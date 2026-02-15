@@ -1147,3 +1147,68 @@ void FPCGExValencyDrawHelper::DrawConnectorConstraints(
 		}
 	}
 }
+
+void FPCGExValencyDrawHelper::DrawConnectorConstraintsAt(
+	FPrimitiveDrawInterface* PDI,
+	const UPCGExValencyCageConnectorComponent* Connector,
+	const FTransform& WorldTransform,
+	EPCGExConstraintDetailLevel DetailLevel,
+	const FLinearColor& Color)
+{
+	if (!PDI || !Connector) { return; }
+
+	const APCGExValencyCageBase* Cage = Cast<APCGExValencyCageBase>(Connector->GetOwner());
+	if (!Cage) { return; }
+
+	const UPCGExValencyConnectorSet* ConnSet = nullptr;
+	for (const TWeakObjectPtr<AValencyContextVolume>& VolRef : Cage->GetContainingVolumes())
+	{
+		if (AValencyContextVolume* Vol = VolRef.Get())
+		{
+			ConnSet = Vol->GetEffectiveConnectorSet();
+			if (ConnSet) { break; }
+		}
+	}
+
+	TArray<const FInstancedStruct*> ConstraintPtrs;
+	if (ConnSet)
+	{
+		const int32 TypeIdx = ConnSet->FindConnectorTypeIndex(Connector->ConnectorType);
+		if (ConnSet->ConnectorTypes.IsValidIndex(TypeIdx))
+		{
+			const TArray<FInstancedStruct>& Defaults = ConnSet->ConnectorTypes[TypeIdx].DefaultConstraints;
+			for (const FInstancedStruct& Instance : Defaults)
+			{
+				ConstraintPtrs.Add(&Instance);
+			}
+		}
+	}
+
+	if (ConstraintPtrs.IsEmpty()) { return; }
+
+	const FConstraintVisualizerRegistry& Registry = FConstraintVisualizerRegistry::Get();
+
+	for (const FInstancedStruct* InstancePtr : ConstraintPtrs)
+	{
+		if (!InstancePtr || !InstancePtr->GetScriptStruct()) { continue; }
+
+		const FPCGExConnectorConstraint* Constraint = InstancePtr->GetPtr<FPCGExConnectorConstraint>();
+		if (!Constraint || !Constraint->bEnabled) { continue; }
+
+		IConstraintVisualizer* Visualizer = Registry.Find(InstancePtr->GetScriptStruct());
+		if (!Visualizer) { continue; }
+
+		switch (DetailLevel)
+		{
+		case EPCGExConstraintDetailLevel::Indicator:
+			Visualizer->DrawIndicator(PDI, WorldTransform, *Constraint, Color);
+			break;
+		case EPCGExConstraintDetailLevel::Zone:
+			Visualizer->DrawZone(PDI, WorldTransform, *Constraint, Color);
+			break;
+		case EPCGExConstraintDetailLevel::Detail:
+			Visualizer->DrawDetail(PDI, WorldTransform, *Constraint, Color, false);
+			break;
+		}
+	}
+}

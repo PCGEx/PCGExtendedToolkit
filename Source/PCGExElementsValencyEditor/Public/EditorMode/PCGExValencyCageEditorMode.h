@@ -191,6 +191,14 @@ public:
 	/** Redraw all viewports and invalidate viewport clients */
 	void RedrawViewports();
 
+	// ========== Mirror Ghost Preview ==========
+
+	/** Set mirror ghost preview state (called by inspector widget on hover). AxisMask: bit 0=X, 1=Y, 2=Z */
+	void SetMirrorGhostPreview(UPCGExValencyCageConnectorComponent* Connector, int32 AxisMask);
+
+	/** Clear mirror ghost preview (called on unhover) */
+	void ClearMirrorGhostPreview();
+
 private:
 	// ========== Cache State ==========
 
@@ -237,4 +245,15 @@ private:
 
 	/** Central reference tracker for change propagation */
 	FValencyReferenceTracker ReferenceTracker;
+
+	// ========== Mirror Ghost Preview ==========
+
+	/** Axis mask being previewed (0 = none, bit 0=X, 1=Y, 2=Z) */
+	int32 GhostMirrorAxisMask = 0;
+
+	/** Connector being previewed */
+	TWeakObjectPtr<UPCGExValencyCageConnectorComponent> GhostMirrorConnector;
+
+	/** Last Ctrl state during ghost preview (for redraw on modifier change) */
+	bool bGhostLastCtrlState = false;
 };

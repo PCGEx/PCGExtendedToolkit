@@ -142,6 +142,17 @@ public:
 		EPCGExConstraintDetailLevel DetailLevel,
 		bool bIsSelectedConnector);
 
+	/**
+	 * Draw constraints for a connector at an overridden world transform (used for ghost previews).
+	 * Uses the connector's type/constraints but renders at the specified transform and color.
+	 */
+	static void DrawConnectorConstraintsAt(
+		FPrimitiveDrawInterface* PDI,
+		const UPCGExValencyCageConnectorComponent* Connector,
+		const FTransform& WorldTransform,
+		EPCGExConstraintDetailLevel DetailLevel,
+		const FLinearColor& Color);
+
 	// ========== Low-Level Drawing Primitives ==========
 
 	/**

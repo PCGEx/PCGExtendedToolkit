@@ -23,6 +23,8 @@
 #include "Cages/PCGExValencyAssetPalette.h"
 #include "Components/PCGExValencyCageConnectorComponent.h"
 #include "Volumes/ValencyContextVolume.h"
+#include "PCGExValencyEditorSettings.h"
+#include "Framework/Application/SlateApplication.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(PCGExValencyCageEditorMode)
 
@@ -244,6 +246,81 @@ void UPCGExValencyCageEditorMode::OnRenderCallback(IToolsContextRenderAPI* Rende
 				FPCGExValencyDrawHelper::DrawCageConnectors(PDI, Cage);
 			}
 		}
+
+		// Draw ghost mirror preview
+		if (GhostMirrorAxisMask != 0)
+		{
+			if (UPCGExValencyCageConnectorComponent* GhostConn = GhostMirrorConnector.Get())
+			{
+				if (GhostConn->bEnabled)
+				{
+					const UPCGExValencyEditorSettings* Settings = UPCGExValencyEditorSettings::Get();
+					if (Settings)
+					{
+						FTransform T = GhostConn->GetRelativeTransform();
+						FQuat Rot = T.GetRotation();
+						const bool bCtrl = FSlateApplication::Get().GetModifierKeys().IsControlDown();
+
+						// Apply mirror for each axis in the mask
+						for (int32 Axis = 0; Axis < 3; ++Axis)
+						{
+							if (!(GhostMirrorAxisMask & (1 << Axis))) { continue; }
+
+							if (bCtrl)
+							{
+								// Mirror relative to cage
+								FVector Forward = Rot.GetForwardVector();
+								FVector Up = Rot.GetUpVector();
+								Forward[Axis] = -Forward[Axis];
+								Up[Axis] = -Up[Axis];
+								Rot = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
+
+								FVector Loc = T.GetTranslation();
+								Loc[Axis] = -Loc[Axis];
+								T.SetTranslation(Loc);
+							}
+							else
+							{
+								// Flip-in-place: 180° around perpendicular axis
+								static const FVector Axes[] = { FVector::ForwardVector, FVector::RightVector, FVector::UpVector };
+								static const int32 RotAxisMap[] = { 2, 2, 0 };
+								Rot = Rot * FQuat(Axes[RotAxisMap[Axis]], UE_PI);
+							}
+						}
+
+						T.SetRotation(Rot);
+
+						// Convert to world space
+						const AActor* GhostOwner = GhostConn->GetOwner();
+						const FTransform GhostWorld = GhostOwner ? T * GhostOwner->GetActorTransform() : T;
+						const FVector GhostLoc = GhostWorld.GetLocation();
+						const FQuat GhostRot = GhostWorld.GetRotation();
+
+						// Get connector color at reduced alpha
+						const APCGExValencyCageBase* OwnerCage = Cast<APCGExValencyCageBase>(GhostOwner);
+						const UPCGExValencyConnectorSet* ConnSet = OwnerCage ? OwnerCage->GetEffectiveConnectorSet() : nullptr;
+						FLinearColor GhostColor = GhostConn->GetEffectiveDebugColor(ConnSet);
+						GhostColor.A = 0.35f;
+
+						FPCGExValencyDrawHelper::DrawConnectorShape(
+							PDI, GhostLoc,
+							GhostRot.GetForwardVector(), GhostRot.GetRightVector(), GhostRot.GetUpVector(),
+							GhostConn->Polarity, Settings->ConnectorVisualizerSize, Settings->ConnectorArrowLength,
+							GhostColor, false);
+
+						// Draw ghost constraints at the preview transform
+						if (VisibilityFlags.bShowConstraints)
+						{
+							FLinearColor GhostConstraintColor = Settings->ConstraintZoneColor;
+							GhostConstraintColor.A *= 0.4f;
+							FPCGExValencyDrawHelper::DrawConnectorConstraintsAt(
+								PDI, GhostConn, GhostWorld,
+								EPCGExConstraintDetailLevel::Zone, GhostConstraintColor);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Draw constraint visualization
@@ -438,6 +515,17 @@ void UPCGExValencyCageEditorMode::ModeTick(float DeltaTime)
 				Volume->ExecutePendingRegenerate();
 				RedrawViewports();
 			}
+		}
+	}
+
+	// Ghost mirror preview: redraw when Ctrl state changes so the ghost updates
+	if (GhostMirrorAxisMask != 0 && GhostMirrorConnector.IsValid())
+	{
+		const bool bCtrlNow = FSlateApplication::Get().GetModifierKeys().IsControlDown();
+		if (bCtrlNow != bGhostLastCtrlState)
+		{
+			bGhostLastCtrlState = bCtrlNow;
+			RedrawViewports();
 		}
 	}
 }
@@ -885,6 +973,23 @@ void UPCGExValencyCageEditorMode::RedrawViewports()
 			}
 		}
 	}
+}
+
+// ========== Mirror Ghost Preview ==========
+
+void UPCGExValencyCageEditorMode::SetMirrorGhostPreview(UPCGExValencyCageConnectorComponent* Connector, int32 AxisMask)
+{
+	GhostMirrorAxisMask = AxisMask;
+	GhostMirrorConnector = Connector;
+	bGhostLastCtrlState = FSlateApplication::Get().GetModifierKeys().IsControlDown();
+	RedrawViewports();
+}
+
+void UPCGExValencyCageEditorMode::ClearMirrorGhostPreview()
+{
+	GhostMirrorAxisMask = 0;
+	GhostMirrorConnector = nullptr;
+	RedrawViewports();
 }
 
 // ========== Widget Interface ==========

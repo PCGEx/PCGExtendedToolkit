@@ -864,47 +864,87 @@ TSharedRef<SWidget> SValencyInspector::BuildConnectorContent(UPCGExValencyCageCo
 	];
 
 	{
-		auto MakeMirrorButton = [&](const FName& IconName, int32 AxisIndex, const FText& Tooltip) -> TSharedRef<SWidget>
+		// AxisMask: bit 0=X, bit 1=Y, bit 2=Z
+		auto MakeMirrorButton = [&](const FName& IconName, int32 AxisMask, const FText& Tooltip) -> TSharedRef<SWidget>
 		{
 			return SNew(SButton)
 				.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
 				.ToolTipText(Tooltip)
-				.OnClicked_Lambda([WeakConnector, WeakMode, AxisIndex, this]() -> FReply
+				.OnHovered_Lambda([WeakConnector, WeakMode, AxisMask]()
+				{
+					if (UPCGExValencyCageEditorMode* Mode = WeakMode.Get())
+					{
+						Mode->SetMirrorGhostPreview(WeakConnector.Get(), AxisMask);
+					}
+				})
+				.OnUnhovered_Lambda([WeakMode]()
+				{
+					if (UPCGExValencyCageEditorMode* Mode = WeakMode.Get())
+					{
+						Mode->ClearMirrorGhostPreview();
+					}
+				})
+				.OnClicked_Lambda([WeakConnector, WeakMode, AxisMask, this]() -> FReply
 				{
 					if (UPCGExValencyCageConnectorComponent* S = WeakConnector.Get())
 					{
-						FScopedTransaction Transaction(NSLOCTEXT("PCGExValency", "MirrorConnector", "Mirror Connector"));
-						S->Modify();
+						const FModifierKeysState Mods = FSlateApplication::Get().GetModifierKeys();
+						const bool bCageRelative = Mods.IsControlDown();
+						const bool bDuplicate = Mods.IsControlDown() && Mods.IsAltDown();
+
+						// Compute mirrored transform
 						FTransform T = S->GetRelativeTransform();
 						FQuat Rot = T.GetRotation();
 
-						const FModifierKeysState Mods = FSlateApplication::Get().GetModifierKeys();
-
-						if (Mods.IsControlDown())
+						for (int32 Axis = 0; Axis < 3; ++Axis)
 						{
-							// Mirror relative to cage: reflect forward/up across the plane, negate position
-							FVector Forward = Rot.GetForwardVector();
-							FVector Up = Rot.GetUpVector();
-							Forward[AxisIndex] = -Forward[AxisIndex];
-							Up[AxisIndex] = -Up[AxisIndex];
-							Rot = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
+							if (!(AxisMask & (1 << Axis))) { continue; }
 
-							FVector Loc = T.GetTranslation();
-							Loc[AxisIndex] = -Loc[AxisIndex];
-							T.SetTranslation(Loc);
-						}
-						else
-						{
-							// Flip-in-place: 180° around a perpendicular local axis
-							// X,Y → rotate around Z (preserves up), Z → rotate around X (preserves forward)
-							static const FVector Axes[] = { FVector::ForwardVector, FVector::RightVector, FVector::UpVector };
-							static const int32 RotAxisMap[] = { 2, 2, 0 }; // X→Z, Y→Z, Z→X
-							Rot = Rot * FQuat(Axes[RotAxisMap[AxisIndex]], UE_PI);
+							if (bCageRelative)
+							{
+								// Mirror relative to cage
+								FVector Forward = Rot.GetForwardVector();
+								FVector Up = Rot.GetUpVector();
+								Forward[Axis] = -Forward[Axis];
+								Up[Axis] = -Up[Axis];
+								Rot = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
+
+								FVector Loc = T.GetTranslation();
+								Loc[Axis] = -Loc[Axis];
+								T.SetTranslation(Loc);
+							}
+							else
+							{
+								// Flip-in-place: 180° around a perpendicular local axis
+								static const FVector Axes[] = { FVector::ForwardVector, FVector::RightVector, FVector::UpVector };
+								static const int32 RotAxisMap[] = { 2, 2, 0 };
+								Rot = Rot * FQuat(Axes[RotAxisMap[Axis]], UE_PI);
+							}
 						}
 
 						T.SetRotation(Rot);
 
-						S->SetRelativeTransform(T);
+						if (bDuplicate)
+						{
+							// Ctrl+Alt: duplicate connector at mirrored position
+							if (UPCGExValencyCageEditorMode* Mode = WeakMode.Get())
+							{
+								FScopedTransaction Transaction(NSLOCTEXT("PCGExValency", "MirrorDuplicateConnector", "Mirror Duplicate Connector"));
+								if (UPCGExValencyCageConnectorComponent* NewConn = Mode->DuplicateConnector(S))
+								{
+									NewConn->Modify();
+									NewConn->SetRelativeTransform(T);
+								}
+							}
+						}
+						else
+						{
+							// Normal/Ctrl: mirror in place
+							FScopedTransaction Transaction(NSLOCTEXT("PCGExValency", "MirrorConnector", "Mirror Connector"));
+							S->Modify();
+							S->SetRelativeTransform(T);
+						}
+
 						if (APCGExValencyCageBase* Cage = Cast<APCGExValencyCageBase>(S->GetOwner()))
 						{
 							Cage->RequestRebuild(EValencyRebuildReason::AssetChange);
@@ -930,23 +970,55 @@ TSharedRef<SWidget> SValencyInspector::BuildConnectorContent(UPCGExValencyCageCo
 			.Padding(0, 0, 2, 0)
 			[
 				MakeMirrorButton(
-					FName("PCGEx.ActionIcon.X"), 0,
-					NSLOCTEXT("PCGExValency", "MirrorXTip", "Reverse X direction (also flips Y, preserves Z). Ctrl: mirror relative to cage."))
+					FName("PCGEx.ActionIcon.RotOrder_X"), 1,
+					NSLOCTEXT("PCGExValency", "MirrorXTip", "Mirror X. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
 			.Padding(0, 0, 2, 0)
 			[
 				MakeMirrorButton(
-					FName("PCGEx.ActionIcon.Y"), 1,
-					NSLOCTEXT("PCGExValency", "MirrorYTip", "Reverse Y direction (also flips X, preserves Z). Ctrl: mirror relative to cage."))
+					FName("PCGEx.ActionIcon.RotOrder_Y"), 2,
+					NSLOCTEXT("PCGExValency", "MirrorYTip", "Mirror Y. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(0, 0, 6, 0)
+			[
+				MakeMirrorButton(
+					FName("PCGEx.ActionIcon.RotOrder_Z"), 4,
+					NSLOCTEXT("PCGExValency", "MirrorZTip", "Mirror Z. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(0, 0, 2, 0)
+			[
+				MakeMirrorButton(
+					FName("PCGEx.ActionIcon.RotOrder_XY"), 1 | 2,
+					NSLOCTEXT("PCGExValency", "MirrorXYTip", "Mirror XY. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(0, 0, 2, 0)
+			[
+				MakeMirrorButton(
+					FName("PCGEx.ActionIcon.RotOrder_YZ"), 2 | 4,
+					NSLOCTEXT("PCGExValency", "MirrorYZTip", "Mirror YZ. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(0, 0, 6, 0)
+			[
+				MakeMirrorButton(
+					FName("PCGEx.ActionIcon.RotOrder_XZ"), 1 | 4,
+					NSLOCTEXT("PCGExValency", "MirrorXZTip", "Mirror XZ. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
 			[
 				MakeMirrorButton(
-					FName("PCGEx.ActionIcon.Z"), 2,
-					NSLOCTEXT("PCGExValency", "MirrorZTip", "Reverse Z direction (also flips Y, preserves X). Ctrl: mirror relative to cage."))
+					FName("PCGEx.ActionIcon.RotOrder_XYZ"), 1 | 2 | 4,
+					NSLOCTEXT("PCGExValency", "MirrorXYZTip", "Mirror XYZ. Ctrl: cage-relative. Ctrl+Alt: duplicate at mirror."))
 			]
 		];
 	}
