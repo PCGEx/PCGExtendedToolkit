@@ -114,6 +114,20 @@ public:
 	 */
 	static void DrawConnectorShape(FPrimitiveDrawInterface* PDI, const FVector& Location, const FVector& Forward, const FVector& Right, const FVector& Up, EPCGExConnectorPolarity Polarity, float Size, float PinLength, const FLinearColor& Color, bool bSelected = false);
 
+	/**
+	 * Draw a disabled connector indicator (gray cross on the connector plane).
+	 */
+	static void DrawDisabledConnector(FPrimitiveDrawInterface* PDI, const FVector& Location, const FQuat& Rotation, float Size, bool bSelected);
+
+	/**
+	 * Compute a mirrored relative transform by applying mirror operations per axis in the mask.
+	 * @param InTransform Source relative transform
+	 * @param AxisMask Bitmask of axes to mirror (bit 0=X, 1=Y, 2=Z)
+	 * @param bCageRelative If true, mirror position + orientation relative to cage. If false, flip-in-place (180° rotation).
+	 * @return The mirrored transform
+	 */
+	static FTransform ComputeMirroredTransform(const FTransform& InTransform, int32 AxisMask, bool bCageRelative);
+
 	// ========== Constraint Visualization ==========
 
 	/**

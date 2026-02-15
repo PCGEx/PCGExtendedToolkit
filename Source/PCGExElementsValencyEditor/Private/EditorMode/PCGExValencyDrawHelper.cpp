@@ -285,14 +285,7 @@ void FPCGExValencyDrawHelper::DrawCageConnectors(FPrimitiveDrawInterface* PDI, c
 
 		if (!ConnectorComp->bEnabled)
 		{
-			// Disabled: gray cross on the connector plane
-			const FLinearColor DisabledColor(0.35f, 0.35f, 0.35f, 0.6f);
-			const float CrossSize = DiamondSize * 0.7f;
-			const float CrossThickness = bIsSelected ? 2.0f : 1.0f;
-			const FVector Right = Rotation.GetRightVector();
-			const FVector Up = Rotation.GetUpVector();
-			PDI->DrawLine(ConnectorLocation - Right * CrossSize - Up * CrossSize, ConnectorLocation + Right * CrossSize + Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
-			PDI->DrawLine(ConnectorLocation - Right * CrossSize + Up * CrossSize, ConnectorLocation + Right * CrossSize - Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+			DrawDisabledConnector(PDI, ConnectorLocation, Rotation, DiamondSize, bIsSelected);
 		}
 		else
 		{
@@ -303,6 +296,50 @@ void FPCGExValencyDrawHelper::DrawCageConnectors(FPrimitiveDrawInterface* PDI, c
 		// Clear hit proxy
 		PDI->SetHitProxy(nullptr);
 	}
+}
+
+void FPCGExValencyDrawHelper::DrawDisabledConnector(FPrimitiveDrawInterface* PDI, const FVector& Location, const FQuat& Rotation, float Size, bool bSelected)
+{
+	const FLinearColor DisabledColor(0.35f, 0.35f, 0.35f, 0.6f);
+	const float CrossSize = Size * 0.7f;
+	const float CrossThickness = bSelected ? 2.0f : 1.0f;
+	const FVector Right = Rotation.GetRightVector();
+	const FVector Up = Rotation.GetUpVector();
+	PDI->DrawLine(Location - Right * CrossSize - Up * CrossSize, Location + Right * CrossSize + Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+	PDI->DrawLine(Location - Right * CrossSize + Up * CrossSize, Location + Right * CrossSize - Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+}
+
+FTransform FPCGExValencyDrawHelper::ComputeMirroredTransform(const FTransform& InTransform, int32 AxisMask, bool bCageRelative)
+{
+	FTransform T = InTransform;
+	FQuat Rot = T.GetRotation();
+
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		if (!(AxisMask & (1 << Axis))) { continue; }
+
+		if (bCageRelative)
+		{
+			FVector Forward = Rot.GetForwardVector();
+			FVector Up = Rot.GetUpVector();
+			Forward[Axis] = -Forward[Axis];
+			Up[Axis] = -Up[Axis];
+			Rot = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
+
+			FVector Loc = T.GetTranslation();
+			Loc[Axis] = -Loc[Axis];
+			T.SetTranslation(Loc);
+		}
+		else
+		{
+			static const FVector Axes[] = { FVector::ForwardVector, FVector::RightVector, FVector::UpVector };
+			static const int32 RotAxisMap[] = { 2, 2, 0 };
+			Rot = Rot * FQuat(Axes[RotAxisMap[Axis]], UE_PI);
+		}
+	}
+
+	T.SetRotation(Rot);
+	return T;
 }
 
 void FPCGExValencyDrawHelper::DrawConnectorCircle(FPrimitiveDrawInterface* PDI, const FVector& Center, const FVector& AxisX, const FVector& AxisY, float Radius, const FLinearColor& Color, float Thickness, int32 NumSegments)
@@ -1071,81 +1108,13 @@ void FPCGExValencyDrawHelper::DrawConnectorConstraints(
 	const UPCGExValencyEditorSettings* Settings = GetSettings();
 	if (!Settings) { return; }
 
-	// Get the connector set from the owning cage
-	const APCGExValencyCageBase* Cage = Cast<APCGExValencyCageBase>(Connector->GetOwner());
-	if (!Cage) { return; }
-
-	// Try to get the connector set for effective constraint resolution
-	const UPCGExValencyConnectorSet* ConnSet = nullptr;
-
-	// The connector set is typically on the volume — but for visualization we just need
-	// the DefaultConstraints from the component's type definition.
-	// Check if any containing volume has a connector set.
-	for (const TWeakObjectPtr<AValencyContextVolume>& VolRef : Cage->GetContainingVolumes())
-	{
-		if (AValencyContextVolume* Vol = VolRef.Get())
-		{
-			ConnSet = Vol->GetEffectiveConnectorSet();
-			if (ConnSet) { break; }
-		}
-	}
-
-	// Build the effective constraint list
-	// For visualization, we check component-level overrides first, then type defaults
-	TArray<const FInstancedStruct*> ConstraintPtrs;
-
-	// Check component-level constraint overrides (editor-time: stored on UPCGExValencyCageConnectorComponent)
-	// The component doesn't directly hold constraints — they're on the data model side.
-	// For now, use the ConnectorSet type defaults if available.
-	if (ConnSet)
-	{
-		const int32 TypeIdx = ConnSet->FindConnectorTypeIndex(Connector->ConnectorType);
-		if (ConnSet->ConnectorTypes.IsValidIndex(TypeIdx))
-		{
-			const TArray<FInstancedStruct>& Defaults = ConnSet->ConnectorTypes[TypeIdx].DefaultConstraints;
-			for (const FInstancedStruct& Instance : Defaults)
-			{
-				ConstraintPtrs.Add(&Instance);
-			}
-		}
-	}
-
-	if (ConstraintPtrs.IsEmpty()) { return; }
-
-	// Get transform and color
-	const FTransform ConnectorWorld = Connector->GetComponentTransform();
 	const FLinearColor BaseColor = bIsSelectedConnector
 		? Settings->ConstraintActiveColor
 		: (DetailLevel == EPCGExConstraintDetailLevel::Indicator
 			? Settings->ConstraintIndicatorColor
 			: Settings->ConstraintZoneColor);
 
-	// Dispatch to registered visualizers
-	const FConstraintVisualizerRegistry& Registry = FConstraintVisualizerRegistry::Get();
-
-	for (const FInstancedStruct* InstancePtr : ConstraintPtrs)
-	{
-		if (!InstancePtr || !InstancePtr->GetScriptStruct()) { continue; }
-
-		const FPCGExConnectorConstraint* Constraint = InstancePtr->GetPtr<FPCGExConnectorConstraint>();
-		if (!Constraint || !Constraint->bEnabled) { continue; }
-
-		IConstraintVisualizer* Visualizer = Registry.Find(InstancePtr->GetScriptStruct());
-		if (!Visualizer) { continue; }
-
-		switch (DetailLevel)
-		{
-		case EPCGExConstraintDetailLevel::Indicator:
-			Visualizer->DrawIndicator(PDI, ConnectorWorld, *Constraint, BaseColor);
-			break;
-		case EPCGExConstraintDetailLevel::Zone:
-			Visualizer->DrawZone(PDI, ConnectorWorld, *Constraint, BaseColor);
-			break;
-		case EPCGExConstraintDetailLevel::Detail:
-			Visualizer->DrawDetail(PDI, ConnectorWorld, *Constraint, BaseColor, bIsSelectedConnector);
-			break;
-		}
-	}
+	DrawConnectorConstraintsAt(PDI, Connector, Connector->GetComponentTransform(), DetailLevel, BaseColor);
 }
 
 void FPCGExValencyDrawHelper::DrawConnectorConstraintsAt(

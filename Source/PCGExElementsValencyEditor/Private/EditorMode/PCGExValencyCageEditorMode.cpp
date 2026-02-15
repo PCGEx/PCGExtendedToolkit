@@ -257,38 +257,9 @@ void UPCGExValencyCageEditorMode::OnRenderCallback(IToolsContextRenderAPI* Rende
 					const UPCGExValencyEditorSettings* Settings = UPCGExValencyEditorSettings::Get();
 					if (Settings)
 					{
-						FTransform T = GhostConn->GetRelativeTransform();
-						FQuat Rot = T.GetRotation();
 						const bool bCtrl = FSlateApplication::Get().GetModifierKeys().IsControlDown();
-
-						// Apply mirror for each axis in the mask
-						for (int32 Axis = 0; Axis < 3; ++Axis)
-						{
-							if (!(GhostMirrorAxisMask & (1 << Axis))) { continue; }
-
-							if (bCtrl)
-							{
-								// Mirror relative to cage
-								FVector Forward = Rot.GetForwardVector();
-								FVector Up = Rot.GetUpVector();
-								Forward[Axis] = -Forward[Axis];
-								Up[Axis] = -Up[Axis];
-								Rot = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
-
-								FVector Loc = T.GetTranslation();
-								Loc[Axis] = -Loc[Axis];
-								T.SetTranslation(Loc);
-							}
-							else
-							{
-								// Flip-in-place: 180° around perpendicular axis
-								static const FVector Axes[] = { FVector::ForwardVector, FVector::RightVector, FVector::UpVector };
-								static const int32 RotAxisMap[] = { 2, 2, 0 };
-								Rot = Rot * FQuat(Axes[RotAxisMap[Axis]], UE_PI);
-							}
-						}
-
-						T.SetRotation(Rot);
+						const FTransform T = FPCGExValencyDrawHelper::ComputeMirroredTransform(
+							GhostConn->GetRelativeTransform(), GhostMirrorAxisMask, bCtrl);
 
 						// Convert to world space
 						const AActor* GhostOwner = GhostConn->GetOwner();

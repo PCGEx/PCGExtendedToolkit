@@ -55,14 +55,7 @@ void FPCGExValencyCageConnectorVisualizer::DrawVisualization(const UActorCompone
 
 	if (!ConnectorComp->bEnabled)
 	{
-		// Disabled: gray cross on the connector plane
-		const FLinearColor DisabledColor(0.35f, 0.35f, 0.35f, 0.6f);
-		const float CrossSize = Settings->ConnectorVisualizerSize * 0.7f;
-		const float CrossThickness = bSelected ? 2.0f : 1.0f;
-		const FVector Right = Rotation.GetRightVector();
-		const FVector Up = Rotation.GetUpVector();
-		PDI->DrawLine(ConnectorLocation - Right * CrossSize - Up * CrossSize, ConnectorLocation + Right * CrossSize + Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
-		PDI->DrawLine(ConnectorLocation - Right * CrossSize + Up * CrossSize, ConnectorLocation + Right * CrossSize - Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+		FPCGExValencyDrawHelper::DrawDisabledConnector(PDI, ConnectorLocation, Rotation, Settings->ConnectorVisualizerSize, bSelected);
 	}
 	else
 	{

@@ -15,6 +15,7 @@
 #include "Widgets/Colors/SColorBlock.h"
 
 #include "EditorMode/PCGExValencyCageEditorMode.h"
+#include "EditorMode/PCGExValencyDrawHelper.h"
 #include "Cages/PCGExValencyCageBase.h"
 #include "Cages/PCGExValencyCage.h"
 #include "Cages/PCGExValencyCagePattern.h"
@@ -892,37 +893,8 @@ TSharedRef<SWidget> SValencyInspector::BuildConnectorContent(UPCGExValencyCageCo
 						const bool bCageRelative = Mods.IsControlDown();
 						const bool bDuplicate = Mods.IsControlDown() && Mods.IsAltDown();
 
-						// Compute mirrored transform
-						FTransform T = S->GetRelativeTransform();
-						FQuat Rot = T.GetRotation();
-
-						for (int32 Axis = 0; Axis < 3; ++Axis)
-						{
-							if (!(AxisMask & (1 << Axis))) { continue; }
-
-							if (bCageRelative)
-							{
-								// Mirror relative to cage
-								FVector Forward = Rot.GetForwardVector();
-								FVector Up = Rot.GetUpVector();
-								Forward[Axis] = -Forward[Axis];
-								Up[Axis] = -Up[Axis];
-								Rot = FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat();
-
-								FVector Loc = T.GetTranslation();
-								Loc[Axis] = -Loc[Axis];
-								T.SetTranslation(Loc);
-							}
-							else
-							{
-								// Flip-in-place: 180° around a perpendicular local axis
-								static const FVector Axes[] = { FVector::ForwardVector, FVector::RightVector, FVector::UpVector };
-								static const int32 RotAxisMap[] = { 2, 2, 0 };
-								Rot = Rot * FQuat(Axes[RotAxisMap[Axis]], UE_PI);
-							}
-						}
-
-						T.SetRotation(Rot);
+						const FTransform T = FPCGExValencyDrawHelper::ComputeMirroredTransform(
+							S->GetRelativeTransform(), AxisMask, bCageRelative);
 
 						if (bDuplicate)
 						{
