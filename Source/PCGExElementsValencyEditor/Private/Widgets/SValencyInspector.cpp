@@ -363,7 +363,7 @@ TSharedRef<SWidget> SValencyInspector::BuildCageContent(APCGExValencyCageBase* C
 			}
 
 			const bool bIsActive = (ConnectorComp == ActiveConnector);
-			Content->AddSlot().AutoHeight()
+			Content->AddSlot().AutoHeight().Padding(0, 1)
 			[
 				MakeCompactConnectorRow(ConnectorComp, bIsActive)
 			];
@@ -1200,7 +1200,11 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 	TWeakObjectPtr<UPCGExValencyCageEditorMode> WeakMode(EditorMode);
 
 	const FLinearColor RowBgColor = bIsActive
-		? FLinearColor(0.1f, 0.2f, 0.35f, 1.0f)
+		? FLinearColor(0.12f, 0.25f, 0.45f, 1.0f)
+		: FLinearColor(0.02f, 0.02f, 0.02f, 0.5f);
+
+	const FLinearColor AccentColor = bIsActive
+		? FLinearColor(0.3f, 0.6f, 1.0f, 1.0f)
 		: FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	// Polarity symbols
@@ -1389,7 +1393,8 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 	const bool bIsBlueprintDefined = (ConnectorComp->CreationMethod != EComponentCreationMethod::Instance);
 
 	return SNew(SBorder)
-		.BorderBackgroundColor(RowBgColor)
+		.BorderImage(FAppStyle::Get().GetBrush("NoBorder"))
+		.Padding(0)
 		.ColorAndOpacity_Lambda([WeakConnector]() -> FLinearColor
 		{
 			if (const UPCGExValencyCageConnectorComponent* S = WeakConnector.Get())
@@ -1398,10 +1403,30 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 			}
 			return FLinearColor::White;
 		})
-		.Padding(FMargin(2, 1))
 		[
 			SNew(SHorizontalBox)
-			// [BP] badge for Blueprint-defined connectors
+			// Left accent bar
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				SNew(SBox)
+				.WidthOverride(3.0f)
+				[
+					SNew(SImage)
+					.ColorAndOpacity(AccentColor)
+				]
+			]
+			// Row content
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+				.BorderBackgroundColor(RowBgColor)
+				.Padding(FMargin(4, 5))
+				[
+					SNew(SHorizontalBox)
+					// [BP] badge for Blueprint-defined connectors
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
 			.VAlign(VAlign_Center)
@@ -1465,11 +1490,12 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 			// Clickable name - selects in viewport without leaving cage view
 			+ SHorizontalBox::Slot()
 			.FillWidth(1.0f)
-			.VAlign(VAlign_Center)
-			.Padding(2, 1)
+			.VAlign(VAlign_Fill)
+			.Padding(2, 0)
 			[
 				SNew(SButton)
 				.ContentPadding(FMargin(2, 0))
+				.VAlign(VAlign_Center)
 				.ToolTipText(NSLOCTEXT("PCGExValency", "ConnectorRowNameTip", "Click to select this connector in the viewport"))
 				.OnClicked_Lambda([WeakConnector, this]() -> FReply
 				{
@@ -1506,7 +1532,7 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 			// Polarity cycling button (◉/●/○) - fixed width to prevent layout shift
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
-			.VAlign(VAlign_Center)
+			.VAlign(VAlign_Fill)
 			.Padding(1, 0)
 			[
 				SNew(SBox)
@@ -1531,6 +1557,7 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 					})
 					.ContentPadding(FMargin(2, 0))
 					.HAlign(HAlign_Center)
+					.VAlign(VAlign_Center)
 					.OnClicked_Lambda([WeakConnector, WeakMode]() -> FReply
 					{
 						if (UPCGExValencyCageConnectorComponent* S = WeakConnector.Get())
@@ -1560,7 +1587,7 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 			// Click: detail panel, Ctrl+click: delete, Alt+click: duplicate
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
-			.VAlign(VAlign_Center)
+			.VAlign(VAlign_Fill)
 			.Padding(1, 0)
 			[
 				SNew(SButton)
@@ -1577,6 +1604,8 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 					return NSLOCTEXT("PCGExValency", "MoreInfoTip", "Details (Ctrl: delete, Alt: duplicate)");
 				})
 				.ContentPadding(FMargin(2, 0))
+				.VAlign(VAlign_Center)
+				.HAlign(HAlign_Center)
 				.OnClicked_Lambda([WeakConnector, WeakMode, this]() -> FReply
 				{
 					if (UPCGExValencyCageConnectorComponent* S = WeakConnector.Get())
@@ -1619,7 +1648,9 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 					return FReply::Handled();
 				})
 			]
-		];
+			] // inner SBorder content
+		] // content slot
+	]; // outer SBorder
 }
 
 TSharedRef<SWidget> SValencyInspector::MakeAddConnectorButton(APCGExValencyCageBase* Cage)

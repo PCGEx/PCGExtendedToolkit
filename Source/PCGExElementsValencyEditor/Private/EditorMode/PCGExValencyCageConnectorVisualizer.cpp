@@ -48,23 +48,32 @@ void FPCGExValencyCageConnectorVisualizer::DrawVisualization(const UActorCompone
 	const FTransform ConnectorTransform = ConnectorComp->GetComponentTransform();
 	const FVector ConnectorLocation = ConnectorTransform.GetLocation();
 
-	const APCGExValencyCageBase* OwnerCage = Cast<APCGExValencyCageBase>(ConnectorComp->GetOwner());
-	const UPCGExValencyConnectorSet* ConnectorSet = OwnerCage ? OwnerCage->GetEffectiveConnectorSet() : nullptr;
-	FLinearColor Color = ConnectorComp->GetEffectiveDebugColor(ConnectorSet);
-
-	if (!ConnectorComp->bEnabled)
-	{
-		Color.A *= Settings->ConnectorDisabledAlpha;
-	}
-
 	PDI->SetHitProxy(new HPCGExConnectorHitProxy(ConnectorComp));
 
 	const FQuat Rotation = ConnectorTransform.GetRotation();
 	const bool bSelected = ConnectorComp == UPCGExValencyCageEditorMode::GetSelectedConnector();
-	FPCGExValencyDrawHelper::DrawConnectorShape(
-		PDI, ConnectorLocation,
-		Rotation.GetForwardVector(), Rotation.GetRightVector(), Rotation.GetUpVector(),
-		ConnectorComp->Polarity, Settings->ConnectorVisualizerSize, Settings->ConnectorArrowLength, Color, bSelected);
+
+	if (!ConnectorComp->bEnabled)
+	{
+		// Disabled: gray cross on the connector plane
+		const FLinearColor DisabledColor(0.35f, 0.35f, 0.35f, 0.6f);
+		const float CrossSize = Settings->ConnectorVisualizerSize * 0.7f;
+		const float CrossThickness = bSelected ? 2.0f : 1.0f;
+		const FVector Right = Rotation.GetRightVector();
+		const FVector Up = Rotation.GetUpVector();
+		PDI->DrawLine(ConnectorLocation - Right * CrossSize - Up * CrossSize, ConnectorLocation + Right * CrossSize + Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+		PDI->DrawLine(ConnectorLocation - Right * CrossSize + Up * CrossSize, ConnectorLocation + Right * CrossSize - Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+	}
+	else
+	{
+		const APCGExValencyCageBase* OwnerCage = Cast<APCGExValencyCageBase>(ConnectorComp->GetOwner());
+		const UPCGExValencyConnectorSet* ConnectorSet = OwnerCage ? OwnerCage->GetEffectiveConnectorSet() : nullptr;
+		const FLinearColor Color = ConnectorComp->GetEffectiveDebugColor(ConnectorSet);
+		FPCGExValencyDrawHelper::DrawConnectorShape(
+			PDI, ConnectorLocation,
+			Rotation.GetForwardVector(), Rotation.GetRightVector(), Rotation.GetUpVector(),
+			ConnectorComp->Polarity, Settings->ConnectorVisualizerSize, Settings->ConnectorArrowLength, Color, bSelected);
+	}
 
 	PDI->SetHitProxy(nullptr);
 }

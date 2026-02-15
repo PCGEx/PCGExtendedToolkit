@@ -277,20 +277,28 @@ void FPCGExValencyDrawHelper::DrawCageConnectors(FPrimitiveDrawInterface* PDI, c
 		const FTransform ConnectorTransform = ConnectorComp->GetComponentTransform();
 		const FVector ConnectorLocation = ConnectorTransform.GetLocation();
 
-		// Get effective debug color
-		FLinearColor Color = ConnectorComp->GetEffectiveDebugColor(ConnectorSet);
-
-		// Disabled connectors: dimmed alpha
-		if (!ConnectorComp->bEnabled)
-		{
-			Color.A *= Settings->ConnectorDisabledAlpha;
-		}
-
 		// Enqueue hit proxy for click detection
 		PDI->SetHitProxy(new HPCGExConnectorHitProxy(ConnectorComp));
 
 		const FQuat Rotation = ConnectorTransform.GetRotation();
-		DrawConnectorShape(PDI, ConnectorLocation, Rotation.GetForwardVector(), Rotation.GetRightVector(), Rotation.GetUpVector(), ConnectorComp->Polarity, DiamondSize, ArrowLength, Color, ConnectorComp == SelectedConnector);
+		const bool bIsSelected = (ConnectorComp == SelectedConnector);
+
+		if (!ConnectorComp->bEnabled)
+		{
+			// Disabled: gray cross on the connector plane
+			const FLinearColor DisabledColor(0.35f, 0.35f, 0.35f, 0.6f);
+			const float CrossSize = DiamondSize * 0.7f;
+			const float CrossThickness = bIsSelected ? 2.0f : 1.0f;
+			const FVector Right = Rotation.GetRightVector();
+			const FVector Up = Rotation.GetUpVector();
+			PDI->DrawLine(ConnectorLocation - Right * CrossSize - Up * CrossSize, ConnectorLocation + Right * CrossSize + Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+			PDI->DrawLine(ConnectorLocation - Right * CrossSize + Up * CrossSize, ConnectorLocation + Right * CrossSize - Up * CrossSize, DisabledColor, SDPG_Foreground, CrossThickness);
+		}
+		else
+		{
+			FLinearColor Color = ConnectorComp->GetEffectiveDebugColor(ConnectorSet);
+			DrawConnectorShape(PDI, ConnectorLocation, Rotation.GetForwardVector(), Rotation.GetRightVector(), Rotation.GetUpVector(), ConnectorComp->Polarity, DiamondSize, ArrowLength, Color, bIsSelected);
+		}
 
 		// Clear hit proxy
 		PDI->SetHitProxy(nullptr);
@@ -1042,7 +1050,7 @@ void FPCGExValencyDrawHelper::DrawCageConstraints(
 
 	for (UPCGExValencyCageConnectorComponent* Connector : Connectors)
 	{
-		if (!Connector) { continue; }
+		if (!Connector || !Connector->bEnabled) { continue; }
 
 		const bool bIsSelected = (Connector == SelectedConnector);
 		const EPCGExConstraintDetailLevel ConnectorDetailLevel =

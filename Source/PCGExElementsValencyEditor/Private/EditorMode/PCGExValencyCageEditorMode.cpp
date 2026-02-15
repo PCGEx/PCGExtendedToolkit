@@ -274,9 +274,9 @@ void UPCGExValencyCageEditorMode::OnRenderCallback(IToolsContextRenderAPI* Rende
 
 			if (SelectedConn && SelectedConn->GetOwner() == Cage)
 			{
-				// This cage has the selected connector — draw at Detail level
+				// This cage has the selected connector — Detail for selected, Zone for siblings
 				FPCGExValencyDrawHelper::DrawCageConstraints(
-					PDI, Cage, EPCGExConstraintDetailLevel::Detail, SelectedConn);
+					PDI, Cage, EPCGExConstraintDetailLevel::Zone, SelectedConn);
 			}
 			else if (bCageSelected)
 			{
