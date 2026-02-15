@@ -81,7 +81,7 @@ struct PCGEXELEMENTSVALENCYEDITOR_API FPCGExValencyPatternSettings
  * Connected pattern cages form a pattern. One cage is designated as the
  * "pattern root" which holds the pattern settings and identifies the pattern.
  */
-UCLASS(Blueprintable, meta = (DisplayName = "Valency Cage (Pattern)"))
+UCLASS(Blueprintable, meta = (DisplayName = "Valency Cage (Pattern)", IsBlueprintBase = "false"))
 class PCGEXELEMENTSVALENCYEDITOR_API APCGExValencyCagePattern : public APCGExValencyCageBase
 {
 	GENERATED_BODY()

@@ -27,7 +27,7 @@ class USphereComponent;
  * - Magenta: Wildcard
  * - Cyan: Any
  */
-UCLASS(Blueprintable, meta = (DisplayName = "Valency Cage (Null)"))
+UCLASS(Blueprintable, meta = (DisplayName = "Valency Cage (Null)", IsBlueprintBase = "false"))
 class PCGEXELEMENTSVALENCYEDITOR_API APCGExValencyCageNull : public APCGExValencyCageBase
 {
 	GENERATED_BODY()

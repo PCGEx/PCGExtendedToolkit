@@ -986,6 +986,12 @@ void UPCGExValencyCageEditorMode::RemoveConnector(UPCGExValencyCageConnectorComp
 		return;
 	}
 
+	// Protect Blueprint-defined connectors from deletion on instances
+	if (Connector->CreationMethod != EComponentCreationMethod::Instance)
+	{
+		return;
+	}
+
 	APCGExValencyCageBase* Cage = Cast<APCGExValencyCageBase>(Connector->GetOwner());
 	if (!Cage)
 	{
@@ -1079,7 +1085,9 @@ void UPCGExValencyCageEditorMode::ExecuteRemoveConnector()
 
 bool UPCGExValencyCageEditorMode::CanExecuteRemoveConnector() const
 {
-	return GetSelectedConnector() != nullptr;
+	UPCGExValencyCageConnectorComponent* Connector = GetSelectedConnector();
+	if (!Connector) return false;
+	return Connector->CreationMethod == EComponentCreationMethod::Instance;
 }
 
 void UPCGExValencyCageEditorMode::ExecuteDuplicateConnector()

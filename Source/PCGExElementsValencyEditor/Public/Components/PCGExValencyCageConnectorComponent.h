@@ -29,6 +29,7 @@ public:
 	virtual void OnRegister() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual bool CanEditChange(const FProperty* InProperty) const override;
 #endif
 	//~ End UActorComponent Interface
 

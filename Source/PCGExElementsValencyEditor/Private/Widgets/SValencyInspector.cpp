@@ -1234,6 +1234,8 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 			];
 	}
 
+	const bool bIsBlueprintDefined = (ConnectorComp->CreationMethod != EComponentCreationMethod::Instance);
+
 	return SNew(SBorder)
 		.BorderBackgroundColor(RowBgColor)
 		.ColorAndOpacity_Lambda([WeakConnector]() -> FLinearColor
@@ -1247,6 +1249,25 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 		.Padding(FMargin(2, 1))
 		[
 			SNew(SHorizontalBox)
+			// [BP] badge for Blueprint-defined connectors
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(0, 0, 2, 0)
+			[
+				bIsBlueprintDefined
+				? static_cast<TSharedRef<SWidget>>(SNew(SBorder)
+					.BorderBackgroundColor(FLinearColor(0.15f, 0.35f, 0.15f, 1.0f))
+					.Padding(FMargin(3, 0))
+					[
+						SNew(STextBlock)
+						.Text(NSLOCTEXT("PCGExValency", "BPBadge", "BP"))
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
+						.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.9f, 0.5f)))
+						.ToolTipText(NSLOCTEXT("PCGExValency", "BPBadgeTip", "Blueprint-defined connector (cannot be removed on instances)"))
+					])
+				: static_cast<TSharedRef<SWidget>>(SNullWidget::NullWidget)
+			]
 			// Enable/disable checkbox (first item)
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -1392,16 +1413,26 @@ TSharedRef<SWidget> SValencyInspector::MakeCompactConnectorRow(UPCGExValencyCage
 			[
 				SNew(SButton)
 				.Text(NSLOCTEXT("PCGExValency", "MoreInfoDots", "..."))
-				.ToolTipText(NSLOCTEXT("PCGExValency", "MoreInfoTip", "Details (Ctrl: delete, Alt: duplicate)"))
+				.ToolTipText_Lambda([WeakConnector]() -> FText
+				{
+					if (const UPCGExValencyCageConnectorComponent* S = WeakConnector.Get())
+					{
+						if (S->CreationMethod != EComponentCreationMethod::Instance)
+						{
+							return NSLOCTEXT("PCGExValency", "MoreInfoTipBP", "Details (Blueprint-defined: Alt to duplicate)");
+						}
+					}
+					return NSLOCTEXT("PCGExValency", "MoreInfoTip", "Details (Ctrl: delete, Alt: duplicate)");
+				})
 				.ContentPadding(FMargin(2, 0))
 				.OnClicked_Lambda([WeakConnector, WeakMode, this]() -> FReply
 				{
 					if (UPCGExValencyCageConnectorComponent* S = WeakConnector.Get())
 					{
 						const FModifierKeysState Mods = FSlateApplication::Get().GetModifierKeys();
-						if (Mods.IsControlDown())
+						if (Mods.IsControlDown() && S->CreationMethod == EComponentCreationMethod::Instance)
 						{
-							// Ctrl+click = Delete connector
+							// Ctrl+click = Delete connector (instance-only)
 							if (UPCGExValencyCageEditorMode* Mode = WeakMode.Get())
 							{
 								Mode->RemoveConnector(S);

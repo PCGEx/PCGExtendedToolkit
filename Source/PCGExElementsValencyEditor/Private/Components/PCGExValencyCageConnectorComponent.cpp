@@ -39,6 +39,33 @@ void UPCGExValencyCageConnectorComponent::PostEditChangeProperty(FPropertyChange
 		RequestCageRebuild();
 	}
 }
+
+bool UPCGExValencyCageConnectorComponent::CanEditChange(const FProperty* InProperty) const
+{
+	if (!Super::CanEditChange(InProperty))
+	{
+		return false;
+	}
+
+	// Blueprint-defined connectors on instances: lock identity properties
+	if (CreationMethod == EComponentCreationMethod::SimpleConstructionScript && !IsTemplate())
+	{
+		const FName PropName = InProperty->GetFName();
+		if (PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, Identifier) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, ConnectorType) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, ConstraintOverrides) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, OverrideMode) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, bInheritable) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, MeshSocketName) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, bMatchMeshSocketTransform) ||
+			PropName == GET_MEMBER_NAME_CHECKED(UPCGExValencyCageConnectorComponent, bOverrideAutoExtracted))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
 #endif
 
 FLinearColor UPCGExValencyCageConnectorComponent::GetEffectiveDebugColor(const UPCGExValencyConnectorSet* ConnectorSet) const
