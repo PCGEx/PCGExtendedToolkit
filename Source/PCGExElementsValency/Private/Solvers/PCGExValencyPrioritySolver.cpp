@@ -142,14 +142,14 @@ PCGExValency::FSolveResult FPCGExValencyPrioritySolver::Solve()
 		if (!CollapseState(StateIndex))
 		{
 			// Don't mark UNSOLVABLE yet if fillers are available - filler sweep will handle it
-			if (StateData[StateIndex].FillerCandidates.Num() == 0)
+			if (FillerCandidatesPerState[StateIndex].Num() == 0)
 			{
 				(*ValencyStates)[StateIndex].ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
 				PCGEX_VALENCY_WARNING(Solver, "State %d marked UNSOLVABLE (no valid candidates, no fillers)", StateIndex);
 			}
 			else
 			{
-				PCGEX_VALENCY_VERBOSE(Solver, "State %d deferred to filler sweep (%d fillers available)", StateIndex, StateData[StateIndex].FillerCandidates.Num());
+				PCGEX_VALENCY_VERBOSE(Solver, "State %d deferred to filler sweep (%d fillers available)", StateIndex, FillerCandidatesPerState[StateIndex].Num());
 			}
 		}
 
@@ -158,41 +158,8 @@ PCGExValency::FSolveResult FPCGExValencyPrioritySolver::Solve()
 	}
 
 	// Filler sweep - assign filler modules to remaining unresolved states
-	// This runs AFTER the main loop to avoid fillers interfering with normal constraint propagation
-	int32 FillerCount = 0;
-	for (int32 i = 0; i < ValencyStates->Num(); ++i)
-	{
-		PCGExValency::FValencyState& State = (*ValencyStates)[i];
-		if (State.IsResolved()) { continue; }
-		if (!HasOrbitals(i)) { continue; }
-
-		FPriorityStateData& Data = StateData[i];
-		if (Data.FillerCandidates.Num() == 0)
-		{
-			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
-			continue;
-		}
-
-		const int32 SelectedFiller = SelectWeightedRandom(Data.FillerCandidates);
-		if (SelectedFiller >= 0)
-		{
-			State.ResolvedModule = SelectedFiller;
-			DistributionTracker.RecordSpawn(SelectedFiller, CompiledBondingRules);
-			Data.FillerCandidates.Empty();
-			FillerCount++;
-
-			PCGEX_VALENCY_VERBOSE(Solver, "  Filler sweep: State[%d] assigned FILLER Module[%d]", i, SelectedFiller);
-		}
-		else
-		{
-			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
-		}
-	}
-
-	if (FillerCount > 0)
-	{
-		PCGEX_VALENCY_INFO(Solver, "Filler sweep assigned %d filler modules", FillerCount);
-	}
+	// Runs AFTER the main loop to avoid fillers interfering with normal constraint propagation
+	SweepFillers();
 
 	// Count results
 	for (const PCGExValency::FValencyState& State : *ValencyStates)
@@ -239,7 +206,7 @@ void FPCGExValencyPrioritySolver::InitializeAllCandidates()
 
 		// Find Normal modules that fit this state's orbital configuration
 		Data.Candidates.Empty();
-		Data.FillerCandidates.Empty();
+		FillerCandidatesPerState[StateIndex].Empty();
 
 		for (int32 ModuleIndex = 0; ModuleIndex < CompiledBondingRules->ModuleCount; ++ModuleIndex)
 		{
@@ -249,7 +216,7 @@ void FPCGExValencyPrioritySolver::InitializeAllCandidates()
 			{
 				if (CompiledBondingRules->IsModuleFiller(ModuleIndex))
 				{
-					Data.FillerCandidates.Add(ModuleIndex);
+					FillerCandidatesPerState[StateIndex].Add(ModuleIndex);
 				}
 				else
 				{
@@ -259,7 +226,7 @@ void FPCGExValencyPrioritySolver::InitializeAllCandidates()
 		}
 
 		PCGEX_VALENCY_VERBOSE(Solver, "State[%d]: %d candidates, %d fillers, priority=%.2f",
-			StateIndex, Data.Candidates.Num(), Data.FillerCandidates.Num(), Data.Priority);
+			StateIndex, Data.Candidates.Num(), FillerCandidatesPerState[StateIndex].Num(), Data.Priority);
 	}
 }
 

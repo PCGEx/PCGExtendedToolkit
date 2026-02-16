@@ -203,8 +203,19 @@ protected:
 	/** Distribution constraint tracker (shared utility) */
 	PCGExValency::FDistributionTracker DistributionTracker;
 
+	/** Per-state filler candidates - populated by InitializeAllCandidates, consumed by SweepFillers */
+	TArray<TArray<int32>> FillerCandidatesPerState;
+
 	/** Random stream for deterministic selection */
 	FRandomStream RandomStream;
+
+	/**
+	 * Assign filler modules to all remaining unresolved states.
+	 * Call at the end of Solve() after the main loop completes.
+	 * Fillers bypass constraint propagation entirely to avoid domino effects.
+	 * @return Number of states assigned a filler module
+	 */
+	int32 SweepFillers();
 
 	/**
 	 * Check if a module is compatible with a neighbor at a specific orbital.

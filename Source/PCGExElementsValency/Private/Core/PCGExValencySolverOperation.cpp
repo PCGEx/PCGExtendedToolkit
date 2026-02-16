@@ -261,6 +261,9 @@ void FPCGExValencySolverOperation::Initialize(
 
 	DistributionTracker.Initialize(CompiledBondingRules);
 
+	// Initialize filler candidates storage
+	FillerCandidatesPerState.SetNum(InValencyStates.Num());
+
 	// Mark boundary states (no orbitals = NULL_SLOT)
 	if (OrbitalCache)
 	{
@@ -272,6 +275,47 @@ void FPCGExValencySolverOperation::Initialize(
 			}
 		}
 	}
+}
+
+int32 FPCGExValencySolverOperation::SweepFillers()
+{
+	int32 FillerCount = 0;
+
+	for (int32 i = 0; i < ValencyStates->Num(); ++i)
+	{
+		PCGExValency::FValencyState& State = (*ValencyStates)[i];
+		if (State.IsResolved()) { continue; }
+		if (!HasOrbitals(i)) { continue; }
+
+		TArray<int32>& Fillers = FillerCandidatesPerState[i];
+		if (Fillers.Num() == 0)
+		{
+			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
+			continue;
+		}
+
+		const int32 SelectedFiller = SelectWeightedRandom(Fillers);
+		if (SelectedFiller >= 0)
+		{
+			State.ResolvedModule = SelectedFiller;
+			DistributionTracker.RecordSpawn(SelectedFiller, CompiledBondingRules);
+			Fillers.Empty();
+			FillerCount++;
+
+			PCGEX_VALENCY_VERBOSE(Solver, "  Filler sweep: State[%d] assigned FILLER Module[%d]", i, SelectedFiller);
+		}
+		else
+		{
+			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
+		}
+	}
+
+	if (FillerCount > 0)
+	{
+		PCGEX_VALENCY_INFO(Solver, "Filler sweep assigned %d filler modules", FillerCount);
+	}
+
+	return FillerCount;
 }
 
 bool FPCGExValencySolverOperation::IsModuleCompatibleWithNeighbor(int32 ModuleIndex, int32 OrbitalIndex, int32 NeighborModuleIndex) const
