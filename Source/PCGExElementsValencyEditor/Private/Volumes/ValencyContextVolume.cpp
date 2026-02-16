@@ -158,10 +158,10 @@ UPCGExValencyOrbitalSet* AValencyContextVolume::GetEffectiveOrbitalSet() const
 		return OrbitalSetOverride;
 	}
 
-	// Otherwise use first orbital set from BondingRules
-	if (BondingRules && BondingRules->OrbitalSets.Num() > 0)
+	// Otherwise use orbital set from BondingRules
+	if (BondingRules && BondingRules->OrbitalSet)
 	{
-		return BondingRules->OrbitalSets[0];
+		return BondingRules->OrbitalSet;
 	}
 
 	return nullptr;

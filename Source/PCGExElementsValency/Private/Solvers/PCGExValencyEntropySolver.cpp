@@ -22,8 +22,8 @@ void FPCGExValencyEntropySolver::Initialize(
 
 	if (InCompiledBondingRules)
 	{
-		PCGEX_VALENCY_INFO(Solver, "  CompiledRules: %d modules, %d layers",
-			InCompiledBondingRules->ModuleCount, InCompiledBondingRules->Layers.Num());
+		PCGEX_VALENCY_INFO(Solver, "  CompiledRules: %d modules",
+			InCompiledBondingRules->ModuleCount);
 	}
 
 	// Call base - marks boundary states

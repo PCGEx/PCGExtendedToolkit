@@ -106,15 +106,15 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyBondingRulesCompiled
 	UPROPERTY()
 	TArray<float> ModuleWeights;
 
-	/** Module orbital masks per layer (Index = ModuleIndex * LayerCount + LayerIndex) */
+	/** Module orbital masks (Index = ModuleIndex) */
 	UPROPERTY()
 	TArray<int64> ModuleOrbitalMasks;
 
-	/** Module boundary orbital masks per layer - orbitals that must have NO neighbor (Index = ModuleIndex * LayerCount + LayerIndex) */
+	/** Module boundary orbital masks - orbitals that must have NO neighbor (Index = ModuleIndex) */
 	UPROPERTY()
 	TArray<int64> ModuleBoundaryMasks;
 
-	/** Module wildcard orbital masks per layer - orbitals that must have ANY neighbor (Index = ModuleIndex * LayerCount + LayerIndex) */
+	/** Module wildcard orbital masks - orbitals that must have ANY neighbor (Index = ModuleIndex) */
 	UPROPERTY()
 	TArray<int64> ModuleWildcardMasks;
 
@@ -282,7 +282,7 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyBondingRulesCompiled
 
 	/** Compiled layer data */
 	UPROPERTY()
-	TArray<FPCGExValencyLayerCompiled> Layers;
+	FPCGExValencyLayerCompiled Layer;
 
 	/** Compiled patterns for post-solve pattern matching */
 	UPROPERTY()
@@ -310,28 +310,22 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyBondingRulesCompiled
 	 */
 	TMap<int64, TArray<int32>> MaskToCandidates;
 
-	/** Get layer count */
-	int32 GetLayerCount() const { return Layers.Num(); }
-
-	/** Get a module's orbital mask for a specific layer */
-	int64 GetModuleOrbitalMask(int32 ModuleIndex, int32 LayerIndex) const
+	/** Get a module's orbital mask */
+	int64 GetModuleOrbitalMask(int32 ModuleIndex) const
 	{
-		const int32 Index = ModuleIndex * Layers.Num() + LayerIndex;
-		return ModuleOrbitalMasks.IsValidIndex(Index) ? ModuleOrbitalMasks[Index] : 0;
+		return ModuleOrbitalMasks.IsValidIndex(ModuleIndex) ? ModuleOrbitalMasks[ModuleIndex] : 0;
 	}
 
-	/** Get a module's boundary orbital mask for a specific layer (orbitals that must have no neighbor) */
-	int64 GetModuleBoundaryMask(int32 ModuleIndex, int32 LayerIndex) const
+	/** Get a module's boundary orbital mask (orbitals that must have no neighbor) */
+	int64 GetModuleBoundaryMask(int32 ModuleIndex) const
 	{
-		const int32 Index = ModuleIndex * Layers.Num() + LayerIndex;
-		return ModuleBoundaryMasks.IsValidIndex(Index) ? ModuleBoundaryMasks[Index] : 0;
+		return ModuleBoundaryMasks.IsValidIndex(ModuleIndex) ? ModuleBoundaryMasks[ModuleIndex] : 0;
 	}
 
-	/** Get a module's wildcard orbital mask for a specific layer (orbitals that must have any neighbor) */
-	int64 GetModuleWildcardMask(int32 ModuleIndex, int32 LayerIndex) const
+	/** Get a module's wildcard orbital mask (orbitals that must have any neighbor) */
+	int64 GetModuleWildcardMask(int32 ModuleIndex) const
 	{
-		const int32 Index = ModuleIndex * Layers.Num() + LayerIndex;
-		return ModuleWildcardMasks.IsValidIndex(Index) ? ModuleWildcardMasks[Index] : 0;
+		return ModuleWildcardMasks.IsValidIndex(ModuleIndex) ? ModuleWildcardMasks[ModuleIndex] : 0;
 	}
 
 	/** Check if a module is excluded from solver placement */
@@ -367,12 +361,12 @@ class PCGEXELEMENTSVALENCY_API UPCGExValencyBondingRules : public UDataAsset
 
 public:
 	/**
-	 * Orbital sets defining the layers. Each set defines orbitals for one layer.
-	 * Using TObjectPtr ensures all orbital sets are loaded when this asset is loaded,
+	 * Orbital set defining the orbitals for this bonding ruleset.
+	 * Using TObjectPtr ensures the orbital set is loaded when this asset is loaded,
 	 * avoiding the need for LoadSynchronous during Compile().
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency|Layers")
-	TArray<TObjectPtr<UPCGExValencyOrbitalSet>> OrbitalSets;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency|Orbitals")
+	TObjectPtr<UPCGExValencyOrbitalSet> OrbitalSet;
 
 	/** Connector set defining connector types and compatibility rules */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency|Connectors")
@@ -487,9 +481,6 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Build Info")
 	FDateTime LastBuildTime;
 
-	/** Get layer count */
-	int32 GetLayerCount() const { return OrbitalSets.Num(); }
-
 	/** Get module count */
 	int32 GetModuleCount() const { return Modules.Num(); }
 
@@ -499,18 +490,8 @@ public:
 	/** Check if there are any patterns */
 	bool HasPatterns() const { return Patterns.HasPatterns(); }
 
-	/** Find an orbital set by layer name */
-	const UPCGExValencyOrbitalSet* FindOrbitalSet(const FName& LayerName) const
-	{
-		for (const TObjectPtr<UPCGExValencyOrbitalSet>& OrbitalSet : OrbitalSets)
-		{
-			if (OrbitalSet && OrbitalSet->LayerName == LayerName)
-			{
-				return OrbitalSet;
-			}
-		}
-		return nullptr;
-	}
+	/** Get the orbital set */
+	const UPCGExValencyOrbitalSet* GetOrbitalSet() const { return OrbitalSet; }
 
 	/** Find a module by asset */
 	FPCGExValencyModuleDefinition* FindModuleByAsset(const TSoftObjectPtr<UObject>& Asset)

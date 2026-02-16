@@ -328,32 +328,22 @@ namespace PCGExValencyBonding
 			for (int32 ModuleIndex : *MatchingModules)
 			{
 				// Check if module fits the node's orbital configuration
-				bool bFits = true;
-				for (int32 LayerIndex = 0; LayerIndex < CompiledRules->GetLayerCount(); ++LayerIndex)
+				const int64 ModuleMask = CompiledRules->GetModuleOrbitalMask(ModuleIndex);
+				const int64 ModuleBoundaryMask = CompiledRules->GetModuleBoundaryMask(ModuleIndex);
+
+				// Module requires certain orbitals to be connected
+				if ((ModuleMask & NodeOrbitalMask) != ModuleMask)
 				{
-					const int64 ModuleMask = CompiledRules->GetModuleOrbitalMask(ModuleIndex, LayerIndex);
-					const int64 ModuleBoundaryMask = CompiledRules->GetModuleBoundaryMask(ModuleIndex, LayerIndex);
-					const int64 NodeMask = NodeOrbitalMask;
-
-					// Module requires certain orbitals to be connected
-					if ((ModuleMask & NodeMask) != ModuleMask)
-					{
-						bFits = false;
-						break;
-					}
-
-					// Module requires certain orbitals to be disconnected (boundary)
-					if ((ModuleBoundaryMask & NodeMask) != 0)
-					{
-						bFits = false;
-						break;
-					}
+					continue;
 				}
 
-				if (bFits)
+				// Module requires certain orbitals to be disconnected (boundary)
+				if ((ModuleBoundaryMask & NodeOrbitalMask) != 0)
 				{
-					FittingModules.Add(ModuleIndex);
+					continue;
 				}
+
+				FittingModules.Add(ModuleIndex);
 			}
 
 			// Handle no fitting modules
@@ -398,12 +388,8 @@ namespace PCGExValencyBonding
 						int32 BestScore = -1;
 						for (int32 ModuleIndex : FittingModules)
 						{
-							int32 Score = 0;
-							for (int32 LayerIndex = 0; LayerIndex < CompiledRules->GetLayerCount(); ++LayerIndex)
-							{
-								const int64 ModuleMask = CompiledRules->GetModuleOrbitalMask(ModuleIndex, LayerIndex);
-								Score += FMath::CountBits(ModuleMask & NodeOrbitalMask);
-							}
+							const int64 ModuleMask = CompiledRules->GetModuleOrbitalMask(ModuleIndex);
+							const int32 Score = FMath::CountBits(ModuleMask & NodeOrbitalMask);
 							if (Score > BestScore)
 							{
 								BestScore = Score;

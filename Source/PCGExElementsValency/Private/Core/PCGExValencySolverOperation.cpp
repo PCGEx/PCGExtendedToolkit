@@ -276,13 +276,12 @@ void FPCGExValencySolverOperation::Initialize(
 
 bool FPCGExValencySolverOperation::IsModuleCompatibleWithNeighbor(int32 ModuleIndex, int32 OrbitalIndex, int32 NeighborModuleIndex) const
 {
-	if (!CompiledBondingRules || CompiledBondingRules->Layers.Num() == 0)
+	if (!CompiledBondingRules)
 	{
 		return false;
 	}
 
-	// Check first layer (primary compatibility)
-	const FPCGExValencyLayerCompiled& Layer = CompiledBondingRules->Layers[0];
+	const FPCGExValencyLayerCompiled& Layer = CompiledBondingRules->Layer;
 
 	// First try the explicit neighbor list
 	if (Layer.OrbitalAcceptsNeighbor(ModuleIndex, OrbitalIndex, NeighborModuleIndex))
@@ -300,7 +299,7 @@ bool FPCGExValencySolverOperation::IsModuleCompatibleWithNeighbor(int32 ModuleIn
 		if (Header.Y == 0) // Empty neighbor list
 		{
 			// Check if this is a boundary orbital (connected to null cage)
-			const int64 BoundaryMask = CompiledBondingRules->GetModuleBoundaryMask(ModuleIndex, 0);
+			const int64 BoundaryMask = CompiledBondingRules->GetModuleBoundaryMask(ModuleIndex);
 			const bool bIsBoundary = (BoundaryMask & (1LL << OrbitalIndex)) != 0;
 
 			// If NOT a boundary, it's a wildcard - accept any neighbor
@@ -324,40 +323,32 @@ bool FPCGExValencySolverOperation::DoesModuleFitNode(int32 ModuleIndex, int32 No
 	// Get node's orbital mask from cache
 	const int64 NodeMask = OrbitalCache->GetOrbitalMask(NodeIndex);
 
-	// Check all layers (for now we only use layer 0 from cache)
-	for (int32 LayerIndex = 0; LayerIndex < CompiledBondingRules->GetLayerCount(); ++LayerIndex)
+	const int64 ModuleMask = CompiledBondingRules->GetModuleOrbitalMask(ModuleIndex);
+	const int64 BoundaryMask = CompiledBondingRules->GetModuleBoundaryMask(ModuleIndex);
+	const int64 WildcardMask = CompiledBondingRules->GetModuleWildcardMask(ModuleIndex);
+
+	// Module's required orbitals must be present in node
+	if ((ModuleMask & NodeMask) != ModuleMask)
 	{
-		const int64 ModuleMask = CompiledBondingRules->GetModuleOrbitalMask(ModuleIndex, LayerIndex);
-		const int64 BoundaryMask = CompiledBondingRules->GetModuleBoundaryMask(ModuleIndex, LayerIndex);
-		const int64 WildcardMask = CompiledBondingRules->GetModuleWildcardMask(ModuleIndex, LayerIndex);
-		// Currently cache only stores single layer mask; use it for all layers
-		const int64 StateMask = (LayerIndex == 0) ? NodeMask : 0;
+		PCGEX_VALENCY_VERBOSE(Solver, "    Module[%d] REJECTED: ModuleMask=0x%llX, NodeMask=0x%llX, (ModuleMask & NodeMask)=0x%llX != ModuleMask",
+			ModuleIndex, ModuleMask, NodeMask, (ModuleMask & NodeMask));
+		return false;
+	}
 
-		// Module's required orbitals must be present in node
-		if ((ModuleMask & StateMask) != ModuleMask)
-		{
-			PCGEX_VALENCY_VERBOSE(Solver, "    Module[%d] REJECTED at Layer[%d]: ModuleMask=0x%llX, NodeMask=0x%llX, (ModuleMask & NodeMask)=0x%llX != ModuleMask",
-				ModuleIndex, LayerIndex, ModuleMask, StateMask, (ModuleMask & StateMask));
-			return false;
-		}
+	// Module's boundary orbitals must NOT have connections in node
+	if ((BoundaryMask & NodeMask) != 0)
+	{
+		PCGEX_VALENCY_VERBOSE(Solver, "    Module[%d] REJECTED: BoundaryMask=0x%llX conflicts with NodeMask=0x%llX",
+			ModuleIndex, BoundaryMask, NodeMask);
+		return false;
+	}
 
-		// Module's boundary orbitals must NOT have connections in node
-		// (BoundaryMask has bits set for orbitals that must be empty; NodeMask has bits set for orbitals with neighbors)
-		if ((BoundaryMask & StateMask) != 0)
-		{
-			PCGEX_VALENCY_VERBOSE(Solver, "    Module[%d] REJECTED at Layer[%d]: BoundaryMask=0x%llX conflicts with NodeMask=0x%llX",
-				ModuleIndex, LayerIndex, BoundaryMask, StateMask);
-			return false;
-		}
-
-		// Module's wildcard orbitals must HAVE connections in node
-		// (WildcardMask has bits set for orbitals that require any neighbor; those bits must also be set in StateMask)
-		if ((WildcardMask & StateMask) != WildcardMask)
-		{
-			PCGEX_VALENCY_VERBOSE(Solver, "    Module[%d] REJECTED at Layer[%d]: WildcardMask=0x%llX requires neighbors, NodeMask=0x%llX missing some",
-				ModuleIndex, LayerIndex, WildcardMask, StateMask);
-			return false;
-		}
+	// Module's wildcard orbitals must HAVE connections in node
+	if ((WildcardMask & NodeMask) != WildcardMask)
+	{
+		PCGEX_VALENCY_VERBOSE(Solver, "    Module[%d] REJECTED: WildcardMask=0x%llX requires neighbors, NodeMask=0x%llX missing some",
+			ModuleIndex, WildcardMask, NodeMask);
+		return false;
 	}
 
 	return true;

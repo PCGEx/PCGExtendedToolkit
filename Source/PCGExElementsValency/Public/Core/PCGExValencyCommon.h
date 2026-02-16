@@ -480,9 +480,9 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Module")
 	FName ModuleName;
 
-	/** Per-layer orbital configuration */
+	/** Orbital configuration */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Module")
-	TMap<FName, FPCGExValencyModuleLayerConfig> Layers;
+	FPCGExValencyModuleLayerConfig LayerConfig;
 
 	/**
 	 * Properties from cage property components.
@@ -519,12 +519,10 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleDefinition
 		return CurrentSpawnCount < Settings.MinSpawns;
 	}
 
-	/** Get a unique key for this module (Asset path + primary orbital mask) */
-	FString GetModuleKey(const FName& PrimaryLayerName) const
+	/** Get a unique key for this module (Asset path + orbital mask) */
+	FString GetModuleKey() const
 	{
-		const FPCGExValencyModuleLayerConfig* LayerConfig = Layers.Find(PrimaryLayerName);
-		const int64 Mask = LayerConfig ? LayerConfig->OrbitalMask : 0;
-		return FString::Printf(TEXT("%s_%lld"), *Asset.ToSoftObjectPath().ToString(), Mask);
+		return FString::Printf(TEXT("%s_%lld"), *Asset.ToSoftObjectPath().ToString(), LayerConfig.OrbitalMask);
 	}
 
 	/** Check if this module has any connectors defined */
