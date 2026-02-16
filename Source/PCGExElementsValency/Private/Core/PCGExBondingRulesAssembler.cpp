@@ -275,6 +275,30 @@ void FPCGExBondingRulesAssembler::ApplyModuleToDefinition(
 	Dst.Tags = Src.Tags;
 	Dst.Connectors = Src.Connectors;
 
+#if WITH_EDITOR
+	// Generate variant name for editor debug display
+	{
+		FString AssetName = Src.Desc.Asset.GetAssetName();
+		if (AssetName.IsEmpty()) { AssetName = TEXT("Unknown"); }
+
+		int32 ConnectionCount = 0;
+		int64 Mask = Src.Desc.OrbitalMask;
+		while (Mask) { ConnectionCount += (Mask & 1); Mask >>= 1; }
+
+		Dst.VariantName = FString::Printf(TEXT("%s_%dconn"), *AssetName, ConnectionCount);
+
+		if (Dst.bHasLocalTransform)
+		{
+			Dst.VariantName += TEXT("_offset");
+		}
+
+		if (Dst.bHasMaterialVariant)
+		{
+			Dst.VariantName += TEXT("_mat");
+		}
+	}
+#endif
+
 	// Set up layer config
 	FPCGExValencyModuleLayerConfig& LayerConfig = Dst.LayerConfig;
 	LayerConfig.OrbitalMask = Src.Desc.OrbitalMask;
