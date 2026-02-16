@@ -233,10 +233,8 @@ bool FPCGExValencyBondingGenerativeElement::AdvanceWork(FPCGExContext* InContext
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
 	// Output all processor-created IOs
+	Context->MainPoints->StageOutputs();
 	Context->MainBatch->Output();
-
-	// Stage edges
-	Context->EdgesIO->StageOutputs();
 
 	// Output valency map
 	UPCGParamData* ValencyParamData = Context->ManagedObjects->New<UPCGParamData>();
@@ -406,7 +404,13 @@ namespace PCGExValencyBondingGenerative
 		GrowthOp->Grow(PlacedModules);
 
 		// Create output point data
-		OutputIO = PCGExData::NewPointIO(Context, PCGPinConstants::DefaultOutputLabel);
+		if (!PointDataFacade->Source->InitializeOutput(PCGExData::EIOInit::New))
+		{
+			bIsProcessorValid = false;
+			return;
+		}
+		
+		TSharedPtr<PCGExData::FPointIO> OutputIO = PointDataFacade->Source;
 		UPCGBasePointData* OutPointData = OutputIO->GetOut();
 
 		const int32 TotalPlaced = PlacedModules.Num();
@@ -421,12 +425,9 @@ namespace PCGExValencyBondingGenerative
 		TPCGValueRange<FVector> OutBoundsMax = OutPointData->GetBoundsMaxValueRange(false);
 		TPCGValueRange<int32> OutSeeds = OutPointData->GetSeedValueRange(false);
 
-		// Create output facade for attribute writing
-		OutputFacade = MakeShared<PCGExData::FFacade>(OutputIO.ToSharedRef());
-
 		// Create ValencyEntry writer for Valency Map pipeline
 		const FName ValencyEntryAttrName = PCGExValency::EntryData::GetEntryAttributeName(Settings->EntrySuffix);
-		TSharedPtr<PCGExData::TBuffer<int64>> ValencyEntryWriter = OutputFacade->GetWritable<int64>(ValencyEntryAttrName, 0, true, PCGExData::EBufferInit::Inherit);
+		TSharedPtr<PCGExData::TBuffer<int64>> ValencyEntryWriter = PointDataFacade->GetWritable<int64>(ValencyEntryAttrName, 0, true, PCGExData::EBufferInit::Inherit);
 
 		TSharedPtr<PCGExData::TBuffer<FName>> ModuleNameWriter;
 		TSharedPtr<PCGExData::TBuffer<int32>> DepthWriter;
@@ -434,17 +435,17 @@ namespace PCGExValencyBondingGenerative
 
 		if (Settings->bOutputModuleName)
 		{
-			ModuleNameWriter = OutputFacade->GetWritable<FName>(Settings->ModuleNameAttributeName, NAME_None, true, PCGExData::EBufferInit::Inherit);
+			ModuleNameWriter = PointDataFacade->GetWritable<FName>(Settings->ModuleNameAttributeName, NAME_None, true, PCGExData::EBufferInit::Inherit);
 		}
 
 		if (Settings->bOutputDepth)
 		{
-			DepthWriter = OutputFacade->GetWritable<int32>(Settings->DepthAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
+			DepthWriter = PointDataFacade->GetWritable<int32>(Settings->DepthAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
 		}
 
 		if (Settings->bOutputSeedIndex)
 		{
-			SeedIndexWriter = OutputFacade->GetWritable<int32>(Settings->SeedIndexAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
+			SeedIndexWriter = PointDataFacade->GetWritable<int32>(Settings->SeedIndexAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
 		}
 
 		// Write vertex orbital masks if orbital data output is enabled
@@ -452,7 +453,7 @@ namespace PCGExValencyBondingGenerative
 		if (Settings->bOutputOrbitalData)
 		{
 			const FName MaskAttrName = PCGExValency::Attributes::GetMaskAttributeName(Settings->EntrySuffix);
-			OrbitalMaskWriter = OutputFacade->GetWritable<int64>(MaskAttrName, 0, true, PCGExData::EBufferInit::Inherit);
+			OrbitalMaskWriter = PointDataFacade->GetWritable<int64>(MaskAttrName, 0, true, PCGExData::EBufferInit::Inherit);
 		}
 
 		// Build per-vertex orbital masks from connectivity
@@ -578,7 +579,7 @@ namespace PCGExValencyBondingGenerative
 		if (UniqueEdges.IsEmpty()) { return; }
 
 		// Create graph builder
-		GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(OutputFacade.ToSharedRef(), &Settings->GraphBuilderDetails);
+		GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(PointDataFacade, &Settings->GraphBuilderDetails);
 		GraphBuilder->bInheritNodeData = false;
 		GraphBuilder->EdgesIO = Context->EdgesIO;
 		GraphBuilder->NodePointsTransforms = OutPointData->GetConstTransformValueRange();
@@ -692,31 +693,9 @@ namespace PCGExValencyBondingGenerative
 		GraphBuilder->CompileAsync(TaskManager, true, nullptr);
 	}
 
-	void FProcessor::CompleteWork()
-	{
-		if (OutputFacade)
-		{
-			OutputFacade->WriteFastest(TaskManager);
-		}
-	}
-
-	void FProcessor::Write()
-	{
-		if (GraphBuilder && !GraphBuilder->bCompiledSuccessfully)
-		{
-			bIsProcessorValid = false;
-			return;
-		}
-	}
-
 	void FProcessor::Output()
 	{
-		if (OutputIO)
-		{
-			OutputIO->StageOutput(Context);
-		}
-
-		if (GraphBuilder)
+		if (GraphBuilder && GraphBuilder->bCompiledSuccessfully)
 		{
 			GraphBuilder->StageEdgesOutputs();
 		}

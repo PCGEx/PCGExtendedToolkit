@@ -178,10 +178,6 @@ namespace PCGExValencyBondingGenerative
 		TSharedPtr<FPCGExValencyGrowthOperation> GrowthOp;
 		TArray<FPCGExPlacedModule> PlacedModules;
 
-		/** Output facade and IO for the generated points */
-		TSharedPtr<PCGExData::FFacade> OutputFacade;
-		TSharedPtr<PCGExData::FPointIO> OutputIO;
-
 		/** Graph builder for cluster output */
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 
@@ -194,8 +190,6 @@ namespace PCGExValencyBondingGenerative
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
 		virtual void OnPointsProcessingComplete() override;
-		virtual void CompleteWork() override;
-		virtual void Write() override;
 		virtual void Output() override;
 	};
 }

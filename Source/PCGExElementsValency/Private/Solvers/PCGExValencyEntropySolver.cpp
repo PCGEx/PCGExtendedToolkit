@@ -79,7 +79,7 @@ void FPCGExValencyEntropySolver::InitializeAllCandidates()
 		}
 
 		Data.Candidates.Empty();
-		TArray<int32> FillerCandidates;
+		Data.FillerCandidates.Empty();
 
 		// Get node orbital mask for logging (using cache)
 		const int64 NodeMask = GetOrbitalMask(StateIndex);
@@ -93,7 +93,7 @@ void FPCGExValencyEntropySolver::InitializeAllCandidates()
 			{
 				if (CompiledBondingRules->IsModuleFiller(ModuleIndex))
 				{
-					FillerCandidates.Add(ModuleIndex);
+					Data.FillerCandidates.Add(ModuleIndex);
 				}
 				else
 				{
@@ -102,16 +102,9 @@ void FPCGExValencyEntropySolver::InitializeAllCandidates()
 			}
 		}
 
-		// Fall back to filler modules if no normal candidates found
-		if (Data.Candidates.Num() == 0 && FillerCandidates.Num() > 0)
-		{
-			Data.Candidates = MoveTemp(FillerCandidates);
-			PCGEX_VALENCY_VERBOSE(Solver, "  State[%d]: using %d filler candidates (no normal candidates)", StateIndex, Data.Candidates.Num());
-		}
-
 		TotalCandidates += Data.Candidates.Num();
 
-		if (Data.Candidates.Num() == 0 && HasOrbitals(StateIndex))
+		if (Data.Candidates.Num() == 0 && Data.FillerCandidates.Num() == 0 && HasOrbitals(StateIndex))
 		{
 			PCGEX_VALENCY_WARNING(Solver, "  State[%d]: UNSOLVABLE - NodeMask=0x%llX, no modules fit!", StateIndex, NodeMask);
 			(*ValencyStates)[StateIndex].ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
@@ -119,8 +112,8 @@ void FPCGExValencyEntropySolver::InitializeAllCandidates()
 		}
 		else
 		{
-			PCGEX_VALENCY_VERBOSE(Solver, "  State[%d]: NodeMask=0x%llX, %d candidates: [%s]",
-				StateIndex, NodeMask, Data.Candidates.Num(),
+			PCGEX_VALENCY_VERBOSE(Solver, "  State[%d]: NodeMask=0x%llX, %d candidates, %d fillers: [%s]",
+				StateIndex, NodeMask, Data.Candidates.Num(), Data.FillerCandidates.Num(),
 				*FString::JoinBy(Data.Candidates, TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
 		}
 	}
@@ -180,7 +173,8 @@ void FPCGExValencyEntropySolver::RebuildEntropyQueue()
 
 	for (int32 i = 0; i < ValencyStates->Num(); ++i)
 	{
-		if (!(*ValencyStates)[i].IsResolved())
+		// Only queue states with normal candidates - filler-only states are handled in the post-solve sweep
+		if (!(*ValencyStates)[i].IsResolved() && StateData[i].Candidates.Num() > 0)
 		{
 			EntropyQueue.Add(i);
 		}
@@ -254,7 +248,7 @@ PCGExValency::FSolveResult FPCGExValencyEntropySolver::Solve()
 
 	PCGEX_VALENCY_INFO(Solver, "Initial boundaries: %d, Queue size: %d", Result.BoundaryCount, EntropyQueue.Num());
 
-	// Main solve loop
+	// Main solve loop - normal candidates only
 	int32 Iteration = 0;
 	while (EntropyQueue.Num() > 0)
 	{
@@ -269,11 +263,47 @@ PCGExValency::FSolveResult FPCGExValencyEntropySolver::Solve()
 
 		if (!CollapseState(StateIndex))
 		{
-			PCGEX_VALENCY_WARNING(Solver, "  State[%d] CONTRADICTION - marked unsolvable", StateIndex);
-			// Contradiction - state is now unsolvable but we continue with others
+			PCGEX_VALENCY_VERBOSE(Solver, "  State[%d] CONTRADICTION during normal pass", StateIndex);
 		}
 
 		Iteration++;
+	}
+
+	// Filler sweep - assign filler modules to remaining unresolved states
+	// This runs AFTER the main loop to avoid fillers interfering with normal constraint propagation
+	int32 FillerCount = 0;
+	for (int32 i = 0; i < ValencyStates->Num(); ++i)
+	{
+		PCGExValency::FValencyState& State = (*ValencyStates)[i];
+		if (State.IsResolved()) { continue; }
+		if (!HasOrbitals(i)) { continue; }
+
+		FWFCStateData& Data = StateData[i];
+		if (Data.FillerCandidates.Num() == 0)
+		{
+			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
+			continue;
+		}
+
+		const int32 SelectedFiller = SelectWeightedRandom(Data.FillerCandidates);
+		if (SelectedFiller >= 0)
+		{
+			State.ResolvedModule = SelectedFiller;
+			DistributionTracker.RecordSpawn(SelectedFiller, CompiledBondingRules);
+			Data.FillerCandidates.Empty();
+			FillerCount++;
+
+			PCGEX_VALENCY_VERBOSE(Solver, "  Filler sweep: State[%d] assigned FILLER Module[%d]", i, SelectedFiller);
+		}
+		else
+		{
+			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
+		}
+	}
+
+	if (FillerCount > 0)
+	{
+		PCGEX_VALENCY_INFO(Solver, "Filler sweep assigned %d filler modules", FillerCount);
 	}
 
 	// Count results
@@ -321,9 +351,16 @@ bool FPCGExValencyEntropySolver::CollapseState(int32 StateIndex)
 	// Filter candidates based on current neighbor states
 	if (!FilterCandidates(StateIndex))
 	{
-		PCGEX_VALENCY_WARNING(Solver, "  CollapseState[%d]: NO CANDIDATES after filter!", StateIndex);
-		// No valid candidates - mark as unsolvable
-		State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
+		// Normal candidates exhausted - don't mark UNSOLVABLE yet, filler sweep will handle it
+		if (Data.FillerCandidates.Num() > 0)
+		{
+			PCGEX_VALENCY_VERBOSE(Solver, "  CollapseState[%d]: Normal candidates exhausted, %d fillers available for post-solve sweep", StateIndex, Data.FillerCandidates.Num());
+		}
+		else
+		{
+			PCGEX_VALENCY_WARNING(Solver, "  CollapseState[%d]: NO CANDIDATES after filter, no fillers available", StateIndex);
+			State.ResolvedModule = PCGExValency::SlotState::UNSOLVABLE;
+		}
 		return false;
 	}
 

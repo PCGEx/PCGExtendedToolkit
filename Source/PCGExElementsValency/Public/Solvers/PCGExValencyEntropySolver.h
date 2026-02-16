@@ -17,6 +17,9 @@ struct FWFCStateData
 	/** Valid candidate module indices (shrinks during propagation) */
 	TArray<int32> Candidates;
 
+	/** Filler module candidates - used as last resort when all normal candidates are eliminated */
+	TArray<int32> FillerCandidates;
+
 	/** Cached entropy value for priority queue ordering */
 	float Entropy = TNumericLimits<float>::Max();
 
@@ -27,6 +30,7 @@ struct FWFCStateData
 	void Reset()
 	{
 		Candidates.Empty();
+		FillerCandidates.Empty();
 		Entropy = TNumericLimits<float>::Max();
 		NeighborResolutionRatio = 0.0f;
 	}

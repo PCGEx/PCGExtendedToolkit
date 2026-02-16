@@ -36,6 +36,9 @@ struct FPriorityStateData
 	/** Valid candidate module indices (shrinks during propagation) */
 	TArray<int32> Candidates;
 
+	/** Filler module candidates - used as last resort when all normal candidates are eliminated */
+	TArray<int32> FillerCandidates;
+
 	/** Priority value for this state */
 	float Priority = 0.0f;
 
@@ -43,6 +46,7 @@ struct FPriorityStateData
 	void Reset()
 	{
 		Candidates.Empty();
+		FillerCandidates.Empty();
 		Priority = 0.0f;
 	}
 };
