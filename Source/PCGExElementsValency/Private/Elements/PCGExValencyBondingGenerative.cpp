@@ -141,6 +141,7 @@ bool FPCGExValencyBondingGenerativeElement::PostBoot(FPCGExContext* InContext) c
 
 	// Create edges IO collection for graph builder
 	Context->EdgesIO = MakeShared<PCGExData::FPointIOCollection>(Context);
+	Context->EdgesIO->OutputPin = PCGExClusters::Labels::OutputEdgesLabel;
 
 	// Build module local bounds cache from collection staging data
 	const int32 ModuleCount = Context->CompiledRules->ModuleCount;
