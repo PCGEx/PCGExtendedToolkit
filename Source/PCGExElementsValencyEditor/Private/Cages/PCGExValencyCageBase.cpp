@@ -84,19 +84,7 @@ void APCGExValencyCageBase::OnPostEditChangeProperty(FPropertyChangedEvent& Prop
 {
 	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
 
-	if (PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, BondingRulesOverride))
-	{
-		// Override changed - reinitialize orbitals, redetect connections, and trigger rebuild
-		CachedOrbitalSet.Reset();
-		InitializeOrbitalsFromSet();
-		DetectNearbyConnections();
-
-		// Structural change - needs rebuild
-		RequestRebuild(EValencyRebuildReason::PropertyChange);
-
-		PCGEX_VALENCY_REDRAW_ALL_VIEWPORT
-	}
-	else if (PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, ProbeRadius))
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, ProbeRadius))
 	{
 		// Probe radius changed - redetect connections
 		// This can change which cages are connected, so trigger rebuild if connections changed
@@ -271,13 +259,6 @@ UPCGExValencyOrbitalSet* APCGExValencyCageBase::GetEffectiveOrbitalSet() const
 
 UPCGExValencyBondingRules* APCGExValencyCageBase::GetEffectiveBondingRules() const
 {
-	// Check override first
-	if (BondingRulesOverride)
-	{
-		return BondingRulesOverride;
-	}
-
-	// Check containing volumes
 	for (const TWeakObjectPtr<AValencyContextVolume>& VolumePtr : ContainingVolumes)
 	{
 		if (const AValencyContextVolume* Volume = VolumePtr.Get())

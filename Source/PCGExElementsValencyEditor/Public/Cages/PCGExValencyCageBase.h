@@ -57,8 +57,7 @@ enum class EValencyRebuildReason : uint8
  * Cages represent potential node positions in a Valency graph and define
  * orbital connections to neighboring cages.
  *
- * Cages inherit their BondingRules and OrbitalSet from containing volumes
- * unless an explicit override is provided.
+ * Cages inherit their BondingRules and OrbitalSet from containing volumes.
  */
 UCLASS(Abstract, HideCategories = (Rendering, Replication, Collision, HLOD, Physics, Networking, Input, LOD, Cooking))
 class PCGEXELEMENTSVALENCYEDITOR_API APCGExValencyCageBase : public APCGExValencyAssetContainerBase
@@ -214,13 +213,6 @@ public:
 	/** Optional display name for this cage */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage")
 	FString CageName;
-
-	/**
-	 * Optional explicit BondingRules override.
-	 * If not set, uses the BondingRules from containing volume(s).
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage|Advanced", AdvancedDisplay)
-	TObjectPtr<UPCGExValencyBondingRules> BondingRulesOverride;
 
 	/**
 	 * Probe radius for detecting nearby cages.
