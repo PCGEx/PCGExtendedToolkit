@@ -163,13 +163,15 @@ namespace PCGExValencyAssetStaging
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			const uint64 ValencyHash = ValencyEntryReader->Read(Index);
+			const int64 RawRead = ValencyEntryReader->Read(Index);
+			const uint64 ValencyHash = static_cast<uint64>(RawRead);
 			if (ValencyHash == PCGExValency::EntryData::INVALID_ENTRY) { continue; }
 
 			// Resolve ValencyEntry -> BondingRules + ModuleIndex
 			uint16 ModuleIndex = 0;
 			uint16 PatternFlags = 0;
 			UPCGExValencyBondingRules* Rules = Context->ValencyUnpacker->ResolveEntry(ValencyHash, ModuleIndex, PatternFlags);
+
 			if (!Rules || !Rules->IsCompiled()) { continue; }
 
 			const FPCGExValencyBondingRulesCompiled* CompiledRules = Rules->GetCompiledData();

@@ -77,10 +77,11 @@ protected:
 
 	/**
 	 * Compute world transform for placing a child module attached at a connector.
-	 * Uses plug/receptacle semantics: connectors face each other.
+	 * Child inherits parent module orientation; position offset by child connector.
 	 */
 	FTransform ComputeAttachmentTransform(
 		const FPCGExOpenConnector& ParentConnector,
+		const FTransform& ParentModuleWorld,
 		int32 ChildModuleIndex,
 		int32 ChildConnectorIndex) const;
 

@@ -409,7 +409,48 @@ namespace PCGExValencyBondingGenerative
 		}
 
 		// Run the growth (sequential)
+		const int32 SeedCount = PlacedModules.Num();
 		GrowthOp->Grow(PlacedModules);
+		const int32 GrownCount = PlacedModules.Num() - SeedCount;
+
+		if (GrownCount == 0)
+		{
+			// Diagnose: check if modules have compiled connectors at all
+			int32 TotalCompiledConnectors = 0;
+			for (int32 i = 0; i < CompiledRules->ModuleCount; ++i)
+			{
+				TotalCompiledConnectors += CompiledRules->GetModuleConnectorCount(i);
+			}
+
+			if (TotalCompiledConnectors == 0)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Growth placed 0 modules: no compiled connectors found in any module. Ensure the BondingRules has a valid OrbitalSet assigned (connectors require it for compilation)."));
+			}
+			else
+			{
+				// Check if all seed modules are dead-ends
+				bool bAllSeedsDeadEnd = true;
+				for (int32 i = 0; i < SeedCount; ++i)
+				{
+					if (!CompiledRules->ModuleIsDeadEnd[PlacedModules[i].ModuleIndex])
+					{
+						bAllSeedsDeadEnd = false;
+						break;
+					}
+				}
+
+				if (bAllSeedsDeadEnd)
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Growth placed 0 modules: all seed modules are marked as dead-ends (no frontier expansion)."));
+				}
+				else
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+						FTEXT("Growth placed 0 modules despite {0} total compiled connectors across {1} modules. Check connector type compatibility and polarity settings in the ConnectorSet."),
+						FText::AsNumber(TotalCompiledConnectors), FText::AsNumber(CompiledRules->ModuleCount)));
+				}
+			}
+		}
 
 		// Add sentinel vertices for isolated seeds to ensure valid clusters (>= 2 vtx, 1 edge).
 		// Sentinels are identified by having ParentIndex >= 0 but ParentConnectorIndex < 0.
@@ -747,7 +788,15 @@ namespace PCGExValencyBondingGenerative
 
 			};
 		}
+		
+		// Write attributes now, and compile in CompleteWork.
+		// Compile will do the re-ordering of metadata keys
+		PointDataFacade->WriteFastest(TaskManager);
 
+	}
+
+	void FProcessor::CompleteWork()
+	{		
 		// Compile graph asynchronously
 		GraphBuilder->CompileAsync(TaskManager, true, nullptr);
 	}
