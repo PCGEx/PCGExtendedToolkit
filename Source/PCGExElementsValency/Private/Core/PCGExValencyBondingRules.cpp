@@ -12,43 +12,35 @@ void FPCGExValencyBondingRulesCompiled::BuildCandidateLookup()
 {
 	MaskToCandidates.Empty();
 
-	// For each unique orbital mask combination, collect candidate modules
-	// This is most useful for single-layer bonding rules
-	if (Layers.Num() == 1)
+	for (int32 ModuleIndex = 0; ModuleIndex < ModuleCount; ++ModuleIndex)
 	{
-		for (int32 ModuleIndex = 0; ModuleIndex < ModuleCount; ++ModuleIndex)
-		{
-			if (IsModuleExcluded(ModuleIndex)) { continue; }
+		if (IsModuleExcluded(ModuleIndex)) { continue; }
 
-			const int64 Mask = ModuleOrbitalMasks[ModuleIndex];
-			TArray<int32>& Candidates = MaskToCandidates.FindOrAdd(Mask);
-			Candidates.Add(ModuleIndex);
-		}
+		const int64 Mask = ModuleOrbitalMasks[ModuleIndex];
+		TArray<int32>& Candidates = MaskToCandidates.FindOrAdd(Mask);
+		Candidates.Add(ModuleIndex);
 	}
-	// For multi-layer, we could build more complex lookup but it's less beneficial
-	// Runtime will iterate modules and check masks directly
 }
 
 bool UPCGExValencyBondingRules::Compile()
 {
 	VALENCY_LOG_SECTION(Compilation, "BONDING RULES COMPILATION START");
 	PCGEX_VALENCY_INFO(Compilation, "Asset: %s", *GetName());
-	PCGEX_VALENCY_INFO(Compilation, "Module count: %d, OrbitalSet count: %d", Modules.Num(), OrbitalSets.Num());
+	PCGEX_VALENCY_INFO(Compilation, "Module count: %d, OrbitalSet: %s", Modules.Num(), OrbitalSet ? *OrbitalSet->LayerName.ToString() : TEXT("null"));
 
-	// Validate orbital sets (TObjectPtr ensures they're already loaded with this asset)
-	for (int32 i = 0; i < OrbitalSets.Num(); ++i)
+	// Validate orbital set (TObjectPtr ensures it's already loaded with this asset)
+	if (!OrbitalSet)
 	{
-		if (!OrbitalSets[i])
-		{
-			PCGEX_VALENCY_ERROR(Compilation, "Orbital set at index %d is null", i);
-			return false;
-		}
+		PCGEX_VALENCY_ERROR(Compilation, "OrbitalSet is null");
+		return false;
+	}
 
-		PCGEX_VALENCY_INFO(Compilation, "  OrbitalSet[%d]: '%s' with %d orbitals", i, *OrbitalSets[i]->LayerName.ToString(), OrbitalSets[i]->Num());
+	PCGEX_VALENCY_INFO(Compilation, "  OrbitalSet: '%s' with %d orbitals", *OrbitalSet->LayerName.ToString(), OrbitalSet->Num());
 
-		// Validate orbital set
+	// Validate orbital set
+	{
 		TArray<FText> ValidationErrors;
-		if (!OrbitalSets[i]->Validate(ValidationErrors))
+		if (!OrbitalSet->Validate(ValidationErrors))
 		{
 			for (const FText& Error : ValidationErrors)
 			{
@@ -56,22 +48,19 @@ bool UPCGExValencyBondingRules::Compile()
 			}
 			return false;
 		}
+	}
 
-		// Check for more than 64 orbitals
-		if (OrbitalSets[i]->Num() > 64)
-		{
-			PCGEX_VALENCY_ERROR(Compilation, "Layer '%s' has more than 64 orbitals", *OrbitalSets[i]->LayerName.ToString());
-			return false;
-		}
+	// Check for more than 64 orbitals
+	if (OrbitalSet->Num() > 64)
+	{
+		PCGEX_VALENCY_ERROR(Compilation, "OrbitalSet '%s' has more than 64 orbitals", *OrbitalSet->LayerName.ToString());
+		return false;
 	}
 
 	// Reset compiled data for fresh compilation
 	CompiledData = FPCGExValencyBondingRulesCompiled();
 
-	const int32 LayerCount = OrbitalSets.Num();
-
 	CompiledData.ModuleCount = Modules.Num();
-	CompiledData.Layers.SetNum(LayerCount);
 
 	// Initialize parallel arrays
 	CompiledData.ModuleWeights.SetNum(Modules.Num());
@@ -82,9 +71,9 @@ bool UPCGExValencyBondingRules::Compile()
 	CompiledData.ModuleNames.SetNum(Modules.Num());
 	CompiledData.ModuleLocalTransformHeaders.SetNum(Modules.Num());
 	CompiledData.ModuleHasLocalTransform.SetNum(Modules.Num());
-	CompiledData.ModuleOrbitalMasks.SetNum(Modules.Num() * LayerCount);
-	CompiledData.ModuleBoundaryMasks.SetNum(Modules.Num() * LayerCount);
-	CompiledData.ModuleWildcardMasks.SetNum(Modules.Num() * LayerCount);
+	CompiledData.ModuleOrbitalMasks.SetNum(Modules.Num());
+	CompiledData.ModuleBoundaryMasks.SetNum(Modules.Num());
+	CompiledData.ModuleWildcardMasks.SetNum(Modules.Num());
 	CompiledData.AllLocalTransforms.Empty();
 	CompiledData.ModulePropertyHeaders.SetNum(Modules.Num());
 	CompiledData.AllModuleProperties.Empty();
@@ -131,37 +120,42 @@ bool UPCGExValencyBondingRules::Compile()
 		const int32 ConnectorStartIndex = CompiledData.AllModuleConnectors.Num();
 		int32 ConnectorCount = 0;
 
-		if (Module.Connectors.Num() > 0 && OrbitalSets.Num() > 0)
+		if (Module.Connectors.Num() > 0 && OrbitalSet)
 		{
-			// Use primary orbital set for connector-to-orbital mapping
-			const UPCGExValencyOrbitalSet* PrimaryOrbitalSet = OrbitalSets[0];
-
 			// Build orbital direction resolver
 			PCGExValency::FOrbitalDirectionResolver OrbitalResolver;
-			OrbitalResolver.BuildFrom(PrimaryOrbitalSet);
+			OrbitalResolver.BuildFrom(OrbitalSet);
 
 			for (const FPCGExValencyModuleConnector& Connector : Module.Connectors)
 			{
 				FPCGExValencyModuleConnector CompiledConnector = Connector;
 
-				// Compute orbital index from connector direction
-				// The connector's LocalOffset translation defines its position relative to module origin
-				const FVector ConnectorDirection = Connector.LocalOffset.GetTranslation().GetSafeNormal();
-
-				if (!ConnectorDirection.IsNearlyZero())
+				if (Connector.bManualOrbitalOverride)
 				{
-					// Use the orbital resolver to find matching orbital
-					// Note: For connectors, we typically don't transform by module rotation (connectors are module-local)
-					CompiledConnector.OrbitalIndex = OrbitalResolver.FindMatchingOrbital(
-						ConnectorDirection,
-						false, // Don't transform - connectors are in module-local space
-						FTransform::Identity
-					);
+					// Manual override - use user-specified orbital index
+					CompiledConnector.OrbitalIndex = FMath::Clamp(Connector.ManualOrbitalIndex, 0, 63);
 				}
 				else
 				{
-					// Connector at origin - assign to orbital 0 as fallback, or -1 for invalid
-					CompiledConnector.OrbitalIndex = PrimaryOrbitalSet->Num() > 0 ? 0 : -1;
+					// Compute orbital index from connector direction
+					// The connector's LocalOffset translation defines its position relative to module origin
+					const FVector ConnectorDirection = Connector.LocalOffset.GetTranslation().GetSafeNormal();
+
+					if (!ConnectorDirection.IsNearlyZero())
+					{
+						// Use the orbital resolver to find matching orbital
+						// Note: For connectors, we typically don't transform by module rotation (connectors are module-local)
+						CompiledConnector.OrbitalIndex = OrbitalResolver.FindMatchingOrbital(
+							ConnectorDirection,
+							false, // Don't transform - connectors are in module-local space
+							FTransform::Identity
+						);
+					}
+					else
+					{
+						// Connector at origin - assign to orbital 0 as fallback, or -1 for invalid
+						CompiledConnector.OrbitalIndex = OrbitalSet->Num() > 0 ? 0 : -1;
+					}
 				}
 
 				CompiledData.AllModuleConnectors.Add(CompiledConnector);
@@ -186,55 +180,39 @@ bool UPCGExValencyBondingRules::Compile()
 			Module.Tags.Num(),
 			ConnectorCount);
 
-		// Orbital masks per layer
-		for (int32 LayerIndex = 0; LayerIndex < LayerCount; ++LayerIndex)
+		// Orbital masks
 		{
-			const FName& LayerName = OrbitalSets[LayerIndex]->LayerName;
-			const int32 MaskIndex = ModuleIndex * LayerCount + LayerIndex;
+			const FPCGExValencyModuleLayerConfig& Config = Module.LayerConfig;
+			CompiledData.ModuleOrbitalMasks[ModuleIndex] = Config.OrbitalMask;
+			CompiledData.ModuleBoundaryMasks[ModuleIndex] = Config.BoundaryOrbitalMask;
+			CompiledData.ModuleWildcardMasks[ModuleIndex] = Config.WildcardOrbitalMask;
 
-			if (const FPCGExValencyModuleLayerConfig* LayerConfig = Module.Layers.Find(LayerName))
+			// Log orbital mask as binary for easier reading
+			FString OrbitalBits;
+			FString BoundaryBits;
+			FString WildcardBits;
+			for (int32 Bit = 0; Bit < OrbitalSet->Num(); ++Bit)
 			{
-				CompiledData.ModuleOrbitalMasks[MaskIndex] = LayerConfig->OrbitalMask;
-				CompiledData.ModuleBoundaryMasks[MaskIndex] = LayerConfig->BoundaryOrbitalMask;
-				CompiledData.ModuleWildcardMasks[MaskIndex] = LayerConfig->WildcardOrbitalMask;
-
-				// Log orbital mask as binary for easier reading
-				FString OrbitalBits;
-				FString BoundaryBits;
-				FString WildcardBits;
-				for (int32 Bit = 0; Bit < OrbitalSets[LayerIndex]->Num(); ++Bit)
-				{
-					OrbitalBits += (LayerConfig->OrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
-					BoundaryBits += (LayerConfig->BoundaryOrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
-					WildcardBits += (LayerConfig->WildcardOrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
-				}
-				PCGEX_VALENCY_VERBOSE(Compilation, "    Layer[%d] '%s': OrbitalMask=%s, BoundaryMask=%s, WildcardMask=%s",
-					LayerIndex, *LayerName.ToString(),
-					*OrbitalBits, *BoundaryBits, *WildcardBits);
-
-				// Log neighbor info
-				for (const auto& NeighborPair : LayerConfig->OrbitalNeighbors)
-				{
-					PCGEX_VALENCY_VERBOSE(Compilation, "      Orbital '%s' neighbors: [%s]",
-						*NeighborPair.Key.ToString(),
-						*FString::JoinBy(NeighborPair.Value.Indices, TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
-				}
+				OrbitalBits += (Config.OrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
+				BoundaryBits += (Config.BoundaryOrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
+				WildcardBits += (Config.WildcardOrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
 			}
-			else
+			PCGEX_VALENCY_VERBOSE(Compilation, "    OrbitalMask=%s, BoundaryMask=%s, WildcardMask=%s",
+				*OrbitalBits, *BoundaryBits, *WildcardBits);
+
+			// Log neighbor info
+			for (const auto& NeighborPair : Config.OrbitalNeighbors)
 			{
-				CompiledData.ModuleOrbitalMasks[MaskIndex] = 0;
-				CompiledData.ModuleBoundaryMasks[MaskIndex] = 0;
-				CompiledData.ModuleWildcardMasks[MaskIndex] = 0;
-				PCGEX_VALENCY_VERBOSE(Compilation, "    Layer[%d] '%s': NO CONFIG (masks=0)", LayerIndex, *LayerName.ToString());
+				PCGEX_VALENCY_VERBOSE(Compilation, "      Orbital '%s' neighbors: [%s]",
+					*NeighborPair.Key.ToString(),
+					*FString::JoinBy(NeighborPair.Value.Indices, TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
 			}
 		}
 	}
 
-	// Compile each layer's neighbor data
-	for (int32 LayerIndex = 0; LayerIndex < LayerCount; ++LayerIndex)
+	// Compile layer neighbor data
 	{
-		const UPCGExValencyOrbitalSet* OrbitalSet = OrbitalSets[LayerIndex];
-		FPCGExValencyLayerCompiled& CompiledLayer = CompiledData.Layers[LayerIndex];
+		FPCGExValencyLayerCompiled& CompiledLayer = CompiledData.Layer;
 
 		CompiledLayer.LayerName = OrbitalSet->LayerName;
 		CompiledLayer.OrbitalCount = OrbitalSet->Num();
@@ -248,7 +226,7 @@ bool UPCGExValencyBondingRules::Compile()
 		for (int32 ModuleIndex = 0; ModuleIndex < Modules.Num(); ++ModuleIndex)
 		{
 			const FPCGExValencyModuleDefinition& Module = Modules[ModuleIndex];
-			const FPCGExValencyModuleLayerConfig* LayerConfig = Module.Layers.Find(OrbitalSet->LayerName);
+			const FPCGExValencyModuleLayerConfig& Config = Module.LayerConfig;
 
 			for (int32 OrbitalIndex = 0; OrbitalIndex < OrbitalSet->Num(); ++OrbitalIndex)
 			{
@@ -258,13 +236,10 @@ bool UPCGExValencyBondingRules::Compile()
 				int32 NeighborStart = CompiledLayer.AllNeighbors.Num();
 				int32 NeighborCount = 0;
 
-				if (LayerConfig)
+				if (const FPCGExValencyNeighborIndices* Neighbors = Config.OrbitalNeighbors.Find(OrbitalName))
 				{
-					if (const FPCGExValencyNeighborIndices* Neighbors = LayerConfig->OrbitalNeighbors.Find(OrbitalName))
-					{
-						NeighborCount = Neighbors->Num();
-						CompiledLayer.AllNeighbors.Append(Neighbors->Indices);
-					}
+					NeighborCount = Neighbors->Num();
+					CompiledLayer.AllNeighbors.Append(Neighbors->Indices);
 				}
 
 				CompiledLayer.NeighborHeaders[HeaderIndex] = FIntPoint(NeighborStart, NeighborCount);
@@ -464,7 +439,7 @@ bool UPCGExValencyBondingRules::Compile()
 		Patterns.AdditivePatternIndices.Num());
 
 	VALENCY_LOG_SECTION(Compilation, "BONDING RULES COMPILATION COMPLETE");
-	PCGEX_VALENCY_INFO(Compilation, "Result: %d modules, %d layers, %d patterns", Modules.Num(), LayerCount, Patterns.GetPatternCount());
+	PCGEX_VALENCY_INFO(Compilation, "Result: %d modules, %d patterns", Modules.Num(), Patterns.GetPatternCount());
 	return true;
 }
 
@@ -480,7 +455,7 @@ void UPCGExValencyBondingRules::PostLoad()
 	}
 
 	// Otherwise compile if we have the required data
-	if (Modules.Num() > 0 && OrbitalSets.Num() > 0)
+	if (Modules.Num() > 0 && OrbitalSet)
 	{
 		Compile();
 	}

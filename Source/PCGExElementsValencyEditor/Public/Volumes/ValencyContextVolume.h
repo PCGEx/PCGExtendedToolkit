@@ -73,20 +73,6 @@ public:
 	TObjectPtr<UPCGExValencyBondingRules> BondingRules;
 
 	/**
-	 * Optional orbital set override.
-	 * If not set, uses the first orbital set from BondingRules.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency", AdvancedDisplay)
-	TObjectPtr<UPCGExValencyOrbitalSet> OrbitalSetOverride;
-
-	/**
-	 * Optional connector set override.
-	 * If not set, uses ConnectorSet from BondingRules.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency")
-	TObjectPtr<UPCGExValencyConnectorSet> ConnectorSetOverride;
-
-	/**
 	 * Default probe radius for cages in this volume.
 	 * Cages use this value unless they have their own override.
 	 */

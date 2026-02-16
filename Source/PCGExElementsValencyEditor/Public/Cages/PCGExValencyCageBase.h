@@ -57,8 +57,7 @@ enum class EValencyRebuildReason : uint8
  * Cages represent potential node positions in a Valency graph and define
  * orbital connections to neighboring cages.
  *
- * Cages inherit their BondingRules and OrbitalSet from containing volumes
- * unless an explicit override is provided.
+ * Cages inherit their BondingRules and OrbitalSet from containing volumes.
  */
 UCLASS(Abstract, HideCategories = (Rendering, Replication, Collision, HLOD, Physics, Networking, Input, LOD, Cooking))
 class PCGEXELEMENTSVALENCYEDITOR_API APCGExValencyCageBase : public APCGExValencyAssetContainerBase
@@ -216,20 +215,6 @@ public:
 	FString CageName;
 
 	/**
-	 * Optional explicit BondingRules override.
-	 * If not set, uses the BondingRules from containing volume(s).
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage|Advanced", AdvancedDisplay)
-	TObjectPtr<UPCGExValencyBondingRules> BondingRulesOverride;
-
-	/**
-	 * Optional explicit OrbitalSet override.
-	 * If not set, uses the OrbitalSet from containing volume(s).
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage|Advanced", AdvancedDisplay)
-	TObjectPtr<UPCGExValencyOrbitalSet> OrbitalSetOverride;
-
-	/**
 	 * Probe radius for detecting nearby cages.
 	 * -1 = use volume's default radius.
 	 * 0 = receive-only (other cages can detect me, I don't detect them).
@@ -260,14 +245,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage|Connectors")
 	bool bReadConnectorsFromAssets = false;
 
-	/**
-	 * Optional explicit ConnectorSet override for this cage.
-	 * If not set, uses the ConnectorSet from containing volume(s) or BondingRules.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage|Connectors", AdvancedDisplay)
-	TObjectPtr<UPCGExValencyConnectorSet> ConnectorSetOverride;
-
-	/** Get the effective connector set (from volume, bonding rules, or override) */
+	/** Get the effective connector set (from volume or bonding rules) */
 	UPCGExValencyConnectorSet* GetEffectiveConnectorSet() const;
 
 	/**

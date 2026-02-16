@@ -110,10 +110,10 @@ void FPCGExValencyProcessorElement::PostLoadAssetsDependencies(FPCGExContext* In
 	{
 		Context->OrbitalSet = Settings->OrbitalSet.Get();
 	}
-	else if (Context->BondingRules && Context->BondingRules->OrbitalSets.Num() > 0)
+	else if (Context->BondingRules && Context->BondingRules->OrbitalSet)
 	{
 		// Auto-populate from BondingRules if OrbitalSet not explicitly set
-		Context->OrbitalSet = Context->BondingRules->OrbitalSets[0];
+		Context->OrbitalSet = Context->BondingRules->OrbitalSet;
 	}
 }
 
@@ -147,9 +147,9 @@ bool FPCGExValencyProcessorElement::PostBoot(FPCGExContext* InContext) const
 	{
 		if (!Context->OrbitalSet)
 		{
-			if (Context->BondingRules && Context->BondingRules->OrbitalSets.Num() == 0)
+			if (Context->BondingRules && !Context->BondingRules->OrbitalSet)
 			{
-				PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules has no OrbitalSets. Rebuild the Bonding Rules asset."));
+				PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules has no OrbitalSet. Rebuild the Bonding Rules asset."));
 			}
 			else if (!Settings->bQuietMissingOrbitalSet)
 			{
@@ -229,14 +229,14 @@ bool FPCGExValencyProcessorElement::ConsumeValencyMap(FPCGExContext* InContext) 
 	}
 
 	// 4. Resolve OrbitalSet from BondingRules
-	if (Context->BondingRules->OrbitalSets.Num() > 0)
+	if (Context->BondingRules->OrbitalSet)
 	{
-		Context->OrbitalSet = Context->BondingRules->OrbitalSets[0];
+		Context->OrbitalSet = Context->BondingRules->OrbitalSet;
 	}
 
 	if (!Context->OrbitalSet)
 	{
-		PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules in Valency Map has no OrbitalSets. Rebuild the Bonding Rules asset."));
+		PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules in Valency Map has no OrbitalSet. Rebuild the Bonding Rules asset."));
 		return false;
 	}
 

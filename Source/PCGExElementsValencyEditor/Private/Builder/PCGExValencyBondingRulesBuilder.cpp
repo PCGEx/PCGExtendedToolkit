@@ -110,13 +110,11 @@ FPCGExValencyBuildResult UPCGExValencyBondingRulesBuilder::BuildFromVolumes(cons
 	{
 		// Rebuild ModuleKeyToIndex from compiled modules for pattern compilation
 		TMap<FString, int32> ModuleKeyToIndex;
-		const FName LayerName = OrbitalSet->LayerName;
 
 		for (int32 ModuleIndex = 0; ModuleIndex < TargetRules->Modules.Num(); ++ModuleIndex)
 		{
 			const FPCGExValencyModuleDefinition& Module = TargetRules->Modules[ModuleIndex];
-			const FPCGExValencyModuleLayerConfig* LayerConfig = Module.Layers.Find(LayerName);
-			const int64 OrbitalMask = LayerConfig ? LayerConfig->OrbitalMask : 0;
+			const int64 OrbitalMask = Module.LayerConfig.OrbitalMask;
 
 			// LocalTransform is NOT part of module identity - always pass nullptr
 			const FPCGExValencyMaterialVariant* MaterialVariantPtr = Module.bHasMaterialVariant ? &Module.MaterialVariant : nullptr;
@@ -186,11 +184,8 @@ FPCGExValencyBuildResult UPCGExValencyBondingRulesBuilder::BuildFromCages(
 		TargetRules->Modules.Empty();
 	}
 
-	// Ensure orbital set is in the bonding rules
-	if (!TargetRules->OrbitalSets.Contains(OrbitalSet))
-	{
-		TargetRules->OrbitalSets.Add(OrbitalSet);
-	}
+	// Assign orbital set to the bonding rules
+	TargetRules->OrbitalSet = OrbitalSet;
 
 	// Step 1: Collect and preprocess cage data
 	TArray<FPCGExValencyCageData> CageData;
@@ -438,6 +433,8 @@ void UPCGExValencyBondingRulesBuilder::CollectCageData(
 					InheritedConn.Polarity = SrcConn->Polarity;
 					InheritedConn.ConstraintOverrides = SrcConn->ConstraintOverrides;
 					InheritedConn.OverrideMode = SrcConn->OverrideMode;
+					InheritedConn.bManualOrbitalOverride = SrcConn->bManualOrbitalOverride;
+					InheritedConn.ManualOrbitalIndex = SrcConn->ManualOrbitalIndex;
 					InheritedConn.OrbitalIndex = -1;
 
 					Data.Connectors.Add(InheritedConn);
@@ -503,6 +500,8 @@ void UPCGExValencyBondingRulesBuilder::CollectCageData(
 					ExistingConnector.Polarity = ConnectorComp->Polarity;
 					ExistingConnector.ConstraintOverrides = ConnectorComp->ConstraintOverrides;
 					ExistingConnector.OverrideMode = ConnectorComp->OverrideMode;
+					ExistingConnector.bManualOrbitalOverride = ConnectorComp->bManualOrbitalOverride;
+					ExistingConnector.ManualOrbitalIndex = ConnectorComp->ManualOrbitalIndex;
 					PCGEX_VALENCY_VERBOSE(Building, "    Connector component '%s' overrides existing",
 						*ConnectorComp->Identifier.ToString());
 				}
@@ -523,6 +522,8 @@ void UPCGExValencyBondingRulesBuilder::CollectCageData(
 				ModuleConnector.Polarity = ConnectorComp->Polarity;
 				ModuleConnector.ConstraintOverrides = ConnectorComp->ConstraintOverrides;
 				ModuleConnector.OverrideMode = ConnectorComp->OverrideMode;
+				ModuleConnector.bManualOrbitalOverride = ConnectorComp->bManualOrbitalOverride;
+				ModuleConnector.ManualOrbitalIndex = ConnectorComp->ManualOrbitalIndex;
 				ModuleConnector.OrbitalIndex = -1;
 
 				Data.Connectors.Add(ModuleConnector);
@@ -624,8 +625,6 @@ void UPCGExValencyBondingRulesBuilder::BuildModuleMap(
 
 	VALENCY_LOG_SECTION(Building, "BUILDING MODULE MAP");
 
-	const FName LayerName = OrbitalSet->LayerName;
-
 	// Collect all unique Asset + OrbitalMask (+ MaterialVariant) combinations from cages.
 	// IMPORTANT: LocalTransform is NOT part of module identity - transform variants share the same module.
 	// This ensures consistent module indices regardless of child mesh positioning.
@@ -707,8 +706,7 @@ void UPCGExValencyBondingRulesBuilder::BuildModuleMap(
 #endif
 
 			// Set up the layer config with the orbital mask
-			FPCGExValencyModuleLayerConfig& LayerConfig = NewModule.Layers.FindOrAdd(LayerName);
-			LayerConfig.OrbitalMask = Data.OrbitalMask;
+			NewModule.LayerConfig.OrbitalMask = Data.OrbitalMask;
 
 			// Log mask as binary
 			FString MaskBits;
@@ -793,8 +791,6 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 {
 	VALENCY_LOG_SECTION(Building, "BUILDING NEIGHBOR RELATIONSHIPS");
 
-	const FName LayerName = OrbitalSet->LayerName;
-
 	// Build a cage pointer to cage data index map for fast lookup
 	TMap<APCGExValencyCage*, int32> CageToDataIndex;
 	for (int32 i = 0; i < CageData.Num(); ++i)
@@ -871,7 +867,7 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 							{
 								if (TargetRules->Modules.IsValidIndex(ModuleIndex))
 								{
-									FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].Layers.FindOrAdd(LayerName);
+									FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
 									LayerConfig.SetBoundaryOrbital(Orbital.OrbitalIndex);
 								}
 							}
@@ -886,7 +882,7 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 							{
 								if (TargetRules->Modules.IsValidIndex(ModuleIndex))
 								{
-									FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].Layers.FindOrAdd(LayerName);
+									FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
 									LayerConfig.SetWildcardOrbital(Orbital.OrbitalIndex);
 								}
 							}
@@ -911,7 +907,7 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 						{
 							if (TargetRules->Modules.IsValidIndex(ModuleIndex))
 							{
-								FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].Layers.FindOrAdd(LayerName);
+								FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
 								LayerConfig.SetBoundaryOrbital(Orbital.OrbitalIndex);
 							}
 						}
@@ -965,7 +961,7 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 					{
 						if (TargetRules->Modules.IsValidIndex(ModuleIndex))
 						{
-							FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].Layers.FindOrAdd(LayerName);
+							FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
 							LayerConfig.SetBoundaryOrbital(Orbital.OrbitalIndex);
 						}
 					}
@@ -979,7 +975,7 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 					{
 						if (TargetRules->Modules.IsValidIndex(ModuleIndex))
 						{
-							FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].Layers.FindOrAdd(LayerName);
+							FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
 							LayerConfig.SetWildcardOrbital(Orbital.OrbitalIndex);
 						}
 					}
@@ -998,7 +994,7 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 				FPCGExValencyModuleDefinition& Module = TargetRules->Modules[ModuleIndex];
 
 				// Get layer config (already created in BuildModuleMap)
-				FPCGExValencyModuleLayerConfig& LayerConfig = Module.Layers.FindOrAdd(LayerName);
+				FPCGExValencyModuleLayerConfig& LayerConfig = Module.LayerConfig;
 
 				// Add neighbor modules for this orbital
 				for (int32 NeighborModuleIndex : NeighborModuleIndices)
@@ -1022,34 +1018,23 @@ void UPCGExValencyBondingRulesBuilder::ValidateRules(
 		return;
 	}
 
-	const FName LayerName = OrbitalSet->LayerName;
-
 	// Check for modules without any neighbors defined
 	for (const FPCGExValencyModuleDefinition& Module : Rules->Modules)
 	{
-		const FPCGExValencyModuleLayerConfig* LayerConfig = Module.Layers.Find(LayerName);
-		if (!LayerConfig)
-		{
-			OutResult.Warnings.Add(FText::Format(
-				LOCTEXT("ModuleNoLayerConfig", "Module '{0}' has no configuration for layer '{1}'."),
-				FText::FromString(Module.Asset.GetAssetName()),
-				FText::FromName(LayerName)
-			));
-			continue;
-		}
+		const FPCGExValencyModuleLayerConfig& Config = Module.LayerConfig;
 
 		// Check if any orbitals have no neighbors
 		for (int32 i = 0; i < OrbitalSet->Num(); ++i)
 		{
-			if (LayerConfig->HasOrbital(i))
+			if (Config.HasOrbital(i))
 			{
 				const FName OrbitalName = OrbitalSet->Orbitals[i].GetOrbitalName();
-				const FPCGExValencyNeighborIndices* Neighbors = LayerConfig->OrbitalNeighbors.Find(OrbitalName);
+				const FPCGExValencyNeighborIndices* Neighbors = Config.OrbitalNeighbors.Find(OrbitalName);
 
 				if (!Neighbors || Neighbors->Num() == 0)
 				{
 					// Skip warning if this orbital is a boundary or wildcard (both legitimately have no specific neighbors)
-					if (!LayerConfig->IsBoundaryOrbital(i) && !LayerConfig->IsWildcardOrbital(i))
+					if (!Config.IsBoundaryOrbital(i) && !Config.IsWildcardOrbital(i))
 					{
 						OutResult.Warnings.Add(FText::Format(
 							LOCTEXT("OrbitalNoNeighbors", "Module '{0}', orbital '{1}' has no valid neighbors defined. The connected cage may have no assets."),
@@ -1637,8 +1622,6 @@ bool UPCGExValencyBondingRulesBuilder::CompileSinglePattern(
 	{
 		return false;
 	}
-
-	const FName LayerName = OrbitalSet->LayerName;
 
 	// CRITICAL: Refresh connections for all pattern cages in the network BEFORE traversing.
 	// This ensures the network traversal uses up-to-date orbital data.

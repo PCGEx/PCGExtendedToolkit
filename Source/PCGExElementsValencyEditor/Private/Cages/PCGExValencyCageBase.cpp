@@ -84,20 +84,7 @@ void APCGExValencyCageBase::OnPostEditChangeProperty(FPropertyChangedEvent& Prop
 {
 	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
 
-	if (PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, OrbitalSetOverride) ||
-		PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, BondingRulesOverride))
-	{
-		// Override changed - reinitialize orbitals, redetect connections, and trigger rebuild
-		CachedOrbitalSet.Reset();
-		InitializeOrbitalsFromSet();
-		DetectNearbyConnections();
-
-		// Structural change - needs rebuild
-		RequestRebuild(EValencyRebuildReason::PropertyChange);
-
-		PCGEX_VALENCY_REDRAW_ALL_VIEWPORT
-	}
-	else if (PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, ProbeRadius))
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(APCGExValencyCageBase, ProbeRadius))
 	{
 		// Probe radius changed - redetect connections
 		// This can change which cages are connected, so trigger rebuild if connections changed
@@ -256,13 +243,6 @@ FString APCGExValencyCageBase::GetCageDisplayName() const
 
 UPCGExValencyOrbitalSet* APCGExValencyCageBase::GetEffectiveOrbitalSet() const
 {
-	// Check override first
-	if (OrbitalSetOverride)
-	{
-		return OrbitalSetOverride;
-	}
-
-	// Check containing volumes
 	for (const TWeakObjectPtr<AValencyContextVolume>& VolumePtr : ContainingVolumes)
 	{
 		if (const AValencyContextVolume* Volume = VolumePtr.Get())
@@ -279,13 +259,6 @@ UPCGExValencyOrbitalSet* APCGExValencyCageBase::GetEffectiveOrbitalSet() const
 
 UPCGExValencyBondingRules* APCGExValencyCageBase::GetEffectiveBondingRules() const
 {
-	// Check override first
-	if (BondingRulesOverride)
-	{
-		return BondingRulesOverride;
-	}
-
-	// Check containing volumes
 	for (const TWeakObjectPtr<AValencyContextVolume>& VolumePtr : ContainingVolumes)
 	{
 		if (const AValencyContextVolume* Volume = VolumePtr.Get())
@@ -953,13 +926,6 @@ void APCGExValencyCageBase::RequestRebuild(EValencyRebuildReason Reason)
 
 UPCGExValencyConnectorSet* APCGExValencyCageBase::GetEffectiveConnectorSet() const
 {
-	// 1. Per-cage override
-	if (ConnectorSetOverride)
-	{
-		return ConnectorSetOverride;
-	}
-
-	// 2. Containing volume override
 	for (const TWeakObjectPtr<AValencyContextVolume>& VolumePtr : ContainingVolumes)
 	{
 		if (const AValencyContextVolume* Volume = VolumePtr.Get())
@@ -971,13 +937,9 @@ UPCGExValencyConnectorSet* APCGExValencyCageBase::GetEffectiveConnectorSet() con
 		}
 	}
 
-	// 3. Fallback: BondingRules.ConnectorSet
 	if (const UPCGExValencyBondingRules* Rules = GetEffectiveBondingRules())
 	{
-		if (Rules->ConnectorSet)
-		{
-			return Rules->ConnectorSet;
-		}
+		return Rules->ConnectorSet;
 	}
 
 	return nullptr;

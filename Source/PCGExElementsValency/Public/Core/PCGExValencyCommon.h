@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExH.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/SoftObjectPath.h"
 #include "StructUtils/InstancedStruct.h"
@@ -105,6 +106,77 @@ namespace PCGExValency
 		static FName GetOrbitalAttributeName(const FName& Suffix)
 		{
 			return FName(FString::Printf(TEXT("PCGEx/V/Orbital/%s"), *Suffix.ToString()));
+		}
+	}
+
+	/**
+	 * Pack/unpack helpers for the PCGEx/V/Orbital/* edge attribute.
+	 * Layout: byte[0] = start node's orbital index, byte[1] = end node's orbital index.
+	 * Max 255 orbital indices (uint8); 0xFF = no match (sentinel).
+	 *
+	 * NOTE: WriteOrbitals uses byte-level writes (PackedBytes[ByteOffset]) for thread-safe
+	 * per-node processing. That pattern can't call Pack() but shares the same binary layout.
+	 */
+	namespace EdgeOrbital
+	{
+		/** Sentinel for unmatched orbital endpoint. Same as PCGExValency::NO_ORBITAL_MATCH. */
+		constexpr uint8 NO_MATCH = 0xFF;
+
+		/** Pack start/end orbital indices into int64 for edge attribute storage. */
+		FORCEINLINE int64 Pack(const uint8 StartOrbital, const uint8 EndOrbital)
+		{
+			return static_cast<int64>(
+				static_cast<uint64>(StartOrbital) |
+				(static_cast<uint64>(EndOrbital) << 8));
+		}
+
+		/** Extract start node's orbital index from packed edge data. */
+		FORCEINLINE uint8 GetStartOrbital(const int64 Packed)
+		{
+			return static_cast<uint8>(Packed & 0xFF);
+		}
+
+		/** Extract end node's orbital index from packed edge data. */
+		FORCEINLINE uint8 GetEndOrbital(const int64 Packed)
+		{
+			return static_cast<uint8>((Packed >> 8) & 0xFF);
+		}
+
+		/** Initial sentinel value for edges (both endpoints = no match). */
+		constexpr int64 NoMatchSentinel()
+		{
+			return static_cast<int64>(
+				static_cast<uint64>(NO_MATCH) |
+				(static_cast<uint64>(NO_MATCH) << 8));
+		}
+	}
+
+	/**
+	 * Pack/unpack helpers for the PCGEx/V/Connector/* edge attribute.
+	 * Encodes which connector INSTANCE sits at each edge endpoint (by flat index into
+	 * AllModuleConnectors). Uses H64: upper 32 bits = source, lower 32 bits = target.
+	 *
+	 * NOT the same as PCGExValencyConnector::Pack() which encodes connector TYPE identity
+	 * (RulesIndex + ConnectorTypeIndex in 16-bit fields).
+	 */
+	namespace EdgeConnector
+	{
+		/** Pack source/target connector instance indices into int64. */
+		FORCEINLINE int64 Pack(const int32 SourceIndex, const int32 TargetIndex)
+		{
+			return static_cast<int64>(PCGEx::H64(SourceIndex, TargetIndex));
+		}
+
+		/** Extract source (start) connector instance index. */
+		FORCEINLINE int32 GetSourceIndex(const int64 Packed)
+		{
+			return static_cast<int32>(PCGEx::H64A(static_cast<uint64>(Packed)));
+		}
+
+		/** Extract target (end) connector instance index. */
+		FORCEINLINE int32 GetTargetIndex(const int64 Packed)
+		{
+			return static_cast<int32>(PCGEx::H64B(static_cast<uint64>(Packed)));
 		}
 	}
 
@@ -480,9 +552,9 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Module")
 	FName ModuleName;
 
-	/** Per-layer orbital configuration */
+	/** Orbital configuration */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Module")
-	TMap<FName, FPCGExValencyModuleLayerConfig> Layers;
+	FPCGExValencyModuleLayerConfig LayerConfig;
 
 	/**
 	 * Properties from cage property components.
@@ -519,12 +591,10 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleDefinition
 		return CurrentSpawnCount < Settings.MinSpawns;
 	}
 
-	/** Get a unique key for this module (Asset path + primary orbital mask) */
-	FString GetModuleKey(const FName& PrimaryLayerName) const
+	/** Get a unique key for this module (Asset path + orbital mask) */
+	FString GetModuleKey() const
 	{
-		const FPCGExValencyModuleLayerConfig* LayerConfig = Layers.Find(PrimaryLayerName);
-		const int64 Mask = LayerConfig ? LayerConfig->OrbitalMask : 0;
-		return FString::Printf(TEXT("%s_%lld"), *Asset.ToSoftObjectPath().ToString(), Mask);
+		return FString::Printf(TEXT("%s_%lld"), *Asset.ToSoftObjectPath().ToString(), LayerConfig.OrbitalMask);
 	}
 
 	/** Check if this module has any connectors defined */

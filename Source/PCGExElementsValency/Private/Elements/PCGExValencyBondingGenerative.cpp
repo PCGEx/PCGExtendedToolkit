@@ -1,29 +1,29 @@
 // Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
-#include "Elements/PCGExValencyGenerative.h"
+#include "Elements/PCGExValencyBondingGenerative.h"
 
 #include "PCGParamData.h"
 #include "Data/PCGExData.h"
-#include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
-#include "PCGExCollectionsCommon.h"
-#include "Collections/PCGExActorCollection.h"
 #include "Collections/PCGExMeshCollection.h"
-#include "Containers/PCGExManagedObjects.h"
+#include "Collections/PCGExActorCollection.h"
+#include "Clusters/PCGExClusterCommon.h"
+#include "Graphs/PCGExGraph.h"
 #include "Data/PCGExPointIO.h"
+#include "Graphs/PCGExSubGraph.h"
 #include "Growth/PCGExValencyGrowthBFS.h"
 
-#define LOCTEXT_NAMESPACE "PCGExValencyGenerative"
-#define PCGEX_NAMESPACE ValencyGenerative
+#define LOCTEXT_NAMESPACE "PCGExValencyBondingGenerative"
+#define PCGEX_NAMESPACE ValencyBondingGenerative
 
-PCGEX_INITIALIZE_ELEMENT(ValencyGenerative)
-PCGEX_ELEMENT_BATCH_POINT_IMPL(ValencyGenerative)
+PCGEX_INITIALIZE_ELEMENT(ValencyBondingGenerative)
+PCGEX_ELEMENT_BATCH_POINT_IMPL(ValencyBondingGenerative)
 
-#pragma region UPCGExValencyGenerativeSettings
+#pragma region UPCGExValencyBondingGenerativeSettings
 
-void UPCGExValencyGenerativeSettings::PostInitProperties()
+void UPCGExValencyBondingGenerativeSettings::PostInitProperties()
 {
 	if (!HasAnyFlags(RF_ClassDefaultObject) && IsInGameThread())
 	{
@@ -32,45 +32,40 @@ void UPCGExValencyGenerativeSettings::PostInitProperties()
 	Super::PostInitProperties();
 }
 
-TArray<FPCGPinProperties> UPCGExValencyGenerativeSettings::OutputPinProperties() const
+TArray<FPCGPinProperties> UPCGExValencyBondingGenerativeSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Collection map for resolving entry hashes", Required)
+	PCGEX_PIN_POINTS(PCGExClusters::Labels::OutputEdgesLabel, "Edges of the generated growth trees", Required)
 	PCGEX_PIN_PARAMS(PCGExValency::Labels::OutputValencyMapLabel, "Valency map for resolving ValencyEntry hashes", Required)
 	return PinProperties;
 }
 
 #pragma endregion
 
-#pragma region FPCGExValencyGenerativeContext
+#pragma region FPCGExValencyBondingGenerativeContext
 
-void FPCGExValencyGenerativeContext::RegisterAssetDependencies()
+void FPCGExValencyBondingGenerativeContext::RegisterAssetDependencies()
 {
 	FPCGExPointsProcessorContext::RegisterAssetDependencies();
 
-	const UPCGExValencyGenerativeSettings* Settings = GetInputSettings<UPCGExValencyGenerativeSettings>();
+	const UPCGExValencyBondingGenerativeSettings* Settings = GetInputSettings<UPCGExValencyBondingGenerativeSettings>();
 	if (!Settings) { return; }
 
 	if (!Settings->BondingRules.IsNull())
 	{
 		AddAssetDependency(Settings->BondingRules.ToSoftObjectPath());
 	}
-
-	if (!Settings->ConnectorSet.IsNull())
-	{
-		AddAssetDependency(Settings->ConnectorSet.ToSoftObjectPath());
-	}
 }
 
 #pragma endregion
 
-#pragma region FPCGExValencyGenerativeElement
+#pragma region FPCGExValencyBondingGenerativeElement
 
-bool FPCGExValencyGenerativeElement::Boot(FPCGExContext* InContext) const
+bool FPCGExValencyBondingGenerativeElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExPointsProcessorElement::Boot(InContext)) { return false; }
 
-	PCGEX_CONTEXT_AND_SETTINGS(ValencyGenerative)
+	PCGEX_CONTEXT_AND_SETTINGS(ValencyBondingGenerative)
 
 	// Validate required settings
 	if (Settings->BondingRules.IsNull())
@@ -79,36 +74,28 @@ bool FPCGExValencyGenerativeElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	if (Settings->ConnectorSet.IsNull())
-	{
-		PCGE_LOG(Error, GraphAndLog, FTEXT("No Connector Set provided."));
-		return false;
-	}
-
 	PCGEX_OPERATION_VALIDATE(GrowthStrategy)
 
 	// Load assets
 	PCGExHelpers::LoadBlocking_AnyThreadTpl(Settings->BondingRules, InContext);
-	PCGExHelpers::LoadBlocking_AnyThreadTpl(Settings->ConnectorSet, InContext);
 
 	return true;
 }
 
-void FPCGExValencyGenerativeElement::PostLoadAssetsDependencies(FPCGExContext* InContext) const
+void FPCGExValencyBondingGenerativeElement::PostLoadAssetsDependencies(FPCGExContext* InContext) const
 {
 	FPCGExPointsProcessorElement::PostLoadAssetsDependencies(InContext);
 
-	PCGEX_CONTEXT_AND_SETTINGS(ValencyGenerative)
+	PCGEX_CONTEXT_AND_SETTINGS(ValencyBondingGenerative)
 
 	Context->BondingRules = Settings->BondingRules.Get();
-	Context->ConnectorSet = Settings->ConnectorSet.Get();
 }
 
-bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
+bool FPCGExValencyBondingGenerativeElement::PostBoot(FPCGExContext* InContext) const
 {
 	if (!FPCGExPointsProcessorElement::PostBoot(InContext)) { return false; }
 
-	PCGEX_CONTEXT_AND_SETTINGS(ValencyGenerative)
+	PCGEX_CONTEXT_AND_SETTINGS(ValencyBondingGenerative)
 
 	if (!Context->BondingRules)
 	{
@@ -116,9 +103,11 @@ bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	// Derive connector set from bonding rules
+	Context->ConnectorSet = Context->BondingRules->ConnectorSet;
 	if (!Context->ConnectorSet)
 	{
-		PCGE_LOG(Error, GraphAndLog, FTEXT("Failed to load Connector Set."));
+		PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules has no Connector Set assigned."));
 		return false;
 	}
 
@@ -136,16 +125,8 @@ bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
 	Context->GrowthFactory = PCGEX_OPERATION_REGISTER_C(Context, UPCGExValencyGrowthFactory, Settings->GrowthStrategy, NAME_None);
 	if (!Context->GrowthFactory) { return false; }
 
-	// Create pick packer and valency packer
-	Context->PickPacker = MakeShared<PCGExCollections::FPickPacker>(Context);
+	// Create valency packer
 	Context->ValencyPacker = MakeShared<PCGExValency::FValencyPacker>(Context);
-
-	// Get collections
-	Context->MeshCollection = Context->BondingRules->GetMeshCollection();
-	if (Context->MeshCollection) { Context->MeshCollection->BuildCache(); }
-
-	Context->ActorCollection = Context->BondingRules->GetActorCollection();
-	if (Context->ActorCollection) { Context->ActorCollection->BuildCache(); }
 
 	// Cache compiled rules
 	Context->CompiledRules = Context->BondingRules->GetCompiledData();
@@ -158,6 +139,9 @@ bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
 	// Compile connector set
 	Context->ConnectorSet->Compile();
 
+	// Create edges IO collection for graph builder
+	Context->EdgesIO = MakeShared<PCGExData::FPointIOCollection>(Context);
+
 	// Build module local bounds cache from collection staging data
 	const int32 ModuleCount = Context->CompiledRules->ModuleCount;
 	Context->ModuleLocalBounds.SetNum(ModuleCount);
@@ -167,14 +151,17 @@ bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
 	}
 
 	// Populate bounds from mesh collection entries
-	if (Context->MeshCollection)
+	UPCGExMeshCollection* MeshCollection = Context->BondingRules->GetMeshCollection();
+	if (MeshCollection)
 	{
+		MeshCollection->BuildCache();
+
 		for (int32 ModuleIdx = 0; ModuleIdx < ModuleCount; ++ModuleIdx)
 		{
 			const int32 EntryIndex = Context->BondingRules->GetMeshEntryIndex(ModuleIdx);
 			if (EntryIndex >= 0)
 			{
-				const FPCGExEntryAccessResult Result = Context->MeshCollection->GetEntryRaw(EntryIndex);
+				const FPCGExEntryAccessResult Result = MeshCollection->GetEntryRaw(EntryIndex);
 				if (Result.IsValid())
 				{
 					Context->ModuleLocalBounds[ModuleIdx] = Result.Entry->Staging.Bounds;
@@ -189,14 +176,17 @@ bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
 	}
 
 	// Populate bounds from actor collection entries
-	if (Context->ActorCollection)
+	UPCGExActorCollection* ActorCollection = Context->BondingRules->GetActorCollection();
+	if (ActorCollection)
 	{
+		ActorCollection->BuildCache();
+
 		for (int32 ModuleIdx = 0; ModuleIdx < ModuleCount; ++ModuleIdx)
 		{
 			const int32 EntryIndex = Context->BondingRules->GetActorEntryIndex(ModuleIdx);
 			if (EntryIndex >= 0)
 			{
-				const FPCGExEntryAccessResult Result = Context->ActorCollection->GetEntryRaw(EntryIndex);
+				const FPCGExEntryAccessResult Result = ActorCollection->GetEntryRaw(EntryIndex);
 				if (Result.IsValid())
 				{
 					Context->ModuleLocalBounds[ModuleIdx] = Result.Entry->Staging.Bounds;
@@ -223,9 +213,9 @@ bool FPCGExValencyGenerativeElement::PostBoot(FPCGExContext* InContext) const
 	return true;
 }
 
-bool FPCGExValencyGenerativeElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+bool FPCGExValencyBondingGenerativeElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
-	PCGEX_CONTEXT_AND_SETTINGS(ValencyGenerative)
+	PCGEX_CONTEXT_AND_SETTINGS(ValencyBondingGenerative)
 	PCGEX_EXECUTION_CHECK
 
 	PCGEX_ON_INITIAL_EXECUTION
@@ -245,13 +235,8 @@ bool FPCGExValencyGenerativeElement::AdvanceWork(FPCGExContext* InContext, const
 	// Output all processor-created IOs
 	Context->MainBatch->Output();
 
-	// Output collection map
-	UPCGParamData* CollectionParamData = Context->ManagedObjects->New<UPCGParamData>();
-	Context->PickPacker->PackToDataset(CollectionParamData);
-
-	FPCGTaggedData& CollectionOutData = Context->OutputData.TaggedData.Emplace_GetRef();
-	CollectionOutData.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
-	CollectionOutData.Data = CollectionParamData;
+	// Stage edges
+	Context->EdgesIO->StageOutputs();
 
 	// Output valency map
 	UPCGParamData* ValencyParamData = Context->ManagedObjects->New<UPCGParamData>();
@@ -266,13 +251,13 @@ bool FPCGExValencyGenerativeElement::AdvanceWork(FPCGExContext* InContext, const
 
 #pragma endregion
 
-#pragma region PCGExValencyGenerative::FProcessor
+#pragma region PCGExValencyBondingGenerative::FProcessor
 
-namespace PCGExValencyGenerative
+namespace PCGExValencyBondingGenerative
 {
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExValencyGenerative::Process);
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExValencyBondingGenerative::Process);
 
 		if (!IProcessor::Process(InTaskManager)) { return false; }
 
@@ -300,7 +285,7 @@ namespace PCGExValencyGenerative
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExValencyGenerative::ProcessPoints);
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExValencyBondingGenerative::ProcessPoints);
 
 		PointDataFacade->Fetch(Scope);
 
@@ -439,9 +424,6 @@ namespace PCGExValencyGenerative
 		// Create output facade for attribute writing
 		OutputFacade = MakeShared<PCGExData::FFacade>(OutputIO.ToSharedRef());
 
-		// Create attribute writers
-		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashWriter = OutputFacade->GetWritable<int64>(PCGExCollections::Labels::Tag_EntryIdx, 0, true, PCGExData::EBufferInit::Inherit);
-
 		// Create ValencyEntry writer for Valency Map pipeline
 		const FName ValencyEntryAttrName = PCGExValency::EntryData::GetEntryAttributeName(Settings->EntrySuffix);
 		TSharedPtr<PCGExData::TBuffer<int64>> ValencyEntryWriter = OutputFacade->GetWritable<int64>(ValencyEntryAttrName, 0, true, PCGExData::EBufferInit::Inherit);
@@ -465,25 +447,52 @@ namespace PCGExValencyGenerative
 			SeedIndexWriter = OutputFacade->GetWritable<int32>(Settings->SeedIndexAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
 		}
 
-		// Initialize property writer
-		TSharedPtr<FPCGExValencyPropertyWriter> PropertyWriter;
-		if (Context->BondingRules && Context->BondingRules->IsCompiled())
+		// Write vertex orbital masks if orbital data output is enabled
+		TSharedPtr<PCGExData::TBuffer<int64>> OrbitalMaskWriter;
+		if (Settings->bOutputOrbitalData)
 		{
-			PropertyWriter = MakeShared<FPCGExValencyPropertyWriter>();
-			PropertyWriter->Initialize(
-				Context->BondingRules,
-				CompiledRules,
-				OutputFacade.ToSharedRef(),
-				Settings->PropertiesOutput);
+			const FName MaskAttrName = PCGExValency::Attributes::GetMaskAttributeName(Settings->EntrySuffix);
+			OrbitalMaskWriter = OutputFacade->GetWritable<int64>(MaskAttrName, 0, true, PCGExData::EBufferInit::Inherit);
 		}
 
-		// Fitting handler
-		FPCGExFittingDetailsHandler FittingHandler;
-		FittingHandler.ScaleToFit = Settings->ScaleToFit;
-		FittingHandler.Justification = Settings->Justification;
-		FittingHandler.Init(Context, OutputFacade.ToSharedRef());
+		// Build per-vertex orbital masks from connectivity
+		TArray<int64> VertexOrbitalMasks;
+		if (Settings->bOutputOrbitalData)
+		{
+			VertexOrbitalMasks.SetNumZeroed(TotalPlaced);
 
-		// Write output points
+			for (int32 i = 0; i < TotalPlaced; ++i)
+			{
+				const FPCGExPlacedModule& Placed = PlacedModules[i];
+				if (Placed.ParentIndex < 0) { continue; }
+
+				// Child connector's orbital -> bit on this vertex
+				const FIntPoint& ChildHeader = CompiledRules->ModuleConnectorHeaders[Placed.ModuleIndex];
+				const int32 ChildConnIdx = ChildHeader.X + Placed.ChildConnectorIndex;
+				if (CompiledRules->AllModuleConnectors.IsValidIndex(ChildConnIdx))
+				{
+					const int32 ChildOrbital = CompiledRules->AllModuleConnectors[ChildConnIdx].OrbitalIndex;
+					if (ChildOrbital >= 0 && ChildOrbital < 64)
+					{
+						VertexOrbitalMasks[i] |= (1LL << ChildOrbital);
+					}
+				}
+
+				// Parent connector's orbital -> bit on parent vertex
+				const FIntPoint& ParentHeader = CompiledRules->ModuleConnectorHeaders[PlacedModules[Placed.ParentIndex].ModuleIndex];
+				const int32 ParentConnIdx = ParentHeader.X + Placed.ParentConnectorIndex;
+				if (CompiledRules->AllModuleConnectors.IsValidIndex(ParentConnIdx))
+				{
+					const int32 ParentOrbital = CompiledRules->AllModuleConnectors[ParentConnIdx].OrbitalIndex;
+					if (ParentOrbital >= 0 && ParentOrbital < 64)
+					{
+						VertexOrbitalMasks[Placed.ParentIndex] |= (1LL << ParentOrbital);
+					}
+				}
+			}
+		}
+
+		// Write output vertex data
 		for (int32 PlacedIdx = 0; PlacedIdx < TotalPlaced; ++PlacedIdx)
 		{
 			const FPCGExPlacedModule& Placed = PlacedModules[PlacedIdx];
@@ -503,53 +512,17 @@ namespace PCGExValencyGenerative
 				OutTransform = LocalTransform * OutTransform;
 			}
 
-			// Write entry hash for collection map
-			if (EntryHashWriter && Context->PickPacker)
+			// Set default bounds
+			const FBox& ModuleBounds = Context->ModuleLocalBounds[ModuleIdx];
+			if (ModuleBounds.IsValid)
 			{
-				const EPCGExValencyAssetType AssetType = CompiledRules->ModuleAssetTypes[ModuleIdx];
-				const UPCGExAssetCollection* Collection = nullptr;
-				FPCGExEntryAccessResult Result{};
-				int32 EntryIndex = -1;
-				int16 SecondaryIndex = -1;
-
-				if (AssetType == EPCGExValencyAssetType::Mesh)
-				{
-					Collection = Context->MeshCollection;
-					EntryIndex = Context->BondingRules->GetMeshEntryIndex(ModuleIdx);
-					if (Collection)
-					{
-						Result = Collection->GetEntryRaw(EntryIndex);
-						if (Result.IsValid())
-						{
-							if (const PCGExAssetCollection::FMicroCache* MicroCache = Result.Entry->MicroCache.Get())
-							{
-								SecondaryIndex = MicroCache->GetPickRandomWeighted(OutSeeds[PlacedIdx]);
-							}
-						}
-					}
-				}
-				else if (AssetType == EPCGExValencyAssetType::Actor)
-				{
-					Collection = Context->ActorCollection;
-					EntryIndex = Context->BondingRules->GetActorEntryIndex(ModuleIdx);
-					if (Collection)
-					{
-						Result = Collection->GetEntryRaw(EntryIndex);
-					}
-				}
-
-				if (Collection && Result.IsValid())
-				{
-					const uint64 Hash = Context->PickPacker->GetPickIdx(Collection, EntryIndex, SecondaryIndex);
-					EntryHashWriter->SetValue(PlacedIdx, static_cast<int64>(Hash));
-
-					// Apply fitting
-					FBox OutBounds = Result.Entry->Staging.Bounds;
-					FVector Translation = FVector::ZeroVector;
-					FittingHandler.ComputeTransform(PlacedIdx, OutTransform, OutBounds, Translation);
-					OutBoundsMin[PlacedIdx] = OutBounds.Min;
-					OutBoundsMax[PlacedIdx] = OutBounds.Max;
-				}
+				OutBoundsMin[PlacedIdx] = ModuleBounds.Min;
+				OutBoundsMax[PlacedIdx] = ModuleBounds.Max;
+			}
+			else
+			{
+				OutBoundsMin[PlacedIdx] = -FVector::OneVector;
+				OutBoundsMax[PlacedIdx] = FVector::OneVector;
 			}
 
 			// Write ValencyEntry hash for Valency Map pipeline
@@ -558,6 +531,12 @@ namespace PCGExValencyGenerative
 				const uint64 ValencyHash = Context->ValencyPacker->GetEntryIdx(
 					Context->BondingRules, static_cast<uint16>(ModuleIdx));
 				ValencyEntryWriter->SetValue(PlacedIdx, static_cast<int64>(ValencyHash));
+			}
+
+			// Write vertex orbital mask
+			if (OrbitalMaskWriter && Settings->bOutputOrbitalData)
+			{
+				OrbitalMaskWriter->SetValue(PlacedIdx, VertexOrbitalMasks[PlacedIdx]);
 			}
 
 			// Write module name
@@ -577,13 +556,140 @@ namespace PCGExValencyGenerative
 			{
 				SeedIndexWriter->SetValue(PlacedIdx, Placed.SeedIndex);
 			}
+		}
 
-			// Write properties
-			if (PropertyWriter)
+		// ==================== Graph Creation ====================
+
+		// Build edges from parent-child connectivity
+		TSet<uint64> UniqueEdges;
+		// Also build mapping: H64U(ParentIdx, ChildIdx) -> ChildPlacedIdx for edge attribute lookup
+		TMap<uint64, int32> EdgeToChildIndex;
+
+		for (int32 i = 0; i < TotalPlaced; ++i)
+		{
+			if (PlacedModules[i].ParentIndex >= 0)
 			{
-				PropertyWriter->WriteModuleProperties(PlacedIdx, ModuleIdx);
+				const uint64 EdgeHash = PCGEx::H64U(PlacedModules[i].ParentIndex, i);
+				UniqueEdges.Add(EdgeHash);
+				EdgeToChildIndex.Add(EdgeHash, i);
 			}
 		}
+
+		if (UniqueEdges.IsEmpty()) { return; }
+
+		// Create graph builder
+		GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(OutputFacade.ToSharedRef(), &Settings->GraphBuilderDetails);
+		GraphBuilder->bInheritNodeData = false;
+		GraphBuilder->EdgesIO = Context->EdgesIO;
+		GraphBuilder->NodePointsTransforms = OutPointData->GetConstTransformValueRange();
+
+		// Create graph and insert edges
+		GraphBuilder->Graph = MakeShared<PCGExGraphs::FGraph>(TotalPlaced);
+		GraphBuilder->Graph->InsertEdges(UniqueEdges, BatchIndex);
+
+		// Capture data for edge attribute writing in post-compile callback
+		const bool bWriteOrbital = Settings->bOutputOrbitalData;
+		const bool bWriteConnector = Settings->bOutputConnectorData;
+		const FName OrbitalSuffix = Settings->EntrySuffix;
+		const UPCGExValencyConnectorSet* ConnectorSetPtr = Context->ConnectorSet;
+
+		if (bWriteOrbital || bWriteConnector)
+		{
+			// Capture PlacedModules and CompiledRules for the callback
+			TArray<FPCGExPlacedModule> CapturedPlacedModules = PlacedModules;
+			const FPCGExValencyBondingRulesCompiled* CapturedCompiledRules = CompiledRules;
+			TMap<uint64, int32> CapturedEdgeToChildIndex = MoveTemp(EdgeToChildIndex);
+
+			GraphBuilder->OnSubGraphPostProcess = [bWriteOrbital, bWriteConnector, OrbitalSuffix, ConnectorSetPtr,
+				CapturedPlacedModules = MoveTemp(CapturedPlacedModules),
+				CapturedCompiledRules,
+				CapturedEdgeToChildIndex = MoveTemp(CapturedEdgeToChildIndex)](const TSharedRef<PCGExGraphs::FSubGraph>& SubGraph)
+			{
+				const TSharedPtr<PCGExData::FFacade>& EdgeFacade = SubGraph->EdgesDataFacade;
+
+				const int32 NumEdges = SubGraph->FlattenedEdges.Num();
+
+				// Create edge attribute writers
+				TSharedPtr<PCGExData::TBuffer<int64>> OrbitalWriter;
+				TSharedPtr<PCGExData::TBuffer<int64>> ConnectorWriter;
+
+				if (bWriteOrbital)
+				{
+					const FName OrbitalAttrName = PCGExValency::Attributes::GetOrbitalAttributeName(OrbitalSuffix);
+					OrbitalWriter = EdgeFacade->GetWritable<int64>(OrbitalAttrName, 0, true, PCGExData::EBufferInit::Inherit);
+				}
+
+				if (bWriteConnector && ConnectorSetPtr)
+				{
+					const FName ConnectorAttrName = ConnectorSetPtr->GetConnectorAttributeName();
+					ConnectorWriter = EdgeFacade->GetWritable<int64>(ConnectorAttrName, 0, true, PCGExData::EBufferInit::Inherit);
+				}
+
+				// Write edge attributes
+				for (int32 EdgeIdx = 0; EdgeIdx < NumEdges; ++EdgeIdx)
+				{
+					const PCGExGraphs::FEdge& Edge = SubGraph->FlattenedEdges[EdgeIdx];
+					if (!Edge.bValid) { continue; }
+
+					// Find which placed module this edge corresponds to
+					const uint64 EdgeHash = PCGEx::H64U(Edge.Start, Edge.End);
+					const int32* ChildIdxPtr = CapturedEdgeToChildIndex.Find(EdgeHash);
+					if (!ChildIdxPtr) { continue; }
+
+					const FPCGExPlacedModule& Child = CapturedPlacedModules[*ChildIdxPtr];
+					const int32 ParentIdx = Child.ParentIndex;
+					if (ParentIdx < 0) { continue; }
+
+					const FPCGExPlacedModule& Parent = CapturedPlacedModules[ParentIdx];
+
+					if (OrbitalWriter)
+					{
+						// Get orbital indices for both endpoints
+						int32 ParentOrbital = -1;
+						int32 ChildOrbital = -1;
+
+						const FIntPoint& ParentHeader = CapturedCompiledRules->ModuleConnectorHeaders[Parent.ModuleIndex];
+						const int32 ParentConnFlatIdx = ParentHeader.X + Child.ParentConnectorIndex;
+						if (CapturedCompiledRules->AllModuleConnectors.IsValidIndex(ParentConnFlatIdx))
+						{
+							ParentOrbital = CapturedCompiledRules->AllModuleConnectors[ParentConnFlatIdx].OrbitalIndex;
+						}
+
+						const FIntPoint& ChildHeader = CapturedCompiledRules->ModuleConnectorHeaders[Child.ModuleIndex];
+						const int32 ChildConnFlatIdx = ChildHeader.X + Child.ChildConnectorIndex;
+						if (CapturedCompiledRules->AllModuleConnectors.IsValidIndex(ChildConnFlatIdx))
+						{
+							ChildOrbital = CapturedCompiledRules->AllModuleConnectors[ChildConnFlatIdx].OrbitalIndex;
+						}
+
+						const uint8 ParentOrbU8 = static_cast<uint8>(FMath::Max(0, ParentOrbital));
+						const uint8 ChildOrbU8 = static_cast<uint8>(FMath::Max(0, ChildOrbital));
+
+						// Pack: determine which endpoint is Start vs End
+						// FEdge.Start/End are point indices. Parent is Start if Edge.Start matches ParentIdx
+						const int64 PackedOrbital = (static_cast<int32>(Edge.Start) == ParentIdx)
+							? PCGExValency::EdgeOrbital::Pack(ParentOrbU8, ChildOrbU8)
+							: PCGExValency::EdgeOrbital::Pack(ChildOrbU8, ParentOrbU8);
+
+						OrbitalWriter->SetValue(EdgeIdx, PackedOrbital);
+					}
+
+					if (ConnectorWriter)
+					{
+						// Pack connector instance indices: source = start endpoint, target = end endpoint
+						const int64 PackedConnector = (static_cast<int32>(Edge.Start) == ParentIdx)
+							? PCGExValency::EdgeConnector::Pack(Child.ParentConnectorIndex, Child.ChildConnectorIndex)
+							: PCGExValency::EdgeConnector::Pack(Child.ChildConnectorIndex, Child.ParentConnectorIndex);
+
+						ConnectorWriter->SetValue(EdgeIdx, PackedConnector);
+					}
+				}
+
+			};
+		}
+
+		// Compile graph asynchronously
+		GraphBuilder->CompileAsync(TaskManager, true, nullptr);
 	}
 
 	void FProcessor::CompleteWork()
@@ -594,11 +700,25 @@ namespace PCGExValencyGenerative
 		}
 	}
 
+	void FProcessor::Write()
+	{
+		if (GraphBuilder && !GraphBuilder->bCompiledSuccessfully)
+		{
+			bIsProcessorValid = false;
+			return;
+		}
+	}
+
 	void FProcessor::Output()
 	{
 		if (OutputIO)
 		{
 			OutputIO->StageOutput(Context);
+		}
+
+		if (GraphBuilder)
+		{
+			GraphBuilder->StageEdgesOutputs();
 		}
 	}
 }

@@ -485,6 +485,15 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleConnector
 	UPROPERTY()
 	EPCGExConstraintOverrideMode OverrideMode = EPCGExConstraintOverrideMode::Append;
 
+	/** Whether to manually assign orbital index instead of direction-based detection */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, AdvancedDisplay)
+	bool bManualOrbitalOverride = false;
+
+	/** Manual orbital index (0-63). Only used when bManualOrbitalOverride is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, AdvancedDisplay,
+		meta = (EditCondition = "bManualOrbitalOverride", ClampMin = "0", ClampMax = "63"))
+	int32 ManualOrbitalIndex = 0;
+
 	/** Orbital index this connector maps to (assigned during compilation, runtime only) */
 	int32 OrbitalIndex = -1;
 

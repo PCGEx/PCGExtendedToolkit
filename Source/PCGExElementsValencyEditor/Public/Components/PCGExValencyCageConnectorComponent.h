@@ -65,6 +65,17 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Connector|Constraints", meta=(DisplayAfter="ConstraintOverrides"))
 	EPCGExConstraintOverrideMode OverrideMode = EPCGExConstraintOverrideMode::Append;
 
+	// ========== Orbital Override ==========
+
+	/** Override automatic orbital index assignment for this connector */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Connector", AdvancedDisplay)
+	bool bManualOrbitalOverride = false;
+
+	/** Manual orbital index (0-63). Only used when bManualOrbitalOverride is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Connector", AdvancedDisplay,
+		meta = (EditCondition = "bManualOrbitalOverride", ClampMin = "0", ClampMax = "63"))
+	int32 ManualOrbitalIndex = 0;
+
 	// ========== Mesh Integration ==========
 
 	/** Optional reference to a mesh socket name to inherit transform from. */

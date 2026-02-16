@@ -79,9 +79,9 @@ void FPCGExWriteValencyOrbitalsElement::PostLoadAssetsDependencies(FPCGExContext
 
 	if (Settings->AssignmentMode == EPCGExOrbitalAssignmentMode::Direction)
 	{
-		if (Context->BondingRules->OrbitalSets.Num() > 0)
+		if (Context->BondingRules->OrbitalSet)
 		{
-			Context->OrbitalSet = Context->BondingRules->OrbitalSets[0];
+			Context->OrbitalSet = Context->BondingRules->OrbitalSet;
 		}
 	}
 	else if (Settings->AssignmentMode == EPCGExOrbitalAssignmentMode::Connector)
@@ -110,7 +110,7 @@ bool FPCGExWriteValencyOrbitalsElement::PostBoot(FPCGExContext* InContext) const
 	{
 		if (!Context->OrbitalSet)
 		{
-			if (!Settings->bQuietMissingBondingRules) { PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules has no OrbitalSets.")); }
+			if (!Settings->bQuietMissingBondingRules) { PCGE_LOG(Error, GraphAndLog, FTEXT("Bonding Rules has no OrbitalSet.")); }
 			return false;
 		}
 
@@ -218,8 +218,7 @@ namespace PCGExWriteValencyOrbitals
 		}
 
 		// Initialize all edge indices to sentinel values (no match)
-		constexpr int64 InitialValue = static_cast<int64>(PCGExValency::NO_ORBITAL_MATCH) | (static_cast<int64>(PCGExValency::NO_ORBITAL_MATCH) << 8);
-		IdxWriter = EdgeDataFacade->GetWritable<int64>(IdxAttributeName, InitialValue, false, PCGExData::EBufferInit::New);
+		IdxWriter = EdgeDataFacade->GetWritable<int64>(IdxAttributeName, PCGExValency::EdgeOrbital::NoMatchSentinel(), false, PCGExData::EBufferInit::New);
 		StartParallelLoopForNodes();
 
 		return true;
