@@ -218,8 +218,7 @@ namespace PCGExWriteValencyOrbitals
 		}
 
 		// Initialize all edge indices to sentinel values (no match)
-		constexpr int64 InitialValue = static_cast<int64>(PCGExValency::NO_ORBITAL_MATCH) | (static_cast<int64>(PCGExValency::NO_ORBITAL_MATCH) << 8);
-		IdxWriter = EdgeDataFacade->GetWritable<int64>(IdxAttributeName, InitialValue, false, PCGExData::EBufferInit::New);
+		IdxWriter = EdgeDataFacade->GetWritable<int64>(IdxAttributeName, PCGExValency::EdgeOrbital::NoMatchSentinel(), false, PCGExData::EBufferInit::New);
 		StartParallelLoopForNodes();
 
 		return true;

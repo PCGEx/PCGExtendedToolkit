@@ -57,14 +57,10 @@ namespace PCGExValency
 				const PCGExGraphs::FEdge& Edge = Edges[EdgeIndex];
 				const int64 PackedIndices = EdgeIndicesReader->Read(EdgeIndex);
 
-				// Unpack orbital indices (byte 0 = start node's orbital, byte 1 = end node's orbital)
-				const uint8 StartOrbitalIndex = static_cast<uint8>(PackedIndices & 0xFF);
-				const uint8 EndOrbitalIndex = static_cast<uint8>((PackedIndices >> 8) & 0xFF);
-
 				// Determine which orbital index applies to this node
 				const uint8 OrbitalIndex = (Edge.Start == static_cast<uint32>(Node.PointIndex))
-					                           ? StartOrbitalIndex
-					                           : EndOrbitalIndex;
+					                           ? PCGExValency::EdgeOrbital::GetStartOrbital(PackedIndices)
+					                           : PCGExValency::EdgeOrbital::GetEndOrbital(PackedIndices);
 
 				// Skip if no match (sentinel value)
 				if (OrbitalIndex == NO_ORBITAL_MATCH) { continue; }
@@ -130,14 +126,10 @@ namespace PCGExValency
 				const PCGExGraphs::FEdge& Edge = Edges[EdgeIndex];
 				const int64 PackedIndices = EdgePackedIndices[EdgeIndex];
 
-				// Unpack orbital indices (byte 0 = start node's orbital, byte 1 = end node's orbital)
-				const uint8 StartOrbitalIndex = static_cast<uint8>(PackedIndices & 0xFF);
-				const uint8 EndOrbitalIndex = static_cast<uint8>((PackedIndices >> 8) & 0xFF);
-
 				// Determine which orbital index applies to this node
 				const uint8 OrbitalIndex = (Edge.Start == static_cast<uint32>(Node.PointIndex))
-					                           ? StartOrbitalIndex
-					                           : EndOrbitalIndex;
+					                           ? PCGExValency::EdgeOrbital::GetStartOrbital(PackedIndices)
+					                           : PCGExValency::EdgeOrbital::GetEndOrbital(PackedIndices);
 
 				// Skip if no match (sentinel value)
 				if (OrbitalIndex == NO_ORBITAL_MATCH) { continue; }

@@ -662,39 +662,24 @@ namespace PCGExValencyBondingGenerative
 							ChildOrbital = CapturedCompiledRules->AllModuleConnectors[ChildConnFlatIdx].OrbitalIndex;
 						}
 
+						const uint8 ParentOrbU8 = static_cast<uint8>(FMath::Max(0, ParentOrbital));
+						const uint8 ChildOrbU8 = static_cast<uint8>(FMath::Max(0, ChildOrbital));
+
 						// Pack: determine which endpoint is Start vs End
 						// FEdge.Start/End are point indices. Parent is Start if Edge.Start matches ParentIdx
-						int64 PackedOrbital;
-						if (static_cast<int32>(Edge.Start) == ParentIdx)
-						{
-							// Start = parent, End = child
-							PackedOrbital = static_cast<int64>(
-								(static_cast<uint64>(FMath::Max(0, ParentOrbital)) & 0xFF) |
-								((static_cast<uint64>(FMath::Max(0, ChildOrbital)) & 0xFF) << 8));
-						}
-						else
-						{
-							// Start = child, End = parent
-							PackedOrbital = static_cast<int64>(
-								(static_cast<uint64>(FMath::Max(0, ChildOrbital)) & 0xFF) |
-								((static_cast<uint64>(FMath::Max(0, ParentOrbital)) & 0xFF) << 8));
-						}
+						const int64 PackedOrbital = (static_cast<int32>(Edge.Start) == ParentIdx)
+							? PCGExValency::EdgeOrbital::Pack(ParentOrbU8, ChildOrbU8)
+							: PCGExValency::EdgeOrbital::Pack(ChildOrbU8, ParentOrbU8);
 
 						OrbitalWriter->SetValue(EdgeIdx, PackedOrbital);
 					}
 
 					if (ConnectorWriter)
 					{
-						// Pack connector indices: source connector in low 32, target in high 32
-						int64 PackedConnector;
-						if (static_cast<int32>(Edge.Start) == ParentIdx)
-						{
-							PackedConnector = static_cast<int64>(PCGEx::H64(Child.ParentConnectorIndex, Child.ChildConnectorIndex));
-						}
-						else
-						{
-							PackedConnector = static_cast<int64>(PCGEx::H64(Child.ChildConnectorIndex, Child.ParentConnectorIndex));
-						}
+						// Pack connector instance indices: source = start endpoint, target = end endpoint
+						const int64 PackedConnector = (static_cast<int32>(Edge.Start) == ParentIdx)
+							? PCGExValency::EdgeConnector::Pack(Child.ParentConnectorIndex, Child.ChildConnectorIndex)
+							: PCGExValency::EdgeConnector::Pack(Child.ChildConnectorIndex, Child.ParentConnectorIndex);
 
 						ConnectorWriter->SetValue(EdgeIdx, PackedConnector);
 					}
