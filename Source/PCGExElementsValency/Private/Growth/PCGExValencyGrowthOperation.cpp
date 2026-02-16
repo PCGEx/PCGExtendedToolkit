@@ -163,14 +163,25 @@ FTransform FPCGExValencyGrowthOperation::ComputeAttachmentTransform(
 	const FPCGExValencyModuleConnector& ChildConnector = ChildConnectors[ChildConnectorIndex];
 	const FTransform ChildConnectorLocal = ChildConnector.GetEffectiveOffset(ConnectorSet);
 
-	// Child inherits parent MODULE rotation (not the connector's facing rotation).
-	// Position: parent connector world pos - child connector offset in module-rotated frame.
-	// This ensures the child extends AWAY from the parent along the connector axis.
-	const FQuat ChildModuleRot = ParentModuleWorld.GetRotation();
+	// Start from parent module rotation, then apply a minimal correction so the child's
+	// attachment connector faces opposite to the parent connector direction.
+	// This preserves the parent module's base orientation (yaw, twist) while tilting
+	// the child along the connector axis.
+	const FVector ParentConnWorldFwd = ParentConnector.WorldTransform.GetRotation().GetForwardVector();
+	const FVector ChildConnLocalFwd = ChildConnectorLocal.GetRotation().GetForwardVector();
+
+	const FVector DesiredChildConnWorldFwd = -ParentConnWorldFwd;
+	const FVector CurrentChildConnWorldFwd = ParentModuleWorld.GetRotation().RotateVector(ChildConnLocalFwd);
+
+	const FQuat CorrectionRot = FQuat::FindBetweenNormals(CurrentChildConnWorldFwd, DesiredChildConnWorldFwd);
+	const FQuat ChildModuleRot = CorrectionRot * ParentModuleWorld.GetRotation();
+	const FVector ChildModuleScale = ParentModuleWorld.GetScale3D();
+
+	// Position: parent connector world pos - child connector offset in the new module frame
 	const FVector ChildModulePos = ParentConnector.WorldTransform.GetTranslation()
 		- ChildModuleRot.RotateVector(ChildConnectorLocal.GetTranslation());
 
-	return FTransform(ChildModuleRot, ChildModulePos);
+	return FTransform(ChildModuleRot, ChildModulePos, ChildModuleScale);
 }
 
 FBox FPCGExValencyGrowthOperation::ComputeWorldBounds(int32 ModuleIndex, const FTransform& WorldTransform) const

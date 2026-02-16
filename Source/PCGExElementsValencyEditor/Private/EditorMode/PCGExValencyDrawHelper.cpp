@@ -281,16 +281,19 @@ void FPCGExValencyDrawHelper::DrawCageConnectors(FPrimitiveDrawInterface* PDI, c
 		PDI->SetHitProxy(new HPCGExConnectorHitProxy(ConnectorComp));
 
 		const FQuat Rotation = ConnectorTransform.GetRotation();
+		const float ScaleFactor = ConnectorTransform.GetScale3D().GetAbsMax();
+		const float ScaledDiamondSize = DiamondSize * ScaleFactor;
+		const float ScaledArrowLength = ArrowLength * ScaleFactor;
 		const bool bIsSelected = (ConnectorComp == SelectedConnector);
 
 		if (!ConnectorComp->bEnabled)
 		{
-			DrawDisabledConnector(PDI, ConnectorLocation, Rotation, DiamondSize, bIsSelected);
+			DrawDisabledConnector(PDI, ConnectorLocation, Rotation, ScaledDiamondSize, bIsSelected);
 		}
 		else
 		{
 			FLinearColor Color = ConnectorComp->GetEffectiveDebugColor(ConnectorSet);
-			DrawConnectorShape(PDI, ConnectorLocation, Rotation.GetForwardVector(), Rotation.GetRightVector(), Rotation.GetUpVector(), ConnectorComp->Polarity, DiamondSize, ArrowLength, Color, bIsSelected);
+			DrawConnectorShape(PDI, ConnectorLocation, Rotation.GetForwardVector(), Rotation.GetRightVector(), Rotation.GetUpVector(), ConnectorComp->Polarity, ScaledDiamondSize, ScaledArrowLength, Color, bIsSelected);
 		}
 
 		// Clear hit proxy

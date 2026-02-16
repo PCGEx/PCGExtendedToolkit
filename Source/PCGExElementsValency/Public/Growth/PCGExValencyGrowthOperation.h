@@ -77,7 +77,9 @@ protected:
 
 	/**
 	 * Compute world transform for placing a child module attached at a connector.
-	 * Child inherits parent module orientation; position offset by child connector.
+	 * Starts from parent module rotation and applies a minimal correction to align the
+	 * child's attachment connector opposite to the parent connector direction.
+	 * Scale propagated from parent module.
 	 */
 	FTransform ComputeAttachmentTransform(
 		const FPCGExOpenConnector& ParentConnector,
