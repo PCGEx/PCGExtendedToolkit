@@ -3,6 +3,7 @@
 
 #include "Builder/PCGExValencyBondingRulesBuilder.h"
 
+#include "Core/PCGExBondingRulesAssembler.h"
 #include "Cages/PCGExValencyCage.h"
 #include "Cages/PCGExValencyCageNull.h"
 #include "Cages/PCGExValencyCagePattern.h"
@@ -178,16 +179,10 @@ FPCGExValencyBuildResult UPCGExValencyBondingRulesBuilder::BuildFromCages(
 		return Result;
 	}
 
-	// Clear existing if requested
-	if (bClearExistingModules)
-	{
-		TargetRules->Modules.Empty();
-	}
-
 	// Assign orbital set to the bonding rules
 	TargetRules->OrbitalSet = OrbitalSet;
 
-	// Step 1: Collect and preprocess cage data
+	// Phase 1: Cage-specific collection
 	TArray<FPCGExValencyCageData> CageData;
 	CollectCageData(Cages, OrbitalSet, CageData, Result);
 
@@ -197,6 +192,11 @@ FPCGExValencyBuildResult UPCGExValencyBondingRulesBuilder::BuildFromCages(
 
 		// Even with no valid cages, we need to compile and mark dirty
 		// This ensures the PCG graph sees the cleared modules
+		if (bClearExistingModules)
+		{
+			TargetRules->Modules.Empty();
+		}
+
 		if (!TargetRules->Compile())
 		{
 			Result.Errors.Add(LOCTEXT("CompileFailedEmpty", "Failed to compile empty BondingRules."));
@@ -213,36 +213,24 @@ FPCGExValencyBuildResult UPCGExValencyBondingRulesBuilder::BuildFromCages(
 		return Result;
 	}
 
-	// Step 1.5: Discover material variants from mesh components
+	// Phase 1.5: Discover material variants from mesh components
 	DiscoverMaterialVariants(CageData, TargetRules);
 
-	// Step 2: Build module mapping (keyed by Asset + OrbitalMask)
-	TMap<FString, int32> ModuleKeyToIndex;
-	BuildModuleMap(CageData, TargetRules, OrbitalSet, ModuleKeyToIndex, Result);
+	// Phase 2+3: Delegate module building + neighbor relationships to Assembler
+	FPCGExBondingRulesAssembler Assembler;
+	PopulateAssembler(CageData, OrbitalSet, Assembler);
 
-	// Step 2.5: Validate property name-type consistency across modules
-	ValidateModulePropertyTypes(TargetRules, Result);
+	// Phase 4: Validate + Apply
+	FPCGExAssemblerResult AssemblerResult = Assembler.Apply(TargetRules, bClearExistingModules);
+	Result.Warnings.Append(MoveTemp(AssemblerResult.Warnings));
+	Result.Errors.Append(MoveTemp(AssemblerResult.Errors));
 
-	// Step 3: Build neighbor relationships
-	BuildNeighborRelationships(CageData, ModuleKeyToIndex, TargetRules, OrbitalSet, Result);
-
-	// Step 4: Validate if requested
-	if (bValidateCompleteness)
+	if (!AssemblerResult.bSuccess)
 	{
-		ValidateRules(TargetRules, OrbitalSet, Result);
-	}
-
-	// Compile the rules
-	if (!TargetRules->Compile())
-	{
-		Result.Errors.Add(LOCTEXT("CompileFailed", "Failed to compile BondingRules after building."));
 		return Result;
 	}
 
 	TargetRules->Modify();
-
-	// Generate synthetic collections from modules
-	TargetRules->RebuildGeneratedCollections();
 
 	// Mark asset as modified
 	(void)TargetRules->MarkPackageDirty();
@@ -614,23 +602,27 @@ void UPCGExValencyBondingRulesBuilder::CollectCageData(
 	PCGEX_VALENCY_INFO(Building, "Valid cages: %d", OutCageData.Num());
 }
 
-void UPCGExValencyBondingRulesBuilder::BuildModuleMap(
+void UPCGExValencyBondingRulesBuilder::PopulateAssembler(
 	const TArray<FPCGExValencyCageData>& CageData,
-	UPCGExValencyBondingRules* TargetRules,
 	const UPCGExValencyOrbitalSet* OrbitalSet,
-	TMap<FString, int32>& OutModuleKeyToIndex,
-	FPCGExValencyBuildResult& OutResult)
+	FPCGExBondingRulesAssembler& OutAssembler)
 {
-	OutModuleKeyToIndex.Empty();
+	VALENCY_LOG_SECTION(Building, "POPULATING ASSEMBLER");
 
-	VALENCY_LOG_SECTION(Building, "BUILDING MODULE MAP");
+	// ========== Pass 1: Register modules from asset entries ==========
 
-	// Collect all unique Asset + OrbitalMask (+ MaterialVariant) combinations from cages.
-	// IMPORTANT: LocalTransform is NOT part of module identity - transform variants share the same module.
-	// This ensures consistent module indices regardless of child mesh positioning.
-	// Each cage data already has its computed OrbitalMask
-	for (const FPCGExValencyCageData& Data : CageData)
+	// Map: CageData index -> array of assembler module indices for that cage
+	TArray<TArray<int32>> CageDataToModuleIndices;
+	CageDataToModuleIndices.SetNum(CageData.Num());
+
+	// Track which modules have had metadata (properties/tags/connectors) set.
+	// Only the first cage that creates a module sets metadata; subsequent dedup hits skip.
+	TSet<int32> ModulesWithMetadata;
+
+	for (int32 CageIdx = 0; CageIdx < CageData.Num(); ++CageIdx)
 	{
+		const FPCGExValencyCageData& Data = CageData[CageIdx];
+
 		for (const FPCGExValencyAssetEntry& Entry : Data.AssetEntries)
 		{
 			if (!Entry.IsValid())
@@ -638,158 +630,72 @@ void UPCGExValencyBondingRulesBuilder::BuildModuleMap(
 				continue;
 			}
 
-			// Module identity = Asset + OrbitalMask + MaterialVariant
-			// LocalTransform is NOT part of module identity - transform variants are the SAME module
-			const FPCGExValencyMaterialVariant* MaterialVariantPtr = Entry.bHasMaterialVariant ? &Entry.MaterialVariant : nullptr;
-			const FString ModuleKey = FPCGExValencyCageData::MakeModuleKey(
-				Entry.Asset.ToSoftObjectPath(), Data.OrbitalMask, nullptr, MaterialVariantPtr);
-
-			if (const int32* ExistingIndex = OutModuleKeyToIndex.Find(ModuleKey))
-			{
-				// Module already exists - accumulate transform variant if applicable
-				// Check both cage-level flag AND entry-level flag (for mirrored entries from palettes)
-				if (Data.bPreserveLocalTransforms || Entry.bPreserveLocalTransform)
-				{
-					FPCGExValencyModuleDefinition& ExistingModule = TargetRules->Modules[*ExistingIndex];
-					ExistingModule.AddLocalTransform(Entry.LocalTransform);
-					PCGEX_VALENCY_VERBOSE(Building, "  Module[%d] added transform variant (now %d variants)", *ExistingIndex, ExistingModule.LocalTransforms.Num());
-				}
-				else
-				{
-					PCGEX_VALENCY_VERBOSE(Building, "  Module key '%s' already exists (transform variant)", *ModuleKey);
-				}
-				continue; // Already have a module for this combo - transform variants share module
-			}
-
-			// Create new module
-			const int32 NewModuleIndex = TargetRules->Modules.Num();
-			FPCGExValencyModuleDefinition& NewModule = TargetRules->Modules.AddDefaulted_GetRef();
-			NewModule.Asset = Entry.Asset;
-			NewModule.AssetType = Entry.AssetType;
+			// Build module desc
+			FPCGExAssemblerModuleDesc Desc;
+			Desc.Asset = Entry.Asset;
+			Desc.AssetType = Entry.AssetType;
+			Desc.OrbitalMask = Data.OrbitalMask;
 
 			// Use entry-level settings if available (from mirror source), otherwise fall back to cage settings
-			// This allows mirrored entries to carry their source's weight/constraints
-			NewModule.Settings = Entry.bHasSettings ? Entry.Settings : Data.Settings;
+			Desc.Settings = Entry.bHasSettings ? Entry.Settings : Data.Settings;
+			Desc.PlacementPolicy = Data.PlacementPolicy;
+			Desc.ModuleName = Data.ModuleName;
 
-			// Copy module name from cage (for fixed picks)
-			NewModule.ModuleName = Data.ModuleName;
-
-			// Copy placement policy from cage
-			NewModule.PlacementPolicy = Data.PlacementPolicy;
-
-			// Store local transform if cage or entry preserves them
-			// Entry flag is set when mirrored from a source (palette/cage) with bPreserveLocalTransforms enabled
-			if (Data.bPreserveLocalTransforms || Entry.bPreserveLocalTransform)
-			{
-				NewModule.AddLocalTransform(Entry.LocalTransform);
-			}
-
-			// Store material variant directly on the module
 			if (Entry.bHasMaterialVariant)
 			{
-				NewModule.MaterialVariant = Entry.MaterialVariant;
-				NewModule.bHasMaterialVariant = true;
+				Desc.MaterialVariant = Entry.MaterialVariant;
+				Desc.bHasMaterialVariant = true;
 			}
 
-			// Copy cage properties to module
-			NewModule.Properties = Data.Properties;
+			// AddModule deduplicates by key
+			const int32 ModuleIndex = OutAssembler.AddModule(Desc);
+			CageDataToModuleIndices[CageIdx].AddUnique(ModuleIndex);
 
-			// Copy actor tags to module (inherited from cage + palette)
-			NewModule.Tags = Data.Tags;
-
-			// Copy connector definitions from cage (will have orbital indices assigned in compilation)
-			NewModule.Connectors = Data.Connectors;
-
-#if WITH_EDITORONLY_DATA
-			// Generate variant name for editor review
-			NewModule.VariantName = GenerateVariantName(Entry, Data.OrbitalMask, NewModule.bHasLocalTransform);
-#endif
-
-			// Set up the layer config with the orbital mask
-			NewModule.LayerConfig.OrbitalMask = Data.OrbitalMask;
-
-			// Log mask as binary
-			FString MaskBits;
-			for (int32 Bit = 0; Bit < OrbitalSet->Num(); ++Bit)
+			// Accumulate local transform if cage or entry preserves them
+			// This happens for both new AND existing modules (transform accumulation)
+			if (Data.bPreserveLocalTransforms || Entry.bPreserveLocalTransform)
 			{
-				MaskBits += (Data.OrbitalMask & (1LL << Bit)) ? TEXT("1") : TEXT("0");
+				OutAssembler.AddLocalTransform(ModuleIndex, Entry.LocalTransform);
 			}
-
-			PCGEX_VALENCY_VERBOSE(Building, "  Module[%d]: Asset='%s', OrbitalMask=%s (0x%llX), Weight=%.2f",
-				NewModuleIndex, *Entry.Asset.GetAssetName(), *MaskBits, Data.OrbitalMask, NewModule.Settings.Weight);
-
-			OutModuleKeyToIndex.Add(ModuleKey, NewModuleIndex);
 		}
-	}
 
-	VALENCY_LOG_SECTION(Building, "MODULE MAP COMPLETE");
-	PCGEX_VALENCY_INFO(Building, "Total modules: %d", OutModuleKeyToIndex.Num());
-}
-
-void UPCGExValencyBondingRulesBuilder::ValidateModulePropertyTypes(
-	UPCGExValencyBondingRules* TargetRules,
-	FPCGExValencyBuildResult& OutResult)
-{
-	VALENCY_LOG_SECTION(Building, "VALIDATING MODULE PROPERTY TYPES");
-
-	// Map: PropertyName -> (StructType, first module name that defined it)
-	TMap<FName, TPair<const UScriptStruct*, FName>> NameToType;
-
-	for (int32 ModuleIndex = 0; ModuleIndex < TargetRules->Modules.Num(); ++ModuleIndex)
-	{
-		const FPCGExValencyModuleDefinition& Module = TargetRules->Modules[ModuleIndex];
-
-		for (const FInstancedStruct& Prop : Module.Properties)
+		// Add properties, tags, and connectors only to modules that haven't had metadata set yet.
+		// This matches the original Builder behavior: first cage to create a module sets metadata,
+		// subsequent cages with the same module key only contribute transforms.
+		for (const int32 ModuleIndex : CageDataToModuleIndices[CageIdx])
 		{
-			// Get property name from the property base
-			const FPCGExProperty* Base = Prop.GetPtr<FPCGExProperty>();
-			if (!Base)
+			if (ModulesWithMetadata.Contains(ModuleIndex))
 			{
 				continue;
 			}
+			ModulesWithMetadata.Add(ModuleIndex);
 
-			const FName PropName = Base->PropertyName;
-			if (PropName.IsNone())
+			for (const FInstancedStruct& Prop : Data.Properties)
 			{
-				continue; // Unnamed properties don't participate in validation
+				OutAssembler.AddProperty(ModuleIndex, Prop);
 			}
 
-			const UScriptStruct* PropType = Prop.GetScriptStruct();
-
-			if (const auto* Existing = NameToType.Find(PropName))
+			for (const FName& Tag : Data.Tags)
 			{
-				if (Existing->Key != PropType)
-				{
-					OutResult.Errors.Add(FText::Format(
-						LOCTEXT("PropertyTypeConflict",
-							"Property name '{0}' has conflicting types across modules: '{1}' (from module '{2}') vs '{3}' (from module '{4}'). "
-							"Same property name must use same type across all cages."),
-						FText::FromName(PropName),
-						FText::FromString(Existing->Key->GetName()),
-						FText::FromName(Existing->Value),
-						FText::FromString(PropType->GetName()),
-						FText::FromName(Module.ModuleName.IsNone() ? FName(*FString::Printf(TEXT("Module_%d"), ModuleIndex)) : Module.ModuleName)
-					));
-				}
+				OutAssembler.AddTag(ModuleIndex, Tag);
 			}
-			else
+
+			for (const FPCGExValencyModuleConnector& Connector : Data.Connectors)
 			{
-				NameToType.Add(PropName, {PropType, Module.ModuleName.IsNone() ? FName(*FString::Printf(TEXT("Module_%d"), ModuleIndex)) : Module.ModuleName});
+				OutAssembler.AddConnector(ModuleIndex, Connector);
 			}
 		}
+
+		PCGEX_VALENCY_VERBOSE(Building, "  CageData[%d]: %d modules registered [%s]",
+			CageIdx, CageDataToModuleIndices[CageIdx].Num(),
+			*FString::JoinBy(CageDataToModuleIndices[CageIdx], TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
 	}
 
-	PCGEX_VALENCY_INFO(Building, "Validated %d unique property names", NameToType.Num());
-}
+	PCGEX_VALENCY_INFO(Building, "Pass 1 complete: %d modules registered", OutAssembler.GetModuleCount());
 
-void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
-	const TArray<FPCGExValencyCageData>& CageData,
-	const TMap<FString, int32>& ModuleKeyToIndex,
-	UPCGExValencyBondingRules* TargetRules,
-	const UPCGExValencyOrbitalSet* OrbitalSet,
-	FPCGExValencyBuildResult& OutResult)
-{
-	VALENCY_LOG_SECTION(Building, "BUILDING NEIGHBOR RELATIONSHIPS");
+	// ========== Pass 2: Set neighbor relationships from orbital connections ==========
+
+	VALENCY_LOG_SECTION(Building, "BUILDING NEIGHBOR RELATIONSHIPS (via Assembler)");
 
 	// Build a cage pointer to cage data index map for fast lookup
 	TMap<APCGExValencyCage*, int32> CageToDataIndex;
@@ -801,35 +707,21 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 		}
 	}
 
-	// For each cage, update its modules' neighbor info
-	for (const FPCGExValencyCageData& Data : CageData)
+	for (int32 CageIdx = 0; CageIdx < CageData.Num(); ++CageIdx)
 	{
+		const FPCGExValencyCageData& Data = CageData[CageIdx];
 		APCGExValencyCage* Cage = Data.Cage.Get();
 		if (!Cage)
 		{
 			continue;
 		}
 
-		PCGEX_VALENCY_VERBOSE(Building, "  Processing cage '%s':", *Cage->GetCageDisplayName());
-
-		// Get module indices for this cage's asset entries
-		// Note: Transform is NOT part of module identity, so we don't include it in the key
-		TArray<int32> CageModuleIndices;
-		for (const FPCGExValencyAssetEntry& Entry : Data.AssetEntries)
-		{
-			const FPCGExValencyMaterialVariant* MaterialVariantPtr = Entry.bHasMaterialVariant ? &Entry.MaterialVariant : nullptr;
-			const FString ModuleKey = FPCGExValencyCageData::MakeModuleKey(
-				Entry.Asset.ToSoftObjectPath(), Data.OrbitalMask, nullptr, MaterialVariantPtr);
-			if (const int32* ModuleIndex = ModuleKeyToIndex.Find(ModuleKey))
-			{
-				CageModuleIndices.AddUnique(*ModuleIndex);
-			}
-		}
-
-		PCGEX_VALENCY_VERBOSE(Building, "    Cage modules: [%s]",
-			*FString::JoinBy(CageModuleIndices, TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
-
+		const TArray<int32>& CageModuleIndices = CageDataToModuleIndices[CageIdx];
 		const TArray<FPCGExValencyCageOrbital>& Orbitals = Cage->GetOrbitals();
+
+		PCGEX_VALENCY_VERBOSE(Building, "  Processing cage '%s' (modules: [%s]):",
+			*Cage->GetCageDisplayName(),
+			*FString::JoinBy(CageModuleIndices, TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
 
 		for (const FPCGExValencyCageOrbital& Orbital : Orbitals)
 		{
@@ -845,13 +737,9 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 				OrbitalName = OrbitalSet->Orbitals[Orbital.OrbitalIndex].GetOrbitalName();
 			}
 
-			// Get neighbor modules from connected cage
-			TArray<int32> NeighborModuleIndices;
-
 			if (const APCGExValencyCageBase* ConnectedBase = Orbital.GetDisplayConnection())
 			{
 				// Handle null cages (placeholders) based on mode
-				// See Orbital_Bitmask_Reference.md for mask behavior per mode
 				if (ConnectedBase->IsNullCage())
 				{
 					if (const APCGExValencyCageNull* NullCage = Cast<APCGExValencyCageNull>(ConnectedBase))
@@ -861,40 +749,24 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 						case EPCGExPlaceholderMode::Boundary:
 							PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': BOUNDARY (null cage)",
 								Orbital.OrbitalIndex, *OrbitalName.ToString());
-
-							// Boundary: Set BoundaryMask, do NOT set OrbitalMask
-							for (int32 ModuleIndex : CageModuleIndices)
+							for (const int32 ModuleIndex : CageModuleIndices)
 							{
-								if (TargetRules->Modules.IsValidIndex(ModuleIndex))
-								{
-									FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
-									LayerConfig.SetBoundaryOrbital(Orbital.OrbitalIndex);
-								}
+								OutAssembler.SetBoundaryOrbital(ModuleIndex, Orbital.OrbitalIndex);
 							}
 							break;
 
 						case EPCGExPlaceholderMode::Wildcard:
 							PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': WILDCARD (null cage)",
 								Orbital.OrbitalIndex, *OrbitalName.ToString());
-
-							// Wildcard: Set WildcardMask AND OrbitalMask (via SetWildcardOrbital)
-							for (int32 ModuleIndex : CageModuleIndices)
+							for (const int32 ModuleIndex : CageModuleIndices)
 							{
-								if (TargetRules->Modules.IsValidIndex(ModuleIndex))
-								{
-									FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
-									LayerConfig.SetWildcardOrbital(Orbital.OrbitalIndex);
-								}
+								OutAssembler.SetWildcardOrbital(ModuleIndex, Orbital.OrbitalIndex);
 							}
-							// Note: No specific neighbors added - any module is valid at this orbital
 							break;
 
 						case EPCGExPlaceholderMode::Any:
 							PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': ANY (null cage) - no constraint",
 								Orbital.OrbitalIndex, *OrbitalName.ToString());
-
-							// Any: Neither mask set - pure spatial placeholder, no runtime constraint
-							// No action needed - orbital exists but has no constraint
 							break;
 						}
 					}
@@ -903,152 +775,65 @@ void UPCGExValencyBondingRulesBuilder::BuildNeighborRelationships(
 						// Fallback for legacy null cages without mode - treat as Boundary
 						PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': BOUNDARY (legacy null cage)",
 							Orbital.OrbitalIndex, *OrbitalName.ToString());
-						for (int32 ModuleIndex : CageModuleIndices)
+						for (const int32 ModuleIndex : CageModuleIndices)
 						{
-							if (TargetRules->Modules.IsValidIndex(ModuleIndex))
-							{
-								FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
-								LayerConfig.SetBoundaryOrbital(Orbital.OrbitalIndex);
-							}
+							OutAssembler.SetBoundaryOrbital(ModuleIndex, Orbital.OrbitalIndex);
 						}
 					}
 				}
 				else if (const APCGExValencyCage* ConnectedCage = Cast<APCGExValencyCage>(ConnectedBase))
 				{
-					// Get the connected cage's data
+					// Get connected cage's module indices
+					TArray<int32> NeighborModuleIndices;
 					if (const int32* ConnectedDataIndex = CageToDataIndex.Find(const_cast<APCGExValencyCage*>(ConnectedCage)))
 					{
-						const FPCGExValencyCageData& ConnectedData = CageData[*ConnectedDataIndex];
-
-						// Add all of connected cage's modules as valid neighbors
-						// Note: Transform is NOT part of module identity
-						for (const FPCGExValencyAssetEntry& ConnectedEntry : ConnectedData.AssetEntries)
-						{
-							const FPCGExValencyMaterialVariant* ConnectedMaterialVariantPtr = ConnectedEntry.bHasMaterialVariant
-								                                                                  ? &ConnectedEntry.MaterialVariant
-								                                                                  : nullptr;
-							const FString NeighborKey = FPCGExValencyCageData::MakeModuleKey(
-								ConnectedEntry.Asset.ToSoftObjectPath(), ConnectedData.OrbitalMask, nullptr, ConnectedMaterialVariantPtr);
-							if (const int32* NeighborModuleIndex = ModuleKeyToIndex.Find(NeighborKey))
-							{
-								NeighborModuleIndices.AddUnique(*NeighborModuleIndex);
-							}
-						}
+						NeighborModuleIndices = CageDataToModuleIndices[*ConnectedDataIndex];
 					}
 
 					PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': Connected to '%s', neighbor modules: [%s]",
 						Orbital.OrbitalIndex, *OrbitalName.ToString(), *ConnectedCage->GetCageDisplayName(),
 						*FString::JoinBy(NeighborModuleIndices, TEXT(", "), [](int32 Idx) { return FString::FromInt(Idx); }));
+
+					// Add neighbors to each of this cage's modules
+					for (const int32 ModuleIndex : CageModuleIndices)
+					{
+						OutAssembler.AddNeighbors(ModuleIndex, OrbitalName, NeighborModuleIndices);
+					}
 				}
 			}
 			else
 			{
 				// No explicit connection - apply MissingConnectionBehavior if configured
-				// See Orbital_Bitmask_Reference.md for mask behavior
 				switch (Cage->MissingConnectionBehavior)
 				{
 				case EPCGExMissingConnectionBehavior::Unconstrained:
-					// Default behavior - no constraint for unconnected orbitals
 					PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': NO CONNECTION (unconstrained)",
 						Orbital.OrbitalIndex, *OrbitalName.ToString());
 					break;
 
 				case EPCGExMissingConnectionBehavior::Boundary:
-					// Treat as boundary - must have NO neighbor
 					PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': NO CONNECTION -> BOUNDARY (via MissingConnectionBehavior)",
 						Orbital.OrbitalIndex, *OrbitalName.ToString());
-					for (int32 ModuleIndex : CageModuleIndices)
+					for (const int32 ModuleIndex : CageModuleIndices)
 					{
-						if (TargetRules->Modules.IsValidIndex(ModuleIndex))
-						{
-							FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
-							LayerConfig.SetBoundaryOrbital(Orbital.OrbitalIndex);
-						}
+						OutAssembler.SetBoundaryOrbital(ModuleIndex, Orbital.OrbitalIndex);
 					}
 					break;
 
 				case EPCGExMissingConnectionBehavior::Wildcard:
-					// Treat as wildcard - must have ANY neighbor
 					PCGEX_VALENCY_VERBOSE(Building, "    Orbital[%d] '%s': NO CONNECTION -> WILDCARD (via MissingConnectionBehavior)",
 						Orbital.OrbitalIndex, *OrbitalName.ToString());
-					for (int32 ModuleIndex : CageModuleIndices)
+					for (const int32 ModuleIndex : CageModuleIndices)
 					{
-						if (TargetRules->Modules.IsValidIndex(ModuleIndex))
-						{
-							FPCGExValencyModuleLayerConfig& LayerConfig = TargetRules->Modules[ModuleIndex].LayerConfig;
-							LayerConfig.SetWildcardOrbital(Orbital.OrbitalIndex);
-						}
+						OutAssembler.SetWildcardOrbital(ModuleIndex, Orbital.OrbitalIndex);
 					}
 					break;
 				}
 			}
-
-			// Update each of this cage's modules with the neighbor info
-			for (int32 ModuleIndex : CageModuleIndices)
-			{
-				if (!TargetRules->Modules.IsValidIndex(ModuleIndex))
-				{
-					continue;
-				}
-
-				FPCGExValencyModuleDefinition& Module = TargetRules->Modules[ModuleIndex];
-
-				// Get layer config (already created in BuildModuleMap)
-				FPCGExValencyModuleLayerConfig& LayerConfig = Module.LayerConfig;
-
-				// Add neighbor modules for this orbital
-				for (int32 NeighborModuleIndex : NeighborModuleIndices)
-				{
-					LayerConfig.AddValidNeighbor(OrbitalName, NeighborModuleIndex);
-				}
-			}
 		}
 	}
 
-	VALENCY_LOG_SECTION(Building, "NEIGHBOR RELATIONSHIPS COMPLETE");
-}
-
-void UPCGExValencyBondingRulesBuilder::ValidateRules(
-	UPCGExValencyBondingRules* Rules,
-	const UPCGExValencyOrbitalSet* OrbitalSet,
-	FPCGExValencyBuildResult& OutResult)
-{
-	if (!Rules || !OrbitalSet)
-	{
-		return;
-	}
-
-	// Check for modules without any neighbors defined
-	for (const FPCGExValencyModuleDefinition& Module : Rules->Modules)
-	{
-		const FPCGExValencyModuleLayerConfig& Config = Module.LayerConfig;
-
-		// Check if any orbitals have no neighbors
-		for (int32 i = 0; i < OrbitalSet->Num(); ++i)
-		{
-			if (Config.HasOrbital(i))
-			{
-				const FName OrbitalName = OrbitalSet->Orbitals[i].GetOrbitalName();
-				const FPCGExValencyNeighborIndices* Neighbors = Config.OrbitalNeighbors.Find(OrbitalName);
-
-				if (!Neighbors || Neighbors->Num() == 0)
-				{
-					// Skip warning if this orbital is a boundary or wildcard (both legitimately have no specific neighbors)
-					if (!Config.IsBoundaryOrbital(i) && !Config.IsWildcardOrbital(i))
-					{
-						OutResult.Warnings.Add(FText::Format(
-							LOCTEXT("OrbitalNoNeighbors", "Module '{0}', orbital '{1}' has no valid neighbors defined. The connected cage may have no assets."),
-							FText::FromString(Module.Asset.GetAssetName()),
-							FText::FromName(OrbitalName)
-						));
-					}
-				}
-			}
-		}
-	}
-
-	// Check for orphan modules (no cages reference them)
-	// This would require tracking which modules came from which cages
+	VALENCY_LOG_SECTION(Building, "ASSEMBLER POPULATION COMPLETE");
 }
 
 TArray<FPCGExValencyAssetEntry> UPCGExValencyBondingRulesBuilder::GetEffectiveAssetEntries(const APCGExValencyCage* Cage)

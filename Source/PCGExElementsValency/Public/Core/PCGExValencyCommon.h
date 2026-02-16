@@ -317,6 +317,38 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyMaterialVariant
 	}
 };
 
+namespace PCGExValency
+{
+	/**
+	 * Module identity key — used for deduplication during building.
+	 * Same key = same module (Asset + OrbitalMask + optional MaterialVariant).
+	 * LocalTransform is NOT part of identity (transform variants share the same module).
+	 */
+	inline FString MakeModuleKey(
+		const FSoftObjectPath& AssetPath,
+		int64 OrbitalMask,
+		const FPCGExValencyMaterialVariant* MaterialVariant = nullptr)
+	{
+		FString Key = FString::Printf(TEXT("%s_%lld"), *AssetPath.ToString(), OrbitalMask);
+
+		// Include material variant hash - each unique material configuration is a separate module
+		if (MaterialVariant && MaterialVariant->Overrides.Num() > 0)
+		{
+			Key += TEXT("_M");
+			for (const FPCGExValencyMaterialOverride& Override : MaterialVariant->Overrides)
+			{
+				// Use material path hash for uniqueness
+				const uint32 MatHash = Override.Material.IsValid()
+					? GetTypeHash(Override.Material.ToSoftObjectPath().ToString())
+					: 0;
+				Key += FString::Printf(TEXT("%d:%u"), Override.SlotIndex, MatHash);
+			}
+		}
+
+		return Key;
+	}
+}
+
 /**
  * An asset entry within a cage, with optional local transform.
  * When bPreserveLocalTransform is enabled on the cage, the LocalTransform

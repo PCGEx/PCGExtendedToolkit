@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Core/PCGExBondingRulesAssembler.h"
 #include "Core/PCGExValencyBondingRules.h"
 #include "Core/PCGExValencyConnectorSet.h"
 
@@ -90,39 +91,10 @@ struct FPCGExValencyCageData
 	/** Whether this cage has auto-extraction enabled */
 	bool bReadConnectorsFromAssets = false;
 
-	/**
-	 * Get a unique key for module lookup.
-	 * Includes transform hash when transforms are preserved, and material variant hash when materials differ.
-	 */
+	/** Delegates to PCGExValency::MakeModuleKey (LocalTransform param kept for API compat but ignored). */
 	static FString MakeModuleKey(const FSoftObjectPath& AssetPath, int64 Mask, const FTransform* LocalTransform = nullptr, const FPCGExValencyMaterialVariant* MaterialVariant = nullptr)
 	{
-		FString Key = FString::Printf(TEXT("%s_%lld"), *AssetPath.ToString(), Mask);
-
-		// Include transform hash for unique variants
-		if (LocalTransform && !LocalTransform->Equals(FTransform::Identity, 0.01f))
-		{
-			const FVector Loc = LocalTransform->GetLocation();
-			const FRotator Rot = LocalTransform->Rotator();
-			Key += FString::Printf(TEXT("_T%.0f%.0f%.0f_%.0f%.0f%.0f"),
-				Loc.X, Loc.Y, Loc.Z,
-				Rot.Pitch, Rot.Yaw, Rot.Roll);
-		}
-
-		// Include material variant hash - each unique material configuration is a separate module
-		if (MaterialVariant && MaterialVariant->Overrides.Num() > 0)
-		{
-			Key += TEXT("_M");
-			for (const FPCGExValencyMaterialOverride& Override : MaterialVariant->Overrides)
-			{
-				// Use material path hash for uniqueness
-				const uint32 MatHash = Override.Material.IsValid()
-					? GetTypeHash(Override.Material.ToSoftObjectPath().ToString())
-					: 0;
-				Key += FString::Printf(TEXT("%d:%u"), Override.SlotIndex, MatHash);
-			}
-		}
-
-		return Key;
+		return PCGExValency::MakeModuleKey(AssetPath, Mask, MaterialVariant);
 	}
 };
 
@@ -202,45 +174,19 @@ protected:
 	);
 
 	/**
-	 * Build module key to module index mapping.
-	 * Creates modules for each unique Asset + OrbitalMask combination.
-	 * Key format: "AssetPath_OrbitalMask"
+	 * Populate an Assembler from collected cage data.
+	 * Replaces BuildModuleMap + BuildNeighborRelationships + validation.
+	 * Pass 1: Register modules from asset entries.
+	 * Pass 2: Set neighbor relationships from orbital connections.
+	 *
+	 * @param CageData Collected cage data from CollectCageData
+	 * @param OrbitalSet The orbital set for name/index lookup
+	 * @param OutAssembler The assembler to populate
 	 */
-	void BuildModuleMap(
+	void PopulateAssembler(
 		const TArray<FPCGExValencyCageData>& CageData,
-		UPCGExValencyBondingRules* TargetRules,
 		const UPCGExValencyOrbitalSet* OrbitalSet,
-		TMap<FString, int32>& OutModuleKeyToIndex,
-		FPCGExValencyBuildResult& OutResult
-	);
-
-	/**
-	 * Validate that property names map to consistent types across all modules.
-	 * Same property name with different types across cages = error.
-	 */
-	void ValidateModulePropertyTypes(
-		UPCGExValencyBondingRules* TargetRules,
-		FPCGExValencyBuildResult& OutResult
-	);
-
-	/**
-	 * Populate neighbor relationships for each module.
-	 */
-	void BuildNeighborRelationships(
-		const TArray<FPCGExValencyCageData>& CageData,
-		const TMap<FString, int32>& ModuleKeyToIndex,
-		UPCGExValencyBondingRules* TargetRules,
-		const UPCGExValencyOrbitalSet* OrbitalSet,
-		FPCGExValencyBuildResult& OutResult
-	);
-
-	/**
-	 * Validate the built rules for completeness.
-	 */
-	void ValidateRules(
-		UPCGExValencyBondingRules* Rules,
-		const UPCGExValencyOrbitalSet* OrbitalSet,
-		FPCGExValencyBuildResult& OutResult
+		FPCGExBondingRulesAssembler& OutAssembler
 	);
 
 	/**
