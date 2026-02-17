@@ -276,8 +276,9 @@ bool FPCGExValencyGrowthOperation::TryPlaceModule(
 	ConstraintContext.PlacedCount = Budget->CurrentTotal;
 
 	// Seed deterministic random for this specific connector evaluation
+	// Advance the main stream to produce a unique seed per call (GetCurrentSeed() is constant)
 	FRandomStream ConstraintRandom(
-		RandomStream.GetCurrentSeed() ^ (static_cast<uint32>(Budget->CurrentTotal) << 16) ^ static_cast<uint32>(Connector.ConnectorIndex));
+		RandomStream.GetUnsignedInt() ^ (static_cast<uint32>(Budget->CurrentTotal) << 16) ^ static_cast<uint32>(Connector.ConnectorIndex));
 
 	// Resolve candidates through ordered pipeline (uses pre-cached pointer arrays)
 	TArray<FTransform> Candidates;
