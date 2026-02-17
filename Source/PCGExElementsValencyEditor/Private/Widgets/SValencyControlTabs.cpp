@@ -130,14 +130,14 @@ void SValencyControlTabs::RefreshContent()
 		}
 	}
 
-	// Check if volume or palette is selected (hide tabs)
+	// Check if volume, palette, or null cage is selected (hide tabs — no connectors/assets)
 	bool bHideTabs = false;
 	if (GEditor)
 	{
 		USelection* Selection = GEditor->GetSelectedActors();
 		for (FSelectionIterator It(*Selection); It; ++It)
 		{
-			if (Cast<AValencyContextVolume>(*It) || Cast<APCGExValencyAssetPalette>(*It))
+			if (Cast<AValencyContextVolume>(*It) || Cast<APCGExValencyAssetPalette>(*It) || Cast<APCGExValencyCageNull>(*It))
 			{
 				bHideTabs = true;
 				break;
@@ -152,12 +152,9 @@ void SValencyControlTabs::RefreshContent()
 	}
 
 	APCGExValencyCageBase* Cage = GetSelectedCage();
-	if (!Cage)
+	if (!Cage || Cage->IsNullCage())
 	{
-		RootArea->SetContent(
-			PCGExValencyWidgets::MakeHintText(
-				NSLOCTEXT("PCGExValency", "TabsNoSelection", "Select a cage to view controls"))
-		);
+		RootArea->SetContent(SNullWidget::NullWidget);
 		return;
 	}
 

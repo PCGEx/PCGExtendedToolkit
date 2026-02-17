@@ -340,7 +340,7 @@ void SValencyRegularCagePanel::Construct(const FArguments& InArgs)
 	[
 		PCGExValencyWidgets::MakeTypeHeader(
 			NSLOCTEXT("PCGExValency", "CageTypeLabel", "CAGE"),
-			Cage->GetCageDisplayName(),
+			TAttribute<FText>::CreateLambda([WeakCage]() { return WeakCage.IsValid() ? FText::FromString(WeakCage->GetCageDisplayName()) : FText::GetEmpty(); }),
 			Style::CageHeaderColor(),
 			&Cage->CageColor)
 	];
@@ -443,7 +443,7 @@ void SValencyNullCagePanel::Construct(const FArguments& InArgs)
 	[
 		PCGExValencyWidgets::MakeTypeHeader(
 			NSLOCTEXT("PCGExValency", "PlaceholderTypeLabel", "PLACEHOLDER"),
-			Cage->GetCageDisplayName(),
+			TAttribute<FText>::CreateLambda([WeakCage]() { return WeakCage.IsValid() ? FText::FromString(WeakCage->GetCageDisplayName()) : FText::GetEmpty(); }),
 			Style::PlaceholderHeaderColor())
 	];
 
@@ -530,7 +530,7 @@ void SValencyPatternCagePanel::Construct(const FArguments& InArgs)
 	[
 		PCGExValencyWidgets::MakeTypeHeader(
 			NSLOCTEXT("PCGExValency", "PatternTypeLabel", "PATTERN"),
-			Cage->GetCageDisplayName(),
+			TAttribute<FText>::CreateLambda([WeakCage]() { return WeakCage.IsValid() ? FText::FromString(WeakCage->GetCageDisplayName()) : FText::GetEmpty(); }),
 			Style::PatternHeaderColor())
 	];
 
@@ -905,12 +905,14 @@ void SValencyPalettePanel::Construct(const FArguments& InArgs)
 
 	TSharedRef<SVerticalBox> Content = SNew(SVerticalBox);
 
+	TWeakObjectPtr<APCGExValencyAssetPalette> WeakPalette(Palette);
+
 	// Type header: amber with color swatch
 	Content->AddSlot().AutoHeight()
 	[
 		PCGExValencyWidgets::MakeTypeHeader(
 			NSLOCTEXT("PCGExValency", "PaletteTypeLabel", "PALETTE"),
-			Palette->GetPaletteDisplayName(),
+			TAttribute<FText>::CreateLambda([WeakPalette]() { return WeakPalette.IsValid() ? FText::FromString(WeakPalette->GetPaletteDisplayName()) : FText::GetEmpty(); }),
 			Style::PaletteHeaderColor(),
 			&Palette->PaletteColor)
 	];

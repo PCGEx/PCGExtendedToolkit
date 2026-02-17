@@ -124,7 +124,7 @@ namespace PCGExValencyWidgets
 	 * @param OptionalSwatchColor If non-null, adds a color swatch at the end
 	 */
 	inline TSharedRef<SWidget> MakeTypeHeader(
-		const FText& TypeLabel, const FString& Name, const FLinearColor& Color,
+		const FText& TypeLabel, const TAttribute<FText>& Name, const FLinearColor& Color,
 		const FLinearColor* OptionalSwatchColor = nullptr)
 	{
 		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox)
@@ -152,7 +152,7 @@ namespace PCGExValencyWidgets
 			.VAlign(VAlign_Center)
 			[
 				SNew(STextBlock)
-				.Text(FText::FromString(Name))
+				.Text(Name)
 				.Font(Style::Label())
 				.ColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f)))
 			];
