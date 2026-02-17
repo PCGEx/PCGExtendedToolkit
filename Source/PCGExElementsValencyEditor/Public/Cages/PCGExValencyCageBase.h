@@ -211,7 +211,7 @@ public:
 
 public:
 	/** If false, this cage is completely excluded from compilation (not inherited, mirrored, or built into bonding rules) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage", meta = (PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cage", meta = (PCGEX_ValencyRebuild, ToolTip = "Include this cage in compilation"))
 	bool bEnabledForCompilation = true;
 
 	/** Optional display name for this cage */

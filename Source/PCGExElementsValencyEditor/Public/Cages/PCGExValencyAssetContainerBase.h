@@ -104,6 +104,9 @@ public:
 		return bPreserveLocalTransforms && EnumHasAnyFlags(static_cast<EPCGExLocalTransformFlags>(LocalTransformFlags), EPCGExLocalTransformFlags::Scale);
 	}
 
+	/** Whether the connector transform strategy depends on asset-to-cage relative transforms */
+	bool IsConnectorTransformSensitive() const;
+
 	/** Compute the local transform to preserve based on flags */
 	FTransform ComputePreservedLocalTransform(const FTransform& AssetWorldTransform) const;
 

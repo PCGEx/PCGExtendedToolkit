@@ -55,15 +55,27 @@ TArray<FPCGExValencyAssetEntry> APCGExValencyAssetContainerBase::GetAllAssetEntr
 
 #pragma region Transform and Comparison
 
+bool APCGExValencyAssetContainerBase::IsConnectorTransformSensitive() const
+{
+	if (const FPCGExConnectorTransformStrategy* Strategy = ConnectorTransformStrategy.GetPtr<FPCGExConnectorTransformStrategy>())
+	{
+		return Strategy->IsTransformSensitive();
+	}
+	return false;
+}
+
 FTransform APCGExValencyAssetContainerBase::ComputePreservedLocalTransform(const FTransform& AssetWorldTransform) const
 {
 	return PCGExValencyAssetUtils::ComputePreservedLocalTransform(
-		AssetWorldTransform, GetActorTransform(), bPreserveLocalTransforms, LocalTransformFlags);
+		AssetWorldTransform, GetActorTransform(), bPreserveLocalTransforms, LocalTransformFlags,
+		IsConnectorTransformSensitive());
 }
 
 bool APCGExValencyAssetContainerBase::HaveScannedAssetsChanged(const TArray<FPCGExValencyAssetEntry>& OldScannedAssets) const
 {
-	return PCGExValencyAssetUtils::HaveScannedAssetsChanged(OldScannedAssets, ScannedAssetEntries, bPreserveLocalTransforms);
+	return PCGExValencyAssetUtils::HaveScannedAssetsChanged(
+		OldScannedAssets, ScannedAssetEntries,
+		bPreserveLocalTransforms || IsConnectorTransformSensitive());
 }
 
 #pragma endregion
@@ -112,6 +124,7 @@ void APCGExValencyAssetContainerBase::AddScannedEntry(
 
 	// Check for duplicates in scanned entries
 	// Material variants are a differentiating factor
+	const bool bCompareTransforms = bPreserveLocalTransforms || IsConnectorTransformSensitive();
 	for (FPCGExValencyAssetEntry& Existing : ScannedAssetEntries)
 	{
 		if (Existing.Asset == Asset)
@@ -122,7 +135,7 @@ void APCGExValencyAssetContainerBase::AddScannedEntry(
 				if (Existing.MaterialVariant == NewEntry.MaterialVariant)
 				{
 					// Same asset, same material variant - check transform
-					if (!bPreserveLocalTransforms || Existing.LocalTransform.Equals(NewEntry.LocalTransform, 0.1f))
+					if (!bCompareTransforms || Existing.LocalTransform.Equals(NewEntry.LocalTransform, 0.1f))
 					{
 						// Increment discovery count as weight
 						Existing.MaterialVariant.DiscoveryCount++;
@@ -134,7 +147,7 @@ void APCGExValencyAssetContainerBase::AddScannedEntry(
 			else if (!Existing.bHasMaterialVariant && !NewEntry.bHasMaterialVariant)
 			{
 				// Both have default materials - check transform
-				if (!bPreserveLocalTransforms || Existing.LocalTransform.Equals(NewEntry.LocalTransform, 0.1f))
+				if (!bCompareTransforms || Existing.LocalTransform.Equals(NewEntry.LocalTransform, 0.1f))
 				{
 					return;
 				}

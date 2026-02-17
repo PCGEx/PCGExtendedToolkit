@@ -114,7 +114,7 @@ namespace PCGExValencyAssetUtils
 	bool HaveScannedAssetsChanged(
 		const TArray<FPCGExValencyAssetEntry>& OldScannedAssets,
 		const TArray<FPCGExValencyAssetEntry>& NewScannedAssets,
-		bool bPreserveLocalTransforms)
+		bool bCompareTransforms)
 	{
 		// Quick count check
 		if (OldScannedAssets.Num() != NewScannedAssets.Num())
@@ -130,8 +130,8 @@ namespace PCGExValencyAssetUtils
 			{
 				if (OldEntry.Asset == NewEntry.Asset)
 				{
-					// If preserving transforms, also check transform equality
-					if (bPreserveLocalTransforms)
+					// When transforms matter (preservation or connector strategy), also check transform equality
+					if (bCompareTransforms)
 					{
 						if (OldEntry.LocalTransform.Equals(NewEntry.LocalTransform, 0.1f))
 						{
@@ -159,16 +159,23 @@ namespace PCGExValencyAssetUtils
 		const FTransform& AssetWorldTransform,
 		const FTransform& OwnerWorldTransform,
 		bool bPreserveLocalTransforms,
-		uint8 LocalTransformFlags)
+		uint8 LocalTransformFlags,
+		bool bConnectorTransformSensitive)
 	{
-		if (!bPreserveLocalTransforms)
+		if (!bPreserveLocalTransforms && !bConnectorTransformSensitive)
 		{
 			return FTransform::Identity;
 		}
 
 		const FTransform LocalTransform = AssetWorldTransform.GetRelativeTransform(OwnerWorldTransform);
 
-		// Build result transform based on which flags are set
+		// Connector strategy needs the full unfiltered transform for change detection
+		if (!bPreserveLocalTransforms)
+		{
+			return LocalTransform;
+		}
+
+		// Apply flag-based filtering for the preservation feature
 		FTransform Result = FTransform::Identity;
 
 		const EPCGExLocalTransformFlags Flags = static_cast<EPCGExLocalTransformFlags>(LocalTransformFlags);

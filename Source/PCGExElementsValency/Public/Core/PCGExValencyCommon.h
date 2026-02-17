@@ -71,6 +71,20 @@ enum class EPCGExModulePlacementPolicy : uint8
 	Excluded UMETA(ToolTip = "Not placed - sockets and metadata only")
 };
 
+/**
+ * Non-exclusive behavioral hints for module placement.
+ * These inform the solver's selection heuristics without changing constraint logic.
+ */
+UENUM(BlueprintType, Meta = (Bitflags, UseEnumValuesAsBitflags))
+enum class EPCGExModuleBehavior : uint8
+{
+	None = 0 UMETA(Hidden),
+	PreferredStart = 1 << 0 UMETA(ToolTip = "Prioritized as growth origins"),
+	PreferredEnd = 1 << 1 UMETA(ToolTip = "Favored when closing branches or nearing spawn budget"),
+	Greedy = 1 << 2 UMETA(ToolTip = "Place immediately when valid \u2014 don't defer for later"),
+};
+ENUM_CLASS_FLAGS(EPCGExModuleBehavior);
+
 namespace PCGExValency
 {
 	/** Algorithm state constants */
@@ -248,15 +262,15 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleSettings
 	GENERATED_BODY()
 
 	/** Probability weight for selection (higher = more likely) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0.001", PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0.001", PCGEX_ValencyRebuild, ToolTip = "Module weight for weighted distribution"))
 	float Weight = 1.0f;
 
 	/** Minimum number of times this module must be placed (0 = no minimum) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0", PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0", PCGEX_ValencyRebuild, ToolTip = "Minimum guaranteed placements (0 = no minimum)"))
 	int32 MinSpawns = 0;
 
 	/** Maximum number of times this module can be placed (-1 = unlimited) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "-1", PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "-1", PCGEX_ValencyRebuild, ToolTip = "Maximum placements (-1 = unlimited)"))
 	int32 MaxSpawns = -1;
 
 	/** Bounds modifier for overlap checking in generative solving */
@@ -264,12 +278,21 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleSettings
 	FPCGExBoundsModifier BoundsModifier;
 
 	/** If true, this module terminates growth - its sockets are not expanded */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild, ToolTip = "Dead end modules terminate growth \u2014 their sockets are not expanded"))
 	bool bIsDeadEnd = false;
 
-	/** If true, this module is preferred as a growth starting point */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild))
-	bool bPreferredStartingPoint = false;
+	/** Behavioral hints for module placement (non-exclusive flags) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (Bitmask, BitmaskEnum="/Script/PCGExElementsValency.EPCGExModuleBehavior", PCGEX_ValencyRebuild, ToolTip = "Behavioral hints for solver placement heuristics"))
+	uint8 BehaviorFlags = 0;
+
+	/** Check if a specific behavior flag is set */
+	FORCEINLINE bool HasBehavior(EPCGExModuleBehavior Flag) const { return (BehaviorFlags & static_cast<uint8>(Flag)) != 0; }
+
+	/** Set a specific behavior flag */
+	FORCEINLINE void SetBehavior(EPCGExModuleBehavior Flag) { BehaviorFlags |= static_cast<uint8>(Flag); }
+
+	/** Clear a specific behavior flag */
+	FORCEINLINE void ClearBehavior(EPCGExModuleBehavior Flag) { BehaviorFlags &= ~static_cast<uint8>(Flag); }
 
 	/** Placement conditions that must ALL pass for module placement during growth.
 	 *  Stack is evaluated in order — first failure rejects placement.

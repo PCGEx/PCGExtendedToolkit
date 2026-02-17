@@ -41,27 +41,14 @@ void APCGExValencyCage::PostLoad()
 
 void APCGExValencyCage::PostEditMove(bool bFinished)
 {
-	// Capture current scanned assets before Super (which may trigger volume membership changes)
-	TArray<FPCGExValencyAssetEntry> OldScannedAssets;
-	if (bFinished && bAutoRegisterContainedAssets && AValencyContextVolume::IsValencyModeActive())
-	{
-		OldScannedAssets = ScannedAssetEntries;
-	}
-
 	// Let base class handle volume membership changes, connections, CTRL+drag assets, etc.
 	Super::PostEditMove(bFinished);
 
 	// After drag finishes, re-scan for assets if auto-registration is enabled
+	// Change detection is handled inside ScanAndRegisterContainedAssets
 	if (bFinished && bAutoRegisterContainedAssets && AValencyContextVolume::IsValencyModeActive())
 	{
-		// Re-scan contained assets
 		ScanAndRegisterContainedAssets();
-
-		// Check if scanned assets changed
-		if (HaveScannedAssetsChanged(OldScannedAssets))
-		{
-			RequestRebuild(EValencyRebuildReason::AssetChange);
-		}
 	}
 }
 
@@ -205,6 +192,9 @@ void APCGExValencyCage::ScanAndRegisterContainedAssets()
 		return;
 	}
 
+	// Snapshot current state for change detection
+	TArray<FPCGExValencyAssetEntry> OldScannedAssets = MoveTemp(ScannedAssetEntries);
+
 	// Clear previous scanned entries and material variants (manual entries preserved)
 	ScannedAssetEntries.Empty();
 	DiscoveredMaterialVariants.Empty();
@@ -284,7 +274,11 @@ void APCGExValencyCage::ScanAndRegisterContainedAssets()
 		}
 	}
 
-	OnAssetRegistrationChanged();
+	// Only trigger cascade if scan results actually changed
+	if (HaveScannedAssetsChanged(OldScannedAssets))
+	{
+		OnAssetRegistrationChanged();
+	}
 }
 
 void APCGExValencyCage::OnAssetRegistrationChanged()

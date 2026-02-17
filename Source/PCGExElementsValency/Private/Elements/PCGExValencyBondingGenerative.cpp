@@ -324,7 +324,7 @@ namespace PCGExValencyBondingGenerative
 			{
 				CandidateModules.RemoveAll([CompiledRules](int32 Idx)
 				{
-					return !CompiledRules->ModuleIsPreferredStart[Idx];
+					return !CompiledRules->ModuleHasBehavior(Idx, EPCGExModuleBehavior::PreferredStart);
 				});
 			}
 

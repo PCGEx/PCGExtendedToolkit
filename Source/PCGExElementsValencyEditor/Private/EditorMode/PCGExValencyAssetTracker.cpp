@@ -205,12 +205,15 @@ bool FPCGExValencyAssetTracker::Update(TSet<APCGExValencyCage*>& OutAffectedCage
 
 			const bool bContainmentChanged = (NewContainingCage != OldContainingCage);
 
-			// Refresh if any part of transform changed within a cage that preserves local transforms
-			// This includes position, rotation, and scale changes
+			// Refresh if any part of transform changed within a cage that tracks transforms.
+			// This covers both explicit local-transform preservation and connector strategies
+			// that depend on asset-to-cage relative transforms (e.g., AssetRelative).
+			// ScanAndRegisterContainedAssets gates the cascade with HaveScannedAssetsChanged,
+			// so this won't cause spurious rebuilds when scan results are unchanged.
 			const bool bTransformChangedWithinCage = bTransformChanged &&
 				NewContainingCage &&
 				NewContainingCage == OldContainingCage &&
-				NewContainingCage->bPreserveLocalTransforms;
+				(NewContainingCage->bPreserveLocalTransforms || NewContainingCage->IsConnectorTransformSensitive());
 
 			// For newly selected actors, just record the mapping but don't trigger rebuild
 			// (they're already in the cage, selecting them shouldn't cause regeneration)
@@ -249,12 +252,15 @@ bool FPCGExValencyAssetTracker::Update(TSet<APCGExValencyCage*>& OutAffectedCage
 
 			const bool bContainmentChanged = (NewContainingPalette != OldContainingPalette);
 
-			// Refresh if any part of transform changed within a palette that preserves local transforms
-			// This includes position, rotation, and scale changes
+			// Refresh if any part of transform changed within a palette that tracks transforms.
+			// This covers both explicit local-transform preservation and connector strategies
+			// that depend on asset-to-cage relative transforms (e.g., AssetRelative).
+			// ScanAndRegisterContainedAssets gates the cascade with HaveScannedAssetsChanged,
+			// so this won't cause spurious rebuilds when scan results are unchanged.
 			const bool bTransformChangedWithinPalette = bTransformChanged &&
 				NewContainingPalette &&
 				NewContainingPalette == OldContainingPalette &&
-				NewContainingPalette->bPreserveLocalTransforms;
+				(NewContainingPalette->bPreserveLocalTransforms || NewContainingPalette->IsConnectorTransformSensitive());
 
 			// For newly selected actors, just record the mapping but don't trigger rebuild
 			// (they're already in the palette, selecting them shouldn't cause regeneration)

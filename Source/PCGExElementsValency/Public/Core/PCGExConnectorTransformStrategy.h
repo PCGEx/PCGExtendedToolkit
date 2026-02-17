@@ -18,6 +18,10 @@ struct PCGEXELEMENTSVALENCY_API FPCGExConnectorTransformStrategy
 
 	virtual ~FPCGExConnectorTransformStrategy() = default;
 
+	/** Whether this strategy depends on the asset-to-cage relative transform.
+	 *  When true, the scan pipeline must track asset transforms for change detection. */
+	virtual bool IsTransformSensitive() const { return false; }
+
 	/**
 	 * Called during Compile() per connector. Mutates LocalOffset in-place.
 	 * @param InOutOffset The connector's local offset transform to modify
@@ -39,6 +43,8 @@ USTRUCT(BlueprintType, DisplayName = "Asset Relative")
 struct PCGEXELEMENTSVALENCY_API FPCGExConnectorTransform_AssetRelative : public FPCGExConnectorTransformStrategy
 {
 	GENERATED_BODY()
+
+	virtual bool IsTransformSensitive() const override { return true; }
 
 	virtual void TransformConnector(
 		FTransform& InOutOffset,

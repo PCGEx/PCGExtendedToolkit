@@ -11,8 +11,9 @@
 
 #include "EditorMode/PCGExValencyCageEditorMode.h"
 #include "Widgets/SValencyVisToggles.h"
-#include "Widgets/SValencySceneOverview.h"
-#include "Widgets/SValencyInspector.h"
+#include "Widgets/SValencySceneBar.h"
+#include "Widgets/SValencyModuleInfo.h"
+#include "Widgets/SValencyControlTabs.h"
 #include "Widgets/SValencyValidation.h"
 
 #define LOCTEXT_NAMESPACE "ValencyEditor"
@@ -64,7 +65,7 @@ void SValencyModePanel::RebuildLayout()
 
 	ScrollBox->ClearChildren();
 
-	// Visualization toggles section
+	// [1] Visualization toggles section
 	SAssignNew(VisTogglesWidget, SValencyVisToggles)
 		.EditorMode(EditorMode);
 
@@ -80,34 +81,18 @@ void SValencyModePanel::RebuildLayout()
 		SNew(SSeparator)
 	];
 
-	// Scene overview section
-	SAssignNew(SceneOverviewWidget, SValencySceneOverview)
-		.EditorMode(EditorMode);
-
-	ScrollBox->AddSlot()
-	.Padding(4.0f)
-	[
-		SceneOverviewWidget.ToSharedRef()
-	];
-
-	ScrollBox->AddSlot()
-	.Padding(2.0f, 0.0f)
-	[
-		SNew(SSeparator)
-	];
-
-	// Inspector preserves state (DetailPanelConnector, search filter, delegate bindings)
-	// across panel rebuilds — created once, refreshes internally via OnSceneChanged
-	if (!InspectorWidget.IsValid())
+	// [2] Scene bar (replaces SceneOverview)
+	// Preserved across rebuilds for state continuity
+	if (!SceneBarWidget.IsValid())
 	{
-		SAssignNew(InspectorWidget, SValencyInspector)
+		SAssignNew(SceneBarWidget, SValencySceneBar)
 			.EditorMode(EditorMode);
 	}
 
 	ScrollBox->AddSlot()
 	.Padding(4.0f)
 	[
-		InspectorWidget.ToSharedRef()
+		SceneBarWidget.ToSharedRef()
 	];
 
 	ScrollBox->AddSlot()
@@ -116,9 +101,53 @@ void SValencyModePanel::RebuildLayout()
 		SNew(SSeparator)
 	];
 
-	// Validation section
-	SAssignNew(ValidationWidget, SValencyValidation)
-		.EditorMode(EditorMode);
+	// [3] Module info (context-sensitive cage/volume/palette info)
+	// Preserved across rebuilds - refreshes internally via selection + OnSceneChanged
+	if (!ModuleInfoWidget.IsValid())
+	{
+		SAssignNew(ModuleInfoWidget, SValencyModuleInfo)
+			.EditorMode(EditorMode);
+	}
+
+	ScrollBox->AddSlot()
+	.Padding(4.0f)
+	[
+		ModuleInfoWidget.ToSharedRef()
+	];
+
+	ScrollBox->AddSlot()
+	.Padding(2.0f, 0.0f)
+	[
+		SNew(SSeparator)
+	];
+
+	// [4] Control tabs (Connectors / Assets / Placement)
+	// Preserved across rebuilds - tab state, search filter, detail connector persist
+	if (!ControlTabsWidget.IsValid())
+	{
+		SAssignNew(ControlTabsWidget, SValencyControlTabs)
+			.EditorMode(EditorMode);
+	}
+
+	ScrollBox->AddSlot()
+	.Padding(4.0f)
+	[
+		ControlTabsWidget.ToSharedRef()
+	];
+
+	ScrollBox->AddSlot()
+	.Padding(2.0f, 0.0f)
+	[
+		SNew(SSeparator)
+	];
+
+	// [5] Validation section
+	// Preserved across rebuilds so collapsed/expanded state persists
+	if (!ValidationWidget.IsValid())
+	{
+		SAssignNew(ValidationWidget, SValencyValidation)
+			.EditorMode(EditorMode);
+	}
 
 	ScrollBox->AddSlot()
 	.Padding(4.0f)

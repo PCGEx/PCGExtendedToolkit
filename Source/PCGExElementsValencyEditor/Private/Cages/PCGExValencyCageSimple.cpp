@@ -171,11 +171,8 @@ bool APCGExValencyCageSimple::IsActorInside_Implementation(AActor* Actor) const
 
 bool APCGExValencyCageSimple::ContainsPoint_Implementation(const FVector& WorldLocation) const
 {
-	const FVector CageLocation = GetActorLocation();
-	const FVector LocalPoint = WorldLocation - CageLocation;
-
-	// TODO: Apply inverse rotation if cage rotation should affect containment
-	// For now, shapes are axis-aligned
+	// Transform world point into the cage's local space (accounts for translation, rotation, and scale)
+	const FVector LocalPoint = GetActorTransform().InverseTransformPosition(WorldLocation);
 
 	switch (DetectionShape)
 	{
@@ -211,25 +208,31 @@ bool APCGExValencyCageSimple::ContainsPoint_Implementation(const FVector& WorldL
 
 FBox APCGExValencyCageSimple::GetBoundingBox() const
 {
-	const FVector CageLocation = GetActorLocation();
+	FVector LocalExtent;
 
 	switch (DetectionShape)
 	{
 	case EPCGExValencyCageShape::Box:
-		return FBox(CageLocation - BoxExtent, CageLocation + BoxExtent);
+		LocalExtent = BoxExtent;
+		break;
 
 	case EPCGExValencyCageShape::Sphere:
-		return FBox(CageLocation - FVector(SphereRadius), CageLocation + FVector(SphereRadius));
+		LocalExtent = FVector(SphereRadius);
+		break;
 
 	case EPCGExValencyCageShape::Cylinder:
-		{
-			const FVector Extent(CylinderRadius, CylinderRadius, CylinderHalfHeight);
-			return FBox(CageLocation - Extent, CageLocation + Extent);
-		}
+		LocalExtent = FVector(CylinderRadius, CylinderRadius, CylinderHalfHeight);
+		break;
 
 	default:
-		return FBox(CageLocation, CageLocation);
+		{
+			const FVector Loc = GetActorLocation();
+			return FBox(Loc, Loc);
+		}
 	}
+
+	// Transform local-space box to world-space AABB (accounts for rotation and scale)
+	return FBox(-LocalExtent, LocalExtent).TransformBy(GetActorTransform());
 }
 
 void APCGExValencyCageSimple::OnAssetRegistrationChanged()

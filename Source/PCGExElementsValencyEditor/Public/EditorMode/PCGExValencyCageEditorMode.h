@@ -254,6 +254,6 @@ private:
 	/** Connector being previewed */
 	TWeakObjectPtr<UPCGExValencyCageConnectorComponent> GhostMirrorConnector;
 
-	/** Last Ctrl state during ghost preview (for redraw on modifier change) */
-	bool bGhostLastCtrlState = false;
+	/** Last Shift state during ghost preview (for redraw on modifier change) */
+	bool bGhostLastShiftState = false;
 };

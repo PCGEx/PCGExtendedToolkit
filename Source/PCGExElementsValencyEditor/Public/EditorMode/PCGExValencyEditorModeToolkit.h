@@ -41,8 +41,9 @@ public:
  * Root panel widget for the Valency editor mode side panel.
  * Contains all sub-sections in a scrollable layout:
  * - Visualization toggles
- * - Scene overview tree
- * - Context-sensitive inspector
+ * - Scene bar (compact context/rebuild controls)
+ * - Module info (context-sensitive cage/volume/palette properties)
+ * - Control tabs (Connectors / Assets / Placement)
  * - Validation messages
  */
 class SValencyModePanel : public SCompoundWidget
@@ -69,8 +70,9 @@ private:
 
 	/** Sub-widgets (populated incrementally by phases) */
 	TSharedPtr<SWidget> VisTogglesWidget;
-	TSharedPtr<SWidget> SceneOverviewWidget;
-	TSharedPtr<SWidget> InspectorWidget;
+	TSharedPtr<class SValencySceneBar> SceneBarWidget;
+	TSharedPtr<class SValencyModuleInfo> ModuleInfoWidget;
+	TSharedPtr<class SValencyControlTabs> ControlTabsWidget;
 	TSharedPtr<SWidget> ValidationWidget;
 
 	/** Rebuild the scroll box contents */

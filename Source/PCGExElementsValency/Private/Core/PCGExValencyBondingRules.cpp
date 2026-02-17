@@ -83,8 +83,10 @@ bool UPCGExValencyBondingRules::Compile()
 	CompiledData.AllModuleConnectors.Empty();
 	CompiledData.ModulePlacementPolicies.SetNum(Modules.Num());
 	CompiledData.ModuleIsDeadEnd.SetNum(Modules.Num());
-	CompiledData.ModuleIsPreferredStart.SetNum(Modules.Num());
+	CompiledData.ModuleBehaviorFlags.SetNum(Modules.Num());
 	CompiledData.bHasAnyPreferredStart = false;
+	CompiledData.bHasAnyPreferredEnd = false;
+	CompiledData.bHasAnyGreedy = false;
 	CompiledData.ModuleBoundsModifiers.SetNum(Modules.Num());
 	CompiledData.ModulePlacementConditionHeaders.SetNum(Modules.Num());
 	CompiledData.AllPlacementConditions.Empty();
@@ -105,8 +107,10 @@ bool UPCGExValencyBondingRules::Compile()
 		CompiledData.ModuleHasLocalTransform[ModuleIndex] = Module.bHasLocalTransform;
 		CompiledData.ModulePlacementPolicies[ModuleIndex] = Module.PlacementPolicy;
 		CompiledData.ModuleIsDeadEnd[ModuleIndex] = Module.Settings.bIsDeadEnd;
-		CompiledData.ModuleIsPreferredStart[ModuleIndex] = Module.Settings.bPreferredStartingPoint;
-		if (Module.Settings.bPreferredStartingPoint) { CompiledData.bHasAnyPreferredStart = true; }
+		CompiledData.ModuleBehaviorFlags[ModuleIndex] = Module.Settings.BehaviorFlags;
+		if (Module.Settings.HasBehavior(EPCGExModuleBehavior::PreferredStart)) { CompiledData.bHasAnyPreferredStart = true; }
+		if (Module.Settings.HasBehavior(EPCGExModuleBehavior::PreferredEnd)) { CompiledData.bHasAnyPreferredEnd = true; }
+		if (Module.Settings.HasBehavior(EPCGExModuleBehavior::Greedy)) { CompiledData.bHasAnyGreedy = true; }
 		CompiledData.ModuleBoundsModifiers[ModuleIndex] = Module.Settings.BoundsModifier;
 
 		// Populate placement condition header and flattened conditions

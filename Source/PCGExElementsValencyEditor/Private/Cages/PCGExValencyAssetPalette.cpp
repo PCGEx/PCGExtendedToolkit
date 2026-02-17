@@ -268,6 +268,9 @@ void APCGExValencyAssetPalette::ScanAndRegisterContainedAssets()
 		return;
 	}
 
+	// Snapshot current state for change detection
+	TArray<FPCGExValencyAssetEntry> OldScannedAssets = MoveTemp(ScannedAssetEntries);
+
 	// Clear previous scanned entries
 	ScannedAssetEntries.Empty();
 	DiscoveredMaterialVariants.Empty();
@@ -353,7 +356,11 @@ void APCGExValencyAssetPalette::ScanAndRegisterContainedAssets()
 	// Mark as initialized - no longer needs initial scan
 	bNeedsInitialScan = false;
 
-	OnAssetRegistrationChanged();
+	// Only trigger cascade if scan results actually changed
+	if (HaveScannedAssetsChanged(OldScannedAssets))
+	{
+		OnAssetRegistrationChanged();
+	}
 }
 
 void APCGExValencyAssetPalette::UpdateShapeComponent()

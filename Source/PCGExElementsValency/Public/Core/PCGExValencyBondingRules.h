@@ -276,13 +276,27 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyBondingRulesCompiled
 	UPROPERTY()
 	TArray<bool> ModuleIsDeadEnd;
 
-	/** Per-module preferred starting point flag (parallel array) */
+	/** Per-module behavior flags (parallel array). See EPCGExModuleBehavior. */
 	UPROPERTY()
-	TArray<bool> ModuleIsPreferredStart;
+	TArray<uint8> ModuleBehaviorFlags;
 
-	/** Whether any module is marked as preferred start (cached at compile time) */
+	/** Whether any module has any behavior flags set (cached at compile time) */
 	UPROPERTY()
 	bool bHasAnyPreferredStart = false;
+
+	/** Whether any module has PreferredEnd set (cached at compile time) */
+	UPROPERTY()
+	bool bHasAnyPreferredEnd = false;
+
+	/** Whether any module has Greedy set (cached at compile time) */
+	UPROPERTY()
+	bool bHasAnyGreedy = false;
+
+	/** Helper: check if a module has a specific behavior flag */
+	FORCEINLINE bool ModuleHasBehavior(int32 ModuleIndex, EPCGExModuleBehavior Flag) const
+	{
+		return (ModuleBehaviorFlags[ModuleIndex] & static_cast<uint8>(Flag)) != 0;
+	}
 
 	/** Per-module bounds modifiers for generative solving (parallel array) */
 	UPROPERTY()
