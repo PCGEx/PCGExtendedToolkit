@@ -248,15 +248,15 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleSettings
 	GENERATED_BODY()
 
 	/** Probability weight for selection (higher = more likely) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0.001", PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0.001", PCGEX_ValencyRebuild, ToolTip = "Module weight for weighted distribution"))
 	float Weight = 1.0f;
 
 	/** Minimum number of times this module must be placed (0 = no minimum) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0", PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "0", PCGEX_ValencyRebuild, ToolTip = "Minimum guaranteed placements (0 = no minimum)"))
 	int32 MinSpawns = 0;
 
 	/** Maximum number of times this module can be placed (-1 = unlimited) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "-1", PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta = (ClampMin = "-1", PCGEX_ValencyRebuild, ToolTip = "Maximum placements (-1 = unlimited)"))
 	int32 MaxSpawns = -1;
 
 	/** Bounds modifier for overlap checking in generative solving */
@@ -264,11 +264,11 @@ struct PCGEXELEMENTSVALENCY_API FPCGExValencyModuleSettings
 	FPCGExBoundsModifier BoundsModifier;
 
 	/** If true, this module terminates growth - its sockets are not expanded */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild, ToolTip = "Dead end modules terminate growth \u2014 their sockets are not expanded"))
 	bool bIsDeadEnd = false;
 
 	/** If true, this module is preferred as a growth starting point */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Generative", meta = (PCGEX_ValencyRebuild, ToolTip = "Preferred starting points are prioritized as growth origins"))
 	bool bPreferredStartingPoint = false;
 
 	/** Placement conditions that must ALL pass for module placement during growth.

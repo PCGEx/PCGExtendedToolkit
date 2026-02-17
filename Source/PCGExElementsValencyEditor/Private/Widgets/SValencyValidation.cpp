@@ -10,6 +10,7 @@
 #include "Widgets/Views/STableRow.h"
 
 #include "EditorMode/PCGExValencyCageEditorMode.h"
+#include "Widgets/PCGExValencyWidgetHelpers.h"
 #include "Cages/PCGExValencyCageBase.h"
 #include "Cages/PCGExValencyCage.h"
 #include "Cages/PCGExValencyCagePattern.h"
@@ -17,6 +18,8 @@
 #include "Cages/PCGExValencyCageOrbital.h"
 #include "Cages/PCGExValencyAssetPalette.h"
 #include "Volumes/ValencyContextVolume.h"
+
+namespace Style = PCGExValencyWidgets::Style;
 
 void SValencyValidation::Construct(const FArguments& InArgs)
 {
@@ -120,7 +123,7 @@ TSharedRef<ITableRow> SValencyValidation::OnGenerateRow(TSharedPtr<FValencyValid
 			[
 				SNew(STextBlock)
 				.Text(FText::FromString(SeverityIcon))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+				.Font(Style::Title())
 				.ColorAndOpacity(FSlateColor(SeverityColor))
 			]
 			// Source name
@@ -131,7 +134,7 @@ TSharedRef<ITableRow> SValencyValidation::OnGenerateRow(TSharedPtr<FValencyValid
 			[
 				SNew(STextBlock)
 				.Text(FText::FromString(Item->SourceName))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
+				.Font(Style::SmallBold())
 				.ColorAndOpacity(FSlateColor(FLinearColor(0.8f, 0.8f, 0.8f)))
 			]
 			// Message
@@ -142,7 +145,7 @@ TSharedRef<ITableRow> SValencyValidation::OnGenerateRow(TSharedPtr<FValencyValid
 			[
 				SNew(STextBlock)
 				.Text(FText::FromString(Item->Message))
-				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+				.Font(Style::Small())
 				.AutoWrapText(true)
 			]
 		];

@@ -257,9 +257,9 @@ void UPCGExValencyCageEditorMode::OnRenderCallback(IToolsContextRenderAPI* Rende
 					const UPCGExValencyEditorSettings* Settings = UPCGExValencyEditorSettings::Get();
 					if (Settings)
 					{
-						const bool bCtrl = FSlateApplication::Get().GetModifierKeys().IsControlDown();
+						const bool bShift = FSlateApplication::Get().GetModifierKeys().IsShiftDown();
 						const FTransform T = FPCGExValencyDrawHelper::ComputeMirroredTransform(
-							GhostConn->GetRelativeTransform(), GhostMirrorAxisMask, bCtrl);
+							GhostConn->GetRelativeTransform(), GhostMirrorAxisMask, bShift);
 
 						// Convert to world space
 						const AActor* GhostOwner = GhostConn->GetOwner();
@@ -490,13 +490,13 @@ void UPCGExValencyCageEditorMode::ModeTick(float DeltaTime)
 		}
 	}
 
-	// Ghost mirror preview: redraw when Ctrl state changes so the ghost updates
+	// Ghost mirror preview: redraw when Shift state changes so the ghost updates
 	if (GhostMirrorAxisMask != 0 && GhostMirrorConnector.IsValid())
 	{
-		const bool bCtrlNow = FSlateApplication::Get().GetModifierKeys().IsControlDown();
-		if (bCtrlNow != bGhostLastCtrlState)
+		const bool bShiftNow = FSlateApplication::Get().GetModifierKeys().IsShiftDown();
+		if (bShiftNow != bGhostLastShiftState)
 		{
-			bGhostLastCtrlState = bCtrlNow;
+			bGhostLastShiftState = bShiftNow;
 			RedrawViewports();
 		}
 	}
@@ -953,7 +953,7 @@ void UPCGExValencyCageEditorMode::SetMirrorGhostPreview(UPCGExValencyCageConnect
 {
 	GhostMirrorAxisMask = AxisMask;
 	GhostMirrorConnector = Connector;
-	bGhostLastCtrlState = FSlateApplication::Get().GetModifierKeys().IsControlDown();
+	bGhostLastShiftState = FSlateApplication::Get().GetModifierKeys().IsShiftDown();
 	RedrawViewports();
 }
 

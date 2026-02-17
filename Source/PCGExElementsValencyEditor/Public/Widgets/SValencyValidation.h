@@ -52,9 +52,6 @@ private:
 	/** The list view widget */
 	TSharedPtr<SListView<TSharedPtr<FValencyValidationMessage>>> ListView;
 
-	/** Whether the validation section is expanded */
-	bool bIsExpanded = true;
-
 	/** List view callbacks */
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FValencyValidationMessage> Item, const TSharedRef<STableViewBase>& OwnerTable);
 	void OnMessageClicked(TSharedPtr<FValencyValidationMessage> Item, ESelectInfo::Type SelectInfo);

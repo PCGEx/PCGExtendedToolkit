@@ -92,6 +92,73 @@ namespace PCGExEnumCustomization
 		return CreateRadioGroup(PropertyHandle, FindFirstObjectSafe<UEnum>(*Enum));
 	}
 
+	TSharedRef<SWidget> CreateRadioGroup(UEnum* Enum, TFunction<int32()> GetValue, TFunction<void(int32)> SetValue)
+	{
+		TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox);
+
+		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+		{
+			if (Enum->HasMetaData(TEXT("Hidden"), i)) { continue; }
+			const int32 EnumValue = static_cast<int32>(Enum->GetValueByIndex(i));
+
+			FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+			if (IconName.IsEmpty())
+			{
+				Box->AddSlot().AutoWidth().Padding(2, 2)
+				[
+					SNew(SButton)
+					.Text(Enum->GetDisplayNameTextByIndex(i))
+					.ToolTipText(Enum->GetToolTipTextByIndex(i))
+					.ButtonColorAndOpacity_Lambda(
+						[GetValue, EnumValue]
+						{
+							return GetValue() == EnumValue ? FLinearColor(0.005, 0.005, 0.005, 0.8) : FLinearColor::Transparent;
+						})
+					.OnClicked_Lambda(
+						[SetValue, EnumValue]()
+						{
+							SetValue(EnumValue);
+							return FReply::Handled();
+						})
+				];
+			}
+			else
+			{
+				IconName = TEXT("PCGEx.ActionIcon.") + IconName;
+				Box->AddSlot().AutoWidth().Padding(2, 2)
+				[
+					SNew(SButton)
+					.ToolTipText(Enum->GetToolTipTextByIndex(i))
+					.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
+					.ButtonColorAndOpacity_Lambda(
+						[GetValue, EnumValue]
+						{
+							return GetValue() == EnumValue ? FLinearColor(0.005, 0.005, 0.005, 0.8) : FLinearColor::Transparent;
+						})
+					.OnClicked_Lambda(
+						[SetValue, EnumValue]()
+						{
+							SetValue(EnumValue);
+							return FReply::Handled();
+						})
+					[
+						SNew(SImage)
+						.Image(FAppStyle::Get().GetBrush(*IconName))
+						.ColorAndOpacity_Lambda(
+							[GetValue, EnumValue]
+							{
+								return GetValue() == EnumValue
+									       ? FLinearColor::White
+									       : FLinearColor::Gray;
+							})
+					]
+				];
+			}
+		}
+
+		return Box;
+	}
+
 	TSharedRef<SWidget> CreateCheckboxGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum, const TSet<int32>& SkipIndices)
 	{
 		TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox);
