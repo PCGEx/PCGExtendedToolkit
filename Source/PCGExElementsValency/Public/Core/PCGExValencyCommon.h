@@ -112,7 +112,7 @@ namespace PCGExValency
 	}
 
 	/**
-	 * Pack/unpack helpers for the PCGEx/V/Orbital/* edge attribute.
+	 * Pack/unpack helpers for the PCGEx/V/Orbital/{Id} edge attribute.
 	 * Layout: byte[0] = start node's orbital index, byte[1] = end node's orbital index.
 	 * Max 255 orbital indices (uint8); 0xFF = no match (sentinel).
 	 *
@@ -154,7 +154,7 @@ namespace PCGExValency
 	}
 
 	/**
-	 * Pack/unpack helpers for the PCGEx/V/Connector/* edge attribute.
+	 * Pack/unpack helpers for the PCGEx/V/Connector/{Id} edge attribute.
 	 * Encodes which connector INSTANCE sits at each edge endpoint (by flat index into
 	 * AllModuleConnectors). Uses H64: upper 32 bits = source, lower 32 bits = target.
 	 *
