@@ -13,6 +13,7 @@ class UPCGExValencyCageEditorMode;
  * Context-sensitive module info panel.
  * Shows cage properties, volume info, palette info, or hint text
  * based on the current editor selection.
+ * Dispatches to type-specific SValencyInfoPanel subclasses for cages/palettes.
  */
 class SValencyModuleInfo : public SCompoundWidget
 {
@@ -40,9 +41,7 @@ private:
 	/** Selection changed callback */
 	void OnSelectionChangedCallback(UObject* InObject);
 
-	/** Build content for each context */
+	/** Build content for non-dispatched contexts */
 	TSharedRef<SWidget> BuildHintContent();
-	TSharedRef<SWidget> BuildCageInfoContent(class APCGExValencyCageBase* Cage);
 	TSharedRef<SWidget> BuildVolumeInfoContent(class AValencyContextVolume* Volume);
-	TSharedRef<SWidget> BuildPaletteInfoContent(class APCGExValencyAssetPalette* Palette);
 };

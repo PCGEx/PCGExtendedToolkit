@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SSpinBox.h"
@@ -38,6 +39,12 @@ namespace PCGExValencyWidgets
 		inline FSlateColor LabelColor()  { return FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f)); }
 		inline FSlateColor DimColor()    { return FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f)); }
 		inline FSlateColor AccentColor() { return FSlateColor(FLinearColor(0.8f, 0.5f, 0.1f)); }
+
+		// Type header colors
+		inline FLinearColor CageHeaderColor()        { return FLinearColor(0.12f, 0.30f, 0.50f, 1.0f); }
+		inline FLinearColor PlaceholderHeaderColor()  { return FLinearColor(0.40f, 0.12f, 0.12f, 1.0f); }
+		inline FLinearColor PatternHeaderColor()      { return FLinearColor(0.12f, 0.35f, 0.18f, 1.0f); }
+		inline FLinearColor PaletteHeaderColor()      { return FLinearColor(0.40f, 0.25f, 0.08f, 1.0f); }
 
 		// Dimensions
 		constexpr float LabelWidth = 100.0f;
@@ -107,6 +114,74 @@ namespace PCGExValencyWidgets
 			.Text(Text)
 			.Font(Style::Italic())
 			.ColorAndOpacity(Style::DimColor());
+	}
+
+	/**
+	 * Create a full-width colored type header bar: "TYPE · Name" with optional color swatch.
+	 * @param TypeLabel The type label text (e.g., "CAGE", "PLACEHOLDER")
+	 * @param Name The display name of the item
+	 * @param Color Background color for the header bar
+	 * @param OptionalSwatchColor If non-null, adds a color swatch at the end
+	 */
+	inline TSharedRef<SWidget> MakeTypeHeader(
+		const FText& TypeLabel, const FString& Name, const FLinearColor& Color,
+		const FLinearColor* OptionalSwatchColor = nullptr)
+	{
+		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(TypeLabel)
+				.Font(Style::Bold())
+				.ColorAndOpacity(FSlateColor(FLinearColor::White))
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(4, 0)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("\u00B7")))
+				.Font(Style::Label())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f, 0.5f)))
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(Name))
+				.Font(Style::Label())
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f)))
+			];
+
+		if (OptionalSwatchColor)
+		{
+			Row->AddSlot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(4, 0, 0, 0)
+			[
+				SNew(SColorBlock)
+				.Color(*OptionalSwatchColor)
+				.Size(FVector2D(Style::SwatchSize, Style::SwatchSize))
+			];
+		}
+
+		return SNew(SBox)
+			.MinDesiredHeight(24.0f)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+				.BorderBackgroundColor(Color * FLinearColor(1,1,1,0.5))
+				.Padding(FMargin(6, 0))
+				.VAlign(VAlign_Center)
+				[
+					Row
+				]
+			];
 	}
 
 	/** Create a checkbox row: [checkbox] + label text (no label column — checkbox IS the control) */
