@@ -47,11 +47,26 @@ private:
 	/** Build the editor toolbar */
 	void BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder);
 
+	/** Bind keyboard shortcuts for the graph editor */
+	void BindGraphCommands();
+
 	/** Spawn graph tab */
 	TSharedRef<SDockTab> SpawnGraphTab(const FSpawnTabArgs& Args);
 
 	/** Spawn details tab */
 	TSharedRef<SDockTab> SpawnDetailsTab(const FSpawnTabArgs& Args);
+
+	//~ Command handlers
+	void DeleteSelectedNodes();
+	bool CanDeleteNodes() const;
+	void CopySelectedNodes();
+	bool CanCopyNodes() const;
+	void PasteNodes();
+	bool CanPasteNodes() const;
+	void CutSelectedNodes();
+	void DuplicateSelectedNodes();
+	void SelectAllNodes();
+	void OnCreateComment();
 
 	/** Tab IDs */
 	static const FName GraphTabId;
@@ -68,6 +83,9 @@ private:
 
 	/** Details panel for selected nodes */
 	TSharedPtr<IDetailsView> DetailsView;
+
+	/** Command list for graph editor keyboard shortcuts */
+	TSharedPtr<FUICommandList> GraphEditorCommands;
 
 	/** Delegate handle for graph changes */
 	FDelegateHandle OnGraphChangedHandle;

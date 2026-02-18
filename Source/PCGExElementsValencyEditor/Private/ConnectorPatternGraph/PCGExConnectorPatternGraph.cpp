@@ -78,6 +78,7 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 			{
 				for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
 				{
+					if (!LinkedPin || !IsValid(LinkedPin->GetOwningNode())) { continue; }
 					if (UPCGExConnectorPatternGraphNode* Neighbor = Cast<UPCGExConnectorPatternGraphNode>(LinkedPin->GetOwningNode()))
 					{
 						if (!Visited.Contains(Neighbor))
@@ -150,6 +151,8 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 
 				for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
 				{
+					if (!LinkedPin || !IsValid(LinkedPin->GetOwningNode())) { continue; }
+
 					// Check if target is a constraint node
 					if (const UPCGExConnectorPatternConstraintNode* ConstraintNode = Cast<UPCGExConnectorPatternConstraintNode>(LinkedPin->GetOwningNode()))
 					{
@@ -199,6 +202,7 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 
 				for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
 				{
+					if (!LinkedPin || !IsValid(LinkedPin->GetOwningNode())) { continue; }
 					const UPCGExConnectorPatternConstraintNode* ConstraintNode = Cast<UPCGExConnectorPatternConstraintNode>(LinkedPin->GetOwningNode());
 					if (!ConstraintNode) { continue; }
 
