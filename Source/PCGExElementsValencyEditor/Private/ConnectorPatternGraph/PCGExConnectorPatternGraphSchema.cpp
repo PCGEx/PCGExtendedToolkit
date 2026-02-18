@@ -3,12 +3,111 @@
 
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphSchema.h"
 
+#include "ConnectionDrawingPolicy.h"
+#include "EdGraphNode_Comment.h"
 #include "ScopedTransaction.h"
+#include "ConnectorPatternGraph/PCGExConnectorPatternConstraintNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraph.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
 #include "Core/PCGExValencyConnectorSet.h"
 #include "ToolMenu.h"
 #include "ToolMenuSection.h"
+
+namespace
+{
+	/** Wire color inherits from the output pin's type color. */
+	class FPCGExPatternConnectionDrawingPolicy : public FConnectionDrawingPolicy
+	{
+	public:
+		FPCGExPatternConnectionDrawingPolicy(
+			int32 InBackLayerID, int32 InFrontLayerID, float InZoomFactor,
+			const FSlateRect& InClippingRect, FSlateWindowElementList& InDrawElements,
+			const UEdGraphSchema* InSchema)
+			: FConnectionDrawingPolicy(InBackLayerID, InFrontLayerID, InZoomFactor, InClippingRect, InDrawElements)
+			, Schema(InSchema)
+		{
+		}
+
+		virtual void DetermineWiringStyle(UEdGraphPin* OutputPin, UEdGraphPin* InputPin, FConnectionParams& Params) override
+		{
+			Params.AssociatedPin1 = OutputPin;
+			Params.AssociatedPin2 = InputPin;
+			Params.WireThickness = 1.5f;
+
+			if (OutputPin && Schema)
+			{
+				Params.WireColor = Schema->GetPinTypeColor(OutputPin->PinType);
+			}
+
+			if (HoveredPins.Num() > 0)
+			{
+				ApplyHoverDeemphasis(OutputPin, InputPin, Params.WireThickness, Params.WireColor);
+			}
+		}
+
+	private:
+		const UEdGraphSchema* Schema = nullptr;
+	};
+
+	/** Schema action for creating constraint nodes (Boundary/Wildcard). */
+	struct FPCGExSchemaAction_AddConstraint : public FEdGraphSchemaAction
+	{
+		EPCGExPatternConstraintType ConstraintType = EPCGExPatternConstraintType::Boundary;
+
+		FPCGExSchemaAction_AddConstraint(FText InCategory, FText InMenuDesc, FText InToolTip, int32 InGrouping, EPCGExPatternConstraintType InType)
+			: FEdGraphSchemaAction(MoveTemp(InCategory), MoveTemp(InMenuDesc), MoveTemp(InToolTip), InGrouping)
+			, ConstraintType(InType)
+		{
+		}
+
+		virtual UEdGraphNode* PerformAction(UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode = true) override
+		{
+			FGraphNodeCreator<UPCGExConnectorPatternConstraintNode> NodeCreator(*ParentGraph);
+			UPCGExConnectorPatternConstraintNode* NewNode = NodeCreator.CreateNode(bSelectNewNode);
+			NewNode->NodePosX = static_cast<int32>(Location.X);
+			NewNode->NodePosY = static_cast<int32>(Location.Y);
+			NewNode->ConstraintType = ConstraintType;
+			NodeCreator.Finalize();
+
+			if (FromPin)
+			{
+				NewNode->AutowireNewNode(FromPin);
+			}
+
+			if (UPCGExConnectorPatternGraph* PatternGraph = Cast<UPCGExConnectorPatternGraph>(ParentGraph))
+			{
+				PatternGraph->CompileGraphToAsset();
+			}
+
+			return NewNode;
+		}
+	};
+
+	/** Schema action for creating comment boxes. */
+	struct FPCGExSchemaAction_AddComment : public FEdGraphSchemaAction
+	{
+		FPCGExSchemaAction_AddComment()
+			: FEdGraphSchemaAction(
+				FText::FromString(TEXT("Utility")),
+				INVTEXT("Add Comment..."),
+				INVTEXT("Create a resizable comment box"),
+				0)
+		{
+		}
+
+		virtual UEdGraphNode* PerformAction(UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode = true) override
+		{
+			UEdGraphNode_Comment* Comment = NewObject<UEdGraphNode_Comment>(ParentGraph);
+			Comment->NodePosX = static_cast<int32>(Location.X);
+			Comment->NodePosY = static_cast<int32>(Location.Y);
+			Comment->NodeWidth = 400;
+			Comment->NodeHeight = 100;
+			Comment->NodeComment = TEXT("Comment");
+			ParentGraph->AddNode(Comment, true, bSelectNewNode);
+			return Comment;
+		}
+	};
+}
 
 #pragma region FPCGExConnectorPatternGraphSchemaAction_NewNode
 
@@ -70,6 +169,22 @@ void UPCGExConnectorPatternGraphSchema::GetGraphContextActions(FGraphContextMenu
 		Action->bCreateAsRoot = false;
 		ContextMenuBuilder.AddAction(Action);
 	}
+
+	// "Add Boundary Constraint" action
+	ContextMenuBuilder.AddAction(MakeShared<FPCGExSchemaAction_AddConstraint>(
+		FText::FromString(TEXT("Constraints")),
+		INVTEXT("Add Boundary Constraint"),
+		INVTEXT("Create a boundary node (connected types must have NO neighbors)"),
+		0,
+		EPCGExPatternConstraintType::Boundary));
+
+	// "Add Wildcard Constraint" action
+	ContextMenuBuilder.AddAction(MakeShared<FPCGExSchemaAction_AddConstraint>(
+		FText::FromString(TEXT("Constraints")),
+		INVTEXT("Add Wildcard Constraint"),
+		INVTEXT("Create a wildcard node (connected types must have at least one neighbor)"),
+		0,
+		EPCGExPatternConstraintType::Wildcard));
 }
 
 void UPCGExConnectorPatternGraphSchema::GetContextMenuActions(UToolMenu* Menu, UGraphNodeContextMenuContext* Context) const
@@ -329,12 +444,18 @@ void UPCGExConnectorPatternGraphSchema::CreateDefaultNodesForGraph(UEdGraph& Gra
 	NodeCreator.Finalize();
 }
 
+TSharedPtr<FEdGraphSchemaAction> UPCGExConnectorPatternGraphSchema::GetCreateCommentAction() const
+{
+	return MakeShared<FPCGExSchemaAction_AddComment>();
+}
+
 FConnectionDrawingPolicy* UPCGExConnectorPatternGraphSchema::CreateConnectionDrawingPolicy(
 	int32 InBackLayerID, int32 InFrontLayerID, float InZoomFactor,
 	const FSlateRect& InClippingRect, FSlateWindowElementList& InDrawElements, UEdGraph* InGraphObj) const
 {
-	// Use default drawing policy
-	return UEdGraphSchema::CreateConnectionDrawingPolicy(InBackLayerID, InFrontLayerID, InZoomFactor, InClippingRect, InDrawElements, InGraphObj);
+	return new FPCGExPatternConnectionDrawingPolicy(
+		InBackLayerID, InFrontLayerID, InZoomFactor,
+		InClippingRect, InDrawElements, this);
 }
 
 void UPCGExConnectorPatternGraphSchema::TriggerRecompile(UEdGraph* Graph) const

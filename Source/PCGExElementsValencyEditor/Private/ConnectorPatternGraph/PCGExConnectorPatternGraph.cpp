@@ -3,6 +3,7 @@
 
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraph.h"
 
+#include "ConnectorPatternGraph/PCGExConnectorPatternConstraintNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
 #include "Core/PCGExConnectorPatternAsset.h"
 #include "Core/PCGExValencyConnectorSet.h"
@@ -135,8 +136,7 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 
 			Entry.ModuleNames = EntryNode->ModuleNames;
 			Entry.bIsActive = EntryNode->bIsActive;
-			Entry.BoundaryConnectorTypes = EntryNode->BoundaryConnectorTypes;
-			Entry.WildcardConnectorTypes = EntryNode->WildcardConnectorTypes;
+			// BoundaryConnectorTypes and WildcardConnectorTypes are derived from constraint nodes below
 
 			// Build adjacencies from output pin connections
 			// Group by target node, collect type pairs
@@ -150,6 +150,23 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 
 				for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
 				{
+					// Check if target is a constraint node
+					if (const UPCGExConnectorPatternConstraintNode* ConstraintNode = Cast<UPCGExConnectorPatternConstraintNode>(LinkedPin->GetOwningNode()))
+					{
+						if (!SourceTypeName.IsNone())
+						{
+							if (ConstraintNode->ConstraintType == EPCGExPatternConstraintType::Boundary)
+							{
+								Entry.BoundaryConnectorTypes.AddUnique(SourceTypeName);
+							}
+							else
+							{
+								Entry.WildcardConnectorTypes.AddUnique(SourceTypeName);
+							}
+						}
+						continue;
+					}
+
 					UPCGExConnectorPatternGraphNode* TargetNode = Cast<UPCGExConnectorPatternGraphNode>(LinkedPin->GetOwningNode());
 					if (!TargetNode) { continue; }
 
@@ -169,6 +186,30 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 					FPCGExConnectorTypePairAuthored& Pair = Adj->TypePairs.Emplace_GetRef();
 					Pair.SourceType = SourceTypeName;
 					Pair.TargetType = TargetTypeName;
+				}
+			}
+
+			// Also check input pins for connections FROM constraint nodes
+			for (const UEdGraphPin* Pin : EntryNode->Pins)
+			{
+				if (Pin->Direction != EGPD_Input) { continue; }
+
+				const FName TypeName = PCGExConnectorPatternGraphHelpers::GetTypeNameFromPin(Pin);
+				if (TypeName.IsNone()) { continue; }
+
+				for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
+				{
+					const UPCGExConnectorPatternConstraintNode* ConstraintNode = Cast<UPCGExConnectorPatternConstraintNode>(LinkedPin->GetOwningNode());
+					if (!ConstraintNode) { continue; }
+
+					if (ConstraintNode->ConstraintType == EPCGExPatternConstraintType::Boundary)
+					{
+						Entry.BoundaryConnectorTypes.AddUnique(TypeName);
+					}
+					else
+					{
+						Entry.WildcardConnectorTypes.AddUnique(TypeName);
+					}
 				}
 			}
 		}

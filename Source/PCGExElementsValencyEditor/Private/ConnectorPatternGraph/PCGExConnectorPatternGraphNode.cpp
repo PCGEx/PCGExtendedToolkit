@@ -3,12 +3,29 @@
 
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
 
+#include "ConnectorPatternGraph/PCGExConnectorPatternConstraintNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraph.h"
 #include "Core/PCGExValencyConnectorSet.h"
 #include "EdGraph/EdGraphPin.h"
 #include "EdGraph/EdGraphSchema.h"
 
 #pragma region UPCGExConnectorPatternGraphNode
+
+void UPCGExConnectorPatternGraphNode::PostLoad()
+{
+	Super::PostLoad();
+
+	// Migration: entries serialized before bOutput/bInput fields default to both false.
+	// Treat as both true (legacy behavior was always both directions).
+	for (FPCGExConnectorPinEntry& Entry : ConnectorPins)
+	{
+		if (!Entry.bOutput && !Entry.bInput)
+		{
+			Entry.bOutput = true;
+			Entry.bInput = true;
+		}
+	}
+}
 
 const FName UPCGExConnectorPatternGraphNode::AnyPinCategory = TEXT("AnyConnector");
 const FName UPCGExConnectorPatternGraphNode::ConnectorPinCategory = TEXT("ConnectorType");
@@ -334,9 +351,62 @@ void UPCGExConnectorPatternGraphNode::PostEditChangeProperty(FPropertyChangedEve
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	if (UPCGExConnectorPatternGraph* PatternGraph = GetPatternGraph())
+	// NotifyGraphChanged triggers the editor's OnGraphChanged handler which calls CompileGraphToAsset.
+	// It also forces the SGraphEditor to refresh node visuals (title, colors, etc.).
+	if (UEdGraph* Graph = GetGraph())
 	{
-		PatternGraph->CompileGraphToAsset();
+		Graph->NotifyGraphChanged();
+	}
+}
+#endif
+
+#pragma endregion
+
+#pragma region UPCGExConnectorPatternConstraintNode
+
+void UPCGExConnectorPatternConstraintNode::AllocateDefaultPins()
+{
+	FEdGraphPinType AnyPinType;
+	AnyPinType.PinCategory = UPCGExConnectorPatternGraphNode::AnyPinCategory;
+
+	CreatePin(EGPD_Input, AnyPinType, TEXT("ConstraintIn"))->PinFriendlyName = INVTEXT("In");
+	CreatePin(EGPD_Output, AnyPinType, TEXT("ConstraintOut"))->PinFriendlyName = INVTEXT("Out");
+}
+
+FText UPCGExConnectorPatternConstraintNode::GetNodeTitle(ENodeTitleType::Type TitleType) const
+{
+	switch (ConstraintType)
+	{
+	case EPCGExPatternConstraintType::Boundary:
+		return INVTEXT("[Boundary]");
+	case EPCGExPatternConstraintType::Wildcard:
+		return INVTEXT("[Wildcard]");
+	default:
+		return INVTEXT("[Constraint]");
+	}
+}
+
+FLinearColor UPCGExConnectorPatternConstraintNode::GetNodeTitleColor() const
+{
+	switch (ConstraintType)
+	{
+	case EPCGExPatternConstraintType::Boundary:
+		return FLinearColor(0.8f, 0.2f, 0.2f); // Red for boundary (no connections)
+	case EPCGExPatternConstraintType::Wildcard:
+		return FLinearColor(0.9f, 0.7f, 0.1f); // Yellow for wildcard (must connect)
+	default:
+		return FLinearColor::Gray;
+	}
+}
+
+#if WITH_EDITOR
+void UPCGExConnectorPatternConstraintNode::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	if (UEdGraph* Graph = GetGraph())
+	{
+		Graph->NotifyGraphChanged();
 	}
 }
 #endif

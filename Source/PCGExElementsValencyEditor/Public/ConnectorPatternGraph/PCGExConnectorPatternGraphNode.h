@@ -57,12 +57,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Entry")
 	bool bIsActive = true;
 
-	/** Connector types that must have NO connections (boundary constraint) */
-	UPROPERTY(EditAnywhere, Category = "Entry|Constraints")
+	/** Connector types that must have NO connections (boundary constraint).
+	 * Now derived from Boundary constraint nodes in graph — kept for serialization. */
+	UPROPERTY()
 	TArray<FName> BoundaryConnectorTypes;
 
-	/** Connector types that must have at least one connection (wildcard constraint) */
-	UPROPERTY(EditAnywhere, Category = "Entry|Constraints")
+	/** Connector types that must have at least one connection (wildcard constraint).
+	 * Now derived from Wildcard constraint nodes in graph — kept for serialization. */
+	UPROPERTY()
 	TArray<FName> WildcardConnectorTypes;
 
 	/** Whether this node is the root (entry 0) of a pattern */
@@ -129,6 +131,7 @@ public:
 	UPCGExConnectorPatternGraph* GetPatternGraph() const;
 
 	//~ UEdGraphNode interface
+	virtual void PostLoad() override;
 	virtual void AllocateDefaultPins() override;
 	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
 	virtual FLinearColor GetNodeTitleColor() const override;
