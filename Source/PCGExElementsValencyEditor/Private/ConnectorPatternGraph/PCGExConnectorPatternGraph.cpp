@@ -270,7 +270,7 @@ void UPCGExConnectorPatternGraph::BuildGraphFromAsset()
 				{
 					TypeId = GetTypeHash(TypeName);
 				}
-				NewNode->AddConnectorPin(TypeId, TypeName);
+				NewNode->AddConnectorPinBoth(TypeId, TypeName);
 			}
 
 			NodeCreator.Finalize();

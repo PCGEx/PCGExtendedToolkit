@@ -27,6 +27,14 @@ struct FPCGExConnectorPinEntry
 	/** Cached display name (survives ConnectorSet removal) */
 	UPROPERTY()
 	FName StoredTypeName;
+
+	/** Whether this entry has an output pin */
+	UPROPERTY()
+	bool bOutput = false;
+
+	/** Whether this entry has an input pin */
+	UPROPERTY()
+	bool bInput = false;
 };
 
 /**
@@ -99,17 +107,23 @@ public:
 
 	//~ Pin management
 
-	/** Add a connector type pin pair (output + input) */
-	void AddConnectorPin(int32 TypeId, FName TypeName);
+	/** Add a connector type pin in the given direction. If the type already exists, enables the additional direction. */
+	void AddConnectorPin(int32 TypeId, FName TypeName, EEdGraphPinDirection Direction);
 
-	/** Remove a connector type pin pair by TypeId */
-	void RemoveConnectorPin(int32 TypeId);
+	/** Add both input and output pins for a connector type (convenience for BuildGraphFromAsset) */
+	void AddConnectorPinBoth(int32 TypeId, FName TypeName);
+
+	/** Remove a connector type pin by TypeId and direction. Removes the entry entirely if no directions remain. */
+	void RemoveConnectorPin(int32 TypeId, EEdGraphPinDirection Direction);
 
 	/** Resolve pin display names and colors from current ConnectorSet */
 	void ResolveConnectorPins(const UPCGExValencyConnectorSet* InConnectorSet);
 
-	/** Check if this node already has a pin for the given TypeId */
-	bool HasConnectorPin(int32 TypeId) const;
+	/** Check if this node already has a pin for the given TypeId in the given direction */
+	bool HasConnectorPin(int32 TypeId, EEdGraphPinDirection Direction) const;
+
+	/** Check if this node has any pin (input or output) for the given TypeId */
+	bool HasAnyConnectorPin(int32 TypeId) const;
 
 	/** Get the owning pattern graph */
 	UPCGExConnectorPatternGraph* GetPatternGraph() const;
