@@ -25,7 +25,7 @@
 
 #define LOCTEXT_NAMESPACE "PCGExContext"
 
-UPCGExInstancedFactory* FPCGExContext::RegisterOperation(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel)
+UPCGExInstancedFactory* FPCGExContext::RegisterInstancedFactory(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel)
 {
 	BaseOperation->BindContext(this); // Temp so Copy doesn't crash
 

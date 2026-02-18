@@ -54,7 +54,7 @@ bool FPCGExPathCrossingsElement::Boot(FPCGExContext* InContext) const
 	if (Settings->bWriteCrossDirection) { PCGEX_VALIDATE_NAME(Settings->CrossDirectionAttributeName) }
 	if (Settings->bWriteIsPointCrossing) { PCGEX_VALIDATE_NAME(Settings->IsPointCrossingAttributeName) }
 
-	PCGEX_OPERATION_BIND(Blending, UPCGExSubPointsBlendInstancedFactory, PCGExBlending::Labels::SourceOverridesBlendingOps)
+	PCGEX_BIND_INSTANCED_FACTORY(Blending, UPCGExSubPointsBlendInstancedFactory, PCGExBlending::Labels::SourceOverridesBlendingOps)
 
 	GetInputFactories(Context, PCGExPaths::Labels::SourceCanCutFilters, Context->CanCutFilterFactories, PCGExFactories::PointFilters, false);
 

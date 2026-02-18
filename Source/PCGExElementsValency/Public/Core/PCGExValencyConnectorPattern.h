@@ -69,9 +69,18 @@ struct PCGEXELEMENTSVALENCY_API FPCGExConnectorPatternEntryCompiled
 	/**
 	 * Module indices that can match this entry.
 	 * Empty = wildcard (matches any module).
+	 * Populated at runtime by ResolveModuleNames() using BondingRules.
 	 */
 	UPROPERTY()
 	TArray<int32> ModuleIndices;
+
+	/**
+	 * Module names from authored data (for runtime resolution to indices).
+	 * Empty = wildcard (matches any module).
+	 * Resolved to ModuleIndices when BondingRules become available.
+	 */
+	UPROPERTY()
+	TArray<FName> ModuleNames;
 
 	/** If true, this entry is consumed by the pattern; if false, constraint-only */
 	UPROPERTY()
@@ -170,4 +179,11 @@ struct PCGEXELEMENTSVALENCY_API FPCGExConnectorPatternSetCompiled
 
 	bool HasPatterns() const { return Patterns.Num() > 0; }
 	int32 GetPatternCount() const { return Patterns.Num(); }
+
+	/**
+	 * Resolve module names to indices using BondingRules.
+	 * Populates ModuleIndices in each entry from stored ModuleNames.
+	 * @param RulesModuleNames Module names array from FPCGExValencyBondingRulesCompiled
+	 */
+	void ResolveModuleNames(const TArray<FName>& RulesModuleNames);
 };

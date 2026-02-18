@@ -130,6 +130,9 @@ class PCGEXELEMENTSVALENCY_API UPCGExConnectorPatternMatcherFactory : public UPC
 	GENERATED_BODY()
 
 public:
+	
+	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
+	
 	/** The connector pattern asset defining patterns to match */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	TSoftObjectPtr<UPCGExConnectorPatternAsset> ConnectorPatternAsset;
@@ -158,12 +161,15 @@ public:
 	virtual void RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 	virtual TSharedPtr<PCGExPatternMatcher::FMatcherAllocations> CreateAllocations(const TSharedRef<PCGExData::FFacade>& VtxFacade) const override;
 	//~ End UPCGExPatternMatcherFactory Interface
-
+	
 protected:
 	/** Resolved references (set by ResolveAsset) */
 	const FPCGExConnectorPatternSetCompiled* ResolvedConnectorPatterns = nullptr;
 	const FPCGExValencyBondingRulesCompiled* ResolvedCompiledRules = nullptr;
 	const UPCGExValencyConnectorSet* ResolvedConnectorSet = nullptr;
 	FName ResolvedEdgeConnectorAttrName;
+
+	/** Local copy with resolved module names (owned by factory) */
+	FPCGExConnectorPatternSetCompiled ResolvedPatternsStorage;
 	int32 ResolvedMaxTypes = 0;
 };

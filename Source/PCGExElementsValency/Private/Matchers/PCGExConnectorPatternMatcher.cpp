@@ -431,7 +431,7 @@ void FPCGExConnectorPatternMatcherOperation::ResolveOverlaps()
 		Matches.Sort([ConnPatterns](const FPCGExValencyPatternMatch& A, const FPCGExValencyPatternMatch& B)
 		{
 			return ConnPatterns->Patterns[A.PatternIndex].Settings.Weight >
-			       ConnPatterns->Patterns[B.PatternIndex].Settings.Weight;
+				ConnPatterns->Patterns[B.PatternIndex].Settings.Weight;
 		});
 		break;
 
@@ -537,6 +537,17 @@ void FPCGExConnectorPatternMatcherOperation::ValidateMinMatches(PCGExPatternMatc
 	}
 }
 
+void UPCGExConnectorPatternMatcherFactory::CopySettingsFrom(const UPCGExInstancedFactory* Other)
+{
+	Super::CopySettingsFrom(Other);
+
+	if (const UPCGExConnectorPatternMatcherFactory* TypedOther = Cast<UPCGExConnectorPatternMatcherFactory>(Other))
+	{
+		ConnectorPatternAsset = TypedOther->ConnectorPatternAsset;
+		OverlapResolution = TypedOther->OverlapResolution;
+	}
+}
+
 #pragma endregion
 
 #pragma region UPCGExConnectorPatternMatcherFactory
@@ -560,8 +571,18 @@ bool UPCGExConnectorPatternMatcherFactory::ResolveAsset(
 		return false;
 	}
 
-	ResolvedConnectorPatterns = &PatternAsset->GetCompiledPatterns();
-	return ResolvedConnectorPatterns && ResolvedConnectorPatterns->HasPatterns();
+	const FPCGExConnectorPatternSetCompiled& AssetPatterns = PatternAsset->GetCompiledPatterns();
+	if (!AssetPatterns.HasPatterns()) { return false; }
+
+	// Copy compiled patterns and resolve module names using BondingRules
+	ResolvedPatternsStorage = AssetPatterns;
+	if (InCompiledRules)
+	{
+		ResolvedPatternsStorage.ResolveModuleNames(InCompiledRules->ModuleNames);
+	}
+	ResolvedConnectorPatterns = &ResolvedPatternsStorage;
+
+	return true;
 }
 
 TSharedPtr<FPCGExPatternMatcherOperation> UPCGExConnectorPatternMatcherFactory::CreateOperation() const

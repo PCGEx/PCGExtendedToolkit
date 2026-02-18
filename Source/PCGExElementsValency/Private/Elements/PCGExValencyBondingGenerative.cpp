@@ -74,7 +74,7 @@ bool FPCGExValencyBondingGenerativeElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	PCGEX_OPERATION_VALIDATE(GrowthStrategy)
+	PCGEX_VALIDATE_INSTANCED_FACTORY(GrowthStrategy)
 
 	// Load assets
 	PCGExHelpers::LoadBlocking_AnyThreadTpl(Settings->BondingRules, InContext);
@@ -122,7 +122,7 @@ bool FPCGExValencyBondingGenerativeElement::PostBoot(FPCGExContext* InContext) c
 	}
 
 	// Register growth factory
-	Context->GrowthFactory = PCGEX_OPERATION_REGISTER_C(Context, UPCGExValencyGrowthFactory, Settings->GrowthStrategy, NAME_None);
+	Context->GrowthFactory = PCGEX_REGISTER_INSTANCED_FACTORY_C(Context, UPCGExValencyGrowthFactory, Settings->GrowthStrategy, NAME_None);
 	if (!Context->GrowthFactory) { return false; }
 
 	// Create valency packer

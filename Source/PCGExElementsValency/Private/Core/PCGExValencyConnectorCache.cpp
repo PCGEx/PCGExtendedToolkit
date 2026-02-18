@@ -67,7 +67,7 @@ namespace PCGExValency
 				if (!Edges.IsValidIndex(EdgeIndex)) { continue; }
 
 				const PCGExGraphs::FEdge& Edge = Edges[EdgeIndex];
-				const int64 PackedConnectors = EdgeConnectorReader->Read(EdgeIndex);
+				const int64 PackedConnectors = EdgeConnectorReader->Read(Edge.PointIndex);
 
 				// Determine which connector instance applies to this node
 				const bool bIsStart = (Edge.Start == static_cast<uint32>(Node.PointIndex));

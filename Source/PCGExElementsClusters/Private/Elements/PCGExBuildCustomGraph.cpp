@@ -314,7 +314,7 @@ bool FPCGExBuildCustomGraphElement::Boot(FPCGExContext* InContext) const
 
 	Context->EDITOR_TrackClass(Settings->Builder->GetClass());
 
-	PCGEX_OPERATION_BIND(Builder, UPCGExCustomGraphBuilder, PCGExBuildCustomGraph::SourceOverridesBuilder)
+	PCGEX_BIND_INSTANCED_FACTORY(Builder, UPCGExCustomGraphBuilder, PCGExBuildCustomGraph::SourceOverridesBuilder)
 
 	if (Settings->Mode == EPCGExCustomGraphActorSourceMode::ActorReferences)
 	{

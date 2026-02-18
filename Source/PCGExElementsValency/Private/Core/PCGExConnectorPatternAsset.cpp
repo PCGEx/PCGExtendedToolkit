@@ -3,6 +3,30 @@
 
 #include "Core/PCGExConnectorPatternAsset.h"
 
+#pragma region FPCGExConnectorPatternSetCompiled
+
+void FPCGExConnectorPatternSetCompiled::ResolveModuleNames(const TArray<FName>& RulesModuleNames)
+{
+	for (FPCGExConnectorPatternCompiled& Pattern : Patterns)
+	{
+		for (FPCGExConnectorPatternEntryCompiled& Entry : Pattern.Entries)
+		{
+			Entry.ModuleIndices.Reset();
+
+			for (const FName& ModuleName : Entry.ModuleNames)
+			{
+				const int32 Idx = RulesModuleNames.IndexOfByKey(ModuleName);
+				if (Idx != INDEX_NONE)
+				{
+					Entry.ModuleIndices.AddUnique(Idx);
+				}
+			}
+		}
+	}
+}
+
+#pragma endregion
+
 #pragma region UPCGExConnectorPatternAsset
 
 bool UPCGExConnectorPatternAsset::Compile(TArray<FText>* OutErrors)
@@ -58,13 +82,8 @@ bool UPCGExConnectorPatternAsset::Compile(TArray<FText>* OutErrors)
 			const FPCGExConnectorPatternEntryAuthored& AuthEntry = Authored.Entries[EntryIdx];
 			FPCGExConnectorPatternEntryCompiled CompiledEntry;
 
-			// Module names are kept as-is (resolved to ModuleIndices at match time by factory)
-			// For now we store them as empty (wildcard) or populate from authored names
-			// The factory resolves names to indices using BondingRules at runtime
-			// Store module names for later resolution - we don't have BondingRules at compile time
-			// So we store indices as -1 initially, and the user must configure module names
-			// Actually, module names stay as FName in the compiled pattern per the plan spec
-			// We'll just store them here for now - resolution happens at match time
+			// Store module names for runtime resolution via ResolveModuleNames()
+			CompiledEntry.ModuleNames = AuthEntry.ModuleNames;
 
 			CompiledEntry.bIsActive = AuthEntry.bIsActive;
 			if (AuthEntry.bIsActive) { ++ActiveCount; }

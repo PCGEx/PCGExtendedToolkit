@@ -419,7 +419,7 @@ public:
 	TObjectPtr<UPCGExValencyConnectorSet> ConnectorSet;
 
 	/** Module definitions */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency|Modules")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Valency|Modules", meta=(TitleProperty="{ModuleName}"))
 	TArray<FPCGExValencyModuleDefinition> Modules;
 
 	/**

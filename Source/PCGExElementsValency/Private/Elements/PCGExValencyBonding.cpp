@@ -63,7 +63,7 @@ bool FPCGExValencyBondingElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(ValencyBonding)
 
-	PCGEX_OPERATION_VALIDATE(Solver)
+	PCGEX_VALIDATE_INSTANCED_FACTORY(Solver)
 
 	return true;
 }
@@ -86,7 +86,7 @@ bool FPCGExValencyBondingElement::PostBoot(FPCGExContext* InContext) const
 	}
 
 	// Register solver from settings
-	Context->Solver = PCGEX_OPERATION_REGISTER_C(Context, UPCGExValencySolverInstancedFactory, Settings->Solver, NAME_None);
+	Context->Solver = PCGEX_REGISTER_INSTANCED_FACTORY_C(Context, UPCGExValencySolverInstancedFactory, Settings->Solver, NAME_None);
 	if (!Context->Solver) { return false; }
 
 	// Create valency packer seeded from input map (preserves hash keys for output duplication)

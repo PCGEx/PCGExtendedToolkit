@@ -56,7 +56,7 @@ bool FPCGExValencyPatternReplacementElement::Boot(FPCGExContext* InContext) cons
 
 	PCGEX_CONTEXT_AND_SETTINGS(ValencyPatternReplacement)
 
-	PCGEX_OPERATION_VALIDATE(Matcher)
+	PCGEX_VALIDATE_INSTANCED_FACTORY(Matcher)
 
 	return true;
 }
@@ -92,7 +92,7 @@ bool FPCGExValencyPatternReplacementElement::PostBoot(FPCGExContext* InContext) 
 	// Register matcher factory from Settings
 	if (Settings->Matcher)
 	{
-		Context->MatcherFactory = PCGEX_OPERATION_REGISTER_C(Context, UPCGExPatternMatcherFactory, Settings->Matcher, NAME_None);
+		Context->MatcherFactory = PCGEX_REGISTER_INSTANCED_FACTORY_C(Context, UPCGExPatternMatcherFactory, Settings->Matcher, NAME_None);
 
 		// If this is a connector pattern matcher, resolve its asset on game thread
 		if (auto* ConnFactory = Cast<UPCGExConnectorPatternMatcherFactory>(const_cast<UPCGExPatternMatcherFactory*>(Context->MatcherFactory.Get())))

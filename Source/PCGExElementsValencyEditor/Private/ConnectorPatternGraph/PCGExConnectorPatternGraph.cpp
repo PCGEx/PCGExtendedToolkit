@@ -222,7 +222,15 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 	}
 
 	// Compile the asset
-	Asset->Compile();
+	TArray<FText> Errors;
+	Asset->Compile(&Errors);
+
+	// Log errors
+	for (const FText& Error : Errors)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ConnectorPattern Compile: %s"), *Error.ToString());
+	}
+	
 	Asset->MarkPackageDirty();
 }
 
