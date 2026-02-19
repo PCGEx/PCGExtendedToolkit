@@ -5,6 +5,7 @@
 
 #include "ConnectorPatternGraph/PCGExConnectorPatternConstraintNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
+#include "ConnectorPatternGraph/PCGExConnectorPatternHeaderNode.h"
 #include "Core/PCGExConnectorPatternAsset.h"
 #include "Core/PCGExValencyConnectorSet.h"
 #include "Volumes/ValencyContextVolume.h"
@@ -42,35 +43,49 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 	UPCGExConnectorPatternAsset* Asset = OwningAsset.Get();
 	if (!Asset) { return; }
 
-	// Collect all pattern nodes (exclude constraint nodes which inherit from pattern node)
-	TArray<UPCGExConnectorPatternGraphNode*> AllNodes;
+	Asset->Patterns.Empty();
+
+	// Collect all header nodes — each header defines one pattern
+	TArray<UPCGExConnectorPatternHeaderNode*> Headers;
 	for (UEdGraphNode* Node : Nodes)
 	{
-		if (Cast<UPCGExConnectorPatternConstraintNode>(Node)) { continue; }
-		if (UPCGExConnectorPatternGraphNode* PatternNode = Cast<UPCGExConnectorPatternGraphNode>(Node))
+		if (UPCGExConnectorPatternHeaderNode* Header = Cast<UPCGExConnectorPatternHeaderNode>(Node))
 		{
-			AllNodes.Add(PatternNode);
+			Headers.Add(Header);
 		}
 	}
 
-	if (AllNodes.IsEmpty())
+	if (Headers.IsEmpty())
 	{
-		Asset->Patterns.Empty();
 		Asset->Compile();
 		return;
 	}
 
-	// Find connected components via flood-fill
-	TSet<UPCGExConnectorPatternGraphNode*> Visited;
-	TArray<TArray<UPCGExConnectorPatternGraphNode*>> Components;
+	// Track all entry nodes claimed by a pattern (for orphan detection)
+	TSet<UPCGExConnectorPatternGraphNode*> ClaimedEntries;
 
-	for (UPCGExConnectorPatternGraphNode* StartNode : AllNodes)
+	for (const UPCGExConnectorPatternHeaderNode* Header : Headers)
 	{
-		if (Visited.Contains(StartNode)) { continue; }
+		// Follow Root output pin to find the connected entry node (match center)
+		const UEdGraphPin* RootOutPin = Header->FindPin(TEXT("RootOut"), EGPD_Output);
+		if (!RootOutPin || RootOutPin->LinkedTo.Num() == 0) { continue; } // Unwired header — silently skip (WIP state)
 
-		TArray<UPCGExConnectorPatternGraphNode*>& Component = Components.Emplace_GetRef();
+		UPCGExConnectorPatternGraphNode* RootEntry = nullptr;
+		for (const UEdGraphPin* LinkedPin : RootOutPin->LinkedTo)
+		{
+			if (!LinkedPin || !IsValid(LinkedPin->GetOwningNode())) { continue; }
+			if (Cast<UPCGExConnectorPatternConstraintNode>(LinkedPin->GetOwningNode())) { continue; }
+			RootEntry = Cast<UPCGExConnectorPatternGraphNode>(LinkedPin->GetOwningNode());
+			if (RootEntry) { break; }
+		}
+
+		if (!RootEntry) { continue; }
+
+		// Flood-fill from root entry through connector wires (skip headers, skip constraint nodes)
+		TArray<UPCGExConnectorPatternGraphNode*> Component;
+		TSet<UPCGExConnectorPatternGraphNode*> Visited;
 		TArray<UPCGExConnectorPatternGraphNode*> Stack;
-		Stack.Add(StartNode);
+		Stack.Add(RootEntry);
 
 		while (Stack.Num() > 0)
 		{
@@ -79,13 +94,16 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 			Visited.Add(Current);
 			Component.Add(Current);
 
-			// Follow all pin connections to find neighbors
 			for (const UEdGraphPin* Pin : Current->Pins)
 			{
+				// Skip Root pins during flood-fill (only follow connector/Any wires)
+				if (Pin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory) { continue; }
+
 				for (const UEdGraphPin* LinkedPin : Pin->LinkedTo)
 				{
 					if (!LinkedPin || !IsValid(LinkedPin->GetOwningNode())) { continue; }
 					if (Cast<UPCGExConnectorPatternConstraintNode>(LinkedPin->GetOwningNode())) { continue; }
+					if (Cast<UPCGExConnectorPatternHeaderNode>(LinkedPin->GetOwningNode())) { continue; }
 					if (UPCGExConnectorPatternGraphNode* Neighbor = Cast<UPCGExConnectorPatternGraphNode>(LinkedPin->GetOwningNode()))
 					{
 						if (!Visited.Contains(Neighbor))
@@ -96,26 +114,13 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 				}
 			}
 		}
-	}
 
-	// Build patterns from components
-	Asset->Patterns.Empty();
-
-	for (TArray<UPCGExConnectorPatternGraphNode*>& Component : Components)
-	{
-		// Find root node (bIsPatternRoot=true, or first node)
-		int32 RootIdx = 0;
-		for (int32 i = 0; i < Component.Num(); i++)
+		// Root entry is already at index 0 (first added to Component)
+		// Mark all entries as claimed
+		for (UPCGExConnectorPatternGraphNode* Entry : Component)
 		{
-			if (Component[i]->bIsPatternRoot)
-			{
-				RootIdx = i;
-				break;
-			}
+			ClaimedEntries.Add(Entry);
 		}
-
-		// Put root first
-		if (RootIdx != 0) { Component.Swap(0, RootIdx); }
 
 		// Build entry index map
 		TMap<UPCGExConnectorPatternGraphNode*, int32> NodeToEntryIndex;
@@ -126,15 +131,14 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 
 		FPCGExConnectorPatternAuthored& Pattern = Asset->Patterns.Emplace_GetRef();
 
-		// Copy pattern-level settings from root
-		const UPCGExConnectorPatternGraphNode* Root = Component[0];
-		Pattern.PatternName = Root->PatternName;
-		Pattern.Weight = Root->Weight;
-		Pattern.bExclusive = Root->bExclusive;
-		Pattern.MinMatches = Root->MinMatches;
-		Pattern.MaxMatches = Root->MaxMatches;
-		Pattern.OutputStrategy = Root->OutputStrategy;
-		Pattern.TransformMode = Root->TransformMode;
+		// Copy pattern-level settings from header
+		Pattern.PatternName = Header->PatternName;
+		Pattern.Weight = Header->Weight;
+		Pattern.bExclusive = Header->bExclusive;
+		Pattern.MinMatches = Header->MinMatches;
+		Pattern.MaxMatches = Header->MaxMatches;
+		Pattern.OutputStrategy = Header->OutputStrategy;
+		Pattern.TransformMode = Header->TransformMode;
 
 		// Build entries
 		for (int32 EntryIdx = 0; EntryIdx < Component.Num(); EntryIdx++)
@@ -144,15 +148,15 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 
 			Entry.ModuleNames = EntryNode->ModuleNames;
 			Entry.bIsActive = EntryNode->bIsActive;
-			// BoundaryConnectorTypes and WildcardConnectorTypes are derived from constraint nodes below
 
 			// Build adjacencies from output pin connections
-			// Group by target node, collect type pairs
 			TMap<int32, FPCGExConnectorPatternAdjacencyAuthored*> AdjacencyMap;
 
 			for (const UEdGraphPin* Pin : EntryNode->Pins)
 			{
 				if (Pin->Direction != EGPD_Output) { continue; }
+				// Skip Root pins
+				if (Pin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory) { continue; }
 
 				const FName SourceTypeName = PCGExConnectorPatternGraphHelpers::GetTypeNameFromPin(Pin);
 
@@ -176,6 +180,9 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 						}
 						continue;
 					}
+
+					// Skip header nodes
+					if (Cast<UPCGExConnectorPatternHeaderNode>(LinkedPin->GetOwningNode())) { continue; }
 
 					UPCGExConnectorPatternGraphNode* TargetNode = Cast<UPCGExConnectorPatternGraphNode>(LinkedPin->GetOwningNode());
 					if (!TargetNode) { continue; }
@@ -203,6 +210,8 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 			for (const UEdGraphPin* Pin : EntryNode->Pins)
 			{
 				if (Pin->Direction != EGPD_Input) { continue; }
+				// Skip Root pins
+				if (Pin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory) { continue; }
 
 				const FName TypeName = PCGExConnectorPatternGraphHelpers::GetTypeNameFromPin(Pin);
 				if (TypeName.IsNone()) { continue; }
@@ -222,6 +231,21 @@ void UPCGExConnectorPatternGraph::CompileGraphToAsset()
 						Entry.WildcardConnectorTypes.AddUnique(TypeName);
 					}
 				}
+			}
+		}
+	}
+
+	// Warn about orphan entry nodes (not reachable from any header)
+	for (UEdGraphNode* Node : Nodes)
+	{
+		if (Cast<UPCGExConnectorPatternConstraintNode>(Node)) { continue; }
+		if (Cast<UPCGExConnectorPatternHeaderNode>(Node)) { continue; }
+		if (UPCGExConnectorPatternGraphNode* EntryNode = Cast<UPCGExConnectorPatternGraphNode>(Node))
+		{
+			if (!ClaimedEntries.Contains(EntryNode))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ConnectorPattern Compile: Orphan entry node '%s' not reachable from any pattern header — skipped"),
+					*EntryNode->GetNodeTitle(ENodeTitleType::ListView).ToString());
 			}
 		}
 	}
@@ -306,6 +330,20 @@ void UPCGExConnectorPatternGraph::BuildGraphFromAsset()
 	{
 		const FPCGExConnectorPatternAuthored& Pattern = Asset->Patterns[PatternIdx];
 
+		// Create header node with pattern-level settings, positioned above entries
+		FGraphNodeCreator<UPCGExConnectorPatternHeaderNode> HeaderCreator(*this);
+		UPCGExConnectorPatternHeaderNode* HeaderNode = HeaderCreator.CreateNode(true);
+		HeaderNode->NodePosX = static_cast<int32>(XOffset);
+		HeaderNode->NodePosY = -150;
+		HeaderNode->PatternName = Pattern.PatternName;
+		HeaderNode->Weight = Pattern.Weight;
+		HeaderNode->bExclusive = Pattern.bExclusive;
+		HeaderNode->MinMatches = Pattern.MinMatches;
+		HeaderNode->MaxMatches = Pattern.MaxMatches;
+		HeaderNode->OutputStrategy = Pattern.OutputStrategy;
+		HeaderNode->TransformMode = Pattern.TransformMode;
+		HeaderCreator.Finalize();
+
 		TArray<UPCGExConnectorPatternGraphNode*> CreatedNodes;
 
 		for (int32 EntryIdx = 0; EntryIdx < Pattern.Entries.Num(); EntryIdx++)
@@ -323,19 +361,6 @@ void UPCGExConnectorPatternGraph::BuildGraphFromAsset()
 			NewNode->bIsActive = Entry.bIsActive;
 			NewNode->BoundaryConnectorTypes = Entry.BoundaryConnectorTypes;
 			NewNode->WildcardConnectorTypes = Entry.WildcardConnectorTypes;
-			NewNode->bIsPatternRoot = (EntryIdx == 0);
-
-			// Copy pattern-level settings to root
-			if (EntryIdx == 0)
-			{
-				NewNode->PatternName = Pattern.PatternName;
-				NewNode->Weight = Pattern.Weight;
-				NewNode->bExclusive = Pattern.bExclusive;
-				NewNode->MinMatches = Pattern.MinMatches;
-				NewNode->MaxMatches = Pattern.MaxMatches;
-				NewNode->OutputStrategy = Pattern.OutputStrategy;
-				NewNode->TransformMode = Pattern.TransformMode;
-			}
 
 			// Collect connector type names used by this entry
 			TSet<FName> UsedTypes;
@@ -382,6 +407,17 @@ void UPCGExConnectorPatternGraph::BuildGraphFromAsset()
 
 			NodeCreator.Finalize();
 			CreatedNodes.Add(NewNode);
+		}
+
+		// Wire header Root output → entry[0] Root input
+		if (CreatedNodes.Num() > 0)
+		{
+			UEdGraphPin* HeaderRootOut = HeaderNode->FindPin(TEXT("RootOut"), EGPD_Output);
+			UEdGraphPin* EntryRootIn = CreatedNodes[0]->FindPin(TEXT("RootIn"), EGPD_Input);
+			if (HeaderRootOut && EntryRootIn)
+			{
+				HeaderRootOut->MakeLinkTo(EntryRootIn);
+			}
 		}
 
 		// Create wires from adjacency data

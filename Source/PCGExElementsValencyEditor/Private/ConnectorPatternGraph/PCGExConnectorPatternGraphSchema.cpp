@@ -9,6 +9,7 @@
 #include "ConnectorPatternGraph/PCGExConnectorPatternConstraintNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraph.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
+#include "ConnectorPatternGraph/PCGExConnectorPatternHeaderNode.h"
 #include "Core/PCGExValencyConnectorSet.h"
 #include "ToolMenu.h"
 #include "ToolMenuSection.h"
@@ -109,22 +110,15 @@ namespace
 	};
 }
 
-#pragma region FPCGExConnectorPatternGraphSchemaAction_NewNode
+#pragma region FPCGExConnectorPatternGraphSchemaAction_NewEntry
 
-UEdGraphNode* FPCGExConnectorPatternGraphSchemaAction_NewNode::PerformAction(
+UEdGraphNode* FPCGExConnectorPatternGraphSchemaAction_NewEntry::PerformAction(
 	UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode)
 {
 	FGraphNodeCreator<UPCGExConnectorPatternGraphNode> NodeCreator(*ParentGraph);
 	UPCGExConnectorPatternGraphNode* NewNode = NodeCreator.CreateNode(bSelectNewNode);
 	NewNode->NodePosX = static_cast<int32>(Location.X);
 	NewNode->NodePosY = static_cast<int32>(Location.Y);
-	NewNode->bIsPatternRoot = bCreateAsRoot;
-
-	if (bCreateAsRoot)
-	{
-		NewNode->PatternName = FName("NewPattern");
-	}
-
 	NodeCreator.Finalize();
 
 	// Auto-wire if dragged from a pin
@@ -144,29 +138,66 @@ UEdGraphNode* FPCGExConnectorPatternGraphSchemaAction_NewNode::PerformAction(
 
 #pragma endregion
 
+#pragma region FPCGExSchemaAction_AddPattern
+
+UEdGraphNode* FPCGExSchemaAction_AddPattern::PerformAction(
+	UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode)
+{
+	// Create header node
+	FGraphNodeCreator<UPCGExConnectorPatternHeaderNode> HeaderCreator(*ParentGraph);
+	UPCGExConnectorPatternHeaderNode* HeaderNode = HeaderCreator.CreateNode(bSelectNewNode);
+	HeaderNode->NodePosX = static_cast<int32>(Location.X);
+	HeaderNode->NodePosY = static_cast<int32>(Location.Y);
+	HeaderNode->PatternName = FName("NewPattern");
+	HeaderCreator.Finalize();
+
+	// Create entry node below header
+	FGraphNodeCreator<UPCGExConnectorPatternGraphNode> EntryCreator(*ParentGraph);
+	UPCGExConnectorPatternGraphNode* EntryNode = EntryCreator.CreateNode(false);
+	EntryNode->NodePosX = static_cast<int32>(Location.X);
+	EntryNode->NodePosY = static_cast<int32>(Location.Y) + 150;
+	EntryCreator.Finalize();
+
+	// Wire header Root output → entry Root input
+	UEdGraphPin* HeaderRootOut = HeaderNode->FindPin(TEXT("RootOut"), EGPD_Output);
+	UEdGraphPin* EntryRootIn = EntryNode->FindPin(TEXT("RootIn"), EGPD_Input);
+	if (HeaderRootOut && EntryRootIn)
+	{
+		HeaderRootOut->MakeLinkTo(EntryRootIn);
+	}
+
+	// Trigger recompile
+	if (UPCGExConnectorPatternGraph* PatternGraph = Cast<UPCGExConnectorPatternGraph>(ParentGraph))
+	{
+		PatternGraph->CompileGraphToAsset();
+	}
+
+	return HeaderNode;
+}
+
+#pragma endregion
+
 #pragma region UPCGExConnectorPatternGraphSchema
 
 void UPCGExConnectorPatternGraphSchema::GetGraphContextActions(FGraphContextMenuBuilder& ContextMenuBuilder) const
 {
-	// "Add Pattern Root" action
+	// "Add Pattern" action — creates header + entry pair, pre-wired
 	{
-		TSharedPtr<FPCGExConnectorPatternGraphSchemaAction_NewNode> Action = MakeShared<FPCGExConnectorPatternGraphSchemaAction_NewNode>(
+		TSharedPtr<FPCGExSchemaAction_AddPattern> Action = MakeShared<FPCGExSchemaAction_AddPattern>(
 			FText::FromString(TEXT("Pattern")),
-			FText::FromString(TEXT("Add Pattern Root")),
-			FText::FromString(TEXT("Create a new pattern root node (entry 0)")),
+			FText::FromString(TEXT("Add Pattern")),
+			FText::FromString(TEXT("Create a new pattern (header + entry, pre-wired)")),
 			0);
-		Action->bCreateAsRoot = true;
 		ContextMenuBuilder.AddAction(Action);
 	}
 
-	// "Add Pattern Entry" action
+	// "Add Pattern Entry" action — standalone entry node
 	{
-		TSharedPtr<FPCGExConnectorPatternGraphSchemaAction_NewNode> Action = MakeShared<FPCGExConnectorPatternGraphSchemaAction_NewNode>(
+		TSharedPtr<FPCGExConnectorPatternGraphSchemaAction_NewEntry> Action = MakeShared<FPCGExConnectorPatternGraphSchemaAction_NewEntry>(
 			FText::FromString(TEXT("Pattern")),
 			FText::FromString(TEXT("Add Pattern Entry")),
-			FText::FromString(TEXT("Create a new pattern entry node")),
+			FText::FromString(TEXT("Create a standalone pattern entry node")),
 			0);
-		Action->bCreateAsRoot = false;
 		ContextMenuBuilder.AddAction(Action);
 	}
 
@@ -402,7 +433,33 @@ const FPinConnectionResponse UPCGExConnectorPatternGraphSchema::CanCreateConnect
 		return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Must connect output to input"));
 	}
 
-	// "Any" pins can connect to anything
+	// PatternRoot pin validation
+	const bool bOutputIsRoot = (OutputPin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory);
+	const bool bInputIsRoot = (InputPin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory);
+
+	if (bOutputIsRoot || bInputIsRoot)
+	{
+		// Root output → Root input: exact match
+		if (bOutputIsRoot && bInputIsRoot)
+		{
+			return FPinConnectionResponse(CONNECT_RESPONSE_BREAK_OTHERS_AB, TEXT(""));
+		}
+
+		// Root output dropped on a non-Root pin of an entry node that has a RootIn pin:
+		// Allow it — TryCreateConnection will redirect to RootIn
+		if (bOutputIsRoot && !bInputIsRoot)
+		{
+			if (InputPin->GetOwningNode()->FindPin(TEXT("RootIn"), EGPD_Input))
+			{
+				return FPinConnectionResponse(CONNECT_RESPONSE_BREAK_OTHERS_AB, TEXT(""));
+			}
+		}
+
+		// Cross-category disallow (Root input can't connect to non-Root output, etc.)
+		return FPinConnectionResponse(CONNECT_RESPONSE_DISALLOW, TEXT("Root pin can only connect to an entry node"));
+	}
+
+	// "Any" pins can connect to anything (except Root pins, handled above)
 	if (OutputPin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::AnyPinCategory ||
 		InputPin->PinType.PinCategory == UPCGExConnectorPatternGraphNode::AnyPinCategory)
 	{
@@ -436,10 +493,23 @@ const FPinConnectionResponse UPCGExConnectorPatternGraphSchema::CanCreateConnect
 
 bool UPCGExConnectorPatternGraphSchema::TryCreateConnection(UEdGraphPin* A, UEdGraphPin* B) const
 {
-	const bool bResult = UEdGraphSchema::TryCreateConnection(A, B);
+	// Redirect: Root output dropped on a non-Root pin → reroute to that node's RootIn pin
+	UEdGraphPin* Output = (A->Direction == EGPD_Output) ? A : B;
+	UEdGraphPin* Input = (A->Direction == EGPD_Input) ? A : B;
+
+	if (Output->PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory &&
+		Input->PinType.PinCategory != UPCGExConnectorPatternGraphNode::PatternRootPinCategory)
+	{
+		if (UEdGraphPin* RootIn = Input->GetOwningNode()->FindPin(TEXT("RootIn"), EGPD_Input))
+		{
+			Input = RootIn;
+		}
+	}
+
+	const bool bResult = UEdGraphSchema::TryCreateConnection(Output, Input);
 	if (bResult)
 	{
-		TriggerRecompile(A->GetOwningNode()->GetGraph());
+		TriggerRecompile(Output->GetOwningNode()->GetGraph());
 	}
 	return bResult;
 }
@@ -458,6 +528,11 @@ void UPCGExConnectorPatternGraphSchema::BreakSinglePinLink(UEdGraphPin* SourcePi
 
 FLinearColor UPCGExConnectorPatternGraphSchema::GetPinTypeColor(const FEdGraphPinType& PinType) const
 {
+	if (PinType.PinCategory == UPCGExConnectorPatternGraphNode::PatternRootPinCategory)
+	{
+		return FLinearColor(0.6f, 0.3f, 0.9f); // Purple for Root wire
+	}
+
 	if (PinType.PinCategory == UPCGExConnectorPatternGraphNode::AnyPinCategory)
 	{
 		return FLinearColor::White;
@@ -489,14 +564,28 @@ FLinearColor UPCGExConnectorPatternGraphSchema::GetPinTypeColor(const FEdGraphPi
 
 void UPCGExConnectorPatternGraphSchema::CreateDefaultNodesForGraph(UEdGraph& Graph) const
 {
-	// Create a single root node
-	FGraphNodeCreator<UPCGExConnectorPatternGraphNode> NodeCreator(Graph);
-	UPCGExConnectorPatternGraphNode* RootNode = NodeCreator.CreateNode(true);
-	RootNode->NodePosX = 0;
-	RootNode->NodePosY = 0;
-	RootNode->bIsPatternRoot = true;
-	RootNode->PatternName = FName("Pattern");
-	NodeCreator.Finalize();
+	// Create header node
+	FGraphNodeCreator<UPCGExConnectorPatternHeaderNode> HeaderCreator(Graph);
+	UPCGExConnectorPatternHeaderNode* HeaderNode = HeaderCreator.CreateNode(true);
+	HeaderNode->NodePosX = 0;
+	HeaderNode->NodePosY = 0;
+	HeaderNode->PatternName = FName("Pattern");
+	HeaderCreator.Finalize();
+
+	// Create entry node below header
+	FGraphNodeCreator<UPCGExConnectorPatternGraphNode> EntryCreator(Graph);
+	UPCGExConnectorPatternGraphNode* EntryNode = EntryCreator.CreateNode(false);
+	EntryNode->NodePosX = 0;
+	EntryNode->NodePosY = 150;
+	EntryCreator.Finalize();
+
+	// Wire header Root output → entry Root input
+	UEdGraphPin* HeaderRootOut = HeaderNode->FindPin(TEXT("RootOut"), EGPD_Output);
+	UEdGraphPin* EntryRootIn = EntryNode->FindPin(TEXT("RootIn"), EGPD_Input);
+	if (HeaderRootOut && EntryRootIn)
+	{
+		HeaderRootOut->MakeLinkTo(EntryRootIn);
+	}
 }
 
 TSharedPtr<FEdGraphSchemaAction> UPCGExConnectorPatternGraphSchema::GetCreateCommentAction() const

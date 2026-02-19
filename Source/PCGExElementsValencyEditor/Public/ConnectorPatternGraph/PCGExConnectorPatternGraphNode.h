@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraphNode.h"
-#include "Core/PCGExValencyPattern.h"
 
 #include "PCGExConnectorPatternGraphNode.generated.h"
 
@@ -67,40 +66,6 @@ public:
 	UPROPERTY()
 	TArray<FName> WildcardConnectorTypes;
 
-	/** Whether this node is the root (entry 0) of a pattern */
-	UPROPERTY(EditAnywhere, Category = "Entry")
-	bool bIsPatternRoot = false;
-
-	//~ Pattern-level settings (only meaningful on root nodes)
-
-	/** Pattern name for identification and filtering */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot"))
-	FName PatternName;
-
-	/** Weight for probabilistic selection among competing patterns */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot", ClampMin = "0.001"))
-	float Weight = 1.0f;
-
-	/** If true, matched points are claimed exclusively */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot"))
-	bool bExclusive = true;
-
-	/** Minimum times this pattern must be matched (0 = no minimum) */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot", ClampMin = 0))
-	int32 MinMatches = 0;
-
-	/** Maximum times this pattern can be matched (-1 = unlimited) */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot", ClampMin = -1))
-	int32 MaxMatches = -1;
-
-	/** Output strategy for matched points */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot"))
-	EPCGExPatternOutputStrategy OutputStrategy = EPCGExPatternOutputStrategy::Annotate;
-
-	/** Transform computation mode for Collapse strategy */
-	UPROPERTY(EditAnywhere, Category = "Pattern", meta = (EditCondition = "bIsPatternRoot"))
-	EPCGExPatternTransformMode TransformMode = EPCGExPatternTransformMode::Centroid;
-
 	//~ Pin storage
 
 	/** User-added connector pins (excludes "Any" which is always present) */
@@ -152,4 +117,5 @@ public:
 
 	static const FName AnyPinCategory;
 	static const FName ConnectorPinCategory;
+	static const FName PatternRootPinCategory;
 };

@@ -6,6 +6,7 @@
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraph.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphSchema.h"
+#include "ConnectorPatternGraph/PCGExConnectorPatternHeaderNode.h"
 #include "Core/PCGExConnectorPatternAsset.h"
 #include "Core/PCGExValencyConnectorSet.h"
 
@@ -250,7 +251,7 @@ void FPCGExConnectorPatternEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBu
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "AssetEditor.Apply")
 		);
 
-		// Add Root button
+		// Add Pattern button — creates header + entry pair, pre-wired
 		ToolbarBuilder.AddToolBarButton(
 			FUIAction(
 				FExecuteAction::CreateLambda(
@@ -258,23 +259,38 @@ void FPCGExConnectorPatternEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBu
 					{
 						if (!PatternGraph) { return; }
 
-						const FScopedTransaction Transaction(INVTEXT("Add Pattern Root"));
+						const FScopedTransaction Transaction(INVTEXT("Add Pattern"));
 
-						FGraphNodeCreator<UPCGExConnectorPatternGraphNode> NodeCreator(*PatternGraph);
-						UPCGExConnectorPatternGraphNode* RootNode = NodeCreator.CreateNode(true);
-						RootNode->NodePosX = 400;
-						RootNode->NodePosY = 0;
-						RootNode->bIsPatternRoot = true;
-						RootNode->PatternName = FName("NewPattern");
-						NodeCreator.Finalize();
+						// Create header
+						FGraphNodeCreator<UPCGExConnectorPatternHeaderNode> HeaderCreator(*PatternGraph);
+						UPCGExConnectorPatternHeaderNode* HeaderNode = HeaderCreator.CreateNode(true);
+						HeaderNode->NodePosX = 400;
+						HeaderNode->NodePosY = 0;
+						HeaderNode->PatternName = FName("NewPattern");
+						HeaderCreator.Finalize();
+
+						// Create entry below header
+						FGraphNodeCreator<UPCGExConnectorPatternGraphNode> EntryCreator(*PatternGraph);
+						UPCGExConnectorPatternGraphNode* EntryNode = EntryCreator.CreateNode(false);
+						EntryNode->NodePosX = 400;
+						EntryNode->NodePosY = 150;
+						EntryCreator.Finalize();
+
+						// Wire header Root → entry Root
+						UEdGraphPin* HeaderRootOut = HeaderNode->FindPin(TEXT("RootOut"), EGPD_Output);
+						UEdGraphPin* EntryRootIn = EntryNode->FindPin(TEXT("RootIn"), EGPD_Input);
+						if (HeaderRootOut && EntryRootIn)
+						{
+							HeaderRootOut->MakeLinkTo(EntryRootIn);
+						}
 
 						PatternGraph->CompileGraphToAsset();
 						PatternGraph->NotifyGraphChanged();
 					})
 			),
 			NAME_None,
-			FText::FromString(TEXT("Add Root")),
-			INVTEXT("Add a new pattern root node"),
+			FText::FromString(TEXT("Add Pattern")),
+			INVTEXT("Add a new pattern (header + entry, pre-wired)"),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus")
 		);
 	}

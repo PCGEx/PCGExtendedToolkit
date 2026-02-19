@@ -23,7 +23,7 @@ enum class EPCGExPatternConstraintType : uint8
  * Wiring a pattern entry's typed pin to this node's input applies the constraint to that type.
  * Inherits full connector pin management from pattern graph node.
  */
-UCLASS(HideCategories=("Pattern"))
+UCLASS()
 class PCGEXELEMENTSVALENCYEDITOR_API UPCGExConnectorPatternConstraintNode : public UPCGExConnectorPatternGraphNode
 {
 	GENERATED_BODY()

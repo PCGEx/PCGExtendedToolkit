@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraphNode.h"
+#include "ConnectorPatternGraph/PCGExConnectorPatternHeaderNode.h"
 
 #include "ConnectorPatternGraph/PCGExConnectorPatternConstraintNode.h"
 #include "ConnectorPatternGraph/PCGExConnectorPatternGraph.h"
@@ -25,10 +26,19 @@ void UPCGExConnectorPatternGraphNode::PostLoad()
 			Entry.bInput = true;
 		}
 	}
+
+	// Migration: add RootIn pin if absent (nodes serialized before header node refactor)
+	if (!FindPin(TEXT("RootIn"), EGPD_Input))
+	{
+		FEdGraphPinType RootPinType;
+		RootPinType.PinCategory = PatternRootPinCategory;
+		CreatePin(EGPD_Input, RootPinType, TEXT("RootIn"))->PinFriendlyName = INVTEXT("Root");
+	}
 }
 
 const FName UPCGExConnectorPatternGraphNode::AnyPinCategory = TEXT("AnyConnector");
 const FName UPCGExConnectorPatternGraphNode::ConnectorPinCategory = TEXT("ConnectorType");
+const FName UPCGExConnectorPatternGraphNode::PatternRootPinCategory = TEXT("PatternRoot");
 
 FName UPCGExConnectorPatternGraphNode::MakeOutputPinName(int32 TypeId, FName TypeName)
 {
@@ -59,6 +69,11 @@ int32 UPCGExConnectorPatternGraphNode::GetTypeIdFromPinName(FName PinName)
 
 void UPCGExConnectorPatternGraphNode::AllocateDefaultPins()
 {
+	// Root input pin — receives wire from Pattern Header node
+	FEdGraphPinType RootPinType;
+	RootPinType.PinCategory = PatternRootPinCategory;
+	CreatePin(EGPD_Input, RootPinType, TEXT("RootIn"))->PinFriendlyName = INVTEXT("Root");
+
 	// "Any" output pin (wildcard)
 	FEdGraphPinType AnyPinType;
 	AnyPinType.PinCategory = AnyPinCategory;
@@ -96,15 +111,6 @@ void UPCGExConnectorPatternGraphNode::AllocateDefaultPins()
 
 FText UPCGExConnectorPatternGraphNode::GetNodeTitle(ENodeTitleType::Type TitleType) const
 {
-	if (bIsPatternRoot)
-	{
-		if (!PatternName.IsNone())
-		{
-			return FText::FromString(FString::Printf(TEXT("[Root] %s"), *PatternName.ToString()));
-		}
-		return INVTEXT("[Root] Pattern");
-	}
-
 	// Show module names summary
 	if (ModuleNames.Num() > 0)
 	{
@@ -126,11 +132,6 @@ FText UPCGExConnectorPatternGraphNode::GetNodeTitle(ENodeTitleType::Type TitleTy
 
 FLinearColor UPCGExConnectorPatternGraphNode::GetNodeTitleColor() const
 {
-	if (bIsPatternRoot)
-	{
-		return FLinearColor(0.2f, 0.6f, 1.0f); // Blue for root
-	}
-
 	if (!bIsActive)
 	{
 		return FLinearColor(0.4f, 0.4f, 0.4f); // Gray for inactive/constraint-only
@@ -430,6 +431,46 @@ FLinearColor UPCGExConnectorPatternConstraintNode::GetNodeTitleColor() const
 
 #if WITH_EDITOR
 void UPCGExConnectorPatternConstraintNode::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	if (UEdGraph* Graph = GetGraph())
+	{
+		Graph->NotifyGraphChanged();
+	}
+}
+#endif
+
+#pragma endregion
+
+#pragma region UPCGExConnectorPatternHeaderNode
+
+const FName UPCGExConnectorPatternHeaderNode::PatternRootPinCategory = TEXT("PatternRoot");
+
+void UPCGExConnectorPatternHeaderNode::AllocateDefaultPins()
+{
+	FEdGraphPinType RootPinType;
+	RootPinType.PinCategory = PatternRootPinCategory;
+
+	CreatePin(EGPD_Output, RootPinType, TEXT("RootOut"))->PinFriendlyName = INVTEXT("Root");
+}
+
+FText UPCGExConnectorPatternHeaderNode::GetNodeTitle(ENodeTitleType::Type TitleType) const
+{
+	if (!PatternName.IsNone())
+	{
+		return FText::FromString(FString::Printf(TEXT("Pattern: %s"), *PatternName.ToString()));
+	}
+	return INVTEXT("Pattern");
+}
+
+FLinearColor UPCGExConnectorPatternHeaderNode::GetNodeTitleColor() const
+{
+	return FLinearColor(0.6f, 0.3f, 0.9f); // Purple accent
+}
+
+#if WITH_EDITOR
+void UPCGExConnectorPatternHeaderNode::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 

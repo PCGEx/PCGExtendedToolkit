@@ -10,24 +10,40 @@
 
 class UPCGExConnectorPatternGraph;
 
-/** Action to create a new pattern node */
+/** Action to create a standalone pattern entry node */
 USTRUCT()
-struct FPCGExConnectorPatternGraphSchemaAction_NewNode : public FEdGraphSchemaAction
+struct FPCGExConnectorPatternGraphSchemaAction_NewEntry : public FEdGraphSchemaAction
 {
 	GENERATED_BODY()
 
-	FPCGExConnectorPatternGraphSchemaAction_NewNode()
+	FPCGExConnectorPatternGraphSchemaAction_NewEntry()
 	{
 	}
 
-	FPCGExConnectorPatternGraphSchemaAction_NewNode(
+	FPCGExConnectorPatternGraphSchemaAction_NewEntry(
 		FText InNodeCategory, FText InMenuDesc, FText InToolTip, int32 InGrouping)
 		: FEdGraphSchemaAction(MoveTemp(InNodeCategory), MoveTemp(InMenuDesc), MoveTemp(InToolTip), InGrouping)
 	{
 	}
 
-	/** Whether the created node should be a pattern root */
-	bool bCreateAsRoot = false;
+	virtual UEdGraphNode* PerformAction(UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode = true) override;
+};
+
+/** Action to create a new pattern (header + entry pair, pre-wired) */
+USTRUCT()
+struct FPCGExSchemaAction_AddPattern : public FEdGraphSchemaAction
+{
+	GENERATED_BODY()
+
+	FPCGExSchemaAction_AddPattern()
+	{
+	}
+
+	FPCGExSchemaAction_AddPattern(
+		FText InNodeCategory, FText InMenuDesc, FText InToolTip, int32 InGrouping)
+		: FEdGraphSchemaAction(MoveTemp(InNodeCategory), MoveTemp(InMenuDesc), MoveTemp(InToolTip), InGrouping)
+	{
+	}
 
 	virtual UEdGraphNode* PerformAction(UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode = true) override;
 };
