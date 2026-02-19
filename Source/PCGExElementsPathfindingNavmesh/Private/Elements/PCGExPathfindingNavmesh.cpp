@@ -63,8 +63,8 @@ bool FPCGExPathfindingNavmeshElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(PathfindingNavmesh)
 
-	PCGEX_OPERATION_BIND(GoalPicker, UPCGExGoalPicker, PCGExPathfinding::Labels::SourceOverridesGoalPicker)
-	PCGEX_OPERATION_BIND(Blending, UPCGExSubPointsBlendInstancedFactory, PCGExBlending::Labels::SourceOverridesBlendingOps)
+	PCGEX_BIND_INSTANCED_FACTORY(GoalPicker, UPCGExGoalPicker, PCGExPathfinding::Labels::SourceOverridesGoalPicker)
+	PCGEX_BIND_INSTANCED_FACTORY(Blending, UPCGExSubPointsBlendInstancedFactory, PCGExBlending::Labels::SourceOverridesBlendingOps)
 
 	Context->SeedsDataFacade = PCGExData::TryGetSingleFacade(Context, PCGExCommon::Labels::SourceSeedsLabel, false, true);
 	Context->GoalsDataFacade = PCGExData::TryGetSingleFacade(Context, PCGExClusters::Labels::SourceGoalsLabel, false, true);

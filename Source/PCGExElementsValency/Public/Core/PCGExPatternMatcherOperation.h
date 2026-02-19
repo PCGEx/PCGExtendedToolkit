@@ -50,6 +50,23 @@ namespace PCGExPatternMatcher
 	struct PCGEXELEMENTSVALENCY_API FMatcherAllocations : TSharedFromThis<FMatcherAllocations>
 	{
 		virtual ~FMatcherAllocations() = default;
+
+		/**
+		 * Finalize allocations with cluster and edge data.
+		 * Called after cluster construction, before matching.
+		 * Override to build caches that require edge topology (e.g., ConnectorCache).
+		 * @param Cluster The constructed cluster
+		 * @param EdgeFacade Edge data facade
+		 */
+		virtual void FinalizeAllocations(
+			const TSharedPtr<PCGExClusters::FCluster>& Cluster,
+			const TSharedRef<PCGExData::FFacade>& EdgeFacade) {}
+
+		/**
+		 * Set the ValencyEntry reader if this allocation type needs it.
+		 * Default implementation does nothing. Override in derived types.
+		 */
+		virtual void SetValencyEntryReader(const TSharedPtr<PCGExData::TBuffer<int64>>& InReader) {}
 	};
 
 	/**
@@ -175,12 +192,39 @@ public:
 		const TSharedPtr<PCGExData::TBuffer<int32>>& MatchIndexWriter);
 
 	/**
+	 * Collect all node indices that were annotated by effective matches.
+	 * Effective = not (exclusive + unclaimed).
+	 * Base implementation uses CompiledPatterns; connector matcher overrides to use its own set.
+	 * @param OutAnnotatedNodes Set to populate with annotated node indices
+	 */
+	virtual void CollectAnnotatedNodes(TSet<int32>& OutAnnotatedNodes) const;
+
+	/**
 	 * Write to additional output pins (optional).
 	 * Override in derived classes that declare custom output pins.
 	 * Called after Annotate() during the Write phase.
 	 * @param OutputContext Context with source data and output collections
 	 */
 	virtual void WriteCustomOutput(PCGExPatternMatcher::FMatcherOutputContext& OutputContext) {}
+
+	/**
+	 * Get pattern settings for a given match's pattern.
+	 * Base implementation uses CompiledPatterns; connector matcher overrides.
+	 * @return Pattern settings, or nullptr if pattern index is invalid
+	 */
+	virtual const FPCGExValencyPatternSettingsCompiled* GetMatchPatternSettings(const FPCGExValencyPatternMatch& Match) const;
+
+	/**
+	 * Check if a specific entry in a match's pattern is active.
+	 * Base implementation uses CompiledPatterns; connector matcher overrides.
+	 */
+	virtual bool IsMatchEntryActive(const FPCGExValencyPatternMatch& Match, int32 EntryIndex) const;
+
+	/**
+	 * Get swap target module index for a match's pattern.
+	 * Base implementation uses CompiledPatterns; connector matcher overrides.
+	 */
+	virtual int32 GetMatchSwapTarget(const FPCGExValencyPatternMatch& Match) const;
 
 	/** Get the matches found by this operation */
 	const TArray<FPCGExValencyPatternMatch>& GetMatches() const { return Matches; }

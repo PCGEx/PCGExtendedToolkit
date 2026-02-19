@@ -74,6 +74,51 @@ void FPCGExPatternMatcherOperation::Annotate(
 	}
 }
 
+void FPCGExPatternMatcherOperation::CollectAnnotatedNodes(TSet<int32>& OutAnnotatedNodes) const
+{
+	if (!CompiledPatterns) { return; }
+
+	for (const FPCGExValencyPatternMatch& Match : Matches)
+	{
+		if (!Match.IsValid()) { continue; }
+
+		// Skip unclaimed exclusive matches
+		if (!Match.bClaimed)
+		{
+			const FPCGExValencyPatternCompiled& Pattern = CompiledPatterns->Patterns[Match.PatternIndex];
+			if (Pattern.Settings.bExclusive) { continue; }
+		}
+
+		const FPCGExValencyPatternCompiled& Pattern = CompiledPatterns->Patterns[Match.PatternIndex];
+		for (int32 EntryIdx = 0; EntryIdx < Match.EntryToNode.Num(); ++EntryIdx)
+		{
+			if (Pattern.Entries[EntryIdx].bIsActive)
+			{
+				OutAnnotatedNodes.Add(Match.EntryToNode[EntryIdx]);
+			}
+		}
+	}
+}
+
+const FPCGExValencyPatternSettingsCompiled* FPCGExPatternMatcherOperation::GetMatchPatternSettings(const FPCGExValencyPatternMatch& Match) const
+{
+	if (!CompiledPatterns || !CompiledPatterns->Patterns.IsValidIndex(Match.PatternIndex)) { return nullptr; }
+	return &CompiledPatterns->Patterns[Match.PatternIndex].Settings;
+}
+
+bool FPCGExPatternMatcherOperation::IsMatchEntryActive(const FPCGExValencyPatternMatch& Match, int32 EntryIndex) const
+{
+	if (!CompiledPatterns || !CompiledPatterns->Patterns.IsValidIndex(Match.PatternIndex)) { return false; }
+	const FPCGExValencyPatternCompiled& Pattern = CompiledPatterns->Patterns[Match.PatternIndex];
+	return Pattern.Entries.IsValidIndex(EntryIndex) && Pattern.Entries[EntryIndex].bIsActive;
+}
+
+int32 FPCGExPatternMatcherOperation::GetMatchSwapTarget(const FPCGExValencyPatternMatch& Match) const
+{
+	if (!CompiledPatterns || !CompiledPatterns->Patterns.IsValidIndex(Match.PatternIndex)) { return INDEX_NONE; }
+	return CompiledPatterns->Patterns[Match.PatternIndex].SwapTargetModuleIndex;
+}
+
 int32 FPCGExPatternMatcherOperation::GetModuleIndex(int32 NodeIndex) const
 {
 	if (!ValencyEntryReader) { return -1; }

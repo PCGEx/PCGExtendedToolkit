@@ -110,10 +110,12 @@ void FPCGExDefaultPatternMatcherOperation::FindMatchesForPattern(int32 PatternIn
 	// Try to match starting from each node that could match the root entry
 	for (int32 NodeIdx = 0; NodeIdx < NumNodes; ++NodeIdx)
 	{
-		// Check MaxMatches constraint before continuing
-		if (MaxMatches >= 0 && PatternMatchCounts[PatternIndex] >= MaxMatches)
+		// For non-exclusive (additive) patterns, enforce MaxMatches during collection.
+		// For exclusive patterns, collect all candidates — MaxMatches is enforced during
+		// claiming so overlap-discarded matches don't consume slots.
+		if (!Pattern.Settings.bExclusive && MaxMatches >= 0 && PatternMatchCounts[PatternIndex] >= MaxMatches)
 		{
-			break; // Reached max matches for this pattern
+			break;
 		}
 
 		// Skip already claimed nodes for exclusive patterns
@@ -334,11 +336,19 @@ void FPCGExDefaultPatternMatcherOperation::ClaimMatchedNodes()
 {
 	if (!bExclusive) { return; }
 
-	// Claim nodes for exclusive patterns (in sorted order)
+	// Track claimed count per pattern to enforce MaxMatches on effective (non-discarded) matches
+	TMap<int32, int32> ClaimedCounts;
+
+	// Claim nodes for exclusive patterns (in sorted/priority order)
 	for (FPCGExValencyPatternMatch& Match : Matches)
 	{
 		const FPCGExValencyPatternCompiled& Pattern = CompiledPatterns->Patterns[Match.PatternIndex];
 		if (!Pattern.Settings.bExclusive) { continue; }
+
+		// Enforce MaxMatches on claimed count (not candidate count)
+		const int32 MaxMatches = Pattern.Settings.MaxMatches;
+		int32& ClaimedCount = ClaimedCounts.FindOrAdd(Match.PatternIndex, 0);
+		if (MaxMatches >= 0 && ClaimedCount >= MaxMatches) { continue; }
 
 		// Check if any active nodes are already claimed
 		bool bCanClaim = true;
@@ -357,6 +367,7 @@ void FPCGExDefaultPatternMatcherOperation::ClaimMatchedNodes()
 		if (bCanClaim)
 		{
 			Match.bClaimed = true;
+			ClaimedCount++;
 
 			// Claim all active nodes
 			for (int32 EntryIdx = 0; EntryIdx < Pattern.Entries.Num(); ++EntryIdx)

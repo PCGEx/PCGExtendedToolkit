@@ -102,7 +102,7 @@ bool FPCGExRefineEdgesElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	PCGEX_OPERATION_BIND(Refinement, UPCGExEdgeRefineInstancedFactory, PCGExRefineEdges::SourceOverridesRefinement)
+	PCGEX_BIND_INSTANCED_FACTORY(Refinement, UPCGExEdgeRefineInstancedFactory, PCGExRefineEdges::SourceOverridesRefinement)
 	PCGEX_FWD(GraphBuilderDetails)
 
 	if (Context->Refinement->WantsHeuristics() && !Context->bHasValidHeuristics)

@@ -149,7 +149,7 @@ namespace PCGExValencyPatternReplacement
 		void ApplyMatches();
 
 		/** Compute replacement transform for Collapse mode */
-		FTransform ComputeReplacementTransform(const FPCGExValencyPatternMatch& Match, const FPCGExValencyPatternCompiled& Pattern);
+		FTransform ComputeReplacementTransform(const FPCGExValencyPatternMatch& Match, const FPCGExValencyPatternSettingsCompiled& PatternSettings);
 	};
 
 	class FBatch final : public PCGExValencyMT::TBatch<FProcessor>

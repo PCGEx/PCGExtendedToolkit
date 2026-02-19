@@ -297,7 +297,7 @@ void UPCGExValencyBondingRulesBuilder::CollectCageData(
 		Data.AssetEntries = MoveTemp(AssetEntries);
 		Data.Settings = Cage->ModuleSettings;
 		Data.PlacementPolicy = Cage->PlacementPolicy;
-		Data.ModuleName = Cage->ModuleName;
+		Data.ModuleName = Cage->ModuleName.IsNone() ? FName(*Cage->GetCageDisplayName()) : Cage->ModuleName;
 		Data.bPreserveLocalTransforms = Cage->bPreserveLocalTransforms;
 		Data.ConnectorTransformStrategy = Cage->ConnectorTransformStrategy;
 
