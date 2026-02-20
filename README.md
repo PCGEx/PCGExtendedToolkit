@@ -112,9 +112,6 @@ Build clusters from connection rules—define how points should connect based on
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/ffcf4a0f-f05b-4c66-bd83-7165379ada3c" />
 
 
-### Valency (WFC)
-Wave Function Collapse for modular generation. Impressive constraint solving with a dedicated editor mode. Eye candy that actually works.
-
 ### Supporting Tools
 **Shapes** — 2D/3D primitives, Clipper2 polygon booleans.  
 **Topology** — Boundary detection, flood fill, island analysis.  
