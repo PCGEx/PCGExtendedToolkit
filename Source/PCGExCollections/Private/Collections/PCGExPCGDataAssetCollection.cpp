@@ -3,12 +3,17 @@
 
 #include "Collections/PCGExPCGDataAssetCollection.h"
 
+#include "Engine/World.h"
+
 #if WITH_EDITOR
 #include "AssetRegistry/AssetData.h"
 #endif
 
 #include "PCGDataAsset.h"
 #include "Data/PCGSpatialData.h"
+#include "Helpers/PCGExLevelDataExporter.h"
+#include "Helpers/PCGExDefaultLevelDataExporter.h"
+#include "PCGExLog.h"
 
 
 // Static-init type registration: TypeId=PCGDataAsset, parent=Base
@@ -41,13 +46,40 @@ bool FPCGExPCGDataAssetCollectionEntry::Validate(const UPCGExAssetCollection* Pa
 {
 	if (!bIsSubCollection)
 	{
-		if (!DataAsset.ToSoftObjectPath().IsValid() && ParentCollection->bDoNotIgnoreInvalidEntries) { return false; }
+		if (Source == EPCGExDataAssetEntrySource::Level)
+		{
+			if (!Level.ToSoftObjectPath().IsValid() && ParentCollection->bDoNotIgnoreInvalidEntries) { return false; }
+		}
+		else
+		{
+			if (!DataAsset.ToSoftObjectPath().IsValid() && ParentCollection->bDoNotIgnoreInvalidEntries) { return false; }
+		}
 	}
 
 	return FPCGExAssetCollectionEntry::Validate(ParentCollection);
 }
 
-// Loads the PCG data asset and computes combined bounds from all spatial data inputs.
+namespace PCGExPCGDataAssetCollectionInternal
+{
+	/** Compute combined bounds from all spatial data in a PCGDataAsset. */
+	static FBox ComputeBoundsFromAsset(const UPCGDataAsset* Asset)
+	{
+		FBox CombinedBounds(ForceInit);
+		if (Asset)
+		{
+			for (const FPCGTaggedData& TaggedData : Asset->Data.GetAllInputs())
+			{
+				if (const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(TaggedData.Data))
+				{
+					CombinedBounds += SpatialData->GetBounds();
+				}
+			}
+		}
+		return CombinedBounds.IsValid ? CombinedBounds : FBox(ForceInit);
+	}
+}
+
+// Loads the PCG data asset (or exports level data) and computes combined bounds.
 void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive)
 {
 	ClearManagedSockets();
@@ -58,37 +90,91 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 		return;
 	}
 
-	Staging.Path = DataAsset.ToSoftObjectPath();
-	TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThreadTpl(DataAsset);
-
-	if (const UPCGDataAsset* Asset = DataAsset.Get())
+	if (Source == EPCGExDataAssetEntrySource::Level)
 	{
-		// Compute bounds from all point data in the asset
-		FBox CombinedBounds(ForceInit);
+		// Level source: load world, export to embedded data asset
+		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(Level.ToSoftObjectPath());
+		UWorld* LoadedWorld = Level.Get();
 
-		for (const FPCGTaggedData& TaggedData : Asset->Data.GetAllInputs())
+		if (!LoadedWorld)
 		{
-			if (const UPCGSpatialData* PointData = Cast<UPCGSpatialData>(TaggedData.Data))
-			{
-				CombinedBounds += PointData->GetBounds();
-			}
+			Staging.Bounds = FBox(ForceInit);
+			Staging.Path = FSoftObjectPath();
+			PCGExHelpers::SafeReleaseHandle(Handle);
+			FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
+			return;
 		}
 
-		Staging.Bounds = CombinedBounds.IsValid ? CombinedBounds : FBox(ForceInit);
+		// Create or reuse embedded data asset, outered to the owning collection
+		if (!ExportedDataAsset || ExportedDataAsset->GetOuter() != OwningCollection)
+		{
+			ExportedDataAsset = NewObject<UPCGDataAsset>(const_cast<UPCGExAssetCollection*>(OwningCollection));
+		}
+		ExportedDataAsset->Data.TaggedData.Reset();
+
+		// Use collection's instanced exporter if available, otherwise create a transient default
+		UPCGExLevelDataExporter* Exporter = nullptr;
+		if (const UPCGExPCGDataAssetCollection* TypedCollection = Cast<UPCGExPCGDataAssetCollection>(OwningCollection))
+		{
+			Exporter = TypedCollection->LevelExporter;
+		}
+
+		TObjectPtr<UPCGExDefaultLevelDataExporter> FallbackExporter;
+		if (!Exporter)
+		{
+			FallbackExporter = NewObject<UPCGExDefaultLevelDataExporter>(GetTransientPackage());
+			Exporter = FallbackExporter;
+		}
+
+		// Run export
+		const bool bSuccess = Exporter->ExportLevelData(LoadedWorld, ExportedDataAsset);
+
+		if (bSuccess)
+		{
+			Staging.Path = FSoftObjectPath(ExportedDataAsset);
+			Staging.Bounds = PCGExPCGDataAssetCollectionInternal::ComputeBoundsFromAsset(ExportedDataAsset);
+		}
+		else
+		{
+			Staging.Path = FSoftObjectPath();
+			Staging.Bounds = FBox(ForceInit);
+		}
+
+		PCGExHelpers::SafeReleaseHandle(Handle);
 	}
 	else
 	{
-		Staging.Bounds = FBox(ForceInit);
+		// DataAsset source: existing behavior
+		Staging.Path = DataAsset.ToSoftObjectPath();
+		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThreadTpl(DataAsset);
+
+		if (const UPCGDataAsset* Asset = DataAsset.Get())
+		{
+			Staging.Bounds = PCGExPCGDataAssetCollectionInternal::ComputeBoundsFromAsset(Asset);
+		}
+		else
+		{
+			Staging.Bounds = FBox(ForceInit);
+		}
+
+		PCGExHelpers::SafeReleaseHandle(Handle);
 	}
 
 	FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
-	PCGExHelpers::SafeReleaseHandle(Handle);
 }
 
 void FPCGExPCGDataAssetCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 {
 	FPCGExAssetCollectionEntry::SetAssetPath(InPath);
-	DataAsset = TSoftObjectPtr<UPCGDataAsset>(InPath);
+
+	if (Source == EPCGExDataAssetEntrySource::Level)
+	{
+		Level = TSoftObjectPtr<UWorld>(InPath);
+	}
+	else
+	{
+		DataAsset = TSoftObjectPtr<UPCGDataAsset>(InPath);
+	}
 }
 
 #if WITH_EDITOR
@@ -103,6 +189,12 @@ void FPCGExPCGDataAssetCollectionEntry::EDITOR_Sanitize()
 	else
 	{
 		InternalSubCollection = SubCollection;
+	}
+
+	// Clean up embedded data asset when not in Level mode
+	if (Source != EPCGExDataAssetEntrySource::Level)
+	{
+		ExportedDataAsset = nullptr;
 	}
 }
 #endif
@@ -131,13 +223,38 @@ void UPCGExPCGDataAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArr
 
 	for (const FAssetData& SelectedAsset : InAssetData)
 	{
+		// Try as UWorld (Level source)
+		if (SelectedAsset.AssetClassPath == UWorld::StaticClass()->GetClassPathName())
+		{
+			TSoftObjectPtr<UWorld> WorldAsset(SelectedAsset.GetSoftObjectPath());
+
+			bool bAlreadyExists = false;
+			for (const FPCGExPCGDataAssetCollectionEntry& ExistingEntry : Entries)
+			{
+				if (ExistingEntry.Source == EPCGExDataAssetEntrySource::Level && ExistingEntry.Level == WorldAsset)
+				{
+					bAlreadyExists = true;
+					break;
+				}
+			}
+
+			if (bAlreadyExists) { continue; }
+
+			FPCGExPCGDataAssetCollectionEntry Entry;
+			Entry.Source = EPCGExDataAssetEntrySource::Level;
+			Entry.Level = WorldAsset;
+			Entries.Add(Entry);
+			continue;
+		}
+
+		// Try as UPCGDataAsset (DataAsset source)
 		TSoftObjectPtr<UPCGDataAsset> Asset = TSoftObjectPtr<UPCGDataAsset>(SelectedAsset.ToSoftObjectPath());
 		if (!Asset.LoadSynchronous()) { continue; }
 
 		bool bAlreadyExists = false;
 		for (const FPCGExPCGDataAssetCollectionEntry& ExistingEntry : Entries)
 		{
-			if (ExistingEntry.DataAsset == Asset)
+			if (ExistingEntry.Source == EPCGExDataAssetEntrySource::DataAsset && ExistingEntry.DataAsset == Asset)
 			{
 				bAlreadyExists = true;
 				break;
@@ -146,9 +263,9 @@ void UPCGExPCGDataAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArr
 
 		if (bAlreadyExists) { continue; }
 
-		FPCGExPCGDataAssetCollectionEntry Entry = FPCGExPCGDataAssetCollectionEntry();
+		FPCGExPCGDataAssetCollectionEntry Entry;
+		Entry.Source = EPCGExDataAssetEntrySource::DataAsset;
 		Entry.DataAsset = Asset;
-
 		Entries.Add(Entry);
 	}
 }

@@ -11,7 +11,15 @@
 
 class UPCGDataAsset;
 class UPCGExPCGDataAssetCollection;
+class UPCGExLevelDataExporter;
+class UWorld;
 
+UENUM()
+enum class EPCGExDataAssetEntrySource : uint8
+{
+	DataAsset = 0 UMETA(DisplayName = "Data Asset", ToolTip="Reference an existing PCGDataAsset"),
+	Level     = 1 UMETA(DisplayName = "Level",      ToolTip="Export a level to an embedded PCGDataAsset"),
+};
 
 namespace PCGExPCGDataAssetCollection
 {
@@ -51,18 +59,30 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 		return PCGExAssetCollection::TypeIds::PCGDataAsset;
 	}
 
-	// PCGDataAsset-Specific Properties 
+	// PCGDataAsset-Specific Properties
 
+	/** Source mode toggle (default = DataAsset for backward compatibility) */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	EPCGExDataAssetEntrySource Source = EPCGExDataAssetEntrySource::DataAsset;
+
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source==EPCGExDataAssetEntrySource::DataAsset && !bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UPCGDataAsset> DataAsset = nullptr;
+
+	/** Level reference (used when Source == Level) */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source==EPCGExDataAssetEntrySource::Level && !bIsSubCollection", EditConditionHides))
+	TSoftObjectPtr<UWorld> Level;
+
+	/** Embedded exported data asset (hidden, serialized, outered to collection) */
+	UPROPERTY()
+	TObjectPtr<UPCGDataAsset> ExportedDataAsset;
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
 	TObjectPtr<UPCGExPCGDataAssetCollection> SubCollection;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source==EPCGExDataAssetEntrySource::DataAsset && !bIsSubCollection", EditConditionHides))
 	bool bOverrideWeights = false;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Weights", EditCondition="!bIsSubCollection && bOverrideWeights", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Weights", EditCondition="Source==EPCGExDataAssetEntrySource::DataAsset && !bIsSubCollection && bOverrideWeights", EditConditionHides))
 	TArray<int32> PointWeights;
 
 	// Subcollection Access
@@ -102,8 +122,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 #pragma endregion
 };
 
-/** Concrete collection for UPCGDataAsset references. Minimal extension like the
- *  actor collection -- no extra global settings beyond the base class. */
+/** Concrete collection for UPCGDataAsset references with optional level-sourced entries. */
 UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | PCGDataAsset")
 class PCGEXCOLLECTIONS_API UPCGExPCGDataAssetCollection : public UPCGExAssetCollection
 {
@@ -119,6 +138,13 @@ public:
 	{
 		return PCGExAssetCollection::TypeIds::PCGDataAsset;
 	}
+
+	// Settings
+
+	/** Exporter used to convert level-sourced entries into embedded PCGDataAssets during staging.
+	 *  If unset, a default exporter is used. Instanced so custom exporters can expose their own settings. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced, Category = Settings)
+	TObjectPtr<UPCGExLevelDataExporter> LevelExporter;
 
 	// Entries Array
 
