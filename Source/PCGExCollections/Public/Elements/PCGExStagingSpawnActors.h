@@ -17,7 +17,8 @@
 /**
  * Spawns actors at staged point locations using collection map entries.
  * Each point with a valid actor collection entry will spawn the referenced actor class
- * at the point's transform, with optional fitting, tagging, and PCG generation triggering.
+ * at the point's transform, with optional tagging and PCG generation triggering.
+ * Transforms are consumed as-is from upstream staging nodes (fitting is their responsibility).
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc",
 	meta=(Keywords = "spawn actor staged collection", PCGExNodeLibraryDoc="staging/staging-spawn-actors"))
@@ -115,24 +116,24 @@ protected:
 
 namespace PCGExStagingSpawnActors
 {
-	struct FActorSpawnRequest
+	/** Per-point resolved data, written lock-free during parallel phase (one slot per point index) */
+	struct FResolvedEntry
 	{
-		int32 PointIndex = -1;
-		FTransform Transform = FTransform::Identity;
 		const FPCGExActorCollectionEntry* Entry = nullptr;
-		const UPCGExAssetCollection* Host = nullptr;
 	};
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExStagingSpawnActorsContext, UPCGExStagingSpawnActorsSettings>
 	{
 		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashGetter;
 
-		/** Collected spawn requests from parallel phase */
-		TArray<FActorSpawnRequest> SpawnRequests;
-		mutable FRWLock RequestLock;
+		/** Pre-sized to NumPoints — each parallel thread writes to its own index, no locks */
+		TArray<FResolvedEntry> ResolvedEntries;
 
 		/** Main thread loop for spawning */
 		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
+
+		/** Keeps loaded actor classes alive */
+		TSharedPtr<FStreamableHandle> LoadHandle;
 
 		/** Managed resource for actor cleanup via PCG's native resource tracking */
 		UPCGManagedActors* ManagedActors = nullptr;
@@ -145,6 +146,10 @@ namespace PCGExStagingSpawnActors
 
 		/** Forwarding handler */
 		TSharedPtr<PCGExData::FDataForwardHandler> ForwardHandler;
+
+		/** Cached transform range for main thread spawn loop */
+		TConstPCGValueRange<FTransform> Transforms;
+		int32 NumPoints = 0;
 
 #if WITH_EDITOR
 		/** Cached folder path for organizing spawned actors */
@@ -164,7 +169,7 @@ namespace PCGExStagingSpawnActors
 		virtual void OnPointsProcessingComplete() override;
 
 	private:
-		void SpawnActor(int32 RequestIndex);
+		void SpawnAtPoint(int32 PointIndex);
 
 #if WITH_EDITOR
 		void ComputeFolderPath();
