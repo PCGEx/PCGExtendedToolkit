@@ -11,6 +11,7 @@
 #include "LevelInstance/LevelInstanceLevelStreaming.h"
 #include "LevelInstance/LevelInstanceActor.h"
 #include "PCGManagedResource.h"
+#include "PCGCrc.h"
 
 #include "PCGExStagingLoadLevel.generated.h"
 
@@ -109,7 +110,7 @@ public:
 
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
+	virtual void InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const override;
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points spawn a level instance.", PCGExFactories::PointFilters, false)
 	//~End UPCGSettings
 
@@ -151,6 +152,9 @@ struct FPCGExStagingLoadLevelContext final : FPCGExPointsProcessorContext
 	friend class FPCGExStagingLoadLevelElement;
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
+
+	FPCGCrc DependenciesCrc;
+	bool bReusedManagedResources = false;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL

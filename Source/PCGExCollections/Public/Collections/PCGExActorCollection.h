@@ -8,6 +8,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "PCGGraph.h"
 
 #include "PCGExActorCollection.generated.h"
 
@@ -45,7 +46,15 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	/** If enabled, the cached bounds will also account for child actors. */
 	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	bool bIncludeFromChildActors = true;
-	
+
+	/** Cached: whether the actor CDO has any UPCGComponent. */
+	UPROPERTY(VisibleAnywhere, Category = "Settings|PCG")
+	bool bHasPCGComponent = false;
+
+	/** Cached: graph set on the first found PCG component, if any. */
+	UPROPERTY(VisibleAnywhere, Category = "Settings|PCG")
+	TSoftObjectPtr<UPCGGraphInterface> CachedPCGGraph;
+
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const override;
 
 	virtual void ClearSubCollection() override;
