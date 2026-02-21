@@ -46,6 +46,7 @@ namespace PCGExAssetCollection
 		inline const FTypeId Mesh = FName(TEXT("Mesh"));
 		inline const FTypeId Actor = FName(TEXT("Actor"));
 		inline const FTypeId PCGDataAsset = FName(TEXT("PCGDataAsset"));
+		inline const FTypeId Level = FName(TEXT("Level"));
 	}
 
 	/**
