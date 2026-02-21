@@ -6,7 +6,6 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Core/PCGExPointFilter.h"
-#include "Fitting/PCGExFitting.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Collections/PCGExActorCollection.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
@@ -44,17 +43,6 @@ protected:
 	virtual bool IsCacheable() const override { return false; }
 
 public:
-	// --- Fitting ---
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	FPCGExScaleToFitDetails ScaleToFit;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	FPCGExJustificationDetails Justification;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	FPCGExFittingVariationsDetails Variations;
-
 	// --- Spawning ---
 
 	/** How to handle collisions when spawning actors. */
@@ -154,10 +142,6 @@ namespace PCGExStagingSpawnActors
 
 		/** Output: actor reference writer */
 		TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>> ActorRefWriter;
-
-		/** Fitting handler */
-		FPCGExFittingDetailsHandler FittingHandler;
-		FPCGExFittingVariationsDetails Variations;
 
 		/** Forwarding handler */
 		TSharedPtr<PCGExData::FDataForwardHandler> ForwardHandler;

@@ -10,8 +10,6 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataForward.h"
 #include "Engine/World.h"
-#include "Fitting/PCGExFittingVariations.h"
-#include "Helpers/PCGExRandomHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSpawnActorsElement"
@@ -105,14 +103,6 @@ namespace PCGExStagingSpawnActors
 		// Create ActorReference writer
 		ActorRefWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->ActorReferenceAttribute, FSoftObjectPath(), false, PCGExData::EBufferInit::New);
 
-		// Init fitting
-		FittingHandler.ScaleToFit = Settings->ScaleToFit;
-		FittingHandler.Justification = Settings->Justification;
-		if (!FittingHandler.Init(ExecutionContext, PointDataFacade)) { return false; }
-
-		Variations = Settings->Variations;
-		Variations.Init(Settings->Seed);
-
 		// Init forwarding
 		ForwardHandler = Settings->TargetsForwarding.TryGetHandler(PointDataFacade);
 
@@ -140,11 +130,9 @@ namespace PCGExStagingSpawnActors
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
 
-		const UPCGBasePointData* InPointData = PointDataFacade->Source->GetIn();
-		const TConstPCGValueRange<int32> Seeds = InPointData->GetConstSeedValueRange();
+		const TConstPCGValueRange<FTransform> Transforms = PointDataFacade->Source->GetIn()->GetConstTransformValueRange();
 
 		int16 MaterialPick = 0;
-		FRandomStream RandomSource;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -170,35 +158,11 @@ namespace PCGExStagingSpawnActors
 
 			if (!ActorEntry->Actor.ToSoftObjectPath().IsValid()) { continue; }
 
-			// Compute fitted spawn transform
-			FTransform OutTransform = FTransform::Identity;
-			FVector OutTranslation = FVector::ZeroVector;
-			FBox OutBounds = ActorEntry->Staging.Bounds;
-			const FPCGExFittingVariations& EntryVariations = ActorEntry->GetVariations(Result.Host);
-
-			RandomSource.Initialize(PCGExRandomHelpers::GetSeed(Seeds[Index], Variations.Seed));
-
-			if (Variations.bEnabledBefore)
-			{
-				FTransform LocalXForm = FTransform::Identity;
-				Variations.Apply(RandomSource, LocalXForm, EntryVariations, EPCGExVariationMode::Before);
-				FittingHandler.ComputeLocalTransform(Index, LocalXForm, OutTransform, OutBounds, OutTranslation);
-			}
-			else
-			{
-				FittingHandler.ComputeTransform(Index, OutTransform, OutBounds, OutTranslation);
-			}
-
-			if (Variations.bEnabledAfter)
-			{
-				Variations.Apply(RandomSource, OutTransform, EntryVariations, EPCGExVariationMode::After);
-			}
-
 			{
 				FWriteScopeLock WriteLock(RequestLock);
 				FActorSpawnRequest& Request = SpawnRequests.AddDefaulted_GetRef();
 				Request.PointIndex = Index;
-				Request.Transform = OutTransform;
+				Request.Transform = Transforms[Index];
 				Request.Entry = ActorEntry;
 				Request.Host = Result.Host;
 			}
