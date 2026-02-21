@@ -90,7 +90,7 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 
 #else
 		Staging.Bounds = FBox(ForceInit);
-		UE_LOG(LogPCGEx, Error, TEXT("UpdateStaging called in non-editor context."));
+		UE_LOG(LogPCGEx, Error, TEXT("UpdateStaging called in non-editor context. This is not supported for Actor Collections."));
 #endif
 	}
 

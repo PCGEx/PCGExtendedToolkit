@@ -4,8 +4,10 @@
 #include "PCGExCollectionsEditorMenuUtils.h"
 
 #include "Collections/PCGExActorCollection.h"
+#include "Collections/PCGExLevelCollection.h"
 #include "Collections/PCGExMeshCollection.h"
 #include "Details/Collections/PCGExActorCollectionActions.h"
+#include "Details/Collections/PCGExLevelCollectionActions.h"
 #include "Details/Collections/PCGExMeshCollectionActions.h"
 #include "Engine/Blueprint.h"
 #include "Engine/World.h"
@@ -36,6 +38,9 @@ namespace PCGExCollectionsEditorMenuUtils
 		TArray<FAssetData> TempActorAssets;
 		TArray<TObjectPtr<UPCGExActorCollection>> TempActorCollections;
 
+		TArray<FAssetData> TempLevelAssets;
+		TArray<TObjectPtr<UPCGExLevelCollection>> TempLevelCollections;
+
 		for (const FAssetData& Asset : Assets)
 		{
 			if (Asset.IsInstanceOf<UStaticMesh>())
@@ -49,6 +54,22 @@ namespace PCGExCollectionsEditorMenuUtils
 				if (UPCGExMeshCollection* Collection = TSoftObjectPtr<UPCGExMeshCollection>(Asset.GetSoftObjectPath()).LoadSynchronous())
 				{
 					TempMeshCollections.Add(Collection);
+				}
+
+				continue;
+			}
+
+			if (Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName())
+			{
+				TempLevelAssets.Add(Asset);
+				continue;
+			}
+
+			if (Asset.IsInstanceOf<UPCGExLevelCollection>())
+			{
+				if (UPCGExLevelCollection* Collection = TSoftObjectPtr<UPCGExLevelCollection>(Asset.GetSoftObjectPath()).LoadSynchronous())
+				{
+					TempLevelCollections.Add(Collection);
 				}
 
 				continue;
@@ -69,14 +90,14 @@ namespace PCGExCollectionsEditorMenuUtils
 			}
 		}
 
-		if (TempStaticMeshes.IsEmpty() && TempActorAssets.IsEmpty())
+		if (TempStaticMeshes.IsEmpty() && TempActorAssets.IsEmpty() && TempLevelAssets.IsEmpty())
 		{
 			return;
 		}
 
 		FToolMenuSection& Section = CreatePCGExSection(Menu);
 
-		if (!TempStaticMeshes.IsEmpty() || !TempActorAssets.IsEmpty())
+		if (!TempStaticMeshes.IsEmpty() || !TempActorAssets.IsEmpty() || !TempLevelAssets.IsEmpty())
 		{
 			FToolUIAction UIAction;
 			UIAction.ExecuteAction.BindLambda(
@@ -84,7 +105,9 @@ namespace PCGExCollectionsEditorMenuUtils
 					Meshes = MoveTemp(TempStaticMeshes),
 					MeshCollections = MoveTemp(TempMeshCollections),
 					Actors = MoveTemp(TempActorAssets),
-					ActorCollections = MoveTemp(TempActorCollections)](const FToolMenuContext& MenuContext)
+					ActorCollections = MoveTemp(TempActorCollections),
+					Levels = MoveTemp(TempLevelAssets),
+					LevelCollections = MoveTemp(TempLevelCollections)](const FToolMenuContext& MenuContext)
 				{
 					FScopedSlowTask SlowTask(0.0f, LOCTEXT("CreateOrUpdatePCGExMeshCollection", "Create or Update Asset Collection(s) from selection..."));
 
@@ -93,6 +116,9 @@ namespace PCGExCollectionsEditorMenuUtils
 
 					if (ActorCollections.IsEmpty()) { PCGExActorCollectionActions::CreateCollectionFrom(Actors); }
 					else { PCGExActorCollectionActions::UpdateCollectionsFrom(ActorCollections, Actors); }
+
+					if (LevelCollections.IsEmpty()) { PCGExLevelCollectionActions::CreateCollectionFrom(Levels); }
+					else { PCGExLevelCollectionActions::UpdateCollectionsFrom(LevelCollections, Levels); }
 				});
 
 			Section.AddMenuEntry(

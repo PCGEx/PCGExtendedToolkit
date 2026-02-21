@@ -7,6 +7,7 @@
 
 #include "Core/PCGExAssetCollection.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 
 #include "PCGExLevelCollection.generated.h"
 
@@ -32,6 +33,28 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelCollectionEntry : public FPCGExAssetColle
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level = nullptr;
+
+	// ========== Bounds Filtering ==========
+
+	/** If enabled, only actors with at least one of these tags contribute to bounds. Empty = all actors. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	TArray<FName> BoundsIncludeTags;
+
+	/** Actors with any of these tags are excluded from bounds computation. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	TArray<FName> BoundsExcludeTags;
+
+	/** If non-empty, only actors of these classes (or subclasses) contribute to bounds. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	TArray<TSoftClassPtr<AActor>> BoundsIncludeClasses;
+
+	/** If non-empty, actors of these classes (or subclasses) are excluded from bounds. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	TArray<TSoftClassPtr<AActor>> BoundsExcludeClasses;
+
+	/** If enabled, only collidable primitive components contribute to bounds. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	bool bOnlyCollidingComponents = false;
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
 	TObjectPtr<UPCGExLevelCollection> SubCollection;
