@@ -4,8 +4,10 @@
 #include "Elements/PCGExStagingSpawnActors.h"
 
 #include "PCGComponent.h"
+#include "PCGElement.h"
 #include "PCGManagedResource.h"
 #include "PCGParamData.h"
+#include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataForward.h"
@@ -65,6 +67,15 @@ bool FPCGExStagingSpawnActorsElement::AdvanceWork(FPCGExContext* InContext, cons
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
+		// Compute CRC for managed resource reuse detection
+		GetDependenciesCrc(FPCGGetDependenciesCrcParams(&Context->InputData, Settings, nullptr), Context->DependenciesCrc);
+
+		if (Context->DependenciesCrc.IsValid())
+		{
+			Context->ReusedManagedActors = PCGExManagedHelpers::TryReuseManagedResource<UPCGManagedActors>(
+				Context->GetMutableComponent(), Context->DependenciesCrc);
+		}
+
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry) { return true; },
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
@@ -183,6 +194,22 @@ namespace PCGExStagingSpawnActors
 		if (UniqueClasses.IsEmpty())
 		{
 			bIsProcessorValid = false;
+			return;
+		}
+
+		// CRC reuse: if managed actors from a previous execution match, skip spawning entirely
+		if (Context->ReusedManagedActors)
+		{
+			const TArray<TSoftObjectPtr<AActor>>& Actors = Context->ReusedManagedActors->GetConstGeneratedActors();
+			int32 ActorIdx = 0;
+			for (int32 i = 0; i < NumPoints; ++i)
+			{
+				if (ResolvedEntries[i].Entry && ActorIdx < Actors.Num())
+				{
+					ActorRefWriter->SetValue(i, Actors[ActorIdx].ToSoftObjectPath());
+					++ActorIdx;
+				}
+			}
 			return;
 		}
 
@@ -340,6 +367,7 @@ namespace PCGExStagingSpawnActors
 		if (bIsLastPoint && ManagedActors)
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::RegisterManagedActors);
+			ManagedActors->SetCrc(Context->DependenciesCrc);
 			ExecutionContext->GetMutableComponent()->AddToManagedResources(ManagedActors);
 		}
 	}

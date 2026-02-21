@@ -11,6 +11,7 @@
 #include "Data/Utils/PCGExDataForwardDetails.h"
 #include "Helpers/PCGExPCGGenerationWatcher.h"
 #include "PCGManagedResource.h"
+#include "PCGCrc.h"
 
 #include "PCGExStagingSpawnActors.generated.h"
 
@@ -96,6 +97,9 @@ struct FPCGExStagingSpawnActorsContext final : FPCGExPointsProcessorContext
 	friend class FPCGExStagingSpawnActorsElement;
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionUnpacker;
+
+	FPCGCrc DependenciesCrc;
+	UPCGManagedActors* ReusedManagedActors = nullptr;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL

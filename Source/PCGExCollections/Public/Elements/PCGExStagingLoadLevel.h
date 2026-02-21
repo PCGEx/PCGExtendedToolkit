@@ -11,6 +11,7 @@
 #include "LevelInstance/LevelInstanceLevelStreaming.h"
 #include "LevelInstance/LevelInstanceActor.h"
 #include "PCGManagedResource.h"
+#include "PCGCrc.h"
 
 #include "PCGExStagingLoadLevel.generated.h"
 
@@ -151,6 +152,9 @@ struct FPCGExStagingLoadLevelContext final : FPCGExPointsProcessorContext
 	friend class FPCGExStagingLoadLevelElement;
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
+
+	FPCGCrc DependenciesCrc;
+	bool bReusedManagedResources = false;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL

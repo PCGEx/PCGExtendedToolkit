@@ -6,7 +6,9 @@
 #include <atomic>
 
 #include "PCGComponent.h"
+#include "PCGElement.h"
 #include "PCGParamData.h"
+#include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Engine/Level.h"
@@ -154,6 +156,26 @@ bool FPCGExStagingLoadLevelElement::AdvanceWork(FPCGExContext* InContext, const 
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
+		// Compute CRC for managed resource reuse detection
+		GetDependenciesCrc(FPCGGetDependenciesCrcParams(&Context->InputData, Settings, nullptr), Context->DependenciesCrc);
+
+		if (Context->DependenciesCrc.IsValid())
+		{
+			UPCGComponent* SourceComponent = Context->GetMutableComponent();
+
+			// Try streaming levels first, then LevelInstance actors
+			if (PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedStreamingLevels>(SourceComponent, Context->DependenciesCrc))
+			{
+				Context->bReusedManagedResources = true;
+			}
+#if WITH_EDITOR
+			else if (PCGExManagedHelpers::TryReuseManagedResource<UPCGManagedActors>(SourceComponent, Context->DependenciesCrc))
+			{
+				Context->bReusedManagedResources = true;
+			}
+#endif
+		}
+
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry) { return true; },
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
@@ -236,6 +258,8 @@ namespace PCGExStagingLoadLevel
 
 		// TODO : Collapse SpawnRequests TScopedArray here
 
+		// CRC reuse: managed resources from a previous execution match, skip spawning entirely
+		if (Context->bReusedManagedResources) { return; }
 
 		if (SpawnRequests.IsEmpty())
 		{
@@ -385,6 +409,7 @@ namespace PCGExStagingLoadLevel
 			// Register managed actors with PCG after the last spawn
 			if (RequestIndex == SpawnRequests.Num() - 1 && ManagedLevelInstances)
 			{
+				ManagedLevelInstances->SetCrc(Context->DependenciesCrc);
 				SourceComponent->AddToManagedResources(ManagedLevelInstances);
 			}
 
@@ -428,6 +453,7 @@ namespace PCGExStagingLoadLevel
 		// Register managed streaming levels with PCG after the last spawn
 		if (RequestIndex == SpawnRequests.Num() - 1 && ManagedStreamingLevels)
 		{
+			ManagedStreamingLevels->SetCrc(Context->DependenciesCrc);
 			SourceComponent->AddToManagedResources(ManagedStreamingLevels);
 		}
 	}
