@@ -16,6 +16,7 @@
 #define PCGEX_NAMESPACE StagingLoadLevel
 
 PCGEX_INITIALIZE_ELEMENT(StagingLoadLevel)
+
 PCGEX_ELEMENT_BATCH_POINT_IMPL(StagingLoadLevel)
 
 #pragma region UPCGExManagedStreamingLevels
@@ -117,11 +118,10 @@ TSubclassOf<ULevelStreamingLevelInstance> APCGExLevelInstance::GetLevelStreaming
 
 #pragma region UPCGExStagingLoadLevelSettings
 
-TArray<FPCGPinProperties> UPCGExStagingLoadLevelSettings::InputPinProperties() const
+void UPCGExStagingLoadLevelSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
-	return PinProperties;
+	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 
 #pragma endregion
@@ -300,8 +300,8 @@ namespace PCGExStagingLoadLevel
 		if (!LevelInstanceActor)
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
-				FText::Format(LOCTEXT("FailedToSpawnLevelInstance", "Failed to spawn ALevelInstance for '{0}' at point {1}"),
-					FText::FromString(Request.Params.LongPackageName), FText::AsNumber(Request.PointIndex)));
+			           FText::Format(LOCTEXT("FailedToSpawnLevelInstance", "Failed to spawn ALevelInstance for '{0}' at point {1}"),
+				           FText::FromString(Request.Params.LongPackageName), FText::AsNumber(Request.PointIndex)));
 			return;
 		}
 
@@ -363,7 +363,7 @@ namespace PCGExStagingLoadLevel
 			if (Settings->bSpawnAsLevelInstance && !bUseLevelInstance && !Settings->bQuietRuntimeFallbackWarning)
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
-					LOCTEXT("RuntimeFallback", "Spawn As Level Instance is enabled but the component uses Generate At Runtime. Falling back to streaming levels."));
+				           LOCTEXT("RuntimeFallback", "Spawn As Level Instance is enabled but the component uses Generate At Runtime. Falling back to streaming levels."));
 			}
 
 			if (bUseLevelInstance)
@@ -406,8 +406,8 @@ namespace PCGExStagingLoadLevel
 		if (!bOutSuccess || !StreamingLevel)
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
-				FText::Format(LOCTEXT("FailedToLoadLevel", "Failed to load level instance '{0}' at point {1}"),
-					FText::FromString(Request.Params.LongPackageName), FText::AsNumber(Request.PointIndex)));
+			           FText::Format(LOCTEXT("FailedToLoadLevel", "Failed to load level instance '{0}' at point {1}"),
+				           FText::FromString(Request.Params.LongPackageName), FText::AsNumber(Request.PointIndex)));
 			return;
 		}
 

@@ -45,7 +45,7 @@ protected:
 	virtual bool SupportsDataStealing() const override { return true; }
 
 	virtual FPCGElementPtr CreateElement() const override;
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
+	virtual void InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get fitted.", PCGExFactories::PointFilters, false)
 	//~End UPCGSettings

@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #endif
 
+#include "PCGComponent.h"
 #include "PCGExLog.h"
 #include "Engine/Blueprint.h"
 
@@ -79,6 +80,14 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 		// Compute the bounds
 		TempActor->GetActorBounds(bOnlyCollidingComponents, Origin, Extents, bIncludeFromChildActors);
 
+		// Inspect for PCG components
+		TInlineComponentArray<UPCGComponent*, 1> PCGComps;
+		TempActor->GetComponents(PCGComps);
+		bHasPCGComponent = !PCGComps.IsEmpty();
+		CachedPCGGraph = (bHasPCGComponent && PCGComps[0]->GetGraph())
+			? TSoftObjectPtr<UPCGGraphInterface>(FSoftObjectPath(PCGComps[0]->GetGraph()))
+			: nullptr;
+
 		// Hide the actor to ensure it doesn't affect gameplay or rendering
 		TempActor->SetActorHiddenInGame(true);
 		TempActor->SetActorEnableCollision(false);
@@ -90,6 +99,8 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 
 #else
 		Staging.Bounds = FBox(ForceInit);
+		bHasPCGComponent = false;
+		CachedPCGGraph = nullptr;
 		UE_LOG(LogPCGEx, Error, TEXT("UpdateStaging called in non-editor context. This is not supported for Actor Collections."));
 #endif
 	}
@@ -112,10 +123,18 @@ void FPCGExActorCollectionEntry::EDITOR_Sanitize()
 	if (!bIsSubCollection)
 	{
 		InternalSubCollection = nullptr;
+
+		if (!Actor.ToSoftObjectPath().IsValid())
+		{
+			bHasPCGComponent = false;
+			CachedPCGGraph = nullptr;
+		}
 	}
 	else
 	{
 		InternalSubCollection = SubCollection;
+		bHasPCGComponent = false;
+		CachedPCGGraph = nullptr;
 	}
 }
 #endif
