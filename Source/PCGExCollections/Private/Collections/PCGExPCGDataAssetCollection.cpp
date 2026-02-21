@@ -13,6 +13,8 @@
 #include "Data/PCGSpatialData.h"
 #include "Helpers/PCGExLevelDataExporter.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
+#include "Collections/PCGExMeshCollection.h"
+#include "Collections/PCGExActorCollection.h"
 #include "PCGExLog.h"
 
 
@@ -133,11 +135,22 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 		{
 			Staging.Path = FSoftObjectPath(ExportedDataAsset);
 			Staging.Bounds = PCGExPCGDataAssetCollectionInternal::ComputeBoundsFromAsset(ExportedDataAsset);
+
+			// Extract embedded collections (created by exporter when bGenerateCollections is enabled)
+			EmbeddedMeshCollection = nullptr;
+			EmbeddedActorCollection = nullptr;
+			ForEachObjectWithOuter(ExportedDataAsset, [this](UObject* Inner)
+			{
+				if (UPCGExMeshCollection* MC = Cast<UPCGExMeshCollection>(Inner)) { EmbeddedMeshCollection = MC; }
+				if (UPCGExActorCollection* AC = Cast<UPCGExActorCollection>(Inner)) { EmbeddedActorCollection = AC; }
+			}, false);
 		}
 		else
 		{
 			Staging.Path = FSoftObjectPath();
 			Staging.Bounds = FBox(ForceInit);
+			EmbeddedMeshCollection = nullptr;
+			EmbeddedActorCollection = nullptr;
 		}
 
 		PCGExHelpers::SafeReleaseHandle(Handle);
@@ -191,10 +204,12 @@ void FPCGExPCGDataAssetCollectionEntry::EDITOR_Sanitize()
 		InternalSubCollection = SubCollection;
 	}
 
-	// Clean up embedded data asset when not in Level mode
+	// Clean up embedded data when not in Level mode
 	if (Source != EPCGExDataAssetEntrySource::Level)
 	{
 		ExportedDataAsset = nullptr;
+		EmbeddedMeshCollection = nullptr;
+		EmbeddedActorCollection = nullptr;
 	}
 }
 #endif

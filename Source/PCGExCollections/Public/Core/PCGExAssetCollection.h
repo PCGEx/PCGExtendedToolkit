@@ -406,6 +406,11 @@ class PCGEXCOLLECTIONS_API UPCGExAssetCollection : public UDataAsset
 	friend struct FPCGExAssetCollectionEntry;
 
 public:
+	UPCGExAssetCollection()
+	{
+		CollectionGUID = GenerateNewGUID();
+	}
+
 #pragma region Type
 
 	/** Get the type ID of this collection */
@@ -559,6 +564,8 @@ protected:
 	}
 #endif
 
+	static uint32 GenerateNewGUID() { return GetTypeHash(FGuid::NewGuid()); }
+
 #pragma endregion
 
 public:
@@ -571,6 +578,14 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1))
 	TSet<FName> CollectionTags;
+
+	/** Persistent unique identifier for this collection. Used by FPickPacker to produce
+	 *  deterministic, mergeable hashes across different staging nodes and sessions.
+	 *  Generated once in the constructor; new value assigned on duplication/import. */
+	UPROPERTY(VisibleAnywhere, Category = Settings, AdvancedDisplay, meta=(IgnoreForMemberInitializationTest))
+	uint32 CollectionGUID = 0;
+
+	uint32 GetCollectionGUID() const { return CollectionGUID; }
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(EditAnywhere, Category = Settings, AdvancedDisplay)

@@ -672,6 +672,10 @@ void UPCGExAssetCollection::BuildCache()
 void UPCGExAssetCollection::PostDuplicate(bool bDuplicateForPIE)
 {
 	Super::PostDuplicate(bDuplicateForPIE);
+
+	// Duplicates get a new identity; PIE copies keep the same GUID
+	if (!bDuplicateForPIE) { CollectionGUID = GenerateNewGUID(); }
+
 #if WITH_EDITOR
 	EDITOR_SetDirty();
 #endif
@@ -680,6 +684,10 @@ void UPCGExAssetCollection::PostDuplicate(bool bDuplicateForPIE)
 void UPCGExAssetCollection::PostEditImport()
 {
 	Super::PostEditImport();
+
+	// Paste/import gets a new identity
+	CollectionGUID = GenerateNewGUID();
+
 #if WITH_EDITOR
 	EDITOR_SetDirty();
 #endif

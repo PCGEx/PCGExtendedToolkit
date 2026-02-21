@@ -12,6 +12,8 @@
 class UPCGDataAsset;
 class UPCGExPCGDataAssetCollection;
 class UPCGExLevelDataExporter;
+class UPCGExMeshCollection;
+class UPCGExActorCollection;
 class UWorld;
 
 UENUM()
@@ -75,6 +77,14 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	/** Embedded exported data asset (hidden, serialized, outered to collection) */
 	UPROPERTY()
 	TObjectPtr<UPCGDataAsset> ExportedDataAsset;
+
+	/** Embedded mesh collection built by level exporter when bGenerateCollections is enabled */
+	UPROPERTY()
+	TObjectPtr<UPCGExMeshCollection> EmbeddedMeshCollection;
+
+	/** Embedded actor collection built by level exporter when bGenerateCollections is enabled */
+	UPROPERTY()
+	TObjectPtr<UPCGExActorCollection> EmbeddedActorCollection;
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
 	TObjectPtr<UPCGExPCGDataAssetCollection> SubCollection;

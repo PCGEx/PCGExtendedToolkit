@@ -62,7 +62,12 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 
 	if (!HashAttribute)
 	{
-		PCGE_LOG_C(Error, GraphAndLog, &Context, FTEXT( "Unable to get hash attribute from input"));
+		if (!bQuietMissingStagingDataWarning)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, &Context, FTEXT("Unable to get hash attribute from input. Enable 'Quiet Missing Staging Data Warning' to silence this."));
+		}
+
+		if (OutPointData) { OutPointData->SetNumPoints(0); }
 		return true;
 	}
 

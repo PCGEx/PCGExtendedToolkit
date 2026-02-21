@@ -49,7 +49,8 @@ class UPCGParamData;
  *   3. Use entry data (staging path, bounds, sockets, etc.)
  *
  * Hash encoding (FPickPacker/FPickUnpacker):
- *   uint64 = H64( H32(BaseHash, CollectionArrayIndex), H32(EntryIndex, SecondaryIndex+1) )
+ *   uint64 = H64( CollectionGUID, H32(EntryIndex, SecondaryIndex+1) )
+ *   CollectionGUID is a persistent uint32 on each UPCGExAssetCollection.
  *   This packs collection identity + entry + variant into a single attribute value.
  */
 namespace PCGExCollections
@@ -168,7 +169,7 @@ namespace PCGExCollections
 	 *
 	 * Usage:
 	 *   // In Boot:
-	 *   Packer = MakeShared<FPickPacker>(Context);
+	 *   Packer = MakeShared<FPickPacker>();  // or FPickPacker(Context) for backward compat
 	 *   // In ProcessPoints (parallel):
 	 *   uint64 Hash = Packer->GetPickIdx(EntryHost, Staging.InternalIndex, SecondaryIndex);
 	 *   HashWriter->SetValue(Index, Hash);
@@ -179,13 +180,11 @@ namespace PCGExCollections
 	 */
 	class PCGEXCOLLECTIONS_API FPickPacker : public TSharedFromThis<FPickPacker>
 	{
-		TArray<const UPCGExAssetCollection*> AssetCollections;
 		TMap<const UPCGExAssetCollection*, uint32> CollectionMap;
 		mutable FRWLock AssetCollectionsLock;
 
-		uint16 BaseHash = 0;
-
 	public:
+		FPickPacker() = default;
 		explicit FPickPacker(FPCGContext* InContext);
 
 		/**
