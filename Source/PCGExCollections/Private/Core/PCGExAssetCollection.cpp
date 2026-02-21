@@ -56,6 +56,24 @@ bool FPCGExAssetStagingData::FindSocket(FName InName, const FString& Tag, const 
 
 namespace PCGExAssetCollection
 {
+	// Shared helper: sorts Order by Weights ascending, converts Weights to cumulative sums.
+	// Used by both FMicroCache::BuildFromWeights() and FCategory::Compile().
+	static double CompileWeightedOrder(TArray<int32>& Weights, TArray<int32>& Order)
+	{
+		PCGExArrayHelpers::ArrayOfIndices(Order, Weights.Num());
+
+		Order.Sort([&Weights](int32 A, int32 B) { return Weights[A] < Weights[B]; });
+		Weights.Sort([](int32 A, int32 B) { return A < B; });
+
+		double WeightSum = 0;
+		for (int32 i = 0; i < Weights.Num(); i++)
+		{
+			WeightSum += Weights[i];
+			Weights[i] = static_cast<int32>(WeightSum);
+		}
+		return WeightSum;
+	}
+
 #pragma region FMicroCache
 
 	int32 FMicroCache::GetPick(int32 Index, EPCGExIndexPickMode PickMode) const
@@ -112,9 +130,6 @@ namespace PCGExAssetCollection
 		return Order[FMath::Min(Pick, Order.Num() - 1)];
 	}
 
-	// Builds cumulative weight array for weighted random picking.
-	// Weights are sorted ascending, then converted to cumulative sums.
-	// GetPickRandomWeighted scans for the first cumulative weight > threshold.
 	void FMicroCache::BuildFromWeights(TConstArrayView<int32> InWeights)
 	{
 		const int32 NumEntries = InWeights.Num();
@@ -124,18 +139,8 @@ namespace PCGExAssetCollection
 		{
 			Weights[i] = InWeights[i] + 1; // +1 to ensure non-zero (Weight=0 entries are already excluded by Validate)
 		}
-		
-		PCGExArrayHelpers::ArrayOfIndices(Order, NumEntries);
 
-		Order.Sort([this](int32 A, int32 B) { return Weights[A] < Weights[B]; });
-		Weights.Sort([](int32 A, int32 B) { return A < B; });
-
-		WeightSum = 0;
-		for (int32 i = 0; i < NumEntries; i++)
-		{
-			WeightSum += Weights[i];
-			Weights[i] = static_cast<int32>(WeightSum);
-		}
+		WeightSum = CompileWeightedOrder(Weights, Order);
 	}
 
 #pragma endregion
@@ -214,19 +219,7 @@ namespace PCGExAssetCollection
 	void FCategory::Compile()
 	{
 		Shrink();
-
-		const int32 NumEntries = Indices.Num();
-		PCGExArrayHelpers::ArrayOfIndices(Order, NumEntries);
-
-		Order.Sort([this](int32 A, int32 B) { return Weights[A] < Weights[B]; });
-		Weights.Sort([](int32 A, int32 B) { return A < B; });
-
-		WeightSum = 0;
-		for (int32 i = 0; i < NumEntries; i++)
-		{
-			WeightSum += Weights[i];
-			Weights[i] = static_cast<int32>(WeightSum);
-		}
+		WeightSum = CompileWeightedOrder(Weights, Order);
 	}
 
 #pragma endregion

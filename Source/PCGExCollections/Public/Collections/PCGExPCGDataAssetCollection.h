@@ -120,16 +120,6 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 		return static_cast<PCGExPCGDataAssetCollection::FMicroCache*>(MicroCache.Get());
 	}
 
-#pragma region DEPRECATED
-	UPROPERTY()
-	int32 PointWeightsCumulativeWeight_DEPRECATED = -1;
-
-	UPROPERTY()
-	TArray<int32> PointWeightsOrder_DEPRECATED;
-
-	UPROPERTY()
-	TArray<int32> ProcessedPointWeights_DEPRECATED;
-#pragma endregion
 };
 
 /** Concrete collection for UPCGDataAsset references with optional level-sourced entries. */
