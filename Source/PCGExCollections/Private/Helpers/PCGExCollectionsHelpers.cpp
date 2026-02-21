@@ -224,42 +224,40 @@ namespace PCGExCollections
 	// Encodes collection identity + entry index + secondary index into a single uint64.
 	// IMPORTANT: InIndex is a RAW Entries array index, not a cache-adjusted index.
 	// The unpacker resolves via GetEntryRaw() to bypass cache indirection.
-	// BaseHash incorporates the node's UID to avoid collisions across different staging nodes.
-	// The collection is assigned a unique uint32 ID on first encounter (thread-safe double-check).
+	// CollectionGUID is a persistent uint32 on each UPCGExAssetCollection, deterministic
+	// across sessions and nodes. This enables merging collection maps from multiple sources.
 	// SecondaryIndex is stored +1 so that 0 can represent "no secondary" (unpacker subtracts 1).
 
 	FPickPacker::FPickPacker(FPCGContext* InContext)
 	{
-		BaseHash = static_cast<uint16>(InContext->GetInputSettings<UPCGSettings>()->UID);
+		// Kept for API backward compatibility. GUID-based scheme no longer needs context.
 	}
 
 	uint64 FPickPacker::GetPickIdx(const UPCGExAssetCollection* InCollection, int16 InIndex, int16 InSecondaryIndex)
 	{
 		const uint32 ItemHash = PCGEx::H32(InIndex, InSecondaryIndex + 1);
+		const uint32 GUID = InCollection->GetCollectionGUID();
 
 		{
 			FReadScopeLock ReadScopeLock(AssetCollectionsLock);
-			if (const uint32* ColIdxPtr = CollectionMap.Find(InCollection))
+			if (CollectionMap.Contains(InCollection))
 			{
-				return PCGEx::H64(*ColIdxPtr, ItemHash);
+				return PCGEx::H64(GUID, ItemHash);
 			}
 		}
 
 		{
 			FWriteScopeLock WriteScopeLock(AssetCollectionsLock);
-			if (const uint32* ColIdxPtr = CollectionMap.Find(InCollection))
+			if (!CollectionMap.Contains(InCollection))
 			{
-				return PCGEx::H64(*ColIdxPtr, ItemHash);
+				CollectionMap.Add(InCollection, GUID);
 			}
-
-			uint32 ColIndex = PCGEx::H32(BaseHash, AssetCollections.Add(InCollection));
-			CollectionMap.Add(InCollection, ColIndex);
-			return PCGEx::H64(ColIndex, ItemHash);
+			return PCGEx::H64(GUID, ItemHash);
 		}
 	}
 
-	// Writes the collection→ID mapping as rows in an attribute set.
-	// Each row has a CollectionIdx (the uint32 ID used in hashes) and a CollectionPath
+	// Writes the collection→GUID mapping as rows in an attribute set.
+	// Each row has a CollectionIdx (the collection's GUID used in hashes) and a CollectionPath
 	// (the soft path needed to reload the collection on the consumption side).
 	void FPickPacker::PackToDataset(const UPCGParamData* InAttributeSet)
 	{

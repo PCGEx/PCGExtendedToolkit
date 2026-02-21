@@ -387,6 +387,11 @@ TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties(
 	// Default fallback pin for unmatched data
 	PCGEX_PIN_ANY(PCGExPCGDataAssetLoader::OutputPinDefault, "Default output for data that doesn't match custom pins. Tagged with Pin:OriginalPinName.", Normal)
 
+	if (bMergeEmbeddedCollectionMaps)
+	{
+		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets.", Normal)
+	}
+
 	return PinProperties;
 }
 
@@ -477,6 +482,16 @@ bool FPCGExPCGDataAssetLoaderElement::AdvanceWork(FPCGExContext* InContext, cons
 			}
 			PinIndex++;
 		}
+	}
+
+	// Map pin (when bMergeEmbeddedCollectionMaps is enabled)
+	if (Settings->bMergeEmbeddedCollectionMaps)
+	{
+		if (!Context->MergedMapPacker)
+		{
+			Context->OutputData.InactiveOutputPinBitmask |= (1ULL << PinIndex);
+		}
+		PinIndex++;
 	}
 
 	return Context->TryComplete();
@@ -719,6 +734,9 @@ namespace PCGExPCGDataAssetLoader
 			// Process each data item in the asset
 			for (const FPCGTaggedData& TaggedData : DataAsset->Data.GetAllInputs())
 			{
+				// Strip embedded CollectionMap entries (consumed by merge in FBatch::OnLoadAssetsComplete)
+				if (Settings->bMergeEmbeddedCollectionMaps && TaggedData.Pin == FName(TEXT("CollectionMap"))) { continue; }
+
 				// Apply tag filtering
 				if (!PassesTagFilter(TaggedData)) { continue; }
 
@@ -771,6 +789,60 @@ namespace PCGExPCGDataAssetLoader
 	{
 		if (bSuccess)
 		{
+			PCGEX_TYPED_CONTEXT_AND_SETTINGS(PCGDataAssetLoader)
+
+			// Merge embedded collection maps if enabled
+			if (Settings->bMergeEmbeddedCollectionMaps)
+			{
+				Context->MergedMapPacker = MakeShared<PCGExCollections::FPickPacker>();
+				PCGExCollections::FPickUnpacker TempUnpacker;
+
+				// Scan all loaded data assets for embedded CollectionMap entries
+				for (const auto& Pair : Context->SharedAssetPool->GetEntryMap())
+				{
+					UPCGDataAsset* Asset = Context->SharedAssetPool->GetAsset(Pair.Key);
+					if (!Asset) { continue; }
+
+					for (const FPCGTaggedData& TD : Asset->Data.TaggedData)
+					{
+						if (TD.Pin != FName(TEXT("CollectionMap"))) { continue; }
+
+						const UPCGParamData* ParamData = Cast<UPCGParamData>(TD.Data);
+						if (!ParamData) { continue; }
+
+						// Unpack into temporary unpacker (accumulates all GUID→Path pairs)
+						TempUnpacker.UnpackDataset(Context, ParamData);
+					}
+				}
+
+				// Re-pack merged map: iterate unpacker's collection map and register each
+				// collection through the packer to produce a merged output
+				if (TempUnpacker.HasValidMapping())
+				{
+					// Create merged param data
+					UPCGParamData* MergedMapData = Context->ManagedObjects->New<UPCGParamData>();
+
+					// The unpacker's CollectionMap has (GUID → Collection*) pairs.
+					// We need to produce the same format that PackToDataset writes.
+					// Since GUIDs are deterministic and globally unique, the union is trivial:
+					// just feed each collection through the packer once.
+					for (const auto& MapPair : TempUnpacker.GetCollections())
+					{
+						// Register each collection so packer knows about it
+						// GetPickIdx with dummy indices just to register the collection
+						Context->MergedMapPacker->GetPickIdx(MapPair.Value, 0, -1);
+					}
+
+					Context->MergedMapPacker->PackToDataset(MergedMapData);
+
+					// Output on Map pin
+					FPCGTaggedData MapOutput;
+					MapOutput.Data = MergedMapData;
+					MapOutput.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
+					Context->OutputData.TaggedData.Add(MapOutput);
+				}
+			}
+
 			// Assets loaded, now complete work on all processors
 			TBatch<FProcessor>::CompleteWork();
 		}

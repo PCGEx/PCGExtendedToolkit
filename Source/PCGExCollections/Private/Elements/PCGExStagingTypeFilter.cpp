@@ -300,13 +300,9 @@ namespace PCGExStagedTypeFilter
 			PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 		}
 
-		// Get hash attribute
+		// Get hash attribute — silently skip data without staging hashes
 		EntryHashGetter = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
-		if (!EntryHashGetter)
-		{
-			PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Missing staging hash attribute. Make sure points were staged with Collection Map output."));
-			return false;
-		}
+		if (!EntryHashGetter) { return false; }
 
 		if (Settings->FilterMode != EPCGExStagedTypeFilterMode::PinPerType)
 		{
