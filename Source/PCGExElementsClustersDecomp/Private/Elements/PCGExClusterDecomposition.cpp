@@ -1,18 +1,32 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
-#include "Elements/Decomposition/PCGExClusterDecomposition.h"
-
+#include "Elements/PCGExClusterDecomposition.h"
 
 #include "Data/PCGExData.h"
 #include "Clusters/PCGExCluster.h"
-#include "Clusters/PCGExClustersHelpers.h"
 #include "Data/PCGExPointIO.h"
-#include "Elements/Decomposition/PCGExSimpleConvexDecomposer.h"
-#include "Math/PCGExBestFitPlane.h"
 
 #define LOCTEXT_NAMESPACE "ClusterDecomposition"
 #define PCGEX_NAMESPACE ClusterDecomposition
+
+bool UPCGExClusterDecompositionSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
+{
+	if (InPin->Properties.Label == PCGExHeuristics::Labels::SourceHeuristicsLabel) { return Decomposition && Decomposition->WantsHeuristics(); }
+	return Super::IsPinUsedByNodeExecution(InPin);
+}
+
+TArray<FPCGPinProperties> UPCGExClusterDecompositionSettings::InputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+
+	if (Decomposition && Decomposition->WantsHeuristics()) { PCGEX_PIN_FACTORIES(PCGExHeuristics::Labels::SourceHeuristicsLabel, "Heuristics may be required by some decompositions.", Required, FPCGExDataTypeInfoHeuristics::AsId()) }
+	else { PCGEX_PIN_FACTORIES(PCGExHeuristics::Labels::SourceHeuristicsLabel, "Heuristics may be required by some decompositions.", Advanced, FPCGExDataTypeInfoHeuristics::AsId()) }
+
+	PCGEX_PIN_OPERATION_OVERRIDES(PCGExClusterDecomposition::SourceOverridesDecomposition)
+
+	return PinProperties;
+}
 
 PCGExData::EIOInit UPCGExClusterDecompositionSettings::GetMainOutputInitMode() const { return PCGExData::EIOInit::Duplicate; }
 PCGExData::EIOInit UPCGExClusterDecompositionSettings::GetEdgeOutputInitMode() const { return PCGExData::EIOInit::Forward; }
@@ -25,6 +39,20 @@ bool FPCGExClusterDecompositionElement::Boot(FPCGExContext* InContext) const
 	if (!FPCGExClustersProcessorElement::Boot(InContext)) { return false; }
 
 	PCGEX_CONTEXT_AND_SETTINGS(ClusterDecomposition)
+
+	if (!Settings->Decomposition)
+	{
+		PCGE_LOG(Error, GraphAndLog, FTEXT("No decomposition selected."));
+		return false;
+	}
+
+	PCGEX_BIND_INSTANCED_FACTORY(Decomposition, UPCGExDecompositionInstancedFactory, PCGExClusterDecomposition::SourceOverridesDecomposition)
+
+	if (Context->Decomposition->WantsHeuristics() && !Context->bHasValidHeuristics)
+	{
+		PCGE_LOG(Error, GraphAndLog, FTEXT("The selected decomposition requires heuristics to be connected, but none can be found."));
+		return false;
+	}
 
 	return true;
 }
@@ -40,6 +68,7 @@ bool FPCGExClusterDecompositionElement::AdvanceWork(FPCGExContext* InContext, co
 		if (!Context->StartProcessingClusters([](const TSharedPtr<PCGExData::FPointIOTaggedEntries>& Entries) { return true; }, [&](const TSharedPtr<PCGExClusterMT::IBatch>& NewBatch)
 		{
 			NewBatch->bRequiresWriteStep = true;
+			if (Context->Decomposition->WantsHeuristics()) { NewBatch->SetWantsHeuristics(true, Settings->HeuristicScoreMode); }
 		}))
 		{
 			return Context->CancelExecution(TEXT("Could not build any clusters."));
@@ -55,23 +84,33 @@ bool FPCGExClusterDecompositionElement::AdvanceWork(FPCGExContext* InContext, co
 
 namespace PCGExClusterDecomposition
 {
+#pragma region FProcessor
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExClusterDecomposition::Process);
 
 		if (!IProcessor::Process(InTaskManager)) { return false; }
 
-		// Run decomposition
-		PCGExClusters::FSimpleConvexDecomposer Decomposer;
-		PCGExClusters::FConvexDecomposition Result;
+		Operation = Context->Decomposition->CreateOperation();
+		if (!Operation) { return false; }
 
-		if (Decomposer.Decompose(Cluster.Get(), Result, Settings->DecompositionSettings))
+		Operation->PrimaryDataFacade = VtxDataFacade;
+		Operation->SecondaryDataFacade = EdgeDataFacade;
+
+		Operation->PrepareForCluster(Cluster, HeuristicsHandler);
+
+		FPCGExDecompositionResult Result;
+		Result.Init(Cluster->Nodes->Num());
+
+		if (Operation->Decompose(Result))
 		{
 			const int32 Offset = EdgeDataFacade->Source->IOIndex * 1000000;
-			for (int32 i = 0; i < Result.Cells.Num(); i++)
+			for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
 			{
-				const PCGExClusters::FConvexCell3D& Cell = Result.Cells[i];
-				for (const int32 NodeIndex : Cell.NodeIndices) { CellIDBuffer->SetValue(Cluster->GetNodePointIndex(NodeIndex), Offset + i); }
+				const int32 CellID = Result.NodeCellIDs[NodeIndex];
+				if (CellID < 0) { continue; }
+				CellIDBuffer->SetValue(Cluster->GetNodePointIndex(NodeIndex), Offset + CellID);
 			}
 		}
 
@@ -85,17 +124,25 @@ namespace PCGExClusterDecomposition
 	void FProcessor::Cleanup()
 	{
 		TProcessor<FPCGExClusterDecompositionContext, UPCGExClusterDecompositionSettings>::Cleanup();
+		Operation.Reset();
 	}
 
-	//////// BATCH
+#pragma endregion
+
+#pragma region FBatch
 
 	FBatch::FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges)
 		: TBatch(InContext, InVtx, InEdges)
 	{
 	}
 
-	FBatch::~FBatch()
+	void FBatch::RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader)
 	{
+		PCGEX_TYPED_CONTEXT_AND_SETTINGS(ClusterDecomposition)
+
+		TBatch<FProcessor>::RegisterBuffersDependencies(FacadePreloader);
+
+		Context->Decomposition->RegisterBuffersDependencies(ExecutionContext, FacadePreloader);
 	}
 
 	void FBatch::OnProcessingPreparationComplete()
@@ -104,6 +151,7 @@ namespace PCGExClusterDecomposition
 
 		CellIDBuffer = VtxDataFacade->GetWritable<int32>(Settings->CellIDAttributeName, -1, true, PCGExData::EBufferInit::New);
 
+		Context->Decomposition->PrepareVtxFacade(VtxDataFacade);
 		TBatch<FProcessor>::OnProcessingPreparationComplete();
 	}
 
@@ -122,6 +170,8 @@ namespace PCGExClusterDecomposition
 		VtxDataFacade->WriteFastest(TaskManager);
 		TBatch<FProcessor>::Write();
 	}
+
+#pragma endregion
 }
 
 #undef LOCTEXT_NAMESPACE
