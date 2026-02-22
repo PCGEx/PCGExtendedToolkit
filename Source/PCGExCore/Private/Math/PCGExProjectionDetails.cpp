@@ -13,23 +13,28 @@
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Math/PCGExBestFitPlane.h"
 
-FPCGExGeo2DProjectionDetails::FPCGExGeo2DProjectionDetails()
+FPCGExGeo2DProjectionDetails::FPCGExGeo2DProjectionDetails(const bool InSupportLocalTangent)
+	: bSupportLocalTangent(InSupportLocalTangent)
 {
 	WorldUp = PCGEX_CORE_SETTINGS.WorldUp;
 	WorldFwd = PCGEX_CORE_SETTINGS.WorldForward;
-	
+
 	InitInternal(WorldUp);
 	ProjectionVector.Constant = Normal;
 }
 
+#define PCGEX_SANITIZE_PROJECTION_METHOD if (!bSupportLocalTangent && Method == EPCGExProjectionMethod::LocalTangent) { Method = EPCGExProjectionMethod::BestFit; }
+
 bool FPCGExGeo2DProjectionDetails::Init(const TSharedPtr<PCGExData::FFacade>& PointDataFacade)
 {
-	if (Method == EPCGExProjectionMethod::BestFit)
+	PCGEX_SANITIZE_PROJECTION_METHOD
+
+	if (Method != EPCGExProjectionMethod::Normal)
 	{
 		Init(PCGExMath::FBestFitPlane(PointDataFacade->GetIn()->GetConstTransformValueRange()));
 		return true;
 	}
-	
+
 	FPCGExContext* Context = PointDataFacade->GetContext();
 	if (!Context) { return false; }
 
@@ -49,12 +54,14 @@ bool FPCGExGeo2DProjectionDetails::Init(const TSharedPtr<PCGExData::FFacade>& Po
 
 bool FPCGExGeo2DProjectionDetails::Init(const TSharedPtr<PCGExData::FPointIO>& PointIO)
 {
-	if (Method == EPCGExProjectionMethod::BestFit)
+	PCGEX_SANITIZE_PROJECTION_METHOD
+	
+	if (Method != EPCGExProjectionMethod::Normal)
 	{
 		Init(PCGExMath::FBestFitPlane(PointIO->GetIn()->GetConstTransformValueRange()));
 		return true;
 	}
-	
+
 	FPCGExContext* Context = PointIO->GetContext();
 	if (!Context) { return false; }
 
@@ -73,6 +80,8 @@ bool FPCGExGeo2DProjectionDetails::Init(const TSharedPtr<PCGExData::FPointIO>& P
 
 bool FPCGExGeo2DProjectionDetails::Init(const UPCGData* InData)
 {
+	PCGEX_SANITIZE_PROJECTION_METHOD
+	
 	if (ProjectionVector.Input == EPCGExInputValueType::Attribute && !PCGExMetaHelpers::IsDataDomainAttribute(ProjectionVector.Attribute))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
@@ -99,7 +108,13 @@ void FPCGExGeo2DProjectionDetails::InitInternal(const FVector& InNormal)
 	// the result's X,Y are the 2D coordinates on the projection plane, Z is the depth.
 	// The inverse quaternion is used for unprojection (2D → 3D).
 	Normal = InNormal.GetSafeNormal(1E-08, WorldUp);
-	ProjectionQuat = FRotationMatrix::MakeFromZX(Normal, WorldFwd).ToQuat();
+
+	// Adaptive X hint: when Normal ≈ WorldFwd, MakeFromZX degenerates.
+	// Fall back to WorldUp which is guaranteed perpendicular in that case.
+	const FVector XHint = FMath::Abs(FVector::DotProduct(Normal, WorldFwd)) < 0.95
+		                      ? WorldFwd
+		                      : WorldUp;
+	ProjectionQuat = FRotationMatrix::MakeFromZX(Normal, XHint).ToQuat();
 	ProjectionQuatInv = ProjectionQuat.Inverse();
 }
 
