@@ -38,21 +38,7 @@ bool FPCGExDecompMaxBoxes::Decompose(FPCGExDecompositionResult& OutResult)
 	int32 NextCellID = 0;
 	TArray<int32> CellVoxelCounts; // Track occupied voxel count per CellID
 
-	// Phase 1: Extract full slabs (contiguous slices with 100% occupancy) when Balance > 0
-	if (Balance > KINDA_SMALL_NUMBER)
-	{
-		while (RemainingCount > 0)
-		{
-			FIntVector SlabMin, SlabMax;
-			int32 SlabVolume = 0;
-
-			if (!FindLargestFullSlab(Grid, Available, SlabMin, SlabMax, SlabVolume) || SlabVolume == 0) { break; }
-
-			SubdivideAndClaim(Grid, SlabMin, SlabMax, MaxExtent, Available, VoxelCellIDs, NextCellID, RemainingCount, CellVoxelCounts);
-		}
-	}
-
-	// Phase 2: Extract remaining voxels using largest-box (pure volume)
+	// Iteratively extract the best box (compactness-scored when Balance > 0, pure volume otherwise)
 	while (RemainingCount > 0)
 	{
 		FIntVector BoxMin, BoxMax;
@@ -116,6 +102,8 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 	const int32 GZ = Grid.GridDimensions.Z;
 
 	OutVolume = 0;
+	double BestScore = -1.0;
+	const bool bUseBalance = Balance > KINDA_SMALL_NUMBER;
 
 	// ColAvail[x + y * GX] = true iff ALL z-layers from Z1 to current Z2 at (x,y) are available
 	TArray<bool> ColAvail;
@@ -179,8 +167,26 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 						const int32 Width = X - StackIdx;
 						const int32 Volume = Width * StackHeight * ZDepth;
 
-						if (Volume > OutVolume)
+						// Score: pure volume when Balance=0, cube-like preference when Balance>0
+						double Score;
+						if (bUseBalance)
 						{
+							// Compactness = second-largest / largest dimension (1.0 = perfect cube/square)
+							int32 d1 = Width, d2 = StackHeight, d3 = ZDepth;
+							if (d1 < d2) { Swap(d1, d2); }
+							if (d1 < d3) { Swap(d1, d3); }
+							if (d2 < d3) { Swap(d2, d3); }
+							const double Compactness = static_cast<double>(d2) / d1;
+							Score = Volume * FMath::Pow(Compactness, Balance * 2.0);
+						}
+						else
+						{
+							Score = static_cast<double>(Volume);
+						}
+
+						if (Score > BestScore)
+						{
+							BestScore = Score;
 							OutVolume = Volume;
 							OutMin = FIntVector(StackIdx, Y - StackHeight + 1, Z1);
 							OutMax = FIntVector(X - 1, Y, Z2);
@@ -190,102 +196,6 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 					}
 
 					Stack.Add(TPair<int32, int32>(Start, H));
-				}
-			}
-		}
-	}
-
-	return OutVolume > 0;
-}
-
-bool FPCGExDecompMaxBoxes::FindLargestFullSlab(
-	const FPCGExDecompOccupancyGrid& Grid,
-	const TBitArray<>& Available,
-	FIntVector& OutMin,
-	FIntVector& OutMax,
-	int32& OutVolume) const
-{
-	const int32 GX = Grid.GridDimensions.X;
-	const int32 GY = Grid.GridDimensions.Y;
-	const int32 GZ = Grid.GridDimensions.Z;
-
-	OutVolume = 0;
-
-	const int32 AxisSizes[3] = {GX, GY, GZ};
-	const int32 CrossAreas[3] = {GY * GZ, GX * GZ, GX * GY};
-
-	for (int32 Axis = 0; Axis < 3; Axis++)
-	{
-		const int32 SliceCount = AxisSizes[Axis];
-		const int32 CrossArea = CrossAreas[Axis];
-
-		if (CrossArea == 0) { continue; }
-
-		const int32 PerpA = (Axis == 0) ? GY : GX;
-		const int32 PerpB = (Axis <= 1) ? GZ : GY;
-
-		int32 RunStart = -1;
-
-		for (int32 S = 0; S <= SliceCount; S++)
-		{
-			bool bSliceFull = (S < SliceCount);
-
-			if (bSliceFull)
-			{
-				// A slice is "full" if every voxel in the perpendicular cross-section is Available
-				for (int32 A = 0; A < PerpA && bSliceFull; A++)
-				{
-					for (int32 B = 0; B < PerpB && bSliceFull; B++)
-					{
-						int32 X, Y, Z;
-						switch (Axis)
-						{
-						case 0: X = S; Y = A; Z = B; break;
-						case 1: X = A; Y = S; Z = B; break;
-						default: X = A; Y = B; Z = S; break;
-						}
-
-						if (!Available[Grid.FlatIndex(X, Y, Z)])
-						{
-							bSliceFull = false;
-						}
-					}
-				}
-			}
-
-			if (bSliceFull)
-			{
-				if (RunStart < 0) { RunStart = S; }
-			}
-			else
-			{
-				if (RunStart >= 0)
-				{
-					const int32 RunLength = S - RunStart;
-					const int32 Volume = RunLength * CrossArea;
-
-					if (Volume > OutVolume)
-					{
-						OutVolume = Volume;
-
-						switch (Axis)
-						{
-						case 0:
-							OutMin = FIntVector(RunStart, 0, 0);
-							OutMax = FIntVector(S - 1, GY - 1, GZ - 1);
-							break;
-						case 1:
-							OutMin = FIntVector(0, RunStart, 0);
-							OutMax = FIntVector(GX - 1, S - 1, GZ - 1);
-							break;
-						case 2:
-							OutMin = FIntVector(0, 0, RunStart);
-							OutMax = FIntVector(GX - 1, GY - 1, S - 1);
-							break;
-						}
-					}
-
-					RunStart = -1;
 				}
 			}
 		}

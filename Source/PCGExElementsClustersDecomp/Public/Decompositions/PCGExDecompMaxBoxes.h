@@ -40,17 +40,6 @@ protected:
 		FIntVector& OutMax,
 		int32& OutVolume) const;
 
-	/**
-	 * Find the largest "full slab" — a contiguous run of slices along one axis where
-	 * EVERY voxel in each slice is available. Tries all 3 axes, returns the biggest.
-	 */
-	bool FindLargestFullSlab(
-		const FPCGExDecompOccupancyGrid& Grid,
-		const TBitArray<>& Available,
-		FIntVector& OutMin,
-		FIntVector& OutMax,
-		int32& OutVolume) const;
-
 	/** Subdivide a box into chunks that fit within MaxExtent, claim and assign CellIDs. */
 	void SubdivideAndClaim(
 		const FPCGExDecompOccupancyGrid& Grid,
@@ -97,9 +86,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 MinVoxelsPerCell = 1;
 
-	/** When enabled (> 0), full-slab extraction runs first: contiguous slices where every voxel
-	 *  is occupied are extracted as cells before falling back to largest-box.
-	 *  This respects holes as natural cell boundaries. 0 = disabled (pure volume only). */
+	/** Penalizes elongated strips in favor of compact, cube-like boxes.
+	 *  0 = pure volume (largest box first, may produce thin strips).
+	 *  Higher values strongly prefer square-like shapes over thin rectangles. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
 	double Balance = 1.0;
 
