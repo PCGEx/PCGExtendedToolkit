@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExClusterDecomposition.h"
 
+#include "PCGParamData.h"
 #include "Data/PCGExData.h"
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExPointIO.h"

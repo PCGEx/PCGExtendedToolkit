@@ -66,48 +66,55 @@ bool FPCGExDecompGridPartition::Decompose(FPCGExDecompositionResult& OutResult)
 	// Merge underpopulated cells into nearest neighbor
 	if (MinNodesPerCell > 1)
 	{
-		TArray<int32> SmallCells;
-		for (const auto& Pair : CellNodes)
+		bool bMergedAny = true;
+		while (bMergedAny)
 		{
-			if (Pair.Value.Num() < MinNodesPerCell) { SmallCells.Add(Pair.Key); }
-		}
+			bMergedAny = false;
 
-		for (const int32 SmallCellID : SmallCells)
-		{
-			const TArray<int32>& Nodes = CellNodes[SmallCellID];
-			if (Nodes.Num() == 0) { continue; }
-
-			// Find centroid of small cell
-			FVector SmallCentroid = FVector::ZeroVector;
-			for (const int32 NodeIdx : Nodes) { SmallCentroid += Cluster->GetPos(NodeIdx); }
-			SmallCentroid /= Nodes.Num();
-
-			// Find nearest non-small cell
-			int32 BestTargetID = -1;
-			double BestDistSq = MAX_dbl;
-
+			TArray<int32> SmallCells;
 			for (const auto& Pair : CellNodes)
 			{
-				if (Pair.Key == SmallCellID) { continue; }
-				if (Pair.Value.Num() < MinNodesPerCell) { continue; } // Skip other small cells
-
-				FVector TargetCentroid = FVector::ZeroVector;
-				for (const int32 NodeIdx : Pair.Value) { TargetCentroid += Cluster->GetPos(NodeIdx); }
-				TargetCentroid /= Pair.Value.Num();
-
-				const double DistSq = FVector::DistSquared(SmallCentroid, TargetCentroid);
-				if (DistSq < BestDistSq)
-				{
-					BestDistSq = DistSq;
-					BestTargetID = Pair.Key;
-				}
+				if (Pair.Value.Num() < MinNodesPerCell) { SmallCells.Add(Pair.Key); }
 			}
 
-			if (BestTargetID >= 0)
+			if (SmallCells.Num() == 0 || SmallCells.Num() == CellNodes.Num()) { break; } // All small or none small — stop
+
+			for (const int32 SmallCellID : SmallCells)
 			{
-				for (const int32 NodeIdx : Nodes) { OutResult.NodeCellIDs[NodeIdx] = BestTargetID; }
-				CellNodes[BestTargetID].Append(Nodes);
-				CellNodes.Remove(SmallCellID);
+				const TArray<int32>* NodesPtr = CellNodes.Find(SmallCellID);
+				if (!NodesPtr || NodesPtr->Num() == 0) { continue; } // Already merged away
+
+				FVector SmallCentroid = FVector::ZeroVector;
+				for (const int32 NodeIdx : *NodesPtr) { SmallCentroid += Cluster->GetPos(NodeIdx); }
+				SmallCentroid /= NodesPtr->Num();
+
+				int32 BestTargetID = -1;
+				double BestDistSq = MAX_dbl;
+
+				for (const auto& Pair : CellNodes)
+				{
+					if (Pair.Key == SmallCellID) { continue; }
+
+					FVector TargetCentroid = FVector::ZeroVector;
+					for (const int32 NodeIdx : Pair.Value) { TargetCentroid += Cluster->GetPos(NodeIdx); }
+					TargetCentroid /= Pair.Value.Num();
+
+					const double DistSq = FVector::DistSquared(SmallCentroid, TargetCentroid);
+					if (DistSq < BestDistSq)
+					{
+						BestDistSq = DistSq;
+						BestTargetID = Pair.Key;
+					}
+				}
+
+				if (BestTargetID >= 0)
+				{
+					const TArray<int32> NodesToMove = *NodesPtr; // Copy before mutation
+					for (const int32 NodeIdx : NodesToMove) { OutResult.NodeCellIDs[NodeIdx] = BestTargetID; }
+					CellNodes[BestTargetID].Append(NodesToMove);
+					CellNodes.Remove(SmallCellID);
+					bMergedAny = true;
+				}
 			}
 		}
 

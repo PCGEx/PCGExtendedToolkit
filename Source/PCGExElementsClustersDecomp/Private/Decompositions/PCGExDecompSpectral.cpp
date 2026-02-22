@@ -75,15 +75,16 @@ bool FPCGExDecompSpectral::ComputeFiedlerVector(
 			const int32* LocalNeighbor = NodeToLocal.Find(Lk.Node);
 			if (!LocalNeighbor) { continue; } // Neighbor not in subset
 
-			// Edge weight from heuristics if available, else 1.0
+			// Edge weight from heuristics if available, else use inverse distance
 			double Weight = 1.0;
 			if (Heuristics)
 			{
-				const PCGExGraphs::FEdge* Edge = Cluster->GetEdge(Lk.Edge);
-				if (Edge && Edge->bValid)
-				{
-					Weight = FMath::Max(Edge->Weight, KINDA_SMALL_NUMBER);
-				}
+				const PCGExClusters::FNode* Neighbor = Cluster->GetNode(Lk.Node);
+				const PCGExGraphs::FEdge& Edge = *Cluster->GetEdge(Lk.Edge);
+				// Average both directions for symmetric weight
+				const double ScoreAB = Heuristics->GetEdgeScore(*Node, *Neighbor, Edge, *Node, *Neighbor);
+				const double ScoreBA = Heuristics->GetEdgeScore(*Neighbor, *Node, Edge, *Neighbor, *Node);
+				Weight = FMath::Max((ScoreAB + ScoreBA) * 0.5, KINDA_SMALL_NUMBER);
 			}
 
 			Adjacency[i].Add(TPair<int32, double>(*LocalNeighbor, Weight));
