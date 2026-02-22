@@ -38,7 +38,21 @@ bool FPCGExDecompMaxBoxes::Decompose(FPCGExDecompositionResult& OutResult)
 	int32 NextCellID = 0;
 	TArray<int32> CellVoxelCounts; // Track occupied voxel count per CellID
 
-	// Iteratively extract the globally largest box, subdivide if too big
+	// Phase 1: Extract full slabs (contiguous slices with 100% occupancy) when Balance > 0
+	if (Balance > KINDA_SMALL_NUMBER)
+	{
+		while (RemainingCount > 0)
+		{
+			FIntVector SlabMin, SlabMax;
+			int32 SlabVolume = 0;
+
+			if (!FindLargestFullSlab(Grid, Available, SlabMin, SlabMax, SlabVolume) || SlabVolume == 0) { break; }
+
+			SubdivideAndClaim(Grid, SlabMin, SlabMax, MaxExtent, Available, VoxelCellIDs, NextCellID, RemainingCount, CellVoxelCounts);
+		}
+	}
+
+	// Phase 2: Extract remaining voxels using largest-box (pure volume)
 	while (RemainingCount > 0)
 	{
 		FIntVector BoxMin, BoxMax;
@@ -102,8 +116,6 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 	const int32 GZ = Grid.GridDimensions.Z;
 
 	OutVolume = 0;
-	double BestScore = -1.0;
-	const bool bUseBalance = Balance > KINDA_SMALL_NUMBER;
 
 	// ColAvail[x + y * GX] = true iff ALL z-layers from Z1 to current Z2 at (x,y) are available
 	TArray<bool> ColAvail;
@@ -112,10 +124,6 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 	// Y-direction histogram: Hist[x] = consecutive Y rows where ColAvail is true
 	TArray<int32> Hist;
 	Hist.SetNum(GX);
-
-	// Per-row available count for coverage scoring
-	TArray<int32> AvailPerRow;
-	if (bUseBalance) { AvailPerRow.SetNum(GY); }
 
 	// Stack for the largest-rectangle-in-histogram algorithm
 	TArray<TPair<int32, int32>> Stack; // (start_index, height)
@@ -139,17 +147,6 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 					{
 						ColAvail[Idx2D] = Available[Grid.FlatIndex(X, Y, Z2)];
 					}
-				}
-			}
-
-			// Compute per-row available counts for coverage scoring
-			if (bUseBalance)
-			{
-				for (int32 Y = 0; Y < GY; Y++)
-				{
-					int32 Count = 0;
-					for (int32 X = 0; X < GX; X++) { if (ColAvail[X + Y * GX]) { Count++; } }
-					AvailPerRow[Y] = Count;
 				}
 			}
 
@@ -182,27 +179,8 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 						const int32 Width = X - StackIdx;
 						const int32 Volume = Width * StackHeight * ZDepth;
 
-						// Score: Volume weighted by row coverage when Balance > 0
-						double Score = static_cast<double>(Volume);
-						if (bUseBalance && Volume > 0)
+						if (Volume > OutVolume)
 						{
-							const int32 YStart = Y - StackHeight + 1;
-							int32 MaxRowWidth = 0;
-							for (int32 RY = YStart; RY <= Y; RY++)
-							{
-								MaxRowWidth = FMath::Max(MaxRowWidth, AvailPerRow[RY]);
-							}
-
-							if (MaxRowWidth > 0)
-							{
-								const double Coverage = static_cast<double>(Width) / MaxRowWidth;
-								Score *= FMath::Pow(Coverage, Balance);
-							}
-						}
-
-						if (Score > BestScore)
-						{
-							BestScore = Score;
 							OutVolume = Volume;
 							OutMin = FIntVector(StackIdx, Y - StackHeight + 1, Z1);
 							OutMax = FIntVector(X - 1, Y, Z2);
@@ -212,6 +190,102 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 					}
 
 					Stack.Add(TPair<int32, int32>(Start, H));
+				}
+			}
+		}
+	}
+
+	return OutVolume > 0;
+}
+
+bool FPCGExDecompMaxBoxes::FindLargestFullSlab(
+	const FPCGExDecompOccupancyGrid& Grid,
+	const TBitArray<>& Available,
+	FIntVector& OutMin,
+	FIntVector& OutMax,
+	int32& OutVolume) const
+{
+	const int32 GX = Grid.GridDimensions.X;
+	const int32 GY = Grid.GridDimensions.Y;
+	const int32 GZ = Grid.GridDimensions.Z;
+
+	OutVolume = 0;
+
+	const int32 AxisSizes[3] = {GX, GY, GZ};
+	const int32 CrossAreas[3] = {GY * GZ, GX * GZ, GX * GY};
+
+	for (int32 Axis = 0; Axis < 3; Axis++)
+	{
+		const int32 SliceCount = AxisSizes[Axis];
+		const int32 CrossArea = CrossAreas[Axis];
+
+		if (CrossArea == 0) { continue; }
+
+		const int32 PerpA = (Axis == 0) ? GY : GX;
+		const int32 PerpB = (Axis <= 1) ? GZ : GY;
+
+		int32 RunStart = -1;
+
+		for (int32 S = 0; S <= SliceCount; S++)
+		{
+			bool bSliceFull = (S < SliceCount);
+
+			if (bSliceFull)
+			{
+				// A slice is "full" if every voxel in the perpendicular cross-section is Available
+				for (int32 A = 0; A < PerpA && bSliceFull; A++)
+				{
+					for (int32 B = 0; B < PerpB && bSliceFull; B++)
+					{
+						int32 X, Y, Z;
+						switch (Axis)
+						{
+						case 0: X = S; Y = A; Z = B; break;
+						case 1: X = A; Y = S; Z = B; break;
+						default: X = A; Y = B; Z = S; break;
+						}
+
+						if (!Available[Grid.FlatIndex(X, Y, Z)])
+						{
+							bSliceFull = false;
+						}
+					}
+				}
+			}
+
+			if (bSliceFull)
+			{
+				if (RunStart < 0) { RunStart = S; }
+			}
+			else
+			{
+				if (RunStart >= 0)
+				{
+					const int32 RunLength = S - RunStart;
+					const int32 Volume = RunLength * CrossArea;
+
+					if (Volume > OutVolume)
+					{
+						OutVolume = Volume;
+
+						switch (Axis)
+						{
+						case 0:
+							OutMin = FIntVector(RunStart, 0, 0);
+							OutMax = FIntVector(S - 1, GY - 1, GZ - 1);
+							break;
+						case 1:
+							OutMin = FIntVector(0, RunStart, 0);
+							OutMax = FIntVector(GX - 1, S - 1, GZ - 1);
+							break;
+						case 2:
+							OutMin = FIntVector(0, 0, RunStart);
+							OutMax = FIntVector(GX - 1, GY - 1, S - 1);
+							break;
+						}
+					}
+
+					RunStart = -1;
 				}
 			}
 		}

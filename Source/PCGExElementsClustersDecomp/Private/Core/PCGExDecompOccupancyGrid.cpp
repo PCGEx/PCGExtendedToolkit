@@ -18,12 +18,12 @@ FVector FPCGExDecompOccupancyGrid::ResolveVoxelSize(
 			FMath::Max(ManualVoxelSize.Z, KINDA_SMALL_NUMBER));
 	}
 
-	// EdgeInferred: use minimum edge length to preserve grid topology.
-	// Average inflates the voxel size for grids with diagonal edges, collapsing adjacent nodes.
+	// EdgeInferred: compute average edge length
 	if (!InCluster || InCluster->Nodes->Num() < 2) { return FVector(100.0); }
 
 	const int32 NumNodes = InCluster->Nodes->Num();
-	double MinDist = MAX_dbl;
+	double TotalDist = 0;
+	int32 EdgeCount = 0;
 
 	for (int32 i = 0; i < NumNodes; i++)
 	{
@@ -33,14 +33,15 @@ FVector FPCGExDecompOccupancyGrid::ResolveVoxelSize(
 		const FVector NodePos = InCluster->GetPos(i);
 		for (const PCGExGraphs::FLink& Lk : Node->Links)
 		{
-			const double Dist = FVector::Dist(NodePos, InCluster->GetPos(Lk.Node));
-			if (Dist > KINDA_SMALL_NUMBER) { MinDist = FMath::Min(MinDist, Dist); }
+			TotalDist += FVector::Dist(NodePos, InCluster->GetPos(Lk.Node));
+			EdgeCount++;
 		}
 	}
 
-	if (MinDist >= MAX_dbl) { return FVector(100.0); }
+	if (EdgeCount == 0) { return FVector(100.0); }
 
-	return FVector(MinDist);
+	const double AvgEdgeLength = FMath::Max(TotalDist / EdgeCount, KINDA_SMALL_NUMBER);
+	return FVector(AvgEdgeLength);
 }
 
 bool FPCGExDecompOccupancyGrid::Build(
