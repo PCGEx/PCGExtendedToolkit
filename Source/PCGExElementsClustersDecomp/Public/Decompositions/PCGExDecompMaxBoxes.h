@@ -20,15 +20,15 @@ class FPCGExDecompMaxBoxes : public FPCGExDecompositionOperation
 public:
 	EPCGExDecompTransformSpace TransformSpace = EPCGExDecompTransformSpace::Raw;
 	FTransform CustomTransform = FTransform::Identity;
+	EPCGExDecompVoxelSizeMode VoxelSizeMode = EPCGExDecompVoxelSizeMode::EdgeInferred;
+	FVector VoxelSize = FVector(100.0);
 	FVector MaxCellSize = FVector(500.0);
 	int32 MinVoxelsPerCell = 1;
+	double Balance = 1.0;
 
 	virtual bool Decompose(FPCGExDecompositionResult& OutResult) override;
 
 protected:
-	/** Auto-detect voxel size from cluster average edge length. */
-	FVector ComputeVoxelSize() const;
-
 	/**
 	 * Find the largest axis-aligned box where ALL voxels are available.
 	 * Uses the 2D histogram largest-rectangle method extended to 3D via Z-range iteration.
@@ -70,6 +70,14 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="TransformSpace==EPCGExDecompTransformSpace::Custom", EditConditionHides))
 	FTransform CustomTransform = FTransform::Identity;
 
+	/** How to determine the voxel grid resolution. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	EPCGExDecompVoxelSizeMode VoxelSizeMode = EPCGExDecompVoxelSizeMode::EdgeInferred;
+
+	/** Manual voxel size. Only used when VoxelSizeMode = Manual. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="VoxelSizeMode==EPCGExDecompVoxelSizeMode::Manual", EditConditionHides))
+	FVector VoxelSize = FVector(100.0);
+
 	/** Maximum dimensions for output cells in world units. Extracted boxes larger than this are subdivided. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FVector MaxCellSize = FVector(500.0);
@@ -78,12 +86,20 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 MinVoxelsPerCell = 1;
 
+	/** Controls preference for boxes that fill the full occupied width of each row.
+	 *  0 = pure volume (largest box first), higher values prefer wider coverage over raw size. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
+	double Balance = 1.0;
+
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompMaxBoxes, {
 		Operation->TransformSpace = TransformSpace;
 		Operation->CustomTransform = CustomTransform;
+		Operation->VoxelSizeMode = VoxelSizeMode;
+		Operation->VoxelSize = VoxelSize;
 		Operation->MaxCellSize = MaxCellSize;
 		Operation->MinVoxelsPerCell = MinVoxelsPerCell;
+		Operation->Balance = Balance;
 	})
 };

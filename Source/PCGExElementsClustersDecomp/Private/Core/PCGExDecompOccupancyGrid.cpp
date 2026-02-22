@@ -5,6 +5,44 @@
 
 #include "Math/PCGExBestFitPlane.h"
 
+FVector FPCGExDecompOccupancyGrid::ResolveVoxelSize(
+	const TSharedPtr<PCGExClusters::FCluster>& InCluster,
+	const EPCGExDecompVoxelSizeMode Mode,
+	const FVector& ManualVoxelSize)
+{
+	if (Mode == EPCGExDecompVoxelSizeMode::Manual)
+	{
+		return FVector(
+			FMath::Max(ManualVoxelSize.X, KINDA_SMALL_NUMBER),
+			FMath::Max(ManualVoxelSize.Y, KINDA_SMALL_NUMBER),
+			FMath::Max(ManualVoxelSize.Z, KINDA_SMALL_NUMBER));
+	}
+
+	// EdgeInferred: use minimum edge length to preserve grid topology.
+	// Average inflates the voxel size for grids with diagonal edges, collapsing adjacent nodes.
+	if (!InCluster || InCluster->Nodes->Num() < 2) { return FVector(100.0); }
+
+	const int32 NumNodes = InCluster->Nodes->Num();
+	double MinDist = MAX_dbl;
+
+	for (int32 i = 0; i < NumNodes; i++)
+	{
+		const PCGExClusters::FNode* Node = InCluster->GetNode(i);
+		if (!Node->bValid) { continue; }
+
+		const FVector NodePos = InCluster->GetPos(i);
+		for (const PCGExGraphs::FLink& Lk : Node->Links)
+		{
+			const double Dist = FVector::Dist(NodePos, InCluster->GetPos(Lk.Node));
+			if (Dist > KINDA_SMALL_NUMBER) { MinDist = FMath::Min(MinDist, Dist); }
+		}
+	}
+
+	if (MinDist >= MAX_dbl) { return FVector(100.0); }
+
+	return FVector(MinDist);
+}
+
 bool FPCGExDecompOccupancyGrid::Build(
 	const TSharedPtr<PCGExClusters::FCluster>& InCluster,
 	const EPCGExDecompTransformSpace TransformSpace,
@@ -59,12 +97,14 @@ bool FPCGExDecompOccupancyGrid::Build(
 
 	LocalMin = LocalBounds.Min;
 
-	// Compute grid dimensions
+	// Compute grid dimensions.
+	// Use FloorToInt+1 (not CeilToInt) so boundary nodes at exact multiples of CellSize
+	// get their own voxel instead of being clamped into their neighbor's.
 	const FVector BoundsSize = LocalBounds.Max - LocalBounds.Min;
 	GridDimensions = FIntVector(
-		FMath::Max(FMath::CeilToInt(BoundsSize.X / SafeCellSize.X), 1),
-		FMath::Max(FMath::CeilToInt(BoundsSize.Y / SafeCellSize.Y), 1),
-		FMath::Max(FMath::CeilToInt(BoundsSize.Z / SafeCellSize.Z), 1));
+		FMath::Max(FMath::FloorToInt(BoundsSize.X / SafeCellSize.X) + 1, 1),
+		FMath::Max(FMath::FloorToInt(BoundsSize.Y / SafeCellSize.Y) + 1, 1),
+		FMath::Max(FMath::FloorToInt(BoundsSize.Z / SafeCellSize.Z) + 1, 1));
 
 	TotalVoxels = GridDimensions.X * GridDimensions.Y * GridDimensions.Z;
 	if (TotalVoxels <= 0) { return false; }

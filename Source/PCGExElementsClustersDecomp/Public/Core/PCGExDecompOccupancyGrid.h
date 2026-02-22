@@ -12,9 +12,16 @@
 UENUM()
 enum class EPCGExDecompTransformSpace : uint8
 {
-	Raw     = 0 UMETA(DisplayName = "Raw", ToolTip="Use world axes. Assumes the cluster grid is already axis-aligned."),
+	Raw     = 0 UMETA(DisplayName = "World", ToolTip="Use world axes. Assumes the cluster grid is already axis-aligned."),
 	BestFit = 1 UMETA(DisplayName = "Best Fit", ToolTip="Auto-detect principal axes via PCA (FBestFitPlane)."),
 	Custom  = 2 UMETA(DisplayName = "Custom", ToolTip="User-supplied transform defines the grid basis."),
+};
+
+UENUM()
+enum class EPCGExDecompVoxelSizeMode : uint8
+{
+	EdgeInferred = 0 UMETA(DisplayName = "Edge Inferred", ToolTip="Auto-detect voxel size from average cluster edge length."),
+	Manual       = 1 UMETA(DisplayName = "Manual", ToolTip="Use a user-specified voxel size."),
 };
 
 /**
@@ -37,6 +44,16 @@ struct FPCGExDecompOccupancyGrid
 
 	/** Cluster NodeIndex -> flat voxel index (-1 if invalid/outside grid) */
 	TArray<int32> NodeToVoxelIndex;
+
+	/**
+	 * Resolve the voxel size based on the mode.
+	 * EdgeInferred computes average edge length from the cluster.
+	 * Manual returns ManualVoxelSize as-is.
+	 */
+	static FVector ResolveVoxelSize(
+		const TSharedPtr<PCGExClusters::FCluster>& InCluster,
+		EPCGExDecompVoxelSizeMode Mode,
+		const FVector& ManualVoxelSize);
 
 	/**
 	 * Build the occupancy grid from a cluster.

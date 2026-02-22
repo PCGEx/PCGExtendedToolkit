@@ -11,18 +11,18 @@ bool FPCGExDecompMaxBoxes::Decompose(FPCGExDecompositionResult& OutResult)
 
 	const int32 NumNodes = Cluster->Nodes->Num();
 
-	// Auto-detect voxel size from cluster edge lengths
-	const FVector VoxelSize = ComputeVoxelSize();
+	// Resolve voxel size (auto-detect from edges or use manual)
+	const FVector ResolvedVoxelSize = FPCGExDecompOccupancyGrid::ResolveVoxelSize(Cluster, VoxelSizeMode, VoxelSize);
 
-	// Build occupancy grid using auto-detected voxel size
+	// Build occupancy grid
 	FPCGExDecompOccupancyGrid Grid;
-	if (!Grid.Build(Cluster, TransformSpace, VoxelSize, CustomTransform)) { return false; }
+	if (!Grid.Build(Cluster, TransformSpace, ResolvedVoxelSize, CustomTransform)) { return false; }
 
 	// Compute max extent in voxels from MaxCellSize (world units)
 	const FIntVector MaxExtent = FIntVector(
-		MaxCellSize.X > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.X / VoxelSize.X), 1) : MAX_int32,
-		MaxCellSize.Y > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Y / VoxelSize.Y), 1) : MAX_int32,
-		MaxCellSize.Z > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Z / VoxelSize.Z), 1) : MAX_int32);
+		MaxCellSize.X > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.X / ResolvedVoxelSize.X), 1) : MAX_int32,
+		MaxCellSize.Y > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Y / ResolvedVoxelSize.Y), 1) : MAX_int32,
+		MaxCellSize.Z > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Z / ResolvedVoxelSize.Z), 1) : MAX_int32);
 
 	// Available = occupied and not yet claimed
 	TBitArray<> Available = Grid.Occupied;
@@ -90,34 +90,6 @@ bool FPCGExDecompMaxBoxes::Decompose(FPCGExDecompositionResult& OutResult)
 	return OutResult.NumCells > 0;
 }
 
-FVector FPCGExDecompMaxBoxes::ComputeVoxelSize() const
-{
-	if (!Cluster || Cluster->Nodes->Num() < 2) { return FVector(100.0); }
-
-	const int32 NumNodes = Cluster->Nodes->Num();
-	double TotalDist = 0;
-	int32 EdgeCount = 0;
-
-	for (int32 i = 0; i < NumNodes; i++)
-	{
-		const PCGExClusters::FNode* Node = Cluster->GetNode(i);
-		if (!Node->bValid) { continue; }
-
-		const FVector NodePos = Cluster->GetPos(i);
-		for (const PCGExGraphs::FLink& Lk : Node->Links)
-		{
-			TotalDist += FVector::Dist(NodePos, Cluster->GetPos(Lk.Node));
-			EdgeCount++;
-		}
-	}
-
-	if (EdgeCount == 0) { return FVector(100.0); }
-
-	// Each edge is counted twice (once from each endpoint), so average = TotalDist / EdgeCount
-	const double AvgEdgeLength = FMath::Max(TotalDist / EdgeCount, KINDA_SMALL_NUMBER);
-	return FVector(AvgEdgeLength);
-}
-
 bool FPCGExDecompMaxBoxes::FindLargestBox(
 	const FPCGExDecompOccupancyGrid& Grid,
 	const TBitArray<>& Available,
@@ -130,6 +102,8 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 	const int32 GZ = Grid.GridDimensions.Z;
 
 	OutVolume = 0;
+	double BestScore = -1.0;
+	const bool bUseBalance = Balance > KINDA_SMALL_NUMBER;
 
 	// ColAvail[x + y * GX] = true iff ALL z-layers from Z1 to current Z2 at (x,y) are available
 	TArray<bool> ColAvail;
@@ -138,6 +112,10 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 	// Y-direction histogram: Hist[x] = consecutive Y rows where ColAvail is true
 	TArray<int32> Hist;
 	Hist.SetNum(GX);
+
+	// Per-row available count for coverage scoring
+	TArray<int32> AvailPerRow;
+	if (bUseBalance) { AvailPerRow.SetNum(GY); }
 
 	// Stack for the largest-rectangle-in-histogram algorithm
 	TArray<TPair<int32, int32>> Stack; // (start_index, height)
@@ -161,6 +139,17 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 					{
 						ColAvail[Idx2D] = Available[Grid.FlatIndex(X, Y, Z2)];
 					}
+				}
+			}
+
+			// Compute per-row available counts for coverage scoring
+			if (bUseBalance)
+			{
+				for (int32 Y = 0; Y < GY; Y++)
+				{
+					int32 Count = 0;
+					for (int32 X = 0; X < GX; X++) { if (ColAvail[X + Y * GX]) { Count++; } }
+					AvailPerRow[Y] = Count;
 				}
 			}
 
@@ -193,8 +182,27 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 						const int32 Width = X - StackIdx;
 						const int32 Volume = Width * StackHeight * ZDepth;
 
-						if (Volume > OutVolume)
+						// Score: Volume weighted by row coverage when Balance > 0
+						double Score = static_cast<double>(Volume);
+						if (bUseBalance && Volume > 0)
 						{
+							const int32 YStart = Y - StackHeight + 1;
+							int32 MaxRowWidth = 0;
+							for (int32 RY = YStart; RY <= Y; RY++)
+							{
+								MaxRowWidth = FMath::Max(MaxRowWidth, AvailPerRow[RY]);
+							}
+
+							if (MaxRowWidth > 0)
+							{
+								const double Coverage = static_cast<double>(Width) / MaxRowWidth;
+								Score *= FMath::Pow(Coverage, Balance);
+							}
+						}
+
+						if (Score > BestScore)
+						{
+							BestScore = Score;
 							OutVolume = Volume;
 							OutMin = FIntVector(StackIdx, Y - StackHeight + 1, Z1);
 							OutMax = FIntVector(X - 1, Y, Z2);
@@ -288,8 +296,11 @@ void UPCGExDecompMaxBoxes::CopySettingsFrom(const UPCGExInstancedFactory* Other)
 	{
 		TransformSpace = TypedOther->TransformSpace;
 		CustomTransform = TypedOther->CustomTransform;
+		VoxelSizeMode = TypedOther->VoxelSizeMode;
+		VoxelSize = TypedOther->VoxelSize;
 		MaxCellSize = TypedOther->MaxCellSize;
 		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
+		Balance = TypedOther->Balance;
 	}
 }
 

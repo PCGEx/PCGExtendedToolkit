@@ -9,12 +9,12 @@ bool FPCGExDecompBSPOccupancy::Decompose(FPCGExDecompositionResult& OutResult)
 {
 	if (!Cluster || Cluster->Nodes->Num() == 0) { return false; }
 
-	// Auto-detect voxel size from cluster edge lengths
-	const FVector VoxelSize = ComputeVoxelSize();
+	// Resolve voxel size (auto-detect from edges or use manual)
+	const FVector ResolvedVoxelSize = FPCGExDecompOccupancyGrid::ResolveVoxelSize(Cluster, VoxelSizeMode, VoxelSize);
 
 	// Build occupancy grid
 	FPCGExDecompOccupancyGrid Grid;
-	if (!Grid.Build(Cluster, TransformSpace, VoxelSize, CustomTransform)) { return false; }
+	if (!Grid.Build(Cluster, TransformSpace, ResolvedVoxelSize, CustomTransform)) { return false; }
 
 	// Per-voxel CellID array (indexed by flat voxel index)
 	TArray<int32> VoxelCellIDs;
@@ -45,33 +45,6 @@ bool FPCGExDecompBSPOccupancy::Decompose(FPCGExDecompositionResult& OutResult)
 
 	OutResult.NumCells = NextCellID;
 	return OutResult.NumCells > 0;
-}
-
-FVector FPCGExDecompBSPOccupancy::ComputeVoxelSize() const
-{
-	if (!Cluster || Cluster->Nodes->Num() < 2) { return FVector(100.0); }
-
-	const int32 NumNodes = Cluster->Nodes->Num();
-	double TotalDist = 0;
-	int32 EdgeCount = 0;
-
-	for (int32 i = 0; i < NumNodes; i++)
-	{
-		const PCGExClusters::FNode* Node = Cluster->GetNode(i);
-		if (!Node->bValid) { continue; }
-
-		const FVector NodePos = Cluster->GetPos(i);
-		for (const PCGExGraphs::FLink& Lk : Node->Links)
-		{
-			TotalDist += FVector::Dist(NodePos, Cluster->GetPos(Lk.Node));
-			EdgeCount++;
-		}
-	}
-
-	if (EdgeCount == 0) { return FVector(100.0); }
-
-	const double AvgEdgeLength = FMath::Max(TotalDist / EdgeCount, KINDA_SMALL_NUMBER);
-	return FVector(AvgEdgeLength);
 }
 
 void FPCGExDecompBSPOccupancy::SplitRecursive(
@@ -324,7 +297,8 @@ void UPCGExDecompBSPOccupancy::CopySettingsFrom(const UPCGExInstancedFactory* Ot
 	{
 		TransformSpace = TypedOther->TransformSpace;
 		CustomTransform = TypedOther->CustomTransform;
-		MaxCellSize = TypedOther->MaxCellSize;
+		VoxelSizeMode = TypedOther->VoxelSizeMode;
+		VoxelSize = TypedOther->VoxelSize;
 		MaxDepth = TypedOther->MaxDepth;
 		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
 		GapWeight = TypedOther->GapWeight;
