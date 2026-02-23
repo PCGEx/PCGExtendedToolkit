@@ -49,6 +49,17 @@ bool FPCGExDecompMaxBoxes::Decompose(FPCGExDecompositionResult& OutResult)
 		SubdivideAndClaim(Grid, BoxMin, BoxMax, MaxExtent, Available, VoxelCellIDs, NextCellID, RemainingCount, CellVoxelCounts);
 	}
 
+	// Merge adjacent cells that together form a perfect box
+	MergeAdjacentCells(Grid, VoxelCellIDs, NextCellID, MaxExtent);
+
+	// Rebuild voxel counts after merge (CellIDs were re-compacted)
+	CellVoxelCounts.Reset();
+	CellVoxelCounts.SetNumZeroed(NextCellID);
+	for (int32 i = 0; i < Grid.TotalVoxels; i++)
+	{
+		if (VoxelCellIDs[i] >= 0 && VoxelCellIDs[i] < NextCellID) { CellVoxelCounts[VoxelCellIDs[i]]++; }
+	}
+
 	// Discard cells below MinVoxelsPerCell (set their CellID to -1)
 	if (MinVoxelsPerCell > 1)
 	{
@@ -202,6 +213,138 @@ bool FPCGExDecompMaxBoxes::FindLargestBox(
 	}
 
 	return OutVolume > 0;
+}
+
+void FPCGExDecompMaxBoxes::MergeAdjacentCells(
+	const FPCGExDecompOccupancyGrid& Grid,
+	TArray<int32>& VoxelCellIDs,
+	int32& NextCellID,
+	const FIntVector& MaxExtent) const
+{
+	static constexpr int32 Dx[] = {1, -1, 0, 0, 0, 0};
+	static constexpr int32 Dy[] = {0, 0, 1, -1, 0, 0};
+	static constexpr int32 Dz[] = {0, 0, 0, 0, 1, -1};
+
+	struct FCellInfo
+	{
+		FIntVector Min = FIntVector(MAX_int32, MAX_int32, MAX_int32);
+		FIntVector Max = FIntVector(MIN_int32, MIN_int32, MIN_int32);
+		int32 Count = 0;
+	};
+
+	bool bChanged = true;
+	while (bChanged)
+	{
+		bChanged = false;
+
+		// Build per-cell AABB and voxel count
+		TMap<int32, FCellInfo> Cells;
+		for (int32 Flat = 0; Flat < Grid.TotalVoxels; Flat++)
+		{
+			const int32 CellID = VoxelCellIDs[Flat];
+			if (CellID < 0) { continue; }
+
+			const FIntVector Coord = Grid.UnflatIndex(Flat);
+			FCellInfo& Info = Cells.FindOrAdd(CellID);
+			Info.Min = FIntVector(
+				FMath::Min(Info.Min.X, Coord.X),
+				FMath::Min(Info.Min.Y, Coord.Y),
+				FMath::Min(Info.Min.Z, Coord.Z));
+			Info.Max = FIntVector(
+				FMath::Max(Info.Max.X, Coord.X),
+				FMath::Max(Info.Max.Y, Coord.Y),
+				FMath::Max(Info.Max.Z, Coord.Z));
+			Info.Count++;
+		}
+
+		if (Cells.Num() <= 1) { break; }
+
+		// Build face-adjacency between cells
+		TMap<int32, TSet<int32>> Adj;
+		for (int32 Flat = 0; Flat < Grid.TotalVoxels; Flat++)
+		{
+			const int32 CellID = VoxelCellIDs[Flat];
+			if (CellID < 0) { continue; }
+
+			const FIntVector Coord = Grid.UnflatIndex(Flat);
+			for (int32 Dir = 0; Dir < 6; Dir++)
+			{
+				const int32 NX = Coord.X + Dx[Dir];
+				const int32 NY = Coord.Y + Dy[Dir];
+				const int32 NZ = Coord.Z + Dz[Dir];
+				if (!Grid.IsInBounds(NX, NY, NZ)) { continue; }
+
+				const int32 NCellID = VoxelCellIDs[Grid.FlatIndex(NX, NY, NZ)];
+				if (NCellID >= 0 && NCellID != CellID)
+				{
+					Adj.FindOrAdd(CellID).Add(NCellID);
+				}
+			}
+		}
+
+		// Sort cells by count ascending (merge smallest cells first)
+		TArray<int32> SortedCellIDs;
+		Cells.GetKeys(SortedCellIDs);
+		SortedCellIDs.Sort([&Cells](int32 A, int32 B) { return Cells[A].Count < Cells[B].Count; });
+
+		for (const int32 CellA : SortedCellIDs)
+		{
+			const FCellInfo* InfoA = Cells.Find(CellA);
+			if (!InfoA) { continue; }
+
+			const TSet<int32>* AdjSet = Adj.Find(CellA);
+			if (!AdjSet) { continue; }
+
+			for (const int32 CellB : *AdjSet)
+			{
+				const FCellInfo* InfoB = Cells.Find(CellB);
+				if (!InfoB) { continue; }
+
+				// Compute merged AABB
+				const FIntVector MMin(
+					FMath::Min(InfoA->Min.X, InfoB->Min.X),
+					FMath::Min(InfoA->Min.Y, InfoB->Min.Y),
+					FMath::Min(InfoA->Min.Z, InfoB->Min.Z));
+				const FIntVector MMax(
+					FMath::Max(InfoA->Max.X, InfoB->Max.X),
+					FMath::Max(InfoA->Max.Y, InfoB->Max.Y),
+					FMath::Max(InfoA->Max.Z, InfoB->Max.Z));
+				const FIntVector MSize = MMax - MMin + FIntVector(1, 1, 1);
+
+				// Check MaxExtent
+				if (MSize.X > MaxExtent.X || MSize.Y > MaxExtent.Y || MSize.Z > MaxExtent.Z) { continue; }
+
+				// Perfect box check: merged AABB volume must equal combined voxel count
+				const int32 MergedVolume = MSize.X * MSize.Y * MSize.Z;
+				if (MergedVolume != InfoA->Count + InfoB->Count) { continue; }
+
+				// Valid merge — absorb B into A
+				for (int32 Flat = 0; Flat < Grid.TotalVoxels; Flat++)
+				{
+					if (VoxelCellIDs[Flat] == CellB) { VoxelCellIDs[Flat] = CellA; }
+				}
+
+				Cells.FindOrAdd(CellA) = FCellInfo{MMin, MMax, InfoA->Count + InfoB->Count};
+				Cells.Remove(CellB);
+
+				bChanged = true;
+				break;
+			}
+
+			if (bChanged) { break; }
+		}
+	}
+
+	// Re-compact CellIDs to be sequential after merges
+	TMap<int32, int32> Remap;
+	int32 CompactID = 0;
+	for (int32 Flat = 0; Flat < Grid.TotalVoxels; Flat++)
+	{
+		if (VoxelCellIDs[Flat] < 0) { continue; }
+		if (!Remap.Contains(VoxelCellIDs[Flat])) { Remap.Add(VoxelCellIDs[Flat], CompactID++); }
+		VoxelCellIDs[Flat] = Remap[VoxelCellIDs[Flat]];
+	}
+	NextCellID = CompactID;
 }
 
 void FPCGExDecompMaxBoxes::SubdivideAndClaim(

@@ -40,6 +40,13 @@ protected:
 		FIntVector& OutMax,
 		int32& OutVolume) const;
 
+	/** Post-process: iteratively merge adjacent cells that together form a perfect box. */
+	void MergeAdjacentCells(
+		const FPCGExDecompOccupancyGrid& Grid,
+		TArray<int32>& VoxelCellIDs,
+		int32& NextCellID,
+		const FIntVector& MaxExtent) const;
+
 	/** Subdivide a box into chunks that fit within MaxExtent, claim and assign CellIDs. */
 	void SubdivideAndClaim(
 		const FPCGExDecompOccupancyGrid& Grid,
