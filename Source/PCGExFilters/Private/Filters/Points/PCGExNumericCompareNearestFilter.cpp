@@ -3,8 +3,8 @@
 
 #include "Filters/Points/PCGExNumericCompareNearestFilter.h"
 
-
 #include "Containers/PCGExManagedObjects.h"
+#include "Data/PCGExPointIO.h"
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExDataMatcher.h"

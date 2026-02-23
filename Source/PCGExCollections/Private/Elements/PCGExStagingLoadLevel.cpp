@@ -51,6 +51,7 @@ void UPCGExLevelStreamingDynamic::OnLevelLoadedChanged(ULevel* Level)
 	{
 		if (!Actor) { continue; }
 
+
 #if WITH_EDITORONLY_DATA
 		if (Actor->bIsMainWorldOnly)
 		{
@@ -101,7 +102,7 @@ void UPCGExLevelStreamingLevelInstance::OnLevelLoadedChanged(ULevel* Level)
 			continue;
 		}
 #endif
-		
+
 #if WITH_EDITOR
 		if (GeneratedFolder != NAME_None)
 		{
