@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Data/PCGExDataCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Core/PCGExDecompositionOperation.h"
 #include "Core/PCGExDecompOccupancyGrid.h"
 
@@ -34,11 +35,10 @@ public:
 	double Balance = 1.0;
 
 	// --- Axis Bias ---
-	FVector AxisBias = FVector(1.0);
+	FPCGExInputShorthandSelectorVector AxisBias;
 
 	// --- Per-Node Weight ---
-	FName WeightAttributeName = NAME_None;
-	double DefaultWeight = 1.0;
+	FPCGExInputShorthandSelectorDouble Weight;
 	double WeightInfluence = 1.0;
 	EPCGExDecompWeightMode WeightMode = EPCGExDecompWeightMode::Multiplier;
 	double PriorityThreshold = 0.5;
@@ -63,6 +63,8 @@ protected:
 		const FPCGExDecompOccupancyGrid& Grid,
 		const TBitArray<>& Available,
 		const TArray<double>* WeightPrefixSums,
+		const FVector& ConstantBias,
+		const TArray<FVector>* BiasPrefixSums,
 		FIntVector& OutMin,
 		FIntVector& OutMax,
 		int32& OutVolume) const;
@@ -98,6 +100,19 @@ protected:
 	double QueryWeightSum(
 		const FPCGExDecompOccupancyGrid& Grid,
 		const TArray<double>& PrefixSums,
+		const FIntVector& BoxMin,
+		const FIntVector& BoxMax) const;
+
+	/** Build 3D prefix sum array for per-node axis bias vectors. */
+	void BuildBiasPrefixSums(
+		const FPCGExDecompOccupancyGrid& Grid,
+		const TArray<FVector>& VoxelBias,
+		TArray<FVector>& OutPrefixSums) const;
+
+	/** Query bias vector sum in box region via inclusion-exclusion on prefix sums. */
+	FVector QueryBiasSum(
+		const FPCGExDecompOccupancyGrid& Grid,
+		const TArray<FVector>& PrefixSums,
 		const FIntVector& BoxMin,
 		const FIntVector& BoxMax) const;
 };
@@ -147,35 +162,27 @@ public:
 
 	/** Per-axis compactness penalty. Set low on axes where elongation is acceptable.
 	 *  e.g., (0.1, 0.1, 1) for flat boxes, (1, 1, 0.1) for tall columns.
-	 *  Works in grid-local space (post-transform). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Shape", meta=(PCG_Overridable))
-	FVector AxisBias = FVector(1.0);
+	 *  Works in grid-local space (post-transform). Can be per-node via attribute. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	FPCGExInputShorthandSelectorVector AxisBias = FPCGExInputShorthandSelectorVector(FName("AxisBias"), FVector(1.0));
 
 	// --- Per-Node Weight ---
 
-	/** Source for per-node weight values. */
+	/** Per-node weight for box extraction scoring. Higher weight = preferred extraction region. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable))
-	EPCGExInputValueType WeightInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read weight values from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, EditCondition="WeightInput==EPCGExInputValueType::Attribute", EditConditionHides))
-	FPCGAttributePropertyInputSelector WeightAttribute;
-
-	/** Default weight when using constant mode, or fallback for missing attribute values. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable))
-	double DefaultWeight = 1.0;
+	FPCGExInputShorthandSelectorDouble Weight = FPCGExInputShorthandSelectorDouble(FName("Weight"), 1.0);
 
 	/** How strongly weights influence box extraction scoring.
 	 *  0 = ignore weights, 1 = linear influence. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, ClampMin="0", EditCondition="WeightInput==EPCGExInputValueType::Attribute", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, ClampMin="0", EditCondition="Weight.Input==EPCGExInputValueType::Attribute", EditConditionHides))
 	double WeightInfluence = 1.0;
 
 	/** How weights affect the extraction algorithm. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, EditCondition="WeightInput==EPCGExInputValueType::Attribute", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, EditCondition="Weight.Input==EPCGExInputValueType::Attribute", EditConditionHides))
 	EPCGExDecompWeightMode WeightMode = EPCGExDecompWeightMode::Multiplier;
 
 	/** For Priority mode: minimum average weight for a box to be extracted in the first pass. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, ClampMin="0", ClampMax="1", EditCondition="WeightInput==EPCGExInputValueType::Attribute&&WeightMode==EPCGExDecompWeightMode::Priority", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, ClampMin="0", ClampMax="1", EditCondition="Weight.Input==EPCGExInputValueType::Attribute&&WeightMode==EPCGExDecompWeightMode::Priority", EditConditionHides))
 	double PriorityThreshold = 0.5;
 
 	// --- Preferred Volume Range ---
@@ -217,8 +224,7 @@ public:
 		Operation->MinVoxelsPerCell = MinVoxelsPerCell;
 		Operation->Balance = Balance;
 		Operation->AxisBias = AxisBias;
-		Operation->WeightAttributeName = (WeightInput == EPCGExInputValueType::Attribute) ? WeightAttribute.GetName() : NAME_None;
-		Operation->DefaultWeight = DefaultWeight;
+		Operation->Weight = Weight;
 		Operation->WeightInfluence = WeightInfluence;
 		Operation->WeightMode = WeightMode;
 		Operation->PriorityThreshold = PriorityThreshold;

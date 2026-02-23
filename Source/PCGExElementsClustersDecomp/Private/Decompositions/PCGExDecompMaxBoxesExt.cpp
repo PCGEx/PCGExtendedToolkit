@@ -4,6 +4,7 @@
 #include "Decompositions/PCGExDecompMaxBoxesExt.h"
 
 #include "Data/PCGExData.h"
+#include "Details/PCGExSettingsDetails.h"
 
 #pragma region FPCGExDecompMaxBoxesExt
 
@@ -26,30 +27,67 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 		MaxCellSize.Y > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Y / ResolvedVoxelSize.Y), 1) : MAX_int32,
 		MaxCellSize.Z > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Z / ResolvedVoxelSize.Z), 1) : MAX_int32);
 
-	// --- Build per-voxel weight grid ---
-	const bool bUseWeights = WeightAttributeName != NAME_None && WeightInfluence > KINDA_SMALL_NUMBER;
-	TArray<double> VoxelWeights;
-	TArray<double> WeightPrefixSums;
+	// --- Resolve axis bias ---
+	TSharedPtr<PCGExDetails::TSettingValue<FVector>> BiasSetting = AxisBias.GetValueSetting();
+	BiasSetting->Init(PrimaryDataFacade);
 
-	if (bUseWeights)
+	FVector ConstantBias = FVector(1.0);
+	TArray<FVector> BiasPrefixSums;
+	bool bUsePerNodeBias = false;
+
+	if (BiasSetting->IsConstant())
 	{
-		VoxelWeights.SetNumUninitialized(Grid.TotalVoxels);
-		for (int32 i = 0; i < Grid.TotalVoxels; i++) { VoxelWeights[i] = DefaultWeight; }
+		ConstantBias = BiasSetting->Read(0);
+		BiasSetting.Reset();
+	}
+	else
+	{
+		bUsePerNodeBias = true;
+		TArray<FVector> VoxelBias;
+		VoxelBias.SetNumUninitialized(Grid.TotalVoxels);
+		for (int32 i = 0; i < Grid.TotalVoxels; i++) { VoxelBias[i] = FVector(1.0); }
 
-		const TSharedPtr<PCGExData::TBuffer<double>> WeightBuffer = PrimaryDataFacade->GetReadable<double>(WeightAttributeName);
-		if (WeightBuffer)
+		for (int32 i = 0; i < NumNodes; i++)
 		{
-			for (int32 i = 0; i < NumNodes; i++)
-			{
-				const int32 VoxelIdx = Grid.NodeToVoxelIndex[i];
-				if (VoxelIdx >= 0)
-				{
-					VoxelWeights[VoxelIdx] = WeightBuffer->Read(Cluster->GetNodePointIndex(i));
-				}
-			}
+			const int32 VoxelIdx = Grid.NodeToVoxelIndex[i];
+			if (VoxelIdx >= 0) { VoxelBias[VoxelIdx] = BiasSetting->Read(Cluster->GetNodePointIndex(i)); }
+		}
+
+		BuildBiasPrefixSums(Grid, VoxelBias, BiasPrefixSums);
+		BiasSetting.Reset();
+	}
+
+	// --- Resolve weight ---
+	TSharedPtr<PCGExDetails::TSettingValue<double>> WeightSetting = Weight.GetValueSetting();
+	WeightSetting->Init(PrimaryDataFacade);
+
+	TArray<double> WeightPrefixSums;
+	bool bUseWeights = false;
+
+	if (WeightSetting->IsConstant())
+	{
+		// Constant weight = uniform = no effect on relative scoring
+		WeightSetting.Reset();
+	}
+	else if (WeightInfluence > KINDA_SMALL_NUMBER)
+	{
+		bUseWeights = true;
+		TArray<double> VoxelWeights;
+		VoxelWeights.SetNumUninitialized(Grid.TotalVoxels);
+		for (int32 i = 0; i < Grid.TotalVoxels; i++) { VoxelWeights[i] = 1.0; }
+
+		for (int32 i = 0; i < NumNodes; i++)
+		{
+			const int32 VoxelIdx = Grid.NodeToVoxelIndex[i];
+			if (VoxelIdx >= 0) { VoxelWeights[VoxelIdx] = WeightSetting->Read(Cluster->GetNodePointIndex(i)); }
 		}
 
 		BuildWeightPrefixSums(Grid, VoxelWeights, WeightPrefixSums);
+		WeightSetting.Reset();
+	}
+	else
+	{
+		WeightSetting.Reset();
 	}
 
 	// --- Precompute heuristic edge scores ---
@@ -92,7 +130,8 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 	int32 NextCellID = 0;
 	TArray<int32> CellVoxelCounts;
 
-	const TArray<double>* PrefixSumsPtr = bUseWeights ? &WeightPrefixSums : nullptr;
+	const TArray<double>* WeightPrefixSumsPtr = bUseWeights ? &WeightPrefixSums : nullptr;
+	const TArray<FVector>* BiasPrefixSumsPtr = bUsePerNodeBias ? &BiasPrefixSums : nullptr;
 
 	// --- Priority mode: two-pass extraction ---
 	if (bUseWeights && WeightMode == EPCGExDecompWeightMode::Priority)
@@ -103,7 +142,7 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 			FIntVector BoxMin, BoxMax;
 			int32 BoxVolume = 0;
 
-			if (!FindLargestBox(Grid, Available, PrefixSumsPtr, BoxMin, BoxMax, BoxVolume) || BoxVolume == 0) { break; }
+			if (!FindLargestBox(Grid, Available, WeightPrefixSumsPtr, ConstantBias, BiasPrefixSumsPtr, BoxMin, BoxMax, BoxVolume) || BoxVolume == 0) { break; }
 
 			// Check average weight of the box
 			const double WeightSum = QueryWeightSum(Grid, WeightPrefixSums, BoxMin, BoxMax);
@@ -120,7 +159,7 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 		FIntVector BoxMin, BoxMax;
 		int32 BoxVolume = 0;
 
-		if (!FindLargestBox(Grid, Available, PrefixSumsPtr, BoxMin, BoxMax, BoxVolume) || BoxVolume == 0) { break; }
+		if (!FindLargestBox(Grid, Available, WeightPrefixSumsPtr, ConstantBias, BiasPrefixSumsPtr, BoxMin, BoxMax, BoxVolume) || BoxVolume == 0) { break; }
 
 		SubdivideAndClaim(Grid, BoxMin, BoxMax, MaxExtent, Available, VoxelCellIDs, NextCellID, RemainingCount, CellVoxelCounts);
 	}
@@ -181,6 +220,8 @@ bool FPCGExDecompMaxBoxesExt::FindLargestBox(
 	const FPCGExDecompOccupancyGrid& Grid,
 	const TBitArray<>& Available,
 	const TArray<double>* WeightPrefixSums,
+	const FVector& ConstantBias,
+	const TArray<FVector>* BiasPrefixSums,
 	FIntVector& OutMin,
 	FIntVector& OutMax,
 	int32& OutVolume) const
@@ -192,7 +233,8 @@ bool FPCGExDecompMaxBoxesExt::FindLargestBox(
 	OutVolume = 0;
 	double BestScore = -1.0;
 	const bool bUseBalance = Balance > KINDA_SMALL_NUMBER;
-	const bool bUseAxisBias = !AxisBias.Equals(FVector(1.0), KINDA_SMALL_NUMBER);
+	const bool bHasPerNodeBias = BiasPrefixSums != nullptr;
+	const bool bUseAxisBias = bHasPerNodeBias || !ConstantBias.Equals(FVector(1.0), KINDA_SMALL_NUMBER);
 	const bool bUseWeightScoring = WeightPrefixSums != nullptr && WeightInfluence > KINDA_SMALL_NUMBER;
 	const bool bUseVolumePreference = (PreferredMinVolume > KINDA_SMALL_NUMBER || PreferredMaxVolume > KINDA_SMALL_NUMBER) && VolumePreferenceWeight > KINDA_SMALL_NUMBER;
 
@@ -264,10 +306,22 @@ bool FPCGExDecompMaxBoxesExt::FindLargestBox(
 
 							if (bUseAxisBias)
 							{
-								// Scale dimensions by axis bias before computing compactness
-								d1 = Width * AxisBias.X;
-								d2 = StackHeight * AxisBias.Y;
-								d3 = ZDepth * AxisBias.Z;
+								FVector EffectiveBias;
+								if (bHasPerNodeBias)
+								{
+									const FIntVector CandMin(StackIdx, Y - StackHeight + 1, Z1);
+									const FIntVector CandMax(X - 1, Y, Z2);
+									const FVector BiasSum = QueryBiasSum(Grid, *BiasPrefixSums, CandMin, CandMax);
+									EffectiveBias = BiasSum / static_cast<double>(Volume);
+								}
+								else
+								{
+									EffectiveBias = ConstantBias;
+								}
+
+								d1 = Width * EffectiveBias.X;
+								d2 = StackHeight * EffectiveBias.Y;
+								d3 = ZDepth * EffectiveBias.Z;
 							}
 							else
 							{
@@ -630,16 +684,72 @@ double FPCGExDecompMaxBoxesExt::QueryWeightSum(
 		- SafeGet(X1 - 1, Y1 - 1, Z1 - 1);
 }
 
+void FPCGExDecompMaxBoxesExt::BuildBiasPrefixSums(
+	const FPCGExDecompOccupancyGrid& Grid,
+	const TArray<FVector>& VoxelBias,
+	TArray<FVector>& OutPrefixSums) const
+{
+	const int32 GX = Grid.GridDimensions.X;
+	const int32 GY = Grid.GridDimensions.Y;
+	const int32 GZ = Grid.GridDimensions.Z;
+
+	OutPrefixSums.SetNum(Grid.TotalVoxels);
+	for (FVector& V : OutPrefixSums) { V = FVector::ZeroVector; }
+
+	for (int32 Z = 0; Z < GZ; Z++)
+	{
+		for (int32 Y = 0; Y < GY; Y++)
+		{
+			for (int32 X = 0; X < GX; X++)
+			{
+				const int32 Flat = Grid.FlatIndex(X, Y, Z);
+				FVector Val = VoxelBias[Flat];
+
+				if (X > 0) { Val += OutPrefixSums[Grid.FlatIndex(X - 1, Y, Z)]; }
+				if (Y > 0) { Val += OutPrefixSums[Grid.FlatIndex(X, Y - 1, Z)]; }
+				if (Z > 0) { Val += OutPrefixSums[Grid.FlatIndex(X, Y, Z - 1)]; }
+
+				if (X > 0 && Y > 0) { Val -= OutPrefixSums[Grid.FlatIndex(X - 1, Y - 1, Z)]; }
+				if (X > 0 && Z > 0) { Val -= OutPrefixSums[Grid.FlatIndex(X - 1, Y, Z - 1)]; }
+				if (Y > 0 && Z > 0) { Val -= OutPrefixSums[Grid.FlatIndex(X, Y - 1, Z - 1)]; }
+
+				if (X > 0 && Y > 0 && Z > 0) { Val += OutPrefixSums[Grid.FlatIndex(X - 1, Y - 1, Z - 1)]; }
+
+				OutPrefixSums[Flat] = Val;
+			}
+		}
+	}
+}
+
+FVector FPCGExDecompMaxBoxesExt::QueryBiasSum(
+	const FPCGExDecompOccupancyGrid& Grid,
+	const TArray<FVector>& PrefixSums,
+	const FIntVector& BoxMin,
+	const FIntVector& BoxMax) const
+{
+	auto SafeGet = [&](int32 X, int32 Y, int32 Z) -> FVector
+	{
+		if (X < 0 || Y < 0 || Z < 0) { return FVector::ZeroVector; }
+		return PrefixSums[Grid.FlatIndex(X, Y, Z)];
+	};
+
+	const int32 X1 = BoxMin.X, Y1 = BoxMin.Y, Z1 = BoxMin.Z;
+	const int32 X2 = BoxMax.X, Y2 = BoxMax.Y, Z2 = BoxMax.Z;
+
+	return SafeGet(X2, Y2, Z2)
+		- SafeGet(X1 - 1, Y2, Z2) - SafeGet(X2, Y1 - 1, Z2) - SafeGet(X2, Y2, Z1 - 1)
+		+ SafeGet(X1 - 1, Y1 - 1, Z2) + SafeGet(X1 - 1, Y2, Z1 - 1) + SafeGet(X2, Y1 - 1, Z1 - 1)
+		- SafeGet(X1 - 1, Y1 - 1, Z1 - 1);
+}
+
 #pragma endregion
 
 #pragma region UPCGExDecompMaxBoxesExt
 
 void UPCGExDecompMaxBoxesExt::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader)
 {
-	if (WeightInput == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, WeightAttribute);
-	}
+	AxisBias.RegisterBufferDependencies(InContext, FacadePreloader);
+	Weight.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 void UPCGExDecompMaxBoxesExt::CopySettingsFrom(const UPCGExInstancedFactory* Other)
@@ -655,9 +765,7 @@ void UPCGExDecompMaxBoxesExt::CopySettingsFrom(const UPCGExInstancedFactory* Oth
 		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
 		Balance = TypedOther->Balance;
 		AxisBias = TypedOther->AxisBias;
-		WeightInput = TypedOther->WeightInput;
-		WeightAttribute = TypedOther->WeightAttribute;
-		DefaultWeight = TypedOther->DefaultWeight;
+		Weight = TypedOther->Weight;
 		WeightInfluence = TypedOther->WeightInfluence;
 		WeightMode = TypedOther->WeightMode;
 		PriorityThreshold = TypedOther->PriorityThreshold;
