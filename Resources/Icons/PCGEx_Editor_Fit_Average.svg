@@ -1,1 +1,9 @@
-<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><style>.cls-1{fill:#4d8dfc;}.cls-2{fill:#fff;}</style></defs><rect class="cls-1" x="17.31" y="31.19" width="65.38" height="37.62"/><rect x="25.92" y="25.92" width="48.16" height="48.16"/><path class="cls-2" d="M74.29,76.68H25.71a2.39,2.39,0,0,1-2.39-2.39V25.71a2.39,2.39,0,0,1,2.39-2.39H74.29a2.39,2.39,0,0,1,2.39,2.39V74.29A2.39,2.39,0,0,1,74.29,76.68Zm-48.37-2.6H74.08V25.92H25.92Z"/></svg>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <style>.cls-1{fill:#4d8dfc;}.cls-2{fill:#fff;}</style>
+    </defs>
+    <rect class="cls-1" x="17.31" y="31.19" width="65.38" height="37.62"/>
+    <rect x="25.92" y="25.92" width="48.16" height="48.16"/>
+    <path class="cls-2"
+          d="M74.29,76.68H25.71a2.39,2.39,0,0,1-2.39-2.39V25.71a2.39,2.39,0,0,1,2.39-2.39H74.29a2.39,2.39,0,0,1,2.39,2.39V74.29A2.39,2.39,0,0,1,74.29,76.68Zm-48.37-2.6H74.08V25.92H25.92Z"/>
+</svg>

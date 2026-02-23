@@ -36,8 +36,9 @@ namespace PCGExDetails
 UENUM()
 enum class EPCGExProjectionMethod : uint8
 {
-	Normal  = 0 UMETA(DisplayName = "Normal", ToolTip="Uses a normal to project on a plane."),
-	BestFit = 1 UMETA(DisplayName = "Best Fit", ToolTip="Compute eigen values to find the best-fit plane"),
+	Normal       = 0 UMETA(DisplayName = "Normal", ToolTip="Uses a normal to project on a plane."),
+	BestFit      = 1 UMETA(DisplayName = "Best Fit", ToolTip="Compute eigen values to find the best-fit plane"),
+	LocalTangent = 2 UMETA(DisplayName = "Local Tangent", ToolTip="Per-vertex tangent plane projection for non-planar clusters (spheres, curved surfaces)"),
 };
 
 USTRUCT(BlueprintType)
@@ -45,8 +46,11 @@ struct PCGEXCORE_API FPCGExGeo2DProjectionDetails
 {
 	GENERATED_BODY()
 
-	FPCGExGeo2DProjectionDetails();
+	FPCGExGeo2DProjectionDetails(const bool InSupportLocalTangent = false);
 
+	UPROPERTY()
+	bool bSupportLocalTangent = false;
+	
 	/** How to determine the projection plane. Normal uses explicit vector, BestFit computes from points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExProjectionMethod Method = EPCGExProjectionMethod::Normal;

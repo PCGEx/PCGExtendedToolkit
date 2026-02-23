@@ -232,7 +232,7 @@ bool FPCGExPackActorDataElement::Boot(FPCGExContext* InContext) const
 
 	InContext->EDITOR_TrackClass(Settings->Packer->GetClass());
 
-	PCGEX_OPERATION_BIND(Packer, UPCGExCustomActorDataPacker, PCGExPackActorData::SourceOverridesPacker)
+	PCGEX_BIND_INSTANCED_FACTORY(Packer, UPCGExCustomActorDataPacker, PCGExPackActorData::SourceOverridesPacker)
 	PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->ActorReferenceAttribute)
 
 	//Context->OutputParams.Init(nullptr, Context->MainPoints->Num());

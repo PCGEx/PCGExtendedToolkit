@@ -63,11 +63,17 @@ namespace PCGExClusters
 			// Project all points
 			ProjectionDetails.ProjectFlat(PointDataFacade, ProjectedPoints);
 
-			// Compute tight AABB
+			// Compute tight 2D and 3D AABBs
 			TightBounds = FBox2D(ForceInit);
-			for (const FVector2D& Point : ProjectedPoints)
+			TightBounds3D = FBox(ForceInit);
+
+			const TConstPCGValueRange<FTransform> Transforms = PointDataFacade->Source->GetIn()->GetConstTransformValueRange();
+			const int32 Num = Transforms.Num();
+
+			for (int32 i = 0; i < Num; ++i)
 			{
-				TightBounds += Point;
+				TightBounds += ProjectedPoints[i];
+				TightBounds3D += Transforms[i].GetLocation();
 			}
 		}
 	}
@@ -86,6 +92,36 @@ namespace PCGExClusters
 		return PCGExMath::Geo::IsAnyPointInPolygon(ProjectedPoints, Polygon);
 	}
 
+	bool FProjectedPointSet::OverlapsPolygonLocal(
+		const TArray<FVector2D>& Polygon,
+		const FBox2D& PolygonBounds,
+		const FBox& FaceBounds3D,
+		const FPCGExGeo2DProjectionDetails& FaceProjection) const
+	{
+		const_cast<FProjectedPointSet*>(this)->EnsureProjected();
+
+		// Coarse 3D check: do the hole points' 3D bounds even intersect the face's 3D bounds?
+		if (!TightBounds3D.Intersect(FaceBounds3D))
+		{
+			return false;
+		}
+
+		// Fine: Project each hole point into the face's local 2D space and test containment
+		const TConstPCGValueRange<FTransform> Transforms = PointDataFacade->Source->GetIn()->GetConstTransformValueRange();
+		const int32 NumPoints = Transforms.Num();
+
+		for (int32 i = 0; i < NumPoints; ++i)
+		{
+			const FVector Projected = FaceProjection.Project(Transforms[i].GetLocation());
+			const FVector2D Point2D(Projected.X, Projected.Y);
+
+			if (!PolygonBounds.IsInside(Point2D)) { continue; }
+			if (PCGExMath::Geo::IsPointInPolygon(Point2D, Polygon)) { return true; }
+		}
+
+		return false;
+	}
+
 	int32 FProjectedPointSet::Num() const{ return PointDataFacade->GetNum(); }
 
 	FCellConstraints::FCellConstraints(const FPCGExCellConstraintsDetails& InDetails)
@@ -96,7 +132,6 @@ namespace PCGExClusters
 		bKeepCellsWithLeaves = InDetails.bKeepCellsWithLeaves;
 		bDuplicateLeafPoints = InDetails.bDuplicateLeafPoints;
 
-		WrapperClassificationTolerance = InDetails.WrapperClassificationTolerance;
 		bBuildWrapper = InDetails.bOmitWrappingBounds;
 
 		if (InDetails.bOmitBelowPointCount) { MinPointCount = InDetails.MinPointCount; }
@@ -160,7 +195,29 @@ namespace PCGExClusters
 			return Enumerator;
 		}
 
-		// Build fresh with node-indexed positions
+		// LocalTangent path: retrieve cached tangent frames and build with per-node frames
+		if (ProjectionDetails.Method == EPCGExProjectionMethod::LocalTangent)
+		{
+			static const FName TangentFramesKey = FName("TangentFrames");
+			if (TSharedPtr<FCachedTangentFrames> CachedFrames = InCluster->GetCachedData<FCachedTangentFrames>(TangentFramesKey))
+			{
+				Enumerator = MakeShared<FPlanarFaceEnumerator>();
+				Enumerator->Build(InCluster, CachedFrames->NodeTangentFrames);
+
+				// Opportunistically cache the enumerator
+				if (Enumerator->IsBuilt())
+				{
+					TSharedPtr<FCachedFaceEnumerator> NewCached = MakeShared<FCachedFaceEnumerator>();
+					NewCached->ContextHash = ProjHash;
+					NewCached->Enumerator = Enumerator;
+					InCluster->SetCachedData(FFaceEnumeratorCacheFactory::CacheKey, NewCached);
+				}
+
+				return Enumerator;
+			}
+		}
+
+		// Build fresh with node-indexed positions (Normal/BestFit, or LocalTangent fallback if no cached frames)
 		Enumerator = MakeShared<FPlanarFaceEnumerator>();
 		Enumerator->Build(InCluster, ProjectionDetails);
 
@@ -183,6 +240,37 @@ namespace PCGExClusters
 		if (!Enumerator || !Enumerator->IsBuilt())
 		{
 			// Cannot build wrapper without an enumerator - caller should call GetOrBuildEnumerator first
+			return;
+		}
+
+		// LocalTangent: no topological wrapper — identify wrapper as the largest-area cell
+		if (Enumerator->IsLocalTangent())
+		{
+			const TArray<FRawFace>& RawFaces = Enumerator->EnumerateRawFaces();
+			const FCluster* Cluster = Enumerator->GetCluster();
+			if (!Cluster || RawFaces.IsEmpty()) { return; }
+
+			TSharedPtr<FCellConstraints> TempConstraints = MakeShared<FCellConstraints>();
+			TempConstraints->bKeepCellsWithLeaves = true;
+			TempConstraints->bDuplicateLeafPoints = InConstraints ? InConstraints->bDuplicateLeafPoints : bDuplicateLeafPoints;
+
+			double LargestArea = -1.0;
+
+			for (const FRawFace& RawFace : RawFaces)
+			{
+				TSharedPtr<FCell> Cell = MakeShared<FCell>(TempConstraints.ToSharedRef());
+				const ECellResult Result = Enumerator->BuildCellFromRawFace(RawFace, Cell, TempConstraints.ToSharedRef());
+
+				if (Result != ECellResult::Success && Result != ECellResult::Duplicate) { continue; }
+
+				if (Cell->Data.Area > LargestArea)
+				{
+					LargestArea = Cell->Data.Area;
+					WrapperCell = Cell;
+				}
+			}
+
+			if (WrapperCell) { IsUniqueCellHash(WrapperCell); }
 			return;
 		}
 

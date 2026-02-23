@@ -1,1 +1,9 @@
-<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><style>.cls-1{fill:#4d8dfc;}.cls-2{fill:#fff;}</style></defs><rect x="19.81" y="19.81" width="60.38" height="60.38"/><rect class="cls-1" x="17.31" y="31.19" width="65.38" height="37.62"/><path class="cls-2" d="M80.41,82.91H19.59a2.5,2.5,0,0,1-2.5-2.5V19.59a2.5,2.5,0,0,1,2.5-2.5H80.41a2.5,2.5,0,0,1,2.5,2.5V80.41A2.5,2.5,0,0,1,80.41,82.91Zm-60.6-2.72H80.19V19.81H19.81Z"/></svg>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <style>.cls-1{fill:#4d8dfc;}.cls-2{fill:#fff;}</style>
+    </defs>
+    <rect x="19.81" y="19.81" width="60.38" height="60.38"/>
+    <rect class="cls-1" x="17.31" y="31.19" width="65.38" height="37.62"/>
+    <path class="cls-2"
+          d="M80.41,82.91H19.59a2.5,2.5,0,0,1-2.5-2.5V19.59a2.5,2.5,0,0,1,2.5-2.5H80.41a2.5,2.5,0,0,1,2.5,2.5V80.41A2.5,2.5,0,0,1,80.41,82.91Zm-60.6-2.72H80.19V19.81H19.81Z"/>
+</svg>

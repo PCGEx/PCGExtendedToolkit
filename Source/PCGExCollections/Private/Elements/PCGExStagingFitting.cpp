@@ -24,18 +24,17 @@ PCGExData::EIOInit UPCGExStagingFittingSettings::GetMainDataInitializationPolicy
 }
 
 PCGEX_INITIALIZE_ELEMENT(StagingFitting)
+
 PCGEX_ELEMENT_BATCH_POINT_IMPL(StagingFitting)
 
-TArray<FPCGPinProperties> UPCGExStagingFittingSettings::InputPinProperties() const
+void UPCGExStagingFittingSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-
 	if (Source == EPCGExFittingSource::CollectionMap)
 	{
 		PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
 	}
-
-	return PinProperties;
+	
+	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 
 TArray<FPCGPinProperties> UPCGExStagingFittingSettings::OutputPinProperties() const

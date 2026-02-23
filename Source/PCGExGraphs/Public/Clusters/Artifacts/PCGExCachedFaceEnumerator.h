@@ -11,6 +11,16 @@ namespace PCGExClusters
 	class FPlanarFaceEnumerator;
 
 	/**
+	 * Cached per-node tangent frames for LocalTangent projection.
+	 * Each entry is a quaternion whose Z axis is the node's estimated surface normal.
+	 */
+	class PCGEXGRAPHS_API FCachedTangentFrames : public ICachedClusterData
+	{
+	public:
+		TSharedPtr<TArray<FQuat>> NodeTangentFrames; // node-indexed
+	};
+
+	/**
 	 * Cached face enumerator data.
 	 * Stores a pre-built or opportunistically cached FPlanarFaceEnumerator.
 	 */

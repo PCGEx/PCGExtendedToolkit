@@ -78,6 +78,7 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		PCGEX_ADD_CLASS_ICON(PCGExAssetCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExMeshCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExActorCollection)
+		PCGEX_ADD_CLASS_ICON(PCGExLevelCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExPCGDataAssetCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExCustomGraphSettings)
 		PCGEX_ADD_CLASS_ICON(PCGExCustomGraphBuilder)
@@ -86,7 +87,7 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		PCGEX_ADD_CLASS_ICON(PCGExBitmaskCollection)
 		
 		PCGEX_ADD_CLASS_ICON(PCGExValencyBondingRules)
-		PCGEX_ADD_CLASS_ICON(PCGExValencySocketRules)
+		PCGEX_ADD_CLASS_ICON(PCGExValencyConnectorSet)
 		PCGEX_ADD_CLASS_ICON(PCGExValencyOrbitalSet)
 
 		PCGEX_REGISTER_PIN_ICON(OUT_Special)
@@ -101,6 +102,9 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		Module->RegisterToEditor(Style);
 		Module->RegisterMenuExtensions();
 	}
+
+	// Store for late-loading addon modules that self-register
+	IPCGExModuleInterface::EditorStyle = Style;
 
 	FSlateStyleRegistry::RegisterSlateStyle(*Style.Get());
 	PCGExDetailsCustomization::RegisterDetailsCustomization(Style);

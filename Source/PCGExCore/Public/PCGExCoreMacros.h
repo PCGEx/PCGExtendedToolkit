@@ -195,13 +195,13 @@ FPCGElementPtr UPCGEx##_NAME##Settings::CreateElement() const{	return MakeShared
 
 
 // Validate that an operation has been selected in settings
-#define PCGEX_OPERATION_VALIDATE(_NAME) if(!Settings->_NAME){PCGE_LOG(Error, GraphAndLog, FTEXT("No operation selected for : "#_NAME)); return false;}
+#define PCGEX_VALIDATE_INSTANCED_FACTORY(_NAME) if(!Settings->_NAME){PCGE_LOG(Error, GraphAndLog, FTEXT("No operation selected for : "#_NAME)); return false;}
 
 // Register an operation with the context and cast to expected type
-#define PCGEX_OPERATION_REGISTER_C(_CTX, _TYPE, _OP, _OVERRIDES_PIN) Cast<_TYPE>(_CTX->RegisterOperation(_OP, _OVERRIDES_PIN))
+#define PCGEX_REGISTER_INSTANCED_FACTORY_C(_CTX, _TYPE, _OP, _OVERRIDES_PIN) Cast<_TYPE>(_CTX->RegisterInstancedFactory(_OP, _OVERRIDES_PIN))
 
 // Complete operation binding: validate, register, and store in context
-#define PCGEX_OPERATION_BIND(_NAME, _TYPE, _OVERRIDES_PIN) PCGEX_OPERATION_VALIDATE(_NAME) Context->_NAME = PCGEX_OPERATION_REGISTER_C(Context, _TYPE, Settings->_NAME, _OVERRIDES_PIN); if(!Context->_NAME){return false;}
+#define PCGEX_BIND_INSTANCED_FACTORY(_NAME, _TYPE, _OVERRIDES_PIN) PCGEX_VALIDATE_INSTANCED_FACTORY(_NAME) Context->_NAME = PCGEX_REGISTER_INSTANCED_FACTORY_C(Context, _TYPE, Settings->_NAME, _OVERRIDES_PIN); if(!Context->_NAME){return false;}
 
 
 /// ASYNC & WORK HANDLE UTILITIES

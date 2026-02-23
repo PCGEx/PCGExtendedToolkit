@@ -1,1 +1,14 @@
-<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><style>.cls-1{fill:#fff;}.cls-2{fill:#ccc;}.cls-3{fill:gray;}</style></defs><rect class="cls-1" x="7.46" y="6.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-1" x="38.8" y="6.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-1" x="70.14" y="6.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-1" x="7.46" y="38.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-2" x="38.8" y="38.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-2" x="70.14" y="38.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-2" x="7.46" y="70.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-3" x="38.8" y="70.8" width="22.4" height="22.4" rx="6.71"/><rect class="cls-3" x="70.14" y="70.8" width="22.4" height="22.4" rx="6.71"/></svg>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <style>.cls-1{fill:#fff;}.cls-2{fill:#ccc;}.cls-3{fill:gray;}</style>
+    </defs>
+    <rect class="cls-1" x="7.46" y="6.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-1" x="38.8" y="6.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-1" x="70.14" y="6.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-1" x="7.46" y="38.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-2" x="38.8" y="38.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-2" x="70.14" y="38.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-2" x="7.46" y="70.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-3" x="38.8" y="70.8" width="22.4" height="22.4" rx="6.71"/>
+    <rect class="cls-3" x="70.14" y="70.8" width="22.4" height="22.4" rx="6.71"/>
+</svg>

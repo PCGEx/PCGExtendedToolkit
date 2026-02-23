@@ -37,9 +37,6 @@ bool FPCGExBreakClustersToPathsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(BreakClustersToPaths)
 
-	Context->bUseProjection = Settings->Winding != EPCGExWindingMutation::Unchanged;
-	Context->bUsePerClusterProjection = Context->bUseProjection && Settings->ProjectionDetails.Method == EPCGExProjectionMethod::BestFit;
-
 	Context->OutputPaths = MakeShared<PCGExData::FPointIOCollection>(Context);
 	Context->OutputPaths->OutputPin = PCGExPaths::Labels::OutputPathsLabel;
 

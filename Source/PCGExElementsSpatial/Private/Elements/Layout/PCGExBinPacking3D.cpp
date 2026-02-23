@@ -581,16 +581,16 @@ namespace PCGExBinPacking3D
 		const double PaddedVolume = PaddedSize.X * PaddedSize.Y * PaddedSize.Z;
 		const FVector BinSize = Bounds.GetSize();
 
-		// o1: Bin usage — prefer fuller bins (lower score = better), uses padded volume
+		// o1: Bin usage -- prefer fuller bins (lower score = better), uses padded volume
 		const double CurrentFillRatio = MaxVolume > 0 ? (UsedVolume + PaddedVolume) / MaxVolume : 0;
 		const double BinUsageScore = 1.0 - CurrentFillRatio;
 
-		// o2: Height — prefer lower actual placement Z (Paper Eq. 2)
+		// o2: Height -- prefer lower actual placement Z (Paper Eq. 2)
 		const double NormalizedZ = BinSize.Z > KINDA_SMALL_NUMBER
 			                           ? (ActualMin.Z + RotatedSize.Z - Bounds.Min.Z) / BinSize.Z
 			                           : 0.0;
 
-		// o3: Load balance — Manhattan distance of actual center to bin center (Paper Eq. 3)
+		// o3: Load balance -- Manhattan distance of actual center to bin center (Paper Eq. 3)
 		const FVector ActualCenter = ActualMin + RotatedSize * 0.5;
 		const FVector BinCenter = Bounds.GetCenter();
 		const FVector Diff = (ActualCenter - BinCenter).GetAbs();
@@ -599,7 +599,7 @@ namespace PCGExBinPacking3D
 		const double ManhattanDist = Diff.X + Diff.Y + Diff.Z;
 		const double LoadBalanceScore = MaxManhattan > KINDA_SMALL_NUMBER ? ManhattanDist / MaxManhattan : 0.0;
 
-		// Contact score — uses padded box for algorithm adjacency
+		// Contact score -- uses padded box for algorithm adjacency
 		const double ContactScoreVal = ComputeContactScore(PaddedBox);
 
 		OutCandidate.BinIndex = BinIndex;
@@ -887,7 +887,7 @@ namespace PCGExBinPacking3D
 
 					if (Bin->EvaluatePlacement(OriginalSize, InItem.Padding, EPIdx, RotationsToTest[RotIdx], Candidate))
 					{
-						// Support check — reject placements with no physical support beneath
+						// Support check -- reject placements with no physical support beneath
 						if (Settings->bRequireSupport)
 						{
 							const FBox CandidateActualBox(Candidate.PlacementMin, Candidate.PlacementMin + Candidate.RotatedSize);

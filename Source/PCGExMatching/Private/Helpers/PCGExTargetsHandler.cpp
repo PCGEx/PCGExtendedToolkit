@@ -6,7 +6,9 @@
 #include "Core/PCGExContext.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Data/PCGExTaggedData.h"
 #include "Details/PCGExDistancesDetails.h"
+#include "Details/PCGExMatchingDetails.h"
 #include "Helpers/PCGExDataMatcher.h"
 #include "Math/PCGExMathDistances.h"
 
@@ -86,6 +88,30 @@ namespace PCGExMatching
 	{
 		if (DataMatcher) { return DataMatcher->PopulateIgnoreList(InDataCandidate->GetTaggedData(), InMatchingScope, OutIgnoreList); }
 		return true;
+	}
+
+	bool FTargetsHandler::PopulateIgnoreListInverse(const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InMatchRuleFactories, const TSharedPtr<PCGExData::FFacade>& InSourceFacade, const FPCGExMatchingDetails* InDetails, FScope& InMatchingScope, TSet<const UPCGData*>& OutIgnoreList) const
+	{
+		if (!InDetails || !InDetails->IsEnabled()) { return true; }
+		if (InMatchRuleFactories.IsEmpty()) { return true; }
+
+		// Create inverse matcher: input is the single MatchableSource, targets are candidates
+		auto InverseMatcher = MakeShared<FDataMatcher>();
+		InverseMatcher->SetDetails(InDetails);
+
+		TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
+		SingleSource.Add(InSourceFacade);
+		if (!InverseMatcher->Init(InMatchRuleFactories, SingleSource, false)) { return true; }
+
+		// Build FPCGExTaggedData array from targets (candidates in inverse context)
+		TArray<FPCGExTaggedData> TargetCandidates;
+		TargetCandidates.Reserve(TargetFacades.Num());
+		for (int32 i = 0; i < TargetFacades.Num(); i++)
+		{
+			TargetCandidates.Add(TargetFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
+		}
+
+		return InverseMatcher->PopulateIgnoreListFromCandidates(TargetCandidates, InMatchingScope, OutIgnoreList);
 	}
 
 	bool FTargetsHandler::HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward) const

@@ -15,7 +15,7 @@ class UPCGExAssetCollection;
  * Used for mesh/actor swapping based on pattern matches.
  * Does not support direct attribute output.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Asset Collection")
 struct PCGEXCOLLECTIONS_API FPCGExProperty_AssetCollection : public FPCGExProperty
 {
 	GENERATED_BODY()

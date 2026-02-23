@@ -148,7 +148,7 @@ namespace PCGExClusterFilter
 	 * path wasn't taken first. This ensures cluster filters are never accidentally used without
 	 * cluster context.
 	 *
-	 * Subclass IVtxFilter or IEdgeFilter instead of this directly — they handle the
+	 * Subclass IVtxFilter or IEdgeFilter instead of this directly -- they handle the
 	 * index-to-element routing automatically.
 	 */
 	class PCGEXFILTERS_API IFilter : public PCGExPointFilter::IFilter
