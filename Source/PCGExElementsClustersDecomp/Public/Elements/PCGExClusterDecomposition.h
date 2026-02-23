@@ -17,7 +17,7 @@ namespace PCGExData
 	class TBuffer;
 }
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(Keywords = "decompose partition cell"), meta=(PCGExNodeLibraryDoc="clusters/cluster-decomposition"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(Keywords = "decompose partition cell"), meta=(PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition"))
 class UPCGExClusterDecompositionSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

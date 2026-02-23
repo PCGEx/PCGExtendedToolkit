@@ -95,7 +95,7 @@ public:
  * and tracked for cleanup on PCG regeneration.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc",
-	meta=(Keywords = "spawn level instance staged world", PCGExNodeLibraryDoc="staging/staging-load-level"))
+	meta=(Keywords = "spawn level instance staged world", PCGExNodeLibraryDoc="staging/staging-spawn-level"))
 class UPCGExStagingLoadLevelSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()
