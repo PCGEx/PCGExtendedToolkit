@@ -3,6 +3,7 @@
 
 #include "Core/PCGExClusterMT.h"
 
+#include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
 #include "Data/PCGExData.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Data/PCGExPointIO.h"
@@ -19,6 +20,8 @@
 
 namespace PCGExClusterMT
 {
+	const FName CachedTangentFramesKey = FName("TangentFrames");
+
 #pragma region Tasks
 
 #define PCGEX_ASYNC_CLUSTER_PROCESSOR_LOOP(_NAME, _NUM, _PREPARE, _PROCESS, _COMPLETE, _INLINE) PCGEX_ASYNC_PROCESSOR_LOOP(_NAME, _NUM, _PREPARE, _PROCESS, _COMPLETE, _INLINE, GetClusterBatchChunkSize)
@@ -133,7 +136,7 @@ namespace PCGExClusterMT
 			TArray<FVector2D>& ProjectedVtx = *ProjectedVtxPositions.Get();
 			Cluster->ProjectedCentroid = FVector2D::ZeroVector;
 
-			if (bWantsProjection && ProjectionDetails.Method == EPCGExProjectionMethod::BestFit)
+			if (bWantsProjection && (ProjectionDetails.Method == EPCGExProjectionMethod::BestFit || ProjectionDetails.Method == EPCGExProjectionMethod::LocalTangent))
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(IProcessor::Process::Project);
 
@@ -143,6 +146,7 @@ namespace PCGExClusterMT
 				TArray<int32> PtIndices;
 				IdxLookup->Dump(PtIndices);
 
+				// BestFit projection for ProjectedVtxPositions (fallback for non-cell consumers)
 				ProjectionDetails.Init(PCGExMath::FBestFitPlane(InVtxTransforms, PtIndices));
 
 				for (const int32 i : PtIndices)
@@ -150,6 +154,104 @@ namespace PCGExClusterMT
 					FVector2D V = FVector2D(ProjectionDetails.ProjectFlat(InVtxTransforms[i].GetLocation()));
 					ProjectedVtx[i] = V;
 					Cluster->ProjectedCentroid += V;
+				}
+
+				// LocalTangent: compute per-node tangent frames and cache on cluster
+				if (ProjectionDetails.Method == EPCGExProjectionMethod::LocalTangent)
+				{
+					TRACE_CPUPROFILER_EVENT_SCOPE(IProcessor::Process::TangentFrames);
+
+					const TArray<PCGExClusters::FNode>& NodesRef = *Cluster->Nodes.Get();
+					const int32 ClusterNumNodes = NodesRef.Num();
+
+					TSharedPtr<TArray<FQuat>> TangentFrames = MakeShared<TArray<FQuat>>();
+					TangentFrames->SetNumUninitialized(ClusterNumNodes);
+
+					// Step 1: Compute raw normal for each node from adjacent edges
+					TArray<FVector> NodeNormals;
+					NodeNormals.SetNumUninitialized(ClusterNumNodes);
+
+					for (int32 NodeIdx = 0; NodeIdx < ClusterNumNodes; ++NodeIdx)
+					{
+						const PCGExClusters::FNode& Node = NodesRef[NodeIdx];
+						const FVector NodePos = Cluster->GetPos(NodeIdx);
+						FVector Normal = FVector::ZeroVector;
+
+						if (Node.Num() >= 2)
+						{
+							// Find the two most linearly independent edges for a robust cross product
+							double BestCross = -1.0;
+							FVector BestNormal = FVector::UpVector;
+
+							for (int32 i = 0; i < Node.Num(); ++i)
+							{
+								const FVector DirA = (Cluster->GetPos(Node.Links[i].Node) - NodePos).GetSafeNormal();
+								for (int32 j = i + 1; j < Node.Num(); ++j)
+								{
+									const FVector DirB = (Cluster->GetPos(Node.Links[j].Node) - NodePos).GetSafeNormal();
+									const FVector Cross = FVector::CrossProduct(DirA, DirB);
+									const double CrossLen = Cross.Size();
+									if (CrossLen > BestCross)
+									{
+										BestCross = CrossLen;
+										BestNormal = Cross / CrossLen;
+									}
+								}
+							}
+							Normal = BestNormal;
+						}
+						else
+						{
+							Normal = FVector::UpVector;
+						}
+
+						NodeNormals[NodeIdx] = Normal;
+					}
+
+					// Step 2: BFS normal consistency propagation (flip normals that disagree with parent)
+					TArray<bool> Visited;
+					Visited.SetNumZeroed(ClusterNumNodes);
+					TArray<int32> BFSQueue;
+					BFSQueue.Reserve(ClusterNumNodes);
+					BFSQueue.Add(0);
+					Visited[0] = true;
+
+					for (int32 QueueIdx = 0; QueueIdx < BFSQueue.Num(); ++QueueIdx)
+					{
+						const int32 CurrentNode = BFSQueue[QueueIdx];
+						const PCGExClusters::FNode& Node = NodesRef[CurrentNode];
+
+						for (const PCGExGraphs::FLink& Link : Node.Links)
+						{
+							const int32 NeighborNode = Link.Node;
+							if (Visited[NeighborNode]) { continue; }
+
+							// Flip neighbor normal if it disagrees with current
+							if (FVector::DotProduct(NodeNormals[CurrentNode], NodeNormals[NeighborNode]) < 0)
+							{
+								NodeNormals[NeighborNode] = -NodeNormals[NeighborNode];
+							}
+
+							Visited[NeighborNode] = true;
+							BFSQueue.Add(NeighborNode);
+						}
+					}
+
+					// Step 3: Build quaternions from oriented normals
+					// Use adaptive X hint per node to avoid degeneracy when normal ≈ hint direction
+					for (int32 NodeIdx = 0; NodeIdx < ClusterNumNodes; ++NodeIdx)
+					{
+						const FVector& N = NodeNormals[NodeIdx];
+						const FVector XHint = FMath::Abs(FVector::DotProduct(N, FVector::ForwardVector)) < 0.95
+							                      ? FVector::ForwardVector
+							                      : FVector::RightVector;
+						(*TangentFrames)[NodeIdx] = FRotationMatrix::MakeFromZX(N, XHint).ToQuat();
+					}
+
+					// Cache on cluster
+					TSharedPtr<PCGExClusters::FCachedTangentFrames> CachedFrames = MakeShared<PCGExClusters::FCachedTangentFrames>();
+					CachedFrames->NodeTangentFrames = TangentFrames;
+					Cluster->SetCachedData(CachedTangentFramesKey, CachedFrames);
 				}
 			}
 			else
@@ -314,7 +416,7 @@ namespace PCGExClusterMT
 	void IBatch::SetProjectionDetails(const FPCGExGeo2DProjectionDetails& InProjectionDetails)
 	{
 		bWantsProjection = true;
-		bWantsPerClusterProjection = InProjectionDetails.Method == EPCGExProjectionMethod::BestFit;
+		bWantsPerClusterProjection = InProjectionDetails.Method != EPCGExProjectionMethod::Normal;
 		ProjectionDetails = InProjectionDetails;
 	}
 

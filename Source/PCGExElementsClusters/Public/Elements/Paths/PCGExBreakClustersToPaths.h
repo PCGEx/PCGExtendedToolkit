@@ -100,8 +100,6 @@ struct FPCGExBreakClustersToPathsContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExBreakClustersToPathsElement;
 
-	bool bUseProjection = false;
-	bool bUsePerClusterProjection = false;
 	TSharedPtr<PCGExData::FPointIOCollection> OutputPaths;
 	TArray<TSharedPtr<PCGExClusters::FNodeChain>> Chains;
 

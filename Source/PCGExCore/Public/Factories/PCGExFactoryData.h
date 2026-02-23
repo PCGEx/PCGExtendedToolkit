@@ -82,7 +82,7 @@ public:
 
 	virtual void AddDataDependency(const UPCGData* InData);
 	virtual void BeginDestroy() override;
-
+	
 protected:
 	UPROPERTY()
 	TSet<TObjectPtr<UPCGData>> DataDependencies;

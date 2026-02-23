@@ -284,7 +284,7 @@ namespace PCGExUberFilterCascade
 
 		if (SingleBucket >= 0)
 		{
-			// All points in one bucket — Forward (zero-copy)
+			// All points in one bucket -- Forward (zero-copy)
 			if (SingleBucket == DefaultIdx)
 			{
 				if (!Settings->bOutputDiscardedElements) { return; }
@@ -297,7 +297,7 @@ namespace PCGExUberFilterCascade
 			return;
 		}
 
-		// Mixed distribution — create new outputs per bucket
+		// Mixed distribution -- create new outputs per bucket
 		for (int32 i = 0; i < NumBranches; i++)
 		{
 			if (BranchCounts[i] <= 0) { continue; }

@@ -82,9 +82,12 @@ namespace PCGExClusters
 		TArray<FVector2D> ProjectedPoints;
 		FBox2D TightBounds;
 
+		/** 3D AABB of source points (computed alongside 2D projection) */
+		FBox TightBounds3D;
+
 	public:
 		explicit FProjectedPointSet(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const FPCGExGeo2DProjectionDetails& InProjectionDetails)
-			: PointDataFacade(InPointDataFacade), ProjectionDetails(InProjectionDetails), TightBounds(ForceInit)
+			: PointDataFacade(InPointDataFacade), ProjectionDetails(InProjectionDetails), TightBounds(ForceInit), TightBounds3D(ForceInit)
 		{
 			if (ProjectionDetails.Method == EPCGExProjectionMethod::Normal) { ProjectionDetails.Init(PointDataFacade); }
 		}
@@ -94,6 +97,13 @@ namespace PCGExClusters
 
 		/** Check if any point overlaps polygon (with AABB early-out) */
 		bool OverlapsPolygon(const TArray<FVector2D>& Polygon, const FBox2D& PolygonBounds) const;
+
+		/** Check if any source point overlaps polygon using a per-face local projection (for LocalTangent mode) */
+		bool OverlapsPolygonLocal(
+			const TArray<FVector2D>& Polygon,
+			const FBox2D& PolygonBounds,
+			const FBox& FaceBounds3D,
+			const FPCGExGeo2DProjectionDetails& FaceProjection) const;
 
 		/** Get projected point by index (for FindCells seed tracking). Caller must call EnsureProjected() before using in loops. */
 		FORCEINLINE const FVector2D& GetProjected(int32 Index) const
@@ -137,7 +147,6 @@ namespace PCGExClusters
 		double MaxCompactness = MAX_dbl;
 		double MinCompactness = MIN_dbl_neg;
 
-		double WrapperClassificationTolerance = 0;
 		bool bBuildWrapper = true;
 
 		TSharedPtr<FCell> WrapperCell;

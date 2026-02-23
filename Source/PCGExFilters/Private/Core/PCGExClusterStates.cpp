@@ -100,7 +100,7 @@ namespace PCGExClusterStates
 		FlagsCache = InFlags;
 	}
 
-	// Evaluates all states and accumulates flag mutations. Always returns true —
+	// Evaluates all states and accumulates flag mutations. Always returns true --
 	// the purpose is the side-effect on the FlagsCache, not point filtering.
 	bool FStateManager::Test(const int32 Index)
 	{

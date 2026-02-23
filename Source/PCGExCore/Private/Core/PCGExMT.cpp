@@ -786,6 +786,12 @@ namespace PCGExMT
 
 	void ExecuteOnMainThread(FExecuteCallback&& Callback)
 	{
+		if (IsInGameThread())
+		{
+			Callback();
+			return;
+		}
+		
 		AsyncTask(ENamedThreads::GameThread, Callback);
 	}
 

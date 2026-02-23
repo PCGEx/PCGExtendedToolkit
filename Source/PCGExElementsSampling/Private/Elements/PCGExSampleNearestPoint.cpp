@@ -373,7 +373,7 @@ namespace PCGExSampleNearestPoint
 			Union->Reset();
 			Union->Reserve(Context->TargetsHandler->Num(), RangeMax || bSingleSample ? 8 : Context->NumMaxTargets);
 
-			const PCGExData::FMutablePoint Point = PointDataFacade->GetOutPoint(Index);
+			const PCGExData::FConstPoint Point = PointDataFacade->GetInPoint(Index);
 			const FVector Origin = InTransforms[Index].GetLocation();
 
 			PCGExData::FElement SinglePick(-1, -1);

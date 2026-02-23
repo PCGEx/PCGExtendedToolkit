@@ -118,7 +118,7 @@ namespace PCGExMesh
 				// Spatial hash-based vertex deduplication.
 				// Quantizes positions into grid cells of size HashTolerance and looks up by cell key.
 				// The "precise" variant also checks a half-offset cell to catch vertices that
-				// land near cell boundaries — without this, two vertices 0.01 apart could hash
+				// land near cell boundaries -- without this, two vertices 0.01 apart could hash
 				// to different cells despite being within tolerance. Registering under both keys
 				// ensures consistent deduplication regardless of which cell a future vertex hashes to.
 				if constexpr (bCollapse)

@@ -14,6 +14,7 @@
 #include "Details/Collections/PCGExFittingVariationsCustomization.h"
 #include "Details/Collections/PCGExMaterialPicksCustomization.h"
 #include "Details/Collections/PCGExMeshCollectionActions.h"
+#include "Details/Collections/PCGExLevelCollectionActions.h"
 #include "Details/Collections/PCGExPCGDataAssetCollectionActions.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExCollectionsEditorModule"

@@ -24,7 +24,7 @@ namespace PCGExMath
 	namespace Contrast
 	{
 		//
-		// Core contrast functions — input in [-1, 1], output in [-1, 1]
+		// Core contrast functions -- input in [-1, 1], output in [-1, 1]
 		// Contrast parameter: 1.0 = no change, >1 = more contrast, <1 = less contrast
 		//
 
@@ -84,7 +84,7 @@ namespace PCGExMath
 		}
 
 		/**
-		 * Apply contrast with selectable curve type — input in [-1, 1]
+		 * Apply contrast with selectable curve type -- input in [-1, 1]
 		 * @param Value Input value in [-1, 1]
 		 * @param Contrast Contrast amount (1.0 = no change)
 		 * @param CurveType 0 = Power, 1 = SCurve, 2 = Gain
@@ -103,7 +103,7 @@ namespace PCGExMath
 		}
 
 		//
-		// Vector overloads — [-1,1] per component
+		// Vector overloads -- [-1,1] per component
 		//
 
 		FORCEINLINE FVector2D ApplyContrast(const FVector2D& Value, const double Contrast, const int32 CurveType = 0)
@@ -137,7 +137,7 @@ namespace PCGExMath
 		}
 
 		//
-		// Arbitrary range — remaps [Min,Max] → [-1,1] internally
+		// Arbitrary range -- remaps [Min,Max] → [-1,1] internally
 		//
 
 		FORCEINLINE double ApplyContrastInRange(const double Value, const double Contrast, const int32 CurveType, const double Min, const double Max)
@@ -228,7 +228,7 @@ namespace PCGExMath
 		}
 
 		//
-		// [Min,Max] batch — fused remap, switch outside loop
+		// [Min,Max] batch -- fused remap, switch outside loop
 		// Pass 1: find min/max if not provided. Pass 2: remap + contrast + unmap.
 		//
 

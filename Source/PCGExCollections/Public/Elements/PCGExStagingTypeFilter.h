@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -10,11 +10,18 @@
 
 #include "PCGExStagingTypeFilter.generated.h"
 
+namespace PCGExMT
+{
+	template <typename T>
+	class TScopedArray;
+}
+
 UENUM()
 enum class EPCGExStagedTypeFilterMode : uint8
 {
-	Include = 0 UMETA(DisplayName = "Include", ToolTip="Keep points that match selected types"),
-	Exclude = 1 UMETA(DisplayName = "Exclude", ToolTip="Remove points that match selected types"),
+	Include    = 0 UMETA(DisplayName = "Include", ToolTip="Keep points that match selected types"),
+	Exclude    = 1 UMETA(DisplayName = "Exclude", ToolTip="Remove points that match selected types"),
+	PinPerType = 2 UMETA(DisplayName = "Pin Per Type", ToolTip="Split points into separate output pins by type"),
 };
 
 
@@ -36,13 +43,20 @@ public:
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 
+	virtual bool HasDynamicPins() const override { return FilterMode == EPCGExStagedTypeFilterMode::PinPerType; }
+	virtual bool OutputPinsCanBeDeactivated() const override { return FilterMode == EPCGExStagedTypeFilterMode::PinPerType; }
+
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	//~End UPCGSettings
 
+	//~Begin UPCGExPointsProcessorSettings
 public:
+	virtual FName GetMainOutputPin() const override;
+	//~End UPCGExPointsProcessorSettings
+
 	/** Filter mode */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExStagedTypeFilterMode FilterMode = EPCGExStagedTypeFilterMode::Include;
@@ -54,6 +68,10 @@ public:
 	/** If enabled, output filtered-out points to a separate pin */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bOutputDiscarded = false;
+
+	/** Pin labels for PinPerType mode (auto-populated from TypeConfig) */
+	UPROPERTY(meta=(PCG_NotOverridable))
+	TArray<FName> TypePinLabels;
 };
 
 struct FPCGExStagedTypeFilterContext final : FPCGExPointsProcessorContext
@@ -62,7 +80,16 @@ struct FPCGExStagedTypeFilterContext final : FPCGExPointsProcessorContext
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionUnpacker;
 
+	// Include/Exclude mode
 	TSharedPtr<PCGExData::FPointIOCollection> FilteredOutCollection;
+
+	// PinPerType mode
+	TArray<TSharedPtr<PCGExData::FPointIOCollection>> TypeOutputs;
+	TSharedPtr<PCGExData::FPointIOCollection> UnmatchedOutput;
+	TMap<PCGExAssetCollection::FTypeId, int32> TypeToBucketMap;
+	int32 NumPairs = 0;
+
+	int32 FindTypeBucket(PCGExAssetCollection::FTypeId TypeId) const;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
@@ -85,8 +112,14 @@ namespace PCGExStagedTypeFilter
 	{
 	protected:
 		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashGetter;
+
+		// Include/Exclude mode
 		TArray<int8> Mask;
 		int32 NumKept = 0;
+
+		// PinPerType mode
+		TArray<TSharedPtr<PCGExMT::TScopedArray<int32>>> BucketIndices;
+		TArray<int32> BucketCounts;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
@@ -99,7 +132,11 @@ namespace PCGExStagedTypeFilter
 		}
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
+		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
+		virtual void OnPointsProcessingComplete() override;
 		virtual void CompleteWork() override;
+
+		TSharedPtr<PCGExData::FPointIO> CreateIO(const TSharedRef<PCGExData::FPointIOCollection>& InCollection, const PCGExData::EIOInit InitMode) const;
 	};
 }

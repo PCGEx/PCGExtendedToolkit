@@ -7,6 +7,8 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Helpers/PCGExDataMatcher.h"
+#include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 #include "PCGExMatching/Public/Helpers/PCGExTargetsHandler.h"
 
 
@@ -18,6 +20,7 @@ PCGEX_SETTING_VALUE_IMPL(FPCGExNumericCompareNearestFilterConfig, OperandB, doub
 bool UPCGExNumericCompareNearestFilterFactory::Init(FPCGExContext* InContext)
 {
 	if (!Super::Init(InContext)) { return false; }
+	if (Config.DataMatching.IsEnabled()) { PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {PCGExFactories::EType::MatchRule}); }
 	return true;
 }
 
@@ -27,6 +30,7 @@ PCGExFactories::EPreparationResult UPCGExNumericCompareNearestFilterFactory::Pre
 	if (!TargetsHandler->Init(InContext, PCGExCommon::Labels::SourceTargetsLabel)) { return PCGExFactories::EPreparationResult::MissingData; }
 
 	TargetsHandler->SetDistances(Config.DistanceDetails);
+	TargetsHandler->SetMatchingDetails(InContext, &Config.DataMatching);
 	TargetsHandler->ForEachPreloader([&](PCGExData::FFacadePreloader& Preloader) { Preloader.Register<double>(InContext, Config.OperandA); });
 
 	OperandA = MakeShared<TArray<TSharedPtr<PCGExData::TBuffer<double>>>>();
@@ -93,17 +97,52 @@ bool PCGExPointFilter::FNumericCompareNearestFilter::Init(FPCGExContext* InConte
 
 	if (TypedFilterFactory->Config.bIgnoreSelf) { IgnoreList.Add(InPointDataFacade->GetIn()); }
 
+	const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
+		&& !TypedFilterFactory->MatchRuleFactories.IsEmpty();
+
+	if (bMatchingEnabled)
+	{
+		// Always per-point (no bCheckAgainstDataBounds -- this filter doesn't support collection eval)
+		InverseMatcher = MakeShared<PCGExMatching::FDataMatcher>();
+		InverseMatcher->SetDetails(&TypedFilterFactory->Config.DataMatching);
+
+		TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
+		SingleSource.Add(InPointDataFacade);
+		if (InverseMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
+		{
+			TargetsHandler->ForEachTarget([&](const TSharedRef<PCGExData::FFacade>& Target, const int32 TargetIndex)
+			{
+				TargetCandidates.Add(Target->Source->GetTaggedData(PCGExData::EIOSide::In, TargetIndex));
+			});
+			bNoMatchResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
+		}
+		else { InverseMatcher.Reset(); }
+	}
+
 	return true;
 }
 
 bool PCGExPointFilter::FNumericCompareNearestFilter::Test(const int32 PointIndex) const
 {
+	if (bMatchingFailed) { return bCollectionTestResult; }
+
+	const TSet<const UPCGData*>* ExcludePtr = &IgnoreList;
+	TSet<const UPCGData*> PerPointExclude;
+
+	if (InverseMatcher)
+	{
+		PerPointExclude = IgnoreList;
+		if (!InverseMatcher->BuildPerPointExclude(PointDataFacade->Source->GetInPoint(PointIndex), TargetCandidates, PerPointExclude))
+		{ return bNoMatchResult; }
+		ExcludePtr = &PerPointExclude;
+	}
+
 	const double B = OperandB->Read(PointIndex);
 	const PCGExData::FConstPoint SourcePt = PointDataFacade->GetInPoint(PointIndex);
 	PCGExData::FConstPoint TargetPt = PCGExData::FConstPoint();
 
 	double BestDist = MAX_dbl;
-	TargetsHandler->FindClosestTarget(SourcePt, TargetPt, BestDist, &IgnoreList);
+	TargetsHandler->FindClosestTarget(SourcePt, TargetPt, BestDist, ExcludePtr);
 
 	if (!TargetPt.IsValid()) { return false; }
 
@@ -115,6 +154,7 @@ TArray<FPCGPinProperties> UPCGExNumericCompareNearestFilterProviderSettings::Inp
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 	PCGEX_PIN_POINTS(PCGExCommon::Labels::SourceTargetsLabel, TEXT("Target points to read operand B from"), Required)
+	PCGExMatching::Helpers::DeclareMatchingRulesInputs(Config.DataMatching, PinProperties);
 	return PinProperties;
 }
 

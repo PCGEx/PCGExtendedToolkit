@@ -56,7 +56,7 @@ bool FPCGExSmoothElement::Boot(FPCGExContext* InContext) const
 	if (!FPCGExPathProcessorElement::Boot(InContext)) { return false; }
 
 	PCGEX_CONTEXT_AND_SETTINGS(Smooth)
-	PCGEX_OPERATION_BIND(SmoothingMethod, UPCGExSmoothingInstancedFactory, PCGExSmooth::SourceOverridesSmoothing)
+	PCGEX_BIND_INSTANCED_FACTORY(SmoothingMethod, UPCGExSmoothingInstancedFactory, PCGExSmooth::SourceOverridesSmoothing)
 
 	if (Settings->BlendingInterface == EPCGExBlendingInterface::Individual)
 	{

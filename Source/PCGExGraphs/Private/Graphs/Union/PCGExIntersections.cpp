@@ -124,7 +124,7 @@ namespace PCGExGraphs
 				return ClosestNode.Index;
 			}
 
-			// Still holding the lock — safe to insert
+			// Still holding the lock -- safe to insert
 			const TSharedPtr<FUnionNode> Node = MakeShared<FUnionNode>(Point, Origin, Nodes.Num());
 			Octree->AddElement(Node.Get());
 			NodesUnion->NewEntry_Unsafe(Point);

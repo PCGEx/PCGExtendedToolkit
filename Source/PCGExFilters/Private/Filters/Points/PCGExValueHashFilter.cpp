@@ -143,7 +143,7 @@ bool PCGExPointFilter::FValueHashFilter::Init(FPCGExContext* InContext, const TS
 	if (!IFilter::Init(InContext, InPointDataFacade)) { return false; }
 
 	bInvert = TypedFilterFactory->Config.bInvert;
-	// In Merged mode, all sets are combined into one, so "any vs all" is meaningless — force bAnyPass = true.
+	// In Merged mode, all sets are combined into one, so "any vs all" is meaningless -- force bAnyPass = true.
 	bAnyPass = TypedFilterFactory->Config.Mode == EPCGExValueHashMode::Individual ? TypedFilterFactory->Config.Inclusion == EPCGExValueHashSetInclusionMode::Any : true;
 
 	FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(TypedFilterFactory->Config.OperandA, PointDataFacade->GetIn());

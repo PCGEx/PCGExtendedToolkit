@@ -17,10 +17,16 @@ namespace PCGExEnumCustomization
 	TSharedRef<SWidget> CreateRadioGroup(const TSharedPtr<IPropertyHandle>& PropertyHandle, const FString& Enum);
 
 	PCGEXCOREEDITOR_API
+	TSharedRef<SWidget> CreateRadioGroup(UEnum* Enum, TFunction<int32()> GetValue, TFunction<void(int32)> SetValue);
+
+	PCGEXCOREEDITOR_API
 	TSharedRef<SWidget> CreateCheckboxGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum, const TSet<int32>& SkipIndices);
 
 	PCGEXCOREEDITOR_API
 	TSharedRef<SWidget> CreateCheckboxGroup(const TSharedPtr<IPropertyHandle>& PropertyHandle, const FString& Enum, const TSet<int32>& SkipIndices);
+
+	PCGEXCOREEDITOR_API
+	TSharedRef<SWidget> CreateCheckboxGroup(UEnum* Enum, TFunction<uint8()> GetValue, TFunction<void(uint8)> SetValue, const TSet<int32>& SkipIndices = {});
 }
 
 class PCGEXCOREEDITOR_API FPCGExInlineEnumCustomization : public IPropertyTypeCustomization

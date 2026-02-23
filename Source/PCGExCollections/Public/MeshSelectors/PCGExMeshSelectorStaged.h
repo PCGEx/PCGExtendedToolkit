@@ -32,4 +32,8 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bOutputPoints = true;
+
+	/** When enabled, silently skips input data that is missing the staging hash attribute instead of logging an error. */
+	UPROPERTY(EditAnywhere, Category = MeshSelector)
+	bool bQuietMissingStagingDataWarning = false;
 };
