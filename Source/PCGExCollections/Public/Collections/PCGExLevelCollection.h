@@ -8,6 +8,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Helpers/PCGExArrayHelpers.h"
 
 #include "PCGExLevelCollection.generated.h"
 
