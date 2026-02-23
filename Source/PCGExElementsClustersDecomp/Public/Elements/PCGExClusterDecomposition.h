@@ -55,6 +55,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName CellIDAttributeName = FName("CellID");
 
+	/** Optional attribute name for per-node cell count (how many nodes share this cell). Empty = disabled. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(PCG_Overridable))
+	FName CellCountAttributeName = NAME_None;
+
 private:
 	friend class FPCGExClusterDecompositionElement;
 };
@@ -87,6 +91,7 @@ namespace PCGExClusterDecomposition
 		friend class FBatch;
 
 		TSharedPtr<PCGExData::TBuffer<int32>> CellIDBuffer;
+		TSharedPtr<PCGExData::TBuffer<int32>> CellCountBuffer;
 
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
@@ -105,6 +110,7 @@ namespace PCGExClusterDecomposition
 	class FBatch final : public PCGExClusterMT::TBatch<FProcessor>
 	{
 		TSharedPtr<PCGExData::TBuffer<int32>> CellIDBuffer;
+		TSharedPtr<PCGExData::TBuffer<int32>> CellCountBuffer;
 
 	public:
 		FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges);

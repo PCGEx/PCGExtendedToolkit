@@ -113,6 +113,25 @@ namespace PCGExClusterDecomposition
 				if (CellID < 0) { continue; }
 				CellIDBuffer->SetValue(Cluster->GetNodePointIndex(NodeIndex), Offset + CellID);
 			}
+
+			if (CellCountBuffer)
+			{
+				// Count nodes per cell
+				TMap<int32, int32> CellNodeCounts;
+				for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
+				{
+					const int32 CellID = Result.NodeCellIDs[NodeIndex];
+					if (CellID >= 0) { CellNodeCounts.FindOrAdd(CellID)++; }
+				}
+
+				// Write per-node cell count
+				for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
+				{
+					const int32 CellID = Result.NodeCellIDs[NodeIndex];
+					if (CellID < 0) { continue; }
+					CellCountBuffer->SetValue(Cluster->GetNodePointIndex(NodeIndex), CellNodeCounts[CellID]);
+				}
+			}
 		}
 
 		return true;
@@ -152,6 +171,11 @@ namespace PCGExClusterDecomposition
 
 		CellIDBuffer = VtxDataFacade->GetWritable<int32>(Settings->CellIDAttributeName, -1, true, PCGExData::EBufferInit::New);
 
+		if (Settings->CellCountAttributeName != NAME_None)
+		{
+			CellCountBuffer = VtxDataFacade->GetWritable<int32>(Settings->CellCountAttributeName, 0, false, PCGExData::EBufferInit::New);
+		}
+
 		Context->Decomposition->PrepareVtxFacade(VtxDataFacade);
 		TBatch<FProcessor>::OnProcessingPreparationComplete();
 	}
@@ -162,6 +186,7 @@ namespace PCGExClusterDecomposition
 		PCGEX_TYPED_PROCESSOR
 
 		TypedProcessor->CellIDBuffer = CellIDBuffer;
+		TypedProcessor->CellCountBuffer = CellCountBuffer;
 
 		return true;
 	}
