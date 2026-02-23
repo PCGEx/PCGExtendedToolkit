@@ -4,6 +4,7 @@
 #include "Collections/PCGExPCGDataAssetCollection.h"
 
 #include "Engine/World.h"
+#include "UObject/UObjectGlobals.h"
 
 #if WITH_EDITOR
 #include "AssetRegistry/AssetData.h"
