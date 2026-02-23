@@ -51,11 +51,14 @@ void UPCGExLevelStreamingDynamic::OnLevelLoadedChanged(ULevel* Level)
 	{
 		if (!Actor) { continue; }
 
+
+#if WITH_EDITORONLY_DATA
 		if (Actor->bIsMainWorldOnly)
 		{
 			Actor->Destroy();
 			continue;
 		}
+#endif
 
 #if WITH_EDITOR
 		if (GeneratedFolderPath != NAME_None)
@@ -92,11 +95,13 @@ void UPCGExLevelStreamingLevelInstance::OnLevelLoadedChanged(ULevel* Level)
 	{
 		if (!Actor) { continue; }
 
+#if WITH_EDITORONLY_DATA
 		if (Actor->bIsMainWorldOnly)
 		{
 			Actor->Destroy();
 			continue;
 		}
+#endif
 
 #if WITH_EDITOR
 		if (GeneratedFolder != NAME_None)

@@ -8,6 +8,7 @@
 #include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
 
 #include "Data/PCGExData.h"
+#include "Data/PCGExPointIO.h"
 #include "Data/PCGExPointElements.h"
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGBasePointData.h"

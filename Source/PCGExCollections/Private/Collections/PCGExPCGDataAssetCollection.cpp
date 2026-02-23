@@ -124,7 +124,7 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 		TObjectPtr<UPCGExDefaultLevelDataExporter> FallbackExporter;
 		if (!Exporter)
 		{
-			FallbackExporter = NewObject<UPCGExDefaultLevelDataExporter>(GetTransientPackage());
+			FallbackExporter = NewObject<UPCGExDefaultLevelDataExporter>(GetTransientPackageAsObject());
 			Exporter = FallbackExporter;
 		}
 
