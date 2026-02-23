@@ -104,7 +104,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
  * or a subcollection pointer (controlled by bIsSubCollection).
  *
  * Creating a custom collection type:
- * 1. Subclass this struct — add your asset-specific UPROPERTY (e.g. TSoftObjectPtr<UMyAsset>)
+ * 1. Subclass this struct -- add your asset-specific UPROPERTY (e.g. TSoftObjectPtr<UMyAsset>)
  * 2. Override GetTypeId() to return your registered FTypeId
  * 3. Override GetSubCollectionPtr() / ClearSubCollection() if you have a typed SubCollection
  * 4. Override Validate() to reject invalid entries (call Super)
@@ -373,16 +373,16 @@ namespace PCGExAssetCollection
  *
  * Architecture overview:
  *   UPCGExAssetCollection (UDataAsset)
- *     └─ TArray<FMyEntry> Entries          — the authored list
+ *     └─ TArray<FMyEntry> Entries          -- the authored list
  *     └─ FCache (built lazily)
- *         ├─ FCategory "Main"              — all valid entries, weight-sorted
- *         └─ FCategory per unique name     — entries grouped by Category FName
- *             └─ per entry: FMicroCache    — optional sub-selections (material variants, etc.)
+ *         ├─ FCategory "Main"              -- all valid entries, weight-sorted
+ *         └─ FCategory per unique name     -- entries grouped by Category FName
+ *             └─ per entry: FMicroCache    -- optional sub-selections (material variants, etc.)
  *
  * Creating a custom collection type:
  * 1. Create your entry struct (see FPCGExAssetCollectionEntry doc)
  * 2. Subclass UPCGExAssetCollection
- * 3. Add PCGEX_ASSET_COLLECTION_BODY(FMyEntry) in the class body — this implements
+ * 3. Add PCGEX_ASSET_COLLECTION_BODY(FMyEntry) in the class body -- this implements
  *    all required virtual functions (IsValidIndex, NumEntries, BuildCache, ForEachEntry, etc.)
  * 4. Override GetTypeId() to return your registered FTypeId
  * 5. Add your TArray<FMyEntry> Entries UPROPERTY
@@ -390,10 +390,10 @@ namespace PCGExAssetCollection
  * 7. Optionally override EDITOR_AddBrowserSelectionInternal for drag-drop support
  *
  * Picking API (all methods handle subcollection recursion automatically):
- * - GetEntryAt(Index)           — direct index access
- * - GetEntry(Index, Seed, Mode) — pick by mode (ascending/descending/weight-sorted)
- * - GetEntryRandom(Seed)        — uniform random
- * - GetEntryWeightedRandom(Seed)— weighted random
+ * - GetEntryAt(Index)           -- direct index access
+ * - GetEntry(Index, Seed, Mode) -- pick by mode (ascending/descending/weight-sorted)
+ * - GetEntryRandom(Seed)        -- uniform random
+ * - GetEntryWeightedRandom(Seed)-- weighted random
  * All return FPCGExEntryAccessResult with entry + host collection.
  */
 UCLASS(Abstract, BlueprintType, DisplayName="[PCGEx] Asset Collection")
@@ -406,6 +406,11 @@ class PCGEXCOLLECTIONS_API UPCGExAssetCollection : public UDataAsset
 	friend struct FPCGExAssetCollectionEntry;
 
 public:
+	UPCGExAssetCollection()
+	{
+		CollectionGUID = GenerateNewGUID();
+	}
+
 #pragma region Type
 
 	/** Get the type ID of this collection */
@@ -559,6 +564,8 @@ protected:
 	}
 #endif
 
+	static uint32 GenerateNewGUID() { return GetTypeHash(FGuid::NewGuid()); }
+
 #pragma endregion
 
 public:
@@ -571,6 +578,14 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1))
 	TSet<FName> CollectionTags;
+
+	/** Persistent unique identifier for this collection. Used by FPickPacker to produce
+	 *  deterministic, mergeable hashes across different staging nodes and sessions.
+	 *  Generated once in the constructor; new value assigned on duplication/import. */
+	UPROPERTY(VisibleAnywhere, Category = Settings, AdvancedDisplay, meta=(IgnoreForMemberInitializationTest))
+	uint32 CollectionGUID = 0;
+
+	uint32 GetCollectionGUID() const { return CollectionGUID; }
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(EditAnywhere, Category = Settings, AdvancedDisplay)

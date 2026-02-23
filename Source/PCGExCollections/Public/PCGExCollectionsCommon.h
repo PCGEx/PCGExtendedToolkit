@@ -32,9 +32,9 @@ enum class EPCGExIndexPickMode : uint8
 UENUM()
 enum class EPCGExDistribution : uint8
 {
-	Index          = 0 UMETA(DisplayName = "Index", ToolTip="Distribution by index"),
-	Random         = 1 UMETA(DisplayName = "Random", ToolTip="Update the point scale so final asset matches the existing point' bounds"),
-	WeightedRandom = 2 UMETA(DisplayName = "Weighted random", ToolTip="Update the point bounds so it reflects the bounds of the final asset"),
+	Index          = 0 UMETA(DisplayName = "Index", ToolTip="Pick entries by index, with optional remapping and safety modes"),
+	Random         = 1 UMETA(DisplayName = "Random", ToolTip="Uniform random selection (equal probability for all entries)"),
+	WeightedRandom = 2 UMETA(DisplayName = "Weighted random", ToolTip="Random selection weighted by entry Weight property"),
 };
 
 UENUM()

@@ -1,1 +1,11 @@
-<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><style>.cls-1,.cls-3{fill:#ffa627;}.cls-2{fill:#fff;}.cls-2,.cls-3{opacity:0.5;}</style></defs><rect x="9.46" y="27.88" width="85.34" height="22.4" rx="6.71"/><rect class="cls-1" x="7.46" y="24.88" width="85.34" height="22.4" rx="6.71"/><path class="cls-2" d="M87.5,56.88H75.38c-2.92,0-5.3,3-5.3,6.71v9c0,3.69,2.38,6.71,5.3,6.71H87.5c2.91,0,5.3-3,5.3-6.71v-9C92.8,59.9,90.41,56.88,87.5,56.88Z"/><polygon class="cls-3" points="25.39 70.58 64.69 70.58 64.69 65.58 25.39 65.58 25.39 47.28 20.39 47.28 20.39 70.16 25.39 70.58"/></svg>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <style>.cls-1,.cls-3{fill:#ffa627;}.cls-2{fill:#fff;}.cls-2,.cls-3{opacity:0.5;}</style>
+    </defs>
+    <rect x="9.46" y="27.88" width="85.34" height="22.4" rx="6.71"/>
+    <rect class="cls-1" x="7.46" y="24.88" width="85.34" height="22.4" rx="6.71"/>
+    <path class="cls-2"
+          d="M87.5,56.88H75.38c-2.92,0-5.3,3-5.3,6.71v9c0,3.69,2.38,6.71,5.3,6.71H87.5c2.91,0,5.3-3,5.3-6.71v-9C92.8,59.9,90.41,56.88,87.5,56.88Z"/>
+    <polygon class="cls-3"
+             points="25.39 70.58 64.69 70.58 64.69 65.58 25.39 65.58 25.39 47.28 20.39 47.28 20.39 70.16 25.39 70.58"/>
+</svg>

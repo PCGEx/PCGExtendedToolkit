@@ -1,1 +1,10 @@
-<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><style>.cls-1{fill:#fff;}.cls-2{fill:#4d8dfc;}</style></defs><rect x="25.89" y="25.89" width="48.22" height="48.22"/><rect class="cls-1" y="47.5" width="43.94" height="5"/><rect class="cls-1" x="56.93" y="47.5" width="43.07" height="5"/><path class="cls-2" d="M44.73,58.13A9.61,9.61,0,0,0,52,59.48a9.69,9.69,0,0,0-2-19.17,10.09,10.09,0,0,0-2,.21,9.69,9.69,0,0,0-3.25,17.61Z"/></svg>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <defs>
+        <style>.cls-1{fill:#fff;}.cls-2{fill:#4d8dfc;}</style>
+    </defs>
+    <rect x="25.89" y="25.89" width="48.22" height="48.22"/>
+    <rect class="cls-1" y="47.5" width="43.94" height="5"/>
+    <rect class="cls-1" x="56.93" y="47.5" width="43.07" height="5"/>
+    <path class="cls-2"
+          d="M44.73,58.13A9.61,9.61,0,0,0,52,59.48a9.69,9.69,0,0,0-2-19.17,10.09,10.09,0,0,0-2,.21,9.69,9.69,0,0,0-3.25,17.61Z"/>
+</svg>

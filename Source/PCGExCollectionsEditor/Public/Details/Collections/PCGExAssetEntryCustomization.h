@@ -41,7 +41,8 @@ protected:
 #define PCGEX_FOREACH_ENTRY_TYPE(MACRO)\
 MACRO(Mesh, "StaticMesh")\
 MACRO(Actor, "Actor")\
-MACRO(PCGDataAsset, "DataAsset")
+MACRO(PCGDataAsset, "DataAsset")\
+MACRO(Level, "Level")
 
 
 #define PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL(_CLASS, _NAME) \

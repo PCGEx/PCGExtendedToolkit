@@ -52,7 +52,7 @@ bool FPCGExOrientElement::Boot(FPCGExContext* InContext) const
 	if (Settings->Output == EPCGExOrientUsage::OutputToAttribute) { PCGEX_VALIDATE_NAME(Settings->OutputAttribute); }
 	if (Settings->bOutputDot) { PCGEX_VALIDATE_NAME(Settings->DotAttribute); }
 
-	PCGEX_OPERATION_BIND(Orientation, UPCGExOrientInstancedFactory, PCGExOrient::SourceOverridesOrient)
+	PCGEX_BIND_INSTANCED_FACTORY(Orientation, UPCGExOrientInstancedFactory, PCGExOrient::SourceOverridesOrient)
 	Context->Orientation->OrientAxis = Settings->OrientAxis;
 	Context->Orientation->UpAxis = Settings->UpAxis;
 

@@ -10,8 +10,14 @@
 #include "Core/PCGExPointFilter.h"
 
 #include "PCGExPolyPathFilterFactory.h"
+#include "Data/PCGExTaggedData.h"
 
 #include "PCGExInclusionFilter.generated.h"
+
+namespace PCGExMatching
+{
+	class FDataMatcher;
+}
 
 USTRUCT(BlueprintType)
 struct FPCGExInclusionFilterConfig
@@ -89,6 +95,10 @@ struct FPCGExInclusionFilterConfig
 	/** If enabled, a collection will never be tested against itself */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bIgnoreSelf = true;
+
+	/** Data matching settings. When enabled, only paths whose data matches the input being tested will be considered. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
+	FPCGExFilterMatchingDetails DataMatching;
 };
 
 /**
@@ -126,6 +136,11 @@ namespace PCGExPointFilter
 
 		const TObjectPtr<const UPCGExInclusionFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExPathInclusion::FHandler> Handler;
+
+		// Per-point matching -- see FDistanceFilter for full explanation.
+		// Exclude set is passed to FHandler via InAdditionalExclude (alongside static MatchIgnoreList).
+		TSharedPtr<PCGExMatching::FDataMatcher> InverseMatcher;
+		bool bNoMatchResult = false;
 
 		bool bCheckAgainstDataBounds = false;
 		TConstPCGValueRange<FTransform> InTransforms;

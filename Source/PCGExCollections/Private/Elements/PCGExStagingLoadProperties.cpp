@@ -14,19 +14,18 @@
 
 PCGEX_INITIALIZE_ELEMENT(StagingLoadProperties)
 
+void UPCGExStagingLoadPropertiesSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
+{
+	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
+	Super::InputPinPropertiesBeforeFilters(PinProperties);
+}
+
 PCGExData::EIOInit UPCGExStagingLoadPropertiesSettings::GetMainDataInitializationPolicy() const
 {
 	return StealData == EPCGExOptionState::Enabled ? PCGExData::EIOInit::Forward : PCGExData::EIOInit::Duplicate;
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(StagingLoadProperties)
-
-TArray<FPCGPinProperties> UPCGExStagingLoadPropertiesSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
-	return PinProperties;
-}
 
 bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 {

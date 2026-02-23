@@ -83,7 +83,7 @@ namespace PCGEx
 			Add(Object);
 			return Object;
 		}
-
+		
 		template <class T>
 		T* DuplicateData(const UPCGData* InData)
 		{

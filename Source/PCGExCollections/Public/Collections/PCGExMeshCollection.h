@@ -186,16 +186,6 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
 		return static_cast<PCGExMeshCollection::FMicroCache*>(MicroCache.Get());
 	}
 
-#pragma region DEPRECATED
-	UPROPERTY()
-	int32 MaterialVariantsCumulativeWeight_DEPRECATED = -1;
-
-	UPROPERTY()
-	TArray<int32> MaterialVariantsOrder_DEPRECATED;
-
-	UPROPERTY()
-	TArray<int32> MaterialVariantsWeights_DEPRECATED;
-#pragma endregion
 };
 
 /**

@@ -12,14 +12,14 @@
 #define PCGEX_NAMESPACE SocketStaging
 
 PCGEX_INITIALIZE_ELEMENT(SocketStaging)
-PCGEX_ELEMENT_BATCH_POINT_IMPL(SocketStaging)
 
-TArray<FPCGPinProperties> UPCGExSocketStagingSettings::InputPinProperties() const
+void UPCGExSocketStagingSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+	Super::InputPinPropertiesBeforeFilters(PinProperties);
 	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
-	return PinProperties;
 }
+
+PCGEX_ELEMENT_BATCH_POINT_IMPL(SocketStaging)
 
 TArray<FPCGPinProperties> UPCGExSocketStagingSettings::OutputPinProperties() const
 {

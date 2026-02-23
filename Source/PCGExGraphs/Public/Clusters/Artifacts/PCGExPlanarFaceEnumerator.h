@@ -66,8 +66,14 @@ namespace PCGExClusters
 
 		const FCluster* Cluster = nullptr;
 
-		/** Node-indexed projected positions (size = NumNodes, access via NodeIndex) */
+		/** Node-indexed projected positions (size = NumNodes, access via NodeIndex). nullptr when bIsLocalTangent. */
 		TSharedPtr<TArray<FVector2D>> ProjectedPositions;
+
+		/** Per-node tangent frames for LocalTangent mode (node-indexed). nullptr otherwise. */
+		TSharedPtr<TArray<FQuat>> NodeTangentFrames;
+
+		/** True when built with local tangent projection (per-node frames instead of global 2D space) */
+		bool bIsLocalTangent = false;
 
 		int32 NumFaces = 0;
 
@@ -98,6 +104,14 @@ namespace PCGExClusters
 		 * @param InNodeIndexedPositions Pre-computed 2D positions indexed by node index (size must equal cluster node count)
 		 */
 		void Build(const TSharedRef<FCluster>& InCluster, const TSharedPtr<TArray<FVector2D>>& InNodeIndexedPositions);
+
+		/**
+		 * Build the DCEL structure using per-node local tangent frames for non-planar clusters.
+		 * Half-edge angles are computed in each origin node's local tangent frame.
+		 * @param InCluster The cluster to build from
+		 * @param InNodeTangentFrames Per-node tangent frame quaternions (node-indexed)
+		 */
+		void Build(const TSharedRef<FCluster>& InCluster, const TSharedPtr<TArray<FQuat>>& InNodeTangentFrames);
 
 		/**
 		 * Enumerate raw faces (serial operation).
@@ -160,6 +174,7 @@ namespace PCGExClusters
 		int32 GetWrapperFaceIndex() const;
 
 		FORCEINLINE bool IsBuilt() const { return !HalfEdges.IsEmpty(); }
+		FORCEINLINE bool IsLocalTangent() const { return bIsLocalTangent; }
 		FORCEINLINE int32 GetNumHalfEdges() const { return HalfEdges.Num(); }
 		FORCEINLINE int32 GetNumFaces() const { return NumFaces; }
 		FORCEINLINE const FCluster* GetCluster() const { return Cluster; }

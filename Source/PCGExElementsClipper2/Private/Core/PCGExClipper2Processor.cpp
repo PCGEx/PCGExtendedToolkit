@@ -809,7 +809,7 @@ void FPCGExClipper2ProcessorContext::OutputPaths64(
 					}
 				}
 
-				// Pass 2: detect joint arc boundaries — only flag the first/last point of each arc run
+				// Pass 2: detect joint arc boundaries -- only flag the first/last point of each arc run
 				if (JointWriter)
 				{
 					for (int32 i = 0; i < NumPoints; i++)

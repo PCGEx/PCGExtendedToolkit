@@ -10,9 +10,10 @@
 class PCGEXCORE_API IPCGExLegacyModuleInterface : public IPCGExModuleInterface
 {
 public:
-	virtual void StartupModule() override;
-
-protected:
-	TArray<FString> OldBaseModules = {TEXT("PCGExtendedToolkit")};
-	virtual void RegisterRedirectors() const;
+	IPCGExLegacyModuleInterface()
+	{
+#if PCGEX_SUBMODULE_CORE_REDIRECT_ENABLED
+		OldBaseModules.Add(TEXT("PCGExtendedToolkit"));
+#endif
+	}
 };

@@ -8,13 +8,21 @@
 #include "UObject/Object.h"
 
 #include "Core/PCGExPointFilter.h"
+#include "PCGExFilterCommon.h"
+#include "Data/PCGExTaggedData.h"
 #include "Math/PCGExMathBounds.h"
+#include "PCGExMatching/Public/Core/PCGExMatchRuleFactoryProvider.h"
 
 #include "PCGExBoundsFilter.generated.h"
 
 namespace PCGExMath::OBB
 {
 	class FCollection;
+}
+
+namespace PCGExMatching
+{
+	class FDataMatcher;
 }
 
 UENUM()
@@ -73,6 +81,10 @@ struct FPCGExBoundsFilterConfig
 	/** If enabled, a collection will never be tested against itself. */
 	bool bIgnoreSelf = false;
 
+	/** Data matching settings. When enabled, only bounds data that matches the input being tested will be considered. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
+	FPCGExFilterMatchingDetails DataMatching;
+
 	/** If enabled, uses collection bounds as a single proxy point instead of per-point testing. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bCheckAgainstDataBounds = false;
@@ -90,8 +102,13 @@ public:
 	UPROPERTY()
 	FPCGExBoundsFilterConfig Config;
 
+	UPROPERTY()
+	TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>> MatchRuleFactories;
+
 	TArray<TSharedPtr<PCGExData::FFacade>> BoundsDataFacades;
 	TArray<TSharedPtr<PCGExMath::OBB::FCollection>> Collections;
+
+	virtual bool Init(FPCGExContext* InContext) override;
 
 	virtual bool SupportsCollectionEvaluation() const override { return Config.bCheckAgainstDataBounds; }
 	virtual bool SupportsProxyEvaluation() const override { return true; }
@@ -126,6 +143,7 @@ namespace PCGExPointFilter
 	private:
 		// Cached config
 		const TArray<TSharedPtr<PCGExMath::OBB::FCollection>>* Collections = nullptr;
+		TArray<TSharedPtr<PCGExMath::OBB::FCollection>> FilteredCollections;
 		EPCGExPointBoundsSource BoundsSource = EPCGExPointBoundsSource::ScaledBounds;
 		EPCGExBoundsCheckType CheckType = EPCGExBoundsCheckType::Intersects;
 		EPCGExBoxCheckMode CheckMode = EPCGExBoxCheckMode::Box;
@@ -136,8 +154,15 @@ namespace PCGExPointFilter
 		bool bCollectionTestResult = false;
 		bool bUseCollectionBounds = false;
 
+		// Per-point matching: builds a per-point filtered collections list instead of an exclude set.
+		// See FDistanceFilter for the general matching pattern explanation.
+		TSharedPtr<PCGExMatching::FDataMatcher> InverseMatcher;
+		TArray<FPCGExTaggedData> BoundsCandidates;
+		bool bNoMatchResult = false;
+
 		// Core test implementation
 		bool TestPoint(const FVector& Position, const FTransform& Transform, const FBox& LocalBox) const;
+		bool TestPoint(const FVector& Position, const FTransform& Transform, const FBox& LocalBox, const TArray<TSharedPtr<PCGExMath::OBB::FCollection>>& InCollections) const;
 	};
 }
 

@@ -38,12 +38,14 @@ void UPCGExFactoryData::AddDataDependency(const UPCGData* InData)
 	bool bAlreadyInSet = false;
 	UPCGData* MutableData = const_cast<UPCGData*>(InData);
 	DataDependencies.Add(MutableData, &bAlreadyInSet);
-	if (!bAlreadyInSet) { MutableData->AddToRoot(); }
+	// UPROPERTY should be enough, Rooting is overkill
+	//if (!bAlreadyInSet) { MutableData->AddToRoot(); }
 }
 
 void UPCGExFactoryData::BeginDestroy()
 {
-	for (UPCGData* DataDependency : DataDependencies) { DataDependency->RemoveFromRoot(); }
+	// UPROPERTY Should be enough, Rooting is overkill
+	//for (UPCGData* DataDependency : DataDependencies) { DataDependency->RemoveFromRoot(); }
 	Super::BeginDestroy();
 }
 

@@ -201,7 +201,7 @@ bool FPCGExPathfindingPlotEdgesElement::Boot(FPCGExContext* InContext) const
 	Context->VtxDataForwarding.bEnabled = Settings->VtxDataForwarding.bEnabled && Settings->PathComposition == EPCGExPathComposition::Edges;
 	Context->EdgesDataForwarding.bEnabled = Settings->EdgesDataForwarding.bEnabled && Settings->PathComposition == EPCGExPathComposition::Vtx;
 
-	PCGEX_OPERATION_BIND(SearchAlgorithm, UPCGExSearchInstancedFactory, PCGExPathfinding::Labels::SourceOverridesSearch)
+	PCGEX_BIND_INSTANCED_FACTORY(SearchAlgorithm, UPCGExSearchInstancedFactory, PCGExPathfinding::Labels::SourceOverridesSearch)
 
 	Context->OutputPaths = MakeShared<PCGExData::FPointIOCollection>(Context);
 	Context->OutputPaths->OutputPin = PCGExPaths::Labels::OutputPathsLabel;
