@@ -8,6 +8,8 @@
 #include "Data/PCGExPointIO.h"
 #include "Paths/PCGExPath.h"
 #include "PCGExVersion.h"
+#include "PCGExMatching/Public/Helpers/PCGExDataMatcher.h"
+#include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 
 
 #define LOCTEXT_NAMESPACE "PCGExInclusionFilterDefinition"
@@ -40,6 +42,7 @@ void UPCGExInclusionFilterFactory::InitConfig_Internal()
 	WindingMutation = Config.WindingMutation;
 	bScaleTolerance = Config.bSplineScalesTolerance;
 	bIgnoreSelf = Config.bIgnoreSelf;
+	DataMatching = Config.DataMatching;
 }
 
 #if WITH_EDITOR
@@ -59,6 +62,36 @@ namespace PCGExPointFilter
 	bool FInclusionFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 	{
 		if (!IFilter::Init(InContext, InPointDataFacade)) { return false; }
+
+		const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
+			&& TypedFilterFactory->HasMatchRuleFactories();
+
+			// See FDistanceFilter::Init for the full per-point vs static matching explanation.
+
+		if (bMatchingEnabled && !TypedFilterFactory->Config.bCheckAgainstDataBounds)
+		{
+			// Per-point: store matcher now, build per-point exclude in Test()
+			InverseMatcher = MakeShared<PCGExMatching::FDataMatcher>();
+			InverseMatcher->SetDetails(&TypedFilterFactory->Config.DataMatching);
+
+			TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
+			SingleSource.Add(InPointDataFacade);
+			if (InverseMatcher->Init(TypedFilterFactory->GetMatchRuleFactories(), SingleSource, false))
+			{
+				bNoMatchResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
+			}
+			else { InverseMatcher.Reset(); }
+		}
+		else
+		{
+			// Static matching or no matching
+			if (!TypedFilterFactory->PopulateMatchIgnoreList(InContext, InPointDataFacade, Handler->MatchIgnoreList))
+			{
+				bCheckAgainstDataBounds = true;
+				bCollectionTestResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
+				return true;
+			}
+		}
 
 		bCheckAgainstDataBounds = TypedFilterFactory->Config.bCheckAgainstDataBounds;
 		InTransforms = InPointDataFacade->GetIn()->GetConstTransformValueRange();
@@ -92,8 +125,18 @@ namespace PCGExPointFilter
 	{
 		if (bCheckAgainstDataBounds) { return bCollectionTestResult; }
 
+		const TSet<const UPCGData*>* AdditionalExclude = nullptr;
+		TSet<const UPCGData*> PerPointExclude;
+
+		if (InverseMatcher)
+		{
+			if (!InverseMatcher->BuildPerPointExclude(PointDataFacade->Source->GetInPoint(PointIndex), *TypedFilterFactory->Datas, PerPointExclude))
+			{ return bNoMatchResult; }
+			AdditionalExclude = &PerPointExclude;
+		}
+
 		int32 InclusionsCount = 0;
-		PCGExPathInclusion::EFlags Flags = Handler->GetInclusionFlags(InTransforms[PointIndex].GetLocation(), InclusionsCount, TypedFilterFactory->Config.Pick == EPCGExSplineFilterPick::Closest, PointDataFacade->Source->GetIn());
+		PCGExPathInclusion::EFlags Flags = Handler->GetInclusionFlags(InTransforms[PointIndex].GetLocation(), InclusionsCount, TypedFilterFactory->Config.Pick == EPCGExSplineFilterPick::Closest, PointDataFacade->Source->GetIn(), AdditionalExclude);
 
 		PCGEX_CHECK_MAX
 		PCGEX_CHECK_MIN
@@ -125,6 +168,7 @@ TArray<FPCGPinProperties> UPCGExInclusionFilterProviderSettings::InputPinPropert
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 	PCGExPathInclusion::DeclareInclusionPin(PinProperties);
+	PCGExMatching::Helpers::DeclareMatchingRulesInputs(Config.DataMatching, PinProperties);
 	return PinProperties;
 }
 

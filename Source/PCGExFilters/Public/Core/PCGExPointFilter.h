@@ -225,7 +225,7 @@ namespace PCGExPointFilter
 	 * Lifecycle:
 	 * 1. Init() creates filter instances from factories, handles InitializationFailurePolicy fallback
 	 * 2. PostInit() sorts filters by priority, builds the raw-pointer Stack for fast iteration
-	 * 3. Test() evaluates the stack — all filters must pass (short-circuit on first failure)
+	 * 3. Test() evaluates the stack -- all filters must pass (short-circuit on first failure)
 	 *
 	 * Batch Test() overloads accept a scope/range and optionally run in parallel via ParallelFor.
 	 * They return the number of passing items. Parallel paths use InterlockedIncrement for the count.

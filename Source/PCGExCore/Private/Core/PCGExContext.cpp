@@ -25,7 +25,7 @@
 
 #define LOCTEXT_NAMESPACE "PCGExContext"
 
-UPCGExInstancedFactory* FPCGExContext::RegisterOperation(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel)
+UPCGExInstancedFactory* FPCGExContext::RegisterInstancedFactory(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel)
 {
 	BaseOperation->BindContext(this); // Temp so Copy doesn't crash
 
@@ -241,7 +241,7 @@ bool FPCGExContext::DriveAdvanceWork(const UPCGExSettings* InSettings)
 
 	// Safety net: if AdvanceWork signaled "done" (true) but the context was never properly
 	// finalized, cancel to prevent a hang. This catches bugs where AdvanceWork returns true
-	// without calling TryComplete() or CancelExecution() — the context would remain paused
+	// without calling TryComplete() or CancelExecution() -- the context would remain paused
 	// and PCG would wait forever. We cancel rather than complete because outputs are likely
 	// incomplete in this state.
 	if (bResult && !IsWorkCompleted() && !IsWorkCancelled())

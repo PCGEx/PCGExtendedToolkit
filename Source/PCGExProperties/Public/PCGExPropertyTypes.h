@@ -49,7 +49,7 @@
 /**
  * String property - outputs as FString attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="String")
 struct PCGEXPROPERTIES_API FPCGExProperty_String : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -75,7 +75,7 @@ public:
 /**
  * Name property - outputs as FName attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Name")
 struct PCGEXPROPERTIES_API FPCGExProperty_Name : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -101,7 +101,7 @@ public:
 /**
  * Int32 property - outputs as int32 attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Integer 32")
 struct PCGEXPROPERTIES_API FPCGExProperty_Int32 : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -127,7 +127,7 @@ public:
 /**
  * Int64 property - outputs as int64 attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Integer 64")
 struct PCGEXPROPERTIES_API FPCGExProperty_Int64 : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -153,7 +153,7 @@ public:
 /**
  * Float property - outputs as float attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Float")
 struct PCGEXPROPERTIES_API FPCGExProperty_Float : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -179,7 +179,7 @@ public:
 /**
  * Double property - outputs as double attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Double")
 struct PCGEXPROPERTIES_API FPCGExProperty_Double : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -205,7 +205,7 @@ public:
 /**
  * Bool property - outputs as bool attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Bool")
 struct PCGEXPROPERTIES_API FPCGExProperty_Bool : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -231,7 +231,7 @@ public:
 /**
  * Vector property - outputs as FVector attribute.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Vector")
 struct PCGEXPROPERTIES_API FPCGExProperty_Vector : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -257,7 +257,7 @@ public:
 /**
  * Vector2D property - outputs as FVector2D attribute.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Vector2")
 struct PCGEXPROPERTIES_API FPCGExProperty_Vector2 : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -283,7 +283,7 @@ public:
 /**
  * Vector4 property - outputs as FVector4 attribute.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Vector4")
 struct PCGEXPROPERTIES_API FPCGExProperty_Vector4 : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -317,7 +317,7 @@ public:
  * Use this pattern when your authored type differs from the PCG attribute type.
  * The methods are implemented manually in PCGExPropertyTypes.cpp (not via macro).
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Color")
 struct PCGEXPROPERTIES_API FPCGExProperty_Color : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -343,7 +343,7 @@ public:
 /**
  * Rotator property - outputs as FRotator attribute.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Rotator")
 struct PCGEXPROPERTIES_API FPCGExProperty_Rotator : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -369,7 +369,7 @@ public:
 /**
  * Quaternion property - outputs as FQuat attribute.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Quat")
 struct PCGEXPROPERTIES_API FPCGExProperty_Quat : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -395,7 +395,7 @@ public:
 /**
  * Transform property - outputs as FTransform attribute.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Transform")
 struct PCGEXPROPERTIES_API FPCGExProperty_Transform : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -421,7 +421,7 @@ public:
 /**
  * SoftObjectPath property - outputs as FSoftObjectPath attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Soft Object Path")
 struct PCGEXPROPERTIES_API FPCGExProperty_SoftObjectPath : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -447,7 +447,7 @@ public:
 /**
  * SoftClassPath property - outputs as FSoftClassPath attribute.
  */
-USTRUCT(BlueprintType, meta=(PCGExInlineValue))
+USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Soft Class Path")
 struct PCGEXPROPERTIES_API FPCGExProperty_SoftClassPath : public FPCGExProperty
 {
 	GENERATED_BODY()
@@ -478,7 +478,7 @@ public:
  * - OutputBuffer is TBuffer<int64> (enum values stored as integer)
  * - Output methods extract Value.Value (the int64) before writing
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, DisplayName="Enum")
 struct PCGEXPROPERTIES_API FPCGExProperty_Enum : public FPCGExProperty
 {
 	GENERATED_BODY()

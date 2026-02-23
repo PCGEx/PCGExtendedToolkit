@@ -6,6 +6,9 @@
 
 namespace PCGExMath
 {
+	// Single instance -- lives only in this TU, accessed via GetDistances()/GetNoneDistances()
+	static FDistancesStatic GDistancesStatic;
+
 #define PCGEX_FOREACH_DISTANCE_PAIR(MACRO) \
     MACRO(EPCGExDistance::Center, EPCGExDistance::Center) \
     MACRO(EPCGExDistance::Center, EPCGExDistance::SphereBounds) \

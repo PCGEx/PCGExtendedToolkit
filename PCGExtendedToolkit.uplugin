@@ -1,8 +1,8 @@
 {
   "FileVersion": 3,
   "Version": 1,
-  "VersionName": "0.74.4",
-  "FriendlyName": "PCGExtendedToolkit",
+  "VersionName": "0.74.5",
+  "FriendlyName": "PCGEx",
   "Description": "A rather large toolset that expand on existing PCG capabilities in unique ways.",
   "Category": "PCG",
   "CreatedBy": "Timothé Lapetite",
@@ -177,6 +177,19 @@
       ]
     },
     {
+      "Name": "PCGExElementsClustersDecomp",
+      "Type": "Runtime",
+      "LoadingPhase": "Default",
+      "PlatformAllowList": [
+        "Win64",
+        "Mac",
+        "IOS",
+        "Android",
+        "Linux",
+        "LinuxArm64"
+      ]
+    },
+    {
       "Name": "PCGExElementsClustersRelax",
       "Type": "Runtime",
       "LoadingPhase": "Default",
@@ -330,29 +343,6 @@
         "Android",
         "Linux",
         "LinuxArm64"
-      ]
-    },
-    {
-      "Name": "PCGExElementsValency",
-      "Type": "Runtime",
-      "LoadingPhase": "Default",
-      "PlatformAllowList": [
-        "Win64",
-        "Mac",
-        "IOS",
-        "Android",
-        "Linux",
-        "LinuxArm64"
-      ]
-    },
-    {
-      "Name": "PCGExElementsValencyEditor",
-      "Type": "Editor",
-      "LoadingPhase": "Default",
-      "PlatformAllowList": [
-        "Win64",
-        "Mac",
-        "Linux"
       ]
     },
     {

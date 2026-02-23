@@ -115,6 +115,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding", meta = (PCG_Overridable))
 	bool bForwardInputTags = true;
 
+	/** When enabled, scans loaded data assets for embedded CollectionMap entries,
+	 *  merges them into a single output, and strips them from duplicated data. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	bool bMergeEmbeddedCollectionMaps = false;
+
 	/** Quiet warnings about unsupported spatial data types that cannot be transformed */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta = (PCG_Overridable))
 	bool bQuietUnsupportedTypeWarnings = false;
@@ -180,6 +185,11 @@ public:
 	 * Get number of unique entries.
 	 */
 	int32 GetNumEntries() const;
+
+	/**
+	 * Get read-only access to the entry map.
+	 */
+	const TMap<uint64, const FPCGExPCGDataAssetCollectionEntry*>& GetEntryMap() const { return EntryMap; }
 };
 
 struct FPCGExPCGDataAssetLoaderContext final : FPCGExPointsProcessorContext
@@ -204,6 +214,9 @@ struct FPCGExPCGDataAssetLoaderContext final : FPCGExPointsProcessorContext
 	// Non-spatial data (forwarded once per unique asset, not duplicated)
 	TSet<uint32> UniqueNonSpatialUIDs;
 	mutable FRWLock NonSpatialLock;
+
+	// Merged collection map from embedded CollectionMap entries (when bMergeEmbeddedCollectionMaps)
+	TSharedPtr<PCGExCollections::FPickPacker> MergedMapPacker;
 
 	/** Register output data to appropriate pin */
 	void RegisterOutput(const FPCGTaggedData& InTaggedData, bool bAddPinTag, const int32 InIndex);

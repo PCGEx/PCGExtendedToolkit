@@ -133,7 +133,7 @@ namespace PCGExPointStates
 	/**
 	 * Specialized manager that evaluates all states for each point and accumulates
 	 * their bitmask flag mutations into the shared FlagsCache array.
-	 * Test() always returns true — the purpose is the side-effect on flags, not filtering.
+	 * Test() always returns true -- the purpose is the side-effect on flags, not filtering.
 	 */
 	class PCGEXFILTERS_API FStateManager final : public PCGExPointFilter::FManager
 	{

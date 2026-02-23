@@ -41,6 +41,7 @@ enum class EPCGExMatchingDetailsUsage : uint8
 	Default  = 0,
 	Cluster  = 1,
 	Sampling = 2,
+	Filter   = 3,
 };
 
 namespace PCGExMatching::Labels

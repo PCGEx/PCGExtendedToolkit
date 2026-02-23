@@ -27,8 +27,7 @@ namespace PCGExMath
 		else if constexpr (Mode == EPCGExDistance::BoxBounds)
 		{
 			const FVector LocalTargetCenter = FromPoint.GetTransform().InverseTransformPosition(ToCenter);
-			const double DistanceSquared = ComputeSquaredDistanceFromBoxToPoint(FromPoint.GetBoundsMin(), FromPoint.GetBoundsMax(), LocalTargetCenter);
-			const FVector LocalClosestPoint = LocalTargetCenter + (-LocalTargetCenter).GetSafeNormal() * FMath::Sqrt(DistanceSquared);
+			const FVector LocalClosestPoint = LocalTargetCenter.ComponentMax(FromPoint.GetBoundsMin()).ComponentMin(FromPoint.GetBoundsMax());
 
 			return FromPoint.GetTransform().TransformPosition(LocalClosestPoint);
 		}
@@ -81,6 +80,4 @@ namespace PCGExMath
 		FDistancesStatic();
 	};
 
-	// Static instance triggers initialization at module load
-	static FDistancesStatic GDistancesStatic;
 }

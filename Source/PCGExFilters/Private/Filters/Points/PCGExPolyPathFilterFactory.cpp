@@ -5,6 +5,8 @@
 
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "PCGExMatching/Public/Helpers/PCGExDataMatcher.h"
+#include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 #if PCGEX_ENGINE_VERSION > 506
 #include "Data/PCGPolygon2DData.h"
 #endif
@@ -19,6 +21,7 @@
 bool UPCGExPolyPathFilterFactory::Init(FPCGExContext* InContext)
 {
 	if (!Super::Init(InContext)) { return false; }
+	if (DataMatching.IsEnabled()) { PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {PCGExFactories::EType::MatchRule}); }
 	return true;
 }
 
@@ -103,6 +106,7 @@ PCGExFactories::EPreparationResult UPCGExPolyPathFilterFactory::Prepare(FPCGExCo
 
 		Octree = MakeShared<PCGExOctree::FItemOctree>(OctreeBounds.GetCenter(), OctreeBounds.GetExtent().Length());
 		for (int i = 0; i < BoundsList.Num(); i++) { Octree->AddElement(PCGExOctree::FItem(i, BoundsList[i])); }
+
 	};
 
 	CreatePolyPaths->OnIterationCallback = [CtxHandle, this](const int32 Index, const PCGExMT::FScope& Scope)
@@ -177,6 +181,26 @@ TSharedPtr<PCGExPathInclusion::FHandler> UPCGExPolyPathFilterFactory::CreateHand
 	TSharedPtr<PCGExPathInclusion::FHandler> Handler = MakeShared<PCGExPathInclusion::FHandler>(this);
 	Handler->bScaleTolerance = bScaleTolerance;
 	return Handler;
+}
+
+// Static matching path: uses Test(UPCGData*, ...) which reads MatchableSourceFirstElements[0] -- always the
+// first point of the input. Suitable for collection-level proxy evaluation (bCheckAgainstDataBounds) or when
+// no matching is configured. For per-point evaluation with attribute-based rules, filters create their own
+// FDataMatcher and call Test(FConstPoint, ...) per-point instead of using this method.
+bool UPCGExPolyPathFilterFactory::PopulateMatchIgnoreList(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<const UPCGData*>& OutIgnoreList) const
+{
+	if (!DataMatching.IsEnabled()) { return true; }
+	if (MatchRuleFactories.IsEmpty()) { return true; }
+
+	auto InverseMatcher = MakeShared<PCGExMatching::FDataMatcher>();
+	InverseMatcher->SetDetails(&DataMatching);
+
+	TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
+	SingleSource.Add(InFacade);
+	if (!InverseMatcher->Init(MatchRuleFactories, SingleSource, false)) { return true; }
+
+	PCGExMatching::FScope Scope(1, true);
+	return InverseMatcher->PopulateIgnoreListFromCandidates(*Datas, Scope, OutIgnoreList);
 }
 
 void UPCGExPolyPathFilterFactory::BeginDestroy()
@@ -271,7 +295,7 @@ namespace PCGExPathInclusion
 		}
 	}
 
-	EFlags FHandler::GetInclusionFlags(const FVector& WorldPosition, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData) const
+	EFlags FHandler::GetInclusionFlags(const FVector& WorldPosition, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData, const TSet<const UPCGData*>* InAdditionalExclude) const
 	{
 		uint8 OutFlags = None;
 		bool bIsOn = false;
@@ -286,6 +310,8 @@ namespace PCGExPathInclusion
 				Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), [&](const PCGExOctree::FItem& Item)
 				{
 					if (bIgnoreSelf && DataArray[Item.Index].Data == InParentData) { return; }
+					if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data)) { return; }
+					if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data)) { return; }
 
 					const bool bInside = PathArray[Item.Index]->IsInsideProjection(WorldPosition);
 					InclusionCount += bInside;
@@ -297,6 +323,8 @@ namespace PCGExPathInclusion
 				Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), [&](const PCGExOctree::FItem& Item)
 				{
 					if (bIgnoreSelf && DataArray[Item.Index].Data == InParentData) { return; }
+					if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data)) { return; }
+					if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data)) { return; }
 
 					const bool bInside = PathArray[Item.Index]->IsInsideProjection(WorldPosition);
 					InclusionCount += bInside;
@@ -317,6 +345,8 @@ namespace PCGExPathInclusion
 				Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), [&](const PCGExOctree::FItem& Item)
 				{
 					if (bIgnoreSelf && DataArray[Item.Index].Data == InParentData) { return; }
+					if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data)) { return; }
+					if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data)) { return; }
 
 					bool bLocalIsInside = false;
 					const FTransform Closest = PathArray[Item.Index]->GetClosestTransform(WorldPosition, bLocalIsInside, bScaleTolerance);
@@ -336,6 +366,8 @@ namespace PCGExPathInclusion
 				Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), [&](const PCGExOctree::FItem& Item)
 				{
 					if (bIgnoreSelf && DataArray[Item.Index].Data == InParentData) { return; }
+					if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data)) { return; }
+					if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data)) { return; }
 
 					bool bLocalIsInside = false;
 					const FTransform Closest = PathArray[Item.Index]->GetClosestTransform(WorldPosition, bLocalIsInside, bScaleTolerance);
@@ -354,7 +386,7 @@ namespace PCGExPathInclusion
 		return static_cast<EFlags>(OutFlags);
 	}
 
-	PCGExMath::FClosestPosition FHandler::FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData) const
+	PCGExMath::FClosestPosition FHandler::FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData, const TSet<const UPCGData*>* InAdditionalExclude) const
 	{
 		PCGExMath::FClosestPosition ClosestIntersection;
 
@@ -364,6 +396,8 @@ namespace PCGExPathInclusion
 		Octree->FindFirstElementWithBoundsTest(Segment.Bounds, [&](const PCGExOctree::FItem& Item)
 		{
 			if (bIgnoreSelf && InParentData != nullptr) { if (InParentData == DataArray[Item.Index].Data) { return true; } }
+			if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data)) { return true; }
+			if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data)) { return true; }
 			ClosestIntersection = PathArray[Item.Index]->FindClosestIntersection(InDetails, Segment);
 			return !ClosestIntersection.bValid;
 		});

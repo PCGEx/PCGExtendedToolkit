@@ -76,7 +76,7 @@ public:
 
 	virtual ~FPCGExContext() override;
 
-	UPCGExInstancedFactory* RegisterOperation(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel = NAME_None);
+	UPCGExInstancedFactory* RegisterInstancedFactory(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel = NAME_None);
 
 #pragma region Output Data
 

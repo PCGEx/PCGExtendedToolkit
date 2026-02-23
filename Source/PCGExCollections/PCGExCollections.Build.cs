@@ -41,6 +41,7 @@ public class PCGExCollections : ModuleRules
 				"PCGExProperties",
 				"PCGExFilters",
 				"PCGExFoundations",
+				"PCGExElementsBridges",
 			}
 		);
 

@@ -58,8 +58,8 @@ enum class EPCGExClipper2FillRule : uint8
 UENUM(BlueprintType)
 enum class EPCGExGroupingPolicy : uint8
 {
-	Split       = 0 UMETA(DisplayName = "Split", ToolTip="Split inputs into separate groups"),
-	Consolidate = 1 UMETA(DisplayName = "Consolidate", ToolTip="Add all inputs into a single group"),
+	Split       = 0 UMETA(DisplayName = "Separate", ToolTip="Split inputs into separate groups"),
+	Consolidate = 1 UMETA(DisplayName = "Merged", ToolTip="Add all inputs into a single group"),
 };
 
 UENUM()

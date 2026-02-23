@@ -6,6 +6,7 @@
 #include "Async/ParallelFor.h"
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/Artifacts/PCGExCell.h"
+#include "Math/PCGExBestFitPlane.h"
 #include "Math/PCGExMath.h"
 #include "Math/PCGExProjectionDetails.h"
 #include "Math/Geo/PCGExGeo.h"
@@ -45,6 +46,7 @@ namespace PCGExClusters
 
 		Cluster = &InCluster.Get();
 		ProjectedPositions = InNodeIndexedPositions;
+		bIsLocalTangent = false;
 
 		const TArray<FNode>& Nodes = *Cluster->Nodes;
 		const TArray<PCGExGraphs::FEdge>& Edges = *Cluster->Edges;
@@ -135,6 +137,108 @@ namespace PCGExClusters
 
 			// The "next" half-edge is the one AFTER the twin in CCW order
 			// This gives us faces with interior on the LEFT (CCW traversal)
+			const int32 NextPosInList = (TwinPosInList + 1) % TargetOutgoing.Num();
+			HE.NextIndex = TargetOutgoing[NextPosInList];
+		}
+
+		NumFaces = 0;
+		bRawFacesEnumerated = false;
+		CachedRawFaces.Reset();
+	}
+
+	void FPlanarFaceEnumerator::Build(const TSharedRef<FCluster>& InCluster, const TSharedPtr<TArray<FQuat>>& InNodeTangentFrames)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::Build::LocalTangent);
+
+		Cluster = &InCluster.Get();
+		NodeTangentFrames = InNodeTangentFrames;
+		ProjectedPositions = nullptr;
+		bIsLocalTangent = true;
+
+		const TArray<FNode>& Nodes = *Cluster->Nodes;
+		const TArray<PCGExGraphs::FEdge>& Edges = *Cluster->Edges;
+		PCGEx::FIndexLookup* NodeLookup = Cluster->NodeIndexLookup.Get();
+		const int32 NumEdges = Edges.Num();
+		const int32 NumNodes = Nodes.Num();
+		const TArray<FQuat>& Frames = *NodeTangentFrames;
+
+		// Step 1: Create all half-edges with angles computed in origin node's local tangent frame
+		HalfEdges.Reset();
+		HalfEdges.Reserve(NumEdges * 2);
+		HalfEdgeMap.Reset();
+		HalfEdgeMap.Reserve(NumEdges * 2);
+
+		for (int32 EdgeIdx = 0; EdgeIdx < NumEdges; ++EdgeIdx)
+		{
+			const PCGExGraphs::FEdge& Edge = Edges[EdgeIdx];
+			const int32 NodeA = NodeLookup->Get(Edge.Start);
+			const int32 NodeB = NodeLookup->Get(Edge.End);
+
+			const FVector PosA = Cluster->GetPos(NodeA);
+			const FVector PosB = Cluster->GetPos(NodeB);
+			const FVector EdgeDir3D = (PosB - PosA).GetSafeNormal();
+
+			// Half-edge A → B: project into NodeA's local frame
+			{
+				const FVector LocalDir = Frames[NodeA].UnrotateVector(EdgeDir3D);
+				const double AngleAB = FMath::Atan2(LocalDir.Y, LocalDir.X);
+				const int32 IndexAB = HalfEdges.Num();
+				HalfEdges.Emplace(NodeA, NodeB, AngleAB);
+				HalfEdgeMap.Add(PCGEx::H64(NodeA, NodeB), IndexAB);
+			}
+
+			// Half-edge B → A: project into NodeB's local frame
+			{
+				const FVector LocalDir = Frames[NodeB].UnrotateVector(-EdgeDir3D);
+				const double AngleBA = FMath::Atan2(LocalDir.Y, LocalDir.X);
+				const int32 IndexBA = HalfEdges.Num();
+				HalfEdges.Emplace(NodeB, NodeA, AngleBA);
+				HalfEdgeMap.Add(PCGEx::H64(NodeB, NodeA), IndexBA);
+			}
+
+			// Link twins
+			const int32 IndexAB = HalfEdges.Num() - 2;
+			const int32 IndexBA = HalfEdges.Num() - 1;
+			HalfEdges[IndexAB].TwinIndex = IndexBA;
+			HalfEdges[IndexBA].TwinIndex = IndexAB;
+		}
+
+		// Step 2: Collect and sort outgoing half-edges by angle per node (same as global projection)
+		TArray<TArray<int32>> OutgoingByNode;
+		OutgoingByNode.SetNum(NumNodes);
+
+		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
+		{
+			OutgoingByNode[HalfEdges[HEIdx].OriginNode].Add(HEIdx);
+		}
+
+		for (int32 NodeIdx = 0; NodeIdx < NumNodes; ++NodeIdx)
+		{
+			TArray<int32>& Outgoing = OutgoingByNode[NodeIdx];
+			if (Outgoing.Num() <= 1) { continue; }
+
+			Outgoing.Sort([this](const int32 A, const int32 B)
+			{
+				return HalfEdges[A].Angle < HalfEdges[B].Angle;
+			});
+		}
+
+		// Step 3: Link "next" pointers (identical logic — topology is topology)
+		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
+		{
+			FHalfEdge& HE = HalfEdges[HEIdx];
+			const int32 TargetNode = HE.TargetNode;
+			const int32 TwinIdx = HE.TwinIndex;
+
+			const TArray<int32>& TargetOutgoing = OutgoingByNode[TargetNode];
+			const int32 TwinPosInList = TargetOutgoing.Find(TwinIdx);
+
+			if (TwinPosInList == INDEX_NONE)
+			{
+				HE.NextIndex = -1;
+				continue;
+			}
+
 			const int32 NextPosInList = (TwinPosInList + 1) % TargetOutgoing.Num();
 			HE.NextIndex = TargetOutgoing[NextPosInList];
 		}
@@ -237,6 +341,14 @@ namespace PCGExClusters
 		// For small face counts, serial is faster due to parallel overhead
 		constexpr int32 ParallelThreshold = 32;
 
+		// Wrapper detection:
+		// Normal/BestFit: CCW face (inverted winding) with largest area = unbounded exterior
+		// LocalTangent: no topological exterior — wrapper = largest-area cell (heuristic)
+		auto IsWrapperCandidate = [this](const FCell& Cell) -> bool
+		{
+			return bIsLocalTangent ? true : !Cell.Data.bIsClockwise;
+		};
+
 		if (NumRawFaces < ParallelThreshold)
 		{
 			// Serial path for small counts
@@ -253,8 +365,7 @@ namespace PCGExClusters
 
 				if (Result == ECellResult::Success)
 				{
-					// Detect wrapper by winding - CCW face is exterior (inverted due to projection)
-					if (bDetectWrapper && !Cell->Data.bIsClockwise && Cell->Data.Area > WrapperArea)
+					if (bDetectWrapper && IsWrapperCandidate(*Cell) && Cell->Data.Area > WrapperArea)
 					{
 						// Move previous wrapper candidate back to output if any
 						if (Constraints->WrapperCell)
@@ -313,8 +424,7 @@ namespace PCGExClusters
 		{
 			if (!Cell) { continue; }
 
-			// Detect wrapper by winding - CCW face is exterior (inverted due to projection)
-			if (bDetectWrapper && !Cell->Data.bIsClockwise && Cell->Data.Area > WrapperArea)
+			if (bDetectWrapper && IsWrapperCandidate(*Cell) && Cell->Data.Area > WrapperArea)
 			{
 				if (Constraints->WrapperCell)
 				{
@@ -368,6 +478,12 @@ namespace PCGExClusters
 			if (BoundsFilter.Intersect(RawFace.Bounds3D)) { PotentialCount++; }
 		}
 
+		// Wrapper detection lambda (same logic as EnumerateAllFaces)
+		auto IsWrapperCandidate = [this](const FCell& Cell) -> bool
+		{
+			return bIsLocalTangent ? true : !Cell.Data.bIsClockwise;
+		};
+
 		// For small face counts, serial is faster due to parallel overhead
 		constexpr int32 ParallelThreshold = 32;
 
@@ -390,8 +506,7 @@ namespace PCGExClusters
 
 				if (Result == ECellResult::Success)
 				{
-					// Detect wrapper by winding - CCW face is exterior (inverted due to projection)
-					if (bDetectWrapper && !Cell->Data.bIsClockwise && Cell->Data.Area > WrapperArea)
+					if (bDetectWrapper && IsWrapperCandidate(*Cell) && Cell->Data.Area > WrapperArea)
 					{
 						// Move previous wrapper candidate back to output if any
 						if (Constraints->WrapperCell)
@@ -455,8 +570,7 @@ namespace PCGExClusters
 		{
 			if (!Cell) { continue; }
 
-			// Detect wrapper by winding - CCW face is exterior (inverted due to projection)
-			if (bDetectWrapper && !Cell->Data.bIsClockwise && Cell->Data.Area > WrapperArea)
+			if (bDetectWrapper && IsWrapperCandidate(*Cell) && Cell->Data.Area > WrapperArea)
 			{
 				if (Constraints->WrapperCell)
 				{
@@ -581,16 +695,38 @@ namespace PCGExClusters
 		}
 
 		// Build polygon from the expanded nodes array (includes leaf duplicates)
-		// Note: ProjectedPositions is node-indexed, access directly via NodeIdx
 		const int32 NumOutputNodes = OutCell->Nodes.Num();
 		OutCell->Polygon.SetNumUninitialized(NumOutputNodes);
 		OutCell->Bounds2D = FBox2D(ForceInit);
-		for (int32 i = 0; i < NumOutputNodes; ++i)
+
+		// Per-face local projection for LocalTangent (computed once, used for polygon + holes)
+		FPCGExGeo2DProjectionDetails FaceProjection;
+
+		if (bIsLocalTangent)
 		{
-			const int32 NodeIdx = OutCell->Nodes[i];
-			const FVector2D& Point = (*ProjectedPositions)[NodeIdx];
-			OutCell->Polygon[i] = Point;
-			OutCell->Bounds2D += Point;
+			// Compute best-fit plane from the face nodes' 3D positions
+			PCGExMath::FBestFitPlane FacePlane(NumUniqueNodes,
+				[&](int32 i) { return Cluster->GetPos(FaceNodes[i]); });
+			FaceProjection.Init(FacePlane);
+
+			for (int32 i = 0; i < NumOutputNodes; ++i)
+			{
+				const FVector Projected = FaceProjection.Project(Cluster->GetPos(OutCell->Nodes[i]));
+				OutCell->Polygon[i] = FVector2D(Projected.X, Projected.Y);
+				OutCell->Bounds2D += OutCell->Polygon[i];
+			}
+		}
+		else
+		{
+			// Existing global projection path
+			// Note: ProjectedPositions is node-indexed, access directly via NodeIdx
+			for (int32 i = 0; i < NumOutputNodes; ++i)
+			{
+				const int32 NodeIdx = OutCell->Nodes[i];
+				const FVector2D& Point = (*ProjectedPositions)[NodeIdx];
+				OutCell->Polygon[i] = Point;
+				OutCell->Bounds2D += Point;
+			}
 		}
 
 		// Compute polygon properties (area, winding, compactness)
@@ -607,9 +743,23 @@ namespace PCGExClusters
 		}
 
 		// Check holes
-		if (Constraints->Holes && Constraints->Holes->OverlapsPolygon(OutCell->Polygon, OutCell->Bounds2D))
+		if (Constraints->Holes)
 		{
-			return ECellResult::Hole;
+			if (bIsLocalTangent)
+			{
+				if (Constraints->Holes->OverlapsPolygonLocal(
+					OutCell->Polygon, OutCell->Bounds2D, OutCell->Data.Bounds, FaceProjection))
+				{
+					return ECellResult::Hole;
+				}
+			}
+			else
+			{
+				if (Constraints->Holes->OverlapsPolygon(OutCell->Polygon, OutCell->Bounds2D))
+				{
+					return ECellResult::Hole;
+				}
+			}
 		}
 
 		// Check compactness limits
@@ -631,19 +781,15 @@ namespace PCGExClusters
 			return ECellResult::WrongAspect;
 		}
 
-		// Check wrapper cell match
-		if (Constraints->WrapperCell && Constraints->WrapperClassificationTolerance > 0 &&
-			FMath::IsNearlyEqual(OutCell->Data.Area, Constraints->WrapperCell->Data.Area, Constraints->WrapperClassificationTolerance))
-		{
-			return ECellResult::WrapperCell;
-		}
-
 		OutCell->bBuiltSuccessfully = true;
 		return ECellResult::Success;
 	}
 
 	int32 FPlanarFaceEnumerator::FindFaceContaining(const FVector2D& Point) const
 	{
+		// LocalTangent: 2D point query is meaningless (no global 2D space)
+		if (bIsLocalTangent) { return -1; }
+
 		// Simple point-in-polygon test for each face
 		// This could be optimized with spatial indexing
 		TArray<FVector2D> FacePolygon;
@@ -791,6 +937,9 @@ namespace PCGExClusters
 
 	int32 FPlanarFaceEnumerator::GetWrapperFaceIndex() const
 	{
+		// LocalTangent: closed manifolds have no unbounded exterior face
+		if (bIsLocalTangent) { return -1; }
+
 		// The wrapper face is the one with the largest (most negative for CCW) signed area
 		// or equivalently the face that would have CW winding when all others have CCW
 		double LargestArea = -MAX_dbl;

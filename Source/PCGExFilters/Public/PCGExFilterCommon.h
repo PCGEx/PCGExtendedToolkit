@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Details/PCGExMatchingDetails.h"
 #include "PCGExFilterCommon.generated.h"
 
 UENUM()
@@ -72,3 +73,21 @@ namespace PCGExFilters
 		const FName SourceUseValueIfFilters = TEXT("UsableValueFilters");
 	}
 }
+
+/**
+ * Filter-specific matching details with a configurable fallback for when no targets match.
+ */
+USTRUCT(BlueprintType)
+struct PCGEXFILTERS_API FPCGExFilterMatchingDetails : public FPCGExMatchingDetails
+{
+	GENERATED_BODY()
+
+	FPCGExFilterMatchingDetails()
+		: FPCGExMatchingDetails(EPCGExMatchingDetailsUsage::Filter)
+	{
+	}
+
+	/** Behavior when no target matches the input data. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, EditCondition="Mode != EPCGExMapMatchMode::Disabled", EditConditionHides, DisplayAfter="Mode"))
+	EPCGExFilterFallback NoMatchFallback = EPCGExFilterFallback::Fail;
+};

@@ -80,9 +80,15 @@ public:
 	virtual void ShutdownModule() override;
 
 #if WITH_EDITOR
+	static TWeakPtr<FSlateStyleSet> EditorStyle;
+
 	virtual void RegisterToEditor(const TSharedPtr<FSlateStyleSet>& InStyle);
 
 	void RegisterMenuExtensions();
 	void UnregisterMenuExtensions();
 #endif
+
+protected:
+	TArray<FString> OldBaseModules;
+	virtual void RegisterRedirectors() const;
 };

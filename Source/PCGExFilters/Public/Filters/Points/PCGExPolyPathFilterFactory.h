@@ -8,6 +8,8 @@
 #include "Core/PCGExPointFilter.h"
 #include "PCGExVersion.h"
 #include "Data/PCGExTaggedData.h"
+#include "PCGExFilterCommon.h"
+#include "PCGExMatching/Public/Core/PCGExMatchRuleFactoryProvider.h"
 #include "Math/PCGExWinding.h"
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
@@ -73,6 +75,17 @@ public:
 
 	TSharedPtr<PCGExPathInclusion::FHandler> CreateHandler() const;
 
+	/** Static matching: builds an ignore list using the first point only (data-vs-data).
+	 *  Use for collection-level proxy evaluation (bCheckAgainstDataBounds) or when no per-point matching is needed.
+	 *  For per-point evaluation, filters should create their own FDataMatcher and call Test(FConstPoint, ...) instead.
+	 *  Returns true if matching passed (or no matcher). Returns false if no targets matched. */
+	bool PopulateMatchIgnoreList(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<const UPCGData*>& OutIgnoreList) const;
+
+	/** Whether match rule factories were provided (matching pin connected). */
+	bool HasMatchRuleFactories() const { return !MatchRuleFactories.IsEmpty(); }
+	/** Access match rule factories for creating per-point FDataMatcher instances in filter Init(). */
+	const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& GetMatchRuleFactories() const { return MatchRuleFactories; }
+
 	virtual void BeginDestroy() override;
 
 protected:
@@ -89,6 +102,11 @@ protected:
 	FPCGExGeo2DProjectionDetails LocalProjection;
 	EPCGExSplineSamplingIncludeMode LocalSampleInputs = EPCGExSplineSamplingIncludeMode::All;
 	EPCGExWindingMutation WindingMutation = EPCGExWindingMutation::Unchanged;
+	FPCGExFilterMatchingDetails DataMatching;
+
+	UPROPERTY()
+	TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>> MatchRuleFactories;
+
 	bool bScaleTolerance = false;
 	bool bUsedForInclusion = true;
 	bool bIgnoreSelf = true;
@@ -159,6 +177,7 @@ namespace PCGExPathInclusion
 		double ToleranceSquared = MAX_dbl;
 		bool bScaleTolerance = false;
 		FVector ToleranceScaleFactor = FVector(1, 1, 1);
+		TSet<const UPCGData*> MatchIgnoreList;
 
 		explicit FHandler(const UPCGExPolyPathFilterFactory* InFactory);
 
@@ -177,7 +196,7 @@ namespace PCGExPathInclusion
 			return bPass;
 		}
 
-		EFlags GetInclusionFlags(const FVector& WorldPosition, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData = nullptr) const;
-		PCGExMath::FClosestPosition FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData = nullptr) const;
+		EFlags GetInclusionFlags(const FVector& WorldPosition, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData = nullptr, const TSet<const UPCGData*>* InAdditionalExclude = nullptr) const;
+		PCGExMath::FClosestPosition FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData = nullptr, const TSet<const UPCGData*>* InAdditionalExclude = nullptr) const;
 	};
 }
