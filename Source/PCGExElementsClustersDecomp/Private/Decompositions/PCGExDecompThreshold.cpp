@@ -4,6 +4,7 @@
 #include "Decompositions/PCGExDecompThreshold.h"
 
 #include "Data/PCGExData.h"
+#include "Data/Utils/PCGExDataPreloader.h"
 
 #pragma region FPCGExDecompThreshold
 
