@@ -49,11 +49,24 @@ namespace PCGExActorDelta
 			}
 		};
 
+		/** Quick check: does the object have any instance-editable property that differs from defaults? */
+		static bool HasInstanceEditableDelta(UObject* Object, UObject* Defaults)
+		{
+			for (FProperty* Property = Object->GetClass()->PropertyLink; Property; Property = Property->PropertyLinkNext)
+			{
+				if (!IsInstanceEditableProperty(Property)) { continue; }
+				if (!Property->Identical_InContainer(Object, Defaults)) { return true; }
+			}
+			return false;
+		}
+
 		static void SerializeObjectDelta(
 			UObject* Object,
 			UObject* Defaults,
 			TArray<uint8>& OutBytes)
 		{
+			if (!HasInstanceEditableDelta(Object, Defaults)) { return; }
+
 			UClass* Class = Object->GetClass();
 			FDeltaWriter Writer(OutBytes);
 			FStructuredArchiveFromArchive Adapter(Writer);
