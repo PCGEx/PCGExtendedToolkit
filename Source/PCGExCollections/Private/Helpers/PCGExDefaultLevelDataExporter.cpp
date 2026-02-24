@@ -27,7 +27,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 
-#include "Serialization/MemoryWriter.h"
+#include "Helpers/PCGExActorPropertyDelta.h"
 
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, UStaticMeshComponent*& OutMeshComponent) const
 {
@@ -199,23 +199,6 @@ namespace PCGExDefaultLevelDataExporterInternal
 		return VariantIdx;
 	}
 
-	static TArray<uint8> SerializeActorDelta(AActor* Actor)
-	{
-		TArray<uint8> Bytes;
-		UClass* Class = Actor->GetClass();
-		UObject* CDO = Class->GetDefaultObject();
-
-		FMemoryWriter Writer(Bytes);
-		FStructuredArchiveFromArchive Adapter(Writer);
-		Class->SerializeTaggedProperties(
-			Adapter.GetSlot(),
-			reinterpret_cast<uint8*>(Actor),
-			Class,
-			reinterpret_cast<uint8*>(CDO),
-			Actor);
-
-		return Bytes;
-	}
 }
 
 bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* World, UPCGDataAsset* OutAsset)
@@ -315,11 +298,8 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 		uint32 DeltaHash = 0;
 		if (bCapturePropertyDeltas && bGenerateCollections)
 		{
-			DeltaBytes = SerializeActorDelta(CA.Actor);
-			if (!DeltaBytes.IsEmpty())
-			{
-				DeltaHash = FCrc::MemCrc32(DeltaBytes.GetData(), DeltaBytes.Num());
-			}
+			DeltaBytes = PCGExActorDelta::SerializeActorDelta(CA.Actor);
+			DeltaHash = PCGExActorDelta::HashDelta(DeltaBytes);
 		}
 		CA.DeltaHash = DeltaHash;
 
