@@ -39,7 +39,7 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
 	TObjectPtr<UPCGExActorCollection> SubCollection;
 
-	/** If enabled, the cached bounds will only account for collicable components on the actor. */
+	/** If enabled, the cached bounds will only account for collidable components on the actor. */
 	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	bool bOnlyCollidingComponents = false;
 
@@ -48,12 +48,17 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	bool bIncludeFromChildActors = true;
 
 	/** Cached: whether the actor CDO has any UPCGComponent. */
-	UPROPERTY(VisibleAnywhere, Category = "Settings|PCG")
+	UPROPERTY()
 	bool bHasPCGComponent = false;
 
 	/** Cached: graph set on the first found PCG component, if any. */
-	UPROPERTY(VisibleAnywhere, Category = "Settings|PCG")
+	UPROPERTY()
 	TSoftObjectPtr<UPCGGraphInterface> CachedPCGGraph;
+
+	/** Serialized property delta from CDO (UE tagged property format).
+	 *  Empty = CDO-identical. Populated by level data exporter when bCapturePropertyDeltas is enabled. */
+	UPROPERTY()
+	TArray<uint8> SerializedPropertyDelta;
 
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const override;
 

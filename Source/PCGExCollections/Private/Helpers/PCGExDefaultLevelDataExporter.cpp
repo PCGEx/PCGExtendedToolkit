@@ -27,6 +27,8 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 
+#include "Serialization/MemoryWriter.h"
+
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, UStaticMeshComponent*& OutMeshComponent) const
 {
 	OutMeshComponent = Actor->FindComponentByClass<UStaticMeshComponent>();
@@ -50,6 +52,7 @@ namespace PCGExDefaultLevelDataExporterInternal
 		AActor* Actor = nullptr;
 		EPCGExActorExportType Type = EPCGExActorExportType::Skip;
 		UStaticMeshComponent* MeshComponent = nullptr;
+		uint32 DeltaHash = 0;
 	};
 
 	/** Helper to allocate point data with transforms+bounds, init metadata, and return ranges */
@@ -133,6 +136,23 @@ namespace PCGExDefaultLevelDataExporterInternal
 		TSet<FName> IntersectedTags;
 		bool bFirstActor = true;
 		int32 Count = 0;
+		TArray<uint8> SerializedDelta;
+	};
+
+	struct FActorInstanceKey
+	{
+		FSoftClassPath ClassPath;
+		uint32 DeltaHash = 0;
+
+		bool operator==(const FActorInstanceKey& Other) const
+		{
+			return ClassPath == Other.ClassPath && DeltaHash == Other.DeltaHash;
+		}
+
+		friend uint32 GetTypeHash(const FActorInstanceKey& Key)
+		{
+			return HashCombine(GetTypeHash(Key.ClassPath), Key.DeltaHash);
+		}
 	};
 
 	static uint32 HashMaterials(const UStaticMeshComponent* Comp)
@@ -177,6 +197,24 @@ namespace PCGExDefaultLevelDataExporterInternal
 		}
 
 		return VariantIdx;
+	}
+
+	static TArray<uint8> SerializeActorDelta(AActor* Actor)
+	{
+		TArray<uint8> Bytes;
+		UClass* Class = Actor->GetClass();
+		UObject* CDO = Class->GetDefaultObject();
+
+		FMemoryWriter Writer(Bytes);
+		FStructuredArchiveFromArchive Adapter(Writer);
+		Class->SerializeTaggedProperties(
+			Adapter.GetSlot(),
+			reinterpret_cast<uint8*>(Actor),
+			Class,
+			reinterpret_cast<uint8*>(CDO),
+			Actor);
+
+		return Bytes;
 	}
 }
 
@@ -269,17 +307,33 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 		else if (CA.Type == EPCGExActorExportType::Actor) { ActorActors.Add(CA); }
 	}
 
-	// Compute actor tag intersections for tag capture
-	TMap<FSoftClassPath, FActorClassInfo> ActorClassInfoMap;
-	for (const FClassifiedActor& CA : ActorActors)
+	// Compute actor tag intersections and property deltas for collection building
+	TMap<FActorInstanceKey, FActorClassInfo> ActorClassInfoMap;
+	for (FClassifiedActor& CA : ActorActors)
 	{
-		const FSoftClassPath ClassPath(CA.Actor->GetClass());
-		FActorClassInfo& Info = ActorClassInfoMap.FindOrAdd(ClassPath);
+		TArray<uint8> DeltaBytes;
+		uint32 DeltaHash = 0;
+		if (bCapturePropertyDeltas && bGenerateCollections)
+		{
+			DeltaBytes = SerializeActorDelta(CA.Actor);
+			if (!DeltaBytes.IsEmpty())
+			{
+				DeltaHash = FCrc::MemCrc32(DeltaBytes.GetData(), DeltaBytes.Num());
+			}
+		}
+		CA.DeltaHash = DeltaHash;
+
+		FActorInstanceKey Key;
+		Key.ClassPath = FSoftClassPath(CA.Actor->GetClass());
+		Key.DeltaHash = DeltaHash;
+
+		FActorClassInfo& Info = ActorClassInfoMap.FindOrAdd(Key);
 		Info.Count++;
 
 		if (Info.bFirstActor)
 		{
 			Info.bFirstActor = false;
+			if (!DeltaBytes.IsEmpty()) { Info.SerializedDelta = MoveTemp(DeltaBytes); }
 			for (const FName& Tag : CA.Actor->Tags) { Info.IntersectedTags.Add(Tag); }
 		}
 		else
@@ -464,8 +518,10 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 		{
 			for (int32 i = 0; i < ActorActors.Num(); i++)
 			{
-				const FSoftClassPath ClassPath(ActorActors[i].Actor->GetClass());
-				const FActorClassInfo* Info = ActorClassInfoMap.Find(ClassPath);
+				FActorInstanceKey Key;
+				Key.ClassPath = FSoftClassPath(ActorActors[i].Actor->GetClass());
+				Key.DeltaHash = ActorActors[i].DeltaHash;
+				const FActorClassInfo* Info = ActorClassInfoMap.Find(Key);
 				if (!Info) { continue; }
 
 				// Compute delta: actor tags minus intersection
@@ -560,9 +616,14 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 				Elem.Value.EntryIndex = ActorIdx;
 
 				FPCGExActorCollectionEntry& ActorEntry = EmbeddedActorCollection->Entries[ActorIdx];
-				ActorEntry.Actor = TSoftClassPtr<AActor>(Elem.Key);
+				ActorEntry.Actor = TSoftClassPtr<AActor>(Elem.Key.ClassPath);
 				ActorEntry.Weight = Elem.Value.Count;
 				ActorEntry.Tags = Elem.Value.IntersectedTags;
+
+				if (!Elem.Value.SerializedDelta.IsEmpty())
+				{
+					ActorEntry.SerializedPropertyDelta = Elem.Value.SerializedDelta;
+				}
 
 				ActorIdx++;
 			}
@@ -612,8 +673,10 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 			{
 				for (int32 i = 0; i < ActorActors.Num(); i++)
 				{
-					const FSoftClassPath ClassPath(ActorActors[i].Actor->GetClass());
-					const FActorClassInfo* Info = ActorClassInfoMap.Find(ClassPath);
+					FActorInstanceKey Key;
+					Key.ClassPath = FSoftClassPath(ActorActors[i].Actor->GetClass());
+					Key.DeltaHash = ActorActors[i].DeltaHash;
+					const FActorClassInfo* Info = ActorClassInfoMap.Find(Key);
 					if (!Info) { continue; }
 
 					const uint64 Hash = Packer.GetPickIdx(EmbeddedActorCollection, static_cast<int16>(Info->EntryIndex), static_cast<int16>(-1));

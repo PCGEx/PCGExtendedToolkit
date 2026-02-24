@@ -13,6 +13,7 @@
 #include "Data/Utils/PCGExDataForward.h"
 #include "Engine/World.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Serialization/MemoryReader.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSpawnActorsElement"
 #define PCGEX_NAMESPACE StagingSpawnActors
@@ -98,6 +99,19 @@ bool FPCGExStagingSpawnActorsElement::AdvanceWork(FPCGExContext* InContext, cons
 
 namespace PCGExStagingSpawnActors
 {
+	static void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes)
+	{
+		FMemoryReader Reader(DeltaBytes);
+		FStructuredArchiveFromArchive Adapter(Reader);
+		UClass* Class = Actor->GetClass();
+		Class->SerializeTaggedProperties(
+			Adapter.GetSlot(),
+			reinterpret_cast<uint8*>(Actor),
+			Class,
+			reinterpret_cast<uint8*>(Class->GetDefaultObject()),
+			Actor);
+	}
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagingSpawnActors::Process);
@@ -299,12 +313,16 @@ namespace PCGExStagingSpawnActors
 
 			const FTransform& SpawnTransform = Transforms[PointIndex];
 
+			const bool bHasDelta = Settings->bApplyPropertyDeltas
+				&& ActorEntry->SerializedPropertyDelta.Num() > 0;
+
 			AActor* SpawnedActor = nullptr;
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WorldSpawnActor);
 				FActorSpawnParameters SpawnParams;
 				SpawnParams.Template = Cast<AActor>(ActorClass->GetDefaultObject());
 				SpawnParams.SpawnCollisionHandlingOverride = Settings->CollisionHandling;
+				if (bHasDelta) { SpawnParams.bDeferConstruction = true; }
 				SpawnedActor = World->SpawnActor<AActor>(ActorClass, SpawnTransform, SpawnParams);
 			}
 
@@ -317,6 +335,13 @@ namespace PCGExStagingSpawnActors
 							FText::FromString(ActorClass->GetName()), FText::AsNumber(PointIndex)));
 				}
 				goto Finalize;
+			}
+
+			// Apply property delta BEFORE finishing construction
+			if (bHasDelta)
+			{
+				ApplyPropertyDelta(SpawnedActor, ActorEntry->SerializedPropertyDelta);
+				SpawnedActor->FinishSpawning(SpawnTransform);
 			}
 
 			// UE-62747: SpawnActor doesn't properly apply scale from the spawn transform

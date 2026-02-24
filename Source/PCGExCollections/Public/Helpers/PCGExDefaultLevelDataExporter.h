@@ -68,6 +68,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bGenerateCollections"))
 	bool bCaptureMaterialOverrides = true;
 
+	/** When true and bGenerateCollections is enabled, capture per-instance property deltas
+	 *  (CDO diff) on actor collection entries. Only applies to "Actor"-classified actors. */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bGenerateCollections"))
+	bool bCapturePropertyDeltas = false;
+
 	virtual bool ExportLevelData_Implementation(UWorld* World, UPCGDataAsset* OutAsset) override;
 
 	/** Classify an actor. Override for custom logic.

@@ -65,6 +65,13 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable))
 	bool bApplyInstanceTags = false;
 
+	// --- Properties ---
+
+	/** If enabled, apply per-instance property deltas stored on actor collection entries.
+	 *  Actors with deltas are spawned deferred to set properties before construction completes. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Properties", meta=(PCG_Overridable))
+	bool bApplyPropertyDeltas = false;
+
 	// --- PCG Generation ---
 
 	/** If enabled, trigger PCG generation on spawned actors that have PCG components. */
