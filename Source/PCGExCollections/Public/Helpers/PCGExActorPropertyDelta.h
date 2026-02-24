@@ -9,12 +9,20 @@ class AActor;
 
 namespace PCGExActorDelta
 {
-	/** Serialize only properties that differ from the CDO (UE tagged property format).
-	 *  Returns empty array if actor matches CDO exactly. */
+	/**
+	 * Serialize properties that differ from defaults for an actor AND its components.
+	 * Actor-level properties are diffed against the actor CDO.
+	 * Each instanced component is diffed against its archetype.
+	 * Returns empty array if actor and all components match defaults exactly.
+	 *
+	 * Format is opaque — use ApplyPropertyDelta to deserialize.
+	 */
 	PCGEXCOLLECTIONS_API TArray<uint8> SerializeActorDelta(AActor* Actor);
 
-	/** Apply a previously serialized property delta to an actor.
-	 *  Unknown/removed properties are auto-skipped via size tags — safe across class versions. */
+	/**
+	 * Apply a previously serialized property delta to an actor and its components.
+	 * Components are matched by name. Missing/renamed components are safely skipped.
+	 */
 	PCGEXCOLLECTIONS_API void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes);
 
 	/** Compute CRC32 hash of delta bytes. Returns 0 for empty input. */
