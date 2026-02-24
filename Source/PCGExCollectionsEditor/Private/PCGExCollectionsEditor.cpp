@@ -37,7 +37,7 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	FAssetToolsModule::GetModule().Get().RegisterAssetTypeActions(MakeShared<FPCGEx##_CLASS##CollectionActions>());\
 	PCGEX_REGISTER_CUSTO("PCGEx"#_CLASS"CollectionEntry", FPCGEx##_CLASS##EntryCustomization)
 
-	PCGEX_FOREACH_ENTRY_TYPE(PCGEX_REGISTER_ENTRY_CUSTOMIZATION)
+	PCGEX_FOREACH_ENTRY_TYPE_ALL(PCGEX_REGISTER_ENTRY_CUSTOMIZATION)
 
 #undef PCGEX_REGISTER_ENTRY_CUSTOMIZATION
 }

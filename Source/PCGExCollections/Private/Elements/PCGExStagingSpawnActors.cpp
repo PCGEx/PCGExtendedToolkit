@@ -111,6 +111,11 @@ namespace PCGExStagingSpawnActors
 		EntryHashGetter = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
 		if (!EntryHashGetter) { return false; }
 
+		if (Settings->bApplyInstanceTags)
+		{
+			InstanceTagsGetter = PointDataFacade->GetReadable<FString>(TEXT("InstanceTags"), PCGExData::EIOSide::In, true);
+		}
+
 		// Create ActorReference writer
 		ActorRefWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->ActorReferenceAttribute, FSoftObjectPath(), false, PCGExData::EBufferInit::New);
 
@@ -339,6 +344,25 @@ namespace PCGExStagingSpawnActors
 				for (const FName& Tag : ActorEntry->Tags)
 				{
 					SpawnedActor->Tags.AddUnique(Tag);
+				}
+			}
+
+			// Apply per-instance tags from InstanceTags attribute
+			if (Settings->bApplyInstanceTags && InstanceTagsGetter)
+			{
+				const FString TagStr = InstanceTagsGetter->Read(PointIndex);
+				if (!TagStr.IsEmpty())
+				{
+					TArray<FString> TagParts;
+					TagStr.ParseIntoArray(TagParts, TEXT(","));
+					for (const FString& Part : TagParts)
+					{
+						const FString Trimmed = Part.TrimStartAndEnd();
+						if (!Trimmed.IsEmpty())
+						{
+							SpawnedActor->Tags.AddUnique(FName(*Trimmed));
+						}
+					}
 				}
 			}
 

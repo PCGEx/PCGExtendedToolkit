@@ -41,6 +41,11 @@ protected:
 #define PCGEX_FOREACH_ENTRY_TYPE(MACRO)\
 MACRO(Mesh, "StaticMesh")\
 MACRO(Actor, "Actor")\
+MACRO(Level, "Level")
+
+#define PCGEX_FOREACH_ENTRY_TYPE_ALL(MACRO)\
+MACRO(Mesh, "StaticMesh")\
+MACRO(Actor, "Actor")\
 MACRO(PCGDataAsset, "DataAsset")\
 MACRO(Level, "Level")
 
@@ -56,3 +61,14 @@ static TSharedRef<IPropertyTypeCustomization> MakeInstance(); \
 PCGEX_FOREACH_ENTRY_TYPE(PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL)
 
 #undef PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL
+
+/** Custom customization for PCGDataAsset entries — inlines Source dropdown and shows the relevant picker. */
+class FPCGExPCGDataAssetEntryCustomization : public FPCGExAssetEntryCustomization
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+
+protected:
+	virtual void FillCustomizedTopLevelPropertiesNames() override;
+	virtual TSharedRef<SWidget> GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle) override;
+};

@@ -1,14 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-    <defs>
-        <style>.cls-1{fill:#fff;}.cls-2{fill:#ccc;}.cls-3{fill:gray;}</style>
-    </defs>
-    <rect class="cls-1" x="7.46" y="6.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-1" x="38.8" y="6.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-1" x="70.14" y="6.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-1" x="7.46" y="38.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-2" x="38.8" y="38.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-2" x="70.14" y="38.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-2" x="7.46" y="70.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-3" x="38.8" y="70.8" width="22.4" height="22.4" rx="6.71"/>
-    <rect class="cls-3" x="70.14" y="70.8" width="22.4" height="22.4" rx="6.71"/>
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+      }
+
+      .cls-2 {
+        fill: #ccc;
+      }
+
+      .cls-3 {
+        fill: gray;
+      }
+    </style>
+  </defs>
+  <rect class="cls-1" x="7.46" y="6.8" width="22.4" height="22.4" rx="6.71" ry="6.71"/>
+  <path class="cls-1" d="M45.51,6.8h8.99c3.7,0,6.71,3,6.71,6.71v8.99c0,3.7-3,6.71-6.71,6.71h-8.99c-3.7,0-6.71-3-6.71-6.71v-8.99c0-3.7,3-6.71,6.71-6.71Z"/>
+  <rect class="cls-1" x="70.14" y="6.8" width="22.4" height="22.4" rx="6.71" ry="6.71"/>
+  <path class="cls-1" d="M14.16,38.8h8.99c3.7,0,6.71,3,6.71,6.71v8.99c0,3.7-3,6.71-6.71,6.71h-8.99c-3.7,0-6.71-3-6.71-6.71v-8.99c0-3.7,3-6.71,6.71-6.71Z"/>
+  <path class="cls-2" d="M45.51,38.8h8.99c3.7,0,6.71,3,6.71,6.71v8.99c0,3.7-3,6.71-6.71,6.71h-8.99c-3.7,0-6.71-3-6.71-6.71v-8.99c0-3.7,3-6.71,6.71-6.71Z"/>
+  <rect class="cls-2" x="70.14" y="38.8" width="22.4" height="22.4" rx="6.71" ry="6.71"/>
+  <path class="cls-2" d="M14.16,70.8h8.99c3.7,0,6.71,3,6.71,6.71v8.99c0,3.7-3,6.71-6.71,6.71h-8.99c-3.7,0-6.71-3-6.71-6.71v-8.99c0-3.7,3-6.71,6.71-6.71Z"/>
+  <path class="cls-3" d="M45.51,70.8h8.99c3.7,0,6.71,3,6.71,6.71v8.99c0,3.7-3,6.71-6.71,6.71h-8.99c-3.7,0-6.71-3-6.71-6.71v-8.99c0-3.7,3-6.71,6.71-6.71Z"/>
+  <rect class="cls-3" x="70.14" y="70.8" width="22.4" height="22.4" rx="6.71" ry="6.71"/>
 </svg>

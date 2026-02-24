@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
@@ -25,6 +25,7 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, UStaticMeshComponent*& OutMeshComponent) const
 {
@@ -104,6 +105,78 @@ namespace PCGExDefaultLevelDataExporterInternal
 
 		BoundsMin[Index] = LocalCenter - BoxExtent;
 		BoundsMax[Index] = LocalCenter + BoxExtent;
+	}
+
+	struct FMeshPoint
+	{
+		FTransform Transform;
+		FVector BoundsMin = FVector::ZeroVector;
+		FVector BoundsMax = FVector::ZeroVector;
+		FSoftObjectPath MeshPath;
+		const UStaticMeshComponent* SourceComponent = nullptr;
+		AActor* SourceActor = nullptr;
+		int32 MaterialVariantIndex = -1;
+	};
+
+	struct FMeshInfo
+	{
+		int32 EntryIndex = -1;
+		const UStaticMeshComponent* FirstComponent = nullptr;
+		int32 TotalCount = 0;
+		TArray<TArray<FSoftObjectPath>> UniqueVariantMaterials;
+		TMap<uint32, int32> VariantHashToIndex;
+	};
+
+	struct FActorClassInfo
+	{
+		int32 EntryIndex = -1;
+		TSet<FName> IntersectedTags;
+		bool bFirstActor = true;
+		int32 Count = 0;
+	};
+
+	static uint32 HashMaterials(const UStaticMeshComponent* Comp)
+	{
+		uint32 H = 0;
+		for (int32 i = 0; i < Comp->GetNumOverrideMaterials(); i++)
+		{
+			if (UMaterialInterface* M = Comp->GetMaterial(i))
+			{
+				H = HashCombine(H, GetTypeHash(FSoftObjectPath(M)));
+			}
+		}
+		return H;
+	}
+
+	static int32 TrackMaterialVariant(const UStaticMeshComponent* Comp, FMeshInfo& Info)
+	{
+		if (!Comp) { return -1; }
+
+		const uint32 MatHash = HashMaterials(Comp);
+		if (MatHash == 0) { return -1; }
+
+		if (const int32* Existing = Info.VariantHashToIndex.Find(MatHash))
+		{
+			return *Existing;
+		}
+
+		const int32 VariantIdx = Info.UniqueVariantMaterials.Num();
+		Info.VariantHashToIndex.Add(MatHash, VariantIdx);
+
+		TArray<FSoftObjectPath>& Mats = Info.UniqueVariantMaterials.AddDefaulted_GetRef();
+		for (int32 i = 0; i < Comp->GetNumOverrideMaterials(); i++)
+		{
+			if (UMaterialInterface* M = Comp->GetMaterial(i))
+			{
+				Mats.Add(FSoftObjectPath(M));
+			}
+			else
+			{
+				Mats.Add(FSoftObjectPath());
+			}
+		}
+
+		return VariantIdx;
 	}
 }
 
@@ -196,109 +269,67 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 		else if (CA.Type == EPCGExActorExportType::Actor) { ActorActors.Add(CA); }
 	}
 
+	// Compute actor tag intersections for tag capture
+	TMap<FSoftClassPath, FActorClassInfo> ActorClassInfoMap;
+	for (const FClassifiedActor& CA : ActorActors)
+	{
+		const FSoftClassPath ClassPath(CA.Actor->GetClass());
+		FActorClassInfo& Info = ActorClassInfoMap.FindOrAdd(ClassPath);
+		Info.Count++;
+
+		if (Info.bFirstActor)
+		{
+			Info.bFirstActor = false;
+			for (const FName& Tag : CA.Actor->Tags) { Info.IntersectedTags.Add(Tag); }
+		}
+		else
+		{
+			TSet<FName> ActorTags;
+			for (const FName& Tag : CA.Actor->Tags) { ActorTags.Add(Tag); }
+			Info.IntersectedTags = Info.IntersectedTags.Intersect(ActorTags);
+		}
+	}
+
 	// Phase 2: Create typed point data
 
-	// --- Meshes ---
-	if (!MeshActors.IsEmpty())
+	// --- Unified Meshes (SM actors + ISM instances) ---
+	TArray<FMeshPoint> AllMeshPoints;
+	TMap<FSoftObjectPath, FMeshInfo> MeshInfoMap;
+
+	// Collect from SM actors
+	for (const FClassifiedActor& CA : MeshActors)
 	{
-		TPCGValueRange<FTransform> Transforms;
-		TPCGValueRange<FVector> BMin, BMax;
-		UPCGBasePointData* MeshData = CreatePointData(OutAsset, MeshActors.Num(), Transforms, BMin, BMax);
+		if (!CA.MeshComponent) { continue; }
+		UStaticMesh* Mesh = CA.MeshComponent->GetStaticMesh();
+		if (!Mesh) { continue; }
 
-		for (int32 i = 0; i < MeshActors.Num(); i++)
+		const FSoftObjectPath MeshPath(Mesh);
+		FMeshInfo& Info = MeshInfoMap.FindOrAdd(MeshPath);
+		Info.TotalCount++;
+		if (!Info.FirstComponent) { Info.FirstComponent = CA.MeshComponent; }
+
+		FMeshPoint& Point = AllMeshPoints.AddDefaulted_GetRef();
+		Point.MeshPath = MeshPath;
+		Point.SourceComponent = CA.MeshComponent;
+		Point.SourceActor = CA.Actor;
+
+		const FTransform ActorTransform = CA.Actor->GetActorTransform();
+		Point.Transform = ActorTransform;
+
+		FVector Origin, BoxExtent;
+		CA.Actor->GetActorBounds(false, Origin, BoxExtent);
+		const FTransform InvTransform = ActorTransform.Inverse();
+		const FVector LocalCenter = InvTransform.TransformPosition(Origin);
+		Point.BoundsMin = LocalCenter - BoxExtent;
+		Point.BoundsMax = LocalCenter + BoxExtent;
+
+		if (bCaptureMaterialOverrides)
 		{
-			WriteActorTransformAndBounds(MeshActors[i].Actor, i, Transforms, BMin, BMax);
+			Point.MaterialVariantIndex = TrackMaterialVariant(CA.MeshComponent, Info);
 		}
-
-		InitMetadata(MeshData, MeshActors.Num());
-
-		// Write metadata attributes
-		if (!bGenerateCollections)
-		{
-			UPCGMetadata* Meta = MeshData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = MeshData->GetMetadataEntryValueRange();
-
-			FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true);
-			FPCGMetadataAttribute<FSoftObjectPath>* MeshAttr = Meta->CreateAttribute<FSoftObjectPath>(TEXT("Mesh"), FSoftObjectPath(), false, true);
-
-			for (int32 i = 0; i < MeshActors.Num(); i++)
-			{
-				const int64 Entry = MetaEntries[i];
-				if (ActorNameAttr) { ActorNameAttr->SetValue(Entry, MeshActors[i].Actor->GetActorNameOrLabel()); }
-				if (MeshAttr && MeshActors[i].MeshComponent)
-				{
-					if (UStaticMesh* Mesh = MeshActors[i].MeshComponent->GetStaticMesh())
-					{
-						MeshAttr->SetValue(Entry, FSoftObjectPath(Mesh));
-					}
-				}
-			}
-		}
-		else
-		{
-			// Collection mode: only write ActorName, hash written later in Phase 3
-			UPCGMetadata* Meta = MeshData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = MeshData->GetMetadataEntryValueRange();
-
-			FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true);
-			for (int32 i = 0; i < MeshActors.Num(); i++)
-			{
-				if (ActorNameAttr) { ActorNameAttr->SetValue(MetaEntries[i], MeshActors[i].Actor->GetActorNameOrLabel()); }
-			}
-		}
-
-		FPCGTaggedData& TaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
-		TaggedData.Data = MeshData;
-		TaggedData.Pin = FName(TEXT("Meshes"));
 	}
 
-	// --- Actors ---
-	if (!ActorActors.IsEmpty())
-	{
-		TPCGValueRange<FTransform> Transforms;
-		TPCGValueRange<FVector> BMin, BMax;
-		UPCGBasePointData* ActorData = CreatePointData(OutAsset, ActorActors.Num(), Transforms, BMin, BMax);
-
-		for (int32 i = 0; i < ActorActors.Num(); i++)
-		{
-			WriteActorTransformAndBounds(ActorActors[i].Actor, i, Transforms, BMin, BMax);
-		}
-
-		InitMetadata(ActorData, ActorActors.Num());
-
-		if (!bGenerateCollections)
-		{
-			UPCGMetadata* Meta = ActorData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = ActorData->GetMetadataEntryValueRange();
-
-			FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true);
-			FPCGMetadataAttribute<FSoftClassPath>* ActorClassAttr = Meta->CreateAttribute<FSoftClassPath>(TEXT("ActorClass"), FSoftClassPath(), false, true);
-
-			for (int32 i = 0; i < ActorActors.Num(); i++)
-			{
-				const int64 Entry = MetaEntries[i];
-				if (ActorNameAttr) { ActorNameAttr->SetValue(Entry, ActorActors[i].Actor->GetActorNameOrLabel()); }
-				if (ActorClassAttr) { ActorClassAttr->SetValue(Entry, FSoftClassPath(ActorActors[i].Actor->GetClass())); }
-			}
-		}
-		else
-		{
-			UPCGMetadata* Meta = ActorData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = ActorData->GetMetadataEntryValueRange();
-
-			FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true);
-			for (int32 i = 0; i < ActorActors.Num(); i++)
-			{
-				if (ActorNameAttr) { ActorNameAttr->SetValue(MetaEntries[i], ActorActors[i].Actor->GetActorNameOrLabel()); }
-			}
-		}
-
-		FPCGTaggedData& TaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
-		TaggedData.Data = ActorData;
-		TaggedData.Pin = FName(TEXT("Actors"));
-	}
-
-	// --- ISM Instances (unchanged behavior) ---
+	// Collect from ISM instances on all classified actors
 	for (const FClassifiedActor& CA : ClassifiedActors)
 	{
 		TArray<UInstancedStaticMeshComponent*> ISMComponents;
@@ -311,47 +342,153 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 			UStaticMesh* Mesh = ISM->GetStaticMesh();
 			if (!Mesh) { continue; }
 
+			const FSoftObjectPath MeshPath(Mesh);
 			const int32 InstanceCount = ISM->GetInstanceCount();
 
-			const FBox MeshBounds = Mesh->GetBoundingBox();
-			const FVector MeshBoundsMin = MeshBounds.Min;
-			const FVector MeshBoundsMax = MeshBounds.Max;
+			FMeshInfo& Info = MeshInfoMap.FindOrAdd(MeshPath);
+			Info.TotalCount += InstanceCount;
+			if (!Info.FirstComponent) { Info.FirstComponent = ISM; }
 
-			TPCGValueRange<FTransform> InstanceTransforms;
-			TPCGValueRange<FVector> InstanceBMin, InstanceBMax;
-			UPCGBasePointData* InstanceData = CreatePointData(OutAsset, InstanceCount, InstanceTransforms, InstanceBMin, InstanceBMax);
+			const FBox MeshBounds = Mesh->GetBoundingBox();
+
+			int32 VariantIdx = -1;
+			if (bCaptureMaterialOverrides)
+			{
+				VariantIdx = TrackMaterialVariant(ISM, Info);
+			}
 
 			for (int32 Idx = 0; Idx < InstanceCount; Idx++)
 			{
-				FTransform InstanceTransform;
-				ISM->GetInstanceTransform(Idx, InstanceTransform, true);
-				InstanceTransforms[Idx] = InstanceTransform;
-				InstanceBMin[Idx] = MeshBoundsMin;
-				InstanceBMax[Idx] = MeshBoundsMax;
+				FMeshPoint& Point = AllMeshPoints.AddDefaulted_GetRef();
+				Point.MeshPath = MeshPath;
+				Point.SourceComponent = ISM;
+				Point.SourceActor = CA.Actor;
+				Point.MaterialVariantIndex = VariantIdx;
+
+				ISM->GetInstanceTransform(Idx, Point.Transform, true);
+				Point.BoundsMin = MeshBounds.Min;
+				Point.BoundsMax = MeshBounds.Max;
 			}
+		}
+	}
 
-			InitMetadata(InstanceData, InstanceCount);
+	// Create mesh point data
+	UPCGBasePointData* MeshPointData = nullptr;
+	if (!AllMeshPoints.IsEmpty())
+	{
+		TPCGValueRange<FTransform> Transforms;
+		TPCGValueRange<FVector> BMin, BMax;
+		MeshPointData = CreatePointData(OutAsset, AllMeshPoints.Num(), Transforms, BMin, BMax);
 
-			if (!bGenerateCollections)
+		for (int32 i = 0; i < AllMeshPoints.Num(); i++)
+		{
+			const FMeshPoint& Point = AllMeshPoints[i];
+			Transforms[i] = Point.Transform;
+			BMin[i] = Point.BoundsMin;
+			BMax[i] = Point.BoundsMax;
+		}
+
+		InitMetadata(MeshPointData, AllMeshPoints.Num());
+
+		UPCGMetadata* Meta = MeshPointData->MutableMetadata();
+		TPCGValueRange<int64> MetaEntries = MeshPointData->GetMetadataEntryValueRange();
+
+		FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true);
+
+		if (!bGenerateCollections)
+		{
+			FPCGMetadataAttribute<FSoftObjectPath>* MeshAttr = Meta->CreateAttribute<FSoftObjectPath>(TEXT("Mesh"), FSoftObjectPath(), false, true);
+
+			for (int32 i = 0; i < AllMeshPoints.Num(); i++)
 			{
-				UPCGMetadata* Meta = InstanceData->MutableMetadata();
-				FPCGMetadataAttribute<FSoftObjectPath>* InstanceMeshAttr = Meta->CreateAttribute<FSoftObjectPath>(TEXT("Mesh"), FSoftObjectPath(), false, true);
-				if (InstanceMeshAttr)
+				const int64 Entry = MetaEntries[i];
+				if (ActorNameAttr) { ActorNameAttr->SetValue(Entry, AllMeshPoints[i].SourceActor->GetActorNameOrLabel()); }
+				if (MeshAttr) { MeshAttr->SetValue(Entry, AllMeshPoints[i].MeshPath); }
+			}
+		}
+		else
+		{
+			for (int32 i = 0; i < AllMeshPoints.Num(); i++)
+			{
+				if (ActorNameAttr) { ActorNameAttr->SetValue(MetaEntries[i], AllMeshPoints[i].SourceActor->GetActorNameOrLabel()); }
+			}
+		}
+
+		FPCGTaggedData& TaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
+		TaggedData.Data = MeshPointData;
+		TaggedData.Pin = FName(TEXT("Meshes"));
+	}
+
+	// --- Actors ---
+	UPCGBasePointData* ActorPointData = nullptr;
+	if (!ActorActors.IsEmpty())
+	{
+		TPCGValueRange<FTransform> Transforms;
+		TPCGValueRange<FVector> BMin, BMax;
+		ActorPointData = CreatePointData(OutAsset, ActorActors.Num(), Transforms, BMin, BMax);
+
+		for (int32 i = 0; i < ActorActors.Num(); i++)
+		{
+			WriteActorTransformAndBounds(ActorActors[i].Actor, i, Transforms, BMin, BMax);
+		}
+
+		InitMetadata(ActorPointData, ActorActors.Num());
+
+		UPCGMetadata* Meta = ActorPointData->MutableMetadata();
+		TPCGValueRange<int64> MetaEntries = ActorPointData->GetMetadataEntryValueRange();
+
+		FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true);
+
+		if (!bGenerateCollections)
+		{
+			FPCGMetadataAttribute<FSoftClassPath>* ActorClassAttr = Meta->CreateAttribute<FSoftClassPath>(TEXT("ActorClass"), FSoftClassPath(), false, true);
+
+			for (int32 i = 0; i < ActorActors.Num(); i++)
+			{
+				const int64 Entry = MetaEntries[i];
+				if (ActorNameAttr) { ActorNameAttr->SetValue(Entry, ActorActors[i].Actor->GetActorNameOrLabel()); }
+				if (ActorClassAttr) { ActorClassAttr->SetValue(Entry, FSoftClassPath(ActorActors[i].Actor->GetClass())); }
+			}
+		}
+		else
+		{
+			for (int32 i = 0; i < ActorActors.Num(); i++)
+			{
+				if (ActorNameAttr) { ActorNameAttr->SetValue(MetaEntries[i], ActorActors[i].Actor->GetActorNameOrLabel()); }
+			}
+		}
+
+		// Write per-point instance tags delta
+		FPCGMetadataAttribute<FString>* InstanceTagsAttr = Meta->CreateAttribute<FString>(TEXT("InstanceTags"), FString(), false, true);
+		if (InstanceTagsAttr)
+		{
+			for (int32 i = 0; i < ActorActors.Num(); i++)
+			{
+				const FSoftClassPath ClassPath(ActorActors[i].Actor->GetClass());
+				const FActorClassInfo* Info = ActorClassInfoMap.Find(ClassPath);
+				if (!Info) { continue; }
+
+				// Compute delta: actor tags minus intersection
+				FString DeltaStr;
+				for (const FName& Tag : ActorActors[i].Actor->Tags)
 				{
-					TPCGValueRange<int64> MetaEntries = InstanceData->GetMetadataEntryValueRange();
-					const FSoftObjectPath MeshPath(Mesh);
-					for (int32 Idx = 0; Idx < InstanceCount; Idx++)
+					if (!Info->IntersectedTags.Contains(Tag))
 					{
-						InstanceMeshAttr->SetValue(MetaEntries[Idx], MeshPath);
+						if (!DeltaStr.IsEmpty()) { DeltaStr += TEXT(","); }
+						DeltaStr += Tag.ToString();
 					}
 				}
-			}
 
-			FPCGTaggedData& InstanceTaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
-			InstanceTaggedData.Data = InstanceData;
-			InstanceTaggedData.Pin = FName(TEXT("Instances"));
-			InstanceTaggedData.Tags.Add(Mesh->GetPathName());
+				if (!DeltaStr.IsEmpty())
+				{
+					InstanceTagsAttr->SetValue(MetaEntries[i], DeltaStr);
+				}
+			}
 		}
+
+		FPCGTaggedData& TaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
+		TaggedData.Data = ActorPointData;
+		TaggedData.Pin = FName(TEXT("Actors"));
 	}
 
 	// Phase 2.5: Notify subclasses
@@ -360,175 +497,128 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 	// Phase 3: Embedded collection generation (when bGenerateCollections)
 	if (bGenerateCollections)
 	{
-		// Scan unique meshes from Meshes + Instances
-		TMap<FSoftObjectPath, int32> UniqueMeshes;
-
-		for (const FClassifiedActor& CA : MeshActors)
-		{
-			if (CA.MeshComponent)
-			{
-				if (UStaticMesh* Mesh = CA.MeshComponent->GetStaticMesh())
-				{
-					UniqueMeshes.FindOrAdd(FSoftObjectPath(Mesh))++;
-				}
-			}
-		}
-
-		// Also scan ISM meshes
-		for (const FClassifiedActor& CA : ClassifiedActors)
-		{
-			TArray<UInstancedStaticMeshComponent*> ISMComponents;
-			CA.Actor->GetComponents<UInstancedStaticMeshComponent>(ISMComponents);
-			for (const UInstancedStaticMeshComponent* ISM : ISMComponents)
-			{
-				if (!ISM || ISM->GetInstanceCount() == 0) { continue; }
-				if (UStaticMesh* Mesh = ISM->GetStaticMesh())
-				{
-					UniqueMeshes.FindOrAdd(FSoftObjectPath(Mesh)) += ISM->GetInstanceCount();
-				}
-			}
-		}
-
-		// Scan unique actor classes
-		TMap<FSoftClassPath, int32> UniqueActors;
-		for (const FClassifiedActor& CA : ActorActors)
-		{
-			UniqueActors.FindOrAdd(FSoftClassPath(CA.Actor->GetClass()))++;
-		}
-
 		// Build embedded mesh collection
 		UPCGExMeshCollection* EmbeddedMeshCollection = nullptr;
-		TMap<FSoftObjectPath, int32> MeshPathToEntryIndex;
 
-		if (!UniqueMeshes.IsEmpty())
+		if (!MeshInfoMap.IsEmpty())
 		{
 			EmbeddedMeshCollection = NewObject<UPCGExMeshCollection>(OutAsset);
+			EmbeddedMeshCollection->InitNumEntries(MeshInfoMap.Num());
 
-			EmbeddedMeshCollection->InitNumEntries(UniqueMeshes.Num());
 			int32 MeshIdx = 0;
-			for (const auto& Pair : UniqueMeshes)
+			for (auto& Elem : MeshInfoMap)
 			{
-				MeshPathToEntryIndex.Add(Pair.Key, MeshIdx);
+				Elem.Value.EntryIndex = MeshIdx;
 
 				FPCGExMeshCollectionEntry& MeshEntry = EmbeddedMeshCollection->Entries[MeshIdx];
-				MeshEntry.StaticMesh = TSoftObjectPtr<UStaticMesh>(Pair.Key);
-				MeshEntry.Weight = Pair.Value;
+				MeshEntry.StaticMesh = TSoftObjectPtr<UStaticMesh>(Elem.Key);
+				MeshEntry.Weight = Elem.Value.TotalCount;
+
+				// Populate ISM/SM descriptors from first source component
+				if (Elem.Value.FirstComponent)
+				{
+					MeshEntry.ISMDescriptor.InitFrom(Elem.Value.FirstComponent, false);
+					MeshEntry.SMDescriptor.InitFrom(Elem.Value.FirstComponent, false);
+				}
+
+				// Material variants
+				if (bCaptureMaterialOverrides && Elem.Value.UniqueVariantMaterials.Num() > 1)
+				{
+					MeshEntry.MaterialVariants = EPCGExMaterialVariantsMode::Multi;
+
+					for (const TArray<FSoftObjectPath>& VariantMats : Elem.Value.UniqueVariantMaterials)
+					{
+						FPCGExMaterialOverrideCollection& Variant = MeshEntry.MaterialOverrideVariantsList.AddDefaulted_GetRef();
+						Variant.Weight = 1;
+
+						for (int32 SlotIdx = 0; SlotIdx < VariantMats.Num(); SlotIdx++)
+						{
+							FPCGExMaterialOverrideEntry& MatEntry = Variant.Overrides.AddDefaulted_GetRef();
+							MatEntry.SlotIndex = SlotIdx;
+							MatEntry.Material = TSoftObjectPtr<UMaterialInterface>(VariantMats[SlotIdx]);
+						}
+					}
+				}
+
 				MeshIdx++;
 			}
+
 			EmbeddedMeshCollection->RebuildStagingData(true);
 		}
 
 		// Build embedded actor collection
 		UPCGExActorCollection* EmbeddedActorCollection = nullptr;
-		TMap<FSoftClassPath, int32> ActorClassToEntryIndex;
 
-		if (!UniqueActors.IsEmpty())
+		if (!ActorClassInfoMap.IsEmpty())
 		{
 			EmbeddedActorCollection = NewObject<UPCGExActorCollection>(OutAsset);
+			EmbeddedActorCollection->InitNumEntries(ActorClassInfoMap.Num());
 
-			EmbeddedActorCollection->InitNumEntries(UniqueActors.Num());
 			int32 ActorIdx = 0;
-			for (const auto& Pair : UniqueActors)
+			for (auto& Elem : ActorClassInfoMap)
 			{
-				ActorClassToEntryIndex.Add(Pair.Key, ActorIdx);
+				Elem.Value.EntryIndex = ActorIdx;
 
 				FPCGExActorCollectionEntry& ActorEntry = EmbeddedActorCollection->Entries[ActorIdx];
-				ActorEntry.Actor = TSoftClassPtr<AActor>(Pair.Key);
-				ActorEntry.Weight = Pair.Value;
+				ActorEntry.Actor = TSoftClassPtr<AActor>(Elem.Key);
+				ActorEntry.Weight = Elem.Value.Count;
+				ActorEntry.Tags = Elem.Value.IntersectedTags;
+
 				ActorIdx++;
 			}
+
 			EmbeddedActorCollection->RebuildStagingData(true);
 		}
 
 		// Encode hashes on points
 		PCGExCollections::FPickPacker Packer;
 
-		// Encode mesh hashes on Meshes data
-		for (FPCGTaggedData& TD : OutAsset->Data.TaggedData)
+		// Encode mesh hashes
+		if (MeshPointData && EmbeddedMeshCollection)
 		{
-			if (TD.Pin != FName(TEXT("Meshes")) || !EmbeddedMeshCollection) { continue; }
-
-			UPCGBasePointData* MeshData = const_cast<UPCGBasePointData*>(Cast<UPCGBasePointData>(TD.Data));
-			if (!MeshData) { continue; }
-
-			UPCGMetadata* Meta = MeshData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = MeshData->GetMetadataEntryValueRange();
-
-			FPCGMetadataAttribute<int64>* EntryHashAttr = Meta->CreateAttribute<int64>(
-				PCGExCollections::Labels::Tag_EntryIdx, int64(0), false, true);
-
-			for (int32 i = 0; i < MeshActors.Num(); i++)
-			{
-				if (!MeshActors[i].MeshComponent) { continue; }
-				UStaticMesh* Mesh = MeshActors[i].MeshComponent->GetStaticMesh();
-				if (!Mesh) { continue; }
-
-				const int32* EntryIdx = MeshPathToEntryIndex.Find(FSoftObjectPath(Mesh));
-				if (!EntryIdx) { continue; }
-
-				const uint64 Hash = Packer.GetPickIdx(EmbeddedMeshCollection, *EntryIdx, -1);
-				if (EntryHashAttr) { EntryHashAttr->SetValue(MetaEntries[i], static_cast<int64>(Hash)); }
-			}
-		}
-
-		// Encode mesh hashes on Instances data
-		for (FPCGTaggedData& TD : OutAsset->Data.TaggedData)
-		{
-			if (TD.Pin != FName(TEXT("Instances")) || !EmbeddedMeshCollection) { continue; }
-
-			UPCGBasePointData* InstanceData = const_cast<UPCGBasePointData*>(Cast<UPCGBasePointData>(TD.Data));
-			if (!InstanceData) { continue; }
-
-			// Get the mesh path from the tag
-			FSoftObjectPath MeshPath;
-			for (const FString& Tag : TD.Tags)
-			{
-				MeshPath = FSoftObjectPath(Tag);
-				break; // First tag is the mesh path
-			}
-
-			const int32* EntryIdx = MeshPathToEntryIndex.Find(MeshPath);
-			if (!EntryIdx) { continue; }
-
-			const uint64 Hash = Packer.GetPickIdx(EmbeddedMeshCollection, *EntryIdx, -1);
-
-			UPCGMetadata* Meta = InstanceData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = InstanceData->GetMetadataEntryValueRange();
+			UPCGMetadata* Meta = MeshPointData->MutableMetadata();
+			TPCGValueRange<int64> MetaEntries = MeshPointData->GetMetadataEntryValueRange();
 
 			FPCGMetadataAttribute<int64>* EntryHashAttr = Meta->CreateAttribute<int64>(
 				PCGExCollections::Labels::Tag_EntryIdx, int64(0), false, true);
 
 			if (EntryHashAttr)
 			{
-				const int32 NumInstances = InstanceData->GetNumPoints();
-				for (int32 Idx = 0; Idx < NumInstances; Idx++)
+				for (int32 i = 0; i < AllMeshPoints.Num(); i++)
 				{
-					EntryHashAttr->SetValue(MetaEntries[Idx], static_cast<int64>(Hash));
+					const FMeshPoint& Point = AllMeshPoints[i];
+					const FMeshInfo* Info = MeshInfoMap.Find(Point.MeshPath);
+					if (!Info) { continue; }
+
+					const int16 SecIdx = (bCaptureMaterialOverrides && Point.MaterialVariantIndex > 0)
+						? static_cast<int16>(Point.MaterialVariantIndex) : static_cast<int16>(-1);
+
+					const uint64 Hash = Packer.GetPickIdx(EmbeddedMeshCollection, static_cast<int16>(Info->EntryIndex), SecIdx);
+					EntryHashAttr->SetValue(MetaEntries[i], static_cast<int64>(Hash));
 				}
 			}
 		}
 
-		// Encode actor hashes on Actors data
-		for (FPCGTaggedData& TD : OutAsset->Data.TaggedData)
+		// Encode actor hashes
+		if (ActorPointData && EmbeddedActorCollection)
 		{
-			if (TD.Pin != FName(TEXT("Actors")) || !EmbeddedActorCollection) { continue; }
-
-			UPCGBasePointData* ActorData = const_cast<UPCGBasePointData*>(Cast<UPCGBasePointData>(TD.Data));
-			if (!ActorData) { continue; }
-
-			UPCGMetadata* Meta = ActorData->MutableMetadata();
-			TPCGValueRange<int64> MetaEntries = ActorData->GetMetadataEntryValueRange();
+			UPCGMetadata* Meta = ActorPointData->MutableMetadata();
+			TPCGValueRange<int64> MetaEntries = ActorPointData->GetMetadataEntryValueRange();
 
 			FPCGMetadataAttribute<int64>* EntryHashAttr = Meta->CreateAttribute<int64>(
 				PCGExCollections::Labels::Tag_EntryIdx, int64(0), false, true);
 
-			for (int32 i = 0; i < ActorActors.Num(); i++)
+			if (EntryHashAttr)
 			{
-				const int32* EntryIdx = ActorClassToEntryIndex.Find(FSoftClassPath(ActorActors[i].Actor->GetClass()));
-				if (!EntryIdx) { continue; }
+				for (int32 i = 0; i < ActorActors.Num(); i++)
+				{
+					const FSoftClassPath ClassPath(ActorActors[i].Actor->GetClass());
+					const FActorClassInfo* Info = ActorClassInfoMap.Find(ClassPath);
+					if (!Info) { continue; }
 
-				const uint64 Hash = Packer.GetPickIdx(EmbeddedActorCollection, *EntryIdx, -1);
-				if (EntryHashAttr) { EntryHashAttr->SetValue(MetaEntries[i], static_cast<int64>(Hash)); }
+					const uint64 Hash = Packer.GetPickIdx(EmbeddedActorCollection, static_cast<int16>(Info->EntryIndex), static_cast<int16>(-1));
+					EntryHashAttr->SetValue(MetaEntries[i], static_cast<int64>(Hash));
+				}
 			}
 		}
 

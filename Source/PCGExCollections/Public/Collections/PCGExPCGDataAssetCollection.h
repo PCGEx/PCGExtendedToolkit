@@ -19,32 +19,12 @@ class UWorld;
 UENUM()
 enum class EPCGExDataAssetEntrySource : uint8
 {
-	DataAsset = 0 UMETA(DisplayName = "Data Asset", ToolTip="Reference an existing PCGDataAsset"),
-	Level     = 1 UMETA(DisplayName = "Level",      ToolTip="Export a level to an embedded PCGDataAsset"),
+	DataAsset = 0 UMETA(DisplayName = "Data Asset", ToolTip="Reference an existing PCGDataAsset", ActionIcon="PCGDA_DataAsset"),
+	Level     = 1 UMETA(DisplayName = "Level",      ToolTip="Export a level to an embedded PCGDataAsset", ActionIcon="PCGDA_Level"),
 };
-
-namespace PCGExPCGDataAssetCollection
-{
-	/** MicroCache for PCG data asset entries. When bOverrideWeights is true on the entry,
-	 *  builds weighted pick arrays from user-specified per-point weights. */
-	class PCGEXCOLLECTIONS_API FMicroCache : public PCGExAssetCollection::FMicroCache
-	{
-	public:
-		FMicroCache() = default;
-
-		virtual PCGExAssetCollection::FTypeId GetTypeId() const override
-		{
-			return PCGExAssetCollection::TypeIds::PCGDataAsset;
-		}
-
-		void ProcessPointWeights(const TArray<int32>& InPointWeights);
-	};
-}
 
 /**
  * PCG data asset collection entry. References a UPCGDataAsset or a subcollection.
- * Supports optional per-point weight overrides via a MicroCache, allowing weighted
- * point-level picking within the data asset's point sets.
  * UpdateStaging() computes combined bounds from all spatial data in the asset.
  */
 USTRUCT(BlueprintType, DisplayName="[PCGEx] PCGDataAsset Collection Entry")
@@ -89,12 +69,6 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
 	TObjectPtr<UPCGExPCGDataAssetCollection> SubCollection;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source==EPCGExDataAssetEntrySource::DataAsset && !bIsSubCollection", EditConditionHides))
-	bool bOverrideWeights = false;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Weights", EditCondition="Source==EPCGExDataAssetEntrySource::DataAsset && !bIsSubCollection && bOverrideWeights", EditConditionHides))
-	TArray<int32> PointWeights;
-
 	// Subcollection Access
 
 	virtual UPCGExAssetCollection* GetSubCollectionPtr() const override;
@@ -110,15 +84,6 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize() override;
 #endif
-
-	virtual void BuildMicroCache() override;
-
-	// Typed MicroCache Access
-
-	PCGExPCGDataAssetCollection::FMicroCache* GetDataAssetMicroCache() const
-	{
-		return static_cast<PCGExPCGDataAssetCollection::FMicroCache*>(MicroCache.Get());
-	}
 
 };
 
