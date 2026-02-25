@@ -60,7 +60,7 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	TSoftObjectPtr<UWorld> DeltaSourceLevel;
 
 	/** Name of the actor within the level to capture delta from. */
-	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection && DeltaSourceLevel != nullptr", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection ", EditConditionHides))
 	FName DeltaSourceActorName;
 
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const override;
