@@ -102,10 +102,6 @@ protected:
 	 *  Override in derived editors. Used by the grid view to build tile picker widgets. */
 	virtual FName GetTilePickerPropertyName() const { return NAME_None; }
 
-	/** Additional property names shown on the tile that should be excluded from the detail panel.
-	 *  Override when the tile shows more properties than just the picker (e.g., PCGDataAsset's Source enum). */
-	virtual void GetAdditionalTilePropertyNames(TSet<FName>& OutNames) const {}
-
 	/** Build the picker widget for a single tile entry. Override for custom picker logic. */
 	virtual TSharedRef<SWidget> BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle);
 

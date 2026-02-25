@@ -265,24 +265,11 @@ void FPCGExAssetCollectionEditor::CreateGridTab(TArray<PCGExAssetCollectionEdito
 		ThumbnailPool = MakeShared<FAssetThumbnailPool>(128);
 	}
 
-	// Properties already shown on each tile (excluded from detail panel)
-	TSet<FName> TileProps;
-	TileProps.Add(FName("Weight"));
-	TileProps.Add(FName("Category"));
-	TileProps.Add(FName("bIsSubCollection"));
-	TileProps.Add(FName("SubCollection"));
-	TileProps.Add(FName("InternalSubCollection"));
-
-	const FName PickerProp = GetTilePickerPropertyName();
-	if (!PickerProp.IsNone()) { TileProps.Add(PickerProp); }
-	GetAdditionalTilePropertyNames(TileProps);
-
 	SAssignNew(GridView, SPCGExCollectionGridView)
 		.Collection(EditedCollection.Get())
 		.ThumbnailPool(ThumbnailPool)
 		.OnGetPickerWidget(FOnGetTilePickerWidget::CreateSP(this, &FPCGExAssetCollectionEditor::BuildTilePickerWidget))
-		.TileSize(128.f)
-		.TilePropertyNames(TileProps);
+		.TileSize(128.f);
 
 	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Grid"), GridView, FName("Grid View"));
 	Infos.Icon = TEXT("Entries");

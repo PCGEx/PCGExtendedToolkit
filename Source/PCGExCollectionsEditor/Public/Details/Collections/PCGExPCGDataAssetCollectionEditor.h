@@ -20,6 +20,5 @@ public:
 
 protected:
 	virtual FName GetTilePickerPropertyName() const override { return FName("DataAsset"); }
-	virtual void GetAdditionalTilePropertyNames(TSet<FName>& OutNames) const override { OutNames.Add(FName("Source")); OutNames.Add(FName("Level")); }
 	virtual TSharedRef<SWidget> BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle) override;
 };

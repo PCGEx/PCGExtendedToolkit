@@ -11,6 +11,7 @@ class FAssetThumbnail;
 class FAssetThumbnailPool;
 class IPropertyHandle;
 class SBox;
+class UPCGExAssetCollection;
 
 DECLARE_DELEGATE_RetVal_OneParam(TSharedRef<SWidget>, FOnGetTilePickerWidget, TSharedRef<IPropertyHandle> /*EntryHandle*/);
 
@@ -24,6 +25,7 @@ class SPCGExCollectionGridTile : public SCompoundWidget
 public:
 	SLATE_BEGIN_ARGS(SPCGExCollectionGridTile)
 		: _TileSize(128.f)
+		, _EntryIndex(INDEX_NONE)
 	{
 	}
 
@@ -31,6 +33,8 @@ public:
 	SLATE_ARGUMENT(TSharedPtr<FAssetThumbnailPool>, ThumbnailPool)
 	SLATE_ARGUMENT(FOnGetTilePickerWidget, OnGetPickerWidget)
 	SLATE_ARGUMENT(float, TileSize)
+	SLATE_ARGUMENT(TWeakObjectPtr<UPCGExAssetCollection>, Collection)
+	SLATE_ARGUMENT(int32, EntryIndex)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -46,6 +50,8 @@ private:
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 	TSharedPtr<FAssetThumbnail> Thumbnail;
 	TSharedPtr<SBox> ThumbnailBox;
+	TWeakObjectPtr<UPCGExAssetCollection> Collection;
+	int32 EntryIndex = INDEX_NONE;
 	float TileSize = 128.f;
 
 	/** Build the thumbnail widget from the entry's Staging.Path */

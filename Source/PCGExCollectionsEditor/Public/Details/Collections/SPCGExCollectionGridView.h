@@ -11,16 +11,17 @@
 #include "SPCGExCollectionGridTile.h"
 
 class FAssetThumbnailPool;
+class IStructureDetailsView;
 class IPropertyHandle;
 class IPropertyRowGenerator;
 class IDetailTreeNode;
 class UPCGExAssetCollection;
-class UPCGExCollectionsEditorSettings;
+class FStructOnScope;
 
 /**
  * Grid/tile view of collection entries.
  * Left pane: STileView with thumbnails and compact controls per entry.
- * Right pane: Detail panel for selected entry properties (via IPropertyRowGenerator).
+ * Right pane: IStructureDetailsView showing only the selected entry struct.
  */
 class SPCGExCollectionGridView : public SCompoundWidget
 {
@@ -34,8 +35,6 @@ public:
 	SLATE_ARGUMENT(TSharedPtr<FAssetThumbnailPool>, ThumbnailPool)
 	SLATE_ARGUMENT(FOnGetTilePickerWidget, OnGetPickerWidget)
 	SLATE_ARGUMENT(float, TileSize)
-	/** Property names that are already shown on the tile (excluded from detail panel) */
-	SLATE_ARGUMENT(TSet<FName>, TilePropertyNames)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -43,7 +42,7 @@ public:
 	/** Rebuild the tile list (e.g., after entries are added/removed) */
 	void RefreshGrid();
 
-	/** Force the detail panel to refresh (e.g., after filter toggle) */
+	/** Force the detail panel to refresh (e.g., after filter toggle or tile control change) */
 	void RefreshDetailPanel();
 
 	/** Get currently selected indices */
@@ -54,17 +53,18 @@ private:
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 	FOnGetTilePickerWidget OnGetPickerWidget;
 	float TileSize = 128.f;
-	TSet<FName> TilePropertyNames;
 
 	// Tile view
 	TArray<TSharedPtr<int32>> EntryItems;
 	TSharedPtr<STileView<TSharedPtr<int32>>> TileView;
 
-	// Detail panel
-	TSharedPtr<SVerticalBox> DetailPanelBox;
-	TSharedPtr<IPropertyRowGenerator> RowGenerator;
+	// Detail panel — IStructureDetailsView for editing a single entry struct
+	TSharedPtr<IStructureDetailsView> StructDetailView;
+	TSharedPtr<FStructOnScope> CurrentStructScope;
+	int32 CurrentDetailIndex = INDEX_NONE;
 
-	// Entry operations (via property handle array)
+	// Entry operations (via property handle array from row generator)
+	TSharedPtr<IPropertyRowGenerator> RowGenerator;
 	TSharedPtr<IPropertyHandle> EntriesArrayHandle;
 
 	void RebuildEntryItems();
@@ -73,14 +73,20 @@ private:
 	TSharedRef<ITableRow> OnGenerateTile(TSharedPtr<int32> Item, const TSharedRef<STableViewBase>& OwnerTable);
 	void OnSelectionChanged(TSharedPtr<int32> Item, ESelectInfo::Type SelectInfo);
 
-	// Detail panel population
-	void PopulateDetailPanel(const TArray<int32>& SelectedIndices);
+	// Detail panel management
+	void UpdateDetailForSelection();
+	void SyncStructToCollection();
+	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
+
+	// Entry struct reflection helpers
+	UScriptStruct* GetEntryScriptStruct() const;
+	uint8* GetEntryRawPtr(int32 Index) const;
 
 	// Entry operations
 	FReply OnAddEntry();
 	FReply OnDuplicateSelected();
 	FReply OnDeleteSelected();
 
-	// Property row generator setup
+	// Property row generator setup (for entry operations only)
 	void InitRowGenerator();
 };

@@ -18,6 +18,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	EntryHandle = InArgs._EntryHandle;
 	ThumbnailPool = InArgs._ThumbnailPool;
 	TileSize = InArgs._TileSize;
+	Collection = InArgs._Collection;
+	EntryIndex = InArgs._EntryIndex;
 
 	check(EntryHandle.IsValid());
 
@@ -89,15 +91,15 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 					]
 				]
 
-				// Thumbnail
+				// Thumbnail — fills remaining vertical space, clips to square
 				+ SVerticalBox::Slot()
-				.AutoHeight()
+				.FillHeight(1.f)
 				.HAlign(HAlign_Center)
 				.Padding(0, 2)
 				[
 					SAssignNew(ThumbnailBox, SBox)
 					.WidthOverride(TileSize)
-					.HeightOverride(TileSize)
+					.Clipping(EWidgetClipping::ClipToBounds)
 					[
 						BuildThumbnailWidget()
 					]
@@ -149,11 +151,9 @@ void SPCGExCollectionGridTile::RefreshThumbnail()
 
 TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 {
-	if (!ThumbnailPool.IsValid() || !EntryHandle.IsValid())
+	if (!ThumbnailPool.IsValid())
 	{
 		return SNew(SBox)
-			.WidthOverride(TileSize)
-			.HeightOverride(TileSize)
 			.HAlign(HAlign_Center)
 			.VAlign(VAlign_Center)
 			[
@@ -164,17 +164,39 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 			];
 	}
 
-	// Check if subcollection
-	bool bIsSubCollection = false;
-	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, bIsSubCollection));
-	if (IsSubCollectionHandle.IsValid()) { IsSubCollectionHandle->GetValue(bIsSubCollection); }
-
-	if (bIsSubCollection)
+	// Read staging data directly from the collection UObject
+	const UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll || EntryIndex == INDEX_NONE)
 	{
-		// Show a collection icon for subcollections
 		return SNew(SBox)
-			.WidthOverride(TileSize)
-			.HeightOverride(TileSize)
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(INVTEXT("?"))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 16))
+				.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.3f)))
+			];
+	}
+
+	const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(EntryIndex);
+	if (!Result.IsValid())
+	{
+		return SNew(SBox)
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(INVTEXT("Invalid"))
+				.Font(FCoreStyle::GetDefaultFontStyle("Italic", 8))
+				.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.3f)))
+			];
+	}
+
+	// Subcollection — show collection icon
+	if (Result.Entry->bIsSubCollection)
+	{
+		return SNew(SBox)
 			.HAlign(HAlign_Center)
 			.VAlign(VAlign_Center)
 			[
@@ -184,27 +206,11 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 			];
 	}
 
-	// Get Staging.Path from the entry handle
-	TSharedPtr<IPropertyHandle> StagingHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Staging));
-	if (!StagingHandle.IsValid())
-	{
-		return SNullWidget::NullWidget;
-	}
-
-	TSharedPtr<IPropertyHandle> PathHandle = StagingHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Path));
-	if (!PathHandle.IsValid())
-	{
-		return SNullWidget::NullWidget;
-	}
-
-	FString PathString;
-	PathHandle->GetValueAsFormattedString(PathString);
-
-	if (PathString.IsEmpty() || PathString == TEXT("None"))
+	// Get asset path from staging data
+	const FSoftObjectPath& AssetPath = Result.Entry->Staging.Path;
+	if (AssetPath.IsNull())
 	{
 		return SNew(SBox)
-			.WidthOverride(TileSize)
-			.HeightOverride(TileSize)
 			.HAlign(HAlign_Center)
 			.VAlign(VAlign_Center)
 			[
@@ -215,19 +221,17 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 			];
 	}
 
-	// Resolve FAssetData from path
-	const FSoftObjectPath SoftPath(PathString);
+	// Resolve FAssetData from path and create thumbnail
 	const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-	const FAssetData AssetData = AssetRegistry.GetAssetByObjectPath(SoftPath);
+	const FAssetData AssetData = AssetRegistry.GetAssetByObjectPath(AssetPath);
 
 	const int32 ThumbnailResolution = FMath::RoundToInt32(TileSize);
 	Thumbnail = MakeShared<FAssetThumbnail>(AssetData, ThumbnailResolution, ThumbnailResolution, ThumbnailPool);
 
-	FAssetThumbnailConfig ThumbnailConfig;
-	ThumbnailConfig.bAllowFadeIn = true;
-
 	if (Thumbnail.IsValid())
 	{
+		FAssetThumbnailConfig ThumbnailConfig;
+		ThumbnailConfig.bAllowFadeIn = true;
 		return Thumbnail->MakeThumbnailWidget(ThumbnailConfig);
 	}
 

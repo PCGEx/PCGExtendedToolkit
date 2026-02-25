@@ -4,22 +4,25 @@
 #include "Details/Collections/SPCGExCollectionGridView.h"
 
 #include "AssetThumbnail.h"
-#include "DetailLayoutBuilder.h"
 #include "IDetailTreeNode.h"
 #include "IPropertyRowGenerator.h"
-#include "PCGExCollectionsEditorSettings.h"
+#include "IStructureDetailsView.h"
 #include "PropertyEditorModule.h"
 #include "PropertyHandle.h"
 
 #include "Core/PCGExAssetCollection.h"
+#include "Details/Collections/PCGExAssetCollectionEditor.h"
 #include "Details/Collections/SPCGExCollectionGridTile.h"
 #include "Modules/ModuleManager.h"
+#include "UObject/StructOnScope.h"
+#include "UObject/UnrealType.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
+
+#pragma region SPCGExCollectionGridView
 
 void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 {
@@ -27,10 +30,27 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 	ThumbnailPool = InArgs._ThumbnailPool;
 	OnGetPickerWidget = InArgs._OnGetPickerWidget;
 	TileSize = InArgs._TileSize;
-	TilePropertyNames = InArgs._TilePropertyNames;
 
 	RebuildEntryItems();
 	InitRowGenerator();
+
+	// Create the IStructureDetailsView for editing a single entry struct
+	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+
+	FDetailsViewArgs DetailsArgs;
+	DetailsArgs.bUpdatesFromSelection = false;
+	DetailsArgs.bLockable = false;
+	DetailsArgs.bAllowSearch = true;
+	DetailsArgs.bHideSelectionTip = true;
+
+	FStructureDetailsViewArgs StructArgs;
+
+	TSharedPtr<FStructOnScope> NullStruct;
+	StructDetailView = PropertyModule.CreateStructureDetailView(DetailsArgs, StructArgs, NullStruct);
+
+	// Wire up property change callback to sync edits back to the collection
+	StructDetailView->GetOnFinishedChangingPropertiesDelegate().AddSP(
+		this, &SPCGExCollectionGridView::OnDetailPropertyChanged);
 
 	const float TileWidgetSize = TileSize + 24.f;
 
@@ -65,7 +85,7 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 
-			// Action buttons
+			// Action buttons (operate on tile selection)
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(4)
@@ -104,32 +124,12 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 				]
 			]
 
-			// Detail content
+			// Struct details view for the selected entry
 			+ SVerticalBox::Slot()
 			.FillHeight(1.f)
 			.Padding(4, 0, 4, 4)
 			[
-				SNew(SBorder)
-				.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-				.Padding(4.f)
-				[
-					SNew(SScrollBox)
-					+ SScrollBox::Slot()
-					[
-						SAssignNew(DetailPanelBox, SVerticalBox)
-
-						+ SVerticalBox::Slot()
-						.AutoHeight()
-						.HAlign(HAlign_Center)
-						.Padding(0, 20)
-						[
-							SNew(STextBlock)
-							.Text(INVTEXT("Select an entry to view details"))
-							.Font(FCoreStyle::GetDefaultFontStyle("Italic", 9))
-							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.4f)))
-						]
-					]
-				]
+				StructDetailView->GetWidget().ToSharedRef()
 			]
 		]
 	];
@@ -157,32 +157,23 @@ void SPCGExCollectionGridView::RefreshGrid()
 	{
 		TileView->RequestListRefresh();
 	}
-	// Re-init row generator so handles are up-to-date
+
+	// Re-init row generator so entry operation handles are up-to-date
 	InitRowGenerator();
-	// Clear detail panel
-	if (DetailPanelBox.IsValid())
+
+	// Clear detail panel selection
+	CurrentDetailIndex = INDEX_NONE;
+	CurrentStructScope.Reset();
+	if (StructDetailView.IsValid())
 	{
-		DetailPanelBox->ClearChildren();
-		DetailPanelBox->AddSlot()
-			.AutoHeight()
-			.HAlign(HAlign_Center)
-			.Padding(0, 20)
-			[
-				SNew(STextBlock)
-				.Text(INVTEXT("Select an entry to view details"))
-				.Font(FCoreStyle::GetDefaultFontStyle("Italic", 9))
-				.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.4f)))
-			];
+		TSharedPtr<FStructOnScope> NullStruct;
+		StructDetailView->SetStructureData(NullStruct);
 	}
 }
 
 void SPCGExCollectionGridView::RefreshDetailPanel()
 {
-	TArray<int32> Selected = GetSelectedIndices();
-	if (!Selected.IsEmpty())
-	{
-		PopulateDetailPanel(Selected);
-	}
+	UpdateDetailForSelection();
 }
 
 TArray<int32> SPCGExCollectionGridView::GetSelectedIndices() const
@@ -245,124 +236,120 @@ TSharedRef<ITableRow> SPCGExCollectionGridView::OnGenerateTile(TSharedPtr<int32>
 			.ThumbnailPool(ThumbnailPool)
 			.OnGetPickerWidget(OnGetPickerWidget)
 			.TileSize(TileSize)
+			.Collection(Collection)
+			.EntryIndex(Index)
 		];
 }
 
 void SPCGExCollectionGridView::OnSelectionChanged(TSharedPtr<int32> Item, ESelectInfo::Type SelectInfo)
 {
-	TArray<int32> Selected = GetSelectedIndices();
-	PopulateDetailPanel(Selected);
+	UpdateDetailForSelection();
 }
 
-void SPCGExCollectionGridView::PopulateDetailPanel(const TArray<int32>& SelectedIndices)
+void SPCGExCollectionGridView::UpdateDetailForSelection()
 {
-	if (!DetailPanelBox.IsValid()) { return; }
-	DetailPanelBox->ClearChildren();
+	TArray<int32> Selected = GetSelectedIndices();
 
-	if (SelectedIndices.IsEmpty())
+	if (Selected.IsEmpty())
 	{
-		DetailPanelBox->AddSlot()
-			.AutoHeight()
-			.HAlign(HAlign_Center)
-			.Padding(0, 20)
-			[
-				SNew(STextBlock)
-				.Text(INVTEXT("Select an entry to view details"))
-				.Font(FCoreStyle::GetDefaultFontStyle("Italic", 9))
-				.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.4f)))
-			];
+		CurrentDetailIndex = INDEX_NONE;
+		CurrentStructScope.Reset();
+		if (StructDetailView.IsValid())
+		{
+			TSharedPtr<FStructOnScope> NullStruct;
+			StructDetailView->SetStructureData(NullStruct);
+		}
 		return;
 	}
 
-	// Multi-selection indicator
-	if (SelectedIndices.Num() > 1)
+	// Show the first selected entry
+	const int32 Index = Selected[0];
+	UScriptStruct* EntryStruct = GetEntryScriptStruct();
+	uint8* EntryPtr = GetEntryRawPtr(Index);
+
+	if (!EntryStruct || !EntryPtr) { return; }
+
+	// Create FStructOnScope with a copy of the entry data
+	CurrentStructScope = MakeShared<FStructOnScope>(EntryStruct);
+	EntryStruct->CopyScriptStruct(CurrentStructScope->GetStructMemory(), EntryPtr);
+	CurrentDetailIndex = Index;
+
+	if (StructDetailView.IsValid())
 	{
-		DetailPanelBox->AddSlot()
-			.AutoHeight()
-			.Padding(0, 4)
-			[
-				SNew(STextBlock)
-				.Text(FText::Format(INVTEXT("Editing {0} entries"), FText::AsNumber(SelectedIndices.Num())))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-				.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.8f, 1.f)))
-			];
+		StructDetailView->SetStructureData(CurrentStructScope);
 	}
+}
 
-	if (!EntriesArrayHandle.IsValid()) { return; }
+void SPCGExCollectionGridView::SyncStructToCollection()
+{
+	if (!CurrentStructScope.IsValid() || CurrentDetailIndex == INDEX_NONE) { return; }
 
-	// Show properties for the first selected entry
-	const int32 PrimaryIndex = SelectedIndices[0];
-	TSharedPtr<IPropertyHandle> PrimaryEntryHandle;
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll) { return; }
+
+	UScriptStruct* EntryStruct = GetEntryScriptStruct();
+	if (!EntryStruct) { return; }
+
+	// Copy modified data back to the primary selected entry
+	uint8* EntryPtr = GetEntryRawPtr(CurrentDetailIndex);
+	if (!EntryPtr) { return; }
+
+	Coll->Modify();
+	EntryStruct->CopyScriptStruct(EntryPtr, CurrentStructScope->GetStructMemory());
+
+	// Propagate to all other selected entries (multi-select editing)
+	TArray<int32> Selected = GetSelectedIndices();
+	for (int32 OtherIndex : Selected)
 	{
-		TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-		if (ArrayHandle.IsValid())
+		if (OtherIndex == CurrentDetailIndex) { continue; }
+		uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+		if (OtherPtr)
 		{
-			PrimaryEntryHandle = ArrayHandle->GetElement(PrimaryIndex);
+			EntryStruct->CopyScriptStruct(OtherPtr, CurrentStructScope->GetStructMemory());
 		}
 	}
-	if (!PrimaryEntryHandle.IsValid()) { return; }
 
-	// Entry index label
-	DetailPanelBox->AddSlot()
-		.AutoHeight()
-		.Padding(0, 2, 0, 4)
-		[
-			SNew(STextBlock)
-			.Text(FText::Format(INVTEXT("Entry [{0}]"), FText::AsNumber(PrimaryIndex)))
-			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
-		];
+	Coll->PostEditChange();
+}
 
-	// Iterate children and add property widgets, skipping tile properties
-	uint32 NumChildren = 0;
-	PrimaryEntryHandle->GetNumChildren(NumChildren);
+void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEvent& Event)
+{
+	SyncStructToCollection();
 
-	const UPCGExCollectionsEditorSettings* Settings = GetDefault<UPCGExCollectionsEditorSettings>();
-
-	for (uint32 i = 0; i < NumChildren; ++i)
+	// Refresh tiles to reflect updated data
+	if (TileView.IsValid())
 	{
-		TSharedPtr<IPropertyHandle> ChildHandle = PrimaryEntryHandle->GetChildHandle(i);
-		if (!ChildHandle.IsValid()) { continue; }
-
-		const FName ChildName = ChildHandle->GetProperty() ? ChildHandle->GetProperty()->GetFName() : NAME_None;
-
-		// Skip properties already shown on the tile
-		if (TilePropertyNames.Contains(ChildName)) { continue; }
-
-		// Apply filter visibility from settings
-		const EVisibility Vis = Settings->GetPropertyVisibility(ChildName);
-		if (Vis == EVisibility::Collapsed) { continue; }
-
-		DetailPanelBox->AddSlot()
-			.AutoHeight()
-			.Padding(0, 1)
-			[
-				SNew(SHorizontalBox)
-
-				// Property name
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				.Padding(0, 0, 8, 0)
-				[
-					SNew(SBox)
-					.MinDesiredWidth(100)
-					[
-						SNew(STextBlock)
-						.Text(ChildHandle->GetPropertyDisplayName())
-						.Font(IDetailLayoutBuilder::GetDetailFont())
-						.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.7f)))
-					]
-				]
-
-				// Property value widget
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.f)
-				.VAlign(VAlign_Center)
-				[
-					ChildHandle->CreatePropertyValueWidget()
-				]
-			];
+		TileView->RequestListRefresh();
 	}
+}
+
+UScriptStruct* SPCGExCollectionGridView::GetEntryScriptStruct() const
+{
+	const UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll) { return nullptr; }
+
+	FArrayProperty* ArrayProp = CastField<FArrayProperty>(
+		Coll->GetClass()->FindPropertyByName(FName("Entries")));
+	if (!ArrayProp) { return nullptr; }
+
+	FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+	return InnerProp ? InnerProp->Struct : nullptr;
+}
+
+uint8* SPCGExCollectionGridView::GetEntryRawPtr(int32 Index) const
+{
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll || Index < 0) { return nullptr; }
+
+	FArrayProperty* ArrayProp = CastField<FArrayProperty>(
+		Coll->GetClass()->FindPropertyByName(FName("Entries")));
+	if (!ArrayProp) { return nullptr; }
+
+	void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+	FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+
+	if (Index >= ArrayHelper.Num()) { return nullptr; }
+	return ArrayHelper.GetRawPtr(Index);
 }
 
 static bool FindEntriesHandleRecursive(const TArray<TSharedRef<IDetailTreeNode>>& Nodes, TSharedPtr<IPropertyHandle>& OutHandle)
@@ -394,7 +381,7 @@ void SPCGExCollectionGridView::InitRowGenerator()
 	UPCGExAssetCollection* Coll = Collection.Get();
 	if (!Coll) { return; }
 
-	// Create a row generator to get live property handles
+	// Create a row generator to get live property handles for entry operations (add/duplicate/delete)
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	FPropertyRowGeneratorArgs Args;
 	RowGenerator = PropertyModule.CreatePropertyRowGenerator(Args);
@@ -464,3 +451,5 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 	RefreshGrid();
 	return FReply::Handled();
 }
+
+#pragma endregion
