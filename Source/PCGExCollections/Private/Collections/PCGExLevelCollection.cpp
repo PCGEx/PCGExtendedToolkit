@@ -10,9 +10,27 @@
 #endif
 
 #include "PCGExLog.h"
+#include "PCGExCollectionsSettingsCache.h"
+#include "Helpers/PCGExBoundsEvaluator.h"
 
 // Static-init type registration: TypeId=Level, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(Level, UPCGExLevelCollection, FPCGExLevelCollectionEntry, "Level Collection", Base)
+
+UPCGExLevelCollection::UPCGExLevelCollection()
+{
+	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
+
+	UClass* FilterClass = Settings.DefaultContentFilterClass
+		? Settings.DefaultContentFilterClass.Get()
+		: UPCGExDefaultActorContentFilter::StaticClass();
+
+	UClass* EvalClass = Settings.DefaultBoundsEvaluatorClass
+		? Settings.DefaultBoundsEvaluatorClass.Get()
+		: UPCGExDefaultBoundsEvaluator::StaticClass();
+
+	ContentFilter = NewObject<UPCGExActorContentFilter>(this, FilterClass, TEXT("ContentFilter"));
+	BoundsEvaluator = NewObject<UPCGExBoundsEvaluator>(this, EvalClass, TEXT("BoundsEvaluator"));
+}
 
 #pragma region FPCGExLevelCollectionEntry
 

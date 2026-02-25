@@ -10,12 +10,24 @@
 
 #include "PCGComponent.h"
 #include "PCGExLog.h"
+#include "PCGExCollectionsSettingsCache.h"
 #include "Engine/Blueprint.h"
 #include "Engine/Level.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
 
 // Static-init type registration: TypeId=Actor, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(Actor, UPCGExActorCollection, FPCGExActorCollectionEntry, "Actor Collection", Base)
+
+UPCGExActorCollection::UPCGExActorCollection()
+{
+	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
+
+	UClass* EvalClass = Settings.DefaultBoundsEvaluatorClass
+		? Settings.DefaultBoundsEvaluatorClass.Get()
+		: UPCGExDefaultBoundsEvaluator::StaticClass();
+
+	BoundsEvaluator = NewObject<UPCGExBoundsEvaluator>(this, EvalClass, TEXT("BoundsEvaluator"));
+}
 
 #pragma region FPCGExActorCollectionEntry
 

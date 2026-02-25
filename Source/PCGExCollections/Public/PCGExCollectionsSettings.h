@@ -26,5 +26,20 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Collections")
 	bool bDisableCollisionByDefault = true;
 
+	/** Default level data exporter class used when no exporter is explicitly assigned.
+	 *  If None, falls back to UPCGExDefaultLevelDataExporter. */
+	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta=(MetaClass="/Script/PCGExCollections.PCGExLevelDataExporter"))
+	FSoftClassPath DefaultLevelExporterClass;
+
+	/** Default actor content filter class used on new collections and exporters.
+	 *  If None, falls back to UPCGExDefaultActorContentFilter. */
+	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta=(MetaClass="/Script/PCGExCollections.PCGExActorContentFilter"))
+	FSoftClassPath DefaultContentFilterClass;
+
+	/** Default bounds evaluator class used on new collections and exporters.
+	 *  If None, falls back to UPCGExDefaultBoundsEvaluator. */
+	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta=(MetaClass="/Script/PCGExCollections.PCGExBoundsEvaluator"))
+	FSoftClassPath DefaultBoundsEvaluatorClass;
+
 	void UpdateSettingsCaches() const;
 };

@@ -86,6 +86,8 @@ class PCGEXCOLLECTIONS_API UPCGExActorCollection : public UPCGExAssetCollection
 	PCGEX_ASSET_COLLECTION_BODY(FPCGExActorCollectionEntry)
 
 public:
+	UPCGExActorCollection();
+
 	friend struct FPCGExActorCollectionEntry;
 
 	// Type System

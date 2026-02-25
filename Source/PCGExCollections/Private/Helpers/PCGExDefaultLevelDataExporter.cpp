@@ -23,10 +23,22 @@
 
 #include "Helpers/PCGExActorPropertyDelta.h"
 
+#include "PCGExCollectionsSettingsCache.h"
+
 UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter()
 {
-	ContentFilter = CreateDefaultSubobject<UPCGExDefaultActorContentFilter>(TEXT("ContentFilter"));
-	BoundsEvaluator = CreateDefaultSubobject<UPCGExDefaultBoundsEvaluator>(TEXT("BoundsEvaluator"));
+	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
+
+	UClass* FilterClass = Settings.DefaultContentFilterClass
+		? Settings.DefaultContentFilterClass.Get()
+		: UPCGExDefaultActorContentFilter::StaticClass();
+
+	UClass* EvalClass = Settings.DefaultBoundsEvaluatorClass
+		? Settings.DefaultBoundsEvaluatorClass.Get()
+		: UPCGExDefaultBoundsEvaluator::StaticClass();
+
+	ContentFilter = NewObject<UPCGExActorContentFilter>(this, FilterClass, TEXT("ContentFilter"));
+	BoundsEvaluator = NewObject<UPCGExBoundsEvaluator>(this, EvalClass, TEXT("BoundsEvaluator"));
 }
 
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, UStaticMeshComponent*& OutMeshComponent) const
