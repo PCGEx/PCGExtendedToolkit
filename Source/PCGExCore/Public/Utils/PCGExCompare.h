@@ -478,6 +478,7 @@ struct PCGEXCORE_API FPCGExStaticDotComparisonDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Tolerance", EditCondition="(Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual) && Domain == EPCGExAngularDomain::Degrees", EditConditionHides, ClampMin=0, ClampMax=180, Units="Degrees"))
 	double DegreesTolerance = 0.1;
 
+	double ComparisonThreshold = 0;
 	double ComparisonTolerance = 0;
 
 	void Init();

@@ -207,16 +207,40 @@ bool FPCGExVectorHashComparisonDetails::Test(const FVector& A, const FVector& B,
 
 void FPCGExStaticDotComparisonDetails::Init()
 {
-	// Remap from dot product range [-1,1] to normalized range [0,1] for comparisons.
-	// Degrees are converted via DegreesToDot (cos of complement) then remapped.
-	if (Domain == EPCGExAngularDomain::Degrees) { ComparisonTolerance = (1 + PCGExMath::DegreesToDot(180 - DegreesTolerance)) * 0.5; }
-	else { ComparisonTolerance = (1 + DotTolerance) * 0.5; }
-	if (bUnsignedComparison) { DotTolerance = FMath::Abs(DotTolerance); }
+	// Remap threshold and tolerance from their native domain into the comparison space.
+	// Signed: remap [-1,1] → [0,1] via (1+x)*0.5
+	// Unsigned: use absolute value (already in [0,1])
+	if (bUnsignedComparison)
+	{
+		if (Domain == EPCGExAngularDomain::Degrees)
+		{
+			ComparisonThreshold = FMath::Abs(PCGExMath::DegreesToDot(180 - DegreesConstant));
+			ComparisonTolerance = FMath::Abs(PCGExMath::DegreesToDot(180 - DegreesTolerance));
+		}
+		else
+		{
+			ComparisonThreshold = FMath::Abs(DotConstant);
+			ComparisonTolerance = FMath::Abs(DotTolerance);
+		}
+	}
+	else
+	{
+		if (Domain == EPCGExAngularDomain::Degrees)
+		{
+			ComparisonThreshold = (1 + PCGExMath::DegreesToDot(180 - DegreesConstant)) * 0.5;
+			ComparisonTolerance = (1 + PCGExMath::DegreesToDot(180 - DegreesTolerance)) * 0.5;
+		}
+		else
+		{
+			ComparisonThreshold = (1 + DotConstant) * 0.5;
+			ComparisonTolerance = (1 + DotTolerance) * 0.5;
+		}
+	}
 }
 
 bool FPCGExStaticDotComparisonDetails::Test(const double A) const
 {
-	return PCGExCompare::Compare(Comparison, bUnsignedComparison ? FMath::Abs(A) : (1 + A) * 0.5, DotTolerance, ComparisonTolerance);
+	return PCGExCompare::Compare(Comparison, bUnsignedComparison ? FMath::Abs(A) : (1 + A) * 0.5, ComparisonThreshold, ComparisonTolerance);
 }
 
 PCGEX_SETTING_VALUE_IMPL(FPCGExDotComparisonDetails, Threshold, double, ThresholdInput, ThresholdAttribute, Domain == EPCGExAngularDomain::Degrees ? DegreesConstant : DotConstant)
