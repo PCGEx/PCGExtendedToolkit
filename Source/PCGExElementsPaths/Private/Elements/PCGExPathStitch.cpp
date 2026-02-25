@@ -9,6 +9,9 @@
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExDataMatcher.h"
+#include "Helpers/PCGExMatchingHelpers.h"
+#include "PCGExMatchingCommon.h"
 #include "Paths/PCGExPathsHelpers.h"
 
 #include "SubPoints/DataBlending/PCGExSubPointsBlendInterpolate.h"
@@ -22,6 +25,7 @@
 TArray<FPCGPinProperties> UPCGExPathStitchSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+	PCGExMatching::Helpers::DeclareMatchingRulesInputs(MatchingDetails, PinProperties);
 	PCGEX_PIN_FILTERS(PCGExClusters::Labels::SourceEdgeSortingRules, "Sort-in-place to order the data if needed", Normal)
 	return PinProperties;
 }
@@ -37,6 +41,8 @@ bool FPCGExPathStitchElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_FWD(DotComparisonDetails)
 	Context->DotComparisonDetails.Init();
+
+	PCGEX_FWD(MatchingDetails)
 
 	Context->Datas.Reset(Context->MainPoints->Pairs.Num());
 
@@ -247,8 +253,6 @@ namespace PCGExPathStitch
 	{
 		PCGEX_TYPED_CONTEXT_AND_SETTINGS(PathStitch);
 
-		UE_LOG(LogTemp, Warning, TEXT("PathStitch OnInitialPostProcess"));
-
 		TBatch<FProcessor>::OnInitialPostProcess();
 
 		TArray<TSharedPtr<FProcessor>> SortedProcessors;
@@ -295,104 +299,117 @@ namespace PCGExPathStitch
 			PathOctree->AddElement(PCGExOctree::FItem((Processor->BatchIndex + 1), Processor->EndBounds));
 		}
 
-		double BestDist = MAX_dbl;
+		// Build partition lookup from matching rules (empty = matching disabled, all paths can stitch)
 
-		// ---A---x x---B---
-		auto CanStitch = [&](const PCGExMath::FSegment& A, const PCGExMath::FSegment& B)
+		TArray<int32> PartitionOf;
+
+		if (Context->MatchingDetails.IsEnabled())
 		{
-			const double Dist = FVector::Dist(A.B, B.B);
-			if (Dist > BestDist || Dist > Settings->Tolerance) { return false; }
-			//if (Settings->bDoRequireAlignment && !Context->DotComparisonDetails.Test(FVector::DotProduct(A.Direction, B.Direction * -1))) { return false; }
+			TArray<TSharedPtr<PCGExData::FFacade>> Facades;
+			Facades.Reserve(SortedProcessors.Num());
+			for (const TSharedPtr<FProcessor>& P : SortedProcessors) { Facades.Add(P->PointDataFacade); }
 
-			BestDist = Dist;
-			return true;
-		};
+			TSharedPtr<PCGExMatching::FDataMatcher> Matcher = MakeShared<PCGExMatching::FDataMatcher>();
+			Matcher->SetDetails(&Context->MatchingDetails);
 
-		TSet<int32> ConnectedWorkIndices;
-
-		// Resolve stitching
-		for (int i = 0; i < SortedProcessors.Num(); ++i)
-		{
-			TSharedPtr<FProcessor> Current = SortedProcessors[i];
-
-			if (!Current->IsAvailableForStitching()) { continue; }
-
-			TSharedPtr<FProcessor> BestCandidate = nullptr;
-
-			BestDist = MAX_dbl;
-			bool bIsCurrentEnd = false;
-			bool bIsBestCandidateEnd = false;
-
-			// Find candidates that could connect to this path' end first
-			if (!Current->EndStitch)
+			if (Matcher->Init(Context, Facades, false, PCGExMatching::Labels::SourceMatchRulesLabel))
 			{
-				const PCGExMath::FSegment& CurrentSegment = Current->EndSegment;
+				TArray<TArray<int32>> Partitions;
+				PCGExMatching::Helpers::GetMatchingSourcePartitions(Matcher, Facades, Partitions, true);
 
-				PathOctree->FindElementsWithBoundsTest(Current->EndBounds, [&](const PCGExOctree::FItem& Item)
+				// Each sorted index gets a partition ID; unmatched get unique negative IDs
+				PartitionOf.SetNum(SortedProcessors.Num());
+				for (int32 Idx = 0; Idx < PartitionOf.Num(); ++Idx) { PartitionOf[Idx] = -(Idx + 1); }
+
+				for (int32 PIdx = 0; PIdx < Partitions.Num(); ++PIdx)
 				{
-					const bool bIsOtherEnd = Item.Index > 0;
-					const int32 Index = FMath::Abs(Item.Index) - 1;
-
-					if (Settings->bOnlyMatchStartAndEnds && bIsOtherEnd) { return; }
-
-					const TSharedPtr<FProcessor> Other = GetProcessor<FProcessor>(Index);
-					const TSharedPtr<FProcessor> StitchPole = bIsOtherEnd ? Other->EndStitch : Other->StartStitch;
-
-					if (StitchPole || StitchPole == Current || Other->WorkIndex == Current->WorkIndex) { return; }
-
-					if (CanStitch(CurrentSegment, bIsOtherEnd ? Other->EndSegment : Other->StartSegment))
-					{
-						BestCandidate = Other;
-						bIsBestCandidateEnd = bIsOtherEnd;
-					}
-				});
-
-				bIsCurrentEnd = BestCandidate != nullptr;
-			}
-
-			if (!BestCandidate && !Current->StartStitch)
-			{
-				// Look for other paths that may be connecting with this segment' start
-
-				const PCGExMath::FSegment& CurrentSegment = Current->StartSegment;
-				PathOctree->FindElementsWithBoundsTest(Current->StartBounds, [&](const PCGExOctree::FItem& Item)
-				{
-					const bool bIsOtherStart = Item.Index < 0;
-					const int32 Index = FMath::Abs(Item.Index) - 1;
-
-					if (Settings->bOnlyMatchStartAndEnds && bIsOtherStart) { return; }
-
-					const TSharedPtr<FProcessor> Other = GetProcessor<FProcessor>(Index);
-					const TSharedPtr<FProcessor> StitchPole = bIsOtherStart ? Other->StartStitch : Other->EndStitch;
-
-					if (StitchPole || StitchPole == Current || Other->WorkIndex == Current->WorkIndex) { return; }
-
-					if (CanStitch(CurrentSegment, bIsOtherStart ? Other->StartSegment : Other->EndSegment))
-					{
-						BestCandidate = Other;
-						bIsBestCandidateEnd = !bIsOtherStart;
-					}
-				});
-			}
-
-			if (BestCandidate)
-			{
-				bool bSuccess = false;
-
-				ConnectedWorkIndices.Add(Current->WorkIndex);
-				ConnectedWorkIndices.Add(BestCandidate->WorkIndex);
-
-				if (bIsBestCandidateEnd) { bSuccess = BestCandidate->SetEndStitch(Current); }
-				else { bSuccess = BestCandidate->SetStartStitch(Current); }
-
-				check(bSuccess)
-
-				if (bIsCurrentEnd) { Current->SetEndStitch(BestCandidate); }
-				else { Current->SetStartStitch(BestCandidate); }
+					for (const int32 Idx : Partitions[PIdx]) { PartitionOf[Idx] = PIdx; }
+				}
 			}
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("Done"))
+		// Phase 1: Collect all valid stitch candidates
+
+		struct FStitchCandidate
+		{
+			TSharedPtr<FProcessor> A;
+			TSharedPtr<FProcessor> B;
+			bool bEndA;
+			bool bEndB;
+			double Alignment;
+			double Dist;
+		};
+
+		TArray<FStitchCandidate> Candidates;
+
+		for (int i = 0; i < SortedProcessors.Num(); ++i)
+		{
+			const TSharedPtr<FProcessor>& Current = SortedProcessors[i];
+
+			auto CollectFromEndpoint = [&](const bool bCurrentEnd)
+			{
+				const FBox& QueryBounds = bCurrentEnd ? Current->EndBounds : Current->StartBounds;
+				const PCGExMath::FSegment& CurrentSeg = bCurrentEnd ? Current->EndSegment : Current->StartSegment;
+
+				PathOctree->FindElementsWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item)
+				{
+					const bool bOtherEnd = Item.Index > 0;
+					const int32 OtherBatchIndex = FMath::Abs(Item.Index) - 1;
+					const TSharedPtr<FProcessor> Other = GetProcessor<FProcessor>(OtherBatchIndex);
+
+					if (Other->WorkIndex <= Current->WorkIndex) { return; } // Dedup + skip self
+
+					if (!PartitionOf.IsEmpty() && PartitionOf[Current->WorkIndex] != PartitionOf[Other->WorkIndex]) { return; }
+
+					if (Settings->bOnlyMatchStartAndEnds && bCurrentEnd == bOtherEnd) { return; }
+
+					const PCGExMath::FSegment& OtherSeg = bOtherEnd ? Other->EndSegment : Other->StartSegment;
+
+					const double Dist = FVector::Dist(CurrentSeg.B, OtherSeg.B);
+					if (Dist > Settings->Tolerance) { return; }
+
+					const double Dot = FVector::DotProduct(CurrentSeg.Direction, OtherSeg.Direction * -1);
+					if (Settings->bDoRequireAlignment && Settings->bStrictAlignment && !Context->DotComparisonDetails.Test(Dot)) { return; }
+
+					Candidates.Add({Current, Other, bCurrentEnd, bOtherEnd, Dot, Dist});
+				});
+			};
+
+			CollectFromEndpoint(true);
+			CollectFromEndpoint(false);
+		}
+
+		// Phase 2: Sort — best alignment (when enabled), then closest, with deterministic tiebreaker
+
+		const bool bSortByAlignment = Settings->bDoRequireAlignment;
+		Candidates.Sort([bSortByAlignment](const FStitchCandidate& X, const FStitchCandidate& Y)
+		{
+			if (bSortByAlignment && !FMath::IsNearlyEqual(X.Alignment, Y.Alignment, KINDA_SMALL_NUMBER))
+			{
+				return X.Alignment > Y.Alignment;
+			}
+			if (!FMath::IsNearlyEqual(X.Dist, Y.Dist, KINDA_SMALL_NUMBER))
+			{
+				return X.Dist < Y.Dist;
+			}
+			if (X.A->WorkIndex != Y.A->WorkIndex) { return X.A->WorkIndex < Y.A->WorkIndex; }
+			return X.B->WorkIndex < Y.B->WorkIndex;
+		});
+
+		// Phase 3: Greedily assign best matches, skipping claimed endpoints
+
+		for (const FStitchCandidate& C : Candidates)
+		{
+			if ((C.bEndA ? C.A->EndStitch : C.A->StartStitch) ||
+				(C.bEndB ? C.B->EndStitch : C.B->StartStitch))
+			{
+				continue;
+			}
+
+			const bool bA = C.bEndA ? C.A->SetEndStitch(C.B) : C.A->SetStartStitch(C.B);
+			const bool bB = C.bEndB ? C.B->SetEndStitch(C.A) : C.B->SetStartStitch(C.A);
+			check(bA && bB);
+		}
 	}
 }
 
