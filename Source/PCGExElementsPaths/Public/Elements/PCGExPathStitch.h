@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExPathProcessor.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
+#include "Details/PCGExMatchingDetails.h"
 #include "Math/PCGExMath.h"
 #include "Sorting/PCGExSortingCommon.h"
 #include "Utils/PCGExCompare.h"
@@ -55,13 +56,6 @@ protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
 
-	// TODO : Stitch only start with ends
-	// TODO : Sort collections for stitching priorities
-	// TODO : Prioritize least amount of candidates first
-	// Work like overlap check : first process all possibilities and then resolve them until there is none left
-	// - Process
-	// - 
-
 public:
 	/** Choose how paths are connected. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
@@ -92,6 +86,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Requires Alignment", EditCondition="bDoRequireAlignment"))
 	FPCGExStaticDotComparisonDetails DotComparisonDetails;
 
+	/** When enabled, candidates that fail the alignment threshold are hard-rejected. When disabled, alignment is only used as a sorting preference (better-aligned candidates win). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Strict", EditCondition="bDoRequireAlignment", EditConditionHides, HideEditConditionToggle))
+	bool bStrictAlignment = false;
+
 	/** Maximum distance between endpoints for stitching to occur. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	double Tolerance = 10;
@@ -99,6 +97,10 @@ public:
 	/** Controls the order in which data will be sorted */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExSortDirection SortDirection = EPCGExSortDirection::Ascending;
+
+	/** Matching rules that constrain which paths can stitch together. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FPCGExMatchingDetails MatchingDetails = FPCGExMatchingDetails(EPCGExMatchingDetailsUsage::Default);
 
 	/** Meta filter settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Carry Over Settings"))
@@ -111,6 +113,7 @@ struct FPCGExPathStitchContext final : FPCGExPathProcessorContext
 
 	TArray<FPCGTaggedData> Datas;
 	FPCGExStaticDotComparisonDetails DotComparisonDetails;
+	FPCGExMatchingDetails MatchingDetails;
 
 	FPCGExCarryOverDetails CarryOverDetails;
 

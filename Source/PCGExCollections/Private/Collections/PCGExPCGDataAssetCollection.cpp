@@ -22,16 +22,6 @@
 // Static-init type registration: TypeId=PCGDataAsset, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(PCGDataAsset, UPCGExPCGDataAssetCollection, FPCGExPCGDataAssetCollectionEntry, "PCG Data Asset Collection", Base)
 
-// PCGDataAsset MicroCache - Point weight picking
-
-namespace PCGExPCGDataAssetCollection
-{
-	void FMicroCache::ProcessPointWeights(const TArray<int32>& InPointWeights)
-	{
-		BuildFromWeights(InPointWeights);
-	}
-}
-
 // PCGDataAsset Collection Entry
 
 UPCGExAssetCollection* FPCGExPCGDataAssetCollectionEntry::GetSubCollectionPtr() const
@@ -125,7 +115,7 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 		TObjectPtr<UPCGExDefaultLevelDataExporter> FallbackExporter;
 		if (!Exporter)
 		{
-			FallbackExporter = NewObject<UPCGExDefaultLevelDataExporter>(GetTransientPackageAsObject());
+			FallbackExporter = NewObject<UPCGExDefaultLevelDataExporter>(GetTransientPackage());
 			Exporter = FallbackExporter;
 		}
 
@@ -214,20 +204,6 @@ void FPCGExPCGDataAssetCollectionEntry::EDITOR_Sanitize()
 	}
 }
 #endif
-
-void FPCGExPCGDataAssetCollectionEntry::BuildMicroCache()
-{
-	if (!bOverrideWeights || PointWeights.IsEmpty())
-	{
-		MicroCache = nullptr;
-		return;
-	}
-
-	TSharedPtr<PCGExPCGDataAssetCollection::FMicroCache> NewCache = MakeShared<PCGExPCGDataAssetCollection::FMicroCache>();
-	NewCache->ProcessPointWeights(PointWeights);
-	MicroCache = NewCache;
-}
-
 
 #if WITH_EDITOR
 

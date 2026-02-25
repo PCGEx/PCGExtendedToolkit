@@ -1,10 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-    <defs>
-        <style>.cls-1{fill:#fff;}.cls-2{fill:#4d8dfc;}</style>
-    </defs>
-    <rect class="cls-1" x="25.89" y="25.89" width="48.22" height="48.22"/>
-    <rect class="cls-1" y="47.5" width="25.89" height="5"/>
-    <rect class="cls-1" x="72.4" y="47.5" width="27.6" height="5"/>
-    <path class="cls-2"
-          d="M74.11,76.61H25.89a2.5,2.5,0,0,1-2.5-2.5V25.89a2.5,2.5,0,0,1,2.5-2.5H74.11a2.5,2.5,0,0,1,2.5,2.5V74.11A2.5,2.5,0,0,1,74.11,76.61Zm-43.73-7H69.62V30.38H30.38Z"/>
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+      }
+
+      .cls-2 {
+        fill: #4d8dfc;
+      }
+    </style>
+  </defs>
+  <rect class="cls-1" x="25.89" y="25.89" width="48.22" height="48.22"/>
+  <rect class="cls-1" x="0" y="47.5" width="25.89" height="5"/>
+  <rect class="cls-1" x="72.4" y="47.5" width="27.6" height="5"/>
+  <path class="cls-2" d="M74.11,76.61H25.89c-1.38,0-2.5-1.12-2.5-2.5V25.89c0-1.38,1.12-2.5,2.5-2.5h48.22c1.38,0,2.5,1.12,2.5,2.5v48.22c0,1.38-1.12,2.5-2.5,2.5ZM30.38,69.62h39.24V30.38H30.38v39.24Z"/>
 </svg>
