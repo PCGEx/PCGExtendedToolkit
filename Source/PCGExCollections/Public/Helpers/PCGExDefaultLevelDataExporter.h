@@ -27,7 +27,7 @@ enum class EPCGExActorExportType : uint8
  * - Classifies actors as Mesh or Actor (or Skip)
  * - Creates a point at the actor's transform
  * - Stores mesh/actor references, materials, and bounds as metadata attributes
- * - Organizes output as typed tagged data entries ("Meshes", "Actors", "Instances")
+ * - Organizes output as typed tagged data entries ("Meshes", "Actors")
  *
  * When bGenerateCollections is enabled, raw metadata is replaced with collection entry
  * hashes (int64 PCGEx/CollectionEntry), and embedded mesh/actor collections are built
@@ -62,6 +62,16 @@ public:
 	 *  and writes collection entry hashes instead of raw metadata. */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	bool bGenerateCollections = false;
+
+	/** When true, material overrides from source components will be captured
+	 *  and stored as material variants on the mesh collection entries. */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bGenerateCollections"))
+	bool bCaptureMaterialOverrides = true;
+
+	/** When true and bGenerateCollections is enabled, capture per-instance property deltas
+	 *  (CDO diff) on actor collection entries. Only applies to "Actor"-classified actors. */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bGenerateCollections"))
+	bool bCapturePropertyDeltas = false;
 
 	virtual bool ExportLevelData_Implementation(UWorld* World, UPCGDataAsset* OutAsset) override;
 
