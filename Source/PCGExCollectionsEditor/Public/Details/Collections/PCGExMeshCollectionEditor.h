@@ -21,5 +21,4 @@ public:
 protected:
 	virtual void RegisterPropertyNameMapping(TMap<FName, FName>& Mapping) override;
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder) override;
-	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs) override;
 };

@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 
 #include "Helpers/PCGExLevelDataExporter.h"
+#include "Helpers/PCGExActorContentFilter.h"
+#include "Helpers/PCGExBoundsEvaluator.h"
 
 #include "PCGExDefaultLevelDataExporter.generated.h"
 
@@ -42,21 +44,15 @@ class PCGEXCOLLECTIONS_API UPCGExDefaultLevelDataExporter : public UPCGExLevelDa
 	GENERATED_BODY()
 
 public:
-	/** If non-empty, only actors with at least one of these tags are exported. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Filtering")
-	TArray<FName> IncludeTags;
+	UPCGExDefaultLevelDataExporter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Actors with any of these tags are excluded from export. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Filtering")
-	TArray<FName> ExcludeTags;
+	/** Actor content filter. Defaults to UPCGExDefaultActorContentFilter. */
+	UPROPERTY(EditAnywhere, Instanced, Category = "Filtering")
+	TObjectPtr<UPCGExActorContentFilter> ContentFilter;
 
-	/** If non-empty, only actors of these classes (or subclasses) are exported. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Filtering")
-	TArray<TSoftClassPtr<AActor>> IncludeClasses;
-
-	/** Actors of these classes (or subclasses) are excluded from export. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Filtering")
-	TArray<TSoftClassPtr<AActor>> ExcludeClasses;
+	/** Bounds evaluator. Defaults to UPCGExDefaultBoundsEvaluator. */
+	UPROPERTY(EditAnywhere, Instanced, Category = "Bounds")
+	TObjectPtr<UPCGExBoundsEvaluator> BoundsEvaluator;
 
 	/** When true, the exporter builds embedded mesh/actor collections
 	 *  and writes collection entry hashes instead of raw metadata. */
