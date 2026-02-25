@@ -9,6 +9,8 @@
 
 class UPCGExAssetCollection;
 class SVerticalBox;
+class FAssetThumbnailPool;
+class SPCGExCollectionGridView;
 
 namespace PCGExAssetCollectionEditor
 {
@@ -87,6 +89,7 @@ protected:
 
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	void CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
+	void CreateGridTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	virtual void BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox);
@@ -95,6 +98,19 @@ protected:
 	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void ForceRefreshTabs();
 
+	/** Returns the property name of the type-specific asset picker (e.g., "StaticMesh", "Actor").
+	 *  Override in derived editors. Used by the grid view to build tile picker widgets. */
+	virtual FName GetTilePickerPropertyName() const { return NAME_None; }
+
+	/** Additional property names shown on the tile that should be excluded from the detail panel.
+	 *  Override when the tile shows more properties than just the picker (e.g., PCGDataAsset's Source enum). */
+	virtual void GetAdditionalTilePropertyNames(TSet<FName>& OutNames) const {}
+
+	/** Build the picker widget for a single tile entry. Override for custom picker logic. */
+	virtual TSharedRef<SWidget> BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle);
+
 	TArray<PCGExAssetCollectionEditor::TabInfos> Tabs;
 	FDelegateHandle OnHiddenAssetPropertyNamesChanged;
+	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
+	TSharedPtr<SPCGExCollectionGridView> GridView;
 };
