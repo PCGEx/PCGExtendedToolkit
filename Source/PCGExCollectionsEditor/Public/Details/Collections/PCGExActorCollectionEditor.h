@@ -20,5 +20,5 @@ public:
 
 protected:
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder) override;
-	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs) override;
+	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox) override;
 };

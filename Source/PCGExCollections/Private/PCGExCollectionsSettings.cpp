@@ -6,6 +6,9 @@
 #include "CoreMinimal.h"
 #include "PCGExCollectionsSettingsCache.h"
 #include "PCGExCoreSettingsCache.h"
+#include "Helpers/PCGExLevelDataExporter.h"
+#include "Helpers/PCGExActorContentFilter.h"
+#include "Helpers/PCGExBoundsEvaluator.h"
 
 void UPCGExCollectionsSettings::PostLoad()
 {
@@ -28,4 +31,10 @@ void UPCGExCollectionsSettings::UpdateSettingsCaches() const
 	PCGEX_PUSH_SETTING(Collections, bDisableCollisionByDefault)
 
 #undef PCGEX_PUSH_SETTING
+
+	// Resolve soft class paths to UClass* in the cache (runs on game thread in PostLoad/PostEditChangeProperty)
+	auto& Cache = PCGEX_SETTINGS_INST(Collections);
+	Cache.DefaultLevelExporterClass = DefaultLevelExporterClass.TryLoadClass<UPCGExLevelDataExporter>();
+	Cache.DefaultContentFilterClass = DefaultContentFilterClass.TryLoadClass<UPCGExActorContentFilter>();
+	Cache.DefaultBoundsEvaluatorClass = DefaultBoundsEvaluatorClass.TryLoadClass<UPCGExBoundsEvaluator>();
 }
