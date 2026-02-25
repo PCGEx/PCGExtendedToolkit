@@ -141,6 +141,9 @@ namespace PCGExDetailsCustomization
 		PCGEX_ADD_ACTION_ICON(Bit_Direct, AIS_VerySmall)
 		PCGEX_ADD_ACTION_ICON(Bit_Mutations, AIS_VerySmall)
 
+		PCGEX_ADD_ACTION_ICON(PCGDA_DataAsset, AIS_VerySmall)
+		PCGEX_ADD_ACTION_ICON(PCGDA_Level, AIS_VerySmall)
+
 		FButtonStyle ActionIconButton = FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton");
 
 		FSlateBrush Brush = FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton").Pressed;
@@ -209,7 +212,8 @@ MACRO(EPCGExVariationSnapping)\
 MACRO(EPCGExGrammarScaleMode)\
 MACRO(EPCGExSampleSource)\
 MACRO(EPCGExBitmaskMode)\
-MACRO(EPCGExCellTriageFlags)
+MACRO(EPCGExCellTriageFlags)\
+MACRO(EPCGExDataAssetEntrySource)
 
 #define PCGEX_FOREACH_GRID_ENUM(MACRO)\
 MACRO(EPCGExAxisOrder, 3)\

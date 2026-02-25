@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+      }
+
+      .cls-2 {
+        fill: #ffa627;
+      }
+    </style>
+  </defs>
+  <polygon points="17.7 80.82 42.8 22.34 61.29 67.21 71.29 50.88 86.3 80.82 17.7 80.82"/>
+  <polygon class="cls-1" points="15.7 77.82 40.8 19.34 59.29 64.21 69.29 47.88 84.3 77.82 15.7 77.82"/>
+  <polygon class="cls-2" points="32.67 38.3 40.8 19.34 52.09 46.74 44.42 38.61 37.85 46.94 32.67 38.3"/>
+</svg>

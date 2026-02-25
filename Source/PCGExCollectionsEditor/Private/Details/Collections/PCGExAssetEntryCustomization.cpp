@@ -14,6 +14,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Collections/PCGExMeshCollection.h"
 #include "Collections/PCGExPCGDataAssetCollection.h"
+#include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -55,14 +56,17 @@ void FPCGExAssetEntryCustomization::CustomizeHeader(
 				.VAlign(VAlign_Center)
 				.Padding(2, 0)
 				[
-					SNew(STextBlock).Text(FText::FromString(TEXT("Weight"))).Font(IDetailLayoutBuilder::GetDetailFont()).ColorAndOpacity(FSlateColor(FLinearColor::Gray)).MinDesiredWidth(10)
+					SNew(STextBlock).Text(FText::FromString(TEXT("Weight"))).ToolTipText(WeightHandle->GetToolTipText()).Font(IDetailLayoutBuilder::GetDetailFont()).ColorAndOpacity(FSlateColor(FLinearColor::Gray)).MinDesiredWidth(10)
 				]
 				+ SHorizontalBox::Slot()
 				.AutoWidth()
 				.MinWidth(50)
 				.Padding(2, 0)
 				[
-					WeightHandle->CreatePropertyValueWidget()
+					SNew(SBox).ToolTipText(WeightHandle->GetToolTipText())
+					[
+						WeightHandle->CreatePropertyValueWidget()
+					]
 				]
 
 				// Category
@@ -71,14 +75,17 @@ void FPCGExAssetEntryCustomization::CustomizeHeader(
 				.VAlign(VAlign_Center)
 				.Padding(2, 0)
 				[
-					SNew(STextBlock).Text(FText::FromString(TEXT("·· Category"))).Font(IDetailLayoutBuilder::GetDetailFont()).ColorAndOpacity(FSlateColor(FLinearColor::Gray)).MinDesiredWidth(10)
+					SNew(STextBlock).Text(FText::FromString(TEXT("·· Category"))).ToolTipText(CategoryHandle->GetToolTipText()).Font(IDetailLayoutBuilder::GetDetailFont()).ColorAndOpacity(FSlateColor(FLinearColor::Gray)).MinDesiredWidth(10)
 				]
 				+ SHorizontalBox::Slot()
 				.FillWidth(1)
 				.MinWidth(50)
 				.Padding(2, 0)
 				[
-					CategoryHandle->CreatePropertyValueWidget()
+					SNew(SBox).ToolTipText(CategoryHandle->GetToolTipText())
+					[
+						CategoryHandle->CreatePropertyValueWidget()
+					]
 				]
 			]
 			+ SVerticalBox::Slot()
@@ -90,6 +97,7 @@ void FPCGExAssetEntryCustomization::CustomizeHeader(
 				SNew(SBorder)
 				.BorderImage(FStyleDefaults::GetNoBrush())
 				.ColorAndOpacity(FLinearColor(1, 1, 1, 0.6f))
+				.ToolTipText(IsSubCollectionHandle->GetToolTipText())
 				[
 					SNew(SHorizontalBox)
 					+ SHorizontalBox::Slot()
@@ -103,7 +111,7 @@ void FPCGExAssetEntryCustomization::CustomizeHeader(
 					.VAlign(VAlign_Center)
 					.Padding(2, 0)
 					[
-						SNew(STextBlock).Text(FText::FromString(TEXT("Sub-collection"))).Font(IDetailLayoutBuilder::GetDetailFont()).ColorAndOpacity(FSlateColor(FLinearColor::Gray)).MinDesiredWidth(8)
+						SNew(STextBlock).Text(FText::FromString(TEXT("Sub-collection"))).ToolTipText(IsSubCollectionHandle->GetToolTipText()).Font(IDetailLayoutBuilder::GetDetailFont()).ColorAndOpacity(FSlateColor(FLinearColor::Gray)).MinDesiredWidth(8)
 					]
 				]
 			]
@@ -192,6 +200,7 @@ TSharedRef<SWidget> FPCGExEntryHeaderCustomizationBase::GetAssetPicker(TSharedRe
 			.Padding(2, 0)
 			[
 				SNew(SBox)
+				.ToolTipText(SubCollection->GetToolTipText())
 				PCGEX_SUBCOLLECTION_VISIBLE
 				[
 					SubCollection->CreatePropertyValueWidget()
@@ -203,6 +212,7 @@ TSharedRef<SWidget> FPCGExEntryHeaderCustomizationBase::GetAssetPicker(TSharedRe
 			.Padding(2, 0)
 			[
 				SNew(SBox)
+				.ToolTipText(AssetHandle->GetToolTipText())
 				PCGEX_SUBCOLLECTION_COLLAPSED
 				[
 					AssetHandle->CreatePropertyValueWidget()
@@ -220,7 +230,111 @@ TSharedRef<IPropertyTypeCustomization> FPCGEx##_CLASS##EntryCustomization::MakeI
 
 PCGEX_FOREACH_ENTRY_TYPE(PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_IMPL)
 
-#undef PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL
+#undef PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_IMPL
+
+#pragma region FPCGExPCGDataAssetEntryCustomization
+
+TSharedRef<IPropertyTypeCustomization> FPCGExPCGDataAssetEntryCustomization::MakeInstance()
+{
+	TSharedRef<IPropertyTypeCustomization> Ref = MakeShareable(new FPCGExPCGDataAssetEntryCustomization());
+	static_cast<FPCGExPCGDataAssetEntryCustomization&>(Ref.Get()).FillCustomizedTopLevelPropertiesNames();
+	return Ref;
+}
+
+void FPCGExPCGDataAssetEntryCustomization::FillCustomizedTopLevelPropertiesNames()
+{
+	FPCGExAssetEntryCustomization::FillCustomizedTopLevelPropertiesNames();
+	CustomizedTopLevelProperties.Add(FName("Source"));
+	CustomizedTopLevelProperties.Add(FName("DataAsset"));
+	CustomizedTopLevelProperties.Add(FName("Level"));
+}
+
+TSharedRef<SWidget> FPCGExPCGDataAssetEntryCustomization::GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle)
+{
+	TSharedPtr<IPropertyHandle> SubCollection = PropertyHandle->GetChildHandle(FName("SubCollection"));
+	TSharedPtr<IPropertyHandle> SourceHandle = PropertyHandle->GetChildHandle(FName("Source"));
+	TSharedPtr<IPropertyHandle> DataAssetHandle = PropertyHandle->GetChildHandle(FName("DataAsset"));
+	TSharedPtr<IPropertyHandle> LevelHandle = PropertyHandle->GetChildHandle(FName("Level"));
+
+	return SNew(SHorizontalBox)
+		PCGEX_ENTRY_INDEX
+
+		// Source dropdown (hidden when subcollection)
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(2, 0)
+		[
+			SNew(SBox)
+			.ToolTipText(SourceHandle->GetToolTipText())
+			PCGEX_SUBCOLLECTION_COLLAPSED
+			[
+				PCGExEnumCustomization::CreateRadioGroup(SourceHandle, TEXT("EPCGExDataAssetEntrySource"))
+			]
+		]
+
+		// SubCollection picker
+		+ SHorizontalBox::Slot()
+		.FillWidth(1)
+		.MinWidth(200)
+		.Padding(2, 0)
+		[
+			SNew(SBox)
+			.ToolTipText(SubCollection->GetToolTipText())
+			PCGEX_SUBCOLLECTION_VISIBLE
+			[
+				SubCollection->CreatePropertyValueWidget()
+			]
+		]
+
+		// DataAsset picker (when !subcollection && Source == DataAsset)
+		+ SHorizontalBox::Slot()
+		.FillWidth(1)
+		.MinWidth(200)
+		.Padding(2, 0)
+		[
+			SNew(SBox)
+			.ToolTipText(DataAssetHandle->GetToolTipText())
+			.Visibility_Lambda([IsSubCollectionHandle, SourceHandle]()
+			{
+				bool bIsSubCollection = false;
+				IsSubCollectionHandle->GetValue(bIsSubCollection);
+				if (bIsSubCollection) { return EVisibility::Collapsed; }
+				uint8 SourceValue = 0;
+				SourceHandle->GetValue(SourceValue);
+				return static_cast<EPCGExDataAssetEntrySource>(SourceValue) == EPCGExDataAssetEntrySource::DataAsset
+					? EVisibility::Visible : EVisibility::Collapsed;
+			})
+			[
+				DataAssetHandle->CreatePropertyValueWidget()
+			]
+		]
+
+		// Level picker (when !subcollection && Source == Level)
+		+ SHorizontalBox::Slot()
+		.FillWidth(1)
+		.MinWidth(200)
+		.Padding(2, 0)
+		[
+			SNew(SBox)
+			.ToolTipText(LevelHandle->GetToolTipText())
+			.Visibility_Lambda([IsSubCollectionHandle, SourceHandle]()
+			{
+				bool bIsSubCollection = false;
+				IsSubCollectionHandle->GetValue(bIsSubCollection);
+				if (bIsSubCollection) { return EVisibility::Collapsed; }
+				uint8 SourceValue = 0;
+				SourceHandle->GetValue(SourceValue);
+				return static_cast<EPCGExDataAssetEntrySource>(SourceValue) == EPCGExDataAssetEntrySource::Level
+					? EVisibility::Visible : EVisibility::Collapsed;
+			})
+			[
+				LevelHandle->CreatePropertyValueWidget()
+			]
+		];
+}
+
+#pragma endregion
 
 #undef PCGEX_SUBCOLLECTION_VISIBLE
 #undef PCGEX_SUBCOLLECTION_COLLAPSED

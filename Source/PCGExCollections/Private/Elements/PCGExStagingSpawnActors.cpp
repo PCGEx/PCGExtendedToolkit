@@ -13,6 +13,7 @@
 #include "Data/Utils/PCGExDataForward.h"
 #include "Engine/World.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Helpers/PCGExActorPropertyDelta.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSpawnActorsElement"
 #define PCGEX_NAMESPACE StagingSpawnActors
@@ -110,6 +111,11 @@ namespace PCGExStagingSpawnActors
 
 		EntryHashGetter = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
 		if (!EntryHashGetter) { return false; }
+
+		if (Settings->bApplyInstanceTags)
+		{
+			InstanceTagsGetter = PointDataFacade->GetReadable<FString>(TEXT("InstanceTags"), PCGExData::EIOSide::In, true);
+		}
 
 		// Create ActorReference writer
 		ActorRefWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->ActorReferenceAttribute, FSoftObjectPath(), false, PCGExData::EBufferInit::New);
@@ -294,12 +300,16 @@ namespace PCGExStagingSpawnActors
 
 			const FTransform& SpawnTransform = Transforms[PointIndex];
 
+			const bool bHasDelta = Settings->bApplyPropertyDeltas
+				&& ActorEntry->SerializedPropertyDelta.Num() > 0;
+
 			AActor* SpawnedActor = nullptr;
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WorldSpawnActor);
 				FActorSpawnParameters SpawnParams;
 				SpawnParams.Template = Cast<AActor>(ActorClass->GetDefaultObject());
 				SpawnParams.SpawnCollisionHandlingOverride = Settings->CollisionHandling;
+				if (bHasDelta) { SpawnParams.bDeferConstruction = true; }
 				SpawnedActor = World->SpawnActor<AActor>(ActorClass, SpawnTransform, SpawnParams);
 			}
 
@@ -312,6 +322,13 @@ namespace PCGExStagingSpawnActors
 							FText::FromString(ActorClass->GetName()), FText::AsNumber(PointIndex)));
 				}
 				goto Finalize;
+			}
+
+			// Apply property delta BEFORE finishing construction
+			if (bHasDelta)
+			{
+				PCGExActorDelta::ApplyPropertyDelta(SpawnedActor, ActorEntry->SerializedPropertyDelta);
+				SpawnedActor->FinishSpawning(SpawnTransform);
 			}
 
 			// UE-62747: SpawnActor doesn't properly apply scale from the spawn transform
@@ -339,6 +356,25 @@ namespace PCGExStagingSpawnActors
 				for (const FName& Tag : ActorEntry->Tags)
 				{
 					SpawnedActor->Tags.AddUnique(Tag);
+				}
+			}
+
+			// Apply per-instance tags from InstanceTags attribute
+			if (Settings->bApplyInstanceTags && InstanceTagsGetter)
+			{
+				const FString TagStr = InstanceTagsGetter->Read(PointIndex);
+				if (!TagStr.IsEmpty())
+				{
+					TArray<FString> TagParts;
+					TagStr.ParseIntoArray(TagParts, TEXT(","));
+					for (const FString& Part : TagParts)
+					{
+						const FString Trimmed = Part.TrimStartAndEnd();
+						if (!Trimmed.IsEmpty())
+						{
+							SpawnedActor->Tags.AddUnique(FName(*Trimmed));
+						}
+					}
 				}
 			}
 
