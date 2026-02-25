@@ -8,6 +8,7 @@
 #include "Widgets/Docking/SDockTab.h"
 
 class UPCGExAssetCollection;
+class SVerticalBox;
 
 namespace PCGExAssetCollectionEditor
 {
@@ -87,6 +88,7 @@ protected:
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	virtual void BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder);
+	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox);
 	virtual void BuildAssetFooterToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void ForceRefreshTabs();

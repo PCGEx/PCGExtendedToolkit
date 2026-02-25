@@ -17,7 +17,10 @@
 #include "Widgets/Layout/SBox.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Modules/ModuleManager.h"
+#include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
+#include "Widgets/Input/SComboButton.h"
+#include "Widgets/SBoxPanel.h"
 
 namespace PCGExCollectionEditor
 {
@@ -227,6 +230,41 @@ SNew(SBox).VAlign(VAlign_Center).HAlign(HAlign_Center).Padding(FMargin(8, 0))[\
 SNew(STextBlock).Text(INVTEXT(_LABEL)).Font(FCoreStyle::GetDefaultFontStyle("Regular", 8)).ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.8)))\
 .Justification(ETextJustify::Center)]);
 
+#define PCGEX_COMBOBOX_INTERPUNCT \
+SNew(STextBlock)\
+.Text(FText::FromString(TEXT("\u00B7\u00B7\u00B7")))\
+.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
+
+#define PCGEX_COMBOBOX_BUTTON_CONTENT(_BRUSH) \
+SNew(SHorizontalBox)\
++ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)\
+[\
+	SNew(SBox).WidthOverride(22).HeightOverride(22).HAlign(HAlign_Center).VAlign(VAlign_Center)\
+	[\
+		SNew(SImage).Image(FAppStyle::Get().GetBrush(_BRUSH))\
+	]\
+]\
++ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 0, 0)\
+[\
+	PCGEX_COMBOBOX_INTERPUNCT\
+]
+
+#define PCGEX_COMBOBOX_BUTTON_CONTENT_TEXT(_TEXT, _FONT_SIZE) \
+SNew(SHorizontalBox)\
++ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)\
+[\
+	SNew(SBox).WidthOverride(22).HeightOverride(22).HAlign(HAlign_Center).VAlign(VAlign_Center)\
+	[\
+		SNew(STextBlock)\
+		.Text(FText::FromString(_TEXT))\
+		.Font(FCoreStyle::GetDefaultFontStyle("Bold", _FONT_SIZE))\
+	]\
+]\
++ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 0, 0)\
+[\
+	PCGEX_COMBOBOX_INTERPUNCT\
+]
+
 void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder)
 {
 #pragma region Staging
@@ -276,8 +314,6 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 			INVTEXT("Rebuild staging for the entire project. (Will go through all collection assets)"),
 			PCGEX_SLATE_ICON(RebuildStagingProject)
 		);
-
-		ToolbarBuilder.AddSeparator();
 	}
 	ToolbarBuilder.EndSection();
 
@@ -288,168 +324,204 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 {
 #pragma region Append
 
-
-	ToolbarBuilder.BeginSection("AppendSection");
+	ToolbarBuilder.BeginSection("ToolsSection");
 	{
-		ToolbarBuilder.AddToolBarButton(
-			FUIAction(
-				FExecuteAction::CreateLambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::AddBrowserSelection(Collection); }
-					})
-			),
-			NAME_None,
-			FText::GetEmpty(),
-			INVTEXT("Append the current content browser' selection to this collection."),
-			PCGEX_SLATE_ICON(AddContentBrowserSelection)
+		ToolbarBuilder.AddWidget(
+			SNew(SComboButton)
+			.ComboButtonStyle(&FAppStyle::Get(), "SimpleComboButton")
+			.HasDownArrow(false)
+			.ContentPadding(FMargin(4, 4))
+			.ToolTipText(INVTEXT("Add entries\nAdd new entries to this collection."))
+			.ButtonContent()
+			[
+				PCGEX_COMBOBOX_BUTTON_CONTENT("PCGEx.ActionIcon.AddContentBrowserSelection")
+			]
+			.OnGetMenuContent_Lambda(
+				[this]() -> TSharedRef<SWidget>
+				{
+					TSharedRef<SVerticalBox> MenuBox = SNew(SVerticalBox);
+					BuildAddMenuContent(MenuBox);
+					return MenuBox;
+				})
 		);
-	}
-	ToolbarBuilder.EndSection();
 
-#pragma endregion
 
-#pragma region Weighting
-
-	ToolbarBuilder.BeginSection("WeightSection");
-	{
-		PCGEX_SECTION_HEADER("Weight")
-
-		ToolbarBuilder.AddToolBarButton(
-			FUIAction(
-				FExecuteAction::CreateLambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::NormalizedWeightToSum(Collection); }
-					})
-			),
-			NAME_None,
-			FText::GetEmpty(),
-			INVTEXT("Normalize weight sum to 100"),
-			PCGEX_SLATE_ICON(NormalizeWeight)
+		ToolbarBuilder.AddWidget(
+			SNew(SComboButton)
+			.ComboButtonStyle(&FAppStyle::Get(), "SimpleComboButton")
+			.HasDownArrow(false)
+			.ContentPadding(FMargin(4, 4))
+			.ToolTipText(INVTEXT("Weight tools\nBatch-edit entry weights."))
+			.ButtonContent()
+			[
+				PCGEX_COMBOBOX_BUTTON_CONTENT("PCGEx.ActionIcon.NormalizeWeight")
+			]
+			.OnGetMenuContent_Lambda(
+				[this]() -> TSharedRef<SWidget>
+				{
+					return
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot()
+						  .AutoHeight()
+						  .Padding(4)
+						[
+							SNew(SButton)
+							.Text(INVTEXT("Normalize to 100"))
+							.OnClicked_Lambda(
+								[this]()
+								{
+									PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::NormalizedWeightToSum(Collection); }
+									return FReply::Handled();
+								})
+							.ToolTipText(INVTEXT("Normalize weight sum to 100"))
+						]
+						+ SVerticalBox::Slot()
+						  .AutoHeight()
+						  .Padding(4, 0, 4, 4)
+						[
+							SNew(SUniformGridPanel)
+							.SlotPadding(FMargin(2, 2))
+							+ SUniformGridPanel::Slot(0, 0)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("= i")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::SetWeightIndex(Collection); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Set the weight index to the entry index."))
+							]
+							+ SUniformGridPanel::Slot(1, 0)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("100")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::WeightOne(Collection); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Reset all weights to 100"))
+							]
+							+ SUniformGridPanel::Slot(2, 0)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("+=1")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::PadWeight(Collection); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Add 1 to all weights"))
+							]
+							+ SUniformGridPanel::Slot(0, 1)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("\xD7""2")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::MultWeight(Collection, 2); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Multiply weights by 2"))
+							]
+							+ SUniformGridPanel::Slot(1, 1)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("\xD7""10")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::MultWeight(Collection, 10); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Multiply weights by 10"))
+							]
+							+ SUniformGridPanel::Slot(2, 1)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("???")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::WeightRandom(Collection); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Assign random weights"))
+							]
+						];
+				})
 		);
 
 		ToolbarBuilder.AddWidget(
-			SNew(SUniformGridPanel)
-			.SlotPadding(FMargin(2, 2))
-			+ SUniformGridPanel::Slot(0, 0)
+			SNew(SComboButton)
+			.ComboButtonStyle(&FAppStyle::Get(), "SimpleComboButton")
+			.HasDownArrow(false)
+			.ContentPadding(FMargin(4, 4))
+			.ToolTipText(INVTEXT("Sort tools\nSort entries by weight."))
+			.ButtonContent()
 			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("= i")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::SetWeightIndex(Collection); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Set the weight index to the entry index."))
+				PCGEX_COMBOBOX_BUTTON_CONTENT_TEXT(TEXT("\u2195"), 10)
 			]
-			+ SUniformGridPanel::Slot(1, 0)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("100")))
-				.OnClicked_Lambda(
-					[&]()
+			.OnGetMenuContent_Lambda(
+				[this]() -> TSharedRef<SWidget>
 					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::WeightOne(Collection); }
-						return FReply::Handled();
+						return
+							SNew(SUniformGridPanel)
+							.SlotPadding(FMargin(2, 2))
+							+ SUniformGridPanel::Slot(0, 0)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("\u25B2 Ascending")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::SortByWeightAscending(Collection); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Sort collection by ascending weight"))
+							]
+							+ SUniformGridPanel::Slot(0, 1)
+							[
+								SNew(SButton)
+								.Text(FText::FromString(TEXT("\u25BC Descending")))
+								.OnClicked_Lambda(
+									[this]()
+									{
+										PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::SortByWeightDescending(Collection); }
+										return FReply::Handled();
+									})
+								.ToolTipText(FText::FromString("Sort collection by descending weight"))
+							]
+						;
 					})
-				.ToolTipText(FText::FromString("Reset all weights to 100"))
-			]
-			+ SUniformGridPanel::Slot(2, 0)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("+=1")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::PadWeight(Collection); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Add 1 to all weights"))
-			]
-			// Row 2
-			+ SUniformGridPanel::Slot(0, 1)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("×2")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::MultWeight(Collection, 2); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Multiply weights by 2"))
-			]
-			+ SUniformGridPanel::Slot(1, 1)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("×10")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::MultWeight(Collection, 10); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Multiply weights by 10"))
-			]
-			+ SUniformGridPanel::Slot(2, 1)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("???")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::WeightRandom(Collection); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Assign random weights"))
-			]
 		);
 	}
 	ToolbarBuilder.EndSection();
 
 #pragma endregion
+}
 
-#pragma region Sorting
-
-
-	ToolbarBuilder.BeginSection("SortingSection");
-	{
-		PCGEX_SECTION_HEADER("Sort")
-
-		ToolbarBuilder.AddWidget(
-			SNew(SUniformGridPanel)
-			.SlotPadding(FMargin(1, 2))
-			+ SUniformGridPanel::Slot(0, 0)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("▲")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::SortByWeightAscending(Collection); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Sort collection by ascending weight"))
-			]
-			+ SUniformGridPanel::Slot(0, 1)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("▼")))
-				.OnClicked_Lambda(
-					[&]()
-					{
-						PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::SortByWeightDescending(Collection); }
-						return FReply::Handled();
-					})
-				.ToolTipText(FText::FromString("Sort collection by descending weight"))
-			]
-		);
-	}
-	ToolbarBuilder.EndSection();
-
-#pragma endregion
+void FPCGExAssetCollectionEditor::BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox)
+{
+	MenuBox->AddSlot()
+		.AutoHeight()
+		.Padding(4)
+		[
+			SNew(SButton)
+			.Text(INVTEXT("Add Content Browser Selection"))
+			.OnClicked_Lambda(
+				[this]()
+				{
+					PCGEX_CURRENT_COLLECTION { PCGExCollectionEditorUtils::AddBrowserSelection(Collection); }
+					return FReply::Handled();
+				})
+			.ToolTipText(INVTEXT("Append the current content browser selection to this collection."))
+		];
 }
 
 void FPCGExAssetCollectionEditor::BuildAssetFooterToolbar(FToolBarBuilder& ToolbarBuilder)
@@ -606,7 +678,8 @@ void FPCGExAssetCollectionEditor::RegisterTabSpawners(const TSharedRef<FTabManag
 
 		if (!Tab.Icon.IsEmpty())
 		{
-			FString Icon = TEXT("PCGEx.ActionIcon.") + Tab.Icon;
+			FString Icon = TEXT("PCGEx.ActionIcon.");
+			Icon.Append(Tab.Icon);
 			Entry.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), FName(Icon)));
 		}
 	}
