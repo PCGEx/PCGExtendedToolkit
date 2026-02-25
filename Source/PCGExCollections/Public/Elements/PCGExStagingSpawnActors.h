@@ -61,6 +61,17 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable))
 	FPCGExForwardDetails TargetsForwarding;
 
+	/** If enabled, apply per-instance tags from the InstanceTags attribute to spawned actors. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable))
+	bool bApplyInstanceTags = false;
+
+	// --- Properties ---
+
+	/** If enabled, apply per-instance property deltas stored on actor collection entries.
+	 *  Actors with deltas are spawned deferred to set properties before construction completes. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Properties", meta=(PCG_Overridable))
+	bool bApplyPropertyDeltas = false;
+
 	// --- PCG Generation ---
 
 	/** If enabled, trigger PCG generation on spawned actors that have PCG components. */
@@ -129,6 +140,7 @@ namespace PCGExStagingSpawnActors
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExStagingSpawnActorsContext, UPCGExStagingSpawnActorsSettings>
 	{
 		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashGetter;
+		TSharedPtr<PCGExData::TBuffer<FString>> InstanceTagsGetter;
 
 		/** Pre-sized to NumPoints — each parallel thread writes to its own index, no locks */
 		TArray<FResolvedEntry> ResolvedEntries;
