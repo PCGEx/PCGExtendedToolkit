@@ -25,7 +25,7 @@
 
 #include "PCGExCollectionsSettingsCache.h"
 
-UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter()
+UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter(const FObjectInitializer& ObjectInitializer)
 {
 	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
 
@@ -37,8 +37,13 @@ UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter()
 		? Settings.DefaultBoundsEvaluatorClass.Get()
 		: UPCGExDefaultBoundsEvaluator::StaticClass();
 
-	ContentFilter = NewObject<UPCGExActorContentFilter>(this, FilterClass, TEXT("ContentFilter"));
-	BoundsEvaluator = NewObject<UPCGExBoundsEvaluator>(this, EvalClass, TEXT("BoundsEvaluator"));
+	ContentFilter = Cast<UPCGExActorContentFilter>(
+		ObjectInitializer.CreateDefaultSubobject(this, TEXT("ContentFilter"),
+			UPCGExActorContentFilter::StaticClass(), FilterClass, false, false));
+
+	BoundsEvaluator = Cast<UPCGExBoundsEvaluator>(
+		ObjectInitializer.CreateDefaultSubobject(this, TEXT("BoundsEvaluator"),
+			UPCGExBoundsEvaluator::StaticClass(), EvalClass, false, false));
 }
 
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, UStaticMeshComponent*& OutMeshComponent) const

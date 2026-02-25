@@ -18,7 +18,7 @@
 // Static-init type registration: TypeId=Actor, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(Actor, UPCGExActorCollection, FPCGExActorCollectionEntry, "Actor Collection", Base)
 
-UPCGExActorCollection::UPCGExActorCollection()
+UPCGExActorCollection::UPCGExActorCollection(const FObjectInitializer& ObjectInitializer)
 {
 	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
 
@@ -26,7 +26,9 @@ UPCGExActorCollection::UPCGExActorCollection()
 		? Settings.DefaultBoundsEvaluatorClass.Get()
 		: UPCGExDefaultBoundsEvaluator::StaticClass();
 
-	BoundsEvaluator = NewObject<UPCGExBoundsEvaluator>(this, EvalClass, TEXT("BoundsEvaluator"));
+	BoundsEvaluator = Cast<UPCGExBoundsEvaluator>(
+		ObjectInitializer.CreateDefaultSubobject(this, TEXT("BoundsEvaluator"),
+			UPCGExBoundsEvaluator::StaticClass(), EvalClass, false, false));
 }
 
 #pragma region FPCGExActorCollectionEntry

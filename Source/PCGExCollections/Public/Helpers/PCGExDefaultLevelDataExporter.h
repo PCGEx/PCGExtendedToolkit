@@ -44,7 +44,7 @@ class PCGEXCOLLECTIONS_API UPCGExDefaultLevelDataExporter : public UPCGExLevelDa
 	GENERATED_BODY()
 
 public:
-	UPCGExDefaultLevelDataExporter();
+	UPCGExDefaultLevelDataExporter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	/** Actor content filter. Defaults to UPCGExDefaultActorContentFilter. */
 	UPROPERTY(EditAnywhere, Instanced, Category = "Filtering")

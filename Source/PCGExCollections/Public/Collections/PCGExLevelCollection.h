@@ -62,7 +62,7 @@ class PCGEXCOLLECTIONS_API UPCGExLevelCollection : public UPCGExAssetCollection
 	PCGEX_ASSET_COLLECTION_BODY(FPCGExLevelCollectionEntry)
 
 public:
-	UPCGExLevelCollection();
+	UPCGExLevelCollection(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	friend struct FPCGExLevelCollectionEntry;
 

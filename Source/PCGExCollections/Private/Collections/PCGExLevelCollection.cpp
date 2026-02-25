@@ -16,7 +16,7 @@
 // Static-init type registration: TypeId=Level, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(Level, UPCGExLevelCollection, FPCGExLevelCollectionEntry, "Level Collection", Base)
 
-UPCGExLevelCollection::UPCGExLevelCollection()
+UPCGExLevelCollection::UPCGExLevelCollection(const FObjectInitializer& ObjectInitializer)
 {
 	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
 
@@ -28,8 +28,13 @@ UPCGExLevelCollection::UPCGExLevelCollection()
 		? Settings.DefaultBoundsEvaluatorClass.Get()
 		: UPCGExDefaultBoundsEvaluator::StaticClass();
 
-	ContentFilter = NewObject<UPCGExActorContentFilter>(this, FilterClass, TEXT("ContentFilter"));
-	BoundsEvaluator = NewObject<UPCGExBoundsEvaluator>(this, EvalClass, TEXT("BoundsEvaluator"));
+	ContentFilter = Cast<UPCGExActorContentFilter>(
+		ObjectInitializer.CreateDefaultSubobject(this, TEXT("ContentFilter"),
+			UPCGExActorContentFilter::StaticClass(), FilterClass, false, false));
+
+	BoundsEvaluator = Cast<UPCGExBoundsEvaluator>(
+		ObjectInitializer.CreateDefaultSubobject(this, TEXT("BoundsEvaluator"),
+			UPCGExBoundsEvaluator::StaticClass(), EvalClass, false, false));
 }
 
 #pragma region FPCGExLevelCollectionEntry

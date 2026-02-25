@@ -86,7 +86,7 @@ class PCGEXCOLLECTIONS_API UPCGExActorCollection : public UPCGExAssetCollection
 	PCGEX_ASSET_COLLECTION_BODY(FPCGExActorCollectionEntry)
 
 public:
-	UPCGExActorCollection();
+	UPCGExActorCollection(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	friend struct FPCGExActorCollectionEntry;
 
