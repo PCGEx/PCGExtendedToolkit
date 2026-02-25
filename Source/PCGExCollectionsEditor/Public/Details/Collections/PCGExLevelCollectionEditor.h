@@ -17,8 +17,4 @@ public:
 	virtual FText GetBaseToolkitName() const override { return INVTEXT("PCGEx Level Collection Editor"); }
 	virtual FString GetWorldCentricTabPrefix() const override { return TEXT("PCGEx"); }
 	virtual FLinearColor GetWorldCentricTabColorScale() const override { return FLinearColor::White; }
-
-protected:
-	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder) override;
-	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs) override;
 };

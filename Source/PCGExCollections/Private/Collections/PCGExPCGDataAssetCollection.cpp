@@ -14,6 +14,7 @@
 #include "Data/PCGSpatialData.h"
 #include "Helpers/PCGExLevelDataExporter.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
+#include "PCGExCollectionsSettingsCache.h"
 #include "Collections/PCGExMeshCollection.h"
 #include "Collections/PCGExActorCollection.h"
 #include "PCGExLog.h"
@@ -112,10 +113,14 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 			Exporter = TypedCollection->LevelExporter;
 		}
 
-		TObjectPtr<UPCGExDefaultLevelDataExporter> FallbackExporter;
+		TObjectPtr<UPCGExLevelDataExporter> FallbackExporter;
 		if (!Exporter)
 		{
-			FallbackExporter = NewObject<UPCGExDefaultLevelDataExporter>(GetTransientPackageAsObject());
+			const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
+			UClass* ExporterClass = Settings.DefaultLevelExporterClass
+				? Settings.DefaultLevelExporterClass.Get()
+				: UPCGExDefaultLevelDataExporter::StaticClass();
+			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackageAsObject(), ExporterClass);
 			Exporter = FallbackExporter;
 		}
 
