@@ -650,6 +650,15 @@ void FPCGExAssetCollectionEditor::RegisterTabSpawners(const TSharedRef<FTabManag
 	FAssetEditorToolkit::RegisterTabSpawners(InTabManager);
 }
 
+void FPCGExAssetCollectionEditor::UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
+{
+	for (const PCGExAssetCollectionEditor::TabInfos& Tab : Tabs)
+	{
+		InTabManager->UnregisterTabSpawner(Tab.Id);
+	}
+	FAssetEditorToolkit::UnregisterTabSpawners(InTabManager);
+}
+
 void FPCGExAssetCollectionEditor::ForceRefreshTabs()
 {
 	for (const PCGExAssetCollectionEditor::TabInfos& Tab : Tabs)

@@ -18,7 +18,7 @@ namespace PCGExAssetCollectionEditor
 	{
 		TabInfos() = default;
 
-		TabInfos(const FName InId, const TSharedPtr<SWidget>& InView, const FName InLabel = NAME_None, const ETabRole InRole = MajorTab)
+		TabInfos(const FName InId, const TSharedPtr<SWidget>& InView, const FName InLabel = NAME_None, const ETabRole InRole = PanelTab)
 			: Id(InId), View(InView), Label(InLabel.IsNone() ? InId : InLabel), Role(InRole)
 		{
 		}
@@ -29,7 +29,7 @@ namespace PCGExAssetCollectionEditor
 		TSharedPtr<SWidget> Footer = nullptr;
 		TWeakPtr<SWidget> WeakView = nullptr;
 		FName Label = NAME_None;
-		ETabRole Role = MajorTab;
+		ETabRole Role = PanelTab;
 		FString Icon = TEXT("");
 	};
 
@@ -92,6 +92,7 @@ protected:
 	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox);
 	virtual void BuildAssetFooterToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
+	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void ForceRefreshTabs();
 
 	TArray<PCGExAssetCollectionEditor::TabInfos> Tabs;
