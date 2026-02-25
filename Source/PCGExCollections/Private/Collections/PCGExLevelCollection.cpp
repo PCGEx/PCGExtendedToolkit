@@ -7,10 +7,6 @@
 #include "AssetRegistry/AssetData.h"
 #include "Engine/World.h"
 #include "Engine/Level.h"
-#include "Engine/LevelScriptActor.h"
-#include "Engine/Brush.h"
-#include "GameFramework/Info.h"
-#include "Components/PrimitiveComponent.h"
 #endif
 
 #include "PCGExLog.h"
@@ -57,76 +53,25 @@ void FPCGExLevelCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 #if WITH_EDITOR
 	if (const UWorld* World = Level.Get())
 	{
-		// Compute combined bounds from the level's persistent level actors
+		const UPCGExLevelCollection* LevelCollection = CastChecked<UPCGExLevelCollection>(OwningCollection);
+
 		FBox CombinedBounds(ForceInit);
 
 		if (World->PersistentLevel)
 		{
 			for (AActor* Actor : World->PersistentLevel->Actors)
 			{
-				if (!Actor) { continue; }
-
-				// Skip infrastructure and non-visible actors
-				if (Actor->IsHidden()) { continue; }
-				if (Actor->IsA<ALevelScriptActor>()) { continue; }
-				if (Actor->IsA<AInfo>()) { continue; }
-				if (Actor->IsA<ABrush>()) { continue; }
-				if (Actor->bIsEditorOnlyActor) { continue; }
-				if (Actor->bIsMainWorldOnly) { continue; }
-
-				// Tag include filter
-				if (BoundsIncludeTags.Num() > 0)
+				if (!UPCGExActorContentFilter::StaticPassesFilter(
+						LevelCollection->ContentFilter, Actor,
+						const_cast<UPCGExLevelCollection*>(LevelCollection), InInternalIndex))
 				{
-					bool bHasIncludeTag = false;
-					for (const FName& Tag : BoundsIncludeTags)
-					{
-						if (Actor->Tags.Contains(Tag)) { bHasIncludeTag = true; break; }
-					}
-					if (!bHasIncludeTag) { continue; }
+					continue;
 				}
 
-				// Tag exclude filter
-				if (BoundsExcludeTags.Num() > 0)
+				if (LevelCollection->BoundsEvaluator)
 				{
-					bool bHasExcludeTag = false;
-					for (const FName& Tag : BoundsExcludeTags)
-					{
-						if (Actor->Tags.Contains(Tag)) { bHasExcludeTag = true; break; }
-					}
-					if (bHasExcludeTag) { continue; }
-				}
-
-				// Class include filter
-				if (BoundsIncludeClasses.Num() > 0)
-				{
-					bool bMatchesClass = false;
-					for (const TSoftClassPtr<AActor>& ClassPtr : BoundsIncludeClasses)
-					{
-						if (UClass* C = ClassPtr.Get()) { if (Actor->IsA(C)) { bMatchesClass = true; break; } }
-					}
-					if (!bMatchesClass) { continue; }
-				}
-
-				// Class exclude filter
-				if (BoundsExcludeClasses.Num() > 0)
-				{
-					bool bExcluded = false;
-					for (const TSoftClassPtr<AActor>& ClassPtr : BoundsExcludeClasses)
-					{
-						if (UClass* C = ClassPtr.Get()) { if (Actor->IsA(C)) { bExcluded = true; break; } }
-					}
-					if (bExcluded) { continue; }
-				}
-
-				// Collect bounds from primitives
-				TArray<UPrimitiveComponent*> PrimitiveComponents;
-				Actor->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
-
-				for (const UPrimitiveComponent* PrimComp : PrimitiveComponents)
-				{
-					if (!PrimComp || !PrimComp->IsRegistered()) { continue; }
-					if (bOnlyCollidingComponents && PrimComp->GetCollisionEnabled() == ECollisionEnabled::NoCollision) { continue; }
-					CombinedBounds += PrimComp->Bounds.GetBox();
+					CombinedBounds += LevelCollection->BoundsEvaluator->EvaluateActorBounds(
+						Actor, const_cast<UPCGExLevelCollection*>(LevelCollection), InInternalIndex);
 				}
 			}
 		}

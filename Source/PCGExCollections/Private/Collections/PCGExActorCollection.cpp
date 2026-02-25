@@ -11,6 +11,8 @@
 #include "PCGComponent.h"
 #include "PCGExLog.h"
 #include "Engine/Blueprint.h"
+#include "Engine/Level.h"
+#include "Helpers/PCGExActorPropertyDelta.h"
 
 // Static-init type registration: TypeId=Actor, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(Actor, UPCGExActorCollection, FPCGExActorCollectionEntry, "Actor Collection", Base)
@@ -74,11 +76,20 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 			return;
 		}
 
-		FVector Origin;
-		FVector Extents;
-
-		// Compute the bounds
-		TempActor->GetActorBounds(bOnlyCollidingComponents, Origin, Extents, bIncludeFromChildActors);
+		// Compute bounds via evaluator or fallback
+		const UPCGExActorCollection* ActorCollection = CastChecked<UPCGExActorCollection>(OwningCollection);
+		if (ActorCollection->BoundsEvaluator)
+		{
+			const FBox WorldBounds = ActorCollection->BoundsEvaluator->EvaluateActorBounds(
+				TempActor, const_cast<UPCGExActorCollection*>(ActorCollection), InInternalIndex);
+			Staging.Bounds = WorldBounds.IsValid ? WorldBounds : FBox(ForceInit);
+		}
+		else
+		{
+			FVector Origin, Extents;
+			TempActor->GetActorBounds(false, Origin, Extents);
+			Staging.Bounds = FBox(Origin - Extents, Origin + Extents);
+		}
 
 		// Inspect for PCG components
 		TInlineComponentArray<UPCGComponent*, 1> PCGComps;
@@ -95,8 +106,6 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 		// Destroy the temporary actor
 		TempActor->Destroy();
 
-		Staging.Bounds = FBox(Origin - Extents, Origin + Extents);
-
 #else
 		Staging.Bounds = FBox(ForceInit);
 		bHasPCGComponent = false;
@@ -104,6 +113,57 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 		UE_LOG(LogPCGEx, Error, TEXT("UpdateStaging called in non-editor context. This is not supported for Actor Collections."));
 #endif
 	}
+
+#if WITH_EDITOR
+	// Delta capture from a placed actor in a level
+	if (DeltaSourceLevel.ToSoftObjectPath().IsValid() && DeltaSourceActorName != NAME_None)
+	{
+		TSharedPtr<FStreamableHandle> LevelHandle = PCGExHelpers::LoadBlocking_AnyThread(DeltaSourceLevel.ToSoftObjectPath());
+
+		if (const UWorld* World = DeltaSourceLevel.Get())
+		{
+			AActor* FoundActor = nullptr;
+			if (World->PersistentLevel)
+			{
+				for (AActor* LevelActor : World->PersistentLevel->Actors)
+				{
+					if (LevelActor && LevelActor->GetFName() == DeltaSourceActorName)
+					{
+						FoundActor = LevelActor;
+						break;
+					}
+				}
+			}
+
+			if (FoundActor)
+			{
+				if (Actor.Get() && FoundActor->IsA(Actor.Get()))
+				{
+					SerializedPropertyDelta = PCGExActorDelta::SerializeActorDelta(FoundActor);
+				}
+				else if (!Actor.ToSoftObjectPath().IsValid())
+				{
+					// Auto-populate Actor class from the found actor
+					Actor = TSoftClassPtr<AActor>(FSoftClassPath(FoundActor->GetClass()));
+					Staging.Path = Actor.ToSoftObjectPath();
+					SerializedPropertyDelta = PCGExActorDelta::SerializeActorDelta(FoundActor);
+				}
+				else
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("Delta source actor class mismatch — expected '%s', found '%s'"),
+						*Actor.ToSoftObjectPath().ToString(), *FSoftClassPath(FoundActor->GetClass()).ToString());
+				}
+			}
+			else
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("Delta source actor '%s' not found in level '%s'"),
+					*DeltaSourceActorName.ToString(), *DeltaSourceLevel.ToSoftObjectPath().ToString());
+			}
+		}
+
+		PCGExHelpers::SafeReleaseHandle(LevelHandle);
+	}
+#endif
 
 	FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
 	PCGExHelpers::SafeReleaseHandle(Handle);
@@ -129,12 +189,19 @@ void FPCGExActorCollectionEntry::EDITOR_Sanitize()
 			bHasPCGComponent = false;
 			CachedPCGGraph = nullptr;
 		}
+
+		// Clear stale delta if source level reference was removed
+		if (!DeltaSourceLevel.ToSoftObjectPath().IsValid() || DeltaSourceActorName == NAME_None)
+		{
+			SerializedPropertyDelta.Empty();
+		}
 	}
 	else
 	{
 		InternalSubCollection = SubCollection;
 		bHasPCGComponent = false;
 		CachedPCGGraph = nullptr;
+		SerializedPropertyDelta.Empty();
 	}
 }
 #endif

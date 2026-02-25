@@ -17,17 +17,17 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
 
-#if WITH_EDITOR
-#include "Engine/LevelScriptActor.h"
-#include "Engine/Brush.h"
-#include "GameFramework/Info.h"
-#endif
-
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 
 #include "Helpers/PCGExActorPropertyDelta.h"
+
+UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter()
+{
+	ContentFilter = CreateDefaultSubobject<UPCGExDefaultActorContentFilter>(TEXT("ContentFilter"));
+	BoundsEvaluator = CreateDefaultSubobject<UPCGExDefaultBoundsEvaluator>(TEXT("BoundsEvaluator"));
+}
 
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, UStaticMeshComponent*& OutMeshComponent) const
 {
@@ -91,8 +91,28 @@ namespace PCGExDefaultLevelDataExporterInternal
 		Meta->AddDelayedEntries(DelayedEntries);
 	}
 
+	static void WorldBoundsToLocal(const FBox& WorldBounds, const FTransform& ActorTransform, FVector& OutBoundsMin, FVector& OutBoundsMax)
+	{
+		if (WorldBounds.IsValid)
+		{
+			const FTransform InvTransform = ActorTransform.Inverse();
+			const FVector LocalMin = InvTransform.TransformPosition(WorldBounds.Min);
+			const FVector LocalMax = InvTransform.TransformPosition(WorldBounds.Max);
+
+			// Re-min/max after transform (rotation can swap axes)
+			OutBoundsMin = LocalMin.ComponentMin(LocalMax);
+			OutBoundsMax = LocalMin.ComponentMax(LocalMax);
+		}
+		else
+		{
+			OutBoundsMin = FVector::ZeroVector;
+			OutBoundsMax = FVector::ZeroVector;
+		}
+	}
+
 	static void WriteActorTransformAndBounds(
 		AActor* Actor, int32 Index,
+		const UPCGExBoundsEvaluator* Evaluator,
 		TPCGValueRange<FTransform>& Transforms,
 		TPCGValueRange<FVector>& BoundsMin,
 		TPCGValueRange<FVector>& BoundsMax)
@@ -100,14 +120,8 @@ namespace PCGExDefaultLevelDataExporterInternal
 		const FTransform ActorTransform = Actor->GetActorTransform();
 		Transforms[Index] = ActorTransform;
 
-		FVector Origin, BoxExtent;
-		Actor->GetActorBounds(false, Origin, BoxExtent);
-
-		const FTransform InvTransform = ActorTransform.Inverse();
-		const FVector LocalCenter = InvTransform.TransformPosition(Origin);
-
-		BoundsMin[Index] = LocalCenter - BoxExtent;
-		BoundsMax[Index] = LocalCenter + BoxExtent;
+		const FBox WorldBounds = Evaluator ? Evaluator->EvaluateActorBounds(Actor, nullptr, -1) : FBox(ForceInit);
+		WorldBoundsToLocal(WorldBounds, ActorTransform, BoundsMin[Index], BoundsMax[Index]);
 	}
 
 	struct FMeshPoint
@@ -214,59 +228,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 	TArray<FClassifiedActor> ClassifiedActors;
 	for (AActor* Actor : PersistentLevel->Actors)
 	{
-		if (!Actor) { continue; }
-		if (Actor->IsHidden()) { continue; }
-		if (Actor->bIsEditorOnlyActor) { continue; }
-
-#if WITH_EDITOR
-		if (Actor->IsA<ALevelScriptActor>()) { continue; }
-		if (Actor->IsA<AInfo>()) { continue; }
-		if (Actor->IsA<ABrush>()) { continue; }
-#endif
-
-		// Tag include filter
-		if (IncludeTags.Num() > 0)
-		{
-			bool bHasIncludeTag = false;
-			for (const FName& Tag : IncludeTags)
-			{
-				if (Actor->Tags.Contains(Tag)) { bHasIncludeTag = true; break; }
-			}
-			if (!bHasIncludeTag) { continue; }
-		}
-
-		// Tag exclude filter
-		if (ExcludeTags.Num() > 0)
-		{
-			bool bHasExcludeTag = false;
-			for (const FName& Tag : ExcludeTags)
-			{
-				if (Actor->Tags.Contains(Tag)) { bHasExcludeTag = true; break; }
-			}
-			if (bHasExcludeTag) { continue; }
-		}
-
-		// Class include filter
-		if (IncludeClasses.Num() > 0)
-		{
-			bool bMatchesClass = false;
-			for (const TSoftClassPtr<AActor>& ClassPtr : IncludeClasses)
-			{
-				if (UClass* C = ClassPtr.Get()) { if (Actor->IsA(C)) { bMatchesClass = true; break; } }
-			}
-			if (!bMatchesClass) { continue; }
-		}
-
-		// Class exclude filter
-		if (ExcludeClasses.Num() > 0)
-		{
-			bool bExcluded = false;
-			for (const TSoftClassPtr<AActor>& ClassPtr : ExcludeClasses)
-			{
-				if (UClass* C = ClassPtr.Get()) { if (Actor->IsA(C)) { bExcluded = true; break; } }
-			}
-			if (bExcluded) { continue; }
-		}
+		if (!UPCGExActorContentFilter::StaticPassesFilter(ContentFilter, Actor)) { continue; }
 
 		FClassifiedActor Classified;
 		Classified.Actor = Actor;
@@ -350,12 +312,8 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 		const FTransform ActorTransform = CA.Actor->GetActorTransform();
 		Point.Transform = ActorTransform;
 
-		FVector Origin, BoxExtent;
-		CA.Actor->GetActorBounds(false, Origin, BoxExtent);
-		const FTransform InvTransform = ActorTransform.Inverse();
-		const FVector LocalCenter = InvTransform.TransformPosition(Origin);
-		Point.BoundsMin = LocalCenter - BoxExtent;
-		Point.BoundsMax = LocalCenter + BoxExtent;
+		const FBox WorldBounds = BoundsEvaluator ? BoundsEvaluator->EvaluateActorBounds(CA.Actor, nullptr, -1) : FBox(ForceInit);
+		WorldBoundsToLocal(WorldBounds, ActorTransform, Point.BoundsMin, Point.BoundsMax);
 
 		if (bCaptureMaterialOverrides)
 		{
@@ -463,7 +421,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 
 		for (int32 i = 0; i < ActorActors.Num(); i++)
 		{
-			WriteActorTransformAndBounds(ActorActors[i].Actor, i, Transforms, BMin, BMax);
+			WriteActorTransformAndBounds(ActorActors[i].Actor, i, BoundsEvaluator, Transforms, BMin, BMax);
 		}
 
 		InitMetadata(ActorPointData, ActorActors.Num());

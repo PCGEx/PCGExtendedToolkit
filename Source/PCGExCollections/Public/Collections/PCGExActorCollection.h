@@ -8,6 +8,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExBoundsEvaluator.h"
 #include "PCGGraph.h"
 
 #include "PCGExActorCollection.generated.h"
@@ -39,14 +40,6 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
 	TObjectPtr<UPCGExActorCollection> SubCollection;
 
-	/** If enabled, the cached bounds will only account for collidable components on the actor. */
-	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
-	bool bOnlyCollidingComponents = false;
-
-	/** If enabled, the cached bounds will also account for child actors. */
-	UPROPERTY(EditAnywhere, Category = "Settings|Bounds", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
-	bool bIncludeFromChildActors = true;
-
 	/** Cached: whether the actor CDO has any UPCGComponent. */
 	UPROPERTY()
 	bool bHasPCGComponent = false;
@@ -56,9 +49,19 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	TSoftObjectPtr<UPCGGraphInterface> CachedPCGGraph;
 
 	/** Serialized property delta from CDO (UE tagged property format).
-	 *  Empty = CDO-identical. Populated by level data exporter when bCapturePropertyDeltas is enabled. */
+	 *  Empty = CDO-identical. Populated by level data exporter or delta source authoring. */
 	UPROPERTY()
 	TArray<uint8> SerializedPropertyDelta;
+
+	/** Optional: reference a specific level to capture property deltas from a placed actor.
+	 *  The actor's class must match the Actor class ref. During UpdateStaging,
+	 *  the property delta is computed from that instance vs its CDO. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	TSoftObjectPtr<UWorld> DeltaSourceLevel;
+
+	/** Name of the actor within the level to capture delta from. */
+	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection && DeltaSourceLevel != nullptr", EditConditionHides))
+	FName DeltaSourceActorName;
 
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const override;
 
@@ -90,6 +93,10 @@ public:
 	{
 		return PCGExAssetCollection::TypeIds::Actor;
 	}
+
+	/** Bounds evaluator for bounds computation. If null, basic GetActorBounds fallback is used. */
+	UPROPERTY(EditAnywhere, Instanced, Category = "Bounds")
+	TObjectPtr<UPCGExBoundsEvaluator> BoundsEvaluator;
 
 	// Entries Array
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
