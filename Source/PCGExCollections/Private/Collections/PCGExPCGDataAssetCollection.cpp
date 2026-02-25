@@ -120,7 +120,12 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 			UClass* ExporterClass = Settings.DefaultLevelExporterClass
 				? Settings.DefaultLevelExporterClass.Get()
 				: UPCGExDefaultLevelDataExporter::StaticClass();
+#if PCGEX_ENGINE_VERSION < 507
+			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackage(), ExporterClass);
+#elif 
 			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackageAsObject(), ExporterClass);
+#endif
+			
 			Exporter = FallbackExporter;
 		}
 
