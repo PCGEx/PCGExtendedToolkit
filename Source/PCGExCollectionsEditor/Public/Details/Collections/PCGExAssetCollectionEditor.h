@@ -86,6 +86,7 @@ protected:
 	FReply ToggleFilter(const PCGExAssetCollectionEditor::FilterInfos Filter) const;
 
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
+	void CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	virtual void BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox);

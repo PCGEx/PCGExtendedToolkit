@@ -1,22 +1,17 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/PCGExMeshCollectionEditor.h"
+#include "Details/Collections/PCGExCollectionEditorMacros.h"
 
 #include "ToolMenus.h"
 #include "Widgets/Input/SButton.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 
-#include "PropertyEditorModule.h"
-#include "ToolMenus.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Collections/PCGExMeshCollection.h"
-#include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Layout/SBox.h"
-#include "Framework/MultiBox/MultiBoxBuilder.h"
-#include "Modules/ModuleManager.h"
 #include "Widgets/Images/SImage.h"
-#include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/SBoxPanel.h"
 
@@ -50,25 +45,6 @@ void FPCGExMeshCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolba
 	FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(ToolbarBuilder);
 
 #define PCGEX_CURRENT_COLLECTION if (UPCGExMeshCollection* Collection = Cast<UPCGExMeshCollection>(EditedCollection.Get()))
-
-#define PCGEX_COMBOBOX_INTERPUNCT \
-SNew(STextBlock)\
-.Text(FText::FromString(TEXT("\u00B7\u00B7\u00B7")))\
-.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
-
-#define PCGEX_COMBOBOX_BUTTON_CONTENT(_BRUSH) \
-SNew(SHorizontalBox)\
-+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)\
-[\
-	SNew(SBox).WidthOverride(22).HeightOverride(22).HAlign(HAlign_Center).VAlign(VAlign_Center)\
-	[\
-		SNew(SImage).Image(FAppStyle::Get().GetBrush(_BRUSH))\
-	]\
-]\
-+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 0, 0)\
-[\
-	PCGEX_COMBOBOX_INTERPUNCT\
-]
 
 #pragma region Collision
 
@@ -186,45 +162,5 @@ SNew(SHorizontalBox)\
 
 #pragma endregion
 
-#undef PCGEX_COMBOBOX_INTERPUNCT
-#undef PCGEX_COMBOBOX_BUTTON_CONTENT
 #undef PCGEX_CURRENT_COLLECTION
-}
-
-void FPCGExMeshCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
-{
-	// Default handling (will append default collection settings tab)
-	FPCGExAssetCollectionEditor::CreateTabs(OutTabs);
-
-	// Property editor module
-	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
-
-	// Details view arguments
-	FDetailsViewArgs DetailsArgs;
-	DetailsArgs.bUpdatesFromSelection = false;
-	DetailsArgs.bLockable = false;
-	DetailsArgs.bAllowSearch = true;
-	DetailsArgs.bHideSelectionTip = true;
-	DetailsArgs.NotifyHook = nullptr;
-	DetailsArgs.bAllowMultipleTopLevelObjects = false;
-
-	// Create the details view
-	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
-	DetailsView->SetIsPropertyVisibleDelegate(
-		FIsPropertyVisible::CreateStatic(&FPCGExAssetCollectionEditor::IsPropertyUnderEntries));
-
-	// Set the asset to display
-	DetailsView->SetObject(EditedCollection.Get());
-	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Assets"), DetailsView);
-	Infos.Icon = TEXT("Entries");
-
-	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
-	Infos.Header = HeaderToolbarBuilder.MakeWidget();
-
-	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetFooterToolbar(FooterToolbarBuilder);
-	Infos.Footer = FooterToolbarBuilder.MakeWidget();
 }

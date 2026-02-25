@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/PCGExAssetCollectionEditor.h"
+#include "Details/Collections/PCGExCollectionEditorMacros.h"
 
 #include "PCGExCollectionsEditorSettings.h"
 #include "ToolMenus.h"
@@ -9,22 +10,16 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 
 #include "PropertyEditorModule.h"
-#include "ToolMenus.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "PCGExProperty.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Layout/SBox.h"
-#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Modules/ModuleManager.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/SBoxPanel.h"
-
-namespace PCGExCollectionEditor
-{
-}
 
 FPCGExAssetCollectionEditor::FPCGExAssetCollectionEditor()
 {
@@ -220,6 +215,43 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 
 	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Collection"), DetailsView, FName("Collection Settings"));
 	Infos.Icon = TEXT("Settings");
+
+	CreateEntriesTab(OutTabs);
+}
+
+void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
+{
+	// Property editor module
+	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+
+	// Details view arguments
+	FDetailsViewArgs DetailsArgs;
+	DetailsArgs.bUpdatesFromSelection = false;
+	DetailsArgs.bLockable = false;
+	DetailsArgs.bAllowSearch = true;
+	DetailsArgs.bHideSelectionTip = true;
+	DetailsArgs.NotifyHook = nullptr;
+	DetailsArgs.bAllowMultipleTopLevelObjects = false;
+
+	// Create the details view
+	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
+	DetailsView->SetIsPropertyVisibleDelegate(
+		FIsPropertyVisible::CreateStatic(&FPCGExAssetCollectionEditor::IsPropertyUnderEntries));
+
+	// Set the asset to display
+	DetailsView->SetObject(EditedCollection.Get());
+	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Assets"), DetailsView);
+	Infos.Icon = TEXT("Entries");
+
+	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
+	Infos.Header = HeaderToolbarBuilder.MakeWidget();
+
+	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetFooterToolbar(FooterToolbarBuilder);
+	Infos.Footer = FooterToolbarBuilder.MakeWidget();
 }
 
 #define PCGEX_SLATE_ICON(_NAME) FSlateIcon(FAppStyle::GetAppStyleSetName(), "PCGEx.ActionIcon."#_NAME)
@@ -230,53 +262,16 @@ SNew(SBox).VAlign(VAlign_Center).HAlign(HAlign_Center).Padding(FMargin(8, 0))[\
 SNew(STextBlock).Text(INVTEXT(_LABEL)).Font(FCoreStyle::GetDefaultFontStyle("Regular", 8)).ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.8)))\
 .Justification(ETextJustify::Center)]);
 
-#define PCGEX_COMBOBOX_INTERPUNCT \
-SNew(STextBlock)\
-.Text(FText::FromString(TEXT("\u00B7\u00B7\u00B7")))\
-.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
-
-#define PCGEX_COMBOBOX_BUTTON_CONTENT(_BRUSH) \
-SNew(SHorizontalBox)\
-+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)\
-[\
-	SNew(SBox).WidthOverride(22).HeightOverride(22).HAlign(HAlign_Center).VAlign(VAlign_Center)\
-	[\
-		SNew(SImage).Image(FAppStyle::Get().GetBrush(_BRUSH))\
-	]\
-]\
-+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 0, 0)\
-[\
-	PCGEX_COMBOBOX_INTERPUNCT\
-]
-
-#define PCGEX_COMBOBOX_BUTTON_CONTENT_TEXT(_TEXT, _FONT_SIZE) \
-SNew(SHorizontalBox)\
-+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)\
-[\
-	SNew(SBox).WidthOverride(22).HeightOverride(22).HAlign(HAlign_Center).VAlign(VAlign_Center)\
-	[\
-		SNew(STextBlock)\
-		.Text(FText::FromString(_TEXT))\
-		.Font(FCoreStyle::GetDefaultFontStyle("Bold", _FONT_SIZE))\
-	]\
-]\
-+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 0, 0)\
-[\
-	PCGEX_COMBOBOX_INTERPUNCT\
-]
-
 void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder)
 {
 #pragma region Staging
 
 	ToolbarBuilder.BeginSection("StagingSection");
 	{
-		//PCGEX_SECTION_HEADER("Rebuild\nStaging")
-
 		ToolbarBuilder.AddToolBarButton(
 			FUIAction(
 				FExecuteAction::CreateLambda(
-					[&]()
+					[this]()
 					{
 						PCGEX_CURRENT_COLLECTION { Collection->EDITOR_RebuildStagingData(); }
 					})
@@ -290,13 +285,13 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 		ToolbarBuilder.AddToolBarButton(
 			FUIAction(
 				FExecuteAction::CreateLambda(
-					[&]()
+					[this]()
 					{
 						PCGEX_CURRENT_COLLECTION { Collection->EDITOR_RebuildStagingData_Recursive(); }
 					})
 			),
 			NAME_None,
-			FText::GetEmpty(), //FText::FromString(TEXT("Rebuild (Recursive)")),
+			FText::GetEmpty(),
 			INVTEXT("Rebuild staging recursively (this and all subcollections)."),
 			PCGEX_SLATE_ICON(RebuildStagingRecursive)
 		);
@@ -304,13 +299,13 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 		ToolbarBuilder.AddToolBarButton(
 			FUIAction(
 				FExecuteAction::CreateLambda(
-					[&]()
+					[this]()
 					{
 						PCGEX_CURRENT_COLLECTION { Collection->EDITOR_RebuildStagingData_Project(); }
 					})
 			),
 			NAME_None,
-			FText::GetEmpty(), //FText::FromString(TEXT("Rebuild All (Project)")),
+			FText::GetEmpty(),
 			INVTEXT("Rebuild staging for the entire project. (Will go through all collection assets)"),
 			PCGEX_SLATE_ICON(RebuildStagingProject)
 		);
@@ -526,40 +521,6 @@ void FPCGExAssetCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 
 void FPCGExAssetCollectionEditor::BuildAssetFooterToolbar(FToolBarBuilder& ToolbarBuilder)
 {
-#pragma region Expand/Collapse
-	/*
-		ToolbarBuilder.BeginSection("FilterSection");
-		{
-			PCGEX_SECTION_HEADER("")
-	
-			TSharedRef<SUniformGridPanel> Grid =
-				SNew(SUniformGridPanel)
-				.SlotPadding(FMargin(2, 2));
-	
-			// Show all
-			Grid->AddSlot(0, 0)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("▼")))
-				.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-				.OnClicked_Raw(this, &FPCGExAssetCollectionEditor::ExpandAll)
-				.ToolTipText(FText::FromString(TEXT("Expand all properties.")))
-			];
-	
-			// Show all
-			Grid->AddSlot(1, 0)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("▶")))
-				.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-				.OnClicked_Raw(this, &FPCGExAssetCollectionEditor::CollapseAll)
-				.ToolTipText(FText::FromString(TEXT("Collapse all properties.")))
-			];
-		}
-		ToolbarBuilder.EndSection();
-	*/
-#pragma endregion
-
 #pragma region Filters
 
 	ToolbarBuilder.BeginSection("FilterSection");
