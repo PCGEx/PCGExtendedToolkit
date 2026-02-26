@@ -4,11 +4,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/Object.h"
 #include "PCGExSettingsCacheBody.h"
-
-class UPCGExLevelDataExporter;
-class UPCGExActorContentFilter;
-class UPCGExBoundsEvaluator;
 
 #define PCGEX_COLLECTIONS_SETTINGS PCGEX_SETTINGS_INST(Collections)
 
@@ -18,7 +15,7 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionsSettingsCache
 	bool bDisableCollisionByDefault = true;
 
 	/** Resolved default classes (populated from FSoftClassPath during push). */
-	TSubclassOf<UPCGExLevelDataExporter> DefaultLevelExporterClass;
-	TSubclassOf<UPCGExActorContentFilter> DefaultContentFilterClass;
-	TSubclassOf<UPCGExBoundsEvaluator> DefaultBoundsEvaluatorClass;
+	TSubclassOf<UObject> DefaultLevelExporterClass;
+	TSubclassOf<UObject> DefaultContentFilterClass;
+	TSubclassOf<UObject> DefaultBoundsEvaluatorClass;
 };

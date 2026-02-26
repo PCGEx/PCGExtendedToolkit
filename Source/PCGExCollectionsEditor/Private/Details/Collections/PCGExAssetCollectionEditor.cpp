@@ -4,14 +4,18 @@
 #include "Details/Collections/PCGExAssetCollectionEditor.h"
 #include "Details/Collections/PCGExCollectionEditorMacros.h"
 
+#include "AssetThumbnail.h"
 #include "PCGExCollectionsEditorSettings.h"
 #include "ToolMenus.h"
 #include "Widgets/Input/SButton.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 
+#include "PropertyCustomizationHelpers.h"
 #include "PropertyEditorModule.h"
+#include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/SPCGExCollectionGridView.h"
 #include "PCGExProperty.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Layout/SBox.h"
@@ -99,12 +103,16 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 		->SetOrientation(Orient_Horizontal);
 
 	const TSharedRef<FTabManager::FLayout> Layout =
-		FTabManager::NewLayout("PCGExAssetCollectionEditor_Layout_v4")
+		FTabManager::NewLayout("PCGExAssetCollectionEditor_Layout_v6")
 		->AddArea(Area);
 
 	TSharedRef<FTabManager::FStack> MainStack = FTabManager::NewStack();
-	// Add tabs in reverse order so asset comes first
-	for (int i = Tabs.Num() - 1; i >= 0; i--) { MainStack->AddTab(Tabs[i].Id, ETabState::OpenedTab); }
+	// Add tabs in reverse order so grid comes first; list view closed by default
+	for (int i = Tabs.Num() - 1; i >= 0; i--)
+	{
+		const ETabState::Type State = Tabs[i].Id == FName("Assets") ? ETabState::ClosedTab : ETabState::OpenedTab;
+		MainStack->AddTab(Tabs[i].Id, State);
+	}
 	Area->Split(MainStack);
 
 	if (!Tabs.IsEmpty()) { MainStack->SetForegroundTab(Tabs.Last().Id); }
@@ -217,6 +225,7 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 	Infos.Icon = TEXT("Settings");
 
 	CreateEntriesTab(OutTabs);
+	CreateGridTab(OutTabs);
 }
 
 void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
@@ -252,6 +261,94 @@ void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEd
 	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
 	BuildAssetFooterToolbar(FooterToolbarBuilder);
 	Infos.Footer = FooterToolbarBuilder.MakeWidget();
+}
+
+void FPCGExAssetCollectionEditor::CreateGridTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
+{
+	if (!ThumbnailPool.IsValid())
+	{
+		ThumbnailPool = MakeShared<FAssetThumbnailPool>(128);
+	}
+
+	SAssignNew(GridView, SPCGExCollectionGridView)
+		.Collection(EditedCollection.Get())
+		.ThumbnailPool(ThumbnailPool)
+		.OnGetPickerWidget(FOnGetTilePickerWidget::CreateSP(this, &FPCGExAssetCollectionEditor::BuildTilePickerWidget))
+		.TileSize(128.f);
+
+	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Grid"), GridView, FName("Grid View"));
+	Infos.Icon = TEXT("Entries");
+	Infos.bIsDetailsView = false;
+
+	// Reuse the same header toolbar as the Assets tab
+	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
+	Infos.Header = HeaderToolbarBuilder.MakeWidget();
+
+	// Reuse the same footer toolbar (filter buttons)
+	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetFooterToolbar(FooterToolbarBuilder);
+	Infos.Footer = FooterToolbarBuilder.MakeWidget();
+}
+
+TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle)
+{
+	// Get SubCollection toggle to control visibility
+	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = EntryHandle->GetChildHandle(FName("bIsSubCollection"));
+	TSharedPtr<IPropertyHandle> SubCollectionHandle = EntryHandle->GetChildHandle(FName("SubCollection"));
+
+	const FName PickerPropName = GetTilePickerPropertyName();
+	TSharedPtr<IPropertyHandle> AssetHandle = PickerPropName.IsNone() ? nullptr : EntryHandle->GetChildHandle(PickerPropName);
+
+	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
+
+	// SubCollection picker (visible when bIsSubCollection is true)
+	if (SubCollectionHandle.IsValid())
+	{
+		Box->AddSlot()
+			.AutoHeight()
+			[
+				SNew(SBox)
+				.Visibility_Lambda([IsSubCollectionHandle]()
+				{
+					bool bSub = false;
+					if (IsSubCollectionHandle.IsValid()) { IsSubCollectionHandle->GetValue(bSub); }
+					return bSub ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				[
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(SubCollectionHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty()) ? CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
+				]
+			];
+	}
+
+	// Asset picker (visible when bIsSubCollection is false)
+	if (AssetHandle.IsValid())
+	{
+		Box->AddSlot()
+			.AutoHeight()
+			[
+				SNew(SBox)
+				.Visibility_Lambda([IsSubCollectionHandle]()
+				{
+					bool bSub = false;
+					if (IsSubCollectionHandle.IsValid()) { IsSubCollectionHandle->GetValue(bSub); }
+					return bSub ? EVisibility::Collapsed : EVisibility::Visible;
+				})
+				[
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(AssetHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(AssetHandle->GetProperty()) ? CastField<FObjectPropertyBase>(AssetHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
+				]
+			];
+	}
+
+	return Box;
 }
 
 #define PCGEX_SLATE_ICON(_NAME) FSlateIcon(FAppStyle::GetAppStyleSetName(), "PCGEx.ActionIcon."#_NAME)
@@ -663,9 +760,16 @@ void FPCGExAssetCollectionEditor::ForceRefreshTabs()
 {
 	for (const PCGExAssetCollectionEditor::TabInfos& Tab : Tabs)
 	{
+		if (!Tab.bIsDetailsView) { continue; }
 		if (TSharedPtr<IDetailsView> DetailsView = StaticCastSharedPtr<IDetailsView>(Tab.WeakView.Pin()))
 		{
 			DetailsView->ForceRefresh();
 		}
+	}
+
+	// Refresh grid view detail panel (responds to filter changes)
+	if (GridView.IsValid())
+	{
+		GridView->RefreshDetailPanel();
 	}
 }

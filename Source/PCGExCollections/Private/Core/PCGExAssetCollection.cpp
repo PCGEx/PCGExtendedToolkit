@@ -15,6 +15,7 @@
 #if WITH_EDITOR
 #include "Editor.h"
 #include "PropertyEditorModule.h"
+#include "ScopedTransaction.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #endif
@@ -919,6 +920,7 @@ void UPCGExAssetCollection::EDITOR_SanitizeAndRebuildStagingData(bool bRecursive
 
 void UPCGExAssetCollection::EDITOR_AddBrowserSelectionTyped(const TArray<FAssetData>& InAssetData)
 {
+	FScopedTransaction Transaction(INVTEXT("Add Browser Selection to Collection"));
 	Modify(true);
 	EDITOR_AddBrowserSelectionInternal(InAssetData);
 	(void)MarkPackageDirty();

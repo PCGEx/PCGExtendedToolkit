@@ -18,9 +18,9 @@ bool UPCGExActorContentFilter::IsInfrastructureActor(AActor* Actor)
 	if (!Actor) { return true; }
 	if (Actor->IsHidden()) { return true; }
 	if (Actor->bIsEditorOnlyActor) { return true; }
-	if (Actor->bIsMainWorldOnly) { return true; }
-
+	
 #if WITH_EDITOR
+	if (Actor->bIsMainWorldOnly) { return true; }
 	if (Actor->IsA<ALevelScriptActor>()) { return true; }
 	if (Actor->IsA<AInfo>()) { return true; }
 	if (Actor->IsA<ABrush>()) { return true; }
