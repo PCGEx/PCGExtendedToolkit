@@ -33,6 +33,7 @@ namespace PCGExAssetCollectionEditor
 		FName Label = NAME_None;
 		ETabRole Role = PanelTab;
 		FString Icon = TEXT("");
+		bool bIsDetailsView = true;
 	};
 
 	struct FilterInfos

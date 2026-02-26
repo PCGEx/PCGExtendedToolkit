@@ -274,6 +274,7 @@ void FPCGExAssetCollectionEditor::CreateGridTab(TArray<PCGExAssetCollectionEdito
 
 	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Grid"), GridView, FName("Grid View"));
 	Infos.Icon = TEXT("Entries");
+	Infos.bIsDetailsView = false;
 
 	// Reuse the same header toolbar as the Assets tab
 	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
@@ -755,6 +756,7 @@ void FPCGExAssetCollectionEditor::ForceRefreshTabs()
 {
 	for (const PCGExAssetCollectionEditor::TabInfos& Tab : Tabs)
 	{
+		if (!Tab.bIsDetailsView) { continue; }
 		if (TSharedPtr<IDetailsView> DetailsView = StaticCastSharedPtr<IDetailsView>(Tab.WeakView.Pin()))
 		{
 			DetailsView->ForceRefresh();
