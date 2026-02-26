@@ -6,6 +6,7 @@
 #include "AssetThumbnail.h"
 #include "IDetailTreeNode.h"
 #include "IPropertyRowGenerator.h"
+#include "IDetailsView.h"
 #include "IStructureDetailsView.h"
 #include "PropertyEditorModule.h"
 #include "PropertyHandle.h"
@@ -73,6 +74,19 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 	TSharedPtr<FStructOnScope> NullStruct;
 	StructDetailView = PropertyModule.CreateStructureDetailView(DetailsArgs, StructArgs, NullStruct);
 
+	// Enforce VisibleAnywhere / read-only property flags.
+	// IStructureDetailsView on a detached FStructOnScope doesn't respect these
+	// flags automatically — we must check CPF_Edit ourselves.
+	if (IDetailsView* InnerDetailsView = StructDetailView->GetDetailsView())
+	{
+		InnerDetailsView->SetIsPropertyReadOnlyDelegate(
+			FIsPropertyReadOnly::CreateLambda([](const FPropertyAndParent& PropertyAndParent) -> bool
+			{
+				// VisibleAnywhere sets CPF_Edit | CPF_EditConst — check CPF_EditConst for read-only
+				return PropertyAndParent.Property.HasAnyPropertyFlags(CPF_EditConst);
+			}));
+	}
+
 	// Wire up property change callback to sync edits back to the collection
 	StructDetailView->GetOnFinishedChangingPropertiesDelegate().AddSP(
 		this, &SPCGExCollectionGridView::OnDetailPropertyChanged);
@@ -80,6 +94,11 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 	// Listen for undo/redo to fully refresh the grid when the collection is restored
 	FCoreUObjectDelegates::OnObjectTransacted.AddSP(
 		this, &SPCGExCollectionGridView::OnObjectTransacted);
+
+	// Listen for external collection modifications (toolbar "Add" buttons, staging rebuild, etc.)
+	// Deferred to next tick because Modify() fires BEFORE changes are applied.
+	FCoreUObjectDelegates::OnObjectModified.AddSP(
+		this, &SPCGExCollectionGridView::OnObjectModified);
 
 	const float TileWidgetSize = TileSize + 24.f;
 
@@ -436,6 +455,54 @@ void SPCGExCollectionGridView::OnObjectTransacted(UObject* Object, const FTransa
 		InitRowGenerator();
 		RefreshGrid();
 	}
+}
+
+void SPCGExCollectionGridView::OnObjectModified(UObject* Object)
+{
+	if (Object != Collection.Get()) { return; }
+	if (bIsSyncing || bIsBatchOperation) { return; }
+	if (bPendingExternalRefresh) { return; } // Already scheduled
+
+	// Defer to next tick — Modify() fires BEFORE changes are applied,
+	// so the entry count / data hasn't been updated yet.
+	bPendingExternalRefresh = true;
+	RegisterActiveTimer(0.f, FWidgetActiveTimerDelegate::CreateLambda(
+		[this](double, float) -> EActiveTimerReturnType
+		{
+			bPendingExternalRefresh = false;
+
+			if (bIsSyncing || bIsBatchOperation) { return EActiveTimerReturnType::Stop; }
+
+			const int32 CurrentCount = Collection.IsValid() ? Collection->NumEntries() : 0;
+			if (CurrentCount != EntryItems.Num())
+			{
+				// Entry count changed externally — rebuild staging for new entries
+				// (populates Staging.Path needed for thumbnails), then refresh tiles.
+				if (UPCGExAssetCollection* Coll = Collection.Get())
+				{
+					bIsBatchOperation = true; // Suppress re-trigger from Modify() inside rebuild
+					Coll->EDITOR_RebuildStagingData();
+					bIsBatchOperation = false;
+				}
+				InitRowGenerator();
+				RefreshGrid();
+			}
+			else
+			{
+				// Data changed but count same (staging rebuild, sort, etc.)
+				UpdateDetailForSelection();
+
+				// Refresh tile thumbnails in case staging paths changed
+				for (auto& Pair : ActiveTiles)
+				{
+					if (TSharedPtr<SPCGExCollectionGridTile> Tile = Pair.Value.Pin())
+					{
+						Tile->RefreshThumbnail();
+					}
+				}
+			}
+			return EActiveTimerReturnType::Stop;
+		}));
 }
 
 void SPCGExCollectionGridView::InitRowGenerator()

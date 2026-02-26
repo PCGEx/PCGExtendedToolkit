@@ -98,6 +98,11 @@ private:
 	// Undo/redo support
 	void OnObjectTransacted(UObject* Object, const FTransactionObjectEvent& Event);
 
+	// External modification detection (toolbar buttons, etc.)
+	// Deferred to next tick because Modify() fires BEFORE changes are applied.
+	void OnObjectModified(UObject* Object);
+	bool bPendingExternalRefresh = false;
+
 	// Property row generator setup (for entry operations only)
 	void InitRowGenerator();
 };
