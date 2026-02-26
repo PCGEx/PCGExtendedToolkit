@@ -17,6 +17,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExAssetCollectionEditor.h"
 #include "Details/Collections/SPCGExCollectionGridTile.h"
+#include "DragAndDrop/AssetDragDropOp.h"
 #include "Misc/TransactionObjectEvent.h"
 #include "Modules/ModuleManager.h"
 #include "UObject/StructOnScope.h"
@@ -108,7 +109,7 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 		.Orientation(Orient_Horizontal)
 		.PhysicalSplitterHandleSize(4.f)
 
-		// Left pane: Tile grid
+		// Left pane: Tile grid (OnDrop override on this widget handles Content Browser drops)
 		+ SSplitter::Slot()
 		.Value(0.65f)
 		[
@@ -679,6 +680,29 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 
 	RefreshGrid();
 	return FReply::Handled();
+}
+
+FReply SPCGExCollectionGridView::OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent)
+{
+	if (const TSharedPtr<FAssetDragDropOp> AssetOp = InDragDropEvent.GetOperationAs<FAssetDragDropOp>())
+	{
+		if (!AssetOp->GetAssets().IsEmpty()) { return FReply::Handled(); }
+	}
+	return FReply::Unhandled();
+}
+
+FReply SPCGExCollectionGridView::OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent)
+{
+	if (const TSharedPtr<FAssetDragDropOp> AssetOp = InDragDropEvent.GetOperationAs<FAssetDragDropOp>())
+	{
+		const TArray<FAssetData>& Assets = AssetOp->GetAssets();
+		if (UPCGExAssetCollection* Coll = Collection.Get(); Coll && !Assets.IsEmpty())
+		{
+			Coll->EDITOR_AddBrowserSelectionTyped(Assets);
+			return FReply::Handled();
+		}
+	}
+	return FReply::Unhandled();
 }
 
 #pragma endregion
