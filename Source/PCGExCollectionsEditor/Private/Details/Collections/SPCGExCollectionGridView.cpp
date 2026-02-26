@@ -350,7 +350,10 @@ void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEve
 	SyncStructToCollection(Event.MemberProperty);
 	bIsSyncing = false;
 
-	// Refresh tiles to reflect updated data (stable item identity → no tile recreation)
+	// Regenerate tiles so thumbnails pick up restaged data from PostEditChange.
+	// SyncStructToCollection writes raw memory + PostEditChange, which rebuilds staging
+	// but doesn't fire tile handle notifications — must regenerate tiles.
+	RebuildEntryItems();
 	if (TileView.IsValid())
 	{
 		TileView->RequestListRefresh();
@@ -455,15 +458,30 @@ void SPCGExCollectionGridView::InitRowGenerator()
 
 FReply SPCGExCollectionGridView::OnAddEntry()
 {
-	if (!EntriesArrayHandle.IsValid()) { return FReply::Handled(); }
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll) { return FReply::Handled(); }
 
-	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
+	FArrayProperty* ArrayProp = CastField<FArrayProperty>(
+		Coll->GetClass()->FindPropertyByName(FName("Entries")));
+	if (!ArrayProp) { return FReply::Handled(); }
 
+	// Direct array manipulation — single PostEditChange avoids per-item staging rebuild.
+	// IPropertyHandleArray::AddItem triggers PostEditChangeProperty per call, which
+	// runs EDITOR_RebuildStagingData (synchronously loading all entry assets) each time.
 	bIsBatchOperation = true;
-	ArrayHandle->AddItem();
+	{
+		FScopedTransaction Transaction(INVTEXT("Add Collection Entry"));
+		Coll->Modify();
+
+		void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+		FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+		ArrayHelper.AddValues(1);
+
+		Coll->PostEditChange();
+	}
 	bIsBatchOperation = false;
 
+	InitRowGenerator();
 	RefreshGrid();
 
 	// Select the newly added entry
@@ -478,54 +496,83 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 
 FReply SPCGExCollectionGridView::OnDuplicateSelected()
 {
-	if (!EntriesArrayHandle.IsValid()) { return FReply::Handled(); }
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll) { return FReply::Handled(); }
 
 	TArray<int32> Selected = GetSelectedIndices();
 	if (Selected.IsEmpty()) { return FReply::Handled(); }
 
-	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
+	UScriptStruct* EntryStruct = GetEntryScriptStruct();
+	FArrayProperty* ArrayProp = CastField<FArrayProperty>(
+		Coll->GetClass()->FindPropertyByName(FName("Entries")));
+	if (!EntryStruct || !ArrayProp) { return FReply::Handled(); }
 
 	bIsBatchOperation = true;
 	{
 		FScopedTransaction Transaction(INVTEXT("Duplicate Collection Entries"));
+		Coll->Modify();
+
+		void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+		FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
 
 		// Duplicate in reverse order to preserve indices
 		Selected.Sort([](int32 A, int32 B) { return A > B; });
 		for (int32 Index : Selected)
 		{
-			ArrayHandle->DuplicateItem(Index);
+			if (Index < ArrayHelper.Num())
+			{
+				const int32 NewIndex = Index + 1;
+				ArrayHelper.InsertValues(NewIndex);
+				EntryStruct->CopyScriptStruct(
+					ArrayHelper.GetRawPtr(NewIndex),
+					ArrayHelper.GetRawPtr(Index));
+			}
 		}
+
+		Coll->PostEditChange();
 	}
 	bIsBatchOperation = false;
 
+	InitRowGenerator();
 	RefreshGrid();
 	return FReply::Handled();
 }
 
 FReply SPCGExCollectionGridView::OnDeleteSelected()
 {
-	if (!EntriesArrayHandle.IsValid()) { return FReply::Handled(); }
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll) { return FReply::Handled(); }
 
 	TArray<int32> Selected = GetSelectedIndices();
 	if (Selected.IsEmpty()) { return FReply::Handled(); }
 
-	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
+	FArrayProperty* ArrayProp = CastField<FArrayProperty>(
+		Coll->GetClass()->FindPropertyByName(FName("Entries")));
+	if (!ArrayProp) { return FReply::Handled(); }
 
 	bIsBatchOperation = true;
 	{
 		FScopedTransaction Transaction(INVTEXT("Delete Collection Entries"));
+		Coll->Modify();
+
+		void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+		FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
 
 		// Delete in reverse order to preserve indices
 		Selected.Sort([](int32 A, int32 B) { return A > B; });
 		for (int32 Index : Selected)
 		{
-			ArrayHandle->DeleteItem(Index);
+			if (Index < ArrayHelper.Num())
+			{
+				ArrayHelper.RemoveValues(Index, 1);
+			}
 		}
+
+		Coll->PostEditChange();
 	}
 	bIsBatchOperation = false;
 
+	InitRowGenerator();
 	RefreshGrid();
 	return FReply::Handled();
 }
