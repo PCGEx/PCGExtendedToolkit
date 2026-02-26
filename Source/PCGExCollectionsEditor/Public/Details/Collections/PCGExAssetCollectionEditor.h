@@ -8,6 +8,9 @@
 #include "Widgets/Docking/SDockTab.h"
 
 class UPCGExAssetCollection;
+class SVerticalBox;
+class FAssetThumbnailPool;
+class SPCGExCollectionGridView;
 
 namespace PCGExAssetCollectionEditor
 {
@@ -17,7 +20,7 @@ namespace PCGExAssetCollectionEditor
 	{
 		TabInfos() = default;
 
-		TabInfos(const FName InId, const TSharedPtr<SWidget>& InView, const FName InLabel = NAME_None, const ETabRole InRole = MajorTab)
+		TabInfos(const FName InId, const TSharedPtr<SWidget>& InView, const FName InLabel = NAME_None, const ETabRole InRole = PanelTab)
 			: Id(InId), View(InView), Label(InLabel.IsNone() ? InId : InLabel), Role(InRole)
 		{
 		}
@@ -28,8 +31,9 @@ namespace PCGExAssetCollectionEditor
 		TSharedPtr<SWidget> Footer = nullptr;
 		TWeakPtr<SWidget> WeakView = nullptr;
 		FName Label = NAME_None;
-		ETabRole Role = MajorTab;
+		ETabRole Role = PanelTab;
 		FString Icon = TEXT("");
+		bool bIsDetailsView = true;
 	};
 
 	struct FilterInfos
@@ -85,12 +89,25 @@ protected:
 	FReply ToggleFilter(const PCGExAssetCollectionEditor::FilterInfos Filter) const;
 
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
+	void CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
+	void CreateGridTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	virtual void BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder);
+	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox);
 	virtual void BuildAssetFooterToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
+	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void ForceRefreshTabs();
+
+	/** Returns the property name of the type-specific asset picker (e.g., "StaticMesh", "Actor").
+	 *  Override in derived editors. Used by the grid view to build tile picker widgets. */
+	virtual FName GetTilePickerPropertyName() const { return NAME_None; }
+
+	/** Build the picker widget for a single tile entry. Override for custom picker logic. */
+	virtual TSharedRef<SWidget> BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle);
 
 	TArray<PCGExAssetCollectionEditor::TabInfos> Tabs;
 	FDelegateHandle OnHiddenAssetPropertyNamesChanged;
+	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
+	TSharedPtr<SPCGExCollectionGridView> GridView;
 };
