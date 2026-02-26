@@ -83,6 +83,7 @@ private:
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
 	void OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event);
 	bool bIsSyncing = false;
+	bool bIsBatchOperation = false;
 
 	// Entry struct reflection helpers
 	UScriptStruct* GetEntryScriptStruct() const;

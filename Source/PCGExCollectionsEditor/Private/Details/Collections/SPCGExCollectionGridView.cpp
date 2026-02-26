@@ -166,16 +166,15 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 
 void SPCGExCollectionGridView::RebuildEntryItems()
 {
-	EntryItems.Empty();
+	const int32 Num = Collection.IsValid() ? Collection->NumEntries() : 0;
 
-	if (const UPCGExAssetCollection* Coll = Collection.Get())
+	// Always create fresh item pointers so STileView regenerates tile widgets.
+	// Tiles hold IPropertyHandles and cached state from construction —
+	// reusing widgets after array mutations would show stale data.
+	EntryItems.Reset(Num);
+	for (int32 i = 0; i < Num; ++i)
 	{
-		const int32 Num = Coll->NumEntries();
-		EntryItems.Reserve(Num);
-		for (int32 i = 0; i < Num; ++i)
-		{
-			EntryItems.Add(MakeShared<int32>(i));
-		}
+		EntryItems.Add(MakeShared<int32>(i));
 	}
 }
 
@@ -186,9 +185,6 @@ void SPCGExCollectionGridView::RefreshGrid()
 	{
 		TileView->RequestListRefresh();
 	}
-
-	// Re-init row generator so entry operation handles are up-to-date
-	InitRowGenerator();
 
 	// Clear detail panel selection
 	CurrentDetailIndex = INDEX_NONE;
@@ -354,17 +350,17 @@ void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEve
 	SyncStructToCollection(Event.MemberProperty);
 	bIsSyncing = false;
 
-	// Refresh tiles to reflect updated data
+	// Refresh tiles to reflect updated data (stable item identity → no tile recreation)
 	if (TileView.IsValid())
 	{
-		TileView->RebuildList();
+		TileView->RequestListRefresh();
 	}
 }
 
 void SPCGExCollectionGridView::OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event)
 {
-	// Skip if we're already syncing from the detail panel to avoid redundant work
-	if (bIsSyncing) { return; }
+	// Skip during batch operations or detail panel sync
+	if (bIsSyncing || bIsBatchOperation) { return; }
 
 	// A tile control changed — re-sync the detail panel from collection data
 	UpdateDetailForSelection();
@@ -425,6 +421,8 @@ void SPCGExCollectionGridView::OnObjectTransacted(UObject* Object, const FTransa
 {
 	if (Object == Collection.Get() && Event.GetEventType() == ETransactionObjectEventType::UndoRedo)
 	{
+		// Undo/redo replaces the object's internal state — RowGenerator handles become stale
+		InitRowGenerator();
 		RefreshGrid();
 	}
 }
@@ -460,17 +458,19 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 	if (!EntriesArrayHandle.IsValid()) { return FReply::Handled(); }
 
 	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-	if (ArrayHandle.IsValid())
-	{
-		ArrayHandle->AddItem();
-		RefreshGrid();
+	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
 
-		// Auto-select the newly added entry (last item)
-		if (!EntryItems.IsEmpty() && TileView.IsValid())
-		{
-			TileView->SetSelection(EntryItems.Last());
-			TileView->RequestScrollIntoView(EntryItems.Last());
-		}
+	bIsBatchOperation = true;
+	ArrayHandle->AddItem();
+	bIsBatchOperation = false;
+
+	RefreshGrid();
+
+	// Select the newly added entry
+	if (!EntryItems.IsEmpty() && TileView.IsValid())
+	{
+		TileView->SetSelection(EntryItems.Last());
+		TileView->RequestScrollIntoView(EntryItems.Last());
 	}
 
 	return FReply::Handled();
@@ -486,6 +486,7 @@ FReply SPCGExCollectionGridView::OnDuplicateSelected()
 	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
 	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
 
+	bIsBatchOperation = true;
 	{
 		FScopedTransaction Transaction(INVTEXT("Duplicate Collection Entries"));
 
@@ -496,6 +497,7 @@ FReply SPCGExCollectionGridView::OnDuplicateSelected()
 			ArrayHandle->DuplicateItem(Index);
 		}
 	}
+	bIsBatchOperation = false;
 
 	RefreshGrid();
 	return FReply::Handled();
@@ -511,6 +513,7 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
 	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
 
+	bIsBatchOperation = true;
 	{
 		FScopedTransaction Transaction(INVTEXT("Delete Collection Entries"));
 
@@ -521,6 +524,7 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 			ArrayHandle->DeleteItem(Index);
 		}
 	}
+	bIsBatchOperation = false;
 
 	RefreshGrid();
 	return FReply::Handled();
