@@ -122,7 +122,7 @@ namespace PCGExPaths
 	FTransform FPolyPath::GetClosestTransform(const FVector& WorldPosition, int32& OutEdgeIndex, float& OutLerp, const bool bUseScale) const
 	{
 		const float ClosestKey = Spline->FindInputKeyClosestToWorldLocation(WorldPosition);
-		OutEdgeIndex = FMath::FloorToInt32(ClosestKey);
+		OutEdgeIndex = FMath::Min(FMath::FloorToInt32(ClosestKey), this->LastEdge);
 		OutLerp = ClosestKey - OutEdgeIndex;
 		return Spline->GetTransformAtSplineInputKey(ClosestKey, ESplineCoordinateSpace::World, bUseScale);
 	}
