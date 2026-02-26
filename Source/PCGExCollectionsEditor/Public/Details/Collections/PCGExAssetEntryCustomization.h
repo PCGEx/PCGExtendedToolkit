@@ -40,7 +40,6 @@ protected:
 
 #define PCGEX_FOREACH_ENTRY_TYPE(MACRO)\
 MACRO(Mesh, "StaticMesh")\
-MACRO(Actor, "Actor")\
 MACRO(Level, "Level")
 
 #define PCGEX_FOREACH_ENTRY_TYPE_ALL(MACRO)\
@@ -61,6 +60,22 @@ static TSharedRef<IPropertyTypeCustomization> MakeInstance(); \
 PCGEX_FOREACH_ENTRY_TYPE(PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL)
 
 #undef PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL
+
+/** Custom customization for Actor entries — inlines delta source fields with Pick/GoTo buttons. */
+class FPCGExActorEntryCustomization : public FPCGExEntryHeaderCustomizationBase
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+	virtual FName GetAssetName() override { return FName("Actor"); }
+
+protected:
+	virtual void FillCustomizedTopLevelPropertiesNames() override;
+	virtual TSharedRef<SWidget> GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle) override;
+	virtual void CustomizeChildren(
+		TSharedRef<IPropertyHandle> PropertyHandle,
+		IDetailChildrenBuilder& ChildBuilder,
+		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+};
 
 /** Custom customization for PCGDataAsset entries — inlines Source dropdown and shows the relevant picker. */
 class FPCGExPCGDataAssetEntryCustomization : public FPCGExAssetEntryCustomization

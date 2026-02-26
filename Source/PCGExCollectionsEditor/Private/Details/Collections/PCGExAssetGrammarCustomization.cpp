@@ -13,6 +13,7 @@
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/SBoxPanel.h"
 
 #define PCGEX_SMALL_LABEL(_TEXT) \
 + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(1, 0)\
@@ -113,44 +114,57 @@ void FPCGExAssetGrammarCustomization::CustomizeHeader(
 	HeaderRow.ValueContent()
 	         .MinDesiredWidth(400)
 	[
-		// Scale source
-		SNew(SHorizontalBox)
-		PCGEX_SMALL_LABEL("Symbol")
-		+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+		SNew(SVerticalBox)
+
+		// Row 1: Symbol + Scale mode
+		+ SVerticalBox::Slot()
+		.AutoHeight()
 		[
-			SNew(SBox)
-			.IsEnabled_Lambda([bIsGlobal]() { return !bIsGlobal; })
+			SNew(SHorizontalBox)
+			PCGEX_SMALL_LABEL("Symbol")
+			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[
-				SymbolHandle->CreatePropertyValueWidget()
+				SNew(SBox)
+				.IsEnabled_Lambda([bIsGlobal]() { return !bIsGlobal; })
+				[
+					SymbolHandle->CreatePropertyValueWidget()
+				]
+			]
+			// Scale mode
+			+ SHorizontalBox::Slot().Padding(1).AutoWidth()
+			[
+				SNew(SBox)
+				.IsEnabled_Lambda(IsLocalData)
+				[
+					PCGExEnumCustomization::CreateRadioGroup(ScaleModeHandle, TEXT("EPCGExGrammarScaleMode"))
+				]
 			]
 		]
-		// Scale mode
-		+ SHorizontalBox::Slot().Padding(1).AutoWidth()
+
+		// Row 2: Size + Debug color
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0, 2, 0, 0)
 		[
-			SNew(SBox)
-			.IsEnabled_Lambda(IsLocalData)
+			SNew(SHorizontalBox)
+			PCGEX_SMALL_LABEL("Size")
+			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[
-				PCGExEnumCustomization::CreateRadioGroup(ScaleModeHandle, TEXT("EPCGExGrammarScaleMode"))
+				SNew(SBox)
+				.IsEnabled_Lambda(IsLocalData)
+				[
+					SizeHandle->CreatePropertyValueWidget()
+				]
 			]
-		]
-		// Size
-		PCGEX_SMALL_LABEL("·· Size")
-		+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-		[
-			SNew(SBox)
-			.IsEnabled_Lambda(IsLocalData)
+			// Debug color
+			PCGEX_SMALL_LABEL("·· ")
+			+ SHorizontalBox::Slot().Padding(1).MaxWidth(25)
 			[
-				SizeHandle->CreatePropertyValueWidget()
-			]
-		]
-		// Debug color
-		PCGEX_SMALL_LABEL("·· ")
-		+ SHorizontalBox::Slot().Padding(1).MaxWidth(25)
-		[
-			SNew(SBox)
-			.IsEnabled_Lambda(IsLocalData)
-			[
-				DebugColorHandle->CreatePropertyValueWidget()
+				SNew(SBox)
+				.IsEnabled_Lambda(IsLocalData)
+				[
+					DebugColorHandle->CreatePropertyValueWidget()
+				]
 			]
 		]
 	];
