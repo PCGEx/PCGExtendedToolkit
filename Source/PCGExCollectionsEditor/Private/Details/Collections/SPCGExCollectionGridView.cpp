@@ -314,13 +314,24 @@ void SPCGExCollectionGridView::SyncStructToCollection()
 
 void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEvent& Event)
 {
+	bIsSyncing = true;
 	SyncStructToCollection();
+	bIsSyncing = false;
 
 	// Refresh tiles to reflect updated data
 	if (TileView.IsValid())
 	{
-		TileView->RequestListRefresh();
+		TileView->RebuildList();
 	}
+}
+
+void SPCGExCollectionGridView::OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event)
+{
+	// Skip if we're already syncing from the detail panel to avoid redundant work
+	if (bIsSyncing) { return; }
+
+	// A tile control changed — re-sync the detail panel from collection data
+	UpdateDetailForSelection();
 }
 
 UScriptStruct* SPCGExCollectionGridView::GetEntryScriptStruct() const
@@ -389,6 +400,10 @@ void SPCGExCollectionGridView::InitRowGenerator()
 	if (RowGenerator.IsValid())
 	{
 		RowGenerator->SetObjects({Coll});
+
+		// Listen for property changes from tile controls to sync the detail panel
+		RowGenerator->OnFinishedChangingProperties().AddSP(
+			this, &SPCGExCollectionGridView::OnRowGeneratorPropertyChanged);
 
 		// Find the "Entries" property handle — may be nested under a category node
 		const TArray<TSharedRef<IDetailTreeNode>>& RootNodes = RowGenerator->GetRootTreeNodes();

@@ -3,6 +3,7 @@
 
 #include "Details/Collections/PCGExPCGDataAssetCollectionEditor.h"
 
+#include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
 #include "Collections/PCGExPCGDataAssetCollection.h"
 #include "Widgets/Layout/SBox.h"
@@ -37,7 +38,10 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(TS
 					return bSub ? EVisibility::Visible : EVisibility::Collapsed;
 				})
 				[
-					SubCollectionHandle->CreatePropertyValueWidget()
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(SubCollectionHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty()) ? CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
 				]
 			];
 	}
@@ -80,7 +84,10 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(TS
 						? EVisibility::Visible : EVisibility::Collapsed;
 				})
 				[
-					DataAssetHandle->CreatePropertyValueWidget()
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(DataAssetHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(DataAssetHandle->GetProperty()) ? CastField<FObjectPropertyBase>(DataAssetHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
 				]
 			];
 	}
@@ -103,7 +110,10 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(TS
 						? EVisibility::Visible : EVisibility::Collapsed;
 				})
 				[
-					LevelHandle->CreatePropertyValueWidget()
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(LevelHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(LevelHandle->GetProperty()) ? CastField<FObjectPropertyBase>(LevelHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
 				]
 			];
 	}

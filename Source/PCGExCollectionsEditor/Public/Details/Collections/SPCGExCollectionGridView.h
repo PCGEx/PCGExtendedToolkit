@@ -77,6 +77,8 @@ private:
 	void UpdateDetailForSelection();
 	void SyncStructToCollection();
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
+	void OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event);
+	bool bIsSyncing = false;
 
 	// Entry struct reflection helpers
 	UScriptStruct* GetEntryScriptStruct() const;

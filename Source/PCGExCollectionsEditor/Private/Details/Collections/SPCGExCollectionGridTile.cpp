@@ -23,6 +23,10 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 
 	check(EntryHandle.IsValid());
 
+	// Listen for property changes to refresh the thumbnail when the asset changes
+	EntryHandle->SetOnChildPropertyValueChanged(
+		FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridTile::RefreshThumbnail));
+
 	TSharedPtr<IPropertyHandle> WeightHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Weight));
 	TSharedPtr<IPropertyHandle> CategoryHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category));
 	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, bIsSubCollection));

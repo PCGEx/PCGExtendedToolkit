@@ -10,6 +10,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 
+#include "PropertyCustomizationHelpers.h"
 #include "PropertyEditorModule.h"
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
@@ -312,7 +313,10 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(TSharedRe
 					return bSub ? EVisibility::Visible : EVisibility::Collapsed;
 				})
 				[
-					SubCollectionHandle->CreatePropertyValueWidget()
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(SubCollectionHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty()) ? CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
 				]
 			];
 	}
@@ -331,7 +335,10 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(TSharedRe
 					return bSub ? EVisibility::Collapsed : EVisibility::Visible;
 				})
 				[
-					AssetHandle->CreatePropertyValueWidget()
+					SNew(SObjectPropertyEntryBox)
+					.PropertyHandle(AssetHandle)
+					.AllowedClass(CastField<FObjectPropertyBase>(AssetHandle->GetProperty()) ? CastField<FObjectPropertyBase>(AssetHandle->GetProperty())->PropertyClass : nullptr)
+					.DisplayThumbnail(false)
 				]
 			];
 	}
