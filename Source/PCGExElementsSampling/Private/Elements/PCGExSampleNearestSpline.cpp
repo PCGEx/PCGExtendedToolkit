@@ -392,7 +392,7 @@ namespace PCGExSampleNearestSpline
 
 				if (Context->bComputeTangents)
 				{
-					const int32 PrevIndex = FMath::FloorToInt(Time);
+					const int32 PrevIndex = FMath::Clamp(FMath::FloorToInt(Time), 0, static_cast<int32>(NumSegments));
 					const int32 NextIndex = InSpline.bClosedLoop ? PCGExMath::Tile(PrevIndex + 1, 0, NumSegments - 1) : FMath::Clamp(PrevIndex + 1, 0, NumSegments);
 
 					const FInterpCurveVector& SplinePositions = InSpline.GetSplinePointsPosition();
