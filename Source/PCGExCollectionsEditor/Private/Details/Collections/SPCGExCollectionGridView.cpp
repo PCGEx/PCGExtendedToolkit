@@ -113,7 +113,7 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 		.Value(0.65f)
 		[
 			SNew(SBorder)
-			.BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
+			.BorderImage(FAppStyle::GetBrush("Brushes.Recessed"))
 			.Padding(4.f)
 			[
 				SAssignNew(TileView, STileView<TSharedPtr<int32>>)
