@@ -147,10 +147,26 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 
 void SPCGExCollectionGridTile::RefreshThumbnail()
 {
-	if (ThumbnailBox.IsValid())
+	if (!ThumbnailBox.IsValid()) { return; }
+
+	// Check if the visual state has actually changed
+	const UPCGExAssetCollection* Coll = Collection.Get();
+	if (Coll && EntryIndex != INDEX_NONE)
 	{
-		ThumbnailBox->SetContent(BuildThumbnailWidget());
+		const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(EntryIndex);
+		if (Result.IsValid())
+		{
+			const bool bIsSub = Result.Entry->bIsSubCollection;
+			const FSoftObjectPath& CurrentPath = Result.Entry->Staging.Path;
+
+			if (CurrentPath == CachedStagingPath && bIsSub == bCachedIsSubCollection)
+			{
+				return; // Nothing visual changed, skip rebuild
+			}
+		}
 	}
+
+	ThumbnailBox->SetContent(BuildThumbnailWidget());
 }
 
 TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
@@ -186,6 +202,8 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 	const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(EntryIndex);
 	if (!Result.IsValid())
 	{
+		CachedStagingPath.Reset();
+		bCachedIsSubCollection = false;
 		return SNew(SBox)
 			.HAlign(HAlign_Center)
 			.VAlign(VAlign_Center)
@@ -196,6 +214,10 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 				.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.3f)))
 			];
 	}
+
+	// Update cache
+	bCachedIsSubCollection = Result.Entry->bIsSubCollection;
+	CachedStagingPath = Result.Entry->Staging.Path;
 
 	// Subcollection — show collection icon
 	if (Result.Entry->bIsSubCollection)
@@ -211,7 +233,7 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 	}
 
 	// Get asset path from staging data
-	const FSoftObjectPath& AssetPath = Result.Entry->Staging.Path;
+	const FSoftObjectPath& AssetPath = CachedStagingPath;
 	if (AssetPath.IsNull())
 	{
 		return SNew(SBox)

@@ -61,6 +61,7 @@ private:
 	// Tile view
 	TArray<TSharedPtr<int32>> EntryItems;
 	TSharedPtr<STileView<TSharedPtr<int32>>> TileView;
+	TMap<int32, TWeakPtr<SPCGExCollectionGridTile>> ActiveTiles;
 
 	// Detail panel — IStructureDetailsView for editing a single entry struct
 	TSharedPtr<IStructureDetailsView> StructDetailView;

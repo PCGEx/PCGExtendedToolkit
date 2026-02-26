@@ -54,6 +54,10 @@ private:
 	int32 EntryIndex = INDEX_NONE;
 	float TileSize = 128.f;
 
+	// Cached state for short-circuiting RefreshThumbnail when nothing visual changed
+	FSoftObjectPath CachedStagingPath;
+	bool bCachedIsSubCollection = false;
+
 	/** Build the thumbnail widget from the entry's Staging.Path */
 	TSharedRef<SWidget> BuildThumbnailWidget();
 };

@@ -172,6 +172,7 @@ void SPCGExCollectionGridView::RebuildEntryItems()
 	// Tiles hold IPropertyHandles and cached state from construction —
 	// reusing widgets after array mutations would show stale data.
 	EntryItems.Reset(Num);
+	ActiveTiles.Reset();
 	for (int32 i = 0; i < Num; ++i)
 	{
 		EntryItems.Add(MakeShared<int32>(i));
@@ -253,10 +254,12 @@ TSharedRef<ITableRow> SPCGExCollectionGridView::OnGenerateTile(TSharedPtr<int32>
 		];
 	}
 
-	return SNew(STableRow<TSharedPtr<int32>>, OwnerTable)
+	TSharedPtr<SPCGExCollectionGridTile> Tile;
+
+	TSharedRef<STableRow<TSharedPtr<int32>>> Row = SNew(STableRow<TSharedPtr<int32>>, OwnerTable)
 		.Padding(4.f)
 		[
-			SNew(SPCGExCollectionGridTile)
+			SAssignNew(Tile, SPCGExCollectionGridTile)
 			.EntryHandle(EntryHandle)
 			.ThumbnailPool(ThumbnailPool)
 			.OnGetPickerWidget(OnGetPickerWidget)
@@ -264,6 +267,9 @@ TSharedRef<ITableRow> SPCGExCollectionGridView::OnGenerateTile(TSharedPtr<int32>
 			.Collection(Collection)
 			.EntryIndex(Index)
 		];
+
+	ActiveTiles.Add(Index, Tile);
+	return Row;
 }
 
 void SPCGExCollectionGridView::OnSelectionChanged(TSharedPtr<int32> Item, ESelectInfo::Type SelectInfo)
@@ -350,13 +356,15 @@ void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEve
 	SyncStructToCollection(Event.MemberProperty);
 	bIsSyncing = false;
 
-	// Regenerate tiles so thumbnails pick up restaged data from PostEditChange.
-	// SyncStructToCollection writes raw memory + PostEditChange, which rebuilds staging
-	// but doesn't fire tile handle notifications — must regenerate tiles.
-	RebuildEntryItems();
-	if (TileView.IsValid())
+	// Refresh only the selected tile(s) thumbnails — property value widgets
+	// on tiles auto-update via their live IPropertyHandle bindings.
+	TArray<int32> Selected = GetSelectedIndices();
+	for (int32 Index : Selected)
 	{
-		TileView->RequestListRefresh();
+		if (TSharedPtr<SPCGExCollectionGridTile> Tile = ActiveTiles.FindRef(Index).Pin())
+		{
+			Tile->RefreshThumbnail();
+		}
 	}
 }
 
@@ -465,23 +473,38 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 		Coll->GetClass()->FindPropertyByName(FName("Entries")));
 	if (!ArrayProp) { return FReply::Handled(); }
 
-	// Direct array manipulation — single PostEditChange avoids per-item staging rebuild.
-	// IPropertyHandleArray::AddItem triggers PostEditChangeProperty per call, which
-	// runs EDITOR_RebuildStagingData (synchronously loading all entry assets) each time.
+	// Direct array manipulation — bypasses per-item PostEditChangeProperty which would
+	// trigger EDITOR_RebuildStagingData (synchronously loading ALL entry assets).
+	// For Add, we also suppress staging entirely since the new entry is empty — staging
+	// will rebuild naturally when the user picks an asset (via tile picker PostEditChangeProperty).
 	bIsBatchOperation = true;
 	{
 		FScopedTransaction Transaction(INVTEXT("Add Collection Entry"));
 		Coll->Modify();
+
+		// Suppress staging rebuild — nothing to stage on an empty entry
+		const bool bWasAutoRebuild = Coll->bAutoRebuildStaging;
+		Coll->bAutoRebuildStaging = false;
 
 		void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
 		FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
 		ArrayHelper.AddValues(1);
 
 		Coll->PostEditChange();
+		Coll->bAutoRebuildStaging = bWasAutoRebuild;
 	}
 	bIsBatchOperation = false;
 
-	InitRowGenerator();
+	// Re-find the Entries handle from the existing RowGenerator (PostEditChange
+	// causes it to refresh its tree internally). Avoids the cost of InitRowGenerator
+	// which creates an entirely new RowGenerator + SetObjects (full property tree build).
+	EntriesArrayHandle.Reset();
+	if (RowGenerator.IsValid())
+	{
+		const TArray<TSharedRef<IDetailTreeNode>>& RootNodes = RowGenerator->GetRootTreeNodes();
+		FindEntriesHandleRecursive(RootNodes, EntriesArrayHandle);
+	}
+
 	RefreshGrid();
 
 	// Select the newly added entry
@@ -533,7 +556,14 @@ FReply SPCGExCollectionGridView::OnDuplicateSelected()
 	}
 	bIsBatchOperation = false;
 
-	InitRowGenerator();
+	// Re-find the Entries handle from the existing RowGenerator
+	EntriesArrayHandle.Reset();
+	if (RowGenerator.IsValid())
+	{
+		const TArray<TSharedRef<IDetailTreeNode>>& RootNodes = RowGenerator->GetRootTreeNodes();
+		FindEntriesHandleRecursive(RootNodes, EntriesArrayHandle);
+	}
+
 	RefreshGrid();
 	return FReply::Handled();
 }
@@ -572,7 +602,14 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 	}
 	bIsBatchOperation = false;
 
-	InitRowGenerator();
+	// Re-find the Entries handle from the existing RowGenerator
+	EntriesArrayHandle.Reset();
+	if (RowGenerator.IsValid())
+	{
+		const TArray<TSharedRef<IDetailTreeNode>>& RootNodes = RowGenerator->GetRootTreeNodes();
+		FindEntriesHandleRecursive(RootNodes, EntriesArrayHandle);
+	}
+
 	RefreshGrid();
 	return FReply::Handled();
 }
