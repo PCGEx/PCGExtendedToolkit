@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/PCGExFittingVariationsCustomization.h"
@@ -9,14 +9,11 @@
 #include "PCGExCollectionsEditorSettings.h"
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
-#include "Details/PCGExCustomizationMacros.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
-#include "Widgets/Input/SRotatorInputBox.h"
-#include "Widgets/Input/SVectorInputBox.h"
+#include "Widgets/Layout/SBox.h"
 
 #define PCGEX_SMALL_LABEL(_TEXT) \
 + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(1, 0)\
@@ -42,6 +39,24 @@ if (_HANDLE->GetValue(EnumValue) == FPropertyAccess::Success){ return EnumValue 
 return EVisibility::Collapsed;})
 
 #define PCGEX_FIELD(_HANDLE, _TYPE, _PART, _TOOLTIP) PCGEX_FIELD_BASE(_HANDLE, _TYPE, _PART, _TOOLTIP)]
+
+// Inline step spinner as third column on an axis row.
+// FillWidth(1) alongside the min:max wrapper at FillWidth(2) gives equal thirds.
+// When Collapsed (snapping off), the slot is removed from layout and min:max fills 100%.
+#define PCGEX_STEP_SLOT(_STEPS_HANDLE, _TYPE, _PART, _SNAP_HANDLE) \
++ SHorizontalBox::Slot().Padding(1).FillWidth(1) \
+[ \
+	SNew(SBox) \
+	PCGEX_STEP_VISIBILITY(_SNAP_HANDLE) \
+	.RenderOpacity(0.7f) \
+	[ \
+		SNew(SNumericEntryBox<double>) \
+		.Value_Lambda([_STEPS_HANDLE]() -> TOptional<double>{ _TYPE V; _STEPS_HANDLE->GetValue(V); return V._PART; }) \
+		.OnValueCommitted_Lambda([_STEPS_HANDLE](double NewVal, ETextCommit::Type){ _TYPE V; _STEPS_HANDLE->GetValue(V); V._PART = NewVal; _STEPS_HANDLE->SetValue(V); }) \
+		.ToolTipText(INVTEXT("Step")) \
+		.AllowSpin(true) \
+	] \
+]
 
 TSharedRef<IPropertyTypeCustomization> FPCGExFittingVariationsCustomization::MakeInstance()
 {
@@ -103,6 +118,10 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 	IDetailChildrenBuilder& ChildBuilder,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
+	const bool bIsGlobal = PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"));
+
+#define PCGEX_GLOBAL_VISIBILITY(_ID) .Visibility(MakeAttributeLambda([bIsGlobal]() { return !bIsGlobal ? GetDefault<UPCGExCollectionsEditorSettings>()->GetPropertyVisibility(FName(_ID)) : EVisibility::Visible; }))
+
 #pragma region Offset Min/Max
 
 	// Get handles
@@ -112,11 +131,6 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 	TSharedPtr<IPropertyHandle> OffsetSnappingModeHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, SnapPosition));
 	TSharedPtr<IPropertyHandle> OffsetStepsHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, OffsetSnap));
 
-	const bool bIsGlobal = PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"));
-
-#define PCGEX_GLOBAL_VISIBILITY(_ID) .Visibility(MakeAttributeLambda([bIsGlobal]() { return !bIsGlobal ? GetDefault<UPCGExCollectionsEditorSettings>()->GetPropertyVisibility(FName(_ID)) : EVisibility::Visible; }))
-
-	// Add custom Offset row
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Offset"))
 		PCGEX_GLOBAL_VISIBILITY("VariationOffset")
@@ -124,16 +138,18 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 		[
 			SNew(SVerticalBox)
 			PCGEX_SMALL_LABEL_COL("Offset Min:Max", FLinearColor::White)
-			+ SVerticalBox::Slot() // First line: toggle
+			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(0, 2, 0, 8)
+			.Padding(0, 2, 0, 2)
+			[
+				PCGExEnumCustomization::CreateRadioGroup(OffsetSnappingModeHandle, TEXT("EPCGExVariationSnapping"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 0, 0, 4)
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
-				[
-					PCGExEnumCustomization::CreateRadioGroup(OffsetSnappingModeHandle, TEXT("EPCGExVariationSnapping"))
-				]
-				PCGEX_SMALL_LABEL("·· Absolute : ")
+				PCGEX_SMALL_LABEL("Abs : ")
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
 				[
 					AbsoluteOffsetHandle->CreatePropertyValueWidget()
@@ -141,52 +157,56 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			]
 		]
 		.ValueContent()
-		.MinDesiredWidth(400)
+		.MinDesiredWidth(200)
 		[
 			SNew(SVerticalBox)
-			+ SVerticalBox::Slot() // X/Y/Z
-			.Padding(0, 2, 0, 2)
+
+			// X — [min]:[max] [step?]
+			+ SVerticalBox::Slot()
 			.AutoHeight()
+			.Padding(0, 1)
 			[
-				// X pair
 				SNew(SHorizontalBox)
 				PCGEX_SMALL_LABEL(" X")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(OffsetMinHandle, FVector, X, "Min X") PCGEX_SEP_LABEL(":") PCGEX_FIELD(OffsetMaxHandle, FVector, X, "Max X")
 				]
-				// Y pair
-				PCGEX_SMALL_LABEL("·· Y")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				PCGEX_STEP_SLOT(OffsetStepsHandle, FVector, X, OffsetSnappingModeHandle)
+			]
+
+			// Row 4: Y
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				PCGEX_SMALL_LABEL(" Y")
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(OffsetMinHandle, FVector, Y, "Min Y") PCGEX_SEP_LABEL(":") PCGEX_FIELD(OffsetMaxHandle, FVector, Y, "Max Y")
 				]
-				// Z pair
-				PCGEX_SMALL_LABEL("·· Z")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				PCGEX_STEP_SLOT(OffsetStepsHandle, FVector, Y, OffsetSnappingModeHandle)
+			]
+
+			// Row 5: Z
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				PCGEX_SMALL_LABEL(" Z")
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(OffsetMinHandle, FVector, Z, "Min Z") PCGEX_SEP_LABEL(":") PCGEX_FIELD(OffsetMaxHandle, FVector, Z, "Max Z")
 				]
-			]
-			+ SVerticalBox::Slot() // Step
-			.Padding(0, 0, 0, 2)
-			.AutoHeight()
-			[
-				// X pair
-				SNew(SHorizontalBox)
-				PCGEX_STEP_VISIBILITY(OffsetSnappingModeHandle)
-				PCGEX_SMALL_LABEL(" Steps : ")
-				+ SHorizontalBox::Slot().FillWidth(1).Padding(1).VAlign(VAlign_Center)
-				[
-					PCGEX_VECTORINPUTBOX(OffsetStepsHandle)
-				]
+				PCGEX_STEP_SLOT(OffsetStepsHandle, FVector, Z, OffsetSnappingModeHandle)
 			]
 		];
 
 #pragma endregion
 
 #pragma region Rotation Min/Max
-
 
 	// Get handles
 	TSharedPtr<IPropertyHandle> RotationMinHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, RotationMin));
@@ -195,7 +215,6 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 	TSharedPtr<IPropertyHandle> RotationSnappingModeHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, SnapRotation));
 	TSharedPtr<IPropertyHandle> RotationStepsHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, RotationSnap));
 
-	// Add custom Offset row
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Rotation"))
 		PCGEX_GLOBAL_VISIBILITY("VariationRotation")
@@ -203,16 +222,18 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 		[
 			SNew(SVerticalBox)
 			PCGEX_SMALL_LABEL_COL("Rotation Min:Max", FLinearColor::White)
-			+ SVerticalBox::Slot() // First line: toggle
+			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(0, 2, 0, 8)
+			.Padding(0, 2, 0, 2)
+			[
+				PCGExEnumCustomization::CreateRadioGroup(RotationSnappingModeHandle, TEXT("EPCGExVariationSnapping"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 0, 0, 4)
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
-				[
-					PCGExEnumCustomization::CreateRadioGroup(RotationSnappingModeHandle, TEXT("EPCGExVariationSnapping"))
-				]
-				PCGEX_SMALL_LABEL("·· Absolute : ")
+				PCGEX_SMALL_LABEL("Abs : ")
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
 				[
 					PCGExEnumCustomization::CreateCheckboxGroup(AbsoluteRotHandle, TEXT("EPCGExAbsoluteRotationFlags"), {})
@@ -220,45 +241,50 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			]
 		]
 		.ValueContent()
-		.MinDesiredWidth(400)
+		.MinDesiredWidth(200)
 		[
 			SNew(SVerticalBox)
-			+ SVerticalBox::Slot() // Second line: X/Y/Z
-			.Padding(0, 2, 0, 2)
+
+			// R (Roll)
+			+ SVerticalBox::Slot()
 			.AutoHeight()
+			.Padding(0, 1)
 			[
-				// X pair
 				SNew(SHorizontalBox)
 				PCGEX_SMALL_LABEL(" R")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(RotationMinHandle, FRotator, Roll, "Min Roll") PCGEX_SEP_LABEL(":") PCGEX_FIELD(RotationMaxHandle, FRotator, Roll, "Max Roll")
 				]
-				// Y pair
-				PCGEX_SMALL_LABEL("·· P")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				PCGEX_STEP_SLOT(RotationStepsHandle, FRotator, Roll, RotationSnappingModeHandle)
+			]
+
+			// Row 4: P (Pitch)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				PCGEX_SMALL_LABEL(" P")
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(RotationMinHandle, FRotator, Pitch, "Min Pitch") PCGEX_SEP_LABEL(":") PCGEX_FIELD(RotationMaxHandle, FRotator, Pitch, "Max Pitch")
 				]
-				// Z pair
-				PCGEX_SMALL_LABEL("·· Y")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				PCGEX_STEP_SLOT(RotationStepsHandle, FRotator, Pitch, RotationSnappingModeHandle)
+			]
+
+			// Row 5: Y (Yaw)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				PCGEX_SMALL_LABEL(" Y")
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(RotationMinHandle, FRotator, Yaw, "Min Yaw") PCGEX_SEP_LABEL(":") PCGEX_FIELD(RotationMaxHandle, FRotator, Yaw, "Max Yaw")
 				]
-			]
-			+ SVerticalBox::Slot() // Step
-			.Padding(0, 0, 0, 2)
-			.AutoHeight()
-			[
-				// X pair
-				SNew(SHorizontalBox)
-				PCGEX_STEP_VISIBILITY(RotationSnappingModeHandle)
-				PCGEX_SMALL_LABEL(" Steps : ")
-				+ SHorizontalBox::Slot().FillWidth(1).Padding(1).VAlign(VAlign_Center)
-				[
-					PCGEX_ROTATORINPUTBOX(RotationStepsHandle)
-				]
+				PCGEX_STEP_SLOT(RotationStepsHandle, FRotator, Yaw, RotationSnappingModeHandle)
 			]
 		];
 
@@ -273,9 +299,6 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 	TSharedPtr<IPropertyHandle> ScaleSnappingModeHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, SnapScale));
 	TSharedPtr<IPropertyHandle> ScaleStepsHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, ScaleSnap));
 
-#define PCGEX_UNIFORM_VISIBILITY .IsEnabled_Lambda([UniformScaleHandle]() { bool bUniform = false; UniformScaleHandle->GetValue(bUniform); return !bUniform; }) ]
-
-	// Add custom Offset row
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Scale"))
 		PCGEX_GLOBAL_VISIBILITY("VariationScale")
@@ -283,16 +306,18 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 		[
 			SNew(SVerticalBox)
 			PCGEX_SMALL_LABEL_COL("Scale Min:Max", FLinearColor::White)
-			+ SVerticalBox::Slot() // First line: toggle
+			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 2, 0, 2)
 			[
+				PCGExEnumCustomization::CreateRadioGroup(ScaleSnappingModeHandle, TEXT("EPCGExVariationSnapping"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 0, 0, 4)
+			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
-				[
-					PCGExEnumCustomization::CreateRadioGroup(ScaleSnappingModeHandle, TEXT("EPCGExVariationSnapping"))
-				]
-				PCGEX_SMALL_LABEL("·· Uniform : ")
+				PCGEX_SMALL_LABEL("Uniform : ")
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
 				[
 					UniformScaleHandle->CreatePropertyValueWidget()
@@ -300,61 +325,64 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			]
 		]
 		.ValueContent()
-		.MinDesiredWidth(400)
+		.MinDesiredWidth(200)
 		[
 			SNew(SVerticalBox)
-			+ SVerticalBox::Slot() // Second line: X/Y/Z
-			.Padding(0, 2, 0, 2)
+
+			// X
+			+ SVerticalBox::Slot()
 			.AutoHeight()
+			.Padding(0, 1)
 			[
-				// X pair
 				SNew(SHorizontalBox)
 				PCGEX_SMALL_LABEL(" X")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox) PCGEX_FIELD(ScaleMinHandle, FVector, X, "Min X") PCGEX_SEP_LABEL(":") PCGEX_FIELD(ScaleMaxHandle, FVector, X, "Max X")
 				]
-				// Y pair
-				PCGEX_SMALL_LABEL("·· Y")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-				[
-					SNew(SHorizontalBox) PCGEX_FIELD_BASE(ScaleMinHandle, FVector, Y, "Min Y") PCGEX_UNIFORM_VISIBILITY
-					PCGEX_SEP_LABEL(":")
-					PCGEX_FIELD_BASE(ScaleMaxHandle, FVector, Y, "Max Y") PCGEX_UNIFORM_VISIBILITY
-				]
-				// Z pair
-				PCGEX_SMALL_LABEL("·· Z")
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-				[
-					SNew(SHorizontalBox) PCGEX_FIELD_BASE(ScaleMinHandle, FVector, Z, "Min Z") PCGEX_UNIFORM_VISIBILITY
-					PCGEX_SEP_LABEL(":")
-					PCGEX_FIELD_BASE(ScaleMaxHandle, FVector, Z, "Max Z") PCGEX_UNIFORM_VISIBILITY
-				]
+				PCGEX_STEP_SLOT(ScaleStepsHandle, FVector, X, ScaleSnappingModeHandle)
 			]
-			+ SVerticalBox::Slot() // Step
-			.Padding(0, 0, 0, 2)
+
+			// Row 4: Y (disabled when uniform)
+			+ SVerticalBox::Slot()
 			.AutoHeight()
+			.Padding(0, 1)
 			[
-				// X pair
 				SNew(SHorizontalBox)
-				PCGEX_STEP_VISIBILITY(ScaleSnappingModeHandle)
-				PCGEX_SMALL_LABEL(" Steps : ")
-				+ SHorizontalBox::Slot().FillWidth(1).Padding(1).VAlign(VAlign_Center)
+				.IsEnabled_Lambda([UniformScaleHandle]() { bool bUniform = false; UniformScaleHandle->GetValue(bUniform); return !bUniform; })
+				PCGEX_SMALL_LABEL(" Y")
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
-					PCGEX_VECTORINPUTBOX(ScaleStepsHandle)
+					SNew(SHorizontalBox) PCGEX_FIELD(ScaleMinHandle, FVector, Y, "Min Y") PCGEX_SEP_LABEL(":") PCGEX_FIELD(ScaleMaxHandle, FVector, Y, "Max Y")
 				]
+				PCGEX_STEP_SLOT(ScaleStepsHandle, FVector, Y, ScaleSnappingModeHandle)
+			]
+
+			// Row 5: Z (disabled when uniform)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				.IsEnabled_Lambda([UniformScaleHandle]() { bool bUniform = false; UniformScaleHandle->GetValue(bUniform); return !bUniform; })
+				PCGEX_SMALL_LABEL(" Z")
+				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
+				[
+					SNew(SHorizontalBox) PCGEX_FIELD(ScaleMinHandle, FVector, Z, "Min Z") PCGEX_SEP_LABEL(":") PCGEX_FIELD(ScaleMaxHandle, FVector, Z, "Max Z")
+				]
+				PCGEX_STEP_SLOT(ScaleStepsHandle, FVector, Z, ScaleSnappingModeHandle)
 			]
 		];
 
 #undef PCGEX_GLOBAL_VISIBILITY
-#undef PCGEX_UNIFORM_VISIBILITY
 
 #pragma endregion
 }
 
 #undef PCGEX_SMALL_LABEL
+#undef PCGEX_SMALL_LABEL_COL
 #undef PCGEX_SEP_LABEL
 #undef PCGEX_FIELD_BASE
 #undef PCGEX_FIELD
-#undef PCGEX_FIELD_D
 #undef PCGEX_STEP_VISIBILITY
+#undef PCGEX_STEP_SLOT
