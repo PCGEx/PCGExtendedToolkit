@@ -103,12 +103,16 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 		->SetOrientation(Orient_Horizontal);
 
 	const TSharedRef<FTabManager::FLayout> Layout =
-		FTabManager::NewLayout("PCGExAssetCollectionEditor_Layout_v5")
+		FTabManager::NewLayout("PCGExAssetCollectionEditor_Layout_v6")
 		->AddArea(Area);
 
 	TSharedRef<FTabManager::FStack> MainStack = FTabManager::NewStack();
-	// Add tabs in reverse order so asset comes first
-	for (int i = Tabs.Num() - 1; i >= 0; i--) { MainStack->AddTab(Tabs[i].Id, ETabState::OpenedTab); }
+	// Add tabs in reverse order so grid comes first; list view closed by default
+	for (int i = Tabs.Num() - 1; i >= 0; i--)
+	{
+		const ETabState::Type State = Tabs[i].Id == FName("Assets") ? ETabState::ClosedTab : ETabState::OpenedTab;
+		MainStack->AddTab(Tabs[i].Id, State);
+	}
 	Area->Split(MainStack);
 
 	if (!Tabs.IsEmpty()) { MainStack->SetForegroundTab(Tabs.Last().Id); }

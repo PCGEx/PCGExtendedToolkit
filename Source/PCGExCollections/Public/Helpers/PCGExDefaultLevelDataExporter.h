@@ -47,11 +47,11 @@ public:
 	UPCGExDefaultLevelDataExporter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	/** Actor content filter. Defaults to UPCGExDefaultActorContentFilter. */
-	UPROPERTY(EditAnywhere, Instanced, Category = "Filtering")
+	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
 	TObjectPtr<UPCGExActorContentFilter> ContentFilter;
 
 	/** Bounds evaluator. Defaults to UPCGExDefaultBoundsEvaluator. */
-	UPROPERTY(EditAnywhere, Instanced, Category = "Bounds")
+	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
 	TObjectPtr<UPCGExBoundsEvaluator> BoundsEvaluator;
 
 	/** When true, the exporter builds embedded mesh/actor collections
