@@ -17,6 +17,7 @@ class IPropertyRowGenerator;
 class IDetailTreeNode;
 class UPCGExAssetCollection;
 class FStructOnScope;
+class FTransactionObjectEvent;
 
 /**
  * Grid/tile view of collection entries.
@@ -38,6 +39,9 @@ public:
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
+
+	virtual bool SupportsKeyboardFocus() const override { return true; }
+	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Rebuild the tile list (e.g., after entries are added/removed) */
 	void RefreshGrid();
@@ -75,7 +79,7 @@ private:
 
 	// Detail panel management
 	void UpdateDetailForSelection();
-	void SyncStructToCollection();
+	void SyncStructToCollection(const FProperty* ChangedMemberProperty);
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
 	void OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event);
 	bool bIsSyncing = false;
@@ -88,6 +92,9 @@ private:
 	FReply OnAddEntry();
 	FReply OnDuplicateSelected();
 	FReply OnDeleteSelected();
+
+	// Undo/redo support
+	void OnObjectTransacted(UObject* Object, const FTransactionObjectEvent& Event);
 
 	// Property row generator setup (for entry operations only)
 	void InitRowGenerator();

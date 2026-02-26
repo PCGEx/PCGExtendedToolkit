@@ -10,9 +10,13 @@
 #include "PropertyEditorModule.h"
 #include "PropertyHandle.h"
 
+#include "InputCoreTypes.h"
+#include "ScopedTransaction.h"
+
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExAssetCollectionEditor.h"
 #include "Details/Collections/SPCGExCollectionGridTile.h"
+#include "Misc/TransactionObjectEvent.h"
 #include "Modules/ModuleManager.h"
 #include "UObject/StructOnScope.h"
 #include "UObject/UnrealType.h"
@@ -23,6 +27,27 @@
 #include "Widgets/Text/STextBlock.h"
 
 #pragma region SPCGExCollectionGridView
+
+FReply SPCGExCollectionGridView::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == EKeys::Delete)
+	{
+		if (TileView.IsValid() && TileView->GetNumItemsSelected() > 0)
+		{
+			return OnDeleteSelected();
+		}
+	}
+
+	if (InKeyEvent.GetKey() == EKeys::D && InKeyEvent.IsControlDown())
+	{
+		if (TileView.IsValid() && TileView->GetNumItemsSelected() > 0)
+		{
+			return OnDuplicateSelected();
+		}
+	}
+
+	return SCompoundWidget::OnKeyDown(MyGeometry, InKeyEvent);
+}
 
 void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 {
@@ -51,6 +76,10 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 	// Wire up property change callback to sync edits back to the collection
 	StructDetailView->GetOnFinishedChangingPropertiesDelegate().AddSP(
 		this, &SPCGExCollectionGridView::OnDetailPropertyChanged);
+
+	// Listen for undo/redo to fully refresh the grid when the collection is restored
+	FCoreUObjectDelegates::OnObjectTransacted.AddSP(
+		this, &SPCGExCollectionGridView::OnObjectTransacted);
 
 	const float TileWidgetSize = TileSize + 24.f;
 
@@ -280,7 +309,7 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	}
 }
 
-void SPCGExCollectionGridView::SyncStructToCollection()
+void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMemberProperty)
 {
 	if (!CurrentStructScope.IsValid() || CurrentDetailIndex == INDEX_NONE) { return; }
 
@@ -290,22 +319,29 @@ void SPCGExCollectionGridView::SyncStructToCollection()
 	UScriptStruct* EntryStruct = GetEntryScriptStruct();
 	if (!EntryStruct) { return; }
 
-	// Copy modified data back to the primary selected entry
-	uint8* EntryPtr = GetEntryRawPtr(CurrentDetailIndex);
-	if (!EntryPtr) { return; }
+	uint8* PrimaryPtr = GetEntryRawPtr(CurrentDetailIndex);
+	if (!PrimaryPtr) { return; }
+
+	const uint8* SrcData = CurrentStructScope->GetStructMemory();
 
 	Coll->Modify();
-	EntryStruct->CopyScriptStruct(EntryPtr, CurrentStructScope->GetStructMemory());
 
-	// Propagate to all other selected entries (multi-select editing)
-	TArray<int32> Selected = GetSelectedIndices();
-	for (int32 OtherIndex : Selected)
+	// Copy entire struct back to the primary entry (it's the editing copy)
+	EntryStruct->CopyScriptStruct(PrimaryPtr, SrcData);
+
+	// For multi-select: propagate ONLY the changed property to other entries
+	if (ChangedMemberProperty)
 	{
-		if (OtherIndex == CurrentDetailIndex) { continue; }
-		uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
-		if (OtherPtr)
+		const int32 Offset = ChangedMemberProperty->GetOffset_ForInternal();
+		TArray<int32> Selected = GetSelectedIndices();
+		for (int32 OtherIndex : Selected)
 		{
-			EntryStruct->CopyScriptStruct(OtherPtr, CurrentStructScope->GetStructMemory());
+			if (OtherIndex == CurrentDetailIndex) { continue; }
+			uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+			if (OtherPtr)
+			{
+				ChangedMemberProperty->CopyCompleteValue(OtherPtr + Offset, SrcData + Offset);
+			}
 		}
 	}
 
@@ -315,7 +351,7 @@ void SPCGExCollectionGridView::SyncStructToCollection()
 void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEvent& Event)
 {
 	bIsSyncing = true;
-	SyncStructToCollection();
+	SyncStructToCollection(Event.MemberProperty);
 	bIsSyncing = false;
 
 	// Refresh tiles to reflect updated data
@@ -385,6 +421,14 @@ static bool FindEntriesHandleRecursive(const TArray<TSharedRef<IDetailTreeNode>>
 	return false;
 }
 
+void SPCGExCollectionGridView::OnObjectTransacted(UObject* Object, const FTransactionObjectEvent& Event)
+{
+	if (Object == Collection.Get() && Event.GetEventType() == ETransactionObjectEventType::UndoRedo)
+	{
+		RefreshGrid();
+	}
+}
+
 void SPCGExCollectionGridView::InitRowGenerator()
 {
 	EntriesArrayHandle.Reset();
@@ -420,6 +464,13 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 	{
 		ArrayHandle->AddItem();
 		RefreshGrid();
+
+		// Auto-select the newly added entry (last item)
+		if (!EntryItems.IsEmpty() && TileView.IsValid())
+		{
+			TileView->SetSelection(EntryItems.Last());
+			TileView->RequestScrollIntoView(EntryItems.Last());
+		}
 	}
 
 	return FReply::Handled();
@@ -435,11 +486,15 @@ FReply SPCGExCollectionGridView::OnDuplicateSelected()
 	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
 	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
 
-	// Duplicate in reverse order to preserve indices
-	Selected.Sort([](int32 A, int32 B) { return A > B; });
-	for (int32 Index : Selected)
 	{
-		ArrayHandle->DuplicateItem(Index);
+		FScopedTransaction Transaction(INVTEXT("Duplicate Collection Entries"));
+
+		// Duplicate in reverse order to preserve indices
+		Selected.Sort([](int32 A, int32 B) { return A > B; });
+		for (int32 Index : Selected)
+		{
+			ArrayHandle->DuplicateItem(Index);
+		}
 	}
 
 	RefreshGrid();
@@ -456,11 +511,15 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
 	if (!ArrayHandle.IsValid()) { return FReply::Handled(); }
 
-	// Delete in reverse order to preserve indices
-	Selected.Sort([](int32 A, int32 B) { return A > B; });
-	for (int32 Index : Selected)
 	{
-		ArrayHandle->DeleteItem(Index);
+		FScopedTransaction Transaction(INVTEXT("Delete Collection Entries"));
+
+		// Delete in reverse order to preserve indices
+		Selected.Sort([](int32 A, int32 B) { return A > B; });
+		for (int32 Index : Selected)
+		{
+			ArrayHandle->DeleteItem(Index);
+		}
 	}
 
 	RefreshGrid();
