@@ -37,7 +37,7 @@ namespace PCGExCollections
 
 		if (Details.bUseCategories)
 		{
-			CategoryGetter = Details.GetValueSettingCategory();
+			CategoryGetter = Details.Category.GetValueSetting();
 			if (!CategoryGetter->Init(InDataFacade)) { return false; }
 		}
 
@@ -55,7 +55,7 @@ namespace PCGExCollections
 	}
 
 	// Entry picking: category filter → distribution strategy → subcollection recursion.
-	// When a category is active, picks are first filtered to entries within that category.
+	// When a category is active, the distribution strategy is applied within the category.
 	// If the category yields a subcollection entry, WorkingCollection switches to it and
 	// the main distribution strategy is applied to the subcollection instead.
 	FPCGExEntryAccessResult FDistributionHelper::GetEntry(int32 PointIndex, int32 Seed) const
@@ -73,9 +73,42 @@ namespace PCGExCollections
 			}
 
 			const TSharedPtr<PCGExAssetCollection::FCategory>& Category = *CategoryPtr;
-			const int32 PickIndex = (Category->Num() == 1)
-				                        ? Category->Indices[0]
-				                        : Category->GetPickRandomWeighted(Seed);
+
+			int32 PickIndex;
+
+			if (Category->Num() == 1)
+			{
+				PickIndex = Category->Indices[0];
+			}
+			else
+			{
+				switch (Details.Distribution)
+				{
+				default:
+				case EPCGExDistribution::WeightedRandom:
+					PickIndex = Category->GetPickRandomWeighted(Seed);
+					break;
+				case EPCGExDistribution::Random:
+					PickIndex = Category->GetPickRandom(Seed);
+					break;
+				case EPCGExDistribution::Index:
+					{
+						const auto& IndexSettings = Details.IndexSettings;
+						const int32 CategoryMaxIndex = Category->Num() - 1;
+						double UserIndex = IndexGetter->Read(PointIndex);
+
+						if (IndexSettings.bRemapIndexToCollectionSize && MaxInputIndex > 0)
+						{
+							UserIndex = PCGExMath::Remap(UserIndex, 0, MaxInputIndex, 0, CategoryMaxIndex);
+							UserIndex = PCGExMath::TruncateDbl(UserIndex, IndexSettings.TruncateRemap);
+						}
+
+						const int32 Sanitized = PCGExMath::SanitizeIndex(static_cast<int32>(UserIndex), CategoryMaxIndex, IndexSettings.IndexSafety);
+						PickIndex = Category->GetPick(Sanitized, IndexSettings.PickMode);
+					}
+					break;
+				}
+			}
 
 			auto Result = Collection->GetEntryRaw(PickIndex);
 			if (Result && Result.Entry->HasValidSubCollection())
@@ -88,7 +121,7 @@ namespace PCGExCollections
 			}
 		}
 
-		// Apply distribution strategy
+		// Apply distribution strategy (no category, or category resolved to a subcollection)
 		switch (Details.Distribution)
 		{
 		case EPCGExDistribution::WeightedRandom: return WorkingCollection->GetEntryWeightedRandom(Seed);
@@ -137,9 +170,42 @@ namespace PCGExCollections
 			}
 
 			const TSharedPtr<PCGExAssetCollection::FCategory>& Category = *CategoryPtr;
-			const int32 PickIndex = (Category->Num() == 1)
-				                        ? Category->Indices[0]
-				                        : Category->GetPickRandomWeighted(Seed);
+
+			int32 PickIndex;
+
+			if (Category->Num() == 1)
+			{
+				PickIndex = Category->Indices[0];
+			}
+			else
+			{
+				switch (Details.Distribution)
+				{
+				default:
+				case EPCGExDistribution::WeightedRandom:
+					PickIndex = Category->GetPickRandomWeighted(Seed);
+					break;
+				case EPCGExDistribution::Random:
+					PickIndex = Category->GetPickRandom(Seed);
+					break;
+				case EPCGExDistribution::Index:
+					{
+						const auto& IndexSettings = Details.IndexSettings;
+						const int32 CategoryMaxIndex = Category->Num() - 1;
+						double UserIndex = IndexGetter->Read(PointIndex);
+
+						if (IndexSettings.bRemapIndexToCollectionSize && MaxInputIndex > 0)
+						{
+							UserIndex = PCGExMath::Remap(UserIndex, 0, MaxInputIndex, 0, CategoryMaxIndex);
+							UserIndex = PCGExMath::TruncateDbl(UserIndex, IndexSettings.TruncateRemap);
+						}
+
+						const int32 Sanitized = PCGExMath::SanitizeIndex(static_cast<int32>(UserIndex), CategoryMaxIndex, IndexSettings.IndexSafety);
+						PickIndex = Category->GetPick(Sanitized, IndexSettings.PickMode);
+					}
+					break;
+				}
+			}
 
 			auto Result = Collection->GetEntryRaw(PickIndex, TagInheritance, OutTags);
 			if (Result && Result.Entry->HasValidSubCollection())
@@ -211,7 +277,7 @@ namespace PCGExCollections
 
 		case EPCGExDistribution::Index:
 			{
-				const int32 Index = IndexGetter ? IndexGetter->Read(PointIndex) : 0;
+				const int32 Index = IndexGetter ? static_cast<int32>(IndexGetter->Read(PointIndex)) : 0;
 				const int32 Sanitized = PCGExMath::SanitizeIndex(Index, InMicroCache->Num() - 1, Details.IndexSettings.IndexSafety);
 				return InMicroCache->GetPick(Sanitized, Details.IndexSettings.PickMode);
 			}
@@ -348,7 +414,7 @@ namespace PCGExCollections
 
 	void FPickUnpacker::UnpackPin(FPCGContext* InContext, const FName InPinLabel)
 	{
-		for (TArray<FPCGTaggedData> Params = InContext->InputData.GetParamsByPin(InPinLabel.IsNone() ? Labels::SourceCollectionMapLabel : InPinLabel); 
+		for (TArray<FPCGTaggedData> Params = InContext->InputData.GetParamsByPin(InPinLabel.IsNone() ? Labels::SourceCollectionMapLabel : InPinLabel);
 			const FPCGTaggedData& InTaggedData : Params)
 		{
 			const UPCGParamData* ParamData = Cast<UPCGParamData>(InTaggedData.Data);

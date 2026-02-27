@@ -70,6 +70,24 @@ TArray<FPCGPinProperties> UPCGExAssetStagingSettings::OutputPinProperties() cons
 
 #pragma endregion
 
+#pragma region FPCGExAssetStagingContext
+
+void FPCGExAssetStagingContext::RegisterAssetDependencies()
+{
+	FPCGExPointsProcessorContext::RegisterAssetDependencies();
+
+	PCGEX_SETTINGS_LOCAL(AssetStaging)
+
+	// For AttributeSet mode, we built the collection in Boot but assets aren't loaded yet.
+	// Register them so PCG's dependency system will preload before we process.
+	if (Settings->CollectionSource == EPCGExCollectionSource::AttributeSet)
+	{
+		MainCollection->GetAssetPaths(GetRequiredAssets(), PCGExAssetCollection::ELoadingFlags::Recursive);
+	}
+}
+
+#pragma endregion
+
 #pragma region FPCGExAssetStagingElement
 
 bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
@@ -177,28 +195,6 @@ FString UPCGExAssetStagingSettings::GetDisplayName() const
 	return TEXT("Staging [ ") + DisplayName + TEXT(" ]");
 }
 #endif
-
-#pragma endregion
-
-#pragma region FPCGExAssetStagingContext
-
-void FPCGExAssetStagingContext::RegisterAssetDependencies()
-{
-	FPCGExPointsProcessorContext::RegisterAssetDependencies();
-
-	PCGEX_SETTINGS_LOCAL(AssetStaging)
-
-	// For AttributeSet mode, we built the collection in Boot but assets aren't loaded yet.
-	// Register them so PCG's dependency system will preload before we process.
-	if (Settings->CollectionSource == EPCGExCollectionSource::AttributeSet)
-	{
-		MainCollection->GetAssetPaths(GetRequiredAssets(), PCGExAssetCollection::ELoadingFlags::Recursive);
-	}
-}
-
-#pragma endregion
-
-#pragma region FPCGExAssetStagingElement (continued)
 
 void FPCGExAssetStagingElement::PostLoadAssetsDependencies(FPCGExContext* InContext) const
 {

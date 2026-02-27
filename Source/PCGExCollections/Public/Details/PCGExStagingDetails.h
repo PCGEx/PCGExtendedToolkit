@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExCollectionsCommon.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Math/PCGExMath.h"
 #include "PCGExStagingDetails.generated.h"
 
@@ -36,7 +37,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetDistributionIndexDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector IndexSource;
 
-	PCGEX_SETTING_VALUE_DECL(Index, int32);
+	PCGEX_SETTING_VALUE_DECL(Index, double);
 
 	/** Whether to remap index input value to collection size */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -94,22 +95,12 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetDistributionDetails
 	FPCGExAssetDistributionDetails() = default;
 
 	/** If enabled, will limit pick to entries flagged with a specific category. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Category", meta=(PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Category", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bUseCategories = false;
 
-	/** Type of Category */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Category", meta=(PCG_Overridable, EditCondition="bUseCategories", EditConditionHides))
-	EPCGExInputValueType CategoryInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read category name from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Category", meta=(PCG_Overridable, DisplayName="Category (Attr)", EditCondition="bUseCategories && CategoryInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName CategoryAttribute = FName("CategoryName");
-
-	/** Constant category value. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Category", meta=(PCG_Overridable, DisplayName="Category", EditCondition="bUseCategories && CategoryInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FName Category = FName("Category");
-
-	PCGEX_SETTING_VALUE_DECL(Category, FName);
+	/** Category name source (constant or per-point attribute). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Category", meta=(PCG_Overridable, EditCondition="bUseCategories"))
+	FPCGExInputShorthandNameName Category = FPCGExInputShorthandNameName(FName("Category"), FName("MyCategory"), false);
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, Bitmask, BitmaskEnum="/Script/PCGExCore.EPCGExSeedComponents"))
 	uint8 SeedComponents = 0;
