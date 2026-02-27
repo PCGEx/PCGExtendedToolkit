@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -9,7 +9,6 @@
 
 class FAssetThumbnail;
 class FAssetThumbnailPool;
-class IPropertyHandle;
 class SBox;
 class SBorder;
 class UPCGExAssetCollection;
@@ -18,7 +17,10 @@ template <typename OptionType> class SComboBox;
 
 using FThumbnailCacheMap = TMap<FSoftObjectPath, TSharedPtr<FAssetThumbnail>>;
 
-DECLARE_DELEGATE_RetVal_OneParam(TSharedRef<SWidget>, FOnGetTilePickerWidget, TSharedRef<IPropertyHandle> /*EntryHandle*/);
+DECLARE_DELEGATE_RetVal_ThreeParams(TSharedRef<SWidget>, FOnGetTilePickerWidget,
+	TWeakObjectPtr<UPCGExAssetCollection> /*Collection*/,
+	int32 /*EntryIndex*/,
+	FSimpleDelegate /*OnAssetChanged*/);
 DECLARE_DELEGATE_TwoParams(FOnTileClicked, int32 /*EntryIndex*/, const FPointerEvent& /*MouseEvent*/);
 DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnTileDragDetected, int32 /*EntryIndex*/, const FPointerEvent& /*MouseEvent*/);
 
@@ -39,7 +41,6 @@ public:
 	{
 	}
 
-	SLATE_ARGUMENT(TSharedPtr<IPropertyHandle>, EntryHandle)
 	SLATE_ARGUMENT(TSharedPtr<FAssetThumbnailPool>, ThumbnailPool)
 	SLATE_ARGUMENT(FOnGetTilePickerWidget, OnGetPickerWidget)
 	SLATE_ARGUMENT(float, TileSize)
@@ -57,9 +58,6 @@ public:
 	/** Refresh the thumbnail (e.g., when the entry's asset changes) */
 	void RefreshThumbnail();
 
-	/** Get the property handle for this tile's entry */
-	TSharedPtr<IPropertyHandle> GetEntryHandle() const { return EntryHandle; }
-
 	/** Set selection state (visual highlight) */
 	void SetSelected(bool bInSelected) { bIsSelected = bInSelected; }
 
@@ -72,7 +70,6 @@ public:
 	virtual FReply OnDragDetected(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 
 private:
-	TSharedPtr<IPropertyHandle> EntryHandle;
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 	TSharedPtr<FAssetThumbnail> Thumbnail;
 	TSharedPtr<SBox> ThumbnailBox;
@@ -90,7 +87,6 @@ private:
 	TSharedPtr<TArray<TSharedPtr<FName>>> CategoryOptions;
 	TSharedPtr<SWidgetSwitcher> CategoryWidgetSwitcher;
 	TSharedPtr<SComboBox<TSharedPtr<FName>>> CategoryCombo;
-	TSharedPtr<IPropertyHandle> CategoryHandle;
 
 	// Delegates
 	FOnTileClicked OnTileClicked;

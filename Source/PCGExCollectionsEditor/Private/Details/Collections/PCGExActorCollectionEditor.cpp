@@ -12,6 +12,7 @@
 
 #include "Selection.h"
 #include "Collections/PCGExActorCollection.h"
+#include "GameFramework/Actor.h"
 #include "Misc/PackageName.h"
 
 static void AddOrUpdateActorEntry(UPCGExActorCollection* Collection, AActor* Actor)
@@ -246,4 +247,9 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 		];
 
 #undef PCGEX_CURRENT_COLLECTION
+}
+
+const UClass* FPCGExActorCollectionEditor::GetTilePickerAllowedClass() const
+{
+	return AActor::StaticClass();
 }

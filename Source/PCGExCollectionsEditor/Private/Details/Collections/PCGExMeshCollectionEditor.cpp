@@ -10,6 +10,7 @@
 
 #include "Core/PCGExAssetCollection.h"
 #include "Collections/PCGExMeshCollection.h"
+#include "Engine/StaticMesh.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SComboButton.h"
@@ -163,4 +164,9 @@ void FPCGExMeshCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolba
 #pragma endregion
 
 #undef PCGEX_CURRENT_COLLECTION
+}
+
+const UClass* FPCGExMeshCollectionEditor::GetTilePickerAllowedClass() const
+{
+	return UStaticMesh::StaticClass();
 }
