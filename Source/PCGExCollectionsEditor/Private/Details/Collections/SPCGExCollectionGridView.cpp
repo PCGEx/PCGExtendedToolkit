@@ -650,28 +650,109 @@ void SPCGExCollectionGridView::OnTileCategoryChanged()
 
 // ── Category operations ─────────────────────────────────────────────────────
 
-void SPCGExCollectionGridView::OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices)
+void SPCGExCollectionGridView::OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices, int32 InsertBeforeLocalIndex)
 {
 	UPCGExAssetCollection* Coll = Collection.Get();
 	if (!Coll || Indices.IsEmpty()) { return; }
+
+	FEntriesArrayAccess Access = GetEntriesAccess();
+	UScriptStruct* EntryStruct = (Access.IsValid() && Access.InnerProp) ? Access.InnerProp->Struct : nullptr;
 
 	bIsBatchOperation = true;
 	{
 		FScopedTransaction Transaction(INVTEXT("Move Entries to Category"));
 		Coll->Modify();
 
+		// Step 1: Change categories
 		for (int32 Index : Indices)
 		{
 			FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Index);
 			if (Entry) { Entry->Category = TargetCategory; }
 		}
 
+		// Step 2: If a drop position was given, reorder within target category
+		// InsertBeforeLocalIndex was computed against the ORIGINAL tiles in the target
+		// category (i.e. the non-dragged entries), so use it directly — no adjustment needed.
+		if (InsertBeforeLocalIndex != INDEX_NONE && EntryStruct && Access.IsValid())
+		{
+			RebuildCategoryCache();
+
+			const TArray<int32>* CatIndices = CategoryToEntryIndices.Find(TargetCategory);
+			if (CatIndices && CatIndices->Num() >= 2)
+			{
+				TSet<int32> DraggedSet(Indices);
+				TArray<int32> NonDragged;
+				TArray<int32> Dragged;
+
+				for (int32 Idx : *CatIndices)
+				{
+					if (DraggedSet.Contains(Idx)) { Dragged.Add(Idx); }
+					else { NonDragged.Add(Idx); }
+				}
+
+				if (!Dragged.IsEmpty())
+				{
+					const int32 ClampedInsert = FMath::Clamp(InsertBeforeLocalIndex, 0, NonDragged.Num());
+
+					TArray<int32> DesiredOrder;
+					DesiredOrder.Reserve(CatIndices->Num());
+					for (int32 i = 0; i < ClampedInsert; i++) { DesiredOrder.Add(NonDragged[i]); }
+					DesiredOrder.Append(Dragged);
+					for (int32 i = ClampedInsert; i < NonDragged.Num(); i++) { DesiredOrder.Add(NonDragged[i]); }
+
+					if (DesiredOrder != *CatIndices)
+					{
+						FScriptArrayHelper ArrayHelper(Access.ArrayProp, Access.ArrayData);
+
+						const int32 StructSize = EntryStruct->GetStructureSize();
+						TArray<uint8> Temp;
+						Temp.SetNumUninitialized(StructSize);
+						EntryStruct->InitializeStruct(Temp.GetData());
+
+						TArray<int32> CurrentOrder = *CatIndices;
+						for (int32 i = 0; i < DesiredOrder.Num(); i++)
+						{
+							if (CurrentOrder[i] == DesiredOrder[i]) { continue; }
+
+							const int32 j = CurrentOrder.Find(DesiredOrder[i]);
+							check(j != INDEX_NONE);
+
+							uint8* PtrA = ArrayHelper.GetRawPtr((*CatIndices)[i]);
+							uint8* PtrB = ArrayHelper.GetRawPtr((*CatIndices)[j]);
+
+							EntryStruct->CopyScriptStruct(Temp.GetData(), PtrA);
+							EntryStruct->CopyScriptStruct(PtrA, PtrB);
+							EntryStruct->CopyScriptStruct(PtrB, Temp.GetData());
+
+							Swap(CurrentOrder[i], CurrentOrder[j]);
+						}
+
+						EntryStruct->DestroyStruct(Temp.GetData());
+
+						// Update selection to follow dragged entries to their new positions
+						SelectedIndices.Reset();
+						for (int32 i = 0; i < DesiredOrder.Num(); i++)
+						{
+							if (DraggedSet.Contains(DesiredOrder[i]))
+							{
+								SelectedIndices.Add((*CatIndices)[i]);
+							}
+						}
+						LastClickedIndex = SelectedIndices.Num() > 0 ? SelectedIndices.Array()[0] : INDEX_NONE;
+					}
+				}
+			}
+		}
+
 		Coll->PostEditChange();
 	}
 	bIsBatchOperation = false;
 
-	SelectedIndices.Reset();
-	LastClickedIndex = INDEX_NONE;
+	if (InsertBeforeLocalIndex == INDEX_NONE)
+	{
+		SelectedIndices.Reset();
+		LastClickedIndex = INDEX_NONE;
+	}
 
 	IncrementalCategoryRefresh();
 	UpdateDetailForSelection();
@@ -1303,7 +1384,7 @@ FReply SPCGExCollectionGridView::OnDrop(const FGeometry& MyGeometry, const FDrag
 	// Internal tile drops outside any category group = move to uncategorized
 	if (const TSharedPtr<FPCGExCollectionTileDragDropOp> TileOp = InDragDropEvent.GetOperationAs<FPCGExCollectionTileDragDropOp>())
 	{
-		OnTileDropOnCategory(NAME_None, TileOp->DraggedIndices);
+		OnTileDropOnCategory(NAME_None, TileOp->DraggedIndices, INDEX_NONE);
 		return FReply::Handled();
 	}
 

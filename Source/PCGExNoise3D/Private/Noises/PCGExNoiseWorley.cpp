@@ -85,8 +85,7 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 		Result = WF1;
 	}
 
-	// Convert to [-1, 1] range
-	return Result * 2.0 - 1.0;
+	return Result;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWorley::CreateOperation(FPCGExContext* InContext) const

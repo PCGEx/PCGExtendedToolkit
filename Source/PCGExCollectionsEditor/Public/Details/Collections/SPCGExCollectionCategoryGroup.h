@@ -14,7 +14,7 @@ class SBorder;
 class SImage;
 
 DECLARE_DELEGATE_TwoParams(FOnCategoryRenamed, FName /*OldName*/, FName /*NewName*/);
-DECLARE_DELEGATE_TwoParams(FOnTileDropOnCategory, FName /*TargetCategory*/, const TArray<int32>& /*Indices*/);
+DECLARE_DELEGATE_ThreeParams(FOnTileDropOnCategory, FName /*TargetCategory*/, const TArray<int32>& /*Indices*/, int32 /*InsertBeforeLocalIndex*/);
 DECLARE_DELEGATE_TwoParams(FOnAssetDropOnCategory, FName /*TargetCategory*/, const TArray<FAssetData>& /*Assets*/);
 DECLARE_DELEGATE_OneParam(FOnAddToCategory, FName /*Category*/);
 DECLARE_DELEGATE_TwoParams(FOnCategoryExpansionChanged, FName /*Category*/, bool /*bIsExpanded*/);

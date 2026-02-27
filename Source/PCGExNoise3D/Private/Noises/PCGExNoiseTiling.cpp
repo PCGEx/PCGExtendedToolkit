@@ -57,7 +57,7 @@ double FPCGExNoiseTiling::GetDouble(const FVector& Position) const
 {
 	if (Octaves <= 1)
 	{
-		return ApplyRemap(GenerateRaw(TransformPosition(Position) * Frequency));
+		return ApplyRemap(GenerateRaw(TransformPosition(Position) * Frequency) * 0.5 + 0.5);
 	}
 
 	// For tiling with octaves, we scale frequency instead of changing period
@@ -74,7 +74,7 @@ double FPCGExNoiseTiling::GetDouble(const FVector& Position) const
 		Freq *= Lacunarity;
 	}
 
-	return ApplyRemap(Sum * Bounding);
+	return ApplyRemap(Sum * Bounding * 0.5 + 0.5);
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryTiling::CreateOperation(FPCGExContext* InContext) const

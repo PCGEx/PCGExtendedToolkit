@@ -15,7 +15,7 @@ double FPCGExNoiseWhite::GenerateRaw(const FVector& Position) const
 	const int32 Z = FastFloor(Position.Z);
 
 	const uint32 H = Hash32(X + Seed, Y, Z);
-	return Hash32ToDouble(H);
+	return Hash32ToDouble01(H);
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWhite::CreateOperation(FPCGExContext* InContext) const

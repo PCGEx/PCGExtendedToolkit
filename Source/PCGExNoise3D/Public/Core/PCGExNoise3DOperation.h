@@ -48,6 +48,9 @@ public:
 	/** Contrast curve type */
 	EPCGExContrastCurve ContrastCurve = EPCGExContrastCurve::Power;
 
+	/** Post-remap scale multiplier */
+	double Scale = 1.0;
+
 	/** Whether or not this operation wants transformed inputs */
 	bool bApplyTransform = false;
 
@@ -65,7 +68,7 @@ public:
 	/**
 	 * Generate scalar noise at position
 	 * @param Position World position
-	 * @return Noise value in [-1, 1] range
+	 * @return Noise value in [0, 1] range (before Scale)
 	 */
 	virtual double GetDouble(const FVector& Position) const;
 
@@ -121,17 +124,18 @@ protected:
 	virtual double GenerateRaw(const FVector& Position) const { return 0.0; }
 
 	/**
-	 * Apply post-processing: invert, remap curve, contrast
+	 * Apply post-processing: invert, remap curve, contrast, scale
+	 * Input and output in [0, 1] (before Scale)
 	 */
 	FORCEINLINE double ApplyRemap(double Value) const
 	{
-		if (bInvert) { Value = -Value; }
-		if (RemapLUT) { Value = RemapLUT->Eval(Value * 0.5 + 0.5) * 2.0 - 1.0; }
+		if (bInvert) { Value = 1.0 - Value; }
+		if (RemapLUT) { Value = RemapLUT->Eval(Value); }
 		if (!FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
 		{
 			Value = PCGExMath::Contrast::ApplyContrast(Value, Contrast, static_cast<int32>(ContrastCurve));
 		}
-		return Value;
+		return Value * Scale;
 	}
 
 	/**
