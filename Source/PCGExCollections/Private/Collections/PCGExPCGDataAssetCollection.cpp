@@ -5,6 +5,7 @@
 
 #include "Engine/World.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/Package.h"
 
 #if WITH_EDITOR
 #include "AssetRegistry/AssetData.h"
@@ -121,7 +122,7 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 				? Settings.DefaultLevelExporterClass.Get()
 				: UPCGExDefaultLevelDataExporter::StaticClass();
 #if PCGEX_ENGINE_VERSION < 507
-			FallbackExporter = NewObject<UPCGExLevelDataExporter>(static_cast<UObject*>(GetTransientPackage()), ExporterClass);
+			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackage(), ExporterClass);
 #else
 			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackageAsObject(), ExporterClass);
 #endif
