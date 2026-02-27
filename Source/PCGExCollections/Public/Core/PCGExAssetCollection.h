@@ -440,6 +440,11 @@ public:
 	/** Get entry by raw Entries array index (bypasses cache). Use for indices from FCategory, packed hashes, etc. */
 	FPCGExEntryAccessResult GetEntryRaw(int32 RawIndex) const;
 
+#if WITH_EDITOR
+	/** Editor-only mutable access to entry at raw array index. For editor UI direct writes. */
+	FPCGExAssetCollectionEntry* EDITOR_GetMutableEntry(int32 Index) { return GetMutableEntryAtRawIndex(Index); }
+#endif
+
 	/** Get entry by index with pick mode */
 	FPCGExEntryAccessResult GetEntry(int32 Index, int32 Seed, EPCGExIndexPickMode PickMode) const;
 
