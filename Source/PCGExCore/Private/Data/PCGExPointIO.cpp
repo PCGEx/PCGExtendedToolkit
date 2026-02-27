@@ -484,7 +484,7 @@ namespace PCGExData
 		OutKeys.Reset();
 	}
 
-	FPointIO::~FPointIO() = default;
+	FPointIO::~FPointIO() {};
 
 	bool FPointIO::StageOutput(FPCGExContext* TargetContext) const
 	{
@@ -662,7 +662,7 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 		Initialize(Sources, InitOut);
 	}
 
-	FPointIOCollection::~FPointIOCollection() = default;
+	FPointIOCollection::~FPointIOCollection() {};
 
 	void FPointIOCollection::Initialize(TArray<FPCGTaggedData>& Sources, const EIOInit InitOut)
 	{
