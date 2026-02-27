@@ -184,9 +184,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	const float ContentWidth = TileSize + 16.f;
 
 	// Index overlay text
-	const FText IndexOverlayText = (CategoryIndex != INDEX_NONE)
-		                               ? FText::Format(INVTEXT("[{0}|{1}]"), FText::AsNumber(EntryIndex), FText::AsNumber(CategoryIndex))
-		                               : FText::Format(INVTEXT("[{0}]"), FText::AsNumber(EntryIndex));
+	const FText PrimaryIndexText = FText::AsNumber(EntryIndex);
+	const bool bHasCategoryIndex = (CategoryIndex != INDEX_NONE);
 
 	ChildSlot
 	[
@@ -196,8 +195,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 		.BorderBackgroundColor_Lambda([this]() -> FSlateColor
 		{
 			return bIsSelected
-				       ? FSlateColor(FLinearColor(0.15f, 0.4f, 0.8f, 0.4f))
-				       : FSlateColor(FLinearColor::Transparent);
+				       ? FSlateColor(FLinearColor(0.1f, 0.4f, 0.9f, 1.0f))
+				       : FSlateColor(FLinearColor(0, 0, 0, 0));
 		})
 		.Padding(2.f)
 		[
@@ -337,6 +336,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							]
 						]
 
+						// Index tag (top-left)
 						+ SOverlay::Slot()
 						.HAlign(HAlign_Left)
 						.VAlign(VAlign_Top)
@@ -345,12 +345,124 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							SNew(SBorder)
 							.BorderImage(FAppStyle::GetBrush("Brushes.White"))
 							.BorderBackgroundColor(FLinearColor(0, 0, 0, 0.7f))
-							.Padding(FMargin(3, 1))
+							.Padding(FMargin(5, 2))
 							[
-								SNew(STextBlock)
-								.Text(IndexOverlayText)
-								.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
-								.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								SNew(SHorizontalBox)
+
+								+ SHorizontalBox::Slot()
+								.AutoWidth()
+								[
+									SNew(STextBlock)
+									.Text(PrimaryIndexText)
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+
+								+ SHorizontalBox::Slot()
+								.AutoWidth()
+								[
+									SNew(STextBlock)
+									.Text(FText::Format(INVTEXT(" | {0}"), FText::AsNumber(CategoryIndex)))
+									.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+									.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.45f)))
+									.Visibility(bHasCategoryIndex ? EVisibility::HitTestInvisible : EVisibility::Collapsed)
+								]
+							]
+						]
+
+						// Meta badges (top-right)
+						+ SOverlay::Slot()
+						.HAlign(HAlign_Right)
+						.VAlign(VAlign_Top)
+						.Padding(2.f)
+						[
+							SNew(SHorizontalBox)
+
+							// Variations badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid() || Result.Entry->bIsSubCollection) { return EVisibility::Collapsed; }
+									const FPCGExFittingVariations& V = Result.Entry->Variations;
+									const bool bHasVariations =
+										V.OffsetMin != FVector::ZeroVector || V.OffsetMax != FVector::ZeroVector ||
+										V.RotationMin != FRotator::ZeroRotator || V.RotationMax != FRotator::ZeroRotator ||
+										V.ScaleMin != FVector::OneVector || V.ScaleMax != FVector::OneVector;
+									return bHasVariations ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.6f, 0.4f, 0.1f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text(INVTEXT("V"))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+							]
+
+							// Sockets badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid() || Result.Entry->bIsSubCollection) { return EVisibility::Collapsed; }
+									return !Result.Entry->Staging.Sockets.IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.1f, 0.5f, 0.6f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text_Lambda([WeakColl, Idx]() -> FText
+									{
+										const UPCGExAssetCollection* Coll = WeakColl.Get();
+										if (!Coll) { return FText::GetEmpty(); }
+										const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+										if (!Result.IsValid()) { return FText::GetEmpty(); }
+										return FText::Format(INVTEXT("S:{0}"), FText::AsNumber(Result.Entry->Staging.Sockets.Num()));
+									})
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+							]
+
+							// Tags badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid()) { return EVisibility::Collapsed; }
+									return !Result.Entry->Tags.IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.4f, 0.2f, 0.6f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text(INVTEXT("T"))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
 							]
 						]
 					]
@@ -368,20 +480,10 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 					.AutoHeight()
 					.Padding(0, 2, 0, 0)
 					[
-						SNew(SHorizontalBox)
-						+ SHorizontalBox::Slot()
-						.AutoWidth()
-						.VAlign(VAlign_Center)
-						.Padding(0, 0, 4, 0)
-						[
-							SNew(STextBlock)
-							.Text(INVTEXT("Cat"))
-							.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
-							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f)))
-						]
-						+ SHorizontalBox::Slot()
-						.FillWidth(1.f)
-						.VAlign(VAlign_Center)
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetNoBrush())
+						.ColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.8f))
+						.Padding(0)
 						[
 							CategoryWidget
 						]

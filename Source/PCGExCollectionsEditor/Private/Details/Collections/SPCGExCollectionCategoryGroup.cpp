@@ -10,7 +10,6 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SExpandableArea.h"
 #include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -26,6 +25,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 	OnAddToCategory = InArgs._OnAddToCategory;
 	OnExpansionChanged = InArgs._OnExpansionChanged;
 	OnTileReorderInCategory = InArgs._OnTileReorderInCategory;
+	bIsCollapsed = InArgs._bIsCollapsed;
 
 	const bool bIsUncategorized = CategoryName.IsNone();
 	const FText DisplayName = bIsUncategorized ? INVTEXT("Uncategorized") : FText::FromName(CategoryName);
@@ -56,100 +56,146 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SAssignNew(DropHighlightBorder, SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+		.BorderImage(FAppStyle::GetBrush("Brushes.White"))
 		.BorderBackgroundColor_Lambda([this]() -> FSlateColor
 		{
 			return bIsDragOver
 				       ? FSlateColor(FLinearColor(0.2f, 0.5f, 1.f, 0.3f))
 				       : FSlateColor(FLinearColor::Transparent);
 		})
-		.Padding(2.f)
+		.Padding(0)
 		[
-			SAssignNew(ExpandableArea, SExpandableArea)
-			.InitiallyCollapsed(InArgs._bIsCollapsed)
-			.OnAreaExpansionChanged_Lambda([this](bool bIsExpanded)
-			{
-				OnExpansionChanged.ExecuteIfBound(CategoryName, bIsExpanded);
-			})
-			.HeaderPadding(FMargin(4.f, 2.f))
-			.HeaderContent()
+			SNew(SBorder)
+			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+			.BorderBackgroundColor(FLinearColor(0.75f, 0.75f, 0.75f, 1.f))
+			.Padding(FMargin(6.f, 4.f))
 			[
-				SNew(SHorizontalBox)
+				SNew(SVerticalBox)
 
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				.Padding(0, 0, 8, 0)
+				// Header row
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0, 0, 0, 2)
 				[
-					HeaderNameWidget
-				]
+					SNew(SHorizontalBox)
 
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				[
-					SNew(STextBlock)
-					.Text(CountText)
-					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
-					.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.4f)))
-				]
-
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.f)
-				[
-					SNullWidget::NullWidget
-				]
-
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				.Padding(4, 0, 0, 0)
-				[
-					SNew(SButton)
-					.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-					.ContentPadding(FMargin(1, 1))
-					.OnClicked_Lambda([this]() -> FReply
-					{
-						OnAddToCategory.ExecuteIfBound(CategoryName);
-						return FReply::Handled();
-					})
-					.ToolTipText(INVTEXT("Add new entry to this category"))
+					// Collapse arrow
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(0, 0, 4, 0)
 					[
-						SNew(SImage)
-						.Image(FAppStyle::GetBrush("Icons.Plus"))
-						.DesiredSizeOverride(FVector2D(12, 12))
-						.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.6f)))
+						SNew(SButton)
+						.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+						.ContentPadding(FMargin(0))
+						.OnClicked_Lambda([this]() -> FReply
+						{
+							bIsCollapsed = !bIsCollapsed;
+							if (BodyContainer.IsValid())
+							{
+								BodyContainer->SetVisibility(bIsCollapsed ? EVisibility::Collapsed : EVisibility::Visible);
+							}
+							if (CollapseArrow.IsValid())
+							{
+								CollapseArrow->SetImage(FAppStyle::GetBrush(
+									bIsCollapsed ? "TreeArrow_Collapsed" : "TreeArrow_Expanded"));
+							}
+							OnExpansionChanged.ExecuteIfBound(CategoryName, !bIsCollapsed);
+							return FReply::Handled();
+						})
+						[
+							SAssignNew(CollapseArrow, SImage)
+							.Image(FAppStyle::GetBrush(bIsCollapsed ? "TreeArrow_Collapsed" : "TreeArrow_Expanded"))
+							.DesiredSizeOverride(FVector2D(10, 10))
+							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.7f)))
+						]
+					]
+
+					// Category name
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(0, 0, 8, 0)
+					[
+						HeaderNameWidget
+					]
+
+					// Count
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					[
+						SNew(STextBlock)
+						.Text(CountText)
+						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
+						.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.4f)))
+					]
+
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.f)
+					[
+						SNullWidget::NullWidget
+					]
+
+					// Add button
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(4, 0, 0, 0)
+					[
+						SNew(SButton)
+						.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+						.ContentPadding(FMargin(1, 1))
+						.OnClicked_Lambda([this]() -> FReply
+						{
+							OnAddToCategory.ExecuteIfBound(CategoryName);
+							return FReply::Handled();
+						})
+						.ToolTipText(INVTEXT("Add new entry to this category"))
+						[
+							SNew(SImage)
+							.Image(FAppStyle::GetBrush("Icons.Plus"))
+							.DesiredSizeOverride(FVector2D(12, 12))
+							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.6f)))
+						]
 					]
 				]
-			]
-			.BodyContent()
-			[
-				SNew(SOverlay)
 
-				+ SOverlay::Slot()
+				// Body (tiles wrap box)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
 				[
-					SNew(SBox)
-					.Clipping(EWidgetClipping::ClipToBounds)
+					SAssignNew(BodyContainer, SBox)
+					.Visibility(bIsCollapsed ? EVisibility::Collapsed : EVisibility::Visible)
 					[
-						SAssignNew(TilesWrapBox, SWrapBox)
-						.UseAllottedSize(true)
-						.InnerSlotPadding(FVector2D(4.f, 4.f))
-					]
-				]
+						SNew(SOverlay)
 
-				+ SOverlay::Slot()
-				.HAlign(HAlign_Left)
-				.VAlign(VAlign_Top)
-				[
-					SAssignNew(InsertIndicator, SBox)
-					.Visibility(EVisibility::Collapsed)
-					.WidthOverride(3.f)
-					.HeightOverride(1.f)
-					[
-						SNew(SBorder)
-						.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
-						.BorderBackgroundColor(FLinearColor(0.3f, 0.6f, 1.f, 0.8f))
-						.Padding(0)
+						+ SOverlay::Slot()
+						[
+							SNew(SBox)
+							.Clipping(EWidgetClipping::ClipToBounds)
+							[
+								SAssignNew(TilesWrapBox, SWrapBox)
+								.UseAllottedSize(true)
+								.InnerSlotPadding(FVector2D(4.f, 4.f))
+							]
+						]
+
+						+ SOverlay::Slot()
+						.HAlign(HAlign_Left)
+						.VAlign(VAlign_Top)
+						[
+							SAssignNew(InsertIndicator, SBox)
+							.Visibility(EVisibility::Collapsed)
+							.WidthOverride(3.f)
+							.HeightOverride(1.f)
+							[
+								SNew(SBorder)
+								.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+								.BorderBackgroundColor(FLinearColor(0.3f, 0.6f, 1.f, 0.8f))
+								.Padding(0)
+							]
+						]
 					]
 				]
 			]
@@ -175,11 +221,6 @@ void SPCGExCollectionCategoryGroup::ClearTiles()
 	{
 		TilesWrapBox->ClearChildren();
 	}
-}
-
-bool SPCGExCollectionCategoryGroup::IsCollapsed() const
-{
-	return ExpandableArea.IsValid() && !ExpandableArea->IsExpanded();
 }
 
 FReply SPCGExCollectionCategoryGroup::OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent)

@@ -10,8 +10,8 @@
 struct FAssetData;
 class SBox;
 class SWrapBox;
-class SExpandableArea;
 class SBorder;
+class SImage;
 
 DECLARE_DELEGATE_TwoParams(FOnCategoryRenamed, FName /*OldName*/, FName /*NewName*/);
 DECLARE_DELEGATE_TwoParams(FOnTileDropOnCategory, FName /*TargetCategory*/, const TArray<int32>& /*Indices*/);
@@ -57,7 +57,7 @@ public:
 	FName GetCategoryName() const { return CategoryName; }
 
 	/** Get collapse state */
-	bool IsCollapsed() const;
+	bool IsCollapsed() const { return bIsCollapsed; }
 
 	// Drop target overrides
 	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
@@ -76,8 +76,10 @@ private:
 	int32 DropInsertIndex = INDEX_NONE;
 
 	TSharedPtr<SWrapBox> TilesWrapBox;
-	TSharedPtr<SExpandableArea> ExpandableArea;
 	TSharedPtr<SBorder> DropHighlightBorder;
+	TSharedPtr<SBox> BodyContainer;
 	TSharedPtr<SBox> InsertIndicator;
+	TSharedPtr<SImage> CollapseArrow;
 	bool bIsDragOver = false;
+	bool bIsCollapsed = false;
 };
