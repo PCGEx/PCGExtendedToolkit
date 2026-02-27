@@ -75,7 +75,7 @@ namespace PCGExCollections
 		PCGExAssetCollection::FCache* Cache = nullptr;
 		UPCGExAssetCollection* Collection = nullptr;
 
-		TSharedPtr<PCGExDetails::TSettingValue<int32>> IndexGetter;
+		TSharedPtr<PCGExDetails::TSettingValue<double>> IndexGetter;
 		TSharedPtr<PCGExDetails::TSettingValue<FName>> CategoryGetter;
 		double MaxInputIndex = 0;
 
@@ -134,7 +134,7 @@ namespace PCGExCollections
 	class PCGEXCOLLECTIONS_API FMicroDistributionHelper : public TSharedFromThis<FMicroDistributionHelper>
 	{
 	protected:
-		TSharedPtr<PCGExDetails::TSettingValue<int32>> IndexGetter;
+		TSharedPtr<PCGExDetails::TSettingValue<double>> IndexGetter;
 		double MaxInputIndex = 0;
 
 	public:
