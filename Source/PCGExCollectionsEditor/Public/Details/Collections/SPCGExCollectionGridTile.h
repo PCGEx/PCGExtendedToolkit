@@ -49,8 +49,10 @@ public:
 	SLATE_ARGUMENT(int32, CategoryIndex)
 	SLATE_ARGUMENT(TSharedPtr<TArray<TSharedPtr<FName>>>, CategoryOptions)
 	SLATE_ARGUMENT(FThumbnailCacheMap*, ThumbnailCachePtr)
+	SLATE_ARGUMENT(bool*, BatchFlagPtr)
 	SLATE_EVENT(FOnTileClicked, OnTileClicked)
 	SLATE_EVENT(FOnTileDragDetected, OnTileDragDetected)
+	SLATE_EVENT(FSimpleDelegate, OnTileCategoryChanged)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -91,6 +93,10 @@ private:
 	// Delegates
 	FOnTileClicked OnTileClicked;
 	FOnTileDragDetected OnTileDragDetected;
+	FSimpleDelegate OnTileCategoryChanged;
+
+	// Batch flag — pointer to grid view's bIsBatchOperation (suppresses OnObjectModified during tile edits)
+	bool* BatchFlagPtr = nullptr;
 
 	// Cached state for short-circuiting RefreshThumbnail when nothing visual changed
 	FSoftObjectPath CachedStagingPath;

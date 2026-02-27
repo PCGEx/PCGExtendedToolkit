@@ -128,6 +128,7 @@ private:
 	// Tile callbacks
 	void OnTileClicked(int32 Index, const FPointerEvent& MouseEvent);
 	FReply OnTileDragDetected(int32 Index, const FPointerEvent& MouseEvent);
+	void OnTileCategoryChanged();
 
 	// Detail panel management
 	void UpdateDetailForSelection();

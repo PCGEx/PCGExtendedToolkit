@@ -323,8 +323,10 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 				.CategoryIndex(CatIdx)
 				.CategoryOptions(CategoryComboOptions)
 				.ThumbnailCachePtr(&ThumbnailCache)
+				.BatchFlagPtr(&bIsBatchOperation)
 				.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
-				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected));
+				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
+				.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged));
 
 			Group->AddTile(TileWidget);
 			ActiveTiles.Add(EntryIdx, Tile);
@@ -447,8 +449,10 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 				.CategoryIndex(CatIdx)
 				.CategoryOptions(CategoryComboOptions)
 				.ThumbnailCachePtr(&ThumbnailCache)
+				.BatchFlagPtr(&bIsBatchOperation)
 				.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
-				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected));
+				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
+				.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged));
 
 			Group->AddTile(TileWidget);
 			ActiveTiles.Add(EntryIdx, Tile);
@@ -461,7 +465,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 
 void SPCGExCollectionGridView::StructuralRefresh(EPCGExStructuralRefreshFlags Flags)
 {
-	ActiveTiles.Reset();
+	// Don't clear ActiveTiles here — IncrementalCategoryRefresh snapshots them for tile reuse
 
 	if (EnumHasAnyFlags(Flags, EPCGExStructuralRefreshFlags::ClearSelection))
 	{
@@ -624,6 +628,23 @@ FReply SPCGExCollectionGridView::OnTileDragDetected(int32 Index, const FPointerE
 
 	TSharedRef<FPCGExCollectionTileDragDropOp> DragOp = FPCGExCollectionTileDragDropOp::New(DraggedIndices, SourceCategory);
 	return FReply::Handled().BeginDragDrop(DragOp);
+}
+
+void SPCGExCollectionGridView::OnTileCategoryChanged()
+{
+	// Defer to next tick to avoid destroying the combobox widget during its own event handler
+	if (!bPendingCategoryRefresh)
+	{
+		bPendingCategoryRefresh = true;
+		RegisterActiveTimer(0.f, FWidgetActiveTimerDelegate::CreateLambda(
+			[this](double, float) -> EActiveTimerReturnType
+			{
+				bPendingCategoryRefresh = false;
+				IncrementalCategoryRefresh();
+				UpdateDetailForSelection();
+				return EActiveTimerReturnType::Stop;
+			}));
+	}
 }
 
 // ── Category operations ─────────────────────────────────────────────────────
@@ -930,8 +951,10 @@ void SPCGExCollectionGridView::PopulateCategoryTiles(FName Category)
 			.CategoryIndex(CatIdx)
 			.CategoryOptions(CategoryComboOptions)
 			.ThumbnailCachePtr(&ThumbnailCache)
+			.BatchFlagPtr(&bIsBatchOperation)
 			.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
-			.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected));
+			.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
+			.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged));
 
 		Group->AddTile(TileWidget);
 		ActiveTiles.Add(EntryIdx, Tile);

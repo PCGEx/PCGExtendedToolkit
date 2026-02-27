@@ -35,7 +35,9 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	CategoryOptions = InArgs._CategoryOptions;
 	OnTileClicked = InArgs._OnTileClicked;
 	OnTileDragDetected = InArgs._OnTileDragDetected;
+	OnTileCategoryChanged = InArgs._OnTileCategoryChanged;
 	ThumbnailCachePtr = InArgs._ThumbnailCachePtr;
+	BatchFlagPtr = InArgs._BatchFlagPtr;
 
 	TWeakObjectPtr<UPCGExAssetCollection> WeakColl = Collection;
 	const int32 Idx = EntryIndex;
@@ -82,10 +84,13 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 					FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
 					if (!Entry) { return; }
 
+					if (BatchFlagPtr) { *BatchFlagPtr = true; }
 					FScopedTransaction Transaction(INVTEXT("Change Category"));
 					Coll->Modify();
 					Entry->Category = *Selected;
 					Coll->PostEditChange();
+					if (BatchFlagPtr) { *BatchFlagPtr = false; }
+					OnTileCategoryChanged.ExecuteIfBound();
 				})
 				.OnGenerateWidget_Lambda([](TSharedPtr<FName> Item) -> TSharedRef<SWidget>
 				{
@@ -138,10 +143,13 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							if (Entry)
 							{
 								const FName NewCat = FName(*Text.ToString());
+								if (BatchFlagPtr) { *BatchFlagPtr = true; }
 								FScopedTransaction Transaction(INVTEXT("New Category"));
 								Coll->Modify();
 								Entry->Category = NewCat;
 								Coll->PostEditChange();
+								if (BatchFlagPtr) { *BatchFlagPtr = false; }
+								OnTileCategoryChanged.ExecuteIfBound();
 							}
 						}
 					}
@@ -233,10 +241,12 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									if (!Coll) { return; }
 									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
 									if (!Entry) { return; }
+									if (BatchFlagPtr) { *BatchFlagPtr = true; }
 									FScopedTransaction Transaction(INVTEXT("Toggle SubCollection"));
 									Coll->Modify();
 									Entry->bIsSubCollection = (NewState == ECheckBoxState::Checked);
 									Coll->PostEditChange();
+									if (BatchFlagPtr) { *BatchFlagPtr = false; }
 									RefreshThumbnail();
 								})
 							]
@@ -263,7 +273,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							[
 								SNew(SSpinBox<int32>)
 								.MinValue(0)
-								.MaxValue(TNumericLimits<int32>::Max())
+								.Delta(1)
+								.SliderExponent(2)
 								.Value_Lambda([WeakColl, Idx]() -> int32
 								{
 									const UPCGExAssetCollection* Coll = WeakColl.Get();
@@ -271,8 +282,9 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
 									return Result.IsValid() ? Result.Entry->Weight : 0;
 								})
-								.OnBeginSliderMovement_Lambda([WeakColl]()
+								.OnBeginSliderMovement_Lambda([this, WeakColl]()
 								{
+									if (BatchFlagPtr) { *BatchFlagPtr = true; }
 									if (GEditor) { GEditor->BeginTransaction(INVTEXT("Adjust Weight")); }
 									if (UPCGExAssetCollection* Coll = WeakColl.Get()) { Coll->Modify(); }
 								})
@@ -283,21 +295,24 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
 									if (Entry) { Entry->Weight = NewVal; }
 								})
-								.OnEndSliderMovement_Lambda([WeakColl](int32)
+								.OnEndSliderMovement_Lambda([this, WeakColl](int32)
 								{
 									if (UPCGExAssetCollection* Coll = WeakColl.Get()) { Coll->PostEditChange(); }
 									if (GEditor) { GEditor->EndTransaction(); }
+									if (BatchFlagPtr) { *BatchFlagPtr = false; }
 								})
-								.OnValueCommitted_Lambda([WeakColl, Idx](int32 NewVal, ETextCommit::Type CommitType)
+								.OnValueCommitted_Lambda([this, WeakColl, Idx](int32 NewVal, ETextCommit::Type CommitType)
 								{
 									UPCGExAssetCollection* Coll = WeakColl.Get();
 									if (!Coll) { return; }
 									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
 									if (!Entry) { return; }
+									if (BatchFlagPtr) { *BatchFlagPtr = true; }
 									FScopedTransaction Transaction(INVTEXT("Set Weight"));
 									Coll->Modify();
 									Entry->Weight = NewVal;
 									Coll->PostEditChange();
+									if (BatchFlagPtr) { *BatchFlagPtr = false; }
 								})
 								.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
 							]
