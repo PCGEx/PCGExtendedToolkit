@@ -115,7 +115,7 @@ private:
 	void ApplySelectionVisuals();
 
 	// Category operations
-	void OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices);
+	void OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices, int32 InsertBeforeLocalIndex);
 	void OnAssetDropOnCategory(FName TargetCategory, const TArray<FAssetData>& Assets);
 	void OnCategoryRenamed(FName OldName, FName NewName);
 	void OnAddToCategory(FName Category);

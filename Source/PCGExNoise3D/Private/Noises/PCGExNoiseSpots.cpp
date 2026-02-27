@@ -133,8 +133,7 @@ double FPCGExNoiseSpots::GenerateRaw(const FVector& Position) const
 		Result = 1.0 - Result;
 	}
 
-	// Convert to [-1, 1] range
-	return Result * 2.0 - 1.0;
+	return Result;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactorySpots::CreateOperation(FPCGExContext* InContext) const

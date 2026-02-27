@@ -189,22 +189,22 @@ double FPCGExNoiseFBM::GetDouble(const FVector& Position) const
 	switch (Variant)
 	{
 	case EPCGExFBMVariant::Standard:
-		Value = GenerateStandard(TransformPosition(Position));
+		Value = GenerateStandard(TransformPosition(Position)) * 0.5 + 0.5;
 		break;
 	case EPCGExFBMVariant::Ridged:
-		Value = GenerateRidged(TransformPosition(Position));
+		Value = GenerateRidged(TransformPosition(Position)) * 0.5 + 0.5;
 		break;
 	case EPCGExFBMVariant::Billow:
-		Value = GenerateBillow(TransformPosition(Position));
+		Value = GenerateBillow(TransformPosition(Position)) * 0.5 + 0.5;
 		break;
 	case EPCGExFBMVariant::Hybrid:
-		Value = GenerateHybrid(TransformPosition(Position));
+		Value = GenerateHybrid(TransformPosition(Position)) * 0.5 + 0.5;
 		break;
 	case EPCGExFBMVariant::Warped:
-		Value = GenerateWarped(TransformPosition(Position));
+		Value = GenerateWarped(TransformPosition(Position)) * 0.5 + 0.5;
 		break;
 	default:
-		Value = GenerateStandard(TransformPosition(Position));
+		Value = GenerateStandard(TransformPosition(Position)) * 0.5 + 0.5;
 	}
 
 	return ApplyRemap(Value);

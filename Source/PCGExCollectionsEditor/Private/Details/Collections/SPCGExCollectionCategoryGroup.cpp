@@ -231,8 +231,8 @@ FReply SPCGExCollectionCategoryGroup::OnDragOver(const FGeometry& MyGeometry, co
 
 		const int32 OldDropInsertIndex = DropInsertIndex;
 
-		// Compute insertion position for within-category reorder
-		if (TileOp->SourceCategory == CategoryName && TilesWrapBox.IsValid())
+		// Compute insertion position for reorder (same-category or cross-category)
+		if (TilesWrapBox.IsValid())
 		{
 			const FVector2D MouseAbsPos = InDragDropEvent.GetScreenSpacePosition();
 			FChildren* Children = TilesWrapBox->GetChildren();
@@ -343,15 +343,15 @@ FReply SPCGExCollectionCategoryGroup::OnDrop(const FGeometry& MyGeometry, const 
 
 	if (const TSharedPtr<FPCGExCollectionTileDragDropOp> TileOp = InDragDropEvent.GetOperationAs<FPCGExCollectionTileDragDropOp>())
 	{
-		// Same-category drop with valid insertion index → reorder
 		if (TileOp->SourceCategory == CategoryName && CapturedInsertIndex != INDEX_NONE)
 		{
+			// Same-category drop with valid insertion index → reorder
 			OnTileReorderInCategory.ExecuteIfBound(CategoryName, TileOp->DraggedIndices, CapturedInsertIndex);
 		}
 		else
 		{
-			// Cross-category drop → change category
-			OnTileDropOnCategory.ExecuteIfBound(CategoryName, TileOp->DraggedIndices);
+			// Cross-category drop → change category + position
+			OnTileDropOnCategory.ExecuteIfBound(CategoryName, TileOp->DraggedIndices, CapturedInsertIndex);
 		}
 		return FReply::Handled();
 	}

@@ -24,27 +24,29 @@ namespace PCGExMath
 	namespace Contrast
 	{
 		//
-		// Core contrast functions -- input in [-1, 1], output in [-1, 1]
+		// Core contrast functions -- input in [0, 1], output in [0, 1]
 		// Contrast parameter: 1.0 = no change, >1 = more contrast, <1 = less contrast
 		//
 
 		/**
 		 * Power-based contrast (simple, predictable)
-		 * Formula: sign(v) * |v|^(1/c)
-		 * @param Value Input value in [-1, 1]
+		 * Remaps around 0.5 midpoint internally
+		 * @param Value Input value in [0, 1]
 		 * @param Contrast Contrast amount (1.0 = no change, >1 = more contrast)
 		 */
 		FORCEINLINE double ContrastPower(const double Value, const double Contrast)
 		{
-			if (Contrast <= SMALL_NUMBER || FMath::Abs(Value) < SMALL_NUMBER) { return Value; }
+			if (Contrast <= SMALL_NUMBER) { return Value; }
+			const double T = Value * 2.0 - 1.0;
+			if (FMath::Abs(T) < SMALL_NUMBER) { return Value; }
 			const double Exp = 1.0 / Contrast;
-			return FMath::Sign(Value) * FMath::Pow(FMath::Abs(Value), Exp);
+			return (FMath::Sign(T) * FMath::Pow(FMath::Abs(T), Exp)) * 0.5 + 0.5;
 		}
 
 		/**
 		 * S-curve contrast using tanh (smooth, never clips)
-		 * Formula: tanh(v * c) / tanh(c)
-		 * @param Value Input value in [-1, 1]
+		 * Remaps around 0.5 midpoint internally
+		 * @param Value Input value in [0, 1]
 		 * @param Contrast Contrast amount (1.0 = no change, >1 = more contrast)
 		 */
 		FORCEINLINE double ContrastSCurve(const double Value, const double Contrast)
@@ -52,40 +54,33 @@ namespace PCGExMath
 			if (Contrast <= SMALL_NUMBER) { return Value; }
 			const double TanhC = FMath::Tanh(Contrast);
 			if (FMath::Abs(TanhC) < SMALL_NUMBER) { return Value; }
-			return FMath::Tanh(Value * Contrast) / TanhC;
+			const double T = Value * 2.0 - 1.0;
+			return (FMath::Tanh(T * Contrast) / TanhC) * 0.5 + 0.5;
 		}
 
 		/**
-		 * Attempt contrast using sine-based gain function (symmetrical S-curve)
+		 * Gain contrast using power-based S-curve (symmetrical)
 		 * Good for subtle adjustments, softer than sigmoid
-		 * @param Value Input value in [-1, 1]
+		 * @param Value Input value in [0, 1]
 		 * @param Contrast Contrast amount (1.0 = no change, >1 = more contrast)
 		 */
 		FORCEINLINE double ContrastGain(const double Value, const double Contrast)
 		{
 			if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER)) { return Value; }
 
-			// Remap to [0,1] for gain calculation
-			const double T = Value * 0.5 + 0.5;
-
-			// Attempt function for S-curve: attempt = 0.5 * ((2*t)^(1/c)) for t < 0.5
-			double Result;
-			if (T < 0.5)
+			if (Value < 0.5)
 			{
-				Result = 0.5 * FMath::Pow(2.0 * T, Contrast);
+				return 0.5 * FMath::Pow(2.0 * Value, Contrast);
 			}
 			else
 			{
-				Result = 1.0 - 0.5 * FMath::Pow(2.0 * (1.0 - T), Contrast);
+				return 1.0 - 0.5 * FMath::Pow(2.0 * (1.0 - Value), Contrast);
 			}
-
-			// Remap back to [-1,1]
-			return Result * 2.0 - 1.0;
 		}
 
 		/**
-		 * Apply contrast with selectable curve type -- input in [-1, 1]
-		 * @param Value Input value in [-1, 1]
+		 * Apply contrast with selectable curve type -- input in [0, 1]
+		 * @param Value Input value in [0, 1]
 		 * @param Contrast Contrast amount (1.0 = no change)
 		 * @param CurveType 0 = Power, 1 = SCurve, 2 = Gain
 		 */
@@ -103,7 +98,7 @@ namespace PCGExMath
 		}
 
 		//
-		// Vector overloads -- [-1,1] per component
+		// Vector overloads -- [0,1] per component
 		//
 
 		FORCEINLINE FVector2D ApplyContrast(const FVector2D& Value, const double Contrast, const int32 CurveType = 0)
@@ -137,7 +132,7 @@ namespace PCGExMath
 		}
 
 		//
-		// Arbitrary range -- remaps [Min,Max] → [-1,1] internally
+		// Arbitrary range -- remaps [Min,Max] → [0,1] internally
 		//
 
 		FORCEINLINE double ApplyContrastInRange(const double Value, const double Contrast, const int32 CurveType, const double Min, const double Max)
@@ -145,12 +140,12 @@ namespace PCGExMath
 			if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER)) { return Value; }
 			const double Range = Max - Min;
 			if (Range <= SMALL_NUMBER) { return Value; }
-			const double Normalized = (Value - Min) / Range * 2.0 - 1.0;
-			return (ApplyContrast(Normalized, Contrast, CurveType) + 1.0) * 0.5 * Range + Min;
+			const double Normalized = (Value - Min) / Range;
+			return ApplyContrast(Normalized, Contrast, CurveType) * Range + Min;
 		}
 
 		//
-		// [-1,1] batch operations (switch outside loop for branch prediction)
+		// [0,1] batch operations (switch outside loop for branch prediction)
 		//
 
 		inline void ApplyContrastBatch(double* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType = 0)
@@ -164,10 +159,10 @@ namespace PCGExMath
 					const double Exp = 1.0 / Contrast;
 					for (int32 i = 0; i < Count; ++i)
 					{
-						const double V = Values[i];
-						if (FMath::Abs(V) > SMALL_NUMBER)
+						const double T = Values[i] * 2.0 - 1.0;
+						if (FMath::Abs(T) > SMALL_NUMBER)
 						{
-							Values[i] = FMath::Sign(V) * FMath::Pow(FMath::Abs(V), Exp);
+							Values[i] = (FMath::Sign(T) * FMath::Pow(FMath::Abs(T), Exp)) * 0.5 + 0.5;
 						}
 					}
 				}
@@ -179,7 +174,8 @@ namespace PCGExMath
 					const double InvTanhC = 1.0 / TanhC;
 					for (int32 i = 0; i < Count; ++i)
 					{
-						Values[i] = FMath::Tanh(Values[i] * Contrast) * InvTanhC;
+						const double T = Values[i] * 2.0 - 1.0;
+						Values[i] = (FMath::Tanh(T * Contrast) * InvTanhC) * 0.5 + 0.5;
 					}
 				}
 				break;
@@ -248,11 +244,12 @@ namespace PCGExMath
 					const double Exp = 1.0 / Contrast;
 					for (int32 i = 0; i < Count; ++i)
 					{
-						const double V = (Values[i] - Min) * InvRange * 2.0 - 1.0;
-						const double C = FMath::Abs(V) > SMALL_NUMBER
-							                 ? FMath::Sign(V) * FMath::Pow(FMath::Abs(V), Exp)
-							                 : V;
-						Values[i] = (C + 1.0) * 0.5 * Range + Min;
+						const double Norm = (Values[i] - Min) * InvRange;
+						const double T = Norm * 2.0 - 1.0;
+						const double C = FMath::Abs(T) > SMALL_NUMBER
+							                 ? FMath::Sign(T) * FMath::Pow(FMath::Abs(T), Exp)
+							                 : T;
+						Values[i] = (C * 0.5 + 0.5) * Range + Min;
 					}
 				}
 				break;
@@ -263,8 +260,9 @@ namespace PCGExMath
 					const double InvTanhC = 1.0 / TanhC;
 					for (int32 i = 0; i < Count; ++i)
 					{
-						const double V = (Values[i] - Min) * InvRange * 2.0 - 1.0;
-						Values[i] = (FMath::Tanh(V * Contrast) * InvTanhC + 1.0) * 0.5 * Range + Min;
+						const double Norm = (Values[i] - Min) * InvRange;
+						const double T = Norm * 2.0 - 1.0;
+						Values[i] = (FMath::Tanh(T * Contrast) * InvTanhC * 0.5 + 0.5) * Range + Min;
 					}
 				}
 				break;
@@ -272,8 +270,8 @@ namespace PCGExMath
 			case 2: // Gain
 				for (int32 i = 0; i < Count; ++i)
 				{
-					const double V = (Values[i] - Min) * InvRange * 2.0 - 1.0;
-					Values[i] = (ContrastGain(V, Contrast) + 1.0) * 0.5 * Range + Min;
+					const double Norm = (Values[i] - Min) * InvRange;
+					Values[i] = ContrastGain(Norm, Contrast) * Range + Min;
 				}
 				break;
 

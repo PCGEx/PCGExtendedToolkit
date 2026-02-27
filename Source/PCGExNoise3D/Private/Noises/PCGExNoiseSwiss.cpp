@@ -130,7 +130,7 @@ double FPCGExNoiseSwiss::GetDouble(const FVector& Position) const
 		Freq *= Lacunarity;
 	}
 
-	return ApplyRemap(Sum * Bounding);
+	return ApplyRemap(Sum * Bounding * 0.5 + 0.5);
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactorySwiss::CreateOperation(FPCGExContext* InContext) const
