@@ -151,6 +151,19 @@
       ]
     },
     {
+      "Name": "PCGExElementsClustersDecomp",
+      "Type": "Runtime",
+      "LoadingPhase": "Default",
+      "PlatformAllowList": [
+        "Win64",
+        "Mac",
+        "IOS",
+        "Android",
+        "Linux",
+        "LinuxArm64"
+      ]
+    },
+    {
       "Name": "PCGExElementsClustersDiagrams",
       "Type": "Runtime",
       "LoadingPhase": "Default",
@@ -164,20 +177,17 @@
       ]
     },
     {
-      "Name": "PCGExElementsClustersRefine",
-      "Type": "Runtime",
+      "Name": "PCGExElementsClustersEditor",
+      "Type": "Editor",
       "LoadingPhase": "Default",
       "PlatformAllowList": [
         "Win64",
         "Mac",
-        "IOS",
-        "Android",
-        "Linux",
-        "LinuxArm64"
+        "Linux"
       ]
     },
     {
-      "Name": "PCGExElementsClustersDecomp",
+      "Name": "PCGExElementsClustersRefine",
       "Type": "Runtime",
       "LoadingPhase": "Default",
       "PlatformAllowList": [
