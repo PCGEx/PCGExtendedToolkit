@@ -151,6 +151,16 @@
       ]
     },
     {
+      "Name": "PCGExElementsClustersEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default",
+      "PlatformAllowList": [
+        "Win64",
+        "Mac",
+        "Linux"
+      ]
+    },
+    {
       "Name": "PCGExElementsClustersDiagrams",
       "Type": "Runtime",
       "LoadingPhase": "Default",

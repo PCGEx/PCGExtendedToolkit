@@ -1,0 +1,35 @@
+// Copyright 2026 Timothé Lapetite and contributors
+// Released under the MIT license https://opensource.org/license/MIT/
+
+#pragma once
+
+#include "IPropertyTypeCustomization.h"
+
+class SPCGExEdgeEndpointsCompareNumPreview;
+
+/**
+ * IPropertyTypeCustomization for FPCGExEdgeEndpointsCompareNumFilterConfig.
+ * Embeds a 3-panel value comparison visualization above the standard property rows.
+ */
+class FPCGExEdgeEndpointsCompareNumFilterConfigCustomization : public IPropertyTypeCustomization
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+
+	virtual void CustomizeHeader(
+		TSharedRef<IPropertyHandle> PropertyHandle,
+		class FDetailWidgetRow& HeaderRow,
+		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+
+	virtual void CustomizeChildren(
+		TSharedRef<IPropertyHandle> PropertyHandle,
+		class IDetailChildrenBuilder& ChildBuilder,
+		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+
+private:
+	TSharedPtr<IPropertyHandle> ComparisonHandle;
+	TSharedPtr<IPropertyHandle> ToleranceHandle;
+	TSharedPtr<IPropertyHandle> InvertHandle;
+
+	TSharedPtr<SPCGExEdgeEndpointsCompareNumPreview> PreviewWidget;
+};
