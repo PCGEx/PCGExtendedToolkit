@@ -5,6 +5,7 @@
 
 #include "Engine/World.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/Package.h"
 
 #if WITH_EDITOR
 #include "AssetRegistry/AssetData.h"
