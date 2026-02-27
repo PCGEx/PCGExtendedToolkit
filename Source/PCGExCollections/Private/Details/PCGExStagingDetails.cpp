@@ -14,5 +14,4 @@ FPCGExAssetDistributionIndexDetails::FPCGExAssetDistributionIndexDetails()
 	if (IndexSource.GetName() == FName("@Last")) { IndexSource.Update(TEXT("$Index")); }
 }
 
-PCGEX_SETTING_VALUE_IMPL_BOOL(FPCGExAssetDistributionIndexDetails, Index, int32, true, IndexSource, -1);
-PCGEX_SETTING_VALUE_IMPL(FPCGExAssetDistributionDetails, Category, FName, CategoryInput, CategoryAttribute, Category);
+PCGEX_SETTING_VALUE_IMPL_BOOL(FPCGExAssetDistributionIndexDetails, Index, double, true, IndexSource, -1.0);
