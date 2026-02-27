@@ -52,8 +52,7 @@ double FPCGExNoiseCaustic::GenerateRaw(const FVector& Position) const
 	// Apply intensity
 	Sum *= Intensity;
 
-	// Clamp and convert to [-1, 1]
-	return FMath::Clamp(Sum, 0.0, 1.0) * 2.0 - 1.0;
+	return FMath::Clamp(Sum, 0.0, 1.0);
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryCaustic::CreateOperation(FPCGExContext* InContext) const

@@ -56,7 +56,7 @@ double FPCGExNoiseOpenSimplex2::GenerateRaw(const FVector& Position) const
 	// Contribution from (1,1,1)
 	Value += Contrib(XSB + 1, YSB + 1, ZSB + 1, DX0 - 1 - 3 * STRETCH_3D, DY0 - 1 - 3 * STRETCH_3D, DZ0 - 1 - 3 * STRETCH_3D);
 
-	return Value / NORM_3D;
+	return Value / NORM_3D * 0.5 + 0.5;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryOpenSimplex2::CreateOperation(FPCGExContext* InContext) const

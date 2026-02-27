@@ -38,7 +38,8 @@ void UPCGExNoise3DFactory##_TYPE::RegisterAssetDependencies(FPCGExContext* InCon
 	NewOperation->bApplyTransform = Config.bApplyTransform; \
 	NewOperation->Transform = Config.Transform; \
 	NewOperation->Contrast = Config.Contrast; \
-	NewOperation->ContrastCurve = Config.ContrastCurve;
+	NewOperation->ContrastCurve = Config.ContrastCurve; \
+	NewOperation->Scale = Config.Scale;
 
 class FPCGExNoise3DOperation;
 
@@ -104,6 +105,10 @@ struct PCGEXNOISE3D_API FPCGExNoise3DConfigBase
 	/** Contrast curve type */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Constrast", meta=(PCG_Overridable, DisplayPriority=-1, EditCondition="Contrast != 1.0"))
 	EPCGExContrastCurve ContrastCurve = EPCGExContrastCurve::Power;
+
+	/** Post-remap scale multiplier (applied after invert, remap curve, and contrast) */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable))
+	double Scale = 1.0;
 
 	void Init();
 };

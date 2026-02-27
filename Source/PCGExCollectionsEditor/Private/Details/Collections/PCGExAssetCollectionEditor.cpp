@@ -12,8 +12,9 @@
 
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyEditorModule.h"
-#include "PropertyHandle.h"
+#include "ScopedTransaction.h"
 #include "Core/PCGExAssetCollection.h"
+#include "UObject/UnrealType.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/SPCGExCollectionGridView.h"
 #include "PCGExProperty.h"
@@ -293,59 +294,239 @@ void FPCGExAssetCollectionEditor::CreateGridTab(TArray<PCGExAssetCollectionEdito
 	Infos.Footer = FooterToolbarBuilder.MakeWidget();
 }
 
-TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle)
+TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
+	TWeakObjectPtr<UPCGExAssetCollection> InCollection,
+	int32 EntryIndex,
+	FSimpleDelegate OnAssetChanged)
 {
-	// Get SubCollection toggle to control visibility
-	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = EntryHandle->GetChildHandle(FName("bIsSubCollection"));
-	TSharedPtr<IPropertyHandle> SubCollectionHandle = EntryHandle->GetChildHandle(FName("SubCollection"));
+	TWeakObjectPtr<UPCGExAssetCollection> WeakColl = InCollection;
+	const int32 Idx = EntryIndex;
 
+	// Resolve property metadata once — the struct type doesn't change at runtime
 	const FName PickerPropName = GetTilePickerPropertyName();
-	TSharedPtr<IPropertyHandle> AssetHandle = PickerPropName.IsNone() ? nullptr : EntryHandle->GetChildHandle(PickerPropName);
+	const UClass* AllowedClass = GetTilePickerAllowedClass();
+
+	// Resolve SubCollection property class from reflection
+	const UClass* SubCollectionClass = nullptr;
+	if (UPCGExAssetCollection* Coll = WeakColl.Get())
+	{
+		FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(FName("Entries")));
+		if (ArrayProp)
+		{
+			FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+			if (InnerProp && InnerProp->Struct)
+			{
+				if (const FObjectPropertyBase* SubProp = CastField<FObjectPropertyBase>(InnerProp->Struct->FindPropertyByName(FName("SubCollection"))))
+				{
+					SubCollectionClass = SubProp->PropertyClass;
+				}
+			}
+		}
+	}
 
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
 
 	// SubCollection picker (visible when bIsSubCollection is true)
-	if (SubCollectionHandle.IsValid())
-	{
-		Box->AddSlot()
-			.AutoHeight()
+	Box->AddSlot()
+		.AutoHeight()
+		[
+			SNew(SBox)
+			.Visibility_Lambda([WeakColl, Idx]()
+			{
+				const UPCGExAssetCollection* Coll = WeakColl.Get();
+				if (!Coll) { return EVisibility::Collapsed; }
+				const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+				return (Result.IsValid() && Result.Entry->bIsSubCollection) ? EVisibility::Visible : EVisibility::Collapsed;
+			})
 			[
-				SNew(SBox)
-				.Visibility_Lambda([IsSubCollectionHandle]()
+				SNew(SObjectPropertyEntryBox)
+				.AllowedClass(SubCollectionClass)
+				.ObjectPath_Lambda([WeakColl, Idx]() -> FString
 				{
-					bool bSub = false;
-					if (IsSubCollectionHandle.IsValid()) { IsSubCollectionHandle->GetValue(bSub); }
-					return bSub ? EVisibility::Visible : EVisibility::Collapsed;
+					const UPCGExAssetCollection* Coll = WeakColl.Get();
+					if (!Coll) { return FString(); }
+					const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+					if (!Result.IsValid()) { return FString(); }
+					const UPCGExAssetCollection* SubColl = Result.Entry->GetSubCollectionPtr();
+					return SubColl ? SubColl->GetPathName() : FString();
 				})
-				[
-					SNew(SObjectPropertyEntryBox)
-					.PropertyHandle(SubCollectionHandle)
-					.AllowedClass(CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty()) ? CastField<FObjectPropertyBase>(SubCollectionHandle->GetProperty())->PropertyClass : nullptr)
-					.DisplayThumbnail(false)
-				]
-			];
-	}
+				.OnObjectChanged_Lambda([WeakColl, Idx, OnAssetChanged](const FAssetData& AssetData)
+				{
+					UPCGExAssetCollection* Coll = WeakColl.Get();
+					if (!Coll) { return; }
+					FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+					if (!Entry) { return; }
+					FScopedTransaction Transaction(INVTEXT("Set SubCollection"));
+					Coll->Modify();
+					// Write the InternalSubCollection via the base class pointer
+					Entry->InternalSubCollection = Cast<UPCGExAssetCollection>(AssetData.GetAsset());
+					Coll->PostEditChange();
+					OnAssetChanged.ExecuteIfBound();
+				})
+				.DisplayThumbnail(false)
+			]
+		];
 
 	// Asset picker (visible when bIsSubCollection is false)
-	if (AssetHandle.IsValid())
+	// Detect property type once at construction to choose the right widget
+	if (!PickerPropName.IsNone())
 	{
-		Box->AddSlot()
-			.AutoHeight()
-			[
-				SNew(SBox)
-				.Visibility_Lambda([IsSubCollectionHandle]()
+		bool bIsClassProperty = false;
+		if (UPCGExAssetCollection* Coll = WeakColl.Get())
+		{
+			FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(FName("Entries")));
+			if (ArrayProp)
+			{
+				FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+				if (InnerProp && InnerProp->Struct)
 				{
-					bool bSub = false;
-					if (IsSubCollectionHandle.IsValid()) { IsSubCollectionHandle->GetValue(bSub); }
-					return bSub ? EVisibility::Collapsed : EVisibility::Visible;
-				})
+					bIsClassProperty = CastField<FSoftClassProperty>(InnerProp->Struct->FindPropertyByName(PickerPropName)) != nullptr;
+				}
+			}
+		}
+
+		if (bIsClassProperty)
+		{
+			// TSoftClassPtr<T> — use SClassPropertyEntryBox
+			Box->AddSlot()
+				.AutoHeight()
 				[
-					SNew(SObjectPropertyEntryBox)
-					.PropertyHandle(AssetHandle)
-					.AllowedClass(CastField<FObjectPropertyBase>(AssetHandle->GetProperty()) ? CastField<FObjectPropertyBase>(AssetHandle->GetProperty())->PropertyClass : nullptr)
-					.DisplayThumbnail(false)
-				]
-			];
+					SNew(SBox)
+					.Visibility_Lambda([WeakColl, Idx]()
+					{
+						const UPCGExAssetCollection* Coll = WeakColl.Get();
+						if (!Coll) { return EVisibility::Collapsed; }
+						const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+						return (Result.IsValid() && !Result.Entry->bIsSubCollection) ? EVisibility::Visible : EVisibility::Collapsed;
+					})
+					[
+						SNew(SClassPropertyEntryBox)
+						.MetaClass(AllowedClass)
+						.SelectedClass_Lambda([WeakColl, Idx, PickerPropName]() -> const UClass*
+						{
+							UPCGExAssetCollection* Coll = WeakColl.Get();
+							if (!Coll) { return nullptr; }
+							FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(FName("Entries")));
+							if (!ArrayProp) { return nullptr; }
+							FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+							if (!InnerProp || !InnerProp->Struct) { return nullptr; }
+							void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+							FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+							if (Idx < 0 || Idx >= ArrayHelper.Num()) { return nullptr; }
+							const uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
+							const FSoftClassProperty* ClassProp = CastField<FSoftClassProperty>(InnerProp->Struct->FindPropertyByName(PickerPropName));
+							if (!ClassProp) { return nullptr; }
+							const FSoftObjectPtr& SoftRef = *ClassProp->GetPropertyValuePtr_InContainer(EntryPtr);
+							return Cast<UClass>(SoftRef.Get());
+						})
+						.OnSetClass_Lambda([WeakColl, Idx, PickerPropName, OnAssetChanged](const UClass* NewClass)
+						{
+							UPCGExAssetCollection* Coll = WeakColl.Get();
+							if (!Coll) { return; }
+							FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(FName("Entries")));
+							if (!ArrayProp) { return; }
+							FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+							if (!InnerProp || !InnerProp->Struct) { return; }
+							void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+							FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+							if (Idx < 0 || Idx >= ArrayHelper.Num()) { return; }
+							uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
+							const FSoftClassProperty* ClassProp = CastField<FSoftClassProperty>(InnerProp->Struct->FindPropertyByName(PickerPropName));
+							if (!ClassProp) { return; }
+
+							FScopedTransaction Transaction(INVTEXT("Set Class"));
+							Coll->Modify();
+							FSoftObjectPtr& SoftRef = *const_cast<FSoftObjectPtr*>(ClassProp->GetPropertyValuePtr_InContainer(EntryPtr));
+							SoftRef = NewClass ? FSoftObjectPath(NewClass) : FSoftObjectPath();
+							Coll->PostEditChange();
+							OnAssetChanged.ExecuteIfBound();
+						})
+					]
+				];
+		}
+		else
+		{
+			// TSoftObjectPtr<T> or TObjectPtr<T> — use SObjectPropertyEntryBox
+			Box->AddSlot()
+				.AutoHeight()
+				[
+					SNew(SBox)
+					.Visibility_Lambda([WeakColl, Idx]()
+					{
+						const UPCGExAssetCollection* Coll = WeakColl.Get();
+						if (!Coll) { return EVisibility::Collapsed; }
+						const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+						return (Result.IsValid() && !Result.Entry->bIsSubCollection) ? EVisibility::Visible : EVisibility::Collapsed;
+					})
+					[
+						SNew(SObjectPropertyEntryBox)
+						.AllowedClass(AllowedClass)
+						.ObjectPath_Lambda([WeakColl, Idx, PickerPropName]() -> FString
+						{
+							UPCGExAssetCollection* Coll = WeakColl.Get();
+							if (!Coll) { return FString(); }
+							FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(FName("Entries")));
+							if (!ArrayProp) { return FString(); }
+							FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+							if (!InnerProp || !InnerProp->Struct) { return FString(); }
+							void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+							FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+							if (Idx < 0 || Idx >= ArrayHelper.Num()) { return FString(); }
+
+							const uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
+							const FProperty* Prop = InnerProp->Struct->FindPropertyByName(PickerPropName);
+							if (!Prop) { return FString(); }
+
+							// Handle TSoftObjectPtr<T>
+							if (const FSoftObjectProperty* SoftProp = CastField<FSoftObjectProperty>(Prop))
+							{
+								const FSoftObjectPtr& SoftRef = *SoftProp->GetPropertyValuePtr_InContainer(EntryPtr);
+								return SoftRef.ToSoftObjectPath().ToString();
+							}
+							// Handle TObjectPtr<T>
+							if (const FObjectPropertyBase* ObjProp = CastField<FObjectPropertyBase>(Prop))
+							{
+								const UObject* Obj = ObjProp->GetObjectPropertyValue_InContainer(EntryPtr);
+								return Obj ? Obj->GetPathName() : FString();
+							}
+							return FString();
+						})
+						.OnObjectChanged_Lambda([WeakColl, Idx, PickerPropName, OnAssetChanged](const FAssetData& AssetData)
+						{
+							UPCGExAssetCollection* Coll = WeakColl.Get();
+							if (!Coll) { return; }
+							FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(FName("Entries")));
+							if (!ArrayProp) { return; }
+							FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+							if (!InnerProp || !InnerProp->Struct) { return; }
+							void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
+							FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+							if (Idx < 0 || Idx >= ArrayHelper.Num()) { return; }
+
+							uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
+							const FProperty* Prop = InnerProp->Struct->FindPropertyByName(PickerPropName);
+							if (!Prop) { return; }
+
+							FScopedTransaction Transaction(INVTEXT("Set Asset"));
+							Coll->Modify();
+
+							if (const FSoftObjectProperty* SoftProp = CastField<FSoftObjectProperty>(Prop))
+							{
+								FSoftObjectPtr& SoftRef = *const_cast<FSoftObjectPtr*>(SoftProp->GetPropertyValuePtr_InContainer(EntryPtr));
+								SoftRef = AssetData.GetSoftObjectPath();
+							}
+							else if (const FObjectPropertyBase* ObjProp = CastField<FObjectPropertyBase>(Prop))
+							{
+								ObjProp->SetObjectPropertyValue_InContainer(EntryPtr, AssetData.GetAsset());
+							}
+
+							Coll->PostEditChange();
+							OnAssetChanged.ExecuteIfBound();
+						})
+						.DisplayThumbnail(false)
+					]
+				];
+		}
 	}
 
 	return Box;

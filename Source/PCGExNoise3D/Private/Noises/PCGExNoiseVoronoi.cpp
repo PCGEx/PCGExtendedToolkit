@@ -78,8 +78,7 @@ double FPCGExNoiseVoronoi::GenerateRaw(const FVector& Position) const
 		Result = CellVal;
 	}
 
-	// Convert to [-1, 1]
-	return Result * 2.0 - 1.0;
+	return Result;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryVoronoi::CreateOperation(FPCGExContext* InContext) const

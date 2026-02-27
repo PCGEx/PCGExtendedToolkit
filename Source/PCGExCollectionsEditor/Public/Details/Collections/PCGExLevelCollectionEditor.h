@@ -20,4 +20,5 @@ public:
 
 protected:
 	virtual FName GetTilePickerPropertyName() const override { return FName("Level"); }
+	virtual const UClass* GetTilePickerAllowedClass() const override;
 };
