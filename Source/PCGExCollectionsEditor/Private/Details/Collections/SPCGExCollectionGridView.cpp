@@ -433,6 +433,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 			{
 				Group->AddTile(ExistingTile->ToSharedRef());
 				ActiveTiles.Add(EntryIdx, *ExistingTile);
+				(*ExistingTile)->RefreshThumbnail(); // Data at this index may have shifted
 				continue;
 			}
 

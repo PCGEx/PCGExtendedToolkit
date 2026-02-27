@@ -274,7 +274,6 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 								SNew(SSpinBox<int32>)
 								.MinValue(0)
 								.Delta(1)
-								.SliderExponent(2)
 								.Value_Lambda([WeakColl, Idx]() -> int32
 								{
 									const UPCGExAssetCollection* Coll = WeakColl.Get();
