@@ -23,6 +23,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 	OnTileDropOnCategory = InArgs._OnTileDropOnCategory;
 	OnAssetDropOnCategory = InArgs._OnAssetDropOnCategory;
 	OnAddToCategory = InArgs._OnAddToCategory;
+	OnExpansionChanged = InArgs._OnExpansionChanged;
 
 	const bool bIsUncategorized = CategoryName.IsNone();
 	const FText DisplayName = bIsUncategorized ? INVTEXT("Uncategorized") : FText::FromName(CategoryName);
@@ -64,6 +65,10 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 		[
 			SAssignNew(ExpandableArea, SExpandableArea)
 			.InitiallyCollapsed(InArgs._bIsCollapsed)
+			.OnAreaExpansionChanged_Lambda([this](bool bIsExpanded)
+			{
+				OnExpansionChanged.ExecuteIfBound(CategoryName, bIsExpanded);
+			})
 			.HeaderPadding(FMargin(4.f, 2.f))
 			.HeaderContent()
 			[

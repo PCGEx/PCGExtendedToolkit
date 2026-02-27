@@ -23,6 +23,16 @@ class SScrollBox;
 class STextBlock;
 class SPCGExCollectionCategoryGroup;
 
+/** Flags describing what kind of structural change happened, so StructuralRefresh() can do the minimum work. */
+enum class EPCGExStructuralRefreshFlags : uint8
+{
+	None             = 0,
+	HandlesClobbered = 1 << 0, // Undo/redo replaced object state — full InitRowGenerator (expensive!)
+	ClearSelection   = 1 << 1, // Reset selection state
+	ScrollToEnd      = 1 << 2, // Scroll to bottom after refresh
+};
+ENUM_CLASS_FLAGS(EPCGExStructuralRefreshFlags);
+
 /**
  * Grid/tile view of collection entries with categorized grouping.
  * Left pane: SScrollBox with collapsible category groups, each containing a SWrapBox of tiles.
@@ -117,6 +127,10 @@ private:
 	void OnAssetDropOnCategory(FName TargetCategory, const TArray<FAssetData>& Assets);
 	void OnCategoryRenamed(FName OldName, FName NewName);
 	void OnAddToCategory(FName Category);
+	void OnCategoryExpansionChanged(FName Category, bool bIsExpanded);
+
+	// Lazy tile creation for a single category
+	void PopulateCategoryTiles(FName Category);
 
 	// Tile callbacks
 	void OnTileClicked(int32 Index, const FPointerEvent& MouseEvent);
@@ -139,6 +153,9 @@ private:
 	// Incremental layout refresh (tile reuse, no flash)
 	void IncrementalCategoryRefresh();
 
+	// Consolidated post-structural-change refresh (all add/dup/delete/undo ops go through here)
+	void StructuralRefresh(EPCGExStructuralRefreshFlags Flags = EPCGExStructuralRefreshFlags::None);
+
 	// Scroll tracking for pinned header
 	void OnScrolled(float ScrollOffset);
 
@@ -157,4 +174,8 @@ private:
 
 	// Property row generator setup (for entry operations only)
 	void InitRowGenerator();
+
+	// Light refresh: reuse existing RowGenerator, just rebuild its property tree.
+	// Cheaper than InitRowGenerator (no new generator, no re-subscription).
+	void RefreshRowGenerator();
 };

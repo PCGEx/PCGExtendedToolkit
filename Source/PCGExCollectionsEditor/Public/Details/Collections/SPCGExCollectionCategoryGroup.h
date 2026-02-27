@@ -16,6 +16,7 @@ DECLARE_DELEGATE_TwoParams(FOnCategoryRenamed, FName /*OldName*/, FName /*NewNam
 DECLARE_DELEGATE_TwoParams(FOnTileDropOnCategory, FName /*TargetCategory*/, const TArray<int32>& /*Indices*/);
 DECLARE_DELEGATE_TwoParams(FOnAssetDropOnCategory, FName /*TargetCategory*/, const TArray<FAssetData>& /*Assets*/);
 DECLARE_DELEGATE_OneParam(FOnAddToCategory, FName /*Category*/);
+DECLARE_DELEGATE_TwoParams(FOnCategoryExpansionChanged, FName /*Category*/, bool /*bIsExpanded*/);
 
 /**
  * Compound widget for a single category section in the grouped collection grid layout.
@@ -38,6 +39,7 @@ public:
 	SLATE_EVENT(FOnTileDropOnCategory, OnTileDropOnCategory)
 	SLATE_EVENT(FOnAssetDropOnCategory, OnAssetDropOnCategory)
 	SLATE_EVENT(FOnAddToCategory, OnAddToCategory)
+	SLATE_EVENT(FOnCategoryExpansionChanged, OnExpansionChanged)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -65,6 +67,7 @@ private:
 	FOnTileDropOnCategory OnTileDropOnCategory;
 	FOnAddToCategory OnAddToCategory;
 	FOnAssetDropOnCategory OnAssetDropOnCategory;
+	FOnCategoryExpansionChanged OnExpansionChanged;
 
 	TSharedPtr<SWrapBox> TilesWrapBox;
 	TSharedPtr<SExpandableArea> ExpandableArea;

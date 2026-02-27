@@ -301,11 +301,13 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 				.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
 				.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
 				.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
+				.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
 			];
 
 		CategoryGroupWidgets.Add(CatName, Group);
 
-		if (!Indices) { continue; }
+		// Skip tile creation for collapsed categories (lazy — created on expand)
+		if (bIsCollapsed || !Indices) { continue; }
 
 		// Create tiles for this category
 		for (int32 CatIdx = 0; CatIdx < Indices->Num(); ++CatIdx)
@@ -418,11 +420,13 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 				.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
 				.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
 				.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
+				.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
 			];
 
 		CategoryGroupWidgets.Add(CatName, Group);
 
-		if (!Indices) { continue; }
+		// Skip tile creation for collapsed categories (lazy — created on expand)
+		if (bIsCollapsed || !Indices) { continue; }
 
 		for (int32 CatIdx = 0; CatIdx < Indices->Num(); ++CatIdx)
 		{
@@ -463,6 +467,42 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 
 	// Apply selection visuals
 	ApplySelectionVisuals();
+}
+
+void SPCGExCollectionGridView::StructuralRefresh(EPCGExStructuralRefreshFlags Flags)
+{
+	// After any structural array change, old property handles are invalid because the
+	// RowGenerator's internal tree is stale. We MUST refresh it.
+	// HandlesClobbered (undo/redo) = full rebuild; otherwise = light refresh (reuse generator).
+	if (EnumHasAnyFlags(Flags, EPCGExStructuralRefreshFlags::HandlesClobbered))
+	{
+		InitRowGenerator();
+	}
+	else
+	{
+		RefreshRowGenerator();
+	}
+
+	// Old handles are invalid — tiles must be recreated.
+	// Thumbnail cache (ThumbnailCacheMap) persists across rebuilds, so no visual flash.
+	ActiveTiles.Reset();
+
+	if (EnumHasAnyFlags(Flags, EPCGExStructuralRefreshFlags::ClearSelection))
+	{
+		SelectedIndices.Reset();
+		LastClickedIndex = INDEX_NONE;
+	}
+
+	IncrementalCategoryRefresh();
+	UpdateDetailForSelection();
+
+	if (EnumHasAnyFlags(Flags, EPCGExStructuralRefreshFlags::ScrollToEnd))
+	{
+		if (GroupScrollBox.IsValid())
+		{
+			GroupScrollBox->ScrollToEnd();
+		}
+	}
 }
 
 void SPCGExCollectionGridView::RefreshGrid()
@@ -673,8 +713,8 @@ void SPCGExCollectionGridView::OnAssetDropOnCategory(FName TargetCategory, const
 	// Populate Staging.Path for new entries so thumbnails show correctly
 	Coll->EDITOR_RebuildStagingData();
 
-	InitRowGenerator();
-	RefreshGrid();
+	// Append-at-end: existing handles remain valid, skip RebuildRowGenerator
+	StructuralRefresh();
 }
 
 void SPCGExCollectionGridView::OnCategoryRenamed(FName OldName, FName NewName)
@@ -704,8 +744,8 @@ void SPCGExCollectionGridView::OnCategoryRenamed(FName OldName, FName NewName)
 	}
 	bIsBatchOperation = false;
 
-	IncrementalCategoryRefresh();
-	UpdateDetailForSelection();
+	// No array change — just category field mutation
+	StructuralRefresh();
 }
 
 void SPCGExCollectionGridView::OnAddToCategory(FName Category)
@@ -743,16 +783,82 @@ void SPCGExCollectionGridView::OnAddToCategory(FName Category)
 	}
 	bIsBatchOperation = false;
 
-	// Structural array change — rebuild RowGenerator for fresh property handles
-	InitRowGenerator();
-
 	// Select the newly added entry
 	const int32 NewIndex = Coll->NumEntries() - 1;
 	SelectedIndices.Reset();
 	SelectedIndices.Add(NewIndex);
 	LastClickedIndex = NewIndex;
 
-	RefreshGrid();
+	// Append-at-end: existing handles remain valid
+	StructuralRefresh();
+}
+
+void SPCGExCollectionGridView::OnCategoryExpansionChanged(FName Category, bool bIsExpanded)
+{
+	if (bIsExpanded)
+	{
+		CollapsedCategories.Remove(Category);
+		PopulateCategoryTiles(Category);
+	}
+	else
+	{
+		CollapsedCategories.Add(Category);
+	}
+}
+
+void SPCGExCollectionGridView::PopulateCategoryTiles(FName Category)
+{
+	TSharedPtr<SPCGExCollectionCategoryGroup>* GroupPtr = CategoryGroupWidgets.Find(Category);
+	if (!GroupPtr || !GroupPtr->IsValid()) { return; }
+
+	const TArray<int32>* Indices = CategoryToEntryIndices.Find(Category);
+	if (!Indices || Indices->IsEmpty()) { return; }
+
+	// Check if tiles already exist for this category
+	bool bAlreadyPopulated = false;
+	for (int32 EntryIdx : *Indices)
+	{
+		if (ActiveTiles.Contains(EntryIdx))
+		{
+			bAlreadyPopulated = true;
+			break;
+		}
+	}
+	if (bAlreadyPopulated) { return; }
+
+	TSharedPtr<SPCGExCollectionCategoryGroup>& Group = *GroupPtr;
+
+	for (int32 CatIdx = 0; CatIdx < Indices->Num(); ++CatIdx)
+	{
+		const int32 EntryIdx = (*Indices)[CatIdx];
+
+		TSharedPtr<IPropertyHandle> EntryHandle = GetEntryHandle(EntryIdx);
+		if (!EntryHandle.IsValid()) { continue; }
+
+		TSharedPtr<SPCGExCollectionGridTile> Tile;
+
+		TSharedRef<SWidget> TileWidget =
+			SAssignNew(Tile, SPCGExCollectionGridTile)
+			.EntryHandle(EntryHandle)
+			.ThumbnailPool(ThumbnailPool)
+			.OnGetPickerWidget(OnGetPickerWidget)
+			.TileSize(TileSize)
+			.Collection(Collection)
+			.EntryIndex(EntryIdx)
+			.CategoryIndex(CatIdx)
+			.CategoryOptions(CategoryComboOptions)
+			.ThumbnailCachePtr(&ThumbnailCache)
+			.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
+			.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected));
+
+		Group->AddTile(TileWidget);
+		ActiveTiles.Add(EntryIdx, Tile);
+
+		if (SelectedIndices.Contains(EntryIdx))
+		{
+			Tile->SetSelected(true);
+		}
+	}
 }
 
 // ── Detail panel management ─────────────────────────────────────────────────
@@ -999,6 +1105,22 @@ void SPCGExCollectionGridView::InitRowGenerator()
 	}
 }
 
+void SPCGExCollectionGridView::RefreshRowGenerator()
+{
+	if (!RowGenerator.IsValid()) { InitRowGenerator(); return; }
+
+	EntriesArrayHandle.Reset();
+
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll) { return; }
+
+	// Rebuild the property tree on the existing generator (keeps event subscriptions)
+	RowGenerator->SetObjects({Coll});
+
+	const TArray<TSharedRef<IDetailTreeNode>>& RootNodes = RowGenerator->GetRootTreeNodes();
+	FindEntriesHandleRecursive(RootNodes, EntriesArrayHandle);
+}
+
 // ── Entry operations ────────────────────────────────────────────────────────
 
 FReply SPCGExCollectionGridView::OnAddEntry()
@@ -1028,22 +1150,14 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 	}
 	bIsBatchOperation = false;
 
-	// Structural array change — rebuild RowGenerator for fresh property handles
-	InitRowGenerator();
-
 	// Select the newly added entry
 	const int32 NewIndex = Coll->NumEntries() - 1;
 	SelectedIndices.Reset();
 	SelectedIndices.Add(NewIndex);
 	LastClickedIndex = NewIndex;
 
-	RefreshGrid();
-
-	// Scroll to the new entry (it's uncategorized, at the end)
-	if (GroupScrollBox.IsValid())
-	{
-		GroupScrollBox->ScrollToEnd();
-	}
+	// Append-at-end: existing handles remain valid
+	StructuralRefresh(EPCGExStructuralRefreshFlags::ScrollToEnd);
 
 	return FReply::Handled();
 }
@@ -1088,13 +1202,7 @@ FReply SPCGExCollectionGridView::OnDuplicateSelected()
 	}
 	bIsBatchOperation = false;
 
-	// Structural array change — rebuild RowGenerator for fresh property handles
-	InitRowGenerator();
-
-	SelectedIndices.Reset();
-	LastClickedIndex = INDEX_NONE;
-
-	RefreshGrid();
+	StructuralRefresh(EPCGExStructuralRefreshFlags::ClearSelection);
 	return FReply::Handled();
 }
 
@@ -1133,13 +1241,7 @@ FReply SPCGExCollectionGridView::OnDeleteSelected()
 	}
 	bIsBatchOperation = false;
 
-	// Structural array change — rebuild RowGenerator for fresh property handles
-	InitRowGenerator();
-
-	SelectedIndices.Reset();
-	LastClickedIndex = INDEX_NONE;
-
-	RefreshGrid();
+	StructuralRefresh(EPCGExStructuralRefreshFlags::ClearSelection);
 	return FReply::Handled();
 }
 
@@ -1187,11 +1289,8 @@ void SPCGExCollectionGridView::OnObjectTransacted(UObject* Object, const FTransa
 {
 	if (Object == Collection.Get() && Event.GetEventType() == ETransactionObjectEventType::UndoRedo)
 	{
-		// Undo/redo replaces the object's internal state — RowGenerator handles become stale
-		InitRowGenerator();
-		SelectedIndices.Reset();
-		LastClickedIndex = INDEX_NONE;
-		RefreshGrid();
+		// Undo/redo replaces the object's internal state — handles are completely stale
+		StructuralRefresh(EPCGExStructuralRefreshFlags::HandlesClobbered | EPCGExStructuralRefreshFlags::ClearSelection);
 	}
 }
 
@@ -1221,8 +1320,8 @@ void SPCGExCollectionGridView::OnObjectModified(UObject* Object)
 					Coll->EDITOR_RebuildStagingData();
 					bIsBatchOperation = false;
 				}
-				InitRowGenerator();
-				RefreshGrid();
+				// External count change — handles may be stale
+				StructuralRefresh(EPCGExStructuralRefreshFlags::HandlesClobbered);
 			}
 			else
 			{
