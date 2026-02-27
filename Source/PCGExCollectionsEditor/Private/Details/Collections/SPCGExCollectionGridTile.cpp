@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/SPCGExCollectionGridTile.h"
@@ -8,10 +8,19 @@
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Widgets/Images/SImage.h"
-#include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SComboBox.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
+
+namespace PCGExCollectionGrid
+{
+	static const FName NewCategorySentinel("__PCGEx_NewCategory__");
+}
+
+#pragma region SPCGExCollectionGridTile
 
 void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 {
@@ -20,6 +29,11 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	TileSize = InArgs._TileSize;
 	Collection = InArgs._Collection;
 	EntryIndex = InArgs._EntryIndex;
+	CategoryIndex = InArgs._CategoryIndex;
+	CategoryOptions = InArgs._CategoryOptions;
+	OnTileClicked = InArgs._OnTileClicked;
+	OnTileDragDetected = InArgs._OnTileDragDetected;
+	ThumbnailCachePtr = InArgs._ThumbnailCachePtr;
 
 	check(EntryHandle.IsValid());
 
@@ -28,7 +42,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 		FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridTile::RefreshThumbnail));
 
 	TSharedPtr<IPropertyHandle> WeightHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Weight));
-	TSharedPtr<IPropertyHandle> CategoryHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category));
+	CategoryHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category));
 	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, bIsSubCollection));
 
 	// Build picker widget via delegate (type-specific)
@@ -38,111 +52,307 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 		PickerWidget = InArgs._OnGetPickerWidget.Execute(EntryHandle.ToSharedRef());
 	}
 
+	// Build category widget — combobox with "New..." option
+	TSharedRef<SWidget> CategoryWidget = SNullWidget::NullWidget;
+	if (CategoryOptions.IsValid() && CategoryHandle.IsValid())
+	{
+		CategoryWidget =
+			SAssignNew(CategoryWidgetSwitcher, SWidgetSwitcher)
+			.WidgetIndex(0)
+
+			// Index 0: Combobox
+			+ SWidgetSwitcher::Slot()
+			[
+				SAssignNew(CategoryCombo, SComboBox<TSharedPtr<FName>>)
+				.OptionsSource(&(*CategoryOptions))
+				.OnSelectionChanged_Lambda([this](TSharedPtr<FName> Selected, ESelectInfo::Type SelectType)
+				{
+					if (!Selected.IsValid() || SelectType == ESelectInfo::Direct) { return; }
+
+					if (*Selected == PCGExCollectionGrid::NewCategorySentinel)
+					{
+						// Switch to text entry mode
+						if (CategoryWidgetSwitcher.IsValid())
+						{
+							CategoryWidgetSwitcher->SetActiveWidgetIndex(1);
+						}
+						return;
+					}
+
+					// Set the category value
+					if (CategoryHandle.IsValid())
+					{
+						CategoryHandle->SetValue(*Selected);
+					}
+				})
+				.OnGenerateWidget_Lambda([](TSharedPtr<FName> Item) -> TSharedRef<SWidget>
+				{
+					FText DisplayText;
+					if (!Item.IsValid() || Item->IsNone())
+					{
+						DisplayText = INVTEXT("Uncategorized");
+					}
+					else if (*Item == PCGExCollectionGrid::NewCategorySentinel)
+					{
+						DisplayText = INVTEXT("+ New...");
+					}
+					else
+					{
+						DisplayText = FText::FromName(*Item);
+					}
+					return SNew(STextBlock)
+						.Text(DisplayText)
+						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8));
+				})
+				[
+					// Content (header button) — shows current category
+					SNew(STextBlock)
+					.Text_Lambda([this]() -> FText
+					{
+						FName Value;
+						if (CategoryHandle.IsValid())
+						{
+							CategoryHandle->GetValue(Value);
+						}
+						return Value.IsNone() ? INVTEXT("Uncategorized") : FText::FromName(Value);
+					})
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+				]
+			]
+
+			// Index 1: Editable text box for new category
+			+ SWidgetSwitcher::Slot()
+			[
+				SNew(SEditableTextBox)
+				.HintText(INVTEXT("New category..."))
+				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+				.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type CommitType)
+				{
+					if (CommitType == ETextCommit::OnEnter && !Text.IsEmpty())
+					{
+						const FName NewCat = FName(*Text.ToString());
+						if (CategoryHandle.IsValid())
+						{
+							CategoryHandle->SetValue(NewCat);
+						}
+					}
+					// Switch back to combobox mode
+					if (CategoryWidgetSwitcher.IsValid())
+					{
+						CategoryWidgetSwitcher->SetActiveWidgetIndex(0);
+					}
+				})
+			];
+
+		// Set initial combobox selection to match current category
+		if (CategoryCombo.IsValid())
+		{
+			FName CurrentCategory;
+			CategoryHandle->GetValue(CurrentCategory);
+			for (const TSharedPtr<FName>& Option : *CategoryOptions)
+			{
+				if (Option.IsValid() && *Option == CurrentCategory)
+				{
+					CategoryCombo->SetSelectedItem(Option);
+					break;
+				}
+			}
+		}
+	}
+	else if (CategoryHandle.IsValid())
+	{
+		// Fallback: raw property widget if no category options provided
+		CategoryWidget = CategoryHandle->CreatePropertyValueWidget();
+	}
+
 	const float ContentWidth = TileSize + 16.f;
+
+	// Index overlay text
+	const FText IndexOverlayText = (CategoryIndex != INDEX_NONE)
+		                               ? FText::Format(INVTEXT("[{0}|{1}]"), FText::AsNumber(EntryIndex), FText::AsNumber(CategoryIndex))
+		                               : FText::Format(INVTEXT("[{0}]"), FText::AsNumber(EntryIndex));
 
 	ChildSlot
 	[
+		// Selection highlight border (outermost)
 		SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-		.Padding(4.f)
+		.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+		.BorderBackgroundColor_Lambda([this]() -> FSlateColor
+		{
+			return bIsSelected
+				       ? FSlateColor(FLinearColor(0.15f, 0.4f, 0.8f, 0.4f))
+				       : FSlateColor(FLinearColor::Transparent);
+		})
+		.Padding(2.f)
 		[
-			SNew(SBox)
-			.WidthOverride(ContentWidth)
+			SNew(SBorder)
+			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+			.Padding(4.f)
 			[
-				SNew(SVerticalBox)
-
-				// Top bar: SubCollection checkbox + Weight spinner
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				.Padding(0, 0, 0, 2)
+				SNew(SBox)
+				.WidthOverride(ContentWidth)
 				[
-					SNew(SHorizontalBox)
+					SNew(SVerticalBox)
 
-					// SubCollection checkbox
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					.Padding(0, 0, 4, 0)
+					// Top bar: SubCollection checkbox + Weight spinner
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					.Padding(0, 0, 0, 2)
 					[
-						SNew(SBox)
-						.ToolTipText(INVTEXT("Sub-collection"))
+						SNew(SHorizontalBox)
+
+						// SubCollection checkbox
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.VAlign(VAlign_Center)
+						.Padding(0, 0, 4, 0)
 						[
-							IsSubCollectionHandle->CreatePropertyValueWidget()
+							SNew(SBox)
+							.ToolTipText(INVTEXT("Sub-collection"))
+							[
+								IsSubCollectionHandle->CreatePropertyValueWidget()
+							]
+						]
+
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.VAlign(VAlign_Center)
+						.Padding(0, 0, 4, 0)
+						[
+							SNew(STextBlock)
+							.Text(INVTEXT("Sub"))
+							.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f)))
+						]
+
+						// Weight
+						+ SHorizontalBox::Slot()
+						.FillWidth(1.f)
+						.VAlign(VAlign_Center)
+						[
+							SNew(SBox)
+							.ToolTipText(INVTEXT("Weight"))
+							[
+								WeightHandle->CreatePropertyValueWidget()
+							]
 						]
 					]
 
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					.Padding(0, 0, 4, 0)
+					// Thumbnail with [i|j] overlay
+					+ SVerticalBox::Slot()
+					.FillHeight(1.f)
+					.HAlign(HAlign_Center)
+					.Padding(0, 2)
 					[
-						SNew(STextBlock)
-						.Text(INVTEXT("Sub"))
-						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
-						.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f)))
-					]
+						SNew(SOverlay)
 
-					// Weight
-					+ SHorizontalBox::Slot()
-					.FillWidth(1.f)
-					.VAlign(VAlign_Center)
-					[
-						SNew(SBox)
-						.ToolTipText(INVTEXT("Weight"))
+						+ SOverlay::Slot()
 						[
-							WeightHandle->CreatePropertyValueWidget()
+							SAssignNew(ThumbnailBox, SBox)
+							.WidthOverride(TileSize)
+							.HeightOverride(TileSize)
+							.Clipping(EWidgetClipping::ClipToBounds)
+							[
+								BuildThumbnailWidget()
+							]
+						]
+
+						+ SOverlay::Slot()
+						.HAlign(HAlign_Left)
+						.VAlign(VAlign_Top)
+						.Padding(2.f)
+						[
+							SNew(SBorder)
+							.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+							.BorderBackgroundColor(FLinearColor(0, 0, 0, 0.7f))
+							.Padding(FMargin(3, 1))
+							[
+								SNew(STextBlock)
+								.Text(IndexOverlayText)
+								.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
+								.ColorAndOpacity(FSlateColor(FLinearColor::White))
+							]
 						]
 					]
-				]
 
-				// Thumbnail — fills remaining vertical space, clips to square
-				+ SVerticalBox::Slot()
-				.FillHeight(1.f)
-				.HAlign(HAlign_Center)
-				.Padding(0, 2)
-				[
-					SAssignNew(ThumbnailBox, SBox)
-					.WidthOverride(TileSize)
-					.Clipping(EWidgetClipping::ClipToBounds)
+					// Picker (type-specific: mesh picker, actor class picker, etc.)
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					.Padding(0, 2)
 					[
-						BuildThumbnailWidget()
+						PickerWidget
 					]
-				]
 
-				// Picker (type-specific: mesh picker, actor class picker, etc.)
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				.Padding(0, 2)
-				[
-					PickerWidget
-				]
-
-				// Category
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				.Padding(0, 2, 0, 0)
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					.Padding(0, 0, 4, 0)
+					// Category combobox
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					.Padding(0, 2, 0, 0)
 					[
-						SNew(STextBlock)
-						.Text(INVTEXT("Cat"))
-						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
-						.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f)))
-					]
-					+ SHorizontalBox::Slot()
-					.FillWidth(1.f)
-					.VAlign(VAlign_Center)
-					[
-						CategoryHandle->CreatePropertyValueWidget()
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.VAlign(VAlign_Center)
+						.Padding(0, 0, 4, 0)
+						[
+							SNew(STextBlock)
+							.Text(INVTEXT("Cat"))
+							.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f)))
+						]
+						+ SHorizontalBox::Slot()
+						.FillWidth(1.f)
+						.VAlign(VAlign_Center)
+						[
+							CategoryWidget
+						]
 					]
 				]
 			]
 		]
 	];
+}
+
+FReply SPCGExCollectionGridTile::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+{
+	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		// If modifier keys or unselected: apply selection immediately
+		// If already selected without modifiers: defer to mouse-up (preserves multi-select for drag)
+		if (MouseEvent.IsControlDown() || MouseEvent.IsShiftDown() || !bIsSelected)
+		{
+			OnTileClicked.ExecuteIfBound(EntryIndex, MouseEvent);
+			bPendingClick = false;
+		}
+		else
+		{
+			bPendingClick = true;
+		}
+
+		return FReply::Handled().DetectDrag(SharedThis(this), EKeys::LeftMouseButton);
+	}
+	return FReply::Unhandled();
+}
+
+FReply SPCGExCollectionGridTile::OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+{
+	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bPendingClick)
+	{
+		bPendingClick = false;
+		// Deferred exclusive select — was already selected, user didn't drag
+		OnTileClicked.ExecuteIfBound(EntryIndex, MouseEvent);
+		return FReply::Handled();
+	}
+	return FReply::Unhandled();
+}
+
+FReply SPCGExCollectionGridTile::OnDragDetected(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+{
+	bPendingClick = false;
+	if (OnTileDragDetected.IsBound())
+	{
+		return OnTileDragDetected.Execute(EntryIndex, MouseEvent);
+	}
+	return FReply::Unhandled();
 }
 
 void SPCGExCollectionGridTile::RefreshThumbnail()
@@ -247,12 +457,30 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 			];
 	}
 
+	// Check cache first
+	if (ThumbnailCachePtr)
+	{
+		if (TSharedPtr<FAssetThumbnail>* Cached = ThumbnailCachePtr->Find(AssetPath))
+		{
+			Thumbnail = *Cached;
+			FAssetThumbnailConfig ThumbnailConfig;
+			ThumbnailConfig.bAllowFadeIn = false;
+			return Thumbnail->MakeThumbnailWidget(ThumbnailConfig);
+		}
+	}
+
 	// Resolve FAssetData from path and create thumbnail
 	const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
 	const FAssetData AssetData = AssetRegistry.GetAssetByObjectPath(AssetPath);
 
 	const int32 ThumbnailResolution = FMath::RoundToInt32(TileSize);
 	Thumbnail = MakeShared<FAssetThumbnail>(AssetData, ThumbnailResolution, ThumbnailResolution, ThumbnailPool);
+
+	// Store in cache
+	if (ThumbnailCachePtr)
+	{
+		ThumbnailCachePtr->Add(AssetPath, Thumbnail);
+	}
 
 	if (Thumbnail.IsValid())
 	{
@@ -263,3 +491,5 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 
 	return SNullWidget::NullWidget;
 }
+
+#pragma endregion

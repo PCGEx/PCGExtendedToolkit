@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -6,10 +6,10 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
-#include "Widgets/Views/STileView.h"
 
 #include "SPCGExCollectionGridTile.h"
 
+struct FAssetData;
 class FAssetThumbnailPool;
 class IStructureDetailsView;
 class IPropertyHandle;
@@ -18,10 +18,14 @@ class IDetailTreeNode;
 class UPCGExAssetCollection;
 class FStructOnScope;
 class FTransactionObjectEvent;
+class SBorder;
+class SScrollBox;
+class STextBlock;
+class SPCGExCollectionCategoryGroup;
 
 /**
- * Grid/tile view of collection entries.
- * Left pane: STileView with thumbnails and compact controls per entry.
+ * Grid/tile view of collection entries with categorized grouping.
+ * Left pane: SScrollBox with collapsible category groups, each containing a SWrapBox of tiles.
  * Right pane: IStructureDetailsView showing only the selected entry struct.
  */
 class SPCGExCollectionGridView : public SCompoundWidget
@@ -45,7 +49,7 @@ public:
 	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
 	virtual FReply OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
 
-	/** Rebuild the tile list (e.g., after entries are added/removed) */
+	/** Rebuild the category cache and grouped layout (e.g., after entries are added/removed) */
 	void RefreshGrid();
 
 	/** Force the detail panel to refresh (e.g., after filter toggle or tile control change) */
@@ -60,10 +64,31 @@ private:
 	FOnGetTilePickerWidget OnGetPickerWidget;
 	float TileSize = 128.f;
 
-	// Tile view
-	TArray<TSharedPtr<int32>> EntryItems;
-	TSharedPtr<STileView<TSharedPtr<int32>>> TileView;
-	TMap<int32, TWeakPtr<SPCGExCollectionGridTile>> ActiveTiles;
+	// Category cache
+	TArray<FName> SortedCategoryNames;
+	TMap<FName, TArray<int32>> CategoryToEntryIndices;
+	TSharedPtr<TArray<TSharedPtr<FName>>> CategoryComboOptions;
+	TArray<int32> VisualOrder; // flattened display order of indices
+
+	// Selection
+	TSet<int32> SelectedIndices;
+	int32 LastClickedIndex = INDEX_NONE;
+
+	// Layout
+	TSharedPtr<SScrollBox> GroupScrollBox;
+	TMap<FName, TSharedPtr<SPCGExCollectionCategoryGroup>> CategoryGroupWidgets;
+	TMap<int32, TSharedPtr<SPCGExCollectionGridTile>> ActiveTiles;
+
+	// Thumbnail cache (persists across rebuilds to prevent flash)
+	FThumbnailCacheMap ThumbnailCache;
+
+	// Pinned category header overlay
+	TSharedPtr<SBorder> PinnedCategoryHeader;
+	TSharedPtr<STextBlock> PinnedHeaderText;
+	FName PinnedCategoryName;
+
+	// Collapse state (persists across rebuilds)
+	TSet<FName> CollapsedCategories;
 
 	// Detail panel — IStructureDetailsView for editing a single entry struct
 	TSharedPtr<IStructureDetailsView> StructDetailView;
@@ -74,11 +99,28 @@ private:
 	TSharedPtr<IPropertyRowGenerator> RowGenerator;
 	TSharedPtr<IPropertyHandle> EntriesArrayHandle;
 
-	void RebuildEntryItems();
+	// Category cache rebuild
+	void RebuildCategoryCache();
 
-	// STileView callbacks
-	TSharedRef<ITableRow> OnGenerateTile(TSharedPtr<int32> Item, const TSharedRef<STableViewBase>& OwnerTable);
-	void OnSelectionChanged(TSharedPtr<int32> Item, ESelectInfo::Type SelectInfo);
+	// Grouped layout
+	void RebuildGroupedLayout();
+
+	// Selection
+	void SelectIndex(int32 Index, bool bCtrl, bool bShift);
+	void ClearSelection();
+	bool IsSelected(int32 Index) const;
+	void NotifySelectionChanged();
+	void ApplySelectionVisuals();
+
+	// Category operations
+	void OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices);
+	void OnAssetDropOnCategory(FName TargetCategory, const TArray<FAssetData>& Assets);
+	void OnCategoryRenamed(FName OldName, FName NewName);
+	void OnAddToCategory(FName Category);
+
+	// Tile callbacks
+	void OnTileClicked(int32 Index, const FPointerEvent& MouseEvent);
+	FReply OnTileDragDetected(int32 Index, const FPointerEvent& MouseEvent);
 
 	// Detail panel management
 	void UpdateDetailForSelection();
@@ -87,10 +129,17 @@ private:
 	void OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event);
 	bool bIsSyncing = false;
 	bool bIsBatchOperation = false;
+	bool bPendingCategoryRefresh = false;
 
 	// Entry struct reflection helpers
 	UScriptStruct* GetEntryScriptStruct() const;
 	uint8* GetEntryRawPtr(int32 Index) const;
+
+	// Incremental layout refresh (tile reuse, no flash)
+	void IncrementalCategoryRefresh();
+
+	// Scroll tracking for pinned header
+	void OnScrolled(float ScrollOffset);
 
 	// Entry operations
 	FReply OnAddEntry();
