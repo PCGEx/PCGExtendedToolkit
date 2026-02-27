@@ -7,6 +7,9 @@
 #include "PropertyEditorDelegates.h"
 #include "PropertyEditorModule.h"
 #include "Details/PCGExAdjacencySettingsCustomization.h"
+#include "Details/PCGExEdgeEndpointsCheckFilterConfigCustomization.h"
+#include "Details/PCGExEdgeEndpointsCompareNumFilterConfigCustomization.h"
+#include "Details/PCGExEdgeNeighborsCountFilterConfigCustomization.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExElementsClustersEditorModule"
 
@@ -20,6 +23,9 @@ void FPCGExElementsClustersEditorModule::StartupModule()
 
 	PCGEX_REGISTER_CUSTO_START
 	PCGEX_REGISTER_CUSTO("PCGExAdjacencySettings", FPCGExAdjacencySettingsCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExEdgeEndpointsCheckFilterConfig", FPCGExEdgeEndpointsCheckFilterConfigCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExEdgeEndpointsCompareNumFilterConfig", FPCGExEdgeEndpointsCompareNumFilterConfigCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExEdgeNeighborsCountFilterConfig", FPCGExEdgeNeighborsCountFilterConfigCustomization)
 }
 
 void FPCGExElementsClustersEditorModule::ShutdownModule()
