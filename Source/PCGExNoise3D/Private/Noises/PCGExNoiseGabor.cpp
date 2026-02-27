@@ -41,7 +41,7 @@ double FPCGExNoiseGabor::GenerateRaw(const FVector& Position) const
 
 					// Random weight for this impulse
 					const uint32 HW = Hash32(NX + i, NY + i, NZ + Seed);
-					const double Weight = Hash32ToDouble(HW);
+					const double Weight = Hash32ToDouble01(HW) * 2.0 - 1.0;
 
 					Sum += Weight * GaborKernel(Delta, K, A);
 					Count++;
@@ -51,7 +51,7 @@ double FPCGExNoiseGabor::GenerateRaw(const FVector& Position) const
 	}
 
 	// Normalize
-	return Sum * FMath::Sqrt(1.0 / FMath::Max(Count, 1));
+	return Sum * FMath::Sqrt(1.0 / FMath::Max(Count, 1)) * 0.5 + 0.5;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryGabor::CreateOperation(FPCGExContext* InContext) const

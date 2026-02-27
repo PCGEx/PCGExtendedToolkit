@@ -22,4 +22,5 @@ protected:
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder) override;
 	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox) override;
 	virtual FName GetTilePickerPropertyName() const override { return FName("Actor"); }
+	virtual const UClass* GetTilePickerAllowedClass() const override;
 };

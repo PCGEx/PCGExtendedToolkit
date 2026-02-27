@@ -61,21 +61,16 @@ namespace PCGExNoise3D
 		switch (BlendMode)
 		{
 		case EPCGExNoiseBlendMode::Blend:
-			// Most common case - simple weighted lerp, no normalization needed
 			return A + (B - A) * BlendFactor;
 
 		case EPCGExNoiseBlendMode::Add:
-			return FMath::Lerp(A, FMath::Clamp(A + B, -1.0, 1.0), BlendFactor);
+			return FMath::Lerp(A, FMath::Clamp(A + B, 0.0, 1.0), BlendFactor);
 
 		case EPCGExNoiseBlendMode::Subtract:
-			return FMath::Lerp(A, FMath::Clamp(A - B, -1.0, 1.0), BlendFactor);
+			return FMath::Lerp(A, FMath::Clamp(A - B, 0.0, 1.0), BlendFactor);
 
 		case EPCGExNoiseBlendMode::Multiply:
-			{
-				const double An = A * 0.5 + 0.5;
-				const double Bn = B * 0.5 + 0.5;
-				return FMath::Lerp(A, (An * Bn) * 2.0 - 1.0, BlendFactor);
-			}
+			return FMath::Lerp(A, A * B, BlendFactor);
 
 		case EPCGExNoiseBlendMode::Min:
 			return FMath::Lerp(A, FMath::Min(A, B), BlendFactor);
@@ -84,28 +79,16 @@ namespace PCGExNoise3D
 			return FMath::Lerp(A, FMath::Max(A, B), BlendFactor);
 
 		case EPCGExNoiseBlendMode::Screen:
-			{
-				const double An = A * 0.5 + 0.5;
-				const double Bn = B * 0.5 + 0.5;
-				return FMath::Lerp(A, ScreenBlend(An, Bn) * 2.0 - 1.0, BlendFactor);
-			}
+			return FMath::Lerp(A, ScreenBlend(A, B), BlendFactor);
 
 		case EPCGExNoiseBlendMode::Overlay:
-			{
-				const double An = A * 0.5 + 0.5;
-				const double Bn = B * 0.5 + 0.5;
-				return FMath::Lerp(A, OverlayBlend(An, Bn) * 2.0 - 1.0, BlendFactor);
-			}
+			return FMath::Lerp(A, OverlayBlend(A, B), BlendFactor);
 
 		case EPCGExNoiseBlendMode::SoftLight:
-			{
-				const double An = A * 0.5 + 0.5;
-				const double Bn = B * 0.5 + 0.5;
-				return FMath::Lerp(A, SoftLightBlend(An, Bn) * 2.0 - 1.0, BlendFactor);
-			}
+			return FMath::Lerp(A, SoftLightBlend(A, B), BlendFactor);
 
 		case EPCGExNoiseBlendMode::First:
-			return FMath::Abs(A) > SMALL_NUMBER ? A : B;
+			return A > SMALL_NUMBER ? A : B;
 
 		default:
 			return A;
@@ -148,7 +131,6 @@ namespace PCGExNoise3D
 		switch (BlendMode)
 		{
 		case EPCGExNoiseBlendMode::Blend:
-			// Hot path - most common blend mode, no normalization needed
 			for (int32 i = 0; i < Count; ++i)
 			{
 				Out[i] = Out[i] + (In[i] - Out[i]) * BlendFactor;
@@ -158,23 +140,21 @@ namespace PCGExNoise3D
 		case EPCGExNoiseBlendMode::Add:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i] = FMath::Lerp(Out[i], FMath::Clamp(Out[i] + In[i], -1.0, 1.0), BlendFactor);
+				Out[i] = FMath::Lerp(Out[i], FMath::Clamp(Out[i] + In[i], 0.0, 1.0), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::Subtract:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i] = FMath::Lerp(Out[i], FMath::Clamp(Out[i] - In[i], -1.0, 1.0), BlendFactor);
+				Out[i] = FMath::Lerp(Out[i], FMath::Clamp(Out[i] - In[i], 0.0, 1.0), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::Multiply:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				const double An = Out[i] * 0.5 + 0.5;
-				const double Bn = In[i] * 0.5 + 0.5;
-				Out[i] = FMath::Lerp(Out[i], (An * Bn) * 2.0 - 1.0, BlendFactor);
+				Out[i] = FMath::Lerp(Out[i], Out[i] * In[i], BlendFactor);
 			}
 			break;
 
@@ -195,34 +175,28 @@ namespace PCGExNoise3D
 		case EPCGExNoiseBlendMode::Screen:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				const double An = Out[i] * 0.5 + 0.5;
-				const double Bn = In[i] * 0.5 + 0.5;
-				Out[i] = FMath::Lerp(Out[i], ScreenBlend(An, Bn) * 2.0 - 1.0, BlendFactor);
+				Out[i] = FMath::Lerp(Out[i], ScreenBlend(Out[i], In[i]), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::Overlay:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				const double An = Out[i] * 0.5 + 0.5;
-				const double Bn = In[i] * 0.5 + 0.5;
-				Out[i] = FMath::Lerp(Out[i], OverlayBlend(An, Bn) * 2.0 - 1.0, BlendFactor);
+				Out[i] = FMath::Lerp(Out[i], OverlayBlend(Out[i], In[i]), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::SoftLight:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				const double An = Out[i] * 0.5 + 0.5;
-				const double Bn = In[i] * 0.5 + 0.5;
-				Out[i] = FMath::Lerp(Out[i], SoftLightBlend(An, Bn) * 2.0 - 1.0, BlendFactor);
+				Out[i] = FMath::Lerp(Out[i], SoftLightBlend(Out[i], In[i]), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::First:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				if (FMath::Abs(Out[i]) <= SMALL_NUMBER) { Out[i] = In[i]; }
+				if (Out[i] <= SMALL_NUMBER) { Out[i] = In[i]; }
 			}
 			break;
 		}
@@ -242,21 +216,20 @@ namespace PCGExNoise3D
 		case EPCGExNoiseBlendMode::Add:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X + In[i].X, -1.0, 1.0), BlendFactor);
-				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y + In[i].Y, -1.0, 1.0), BlendFactor);
+				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X + In[i].X, 0.0, 1.0), BlendFactor);
+				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y + In[i].Y, 0.0, 1.0), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::Subtract:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X - In[i].X, -1.0, 1.0), BlendFactor);
-				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y - In[i].Y, -1.0, 1.0), BlendFactor);
+				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X - In[i].X, 0.0, 1.0), BlendFactor);
+				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y - In[i].Y, 0.0, 1.0), BlendFactor);
 			}
 			break;
 
 		default:
-			// Fall back to per-element for complex blend modes
 			for (int32 i = 0; i < Count; ++i)
 			{
 				Out[i] = BlendSingle(BlendMode, Out[i], In[i], BlendFactor);
@@ -279,18 +252,18 @@ namespace PCGExNoise3D
 		case EPCGExNoiseBlendMode::Add:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X + In[i].X, -1.0, 1.0), BlendFactor);
-				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y + In[i].Y, -1.0, 1.0), BlendFactor);
-				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z + In[i].Z, -1.0, 1.0), BlendFactor);
+				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X + In[i].X, 0.0, 1.0), BlendFactor);
+				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y + In[i].Y, 0.0, 1.0), BlendFactor);
+				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z + In[i].Z, 0.0, 1.0), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::Subtract:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X - In[i].X, -1.0, 1.0), BlendFactor);
-				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y - In[i].Y, -1.0, 1.0), BlendFactor);
-				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z - In[i].Z, -1.0, 1.0), BlendFactor);
+				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X - In[i].X, 0.0, 1.0), BlendFactor);
+				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y - In[i].Y, 0.0, 1.0), BlendFactor);
+				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z - In[i].Z, 0.0, 1.0), BlendFactor);
 			}
 			break;
 
@@ -317,20 +290,20 @@ namespace PCGExNoise3D
 		case EPCGExNoiseBlendMode::Add:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X + In[i].X, -1.0, 1.0), BlendFactor);
-				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y + In[i].Y, -1.0, 1.0), BlendFactor);
-				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z + In[i].Z, -1.0, 1.0), BlendFactor);
-				Out[i].W = FMath::Lerp(Out[i].W, FMath::Clamp(Out[i].W + In[i].W, -1.0, 1.0), BlendFactor);
+				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X + In[i].X, 0.0, 1.0), BlendFactor);
+				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y + In[i].Y, 0.0, 1.0), BlendFactor);
+				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z + In[i].Z, 0.0, 1.0), BlendFactor);
+				Out[i].W = FMath::Lerp(Out[i].W, FMath::Clamp(Out[i].W + In[i].W, 0.0, 1.0), BlendFactor);
 			}
 			break;
 
 		case EPCGExNoiseBlendMode::Subtract:
 			for (int32 i = 0; i < Count; ++i)
 			{
-				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X - In[i].X, -1.0, 1.0), BlendFactor);
-				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y - In[i].Y, -1.0, 1.0), BlendFactor);
-				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z - In[i].Z, -1.0, 1.0), BlendFactor);
-				Out[i].W = FMath::Lerp(Out[i].W, FMath::Clamp(Out[i].W - In[i].W, -1.0, 1.0), BlendFactor);
+				Out[i].X = FMath::Lerp(Out[i].X, FMath::Clamp(Out[i].X - In[i].X, 0.0, 1.0), BlendFactor);
+				Out[i].Y = FMath::Lerp(Out[i].Y, FMath::Clamp(Out[i].Y - In[i].Y, 0.0, 1.0), BlendFactor);
+				Out[i].Z = FMath::Lerp(Out[i].Z, FMath::Clamp(Out[i].Z - In[i].Z, 0.0, 1.0), BlendFactor);
+				Out[i].W = FMath::Lerp(Out[i].W, FMath::Clamp(Out[i].W - In[i].W, 0.0, 1.0), BlendFactor);
 			}
 			break;
 

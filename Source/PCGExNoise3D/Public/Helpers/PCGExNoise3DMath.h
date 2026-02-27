@@ -169,10 +169,10 @@ namespace PCGExNoise3D
 		// Value Noise Helpers
 		//
 
-		/** Convert hash to normalized value [-1, 1] */
+		/** Convert hash to normalized value [0, 1] */
 		FORCEINLINE double HashToDouble(const uint8 H)
 		{
-			return (static_cast<double>(H) / 127.5) - 1.0;
+			return static_cast<double>(H) / 255.0;
 		}
 
 		/** Convert 32-bit hash to normalized value [0, 1] */
@@ -181,10 +181,10 @@ namespace PCGExNoise3D
 			return static_cast<double>(H) / 4294967295.0;
 		}
 
-		/** Convert 32-bit hash to normalized value [-1, 1] */
+		/** Convert 32-bit hash to normalized value [0, 1] */
 		FORCEINLINE double Hash32ToDouble(const uint32 H)
 		{
-			return Hash32ToDouble01(H) * 2.0 - 1.0;
+			return Hash32ToDouble01(H);
 		}
 
 		//
