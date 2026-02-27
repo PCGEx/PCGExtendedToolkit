@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -12,9 +12,6 @@
 struct FAssetData;
 class FAssetThumbnailPool;
 class IStructureDetailsView;
-class IPropertyHandle;
-class IPropertyRowGenerator;
-class IDetailTreeNode;
 class UPCGExAssetCollection;
 class FStructOnScope;
 class FTransactionObjectEvent;
@@ -26,10 +23,9 @@ class SPCGExCollectionCategoryGroup;
 /** Flags describing what kind of structural change happened, so StructuralRefresh() can do the minimum work. */
 enum class EPCGExStructuralRefreshFlags : uint8
 {
-	None             = 0,
-	HandlesClobbered = 1 << 0, // Undo/redo replaced object state — full InitRowGenerator (expensive!)
-	ClearSelection   = 1 << 1, // Reset selection state
-	ScrollToEnd      = 1 << 2, // Scroll to bottom after refresh
+	None           = 0,
+	ClearSelection = 1 << 0, // Reset selection state
+	ScrollToEnd    = 1 << 1, // Scroll to bottom after refresh
 };
 ENUM_CLASS_FLAGS(EPCGExStructuralRefreshFlags);
 
@@ -105,10 +101,6 @@ private:
 	TSharedPtr<FStructOnScope> CurrentStructScope;
 	int32 CurrentDetailIndex = INDEX_NONE;
 
-	// Entry operations (via property handle array from row generator)
-	TSharedPtr<IPropertyRowGenerator> RowGenerator;
-	TSharedPtr<IPropertyHandle> EntriesArrayHandle;
-
 	// Category cache rebuild
 	void RebuildCategoryCache();
 
@@ -123,11 +115,12 @@ private:
 	void ApplySelectionVisuals();
 
 	// Category operations
-	void OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices);
+	void OnTileDropOnCategory(FName TargetCategory, const TArray<int32>& Indices, int32 InsertBeforeLocalIndex);
 	void OnAssetDropOnCategory(FName TargetCategory, const TArray<FAssetData>& Assets);
 	void OnCategoryRenamed(FName OldName, FName NewName);
 	void OnAddToCategory(FName Category);
 	void OnCategoryExpansionChanged(FName Category, bool bIsExpanded);
+	void OnTileReorderInCategory(FName Category, const TArray<int32>& DraggedIndices, int32 InsertBeforeLocalIndex);
 
 	// Lazy tile creation for a single category
 	void PopulateCategoryTiles(FName Category);
@@ -135,12 +128,12 @@ private:
 	// Tile callbacks
 	void OnTileClicked(int32 Index, const FPointerEvent& MouseEvent);
 	FReply OnTileDragDetected(int32 Index, const FPointerEvent& MouseEvent);
+	void OnTileCategoryChanged();
 
 	// Detail panel management
 	void UpdateDetailForSelection();
 	void SyncStructToCollection(const FProperty* ChangedMemberProperty);
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
-	void OnRowGeneratorPropertyChanged(const FPropertyChangedEvent& Event);
 	bool bIsSyncing = false;
 	bool bIsBatchOperation = false;
 	bool bPendingCategoryRefresh = false;
@@ -148,7 +141,16 @@ private:
 	// Entry struct reflection helpers
 	UScriptStruct* GetEntryScriptStruct() const;
 	uint8* GetEntryRawPtr(int32 Index) const;
-	TSharedPtr<IPropertyHandle> GetEntryHandle(int32 Index) const;
+
+	// Encapsulates reflection boilerplate for Entries array access
+	struct FEntriesArrayAccess
+	{
+		FArrayProperty* ArrayProp = nullptr;
+		FStructProperty* InnerProp = nullptr;
+		void* ArrayData = nullptr;
+		bool IsValid() const { return ArrayProp && ArrayData; }
+	};
+	FEntriesArrayAccess GetEntriesAccess() const;
 
 	// Incremental layout refresh (tile reuse, no flash)
 	void IncrementalCategoryRefresh();
@@ -171,11 +173,4 @@ private:
 	// Deferred to next tick because Modify() fires BEFORE changes are applied.
 	void OnObjectModified(UObject* Object);
 	bool bPendingExternalRefresh = false;
-
-	// Property row generator setup (for entry operations only)
-	void InitRowGenerator();
-
-	// Light refresh: reuse existing RowGenerator, just rebuild its property tree.
-	// Cheaper than InitRowGenerator (no new generator, no re-subscription).
-	void RefreshRowGenerator();
 };

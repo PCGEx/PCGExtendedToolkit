@@ -105,7 +105,7 @@ double FPCGExNoiseMarble::GenerateRaw(const FVector& Position) const
 		Result = FMath::Sign(Result) * FMath::Pow(FMath::Abs(Result), 1.0 / VeinSharpness);
 	}
 
-	return Result;
+	return Result * 0.5 + 0.5;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryMarble::CreateOperation(FPCGExContext* InContext) const

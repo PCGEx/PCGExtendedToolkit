@@ -157,7 +157,7 @@ FVector FPCGExNoiseCurl::GetVector(const FVector& Position) const
 		Curl *= Bounding;
 	}
 
-	for (int i = 0; i < 3; i++) { Curl[i] = ApplyRemap(Curl[i]); }
+	for (int i = 0; i < 3; i++) { Curl[i] = ApplyRemap(Curl[i] * 0.5 + 0.5); }
 
 	return Curl;
 }

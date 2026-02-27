@@ -20,5 +20,8 @@ public:
 
 protected:
 	virtual FName GetTilePickerPropertyName() const override { return FName("DataAsset"); }
-	virtual TSharedRef<SWidget> BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle) override;
+	virtual TSharedRef<SWidget> BuildTilePickerWidget(
+		TWeakObjectPtr<UPCGExAssetCollection> Collection,
+		int32 EntryIndex,
+		FSimpleDelegate OnAssetChanged) override;
 };
