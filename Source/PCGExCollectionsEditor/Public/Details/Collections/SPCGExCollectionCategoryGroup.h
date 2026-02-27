@@ -8,15 +8,17 @@
 #include "Widgets/DeclarativeSyntaxSupport.h"
 
 struct FAssetData;
+class SBox;
 class SWrapBox;
-class SExpandableArea;
 class SBorder;
+class SImage;
 
 DECLARE_DELEGATE_TwoParams(FOnCategoryRenamed, FName /*OldName*/, FName /*NewName*/);
-DECLARE_DELEGATE_TwoParams(FOnTileDropOnCategory, FName /*TargetCategory*/, const TArray<int32>& /*Indices*/);
+DECLARE_DELEGATE_ThreeParams(FOnTileDropOnCategory, FName /*TargetCategory*/, const TArray<int32>& /*Indices*/, int32 /*InsertBeforeLocalIndex*/);
 DECLARE_DELEGATE_TwoParams(FOnAssetDropOnCategory, FName /*TargetCategory*/, const TArray<FAssetData>& /*Assets*/);
 DECLARE_DELEGATE_OneParam(FOnAddToCategory, FName /*Category*/);
 DECLARE_DELEGATE_TwoParams(FOnCategoryExpansionChanged, FName /*Category*/, bool /*bIsExpanded*/);
+DECLARE_DELEGATE_ThreeParams(FOnTileReorderInCategory, FName /*Category*/, const TArray<int32>& /*DraggedIndices*/, int32 /*InsertBeforeLocalIndex*/);
 
 /**
  * Compound widget for a single category section in the grouped collection grid layout.
@@ -40,6 +42,7 @@ public:
 	SLATE_EVENT(FOnAssetDropOnCategory, OnAssetDropOnCategory)
 	SLATE_EVENT(FOnAddToCategory, OnAddToCategory)
 	SLATE_EVENT(FOnCategoryExpansionChanged, OnExpansionChanged)
+	SLATE_EVENT(FOnTileReorderInCategory, OnTileReorderInCategory)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -54,7 +57,7 @@ public:
 	FName GetCategoryName() const { return CategoryName; }
 
 	/** Get collapse state */
-	bool IsCollapsed() const;
+	bool IsCollapsed() const { return bIsCollapsed; }
 
 	// Drop target overrides
 	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
@@ -68,9 +71,15 @@ private:
 	FOnAddToCategory OnAddToCategory;
 	FOnAssetDropOnCategory OnAssetDropOnCategory;
 	FOnCategoryExpansionChanged OnExpansionChanged;
+	FOnTileReorderInCategory OnTileReorderInCategory;
+
+	int32 DropInsertIndex = INDEX_NONE;
 
 	TSharedPtr<SWrapBox> TilesWrapBox;
-	TSharedPtr<SExpandableArea> ExpandableArea;
 	TSharedPtr<SBorder> DropHighlightBorder;
+	TSharedPtr<SBox> BodyContainer;
+	TSharedPtr<SBox> InsertIndicator;
+	TSharedPtr<SImage> CollapseArrow;
 	bool bIsDragOver = false;
+	bool bIsCollapsed = false;
 };

@@ -115,8 +115,8 @@ double FPCGExNoiseSimplex::GenerateRaw(const FVector& Position) const
 	const double N2 = Contrib(GI2, X2, Y2, Z2);
 	const double N3 = Contrib(GI3, X3, Y3, Z3);
 
-	// Sum contributions and scale to [-1, 1]
-	return 32.0 * (N0 + N1 + N2 + N3);
+	// Sum contributions and scale to [0, 1]
+	return 32.0 * (N0 + N1 + N2 + N3) * 0.5 + 0.5;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactorySimplex::CreateOperation(FPCGExContext* InContext) const

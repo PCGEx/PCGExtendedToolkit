@@ -62,7 +62,7 @@ double FPCGExNoiseFlow::GenerateRaw(const FVector& Position) const
 	const double XY0 = Lerp(X00, X10, V);
 	const double XY1 = Lerp(X01, X11, V);
 
-	return Lerp(XY0, XY1, W);
+	return Lerp(XY0, XY1, W) * 0.5 + 0.5;
 }
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryFlow::CreateOperation(FPCGExContext* InContext) const

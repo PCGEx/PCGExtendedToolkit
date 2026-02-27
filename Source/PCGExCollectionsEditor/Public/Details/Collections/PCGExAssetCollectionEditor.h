@@ -104,7 +104,13 @@ protected:
 	virtual FName GetTilePickerPropertyName() const { return NAME_None; }
 
 	/** Build the picker widget for a single tile entry. Override for custom picker logic. */
-	virtual TSharedRef<SWidget> BuildTilePickerWidget(TSharedRef<IPropertyHandle> EntryHandle);
+	virtual TSharedRef<SWidget> BuildTilePickerWidget(
+		TWeakObjectPtr<UPCGExAssetCollection> Collection,
+		int32 EntryIndex,
+		FSimpleDelegate OnAssetChanged);
+
+	/** Returns the allowed UClass for the type-specific asset picker. Override in subclasses. */
+	virtual const UClass* GetTilePickerAllowedClass() const { return nullptr; }
 
 	TArray<PCGExAssetCollectionEditor::TabInfos> Tabs;
 	FDelegateHandle OnHiddenAssetPropertyNamesChanged;

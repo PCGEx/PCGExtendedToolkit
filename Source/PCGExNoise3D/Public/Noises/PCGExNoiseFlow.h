@@ -62,7 +62,7 @@ private:
 		const FVector BaseGrad = PCGExNoise3D::Math::GetGrad3(Hash);
 
 		// Get unique rotation rate for this cell
-		const double Rate = (PCGExNoise3D::Math::HashToDouble(Hash) * 0.5 + 0.5) * RotationSpeed;
+		const double Rate = PCGExNoise3D::Math::HashToDouble(Hash) * RotationSpeed;
 		const double Angle = T * Rate * 2.0 * PI;
 
 		// Rotate in XY plane (could extend to full 3D rotation)

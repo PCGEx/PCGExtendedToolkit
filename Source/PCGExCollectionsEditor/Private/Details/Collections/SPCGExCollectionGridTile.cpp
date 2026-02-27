@@ -1,15 +1,18 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/SPCGExCollectionGridTile.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetThumbnail.h"
-#include "PropertyHandle.h"
+#include "Editor.h"
+#include "ScopedTransaction.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Widgets/Images/SImage.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/SBoxPanel.h"
@@ -24,7 +27,6 @@ namespace PCGExCollectionGrid
 
 void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 {
-	EntryHandle = InArgs._EntryHandle;
 	ThumbnailPool = InArgs._ThumbnailPool;
 	TileSize = InArgs._TileSize;
 	Collection = InArgs._Collection;
@@ -33,28 +35,24 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	CategoryOptions = InArgs._CategoryOptions;
 	OnTileClicked = InArgs._OnTileClicked;
 	OnTileDragDetected = InArgs._OnTileDragDetected;
+	OnTileCategoryChanged = InArgs._OnTileCategoryChanged;
 	ThumbnailCachePtr = InArgs._ThumbnailCachePtr;
+	BatchFlagPtr = InArgs._BatchFlagPtr;
 
-	check(EntryHandle.IsValid());
-
-	// Listen for property changes to refresh the thumbnail when the asset changes
-	EntryHandle->SetOnChildPropertyValueChanged(
-		FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridTile::RefreshThumbnail));
-
-	TSharedPtr<IPropertyHandle> WeightHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Weight));
-	CategoryHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category));
-	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = EntryHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, bIsSubCollection));
+	TWeakObjectPtr<UPCGExAssetCollection> WeakColl = Collection;
+	const int32 Idx = EntryIndex;
 
 	// Build picker widget via delegate (type-specific)
 	TSharedRef<SWidget> PickerWidget = SNullWidget::NullWidget;
 	if (InArgs._OnGetPickerWidget.IsBound())
 	{
-		PickerWidget = InArgs._OnGetPickerWidget.Execute(EntryHandle.ToSharedRef());
+		FSimpleDelegate RefreshDelegate = FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridTile::RefreshThumbnail);
+		PickerWidget = InArgs._OnGetPickerWidget.Execute(Collection, EntryIndex, RefreshDelegate);
 	}
 
 	// Build category widget — combobox with "New..." option
 	TSharedRef<SWidget> CategoryWidget = SNullWidget::NullWidget;
-	if (CategoryOptions.IsValid() && CategoryHandle.IsValid())
+	if (CategoryOptions.IsValid())
 	{
 		CategoryWidget =
 			SAssignNew(CategoryWidgetSwitcher, SWidgetSwitcher)
@@ -65,7 +63,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 			[
 				SAssignNew(CategoryCombo, SComboBox<TSharedPtr<FName>>)
 				.OptionsSource(&(*CategoryOptions))
-				.OnSelectionChanged_Lambda([this](TSharedPtr<FName> Selected, ESelectInfo::Type SelectType)
+				.OnSelectionChanged_Lambda([this, WeakColl, Idx](TSharedPtr<FName> Selected, ESelectInfo::Type SelectType)
 				{
 					if (!Selected.IsValid() || SelectType == ESelectInfo::Direct) { return; }
 
@@ -80,10 +78,19 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 					}
 
 					// Set the category value
-					if (CategoryHandle.IsValid())
-					{
-						CategoryHandle->SetValue(*Selected);
-					}
+					UPCGExAssetCollection* Coll = WeakColl.Get();
+					if (!Coll) { return; }
+
+					FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+					if (!Entry) { return; }
+
+					if (BatchFlagPtr) { *BatchFlagPtr = true; }
+					FScopedTransaction Transaction(INVTEXT("Change Category"));
+					Coll->Modify();
+					Entry->Category = *Selected;
+					Coll->PostEditChange();
+					if (BatchFlagPtr) { *BatchFlagPtr = false; }
+					OnTileCategoryChanged.ExecuteIfBound();
 				})
 				.OnGenerateWidget_Lambda([](TSharedPtr<FName> Item) -> TSharedRef<SWidget>
 				{
@@ -107,14 +114,13 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 				[
 					// Content (header button) — shows current category
 					SNew(STextBlock)
-					.Text_Lambda([this]() -> FText
+					.Text_Lambda([WeakColl, Idx]() -> FText
 					{
-						FName Value;
-						if (CategoryHandle.IsValid())
-						{
-							CategoryHandle->GetValue(Value);
-						}
-						return Value.IsNone() ? INVTEXT("Uncategorized") : FText::FromName(Value);
+						const UPCGExAssetCollection* Coll = WeakColl.Get();
+						if (!Coll) { return INVTEXT("?"); }
+						const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+						if (!Result.IsValid()) { return INVTEXT("?"); }
+						return Result.Entry->Category.IsNone() ? INVTEXT("Uncategorized") : FText::FromName(Result.Entry->Category);
 					})
 					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
 				]
@@ -126,14 +132,25 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 				SNew(SEditableTextBox)
 				.HintText(INVTEXT("New category..."))
 				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
-				.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type CommitType)
+				.OnTextCommitted_Lambda([this, WeakColl, Idx](const FText& Text, ETextCommit::Type CommitType)
 				{
 					if (CommitType == ETextCommit::OnEnter && !Text.IsEmpty())
 					{
-						const FName NewCat = FName(*Text.ToString());
-						if (CategoryHandle.IsValid())
+						UPCGExAssetCollection* Coll = WeakColl.Get();
+						if (Coll)
 						{
-							CategoryHandle->SetValue(NewCat);
+							FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+							if (Entry)
+							{
+								const FName NewCat = FName(*Text.ToString());
+								if (BatchFlagPtr) { *BatchFlagPtr = true; }
+								FScopedTransaction Transaction(INVTEXT("New Category"));
+								Coll->Modify();
+								Entry->Category = NewCat;
+								Coll->PostEditChange();
+								if (BatchFlagPtr) { *BatchFlagPtr = false; }
+								OnTileCategoryChanged.ExecuteIfBound();
+							}
 						}
 					}
 					// Switch back to combobox mode
@@ -148,7 +165,11 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 		if (CategoryCombo.IsValid())
 		{
 			FName CurrentCategory;
-			CategoryHandle->GetValue(CurrentCategory);
+			if (const UPCGExAssetCollection* Coll = WeakColl.Get())
+			{
+				const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+				if (Result.IsValid()) { CurrentCategory = Result.Entry->Category; }
+			}
 			for (const TSharedPtr<FName>& Option : *CategoryOptions)
 			{
 				if (Option.IsValid() && *Option == CurrentCategory)
@@ -159,18 +180,12 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 			}
 		}
 	}
-	else if (CategoryHandle.IsValid())
-	{
-		// Fallback: raw property widget if no category options provided
-		CategoryWidget = CategoryHandle->CreatePropertyValueWidget();
-	}
 
 	const float ContentWidth = TileSize + 16.f;
 
 	// Index overlay text
-	const FText IndexOverlayText = (CategoryIndex != INDEX_NONE)
-		                               ? FText::Format(INVTEXT("[{0}|{1}]"), FText::AsNumber(EntryIndex), FText::AsNumber(CategoryIndex))
-		                               : FText::Format(INVTEXT("[{0}]"), FText::AsNumber(EntryIndex));
+	const FText PrimaryIndexText = FText::AsNumber(EntryIndex);
+	const bool bHasCategoryIndex = (CategoryIndex != INDEX_NONE);
 
 	ChildSlot
 	[
@@ -180,8 +195,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 		.BorderBackgroundColor_Lambda([this]() -> FSlateColor
 		{
 			return bIsSelected
-				       ? FSlateColor(FLinearColor(0.15f, 0.4f, 0.8f, 0.4f))
-				       : FSlateColor(FLinearColor::Transparent);
+				       ? FSlateColor(FLinearColor(0.1f, 0.4f, 0.9f, 1.0f))
+				       : FSlateColor(FLinearColor(0, 0, 0, 0));
 		})
 		.Padding(2.f)
 		[
@@ -210,7 +225,29 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							SNew(SBox)
 							.ToolTipText(INVTEXT("Sub-collection"))
 							[
-								IsSubCollectionHandle->CreatePropertyValueWidget()
+								SNew(SCheckBox)
+								.IsChecked_Lambda([WeakColl, Idx]() -> ECheckBoxState
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return ECheckBoxState::Unchecked; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid()) { return ECheckBoxState::Unchecked; }
+									return Result.Entry->bIsSubCollection ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+								})
+								.OnCheckStateChanged_Lambda([this, WeakColl, Idx](ECheckBoxState NewState)
+								{
+									UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return; }
+									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									if (!Entry) { return; }
+									if (BatchFlagPtr) { *BatchFlagPtr = true; }
+									FScopedTransaction Transaction(INVTEXT("Toggle SubCollection"));
+									Coll->Modify();
+									Entry->bIsSubCollection = (NewState == ECheckBoxState::Checked);
+									Coll->PostEditChange();
+									if (BatchFlagPtr) { *BatchFlagPtr = false; }
+									RefreshThumbnail();
+								})
 							]
 						]
 
@@ -233,7 +270,49 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							SNew(SBox)
 							.ToolTipText(INVTEXT("Weight"))
 							[
-								WeightHandle->CreatePropertyValueWidget()
+								SNew(SSpinBox<int32>)
+								.MinValue(0)
+								.Delta(1)
+								.Value_Lambda([WeakColl, Idx]() -> int32
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return 0; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									return Result.IsValid() ? Result.Entry->Weight : 0;
+								})
+								.OnBeginSliderMovement_Lambda([this, WeakColl]()
+								{
+									if (BatchFlagPtr) { *BatchFlagPtr = true; }
+									if (GEditor) { GEditor->BeginTransaction(INVTEXT("Adjust Weight")); }
+									if (UPCGExAssetCollection* Coll = WeakColl.Get()) { Coll->Modify(); }
+								})
+								.OnValueChanged_Lambda([WeakColl, Idx](int32 NewVal)
+								{
+									UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return; }
+									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									if (Entry) { Entry->Weight = NewVal; }
+								})
+								.OnEndSliderMovement_Lambda([this, WeakColl](int32)
+								{
+									if (UPCGExAssetCollection* Coll = WeakColl.Get()) { Coll->PostEditChange(); }
+									if (GEditor) { GEditor->EndTransaction(); }
+									if (BatchFlagPtr) { *BatchFlagPtr = false; }
+								})
+								.OnValueCommitted_Lambda([this, WeakColl, Idx](int32 NewVal, ETextCommit::Type CommitType)
+								{
+									UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return; }
+									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									if (!Entry) { return; }
+									if (BatchFlagPtr) { *BatchFlagPtr = true; }
+									FScopedTransaction Transaction(INVTEXT("Set Weight"));
+									Coll->Modify();
+									Entry->Weight = NewVal;
+									Coll->PostEditChange();
+									if (BatchFlagPtr) { *BatchFlagPtr = false; }
+								})
+								.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
 							]
 						]
 					]
@@ -257,6 +336,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							]
 						]
 
+						// Index tag (top-left)
 						+ SOverlay::Slot()
 						.HAlign(HAlign_Left)
 						.VAlign(VAlign_Top)
@@ -265,12 +345,124 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							SNew(SBorder)
 							.BorderImage(FAppStyle::GetBrush("Brushes.White"))
 							.BorderBackgroundColor(FLinearColor(0, 0, 0, 0.7f))
-							.Padding(FMargin(3, 1))
+							.Padding(FMargin(5, 2))
 							[
-								SNew(STextBlock)
-								.Text(IndexOverlayText)
-								.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
-								.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								SNew(SHorizontalBox)
+
+								+ SHorizontalBox::Slot()
+								.AutoWidth()
+								[
+									SNew(STextBlock)
+									.Text(PrimaryIndexText)
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 7))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+
+								+ SHorizontalBox::Slot()
+								.AutoWidth()
+								[
+									SNew(STextBlock)
+									.Text(FText::Format(INVTEXT(" | {0}"), FText::AsNumber(CategoryIndex)))
+									.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
+									.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.45f)))
+									.Visibility(bHasCategoryIndex ? EVisibility::HitTestInvisible : EVisibility::Collapsed)
+								]
+							]
+						]
+
+						// Meta badges (top-right)
+						+ SOverlay::Slot()
+						.HAlign(HAlign_Right)
+						.VAlign(VAlign_Top)
+						.Padding(2.f)
+						[
+							SNew(SHorizontalBox)
+
+							// Variations badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid() || Result.Entry->bIsSubCollection) { return EVisibility::Collapsed; }
+									const FPCGExFittingVariations& V = Result.Entry->Variations;
+									const bool bHasVariations =
+										V.OffsetMin != FVector::ZeroVector || V.OffsetMax != FVector::ZeroVector ||
+										V.RotationMin != FRotator::ZeroRotator || V.RotationMax != FRotator::ZeroRotator ||
+										V.ScaleMin != FVector::OneVector || V.ScaleMax != FVector::OneVector;
+									return bHasVariations ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.6f, 0.4f, 0.1f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text(INVTEXT("V"))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+							]
+
+							// Sockets badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid() || Result.Entry->bIsSubCollection) { return EVisibility::Collapsed; }
+									return !Result.Entry->Staging.Sockets.IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.1f, 0.5f, 0.6f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text_Lambda([WeakColl, Idx]() -> FText
+									{
+										const UPCGExAssetCollection* Coll = WeakColl.Get();
+										if (!Coll) { return FText::GetEmpty(); }
+										const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+										if (!Result.IsValid()) { return FText::GetEmpty(); }
+										return FText::Format(INVTEXT("S:{0}"), FText::AsNumber(Result.Entry->Staging.Sockets.Num()));
+									})
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+							]
+
+							// Tags badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid()) { return EVisibility::Collapsed; }
+									return !Result.Entry->Tags.IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.4f, 0.2f, 0.6f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text(INVTEXT("T"))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
 							]
 						]
 					]
@@ -288,20 +480,10 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 					.AutoHeight()
 					.Padding(0, 2, 0, 0)
 					[
-						SNew(SHorizontalBox)
-						+ SHorizontalBox::Slot()
-						.AutoWidth()
-						.VAlign(VAlign_Center)
-						.Padding(0, 0, 4, 0)
-						[
-							SNew(STextBlock)
-							.Text(INVTEXT("Cat"))
-							.Font(FCoreStyle::GetDefaultFontStyle("Regular", 7))
-							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f)))
-						]
-						+ SHorizontalBox::Slot()
-						.FillWidth(1.f)
-						.VAlign(VAlign_Center)
+						SNew(SBorder)
+						.BorderImage(FAppStyle::GetNoBrush())
+						.ColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.8f))
+						.Padding(0)
 						[
 							CategoryWidget
 						]
