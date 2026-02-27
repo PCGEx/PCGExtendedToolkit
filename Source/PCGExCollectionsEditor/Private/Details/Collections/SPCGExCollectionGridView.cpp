@@ -222,15 +222,11 @@ void SPCGExCollectionGridView::RebuildCategoryCache()
 	}
 	SortedCategoryNames.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
 
-	if (bHasUncategorized)
+	// Always add uncategorized as last category (persistent drop target)
+	SortedCategoryNames.Add(NAME_None);
+	if (!bHasUncategorized)
 	{
-		SortedCategoryNames.Add(NAME_None);
-	}
-
-	// If no entries at all, ensure we have at least the uncategorized group
-	if (SortedCategoryNames.IsEmpty() && Num == 0)
-	{
-		SortedCategoryNames.Add(NAME_None);
+		CategoryToEntryIndices.Add(NAME_None); // Empty array — still shows group
 	}
 
 	// Build visual order (flattened index list for shift-click range selection)
@@ -288,7 +284,7 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 	for (const FName& CatName : SortedCategoryNames)
 	{
 		const TArray<int32>* Indices = CategoryToEntryIndices.Find(CatName);
-		if (!Indices || Indices->IsEmpty()) { continue; }
+		const int32 EntryCount = Indices ? Indices->Num() : 0;
 
 		const bool bIsCollapsed = CollapsedCategories.Contains(CatName);
 
@@ -299,7 +295,7 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 			[
 				SAssignNew(Group, SPCGExCollectionCategoryGroup)
 				.CategoryName(CatName)
-				.EntryCount(Indices->Num())
+				.EntryCount(EntryCount)
 				.bIsCollapsed(bIsCollapsed)
 				.OnCategoryRenamed(FOnCategoryRenamed::CreateSP(this, &SPCGExCollectionGridView::OnCategoryRenamed))
 				.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
@@ -309,28 +305,15 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 
 		CategoryGroupWidgets.Add(CatName, Group);
 
+		if (!Indices) { continue; }
+
 		// Create tiles for this category
 		for (int32 CatIdx = 0; CatIdx < Indices->Num(); ++CatIdx)
 		{
 			const int32 EntryIdx = (*Indices)[CatIdx];
 
-			// Get the entry property handle from the array
-			TSharedPtr<IPropertyHandle> EntryHandle;
-			if (EntriesArrayHandle.IsValid())
-			{
-				TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-				if (ArrayHandle.IsValid())
-				{
-					uint32 NumElements = 0;
-					ArrayHandle->GetNumElements(NumElements);
-					if (static_cast<uint32>(EntryIdx) < NumElements)
-					{
-						EntryHandle = ArrayHandle->GetElement(EntryIdx);
-					}
-				}
-			}
-
-			if (!EntryHandle.IsValid() || !EntryHandle->GetProperty()) { continue; }
+			TSharedPtr<IPropertyHandle> EntryHandle = GetEntryHandle(EntryIdx);
+			if (!EntryHandle.IsValid()) { continue; }
 
 			TSharedPtr<SPCGExCollectionGridTile> Tile;
 
@@ -418,7 +401,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 	for (const FName& CatName : SortedCategoryNames)
 	{
 		const TArray<int32>* Indices = CategoryToEntryIndices.Find(CatName);
-		if (!Indices || Indices->IsEmpty()) { continue; }
+		const int32 EntryCount = Indices ? Indices->Num() : 0;
 
 		const bool bIsCollapsed = CollapsedCategories.Contains(CatName);
 
@@ -429,7 +412,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 			[
 				SAssignNew(Group, SPCGExCollectionCategoryGroup)
 				.CategoryName(CatName)
-				.EntryCount(Indices->Num())
+				.EntryCount(EntryCount)
 				.bIsCollapsed(bIsCollapsed)
 				.OnCategoryRenamed(FOnCategoryRenamed::CreateSP(this, &SPCGExCollectionGridView::OnCategoryRenamed))
 				.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
@@ -438,6 +421,8 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 			];
 
 		CategoryGroupWidgets.Add(CatName, Group);
+
+		if (!Indices) { continue; }
 
 		for (int32 CatIdx = 0; CatIdx < Indices->Num(); ++CatIdx)
 		{
@@ -452,22 +437,8 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 			}
 
 			// Fallback: create new tile
-			TSharedPtr<IPropertyHandle> EntryHandle;
-			if (EntriesArrayHandle.IsValid())
-			{
-				TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
-				if (ArrayHandle.IsValid())
-				{
-					uint32 NumElements = 0;
-					ArrayHandle->GetNumElements(NumElements);
-					if (static_cast<uint32>(EntryIdx) < NumElements)
-					{
-						EntryHandle = ArrayHandle->GetElement(EntryIdx);
-					}
-				}
-			}
-
-			if (!EntryHandle.IsValid() || !EntryHandle->GetProperty()) { continue; }
+			TSharedPtr<IPropertyHandle> EntryHandle = GetEntryHandle(EntryIdx);
+			if (!EntryHandle.IsValid()) { continue; }
 
 			TSharedPtr<SPCGExCollectionGridTile> Tile;
 
@@ -966,6 +937,18 @@ uint8* SPCGExCollectionGridView::GetEntryRawPtr(int32 Index) const
 	return ArrayHelper.GetRawPtr(Index);
 }
 
+TSharedPtr<IPropertyHandle> SPCGExCollectionGridView::GetEntryHandle(int32 Index) const
+{
+	if (!EntriesArrayHandle.IsValid()) { return nullptr; }
+	TSharedPtr<IPropertyHandleArray> ArrayHandle = EntriesArrayHandle->AsArray();
+	if (!ArrayHandle.IsValid()) { return nullptr; }
+	uint32 NumElements = 0;
+	ArrayHandle->GetNumElements(NumElements);
+	if (Index < 0 || static_cast<uint32>(Index) >= NumElements) { return nullptr; }
+	TSharedPtr<IPropertyHandle> Handle = ArrayHandle->GetElement(Index);
+	return (Handle.IsValid() && Handle->GetProperty()) ? Handle : nullptr;
+}
+
 // ── Property row generator ──────────────────────────────────────────────────
 
 static bool FindEntriesHandleRecursive(const TArray<TSharedRef<IDetailTreeNode>>& Nodes, TSharedPtr<IPropertyHandle>& OutHandle)
@@ -1261,6 +1244,17 @@ void SPCGExCollectionGridView::OnObjectModified(UObject* Object)
 
 void SPCGExCollectionGridView::OnScrolled(float ScrollOffset)
 {
+	// No pinned header if only one category exists
+	if (SortedCategoryNames.Num() <= 1)
+	{
+		if (PinnedCategoryHeader.IsValid())
+		{
+			PinnedCategoryHeader->SetVisibility(EVisibility::Collapsed);
+		}
+		PinnedCategoryName = NAME_None;
+		return;
+	}
+
 	FName TopCategory = NAME_None;
 	bool bShowPinned = false;
 
@@ -1275,7 +1269,8 @@ void SPCGExCollectionGridView::OnScrolled(float ScrollOffset)
 			{
 				const FVector2D GroupLocalPos = ScrollGeo.AbsoluteToLocal(GroupGeo.GetAbsolutePosition());
 
-				if (GroupLocalPos.Y < 0)
+				// Use a small threshold to avoid sub-pixel false positives
+				if (GroupLocalPos.Y < -2.0f)
 				{
 					TopCategory = CatName;
 					bShowPinned = true;

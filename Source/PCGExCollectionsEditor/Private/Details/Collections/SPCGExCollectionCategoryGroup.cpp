@@ -88,6 +88,12 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 				]
 
 				+ SHorizontalBox::Slot()
+				.FillWidth(1.f)
+				[
+					SNullWidget::NullWidget
+				]
+
+				+ SHorizontalBox::Slot()
 				.AutoWidth()
 				.VAlign(VAlign_Center)
 				.Padding(4, 0, 0, 0)

@@ -134,6 +134,7 @@ private:
 	// Entry struct reflection helpers
 	UScriptStruct* GetEntryScriptStruct() const;
 	uint8* GetEntryRawPtr(int32 Index) const;
+	TSharedPtr<IPropertyHandle> GetEntryHandle(int32 Index) const;
 
 	// Incremental layout refresh (tile reuse, no flash)
 	void IncrementalCategoryRefresh();
