@@ -6,13 +6,12 @@
 #include "IPropertyTypeCustomization.h"
 
 
-class SUniformGridPanel;
 class SWidget;
 
 namespace PCGExBitmaskCustomization
 {
-	PCGEXCOREEDITOR_API
-	TSharedRef<SWidget> BitsGrid(TSharedRef<SUniformGridPanel> Grid, TSharedPtr<IPropertyHandle> BitmaskHandle);
+	PCGEXFOUNDATIONSEDITOR_API
+	TSharedRef<SWidget> BitsGrid(TSharedPtr<IPropertyHandle> BitmaskHandle);
 }
 
 class FPCGExBitmaskCustomization : public IPropertyTypeCustomization
