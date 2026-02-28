@@ -368,10 +368,41 @@ namespace PCGExPathStitch
 					const double Dist = FVector::Dist(CurrentSeg.B, OtherSeg.B);
 					if (Dist > Settings->Tolerance) { return; }
 
-					const double Dot = FVector::DotProduct(CurrentSeg.Direction, OtherSeg.Direction * -1);
-					if (Settings->bDoRequireAlignment && Settings->bStrictAlignment && !Context->DotComparisonDetails.Test(Dot)) { return; }
+					// Compute alignment based on mode
+					double Alignment;
+					const double SegmentDot = FVector::DotProduct(CurrentSeg.Direction, OtherSeg.Direction * -1);
 
-					Candidates.Add({Current, Other, bCurrentEnd, bOtherEnd, Dot, Dist});
+					if (Settings->AlignmentMode == EPCGExStitchAlignmentMode::Segments)
+					{
+						Alignment = SegmentDot;
+					}
+					else
+					{
+						const FVector BridgeDir = (OtherSeg.B - CurrentSeg.B).GetSafeNormal();
+
+						if (BridgeDir.IsNearlyZero())
+						{
+							// Endpoints coincident — bridge direction undefined, fall back to segment alignment
+							Alignment = SegmentDot;
+						}
+						else
+						{
+							const double BridgeDotA = FVector::DotProduct(CurrentSeg.Direction, BridgeDir);
+							const double BridgeDotB = FVector::DotProduct(OtherSeg.Direction * -1, BridgeDir);
+
+							const double BridgeScore = Settings->BridgeScoring == EPCGExStitchBridgeScoring::Minimum
+								? FMath::Min(BridgeDotA, BridgeDotB)
+								: (BridgeDotA + BridgeDotB) * 0.5;
+
+							Alignment = Settings->AlignmentMode == EPCGExStitchAlignmentMode::Bridge
+								? BridgeScore
+								: FMath::Min(SegmentDot, BridgeScore);
+						}
+					}
+
+					if (Settings->bDoRequireAlignment && Settings->bStrictAlignment && !Context->DotComparisonDetails.Test(Alignment)) { return; }
+
+					Candidates.Add({Current, Other, bCurrentEnd, bOtherEnd, Alignment, Dist});
 				});
 			};
 

@@ -37,6 +37,21 @@ enum class EPCGExStitchFuseOperation : uint8
 	LineIntersection = 2 UMETA(DisplayName = "Line Intersection", ToolTip="Connection point position is at the line/line intersection"),
 };
 
+UENUM()
+enum class EPCGExStitchAlignmentMode : uint8
+{
+	Segments = 0 UMETA(DisplayName = "Segments", ToolTip="Compare path segment directions against each other"),
+	Bridge   = 1 UMETA(DisplayName = "Bridge", ToolTip="Compare path segment directions against the connecting segment"),
+	Combined = 2 UMETA(DisplayName = "Combined", ToolTip="Both segment and bridge alignment must be satisfied"),
+};
+
+UENUM()
+enum class EPCGExStitchBridgeScoring : uint8
+{
+	Minimum = 0 UMETA(DisplayName = "Minimum", ToolTip="Use the worse of the two bridge dot products (stricter)"),
+	Average = 1 UMETA(DisplayName = "Average", ToolTip="Average both bridge dot products (more lenient)"),
+};
+
 /**
  * 
  */
@@ -85,6 +100,14 @@ public:
 	/** If enabled, foreign segments must be aligned within a given angular threshold. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Requires Alignment", EditCondition="bDoRequireAlignment"))
 	FPCGExStaticDotComparisonDetails DotComparisonDetails;
+
+	/** How alignment between paths is evaluated. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Mode", EditCondition="bDoRequireAlignment", EditConditionHides, HideEditConditionToggle))
+	EPCGExStitchAlignmentMode AlignmentMode = EPCGExStitchAlignmentMode::Combined;
+
+	/** How the bridge alignment score is computed from both path directions. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Bridge Scoring", EditCondition="bDoRequireAlignment && AlignmentMode != EPCGExStitchAlignmentMode::Segments", EditConditionHides, HideEditConditionToggle))
+	EPCGExStitchBridgeScoring BridgeScoring = EPCGExStitchBridgeScoring::Minimum;
 
 	/** When enabled, candidates that fail the alignment threshold are hard-rejected. When disabled, alignment is only used as a sorting preference (better-aligned candidates win). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Strict", EditCondition="bDoRequireAlignment", EditConditionHides, HideEditConditionToggle))
