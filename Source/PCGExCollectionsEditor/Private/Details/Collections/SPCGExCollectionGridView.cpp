@@ -1243,6 +1243,9 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 		Coll->bAutoRebuildStaging = bWasAutoRebuild;
 		Coll->PostEditChange();
 
+		// Sync PropertyOverrides for the new entry to match the collection schema
+		Coll->SyncPropertyOverridesToEntries();
+
 		// Select the new entry
 		SelectedIndices.Reset();
 		SelectedIndices.Add(NewIndex);

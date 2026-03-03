@@ -20,9 +20,7 @@ namespace PCGExActorCollectionActions
 		bool bIsNewCollection = false);
 };
 
-/**
- * 
- */
+/** Asset type actions for actor collections — reference implementation. */
 class FPCGExActorCollectionActions : public FAssetTypeActions_Base
 {
 public:

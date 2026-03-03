@@ -27,7 +27,7 @@ namespace PCGExMath::OBB
 	public:
 		int32 CloudIndex = -1; // For intersection tracking
 
-	private:
+	protected:
 		// Hot data - contiguous for spatial queries
 		TArray<FBounds> Bounds;
 
@@ -39,18 +39,19 @@ namespace PCGExMath::OBB
 
 	public:
 		FCollection() = default;
+		virtual ~FCollection() = default;
 
 		// Building
 
 		void Reserve(int32 Count);
 
-		void Add(const FOBB& Box);
+		virtual void Add(const FOBB& Box);
 
 		void Add(const FTransform& Transform, const FBox& LocalBox, int32 Index = -1);
 
-		void BuildOctree();
+		virtual void BuildOctree();
 
-		void Reset();
+		virtual void Reset();
 
 		void BuildFrom(const TSharedPtr<PCGExData::FPointIO>& InIO, const EPCGExPointBoundsSource BoundsSource);
 
@@ -214,5 +215,61 @@ namespace PCGExMath::OBB
 			for (int32 i = 0; i < 8; i++) { if (!IsPointInside(Corners[i])) { return false; } }
 			return true;
 		}
+	};
+
+	/**
+	 * Dynamic OBB collection with incremental insertion and periodic octree rebuilds.
+	 * Designed for sequential growth (modules placed one at a time) with fast overlap queries.
+	 * Uses a two-tier approach: octree for bulk entries + linear scan for pending entries.
+	 * Extends FCollection to reuse its SoA data layout and octree infrastructure.
+	 */
+	class PCGEXCORE_API FDynamicCollection : public FCollection
+	{
+	public:
+		FDynamicCollection() = default;
+		virtual ~FDynamicCollection() override = default;
+
+		/** Insert a new OBB. Expands world bounds and triggers periodic octree rebuild. Returns entry index. */
+		virtual void Add(const FOBB& Box) override;
+
+		/** Rebuild octree from all valid (non-invalidated) entries. */
+		virtual void BuildOctree() override;
+
+		/** Reset all data including dynamic state. */
+		virtual void Reset() override;
+
+		/** Returns the index of the last added entry. */
+		FORCEINLINE int32 LastIndex() const { return Num() - 1; }
+
+		/** Mark entries from FromIndex onward as invalid (for grammar backtracking). */
+		void Invalidate(int32 FromIndex);
+
+		/** Check overlap with optional SkipIndex and ValidMask filtering. */
+		bool OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex = INDEX_NONE) const;
+
+		/** Check overlap with SkipIndex and per-entry callback filter. Callback receives the stored item index (OBB.Bounds.Index), returns true to SKIP that entry. */
+		bool OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkip) const;
+
+		/** Check if any entry overlaps with penetration depth exceeding threshold. */
+		bool OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex = INDEX_NONE) const;
+
+		/** Count valid (non-invalidated) entries. */
+		int32 NumValid() const;
+
+		/** How many inserts between octree rebuilds. */
+		int32 RebuildInterval = 32;
+
+	private:
+		TBitArray<> ValidMask;
+
+		/** Entries [0..OctreeCount-1] are in the octree; [OctreeCount..Num()-1] are pending. */
+		int32 OctreeCount = 0;
+
+		/** Check if pending count warrants a rebuild. */
+		void MaybeRebuildOctree();
+
+		/** Templated overlap implementation for code reuse. */
+		template<typename FilterFn>
+		bool OverlapsImpl(const FOBB& Candidate, int32 SkipIndex, FilterFn&& Filter) const;
 	};
 }

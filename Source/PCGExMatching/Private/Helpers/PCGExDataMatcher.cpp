@@ -212,13 +212,20 @@ namespace PCGExMatching
 
 		if (Details->bLimitMatches) { if (!InMatchingScope.IsValid()) { return false; } }
 
+		// Normalize IO index: getter arrays are 0-indexed by MatchableSources position,
+		// but callers may pass points with an IOIndex from collection ordering.
+		// For single-source, IO must be 0. For multi-source, clamp to valid range.
+		PCGExData::FConstPoint MatchableElement = InInMatchableElement;
+		if (NumSources == 1) { MatchableElement.IO = 0; }
+		else if (MatchableElement.IO >= NumSources) { MatchableElement.IO = FMath::Clamp(MatchableElement.IO, 0, NumSources - 1); }
+
 		bool bMatch = true;
 
 		if (MatchMode == EPCGExMapMatchMode::All)
 		{
 			for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : RequiredOperations)
 			{
-				if (!Op->Test(InInMatchableElement, InDataCandidate, InMatchingScope))
+				if (!Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
 				{
 					bMatch = false;
 					break;
@@ -229,7 +236,7 @@ namespace PCGExMatching
 			{
 				for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : OptionalOperations)
 				{
-					if (!Op->Test(InInMatchableElement, InDataCandidate, InMatchingScope))
+					if (!Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
 					{
 						bMatch = false;
 						break;
@@ -242,7 +249,7 @@ namespace PCGExMatching
 			bMatch = false;
 			for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : OptionalOperations)
 			{
-				if (Op->Test(InInMatchableElement, InDataCandidate, InMatchingScope))
+				if (Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
 				{
 					bMatch = true;
 					break;
@@ -253,7 +260,7 @@ namespace PCGExMatching
 			{
 				for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : RequiredOperations)
 				{
-					if (!Op->Test(InInMatchableElement, InDataCandidate, InMatchingScope))
+					if (!Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
 					{
 						bMatch = false;
 						break;

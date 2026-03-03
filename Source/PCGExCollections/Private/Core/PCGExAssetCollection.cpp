@@ -923,6 +923,7 @@ void UPCGExAssetCollection::EDITOR_AddBrowserSelectionTyped(const TArray<FAssetD
 	FScopedTransaction Transaction(INVTEXT("Add Browser Selection to Collection"));
 	Modify(true);
 	EDITOR_AddBrowserSelectionInternal(InAssetData);
+	SyncPropertyOverridesToEntries();
 	(void)MarkPackageDirty();
 	FCoreUObjectDelegates::BroadcastOnObjectModified(this);
 }

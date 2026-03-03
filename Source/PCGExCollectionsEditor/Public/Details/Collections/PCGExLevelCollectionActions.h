@@ -20,9 +20,7 @@ namespace PCGExLevelCollectionActions
 		bool bIsNewCollection = false);
 };
 
-/**
- *
- */
+/** Asset type actions for level collections — reference implementation. */
 class FPCGExLevelCollectionActions : public FAssetTypeActions_Base
 {
 public:

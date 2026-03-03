@@ -53,6 +53,16 @@ namespace PCGExMath::OBB
 	// SAT overlap test
 	PCGEXCORE_API bool SATOverlap(const FOBB& A, const FOBB& B);
 
+	// SAT penetration depth (positive = overlapping, negative = separated).
+	// Returns the minimum overlap across all 15 SAT axes (Minimum Translation Vector magnitude).
+	PCGEXCORE_API float SATPenetrationDepth(const FOBB& A, const FOBB& B);
+
+	// Sphere penetration depth (positive = overlapping, negative = separated)
+	FORCEINLINE float SpherePenetrationDepth(const FBounds& A, const FBounds& B)
+	{
+		return (A.Radius + B.Radius) - FVector::Dist(A.Origin, B.Origin);
+	}
+
 	// Signed distance to surface (negative = inside)
 	FORCEINLINE float SignedDistance(const FOBB& Box, const FVector& Point)
 	{
