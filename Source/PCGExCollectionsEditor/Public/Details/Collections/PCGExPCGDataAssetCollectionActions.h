@@ -20,9 +20,7 @@ namespace PCGExPCGDataAssetCollectionActions
 		bool bIsNewCollection = false);
 };
 
-/**
- * 
- */
+/** Asset type actions for PCGDataAsset collections — reference implementation. */
 class FPCGExPCGDataAssetCollectionActions : public FAssetTypeActions_Base
 {
 public:

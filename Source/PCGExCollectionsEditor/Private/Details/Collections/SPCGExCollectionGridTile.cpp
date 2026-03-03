@@ -464,6 +464,31 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									.ColorAndOpacity(FSlateColor(FLinearColor::White))
 								]
 							]
+
+							// PropertyOverrides badge
+							+ SHorizontalBox::Slot()
+							.AutoWidth()
+							.Padding(1, 0)
+							[
+								SNew(SBorder)
+								.Visibility_Lambda([WeakColl, Idx]() -> EVisibility
+								{
+									const UPCGExAssetCollection* Coll = WeakColl.Get();
+									if (!Coll) { return EVisibility::Collapsed; }
+									const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+									if (!Result.IsValid() || Result.Entry->bIsSubCollection) { return EVisibility::Collapsed; }
+									return Result.Entry->PropertyOverrides.GetEnabledCount() > 0 ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+								})
+								.BorderImage(FAppStyle::GetBrush("Brushes.White"))
+								.BorderBackgroundColor(FLinearColor(0.2f, 0.6f, 0.3f, 0.85f))
+								.Padding(FMargin(3, 1))
+								[
+									SNew(STextBlock)
+									.Text(INVTEXT("P"))
+									.Font(FCoreStyle::GetDefaultFontStyle("Bold", 6))
+									.ColorAndOpacity(FSlateColor(FLinearColor::White))
+								]
+							]
 						]
 					]
 

@@ -9,7 +9,19 @@
 class SWidget;
 class UPCGExAssetCollection;
 
-class FPCGExAssetEntryCustomization : public IPropertyTypeCustomization
+/**
+ * Base property type customization for collection entry structs (used in the list-view tab).
+ *
+ * To create a custom entry customization:
+ * 1. Subclass FPCGExEntryHeaderCustomizationBase (simple case) or FPCGExAssetEntryCustomization (full control).
+ * 2. Override FillCustomizedTopLevelPropertiesNames() to list property names that your header handles
+ *    (these are hidden from the child builder to avoid duplication).
+ * 3. Override GetAssetPicker() to return the widget shown in the header row.
+ * 4. Register via PCGEX_REGISTER_CUSTO(YourEntryStruct, YourCustomizationClass) in your editor module's StartupModule().
+ *
+ * See FPCGExMeshEntryCustomization, FPCGExActorEntryCustomization for reference implementations.
+ */
+class PCGEXCOLLECTIONSEDITOR_API FPCGExAssetEntryCustomization : public IPropertyTypeCustomization
 {
 public:
 	virtual void CustomizeHeader(
@@ -30,7 +42,8 @@ protected:
 	virtual TSharedRef<SWidget> GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle) =0;
 };
 
-class FPCGExEntryHeaderCustomizationBase : public FPCGExAssetEntryCustomization
+/** Simpler base for entries with a single asset picker. Override GetAssetName() to return your property name. */
+class PCGEXCOLLECTIONSEDITOR_API FPCGExEntryHeaderCustomizationBase : public FPCGExAssetEntryCustomization
 {
 protected:
 	virtual FName GetAssetName() { return FName("Asset"); }

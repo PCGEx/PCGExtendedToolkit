@@ -33,8 +33,12 @@ ENUM_CLASS_FLAGS(EPCGExStructuralRefreshFlags);
  * Grid/tile view of collection entries with categorized grouping.
  * Left pane: SScrollBox with collapsible category groups, each containing a SWrapBox of tiles.
  * Right pane: IStructureDetailsView showing only the selected entry struct.
+ *
+ * This widget is created automatically by FPCGExAssetCollectionEditor::CreateGridTab().
+ * Custom collection editors normally don't need to subclass this directly — override the
+ * editor's tile picker virtuals instead (GetTilePickerPropertyName, BuildTilePickerWidget).
  */
-class SPCGExCollectionGridView : public SCompoundWidget
+class PCGEXCOLLECTIONSEDITOR_API SPCGExCollectionGridView : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SPCGExCollectionGridView)

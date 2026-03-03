@@ -8,6 +8,7 @@
 
 class UPCGExAssetCollection;
 
+/** Mesh collection editor — reference implementation of FPCGExAssetCollectionEditor. */
 class FPCGExMeshCollectionEditor : public FPCGExAssetCollectionEditor
 {
 public:

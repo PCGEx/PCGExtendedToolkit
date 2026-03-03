@@ -48,7 +48,7 @@ bool FPCGExBitwiseOperationElement::AdvanceWork(FPCGExContext* InContext, const 
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Settings->MaskInput == EPCGExInputValueType::Attribute && !Entry->GetOut()->Metadata->HasAttribute(Settings->MaskAttribute))
+				if (Settings->MaskInput == EPCGExInputValueType::Attribute && !Entry->GetIn()->Metadata->HasAttribute(Settings->MaskAttribute))
 				{
 					bHasInvalidInputs = true;
 					return false;
