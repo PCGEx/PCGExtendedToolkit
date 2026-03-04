@@ -136,8 +136,19 @@ private:
 
 	// Detail panel management
 	void UpdateDetailForSelection();
-	void SyncStructToCollection(const FProperty* ChangedMemberProperty);
+	void SyncStructToCollection(const FProperty* ChangedMemberProperty, const FProperty* ChangedLeafProperty);
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
+
+	/**
+	 * Recursively propagate only changed sub-properties from NewData to DstData,
+	 * using OldData as baseline for comparison.
+	 * For array elements with a bEnabled field, only propagates non-gate fields
+	 * to elements where bEnabled is true in the destination.
+	 */
+	static void PropagateChangedProperties(
+		const uint8* OldData, const uint8* NewData, uint8* DstData,
+		const UStruct* Struct, bool bCheckEnabledGate = false);
+
 	bool bIsSyncing = false;
 	bool bIsBatchOperation = false;
 	bool bPendingCategoryRefresh = false;

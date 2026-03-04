@@ -82,7 +82,7 @@ void FPCGExWeightedPropertyOverridesCustomization::CustomizeChildren(
 	TSharedPtr<IPropertyHandle> OverridesArrayHandle = PropertyHandle->GetChildHandle(TEXT("Overrides"));
 	if (!OverridesArrayHandle.IsValid()) { return; }
 
-	// Watch for changes to force refresh
+	// Structural changes (add/remove/reorder) need immediate refresh.
 	auto RefreshDelegate = FSimpleDelegate::CreateLambda([this]()
 	{
 		if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
@@ -92,7 +92,7 @@ void FPCGExWeightedPropertyOverridesCustomization::CustomizeChildren(
 	});
 
 	OverridesArrayHandle->SetOnPropertyValueChanged(RefreshDelegate);
-	OverridesArrayHandle->SetOnChildPropertyValueChanged(RefreshDelegate);
+	// No SetOnChildPropertyValueChanged — see FPCGExPropertyOverridesCustomization for rationale.
 
 	// Iterate override entries - hide array controls
 	uint32 NumElements = 0;
