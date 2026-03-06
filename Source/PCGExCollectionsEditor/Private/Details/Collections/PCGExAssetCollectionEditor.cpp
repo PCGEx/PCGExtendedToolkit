@@ -93,6 +93,11 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 
 	EditedCollection = InCollection;
 
+	// Ensure PropertyOverrides are synced to schema before the grid view copies entry data.
+	// Without this, the grid view detail panel may show empty overrides until the schema
+	// is manually edited (which triggers SyncPropertyOverridesToEntries via PostEditChangeProperty).
+	InCollection->SyncPropertyOverridesToEntries();
+
 	const TArray<UObject*> ObjectsToEdit = {InCollection};
 	constexpr bool bCreateDefaultStandaloneMenu = true;
 	constexpr bool bCreateDefaultToolbar = true;

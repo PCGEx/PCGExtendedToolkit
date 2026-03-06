@@ -8,36 +8,37 @@
 class UPCGExAssetCollection;
 class UPackage;
 
+/** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
 namespace PCGExCollectionEditorUtils
 {
 	/** Add Content Browser selection to this collection. */
-	void AddBrowserSelection(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);
 
 #pragma region Tools
 
 	/** Sort collection by weights in ascending order. */
-	void SortByWeightAscending(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void SortByWeightAscending(UPCGExAssetCollection* InCollection);
 
 	/** Sort collection by weights in descending order. */
-	void SortByWeightDescending(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void SortByWeightDescending(UPCGExAssetCollection* InCollection);
 
-	/**Sort collection by weights in descending order. */
-	void SetWeightIndex(UPCGExAssetCollection* InCollection);
+	/** Set weights to match entry index order. */
+	PCGEXCOLLECTIONSEDITOR_API void SetWeightIndex(UPCGExAssetCollection* InCollection);
 
 	/** Add 1 to all weights so it's easier to weight down some assets */
-	void PadWeight(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void PadWeight(UPCGExAssetCollection* InCollection);
 
 	/** Multiplies all weights by 2 */
-	void MultWeight(UPCGExAssetCollection* InCollection, int32 Mult);
+	PCGEXCOLLECTIONSEDITOR_API void MultWeight(UPCGExAssetCollection* InCollection, int32 Mult);
 
 	/** Reset all weights to 100 */
-	void WeightOne(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void WeightOne(UPCGExAssetCollection* InCollection);
 
 	/** Assign random weights to items */
-	void WeightRandom(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void WeightRandom(UPCGExAssetCollection* InCollection);
 
 	/** Normalize weight sum to 100 */
-	void NormalizedWeightToSum(UPCGExAssetCollection* InCollection);
+	PCGEXCOLLECTIONSEDITOR_API void NormalizedWeightToSum(UPCGExAssetCollection* InCollection);
 
 #pragma endregion
 }

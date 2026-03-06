@@ -114,9 +114,10 @@ namespace PCGExCopyToPoints
 
 			if (!Context->DataMatcher->Test(Context->TargetsDataFacade->GetInPoint(i), AsCandidate, MatchScope)) { continue; }
 
-			Copies++;
-
 			TSharedPtr<PCGExData::FPointIO> Dupe = Context->MainPoints->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::Duplicate);
+			if (!Dupe) { continue; }
+
+			Copies++;
 			Context->TargetsForwardHandler->Forward(i, Dupe->GetOut()->Metadata);
 
 			Dupes[i] = Dupe;

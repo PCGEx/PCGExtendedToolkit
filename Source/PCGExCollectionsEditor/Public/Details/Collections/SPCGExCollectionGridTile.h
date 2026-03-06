@@ -29,8 +29,11 @@ DECLARE_DELEGATE_RetVal_TwoParams(FReply, FOnTileDragDetected, int32 /*EntryInde
  * Shows: SubCollection checkbox + Weight spinner (top bar),
  *        Asset thumbnail with [i|j] overlay, Asset picker, Category combobox.
  * Supports selection highlight and drag-source for reordering.
+ *
+ * The tile's asset picker widget comes from the editor's BuildTilePickerWidget() override.
+ * Custom collection editors control tile appearance through that virtual, not by subclassing this widget.
  */
-class SPCGExCollectionGridTile : public SCompoundWidget
+class PCGEXCOLLECTIONSEDITOR_API SPCGExCollectionGridTile : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SPCGExCollectionGridTile)

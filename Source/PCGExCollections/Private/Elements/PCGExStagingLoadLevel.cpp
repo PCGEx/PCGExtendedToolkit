@@ -372,7 +372,9 @@ namespace PCGExStagingLoadLevel
 
 		UPCGComponent* SourceComponent = ExecutionContext->GetMutableComponent();
 
-		// On first iteration, create managed resources for PCG cleanup tracking
+		// On first iteration, create and register managed resources for PCG cleanup tracking.
+		// Registering immediately ensures that if the time-sliced loop is interrupted by a
+		// graph regeneration, already-spawned levels/actors are tracked and will be cleaned up.
 		if (RequestIndex == 0)
 		{
 #if WITH_EDITOR
@@ -393,11 +395,15 @@ namespace PCGExStagingLoadLevel
 			if (bUseLevelInstance)
 			{
 				ManagedLevelInstances = NewObject<UPCGManagedActors>(SourceComponent);
+				ManagedLevelInstances->SetCrc(Context->DependenciesCrc);
+				SourceComponent->AddToManagedResources(ManagedLevelInstances);
 			}
 			else
 #endif
 			{
 				ManagedStreamingLevels = NewObject<UPCGExManagedStreamingLevels>(SourceComponent);
+				ManagedStreamingLevels->SetCrc(Context->DependenciesCrc);
+				SourceComponent->AddToManagedResources(ManagedStreamingLevels);
 			}
 		}
 
@@ -405,14 +411,6 @@ namespace PCGExStagingLoadLevel
 		if (bUseLevelInstance)
 		{
 			SpawnAsLevelInstance(Request);
-
-			// Register managed actors with PCG after the last spawn
-			if (RequestIndex == SpawnRequests.Num() - 1 && ManagedLevelInstances)
-			{
-				ManagedLevelInstances->SetCrc(Context->DependenciesCrc);
-				SourceComponent->AddToManagedResources(ManagedLevelInstances);
-			}
-
 			return;
 		}
 #endif
@@ -444,17 +442,10 @@ namespace PCGExStagingLoadLevel
 #endif
 		}
 
-		// Track via PCG managed resources -- PCG handles cleanup on re-execution
+		// Track via PCG managed resources (already registered with component)
 		if (ManagedStreamingLevels)
 		{
 			ManagedStreamingLevels->StreamingLevels.Add(StreamingLevel);
-		}
-
-		// Register managed streaming levels with PCG after the last spawn
-		if (RequestIndex == SpawnRequests.Num() - 1 && ManagedStreamingLevels)
-		{
-			ManagedStreamingLevels->SetCrc(Context->DependenciesCrc);
-			SourceComponent->AddToManagedResources(ManagedStreamingLevels);
 		}
 	}
 }

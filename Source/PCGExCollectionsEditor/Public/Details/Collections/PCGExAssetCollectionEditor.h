@@ -16,7 +16,7 @@ namespace PCGExAssetCollectionEditor
 {
 	const FName EntriesName = FName("Entries");
 
-	struct TabInfos
+	struct PCGEXCOLLECTIONSEDITOR_API TabInfos
 	{
 		TabInfos() = default;
 
@@ -36,7 +36,7 @@ namespace PCGExAssetCollectionEditor
 		bool bIsDetailsView = true;
 	};
 
-	struct FilterInfos
+	struct PCGEXCOLLECTIONSEDITOR_API FilterInfos
 	{
 		FilterInfos() = default;
 
@@ -51,7 +51,20 @@ namespace PCGExAssetCollectionEditor
 	};
 }
 
-class FPCGExAssetCollectionEditor : public FAssetEditorToolkit
+/**
+ * Base editor toolkit for PCGEx asset collections (Mesh, Actor, Level, PCGDataAsset, etc.).
+ *
+ * To create a custom collection editor:
+ * 1. Subclass this editor and override the tile picker virtuals:
+ *    - GetTilePickerPropertyName() — return the FName of the asset property on your entry struct (e.g., "StaticMesh")
+ *    - GetTilePickerAllowedClass() — return the UClass* for the asset picker filter
+ *    - BuildTilePickerWidget() — (optional) fully custom picker widget per tile
+ * 2. Override CreateTabs() / BuildEditorToolbar() / BuildAssetHeaderToolbar() for custom tabs and toolbar buttons.
+ * 3. Register via FAssetTypeActions_Base::OpenAssetEditor — create a TSharedRef<YourEditor>, call InitEditor().
+ *
+ * See FPCGExMeshCollectionEditor, FPCGExActorCollectionEditor, etc. for reference implementations.
+ */
+class PCGEXCOLLECTIONSEDITOR_API FPCGExAssetCollectionEditor : public FAssetEditorToolkit
 {
 public:
 	FPCGExAssetCollectionEditor();

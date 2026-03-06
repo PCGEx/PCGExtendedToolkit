@@ -19,6 +19,7 @@
 #include "DragAndDrop/AssetDragDropOp.h"
 #include "Misc/TransactionObjectEvent.h"
 #include "Modules/ModuleManager.h"
+#include "InstancedStruct.h"
 #include "UObject/StructOnScope.h"
 #include "UObject/UnrealType.h"
 #include "Widgets/Input/SButton.h"
@@ -1093,7 +1094,7 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	}
 }
 
-void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMemberProperty)
+void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMemberProperty, const FProperty* ChangedLeafProperty)
 {
 	if (!CurrentStructScope.IsValid() || CurrentDetailIndex == INDEX_NONE) { return; }
 
@@ -1110,21 +1111,97 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 
 	Coll->Modify();
 
-	// Copy entire struct back to the primary entry (it's the editing copy)
-	EntryStruct->CopyScriptStruct(PrimaryPtr, SrcData);
+	// ── Step 1: Resolve which top-level member property changed ──────────
+	// ChangedMemberProperty may be null or point to a property inside an external struct
+	// (e.g. when PropertyOverrides values are edited through AddExternalStructureProperty),
+	// so we verify it's a direct member of the entry struct first.
+	const FProperty* PropToPropagate = nullptr;
 
-	// For multi-select: propagate ONLY the changed property to other entries
 	if (ChangedMemberProperty)
 	{
-		const int32 Offset = ChangedMemberProperty->GetOffset_ForInternal();
-		TArray<int32> Selected = GetSelectedIndices();
-		for (int32 OtherIndex : Selected)
+		for (TFieldIterator<FProperty> It(EntryStruct); It; ++It)
 		{
-			if (OtherIndex == CurrentDetailIndex) { continue; }
-			uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
-			if (OtherPtr)
+			if (*It == ChangedMemberProperty)
 			{
-				ChangedMemberProperty->CopyCompleteValue(OtherPtr + Offset, SrcData + Offset);
+				PropToPropagate = ChangedMemberProperty;
+				break;
+			}
+		}
+	}
+
+	// If not a direct member (or null), diff the pre-copy primary data against the
+	// edited source to find which top-level member actually changed.
+	if (!PropToPropagate && SelectedIndices.Num() > 1)
+	{
+		for (TFieldIterator<FProperty> It(EntryStruct); It; ++It)
+		{
+			const FProperty* Prop = *It;
+			const int32 Off = Prop->GetOffset_ForInternal();
+			if (!Prop->Identical(PrimaryPtr + Off, SrcData + Off))
+			{
+				PropToPropagate = Prop;
+				break;
+			}
+		}
+	}
+
+	// ── Step 2: Snapshot struct members before overwrite ──────────────────
+	// When the changed member is a struct (e.g. Variations, PropertyOverrides),
+	// snapshot its data from PrimaryPtr so we can diff after overwrite to
+	// propagate only changed sub-properties / array elements.
+	TArray<uint8> MemberSnapshot;
+	const FStructProperty* StructMember = PropToPropagate
+		? CastField<FStructProperty>(PropToPropagate) : nullptr;
+
+	if (StructMember && SelectedIndices.Num() > 1)
+	{
+		const int32 MemberSize = StructMember->Struct->GetStructureSize();
+		const int32 MemberOffset = PropToPropagate->GetOffset_ForInternal();
+		MemberSnapshot.SetNumUninitialized(MemberSize);
+		StructMember->Struct->InitializeStruct(MemberSnapshot.GetData());
+		StructMember->Struct->CopyScriptStruct(MemberSnapshot.GetData(), PrimaryPtr + MemberOffset);
+	}
+
+	// ── Step 3: Copy entire struct back to the primary entry ─────────────
+	EntryStruct->CopyScriptStruct(PrimaryPtr, SrcData);
+
+	// ── Step 4: Propagate to other selected entries ──────────────────────
+	if (PropToPropagate && SelectedIndices.Num() > 1)
+	{
+		const int32 MemberOffset = PropToPropagate->GetOffset_ForInternal();
+
+		if (StructMember && MemberSnapshot.Num() > 0)
+		{
+			// Granular: snapshot-diff propagation for struct members
+			TArray<int32> Selected = GetSelectedIndices();
+			for (int32 OtherIndex : Selected)
+			{
+				if (OtherIndex == CurrentDetailIndex) { continue; }
+				uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+				if (OtherPtr)
+				{
+					PropagateChangedProperties(
+						MemberSnapshot.GetData(),
+						SrcData + MemberOffset,
+						OtherPtr + MemberOffset,
+						StructMember->Struct);
+				}
+			}
+
+			StructMember->Struct->DestroyStruct(MemberSnapshot.GetData());
+		}
+		else
+		{
+			// Coarse: copy the entire top-level member
+			TArray<int32> Selected = GetSelectedIndices();
+			for (int32 OtherIndex : Selected)
+			{
+				if (OtherIndex == CurrentDetailIndex) { continue; }
+				uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+				if (OtherPtr)
+				{
+					PropToPropagate->CopyCompleteValue(OtherPtr + MemberOffset, SrcData + MemberOffset);
+				}
 			}
 		}
 	}
@@ -1132,10 +1209,103 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 	Coll->PostEditChange();
 }
 
+void SPCGExCollectionGridView::PropagateChangedProperties(
+	const uint8* OldData, const uint8* NewData, uint8* DstData,
+	const UStruct* Struct, bool bCheckEnabledGate)
+{
+	// When bCheckEnabledGate is true: if the destination element has bEnabled == false,
+	// only propagate changes to bEnabled itself (skip Value and other fields).
+	// This prevents override value edits from leaking into entries that have the override disabled.
+	bool bGateBlocksNonGateFields = false;
+	static const FName EnabledFieldName = TEXT("bEnabled");
+
+	if (bCheckEnabledGate)
+	{
+		if (const FBoolProperty* EnabledProp = CastField<FBoolProperty>(Struct->FindPropertyByName(EnabledFieldName)))
+		{
+			bGateBlocksNonGateFields = !EnabledProp->GetPropertyValue(DstData + EnabledProp->GetOffset_ForInternal());
+		}
+	}
+
+	for (TFieldIterator<FProperty> It(Struct); It; ++It)
+	{
+		const FProperty* Prop = *It;
+		const int32 Offset = Prop->GetOffset_ForInternal();
+
+		// Skip unchanged properties
+		if (Prop->Identical(OldData + Offset, NewData + Offset)) { continue; }
+
+		// If gate is active, only allow the gate field (bEnabled) to propagate
+		if (bGateBlocksNonGateFields && Prop->GetFName() != EnabledFieldName) { continue; }
+
+		if (const FStructProperty* NestedStruct = CastField<FStructProperty>(Prop))
+		{
+			// FInstancedStruct stores polymorphic data in an internal heap buffer,
+			// not as reflected UPROPERTYs. Recursing would find no meaningful fields
+			// to propagate, so copy the complete value instead.
+			if (NestedStruct->Struct == TBaseStructure<FInstancedStruct>::Get())
+			{
+				Prop->CopyCompleteValue(DstData + Offset, NewData + Offset);
+			}
+			else
+			{
+				// Recurse into nested struct for finer granularity
+				PropagateChangedProperties(
+					OldData + Offset, NewData + Offset, DstData + Offset,
+					NestedStruct->Struct);
+			}
+		}
+		else if (const FArrayProperty* ArrayProp = CastField<FArrayProperty>(Prop))
+		{
+			// Compare array elements individually
+			FScriptArrayHelper OldHelper(ArrayProp, OldData + Offset);
+			FScriptArrayHelper NewHelper(ArrayProp, NewData + Offset);
+			FScriptArrayHelper DstHelper(ArrayProp, DstData + Offset);
+
+			if (OldHelper.Num() != NewHelper.Num() || NewHelper.Num() != DstHelper.Num())
+			{
+				// Size mismatch — must copy entire array
+				Prop->CopyCompleteValue(DstData + Offset, NewData + Offset);
+			}
+			else
+			{
+				// Check if array elements are structs with a bEnabled gate
+				const FStructProperty* InnerStructProp = CastField<FStructProperty>(ArrayProp->Inner);
+				const bool bInnerHasEnabledGate = InnerStructProp
+					&& InnerStructProp->Struct->FindPropertyByName(EnabledFieldName) != nullptr;
+
+				const FProperty* Inner = ArrayProp->Inner;
+				for (int32 i = 0; i < NewHelper.Num(); i++)
+				{
+					if (!Inner->Identical(OldHelper.GetRawPtr(i), NewHelper.GetRawPtr(i)))
+					{
+						if (InnerStructProp)
+						{
+							// Recurse into struct elements for field-level granularity + bEnabled gate
+							PropagateChangedProperties(
+								OldHelper.GetRawPtr(i), NewHelper.GetRawPtr(i), DstHelper.GetRawPtr(i),
+								InnerStructProp->Struct, bInnerHasEnabledGate);
+						}
+						else
+						{
+							Inner->CopyCompleteValue(DstHelper.GetRawPtr(i), NewHelper.GetRawPtr(i));
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			// Leaf property — copy directly
+			Prop->CopyCompleteValue(DstData + Offset, NewData + Offset);
+		}
+	}
+}
+
 void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEvent& Event)
 {
 	bIsSyncing = true;
-	SyncStructToCollection(Event.MemberProperty);
+	SyncStructToCollection(Event.MemberProperty, Event.Property);
 	bIsSyncing = false;
 
 	// Check if category changed — need to rebuild groups
@@ -1242,6 +1412,9 @@ FReply SPCGExCollectionGridView::OnAddEntry()
 
 		Coll->bAutoRebuildStaging = bWasAutoRebuild;
 		Coll->PostEditChange();
+
+		// Sync PropertyOverrides for the new entry to match the collection schema
+		Coll->SyncPropertyOverridesToEntries();
 
 		// Select the new entry
 		SelectedIndices.Reset();
