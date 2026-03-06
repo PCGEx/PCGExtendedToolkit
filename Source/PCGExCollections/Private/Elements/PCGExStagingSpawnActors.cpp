@@ -275,136 +275,127 @@ namespace PCGExStagingSpawnActors
 
 	void FProcessor::SpawnAtPoint(const int32 PointIndex)
 	{
-		const bool bIsLastPoint = PointIndex == NumPoints - 1;
 		const FPCGExActorCollectionEntry* ActorEntry = ResolvedEntries[PointIndex].Entry;
+		if (!ActorEntry) { return; }
 
-		if (!ActorEntry) { goto Finalize; }
+		// Class is already pre-loaded in OnPointsProcessingComplete
+		UClass* ActorClass = ActorEntry->Actor.Get();
 
+		if (!ActorClass)
 		{
-			// Class is already pre-loaded in OnPointsProcessingComplete
-			UClass* ActorClass = ActorEntry->Actor.Get();
-
-			if (!ActorClass)
+			if (!Settings->bQuietInvalidEntryWarnings)
 			{
-				if (!Settings->bQuietInvalidEntryWarnings)
-				{
-					PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
-						FText::Format(LOCTEXT("FailedToLoadActor", "Failed to load actor class for point {0}"),
-							FText::AsNumber(PointIndex)));
-				}
-				goto Finalize;
+				PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
+					FText::Format(LOCTEXT("FailedToLoadActor", "Failed to load actor class for point {0}"),
+						FText::AsNumber(PointIndex)));
 			}
+			return;
+		}
 
-			UWorld* World = ExecutionContext->GetWorld();
-			if (!World) { goto Finalize; }
+		UWorld* World = ExecutionContext->GetWorld();
+		if (!World) { return; }
 
-			const FTransform& SpawnTransform = Transforms[PointIndex];
+		const FTransform& SpawnTransform = Transforms[PointIndex];
 
-			const bool bHasDelta = Settings->bApplyPropertyDeltas
-				&& ActorEntry->SerializedPropertyDelta.Num() > 0;
+		const bool bHasDelta = Settings->bApplyPropertyDeltas
+			&& ActorEntry->SerializedPropertyDelta.Num() > 0;
 
-			AActor* SpawnedActor = nullptr;
+		AActor* SpawnedActor = nullptr;
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WorldSpawnActor);
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Template = Cast<AActor>(ActorClass->GetDefaultObject());
+			SpawnParams.SpawnCollisionHandlingOverride = Settings->CollisionHandling;
+			if (bHasDelta) { SpawnParams.bDeferConstruction = true; }
+			SpawnedActor = World->SpawnActor<AActor>(ActorClass, SpawnTransform, SpawnParams);
+		}
+
+		if (!SpawnedActor)
+		{
+			if (!Settings->bQuietInvalidEntryWarnings)
 			{
-				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WorldSpawnActor);
-				FActorSpawnParameters SpawnParams;
-				SpawnParams.Template = Cast<AActor>(ActorClass->GetDefaultObject());
-				SpawnParams.SpawnCollisionHandlingOverride = Settings->CollisionHandling;
-				if (bHasDelta) { SpawnParams.bDeferConstruction = true; }
-				SpawnedActor = World->SpawnActor<AActor>(ActorClass, SpawnTransform, SpawnParams);
+				PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
+					FText::Format(LOCTEXT("FailedToSpawnActor", "Failed to spawn actor '{0}' at point {1}"),
+						FText::FromString(ActorClass->GetName()), FText::AsNumber(PointIndex)));
 			}
+			return;
+		}
 
-			if (!SpawnedActor)
-			{
-				if (!Settings->bQuietInvalidEntryWarnings)
-				{
-					PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
-						FText::Format(LOCTEXT("FailedToSpawnActor", "Failed to spawn actor '{0}' at point {1}"),
-							FText::FromString(ActorClass->GetName()), FText::AsNumber(PointIndex)));
-				}
-				goto Finalize;
-			}
+		// Apply property delta BEFORE finishing construction
+		if (bHasDelta)
+		{
+			PCGExActorDelta::ApplyPropertyDelta(SpawnedActor, ActorEntry->SerializedPropertyDelta);
+			SpawnedActor->FinishSpawning(SpawnTransform);
+		}
 
-			// Apply property delta BEFORE finishing construction
-			if (bHasDelta)
-			{
-				PCGExActorDelta::ApplyPropertyDelta(SpawnedActor, ActorEntry->SerializedPropertyDelta);
-				SpawnedActor->FinishSpawning(SpawnTransform);
-			}
-
-			// UE-62747: SpawnActor doesn't properly apply scale from the spawn transform
-			SpawnedActor->SetActorRelativeScale3D(SpawnTransform.GetScale3D());
-
-			// Lazily create managed resource on first successful spawn
-			if (!ManagedActors)
-			{
-				ManagedActors = NewObject<UPCGManagedActors>(ExecutionContext->GetMutableComponent());
-			}
+		// UE-62747: SpawnActor doesn't properly apply scale from the spawn transform
+		SpawnedActor->SetActorRelativeScale3D(SpawnTransform.GetScale3D());
 
 #if WITH_EDITOR
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::SetFolderPath);
+			if (CachedFolderPath != NAME_None)
 			{
-				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::SetFolderPath);
-				if (CachedFolderPath != NAME_None)
-				{
-					SpawnedActor->SetFolderPath(CachedFolderPath);
-				}
+				SpawnedActor->SetFolderPath(CachedFolderPath);
 			}
+		}
 #endif
 
-			// Apply entry tags to the actor
-			if (Settings->bApplyEntryTags)
+		// Apply entry tags to the actor
+		if (Settings->bApplyEntryTags)
+		{
+			for (const FName& Tag : ActorEntry->Tags)
 			{
-				for (const FName& Tag : ActorEntry->Tags)
-				{
-					SpawnedActor->Tags.AddUnique(Tag);
-				}
+				SpawnedActor->Tags.AddUnique(Tag);
 			}
+		}
 
-			// Apply per-instance tags from InstanceTags attribute
-			if (Settings->bApplyInstanceTags && InstanceTagsGetter)
+		// Apply per-instance tags from InstanceTags attribute
+		if (Settings->bApplyInstanceTags && InstanceTagsGetter)
+		{
+			const FString TagStr = InstanceTagsGetter->Read(PointIndex);
+			if (!TagStr.IsEmpty())
 			{
-				const FString TagStr = InstanceTagsGetter->Read(PointIndex);
-				if (!TagStr.IsEmpty())
+				TArray<FString> TagParts;
+				TagStr.ParseIntoArray(TagParts, TEXT(","));
+				for (const FString& Part : TagParts)
 				{
-					TArray<FString> TagParts;
-					TagStr.ParseIntoArray(TagParts, TEXT(","));
-					for (const FString& Part : TagParts)
+					const FString Trimmed = Part.TrimStartAndEnd();
+					if (!Trimmed.IsEmpty())
 					{
-						const FString Trimmed = Part.TrimStartAndEnd();
-						if (!Trimmed.IsEmpty())
-						{
-							SpawnedActor->Tags.AddUnique(FName(*Trimmed));
-						}
+						SpawnedActor->Tags.AddUnique(FName(*Trimmed));
 					}
-				}
-			}
-
-			// Track in managed resources
-			ManagedActors->GetMutableGeneratedActors().Add(SpawnedActor);
-
-			{
-				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WriteActorRef);
-				ActorRefWriter->SetValue(PointIndex, FSoftObjectPath(SpawnedActor));
-			}
-
-			// Optionally trigger PCG generation
-			if (GenerationWatcher && ActorEntry->bHasPCGComponent)
-			{
-				TInlineComponentArray<UPCGComponent*, 1> PCGComps;
-				SpawnedActor->GetComponents(PCGComps);
-				for (UPCGComponent* PCGComp : PCGComps)
-				{
-					GenerationWatcher->Watch(PCGComp);
 				}
 			}
 		}
 
-	Finalize:
-		// Register managed actors after the last point, regardless of whether it spawned
-		if (bIsLastPoint && ManagedActors)
+		// Create and register managed resource on first successful spawn.
+		// Registering immediately ensures that if the time-sliced loop is
+		// interrupted by a graph regeneration, already-spawned actors are
+		// tracked and will be cleaned up.
+		if (!ManagedActors)
 		{
-			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::RegisterManagedActors);
+			ManagedActors = NewObject<UPCGManagedActors>(ExecutionContext->GetMutableComponent());
 			ManagedActors->SetCrc(Context->DependenciesCrc);
 			ExecutionContext->GetMutableComponent()->AddToManagedResources(ManagedActors);
+		}
+
+		ManagedActors->GetMutableGeneratedActors().Add(SpawnedActor);
+
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WriteActorRef);
+			ActorRefWriter->SetValue(PointIndex, FSoftObjectPath(SpawnedActor));
+		}
+
+		// Optionally trigger PCG generation
+		if (GenerationWatcher && ActorEntry->bHasPCGComponent)
+		{
+			TInlineComponentArray<UPCGComponent*, 1> PCGComps;
+			SpawnedActor->GetComponents(PCGComps);
+			for (UPCGComponent* PCGComp : PCGComps)
+			{
+				GenerationWatcher->Watch(PCGComp);
+			}
 		}
 	}
 }
