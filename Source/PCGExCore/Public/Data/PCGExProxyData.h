@@ -57,7 +57,8 @@ namespace PCGExData
 			case EPCGMetadataTypes::String:
 			case EPCGMetadataTypes::Name:
 			case EPCGMetadataTypes::SoftObjectPath:
-			case EPCGMetadataTypes::SoftClassPath: return true;
+			case EPCGMetadataTypes::SoftClassPath:
+			case EPCGMetadataTypes::Text: return true;
 			default: return false;
 			}
 		}

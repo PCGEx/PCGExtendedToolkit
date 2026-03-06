@@ -65,6 +65,8 @@ namespace PCGExTypes
 					break;
 				case EPCGMetadataTypes::SoftClassPath: new(Storage) FSoftClassPath(MoveTemp(*reinterpret_cast<FSoftClassPath*>(Other.Storage)));
 					break;
+				case EPCGMetadataTypes::Text: new(Storage) FText(MoveTemp(*reinterpret_cast<FText*>(Other.Storage)));
+					break;
 				default: FMemory::Memcpy(Storage, Other.Storage, ValueSize > 0 ? ValueSize : BufferSize);
 					break;
 				}
@@ -95,6 +97,8 @@ namespace PCGExTypes
 			case EPCGMetadataTypes::SoftObjectPath: reinterpret_cast<FSoftObjectPath*>(ActiveStorage)->~FSoftObjectPath();
 				break;
 			case EPCGMetadataTypes::SoftClassPath: reinterpret_cast<FSoftClassPath*>(ActiveStorage)->~FSoftClassPath();
+				break;
+			case EPCGMetadataTypes::Text: reinterpret_cast<FText*>(ActiveStorage)->~FText();
 				break;
 			default: break;
 			}
@@ -162,6 +166,8 @@ namespace PCGExTypes
 				break;
 			case EPCGMetadataTypes::SoftClassPath: new(ActiveStorage) FSoftClassPath();
 				break;
+			case EPCGMetadataTypes::Text: new(ActiveStorage) FText();
+				break;
 			default: break;
 			}
 			bConstructed = true;
@@ -182,7 +188,8 @@ namespace PCGExTypes
 		case EPCGMetadataTypes::String:
 		case EPCGMetadataTypes::Name:
 		case EPCGMetadataTypes::SoftObjectPath:
-		case EPCGMetadataTypes::SoftClassPath: return true;
+		case EPCGMetadataTypes::SoftClassPath:
+		case EPCGMetadataTypes::Text: return true;
 		default: return false;
 		}
 	}

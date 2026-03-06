@@ -23,7 +23,9 @@ MACRO(bool, Boolean, __VA_ARGS__)       \
 MACRO(FRotator, Rotator, __VA_ARGS__)   \
 MACRO(FName, Name, __VA_ARGS__)\
 MACRO(FSoftObjectPath, SoftObjectPath, __VA_ARGS__)\
-MACRO(FSoftClassPath, SoftClassPath, __VA_ARGS__)
+MACRO(FSoftClassPath, SoftClassPath, __VA_ARGS__)\
+MACRO(uint8, Byte, __VA_ARGS__)\
+MACRO(FText, Text, __VA_ARGS__)
 
 #define PCGEX_INNER_FOREACH_TYPE2(_TYPE_A, _NAME_A, MACRO, ...) \
 MACRO(_TYPE_A, _NAME_A, float, Float, __VA_ARGS__) \
@@ -40,7 +42,9 @@ MACRO(_TYPE_A, _NAME_A, bool, Boolean, __VA_ARGS__) \
 MACRO(_TYPE_A, _NAME_A, FRotator, Rotator, __VA_ARGS__) \
 MACRO(_TYPE_A, _NAME_A, FName, Name, __VA_ARGS__) \
 MACRO(_TYPE_A, _NAME_A, FSoftObjectPath, SoftObjectPath, __VA_ARGS__) \
-MACRO(_TYPE_A, _NAME_A, FSoftClassPath, SoftClassPath, __VA_ARGS__)
+MACRO(_TYPE_A, _NAME_A, FSoftClassPath, SoftClassPath, __VA_ARGS__) \
+MACRO(_TYPE_A, _NAME_A, uint8, Byte, __VA_ARGS__) \
+MACRO(_TYPE_A, _NAME_A, FText, Text, __VA_ARGS__)
 
 #define PCGEX_FOREACH_SUPPORTEDTYPES_PAIRS(MACRO, ...) \
 PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_INNER_FOREACH_TYPE2, MACRO, __VA_ARGS__)

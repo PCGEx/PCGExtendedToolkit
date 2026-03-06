@@ -259,7 +259,7 @@ namespace PCGExData
 
 		// TODO : Revise this work with a custom has function and output an array of unique values instead
 
-		if constexpr (std::is_same_v<T, FRotator> || std::is_same_v<T, FTransform>)
+		if constexpr (std::is_same_v<T, FRotator> || std::is_same_v<T, FTransform> || std::is_same_v<T, FText>)
 		{
 			UE_LOG(LogTemp, Error, TEXT("Unique value type is unsupported at the moment."))
 		}

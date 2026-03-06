@@ -4,6 +4,7 @@
 #include "Core/PCGExBlendOperations.h"
 
 #include "Core/PCGExOpStats.h"
+#include "PCGExLog.h"
 
 namespace PCGExBlending
 {
@@ -55,9 +56,18 @@ namespace PCGExBlending
 		case EPCGMetadataTypes::Name: return CreateTyped<FName>(BlendMode, bResetForMultiBlend);
 		case EPCGMetadataTypes::SoftObjectPath: return CreateTyped<FSoftObjectPath>(BlendMode, bResetForMultiBlend);
 		case EPCGMetadataTypes::SoftClassPath: return CreateTyped<FSoftClassPath>(BlendMode, bResetForMultiBlend);
+		case EPCGMetadataTypes::Byte: return CreateTyped<uint8>(BlendMode, bResetForMultiBlend);
+		case EPCGMetadataTypes::Text: return CreateTyped<FText>(BlendMode, bResetForMultiBlend);
 		default:
 			if (InValueSize > 0)
 			{
+				if (BlendMode != EPCGExABBlendingType::None &&
+					BlendMode != EPCGExABBlendingType::CopySource &&
+					BlendMode != EPCGExABBlendingType::CopyTarget)
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("Blend mode %d requested for generic type %d (size %d) — arithmetic not supported, falling back to copy."),
+						static_cast<int32>(BlendMode), static_cast<int32>(WorkingType), InValueSize);
+				}
 				return MakeShared<FCopyOnlyBlendOperation>(InValueSize, InValueAlignment, BlendMode, bResetForMultiBlend);
 			}
 			return nullptr;
@@ -129,6 +139,8 @@ namespace PCGExBlending
 	template class TBlendOperationImpl<FName>;
 	template class TBlendOperationImpl<FSoftObjectPath>;
 	template class TBlendOperationImpl<FSoftClassPath>;
+	template class TBlendOperationImpl<uint8>;
+	template class TBlendOperationImpl<FText>;
 
 	// Explicit instantiation of blend function getters
 #define INST_BLEND_FUNC_GETTER(TYPE) \
@@ -150,6 +162,8 @@ namespace PCGExBlending
 	INST_BLEND_FUNC_GETTER(FName)
 	INST_BLEND_FUNC_GETTER(FSoftObjectPath)
 	INST_BLEND_FUNC_GETTER(FSoftClassPath)
+	INST_BLEND_FUNC_GETTER(uint8)
+	INST_BLEND_FUNC_GETTER(FText)
 
 #undef INST_BLEND_FUNC_GETTER
 }

@@ -174,6 +174,8 @@ namespace PCGExMetaHelpers
 	const FName DummyName = NAME_None;
 	const FSoftClassPath DummySoftClassPath = FSoftClassPath{};
 	const FSoftObjectPath DummySoftObjectPath = FSoftObjectPath{};
+	constexpr uint8 DummyByte = uint8{};
+	const FText DummyText = FText::GetEmpty();
 
 	template <typename Func>
 	static void ExecuteWithRightType(const EPCGMetadataTypes Type, Func&& Callback)

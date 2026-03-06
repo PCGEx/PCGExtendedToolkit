@@ -8,6 +8,17 @@
 #include "UObject/SoftObjectPath.h"
 #include "Metadata/PCGMetadataAttributeTraits.h"
 
+// FText lacks GetTypeHash and operator== — needed for TSet<FText> instantiation (e.g. GrabUniqueValues)
+FORCEINLINE uint32 GetTypeHash(const FText& Value)
+{
+	return GetTypeHash(Value.ToString());
+}
+
+FORCEINLINE bool operator==(const FText& A, const FText& B)
+{
+	return A.EqualTo(B);
+}
+
 namespace PCGExTypes
 {
 	constexpr int TypesAllocations = 256; // Full uint8 range for EPCGMetadataTypes
@@ -303,5 +314,43 @@ namespace PCGExTypes
 
 		static FORCEINLINE FSoftClassPath Min() { return FSoftClassPath(); }
 		static FORCEINLINE FSoftClassPath Max() { return FSoftClassPath(); }
+	};
+
+	// Byte type (uint8)
+	template <>
+	struct TTraits<uint8>
+	{
+		static constexpr EPCGMetadataTypes Type = EPCGMetadataTypes::Byte;
+		static constexpr int16 TypeId = static_cast<int16>(Type);
+
+		static constexpr bool bIsNumeric = true;
+		static constexpr bool bIsVector = false;
+		static constexpr bool bIsRotation = false;
+		static constexpr bool bIsString = false;
+		static constexpr bool bSupportsLerp = true;
+		static constexpr bool bSupportsMinMax = true;
+		static constexpr bool bSupportsArithmetic = true;
+
+		static FORCEINLINE uint8 Min() { return TNumericLimits<uint8>::Min(); }
+		static FORCEINLINE uint8 Max() { return TNumericLimits<uint8>::Max(); }
+	};
+
+	// Text type (FText)
+	template <>
+	struct TTraits<FText>
+	{
+		static constexpr EPCGMetadataTypes Type = EPCGMetadataTypes::Text;
+		static constexpr int16 TypeId = static_cast<int16>(Type);
+
+		static constexpr bool bIsNumeric = false;
+		static constexpr bool bIsVector = false;
+		static constexpr bool bIsRotation = false;
+		static constexpr bool bIsString = true;
+		static constexpr bool bSupportsLerp = false;
+		static constexpr bool bSupportsMinMax = false;
+		static constexpr bool bSupportsArithmetic = false;
+
+		static FORCEINLINE FText Min() { return FText::GetEmpty(); }
+		static FORCEINLINE FText Max() { return FText::GetEmpty(); }
 	};
 }

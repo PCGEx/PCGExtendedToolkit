@@ -47,6 +47,13 @@ namespace PCGExData
 		UpdateSubSelection();
 		WorkingType = SubSelection.GetSubType(RealType);
 
+		// Derive size/alignment for generic types that GetTypeSize doesn't know about
+		if (bValid && PCGExTypes::FScopedTypedValue::GetTypeSize(WorkingType) == 0)
+		{
+			ValueSize = PCGExTypes::GetElementSizeFromType(WorkingType);
+			ValueAlignment = PCGExTypes::GetElementAlignmentFromType(WorkingType);
+		}
+
 		return bValid;
 	}
 
@@ -69,6 +76,13 @@ namespace PCGExData
 
 		UpdateSubSelection();
 		WorkingType = SubSelection.GetSubType(RealType);
+
+		// Derive size/alignment for generic types that GetTypeSize doesn't know about
+		if (bValid && PCGExTypes::FScopedTypedValue::GetTypeSize(WorkingType) == 0)
+		{
+			ValueSize = PCGExTypes::GetElementSizeFromType(WorkingType);
+			ValueAlignment = PCGExTypes::GetElementAlignmentFromType(WorkingType);
+		}
 
 		return bValid;
 	}

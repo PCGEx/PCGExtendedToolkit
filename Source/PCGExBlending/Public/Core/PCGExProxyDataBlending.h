@@ -244,8 +244,28 @@ namespace PCGExBlending
 		//void Set(const int32 TargetIndex, const T& Value) const { if (C) { C->Set(TargetIndex, Value); } }
 
 	protected:
+		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(EPCGMetadataTypes, EPCGExABBlendingType, bool);
+		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(FPCGExContext*, EPCGExABBlendingType, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, bool);
+		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(FPCGExContext*, EPCGExABBlendingType, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, bool);
+
 		// Cached type info
 		bool bNeedsLifecycleManagement = false;
+
+		// Cached value size/alignment for working buffers (from Operation)
+		int32 ValueSize = 0;
+		int32 ValueAlignment = 1;
+
+		// Create a FScopedTypedValue with correct sizing for the underlying type.
+		// Uses the 3-arg constructor when ValueSize is known (generic/new types),
+		// otherwise falls back to the 1-arg constructor (known legacy types).
+		FORCEINLINE PCGExTypes::FScopedTypedValue MakeScopedValue() const
+		{
+			if (ValueSize > 0 && PCGExTypes::FScopedTypedValue::GetTypeSize(UnderlyingType) == 0)
+			{
+				return PCGExTypes::FScopedTypedValue(UnderlyingType, ValueSize, ValueAlignment);
+			}
+			return PCGExTypes::FScopedTypedValue(UnderlyingType);
+		}
 	};
 
 	//

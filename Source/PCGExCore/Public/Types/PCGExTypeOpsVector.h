@@ -40,6 +40,8 @@ namespace PCGExTypeOps
 			else if constexpr (std::is_same_v<TTo, FName>) { return FName(*Value.ToString()); }
 			else if constexpr (std::is_same_v<TTo, FSoftObjectPath>) { return FSoftObjectPath(); }
 			else if constexpr (std::is_same_v<TTo, FSoftClassPath>) { return FSoftClassPath(); }
+			else if constexpr (std::is_same_v<TTo, uint8>) { return static_cast<uint8>(FMath::Clamp(Value.X, 0.0, 255.0)); }
+			else if constexpr (std::is_same_v<TTo, FText>) { return FText::FromString(Value.ToString()); }
 			else { return TTo{}; }
 		}
 
@@ -79,6 +81,8 @@ namespace PCGExTypeOps
 			}
 			else if constexpr (std::is_same_v<TFrom, FSoftObjectPath>) { return Type::ZeroVector; }
 			else if constexpr (std::is_same_v<TFrom, FSoftClassPath>) { return Type::ZeroVector; }
+			else if constexpr (std::is_same_v<TFrom, uint8>) { return Type(Value); }
+			else if constexpr (std::is_same_v<TFrom, FText>) { Type Result; Result.InitFromString(Value.ToString()); return Result; }
 			else { return Type::ZeroVector; }
 		}
 
@@ -218,6 +222,8 @@ namespace PCGExTypeOps
 			else if constexpr (std::is_same_v<TTo, FName>) { return FName(*Value.ToString()); }
 			else if constexpr (std::is_same_v<TTo, FSoftObjectPath>) { return FSoftObjectPath(); }
 			else if constexpr (std::is_same_v<TTo, FSoftClassPath>) { return FSoftClassPath(); }
+			else if constexpr (std::is_same_v<TTo, uint8>) { return static_cast<uint8>(FMath::Clamp(Value.X, 0.0, 255.0)); }
+			else if constexpr (std::is_same_v<TTo, FText>) { return FText::FromString(Value.ToString()); }
 			else { return TTo{}; }
 		}
 
@@ -253,6 +259,8 @@ namespace PCGExTypeOps
 			}
 			else if constexpr (std::is_same_v<TFrom, FSoftObjectPath>) { return Type::ZeroVector; }
 			else if constexpr (std::is_same_v<TFrom, FSoftClassPath>) { return Type::ZeroVector; }
+			else if constexpr (std::is_same_v<TFrom, uint8>) { return Type(Value); }
+			else if constexpr (std::is_same_v<TFrom, FText>) { Type Result; Result.InitFromString(Value.ToString()); return Result; }
 			else { return Type::ZeroVector; }
 		}
 
@@ -402,6 +410,8 @@ namespace PCGExTypeOps
 			else if constexpr (std::is_same_v<TTo, FName>) { return FName(*Value.ToString()); }
 			else if constexpr (std::is_same_v<TTo, FSoftObjectPath>) { return FSoftObjectPath(); }
 			else if constexpr (std::is_same_v<TTo, FSoftClassPath>) { return FSoftClassPath(); }
+			else if constexpr (std::is_same_v<TTo, uint8>) { return static_cast<uint8>(FMath::Clamp(Value.X, 0.0, 255.0)); }
+			else if constexpr (std::is_same_v<TTo, FText>) { return FText::FromString(Value.ToString()); }
 			else { return TTo{}; }
 		}
 
@@ -441,6 +451,8 @@ namespace PCGExTypeOps
 			}
 			else if constexpr (std::is_same_v<TFrom, FSoftObjectPath>) { return Type(0.0, 0.0, 0.0, 0.0); }
 			else if constexpr (std::is_same_v<TFrom, FSoftClassPath>) { return Type(0.0, 0.0, 0.0, 0.0); }
+			else if constexpr (std::is_same_v<TFrom, uint8>) { return Type(Value, Value, Value, Value); }
+			else if constexpr (std::is_same_v<TFrom, FText>) { Type Result; Result.InitFromString(Value.ToString()); return Result; }
 			else { return Type(0.0, 0.0, 0.0, 0.0); }
 		}
 

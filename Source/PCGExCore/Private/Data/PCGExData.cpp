@@ -869,12 +869,20 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 	{
 		if (!IsWritable() || !IsEnabled() || !OutBytes) { return; }
 
-		// STUB: Write-back to generic attributes is deferred to Phase 3.
-		// For now, FGenericBuffer supports in-memory read/modify/get but cannot
-		// flush modified bytes back to the underlying FPCGMetadataAttributeGeneric.
-		// This is sufficient for copy-only blend operations that only need to
-		// read source values and pass them through unchanged.
-		ensureMsgf(false, TEXT("FGenericBuffer::Write() is not yet implemented for generic attributes. Data will not be written back."));
+		// STUB: FPCGMetadataAttributeGeneric has no public raw-write API.
+		// SetValueFromProperty() requires a private FProperty*, and UnderlyingProperty is inaccessible.
+		// No GetMutableAddress/SetRawValue equivalent exists.
+		//
+		// WARNING: Any blend output written to OutBytes is LOST.
+		// Nodes can create generic-typed attributes (Struct, Enum, Object, etc.) programmatically
+		// even though they're hidden from UI — if such attributes flow into a blend path, results
+		// are silently discarded.
+		//
+		// When a public write API becomes available, this should:
+		//   1. Iterate OutBytes in ElementSize strides
+		//   2. Write each element back to the attribute's entry via the new API
+		//   3. Respect bEnsureValidKeys (call InitializeOnSet if needed)
+		ensureMsgf(false, TEXT("FGenericBuffer::Write() is not yet implemented — no public raw-write API on FPCGMetadataAttributeGeneric. Data will not be written back."));
 	}
 
 #pragma endregion
