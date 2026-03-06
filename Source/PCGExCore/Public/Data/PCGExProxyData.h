@@ -80,6 +80,10 @@ namespace PCGExData
 		EPCGMetadataTypes RealType = EPCGMetadataTypes::Unknown;
 		EPCGMetadataTypes WorkingType = EPCGMetadataTypes::Unknown;
 
+		// Element size/alignment for generic types (0 = derived from type enum)
+		int32 ValueSize = 0;
+		int32 ValueAlignment = 1;
+
 		TWeakPtr<FFacade> DataFacade;
 		const UPCGBasePointData* PointData = nullptr;
 
@@ -176,6 +180,11 @@ namespace PCGExData
 		FORCEINLINE const PCGExTypeOps::ITypeOpsBase* GetWorkingOps() const { return WorkingOps; }
 		FORCEINLINE bool HasSubSelection() const { return bWantsSubSelection; }
 		FORCEINLINE bool WorkingTypeNeedsLifecycle() const { return bWorkingTypeNeedsLifecycle; }
+
+		// Value size/alignment for blend operation sizing.
+		// Returns the size from WorkingOps if available, otherwise falls back to descriptor or FScopedTypedValue::GetTypeSize.
+		virtual int32 GetValueSize() const;
+		virtual int32 GetValueAlignment() const;
 
 		//
 		// Convenience typed accessors - SAFE versions with proper lifecycle

@@ -339,6 +339,54 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		virtual void Write(const bool bEnsureValidKeys = true) override;
 	};
 
+	//
+	// FGenericBuffer - Type-erased buffer for generic/unknown attribute types (5.8+)
+	//
+	// Stores raw byte data for attributes whose types are not known at compile time.
+	// Reads via FPCGMetadataAttributeGeneric::GetReadAddressFromEntryKey_Unsafe().
+	// Write-back to attributes is stubbed for Phase 2 (copy-only semantics).
+	//
+	class PCGEXCORE_API FGenericBuffer : public IBuffer
+	{
+		friend class FFacade;
+
+	protected:
+		int32 ElementSize = 0;
+		int32 ElementAlignment = 1;
+
+		TSharedPtr<TArray<uint8>> InBytes;
+		TSharedPtr<TArray<uint8>> OutBytes;
+
+		bool bReadInitialized = false;
+		bool bWriteInitialized = false;
+		bool bReadFromOutput = false;
+
+	public:
+		FGenericBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier, int32 InElementSize, int32 InElementAlignment = 1);
+
+		FORCEINLINE int32 GetElementSize() const { return ElementSize; }
+		FORCEINLINE int32 GetElementAlignment() const { return ElementAlignment; }
+
+		virtual int32 GetNumValues(const EIOSide InSide) override;
+
+		virtual bool IsWritable() override;
+		virtual bool IsReadable() override;
+		virtual bool ReadsFromOutput() override;
+		virtual bool EnsureReadable() override;
+
+		virtual void ReadVoid(const int32 Index, void* OutValue) const override;
+		virtual void SetVoid(const int32 Index, const void* Value) override;
+		virtual void GetVoid(const int32 Index, void* OutValue) override;
+
+		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
+		virtual PCGExValueHash GetValueHash(const int32 Index) override;
+
+		virtual void Write(const bool bEnsureValidKeys = true) override;
+
+		bool InitForRead(const EIOSide InSide = EIOSide::In);
+		bool InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init = EBufferInit::Inherit);
+	};
+
 #pragma region externalization
 
 #define PCGEX_TPL(_TYPE, _NAME, ...)\

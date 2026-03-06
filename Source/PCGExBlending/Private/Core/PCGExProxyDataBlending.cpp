@@ -285,7 +285,10 @@ namespace PCGExBlending
 		TSharedPtr<FProxyDataBlender> Blender = MakeShared<FProxyDataBlender>();
 
 		Blender->UnderlyingType = WorkingType;
-		Blender->Operation = FBlendOperationFactory::Create(WorkingType, BlendMode, bResetValueForMultiBlend);
+
+		// For unknown/generic types, get size from the type utility so FCopyOnlyBlendOperation can be created
+		const int32 ValueSize = PCGExTypes::GetElementSizeFromType(WorkingType);
+		Blender->Operation = FBlendOperationFactory::Create(WorkingType, BlendMode, bResetValueForMultiBlend, ValueSize);
 
 		if (!Blender->Operation) { return nullptr; }
 
@@ -311,8 +314,10 @@ namespace PCGExBlending
 		// Set type info
 		Blender->UnderlyingType = A.WorkingType;
 
-		// Create blend operation
-		Blender->Operation = FBlendOperationFactory::Create(A.WorkingType, BlendMode, bResetValueForMultiBlend);
+		// Create blend operation — forward size from descriptor for generic types
+		const int32 ValueSize = A.ValueSize > 0 ? A.ValueSize : PCGExTypes::GetElementSizeFromType(A.WorkingType);
+		const int32 ValueAlign = A.ValueAlignment > 1 ? A.ValueAlignment : PCGExTypes::GetElementAlignmentFromType(A.WorkingType);
+		Blender->Operation = FBlendOperationFactory::Create(A.WorkingType, BlendMode, bResetValueForMultiBlend, ValueSize, ValueAlign);
 		if (!Blender->Operation)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("ProxyBlender: Failed to create blend operation."));
@@ -370,8 +375,10 @@ namespace PCGExBlending
 		// Set type info
 		Blender->UnderlyingType = A.WorkingType;
 
-		// Create blend operation
-		Blender->Operation = FBlendOperationFactory::Create(A.WorkingType, BlendMode, bResetValueForMultiBlend);
+		// Create blend operation — forward size from descriptor for generic types
+		const int32 ValueSize = A.ValueSize > 0 ? A.ValueSize : PCGExTypes::GetElementSizeFromType(A.WorkingType);
+		const int32 ValueAlign = A.ValueAlignment > 1 ? A.ValueAlignment : PCGExTypes::GetElementAlignmentFromType(A.WorkingType);
+		Blender->Operation = FBlendOperationFactory::Create(A.WorkingType, BlendMode, bResetValueForMultiBlend, ValueSize, ValueAlign);
 		if (!Blender->Operation)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("ProxyBlender: Failed to create blend operation."));

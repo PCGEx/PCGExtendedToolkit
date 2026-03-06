@@ -219,6 +219,18 @@ namespace PCGExData
 
 #undef PCGEX_CONVERTING_READ_IMPL
 
+	int32 IBufferProxy::GetValueSize() const
+	{
+		if (WorkingOps) { return WorkingOps->GetTypeSize(); }
+		return PCGExTypes::FScopedTypedValue::GetTypeSize(WorkingType);
+	}
+
+	int32 IBufferProxy::GetValueAlignment() const
+	{
+		if (WorkingOps) { return WorkingOps->GetTypeAlignment(); }
+		return 1;
+	}
+
 #pragma endregion
 
 	TSharedPtr<IBufferProxy> IBufferProxyPool::TryGet(const FProxyDescriptor& Descriptor)

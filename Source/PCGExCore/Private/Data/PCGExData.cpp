@@ -18,6 +18,7 @@
 #include "Metadata/Accessors/PCGCustomAccessor.h"
 #include "Types/PCGExAttributeIdentity.h"
 #include "Types/PCGExTypes.h"
+#include "Metadata/PCGMetadataAttributeGeneric.h"
 
 namespace PCGExData
 {
@@ -702,6 +703,182 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 
 #pragma endregion
 
+#pragma region FGenericBuffer
+
+	FGenericBuffer::FGenericBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier, int32 InElementSize, int32 InElementAlignment)
+		: IBuffer(InSource, InIdentifier)
+		, ElementSize(InElementSize)
+		, ElementAlignment(InElementAlignment)
+	{
+		SetType(EPCGMetadataTypes::Unknown);
+	}
+
+	int32 FGenericBuffer::GetNumValues(const EIOSide InSide)
+	{
+		if (InSide == EIOSide::In)
+		{
+			return InBytes ? InBytes->Num() / FMath::Max(1, ElementSize) : 0;
+		}
+		return OutBytes ? OutBytes->Num() / FMath::Max(1, ElementSize) : 0;
+	}
+
+	bool FGenericBuffer::IsWritable() { return OutBytes != nullptr; }
+	bool FGenericBuffer::IsReadable() { return InBytes != nullptr; }
+	bool FGenericBuffer::ReadsFromOutput() { return bReadFromOutput; }
+
+	bool FGenericBuffer::EnsureReadable()
+	{
+		if (bReadInitialized) { return InBytes != nullptr; }
+
+		// If we have output data, read from it
+		if (OutBytes)
+		{
+			if (!InBytes)
+			{
+				InBytes = OutBytes;
+				bReadFromOutput = true;
+			}
+			bReadInitialized = true;
+			return true;
+		}
+
+		return InitForRead(EIOSide::In);
+	}
+
+	void FGenericBuffer::ReadVoid(const int32 Index, void* OutValue) const
+	{
+		check(InBytes && ElementSize > 0);
+		const int32 Offset = Index * ElementSize;
+		check(Offset + ElementSize <= InBytes->Num());
+		FMemory::Memcpy(OutValue, InBytes->GetData() + Offset, ElementSize);
+	}
+
+	void FGenericBuffer::SetVoid(const int32 Index, const void* Value)
+	{
+		check(OutBytes && ElementSize > 0);
+		const int32 Offset = Index * ElementSize;
+		check(Offset + ElementSize <= OutBytes->Num());
+		FMemory::Memcpy(OutBytes->GetData() + Offset, Value, ElementSize);
+	}
+
+	void FGenericBuffer::GetVoid(const int32 Index, void* OutValue)
+	{
+		if (OutBytes)
+		{
+			const int32 Offset = Index * ElementSize;
+			check(Offset + ElementSize <= OutBytes->Num());
+			FMemory::Memcpy(OutValue, OutBytes->GetData() + Offset, ElementSize);
+			return;
+		}
+		ReadVoid(Index, OutValue);
+	}
+
+	PCGExValueHash FGenericBuffer::ReadValueHash(const int32 Index)
+	{
+		if (!InBytes || ElementSize <= 0) { return 0; }
+		const int32 Offset = Index * ElementSize;
+		return FCrc::MemCrc32(InBytes->GetData() + Offset, ElementSize);
+	}
+
+	PCGExValueHash FGenericBuffer::GetValueHash(const int32 Index)
+	{
+		if (OutBytes && ElementSize > 0)
+		{
+			const int32 Offset = Index * ElementSize;
+			return FCrc::MemCrc32(OutBytes->GetData() + Offset, ElementSize);
+		}
+		return ReadValueHash(Index);
+	}
+
+	bool FGenericBuffer::InitForRead(const EIOSide InSide)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bReadInitialized) { return InBytes != nullptr; }
+		bReadInitialized = true;
+
+		if (ElementSize <= 0) { return false; }
+
+		const UPCGBasePointData* PointData = (InSide == EIOSide::In) ? Source->GetIn() : Source->GetOut();
+		if (!PointData) { return false; }
+
+		const FPCGMetadataAttributeBase* Attr = Source->FindConstAttribute(Identifier, InSide);
+		if (!Attr || !Attr->IsGeneric()) { return false; }
+
+		InAttribute = Attr;
+		const FPCGMetadataAttributeGeneric* GenericAttr = static_cast<const FPCGMetadataAttributeGeneric*>(Attr);
+		const int32 NumPoints = PointData->GetNumPoints();
+
+		InBytes = MakeShared<TArray<uint8>>();
+		InBytes->SetNumZeroed(NumPoints * ElementSize);
+
+		// Bulk read using metadata entry keys
+		auto EntryKeys = PointData->GetConstMetadataEntryValueRange();
+
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			const void* ReadAddr = GenericAttr->GetReadAddressFromEntryKey_Unsafe(EntryKeys[i]);
+			if (ReadAddr)
+			{
+				FMemory::Memcpy(InBytes->GetData() + i * ElementSize, ReadAddr, ElementSize);
+			}
+		}
+
+		bReadComplete = true;
+		return true;
+	}
+
+	bool FGenericBuffer::InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bWriteInitialized) { return OutBytes != nullptr; }
+		bWriteInitialized = true;
+
+		if (ElementSize <= 0) { return false; }
+
+		const UPCGBasePointData* OutData = Source->GetOut();
+		if (!OutData) { return false; }
+
+		const int32 NumPoints = OutData->GetNumPoints();
+
+		OutBytes = MakeShared<TArray<uint8>>();
+		OutBytes->SetNumZeroed(NumPoints * ElementSize);
+
+		// If inheriting, copy input values to output
+		if (Init == EBufferInit::Inherit && SourceAttribute && SourceAttribute->IsGeneric())
+		{
+			const FPCGMetadataAttributeGeneric* GenericSrc = static_cast<const FPCGMetadataAttributeGeneric*>(SourceAttribute);
+			auto EntryKeys = OutData->GetConstMetadataEntryValueRange();
+
+			for (int32 i = 0; i < NumPoints; i++)
+			{
+				const void* ReadAddr = GenericSrc->GetReadAddressFromEntryKey_Unsafe(EntryKeys[i]);
+				if (ReadAddr)
+				{
+					FMemory::Memcpy(OutBytes->GetData() + i * ElementSize, ReadAddr, ElementSize);
+				}
+			}
+		}
+
+		bIsNewOutput = (Init == EBufferInit::New);
+		return true;
+	}
+
+	void FGenericBuffer::Write(const bool bEnsureValidKeys)
+	{
+		if (!IsWritable() || !IsEnabled() || !OutBytes) { return; }
+
+		// STUB: Write-back to generic attributes is deferred to Phase 3.
+		// For now, FGenericBuffer supports in-memory read/modify/get but cannot
+		// flush modified bytes back to the underlying FPCGMetadataAttributeGeneric.
+		// This is sufficient for copy-only blend operations that only need to
+		// read source values and pass them through unchanged.
+		ensureMsgf(false, TEXT("FGenericBuffer::Write() is not yet implemented for generic attributes. Data will not be written back."));
+	}
+
+#pragma endregion
+
 #pragma region FFacade
 
 	int32 FFacade::GetNum(const EIOSide InSide) const { return Source->GetNum(InSide); }
@@ -952,7 +1129,35 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 		switch (Type)
 		{
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TYPED_WRITABLE)
-		default: return nullptr;
+		default:
+			{
+				// Fallback: create FGenericBuffer for unknown/generic types
+				if (!InAttribute) { return nullptr; }
+
+				const int32 ElemSize = PCGExTypes::GetElementSizeFromAttribute(InAttribute);
+				if (ElemSize <= 0)
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("Cannot create writable buffer for attribute '%s' — unknown element size (type %d)."), *InAttribute->Name.ToString(), static_cast<int32>(Type));
+					return nullptr;
+				}
+
+				const int32 ElemAlign = PCGExTypes::GetElementAlignmentFromType(Type, nullptr);
+
+				FPCGAttributeIdentifier AttrIdentifier;
+				AttrIdentifier.Name = InAttribute->Name;
+
+				TSharedPtr<FGenericBuffer> GenericBuf = MakeShared<FGenericBuffer>(Source, AttrIdentifier, ElemSize, ElemAlign);
+				if (!GenericBuf->InitForWrite(InAttribute, Init))
+				{
+					return nullptr;
+				}
+
+				// Register in facade
+				FWriteScopeLock WriteScopeLock(BufferLock);
+				GenericBuf->BufferIndex = Buffers.Add(GenericBuf);
+				BufferMap.Add(GenericBuf->GetUID(), GenericBuf);
+				return GenericBuf;
+			}
 		}
 #undef PCGEX_TYPED_WRITABLE
 	}
@@ -963,7 +1168,22 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 		switch (Type)
 		{
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TYPED_WRITABLE)
-		default: return nullptr;
+		default:
+			{
+				// For generic types by name, look up the attribute first to get size info
+				FPCGAttributeIdentifier AttrId;
+				AttrId.Name = InName;
+
+				const FPCGMetadataAttributeBase* RawAttribute = Source->FindConstAttribute(AttrId, EIOSide::In);
+				if (!RawAttribute)
+				{
+					RawAttribute = Source->FindConstAttribute(AttrId, EIOSide::Out);
+				}
+
+				if (!RawAttribute) { return nullptr; }
+
+				return GetWritable(Type, RawAttribute, Init);
+			}
 		}
 #undef PCGEX_TYPED_WRITABLE
 	}
@@ -976,6 +1196,28 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 		PCGEX_EXECUTEWITHRIGHTTYPE(Identity.UnderlyingType, PCGEX_TYPED_EXEC)
 #undef PCGEX_TYPED_EXEC
 
+		// Fallback: create FGenericBuffer for unknown/generic types
+		if (!Buffer)
+		{
+			const FPCGMetadataAttributeBase* RawAttribute = Source->FindConstAttribute(Identity.Identifier, InSide);
+			if (RawAttribute && RawAttribute->IsGeneric())
+			{
+				const int32 ElemSize = PCGExTypes::GetElementSizeFromAttribute(RawAttribute);
+				if (ElemSize > 0)
+				{
+					const int32 ElemAlign = PCGExTypes::GetElementAlignmentFromType(Identity.UnderlyingType, nullptr);
+					TSharedPtr<FGenericBuffer> GenericBuf = MakeShared<FGenericBuffer>(Source, Identity.Identifier, ElemSize, ElemAlign);
+					if (GenericBuf->InitForRead(InSide))
+					{
+						FWriteScopeLock WriteScopeLock(BufferLock);
+						GenericBuf->BufferIndex = Buffers.Add(GenericBuf);
+						BufferMap.Add(GenericBuf->GetUID(), GenericBuf);
+						Buffer = GenericBuf;
+					}
+				}
+			}
+		}
+
 		return Buffer;
 	}
 
@@ -986,9 +1228,29 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 
 		if (!RawAttribute) { return nullptr; }
 
+		const EPCGMetadataTypes AttrType = static_cast<EPCGMetadataTypes>(RawAttribute->GetTypeId());
+
 #define PCGEX_TYPED_EXEC(_TYPE, _NAME) Buffer = Buffer = GetReadable<_TYPE>(InIdentifier, InSide, bSupportScoped);
-		PCGEX_EXECUTEWITHRIGHTTYPE(static_cast<EPCGMetadataTypes>(RawAttribute->GetTypeId()), PCGEX_TYPED_EXEC)
+		PCGEX_EXECUTEWITHRIGHTTYPE(AttrType, PCGEX_TYPED_EXEC)
 #undef PCGEX_TYPED_EXEC
+
+		// Fallback: create FGenericBuffer for unknown/generic types
+		if (!Buffer && RawAttribute->IsGeneric())
+		{
+			const int32 ElemSize = PCGExTypes::GetElementSizeFromAttribute(RawAttribute);
+			if (ElemSize > 0)
+			{
+				const int32 ElemAlign = PCGExTypes::GetElementAlignmentFromType(AttrType, nullptr);
+				TSharedPtr<FGenericBuffer> GenericBuf = MakeShared<FGenericBuffer>(Source, InIdentifier, ElemSize, ElemAlign);
+				if (GenericBuf->InitForRead(InSide))
+				{
+					FWriteScopeLock WriteScopeLock(BufferLock);
+					GenericBuf->BufferIndex = Buffers.Add(GenericBuf);
+					BufferMap.Add(GenericBuf->GetUID(), GenericBuf);
+					Buffer = GenericBuf;
+				}
+			}
+		}
 
 		return Buffer;
 	}
