@@ -207,6 +207,64 @@ namespace PCGExTypeOps
 		}
 	};
 
+	/**
+	 * FCopyOnlyTypeOps - Fallback for unknown/generic attribute types.
+	 *
+	 * All operations are raw byte copies. No arithmetic, lerp, min/max, or conversion.
+	 * Ensures data is preserved through blending pipelines without data loss.
+	 */
+	class PCGEXCORE_API FCopyOnlyTypeOps final : public ITypeOpsBase
+	{
+	public:
+		static FCopyOnlyTypeOps& GetInstance()
+		{
+			static FCopyOnlyTypeOps Instance;
+			return Instance;
+		}
+
+		virtual EPCGMetadataTypes GetTypeId() const override { return EPCGMetadataTypes::Unknown; }
+		virtual FString GetTypeName() const override { return TEXT("Unknown"); }
+		virtual int32 GetTypeSize() const override { return 0; }
+		virtual int32 GetTypeAlignment() const override { return 1; }
+		virtual bool SupportsLerp() const override { return false; }
+		virtual bool SupportsMinMax() const override { return false; }
+		virtual bool SupportsArithmetic() const override { return false; }
+
+		virtual void SetDefault(void* /*OutValue*/) const override {}
+		virtual void Copy(const void* /*Src*/, void* /*Dst*/) const override {}
+		virtual PCGExValueHash ComputeHash(const void* /*Value*/) const override { return 0; }
+		virtual void ConvertTo(const void* /*SrcValue*/, EPCGMetadataTypes /*TargetType*/, void* /*OutValue*/) const override {}
+		virtual void ConvertFrom(EPCGMetadataTypes /*SrcType*/, const void* /*SrcValue*/, void* /*OutValue*/) const override {}
+
+		// All blend operations are no-ops. Size is unknown at this level.
+		// Actual copy-based blending for generic types is handled by FCopyOnlyBlendOperation
+		// which carries the value size and performs memcpy.
+		virtual void BlendAdd(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendSub(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendMult(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendDiv(const void* /*A*/, double /*Divisor*/, void* /*Out*/) const override {}
+		virtual void BlendLerp(const void* /*A*/, const void* /*B*/, double /*Weight*/, void* /*Out*/) const override {}
+		virtual void BlendMin(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendMax(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendAverage(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendWeightedAdd(const void* /*A*/, const void* /*B*/, double /*Weight*/, void* /*Out*/) const override {}
+		virtual void BlendWeightedSub(const void* /*A*/, const void* /*B*/, double /*Weight*/, void* /*Out*/) const override {}
+		virtual void BlendCopyA(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendCopyB(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendUnsignedMin(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendUnsignedMax(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendAbsoluteMin(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendAbsoluteMax(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendHash(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendUnsignedHash(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendModSimple(const void* /*A*/, double /*Modulo*/, void* /*Out*/) const override {}
+		virtual void BlendModComplex(const void* /*A*/, const void* /*B*/, void* /*Out*/) const override {}
+		virtual void BlendWeight(const void* /*A*/, const void* /*B*/, double /*Weight*/, void* /*Out*/) const override {}
+		virtual void NormalizeWeight(const void* /*A*/, double /*TotalWeight*/, void* /*Out*/) const override {}
+		virtual void Abs(const void* /*A*/, void* /*Out*/) const override {}
+		virtual void Factor(const void* /*A*/, const double /*Factor*/, void* /*Out*/) const override {}
+	};
+
 	// Conversion Function Generation
 
 	namespace ConversionFunctions
@@ -232,23 +290,6 @@ namespace PCGExTypeOps
 			if constexpr (std::is_same_v<TFrom, TTo>) { return &ConvertIdentity<TFrom>; }
 			else { return &ConvertImpl<TFrom, TTo>; }
 		}
-
-		/**
-		 * Row of conversion functions from one source type to all target types
-		 */
-		template <typename TFrom>
-		struct TConversionRow
-		{
-			static FConvertFn GetFunction(int32 ToIndex)
-			{
-#define PCGEX_TPL(_TYPE, _NAME, ...) GetConvertFunction<TFrom, _TYPE>(),
-				static const FConvertFn Functions[PCGExTypes::TypesAllocations] = {PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)};
-#undef PCGEX_TPL
-
-				check(ToIndex >= 0 && ToIndex < 15)
-				return Functions[ToIndex];
-			}
-		};
 	}
 
 	// FTypeOpsRegistry Template Implementations

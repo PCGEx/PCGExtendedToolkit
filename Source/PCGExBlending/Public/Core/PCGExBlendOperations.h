@@ -49,10 +49,12 @@ namespace PCGExBlending
 		virtual ~IBlendOperation() = default;
 
 		// Core blend: Out = Blend(A, B, Weight)
-		FORCEINLINE void Blend(const void* A, const void* B, double Weight, void* Out) const { BlendFunc(A, B, Weight, Out); }
+		// Virtual to allow FCopyOnlyBlendOperation to override with size-aware memcpy.
+		// Default implementation dispatches through function pointer (zero overhead for typed ops).
+		virtual void Blend(const void* A, const void* B, double Weight, void* Out) const { BlendFunc(A, B, Weight, Out); }
 
 		// Multi-blend operations for accumulation patterns
-		FORCEINLINE void BeginMulti(void* Accumulator, const void* InitialValue, PCGEx::FOpStats& OutTracker) const
+		virtual void BeginMulti(void* Accumulator, const void* InitialValue, PCGEx::FOpStats& OutTracker) const
 		{
 			// These modes require the first operation to be a copy of the first blended value
 			// before they can be properly blended -- this should be handled by the blend op?
@@ -68,17 +70,10 @@ namespace PCGExBlending
 					OutTracker.TotalWeight = 1;
 				}
 			}
-			/*
-			if (InitialValue)
-			{
-				// Copy initial value
-				CopyValue(InitialValue, Accumulator);
-			}
-			*/
 		}
 
-		FORCEINLINE void Accumulate(const void* Source, void* Accumulator, double Weight) const { AccumulateFunc(Accumulator, Source, Weight, Accumulator); }
-		FORCEINLINE void EndMulti(void* Accumulator, double TotalWeight, int32 Count) const { FinalizeFunc(Accumulator, TotalWeight, Count); }
+		virtual void Accumulate(const void* Source, void* Accumulator, double Weight) const { AccumulateFunc(Accumulator, Source, Weight, Accumulator); }
+		virtual void EndMulti(void* Accumulator, double TotalWeight, int32 Count) const { FinalizeFunc(Accumulator, TotalWeight, Count); }
 
 		// Division helper (for external averaging)
 		virtual void Div(void* Value, double Divisor) const = 0;
@@ -399,6 +394,61 @@ namespace PCGExBlending
 #undef PCGEX_DECLARE_BLEND_OP_EXTERN
 
 	//
+	// FCopyOnlyBlendOperation - Fallback for unknown/generic attribute types.
+	//
+	// Carries the value size so it can memcpy for CopyA/CopyB/None semantics.
+	// All arithmetic modes (Add, Lerp, etc.) fall back to CopyA to preserve data.
+	//
+	class PCGEXBLENDING_API FCopyOnlyBlendOperation final : public IBlendOperation
+	{
+		int32 ValueSize;
+		int32 ValueAlignment;
+
+	public:
+		FCopyOnlyBlendOperation(int32 InValueSize, int32 InValueAlignment, EPCGExABBlendingType InMode, bool bInResetForMulti)
+			: IBlendOperation(InMode, bInResetForMulti)
+			, ValueSize(InValueSize)
+			, ValueAlignment(InValueAlignment)
+		{
+			// Function pointers unused — all dispatch goes through virtual overrides
+			BlendFunc = nullptr;
+			AccumulateFunc = nullptr;
+			FinalizeFunc = nullptr;
+		}
+
+		virtual void Blend(const void* A, const void* B, double /*Weight*/, void* Out) const override
+		{
+			const void* Src = (Mode == EPCGExABBlendingType::CopySource) ? B : A;
+			FMemory::Memcpy(Out, Src, ValueSize);
+		}
+
+		virtual void BeginMulti(void* Accumulator, const void* /*InitialValue*/, PCGEx::FOpStats& OutTracker) const override
+		{
+			FMemory::Memzero(Accumulator, ValueSize);
+			OutTracker.Count = 0;
+			OutTracker.TotalWeight = 0;
+		}
+
+		virtual void Accumulate(const void* Source, void* Accumulator, double /*Weight*/) const override
+		{
+			// For unknown types, last-write-wins is the only safe semantic
+			FMemory::Memcpy(Accumulator, Source, ValueSize);
+		}
+
+		virtual void EndMulti(void* /*Accumulator*/, double /*TotalWeight*/, int32 /*Count*/) const override {}
+
+		virtual void Div(void* /*Value*/, double /*Divisor*/) const override {}
+		virtual EPCGMetadataTypes GetWorkingType() const override { return EPCGMetadataTypes::Unknown; }
+		virtual int32 GetValueSize() const override { return ValueSize; }
+		virtual int32 GetValueAlignment() const override { return ValueAlignment; }
+		virtual void InitDefault(void* Value) const override { FMemory::Memzero(Value, ValueSize); }
+		virtual bool NeedsLifecycleManagement() const override { return false; }
+		virtual void ConstructValue(void* Value) const override { FMemory::Memzero(Value, ValueSize); }
+		virtual void DestroyValue(void* /*Value*/) const override {}
+		virtual void CopyValue(const void* Src, void* Dst) const override { FMemory::Memcpy(Dst, Src, ValueSize); }
+	};
+
+	//
 	// FBlendOperationFactory - Creates blend operations with runtime dispatch
 	//
 	// Single entry point for creating blend operations. Uses switch on type
@@ -407,11 +457,15 @@ namespace PCGExBlending
 	class PCGEXBLENDING_API FBlendOperationFactory
 	{
 	public:
-		// Create a blend operation for runtime type and mode
+		// Create a blend operation for runtime type and mode.
+		// For unknown types, returns a FCopyOnlyBlendOperation using the provided size/alignment.
+		// If InValueSize is 0 for an unknown type, returns nullptr.
 		static TSharedPtr<IBlendOperation> Create(
 			EPCGMetadataTypes WorkingType,
 			EPCGExABBlendingType BlendMode,
-			bool bResetForMultiBlend = true);
+			bool bResetForMultiBlend = true,
+			int32 InValueSize = 0,
+			int32 InValueAlignment = 1);
 
 		// Compile-time factory for known type
 		template <typename T>
@@ -432,11 +486,15 @@ namespace PCGExBlending
 	class PCGEXBLENDING_API FBlenderPool
 	{
 	public:
-		// Get or create a blend operation
+		// Get or create a blend operation.
+		// For unknown types, InValueSize/InValueAlignment are forwarded to FCopyOnlyBlendOperation.
+		// Copy-only operations are NOT cached (size-specific per attribute).
 		TSharedPtr<IBlendOperation> Get(
 			EPCGMetadataTypes WorkingType,
 			EPCGExABBlendingType BlendMode,
-			bool bResetForMultiBlend = true);
+			bool bResetForMultiBlend = true,
+			int32 InValueSize = 0,
+			int32 InValueAlignment = 1);
 
 		// Clear all cached operations
 		void Clear();

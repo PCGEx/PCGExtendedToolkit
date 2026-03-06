@@ -34,7 +34,9 @@ namespace PCGExBlending
 	TSharedPtr<IBlendOperation> FBlendOperationFactory::Create(
 		EPCGMetadataTypes WorkingType,
 		EPCGExABBlendingType BlendMode,
-		bool bResetForMultiBlend)
+		bool bResetForMultiBlend,
+		int32 InValueSize,
+		int32 InValueAlignment)
 	{
 		switch (WorkingType)
 		{
@@ -53,7 +55,12 @@ namespace PCGExBlending
 		case EPCGMetadataTypes::Name: return CreateTyped<FName>(BlendMode, bResetForMultiBlend);
 		case EPCGMetadataTypes::SoftObjectPath: return CreateTyped<FSoftObjectPath>(BlendMode, bResetForMultiBlend);
 		case EPCGMetadataTypes::SoftClassPath: return CreateTyped<FSoftClassPath>(BlendMode, bResetForMultiBlend);
-		default: return nullptr;
+		default:
+			if (InValueSize > 0)
+			{
+				return MakeShared<FCopyOnlyBlendOperation>(InValueSize, InValueAlignment, BlendMode, bResetForMultiBlend);
+			}
+			return nullptr;
 		}
 	}
 
@@ -62,8 +69,16 @@ namespace PCGExBlending
 	TSharedPtr<IBlendOperation> FBlenderPool::Get(
 		EPCGMetadataTypes WorkingType,
 		EPCGExABBlendingType BlendMode,
-		bool bResetForMultiBlend)
+		bool bResetForMultiBlend,
+		int32 InValueSize,
+		int32 InValueAlignment)
 	{
+		// Copy-only operations are size-specific per attribute — don't cache them
+		if (InValueSize > 0 && WorkingType == EPCGMetadataTypes::Unknown)
+		{
+			return FBlendOperationFactory::Create(WorkingType, BlendMode, bResetForMultiBlend, InValueSize, InValueAlignment);
+		}
+
 		FKey Key{WorkingType, BlendMode, bResetForMultiBlend};
 
 		{
@@ -72,7 +87,7 @@ namespace PCGExBlending
 		}
 
 		// Create new operation outside lock
-		TSharedPtr<IBlendOperation> NewOp = FBlendOperationFactory::Create(WorkingType, BlendMode, bResetForMultiBlend);
+		TSharedPtr<IBlendOperation> NewOp = FBlendOperationFactory::Create(WorkingType, BlendMode, bResetForMultiBlend, InValueSize, InValueAlignment);
 
 		if (NewOp.IsValid())
 		{
