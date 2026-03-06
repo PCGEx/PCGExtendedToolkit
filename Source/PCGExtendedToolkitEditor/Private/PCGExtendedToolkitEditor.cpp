@@ -85,7 +85,7 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		PCGEX_ADD_CLASS_ICON(PCGExCustomActorDataPacker)
 		PCGEX_ADD_CLASS_ICON(PCGExBeacon)
 		PCGEX_ADD_CLASS_ICON(PCGExBitmaskCollection)
-		
+
 		PCGEX_ADD_CLASS_ICON(PCGExValencyBondingRules)
 		PCGEX_ADD_CLASS_ICON(PCGExValencyConnectorSet)
 		PCGEX_ADD_CLASS_ICON(PCGExValencyOrbitalSet)
@@ -95,6 +95,21 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 
 		PCGEX_REGISTER_PIN_ICON(OUT_RecursionTracker)
 		PCGEX_REGISTER_PIN_ICON(IN_RecursionTracker)
+
+		for (int32 Bit = 0; Bit < 64; Bit++)
+		{
+			const FString IconName = FString::Printf(TEXT("bits_bit_%d"), Bit);
+			const FString StyleKey = FString::Printf(TEXT("PCGEx.Bit.%d"), Bit);
+			const FString StyleKey16 = FString::Printf(TEXT("PCGEx.Bit.%d_16"), Bit);
+			const FString FullPath = InStyle->RootToContentDir(*FString::Printf(TEXT("Bits/%s"), *IconName), TEXT(".svg"));
+
+
+			AppStyle.Set(*StyleKey, new FSlateVectorImageBrush(FullPath, FVector2D(8.0f)));
+			InStyle->Set(*StyleKey, new FSlateVectorImageBrush(FullPath, FVector2D(8.0f)));
+
+			AppStyle.Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
+			InStyle->Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
+		}
 	}
 
 	for (IPCGExModuleInterface* Module : IPCGExModuleInterface::RegisteredModules)

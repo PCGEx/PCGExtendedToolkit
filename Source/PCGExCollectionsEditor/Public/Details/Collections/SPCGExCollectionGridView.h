@@ -33,8 +33,12 @@ ENUM_CLASS_FLAGS(EPCGExStructuralRefreshFlags);
  * Grid/tile view of collection entries with categorized grouping.
  * Left pane: SScrollBox with collapsible category groups, each containing a SWrapBox of tiles.
  * Right pane: IStructureDetailsView showing only the selected entry struct.
+ *
+ * This widget is created automatically by FPCGExAssetCollectionEditor::CreateGridTab().
+ * Custom collection editors normally don't need to subclass this directly — override the
+ * editor's tile picker virtuals instead (GetTilePickerPropertyName, BuildTilePickerWidget).
  */
-class SPCGExCollectionGridView : public SCompoundWidget
+class PCGEXCOLLECTIONSEDITOR_API SPCGExCollectionGridView : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SPCGExCollectionGridView)
@@ -132,8 +136,19 @@ private:
 
 	// Detail panel management
 	void UpdateDetailForSelection();
-	void SyncStructToCollection(const FProperty* ChangedMemberProperty);
+	void SyncStructToCollection(const FProperty* ChangedMemberProperty, const FProperty* ChangedLeafProperty);
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
+
+	/**
+	 * Recursively propagate only changed sub-properties from NewData to DstData,
+	 * using OldData as baseline for comparison.
+	 * For array elements with a bEnabled field, only propagates non-gate fields
+	 * to elements where bEnabled is true in the destination.
+	 */
+	static void PropagateChangedProperties(
+		const uint8* OldData, const uint8* NewData, uint8* DstData,
+		const UStruct* Struct, bool bCheckEnabledGate = false);
+
 	bool bIsSyncing = false;
 	bool bIsBatchOperation = false;
 	bool bPendingCategoryRefresh = false;

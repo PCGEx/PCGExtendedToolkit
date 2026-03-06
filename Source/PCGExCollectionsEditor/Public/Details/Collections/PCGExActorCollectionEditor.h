@@ -8,6 +8,7 @@
 
 class UPCGExAssetCollection;
 
+/** Actor collection editor — reference implementation with custom add-menu content. */
 class FPCGExActorCollectionEditor : public FPCGExAssetCollectionEditor
 {
 public:

@@ -21,9 +21,7 @@ namespace PCGExMeshCollectionActions
 		bool bIsNewCollection = false);
 };
 
-/**
- * 
- */
+/** Asset type actions for mesh collections — registers editor and context menu actions. Reference implementation. */
 class FPCGExMeshCollectionActions : public FAssetTypeActions_Base
 {
 public:

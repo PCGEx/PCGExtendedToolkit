@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
   "Version": 1,
-  "VersionName": "0.75",
+  "VersionName": "0.75.1",
   "FriendlyName": "PCGEx",
   "Description": "A rather large toolset that expand on existing PCG capabilities in unique ways.",
   "Category": "PCG",
