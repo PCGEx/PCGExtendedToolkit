@@ -17,7 +17,7 @@
 
 #include "PCGExTexParamFactoryProvider.generated.h"
 
-class UPCGBaseTextureData;
+class UPCGTexture2DSingleBaseData;
 class UMaterialInterface;
 
 namespace PCGExData

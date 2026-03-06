@@ -57,7 +57,7 @@ TArray<FPCGPinProperties> UPCGExIterationsSettings::OutputPinProperties() const
 		break;
 	case EPCGExIterationDataType::Spline: Pin.AllowedTypes = FPCGDataTypeInfoSpline::AsId();
 		break;
-	case EPCGExIterationDataType::Texture: Pin.AllowedTypes = FPCGDataTypeInfoBaseTexture2D::AsId();
+	case EPCGExIterationDataType::Texture: Pin.AllowedTypes = FPCGDataTypeInfoTexture2D::AsId();
 		break;
 	}
 #endif

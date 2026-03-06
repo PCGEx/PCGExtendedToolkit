@@ -131,7 +131,7 @@ namespace PCGExTexture
 		TArray<FPCGTaggedData> TaggedTexData = InContext->InputData.GetInputsByPin(InPin);
 		for (const FPCGTaggedData& TaggedData : TaggedTexData)
 		{
-			const UPCGBaseTextureData* BaseTextureData = Cast<UPCGBaseTextureData>(TaggedData.Data);
+			const UPCGTexture2DSingleBaseData* BaseTextureData = Cast<UPCGTexture2DSingleBaseData>(TaggedData.Data);
 			if (!BaseTextureData) { continue; }
 
 			if (const UPCGTextureData* TextureData = Cast<UPCGTextureData>(BaseTextureData))
@@ -159,9 +159,9 @@ namespace PCGExTexture
 		}
 	}
 
-	const UPCGBaseTextureData* FLookup::TryGetTextureData(const FString& InPath) const
+	const UPCGTexture2DSingleBaseData* FLookup::TryGetTextureData(const FString& InPath) const
 	{
-		const UPCGBaseTextureData* const* Ptr = TextureDataMap.Find(InPath);
+		const UPCGTexture2DSingleBaseData* const* Ptr = TextureDataMap.Find(InPath);
 		return Ptr ? *Ptr : nullptr;
 	}
 }

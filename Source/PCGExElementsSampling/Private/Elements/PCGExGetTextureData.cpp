@@ -167,7 +167,7 @@ void FPCGExGetTextureDataContext::AdvanceProcessing(const int32 Index)
 		});
 	};
 
-	auto ApplySettings = [&](UPCGBaseTextureData* InTex)
+	auto ApplySettings = [&](UPCGTexture2DSingleBaseData* InTex)
 	{
 		InTex->Filter = Settings->Filter == EPCGExTextureFilter::Bilinear ? EPCGTextureFilter::Bilinear : EPCGTextureFilter::Point;
 
