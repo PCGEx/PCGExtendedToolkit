@@ -19,6 +19,9 @@
 #include "Types/PCGExAttributeIdentity.h"
 #include "Types/PCGExTypes.h"
 #include "Metadata/PCGMetadataAttributeGeneric.h"
+#include "Metadata/PCGMetadataDomain.h"
+#include "UObject/TextProperty.h"
+#include "UObject/UnrealType.h"
 
 namespace PCGExData
 {
@@ -88,12 +91,6 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 	}
 
 	template <typename T>
-	const FPCGMetadataAttribute<T>* TBuffer<T>::GetTypedInAttribute() const { return TypedInAttribute; }
-
-	template <typename T>
-	FPCGMetadataAttribute<T>* TBuffer<T>::GetTypedOutAttribute() const { return TypedOutAttribute; }
-
-	template <typename T>
 	void TBuffer<T>::ReadVoid(const int32 Index, void* OutValue) const { *static_cast<T*>(OutValue) = Read(Index); }
 
 	template <typename T>
@@ -115,8 +112,14 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 	void TBuffer<T>::DumpValues(const TSharedPtr<TArray<T>>& OutValues) const { DumpValues(*OutValues.Get()); }
 
 	template <typename T>
-	TArrayBuffer<T>::TArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+	TLegacyBuffer<T>::TLegacyBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
 		: TBuffer<T>(InSource, InIdentifier)
+	{
+	}
+
+	template <typename T>
+	TArrayBuffer<T>::TArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+		: TLegacyBuffer<T>(InSource, InIdentifier)
 	{
 		check(InIdentifier.MetadataDomain.Flag != EPCGMetadataDomainFlag::Data)
 		this->UnderlyingDomain = EDomainType::Elements;
@@ -283,10 +286,7 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 			return false;
 		}
 
-		UPCGMetadata* InMetadata = Source->GetIn()->Metadata;
-		check(InMetadata)
-
-		TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, InMetadata);
+		TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, TypedInAttribute->GetMetadataDomain());
 
 		if (!InAccessor.IsValid())
 		{
@@ -377,7 +377,7 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 
 		if (!TypedOutAttribute) { return false; }
 
-		TUniquePtr<IPCGAttributeAccessor> OutAccessor = PCGAttributeAccessorHelpers::CreateAccessor(TypedOutAttribute, Source->GetOut()->Metadata);
+		TUniquePtr<IPCGAttributeAccessor> OutAccessor = PCGAttributeAccessorHelpers::CreateAccessor(TypedOutAttribute, const_cast<FPCGMetadataDomain*>(TypedOutAttribute->GetMetadataDomain()));
 
 		if (!TypedOutAttribute || !OutAccessor.IsValid())
 		{
@@ -448,7 +448,7 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 			return;
 		}
 
-		TUniquePtr<IPCGAttributeAccessor> OutAccessor = PCGAttributeAccessorHelpers::CreateAccessor(TypedOutAttribute, Source->GetOut()->Metadata);
+		TUniquePtr<IPCGAttributeAccessor> OutAccessor = PCGAttributeAccessorHelpers::CreateAccessor(TypedOutAttribute, const_cast<FPCGMetadataDomain*>(TypedOutAttribute->GetMetadataDomain()));
 		if (!OutAccessor.IsValid()) { return; }
 
 		// Mark this attribute as protected so the consumable-attributes cleanup
@@ -465,7 +465,7 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		if (!IsSparse() || bReadComplete || !IsEnabled()) { return; }
 		if (InternalBroadcaster) { InternalBroadcaster->Fetch(*InValues, Scope); }
 
-		if (TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, Source->GetIn()->Metadata); InAccessor.IsValid())
+		if (TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, TypedInAttribute->GetMetadataDomain()); InAccessor.IsValid())
 		{
 			TArrayView<T> ReadRange = MakeArrayView(InValues->GetData() + Scope.Start, Scope.Count);
 			InAccessor->GetRange<T>(ReadRange, Scope.Start, *Source->GetInKeys());
@@ -503,7 +503,7 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 
 	template <typename T>
 	TSingleValueBuffer<T>::TSingleValueBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
-		: TBuffer<T>(InSource, InIdentifier)
+		: TLegacyBuffer<T>(InSource, InIdentifier)
 	{
 		check(InIdentifier.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
 		this->UnderlyingDomain = EDomainType::Data;
@@ -692,8 +692,12 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 
 #define PCGEX_TPL(_TYPE, _NAME, ...)\
 template class PCGEXCORE_API TBuffer<_TYPE>;\
+template class PCGEXCORE_API TLegacyBuffer<_TYPE>;\
 template class PCGEXCORE_API TArrayBuffer<_TYPE>;\
-template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
+template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;\
+template class PCGEXCORE_API TGenericBuffer<_TYPE>;\
+template class PCGEXCORE_API TGenericArrayBuffer<_TYPE>;\
+template class PCGEXCORE_API TGenericSingleValueBuffer<_TYPE>;
 
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 
@@ -703,49 +707,540 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 
 #pragma endregion
 
-#pragma region FGenericBuffer
+#pragma region TGenericBuffer
 
-	FGenericBuffer::FGenericBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier, int32 InElementSize, int32 InElementAlignment)
+	template <typename T>
+	TGenericBuffer<T>::TGenericBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+		: TBuffer<T>(InSource, InIdentifier)
+	{
+	}
+
+	template <typename T>
+	TGenericArrayBuffer<T>::TGenericArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+		: TGenericBuffer<T>(InSource, InIdentifier)
+	{
+		check(InIdentifier.MetadataDomain.Flag != EPCGMetadataDomainFlag::Data)
+		this->UnderlyingDomain = EDomainType::Elements;
+	}
+
+	template <typename T>
+	int32 TGenericArrayBuffer<T>::GetNumValues(const EIOSide InSide)
+	{
+		if (InSide == EIOSide::In) { return InValues ? InValues->Num() : -1; }
+		return OutValues ? OutValues->Num() : -1;
+	}
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::IsWritable() { return OutValues ? true : false; }
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::IsReadable() { return InValues ? true : false; }
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::ReadsFromOutput() { return InValues == OutValues; }
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::EnsureReadable()
+	{
+		if (InValues) { return true; }
+		InValues = OutValues;
+		return InValues ? true : false;
+	}
+
+	template <typename T>
+	const T& TGenericArrayBuffer<T>::Read(const int32 Index) const { return *(InValues->GetData() + Index); }
+
+	template <typename T>
+	const void TGenericArrayBuffer<T>::Read(const int32 Start, TArrayView<T> OutResults) const
+	{
+		const int32 Count = OutResults.Num();
+		for (int i = 0; i < Count; i++) { OutResults[i] = *(InValues->GetData() + (Start + i)); }
+	}
+
+	template <typename T>
+	const T& TGenericArrayBuffer<T>::GetValue(const int32 Index) { return *(OutValues->GetData() + Index); }
+
+	template <typename T>
+	const void TGenericArrayBuffer<T>::GetValues(const int32 Start, TArrayView<T> OutResults)
+	{
+		const int32 Count = OutResults.Num();
+		for (int i = 0; i < Count; i++) { OutResults[i] = *(OutValues->GetData() + (Start + i)); }
+	}
+
+	template <typename T>
+	void TGenericArrayBuffer<T>::SetValue(const int32 Index, const T& Value) { *(OutValues->GetData() + Index) = Value; }
+
+	template <typename T>
+	PCGExValueHash TGenericArrayBuffer<T>::ReadValueHash(const int32 Index) { return PCGExTypes::ComputeHash(Read(Index)); }
+
+	template <typename T>
+	PCGExValueHash TGenericArrayBuffer<T>::GetValueHash(const int32 Index) { return PCGExTypes::ComputeHash(GetValue(Index)); }
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::InitForRead(const EIOSide InSide, const bool bScoped)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (InValues) { return true; }
+
+		if (InSide == EIOSide::Out)
+		{
+			check(OutValues)
+			InValues = OutValues;
+			return true;
+		}
+
+		const UPCGBasePointData* PointData = Source->GetIn();
+		if (!PointData) { return false; }
+
+		const FPCGMetadataAttributeBase* Attr = Source->FindConstAttribute(Identifier, InSide);
+		if (!Attr || !Attr->IsGeneric()) { return false; }
+
+		GenericInAttribute = static_cast<const FPCGMetadataAttributeGeneric*>(Attr);
+		InAttribute = Attr;
+
+		const int32 NumPoints = PointData->GetNumPoints();
+		InValues = MakeShared<TArray<T>>();
+		PCGExArrayHelpers::InitArray(InValues, NumPoints);
+
+		TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(GenericInAttribute, GenericInAttribute->GetMetadataDomain());
+		if (InAccessor.IsValid())
+		{
+			TArrayView<T> InRange = MakeArrayView(InValues->GetData(), InValues->Num());
+			InAccessor->GetRange<T>(InRange, 0, *Source->GetInKeys());
+		}
+
+		bReadComplete = true;
+		return true;
+	}
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::InitForBroadcast(const FPCGAttributePropertyInputSelector& InSelector, const bool bCaptureMinMax, const bool bScoped, const bool bQuiet)
+	{
+		return false; // Not supported for generic attributes
+	}
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::InitForWrite(const T& DefaultValue, bool bAllowInterpolation, EBufferInit Init)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (OutValues) { return true; }
+
+		UPCGBasePointData* OutData = Source->GetOut();
+		if (!OutData) { return false; }
+
+		FPCGMetadataDomain* Domain = OutData->Metadata->GetMetadataDomain(Identifier.MetadataDomain);
+		if (!Domain) { Domain = OutData->Metadata->GetDefaultMetadataDomain(); }
+
+		this->bIsNewOutput = !PCGExMetaHelpers::HasAttribute(OutData, Identifier);
+
+		GenericOutAttribute = this->bIsNewOutput
+			? Domain->template CreateGenericAttribute<T>(Identifier.Name, DefaultValue, bAllowInterpolation)
+			: Domain->GetMutableGenericAttribute(Identifier.Name);
+
+		if (!GenericOutAttribute)
+		{
+			GenericOutAttribute = Domain->template CreateGenericAttribute<T>(Identifier.Name, DefaultValue, bAllowInterpolation);
+		}
+
+		if (!GenericOutAttribute) { return false; }
+
+		OutAttribute = GenericOutAttribute;
+
+		OutValues = MakeShared<TArray<T>>();
+		OutValues->Init(DefaultValue, OutData->GetNumPoints());
+
+		if (Init == EBufferInit::Inherit)
+		{
+			TUniquePtr<IPCGAttributeAccessor> OutAccessor = PCGAttributeAccessorHelpers::CreateAccessor(GenericOutAttribute, const_cast<FPCGMetadataDomain*>(GenericOutAttribute->GetMetadataDomain()));
+			if (OutAccessor.IsValid())
+			{
+				TUniquePtr<FPCGAttributeAccessorKeysPointIndices> TempOutKeys = MakeUnique<FPCGAttributeAccessorKeysPointIndices>(OutData, false);
+				TArrayView<T> OutRange = MakeArrayView(OutValues->GetData(), OutValues->Num());
+				OutAccessor->template GetRange<T>(OutRange, 0, *TempOutKeys.Get());
+			}
+		}
+
+		return true;
+	}
+
+	template <typename T>
+	bool TGenericArrayBuffer<T>::InitForWrite(const EBufferInit Init)
+	{
+		return InitForWrite(T{}, true, Init);
+	}
+
+	template <typename T>
+	void TGenericArrayBuffer<T>::Write(const bool bEnsureValidKeys)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(TGenericArrayBuffer::Write);
+
+		PCGEX_SHARED_CONTEXT_VOID(Source->GetContextHandle())
+
+		if (!IsWritable() || !OutValues || !IsEnabled()) { return; }
+		if (!Source->GetOut() || !GenericOutAttribute) { return; }
+
+		TUniquePtr<IPCGAttributeAccessor> OutAccessor = PCGAttributeAccessorHelpers::CreateAccessor(GenericOutAttribute, const_cast<FPCGMetadataDomain*>(GenericOutAttribute->GetMetadataDomain()));
+		if (!OutAccessor.IsValid()) { return; }
+
+		SharedContext.Get()->AddProtectedAttributeName(GenericOutAttribute->Name);
+
+		TArrayView<const T> View = MakeArrayView(OutValues->GetData(), OutValues->Num());
+		OutAccessor->SetRange<T>(View, 0, *Source->GetOutKeys(bEnsureValidKeys).Get());
+	}
+
+	template <typename T>
+	void TGenericArrayBuffer<T>::Flush()
+	{
+		InValues.Reset();
+		OutValues.Reset();
+	}
+
+	template <typename T>
+	TGenericSingleValueBuffer<T>::TGenericSingleValueBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+		: TGenericBuffer<T>(InSource, InIdentifier)
+	{
+		check(InIdentifier.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
+		this->UnderlyingDomain = EDomainType::Data;
+	}
+
+	template <typename T>
+	int32 TGenericSingleValueBuffer<T>::GetNumValues(const EIOSide InSide) { return 1; }
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::IsWritable() { return bWriteInitialized; }
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::IsReadable() { return bReadInitialized; }
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::ReadsFromOutput() { return bReadFromOutput; }
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::EnsureReadable()
+	{
+		if (bReadInitialized) { return true; }
+		InValue = OutValue;
+		bReadFromOutput = true;
+		bReadInitialized = bWriteInitialized;
+		return bReadInitialized;
+	}
+
+	template <typename T>
+	const T& TGenericSingleValueBuffer<T>::Read(const int32 Index) const { return InValue; }
+
+	template <typename T>
+	const void TGenericSingleValueBuffer<T>::Read(const int32 Start, TArrayView<T> OutResults) const
+	{
+		for (int i = 0; i < OutResults.Num(); i++) { OutResults[i] = InValue; }
+	}
+
+	template <typename T>
+	const T& TGenericSingleValueBuffer<T>::GetValue(const int32 Index)
+	{
+		FReadScopeLock ReadScopeLock(BufferLock);
+		return OutValue;
+	}
+
+	template <typename T>
+	const void TGenericSingleValueBuffer<T>::GetValues(const int32 Start, TArrayView<T> OutResults)
+	{
+		FReadScopeLock ReadScopeLock(BufferLock);
+		for (int i = 0; i < OutResults.Num(); i++) { OutResults[i] = OutValue; }
+	}
+
+	template <typename T>
+	void TGenericSingleValueBuffer<T>::SetValue(const int32 Index, const T& Value)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+		OutValue = Value;
+		if (bReadFromOutput) { InValue = Value; }
+	}
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::InitForRead(const EIOSide InSide, const bool bScoped)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bReadInitialized) { return true; }
+
+		if (InSide == EIOSide::Out)
+		{
+			check(bWriteInitialized)
+			bReadInitialized = bReadFromOutput = true;
+			InValue = OutValue;
+			return true;
+		}
+
+		const FPCGMetadataAttributeBase* Attr = Source->FindConstAttribute(Identifier, InSide);
+		if (!Attr || !Attr->IsGeneric()) { return false; }
+
+		GenericInAttribute = static_cast<const FPCGMetadataAttributeGeneric*>(Attr);
+		InAttribute = Attr;
+
+		InValue = GenericInAttribute->template GetValueFromItemKey<T>(PCGDefaultValueKey);
+		bReadInitialized = true;
+
+		return true;
+	}
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::InitForBroadcast(const FPCGAttributePropertyInputSelector& InSelector, const bool bCaptureMinMax, const bool bScoped, const bool bQuiet)
+	{
+		return false; // Not supported for generic attributes
+	}
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::InitForWrite(const T& DefaultValue, bool bAllowInterpolation, EBufferInit Init)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bWriteInitialized) { return true; }
+
+		UPCGBasePointData* OutData = Source->GetOut();
+		if (!OutData) { return false; }
+
+		FPCGMetadataDomain* Domain = OutData->Metadata->GetMetadataDomain(Identifier.MetadataDomain);
+		if (!Domain) { Domain = OutData->Metadata->GetDefaultMetadataDomain(); }
+
+		this->bIsNewOutput = !PCGExMetaHelpers::HasAttribute(OutData, Identifier);
+
+		GenericOutAttribute = this->bIsNewOutput
+			? Domain->template CreateGenericAttribute<T>(Identifier.Name, DefaultValue, bAllowInterpolation)
+			: Domain->GetMutableGenericAttribute(Identifier.Name);
+
+		if (!GenericOutAttribute)
+		{
+			GenericOutAttribute = Domain->template CreateGenericAttribute<T>(Identifier.Name, DefaultValue, bAllowInterpolation);
+		}
+
+		if (!GenericOutAttribute) { return false; }
+
+		OutAttribute = GenericOutAttribute;
+		bWriteInitialized = true;
+		OutValue = DefaultValue;
+
+		if (Init == EBufferInit::Inherit)
+		{
+			OutValue = GenericOutAttribute->template GetValueFromItemKey<T>(PCGDefaultValueKey);
+		}
+
+		return true;
+	}
+
+	template <typename T>
+	bool TGenericSingleValueBuffer<T>::InitForWrite(const EBufferInit Init)
+	{
+		return InitForWrite(T{}, true, Init);
+	}
+
+	template <typename T>
+	void TGenericSingleValueBuffer<T>::Write(const bool bEnsureValidKeys)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(TGenericSingleValueBuffer::Write);
+
+		PCGEX_SHARED_CONTEXT_VOID(Source->GetContextHandle())
+
+		if (!IsWritable() || !IsEnabled()) { return; }
+		if (!Source->GetOut() || !GenericOutAttribute) { return; }
+
+		GenericOutAttribute->template SetValue<T>(PCGDefaultValueKey, OutValue);
+	}
+
+#pragma endregion
+
+#pragma region FPropertyBuffer
+
+	FPropertyBuffer::FPropertyBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
 		: IBuffer(InSource, InIdentifier)
-		, ElementSize(InElementSize)
-		, ElementAlignment(InElementAlignment)
 	{
 		SetType(EPCGMetadataTypes::Unknown);
 	}
 
-	int32 FGenericBuffer::GetNumValues(const EIOSide InSide)
+	FPropertyBuffer::~FPropertyBuffer()
 	{
-		if (InSide == EIOSide::In)
+		delete CachedInnerProperty;
+		CachedInnerProperty = nullptr;
+	}
+
+	FProperty* FPropertyBuffer::CreateInnerPropertyFromDesc(const FPCGMetadataAttributeDesc& Desc)
+	{
+		// Construct an FProperty matching the inner element type of a generic attribute.
+		// This mirrors PCG::Private::CreatePropertyFromDesc for non-container leaf types.
+		// The constructed property passes SameType() against the attribute's internal property.
+
+		const UScriptStruct* ScriptStruct = nullptr;
+
+		switch (Desc.ValueType)
 		{
-			return InBytes ? InBytes->Num() / FMath::Max(1, ElementSize) : 0;
+		case EPCGMetadataTypes::Boolean:
+			{
+				FBoolProperty* Prop = new FBoolProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetBoolSize(sizeof(bool), true);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Byte:
+			{
+				FByteProperty* Prop = new FByteProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Integer32:
+			{
+				FIntProperty* Prop = new FIntProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Integer64:
+			{
+				FInt64Property* Prop = new FInt64Property(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Float:
+			{
+				FFloatProperty* Prop = new FFloatProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Double:
+			{
+				FDoubleProperty* Prop = new FDoubleProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Name:
+			{
+				FNameProperty* Prop = new FNameProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::String:
+			{
+				FStrProperty* Prop = new FStrProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Text:
+			{
+				FTextProperty* Prop = new FTextProperty(FFieldVariant{nullptr}, Desc.Name);
+				return Prop;
+			}
+		case EPCGMetadataTypes::Enum:
+			if (const UEnum* Enum = Cast<UEnum>(Desc.ValueTypeObject))
+			{
+				FEnumProperty* Prop = new FEnumProperty(FFieldVariant{nullptr}, Desc.Name);
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+				FNumericProperty* UnderlyingProp = new FByteProperty(Prop, TEXT("UnderlyingType"));
+				UnderlyingProp->SetPropertyFlags(CPF_HasGetValueTypeHash | CPF_IsPlainOldData);
+				Prop->SetEnum(const_cast<UEnum*>(Enum));
+				Prop->AddCppProperty(UnderlyingProp);
+				return Prop;
+			}
+			break;
+		case EPCGMetadataTypes::SoftObjectPath:
+			ScriptStruct = TBaseStructure<FSoftObjectPath>::Get();
+			break;
+		case EPCGMetadataTypes::SoftClassPath:
+			ScriptStruct = TBaseStructure<FSoftClassPath>::Get();
+			break;
+		case EPCGMetadataTypes::Vector2:
+			ScriptStruct = TBaseStructure<FVector2D>::Get();
+			break;
+		case EPCGMetadataTypes::Vector:
+			ScriptStruct = TBaseStructure<FVector>::Get();
+			break;
+		case EPCGMetadataTypes::Vector4:
+			ScriptStruct = TBaseStructure<FVector4>::Get();
+			break;
+		case EPCGMetadataTypes::Quaternion:
+			ScriptStruct = TBaseStructure<FQuat>::Get();
+			break;
+		case EPCGMetadataTypes::Rotator:
+			ScriptStruct = TBaseStructure<FRotator>::Get();
+			break;
+		case EPCGMetadataTypes::Transform:
+			ScriptStruct = TBaseStructure<FTransform>::Get();
+			break;
+		case EPCGMetadataTypes::Struct:
+			ScriptStruct = Cast<UScriptStruct>(Desc.ValueTypeObject);
+			break;
+		default:
+			break;
 		}
+
+		if (ScriptStruct)
+		{
+			FStructProperty* Prop = new FStructProperty(FFieldVariant{nullptr}, Desc.Name);
+			Prop->Struct = const_cast<UScriptStruct*>(ScriptStruct);
+
+			if (ScriptStruct->GetCppStructOps() && ScriptStruct->GetCppStructOps()->HasGetTypeHash())
+			{
+				Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
+			}
+
+			if (ScriptStruct->StructFlags & STRUCT_HasInstancedReference)
+			{
+				Prop->SetPropertyFlags(CPF_ContainsInstancedReference);
+			}
+
+			return Prop;
+		}
+
+		return nullptr;
+	}
+
+	bool FPropertyBuffer::InitProperty(const FPCGMetadataAttributeGeneric* InGenericAttribute)
+	{
+		if (!InGenericAttribute) { return false; }
+
+		const FPCGMetadataAttributeDesc& Desc = InGenericAttribute->GetAttributeDesc();
+
+		// For container types, we'd need to handle the inner element type.
+		// For now, construct the inner property from the desc (ignoring container wrappers).
+		FPCGMetadataAttributeDesc InnerDesc = Desc;
+		InnerDesc.ContainerTypes.Reset();
+
+		CachedInnerProperty = CreateInnerPropertyFromDesc(InnerDesc);
+		if (!CachedInnerProperty) { return false; }
+
+		ElementSize = PCGExTypes::GetElementSizeFromAttribute(InGenericAttribute);
+		return ElementSize > 0;
+	}
+
+	FPropertyArrayBuffer::FPropertyArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+		: FPropertyBuffer(InSource, InIdentifier)
+	{
+		check(InIdentifier.MetadataDomain.Flag != EPCGMetadataDomainFlag::Data)
+		UnderlyingDomain = EDomainType::Elements;
+	}
+
+	int32 FPropertyArrayBuffer::GetNumValues(const EIOSide InSide)
+	{
+		if (InSide == EIOSide::In) { return InBytes ? InBytes->Num() / FMath::Max(1, ElementSize) : 0; }
 		return OutBytes ? OutBytes->Num() / FMath::Max(1, ElementSize) : 0;
 	}
 
-	bool FGenericBuffer::IsWritable() { return OutBytes != nullptr; }
-	bool FGenericBuffer::IsReadable() { return InBytes != nullptr; }
-	bool FGenericBuffer::ReadsFromOutput() { return bReadFromOutput; }
+	bool FPropertyArrayBuffer::IsWritable() { return OutBytes != nullptr; }
+	bool FPropertyArrayBuffer::IsReadable() { return InBytes != nullptr; }
+	bool FPropertyArrayBuffer::ReadsFromOutput() { return InBytes == OutBytes; }
 
-	bool FGenericBuffer::EnsureReadable()
+	bool FPropertyArrayBuffer::EnsureReadable()
 	{
-		if (bReadInitialized) { return InBytes != nullptr; }
+		if (InBytes) { return true; }
 
-		// If we have output data, read from it
 		if (OutBytes)
 		{
-			if (!InBytes)
-			{
-				InBytes = OutBytes;
-				bReadFromOutput = true;
-			}
-			bReadInitialized = true;
+			InBytes = OutBytes;
 			return true;
 		}
 
 		return InitForRead(EIOSide::In);
 	}
 
-	void FGenericBuffer::ReadVoid(const int32 Index, void* OutValue) const
+	void FPropertyArrayBuffer::ReadVoid(const int32 Index, void* OutValue) const
 	{
 		check(InBytes && ElementSize > 0);
 		const int32 Offset = Index * ElementSize;
@@ -753,7 +1248,7 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		FMemory::Memcpy(OutValue, InBytes->GetData() + Offset, ElementSize);
 	}
 
-	void FGenericBuffer::SetVoid(const int32 Index, const void* Value)
+	void FPropertyArrayBuffer::SetVoid(const int32 Index, const void* Value)
 	{
 		check(OutBytes && ElementSize > 0);
 		const int32 Offset = Index * ElementSize;
@@ -761,7 +1256,7 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		FMemory::Memcpy(OutBytes->GetData() + Offset, Value, ElementSize);
 	}
 
-	void FGenericBuffer::GetVoid(const int32 Index, void* OutValue)
+	void FPropertyArrayBuffer::GetVoid(const int32 Index, void* OutValue)
 	{
 		if (OutBytes)
 		{
@@ -773,29 +1268,23 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		ReadVoid(Index, OutValue);
 	}
 
-	PCGExValueHash FGenericBuffer::ReadValueHash(const int32 Index)
+	PCGExValueHash FPropertyArrayBuffer::ReadValueHash(const int32 Index)
 	{
 		if (!InBytes || ElementSize <= 0) { return 0; }
-		const int32 Offset = Index * ElementSize;
-		return FCrc::MemCrc32(InBytes->GetData() + Offset, ElementSize);
+		return FCrc::MemCrc32(InBytes->GetData() + Index * ElementSize, ElementSize);
 	}
 
-	PCGExValueHash FGenericBuffer::GetValueHash(const int32 Index)
+	PCGExValueHash FPropertyArrayBuffer::GetValueHash(const int32 Index)
 	{
-		if (OutBytes && ElementSize > 0)
-		{
-			const int32 Offset = Index * ElementSize;
-			return FCrc::MemCrc32(OutBytes->GetData() + Offset, ElementSize);
-		}
+		if (OutBytes && ElementSize > 0) { return FCrc::MemCrc32(OutBytes->GetData() + Index * ElementSize, ElementSize); }
 		return ReadValueHash(Index);
 	}
 
-	bool FGenericBuffer::InitForRead(const EIOSide InSide)
+	bool FPropertyArrayBuffer::InitForRead(const EIOSide InSide)
 	{
 		FWriteScopeLock WriteScopeLock(BufferLock);
 
-		if (bReadInitialized) { return InBytes != nullptr; }
-		bReadInitialized = true;
+		if (InBytes) { return true; }
 
 		if (ElementSize <= 0) { return false; }
 
@@ -805,19 +1294,22 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		const FPCGMetadataAttributeBase* Attr = Source->FindConstAttribute(Identifier, InSide);
 		if (!Attr || !Attr->IsGeneric()) { return false; }
 
+		GenericInAttribute = static_cast<const FPCGMetadataAttributeGeneric*>(Attr);
 		InAttribute = Attr;
-		const FPCGMetadataAttributeGeneric* GenericAttr = static_cast<const FPCGMetadataAttributeGeneric*>(Attr);
+
+		if (!CachedInnerProperty) { InitProperty(GenericInAttribute); }
+		if (!CachedInnerProperty || ElementSize <= 0) { return false; }
+
 		const int32 NumPoints = PointData->GetNumPoints();
 
 		InBytes = MakeShared<TArray<uint8>>();
 		InBytes->SetNumZeroed(NumPoints * ElementSize);
 
-		// Bulk read using metadata entry keys
 		auto EntryKeys = PointData->GetConstMetadataEntryValueRange();
 
 		for (int32 i = 0; i < NumPoints; i++)
 		{
-			const void* ReadAddr = GenericAttr->GetReadAddressFromEntryKey_Unsafe(EntryKeys[i]);
+			const void* ReadAddr = GenericInAttribute->GetReadAddressFromEntryKey_Unsafe(EntryKeys[i]);
 			if (ReadAddr)
 			{
 				FMemory::Memcpy(InBytes->GetData() + i * ElementSize, ReadAddr, ElementSize);
@@ -828,17 +1320,36 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		return true;
 	}
 
-	bool FGenericBuffer::InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init)
+	bool FPropertyArrayBuffer::InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init)
 	{
 		FWriteScopeLock WriteScopeLock(BufferLock);
 
-		if (bWriteInitialized) { return OutBytes != nullptr; }
-		bWriteInitialized = true;
+		if (OutBytes) { return true; }
 
 		if (ElementSize <= 0) { return false; }
 
 		const UPCGBasePointData* OutData = Source->GetOut();
 		if (!OutData) { return false; }
+
+		// Resolve the output generic attribute
+		if (SourceAttribute && SourceAttribute->IsGeneric())
+		{
+			// Look for existing attribute on output, or it should already exist from duplication
+			FPCGMetadataAttributeBase* MutableAttr = Source->FindMutableAttribute(Identifier, EIOSide::Out);
+			if (MutableAttr && MutableAttr->IsGeneric())
+			{
+				GenericOutAttribute = static_cast<FPCGMetadataAttributeGeneric*>(MutableAttr);
+				OutAttribute = GenericOutAttribute;
+			}
+
+			if (!CachedInnerProperty)
+			{
+				const FPCGMetadataAttributeGeneric* GenericSrc = static_cast<const FPCGMetadataAttributeGeneric*>(SourceAttribute);
+				InitProperty(GenericSrc);
+			}
+		}
+
+		if (!CachedInnerProperty || ElementSize <= 0) { return false; }
 
 		const int32 NumPoints = OutData->GetNumPoints();
 
@@ -865,24 +1376,179 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		return true;
 	}
 
-	void FGenericBuffer::Write(const bool bEnsureValidKeys)
+	void FPropertyArrayBuffer::Write(const bool bEnsureValidKeys)
 	{
-		if (!IsWritable() || !IsEnabled() || !OutBytes) { return; }
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPropertyArrayBuffer::Write);
 
-		// STUB: FPCGMetadataAttributeGeneric has no public raw-write API.
-		// SetValueFromProperty() requires a private FProperty*, and UnderlyingProperty is inaccessible.
-		// No GetMutableAddress/SetRawValue equivalent exists.
-		//
-		// WARNING: Any blend output written to OutBytes is LOST.
-		// Nodes can create generic-typed attributes (Struct, Enum, Object, etc.) programmatically
-		// even though they're hidden from UI — if such attributes flow into a blend path, results
-		// are silently discarded.
-		//
-		// When a public write API becomes available, this should:
-		//   1. Iterate OutBytes in ElementSize strides
-		//   2. Write each element back to the attribute's entry via the new API
-		//   3. Respect bEnsureValidKeys (call InitializeOnSet if needed)
-		ensureMsgf(false, TEXT("FGenericBuffer::Write() is not yet implemented — no public raw-write API on FPCGMetadataAttributeGeneric. Data will not be written back."));
+		if (!IsWritable() || !IsEnabled() || !OutBytes) { return; }
+		if (!GenericOutAttribute || !CachedInnerProperty) { return; }
+
+		const UPCGBasePointData* OutData = Source->GetOut();
+		if (!OutData) { return; }
+
+		PCGEX_SHARED_CONTEXT_VOID(Source->GetContextHandle())
+		SharedContext.Get()->AddProtectedAttributeName(GenericOutAttribute->Name);
+
+		auto EntryKeys = OutData->GetConstMetadataEntryValueRange();
+		const int32 NumPoints = FMath::Min(EntryKeys.Num(), OutBytes->Num() / FMath::Max(1, ElementSize));
+
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			GenericOutAttribute->SetValueFromProperty(
+				EntryKeys[i],
+				OutBytes->GetData() + i * ElementSize,
+				CachedInnerProperty);
+		}
+	}
+
+	void FPropertyArrayBuffer::Flush()
+	{
+		InBytes.Reset();
+		OutBytes.Reset();
+	}
+
+	FPropertySingleValueBuffer::FPropertySingleValueBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier)
+		: FPropertyBuffer(InSource, InIdentifier)
+	{
+		check(InIdentifier.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
+		UnderlyingDomain = EDomainType::Data;
+	}
+
+	int32 FPropertySingleValueBuffer::GetNumValues(const EIOSide InSide) { return 1; }
+
+	bool FPropertySingleValueBuffer::IsWritable() { return bWriteInitialized; }
+	bool FPropertySingleValueBuffer::IsReadable() { return bReadInitialized; }
+	bool FPropertySingleValueBuffer::ReadsFromOutput() { return bReadFromOutput; }
+
+	bool FPropertySingleValueBuffer::EnsureReadable()
+	{
+		if (bReadInitialized) { return true; }
+
+		if (bWriteInitialized && OutValue.Num() > 0)
+		{
+			InValue = OutValue;
+			bReadFromOutput = true;
+			bReadInitialized = true;
+			return true;
+		}
+
+		return InitForRead(EIOSide::In);
+	}
+
+	void FPropertySingleValueBuffer::ReadVoid(const int32 Index, void* OutVal) const
+	{
+		check(InValue.Num() >= ElementSize && ElementSize > 0);
+		FMemory::Memcpy(OutVal, InValue.GetData(), ElementSize);
+	}
+
+	void FPropertySingleValueBuffer::SetVoid(const int32 Index, const void* Value)
+	{
+		check(OutValue.Num() >= ElementSize && ElementSize > 0);
+		FMemory::Memcpy(OutValue.GetData(), Value, ElementSize);
+	}
+
+	void FPropertySingleValueBuffer::GetVoid(const int32 Index, void* OutVal)
+	{
+		if (OutValue.Num() >= ElementSize)
+		{
+			FMemory::Memcpy(OutVal, OutValue.GetData(), ElementSize);
+			return;
+		}
+		ReadVoid(Index, OutVal);
+	}
+
+	PCGExValueHash FPropertySingleValueBuffer::ReadValueHash(const int32 Index)
+	{
+		if (InValue.Num() < ElementSize || ElementSize <= 0) { return 0; }
+		return FCrc::MemCrc32(InValue.GetData(), ElementSize);
+	}
+
+	PCGExValueHash FPropertySingleValueBuffer::GetValueHash(const int32 Index)
+	{
+		if (OutValue.Num() >= ElementSize && ElementSize > 0) { return FCrc::MemCrc32(OutValue.GetData(), ElementSize); }
+		return ReadValueHash(Index);
+	}
+
+	bool FPropertySingleValueBuffer::InitForRead(const EIOSide InSide)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bReadInitialized) { return true; }
+
+		if (ElementSize <= 0) { return false; }
+
+		const FPCGMetadataAttributeBase* Attr = Source->FindConstAttribute(Identifier, InSide);
+		if (!Attr || !Attr->IsGeneric()) { return false; }
+
+		GenericInAttribute = static_cast<const FPCGMetadataAttributeGeneric*>(Attr);
+		InAttribute = Attr;
+
+		if (!CachedInnerProperty) { InitProperty(GenericInAttribute); }
+		if (!CachedInnerProperty || ElementSize <= 0) { return false; }
+
+		const void* ReadAddr = GenericInAttribute->GetReadAddressFromEntryKey_Unsafe(PCGDefaultValueKey);
+		InValue.SetNumZeroed(ElementSize);
+		if (ReadAddr) { FMemory::Memcpy(InValue.GetData(), ReadAddr, ElementSize); }
+
+		bReadInitialized = true;
+		bReadComplete = true;
+		return true;
+	}
+
+	bool FPropertySingleValueBuffer::InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init)
+	{
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bWriteInitialized) { return true; }
+
+		if (ElementSize <= 0) { return false; }
+
+		if (SourceAttribute && SourceAttribute->IsGeneric())
+		{
+			FPCGMetadataAttributeBase* MutableAttr = Source->FindMutableAttribute(Identifier, EIOSide::Out);
+			if (MutableAttr && MutableAttr->IsGeneric())
+			{
+				GenericOutAttribute = static_cast<FPCGMetadataAttributeGeneric*>(MutableAttr);
+				OutAttribute = GenericOutAttribute;
+			}
+
+			if (!CachedInnerProperty)
+			{
+				const FPCGMetadataAttributeGeneric* GenericSrc = static_cast<const FPCGMetadataAttributeGeneric*>(SourceAttribute);
+				InitProperty(GenericSrc);
+			}
+		}
+
+		if (!CachedInnerProperty || ElementSize <= 0) { return false; }
+
+		OutValue.SetNumZeroed(ElementSize);
+
+		if (Init == EBufferInit::Inherit && SourceAttribute && SourceAttribute->IsGeneric())
+		{
+			const FPCGMetadataAttributeGeneric* GenericSrc = static_cast<const FPCGMetadataAttributeGeneric*>(SourceAttribute);
+			const void* ReadAddr = GenericSrc->GetReadAddressFromEntryKey_Unsafe(PCGDefaultValueKey);
+			if (ReadAddr) { FMemory::Memcpy(OutValue.GetData(), ReadAddr, ElementSize); }
+		}
+
+		bWriteInitialized = true;
+		bIsNewOutput = (Init == EBufferInit::New);
+		return true;
+	}
+
+	void FPropertySingleValueBuffer::Write(const bool bEnsureValidKeys)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPropertySingleValueBuffer::Write);
+
+		if (!IsWritable() || !IsEnabled()) { return; }
+		if (!GenericOutAttribute || !CachedInnerProperty) { return; }
+
+		PCGEX_SHARED_CONTEXT_VOID(Source->GetContextHandle())
+		SharedContext.Get()->AddProtectedAttributeName(GenericOutAttribute->Name);
+
+		GenericOutAttribute->SetValueFromProperty(
+			PCGDefaultValueKey,
+			OutValue.GetData(),
+			CachedInnerProperty);
 	}
 
 #pragma endregion
@@ -1139,32 +1805,32 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TYPED_WRITABLE)
 		default:
 			{
-				// Fallback: create FGenericBuffer for unknown/generic types
-				if (!InAttribute) { return nullptr; }
+				// Fallback: create FPropertyBuffer for unknown/generic types
+				if (!InAttribute || !InAttribute->IsGeneric()) { return nullptr; }
 
-				const int32 ElemSize = PCGExTypes::GetElementSizeFromAttribute(InAttribute);
-				if (ElemSize <= 0)
+				const FPCGMetadataDomainID DomainID = InAttribute->GetMetadataDomain()->GetDomainID();
+				FPCGAttributeIdentifier AttrIdentifier(InAttribute->Name, DomainID);
+
+				const auto* GenericAttr = static_cast<const FPCGMetadataAttributeGeneric*>(InAttribute);
+
+				if (DomainID.Flag == EPCGMetadataDomainFlag::Data)
 				{
-					UE_LOG(LogPCGEx, Warning, TEXT("Cannot create writable buffer for attribute '%s' — unknown element size (type %d)."), *InAttribute->Name.ToString(), static_cast<int32>(Type));
-					return nullptr;
+					auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, AttrIdentifier);
+					if (!PropBuf->InitProperty(GenericAttr) || !PropBuf->InitForWrite(InAttribute, Init)) { return nullptr; }
+					FWriteScopeLock WriteScopeLock(BufferLock);
+					PropBuf->BufferIndex = Buffers.Add(PropBuf);
+					BufferMap.Add(PropBuf->GetUID(), PropBuf);
+					return PropBuf;
 				}
-
-				const int32 ElemAlign = PCGExTypes::GetElementAlignmentFromType(Type, nullptr);
-
-				FPCGAttributeIdentifier AttrIdentifier;
-				AttrIdentifier.Name = InAttribute->Name;
-
-				TSharedPtr<FGenericBuffer> GenericBuf = MakeShared<FGenericBuffer>(Source, AttrIdentifier, ElemSize, ElemAlign);
-				if (!GenericBuf->InitForWrite(InAttribute, Init))
+				else
 				{
-					return nullptr;
+					auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, AttrIdentifier);
+					if (!PropBuf->InitProperty(GenericAttr) || !PropBuf->InitForWrite(InAttribute, Init)) { return nullptr; }
+					FWriteScopeLock WriteScopeLock(BufferLock);
+					PropBuf->BufferIndex = Buffers.Add(PropBuf);
+					BufferMap.Add(PropBuf->GetUID(), PropBuf);
+					return PropBuf;
 				}
-
-				// Register in facade
-				FWriteScopeLock WriteScopeLock(BufferLock);
-				GenericBuf->BufferIndex = Buffers.Add(GenericBuf);
-				BufferMap.Add(GenericBuf->GetUID(), GenericBuf);
-				return GenericBuf;
 			}
 		}
 #undef PCGEX_TYPED_WRITABLE
@@ -1204,23 +1870,34 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 		PCGEX_EXECUTEWITHRIGHTTYPE(Identity.UnderlyingType, PCGEX_TYPED_EXEC)
 #undef PCGEX_TYPED_EXEC
 
-		// Fallback: create FGenericBuffer for unknown/generic types
+		// Fallback: create FPropertyBuffer for unknown/generic types
 		if (!Buffer)
 		{
 			const FPCGMetadataAttributeBase* RawAttribute = Source->FindConstAttribute(Identity.Identifier, InSide);
 			if (RawAttribute && RawAttribute->IsGeneric())
 			{
-				const int32 ElemSize = PCGExTypes::GetElementSizeFromAttribute(RawAttribute);
-				if (ElemSize > 0)
+				const auto* GenericAttr = static_cast<const FPCGMetadataAttributeGeneric*>(RawAttribute);
+
+				if (Identity.Identifier.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
 				{
-					const int32 ElemAlign = PCGExTypes::GetElementAlignmentFromType(Identity.UnderlyingType, nullptr);
-					TSharedPtr<FGenericBuffer> GenericBuf = MakeShared<FGenericBuffer>(Source, Identity.Identifier, ElemSize, ElemAlign);
-					if (GenericBuf->InitForRead(InSide))
+					auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, Identity.Identifier);
+					if (PropBuf->InitProperty(GenericAttr) && PropBuf->InitForRead(InSide))
 					{
 						FWriteScopeLock WriteScopeLock(BufferLock);
-						GenericBuf->BufferIndex = Buffers.Add(GenericBuf);
-						BufferMap.Add(GenericBuf->GetUID(), GenericBuf);
-						Buffer = GenericBuf;
+						PropBuf->BufferIndex = Buffers.Add(PropBuf);
+						BufferMap.Add(PropBuf->GetUID(), PropBuf);
+						Buffer = PropBuf;
+					}
+				}
+				else
+				{
+					auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, Identity.Identifier);
+					if (PropBuf->InitProperty(GenericAttr) && PropBuf->InitForRead(InSide))
+					{
+						FWriteScopeLock WriteScopeLock(BufferLock);
+						PropBuf->BufferIndex = Buffers.Add(PropBuf);
+						BufferMap.Add(PropBuf->GetUID(), PropBuf);
+						Buffer = PropBuf;
 					}
 				}
 			}
@@ -1242,20 +1919,31 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 		PCGEX_EXECUTEWITHRIGHTTYPE(AttrType, PCGEX_TYPED_EXEC)
 #undef PCGEX_TYPED_EXEC
 
-		// Fallback: create FGenericBuffer for unknown/generic types
+		// Fallback: create FPropertyBuffer for unknown/generic types
 		if (!Buffer && RawAttribute->IsGeneric())
 		{
-			const int32 ElemSize = PCGExTypes::GetElementSizeFromAttribute(RawAttribute);
-			if (ElemSize > 0)
+			const auto* GenericAttr = static_cast<const FPCGMetadataAttributeGeneric*>(RawAttribute);
+
+			if (InIdentifier.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
 			{
-				const int32 ElemAlign = PCGExTypes::GetElementAlignmentFromType(AttrType, nullptr);
-				TSharedPtr<FGenericBuffer> GenericBuf = MakeShared<FGenericBuffer>(Source, InIdentifier, ElemSize, ElemAlign);
-				if (GenericBuf->InitForRead(InSide))
+				auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, InIdentifier);
+				if (PropBuf->InitProperty(GenericAttr) && PropBuf->InitForRead(InSide))
 				{
 					FWriteScopeLock WriteScopeLock(BufferLock);
-					GenericBuf->BufferIndex = Buffers.Add(GenericBuf);
-					BufferMap.Add(GenericBuf->GetUID(), GenericBuf);
-					Buffer = GenericBuf;
+					PropBuf->BufferIndex = Buffers.Add(PropBuf);
+					BufferMap.Add(PropBuf->GetUID(), PropBuf);
+					Buffer = PropBuf;
+				}
+			}
+			else
+			{
+				auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, InIdentifier);
+				if (PropBuf->InitProperty(GenericAttr) && PropBuf->InitForRead(InSide))
+				{
+					FWriteScopeLock WriteScopeLock(BufferLock);
+					PropBuf->BufferIndex = Buffers.Add(PropBuf);
+					BufferMap.Add(PropBuf->GetUID(), PropBuf);
+					Buffer = PropBuf;
 				}
 			}
 		}

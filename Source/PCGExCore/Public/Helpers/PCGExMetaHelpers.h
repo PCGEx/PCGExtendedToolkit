@@ -6,7 +6,57 @@
 
 #include "CoreMinimal.h"
 #include "PCGExMetaHelpersMacros.h"
+
+// FText lacks native GetTypeHash and operator== — required by engine's DefaultOperationTraits<FText>::Equal()
+// and TSet<FText> instantiation. Must be defined BEFORE PCGMetadataAttributeTraits.h is included,
+// so the operators are in scope when engine templates are instantiated with T=FText.
+#ifndef PCGEX_FTEXT_SHIMS_DEFINED
+#define PCGEX_FTEXT_SHIMS_DEFINED
+FORCEINLINE uint32 GetTypeHash(const FText& Value) { return GetTypeHash(Value.ToString()); }
+FORCEINLINE bool operator==(const FText& A, const FText& B) { return A.EqualTo(B); }
+#endif
+
 #include "Metadata/PCGMetadataAttributeTraits.h"
+
+// Engine registers FText via PCGMetadataGenerateDataTypes but provides no MetadataTraits<FText> specialization.
+// The default template inherits DefaultWeightedSumTraits which requires operator* — FText doesn't have it.
+// CONFLICT GUARD: If Epic adds their own MetadataTraits<FText>, this will trigger a redefinition error.
+// When that happens, remove this block and verify their specialization matches our needs.
+// To check: search PCGMetadataAttributeTraits.h for "MetadataTraits<FText>" — if it exists, delete this.
+namespace PCG
+{
+	namespace Private
+	{
+		template<>
+		struct MetadataTraits<FText> : DefaultCompareTraits<FText>, DefaultStringTraits<FText>, CompareBasedFindNearestTraits<MetadataTraits<FText>, FText>, DefaultHashTraits<FText>
+		{
+			enum { CompressData = false };
+			enum { CanMinMax = false };
+			enum { CanSubAdd = false };
+			enum { CanMulDiv = false };
+			enum { CanInterpolate = false };
+			enum { CanNormalize = false };
+			enum { InterpolationNeedsNormalization = false };
+			enum { CanSearchString = true };
+			enum { NeedsConstruction = true };
+
+			static FString ToString(const FText& A) { return A.ToString(); }
+			static bool Equal(const FText& A, const FText& B) { return A.EqualTo(B); }
+			static FText ZeroValue() { return FText::GetEmpty(); }
+
+			static bool Substring(const FText& A, const FText& B, const ESearchCase::Type SearchCase = ESearchCase::IgnoreCase)
+			{
+				return A.ToString().Contains(B.ToString(), SearchCase);
+			}
+
+			static bool Matches(const FText& A, const FText& B, const ESearchCase::Type SearchCase = ESearchCase::IgnoreCase)
+			{
+				return A.ToString().MatchesWildcard(B.ToString(), SearchCase);
+			}
+		};
+	}
+}
+
 #include "Metadata/PCGMetadataAttributeTpl.h"
 #include "Metadata/PCGMetadata.h"
 

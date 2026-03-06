@@ -6,18 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExCommon.h"
 #include "UObject/SoftObjectPath.h"
-#include "Metadata/PCGMetadataAttributeTraits.h"
-
-// FText lacks GetTypeHash and operator== — needed for TSet<FText> instantiation (e.g. GrabUniqueValues)
-FORCEINLINE uint32 GetTypeHash(const FText& Value)
-{
-	return GetTypeHash(Value.ToString());
-}
-
-FORCEINLINE bool operator==(const FText& A, const FText& B)
-{
-	return A.EqualTo(B);
-}
+#include "Helpers/PCGExMetaHelpers.h" // FText shims + MetadataTraits<FText> specialization
 
 namespace PCGExTypes
 {

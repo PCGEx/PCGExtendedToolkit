@@ -162,7 +162,7 @@ namespace PCGExSplineToPath
 
 						if (Keys)
 						{
-							TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(SourceAttr, SplineData->Metadata);
+							TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(SourceAttr, SourceAttr->GetMetadataDomain());
 							InAccessor->GetRange(InRange, 0, *Keys.Get());
 						}
 						else

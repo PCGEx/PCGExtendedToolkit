@@ -115,7 +115,7 @@ namespace PCGExPointIOMerger
 				check(Scope.Read.Count == Scope.Write.Count)
 
 				// From elements domain
-				TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, InMetadata);
+				TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, TypedInAttribute->GetMetadataDomain());
 
 				if (!InAccessor.IsValid()) { return; }
 
@@ -147,7 +147,7 @@ namespace PCGExPointIOMerger
 			else
 			{
 				// From elements domain
-				TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, InMetadata);
+				TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, TypedInAttribute->GetMetadataDomain());
 				if (!InAccessor.IsValid()) { return; }
 				if (T Value = T{}; InAccessor->Get(Value, Scope.Read.Start, *SourceIO->GetInKeys())) { OutDataBuffer->SetValue(0, Value); }
 			}
