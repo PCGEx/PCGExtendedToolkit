@@ -163,18 +163,6 @@ namespace PCGExData
 		static bool bInitialized;
 	};
 
-	// Module Initialization
-	struct FSubSelectionOpsModuleInit
-	{
-		FSubSelectionOpsModuleInit()
-		{
-			FSubSelectorRegistry::Initialize();
-		}
-	};
-
-	// Static instance triggers initialization at module load
-	static FSubSelectionOpsModuleInit GSubSelectionOpsModuleInit;
-
 	/**
 	 * Type traits for sub-selection capabilities
 	 */

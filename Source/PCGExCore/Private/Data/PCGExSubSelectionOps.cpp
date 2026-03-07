@@ -17,7 +17,7 @@ namespace PCGExData
 	{
 		if (bInitialized) { return; }
 
-		Ops.SetNum(15); // Index 0-14 for EPCGMetadataTypes enum values
+		Ops.SetNum(PCGExTypes::TypesAllocations); // Full enum range (256)
 
 		// Create instances for each supported type
 #define PCGEX_TPL(_TYPE, _NAME, ...) Ops[static_cast<int32>(EPCGMetadataTypes::_NAME)] = MakeUnique<TSubSelectorOpsImpl<_TYPE>>();
@@ -29,8 +29,7 @@ namespace PCGExData
 
 	const ISubSelectorOps* FSubSelectorRegistry::Get(EPCGMetadataTypes Type)
 	{
-		check(bInitialized)
-		//if (!bInitialized) { Initialize(); }
+		if (!bInitialized) { Initialize(); }
 
 		const int32 Index = static_cast<int32>(Type);
 		if (Index >= 0 && Index < Ops.Num() && Ops[Index].IsValid()) { return Ops[Index].Get(); }

@@ -358,6 +358,63 @@ namespace PCGExData
 
 #pragma endregion
 
+#pragma region FPropertyBufferProxy
+
+	FPropertyBufferProxy::FPropertyBufferProxy(int32 InElementSize, int32 InElementAlignment)
+		: IBufferProxy(EPCGMetadataTypes::Unknown, EPCGMetadataTypes::Unknown)
+		  , ElementSize(InElementSize)
+		  , ElementAlignment(InElementAlignment)
+	{
+	}
+
+	void FPropertyBufferProxy::GetVoid(const int32 Index, void* OutValue) const
+	{
+		check(Buffer);
+		Buffer->ReadVoid(Index, OutValue);
+	}
+
+	void FPropertyBufferProxy::SetVoid(const int32 Index, const void* Value) const
+	{
+		check(Buffer);
+		// const_cast needed: IBuffer::SetVoid is non-const, but IBufferProxy::SetVoid is const.
+		const_cast<IBuffer*>(Buffer.Get())->SetVoid(Index, Value);
+	}
+
+	void FPropertyBufferProxy::GetCurrentVoid(const int32 Index, void* OutValue) const
+	{
+		check(Buffer);
+		// GetVoid reads from the output side (current working value)
+		const_cast<IBuffer*>(Buffer.Get())->GetVoid(Index, OutValue);
+	}
+
+	TSharedPtr<IBuffer> FPropertyBufferProxy::GetBuffer() const
+	{
+		return Buffer;
+	}
+
+	bool FPropertyBufferProxy::EnsureReadable() const
+	{
+		return Buffer && Buffer->EnsureReadable();
+	}
+
+	PCGExValueHash FPropertyBufferProxy::ReadValueHash(const int32 Index) const
+	{
+		check(Buffer);
+		return Buffer->ReadValueHash(Index);
+	}
+
+	int32 FPropertyBufferProxy::GetValueSize() const
+	{
+		return ElementSize;
+	}
+
+	int32 FPropertyBufferProxy::GetValueAlignment() const
+	{
+		return ElementAlignment;
+	}
+
+#pragma endregion
+
 #pragma region TConstantProxy
 
 	template <typename T_CONST>

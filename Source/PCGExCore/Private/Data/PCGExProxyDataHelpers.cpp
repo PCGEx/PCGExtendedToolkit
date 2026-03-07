@@ -406,6 +406,60 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 						OutProxy = Internal::CreateAttributeProxy<T>(InContext, InDescriptor, InDataFacade);
 					});
 				}
+
+				// Tier 3 fallback: generic/unknown attribute types not in PCGEX_FOREACH_SUPPORTEDTYPES.
+				// Uses FPropertyBufferProxy wrapping FPropertyBuffer via void* R/W — no type conversion,
+				// but enables FCopyOnlyBlendOperation (memcpy-based) to carry the data through blending.
+				if (!OutProxy)
+				{
+					const FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(
+						InDescriptor.Selector,
+						InDescriptor.Side == EIOSide::In ? InDataFacade->GetIn() : InDataFacade->GetOut());
+
+					// Resolve element size — descriptor may have it, or we derive from the attribute
+					int32 ElemSize = InDescriptor.ValueSize;
+					int32 ElemAlign = InDescriptor.ValueAlignment;
+
+					if (ElemSize <= 0)
+					{
+						const FPCGMetadataAttributeBase* Attr = InDataFacade->FindConstAttribute(Identifier, InDescriptor.Side == EIOSide::In ? EIOSide::In : EIOSide::Out);
+						if (Attr)
+						{
+							ElemSize = PCGExTypes::GetElementSizeFromAttribute(Attr);
+							ElemAlign = FMath::Max(1, ElemAlign);
+						}
+					}
+
+					if (ElemSize > 0)
+					{
+						TSharedPtr<IBuffer> PropertyBuf;
+
+						if (InDescriptor.Role == EProxyRole::Read)
+						{
+							PropertyBuf = InDataFacade->GetDefaultReadable(Identifier, InDescriptor.Side);
+						}
+						else
+						{
+							// For writes, find the source attribute and use the type-erased writable path
+							const FPCGMetadataAttributeBase* SrcAttr = InDataFacade->FindConstAttribute(Identifier, EIOSide::In);
+							if (!SrcAttr) { SrcAttr = InDataFacade->FindConstAttribute(Identifier, EIOSide::Out); }
+
+							if (SrcAttr)
+							{
+								PropertyBuf = InDataFacade->GetWritable(
+									static_cast<EPCGMetadataTypes>(SrcAttr->GetTypeId()),
+									SrcAttr, EBufferInit::Inherit);
+							}
+						}
+
+						if (PropertyBuf)
+						{
+							auto Proxy = MakeShared<FPropertyBufferProxy>(ElemSize, ElemAlign);
+							Proxy->Buffer = PropertyBuf;
+							OutProxy = Proxy;
+						}
+					}
+				}
 			}
 			// Handle point property proxy
 			else if (InDescriptor.Selector.GetSelection() == EPCGAttributePropertySelection::Property)

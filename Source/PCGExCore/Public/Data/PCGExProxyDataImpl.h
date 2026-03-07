@@ -186,6 +186,39 @@ namespace PCGExData
 #pragma endregion
 
 	//
+	// FPropertyBufferProxy - Non-template proxy for generic/unknown attribute types (Tier 3).
+	//
+	// Wraps an IBuffer (typically FPropertyArrayBuffer or FPropertySingleValueBuffer) and
+	// delegates all access through the void* API (ReadVoid/SetVoid/GetVoid). No type
+	// conversion is performed — RealType and WorkingType are both EPCGMetadataTypes::Unknown.
+	//
+	// This enables blending/data-forwarding code to carry generic attribute data even when
+	// the underlying type isn't in PCGEX_FOREACH_SUPPORTEDTYPES. The blend system's
+	// FCopyOnlyBlendOperation handles the actual memcpy-based accumulation.
+	//
+	class PCGEXCORE_API FPropertyBufferProxy : public IBufferProxy
+	{
+	public:
+		TSharedPtr<IBuffer> Buffer;
+		int32 ElementSize = 0;
+		int32 ElementAlignment = 1;
+
+		FPropertyBufferProxy(int32 InElementSize, int32 InElementAlignment);
+
+		virtual void GetVoid(const int32 Index, void* OutValue) const override;
+		virtual void SetVoid(const int32 Index, const void* Value) const override;
+		virtual void GetCurrentVoid(const int32 Index, void* OutValue) const override;
+
+		virtual TSharedPtr<IBuffer> GetBuffer() const override;
+		virtual bool EnsureReadable() const override;
+
+		virtual PCGExValueHash ReadValueHash(const int32 Index) const override;
+
+		virtual int32 GetValueSize() const override;
+		virtual int32 GetValueAlignment() const override;
+	};
+
+	//
 	// TDirectDataAttributeProxy - Direct data-domain attribute access
 	//
 	template <typename T_REAL>

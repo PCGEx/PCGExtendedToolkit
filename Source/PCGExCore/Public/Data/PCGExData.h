@@ -252,114 +252,13 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		virtual FPCGMetadataAttribute<T>* GetTypedOutAttribute() const override { return TypedOutAttribute; }
 	};
 
-#define PCGEX_USING_TLEGACYBUFFER \
-	PCGEX_USING_TBUFFER \
-	using TLegacyBuffer<T>::TypedInAttribute;\
-	using TLegacyBuffer<T>::TypedOutAttribute;
-
-	template <typename T>
-	class PCGEXCORE_API TArrayBuffer : public TLegacyBuffer<T>
-	{
-		PCGEX_USING_TLEGACYBUFFER
-
-	protected:
-		// Used to read from an attribute as another type
-		TSharedPtr<TAttributeBroadcaster<T>> InternalBroadcaster;
-		bool bSparseBuffer = false;
-
-		TSharedPtr<TArray<T>> InValues;
-		TSharedPtr<TArray<T>> OutValues;
-		TArray<PCGExValueHash> InHashes;
-
-	public:
-		TArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-
-		virtual bool IsSparse() const override { return bSparseBuffer || InternalBroadcaster; }
-
-		TSharedPtr<TArray<T>> GetInValues();
-		TSharedPtr<TArray<T>> GetOutValues();
-
-		virtual int32 GetNumValues(const EIOSide InSide) override;
-
-		virtual bool IsWritable() override;
-		virtual bool IsReadable() override;
-		virtual bool ReadsFromOutput() override;
-
-		virtual const T& Read(const int32 Index) const override;
-		virtual const void Read(const int32 Start, TArrayView<T> OutResults) const override;
-
-		virtual const T& GetValue(const int32 Index) override;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) override;
-
-		virtual void SetValue(const int32 Index, const T& Value) override;
-		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-
-	protected:
-		virtual void ComputeValueHashes(const PCGExMT::FScope& Scope);
-
-		virtual void InitForReadInternal(const bool bScoped, const FPCGMetadataAttributeBase* Attribute);
-		virtual void InitForWriteInternal(FPCGMetadataAttributeBase* Attribute, const T& InDefaultValue, const EBufferInit Init);
-
-	public:
-		virtual bool EnsureReadable() override;
-		virtual void EnableValueHashCache() override;
-
-		virtual bool InitForRead(const EIOSide InSide = EIOSide::In, const bool bScoped = false) override;
-		virtual bool InitForBroadcast(const FPCGAttributePropertyInputSelector& InSelector, const bool bCaptureMinMax = false, const bool bScoped = false, const bool bQuiet = false) override;
-
-		virtual bool InitForWrite(const T& DefaultValue, bool bAllowInterpolation, EBufferInit Init = EBufferInit::Inherit) override;
-		virtual bool InitForWrite(const EBufferInit Init = EBufferInit::Inherit) override;
-		virtual void Write(const bool bEnsureValidKeys = true) override;
-
-		virtual void Fetch(const PCGExMT::FScope& Scope) override;
-
-		virtual void Flush() override;
-	};
-
-	template <typename T>
-	class PCGEXCORE_API TSingleValueBuffer : public TLegacyBuffer<T>
-	{
-		PCGEX_USING_TLEGACYBUFFER
-
-	protected:
-		bool bReadInitialized = false;
-		bool bWriteInitialized = false;
-		bool bReadFromOutput = false;
-
-		T InValue = T{};
-		T OutValue = T{};
-		PCGExValueHash Hash = 0;
-
-	public:
-		virtual int32 GetNumValues(const EIOSide InSide) override;
-
-		virtual bool EnsureReadable() override;
-
-		TSingleValueBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-
-		virtual bool IsWritable() override;
-		virtual bool IsReadable() override;
-		virtual bool ReadsFromOutput() override;
-
-		virtual const T& Read(const int32 Index) const override;
-		virtual const void Read(const int32 Start, TArrayView<T> OutResults) const override;
-
-		virtual const T& GetValue(const int32 Index) override;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) override;
-
-		virtual void SetValue(const int32 Index, const T& Value) override;
-
-		virtual bool InitForRead(const EIOSide InSide = EIOSide::In, const bool bScoped = false) override;
-		virtual bool InitForBroadcast(const FPCGAttributePropertyInputSelector& InSelector, const bool bCaptureMinMax = false, const bool bScoped = false, const bool bQuiet = false) override;
-
-		virtual bool InitForWrite(const T& DefaultValue, bool bAllowInterpolation, EBufferInit Init = EBufferInit::Inherit) override;
-		virtual bool InitForWrite(const EBufferInit Init = EBufferInit::Inherit) override;
-		virtual void Write(const bool bEnsureValidKeys = true) override;
-	};
-
 	//
-	// TGenericBuffer<T> - Buffer for known T through FPCGMetadataAttributeGeneric template API.
+	// TGenericBuffer<T> - Base for Tier 2 buffers (known T through FPCGMetadataAttributeGeneric).
 	// Used when the attribute is generic but the C++ type T is known at compile time.
+	// Also works for container types (TArray<T>, TSet<T>, TMap<K,V>) — see PCGExBufferGeneric.h.
+	//
+	// API direction: this is the future-proof path. When UE 5.8 unifies typed→generic,
+	// TLegacyBuffer becomes a thin wrapper and TGenericBuffer becomes the canonical buffer.
 	//
 	template <typename T>
 	class PCGEXCORE_API TGenericBuffer : public TBuffer<T>
@@ -377,203 +276,14 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		FPCGMetadataAttributeGeneric* GetGenericOutAttribute() const { return GenericOutAttribute; }
 	};
 
-#define PCGEX_USING_TGENERICBUFFER \
-	PCGEX_USING_TBUFFER \
-	using TGenericBuffer<T>::GenericInAttribute;\
-	using TGenericBuffer<T>::GenericOutAttribute;
-
-	template <typename T>
-	class PCGEXCORE_API TGenericArrayBuffer : public TGenericBuffer<T>
-	{
-		PCGEX_USING_TGENERICBUFFER
-
-	protected:
-		TSharedPtr<TArray<T>> InValues;
-		TSharedPtr<TArray<T>> OutValues;
-
-	public:
-		TGenericArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-
-		virtual int32 GetNumValues(const EIOSide InSide) override;
-
-		virtual bool IsWritable() override;
-		virtual bool IsReadable() override;
-		virtual bool ReadsFromOutput() override;
-		virtual bool EnsureReadable() override;
-
-		virtual const T& Read(const int32 Index) const override;
-		virtual const void Read(const int32 Start, TArrayView<T> OutResults) const override;
-
-		virtual const T& GetValue(const int32 Index) override;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) override;
-
-		virtual void SetValue(const int32 Index, const T& Value) override;
-
-		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-		virtual PCGExValueHash GetValueHash(const int32 Index) override;
-
-		virtual bool InitForRead(const EIOSide InSide = EIOSide::In, const bool bScoped = false) override;
-		virtual bool InitForBroadcast(const FPCGAttributePropertyInputSelector& InSelector, const bool bCaptureMinMax = false, const bool bScoped = false, const bool bQuiet = false) override;
-		virtual bool InitForWrite(const T& DefaultValue, bool bAllowInterpolation, EBufferInit Init = EBufferInit::Inherit) override;
-		virtual bool InitForWrite(const EBufferInit Init = EBufferInit::Inherit) override;
-		virtual void Write(const bool bEnsureValidKeys = true) override;
-
-		virtual void Flush() override;
-	};
-
-	template <typename T>
-	class PCGEXCORE_API TGenericSingleValueBuffer : public TGenericBuffer<T>
-	{
-		PCGEX_USING_TGENERICBUFFER
-
-	protected:
-		bool bReadInitialized = false;
-		bool bWriteInitialized = false;
-		bool bReadFromOutput = false;
-
-		T InValue = T{};
-		T OutValue = T{};
-
-	public:
-		TGenericSingleValueBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-
-		virtual int32 GetNumValues(const EIOSide InSide) override;
-
-		virtual bool IsWritable() override;
-		virtual bool IsReadable() override;
-		virtual bool ReadsFromOutput() override;
-		virtual bool EnsureReadable() override;
-
-		virtual const T& Read(const int32 Index) const override;
-		virtual const void Read(const int32 Start, TArrayView<T> OutResults) const override;
-
-		virtual const T& GetValue(const int32 Index) override;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) override;
-
-		virtual void SetValue(const int32 Index, const T& Value) override;
-
-		virtual bool InitForRead(const EIOSide InSide = EIOSide::In, const bool bScoped = false) override;
-		virtual bool InitForBroadcast(const FPCGAttributePropertyInputSelector& InSelector, const bool bCaptureMinMax = false, const bool bScoped = false, const bool bQuiet = false) override;
-		virtual bool InitForWrite(const T& DefaultValue, bool bAllowInterpolation, EBufferInit Init = EBufferInit::Inherit) override;
-		virtual bool InitForWrite(const EBufferInit Init = EBufferInit::Inherit) override;
-		virtual void Write(const bool bEnsureValidKeys = true) override;
-	};
-
-	//
-	// FPropertyBuffer - Non-template buffer for types where T is unknowable at compile time.
-	// Uses void* read (GetReadAddressFromEntryKey_Unsafe) + FProperty-based write (SetValueFromProperty).
-	// Handles: arbitrary UStructs, UEnums, UObjects, ALL container types (TArray, TSet, TMap).
-	//
-	class PCGEXCORE_API FPropertyBuffer : public IBuffer
-	{
-		friend class FFacade;
-
-	protected:
-		int32 ElementSize = 0;
-		FProperty* CachedInnerProperty = nullptr; // Owned by us, constructed from attribute desc
-
-		const FPCGMetadataAttributeGeneric* GenericInAttribute = nullptr;
-		FPCGMetadataAttributeGeneric* GenericOutAttribute = nullptr;
-
-	public:
-		FPropertyBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-		virtual ~FPropertyBuffer() override;
-
-		FORCEINLINE int32 GetElementSize() const { return ElementSize; }
-
-		bool InitProperty(const FPCGMetadataAttributeGeneric* InAttribute);
-
-		const FPCGMetadataAttributeGeneric* GetGenericInAttribute() const { return GenericInAttribute; }
-		FPCGMetadataAttributeGeneric* GetGenericOutAttribute() const { return GenericOutAttribute; }
-
-	private:
-		static FProperty* CreateInnerPropertyFromDesc(const FPCGMetadataAttributeDesc& Desc);
-	};
-
-	class PCGEXCORE_API FPropertyArrayBuffer : public FPropertyBuffer
-	{
-		friend class FFacade;
-
-	protected:
-		TSharedPtr<TArray<uint8>> InBytes;
-		TSharedPtr<TArray<uint8>> OutBytes;
-
-	public:
-		FPropertyArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-
-		virtual int32 GetNumValues(const EIOSide InSide) override;
-
-		virtual bool IsWritable() override;
-		virtual bool IsReadable() override;
-		virtual bool ReadsFromOutput() override;
-		virtual bool EnsureReadable() override;
-
-		virtual void ReadVoid(const int32 Index, void* OutValue) const override;
-		virtual void SetVoid(const int32 Index, const void* Value) override;
-		virtual void GetVoid(const int32 Index, void* OutValue) override;
-
-		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-		virtual PCGExValueHash GetValueHash(const int32 Index) override;
-
-		virtual void Write(const bool bEnsureValidKeys = true) override;
-
-		bool InitForRead(const EIOSide InSide = EIOSide::In);
-		bool InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init = EBufferInit::Inherit);
-
-		virtual void Flush() override;
-	};
-
-	class PCGEXCORE_API FPropertySingleValueBuffer : public FPropertyBuffer
-	{
-		friend class FFacade;
-
-	protected:
-		TArray<uint8> InValue;
-		TArray<uint8> OutValue;
-
-		bool bReadInitialized = false;
-		bool bWriteInitialized = false;
-		bool bReadFromOutput = false;
-
-	public:
-		FPropertySingleValueBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
-
-		virtual int32 GetNumValues(const EIOSide InSide) override;
-
-		virtual bool IsWritable() override;
-		virtual bool IsReadable() override;
-		virtual bool ReadsFromOutput() override;
-		virtual bool EnsureReadable() override;
-
-		virtual void ReadVoid(const int32 Index, void* OutValue) const override;
-		virtual void SetVoid(const int32 Index, const void* Value) override;
-		virtual void GetVoid(const int32 Index, void* OutValue) override;
-
-		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-		virtual PCGExValueHash GetValueHash(const int32 Index) override;
-
-		virtual void Write(const bool bEnsureValidKeys = true) override;
-
-		bool InitForRead(const EIOSide InSide = EIOSide::In);
-		bool InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init = EBufferInit::Inherit);
-	};
-
-#pragma region externalization
-
-#define PCGEX_TPL(_TYPE, _NAME, ...)\
-extern template class TBuffer<_TYPE>;\
-extern template class TLegacyBuffer<_TYPE>;\
-extern template class TArrayBuffer<_TYPE>;\
-extern template class TSingleValueBuffer<_TYPE>;\
-extern template class TGenericBuffer<_TYPE>;\
-extern template class TGenericArrayBuffer<_TYPE>;\
-extern template class TGenericSingleValueBuffer<_TYPE>;
-
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
-
-#undef PCGEX_TPL
-
-#pragma endregion
+	// Forward declarations for buffer leaf classes (defined in Buffers/ headers)
+	template <typename T> class TArrayBuffer;
+	template <typename T> class TSingleValueBuffer;
+	template <typename T> class TGenericArrayBuffer;
+	template <typename T> class TGenericSingleValueBuffer;
+	class FPropertyBuffer;
+	class FPropertyArrayBuffer;
+	class FPropertySingleValueBuffer;
 
 	class PCGEXCORE_API FFacade : public TSharedFromThis<FFacade>
 	{
@@ -767,3 +477,8 @@ extern template bool TryReadMark<_TYPE>(const TSharedRef<FPointIO>& PointIO, con
 	PCGEXCORE_API
 	void WriteBuffer(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, const TSharedPtr<IBuffer>& InBuffer, const bool InEnsureValidKeys = true);
 }
+
+// Buffer leaf class definitions — must come after FFacade and base buffer declarations
+#include "Data/Buffers/PCGExBufferLegacy.h"
+#include "Data/Buffers/PCGExBufferGeneric.h"
+#include "Data/Buffers/PCGExBufferProperty.h"
