@@ -133,6 +133,7 @@ private:
 	void OnTileClicked(int32 Index, const FPointerEvent& MouseEvent);
 	FReply OnTileDragDetected(int32 Index, const FPointerEvent& MouseEvent);
 	void OnTileCategoryChanged();
+	void OnTilePropertyChanged();
 
 	// Detail panel management
 	void UpdateDetailForSelection();

@@ -56,6 +56,7 @@ public:
 	SLATE_EVENT(FOnTileClicked, OnTileClicked)
 	SLATE_EVENT(FOnTileDragDetected, OnTileDragDetected)
 	SLATE_EVENT(FSimpleDelegate, OnTileCategoryChanged)
+	SLATE_EVENT(FSimpleDelegate, OnTilePropertyChanged)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -97,6 +98,7 @@ private:
 	FOnTileClicked OnTileClicked;
 	FOnTileDragDetected OnTileDragDetected;
 	FSimpleDelegate OnTileCategoryChanged;
+	FSimpleDelegate OnTilePropertyChanged;
 
 	// Batch flag — pointer to grid view's bIsBatchOperation (suppresses OnObjectModified during tile edits)
 	bool* BatchFlagPtr = nullptr;
