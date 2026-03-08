@@ -71,22 +71,23 @@ void FPCGExPropertyOverridesCustomization::CustomizeChildren(
 	TSharedPtr<IPropertyHandle> OverridesArrayHandle = PropertyHandle->GetChildHandle(TEXT("Overrides"));
 	if (!OverridesArrayHandle.IsValid()) { return; }
 
-	// Watch for array changes to force refresh
+	// Structural changes (add/remove/reorder) need immediate refresh
+	// to recreate FStructOnScope instances with fresh pointers.
 	auto RefreshDelegate = FSimpleDelegate::CreateLambda([this]()
 	{
 		if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
 		{
-			// Force complete rebuild of customizations when array changes
-			// This recreates FStructOnScope instances with fresh pointers
 			PropertyUtilities->ForceRefresh();
 		}
 	});
 
-	// Handles add/remove/reorder
 	OverridesArrayHandle->SetOnPropertyValueChanged(RefreshDelegate);
 
-	// Handles value changes within entries (like bEnabled toggle or value edits)
-	OverridesArrayHandle->SetOnChildPropertyValueChanged(RefreshDelegate);
+	// IMPORTANT: Do NOT SetOnChildPropertyValueChanged with ForceRefresh here.
+	// ForceRefresh() during the notification chain invalidates property nodes
+	// before OnFinishedChangingProperties fires, which prevents the grid view's
+	// multi-edit propagation from receiving valid property references.
+	// Header text and enabled state use TAttribute getters that auto-update.
 
 	// Hide array controls (add/remove/reorder buttons) - manually iterate instead
 	uint32 NumElements = 0;

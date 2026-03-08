@@ -19,6 +19,7 @@
 #include "DragAndDrop/AssetDragDropOp.h"
 #include "Misc/TransactionObjectEvent.h"
 #include "Modules/ModuleManager.h"
+#include "InstancedStruct.h"
 #include "UObject/StructOnScope.h"
 #include "UObject/UnrealType.h"
 #include "Widgets/Input/SButton.h"
@@ -1152,92 +1153,161 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 		}
 	}
 
-	// ── Step 2: Try to narrow to a specific sub-property ─────────────────
-	// When the changed member is a struct (e.g. Variations), we want to propagate
-	// only the single field the user actually edited, instead of overwriting the
-	// entire struct on every other selected entry.
-	// Must happen BEFORE the full struct copy below so we can diff against PrimaryPtr.
-	const FProperty* SubPropToPropagate = nullptr;
-	int32 SubPropAbsoluteOffset = INDEX_NONE;
+	// ── Step 2: Snapshot struct members before overwrite ──────────────────
+	// When the changed member is a struct (e.g. Variations, PropertyOverrides),
+	// snapshot its data from PrimaryPtr so we can diff after overwrite to
+	// propagate only changed sub-properties / array elements.
+	TArray<uint8> MemberSnapshot;
+	const FStructProperty* StructMember = PropToPropagate
+		? CastField<FStructProperty>(PropToPropagate) : nullptr;
 
-	if (PropToPropagate && SelectedIndices.Num() > 1)
+	if (StructMember && SelectedIndices.Num() > 1)
 	{
-		const FStructProperty* StructProp = CastField<FStructProperty>(PropToPropagate);
-		if (StructProp && StructProp->Struct)
-		{
-			const int32 MemberOff = PropToPropagate->GetOffset_ForInternal();
-
-			// Primary strategy: use Event.Property to directly identify the changed
-			// sub-property. This is reliable regardless of PrimaryPtr sync state.
-			if (ChangedLeafProperty && ChangedLeafProperty != PropToPropagate)
-			{
-				for (TFieldIterator<FProperty> It(StructProp->Struct); It; ++It)
-				{
-					if (*It == ChangedLeafProperty)
-					{
-						SubPropToPropagate = ChangedLeafProperty;
-						SubPropAbsoluteOffset = MemberOff + ChangedLeafProperty->GetOffset_ForInternal();
-						break;
-					}
-				}
-			}
-
-			// Fallback: diff sub-properties between pre-copy primary and edited source
-			if (!SubPropToPropagate)
-			{
-				for (TFieldIterator<FProperty> It(StructProp->Struct); It; ++It)
-				{
-					const FProperty* SubProp = *It;
-					const int32 SubOff = SubProp->GetOffset_ForInternal();
-					if (!SubProp->Identical(PrimaryPtr + MemberOff + SubOff, SrcData + MemberOff + SubOff))
-					{
-						SubPropToPropagate = SubProp;
-						SubPropAbsoluteOffset = MemberOff + SubOff;
-						break;
-					}
-				}
-			}
-		}
+		const int32 MemberSize = StructMember->Struct->GetStructureSize();
+		const int32 MemberOffset = PropToPropagate->GetOffset_ForInternal();
+		MemberSnapshot.SetNumUninitialized(MemberSize);
+		StructMember->Struct->InitializeStruct(MemberSnapshot.GetData());
+		StructMember->Struct->CopyScriptStruct(MemberSnapshot.GetData(), PrimaryPtr + MemberOffset);
 	}
 
-	// ── Step 3: Check if the member actually changed ────────────────────
-	// Guards against duplicate/re-entrant events (e.g. from PostEditChange())
-	// where PrimaryPtr was already synced — a coarse fallback would overwrite
-	// the fine-grained copy that the first event applied correctly.
-	// Must be checked BEFORE the full struct copy overwrites PrimaryPtr.
-	const bool bMemberChanged = PropToPropagate &&
-		!PropToPropagate->Identical(
-			PrimaryPtr + PropToPropagate->GetOffset_ForInternal(),
-			SrcData + PropToPropagate->GetOffset_ForInternal());
-
-	// ── Step 4: Copy entire struct back to the primary entry ─────────────
+	// ── Step 3: Copy entire struct back to the primary entry ─────────────
 	EntryStruct->CopyScriptStruct(PrimaryPtr, SrcData);
 
-	// ── Step 5: Propagate to other selected entries ──────────────────────
-	if (bMemberChanged && SelectedIndices.Num() > 1 && (SubPropToPropagate || PropToPropagate))
+	// ── Step 4: Propagate to other selected entries ──────────────────────
+	if (PropToPropagate && SelectedIndices.Num() > 1)
 	{
-		TArray<int32> Selected = GetSelectedIndices();
-		for (int32 OtherIndex : Selected)
-		{
-			if (OtherIndex == CurrentDetailIndex) { continue; }
-			uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
-			if (!OtherPtr) { continue; }
+		const int32 MemberOffset = PropToPropagate->GetOffset_ForInternal();
 
-			if (SubPropToPropagate)
+		if (StructMember && MemberSnapshot.Num() > 0)
+		{
+			// Granular: snapshot-diff propagation for struct members
+			TArray<int32> Selected = GetSelectedIndices();
+			for (int32 OtherIndex : Selected)
 			{
-				// Fine-grained: copy only the specific sub-property that changed
-				SubPropToPropagate->CopyCompleteValue(OtherPtr + SubPropAbsoluteOffset, SrcData + SubPropAbsoluteOffset);
+				if (OtherIndex == CurrentDetailIndex) { continue; }
+				uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+				if (OtherPtr)
+				{
+					PropagateChangedProperties(
+						MemberSnapshot.GetData(),
+						SrcData + MemberOffset,
+						OtherPtr + MemberOffset,
+						StructMember->Struct);
+				}
 			}
-			else
+
+			StructMember->Struct->DestroyStruct(MemberSnapshot.GetData());
+		}
+		else
+		{
+			// Coarse: copy the entire top-level member
+			TArray<int32> Selected = GetSelectedIndices();
+			for (int32 OtherIndex : Selected)
 			{
-				// Coarse: copy the entire top-level member
-				const int32 Offset = PropToPropagate->GetOffset_ForInternal();
-				PropToPropagate->CopyCompleteValue(OtherPtr + Offset, SrcData + Offset);
+				if (OtherIndex == CurrentDetailIndex) { continue; }
+				uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+				if (OtherPtr)
+				{
+					PropToPropagate->CopyCompleteValue(OtherPtr + MemberOffset, SrcData + MemberOffset);
+				}
 			}
 		}
 	}
 
 	Coll->PostEditChange();
+}
+
+void SPCGExCollectionGridView::PropagateChangedProperties(
+	const uint8* OldData, const uint8* NewData, uint8* DstData,
+	const UStruct* Struct, bool bCheckEnabledGate)
+{
+	// When bCheckEnabledGate is true: if the destination element has bEnabled == false,
+	// only propagate changes to bEnabled itself (skip Value and other fields).
+	// This prevents override value edits from leaking into entries that have the override disabled.
+	bool bGateBlocksNonGateFields = false;
+	static const FName EnabledFieldName = TEXT("bEnabled");
+
+	if (bCheckEnabledGate)
+	{
+		if (const FBoolProperty* EnabledProp = CastField<FBoolProperty>(Struct->FindPropertyByName(EnabledFieldName)))
+		{
+			bGateBlocksNonGateFields = !EnabledProp->GetPropertyValue(DstData + EnabledProp->GetOffset_ForInternal());
+		}
+	}
+
+	for (TFieldIterator<FProperty> It(Struct); It; ++It)
+	{
+		const FProperty* Prop = *It;
+		const int32 Offset = Prop->GetOffset_ForInternal();
+
+		// Skip unchanged properties
+		if (Prop->Identical(OldData + Offset, NewData + Offset)) { continue; }
+
+		// If gate is active, only allow the gate field (bEnabled) to propagate
+		if (bGateBlocksNonGateFields && Prop->GetFName() != EnabledFieldName) { continue; }
+
+		if (const FStructProperty* NestedStruct = CastField<FStructProperty>(Prop))
+		{
+			// FInstancedStruct stores polymorphic data in an internal heap buffer,
+			// not as reflected UPROPERTYs. Recursing would find no meaningful fields
+			// to propagate, so copy the complete value instead.
+			if (NestedStruct->Struct == TBaseStructure<FInstancedStruct>::Get())
+			{
+				Prop->CopyCompleteValue(DstData + Offset, NewData + Offset);
+			}
+			else
+			{
+				// Recurse into nested struct for finer granularity
+				PropagateChangedProperties(
+					OldData + Offset, NewData + Offset, DstData + Offset,
+					NestedStruct->Struct);
+			}
+		}
+		else if (const FArrayProperty* ArrayProp = CastField<FArrayProperty>(Prop))
+		{
+			// Compare array elements individually
+			FScriptArrayHelper OldHelper(ArrayProp, OldData + Offset);
+			FScriptArrayHelper NewHelper(ArrayProp, NewData + Offset);
+			FScriptArrayHelper DstHelper(ArrayProp, DstData + Offset);
+
+			if (OldHelper.Num() != NewHelper.Num() || NewHelper.Num() != DstHelper.Num())
+			{
+				// Size mismatch — must copy entire array
+				Prop->CopyCompleteValue(DstData + Offset, NewData + Offset);
+			}
+			else
+			{
+				// Check if array elements are structs with a bEnabled gate
+				const FStructProperty* InnerStructProp = CastField<FStructProperty>(ArrayProp->Inner);
+				const bool bInnerHasEnabledGate = InnerStructProp
+					&& InnerStructProp->Struct->FindPropertyByName(EnabledFieldName) != nullptr;
+
+				const FProperty* Inner = ArrayProp->Inner;
+				for (int32 i = 0; i < NewHelper.Num(); i++)
+				{
+					if (!Inner->Identical(OldHelper.GetRawPtr(i), NewHelper.GetRawPtr(i)))
+					{
+						if (InnerStructProp)
+						{
+							// Recurse into struct elements for field-level granularity + bEnabled gate
+							PropagateChangedProperties(
+								OldHelper.GetRawPtr(i), NewHelper.GetRawPtr(i), DstHelper.GetRawPtr(i),
+								InnerStructProp->Struct, bInnerHasEnabledGate);
+						}
+						else
+						{
+							Inner->CopyCompleteValue(DstHelper.GetRawPtr(i), NewHelper.GetRawPtr(i));
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			// Leaf property — copy directly
+			Prop->CopyCompleteValue(DstData + Offset, NewData + Offset);
+		}
+	}
 }
 
 void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEvent& Event)
