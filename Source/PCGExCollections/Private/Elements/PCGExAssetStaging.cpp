@@ -14,7 +14,6 @@
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
-#include "Helpers/PCGHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Helpers/PCGExSocketHelpers.h"
 
@@ -505,15 +504,11 @@ namespace PCGExAssetStaging
 
 			// MicroCache holds per-entry sub-distribution data (e.g., material variants for meshes).
 			// SecondaryIndex selects which variant to use for this point.
-			// Use a decorrelated seed: the entry pick already consumed FRandomStream(Seed).RandRange(),
-			// so a fresh FRandomStream(Seed) would produce the exact same first random value,
-			// correlating entry and variant picks.
 			if (const PCGExAssetCollection::FMicroCache* MicroCache = Entry->MicroCache.Get();
 				MicroHelper && MicroCache && MicroCache->GetTypeId() == PCGExAssetCollection::TypeIds::Mesh)
 			{
 				const PCGExMeshCollection::FMicroCache* EntryMicroCache = static_cast<const PCGExMeshCollection::FMicroCache*>(MicroCache);
-				const int32 MaterialSeed = PCGHelpers::ComputeSeed(Seed, Staging.InternalIndex);
-				SecondaryIndex = MicroHelper->GetPick(EntryMicroCache, Index, MaterialSeed);
+				SecondaryIndex = MicroHelper->GetPick(EntryMicroCache, Index, Seed);
 
 				if (Context->bPickMaterials)
 				{
