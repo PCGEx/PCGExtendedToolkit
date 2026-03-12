@@ -145,7 +145,7 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 		Context->CollectionsLoader = MakeShared<PCGEx::TAssetLoader<UPCGExAssetCollection>>(Context, Context->MainPoints.ToSharedRef(), Names);
 	}
 
-	if (Context->bPickMaterials && !Context->MainCollection->IsType(PCGExAssetCollection::TypeIds::Mesh))
+	if (Context->bPickMaterials && Context->MainCollection && !Context->MainCollection->IsType(PCGExAssetCollection::TypeIds::Mesh))
 	{
 		Context->bPickMaterials = false;
 		PCGE_LOG(Warning, GraphAndLog, FTEXT("Pick Material is enabled, but the selected collection doesn't support material picking."));
@@ -508,7 +508,7 @@ namespace PCGExAssetStaging
 				MicroHelper && MicroCache && MicroCache->GetTypeId() == PCGExAssetCollection::TypeIds::Mesh)
 			{
 				const PCGExMeshCollection::FMicroCache* EntryMicroCache = static_cast<const PCGExMeshCollection::FMicroCache*>(MicroCache);
-				SecondaryIndex = MicroHelper->GetPick(EntryMicroCache, Index, Seed);
+				SecondaryIndex = MicroHelper->GetPick(EntryMicroCache, Index, Seed + Index);
 
 				if (Context->bPickMaterials)
 				{
@@ -525,10 +525,10 @@ namespace PCGExAssetStaging
 
 			if (bOutputWeight)
 			{
-				double Weight = bNormalizedWeight ? static_cast<double>(Entry->Weight) / static_cast<double>(Context->MainCollection->LoadCache()->WeightSum) : Entry->Weight;
+				double Weight = bNormalizedWeight ? static_cast<double>(Entry->Weight) / static_cast<double>(const_cast<UPCGExAssetCollection*>(EntryHost)->LoadCache()->WeightSum) : Entry->Weight;
 				if (bOneMinusWeight) { Weight = 1 - Weight; }
 				if (WeightWriter) { WeightWriter->SetValue(Index, Weight); }
-				if (NormalizedWeightWriter) { NormalizedWeightWriter->SetValue(Index, Weight); }
+				else if (NormalizedWeightWriter) { NormalizedWeightWriter->SetValue(Index, Weight); }
 				else { Densities[Index] = Weight; }
 			}
 
