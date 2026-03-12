@@ -5,6 +5,7 @@
 
 #include "PCGComponent.h"
 #include "Components/SplineMeshComponent.h"
+#include "Helpers/PCGHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
@@ -501,7 +502,8 @@ namespace PCGExPathSplineMesh
 				if (bLocalFitting)
 				{
 					const PCGExMeshCollection::FMicroCache* EntryMicroCache = static_cast<const PCGExMeshCollection::FMicroCache*>(MicroCache);
-					Segment.MaterialPick = MicroHelper->GetPick(EntryMicroCache, Index, Seed);
+					const int32 MaterialSeed = PCGHelpers::ComputeSeed(Seed, MeshEntry->Staging.InternalIndex);
+					Segment.MaterialPick = MicroHelper->GetPick(EntryMicroCache, Index, MaterialSeed);
 				}
 
 				if (Segment.MaterialPick != -1) { MeshEntry->GetMaterialPaths(Segment.MaterialPick, *ScopedMaterials->Get(Scope)); }
