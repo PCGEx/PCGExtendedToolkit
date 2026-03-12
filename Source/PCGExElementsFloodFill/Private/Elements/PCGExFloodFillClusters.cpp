@@ -221,21 +221,7 @@ namespace PCGExClusterDiffusion
 
 		Diffusions.Reserve(OngoingDiffusions.Num());
 
-		if (Settings->Processing == EPCGExFloodFillProcessing::Parallel)
-		{
-			Grow();
-		}
-		else
-		{
-			PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, GrowDiffusions)
-			GrowDiffusions->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
-			{
-				PCGEX_ASYNC_THIS
-				PCGEX_SCOPE_LOOP(i) { This->Grow(); }
-			};
-
-			GrowDiffusions->StartSubLoops(OngoingDiffusions.Num(), 1);
-		}
+		Grow();
 	}
 
 	void FProcessor::Grow()
@@ -250,7 +236,7 @@ namespace PCGExClusterDiffusion
 		}
 
 		// Grow one entirely
-		const TSharedPtr<PCGExFloodFill::FDiffusion> Diffusion = OngoingDiffusions.Pop();
+		TSharedPtr<PCGExFloodFill::FDiffusion> Diffusion = OngoingDiffusions.Pop();
 		while (!Diffusion->bStopped) { Diffusion->Grow(); }
 
 		Diffusions.Add(Diffusion);
