@@ -12,7 +12,8 @@
 
 #define PCGEX_FOREACH_FIELD_BFS_DEPTH(MACRO)\
 MACRO(Depth, int32, -1)\
-MACRO(Distance, double, -1)
+MACRO(Distance, double, -1)\
+MACRO(SeedIndex, int32, -1)
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cluster-bfs-depth"))
 class UPCGExBFSDepthSettings : public UPCGExClustersProcessorSettings
@@ -55,6 +56,14 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="Distance", PCG_Overridable, EditCondition="bWriteDistance"))
 	FName DistanceAttributeName = FName("BFSDistance");
 
+	/** Write the point index of the closest seed that reached this vertex. Unreachable vertices keep a value of -1. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bWriteSeedIndex = false;
+
+	/** Name of the 'int32' attribute to write seed index to. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="Seed Index", PCG_Overridable, EditCondition="bWriteSeedIndex"))
+	FName SeedIndexAttributeName = FName("SeedIndex");
+
 	/** Whether to use an octree for closest node search. Depending on your dataset, this may be faster or slower. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable, AdvancedDisplay))
 	bool bUseOctreeSearch = false;
@@ -96,9 +105,10 @@ namespace PCGExBFSDepth
 		TArray<int8> Seeded;
 		TArray<int32> Depths;
 		TArray<double> Distances;
+		TArray<int32> SeedOwners;
 
-		TSharedPtr<PCGExMT::TScopedArray<int32>> SeedNodeIndices;
-		TArray<int32> CollectedSeeds;
+		TSharedPtr<PCGExMT::TScopedArray<FIntPoint>> SeedNodeIndices;
+		TArray<FIntPoint> CollectedSeeds;
 
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
@@ -108,6 +118,7 @@ namespace PCGExBFSDepth
 
 		int32* DepthData = nullptr;
 		double* DistanceData = nullptr;
+		int32* SeedIndexData = nullptr;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
