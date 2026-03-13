@@ -98,7 +98,7 @@ namespace PCGExBFSDepth
 		SeedPickingGroup->OnPrepareSubLoopsCallback = [PCGEX_ASYNC_THIS_CAPTURE](const TArray<PCGExMT::FScope>& Loops)
 		{
 			PCGEX_ASYNC_THIS
-			This->SeedNodeIndices = MakeShared<PCGExMT::TScopedArray<int32>>(Loops);
+			This->SeedNodeIndices = MakeShared<PCGExMT::TScopedArray<FIntPoint>>(Loops);
 		};
 
 		SeedPickingGroup->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
@@ -122,7 +122,7 @@ namespace PCGExBFSDepth
 					continue;
 				}
 
-				This->SeedNodeIndices->Get(Scope)->Add(ClosestIndex);
+				This->SeedNodeIndices->Get(Scope)->Add(FIntPoint(ClosestIndex, Index));
 			}
 		};
 
@@ -147,25 +147,37 @@ namespace PCGExBFSDepth
 
 		const TArray<PCGExClusters::FNode>& Nodes = *Cluster->Nodes;
 		const bool bComputeDistance = DistanceData != nullptr;
+		const bool bTrackSeedOwner = SeedIndexData != nullptr;
 
 		if (bComputeDistance) { Distances.Init(-1.0, Nodes.Num()); }
+		if (bTrackSeedOwner) { SeedOwners.Init(-1, Nodes.Num()); }
 
 		// Initialize all seeds at depth 0
 		TArray<int32> Queue;
 		Queue.Reserve(Nodes.Num());
 
-		for (const int32 SeedIdx : CollectedSeeds)
+		for (const FIntPoint& Seed : CollectedSeeds)
 		{
-			Depths[SeedIdx] = 0;
-			if (DepthData) { DepthData[Nodes[SeedIdx].PointIndex] = 0; }
+			const int32 NodeIdx = Seed.X;
+			const int32 SeedPtIdx = Seed.Y;
+			const int32 PointIdx = Nodes[NodeIdx].PointIndex;
+
+			Depths[NodeIdx] = 0;
+			if (DepthData) { DepthData[PointIdx] = 0; }
 
 			if (bComputeDistance)
 			{
-				Distances[SeedIdx] = 0.0;
-				DistanceData[Nodes[SeedIdx].PointIndex] = 0.0;
+				Distances[NodeIdx] = 0.0;
+				DistanceData[PointIdx] = 0.0;
 			}
 
-			Queue.Add(SeedIdx);
+			if (bTrackSeedOwner)
+			{
+				SeedOwners[NodeIdx] = SeedPtIdx;
+				SeedIndexData[PointIdx] = SeedPtIdx;
+			}
+
+			Queue.Add(NodeIdx);
 		}
 
 		// BFS — branched to avoid sqrt when distance output is disabled
@@ -193,6 +205,7 @@ namespace PCGExBFSDepth
 
 					if (DepthData) { DepthData[NeighborPointIdx] = NextDepth; }
 					DistanceData[NeighborPointIdx] = NewDist;
+					if (bTrackSeedOwner) { SeedOwners[Lk.Node] = SeedOwners[CurrentIdx]; SeedIndexData[NeighborPointIdx] = SeedOwners[CurrentIdx]; }
 
 					Queue.Add(Lk.Node);
 				}
@@ -212,6 +225,7 @@ namespace PCGExBFSDepth
 
 					Depths[Lk.Node] = NextDepth;
 					if (DepthData) { DepthData[Nodes[Lk.Node].PointIndex] = NextDepth; }
+					if (bTrackSeedOwner) { SeedOwners[Lk.Node] = SeedOwners[CurrentIdx]; SeedIndexData[Nodes[Lk.Node].PointIndex] = SeedOwners[CurrentIdx]; }
 
 					Queue.Add(Lk.Node);
 				}
@@ -248,6 +262,7 @@ namespace PCGExBFSDepth
 
 		if (DepthWriter) { TypedProcessor->DepthData = StaticCastSharedPtr<PCGExData::TArrayBuffer<int32>>(DepthWriter)->GetOutValues()->GetData(); }
 		if (DistanceWriter) { TypedProcessor->DistanceData = StaticCastSharedPtr<PCGExData::TArrayBuffer<double>>(DistanceWriter)->GetOutValues()->GetData(); }
+		if (SeedIndexWriter) { TypedProcessor->SeedIndexData = StaticCastSharedPtr<PCGExData::TArrayBuffer<int32>>(SeedIndexWriter)->GetOutValues()->GetData(); }
 
 		return true;
 	}
