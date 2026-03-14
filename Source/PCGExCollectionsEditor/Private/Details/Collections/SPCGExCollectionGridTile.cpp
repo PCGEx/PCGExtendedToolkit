@@ -36,6 +36,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	OnTileClicked = InArgs._OnTileClicked;
 	OnTileDragDetected = InArgs._OnTileDragDetected;
 	OnTileCategoryChanged = InArgs._OnTileCategoryChanged;
+	OnTilePropertyChanged = InArgs._OnTilePropertyChanged;
 	ThumbnailCachePtr = InArgs._ThumbnailCachePtr;
 	BatchFlagPtr = InArgs._BatchFlagPtr;
 
@@ -247,6 +248,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									Coll->PostEditChange();
 									if (BatchFlagPtr) { *BatchFlagPtr = false; }
 									RefreshThumbnail();
+									OnTilePropertyChanged.ExecuteIfBound();
 								})
 							]
 						]
@@ -298,6 +300,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									if (UPCGExAssetCollection* Coll = WeakColl.Get()) { Coll->PostEditChange(); }
 									if (GEditor) { GEditor->EndTransaction(); }
 									if (BatchFlagPtr) { *BatchFlagPtr = false; }
+									OnTilePropertyChanged.ExecuteIfBound();
 								})
 								.OnValueCommitted_Lambda([this, WeakColl, Idx](int32 NewVal, ETextCommit::Type CommitType)
 								{
@@ -311,6 +314,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									Entry->Weight = NewVal;
 									Coll->PostEditChange();
 									if (BatchFlagPtr) { *BatchFlagPtr = false; }
+									OnTilePropertyChanged.ExecuteIfBound();
 								})
 								.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
 							]

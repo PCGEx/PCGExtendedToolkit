@@ -327,7 +327,8 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 				.BatchFlagPtr(&bIsBatchOperation)
 				.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
 				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
-				.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged));
+				.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged))
+				.OnTilePropertyChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTilePropertyChanged));
 
 			Group->AddTile(TileWidget);
 			ActiveTiles.Add(EntryIdx, Tile);
@@ -454,7 +455,8 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 				.BatchFlagPtr(&bIsBatchOperation)
 				.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
 				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
-				.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged));
+				.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged))
+				.OnTilePropertyChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTilePropertyChanged));
 
 			Group->AddTile(TileWidget);
 			ActiveTiles.Add(EntryIdx, Tile);
@@ -647,6 +649,11 @@ void SPCGExCollectionGridView::OnTileCategoryChanged()
 				return EActiveTimerReturnType::Stop;
 			}));
 	}
+}
+
+void SPCGExCollectionGridView::OnTilePropertyChanged()
+{
+	UpdateDetailForSelection();
 }
 
 // ── Category operations ─────────────────────────────────────────────────────
@@ -1037,7 +1044,8 @@ void SPCGExCollectionGridView::PopulateCategoryTiles(FName Category)
 			.BatchFlagPtr(&bIsBatchOperation)
 			.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
 			.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
-			.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged));
+			.OnTileCategoryChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTileCategoryChanged))
+				.OnTilePropertyChanged(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnTilePropertyChanged));
 
 		Group->AddTile(TileWidget);
 		ActiveTiles.Add(EntryIdx, Tile);
