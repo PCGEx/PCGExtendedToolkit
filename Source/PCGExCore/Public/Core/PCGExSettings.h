@@ -56,6 +56,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	EPCGExOptionState CacheData = EPCGExOptionState::Default;
 
+	/** Cache the resources loaded by this node. Only accounted for if the node actually relies on external resources. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
+	EPCGExOptionState CacheLoadedResources = EPCGExOptionState::Default;
+
 	/** Whether scoped attribute read is enabled or not. Disabling this on small dataset may greatly improve performance. It's enabled by default for legacy reasons. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	EPCGExOptionState ScopedAttributeGet = EPCGExOptionState::Default;
@@ -65,19 +69,24 @@ public:
 	 * Only supported by nodes set-up in a way that makes in-place mutations possible. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	EPCGExOptionState StealData = EPCGExOptionState::Disabled;
-	
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	bool bForceOffThreadPrepare = false;
-	
+
 	bool GetForceOffThreadPrepare(const FPCGExContext* InContext) const;
-	
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	bool bForceOffThreadExecute = false;
-	
+
 	bool GetForceOffThreadExecute(const FPCGExContext* InContext) const;
-	
-	virtual bool WantsDataStealing() const { return SupportsDataStealing() && StealData == EPCGExOptionState::Enabled; };
-	
+
+	virtual bool WantsDataStealing() const
+	{
+		return SupportsDataStealing() && StealData == EPCGExOptionState::Enabled;
+	}
+
+	bool WantsResourcesCached() const;
+
 	/** Flatten the output of this node. Merges hierarchical data into a single flat collection. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Cleanup", meta=(PCG_NotOverridable))
 	bool bFlattenOutput = false;

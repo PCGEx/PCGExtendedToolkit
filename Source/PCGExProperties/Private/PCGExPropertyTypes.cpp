@@ -93,6 +93,17 @@ PCGEX_PROPERTY_IMPL(FTransform, Transform)
 PCGEX_PROPERTY_IMPL(FSoftObjectPath, SoftObjectPath)
 PCGEX_PROPERTY_IMPL(FSoftClassPath, SoftClassPath)
 
+// Soft-path properties surface their value for cook dependencies AND runtime preloading.
+// FSoftClassPath derives from FSoftObjectPath, so a single FSoftObjectPath set absorbs both.
+// Runtime-safe (a plain value read), hence defined here rather than in the editor-only block below.
+#define PCGEX_GATHER_SOFT_PATHS(_TYPE) \
+	void FPCGExProperty_##_TYPE::GatherSoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const \
+	{ if (!Value.IsNull()) { OutPaths.Add(Value); } }
+
+PCGEX_GATHER_SOFT_PATHS(SoftObjectPath)
+PCGEX_GATHER_SOFT_PATHS(SoftClassPath)
+#undef PCGEX_GATHER_SOFT_PATHS
+
 // Editor-only structural meta propagation. AllowedClass and Range are schema-authored
 // and copied verbatim onto override entries so the override UI inherits the same picker
 // constraints. The fields themselves are WITH_EDITORONLY_DATA, so cooked builds get
@@ -125,15 +136,8 @@ PCGEX_DISPLAY_TYPE_FROM_ALLOWED_CLASS(SoftObjectPath)
 PCGEX_DISPLAY_TYPE_FROM_ALLOWED_CLASS(SoftClassPath)
 #undef PCGEX_DISPLAY_TYPE_FROM_ALLOWED_CLASS
 
-// FSoftClassPath inherits from FSoftObjectPath, so the FSoftObjectPath output set
-// absorbs class paths cleanly -- packages cook the same either way.
-#define PCGEX_GET_COOK_DEPS(_TYPE) \
-	void FPCGExProperty_##_TYPE::GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const \
-	{ if (!Value.IsNull()) { OutPaths.Add(Value); } }
-
-PCGEX_GET_COOK_DEPS(SoftObjectPath)
-PCGEX_GET_COOK_DEPS(SoftClassPath)
-#undef PCGEX_GET_COOK_DEPS
+// Soft-path emit is defined as GatherSoftObjectPaths in the always-compiled section above
+// (runtime-safe), so nothing soft-path-related lives in this editor-only block anymore.
 #else
 bool FPCGExProperty_Int32::SyncStructuralFromSchema(const FPCGExProperty&)
 {

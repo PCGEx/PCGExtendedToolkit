@@ -728,6 +728,14 @@ public:
 
 	void GetAssetPaths(TSet<FSoftObjectPath>& OutPaths, PCGExAssetCollection::ELoadingFlags Flags) const;
 
+	/**
+	 * Gather the soft object paths referenced by this collection's custom properties --
+	 * collection-level CollectionProperties plus every entry's PropertyOverrides. Runtime-safe
+	 * (not editor-gated) so preloading can warm property-referenced assets at runtime; the
+	 * editor cook-dependency walk shares the same extraction.
+	 */
+	void GatherPropertySoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const;
+
 #if WITH_EDITOR
 	//~ Begin IPCGExCookDependencyProvider
 	virtual void GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;

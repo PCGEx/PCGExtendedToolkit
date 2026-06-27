@@ -64,6 +64,9 @@ class UPCGExGetCollectionDataSettings : public UPCGExSettings
 	//~End UObject interface
 
 public:
+	
+	UPCGExGetCollectionDataSettings();
+	
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(GetCollectionData, "Get Collection Data", "Unified read of asset collection contents into an attribute set. Supports static asset selection, soft-path-driven inputs, and recursive grammar via upstream Collection Maps.");
@@ -348,11 +351,7 @@ public:
 
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(GetCollectionData)
-
-	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override
-	{
-		return true;
-	}
+	PCGEX_ELEMENT_MAIN_THREAD_ONLY(true)
 
 	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;

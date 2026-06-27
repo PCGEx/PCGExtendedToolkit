@@ -189,7 +189,7 @@ struct FPCGExClipper2VolumeContext final : FPCGExClipper2ProcessorContext
 class FPCGExClipper2VolumeElement final : public FPCGExClipper2ProcessorElement
 {
 protected:
-	PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD(true) // OutputWork spawns actors + cooks collision on the game thread.
+	PCGEX_ELEMENT_MAIN_THREAD_ONLY(true) // OutputWork spawns actors + cooks collision on the game thread.
 	PCGEX_ELEMENT_CREATE_CONTEXT(Clipper2Volume)
 
 	virtual bool PostBoot(FPCGExContext* InContext) const override;
