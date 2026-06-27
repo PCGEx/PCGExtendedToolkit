@@ -759,16 +759,14 @@ const FInstancedStruct* FPCGExPropertyOverrides::GetOverride(FName PropertyName)
 
 #pragma endregion
 
-#if WITH_EDITOR
+#pragma region PCGExProperties soft object path walk
 
-#pragma region PCGExProperties cook dependency walk
-
-namespace PCGExPropertyCookDeps
+namespace PCGExPropertySoftPaths
 {
 	// Visited tracks UPCGExPropertySchemaAsset pointers so an A->B->A import cycle
 	// terminates instead of looping. Peer to PCGExPropertySchemaResolve::Walk; distinct
 	// because Resolve dedups locals/imports by Name (first-wins) and walks override
-	// layers as a chain -- both wrong for cook, which must surface every soft path
+	// layers as a chain -- both wrong here, which must surface every soft path
 	// regardless of shadowing.
 	static void WalkCollection(
 		const FPCGExPropertySchemaCollection& Collection,
@@ -779,11 +777,11 @@ namespace PCGExPropertyCookDeps
 		{
 			if (const FPCGExProperty* Prop = Schema.GetProperty())
 			{
-				Prop->GetCookDependencyAssetPaths(OutPaths);
+				Prop->GatherSoftObjectPaths(OutPaths);
 			}
 		}
 
-		PCGExProperties::GatherCookDependencyAssetPaths(Collection.ImportOverrides, OutPaths);
+		PCGExProperties::GatherSoftObjectPaths(Collection.ImportOverrides, OutPaths);
 
 		// Imported schema assets are auto-cooked via hard refs, but we still walk into
 		// each one's Collection to surface its leaf soft paths.
@@ -800,25 +798,23 @@ namespace PCGExPropertyCookDeps
 
 namespace PCGExProperties
 {
-	void GatherCookDependencyAssetPaths(const FPCGExPropertyOverrides& Overrides, TSet<FSoftObjectPath>& OutPaths)
+	void GatherSoftObjectPaths(const FPCGExPropertyOverrides& Overrides, TSet<FSoftObjectPath>& OutPaths)
 	{
 		for (const FPCGExPropertyOverrideEntry& Entry : Overrides.Overrides)
 		{
 			if (!Entry.bEnabled) { continue; }
 			if (const FPCGExProperty* Prop = Entry.GetProperty())
 			{
-				Prop->GetCookDependencyAssetPaths(OutPaths);
+				Prop->GatherSoftObjectPaths(OutPaths);
 			}
 		}
 	}
 
-	void GatherCookDependencyAssetPaths(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths)
+	void GatherSoftObjectPaths(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths)
 	{
 		TSet<const UPCGExPropertySchemaAsset*> Visited;
-		PCGExPropertyCookDeps::WalkCollection(Collection, Visited, OutPaths);
+		PCGExPropertySoftPaths::WalkCollection(Collection, Visited, OutPaths);
 	}
 }
 
 #pragma endregion
-
-#endif // WITH_EDITOR

@@ -56,6 +56,9 @@ class UPCGExAssetCollectionToSetSettings : public UPCGExSettings
 	//~End UObject interface
 
 public:
+	
+	UPCGExAssetCollectionToSetSettings();
+	
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(AssetCollectionToSet, "Asset Collection to Set", "Converts an asset collection to an attribute set.");

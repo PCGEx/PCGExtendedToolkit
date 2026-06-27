@@ -603,7 +603,12 @@ void FPCGExAssetCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 
 void FPCGExAssetCollectionEntry::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) const
 {
-	OutPaths.Emplace(Staging.Path);
+	// Skip empty/unset slots: a null staged path is never a loadable/cookable asset, and it would
+	// otherwise pollute preload sets and the cook-dependency walk (mirrors EDITOR_GetSourceAssetPaths).
+	if (Staging.Path.IsValid())
+	{
+		OutPaths.Emplace(Staging.Path);
+	}
 }
 
 #if WITH_EDITOR
@@ -1285,16 +1290,25 @@ void UPCGExAssetCollection::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths, PCGEx
 	});
 }
 
-#if WITH_EDITOR
-void UPCGExAssetCollection::GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const
+void UPCGExAssetCollection::GatherPropertySoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const
 {
-	GetAssetPaths(OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive);
-	PCGExProperties::GatherCookDependencyAssetPaths(CollectionProperties, OutPaths);
+	// Collection-level defaults, then every entry's overrides. Shared by the editor
+	// cook-dependency walk and runtime preloading.
+	PCGExProperties::GatherSoftObjectPaths(CollectionProperties, OutPaths);
 
 	ForEachEntry([&OutPaths](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)
 	{
-		PCGExProperties::GatherCookDependencyAssetPaths(Entry->PropertyOverrides, OutPaths);
+		PCGExProperties::GatherSoftObjectPaths(Entry->PropertyOverrides, OutPaths);
 	});
+}
+
+#if WITH_EDITOR
+void UPCGExAssetCollection::GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const
+{
+	// Identical cook output to before: recursive assets + the same custom-property soft paths,
+	// now sourced from the shared (un-gated) GatherPropertySoftObjectPaths.
+	GetAssetPaths(OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive);
+	GatherPropertySoftObjectPaths(OutPaths);
 }
 #endif
 

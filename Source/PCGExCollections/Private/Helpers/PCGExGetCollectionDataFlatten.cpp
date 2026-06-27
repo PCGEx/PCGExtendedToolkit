@@ -376,7 +376,7 @@ namespace PCGExGetCollectionData
 			}
 			if (!UniquePaths->IsEmpty())
 			{
-				PCGExHelpers::LoadBlocking_AnyThread(TSharedPtr<TSet<FSoftObjectPath>>(UniquePaths), InContext);
+				PCGExHelpers::LoadBlockingTracked_AnyThread(TSharedPtr<TSet<FSoftObjectPath>>(UniquePaths), InContext);
 			}
 
 			// Resolve into ResolvedCollections now that everything's in memory.

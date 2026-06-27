@@ -385,7 +385,7 @@ namespace PCGExMT
 	bool IsObjectWorkBlocked();
 
 // Defer the current bool-returning AdvanceWork (return false = "not complete, re-tick") when UObject work is illegal
-// -- a package save / GC is in progress. USE ONLY in a main-thread-only element (PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD):
+// -- a package save / GC is in progress. USE ONLY in a main-thread-only element (PCGEX_ELEMENT_MAIN_THREAD_ONLY):
 // on an off-thread/paused context this return-false is never re-driven and would hang. The game-thread UObject work
 // itself (spawn / marshal / FindFunction) must still carry its own PCGExMT::IsObjectWorkBlocked() backstop.
 #define PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED if (PCGExMT::IsObjectWorkBlocked()) { return false; }

@@ -44,6 +44,10 @@ public:
 	/** Value applied by default to node bulk init data when `Default` is selected. */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
 	bool bBulkInitData = true;
+	
+	/** Value applied by default to node cache loaded resources when `Default` is selected. */
+	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
+	bool bCacheLoadedResources = false;
 
 	/** */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")

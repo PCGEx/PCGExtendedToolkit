@@ -37,7 +37,7 @@ protected:
 	PCGEX_FACTORY_TYPE_ID(FPCGExDataTypeInfoFilterPoint)
 
 public:
-	UPCGExFilterProviderSettings();
+	UPCGExFilterProviderSettings(const FObjectInitializer& ObjectInitializer);
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR

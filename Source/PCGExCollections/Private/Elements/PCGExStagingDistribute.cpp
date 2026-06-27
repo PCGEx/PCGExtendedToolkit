@@ -33,6 +33,11 @@
 
 #pragma region UPCGExAssetStagingSettings
 
+UPCGExAssetStagingSettings::UPCGExAssetStagingSettings()
+{
+	CacheLoadedResources = EPCGExOptionState::Enabled;
+}
+
 #if WITH_EDITOR
 void UPCGExAssetStagingSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {

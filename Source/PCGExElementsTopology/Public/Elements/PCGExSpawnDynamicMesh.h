@@ -68,7 +68,7 @@ public:
 	}
 
 protected:
-	PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD(true) // creates UDynamicMeshComponents on the game thread; keep output off the worker/paused path
+	PCGEX_ELEMENT_MAIN_THREAD_ONLY(true)
 	PCGEX_ELEMENT_CREATE_CONTEXT(SpawnDynamicMesh)
 
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;

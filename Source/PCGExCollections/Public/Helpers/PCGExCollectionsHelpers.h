@@ -318,7 +318,7 @@ namespace PCGExCollections
 	{
 	protected:
 		TMap<uint32, UPCGExAssetCollection*> CollectionMap;
-		TSharedPtr<struct FStreamableHandle> CollectionsHandle;
+		TArray<PCGExHelpers::FPCGExSharedAssetHandlePtr> CollectionsHandles;
 		int32 NumUniqueEntries = 0;
 		const UPCGBasePointData* PointData = nullptr;
 
@@ -327,7 +327,6 @@ namespace PCGExCollections
 		TMap<int64, int32> IndexedPartitions;
 
 		FPickUnpacker() = default;
-		~FPickUnpacker();
 
 		bool HasValidMapping() const
 		{

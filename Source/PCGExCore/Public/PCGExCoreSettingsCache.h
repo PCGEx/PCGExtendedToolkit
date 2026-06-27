@@ -29,6 +29,7 @@ struct PCGEXCORE_API FPCGExCoreSettingsCache
 	FVector WorldForward = FVector::ForwardVector;
 
 	bool bDefaultCacheNodeOutput = true;
+	bool bCacheLoadedResources = true;
 	bool bDefaultScopedAttributeGet = true;
 	bool bBulkInitData = false;
 	bool bUseDelaunator = true;
