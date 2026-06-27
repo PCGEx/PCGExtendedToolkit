@@ -40,6 +40,9 @@ class PCGEXCORE_API UPCGExFactoryProviderSettings : public UPCGExSettings
 	virtual const FPCGDataTypeBaseId& GetFactoryTypeId() const;
 
 public:
+	
+	UPCGExFactoryProviderSettings(const FObjectInitializer& ObjectInitializer);
+	
 	//~Begin UObject interface
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

@@ -41,6 +41,7 @@ void UPCGExGlobalSettings::UpdateSettingsCaches() const
 	PCGEX_PUSH_SETTING(Core, bDefaultCacheNodeOutput)
 	PCGEX_PUSH_SETTING(Core, bDefaultScopedAttributeGet)
 	PCGEX_PUSH_SETTING(Core, bBulkInitData)
+	PCGEX_PUSH_SETTING(Core, bCacheLoadedResources)
 	PCGEX_PUSH_SETTING(Core, bUseDelaunator)
 	PCGEX_PUSH_SETTING(Core, bAssertOnEmptyThread)
 	PCGEX_PUSH_SETTING(Core, bRuntimeAlwaysOffThread)

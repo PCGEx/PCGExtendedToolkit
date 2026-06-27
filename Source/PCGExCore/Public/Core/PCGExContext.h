@@ -44,6 +44,11 @@ namespace PCGEx
 	class FWorkHandle;
 }
 
+namespace PCGExHelpers
+{
+	struct FPCGExSharedAssetHandle;
+}
+
 struct PCGEXCORE_API FPCGExContext : FPCGContext
 {
 	friend class IPCGExElement;
@@ -69,9 +74,10 @@ protected:
 
 	int32 LoopIndex = INDEX_NONE;
 	int32 TopLoopIndex = INDEX_NONE;
-	
+
 	bool bPreparationDispatchedOffThread = false;
-	bool bExecutionDispatchedOffThread = false;	
+	bool bExecutionDispatchedOffThread = false;
+	bool bWantsResourcesCached = false;
 
 public:
 	TWeakPtr<PCGEx::FWorkHandle> GetWorkHandle()
@@ -81,11 +87,17 @@ public:
 
 	// Non-creating handle accessor. Returns an invalid weak ptr once the context is released -- the
 	// "context is gone, bail out" signal for the PCGEX_SHARED_CONTEXT* guards. Use for all self-pinning.
-	const TWeakPtr<FPCGContextHandle>& GetWeakSelfHandle() const { return SelfHandle; }
+	const TWeakPtr<FPCGContextHandle>& GetWeakSelfHandle() const
+	{
+		return SelfHandle;
+	}
 
 	// Shared pin counter; async task bodies bracket their pinned region with an FAsyncContextPinScope
 	// built from this.
-	const TSharedPtr<PCGExMT::FAsyncContextPinTracker>& GetAsyncPinTracker() const { return AsyncPinTracker; }
+	const TSharedPtr<PCGExMT::FAsyncContextPinTracker>& GetAsyncPinTracker() const
+	{
+		return AsyncPinTracker;
+	}
 
 	TSharedPtr<PCGEx::FManagedObjects> ManagedObjects;
 
@@ -99,11 +111,16 @@ public:
 		return TopLoopIndex != INDEX_NONE;
 	}
 
-	bool IsRuntimeGen() const; 
+	bool IsRuntimeGen() const;
 
 	bool bScopedAttributeGet = false;
 	bool bPropagateAbortedExecution = false;
-	
+
+	// True when the most recent LoadAssets() completed synchronously because every dependency was
+	// already resident (a warm resource-cache hit) rather than dispatching an async load. Lets
+	// PostLoadAssetsDependencies overrides distinguish a warm re-run from a cold load.
+	bool bWarmDependencies = false;
+
 	FPCGExContext();
 
 	// Non-copyable / non-movable: SelfHandle and the base Handle both bind to THIS instance (the
@@ -222,13 +239,27 @@ public:
 
 	virtual void RegisterAssetDependencies();
 	void AddAssetDependency(const FSoftObjectPath& Dependency);
+	// Returns true when an asset-dependency load was initiated (state advanced to
+	// State_LoadingAssetDependencies), false when there was nothing to load. On return, bWarmDependencies
+	// reflects whether the load completed synchronously from the resource cache (no async yield needed).
 	bool LoadAssets();
 
 	void TrackAssetsHandle(const TSharedPtr<FStreamableHandle>& InHandle);
 
+	// Keep-alive registration for cached resource wrappers (LoadAndCacheBlocking_AnyThread). Held for the
+	// context's lifetime and dropped on destruction; the underlying handle is released only once the last
+	// owner (here or the subsystem cache) lets go.
+	void TrackCachedAsset(const TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>& InHandle);
+
+	FORCEINLINE bool WantsResourcesCached() const
+	{
+		return bWantsResourcesCached;
+	}
+
 protected:
 	TSharedPtr<TSet<FSoftObjectPath>> RequiredAssets;
 	TArray<TSharedPtr<FStreamableHandle>> TrackedAssets;
+	TArray<TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>> TrackedCachedAssets;
 
 #pragma endregion
 

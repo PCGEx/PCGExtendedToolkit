@@ -28,7 +28,12 @@
 
 
 // Override to control whether a node can only execute on the main thread
-#define PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD(_BOOL) virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override { return _BOOL; }
+#define PCGEX_ELEMENT_MAIN_THREAD_ONLY(_BOOL) virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override { return _BOOL; }
+
+// Force a node onto the main thread for the PrepareData phase only (e.g. nodes that load/cache
+// resources during preparation and must stay game-thread-affine to avoid the marshal-and-wait
+// deadlock under PCG cancellation). Off-thread for every other phase.
+#define PCGEX_ELEMENT_MAIN_THREAD_ONLY_IN_PREPARE() virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override { return Context && Context->CurrentPhase == EPCGExecutionPhase::PrepareData; }
 
 // Override to control whether a node supports base point data inputs
 #define PCGEX_SUPPORT_BASE_POINT_DATA(_BOOL) virtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override { return _BOOL; }
@@ -289,6 +294,9 @@ switch (_OPTION){ \
 
 // Pin for operation property overrides
 #define PCGEX_PIN_OPERATION_OVERRIDES(_LABEL) PCGEX_PIN_PARAMS(_LABEL, "Property overrides to be forwarded & processed by the module. Name must match the property you're targeting 1:1, type mismatch will be broadcasted at your own risk.", Advanced)
+
+// Execution-dependency-only pin: carries no data, only orders execution. Multi-connection/data.
+#define PCGEX_PIN_DEPENDENCY(_LABEL) { FPCGPinProperties& Pin = PinProperties.Emplace_GetRef(_LABEL, EPCGDataType::Any, /*bInAllowMultipleConnections=*/true, /*bAllowMultipleData=*/true); Pin.Usage = EPCGPinUsage::DependencyOnly; }
 
 
 /// GEOMETRY UTILITIES

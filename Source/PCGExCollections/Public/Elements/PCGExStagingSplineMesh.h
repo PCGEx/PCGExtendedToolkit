@@ -240,7 +240,7 @@ public:
 	}
 
 protected:
-	PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD(true)
+	PCGEX_ELEMENT_MAIN_THREAD_ONLY(true)
 	PCGEX_ELEMENT_CREATE_CONTEXT(PathSplineMesh)
 
 	virtual bool Boot(FPCGExContext* InContext) const override;

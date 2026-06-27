@@ -15,6 +15,11 @@
 
 #pragma region UPCGSettings interface
 
+UPCGExAssetCollectionToSetSettings::UPCGExAssetCollectionToSetSettings()
+{
+	CacheLoadedResources = EPCGExOptionState::Enabled;
+}
+
 #if WITH_EDITOR
 void UPCGExAssetCollectionToSetSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
@@ -85,7 +90,7 @@ bool FPCGExAssetCollectionToSetElement::AdvanceWork(FPCGExContext* InContext, co
 		return InContext->TryComplete();
 	};
 
-	PCGExHelpers::LoadBlocking_AnyThread(Settings->AssetCollection.ToSoftObjectPath(), InContext);
+	PCGExHelpers::LoadBlockingTracked_AnyThread(Settings->AssetCollection.ToSoftObjectPath(), InContext);
 	UPCGExAssetCollection* MainCollection = Settings->AssetCollection.Get();
 
 	if (!MainCollection)

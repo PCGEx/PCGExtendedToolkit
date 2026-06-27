@@ -122,6 +122,11 @@ bool UPCGExSettings::GetForceOffThreadExecute(const FPCGExContext* InContext) co
 	return bForceOffThreadExecute || (PCGEX_CORE_SETTINGS.bRuntimeAlwaysOffThread && InContext->IsRuntimeGen());
 }
 
+bool UPCGExSettings::WantsResourcesCached() const
+{
+	PCGEX_GET_OPTION_STATE(CacheLoadedResources, bCacheLoadedResources)
+}
+
 #if WITH_EDITOR
 void UPCGExSettings::EDITOR_OpenNodeDocumentation() const
 {

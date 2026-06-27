@@ -54,8 +54,6 @@ namespace PCGExData::Helpers
 		const int32 NumValues = Keys->GetNum();
 		if (NumValues <= 0) { return; }
 
-		// SetNum (not SetNumUninitialized): T may be non-trivially-destructible (FSoftObjectPath,
-		// FString) and we Reset on failure -- which would destruct uninitialized memory.
 		OutValues.SetNum(NumValues);
 		if (!Accessor->GetRange<T>(OutValues, 0, *Keys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
 		{
@@ -78,14 +76,14 @@ namespace PCGExData::Helpers
 		if (!OutPaths.IsEmpty()) { return; }
 
 		// FString fallback for authored-as-string paths.
-		TArray<FString> Strings;
-		BulkReadRows<FString>(InData, AttributeName, Strings, Keys);
-		if (Strings.IsEmpty()) { return; }
+		TArray<FSoftObjectPath> Paths;
+		BulkReadRows<FSoftObjectPath>(InData, AttributeName, Paths, Keys);
+		if (Paths.IsEmpty()) { return; }
 
-		OutPaths.SetNum(Strings.Num());
-		for (int32 i = 0; i < Strings.Num(); i++)
+		OutPaths.SetNum(Paths.Num());
+		for (int32 i = 0; i < Paths.Num(); i++)
 		{
-			OutPaths[i] = FSoftObjectPath(Strings[i]);
+			OutPaths[i] = FSoftObjectPath(Paths[i]);
 		}
 	}
 }

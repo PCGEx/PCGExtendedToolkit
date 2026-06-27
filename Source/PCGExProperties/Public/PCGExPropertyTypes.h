@@ -754,9 +754,7 @@ public:
 	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;
 	virtual bool TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer) override;
 
-#if WITH_EDITOR
-	virtual void GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
-#endif
+	virtual void GatherSoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 };
 
 /**
@@ -811,9 +809,7 @@ public:
 	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;
 	virtual bool TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer) override;
 
-#if WITH_EDITOR
-	virtual void GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
-#endif
+	virtual void GatherSoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 };
 
 /**

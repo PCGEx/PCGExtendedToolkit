@@ -360,11 +360,6 @@ namespace PCGExCollections
 	// loads all referenced collections, then provides UnpackHash/ResolveEntry to decode
 	// per-point uint64 hashes back into (Collection, EntryIndex, SecondaryIndex).
 
-	FPickUnpacker::~FPickUnpacker()
-	{
-		PCGExHelpers::SafeReleaseHandle(CollectionsHandle);
-	}
-
 	bool FPickUnpacker::UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet)
 	{
 		const UPCGMetadata* Metadata = InAttributeSet->Metadata;
@@ -406,7 +401,11 @@ namespace PCGExCollections
 			DynamicTracking.Finalize(InContext);
 #endif
 
-			CollectionsHandle = PCGExHelpers::LoadBlocking_AnyThread(CollectionPaths);
+			// Append (not assign): UnpackDataset accumulates -- UnpackPin calls it once per param data on the
+			// pin, and CollectionMap grows across calls. The keep-alive wrappers must accumulate in lockstep,
+			// or every batch but the last loses its member-anchored keep-alive (this path has no FPCGExContext
+			// to anchor them on, so the member array IS the keep-alive).
+			CollectionsHandles.Append(PCGExHelpers::LoadAndCacheBlocking_AnyThread(CollectionPaths));
 		}
 
 		for (int32 i = 0; i < NumEntries; i++)

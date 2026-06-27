@@ -162,8 +162,7 @@ TArray<FPCGPinProperties> UPCGExWaitForPCGDataSettings::OutputPinProperties() co
 {
 	TArray<FPCGPinProperties> PinProperties;
 
-	FPCGPinProperties& DependencyPin = PinProperties.Emplace_GetRef(PCGPinConstants::DefaultExecutionDependencyLabel, EPCGDataType::Any, /*bInAllowMultipleConnections=*/true, /*bAllowMultipleData=*/true);
-	DependencyPin.Usage = EPCGPinUsage::DependencyOnly;
+	PCGEX_PIN_DEPENDENCY(PCGPinConstants::DefaultExecutionDependencyLabel)
 
 	if (bOutputRoaming)
 	{

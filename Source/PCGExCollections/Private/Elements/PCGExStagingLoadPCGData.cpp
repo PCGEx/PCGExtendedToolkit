@@ -18,6 +18,7 @@
 #include "Data/PCGSurfaceData.h"
 #include "Data/PCGVolumeData.h"
 #include "Data/Utils/PCGExDataForward.h"
+#include "Elements/PCGExStagingLoadProperties.h"
 #include "Helpers/PCGExRandomHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPCGDataAssetLoaderElement"

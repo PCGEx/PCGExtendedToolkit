@@ -766,7 +766,7 @@ namespace PCGExPathSplineMesh
 		ScopedMaterials->Collapse(*MaterialPaths.Get());
 		if (!MaterialPaths->IsEmpty())
 		{
-			PCGExHelpers::LoadBlocking_AnyThread(MaterialPaths, Context);
+			PCGExHelpers::LoadBlockingTracked_AnyThread(MaterialPaths, Context);
 		} // TODO : Refactor this atrocity
 
 		//

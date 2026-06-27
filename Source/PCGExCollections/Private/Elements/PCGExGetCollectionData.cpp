@@ -76,6 +76,11 @@
 
 #pragma region UPCGSettings interface
 
+UPCGExGetCollectionDataSettings::UPCGExGetCollectionDataSettings()
+{
+	CacheLoadedResources = EPCGExOptionState::Enabled;
+}
+
 #if WITH_EDITOR
 void UPCGExGetCollectionDataSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {

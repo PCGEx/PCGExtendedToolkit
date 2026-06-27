@@ -17,7 +17,8 @@ FString UPCGExFilterProviderSettings::GetDisplayName() const
 }
 #endif
 
-UPCGExFilterProviderSettings::UPCGExFilterProviderSettings()
+UPCGExFilterProviderSettings::UPCGExFilterProviderSettings(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	Priority = GetDefaultPriority();
 }

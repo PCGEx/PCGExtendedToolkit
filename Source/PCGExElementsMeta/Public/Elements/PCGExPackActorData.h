@@ -625,7 +625,7 @@ protected:
 class FPCGExPackActorDataElement final : public FPCGExPointsProcessorElement
 {
 protected:
-	PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD(true) // packs into actor components on the game thread; keep output off the worker/paused path
+	PCGEX_ELEMENT_MAIN_THREAD_ONLY(true) // packs into actor components on the game thread; keep output off the worker/paused path
 	PCGEX_ELEMENT_CREATE_CONTEXT(PackActorData)
 
 	virtual bool Boot(FPCGExContext* InContext) const override;

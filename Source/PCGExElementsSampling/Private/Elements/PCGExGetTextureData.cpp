@@ -131,7 +131,11 @@ bool FPCGExGetTextureDataElement::AdvanceWork(FPCGExContext* InContext, const UP
 			{
 				Paths->Add(Ref.TexturePath);
 			}
-			PCGExHelpers::LoadBlocking_AnyThread(Paths, Context);
+
+			// Runs during AsyncPreparation on this main-thread-only element (game thread), so the blocking
+			// miss-load is safe here. Caller responsibility: keep this on the game thread (see
+			// LoadBlockingTracked_AnyThread docs) -- a cache miss marshals-and-waits.
+			PCGExHelpers::LoadBlockingTracked_AnyThread(Paths, Context);
 
 			Context->TextureReferencesList = Context->TextureReferences.Array();
 			Context->SetState(PCGExCommon::States::State_WaitingOnAsyncWork);
@@ -444,8 +448,11 @@ namespace PCGExGetTextureData
 	{
 		if (Settings->SourceType == EPCGExGetTexturePathType::MaterialPath)
 		{
-			// Load materials on the main thread x_x
-			PCGExHelpers::LoadBlocking_AnyThread(MaterialReferences, Context);
+			// Caller responsibility: this must stay on the game thread when a cache miss is possible -- the
+			// miss-load marshals-and-waits (see LoadBlockingTracked_AnyThread docs). This element is
+			// CanExecuteOnlyOnMainThread, which keeps it game-thread-affine.
+			// TODO : Switch to cancellable Load to avoid deadlock risk
+			PCGExHelpers::LoadBlockingTracked_AnyThread(MaterialReferences, Context);
 
 			if (Settings->bOutputTextureIds)
 			{

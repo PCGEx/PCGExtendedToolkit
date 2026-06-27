@@ -76,7 +76,7 @@ bool FPCGExFactoryProviderElement::AdvanceWork(FPCGExContext* InContext, const U
 		Context->OutFactory->OutputConfigToMetadata();
 
 		{
-			PCGEX_MAKE_SHARED(AssetDeps, TSet<FSoftObjectPath>)			
+			PCGEX_MAKE_SHARED(AssetDeps, TSet<FSoftObjectPath>)
 			Context->OutFactory->RegisterAssetDependencies(*AssetDeps.Get());
 			if (!AssetDeps->IsEmpty())
 			{
@@ -125,6 +125,12 @@ bool FPCGExFactoryProviderElement::AdvanceWork(FPCGExContext* InContext, const U
 	Context->StageOutput(Context->OutFactory, Settings->GetMainOutputPin());
 
 	return Context->TryComplete();
+}
+
+UPCGExFactoryProviderSettings::UPCGExFactoryProviderSettings(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	CacheLoadedResources = EPCGExOptionState::Enabled;
 }
 
 void FPCGExFactoryProviderElement::DisabledPassThroughData(FPCGContext* Context) const

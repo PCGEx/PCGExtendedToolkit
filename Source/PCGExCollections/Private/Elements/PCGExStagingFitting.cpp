@@ -60,6 +60,17 @@ void FPCGExStagingFittingContext::RegisterAssetDependencies()
 	}
 }
 
+bool FPCGExStagingFittingElement::CanExecuteOnlyOnMainThread(FPCGContext* Context) const
+{
+	if (!Context)
+	{
+		return false;
+	}
+	
+	return Context->CurrentPhase == EPCGExecutionPhase::PrepareData
+		&& Context->GetInputSettings<UPCGExStagingFittingSettings>()->Source == EPCGExFittingSource::CollectionMap;
+}
+
 bool FPCGExStagingFittingElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExPointsProcessorElement::Boot(InContext))
