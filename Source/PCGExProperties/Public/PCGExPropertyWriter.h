@@ -40,7 +40,7 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOutputSettings
 
 	/** Explicit configs win over IncludedSchemas-derived entries on name conflict, regardless
 	 *  of bEnabled -- a disabled explicit entry suppresses the schema's same-named output. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(DisplayName="Properties Mapping", TitleProperty="PropertyName"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(DisplayName="Properties Mapping", TitleProperty="{PropertyName}"))
 	TArray<FPCGExPropertyOutputConfig> Configs;
 
 	/** Each asset's Collection is resolved recursively (locals + ImportedSchemas, cycle-safe);

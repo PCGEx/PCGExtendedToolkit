@@ -112,7 +112,7 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorClosestMatchConfig
 	}
 
 	/** One or more axes summed (with weights) into the per-entry distance score. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, TitleProperty="PropertyName"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, TitleProperty="{PropertyName}"))
 	TArray<FPCGExSelectorClosestMatchAxis> Axes;
 };
 
