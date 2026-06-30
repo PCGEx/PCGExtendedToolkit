@@ -210,6 +210,11 @@ bool FPCGExPreloadResourcesElement::AdvanceWork(FPCGExContext* InContext, const 
 		Context->Done();
 		return Context->TryComplete();
 	}
+	
+	if (Settings->bManageOnOriginalComponent)
+	{
+		Component = Component->GetOriginalComponent();
+	}
 
 	if (Settings->Mode == EPCGExPreloadResourcesMode::Release)
 	{
@@ -372,7 +377,7 @@ bool FPCGExPreloadResourcesElement::AdvanceWork(FPCGExContext* InContext, const 
 
 	if (Settings->bLogLoadedResources)
 	{
-		UE_LOG(LogPCGEx, Log, TEXT("================== Preloading from %s | %s"), *GetNameSafe(Context->GetComponent()->GetOwner()), *Context->Node->GetGraph()->GetFName().ToString())
+		UE_LOG(LogPCGEx, Log, TEXT("================== Preloading from %s | %s"), *GetNameSafe(Component->GetOwner()), *Context->Node->GetGraph()->GetFName().ToString())
 		for (const FSoftObjectPath& Path : Paths)
 		{
 			UE_LOG(LogPCGEx, Log, TEXT("+ %s"), *Path.ToString())

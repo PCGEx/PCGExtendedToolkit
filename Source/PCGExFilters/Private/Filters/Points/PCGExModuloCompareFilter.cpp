@@ -93,14 +93,15 @@ namespace PCGExModuloCompareFilter
 	// which catches values landing just below a multiple (179.996 % 90 -> 89.996 ~= 0 cyclically).
 	bool Evaluate(const FPCGExModuloCompareFilterConfig& Config, const double A, const double B, const double C)
 	{
-		if (A == 0 || B == 0) { return Config.ZeroResult; }
+		const double OffsetB = B + Config.OperandBOffset;
+		if (A == 0 || OffsetB == 0) { return Config.ZeroResult; }
 
-		const double M = FMath::Fmod(A, B);
+		const double M = FMath::Fmod(A, OffsetB);
 
 		if (Config.bCyclicRemainder &&
 			(Config.Comparison == EPCGExComparison::NearlyEqual || Config.Comparison == EPCGExComparison::NearlyNotEqual))
 		{
-			const double AbsB = FMath::Abs(B);
+			const double AbsB = FMath::Abs(OffsetB);
 			const double Rm = M < 0 ? M + AbsB : M;
 			double Rc = FMath::Fmod(C, AbsB);
 			if (Rc < 0) { Rc += AbsB; }

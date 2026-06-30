@@ -97,7 +97,7 @@ public:
 	 * Data from the PCGDataAsset will be routed to matching pins by exact name.
 	 * Data that doesn't match any custom pin goes to the default "Out" pin.
 	 */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (TitleProperty = "Label"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (TitleProperty = "{Label}"))
 	TArray<FPCGPinProperties> CustomOutputPins;
 
 	/** If enabled, will refresh seeds on output points. */

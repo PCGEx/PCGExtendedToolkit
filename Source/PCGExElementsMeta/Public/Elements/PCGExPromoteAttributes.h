@@ -106,7 +106,7 @@ public:
 
 	/** Attributes whose value is promoted, each with an optional source->target output-name remap.
 	 *  Leave the target empty to keep the source's resolved name (the pre-remapping behavior). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(TitleProperty="Source"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(TitleProperty="{Source}"))
 	TArray<FPCGExAttributeSourceToTargetDetails> AttributeMappings;
 
 	/** A list of selectors separated by a comma, for easy overrides. Will be appended to the existing array.*/

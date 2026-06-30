@@ -148,8 +148,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides))
 	bool bTrackResources = false;
 	
+	/** Whether to store resources on original component or not.
+	 * Disable this when working with partitioned graphs that don't have unique per-partitions resources */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides), AdvancedDisplay)
+	bool bManageOnOriginalComponent = true;
+	
 	/** Print out the list of loaded assets */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides), AdvancedDisplay)
 	bool bLogLoadedResources = false;
 };
 
