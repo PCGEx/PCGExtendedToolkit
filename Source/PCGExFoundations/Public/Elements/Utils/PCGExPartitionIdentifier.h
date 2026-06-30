@@ -187,7 +187,7 @@ public:
 	// -- Grids --
 
 	/** The partitions to emit, relative to the anchor. The default single entry is the cell itself; add entries for neighbors (Offset) or parents (a coarser Explicit grid). An empty array emits nothing. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (TitleProperty = "Suffix"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (TitleProperty = "{Suffix}"))
 	TArray<FPCGExPartitionGrid> Grids;
 
 	// -- Outputs --

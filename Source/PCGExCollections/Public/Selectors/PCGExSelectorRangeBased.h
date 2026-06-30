@@ -97,7 +97,7 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorRangeBasedConfig
 	}
 
 	/** One or more axes. With multiple axes, an entry must contain the point value on every axis (AND policy). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, TitleProperty="MinPropertyName"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, TitleProperty="{MinPropertyName}"))
 	TArray<FPCGExSelectorRangeAxis> Axes;
 
 	/** What to do when the point value falls in multiple entries' ranges. For multi-axis, NarrowestWins scores by hypervolume (product of per-axis widths). */

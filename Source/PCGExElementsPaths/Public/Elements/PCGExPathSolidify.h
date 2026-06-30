@@ -123,50 +123,50 @@ protected:
 
 public:
 	/** If the path is not closed, the last point cannot be solidified, thus it's usually preferable to remove it. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta = (PCG_Overridable))
 	bool bRemoveLastPoint = true;
 
 	/** Axis order. First axis will use the segment direction, second is the path normal. These are Primary > Secondary > Tertiary. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEnum))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta = (PCG_Overridable, InlineEnum))
 	EPCGExAxisOrder SolidificationOrder = EPCGExAxisOrder::XYZ;
 
 	/** .*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bReadOrderFromAttribute = false;
 
 	/** Solidification Order attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bReadOrderFromAttribute"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_Overridable, EditCondition="bReadOrderFromAttribute"))
 	FName OrderAttribute = NAME_None;
 
 	/** How to "sanitize" the input value.
 	 * "Ignore" will pick the default constant specified above if the attribute value is invalid. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Order Safety", EditCondition="bReadOrderFromAttribute", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_Overridable, DisplayName=" └─ Order Safety", EditCondition="bReadOrderFromAttribute", EditConditionHides, HideEditConditionToggle))
 	EPCGExIndexSafety OrderSafety = EPCGExIndexSafety::Tile;
 
 
 	/** .*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bUseConstructionMapping = false;
 
 	/** Map of rotation construction orders based on selected mapping. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category=Settings, EditFixedSize, meta=(PCG_NotOverridable, ReadOnlyKeys, EditCondition="bUseConstructionMapping"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="Settings|Orient", EditFixedSize, meta=(PCG_NotOverridable, ReadOnlyKeys, EditCondition="bUseConstructionMapping"))
 	TMap<EPCGExAxisOrder, EPCGExMakeRotAxis> RotationMapping;
 
 	/** Defines how the selected axis will be used to construct the point' rotation. This will be using remapped axis from the selected order. X = Primary, Y = Secondary, Z = Tertiary*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEnum, EditCondition="!bUseConstructionMapping", HideEditConditionToggle, EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta = (PCG_Overridable, InlineEnum, EditCondition="!bUseConstructionMapping", HideEditConditionToggle, EditConditionHides))
 	EPCGExMakeRotAxis RotationConstruction = EPCGExMakeRotAxis::X;
 
 	/** .*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bReadConstructionFromAttribute = false;
 
 	/** Rotation Construction attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bReadConstructionFromAttribute"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_Overridable, EditCondition="bReadConstructionFromAttribute"))
 	FName ConstructionAttribute = NAME_None;
 
 	/** How to "sanitize" the input value.
 	 * "Ignore" will pick the default constant specified above if the attribute value is invalid. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Construction Safety", EditCondition="bReadConstructionFromAttribute", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_Overridable, DisplayName=" └─ Construction Safety", EditCondition="bReadConstructionFromAttribute", EditConditionHides, HideEditConditionToggle))
 	EPCGExIndexSafety ConstructionSafety = EPCGExIndexSafety::Tile;
 
 	// - Constant vs attribute
@@ -174,15 +174,15 @@ public:
 	// - Attribute can be vector as pick (with sanitization)
 
 	/** Primary axis settings (direction aligned to the segment) */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Primary"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Axis - Primary"))
 	FPCGExPathSolidificationAxisDetails PrimaryAxis;
 
 	/** Secondary axis settings, relative to the selected order */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Secondary"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Axis - Secondary"))
 	FPCGExPathSolidificationRadiusDetails SecondaryAxis;
 
 	/** Tertiary axis settings, relative to the selected order */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Tertiary"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Axis - Tertiary"))
 	FPCGExPathSolidificationRadiusDetails TertiaryAxis;
 
 
