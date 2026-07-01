@@ -60,8 +60,12 @@ namespace PCGExBlending
 		/** Init from factories, resolving configs against SourceA on the spot. This is the right path
 		 * when the source is unique to this blender (e.g. a processor's own facade) -- resolution then
 		 * happens exactly once anyway. When many blenders share the same sources (multi-target sampling),
-		 * resolve once into a FBlendOpsSchema instead and use the schema overload. */
-		bool Init(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& InFactories);
+		 * resolve once into a FBlendOpsSchema instead and use the schema overload.
+		 *
+		 * bTolerateMissingAttributes: when true, an op whose operand attribute is absent on SourceA is
+		 * silently dropped (left out of the cached/executed set) instead of failing the whole init. Use it
+		 * for best-effort "background" sources that only contribute the attributes they happen to carry. */
+		bool Init(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& InFactories, const bool bTolerateMissingAttributes = false);
 
 		/** Init from a pre-resolved schema: instantiates ops without re-resolving factory configs.
 		 * The schema must have been built from the same source facades (keyed by their In data). */

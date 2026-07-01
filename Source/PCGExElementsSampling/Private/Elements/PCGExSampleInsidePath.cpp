@@ -41,7 +41,7 @@ UPCGExSampleInsidePathSettings::UPCGExSampleInsidePathSettings(const FObjectInit
 #if WITH_EDITOR
 void UPCGExSampleInsidePathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
-	PCGEX_IF_VERSION_LOWER(1, 74, 3)
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
 	{
 		// Rewire Range Min
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMinAttribute, RangeMin, MinRange)
@@ -55,7 +55,7 @@ void UPCGExSampleInsidePathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGN
 
 void UPCGExSampleInsidePathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
-	PCGEX_IF_VERSION_LOWER(1, 74, 3)
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
 	{
 		MinRange.Update(RangeMinInput_DEPRECATED, RangeMinAttribute_DEPRECATED, RangeMin_DEPRECATED);
 		MaxRange.Update(RangeMaxInput_DEPRECATED, RangeMaxAttribute_DEPRECATED, RangeMax_DEPRECATED);

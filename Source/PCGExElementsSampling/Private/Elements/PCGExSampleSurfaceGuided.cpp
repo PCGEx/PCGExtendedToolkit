@@ -31,7 +31,7 @@ UPCGExSampleSurfaceGuidedSettings::UPCGExSampleSurfaceGuidedSettings(const FObje
 #if WITH_EDITOR
 void UPCGExSampleSurfaceGuidedSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
-	PCGEX_IF_VERSION_LOWER(1, 74, 3)
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
 	{
 		// Rewire Distance
 		PCGEX_SHORTHAND_RENAME_PIN(LocalMaxDistance, MaxDistance, Distance)
@@ -48,7 +48,7 @@ void UPCGExSampleSurfaceGuidedSettings::ApplyDeprecationBeforeUpdatePins(UPCGNod
 
 void UPCGExSampleSurfaceGuidedSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
-	PCGEX_IF_VERSION_LOWER(1, 74, 3)
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
 	{
 		Distance.Update(DistanceInput_DEPRECATED == EPCGExTraceSampleDistanceInput::Constant ? EPCGExInputValueType::Constant : EPCGExInputValueType::Attribute,
 		                LocalMaxDistance_DEPRECATED, MaxDistance_DEPRECATED);
