@@ -20,6 +20,13 @@
 #define LOCTEXT_NAMESPACE "PCGExFloodFill"
 #define PCGEX_NAMESPACE FloodFill
 
+#if WITH_EDITOR
+void FPCGExFloodFillFlowDetails::ApplyDeprecation()
+{
+	FillRate.Update(FillRateInput_DEPRECATED, FillRateAttribute_DEPRECATED, FillRateConstant_DEPRECATED);
+}
+#endif
+
 namespace PCGExFloodFill
 {
 	FDiffusion::FDiffusion(const TSharedPtr<FFillControlsHandler>& InFillControlsHandler, const TSharedPtr<PCGExClusters::FCluster>& InCluster, const PCGExClusters::FNode* InSeedNode)
@@ -51,7 +58,11 @@ namespace PCGExFloodFill
 		HeapComparator = FCandidateHeapComparator(Config.Sorting);
 
 		Visited[SeedNode->Index] = true;
-		*(FillControlsHandler->InfluencesCount->GetData() + SeedNode->PointIndex) = 1;
+		// Claiming is optional: with no InfluencesCount, diffusions overlap and never pre-claim their seed node (see FFillControlsHandler::TryCapture).
+		if (FillControlsHandler->InfluencesCount)
+		{
+			*(FillControlsHandler->InfluencesCount->GetData() + SeedNode->PointIndex) = 1;
+		}
 		FCandidate& SeedCandidate = Captured.Emplace_GetRef();
 		SeedCandidate.Link = PCGExGraphs::FLink(-1, -1);
 		SeedCandidate.Node = SeedNode;
@@ -341,7 +352,9 @@ namespace PCGExFloodFill
 				return false;
 			}
 		}
-		if (FPlatformAtomics::InterlockedCompareExchange((InfluencesCount->GetData() + Candidate.Node->PointIndex), 1, 0) == 1)
+		// When claiming is disabled (no InfluencesCount), the && skips the atomic and capture is never gated on
+		// exclusivity -- multiple diffusions may capture the same node.
+		if (InfluencesCount && FPlatformAtomics::InterlockedCompareExchange((InfluencesCount->GetData() + Candidate.Node->PointIndex), 1, 0) == 1)
 		{
 			return false;
 		}

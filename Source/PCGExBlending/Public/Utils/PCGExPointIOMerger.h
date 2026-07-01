@@ -86,9 +86,8 @@ public:
 	}
 
 	TSharedPtr<FPCGExIntTracker> InternalTracker;
-	
-protected:
 
+protected:
 	bool bWriteFacade = false;
 	void CopyProperties(const int32 Index);
 	PCGExPointIOMerger::FMergeScope NullScope;
@@ -113,6 +112,14 @@ namespace PCGExPointIOMerger
 
 		const FPCGMetadataAttribute<T>* TypedInAttribute = PCGExMetaHelpers::TryGetConstAttribute<T>(SourceIO->GetIn()->Metadata, Identity.Identifier);
 		if (!TypedInAttribute)
+		{
+			return;
+		}
+
+		if (!ensureMsgf(
+			TypedInAttribute->Name == Identity.Identifier.Name,
+			TEXT("[PCGEx] merge read guard: attribute '%s' on '%s' reports a mismatched internal name -- memory reclaimed/overwritten?"),
+			*Identity.Identifier.Name.ToString(), *GetNameSafe(SourceIO->GetIn())))
 		{
 			return;
 		}

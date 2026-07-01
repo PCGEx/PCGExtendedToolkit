@@ -84,11 +84,12 @@ protected:
 	bool bConstantBudget = false;
 	int32 ConstantBudget = 0;
 
-	// Captured children per node (Prune + Vtx). Safe shared array: each node is captured by one diffusion, so one writer per element.
+	// Captured children per node (Prune + Vtx). Overlapping diffusions may write the same parent
+	// concurrently (Cluster : Diffuse has no claiming), so accessed atomically.
 	TArray<int32> ChildCounts;
 
-	// Whether a node already has a child (Prune + Seed); the global fork tally lives in DiffusionForks.
-	TBitArray<> ParentHasChild;
+	// Whether a node already has a child (Prune + Seed), as 0/1 for an atomic test-and-set. Fork tally: DiffusionForks.
+	TArray<int32> ParentHasChild;
 
 	// Forks spent per diffusion (Seed, global budget). Indexed by diffusion; one writer per slot.
 	TArray<int32> DiffusionForks;

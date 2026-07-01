@@ -4,6 +4,7 @@
 #include "Elements/PCGExFloodFillClusters.h"
 
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
 #include "Core/PCGExBlendOpsManager.h"
@@ -26,6 +27,19 @@ UPCGExClusterDiffusionSettings::UPCGExClusterDiffusionSettings(const FObjectInit
 {
 	SeedForwarding.bPreservePCGExData = true;
 }
+
+#if WITH_EDITOR
+void UPCGExClusterDiffusionSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
+	{
+		// FillRate migrated from the Input/Attribute/Constant triple to FPCGExInputShorthandSelectorInteger32Abs.
+		Diffusion.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGExData::EIOInit UPCGExClusterDiffusionSettings::GetMainOutputInitMode() const
 {
@@ -154,190 +168,19 @@ namespace PCGExClusterDiffusion
 	{
 	}
 
-	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
+	bool FProcessor::OnGrowthSetup()
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExClusterDiffusion::Process);
-
-		if (!IProcessor::Process(InTaskManager))
-		{
-			return false;
-		}
-
 		EdgeDirectionDetails = Context->EdgeDirectionOutput;
 		if (EdgeDirectionDetails.WantsDirection() && !EdgeDirectionDetails.InitForProcessor(Context, GetParentBatch<FBatch>()->EdgeDirectionOutput, EdgeDataFacade))
 		{
 			return false;
 		}
-
-		FillControlsHandler = MakeShared<PCGExFloodFill::FFillControlsHandler>(Context, Cluster, VtxDataFacade, EdgeDataFacade, Context->SeedsDataFacade, Context->FillControlFactories);
-
-		FillControlsHandler->HeuristicsHandler = HeuristicsHandler;
-		FillControlsHandler->InfluencesCount = InfluencesCount;
-
-		Seeded.Init(0, Cluster->Nodes->Num());
-
-		PCGEX_ASYNC_GROUP_CHKD(TaskManager, DiffusionInitialization)
-		DiffusionInitialization->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
-		{
-			PCGEX_ASYNC_THIS
-			This->StartGrowth();
-		};
-
-		DiffusionInitialization->OnPrepareSubLoopsCallback = [PCGEX_ASYNC_THIS_CAPTURE](const TArray<PCGExMT::FScope>& Loops)
-		{
-			PCGEX_ASYNC_THIS
-			This->InitialDiffusions = MakeShared<PCGExMT::TScopedArray<TSharedPtr<PCGExFloodFill::FDiffusion>>>(Loops);
-		};
-
-		if (Settings->bUseOctreeSearch)
-		{
-			Cluster->RebuildOctree(Settings->Seeds.SeedPicking.PickingMethod);
-		}
-
-		DiffusionInitialization->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
-		{
-			PCGEX_ASYNC_THIS
-
-			const TArray<PCGExClusters::FNode>& Nodes = *This->Cluster->Nodes.Get();
-			TConstPCGValueRange<FTransform> SeedTransforms = This->Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
-
-			PCGEX_SCOPE_LOOP(Index)
-			{
-				FVector SeedLocation = SeedTransforms[Index].GetLocation();
-				const int32 ClosestIndex = This->Cluster->FindClosestNode(SeedLocation, This->Settings->Seeds.SeedPicking.PickingMethod);
-
-				if (ClosestIndex < 0)
-				{
-					continue;
-				}
-
-				const PCGExClusters::FNode* SeedNode = &Nodes[ClosestIndex];
-				if (!This->Settings->Seeds.SeedPicking.WithinDistance(This->Cluster->GetPos(SeedNode), SeedLocation) || FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
-				{
-					continue;
-				}
-
-				TSharedPtr<PCGExFloodFill::FDiffusion> NewDiffusion = MakeShared<PCGExFloodFill::FDiffusion>(This->FillControlsHandler, This->Cluster, SeedNode);
-				NewDiffusion->Index = Index;
-				This->InitialDiffusions->Get(Scope)->Add(NewDiffusion);
-			}
-		};
-
-		if (Context->SeedsDataFacade->GetNum() <= 0)
-		{
-			return false;
-		}
-
-		DiffusionInitialization->StartSubLoops(Context->SeedsDataFacade->GetNum(), PCGEX_CORE_SETTINGS.ClusterDefaultBatchChunkSize);
-
-#undef PCGEX_NEW_DIFFUSION
-
 		return true;
 	}
 
-	void FProcessor::StartGrowth()
+	TSharedPtr<TArray<int8>> FProcessor::GetInfluencesCount() const
 	{
-		Seeded.Empty();
-
-		InitialDiffusions->Collapse(OngoingDiffusions);
-		InitialDiffusions.Reset();
-
-		if (OngoingDiffusions.IsEmpty())
-		{
-			PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("A cluster could not initialize any diffusions. This is usually caused when there is more clusters than there is seeds, or all available seeds were better candidates for other clusters."));
-			bIsProcessorValid = false;
-			return;
-		}
-
-		// Prepare control handler before initializing diffusion
-		// since the init does a first probing pass
-		if (!FillControlsHandler->PrepareForDiffusions(OngoingDiffusions, Settings->Diffusion))
-		{
-			PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Fill controls handler failed to prepare for diffusions. Check that all fill control inputs are valid."));
-			bIsProcessorValid = false;
-			return;
-		}
-
-		for (int i = 0; i < OngoingDiffusions.Num(); i++)
-		{
-			TSharedPtr<PCGExFloodFill::FDiffusion> Diffusion = OngoingDiffusions[i];
-			const int32 InitIndex = Diffusion->Index;
-			Diffusion->Index = i;
-			Diffusion->Init(InitIndex);
-		}
-
-		Diffusions.Reserve(OngoingDiffusions.Num());
-
-		Grow();
-	}
-
-	void FProcessor::Grow()
-	{
-		if (OngoingDiffusions.IsEmpty())
-		{
-			return;
-		}
-
-		if (Settings->Processing == EPCGExFloodFillProcessing::Parallel)
-		{
-			// Grow all by a single step
-			StartParallelLoopForRange(OngoingDiffusions.Num());
-			return;
-		}
-
-		// Grow one entirely
-		TSharedPtr<PCGExFloodFill::FDiffusion> Diffusion = OngoingDiffusions.Pop();
-		while (!Diffusion->bStopped)
-		{
-			Diffusion->Grow();
-		}
-
-		Diffusions.Add(Diffusion);
-
-		Grow(); // Move to the next
-	}
-
-	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
-	{
-		PCGEX_SCOPE_LOOP(Index)
-		{
-			const TSharedPtr<PCGExFloodFill::FDiffusion> Diffusion = OngoingDiffusions[Index];
-			const int32 CurrentFillRate = FillRate->Read(Diffusion->GetSettingsIndex(Settings->Diffusion.FillRateSource));
-			for (int i = 0; i < CurrentFillRate; i++)
-			{
-				Diffusion->Grow();
-			}
-		}
-	}
-
-	void FProcessor::OnRangeProcessingComplete()
-	{
-		// A single growth iteration pass is complete
-		const int32 OngoingNum = OngoingDiffusions.Num();
-
-		// Move stopped diffusions in another castle
-		int32 WriteIndex = 0;
-		for (int32 i = 0; i < OngoingNum; i++)
-		{
-			const TSharedPtr<PCGExFloodFill::FDiffusion> Diff = OngoingDiffusions[i];
-			if (Diff->bStopped)
-			{
-				Diffusions.Add(Diff);
-			}
-			else
-			{
-				OngoingDiffusions[WriteIndex++] = Diff;
-			}
-		}
-
-		OngoingDiffusions.SetNum(WriteIndex);
-
-		if (OngoingDiffusions.IsEmpty())
-		{
-			return;
-		}
-
-		Grow();
+		return InfluencesCount;
 	}
 
 	void FProcessor::CompleteWork()
@@ -639,13 +482,10 @@ namespace PCGExClusterDiffusion
 
 	void FProcessor::Cleanup()
 	{
-		TProcessor<FPCGExClusterDiffusionContext, UPCGExClusterDiffusionSettings>::Cleanup();
+		// Base resets the growth state (diffusions + fill controls handler).
+		TDiffusionGrowthProcessor<FPCGExClusterDiffusionContext, UPCGExClusterDiffusionSettings>::Cleanup();
 
 		// Make sure we flush these ASAP
-		InitialDiffusions.Reset();
-		OngoingDiffusions.Reset();
-		Diffusions.Reset();
-		FillControlsHandler.Reset();
 		BlendOpsManager.Reset();
 		PathWriter.Reset();
 	}
@@ -724,7 +564,7 @@ namespace PCGExClusterDiffusion
 
 		// Diffusion rate
 
-		FillRate = PCGExDetails::MakeSettingValue<int32>(Settings->Diffusion.FillRateInput, Settings->Diffusion.FillRateAttribute, Settings->Diffusion.FillRateConstant);
+		FillRate = Settings->Diffusion.FillRate.GetValueSetting();
 		bIsBatchValid = FillRate->Init(Settings->Diffusion.FillRateSource == EPCGExFloodFillSettingSource::Seed ? Context->SeedsDataFacade : VtxDataFacade);
 
 		if (!bIsBatchValid)

@@ -382,7 +382,8 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 					{
 						if (const FPCGMetadataAttribute<T>* Attr = PCGExMetaHelpers::TryGetConstAttribute<T>(InDataFacade->GetIn(), PCGExMetaHelpers::GetAttributeIdentifier(InDescriptor.Selector, InDataFacade->GetIn())))
 						{
-							OutProxy = GetConstantProxyBuffer<T>(Attr->GetValueFromItemKey(Key), InDescriptor.WorkingType);
+							const bool bIsData = Attr->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data;
+							OutProxy = GetConstantProxyBuffer<T>(bIsData ? Helpers::ReadDataValue(Attr) : Attr->GetValueFromItemKey(Key), InDescriptor.WorkingType);
 						}
 					}
 					else if (InDescriptor.Selector.GetSelection() == EPCGAttributePropertySelection::Property)
