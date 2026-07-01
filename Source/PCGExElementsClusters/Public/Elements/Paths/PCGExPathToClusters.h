@@ -76,7 +76,7 @@ public:
 	FPCGExPointPointIntersectionDetails PointPointIntersectionDetails;
 
 	/** Find Point-Edge intersection (points on edges)*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fusing", meta=(PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fusing", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bFindPointEdgeIntersections;
 
 	/** Point-Edge intersection settings */

@@ -5,6 +5,7 @@
 #include "Utils/PCGExPointIOMerger.h"
 
 #include "PCGExCommon.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExDataValue.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
@@ -120,7 +121,11 @@ namespace PCGExPointIOMerger
 
 				TSharedPtr<PCGExData::TBuffer<T>> Buffer = Merger->UnionDataFacade->GetWritable(
 					Merger->WantsDataToElements() ? Identity.ElementsIdentifier : Identity.Identifier,
-					Identity.bInitDefault ? static_cast<const FPCGMetadataAttribute<T>*>(Identity.Attribute)->GetValue(PCGDefaultValueKey) : T{},
+					Identity.bInitDefault
+						? (Identity.Attribute->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data
+							? PCGExData::Helpers::ReadDataValue(static_cast<const FPCGMetadataAttribute<T>*>(Identity.Attribute))
+							: static_cast<const FPCGMetadataAttribute<T>*>(Identity.Attribute)->GetValue(PCGDefaultValueKey))
+						: T{},
 					Identity.bAllowsInterpolation, PCGExData::EBufferInit::New);
 
 				if (!Buffer)

@@ -434,7 +434,10 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 				InternalBroadcaster->GrabAndDump(*InValues, bCaptureMinMax, this->Min, this->Max);
 				bReadComplete = true;
 				bSparseBuffer = false;
-				if (bCaptureMinMax) { this->bMinMaxCaptured = true; }
+				if (bCaptureMinMax)
+				{
+					this->bMinMaxCaptured = true;
+				}
 				InternalBroadcaster.Reset();
 			}
 			else if (!bSparseBuffer && bCaptureMinMax && !this->bMinMaxCaptured)
@@ -479,7 +482,10 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		{
 			InternalBroadcaster->GrabAndDump(*InValues, bCaptureMinMax, this->Min, this->Max);
 			bReadComplete = true;
-			if (bCaptureMinMax) { this->bMinMaxCaptured = true; }
+			if (bCaptureMinMax)
+			{
+				this->bMinMaxCaptured = true;
+			}
 			InternalBroadcaster.Reset();
 		}
 
@@ -776,6 +782,16 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		TypedInAttribute = PCGExMetaHelpers::TryGetConstAttribute<T>(Source->GetIn(), Identifier);
 		if (TypedInAttribute)
 		{
+			if (!ensureMsgf(
+				TypedInAttribute->Name == Identifier.Name,
+				TEXT("[PCGEx] @Data read guard: attribute resolved by '%s' on '%s' reports a mismatched internal name -- its memory was reclaimed/overwritten?"),
+				*Identifier.Name.ToString(), *GetNameSafe(Source->GetIn())))
+			{
+				InValue = T{};
+				bReadInitialized = true;
+				return true;
+			}
+
 			bReadInitialized = true;
 
 			InAttribute = TypedInAttribute;
@@ -993,11 +1009,17 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 		// Double-checked lazy init: the common case (already created) takes only a read lock.
 		{
 			FReadScopeLock ReadLock(ProxyPoolLock);
-			if (ProxyPool) { return *ProxyPool; }
+			if (ProxyPool)
+			{
+				return *ProxyPool;
+			}
 		}
 
 		FWriteScopeLock WriteLock(ProxyPoolLock);
-		if (!ProxyPool) { ProxyPool = MakeShared<IBufferProxyPool>(); }
+		if (!ProxyPool)
+		{
+			ProxyPool = MakeShared<IBufferProxyPool>();
+		}
 		return *ProxyPool;
 	}
 
@@ -1111,7 +1133,8 @@ template class PCGEXCORE_API TSingleValueBuffer<_TYPE>;
 	template <typename T>
 	TSharedPtr<TBuffer<T>> FFacade::GetWritable(const FPCGMetadataAttribute<T>* InAttribute, EBufferInit Init)
 	{
-		return GetWritable(FPCGAttributeIdentifier(InAttribute->Name, InAttribute->GetMetadataDomain()->GetDomainID()), InAttribute->GetValue(PCGDefaultValueKey), InAttribute->AllowsInterpolation(), Init);
+		const bool bIsData = InAttribute->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data;
+		return GetWritable(FPCGAttributeIdentifier(InAttribute->Name, InAttribute->GetMetadataDomain()->GetDomainID()), bIsData ? Helpers::ReadDataValue(InAttribute) : InAttribute->GetValue(PCGDefaultValueKey), InAttribute->AllowsInterpolation(), Init);
 	}
 
 	template <typename T>
@@ -1357,7 +1380,7 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 				FWriteScopeLock WriteScopeLock(BufferLock);
 				PCGEX_ASYNC_SCHEDULING_SCOPE(TaskManager)
 
-				PCGExMT::ParallelOrSequential(Buffers.Num(),[&](int32 i)
+				PCGExMT::ParallelOrSequential(Buffers.Num(), [&](int32 i)
 				{
 					const TSharedPtr<IBuffer> Buffer = Buffers[i];
 					if (!Buffer.IsValid() || !Buffer->IsWritable() || !Buffer->IsEnabled())
@@ -1366,7 +1389,7 @@ template PCGEXCORE_API const FPCGMetadataAttribute<_TYPE>* FFacade::FindConstAtt
 					}
 					WriteBuffer(nullptr, Buffer, false);
 				}, /*Threshold=*/2);
-				
+
 				/*
 				for (int i = 0; i < Buffers.Num(); i++)
 				{

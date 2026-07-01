@@ -3,6 +3,7 @@
 
 #include "Helpers/PCGExBlendingHelpers.h"
 
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Metadata/PCGMetadata.h"
 #include "Types/PCGExAttributeIdentity.h"
@@ -40,7 +41,7 @@ namespace PCGExBlending::Helpers
 
 					if (!OutAttribute)
 					{
-						OutAttribute = Target->FindOrCreateAttribute<T>(Identity.Identifier, InAttribute->GetValueFromItemKey(PCGDefaultValueKey), InAttribute->AllowsInterpolation());
+						OutAttribute = Target->FindOrCreateAttribute<T>(Identity.Identifier, InAttribute->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data ? PCGExData::Helpers::ReadDataValue(InAttribute) : InAttribute->GetValueFromItemKey(PCGDefaultValueKey), InAttribute->AllowsInterpolation());
 					}
 
 					if (!OutAttribute)
