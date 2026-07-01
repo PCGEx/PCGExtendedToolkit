@@ -5,6 +5,9 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExClustersProcessor.h"
+#include "Clusters/PCGExClusterCommon.h"
+#include "Sorting/PCGExSortingCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "PCGExFloodFill.generated.h"
 
 namespace PCGEx
@@ -42,6 +45,42 @@ enum class EPCGExFloodFillPrioritization : uint8
 {
 	Heuristics = 0 UMETA(DisplayName = "Heuristics", ToolTip="Prioritize expansion based on heuristics first, then depth."),
 	Depth      = 1 UMETA(DisplayName = "Depth", ToolTip="Prioritize expansion based on depth, then FillControls."),
+};
+
+UENUM()
+enum class EPCGExFloodFillOrder : uint8
+{
+	Index   = 0 UMETA(DisplayName = "Index", ToolTip="Uses point index to drive diffusion order."),
+	Sorting = 1 UMETA(DisplayName = "Sorting", ToolTip="Use sorting rules to drive diffusion order."),
+};
+
+UENUM()
+enum class EPCGExFloodFillProcessing : uint8
+{
+	Parallel = 0 UMETA(DisplayName = "Parallel", ToolTip="Diffuse each vtx once before moving to the next iteration."),
+	Sequence = 1 UMETA(DisplayName = "Sequential", ToolTip="Diffuse each vtx until it stops before moving to the next one, and so on."),
+};
+
+USTRUCT(BlueprintType)
+struct PCGEXELEMENTSFLOODFILL_API FPCGExFloodFillSeedPickingDetails
+{
+	GENERATED_BODY()
+
+	FPCGExFloodFillSeedPickingDetails()
+	{
+	}
+
+	/** Drive how a seed point selects a node. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	FPCGExNodeSelectionDetails SeedPicking = FPCGExNodeSelectionDetails(200);
+
+	/** Defines the sorting used for the vtx */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
+	EPCGExFloodFillOrder Ordering = EPCGExFloodFillOrder::Index;
+
+	/** Sort direction */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
+	EPCGExSortDirection SortDirection = EPCGExSortDirection::Ascending;
 };
 
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true", DisplayName="[PCGEx] Flood Fill Control Step Flags"))
@@ -85,17 +124,27 @@ struct PCGEXELEMENTSFLOODFILL_API FPCGExFloodFillFlowDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExFloodFillSettingSource FillRateSource = EPCGExFloodFillSettingSource::Seed;
 
-	/** Diffusion Rate type.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType FillRateInput = EPCGExInputValueType::Constant;
+	/** Diffusion rate -- how many steps each vtx grows per iteration. Zero preserves the vtx from being diffused on. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Fill Rate"))
+	FPCGExInputShorthandSelectorInteger32Abs FillRate = FPCGExInputShorthandSelectorInteger32Abs(FName("FillRate"), 1, false);
 
-	/** Fetch the Diffusion Rate from a local attribute. Must be >= 0, but zero wont grow -- it will however "preserve" the vtx from being diffused on. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Fill Rate (Attr)", EditCondition="FillRateInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName FillRateAttribute = FName("FillRate");
+#if WITH_EDITOR
+	// Migrates the deprecated FillRateInput/Attribute/Constant triple into FillRate.
+	void ApplyDeprecation();
+#endif
 
-	/** Diffusion rate constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Fill Rate", EditCondition="FillRateInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0))
-	int32 FillRateConstant = 1;
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType FillRateInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName FillRateAttribute_DEPRECATED = FName("FillRate");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 FillRateConstant_DEPRECATED = 1;
+
+#pragma endregion
 };
 
 namespace PCGExData

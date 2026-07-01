@@ -49,7 +49,7 @@ UPCGExSampleNearestPathSettings::UPCGExSampleNearestPathSettings(const FObjectIn
 #if WITH_EDITOR
 void UPCGExSampleNearestPathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
-	PCGEX_IF_VERSION_LOWER(1, 74, 3)
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
 	{
 		// Rewire alpha
 		PCGEX_SHORTHAND_RENAME_PIN(SampleAlphaAttribute, SampleAlphaConstant, SampleAlpha)
@@ -72,7 +72,7 @@ void UPCGExSampleNearestPathSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode*
 
 void UPCGExSampleNearestPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
-	PCGEX_IF_VERSION_LOWER(1, 74, 3)
+	PCGEX_IF_VERSION_LOWER(1, 76, 2)
 	{
 		SampleAlpha.Update(SampleAlphaInput_DEPRECATED, SampleAlphaAttribute_DEPRECATED, SampleAlphaConstant_DEPRECATED);
 		MinRange.Update(RangeMinInput_DEPRECATED, RangeMinAttribute_DEPRECATED, RangeMin_DEPRECATED);

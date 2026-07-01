@@ -8,6 +8,7 @@
 
 #include "Core/PCGExClustersProcessor.h"
 #include "Core/PCGExFloodFill.h"
+#include "Core/PCGExDiffusionGrowthProcessor.h"
 #include "Core/PCGExFloodFillEdgeDirection.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
 #include "Sampling/PCGExSamplingCommon.h"
@@ -23,20 +24,6 @@ MACRO(DiffusionEnding, bool, false)
 class UPCGExBlendOpFactory;
 
 UENUM()
-enum class EPCGExFloodFillOrder : uint8
-{
-	Index   = 0 UMETA(DisplayName = "Index", ToolTip="Uses point index to drive diffusion order."),
-	Sorting = 1 UMETA(DisplayName = "Sorting", ToolTip="Use sorting rules to drive diffusion order."),
-};
-
-UENUM()
-enum class EPCGExFloodFillProcessing : uint8
-{
-	Parallel = 0 UMETA(DisplayName = "Parallel", ToolTip="Diffuse each vtx once before moving to the next iteration."),
-	Sequence = 1 UMETA(DisplayName = "Sequential", ToolTip="Diffuse each vtx until it stops before moving to the next one, and so on."),
-};
-
-UENUM()
 enum class EPCGExFloodFillPathOutput : uint8
 {
 	None       = 0 UMETA(DisplayName = "None", ToolTip="Don't output any paths."),
@@ -50,28 +37,6 @@ enum class EPCGExFloodFillPathPartitions : uint8
 	Length = 0 UMETA(DisplayName = "Length", ToolTip="TBD"),
 	Score  = 1 UMETA(DisplayName = "Score", ToolTip="TBD"),
 	Depth  = 2 UMETA(DisplayName = "Depth", ToolTip="TBD"),
-};
-
-USTRUCT(BlueprintType)
-struct PCGEXELEMENTSFLOODFILL_API FPCGExFloodFillSeedPickingDetails
-{
-	GENERATED_BODY()
-
-	FPCGExFloodFillSeedPickingDetails()
-	{
-	}
-
-	/** Drive how a seed point selects a node. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	FPCGExNodeSelectionDetails SeedPicking = FPCGExNodeSelectionDetails(200);
-
-	/** Defines the sorting used for the vtx */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExFloodFillOrder Ordering = EPCGExFloodFillOrder::Index;
-
-	/** Sort direction */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExSortDirection SortDirection = EPCGExSortDirection::Ascending;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cluster-flood-fill"))
@@ -92,6 +57,10 @@ public:
 
 	virtual PCGExData::EIOInit GetMainOutputInitMode() const override;
 	virtual PCGExData::EIOInit GetEdgeOutputInitMode() const override;
+
+#if WITH_EDITOR
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+#endif
 
 protected:
 	virtual bool SupportsDataStealing() const override
@@ -249,7 +218,7 @@ namespace PCGExClusterDiffusion
 	class FBatch;
 	class FProcessor;
 
-	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExClusterDiffusionContext, UPCGExClusterDiffusionSettings>
+	class FProcessor final : public PCGExFloodFill::TDiffusionGrowthProcessor<FPCGExClusterDiffusionContext, UPCGExClusterDiffusionSettings>
 	{
 		friend FBatch;
 
@@ -257,18 +226,12 @@ namespace PCGExClusterDiffusion
 		const PCGExClusters::FNode* RoamingSeedNode = nullptr;
 		const PCGExClusters::FNode* RoamingGoalNode = nullptr;
 
+		// Shared per-vtx claim array, provided to the growth base via GetInfluencesCount().
 		TSharedPtr<TArray<int8>> InfluencesCount;
-		TArray<int8> Seeded;
 		TSharedPtr<PCGExBlending::FBlendOpsManager> BlendOpsManager;
 
-		TSharedPtr<PCGExMT::TScopedArray<TSharedPtr<PCGExFloodFill::FDiffusion>>> InitialDiffusions;
-		TArray<TSharedPtr<PCGExFloodFill::FDiffusion>> OngoingDiffusions; // Ongoing diffusions
-		TArray<TSharedPtr<PCGExFloodFill::FDiffusion>> Diffusions;        // Stopped diffusions, as to not iterate over them needlessly
-
-		TSharedPtr<PCGExFloodFill::FFillControlsHandler> FillControlsHandler;
 		TSharedPtr<PCGExFloodFill::FDiffusionPathWriter> PathWriter;
 		TSharedPtr<TArray<int32>> DiffusionDepths; // Vtx point index -> diffusion depth, for NormalizedPathDepth
-		TSharedPtr<PCGExDetails::TSettingValue<int32>> FillRate;
 
 		TSharedPtr<PCGExMT::TScopedNumericValue<double>> MaxDistanceValue;
 
@@ -276,9 +239,13 @@ namespace PCGExClusterDiffusion
 
 		int32 ExpectedPathCount = 0;
 
+		//~ TDiffusionGrowthProcessor seams
+		virtual bool OnGrowthSetup() override;
+		virtual TSharedPtr<TArray<int8>> GetInfluencesCount() const override;
+
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
-			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
+			: TDiffusionGrowthProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 			bAllowEdgesDataFacadeScopedGet = false;
 		}
@@ -286,14 +253,6 @@ namespace PCGExClusterDiffusion
 		PCGEX_FOREACH_FIELD_CLUSTER_DIFF(PCGEX_OUTPUT_DECL)
 
 		virtual ~FProcessor() override;
-
-		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
-
-		void StartGrowth();
-		void Grow();
-
-		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
-		virtual void OnRangeProcessingComplete() override;
 
 		virtual void CompleteWork() override;
 		void Diffuse(const TSharedPtr<PCGExFloodFill::FDiffusion>& Diffusion);

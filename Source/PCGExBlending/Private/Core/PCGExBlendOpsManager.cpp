@@ -92,7 +92,7 @@ namespace PCGExBlending
 		TargetFacade = InDataFacade;
 	}
 
-	bool FBlendOpsManager::Init(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& InFactories)
+	bool FBlendOpsManager::Init(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& InFactories, const bool bTolerateMissingAttributes)
 	{
 		check(SourceAFacade)
 		check(SourceBFacade)
@@ -135,8 +135,9 @@ namespace PCGExBlending
 
 			for (const TSharedPtr<FPCGExBlendOperation>& Op : NewOps)
 			{
-				// Monolithic ops may fail preparation when a source lacks the attribute
-				if (!SetupOperation(InContext, Op, Factory->IsMonolithic()))
+				// Monolithic ops may fail preparation when a source lacks the attribute; background sources
+				// (bTolerateMissingAttributes) likewise skip ops they can't resolve rather than failing.
+				if (!SetupOperation(InContext, Op, Factory->IsMonolithic() || bTolerateMissingAttributes))
 				{
 					return false;
 				}

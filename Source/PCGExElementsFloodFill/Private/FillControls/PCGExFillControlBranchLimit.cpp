@@ -5,6 +5,7 @@
 #include "FillControls/PCGExFillControlBranchLimit.h"
 
 
+#include "HAL/PlatformAtomics.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
@@ -45,7 +46,7 @@ bool FPCGExFillControlBranchLimit::PrepareForDiffusions(FPCGExContext* InContext
 	}
 	else
 	{
-		ParentHasChild.Init(false, Cluster->Nodes->Num());
+		ParentHasChild.Init(0, Cluster->Nodes->Num());
 		DiffusionForks.Init(0, Handler->GetNumDiffusions());
 	}
 
@@ -78,11 +79,11 @@ bool FPCGExFillControlBranchLimit::IsValidCapture(const PCGExFloodFill::FDiffusi
 	if (bSourceIsVtx)
 	{
 		// Per-vtx: a node may gain up to (1 + budget) children, i.e. branch 'budget' times.
-		return ChildCounts[ParentNode] <= ReadBudget(Cluster->GetNodePointIndex(ParentNode));
+		return FPlatformAtomics::AtomicRead(&ChildCounts[ParentNode]) <= ReadBudget(Cluster->GetNodePointIndex(ParentNode));
 	}
 
 	// Seed (global): first child is free; any beyond it is a fork drawing from the shared budget.
-	if (!ParentHasChild[ParentNode])
+	if (FPlatformAtomics::AtomicRead(&ParentHasChild[ParentNode]) == 0)
 	{
 		return true;
 	}
@@ -104,13 +105,13 @@ void FPCGExFillControlBranchLimit::OnCaptured(const PCGExFloodFill::FDiffusion* 
 
 	if (bSourceIsVtx)
 	{
-		ChildCounts[ParentNode]++;
+		FPlatformAtomics::InterlockedIncrement(&ChildCounts[ParentNode]);
 		return;
 	}
 
-	// First child free; subsequent children spend a fork from the shared budget.
-	if (ParentHasChild[ParentNode]) { DiffusionForks[Diffusion->Index]++; }
-	else { ParentHasChild[ParentNode] = true; }
+	// First child free; subsequent children spend a fork. Atomic test-and-set: whoever flips 0->1 is the
+	// first child (free); everyone that finds it already 1 spends a fork -- correct under overlapping diffusions.
+	if (FPlatformAtomics::InterlockedCompareExchange(&ParentHasChild[ParentNode], 1, 0) != 0) { DiffusionForks[Diffusion->Index]++; }
 }
 
 #pragma endregion
