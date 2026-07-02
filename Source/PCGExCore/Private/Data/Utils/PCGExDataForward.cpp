@@ -170,9 +170,9 @@ namespace PCGExData
 				InTargetDataFacade->Source->DeleteAttribute(Identifier);
 				FPCGMetadataAttribute<T>* TargetAtt = InTargetDataFacade->Source->FindOrCreateAttribute<T>(Identifier, ForwardValue, SourceAtt->AllowsInterpolation());
 
-				// Data-domain targets get a materialized local entry, not just a default value:
-				// default-only attributes read correctly but keep GetNumberOfEntries() == 0, which
-				// re-triggers ancestor-chain resolution in every downstream consumer.
+				// Data-domain targets: SetDataValue writes the default-value slot -- the canonical
+				// @Data store (FindOrCreateAttribute alone would miss the update when the attribute
+				// already existed with a different default).
 				if (TargetAtt && (bElementDomainToDataDomain || Identity.InDataDomain()))
 				{
 					Helpers::SetDataValue(TargetAtt, ForwardValue);

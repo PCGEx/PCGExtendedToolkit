@@ -97,13 +97,6 @@ void FPCGExContext::StageOutput(UPCGData* InData, const FName& InPin, const PCGE
 			}
 		}
 
-		// Backstop for outputs created outside FPointIO::InitializeOutput / FManagedObjects::DuplicateData
-		// (e.g. direct engine-side DuplicateData calls): materialize inherited @Data values locally before
-		// this data leaves the node, while its ancestor chain is still alive. Idempotent -- attributes
-		// that already carry a local entry are skipped. Runs after consumable cleanup so deleted
-		// attributes aren't needlessly resolved.
-		PCGExData::Helpers::LocalizeDataValues(InData);
-
 		if (bFlattenOutput)
 		{
 			InData->Flatten();

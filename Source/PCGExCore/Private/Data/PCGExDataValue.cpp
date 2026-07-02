@@ -207,7 +207,8 @@ template class PCGEXCORE_API TDataValue<_TYPE>;
 			return nullptr;
 		}
 
-		if (const FPCGMetadataAttributeBase* SourceAttribute = InMetadata->GetConstAttribute(SanitizedIdentifier))
+		// Domain-safe lookup: the data may have never instantiated its @Data domain.
+		if (const FPCGMetadataAttributeBase* SourceAttribute = PCGExMetaHelpers::TryGetConstAttribute(InMetadata, SanitizedIdentifier))
 		{
 			PCGExMetaHelpers::ExecuteWithRightType(SourceAttribute->GetTypeId(), [&](auto DummyValue)
 			{

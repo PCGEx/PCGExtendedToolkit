@@ -140,7 +140,9 @@ namespace PCGExPointIOMerger
 					// A real attribute on this source wins (its type must match the resolved type).
 					if (!bTagOnly)
 					{
-						const FPCGMetadataAttributeBase* Attribute = SourceIO->GetIn()->Metadata->GetConstAttribute(Identity.Identifier);
+						// Domain-safe lookup: the identifier may be @Data while this source never
+						// carried @Data attributes (uninstantiated domain -> engine error log).
+						const FPCGMetadataAttributeBase* Attribute = SourceIO->FindConstAttribute(Identity.Identifier);
 						if (Attribute && Identity.IsA(Attribute->GetTypeId()))
 						{
 							Merger->InternalTracker->IncrementPending();
