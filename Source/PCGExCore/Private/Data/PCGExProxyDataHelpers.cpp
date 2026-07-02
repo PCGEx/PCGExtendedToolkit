@@ -521,7 +521,11 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 			// single context-wide chokepoint: a per-cluster target facade's pool is uncontended,
 			// and shared source facades distribute contention while retaining their read proxies.
 			// Descriptors with no pinnable facade fall back to the context pool.
-			IBufferProxyPool& Pool = InDataFacade ? InDataFacade->GetProxyPool() : *InContext->BufferProxyPool;
+			
+			// TODO BUG : Something really bad is happening here when using FUnionProcessors with union blender
+			// Need to double-check data-to-element domain path and how it's possibly messed up by
+			// multi-layered multi-source blending during fusing
+			IBufferProxyPool& Pool = /* InDataFacade ? InDataFacade->GetProxyPool() : */ *InContext->BufferProxyPool;
 			return Pool.GetOrCreate(InDescriptor, Factory);
 		}
 		return Factory();
