@@ -49,10 +49,10 @@ enum class EPCGExClipper2EndType : uint8
 UENUM(BlueprintType)
 enum class EPCGExClipper2FillRule : uint8
 {
-	EvenOdd  = 0 UMETA(DisplayName = "Even Odd", ToolTip="..."),
-	NonZero  = 1 UMETA(DisplayName = "Non Zero", ToolTip="..."),
-	Positive = 2 UMETA(DisplayName = "Positive", ToolTip="..."),
-	Negative = 3 UMETA(DisplayName = "Negative", ToolTip="..."),
+	EvenOdd  = 0 UMETA(DisplayName = "Even Odd", ToolTip="Only odd-numbered sub-regions are filled."),
+	NonZero  = 1 UMETA(DisplayName = "Non Zero", ToolTip="Only sub-regions with non-zero winding counts are filled."),
+	Positive = 2 UMETA(DisplayName = "Positive", ToolTip="Only sub-regions with winding counts greater than zero are filled."),
+	Negative = 3 UMETA(DisplayName = "Negative", ToolTip="Only sub-regions with winding counts less than zero are filled."),
 };
 
 UENUM(BlueprintType)
@@ -73,7 +73,7 @@ enum class EPCGExClipper2OpenPathOutput : uint8
 
 namespace PCGExClipper2
 {
-	static PCGExClipper2Lib::JoinType ConvertJoinType(EPCGExClipper2JoinType InType)
+	FORCEINLINE PCGExClipper2Lib::JoinType ConvertJoinType(EPCGExClipper2JoinType InType)
 	{
 		switch (InType)
 		{
@@ -90,7 +90,7 @@ namespace PCGExClipper2
 		}
 	}
 
-	static PCGExClipper2Lib::EndType ConvertEndType(EPCGExClipper2EndType InType)
+	FORCEINLINE PCGExClipper2Lib::EndType ConvertEndType(EPCGExClipper2EndType InType)
 	{
 		switch (InType)
 		{
@@ -109,7 +109,7 @@ namespace PCGExClipper2
 		}
 	}
 
-	static PCGExClipper2Lib::FillRule ConvertFillRule(EPCGExClipper2FillRule InRule)
+	FORCEINLINE PCGExClipper2Lib::FillRule ConvertFillRule(EPCGExClipper2FillRule InRule)
 	{
 		switch (InRule)
 		{
@@ -175,6 +175,9 @@ namespace PCGExClipper2
 		{
 			return Facades.Num();
 		}
+
+		/** Copy the paths at Indices into OutClosed/OutOpen according to their closed-loop state. */
+		void CollectPaths(const TArray<int32>& Indices, PCGExClipper2Lib::Paths64& OutClosed, PCGExClipper2Lib::Paths64& OutOpen) const;
 	};
 
 	/**
@@ -190,15 +193,16 @@ namespace PCGExClipper2
 		TArray<int32> SubjectIndices;
 		TArray<int32> OperandIndices;
 
-		// Cached paths for quick access (references into AllOpData->Paths)
+		// Cached subject paths (deep copies of AllOpData->Paths; each subject index belongs to exactly one group)
 		PCGExClipper2Lib::Paths64 SubjectPaths;
 		PCGExClipper2Lib::Paths64 OpenSubjectPaths;
 
-		PCGExClipper2Lib::Paths64 OperandPaths;
-		PCGExClipper2Lib::Paths64 OpenOperandPaths;
+		// Cached operand paths. Shared across groups when every group consumes the identical operand set (operand
+		// matching disabled) -- avoids O(groups x operands) duplication. PreProcess copies-on-write before its
+		// debug pre-union. Always valid after Prepare().
+		TSharedPtr<PCGExClipper2Lib::Paths64> OperandPaths;
+		TSharedPtr<PCGExClipper2Lib::Paths64> OpenOperandPaths;
 
-		// Combined source indices for blending
-		TArray<int32> AllSourceIndices;
 		TSharedPtr<PCGExData::FTags> GroupTags;
 
 		// Intersection blend info map: keyed by encoded (x,y) position
@@ -231,7 +235,7 @@ namespace PCGExClipper2
 /**
  * 
  */
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Cavalier")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path")
 class PCGEXELEMENTSCLIPPER2_API UPCGExClipper2ProcessorSettings : public UPCGExPathProcessorSettings
 {
 	GENERATED_BODY()
@@ -398,8 +402,6 @@ struct PCGEXELEMENTSCLIPPER2_API FPCGExClipper2ProcessorContext : FPCGExPathProc
 
 	FPCGExGeo2DProjectionDetails ProjectionDetails;
 
-	TSharedPtr<PCGExData::FTags> GatherTags(const TArray<int8>& VisitedSources);
-
 	/**
 	 * Convert Clipper2 Paths64 results back to PCGEx point data with metadata blending.
 	 *
@@ -447,7 +449,3 @@ protected:
 		const TArray<int32>& MainIndices,
 		const TArray<int32>& OperandIndices) const;
 };
-
-namespace PCGExClipper2
-{
-}

@@ -91,6 +91,40 @@ namespace PCGExClipper2RectClip
 	}
 
 	/**
+	 * Pre-built lookup over a set of source paths, so multiple RectClip results can restore their Z values
+	 * without re-scanning the sources for every call (the as-lines loop calls once per subject path).
+	 */
+	struct FSourceZLookup
+	{
+		// (X,Y) -> Z for every source point (exact matches). Keyed on the low 32 bits of each coord -- same
+		// tradeoff as the intersection-blend map (exact while |coord| < 2^31 scaled units).
+		TMap<uint64, int64_t> PointZMap;
+		const PCGExClipper2Lib::Paths64* SourcePaths = nullptr;
+
+		explicit FSourceZLookup(const PCGExClipper2Lib::Paths64& InSourcePaths)
+			: SourcePaths(&InSourcePaths)
+		{
+			int32 NumPts = 0;
+			for (const PCGExClipper2Lib::Path64& SrcPath : InSourcePaths)
+			{
+				NumPts += static_cast<int32>(SrcPath.size());
+			}
+			PointZMap.Reserve(NumPts);
+
+			for (const PCGExClipper2Lib::Path64& SrcPath : InSourcePaths)
+			{
+				for (const PCGExClipper2Lib::Point64& SrcPt : SrcPath)
+				{
+					const uint64 Key = PCGEx::H64(
+						static_cast<uint32>(SrcPt.x & 0xFFFFFFFF),
+						static_cast<uint32>(SrcPt.y & 0xFFFFFFFF));
+					PointZMap.Add(Key, SrcPt.z);
+				}
+			}
+		}
+	};
+
+	/**
 	 * Restore Z values for paths output by RectClip64.
 	 *
 	 * RectClip64 sets Z=0 for all intersection points (see GetLineIntersectPt in clipper_core.h).
@@ -100,29 +134,16 @@ namespace PCGExClipper2RectClip
 	 *    FIntersectionBlendInfo with both endpoints + alpha, and marking Z as INTERSECTION_MARKER
 	 *
 	 * @param OutPaths - The paths output by RectClip64 (modified in place)
-	 * @param SourcePaths - The original source paths with valid Z encodings
+	 * @param Sources - Pre-built lookup over the original source paths with valid Z encodings
 	 * @param Group - The processing group to store intersection blend info into
 	 * @param Tolerance - Distance tolerance for matching points (in Clipper2 integer units)
 	 */
 	void RestoreZValuesForRectClipResults(
 		PCGExClipper2Lib::Paths64& OutPaths,
-		const PCGExClipper2Lib::Paths64& SourcePaths,
+		const FSourceZLookup& Sources,
 		const TSharedPtr<PCGExClipper2::FProcessingGroup>& Group,
 		int64_t Tolerance = 2)
 	{
-		// Build a map from (X,Y) to Z for all source points (for exact matches)
-		TMap<uint64, int64_t> SourcePointZMap;
-		for (const PCGExClipper2Lib::Path64& SrcPath : SourcePaths)
-		{
-			for (const PCGExClipper2Lib::Point64& SrcPt : SrcPath)
-			{
-				const uint64 Key = PCGEx::H64(
-					static_cast<uint32>(SrcPt.x & 0xFFFFFFFF),
-					static_cast<uint32>(SrcPt.y & 0xFFFFFFFF));
-				SourcePointZMap.Add(Key, SrcPt.z);
-			}
-		}
-
 		// Process each output path
 		for (PCGExClipper2Lib::Path64& OutPath : OutPaths)
 		{
@@ -141,7 +162,7 @@ namespace PCGExClipper2RectClip
 					static_cast<uint32>(Pt.x & 0xFFFFFFFF),
 					static_cast<uint32>(Pt.y & 0xFFFFFFFF));
 
-				if (const int64_t* FoundZ = SourcePointZMap.Find(Key))
+				if (const int64_t* FoundZ = Sources.PointZMap.Find(Key))
 				{
 					// Exact match found - restore original Z
 					Pt.z = *FoundZ;
@@ -152,7 +173,7 @@ namespace PCGExClipper2RectClip
 				// Find which source edge this point lies on
 				bool bFoundEdge = false;
 
-				for (const PCGExClipper2Lib::Path64& SrcPath : SourcePaths)
+				for (const PCGExClipper2Lib::Path64& SrcPath : *Sources.SourcePaths)
 				{
 					if (bFoundEdge)
 					{
@@ -312,11 +333,13 @@ PCGExClipper2Lib::Rect64 FPCGExClipper2RectClipContext::ComputeClipRect(
 		MaxY = FMath::Max(MaxY, Projected.Y);
 	}
 
+	// Floor the min edges / ceil the max edges so the integer rect always CONTAINS the projected bounds
+	// (plain truncation shrinks positive maxima and negative minima by up to a full clipper unit).
 	PCGExClipper2Lib::Rect64 ClipRect;
-	ClipRect.left = static_cast<int64_t>(MinX * Scale);
-	ClipRect.right = static_cast<int64_t>(MaxX * Scale);
-	ClipRect.top = static_cast<int64_t>(MinY * Scale);
-	ClipRect.bottom = static_cast<int64_t>(MaxY * Scale);
+	ClipRect.left = FMath::FloorToInt64(MinX * Scale);
+	ClipRect.right = FMath::CeilToInt64(MaxX * Scale);
+	ClipRect.top = FMath::FloorToInt64(MinY * Scale);
+	ClipRect.bottom = FMath::CeilToInt64(MaxY * Scale);
 
 	// Apply padding
 	ApplyPadding(ClipRect, Settings->BoundsPadding, Settings->BoundsPaddingScale, Scale);
@@ -345,14 +368,18 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 
 	if (Settings->bInvertClip)
 	{
-		// For inverted clip, use boolean difference with the rectangle
-		// (This path uses ZCallback and doesn't need the fix)
+		// For inverted clip, use boolean difference with the rectangle. Edge crossings get blend info via the
+		// ZCallback; the rect's own corners can pass through into the output, so they're encoded as intersection
+		// markers upfront -- OutputPaths64's neighbor fallback then positions them from their clipper coords.
+		// (A raw z of 0 would decode as source 0 / point 0 and snap them onto that point's transform.)
+		const int64_t CornerZ = static_cast<int64_t>(PCGEx::H64(PCGExClipper2::INTERSECTION_MARKER, PCGExClipper2::INTERSECTION_MARKER));
+
 		PCGExClipper2Lib::Path64 RectPath;
 		RectPath.reserve(4);
-		RectPath.emplace_back(ClipRect.left, ClipRect.top, 0);
-		RectPath.emplace_back(ClipRect.right, ClipRect.top, 0);
-		RectPath.emplace_back(ClipRect.right, ClipRect.bottom, 0);
-		RectPath.emplace_back(ClipRect.left, ClipRect.bottom, 0);
+		RectPath.emplace_back(ClipRect.left, ClipRect.top, CornerZ);
+		RectPath.emplace_back(ClipRect.right, ClipRect.top, CornerZ);
+		RectPath.emplace_back(ClipRect.right, ClipRect.bottom, CornerZ);
+		RectPath.emplace_back(ClipRect.left, ClipRect.bottom, CornerZ);
 
 		PCGExClipper2Lib::Paths64 RectPaths = {RectPath};
 
@@ -374,6 +401,7 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 
 		if (!Clipper.Execute(PCGExClipper2Lib::ClipType::Difference, PCGExClipper2Lib::FillRule::NonZero, ClosedResults, OpenResults))
 		{
+			PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Clipper2 inverted rect clip failed; the group was skipped."));
 			return;
 		}
 
@@ -398,6 +426,9 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 		// Clip closed paths
 		if (!Group->SubjectPaths.empty())
 		{
+			// Built once for the whole subject set -- the as-lines loop restores Z once per subject path.
+			const PCGExClipper2RectClip::FSourceZLookup SubjectSources(Group->SubjectPaths);
+
 			if (Settings->bClipAsLines)
 			{
 				for (const PCGExClipper2Lib::Path64& SrcPath : Group->SubjectPaths)
@@ -429,7 +460,7 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 						PCGExClipper2Lib::Paths64 ClippedResults = LineClipper.Execute(SinglePath);
 
 						// Restore Z values using original source paths
-						PCGExClipper2RectClip::RestoreZValuesForRectClipResults(ClippedResults, Group->SubjectPaths, Group);
+						PCGExClipper2RectClip::RestoreZValuesForRectClipResults(ClippedResults, SubjectSources, Group);
 
 						// Now that the path is explicitly closed, segments that should connect at V0 will exist
 						// Find and merge them
@@ -491,20 +522,22 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 				PCGExClipper2Lib::RectClip64 Clipper(ClipRect);
 				ClosedResults = Clipper.Execute(Group->SubjectPaths);
 
-				PCGExClipper2RectClip::RestoreZValuesForRectClipResults(ClosedResults, Group->SubjectPaths, Group);
+				PCGExClipper2RectClip::RestoreZValuesForRectClipResults(ClosedResults, SubjectSources, Group);
 			}
 		}
 
 		// Clip open paths
 		if (!Group->OpenSubjectPaths.empty())
 		{
+			const PCGExClipper2RectClip::FSourceZLookup OpenSubjectSources(Group->OpenSubjectPaths);
+
 			if (Settings->bClipOpenPathsAsLines || Settings->bClipAsLines)
 			{
 				// Use RectClipLines for open paths (or when bClipAsLines is enabled)
 				PCGExClipper2Lib::RectClipLines64 LineClipper(ClipRect);
 				PCGExClipper2Lib::Paths64 OpenLinesResults = LineClipper.Execute(Group->OpenSubjectPaths);
 
-				PCGExClipper2RectClip::RestoreZValuesForRectClipResults(OpenLinesResults, Group->OpenSubjectPaths, Group);
+				PCGExClipper2RectClip::RestoreZValuesForRectClipResults(OpenLinesResults, OpenSubjectSources, Group);
 
 				for (auto& Path : OpenLinesResults)
 				{
@@ -517,7 +550,7 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 				PCGExClipper2Lib::RectClip64 Clipper(ClipRect);
 				PCGExClipper2Lib::Paths64 OpenAsClosedResults = Clipper.Execute(Group->OpenSubjectPaths);
 
-				PCGExClipper2RectClip::RestoreZValuesForRectClipResults(OpenAsClosedResults, Group->OpenSubjectPaths, Group);
+				PCGExClipper2RectClip::RestoreZValuesForRectClipResults(OpenAsClosedResults, OpenSubjectSources, Group);
 
 				for (auto& Path : OpenAsClosedResults)
 				{

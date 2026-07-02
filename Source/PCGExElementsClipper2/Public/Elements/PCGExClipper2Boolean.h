@@ -9,18 +9,13 @@
 
 #include "PCGExClipper2Boolean.generated.h"
 
-namespace PCGExClipper2
-{
-	class FPolyline;
-}
-
 UENUM(BlueprintType)
 enum class EPCGExClipper2BooleanOp : uint8
 {
-	Intersection = 0 UMETA(DisplayName = "Intersection", ToolTip="TBD", SearchHints = "Intersection"),
-	Union        = 1 UMETA(DisplayName = "Union", ToolTip="TBD", SearchHints = "Union"),
-	Difference   = 2 UMETA(DisplayName = "Difference", ToolTip="TBD", SearchHints = "Difference"),
-	Xor          = 3 UMETA(DisplayName = "XOR", ToolTip="TBD", SearchHints = "XOR"),
+	Intersection = 0 UMETA(DisplayName = "Intersection", ToolTip="Keep only the regions covered by both subjects and operands.", SearchHints = "Intersection"),
+	Union        = 1 UMETA(DisplayName = "Union", ToolTip="Merge subjects (and operands, if any) into their combined regions.", SearchHints = "Union"),
+	Difference   = 2 UMETA(DisplayName = "Difference", ToolTip="Subtract the operand regions from the subjects.", SearchHints = "Difference"),
+	Xor          = 3 UMETA(DisplayName = "XOR", ToolTip="Keep the regions covered by either subjects or operands, but not both.", SearchHints = "XOR"),
 };
 
 /**
