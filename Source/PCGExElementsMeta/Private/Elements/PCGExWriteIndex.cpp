@@ -152,11 +152,7 @@ bool FPCGExWriteIndexElement::Boot(FPCGExContext* InContext) const
 		{
 			if (!bTagOnly)
 			{
-				// Direct engine-side duplicate (bypasses FManagedObjects::DuplicateData): materialize
-				// inherited @Data values while the source chain is alive.
-				UPCGData* Duplicate = TaggedData.Data->DuplicateData(Context);
-				PCGExData::Helpers::LocalizeDataValues(Duplicate);
-				TaggedData.Data = Duplicate;
+				TaggedData.Data = TaggedData.Data->DuplicateData(Context);
 			}
 
 			if (const UPCGParamData* ParamData = Cast<UPCGParamData>(TaggedData.Data))
