@@ -106,6 +106,19 @@ namespace PCGExData::Helpers
 		// PCGDefaultValueKey == -1 == PCGInvalidEntryKey and the engine's SetValueFromValueKey_Unsafe
 		// silently drops writes for invalid entry keys.
 		Attribute->SetDefaultValue(Value);
+		
+		// The default slot alone is NOT authoritative when the domain exposes items: item-keyed reads
+		// (ReadDataValue, engine accessors) resolve entry 0 first, and that resolution walks the attribute
+		// parent chain -- CreateAttribute's bOverrideParent LINKS a same-named attribute to its metadata
+		// parent (it does not sever), so data initialized from another data keeps serving the SOURCE's
+		// value no matter what the local default says (e.g. IsClosed=true surviving on paths a clip cut
+		// open). Write a local entry-0 override so this value wins item-keyed reads too. Callers guarantee
+		// the attribute's underlying type is T (same contract as ReadDataValue).
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		if (Domain && Domain->GetItemCountForChild() > 0)
+		{
+			static_cast<FPCGMetadataAttribute<T>*>(Attribute)->SetValue(PCGFirstEntryKey, Value);
+		}
 	}
 
 	template <typename T>
