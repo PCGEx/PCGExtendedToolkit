@@ -5,6 +5,7 @@
 
 #include "PCGParamData.h"
 #include "Data/PCGExData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGPointData.h"
@@ -151,7 +152,11 @@ bool FPCGExWriteIndexElement::Boot(FPCGExContext* InContext) const
 		{
 			if (!bTagOnly)
 			{
-				TaggedData.Data = TaggedData.Data->DuplicateData(Context);
+				// Direct engine-side duplicate (bypasses FManagedObjects::DuplicateData): materialize
+				// inherited @Data values while the source chain is alive.
+				UPCGData* Duplicate = TaggedData.Data->DuplicateData(Context);
+				PCGExData::Helpers::LocalizeDataValues(Duplicate);
+				TaggedData.Data = Duplicate;
 			}
 
 			if (const UPCGParamData* ParamData = Cast<UPCGParamData>(TaggedData.Data))

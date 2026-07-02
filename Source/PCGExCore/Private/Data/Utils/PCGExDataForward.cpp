@@ -169,7 +169,11 @@ namespace PCGExData
 
 				InTargetDataFacade->Source->DeleteAttribute(Identifier);
 				FPCGMetadataAttribute<T>* TargetAtt = InTargetDataFacade->Source->FindOrCreateAttribute<T>(Identifier, ForwardValue, SourceAtt->AllowsInterpolation());
-				if (bElementDomainToDataDomain)
+
+				// Data-domain targets get a materialized local entry, not just a default value:
+				// default-only attributes read correctly but keep GetNumberOfEntries() == 0, which
+				// re-triggers ancestor-chain resolution in every downstream consumer.
+				if (TargetAtt && (bElementDomainToDataDomain || Identity.InDataDomain()))
 				{
 					Helpers::SetDataValue(TargetAtt, ForwardValue);
 				}
@@ -245,7 +249,9 @@ namespace PCGExData
 
 				InTargetMetadata->DeleteAttribute(Identifier);
 				FPCGMetadataAttribute<T>* TargetAtt = InTargetMetadata->FindOrCreateAttribute<T>(Identifier, ForwardValue, SourceAtt->AllowsInterpolation(), true, true);
-				if (bElementDomainToDataDomain)
+
+				// Same rationale as the facade overload above: data-domain targets get a real entry.
+				if (TargetAtt && (bElementDomainToDataDomain || Identity.InDataDomain()))
 				{
 					Helpers::SetDataValue(TargetAtt, ForwardValue);
 				}

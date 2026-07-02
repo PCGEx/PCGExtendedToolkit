@@ -274,6 +274,10 @@ namespace PCGExPartitionIdentifier
 				continue;
 			}
 
+			// Direct engine-side duplicate (bypasses FManagedObjects::DuplicateData): materialize
+			// inherited @Data values while the source chain is alive.
+			PCGExData::Helpers::LocalizeDataValues(OutPointData);
+
 			// Read query positions (defaults to point location). Resolved against the output
 			// copy so the selector sees the same attributes as the input. AllowConstructible
 			// (no broadcast) so a scalar source errors instead of silently fanning to (v,v,v).

@@ -11,6 +11,15 @@
 #include "PCGContext.h"
 #include "Async/Async.h"
 
+class UPCGData;
+
+namespace PCGExData::Helpers
+{
+	// Declared in Data/PCGExDataHelpers.h -- redeclared here so the DuplicateData template below
+	// can localize inherited @Data values without pulling the full helpers header into this one.
+	PCGEXCORE_API void LocalizeDataValues(UPCGData* InData);
+}
+
 namespace PCGEx
 {
 	class PCGEXCORE_API FPCGExAsyncStateScope
@@ -138,6 +147,11 @@ namespace PCGEx
 					DuplicateObjects.Add(Object);
 				}
 			}
+
+			// Duplicates inherit @Data values through weakly-referenced ancestor metadata; materialize
+			// them locally right away, while the source chain is guaranteed alive. Idempotent --
+			// attributes that already carry a local entry are skipped.
+			PCGExData::Helpers::LocalizeDataValues(Object);
 
 			Add(Object);
 			return Object;

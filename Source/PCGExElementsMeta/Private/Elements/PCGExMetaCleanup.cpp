@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExMetaCleanup.h"
 
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 
 #define LOCTEXT_NAMESPACE "PCGExMetaCleanupElement"
@@ -96,6 +97,11 @@ bool FPCGExMetaCleanupElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 					{
 						Metadata->DeleteAttribute(Identifier);
 					}
+
+					// Direct engine-side duplicate (bypasses FManagedObjects::DuplicateData): materialize
+					// inherited @Data values while the source chain is alive. After the deletions so
+					// pruned attributes aren't needlessly resolved.
+					PCGExData::Helpers::LocalizeDataValues(NewOutData);
 
 					FPCGTaggedData& OutData = Context->OutputData.TaggedData.Emplace_GetRef();
 					OutData.Data = NewOutData;
