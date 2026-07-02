@@ -88,13 +88,13 @@ void FPCGExClipper2BooleanContext::Process(const TSharedPtr<PCGExClipper2::FProc
 	}
 
 	// Add operand paths as clips if available
-	if (!Group->OperandPaths.empty())
+	if (Group->OperandPaths && !Group->OperandPaths->empty())
 	{
-		Clipper.AddClip(Group->OperandPaths);
+		Clipper.AddClip(*Group->OperandPaths);
 	}
-	if (!Group->OpenOperandPaths.empty())
+	if (Group->OpenOperandPaths && !Group->OpenOperandPaths->empty())
 	{
-		Clipper.AddClip(Group->OpenOperandPaths);
+		Clipper.AddClip(*Group->OpenOperandPaths);
 	}
 
 	// Determine clip type
@@ -124,6 +124,7 @@ void FPCGExClipper2BooleanContext::Process(const TSharedPtr<PCGExClipper2::FProc
 
 	if (!Clipper.Execute(ClipType, PCGExClipper2::ConvertFillRule(Settings->FillRule), ClosedResults, OpenResults))
 	{
+		PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Clipper2 boolean operation failed; the group was skipped."));
 		return;
 	}
 

@@ -95,6 +95,20 @@ namespace PCGExMetaHelpers
 		return HasAttribute(InData->ConstMetadata(), Identifier);
 	}
 
+	/**
+	 * Domain-safe, type-erased const attribute lookup. UPCGMetadata::GetConstAttribute routes through
+	 * WithConstMetadataDomain, which error-logs "Failed to find domain" for domains the data type
+	 * supports but never instantiated (domains are created lazily on first mutable access -- e.g.
+	 * @Data on point data that never carried @Data attributes). This helper returns null silently
+	 * in that case. Use it anywhere the identifier may target a domain the data might not have.
+	 */
+	PCGEXCORE_API const FPCGMetadataAttributeBase* TryGetConstAttribute(const UPCGMetadata* InMetadata, const FPCGAttributeIdentifier& Identifier);
+
+	static const FPCGMetadataAttributeBase* TryGetConstAttribute(const UPCGData* InData, const FPCGAttributeIdentifier& Identifier)
+	{
+		return InData ? TryGetConstAttribute(InData->ConstMetadata(), Identifier) : nullptr;
+	}
+
 	template <typename T>
 	static const FPCGMetadataAttribute<T>* TryGetConstAttribute(const UPCGMetadata* InMetadata, const FPCGAttributeIdentifier& Identifier)
 	{

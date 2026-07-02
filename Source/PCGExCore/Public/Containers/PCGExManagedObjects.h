@@ -11,6 +11,8 @@
 #include "PCGContext.h"
 #include "Async/Async.h"
 
+class UPCGData;
+
 namespace PCGEx
 {
 	class PCGEXCORE_API FPCGExAsyncStateScope

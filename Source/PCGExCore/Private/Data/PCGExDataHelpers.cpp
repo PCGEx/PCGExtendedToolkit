@@ -8,6 +8,8 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExSubSelection.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataDomain.h"
 #include "Types/PCGExTypes.h"
 
 namespace PCGExData::Helpers
@@ -58,28 +60,27 @@ namespace PCGExData::Helpers
 	T ReadDataValue(const FPCGMetadataAttribute<T>* Attribute)
 	{
 		// Read a single value from a @Data domain attribute (one value per dataset, not per-point).
-		// PCG metadata attributes form an inheritance chain (parent pointers).
-		// If the current attribute has no entries, walk up the parent chain to find
-		// the nearest ancestor with actual data. If none have entries, fall back to
-		// the attribute's default value.
-		const FPCGMetadataAttribute<T>* Attr = Attribute;
-		if (!Attr->GetNumberOfEntries())
+		// The default-value slot is the canonical @Data store, mirroring the engine: accessor keys
+		// resolve to the default slot when the data domain has no items (bAddDefaultValueIfEmpty in
+		// the accessor factory), and attribute copies across node boundaries never carry entries
+		// (CopyInternal: bCopyEntries=false) -- only the default, which is copied eagerly at copy
+		// time and is therefore also GC-proof. Entry reads apply only when the domain actually has
+		// items, exactly like engine accessors; GetValueFromItemKey then resolves inherited entries
+		// through the attribute parent chain the same way the engine would.
+
+		if (!ensure(Attribute))
 		{
-			const FPCGMetadataAttribute<T>* Parent = Attr->GetParent();
-			while (Parent)
-			{
-				if (!Parent->GetNumberOfEntries())
-				{
-					Parent = Parent->GetParent();
-				}
-				else
-				{
-					Attr = Parent;
-					Parent = nullptr;
-				}
-			}
+			// Should not happen, callsite need to gate against reading nothing
+			return T();
 		}
-		return !Attr->GetNumberOfEntries() ? Attr->GetValue(PCGDefaultValueKey) : Attr->GetValueFromItemKey(PCGFirstEntryKey);
+
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		if (Domain && Domain->GetItemCountForChild() > 0)
+		{
+			return Attribute->GetValueFromItemKey(PCGFirstEntryKey);
+		}
+
+		return Attribute->GetValue(PCGDefaultValueKey);
 	}
 
 	template <typename T>
@@ -97,8 +98,13 @@ namespace PCGExData::Helpers
 	template <typename T>
 	void SetDataValue(FPCGMetadataAttribute<T>* Attribute, const T Value)
 	{
-		Attribute->SetValue(PCGFirstEntryKey, Value);
 		Attribute->SetDefaultValue(Value);
+		
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		if (Domain && Domain->GetItemCountForChild() > 0)
+		{
+			Attribute->SetValue(PCGFirstEntryKey, Value);
+		}
 	}
 
 	template <typename T>
@@ -147,7 +153,8 @@ template PCGEXCORE_API void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeI
 		FPCGAttributeIdentifier SanitizedIdentifier = PCGExMetaHelpers::GetAttributeIdentifier(InSelector, InData);
 		SanitizedIdentifier.MetadataDomain = EPCGMetadataDomainFlag::Data; // Force data domain
 
-		if (const FPCGMetadataAttributeBase* SourceAttribute = InMetadata->GetConstAttribute(SanitizedIdentifier))
+		// Domain-safe lookup: the data may have never instantiated its @Data domain.
+		if (const FPCGMetadataAttributeBase* SourceAttribute = PCGExMetaHelpers::TryGetConstAttribute(InMetadata, SanitizedIdentifier))
 		{
 			PCGExMetaHelpers::ExecuteWithRightType(SourceAttribute->GetTypeId(), [&](auto DummyValue)
 			{

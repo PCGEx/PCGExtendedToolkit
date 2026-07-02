@@ -15,6 +15,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGBasePointData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGSpatialData.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
@@ -101,6 +102,8 @@ namespace PCGExData
 		template <typename T>
 		bool InitializeOutput(const EIOInit InitOut = EIOInit::NoInit)
 		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(FPointIO::InitializeOutput);
+			
 			PCGEX_SHARED_CONTEXT(ContextHandle)
 
 			if (LastInit == InitOut)

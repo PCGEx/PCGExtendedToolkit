@@ -856,7 +856,6 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 
 		OutValue = DefaultValue;
 
-		const int32 ExistingEntryCount = TypedOutAttribute->GetNumberOfEntriesWithParents();
 		const bool bHasIn = Source->GetIn() ? true : false;
 
 		auto GrabExistingValues = [&]()
@@ -868,8 +867,11 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		{
 			GrabExistingValues();
 		}
-		else if (!bHasIn && ExistingEntryCount != 0)
+		else if (!bHasIn && !this->bIsNewOutput)
 		{
+			// No input to seed from, but the attribute pre-exists on the output (e.g. written earlier
+			// in the same node) -- seed from its current value instead of clobbering it at Write time.
+			// Entry counts can't signal this: @Data values live in the default slot, entry-less.
 			GrabExistingValues();
 		}
 

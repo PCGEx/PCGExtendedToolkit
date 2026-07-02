@@ -13,6 +13,7 @@
 #include "Core/PCGExMT.h"
 #include "Core/PCGExSettings.h"
 #include "Data/PCGExDataCommon.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExProxyData.h"
 #include "Engine/AssetManager.h"
 #include "Engine/EngineTypes.h"

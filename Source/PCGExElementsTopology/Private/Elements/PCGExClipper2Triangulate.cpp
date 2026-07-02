@@ -135,19 +135,11 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 		}
 	}
 
-	// Combine subject paths for triangulation
-	PCGExClipper2Lib::Paths64 CombinedPaths;
-	CombinedPaths.reserve(Group->SubjectPaths.size());
-	for (const auto& Path : Group->SubjectPaths)
-	{
-		CombinedPaths.push_back(Path);
-	}
-
 	// Perform triangulation with ZCallback to preserve origin data through the internal Union
 	PCGExClipper2Lib::Paths64 TrianglePaths;
 	PCGExClipper2Lib::TriangulateResult Result =
 		PCGExClipper2Lib::TriangulateWithHoles(
-			CombinedPaths,
+			Group->SubjectPaths,
 			TrianglePaths,
 			PCGExClipper2::ConvertFillRule(Settings->FillRule),
 			Settings->bUseDelaunay,

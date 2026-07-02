@@ -169,7 +169,11 @@ namespace PCGExData
 
 				InTargetDataFacade->Source->DeleteAttribute(Identifier);
 				FPCGMetadataAttribute<T>* TargetAtt = InTargetDataFacade->Source->FindOrCreateAttribute<T>(Identifier, ForwardValue, SourceAtt->AllowsInterpolation());
-				if (bElementDomainToDataDomain)
+
+				// Data-domain targets: SetDataValue writes the default-value slot -- the canonical
+				// @Data store (FindOrCreateAttribute alone would miss the update when the attribute
+				// already existed with a different default).
+				if (TargetAtt && (bElementDomainToDataDomain || Identity.InDataDomain()))
 				{
 					Helpers::SetDataValue(TargetAtt, ForwardValue);
 				}
@@ -245,7 +249,9 @@ namespace PCGExData
 
 				InTargetMetadata->DeleteAttribute(Identifier);
 				FPCGMetadataAttribute<T>* TargetAtt = InTargetMetadata->FindOrCreateAttribute<T>(Identifier, ForwardValue, SourceAtt->AllowsInterpolation(), true, true);
-				if (bElementDomainToDataDomain)
+
+				// Same rationale as the facade overload above: data-domain targets get a real entry.
+				if (TargetAtt && (bElementDomainToDataDomain || Identity.InDataDomain()))
 				{
 					Helpers::SetDataValue(TargetAtt, ForwardValue);
 				}
