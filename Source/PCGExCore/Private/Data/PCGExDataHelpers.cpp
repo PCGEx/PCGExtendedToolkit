@@ -8,6 +8,8 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExSubSelection.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataDomain.h"
 #include "Types/PCGExTypes.h"
 
 namespace PCGExData::Helpers
@@ -58,28 +60,51 @@ namespace PCGExData::Helpers
 	T ReadDataValue(const FPCGMetadataAttribute<T>* Attribute)
 	{
 		// Read a single value from a @Data domain attribute (one value per dataset, not per-point).
-		// PCG metadata attributes form an inheritance chain (parent pointers).
-		// If the current attribute has no entries, walk up the parent chain to find
-		// the nearest ancestor with actual data. If none have entries, fall back to
-		// the attribute's default value.
-		const FPCGMetadataAttribute<T>* Attr = Attribute;
-		if (!Attr->GetNumberOfEntries())
+		// If the attribute has no local entries, the value lives on an ancestor in the metadata
+		// inheritance chain.
+
+		if (!ensure(Attribute))
 		{
-			const FPCGMetadataAttribute<T>* Parent = Attr->GetParent();
-			while (Parent)
-			{
-				if (!Parent->GetNumberOfEntries())
-				{
-					Parent = Parent->GetParent();
-				}
-				else
-				{
-					Attr = Parent;
-					Parent = nullptr;
-				}
-			}
+			// Should not happen, callsite need to gate against reading nothing
+			return T();
 		}
-		return !Attr->GetNumberOfEntries() ? Attr->GetValue(PCGDefaultValueKey) : Attr->GetValueFromItemKey(PCGFirstEntryKey);
+
+		if (Attribute->GetNumberOfEntries())
+		{
+			return Attribute->GetValueFromItemKey(PCGFirstEntryKey);
+		}
+
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		const FPCGAttributeIdentifier Identifier(Attribute->Name, Domain->GetDomainID());
+
+		TWeakObjectPtr<const UPCGMetadata> ParentMeta = Domain->GetTopMetadata()->GetParentPtr();
+		while (const UPCGMetadata* Meta = ParentMeta.Get())
+		{
+			const FPCGMetadataAttribute<T>* Ancestor = PCGExMetaHelpers::TryGetConstAttribute<T>(Meta, Identifier);
+			if (!Ancestor)
+			{
+				// Chain broken by an upstream filter/recreation -- nothing further to inherit.
+				break;
+			}
+
+			if (Ancestor->GetNumberOfEntries())
+			{
+				return Ancestor->GetValueFromItemKey(PCGFirstEntryKey);
+			}
+
+			ParentMeta = Meta->GetParentPtr();
+		}
+
+		if (Attribute->GetParent())
+		{
+			// A raw parent exists but the live weak chain carried no value: the value-holding
+			// ancestor was garbage collected (or dropped the attribute). The value is lost.
+			UE_LOG(LogPCGEx, Warning,
+			       TEXT("PCGEx: @Data attribute '%s' could not be resolved -- its ancestor metadata was garbage collected or the attribute was removed upstream. Falling back to the attribute's default value."),
+			       *Attribute->Name.ToString());
+		}
+
+		return Attribute->GetValue(PCGDefaultValueKey);
 	}
 
 	template <typename T>
@@ -121,6 +146,42 @@ namespace PCGExData::Helpers
 	void SetDataValue(UPCGData* InData, FPCGAttributeIdentifier Identifier, const T Value)
 	{
 		SetDataValue<T>(InData, Identifier.Name, Value);
+	}
+
+	void LocalizeDataValues(UPCGData* InData)
+	{
+		if (!InData || !InData->Metadata)
+		{
+			return;
+		}
+
+		UPCGMetadata* Metadata = InData->MutableMetadata();
+		const FPCGMetadataDomain* DataDomain = Metadata->GetConstMetadataDomain(PCGMetadataDomainID::Data);
+		if (!DataDomain)
+		{
+			return;
+		}
+
+		TArray<FName> AttributeNames;
+		TArray<EPCGMetadataTypes> AttributeTypes;
+		DataDomain->GetAttributes(AttributeNames, AttributeTypes);
+
+		for (int32 i = 0; i < AttributeNames.Num(); i++)
+		{
+			const FPCGAttributeIdentifier Identifier(AttributeNames[i], PCGMetadataDomainID::Data);
+
+			// Unsupported types fall through ExecuteWithRightType untouched and stay inherited.
+			PCGExMetaHelpers::ExecuteWithRightType(AttributeTypes[i], [&](auto DummyValue)
+			{
+				using T = decltype(DummyValue);
+				FPCGMetadataAttribute<T>* Attribute = PCGExMetaHelpers::TryGetMutableAttribute<T>(Metadata, Identifier);
+				if (!Attribute || Attribute->GetNumberOfEntries())
+				{
+					return;
+				}
+				SetDataValue<T>(Attribute, ReadDataValue<T>(Attribute));
+			});
+		}
 	}
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \

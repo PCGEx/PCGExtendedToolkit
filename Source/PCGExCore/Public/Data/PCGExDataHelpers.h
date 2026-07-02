@@ -43,6 +43,19 @@ extern template void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifi
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
+	/**
+	 * Materializes inherited @Data-domain values into InData's own metadata.
+	 *
+	 * @Data attributes on freshly initialized/duplicated data carry no local entries; their value
+	 * lives on an ancestor in the metadata parent chain. UPCGMetadata only holds its parent through
+	 * a TWeakObjectPtr, so once the graph executor releases an intermediate upstream data and GC
+	 * collects it, that inherited value is lost -- and the raw attribute-level parent pointers left
+	 * behind dangle. Writing the resolved value locally at output-initialization time (while the
+	 * input chain is still guaranteed alive) caps @Data inheritance depth at node boundaries and
+	 * removes any downstream dependency on ancestor lifetimes.
+	 */
+	PCGEXCORE_API void LocalizeDataValues(UPCGData* InData);
+
 	constexpr static EPCGMetadataTypes GetNumericType(const EPCGExNumericOutput InType)
 	{
 		switch (InType)

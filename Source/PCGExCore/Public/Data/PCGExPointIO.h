@@ -15,6 +15,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGBasePointData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGSpatialData.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
@@ -157,6 +158,12 @@ namespace PCGExData
 					FPCGInitializeFromDataParams InitializeFromDataParams(In);
 					InitializeFromDataParams.bInheritSpatialData = false;
 					Out->InitializeFromDataWithParams(InitializeFromDataParams);
+
+					// Inherited @Data values must be materialized locally while the input chain is
+					// still alive; ancestor metadata is only weakly referenced by the engine and
+					// may be GC'd before this data is read.
+					// Not the best workaround but preserves data and avoid crashes downstream.
+					Helpers::LocalizeDataValues(Out);
 				}
 
 				return true;
@@ -189,6 +196,9 @@ namespace PCGExData
 					FPCGInitializeFromDataParams InitializeFromDataParams(In);
 					Out->InitializeFromDataWithParams(InitializeFromDataParams);
 				}
+
+				// Same rationale as the New branch above: cap @Data inheritance at this boundary.
+				Helpers::LocalizeDataValues(Out);
 
 				return true;
 			}
