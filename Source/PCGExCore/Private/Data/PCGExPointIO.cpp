@@ -64,6 +64,8 @@ namespace PCGExData
 
 	bool FPointIO::InitializeOutput(const EIOInit InitOut)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIO::InitializeOutput);
+		
 		PCGEX_SHARED_CONTEXT(ContextHandle)
 
 		if (LastInit == InitOut)

@@ -102,6 +102,8 @@ namespace PCGExData
 		template <typename T>
 		bool InitializeOutput(const EIOInit InitOut = EIOInit::NoInit)
 		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(FPointIO::InitializeOutput);
+			
 			PCGEX_SHARED_CONTEXT(ContextHandle)
 
 			if (LastInit == InitOut)
