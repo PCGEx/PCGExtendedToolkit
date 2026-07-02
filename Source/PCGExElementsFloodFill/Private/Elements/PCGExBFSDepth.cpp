@@ -5,6 +5,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 #include "Factories/PCGExFactories.h"
 
@@ -60,7 +61,7 @@ bool FPCGExBFSDepthElement::Boot(FPCGExContext* InContext) const
 	if (Settings->TriggerCount.bOutputTriggerCount)
 	{
 		// Required: trigger count is meaningless without filters defining what a trigger is.
-		if (!PCGExFactories::GetInputFactories(Context, PCGExBFSDepth::Labels::SourceTriggerFiltersLabel, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters))
+		if (!PCGExFactories::GetInputFactories(Context, PCGExBFSDepth::Labels::SourceTriggerFiltersLabel, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters()))
 		{
 			return false;
 		}

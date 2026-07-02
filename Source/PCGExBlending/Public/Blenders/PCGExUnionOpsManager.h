@@ -27,10 +27,16 @@ namespace PCGExBlending
 		FUnionOpsManager(const TArray<TObjectPtr<const UPCGExBlendOpFactory>>* InBlendingFactories, const PCGExMath::IDistances* InDistances);
 		virtual ~FUnionOpsManager() override;
 
-		/** When a pre-resolved schema is provided, per-source blenders skip factory config resolution
-		 * (and its concurrent metadata enumeration) -- see PCGExBlending::FBlendOpsSchema. */
-		bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<const FBlendOpsSchema>& InSchema = nullptr);
-		bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<PCGExData::FUnionMetadata>& InUnionMetadata, const TSharedPtr<const FBlendOpsSchema>& InSchema = nullptr);
+		/** When a pre-resolved schema is provided, per-source (primary) blenders skip factory config
+		 * resolution (and its concurrent metadata enumeration) -- see PCGExBlending::FBlendOpsSchema.
+		 *
+		 * InBackgroundSources: optional per-source flags (parallel to InSources; empty = all primary). A source
+		 * flagged true is a best-effort "background" source: it always resolves from factories on the spot
+		 * (never the schema -- typically a per-caller facade used as a fade-to-original source) and tolerates
+		 * operand attributes it doesn't carry (those ops are simply dropped for that source). Primary sources
+		 * keep the strict behaviour: schema if provided, factories otherwise, and fail on a missing attribute. */
+		bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<const FBlendOpsSchema>& InSchema = nullptr, const TConstArrayView<bool> InBackgroundSources = {});
+		bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<PCGExData::FUnionMetadata>& InUnionMetadata, const TSharedPtr<const FBlendOpsSchema>& InSchema = nullptr, const TConstArrayView<bool> InBackgroundSources = {});
 
 		virtual void InitTrackers(TArray<PCGEx::FOpStats>& Trackers) const override;
 		virtual int32 ComputeWeights(const int32 WriteIndex, const TSharedPtr<PCGExData::IUnionData>& InUnionData, TArray<PCGExData::FWeightedPoint>& OutWeightedPoints) const override;

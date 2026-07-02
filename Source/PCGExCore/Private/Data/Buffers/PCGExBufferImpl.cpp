@@ -288,7 +288,10 @@ namespace PCGExData
 				InternalBroadcaster->GrabAndDump(*InValues, bCaptureMinMax, this->Min, this->Max);
 				bReadComplete = true;
 				bSparseBuffer = false;
-				if (bCaptureMinMax) { this->bMinMaxCaptured = true; }
+				if (bCaptureMinMax)
+				{
+					this->bMinMaxCaptured = true;
+				}
 				InternalBroadcaster.Reset();
 			}
 			else if (!bSparseBuffer && bCaptureMinMax && !this->bMinMaxCaptured)
@@ -332,7 +335,10 @@ namespace PCGExData
 		{
 			InternalBroadcaster->GrabAndDump(*InValues, bCaptureMinMax, this->Min, this->Max);
 			bReadComplete = true;
-			if (bCaptureMinMax) { this->bMinMaxCaptured = true; }
+			if (bCaptureMinMax)
+			{
+				this->bMinMaxCaptured = true;
+			}
 			InternalBroadcaster.Reset();
 		}
 
@@ -639,10 +645,20 @@ namespace PCGExData
 		const FPCGMetadataAttributeBase* FoundAttribute = Source->FindConstAttribute(Identifier, EIOSide::In);
 		if (FoundAttribute)
 		{
+			if (!ensureMsgf(
+				FoundAttribute->Name == Identifier.Name,
+				TEXT("[PCGEx] @Data read guard: attribute resolved by '%s' on '%s' reports a mismatched internal name -- its memory was reclaimed/overwritten?"),
+				*Identifier.Name.ToString(), *GetNameSafe(Source->GetIn())))
+			{
+				InValue = T{};
+				bReadInitialized = true;
+				return true;
+			}
+
 			bReadInitialized = true;
 
 			InAttribute = FoundAttribute;
-			InValue = FoundAttribute->GetValueFromItemKey<T>(PCGDefaultValueKey);
+			InValue = Helpers::ReadDataValue<T>(FoundAttribute);
 		}
 
 		return bReadInitialized;
@@ -710,7 +726,7 @@ namespace PCGExData
 
 		auto GrabExistingValues = [&]()
 		{
-			OutValue = CreatedAttribute->GetValueFromItemKey<T>(PCGDefaultValueKey);
+			OutValue = Helpers::ReadDataValue<T>(CreatedAttribute);
 		};
 
 		if (Init == EBufferInit::Inherit)
@@ -738,7 +754,7 @@ namespace PCGExData
 
 		if (const FPCGMetadataAttributeBase* ExistingAttribute = Source->FindConstAttribute(Identifier, EIOSide::In))
 		{
-			return InitForWrite(ExistingAttribute->GetValueFromItemKey<T>(PCGDefaultValueKey), ExistingAttribute->AllowsInterpolation(), Init);
+			return InitForWrite(Helpers::ReadDataValue<T>(ExistingAttribute), ExistingAttribute->AllowsInterpolation(), Init);
 		}
 
 		return InitForWrite(T{}, true, Init);

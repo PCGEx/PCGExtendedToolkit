@@ -67,7 +67,7 @@ bool FPCGExUberFilterCollectionsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(UberFilterCollections)
 
-	PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {PCGExFactories::EType::IndexPicker}, false);
+	PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {FPCGExDataTypeInfoPicker::AsId()}, false);
 
 	Context->Inside = MakeShared<PCGExData::FPointIOCollection>(Context, true);
 	Context->Outside = MakeShared<PCGExData::FPointIOCollection>(Context, true);

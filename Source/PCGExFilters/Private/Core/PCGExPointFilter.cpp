@@ -146,7 +146,7 @@ namespace PCGExPointFilter
 
 		for (const UPCGExPointFilterFactoryData* Factory : InFactories)
 		{
-			if (SupportedFactoriesTypes && !SupportedFactoriesTypes->Contains(Factory->GetFactoryType()))
+			if (SupportedFactoriesTypes && !SupportedFactoriesTypes->Contains(Factory->GetDataTypeId()))
 			{
 				PCGEX_LOG_INVALID_INPUT(InContext, FText::Format(FTEXT("A filter is of an unexpected type : {0}."), FText::FromString(GetNameSafe(Factory->GetClass()))))
 				continue;
@@ -451,12 +451,12 @@ namespace PCGExPointFilter
 		return NumPass;
 	}
 
-	void FManager::SetSupportedTypes(const TSet<PCGExFactories::EType>* InTypes)
+	void FManager::SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes)
 	{
 		SupportedFactoriesTypes = InTypes;
 	}
 
-	const TSet<PCGExFactories::EType>* FManager::GetSupportedTypes() const
+	const TSet<FPCGDataTypeBaseId>* FManager::GetSupportedTypes() const
 	{
 		return SupportedFactoriesTypes;
 	}

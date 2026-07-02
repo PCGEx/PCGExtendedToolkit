@@ -78,7 +78,7 @@ public:
 	}
 #endif
 
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
 protected:
 	virtual bool OutputPinsCanBeDeactivated() const override

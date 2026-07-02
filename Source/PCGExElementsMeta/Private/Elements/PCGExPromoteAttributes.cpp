@@ -280,7 +280,7 @@ bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
 	// Pickers are valid for every resolution -- including Self -- so load them before the Self short-circuit below.
 	if (Settings->Selection == EPCGExCollectionEntrySelection::Picker || Settings->Selection == EPCGExCollectionEntrySelection::PickerFirst || Settings->Selection == EPCGExCollectionEntrySelection::PickerLast)
 	{
-		if (!PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {PCGExFactories::EType::IndexPicker}))
+		if (!PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {FPCGExDataTypeInfoPicker::AsId()}))
 		{
 			return false;
 		}

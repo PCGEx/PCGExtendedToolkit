@@ -41,7 +41,7 @@ bool FPCGExCherryPickPointsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(CherryPickPoints)
 
-	return PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {PCGExFactories::EType::IndexPicker});
+	return PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {FPCGExDataTypeInfoPicker::AsId()});
 }
 
 bool FPCGExCherryPickPointsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const

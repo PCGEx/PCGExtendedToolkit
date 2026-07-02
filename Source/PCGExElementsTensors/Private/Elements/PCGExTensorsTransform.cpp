@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExTensorsTransform.h"
 
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExTensorFactoryProvider.h"
 #include "Data/PCGExData.h"
@@ -37,7 +38,7 @@ bool FPCGExTensorsTransformElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(TensorsTransform)
 
-	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, Context->TensorFactories, {PCGExFactories::EType::Tensor}))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, Context->TensorFactories, {FPCGExDataTypeInfoTensor::AsId()}))
 	{
 		return false;
 	}
@@ -50,7 +51,7 @@ bool FPCGExTensorsTransformElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_FOREACH_FIELD_TRTENSOR(PCGEX_OUTPUT_VALIDATE_NAME)
 
-	GetInputFactories(Context, PCGExFilters::Labels::SourceStopConditionLabel, Context->StopFilterFactories, PCGExFactories::PointFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExFilters::Labels::SourceStopConditionLabel, Context->StopFilterFactories, PCGExFactories::PointFilters(), false);
 
 	PCGExPointFilter::PruneForDirectEvaluation(Context, Context->StopFilterFactories);
 

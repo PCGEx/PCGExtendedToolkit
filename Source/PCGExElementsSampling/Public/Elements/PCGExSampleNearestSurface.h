@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Factories/PCGExFactories.h"
 
 #include "Core/PCGExPointsProcessor.h"
@@ -73,7 +74,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Surface source */

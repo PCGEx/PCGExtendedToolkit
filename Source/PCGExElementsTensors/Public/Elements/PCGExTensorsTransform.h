@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 
 #include "Core/PCGExPointsProcessor.h"
@@ -59,7 +60,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Whether to update point positions using tensor sampling. */

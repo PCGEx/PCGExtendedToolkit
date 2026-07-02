@@ -3,6 +3,7 @@
 
 #include "Elements/ControlFlow/PCGExUberBranch.h"
 
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -88,7 +89,7 @@ bool FPCGExUberBranchElement::Boot(FPCGExContext* InContext) const
 		bool bInitialized = false;
 
 		if (TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> Factories;
-			GetInputFactories(Context, Settings->InputLabels[i], Factories, PCGExFactories::PointFilters))
+			PCGExFactories::GetInputFactories(Context, Settings->InputLabels[i], Factories, PCGExFactories::PointFilters()))
 		{
 			for (const TSharedPtr<PCGExData::FFacade>& Facade : Context->Facades)
 			{

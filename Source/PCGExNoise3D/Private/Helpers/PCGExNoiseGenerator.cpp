@@ -14,7 +14,7 @@ namespace PCGExNoise3D
 	bool FNoiseGenerator::Init(FPCGExContext* InContext, const FName SourceLabel, bool bThrowError)
 	{
 		TArray<TObjectPtr<const UPCGExNoise3DFactoryData>> Factories;
-		if (!PCGExFactories::GetInputFactories(InContext, SourceLabel, Factories, {PCGExFactories::EType::Noise3D}, bThrowError))
+		if (!PCGExFactories::GetInputFactories(InContext, SourceLabel, Factories, {FPCGExDataTypeInfoNoise3D::AsId()}, bThrowError))
 		{
 			return false;
 		}

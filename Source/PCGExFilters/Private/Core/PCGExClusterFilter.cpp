@@ -3,6 +3,8 @@
 
 #include "Core/PCGExClusterFilter.h"
 
+#include "Core/PCGExFilterTypeSets.h"
+
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -102,7 +104,7 @@ namespace PCGExClusterFilter
 	// receive edge data instead of vertex data.
 	bool FManager::InitFilter(FPCGExContext* InContext, const TSharedPtr<PCGExPointFilter::IFilter>& Filter)
 	{
-		if (PCGExFactories::SupportsClusterFilters.Contains(Filter->Factory->GetFactoryType()))
+		if (PCGExFactories::SupportsClusterFilters().Contains(Filter->Factory->GetDataTypeId()))
 		{
 			const TSharedPtr<IFilter> ClusterFilter = StaticCastSharedPtr<IFilter>(Filter);
 			return ClusterFilter->Init(InContext, Cluster, PointDataFacade, EdgeDataFacade);

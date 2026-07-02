@@ -15,7 +15,7 @@
 
 namespace PCGExFactories
 {
-	bool GetInputFactories_Internal(FPCGExContext* InContext, const FName InLabel, TArray<TObjectPtr<const UPCGExFactoryData>>& OutFactories, const TSet<EType>& Types, const bool bRequired)
+	bool GetInputFactories_Internal(FPCGExContext* InContext, const FName InLabel, TArray<TObjectPtr<const UPCGExFactoryData>>& OutFactories, const TSet<FPCGDataTypeBaseId>& Types, const bool bRequired)
 	{
 		const TArray<FPCGTaggedData>& Inputs = InContext->InputData.GetInputsByPin(InLabel);
 		TSet<uint32> UniqueData;
@@ -33,7 +33,7 @@ namespace PCGExFactories
 			const UPCGExFactoryData* Factory = Cast<UPCGExFactoryData>(TaggedData.Data);
 			if (Factory)
 			{
-				if (!Types.Contains(Factory->GetFactoryType()))
+				if (!Types.Contains(Factory->GetDataTypeId()))
 				{
 					PCGEX_LOG_INVALID_INPUT(InContext, FText::Format(FTEXT("Input '{0}' is not supported by pin {1}."), FText::FromString(TaggedData.Data->GetClass()->GetName()), FText::FromName(InLabel)))
 					continue;

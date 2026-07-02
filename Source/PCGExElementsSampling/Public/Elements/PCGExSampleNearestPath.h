@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Factories/PCGExFactories.h"
 
 #include "Curves/CurveFloat.h"
@@ -117,7 +118,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** If enabled, allows you to filter out which targets get sampled by which data */

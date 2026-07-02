@@ -78,7 +78,7 @@ bool FPCGExGetTextureDataElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->SourceType == EPCGExGetTexturePathType::MaterialPath)
 	{
-		if (!PCGExFactories::GetInputFactories(InContext, PCGExTexture::SourceTexLabel, Context->TexParamsFactories, {PCGExFactories::EType::TexParam}))
+		if (!PCGExFactories::GetInputFactories(InContext, PCGExTexture::SourceTexLabel, Context->TexParamsFactories, {FPCGExDataTypeInfoTexParam::AsId()}))
 		{
 			return false;
 		}

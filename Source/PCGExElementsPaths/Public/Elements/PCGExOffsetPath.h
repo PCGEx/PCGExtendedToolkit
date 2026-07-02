@@ -8,6 +8,7 @@
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
 
@@ -59,7 +60,7 @@ protected:
 public:
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters which points will be offset", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters which points will be offset", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Algorithm used to compute the offset direction at each point. */

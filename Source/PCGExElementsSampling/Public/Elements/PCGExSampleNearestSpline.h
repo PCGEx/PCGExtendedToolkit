@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Curves/CurveFloat.h"
 #include "Curves/RichCurve.h"
 #include "UObject/Object.h"
@@ -150,7 +151,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Sample inputs.*/

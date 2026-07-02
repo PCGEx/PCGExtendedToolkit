@@ -108,7 +108,7 @@ bool FPCGExSampleSurfaceGuidedElement::Boot(FPCGExContext* InContext) const
 	{
 		Context->bExtractTextureParams = true;
 
-		if (!PCGExFactories::GetInputFactories(InContext, PCGExTexture::SourceTexLabel, Context->TexParamsFactories, {PCGExFactories::EType::TexParam}))
+		if (!PCGExFactories::GetInputFactories(InContext, PCGExTexture::SourceTexLabel, Context->TexParamsFactories, {FPCGExDataTypeInfoTexParam::AsId()}))
 		{
 			return false;
 		}

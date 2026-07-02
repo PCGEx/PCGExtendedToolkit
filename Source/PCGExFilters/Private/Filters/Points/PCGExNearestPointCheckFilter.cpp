@@ -9,6 +9,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 #include "PCGExMatching/Public/Helpers/PCGExTargetsHandler.h"
 
@@ -45,7 +46,7 @@ bool UPCGExNearestPointCheckFilterFactory::BuildTargetCaches(FPCGExContext* InCo
 	{
 		// Always add (even on failure) so the array stays index-aligned with the target's IO.
 		TSharedPtr<PCGExPointFilter::FManager> Manager = MakeShared<PCGExPointFilter::FManager>(Target);
-		Manager->SetSupportedTypes(&PCGExFactories::PointFilters);
+		Manager->SetSupportedTypes(&PCGExFactories::PointFilters());
 
 		const bool bManagerOk = Manager->Init(InContext, FilterFactories);
 		TargetFilterManagers->Add(bManagerOk ? Manager : nullptr);
@@ -185,7 +186,7 @@ UPCGExFactoryData* UPCGExNearestPointCheckFilterProviderSettings::CreateFactory(
 
 	Super::CreateFactory(InContext, NewFactory);
 
-	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourcePointFiltersLabel, NewFactory->FilterFactories, PCGExFactories::PointFilters))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourcePointFiltersLabel, NewFactory->FilterFactories, PCGExFactories::PointFilters()))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;

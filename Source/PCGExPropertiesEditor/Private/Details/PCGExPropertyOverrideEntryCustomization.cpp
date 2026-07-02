@@ -150,9 +150,9 @@ TSharedRef<SWidget> FPCGExPropertyOverrideEntryCustomization::BuildOverrideToggl
 			: SNullWidget::NullWidget;
 	}
 
-	// Component owners: custom SCheckBox that writes the TSet directly via SetOverrideEnabled.
-	// Bypasses UE's property edit chain entirely, so the CDO->instance per-property propagation
-	// we cannot block on the leaf bEnabled never fires for inspector toggles.
+	// Component owners: custom SCheckBox that writes the TSet directly via SetOverrideEnabled,
+	// bypassing UE's edit chain -- so PostEditChangeChainProperty (whose SyncBEnabledFromOverrideSet
+	// would revert a bEnabled write from the empty set in the same notify) never fires for toggles.
 	const TWeakObjectPtr<UPCGExPropertyCollectionComponent> WeakLive = WeakLiveComponent;
 	const int32 OverrideIndex = CachedOverrideIndex;
 
@@ -221,6 +221,7 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeHeader(
 	// lifetime and is cached here once.
 	WeakLiveComponent.Reset();
 	WeakOwner.Reset();
+	bComponentHasArchetypeChain = false;
 	CachedOverrideIndex = PropertyHandle->GetIndexInArray();
 	CachedAssetDefaultValue.Reset();
 
@@ -240,12 +241,15 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeHeader(
 
 		if (UPCGExPropertyCollectionComponent* Comp = Cast<UPCGExPropertyCollectionComponent>(Outer))
 		{
-			// Only BP-inherited instances get the chain-walk reset arrow; Instance-creation
-			// components have no parent layer to resolve toward.
-			if (Comp->CreationMethod != EComponentCreationMethod::Instance)
-			{
-				WeakLiveComponent = Comp;
+			// Bind the live component for EVERY non-template component (Instance-created included):
+			// its EnabledOverrides TSet is the authoritative toggle store the custom checkbox writes.
+			WeakLiveComponent = Comp;
 
+			// The reset arrow only means something with a BP archetype/class chain to defer to;
+			// Instance-created components have none, so it (and its asset-default cache) stays off.
+			bComponentHasArchetypeChain = (Comp->CreationMethod != EComponentCreationMethod::Instance);
+			if (bComponentHasArchetypeChain)
+			{
 				// Invalid result after this means "no asset default for this entry" -- distinct
 				// from "not yet resolved" and load-bearing for TryGetResetSource.
 				bool _IgnoredEnabled = false;
@@ -424,6 +428,10 @@ FResetToDefaultOverride FPCGExPropertyOverrideEntryCustomization::MakeArchetypeR
 	const TWeakPtr<IPropertyUtilities> WeakUtils = WeakPropertyUtilities;
 	const int32 OverrideIndex = CachedOverrideIndex;
 
+	// No BP chain (Instance-created / non-component): IsVisible returns false so no arrow shows, but
+	// the override stays installed to suppress UE's default reset (which would blank the entry shape).
+	const bool bHasChain = bComponentHasArchetypeChain;
+
 	// Capture the cached asset default by value so the lambda stays self-contained -- the
 	// pointer passed into TryGetResetSource targets this captured copy so the helper sees
 	// "non-null, valid" (use cache) or "non-null, invalid" (no asset default exists)
@@ -431,8 +439,12 @@ FResetToDefaultOverride FPCGExPropertyOverrideEntryCustomization::MakeArchetypeR
 	const FInstancedStruct CachedAssetDefault = CachedAssetDefaultValue;
 
 	auto IsVisible = FIsResetToDefaultVisible::CreateLambda(
-		[WeakLive, OverrideIndex, CachedAssetDefault](TSharedPtr<IPropertyHandle>) -> bool
+		[WeakLive, OverrideIndex, CachedAssetDefault, bHasChain](TSharedPtr<IPropertyHandle>) -> bool
 		{
+			if (!bHasChain)
+			{
+				return false;
+			}
 			const UPCGExPropertyCollectionComponent* Live = WeakLive.Get();
 			if (!Live || !Live->Properties.ImportOverrides.Overrides.IsValidIndex(OverrideIndex))
 			{
@@ -455,8 +467,12 @@ FResetToDefaultOverride FPCGExPropertyOverrideEntryCustomization::MakeArchetypeR
 		});
 
 	auto Handler = FResetToDefaultHandler::CreateLambda(
-		[WeakLive, WeakUtils, OverrideIndex, CachedAssetDefault](TSharedPtr<IPropertyHandle> Handle)
+		[WeakLive, WeakUtils, OverrideIndex, CachedAssetDefault, bHasChain](TSharedPtr<IPropertyHandle> Handle)
 		{
+			if (!bHasChain)
+			{
+				return;
+			}
 			UPCGExPropertyCollectionComponent* Live = WeakLive.Get();
 			if (!Live || !Live->Properties.ImportOverrides.Overrides.IsValidIndex(OverrideIndex))
 			{
@@ -611,8 +627,9 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 			ChildBuilder, InnerScope.ToSharedRef(), InnerStruct, NameContent, IsEnabledAttr);
 		if (InnerRow)
 		{
-			// Reset-to-default arrow walks the BP class chain -- meaningful only for component owners.
-			if (WeakLiveComponent.IsValid())
+			// Reset arrow walks the BP class chain -- only for BP-inherited owners. Instance-created
+			// components have none; their inner Value row keeps its NoResetToDefault meta.
+			if (bComponentHasArchetypeChain)
 			{
 				InnerRow->OverrideResetToDefault(MakeArchetypeResetOverride());
 			}

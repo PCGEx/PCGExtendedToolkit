@@ -235,10 +235,14 @@ namespace PCGExData
 
 		explicit TDirectDataAttributeProxy(EPCGMetadataTypes InWorkingType);
 
+		virtual void InitForRole(EProxyRole InRole) override;
 		virtual void GetVoid(const int32 Index, void* OutValue) const override;
 		virtual void GetCurrentVoid(const int32 Index, void* OutValue) const override;
 		virtual void SetVoid(const int32 Index, const void* Value) const override;
 		virtual PCGExValueHash ReadValueHash(const int32 Index) const override;
+
+	protected:
+		T_REAL CachedInValue{};
 	};
 
 #pragma region externalization TDirectDataAttributeProxy

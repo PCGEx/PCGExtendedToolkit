@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExDiscardByOverlap.h"
 #include "PCGExFilterCommon.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointsProcessor.h"
 
 #include "Sampling/PCGExSamplingCommon.h"
@@ -55,7 +56,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters used to know whether a point should be considered for overlap or not.", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters used to know whether a point should be considered for overlap or not.", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Overlap test mode */

@@ -4,6 +4,7 @@
 #include "Elements/PCGExAttributeRolling.h"
 
 #include "Core/PCGExBlendOpsManager.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -64,30 +65,30 @@ bool FPCGExAttributeRollingElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->RangeControl == EPCGExRollingRangeControl::StartStop)
 	{
-		if (!PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourceStartConditionLabel, Context->StartFilterFactories, PCGExFactories::PointFilters))
+		if (!PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourceStartConditionLabel, Context->StartFilterFactories, PCGExFactories::PointFilters()))
 		{
 			return false;
 		}
 
-		if (!PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourceStopConditionLabel, Context->StopFilterFactories, PCGExFactories::PointFilters))
+		if (!PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourceStopConditionLabel, Context->StopFilterFactories, PCGExFactories::PointFilters()))
 		{
 			return false;
 		}
 	}
 	else
 	{
-		PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourceToggleConditionLabel, Context->StartFilterFactories, PCGExFactories::PointFilters, false);
+		PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourceToggleConditionLabel, Context->StartFilterFactories, PCGExFactories::PointFilters(), false);
 	}
 
 	if (Settings->ValueControl == EPCGExRollingValueControl::Pin)
 	{
-		if (!PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourcePinConditionLabel, Context->PinFilterFactories, PCGExFactories::PointFilters))
+		if (!PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExFilters::Labels::SourcePinConditionLabel, Context->PinFilterFactories, PCGExFactories::PointFilters()))
 		{
 			return false;
 		}
 	}
 
-	PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {PCGExFactories::EType::Blending}, false);
+	PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {FPCGExDataTypeInfoBlendOp::AsId()}, false);
 
 	return true;
 }

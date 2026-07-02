@@ -4,6 +4,7 @@
 #include "Elements/PCGExExtrudeTensors.h"
 
 #include "Containers/PCGExScopedContainers.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExTensorFactoryProvider.h"
 #include "Data/PCGExData.h"
@@ -126,12 +127,12 @@ bool FPCGExExtrudeTensorsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(ExtrudeTensors)
 
-	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, Context->TensorFactories, {PCGExFactories::EType::Tensor}))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, Context->TensorFactories, {FPCGExDataTypeInfoTensor::AsId()}))
 	{
 		return false;
 	}
 
-	GetInputFactories(Context, PCGExFilters::Labels::SourceStopConditionLabel, Context->StopFilterFactories, PCGExFactories::PointFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExFilters::Labels::SourceStopConditionLabel, Context->StopFilterFactories, PCGExFactories::PointFilters(), false);
 	PCGExPointFilter::PruneForDirectEvaluation(Context, Context->StopFilterFactories);
 
 	if (Context->TensorFactories.IsEmpty())

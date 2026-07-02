@@ -59,7 +59,7 @@ protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual void InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get fitted.", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get fitted.", PCGExFactories::PointFilters(), false)
 	//~End UPCGSettings
 
 public:

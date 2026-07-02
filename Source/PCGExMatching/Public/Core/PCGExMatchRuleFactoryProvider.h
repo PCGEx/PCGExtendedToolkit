@@ -112,11 +112,6 @@ public:
 		return false;
 	}
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::MatchRule;
-	}
-
 	virtual TSharedPtr<FPCGExMatchRuleOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 

@@ -66,7 +66,7 @@ PCGExFactories::EPreparationResult UPCGExPolyPathFilterFactory::Prepare(FPCGExCo
 	// They are consumed later (when filter instances are created), which always happens after Prepare().
 	if (DataMatching.IsEnabled())
 	{
-		PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {PCGExFactories::EType::MatchRule});
+		PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {FPCGExDataTypeInfoMatchRule::AsId()});
 	}
 
 	PCGEX_ASYNC_GROUP_CHKD_RET(TaskManager, CreatePolyPaths, PCGExFactories::EPreparationResult::Fail)

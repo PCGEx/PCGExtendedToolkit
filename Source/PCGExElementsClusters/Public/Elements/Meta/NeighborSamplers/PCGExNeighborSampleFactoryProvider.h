@@ -168,11 +168,6 @@ public:
 	UPROPERTY()
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> ValueFilterFactories;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::Sampler;
-	}
-
 	virtual TSharedPtr<FPCGExNeighborSampleOperation> CreateOperation(FPCGExContext* InContext) const;
 
 	virtual void RegisterVtxBuffersDependencies(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, PCGExData::FFacadePreloader& FacadePreloader) const;

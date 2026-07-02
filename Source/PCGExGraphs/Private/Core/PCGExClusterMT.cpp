@@ -10,6 +10,7 @@
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointsMT.h"
 #include "Data/PCGExClusterData.h"
 #include "Data/PCGExData.h"
@@ -535,7 +536,7 @@ namespace PCGExClusterMT
 		}
 
 		VtxFiltersManager = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), VtxDataFacade, EdgeDataFacade);
-		VtxFiltersManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+		VtxFiltersManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 		return VtxFiltersManager->Init(ExecutionContext, *InFilterFactories);
 	}
 
@@ -564,7 +565,7 @@ namespace PCGExClusterMT
 
 		EdgesFiltersManager = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), VtxDataFacade, EdgeDataFacade);
 		EdgesFiltersManager->bUseEdgeAsPrimary = true;
-		EdgesFiltersManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters);
+		EdgesFiltersManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters());
 		return EdgesFiltersManager->Init(ExecutionContext, *InFilterFactories);
 	}
 

@@ -8,6 +8,7 @@
 #include "PCGParamData.h"
 #include "Async/ParallelFor.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Graphs/PCGExGraph.h"
@@ -143,13 +144,13 @@ bool FPCGExRefineEdgesElement::Boot(FPCGExContext* InContext) const
 
 	if (Context->Refinement->SupportFilters())
 	{
-		//GetInputFactories(Context, PCGExRefineEdges::SourceVtxFilters, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters, false);
-		GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+		//GetInputFactories(Context, PCGExRefineEdges::SourceVtxFilters, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters(), false);
+		PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 	}
 
 	if (Settings->Sanitization == EPCGExRefineSanitization::Filters)
 	{
-		if (!GetInputFactories(Context, PCGExRefineEdges::SourceSanitizeEdgeFilters, Context->SanitizationFilterFactories, PCGExFactories::ClusterEdgeFilters))
+		if (!PCGExFactories::GetInputFactories(Context, PCGExRefineEdges::SourceSanitizeEdgeFilters, Context->SanitizationFilterFactories, PCGExFactories::ClusterEdgeFilters()))
 		{
 			return false;
 		}
@@ -349,6 +350,7 @@ namespace PCGExRefineEdges
 
 		Refinement->VtxFilterCache = VtxFilterCache.Get();
 		Refinement->EdgeFilterCache = &EdgeFilterCache;
+		Refinement->bHasEdgeFilters = !Context->EdgeFilterFactories.IsEmpty();
 
 		const int32 PLI = PCGEX_CORE_SETTINGS.GetClusterBatchChunkSize();
 
@@ -369,7 +371,7 @@ namespace PCGExRefineEdges
 			{
 				SanitizationFilterManager = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), VtxDataFacade, EdgeDataFacade);
 				SanitizationFilterManager->bUseEdgeAsPrimary = true;
-				SanitizationFilterManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters);
+				SanitizationFilterManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters());
 				if (!SanitizationFilterManager->Init(ExecutionContext, Context->SanitizationFilterFactories))
 				{
 					return false;

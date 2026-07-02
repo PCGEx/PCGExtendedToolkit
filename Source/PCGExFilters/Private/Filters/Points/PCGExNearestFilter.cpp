@@ -26,7 +26,7 @@ bool UPCGExNearestFilterFactoryData::Init(FPCGExContext* InContext)
 	check(NearestConfig);
 	if (NearestConfig->DataMatching.IsEnabled())
 	{
-		PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {PCGExFactories::EType::MatchRule});
+		PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {FPCGExDataTypeInfoMatchRule::AsId()});
 	}
 	return true;
 }

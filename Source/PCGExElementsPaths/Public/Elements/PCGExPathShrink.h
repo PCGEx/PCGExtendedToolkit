@@ -7,6 +7,7 @@
 #include "PCGExFilterCommon.h"
 #include "Core/PCGExPathProcessor.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 #include "PCGExPathShrink.generated.h"
 
@@ -109,7 +110,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceStopConditionLabel, "", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceStopConditionLabel, "", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Which endpoints to shrink (start, end, or both). */

@@ -10,6 +10,7 @@
 #include "Details/PCGExAttributesDetails.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCurveLookup.h"
 
@@ -64,7 +65,7 @@ public:
 	}
 #endif
 
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
 protected:
 	virtual FPCGElementPtr CreateElement() const override;

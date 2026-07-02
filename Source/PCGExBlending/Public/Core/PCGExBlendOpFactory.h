@@ -216,11 +216,6 @@ public:
 	TSharedPtr<PCGExData::FFacade> ConstantA;
 	TSharedPtr<PCGExData::FFacade> ConstantB;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::Blending;
-	}
-
 	virtual bool IsMonolithic() const
 	{
 		return false;

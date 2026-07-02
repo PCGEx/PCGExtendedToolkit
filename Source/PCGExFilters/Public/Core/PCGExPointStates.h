@@ -88,11 +88,6 @@ public:
 		return true;
 	}
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::PointState;
-	}
-
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
@@ -207,6 +202,6 @@ public:
 #endif
 
 protected:
-	virtual TSet<PCGExFactories::EType> GetInternalFilterTypes() const;
+	virtual TSet<FPCGDataTypeBaseId> GetInternalFilterTypes() const;
 	virtual void OutputBitmasks(FPCGExContext* InContext, const FPCGExStateConfigBase& InConfig) const;
 };

@@ -14,6 +14,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
 #include "Core/PCGExSettings.h"
+#include "Core/PCGExFilterTypeSets.h" // Factory acceptance sets used by PCGEX_NODE_POINT_FILTER
 
 #include "PCGExPointsProcessor.generated.h"
 
@@ -128,7 +129,7 @@ public:
 		return TEXT("Filters");
 	}
 
-	virtual TSet<PCGExFactories::EType> GetPointFilterTypes() const;
+	virtual TSet<FPCGDataTypeBaseId> GetPointFilterTypes() const;
 
 	virtual bool RequiresPointFilters() const
 	{

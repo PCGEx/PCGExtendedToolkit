@@ -37,6 +37,11 @@ struct FPCGExModuloCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="OperandBSource == EPCGExInputValueType::Constant", EditConditionHides))
 	double OperandBConstant = 2;
 
+	/** A static constant offset added to OperandB.
+	 * Useful when dealing with angle or wider multples of (i.e 180d)*/
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Offset"))
+	double OperandBOffset = 0;
+	
 	/** Comparison */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::NearlyEqual;

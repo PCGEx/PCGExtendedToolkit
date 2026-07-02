@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExSocketOutputDetails.h"
 #include "Factories/PCGExFactories.h"
@@ -49,7 +50,7 @@ public:
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get processed.", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get processed.", PCGExFactories::PointFilters(), false)
 	//~End UPCGSettings
 
 public:

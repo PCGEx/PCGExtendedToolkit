@@ -8,6 +8,7 @@
 #include "Factories/PCGExFactories.h"
 
 #include "Core/PCGExPointsProcessor.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Math/PCGExMathAxis.h"
 
 #include "Orient/PCGExOrientOperation.h"
@@ -54,7 +55,7 @@ protected:
 public:
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
-	PCGEX_NODE_POINT_FILTER(FName("Flip Conditions"), "Filters used to know whether an orientation should be flipped or not", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(FName("Flip Conditions"), "Filters used to know whether an orientation should be flipped or not", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointProcessorSettings
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

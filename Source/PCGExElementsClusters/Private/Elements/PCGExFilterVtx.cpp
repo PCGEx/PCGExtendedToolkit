@@ -9,6 +9,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Graphs/PCGExGraph.h"
@@ -106,14 +107,14 @@ bool FPCGExFilterVtxElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_FWD(GraphBuilderDetails)
 
-	if (!GetInputFactories(Context, PCGExClusters::Labels::SourceVtxFiltersLabel, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters))
+	if (!PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceVtxFiltersLabel, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters()))
 	{
 		return false;
 	}
 
 	if (Settings->Mode == EPCGExVtxFilterOutput::Clusters)
 	{
-		GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+		PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 	}
 
 	if (!Context->bWantsClusters)

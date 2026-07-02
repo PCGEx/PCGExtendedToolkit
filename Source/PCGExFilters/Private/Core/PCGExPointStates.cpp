@@ -6,6 +6,7 @@
 
 #include "PCGParamData.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 PCG_DEFINE_TYPE_INFO(FPCGExDataTypeInfoPointState, UPCGExPointStateFactoryData)
 
@@ -139,7 +140,7 @@ UPCGExFactoryData* UPCGExStateFactoryProviderSettings::CreateFactory(FPCGExConte
 	NewFactory->Priority = Priority;
 
 	if (const bool bRequiresFilters = NewFactory->GetRequiresFilters();
-		!GetInputFactories(InContext, PCGExFilters::Labels::SourceFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterNodeFilters, bRequiresFilters) && bRequiresFilters)
+		!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterNodeFilters(), bRequiresFilters) && bRequiresFilters)
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;
@@ -161,9 +162,9 @@ FString UPCGExStateFactoryProviderSettings::GetDisplayName() const
 }
 #endif
 
-TSet<PCGExFactories::EType> UPCGExStateFactoryProviderSettings::GetInternalFilterTypes() const
+TSet<FPCGDataTypeBaseId> UPCGExStateFactoryProviderSettings::GetInternalFilterTypes() const
 {
-	return PCGExFactories::PointFilters;
+	return PCGExFactories::PointFilters();
 }
 
 void UPCGExStateFactoryProviderSettings::OutputBitmasks(FPCGExContext* InContext, const FPCGExStateConfigBase& InConfig) const

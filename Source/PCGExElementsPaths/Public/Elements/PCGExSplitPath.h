@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExPathProcessor.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 #include "Core/PCGExPointsProcessor.h"
 
@@ -64,7 +65,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExSplitPath::SourceSplitFilters, "Filters used to know if a point should be split", PCGExFactories::PointFilters, true)
+	PCGEX_NODE_POINT_FILTER(PCGExSplitPath::SourceSplitFilters, "Filters used to know if a point should be split", PCGExFactories::PointFilters(), true)
 	//~End UPCGExPointsProcessorSettings
 
 	/** If both split and remove are true, the selected behavior takes priority */

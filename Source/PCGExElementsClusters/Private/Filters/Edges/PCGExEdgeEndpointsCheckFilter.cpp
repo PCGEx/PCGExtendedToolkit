@@ -6,6 +6,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Graphs/PCGExGraph.h"
 #include "HAL/PlatformAtomics.h"
 
@@ -94,7 +95,7 @@ namespace PCGExEdgeEndpointsCheck
 		}
 
 		VtxFiltersManager = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), InPointDataFacade, InEdgeDataFacade);
-		VtxFiltersManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+		VtxFiltersManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 		if (!VtxFiltersManager->Init(InContext, TypedFilterFactory->FilterFactories))
 		{
 			return false;
@@ -107,7 +108,7 @@ namespace PCGExEdgeEndpointsCheck
 		if (TypedFilterFactory->Config.bUseTwoFilterSets)
 		{
 			VtxFiltersManagerB = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), InPointDataFacade, InEdgeDataFacade);
-			VtxFiltersManagerB->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+			VtxFiltersManagerB->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 			if (!VtxFiltersManagerB->Init(InContext, TypedFilterFactory->FilterFactoriesB))
 			{
 				return false;
@@ -210,7 +211,7 @@ UPCGExFactoryData* UPCGExEdgeEndpointsCheckFilterProviderSettings::CreateFactory
 
 	Super::CreateFactory(InContext, NewFactory);
 
-	if (!GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterNodeFilters))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterNodeFilters()))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;
@@ -218,7 +219,7 @@ UPCGExFactoryData* UPCGExEdgeEndpointsCheckFilterProviderSettings::CreateFactory
 
 	if (Config.bUseTwoFilterSets)
 	{
-		if (!GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabelB, NewFactory->FilterFactoriesB, PCGExFactories::ClusterNodeFilters))
+		if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabelB, NewFactory->FilterFactoriesB, PCGExFactories::ClusterNodeFilters()))
 		{
 			InContext->ManagedObjects->Destroy(NewFactory);
 			return nullptr;

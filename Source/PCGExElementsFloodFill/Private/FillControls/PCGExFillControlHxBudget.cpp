@@ -130,7 +130,7 @@ UPCGExFactoryData* UPCGExFillControlsHeuristicsBudgetProviderSettings::CreateFac
 	Super::CreateFactory(InContext, NewFactory);
 
 	// Heuristics are optional for budget - can use PathDistance if not provided
-	PCGExFactories::GetInputFactories(InContext, PCGExHeuristics::Labels::SourceHeuristicsLabel, NewFactory->HeuristicsFactories, {PCGExFactories::EType::Heuristics}, false);
+	PCGExFactories::GetInputFactories(InContext, PCGExHeuristics::Labels::SourceHeuristicsLabel, NewFactory->HeuristicsFactories, {FPCGExDataTypeInfoHeuristics::AsId()}, false);
 
 	return NewFactory;
 }

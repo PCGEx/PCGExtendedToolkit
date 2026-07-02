@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "Data/Registry/PCGDataType.h"
 
 ///
 
@@ -23,37 +24,6 @@ struct FPCGExFactoryProviderContext;
 
 namespace PCGExFactories
 {
-	enum class EType : uint8
-	{
-		None = 0,
-		Instanced,
-		Filter,
-		FilterGroup,
-		FilterPoint,
-		FilterNode,
-		FilterEdge,
-		FilterCollection,
-		RuleSort,
-		RulePartition,
-		Probe,
-		ClusterState,
-		PointState,
-		Sampler,
-		Heuristics,
-		VtxProperty,
-		Action,
-		ShapeBuilder,
-		Blending,
-		TexParam,
-		Tensor,
-		IndexPicker,
-		FillControls,
-		MatchRule,
-		Noise3D,
-		Selector,
-		ValencyBias
-	};
-
 	enum class EPreparationResult : uint8
 	{
 		None = 0,
@@ -62,24 +32,15 @@ namespace PCGExFactories
 		Fail
 	};
 
-	static inline TSet<EType> AnyFilters = {EType::FilterPoint, EType::FilterNode, EType::FilterEdge, EType::FilterGroup, EType::FilterCollection};
-	static inline TSet<EType> PointFilters = {EType::FilterPoint, EType::FilterGroup, EType::FilterCollection};
-	static inline TSet<EType> ClusterNodeFilters = {EType::FilterPoint, EType::FilterNode, EType::FilterGroup, EType::FilterCollection};
-	static inline TSet<EType> ClusterEdgeFilters = {EType::FilterPoint, EType::FilterEdge, EType::FilterGroup, EType::FilterCollection};
-	static inline TSet<EType> SupportsClusterFilters = {EType::FilterEdge, EType::FilterNode, EType::ClusterState, EType::FilterGroup, EType::FilterCollection};
-	static inline TSet<EType> ClusterOnlyFilters = {EType::FilterEdge, EType::FilterNode, EType::ClusterState};
-	static inline TSet<EType> ClusterStates = {EType::ClusterState, EType::PointState};
 }
-
-// TODO : Move this to helper class
 
 namespace PCGExFactories
 {
 	PCGEXCORE_API
-	bool GetInputFactories_Internal(FPCGExContext* InContext, const FName InLabel, TArray<TObjectPtr<const UPCGExFactoryData>>& OutFactories, const TSet<EType>& Types, const bool bRequired);
+	bool GetInputFactories_Internal(FPCGExContext* InContext, const FName InLabel, TArray<TObjectPtr<const UPCGExFactoryData>>& OutFactories, const TSet<FPCGDataTypeBaseId>& Types, const bool bRequired);
 
 	template <typename T_DEF>
-	static bool GetInputFactories(FPCGExContext* InContext, const FName InLabel, TArray<TObjectPtr<const T_DEF>>& OutFactories, const TSet<EType>& Types, const bool bRequired = true)
+	static bool GetInputFactories(FPCGExContext* InContext, const FName InLabel, TArray<TObjectPtr<const T_DEF>>& OutFactories, const TSet<FPCGDataTypeBaseId>& Types, const bool bRequired = true)
 	{
 		TArray<TObjectPtr<const UPCGExFactoryData>> BaseFactories;
 		if (!GetInputFactories_Internal(InContext, InLabel, BaseFactories, Types, bRequired))

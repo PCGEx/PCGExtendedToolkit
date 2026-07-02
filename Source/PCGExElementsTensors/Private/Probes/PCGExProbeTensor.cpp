@@ -26,7 +26,7 @@ PCGExFactories::EPreparationResult UPCGExProbeFactoryTensor::Prepare(FPCGExConte
 		return Result;
 	}
 
-	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, TensorFactories, {PCGExFactories::EType::Tensor}))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, TensorFactories, {FPCGExDataTypeInfoTensor::AsId()}))
 	{
 		return PCGExFactories::EPreparationResult::Fail;
 	}

@@ -59,7 +59,7 @@ bool FPCGExShapeProcessorElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(ShapeProcessor)
 
-	if (!PCGExFactories::GetInputFactories(Context, PCGExShapes::Labels::SourceShapeBuildersLabel, Context->BuilderFactories, {PCGExFactories::EType::ShapeBuilder}))
+	if (!PCGExFactories::GetInputFactories(Context, PCGExShapes::Labels::SourceShapeBuildersLabel, Context->BuilderFactories, {FPCGExDataTypeInfoShape::AsId()}))
 	{
 		return false;
 	}

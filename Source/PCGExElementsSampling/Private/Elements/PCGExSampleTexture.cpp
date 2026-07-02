@@ -46,7 +46,7 @@ bool FPCGExSampleTextureElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(SampleTexture)
 
-	if (!PCGExFactories::GetInputFactories(InContext, PCGExTexture::SourceTexLabel, Context->TexParamsFactories, {PCGExFactories::EType::TexParam}))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExTexture::SourceTexLabel, Context->TexParamsFactories, {FPCGExDataTypeInfoTexParam::AsId()}))
 	{
 		return false;
 	}

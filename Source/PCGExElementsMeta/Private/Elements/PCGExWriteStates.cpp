@@ -33,7 +33,7 @@ bool FPCGExWriteStatesElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(WriteStates)
 
-	return PCGExFactories::GetInputFactories(Context, PCGExPointStates::Labels::SourceStatesLabel, Context->StateFactories, {PCGExFactories::EType::PointState});
+	return PCGExFactories::GetInputFactories(Context, PCGExPointStates::Labels::SourceStatesLabel, Context->StateFactories, {FPCGExDataTypeInfoPointState::AsId()});
 }
 
 bool FPCGExWriteStatesElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const

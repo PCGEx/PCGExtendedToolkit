@@ -8,6 +8,7 @@
 #include "Details/PCGExSettingsMacros.h"
 #include "Details/PCGExSubdivisionDetails.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Math/PCGExMathMean.h"
 #include "Utils/PCGValueRange.h"
 
@@ -78,7 +79,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExBevelPath::SourceBevelFilters, "Filters used to know if a point should be Beveled", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExBevelPath::SourceBevelFilters, "Filters used to know if a point should be Beveled", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** Type of Bevel operation */

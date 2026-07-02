@@ -5,6 +5,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
@@ -87,7 +88,7 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 
 	if (SamplingConfig.NeighborSource == EPCGExClusterElement::Vtx)
 	{
-		FilterManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+		FilterManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 		if (!FilterManager->Init(InContext, VtxFilterFactories))
 		{
 			return;
@@ -96,7 +97,7 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 	else
 	{
 		FilterManager->bUseEdgeAsPrimary = true;
-		FilterManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters);
+		FilterManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters());
 		if (!FilterManager->Init(InContext, EdgesFilterFactories))
 		{
 			return;

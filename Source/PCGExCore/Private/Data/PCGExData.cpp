@@ -362,7 +362,9 @@ template class PCGEXCORE_API TBuffer<_TYPE>;
 	template <typename T>
 	TSharedPtr<TBuffer<T>> FFacade::GetWritable(const FPCGMetadataAttributeBase* InAttribute, EBufferInit Init)
 	{
-		return GetWritable<T>(FPCGAttributeIdentifier(InAttribute->Name, InAttribute->GetMetadataDomain()->GetDomainID()), InAttribute->GetValueFromItemKey<T>(PCGDefaultValueKey), InAttribute->AllowsInterpolation(), Init);
+		const bool bIsData = InAttribute->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data;
+		const T DefaultValue = bIsData ? Helpers::ReadDataValue<T>(InAttribute) : InAttribute->GetValueFromItemKey<T>(PCGDefaultValueKey);
+		return GetWritable<T>(FPCGAttributeIdentifier(InAttribute->Name, InAttribute->GetMetadataDomain()->GetDomainID()), DefaultValue, InAttribute->AllowsInterpolation(), Init);
 	}
 
 	template <typename T>

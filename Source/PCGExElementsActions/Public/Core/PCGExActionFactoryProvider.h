@@ -82,11 +82,6 @@ public:
 	UPROPERTY(meta=(PCG_NotOverridable))
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> FilterFactories;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::Action;
-	}
-
 	virtual TSharedPtr<FPCGExActionOperation> CreateOperation(FPCGExContext* InContext) const;
 
 	virtual bool Boot(FPCGContext* InContext);

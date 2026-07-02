@@ -7,6 +7,7 @@
 #include "PCGParamData.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExScopedContainers.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExHeuristicsFactoryProvider.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
@@ -92,7 +93,7 @@ bool FPCGExClusterCentralityElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->IsPathBased() && Settings->DownsamplingMode == EPCGExCentralityDownsampling::Filters)
 	{
-		if (!GetInputFactories(Context, PCGExClusters::Labels::SourceVtxFiltersLabel, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters))
+		if (!PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceVtxFiltersLabel, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters()))
 		{
 			return false;
 		}

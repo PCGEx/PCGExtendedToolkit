@@ -609,7 +609,7 @@ namespace PCGExMatching
 		TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>> Factories;
 		if (!PCGExFactories::GetInputFactories(
 			InContext, InFactoriesLabel.IsNone() ? Labels::SourceMatchRulesLabel : InFactoriesLabel,
-			Factories, {PCGExFactories::EType::MatchRule}))
+			Factories, {FPCGExDataTypeInfoMatchRule::AsId()}))
 		{
 			MatchMode = EPCGExMapMatchMode::Disabled;
 			return false;

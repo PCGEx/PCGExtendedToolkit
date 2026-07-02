@@ -51,11 +51,6 @@ public:
 	UPROPERTY()
 	FPCGExSelectorFactoryBaseConfig BaseConfig;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::Selector;
-	}
-
 	/** Create a hot-path entry picker operation. Concrete subclasses override. */
 	virtual TSharedPtr<FPCGExEntryPickerOperation> CreateEntryOperation(FPCGExContext* InContext) const;
 

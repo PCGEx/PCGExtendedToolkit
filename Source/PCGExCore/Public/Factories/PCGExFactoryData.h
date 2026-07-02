@@ -77,11 +77,6 @@ public:
 
 	PCGExFactories::EPreparationResult PrepResult = PCGExFactories::EPreparationResult::None;
 
-	virtual PCGExFactories::EType GetFactoryType() const
-	{
-		return PCGExFactories::EType::None;
-	}
-
 	virtual bool RegisterConsumableAttributes(FPCGExContext* InContext) const;
 	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const;
 	virtual void RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const;

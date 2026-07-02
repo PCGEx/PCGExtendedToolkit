@@ -38,7 +38,7 @@ TArray<FPCGPinProperties> UPCGExModularPartitionByValuesSettings::InputPinProper
 bool UPCGExModularPartitionByValuesSettings::GetPartitionRules(FPCGExContext* InContext, TArray<FPCGExPartitonRuleConfig>& OutRules) const
 {
 	TArray<TObjectPtr<const UPCGExPartitionRule>> Factories;
-	if (!PCGExFactories::GetInputFactories(InContext, TEXT("PartitionRules"), Factories, {PCGExFactories::EType::RulePartition}))
+	if (!PCGExFactories::GetInputFactories(InContext, TEXT("PartitionRules"), Factories, {FPCGExDataTypeInfoPartitionRule::AsId()}))
 	{
 		return false;
 	}

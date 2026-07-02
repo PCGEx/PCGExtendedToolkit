@@ -32,6 +32,10 @@ public:
 	TArray<int8>* VtxFilterCache = nullptr;
 	TArray<int8>* EdgeFilterCache = nullptr;
 
+	// Set by the processor: whether edge filter factories are actually connected. Lets refinements with
+	// optional filters stay inert when the filter pin is empty (EdgeFilterCache defaults to all-true).
+	bool bHasEdgeFilters = false;
+
 	virtual void PrepareForCluster(const TSharedPtr<PCGExClusters::FCluster>& InCluster, const TSharedPtr<PCGExHeuristics::FHandler>& InHeuristics = nullptr)
 	{
 		Cluster = InCluster;

@@ -114,7 +114,7 @@ UPCGExFactoryData* UPCGExFillControlsHeuristicsScoringProviderSettings::CreateFa
 	PCGEX_FORWARD_FILLCONTROL_FACTORY
 	Super::CreateFactory(InContext, NewFactory);
 
-	if (!PCGExFactories::GetInputFactories(InContext, PCGExHeuristics::Labels::SourceHeuristicsLabel, NewFactory->HeuristicsFactories, {PCGExFactories::EType::Heuristics}))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExHeuristics::Labels::SourceHeuristicsLabel, NewFactory->HeuristicsFactories, {FPCGExDataTypeInfoHeuristics::AsId()}))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;

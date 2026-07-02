@@ -4,6 +4,7 @@
 #include "Elements/PCGExConnectPoints.h"
 
 #include "Containers/PCGExScopedContainers.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExProbeFactoryProvider.h"
 #include "Core/PCGExProbeOperation.h"
@@ -49,13 +50,13 @@ bool FPCGExConnectPointsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(ConnectPoints)
 
-	if (!PCGExFactories::GetInputFactories<UPCGExProbeFactoryData>(Context, PCGExClusters::Labels::SourceProbesLabel, Context->ProbeFactories, {PCGExFactories::EType::Probe}))
+	if (!PCGExFactories::GetInputFactories<UPCGExProbeFactoryData>(Context, PCGExClusters::Labels::SourceProbesLabel, Context->ProbeFactories, {FPCGExDataTypeInfoProbe::AsId()}))
 	{
 		return false;
 	}
 
-	GetInputFactories(Context, PCGExClusters::Labels::SourceFilterGenerators, Context->GeneratorsFiltersFactories, PCGExFactories::PointFilters, false);
-	GetInputFactories(Context, PCGExClusters::Labels::SourceFilterConnectables, Context->ConnectablesFiltersFactories, PCGExFactories::PointFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceFilterGenerators, Context->GeneratorsFiltersFactories, PCGExFactories::PointFilters(), false);
+	PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceFilterConnectables, Context->ConnectablesFiltersFactories, PCGExFactories::PointFilters(), false);
 
 	Context->CWCoincidenceTolerance = FVector(Settings->CoincidenceTolerance);
 

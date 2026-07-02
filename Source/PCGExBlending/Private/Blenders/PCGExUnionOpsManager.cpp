@@ -24,7 +24,7 @@ namespace PCGExBlending
 	{
 	}
 
-	bool FUnionOpsManager::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<const FBlendOpsSchema>& InSchema)
+	bool FUnionOpsManager::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<const FBlendOpsSchema>& InSchema, const TConstArrayView<bool> InBackgroundSources)
 	{
 		CurrentTargetData = TargetData;
 
@@ -38,6 +38,10 @@ namespace PCGExBlending
 		}
 		IOLookup = MakeShared<PCGEx::FIndexLookup>(MaxIndex + 1);
 
+		// A source flagged in InBackgroundSources is best-effort: factories on the spot, missing attributes
+		// tolerated. Every other source is primary (strict; schema if one was provided).
+		int32 SrcPos = 0;
+
 		for (const TSharedRef<PCGExData::FFacade>& Src : InSources)
 		{
 			IOLookup->Set(Src->Source->IOIndex, SourcesData.Add(Src->GetIn()));
@@ -45,12 +49,17 @@ namespace PCGExBlending
 			TSharedPtr<FBlendOpsManager> BlendOpsManager = MakeShared<FBlendOpsManager>(TargetData, true);
 			BlendOpsManager->SetSourceA(Src, PCGExData::EIOSide::In);
 
-			if (InSchema ? !BlendOpsManager->Init(InContext, InSchema) : !BlendOpsManager->Init(InContext, *BlendingFactories))
+			const bool bIsBackground = InBackgroundSources.IsValidIndex(SrcPos) && InBackgroundSources[SrcPos];
+			const bool bInitOk = bIsBackground
+				                     ? BlendOpsManager->Init(InContext, *BlendingFactories, /*bTolerateMissingAttributes=*/true)
+				                     : (InSchema ? BlendOpsManager->Init(InContext, InSchema) : BlendOpsManager->Init(InContext, *BlendingFactories));
+			if (!bInitOk)
 			{
 				return false;
 			}
 
 			Blenders.Add(BlendOpsManager);
+			SrcPos++;
 		}
 
 		// Build a shared OpIdx space across all blenders so the same attribute
@@ -100,10 +109,10 @@ namespace PCGExBlending
 		return true;
 	}
 
-	bool FUnionOpsManager::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<PCGExData::FUnionMetadata>& InUnionMetadata, const TSharedPtr<const FBlendOpsSchema>& InSchema)
+	bool FUnionOpsManager::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSharedPtr<PCGExData::FUnionMetadata>& InUnionMetadata, const TSharedPtr<const FBlendOpsSchema>& InSchema, const TConstArrayView<bool> InBackgroundSources)
 	{
 		CurrentUnionMetadata = InUnionMetadata;
-		return Init(InContext, TargetData, InSources, InSchema);
+		return Init(InContext, TargetData, InSources, InSchema, InBackgroundSources);
 	}
 
 	void FUnionOpsManager::InitTrackers(TArray<PCGEx::FOpStats>& Trackers) const

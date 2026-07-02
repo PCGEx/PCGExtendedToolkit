@@ -44,11 +44,6 @@ public:
 	UPROPERTY()
 	FPCGExClusterStateConfigBase Config;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::ClusterState;
-	}
-
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 
 	virtual void BeginDestroy() override;
@@ -132,5 +127,5 @@ public:
 	FPCGExClusterStateConfigBase Config;
 
 protected:
-	virtual TSet<PCGExFactories::EType> GetInternalFilterTypes() const override;
+	virtual TSet<FPCGDataTypeBaseId> GetInternalFilterTypes() const override;
 };

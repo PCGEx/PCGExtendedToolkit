@@ -111,7 +111,7 @@ UPCGExFactoryData* UPCGExNeighborSampleBlendSettings::CreateFactory(FPCGExContex
 {
 	UPCGExNeighborSamplerFactoryBlend* SamplerFactory = InContext->ManagedObjects->New<UPCGExNeighborSamplerFactoryBlend>();
 
-	if (!PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(InContext, PCGExBlending::Labels::SourceBlendingLabel, SamplerFactory->BlendingFactories, {PCGExFactories::EType::Blending}))
+	if (!PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(InContext, PCGExBlending::Labels::SourceBlendingLabel, SamplerFactory->BlendingFactories, {FPCGExDataTypeInfoBlendOp::AsId()}))
 	{
 		InContext->ManagedObjects->Destroy(SamplerFactory);
 		return nullptr;

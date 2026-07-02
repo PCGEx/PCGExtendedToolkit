@@ -12,6 +12,7 @@
 #include "Core/PCGExClusterMT.h"
 #include "Core/PCGExClustersProcessor.h"
 #include "Core/PCGExContext.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGDynamicMeshData.h"
 #include "Data/PCGExData.h"
@@ -77,7 +78,7 @@ bool FPCGExTopologyClustersProcessorElement::Boot(FPCGExContext* InContext) cons
 		Context->Holes->EnsureProjected(); // Project once upfront
 	}
 
-	GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeConstrainsFiltersLabel, Context->EdgeConstraintsFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeConstrainsFiltersLabel, Context->EdgeConstraintsFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 
 	Context->HashMaps.Init(nullptr, Context->MainPoints->Num());
 	return true;

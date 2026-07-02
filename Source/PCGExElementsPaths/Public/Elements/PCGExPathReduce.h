@@ -8,6 +8,7 @@
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Helpers/PCGExPathSimplifier.h"
 
 #include "PCGExPathReduce.generated.h"
@@ -40,7 +41,7 @@ public:
 
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filter which points are going to be preserved.", PCGExFactories::PointFilters, Mode == EPCGExPathReduceFilterMode::Anchor)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filter which points are going to be preserved.", PCGExFactories::PointFilters(), Mode == EPCGExPathReduceFilterMode::Anchor)
 	//~End UPCGSettings
 
 public:

@@ -9,6 +9,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 PCG_DEFINE_TYPE_INFO(FPCGExDataTypeInfoClusterState, UPCGExClusterStateFactoryData)
 
@@ -53,7 +54,7 @@ namespace PCGExClusterStates
 		}
 
 		Manager = MakeShared<PCGExClusterFilter::FManager>(InCluster, PointDataFacade.ToSharedRef(), EdgeDataFacade.ToSharedRef());
-		Manager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+		Manager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 		return true;
 	}
 
@@ -176,7 +177,7 @@ UPCGExFactoryData* UPCGExClusterStateFactoryProviderSettings::CreateFactory(FPCG
 	return NewFactory;
 }
 
-TSet<PCGExFactories::EType> UPCGExClusterStateFactoryProviderSettings::GetInternalFilterTypes() const
+TSet<FPCGDataTypeBaseId> UPCGExClusterStateFactoryProviderSettings::GetInternalFilterTypes() const
 {
-	return PCGExFactories::ClusterNodeFilters;
+	return PCGExFactories::ClusterNodeFilters();
 }

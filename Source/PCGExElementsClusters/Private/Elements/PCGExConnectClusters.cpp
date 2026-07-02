@@ -5,6 +5,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
@@ -65,11 +66,11 @@ bool FPCGExConnectClustersElement::Boot(FPCGExContext* InContext) const
 		/*
 		if (!GetInputFactories(
 			Context, PCGExClusters::Labels::SourceFilterGenerators, Context->GeneratorsFiltersFactories,
-			PCGExFactories::ClusterNodeFilters, true)) { return false; }
+			PCGExFactories::ClusterNodeFilters(), true)) { return false; }
 
 		if (!GetInputFactories(
 			Context, PCGExClusters::Labels::SourceFilterConnectables, Context->ConnectablesFiltersFactories,
-			PCGExFactories::ClusterNodeFilters, true)) { return false; }
+			PCGExFactories::ClusterNodeFilters(), true)) { return false; }
 		*/
 	}
 

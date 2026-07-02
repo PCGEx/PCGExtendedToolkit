@@ -4,6 +4,7 @@
 #include "Data/PCGExProxyDataImpl.h"
 
 #include "Data/PCGExData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointElements.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGPointArrayData.h"
@@ -623,12 +624,19 @@ namespace PCGExData
 	}
 
 	template <typename T_REAL>
+	void TDirectDataAttributeProxy<T_REAL>::InitForRole(EProxyRole InRole)
+	{
+		IBufferProxy::InitForRole(InRole);
+		if (InAttribute) { CachedInValue = Helpers::ReadDataValue<T_REAL>(InAttribute); }
+	}
+
+	template <typename T_REAL>
 	void TDirectDataAttributeProxy<T_REAL>::GetVoid(const int32 Index, void* OutValue) const
 	{
 		check(InAttribute);
 
-		// Data-domain: always use default entry key
-		const T_REAL& RealValue = InAttribute->GetValueFromItemKey<T_REAL>(PCGDefaultValueKey);
+		// Data-domain singleton -- served from the value cached at InitForRole.
+		const T_REAL& RealValue = CachedInValue;
 
 		if (bWantsSubSelection)
 		{
@@ -649,7 +657,7 @@ namespace PCGExData
 	{
 		check(OutAttribute);
 
-		const T_REAL& RealValue = OutAttribute->GetValueFromItemKey<T_REAL>(PCGDefaultValueKey);
+		const T_REAL RealValue = Helpers::ReadDataValue<T_REAL>(OutAttribute);
 
 		if (bWantsSubSelection)
 		{
@@ -672,7 +680,7 @@ namespace PCGExData
 
 		if (bWantsSubSelection)
 		{
-			T_REAL RealValue = OutAttribute->GetValueFromItemKey<T_REAL>(PCGDefaultValueKey);
+			T_REAL RealValue = Helpers::ReadDataValue<T_REAL>(OutAttribute);
 			CachedSubSelection.ApplySet(&RealValue, Value);
 			OutAttribute->SetDefaultValue(RealValue);
 		}
@@ -692,7 +700,7 @@ namespace PCGExData
 	PCGExValueHash TDirectDataAttributeProxy<T_REAL>::ReadValueHash(const int32 Index) const
 	{
 		check(InAttribute);
-		return PCGExTypes::ComputeHash(InAttribute->GetValueFromItemKey<T_REAL>(PCGDefaultValueKey));
+		return PCGExTypes::ComputeHash(CachedInValue);
 	}
 
 	// Explicit instantiations

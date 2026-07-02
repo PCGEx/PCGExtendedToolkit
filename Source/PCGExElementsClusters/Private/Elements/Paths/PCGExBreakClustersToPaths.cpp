@@ -7,6 +7,7 @@
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Clusters/Artifacts/PCGExCachedChain.h"
 #include "Clusters/Artifacts/PCGExChain.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Curve/CurveUtil.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -63,7 +64,7 @@ bool FPCGExBreakClustersToPathsElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->OperateOn == EPCGExBreakClusterOperationTarget::Paths)
 	{
-		GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+		PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 	}
 
 	return true;

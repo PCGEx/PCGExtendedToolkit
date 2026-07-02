@@ -172,11 +172,6 @@ class UPCGExVtxPropertyFactoryData : public UPCGExFactoryData
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoVtxProperty)
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::VtxProperty;
-	}
-
 	virtual TSharedPtr<FPCGExVtxPropertyOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 

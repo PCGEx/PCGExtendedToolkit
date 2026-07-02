@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExClustersProcessor.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Details/PCGExBlendingDetails.h"
 #include "Details/PCGExIntersectionDetails.h"
@@ -55,7 +56,7 @@ protected:
 public:
 	virtual PCGExData::EIOInit GetMainOutputInitMode() const override;
 	virtual PCGExData::EIOInit GetEdgeOutputInitMode() const override;
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceKeepConditionLabel, "Prevents vtx from being pruned by the simplification process", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceKeepConditionLabel, "Prevents vtx from being pruned by the simplification process", PCGExFactories::PointFilters(), false)
 	//~End UPCGExClustersProcessorSettings interface
 
 	/** If enabled, only check for dead ends. */

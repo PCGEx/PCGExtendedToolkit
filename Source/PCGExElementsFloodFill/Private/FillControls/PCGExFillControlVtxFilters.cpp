@@ -8,6 +8,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 bool FPCGExFillControlVtxFilters::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -19,7 +20,7 @@ bool FPCGExFillControlVtxFilters::PrepareForDiffusions(FPCGExContext* InContext,
 	const UPCGExFillControlsFactoryVtxFilters* TypedFactory = Cast<UPCGExFillControlsFactoryVtxFilters>(Factory);
 
 	VtxFilterManager = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), InHandler->VtxDataFacade.ToSharedRef(), InHandler->EdgeDataFacade.ToSharedRef());
-	VtxFilterManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+	VtxFilterManager->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 	return VtxFilterManager->Init(InContext, TypedFactory->FilterFactories);
 }
 
@@ -108,7 +109,7 @@ UPCGExFactoryData* UPCGExFillControlsVtxFiltersProviderSettings::CreateFactory(F
 	PCGEX_FORWARD_FILLCONTROL_FACTORY
 	Super::CreateFactory(InContext, NewFactory);
 
-	if (!GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterNodeFilters))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterNodeFilters()))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;

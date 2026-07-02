@@ -81,11 +81,6 @@ public:
 	UPROPERTY()
 	TArray<double> RelativePicks;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::IndexPicker;
-	}
-
 	virtual void AddPicks(int32 InNum, TSet<int32>& OutPicks) const;
 
 	FPCGExPickerConfigBase BaseConfig;

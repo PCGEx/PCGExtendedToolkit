@@ -5,6 +5,7 @@
 
 #include "PCGParamData.h"
 #include "Blenders/PCGExUnionBlender.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExUnionData.h"
 #include "Data/PCGExData.h"
@@ -74,9 +75,9 @@ bool FPCGExPathCrossingsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_BIND_INSTANCED_FACTORY(Blending, UPCGExSubPointsBlendInstancedFactory, PCGExBlending::Labels::SourceOverridesBlendingOps)
 
-	GetInputFactories(Context, PCGExPaths::Labels::SourceCanCutFilters, Context->CanCutFilterFactories, PCGExFactories::PointFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExPaths::Labels::SourceCanCutFilters, Context->CanCutFilterFactories, PCGExFactories::PointFilters(), false);
 
-	GetInputFactories(Context, PCGExPaths::Labels::SourceCanBeCutFilters, Context->CanBeCutFilterFactories, PCGExFactories::PointFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExPaths::Labels::SourceCanBeCutFilters, Context->CanBeCutFilterFactories, PCGExFactories::PointFilters(), false);
 
 	Context->CrossingBlending = Settings->CrossingBlending;
 

@@ -8,6 +8,7 @@
 #include "PCGExFilterCommon.h"
 
 #include "Core/PCGExClustersProcessor.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Math/PCGExWinding.h"
 
@@ -64,7 +65,7 @@ public:
 
 	virtual PCGExData::EIOInit GetMainOutputInitMode() const override;
 	virtual PCGExData::EIOInit GetEdgeOutputInitMode() const override;
-	PCGEX_NODE_POINT_FILTER(FName("Break Conditions"), "Filters used to know which points are 'break' points.", PCGExFactories::ClusterNodeFilters, false)
+	PCGEX_NODE_POINT_FILTER(FName("Break Conditions"), "Filters used to know which points are 'break' points.", PCGExFactories::ClusterNodeFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	/** How to handle leaves */

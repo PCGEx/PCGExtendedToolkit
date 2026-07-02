@@ -106,9 +106,9 @@ PCGExData::EIOInit UPCGExPointsProcessorSettings::GetMainOutputInitMode() const
 	return PCGExData::EIOInit::NoInit;
 }
 
-TSet<PCGExFactories::EType> UPCGExPointsProcessorSettings::GetPointFilterTypes() const
+TSet<FPCGDataTypeBaseId> UPCGExPointsProcessorSettings::GetPointFilterTypes() const
 {
-	return PCGExFactories::PointFilters;
+	return PCGExFactories::PointFilters();
 }
 
 FPCGExPointsProcessorContext::~FPCGExPointsProcessorContext()
@@ -344,7 +344,7 @@ bool FPCGExPointsProcessorElement::Boot(FPCGExContext* InContext) const
 	if (Settings->SupportsPointFilters())
 	{
 		if (const bool bRequiredFilters = Settings->RequiresPointFilters();
-			!GetInputFactories(Context, Settings->GetPointFilterPin(), Context->FilterFactories, Settings->GetPointFilterTypes(), bRequiredFilters) && bRequiredFilters)
+			!PCGExFactories::GetInputFactories(Context, Settings->GetPointFilterPin(), Context->FilterFactories, Settings->GetPointFilterTypes(), bRequiredFilters) && bRequiredFilters)
 		{
 			return false;
 		}

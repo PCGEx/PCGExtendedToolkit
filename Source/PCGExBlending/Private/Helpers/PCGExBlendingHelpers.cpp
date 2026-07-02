@@ -44,7 +44,8 @@ namespace PCGExBlending::Helpers
 
 						if (!OutAttribute)
 						{
-							OutAttribute = Target->FindOrCreateAttribute<T>(Identifier, InAttribute->GetValueFromItemKey(PCGDefaultValueKey), InAttribute->AllowsInterpolation());
+							const bool bIsData = InAttribute->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data;
+							OutAttribute = Target->FindOrCreateAttribute<T>(Identifier, bIsData ? PCGExData::Helpers::ReadDataValue<T>(InAttribute) : InAttribute->GetValueFromItemKey(PCGDefaultValueKey), InAttribute->AllowsInterpolation());
 						}
 
 						if (!OutAttribute)

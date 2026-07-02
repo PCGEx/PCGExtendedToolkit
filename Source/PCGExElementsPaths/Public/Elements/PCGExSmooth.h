@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExBlendingDetails.h"
@@ -54,7 +55,7 @@ public:
 	// End of UObject interface
 #endif
 
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get smoothed.", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get smoothed.", PCGExFactories::PointFilters(), false)
 	//~End UPCGExPointsProcessorSettings
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

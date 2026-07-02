@@ -8,6 +8,7 @@
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Math/PCGExMathMean.h"
 
 #include "PCGExPathSlide.generated.h"
@@ -47,7 +48,7 @@ public:
 
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filter which points are processed by the slide maths.", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filter which points are processed by the slide maths.", PCGExFactories::PointFilters(), false)
 	//~End UPCGSettings
 
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;

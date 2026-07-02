@@ -32,11 +32,6 @@ public:
 	virtual bool SupportsProxyEvaluation() const override;
 	virtual bool SupportsCollectionEvaluation() const override;
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterGroup;
-	}
-
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override
 	{
 		return nullptr;
@@ -55,11 +50,6 @@ class UPCGExFilterGroupFactoryDataAND : public UPCGExFilterGroupFactoryData
 	GENERATED_BODY()
 
 public:
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterGroup;
-	}
-
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
@@ -70,11 +60,6 @@ class UPCGExFilterGroupFactoryDataOR : public UPCGExFilterGroupFactoryData
 	GENERATED_BODY()
 
 public:
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterGroup;
-	}
-
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
@@ -120,10 +105,10 @@ namespace PCGExFilterGroup
 		virtual bool Test(const PCGExGraphs::FEdge& Edge) const override = 0;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override = 0;
 
-		virtual void SetSupportedTypes(const TSet<PCGExFactories::EType>* InTypes) override;
+		virtual void SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes) override;
 
 	protected:
-		const TSet<PCGExFactories::EType>* SupportedFactoriesTypes = nullptr;
+		const TSet<FPCGDataTypeBaseId>* SupportedFactoriesTypes = nullptr;
 		TArray<TSharedPtr<PCGExPointFilter::IFilter>> ManagedFilters;
 		TArray<const PCGExPointFilter::IFilter*> Stack;
 

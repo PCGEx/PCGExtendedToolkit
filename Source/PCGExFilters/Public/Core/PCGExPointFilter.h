@@ -75,11 +75,6 @@ class PCGEXFILTERS_API UPCGExFilterFactoryData : public UPCGExFactoryData
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilter)
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::Filter;
-	}
-
 	virtual bool DomainCheck();
 
 	virtual bool GetOnlyUseDataDomain() const
@@ -122,11 +117,6 @@ class PCGEXFILTERS_API UPCGExPointFilterFactoryData : public UPCGExFilterFactory
 
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilterPoint)
-
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterPoint;
-	}
 };
 
 namespace PCGExPointFilter
@@ -187,7 +177,7 @@ namespace PCGExPointFilter
 		// Init() side effects. Apply the data-missing fallback locally (see PCGEX_QUIET_HANDLING_RET).
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const;
 
-		virtual void SetSupportedTypes(const TSet<PCGExFactories::EType>* InTypes)
+		virtual void SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes)
 		{
 		}
 
@@ -297,11 +287,11 @@ namespace PCGExPointFilter
 		{
 		}
 
-		void SetSupportedTypes(const TSet<PCGExFactories::EType>* InTypes);
-		const TSet<PCGExFactories::EType>* GetSupportedTypes() const;
+		void SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes);
+		const TSet<FPCGDataTypeBaseId>* GetSupportedTypes() const;
 
 	protected:
-		const TSet<PCGExFactories::EType>* SupportedFactoriesTypes = nullptr;
+		const TSet<FPCGDataTypeBaseId>* SupportedFactoriesTypes = nullptr;
 		TArray<TSharedPtr<IFilter>> ManagedFilters; // Owns the filter instances
 		TArray<const IFilter*> Stack;               // Raw pointers for cache-friendly iteration in Test()
 
@@ -345,11 +335,6 @@ class PCGEXFILTERS_API UPCGExFilterCollectionFactoryData : public UPCGExPointFil
 
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilterCollection)
-
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterCollection;
-	}
 
 	virtual bool DomainCheck() override;
 	virtual bool SupportsCollectionEvaluation() const override;

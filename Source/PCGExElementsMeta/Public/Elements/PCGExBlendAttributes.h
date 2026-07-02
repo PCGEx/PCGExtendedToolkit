@@ -7,6 +7,7 @@
 #include "PCGExFilterCommon.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "PCGExBlendAttributes.generated.h"
 
 class UPCGExBlendOpFactory;
@@ -37,7 +38,7 @@ public:
 	}
 #endif
 
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
 protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;

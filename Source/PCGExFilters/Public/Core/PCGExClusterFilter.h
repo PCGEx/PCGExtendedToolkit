@@ -88,11 +88,6 @@ class PCGEXFILTERS_API UPCGExNodeFilterFactoryData : public UPCGExClusterFilterF
 
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilterVtx)
-
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterNode;
-	}
 };
 
 UCLASS(Abstract)
@@ -128,11 +123,6 @@ class PCGEXFILTERS_API UPCGExEdgeFilterFactoryData : public UPCGExClusterFilterF
 
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilterEdge)
-
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::FilterEdge;
-	}
 };
 
 UCLASS(Abstract)

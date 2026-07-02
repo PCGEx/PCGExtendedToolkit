@@ -5,6 +5,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Graphs/PCGExGraph.h"
@@ -66,12 +67,12 @@ bool FPCGExCutEdgesElement::Boot(FPCGExContext* InContext) const
 
 	if (Context->bWantsEdgesProcessing)
 	{
-		GetInputFactories(Context, PCGExCutEdges::SourceEdgeFilters, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+		PCGExFactories::GetInputFactories(Context, PCGExCutEdges::SourceEdgeFilters, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 	}
 
 	if (Context->bWantsVtxProcessing)
 	{
-		GetInputFactories(Context, PCGExCutEdges::SourceNodeFilters, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters, false);
+		PCGExFactories::GetInputFactories(Context, PCGExCutEdges::SourceNodeFilters, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters(), false);
 	}
 
 	PCGEX_MAKE_SHARED(PathCollection, PCGExData::FPointIOCollection, Context, PCGExPaths::Labels::SourcePathsLabel)

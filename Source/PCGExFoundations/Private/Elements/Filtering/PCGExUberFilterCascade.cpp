@@ -4,6 +4,7 @@
 #include "Elements/Filtering/PCGExUberFilterCascade.h"
 
 #include "Containers/PCGExScopedContainers.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -101,7 +102,7 @@ bool FPCGExUberFilterCascadeElement::Boot(FPCGExContext* InContext) const
 
 	for (int i = 0; i < Settings->NumBranches; i++)
 	{
-		GetInputFactories(Context, Settings->InputLabels[i], Context->BranchFilterFactories[i], PCGExFactories::PointFilters, false);
+		PCGExFactories::GetInputFactories(Context, Settings->InputLabels[i], Context->BranchFilterFactories[i], PCGExFactories::PointFilters(), false);
 	}
 
 	Context->BranchOutputs.SetNum(Settings->NumBranches);

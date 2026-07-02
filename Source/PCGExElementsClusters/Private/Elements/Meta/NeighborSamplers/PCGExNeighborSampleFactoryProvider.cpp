@@ -5,6 +5,7 @@
 
 #include "PCGPin.h"
 #include "Clusters/PCGExCluster.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 
 
@@ -28,14 +29,14 @@ void FPCGExNeighborSampleOperation::PrepareForCluster(FPCGExContext* InContext, 
 	if (!VtxFilterFactories.IsEmpty())
 	{
 		PointFilters = MakeShared<PCGExClusterFilter::FManager>(InCluster, InVtxDataFacade, InEdgeDataFacade);
-		PointFilters->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+		PointFilters->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 		PointFilters->Init(InContext, VtxFilterFactories);
 	}
 
 	if (!ValueFilterFactories.IsEmpty())
 	{
 		ValueFilters = MakeShared<PCGExClusterFilter::FManager>(InCluster, InVtxDataFacade, InEdgeDataFacade);
-		ValueFilters->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters);
+		ValueFilters->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
 		ValueFilters->Init(InContext, ValueFilterFactories);
 	}
 }
@@ -286,11 +287,11 @@ UPCGExFactoryData* UPCGExNeighborSampleProviderSettings::CreateFactory(FPCGExCon
 	SamplerFactory->SamplingConfig = SamplingConfig;
 	SamplerFactory->SamplingConfig.Init();
 
-	GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, SamplerFactory->VtxFilterFactories, PCGExFactories::ClusterNodeFilters, false);
+	PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, SamplerFactory->VtxFilterFactories, PCGExFactories::ClusterNodeFilters(), false);
 
-	GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, SamplerFactory->EdgesFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+	PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, SamplerFactory->EdgesFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 
-	GetInputFactories(InContext, PCGExFilters::Labels::SourceUseValueIfFilters, SamplerFactory->ValueFilterFactories, PCGExFactories::ClusterNodeFilters, false);
+	PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceUseValueIfFilters, SamplerFactory->ValueFilterFactories, PCGExFactories::ClusterNodeFilters(), false);
 
 	return Super::CreateFactory(InContext, SamplerFactory);
 }

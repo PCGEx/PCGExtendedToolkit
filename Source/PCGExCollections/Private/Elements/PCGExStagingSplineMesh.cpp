@@ -158,7 +158,7 @@ bool FPCGExPathSplineMeshElement::Boot(FPCGExContext* InContext) const
 		if (Settings->SelectorMode != EPCGExSelectorMode::Legacy)
 		{
 			TArray<TObjectPtr<const UPCGExSelectorFactoryData>> Factories;
-			if (!PCGExFactories::GetInputFactories<UPCGExSelectorFactoryData>(Context, PCGExCollections::Labels::SourceSelectorLabel, Factories, {PCGExFactories::EType::Selector}))
+			if (!PCGExFactories::GetInputFactories<UPCGExSelectorFactoryData>(Context, PCGExCollections::Labels::SourceSelectorLabel, Factories, {FPCGExDataTypeInfoSelector::AsId()}))
 			{
 				PCGE_LOG(Error, GraphAndLog, FTEXT("External distribution mode requires a Selector factory on the Selector input pin."));
 				return false;

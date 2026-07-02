@@ -36,11 +36,6 @@ class PCGEXELEMENTSPROBING_API UPCGExProbeFactoryData : public UPCGExFactoryData
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoProbe)
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::Probe;
-	}
-
 	virtual TSharedPtr<FPCGExProbeOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 

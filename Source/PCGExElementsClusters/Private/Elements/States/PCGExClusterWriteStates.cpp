@@ -48,7 +48,7 @@ bool FPCGExFlagNodesElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(FlagNodes)
 
-	return PCGExFactories::GetInputFactories(Context, PCGExPointStates::Labels::SourceStatesLabel, Context->StateFactories, {PCGExFactories::EType::ClusterState});
+	return PCGExFactories::GetInputFactories(Context, PCGExPointStates::Labels::SourceStatesLabel, Context->StateFactories, {FPCGExDataTypeInfoClusterState::AsId()});
 }
 
 bool FPCGExFlagNodesElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const

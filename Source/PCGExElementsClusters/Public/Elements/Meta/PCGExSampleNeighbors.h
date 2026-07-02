@@ -7,6 +7,7 @@
 
 
 #include "Core/PCGExClustersProcessor.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 #include "PCGExSampleNeighbors.generated.h"
 
@@ -33,7 +34,7 @@ public:
 		return PCGEX_NODE_COLOR_NAME(Sampling);
 	}
 #endif
-	PCGEX_NODE_POINT_FILTER(PCGExClusters::Labels::SourceVtxFiltersLabel, "Optional per-node filters. Only nodes that pass the filter will be sampled; filtered-out nodes can still be read by other nodes.", PCGExFactories::ClusterNodeFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExClusters::Labels::SourceVtxFiltersLabel, "Optional per-node filters. Only nodes that pass the filter will be sampled; filtered-out nodes can still be read by other nodes.", PCGExFactories::ClusterNodeFilters(), false)
 
 protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;

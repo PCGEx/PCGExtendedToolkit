@@ -6,6 +6,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/Artifacts/PCGExCachedChain.h"
 #include "Clusters/Artifacts/PCGExChain.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExUnionData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -54,7 +55,7 @@ bool FPCGExSimplifyClustersElement::Boot(FPCGExContext* InContext) const
 
 	Context->EdgeCarryOverDetails.Init();
 
-	GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+	PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 
 	return true;
 }

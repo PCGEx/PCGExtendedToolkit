@@ -29,7 +29,7 @@ namespace PCGExTexture
 
 	bool FLookup::BuildFrom(FPCGExContext* InContext, const FName InPin)
 	{
-		if (!PCGExFactories::GetInputFactories(InContext, InPin, Factories, {PCGExFactories::EType::TexParam}))
+		if (!PCGExFactories::GetInputFactories(InContext, InPin, Factories, {FPCGExDataTypeInfoTexParam::AsId()}))
 		{
 			return false;
 		}

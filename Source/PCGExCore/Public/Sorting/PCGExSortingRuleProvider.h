@@ -34,11 +34,6 @@ class PCGEXCORE_API UPCGExSortingRule : public UPCGExFactoryData
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoSortRule)
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::RuleSort;
-	}
-
 	FPCGExSortRuleConfig Config;
 
 	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;

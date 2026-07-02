@@ -7,6 +7,7 @@
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExBlendingDetails.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Math/PCGExMath.h"
 #include "Paths/PCGExPathsCommon.h"
 
@@ -66,7 +67,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	PCGEX_NODE_POINT_FILTER(InputMode == EPCGExShiftPathMode::Filter ? PCGExPaths::Labels::SourceShiftFilters : NAME_None, "Filters used to find the shift starting point.", PCGExFactories::PointFilters, InputMode == EPCGExShiftPathMode::Filter)
+	PCGEX_NODE_POINT_FILTER(InputMode == EPCGExShiftPathMode::Filter ? PCGExPaths::Labels::SourceShiftFilters : NAME_None, "Filters used to find the shift starting point.", PCGExFactories::PointFilters(), InputMode == EPCGExShiftPathMode::Filter)
 	//~End UPCGExPointsProcessorSettings
 
 	/** What data is shifted (index, metadata, properties, etc.). */

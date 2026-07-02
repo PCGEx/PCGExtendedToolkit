@@ -41,11 +41,6 @@ class PCGEXELEMENTSSHAPES_API UPCGExShapeBuilderFactoryData : public UPCGExFacto
 public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoShape)
 
-	virtual PCGExFactories::EType GetFactoryType() const override
-	{
-		return PCGExFactories::EType::ShapeBuilder;
-	}
-
 	virtual TSharedPtr<FPCGExShapeBuilderOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 

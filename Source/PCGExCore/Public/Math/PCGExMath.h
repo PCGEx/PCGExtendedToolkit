@@ -162,6 +162,11 @@ namespace PCGExMath
 		return FMath::Cos(FMath::DegreesToRadians(AngleInDegrees));
 	}
 
+	FORCEINLINE static double DotToDegrees(const double Dot)
+	{
+		return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Dot, -1.0, 1.0)));
+	}
+
 	PCGEXCORE_API double ConvertStringToDouble(const FString& StringToConvert);
 
 	// Remap function

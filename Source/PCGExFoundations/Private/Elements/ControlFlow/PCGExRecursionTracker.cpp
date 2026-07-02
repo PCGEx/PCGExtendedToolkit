@@ -3,7 +3,7 @@
 
 #include "Elements/ControlFlow/PCGExRecursionTracker.h"
 
-
+#include "Core/PCGExFilterTypeSets.h"
 #include "PCGGraph.h"
 #include "PCGParamData.h"
 #include "PCGPin.h"
@@ -170,7 +170,7 @@ bool FPCGExRecursionTrackerElement::AdvanceWork(FPCGExContext* InContext, const 
 		// Initialize collection filters if we have some inputs
 		TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> FilterFactories;
 
-		if (PCGExFactories::GetInputFactories(Context, PCGExRecursionTracker::SourceTrackerFilters, FilterFactories, PCGExFactories::PointFilters, false))
+		if (PCGExFactories::GetInputFactories(Context, PCGExRecursionTracker::SourceTrackerFilters, FilterFactories, PCGExFactories::PointFilters(), false))
 		{
 			PCGEX_MAKE_SHARED(DummyFacade, PCGExData::FFacade, TrackersCollection->Pairs[0].ToSharedRef())
 			CollectionFilters = MakeShared<PCGExPointFilter::FManager>(DummyFacade.ToSharedRef());
@@ -352,7 +352,7 @@ Context->StageOutput(Extra, PCGExRecursionTracker::Output##_NAME##Label, PCGExDa
 					TSharedPtr<PCGExPointFilter::FManager> TestDataFilters = nullptr;
 					TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> TestFilterFactories;
 
-					if (!bShouldStop && PCGExFactories::GetInputFactories(Context, PCGExRecursionTracker::SourceTrackerFilters, TestFilterFactories, PCGExFactories::PointFilters, false))
+					if (!bShouldStop && PCGExFactories::GetInputFactories(Context, PCGExRecursionTracker::SourceTrackerFilters, TestFilterFactories, PCGExFactories::PointFilters(), false))
 					{
 						PCGEX_MAKE_SHARED(DummyFacade, PCGExData::FFacade, TestDataCollection->Pairs[0].ToSharedRef())
 						TestDataFilters = MakeShared<PCGExPointFilter::FManager>(DummyFacade.ToSharedRef());

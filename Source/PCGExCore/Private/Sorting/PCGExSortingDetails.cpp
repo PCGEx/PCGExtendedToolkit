@@ -27,7 +27,7 @@ namespace PCGExSorting
 	{
 		TArray<FPCGExSortRuleConfig> OutRules;
 		TArray<TObjectPtr<const UPCGExSortingRule>> Factories;
-		if (!PCGExFactories::GetInputFactories(InContext, InLabel, Factories, {PCGExFactories::EType::RuleSort}, false))
+		if (!PCGExFactories::GetInputFactories(InContext, InLabel, Factories, {FPCGExDataTypeInfoSortRule::AsId()}, false))
 		{
 			return OutRules;
 		}

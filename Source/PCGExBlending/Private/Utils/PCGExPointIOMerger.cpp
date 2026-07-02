@@ -170,7 +170,9 @@ namespace PCGExPointIOMerger
 					TSharedPtr<PCGExData::TBuffer<T>> Buffer = Merger->UnionDataFacade->GetWritable(
 						TargetIdentifier,
 						bInitDefault && Identity.Attribute
-						? Identity.Attribute->GetValueFromItemKey<T>(PCGDefaultValueKey)
+						? (Identity.InDataDomain()
+							? PCGExData::Helpers::ReadDataValue<T>(Identity.Attribute)
+							: Identity.Attribute->GetValueFromItemKey<T>(PCGDefaultValueKey))
 						: T{},
 						bAllowsInterp, PCGExData::EBufferInit::New);
 

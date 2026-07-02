@@ -9,6 +9,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 bool FPCGExFillControlEdgeFilters::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -20,7 +21,7 @@ bool FPCGExFillControlEdgeFilters::PrepareForDiffusions(FPCGExContext* InContext
 	const UPCGExFillControlsFactoryEdgeFilters* TypedFactory = Cast<UPCGExFillControlsFactoryEdgeFilters>(Factory);
 
 	EdgeFilterManager = MakeShared<PCGExClusterFilter::FManager>(Cluster.ToSharedRef(), InHandler->VtxDataFacade.ToSharedRef(), InHandler->EdgeDataFacade.ToSharedRef());
-	EdgeFilterManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters);
+	EdgeFilterManager->SetSupportedTypes(&PCGExFactories::ClusterEdgeFilters());
 	EdgeFilterManager->bUseEdgeAsPrimary = true;
 
 	return EdgeFilterManager->Init(InContext, TypedFactory->FilterFactories);
@@ -74,7 +75,7 @@ UPCGExFactoryData* UPCGExFillControlsEdgeFiltersProviderSettings::CreateFactory(
 	PCGEX_FORWARD_FILLCONTROL_FACTORY
 	Super::CreateFactory(InContext, NewFactory);
 
-	if (!GetInputFactories(InContext, PCGExFilters::Labels::SourceEdgeFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterEdgeFilters))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceEdgeFiltersLabel, NewFactory->FilterFactories, PCGExFactories::ClusterEdgeFilters()))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;

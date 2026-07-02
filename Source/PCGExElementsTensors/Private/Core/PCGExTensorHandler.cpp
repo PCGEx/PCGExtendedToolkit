@@ -76,7 +76,7 @@ namespace PCGExTensor
 	bool FTensorsHandler::Init(FPCGExContext* InContext, const FName InPin, const TSharedPtr<PCGExData::FFacade>& InDataFacade)
 	{
 		TArray<TObjectPtr<const UPCGExTensorFactoryData>> InFactories;
-		if (!PCGExFactories::GetInputFactories(InContext, InPin, InFactories, {PCGExFactories::EType::Tensor}))
+		if (!PCGExFactories::GetInputFactories(InContext, InPin, InFactories, {FPCGExDataTypeInfoTensor::AsId()}))
 		{
 			return false;
 		}

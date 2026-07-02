@@ -7,6 +7,7 @@
 #include "PCGExFilterCommon.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Factories/PCGExFactories.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "PCGExRefreshSeed.generated.h"
 
 /**
@@ -33,7 +34,7 @@ public:
 	}
 #endif
 
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
 	virtual bool SupportsDataStealing() const override
 	{

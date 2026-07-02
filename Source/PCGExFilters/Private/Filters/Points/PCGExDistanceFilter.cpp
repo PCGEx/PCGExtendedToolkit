@@ -25,7 +25,7 @@ bool UPCGExDistanceFilterFactory::Init(FPCGExContext* InContext)
 	}
 	if (Config.DataMatching.IsEnabled())
 	{
-		PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {PCGExFactories::EType::MatchRule});
+		PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, MatchRuleFactories, {FPCGExDataTypeInfoMatchRule::AsId()});
 	}
 	return true;
 }

@@ -7,6 +7,7 @@
 #include "PCGExFiltersSubSystem.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Core/PCGExFilterTypeSets.h"
 
 namespace PCGExFilterGroup
 {
@@ -37,7 +38,7 @@ namespace PCGExFilterGroup
 		*/
 	}
 
-	void FFilterGroup::SetSupportedTypes(const TSet<PCGExFactories::EType>* InTypes)
+	void FFilterGroup::SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes)
 	{
 		SupportedFactoriesTypes = InTypes;
 	}
@@ -49,7 +50,7 @@ namespace PCGExFilterGroup
 
 		for (const UPCGExPointFilterFactoryData* ManagedFactory : *ManagedFactories)
 		{
-			if (SupportedFactoriesTypes && !SupportedFactoriesTypes->Contains(ManagedFactory->GetFactoryType()))
+			if (SupportedFactoriesTypes && !SupportedFactoriesTypes->Contains(ManagedFactory->GetDataTypeId()))
 			{
 				PCGEX_LOG_INVALID_INPUT(InContext, FText::Format(FTEXT("A grouped filter is of an unexpected type : {0}."), FText::FromString(GetNameSafe(ManagedFactory->GetClass()))));
 				continue;
@@ -135,7 +136,7 @@ namespace PCGExFilterGroup
 			return Filter->Init(InContext, PointDataFacade);
 		}
 
-		if (PCGExFactories::ClusterOnlyFilters.Contains(Filter->Factory->GetFactoryType()))
+		if (PCGExFactories::ClusterOnlyFilters().Contains(Filter->Factory->GetDataTypeId()))
 		{
 			if (!bInitForCluster)
 			{
@@ -431,7 +432,7 @@ UPCGExFactoryData* UPCGExFilterGroupProviderSettings::CreateFactory(FPCGExContex
 		NewFactory = InContext->ManagedObjects->New<UPCGExFilterGroupFactoryDataOR>();
 	}
 
-	if (!GetInputFactories(InContext, PCGExFilters::Labels::SourceFiltersLabel, NewFactory->FilterFactories, PCGExFactories::AnyFilters))
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceFiltersLabel, NewFactory->FilterFactories, PCGExFactories::AnyFilters()))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
 		return nullptr;

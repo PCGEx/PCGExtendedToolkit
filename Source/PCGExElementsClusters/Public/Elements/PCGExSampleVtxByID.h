@@ -7,6 +7,7 @@
 #include "PCGExFilterCommon.h"
 #include "Factories/PCGExFactories.h"
 
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExBlendingDetails.h"
 #include "Math/PCGExMathAxis.h"
@@ -64,7 +65,7 @@ protected:
 	//~Begin UPCGExPointsProcessorSettings
 
 public:
-	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters, false)
+	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
 	//~End UPCGExPointsProcessorSettings
 

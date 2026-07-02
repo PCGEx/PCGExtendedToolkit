@@ -5,6 +5,7 @@
 
 
 #include "PCGPin.h"
+#include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Types/PCGExAttributeIdentity.h"
@@ -128,7 +129,7 @@ UPCGExFactoryData* UPCGExActionProviderSettings::CreateFactory(FPCGExContext* In
 
 	if (UPCGExActionFactoryData* TypedFactory = Cast<UPCGExActionFactoryData>(InFactory))
 	{
-		if (!GetInputFactories(InContext, PCGExActions::Labels::SourceConditionsFilterLabel, TypedFactory->FilterFactories, PCGExFactories::PointFilters))
+		if (!PCGExFactories::GetInputFactories(InContext, PCGExActions::Labels::SourceConditionsFilterLabel, TypedFactory->FilterFactories, PCGExFactories::PointFilters()))
 		{
 			return nullptr;
 		}

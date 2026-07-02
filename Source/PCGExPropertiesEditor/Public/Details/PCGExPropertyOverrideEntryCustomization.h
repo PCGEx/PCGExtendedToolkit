@@ -64,11 +64,16 @@ private:
 	TSharedPtr<FStructOnScope> NestedScope;
 
 	FDelegateHandle UserDefinedStructReinstancedHandle;
-	// Captured at CustomizeHeader -- inline-path external-structure rows return nothing from
-	// Handle->GetOuterObjects, so the reset delegates can't re-derive the component. Null when
-	// the entry isn't owned by a UPCGExPropertyCollectionComponent or is Instance-created (no
-	// BP chain to walk); UE's default reset behavior applies in those cases.
+	// Captured at CustomizeHeader (inline external-structure rows expose no outers, so the reset
+	// delegates can't re-derive it). Set for EVERY non-template component outer, Instance-created
+	// included -- it drives the authoritative EnabledOverrides TSet the toggle checkbox writes.
+	// Null for non-component owners (Tuple node, level exporter, asset rows).
 	TWeakObjectPtr<UPCGExPropertyCollectionComponent> WeakLiveComponent;
+
+	// True only when the component has a BP archetype/class chain to reset toward
+	// (CreationMethod != Instance). Gates the reset arrow ONLY -- kept separate from
+	// WeakLiveComponent because Instance-created components drive the TSet but have no chain.
+	bool bComponentHasArchetypeChain = false;
 
 	// First non-template outer captured at CustomizeHeader. Covers component AND asset-collection
 	// owners; drives the inline row's owner-change hook so external-struct edits dirty + signal PCG.

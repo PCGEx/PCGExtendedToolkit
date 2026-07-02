@@ -37,7 +37,7 @@ bool FPCGExBlendAttributesElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(BlendAttributes)
 
-	return PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {PCGExFactories::EType::Blending});
+	return PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {FPCGExDataTypeInfoBlendOp::AsId()});
 }
 
 bool FPCGExBlendAttributesElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
