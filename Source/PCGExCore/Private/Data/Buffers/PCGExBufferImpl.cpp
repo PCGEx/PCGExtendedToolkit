@@ -721,7 +721,6 @@ namespace PCGExData
 
 		OutValue = DefaultValue;
 
-		const int32 ExistingEntryCount = CreatedAttribute->GetNumberOfEntriesWithParents();
 		const bool bHasIn = Source->GetIn() ? true : false;
 
 		auto GrabExistingValues = [&]()
@@ -733,8 +732,11 @@ namespace PCGExData
 		{
 			GrabExistingValues();
 		}
-		else if (!bHasIn && ExistingEntryCount != 0)
+		else if (!bHasIn && !this->bIsNewOutput)
 		{
+			// No input to seed from, but the attribute pre-exists on the output (e.g. written earlier
+			// in the same node) -- seed from its current value instead of clobbering it at Write time.
+			// Entry counts can't signal this: @Data values live in the default slot, entry-less.
 			GrabExistingValues();
 		}
 
@@ -783,14 +785,9 @@ namespace PCGExData
 			return;
 		}
 
-		// CRITICAL -- DO NOT REPLACE WITH SetValue<T>(PCGDefaultValueKey, OutValue).
-		// PCGDefaultValueKey == -1 == PCGInvalidEntryKey; the engine's SetValueFromValueKey_Unsafe
-		// early-returns for invalid entry keys and the write is silently dropped. Use SetDefaultValue<T>
-		// which goes through the proper default-value slot (ExistingIndexForDefaultValue) and persists.
-		// (FPropertySingleValueBuffer::Write CAN safely use SetValueFromProperty with PCGDefaultValueKey
-		// because that engine API specifically handles InvalidEntryKey via the default slot -- different
-		// code path, different behavior. See the comment there for context.)
-		OutAttribute->template SetDefaultValue<T>(OutValue);
+		// @Data values live in the default-value slot -- see Helpers::SetDataValue/ReadDataValue for
+		// the model (engine-conformant: no entry materialization).
+		Helpers::SetDataValue<T>(OutAttribute, OutValue);
 	}
 
 #pragma endregion

@@ -67,8 +67,9 @@ namespace PCGExData
 			if (const UPCGData* InData = InFacade->Source->GetData(Side);
 				InData && InData->Metadata)
 			{
-				if (const FPCGMetadataAttributeBase* Attr = InData->Metadata->GetConstAttribute(
-					PCGExMetaHelpers::GetAttributeIdentifier(Selector, InData)))
+				// Domain-safe lookup: the selector may target @Data on data without an instantiated @Data domain.
+				if (const FPCGMetadataAttributeBase* Attr = PCGExMetaHelpers::TryGetConstAttribute(
+					InData->Metadata.Get(), PCGExMetaHelpers::GetAttributeIdentifier(Selector, InData)))
 				{
 					SourceDesc = Attr->GetAttributeDesc();
 				}

@@ -9,6 +9,8 @@
 #include "Data/PCGExSubSelection.h"
 #include "Data/Buffers/PCGExBufferProperty.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataDomain.h"
 #include "Types/PCGExAttributeIdentity.h"
 #include "Types/PCGExTypes.h"
 
@@ -208,28 +210,28 @@ namespace PCGExData::Helpers
 	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute)
 	{
 		// Read a single value from a @Data domain attribute (one value per dataset, not per-point).
-		// PCG metadata attributes form an inheritance chain (parent pointers).
-		// If the current attribute has no entries, walk up the parent chain to find
-		// the nearest ancestor with actual data. If none have entries, fall back to
-		// the attribute's default value.
-		const FPCGMetadataAttributeBase* Attr = Attribute;
-		if (!Attr->GetNumberOfEntries())
+		// The default-value slot is the canonical @Data store, mirroring the engine: accessor keys
+		// resolve to the default slot when the data domain has no items (bAddDefaultValueIfEmpty in
+		// the accessor factory), and attribute copies across node boundaries never carry entries
+		// (CopyInternal: bCopyEntries=false) -- only the default, which is copied eagerly at copy
+		// time and is therefore also GC-proof. Entry reads apply only when the domain actually has
+		// items, exactly like engine accessors; GetValueFromItemKey then resolves inherited entries
+		// through the attribute parent chain the same way the engine would.
+
+		if (!ensure(Attribute))
 		{
-			const FPCGMetadataAttributeBase* Parent = Attr->GetParent();
-			while (Parent)
-			{
-				if (!Parent->GetNumberOfEntries())
-				{
-					Parent = Parent->GetParent();
-				}
-				else
-				{
-					Attr = Parent;
-					Parent = nullptr;
-				}
-			}
+			// Should not happen, callsite need to gate against reading nothing
+			return T();
 		}
-		return Attr->GetValueFromItemKey<T>(!Attr->GetNumberOfEntries() ? Attr->GetValueKey(PCGDefaultValueKey) : PCGFirstEntryKey);
+
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		if (Domain && Domain->GetItemCountForChild() > 0)
+		{
+			return Attribute->GetValueFromItemKey<T>(PCGFirstEntryKey);
+		}
+
+		// PCGDefaultValueKey == PCGInvalidEntryKey routes GetValueFromItemKey to the default slot.
+		return Attribute->GetValueFromItemKey<T>(PCGDefaultValueKey);
 	}
 
 	template <typename T>
@@ -248,7 +250,13 @@ namespace PCGExData::Helpers
 	template <typename T>
 	void SetDataValue(FPCGMetadataAttributeBase* Attribute, const T Value)
 	{
-		Attribute->SetValue(PCGFirstEntryKey, Value);
+		// The default-value slot is the canonical @Data store (see ReadDataValue). Do NOT materialize
+		// an entry here: entries are invisible to the engine while the data domain has no items, but
+		// they survive full data copies -- a later engine-side rewrite of the attribute (which goes to
+		// the default slot) would leave the copied entry stale, and item-keyed reads prefer entries.
+		// CRITICAL -- this must be SetDefaultValue, not SetValue<T>(PCGDefaultValueKey, ...):
+		// PCGDefaultValueKey == -1 == PCGInvalidEntryKey and the engine's SetValueFromValueKey_Unsafe
+		// silently drops writes for invalid entry keys.
 		Attribute->SetDefaultValue(Value);
 	}
 
@@ -298,7 +306,8 @@ template PCGEXCORE_API void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeI
 		FPCGAttributeIdentifier SanitizedIdentifier = PCGExMetaHelpers::GetAttributeIdentifier(InSelector, InData);
 		SanitizedIdentifier.MetadataDomain = EPCGMetadataDomainFlag::Data; // Force data domain
 
-		if (const FPCGMetadataAttributeBase* SourceAttribute = InMetadata->GetConstAttribute(SanitizedIdentifier))
+		// Domain-safe lookup: the data may have never instantiated its @Data domain.
+		if (const FPCGMetadataAttributeBase* SourceAttribute = PCGExMetaHelpers::TryGetConstAttribute(InMetadata, SanitizedIdentifier))
 		{
 			// Container/extended source types: TryReadDataValue<T> can't represent them; falls through to bSuccess=false.
 			PCGExMetaHelpers::ExecuteWithRightType(SourceAttribute, [&](auto DummyValue)
