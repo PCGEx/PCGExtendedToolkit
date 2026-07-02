@@ -82,6 +82,12 @@ namespace PCGExClusters
 		PCGEX_CTX_STATE(State_ReadyForNextEdges)
 	}
 
+	/** Edge count above which cluster adjacency is built with the multi-pass parallel
+	 * path instead of a single sequential loop. Below this, the extra passes cost more
+	 * than they save, and sequential builds keep many-small-clusters batches free of
+	 * task contention. The generic loop-dispatch cutoff is PCGExMT::DefaultParallelThreshold. */
+	inline constexpr int32 ParallelClusterBuildThreshold = 4096;
+
 	namespace Labels
 	{
 		const FName SourceEdgesLabel = TEXT("Edges");

@@ -104,6 +104,7 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 
 		// Extra edge data
 		TSharedPtr<PCGExData::TBuffer<double>> EdgeLength;
+		TSharedPtr<PCGExData::TBuffer<int64>> EdgeEndpointsWriter;
 
 		void CompileRange(const PCGExMT::FScope& Scope);
 		void CompilationComplete();

@@ -3,6 +3,7 @@
 
 #include "Core/PCGExMTCommon.h"
 #include "Async/ParallelFor.h"
+#include "Async/TaskGraphInterfaces.h"
 
 namespace PCGExMT
 {
@@ -41,6 +42,38 @@ namespace PCGExMT
 			{
 				Body(i);
 			}
+		}
+	}
+
+	void ParallelOrSequentialScoped(const int32 Num, const FScopedLoopBody& Body, const int32 Threshold)
+	{
+		if (Num <= 0)
+		{
+			return;
+		}
+
+		if (Num >= Threshold)
+		{
+			// Divide into one chunk per worker thread -- amortizes Body's per-scope setup
+			// (e.g., FScopedTypedValue construction for type-erased buffer access).
+			// ParallelFor handles work-stealing across the resulting chunks.
+			const int32 NumWorkers = FMath::Max(1, FTaskGraphInterface::Get().GetNumWorkerThreads());
+			const int32 ChunkSize = FMath::Max(1, FMath::DivideAndRoundUp(Num, NumWorkers));
+			const int32 NumChunks = FMath::DivideAndRoundUp(Num, ChunkSize);
+
+			ParallelFor(NumChunks, [&](const int32 ChunkIdx)
+			{
+				const int32 Start = ChunkIdx * ChunkSize;
+				const int32 Count = FMath::Min(ChunkSize, Num - Start);
+				const FScope Scope(Start, Count, ChunkIdx);
+				Body(Scope);
+			});
+		}
+		else
+		{
+			// Sequential: single scope covering everything.
+			const FScope Scope(0, Num, 0);
+			Body(Scope);
 		}
 	}
 
