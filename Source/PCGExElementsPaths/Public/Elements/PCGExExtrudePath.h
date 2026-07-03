@@ -31,7 +31,7 @@ enum class EPCGExExtrudeEndpoint : uint8
 UENUM()
 enum class EPCGExExtrudeDirection : uint8
 {
-	PathDirection = 0 UMETA(DisplayName = "Path Direction", ToolTip="Extrude outward along the endpoint's terminal segment (inverted direction to prev/next)."),
+	PathDirection = 0 UMETA(DisplayName = "Path Direction", ToolTip="Extrude outward along the endpoint's terminal segment (inverted direction to prev/next), optionally tilted by the Direction offset."),
 	Custom        = 1 UMETA(DisplayName = "Custom", ToolTip="Extrude along a direction read from a constant or attribute."),
 };
 
@@ -39,8 +39,8 @@ UENUM()
 enum class EPCGExExtrudeProfileType : uint8
 {
 	Line   = 0 UMETA(DisplayName = "Line", ToolTip="Straight extrusion, subdivided evenly."),
-	Arc    = 1 UMETA(DisplayName = "Arc", ToolTip="Seamless arc, tangent to the path at the endpoint (a perpendicular Custom direction gives a half-circle). Needs a Custom direction not parallel to the path, else it stays a straight line."),
-	Custom = 2 UMETA(DisplayName = "Custom", ToolTip="Custom profile applied to the new segment. Needs a Custom direction angled from the path, else it falls back to no profile."),
+	Arc    = 1 UMETA(DisplayName = "Arc", ToolTip="Seamless arc, tangent to the path at the endpoint (a perpendicular extrusion direction gives a half-circle). Needs an extrusion direction not parallel to the path (Custom direction or a non-zero offset), else it stays a straight line."),
+	Custom = 2 UMETA(DisplayName = "Custom", ToolTip="Custom profile applied to the new segment. Needs an extrusion direction angled from the path (Custom direction or a non-zero offset), else it falls back to no profile."),
 };
 
 /**
@@ -83,12 +83,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExExtrudeDirection DirectionMode = EPCGExExtrudeDirection::PathDirection;
 
-	/** Custom extrusion direction. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="DirectionMode == EPCGExExtrudeDirection::Custom", EditConditionHides))
-	FPCGExInputShorthandSelectorDirection Direction = FPCGExInputShorthandSelectorDirection(FName("$Transform.Up"), FVector::UpVector, false);
+	/** Extrusion direction in Custom mode; offset added to the path direction in Path Direction mode (zero = pure path direction). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FPCGExInputShorthandSelectorDirection Direction = FPCGExInputShorthandSelectorDirection(FName("$Transform.Up"), FVector::ZeroVector, false);
+
+	/** If enabled, the offset is added as-read so its length drives how strongly it tilts the path direction; otherwise it is normalized first and weighs equally with it. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Offset Magnitude Matters", EditCondition="DirectionMode == EPCGExExtrudeDirection::PathDirection", EditConditionHides))
+	bool bOffsetMagnitudeMatters = false;
 
 	/** If enabled, the direction read above is rotated by the endpoint's transform. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Transform Direction", EditCondition="DirectionMode == EPCGExExtrudeDirection::Custom", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Transform Direction"))
 	bool bTransformDirection = false;
 
 
