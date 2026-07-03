@@ -35,10 +35,11 @@ enum class EPCGExInputScope : uint8
 UENUM()
 enum class EPCGExPathNormalDirection : uint8
 {
-	Normal        = 0 UMETA(DisplayName = "Normal", ToolTip="..."),
-	Binormal      = 1 UMETA(DisplayName = "Binormal", ToolTip="..."),
-	AverageNormal = 2 UMETA(DisplayName = "Average Normal", ToolTip="..."),
-	Custom        = 10 UMETA(DisplayName = "Custom", ToolTip="..."),
+	Normal            = 0 UMETA(DisplayName = "Normal", ToolTip="..."),
+	Binormal          = 1 UMETA(DisplayName = "Binormal", ToolTip="..."),
+	AverageNormal     = 2 UMETA(DisplayName = "Average Normal", ToolTip="..."),
+	ParallelTransport = 3 UMETA(DisplayName = "Parallel Transport", ToolTip="Torsion-minimizing normal carried along the path from the first edge. Stable through vertical segments where Up-based normals degenerate; on closed loops the residual seam twist is distributed along the path."),
+	Custom            = 10 UMETA(DisplayName = "Custom", ToolTip="..."),
 };
 
 UENUM()

@@ -3,6 +3,39 @@
 
 #include "Math/PCGExMathAxis.h"
 
+namespace PCGExMathAxis
+{
+	// FRotationMatrix::MakeFrom* returns a zeroed matrix when its primary axis is zero, and the
+	// two-axis variants' parallel-input fallback does not cover a zero secondary axis; both yield
+	// garbage quaternions when converted. These helpers degrade degenerate inputs instead:
+	// two-axis -> single-axis -> identity.
+	FORCEINLINE bool IsUsableAxis(const FVector& V)
+	{
+		return V.SizeSquared() > UE_SMALL_NUMBER;
+	}
+
+	using FSingleAxisMaker = FMatrix (*)(FVector const&);
+	using FDualAxisMaker = FMatrix (*)(FVector const&, FVector const&);
+
+	FQuat SafeMakeRot(const FVector& Axis, const FSingleAxisMaker Maker)
+	{
+		return IsUsableAxis(Axis) ? Maker(Axis).ToQuat() : FQuat::Identity;
+	}
+
+	FQuat SafeMakeRot(const FVector& Primary, const FVector& Secondary, const FDualAxisMaker Maker, const FSingleAxisMaker PrimaryMaker, const FSingleAxisMaker SecondaryMaker)
+	{
+		if (!IsUsableAxis(Primary))
+		{
+			return SafeMakeRot(Secondary, SecondaryMaker);
+		}
+		if (!IsUsableAxis(Secondary))
+		{
+			return PrimaryMaker(Primary).ToQuat();
+		}
+		return Maker(Primary, Secondary).ToQuat();
+	}
+}
+
 namespace PCGExMath
 {
 	void GetAxesOrder(EPCGExMakeRotAxis Order, int32& A, int32& B, int32& C)
@@ -47,61 +80,62 @@ namespace PCGExMath
 
 	FQuat MakeRot(const EPCGExMakeRotAxis Order, const FVector& X, const FVector& Y, const FVector& Z)
 	{
+		using namespace PCGExMathAxis;
+
 		switch (Order)
 		{
 		default: case EPCGExMakeRotAxis::X:
-			return FRotationMatrix::MakeFromX(X).ToQuat();
+			return SafeMakeRot(X, &FRotationMatrix::MakeFromX);
 		case EPCGExMakeRotAxis::XY:
-			return FRotationMatrix::MakeFromXY(X, Y).ToQuat();
+			return SafeMakeRot(X, Y, &FRotationMatrix::MakeFromXY, &FRotationMatrix::MakeFromX, &FRotationMatrix::MakeFromY);
 		case EPCGExMakeRotAxis::XZ:
-			return FRotationMatrix::MakeFromXZ(X, Z).ToQuat();
+			return SafeMakeRot(X, Z, &FRotationMatrix::MakeFromXZ, &FRotationMatrix::MakeFromX, &FRotationMatrix::MakeFromZ);
 		case EPCGExMakeRotAxis::Y:
-			return FRotationMatrix::MakeFromY(Y).ToQuat();
+			return SafeMakeRot(Y, &FRotationMatrix::MakeFromY);
 		case EPCGExMakeRotAxis::YX:
-			return FRotationMatrix::MakeFromYX(Y, X).ToQuat();
+			return SafeMakeRot(Y, X, &FRotationMatrix::MakeFromYX, &FRotationMatrix::MakeFromY, &FRotationMatrix::MakeFromX);
 		case EPCGExMakeRotAxis::YZ:
-			return FRotationMatrix::MakeFromYZ(Y, Z).ToQuat();
+			return SafeMakeRot(Y, Z, &FRotationMatrix::MakeFromYZ, &FRotationMatrix::MakeFromY, &FRotationMatrix::MakeFromZ);
 		case EPCGExMakeRotAxis::Z:
-			return FRotationMatrix::MakeFromZ(Z).ToQuat();
+			return SafeMakeRot(Z, &FRotationMatrix::MakeFromZ);
 		case EPCGExMakeRotAxis::ZX:
-			return FRotationMatrix::MakeFromZX(Z, X).ToQuat();
+			return SafeMakeRot(Z, X, &FRotationMatrix::MakeFromZX, &FRotationMatrix::MakeFromZ, &FRotationMatrix::MakeFromX);
 		case EPCGExMakeRotAxis::ZY:
-			return FRotationMatrix::MakeFromZY(Z, Y).ToQuat();
+			return SafeMakeRot(Z, Y, &FRotationMatrix::MakeFromZY, &FRotationMatrix::MakeFromZ, &FRotationMatrix::MakeFromY);
 		}
 	}
 
 	FQuat MakeRot(const EPCGExMakeRotAxis Order, const FVector& A, const FVector& B)
 	{
+		// Route A/B into the primary/secondary slots of the selected construction
 		switch (Order)
 		{
-		default: case EPCGExMakeRotAxis::X:
-			return FRotationMatrix::MakeFromX(A).ToQuat();
+		default:
+		case EPCGExMakeRotAxis::X:
 		case EPCGExMakeRotAxis::XY:
-			return FRotationMatrix::MakeFromXY(A, B).ToQuat();
+			return MakeRot(Order, A, B, FVector::ZeroVector);
 		case EPCGExMakeRotAxis::XZ:
-			return FRotationMatrix::MakeFromXZ(A, B).ToQuat();
+			return MakeRot(Order, A, FVector::ZeroVector, B);
 		case EPCGExMakeRotAxis::Y:
-			return FRotationMatrix::MakeFromY(A).ToQuat();
 		case EPCGExMakeRotAxis::YX:
-			return FRotationMatrix::MakeFromYX(A, B).ToQuat();
+			return MakeRot(Order, B, A, FVector::ZeroVector);
 		case EPCGExMakeRotAxis::YZ:
-			return FRotationMatrix::MakeFromYZ(A, B).ToQuat();
+			return MakeRot(Order, FVector::ZeroVector, A, B);
 		case EPCGExMakeRotAxis::Z:
-			return FRotationMatrix::MakeFromZ(A).ToQuat();
 		case EPCGExMakeRotAxis::ZX:
-			return FRotationMatrix::MakeFromZX(A, B).ToQuat();
+			return MakeRot(Order, B, FVector::ZeroVector, A);
 		case EPCGExMakeRotAxis::ZY:
-			return FRotationMatrix::MakeFromZY(B, B).ToQuat();
+			return MakeRot(Order, FVector::ZeroVector, B, A);
 		}
 	}
 
 	void FindOrderMatch(const FQuat& Quat, const FVector& XAxis, const FVector& YAxis, const FVector& ZAxis, int32& X, int32& Y, int32& Z, const bool bPermute)
 	{
-		// Find which reference axes (X/Y/ZAxis) best align with the quaternion's local axes.
+		// For each reference axis (X/Y/ZAxis), find the quaternion's local axis best aligned with it.
 		// Builds a 3x3 alignment matrix M[i][j] = |dot(QuatAxis[i], RefAxis[j])|.
-		// Without permutation: each axis independently picks its best match (may duplicate).
-		// With permutation: exhaustively checks all 6 axis permutations to find the
-		// highest-scoring bijective mapping (no axis used twice).
+		// Without permutation: each reference axis independently picks its best match (may duplicate).
+		// With permutation: exhaustively checks all 6 assignments to find the highest-scoring
+		// bijective mapping (no local axis used twice).
 		const FVector QA[3] = {Quat.GetAxisX(), Quat.GetAxisY(), Quat.GetAxisZ()};
 
 		double M[3][3];
@@ -112,18 +146,14 @@ namespace PCGExMath
 			M[i][2] = FMath::Abs(FVector::DotProduct(QA[i], ZAxis));
 		}
 
-		// choose best X/Y/Z directly
-		int32 Best[3];
-		for (int i = 0; i < 3; ++i)
-		{
-			const double DX = M[i][0];
-			const double DY = M[i][1];
-			const double DZ = M[i][2];
-			Best[i] = (DX >= DY && DX >= DZ) ? 0 : ((DY >= DZ) ? 1 : 2);
-		}
-
 		if (!bPermute)
 		{
+			// For each reference axis (column), pick the best-matching local axis (row)
+			int32 Best[3];
+			for (int j = 0; j < 3; ++j)
+			{
+				Best[j] = (M[0][j] >= M[1][j] && M[0][j] >= M[2][j]) ? 0 : ((M[1][j] >= M[2][j]) ? 1 : 2);
+			}
 			X = Best[0];
 			Y = Best[1];
 			Z = Best[2];
@@ -148,9 +178,13 @@ namespace PCGExMath
 			}
 		}
 
-		X = BestPerm[0];
-		Y = BestPerm[1];
-		Z = BestPerm[2];
+		// BestPerm maps local axis -> reference axis; callers consume the inverse (reference -> local)
+		for (int i = 0; i < 3; ++i)
+		{
+			if (BestPerm[i] == 0) { X = i; }
+			else if (BestPerm[i] == 1) { Y = i; }
+			else { Z = i; }
+		}
 
 		check(X >= 0 && X <= 2);
 		check(Y >= 0 && Y <= 2);
@@ -280,6 +314,19 @@ namespace PCGExMath
 	FVector GetNormalUp(const FVector& A, const FVector& B, const FVector& Up)
 	{
 		return FVector::CrossProduct((B - A), ((B + Up) - A)).GetSafeNormal();
+	}
+
+	FVector SafeCrossNormal(const FVector& Up, const FVector& Dir)
+	{
+		const FVector Cross = FVector::CrossProduct(Up, Dir);
+		if (Cross.SizeSquared() > UE_SMALL_NUMBER)
+		{
+			return Cross.GetSafeNormal();
+		}
+
+		// Dir is parallel to Up: fall back to the world axis least aligned with Dir
+		const FVector Alt = FMath::Abs(Dir.Z) < (1.0 - UE_KINDA_SMALL_NUMBER) ? FVector::UpVector : FVector::ForwardVector;
+		return FVector::CrossProduct(Alt, Dir).GetSafeNormal();
 	}
 
 	FTransform MakeLookAtTransform(const FVector& LookAt, const FVector& LookUp, const EPCGExAxisAlign AlignAxis)

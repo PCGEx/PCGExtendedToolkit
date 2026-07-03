@@ -120,13 +120,14 @@ namespace PCGExMath::Geo
 	{
 		double Radius = 0;
 		double Theta = 0;
-		double SinTheta = 0;
 
 		FVector Center = FVector::ZeroVector;
 		FVector Normal = FVector::ZeroVector;
 		FVector Hand = FVector::ZeroVector;
 		FVector OtherHand = FVector::ZeroVector;
 
+		// When set, the arc parametrization is degenerate (GetLocationOnArc/GetLength are not meaningful);
+		// callers must handle the straight-line case themselves.
 		bool bIsLine = false;
 
 		FExCenterArc()
@@ -153,6 +154,18 @@ namespace PCGExMath::Geo
 			 * @param MaxLength 
 			 */
 		FExCenterArc(const FVector& A1, const FVector& B1, const FVector& A2, const FVector& B2, const double MaxLength = 100000);
+
+		/**
+		 * Arc tangent to TangentDir at A, passing through C.
+		 * Produces the unique seamless arc that leaves A along +TangentDir and reaches C; both A and C lie exactly on it.
+		 * Robust for any C off the tangent line (no synthetic corner needed); sets bIsLine when C is near-collinear
+		 * with TangentDir or TangentDir is degenerate (zero-length).
+		 * @param A Start point, lies on the arc (Alpha 0)
+		 * @param TangentDir Direction the arc departs A along. Need not be normalized, but its SIGN matters:
+		 *                   flipping it yields the complementary arc (the sweep going the other way around the circle).
+		 * @param C End point, lies on the arc (Alpha 1)
+		 */
+		static FExCenterArc MakeTangent(const FVector& A, const FVector& TangentDir, const FVector& C);
 
 		FORCEINLINE double GetLength() const
 		{
