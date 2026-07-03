@@ -55,12 +55,19 @@ bool FPCGExExtrudePathElement::Boot(FPCGExContext* InContext) const
 		PCGEX_VALIDATE_NAME(Settings->SubdivisionFlagName)
 	}
 
-	// Arc & Custom profiles curve the segment away from the path tangent, which needs the extrusion direction to
-	// differ from the path. Path Direction is always collinear, so warn once here rather than per-path at runtime.
-	const bool bWantsCurvedProfile = Settings->Type == EPCGExExtrudeProfileType::Custom || (Settings->Type == EPCGExExtrudeProfileType::Arc && Settings->bSubdivide);
-	if (bWantsCurvedProfile && Settings->DirectionMode == EPCGExExtrudeDirection::PathDirection && !Settings->bQuietDegenerateProfileWarning)
+	const bool bZeroConstantDirection = Settings->Direction.Input == EPCGExInputValueType::Constant && Settings->Direction.Constant.IsNearlyZero();
+
+	if (Settings->DirectionMode == EPCGExExtrudeDirection::Custom && bZeroConstantDirection)
 	{
-		PCGE_LOG(Warning, GraphAndLog, FTEXT("Arc/Custom profiles need a Custom extrusion direction angled from the path; with Path Direction the new segment stays straight."));
+		PCGE_LOG(Warning, GraphAndLog, FTEXT("Custom extrusion direction is a zero-length constant; no endpoint will be extruded."));
+	}
+
+	// Arc & Custom profiles curve the segment away from the path tangent, which needs the extrusion direction to
+	// differ from the path. Path Direction with a zero offset is always collinear, so warn once here rather than per-path at runtime.
+	const bool bWantsCurvedProfile = Settings->Type == EPCGExExtrudeProfileType::Custom || (Settings->Type == EPCGExExtrudeProfileType::Arc && Settings->bSubdivide);
+	if (bWantsCurvedProfile && Settings->DirectionMode == EPCGExExtrudeDirection::PathDirection && bZeroConstantDirection && !Settings->bQuietDegenerateProfileWarning)
+	{
+		PCGE_LOG(Warning, GraphAndLog, FTEXT("Arc/Custom profiles need an extrusion direction angled from the path; with Path Direction and a zero offset the new segment stays straight."));
 	}
 
 	if (Settings->Type == EPCGExExtrudeProfileType::Custom &&
@@ -142,13 +149,10 @@ namespace PCGExExtrudePath
 			return false;
 		}
 
-		if (Settings->DirectionMode == EPCGExExtrudeDirection::Custom)
+		DirectionGetter = Settings->Direction.GetValueSetting();
+		if (!DirectionGetter->Init(PointDataFacade))
 		{
-			DirectionGetter = Settings->Direction.GetValueSetting();
-			if (!DirectionGetter->Init(PointDataFacade))
-			{
-				return false;
-			}
+			return false;
 		}
 
 		if (bProfileActive && Settings->Type != EPCGExExtrudeProfileType::Custom)
@@ -243,22 +247,28 @@ namespace PCGExExtrudePath
 			return 0;
 		}
 
-		FVector Dir;
+		// Raw extrusion direction in Custom mode, offset added to the path tangent in Path Direction mode
+		FVector Dir = DirectionGetter->Read(EndpointIdx);
+		if (Settings->Direction.bFlip)
+		{
+			Dir *= -1;
+		}
+		if (Settings->bTransformDirection)
+		{
+			Dir = InTransforms[EndpointIdx].GetRotation().RotateVector(Dir);
+		}
+
 		if (Settings->DirectionMode == EPCGExExtrudeDirection::PathDirection)
 		{
-			Dir = T;
+			// Unless magnitude matters, the offset weighs equally with the unit tangent; a zero offset leaves T untouched
+			if (!Settings->bOffsetMagnitudeMatters)
+			{
+				Dir = Dir.GetSafeNormal();
+			}
+			Dir = (T + Dir).GetSafeNormal();
 		}
 		else
 		{
-			Dir = DirectionGetter->Read(EndpointIdx);
-			if (Settings->Direction.bFlip)
-			{
-				Dir *= -1;
-			}
-			if (Settings->bTransformDirection)
-			{
-				Dir = InTransforms[EndpointIdx].GetRotation().RotateVector(Dir);
-			}
 			Dir = Dir.GetSafeNormal();
 		}
 
