@@ -16,6 +16,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExBlendingDetails.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Types/PCGExAttributeIdentity.h"
 
 #define LOCTEXT_NAMESPACE "PCGExClusterDiffuse"
 #define PCGEX_NAMESPACE ClusterDiffuse
