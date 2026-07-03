@@ -183,6 +183,17 @@ namespace PCGExClusters
 		~FCluster();
 
 		bool BuildFrom(const TMap<uint32, int32>& InEndpointsLookup, const TArray<int32>* InExpectedAdjacency);
+
+		/**
+		 * Builds this cluster from pre-flattened subgraph edges.
+		 * Preconditions (satisfied by FSubGraph::BuildCluster, the only intended call path):
+		 * - NodeIndexLookup is non-null and holds -1 for every point index appearing in
+		 *   InEdges (it is created fresh per graph compile); entries are written during
+		 *   the build and become the lookup's final Point Index -> Node Index content.
+		 * - Subgraphs partition vtx points, so concurrent builds sharing the lookup
+		 *   write disjoint entries.
+		 * - InNumNodes is the exact number of unique endpoints in InEdges.
+		 */
 		void BuildFromSubgraphData(const TSharedPtr<PCGExData::FFacade>& InVtxFacade, const TSharedPtr<PCGExData::FFacade>& InEdgeFacade, const TArray<FEdge>& InEdges, const int32 InNumNodes);
 
 		bool IsValidWith(const TSharedRef<PCGExData::FPointIO>& InVtxIO, const TSharedRef<PCGExData::FPointIO>& InEdgesIO) const;
@@ -467,7 +478,12 @@ namespace PCGExClusters
 		}
 
 	protected:
+		/** Builds Nodes, their links and the node bounds from the already-populated Edges
+		 * array, writing NodeIndexLookup along the way. Requires the lookup to hold -1 for
+		 * every point index the edges reference; InNumNodesHint must be >= the number of
+		 * unique edge endpoints (it is used as allocation size by the parallel path). */
+		void BuildAdjacency_Unsafe(const int32 InNumNodesHint);
+
 		int32 GetOrCreateNode_Unsafe(const int32 PointIndex);
-		int32 GetOrCreateNode_Unsafe(TSparseArray<int32>& InLookup, const int32 PointIndex);
 	};
 }

@@ -10,11 +10,6 @@
 
 #include "PCGExClipper2Offset.generated.h"
 
-namespace PCGExClipper2
-{
-	class FPolyline;
-}
-
 UENUM(BlueprintType)
 enum class EPCGExClipper2OffsetIterationCount : uint8
 {
@@ -36,7 +31,7 @@ class UPCGExClipper2OffsetSettings : public UPCGExClipper2ProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(Clipper2Offset, "Clipper2 : Offset", "Does a Clipper2 offset operation with optional dual (inward+outward) offset.");
+	PCGEX_NODE_INFOS(Clipper2Offset, "Clipper2 : Offset", "Does a Clipper2 offset operation.");
 #endif
 
 protected:
@@ -99,13 +94,6 @@ public:
 	/** Write the iteration index to a tag */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output|Tagging", meta=(PCG_Overridable, EditCondition="bTagIteration"))
 	FString IterationTag = TEXT("OffsetNum");
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output|Tagging", meta=(InlineEditConditionToggle))
-	bool bTagDual = false;
-
-	/** Write this tag on the dual (negative) offsets */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output|Tagging", meta=(PCG_Overridable, EditCondition="bTagDual"))
-	FString DualTag = TEXT("Dual");
 
 	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 	virtual bool SupportOpenMainPaths() const override;

@@ -176,36 +176,40 @@ namespace PCGExClusterDiffuse
 			return;
 		}
 
-		const int32 NumVtx = VtxDataFacade->GetNum();
-
 		// Per-vtx "does the original value participate" toggle (constant or attribute); full read (grouping below hits arbitrary vtx).
 		const TSharedPtr<PCGExDetails::TSettingValue<bool>> ParticipatesValue = Settings->VtxParticipates.GetValueSetting();
 		const bool bHasParticipates = ParticipatesValue && ParticipatesValue->Init(VtxDataFacade, false);
 
-		// Per reached vtx, collect every seed that touched it. Built single-threaded (growth has finished);
-		// no dedup needed except the self-participation case handled below.
-		VtxContributors.Empty();
-		VtxContributors.SetNum(NumVtx);
-
-		// Count contributors per vtx first so each inner array is reserved to its exact size (no reallocation growth
-		// on dense diffusions). MaxContributors also sizes the per-thread scratch buffers in the blend pass below.
+		// Per reached node, collect every seed that touched it, in CSR layout (count -> prefix-sum -> fill:
+		// one flat allocation instead of one heap array per reached vtx). Built single-threaded (growth has
+		// finished); no dedup needed except the self-participation case handled below.
+		// MaxContributors sizes the per-thread scratch buffers in the blend pass.
 		int32 MaxContributors = 0;
 		{
 			TArray<int32> Counts;
-			Counts.Init(0, NumVtx);
+			Counts.Init(0, NumNodes);
 			for (const TSharedPtr<PCGExFloodFill::FDiffusion>& Diffusion : Diffusions)
 			{
 				for (const PCGExFloodFill::FCandidate& Candidate : Diffusion->Captured)
 				{
-					Counts[Candidate.Node->PointIndex]++;
+					Counts[Candidate.Node->Index]++;
 				}
 			}
-			for (int32 i = 0; i < NumVtx; i++)
+
+			// Prefix sum, with one slack slot per reached node for the potential participation self-entry.
+			ContribOffsets.SetNumUninitialized(NumNodes);
+			int32 RunningTotal = 0;
+			for (int32 i = 0; i < NumNodes; i++)
 			{
-				VtxContributors[i].Reserve(Counts[i]);
-				MaxContributors = FMath::Max(MaxContributors, Counts[i]);
+				ContribOffsets[i] = RunningTotal;
+				const int32 Count = Counts[i];
+				RunningTotal += Count + ((bHasParticipates && Count > 0) ? 1 : 0);
+				MaxContributors = FMath::Max(MaxContributors, Count);
 			}
 			MaxContributors += bHasParticipates ? 1 : 0;
+
+			Contributions.SetNumUninitialized(RunningTotal);
+			ContribEnds = ContribOffsets; // Write cursors
 		}
 
 		for (const TSharedPtr<PCGExFloodFill::FDiffusion>& Diffusion : Diffusions)
@@ -221,25 +225,32 @@ namespace PCGExClusterDiffuse
 			{
 				const double NormDepth = static_cast<double>(Candidate.Depth) * InvMaxDepth;
 				const double NormDist = Candidate.PathDistance * InvMaxDist;
-				VtxContributors[Candidate.Node->PointIndex].Add(FContribution{SeedVtx, SeedPoint, Candidate.Depth, NormDepth, NormDist, Candidate.PathDistance});
+				Contributions[ContribEnds[Candidate.Node->Index]++] = FContribution{SeedVtx, SeedPoint, Candidate.Depth, NormDepth, NormDist, Candidate.PathDistance};
 			}
 		}
 
 		// Add each reached vtx's own value as a contributor (depth 0), skipping vtx that are their own seed (avoid double-counting).
 		if (bHasParticipates)
 		{
-			for (int32 VtxIndex = 0; VtxIndex < NumVtx; VtxIndex++)
+			for (int32 NodeIndex = 0; NodeIndex < NumNodes; NodeIndex++)
 			{
-				TArray<FContribution>& Contributors = VtxContributors[VtxIndex];
-				if (Contributors.IsEmpty() || !ParticipatesValue->Read(VtxIndex))
+				const int32 Start = ContribOffsets[NodeIndex];
+				const int32 End = ContribEnds[NodeIndex];
+				if (Start == End)
+				{
+					continue;
+				}
+
+				const int32 VtxIndex = Cluster->GetNodePointIndex(NodeIndex);
+				if (!ParticipatesValue->Read(VtxIndex))
 				{
 					continue;
 				}
 
 				bool bSelfPresent = false;
-				for (const FContribution& C : Contributors)
+				for (int32 i = Start; i < End; i++)
 				{
-					if (C.SeedVtxIndex == VtxIndex)
+					if (Contributions[i].SeedVtxIndex == VtxIndex)
 					{
 						bSelfPresent = true;
 						break;
@@ -247,7 +258,7 @@ namespace PCGExClusterDiffuse
 				}
 				if (!bSelfPresent)
 				{
-					Contributors.Add(FContribution{VtxIndex, -1, 0, 0.0, 0.0, 0.0});
+					Contributions[ContribEnds[NodeIndex]++] = FContribution{VtxIndex, -1, 0, 0.0, 0.0, 0.0};
 				}
 			}
 		}
@@ -284,14 +295,17 @@ namespace PCGExClusterDiffuse
 
 			const TSharedPtr<PCGExDetails::TSettingValue<double>>& SeedFactor = This->Context->SeedFactorValue;
 
-			PCGEX_SCOPE_LOOP(Index)
+			// Scope loop runs over cluster NODE indices; the blend target is the node's vtx point index.
+			PCGEX_SCOPE_LOOP(NodeIndex)
 			{
-				const TArray<FContribution>& Contributors = This->VtxContributors[Index];
-				const int32 Count = Contributors.Num();
+				const int32 Count = This->ContribEnds[NodeIndex] - This->ContribOffsets[NodeIndex];
 				if (Count == 0)
 				{
 					continue;
 				}
+
+				const TArrayView<const FContribution> Contributors(This->Contributions.GetData() + This->ContribOffsets[NodeIndex], Count);
+				const int32 Index = This->Cluster->GetNodePointIndex(NodeIndex);
 
 				Weights.Reset(Count);
 
@@ -540,7 +554,7 @@ namespace PCGExClusterDiffuse
 			}
 		};
 
-		BlendDiffusions->StartSubLoops(NumVtx, PCGEX_CORE_SETTINGS.ClusterDefaultBatchChunkSize);
+		BlendDiffusions->StartSubLoops(NumNodes, PCGEX_CORE_SETTINGS.ClusterDefaultBatchChunkSize);
 	}
 
 	void FProcessor::Cleanup()
@@ -549,7 +563,9 @@ namespace PCGExClusterDiffuse
 		TDiffusionGrowthProcessor<FPCGExClusterDiffuseContext, UPCGExClusterDiffuseSettings>::Cleanup();
 		VtxBlender.Reset();
 		SeedBlender.Reset();
-		VtxContributors.Empty();
+		ContribOffsets.Empty();
+		ContribEnds.Empty();
+		Contributions.Empty();
 	}
 
 #pragma endregion

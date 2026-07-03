@@ -41,18 +41,35 @@ namespace PCGExFloodFill
 		// reintroduce it explicitly. (Concrete processors don't need this -- their base is non-dependent.)
 		using PCGExClusterMT::IProcessor::SharedThis;
 
-		TArray<int8> Seeded;
+		// Deterministic seed-node claims: per node, the LOWEST seed index that resolved to it (MAX_int32 = unclaimed).
+		TArray<int32> Seeded;
+		// Per seed, the node it resolved to (-1 when out of range / no node). Consumed by StartGrowth.
+		TArray<int32> SeedClosestNode;
+
 		TSharedPtr<FFillControlsHandler> FillControlsHandler;
 
-		TSharedPtr<PCGExMT::TScopedArray<TSharedPtr<FDiffusion>>> InitialDiffusions;
 		TArray<TSharedPtr<FDiffusion>> OngoingDiffusions;
 		TArray<TSharedPtr<FDiffusion>> Diffusions;        // Stopped diffusions, as to not iterate over them needlessly
+
+		// When true, ProcessRange exhausts each diffusion instead of stepping it by FillRate. Set by the
+		// growth driver when diffusions cannot interact (no claiming, no shared capture state) or when a
+		// single diffusion remains (no competitor left to interleave with).
+		bool bGrowthRunToCompletion = false;
 
 		/** Node-specific Process()-time setup, run before diffusion initialization. Return false to abort. */
 		virtual bool OnGrowthSetup() { return true; }
 
 		/** Per-vtx claim array shared across diffusions. Null disables claiming (overlapping diffusions). */
 		virtual TSharedPtr<TArray<int8>> GetInfluencesCount() const { return nullptr; }
+
+		/** Whether the node itself consumes FDiffusion::TravelStack (e.g. path output). Controls declare their own need. */
+		virtual bool NeedsTravelStack() const { return false; }
+
+		/** Per-diffusion growth rate; <= 0 means the seed vtx is preserved from diffusing. */
+		FORCEINLINE int32 ReadFillRate(const TSharedPtr<FDiffusion>& Diffusion) const
+		{
+			return FillRate->Read(Diffusion->GetSettingsIndex(this->Settings->Diffusion.FillRateSource));
+		}
 
 	public:
 		// Set by the owning batch; drives how many growth steps each diffusion takes per iteration.
@@ -77,12 +94,25 @@ namespace PCGExFloodFill
 				return false;
 			}
 
+			const int32 NumSeeds = this->Context->SeedsDataFacade->GetNum();
+			if (NumSeeds <= 0)
+			{
+				return false;
+			}
+
 			FillControlsHandler = MakeShared<FFillControlsHandler>(this->Context, this->Cluster, this->VtxDataFacade, this->EdgeDataFacade, this->Context->SeedsDataFacade, this->Context->FillControlFactories);
 
 			FillControlsHandler->HeuristicsHandler = this->HeuristicsHandler;
 			FillControlsHandler->InfluencesCount = GetInfluencesCount();
+			FillControlsHandler->bNeedsTravelStack |= NeedsTravelStack();
 
-			Seeded.Init(0, this->Cluster->Nodes->Num());
+			Seeded.Init(MAX_int32, this->Cluster->Nodes->Num());
+			SeedClosestNode.Init(-1, NumSeeds);
+
+			if (this->Settings->bUseOctreeSearch)
+			{
+				this->Cluster->RebuildOctree(this->Settings->Seeds.SeedPicking.PickingMethod);
+			}
 
 			PCGEX_ASYNC_GROUP_CHKD(this->TaskManager, DiffusionInitialization)
 			DiffusionInitialization->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
@@ -91,22 +121,10 @@ namespace PCGExFloodFill
 				This->StartGrowth();
 			};
 
-			DiffusionInitialization->OnPrepareSubLoopsCallback = [PCGEX_ASYNC_THIS_CAPTURE](const TArray<PCGExMT::FScope>& Loops)
-			{
-				PCGEX_ASYNC_THIS
-				This->InitialDiffusions = MakeShared<PCGExMT::TScopedArray<TSharedPtr<FDiffusion>>>(Loops);
-			};
-
-			if (this->Settings->bUseOctreeSearch)
-			{
-				this->Cluster->RebuildOctree(this->Settings->Seeds.SeedPicking.PickingMethod);
-			}
-
 			DiffusionInitialization->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
 			{
 				PCGEX_ASYNC_THIS
 
-				const TArray<PCGExClusters::FNode>& Nodes = *This->Cluster->Nodes.Get();
 				TConstPCGValueRange<FTransform> SeedTransforms = This->Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
 
 				PCGEX_SCOPE_LOOP(Index)
@@ -114,39 +132,56 @@ namespace PCGExFloodFill
 					FVector SeedLocation = SeedTransforms[Index].GetLocation();
 					const int32 ClosestIndex = This->Cluster->FindClosestNode(SeedLocation, This->Settings->Seeds.SeedPicking.PickingMethod);
 
-					if (ClosestIndex < 0)
+					if (ClosestIndex < 0 || !This->Settings->Seeds.SeedPicking.WithinDistance(This->Cluster->GetPos(ClosestIndex), SeedLocation))
 					{
 						continue;
 					}
 
-					const PCGExClusters::FNode* SeedNode = &Nodes[ClosestIndex];
-					if (!This->Settings->Seeds.SeedPicking.WithinDistance(This->Cluster->GetPos(SeedNode), SeedLocation) || FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
-					{
-						continue;
-					}
+					This->SeedClosestNode[Index] = ClosestIndex;
 
-					TSharedPtr<FDiffusion> NewDiffusion = MakeShared<FDiffusion>(This->FillControlsHandler, This->Cluster, SeedNode);
-					NewDiffusion->Index = Index;
-					This->InitialDiffusions->Get(Scope)->Add(NewDiffusion);
+					// Contested nodes go to the LOWEST seed index -- atomic min keeps the outcome
+					// deterministic regardless of thread scheduling.
+					int32 Current = This->Seeded[ClosestIndex];
+					while (Index < Current)
+					{
+						const int32 Prev = FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], Index, Current);
+						if (Prev == Current)
+						{
+							break;
+						}
+						Current = Prev;
+					}
 				}
 			};
 
-			if (this->Context->SeedsDataFacade->GetNum() <= 0)
-			{
-				return false;
-			}
-
-			DiffusionInitialization->StartSubLoops(this->Context->SeedsDataFacade->GetNum(), PCGEX_CORE_SETTINGS.ClusterDefaultBatchChunkSize);
+			DiffusionInitialization->StartSubLoops(NumSeeds, PCGEX_CORE_SETTINGS.ClusterDefaultBatchChunkSize);
 
 			return true;
 		}
 
 		void StartGrowth()
 		{
-			Seeded.Empty();
+			// Materialize diffusions for winning seeds, in ascending seed order (deterministic).
+			const int32 NumSeeds = SeedClosestNode.Num();
+			const TArray<PCGExClusters::FNode>& Nodes = *this->Cluster->Nodes.Get();
 
-			InitialDiffusions->Collapse(OngoingDiffusions);
-			InitialDiffusions.Reset();
+			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; SeedIdx++)
+			{
+				const int32 NodeIdx = SeedClosestNode[SeedIdx];
+				if (NodeIdx < 0 || Seeded[NodeIdx] != SeedIdx)
+				{
+					// No node in range, or the node went to a lower seed index
+					continue;
+				}
+
+				TSharedPtr<FDiffusion> NewDiffusion = MakeShared<FDiffusion>(FillControlsHandler, this->Cluster, &Nodes[NodeIdx]);
+				NewDiffusion->Index = OngoingDiffusions.Num();
+				NewDiffusion->SeedIndex = SeedIdx;
+				OngoingDiffusions.Add(NewDiffusion);
+			}
+
+			Seeded.Empty();
+			SeedClosestNode.Empty();
 
 			if (OngoingDiffusions.IsEmpty())
 			{
@@ -155,8 +190,8 @@ namespace PCGExFloodFill
 				return;
 			}
 
-			// Prepare control handler before initializing diffusion
-			// since the init does a first probing pass
+			// Prepare control handler before initializing diffusions since the init does a first probing pass.
+			// This is also what makes the final diffusion count (and thus per-diffusion reserves) available to Init.
 			if (!FillControlsHandler->PrepareForDiffusions(OngoingDiffusions, this->Settings->Diffusion))
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, this->Context, FTEXT("Fill controls handler failed to prepare for diffusions. Check that all fill control inputs are valid."));
@@ -164,13 +199,15 @@ namespace PCGExFloodFill
 				return;
 			}
 
-			for (int i = 0; i < OngoingDiffusions.Num(); i++)
-			{
-				TSharedPtr<FDiffusion> Diffusion = OngoingDiffusions[i];
-				const int32 InitIndex = Diffusion->Index;
-				Diffusion->Index = i;
-				Diffusion->Init(InitIndex);
-			}
+			// Init only touches per-diffusion state (plus each diffusion's unique slot in the shared claim array),
+			// so diffusions initialize concurrently -- allocation & the first probe are the heavy parts.
+			PCGExMT::ParallelOrSequential(
+				OngoingDiffusions.Num(),
+				[&](const int32 i)
+				{
+					OngoingDiffusions[i]->Init();
+				},
+				2, EParallelForFlags::Unbalanced);
 
 			Diffusions.Reserve(OngoingDiffusions.Num());
 
@@ -179,28 +216,52 @@ namespace PCGExFloodFill
 
 		void Grow()
 		{
-			if (OngoingDiffusions.IsEmpty())
+			// Iterative drivers only: growth used to re-enter itself (Grow -> round -> completion -> Grow),
+			// stacking 3+ frames per round -- a stack overflow on large clusters at low fill rates.
+
+			if (this->Settings->Processing != EPCGExFloodFillProcessing::Parallel)
 			{
+				// Sequential: exhaust one diffusion at a time, in seed order.
+				for (const TSharedPtr<FDiffusion>& Diffusion : OngoingDiffusions)
+				{
+					if (ReadFillRate(Diffusion) <= 0)
+					{
+						// Zero rate preserves the seed vtx from diffusing
+						Diffusion->bStopped = true;
+					}
+					while (!Diffusion->bStopped)
+					{
+						Diffusion->Grow();
+					}
+					Diffusions.Add(Diffusion);
+				}
+				OngoingDiffusions.Reset();
 				return;
 			}
 
-			if (this->Settings->Processing == EPCGExFloodFillProcessing::Parallel)
+			// Parallel: without claiming or shared capture state, diffusions cannot interact -- lockstep
+			// interleaving buys nothing, so each diffusion runs to completion in a single pass.
+			bGrowthRunToCompletion = !FillControlsHandler->InfluencesCount && !FillControlsHandler->bHasCaptureNotify;
+
+			while (!OngoingDiffusions.IsEmpty())
 			{
-				// Grow all by a single step
-				this->StartParallelLoopForRange(OngoingDiffusions.Num());
-				return;
+				// StartParallelLoopForRange bails without running compaction when the work handle dies;
+				// bail with it or this loop never terminates.
+				if (!this->WorkHandle.IsValid())
+				{
+					return;
+				}
+
+				// A single competitor left has nothing to interleave with -- exhaust it.
+				if (OngoingDiffusions.Num() == 1)
+				{
+					bGrowthRunToCompletion = true;
+				}
+
+				// One synchronous pass; OnRangeProcessingComplete compacts OngoingDiffusions.
+				// Run-to-completion passes use single-iteration chunks for work stealing across uneven diffusions.
+				this->StartParallelLoopForRange(OngoingDiffusions.Num(), bGrowthRunToCompletion ? 1 : -1);
 			}
-
-			// Grow one entirely
-			TSharedPtr<FDiffusion> Diffusion = OngoingDiffusions.Pop();
-			while (!Diffusion->bStopped)
-			{
-				Diffusion->Grow();
-			}
-
-			Diffusions.Add(Diffusion);
-
-			Grow(); // Move to the next
 		}
 
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override
@@ -208,7 +269,25 @@ namespace PCGExFloodFill
 			PCGEX_SCOPE_LOOP(Index)
 			{
 				const TSharedPtr<FDiffusion> Diffusion = OngoingDiffusions[Index];
-				const int32 CurrentFillRate = FillRate->Read(Diffusion->GetSettingsIndex(this->Settings->Diffusion.FillRateSource));
+
+				const int32 CurrentFillRate = ReadFillRate(Diffusion);
+				if (CurrentFillRate <= 0)
+				{
+					// Zero rate preserves the seed vtx from diffusing. Park the diffusion for good --
+					// leaving it ongoing would spin the growth loop forever.
+					Diffusion->bStopped = true;
+					continue;
+				}
+
+				if (bGrowthRunToCompletion)
+				{
+					while (!Diffusion->bStopped)
+					{
+						Diffusion->Grow();
+					}
+					continue;
+				}
+
 				for (int i = 0; i < CurrentFillRate; i++)
 				{
 					Diffusion->Grow();
@@ -218,10 +297,10 @@ namespace PCGExFloodFill
 
 		virtual void OnRangeProcessingComplete() override
 		{
-			// A single growth iteration pass is complete
+			// A single growth pass is complete: move stopped diffusions in another castle.
+			// Compaction only -- the Grow() driver loop owns re-entry.
 			const int32 OngoingNum = OngoingDiffusions.Num();
 
-			// Move stopped diffusions in another castle
 			int32 WriteIndex = 0;
 			for (int32 i = 0; i < OngoingNum; i++)
 			{
@@ -237,13 +316,6 @@ namespace PCGExFloodFill
 			}
 
 			OngoingDiffusions.SetNum(WriteIndex);
-
-			if (OngoingDiffusions.IsEmpty())
-			{
-				return;
-			}
-
-			Grow();
 		}
 
 		virtual void Cleanup() override
@@ -251,7 +323,8 @@ namespace PCGExFloodFill
 			PCGExClusterMT::TProcessor<TContext, TSettings>::Cleanup();
 
 			// Make sure we flush these ASAP
-			InitialDiffusions.Reset();
+			Seeded.Empty();
+			SeedClosestNode.Empty();
 			OngoingDiffusions.Reset();
 			Diffusions.Reset();
 			FillControlsHandler.Reset();

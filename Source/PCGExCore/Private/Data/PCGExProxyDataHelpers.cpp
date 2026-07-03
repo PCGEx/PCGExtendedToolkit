@@ -522,10 +522,7 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 			// and shared source facades distribute contention while retaining their read proxies.
 			// Descriptors with no pinnable facade fall back to the context pool.
 			
-			// TODO BUG : Something really bad is happening here when using FUnionProcessors with union blender
-			// Need to double-check data-to-element domain path and how it's possibly messed up by
-			// multi-layered multi-source blending during fusing
-			IBufferProxyPool& Pool = /* InDataFacade ? InDataFacade->GetProxyPool() : */ *InContext->BufferProxyPool;
+			IBufferProxyPool& Pool = InDataFacade ? InDataFacade->GetProxyPool() : *InContext->BufferProxyPool;
 			return Pool.GetOrCreate(InDescriptor, Factory);
 		}
 		return Factory();

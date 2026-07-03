@@ -40,8 +40,11 @@ namespace PCGExData
 		Details.Filter(Identities);
 
 		const int32 NumAttributes = Identities.Num();
-		Readers.Reserve(NumAttributes);
-		Writers.Reserve(NumAttributes);
+
+		// Readers/Writers stay index-aligned with Identities (null on failure) -- the typed Forward
+		// paths cast by Identities[i]'s type, so a compacted array would cast to the wrong type.
+		Readers.Init(nullptr, NumAttributes);
+		Writers.Init(nullptr, NumAttributes);
 
 		// Init forwarded attributes on target
 		for (int i = 0; i < NumAttributes; i++)
@@ -64,8 +67,8 @@ namespace PCGExData
 					{
 						return;
 					}
-					Readers.Add(Reader);
-					Writers.Add(Writer);
+					Readers[i] = Reader;
+					Writers[i] = Writer;
 				},
 				[&]()
 				{
@@ -85,8 +88,8 @@ namespace PCGExData
 					{
 						return;
 					}
-					Readers.Add(Reader);
-					Writers.Add(Writer);
+					Readers[i] = Reader;
+					Writers[i] = Writer;
 				});
 		}
 	}
@@ -106,7 +109,7 @@ namespace PCGExData
 		for (int i = 0; i < NumAttributes; i++)
 		{
 			const FAttributeIdentity& Identity = Identities[i];
-			if (!Readers.IsValidIndex(i) || !Writers.IsValidIndex(i))
+			if (!Readers.IsValidIndex(i) || !Readers[i] || !Writers[i])
 			{
 				continue;
 			}
@@ -127,6 +130,63 @@ namespace PCGExData
 					PCGExTypes::FScopedTypedValue Scratch = Readers[i]->MakeScopedValue();
 					Readers[i]->ReadVoid(SourceIndex, Scratch);
 					Writers[i]->SetVoid(TargetIndex, Scratch);
+				});
+		}
+	}
+
+	void FDataForwardHandler::Forward(const int32 SourceIndex, const TArray<int32>& Indices)
+	{
+		// Prepared-target variant (requires the target-facade constructor): fans one source row out to
+		// many target indices through the pre-created writers. No lazy buffer/attribute creation happens
+		// here, so this is safe to call from concurrent tasks once the handler is built.
+		if (Indices.IsEmpty())
+		{
+			return;
+		}
+
+		const int32 NumAttributes = Identities.Num();
+
+		for (int i = 0; i < NumAttributes; i++)
+		{
+			const FAttributeIdentity& Identity = Identities[i];
+			if (!Readers.IsValidIndex(i) || !Readers[i] || !Writers[i])
+			{
+				continue;
+			}
+
+			PCGExMetaHelpers::ExecuteWithRightType(
+				Identity,
+				[&](auto DummyValue)
+				{
+					using T = decltype(DummyValue);
+					TSharedPtr<TBuffer<T>> Reader = StaticCastSharedPtr<TBuffer<T>>(Readers[i]);
+					TSharedPtr<TBuffer<T>> Writer = StaticCastSharedPtr<TBuffer<T>>(Writers[i]);
+
+					const T ForwardValue = Reader->Read(SourceIndex);
+
+					if (Writer->GetUnderlyingDomain() == EDomainType::Elements)
+					{
+						TSharedPtr<TArrayBuffer<T>> ElementsWriter = StaticCastSharedPtr<TArrayBuffer<T>>(Writer);
+						TArray<T>& Values = *ElementsWriter->GetOutValues();
+						for (const int32 TargetIndex : Indices)
+						{
+							Values[TargetIndex] = ForwardValue;
+						}
+					}
+					else
+					{
+						Writer->SetValue(0, ForwardValue);
+					}
+				},
+				[&]()
+				{
+					// Property-backed: read the source slot once to scratch, deep-copy onto every target.
+					PCGExTypes::FScopedTypedValue Scratch = Readers[i]->MakeScopedValue();
+					Readers[i]->ReadVoid(SourceIndex, Scratch);
+					for (const int32 TargetIndex : Indices)
+					{
+						Writers[i]->SetVoid(TargetIndex, Scratch);
+					}
 				});
 		}
 	}

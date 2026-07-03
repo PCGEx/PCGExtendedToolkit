@@ -190,15 +190,15 @@ struct FPCGExClusterDiffusionContext final : FPCGExClustersProcessorContext
 
 	TSharedPtr<PCGExData::FFacade> SeedsDataFacade;
 	FPCGExAttributeToTagDetails SeedAttributesToPathTags;
-	TSharedPtr<PCGExData::FDataForwardHandler> SeedForwardHandler;
+	// Adjusted copy of SeedForwarding; each batch builds its own prepared handler from it (writers
+	// target the batch's vtx facade and must be created single-threaded at batch scope).
+	FPCGExForwardDetails SeedForwardDetails;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Paths;
 
 	PCGEX_FOREACH_FIELD_CLUSTER_DIFF(PCGEX_OUTPUT_DECL_TOGGLE)
 
 	FPCGExFloodFillEdgeDirectionDetails EdgeDirectionOutput;
-
-	int32 ExpectedPathCount = 0;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL
@@ -229,11 +229,15 @@ namespace PCGExClusterDiffusion
 		// Shared per-vtx claim array, provided to the growth base via GetInfluencesCount().
 		TSharedPtr<TArray<int8>> InfluencesCount;
 		TSharedPtr<PCGExBlending::FBlendOpsManager> BlendOpsManager;
+		// Batch-owned prepared forward handler (writers pre-created on the shared vtx facade).
+		TSharedPtr<PCGExData::FDataForwardHandler> SeedForwardHandler;
 
 		TSharedPtr<PCGExFloodFill::FDiffusionPathWriter> PathWriter;
 		TSharedPtr<TArray<int32>> DiffusionDepths; // Vtx point index -> diffusion depth, for NormalizedPathDepth
 
-		TSharedPtr<PCGExMT::TScopedNumericValue<double>> MaxDistanceValue;
+		// Per diffusion (indexed by FDiffusion::Index), the first path ordinal it owns -- prefix sums of
+		// endpoint counts, so concurrent path tasks assign deterministic, collision-free IOIndices.
+		TArray<int32> PathIOBases;
 
 		FPCGExFloodFillEdgeDirectionDetails EdgeDirectionDetails;
 
@@ -242,6 +246,12 @@ namespace PCGExClusterDiffusion
 		//~ TDiffusionGrowthProcessor seams
 		virtual bool OnGrowthSetup() override;
 		virtual TSharedPtr<TArray<int8>> GetInfluencesCount() const override;
+
+		virtual bool NeedsTravelStack() const override
+		{
+			// Path output walks the travel stack back to the seed
+			return Settings->PathOutput != EPCGExFloodFillPathOutput::None;
+		}
 
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
@@ -270,6 +280,8 @@ namespace PCGExClusterDiffusion
 	protected:
 		TSharedPtr<TArray<int8>> InfluencesCount;
 		TSharedPtr<PCGExBlending::FBlendOpsManager> BlendOpsManager;
+		// Built once in Process() (single-threaded) so the parallel Diffuse pass never creates writables on the shared vtx facade.
+		TSharedPtr<PCGExData::FDataForwardHandler> SeedForwardHandler;
 		TSharedPtr<TArray<int32>> DiffusionDepths; // Vtx point index -> diffusion depth, for NormalizedPathDepth
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> FillRate;
 

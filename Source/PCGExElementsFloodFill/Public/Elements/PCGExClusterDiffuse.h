@@ -170,8 +170,12 @@ namespace PCGExClusterDiffuse
 		friend FBatch;
 
 	protected:
-		// Per reached vtx (indexed by vtx point index), the seeds that touched it. Built after growth.
-		TArray<TArray<FContribution>> VtxContributors;
+		// Contributors in CSR layout, keyed by CLUSTER NODE index (not vtx point index): node i's
+		// contributors live in Contributions[ContribOffsets[i] .. ContribEnds[i]). Built after growth.
+		// One flat allocation for all contributors, sized to the cluster rather than the shared vtx collection.
+		TArray<int32> ContribOffsets;
+		TArray<int32> ContribEnds;
+		TArray<FContribution> Contributions;
 		// Layer 1: blends seed VTX values onto reached vtx (source & target = vtx facade).
 		TSharedPtr<PCGExBlending::FUnionOpsManager> VtxBlender;
 		// Layer 2: blends seeds-cloud values onto reached vtx (source = seeds facade, target = vtx facade).

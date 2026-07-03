@@ -84,6 +84,11 @@ public:
 
 	virtual bool IsValidCandidate(const PCGExFloodFill::FDiffusion* Diffusion, const PCGExFloodFill::FCandidate& From, const PCGExFloodFill::FCandidate& Candidate) override;
 
+	virtual bool WantsTravelStack() const override
+	{
+		return true; // Walks the travel stack to average values along the path
+	}
+
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> WindowSize;
 	TSharedPtr<PCGExDetails::TSettingValue<double>> Tolerance;

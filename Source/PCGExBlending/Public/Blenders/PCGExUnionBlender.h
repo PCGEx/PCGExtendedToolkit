@@ -84,6 +84,14 @@ namespace PCGExBlending
 
 		void AddSources(const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSet<FName>* IgnoreAttributeSet = nullptr, FGetSourceIdx GetSourceIdxFn = nullptr, const TSet<int32>* RelevantIOIndices = nullptr);
 
+		/** True once AddSources gathered at least one attribute to blend or carry over. Property blenders are only
+		 *  added during Init, so queried between AddSources and Init this tells whether the target will have
+		 *  attribute values written (i.e. needs valid metadata entry keys). */
+		bool HasAnyAttributeBlenders() const
+		{
+			return !Blenders.IsEmpty();
+		}
+
 		// bWantsDirectAccess replaces the previous "soft blending" concept
 		// Blenders will be initialized with an attribute instead of a buffer if it is enabled
 		bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& TargetData, PCGExData::EProxyFlags InProxyFlags = PCGExData::EProxyFlags::None);

@@ -43,6 +43,11 @@ namespace PCGExData
 		}
 
 		void Forward(const int32 SourceIndex, const int32 TargetIndex);
+
+		// Prepared-target variant (requires the target-facade constructor): fans one source row out to many
+		// target indices through the pre-created writers -- no lazy buffer creation, safe from concurrent tasks.
+		void Forward(const int32 SourceIndex, const TArray<int32>& Indices);
+
 		void Forward(const int32 SourceIndex, const TSharedPtr<FFacade>& InTargetDataFacade);
 		void Forward(const int32 SourceIndex, const TSharedPtr<FFacade>& InTargetDataFacade, const TArray<int32>& Indices);
 		void Forward(const int32 SourceIndex, UPCGMetadata* InTargetMetadata);

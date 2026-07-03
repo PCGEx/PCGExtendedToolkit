@@ -64,6 +64,8 @@ namespace PCGExData
 
 	bool FPointIO::InitializeOutput(const EIOInit InitOut)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIO::InitializeOutput);
+		
 		PCGEX_SHARED_CONTEXT(ContextHandle)
 
 		if (LastInit == InitOut)
@@ -736,12 +738,7 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 
 	const FPCGMetadataAttributeBase* FPointIO::FindConstAttribute(const FPCGAttributeIdentifier& InIdentifier, const EIOSide InSide) const
 	{
-		const UPCGBasePointData* Data = GetData(InSide);
-		if (!Data || !PCGExMetaHelpers::HasAttribute(Data, InIdentifier))
-		{
-			return nullptr;
-		}
-		return Data->Metadata->GetConstAttribute(InIdentifier);
+		return PCGExMetaHelpers::TryGetConstAttribute(GetData(InSide), InIdentifier);
 	}
 
 #pragma endregion

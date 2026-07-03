@@ -441,6 +441,18 @@ namespace PCGExMetaHelpers
 		return InMetadata->HasAttribute(Identifier);
 	}
 
+	const FPCGMetadataAttributeBase* TryGetConstAttribute(const UPCGMetadata* InMetadata, const FPCGAttributeIdentifier& Identifier)
+	{
+		if (!InMetadata)
+		{
+			return nullptr;
+		}
+		// GetConstMetadataDomain returns null quietly for supported-but-never-instantiated domains,
+		// unlike UPCGMetadata::GetConstAttribute which error-logs through WithConstMetadataDomain.
+		const FPCGMetadataDomain* Domain = InMetadata->GetConstMetadataDomain(Identifier.MetadataDomain);
+		return Domain ? Domain->GetConstAttribute(Identifier.Name) : nullptr;
+	}
+
 	FString GetSelectorDisplayName(const FPCGAttributePropertyInputSelector& InSelector)
 	{
 		const FName Name = InSelector.GetName();

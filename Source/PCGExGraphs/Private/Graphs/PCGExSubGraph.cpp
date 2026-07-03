@@ -315,11 +315,22 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 
 					TSet<int32> UniqueSourceIOIndices;
 
+					// Many edges share the same union root; appending its IO set once per
+					// root instead of once per edge avoids re-hashing the same entries.
+					TSet<int32> VisitedRoots;
+
 					for (const FEdge& E : FlattenedEdges)
 					{
 						const FGraphEdgeMetadata* EdgeMeta = ParentGraph->FindEdgeMetadata_Unsafe(E.IOIndex);
 						if (const FGraphEdgeMetadata* RootEdgeMeta = EdgeMeta ? ParentGraph->FindEdgeMetadata_Unsafe(EdgeMeta->RootIndex) : nullptr)
 						{
+							bool bAlreadyVisited = false;
+							VisitedRoots.Add(RootEdgeMeta->RootIndex, &bAlreadyVisited);
+							if (bAlreadyVisited)
+							{
+								continue;
+							}
+
 							if (ParentGraph->EdgesUnion->Size(RootEdgeMeta->RootIndex) > 0)
 							{
 								UniqueSourceIOIndices.Append(ParentGraph->EdgesUnion->GetIOSet(RootEdgeMeta->RootIndex));
@@ -345,6 +356,10 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 					}
 				}
 			}
+
+			// Fetched once here rather than per-scope in CompileRange, where parallel
+			// chunks would contend on the facade's buffer-map lock.
+			EdgeEndpointsWriter = EdgesDataFacade->GetWritable<int64>(PCGExClusters::Labels::Attr_PCGExEdgeIdx, -1, false, PCGExData::EBufferInit::New);
 
 			if (InBuilder->OutputDetails->bOutputEdgeLength)
 			{
@@ -411,9 +426,6 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 		{
 			return;
 		}
-
-		const TSharedPtr<PCGExData::TBuffer<int64>> EdgeEndpointsWriter = EdgesDataFacade->GetWritable<int64>(PCGExClusters::Labels::Attr_PCGExEdgeIdx, -1, false, PCGExData::EBufferInit::New);
-
 
 		UPCGBasePointData* OutVtxData = VtxDataFacade->GetOut();
 		UPCGBasePointData* OutEdgeData = EdgesDataFacade->GetOut();

@@ -74,6 +74,11 @@ int32 FPCGExFillControlOperation::GetProbeFanoutLimit(const PCGExFloodFill::FDif
 	return MAX_int32;
 }
 
+bool FPCGExFillControlOperation::WantsTravelStack() const
+{
+	return false;
+}
+
 int32 FPCGExFillControlOperation::GetSettingsIndex(const PCGExFloodFill::FDiffusion* Diffusion) const
 {
 	return *(SettingsIndex->GetData() + Diffusion->Index);

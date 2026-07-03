@@ -196,6 +196,9 @@ namespace PCGExPathSolidify
 			case EPCGExPathNormalDirection::AverageNormal:
 				PathNormal = StaticCastSharedPtr<PCGExPaths::TPathEdgeExtra<FVector>>(Path->AddExtra<PCGExPaths::FPathEdgeAvgNormal>(false, Up));
 				break;
+			case EPCGExPathNormalDirection::ParallelTransport:
+				PathNormal = StaticCastSharedPtr<PCGExPaths::TPathEdgeExtra<FVector>>(Path->AddExtra<PCGExPaths::FPathEdgeParallelTransportNormal>(false, Up));
+				break;
 			}
 		}
 
@@ -219,7 +222,7 @@ namespace PCGExPathSolidify
 		if (Settings->bReadConstructionFromAttribute)
 		{
 			RotationConstruction = PointDataFacade->GetBroadcaster<int32>(Settings->ConstructionAttribute, true);
-			if (!AxisOrder)
+			if (!RotationConstruction)
 			{
 				PCGEX_LOG_INVALID_ATTR_C(ExecutionContext, Rotation Construction, Settings->ConstructionAttribute)
 			}
@@ -298,7 +301,7 @@ namespace PCGExPathSolidify
 		{
 			return Settings->SolidificationOrder;
 		}
-		int32 CustomValue = PCGExMath::SanitizeIndex(AxisOrder->Read(Index), 5);
+		const int32 CustomValue = PCGExMath::SanitizeIndex(AxisOrder->Read(Index), static_cast<int32>(EPCGExAxisOrder::XZY), Settings->OrderSafety);
 		if (CustomValue == -1)
 		{
 			return Settings->SolidificationOrder;
@@ -308,24 +311,53 @@ namespace PCGExPathSolidify
 
 	EPCGExMakeRotAxis FProcessor::GetConstruction(const EPCGExAxisOrder Order, const int32 Index) const
 	{
+		const EPCGExMakeRotAxis Fallback = Settings->bUseConstructionMapping ? Context->RotationConstructionsMap[static_cast<int32>(Order)] : Settings->RotationConstruction;
+
 		if (!RotationConstruction)
 		{
-			if (Settings->bUseConstructionMapping)
-			{
-				return Context->RotationConstructionsMap[static_cast<int32>(Order)];
-			}
-			return Settings->RotationConstruction;
+			return Fallback;
 		}
-		int32 CustomValue = PCGExMath::SanitizeIndex(AxisOrder->Read(Index), 5);
+		const int32 CustomValue = PCGExMath::SanitizeIndex(RotationConstruction->Read(Index), static_cast<int32>(EPCGExMakeRotAxis::ZY), Settings->ConstructionSafety);
 		if (CustomValue == -1)
 		{
-			if (Settings->bUseConstructionMapping)
-			{
-				return Context->RotationConstructionsMap[static_cast<int32>(Order)];
-			}
-			return Settings->RotationConstruction;
+			return Fallback;
 		}
 		return static_cast<EPCGExMakeRotAxis>(CustomValue);
+	}
+
+	int32 FProcessor::FindReferenceEdge(const int32 Index) const
+	{
+		// Only reached for zero-length edges, so the walk cost stays out of the common path.
+		// Upstream first so the borrowed frame continues the path's flow.
+		if (bClosedLoop)
+		{
+			const int32 NumEdges = Path->NumEdges;
+			for (int32 Offset = 1; Offset < NumEdges; Offset++)
+			{
+				const int32 Prev = PCGExMath::Tile(Index - Offset, 0, NumEdges - 1);
+				if (!Path->Edges[Prev].Dir.IsZero())
+				{
+					return Prev;
+				}
+			}
+			return -1;
+		}
+
+		for (int32 Prev = Index - 1; Prev >= 0; Prev--)
+		{
+			if (!Path->Edges[Prev].Dir.IsZero())
+			{
+				return Prev;
+			}
+		}
+		for (int32 Next = Index + 1; Next < Path->NumEdges; Next++)
+		{
+			if (!Path->Edges[Next].Dir.IsZero())
+			{
+				return Next;
+			}
+		}
+		return -1;
 	}
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
@@ -354,15 +386,28 @@ namespace PCGExPathSolidify
 				continue;
 			}
 
+			int32 FrameIndex = Index;
+			if (Path->Edges[Index].Dir.IsZero())
+			{
+				// Zero-length edge (coincident points, e.g. beveled at a too-small scale): borrow the
+				// frame from the nearest valid edge so the point still solidifies coherently — its
+				// primary bounds naturally collapse to zero through the edge length.
+				FrameIndex = FindReferenceEdge(Index);
+				if (FrameIndex == -1)
+				{
+					// Fully degenerate path (all points coincident): nothing to align to
+					continue;
+				}
+			}
+
 			const int32 i = Index - Scope.Start;
 
-			const PCGExPaths::FPathEdge& Edge = Path->Edges[Index];
 			const double Length = PathLength->Get(Index);
 			const FVector Scale = Transforms[Index].GetScale3D();
 			const FVector InvScale = FVector(1 / Scale.X, 1 / Scale.Y, 1 / Scale.Z);
 
-			const FVector Normal = PathNormal ? PathNormal->Get(Index) : NormalGetter->Read(Index).GetSafeNormal();
-			const FVector RealXAxis = Edge.Dir;
+			const FVector Normal = PathNormal ? PathNormal->Get(FrameIndex) : NormalGetter->Read(Index).GetSafeNormal();
+			const FVector RealXAxis = Path->Edges[FrameIndex].Dir;
 			const FVector RealYAxis = FVector::CrossProduct(RealXAxis, Normal);
 			const FVector RealZAxis = FVector::CrossProduct(RealYAxis, RealXAxis);
 

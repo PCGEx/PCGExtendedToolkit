@@ -7,6 +7,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Math/PCGExMathAxis.h"
+#include "Misc/ScopeLock.h"
 #include "Paths/PCGExPathIntersectionDetails.h"
 #include "Paths/PCGExPathsHelpers.h"
 
@@ -499,7 +500,7 @@ namespace PCGExPaths
 
 	void FPathEdgeNormal::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
 	{
-		GetMutable(Edge.Start) = FVector::CrossProduct(Up, Edge.Dir).GetSafeNormal();
+		GetMutable(Edge.Start) = PCGExMath::SafeCrossNormal(Up, Edge.Dir);
 	}
 
 #pragma endregion
@@ -514,24 +515,29 @@ namespace PCGExPaths
 			return;
 		}
 
-		const FVector N = FVector::CrossProduct(Up, Edge.Dir).GetSafeNormal();
+		const FVector N = PCGExMath::SafeCrossNormal(Up, Edge.Dir);
 		Normals[Edge.Start] = N;
 		GetMutable(Edge.Start) = N;
 	}
 
 	void FPathEdgeBinormal::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
 	{
-		const FVector N = FVector::CrossProduct(Up, Edge.Dir).GetSafeNormal();
+		const FVector N = PCGExMath::SafeCrossNormal(Up, Edge.Dir);
 		Normals[Edge.Start] = N;
 
-		// Compute the angular bisector between the incoming and outgoing edge directions.
-		// Construct a quaternion that rotates by half the angle between the two directions,
-		// around their shared perpendicular axis. This gives a smooth "binormal" at the vertex.
+		// The angular bisector between the incoming and outgoing edge directions gives a smooth
+		// "binormal" at the vertex; for unit directions that is simply their normalized sum
+		// (equivalent to rotating the incoming direction by half the angle between them).
 		// If the result points away from the edge normal, flip it to maintain consistent orientation.
 		const FVector A = Path->DirToPrevPoint(Edge.Start);
-		FVector D = FQuat(FVector::CrossProduct(A, Edge.Dir).GetSafeNormal(), FMath::Acos(FVector::DotProduct(A, Edge.Dir)) * 0.5f).RotateVector(A);
+		FVector D = (A + Edge.Dir).GetSafeNormal();
 
-		if (FVector::DotProduct(N, D) < 0.0f)
+		if (D.IsZero())
+		{
+			// Collinear vertex: the bisector is undefined, fall back to the edge normal
+			D = N;
+		}
+		else if (FVector::DotProduct(N, D) < 0.0)
 		{
 			D *= -1;
 		}
@@ -551,14 +557,133 @@ namespace PCGExPaths
 			return;
 		}
 
-		GetMutable(Edge.Start) = FVector::CrossProduct(Up, Edge.Dir).GetSafeNormal();
+		GetMutable(Edge.Start) = PCGExMath::SafeCrossNormal(Up, Edge.Dir);
 	}
 
 	void FPathEdgeAvgNormal::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
 	{
-		const FVector A = FVector::CrossProduct(Up, Path->DirToPrevPoint(Edge.Start) * -1).GetSafeNormal();
-		const FVector B = FVector::CrossProduct(Up, Edge.Dir).GetSafeNormal();
-		GetMutable(Edge.Start) = FMath::Lerp(A, B, 0.5).GetSafeNormal();
+		const FVector A = PCGExMath::SafeCrossNormal(Up, Path->DirToPrevPoint(Edge.Start) * -1);
+		const FVector B = PCGExMath::SafeCrossNormal(Up, Edge.Dir);
+		FVector Avg = FMath::Lerp(A, B, 0.5).GetSafeNormal();
+
+		if (Avg.IsZero())
+		{
+			// Opposite edge normals (hairpin): the average is undefined, favor the current edge
+			Avg = B;
+		}
+
+		GetMutable(Edge.Start) = Avg;
+	}
+
+#pragma endregion
+
+#pragma region FPathEdgeParallelTransportNormal
+
+	void FPathEdgeParallelTransportNormal::ProcessSingleEdge(const FPath* Path, const FPathEdge& Edge)
+	{
+		ComputeAll(Path);
+	}
+
+	void FPathEdgeParallelTransportNormal::ProcessFirstEdge(const FPath* Path, const FPathEdge& Edge)
+	{
+		ComputeAll(Path);
+	}
+
+	void FPathEdgeParallelTransportNormal::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
+	{
+		ComputeAll(Path);
+	}
+
+	void FPathEdgeParallelTransportNormal::ProcessLastEdge(const FPath* Path, const FPathEdge& Edge)
+	{
+		ComputeAll(Path);
+	}
+
+	void FPathEdgeParallelTransportNormal::ComputeAll(const FPath* Path)
+	{
+		if (bComputed.load(std::memory_order_acquire))
+		{
+			return;
+		}
+
+		FScopeLock Lock(&ComputeLock);
+
+		if (bComputed.load(std::memory_order_relaxed))
+		{
+			return;
+		}
+
+		const int32 NumEdges = Path->NumEdges;
+
+		// Seed from the first edge with a usable direction; zero-length edges carry the running normal
+		int32 FirstUsableIndex = -1;
+		for (int i = 0; i < NumEdges; i++)
+		{
+			if (!Path->Edges[i].Dir.IsZero())
+			{
+				FirstUsableIndex = i;
+				break;
+			}
+		}
+
+		if (FirstUsableIndex == -1)
+		{
+			// Fully degenerate path (all points coincident)
+			for (int i = 0; i < NumEdges; i++)
+			{
+				GetMutable(i) = FVector::ZeroVector;
+			}
+			bComputed.store(true, std::memory_order_release);
+			return;
+		}
+
+		const FVector FirstUsableDir = Path->Edges[FirstUsableIndex].Dir;
+		FVector PrevDir = FirstUsableDir;
+		FVector N = PCGExMath::SafeCrossNormal(Up, FirstUsableDir);
+
+		for (int i = 0; i < NumEdges; i++)
+		{
+			const FVector Dir = Path->Edges[i].Dir;
+			if (!Dir.IsZero())
+			{
+				N = FQuat::FindBetweenNormals(PrevDir, Dir).RotateVector(N);
+
+				// Re-orthogonalize against the tangent to cancel accumulated numerical drift
+				const FVector Ortho = (N - FVector::DotProduct(N, Dir) * Dir).GetSafeNormal();
+				N = Ortho.IsZero() ? PCGExMath::SafeCrossNormal(Up, Dir) : Ortho;
+
+				PrevDir = Dir;
+			}
+
+			GetMutable(i) = N;
+		}
+
+		// Closed loop: transport across the seam and distribute the residual twist along the path
+		// so the frame does not jump between the last and first edge
+		if (bClosedLoop && NumEdges > 1)
+		{
+			const FVector SeamN = FQuat::FindBetweenNormals(PrevDir, FirstUsableDir).RotateVector(N);
+			const FVector FirstN = Get(FirstUsableIndex);
+			const double SeamTwist = FMath::Atan2(
+				FVector::DotProduct(FVector::CrossProduct(FirstN, SeamN), FirstUsableDir),
+				FVector::DotProduct(FirstN, SeamN));
+
+			if (!FMath::IsNearlyZero(SeamTwist))
+			{
+				const double TwistStep = SeamTwist / static_cast<double>(NumEdges);
+				for (int i = 1; i < NumEdges; i++)
+				{
+					const FVector Dir = Path->Edges[i].Dir;
+					if (Dir.IsZero())
+					{
+						continue;
+					}
+					GetMutable(i) = FQuat(Dir, -TwistStep * i).RotateVector(Get(i));
+				}
+			}
+		}
+
+		bComputed.store(true, std::memory_order_release);
 	}
 
 #pragma endregion

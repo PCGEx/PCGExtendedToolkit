@@ -44,6 +44,10 @@ public:
 	virtual bool LimitsProbeFanout() const;
 	virtual int32 GetProbeFanoutLimit(const PCGExFloodFill::FDiffusion* Diffusion, const PCGExFloodFill::FCandidate& From);
 
+	// Whether this control reads FDiffusion::TravelStack. When no control (and no node feature)
+	// needs it, diffusions skip breadcrumb allocation and per-capture writes entirely.
+	virtual bool WantsTravelStack() const;
+
 	int32 GetSettingsIndex(const PCGExFloodFill::FDiffusion* Diffusion) const;
 
 protected:

@@ -34,15 +34,8 @@ namespace PCGExFloodFill
 		  , SeedNode(InSeedNode)
 		  , Cluster(InCluster)
 	{
-		TravelStack = MakeShared<PCGEx::FHashLookupMap>(0, 0);
-
-		// Pre-allocate visited array for O(1) lookups instead of TSet hashing
-		const int32 NumNodes = InCluster->Nodes->Num();
-		Visited.Init(false, NumNodes);
-
-		// Pre-reserve arrays to avoid reallocations during growth
-		Candidates.Reserve(NumNodes / 4); // Heuristic: ~25% of nodes as candidates at any time
-		Captured.Reserve(NumNodes / 2);   // Heuristic: ~50% of nodes may be captured
+		// Deliberately light: allocations happen in Init(), once the final diffusion count is known
+		// (reserves are sized per-diffusion, and Init may run in parallel across diffusions).
 	}
 
 	int32 FDiffusion::GetSettingsIndex(EPCGExFloodFillSettingSource Source) const
@@ -50,12 +43,35 @@ namespace PCGExFloodFill
 		return Source == EPCGExFloodFillSettingSource::Seed ? SeedIndex : SeedNode->PointIndex;
 	}
 
-	void FDiffusion::Init(const int32 InSeedIndex)
+	void FDiffusion::Init()
 	{
-		SeedIndex = InSeedIndex;
-
 		// Initialize heap comparator with sorting mode from config
 		HeapComparator = FCandidateHeapComparator(Config.Sorting);
+
+		const int32 NumNodes = Cluster->Nodes->Num();
+		const int32 NumDiffusions = FMath::Max(1, FillControlsHandler->GetNumDiffusions());
+
+		// Expected captures if the cluster split evenly across diffusions -- a starting reserve, not a cap.
+		// Geometric growth absorbs underestimates; overestimating per-diffusion at NumNodes scale does not scale to many seeds.
+		const int32 ExpectedCaptures = FMath::Clamp(NumNodes / NumDiffusions, 8, NumNodes);
+
+		Visited.Init(false, NumNodes);
+		Captured.Reserve(ExpectedCaptures + 1);
+		Candidates.Reserve(FMath::Min(ExpectedCaptures, 64)); // Frontier, not volume -- stays small relative to captures
+
+		if (FillControlsHandler->bNeedsTravelStack)
+		{
+			// Few diffusions each cover large swaths of the cluster: a flat array beats per-entry map overhead.
+			// Many diffusions each cover a sliver: a reserved map keeps memory proportional to actual captures.
+			if (NumDiffusions <= 8)
+			{
+				TravelStack = PCGEx::NewHashLookup<PCGEx::FHashLookupArray>(PCGEx::NH64(-1, -1), NumNodes);
+			}
+			else
+			{
+				TravelStack = PCGEx::NewHashLookup<PCGEx::FHashLookupMap>(PCGEx::NH64(-1, -1), ExpectedCaptures);
+			}
+		}
 
 		Visited[SeedNode->Index] = true;
 		// Claiming is optional: with no InfluencesCount, diffusions overlap and never pre-claim their seed node (see FFillControlsHandler::TryCapture).
@@ -66,12 +82,12 @@ namespace PCGExFloodFill
 		FCandidate& SeedCandidate = Captured.Emplace_GetRef();
 		SeedCandidate.Link = PCGExGraphs::FLink(-1, -1);
 		SeedCandidate.Node = SeedNode;
-		SeedCandidate.CaptureIndex = 0;
+		SeedCandidate.CaptureIndex = -1; // The seed has no parent
 
-		Probe(SeedCandidate);
+		Probe(SeedCandidate, 0);
 	}
 
-	void FDiffusion::Probe(const FCandidate& From)
+	void FDiffusion::Probe(const FCandidate& From, const int32 FromCaptureIndex)
 	{
 		if (!FillControlsHandler->IsValidProbe(this, From))
 		{
@@ -89,7 +105,7 @@ namespace PCGExFloodFill
 			const double Dist = FVector::Dist(FromPosition, OtherPosition);
 
 			FCandidate Candidate = FCandidate{};
-			Candidate.CaptureIndex = From.CaptureIndex;
+			Candidate.CaptureIndex = FromCaptureIndex; // Parent capture index
 			Candidate.Link = PCGExGraphs::FLink(FromNode.Index, Lk.Edge);
 			Candidate.Node = OtherNode;
 			Candidate.Depth = From.Depth + 1;
@@ -190,13 +206,13 @@ namespace PCGExFloodFill
 			MaxDepth = FMath::Max(MaxDepth, Candidate.Depth);
 			MaxDistance = FMath::Max(MaxDistance, Candidate.PathDistance);
 
-			FCandidate& CapturedCandidate = Captured.Add_GetRef(Candidate);
-			CapturedCandidate.CaptureIndex = Captured.Num() - 1;
+			// The stored entry keeps its parent capture index (its own is its array position).
+			Captured.Add(Candidate);
 
-			TravelStack->Set(Candidate.Node->Index, PCGEx::NH64(Candidate.Link.Node, Candidate.Link.Edge));
-
-			Endpoints.Add(CapturedCandidate.CaptureIndex);
-			Endpoints.Remove(Candidate.CaptureIndex);
+			if (TravelStack)
+			{
+				TravelStack->Set(Candidate.Node->Index, PCGEx::NH64(Candidate.Link.Node, Candidate.Link.Edge));
+			}
 
 			PostGrow();
 
@@ -208,7 +224,31 @@ namespace PCGExFloodFill
 	{
 		// Probe from last captured candidate
 		// New candidates are inserted via HeapPush, maintaining heap order - no sort needed
-		Probe(Captured.Last());
+		Probe(Captured.Last(), Captured.Num() - 1);
+	}
+
+	void FDiffusion::BuildEndpoints()
+	{
+		const int32 NumCaptured = Captured.Num();
+
+		HasChildMask.Init(false, NumCaptured);
+		for (int32 i = 1; i < NumCaptured; i++)
+		{
+			const int32 ParentCaptureIndex = Captured[i].CaptureIndex;
+			if (ParentCaptureIndex >= 0)
+			{
+				HasChildMask[ParentCaptureIndex] = true;
+			}
+		}
+
+		Endpoints.Reset();
+		for (int32 i = 1; i < NumCaptured; i++)
+		{
+			if (!HasChildMask[i])
+			{
+				Endpoints.Add(i);
+			}
+		}
 	}
 
 	void DiffuseAndBlend(
@@ -287,6 +327,10 @@ namespace PCGExFloodFill
 				if (Op->LimitsProbeFanout())
 				{
 					SubOpsProbeFanout.Add(Op);
+				}
+				if (Op->WantsTravelStack())
+				{
+					bNeedsTravelStack = true;
 				}
 			}
 		}
@@ -429,7 +473,7 @@ namespace PCGExFloodFill
 		const int32 MaxDiffusionDepth,
 		const FName NormalizedPathDepthName,
 		const EPCGExFloodFillNormalizedPathDepthMode Mode,
-		const TArray<double>* CascadeValues)
+		const TMap<int32, double>* CascadeValues)
 	{
 		if (NormalizedPathDepthName == NAME_None || !DiffusionDepths || PathIndices.IsEmpty())
 		{
@@ -489,7 +533,7 @@ namespace PCGExFloodFill
 			{
 				for (int32 i = 0; i < PathIndices.Num(); i++)
 				{
-					NormBuffer->SetValue(i, (*CascadeValues)[PathIndices[i]]);
+					NormBuffer->SetValue(i, CascadeValues->FindRef(PathIndices[i]));
 				}
 			}
 			break;
@@ -504,7 +548,8 @@ namespace PCGExFloodFill
 		const FName NormalizedPathDepthName,
 		const EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 		const FPCGExAttributeToTagDetails& SeedTags,
-		const TSharedRef<PCGExData::FFacade>& SeedsDataFacade)
+		const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
+		const int32 InIOIndex)
 	{
 		int32 PathNodeIndex = PCGEx::NH64A(Diffusion.TravelStack->Get(EndpointNodeIndex));
 		int32 PathEdgeIndex = -1;
@@ -549,7 +594,7 @@ namespace PCGExFloodFill
 		PathFacade->WriteFastest(TaskManager);
 		SeedTags.Tag(SeedsDataFacade->GetInPoint(Diffusion.SeedIndex), PathIO);
 
-		PathIO->IOIndex = Diffusion.SeedIndex * 1000000 + VtxDataFacade->Source->IOIndex * 1000000 + EndpointNodeIndex;
+		PathIO->IOIndex = InIOIndex;
 	}
 
 	void FDiffusionPathWriter::WritePartitionedPath(
@@ -561,7 +606,8 @@ namespace PCGExFloodFill
 		const EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 		const FPCGExAttributeToTagDetails& SeedTags,
 		const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
-		const TArray<double>* CascadeValues)
+		const int32 InIOIndex,
+		const TMap<int32, double>* CascadeValues)
 	{
 		if (PathIndices.Num() < 2)
 		{
@@ -590,7 +636,7 @@ namespace PCGExFloodFill
 		PathFacade->WriteFastest(TaskManager);
 		SeedTags.Tag(SeedsDataFacade->GetInPoint(Diffusion.SeedIndex), PathIO);
 
-		PathIO->IOIndex = Diffusion.SeedIndex * 1000000 + VtxDataFacade->Source->IOIndex * 1000000 + PathIndices[0];
+		PathIO->IOIndex = InIOIndex;
 	}
 
 #pragma endregion
