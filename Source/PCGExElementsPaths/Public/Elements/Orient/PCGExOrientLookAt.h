@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExOrientOperation.h"
+#include "Core/PCGExContext.h"
 #include "Data/PCGExData.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "PCGExOrientLookAt.generated.h"
