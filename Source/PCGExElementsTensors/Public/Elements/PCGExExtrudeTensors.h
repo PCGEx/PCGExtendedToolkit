@@ -96,7 +96,7 @@ class UPCGExExtrudeTensorsSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(ExtrudeTensors, "Path : Extrude Tensors", "Extrude input points into paths along tensors.");
+	PCGEX_NODE_INFOS(ExtrudeTensors, "Tensors : Extrude", "Extrude input points into paths along tensors.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{

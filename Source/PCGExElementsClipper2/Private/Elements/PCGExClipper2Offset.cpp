@@ -45,28 +45,30 @@ void FPCGExClipper2OffsetContext::Process(const TSharedPtr<PCGExClipper2::FProce
 		return;
 	}
 
-	int32 NumIterations = 1;
+	int32 NumIterations = 0;
 	constexpr double DefaultOffset = 10;
 
-	// Read values from subjects (take max iterations across all)
+	// Consolidate the per-subject iteration counts into one value for the group.
 	switch (Settings->IterationConsolidation)
 	{
 	case EPCGExClipper2OffsetIterationCount::First:
-		NumIterations = FMath::Max(1, IterationValues[Group->SubjectIndices[0]]->Read(0));
+		NumIterations = IterationValues[Group->SubjectIndices[0]]->Read(0);
 		break;
 	case EPCGExClipper2OffsetIterationCount::Last:
-		NumIterations = FMath::Max(1, IterationValues[Group->SubjectIndices.Last()]->Read(0));
+		NumIterations = IterationValues[Group->SubjectIndices.Last()]->Read(0);
 		break;
 	case EPCGExClipper2OffsetIterationCount::Average:
 	{
+		int64 Sum = 0;
 		for (const int32 SubjectIdx : Group->SubjectIndices)
 		{
-			NumIterations += FMath::Max(1, IterationValues[SubjectIdx]->Read(0));
+			Sum += IterationValues[SubjectIdx]->Read(0);
 		}
-		NumIterations /= Group->SubjectIndices.Num();
+		NumIterations = static_cast<int32>(Sum / Group->SubjectIndices.Num());
 	}
 	break;
 	case EPCGExClipper2OffsetIterationCount::Min:
+		NumIterations = MAX_int32;
 		for (const int32 SubjectIdx : Group->SubjectIndices)
 		{
 			NumIterations = FMath::Min(NumIterations, IterationValues[SubjectIdx]->Read(0));
@@ -83,20 +85,19 @@ void FPCGExClipper2OffsetContext::Process(const TSharedPtr<PCGExClipper2::FProce
 
 	NumIterations = FMath::Max(Settings->MinIterations, NumIterations);
 
-	if (!NumIterations)
+	if (NumIterations <= 0)
 	{
 		return;
 	}
 
-	// Capture values by copy for lambda safety
-	// Since Facade->Idx == ArrayIndex, we can use SourceIdx from Z directly as array index
-	const TArray<TSharedPtr<PCGExDetails::TSettingValue<double>>> OffsetValuesCopy = OffsetValues;
+	// Since Facade->Idx == ArrayIndex, SourceIdx decoded from Z is directly usable as an array index. The context
+	// (and therefore OffsetValues) outlives the synchronous Execute() calls the callbacks run within.
 	const int32 NumFacades = AllOpData->Facades.Num();
 
 	// Helper lambda to create the delta callback with a sign multiplier
-	auto CreateDeltaCallback = [Scale, &OffsetValuesCopy, NumFacades, DefaultOffset](double SignMultiplier, double IterationMultiplier) -> PCGExClipper2Lib::DeltaCallback64
+	auto CreateDeltaCallback = [this, Scale, NumFacades, DefaultOffset](double SignMultiplier, double IterationMultiplier) -> PCGExClipper2Lib::DeltaCallback64
 	{
-		return [Scale, &OffsetValuesCopy, NumFacades, DefaultOffset, SignMultiplier, IterationMultiplier](
+		return [this, Scale, NumFacades, DefaultOffset, SignMultiplier, IterationMultiplier](
 			const PCGExClipper2Lib::Path64& Path, const PCGExClipper2Lib::PathD& PathNormals,
 			size_t CurrIdx, size_t PrevIdx) -> double
 		{
@@ -104,15 +105,14 @@ void FPCGExClipper2OffsetContext::Process(const TSharedPtr<PCGExClipper2::FProce
 			uint32 PointIdx, SourceIdx;
 			PCGEx::H64(static_cast<uint64>(Path[CurrIdx].z), PointIdx, SourceIdx);
 
-			// SourceIdx is now directly the array index (Facade->Idx == ArrayIndex)
 			const int32 ArrayIdx = static_cast<int32>(SourceIdx);
 
-			if (ArrayIdx < 0 || ArrayIdx >= NumFacades || ArrayIdx >= OffsetValuesCopy.Num())
+			if (ArrayIdx < 0 || ArrayIdx >= NumFacades || ArrayIdx >= OffsetValues.Num())
 			{
 				return DefaultOffset * Scale * IterationMultiplier * SignMultiplier;
 			}
 
-			const TSharedPtr<PCGExDetails::TSettingValue<double>>& OffsetReader = OffsetValuesCopy[ArrayIdx];
+			const TSharedPtr<PCGExDetails::TSettingValue<double>>& OffsetReader = OffsetValues[ArrayIdx];
 			if (!OffsetReader)
 			{
 				return DefaultOffset * Scale * IterationMultiplier * SignMultiplier;
@@ -129,7 +129,6 @@ void FPCGExClipper2OffsetContext::Process(const TSharedPtr<PCGExClipper2::FProce
 	{
 		const double IterationMultiplier = Iteration + 1;
 
-		// Generate positive offset
 		{
 			PCGExClipper2Lib::ClipperOffset ClipperOffset(Settings->MiterLimit, Settings->GetArcTolerance(), Settings->bPreserveCollinear, false);
 			ClipperOffset.SetZCallback(Group->CreateZCallback());

@@ -250,14 +250,13 @@ namespace PCGExData::Helpers
 	template <typename T>
 	void SetDataValue(FPCGMetadataAttributeBase* Attribute, const T Value)
 	{
-		// The default-value slot is the canonical @Data store (see ReadDataValue). Do NOT materialize
-		// an entry here: entries are invisible to the engine while the data domain has no items, but
-		// they survive full data copies -- a later engine-side rewrite of the attribute (which goes to
-		// the default slot) would leave the copied entry stale, and item-keyed reads prefer entries.
-		// CRITICAL -- this must be SetDefaultValue, not SetValue<T>(PCGDefaultValueKey, ...):
-		// PCGDefaultValueKey == -1 == PCGInvalidEntryKey and the engine's SetValueFromValueKey_Unsafe
-		// silently drops writes for invalid entry keys.
 		Attribute->SetDefaultValue(Value);
+
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		if (Domain && Domain->GetItemCountForChild() > 0)
+		{
+			static_cast<FPCGMetadataAttribute<T>*>(Attribute)->SetValue(PCGFirstEntryKey, Value);
+		}
 	}
 
 	template <typename T>

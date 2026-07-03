@@ -123,9 +123,10 @@ bool FPCGExClusterDiffusionElement::Boot(FPCGExContext* InContext) const
 		Context->Paths->OutputPin = PCGExPaths::Labels::OutputPathsLabel;
 	}
 
-	FPCGExForwardDetails FwdDetails = Settings->SeedForwarding;
-	FwdDetails.bFilterToRemove = true;
-	Context->SeedForwardHandler = FwdDetails.GetHandler(Context->SeedsDataFacade, false);
+	// Handlers are built per-batch (writers must be pre-created on each batch's vtx facade); only the
+	// adjusted details live on the context.
+	Context->SeedForwardDetails = Settings->SeedForwarding;
+	Context->SeedForwardDetails.bFilterToRemove = true;
 
 	return true;
 }
@@ -192,8 +193,8 @@ namespace PCGExClusterDiffusion
 			return;
 		}
 
-		// Proceed to blending
-		// Note: There is an important probability of collision for nodes with influences > 1
+		// Proceed to blending. Claiming (InfluencesCount CAS) guarantees each vtx belongs to at most
+		// one diffusion, so the parallel per-diffusion passes below write disjoint vtx.
 
 		PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, DiffuseDiffusions)
 
@@ -218,8 +219,17 @@ namespace PCGExClusterDiffusion
 
 		// Diffuse & blend
 		PCGExFloodFill::DiffuseAndBlend(*Diffusion, VtxDataFacade, BlendOpsManager, Indices);
-		FPlatformAtomics::InterlockedAdd(&ExpectedPathCount, Diffusion->Endpoints.Num());
-		FPlatformAtomics::InterlockedAdd(&Context->ExpectedPathCount, ExpectedPathCount);
+
+		// Endpoints are derived on demand -- growth doesn't track them anymore.
+		const bool bWantsPaths = Settings->PathOutput != EPCGExFloodFillPathOutput::None;
+		if (bWantsPaths || DiffusionEndingWriter)
+		{
+			Diffusion->BuildEndpoints();
+		}
+		if (bWantsPaths)
+		{
+			FPlatformAtomics::InterlockedAdd(&ExpectedPathCount, Diffusion->Endpoints.Num());
+		}
 
 		// Outputs
 		if (!Indices.IsEmpty())
@@ -237,13 +247,13 @@ namespace PCGExClusterDiffusion
 				}
 				PCGEX_OUTPUT_VALUE(DiffusionDistance, TargetIndex, Candidate.PathDistance);
 				PCGEX_OUTPUT_VALUE(DiffusionOrder, TargetIndex, i);
-				PCGEX_OUTPUT_VALUE(DiffusionEnding, TargetIndex, Diffusion->Endpoints.Contains(Candidate.CaptureIndex));
+				PCGEX_OUTPUT_VALUE(DiffusionEnding, TargetIndex, Diffusion->IsEndpoint(i));
 			}
 
-			// Forward seed values to diffusion
-			if (Diffusion->SeedIndex != -1)
+			// Forward seed values to diffusion, through the batch's prepared writers (no lazy creation here).
+			if (SeedForwardHandler)
 			{
-				Context->SeedForwardHandler->Forward(Diffusion->SeedIndex, VtxDataFacade, Indices);
+				SeedForwardHandler->Forward(Diffusion->SeedIndex, Indices);
 			}
 		}
 
@@ -263,6 +273,25 @@ namespace PCGExClusterDiffusion
 		// Create the path writer for output
 		PathWriter = MakeShared<PCGExFloodFill::FDiffusionPathWriter>(Cluster.ToSharedRef(), VtxDataFacade, Context->Paths.ToSharedRef(), TaskManager, DiffusionDepths);
 
+		// Deterministic path IOIndices: the edges dataset is the base, then each diffusion owns a
+		// contiguous ordinal range (prefix sums of endpoint counts, keyed by the seed-ordered diffusion
+		// Index), then the endpoint ordinal within the diffusion.
+		const int32 EdgeIOBase = EdgeDataFacade->Source->IOIndex * 1000000;
+		PathIOBases.SetNumZeroed(Diffusions.Num());
+		for (const TSharedPtr<PCGExFloodFill::FDiffusion>& Diff : Diffusions)
+		{
+			PathIOBases[Diff->Index] = Diff->Endpoints.Num();
+		}
+		{
+			int32 RunningTotal = 0;
+			for (int32& Base : PathIOBases)
+			{
+				const int32 Count = Base;
+				Base = RunningTotal;
+				RunningTotal += Count;
+			}
+		}
+
 		const FName NormPathDepthName = Settings->bWriteNormalizedPathDepth && Settings->PathOutput != EPCGExFloodFillPathOutput::None
 			? Settings->NormalizedPathDepthAttributeName
 			: NAME_None;
@@ -272,10 +301,11 @@ namespace PCGExClusterDiffusion
 		{
 			// Output full path, rather straightforward
 			PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, PathsTaskGroup)
-			PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, NormPathDepthName, NormPathDepthMode](const int32 Index, const PCGExMT::FScope& Scope)
+			PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, NormPathDepthName, NormPathDepthMode, EdgeIOBase](const int32 Index, const PCGExMT::FScope& Scope)
 			{
 				PCGEX_ASYNC_THIS
 				TSharedPtr<PCGExFloodFill::FDiffusion> Diff = This->Diffusions[Index];
+				int32 PathIOIndex = EdgeIOBase + This->PathIOBases[Diff->Index];
 				for (const int32 EndpointIndex : Diff->Endpoints)
 				{
 					This->PathWriter->WriteFullPath(
@@ -286,7 +316,8 @@ namespace PCGExClusterDiffusion
 						NormPathDepthName,
 						NormPathDepthMode,
 						This->Context->SeedAttributesToPathTags,
-						This->Context->SeedsDataFacade.ToSharedRef());
+						This->Context->SeedsDataFacade.ToSharedRef(),
+						PathIOIndex++);
 				}
 			};
 
@@ -295,7 +326,7 @@ namespace PCGExClusterDiffusion
 		}
 
 		PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, PathsTaskGroup)
-		PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, SortOver = Settings->PathPartitions, SortOrder = Settings->PartitionSorting, NormPathDepthName, NormPathDepthMode](const int32 Index, const PCGExMT::FScope& Scope)
+		PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, SortOver = Settings->PathPartitions, SortOrder = Settings->PartitionSorting, NormPathDepthName, NormPathDepthMode, EdgeIOBase](const int32 Index, const PCGExMT::FScope& Scope)
 		{
 			PCGEX_ASYNC_THIS
 			TSharedPtr<PCGExFloodFill::FDiffusion> Diff = This->Diffusions[Index];
@@ -307,7 +338,7 @@ namespace PCGExClusterDiffusion
 			TArray<int32> PathIndices;
 			PathIndices.Reserve(Captured.Num());
 
-			TArray<int32> Endpoints = Diff->Endpoints.Array();
+			TArray<int32> Endpoints = Diff->Endpoints;
 
 			switch (SortOver)
 			{
@@ -361,14 +392,17 @@ namespace PCGExClusterDiffusion
 				break;
 			}
 
-			// Cascade mode: per-diffusion array tracking hierarchical falloff values by vtx point index
-			// 1.0 at seed, 0.0 at leaves, branches inherit parent value and lerp to 0
-			TArray<double> CascadeValues;
+			// Cascade mode: per-diffusion hierarchical falloff values by vtx point index
+			// 1.0 at seed, 0.0 at leaves, branches inherit parent value and lerp to 0.
+			// Sparse map keyed by touched vtx -- an array would be NumVtx-sized per diffusion.
+			TMap<int32, double> CascadeValues;
 			const bool bCascade = NormPathDepthMode == EPCGExFloodFillNormalizedPathDepthMode::Cascade && This->DiffusionDepths;
 			if (bCascade)
 			{
-				CascadeValues.Init(-1.0, This->VtxDataFacade->GetNum());
+				CascadeValues.Reserve(Captured.Num());
 			}
+
+			int32 PathIOIndex = EdgeIOBase + This->PathIOBases[Diff->Index];
 
 			for (const int32 EndpointIndex : Endpoints)
 			{
@@ -420,7 +454,8 @@ namespace PCGExClusterDiffusion
 					const int32 DepthRange = LeafDepth - BranchDepth;
 
 					// Branch point value: read from previous partition, or 1.0 if seed (first occurrence)
-					const double BranchValue = CascadeValues[BranchVtxIdx] >= 0.0 ? CascadeValues[BranchVtxIdx] : 1.0;
+					const double* BranchFound = CascadeValues.Find(BranchVtxIdx);
+					const double BranchValue = BranchFound ? *BranchFound : 1.0;
 
 					if (DepthRange > 0)
 					{
@@ -429,14 +464,14 @@ namespace PCGExClusterDiffusion
 						{
 							const int32 VtxIdx = PathIndices[i];
 							const double T = static_cast<double>(Depths[VtxIdx] - BranchDepth) * InvRange;
-							CascadeValues[VtxIdx] = BranchValue * (1.0 - T);
+							CascadeValues.Add(VtxIdx, BranchValue * (1.0 - T));
 						}
 					}
 					else
 					{
 						for (int32 i = 0; i < PathIndices.Num(); i++)
 						{
-							CascadeValues[PathIndices[i]] = BranchValue;
+							CascadeValues.Add(PathIndices[i], BranchValue);
 						}
 					}
 				}
@@ -450,6 +485,7 @@ namespace PCGExClusterDiffusion
 					NormPathDepthMode,
 					This->Context->SeedAttributesToPathTags,
 					This->Context->SeedsDataFacade.ToSharedRef(),
+					PathIOIndex++,
 					bCascade ? &CascadeValues : nullptr);
 			}
 		};
@@ -487,7 +523,9 @@ namespace PCGExClusterDiffusion
 
 		// Make sure we flush these ASAP
 		BlendOpsManager.Reset();
+		SeedForwardHandler.Reset();
 		PathWriter.Reset();
+		PathIOBases.Empty();
 	}
 
 
@@ -552,6 +590,10 @@ namespace PCGExClusterDiffusion
 			return;
 		}
 
+		// Prepared forward handler: readers on the seeds facade, writers on this batch's vtx facade,
+		// all created here (single-threaded) so the parallel Diffuse pass never creates buffers.
+		SeedForwardHandler = Context->SeedForwardDetails.TryGetHandler(Context->SeedsDataFacade, VtxDataFacade, false);
+
 		InfluencesCount = MakeShared<TArray<int8>>();
 		InfluencesCount->Init(0, VtxDataFacade->GetNum());
 
@@ -586,6 +628,7 @@ namespace PCGExClusterDiffusion
 
 		TypedProcessor->BlendOpsManager = BlendOpsManager;
 		TypedProcessor->InfluencesCount = InfluencesCount;
+		TypedProcessor->SeedForwardHandler = SeedForwardHandler;
 		TypedProcessor->DiffusionDepths = DiffusionDepths;
 
 		TypedProcessor->FillRate = FillRate;

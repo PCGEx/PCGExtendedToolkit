@@ -55,6 +55,11 @@ public:
 	virtual bool PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler) override;
 	virtual void ScoreCandidate(const PCGExFloodFill::FDiffusion* Diffusion, const PCGExFloodFill::FCandidate& From, PCGExFloodFill::FCandidate& OutCandidate) override;
 
+	virtual bool WantsTravelStack() const override
+	{
+		return true; // Heuristics edge scoring receives the travel stack
+	}
+
 protected:
 	TSharedPtr<PCGExHeuristics::FHandler> HeuristicsHandler;
 	/** Resolved during PrepareForDiffusions -- ScoreCandidate runs in parallel and must not hit the lazy lookup */

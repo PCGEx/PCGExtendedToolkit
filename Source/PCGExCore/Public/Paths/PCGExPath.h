@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include "CoreMinimal.h"
+#include "HAL/CriticalSection.h"
 #include "PCGExCoreMacros.h"
 #include "PCGExOctree.h"
 #include "Math/PCGExMath.h"
@@ -444,6 +446,34 @@ namespace PCGExPaths
 
 		virtual void ProcessFirstEdge(const FPath* Path, const FPathEdge& Edge) override;
 		virtual void ProcessEdge(const FPath* Path, const FPathEdge& Edge) override;
+	};
+
+	/** Torsion-minimizing edge normal (parallel transport): the first edge's normal is carried along
+	 * the path, rotated at each vertex by the minimal rotation between consecutive edge directions,
+	 * instead of being re-derived from the Up vector on every edge. Immune to the vertical-tangent
+	 * singularity of the Up-cross based providers; on closed loops the residual seam twist is
+	 * distributed along the path. The full chain is computed once, on whichever edge callback fires
+	 * first — safe with both sequential and scoped/parallel extra computation. */
+	class PCGEXCORE_API FPathEdgeParallelTransportNormal : public TPathEdgeExtra<FVector>
+	{
+		FVector Up = FVector::UpVector;
+		std::atomic<bool> bComputed{false};
+		FCriticalSection ComputeLock;
+
+	public:
+		explicit FPathEdgeParallelTransportNormal(const int32 InNumSegments, const bool InClosedLoop, const FVector& InUp = FVector::UpVector)
+			: TPathEdgeExtra(InNumSegments, InClosedLoop)
+			  , Up(InUp)
+		{
+		}
+
+		virtual void ProcessSingleEdge(const FPath* Path, const FPathEdge& Edge) override;
+		virtual void ProcessFirstEdge(const FPath* Path, const FPathEdge& Edge) override;
+		virtual void ProcessEdge(const FPath* Path, const FPathEdge& Edge) override;
+		virtual void ProcessLastEdge(const FPath* Path, const FPathEdge& Edge) override;
+
+	protected:
+		void ComputeAll(const FPath* Path);
 	};
 
 	class PCGEXCORE_API FPathEdgeHalfAngle : public TPathEdgeExtra<double>

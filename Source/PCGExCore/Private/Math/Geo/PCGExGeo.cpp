@@ -238,7 +238,6 @@ namespace PCGExMath::Geo
 
 		Normal = FVector::CrossProduct(Hand, OtherHand).GetSafeNormal();
 		Theta = FMath::Acos(FVector::DotProduct(Hand, OtherHand));
-		SinTheta = FMath::Sin(Theta);
 	}
 
 	FExCenterArc::FExCenterArc(const FVector& A1, const FVector& B1, const FVector& A2, const FVector& B2, const double MaxLength)
@@ -268,17 +267,62 @@ namespace PCGExMath::Geo
 
 		Normal = FVector::CrossProduct(Hand, OtherHand).GetSafeNormal();
 		Theta = FMath::Acos(FVector::DotProduct(Hand, OtherHand));
-		SinTheta = FMath::Sin(Theta);
+	}
+
+	FExCenterArc FExCenterArc::MakeTangent(const FVector& A, const FVector& TangentDir, const FVector& C)
+	{
+		// Seamless arc: tangent to TangentDir at A, passing through C.
+		// The center sits on the ray from A perpendicular to TangentDir (which guarantees tangency at A),
+		// at radius R = |AC|^2 / (2b), where b is AC's magnitude along that perpendicular.
+		// This lands both A (Alpha 0) and C (Alpha 1) exactly on the circle, for any C off the tangent line.
+		FExCenterArc Arc;
+
+		const FVector D = C - A;
+		const FVector Tangent = TangentDir.GetSafeNormal();
+
+		// Component of AC perpendicular to the tangent, pointing from the tangent line toward C
+		FVector Perp = D - FVector::DotProduct(D, Tangent) * Tangent;
+		const double B = Perp.Length();
+
+		if (B <= UE_KINDA_SMALL_NUMBER || Tangent.IsNearlyZero())
+		{
+			// C is (near) collinear with the tangent, or the tangent itself is degenerate (zero-length,
+			// e.g. a duplicated terminal point upstream): no curvature, degenerate to a line
+			Arc.bIsLine = true;
+			Arc.Center = FMath::Lerp(A, C, 0.5);
+			Arc.Radius = FVector::Dist(A, C) * 0.5;
+			Arc.Hand = (A - Arc.Center).GetSafeNormal();
+			Arc.OtherHand = (C - Arc.Center).GetSafeNormal();
+			Arc.Normal = FVector::CrossProduct(Arc.Hand, Arc.OtherHand).GetSafeNormal();
+			return Arc;
+		}
+
+		Perp /= B;
+
+		Arc.Radius = D.SizeSquared() / (2.0 * B);
+		Arc.Center = A + Perp * Arc.Radius;
+
+		Arc.Hand = (A - Arc.Center).GetSafeNormal();     // == -Perp
+		Arc.OtherHand = (C - Arc.Center).GetSafeNormal();
+
+		// Forward (seamless) rotation axis: sweeping Hand around it leaves A along +Tangent.
+		Arc.Normal = FVector::CrossProduct(Tangent, Perp).GetSafeNormal();
+
+		// Central angle = twice the angle between the chord (AC) and the tangent, taken as the forward sweep in
+		// (0, 2PI). This spans the semicircle case (extrusion perpendicular to the path -> radius = half the
+		// segment) and the reflex case (extrusion leaning back), which the shorter-arc slerp form could not
+		// represent. Only the b<=eps early-out above (extrusion collinear with the path) is a real degeneracy.
+		const double CosChordAngle = FMath::Clamp(FVector::DotProduct(D.GetSafeNormal(), Tangent), -1.0, 1.0);
+		Arc.Theta = 2.0 * FMath::Acos(CosChordAngle);
+
+		return Arc;
 	}
 
 	FVector FExCenterArc::GetLocationOnArc(const double Alpha) const
 	{
-		// Spherical linear interpolation (slerp) between Hand and OtherHand directions,
-		// then project outward from Center by Radius to get the point on the arc.
-		const double W1 = FMath::Sin((1.0 - Alpha) * Theta) / SinTheta;
-		const double W2 = FMath::Sin(Alpha * Theta) / SinTheta;
-
-		const FVector Dir = Hand * W1 + OtherHand * W2;
+		// Sweep Hand around Normal by Alpha*Theta. Robust for any sweep angle (including the Theta = PI semicircle
+		// and reflex arcs), unlike the sin-based slerp which divides by SinTheta and blows up at Theta = PI.
+		const FVector Dir = FQuat(Normal, Alpha * Theta).RotateVector(Hand);
 		return Center + (Dir * Radius);
 	}
 

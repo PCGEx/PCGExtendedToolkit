@@ -9,6 +9,7 @@
 #include "Core/PCGExBFSTriggerCount.h"
 #include "Core/PCGExClustersProcessor.h"
 #include "Core/PCGExFloodFillEdgeDirection.h"
+#include "Data/Utils/PCGExDataForwardDetails.h"
 #include "Sampling/PCGExSamplingCommon.h"
 #include "PCGExBFSDepth.generated.h"
 
@@ -110,6 +111,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable))
 	FPCGExBFSTriggerCountDetails TriggerCount;
 
+	/** Which Seed attributes to forward on the vtx they reached (each vtx receives values from its owning seed). Disabled by default. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta = (PCG_Overridable))
+	FPCGExForwardDetails SeedForwarding = FPCGExForwardDetails(false);
+
 	/** Whether to use an octree for closest node search. Depending on your dataset, this may be faster or slower. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable, AdvancedDisplay))
 	bool bUseOctreeSearch = false;
@@ -123,6 +128,10 @@ struct FPCGExBFSDepthContext final : FPCGExClustersProcessorContext
 	friend class FPCGExBFSDepthElement;
 
 	TSharedPtr<PCGExData::FFacade> SeedsDataFacade;
+
+	// Adjusted copy of SeedForwarding; each batch builds its own prepared handler from it (writers
+	// target the batch's vtx facade and must be created single-threaded at batch scope).
+	FPCGExForwardDetails SeedForwardDetails;
 
 	PCGEX_FOREACH_FIELD_BFS_DEPTH(PCGEX_OUTPUT_DECL_TOGGLE)
 
@@ -169,6 +178,9 @@ namespace PCGExBFSDepth
 		const FPCGExBFSTriggerCountDetails* TriggerCountPtr = nullptr; // Points at the batch's instance (shared vtx writer)
 		TArray<int32> TriggerCounts;                                   // BFS-path trigger count per node
 
+		// Batch-owned prepared forward handler (writers pre-created on the shared vtx facade); null when forwarding is off.
+		TSharedPtr<PCGExData::FDataForwardHandler> SeedForwardHandler;
+
 		void ComputeNormalizedDepth();
 
 	public:
@@ -192,6 +204,8 @@ namespace PCGExBFSDepth
 	{
 		PCGEX_FOREACH_FIELD_BFS_DEPTH(PCGEX_OUTPUT_DECL)
 		TSharedPtr<PCGExData::TBuffer<double>> NormalizedDepthWriter;
+		// Built once (single-threaded) so the per-processor BFS passes never create writables on the shared vtx facade.
+		TSharedPtr<PCGExData::FDataForwardHandler> SeedForwardHandler;
 
 	public:
 		FPCGExFloodFillEdgeDirectionDetails EdgeDirectionOutput;

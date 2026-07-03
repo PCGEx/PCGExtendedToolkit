@@ -177,6 +177,9 @@ namespace PCGExOffsetPath
 				case EPCGExPathNormalDirection::AverageNormal:
 					OffsetDirection = StaticCastSharedPtr<PCGExPaths::TPathEdgeExtra<FVector>>(Path->AddExtra<PCGExPaths::FPathEdgeAvgNormal>(false, Up));
 					break;
+				case EPCGExPathNormalDirection::ParallelTransport:
+					OffsetDirection = StaticCastSharedPtr<PCGExPaths::TPathEdgeExtra<FVector>>(Path->AddExtra<PCGExPaths::FPathEdgeParallelTransportNormal>(false, Up));
+					break;
 				}
 			}
 		}

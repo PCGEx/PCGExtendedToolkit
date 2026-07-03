@@ -7,6 +7,7 @@
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
+#include "Data/Utils/PCGExDataForward.h"
 #include "Factories/PCGExFactories.h"
 
 #define LOCTEXT_NAMESPACE "PCGExBFSDepth"
@@ -72,6 +73,11 @@ bool FPCGExBFSDepthElement::Boot(FPCGExContext* InContext) const
 	{
 		return false;
 	}
+
+	// Handlers are built per-batch (writers must be pre-created on each batch's vtx facade); only the
+	// adjusted details live on the context.
+	Context->SeedForwardDetails = Settings->SeedForwarding;
+	Context->SeedForwardDetails.bFilterToRemove = true;
 
 	return true;
 }
@@ -223,7 +229,8 @@ namespace PCGExBFSDepth
 
 		const TArray<PCGExClusters::FNode>& Nodes = *Cluster->Nodes;
 		const bool bComputeDistance = DistanceData != nullptr;
-		const bool bTrackSeedOwner = SeedIndexData != nullptr;
+		// Seed forwarding needs per-vtx ownership even when the SeedIndex output is off.
+		const bool bTrackSeedOwner = SeedIndexData != nullptr || SeedForwardHandler != nullptr;
 		const bool bTrackParents = !Parents.IsEmpty();
 		const bool bWriteTriggers = TriggerCountPtr && TriggerCountPtr->IsActive();
 		const bool bTriggerCountsSelf = bWriteTriggers && TriggerCountPtr->CountsTriggerItself();
@@ -269,7 +276,10 @@ namespace PCGExBFSDepth
 			if (bTrackSeedOwner)
 			{
 				SeedOwners[NodeIdx] = SeedPtIdx;
-				SeedIndexData[PointIdx] = SeedPtIdx;
+				if (SeedIndexData)
+				{
+					SeedIndexData[PointIdx] = SeedPtIdx;
+				}
 			}
 
 			if (bWriteTriggers)
@@ -323,7 +333,10 @@ namespace PCGExBFSDepth
 					if (bTrackSeedOwner)
 					{
 						SeedOwners[Lk.Node] = SeedOwners[CurrentIdx];
-						SeedIndexData[NeighborPointIdx] = SeedOwners[CurrentIdx];
+						if (SeedIndexData)
+						{
+							SeedIndexData[NeighborPointIdx] = SeedOwners[CurrentIdx];
+						}
 					}
 
 					if (bWriteTriggers)
@@ -367,7 +380,10 @@ namespace PCGExBFSDepth
 					if (bTrackSeedOwner)
 					{
 						SeedOwners[Lk.Node] = SeedOwners[CurrentIdx];
-						SeedIndexData[Nodes[Lk.Node].PointIndex] = SeedOwners[CurrentIdx];
+						if (SeedIndexData)
+						{
+							SeedIndexData[Nodes[Lk.Node].PointIndex] = SeedOwners[CurrentIdx];
+						}
 					}
 
 					if (bWriteTriggers)
@@ -392,6 +408,25 @@ namespace PCGExBFSDepth
 		if (EdgeDirectionDetails.IsActive())
 		{
 			EdgeDirectionDetails.WriteFromNodeDepths(Cluster.Get(), Depths);
+		}
+
+		// Forward seed attributes onto the vtx each seed reached: bucket reached vtx by owning seed,
+		// then fan each seed's row out in one prepared pass (writers were pre-created at batch scope).
+		if (SeedForwardHandler)
+		{
+			TMap<int32, TArray<int32>> ForwardBuckets;
+			ForwardBuckets.Reserve(CollectedSeeds.Num());
+			for (int32 i = 0; i < Nodes.Num(); i++)
+			{
+				if (SeedOwners[i] >= 0)
+				{
+					ForwardBuckets.FindOrAdd(SeedOwners[i]).Add(Nodes[i].PointIndex);
+				}
+			}
+			for (const TPair<int32, TArray<int32>>& Bucket : ForwardBuckets)
+			{
+				SeedForwardHandler->Forward(Bucket.Key, Bucket.Value);
+			}
 		}
 	}
 
@@ -552,6 +587,10 @@ namespace PCGExBFSDepth
 			return;
 		}
 
+		// Prepared forward handler: readers on the seeds facade, writers on this batch's vtx facade,
+		// all created here (single-threaded) so the per-processor BFS passes never create buffers.
+		SeedForwardHandler = Context->SeedForwardDetails.TryGetHandler(Context->SeedsDataFacade, VtxDataFacade, false);
+
 		// Build the shared edge-direction sorter before the base triggers RegisterBuffersDependencies.
 		EdgeDirectionOutput = Context->EdgeDirectionOutput;
 		if (!EdgeDirectionOutput.InitForBatch(Context, VtxDataFacade, Context->GetEdgeSortingRules()))
@@ -590,6 +629,7 @@ namespace PCGExBFSDepth
 		}
 
 		TypedProcessor->TriggerCountPtr = &TriggerCount;
+		TypedProcessor->SeedForwardHandler = SeedForwardHandler;
 
 		return true;
 	}

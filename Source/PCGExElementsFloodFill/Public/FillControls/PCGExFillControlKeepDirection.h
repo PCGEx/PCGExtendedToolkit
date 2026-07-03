@@ -69,6 +69,11 @@ public:
 
 	virtual bool IsValidCandidate(const PCGExFloodFill::FDiffusion* Diffusion, const PCGExFloodFill::FCandidate& From, const PCGExFloodFill::FCandidate& Candidate) override;
 
+	virtual bool WantsTravelStack() const override
+	{
+		return true; // Walks the travel stack to compare against the path's running direction
+	}
+
 protected:
 	FPCGExVectorHashComparisonDetails HashComparisonDetails;
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> WindowSize;

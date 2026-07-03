@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/BitArray.h"
 #include "Core/PCGExClustersProcessor.h"
 #include "Clusters/PCGExClusterCommon.h"
 #include "Sorting/PCGExSortingCommon.h"
@@ -12,7 +13,7 @@
 
 namespace PCGEx
 {
-	class FHashLookupMap;
+	class FHashLookup;
 }
 
 namespace PCGExBlending
@@ -195,6 +196,8 @@ namespace PCGExFloodFill
 	{
 		const PCGExClusters::FNode* Node = nullptr;
 		PCGExGraphs::FLink Link;
+		// Capture index of the PARENT capture (the node this candidate was probed from); -1 for the seed.
+		// A captured entry's own capture index is implicitly its position in FDiffusion::Captured.
 		int32 CaptureIndex = -1;
 		int32 Depth = 0;
 		double PathScore = 0;
@@ -248,7 +251,7 @@ namespace PCGExFloodFill
 		friend class FFillControlsHandler;
 
 	protected:
-		TArray<bool> Visited; // Indexed by node index, faster than TSet for membership checks
+		TBitArray<> Visited; // Indexed by node index, 1 bit per node
 
 		int32 MaxDepth = 0;
 		double MaxDistance = 0;
@@ -257,14 +260,21 @@ namespace PCGExFloodFill
 		FDiffusionConfig Config;                 // Local config snapshot, set by FFillControlsHandler::PrepareForDiffusions
 		FCandidateHeapComparator HeapComparator; // Cached comparator for heap operations
 
+		TBitArray<> HasChildMask; // Indexed by capture index; built by BuildEndpoints()
+
 	public:
 		int32 Index = -1;
 		bool bStopped = false;
 		const PCGExClusters::FNode* SeedNode = nullptr;
-		int32 SeedIndex = -1;
-		TSet<int32> Endpoints;
+		int32 SeedIndex = -1; // Seed point index; set by the owning processor before PrepareForDiffusions
 
-		TSharedPtr<PCGEx::FHashLookupMap> TravelStack; // Required for FillControls & Heuristics
+		// Capture indices of leaf captures (no children). Built on demand by BuildEndpoints() -- growth does
+		// not maintain it, so nodes that never output paths/endings skip the bookkeeping entirely.
+		TArray<int32> Endpoints;
+
+		// Node index -> packed (parent node, edge) breadcrumbs. Null unless a fill control or the owning
+		// node declared the need (FFillControlsHandler::bNeedsTravelStack) -- growth skips the writes otherwise.
+		TSharedPtr<PCGEx::FHashLookup> TravelStack;
 		TSharedPtr<PCGExClusters::FCluster> Cluster;
 
 		TArray<FCandidate> Candidates;
@@ -290,10 +300,19 @@ namespace PCGExFloodFill
 
 		int32 GetSettingsIndex(EPCGExFloodFillSettingSource Source) const;
 
-		void Init(const int32 InSeedIndex);
-		void Probe(const FCandidate& From);
+		void Init();
+		void Probe(const FCandidate& From, const int32 FromCaptureIndex);
 		void Grow();
 		void PostGrow();
+
+		/** Derive endpoints (leaf captures) from parent links. Call once after growth, before Endpoints/IsEndpoint. */
+		void BuildEndpoints();
+
+		/** Whether a captured entry is a leaf. Only valid after BuildEndpoints(). The seed is never an endpoint. */
+		FORCEINLINE bool IsEndpoint(const int32 CaptureIdx) const
+		{
+			return CaptureIdx > 0 && !HasChildMask[CaptureIdx];
+		}
 	};
 
 	class PCGEXELEMENTSFLOODFILL_API FFillControlsHandler : public TSharedFromThis<FFillControlsHandler>
@@ -318,6 +337,11 @@ namespace PCGExFloodFill
 		// limiting, so hot paths can skip the dispatch.
 		bool bHasCaptureNotify = false;
 		bool bHasProbeFanout = false;
+
+		// Whether diffusions must record travel breadcrumbs. Seeded in BuildFrom from the controls
+		// (WantsTravelStack), then OR-ed by the owning node (e.g. path output). When false, FDiffusion
+		// skips TravelStack allocation and per-capture writes entirely.
+		bool bNeedsTravelStack = false;
 
 		TSharedPtr<PCGExClusters::FCluster> Cluster;
 		TSharedPtr<PCGExData::FFacade> VtxDataFacade;
@@ -391,7 +415,8 @@ namespace PCGExFloodFill
 			FName NormalizedPathDepthName,
 			EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 			const FPCGExAttributeToTagDetails& SeedTags,
-			const TSharedRef<PCGExData::FFacade>& SeedsDataFacade);
+			const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
+			int32 InIOIndex);
 
 		void WritePartitionedPath(
 			const FDiffusion& Diffusion,
@@ -402,7 +427,8 @@ namespace PCGExFloodFill
 			EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 			const FPCGExAttributeToTagDetails& SeedTags,
 			const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
-			const TArray<double>* CascadeValues = nullptr);
+			int32 InIOIndex,
+			const TMap<int32, double>* CascadeValues = nullptr);
 
 	protected:
 		void WriteNormalizedPathDepth(
@@ -412,7 +438,7 @@ namespace PCGExFloodFill
 			int32 MaxDiffusionDepth,
 			FName NormalizedPathDepthName,
 			EPCGExFloodFillNormalizedPathDepthMode Mode,
-			const TArray<double>* CascadeValues = nullptr);
+			const TMap<int32, double>* CascadeValues = nullptr);
 
 		TSharedRef<PCGExClusters::FCluster> Cluster;
 		TSharedRef<PCGExData::FFacade> VtxDataFacade;

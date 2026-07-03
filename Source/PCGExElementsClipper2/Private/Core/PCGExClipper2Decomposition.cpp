@@ -186,16 +186,9 @@ namespace PCGExClipper2Decomposition
 		const double InvScale = 1.0 / static_cast<double>(Params.Precision);
 
 		// --- Boundary-respecting triangulation (holes honored via fill rule) ---
-		PCGExClipper2Lib::Paths64 CombinedPaths;
-		CombinedPaths.reserve(SubjectPaths.size());
-		for (const auto& Path : SubjectPaths)
-		{
-			CombinedPaths.push_back(Path);
-		}
-
 		PCGExClipper2Lib::Paths64 TrianglePaths;
 		const PCGExClipper2Lib::TriangulateResult Result = PCGExClipper2Lib::TriangulateWithHoles(
-			CombinedPaths, TrianglePaths, PCGExClipper2::ConvertFillRule(Params.FillRule), Params.bUseDelaunay, ZCallback);
+			SubjectPaths, TrianglePaths, PCGExClipper2::ConvertFillRule(Params.FillRule), Params.bUseDelaunay, ZCallback);
 
 		if (Result != PCGExClipper2Lib::TriangulateResult::success || TrianglePaths.empty())
 		{
