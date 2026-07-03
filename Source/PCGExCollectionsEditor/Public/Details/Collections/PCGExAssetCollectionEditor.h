@@ -18,10 +18,6 @@ namespace PCGExAssetCollectionEditor
 {
 	const FName EntriesName = FName("Entries");
 
-	/** Typed sub-collection UPROPERTY name on derived entry structs (Mesh/Actor/Level/PCGDataAsset).
-	 *  EDITOR_Sanitize resyncs the base InternalSubCollection from this field on every PostEditChange. */
-	const FName SubCollectionName = FName("SubCollection");
-
 	struct PCGEXCOLLECTIONSEDITOR_API TabInfos
 	{
 		TabInfos() = default;
@@ -185,8 +181,8 @@ protected:
 		FOnTilePropertyEdited OnPropertyEdited);
 
 	/** Standard SubCollection picker slot (visible only when bIsSubCollection is true).
-	 *  Writes the typed SubCollection UPROPERTY; falls back to base InternalSubCollection
-	 *  when no typed field exists. */
+	 *  Writes the base FPCGExAssetCollectionEntry::SubCollection property; any collection
+	 *  type is accepted. */
 	TSharedRef<SWidget> BuildSubCollectionPickerSlot(
 		TWeakObjectPtr<UPCGExAssetCollection> Collection,
 		int32 EntryIndex,

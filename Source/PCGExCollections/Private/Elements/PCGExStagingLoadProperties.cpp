@@ -407,7 +407,7 @@ namespace PCGExStagingLoadProperties
 				if (!(EntryAxes & static_cast<uint8>(PCGExGrammarAxes::Bits[a]))) { continue; }
 				FPCGSubdivisionSubmodule Module;
 				const bool bFixed = bIsSub
-					? Grammar->FixSubCollection(Entry->InternalSubCollection, PCGExGrammarAxes::Bits[a], Module, Settings->bWriteSize ? &SizeCache : nullptr)
+					? Grammar->FixSubCollection(Entry->SubCollection, PCGExGrammarAxes::Bits[a], Module, Settings->bWriteSize ? &SizeCache : nullptr)
 					: Grammar->FixLeaf(Entry->Staging.Bounds, PCGExGrammarAxes::Bits[a], Module);
 				if (!bFixed) { continue; }
 

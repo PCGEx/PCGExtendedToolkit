@@ -40,17 +40,6 @@ UPCGExLevelCollection::UPCGExLevelCollection(const FObjectInitializer& ObjectIni
 
 #pragma region FPCGExLevelCollectionEntry
 
-const UPCGExAssetCollection* FPCGExLevelCollectionEntry::GetSubCollectionPtr() const
-{
-	return SubCollection;
-}
-
-void FPCGExLevelCollectionEntry::ClearSubCollection()
-{
-	FPCGExAssetCollectionEntry::ClearSubCollection();
-	SubCollection = nullptr;
-}
-
 bool FPCGExLevelCollectionEntry::Validate(const UPCGExAssetCollection* ParentCollection)
 {
 	if (!bIsSubCollection)
@@ -142,20 +131,6 @@ void FPCGExLevelCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 }
 
 #if WITH_EDITOR
-void FPCGExLevelCollectionEntry::EDITOR_Sanitize()
-{
-	FPCGExAssetCollectionEntry::EDITOR_Sanitize();
-
-	if (!bIsSubCollection)
-	{
-		InternalSubCollection = nullptr;
-	}
-	else
-	{
-		InternalSubCollection = SubCollection;
-	}
-}
-
 void FPCGExLevelCollectionEntry::EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath>& OutPaths) const
 {
 	if (bIsSubCollection)

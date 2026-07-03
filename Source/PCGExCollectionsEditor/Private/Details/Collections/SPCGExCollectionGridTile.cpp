@@ -7,9 +7,10 @@
 #include "Editor.h"
 #include "ScopedTransaction.h"
 #include "Subsystems/AssetEditorSubsystem.h"
-#include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetRegistry/AssetData.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SCheckBox.h"
@@ -942,18 +943,7 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 	bCachedIsSubCollection = Result.Entry->bIsSubCollection;
 	CachedThumbnailPath = Result.Entry->EDITOR_GetThumbnailAssetPath();
 
-	// Subcollection -- show collection icon
-	if (Result.Entry->bIsSubCollection)
-	{
-		return SNew(SBox)
-			.HAlign(HAlign_Center)
-			.VAlign(VAlign_Center)
-			[
-				SNew(SImage)
-				.Image(FAppStyle::GetBrush("ClassIcon.DataAsset"))
-				.DesiredSizeOverride(FVector2D(48, 48))
-			];
-	}
+	// Subcollection entries fall through to the FAssetThumbnail path; the renderer draws their mosaic.
 
 	// Get asset path -- entry-specific source (may differ from Staging.Path for
 	// entry types that bake into an embedded asset, e.g. level-sourced PCGDataAsset).
@@ -983,21 +973,7 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 		}
 	}
 
-	// Resolve FAssetData from path and create thumbnail.
-	const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-	FAssetData AssetData = AssetRegistry.GetAssetByObjectPath(AssetPath);
-
-	// Fallback: actor entries store the generated class path (ends in "_C"); the
-	// Blueprint asset is registered without the suffix, so retry with it stripped.
-	if (!AssetData.IsValid())
-	{
-		FString PathString = AssetPath.ToString();
-		if (PathString.EndsWith(TEXT("_C")))
-		{
-			PathString.LeftChopInline(2);
-			AssetData = AssetRegistry.GetAssetByObjectPath(FSoftObjectPath(PathString));
-		}
-	}
+	const FAssetData AssetData = PCGExCollectionEditorUtils::ResolveEntryAssetData(AssetPath);
 
 	const int32 ThumbnailResolution = FMath::RoundToInt32(TileSize);
 	Thumbnail = MakeShared<FAssetThumbnail>(AssetData, ThumbnailResolution, ThumbnailResolution, ThumbnailPool);

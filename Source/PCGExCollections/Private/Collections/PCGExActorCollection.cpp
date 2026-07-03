@@ -36,17 +36,6 @@ UPCGExActorCollection::UPCGExActorCollection(const FObjectInitializer& ObjectIni
 
 #pragma region FPCGExActorCollectionEntry
 
-const UPCGExAssetCollection* FPCGExActorCollectionEntry::GetSubCollectionPtr() const
-{
-	return SubCollection;
-}
-
-void FPCGExActorCollectionEntry::ClearSubCollection()
-{
-	FPCGExAssetCollectionEntry::ClearSubCollection();
-	SubCollection = nullptr;
-}
-
 bool FPCGExActorCollectionEntry::Validate(const UPCGExAssetCollection* ParentCollection)
 {
 	if (!bIsSubCollection)
@@ -235,8 +224,6 @@ void FPCGExActorCollectionEntry::EDITOR_Sanitize()
 
 	if (!bIsSubCollection)
 	{
-		InternalSubCollection = nullptr;
-
 		if (!Actor.ToSoftObjectPath().IsValid())
 		{
 			bHasPCGComponent = false;
@@ -252,7 +239,6 @@ void FPCGExActorCollectionEntry::EDITOR_Sanitize()
 	}
 	else
 	{
-		InternalSubCollection = SubCollection;
 		bHasPCGComponent = false;
 		CachedPCGGraph = nullptr;
 		SerializedPropertyDelta.Empty();
