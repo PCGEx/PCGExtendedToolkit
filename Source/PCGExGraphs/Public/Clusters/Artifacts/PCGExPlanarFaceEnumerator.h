@@ -286,6 +286,15 @@ namespace PCGExClusters
 		 */
 		void GetSharedSegments(TArray<FSharedSegment>& OutSegments, int32 WrapperFaceIndex = -1) const;
 
+		/**
+		 * Trace the boundary loops of a region defined by a set of faces, directly on the DCEL. Robust to pinch
+		 * vertices, interior holes and disconnected components (one loop per component outline and per hole).
+		 * Requires raw faces enumerated (FaceIndex populated).
+		 * @param InFaceSet Region faces (matches FCell::FaceIndex)
+		 * @param OutLoops One ordered node-index loop (length >= 3) per boundary
+		 */
+		void TraceRegionBoundaries(const TSet<int32>& InFaceSet, TArray<TArray<int32>>& OutLoops) const;
+
 	protected:
 		/** Build a cell from a face (list of node indices) - internal use */
 		ECellResult BuildCellFromFace(

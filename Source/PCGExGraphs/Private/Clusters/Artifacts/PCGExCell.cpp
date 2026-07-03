@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Clusters/Artifacts/PCGExCell.h"
+#include "Algo/Reverse.h"
 #include "Misc/ScopeExit.h"
 
 #include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
@@ -543,143 +544,113 @@ namespace PCGExClusters
 	{
 		TArray<TSharedPtr<FCell>> Result;
 
-		if (InCells.IsEmpty())
+		if (InCells.IsEmpty() || !InCluster)
 		{
 			return Result;
 		}
 
-		// Build boundary edge set via undirected hash deduplication.
-		// TMap::Remove returns the count of removed elements: 0 = first occurrence (boundary candidate),
-		// 1 = second occurrence (shared interior edge -- already removed, nothing to re-add).
-		TMap<uint64, TPair<int32, int32>> DirectedEdges;
+		// Trace the merged region's boundary on the DCEL (FCell::FaceIndex == FHalfEdge::FaceIndex). Robust to
+		// pinch vertices, holes and disconnected components. If we can't trace (no enumerator, or a cell lacks a
+		// face), return empty so the caller keeps the un-merged cells.
+		const TSharedPtr<FPlanarFaceEnumerator>& Enumerator = InConstraints->Enumerator;
+		if (!Enumerator || !Enumerator->IsBuilt())
+		{
+			return Result;
+		}
 
+		TSet<int32> FaceSet;
+		FaceSet.Reserve(InCells.Num());
+		int32 NumNonNull = 0;
 		for (const TSharedPtr<FCell>& Cell : InCells)
 		{
 			if (!Cell)
 			{
 				continue;
 			}
-			const TArray<int32>& Nodes = Cell->Nodes;
-			const int32 N = Nodes.Num();
-			for (int32 i = 0; i < N; ++i)
+			++NumNonNull;
+			if (Cell->FaceIndex >= 0)
 			{
-				const int32 A = Nodes[i];
-				const int32 B = Nodes[(i + 1) % N];
-				const uint64 Hash = PCGEx::H64U(static_cast<uint32>(A), static_cast<uint32>(B));
-				if (DirectedEdges.Remove(Hash) == 0)
-				{
-					DirectedEdges.Add(Hash, TPair<int32, int32>(A, B));
-				}
+				FaceSet.Add(Cell->FaceIndex);
 			}
 		}
 
-		if (DirectedEdges.IsEmpty())
+		// Every non-null input cell must map to a distinct enumerated face for the trace to cover the whole region.
+		if (FaceSet.IsEmpty() || FaceSet.Num() != NumNonNull)
 		{
 			return Result;
 		}
 
-		// Build NextNode map: FromNode → ToNode
-		TMap<int32, int32> NextNode;
-		NextNode.Reserve(DirectedEdges.Num());
-		for (const auto& Pair : DirectedEdges)
+		TArray<TArray<int32>> Loops;
+		Enumerator->TraceRegionBoundaries(FaceSet, Loops);
+
+		if (Loops.IsEmpty())
 		{
-			NextNode.Add(Pair.Value.Key, Pair.Value.Value);
+			return Result;
 		}
 
-		// Walk boundary loops. GlobalVisited serves double duty: skips already-claimed start nodes
-		// and catches premature cycles mid-walk, eliminating a per-loop LoopVisited set.
-		TSet<int32> GlobalVisited;
-		GlobalVisited.Reserve(NextNode.Num());
-		Result.Reserve(InCells.Num());
+		Result.Reserve(Loops.Num());
 
-		for (const auto& StartPair : DirectedEdges)
+		for (TArray<int32>& LoopNodes : Loops)
 		{
-			const int32 StartNode = StartPair.Value.Key;
-			if (GlobalVisited.Contains(StartNode))
-			{
-				continue;
-			}
-
-			TArray<int32> LoopNodes;
-			int32 Current = StartNode;
-			bool bValid = true;
-
-			while (true)
-			{
-				GlobalVisited.Add(Current);
-				LoopNodes.Add(Current);
-
-				const int32* Next = NextNode.Find(Current);
-				if (!Next)
-				{
-					bValid = false;
-					break;
-				} // dead end -- non-manifold boundary
-				Current = *Next;
-				if (Current == StartNode)
-				{
-					break;
-				} // loop closed cleanly
-				if (GlobalVisited.Contains(Current))
-				{
-					bValid = false;
-					break;
-				} // premature cycle
-			}
-
-			if (!bValid || LoopNodes.Num() < 3)
+			if (LoopNodes.Num() < 3)
 			{
 				continue;
 			}
 
 			TSharedPtr<FCell> MergedCell = MakeShared<FCell>(InConstraints);
-			MergedCell->Nodes = LoopNodes;
 			MergedCell->CustomIndex = InCustomIndex;
 			MergedCell->bBuiltSuccessfully = true;
-			MergedCell->Data.bIsClosedLoop = true;
 			MergedCell->Data.bIsValid = true;
+			MergedCell->Data.bIsClosedLoop = true;
+			MergedCell->Data.bIsConvex = false; // spans multiple faces
 
-			// Compute 3D bounds and centroid
+			// 2D metrics + winding from the projected polygon (null in LocalTangent mode). Mirrors
+			// BuildCellFromFace; Polygon left empty (merged cells are never containment-tested).
+			if (InProjectedPositions && !InProjectedPositions->IsEmpty())
+			{
+				const TArray<FVector2D>& Positions = *InProjectedPositions;
+				const int32 NumPts = LoopNodes.Num();
+
+				TArray<FVector2D> Polygon;
+				Polygon.SetNumUninitialized(NumPts);
+				MergedCell->Bounds2D = FBox2D(ForceInit);
+				for (int32 i = 0; i < NumPts; ++i)
+				{
+					Polygon[i] = Positions[LoopNodes[i]];
+					MergedCell->Bounds2D += Polygon[i];
+				}
+
+				double Perimeter = 0;
+				for (int32 i = 0; i < NumPts; ++i)
+				{
+					Perimeter += FVector2D::Distance(Polygon[i], Polygon[(i + 1) % NumPts]);
+				}
+
+				const PCGExMath::FPolygonInfos PolyInfos = PCGExMath::FPolygonInfos(Polygon);
+				MergedCell->Data.Area = PolyInfos.Area * 0.01; // QoL scaling, matches BuildCellFromFace
+				MergedCell->Data.Perimeter = Perimeter;
+				MergedCell->Data.Compactness = PolyInfos.Compactness;
+				MergedCell->Data.bIsClockwise = PolyInfos.bIsClockwise;
+
+				if (!PolyInfos.IsWinded(InConstraints->Winding))
+				{
+					Algo::Reverse(LoopNodes);
+				}
+			}
+
+			MergedCell->Nodes = MoveTemp(LoopNodes);
+
+			// 3D bounds and centroid from the loop's cluster positions.
 			FBox Bounds(ForceInit);
 			FVector Centroid = FVector::ZeroVector;
-			for (const int32 NodeIdx : LoopNodes)
+			for (const int32 NodeIdx : MergedCell->Nodes)
 			{
 				const FVector Pos = InCluster->GetPos(NodeIdx);
 				Bounds += Pos;
 				Centroid += Pos;
 			}
 			MergedCell->Data.Bounds = Bounds;
-			MergedCell->Data.Centroid = Centroid / LoopNodes.Num();
-
-			// Compute 2D polygon metrics if projected positions are available.
-			// Polygon is intentionally not populated -- synthetic cells only need it for containment testing,
-			// which never runs on merged cells (seeding/hole detection precedes the merge step).
-			if (InProjectedPositions && !InProjectedPositions->IsEmpty())
-			{
-				MergedCell->Bounds2D = FBox2D(ForceInit);
-				double SignedArea = 0;
-				double Perimeter = 0;
-				const int32 NumPts = LoopNodes.Num();
-				for (int32 i = 0; i < NumPts; ++i)
-				{
-					const FVector2D& PA = (*InProjectedPositions)[LoopNodes[i]];
-					const FVector2D& PB = (*InProjectedPositions)[LoopNodes[(i + 1) % NumPts]];
-					MergedCell->Bounds2D += PA;
-					SignedArea += (PA.X * PB.Y - PB.X * PA.Y);
-					Perimeter += FVector2D::Distance(PA, PB);
-				}
-				SignedArea *= 0.5;
-				MergedCell->Data.Area = FMath::Abs(SignedArea);
-				MergedCell->Data.Perimeter = Perimeter;
-				MergedCell->Data.bIsClockwise = SignedArea < 0;
-				if (Perimeter > 0)
-				{
-					MergedCell->Data.Compactness = FMath::Clamp((4.0 * UE_PI * MergedCell->Data.Area) / (Perimeter * Perimeter), 0.0, 1.0);
-				}
-			}
-
-			// Merged cells spanning multiple original faces are never purely convex
-			MergedCell->Data.bIsConvex = false;
+			MergedCell->Data.Centroid = Centroid / MergedCell->Nodes.Num();
 
 			Result.Add(MergedCell);
 		}
