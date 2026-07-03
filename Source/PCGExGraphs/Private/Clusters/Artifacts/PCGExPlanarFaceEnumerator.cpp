@@ -1074,6 +1074,102 @@ namespace PCGExClusters
 		}
 	}
 
+	void FPlanarFaceEnumerator::TraceRegionBoundaries(const TSet<int32>& InFaceSet, TArray<TArray<int32>>& OutLoops) const
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::TraceRegionBoundaries);
+
+		OutLoops.Reset();
+
+		const int32 NumHalfEdges = HalfEdges.Num();
+		if (NumHalfEdges == 0 || InFaceSet.IsEmpty())
+		{
+			return;
+		}
+
+		auto IsInSet = [&InFaceSet](const int32 FaceIndex) -> bool
+		{
+			return FaceIndex >= 0 && InFaceSet.Contains(FaceIndex);
+		};
+
+		// Boundary half-edge: own face in the region, twin's face outside it (region on its left).
+		auto IsBoundary = [&](const int32 HEIndex) -> bool
+		{
+			const FHalfEdge& HE = HalfEdges[HEIndex];
+			if (!IsInSet(HE.FaceIndex))
+			{
+				return false;
+			}
+			const int32 Twin = HE.TwinIndex;
+			return Twin < 0 || Twin >= NumHalfEdges || !IsInSet(HalfEdges[Twin].FaceIndex);
+		};
+
+		TArray<bool> Visited;
+		Visited.SetNumZeroed(NumHalfEdges);
+
+		for (int32 StartHE = 0; StartHE < NumHalfEdges; ++StartHE)
+		{
+			if (Visited[StartHE] || !IsBoundary(StartHE))
+			{
+				continue;
+			}
+
+			TArray<int32> Loop;
+			int32 Current = StartHE;
+			bool bValid = true;
+			int32 Steps = 0;
+
+			while (true)
+			{
+				if (Visited[Current])
+				{
+					// A well-formed loop closes by returning to its start half-edge.
+					bValid = (Current == StartHE);
+					break;
+				}
+
+				Visited[Current] = true;
+				Loop.Add(HalfEdges[Current].OriginNode);
+
+				// Next boundary half-edge out of the target vertex: rotate through the in-set face fan (twin+Next)
+				// until an edge whose right side leaves the region. Correct even when a vertex is visited twice.
+				int32 Next = HalfEdges[Current].NextIndex;
+				int32 Turns = 0;
+				while (Next >= 0 && Next < NumHalfEdges)
+				{
+					const int32 NextTwin = HalfEdges[Next].TwinIndex;
+					if (NextTwin < 0 || NextTwin >= NumHalfEdges || !IsInSet(HalfEdges[NextTwin].FaceIndex))
+					{
+						break; // Next is a boundary half-edge -> the loop's next segment
+					}
+					Next = HalfEdges[NextTwin].NextIndex; // interior edge -> cross into the neighbour and keep turning
+					if (++Turns > NumHalfEdges)
+					{
+						Next = -1;
+						break;
+					}
+				}
+
+				if (Next < 0 || Next >= NumHalfEdges)
+				{
+					bValid = false;
+					break;
+				}
+
+				Current = Next;
+				if (++Steps > NumHalfEdges)
+				{
+					bValid = false;
+					break;
+				}
+			}
+
+			if (bValid && Loop.Num() >= 3)
+			{
+				OutLoops.Emplace(MoveTemp(Loop));
+			}
+		}
+	}
+
 	int32 FPlanarFaceEnumerator::GetWrapperFaceIndex() const
 	{
 		// LocalTangent: closed manifolds have no unbounded exterior face
