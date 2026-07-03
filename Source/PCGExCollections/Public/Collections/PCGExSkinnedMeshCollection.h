@@ -46,10 +46,10 @@ namespace PCGExSkinnedMeshCollection
 }
 
 /**
- * Skinned mesh collection entry. References a USkinnedAsset (or a UPCGExSkinnedMeshCollection
- * subcollection). Mirrors FPCGExMeshCollectionEntry feature-for-feature, but with a single
- * skinned-mesh component descriptor (FPCGSoftSkinnedMeshComponentDescriptor) used directly --
- * no PCGEx wrapper.
+ * Skinned mesh collection entry. References a USkinnedAsset (or, via the base SubCollection
+ * property, any collection type as a subcollection). Mirrors FPCGExMeshCollectionEntry
+ * feature-for-feature, but with a single skinned-mesh component descriptor
+ * (FPCGSoftSkinnedMeshComponentDescriptor) used directly -- no PCGEx wrapper.
  *
  * AnimationIndex on each spawned FPCGSkinnedMeshInstance is a per-instance selector-scoped
  * concern handled by the staged selector, not by the collection entry.
@@ -72,9 +72,6 @@ struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAsse
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<USkinnedAsset> SkinnedAsset = nullptr;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
-	TObjectPtr<UPCGExSkinnedMeshCollection> SubCollection;
-
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	EPCGExMaterialVariantsMode MaterialVariants = EPCGExMaterialVariantsMode::None;
 
@@ -92,12 +89,6 @@ struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAsse
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Skinned Mesh Settings", EditCondition="!bIsSubCollection && DescriptorSource == EPCGExEntryVariationMode::Local", EditConditionHides, DisplayAfter="DescriptorSource"))
 	FPCGSoftSkinnedMeshComponentDescriptor Descriptor;
-
-	// Subcollection Access
-
-	virtual UPCGExAssetCollection* GetSubCollectionPtr() const override;
-
-	virtual void ClearSubCollection() override;
 
 	// Asset & Material Handling
 

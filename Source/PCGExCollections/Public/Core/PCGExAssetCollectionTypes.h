@@ -60,7 +60,6 @@ namespace PCGExAssetCollection
 		UScriptStruct* EntryStruct = nullptr;
 		FText DisplayName;
 		FTypeId ParentType = NAME_None; // For inheritance checking
-		bool bCanBeSubCollection = true;
 
 		bool IsValid() const
 		{

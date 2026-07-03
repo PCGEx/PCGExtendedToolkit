@@ -229,7 +229,7 @@ namespace PCGExGrammitExport
 
 					FPCGSubdivisionSubmodule Submodule;
 					const bool bFixed = bIsSub
-						? Grammar->FixSubCollection(Entry->InternalSubCollection, PCGExGrammarAxes::Bits[a], Submodule, /*SizeCache=*/nullptr)
+						? Grammar->FixSubCollection(Entry->SubCollection, PCGExGrammarAxes::Bits[a], Submodule, /*SizeCache=*/nullptr)
 						: Grammar->FixLeaf(Entry->Staging.Bounds, PCGExGrammarAxes::Bits[a], Submodule);
 					if (!bFixed)
 					{

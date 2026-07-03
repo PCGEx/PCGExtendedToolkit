@@ -73,17 +73,6 @@ namespace PCGExMeshCollection
 
 // Mesh Collection Entry
 
-UPCGExAssetCollection* FPCGExMeshCollectionEntry::GetSubCollectionPtr() const
-{
-	return SubCollection;
-}
-
-void FPCGExMeshCollectionEntry::ClearSubCollection()
-{
-	FPCGExAssetCollectionEntry::ClearSubCollection();
-	SubCollection = nullptr;
-}
-
 void FPCGExMeshCollectionEntry::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) const
 {
 	FPCGExAssetCollectionEntry::GetAssetPaths(OutPaths);
@@ -318,17 +307,9 @@ void FPCGExMeshCollectionEntry::EDITOR_Sanitize()
 {
 	FPCGExAssetCollectionEntry::EDITOR_Sanitize();
 
-	if (!bIsSubCollection)
+	if (!bIsSubCollection && StaticMesh)
 	{
-		InternalSubCollection = nullptr;
-		if (StaticMesh)
-		{
-			ISMDescriptor.StaticMesh = StaticMesh;
-		}
-	}
-	else
-	{
-		InternalSubCollection = SubCollection;
+		ISMDescriptor.StaticMesh = StaticMesh;
 	}
 }
 #endif

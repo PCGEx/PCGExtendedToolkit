@@ -18,10 +18,12 @@
 
 #if WITH_EDITOR
 #include "Editor.h"
+#include "ObjectTools.h"
 #include "ScopedTransaction.h"
 #include "TimerManager.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "HAL/FileManager.h"
 #include "Helpers/PCGExCollectionStagingPipeline.h"
 #include "Misc/PackageName.h"
@@ -400,14 +402,14 @@ const FPCGExAssetGrammarDetails* FPCGExAssetCollectionEntry::GetEffectiveGrammar
 	}
 
 	// Subcollection: Inherit / Override / Flatten.
-	if (!InternalSubCollection)
+	if (!SubCollection)
 	{
 		return nullptr;
 	}
 	switch (SubGrammarMode)
 	{
 	case EPCGExGrammarSubCollectionMode::Inherit:
-		return &InternalSubCollection->SubCollectionGrammar;
+		return &SubCollection->SubCollectionGrammar;
 	case EPCGExGrammarSubCollectionMode::Override:
 		return &AssetGrammar;
 	default: // Flatten -- no module emitted for the subcollection itself; leaves contribute directly.
@@ -433,7 +435,7 @@ double FPCGExAssetCollectionEntry::GetGrammarSize(
 	const double Size = !Resolved
 		? 0.0
 		: (bIsSubCollection
-			? Resolved->GetSubCollectionSize(InternalSubCollection, Axis, SizeCache)
+			? Resolved->GetSubCollectionSize(SubCollection, Axis, SizeCache)
 			: Resolved->GetLeafSize(Staging.Bounds, Axis));
 
 	if (SizeCache)
@@ -455,7 +457,7 @@ bool FPCGExAssetCollectionEntry::FixModuleInfos(
 		return false;
 	}
 	return bIsSubCollection
-		? Resolved->FixSubCollection(InternalSubCollection, Axis, OutModule, SizeCache)
+		? Resolved->FixSubCollection(SubCollection, Axis, OutModule, SizeCache)
 		: Resolved->FixLeaf(Staging.Bounds, Axis, OutModule);
 }
 
@@ -475,16 +477,16 @@ bool FPCGExAssetCollectionEntry::Validate(const UPCGExAssetCollection* ParentCol
 
 	if (bIsSubCollection)
 	{
-		if (!InternalSubCollection)
+		if (!SubCollection)
 		{
 			return false;
 		}
-		InternalSubCollection->LoadCache();
+		SubCollection->LoadCache();
 	}
 	return true;
 }
 
-namespace
+namespace PCGExAssetCollection
 {
 	// Aggregate child entry extents per the collection's SubcollectionBoundsMode.
 	// Children must have their Staging.Bounds already filled (caller ensures this via the
@@ -569,12 +571,12 @@ void FPCGExAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 	if (bIsSubCollection)
 	{
 		Staging.Bounds = FBox(ForceInit);
-		if (InternalSubCollection)
+		if (SubCollection)
 		{
-			Staging.Path = FSoftObjectPath(InternalSubCollection.GetPathName());
+			Staging.Path = FSoftObjectPath(SubCollection.GetPathName());
 			if (bRecursive)
 			{
-				InternalSubCollection->RebuildStagingData(true);
+				SubCollection->RebuildStagingData(true);
 			}
 
 			// Aggregate child bounds per the owning collection's policy. Children are now staged
@@ -582,7 +584,7 @@ void FPCGExAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 			const EPCGExSubcollectionBoundsMode Mode = OwningCollection
 				? OwningCollection->SubcollectionBoundsMode
 				: EPCGExSubcollectionBoundsMode::UnionAABB;
-			Staging.Bounds = AggregateSubcollectionBounds(InternalSubCollection, Mode);
+			Staging.Bounds = PCGExAssetCollection::AggregateSubcollectionBounds(SubCollection, Mode);
 		}
 		else
 		{
@@ -625,6 +627,11 @@ void FPCGExAssetCollectionEntry::EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath
 
 FSoftObjectPath FPCGExAssetCollectionEntry::EDITOR_GetThumbnailAssetPath() const
 {
+	// Live SubCollection ref, not Staging.Path: staging can lag a just-assigned reference.
+	if (bIsSubCollection)
+	{
+		return SubCollection ? FSoftObjectPath(SubCollection.GetPathName()) : FSoftObjectPath();
+	}
 	return Staging.Path;
 }
 #endif
@@ -1253,6 +1260,11 @@ bool UPCGExAssetCollection::HasCircularDependency(TSet<const UPCGExAssetCollecti
 		{
 			return;
 		}
+		// Skip leaf entries: a parked SubCollection ref is not a cycle edge.
+		if (!InEntry->bIsSubCollection)
+		{
+			return;
+		}
 		if (const UPCGExAssetCollection* Other = InEntry->GetSubCollectionPtr())
 		{
 			bCircularDependency = Other->HasCircularDependency(InReferences);
@@ -1274,9 +1286,9 @@ void UPCGExAssetCollection::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths, PCGEx
 		{
 			if (bRecursive || bCollectionOnly)
 			{
-				if (InEntry->InternalSubCollection)
+				if (InEntry->SubCollection)
 				{
-					InEntry->InternalSubCollection->GetAssetPaths(OutPaths, Flags);
+					InEntry->SubCollection->GetAssetPaths(OutPaths, Flags);
 				}
 			}
 			return;
@@ -1510,8 +1522,13 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	if (!bIsValueOnlyLeafEdit)
 	{
 		// Sub-collection refs can only change on structural edits -- value-only edits can't create cycles.
+		// Skip leaf entries: a parked ref (survives bIsSubCollection toggles) must not be cleared here.
 		ForEachEntry([this](FPCGExAssetCollectionEntry* InEntry, int32 i)
 		{
+			if (!InEntry->bIsSubCollection)
+			{
+				return;
+			}
 			const UPCGExAssetCollection* Other = InEntry->GetSubCollectionPtr();
 			if (Other && HasCircularDependency(Other))
 			{
@@ -1632,6 +1649,47 @@ void UPCGExAssetCollection::EDITOR_FinalizeStagingRebuild()
 	// compaction), then the pipeline so its OnPostRebuild operates on final state.
 	EDITOR_OnPostStagingRebuild();
 	EDITOR_DispatchPipelinePostRebuild();
+
+	// Content is final here -- persist the mosaic so it survives editor restarts.
+	EDITOR_BakeThumbnailToPackage();
+}
+
+void UPCGExAssetCollection::EDITOR_BakeThumbnailToPackage()
+{
+	// Needs the editor engine + thumbnail manager, so no-op in commandlets/cooks; never render mid-GC.
+	if (!GEditor || IsRunningCommandlet() || IsGarbageCollecting())
+	{
+		return;
+	}
+
+	// Empty collections render nothing (CanVisualizeAsset == false) -- leave the class icon.
+	if (NumEntries() <= 0)
+	{
+		return;
+	}
+
+	// Cells resolve child paths through the asset registry; skip while its initial scan is in flight
+	// so a load-time rebuild doesn't bake a half-resolved mosaic.
+	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	if (AssetRegistryModule.Get().IsLoadingAssets())
+	{
+		return;
+	}
+
+	UPackage* Package = GetOutermost();
+	if (!Package || Package == GetTransientPackage())
+	{
+		return;
+	}
+
+	// Render via our renderer + CacheThumbnail into the package's (in-memory) thumbnail map.
+	// This alone does NOT dirty the package, so without the MarkPackageDirty below a normal Save
+	// never serializes the map (SaveThumbnails only runs for packages that actually get saved) --
+	// the thumbnail would stay session-only. Only dirty when a thumbnail was actually produced.
+	if (ThumbnailTools::GenerateThumbnailForObjectToSaveToDisk(this))
+	{
+		(void)MarkPackageDirty();
+	}
 }
 
 void UPCGExAssetCollection::EDITOR_RebuildStagingData()
@@ -1838,11 +1896,9 @@ void UPCGExAssetCollection::EDITOR_AddBrowserSelectionTyped(const TArray<FAssetD
 	FScopedTransaction Transaction(INVTEXT("Add Browser Selection to Collection"));
 	Modify(true);
 
-	// Partition: assets that are themselves a collection of (a subclass of) this collection's
-	// own class become subcollection entries; everything else falls through to the type-specific
-	// EDITOR_AddBrowserSelectionInternal. Resolving GetAsset() loads the package -- fine here
-	// since this only runs from user-driven editor actions (drag-drop / browser selection).
-	UClass* OwnClass = GetClass();
+	// Partition: any collection asset (any type, not just the host's class) becomes a subcollection
+	// entry; everything else goes to the type-specific EDITOR_AddBrowserSelectionInternal. GetAsset()
+	// loads the package, fine for a user-driven editor action.
 	TArray<FAssetData> RegularAssets;
 	TArray<UPCGExAssetCollection*> SubCollectionAssets;
 	RegularAssets.Reserve(InAssetData.Num());
@@ -1850,7 +1906,7 @@ void UPCGExAssetCollection::EDITOR_AddBrowserSelectionTyped(const TArray<FAssetD
 	for (const FAssetData& AssetData : InAssetData)
 	{
 		UClass* AssetClass = AssetData.GetClass();
-		if (!AssetClass || !AssetClass->IsChildOf(OwnClass))
+		if (!AssetClass || !AssetClass->IsChildOf(UPCGExAssetCollection::StaticClass()))
 		{
 			RegularAssets.Add(AssetData);
 			continue;
@@ -1887,25 +1943,16 @@ void UPCGExAssetCollection::EDITOR_AddSubCollectionEntries(const TArray<UPCGExAs
 		return;
 	}
 
-	// Reflection on the entry struct. Every entry type in this plugin exposes a
-	// `bIsSubCollection` bool (defined on FPCGExAssetCollectionEntry) and a typed
-	// `SubCollection` UPROPERTY -- this helper relies on those names.
+	// Reflection only grows the per-class Entries array; bIsSubCollection/SubCollection live on the
+	// base struct, so the new element is written through a base pointer. Any collection type is accepted.
 	FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
 	if (!ArrayProp)
 	{
 		return;
 	}
 
-	FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-	if (!InnerProp || !InnerProp->Struct)
-	{
-		return;
-	}
-	UScriptStruct* EntryStruct = InnerProp->Struct;
-
-	FBoolProperty* IsSubProp = CastField<FBoolProperty>(EntryStruct->FindPropertyByName(FName("bIsSubCollection")));
-	FObjectProperty* SubCollProp = CastField<FObjectProperty>(EntryStruct->FindPropertyByName(FName("SubCollection")));
-	if (!IsSubProp || !SubCollProp || !SubCollProp->PropertyClass)
+	const FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
+	if (!InnerProp || !InnerProp->Struct || !InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
 	{
 		return;
 	}
@@ -1918,29 +1965,17 @@ void UPCGExAssetCollection::EDITOR_AddSubCollectionEntries(const TArray<UPCGExAs
 	// dedupe behavior of MeshCollection / ActorCollection / PCGDataAssetCollection's
 	// EDITOR_AddBrowserSelectionInternal implementations.
 	TSet<const UPCGExAssetCollection*> AlreadyReferenced;
-	const int32 ExistingNum = ArrayHelper.Num();
-	const int32 IsSubOffset = IsSubProp->GetOffset_ForInternal();
-	const int32 SubCollOffset = SubCollProp->GetOffset_ForInternal();
-
-	for (int32 i = 0; i < ExistingNum; ++i)
+	ForEachEntry([&AlreadyReferenced](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)
 	{
-		const uint8* EntryPtr = ArrayHelper.GetRawPtr(i);
-		if (IsSubProp->GetPropertyValue(EntryPtr + IsSubOffset))
+		if (Entry->HasValidSubCollection())
 		{
-			if (const UObject* Existing = SubCollProp->GetObjectPropertyValue(EntryPtr + SubCollOffset))
-			{
-				AlreadyReferenced.Add(Cast<UPCGExAssetCollection>(Existing));
-			}
+			AlreadyReferenced.Add(Entry->GetSubCollectionPtr());
 		}
-	}
+	});
 
 	for (UPCGExAssetCollection* Sub : InSubCollections)
 	{
 		if (!Sub || Sub == this)
-		{
-			continue;
-		}
-		if (!Sub->GetClass()->IsChildOf(SubCollProp->PropertyClass))
 		{
 			continue;
 		}
@@ -1954,9 +1989,9 @@ void UPCGExAssetCollection::EDITOR_AddSubCollectionEntries(const TArray<UPCGExAs
 		}
 
 		const int32 NewIdx = ArrayHelper.AddValue();
-		uint8* EntryPtr = ArrayHelper.GetRawPtr(NewIdx);
-		IsSubProp->SetPropertyValue(EntryPtr + IsSubOffset, true);
-		SubCollProp->SetObjectPropertyValue(EntryPtr + SubCollOffset, Sub);
+		FPCGExAssetCollectionEntry* NewEntry = reinterpret_cast<FPCGExAssetCollectionEntry*>(ArrayHelper.GetRawPtr(NewIdx));
+		NewEntry->bIsSubCollection = true;
+		NewEntry->SubCollection = Sub;
 		AlreadyReferenced.Add(Sub);
 	}
 }

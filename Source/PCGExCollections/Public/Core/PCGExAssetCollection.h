@@ -134,12 +134,13 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
  * Creating a custom collection type:
  * 1. Subclass this struct -- add your asset-specific UPROPERTY (e.g. TSoftObjectPtr<UMyAsset>)
  * 2. Override GetTypeId() to return your registered FTypeId
- * 3. Override GetSubCollectionPtr() / ClearSubCollection() if you have a typed SubCollection
- * 4. Override Validate() to reject invalid entries (call Super)
- * 5. Override UpdateStaging() to populate Staging.Bounds and Staging.Path from your asset
- * 6. Override SetAssetPath() to update your TSoftObjectPtr from a path
- * 7. Override EDITOR_Sanitize() to sync InternalSubCollection from your typed SubCollection
- * 8. Optionally override BuildMicroCache() for per-entry sub-selections (e.g. material variants)
+ * 3. Override Validate() to reject invalid entries (call Super)
+ * 4. Override UpdateStaging() to populate Staging.Bounds and Staging.Path from your asset
+ * 5. Override SetAssetPath() to update your TSoftObjectPtr from a path
+ * 6. Optionally override EDITOR_Sanitize() to clean up type-specific state (call Super)
+ * 7. Optionally override BuildMicroCache() for per-entry sub-selections (e.g. material variants)
+ * Subcollection support comes for free: the base SubCollection property accepts any
+ * collection type, no per-type storage or overrides needed.
  *
  * Key properties inherited:
  * - Weight: pick probability (0 = excluded from cache)
@@ -244,23 +245,27 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	FPCGExAssetStagingData Staging;
 
-	/** Internal subcollection reference - set via EDITOR_Sanitize from typed SubCollection property */
-	UPROPERTY()
-	TObjectPtr<UPCGExAssetCollection> InternalSubCollection;
+	/**
+	 * Subcollection to draw picks from when bIsSubCollection is enabled. Accepts any collection type;
+	 * consuming nodes type-check resolved entries, so mixed-type nesting must be routed through type
+	 * filters downstream. Kept populated when bIsSubCollection is toggled off so the ref survives iteration.
+	 * Do not rename: legacy per-type entry members were also named "SubCollection", so their on-disk
+	 * tags deserialize straight into this property.
+	 */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
+	TObjectPtr<UPCGExAssetCollection> SubCollection;
 
 
-	// Subcollection Access (Virtual - Override in derived types)
+	// Subcollection Access
 
-	/** Get subcollection as base type. Override in derived classes. */
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const
 	{
-		return InternalSubCollection;
+		return SubCollection;
 	}
 
-	/** Clear subcollection references. Override to also clear typed pointer. */
 	virtual void ClearSubCollection()
 	{
-		InternalSubCollection = nullptr;
+		SubCollection = nullptr;
 	}
 
 	/** Check if this is a valid subcollection entry */
@@ -275,13 +280,13 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	template <typename T>
 	T* GetSubCollection()
 	{
-		return Cast<T>(InternalSubCollection);
+		return Cast<T>(SubCollection);
 	}
 
 	template <typename T>
 	const T* GetSubCollection() const
 	{
-		return Cast<T>(InternalSubCollection);
+		return Cast<T>(SubCollection);
 	}
 
 
@@ -352,7 +357,8 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 	/**
 	 * Editor-only: the asset path the collection grid should use for this entry's
-	 * thumbnail and for double-click "open asset" actions. Defaults to Staging.Path.
+	 * thumbnail and for double-click "open asset" actions. Defaults to Staging.Path
+	 * for leaves and to the live SubCollection reference for subcollection entries.
 	 * Override when the user-facing source asset differs from Staging.Path -- e.g.
 	 * level-sourced PCGDataAsset entries whose Staging.Path points at the embedded
 	 * exported data asset rather than the authored UWorld.
@@ -841,10 +847,9 @@ public:
 
 	/**
 	 * Append one entry per input subcollection. Each new entry has bIsSubCollection = true
-	 * and its SubCollection UPROPERTY pointed at the input collection. Uses reflection on
-	 * the entry struct (looks up bIsSubCollection + SubCollection by name) so it works for
-	 * every entry type without per-type wiring. Skips inputs that would create a cycle, that
-	 * point at self, or that are already referenced by an existing subcollection entry.
+	 * and its base SubCollection property pointed at the input collection -- any collection
+	 * type is accepted. Skips inputs that would create a cycle, that point at self, or that
+	 * are already referenced by an existing subcollection entry.
 	 * Does NOT open a transaction or mark dirty -- caller is responsible (matches the
 	 * EDITOR_AddBrowserSelectionTyped contract).
 	 */
@@ -890,6 +895,11 @@ protected:
 	 *  so the pipelines see post-merge/post-compaction state. Must stay outside the virtual --
 	 *  overrides are not required to call Super. */
 	void EDITOR_FinalizeStagingRebuild();
+
+	/** Render the entry mosaic and cache it into the package thumbnail map so it survives editor
+	 *  restarts -- the pool's live render is session-only and data assets get no engine save-time
+	 *  bake. No-op outside the editor, mid asset-registry scan, or for empty/transient collections. */
+	void EDITOR_BakeThumbnailToPackage();
 
 	/** Staging pipeline hook dispatchers. Run every valid pipeline in array order; no-op when
 	 *  none are assigned, when invoked re-entrantly from inside another hook, or while cooking. */

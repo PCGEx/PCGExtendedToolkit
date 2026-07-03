@@ -637,7 +637,7 @@ namespace PCGExGetCollectionData
 
 					FPCGSubdivisionSubmodule Module;
 					const bool bFixed = bIsSub
-						? Grammar->FixSubCollection(E->InternalSubCollection, PCGExGrammarAxes::Bits[a], Module, Settings->bWriteSize ? &SizeCache : nullptr)
+						? Grammar->FixSubCollection(E->SubCollection, PCGExGrammarAxes::Bits[a], Module, Settings->bWriteSize ? &SizeCache : nullptr)
 						: Grammar->FixLeaf(E->Staging.Bounds, PCGExGrammarAxes::Bits[a], Module);
 					if (!bFixed)
 					{

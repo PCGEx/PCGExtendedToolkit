@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AssetRegistry/AssetData.h"
 
 class UPCGExAssetCollection;
 class UPackage;
@@ -11,6 +12,12 @@ class UPackage;
 /** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
 namespace PCGExCollectionEditorUtils
 {
+	/**
+	 * Resolve an entry's thumbnail/source path to FAssetData without loading. Falls back to stripping
+	 * a trailing "_C" so actor entries (generated class path) resolve to their Blueprint asset.
+	 */
+	PCGEXCOLLECTIONSEDITOR_API FAssetData ResolveEntryAssetData(const FSoftObjectPath& AssetPath);
+
 	/** Add Content Browser selection to this collection. */
 	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);
 
