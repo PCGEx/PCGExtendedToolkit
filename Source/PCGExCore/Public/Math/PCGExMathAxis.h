@@ -115,11 +115,23 @@ namespace PCGExMath
 		GetAxesOrder(Order, OutArray[0], OutArray[1], OutArray[2]);
 	}
 
+	/** Builds a rotation from the given axes according to the selected construction.
+	 * Degenerate inputs degrade gracefully: a two-axis construction whose secondary axis is zero
+	 * falls back to its single-axis variant, a zero primary axis falls back to the secondary,
+	 * and fully degenerate inputs return identity. */
 	PCGEXCORE_API FQuat MakeRot(const EPCGExMakeRotAxis Order, const FVector& X, const FVector& Y, const FVector& Z);
 
+	/** Two-axes shorthand: A is the construction's primary axis, B its secondary. Same degeneracy fallbacks as above. */
 	PCGEXCORE_API FQuat MakeRot(const EPCGExMakeRotAxis Order, const FVector& A, const FVector& B);
 
+	/** For each reference axis (X/Y/ZAxis), outputs the index (0=X, 1=Y, 2=Z) of the quaternion's local
+	 * axis best aligned with it, sign-insensitive. With bPermute the mapping is guaranteed bijective
+	 * (highest-scoring assignment); without it each reference axis picks independently and may duplicate. */
 	PCGEXCORE_API void FindOrderMatch(const FQuat& Quat, const FVector& XAxis, const FVector& YAxis, const FVector& ZAxis, int32& X, int32& Y, int32& Z, const bool bPermute = true);
+
+	/** Normalized Cross(Up, Dir). When Dir is (nearly) parallel to Up the cross vanishes; this falls
+	 * back to an alternate reference axis so the result is never zero for a non-zero Dir. */
+	PCGEXCORE_API FVector SafeCrossNormal(const FVector& Up, const FVector& Dir);
 
 	template <const EPCGExAxis Dir = EPCGExAxis::Forward>
 	FORCEINLINE static FVector GetDirection(const FQuat& Quat)

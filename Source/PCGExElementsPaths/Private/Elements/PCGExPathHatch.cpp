@@ -438,6 +438,14 @@ namespace PCGExPathHatch
 					{
 						const double Step = FMath::Max(UE_DOUBLE_KINDA_SMALL_NUMBER, SegmentSpacingValue);
 						NumInterior = FMath::Max(0, FMath::FloorToInt(Seg.Length / Step));
+
+						// When Length is an exact multiple of Step, the last interior point lands on WorldEnd,
+						// emitting collocated points at the segment end (which downstream nodes choke on --
+						// e.g. Path : Extrude can't derive a terminal tangent). Keep interiors strictly inside.
+						if (NumInterior > 0 && NumInterior * Step >= Seg.Length - UE_DOUBLE_KINDA_SMALL_NUMBER)
+						{
+							NumInterior--;
+						}
 					}
 					Seg.NumPoints = NumInterior + 2;
 
