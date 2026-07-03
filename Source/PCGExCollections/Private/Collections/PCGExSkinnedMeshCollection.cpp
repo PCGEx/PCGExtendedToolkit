@@ -53,17 +53,6 @@ namespace PCGExSkinnedMeshCollection
 
 // Skinned Mesh Collection Entry
 
-UPCGExAssetCollection* FPCGExSkinnedMeshCollectionEntry::GetSubCollectionPtr() const
-{
-	return SubCollection;
-}
-
-void FPCGExSkinnedMeshCollectionEntry::ClearSubCollection()
-{
-	FPCGExAssetCollectionEntry::ClearSubCollection();
-	SubCollection = nullptr;
-}
-
 void FPCGExSkinnedMeshCollectionEntry::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) const
 {
 	FPCGExAssetCollectionEntry::GetAssetPaths(OutPaths);
@@ -225,17 +214,9 @@ void FPCGExSkinnedMeshCollectionEntry::EDITOR_Sanitize()
 {
 	FPCGExAssetCollectionEntry::EDITOR_Sanitize();
 
-	if (!bIsSubCollection)
+	if (!bIsSubCollection && SkinnedAsset)
 	{
-		InternalSubCollection = nullptr;
-		if (SkinnedAsset)
-		{
-			Descriptor.SkinnedAsset = SkinnedAsset;
-		}
-	}
-	else
-	{
-		InternalSubCollection = SubCollection;
+		Descriptor.SkinnedAsset = SkinnedAsset;
 	}
 }
 #endif

@@ -38,17 +38,6 @@ PCGEX_REGISTER_COLLECTION_TYPE(PCGDataAsset, UPCGExPCGDataAssetCollection, FPCGE
 
 #pragma region FPCGExPCGDataAssetCollectionEntry
 
-UPCGExAssetCollection* FPCGExPCGDataAssetCollectionEntry::GetSubCollectionPtr() const
-{
-	return SubCollection;
-}
-
-void FPCGExPCGDataAssetCollectionEntry::ClearSubCollection()
-{
-	FPCGExAssetCollectionEntry::ClearSubCollection();
-	SubCollection = nullptr;
-}
-
 bool FPCGExPCGDataAssetCollectionEntry::Validate(const UPCGExAssetCollection* ParentCollection)
 {
 	if (!bIsSubCollection)
@@ -278,15 +267,6 @@ void FPCGExPCGDataAssetCollectionEntry::SetAssetPath(const FSoftObjectPath& InPa
 void FPCGExPCGDataAssetCollectionEntry::EDITOR_Sanitize()
 {
 	FPCGExAssetCollectionEntry::EDITOR_Sanitize();
-
-	if (!bIsSubCollection)
-	{
-		InternalSubCollection = nullptr;
-	}
-	else
-	{
-		InternalSubCollection = SubCollection;
-	}
 
 	// Clean up embedded data when not in Level mode
 	if (Source != EPCGExDataAssetEntrySource::Level)

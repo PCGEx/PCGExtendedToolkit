@@ -17,10 +17,10 @@
 class UPCGExActorCollection;
 
 /**
- * Actor collection entry. References an actor class (TSoftClassPtr<AActor>) or
- * a UPCGExActorCollection subcollection. Simpler than FPCGExMeshCollectionEntry --
- * no MicroCache, no descriptors. UpdateStaging() spawns a temporary actor in-editor
- * to compute bounds (with configurable collision/child-actor inclusion).
+ * Actor collection entry. References an actor class (TSoftClassPtr<AActor>) or, via the
+ * base SubCollection property, any collection type as a subcollection. Simpler than
+ * FPCGExMeshCollectionEntry -- no MicroCache, no descriptors. UpdateStaging() spawns a
+ * temporary actor in-editor to compute bounds (with configurable collision/child-actor inclusion).
  */
 USTRUCT(BlueprintType, DisplayName="[PCGEx] Actor Collection Entry")
 struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetCollectionEntry
@@ -40,9 +40,6 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftClassPtr<AActor> Actor = nullptr;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
-	TObjectPtr<UPCGExActorCollection> SubCollection;
 
 	/** Cached: whether the actor CDO has any UPCGComponent. */
 	UPROPERTY()
@@ -75,10 +72,6 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	/** Name of the actor within the level to capture delta from. */
 	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection ", EditConditionHides))
 	FName DeltaSourceActorName;
-
-	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const override;
-
-	virtual void ClearSubCollection() override;
 
 	// Lifecycle
 	virtual bool Validate(const UPCGExAssetCollection* ParentCollection) override;

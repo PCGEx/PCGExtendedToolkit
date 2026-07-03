@@ -6,12 +6,33 @@
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "ScopedTransaction.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Core/PCGExAssetCollection.h"
 
 namespace PCGExCollectionEditorUtils
 {
 #define PCGEX_IF_TYPE(_NAME, _BODY) { if (UPCGEx##_NAME##Collection* Collection = Cast<UPCGEx##_NAME##Collection>(InCollection)) { _BODY; return; }}
 #define PCGEX_PER_COLLECTION(_BODY)	PCGEX_FOREACH_COLLECTION_TYPE(PCGEX_IF_TYPE, _BODY)
+
+	FAssetData ResolveEntryAssetData(const FSoftObjectPath& AssetPath)
+	{
+		const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+		FAssetData AssetData = AssetRegistry.GetAssetByObjectPath(AssetPath);
+
+		// Actor entries store the generated class path ("_C"); retry against the Blueprint asset.
+		if (!AssetData.IsValid())
+		{
+			FString PathString = AssetPath.ToString();
+			if (PathString.EndsWith(TEXT("_C")))
+			{
+				PathString.LeftChopInline(2);
+				AssetData = AssetRegistry.GetAssetByObjectPath(FSoftObjectPath(PathString));
+			}
+		}
+
+		return AssetData;
+	}
 
 	// Notify listeners that the collection was modified (for grid view refresh, etc.)
 	static void NotifyModified(UPCGExAssetCollection* InCollection)

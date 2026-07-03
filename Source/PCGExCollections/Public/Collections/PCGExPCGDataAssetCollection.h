@@ -88,9 +88,6 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY()
 	TSoftObjectPtr<UPCGExActorCollection> ExternalActorCollection;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
-	TObjectPtr<UPCGExPCGDataAssetCollection> SubCollection;
-
 #if WITH_EDITORONLY_DATA
 	/** Snapshot of mesh entries captured from this entry's source level. Editor-only,
 	 *  stripped at cook. Consumed by UPCGExPCGDataAssetCollection::CompactSharedMesh
@@ -137,12 +134,6 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY()
 	TArray<int32> EditorLevelLocalPicks;
 #endif
-
-	// Subcollection Access
-
-	virtual UPCGExAssetCollection* GetSubCollectionPtr() const override;
-
-	virtual void ClearSubCollection() override;
 
 	// Lifecycle
 

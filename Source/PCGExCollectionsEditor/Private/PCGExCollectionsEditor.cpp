@@ -27,6 +27,9 @@
 #include "Details/Collections/PCGExSelectorClosestMatchAxisCustomization.h"
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
 #include "Details/Collections/PCGExSkinnedMeshCollectionActions.h"
+#include "Misc/CoreDelegates.h"
+#include "ThumbnailRendering/ThumbnailManager.h"
+#include "Thumbnails/PCGExCollectionThumbnailRenderer.h"
 #include "UObject/UObjectGlobals.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExCollectionsEditorModule"
@@ -57,6 +60,17 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	PCGEX_FOREACH_ENTRY_TYPE_ALL(PCGEX_REGISTER_ENTRY_CUSTOMIZATION)
 
 #undef PCGEX_REGISTER_ENTRY_CUSTOMIZATION
+
+	// Mosaic thumbnail renderer for all collection types. GEngine != null means engine init is
+	// done and UThumbnailManager is safe to touch; otherwise defer to PostEngineInit.
+	if (GEngine)
+	{
+		RegisterThumbnailRenderer();
+	}
+	else
+	{
+		OnPostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(this, &FPCGExCollectionsEditorModule::RegisterThumbnailRenderer);
+	}
 
 	// Defer subscription until the AssetRegistry's initial scan completes -- it fires
 	// OnAssetUpdatedOnDisk for every asset it discovers at startup, when referenced data
@@ -91,8 +105,20 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 		AssetRegistry.OnAssetUpdatedOnDisk().Remove(OnAssetUpdatedOnDiskHandle);
 	}
 	FCoreUObjectDelegates::OnObjectsReinstanced.Remove(OnObjectsReinstancedHandle);
+	FCoreDelegates::GetOnPostEngineInit().Remove(OnPostEngineInitHandle);
+
+	if (bThumbnailRendererRegistered && UObjectInitialized())
+	{
+		UThumbnailManager::Get().UnregisterCustomRenderer(UPCGExAssetCollection::StaticClass());
+	}
 
 	IPCGExEditorModuleInterface::ShutdownModule();
+}
+
+void FPCGExCollectionsEditorModule::RegisterThumbnailRenderer()
+{
+	UThumbnailManager::Get().RegisterCustomRenderer(UPCGExAssetCollection::StaticClass(), UPCGExCollectionThumbnailRenderer::StaticClass());
+	bThumbnailRendererRegistered = true;
 }
 
 void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& AssetData)

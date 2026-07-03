@@ -624,14 +624,15 @@ namespace PCGExPathSplineMesh
 				Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, Segment.MaterialPick);
 			}
 
-			MeshEntry = static_cast<const FPCGExMeshCollectionEntry*>(Result.Entry);
-			Segment.MeshEntry = MeshEntry;
-
-			if (!MeshEntry)
+			// Subcollections may nest any collection type; only mesh-hosted entries are usable here.
+			if (!Result.IsValid() || !Result.Host->IsType(PCGExAssetCollection::TypeIds::Mesh))
 			{
 				HandleInvalidPoint(Index);
 				continue;
 			}
+
+			MeshEntry = static_cast<const FPCGExMeshCollectionEntry*>(Result.Entry);
+			Segment.MeshEntry = MeshEntry;
 
 			const int32 NextIndex = Index + 1 > LastIndex ? 0 : Index + 1;
 			const FTransform& CurrentTransform = Transforms[Index];

@@ -102,15 +102,13 @@ namespace PCGExMeshCollection
 }
 
 /**
- * Mesh collection entry. References a UStaticMesh (or a UPCGExMeshCollection subcollection).
- * Adds mesh-specific features on top of the base entry:
+ * Mesh collection entry. References a UStaticMesh (or, via the base SubCollection property,
+ * any collection type as a subcollection). Adds mesh-specific features on top of the base entry:
  * - Material variants: weighted material override sets (single-slot or multi-slot)
  * - ISM/SM descriptors: per-entry component settings (collision, rendering, etc.)
  * - DescriptorSource: local vs global descriptor inheritance
  *
  * Example of what custom collections can learn from this:
- * - The typed SubCollection UPROPERTY is separate from InternalSubCollection
- * - EDITOR_Sanitize() syncs them: InternalSubCollection = SubCollection
  * - BuildMicroCache() creates a mesh-specific FMicroCache for material variant picking
  * - UpdateStaging() loads the mesh to extract bounds and sockets
  */
@@ -131,9 +129,6 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UStaticMesh> StaticMesh = nullptr;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
-	TObjectPtr<UPCGExMeshCollection> SubCollection;
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	EPCGExMaterialVariantsMode MaterialVariants = EPCGExMaterialVariantsMode::None;
@@ -169,12 +164,6 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
 	 *  hash to the new scheme. */
 	UPROPERTY()
 	uint32 PropertyComponentHash = 0;
-
-	// Subcollection Access
-
-	virtual UPCGExAssetCollection* GetSubCollectionPtr() const override;
-
-	virtual void ClearSubCollection() override;
 
 	// Asset & Material Handling
 

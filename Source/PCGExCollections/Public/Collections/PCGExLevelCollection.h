@@ -17,8 +17,8 @@
 class UPCGExLevelCollection;
 
 /**
- * Level collection entry. References a UWorld level asset or
- * a UPCGExLevelCollection subcollection. UpdateStaging() loads the level
+ * Level collection entry. References a UWorld level asset or, via the base SubCollection
+ * property, any collection type as a subcollection. UpdateStaging() loads the level
  * package in-editor to compute combined bounds from spatial actors.
  */
 USTRUCT(BlueprintType, DisplayName="[PCGEx] Level Collection Entry")
@@ -40,20 +40,12 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelCollectionEntry : public FPCGExAssetColle
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level = nullptr;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bIsSubCollection", EditConditionHides, DisplayAfter="bIsSubCollection"))
-	TObjectPtr<UPCGExLevelCollection> SubCollection;
-
-	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const override;
-
-	virtual void ClearSubCollection() override;
-
 	// Lifecycle
 	virtual bool Validate(const UPCGExAssetCollection* ParentCollection) override;
 	virtual void UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive) override;
 	virtual void SetAssetPath(const FSoftObjectPath& InPath) override;
 
 #if WITH_EDITOR
-	virtual void EDITOR_Sanitize() override;
 	virtual void EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 #endif
 };

@@ -20,8 +20,11 @@ private:
 	FDelegateHandle OnFilesLoadedHandle;
 	FDelegateHandle OnAssetUpdatedOnDiskHandle;
 	FDelegateHandle OnObjectsReinstancedHandle;
+	FDelegateHandle OnPostEngineInitHandle;
+	bool bThumbnailRendererRegistered = false;
 
 	void OnFilesLoaded();
 	void OnAssetUpdatedOnDisk(const FAssetData& AssetData);
 	void OnObjectsReinstanced(const TMap<UObject*, UObject*>& OldToNewMap);
+	void RegisterThumbnailRenderer();
 };
