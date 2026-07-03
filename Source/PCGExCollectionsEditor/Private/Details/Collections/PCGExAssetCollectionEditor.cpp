@@ -426,21 +426,6 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildSubCollectionPickerSlot(
 	TWeakObjectPtr<UPCGExAssetCollection> WeakColl = InCollection;
 	const int32 Idx = EntryIndex;
 
-	const UClass* SubCollectionClass = nullptr;
-	if (UPCGExAssetCollection* Coll = WeakColl.Get())
-	{
-		if (FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName)))
-		{
-			if (FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner); InnerProp && InnerProp->Struct)
-			{
-				if (const FObjectPropertyBase* SubProp = CastField<FObjectPropertyBase>(InnerProp->Struct->FindPropertyByName(PCGExAssetCollectionEditor::SubCollectionName)))
-				{
-					SubCollectionClass = SubProp->PropertyClass;
-				}
-			}
-		}
-	}
-
 	return SNew(SBox)
 		.Visibility_Lambda([WeakColl, Idx]()
 		{
@@ -451,7 +436,7 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildSubCollectionPickerSlot(
 		})
 		[
 			SNew(SObjectPropertyEntryBox)
-			.AllowedClass(SubCollectionClass)
+			.AllowedClass(UPCGExAssetCollection::StaticClass())
 			.ObjectPath_Lambda([WeakColl, Idx]() -> FString
 			{
 				const UPCGExAssetCollection* Coll = WeakColl.Get();
@@ -466,34 +451,16 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildSubCollectionPickerSlot(
 				UPCGExAssetCollection* Coll = WeakColl.Get();
 				if (!Coll) { return; }
 
-				FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
-				if (!ArrayProp) { return; }
-				FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-				if (!InnerProp || !InnerProp->Struct) { return; }
-				void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
-				FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
-				if (Idx < 0 || Idx >= ArrayHelper.Num()) { return; }
-				uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
+				FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
+				if (!Entry) { return; }
 
 				FScopedTransaction Transaction(INVTEXT("Set SubCollection"));
 				Coll->Modify();
 
-				// Write the typed SubCollection UPROPERTY -- the base InternalSubCollection field
-				// is resynced from this on every PostEditChange via EDITOR_Sanitize, so writes
-				// to it directly are silently reverted.
-				if (const FObjectPropertyBase* SubProp = CastField<FObjectPropertyBase>(InnerProp->Struct->FindPropertyByName(PCGExAssetCollectionEditor::SubCollectionName)))
-				{
-					SubProp->SetObjectPropertyValue_InContainer(EntryPtr, AssetData.GetAsset());
-				}
-				else
-				{
-					// Entry types without a typed SubCollection field: write the base storage directly.
-					FPCGExAssetCollectionEntry* BaseEntry = reinterpret_cast<FPCGExAssetCollectionEntry*>(EntryPtr);
-					BaseEntry->InternalSubCollection = Cast<UPCGExAssetCollection>(AssetData.GetAsset());
-				}
+				Entry->SubCollection = Cast<UPCGExAssetCollection>(AssetData.GetAsset());
 
 				Coll->PostEditChange();
-				OnPropertyEdited.ExecuteIfBound(PCGExAssetCollectionEditor::SubCollectionName);
+				OnPropertyEdited.ExecuteIfBound(GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, SubCollection));
 			})
 			.DisplayThumbnail(false)
 		];
