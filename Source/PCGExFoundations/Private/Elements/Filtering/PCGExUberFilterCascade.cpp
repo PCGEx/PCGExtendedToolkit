@@ -65,6 +65,12 @@ TArray<FPCGPinProperties> UPCGExUberFilterCascadeSettings::InputPinProperties() 
 
 TArray<FPCGPinProperties> UPCGExUberFilterCascadeSettings::OutputPinProperties() const
 {
+	if (Mode == EPCGExUberFilterMode::Write)
+	{
+		// Single "Out" pin: all points forwarded with the partition index written to an attribute.
+		return Super::OutputPinProperties();
+	}
+
 	TArray<FPCGPinProperties> PinProperties;
 
 	PCGEX_PIN_POINTS(PCGExFilters::Labels::OutputOutsideFiltersLabel, "Points that didn't pass any branch's filters.", Normal)
@@ -80,9 +86,20 @@ TArray<FPCGPinProperties> UPCGExUberFilterCascadeSettings::OutputPinProperties()
 PCGEX_INITIALIZE_ELEMENT(UberFilterCascade)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(UberFilterCascade)
 
+PCGExData::EIOInit UPCGExUberFilterCascadeSettings::GetMainDataInitializationPolicy() const
+{
+	if (Mode == EPCGExUberFilterMode::Write)
+	{
+		return WantsDataStealing() ? PCGExData::EIOInit::Forward : PCGExData::EIOInit::Duplicate;
+	}
+	return PCGExData::EIOInit::NoInit;
+}
+
 FName UPCGExUberFilterCascadeSettings::GetMainOutputPin() const
 {
-	return PCGExFilters::Labels::OutputOutsideFiltersLabel;
+	// Partition mode: the first output pin (Outside) is the main output, ensuring a proper forward when the node is disabled.
+	// Write mode: use the default single "Out" pin.
+	return Mode == EPCGExUberFilterMode::Partition ? PCGExFilters::Labels::OutputOutsideFiltersLabel : Super::GetMainOutputPin();
 }
 
 #pragma endregion
@@ -103,6 +120,12 @@ bool FPCGExUberFilterCascadeElement::Boot(FPCGExContext* InContext) const
 	for (int i = 0; i < Settings->NumBranches; i++)
 	{
 		PCGExFactories::GetInputFactories(Context, Settings->InputLabels[i], Context->BranchFilterFactories[i], PCGExFactories::PointFilters(), false);
+	}
+
+	if (Settings->Mode == EPCGExUberFilterMode::Write)
+	{
+		PCGEX_VALIDATE_NAME(Settings->PartitionAttributeName)
+		return true;
 	}
 
 	Context->BranchOutputs.SetNum(Settings->NumBranches);
@@ -131,13 +154,16 @@ bool FPCGExUberFilterCascadeElement::AdvanceWork(FPCGExContext* InContext, const
 	{
 		Context->NumPairs = Context->MainPoints->Pairs.Num();
 
-		for (int i = 0; i < Settings->NumBranches; i++)
+		if (Settings->Mode == EPCGExUberFilterMode::Partition)
 		{
-			Context->BranchOutputs[i]->Pairs.Init(nullptr, Context->NumPairs);
-		}
-		if (Context->DefaultOutput)
-		{
-			Context->DefaultOutput->Pairs.Init(nullptr, Context->NumPairs);
+			for (int i = 0; i < Settings->NumBranches; i++)
+			{
+				Context->BranchOutputs[i]->Pairs.Init(nullptr, Context->NumPairs);
+			}
+			if (Context->DefaultOutput)
+			{
+				Context->DefaultOutput->Pairs.Init(nullptr, Context->NumPairs);
+			}
 		}
 
 		if (!Context->StartBatchProcessingPoints(
@@ -155,6 +181,12 @@ bool FPCGExUberFilterCascadeElement::AdvanceWork(FPCGExContext* InContext, const
 	}
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
+
+	if (Settings->Mode == EPCGExUberFilterMode::Write)
+	{
+		Context->MainPoints->StageOutputs();
+		return Context->TryComplete();
+	}
 
 	for (int i = 0; i < Settings->NumBranches; i++)
 	{
@@ -214,7 +246,7 @@ namespace PCGExUberFilterCascade
 			return false;
 		}
 
-		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::NoInit)
+		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
 		const int32 NumBranches = Settings->NumBranches;
 		BranchManagers.SetNum(NumBranches);
@@ -231,6 +263,11 @@ namespace PCGExUberFilterCascade
 			}
 		}
 
+		if (Settings->Mode == EPCGExUberFilterMode::Write)
+		{
+			PartitionBuffer = PointDataFacade->GetWritable<int32>(Settings->PartitionAttributeName, Settings->DefaultValue, false, PCGExData::EBufferInit::New);
+		}
+
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
 		return true;
@@ -238,6 +275,12 @@ namespace PCGExUberFilterCascade
 
 	void FProcessor::PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops)
 	{
+		if (Settings->Mode != EPCGExUberFilterMode::Partition)
+		{
+			// Write mode writes directly to the partition buffer; no per-scope index buckets needed.
+			return;
+		}
+
 		const int32 NumBranches = Settings->NumBranches;
 		const int32 MaxRange = PCGExMT::FScope::GetMaxRange(Loops);
 		const int32 TotalBuckets = NumBranches + 1; // N branches + default
@@ -259,6 +302,30 @@ namespace PCGExUberFilterCascade
 		PointDataFacade->Fetch(Scope);
 
 		const int32 NumBranches = BranchManagers.Num();
+
+		if (Settings->Mode == EPCGExUberFilterMode::Write)
+		{
+			const int32 Base = Settings->DefaultValue;
+
+			PCGEX_SCOPE_LOOP(Index)
+			{
+				// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
+				int32 Depth = 0;
+				for (int32 i = 0; i < NumBranches; i++)
+				{
+					if (BranchManagers[i] && BranchManagers[i]->Test(Index))
+					{
+						Depth = i + 1;
+						break;
+					}
+				}
+
+				PartitionBuffer->SetValue(Index, Base + Depth);
+			}
+
+			return;
+		}
+
 		const int32 DefaultIdx = NumBranches; // Last bucket
 
 		PCGEX_SCOPE_LOOP(Index)
@@ -302,6 +369,12 @@ namespace PCGExUberFilterCascade
 	void FProcessor::OnPointsProcessingComplete()
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExUberFilterCascadeProcessor::CompleteWork);
+
+		if (Settings->Mode == EPCGExUberFilterMode::Write)
+		{
+			PointDataFacade->WriteFastest(TaskManager);
+			return;
+		}
 
 		PCGExBucketDispatchHelpers::DispatchBuckets(
 			Context->BranchOutputs,
