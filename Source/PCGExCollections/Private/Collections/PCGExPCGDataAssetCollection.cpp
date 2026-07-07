@@ -27,6 +27,7 @@
 #include "Data/PCGPointArrayData.h"
 #include "Data/PCGSpatialData.h"
 #include "Engine/Level.h"
+#include "Helpers/PCGExCollectionExternalization.h"
 #include "Helpers/PCGExCollectionSortKeys.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
@@ -364,93 +365,8 @@ namespace PCGExSharedCompact
 		return nullptr;
 	}
 
-	/**
-	 * Symmetric to ExternalizeUObject. Loads the asset behind External (when valid) and
-	 * renames it into NewOuter's package, populating Instanced. External is always reset.
-	 * Guarded: if Instanced is already set we skip the load -- never overwrite an in-memory
-	 * working buffer with a (possibly stale) on-disk copy.
-	 */
-	template <typename T>
-	static void Internalize(TObjectPtr<T>& Instanced, TSoftObjectPtr<T>& External, UObject* NewOuter)
-	{
-#if WITH_EDITOR
-		if (!Instanced && !External.IsNull())
-		{
-			if (T* Loaded = External.LoadSynchronous())
-			{
-				Loaded->Rename(nullptr, NewOuter, REN_DontCreateRedirectors | REN_NonTransactional);
-				Loaded->ClearFlags(RF_Public | RF_Standalone);
-				Instanced = Loaded;
-			}
-		}
-		External.Reset();
-#endif
-	}
-
-	/**
-	 * Rename Source into the package at DesiredPackagePath as DesiredAssetName, evicting any
-	 * existing UObject sitting at that path to the transient package first. On first emit,
-	 * notifies the asset registry. Idempotent: skips work if Source is already in place.
-	 *
-	 * Returns the resulting soft path (empty if Source was null).
-	 */
-	static FSoftObjectPath ExternalizeUObject(UObject* Source, const FString& DesiredPackagePath, const FString& DesiredAssetName)
-	{
-#if WITH_EDITOR
-		if (!Source)
-		{
-			return FSoftObjectPath();
-		}
-
-		UPackage* CurrentPackage = Source->GetOutermost();
-		if (CurrentPackage && CurrentPackage->GetName() == DesiredPackagePath && Source->GetName() == DesiredAssetName)
-		{
-			return FSoftObjectPath(Source);
-		}
-
-		UPackage* TargetPackage = CreatePackage(*DesiredPackagePath);
-		check(TargetPackage);
-
-		// SavePackage refuses to overwrite a package that is only partially loaded -- doing so
-		// would clobber the unloaded on-disk exports (see SavePackage2.cpp IsFullyLoaded guard).
-		// When the destination already exists on disk but was never loaded this session,
-		// CreatePackage hands back an unloaded stub (IsFullyLoaded() == false). This is the
-		// common case during cook: per-entry ExportedDataAssets are reached only via soft refs
-		// (Staging.Path), so a project-wide rebuild that force-loads collections never pulls the
-		// data-asset packages in. Fully load the target first -- it both materializes the
-		// existing occupant for the eviction below and makes the resulting package saveable.
-		// Newly-created packages with no file on disk already report IsFullyLoaded() == true, so
-		// this is a no-op for them. (Shared collections don't hit this because CompactShared
-		// LoadSynchronous()'s their external package back before modifying it.)
-		if (!TargetPackage->IsFullyLoaded())
-		{
-			TargetPackage->FullyLoad();
-		}
-
-		// If something already owns the target name in the target package, evict it. Renaming
-		// onto a name conflict would otherwise assert; we expect this on subsequent rebuilds
-		// when an old externalized asset is still loaded in the editor.
-		const FName TargetName(*DesiredAssetName);
-		if (UObject* Existing = StaticFindObjectFast(UObject::StaticClass(), TargetPackage, TargetName))
-		{
-			if (Existing != Source)
-			{
-				Existing->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_NonTransactional);
-			}
-		}
-
-		Source->Rename(*DesiredAssetName, TargetPackage, REN_DontCreateRedirectors | REN_NonTransactional);
-		Source->SetFlags(RF_Public | RF_Standalone);
-		TargetPackage->SetFlags(RF_Public | RF_Standalone);
-		TargetPackage->MarkPackageDirty();
-
-		FAssetRegistryModule::AssetCreated(Source);
-
-		return FSoftObjectPath(Source);
-#else
-		return Source ? FSoftObjectPath(Source) : FSoftObjectPath();
-#endif
-	}
+	// ExternalizeUObject + Internalize live in Helpers/PCGExCollectionExternalization.h now
+	// (shared with the Valency bonding-rules externalization). See that header for contracts.
 
 	// --- Mesh identity ---
 	// Identity hash deliberately omits Weight/Tags/Category/PropertyOverrides -- Weight
