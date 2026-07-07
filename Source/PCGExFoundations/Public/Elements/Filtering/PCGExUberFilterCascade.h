@@ -9,8 +9,15 @@
 #include "PCGExFilterCommon.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExPointsProcessor.h"
+#include "Elements/Filtering/PCGExUberFilter.h"
 
 #include "PCGExUberFilterCascade.generated.h"
+
+namespace PCGExData
+{
+	template <typename T>
+	class TBuffer;
+}
 
 namespace PCGExMT
 {
@@ -49,23 +56,25 @@ public:
 
 	virtual bool OutputPinsCanBeDeactivated() const override
 	{
-		return true;
+		return Mode != EPCGExUberFilterMode::Write;
 	}
 
 	virtual bool HasDynamicPins() const override;
-
+	
 protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
 
+	virtual bool SupportsDataStealing() const override
+	{
+		return Mode == EPCGExUberFilterMode::Write;
+	}
+
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override
-	{
-		return PCGExData::EIOInit::NoInit;
-	}
+	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
 	virtual FName GetMainOutputPin() const override;
 	//~End UPCGExPointsProcessorSettings
@@ -74,6 +83,18 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=1))
 	int32 NumBranches = 3;
 
+	/** How results are output. Partition splits points into per-branch pins; Write records the matched branch index onto a single output. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	EPCGExUberFilterMode Mode = EPCGExUberFilterMode::Partition;
+
+	/** Name of the int32 attribute the matched branch index is written to. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Partition Attribute", EditCondition="Mode == EPCGExUberFilterMode::Write", EditConditionHides))
+	FName PartitionAttributeName = FName("Partition");
+
+	/** Base value written to the attribute. Unmatched points receive this value; a point matching branch i receives DefaultValue + i + 1. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Default Value", EditCondition="Mode == EPCGExUberFilterMode::Write", EditConditionHides))
+	int32 DefaultValue = 0;
+
 	UPROPERTY(meta=(PCG_NotOverridable))
 	TArray<FName> InputLabels = {TEXT("→ 0"), TEXT("→ 1"), TEXT("→ 2")};
 
@@ -81,7 +102,7 @@ public:
 	TArray<FName> OutputLabels = {TEXT("0 →"), TEXT("1 →"), TEXT("2 →")};
 
 	/** If enabled, will output unmatched points to the Outside pin, otherwise omit creating the data entirely. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExUberFilterMode::Partition", EditConditionHides))
 	bool bOutputDiscardedElements = true;
 
 private:
@@ -118,6 +139,8 @@ namespace PCGExUberFilterCascade
 		TArray<TSharedPtr<PCGExPointFilter::FManager>> BranchManagers;
 		TArray<TSharedPtr<PCGExMT::TScopedArray<int32>>> BranchIndices;
 		TArray<int32> BranchCounts;
+
+		TSharedPtr<PCGExData::TBuffer<int32>> PartitionBuffer;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

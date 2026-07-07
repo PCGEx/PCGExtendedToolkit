@@ -381,9 +381,8 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExFilterGroupFactoryDataOR::CreateFilt
 #if WITH_EDITOR
 FString UPCGExFilterGroupProviderSettings::GetDisplayName() const
 {
-	return Mode == EPCGExFilterGroupMode::OR ? TEXT("OR") : TEXT("AND");
+	return FString(Mode == EPCGExFilterGroupMode::OR ? TEXT("OR") : TEXT("AND")) + (bInvert ? TEXT(" (NOT)") : TEXT(""));
 }
-
 
 TArray<FPCGPreConfiguredSettingsInfo> UPCGExFilterGroupProviderSettings::GetPreconfiguredInfo() const
 {
