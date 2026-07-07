@@ -5,8 +5,8 @@
 
 #include "StaticMeshResources.h"
 #include "AssetRegistry/AssetData.h"
-#include "Engine/StaticMesh.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "PhysicsEngine/BodySetup.h"
 

@@ -9,9 +9,9 @@
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Metadata/PCGMetadata.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
-#include "Metadata/PCGMetadata.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
 
 namespace PCGExCollections
@@ -186,7 +186,7 @@ namespace PCGExCollections
 
 		// Build accessor keys once -- same uniform pattern as the identity-attr write block.
 		TSharedPtr<IPCGAttributeAccessorKeys> Keys = PCGExMetaHelpers::MakeMutableKeys(InData);
-		
+
 		if (!Keys)
 		{
 			return;

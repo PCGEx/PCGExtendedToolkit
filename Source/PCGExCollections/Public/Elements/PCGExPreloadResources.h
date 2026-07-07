@@ -123,7 +123,7 @@ public:
 	/** Preload assets and keep them resident, or release everything this node-type preloaded. Chosen by the palette entry (Preload Resources / Release Resources), mirroring the Constant node. */
 	UPROPERTY(BlueprintReadWrite, Category = Settings)
 	EPCGExPreloadResourcesMode Mode = EPCGExPreloadResourcesMode::Preload;
-	
+
 	/** Asset collections whose referenced assets should be preloaded. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides))
 	TArray<TSoftObjectPtr<UPCGExAssetCollection>> Collections;
@@ -147,12 +147,12 @@ public:
 	/** Register the preloaded assets for change-tracking so editing a referenced collection/asset forces a graph refresh. Editor-only effect. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides))
 	bool bTrackResources = false;
-	
+
 	/** Whether to store resources on original component or not.
 	 * Disable this when working with partitioned graphs that don't have unique per-partitions resources */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides), AdvancedDisplay)
 	bool bManageOnOriginalComponent = true;
-	
+
 	/** Print out the list of loaded assets */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Mode == EPCGExPreloadResourcesMode::Preload", EditConditionHides), AdvancedDisplay)
 	bool bLogLoadedResources = false;

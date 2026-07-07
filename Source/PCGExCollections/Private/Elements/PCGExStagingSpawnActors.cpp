@@ -69,8 +69,7 @@ bool FPCGExStagingSpawnActorsElement::Boot(FPCGExContext* InContext) const
 		PCGE_LOG(Error, GraphAndLog, FTEXT("Could not rebuild a valid asset mapping from the provided map."));
 		return false;
 	}
-	
-	
+
 
 	return true;
 }
@@ -231,7 +230,7 @@ namespace PCGExStagingSpawnActors
 				continue;
 			}
 
-			if (Result.Host->GetTypeId() != PCGExAssetCollection::TypeIds::Actor)
+			if (Result.Entry->GetTypeId() != PCGExAssetCollection::TypeIds::Actor)
 			{
 				if (!Settings->bQuietInvalidEntryWarnings)
 				{

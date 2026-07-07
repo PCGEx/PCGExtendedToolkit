@@ -42,7 +42,8 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 	// Basic Dijkstra implementation
 
 	TBitArray<>& Visited = LocalAllocations->Visited;
-	PCGEx::FHashLookup* TravelStack = LocalAllocations->TravelStack.Get();
+	PCGEx::FHashLookupArray* TravelStack = LocalAllocations->TravelStack.Get();
+	uint64* const TravelData = TravelStack->GetMutableData();
 	PCGEx::FScoredQueue* ScoredQueue = LocalAllocations->ScoredQueue.Get();
 	ScoredQueue->Enqueue(SeedNode.Index, 0);
 
@@ -58,14 +59,15 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 			break;
 		} // Exit early
 
-		const PCGExClusters::FNode& Current = NodesRef[CurrentNodeIndex];
-
 		if (Visited[CurrentNodeIndex])
 		{
 			continue;
 		}
 		Visited[CurrentNodeIndex] = true;
 		VisitedNum++;
+
+		// Read the node only after the visited check -- stale queue entries skip the load.
+		const PCGExClusters::FNode& Current = NodesRef[CurrentNodeIndex];
 
 		for (const PCGExGraphs::FLink Lk : Current.Links)
 		{
@@ -83,7 +85,7 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 			const double AltScore = CurrentScore + Heuristics->GetEdgeScore(Current, AdjacentNode, Edge, SeedNode, GoalNode, Feedback, TravelStack);
 			if (ScoredQueue->Enqueue(NeighborIndex, AltScore))
 			{
-				TravelStack->Set(NeighborIndex, PCGEx::NH64(CurrentNodeIndex, EdgeIndex));
+				TravelData[NeighborIndex] = PCGEx::NH64(CurrentNodeIndex, EdgeIndex);
 			}
 		}
 	}
@@ -92,7 +94,7 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 
 	int32 PathNodeIndex;
 	int32 PathEdgeIndex;
-	PCGEx::NH64(TravelStack->Get(GoalNode.Index), PathNodeIndex, PathEdgeIndex);
+	PCGEx::NH64(TravelData[GoalNode.Index], PathNodeIndex, PathEdgeIndex);
 
 	if (PathNodeIndex != -1)
 	{
@@ -104,7 +106,7 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 		while (PathNodeIndex != -1)
 		{
 			const int32 CurrentIndex = PathNodeIndex;
-			PCGEx::NH64(TravelStack->Get(CurrentIndex), PathNodeIndex, PathEdgeIndex);
+			PCGEx::NH64(TravelData[CurrentIndex], PathNodeIndex, PathEdgeIndex);
 
 			InQuery->AddPathNode(CurrentIndex, PathEdgeIndex);
 		}

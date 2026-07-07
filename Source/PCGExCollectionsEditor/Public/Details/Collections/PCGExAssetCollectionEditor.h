@@ -166,6 +166,28 @@ protected:
 	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void ForceRefreshTabs();
 
+	/**
+	 * Layout/app identity. Subclasses whose tab set differs from the base MUST override all
+	 * three: tab-manager state persists per layout name in GEditorLayoutIni, and a shared
+	 * name restores another editor's tab layout — unregistered tab ids then warn with
+	 * "Cannot spawn tab because no spawner is registered" and render as unrecognized tabs.
+	 */
+	virtual FName GetLayoutName() const
+	{
+		return FName("PCGExAssetCollectionEditor_Layout_v9");
+	}
+
+	virtual FName GetAppIdentifier() const
+	{
+		return FName("PCGExAssetCollectionEditor");
+	}
+
+	/** Tab forcibly foregrounded on open (see InitEditor). Must be one of the Tabs ids. */
+	virtual FName GetDefaultForegroundTabId() const
+	{
+		return FName("Grid");
+	}
+
 	/** Returns the property name of the type-specific asset picker (e.g., "StaticMesh", "Actor").
 	 *  Override in derived editors. Used by the grid view to build tile picker widgets. */
 	virtual FName GetTilePickerPropertyName() const

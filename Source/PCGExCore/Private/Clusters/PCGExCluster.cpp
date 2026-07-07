@@ -145,7 +145,8 @@ namespace PCGExClusters
 		EdgeOctree.Reset();
 		BoundedEdges.Reset();
 		EdgeLengths.Reset();
-		bEdgeLengthsDirty = true;
+		MinEdgeLength = 0;
+		MaxEdgeLength = 0;
 		ClearCachedData();
 	}
 
@@ -896,7 +897,7 @@ namespace PCGExClusters
 		return Result;
 	}
 
-	void FCluster::ComputeEdgeLengths(const bool bNormalize)
+	void FCluster::ComputeEdgeLengths()
 	{
 		if (EdgeLengths)
 		{
@@ -908,7 +909,7 @@ namespace PCGExClusters
 
 		const int32 NumEdges = Edges->Num();
 		double Min = TNumericLimits<double>::Max();
-		double Max = TNumericLimits<double>::Min();
+		double Max = 0;
 		EdgeLengths->SetNumUninitialized(NumEdges);
 
 		for (int i = 0; i < NumEdges; i++)
@@ -920,15 +921,8 @@ namespace PCGExClusters
 			Max = FMath::Max(Dist, Max);
 		}
 
-		if (bNormalize)
-		{
-			for (int i = 0; i < NumEdges; i++)
-			{
-				LengthsRef[i] /= Max;
-			}
-		}
-
-		bEdgeLengthsDirty = false;
+		MinEdgeLength = NumEdges > 0 ? Min : 0;
+		MaxEdgeLength = Max;
 	}
 
 	void FCluster::GetConnectedNodes(const int32 FromIndex, TArray<int32>& OutIndices, const int32 SearchDepth) const

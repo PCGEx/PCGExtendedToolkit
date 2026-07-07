@@ -5,12 +5,12 @@
 
 #include "CoreMinimal.h"
 #include "PCGExPropertyWriter.h"
+#include "Core/PCGExAssetGrammar.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
-#include "Elements/Grammar/PCGSubdivisionBase.h"
 #include "Elements/PCGExAssetCollectionToSet.h"
+#include "Elements/Grammar/PCGSubdivisionBase.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
-#include "Core/PCGExAssetGrammar.h"
 #include "PCGExGetCollectionData.generated.h"
 
 class UPCGExAssetCollection;
@@ -20,10 +20,10 @@ struct FPCGExAssetCollectionEntry;
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true"))
 enum class EPCGExGetCollectionDataSkipFlags : uint8
 {
-	None        = 0      UMETA(Hidden),
+	None        = 0 UMETA(Hidden),
 	EmptySymbol = 1 << 0 UMETA(DisplayName = "Empty Symbol", Tooltip = "Skip entries whose resolved grammar Symbol is None."),
-	EmptyAxes   = 1 << 1 UMETA(DisplayName = "Empty Axes",   Tooltip = "Skip entries whose enabled axes don't intersect the requested OutputAxes (i.e. contribute nothing to the per-axis output)."),
-	Duplicates  = 1 << 2 UMETA(DisplayName = "Duplicates",   Tooltip = "Dedupe both pointer-identical entries reached through multiple subcollection paths (flatten phase) AND rows sharing the same Symbol (write phase)."),
+	EmptyAxes   = 1 << 1 UMETA(DisplayName = "Empty Axes", Tooltip = "Skip entries whose enabled axes don't intersect the requested OutputAxes (i.e. contribute nothing to the per-axis output)."),
+	Duplicates  = 1 << 2 UMETA(DisplayName = "Duplicates", Tooltip = "Dedupe both pointer-identical entries reached through multiple subcollection paths (flatten phase) AND rows sharing the same Symbol (write phase)."),
 };
 
 ENUM_CLASS_FLAGS(EPCGExGetCollectionDataSkipFlags)
@@ -64,15 +64,14 @@ class UPCGExGetCollectionDataSettings : public UPCGExSettings
 	//~End UObject interface
 
 public:
-	
 	UPCGExGetCollectionDataSettings();
-	
+
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(GetCollectionData, "Get Collection Data", "Unified read of asset collection contents into an attribute set. Supports static asset selection, soft-path-driven inputs, and recursive grammar via upstream Collection Maps.");
 
 	virtual TArray<FText> GetNodeTitleAliases() const override;
-	
+
 	virtual EPCGSettingsType GetType() const override
 	{
 		return EPCGSettingsType::Param;
@@ -230,7 +229,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Asset", meta=(PCG_Overridable, DisplayName="BoundsMax", EditCondition="bWriteBoundsMax"))
 	FName BoundsMaxAttributeName = FName("BoundsMax");
 
-	
+
 	// Grammar outputs
 
 	/**
@@ -275,16 +274,16 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Grammar", meta=(PCG_Overridable, DisplayName="DebugColor", EditCondition="bWriteDebugColor"))
 	FName DebugColorAttributeName = FName("DebugColor");
-	
+
 	// Annotations
-	
+
 	/** Write the asset nesting depth (0 = top-level). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Annotations", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteNestingDepth = false;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Annotations", meta=(PCG_Overridable, DisplayName="Nesting Depth", EditCondition="bWriteNestingDepth"))
 	FName NestingDepthAttributeName = FName("NestingDepth");
-	
+
 	/** Write the index of the root collection (the one referenced from input / picked on the node) this row originated from. Counter increments per unique root in encounter order; sub-collection rows reached through recursion inherit their root's index. Shared across every output emitted by this node invocation. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Annotations", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteRootCollectionIndex = false;
@@ -298,7 +297,7 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Annotations", meta=(PCG_Overridable, DisplayName="Collection Index", EditCondition="bWriteCollectionIndex"))
 	FName CollectionIndexAttributeName = FName("CollectionIndex");
-	
+
 	/** Write a dense per-tuple hash combining RootCollectionIndex + CollectionIndex + NestingDepth. Each unique (Root, Collection, Depth) triplet is assigned a fresh sequential index (0, 1, 2, ...) the first time it's encountered. All rows sharing the same identity context get the same hash -- useful as a single short token for downstream substitution. Shared across every output emitted by this node invocation. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Annotations", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteCollectionHash = false;

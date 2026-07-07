@@ -190,6 +190,23 @@ void FPCGExSkinnedMeshCollectionEntry::SetAssetPath(const FSoftObjectPath& InPat
 	Descriptor.SkinnedAsset = SkinnedAsset;
 }
 
+void FPCGExSkinnedMeshCollectionEntry::ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection)
+{
+	const UPCGExSkinnedMeshCollection* TypedCollection = Cast<UPCGExSkinnedMeshCollection>(InSourceCollection);
+	if (!TypedCollection)
+	{
+		return;
+	}
+
+	// Mirror the effective-descriptor rule from InitPCGSoftSkinnedDescriptor.
+	if (DescriptorSource == EPCGExEntryVariationMode::Global || TypedCollection->GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule)
+	{
+		Descriptor = TypedCollection->GlobalDescriptor;
+		Descriptor.SkinnedAsset = SkinnedAsset; // globals don't carry the entry's asset
+		DescriptorSource = EPCGExEntryVariationMode::Local;
+	}
+}
+
 // Resolves descriptor inheritance: Global/Overrule → use collection-level descriptor,
 // Local → use entry-level Descriptor. Always appends entry tags to component tags.
 void FPCGExSkinnedMeshCollectionEntry::InitPCGSoftSkinnedDescriptor(const UPCGExSkinnedMeshCollection* ParentCollection, FPCGSoftSkinnedMeshComponentDescriptor& TargetDescriptor) const

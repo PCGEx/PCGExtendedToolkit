@@ -119,7 +119,7 @@ bool UPCGExSkinnedMeshSelectorStaged::SelectInstances(FPCGSkinnedMeshSpawnerCont
 			int16 MaterialPick = -1;
 
 			FPCGExEntryAccessResult Result = CollectionMap->ResolveEntry(Partition.Key, MaterialPick);
-			if (!Result.IsValid() || !Result.Host->IsType(PCGExAssetCollection::TypeIds::SkinnedMesh))
+			if (!Result.IsValid() || !Result.Entry->IsType(PCGExAssetCollection::TypeIds::SkinnedMesh))
 			{
 				continue;
 			}
@@ -138,7 +138,8 @@ bool UPCGExSkinnedMeshSelectorStaged::SelectInstances(FPCGSkinnedMeshSpawnerCont
 			}
 			else
 			{
-				Entry->InitPCGSoftSkinnedDescriptor(static_cast<const UPCGExSkinnedMeshCollection*>(Result.Host), OutDescriptor);
+				// Host may not be a skinned mesh collection (heterogeneous hosts); null parent falls back to the entry's local descriptor.
+				Entry->InitPCGSoftSkinnedDescriptor(Cast<UPCGExSkinnedMeshCollection>(Result.Host), OutDescriptor);
 			}
 
 			if (bForceDisableCollisions)

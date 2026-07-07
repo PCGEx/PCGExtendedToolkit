@@ -32,12 +32,16 @@ public:
 	SLATE_BEGIN_ARGS(SPCGExCollectionCategoryGroup)
 			: _EntryCount(0)
 			  , _bIsCollapsed(false)
+			  , _bAllowRename(true)
 		{
 		}
 
 		SLATE_ARGUMENT(FName, CategoryName)
 		SLATE_ARGUMENT(int32, EntryCount)
 		SLATE_ARGUMENT(bool, bIsCollapsed)
+		/** When false, the header renders as static text — for grids whose group names mirror
+		 *  external identity (e.g. variant source collections) rather than an editable category. */
+		SLATE_ARGUMENT(bool, bAllowRename)
 		SLATE_EVENT(FOnCategoryRenamed, OnCategoryRenamed)
 		SLATE_EVENT(FOnTileDropOnCategory, OnTileDropOnCategory)
 		SLATE_EVENT(FOnAssetDropOnCategory, OnAssetDropOnCategory)

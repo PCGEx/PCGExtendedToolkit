@@ -143,7 +143,7 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			int16 MaterialPick = -1;
 
 			FPCGExEntryAccessResult Result = CollectionMap->ResolveEntry(Partition.Key, MaterialPick);
-			if (!Result.IsValid() || !Result.Host->IsType(PCGExAssetCollection::TypeIds::Mesh))
+			if (!Result.IsValid() || !Result.Entry->IsType(PCGExAssetCollection::TypeIds::Mesh))
 			{
 				continue;
 			}
@@ -162,7 +162,8 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			}
 			else
 			{
-				Entry->InitPCGSoftISMDescriptor(static_cast<const UPCGExMeshCollection*>(Result.Host), OutDescriptor);
+				// Host may not be a mesh collection (heterogeneous hosts); null parent falls back to the entry's local descriptor.
+				Entry->InitPCGSoftISMDescriptor(Cast<UPCGExMeshCollection>(Result.Host), OutDescriptor);
 			}
 
 			if (bForceDisableCollisions)

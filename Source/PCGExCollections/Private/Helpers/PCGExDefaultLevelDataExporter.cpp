@@ -1276,7 +1276,34 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 
 		if (!ActorClassInfoMap.IsEmpty())
 		{
-			EmbeddedActorCollection = NewObject<UPCGExActorCollection>(OutAsset);
+			// EntryIds re-claimed by actor identity: exact = class + property-delta hash,
+			// loose = class alone (survives a delta change). Unclaimed entries get fresh ids
+			// from the RebuildStagingData -> SyncEntryIds pass.
+			PCGExAssetCollection::FEntryIdBank PreservedIds;
+
+			// Reuse the previous collection UObject -- a fresh one would mint a new
+			// CollectionGUID on every export, unbinding external references (variants).
+			if (UPCGExActorCollection* Previous = OutContext.PreviousActorCollection)
+			{
+				for (const FPCGExActorCollectionEntry& PrevEntry : Previous->Entries)
+				{
+					// Rebuilt as an FActorInstanceKey so deposit and claim share one key derivation.
+					FActorInstanceKey PrevKey;
+					PrevKey.ClassPath = FSoftClassPath(PrevEntry.Actor.ToString());
+					PrevKey.DeltaHash = PCGExActorDelta::HashDelta(PrevEntry.SerializedPropertyDelta);
+					PreservedIds.Deposit(GetTypeHash(PrevKey), GetTypeHash(PrevKey.ClassPath), PrevEntry.EntryId);
+				}
+
+				Previous->Rename(nullptr, OutAsset, REN_DontCreateRedirectors | REN_NonTransactional);
+				// InitNumEntries SetNums without clearing -- shrink would leave stale survivors.
+				Previous->Entries.Reset();
+				EmbeddedActorCollection = Previous;
+			}
+			else
+			{
+				EmbeddedActorCollection = NewObject<UPCGExActorCollection>(OutAsset);
+			}
+
 			EmbeddedActorCollection->InitNumEntries(ActorClassInfoMap.Num());
 
 			// Parallel to Entries: one live donor per entry, used by the property-component scan
@@ -1302,9 +1329,20 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 					ActorEntry.DeltaCollateralPaths = Elem.Value.CollateralPaths;
 				}
 
+				ActorEntry.EntryId = PreservedIds.ClaimExact(GetTypeHash(Elem.Key));
+
 				RepresentativeInstances[ActorIdx] = Elem.Value.RepresentativeActor.Get();
 
 				ActorIdx++;
+			}
+
+			// Loose pass -- strictly after every exact claim; class path mirrors the deposit's loose key.
+			for (FPCGExActorCollectionEntry& ActorEntry : EmbeddedActorCollection->Entries)
+			{
+				if (ActorEntry.EntryId == 0)
+				{
+					ActorEntry.EntryId = PreservedIds.ClaimLoose(GetTypeHash(ActorEntry.Actor.ToSoftObjectPath()));
+				}
 			}
 
 			// Scan UPCGExPropertyCollectionComponent on each representative actor and merge into

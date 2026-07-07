@@ -283,6 +283,25 @@ void FPCGExMeshCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 	ISMDescriptor.StaticMesh = StaticMesh;
 }
 
+void FPCGExMeshCollectionEntry::ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection)
+{
+	const UPCGExMeshCollection* TypedCollection = Cast<UPCGExMeshCollection>(InSourceCollection);
+	if (!TypedCollection)
+	{
+		return;
+	}
+
+	// Mirror the effective-descriptor rule from InitPCGSoftISMDescriptor: Global source or
+	// collection-level Overrule means the collection's globals were what actually applied.
+	if (DescriptorSource == EPCGExEntryVariationMode::Global || TypedCollection->GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule)
+	{
+		ISMDescriptor = TypedCollection->GlobalISMDescriptor;
+		SMDescriptor = TypedCollection->GlobalSMDescriptor;
+		ISMDescriptor.StaticMesh = StaticMesh; // globals don't carry the entry's asset
+		DescriptorSource = EPCGExEntryVariationMode::Local;
+	}
+}
+
 // Resolves descriptor inheritance: Global/Overrule → use collection-level descriptor,
 // Local → use entry-level ISMDescriptor. Always appends entry tags to component tags.
 void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExMeshCollection* ParentCollection, FPCGSoftISMComponentDescriptor& TargetDescriptor) const
@@ -391,7 +410,10 @@ void UPCGExMeshCollection::EDITOR_DisableCollisions()
 void UPCGExMeshCollection::EDITOR_SetDescriptorSourceAll(EPCGExEntryVariationMode DescriptorSource)
 {
 	// None is a variations/fitting-source concept; descriptors always carry data. Clamp to Local.
-	if (DescriptorSource == EPCGExEntryVariationMode::None) { DescriptorSource = EPCGExEntryVariationMode::Local; }
+	if (DescriptorSource == EPCGExEntryVariationMode::None)
+	{
+		DescriptorSource = EPCGExEntryVariationMode::Local;
+	}
 
 	Modify(true);
 

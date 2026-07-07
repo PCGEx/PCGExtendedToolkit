@@ -12,16 +12,20 @@ void FPCGExHeuristicDistance::PrepareForCluster(const TSharedPtr<const PCGExClus
 {
 	FPCGExHeuristicOperation::PrepareForCluster(InCluster);
 	BoundsSize = InCluster->Bounds.GetSize().Length();
+	InvBoundsSize = BoundsSize > UE_SMALL_NUMBER ? 1.0 / BoundsSize : 1.0;
 }
 
 double FPCGExHeuristicDistance::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal) const
 {
-	return GetScoreInternal(Cluster->GetDist(From, Goal) / BoundsSize);
+	return GetScoreInternal(Cluster->GetDist(From, Goal) * InvBoundsSize);
 }
 
 double FPCGExHeuristicDistance::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, PCGEx::FHashLookup* TravelStack) const
 {
-	return GetScoreInternal((*Cluster->EdgeLengths)[Edge.Index]);
+	// EdgeLengths are raw world-space; normalize by the cluster bounds so g shares h's scale
+	// (GetGlobalScore). Any other scale breaks A*: a larger g drowns h (degrades toward Dijkstra),
+	// a smaller g lets h dominate (degrades toward greedy best-first).
+	return GetScoreInternal((*Cluster->EdgeLengths)[Edge.Index] * InvBoundsSize);
 }
 
 TSharedPtr<FPCGExHeuristicOperation> UPCGExHeuristicsFactoryShortestDistance::CreateOperation(FPCGExContext* InContext) const

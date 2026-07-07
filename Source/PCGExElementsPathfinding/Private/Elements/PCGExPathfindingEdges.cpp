@@ -19,7 +19,7 @@
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
 #include "Paths/PCGExPathsHelpers.h"
-#include "Search/PCGExSearchAStar.h"
+#include "Search/PCGExSearchDijkstra.h"
 #include "Search/PCGExSearchOperation.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPathfindingEdgesElement"
@@ -36,7 +36,7 @@ void UPCGExPathfindingEdgesSettings::PostInitProperties()
 		}
 		if (!SearchAlgorithm)
 		{
-			SearchAlgorithm = NewObject<UPCGExSearchAStar>(this, TEXT("SearchAlgorithm"));
+			SearchAlgorithm = NewObject<UPCGExSearchDijkstra>(this, TEXT("SearchAlgorithm"));
 		}
 	}
 	Super::PostInitProperties();

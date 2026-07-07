@@ -15,7 +15,7 @@ namespace PCGExPathfinding
 		NumNodes = InCluster->Nodes->Num();
 
 		Visited.Init(false, NumNodes);
-		TravelStack = PCGEx::NewHashLookup<PCGEx::FHashLookupArray>(PCGEx::NH64(-1, -1), NumNodes);
+		TravelStack = MakeShared<PCGEx::FHashLookupArray>(PCGEx::NH64(-1, -1), NumNodes);
 		ScoredQueue = MakeShared<PCGEx::FScoredQueue>(NumNodes);
 	}
 

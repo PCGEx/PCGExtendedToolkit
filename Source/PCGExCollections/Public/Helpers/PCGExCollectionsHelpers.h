@@ -258,6 +258,38 @@ namespace PCGExCollections
 	 *   UPCGParamData* OutputSet = Context->ManagedObjects->New<UPCGParamData>();
 	 *   Packer->PackToDataset(OutputSet);
 	 */
+	/**
+	 * Canonical pick-hash layout -- the ONE definition shared by FPickPacker, FPickUnpacker
+	 * and any node that rewrites picks (e.g. Staging : Swap):
+	 *
+	 *   uint64 = H64(CollectionGUID, H32(RawEntryIndex, SecondaryIndex + 1))
+	 *
+	 * Raw entry indices are 16-bit BY DESIGN (collections beyond that are out of contract);
+	 * SecondaryIndex is stored +1 so 0 means "none" (-1). Change the layout here and nowhere else.
+	 */
+	namespace PickHash
+	{
+		FORCEINLINE uint64 Pack(const uint32 InCollectionGUID, const uint16 InRawEntryIndex, const int16 InSecondaryIndex = -1)
+		{
+			return PCGEx::H64(InCollectionGUID, PCGEx::H32(InRawEntryIndex, InSecondaryIndex + 1));
+		}
+
+		FORCEINLINE uint32 GetCollectionGUID(const uint64 InHash)
+		{
+			return PCGEx::H64A(InHash);
+		}
+
+		FORCEINLINE uint16 GetRawEntryIndex(const uint64 InHash)
+		{
+			return static_cast<uint16>(PCGEx::H32A(PCGEx::H64B(InHash)));
+		}
+
+		FORCEINLINE int16 GetSecondaryIndex(const uint64 InHash)
+		{
+			return static_cast<int16>(PCGEx::H32B(PCGEx::H64B(InHash))) - 1;
+		}
+	}
+
 	class PCGEXCOLLECTIONS_API FPickPacker : public TSharedFromThis<FPickPacker>
 	{
 		TMap<const UPCGExAssetCollection*, uint32> CollectionMap;
@@ -284,7 +316,7 @@ namespace PCGExCollections
 		 */
 		FORCEINLINE uint64 GetPickIdx(const UPCGExAssetCollection* InCollection, int16 InIndex, int16 InSecondaryIndex) const
 		{
-			return PCGEx::H64(InCollection->GetCollectionGUID(), PCGEx::H32(InIndex, InSecondaryIndex + 1));
+			return PickHash::Pack(InCollection->GetCollectionGUID(), static_cast<uint16>(InIndex), InSecondaryIndex);
 		}
 
 		/** Write collection mapping to an attribute set */

@@ -43,6 +43,9 @@ public:
 
 protected:
 	double BoundsSize = 0;
+	// Precomputed reciprocal of BoundsSize. Both the edge score and the global (heuristic) score
+	// divide their distance input by the cluster bounds so they share a scale -- see GetEdgeScore.
+	double InvBoundsSize = 1;
 };
 
 ////

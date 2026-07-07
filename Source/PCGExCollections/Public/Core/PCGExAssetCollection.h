@@ -106,9 +106,9 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(BaseStruct="/Script/PCGExCollections.PCGExStagingBoundsModifier", ExcludeBaseStruct))
 	FInstancedStruct BoundsStagingModifier;
-	
+
 	FBox AlteredBounds = FBox(ForceInit);
-	
+
 	template <typename T>
 	T* LoadSync(FPCGExContext* InContext = nullptr) const
 	{
@@ -171,6 +171,27 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 		return PCGExAssetCollection::FTypeRegistry::Get().IsA(GetTypeId(), TypeId);
 	}
 
+	/**
+	 * Bake collection-level ("Global") inheritance channels into local values, reading the
+	 * globals from the given source collection. Call when an entry is copied OUT of its
+	 * collection (e.g. into a variant collection payload) -- the new host cannot provide the
+	 * typed globals, so they must be resolved into the entry or they are silently lost.
+	 * Base is a no-op; typed entries override for their descriptor channels.
+	 */
+	virtual void ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection)
+	{
+	}
+
+	/**
+	 * Stable identity for external entry references (e.g. variant collections) across source
+	 * edits -- reorder, rename, duplicate. 0 = unassigned. NEVER assign in the ctor: it would
+	 * defeat UE's CDO->instance propagation for arrays-of-structs (see FPCGExProperty::HeaderId).
+	 * Assigned and deduplicated by UPCGExAssetCollection::SyncEntryIds (RebuildStagingData).
+	 * Cooked deliberately (not editor-only) so packaged builds can match entries by identity.
+	 */
+	UPROPERTY()
+	int32 EntryId = 0;
+
 	// Core Properties
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1, ClampMin=0, UIMin=0))
@@ -224,7 +245,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName="Grammar Mode", EditCondition="bIsSubCollection", EditConditionHides))
 	EPCGExGrammarSubCollectionMode SubGrammarMode = EPCGExGrammarSubCollectionMode::Inherit;
-	
+
 	/**
 	 * Per-entry grammar configuration. Shared between leaf and subcollection entries; for
 	 * subcollections this slot is populated only when SubGrammarMode == Override (it then
@@ -235,11 +256,11 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	FPCGExAssetGrammarDetails AssetGrammar;
 
 #pragma region DEPRECATED
-	
+
 	/** LEGACY (schema v0). Migrated into AssetGrammar by PostLoad when SubGrammarMode==Override. */
 	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
 	FPCGExCollectionGrammarDetails CollectionGrammar_DEPRECATED;
-	
+
 #pragma endregion
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
@@ -430,6 +451,47 @@ protected:
 
 namespace PCGExAssetCollection
 {
+	/**
+	 * Claim-once bank of persistent EntryIds for GENERATED collections that rebuild their
+	 * Entries from scratch. External references (variant collections) bind entries by
+	 * EntryId; a rebuild that mints all-new ids silently unbinds them.
+	 *
+	 * Deposit every previous entry's id under caller-defined identity keys before
+	 * regenerating, then claim while writing the new entries. Two tiers: exact (full
+	 * content/definition identity -- claim FIRST, for every entry) and loose (coarser
+	 * identity, e.g. primary asset path, so a binding survives a content tweak -- claim only
+	 * for entries the exact pass left at 0; ordering ensure-enforced). Pass 0 for either key
+	 * to skip that tier. Each deposited id is handed out at most once, in deposit order per
+	 * key. Unclaimed entries keep EntryId 0 and receive fresh ids from the post-rebuild
+	 * SyncEntryIds pass. Keys only need to be stable within the rebuild call.
+	 */
+	class PCGEXCOLLECTIONS_API FEntryIdBank
+	{
+		struct FDeposit
+		{
+			int32 EntryId = 0;
+			bool bClaimed = false;
+		};
+
+		TArray<FDeposit> Deposits;
+		TMap<uint32, TArray<int32>> ExactToDeposits;
+		TMap<uint32, TArray<int32>> LooseToDeposits;
+		bool bLooseClaimStarted = false;
+
+	public:
+		/** Deposit one id under the two identity tiers. Zero id is ignored; a zero key skips that tier. */
+		void Deposit(uint32 InExactKey, uint32 InLooseKey, int32 InEntryId);
+
+		/** Deposit every non-zero EntryId of InCollection; InKeyFunc returns the exact key per entry (0 = skip). No loose tier. */
+		void Deposit(const UPCGExAssetCollection* InCollection, TFunctionRef<uint32(const FPCGExAssetCollectionEntry&, int32 Index)> InKeyFunc);
+
+		/** Pop the oldest unclaimed id deposited under the exact key. 0 when exhausted or unknown. */
+		int32 ClaimExact(uint32 InExactKey);
+
+		/** Pop the oldest unclaimed id deposited under the loose key. 0 when exhausted or unknown. */
+		int32 ClaimLoose(uint32 InLooseKey);
+	};
+
 	/**
 	 * Per-entry cache for weighted sub-selections within a single entry.
 	 * Used when an entry has multiple variants (e.g. material overrides on a mesh,
@@ -830,6 +892,14 @@ public:
 	bool HasCircularDependency(const UPCGExAssetCollection* OtherCollection) const;
 	bool HasCircularDependency(TSet<const UPCGExAssetCollection*>& InReferences) const;
 
+	/**
+	 * Assigns a unique non-zero EntryId to every entry that has none, and re-assigns
+	 * copy-paste-introduced duplicates (first-seen entry keeps its id, so external
+	 * references keep resolving to the original). Runs at the top of RebuildStagingData
+	 * so identity is settled before any derived data (e.g. variant bakes) reads it.
+	 */
+	void SyncEntryIds();
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 
@@ -1004,11 +1074,11 @@ public:
 	FPCGExAssetGrammarDetails SubCollectionGrammar;
 
 #pragma region DEPRECATED
-	
+
 	/** LEGACY (schema v0). Migrated into SubCollectionGrammar by PostLoad. */
 	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
 	FPCGExCollectionGrammarDetails CollectionGrammar_DEPRECATED;
-	
+
 #pragma endregion
 
 	/** Versioned grammar schema. PostLoad migrates legacy data to the current version. 0 = pre-v1 layout. */
@@ -1062,6 +1132,13 @@ protected:
 	template <typename T>
 	bool BuildCacheFromEntries(TArray<T>& InEntries);
 
+	/**
+	 * Non-template cache build over base-entry pointers -- the shared core the typed template
+	 * delegates to. Null pointers are tolerated and skipped while still consuming their raw
+	 * index (heterogeneous collections may carry unset rows).
+	 */
+	bool BuildCacheFromEntryPtrs(TConstArrayView<FPCGExAssetCollectionEntry*> InEntries);
+
 	UPROPERTY()
 	bool bCacheNeedsRebuild = true;
 
@@ -1084,98 +1161,18 @@ protected:
 
 // Validates each entry, registers valid ones to the cache (Main + named categories),
 // triggers MicroCache builds, and compiles weight-sorted indices.
+// Thin typed adapter -- the actual build lives in BuildCacheFromEntryPtrs (all per-entry
+// calls it makes are virtual on the base entry, so the pointer view loses nothing).
 template <typename T>
 bool UPCGExAssetCollection::BuildCacheFromEntries(TArray<T>& InEntries)
 {
-	FWriteScopeLock WriteScopeLock(CacheLock);
-
-	if (Cache)
+	TArray<FPCGExAssetCollectionEntry*> EntryPtrs;
+	EntryPtrs.Reserve(InEntries.Num());
+	for (T& Entry : InEntries)
 	{
-		return true;
+		EntryPtrs.Add(&Entry);
 	}
-
-	// Rebuild property registry from collection properties
-	RebuildPropertyRegistry();
-
-	Cache = MakeShared<PCGExAssetCollection::FCache>();
-	bCacheNeedsRebuild = false;
-
-	const int32 NumEntriesCount = InEntries.Num();
-	Cache->Main->Reserve(NumEntriesCount);
-
-	// Collect direct subcollection children while iterating entries. Recursion into their
-	// FlatHosts is deferred to after the loop because LoadCache() on a sub-collection takes
-	// its own CacheLock and we want to release the write path here before that happens.
-	TSet<UPCGExAssetCollection*> DirectSubs;
-
-	for (int32 i = 0; i < NumEntriesCount; i++)
-	{
-		T& Entry = InEntries[i];
-		if (!Entry.Validate(this))
-		{
-			continue;
-		}
-
-		Cache->RegisterEntry(i, static_cast<const FPCGExAssetCollectionEntry*>(&Entry));
-
-		if (Entry.HasValidSubCollection())
-		{
-			if (UPCGExAssetCollection* Sub = const_cast<UPCGExAssetCollection*>(Entry.GetSubCollectionPtr()))
-			{
-				if (Sub != this)
-				{
-					DirectSubs.Add(Sub);
-				}
-			}
-		}
-	}
-
-	Cache->Compile();
-
-	// Materialize FlatHosts: self + every transitively reachable subcollection, deduplicated.
-	// Walks sub-collections via ForEachEntry (direct Entries array read -- no lock on the
-	// sub-collection's cache). This avoids calling LoadCache() on sub-collections, which
-	// could re-enter BuildCacheFromEntries on a cycle (A→B→A) and deadlock on our own
-	// CacheLock. Cycles are handled by the Visited set.
-	TSet<UPCGExAssetCollection*> Visited;
-	Visited.Add(this);
-	Cache->FlatHosts.Add(this);
-
-	TArray<UPCGExAssetCollection*> Stack;
-	for (UPCGExAssetCollection* Sub : DirectSubs)
-	{
-		bool bAlreadyVisited = false;
-		Visited.Add(Sub, &bAlreadyVisited);
-		if (!bAlreadyVisited)
-		{
-			Stack.Add(Sub);
-		}
-	}
-
-	while (!Stack.IsEmpty())
-	{
-		UPCGExAssetCollection* Current = Stack.Pop(EAllowShrinking::No);
-		Cache->FlatHosts.Add(Current);
-
-		Current->ForEachEntry([&Visited, &Stack](const FPCGExAssetCollectionEntry* E, int32 /*Idx*/)
-		{
-			if (!E || !E->HasValidSubCollection())
-			{
-				return;
-			}
-			if (UPCGExAssetCollection* Sub = const_cast<UPCGExAssetCollection*>(E->GetSubCollectionPtr()))
-			{
-				bool bAlreadyVisited = false;
-				Visited.Add(Sub, &bAlreadyVisited);
-				if (!bAlreadyVisited)
-				{
-					Stack.Add(Sub);
-				}
-			}
-		});
-	}
-
-	return true;
+	return BuildCacheFromEntryPtrs(EntryPtrs);
 }
 
 // Boilerplate Macro

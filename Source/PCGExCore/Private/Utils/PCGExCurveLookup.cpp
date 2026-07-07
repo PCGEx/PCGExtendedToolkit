@@ -66,6 +66,7 @@ void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGE
 	CurvePtr = Curve.GetRichCurveConst();
 	Mode = InMode;
 	LUT.Reset();
+	bFastLinear = false;
 
 	if (!CurvePtr || CurvePtr->GetNumKeys() == 0)
 	{
@@ -85,6 +86,23 @@ void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGE
 
 	const float TimeDelta = TimeMax - TimeMin;
 	TimeToNormalized = FMath::IsNearlyZero(TimeDelta) ? 1.0f : 1.0f / TimeDelta;
+
+	// A 2-key linear segment with constant extrapolation (the default weight-distribution ramps,
+	// including identity) reduces to a clamped lerp. Detect it and bypass both FRichCurve::Eval
+	// (branchy key search, called every edge relaxation in pathfinding) and the LUT, whichever
+	// mode was requested -- the closed form is faster and exact.
+	if (CurvePtr->GetNumKeys() == 2
+		&& CurvePtr->Keys[0].InterpMode == RCIM_Linear
+		&& CurvePtr->PreInfinityExtrap == RCCE_Constant
+		&& CurvePtr->PostInfinityExtrap == RCCE_Constant
+		&& TimeDelta > 0.0f)
+	{
+		bFastLinear = true;
+		LinearBase = CurvePtr->Keys[0].Value;
+		LinearSlope = (static_cast<double>(CurvePtr->Keys[1].Value) - CurvePtr->Keys[0].Value) / TimeDelta;
+		LUTMaxIdx = 0.0f;
+		return;
+	}
 
 	if (Mode == EPCGExCurveLUTMode::Direct)
 	{
