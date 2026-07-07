@@ -241,14 +241,14 @@ MACRO(BoundsMin, FVector, FVector::ZeroVector, Entry->Staging.Bounds.Min)\
 MACRO(BoundsMax, FVector, FVector::ZeroVector, Entry->Staging.Bounds.Max)\
 MACRO(CollectionType, FName, NAME_None, Host ? Host->GetTypeId() : NAME_None)
 
-// Symbol/DebugColor are axis-invariant -- one writer + cache each, sourced from the effective
-// grammar pointer (not a per-axis Module).
+		// Symbol/DebugColor are axis-invariant -- one writer + cache each, sourced from the effective
+		// grammar pointer (not a per-axis Module).
 #define PCGEX_FOREACH_GRAMMAR_SHARED_FIELD(MACRO)\
 MACRO(Symbol, FName, NAME_None, Grammar->Symbol)\
 MACRO(DebugColor, FVector4, FVector4(1, 1, 1, 1), FVector4(Grammar->DebugColor))
 
-// Per-axis grammar attributes. Getter expressions assume a local `Module` (FPCGSubdivisionSubmodule)
-// populated by FixLeaf/FixSubCollection at the call site.
+		// Per-axis grammar attributes. Getter expressions assume a local `Module` (FPCGSubdivisionSubmodule)
+		// populated by FixLeaf/FixSubCollection at the call site.
 #define PCGEX_FOREACH_GRAMMAR_PERAXIS_FIELD(MACRO)\
 MACRO(Size, double, 0.0, Module.Size)\
 MACRO(Scalable, bool, true, Module.bScalable)

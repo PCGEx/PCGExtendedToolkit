@@ -9,7 +9,10 @@ FBox FPCGExStagingBoundsModifier::ComputeAlteredBounds(const FBox& InBounds) con
 {
 	// Nothing meaningful to modify if the source box was never computed; consumers gate on the
 	// original Bounds.IsValid, so mirror it rather than fabricate a box from zero corners.
-	if (!InBounds.IsValid) { return InBounds; }
+	if (!InBounds.IsValid)
+	{
+		return InBounds;
+	}
 
 	const FBox Result = Modify(InBounds);
 

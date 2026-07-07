@@ -25,6 +25,7 @@
 #include "Details/Collections/PCGExPCGDataAssetCollectionActions.h"
 #include "Details/Collections/PCGExSelectorClosestMatchAxisCustomization.h"
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
+#include "Details/Collections/PCGExVariantCollectionActions.h"
 #include "Misc/CoreDelegates.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Thumbnails/PCGExCollectionThumbnailRenderer.h"

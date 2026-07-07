@@ -140,12 +140,20 @@ namespace PCGExCollections
 		 *  Per-entry source resolution is handled by WriteEntry directly (via WriteAt + the existing
 		 *  ResolveEntrySourceProperty helper) -- the dynamic (Entry, Host) shape doesn't fit the
 		 *  per-source-index lookup that provider-based WriteEntry expects. */
-		struct FCollectionPrototypeProvider final : public IPCGExPropertyProvider
+		struct FCollectionPrototypeProvider final : IPCGExPropertyProvider
 		{
 			TArray<const UPCGExAssetCollection*> SearchOrder;
 
-			virtual TConstArrayView<FInstancedStruct> GetProperties(int32 /*Index*/) const override { return {}; }
-			virtual TConstArrayView<FPCGExPropertyRegistryEntry> GetPropertyRegistry() const override { return {}; }
+			virtual TConstArrayView<FInstancedStruct> GetProperties(int32 /*Index*/) const override
+			{
+				return {};
+			}
+
+			virtual TConstArrayView<FPCGExPropertyRegistryEntry> GetPropertyRegistry() const override
+			{
+				return {};
+			}
+
 			virtual const FInstancedStruct* FindPrototypeProperty(FName PropertyName) const override;
 		};
 

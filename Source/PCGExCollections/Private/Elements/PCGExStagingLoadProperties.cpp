@@ -325,7 +325,10 @@ namespace PCGExStagingLoadProperties
 			for (const uint64 Hash : UniqueEntryHashes)
 			{
 				FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, MaterialPick);
-				if (!Result.IsValid() || !Result.Entry) { continue; }
+				if (!Result.IsValid() || !Result.Entry)
+				{
+					continue;
+				}
 
 				FResolved& R = Resolved.AddDefaulted_GetRef();
 				R.Hash = Hash;
@@ -334,7 +337,10 @@ namespace PCGExStagingLoadProperties
 				if (bWantGrammar)
 				{
 					R.Grammar = Result.Entry->GetEffectiveGrammar(Result.Host);
-					if (R.Grammar) { LocalUsedAxes |= (R.Grammar->Axes & Settings->OutputAxes); }
+					if (R.Grammar)
+					{
+						LocalUsedAxes |= (R.Grammar->Axes & Settings->OutputAxes);
+					}
 				}
 			}
 		}
@@ -392,7 +398,10 @@ namespace PCGExStagingLoadProperties
 #undef PCGEX_LOAD_PROP_FIELD_FILL_ENTRY
 
 			const FPCGExAssetGrammarDetails* Grammar = R.Grammar;
-			if (!Grammar || Grammar->Axes == 0) { continue; }
+			if (!Grammar || Grammar->Axes == 0)
+			{
+				continue;
+			}
 
 #define PCGEX_LOAD_PROP_FIELD_FILL_SHARED(_NAME, _TYPE, _DEFAULT, _GETTER) \
 			if (_NAME##Writer) { _NAME##ByHash.Add(Hash, _GETTER); }
@@ -404,12 +413,18 @@ namespace PCGExStagingLoadProperties
 			const bool bIsSub = Entry->bIsSubCollection;
 			for (int32 a = 0; a < 3; a++)
 			{
-				if (!(EntryAxes & static_cast<uint8>(PCGExGrammarAxes::Bits[a]))) { continue; }
+				if (!(EntryAxes & static_cast<uint8>(PCGExGrammarAxes::Bits[a])))
+				{
+					continue;
+				}
 				FPCGSubdivisionSubmodule Module;
 				const bool bFixed = bIsSub
 					? Grammar->FixSubCollection(Entry->SubCollection, PCGExGrammarAxes::Bits[a], Module, Settings->bWriteSize ? &SizeCache : nullptr)
 					: Grammar->FixLeaf(Entry->Staging.Bounds, PCGExGrammarAxes::Bits[a], Module);
-				if (!bFixed) { continue; }
+				if (!bFixed)
+				{
+					continue;
+				}
 
 #define PCGEX_LOAD_PROP_FIELD_FILL_PERAXIS(_NAME, _TYPE, _DEFAULT, _GETTER) \
 				if (_NAME##Writer[a]) { _NAME##ByHash[a].Add(Hash, _GETTER); }

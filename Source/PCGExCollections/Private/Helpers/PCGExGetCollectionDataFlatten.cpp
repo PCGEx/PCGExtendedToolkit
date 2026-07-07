@@ -50,7 +50,10 @@ namespace PCGExGetCollectionData
 			// null rows from the same root+depth group together under one hash.
 			const int32 NoneHash = GetOrAssignCollectionHash(Ctx, RootCollectionIndex, -1, Depth);
 			OutEntries.Add({nullptr, nullptr, NAME_None, RootCollectionIndex, -1, Depth, NoneHash});
-			if (bDedup) { Ctx.SeenEntries->Add(nullptr); }
+			if (bDedup)
+			{
+				Ctx.SeenEntries->Add(nullptr);
+			}
 		};
 
 		if (!InEntry)
@@ -89,13 +92,19 @@ namespace PCGExGetCollectionData
 				return;
 			}
 			OutEntries.Add({S, InHost, NAME_None, RootCollectionIndex, HostCollectionIndex, Depth, EntryHash});
-			if (bDedup) { Ctx.SeenEntries->Add(S); }
+			if (bDedup)
+			{
+				Ctx.SeenEntries->Add(S);
+			}
 		};
 
 		if (!InEntry->bIsSubCollection)
 		{
 			OutEntries.Add({InEntry, InHost, ResolveCategory(InEntry->Category), RootCollectionIndex, HostCollectionIndex, Depth, EntryHash});
-			if (bDedup) { Ctx.SeenEntries->Add(InEntry); }
+			if (bDedup)
+			{
+				Ctx.SeenEntries->Add(InEntry);
+			}
 			return;
 		}
 
@@ -111,7 +120,10 @@ namespace PCGExGetCollectionData
 				// Sub-collection emitted as a single placeholder row -- depth stays at the host's depth
 				// (the entry physically lives in InHost; we didn't recurse into its contents).
 				OutEntries.Add({InEntry, InHost, ResolveCategory(InEntry->Category), RootCollectionIndex, HostCollectionIndex, Depth, EntryHash});
-				if (bDedup) { Ctx.SeenEntries->Add(InEntry); }
+				if (bDedup)
+				{
+					Ctx.SeenEntries->Add(InEntry);
+				}
 				return;
 			}
 		}
@@ -232,7 +244,7 @@ namespace PCGExGetCollectionData
 
 		PCGEX_VALIDATE_NAME_C(InContext, Settings->SourceAttribute)
 
-		TArray<FPCGTaggedData> Inputs = InContext->InputData.GetInputsByPin(PCGExGetCollectionData::SourcesPin);
+		TArray<FPCGTaggedData> Inputs = InContext->InputData.GetInputsByPin(SourcesPin);
 		if (Inputs.IsEmpty())
 		{
 			return true;
@@ -277,11 +289,11 @@ namespace PCGExGetCollectionData
 				// One value per input (regardless of read success -> empty slot on failure).
 				if (bIsSoftPath)
 				{
-					Out.Paths.Add(PCGExGetCollectionData::ReadSinglePath(InContext, TD.Data, SourceAttribute));
+					Out.Paths.Add(ReadSinglePath(InContext, TD.Data, SourceAttribute));
 				}
 				else
 				{
-					Out.Hashes.Add(PCGExGetCollectionData::ReadSingleHash(InContext, TD.Data, SourceAttribute));
+					Out.Hashes.Add(ReadSingleHash(InContext, TD.Data, SourceAttribute));
 				}
 			}
 			else

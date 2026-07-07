@@ -40,9 +40,12 @@ void UPCGExPathSplineMeshSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* In
 	if (SelectorMode == EPCGExSelectorMode::Unset)
 	{
 		SelectorMode = EPCGExSelectorMode::External;
-		PCGEX_IF_VERSION_LOWER(1, 75, 19) { SelectorMode = EPCGExSelectorMode::Legacy; }
+		PCGEX_IF_VERSION_LOWER(1, 75, 19)
+		{
+			SelectorMode = EPCGExSelectorMode::Legacy;
+		}
 	}
-	
+
 	Super::ApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -62,7 +65,7 @@ void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 			bUseStagedPoints = false;
 		}
 	}
-	
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
@@ -624,8 +627,8 @@ namespace PCGExPathSplineMesh
 				Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, Segment.MaterialPick);
 			}
 
-			// Subcollections may nest any collection type; only mesh-hosted entries are usable here.
-			if (!Result.IsValid() || !Result.Host->IsType(PCGExAssetCollection::TypeIds::Mesh))
+			// Subcollections/hosts may mix collection types; only mesh entries are usable here.
+			if (!Result.IsValid() || !Result.Entry->IsType(PCGExAssetCollection::TypeIds::Mesh))
 			{
 				HandleInvalidPoint(Index);
 				continue;
