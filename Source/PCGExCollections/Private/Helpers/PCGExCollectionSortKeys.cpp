@@ -3,10 +3,10 @@
 
 #include "Helpers/PCGExCollectionSortKeys.h"
 
-#include "Hash/Blake3.h"
-#include "Helpers/PCGExArchiveBlake3.h"
 #include "Collections/PCGExLevelCollection.h"
 #include "Collections/PCGExMeshCollection.h"
+#include "Hash/Blake3.h"
+#include "Helpers/PCGExArchiveBlake3.h"
 
 namespace PCGExSharedCompact
 {
@@ -26,10 +26,10 @@ namespace PCGExSharedCompact
 		TStringBuilder<512> Builder;
 		Builder.Append(E.StaticMesh.ToSoftObjectPath().ToString());
 		Builder.Appendf(TEXT("|MV=%d|SI=%d|DS=%d|PCH=%u|DESC="),
-			static_cast<int32>(E.MaterialVariants),
-			E.SlotIndex,
-			static_cast<int32>(E.DescriptorSource),
-			E.PropertyComponentHash);
+		                static_cast<int32>(E.MaterialVariants),
+		                E.SlotIndex,
+		                static_cast<int32>(E.DescriptorSource),
+		                E.PropertyComponentHash);
 		Builder.Append(LexToString(DescHash));
 
 		for (const FPCGExMaterialOverrideSingleEntry& S : E.MaterialOverrideVariants)

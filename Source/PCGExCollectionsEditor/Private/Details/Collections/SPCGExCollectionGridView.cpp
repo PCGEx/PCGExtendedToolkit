@@ -991,6 +991,10 @@ void SPCGExCollectionGridView::HandleCrossCollectionDrop(
 			if (FPCGExAssetCollectionEntry* NewEntry = TargetColl->EDITOR_GetMutableEntry(NewIdx))
 			{
 				NewEntry->Category = TargetCategory;
+				// Copied/moved entries are NEW identities in the target collection: zero the
+				// carried-over EntryId so SyncEntryIds assigns a fresh one instead of aliasing
+				// (or colliding with) ids that external references may be bound to.
+				NewEntry->EntryId = 0;
 			}
 
 			InsertedIndices.Add(NewIdx);
@@ -2082,6 +2086,11 @@ FReply SPCGExCollectionGridView::OnDuplicateSelected()
 			uint8* SrcPtr = ArrayHelper.GetRawPtr(SrcIndex);
 			uint8* DstPtr = ArrayHelper.GetRawPtr(InsertAt);
 			EntryStruct->CopyScriptStruct(DstPtr, SrcPtr);
+
+			// A duplicate is a NEW identity: zero the copied EntryId so SyncEntryIds assigns
+			// a fresh one and the ORIGINAL unambiguously keeps its id — external references
+			// (variant collections) must never re-bind to the copy.
+			reinterpret_cast<FPCGExAssetCollectionEntry*>(DstPtr)->EntryId = 0;
 		}
 
 		Coll->PostEditChange();

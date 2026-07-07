@@ -177,6 +177,7 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
 	virtual bool Validate(const UPCGExAssetCollection* ParentCollection) override;
 	virtual void UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive) override;
 	virtual void SetAssetPath(const FSoftObjectPath& InPath) override;
+	virtual void ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection) override;
 
 	void InitPCGSoftISMDescriptor(const UPCGExMeshCollection* ParentCollection, FPCGSoftISMComponentDescriptor& TargetDescriptor) const;
 

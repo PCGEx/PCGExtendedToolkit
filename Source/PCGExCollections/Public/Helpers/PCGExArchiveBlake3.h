@@ -72,7 +72,10 @@ public:
 	//~ End FArchive Interface
 
 	/** Finalize and return the 256-bit Blake3 digest. May be called repeatedly; more input may follow. */
-	FBlake3Hash Finalize() const { return Hasher.Finalize(); }
+	FBlake3Hash Finalize() const
+	{
+		return Hasher.Finalize();
+	}
 
 private:
 	FBlake3 Hasher;

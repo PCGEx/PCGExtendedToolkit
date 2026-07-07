@@ -46,6 +46,11 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelExportContext
 	 *  pick it up directly instead of walking the asset's inner-object graph. */
 	TObjectPtr<UPCGExActorCollection>* ActorCollectionOut = nullptr;
 
+	/** Previous per-entry actor collection, when one exists. Reused as the working buffer
+	 *  (re-outered to the new asset) so its CollectionGUID and EntryIds survive re-exports.
+	 *  The caller keeps it GC-reachable for the duration of the call. */
+	UPCGExActorCollection* PreviousActorCollection = nullptr;
+
 	/** Receives the "common-ancestor" inherited-defaults view computed from the contributing
 	 *  actors' BP class chains -- per property, the value all unique classes agree on at the
 	 *  CDO level, or the asset's authored default when classes disagree. Used by the shared

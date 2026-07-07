@@ -5,12 +5,12 @@
 
 #include "CoreMinimal.h"
 
+#include "PCGExSchemaMerging.h"
 #include "PCGGraph.h"
 #include "Core/PCGExAssetCollection.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExBoundsEvaluator.h"
-#include "PCGExSchemaMerging.h"
 
 #include "PCGExActorCollection.generated.h"
 
