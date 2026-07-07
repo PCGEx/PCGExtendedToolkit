@@ -91,6 +91,88 @@ namespace PCGExAssetCollection
 		return WeightSum;
 	}
 
+#pragma region FEntryIdBank
+
+	void FEntryIdBank::Deposit(const uint32 InExactKey, const uint32 InLooseKey, const int32 InEntryId)
+	{
+		if (InEntryId == 0 || (InExactKey == 0 && InLooseKey == 0))
+		{
+			return;
+		}
+
+		const int32 DepositIndex = Deposits.Add(FDeposit{InEntryId, false});
+		if (InExactKey != 0)
+		{
+			ExactToDeposits.FindOrAdd(InExactKey).Add(DepositIndex);
+		}
+		if (InLooseKey != 0)
+		{
+			LooseToDeposits.FindOrAdd(InLooseKey).Add(DepositIndex);
+		}
+	}
+
+	void FEntryIdBank::Deposit(const UPCGExAssetCollection* InCollection, TFunctionRef<uint32(const FPCGExAssetCollectionEntry&, int32)> InKeyFunc)
+	{
+		if (!InCollection)
+		{
+			return;
+		}
+		InCollection->ForEachEntry([this, &InKeyFunc](const FPCGExAssetCollectionEntry* Entry, const int32 Index)
+		{
+			Deposit(InKeyFunc(*Entry, Index), 0, Entry->EntryId);
+		});
+	}
+
+	int32 FEntryIdBank::ClaimExact(const uint32 InExactKey)
+	{
+		ensureMsgf(!bLooseClaimStarted, TEXT("FEntryIdBank: exact claims must all happen before the first loose claim."));
+
+		if (InExactKey == 0)
+		{
+			return 0;
+		}
+
+		if (const TArray<int32>* Bucket = ExactToDeposits.Find(InExactKey))
+		{
+			for (const int32 DepositIndex : *Bucket)
+			{
+				FDeposit& D = Deposits[DepositIndex];
+				if (!D.bClaimed)
+				{
+					D.bClaimed = true;
+					return D.EntryId;
+				}
+			}
+		}
+		return 0;
+	}
+
+	int32 FEntryIdBank::ClaimLoose(const uint32 InLooseKey)
+	{
+		bLooseClaimStarted = true;
+
+		if (InLooseKey == 0)
+		{
+			return 0;
+		}
+
+		if (const TArray<int32>* Bucket = LooseToDeposits.Find(InLooseKey))
+		{
+			for (const int32 DepositIndex : *Bucket)
+			{
+				FDeposit& D = Deposits[DepositIndex];
+				if (!D.bClaimed)
+				{
+					D.bClaimed = true;
+					return D.EntryId;
+				}
+			}
+		}
+		return 0;
+	}
+
+#pragma endregion
+
 #pragma region FMicroCache
 
 	int32 FMicroCache::GetPick(int32 Index, EPCGExIndexPickMode PickMode) const
@@ -1202,12 +1284,136 @@ void UPCGExAssetCollection::BeginDestroy()
 
 void UPCGExAssetCollection::RebuildStagingData(bool bRecursive)
 {
+	SyncEntryIds();
+
 	ForEachEntry([this, bRecursive](FPCGExAssetCollectionEntry* InEntry, int32 i)
 	{
 		InEntry->UpdateStaging(this, i, bRecursive);
 		InEntry->PostUpdateStaging();
 	});
 	InvalidateCache();
+}
+
+bool UPCGExAssetCollection::BuildCacheFromEntryPtrs(TConstArrayView<FPCGExAssetCollectionEntry*> InEntries)
+{
+	FWriteScopeLock WriteScopeLock(CacheLock);
+
+	if (Cache)
+	{
+		return true;
+	}
+
+	// Rebuild property registry from collection properties
+	RebuildPropertyRegistry();
+
+	Cache = MakeShared<PCGExAssetCollection::FCache>();
+	bCacheNeedsRebuild = false;
+
+	const int32 NumEntriesCount = InEntries.Num();
+	Cache->Main->Reserve(NumEntriesCount);
+
+	// Collect direct subcollection children while iterating entries. Recursion into their
+	// FlatHosts is deferred to after the loop because LoadCache() on a sub-collection takes
+	// its own CacheLock and we want to release the write path here before that happens.
+	TSet<UPCGExAssetCollection*> DirectSubs;
+
+	for (int32 i = 0; i < NumEntriesCount; i++)
+	{
+		FPCGExAssetCollectionEntry* Entry = InEntries[i];
+
+		// Null = unset row in a heterogeneous collection. Skipped, but still consumes
+		// raw index i so pointer-array order stays aligned with raw entry indices.
+		if (!Entry || !Entry->Validate(this))
+		{
+			continue;
+		}
+
+		Cache->RegisterEntry(i, Entry);
+
+		if (Entry->HasValidSubCollection())
+		{
+			if (UPCGExAssetCollection* Sub = const_cast<UPCGExAssetCollection*>(Entry->GetSubCollectionPtr()))
+			{
+				if (Sub != this)
+				{
+					DirectSubs.Add(Sub);
+				}
+			}
+		}
+	}
+
+	Cache->Compile();
+
+	// Materialize FlatHosts: self + every transitively reachable subcollection, deduplicated.
+	// Walks sub-collections via ForEachEntry (direct Entries array read -- no lock on the
+	// sub-collection's cache). This avoids calling LoadCache() on sub-collections, which
+	// could re-enter the cache build on a cycle (A→B→A) and deadlock on our own CacheLock.
+	// Cycles are handled by the Visited set.
+	TSet<UPCGExAssetCollection*> Visited;
+	Visited.Add(this);
+	Cache->FlatHosts.Add(this);
+
+	TArray<UPCGExAssetCollection*> Stack;
+	for (UPCGExAssetCollection* Sub : DirectSubs)
+	{
+		bool bAlreadyVisited = false;
+		Visited.Add(Sub, &bAlreadyVisited);
+		if (!bAlreadyVisited)
+		{
+			Stack.Add(Sub);
+		}
+	}
+
+	while (!Stack.IsEmpty())
+	{
+		UPCGExAssetCollection* Current = Stack.Pop(EAllowShrinking::No);
+		Cache->FlatHosts.Add(Current);
+
+		Current->ForEachEntry([&Visited, &Stack](const FPCGExAssetCollectionEntry* E, int32 /*Idx*/)
+		{
+			if (!E || !E->HasValidSubCollection())
+			{
+				return;
+			}
+			if (UPCGExAssetCollection* Sub = const_cast<UPCGExAssetCollection*>(E->GetSubCollectionPtr()))
+			{
+				bool bAlreadyVisited = false;
+				Visited.Add(Sub, &bAlreadyVisited);
+				if (!bAlreadyVisited)
+				{
+					Stack.Add(Sub);
+				}
+			}
+		});
+	}
+
+	return true;
+}
+
+void UPCGExAssetCollection::SyncEntryIds()
+{
+	TSet<int32> SeenIds;
+	SeenIds.Reserve(NumEntries());
+
+	ForEachEntry([&SeenIds](FPCGExAssetCollectionEntry* InEntry, int32 i)
+	{
+		// Copy-paste preserves the source's EntryId; without this catch, external references
+		// (variant collections) would alias the duplicates. First-seen keeps its id.
+		bool bAlreadySeen = false;
+		if (InEntry->EntryId != 0)
+		{
+			SeenIds.Add(InEntry->EntryId, &bAlreadySeen);
+		}
+		if (InEntry->EntryId == 0 || bAlreadySeen)
+		{
+			do
+			{
+				InEntry->EntryId = GetTypeHash(FGuid::NewGuid());
+			}
+			while (InEntry->EntryId == 0 || SeenIds.Contains(InEntry->EntryId));
+			SeenIds.Add(InEntry->EntryId);
+		}
+	});
 }
 
 void UPCGExAssetCollection::EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const
@@ -1906,7 +2112,7 @@ void UPCGExAssetCollection::EDITOR_AddBrowserSelectionTyped(const TArray<FAssetD
 	for (const FAssetData& AssetData : InAssetData)
 	{
 		UClass* AssetClass = AssetData.GetClass();
-		if (!AssetClass || !AssetClass->IsChildOf(UPCGExAssetCollection::StaticClass()))
+		if (!AssetClass || !AssetClass->IsChildOf(StaticClass()))
 		{
 			RegularAssets.Add(AssetData);
 			continue;

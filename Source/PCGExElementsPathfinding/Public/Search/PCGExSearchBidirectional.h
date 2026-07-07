@@ -15,6 +15,7 @@ namespace PCGEx
 {
 	class FScoredQueue;
 	class FHashLookup;
+	class FHashLookupArray;
 }
 
 class FPCGExHeuristicOperation;
@@ -31,7 +32,7 @@ namespace PCGExPathfinding
 		// Backward search structures
 		TBitArray<> VisitedBackward;
 		TArray<double> GScoreBackward;
-		TSharedPtr<PCGEx::FHashLookup> TravelStackBackward;
+		TSharedPtr<PCGEx::FHashLookupArray> TravelStackBackward;
 		TSharedPtr<PCGEx::FScoredQueue> ScoredQueueBackward;
 
 		virtual void Init(const PCGExClusters::FCluster* InCluster) override;

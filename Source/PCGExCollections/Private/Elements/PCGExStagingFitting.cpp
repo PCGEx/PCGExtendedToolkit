@@ -66,7 +66,7 @@ bool FPCGExStagingFittingElement::CanExecuteOnlyOnMainThread(FPCGContext* Contex
 	{
 		return false;
 	}
-	
+
 	return Context->CurrentPhase == EPCGExecutionPhase::PrepareData
 		&& Context->GetInputSettings<UPCGExStagingFittingSettings>()->Source == EPCGExFittingSource::CollectionMap;
 }
@@ -201,10 +201,7 @@ namespace PCGExStagingFitting
 				PCGEX_INIT_IO(PointDataFacade->Source, Settings->bPruneEmptyPoints ? PCGExData::EIOInit::NoInit : PCGExData::EIOInit::Forward)
 				return false;
 			}
-			else
-			{
-				PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
-			}
+			PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
 
 			// Build bounds cache from loaded meshes

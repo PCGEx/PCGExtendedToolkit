@@ -58,6 +58,12 @@ namespace PCGEx
 			return Data[At];
 		}
 
+		/** Raw storage access for hot paths that hold a concrete FHashLookupArray and want to bypass
+		 * the virtual Set/Get -- e.g. pathfinding search loops writing predecessors every relaxation.
+		 * The array is fixed-size after construction, so the pointer stays valid for the lookup's life. */
+		FORCEINLINE uint64* GetMutableData() { return Data.GetData(); }
+		FORCEINLINE const uint64* GetData() const { return Data.GetData(); }
+
 		virtual void Reset() override
 		{
 			for (uint64& V : Data)

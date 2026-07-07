@@ -78,6 +78,10 @@ public:
 protected:
 	/** Cached attribute values per node (indexed by node index) */
 	TArray<double> CachedValues;
+
+	/** Reciprocal of the cluster's max edge length -- EdgeLengths are raw world-space, and
+	 * bNormalizeByDistance divides by the max-relative length to keep gradients in a usable range. */
+	double InvMaxEdgeLength = 1;
 };
 
 

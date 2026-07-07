@@ -109,6 +109,10 @@ public:
 	// Evaluate at time T - same signature as FRichCurve::Eval()
 	FORCEINLINE double Eval(const double InTime) const
 	{
+		if (bFastLinear)
+		{
+			return EvalLinear(InTime);
+		}
 		if (Mode == EPCGExCurveLUTMode::Direct)
 		{
 			return CurvePtr ? CurvePtr->Eval(static_cast<float>(InTime)) : 0.0f;
@@ -119,7 +123,14 @@ public:
 	FORCEINLINE void EvalInPlace(TArrayView<double> InTimes) const
 	{
 		const int32 NumSamples = InTimes.Num();
-		if (Mode == EPCGExCurveLUTMode::Direct)
+		if (bFastLinear)
+		{
+			for (double& InTime : InTimes)
+			{
+				InTime = EvalLinear(InTime);
+			}
+		}
+		else if (Mode == EPCGExCurveLUTMode::Direct)
 		{
 			if (CurvePtr)
 			{
@@ -190,6 +201,13 @@ public:
 protected:
 	TSharedPtr<FStreamableHandle> ExternalCurveHandle = nullptr;
 
+	/** Clamped lerp equivalent of a 2-key linear curve with constant extrapolation -- what the
+	 * default weight-distribution ramps are. Set up by Init, bypasses FRichCurve::Eval entirely. */
+	FORCEINLINE double EvalLinear(const double InTime) const
+	{
+		return LinearBase + LinearSlope * (FMath::Clamp(InTime, static_cast<double>(TimeMin), static_cast<double>(TimeMax)) - TimeMin);
+	}
+
 	FORCEINLINE float EvalLUT(const float InTime) const
 	{
 		// Normalize time to [0, 1] within curve's range
@@ -213,6 +231,11 @@ protected:
 	float TimeMax = 1.0f;
 	float TimeToNormalized = 1.0f; // 1.0 / (TimeMax - TimeMin)
 	float LUTMaxIdx = 0.0f;        // LUT.Num() - 2 (because we have Count+1 entries)
+
+	// Fast-linear path (see EvalLinear); takes precedence over Mode when set.
+	bool bFastLinear = false;
+	double LinearBase = 0;  // First key value
+	double LinearSlope = 0; // (V1 - V0) / (T1 - T0)
 };
 
 #pragma endregion

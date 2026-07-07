@@ -588,16 +588,9 @@ namespace PCGExCollections
 
 	UPCGExAssetCollection* FPickUnpacker::UnpackHash(uint64 EntryHash, int16& OutPrimaryIndex, int16& OutSecondaryIndex)
 	{
-		uint32 CollectionIdx = 0;
-		uint32 OutEntryIndices = 0;
-
-		PCGEx::H64(EntryHash, CollectionIdx, OutEntryIndices);
-
-		uint16 EntryIndex = 0;
-		uint16 SecondaryIndex = 0;
-
-		PCGEx::H32(OutEntryIndices, EntryIndex, SecondaryIndex);
-		OutSecondaryIndex = SecondaryIndex - 1; // minus one because we do +1 during packing
+		const uint32 CollectionIdx = PickHash::GetCollectionGUID(EntryHash);
+		const uint16 EntryIndex = PickHash::GetRawEntryIndex(EntryHash);
+		OutSecondaryIndex = PickHash::GetSecondaryIndex(EntryHash);
 
 		UPCGExAssetCollection** Collection = CollectionMap.Find(CollectionIdx);
 		if (!Collection || !(*Collection)->IsValidIndex(EntryIndex))

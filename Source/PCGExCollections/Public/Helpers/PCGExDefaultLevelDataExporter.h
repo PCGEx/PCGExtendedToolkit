@@ -5,11 +5,11 @@
 
 #include "CoreMinimal.h"
 
+#include "PCGExSchemaMerging.h"
 #include "Helpers/PCGExActorContentFilter.h"
 #include "Helpers/PCGExActorMeshClassificator.h"
 #include "Helpers/PCGExBoundsEvaluator.h"
 #include "Helpers/PCGExLevelDataExporter.h"
-#include "PCGExSchemaMerging.h"
 
 #include "PCGExDefaultLevelDataExporter.generated.h"
 

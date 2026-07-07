@@ -55,7 +55,8 @@ bool FPCGExSearchOperationBellmanFord::ResolveQuery(
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExSearchOperationBellmanFord::FindPath);
 
 	TArray<double>& Distance = LocalAllocations->GScore;
-	PCGEx::FHashLookup* TravelStack = LocalAllocations->TravelStack.Get();
+	PCGEx::FHashLookupArray* TravelStack = LocalAllocations->TravelStack.Get();
+	uint64* const TravelData = TravelStack->GetMutableData();
 
 	const PCGExHeuristics::FLocalFeedbackHandler* Feedback = LocalFeedback.Get();
 
@@ -92,7 +93,7 @@ bool FPCGExSearchOperationBellmanFord::ResolveQuery(
 				if (NewDist < Distance[NeighborIndex])
 				{
 					Distance[NeighborIndex] = NewDist;
-					TravelStack->Set(NeighborIndex, PCGEx::NH64(NodeIndex, EdgeIndex));
+					TravelData[NeighborIndex] = PCGEx::NH64(NodeIndex, EdgeIndex);
 					bAnyRelaxation = true;
 				}
 			}
@@ -147,7 +148,7 @@ bool FPCGExSearchOperationBellmanFord::ResolveQuery(
 	// Reconstruct path
 	int32 PathNodeIndex;
 	int32 PathEdgeIndex;
-	PCGEx::NH64(TravelStack->Get(GoalNode.Index), PathNodeIndex, PathEdgeIndex);
+	PCGEx::NH64(TravelData[GoalNode.Index], PathNodeIndex, PathEdgeIndex);
 
 	if (PathNodeIndex != -1)
 	{
@@ -156,7 +157,7 @@ bool FPCGExSearchOperationBellmanFord::ResolveQuery(
 		while (PathNodeIndex != -1)
 		{
 			const int32 CurrentIndex = PathNodeIndex;
-			PCGEx::NH64(TravelStack->Get(CurrentIndex), PathNodeIndex, PathEdgeIndex);
+			PCGEx::NH64(TravelData[CurrentIndex], PathNodeIndex, PathEdgeIndex);
 			InQuery->AddPathNode(CurrentIndex, PathEdgeIndex);
 		}
 

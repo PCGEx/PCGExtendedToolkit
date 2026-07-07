@@ -12,13 +12,13 @@
 #include "Core/PCGExMTCommon.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
-#include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
-#include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
-#include "Metadata/Accessors/PCGCustomAccessor.h"
 #include "Elements/Grammar/PCGSubdivisionBase.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 #include "Helpers/PCGExGetCollectionDataFlatten.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
+#include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
+#include "Metadata/Accessors/PCGCustomAccessor.h"
 
 #define LOCTEXT_NAMESPACE "PCGExGetCollectionData"
 #define PCGEX_NAMESPACE GetCollectionData
@@ -883,7 +883,7 @@ namespace PCGExGetCollectionData
 				{
 					return;
 				}
-				
+
 				TSharedPtr<IPCGAttributeAccessorKeys> Keys = PCGExMetaHelpers::MakeMutableKeys(DupData);
 
 				auto WriteAttr = [&](const bool bWant, const FName AttrName, const TArray<int32>& Values)

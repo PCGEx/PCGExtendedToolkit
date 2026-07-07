@@ -21,7 +21,7 @@
 #include "Helpers/PCGExTargetsHandler.h"
 #include "Paths/PCGExPathsCommon.h"
 #include "Paths/PCGExPathsHelpers.h"
-#include "Search/PCGExSearchAStar.h"
+#include "Search/PCGExSearchDijkstra.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPathfindingPlotEdgesElement"
 #define PCGEX_NAMESPACE PathfindingPlotEdges
@@ -33,7 +33,7 @@ void UPCGExPathfindingPlotEdgesSettings::PostInitProperties()
 	{
 		if (!SearchAlgorithm)
 		{
-			SearchAlgorithm = NewObject<UPCGExSearchAStar>(this, TEXT("SearchAlgorithm"));
+			SearchAlgorithm = NewObject<UPCGExSearchDijkstra>(this, TEXT("SearchAlgorithm"));
 		}
 	}
 	Super::PostInitProperties();

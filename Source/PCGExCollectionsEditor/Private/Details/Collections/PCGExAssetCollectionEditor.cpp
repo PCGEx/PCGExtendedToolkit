@@ -141,7 +141,7 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 		->SetOrientation(Orient_Horizontal);
 
 	const TSharedRef<FTabManager::FLayout> Layout =
-		FTabManager::NewLayout("PCGExAssetCollectionEditor_Layout_v9")
+		FTabManager::NewLayout(GetLayoutName())
 		->AddArea(Area);
 
 	TSharedRef<FTabManager::FStack> MainStack = FTabManager::NewStack();
@@ -165,9 +165,9 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 	}
 	Area->Split(MainStack);
 
-	MainStack->SetForegroundTab(FName("Grid"));
+	MainStack->SetForegroundTab(GetDefaultForegroundTabId());
 
-	InitAssetEditor(EToolkitMode::Standalone, InitToolkitHost, FName("PCGExAssetCollectionEditor"), Layout, bCreateDefaultStandaloneMenu, bCreateDefaultToolbar, ObjectsToEdit);
+	InitAssetEditor(EToolkitMode::Standalone, InitToolkitHost, GetAppIdentifier(), Layout, bCreateDefaultStandaloneMenu, bCreateDefaultToolbar, ObjectsToEdit);
 
 	// Toolbar extender
 	TSharedRef<FExtender> ToolbarExtender = MakeShared<FExtender>();
@@ -190,7 +190,7 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 	// state wins. Invoking the tab post-init bypasses that entirely.
 	if (const TSharedPtr<FTabManager>& TabMgr = GetTabManager())
 	{
-		TabMgr->TryInvokeTab(FName("Grid"));
+		TabMgr->TryInvokeTab(GetDefaultForegroundTabId());
 	}
 }
 

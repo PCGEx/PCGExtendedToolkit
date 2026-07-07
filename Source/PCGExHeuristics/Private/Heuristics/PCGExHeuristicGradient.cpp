@@ -19,6 +19,8 @@ void FPCGExHeuristicGradient::PrepareForCluster(const TSharedPtr<const PCGExClus
 	const int32 NumNodes = InCluster->Nodes->Num();
 	CachedValues.SetNumZeroed(NumNodes);
 
+	InvMaxEdgeLength = InCluster->MaxEdgeLength > UE_SMALL_NUMBER ? 1.0 / InCluster->MaxEdgeLength : 1.0;
+
 	// Read attribute values from vertices
 	const TSharedPtr<PCGExData::TBuffer<double>> Values = PrimaryDataFacade->GetBroadcaster<double>(Attribute, false, true);
 
@@ -87,10 +89,12 @@ double FPCGExHeuristicGradient::GetEdgeScore(const PCGExClusters::FNode& From, c
 	const double ToValue = CachedValues[To.Index];
 	double Gradient = ToValue - FromValue;
 
-	// Optionally normalize by edge length
+	// Optionally normalize by edge length. EdgeLengths are raw world-space; dividing by the
+	// max-relative length (len/maxLen, in (0,1]) keeps gradients in a range the clamps below
+	// can still discriminate -- per-world-unit slopes would collapse toward 0.
 	if (bNormalizeByDistance)
 	{
-		const double EdgeLength = (*Cluster->EdgeLengths)[Edge.Index];
+		const double EdgeLength = (*Cluster->EdgeLengths)[Edge.Index] * InvMaxEdgeLength;
 		if (EdgeLength > KINDA_SMALL_NUMBER)
 		{
 			Gradient /= EdgeLength;

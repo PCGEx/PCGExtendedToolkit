@@ -5,6 +5,7 @@
 
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
+#include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExCustomizationMacros.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
@@ -239,6 +240,50 @@ TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandSoftObjectPathCustomi
 
 TSharedRef<SWidget> FPCGExInputShorthandSoftObjectPathCustomization::CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle)
 {
+	// When the DECLARING UPROPERTY names an allowed type via the standard AllowedClasses meta
+	// (e.g. meta=(AllowedClasses="/Script/PCGExCollections.PCGExVariantCollection")), render a
+	// strongly-typed asset picker — same approach as PCGExProperties' soft-path widgets.
+	// GetOwnerProperty() resolves the declaring property in both the plain-member case (self)
+	// and the array-element case (UHT stores the meta on the FArrayProperty).
+	UClass* AllowedClass = nullptr;
+	if (const TSharedPtr<IPropertyHandle> StructHandle = ValueHandle->GetParentHandle())
+	{
+		const FProperty* Property = StructHandle->GetProperty();
+		if (const FProperty* OwnerProperty = Property ? Property->GetOwnerProperty() : nullptr)
+		{
+			FString Meta = OwnerProperty->GetMetaData(TEXT("AllowedClasses"));
+			if (!Meta.IsEmpty())
+			{
+				// Single-type picker: first entry wins when a list is provided.
+				FString First = MoveTemp(Meta);
+				if (int32 CommaIdx; First.FindChar(TEXT(','), CommaIdx))
+				{
+					First.LeftInline(CommaIdx);
+				}
+				First.TrimStartAndEndInline();
+
+				AllowedClass = FSoftClassPath(First).ResolveClass();
+				if (!AllowedClass)
+				{
+					AllowedClass = FSoftClassPath(First).TryLoadClass<UObject>();
+				}
+			}
+		}
+	}
+
+	if (AllowedClass)
+	{
+		return SNew(SBox)
+			.VAlign(VAlign_Center)
+			[
+				SNew(SObjectPropertyEntryBox)
+				.PropertyHandle(ValueHandle)
+				.AllowedClass(AllowedClass)
+				.AllowClear(true)
+				.DisplayThumbnail(false)
+			];
+	}
+
 	// FSoftObjectPath's default property widget renders as a multi-row asset picker that doesn't
 	// fit our header layout, and an asset picker isn't meaningful here -- the path is resolved at
 	// graph execution against live actors. A plain editable text box matches the attribute fallback.

@@ -14,6 +14,7 @@ namespace PCGEx
 {
 	class FScoredQueue;
 	class FHashLookup;
+	class FHashLookupArray;
 }
 
 namespace PCGExPathfinding
@@ -30,7 +31,9 @@ namespace PCGExPathfinding
 		TBitArray<> Visited;
 		TArray<double> GScore;
 		double GScoreInit = -1;
-		TSharedPtr<PCGEx::FHashLookup> TravelStack;
+		// Concrete array variant (search always uses the dense array): the hot loops grab its raw
+		// uint64* for predecessor writes, while heuristics that need it still receive the FHashLookup*.
+		TSharedPtr<PCGEx::FHashLookupArray> TravelStack;
 		TSharedPtr<PCGEx::FScoredQueue> ScoredQueue;
 
 		virtual void Init(const PCGExClusters::FCluster* InCluster);

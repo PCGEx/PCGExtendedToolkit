@@ -31,12 +31,12 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 	const FText DisplayName = bIsUncategorized ? INVTEXT("Uncategorized") : FText::FromName(CategoryName);
 	const FText CountText = FText::Format(INVTEXT("({0})"), FText::AsNumber(InArgs._EntryCount));
 
-	TSharedRef<SWidget> HeaderNameWidget = bIsUncategorized
+	TSharedRef<SWidget> HeaderNameWidget = bIsUncategorized || !InArgs._bAllowRename
 		? StaticCastSharedRef<SWidget>(
 			SNew(STextBlock)
 			.Text(DisplayName)
 			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
-			.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.5f))))
+			.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, bIsUncategorized ? 0.5f : 1.f))))
 		: StaticCastSharedRef<SWidget>(
 			SNew(SEditableTextBox)
 			.Text(DisplayName)

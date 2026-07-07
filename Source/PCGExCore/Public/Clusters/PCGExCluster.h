@@ -54,7 +54,6 @@ namespace PCGExClusters
 	protected:
 		bool bIsMirror = false;
 
-		bool bEdgeLengthsDirty = true;
 		TSharedPtr<FCluster> OriginalCluster = nullptr;
 
 		mutable FRWLock ClusterLock;
@@ -83,7 +82,11 @@ namespace PCGExClusters
 		TSharedPtr<TArray<FNode>> Nodes;
 		TSharedPtr<TArray<FBoundedEdge>> BoundedEdges;
 		TSharedPtr<TArray<FEdge>> Edges;
+		/** Raw world-space edge lengths, built by ComputeEdgeLengths. Consumers needing a
+		 * normalized value scale explicitly (MinEdgeLength/MaxEdgeLength are kept alongside). */
 		TSharedPtr<TArray<double>> EdgeLengths;
+		double MinEdgeLength = 0;
+		double MaxEdgeLength = 0;
 		TConstPCGValueRange<FTransform> VtxTransforms;
 
 		FBox Bounds = FBox(NoInit);
@@ -431,7 +434,7 @@ namespace PCGExClusters
 		int32 FindClosestNeighbor(const int32 NodeIndex, const FVector& Position, const int32 MinNeighborCount = 1) const;
 		int32 FindClosestNeighbor(const int32 NodeIndex, const FVector& Position, const TSet<int32>& Exclusion, const int32 MinNeighborCount = 1) const;
 
-		void ComputeEdgeLengths(bool bNormalize = false);
+		void ComputeEdgeLengths();
 
 		void GetConnectedNodes(const int32 FromIndex, TArray<int32>& OutIndices, const int32 SearchDepth) const;
 		void GetConnectedNodes(const int32 FromIndex, TArray<int32>& OutIndices, const int32 SearchDepth, const TSet<int32>& Skip) const;

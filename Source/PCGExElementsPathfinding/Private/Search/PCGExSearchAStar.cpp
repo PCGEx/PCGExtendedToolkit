@@ -40,7 +40,8 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 
 	TBitArray<>& Visited = LocalAllocations->Visited;
 	TArray<double>& GScore = LocalAllocations->GScore;
-	PCGEx::FHashLookup* TravelStack = LocalAllocations->TravelStack.Get();
+	PCGEx::FHashLookupArray* TravelStack = LocalAllocations->TravelStack.Get();
+	uint64* const TravelData = TravelStack->GetMutableData();
 	PCGEx::FScoredQueue* ScoredQueue = LocalAllocations->ScoredQueue.Get();
 	ScoredQueue->Enqueue(SeedNode.Index, Heuristics->GetGlobalScore(SeedNode, SeedNode, GoalNode));
 
@@ -58,15 +59,16 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 			break;
 		} // Exit early
 
-		const double CurrentGScore = GScore[CurrentNodeIndex];
-		const PCGExClusters::FNode& Current = NodesRef[CurrentNodeIndex];
-
 		if (Visited[CurrentNodeIndex])
 		{
 			continue;
 		}
 		Visited[CurrentNodeIndex] = true;
 		VisitedNum++;
+
+		// Read per-node state only after the visited check -- stale queue entries skip these loads.
+		const double CurrentGScore = GScore[CurrentNodeIndex];
+		const PCGExClusters::FNode& Current = NodesRef[CurrentNodeIndex];
 
 		for (const PCGExGraphs::FLink Lk : Current.Links)
 		{
@@ -90,7 +92,7 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 				continue;
 			}
 
-			TravelStack->Set(NeighborIndex, PCGEx::NH64(CurrentNodeIndex, EdgeIndex));
+			TravelData[NeighborIndex] = PCGEx::NH64(CurrentNodeIndex, EdgeIndex);
 			GScore[NeighborIndex] = TentativeGScore;
 
 			const double GS = Heuristics->GetGlobalScore(AdjacentNode, SeedNode, GoalNode, Feedback);
@@ -104,7 +106,7 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 
 	int32 PathNodeIndex;
 	int32 PathEdgeIndex;
-	PCGEx::NH64(TravelStack->Get(GoalNode.Index), PathNodeIndex, PathEdgeIndex);
+	PCGEx::NH64(TravelData[GoalNode.Index], PathNodeIndex, PathEdgeIndex);
 
 	if (PathNodeIndex != -1)
 	{
@@ -116,7 +118,7 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 		while (PathNodeIndex != -1)
 		{
 			const int32 CurrentIndex = PathNodeIndex;
-			PCGEx::NH64(TravelStack->Get(CurrentIndex), PathNodeIndex, PathEdgeIndex);
+			PCGEx::NH64(TravelData[CurrentIndex], PathNodeIndex, PathEdgeIndex);
 
 			InQuery->AddPathNode(CurrentIndex, PathEdgeIndex);
 		}

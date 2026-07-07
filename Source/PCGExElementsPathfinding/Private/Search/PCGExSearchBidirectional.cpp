@@ -20,7 +20,7 @@ namespace PCGExPathfinding
 		InitGScore(-1);
 		VisitedBackward.Init(false, NumNodes);
 		GScoreBackward.Init(-1, NumNodes);
-		TravelStackBackward = PCGEx::NewHashLookup<PCGEx::FHashLookupArray>(PCGEx::NH64(-1, -1), NumNodes);
+		TravelStackBackward = MakeShared<PCGEx::FHashLookupArray>(PCGEx::NH64(-1, -1), NumNodes);
 		ScoredQueueBackward = MakeShared<PCGEx::FScoredQueue>(NumNodes);
 	}
 
@@ -61,13 +61,15 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 	// Forward search structures
 	TBitArray<>& VisitedForward = LocalAllocations->Visited;
 	TArray<double>& GScoreForward = LocalAllocations->GScore;
-	PCGEx::FHashLookup* TravelStackForward = LocalAllocations->TravelStack.Get();
+	PCGEx::FHashLookupArray* TravelStackForward = LocalAllocations->TravelStack.Get();
+	uint64* const TravelDataForward = TravelStackForward->GetMutableData();
 	PCGEx::FScoredQueue* QueueForward = LocalAllocations->ScoredQueue.Get();
 
 	// Backward search structures
 	TBitArray<>& VisitedBackward = LocalAllocations->VisitedBackward;
 	TArray<double>& GScoreBackward = LocalAllocations->GScoreBackward;
-	PCGEx::FHashLookup* TravelStackBackward = LocalAllocations->TravelStackBackward.Get();
+	PCGEx::FHashLookupArray* TravelStackBackward = LocalAllocations->TravelStackBackward.Get();
+	uint64* const TravelDataBackward = TravelStackBackward->GetMutableData();
 	PCGEx::FScoredQueue* QueueBackward = LocalAllocations->ScoredQueueBackward.Get();
 
 	// Initialize forward search from seed
@@ -138,7 +140,7 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 						continue;
 					}
 
-					TravelStackForward->Set(NeighborIndex, PCGEx::NH64(CurrentNodeIndex, EdgeIndex));
+					TravelDataForward[NeighborIndex] = PCGEx::NH64(CurrentNodeIndex, EdgeIndex);
 					GScoreForward[NeighborIndex] = TentativeGScore;
 
 					QueueForward->Enqueue(NeighborIndex, TentativeGScore);
@@ -198,7 +200,7 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 						continue;
 					}
 
-					TravelStackBackward->Set(NeighborIndex, PCGEx::NH64(CurrentNodeIndex, EdgeIndex));
+					TravelDataBackward[NeighborIndex] = PCGEx::NH64(CurrentNodeIndex, EdgeIndex);
 					GScoreBackward[NeighborIndex] = TentativeGScore;
 
 					QueueBackward->Enqueue(NeighborIndex, TentativeGScore);

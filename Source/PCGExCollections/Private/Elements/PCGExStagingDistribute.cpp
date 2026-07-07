@@ -649,7 +649,7 @@ namespace PCGExAssetStaging
 
 			if (!Result.IsValid()
 				|| !Result.Entry->Staging.Bounds.IsValid
-				|| (bFilterEntryType && !EntryTypeFilter.Matches(Result.Host->GetTypeId())))
+				|| (bFilterEntryType && !EntryTypeFilter.Matches(Result.Entry->GetTypeId())))
 			{
 				InvalidPoint(Index);
 				continue;
@@ -770,7 +770,7 @@ namespace PCGExAssetStaging
 
 			if (EntryTypeWriter)
 			{
-				EntryTypeWriter->SetValue(Index, Result.Host->GetTypeId());
+				EntryTypeWriter->SetValue(Index, Result.Entry->GetTypeId());
 			}
 		}
 
