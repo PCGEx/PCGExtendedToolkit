@@ -8,6 +8,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExAttributeBroadcaster.h"
+#include "Data/PCGExPointElements.h"
 #include "Data/PCGExPointIO.h"
 #include "Engine/AssetManager.h"
 #if WITH_EDITOR
@@ -75,8 +76,27 @@ namespace PCGEx
 				}
 
 				TSharedPtr<TArray<PCGExValueHash>> KeysPtr = MakeShared<TArray<PCGExValueHash>>();
-				KeysPtr->Init(0, NumPoints);
 				Keys[PointIORef->IOIndex] = KeysPtr;
+
+				// @Data source: one value governs the dataset -- bulk-fill from the broadcaster's cached
+				// single value instead of scanning every point. Consumers stay blind to the domain.
+				if (Broadcaster->ProcessingInfos.bIsDataDomain)
+				{
+					const FSoftObjectPath DataPath = Broadcaster->FetchSingle(PCGExData::FElement(0), FSoftObjectPath());
+					if (DataPath.IsAsset())
+					{
+						KeysPtr->Init(PCGExTypes::ComputeHash(DataPath), NumPoints);
+						UniquePaths.Add(DataPath);
+					}
+					else
+					{
+						KeysPtr->Init(0, NumPoints);
+					}
+
+					continue;
+				}
+
+				KeysPtr->Init(0, NumPoints);
 				TArray<PCGExValueHash>& KeysRef = *KeysPtr.Get();
 
 				TArray<PCGExMT::FScope> Scopes;

@@ -7,6 +7,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExAssetLoader.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSwapElement"
 #define PCGEX_NAMESPACE StagingSwap
@@ -41,9 +42,25 @@ void FPCGExStagingSwapContext::RegisterAssetDependencies()
 
 	// Unique variant paths across IOs; batch-loaded before PostLoadAssetsDependencies runs.
 	TSet<FSoftObjectPath>& Required = GetRequiredAssets();
+
+	// All-uniform fast path.
 	for (const TPair<int32, TArray<FSoftObjectPath>>& Pair : VariantPathsPerIO)
 	{
 		Required.Append(Pair.Value);
+	}
+
+	// Mixed path: uniform-slot paths (per-point placeholders are null) + per-point loaders' paths.
+	for (const TPair<int32, TArray<FSoftObjectPath>>& Pair : UniformSlotPathsPerIO)
+	{
+		for (const FSoftObjectPath& Path : Pair.Value)
+		{
+			if (!Path.IsNull()) { Required.Add(Path); }
+		}
+	}
+
+	for (const TSharedPtr<PCGEx::TAssetLoader<UPCGExVariantCollection>>& Loader : SlotLoaders)
+	{
+		if (Loader) { Loader->AddAssetDependencies(); }
 	}
 }
 
@@ -84,25 +101,77 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
-	// Resolve which variant paths apply to each input IO (constant or @Data) -- attribute
-	// reads only; loading happens through the asset-dependency pipeline.
-	for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
-	{
-		TArray<FSoftObjectPath> Paths;
+	// Classify slots: constant/@Data (CanSupportDataOnly) resolve one path per IO; a per-point,
+	// non-@Data attribute gets its own loader (one per slot keeps per-point keys isolated).
+	const int32 NumSlots = Settings->VariantCollections.Num();
+	Context->SlotLoaders.Init(nullptr, NumSlots);
 
-		for (const FPCGExInputShorthandNameSoftObjectPath& VariantInput : Settings->VariantCollections)
+	for (int32 i = 0; i < NumSlots; i++)
+	{
+		if (Settings->VariantCollections[i].CanSupportDataOnly())
 		{
-			FSoftObjectPath VariantPath;
-			if (!VariantInput.TryReadDataValue(IO, VariantPath) || VariantPath.IsNull())
-			{
-				continue;
-			}
-			Paths.Add(MoveTemp(VariantPath));
+			continue;
 		}
 
-		if (!Paths.IsEmpty())
+		Context->bHasPerPointSlots = true;
+
+		TArray<FName> Names = {Settings->VariantCollections[i].Attribute};
+		TSharedPtr<PCGEx::TAssetLoader<UPCGExVariantCollection>> Loader = MakeShared<PCGEx::TAssetLoader<UPCGExVariantCollection>>(Context, Context->MainPoints.ToSharedRef(), Names);
+
+		// Paths only -- assets load through the dependency pipeline, like the uniform slots.
+		Loader->Discover();
+		Context->SlotLoaders[i] = Loader;
+	}
+
+	if (!Context->bHasPerPointSlots)
+	{
+		// All-uniform (current behavior): resolve each input's variant path list in slot order.
+		for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
 		{
-			Context->VariantPathsPerIO.Add(IO->IOIndex, MoveTemp(Paths));
+			TArray<FSoftObjectPath> Paths;
+
+			for (const FPCGExInputShorthandNameSoftObjectPath& VariantInput : Settings->VariantCollections)
+			{
+				FSoftObjectPath VariantPath;
+				if (!VariantInput.TryReadDataValue(IO, VariantPath) || VariantPath.IsNull())
+				{
+					continue;
+				}
+				Paths.Add(MoveTemp(VariantPath));
+			}
+
+			if (!Paths.IsEmpty())
+			{
+				Context->VariantPathsPerIO.Add(IO->IOIndex, MoveTemp(Paths));
+			}
+		}
+	}
+	else
+	{
+		// Mixed: resolve uniform slots per IO into their slot positions (per-point slots left null) so
+		// PostLoad can assemble ordered layers. Same per-IO TryReadDataValue as the fast path.
+		Context->SlotContributionByHash.Init(nullptr, NumSlots);
+
+		for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
+		{
+			TArray<FSoftObjectPath> Paths;
+			Paths.Init(FSoftObjectPath(), NumSlots);
+
+			for (int32 i = 0; i < NumSlots; i++)
+			{
+				if (Context->SlotLoaders[i])
+				{
+					continue; // per-point slot -- resolved via the loader
+				}
+
+				FSoftObjectPath VariantPath;
+				if (Settings->VariantCollections[i].TryReadDataValue(IO, VariantPath) && !VariantPath.IsNull())
+				{
+					Paths[i] = MoveTemp(VariantPath);
+				}
+			}
+
+			Context->UniformSlotPathsPerIO.Add(IO->IOIndex, MoveTemp(Paths));
 		}
 	}
 
@@ -194,41 +263,138 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 		return Contribution;
 	};
 
-	for (const TPair<int32, TArray<FSoftObjectPath>>& PerIO : Context->VariantPathsPerIO)
+	if (!Context->bHasPerPointSlots)
 	{
-		TSharedPtr<TMap<uint64, uint64>> Merged;
-
-		for (const FSoftObjectPath& VariantPath : PerIO.Value)
+		// All-uniform fast path: merge each IO's slot contributions into a single per-IO map.
+		for (const TPair<int32, TArray<FSoftObjectPath>>& PerIO : Context->VariantPathsPerIO)
 		{
-			const TSharedPtr<TMap<uint64, uint64>> Contribution = GetContribution(VariantPath);
-			if (!Contribution || Contribution->IsEmpty())
+			TSharedPtr<TMap<uint64, uint64>> Merged;
+
+			for (const FSoftObjectPath& VariantPath : PerIO.Value)
+			{
+				const TSharedPtr<TMap<uint64, uint64>> Contribution = GetContribution(VariantPath);
+				if (!Contribution || Contribution->IsEmpty())
+				{
+					continue;
+				}
+
+				if (!Merged)
+				{
+					// Single-variant case shares the contribution map directly (common path).
+					Merged = Contribution;
+				}
+				else
+				{
+					// Clone-on-second-contribution so a shared per-path map is never mutated.
+					if (ContributionByPath.FindKey(Merged))
+					{
+						Merged = MakeShared<TMap<uint64, uint64>>(*Merged);
+					}
+					Merged->Append(*Contribution); // later slots win on conflicts
+				}
+			}
+
+			if (Merged && !Merged->IsEmpty())
+			{
+				Context->SwapMapsPerIO.Add(PerIO.Key, Merged);
+			}
+		}
+
+		if (Context->SwapMapsPerIO.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
+		{
+			PCGE_LOG(Warning, GraphAndLog, FTEXT("No applicable variant mappings -- points and map are forwarded unchanged."));
+		}
+
+		return;
+	}
+
+	// Per-point path: build each per-point slot's hash -> contribution once, from its loaded variants.
+	for (int32 i = 0; i < Context->SlotLoaders.Num(); i++)
+	{
+		const TSharedPtr<PCGEx::TAssetLoader<UPCGExVariantCollection>> Loader = Context->SlotLoaders[i];
+		if (!Loader)
+		{
+			continue;
+		}
+
+		// Assets were batch-loaded between RegisterAssetDependencies and here; resolve them into AssetsMap.
+		Loader->Finalize();
+
+		TSharedPtr<TMap<PCGExValueHash, TSharedPtr<TMap<uint64, uint64>>>> ByHash = MakeShared<TMap<PCGExValueHash, TSharedPtr<TMap<uint64, uint64>>>>();
+
+		for (const TPair<PCGExValueHash, TObjectPtr<UPCGExVariantCollection>>& Pair : Loader->AssetsMap)
+		{
+			if (!Pair.Value)
 			{
 				continue;
 			}
 
-			if (!Merged)
+			// GetContribution caches by path, so a variant shared across slots resolves/registers once.
+			const TSharedPtr<TMap<uint64, uint64>> Contribution = GetContribution(FSoftObjectPath(Pair.Value.Get()));
+			if (Contribution && !Contribution->IsEmpty())
 			{
-				// Single-variant case shares the contribution map directly (common path).
-				Merged = Contribution;
+				ByHash->Add(Pair.Key, Contribution);
+			}
+		}
+
+		Context->SlotContributionByHash[i] = ByHash;
+	}
+
+	// Assemble ordered layers per IO -- uniform slots as fixed maps, per-point slots as (keys + ByHash).
+	const int32 NumSlots = Settings->VariantCollections.Num();
+	for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
+	{
+		const int32 IOIndex = IO->IOIndex;
+		const TArray<FSoftObjectPath>* UniformPaths = Context->UniformSlotPathsPerIO.Find(IOIndex);
+
+		TArray<FPCGExStagingSwapVariantLayer> Layers;
+
+		for (int32 i = 0; i < NumSlots; i++)
+		{
+			if (Context->SlotLoaders[i])
+			{
+				const TSharedPtr<TMap<PCGExValueHash, TSharedPtr<TMap<uint64, uint64>>>> ByHash = Context->SlotContributionByHash[i];
+				if (!ByHash || ByHash->IsEmpty())
+				{
+					continue;
+				}
+
+				// Null keys means the loader found no variant attribute on this IO -- slot inert here.
+				const TSharedPtr<TArray<PCGExValueHash>> PerPointKeys = Context->SlotLoaders[i]->GetKeys(IOIndex);
+				if (!PerPointKeys)
+				{
+					continue;
+				}
+
+				FPCGExStagingSwapVariantLayer& Layer = Layers.Emplace_GetRef();
+				Layer.PerPointKeys = PerPointKeys;
+				Layer.PerPointContribution = ByHash;
 			}
 			else
 			{
-				// Clone-on-second-contribution so a shared per-path map is never mutated.
-				if (ContributionByPath.FindKey(Merged))
+				const FSoftObjectPath Path = UniformPaths ? (*UniformPaths)[i] : FSoftObjectPath();
+				if (Path.IsNull())
 				{
-					Merged = MakeShared<TMap<uint64, uint64>>(*Merged);
+					continue;
 				}
-				Merged->Append(*Contribution); // later slots win on conflicts
+
+				const TSharedPtr<TMap<uint64, uint64>> Contribution = GetContribution(Path);
+				if (!Contribution || Contribution->IsEmpty())
+				{
+					continue;
+				}
+
+				Layers.Emplace_GetRef().Uniform = Contribution;
 			}
 		}
 
-		if (Merged && !Merged->IsEmpty())
+		if (!Layers.IsEmpty())
 		{
-			Context->SwapMapsPerIO.Add(PerIO.Key, Merged);
+			Context->LayersPerIO.Add(IOIndex, MoveTemp(Layers));
 		}
 	}
 
-	if (Context->SwapMapsPerIO.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
+	if (Context->LayersPerIO.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
 	{
 		PCGE_LOG(Warning, GraphAndLog, FTEXT("No applicable variant mappings -- points and map are forwarded unchanged."));
 	}
@@ -288,16 +454,28 @@ namespace PCGExStagingSwap
 
 		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
-		// Variants are resolved per input IO (constant or @Data) -- no map means this input
-		// passes through untouched; the init policy already forwards/duplicates the data.
-		if (const TSharedPtr<TMap<uint64, uint64>>* Found = Context->SwapMapsPerIO.Find(PointDataFacade->Source->IOIndex))
-		{
-			SwapMap = *Found;
-		}
+		const int32 IOIndex = PointDataFacade->Source->IOIndex;
 
-		if (!SwapMap || SwapMap->IsEmpty())
+		// No mapping for this input -> pass through untouched (the init policy already forwarded/duplicated it).
+		if (Context->bHasPerPointSlots)
 		{
-			return true;
+			Layers = Context->LayersPerIO.Find(IOIndex);
+			if (!Layers || Layers->IsEmpty())
+			{
+				return true;
+			}
+		}
+		else
+		{
+			if (const TSharedPtr<TMap<uint64, uint64>>* Found = Context->SwapMapsPerIO.Find(IOIndex))
+			{
+				SwapMap = *Found;
+			}
+
+			if (!SwapMap || SwapMap->IsEmpty())
+			{
+				return true;
+			}
 		}
 
 		HashReader = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
@@ -323,6 +501,35 @@ namespace PCGExStagingSwap
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
 
+		if (SwapMap)
+		{
+			// All-uniform fast path: one map governs the whole IO.
+			PCGEX_SCOPE_LOOP(Index)
+			{
+				if (!PointFilterCache[Index])
+				{
+					continue;
+				}
+
+				const uint64 Hash = static_cast<uint64>(HashReader->Read(Index));
+				if (Hash == 0)
+				{
+					continue;
+				}
+
+				const uint32 CollectionGUID = PCGExCollections::PickHash::GetCollectionGUID(Hash);
+				const uint32 RawEntryIndex = PCGExCollections::PickHash::GetRawEntryIndex(Hash);
+
+				if (const uint64* NewHash = SwapMap->Find(PCGEx::H64(CollectionGUID, RawEntryIndex)))
+				{
+					HashWriter->SetValue(Index, static_cast<int64>(*NewHash));
+				}
+			}
+
+			return;
+		}
+
+		// Per-point path: walk this IO's variant layers in slot order, keeping the last that remaps the pick.
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			if (!PointFilterCache[Index])
@@ -336,10 +543,24 @@ namespace PCGExStagingSwap
 				continue;
 			}
 
-			const uint32 CollectionGUID = PCGExCollections::PickHash::GetCollectionGUID(Hash);
-			const uint32 RawEntryIndex = PCGExCollections::PickHash::GetRawEntryIndex(Hash);
+			const uint64 Key = PCGEx::H64(PCGExCollections::PickHash::GetCollectionGUID(Hash), PCGExCollections::PickHash::GetRawEntryIndex(Hash));
 
-			if (const uint64* NewHash = SwapMap->Find(PCGEx::H64(CollectionGUID, RawEntryIndex)))
+			const uint64* NewHash = nullptr;
+			for (const FPCGExStagingSwapVariantLayer& Layer : *Layers)
+			{
+				const TMap<uint64, uint64>* Contribution = Layer.ResolveContribution(Index);
+				if (!Contribution)
+				{
+					continue;
+				}
+
+				if (const uint64* Found = Contribution->Find(Key))
+				{
+					NewHash = Found;
+				}
+			}
+
+			if (NewHash)
 			{
 				HashWriter->SetValue(Index, static_cast<int64>(*NewHash));
 			}
