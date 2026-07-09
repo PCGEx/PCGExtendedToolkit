@@ -47,7 +47,7 @@ enum class EPCGExExtrudeProfileType : uint8
 /**
  *
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path", meta=(Keywords = "extend grow prolong lengthen cap", PCGExNodeLibraryDoc="paths/modify/path-extrude"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path", meta=(Keywords = "extend grow prolong lengthen cap", PCGExNodeLibraryDoc="paths/generate/path-extrude"))
 class UPCGExExtrudePathSettings : public UPCGExPathProcessorSettings
 {
 	GENERATED_BODY()

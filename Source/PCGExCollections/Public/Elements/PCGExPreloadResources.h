@@ -74,7 +74,7 @@ public:
 	TArray<PCGExHelpers::FPCGExSharedAssetHandlePtr> Handles;
 };
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Collections", meta = (PCGExNodeLibraryDoc = "collections/preload-resources"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Collections", meta = (PCGExNodeLibraryDoc = "staging/utilities/preload-release-resources"))
 class UPCGExPreloadResourcesSettings : public UPCGExSettings
 {
 	GENERATED_BODY()
