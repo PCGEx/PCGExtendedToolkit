@@ -66,6 +66,7 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	virtual void ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(AssetStaging, "Staging : Distribute", "Distribute PCGEx Asset Collection entries to points.", FName(GetDisplayName()));
 
@@ -106,20 +107,25 @@ protected:
 	//~End UPCGSettings
 
 public:
+	/** Asset collection to stage from. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExAssetCollection"))
+	FPCGExInputShorthandNameSoftObjectPath SourceCollection;
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	EPCGExCollectionSource CollectionSource = EPCGExCollectionSource::Asset;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="CollectionSource == EPCGExCollectionSource::Asset", EditConditionHides))
-	TSoftObjectPtr<UPCGExAssetCollection> AssetCollection;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="CollectionSource == EPCGExCollectionSource::AttributeSet", EditConditionHides))
-	FPCGExRoamingAssetCollectionDetails AttributeSetDetails;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Attribute", EditCondition="CollectionSource == EPCGExCollectionSource::Attribute", EditConditionHides))
-	FName CollectionPathAttributeName = "CollectionPath";
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(EditCondition="CollectionSource != EPCGExCollectionSource::AttributeSet", EditConditionHides))
 	EPCGExStagingOutputMode OutputMode = EPCGExStagingOutputMode::CollectionMap;
+
+#pragma region DEPRECATED
+	
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExCollectionSource CollectionSource_DEPRECATED = EPCGExCollectionSource::Asset;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	TSoftObjectPtr<UPCGExAssetCollection> AssetCollection_DEPRECATED;
+
+#pragma endregion
+	
+	UPROPERTY()
+	FName CollectionPathAttributeName_DEPRECATED = "CollectionPath";
 
 	/** The name of the attribute to write asset path to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="OutputMode == EPCGExStagingOutputMode::Attributes"))
@@ -268,7 +274,6 @@ protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(AssetStaging)
 
 	virtual bool Boot(FPCGExContext* InContext) const override;
-	virtual void PostLoadAssetsDependencies(FPCGExContext* InContext) const override;
 	virtual bool PostBoot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };
