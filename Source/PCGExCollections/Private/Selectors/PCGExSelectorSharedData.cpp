@@ -26,6 +26,11 @@ namespace PCGExCollections
 		}
 
 		TSharedPtr<FSelectorSharedData> NewData = Factory->BuildSharedData(Collection, Target);
+		if (NewData)
+		{
+			// Finalize batch-dependent state before publication -- see FSelectorSharedData::OnCached.
+			NewData->OnCached(*this);
+		}
 		// Cache the result even when null so factories that don't participate aren't re-queried.
 		Entries.Add(Key, NewData);
 #if WITH_EDITOR

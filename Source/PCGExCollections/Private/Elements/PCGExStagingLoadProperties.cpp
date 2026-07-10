@@ -8,6 +8,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Details/PCGExSettingsDetails.h"
 #include "Elements/Grammar/PCGSubdivisionBase.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 
@@ -48,6 +49,7 @@ bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 	}
 
 	PCGEX_FWD(PropertyOutputSettings)
+	PCGEX_FWD(SampledPropertyOutputs)
 
 	// Roll up "any output configured?" across all output families so the warning only fires
 	// when the node would genuinely produce nothing.
@@ -73,7 +75,17 @@ bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 
 #undef PCGEX_LOAD_PROP_FIELD_BOOT
 
-	if (!Context->PropertyOutputSettings.HasOutputs() && !Settings->bWriteEntryTags && !bAnyEntryOrGrammarOutput)
+	bool bAnySampledOutput = false;
+	for (const FPCGExPropertySampledOutputConfig& Config : Context->SampledPropertyOutputs)
+	{
+		if (Config.IsValid())
+		{
+			bAnySampledOutput = true;
+			break;
+		}
+	}
+
+	if (!Context->PropertyOutputSettings.HasOutputs() && !bAnySampledOutput && !Settings->bWriteEntryTags && !bAnyEntryOrGrammarOutput)
 	{
 		PCGE_LOG(Warning, GraphAndLog, FTEXT("No property outputs configured."));
 	}
@@ -134,6 +146,11 @@ namespace PCGExStagingLoadProperties
 		{
 			return false;
 		}
+
+		// Sampled-output writers and time getters must exist before the parallel pass below:
+		// the getters' readable buffers only get fetched by the per-scope Fetch calls if they
+		// are registered on the facade beforehand.
+		PrepareSampledPropertyCaches();
 
 		// Step 1: Collect unique entry hashes (O(N) scan, but enables O(1) lookups later)
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
@@ -246,6 +263,125 @@ namespace PCGExStagingLoadProperties
 				if (const FInstancedStruct* Source = PCGExCollections::ResolveEntrySourceProperty(Result.Entry, Result.Host, PropName))
 				{
 					if (const FPCGExProperty* SourceProp = Source->GetPtr<FPCGExProperty>())
+					{
+						Cache.SourceByHash.Add(Hash, SourceProp);
+					}
+				}
+			}
+		}
+	}
+
+	void FProcessor::PrepareSampledPropertyCaches()
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagingLoadProperties::PrepareSampledPropertyCaches);
+
+		if (Context->SampledPropertyOutputs.IsEmpty())
+		{
+			return;
+		}
+
+		// Flatten collections from the unpacker into a search order, once.
+		TArray<const UPCGExAssetCollection*> SearchOrder;
+		SearchOrder.Reserve(Context->CollectionPickUnpacker->GetCollections().Num());
+		for (const auto& CollectionPair : Context->CollectionPickUnpacker->GetCollections())
+		{
+			if (CollectionPair.Value)
+			{
+				SearchOrder.Add(CollectionPair.Value);
+			}
+		}
+
+		SampledPropertyCaches.Reserve(Context->SampledPropertyOutputs.Num());
+
+		// Sampled configs may legitimately repeat a property (different times), so effective
+		// output names can collide -- and colliding caches would share one facade buffer
+		// (GetWritable is identifier-keyed) and silently clobber each other. First wins.
+		TSet<FName> SeenOutputNames;
+		SeenOutputNames.Reserve(Context->SampledPropertyOutputs.Num());
+
+		for (const FPCGExPropertySampledOutputConfig& Config : Context->SampledPropertyOutputs)
+		{
+			if (!Config.IsValid())
+			{
+				continue;
+			}
+
+			const FName OutputName = Config.GetEffectiveOutputName();
+			const FName PropName = Config.PropertyName;
+
+			bool bNameAlreadyUsed = false;
+			SeenOutputNames.Add(OutputName, &bNameAlreadyUsed);
+			if (bNameAlreadyUsed)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+					           FTEXT("Sampled output '{0}' (property '{1}') collides with a previous sampled output attribute name, skipping. Set distinct Output Attribute Names when sampling the same property several times."),
+					           FText::FromName(OutputName), FText::FromName(PropName)));
+				continue;
+			}
+
+			const FInstancedStruct* Prototype = PCGExCollections::FindPrototypeProperty(PropName, SearchOrder);
+			const FPCGExProperty* PrototypeProp = Prototype ? Prototype->GetPtr<FPCGExProperty>() : nullptr;
+			if (!PrototypeProp)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+					           FTEXT("Sampled property '{0}' not found in any staged collection, skipping."),
+					           FText::FromName(PropName)));
+				continue;
+			}
+
+			if (!PrototypeProp->SupportsSampling())
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+					           FTEXT("Property '{0}' ({1}) does not support sampling, skipping."),
+					           FText::FromName(PropName), FText::FromName(PrototypeProp->GetTypeName())));
+				continue;
+			}
+
+			TSharedPtr<PCGExData::TBuffer<double>> Writer = PointDataFacade->GetWritable<double>(
+				OutputName, 0.0, true, PCGExData::EBufferInit::New);
+			if (!Writer)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+					           FTEXT("Failed to initialize sampled output buffer for property '{0}', skipping."),
+					           FText::FromName(PropName)));
+				continue;
+			}
+
+			TSharedPtr<PCGExDetails::TSettingValue<double>> TimeGetter = Config.Time.GetValueSetting();
+			if (!TimeGetter->Init(PointDataFacade))
+			{
+				// Init logs the missing-attribute error itself.
+				continue;
+			}
+
+			FSampledPropertyCache& Cache = SampledPropertyCaches.AddDefaulted_GetRef();
+			Cache.PropertyName = PropName;
+			Cache.TimeGetter = TimeGetter;
+			Cache.Writer = Writer;
+		}
+	}
+
+	void FProcessor::BuildSampledPropertySources()
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagingLoadProperties::BuildSampledPropertySources);
+
+		int16 MaterialPick = 0;
+		for (FSampledPropertyCache& Cache : SampledPropertyCaches)
+		{
+			Cache.SourceByHash.Reserve(UniqueEntryHashes.Num());
+
+			for (const uint64 Hash : UniqueEntryHashes)
+			{
+				FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, MaterialPick);
+				if (!Result.IsValid())
+				{
+					continue;
+				}
+
+				if (const FInstancedStruct* Source = PCGExCollections::ResolveEntrySourceProperty(Result.Entry, Result.Host, Cache.PropertyName))
+				{
+					const FPCGExProperty* SourceProp = Source->GetPtr<FPCGExProperty>();
+					if (SourceProp && SourceProp->SupportsSampling())
 					{
 						Cache.SourceByHash.Add(Hash, SourceProp);
 					}
@@ -460,6 +596,7 @@ namespace PCGExStagingLoadProperties
 
 		// Step 2: Initialize writers and pre-resolve properties for all unique hashes
 		BuildPropertyCaches();
+		BuildSampledPropertySources();
 
 		if (Settings->bWriteEntryTags)
 		{
@@ -468,7 +605,7 @@ namespace PCGExStagingLoadProperties
 
 		BuildEntryFieldsCache();
 
-		if (PropertyCaches.IsEmpty() && !EntryTagsWriter && !HasAnyEntryFieldWriter())
+		if (PropertyCaches.IsEmpty() && SampledPropertyCaches.IsEmpty() && !EntryTagsWriter && !HasAnyEntryFieldWriter())
 		{
 			// No valid outputs of any kind
 			bIsProcessorValid = false;
@@ -500,6 +637,16 @@ namespace PCGExStagingLoadProperties
 					if (const FPCGExProperty* const* SourcePtr = Cache.SourceByHash.Find(Hash))
 					{
 						Cache.WriterPtr->WriteOutputFrom(i, *SourcePtr);
+					}
+				}
+
+				// Sampled outputs: read the per-point time, sample the entry's source property.
+				// Unmatched hashes leave the buffer default (0.0), same as the raw-output path.
+				for (const FSampledPropertyCache& Cache : SampledPropertyCaches)
+				{
+					if (const FPCGExProperty* const* SourcePtr = Cache.SourceByHash.Find(Hash))
+					{
+						Cache.Writer->SetValue(i, (*SourcePtr)->SampleAt(Cache.TimeGetter->Read(i)));
 					}
 				}
 

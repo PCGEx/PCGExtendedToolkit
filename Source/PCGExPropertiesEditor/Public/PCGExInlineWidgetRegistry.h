@@ -93,6 +93,11 @@ public:
 	 * PropertyName, HeaderId, and OutputBuffer. Applies IsEnabled to each row.
 	 * Used for complex (non-PCGExInlineValue) property types shown in override or read-only-schema contexts.
 	 *
+	 * When a Compact factory is registered for InnerStruct (and the type is NOT PCGExInlineValue,
+	 * or it wouldn't reach this path), the "Value" field renders through the factory as a
+	 * full-width (WholeRowContent) row instead of the default property row -- for editors whose
+	 * width must be pinned by the panel (e.g. the Float Curve editor).
+	 *
 	 * Pass WeakOwner to hook each emitted row's value-change through
 	 * PCGExEditorCustomizationUtils::HookOwnerChangeOnHandleChanged -- required when the owner
 	 * needs to dirty + signal PCG re-cook for these external-struct edits.

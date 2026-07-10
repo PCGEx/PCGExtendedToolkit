@@ -6,6 +6,7 @@
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Math/PCGExMath.h"
+#include "Selectors/PCGExSelectorHelpers.h"
 
 #pragma region FPCGExEntryWeightedRandomPickerOp
 
@@ -13,6 +14,12 @@ int32 FPCGExEntryWeightedRandomPickerOp::Pick(int32 PointIndex, int32 Seed, FPCG
 {
 	checkSlow(Target && !Target->IsEmpty());
 	return Target->GetPickRandomWeighted(Seed);
+}
+
+int32 FPCGExEntryWeightedRandomPickerOp::PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch) const
+{
+	checkSlow(Target && !Target->IsEmpty());
+	return PCGExCollections::Selectors::FilteredWeightedPick(Target, InAvailability, Seed);
 }
 
 #pragma endregion
@@ -23,6 +30,35 @@ int32 FPCGExEntryRandomPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPicker
 {
 	checkSlow(Target && !Target->IsEmpty());
 	return Target->GetPickRandom(Seed);
+}
+
+int32 FPCGExEntryRandomPickerOp::PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch) const
+{
+	checkSlow(Target && !Target->IsEmpty());
+
+	const int32 N = Target->Entries.Num();
+	int32 NumAvailable = 0;
+	for (int32 i = 0; i < N; ++i)
+	{
+		if (InAvailability.IsAvailable(i))
+		{
+			++NumAvailable;
+		}
+	}
+	if (NumAvailable == 0)
+	{
+		return -1;
+	}
+
+	int32 Roll = FRandomStream(Seed).RandRange(0, NumAvailable - 1);
+	for (int32 i = 0; i < N; ++i)
+	{
+		if (InAvailability.IsAvailable(i) && Roll-- == 0)
+		{
+			return Target->Indices[i];
+		}
+	}
+	return -1;
 }
 
 #pragma endregion
@@ -56,6 +92,9 @@ int32 FPCGExEntryIndexPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerS
 
 	if (IndexConfig.bRemapIndexToCollectionSize && MaxInputIndex > 0)
 	{
+		// Input min is deliberately 0, not the observed min: values are treated as 0-based
+		// indices and remap only compresses the top end. Changing this would silently alter
+		// picks in existing graphs whose index attribute doesn't start at 0.
 		UserIndex = PCGExMath::Remap(UserIndex, 0, MaxInputIndex, 0, MaxIndex);
 		UserIndex = PCGExMath::TruncateDbl(UserIndex, IndexConfig.TruncateRemap);
 	}
@@ -101,8 +140,11 @@ bool FPCGExMicroIndexPickerOp::PrepareForData(FPCGExContext* InContext, const TS
 		return false;
 	}
 
+	// Mirror the entry picker: min/max capture is only needed by the remap path, and scoped
+	// reads must be disabled when capturing (full scan required).
+	const bool bWantsMinMax = IndexConfig.bRemapIndexToCollectionSize;
 	IndexGetter = IndexConfig.GetValueSettingIndex();
-	if (!IndexGetter->Init(InDataFacade, true, false))
+	if (!IndexGetter->Init(InDataFacade, !bWantsMinMax, bWantsMinMax))
 	{
 		return false;
 	}
@@ -118,8 +160,19 @@ int32 FPCGExMicroIndexPickerOp::Pick(const PCGExAssetCollection::FMicroCache* In
 		return -1;
 	}
 
-	const int32 Index = IndexGetter ? static_cast<int32>(IndexGetter->Read(PointIndex)) : 0;
-	const int32 Sanitized = PCGExMath::SanitizeIndex(Index, InMicroCache->Num() - 1, IndexConfig.IndexSafety);
+	check(IndexGetter);
+
+	const int32 MaxIndex = InMicroCache->Num() - 1;
+	double UserIndex = IndexGetter->Read(PointIndex);
+
+	if (IndexConfig.bRemapIndexToCollectionSize && MaxInputIndex > 0)
+	{
+		// Same contract as the entry picker: 0-based input remapped to the micro cache size.
+		UserIndex = PCGExMath::Remap(UserIndex, 0, MaxInputIndex, 0, MaxIndex);
+		UserIndex = PCGExMath::TruncateDbl(UserIndex, IndexConfig.TruncateRemap);
+	}
+
+	const int32 Sanitized = PCGExMath::SanitizeIndex(static_cast<int32>(UserIndex), MaxIndex, IndexConfig.IndexSafety);
 	return InMicroCache->GetPick(Sanitized, IndexConfig.PickMode);
 }
 

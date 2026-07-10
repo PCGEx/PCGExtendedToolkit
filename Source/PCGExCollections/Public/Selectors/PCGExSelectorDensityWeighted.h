@@ -66,6 +66,18 @@ class FPCGExDensityWeightedSharedData : public PCGExCollections::FSelectorShared
 public:
 	TArray<double> EntryWeights;    // (Weight + 1), parallel to Target->Entries
 	TArray<double> EntryLogWeights; // log(EntryWeights[i]) -- for the WeightModulation fast path
+	double TotalWeight = 0.0;       // Sum of EntryWeights -- analytic totals skip per-pick accumulation
+};
+
+/**
+ * Per-scope scratch for Density-Weighted picks: reusable effective-weight buffer for the
+ * WeightModulation path (the only one that materializes per-entry weights per pick).
+ * Ops fall back to a per-pick local buffer when no scratch is provided.
+ */
+class FPCGExDensityWeightedScratch : public FPCGExPickerScratchBase
+{
+public:
+	TArray<double, TInlineAllocator<32>> EffectiveWeights;
 };
 
 /**
@@ -85,9 +97,21 @@ public:
 
 	TSharedPtr<PCGExDetails::TSettingValue<double>> DensityGetter;
 
+	virtual TSharedPtr<FPCGExPickerScratchBase> CreateScratchForScope(int32 MaxPointsInScope) const override;
+
 	virtual int32 Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch = nullptr) const override;
+	virtual int32 PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch = nullptr) const override;
 
 protected:
+	// Constant-density fast path, resolved in OnInitForData: when the density source is a
+	// constant, the whole effective-weight table is point-invariant -- precompute the cumulative
+	// once and reduce Pick to a single roll. bSkipAllPoints covers a constant out-of-range
+	// density under the SkipPoint policy.
+	bool bConstantDensity = false;
+	bool bSkipAllPoints = false;
+	double ConstantTotalWeight = 0.0;
+	TArray<double> ConstantCumulative;
+
 	virtual void OnSharedDataMissing(FPCGExContext* InContext) const override;
 	virtual bool OnInitForData(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade) override;
 };

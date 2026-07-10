@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExProperty.h"
 #include "Data/PCGExData.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExPropertyWriter.generated.h"
 
@@ -31,6 +32,26 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOutputConfig
 	{
 		return bEnabled && !PropertyName.IsNone() && !GetEffectiveOutputName().IsNone();
 	}
+};
+
+/**
+ * Output config for time-sampled properties: the named property must support the sampling
+ * interface (FPCGExProperty::SupportsSampling); a per-point time is read from Time and the
+ * SampleAt result is written as a double attribute under the effective output name.
+ *
+ * Kept as a separate config family (rather than extra fields on FPCGExPropertyOutputConfig)
+ * because sampling only makes sense for per-point consumers -- the metadata/tuple writers
+ * have no per-point time to read -- and because a property can legitimately be sampled at
+ * several different times (one config each), which the name-keyed raw-output path forbids.
+ */
+USTRUCT(BlueprintType)
+struct PCGEXPROPERTIES_API FPCGExPropertySampledOutputConfig : public FPCGExPropertyOutputConfig
+{
+	GENERATED_BODY()
+
+	/** Per-point time the property is sampled at. Out-of-range values follow the property's own domain rules (curves use their extrapolation settings). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Output", meta=(EditCondition="bEnabled"))
+	FPCGExInputShorthandSelectorDouble Time = FPCGExInputShorthandSelectorDouble(FName("$Density"), 1.0, true);
 };
 
 USTRUCT(BlueprintType)

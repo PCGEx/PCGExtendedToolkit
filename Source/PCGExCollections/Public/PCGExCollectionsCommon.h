@@ -120,6 +120,8 @@ namespace PCGExCollections::Labels
 
 	const FName SourceSelectorLabel = TEXT("Selector");
 	const FName OutputSelectorLabel = TEXT("Selector");
+	const FName SourceSelectorsLabel = TEXT("Selectors");
+	const FName SourceNoiseLabel = TEXT("Noise");
 
 	const FName Tag_CollectionPath = FName(PCGExCommon::PCGExPrefix + TEXT("Collection/Path"));
 	const FName Tag_CollectionIdx = FName(PCGExCommon::PCGExPrefix + TEXT("Collection/Idx"));

@@ -56,6 +56,7 @@ public class PCGExPropertiesEditor : ModuleRules
 				"KismetCompiler",
 				"Kismet",
 				"ToolMenus",
+				"Projects",          // IPluginManager -> plugin Resources dir for the Slate style
 			}
 		);
 

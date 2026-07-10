@@ -31,6 +31,7 @@ class FPCGExEntryWeightedRandomPickerOp : public FPCGExEntryPickerOperation
 {
 public:
 	virtual int32 Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch = nullptr) const override;
+	virtual int32 PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch = nullptr) const override;
 };
 
 /** Uniform random pick on the bound FCategory target. */
@@ -38,11 +39,16 @@ class FPCGExEntryRandomPickerOp : public FPCGExEntryPickerOperation
 {
 public:
 	virtual int32 Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch = nullptr) const override;
+	virtual int32 PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch = nullptr) const override;
 };
 
 /**
  * Attribute-driven index pick. Reads a per-point index from IndexConfig.IndexSource,
  * optionally remaps to collection size, then sanitizes and applies PickMode on the target.
+ *
+ * No PickFiltered override BY DESIGN: an explicitly-indexed entry that is quota-exhausted is
+ * correctly "no pick" -- the inherited veto fallback detects the deterministic miss and
+ * returns -1 rather than substituting a neighbor the user didn't ask for.
  */
 class FPCGExEntryIndexPickerOp : public FPCGExEntryPickerOperation
 {

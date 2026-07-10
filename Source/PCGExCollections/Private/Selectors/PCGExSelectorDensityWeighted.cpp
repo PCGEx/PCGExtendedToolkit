@@ -23,14 +23,89 @@ bool FPCGExEntryDensityWeightedPickerOp::OnInitForData(FPCGExContext* InContext,
 		return false;
 	}
 
+	// Constant-density fast path: the effective-weight table is point-invariant, so build the
+	// cumulative once here and reduce Pick to a single roll.
+	if (DensityGetter->IsConstant())
+	{
+		bConstantDensity = true;
+
+		double Density = DensityGetter->Read(0);
+		if (Density < 0.0 || Density > 1.0)
+		{
+			if (OutOfRangePolicy == EPCGExDensityOutOfRangePolicy::SkipPoint)
+			{
+				bSkipAllPoints = true;
+				return true;
+			}
+			Density = FMath::Clamp(Density, 0.0, 1.0);
+		}
+
+		const TArray<double>& EntryWeights = Shared->EntryWeights;
+		const TArray<double>& EntryLogWeights = Shared->EntryLogWeights;
+		const int32 N = EntryWeights.Num();
+
+		ConstantCumulative.SetNumUninitialized(N);
+		double Total = 0.0;
+
+		switch (Mode)
+		{
+		default:
+		case EPCGExDensityWeightMode::WeightModulation:
+		{
+			const double Exponent = FMath::Lerp(1.0, Density * 2.0, DensityInfluence);
+			for (int32 i = 0; i < N; ++i)
+			{
+				Total += FMath::Exp(EntryLogWeights[i] * Exponent);
+				ConstantCumulative[i] = Total;
+			}
+			break;
+		}
+		case EPCGExDensityWeightMode::RandomnessModulation:
+		{
+			const double EffectiveDensity = (1.0 - DensityInfluence) + DensityInfluence * Density;
+			for (int32 i = 0; i < N; ++i)
+			{
+				Total += FMath::Lerp(1.0, EntryWeights[i], EffectiveDensity);
+				ConstantCumulative[i] = Total;
+			}
+			break;
+		}
+		}
+
+		ConstantTotalWeight = Total;
+	}
+
 	return true;
+}
+
+TSharedPtr<FPCGExPickerScratchBase> FPCGExEntryDensityWeightedPickerOp::CreateScratchForScope(int32 MaxPointsInScope) const
+{
+	// Only the per-point WeightModulation path materializes an effective-weight array.
+	if (bConstantDensity || Mode != EPCGExDensityWeightMode::WeightModulation)
+	{
+		return nullptr;
+	}
+	return MakeShared<FPCGExDensityWeightedScratch>();
 }
 
 int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch) const
 {
 	checkSlow(Target && !Target->IsEmpty());
+	check(DensityGetter);
 
-	double Density = DensityGetter ? DensityGetter->Read(PointIndex) : 1.0;
+	const TArray<double>& EntryWeights = Shared->EntryWeights;
+
+	if (bConstantDensity)
+	{
+		if (bSkipAllPoints)
+		{
+			return -1;
+		}
+		const int32 Pick = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(ConstantCumulative), ConstantTotalWeight, Seed);
+		return Pick == INDEX_NONE ? -1 : Target->Indices[Pick];
+	}
+
+	double Density = DensityGetter->Read(PointIndex);
 
 	// Out-of-range policy: either clamp, or skip the point entirely.
 	if (Density < 0.0 || Density > 1.0)
@@ -42,18 +117,11 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 		Density = FMath::Clamp(Density, 0.0, 1.0);
 	}
 
-	const int32 N = Target->Num();
-	const TArray<double>& EntryWeights = Shared->EntryWeights;
-	const TArray<double>& EntryLogWeights = Shared->EntryLogWeights;
-
-	// Build per-point effective weights. Inline allocator covers typical category sizes
-	// without heap pressure. O(N) per pick -- acceptable for the usual small-N cases.
-	TArray<double, TInlineAllocator<32>> EffectiveWeights;
-	EffectiveWeights.SetNumUninitialized(N);
-	double TotalWeight = 0.0;
+	const int32 N = EntryWeights.Num();
 
 	switch (Mode)
 	{
+	default:
 	case EPCGExDensityWeightMode::WeightModulation:
 	{
 		// exponent = lerp(1, density*2, DensityInfluence)
@@ -64,12 +132,42 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 		// Pow(W, Exp) rewritten as exp(LogW * Exp). Shared data hosts LogW once per category --
 		// per-pick cost drops from one log+one exp to one exp, with no precision change for W >= 0.
 		const double Exponent = FMath::Lerp(1.0, Density * 2.0, DensityInfluence);
+
+		// Exponent == 1 is exact at the two most common operating points (DI=0, or density=0.5
+		// at full influence) and reduces to a plain weighted roll -- skip the N transcendentals.
+		if (Exponent == 1.0)
+		{
+			const int32 Pick = PCGExCollections::Selectors::RollWeightedStreaming(
+				N,
+				[&EntryWeights](int32 LocalIdx)
+				{
+					return EntryWeights[LocalIdx];
+				},
+				Shared->TotalWeight, Seed);
+			return Pick == INDEX_NONE ? -1 : Target->Indices[Pick];
+		}
+
+		const TArray<double>& EntryLogWeights = Shared->EntryLogWeights;
+
+		FPCGExDensityWeightedScratch LocalScratch;
+		FPCGExDensityWeightedScratch& S = Scratch ? *static_cast<FPCGExDensityWeightedScratch*>(Scratch) : LocalScratch;
+		S.EffectiveWeights.SetNumUninitialized(N, EAllowShrinking::No);
+
+		double TotalWeight = 0.0;
 		for (int32 i = 0; i < N; ++i)
 		{
-			EffectiveWeights[i] = FMath::Exp(EntryLogWeights[i] * Exponent);
-			TotalWeight += EffectiveWeights[i];
+			S.EffectiveWeights[i] = FMath::Exp(EntryLogWeights[i] * Exponent);
+			TotalWeight += S.EffectiveWeights[i];
 		}
-		break;
+
+		const int32 Pick = PCGExCollections::Selectors::RollWeightedStreaming(
+			N,
+			[&S](int32 LocalIdx)
+			{
+				return S.EffectiveWeights[LocalIdx];
+			},
+			TotalWeight, Seed);
+		return Pick == INDEX_NONE ? -1 : Target->Indices[Pick];
 	}
 	case EPCGExDensityWeightMode::RandomnessModulation:
 	{
@@ -77,24 +175,90 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 		// DI=0               -> eff=1               -> plain weighted (parity with WeightedRandom)
 		// DI=1 & density=1   -> eff=1               -> plain weighted
 		// DI=1 & density=0   -> eff=0               -> uniform
+		// The total is analytic -- sum of lerp(1, W, e) = N*(1-e) + e*SumW -- so no per-entry
+		// array is materialized; the streaming roll computes each weight on the fly.
 		const double EffectiveDensity = (1.0 - DensityInfluence) + DensityInfluence * Density;
-		for (int32 i = 0; i < N; ++i)
-		{
-			EffectiveWeights[i] = FMath::Lerp(1.0, EntryWeights[i], EffectiveDensity);
-			TotalWeight += EffectiveWeights[i];
-		}
-		break;
+		const double TotalWeight = N * (1.0 - EffectiveDensity) + EffectiveDensity * Shared->TotalWeight;
+
+		const int32 Pick = PCGExCollections::Selectors::RollWeightedStreaming(
+			N,
+			[&EntryWeights, EffectiveDensity](int32 LocalIdx)
+			{
+				return FMath::Lerp(1.0, EntryWeights[LocalIdx], EffectiveDensity);
+			},
+			TotalWeight, Seed);
+		return Pick == INDEX_NONE ? -1 : Target->Indices[Pick];
 	}
+	}
+}
+
+int32 FPCGExEntryDensityWeightedPickerOp::PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch) const
+{
+	checkSlow(Target && !Target->IsEmpty());
+	check(DensityGetter);
+
+	// Quota-only path: the constant-density precomputed cumulative can't be used (availability
+	// varies per pick), so both modes stream with the availability guard. Reading the getter is
+	// valid for constant sources too.
+	if (bSkipAllPoints)
+	{
+		return -1;
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollWeightedStreaming(
-		N,
-		[&](int32 LocalIdx)
+	double Density = DensityGetter->Read(PointIndex);
+	if (Density < 0.0 || Density > 1.0)
+	{
+		if (OutOfRangePolicy == EPCGExDensityOutOfRangePolicy::SkipPoint)
 		{
-			return EffectiveWeights[LocalIdx];
-		},
-		TotalWeight, Seed);
-	return k == INDEX_NONE ? -1 : Target->Indices[k];
+			return -1;
+		}
+		Density = FMath::Clamp(Density, 0.0, 1.0);
+	}
+
+	const TArray<double>& EntryWeights = Shared->EntryWeights;
+	const TArray<double>& EntryLogWeights = Shared->EntryLogWeights;
+	const int32 N = EntryWeights.Num();
+
+	const double Exponent = FMath::Lerp(1.0, Density * 2.0, DensityInfluence);
+	const double EffectiveDensity = (1.0 - DensityInfluence) + DensityInfluence * Density;
+
+	auto WeightOf = [&](const int32 i) -> double
+	{
+		return Mode == EPCGExDensityWeightMode::WeightModulation
+			? FMath::Exp(EntryLogWeights[i] * Exponent)
+			: FMath::Lerp(1.0, EntryWeights[i], EffectiveDensity);
+	};
+
+	double TotalWeight = 0.0;
+	for (int32 i = 0; i < N; ++i)
+	{
+		if (InAvailability.IsAvailable(i))
+		{
+			TotalWeight += WeightOf(i);
+		}
+	}
+	if (TotalWeight <= 0.0)
+	{
+		return -1;
+	}
+
+	const double Roll = FRandomStream(Seed).FRandRange(0.0, TotalWeight);
+	double Acc = 0.0;
+	int32 LastAvailable = -1;
+	for (int32 i = 0; i < N; ++i)
+	{
+		if (!InAvailability.IsAvailable(i))
+		{
+			continue;
+		}
+		LastAvailable = i;
+		Acc += WeightOf(i);
+		if (Roll <= Acc)
+		{
+			return Target->Indices[i];
+		}
+	}
+	return LastAvailable == -1 ? -1 : Target->Indices[LastAvailable];
 }
 
 #pragma endregion
@@ -105,7 +269,10 @@ TSharedPtr<FPCGExEntryPickerOperation> UPCGExSelectorDensityWeightedFactoryData:
 {
 	TSharedPtr<FPCGExEntryDensityWeightedPickerOp> NewOp = MakeShared<FPCGExEntryDensityWeightedPickerOp>();
 	NewOp->Mode = Config.Mode;
-	NewOp->DensityInfluence = Config.DensityInfluence;
+	// Property clamp metadata doesn't guard values injected through overrides -- re-clamp at
+	// init so the hot path can rely on the invariant (out-of-range influence flips the
+	// WeightModulation exponent negative and inverts the weight preference).
+	NewOp->DensityInfluence = FMath::Clamp(Config.DensityInfluence, 0.0, 1.0);
 	NewOp->OutOfRangePolicy = Config.OutOfRangePolicy;
 	NewOp->DensitySource = Config.DensitySource;
 	return NewOp;
@@ -130,15 +297,18 @@ TSharedPtr<PCGExCollections::FSelectorSharedData> UPCGExSelectorDensityWeightedF
 	NewShared->EntryWeights.SetNumUninitialized(N);
 	NewShared->EntryLogWeights.SetNumUninitialized(N);
 
+	double TotalWeight = 0.0;
 	for (int32 i = 0; i < N; ++i)
 	{
 		const double W = PCGExCollections::Selectors::EntryEffectiveWeight(Target->Entries[i]);
 		NewShared->EntryWeights[i] = W;
-		// EntryEffectiveWeight returns Weight + 1, so W >= 1 for any valid entry -- log is well-defined.
-		// W==0 only occurs when Entry is null; we treat that as log(1)=0 to keep Exp() finite (Pow path
-		// would have produced 0^Exp anyway, which is the same numerical floor when the entry can't be picked).
+		// EntryEffectiveWeight returns Weight + 1 and category entries are never null
+		// (FCache::RegisterEntry asserts), so W >= 1 and log is always well-defined; the
+		// defensive fallback exists only to keep Exp() finite if that invariant ever breaks.
 		NewShared->EntryLogWeights[i] = W > 0.0 ? FMath::Loge(W) : 0.0;
+		TotalWeight += W;
 	}
+	NewShared->TotalWeight = TotalWeight;
 
 	return NewShared;
 }
