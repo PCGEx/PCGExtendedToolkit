@@ -258,7 +258,10 @@ public class PCGExtendedToolkit : ModuleRules
 
 	private void GenerateSubModulesHeader()
 	{
-		string headerPath = Path.Combine(ModuleDirectory, "..", "..", "Intermediate", "Generated", "PCGExSubModules.generated.h");
+		// Editor and client/server targets generate different content (editor-only modules
+		// are skipped in RegisterModule), so each flavor writes to its own file - otherwise
+		// switching targets rewrites a shared header and dirties every TU that includes it.
+		string headerPath = Path.Combine(ModuleDirectory, "..", "..", "Intermediate", "Generated", Target.bBuildEditor ? "Editor" : "", "PCGExSubModules.generated.h");
 		Directory.CreateDirectory(Path.GetDirectoryName(headerPath)!);
 
 		var modules = _moduleDependencies.Keys.OrderBy(m => m).ToList();
