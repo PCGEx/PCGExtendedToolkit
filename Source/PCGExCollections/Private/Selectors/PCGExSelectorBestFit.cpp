@@ -10,6 +10,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Selectors/PCGExSelectorHelpers.h"
+#include "Templates/Greater.h"
 
 #pragma region FPCGExEntryBestFitPickerOpBase
 
@@ -46,6 +47,11 @@ bool FPCGExEntryBestFitPickerOpBase::OnInitForData(FPCGExContext* InContext, con
 	}
 
 	return true;
+}
+
+TSharedPtr<FPCGExPickerScratchBase> FPCGExEntryBestFitPickerOpBase::CreateScratchForScope(int32 MaxPointsInScope) const
+{
+	return MakeShared<FPCGExBestFitScratch>();
 }
 
 FVector FPCGExEntryBestFitPickerOpBase::GetPointExtents(int32 PointIndex) const
@@ -144,37 +150,133 @@ int32 FPCGExEntryBestFitTopKPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExP
 	const int32 N = ValidEntryIndices.Num();
 	const int32 K = FMath::Clamp(FMath::RoundToInt(PoolSizeGetter->Read(PointIndex)), 1, N);
 
-	// Score + sort. Inline allocator covers typical category sizes.
-	TArray<TPair<double, int32>, TInlineAllocator<32>> Scored;
-	Scored.Reserve(N);
+	FPCGExBestFitScratch LocalScratch;
+	FPCGExBestFitScratch& S = Scratch ? *static_cast<FPCGExBestFitScratch*>(Scratch) : LocalScratch;
+	S.Scored.Reset();
+	S.KHeap.Reset();
+	S.Pool.Reset();
+	S.Cumulative.Reset();
+
+	// Score all valid entries; a bounded max-heap of the K best scores (root = worst kept)
+	// yields the K-th smallest score in O(N log K) instead of a full O(N log N) sort.
+	S.Scored.Reserve(N);
 	for (const int32 i : ValidEntryIndices)
 	{
-		Scored.Emplace(ComputeScore(P, i), i);
+		const double Score = ComputeScore(P, i);
+		S.Scored.Emplace(Score, i);
+
+		if (S.KHeap.Num() < K)
+		{
+			S.KHeap.HeapPush(Score, TGreater<double>());
+		}
+		else if (Score < S.KHeap.HeapTop())
+		{
+			S.KHeap.HeapPopDiscard(TGreater<double>(), EAllowShrinking::No);
+			S.KHeap.HeapPush(Score, TGreater<double>());
+		}
 	}
-	Scored.Sort([](const TPair<double, int32>& A, const TPair<double, int32>& B)
+
+	// Pool = the K best, plus any ties at the K-th score to avoid arbitrary tie-breaking.
+	// Compact in place, then sort the (small) pool by score so the cumulative order matches
+	// the previous full-sort behavior.
+	const double Cutoff = S.KHeap.HeapTop() + UE_DOUBLE_KINDA_SMALL_NUMBER;
+	int32 Write = 0;
+	for (int32 r = 0; r < S.Scored.Num(); ++r)
+	{
+		if (S.Scored[r].Key <= Cutoff)
+		{
+			S.Scored[Write++] = S.Scored[r];
+		}
+	}
+	S.Scored.SetNum(Write, EAllowShrinking::No);
+	S.Scored.Sort([](const TPair<double, int32>& A, const TPair<double, int32>& B)
 	{
 		return A.Key < B.Key;
 	});
 
-	// Pool = first K, plus any ties at the K-th score to avoid arbitrary tie-breaking.
-	const double Cutoff = Scored[K - 1].Key;
-	TArray<int32, TInlineAllocator<32>> Pool;
-	TArray<double, TInlineAllocator<32>> Cumulative;
 	double TotalWeight = 0.0;
-
-	for (const TPair<double, int32>& S : Scored)
+	for (const TPair<double, int32>& Sc : S.Scored)
 	{
-		if (S.Key > Cutoff + UE_DOUBLE_KINDA_SMALL_NUMBER)
-		{
-			break;
-		}
-		Pool.Add(S.Value);
-		TotalWeight += EntryWeights[S.Value];
-		Cumulative.Add(TotalWeight);
+		S.Pool.Add(Sc.Value);
+		TotalWeight += EntryWeights[Sc.Value];
+		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(Cumulative), TotalWeight, Seed);
-	return k == INDEX_NONE ? -1 : Target->Indices[Pool[k]];
+	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
+}
+
+int32 FPCGExEntryBestFitTopKPickerOp::PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch) const
+{
+	checkSlow(Target && !Target->IsEmpty());
+	const TArray<int32>& ValidEntryIndices = Shared->ValidEntryIndices;
+	const TArray<double>& EntryWeights = Shared->EntryWeights;
+
+	const FVector P = GetPointExtents(PointIndex);
+
+	FPCGExBestFitScratch LocalScratch;
+	FPCGExBestFitScratch& S = Scratch ? *static_cast<FPCGExBestFitScratch*>(Scratch) : LocalScratch;
+	S.Scored.Reset();
+	S.KHeap.Reset();
+	S.Pool.Reset();
+	S.Cumulative.Reset();
+
+	// Quota-only path: unavailable entries are excluded before scoring, then the TopK logic
+	// runs unchanged over the surviving candidates. K clamps to the filtered count.
+	for (const int32 i : ValidEntryIndices)
+	{
+		if (!InAvailability.IsAvailable(i))
+		{
+			continue;
+		}
+		S.Scored.Emplace(ComputeScore(P, i), i);
+	}
+
+	const int32 N = S.Scored.Num();
+	if (N == 0)
+	{
+		return -1;
+	}
+	const int32 K = FMath::Clamp(FMath::RoundToInt(PoolSizeGetter->Read(PointIndex)), 1, N);
+
+	for (const TPair<double, int32>& Sc : S.Scored)
+	{
+		if (S.KHeap.Num() < K)
+		{
+			S.KHeap.HeapPush(Sc.Key, TGreater<double>());
+		}
+		else if (Sc.Key < S.KHeap.HeapTop())
+		{
+			S.KHeap.HeapPopDiscard(TGreater<double>(), EAllowShrinking::No);
+			S.KHeap.HeapPush(Sc.Key, TGreater<double>());
+		}
+	}
+
+	const double Cutoff = S.KHeap.HeapTop() + UE_DOUBLE_KINDA_SMALL_NUMBER;
+	int32 Write = 0;
+	for (int32 r = 0; r < S.Scored.Num(); ++r)
+	{
+		if (S.Scored[r].Key <= Cutoff)
+		{
+			S.Scored[Write++] = S.Scored[r];
+		}
+	}
+	S.Scored.SetNum(Write, EAllowShrinking::No);
+	S.Scored.Sort([](const TPair<double, int32>& A, const TPair<double, int32>& B)
+	{
+		return A.Key < B.Key;
+	});
+
+	double TotalWeight = 0.0;
+	for (const TPair<double, int32>& Sc : S.Scored)
+	{
+		S.Pool.Add(Sc.Value);
+		TotalWeight += EntryWeights[Sc.Value];
+		S.Cumulative.Add(TotalWeight);
+	}
+
+	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
 }
 
 #pragma endregion
@@ -195,17 +297,22 @@ int32 FPCGExEntryBestFitTolerancePickerOp::Pick(int32 PointIndex, int32 Seed, FP
 	const FVector P = GetPointExtents(PointIndex);
 	const double Tolerance = FMath::Max(0.0, PoolSizeGetter->Read(PointIndex));
 
+	FPCGExBestFitScratch LocalScratch;
+	FPCGExBestFitScratch& S = Scratch ? *static_cast<FPCGExBestFitScratch*>(Scratch) : LocalScratch;
+	S.Scored.Reset();
+	S.Pool.Reset();
+	S.Cumulative.Reset();
+
 	// Single pass: score and track best.
-	TArray<TPair<double, int32>, TInlineAllocator<32>> Scored;
-	Scored.Reserve(ValidEntryIndices.Num());
+	S.Scored.Reserve(ValidEntryIndices.Num());
 	double BestScore = TNumericLimits<double>::Max();
 	for (const int32 i : ValidEntryIndices)
 	{
-		const double S = ComputeScore(P, i);
-		Scored.Emplace(S, i);
-		if (S < BestScore)
+		const double Score = ComputeScore(P, i);
+		S.Scored.Emplace(Score, i);
+		if (Score < BestScore)
 		{
-			BestScore = S;
+			BestScore = Score;
 		}
 	}
 
@@ -213,23 +320,74 @@ int32 FPCGExEntryBestFitTolerancePickerOp::Pick(int32 PointIndex, int32 Seed, FP
 	// When BestScore is ~0 (perfect fit), the cutoff also ~0 → only perfect-tie entries pool together.
 	const double Cutoff = BestScore * (1.0 + Tolerance) + UE_DOUBLE_KINDA_SMALL_NUMBER;
 
-	TArray<int32, TInlineAllocator<32>> Pool;
-	TArray<double, TInlineAllocator<32>> Cumulative;
 	double TotalWeight = 0.0;
-
-	for (const TPair<double, int32>& S : Scored)
+	for (const TPair<double, int32>& Sc : S.Scored)
 	{
-		if (S.Key > Cutoff)
+		if (Sc.Key > Cutoff)
 		{
 			continue;
 		}
-		Pool.Add(S.Value);
-		TotalWeight += EntryWeights[S.Value];
-		Cumulative.Add(TotalWeight);
+		S.Pool.Add(Sc.Value);
+		TotalWeight += EntryWeights[Sc.Value];
+		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(Cumulative), TotalWeight, Seed);
-	return k == INDEX_NONE ? -1 : Target->Indices[Pool[k]];
+	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
+}
+
+int32 FPCGExEntryBestFitTolerancePickerOp::PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch) const
+{
+	checkSlow(Target && !Target->IsEmpty());
+	const TArray<int32>& ValidEntryIndices = Shared->ValidEntryIndices;
+	const TArray<double>& EntryWeights = Shared->EntryWeights;
+
+	const FVector P = GetPointExtents(PointIndex);
+	const double Tolerance = FMath::Max(0.0, PoolSizeGetter->Read(PointIndex));
+
+	FPCGExBestFitScratch LocalScratch;
+	FPCGExBestFitScratch& S = Scratch ? *static_cast<FPCGExBestFitScratch*>(Scratch) : LocalScratch;
+	S.Scored.Reset();
+	S.Pool.Reset();
+	S.Cumulative.Reset();
+
+	// Quota-only path: unavailable entries are excluded before scoring; the best score (and
+	// therefore the tolerance window) is computed over the surviving candidates only.
+	double BestScore = TNumericLimits<double>::Max();
+	for (const int32 i : ValidEntryIndices)
+	{
+		if (!InAvailability.IsAvailable(i))
+		{
+			continue;
+		}
+		const double Score = ComputeScore(P, i);
+		S.Scored.Emplace(Score, i);
+		if (Score < BestScore)
+		{
+			BestScore = Score;
+		}
+	}
+	if (S.Scored.IsEmpty())
+	{
+		return -1;
+	}
+
+	const double Cutoff = BestScore * (1.0 + Tolerance) + UE_DOUBLE_KINDA_SMALL_NUMBER;
+
+	double TotalWeight = 0.0;
+	for (const TPair<double, int32>& Sc : S.Scored)
+	{
+		if (Sc.Key > Cutoff)
+		{
+			continue;
+		}
+		S.Pool.Add(Sc.Value);
+		TotalWeight += EntryWeights[Sc.Value];
+		S.Cumulative.Add(TotalWeight);
+	}
+
+	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
 }
 
 #pragma endregion
@@ -254,7 +412,9 @@ TSharedPtr<FPCGExEntryPickerOperation> UPCGExSelectorBestFitFactoryData::CreateE
 	NewOp->Metric = Config.Metric;
 	NewOp->AxisMask = Config.AxisMask;
 	NewOp->AxisAggregation = Config.AxisAggregation;
-	NewOp->VolumeInfluence = Config.VolumeInfluence;
+	// Property clamp metadata doesn't guard values injected through overrides -- re-clamp at
+	// init so the hot path can rely on the invariant (negative influence inverts the score).
+	NewOp->VolumeInfluence = FMath::Max(0.0, Config.VolumeInfluence);
 	NewOp->bApplyPointScale = Config.bApplyPointScale;
 	// Pick the shorthand that matches the chosen strategy -- op reads a single PoolSize regardless.
 	NewOp->PoolSize = (Config.PoolStrategy == EPCGExBestFitPoolStrategy::TopK) ? Config.TopK : Config.Tolerance;

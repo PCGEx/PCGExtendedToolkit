@@ -59,6 +59,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
 
+	/**
+	 * Sampleable properties (e.g. Float Curve) evaluated at a per-point time and written as
+	 * double point attributes. Independent from Properties Mapping -- a property can be
+	 * sampled even when it doesn't support raw value output, and the same property can be
+	 * sampled at several different times (one config each).
+	 */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Sampled Properties Mapping", TitleProperty="{PropertyName}"))
+	TArray<FPCGExPropertySampledOutputConfig> SampledPropertyOutputs;
+
 	/** If enabled, write each entry's collection Tags joined into a string attribute on the point. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteEntryTags = false;
@@ -174,6 +183,7 @@ struct FPCGExStagingLoadPropertiesContext final : FPCGExPointsProcessorContext
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
+	TArray<FPCGExPropertySampledOutputConfig> SampledPropertyOutputs;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
@@ -207,12 +217,37 @@ namespace PCGExStagingLoadProperties
 		const FPCGExProperty* WriterPtr = nullptr;
 	};
 
+	/**
+	 * Cached sampling data for a single sampled-output config (see FPCGExPropertySampledOutputConfig).
+	 * Writer + time getter are allocated during Process -- the getter's readable buffer must be
+	 * registered before the parallel point pass so scoped fetches cover it. Sources are resolved
+	 * per unique entry hash in OnPointsProcessingComplete, once hashes are known.
+	 * Entries in the array are fully valid by construction (Writer and TimeGetter non-null).
+	 */
+	struct FSampledPropertyCache
+	{
+		/** Property name resolved against each entry (override first, collection default second) */
+		FName PropertyName = NAME_None;
+
+		/** Per-point time source */
+		TSharedPtr<PCGExDetails::TSettingValue<double>> TimeGetter;
+
+		/** Output buffer the SampleAt results are written to */
+		TSharedPtr<PCGExData::TBuffer<double>> Writer;
+
+		/** Cached source property pointer per unique entry hash (sampleable sources only) */
+		TMap<uint64, const FPCGExProperty*> SourceByHash;
+	};
+
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExStagingLoadPropertiesContext, UPCGExStagingLoadPropertiesSettings>
 	{
 		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashGetter;
 
 		/** Pre-resolved property caches keyed by property name */
 		TMap<FName, FPropertyCache> PropertyCaches;
+
+		/** Sampled-output caches, one per valid config (array: the same property may appear several times) */
+		TArray<FSampledPropertyCache> SampledPropertyCaches;
 
 		/** Optional joined entry-tags writer + per-hash cache (only allocated when bWriteEntryTags). */
 		TSharedPtr<PCGExData::TBuffer<FString>> EntryTagsWriter;
@@ -283,6 +318,17 @@ MACRO(Scalable, bool, true, Module.bScalable)
 	private:
 		/** Pre-resolve properties for all unique hashes */
 		void BuildPropertyCaches();
+
+		/**
+		 * Allocate sampled-output writers + time getters from the context configs. Called from
+		 * Process, BEFORE the parallel point pass, so the getters' readable buffers participate
+		 * in scoped fetches. Invalid configs (unknown property, non-sampleable, bad output name,
+		 * failed getter init) warn and are excluded entirely.
+		 */
+		void PrepareSampledPropertyCaches();
+
+		/** Pre-resolve sampleable source properties for all unique hashes. */
+		void BuildSampledPropertySources();
 
 		/** Pre-join entry tags per unique hash (only when Settings->bWriteEntryTags is on). */
 		void BuildEntryTagsCache();

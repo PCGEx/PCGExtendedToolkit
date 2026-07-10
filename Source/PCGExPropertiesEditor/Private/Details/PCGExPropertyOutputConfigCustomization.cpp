@@ -5,6 +5,7 @@
 
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
+#include "IDetailPropertyRow.h"
 #include "PCGExPropertyWriter.h"
 #include "PropertyHandle.h"
 #include "Helpers/PCGExMetaHelpers.h"
@@ -119,4 +120,41 @@ void FPCGExPropertyOutputConfigCustomization::CustomizeChildren(
 	IDetailChildrenBuilder& ChildBuilder,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
+	// The base FPCGExPropertyOutputConfig consumes all its fields in the header row; derived
+	// configs (e.g. FPCGExPropertySampledOutputConfig, registered on this same customization)
+	// surface their extra fields as regular child rows, enabled-gated like the header widgets.
+	TSharedPtr<IPropertyHandle> EnabledHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExPropertyOutputConfig, bEnabled));
+	const TAttribute<bool> EnabledAttr = TAttribute<bool>::CreateLambda(
+		[EnabledHandle]()
+		{
+			bool bEnabled = false;
+			if (EnabledHandle)
+			{
+				EnabledHandle->GetValue(bEnabled);
+			}
+			return bEnabled;
+		});
+
+	uint32 NumChildren = 0;
+	PropertyHandle->GetNumChildren(NumChildren);
+
+	for (uint32 i = 0; i < NumChildren; ++i)
+	{
+		TSharedPtr<IPropertyHandle> Child = PropertyHandle->GetChildHandle(i);
+		if (!Child.IsValid() || !Child->GetProperty())
+		{
+			continue;
+		}
+
+		const FName ChildName = Child->GetProperty()->GetFName();
+		if (ChildName == GET_MEMBER_NAME_CHECKED(FPCGExPropertyOutputConfig, bEnabled) ||
+			ChildName == GET_MEMBER_NAME_CHECKED(FPCGExPropertyOutputConfig, PropertyName) ||
+			ChildName == GET_MEMBER_NAME_CHECKED(FPCGExPropertyOutputConfig, OutputAttributeName))
+		{
+			continue;
+		}
+
+		IDetailPropertyRow& Row = ChildBuilder.AddProperty(Child.ToSharedRef());
+		Row.IsEnabled(EnabledAttr);
+	}
 }

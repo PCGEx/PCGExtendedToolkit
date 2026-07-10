@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 #include "PCGExEditorModuleInterface.h"
 
+class FPCGExPropertiesEditorStyle;
+
 class FPCGExPropertiesEditorModule final : public IPCGExEditorModuleInterface
 {
 	PCGEX_MODULE_BODY
@@ -13,4 +15,8 @@ class FPCGExPropertiesEditorModule final : public IPCGExEditorModuleInterface
 public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+private:
+	/** Slate style set for the inline curve editor widgets (key/gem SVG brushes). */
+	TSharedPtr<FPCGExPropertiesEditorStyle> Style;
 };
