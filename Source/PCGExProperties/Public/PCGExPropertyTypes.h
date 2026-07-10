@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Curves/CurveFloat.h"
 #include "PCGExEnumSelector.h"
 #include "PCGExProperty.h"
 #include "PCGSettings.h"
@@ -857,6 +858,52 @@ public:
 	virtual void WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, int64 EntryKey) const override;
 	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;
 	virtual bool TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer) override;
+};
+
+/**
+ * Float curve property -- packs an inline FRuntimeFloatCurve per entry.
+ *
+ * VALUE-ONLY property: the curve is not representable as a PCG metadata attribute, so this
+ * type deliberately supports neither attribute output nor metadata output nor type-erased
+ * value reads (SupportsOutput=false, GetOutputType=Unknown, TryWriteValue=false). Consumers
+ * read it typed via GetResolvedProperty<FPCGExProperty_FloatCurve> -- e.g. the
+ * Curve-Remapped Weight selector bakes each entry's curve into a LUT.
+ *
+ * It DOES support the sampling interface (SupportsSampling/SampleAt): generic consumers
+ * such as Staging : Load Properties evaluate the curve at a per-point time and write the
+ * result as a double attribute.
+ */
+// NOT PCGExInlineValue: the curve editor needs a full-width row, not the value-column slot of
+// an inline row (whose width tracks the widget's desired size and jitters while typing).
+// The complex path renders it via the Compact registry factory as WholeRowContent instead.
+USTRUCT(BlueprintType, DisplayName="Float Curve")
+struct PCGEXPROPERTIES_API FPCGExProperty_FloatCurve : public FPCGExProperty
+{
+	GENERATED_BODY()
+
+	FPCGExProperty_FloatCurve()
+	{
+		// Seed a sensible default (identity ramp) so a freshly-added curve is immediately usable.
+		Value.EditorCurveData.AddKey(0.f, 0.f);
+		Value.EditorCurveData.AddKey(1.f, 1.f);
+	}
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Property", meta=(NoResetToDefault))
+	FRuntimeFloatCurve Value;
+
+	virtual void CopyValueFrom(const FPCGExProperty* Source) override;
+
+	virtual bool SupportsSampling() const override
+	{
+		return true;
+	}
+
+	virtual double SampleAt(const double InTime) const override;
+
+	virtual FName GetTypeName() const override
+	{
+		return FName("FloatCurve");
+	}
 };
 
 #pragma endregion

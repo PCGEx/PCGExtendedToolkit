@@ -8,6 +8,7 @@
 #include "PCGExProperty.h"
 #include "PCGExPropertySchemaAsset.h"
 #include "StaticMeshResources.h"
+#include "Algo/BinarySearch.h"
 #include "Algo/RemoveIf.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -228,11 +229,8 @@ namespace PCGExAssetCollection
 		}
 
 		const int32 Threshold = FRandomStream(Seed).RandRange(0, static_cast<int32>(WeightSum) - 1);
-		int32 Pick = 0;
-		while (Pick < Weights.Num() && Weights[Pick] <= Threshold)
-		{
-			Pick++;
-		}
+		// Weights is a sorted cumulative array after BuildFromWeights -- first bucket > Threshold.
+		const int32 Pick = Algo::UpperBound(Weights, Threshold);
 		return Order[FMath::Min(Pick, Order.Num() - 1)];
 	}
 
@@ -305,11 +303,8 @@ namespace PCGExAssetCollection
 			return -1;
 		}
 		const int32 Threshold = FRandomStream(Seed).RandRange(0, static_cast<int32>(WeightSum) - 1);
-		int32 Pick = 0;
-		while (Pick < Weights.Num() && Weights[Pick] <= Threshold)
-		{
-			Pick++;
-		}
+		// Weights is a sorted cumulative array after Compile -- first bucket > Threshold.
+		const int32 Pick = Algo::UpperBound(Weights, Threshold);
 		return Indices[Order[FMath::Min(Pick, Order.Num() - 1)]];
 	}
 

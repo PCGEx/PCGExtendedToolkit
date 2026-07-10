@@ -8,6 +8,7 @@
 #include "Details/PCGExEnumSelectorWidget.h"
 #include "Details/PCGExInlineNumericWidgets.h"
 #include "Details/PCGExPropertyInlineWidgets.h"
+#include "Widgets/SPCGExPropertyCurveValueWidget.h"
 
 namespace PCGExBuiltInInlineWidgets
 {
@@ -55,5 +56,19 @@ namespace PCGExBuiltInInlineWidgets
 		FPCGExInlineWidgetRegistry::RegisterAllModes(
 			FPCGExProperty_Int64::StaticStruct()->GetFName(),
 			&PCGExPropertyInlineWidgets::MakeClampedInt64Widget);
+
+		// Float curve: compact-mode only, mirroring Enum. The schema-edit (Edit) path falls
+		// through to the default AddProperty route, which renders through
+		// FPCGExPropertyFloatCurveCustomization. FPCGExProperty_FloatCurve is deliberately NOT
+		// PCGExInlineValue, so override/readonly rows route through AddComplexValueRows, which
+		// picks this factory up and renders the editor as a full-width row (an inline value
+		// column would track the editor's desired width and jitter while typing).
+		FPCGExInlineWidgetRegistry::Register(
+			FPCGExProperty_FloatCurve::StaticStruct()->GetFName(),
+			EPCGExInlineWidgetMode::Compact,
+			[](const TSharedRef<IPropertyHandle>& ValueHandle) -> TSharedRef<SWidget>
+			{
+				return SNew(SPCGExPropertyCurveValueWidget, ValueHandle);
+			});
 	}
 }

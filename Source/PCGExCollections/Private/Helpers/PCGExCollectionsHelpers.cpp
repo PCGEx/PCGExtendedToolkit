@@ -191,8 +191,10 @@ namespace PCGExCollections
 	// Category attribute doesn't match any named category, MissingCategoryBehavior controls
 	// whether we skip (return nullptr) or fall back to MainPickerOp.
 	// Returns nullptr when the result should be an empty FPCGExEntryAccessResult.
-	const FPCGExEntryPickerOperation* FSelectorHelper::ResolvePickerForPoint(int32 PointIndex) const
+	const FPCGExEntryPickerOperation* FSelectorHelper::ResolvePickerForPoint(int32 PointIndex, int32& OutCategorySlot) const
 	{
+		OutCategorySlot = -1;
+
 		if (!CategoryGetter)
 		{
 			return MainPickerOp.Get();
@@ -205,6 +207,7 @@ namespace PCGExCollections
 			{
 				if (const TSharedPtr<FPCGExEntryPickerOperation>& Op = CategoryPickerOpsByIndex[*IdxPtr])
 				{
+					OutCategorySlot = *IdxPtr;
 					return Op.Get();
 				}
 			}
@@ -215,18 +218,52 @@ namespace PCGExCollections
 			: nullptr;
 	}
 
+	// Scratch slots parallel the op layout (Main + CategoryPickerOpsByIndex). Ops that don't
+	// override CreateScratchForScope leave their slot null; a fully-null set collapses to
+	// nullptr so consumers can skip the routing entirely.
+	TSharedPtr<FSelectorScratches> FSelectorHelper::CreateScratches(const int32 MaxPointsInScope) const
+	{
+		bool bAny = false;
+		TSharedPtr<FSelectorScratches> Result = MakeShared<FSelectorScratches>();
+
+		if (MainPickerOp)
+		{
+			Result->Main = MainPickerOp->CreateScratchForScope(MaxPointsInScope);
+			bAny |= Result->Main.IsValid();
+		}
+
+		Result->ByCategory.SetNum(CategoryPickerOpsByIndex.Num());
+		for (int32 i = 0; i < CategoryPickerOpsByIndex.Num(); ++i)
+		{
+			if (const TSharedPtr<FPCGExEntryPickerOperation>& Op = CategoryPickerOpsByIndex[i])
+			{
+				Result->ByCategory[i] = Op->CreateScratchForScope(MaxPointsInScope);
+				bAny |= Result->ByCategory[i].IsValid();
+			}
+		}
+
+		return bAny ? Result : nullptr;
+	}
+
 	// Entry picking: resolve the active picker (category-aware) -> pick a raw entries index
 	// -> resolve entry -> handle subcollection recursion via the "fallback to WeightedRandom"
 	// policy (matches current behavior when the picked entry is a subcollection).
-	FPCGExEntryAccessResult FSelectorHelper::GetEntry(int32 PointIndex, int32 Seed, const bool bFlattenSubCollections) const
+	FPCGExEntryAccessResult FSelectorHelper::GetEntry(int32 PointIndex, int32 Seed, const bool bFlattenSubCollections, const FSelectorScratches* Scratches) const
 	{
-		const FPCGExEntryPickerOperation* Op = ResolvePickerForPoint(PointIndex);
+		int32 CategorySlot = -1;
+		const FPCGExEntryPickerOperation* Op = ResolvePickerForPoint(PointIndex, CategorySlot);
 		if (!Op)
 		{
 			return FPCGExEntryAccessResult{};
 		}
 
-		const int32 Raw = Op->Pick(PointIndex, Seed);
+		FPCGExPickerScratchBase* Scratch = nullptr;
+		if (Scratches)
+		{
+			Scratch = CategorySlot < 0 ? Scratches->Main.Get() : Scratches->ByCategory[CategorySlot].Get();
+		}
+
+		const int32 Raw = Op->Pick(PointIndex, Seed, Scratch);
 		FPCGExEntryAccessResult Result = Collection->GetEntryRaw(Raw);
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
@@ -235,20 +272,27 @@ namespace PCGExCollections
 		return Result;
 	}
 
-	FPCGExEntryAccessResult FSelectorHelper::GetEntry(int32 PointIndex, int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags, const bool bFlattenSubCollections) const
+	FPCGExEntryAccessResult FSelectorHelper::GetEntry(int32 PointIndex, int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags, const bool bFlattenSubCollections, const FSelectorScratches* Scratches) const
 	{
 		if (TagInheritance == 0)
 		{
-			return GetEntry(PointIndex, Seed);
+			return GetEntry(PointIndex, Seed, bFlattenSubCollections, Scratches);
 		}
 
-		const FPCGExEntryPickerOperation* Op = ResolvePickerForPoint(PointIndex);
+		int32 CategorySlot = -1;
+		const FPCGExEntryPickerOperation* Op = ResolvePickerForPoint(PointIndex, CategorySlot);
 		if (!Op)
 		{
 			return FPCGExEntryAccessResult{};
 		}
 
-		const int32 Raw = Op->Pick(PointIndex, Seed);
+		FPCGExPickerScratchBase* Scratch = nullptr;
+		if (Scratches)
+		{
+			Scratch = CategorySlot < 0 ? Scratches->Main.Get() : Scratches->ByCategory[CategorySlot].Get();
+		}
+
+		const int32 Raw = Op->Pick(PointIndex, Seed, Scratch);
 		FPCGExEntryAccessResult Result = Collection->GetEntryRaw(Raw, TagInheritance, OutTags);
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
@@ -740,6 +784,42 @@ namespace PCGExCollections
 			}
 			SocketHelper.RegisterCollection(H->GetCollection());
 		}
+	}
+
+	TSharedPtr<FSourceScratches> FCollectionSource::CreateScratches(const int32 MaxPointsInScope) const
+	{
+		TSharedPtr<FSourceScratches> Result;
+		auto EnsureResult = [&Result]() -> FSourceScratches&
+		{
+			if (!Result)
+			{
+				Result = MakeShared<FSourceScratches>();
+			}
+			return *Result;
+		};
+
+		if (Helper)
+		{
+			if (TSharedPtr<FSelectorScratches> Scratches = Helper->CreateScratches(MaxPointsInScope))
+			{
+				EnsureResult().Single = Scratches;
+			}
+		}
+
+		for (const TSharedPtr<FSelectorHelper>& MappedHelper : Helpers)
+		{
+			if (!MappedHelper)
+			{
+				continue;
+			}
+			if (TSharedPtr<FSelectorScratches> Scratches = MappedHelper->CreateScratches(MaxPointsInScope))
+			{
+				EnsureResult().ByHelper.Add(MappedHelper.Get(), Scratches);
+			}
+		}
+
+		// Null when no op anywhere wants scratch -- consumers skip routing entirely.
+		return Result;
 	}
 
 	bool FCollectionSource::TryGetHelpers(int32 Index, FSelectorHelper*& OutHelper, FMicroSelectorHelper*& OutMicroHelper)

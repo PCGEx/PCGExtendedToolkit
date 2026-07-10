@@ -44,6 +44,7 @@ TSharedPtr<FPCGExMicroEntryPickerOperation> UPCGExSelectorFactoryData::CreateMic
 
 UPCGExFactoryData* UPCGExSelectorFactoryProviderSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const
 {
+	InFactory->Priority = Priority;
 	return Super::CreateFactory(InContext, InFactory);
 }
 

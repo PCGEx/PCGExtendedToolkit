@@ -6,6 +6,7 @@
 #include "PCGExBuiltInInlineWidgets.h"
 #include "PCGExEnumSelector.h"
 #include "PCGExInlineWidgetRegistry.h"
+#include "PCGExPropertiesEditorStyle.h"
 #include "PCGExProperty.h"
 #include "PCGExPropertyType_Struct.h"
 #include "PCGExPropertyTypes.h"
@@ -16,6 +17,7 @@
 #include "Details/PCGExNumericRangeCustomization.h"
 #include "Details/PCGExObjectPropertyOverrideDescriptionCustomization.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
+#include "Details/PCGExPropertyFloatCurveCustomization.h"
 #include "Details/PCGExPropertyOutputConfigCustomization.h"
 #include "Details/PCGExPropertyOverrideEntryCustomization.h"
 #include "Details/PCGExPropertyOverridesCustomization.h"
@@ -28,6 +30,9 @@
 void FPCGExPropertiesEditorModule::StartupModule()
 {
 	IPCGExEditorModuleInterface::StartupModule();
+
+	// Style first: the curve editor widgets look its brushes up by style name at paint time.
+	Style = MakeShared<FPCGExPropertiesEditorStyle>();
 
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 
@@ -77,6 +82,14 @@ void FPCGExPropertiesEditorModule::StartupModule()
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyOutputConfigCustomization::MakeInstance)
 		);
 
+	// FPCGExPropertySampledOutputConfig reuses the output-config customization: same header row,
+	// extra fields (Time) fall through CustomizeChildren. Type-layout registration is per struct
+	// name, so the derived struct needs its own explicit registration.
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FPCGExPropertySampledOutputConfig::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyOutputConfigCustomization::MakeInstance)
+		);
+
 	// FPCGObjectPropertyOverrideDescription (engine struct) -> compact inline [source] -> [target]. Global by FName.
 	PropertyModule.RegisterCustomPropertyTypeLayout(
 		FPCGObjectPropertyOverrideDescription::StaticStruct()->GetFName(),
@@ -119,6 +132,13 @@ void FPCGExPropertiesEditorModule::StartupModule()
 
 #undef REGISTER_PROPERTY_COMPILED_CUSTOMIZATION
 
+	// FPCGExProperty_FloatCurve gets the inline curve editor instead of the generic compiled
+	// layout -- it renders the whole value surface itself (and hides PropertyName the same way).
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FPCGExProperty_FloatCurve::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyFloatCurveCustomization::MakeInstance)
+		);
+
 	// Register built-in compact inline widgets for Vector / Vector2D / Rotator property types
 	PCGExBuiltInInlineWidgets::RegisterAll();
 }
@@ -126,6 +146,9 @@ void FPCGExPropertiesEditorModule::StartupModule()
 void FPCGExPropertiesEditorModule::ShutdownModule()
 {
 	FPCGExInlineWidgetRegistry::Clear();
+
+	// Destroying the style unregisters it from the Slate style registry.
+	Style.Reset();
 
 	IPCGExEditorModuleInterface::ShutdownModule();
 }

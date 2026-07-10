@@ -186,6 +186,8 @@ bool FPCGExPathSplineMeshElement::Boot(FPCGExContext* InContext) const
 	}
 
 	Context->SelectorSharedDataCache = MakeShared<PCGExCollections::FSelectorSharedDataCache>();
+	// Batch total for AllInputs-scoped selector state; must precede any GetOrBuild (see OnCached).
+	Context->SelectorSharedDataCache->AllInputsPointCount = Context->MainPoints->GetTotalNum(PCGExData::EIOSide::In);
 
 	if (Settings->bUseStagedPoints)
 	{
@@ -574,6 +576,10 @@ namespace PCGExPathSplineMesh
 		const UPCGComponent* Component = Context->GetComponent();
 		const bool bTangentsEnabled = TangentsHandler->IsEnabled();
 
+		// Per-scope pick scratches -- this scope runs on a single thread, so ops can mutate
+		// their scratch freely. Null when no active selector op uses scratch.
+		const TSharedPtr<PCGExCollections::FSourceScratches> PickScratches = bLocalFitting ? Source->CreateScratches(Scope.Count) : nullptr;
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			PCGExCollections::FMicroSelectorHelper* MicroHelper = nullptr;
@@ -606,13 +612,14 @@ namespace PCGExPathSplineMesh
 
 				Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
 
+				const PCGExCollections::FSelectorScratches* Scratches = PickScratches ? PickScratches->GetFor(Helper) : nullptr;
 				if (bUseTags)
 				{
-					Result = Helper->GetEntry(Index, Seed, Settings->TaggingDetails.GrabTags, Segment.Tags);
+					Result = Helper->GetEntry(Index, Seed, Settings->TaggingDetails.GrabTags, Segment.Tags, false, Scratches);
 				}
 				else
 				{
-					Result = Helper->GetEntry(Index, Seed);
+					Result = Helper->GetEntry(Index, Seed, false, Scratches);
 				}
 			}
 			else

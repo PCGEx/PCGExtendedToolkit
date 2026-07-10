@@ -44,13 +44,18 @@ struct PCGEXPROPERTIES_API FPCGExPropertyRegistryEntry
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Property")
 	bool bSupportsOutput = false;
 
+	/** Whether this property supports time-based sampling (see FPCGExProperty::SampleAt) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Property")
+	bool bSupportsSampling = false;
+
 	FPCGExPropertyRegistryEntry() = default;
 
-	FPCGExPropertyRegistryEntry(FName InName, FName InTypeName, EPCGMetadataTypes InOutputType, bool bInSupportsOutput)
+	FPCGExPropertyRegistryEntry(FName InName, FName InTypeName, EPCGMetadataTypes InOutputType, bool bInSupportsOutput, bool bInSupportsSampling = false)
 		: PropertyName(InName)
 		  , TypeName(InTypeName)
 		  , OutputType(InOutputType)
 		  , bSupportsOutput(bInSupportsOutput)
+		  , bSupportsSampling(bInSupportsSampling)
 	{
 	}
 };
@@ -114,12 +119,21 @@ struct PCGEXPROPERTIES_API FPCGExPropertyRegistryEntry
  * Both paths are optional. Return false/nullptr from SupportsOutput()/
  * CreateMetadataAttribute() if your type doesn't support a path.
  *
+ * C) TIME-BASED SAMPLING (via SupportsSampling / SampleAt):
+ *    Orthogonal to A/B -- a value-only type (e.g. Float Curve) can be sampleable
+ *    while SupportsOutput() stays false. Consumers read a per-point time, call
+ *    SampleAt(time) on the resolved source property, and write the double result
+ *    into their own output buffer.
+ *    Used by: Staging : Load Properties (Sampled Properties Mapping)
+ *
  * ============================================================================
  * THREAD SAFETY
  * ============================================================================
  *
- * - WriteOutputFrom() is the ONLY method safe for parallel processing loops.
+ * - WriteOutputFrom() is the ONLY output method safe for parallel processing loops.
  *   It reads from Source and writes directly to the buffer without mutating 'this'.
+ * - SampleAt() MUST be const, re-entrant and mutation-free -- it is called per-point
+ *   from parallel loops on a shared, immutable property instance.
  * - CopyValueFrom() + WriteOutput() is NOT thread-safe (mutates Value field).
  *   Only use this pattern in single-threaded contexts.
  * - InitializeOutput() must be called during boot phase (single-threaded).
@@ -216,6 +230,35 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	virtual EPCGMetadataTypes GetOutputType() const
 	{
 		return EPCGMetadataTypes::Unknown;
+	}
+
+	// --- Sampling Interface ---
+
+	/**
+	 * Check if this property type supports time-based sampling (see SampleAt).
+	 * Orthogonal to SupportsOutput() -- value-only types (e.g. Float Curve) can be
+	 * sampleable without supporting raw attribute output.
+	 */
+	virtual bool SupportsSampling() const
+	{
+		return false;
+	}
+
+	/**
+	 * Sample this property's value at InTime.
+	 * The time domain is type-defined -- curve-backed types use their own key range and
+	 * extrapolation settings; out-of-range times are NOT clamped here.
+	 *
+	 * THREAD SAFETY: must be const, re-entrant and mutation-free (including mutable
+	 * caches) -- called per-point from parallel processing loops on a shared, immutable
+	 * property instance.
+	 *
+	 * @param InTime The time to sample at
+	 * @return Sampled value; base implementation returns 0.
+	 */
+	virtual double SampleAt(const double InTime) const
+	{
+		return 0.0;
 	}
 
 	/**
@@ -380,7 +423,7 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	 */
 	FPCGExPropertyRegistryEntry ToRegistryEntry() const
 	{
-		return FPCGExPropertyRegistryEntry(PropertyName, GetTypeName(), GetOutputType(), SupportsOutput());
+		return FPCGExPropertyRegistryEntry(PropertyName, GetTypeName(), GetOutputType(), SupportsOutput(), SupportsSampling());
 	}
 };
 
