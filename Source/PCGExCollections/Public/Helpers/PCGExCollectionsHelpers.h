@@ -30,6 +30,7 @@ class UPCGManagedActors;
 class UPCGParamData;
 class FPCGExEntryPickerOperation;
 class FPCGExMicroEntryPickerOperation;
+class FPCGExPickerScratchBase;
 
 namespace PCGExCollections
 {
@@ -90,6 +91,50 @@ namespace PCGExCollections
 	void FinalizeSpawnedActor(AActor* InActor, UPCGManagedActors* InManagedActors, bool bIsPreview);
 
 	class FSocketHelper;
+	class FSelectorHelper;
+	class FCollectionSource;
+
+	/**
+	 * Per-scope pick scratch storage for one FSelectorHelper -- one slot per picker op
+	 * (Main + one per named category), parallel to the helper's op layout.
+	 *
+	 * Created via FSelectorHelper::CreateScratches once per processing scope (single-threaded,
+	 * before entering the point loop of that scope), then passed back into GetEntry for every
+	 * pick within the scope. Since each scope runs on one thread, ops can mutate their scratch
+	 * freely without locking. Slots are null for ops that don't use scratch.
+	 */
+	class PCGEXCOLLECTIONS_API FSelectorScratches
+	{
+		friend class FSelectorHelper;
+
+		TSharedPtr<FPCGExPickerScratchBase> Main;
+		TArray<TSharedPtr<FPCGExPickerScratchBase>> ByCategory;
+	};
+
+	/**
+	 * Per-scope pick scratch storage for a whole FCollectionSource -- one FSelectorScratches
+	 * per underlying helper. Created via FCollectionSource::CreateScratches once per scope;
+	 * consumers route the right per-helper set via GetFor(Helper).
+	 */
+	class PCGEXCOLLECTIONS_API FSourceScratches
+	{
+		friend class FCollectionSource;
+
+		TSharedPtr<FSelectorScratches> Single;
+		TMap<const FSelectorHelper*, TSharedPtr<FSelectorScratches>> ByHelper;
+
+	public:
+		const FSelectorScratches* GetFor(const FSelectorHelper* InHelper) const
+		{
+			if (Single)
+			{
+				return Single.Get();
+			}
+			const TSharedPtr<FSelectorScratches>* Found = ByHelper.Find(InHelper);
+			return Found ? Found->Get() : nullptr;
+		}
+	};
+
 	/**
 	 * Per-point entry picker. Reads distribution settings (index/random/weighted) and
 	 * optional category filtering, then picks entries from a collection's cache.
@@ -125,8 +170,12 @@ namespace PCGExCollections
 		// context (mirrors FPickPacker lifetime pattern). When null, ops self-build as before.
 		TSharedPtr<FSelectorSharedDataCache> SharedDataCache;
 
-		/** Resolve which picker op applies to a given point (category-aware, with MissingCategoryBehavior fallback). */
-		const FPCGExEntryPickerOperation* ResolvePickerForPoint(int32 PointIndex) const;
+		/**
+		 * Resolve which picker op applies to a given point (category-aware, with MissingCategoryBehavior fallback).
+		 * OutCategorySlot receives -1 for the Main op, or the category index for a category op --
+		 * used to route the matching scratch slot.
+		 */
+		const FPCGExEntryPickerOperation* ResolvePickerForPoint(int32 PointIndex, int32& OutCategorySlot) const;
 
 	public:
 		FPCGExAssetDistributionDetails Details;
@@ -157,13 +206,23 @@ namespace PCGExCollections
 		}
 
 		/**
+		 * Create per-scope scratch storage for this helper's picker ops. Call once per processing
+		 * scope (single-threaded, before entering the scope's point loop) and pass the result into
+		 * GetEntry for every pick in that scope. Returns null when no op wants scratch -- passing
+		 * null Scratches to GetEntry is always valid (ops fall back to per-pick local buffers).
+		 * @param MaxPointsInScope Upper bound of points the scope will process; forwarded to ops.
+		 */
+		TSharedPtr<FSelectorScratches> CreateScratches(int32 MaxPointsInScope) const;
+
+		/**
 		 * Get an entry for a specific point
 		 * @param PointIndex Index of the point
 		 * @param Seed Random seed for this point
 		 * @param bFlattenSubCollections
+		 * @param Scratches Optional per-scope scratch set from CreateScratches. May be null.
 		 * @return Access result containing entry and host collection
 		 */
-		FPCGExEntryAccessResult GetEntry(int32 PointIndex, int32 Seed, const bool bFlattenSubCollections = false) const;
+		FPCGExEntryAccessResult GetEntry(int32 PointIndex, int32 Seed, const bool bFlattenSubCollections = false, const FSelectorScratches* Scratches = nullptr) const;
 
 		/**
 		 * Get an entry with tag inheritance
@@ -172,9 +231,10 @@ namespace PCGExCollections
 		 * @param TagInheritance Bitmask of EPCGExAssetTagInheritance flags
 		 * @param OutTags Set to append inherited tags to
 		 * @param bFlattenSubCollections
+		 * @param Scratches Optional per-scope scratch set from CreateScratches. May be null.
 		 * @return Access result containing entry and host collection
 		 */
-		FPCGExEntryAccessResult GetEntry(int32 PointIndex, int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags, const bool bFlattenSubCollections = false) const;
+		FPCGExEntryAccessResult GetEntry(int32 PointIndex, int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags, const bool bFlattenSubCollections = false, const FSelectorScratches* Scratches = nullptr) const;
 
 		/** Get the underlying collection */
 		UPCGExAssetCollection* GetCollection() const
@@ -466,6 +526,14 @@ namespace PCGExCollections
 
 		/** Initialize with a mapped collection source. ExternalFactory drives picking for all collections in External mode. */
 		bool Init(const TMap<PCGExValueHash, TObjectPtr<UPCGExAssetCollection>>& InMap, const TSharedPtr<TArray<PCGExValueHash>>& InKeys, const UPCGExSelectorFactoryData* ExternalFactory = nullptr);
+
+		/**
+		 * Create per-scope scratch storage covering every helper this source wraps. Call once per
+		 * processing scope (single-threaded, before the scope's point loop); route the per-helper
+		 * set via FSourceScratches::GetFor(Helper) when calling GetEntry. Returns null when no op
+		 * across any helper wants scratch -- null is always safe to skip.
+		 */
+		TSharedPtr<FSourceScratches> CreateScratches(int32 MaxPointsInScope) const;
 
 		/**
 		 * Get helpers for a specific point index

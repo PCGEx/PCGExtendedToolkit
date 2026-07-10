@@ -102,5 +102,13 @@ public:
 		return PCGExCollections::Labels::OutputSelectorLabel;
 	}
 
+	/**
+	 * Selector priority. Drives ordering when multiple selectors are consumed by a single pin
+	 * (e.g. Selector Modifier : Cascade tries the lowest priority first). Forwarded to the factory data;
+	 * GetInputFactories sorts ascending.
+	 */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayPriority=-1), AdvancedDisplay)
+	int32 Priority = 0;
+
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
 };

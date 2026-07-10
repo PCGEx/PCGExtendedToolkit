@@ -10,6 +10,8 @@ class UPCGExSelectorFactoryData;
 
 namespace PCGExCollections
 {
+	class FSelectorSharedDataCache;
+
 	/**
 	 * Opaque base for collection-derived state that's invariant across facades.
 	 * Each selector that benefits from sharing subclasses this with its specific cached arrays
@@ -23,6 +25,18 @@ namespace PCGExCollections
 	{
 	public:
 		virtual ~FSelectorSharedData() = default;
+
+		/**
+		 * Called once per instance, under the cache lock, after BuildSharedData and before the
+		 * instance is published to any facade -- the only sanctioned place to finalize
+		 * batch-dependent state (e.g. Quota's Proportion budget vs InCache.AllInputsPointCount),
+		 * since the lock removes any dependency on facade init order. Composites must forward
+		 * to their children. NOT called when the cache is bypassed (self-built shared data);
+		 * keep a functional fallback for that path.
+		 */
+		virtual void OnCached(const FSelectorSharedDataCache& InCache)
+		{
+		}
 	};
 
 	/**
@@ -38,7 +52,15 @@ namespace PCGExCollections
 	{
 	public:
 		/**
+		 * Total In-side point count across the consumer's batch, or -1 when unknown. Set once
+		 * at Boot, BEFORE any GetOrBuild call; consumed by OnCached implementations that scale
+		 * state to the full batch (-1 -> they fall back to per-facade behavior).
+		 */
+		int64 AllInputsPointCount = -1;
+
+		/**
 		 * Return cached shared data for (Factory, Target), building it lazily on first access.
+		 * Freshly built instances receive OnCached(*this) under the lock before publication.
 		 * Returns null if the factory declines to produce shared data (its BuildSharedData returns null).
 		 */
 		TSharedPtr<FSelectorSharedData> GetOrBuild(

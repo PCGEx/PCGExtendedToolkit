@@ -117,6 +117,7 @@ namespace PCGExSelectorClosestMatch
 		Eval->Weight = Axis.Weight;
 		Eval->Broadcaster = Broadcaster;
 		Eval->Shared = Typed;
+		Eval->EntryValuesPtr = Typed->EntryValues.GetData();
 
 		if constexpr (PCGExClosestMatch::IsNormalizable<T>())
 		{
@@ -133,9 +134,20 @@ namespace PCGExSelectorClosestMatch
 				{
 					Eval->PointMin = Broadcaster->Min;
 					Eval->PointInvRange = PCGExTypeOps::FTypeOps<T>::ComputeInvRange(Broadcaster->Min, Broadcaster->Max);
-					Eval->EntryMin = Typed->EntryMin;
-					Eval->EntryInvRange = PCGExTypeOps::FTypeOps<T>::ComputeInvRange(Typed->EntryMin, Typed->EntryMax);
 					Eval->bRemap = true;
+
+					// Entry-side remap state is constant per facade -- bake it into a remapped copy
+					// once here so the hot path never re-remaps entries. Unresolved entries hold
+					// default values; remapping them is harmless (never reached via ValidEntryIndices).
+					const T EntryMin = Typed->EntryMin;
+					const T EntryInvRange = PCGExTypeOps::FTypeOps<T>::ComputeInvRange(Typed->EntryMin, Typed->EntryMax);
+					const int32 NumEntries = Typed->EntryValues.Num();
+					Eval->RemappedEntryValues.SetNumUninitialized(NumEntries);
+					for (int32 i = 0; i < NumEntries; ++i)
+					{
+						Eval->RemappedEntryValues[i] = PCGExTypeOps::FTypeOps<T>::ApplyRemap(Typed->EntryValues[i], EntryMin, EntryInvRange);
+					}
+					Eval->EntryValuesPtr = Eval->RemappedEntryValues.GetData();
 				}
 			}
 		}
@@ -198,6 +210,11 @@ bool FPCGExEntryClosestMatchPickerOp::OnInitForData(FPCGExContext* InContext, co
 	return true;
 }
 
+TSharedPtr<FPCGExPickerScratchBase> FPCGExEntryClosestMatchPickerOp::CreateScratchForScope(int32 MaxPointsInScope) const
+{
+	return MakeShared<FPCGExClosestMatchScratch>();
+}
+
 int32 FPCGExEntryClosestMatchPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch) const
 {
 	checkSlow(Target && !Target->IsEmpty());
@@ -208,32 +225,72 @@ int32 FPCGExEntryClosestMatchPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGEx
 		return -1;
 	}
 
-	double BestDist = TNumericLimits<double>::Max();
-	int32 BestIdx = -1;
+	// Axis-major accumulation: one virtual call per axis (not per axis per entry), with the
+	// query attribute read + remapped once per axis per pick inside Accumulate. Distances is
+	// compact over ValidEntryIndices.
+	FPCGExClosestMatchScratch LocalScratch;
+	FPCGExClosestMatchScratch& S = Scratch ? *static_cast<FPCGExClosestMatchScratch*>(Scratch) : LocalScratch;
+	S.Distances.Reset();
+	S.Distances.SetNumZeroed(ValidEntryIndices.Num());
 
-	// TODO: when the scratch contract is wired through FSelectorHelper, hoist the per-axis
-	// Broadcaster->Read(PointIndex) out of the inner virtual Distance() -- one read per axis
-	// per pick instead of per axis per entry. Currently safe to leave because Pick runs
-	// concurrently on the same op across points, so mutating evaluator state would race.
-	for (const int32 i : ValidEntryIndices)
+	for (const TSharedPtr<FPCGExClosestMatchAxisEvaluator>& Eval : ActiveEvaluators)
 	{
-		double D = 0.0;
-		for (const TSharedPtr<FPCGExClosestMatchAxisEvaluator>& Eval : ActiveEvaluators)
+		Eval->Accumulate(PointIndex, ValidEntryIndices, S.Distances);
+	}
+
+	// First encountered minimum wins -- same tie behavior as the previous entry-major loop.
+	double BestDist = TNumericLimits<double>::Max();
+	int32 BestLocal = -1;
+	for (int32 j = 0; j < S.Distances.Num(); ++j)
+	{
+		if (S.Distances[j] < BestDist)
 		{
-			D += Eval->Distance(PointIndex, i);
-			if (D >= BestDist)
-			{
-				break; // Already worse than current best -- no point summing remaining axes.
-			}
-		}
-		if (D < BestDist)
-		{
-			BestDist = D;
-			BestIdx = i;
+			BestDist = S.Distances[j];
+			BestLocal = j;
 		}
 	}
 
-	return BestIdx == -1 ? -1 : Target->Indices[BestIdx];
+	return BestLocal == -1 ? -1 : Target->Indices[ValidEntryIndices[BestLocal]];
+}
+
+int32 FPCGExEntryClosestMatchPickerOp::PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch) const
+{
+	checkSlow(Target && !Target->IsEmpty());
+
+	const TArray<int32>& ValidEntryIndices = Shared->ValidEntryIndices;
+	if (ValidEntryIndices.IsEmpty())
+	{
+		return -1;
+	}
+
+	// Quota-only path: distances are accumulated for the full valid set (the batched evaluators
+	// are cheaper unsegmented), then availability filters the argmin.
+	FPCGExClosestMatchScratch LocalScratch;
+	FPCGExClosestMatchScratch& S = Scratch ? *static_cast<FPCGExClosestMatchScratch*>(Scratch) : LocalScratch;
+	S.Distances.Reset();
+	S.Distances.SetNumZeroed(ValidEntryIndices.Num());
+
+	for (const TSharedPtr<FPCGExClosestMatchAxisEvaluator>& Eval : ActiveEvaluators)
+	{
+		Eval->Accumulate(PointIndex, ValidEntryIndices, S.Distances);
+	}
+
+	double BestDist = TNumericLimits<double>::Max();
+	int32 BestLocal = -1;
+	for (int32 j = 0; j < S.Distances.Num(); ++j)
+	{
+		if (!InAvailability.IsAvailable(ValidEntryIndices[j]))
+		{
+			continue;
+		}
+		if (S.Distances[j] < BestDist)
+		{
+			BestDist = S.Distances[j];
+			BestLocal = j;
+		}
+	}
+
+	return BestLocal == -1 ? -1 : Target->Indices[ValidEntryIndices[BestLocal]];
 }
 
 #pragma endregion

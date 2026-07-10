@@ -127,6 +127,12 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 	TAttribute<bool> IsEnabled,
 	const TWeakObjectPtr<UObject>& WeakOwner)
 {
+	// Types with a registered Compact factory but WITHOUT the PCGExInlineValue meta get their
+	// Value rendered through the factory as a FULL-WIDTH row (e.g. the Float Curve editor,
+	// whose width must be pinned by the panel rather than track the widget's desired size).
+	// Types with the inline meta never reach this path, so existing rows are unaffected.
+	const FPCGExMakeInlineWidgetFn* ValueFactory = Find(InnerStruct->GetFName(), EPCGExInlineWidgetMode::Compact);
+
 	for (TFieldIterator<FProperty> It(InnerStruct); It; ++It)
 	{
 		const FProperty* Property = *It;
@@ -147,6 +153,22 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 		if (WeakOwner.IsValid())
 		{
 			PCGExEditorCustomizationUtils::HookOwnerChangeOnHandleChanged(PropRow.GetPropertyHandle(), WeakOwner);
+		}
+
+		if (ValueFactory && PropName == TEXT("Value"))
+		{
+			if (TSharedPtr<IPropertyHandle> ValueHandle = PropRow.GetPropertyHandle(); ValueHandle.IsValid())
+			{
+				PropRow.CustomWidget(/*bShowChildren=*/false)
+				       .WholeRowContent()
+					[
+						SNew(SBox)
+						.IsEnabled(IsEnabled)
+						[
+							(*ValueFactory)(ValueHandle.ToSharedRef())
+						]
+					];
+			}
 		}
 	}
 }

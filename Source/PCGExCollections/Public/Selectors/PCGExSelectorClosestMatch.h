@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/ArrayView.h"
 #include "Data/PCGExData.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
 #include "Metadata/PCGMetadataAttribute.h"
@@ -166,8 +167,9 @@ public:
 #pragma region Op
 
 /**
- * Per-facade axis evaluator. One virtual Distance() per axis per entry; the typed subclass
- * keeps Broadcaster->Read inlined through TBuffer<T>.
+ * Per-facade axis evaluator. Batched: one virtual Accumulate() per axis per pick (instead of
+ * one virtual call per axis per entry), with the query attribute read and remapped exactly
+ * once per pick. The typed subclass runs a tight non-virtual inner loop over entries.
  */
 class PCGEXCOLLECTIONS_API FPCGExClosestMatchAxisEvaluator
 {
@@ -175,8 +177,11 @@ public:
 	double Weight = 1.0;
 	virtual ~FPCGExClosestMatchAxisEvaluator() = default;
 
-	/** Per-point per-entry weighted distance contribution. */
-	virtual double Distance(int32 PointIndex, int32 EntryIndex) const = 0;
+	/**
+	 * Add this axis's weighted distance contribution for every listed entry.
+	 * InOutDistances is parallel to EntryIndices (compact over ValidEntryIndices).
+	 */
+	virtual void Accumulate(int32 PointIndex, TConstArrayView<int32> EntryIndices, TArrayView<double> InOutDistances) const = 0;
 };
 
 template <typename T>
@@ -184,33 +189,48 @@ class TPCGExClosestMatchAxisEvaluator : public FPCGExClosestMatchAxisEvaluator
 {
 public:
 	TSharedPtr<PCGExData::TBuffer<T>> Broadcaster;
-	TSharedPtr<TPCGExClosestMatchAxisData<T>> Shared;
+	TSharedPtr<TPCGExClosestMatchAxisData<T>> Shared; // keeps EntryValues alive
 
-	// When bRemap is true, Query and Entry values are independently mapped to [0, 1] using
-	// PointMin/PointInvRange and EntryMin/EntryInvRange before distance -- only set up for
-	// types satisfying IsNormalizable<T>.
+	// When bRemap is true, the query is mapped to [0, 1] via PointMin/PointInvRange before
+	// distance -- only set up for types satisfying IsNormalizable<T>. The entry side is
+	// pre-remapped once at bind time into RemappedEntryValues.
 	bool bRemap = false;
 	T PointMin{};
 	T PointInvRange{};
-	T EntryMin{};
-	T EntryInvRange{};
 
-	virtual double Distance(int32 PointIndex, int32 EntryIndex) const override
+	// Entry-side values consumed by Accumulate: Shared->EntryValues directly, or the
+	// pre-remapped copy when bRemap. Bound once in BuildEvaluatorT.
+	TArray<T> RemappedEntryValues;
+	const T* EntryValuesPtr = nullptr;
+
+	virtual void Accumulate(int32 PointIndex, TConstArrayView<int32> EntryIndices, TArrayView<double> InOutDistances) const override
 	{
-		const T Query = Broadcaster->Read(PointIndex);
-		const T& Entry = Shared->EntryValues[EntryIndex];
-
+		T Query = Broadcaster->Read(PointIndex);
 		if constexpr (PCGExClosestMatch::IsNormalizable<T>())
 		{
 			if (bRemap)
 			{
-				const T QR = PCGExTypeOps::FTypeOps<T>::ApplyRemap(Query, PointMin, PointInvRange);
-				const T ER = PCGExTypeOps::FTypeOps<T>::ApplyRemap(Entry, EntryMin, EntryInvRange);
-				return PCGExClosestMatch::Distance<T>(QR, ER) * Weight;
+				Query = PCGExTypeOps::FTypeOps<T>::ApplyRemap(Query, PointMin, PointInvRange);
 			}
 		}
-		return PCGExClosestMatch::Distance<T>(Query, Entry) * Weight;
+
+		const double W = Weight;
+		const int32 Num = EntryIndices.Num();
+		for (int32 j = 0; j < Num; ++j)
+		{
+			InOutDistances[j] += PCGExClosestMatch::Distance<T>(Query, EntryValuesPtr[EntryIndices[j]]) * W;
+		}
 	}
+};
+
+/**
+ * Per-scope scratch for Closest Match picks: reusable per-entry distance accumulator.
+ * Ops fall back to a per-pick local buffer when no scratch is provided.
+ */
+class FPCGExClosestMatchScratch : public FPCGExPickerScratchBase
+{
+public:
+	TArray<double, TInlineAllocator<64>> Distances;
 };
 
 /**
@@ -229,7 +249,10 @@ public:
 	// land here, so the hot path never has to null-check.
 	TArray<TSharedPtr<FPCGExClosestMatchAxisEvaluator>> ActiveEvaluators;
 
+	virtual TSharedPtr<FPCGExPickerScratchBase> CreateScratchForScope(int32 MaxPointsInScope) const override;
+
 	virtual int32 Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch = nullptr) const override;
+	virtual int32 PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch = nullptr) const override;
 
 protected:
 	virtual void OnSharedDataMissing(FPCGExContext* InContext) const override;

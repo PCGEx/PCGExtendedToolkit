@@ -43,6 +43,7 @@ public class PCGExCollections : ModuleRules
 				"PCGExFilters",
 				"PCGExFoundations",
 				"PCGExElementsBridges",
+				"PCGExNoise3D",
 			}
 		);
 

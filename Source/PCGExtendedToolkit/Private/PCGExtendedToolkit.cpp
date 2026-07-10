@@ -2,7 +2,11 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExtendedToolkit.h"
+#if WITH_EDITOR
+#include "Editor/PCGExSubModules.generated.h"
+#else
 #include "PCGExSubModules.generated.h"
+#endif
 #include "PCGExVersion.h"
 
 #if WITH_EDITOR

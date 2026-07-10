@@ -57,6 +57,7 @@ public class PCGExPropertiesEditor : ModuleRules
 				"Kismet",
 				"ToolMenus",
 				"StructUtilsEditor", // for OnUserDefinedStructReinstanced delegate (FPCGExProperty_Struct refresh)
+				"Projects",          // IPluginManager -> plugin Resources dir for the Slate style
 			}
 		);
 

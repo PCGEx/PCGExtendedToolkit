@@ -514,6 +514,18 @@ namespace PCGExData
 		void Add_Unsafe(const TArray<TSharedPtr<FPointIO>>& IOs);
 		void Add(const TArray<TSharedPtr<FPointIO>>& IOs);
 
+		/** Sum of point counts across all pairs on the given side. Pairs without data on that side contribute 0. */
+		int64 GetTotalNum(const EIOSide Side = EIOSide::In) const
+		{
+			FReadScopeLock ReadLock(PairsLock);
+			int64 Total = 0;
+			for (const TSharedPtr<FPointIO>& IO : Pairs)
+			{
+				const UPCGBasePointData* Data = Side == EIOSide::In ? IO->GetIn() : IO->GetOut();
+				Total += Data ? Data->GetNumPoints() : 0;
+			}
+			return Total;
+		}
 
 		template <typename T>
 		TSharedPtr<FPointIO> Emplace_GetRef(const UPCGBasePointData* In, const EIOInit InitOut = EIOInit::NoInit, const TSet<FString>* Tags = nullptr)
