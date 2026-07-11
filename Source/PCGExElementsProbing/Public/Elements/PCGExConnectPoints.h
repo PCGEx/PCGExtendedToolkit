@@ -1,10 +1,9 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PCGExOctree.h"
 #include "Clusters/PCGExClusterCommon.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Graphs/PCGExGraphDetails.h"
@@ -16,17 +15,15 @@ namespace PCGExGraphs
 	class FGraphBuilder;
 }
 
-namespace PCGExMT
+namespace PCGExProbing
 {
-	template <typename T>
-	class TScopedSet;
+	class FProbingEngine;
 }
 
 class UPCGExProbeFactoryData;
-class FPCGExProbeOperation;
 
 /**
- * 
+ *
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/generate/cluster-connect-points"))
 class UPCGExConnectPointsSettings : public UPCGExPointsProcessorSettings
@@ -111,44 +108,7 @@ namespace PCGExConnectPoints
 
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 
-		TArray<TSharedPtr<FPCGExProbeOperation>> AllOperations;
-
-		TArray<FPCGExProbeOperation*> RadiusSources;
-		TArray<FPCGExProbeOperation*> DirectOperations;
-		TArray<FPCGExProbeOperation*> ChainedOperations;
-		TArray<FPCGExProbeOperation*> SharedOperations;
-		TArray<FPCGExProbeOperation*> GlobalOperations;
-
-		int32 NumRadiusSources = 0;
-		int32 NumDirectOps = 0;
-		int32 NumChainedOps = 0;
-		int32 NumSharedOps = 0;
-		int32 NumGlobalOps = 0;
-
-		bool bOnlyGlobalOps = false;
-		bool bWantsOctree = false;
-
-		int8 NumCompletions = 2;
-
-		bool bUseVariableRadius = false;
-		double SharedSearchRadius = 0;
-
-		TArray<int8> CanGenerate;
-		TArray<int8> AcceptConnections;
-		TUniquePtr<PCGExOctree::FItemOctree> Octree;
-
-		TArray<FTransform> WorkingTransforms;
-		TArray<FVector> WorkingPositions;
-
-		mutable FRWLock UniqueEdgesLock;
-		TSharedPtr<PCGExMT::TScopedSet<uint64>> ScopedEdges;
-		TSet<uint64> UniqueEdges;
-
-		FPCGExGeo2DProjectionDetails ProjectionDetails;
-
-		bool bPreventCoincidence = false;
-		bool bUseProjection = false;
-		FVector CWCoincidenceTolerance = FVector::OneVector;
+		TSharedPtr<PCGExProbing::FProbingEngine> Engine;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
@@ -158,15 +118,8 @@ namespace PCGExConnectPoints
 
 		virtual ~FProcessor() override;
 
-		void AppendEdges(const TSet<uint64>& InUniqueEdges);
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void OnPreparationComplete();
-		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;
-		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
-		virtual void OnPointsProcessingComplete() override;
-
-		void AdvanceCompletion();
 
 		virtual void CompleteWork() override;
 		virtual void Output() override;

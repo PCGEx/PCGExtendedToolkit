@@ -5,8 +5,6 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
-#include "Core/PCGExFilterTypeSets.h"
-#include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
@@ -30,19 +28,6 @@ PCGExData::EIOInit UPCGExConnectClustersSettings::GetEdgeOutputInitMode() const
 PCGEX_INITIALIZE_ELEMENT(ConnectClusters)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(ConnectClusters)
 
-TArray<FPCGPinProperties> UPCGExConnectClustersSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-
-	if (BridgeMethod == EPCGExBridgeClusterMethod::Filters)
-	{
-		PCGEX_PIN_FILTERS(PCGExClusters::Labels::SourceFilterGenerators, "Nodes that don't meet requirements won't generate connections", Required)
-		PCGEX_PIN_FILTERS(PCGExClusters::Labels::SourceFilterConnectables, "Nodes that don't meet requirements can't receive connections", Required)
-	}
-
-	return PinProperties;
-}
-
 bool FPCGExConnectClustersElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExClustersProcessorElement::Boot(InContext))
@@ -56,23 +41,6 @@ bool FPCGExConnectClustersElement::Boot(FPCGExContext* InContext) const
 	Context->CarryOverDetails.Init();
 
 	PCGEX_FWD(ProjectionDetails)
-	PCGEX_FWD(GraphBuilderDetails)
-
-	if (Settings->BridgeMethod == EPCGExBridgeClusterMethod::Filters)
-	{
-		PCGE_LOG(Error, GraphAndLog, FTEXT("Bridge through filter is not implemented yet!"));
-		return false;
-
-		/*
-		if (!GetInputFactories(
-			Context, PCGExClusters::Labels::SourceFilterGenerators, Context->GeneratorsFiltersFactories,
-			PCGExFactories::ClusterNodeFilters(), true)) { return false; }
-
-		if (!GetInputFactories(
-			Context, PCGExClusters::Labels::SourceFilterConnectables, Context->ConnectablesFiltersFactories,
-			PCGExFactories::ClusterNodeFilters(), true)) { return false; }
-		*/
-	}
 
 	if (Settings->bFlagVtxConnector)
 	{
@@ -157,7 +125,6 @@ namespace PCGExConnectClusters
 
 	void FProcessor::CompleteWork()
 	{
-		// if mode == filter, loop through generators and find all suitable connectables
 	}
 
 	//////// BATCH
@@ -330,10 +297,6 @@ namespace PCGExConnectClusters
 				}
 			}
 		}
-		else if (SafeMethod == EPCGExBridgeClusterMethod::Filters)
-		{
-			// Let cluster processor handle it.
-		}
 
 		// Resolve each connected cluster pair to its closest vtx pair and stage a bridge edge.
 		BridgesList = Bridges.Array();
@@ -363,36 +326,10 @@ namespace PCGExConnectClusters
 		Patcher->Commit();
 
 		// Optional connector flags (node-specific; the patcher handles topology only).
-		if (!Settings->bFlagVtxConnector && !Settings->bFlagEdgeConnector) { return; }
-
-		FPCGMetadataAttribute<int32>* VtxConnectorFlagAttribute = Settings->bFlagVtxConnector
-			                                                          ? VtxDataFacade->GetOut()->MutableMetadata()->FindOrCreateAttribute<int32>(Settings->VtxConnectorFlagName, 0)
-			                                                          : nullptr;
-
-		TConstPCGValueRange<int64> VtxMetadataEntries = VtxDataFacade->GetOut()->GetConstMetadataEntryValueRange();
-
-		for (int32 i = 0; i < BridgeEdgeHandles.Num(); ++i)
-		{
-			if (Settings->bFlagEdgeConnector)
-			{
-				TSharedPtr<PCGExData::FPointIO> EdgesIO;
-				int32 EdgePointIndex = -1;
-				if (Patcher->GetEdgeOutput(BridgeEdgeHandles[i], EdgesIO, EdgePointIndex) && EdgesIO)
-				{
-					FPCGMetadataAttribute<bool>* EdgeConnectorFlagAttribute = EdgesIO->GetOut()->MutableMetadata()->FindOrCreateAttribute<bool>(Settings->EdgeConnectorFlagName, false);
-					const TConstPCGValueRange<int64> EdgeMetadataEntries = EdgesIO->GetOut()->GetConstMetadataEntryValueRange();
-					EdgeConnectorFlagAttribute->SetValue(EdgeMetadataEntries[EdgePointIndex], true);
-				}
-			}
-
-			if (VtxConnectorFlagAttribute)
-			{
-				const int64 VtxKeyA = VtxMetadataEntries[PCGEx::H64A(BridgeEndpoints[i])];
-				const int64 VtxKeyB = VtxMetadataEntries[PCGEx::H64B(BridgeEndpoints[i])];
-				VtxConnectorFlagAttribute->SetValue(VtxKeyA, VtxConnectorFlagAttribute->GetValueFromItemKey(VtxKeyA) + 1);
-				VtxConnectorFlagAttribute->SetValue(VtxKeyB, VtxConnectorFlagAttribute->GetValueFromItemKey(VtxKeyB) + 1);
-			}
-		}
+		PCGExGraphs::WriteConnectorFlags(
+			*Patcher, VtxDataFacade,
+			{Settings->bFlagVtxConnector, Settings->VtxConnectorFlagName, Settings->bFlagEdgeConnector, Settings->EdgeConnectorFlagName},
+			BridgeEdgeHandles, BridgeEndpoints);
 	}
 
 

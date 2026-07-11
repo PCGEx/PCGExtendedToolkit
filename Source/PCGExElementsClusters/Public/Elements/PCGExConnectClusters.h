@@ -24,7 +24,7 @@ enum class EPCGExBridgeClusterMethod : uint8
 	Delaunay2D = 1 UMETA(DisplayName = "Delaunay 2D", ToolTip="Uses Delaunay 2D graph to find connections."),
 	LeastEdges = 2 UMETA(DisplayName = "Least Edges", ToolTip="Ensure all clusters are connected using the least possible number of bridges."),
 	MostEdges  = 3 UMETA(DisplayName = "Most Edges", ToolTip="Each cluster will have a bridge to every other cluster"),
-	Filters    = 4 UMETA(DisplayName = "Node Filters", ToolTip="Isolate nodes in each cluster as generators & connectable and connect by proximity.", Hidden),
+	// 4 was the never-implemented "Node Filters" placeholder; "Cluster : Connect Vtx" covers it now.
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/refine/cluster-connect"))
@@ -49,8 +49,6 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
-
 	virtual PCGExData::EIOInit GetMainOutputInitMode() const override;
 	virtual PCGExData::EIOInit GetEdgeOutputInitMode() const override;
 	//~End UPCGExPointsProcessorSettings
@@ -67,10 +65,6 @@ public:
 	/** Meta filter settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Carry Over Settings"))
 	FPCGExCarryOverDetails CarryOverDetails;
-
-	/** Graph & Edges output properties */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Output Settings"))
-	FPCGExGraphBuilderDetails GraphBuilderDetails;
 
 	/** Write the number of bridges connected to each vertex. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta = (PCG_Overridable, InlineEditConditionToggle))
@@ -103,9 +97,6 @@ struct FPCGExConnectClustersContext final : FPCGExClustersProcessorContext
 
 	FPCGExGeo2DProjectionDetails ProjectionDetails;
 	FPCGExCarryOverDetails CarryOverDetails;
-
-	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> GeneratorsFiltersFactories;
-	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> ConnectablesFiltersFactories;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL

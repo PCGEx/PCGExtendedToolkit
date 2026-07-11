@@ -219,8 +219,6 @@ namespace PCGExPointIOMerger
 						Merger->InternalTracker->IncrementPending();
 						PCGEX_LAUNCH_INTERNAL(FWriteConvertedTagScopeTask<T>, Scope, ConvertedValue, Buffer, Merger->InternalTracker)
 					}
-
-					Merger->InternalTracker->IncrementCompleted();
 				},
 				[&]()
 				{
