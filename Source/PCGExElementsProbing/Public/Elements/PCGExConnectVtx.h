@@ -50,7 +50,7 @@ enum class EPCGExConnectVtxEdgeRelation : uint8
 	CrossData    = 2 UMETA(DisplayName = "Cross-Data Only", ToolTip="Only vtx from different input vtx datasets may connect. All Inputs scope only."),
 };
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/refine/cluster-connect-vtx"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/generate/cluster-connect-vtx"))
 class UPCGExConnectVtxSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

@@ -42,7 +42,7 @@ enum class EPCGExCellSpokeMode : uint8
 	ShortestSpoke = 3 UMETA(DisplayName = "Shortest Spoke", ToolTip="Emit only the single shortest centroid-to-corner spoke per cell."),
 };
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/generate/cluster-cell-diagram"))
 class UPCGExBuildCellDiagramSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

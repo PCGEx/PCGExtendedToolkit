@@ -53,7 +53,7 @@ public:
 /**
  * Palette node: "Selector : Classic". Produces the built-in selector factory for the selected Mode.
  */
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/staging-distribute/selector-classic"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/selectors/selector-classic"))
 class PCGEXCOLLECTIONS_API UPCGExSelectorClassicFactoryProviderSettings : public UPCGExSelectorFactoryProviderSettings
 {
 	GENERATED_BODY()

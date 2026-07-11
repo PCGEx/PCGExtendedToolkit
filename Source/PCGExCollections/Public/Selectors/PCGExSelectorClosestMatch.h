@@ -278,7 +278,7 @@ public:
 		const PCGExAssetCollection::FCategory* Target) const override;
 };
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/staging-distribute/selector-closest-match"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/selectors/selector-closest-match"))
 class PCGEXCOLLECTIONS_API UPCGExSelectorClosestMatchFactoryProviderSettings : public UPCGExSelectorFactoryProviderSettings
 {
 	GENERATED_BODY()
