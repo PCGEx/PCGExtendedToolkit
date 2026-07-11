@@ -104,7 +104,7 @@ public:
 /**
  * Palette node: "Selector Modifier : Anti-Repeat".
  */
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/staging-distribute/selector-anti-repeat"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/selectors/mod-anti-repeat"))
 class PCGEXCOLLECTIONS_API UPCGExSelectorAntiRepeatFactoryProviderSettings : public UPCGExSelectorFactoryProviderSettings
 {
 	GENERATED_BODY()

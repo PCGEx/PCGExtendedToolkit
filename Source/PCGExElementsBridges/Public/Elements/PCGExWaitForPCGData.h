@@ -85,7 +85,7 @@ namespace PCGExWaitForPCGData
 	};
 }
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="utilities/control-flow/wait-for-pcg-data"))
 class UPCGExWaitForPCGDataSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()

@@ -18,7 +18,7 @@ namespace PCGExShapes
 class FPCGExComputeIOBounds;
 
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc")
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="shapes/create-shapes"))
 class UPCGExCreateShapesSettings : public UPCGExShapeProcessorSettings
 {
 	GENERATED_BODY()
