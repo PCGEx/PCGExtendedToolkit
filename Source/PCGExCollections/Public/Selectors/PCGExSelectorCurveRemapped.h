@@ -120,7 +120,7 @@ public:
 /**
  * Palette node: "Selector : Curve-Remapped Weight".
  */
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/staging-distribute/selector-curve-remapped"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/selectors/selector-curve-remapped-weight"))
 class PCGEXCOLLECTIONS_API UPCGExSelectorCurveRemappedFactoryProviderSettings : public UPCGExSelectorFactoryProviderSettings
 {
 	GENERATED_BODY()

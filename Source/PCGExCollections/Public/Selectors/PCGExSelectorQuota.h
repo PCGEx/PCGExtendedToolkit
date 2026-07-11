@@ -192,7 +192,7 @@ public:
 /**
  * Palette node: "Selector Modifier : Quota".
  */
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/staging-distribute/selector-quota"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/selectors/mod-quota"))
 class PCGEXCOLLECTIONS_API UPCGExSelectorQuotaFactoryProviderSettings : public UPCGExSelectorFactoryProviderSettings
 {
 	GENERATED_BODY()

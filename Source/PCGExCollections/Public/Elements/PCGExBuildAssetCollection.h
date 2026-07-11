@@ -47,7 +47,7 @@ public:
  * Inverse of Asset Collection to Set. Anchored by a UPCGExManagedAssetCollection on the component, so
  * identical inputs dedup by CRC and survive regeneration. Main-thread-only + non-cacheable (see below).
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Collections", meta = (PCGExNodeLibraryDoc = "collections/build-asset-collection"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Collections", meta = (PCGExNodeLibraryDoc = "staging/utilities/build-asset-collection"))
 class UPCGExBuildAssetCollectionSettings : public UPCGExSettings
 {
 	GENERATED_BODY()

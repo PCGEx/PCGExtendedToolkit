@@ -11,7 +11,7 @@
 
 #include "PCGExFlatten.generated.h"
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc")
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc", meta=(PCGExNodeLibraryDoc="utilities/flatten"))
 class UPCGExFlattenSettings : public UPCGSettings
 {
 	GENERATED_BODY()

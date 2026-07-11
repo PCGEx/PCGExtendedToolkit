@@ -43,7 +43,7 @@ enum class EPCGExClusterDiffuseWeightSpace : uint8
  * Unlike Flood Fill, diffusions do NOT claim vtx -- they overlap freely. Each reached vtx is the
  * union of every seed that touched it, reconciled by a single weighted blend pass.
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/analyze/cluster-diffuse"))
 class UPCGExClusterDiffuseSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

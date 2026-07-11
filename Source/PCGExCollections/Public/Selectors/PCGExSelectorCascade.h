@@ -94,7 +94,7 @@ public:
  * Palette node: "Selector Modifier : Cascade". Consumes an ordered set of selectors on the
  * "Selectors" pin; the first child returning a valid pick wins.
  */
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/staging-distribute/selector-cascade"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Collections|Distribution", meta=(PCGExNodeLibraryDoc="staging/selectors/mod-cascade"))
 class PCGEXCOLLECTIONS_API UPCGExSelectorCascadeFactoryProviderSettings : public UPCGExSelectorFactoryProviderSettings
 {
 	GENERATED_BODY()
