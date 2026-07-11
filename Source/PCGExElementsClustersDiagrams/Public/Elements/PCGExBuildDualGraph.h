@@ -41,7 +41,7 @@ namespace PCGExBuildDualGraph
  * Build the edge dual graph: edges become vertices, vertices become edges connecting adjacent original edges.
  * Uses DCEL half-edge traversal to connect edges that are sequential around shared vertices.
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/generate/cluster-dual-graph"))
 class UPCGExBuildDualGraphSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

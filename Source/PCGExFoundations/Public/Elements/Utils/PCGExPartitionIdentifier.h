@@ -111,7 +111,7 @@ struct FPCGExPartitionOutputs
 	FName RowLabelAttributeName = "Partition";
 };
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc")
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc", meta=(PCGExNodeLibraryDoc="utilities/partition-identifier"))
 class UPCGExPartitionIdentifierSettings : public UPCGSettings
 {
 	GENERATED_BODY()

@@ -16,7 +16,7 @@ namespace PCGExCullOnEmpty
 	const FName IsEmptyName("IsEmpty");
 }
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc")
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc", meta=(PCGExNodeLibraryDoc="utilities/cull-on-empty"))
 class UPCGExCullOnEmptySettings : public UPCGExSettings
 {
 	GENERATED_BODY()
