@@ -36,8 +36,14 @@ namespace PCGExGraphs
 
 	bool FGraph::InsertEdge_Unsafe(const int32 A, const int32 B, FEdge& OutEdge, const int32 IOIndex)
 	{
-		check(A != B)
-
+		
+#if WITH_EDITOR
+		if (!ensure(A != B))
+		{
+			return false;
+		}
+#endif
+		
 		const uint64 Hash = PCGEx::H64U(A, B);
 		if (const int32* EdgeIndex = UniqueEdges.Find(Hash))
 		{
@@ -112,9 +118,14 @@ namespace PCGExGraphs
 			}
 
 			PCGEx::H64(E, A, B);
-
-			check(A != B)
-
+			
+#if WITH_EDITOR
+			if (!ensure(A != B))
+			{
+				continue;
+			}
+#endif
+			
 			const int32 EdgeIndex = Edges.Emplace(Edges.Num(), A, B, -1, InIOIndex);
 
 			UniqueEdges.Add(E, EdgeIndex);
@@ -246,7 +257,12 @@ namespace PCGExGraphs
 
 			PCGEx::H64(E, A, B);
 
-			check(A != B)
+#if WITH_EDITOR
+			if (!ensure(A != B))
+			{
+				continue;
+			}
+#endif
 
 			const int32 EdgeIndex = Edges.Emplace(Edges.Num(), A, B);
 			UniqueEdges.Add(E, EdgeIndex);
@@ -335,7 +351,10 @@ namespace PCGExGraphs
 		TArray<int32> Parent;
 		Parent.SetNumUninitialized(NumNodes);
 		int32* ParentData = Parent.GetData();
-		PCGExMT::ParallelOrSequential(NumNodes, [&](const int32 i) { ParentData[i] = i; });
+		PCGExMT::ParallelOrSequential(NumNodes, [&](const int32 i)
+		{
+			ParentData[i] = i;
+		});
 
 		// Iterative find with opportunistic CAS path-halving. Links always attach the
 		// larger root under the smaller one, so parents only ever move toward smaller
