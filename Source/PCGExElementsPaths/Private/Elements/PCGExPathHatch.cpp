@@ -391,7 +391,7 @@ namespace PCGExPathHatch
 			for (int32 L = 0; L < NumLines; ++L)
 			{
 				const int32 Begin = LineStart[L];
-				const int32 NumCrossings = LineStart[L + 1] - Begin;
+				int32 NumCrossings = LineStart[L + 1] - Begin;
 				if (NumCrossings < 2) { continue; }
 
 				FCrossing* CData = Crossings.GetData() + Begin;
@@ -405,6 +405,34 @@ namespace PCGExPathHatch
 				else
 				{
 					Algo::Sort(MakeArrayView(CData, NumCrossings), [](const FCrossing& A, const FCrossing& B) { return A.TAlongLine < B.TAlongLine; });
+				}
+
+				// Tangency parity: a line exactly through a perp-local-extremum vertex is claimed by BOTH
+				// adjacent edges (the half-open rule only disambiguates monotonic pass-through vertices),
+				// yielding two coincident crossings. A tangent touch spans nothing inside -- drop both, or
+				// the duplicate shifts pairing and truncates/splits every segment after it on this line.
+				{
+					int32 Kept = 0;
+					int32 CIdx = 0;
+					while (CIdx < NumCrossings)
+					{
+						if (CIdx + 1 < NumCrossings)
+						{
+							const FCrossing& A = CData[CIdx];
+							const FCrossing& B = CData[CIdx + 1];
+							const bool bSharedVtx = A.EdgeI0 == B.EdgeI0 || A.EdgeI0 == B.EdgeI1 || A.EdgeI1 == B.EdgeI0 || A.EdgeI1 == B.EdgeI1;
+							if (bSharedVtx && FMath::IsNearlyEqual(A.TAlongLine, B.TAlongLine, UE_DOUBLE_KINDA_SMALL_NUMBER))
+							{
+								CIdx += 2;
+								continue;
+							}
+						}
+						if (Kept != CIdx) { CData[Kept] = CData[CIdx]; }
+						Kept++;
+						CIdx++;
+					}
+					NumCrossings = Kept;
+					if (NumCrossings < 2) { continue; }
 				}
 
 				const int32 PairCount = NumCrossings / 2;
@@ -423,6 +451,11 @@ namespace PCGExPathHatch
 					Seg.WorldStart = FMath::Lerp(InTransforms[Entry.EdgeI0].GetLocation(), InTransforms[Entry.EdgeI1].GetLocation(), static_cast<double>(Entry.EdgeT));
 					Seg.WorldEnd = FMath::Lerp(InTransforms[Exit.EdgeI0].GetLocation(), InTransforms[Exit.EdgeI1].GetLocation(), static_cast<double>(Exit.EdgeT));
 					Seg.Length = FVector::Distance(Seg.WorldStart, Seg.WorldEnd);
+
+					// Collocated crossing pair (tangent or sliver geometry): a zero-length segment emits
+					// two coincident points that downstream path nodes can't frame. Drop unconditionally --
+					// bFilterSmallSegments is opt-in and defaults off.
+					if (Seg.Length < UE_DOUBLE_KINDA_SMALL_NUMBER) { continue; }
 
 					Seg.SourceStart = NearestOfTwo(Entry.EdgeI0, Entry.EdgeI1, Entry.EdgeT);
 					Seg.SourceEnd = NearestOfTwo(Exit.EdgeI0, Exit.EdgeI1, Exit.EdgeT);
@@ -558,6 +591,10 @@ namespace PCGExPathHatch
 		{
 			MergedIO = Context->OutputPaths->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::New);
 			if (!MergedIO) { bIsProcessorValid = false; return; }
+
+			// EIOInit::New inherits the source's @Data attributes, including ClosedLoop=true from the
+			// input loop -- the merged polyline is open, same as the per-segment outputs.
+			PCGExPaths::Helpers::SetClosedLoop(MergedIO, false);
 
 			UPCGBasePointData* OutPoints = MergedIO->GetOut();
 			const UPCGBasePointData* InPoints = PointDataFacade->GetIn();
