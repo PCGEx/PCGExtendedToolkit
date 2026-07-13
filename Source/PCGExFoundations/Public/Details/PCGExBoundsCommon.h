@@ -4,6 +4,8 @@
 #pragma once
 #include "CoreMinimal.h"
 
+#include "PCGExBoundsCommon.generated.h"
+
 UENUM()
 enum class EPCGExPointOnBoundsOutputMode : uint8
 {

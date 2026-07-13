@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 #include "PCGExCommon.h"
 
+#include "PCGExCollectionsCommon.generated.h"
+
 class UPCGParamData;
 class UPCGExAssetCollection;
 
