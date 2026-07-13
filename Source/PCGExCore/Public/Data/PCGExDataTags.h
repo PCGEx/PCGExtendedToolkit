@@ -9,6 +9,8 @@
 
 #include "Types/PCGExTypeTraits.h"
 
+#include "PCGExDataTags.generated.h"
+
 #define PCGEX_FOREACH_SUPPORTEDTAGTYPE(MACRO) \
 MACRO(Integer, int64) \
 MACRO(FloatingPoint, double) \
