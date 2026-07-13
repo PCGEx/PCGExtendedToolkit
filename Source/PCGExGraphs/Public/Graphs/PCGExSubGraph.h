@@ -48,6 +48,12 @@ namespace PCGExGraphs
 		TSet<int32> EdgesInIOIndices;
 		TSharedPtr<PCGExData::FFacade> VtxDataFacade;
 		TSharedPtr<PCGExData::FFacade> EdgesDataFacade;
+
+		/**
+		 * Output-space edges built by Compile (1:1 with Edges). Start/End are OUTPUT vtx
+		 * point indices (post-prune/reorder); IOIndex is the parent-graph edge index.
+		 * Immutable once Compile has run -- read concurrently by cluster build and callbacks.
+		 */
 		TArray<FEdge> FlattenedEdges;
 		int32 UID = 0;
 		int32 MinPointIndex = MAX_int32;

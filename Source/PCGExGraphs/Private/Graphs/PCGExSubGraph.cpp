@@ -125,8 +125,7 @@ namespace PCGExGraphs
 
 	void FSubGraph::BuildCluster(const TSharedRef<PCGExClusters::FCluster>& InCluster)
 	{
-		// Correct edge IO Index that has been overwritten during subgraph processing
-		PCGEX_PARALLEL_FOR(FlattenedEdges.Num(), FlattenedEdges[i].IOIndex = -1;)
+		// FlattenedEdges is immutable after Compile (read concurrently by post-compile callbacks).
 		InCluster->BuildFromSubgraphData(VtxDataFacade, EdgesDataFacade, FlattenedEdges, Nodes.Num());
 
 		// Look into the cost of this
@@ -243,7 +242,8 @@ namespace PCGExGraphs
 					{
 						const FEdge& OE = ParentGraphEdges[Edges[i].Index];
 
-						// Hijack edge IOIndex to store original edge index in the flattened
+						// IOIndex = parent-graph edge index: the flattened edge's stable identity
+						// (see the FlattenedEdges contract in the header)
 						FlattenedEdges[i] = FEdge(i, ParentGraphNodes[OE.Start].PointIndex, ParentGraphNodes[OE.End].PointIndex, i, OE.Index);
 
 						const int32 OriginalPointIndex = OE.PointIndex;

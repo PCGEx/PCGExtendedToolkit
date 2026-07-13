@@ -1,4 +1,4 @@
-![UE 5.8](https://img.shields.io/badge/UE-5.8-darkgreen)  ![5.7](https://img.shields.io/badge/5.7-darkgreen)  ![5.6](https://img.shields.io/badge/5.6-darkgreen) ![5.5](https://img.shields.io/badge/5.5-gray) ![5.4](https://img.shields.io/badge/5.4-gray) ![5.3](https://img.shields.io/badge/5.3-gray) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Nebukam/PCGExtendedToolkit)
+![UE 5.8](https://img.shields.io/badge/UE-5.8-darkgreen)  ![5.7](https://img.shields.io/badge/5.7-gray)  ![5.6](https://img.shields.io/badge/5.6-gray) ![5.5](https://img.shields.io/badge/5.5-gray) ![5.4](https://img.shields.io/badge/5.4-gray) ![5.3](https://img.shields.io/badge/5.3-gray) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Nebukam/PCGExtendedToolkit)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nebukam/PCGExtendedToolkit/refs/heads/docs/_sources/smol-logo.png" alt="PCGEx Logo">
@@ -23,7 +23,7 @@
 
 ## What is PCGEx?
 
-### PCGEx is a **low-level, use-case agnostic toolkit** extending Unreal Engine's PCG framework with **200+ nodes**.
+### PCGEx is a **low-level, use-case agnostic toolkit** extending Unreal Engine's PCG framework with **200+ nodes and new paradigms**.
 
 Vanilla PCG excels at scattering and rule-based placement. PCGEx adds what's missing: **structure**. Build graphs from points, find paths through them, analyze topology, and work with explicit connections, not just proximity. Delaunay, Voronoi, MST, convex hulls, A* pathfinding, and more.
 

@@ -74,7 +74,7 @@ namespace PCGExGraphs::Helpers
 
 					if ((!StartPointIndexPtr || !EndPointIndexPtr))
 					{
-						FPlatformAtomics::InterlockedExchange(&bValid, 1);
+						FPlatformAtomics::InterlockedExchange(&bValid, 0);
 						return;
 					}
 

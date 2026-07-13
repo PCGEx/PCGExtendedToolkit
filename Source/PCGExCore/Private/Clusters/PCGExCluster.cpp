@@ -258,15 +258,13 @@ namespace PCGExClusters
 		Edges->Reserve(NumRawEdges);
 		Edges->Append(InEdges);
 
-		// The shared, -1-initialized lookup (created fresh per graph compile) doubles as
-		// the point->node scratch: subgraphs partition vtx points (union-find components),
-		// so concurrent cluster builds each claim a disjoint set of indices, and the values
-		// written during creation ARE the lookup's final content. This replaces a per-cluster
-		// TSparseArray whose expansion cost scaled with the highest point index touched.
+		// Edge IOIndex is left as-is (parent-graph edge index); no cluster consumer reads it.
+
+		// Shared -1-initialized lookup doubles as point->node scratch: disjoint subgraph
+		// components let concurrent builds write it directly instead of using a TSparseArray.
 		BuildAdjacency_Unsafe(InNumNodes);
 
-		// Subgraph node counts are exact: every subgraph node is an endpoint of at
-		// least one of its edges (see FGraph::BuildSubGraphs).
+		// Exact: every subgraph node is an endpoint of one of its edges.
 		check(Nodes->Num() == InNumNodes)
 
 		Bounds = Bounds.ExpandBy(10);
