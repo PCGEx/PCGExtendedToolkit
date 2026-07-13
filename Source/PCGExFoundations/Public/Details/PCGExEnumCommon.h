@@ -4,6 +4,8 @@
 #pragma once
 #include "CoreMinimal.h"
 
+#include "PCGExEnumCommon.generated.h"
+
 UENUM()
 enum class EPCGExEnumConstantSourceType : uint8
 {

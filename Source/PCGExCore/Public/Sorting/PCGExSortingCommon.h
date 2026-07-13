@@ -6,6 +6,8 @@
 
 #include "CoreMinimal.h"
 
+#include "PCGExSortingCommon.generated.h"
+
 enum class EPCGPinStatus : uint8;
 struct FPCGPinProperties;
 
