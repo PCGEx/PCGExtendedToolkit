@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 #include "PCGExCommon.h"
 
+#include "PCGExUnionCommon.generated.h"
+
 UENUM()
 enum class EPCGExFuseMethod : uint8
 {

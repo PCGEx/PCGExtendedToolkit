@@ -7,6 +7,8 @@
 #include "PCGExCommon.h"
 #include "Types/PCGExAttributeIdentity.h"
 
+#include "PCGExPathsCommon.generated.h"
+
 UENUM()
 enum class EPCGExSplinePointTypeRedux : uint8
 {

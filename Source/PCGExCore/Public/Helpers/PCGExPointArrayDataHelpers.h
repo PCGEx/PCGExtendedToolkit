@@ -9,6 +9,8 @@
 #include "Metadata/PCGMetadataAttributeTpl.h"
 #include "Utils/PCGValueRange.h"
 
+#include "PCGExPointArrayDataHelpers.generated.h"
+
 class UPCGBasePointData;
 class UPCGManagedComponent;
 class UPCGData;

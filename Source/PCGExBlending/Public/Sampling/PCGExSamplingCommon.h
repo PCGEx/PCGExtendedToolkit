@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
+#include "PCGExSamplingCommon.generated.h"
+
 UENUM()
 enum class EPCGExRangeType : uint8
 {

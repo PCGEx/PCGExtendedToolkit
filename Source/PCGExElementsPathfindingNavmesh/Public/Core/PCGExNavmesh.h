@@ -10,6 +10,8 @@
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
 
+#include "PCGExNavmesh.generated.h"
+
 UENUM()
 enum class EPCGExPathfindingNavmeshMode : uint8
 {
