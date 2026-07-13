@@ -36,8 +36,6 @@ namespace PCGExMT
 
 class UPCGSettings;
 struct FPCGExContext;
-template <typename T>
-class FPCGMetadataAttribute;
 class UPCGExHeuristicsFactoryData;
 
 namespace PCGEx
@@ -237,13 +235,9 @@ namespace PCGExClusterMT
 		TSharedPtr<PCGExMT::FTaskManager> TaskManager;
 		TSharedPtr<PCGExData::FFacadePreloader> VtxFacadePreloader;
 
-		const FPCGMetadataAttribute<int64>* RawLookupAttribute = nullptr;
-		TArray<uint32> ReverseLookup;
-
 		TMap<uint32, int32> EndpointsLookup;
 		TArray<int32> ExpectedAdjacency;
 
-		bool bPreparationSuccessful = false;
 		bool bWantsHeuristics = false;
 		EPCGExHeuristicScoreMode HeuristicsScoreMode = EPCGExHeuristicScoreMode::WeightedAverage;
 		bool bRequiresGraphBuilder = false;
@@ -291,11 +285,6 @@ namespace PCGExClusterMT
 		const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* EdgeFilterFactories = nullptr;
 		bool DefaultVtxFilterValue = true;
 		TSharedPtr<TArray<int8>> VtxFilterCache;
-
-		bool PreparationSuccessful() const
-		{
-			return bPreparationSuccessful;
-		}
 
 		bool RequiresGraphBuilder() const
 		{

@@ -27,20 +27,19 @@ namespace PCGExClusterMT
 
 #pragma region Tasks
 
-	template <typename T>
 	class FStartClusterBatchProcessing final : public PCGExMT::FTask
 	{
 	public:
 		PCGEX_ASYNC_TASK_NAME(FStartClusterBatchProcessing)
 
-		FStartClusterBatchProcessing(TSharedPtr<T> InTarget, const bool bScoped)
+		FStartClusterBatchProcessing(TSharedPtr<IBatch> InTarget, const bool bScoped)
 			: FTask()
 			  , Target(InTarget)
 			  , bScopedIndexLookupBuild(bScoped)
 		{
 		}
 
-		TSharedPtr<T> Target;
+		TSharedPtr<IBatch> Target;
 		bool bScopedIndexLookupBuild = false;
 
 		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override
@@ -612,6 +611,8 @@ namespace PCGExClusterMT
 		PCGEX_CHECK_WORK_HANDLE_VOID
 
 		TaskManager = TaskManagerPtr;
+		PCGEX_ASYNC_CHKD_VOID(TaskManager)
+
 		VtxDataFacade->bSupportsScopedGet = bAllowVtxDataFacadeScopedGet && ExecutionContext->bScopedAttributeGet;
 
 		const int32 NumVtx = VtxDataFacade->GetNum();
@@ -623,124 +624,105 @@ namespace PCGExClusterMT
 			ProjectionDetails.Init(VtxDataFacade);
 		}
 
+		// Batch-wide projection; fused into the lookup pass when both are needed
+		const bool bProjectAllVtx = WantsProjection() && !WantsPerClusterProjection();
+		auto ProjectScope = [this](const PCGExMT::FScope& Scope)
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(IBatch::PrepareProcessing::Project);
+
+			const TConstPCGValueRange<FTransform> InVtxTransforms = VtxDataFacade->GetIn()->GetConstTransformValueRange();
+			TArray<FVector2D>& Proj = *ProjectedVtxPositions.Get();
+
+			PCGEX_SCOPE_LOOP(i)
+			{
+				Proj[i] = FVector2D(ProjectionDetails.ProjectFlat(InVtxTransforms[i].GetLocation()));
+			}
+		};
+
 		if (!bScopedIndexLookupBuild || NumVtx < PCGEX_CORE_SETTINGS.SmallClusterSize)
 		{
-			// Trivial
-			PCGExGraphs::Helpers::BuildEndpointsLookup(VtxDataFacade->Source, EndpointsLookup, ExpectedAdjacency);
-			if (RequiresGraphBuilder())
+			if (!PCGExGraphs::Helpers::BuildEndpointsLookup(VtxDataFacade->Source, EndpointsLookup, ExpectedAdjacency))
 			{
-				GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(VtxDataFacade, &GraphBuilderDetails);
-				GraphBuilder->SourceEdgeFacades = EdgesDataFacades;
+				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Some vtx data is missing its PCGEx endpoint attribute. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Sanitize Cluster' to ensure clusters are validated."));
+				return;
 			}
 
-			if (WantsProjection() && !WantsPerClusterProjection())
+			if (bProjectAllVtx)
 			{
-				// Prepare projection early, as we want all points projected from the batch				
-				PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManagerPtr, ProjectTask)
-
-				ProjectTask->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
-				{
-					TRACE_CPUPROFILER_EVENT_SCOPE(IBatch::Projection::Complete);
-					PCGEX_ASYNC_THIS
-					This->OnProcessingPreparationComplete();
-				};
-
-				ProjectTask->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
-				{
-					TRACE_CPUPROFILER_EVENT_SCOPE(IBatch::Projection::Range);
-
-					PCGEX_ASYNC_THIS
-
-					const TConstPCGValueRange<FTransform> InVtxTransforms = This->VtxDataFacade->GetIn()->GetConstTransformValueRange();
-					const FPCGExGeo2DProjectionDetails& Projection = This->ProjectionDetails;
-					TArray<FVector2D>& Proj = *This->ProjectedVtxPositions.Get();
-
-					PCGEX_SCOPE_LOOP(i)
+				PCGExMT::ParallelOrSequentialScoped(
+					NumVtx,
+					[&](const PCGExMT::FScope& Scope)
 					{
-						Proj[i] = FVector2D(Projection.ProjectFlat(InVtxTransforms[i].GetLocation()));
-					}
-				};
-
-				ProjectTask->StartSubLoops(VtxDataFacade->GetNum(), 4096);
-			}
-			else
-			{
-				OnProcessingPreparationComplete();
+						if (!WorkHandle.IsValid())
+						{
+							return;
+						}
+						ProjectScope(Scope);
+					});
 			}
 		}
 		else
 		{
-			PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManagerPtr, BuildEndpointLookupTask)
-
-			PCGExArrayHelpers::InitArray(ReverseLookup, NumVtx);
-			PCGExArrayHelpers::InitArray(ExpectedAdjacency, NumVtx);
-
 			const FPCGMetadataAttributeBase* RawLookupAttributeBase = PCGExMetaHelpers::TryGetConstAttribute<int64>(VtxDataFacade->GetIn(), PCGExClusters::Labels::Attr_PCGExVtxIdx);
 			if (!RawLookupAttributeBase)
 			{
+				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Some vtx data is missing its PCGEx endpoint attribute. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Sanitize Cluster' to ensure clusters are validated."));
 				return;
-			} // FAIL
+			}
 
-			RawLookupAttribute = static_cast<const FPCGMetadataAttribute<int64>*>(RawLookupAttributeBase);
+			const FPCGMetadataAttribute<int64>* RawLookupAttribute = static_cast<const FPCGMetadataAttribute<int64>*>(RawLookupAttributeBase);
 
-			BuildEndpointLookupTask->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
-			{
-				TRACE_CPUPROFILER_EVENT_SCOPE(IBatch::BuildLookupTable::Complete);
+			TArray<uint32> ReverseLookup;
+			PCGExArrayHelpers::InitArray(ReverseLookup, NumVtx);
+			PCGExArrayHelpers::InitArray(ExpectedAdjacency, NumVtx);
 
-				PCGEX_ASYNC_THIS
-
-				const int32 Num = This->VtxDataFacade->GetNum();
-				This->EndpointsLookup.Reserve(Num);
-				for (int i = 0; i < Num; i++)
+			PCGExMT::ParallelOrSequentialScoped(
+				NumVtx,
+				[&](const PCGExMT::FScope& Scope)
 				{
-					This->EndpointsLookup.Add(This->ReverseLookup[i], i);
-				}
-				This->ReverseLookup.Empty();
+					TRACE_CPUPROFILER_EVENT_SCOPE(IBatch::PrepareProcessing::BuildLookupTable);
 
-				if (This->RequiresGraphBuilder())
-				{
-					This->GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(This->VtxDataFacade, &This->GraphBuilderDetails);
-					This->GraphBuilder->SourceEdgeFacades = This->EdgesDataFacades;
-				}
+					if (!WorkHandle.IsValid())
+					{
+						return;
+					}
 
-				This->OnProcessingPreparationComplete();
-			};
-
-			BuildEndpointLookupTask->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
-			{
-				TRACE_CPUPROFILER_EVENT_SCOPE(IBatch::BuildLookupTable::Range);
-
-				PCGEX_ASYNC_THIS
-
-				const TConstPCGValueRange<int64> MetadataEntries = This->VtxDataFacade->GetIn()->GetConstMetadataEntryValueRange();
-
-				PCGEX_SCOPE_LOOP(i)
-				{
-					uint32 A;
-					uint32 B;
-					PCGEx::H64(This->RawLookupAttribute->GetValueFromItemKey(MetadataEntries[i]), A, B);
-
-					This->ReverseLookup[i] = A;
-					This->ExpectedAdjacency[i] = B;
-				}
-
-				if (This->WantsProjection() && !This->WantsPerClusterProjection())
-				{
-					// Extra loop for projection when desired
-
-					const TConstPCGValueRange<FTransform> InVtxTransforms = This->VtxDataFacade->GetIn()->GetConstTransformValueRange();
-					const FPCGExGeo2DProjectionDetails& Projection = This->ProjectionDetails;
-					TArray<FVector2D>& Proj = *This->ProjectedVtxPositions.Get();
+					const TConstPCGValueRange<int64> MetadataEntries = VtxDataFacade->GetIn()->GetConstMetadataEntryValueRange();
 
 					PCGEX_SCOPE_LOOP(i)
 					{
-						Proj[i] = FVector2D(Projection.ProjectFlat(InVtxTransforms[i].GetLocation()));
-					}
-				}
-			};
+						uint32 A;
+						uint32 B;
+						PCGEx::H64(RawLookupAttribute->GetValueFromItemKey(MetadataEntries[i]), A, B);
 
-			BuildEndpointLookupTask->StartSubLoops(VtxDataFacade->GetNum(), PCGEX_CORE_SETTINGS.GetPointsBatchChunkSize());
+						ReverseLookup[i] = A;
+						ExpectedAdjacency[i] = B;
+					}
+
+					if (bProjectAllVtx)
+					{
+						ProjectScope(Scope);
+					}
+				});
+
+			PCGEX_CHECK_WORK_HANDLE_VOID
+
+			EndpointsLookup.Reserve(NumVtx);
+			for (int i = 0; i < NumVtx; i++)
+			{
+				EndpointsLookup.Add(ReverseLookup[i], i);
+			}
 		}
+
+		PCGEX_CHECK_WORK_HANDLE_VOID
+
+		if (RequiresGraphBuilder())
+		{
+			GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(VtxDataFacade, &GraphBuilderDetails);
+			GraphBuilder->SourceEdgeFacades = EdgesDataFacades;
+		}
+
+		OnProcessingPreparationComplete();
 	}
 
 	bool IBatch::PrepareSingle(const TSharedPtr<IProcessor>& InProcessor)
@@ -1066,7 +1048,7 @@ namespace PCGExClusterMT
 
 	void ScheduleBatch(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, const TSharedPtr<IBatch>& Batch, const bool bScopedIndexLookupBuild)
 	{
-		PCGEX_LAUNCH(FStartClusterBatchProcessing<IBatch>, Batch, bScopedIndexLookupBuild)
+		PCGEX_LAUNCH(FStartClusterBatchProcessing, Batch, bScopedIndexLookupBuild)
 	}
 
 	void CompleteBatches(const TArrayView<TSharedPtr<IBatch>> Batches)
