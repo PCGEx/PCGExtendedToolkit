@@ -85,7 +85,6 @@ public:
 
 	// Registers MaxDistance (source-side) for preload + consumption. Overrides MUST call Super.
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
-	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 
 protected:
 	// Concrete factory's own Config slice. MUST be set at the top of Init, before Super::Init.

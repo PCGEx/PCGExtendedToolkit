@@ -31,6 +31,26 @@ TArray<FPCGPinProperties> UPCGExExtrudePathSettings::InputPinProperties() const
 	return PinProperties;
 }
 
+#if WITH_EDITOR
+void UPCGExExtrudePathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		ManhattanDetails.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExExtrudePathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		ManhattanDetails.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 PCGEX_INITIALIZE_ELEMENT(ExtrudePath)
 
 PCGExData::EIOInit UPCGExExtrudePathSettings::GetMainDataInitializationPolicy() const

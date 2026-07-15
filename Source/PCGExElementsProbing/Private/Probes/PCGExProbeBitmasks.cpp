@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExProbeBitmasks.h"
+#include "PCGExVersion.h"
 
 
 #include "PCGExH.h"
@@ -15,6 +16,28 @@ PCGEX_CREATE_PROBE_FACTORY(
 	{ NewFactory->BitmaskData = PCGExBitmask::FBitmaskData::Make(Config.Collections, Config.Compositions, Config.Angle); },
 	{ NewOperation->BitmaskData = BitmaskData; }
 	)
+
+#if WITH_EDITOR
+void UPCGExProbeBitmasksProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeBitmasksProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 namespace PCGExProbeBitmasks
 {

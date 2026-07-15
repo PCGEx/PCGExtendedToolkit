@@ -3,7 +3,7 @@
 
 #include "Filters/Edges/PCGExEdgeNeighborsCountFilter.h"
 
-
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Graphs/PCGExGraph.h"
@@ -12,20 +12,18 @@
 #define LOCTEXT_NAMESPACE "PCGExEdgeNeighborsCountFilter"
 #define PCGEX_NAMESPACE EdgeNeighborsCountFilter
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExEdgeNeighborsCountFilterConfig, Threshold, int32, ThresholdInput, ThresholdAttribute, ThresholdConstant)
-
-bool UPCGExEdgeNeighborsCountFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
+#if WITH_EDITOR
+void FPCGExEdgeNeighborsCountFilterConfig::ApplyDeprecation()
 {
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.ThresholdInput == EPCGExInputValueType::Attribute, Config.ThresholdAttribute, Consumable)
-
-	return true;
+	Threshold.Update(ThresholdInput_DEPRECATED, ThresholdAttribute_DEPRECATED, ThresholdConstant_DEPRECATED);
 }
+
+void FPCGExEdgeNeighborsCountFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ThresholdConstant")), FName(TEXT("Threshold")), FName(TEXT("Constant")), FName(TEXT("Threshold")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ThresholdAttribute")), FName(TEXT("Threshold")), FName(TEXT("Attribute")), FName(TEXT("Threshold (Attr)")));
+}
+#endif
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExEdgeNeighborsCountFilterFactory::CreateFilter() const
 {
@@ -41,7 +39,8 @@ namespace PCGExEdgeNeighborsCount
 			return false;
 		}
 
-		ThresholdBuffer = TypedFilterFactory->Config.GetValueSettingThreshold(PCGEX_QUIET_HANDLING);
+		ThresholdBuffer = TypedFilterFactory->Config.Threshold.GetValueSetting(PCGEX_QUIET_HANDLING);
+		ThresholdBuffer->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!ThresholdBuffer->Init(PointDataFacade))
 		{
 			return false;
@@ -88,6 +87,26 @@ namespace PCGExEdgeNeighborsCount
 PCGEX_CREATE_FILTER_FACTORY(EdgeNeighborsCount)
 
 #if WITH_EDITOR
+void UPCGExEdgeNeighborsCountFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExEdgeNeighborsCountFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExEdgeNeighborsCountFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = "Num Vtx (";
@@ -106,13 +125,13 @@ FString UPCGExEdgeNeighborsCountFilterProviderSettings::GetDisplayName() const
 	}
 
 	DisplayName += ")" + PCGExCompare::ToString(Config.Comparison);
-	if (Config.ThresholdInput == EPCGExInputValueType::Constant)
+	if (Config.Threshold.Input == EPCGExInputValueType::Constant)
 	{
-		DisplayName += FString::Printf(TEXT("%d"), Config.ThresholdConstant);
+		DisplayName += FString::Printf(TEXT("%d"), Config.Threshold.Constant);
 	}
 	else
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.ThresholdAttribute);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.Threshold.Attribute);
 	}
 
 	return DisplayName;

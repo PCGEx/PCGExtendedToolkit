@@ -9,7 +9,18 @@
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExTensorHandlerDetails, Size, double, SizeInput, SizeAttribute, SizeConstant)
+#if WITH_EDITOR
+void FPCGExTensorHandlerDetails::ApplyDeprecation()
+{
+	Size.Update(SizeInput_DEPRECATED, SizeAttribute_DEPRECATED, SizeConstant_DEPRECATED);
+}
+
+void FPCGExTensorHandlerDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("SizeAttribute")), FName(TEXT("Size")), FName(TEXT("Attribute")), FName(TEXT(" └─ Size (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("SizeConstant")), FName(TEXT("Size")), FName(TEXT("Constant")), FName(TEXT(" └─ Size")));
+}
+#endif
 
 namespace PCGExTensor
 {
@@ -30,7 +41,7 @@ namespace PCGExTensor
 
 		if (Config.bNormalize)
 		{
-			Size = Config.GetValueSettingSize();
+			Size = Config.Size.GetValueSetting();
 			if (!Size->Init(InDataFacade))
 			{
 				return false;

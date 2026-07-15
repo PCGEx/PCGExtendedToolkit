@@ -43,19 +43,6 @@ void UPCGExNoiseFilterFactory::RegisterBuffersDependencies(FPCGExContext* InCont
 	Config.Comparison.RegisterBuffersDependencies(InContext, FacadePreloader);
 }
 
-bool UPCGExNoiseFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.Comparison.Input == EPCGExInputValueType::Attribute, Config.Comparison.Attribute, Consumable)
-
-	return true;
-}
-
 bool PCGExPointFilter::FNoiseFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 {
 	if (!IFilter::Init(InContext, InPointDataFacade))
@@ -66,6 +53,7 @@ bool PCGExPointFilter::FNoiseFilter::Init(FPCGExContext* InContext, const TShare
 	NoiseGenerator = TypedFilterFactory->NoiseGenerator;
 
 	OperandB = TypedFilterFactory->Config.Comparison.GetValueSetting(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(PointDataFacade))
 	{
 		return false;

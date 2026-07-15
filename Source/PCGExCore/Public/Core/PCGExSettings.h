@@ -66,7 +66,9 @@ public:
 
 	/** This node will not make any copy of the data and instead modify the inputs directly.
 	 * When enabling this you must make absolutely sure the data plugged into this node is not plugged in any other node.
-	 * Only supported by nodes set-up in a way that makes in-place mutations possible. */
+	 * Only supported by nodes set-up in a way that makes in-place mutations possible.
+	 * Note that 'Cleanup Consumable Attributes' and 'Flatten Output' then also apply to the stolen inputs (including forwarded pass-through pins),
+	 * and because upstream caches keep referencing the mutated data, re-running only this node against cached inputs is not idempotent. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	EPCGExOptionState StealData = EPCGExOptionState::Disabled;
 
@@ -88,19 +90,19 @@ public:
 	bool WantsResourcesCached() const;
 
 	/** Flatten the output of this node. Merges hierarchical data into a single flat collection. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Cleanup", meta=(PCG_NotOverridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Performance|Cleanup", meta=(PCG_NotOverridable))
 	bool bFlattenOutput = false;
 
 	/** If the node registers consumable attributes, these will be deleted from the output data. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Cleanup", meta=(PCG_NotOverridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Performance|Cleanup", meta=(PCG_NotOverridable))
 	bool bCleanupConsumableAttributes = false;
 
 	/** If the node registers consumable attributes, this a list of comma separated names that won't be deleted if they were registered. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Cleanup", meta=(PCG_Overridable, DisplayName="Protected Attributes", EditCondition="bCleanupConsumableAttributes"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Performance|Cleanup", meta=(PCG_Overridable, DisplayName="Protected Attributes", EditCondition="bCleanupConsumableAttributes"))
 	FString CommaSeparatedProtectedAttributesName;
 
 	/** Attribute names to exclude from cleanup. Works alongside the comma-separated string list above. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Cleanup", meta=(PCG_NotOverridable, DisplayName="Protected Attributes", EditCondition="bCleanupConsumableAttributes"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Performance|Cleanup", meta=(PCG_NotOverridable, DisplayName="Protected Attributes", EditCondition="bCleanupConsumableAttributes"))
 	TArray<FName> ProtectedAttributes;
 
 	/** Whether the execution of the graph should be cancelled if this node execution is cancelled internally */

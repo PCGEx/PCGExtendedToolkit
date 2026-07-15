@@ -9,6 +9,19 @@
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
 
+#if WITH_EDITOR
+void FPCGExProbeConfigBase::ApplyDeprecation()
+{
+	SearchRadius.Update(SearchRadiusInput_DEPRECATED, SearchRadiusAttribute_DEPRECATED, SearchRadiusConstant_DEPRECATED);
+}
+
+void FPCGExProbeConfigBase::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("SearchRadiusAttribute")), FName(TEXT("SearchRadius")), FName(TEXT("Attribute")), FName(TEXT("Search Radius (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("SearchRadiusConstant")), FName(TEXT("SearchRadius")), FName(TEXT("Constant")), FName(TEXT("Search Radius")));
+}
+#endif
+
 bool FPCGExProbeOperation::IsDirectProbe() const
 {
 	return false;
@@ -19,13 +32,11 @@ bool FPCGExProbeOperation::RequiresChainProcessing() const
 	return false;
 }
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExProbeConfigBase, SearchRadius, double, SearchRadiusInput, SearchRadiusAttribute, SearchRadiusConstant)
-
 bool FPCGExProbeOperation::Prepare(FPCGExContext* InContext)
 {
 	PointIO = PrimaryDataFacade->Source;
 
-	SearchRadius = BaseConfig->GetValueSettingSearchRadius();
+	SearchRadius = BaseConfig->SearchRadius.GetValueSetting();
 	if (!SearchRadius->Init(PrimaryDataFacade))
 	{
 		return false;

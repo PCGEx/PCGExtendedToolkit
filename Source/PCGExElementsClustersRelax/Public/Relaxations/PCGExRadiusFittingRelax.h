@@ -7,6 +7,7 @@
 #include "PCGExBoxFittingRelax.h"
 #include "Core/PCGExRelaxClusterOperation.h"
 #include "Data/Utils/PCGExDataPreloader.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
@@ -24,24 +25,29 @@ public:
 	UPCGExRadiusFittingRelax(const FObjectInitializer& ObjectInitializer)
 		: Super(ObjectInitializer)
 	{
-		RadiusAttribute.Update(TEXT("$Extents.Length"));
+		RadiusAttribute_DEPRECATED.Update(TEXT("$Extents.Length"));
 	}
 
 	virtual void RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 
-	/** Type of Velocity */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType RadiusInput = EPCGExInputValueType::Attribute;
+	/** Radius. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Radius"))
+	FPCGExInputShorthandSelectorDouble RadiusValue = FPCGExInputShorthandSelectorDouble(FString(TEXT("$Extents.Length")), 100, true);
 
-	/** Attribute to read weight value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Radius (Attr)", EditCondition="RadiusInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector RadiusAttribute;
+#pragma region DEPRECATED
 
-	/** Constant velocity value. Think of it as gravity vector. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Radius", EditCondition="RadiusInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double Radius = 100;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType RadiusInput_DEPRECATED = EPCGExInputValueType::Attribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector RadiusAttribute_DEPRECATED;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Radius_DEPRECATED = 100;
 
-	PCGEX_SETTING_VALUE_INLINE(Radius, double, RadiusInput, RadiusAttribute, Radius)
+#pragma endregion
+
+#if WITH_EDITOR
+	virtual void ApplyShorthandDeprecation() override;
+#endif
 
 	virtual bool PrepareForCluster(FPCGExContext* InContext, const TSharedPtr<PCGExClusters::FCluster>& InCluster) override;
 	virtual void Step2(const PCGExClusters::FNode& Node) override;

@@ -7,11 +7,15 @@
 #include "Clusters/PCGExClusterCommon.h"
 #include "Core/PCGExFillControlOperation.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
 
 #include "PCGExFillControlAttributeThreshold.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 USTRUCT(BlueprintType)
 struct FPCGExFillControlConfigAttributeThreshold : public FPCGExFillControlConfigBase
@@ -28,23 +32,31 @@ struct FPCGExFillControlConfigAttributeThreshold : public FPCGExFillControlConfi
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExClusterElement AttributeSource = EPCGExClusterElement::Vtx;
 
-	/** Threshold input type. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
+	/** Threshold. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Threshold"))
+	FPCGExInputShorthandNameDouble ThresholdValue = FPCGExInputShorthandNameDouble(FName("Threshold"), 0.5, false);
 
-	/** Threshold attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Threshold (Attr)", EditCondition = "ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName ThresholdAttribute = FName("Threshold");
+#pragma region DEPRECATED
 
-	/** Threshold constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Threshold", EditCondition = "ThresholdInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double Threshold = 0.5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ThresholdInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Threshold, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName ThresholdAttribute_DEPRECATED = FName("Threshold");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Threshold_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Comparison operator. Candidate is valid if: AttributeValue [Comparison] Threshold */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExComparison Comparison = EPCGExComparison::StrictlySmaller;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -92,6 +104,8 @@ class UPCGExFillControlsAttributeThresholdProviderSettings : public UPCGExFillCo
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsAttributeThreshold, "Fill Control : Attribute Threshold", "Stop diffusion when vertex/edge attribute crosses a threshold.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

@@ -62,6 +62,8 @@ class UPCGExProbeSpannerProviderSettings : public UPCGExProbeFactoryProviderSett
 
 public:
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(ProbeSpanner, "G-Probe : Greedy Spanner", "Greedy t-spanner - sparse graph with path length guarantees")
 #endif
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;

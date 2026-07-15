@@ -7,10 +7,14 @@
 #include "Clusters/PCGExClusterCommon.h"
 #include "Core/PCGExFillControlOperation.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "UObject/Object.h"
 
 #include "PCGExFillControlAttributeAccumulation.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 UENUM(BlueprintType)
 enum class EPCGExAccumulationMode : uint8
@@ -40,23 +44,31 @@ struct FPCGExFillControlConfigAttributeAccumulation : public FPCGExFillControlCo
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExAccumulationMode Mode = EPCGExAccumulationMode::Sum;
 
-	/** Maximum accumulated value input type. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExInputValueType MaxAccumulationInput = EPCGExInputValueType::Constant;
+	/** Maximum accumulated value. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Max Accumulation"))
+	FPCGExInputShorthandNameDouble MaxAccumulationValue = FPCGExInputShorthandNameDouble(FName("MaxAccumulation"), 100.0, false);
 
-	/** Max accumulation attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Max Accumulation (Attr)", EditCondition = "MaxAccumulationInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName MaxAccumulationAttribute = FName("MaxAccumulation");
+#pragma region DEPRECATED
 
-	/** Max accumulation constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Max Accumulation", EditCondition = "MaxAccumulationInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double MaxAccumulation = 100.0;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaxAccumulationInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(MaxAccumulation, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName MaxAccumulationAttribute_DEPRECATED = FName("MaxAccumulation");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double MaxAccumulation_DEPRECATED = 100.0;
+
+#pragma endregion
 
 	/** Store accumulated value in FCandidate::AccumulatedValue for use by other controls. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay, meta = (PCG_NotOverridable))
 	bool bWriteToAccumulatedValue = true;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -114,6 +126,8 @@ class UPCGExFillControlsAttributeAccumulationProviderSettings : public UPCGExFil
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsAttributeAccumulation, "Fill Control : Attribute Accumulation", "Track accumulated attribute value along path, stop when threshold exceeded.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

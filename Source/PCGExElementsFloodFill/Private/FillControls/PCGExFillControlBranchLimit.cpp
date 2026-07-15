@@ -23,6 +23,7 @@ bool FPCGExFillControlBranchLimit::PrepareForDiffusions(FPCGExContext* InContext
 	const UPCGExFillControlsFactoryBranchLimit* TypedFactory = Cast<UPCGExFillControlsFactoryBranchLimit>(Factory);
 
 	MaxBranchesValue = TypedFactory->Config.MaxBranches.GetValueSetting();
+	MaxBranchesValue->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!MaxBranchesValue->Init(GetSourceFacade()))
 	{
 		return false;

@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExPathfindingPlotEdges.h"
 
+#include "PCGExVersion.h"
 #include "PCGExHeuristicsHandler.h"
 #include "PCGParamData.h"
 #include "Algo/Reverse.h"
@@ -42,6 +43,24 @@ void UPCGExPathfindingPlotEdgesSettings::PostInitProperties()
 void UPCGExPathfindingPlotEdgesSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+
+void UPCGExPathfindingPlotEdgesSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExPathfindingPlotEdgesSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
 

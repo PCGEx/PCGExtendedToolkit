@@ -4,18 +4,41 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/ArrayView.h"
 #include "PCGExSettingsMacros.h"
 #include "Data/PCGExDataCommon.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "PCGExInputShorthandsDetails.generated.h"
 
 struct FPCGExContext;
+class UPCGSettings;
+class UPCGNode;
 
 namespace PCGExData
 {
 	class FPointIO;
 	class FFacadePreloader;
 }
+
+#if WITH_EDITOR
+namespace PCGExDeprecation
+{
+	/**
+	 * Rewires the serialized override pin of a removed property onto the current override param whose
+	 * PropertiesNames end with [InMemberName, InLeafName]. New labels are resolved from the settings'
+	 * freshly gathered OverridableParams — the exact source UpdatePins builds pins from — so this stays
+	 * correct across bare/member-path/Config-path label variants (see .claude/Shorthand_Migration_Plan.md).
+	 * The old pin is matched by exact label, else by unique segment-qualified ".../InOldName", else by
+	 * legacy display-name labels (explicit InOldDisplayName, then the engine-default prettified name) —
+	 * very old assets carry pins labeled by GetDisplayNameText from before PCG switched to authored names.
+	 * Call from PCGExApplyDeprecationBeforeUpdatePins; safely no-ops when either side is absent.
+	 */
+	PCGEXCORE_API void RenameShorthandOverridePin(const UPCGSettings* InSettings, UPCGNode* InOutNode, FName InOldName, FName InMemberName, FName InLeafName, FName InOldDisplayName = NAME_None);
+
+	/** Suffix-explicit variant for ambiguous embeddings (same member/leaf tail reachable through two paths). */
+	PCGEXCORE_API void RenameShorthandOverridePin(const UPCGSettings* InSettings, UPCGNode* InOutNode, FName InOldName, TArrayView<const FName> InNewPathSuffix, FName InOldDisplayName = NAME_None);
+}
+#endif
 
 /**
  * Base struct for input shorthands that can read from constant or attribute.
@@ -32,6 +55,10 @@ struct PCGEXCORE_API FPCGExInputShorthandBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExInputValueType Input = EPCGExInputValueType::Constant;
 
+	/** Allow this attribute to be registered as consumable, i.e. deleted from the consuming node's outputs when its 'Cleanup Consumable Attributes' toggle is enabled. Disable to always preserve the attribute. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, EditCondition="Input == EPCGExInputValueType::Attribute"))
+	bool bCleanupAttribute = true;
+
 	void RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 	{
 	}
@@ -46,13 +73,15 @@ void Update(EPCGExInputValueType InInputType, FName InSelector, _TYPE InConstant
 bool CanSupportDataOnly() const;
 
 // Renames old separate override pins to new shorthand struct pins during deprecation.
-// Uses C++ property names (as returned by GetAuthoredName) for label matching.
+// Target labels are resolved from the live OverridableParams (never hardcoded — nested/Config
+// wrapping and clash disambiguation make static labels unreliable). Expects to expand inside
+// PCGExApplyDeprecationBeforeUpdatePins (uses `this` and `InOutNode`).
 // _OLD_ATTR:     C++ name of the old attribute property  (e.g. RangeMinAttribute)
 // _OLD_CONST:    C++ name of the old constant property    (e.g. RangeMin)
 // _NEW_MEMBER:   C++ name of the new shorthand struct member (e.g. MinRange)
 #define PCGEX_SHORTHAND_RENAME_PIN(_OLD_ATTR, _OLD_CONST, _NEW_MEMBER)\
-InOutNode->RenameInputPin(FName(TEXT(#_OLD_ATTR)), FName(TEXT(#_NEW_MEMBER "/Attribute")));\
-InOutNode->RenameInputPin(FName(TEXT(#_OLD_CONST)), FName(TEXT(#_NEW_MEMBER "/Constant")));
+PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT(#_OLD_ATTR)), FName(TEXT(#_NEW_MEMBER)), FName(TEXT("Attribute")));\
+PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT(#_OLD_CONST)), FName(TEXT(#_NEW_MEMBER)), FName(TEXT("Constant")));
 
 #pragma region Name
 
@@ -63,6 +92,7 @@ FPCGExInputShorthandName##_NAME(const FName DefaultName, const _TYPE DefaultValu
 bool TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet = false) const;\
 bool TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet = false) const;\
 PCGEX_SETTING_VALUE_DECL(, _TYPE)\
+PCGEX_SETTING_DATA_VALUE_DECL(, _TYPE)\
 void RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const;\
 PCGEX_SHORTHAND_UPDATE_DECL(_NAME, _TYPE)
 
@@ -134,6 +164,18 @@ struct PCGEXCORE_API FPCGExInputShorthandNameDouble01 : public FPCGExInputShorth
 	double Constant = 0;
 };
 
+/** Signed unit-range shorthand (-1..1). */
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandNameDouble11 : public FPCGExInputShorthandNameBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_NAME_CTR(Double11, double)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=-1, UIMin=-1, ClampMax=1, UIMax=1))
+	double Constant = 0;
+};
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameInteger32 : public FPCGExInputShorthandNameBase
 {
@@ -166,6 +208,17 @@ struct PCGEXCORE_API FPCGExInputShorthandNameInteger3201 : public FPCGExInputSho
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0, ClampMax=1, UIMax=1))
 	int32 Constant = 0;
+};
+
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandNameInteger64 : public FPCGExInputShorthandNameBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_NAME_CTR(Integer64, int64)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	int64 Constant = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -277,11 +330,13 @@ struct PCGEXCORE_API FPCGExInputShorthandNameSoftObjectPath : public FPCGExInput
 FPCGExInputShorthandSelector##_NAME() = default;\
 explicit FPCGExInputShorthandSelector##_NAME(const FString& DefaultSelection, PCGEX_ATTRIBUTE_TOGGLE_DECL) { Attribute.Update(DefaultSelection); PCGEX_ATTRIBUTE_TOGGLE } \
 explicit FPCGExInputShorthandSelector##_NAME(const FName& DefaultSelection, PCGEX_ATTRIBUTE_TOGGLE_DECL) { Attribute.SetAttributeName(DefaultSelection); PCGEX_ATTRIBUTE_TOGGLE } \
+explicit FPCGExInputShorthandSelector##_NAME(const FPCGAttributePropertyInputSelector& DefaultSelector, const _TYPE DefaultValue, PCGEX_ATTRIBUTE_TOGGLE_DECL) { Attribute = DefaultSelector; Constant = DefaultValue; PCGEX_ATTRIBUTE_TOGGLE } \
 FPCGExInputShorthandSelector##_NAME(const FString& DefaultSelection, const _TYPE DefaultValue, PCGEX_ATTRIBUTE_TOGGLE_DECL){ Attribute.Update(DefaultSelection);	Constant = DefaultValue; PCGEX_ATTRIBUTE_TOGGLE } \
 FPCGExInputShorthandSelector##_NAME(const FName& DefaultSelection, const _TYPE DefaultValue, PCGEX_ATTRIBUTE_TOGGLE_DECL){ Attribute.Update(DefaultSelection.ToString()); Constant = DefaultValue; PCGEX_ATTRIBUTE_TOGGLE  } \
 bool TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet = false) const;\
 bool TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet = false) const;\
 PCGEX_SETTING_VALUE_DECL(, _TYPE)\
+PCGEX_SETTING_DATA_VALUE_DECL(, _TYPE)\
 void RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const;\
 PCGEX_SHORTHAND_UPDATE_DECL(_NAME, _TYPE)
 
@@ -354,6 +409,18 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble01 : public FPCGExInputSh
 	double Constant = 0;
 };
 
+/** Signed unit-range shorthand (-1..1). */
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble11 : public FPCGExInputShorthandSelectorBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_SELECTOR_CTR(Double11, double)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=-1, UIMin=-1, ClampMax=1, UIMax=1))
+	double Constant = 0;
+};
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger32 : public FPCGExInputShorthandSelectorBase
 {
@@ -385,6 +452,17 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger3201 : public FPCGExInpu
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0, ClampMax=1, UIMax=1))
 	int32 Constant = 0;
+};
+
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger64 : public FPCGExInputShorthandSelectorBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_SELECTOR_CTR(Integer64, int64)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	int64 Constant = 0;
 };
 
 USTRUCT(BlueprintType)

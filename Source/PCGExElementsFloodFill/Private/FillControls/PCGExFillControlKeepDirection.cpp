@@ -5,6 +5,7 @@
 #include "FillControls/PCGExFillControlKeepDirection.h"
 
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -12,7 +13,18 @@
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigKeepDirection, WindowSize, int32, WindowSizeInput, WindowSizeAttribute, WindowSize)
+#if WITH_EDITOR
+void FPCGExFillControlConfigKeepDirection::ApplyDeprecation()
+{
+	WindowSizeValue.Update(WindowSizeInput_DEPRECATED, WindowSizeAttribute_DEPRECATED, WindowSize_DEPRECATED);
+}
+
+void FPCGExFillControlConfigKeepDirection::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WindowSize")), FName(TEXT("WindowSizeValue")), FName(TEXT("Constant")), FName(TEXT("Window Size")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WindowSizeAttribute")), FName(TEXT("WindowSizeValue")), FName(TEXT("Attribute")), FName(TEXT("Window Size (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlKeepDirection::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -23,7 +35,8 @@ bool FPCGExFillControlKeepDirection::PrepareForDiffusions(FPCGExContext* InConte
 
 	const UPCGExFillControlsFactoryKeepDirection* TypedFactory = Cast<UPCGExFillControlsFactoryKeepDirection>(Factory);
 
-	WindowSize = TypedFactory->Config.GetValueSettingWindowSize();
+	WindowSize = TypedFactory->Config.WindowSizeValue.GetValueSetting();
+	WindowSize->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!WindowSize->Init(GetSourceFacade()))
 	{
 		return false;
@@ -89,7 +102,7 @@ void UPCGExFillControlsFactoryKeepDirection::RegisterBuffersDependencies(FPCGExC
 
 	if (Config.Source == EPCGExFloodFillSettingSource::Vtx)
 	{
-		FacadePreloader.Register<double>(InContext, Config.WindowSizeAttribute);
+		FacadePreloader.Register<int32>(InContext, Config.WindowSizeValue.Attribute);
 	}
 }
 
@@ -101,17 +114,37 @@ UPCGExFactoryData* UPCGExFillControlsKeepDirectionProviderSettings::CreateFactor
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsKeepDirectionProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsKeepDirectionProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsKeepDirectionProviderSettings::GetDisplayName() const
 {
 	FString DName = GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control"), TEXT("FC")) + TEXT(" @ ");
 
-	if (Config.WindowSizeInput == EPCGExInputValueType::Attribute)
+	if (Config.WindowSizeValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DName += PCGExMetaHelpers::GetSelectorDisplayName(Config.WindowSizeAttribute);
+		DName += PCGExMetaHelpers::GetSelectorDisplayName(Config.WindowSizeValue.Attribute);
 	}
 	else
 	{
-		DName += FString::Printf(TEXT("%d"), Config.WindowSize);
+		DName += FString::Printf(TEXT("%d"), Config.WindowSizeValue.Constant);
 	}
 
 	return DName;

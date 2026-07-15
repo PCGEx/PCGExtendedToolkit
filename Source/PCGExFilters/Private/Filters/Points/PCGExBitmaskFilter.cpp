@@ -3,7 +3,7 @@
 
 #include "Filters/Points/PCGExBitmaskFilter.h"
 
-
+#include "PCGExVersion.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
@@ -14,11 +14,22 @@
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExBitmaskFilterConfig, Bitmask, int64, MaskInput, BitmaskAttribute, Bitmask)
+#if WITH_EDITOR
+void FPCGExBitmaskFilterConfig::ApplyDeprecation()
+{
+	BitmaskValue.Update(MaskInput_DEPRECATED, BitmaskAttribute_DEPRECATED, Bitmask_DEPRECATED);
+}
+
+void FPCGExBitmaskFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Bitmask")), FName(TEXT("BitmaskValue")), FName(TEXT("Constant")), FName(TEXT("Bitmask")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("BitmaskAttribute")), FName(TEXT("BitmaskValue")), FName(TEXT("Attribute")), FName(TEXT("Bitmask (Attr)")));
+}
+#endif
 
 bool UPCGExBitmaskFilterFactory::DomainCheck()
 {
-	return (Config.MaskInput == EPCGExInputValueType::Constant || PCGExMetaHelpers::IsDataDomainAttribute(Config.BitmaskAttribute)) && PCGExMetaHelpers::IsDataDomainAttribute(Config.FlagsAttribute);
+	return Config.BitmaskValue.CanSupportDataOnly() && PCGExMetaHelpers::IsDataDomainAttribute(Config.FlagsAttribute);
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExBitmaskFilterFactory::CreateFilter() const
@@ -30,9 +41,9 @@ void UPCGExBitmaskFilterFactory::RegisterBuffersDependencies(FPCGExContext* InCo
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 	FacadePreloader.Register<int64>(InContext, Config.FlagsAttribute);
-	if (Config.MaskInput == EPCGExInputValueType::Attribute)
+	if (Config.BitmaskValue.Input == EPCGExInputValueType::Attribute)
 	{
-		FacadePreloader.Register<int64>(InContext, Config.BitmaskAttribute);
+		FacadePreloader.Register<int64>(InContext, Config.BitmaskValue.Attribute);
 	}
 }
 
@@ -44,7 +55,6 @@ bool UPCGExBitmaskFilterFactory::RegisterConsumableAttributes(FPCGExContext* InC
 	}
 
 	InContext->AddConsumableAttributeName(Config.FlagsAttribute);
-	InContext->AddConsumableAttributeName(Config.BitmaskAttribute);
 
 	return true;
 }
@@ -73,7 +83,8 @@ bool PCGExPointFilter::FBitmaskFilter::Init(FPCGExContext* InContext, const TSha
 		return false;
 	}
 
-	MaskReader = TypedFilterFactory->Config.GetValueSettingBitmask(PCGEX_QUIET_HANDLING);
+	MaskReader = TypedFilterFactory->Config.BitmaskValue.GetValueSetting(PCGEX_QUIET_HANDLING);
+	MaskReader->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!MaskReader->Init(PointDataFacade))
 	{
 		return false;
@@ -104,7 +115,7 @@ bool PCGExPointFilter::FBitmaskFilter::Test(const TSharedPtr<PCGExData::FPointIO
 		PCGEX_QUIET_HANDLING_RET
 	}
 
-	if (!PCGExData::Helpers::TryGetSettingDataValue(IO, TypedFilterFactory->Config.MaskInput, TypedFilterFactory->Config.BitmaskAttribute, TypedFilterFactory->Config.Bitmask, OutMask, PCGEX_QUIET_HANDLING))
+	if (!TypedFilterFactory->Config.BitmaskValue.TryReadDataValue(IO, OutMask, PCGEX_QUIET_HANDLING))
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
@@ -121,9 +132,29 @@ bool PCGExPointFilter::FBitmaskFilter::Test(const TSharedPtr<PCGExData::FPointIO
 PCGEX_CREATE_FILTER_FACTORY(Bitmask)
 
 #if WITH_EDITOR
+void UPCGExBitmaskFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBitmaskFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExBitmaskFilterProviderSettings::GetDisplayName() const
 {
-	FString A = Config.MaskInput == EPCGExInputValueType::Attribute ? Config.BitmaskAttribute.ToString() : TEXT("(Const)");
+	FString A = Config.BitmaskValue.Input == EPCGExInputValueType::Attribute ? Config.BitmaskValue.Attribute.ToString() : TEXT("(Const)");
 	FString B = Config.FlagsAttribute.ToString();
 	FString DisplayName;
 

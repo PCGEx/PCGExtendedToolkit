@@ -85,4 +85,17 @@ void FPCGExRandomRatioDetails::ApplyDeprecation()
 	DiscreteAmount.Constant = FixedAmount_DEPRECATED;
 	DiscreteAmount.Attribute = LocalAmount_DEPRECATED;
 }
+
+void FPCGExRandomRatioDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("LocalSeed")), FName(TEXT("BaseSeed")), FName(TEXT("Attribute")), FName(TEXT("Seed (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("SeedValue")), FName(TEXT("BaseSeed")), FName(TEXT("Constant")), FName(TEXT("Seed")));
+
+	// The old single Amount attribute input split into Relative/Discrete; route its pin by the loaded Units value.
+	const FName AmountMember = Units == EPCGExMeanMeasure::Relative ? FName(TEXT("RelativeAmount")) : FName(TEXT("DiscreteAmount"));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("LocalAmount")), AmountMember, FName(TEXT("Attribute")), FName(TEXT("Amount (Attr)")));
+
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Amount")), FName(TEXT("RelativeAmount")), FName(TEXT("Constant")), FName(TEXT("Amount")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("FixedAmount")), FName(TEXT("DiscreteAmount")), FName(TEXT("Constant")), FName(TEXT("Fixed Amount")));
+}
 #endif

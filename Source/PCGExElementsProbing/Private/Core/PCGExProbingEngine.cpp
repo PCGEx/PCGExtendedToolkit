@@ -94,7 +94,7 @@ namespace PCGExProbing
 			{
 				bUseVariableRadius = true;
 			}
-			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadiusConstant);
+			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadius.Constant);
 
 			if (NewOperation->RequiresChainProcessing())
 			{

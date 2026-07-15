@@ -11,6 +11,7 @@
 #include "Curves/CurveVector.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Details/PCGExSettingsMacros.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Math/PCGExMathAxis.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Utils/PCGExCurveLookup.h"
@@ -18,6 +19,8 @@
 #include "PCGExTensor.generated.h"
 
 struct FPCGExContext;
+class UPCGSettings;
+class UPCGNode;
 class UPCGExTensorPointFactoryData;
 class UPCGExTensorFactoryData;
 
@@ -143,19 +146,22 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 
 	// Potency Falloff
 
-	/** Per-point internal Weight input type */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta = (PCG_NotOverridable, EditCondition="bSupportAttributes", EditConditionHides, DisplayPriority=-1, HideEditConditionToggle))
-	EPCGExInputValueType PotencyInput = EPCGExInputValueType::Attribute;
-
 	/** Per-point Potency. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta=(PCG_Overridable, DisplayName="Potency (Attr)", EditCondition = "bSupportAttributes && PotencyInput != EPCGExInputValueType::Constant", EditConditionHides, DisplayPriority=-1, HideEditConditionToggle))
-	FPCGAttributePropertyInputSelector PotencyAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta=(PCG_Overridable, DisplayName="Potency", DisplayPriority=-1))
+	FPCGExInputShorthandSelectorDouble PotencyValue = FPCGExInputShorthandSelectorDouble(FName("$Density"), 1.0, true);
 
-	/** Constant Potency. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta=(PCG_Overridable, DisplayName="Potency", EditCondition = "PotencyInput == EPCGExInputValueType::Constant", EditConditionHides, DisplayPriority=-1))
-	double Potency = 1;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(Potency, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType PotencyInput_DEPRECATED = EPCGExInputValueType::Attribute;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector PotencyAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Potency_DEPRECATED = 1;
+
+#pragma endregion
 
 	/** Whether to use in-editor curve or an external asset. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta=(PCG_NotOverridable, DisplayPriority=-1))
@@ -181,19 +187,22 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 
 	// Weight Falloff
 
-	/** Per-point internal Weight input type */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta = (PCG_NotOverridable, EditCondition="bSupportAttributes", EditConditionHides, DisplayPriority=-1, HideEditConditionToggle))
-	EPCGExInputValueType WeightInput = EPCGExInputValueType::Constant;
+	/** Per-point internal Weight. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, DisplayName="Weight", DisplayPriority=-1))
+	FPCGExInputShorthandSelectorDoubleAbs WeightValue = FPCGExInputShorthandSelectorDoubleAbs(FName("Steepness"), 1.0, false);
 
-	/** Per-point internal Weight Attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, DisplayName="Weight (Attr)", EditCondition="bSupportAttributes && WeightInput != EPCGExInputValueType::Constant", EditConditionHides, DisplayPriority=-1, HideEditConditionToggle))
-	FPCGAttributePropertyInputSelector WeightAttribute;
+#pragma region DEPRECATED
 
-	/** Per-point internal Weight Constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, DisplayName="Weight", EditCondition="WeightInput == EPCGExInputValueType::Constant", EditConditionHides, DisplayPriority=-1, ClampMin=0))
-	double Weight = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType WeightInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Weight, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector WeightAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Weight_DEPRECATED = 1;
+
+#pragma endregion
 
 	/** Whether to use in-editor curve or an external asset. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable, DisplayPriority=-1))
@@ -222,6 +231,11 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 	FPCGExTensorSamplingMutationsDetails Mutations;
 
 	virtual void Init(FPCGExContext* InContext);
+
+#if WITH_EDITOR
+	virtual void ApplyDeprecation();
+	virtual void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 namespace PCGExTensor

@@ -6,10 +6,14 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExFilterFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Utils/PCGExCompare.h"
 
 #include "PCGExEdgeNeighborsCountFilter.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 UENUM()
 enum class EPCGExRefineEdgeThresholdMode : uint8
@@ -26,17 +30,22 @@ struct FPCGExEdgeNeighborsCountFilterConfig
 
 	FPCGExEdgeNeighborsCountFilterConfig() = default;
 
-	/** Whether to read the threshold from an attribute on the edge or a constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to fetch threshold from */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold (Attr)", EditCondition="ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ThresholdAttribute;
-
 	/** The number of connection endpoints must have to be considered a Bridge. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", ClampMin=1, EditCondition="ThresholdInput == EPCGExInputValueType::Constant", EditConditionHides))
-	int32 ThresholdConstant = 2;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	FPCGExInputShorthandSelectorInteger32Abs Threshold = FPCGExInputShorthandSelectorInteger32Abs(FString(TEXT("")), 2, false);
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ThresholdInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ThresholdAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 ThresholdConstant_DEPRECATED = 2;
+
+#pragma endregion
 
 	/** How should we check if the threshold is reached. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -54,7 +63,10 @@ struct FPCGExEdgeNeighborsCountFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvert = false;
 
-	PCGEX_SETTING_VALUE_DECL(Threshold, int32)
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -69,7 +81,6 @@ public:
 	UPROPERTY()
 	FPCGExEdgeNeighborsCountFilterConfig Config;
 
-	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
@@ -106,6 +117,8 @@ class UPCGExEdgeNeighborsCountFilterProviderSettings : public UPCGExEdgeFilterPr
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EdgeNeighborsCountFilterFactory, "Edge Filter : Num Vtx", "Check against the edge' endpoints neighbor count.", PCGEX_FACTORY_NAME_PRIORITY)
 
 	virtual FLinearColor GetNodeTitleColor() const override

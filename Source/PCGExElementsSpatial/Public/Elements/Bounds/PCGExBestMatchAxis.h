@@ -8,6 +8,7 @@
 
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExDistancesDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExMatchingDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
@@ -38,6 +39,9 @@ class UPCGExBestMatchAxisSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(BestMatchAxis, "Best Match Axis", "Rotate a point or transform to closely match an input direction (or look at location) but preserve orthogonality.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
@@ -59,19 +63,22 @@ public:
 	EPCGExBestMatchAxisTargetMode Mode = EPCGExBestMatchAxisTargetMode::Direction;
 
 
-	/** Up vector source.*/
+	/** The value to use as Up vector for the look at transform.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode != EPCGExBestMatchAxisTargetMode::ClosestTarget", EditConditionHides))
-	EPCGExInputValueType MatchInput = EPCGExInputValueType::Attribute;
+	FPCGExInputShorthandSelectorVector Match = FPCGExInputShorthandSelectorVector(FName("@Last"), FVector::UpVector, true);
 
-	/** The attribute or property on selected source to use as Up vector for the look at transform.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Match (Attr)", EditCondition="Mode != EPCGExBestMatchAxisTargetMode::ClosestTarget && MatchInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector MatchSource;
+#pragma region DEPRECATED
 
-	/** The constant to use as Up vector for the look at transform.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Match", EditCondition="Mode != EPCGExBestMatchAxisTargetMode::ClosestTarget && MatchInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector MatchConstant = FVector::UpVector;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MatchInput_DEPRECATED = EPCGExInputValueType::Attribute;
 
-	PCGEX_SETTING_VALUE_DECL(Match, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector MatchSource_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector MatchConstant_DEPRECATED = FVector::UpVector;
+
+#pragma endregion
 
 	// TODO : Support attribute mutation such as transform, rotator, vector
 	// TODO : Auto-pick axis based on unsigned dot product (so we only mutate where it make the most meaingful)

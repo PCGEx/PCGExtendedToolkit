@@ -3,6 +3,7 @@
 
 #include "Core/PCGExBlendOpFactoryProvider.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExProxyData.h"
 
@@ -14,7 +15,23 @@ void UPCGExBlendOpFactoryProviderSettings::PCGExApplyDeprecationBeforeUpdatePins
 {
 	InOutNode->RenameInputPin(FName("Constant A"), PCGExBlending::Labels::SourceConstantA);
 	InOutNode->RenameInputPin(FName("Constant B"), PCGExBlending::Labels::SourceConstantB);
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.Weighting.RenamePins(this, InOutNode);
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBlendOpFactoryProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.Weighting.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 
 void UPCGExBlendOpFactoryProviderSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)

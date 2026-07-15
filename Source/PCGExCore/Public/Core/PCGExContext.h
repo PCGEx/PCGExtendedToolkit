@@ -10,6 +10,7 @@
 #include "PCGContext.h"
 #include "PCGExCommon.h"
 #include "PCGExMT.h"
+#include "Metadata/PCGMetadataCommon.h"
 
 #include "Data/PCGExDataCommon.h"
 
@@ -274,13 +275,32 @@ protected:
 	TSet<FName> ConsumableAttributesSet;
 	TSet<FName> ProtectedAttributesSet;
 
+	// Domain-precise protection: identifiers registered with a CONCRETE (normalized) domain shield
+	// only that domain, unlike ProtectedAttributesSet names which shield the name in every domain.
+	TArray<FPCGAttributeIdentifier> ProtectedAttributeIdentifiers;
+
 	mutable FRWLock ConsumableAttributesLock;
 	mutable FRWLock ProtectedAttributesLock;
+
+	// Output data this node owns (duplicated, created, or stolen under the StealData contract) and
+	// may therefore mutate at flush time (consumable deletion, flattening). Populated by StageOutput
+	// for Mutable-staged data; elements that write OutputData.TaggedData directly must either route
+	// their outputs through StageOutput or register them via AddMutableOutput themselves.
+	TSet<const UPCGData*> MutableOutputs;
+	mutable FRWLock MutableOutputsLock;
+
+	// Flush-time pass over MutableOutputs, called once from OnComplete when all consumable/protected
+	// registrations are final: deletes consumable attributes FIRST (names may be domain-qualified,
+	// "@Data.Foo", resolved per-data), then flattens -- so flatten never materializes attributes that
+	// are scheduled for deletion.
+	void FinalizeMutableOutputs();
 
 public:
 	bool bCleanupConsumableAttributes = false;
 	void AddConsumableAttributeName(FName InName);
 	void AddProtectedAttributeName(FName InName);
+	void AddProtectedAttribute(const FPCGAttributeIdentifier& InIdentifier);
+	void AddMutableOutput(const UPCGData* InData);
 
 	TSharedPtr<FPCGExUniqueNameGenerator> UniqueNameGenerator;
 

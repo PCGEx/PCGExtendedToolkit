@@ -3,7 +3,7 @@
 
 #include "Elements/PCGExMovePivot.h"
 
-
+#include "PCGExVersion.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 
@@ -12,6 +12,26 @@
 #define PCGEX_NAMESPACE MovePivot
 
 PCGEX_INITIALIZE_ELEMENT(MovePivot)
+
+#if WITH_EDITOR
+void UPCGExMovePivotSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		UVW.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExMovePivotSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		UVW.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGExData::EIOInit UPCGExMovePivotSettings::GetMainDataInitializationPolicy() const
 {
