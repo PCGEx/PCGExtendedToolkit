@@ -42,6 +42,9 @@ public:
 
 	virtual bool IsCacheable(const UPCGSettings* InSettings) const override;
 
+	/** Full content CRC when stealing, so downstream detects the in-place mutation (identity is unchanged). */
+	virtual bool ShouldComputeFullOutputDataCrc(FPCGContext* Context) const override;
+
 protected:
 	virtual FPCGContext* CreateContext() override;
 

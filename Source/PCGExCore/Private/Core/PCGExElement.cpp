@@ -188,6 +188,13 @@ bool IPCGExElement::IsCacheable(const UPCGSettings* InSettings) const
 	return !Settings->WantsDataStealing() && Settings->ShouldCache();
 }
 
+bool IPCGExElement::ShouldComputeFullOutputDataCrc(FPCGContext* Context) const
+{
+	// Stealing forwards inputs by identity after in-place mutation; only a content CRC changes,
+	// letting downstream re-run on genuine change yet stay cached otherwise. Cf. engine PCGEditPoints.
+	return static_cast<FPCGExContext*>(Context)->bWantsDataStealing;
+}
+
 FPCGContext* IPCGExElement::CreateContext()
 {
 	return new FPCGExContext();

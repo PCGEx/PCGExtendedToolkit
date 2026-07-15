@@ -86,6 +86,9 @@ void FPCGExContext::StageOutput(UPCGData* InData, const FName& InPin, const PCGE
 	// never mutate forwarded inputs.
 	if (EnumHasAnyFlags(Staging, PCGExData::EStaging::Mutable))
 	{
+		// Stealing keeps this data's identity across in-place mutation, so its cached CRC is stale; clear
+		// it so the full-CRC pass in PostExecute recomputes it instead of returning the cached value.
+		if (bWantsDataStealing) { InData->Crc = FPCGCrc(); }
 		AddMutableOutput(InData);
 	}
 }
