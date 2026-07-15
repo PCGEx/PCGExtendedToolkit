@@ -3,13 +3,13 @@
 
 #include "Filters/Points/PCGExStringCompareNearestFilter.h"
 
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 #include "PCGExMatching/Public/Helpers/PCGExTargetsHandler.h"
-
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -83,19 +83,6 @@ void UPCGExStringCompareNearestFilterFactory::RegisterBuffersDependencies(FPCGEx
 	Config.OperandBValue.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
-bool UPCGExStringCompareNearestFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.OperandBValue.Input == EPCGExInputValueType::Attribute, Config.OperandBValue.Attribute, Consumable)
-
-	return true;
-}
-
 bool PCGExPointFilter::FStringCompareNearestFilter::InitNearest(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 {
 	if (bUseNameComparison)
@@ -105,6 +92,7 @@ bool PCGExPointFilter::FStringCompareNearestFilter::InitNearest(FPCGExContext* I
 			TypedFilterFactory->Config.OperandBValue.Input,
 			TypedFilterFactory->Config.OperandBValue.Attribute,
 			FName(TypedFilterFactory->Config.OperandBValue.Constant));
+		OperandBName->bRegisterConsumable = TypedFilterFactory->Config.OperandBValue.bCleanupAttribute && TypedFilterFactory->bCleanupConsumableAttributes; // direct MakeSettingValue bypasses the shorthand getter: apply both the per-operand and factory gates
 		OperandBName->bQuiet = PCGEX_QUIET_HANDLING;
 		if (!OperandBName->Init(PointDataFacade, false))
 		{
@@ -114,6 +102,7 @@ bool PCGExPointFilter::FStringCompareNearestFilter::InitNearest(FPCGExContext* I
 	else
 	{
 		OperandBString = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
+		OperandBString->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!OperandBString->Init(PointDataFacade, false))
 		{
 			return false;
@@ -168,6 +157,24 @@ TArray<FPCGPinProperties> UPCGExStringCompareNearestFilterProviderSettings::Inpu
 PCGEX_CREATE_FILTER_FACTORY(StringCompareNearest)
 
 #if WITH_EDITOR
+void UPCGExStringCompareNearestFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExStringCompareNearestFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExStringCompareNearestFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandA) + PCGExCompare::ToString(Config.Comparison);

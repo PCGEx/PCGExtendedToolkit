@@ -3,13 +3,25 @@
 
 #include "FillControls/PCGExFillControlAttributeAccumulation.h"
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigAttributeAccumulation, MaxAccumulation, double, MaxAccumulationInput, MaxAccumulationAttribute, MaxAccumulation)
+#if WITH_EDITOR
+void FPCGExFillControlConfigAttributeAccumulation::ApplyDeprecation()
+{
+	MaxAccumulationValue.Update(MaxAccumulationInput_DEPRECATED, MaxAccumulationAttribute_DEPRECATED, MaxAccumulation_DEPRECATED);
+}
+
+void FPCGExFillControlConfigAttributeAccumulation::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxAccumulation")), FName(TEXT("MaxAccumulationValue")), FName(TEXT("Constant")), FName(TEXT("Max Accumulation")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxAccumulationAttribute")), FName(TEXT("MaxAccumulationValue")), FName(TEXT("Attribute")), FName(TEXT("Max Accumulation (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -25,7 +37,8 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 	bWriteToAccumulatedValue = TypedFactory->Config.bWriteToAccumulatedValue;
 
 	// Initialize max accumulation setting value
-	MaxAccumulation = TypedFactory->Config.GetValueSettingMaxAccumulation();
+	MaxAccumulation = TypedFactory->Config.MaxAccumulationValue.GetValueSetting();
+	MaxAccumulation->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!MaxAccumulation->Init(GetSourceFacade()))
 	{
 		return false;
@@ -137,6 +150,26 @@ UPCGExFactoryData* UPCGExFillControlsAttributeAccumulationProviderSettings::Crea
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsAttributeAccumulationProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsAttributeAccumulationProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsAttributeAccumulationProviderSettings::GetDisplayName() const
 {
 	return GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control"), TEXT("FC"));

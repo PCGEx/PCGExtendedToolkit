@@ -3,13 +3,11 @@
 
 #include "Filters/Points/PCGExModuloCompareFilter.h"
 
-
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
-
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -50,8 +48,6 @@ bool UPCGExModuloCompareFilterFactory::RegisterConsumableAttributesWithData(FPCG
 
 	FName Consumable = NAME_None;
 	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.OperandBSource == EPCGExInputValueType::Attribute, Config.OperandB, Consumable)
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.OperandC, Consumable)
 
 	return true;
 }
@@ -72,12 +68,14 @@ bool PCGExPointFilter::FModuloComparisonFilter::Init(FPCGExContext* InContext, c
 	}
 
 	OperandB = TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(PointDataFacade))
 	{
 		return false;
 	}
 
 	OperandC = TypedFilterFactory->Config.GetValueSettingOperandC(PCGEX_QUIET_HANDLING);
+	OperandC->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandC->Init(PointDataFacade))
 	{
 		return false;

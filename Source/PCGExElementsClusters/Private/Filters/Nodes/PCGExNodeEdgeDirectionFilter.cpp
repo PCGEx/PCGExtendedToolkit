@@ -3,7 +3,6 @@
 
 #include "Filters/Nodes/PCGExNodeEdgeDirectionFilter.h"
 
-
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
@@ -28,9 +27,6 @@ bool UPCGExNodeEdgeDirectionFilterFactory::RegisterConsumableAttributesWithData(
 		return false;
 	}
 
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.Direction, Consumable)
-
 	if (Config.ComparisonQuality == EPCGExDirectionCheckMode::Dot)
 	{
 		Config.DotComparisonDetails.RegisterConsumableAttributesWithData(InContext, InData);
@@ -53,6 +49,7 @@ bool FNodeEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<P
 	bFromNode = TypedFilterFactory->Config.DirectionOrder == EPCGExAdjacencyDirectionOrigin::FromNode;
 
 	OperandDirection = TypedFilterFactory->Config.GetValueSettingDirection(PCGEX_QUIET_HANDLING);
+	OperandDirection->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandDirection->Init(PointDataFacade, false))
 	{
 		return false;
@@ -266,7 +263,6 @@ FNodeEdgeDirectionFilter::~FNodeEdgeDirectionFilter()
 {
 	TypedFilterFactory = nullptr;
 }
-
 
 PCGEX_CREATE_FILTER_FACTORY(NodeEdgeDirection)
 

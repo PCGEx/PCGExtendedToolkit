@@ -10,10 +10,14 @@
 
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "Core/PCGExPointFilter.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Utils/PCGExCurveLookup.h"
 
 #include "PCGExRandomFilter.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 USTRUCT(BlueprintType)
 struct FPCGExRandomFilterConfig
@@ -30,23 +34,26 @@ struct FPCGExRandomFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	int32 RandomSeed = 42;
 
-	/** Type of Threshold value source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
-
 	/** Pass threshold -- Value is expected to fit within a 0-1 range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold (Attr)", EditCondition="ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ThresholdAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	FPCGExInputShorthandSelectorDouble01 ThresholdValue = FPCGExInputShorthandSelectorDouble01(FString(TEXT("")), 0.5, false);
 
 	/** Whether to normalize the threshold internally or not. Enable this if your per-point threshold does not fit within a 0-1 range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Remap to 0..1", EditCondition="ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Remap to 0..1", EditCondition="ThresholdValue.Input != EPCGExInputValueType::Constant", EditConditionHides))
 	bool bRemapThresholdInternally = false;
 
-	/** Pass threshold */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", EditCondition="ThresholdInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0, ClampMax=1))
-	double Threshold = 0.5;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(Threshold, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ThresholdInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ThresholdAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Threshold_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Use per-point weight values from an attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
@@ -83,6 +90,11 @@ struct FPCGExRandomFilterConfig
 	/** Invert the filter result. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvertResult = false;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -104,7 +116,6 @@ public:
 
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 	virtual void RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const override;
-	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
@@ -162,6 +173,8 @@ class UPCGExRandomFilterProviderSettings : public UPCGExFilterProviderSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(RandomCompareFilterFactory, "Filter : Random", "Filter using a random value.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

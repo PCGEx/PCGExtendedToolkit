@@ -22,7 +22,7 @@ PCGExTensor::FTensorSample FPCGExTensorConstant::Sample(const int32 InSeedIndex,
 {
 	PCGExTensor::FEffectorSamples Samples = PCGExTensor::FEffectorSamples();
 
-	Samples.Emplace_GetRef(Config.Direction, Config.Potency, Config.Weight);
+	Samples.Emplace_GetRef(Config.Direction, Config.PotencyValue.Constant, Config.WeightValue.Constant);
 
 	return Config.Mutations.Mutate(InProbe, Samples.Flatten(Config.TensorWeight));
 }
@@ -32,23 +32,23 @@ PCGEX_TENSOR_BOILERPLATE(
 	{
 	NewFactory->Config.Mutations = Mutations;
 	NewFactory->Config.Direction = Direction;
-	NewFactory->Config.Potency = Potency;
-	NewFactory->Config.PotencyInput = EPCGExInputValueType::Constant;
-	NewFactory->Config.Weight = 1;
+	NewFactory->Config.PotencyValue.Constant = Potency;
+	NewFactory->Config.PotencyValue.Input = EPCGExInputValueType::Constant;
+	NewFactory->Config.WeightValue.Constant = 1;
 	NewFactory->Config.TensorWeight = TensorWeight;
-	NewFactory->Config.WeightInput = EPCGExInputValueType::Constant;
+	NewFactory->Config.WeightValue.Input = EPCGExInputValueType::Constant;
 	},
 	{})
 
 PCGExFactories::EPreparationResult UPCGExTensorConstantFactory::InitInternalData(FPCGExContext* InContext)
 {
-	if (Config.PotencyInput == EPCGExInputValueType::Attribute)
+	if (Config.PotencyValue.Input == EPCGExInputValueType::Attribute)
 	{
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Attribute-driven Potency is not supported on Constant Tensor."));
 		return PCGExFactories::EPreparationResult::Fail;
 	}
 
-	if (Config.WeightInput == EPCGExInputValueType::Attribute)
+	if (Config.WeightValue.Input == EPCGExInputValueType::Attribute)
 	{
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Attribute-driven Weight is not supported on Constant Tensor."));
 		return PCGExFactories::EPreparationResult::Fail;

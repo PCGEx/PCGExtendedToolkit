@@ -6,11 +6,9 @@
 
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExInfluenceDetails, Influence, double, InfluenceInput, LocalInfluence, Influence)
-
 bool FPCGExInfluenceDetails::Init(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 {
-	InfluenceBuffer = GetValueSettingInfluence();
+	InfluenceBuffer = InfluenceValue.GetValueSetting();
 	return InfluenceBuffer->Init(InPointDataFacade, false);
 }
 
@@ -18,3 +16,16 @@ double FPCGExInfluenceDetails::GetInfluence(const int32 PointIndex) const
 {
 	return InfluenceBuffer->Read(PointIndex);
 }
+
+#if WITH_EDITOR
+void FPCGExInfluenceDetails::ApplyDeprecation()
+{
+	InfluenceValue.Update(InfluenceInput_DEPRECATED, LocalInfluence_DEPRECATED, Influence_DEPRECATED);
+}
+
+void FPCGExInfluenceDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("LocalInfluence")), FName(TEXT("InfluenceValue")), FName(TEXT("Attribute")), FName(TEXT("Influence (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Influence")), FName(TEXT("InfluenceValue")), FName(TEXT("Constant")), FName(TEXT("Influence")));
+}
+#endif

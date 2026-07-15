@@ -70,6 +70,8 @@ class UPCGExProbeRNGProviderSettings : public UPCGExProbeFactoryProviderSettings
 
 public:
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeRNG, "Probe : RNG", "β-skeleton probe. β=2 → Relative Neighborhood Graph (lune test). β=1 → Gabriel Graph (diametric circle test).", FName(GetDisplayName()))
 #endif
 

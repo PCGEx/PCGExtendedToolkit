@@ -3,7 +3,6 @@
 
 #include "Filters/Nodes/PCGExNodeAdjacencyFilter.h"
 
-
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/Utils/PCGExDataPreloader.h"
@@ -29,20 +28,6 @@ void UPCGExNodeAdjacencyFilterFactory::RegisterBuffersDependencies(FPCGExContext
 	}
 }
 
-bool UPCGExNodeAdjacencyFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.OperandA, Consumable)
-	PCGEX_CONSUMABLE_SELECTOR(Config.OperandB, Consumable)
-
-	return true;
-}
-
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExNodeAdjacencyFilterFactory::CreateFilter() const
 {
 	return MakeShared<FNodeAdjacencyFilter>(this);
@@ -58,6 +43,7 @@ bool FNodeAdjacencyFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 	bCaptureFromNodes = TypedFilterFactory->Config.OperandBSource != EPCGExClusterElement::Edge;
 
 	OperandA = TypedFilterFactory->Config.GetValueSettingOperandA(PCGEX_QUIET_HANDLING);
+	OperandA->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandA->Init(PointDataFacade, false))
 	{
 		return false;
@@ -69,6 +55,7 @@ bool FNodeAdjacencyFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 	}
 
 	OperandB = TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(bCaptureFromNodes ? PointDataFacade : EdgeDataFacade, false))
 	{
 		return false;
@@ -298,7 +285,6 @@ FNodeAdjacencyFilter::~FNodeAdjacencyFilter()
 {
 	TypedFilterFactory = nullptr;
 }
-
 
 PCGEX_CREATE_FILTER_FACTORY(NodeAdjacency)
 

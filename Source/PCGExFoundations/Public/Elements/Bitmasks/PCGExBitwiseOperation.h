@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Data/Bitmasks/PCGExBitmaskDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
 #include "PCGExBitwiseOperation.generated.h"
@@ -18,6 +19,9 @@ class UPCGExBitwiseOperationSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(BitwiseOperation, "Bitmask Operation", "Do a Bitmask operation on an attribute.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -46,19 +50,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExBitOp Operation;
 
-	/** Where the mask value comes from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType MaskInput = EPCGExInputValueType::Constant;
+	/** Constant bitmask value to apply. Must be int64 when read from an attribute. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Bitmask"))
+	FPCGExInputShorthandSelectorInteger64 Mask = FPCGExInputShorthandSelectorInteger64(FName("@Last"), 0, false);
 
-	/** Attribute to read the mask from. Must be int64. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Bitmask (Attr)", EditCondition="MaskInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName MaskAttribute;
+#pragma region DEPRECATED
 
-	/** Constant bitmask value to apply. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Bitmask", EditCondition="MaskInput == EPCGExInputValueType::Constant", EditConditionHides))
-	int64 Bitmask;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaskInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Mask, int64)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName MaskAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int64 Bitmask_DEPRECATED = 0;
+
+#pragma endregion
 };
 
 struct FPCGExBitwiseOperationContext final : FPCGExPointsProcessorContext

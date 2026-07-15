@@ -4,14 +4,29 @@
 #include "Probes/PCGExProbeNumericCompare.h"
 
 
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExProbingCandidates.h"
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExProbeConfigNumericCompare, MaxConnections, int32, MaxConnectionsInput, MaxConnectionsAttribute, MaxConnectionsConstant)
 PCGEX_CREATE_PROBE_FACTORY(NumericCompare, {}, {})
+
+#if WITH_EDITOR
+void FPCGExProbeConfigNumericCompare::ApplyDeprecation()
+{
+	FPCGExProbeConfigBase::ApplyDeprecation();
+	MaxConnections.Update(MaxConnectionsInput_DEPRECATED, MaxConnectionsAttribute_DEPRECATED, MaxConnectionsConstant_DEPRECATED);
+}
+
+void FPCGExProbeConfigNumericCompare::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	FPCGExProbeConfigBase::RenamePins(InSettings, InOutNode);
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxConnectionsAttribute")), FName(TEXT("MaxConnections")), FName(TEXT("Attribute")), FName(TEXT("Max Connections (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxConnectionsConstant")), FName(TEXT("MaxConnections")), FName(TEXT("Constant")), FName(TEXT("Max Connections")));
+}
+#endif
 
 bool FPCGExProbeNumericCompare::Prepare(FPCGExContext* InContext)
 {
@@ -20,7 +35,7 @@ bool FPCGExProbeNumericCompare::Prepare(FPCGExContext* InContext)
 		return false;
 	}
 
-	MaxConnections = Config.GetValueSettingMaxConnections();
+	MaxConnections = Config.MaxConnections.GetValueSetting();
 	if (!MaxConnections->Init(PrimaryDataFacade))
 	{
 		return false;
@@ -93,6 +108,26 @@ void FPCGExProbeNumericCompare::ProcessCandidates(const int32 Index, TArray<PCGE
 }
 
 #if WITH_EDITOR
+void UPCGExProbeNumericCompareProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeNumericCompareProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExProbeNumericCompareProviderSettings::GetDisplayName() const
 {
 	return TEXT("");

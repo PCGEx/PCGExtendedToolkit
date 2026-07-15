@@ -7,10 +7,13 @@
 #include "CoreMinimal.h"
 #include "PCGExMatchingCommon.h"
 #include "Data/PCGExDataCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "PCGExMatchingDetails.generated.h"
 
 struct FPCGPinProperties;
+class UPCGSettings;
+class UPCGNode;
 
 
 /**
@@ -63,17 +66,22 @@ struct PCGEXMATCHING_API FPCGExMatchingDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, EditCondition="Mode != EPCGExMapMatchMode::Disabled && Usage != EPCGExMatchingDetailsUsage::Sampling && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
 	bool bLimitMatches = false;
 
-	/** Type of Match limit */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bLimitMatches && Mode != EPCGExMapMatchMode::Disabled && Usage != EPCGExMatchingDetailsUsage::Sampling && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
-	EPCGExInputValueType LimitInput = EPCGExInputValueType::Constant;
+	/** Maximum number of matches allowed. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Limit", EditCondition="bLimitMatches && Mode != EPCGExMapMatchMode::Disabled && Usage != EPCGExMatchingDetailsUsage::Sampling && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
+	FPCGExInputShorthandSelectorInteger32 LimitValue = FPCGExInputShorthandSelectorInteger32(FName("@Last"), 1, false);
 
-	/** Attribute to read Limit value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Limit (Attr)", EditCondition="bLimitMatches && LimitInput != EPCGExInputValueType::Constant && Mode != EPCGExMapMatchMode::Disabled && Usage != EPCGExMatchingDetailsUsage::Sampling && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
-	FPCGAttributePropertyInputSelector LimitAttribute;
+#pragma region DEPRECATED
 
-	/** Constant Limit value. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Limit", EditCondition="bLimitMatches && LimitInput == EPCGExInputValueType::Constant && Mode != EPCGExMapMatchMode::Disabled && Usage != EPCGExMatchingDetailsUsage::Sampling && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
-	int32 Limit = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType LimitInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LimitAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 Limit_DEPRECATED = 1;
+
+#pragma endregion
 
 	bool IsEnabled() const
 	{
@@ -84,4 +92,10 @@ struct PCGEXMATCHING_API FPCGExMatchingDetails
 	{
 		return Mode != EPCGExMapMatchMode::Disabled && bSplitUnmatched;
 	}
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** Rewires the pre-shorthand override pins; call from the embedder's PCGExApplyDeprecationBeforeUpdatePins under the same version gate as ApplyDeprecation. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };

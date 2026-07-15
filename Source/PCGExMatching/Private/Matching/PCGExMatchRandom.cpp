@@ -3,6 +3,7 @@
 
 #include "Matching/PCGExMatchRandom.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExRandomHelpers.h"
@@ -14,8 +15,21 @@
 FPCGExMatchRandomConfig::FPCGExMatchRandomConfig()
 	: FPCGExMatchRuleConfigBase()
 {
-	ThresholdAttribute.Update("@Data.Threshold");
+	ThresholdAttribute_DEPRECATED.Update("@Data.Threshold");
 }
+
+#if WITH_EDITOR
+void FPCGExMatchRandomConfig::ApplyDeprecation()
+{
+	ThresholdValue.Update(ThresholdInput_DEPRECATED, ThresholdAttribute_DEPRECATED, Threshold_DEPRECATED);
+}
+
+void FPCGExMatchRandomConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Threshold")), FName(TEXT("ThresholdValue")), FName(TEXT("Constant")), FName(TEXT("Threshold")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ThresholdAttribute")), FName(TEXT("ThresholdValue")), FName(TEXT("Attribute")), FName(TEXT("Threshold (Attr)")));
+}
+#endif
 
 bool FPCGExMatchRandom::PrepareForMatchableSources(FPCGExContext* InContext, const TSharedPtr<TArray<FPCGExTaggedData>>& InMatchableSources)
 {
@@ -26,16 +40,16 @@ bool FPCGExMatchRandom::PrepareForMatchableSources(FPCGExContext* InContext, con
 
 	TArray<FPCGExTaggedData>& MatchableSourcesRef = *InMatchableSources.Get();
 
-	if (Config.ThresholdInput == EPCGExInputValueType::Attribute)
+	if (Config.ThresholdValue.Input == EPCGExInputValueType::Attribute)
 	{
 		ThresholdGetters.Reserve(MatchableSourcesRef.Num());
 		for (const FPCGExTaggedData& TaggedData : MatchableSourcesRef)
 		{
 			TSharedPtr<PCGExData::TAttributeBroadcaster<double>> Getter = MakeShared<PCGExData::TAttributeBroadcaster<double>>();
 
-			if (!Getter->PrepareForSingleFetch(Config.ThresholdAttribute, TaggedData))
+			if (!Getter->PrepareForSingleFetch(Config.ThresholdValue.Attribute, TaggedData))
 			{
-				PCGEX_LOG_INVALID_SELECTOR_C(InContext, Index Attribute, Config.ThresholdAttribute)
+				PCGEX_LOG_INVALID_SELECTOR_C(InContext, Index Attribute, Config.ThresholdValue.Attribute)
 				return false;
 			}
 
@@ -48,7 +62,7 @@ bool FPCGExMatchRandom::PrepareForMatchableSources(FPCGExContext* InContext, con
 
 bool FPCGExMatchRandom::Test(const PCGExData::FConstPoint& InTargetElement, const FPCGExTaggedData& InCandidate, const PCGExMatching::FScope& InMatchingScope) const
 {
-	const double LocalThreshold = ThresholdGetters.IsEmpty() ? Config.Threshold : ThresholdGetters[InTargetElement.IO]->FetchSingle(InTargetElement, Config.Threshold);
+	const double LocalThreshold = ThresholdGetters.IsEmpty() ? Config.ThresholdValue.Constant : ThresholdGetters[InTargetElement.IO]->FetchSingle(InTargetElement, Config.ThresholdValue.Constant);
 	const float RandomValue = FRandomStream(PCGExRandomHelpers::GetRandomStreamFromPoint(Config.RandomSeed + InTargetElement.IO, InCandidate.Index)).GetFraction();
 	const bool bResult = Config.bInvertThreshold ? RandomValue <= LocalThreshold : RandomValue >= LocalThreshold;
 	return Config.bInvert ? !bResult : bResult;
@@ -56,12 +70,32 @@ bool FPCGExMatchRandom::Test(const PCGExData::FConstPoint& InTargetElement, cons
 
 bool UPCGExMatchRandomFactory::WantsPoints() const
 {
-	return !PCGExMetaHelpers::IsDataDomainAttribute(Config.ThresholdAttribute);
+	return !PCGExMetaHelpers::IsDataDomainAttribute(Config.ThresholdValue.Attribute);
 }
 
 PCGEX_MATCH_RULE_BOILERPLATE(Random)
 
 #if WITH_EDITOR
+void UPCGExCreateMatchRandomSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateMatchRandomSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExCreateMatchRandomSettings::GetDisplayName() const
 {
 	return TEXT("Random");

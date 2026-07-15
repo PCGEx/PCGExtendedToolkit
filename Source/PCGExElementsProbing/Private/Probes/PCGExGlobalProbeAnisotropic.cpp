@@ -2,9 +2,32 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExGlobalProbeAnisotropic.h"
+#include "PCGExVersion.h"
 #include "Data/PCGExPointIO.h"
 
 PCGEX_CREATE_PROBE_FACTORY(GlobalAnisotropic, {}, {})
+
+#if WITH_EDITOR
+void UPCGExProbeGlobalAnisotropicProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeGlobalAnisotropicProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExProbeGlobalAnisotropic::IsGlobalProbe() const
 {

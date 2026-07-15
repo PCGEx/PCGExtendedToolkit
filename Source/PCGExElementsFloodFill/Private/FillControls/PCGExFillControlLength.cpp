@@ -5,12 +5,24 @@
 #include "FillControls/PCGExFillControlLength.h"
 
 
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigLength, MaxLength, double, MaxLengthInput, MaxLengthAttribute, MaxLength)
+#if WITH_EDITOR
+void FPCGExFillControlConfigLength::ApplyDeprecation()
+{
+	MaxLengthValue.Update(MaxLengthInput_DEPRECATED, MaxLengthAttribute_DEPRECATED, MaxLength_DEPRECATED);
+}
+
+void FPCGExFillControlConfigLength::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxLength")), FName(TEXT("MaxLengthValue")), FName(TEXT("Constant")), FName(TEXT("Max Length")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxLengthAttribute")), FName(TEXT("MaxLengthValue")), FName(TEXT("Attribute")), FName(TEXT("Max Length (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlLength::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -22,7 +34,8 @@ bool FPCGExFillControlLength::PrepareForDiffusions(FPCGExContext* InContext, con
 	const UPCGExFillControlsFactoryLength* TypedFactory = Cast<UPCGExFillControlsFactoryLength>(Factory);
 	bUsePathLength = TypedFactory->Config.bUsePathLength;
 
-	DistanceLimit = TypedFactory->Config.GetValueSettingMaxLength();
+	DistanceLimit = TypedFactory->Config.MaxLengthValue.GetValueSetting();
+	DistanceLimit->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!DistanceLimit->Init(GetSourceFacade()))
 	{
 		return false;
@@ -59,7 +72,7 @@ void UPCGExFillControlsFactoryLength::RegisterBuffersDependencies(FPCGExContext*
 
 	if (Config.Source == EPCGExFloodFillSettingSource::Vtx)
 	{
-		FacadePreloader.Register<double>(InContext, Config.MaxLengthAttribute);
+		FacadePreloader.Register<double>(InContext, Config.MaxLengthValue.Attribute);
 	}
 }
 
@@ -71,17 +84,37 @@ UPCGExFactoryData* UPCGExFillControlsLengthProviderSettings::CreateFactory(FPCGE
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsLengthProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsLengthProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsLengthProviderSettings::GetDisplayName() const
 {
 	FString DName = GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control"), TEXT("FC")) + TEXT(" @ ");
 
-	if (Config.MaxLengthInput == EPCGExInputValueType::Attribute)
+	if (Config.MaxLengthValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DName += Config.MaxLengthAttribute.ToString();
+		DName += Config.MaxLengthValue.Attribute.ToString();
 	}
 	else
 	{
-		DName += FString::Printf(TEXT("%.1f"), Config.MaxLength);
+		DName += FString::Printf(TEXT("%.1f"), Config.MaxLengthValue.Constant);
 	}
 
 	return DName;

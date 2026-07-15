@@ -264,6 +264,63 @@ namespace PCGExMetaHelpers
 		return true;
 	}
 
+	FName GetDomainQualifiedName(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData)
+	{
+		if (!InData)
+		{
+			return NAME_None;
+		}
+
+		return GetDomainQualifiedName(InSelector.CopyAndFixLast(InData));
+	}
+
+	FName GetDomainQualifiedName(const FPCGAttributePropertySelector& InFixedSelector)
+	{
+		if (InFixedSelector.GetSelection() != EPCGAttributePropertySelection::Attribute)
+		{
+			return NAME_None;
+		}
+
+		const FName DomainName = InFixedSelector.GetDomainName();
+		if (DomainName.IsNone())
+		{
+			return InFixedSelector.GetAttributeName();
+		}
+
+		return FName(TEXT("@") + DomainName.ToString() + TEXT(".") + InFixedSelector.GetAttributeName().ToString());
+	}
+
+	bool TryGetQualifiedAttributeName(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, FName& OutName, FName& OutQualifiedName)
+	{
+		const FPCGAttributePropertyInputSelector FixedSelector = InSelector.CopyAndFixLast(InData);
+		if (!FixedSelector.IsValid() || FixedSelector.GetSelection() != EPCGAttributePropertySelection::Attribute)
+		{
+			return false;
+		}
+
+		OutName = FixedSelector.GetName();
+		OutQualifiedName = GetDomainQualifiedName(FixedSelector);
+		return !OutQualifiedName.IsNone();
+	}
+
+	FPCGMetadataDomainID GetNormalizedDomainID(const UPCGData* InData, const FPCGAttributePropertySelector& InSelector)
+	{
+		if (!InData)
+		{
+			return FPCGMetadataDomainID(EPCGMetadataDomainFlag::Invalid);
+		}
+
+		const FPCGMetadataDomainID Resolved = InData->GetMetadataDomainIDFromSelector(InSelector);
+		if (!Resolved.IsDefault())
+		{
+			return Resolved;
+		}
+
+		const UPCGMetadata* Metadata = InData->ConstMetadata();
+		const FPCGMetadataDomain* DefaultDomain = Metadata ? Metadata->GetConstDefaultMetadataDomain() : nullptr;
+		return DefaultDomain ? DefaultDomain->GetDomainID() : Resolved;
+	}
+
 	bool IsDataDomainAttribute(const FName& InName)
 	{
 		return InName.ToString().TrimStartAndEnd().StartsWith("@Data.");

@@ -21,6 +21,9 @@ class UPCGExLloydRelax2DSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(LloydRelax2D, "Lloyd Relax 2D", "Applies Lloyd relaxation to the input points.");
 
 	virtual FLinearColor GetNodeTitleColor() const override

@@ -9,18 +9,18 @@
 #include "Details/PCGExSocket.h"
 
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExSocketFitDetails, SocketName, FName, SocketNameInput, SocketNameAttribute, SocketName)
-
 bool FPCGExSocketFitDetails::Init(const TSharedPtr<PCGExData::FFacade>& InFacade)
 {
-	if (!bEnabled || (SocketNameInput == EPCGExInputValueType::Constant && SocketName.IsNone()) || (SocketNameInput == EPCGExInputValueType::Attribute && SocketNameAttribute.IsNone()))
+	if (!bEnabled ||
+		(SocketNameValue.Input == EPCGExInputValueType::Constant && SocketNameValue.Constant.IsNone()) ||
+		(SocketNameValue.Input == EPCGExInputValueType::Attribute && SocketNameValue.Attribute.IsNone()))
 	{
 		bMutate = false;
 		return true;
 	}
 
 	bMutate = true;
-	SocketNameBuffer = GetValueSettingSocketName();
+	SocketNameBuffer = SocketNameValue.GetValueSetting();
 	if (!SocketNameBuffer->Init(InFacade))
 	{
 		return false;

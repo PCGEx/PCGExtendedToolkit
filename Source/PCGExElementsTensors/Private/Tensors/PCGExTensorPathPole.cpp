@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Tensors/PCGExTensorPathPole.h"
+#include "PCGExVersion.h"
 
 #include "Containers/PCGExManagedObjects.h"
 
@@ -33,7 +34,7 @@ PCGExTensor::FTensorSample FPCGExTensorPathPole::Sample(const int32 InSeedIndex,
 PCGEX_TENSOR_BOILERPLATE(
 	PathPole,
 	{
-	NewFactory->Config.Potency *=NewFactory->Config.PotencyScale;
+	NewFactory->Config.PotencyValue.Constant *= NewFactory->Config.PotencyScale;
 	NewFactory->bBuildFromPaths = GetBuildFromPoints();
 	NewFactory->PointType = NewFactory->Config.PointType;
 	NewFactory->bSmoothLinear = NewFactory->Config.bSmoothLinear;
@@ -41,6 +42,28 @@ PCGEX_TENSOR_BOILERPLATE(
 	{
 	NewOperation->Splines = &ManagedSplines;
 	})
+
+#if WITH_EDITOR
+void UPCGExCreateTensorPathPoleSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateTensorPathPoleSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE
 #undef PCGEX_NAMESPACE

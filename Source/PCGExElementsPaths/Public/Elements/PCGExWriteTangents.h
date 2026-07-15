@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExPathProcessor.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "PCGExWriteTangents.generated.h"
 
@@ -23,6 +24,9 @@ class UPCGExWriteTangentsSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(PathWriteTangents, "Path : Write Tangents", "Computes & writes points tangents.");
 #endif
 
@@ -60,27 +64,35 @@ public:
 	TObjectPtr<UPCGExTangentsInstancedFactory> EndTangents;
 
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_NotOverridable))
-	EPCGExInputValueType ArriveScaleInput = EPCGExInputValueType::Constant;
+	/** Scale applied to the arrive tangent. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_Overridable))
+	FPCGExInputShorthandSelectorVector ArriveScale = FPCGExInputShorthandSelectorVector(FString(TEXT("$Scale")), FVector::OneVector, false);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_Overridable, DisplayName="Arrive Scale (Attr)", EditCondition="ArriveScaleInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ArriveScaleAttribute;
+	/** Scale applied to the leave tangent. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_Overridable))
+	FPCGExInputShorthandSelectorVector LeaveScale = FPCGExInputShorthandSelectorVector(FString(TEXT("$Scale")), FVector::OneVector, false);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_Overridable, DisplayName="Arrive Scale", EditCondition="ArriveScaleInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double ArriveScaleConstant = 1;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(ArriveScale, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ArriveScaleInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_NotOverridable))
-	EPCGExInputValueType LeaveScaleInput = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ArriveScaleAttribute_DEPRECATED;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_Overridable, DisplayName="Leave Scale (Attr)", EditCondition="LeaveScaleInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector LeaveScaleAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double ArriveScaleConstant_DEPRECATED = 1;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Scaling", meta=(PCG_Overridable, DisplayName="Leave Scale", EditCondition="LeaveScaleInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double LeaveScaleConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType LeaveScaleInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(LeaveScale, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LeaveScaleAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double LeaveScaleConstant_DEPRECATED = 1;
+
+#pragma endregion
 };
 
 struct FPCGExWriteTangentsContext final : FPCGExPathProcessorContext

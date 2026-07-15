@@ -96,9 +96,6 @@ namespace PCGExPaths
 	}
 }
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExSplineMeshMutationDetails, StartPush, double, StartPushInput, StartPushInputAttribute, StartPushConstant);
-PCGEX_SETTING_VALUE_IMPL(FPCGExSplineMeshMutationDetails, EndPush, double, EndPushInput, EndPushInputAttribute, EndPushConstant);
-
 bool FPCGExSplineMeshMutationDetails::Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade)
 {
 	if (!bPushStart && !bPushEnd)
@@ -108,7 +105,7 @@ bool FPCGExSplineMeshMutationDetails::Init(const TSharedPtr<PCGExData::FFacade>&
 
 	if (bPushStart)
 	{
-		StartAmount = GetValueSettingStartPush();
+		StartAmount = StartPush.GetValueSetting();
 		if (!StartAmount->Init(InDataFacade))
 		{
 			return false;
@@ -117,7 +114,7 @@ bool FPCGExSplineMeshMutationDetails::Init(const TSharedPtr<PCGExData::FFacade>&
 
 	if (bPushEnd)
 	{
-		EndAmount = GetValueSettingEndPush();
+		EndAmount = EndPush.GetValueSetting();
 		if (!EndAmount->Init(InDataFacade))
 		{
 			return false;
@@ -156,3 +153,19 @@ void FPCGExSplineMeshMutationDetails::Mutate(const int32 PointIndex, PCGExPaths:
 		InSegment.Params.EndTangent = EndDir * (InSegment.Params.EndTangent.Size() + Dist * 3);
 	}
 }
+
+#if WITH_EDITOR
+void FPCGExSplineMeshMutationDetails::ApplyDeprecation()
+{
+	StartPush.Update(StartPushInput_DEPRECATED, StartPushInputAttribute_DEPRECATED, StartPushConstant_DEPRECATED);
+	EndPush.Update(EndPushInput_DEPRECATED, EndPushInputAttribute_DEPRECATED, EndPushConstant_DEPRECATED);
+}
+
+void FPCGExSplineMeshMutationDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("StartPushInputAttribute")), FName(TEXT("StartPush")), FName(TEXT("Attribute")), FName(TEXT(" ├─ Amount (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("StartPushConstant")), FName(TEXT("StartPush")), FName(TEXT("Constant")), FName(TEXT(" ├─ Amount")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("EndPushInputAttribute")), FName(TEXT("EndPush")), FName(TEXT("Attribute")), FName(TEXT(" ├─ Amount (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("EndPushConstant")), FName(TEXT("EndPush")), FName(TEXT("Constant")), FName(TEXT(" ├─ Amount")));
+}
+#endif

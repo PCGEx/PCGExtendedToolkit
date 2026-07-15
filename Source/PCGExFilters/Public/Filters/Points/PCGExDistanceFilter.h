@@ -99,7 +99,6 @@ public:
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
-	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 
 	virtual bool WantsPreparation(FPCGExContext* InContext) override
 	{
@@ -158,6 +157,8 @@ class UPCGExDistanceFilterProviderSettings : public UPCGExFilterProviderSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(DistanceFilterFactory, "Filter : Distance", "Creates a filter definition that compares the distance from the point to the nearest target.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

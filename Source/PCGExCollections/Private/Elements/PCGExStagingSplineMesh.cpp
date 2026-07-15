@@ -32,7 +32,7 @@
 
 #if WITH_EDITOR
 
-void UPCGExPathSplineMeshSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+void UPCGExPathSplineMeshSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
 	// Resolve the deferred selector default ONCE, and only while still Unset so explicit user choices
 	// are never overwritten. Nodes predating the Unset default (< 1.75.19) keep the legacy inline
@@ -46,7 +46,12 @@ void UPCGExPathSplineMeshSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* In
 		}
 	}
 
-	Super::ApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MutationDetails.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
 void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
@@ -64,6 +69,11 @@ void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 		{
 			bUseStagedPoints = false;
 		}
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MutationDetails.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -90,7 +100,6 @@ bool UPCGExPathSplineMeshSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin
 	}
 	return Super::IsPinUsedByNodeExecution(InPin);
 }
-
 
 PCGEX_INITIALIZE_ELEMENT(PathSplineMesh)
 

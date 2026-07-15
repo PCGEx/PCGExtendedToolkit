@@ -16,6 +16,22 @@
 #define LOCTEXT_NAMESPACE "PCGExBinPackingElement"
 #define PCGEX_NAMESPACE BinPacking
 
+#if WITH_EDITOR
+void UPCGExBinPackingSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	// OccupationPadding was migrated FVector-triplet -> shorthand in-place (same member name) with no version
+	// gate or deprecation, so the old FVector constant value cannot be recovered (releases shipped since; the
+	// serialized tag type no longer matches). We only rewire the override-pin connections; the constant value
+	// is intentionally not rescued per project decision.
+	PCGEX_IF_VERSION_LOWER(1, 76, 9)
+	{
+		PCGEX_SHORTHAND_RENAME_PIN(OccupationPaddingAttribute, OccupationPadding, OccupationPadding)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+#endif
+
 bool UPCGExBinPackingSettings::GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const
 {
 	OutRules.Append(PCGExSorting::GetSortingRules(InContext, PCGExSorting::Labels::SourceSortingRules));

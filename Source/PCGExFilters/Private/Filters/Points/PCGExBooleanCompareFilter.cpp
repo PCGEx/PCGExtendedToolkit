@@ -3,13 +3,11 @@
 
 #include "Filters/Points/PCGExBooleanCompareFilter.h"
 
-
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
-
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -46,7 +44,6 @@ bool UPCGExBooleanCompareFilterFactory::RegisterConsumableAttributesWithData(FPC
 
 	FName Consumable = NAME_None;
 	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.OperandB, Consumable)
 
 	return true;
 }
@@ -67,6 +64,7 @@ bool PCGExPointFilter::FBooleanCompareFilter::Init(FPCGExContext* InContext, con
 	}
 
 	OperandB = TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(PointDataFacade))
 	{
 		return false;

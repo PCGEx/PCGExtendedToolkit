@@ -29,9 +29,6 @@ bool UPCGExIsoEdgeDirectionFilterFactory::RegisterConsumableAttributesWithData(F
 		return false;
 	}
 
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.Direction, Consumable)
-
 	if (Config.ComparisonQuality == EPCGExDirectionCheckMode::Dot)
 	{
 		Config.DotComparisonDetails.RegisterConsumableAttributesWithData(InContext, InData);
@@ -78,6 +75,7 @@ bool FIsoEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<PC
 	}
 
 	OperandDirection = TypedFilterFactory->Config.GetValueSettingDirection(PCGEX_QUIET_HANDLING);
+	OperandDirection->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandDirection->Init(InEdgeDataFacade))
 	{
 		return false;

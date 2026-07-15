@@ -56,6 +56,76 @@ namespace PCGExData::Helpers
 		}
 	}
 
+	PCGMetadataEntryKey GetDataValueKey(const FPCGMetadataAttributeBase* Attribute)
+	{
+		if (!Attribute)
+		{
+			return PCGDefaultValueKey;
+		}
+
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		return (Domain && Domain->GetItemCountForChild() > 0) ? PCGFirstEntryKey : PCGDefaultValueKey;
+	}
+
+	bool HasPropertyCopyableValue(const FPCGMetadataAttributeBase* Attribute, const PCGMetadataEntryKey /*Key*/)
+	{
+		// 5.7 metadata attributes always resolve a value at their data key (default slot or first entry
+		// via GetDataValueKey), so readability reduces to the attribute existing. 5.8's void read-address
+		// probe existed to reject extended/container attributes with no stored value; those attribute
+		// types don't exist on 5.7, so there is nothing extra to guard against here.
+		return Attribute != nullptr;
+	}
+
+	bool PropertyCopyAttribute(
+		const FPCGMetadataAttributeBase* SourceAttr, const PCGMetadataEntryKey SourceKey,
+		FPCGMetadataAttributeBase* TargetAttr, const PCGMetadataEntryKey TargetKey)
+	{
+		return PropertyCopyAttribute(SourceAttr, SourceKey, TargetAttr, MakeArrayView(&TargetKey, 1));
+	}
+
+	bool PropertyCopyAttribute(
+		const FPCGMetadataAttributeBase* SourceAttr, const PCGMetadataEntryKey SourceKey,
+		FPCGMetadataAttributeBase* TargetAttr, const TArrayView<const PCGMetadataEntryKey> TargetKeys)
+	{
+		if (!SourceAttr || !TargetAttr || TargetKeys.IsEmpty())
+		{
+			return false;
+		}
+
+		// 5.7 has no type-erased property setter (5.8's SetValueFromProperty / GetReadAddressFromEntryKey_Unsafe),
+		// so recover the concrete type and copy typed. Every 5.7 metadata attribute is one of the supported
+		// scalar/vector types, so ExecuteWithRightType covers them all. Types must match.
+		if (SourceAttr->GetTypeId() != TargetAttr->GetTypeId())
+		{
+			return false;
+		}
+
+		bool bCopied = false;
+		PCGExMetaHelpers::ExecuteWithRightType(
+			SourceAttr->GetTypeId(),
+			[&](auto DummyValue)
+			{
+				using T = decltype(DummyValue);
+				const FPCGMetadataAttribute<T>* TypedSource = static_cast<const FPCGMetadataAttribute<T>*>(SourceAttr);
+				FPCGMetadataAttribute<T>* TypedTarget = static_cast<FPCGMetadataAttribute<T>*>(TargetAttr);
+				const T Value = TypedSource->GetValueFromItemKey(SourceKey);
+				for (const PCGMetadataEntryKey TargetKey : TargetKeys)
+				{
+					if (TargetKey == PCGDefaultValueKey)
+					{
+						TypedTarget->SetDefaultValue(Value);
+					}
+					else
+					{
+						TypedTarget->SetValue(TargetKey, Value);
+					}
+				}
+				bCopied = true;
+			});
+
+		return bCopied;
+	}
+
 	template <typename T>
 	T ReadDataValue(const FPCGMetadataAttribute<T>* Attribute)
 	{

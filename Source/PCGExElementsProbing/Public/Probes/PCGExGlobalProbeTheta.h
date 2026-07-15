@@ -66,6 +66,8 @@ class UPCGExProbeThetaProviderSettings : public UPCGExProbeFactoryProviderSettin
 
 public:
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(ProbeTheta, "G-Probe : Theta Graph", "Theta/Yao graph spanner - connects to nearest in angular cones")
 #endif
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;

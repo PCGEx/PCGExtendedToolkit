@@ -17,7 +17,27 @@
 #define LOCTEXT_NAMESPACE "PCGExNormalizeElement"
 #define PCGEX_NAMESPACE Normalize
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExNormalizeSettings, Transform, FTransform, TransformInput, TransformAttribute, TransformConstant)
+#if WITH_EDITOR
+void UPCGExNormalizeSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire Transform
+		PCGEX_SHORTHAND_RENAME_PIN(TransformAttribute, TransformConstant, Transform)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExNormalizeSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		Transform.Update(TransformInput_DEPRECATED, TransformAttribute_DEPRECATED, TransformConstant_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 UPCGExNormalizeSettings::UPCGExNormalizeSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -26,9 +46,11 @@ UPCGExNormalizeSettings::UPCGExNormalizeSettings(const FObjectInitializer& Objec
 	{
 		Output.Update("$Position");
 	}
-	if (TransformAttribute.GetName() == TEXT("@Last"))
+	// Deprecated selector must default to the old ctor-set value so unserialized (default)
+	// legacy assets migrate to the same selection.
+	if (TransformAttribute_DEPRECATED.GetName() == TEXT("@Last"))
 	{
-		TransformAttribute.Update("@Data.Transform");
+		TransformAttribute_DEPRECATED.Update("@Data.Transform");
 	}
 }
 
@@ -124,7 +146,7 @@ namespace PCGExNormalize
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		TransformBuffer = Settings->GetValueSettingTransform();
+		TransformBuffer = Settings->Transform.GetValueSetting();
 		if (!TransformBuffer->Init(PointDataFacade, true))
 		{
 			return false;

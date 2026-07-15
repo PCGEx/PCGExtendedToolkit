@@ -5,12 +5,24 @@
 #include "FillControls/PCGExFillControlCount.h"
 
 
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigCount, MaxCount, int32, MaxCountInput, MaxCountAttribute, MaxCount)
+#if WITH_EDITOR
+void FPCGExFillControlConfigCount::ApplyDeprecation()
+{
+	MaxCountValue.Update(MaxCountInput_DEPRECATED, MaxCountAttribute_DEPRECATED, MaxCount_DEPRECATED);
+}
+
+void FPCGExFillControlConfigCount::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxCount")), FName(TEXT("MaxCountValue")), FName(TEXT("Constant")), FName(TEXT("Max Count")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxCountAttribute")), FName(TEXT("MaxCountValue")), FName(TEXT("Attribute")), FName(TEXT("Max Count (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlCount::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -21,7 +33,8 @@ bool FPCGExFillControlCount::PrepareForDiffusions(FPCGExContext* InContext, cons
 
 	const UPCGExFillControlsFactoryCount* TypedFactory = Cast<UPCGExFillControlsFactoryCount>(Factory);
 
-	CountLimit = TypedFactory->Config.GetValueSettingMaxCount();
+	CountLimit = TypedFactory->Config.MaxCountValue.GetValueSetting();
+	CountLimit->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!CountLimit->Init(GetSourceFacade()))
 	{
 		return false;
@@ -49,7 +62,7 @@ void UPCGExFillControlsFactoryCount::RegisterBuffersDependencies(FPCGExContext* 
 
 	if (Config.Source == EPCGExFloodFillSettingSource::Vtx)
 	{
-		FacadePreloader.Register<int32>(InContext, Config.MaxCountAttribute);
+		FacadePreloader.Register<int32>(InContext, Config.MaxCountValue.Attribute);
 	}
 }
 
@@ -61,17 +74,37 @@ UPCGExFactoryData* UPCGExFillControlsCountProviderSettings::CreateFactory(FPCGEx
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsCountProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsCountProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsCountProviderSettings::GetDisplayName() const
 {
 	FString DName = GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control"), TEXT("FC")) + TEXT(" @ ");
 
-	if (Config.MaxCountInput == EPCGExInputValueType::Attribute)
+	if (Config.MaxCountValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DName += Config.MaxCountAttribute.ToString();
+		DName += Config.MaxCountValue.Attribute.ToString();
 	}
 	else
 	{
-		DName += FString::Printf(TEXT("%d"), Config.MaxCount);
+		DName += FString::Printf(TEXT("%d"), Config.MaxCountValue.Constant);
 	}
 
 	return DName;

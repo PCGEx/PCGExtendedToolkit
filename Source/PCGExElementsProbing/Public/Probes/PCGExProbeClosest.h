@@ -25,16 +25,22 @@ struct FPCGExProbeConfigClosest : public FPCGExProbeConfigBase
 	{
 	}
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType MaxConnectionsInput = EPCGExInputValueType::Constant;
+	/** Max number of connections. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Connections"))
+	FPCGExInputShorthandSelectorInteger32Abs MaxConnections = FPCGExInputShorthandSelectorInteger32Abs(FName("@Last"), 1, false);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Connections (Attr)", EditCondition="MaxConnectionsInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector MaxConnectionsAttribute;
+#pragma region DEPRECATED
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Connections", ClampMin=0, EditCondition="MaxConnectionsInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0))
-	int32 MaxConnectionsConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaxConnectionsInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(MaxConnections, int32)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector MaxConnectionsAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 MaxConnectionsConstant_DEPRECATED = 1;
+
+#pragma endregion
 
 	/** Attempts to prevent connections that are roughly in the same direction */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
@@ -43,6 +49,11 @@ struct FPCGExProbeConfigClosest : public FPCGExProbeConfigBase
 	/** Attempts to prevent connections that are roughly in the same direction */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bPreventCoincidence", ClampMin=0.00001))
 	double CoincidencePreventionTolerance = 0.001;
+
+#if WITH_EDITOR
+	virtual void ApplyDeprecation() override;
+	virtual void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const override;
+#endif
 };
 
 /**
@@ -84,6 +95,8 @@ class UPCGExProbeClosestProviderSettings : public UPCGExProbeFactoryProviderSett
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeClosest, "Probe : Closests", "Probe in a given Closest.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

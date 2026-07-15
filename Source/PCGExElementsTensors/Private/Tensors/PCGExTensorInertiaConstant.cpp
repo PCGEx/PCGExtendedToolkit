@@ -27,11 +27,11 @@ PCGExTensor::FTensorSample FPCGExTensorInertiaConstant::Sample(const int32 InSee
 
 	if (Config.bSetInertiaOnce)
 	{
-		Samples.Emplace_GetRef(PCGExMath::GetDirection(PrimaryDataFacade->GetIn()->GetTransform(InSeedIndex).GetRotation() * Offset, Config.Axis), Config.Potency, Config.Weight);
+		Samples.Emplace_GetRef(PCGExMath::GetDirection(PrimaryDataFacade->GetIn()->GetTransform(InSeedIndex).GetRotation() * Offset, Config.Axis), Config.PotencyValue.Constant, Config.WeightValue.Constant);
 	}
 	else
 	{
-		Samples.Emplace_GetRef(PCGExMath::GetDirection(InProbe.GetRotation() * Offset, Config.Axis), Config.Potency, Config.Weight);
+		Samples.Emplace_GetRef(PCGExMath::GetDirection(InProbe.GetRotation() * Offset, Config.Axis), Config.PotencyValue.Constant, Config.WeightValue.Constant);
 	}
 
 
@@ -43,24 +43,24 @@ PCGEX_TENSOR_BOILERPLATE(
 	{
 	NewFactory->Config.Axis = Axis;
 	NewFactory->Config.Offset = Offset;
-	NewFactory->Config.Potency = Potency;
-	NewFactory->Config.PotencyInput = EPCGExInputValueType::Constant;
-	NewFactory->Config.Weight = 1;
+	NewFactory->Config.PotencyValue.Constant = Potency;
+	NewFactory->Config.PotencyValue.Input = EPCGExInputValueType::Constant;
+	NewFactory->Config.WeightValue.Constant = 1;
 	NewFactory->Config.TensorWeight = TensorWeight;
-	NewFactory->Config.WeightInput = EPCGExInputValueType::Constant;
+	NewFactory->Config.WeightValue.Input = EPCGExInputValueType::Constant;
 	NewFactory->Config.bSetInertiaOnce = bSetInertiaOnce;
 	},
 	{})
 
 PCGExFactories::EPreparationResult UPCGExTensorInertiaConstantFactory::InitInternalData(FPCGExContext* InContext)
 {
-	if (Config.PotencyInput == EPCGExInputValueType::Attribute)
+	if (Config.PotencyValue.Input == EPCGExInputValueType::Attribute)
 	{
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Attribute-driven Potency is not supported on Constant Tensor."));
 		return PCGExFactories::EPreparationResult::Fail;
 	}
 
-	if (Config.WeightInput == EPCGExInputValueType::Attribute)
+	if (Config.WeightValue.Input == EPCGExInputValueType::Attribute)
 	{
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Attribute-driven Weight is not supported on Constant Tensor."));
 		return PCGExFactories::EPreparationResult::Fail;

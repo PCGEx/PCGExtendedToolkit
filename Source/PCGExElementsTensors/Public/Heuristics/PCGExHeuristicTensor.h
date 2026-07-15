@@ -92,6 +92,8 @@ class UPCGExHeuristicsTensorProviderSettings : public UPCGExHeuristicsFactoryPro
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(HeuristicsTensor, "Heuristics : Tensor", "Heuristics based on tensors.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

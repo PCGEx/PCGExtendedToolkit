@@ -6,6 +6,7 @@
 
 #include "PCGExCommon.h"
 #include "Data/PCGExDataCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 
@@ -13,6 +14,8 @@
 
 struct FPCGExContext;
 class UPCGBasePointData;
+class UPCGSettings;
+class UPCGNode;
 enum class EPCGExMinimalAxis : uint8;
 
 namespace PCGExData
@@ -37,7 +40,7 @@ struct PCGEXCORE_API FPCGExUVW
 	}
 
 	explicit FPCGExUVW(const double DefaultW)
-		: WConstant(DefaultW)
+		: W(FName("@Last"), DefaultW, false)
 	{
 	}
 
@@ -45,47 +48,48 @@ struct PCGEXCORE_API FPCGExUVW
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExPointBoundsSource BoundsReference = EPCGExPointBoundsSource::ScaledBounds;
 
-	/** Whether U comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType UInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read U from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="U (Attr)", EditCondition="UInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector UAttribute;
-
 	/** U coordinate within bounds (0 = min X, 1 = max X). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="U", EditCondition="UInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double UConstant = 0;
-
-
-	/** Whether V comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType VInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read V from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="V (Attr)", EditCondition="VInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector VAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="U"))
+	FPCGExInputShorthandSelectorDouble U = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0, false);
 
 	/** V coordinate within bounds (0 = min Y, 1 = max Y). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="V", EditCondition="VInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double VConstant = 0;
-
-
-	/** Whether W comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType WInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read W from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="W (Attr)", EditCondition="WInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector WAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="V"))
+	FPCGExInputShorthandSelectorDouble V = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0, false);
 
 	/** W coordinate within bounds (0 = min Z, 1 = max Z). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="W", EditCondition="WInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double WConstant = 0;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="W"))
+	FPCGExInputShorthandSelectorDouble W = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0, false);
 
-	PCGEX_SETTING_VALUE_DECL(U, double)
-	PCGEX_SETTING_VALUE_DECL(V, double)
-	PCGEX_SETTING_VALUE_DECL(W, double)
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType UInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector UAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double UConstant_DEPRECATED = 0;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType VInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector VAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double VConstant_DEPRECATED = 0;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType WInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector WAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double WConstant_DEPRECATED = 0;
+
+#pragma endregion
 
 	bool Init(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade);
 
@@ -104,6 +108,12 @@ struct PCGEXCORE_API FPCGExUVW
 	FVector GetPosition(const int32 PointIndex, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
 
 	FVector GetPosition(const int32 PointIndex, FVector& OutOffset, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** Rewires the pre-shorthand override pins; call from the embedder's PCGExApplyDeprecationBeforeUpdatePins under the same version gate as ApplyDeprecation. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<double>> UGetter;

@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExSocket.h"
 #include "Data/PCGExDataCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
 #include "PCGExSocketFitDetails.generated.h"
@@ -32,19 +33,9 @@ struct PCGEXFOUNDATIONS_API FPCGExSocketFitDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	bool bEnabled = false;
 
-	/** Where socket name comes from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bEnabled"))
-	EPCGExInputValueType SocketNameInput = EPCGExInputValueType::Attribute;
-
-	/** Attribute to read socket name from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Socket Name (Attr)", EditCondition="bEnabled && SocketNameInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName SocketNameAttribute = NAME_None;
-
 	/** Name of the socket to fit to. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Socket Name", EditCondition="bEnabled && SocketNameInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FName SocketName = NAME_None;
-
-	PCGEX_SETTING_VALUE_DECL(SocketName, FName)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Socket Name", EditCondition="bEnabled", EditConditionHides))
+	FPCGExInputShorthandNameName SocketNameValue = FPCGExInputShorthandNameName(FName(NAME_None), NAME_None, true);
 
 	/** Type of Socket name input */
 	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

@@ -15,6 +15,26 @@
 
 PCGEX_INITIALIZE_ELEMENT(LloydRelax2D)
 
+#if WITH_EDITOR
+void UPCGExLloydRelax2DSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		InfluenceDetails.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExLloydRelax2DSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		InfluenceDetails.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 PCGExData::EIOInit UPCGExLloydRelax2DSettings::GetMainDataInitializationPolicy() const
 {
 	return PCGExData::EIOInit::Duplicate;

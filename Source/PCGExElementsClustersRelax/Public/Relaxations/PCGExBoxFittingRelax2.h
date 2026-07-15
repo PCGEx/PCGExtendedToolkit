@@ -7,6 +7,7 @@
 #include "PCGExFittingRelaxBase.h"
 #include "Core/PCGExRelaxClusterOperation.h"
 #include "Data/Utils/PCGExDataPreloader.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
@@ -33,24 +34,29 @@ public:
 	UPCGExBoxFittingRelax2(const FObjectInitializer& ObjectInitializer)
 		: Super(ObjectInitializer)
 	{
-		ExtentsAttribute.Update(TEXT("$Extents"));
+		ExtentsAttribute_DEPRECATED.Update(TEXT("$Extents"));
 	}
 
 	virtual void RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 
-	/** How extents are determined */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType ExtentsInput = EPCGExInputValueType::Attribute;
+	/** Extents. Half-size in each axis. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Extents"))
+	FPCGExInputShorthandSelectorVector ExtentsValue = FPCGExInputShorthandSelectorVector(FString(TEXT("$Extents")), FVector(50, 50, 50), true);
 
-	/** Attribute to read extents value from. Expected to be half-size in each axis. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Extents (Attr)", EditCondition="ExtentsInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ExtentsAttribute;
+#pragma region DEPRECATED
 
-	/** Constant extents value. Half-size in each axis. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Extents", EditCondition="ExtentsInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector Extents = FVector(50, 50, 50);
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ExtentsInput_DEPRECATED = EPCGExInputValueType::Attribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ExtentsAttribute_DEPRECATED;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector Extents_DEPRECATED = FVector(50, 50, 50);
 
-	PCGEX_SETTING_VALUE_INLINE(Extents, FVector, ExtentsInput, ExtentsAttribute, Extents)
+#pragma endregion
+
+#if WITH_EDITOR
+	virtual void ApplyShorthandDeprecation() override;
+#endif
 
 	/** How to determine separation direction when boxes overlap */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

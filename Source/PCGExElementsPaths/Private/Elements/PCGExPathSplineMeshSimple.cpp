@@ -24,16 +24,43 @@
 #define LOCTEXT_NAMESPACE "PCGExPathSplineMeshSimpleElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExPathSplineMeshSimpleSettings, StartOffset, FVector2D, StartOffsetInput, StartOffsetAttribute, StartOffset)
-PCGEX_SETTING_VALUE_IMPL(UPCGExPathSplineMeshSimpleSettings, EndOffset, FVector2D, EndOffsetInput, EndOffsetAttribute, EndOffset)
-
 #if WITH_EDITOR
+void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		// Rewire Start Offset
+		PCGEX_SHORTHAND_RENAME_PIN(StartOffsetAttribute, StartOffset, StartOffsetValue)
+
+		// Rewire End Offset
+		PCGEX_SHORTHAND_RENAME_PIN(EndOffsetAttribute, EndOffset, EndOffsetValue)
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MutationDetails.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
 void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGEX_IF_VERSION_LOWER(1, 70, 11)
 	{
 		StaticMeshDescriptor.SplineMeshAxis = static_cast<EPCGExSplineMeshAxis>(SplineMeshAxisConstant_DEPRECATED);
 		Tangents.ApplyDeprecation(bApplyCustomTangents_DEPRECATED, ArriveTangentAttribute_DEPRECATED, LeaveTangentAttribute_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		StartOffsetValue.Update(StartOffsetInput_DEPRECATED, StartOffsetAttribute_DEPRECATED, StartOffset_DEPRECATED);
+		EndOffsetValue.Update(EndOffsetInput_DEPRECATED, EndOffsetAttribute_DEPRECATED, EndOffset_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MutationDetails.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -224,13 +251,13 @@ namespace PCGExPathSplineMeshSimple
 			return false;
 		}
 
-		StartOffset = Settings->GetValueSettingStartOffset();
+		StartOffset = Settings->StartOffsetValue.GetValueSetting();
 		if (!StartOffset->Init(PointDataFacade))
 		{
 			return false;
 		}
 
-		EndOffset = Settings->GetValueSettingEndOffset();
+		EndOffset = Settings->EndOffsetValue.GetValueSetting();
 		if (!EndOffset->Init(PointDataFacade))
 		{
 			return false;

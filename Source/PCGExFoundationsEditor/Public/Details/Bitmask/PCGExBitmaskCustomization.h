@@ -44,6 +44,11 @@ class FPCGExBitmaskFilterConfigCustomization : public FPCGExBitmaskCustomization
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
 
+	virtual void CustomizeChildren(
+		TSharedRef<IPropertyHandle> PropertyHandle,
+		class IDetailChildrenBuilder& ChildBuilder,
+		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+
 protected:
 	virtual void BuildGrid(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder) const override;
 };

@@ -79,6 +79,8 @@ class UPCGExProbeChainProviderSettings : public UPCGExProbeFactoryProviderSettin
 
 public:
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(ProbeChain, "G-Probe : Chain/Path", "Creates sequential chain connections based on sorting criteria")
 #endif
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;

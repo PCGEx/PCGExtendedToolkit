@@ -3,7 +3,7 @@
 
 #include "Filters/Points/PCGExTimeFilter.h"
 
-
+#include "PCGExVersion.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataPreloader.h"
@@ -56,19 +56,6 @@ void UPCGExTimeFilterFactory::RegisterBuffersDependencies(FPCGExContext* InConte
 	}
 }
 
-bool UPCGExTimeFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.OperandB, Consumable)
-
-	return true;
-}
-
 FName UPCGExTimeFilterFactory::GetInputLabel() const
 {
 	return PCGExCommon::Labels::SourceTargetsLabel;
@@ -106,6 +93,7 @@ namespace PCGExPointFilter
 		}
 
 		OperandB = TypedFilterFactory->Config.GetValueSettingOperandB();
+		OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!OperandB->Init(PointDataFacade))
 		{
 			return false;
@@ -286,6 +274,24 @@ TArray<FPCGPinProperties> UPCGExTimeFilterProviderSettings::InputPinProperties()
 PCGEX_CREATE_FILTER_FACTORY(Time)
 
 #if WITH_EDITOR
+void UPCGExTimeFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExTimeFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExTimeFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Time ") + PCGExCompare::ToString(Config.Comparison);

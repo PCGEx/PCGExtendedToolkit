@@ -3,12 +3,24 @@
 
 #include "FillControls/PCGExFillControlHxBudget.h"
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigHeuristicsBudget, MaxBudget, double, MaxBudgetInput, MaxBudgetAttribute, MaxBudget)
+#if WITH_EDITOR
+void FPCGExFillControlConfigHeuristicsBudget::ApplyDeprecation()
+{
+	MaxBudgetValue.Update(MaxBudgetInput_DEPRECATED, MaxBudgetAttribute_DEPRECATED, MaxBudget_DEPRECATED);
+}
+
+void FPCGExFillControlConfigHeuristicsBudget::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxBudget")), FName(TEXT("MaxBudgetValue")), FName(TEXT("Constant")), FName(TEXT("Max Budget")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("MaxBudgetAttribute")), FName(TEXT("MaxBudgetValue")), FName(TEXT("Attribute")), FName(TEXT("Max Budget (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlHeuristicsBudget::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -22,7 +34,8 @@ bool FPCGExFillControlHeuristicsBudget::PrepareForDiffusions(FPCGExContext* InCo
 	BudgetSource = TypedFactory->Config.BudgetSource;
 
 	// Initialize budget setting value
-	MaxBudget = TypedFactory->Config.GetValueSettingMaxBudget();
+	MaxBudget = TypedFactory->Config.MaxBudgetValue.GetValueSetting();
+	MaxBudget->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!MaxBudget->Init(GetSourceFacade()))
 	{
 		return false;
@@ -136,6 +149,26 @@ UPCGExFactoryData* UPCGExFillControlsHeuristicsBudgetProviderSettings::CreateFac
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsHeuristicsBudgetProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsHeuristicsBudgetProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsHeuristicsBudgetProviderSettings::GetDisplayName() const
 {
 	return GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control : Heuristics"), TEXT("FC × HX"));

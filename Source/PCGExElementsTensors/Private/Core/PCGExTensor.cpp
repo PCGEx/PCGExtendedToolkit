@@ -41,8 +41,10 @@ FPCGExTensorConfigBase::FPCGExTensorConfigBase(const bool SupportAttributes, con
 {
 	if (!bSupportAttributes)
 	{
-		PotencyInput = EPCGExInputValueType::Constant;
-		WeightInput = EPCGExInputValueType::Constant;
+		PotencyValue.Input = EPCGExInputValueType::Constant;
+		WeightValue.Input = EPCGExInputValueType::Constant;
+		PotencyInput_DEPRECATED = EPCGExInputValueType::Constant;
+		WeightInput_DEPRECATED = EPCGExInputValueType::Constant;
 	}
 
 	LocalGuideCurve.VectorCurves[0].AddKey(0, 1);
@@ -59,12 +61,25 @@ FPCGExTensorConfigBase::FPCGExTensorConfigBase(const bool SupportAttributes, con
 	LocalWeightFalloffCurve.EditorCurveData.AddKey(1, 0);
 	LocalWeightFalloffCurve.EditorCurveData.AddKey(0, 1);
 
-	PotencyAttribute.Update(TEXT("$Density"));
-	WeightAttribute.Update(TEXT("Steepness"));
+	PotencyAttribute_DEPRECATED.Update(TEXT("$Density"));
+	WeightAttribute_DEPRECATED.Update(TEXT("Steepness"));
 }
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExTensorConfigBase, Weight, double, WeightInput, WeightAttribute, Weight);
-PCGEX_SETTING_VALUE_IMPL(FPCGExTensorConfigBase, Potency, double, PotencyInput, PotencyAttribute, Potency);
+#if WITH_EDITOR
+void FPCGExTensorConfigBase::ApplyDeprecation()
+{
+	PotencyValue.Update(PotencyInput_DEPRECATED, PotencyAttribute_DEPRECATED, Potency_DEPRECATED);
+	WeightValue.Update(WeightInput_DEPRECATED, WeightAttribute_DEPRECATED, Weight_DEPRECATED);
+}
+
+void FPCGExTensorConfigBase::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("PotencyAttribute")), FName(TEXT("PotencyValue")), FName(TEXT("Attribute")), FName(TEXT("Potency (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Potency")), FName(TEXT("PotencyValue")), FName(TEXT("Constant")), FName(TEXT("Potency")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WeightAttribute")), FName(TEXT("WeightValue")), FName(TEXT("Attribute")), FName(TEXT("Weight (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Weight")), FName(TEXT("WeightValue")), FName(TEXT("Constant")), FName(TEXT("Weight")));
+}
+#endif
 
 void FPCGExTensorConfigBase::Init(FPCGExContext* InContext)
 {
@@ -97,13 +112,13 @@ namespace PCGExTensor
 {
 	bool FEffectorsArray::Init(FPCGExContext* InContext, const UPCGExTensorPointFactoryData* InFactory)
 	{
-		TSharedPtr<PCGExDetails::TSettingValue<double>> PotencyValue = InFactory->BaseConfig.GetValueSettingPotency();
+		TSharedPtr<PCGExDetails::TSettingValue<double>> PotencyValue = InFactory->BaseConfig.PotencyValue.GetValueSetting();
 		if (!PotencyValue->Init(InFactory->InputDataFacade, false))
 		{
 			return false;
 		}
 
-		TSharedPtr<PCGExDetails::TSettingValue<double>> WeightValue = InFactory->BaseConfig.GetValueSettingWeight();
+		TSharedPtr<PCGExDetails::TSettingValue<double>> WeightValue = InFactory->BaseConfig.WeightValue.GetValueSetting();
 		if (!WeightValue->Init(InFactory->InputDataFacade, false))
 		{
 			return false;

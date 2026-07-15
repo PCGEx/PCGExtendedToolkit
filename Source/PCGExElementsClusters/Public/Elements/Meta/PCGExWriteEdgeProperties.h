@@ -43,6 +43,9 @@ class UPCGExWriteEdgePropertiesSettings : public UPCGExClustersProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(WriteEdgeProperties, "Cluster : Edge Properties", "Extract & write extra edge informations to the point representing the edge.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
@@ -135,18 +138,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta = (PCG_Overridable))
 	EPCGExMinimalAxis SolidificationAxis = EPCGExMinimalAxis::None;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable, EditCondition="SolidificationAxis != EPCGExMinimalAxis::None"))
-	EPCGExInputValueType SolidificationLerpInput = EPCGExInputValueType::Constant;
+	/** Solidification Lerp (read from Edge when using an attribute). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable, EditCondition="SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
+	FPCGExInputShorthandSelectorDouble SolidificationLerp = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0.5, false);
 
-	/** Solidification Lerp attribute (read from Edge).*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable, DisplayName="Solidification Lerp (Attr)", EditCondition="SolidificationLerpInput == EPCGExInputValueType::Attribute && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	FPCGAttributePropertyInputSelector SolidificationLerpAttribute;
+#pragma region DEPRECATED
 
-	/** Solidification Lerp constant.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable, DisplayName="Solidification Lerp", EditCondition="SolidificationLerpInput == EPCGExInputValueType::Constant && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	double SolidificationLerpConstant = 0.5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType SolidificationLerpInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(SolidificationLerp, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector SolidificationLerpAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double SolidificationLerpConstant_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	// Edge radiuses
 

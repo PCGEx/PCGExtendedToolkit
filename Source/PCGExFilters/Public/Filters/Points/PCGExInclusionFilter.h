@@ -171,6 +171,7 @@ class UPCGExInclusionFilterProviderSettings : public UPCGExFilterProviderSetting
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(InclusionFilterFactory, "Filter : Inclusion (Path/Splines)", "Creates a filter definition that checks points inclusion against path-like data (paths, splines, polygons).", PCGEX_FACTORY_NAME_PRIORITY)

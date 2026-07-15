@@ -25,6 +25,28 @@
 #define LOCTEXT_NAMESPACE "PCGExGraphs"
 #define PCGEX_NAMESPACE MeshToClusters
 
+#if WITH_EDITOR
+void UPCGExMeshToClustersSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire Static Mesh
+		PCGEX_SHORTHAND_RENAME_PIN(StaticMeshAttribute, StaticMeshConstant, StaticMesh)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExMeshToClustersSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		StaticMesh.Update(StaticMeshInput_DEPRECATED, StaticMeshAttribute_DEPRECATED, StaticMeshConstant_DEPRECATED.ToSoftObjectPath());
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 namespace PCGExMesh
 {
 	class FGeoStaticMesh;
@@ -439,9 +461,9 @@ bool FPCGExMeshToClustersElement::Boot(FPCGExContext* InContext) const
 	}
 	Context->bWantsImport = Context->ImportDetails.WantsImport();
 
-	if (Settings->StaticMeshInput == EPCGExInputValueType::Attribute)
+	if (Settings->StaticMesh.Input == EPCGExInputValueType::Attribute)
 	{
-		PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->StaticMeshAttribute)
+		PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->StaticMesh.Attribute)
 	}
 
 	const TSharedPtr<PCGExData::FPointIO> Targets = Context->MainPoints->Pairs[0];
@@ -478,23 +500,21 @@ bool FPCGExMeshToClustersElement::AdvanceWork(FPCGExContext* InContext, const UP
 	PCGEX_ON_INITIAL_EXECUTION
 	{
 		Context->AdvancePointsIO();
-		if (Settings->StaticMeshInput == EPCGExInputValueType::Constant)
+		if (Settings->StaticMesh.Input == EPCGExInputValueType::Constant)
 		{
-			if (!Settings->StaticMeshConstant.ToSoftObjectPath().IsValid())
+			if (!Settings->StaticMesh.Constant.IsValid())
 			{
-				PCGE_LOG(Error, GraphAndLog, FTEXT("Invalid static mesh constant"));
-				return false;
+				return Context->CancelExecution(TEXT("Invalid static mesh constant"));
 			}
 
-			const int32 Idx = Context->StaticMeshMap->FindOrAdd(Settings->StaticMeshConstant.ToSoftObjectPath());
+			const int32 Idx = Context->StaticMeshMap->FindOrAdd(Settings->StaticMesh.Constant);
 
 			if (Idx == -1)
 			{
-				PCGE_LOG(Error, GraphAndLog, FTEXT("Static mesh constant could not be loaded."));
-				return false;
+				return Context->CancelExecution(TEXT("Static mesh constant could not be loaded."));
 			}
 
-			Context->EDITOR_TrackPath(Settings->StaticMeshConstant.ToSoftObjectPath());
+			Context->EDITOR_TrackPath(Settings->StaticMesh.Constant);
 			for (int32& Index : Context->MeshIdx)
 			{
 				Index = Idx;
@@ -503,13 +523,12 @@ bool FPCGExMeshToClustersElement::AdvanceWork(FPCGExContext* InContext, const UP
 		else
 		{
 			FPCGAttributePropertyInputSelector Selector = FPCGAttributePropertyInputSelector();
-			Selector.SetAttributeName(Settings->StaticMeshAttribute);
+			Selector.SetAttributeName(Settings->StaticMesh.Attribute);
 
 			const TUniquePtr<PCGExData::TAttributeBroadcaster<FSoftObjectPath>> PathGetter = MakeUnique<PCGExData::TAttributeBroadcaster<FSoftObjectPath>>();
 			if (!PathGetter->Prepare(Selector, Context->MainPoints->Pairs[0].ToSharedRef()))
 			{
-				PCGE_LOG(Error, GraphAndLog, FTEXT("Static mesh attribute does not exists on targets."));
-				return false;
+				return Context->CancelExecution(TEXT("Static mesh attribute does not exists on targets."));
 			}
 
 			const UPCGBasePointData* TargetPoints = Context->CurrentIO->GetIn();

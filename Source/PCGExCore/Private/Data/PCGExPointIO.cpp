@@ -526,12 +526,20 @@ namespace PCGExData
 			return false;
 		}
 
+		// Forwarded data is only ours to mutate under the StealData contract, where the user
+		// guarantees this node's inputs aren't consumed anywhere else.
+		const bool bOwnsForwarded = TargetContext->bWantsDataStealing;
+
 		// Forward mode: output the original input data (before any PCGEx type conversion).
 		// This ensures downstream nodes see the exact same UPCGData pointer, preserving
 		// any non-point-data type information that ToPointData might have changed.
 		if (LastInit == EIOInit::Forward && Out == In && OriginalIn)
 		{
-			TargetContext->StageOutput(const_cast<UPCGData*>(OriginalIn), OutputPin, bPinless ? EStaging::Pinless : EStaging::None, Tags->Flatten());
+			const EStaging Staging =
+				(bOwnsForwarded ? EStaging::Mutable : EStaging::None) |
+				(bPinless ? EStaging::Pinless : EStaging::None);
+
+			TargetContext->StageOutput(const_cast<UPCGData*>(OriginalIn), OutputPin, Staging, Tags->Flatten());
 		}
 		else
 		{
@@ -539,7 +547,7 @@ namespace PCGExData
 			// Mutable: we own this data and can clean up consumable attributes on it.
 			const EStaging Staging =
 				(Out != In ? EStaging::Managed : EStaging::None) |
-				(bMutable ? EStaging::Mutable : EStaging::None) |
+				(bMutable || bOwnsForwarded ? EStaging::Mutable : EStaging::None) |
 				(bPinless ? EStaging::Pinless : EStaging::None);
 
 			TargetContext->StageOutput(Out, OutputPin, Staging, Tags->Flatten());

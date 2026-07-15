@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Elements/PCGExBoundsPathIntersection.h"
+#include "PCGExVersion.h"
 
 #include "PCGParamData.h"
 #include "Core/PCGExBlendOpsManager.h"
@@ -33,6 +34,24 @@ void UPCGExBoundsPathIntersectionSettings::PostInitProperties()
 		}
 	}
 	Super::PostInitProperties();
+}
+
+void UPCGExBoundsPathIntersectionSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBoundsPathIntersectionSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
 

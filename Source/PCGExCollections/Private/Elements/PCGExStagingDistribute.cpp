@@ -40,7 +40,7 @@ UPCGExAssetStagingSettings::UPCGExAssetStagingSettings()
 }
 
 #if WITH_EDITOR
-void UPCGExAssetStagingSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+void UPCGExAssetStagingSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
 	// Resolve the deferred selector default ONCE, and only while still Unset so explicit user choices
 	// are never overwritten. Nodes predating the Unset default (< 1.75.19) keep the legacy inline
@@ -60,7 +60,7 @@ void UPCGExAssetStagingSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOu
 		PCGEX_SHORTHAND_RENAME_PIN(CollectionPathAttributeName, AssetCollection, SourceCollection)
 	}
 
-	Super::ApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
 void UPCGExAssetStagingSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)

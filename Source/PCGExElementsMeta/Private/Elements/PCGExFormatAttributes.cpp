@@ -495,10 +495,15 @@ bool FPCGExFormatAttributesElement::AdvanceWork(FPCGExContext* InContext, const 
 		OutTagged.Tags = InputTagged.Tags;
 	}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
-	InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + ParallelResults.Num());
-	for (FPCGTaggedData& R : ParallelResults)
+	// Staged (not written directly to OutputData) so ownership flags feed the flush-time
+	// consumable/flatten pass.
+	InContext->IncreaseStagedOutputReserve(ParallelResults.Num());
+	for (const FPCGTaggedData& R : ParallelResults)
 	{
-		if (R.Data) { InContext->OutputData.TaggedData.Emplace(MoveTemp(R)); }
+		if (R.Data)
+		{
+			InContext->StageOutput(const_cast<UPCGData*>(R.Data.Get()), PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::Managed | PCGExData::EStaging::Mutable, R.Tags);
+		}
 	}
 
 	InContext->Done();
