@@ -688,9 +688,9 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 								const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
 								if (!Result.IsValid()) { return EVisibility::Collapsed; }
 								const FPCGExAssetGrammarDetails* G = Result.Entry->GetEffectiveGrammar(Coll);
-								// nullptr = Flatten or unbound sub-collection (no module emitted).
-								// Empty Symbol or no axes = dormant module.
-								if (!G || G->Symbol.IsNone() || !G->IsValidModule()) { return EVisibility::Collapsed; }
+								// nullptr = Flatten or unbound sub-collection (no module emitted); empty Symbol = nothing to label.
+								// Axis state is deliberately not gated -- the symbol shows even with no axis enabled.
+								if (!G || G->Symbol.IsNone()) { return EVisibility::Collapsed; }
 								return EVisibility::HitTestInvisible;
 							})
 
