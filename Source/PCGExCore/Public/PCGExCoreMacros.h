@@ -137,11 +137,14 @@ if(!SharedContext.Get()){ return _RET; }
 /// Macros for defining PCG node names, titles, and tooltips
 
 #if WITH_EDITOR
+
+#define PCGEX_TITLE_PREFIX FString A = TEXT(""); A += (WantsDataStealing() ? TEXT("▶▶ ") : TEXT("")); A += (bCleanupConsumableAttributes ? TEXT("🆑 ") : TEXT("")); A += TEXT("PCGEx | ");
+
 // Standard node info definition with name, title, and tooltip
 #define PCGEX_NODE_INFOS(_SHORTNAME, _NAME, _TOOLTIP)\
 virtual FName GetDefaultNodeName() const override { return FName(TEXT("PCGEx"#_SHORTNAME)); } \
 virtual FName AdditionalTaskName() const override{ FString A = TEXT(""); return FName(A + GetDefaultNodeTitle().ToString()); }\
-virtual FText GetDefaultNodeTitle() const override { FString A = TEXT(""); A += (bCleanupConsumableAttributes ? TEXT("🆑 ") : TEXT("")); A += TEXT("PCGEx | "); A += TEXT(_NAME); return FTEXT(A);} \
+virtual FText GetDefaultNodeTitle() const override { PCGEX_TITLE_PREFIX A += TEXT(_NAME); return FTEXT(A);} \
 virtual FText GetNodeTooltipText() const override{ return FTEXT(_TOOLTIP); }
 
 // Extended node info with custom subtitle support
@@ -150,7 +153,7 @@ virtual FName GetDefaultNodeName() const override { return FName(TEXT(#_SHORTNAM
 virtual FName AdditionalTaskName() const override{ FString A = TEXT(""); return FName(A + GetDefaultNodeTitle().ToString()); }\
 virtual FString GetAdditionalTitleInformation() const override{ FName N = _TASK_NAME; return N.IsNone() ? FString() : N.ToString(); }\
 virtual bool HasFlippedTitleLines() const { FName N = _TASK_NAME; return !N.IsNone(); }\
-virtual FText GetDefaultNodeTitle() const override { FString A = TEXT(""); A += (bCleanupConsumableAttributes ? TEXT("🆑 ") : TEXT("")); A += TEXT("PCGEx | "); A += TEXT(_NAME); return FTEXT(A);} \
+virtual FText GetDefaultNodeTitle() const override { PCGEX_TITLE_PREFIX A += TEXT(_NAME); return FTEXT(A);} \
 virtual FText GetNodeTooltipText() const override{ return FTEXT(_TOOLTIP); }
 
 #else
