@@ -3,6 +3,7 @@
 
 #include "Filters/Points/PCGExBoundsFilter.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Math/PCGExMathBounds.h"  // For PCGExMath::GetLocalBounds
@@ -346,6 +347,24 @@ TArray<FPCGPinProperties> UPCGExBoundsFilterProviderSettings::InputPinProperties
 PCGEX_CREATE_FILTER_FACTORY(Bounds)
 
 #if WITH_EDITOR
+void UPCGExBoundsFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBoundsFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExBoundsFilterProviderSettings::GetDisplayName() const
 {
 	switch (Config.CheckType)

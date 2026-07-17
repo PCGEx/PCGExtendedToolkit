@@ -22,6 +22,14 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Floating Point Precision"), AdvancedDisplay)
 	double Precision = 100;
 
+#if WITH_EDITOR
+	/** Value-forward legacy triplet values into their shorthand replacements. No pin renaming: instanced
+	 *  operation properties generate no override pins (engine recurses the base class, not the subclass). */
+	virtual void ApplyShorthandDeprecation()
+	{
+	}
+#endif
+
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override
 	{
 		Super::CopySettingsFrom(Other);

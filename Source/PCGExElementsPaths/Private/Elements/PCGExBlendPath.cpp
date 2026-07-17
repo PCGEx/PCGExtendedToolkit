@@ -13,7 +13,27 @@
 #define LOCTEXT_NAMESPACE "PCGExBlendPathElement"
 #define PCGEX_NAMESPACE BlendPath
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExBlendPathSettings, Lerp, double, LerpInput, LerpAttribute, LerpConstant)
+#if WITH_EDITOR
+void UPCGExBlendPathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 6)
+	{
+		// Rewire Lerp
+		PCGEX_SHORTHAND_RENAME_PIN(LerpAttribute, LerpConstant, Lerp)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBlendPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 6)
+	{
+		Lerp.Update(LerpInput_DEPRECATED, LerpAttribute_DEPRECATED, LerpConstant_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 UPCGExBlendPathSettings::UPCGExBlendPathSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -107,7 +127,7 @@ namespace PCGExBlendPath
 
 		if (Settings->BlendOver == EPCGExBlendOver::Fixed)
 		{
-			LerpGetter = Settings->GetValueSettingLerp();
+			LerpGetter = Settings->Lerp.GetValueSetting();
 			if (!LerpGetter->Init(PointDataFacade))
 			{
 				return false;

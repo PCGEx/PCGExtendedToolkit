@@ -42,6 +42,9 @@ public:
 
 	virtual bool IsCacheable(const UPCGSettings* InSettings) const override;
 
+	/** Full content CRC when stealing, so downstream detects the in-place mutation (identity is unchanged). */
+	virtual bool ShouldComputeFullOutputDataCrc(FPCGContext* Context) const override;
+
 protected:
 	virtual FPCGContext* CreateContext() override;
 
@@ -54,6 +57,12 @@ protected:
 
 	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override;
 	virtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override;
+
+	/** Elements that populate FPCGContext::DynamicDependencies (ScheduleGraph + bIsPaused) must return
+	 *  false: the executor registers paused-task successors from the dependencies visible when
+	 *  ExecuteInternal returns, so dependencies added from a detached AdvanceWork are never watched
+	 *  and the node is never unpaused. */
+	virtual bool SupportsDetachedExecute() const { return true; }
 
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;
 	virtual void InitializeData(FPCGExContext* InContext, const UPCGExSettings* InSettings) const;

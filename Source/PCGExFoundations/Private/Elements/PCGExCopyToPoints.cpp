@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExCopyToPoints.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataForward.h"
@@ -31,6 +32,26 @@ TArray<FPCGPinProperties> UPCGExCopyToPointsSettings::OutputPinProperties() cons
 
 PCGEX_INITIALIZE_ELEMENT(CopyToPoints)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(CopyToPoints)
+
+#if WITH_EDITOR
+void UPCGExCopyToPointsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCopyToPointsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExCopyToPointsElement::Boot(FPCGExContext* InContext) const
 {

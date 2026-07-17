@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -65,12 +65,16 @@ public:
 
 	virtual ~FPCGExNoiseMarble() override = default;
 
+	virtual void PostInitDerived() override;
+
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 
 private:
+	/** Precomputed in PostInitDerived */
+	double InvTurbulenceNorm = 1.0;
+
 	double GenerateTurbulence(const FVector& Position) const;
-	double BaseNoise(const FVector& Position) const;
 };
 
 ////
@@ -84,7 +88,7 @@ public:
 	UPROPERTY()
 	FPCGExNoiseConfigMarble Config;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const override;
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const override;
 	PCGEX_NOISE3D_FACTORY_BOILERPLATE
 };
 

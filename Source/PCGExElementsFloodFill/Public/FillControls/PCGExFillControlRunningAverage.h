@@ -6,10 +6,14 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExFillControlOperation.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "UObject/Object.h"
 
 #include "PCGExFillControlRunningAverage.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 USTRUCT(BlueprintType)
 struct FPCGExFillControlConfigRunningAverage : public FPCGExFillControlConfigBase
@@ -20,41 +24,48 @@ struct FPCGExFillControlConfigRunningAverage : public FPCGExFillControlConfigBas
 		: FPCGExFillControlConfigBase()
 	{
 		bSupportSteps = false;
-		WindowSizeAttribute.Update("WindowSize");
+		WindowSizeAttribute_DEPRECATED.Update("WindowSize");
 		Operand.Update("$Position.Z");
 	}
 
-	/** Whether the window size is a constant or from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType WindowSizeInput = EPCGExInputValueType::Constant;
+	/** Window Size. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Window Size"))
+	FPCGExInputShorthandSelectorInteger32Abs WindowSizeValue = FPCGExInputShorthandSelectorInteger32Abs(FName("WindowSize"), 10, false);
 
-	/** Window Size Attribute */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Window Size (Attr)", EditCondition="WindowSizeInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector WindowSizeAttribute;
+	/** Tolerance. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tolerance"))
+	FPCGExInputShorthandNameDoubleAbs ToleranceValue = FPCGExInputShorthandNameDoubleAbs(FName("Tolerance"), 10, false);
 
-	/** Window Size Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Window Size", EditCondition="WindowSizeInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=1))
-	int32 WindowSize = 10;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(WindowSize, int32)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType WindowSizeInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Whether the tolerance is a constant or from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType ToleranceInput = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector WindowSizeAttribute_DEPRECATED;
 
-	/** Tolerance Attribute */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tolerance (Attr)", EditCondition="ToleranceInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName ToleranceAttribute = FName("Tolerance");
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 WindowSize_DEPRECATED = 10;
 
-	/** Tolerance Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tolerance", EditCondition="ToleranceInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0))
-	double Tolerance = 10;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ToleranceInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Tolerance, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName ToleranceAttribute_DEPRECATED = FName("Tolerance");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Tolerance_DEPRECATED = 10;
+
+#pragma endregion
 
 	/** The property that will be averaged and checked against candidates -- will be broadcasted to a `double`. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector Operand;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -117,6 +128,8 @@ class UPCGExFillControlsRunningAverageProviderSettings : public UPCGExFillContro
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsRunningAverage, "Fill Control : Running Average", "Ignore candidates which attribute value isn't within the given tolerance of a running average.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

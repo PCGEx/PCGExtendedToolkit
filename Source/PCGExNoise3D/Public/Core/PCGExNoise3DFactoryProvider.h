@@ -126,7 +126,11 @@ public:
 
 	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const;
+	/** Creates a fully initialized operation. Non-virtual so PostInit is guaranteed for every caller. */
+	TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const;
+
+protected:
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const;
 };
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Noise")

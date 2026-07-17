@@ -3,10 +3,26 @@
 
 #include "Selectors/PCGExSelectorSharedData.h"
 
+#include "Data/PCGExPointIO.h"
 #include "Selectors/PCGExSelectorFactoryProvider.h"
 
 namespace PCGExCollections
 {
+	void FSelectorSharedDataCache::SetBatchPointCounts(const PCGExData::FPointIOCollection& InCollection)
+	{
+		AllInputsPointCount = InCollection.GetTotalNum(PCGExData::EIOSide::In);
+
+		PerInputPointCounts.Init(0, InCollection.Pairs.Num());
+		for (const TSharedPtr<PCGExData::FPointIO>& IO : InCollection.Pairs)
+		{
+			if (IO && PerInputPointCounts.IsValidIndex(IO->IOIndex))
+			{
+				const UPCGBasePointData* InData = IO->GetIn();
+				PerInputPointCounts[IO->IOIndex] = InData ? InData->GetNumPoints() : 0;
+			}
+		}
+	}
+
 	TSharedPtr<FSelectorSharedData> FSelectorSharedDataCache::GetOrBuild(
 		const UPCGExSelectorFactoryData* Factory,
 		const UPCGExAssetCollection* Collection,

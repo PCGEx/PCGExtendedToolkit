@@ -28,6 +28,7 @@ MACRO(NumInside, int32, 0)
 #define PCGEX_FOREACH_FIELD_PATH_POINT(MACRO)\
 MACRO(Dot, double, 0)\
 MACRO(Angle, double, 0)\
+MACRO(Concavity, int32, 0)\
 MACRO(DistanceToNext, double, 0)\
 MACRO(DistanceToPrev, double, 0)\
 MACRO(DistanceToStart, double, 0)\
@@ -82,6 +83,8 @@ class UPCGExWritePathPropertiesSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(WritePathProperties, "Path : Properties", "One-stop node to compute useful path infos.");
 #endif
 
@@ -103,9 +106,16 @@ protected:
 public:
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
-	/** Projection settings. Some path data must be computed on a 2D plane. */
+	/** Projection settings. Some path data must be computed on a 2D plane. The projection normal (static, @Data attribute, or best-fit) also serves as the up/winding reference for point normals, binormals and signed angles. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExGeo2DProjectionDetails ProjectionDetails = FPCGExGeo2DProjectionDetails();
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector UpVector_DEPRECATED = FVector::UpVector;
+
+#pragma endregion
 
 	/** Inclusion details settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
@@ -226,10 +236,6 @@ public:
 
 #pragma region Points attributes
 
-	/** Up Attribute constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta = (PCG_Overridable))
-	FVector UpVector = FVector::UpVector;
-
 	/** Output Dot product of Prev/Next directions. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteDot = false;
@@ -249,6 +255,22 @@ public:
 	/** Unit/range to output the angle to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_Overridable, DisplayName=" └─ Range", EditCondition="bWriteAngle", EditConditionHides, HideEditConditionToggle))
 	EPCGExAngleRange AngleRange = EPCGExAngleRange::PIRadians;
+
+	/** Output per-point concavity: -1 for concave corners, +1 for convex corners, 0 for straight points and open path endpoints. Resolved against the projected path winding, so results are winding-agnostic. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
+	bool bWriteConcavity = false;
+
+	/** Name of the 'int32' attribute to write concavity to.*/
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="Concavity", PCG_Overridable, EditCondition="bWriteConcavity"))
+	FName ConcavityAttributeName = FName("Concavity");
+
+	/** If enabled, corners forming a right angle (within tolerance) write 0 instead of -1/+1. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, DisplayName=" └─ Right Angles as 0", EditCondition="bWriteConcavity", EditConditionHides, HideEditConditionToggle))
+	bool bFlagRightAngles = false;
+
+	/** Tolerance, in degrees, around 90° within which a corner is considered a right angle. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_Overridable, DisplayName=" └─ Right Angle Tolerance", EditCondition="bWriteConcavity && bFlagRightAngles", EditConditionHides, HideEditConditionToggle, ClampMin=0, ClampMax=90, Units="Degrees"))
+	double RightAngleTolerance = 5;
 
 	/** Output distance to next. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
@@ -440,15 +462,6 @@ namespace PCGExWritePathProperties
 	const FName OutputPathInner = TEXT("Inner");
 	const FName OutputPathMedian = TEXT("Odd");
 
-	struct PCGEXELEMENTSPATHS_API FPointDetails
-	{
-		int32 Index;
-		FVector Normal;
-		FVector Binormal;
-		FVector ToPrev;
-		FVector ToNext;
-	};
-
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExWritePathPropertiesContext, UPCGExWritePathPropertiesSettings>
 	{
 		friend class FBatch;
@@ -466,10 +479,8 @@ namespace PCGExWritePathProperties
 		TSharedPtr<PCGExPaths::FPathEdgeBinormal> PathBinormal;
 		TSharedPtr<PCGExPaths::FPathEdgeAvgNormal> PathAvgNormal;
 
-		TArray<FPointDetails> Details;
-
-		FVector UpConstant = FVector::ZeroVector;
-		TSharedPtr<PCGExData::TBuffer<FVector>> UpGetter;
+		// Per-point turn sign vs projected winding (-1 concave, +1 convex, 0 straight); must be computed from the pre-offset projection
+		TArray<int8> ConcavitySigns;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

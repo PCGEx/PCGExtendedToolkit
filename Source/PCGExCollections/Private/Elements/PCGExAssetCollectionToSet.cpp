@@ -27,6 +27,16 @@ void UPCGExAssetCollectionToSetSettings::PostEditChangeProperty(FPropertyChanged
 	bWriteAssetClass = bWriteAssetPath;
 	AssetClassAttributeName = AssetPathAttributeName;
 }
+
+TOptional<FPCGNodeThumbnailProxy> UPCGExAssetCollectionToSetSettings::GetNodeThumbnail() const
+{
+	if (!AssetCollection.IsNull())
+	{
+		return FPCGNodeThumbnailProxy::FromAssetPath(AssetCollection.ToSoftObjectPath());
+	}
+
+	return {};
+}
 #endif
 
 

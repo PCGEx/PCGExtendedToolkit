@@ -4,10 +4,25 @@
 #include "Probes/PCGExProbeTensor.h"
 
 #include "PCGExH.h"
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExProbingCandidates.h"
 #include "Core/PCGExTensorFactoryProvider.h"
 #include "Math/PCGExMath.h"
+
+#if WITH_EDITOR
+void FPCGExProbeConfigTensor::ApplyDeprecation()
+{
+	FPCGExProbeConfigBase::ApplyDeprecation();
+	TensorHandlerDetails.ApplyDeprecation();
+}
+
+void FPCGExProbeConfigTensor::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	FPCGExProbeConfigBase::RenamePins(InSettings, InOutNode);
+	TensorHandlerDetails.RenamePins(InSettings, InOutNode);
+}
+#endif
 
 TArray<FPCGPinProperties> UPCGExProbeTensorProviderSettings::InputPinProperties() const
 {
@@ -246,6 +261,26 @@ void FPCGExProbeTensor::ProcessBestCandidate(const int32 Index, PCGExProbing::FB
 }
 
 #if WITH_EDITOR
+void UPCGExProbeTensorProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeTensorProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExProbeTensorProviderSettings::GetDisplayName() const
 {
 	return TEXT("");

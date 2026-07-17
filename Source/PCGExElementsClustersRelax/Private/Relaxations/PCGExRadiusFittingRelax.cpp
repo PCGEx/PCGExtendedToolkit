@@ -5,12 +5,19 @@
 
 #pragma region UPCGExRadiusFittingRelax
 
+#if WITH_EDITOR
+void UPCGExRadiusFittingRelax::ApplyShorthandDeprecation()
+{
+	RadiusValue.Update(RadiusInput_DEPRECATED, RadiusAttribute_DEPRECATED, Radius_DEPRECATED);
+}
+#endif
+
 void UPCGExRadiusFittingRelax::RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterPrimaryBuffersDependencies(InContext, FacadePreloader);
-	if (RadiusInput == EPCGExInputValueType::Attribute)
+	if (RadiusValue.Input == EPCGExInputValueType::Attribute)
 	{
-		FacadePreloader.Register<double>(InContext, RadiusAttribute);
+		FacadePreloader.Register<double>(InContext, RadiusValue.Attribute);
 	}
 }
 
@@ -21,7 +28,7 @@ bool UPCGExRadiusFittingRelax::PrepareForCluster(FPCGExContext* InContext, const
 		return false;
 	}
 
-	RadiusBuffer = GetValueSettingRadius();
+	RadiusBuffer = RadiusValue.GetValueSetting();
 	if (!RadiusBuffer->Init(PrimaryDataFacade))
 	{
 		return false;

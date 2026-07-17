@@ -204,15 +204,14 @@ void FPCGExPropertySchemaCollectionCustomization::OnSchemasArrayChanged()
 	{
 		Schema.SyncPropertyName();
 	}
-	Collection->ReconcileImportOverrides();
+	ReconcileImportOverridesPreservingLiveRows(*Collection);
 
 	CachedResolvedCount = -1;
-	// Deferred refresh: ForceRefresh from inside a property change notification tears down the
-	// widget tree mid-stack-unwind, killing the FInstancedStruct picker's in-flight transaction
-	// and breaking undo. Same trap FPCGExPropertyOverridesCustomization documents.
+	// Deferred rebuild. RequestRefresh only re-lays-out existing rows (never re-runs this customization
+	// -> stale list); a synchronous ForceRefresh from inside a change notification would re-enter.
 	if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
 	{
-		PropertyUtilities->RequestRefresh();
+		PropertyUtilities->RequestForceRefresh();
 	}
 }
 
@@ -228,14 +227,14 @@ void FPCGExPropertySchemaCollectionCustomization::OnImportedSchemasArrayChanged(
 	PropertyHandle->AccessRawData(RawData);
 	if (!RawData.IsEmpty() && RawData[0])
 	{
-		static_cast<FPCGExPropertySchemaCollection*>(RawData[0])->ReconcileImportOverrides();
+		ReconcileImportOverridesPreservingLiveRows(*static_cast<FPCGExPropertySchemaCollection*>(RawData[0]));
 	}
 
 	CachedResolvedCount = -1;
-	// Deferred refresh -- see OnSchemasArrayChanged.
+	// Deferred rebuild -- see OnSchemasArrayChanged.
 	if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
 	{
-		PropertyUtilities->RequestRefresh();
+		PropertyUtilities->RequestForceRefresh();
 	}
 }
 
@@ -270,23 +269,30 @@ void FPCGExPropertySchemaCollectionCustomization::ReconcileAndNotify()
 	PropertyHandle->AccessRawData(RawData);
 	if (!RawData.IsEmpty() && RawData[0])
 	{
-		static_cast<FPCGExPropertySchemaCollection*>(RawData[0])->ReconcileImportOverrides();
+		ReconcileImportOverridesPreservingLiveRows(*static_cast<FPCGExPropertySchemaCollection*>(RawData[0]));
 	}
 
-	PropertyHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
+	PropertyHandle->NotifyPostChange(EPropertyChangeType::ValueSet); // mark host dirty to re-serialise
 
-	// ForceRefresh, not RequestRefresh: when this handler fires from an upstream asset's
-	// OnSchemaAssetChanged broadcast (e.g. A adds an entry, B is open and subscribed), the
-	// deferred RequestRefresh path doesn't reliably tick through to a rebuild from inside
-	// the broadcast event chain -- the rebuild only fires when the detail panel is otherwise
-	// invalidated (editor close/reopen). ForceRefresh runs the rebuild synchronously, which
-	// the sibling array-change handlers (OnSchemasArrayChanged, OnImportedSchemasArrayChanged)
-	// already use without re-entrancy issues.
+	// Fires from an imported asset's broadcast -> deferred rebuild (synchronous ForceRefresh would
+	// re-enter mid-broadcast; RequestRefresh wouldn't re-run this customization -> stale).
 	CachedResolvedCount = -1;
 	if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
 	{
-		PropertyUtilities->ForceRefresh();
+		PropertyUtilities->RequestForceRefresh();
 	}
+}
+
+void FPCGExPropertySchemaCollectionCustomization::ReconcileImportOverridesPreservingLiveRows(FPCGExPropertySchemaCollection& Collection)
+{
+	// Mounted rows alias each Overrides[i].Value's inner memory via non-owning FStructOnScope and repaint
+	// from it, so reconciling in place (SyncToSchema's slow path frees it) is a use-after-free until the
+	// deferred rebuild tears them down. Park the entries -- a TArray move leaves their inner allocations
+	// put -- and reconcile a copy instead. Stays in the caller's transaction, so undo is unaffected.
+	TArray<FPCGExPropertyOverrideEntry>& Parked = ParkedOverrideBuffers.AddDefaulted_GetRef();
+	Parked = MoveTemp(Collection.ImportOverrides.Overrides);
+	Collection.ImportOverrides.Overrides = Parked; // copy back for the reconcile to reallocate
+	Collection.ReconcileImportOverrides();
 }
 
 void FPCGExPropertySchemaCollectionCustomization::EmitSectionHeader(IDetailChildrenBuilder& ChildBuilder, const FString& Title) const

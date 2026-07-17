@@ -8,10 +8,14 @@
 #include "Core/PCGExFillControlOperation.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
 #include "Core/PCGExHeuristicsFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "UObject/Object.h"
 
 #include "PCGExFillControlHxBudget.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 UENUM(BlueprintType)
 enum class EPCGExFloodFillBudgetSource : uint8
@@ -37,22 +41,30 @@ struct FPCGExFillControlConfigHeuristicsBudget : public FPCGExFillControlConfigB
 	EPCGExHeuristicScoreMode HeuristicScoreMode = EPCGExHeuristicScoreMode::WeightedAverage;
 
 	/** Maximum accumulated heuristic cost allowed before stopping. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExInputValueType MaxBudgetInput = EPCGExInputValueType::Constant;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Max Budget"))
+	FPCGExInputShorthandNameDoubleAbs MaxBudgetValue = FPCGExInputShorthandNameDoubleAbs(FName("MaxBudget"), 100.0, false);
 
-	/** Max budget attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Max Budget (Attr)", EditCondition = "MaxBudgetInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName MaxBudgetAttribute = FName("MaxBudget");
+#pragma region DEPRECATED
 
-	/** Max budget constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Max Budget", EditCondition = "MaxBudgetInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin = 0))
-	double MaxBudget = 100.0;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaxBudgetInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(MaxBudget, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName MaxBudgetAttribute_DEPRECATED = FName("MaxBudget");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double MaxBudget_DEPRECATED = 100.0;
+
+#pragma endregion
 
 	/** Which score to track for budget comparison. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExFloodFillBudgetSource BudgetSource = EPCGExFloodFillBudgetSource::PathScore;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -118,6 +130,8 @@ class UPCGExFillControlsHeuristicsBudgetProviderSettings : public UPCGExFillCont
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsHeuristicsBudget, "Fill Control : Heuristics Budget", "Stop diffusion when accumulated heuristic cost exceeds a budget.", FName(GetDisplayName()))
 
 	virtual FLinearColor GetNodeTitleColor() const override

@@ -7,6 +7,7 @@
 
 
 #include "Core/PCGExPointsProcessor.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Math/PCGExMath.h"
 
@@ -30,6 +31,9 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(Normalize, "Normalize", "Output normalized position against data bounds to a new vector attribute.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
@@ -66,19 +70,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExBlending.EPCGExApplySampledComponentFlags"))
 	uint8 OneMinus = 0;
 
-	/** Whether to read the transform from an attribute on the edge or a constant. */
+	/** Transform applied to the position before processing. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType TransformInput = EPCGExInputValueType::Constant;
+	FPCGExInputShorthandSelectorTransform Transform = FPCGExInputShorthandSelectorTransform(FName("@Data.Transform"), FTransform::Identity, false);
 
-	/** Transform applied to the position before processing  */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Transform (Attr)", EditCondition="TransformInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector TransformAttribute;
+#pragma region DEPRECATED
 
-	/** Transform applied to the position before processing  */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Transform", ClampMin=1, EditCondition="TransformInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FTransform TransformConstant = FTransform::Identity;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType TransformInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Transform, FTransform)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector TransformAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FTransform TransformConstant_DEPRECATED = FTransform::Identity;
+
+#pragma endregion
 
 	/** Attribute to write the normalized position to. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

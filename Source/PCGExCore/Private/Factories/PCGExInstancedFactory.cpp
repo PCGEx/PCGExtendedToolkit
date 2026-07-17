@@ -12,6 +12,7 @@
 #include "Core/PCGExContext.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExPropertyHelpers.h"
 
@@ -98,11 +99,45 @@ void UPCGExInstancedFactory::ApplyOverrides()
 
 	for (const TPair<FName, FPCGMetadataAttributeBase*>& PossibleOverride : PossibleOverrides)
 	{
-		// Find the property by name
+		// Find the property by name.
 		FProperty* Property = ObjectClass->FindPropertyByName(PossibleOverride.Key);
-		if (!Property)
+
+		// A migrated triplet's old flat name resolves to its _DEPRECATED stub, so reroute the override into
+		// the matching input-shorthand's Constant. Input stays untouched: the legacy flat override only
+		// ever affected the constant.
+		void* Container = this;
+		if (!Property || Property->HasAnyPropertyFlags(CPF_Deprecated))
 		{
-			continue;
+			Property = nullptr;
+
+			auto TryShorthandConstant = [&](const FString& MemberName) -> bool
+			{
+				const FStructProperty* ShorthandProp = CastField<FStructProperty>(ObjectClass->FindPropertyByName(FName(MemberName)));
+				if (!ShorthandProp || !ShorthandProp->Struct || !ShorthandProp->Struct->IsChildOf(FPCGExInputShorthandBase::StaticStruct()))
+				{
+					return false;
+				}
+				FProperty* ConstantProp = ShorthandProp->Struct->FindPropertyByName(FName("Constant"));
+				if (!ConstantProp)
+				{
+					return false;
+				}
+				Property = ConstantProp;
+				Container = ShorthandProp->ContainerPtrToValuePtr<void>(this);
+				return true;
+			};
+
+			// Both migration namings are in use: "<Key>" -> "<Key>Value", and "<X>Constant" -> "<X>Value".
+			const FString KeyStr = PossibleOverride.Key.ToString();
+			if (!TryShorthandConstant(KeyStr + TEXT("Value")) && KeyStr.EndsWith(TEXT("Constant")))
+			{
+				TryShorthandConstant(KeyStr.LeftChop(8) + TEXT("Value"));
+			}
+
+			if (!Property)
+			{
+				continue;
+			}
 		}
 
 		// Container/extended source attributes can't drive the typed FProperty setter -- skip silently
@@ -110,7 +145,7 @@ void UPCGExInstancedFactory::ApplyOverrides()
 		PCGExMetaHelpers::ExecuteWithRightType(PossibleOverride.Value, [&](auto DummyValue)
 		{
 			using T = decltype(DummyValue);
-			PCGExPropertyHelpers::TrySetFPropertyValue<T>(this, Property, PossibleOverride.Value->GetValueFromItemKey<T>(0));
+			PCGExPropertyHelpers::TrySetFPropertyValueCoerced<T>(Container, Property, PossibleOverride.Value->GetValueFromItemKey<T>(0));
 		});
 	}
 }

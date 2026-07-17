@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseCurl.h"
@@ -7,65 +7,31 @@
 
 using namespace PCGExNoise3D::Math;
 
-double FPCGExNoiseCurl::BaseNoise(const FVector& Position) const
+namespace PCGExNoiseCurl
 {
-	const int32 X0 = FastFloor(Position.X);
-	const int32 Y0 = FastFloor(Position.Y);
-	const int32 Z0 = FastFloor(Position.Z);
+	// Noise-space offsets decorrelating the three potential-field channels
+	const FVector OffsetFy = FVector(31.416, 47.853, 12.793);
+	const FVector OffsetFz = FVector(93.139, 25.186, 71.524);
+}
 
-	const double Xf = Position.X - X0;
-	const double Yf = Position.Y - Y0;
-	const double Zf = Position.Z - Z0;
-
-	const double U = SmoothStep(Xf);
-	const double V = SmoothStep(Yf);
-	const double W = SmoothStep(Zf);
-
-	const int32 X0S = (X0 + Seed) & 255;
-
-	const int32 AAA = Hash3D(X0S, Y0, Z0);
-	const int32 ABA = Hash3D(X0S, Y0 + 1, Z0);
-	const int32 AAB = Hash3D(X0S, Y0, Z0 + 1);
-	const int32 ABB = Hash3D(X0S, Y0 + 1, Z0 + 1);
-	const int32 BAA = Hash3D(X0S + 1, Y0, Z0);
-	const int32 BBA = Hash3D(X0S + 1, Y0 + 1, Z0);
-	const int32 BAB = Hash3D(X0S + 1, Y0, Z0 + 1);
-	const int32 BBB = Hash3D(X0S + 1, Y0 + 1, Z0 + 1);
-
-	const double G_AAA = GradDot3(AAA, Xf, Yf, Zf);
-	const double G_BAA = GradDot3(BAA, Xf - 1.0, Yf, Zf);
-	const double G_ABA = GradDot3(ABA, Xf, Yf - 1.0, Zf);
-	const double G_BBA = GradDot3(BBA, Xf - 1.0, Yf - 1.0, Zf);
-	const double G_AAB = GradDot3(AAB, Xf, Yf, Zf - 1.0);
-	const double G_BAB = GradDot3(BAB, Xf - 1.0, Yf, Zf - 1.0);
-	const double G_ABB = GradDot3(ABB, Xf, Yf - 1.0, Zf - 1.0);
-	const double G_BBB = GradDot3(BBB, Xf - 1.0, Yf - 1.0, Zf - 1.0);
-
-	const double X00 = Lerp(G_AAA, G_BAA, U);
-	const double X10 = Lerp(G_ABA, G_BBA, U);
-	const double X01 = Lerp(G_AAB, G_BAB, U);
-	const double X11 = Lerp(G_ABB, G_BBB, U);
-
-	const double XY0 = Lerp(X00, X10, V);
-	const double XY1 = Lerp(X01, X11, V);
-
-	return Lerp(XY0, XY1, W);
+void FPCGExNoiseCurl::PostInitDerived()
+{
+	InvE2 = 1.0 / (2.0 * Epsilon);
 }
 
 FVector FPCGExNoiseCurl::GetPotentialField(const FVector& Position) const
 {
 	// Three independent noise channels for potential field
 	const FVector ScaledPos = Position * Frequency;
-	const double Fx = BaseNoise(ScaledPos);
-	const double Fy = BaseNoise(ScaledPos + FVector(31.416, 47.853, 12.793));
-	const double Fz = BaseNoise(ScaledPos + FVector(93.139, 25.186, 71.524));
+	const double Fx = Perlin3D(ScaledPos, Seed);
+	const double Fy = Perlin3D(ScaledPos + PCGExNoiseCurl::OffsetFy, Seed);
+	const double Fz = Perlin3D(ScaledPos + PCGExNoiseCurl::OffsetFz, Seed);
 	return FVector(Fx, Fy, Fz);
 }
 
 FVector FPCGExNoiseCurl::ComputeCurl(const FVector& Position) const
 {
 	const double E = Epsilon;
-	const double InvE2 = 1.0 / (2.0 * E);
 
 	// Central differences for partial derivatives
 	const FVector PxP = GetPotentialField(Position + FVector(E, 0, 0));
@@ -91,71 +57,81 @@ FVector FPCGExNoiseCurl::ComputeCurl(const FVector& Position) const
 		) * CurlScale;
 }
 
-double FPCGExNoiseCurl::GenerateRaw(const FVector& Position) const
+double FPCGExNoiseCurl::ComputeCurlX(const FVector& Position) const
 {
-	// For scalar output, return magnitude of curl
-	const FVector ScaledPos = Position * Frequency;
-
-	// Need a non-const way to compute curl
+	// X component only (dFz/dy - dFy/dz)
 	const double E = Epsilon;
-	const double InvE2 = 1.0 / (2.0 * E);
 
-	const FVector PxP = GetPotentialField(ScaledPos + FVector(E, 0, 0));
-	const FVector PxN = GetPotentialField(ScaledPos - FVector(E, 0, 0));
-	const FVector PyP = GetPotentialField(ScaledPos + FVector(0, E, 0));
-	const FVector PyN = GetPotentialField(ScaledPos - FVector(0, E, 0));
-	const FVector PzP = GetPotentialField(ScaledPos + FVector(0, 0, E));
-	const FVector PzN = GetPotentialField(ScaledPos - FVector(0, 0, E));
+	const double FzYP = Perlin3D((Position + FVector(0, E, 0)) * Frequency + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FzYN = Perlin3D((Position - FVector(0, E, 0)) * Frequency + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FyZP = Perlin3D((Position + FVector(0, 0, E)) * Frequency + PCGExNoiseCurl::OffsetFy, Seed);
+	const double FyZN = Perlin3D((Position - FVector(0, 0, E)) * Frequency + PCGExNoiseCurl::OffsetFy, Seed);
 
-	const double dFz_dy = (PyP.Z - PyN.Z) * InvE2;
-	const double dFy_dz = (PzP.Y - PzN.Y) * InvE2;
-	const double dFx_dz = (PzP.X - PzN.X) * InvE2;
-	const double dFz_dx = (PxP.Z - PxN.Z) * InvE2;
-	const double dFy_dx = (PxP.Y - PxN.Y) * InvE2;
-	const double dFx_dy = (PyP.X - PyN.X) * InvE2;
+	const double dFz_dy = (FzYP - FzYN) * InvE2;
+	const double dFy_dz = (FyZP - FyZN) * InvE2;
 
-	const FVector Curl(
-		dFz_dy - dFy_dz,
-		dFx_dz - dFz_dx,
-		dFy_dx - dFx_dy
-		);
-
-	return Curl.Size() * CurlScale;
+	return (dFz_dy - dFy_dz) * CurlScale;
 }
 
-double FPCGExNoiseCurl::GetDouble(const FVector& Position) const
+double FPCGExNoiseCurl::ComputeCurlY(const FVector& Position) const
 {
-	return GetVector(Position).X;
+	// Y component only (dFx/dz - dFz/dx)
+	const double E = Epsilon;
+
+	const double FxZP = Perlin3D((Position + FVector(0, 0, E)) * Frequency, Seed);
+	const double FxZN = Perlin3D((Position - FVector(0, 0, E)) * Frequency, Seed);
+	const double FzXP = Perlin3D((Position + FVector(E, 0, 0)) * Frequency + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FzXN = Perlin3D((Position - FVector(E, 0, 0)) * Frequency + PCGExNoiseCurl::OffsetFz, Seed);
+
+	const double dFx_dz = (FxZP - FxZN) * InvE2;
+	const double dFz_dx = (FzXP - FzXN) * InvE2;
+
+	return (dFx_dz - dFz_dx) * CurlScale;
 }
 
-FVector2D FPCGExNoiseCurl::GetVector2D(const FVector& Position) const
+template <typename ValueType, typename ComputeFn>
+ValueType FPCGExNoiseCurl::AccumulateOctaves(const FVector& Position, ComputeFn&& Compute) const
 {
-	const FVector Curl = GetVector(Position);
-	return FVector2D(Curl);
-}
+	// Load-bearing asymmetry shared by all output arities: octave 0 samples the
+	// transformed position, higher octaves the raw one (kept for compatibility)
+	ValueType Acc = Compute(TransformPosition(Position));
 
-FVector FPCGExNoiseCurl::GetVector(const FVector& Position) const
-{
-	FVector Curl = ComputeCurl(TransformPosition(Position));
-
-	// Apply fractal octaves if configured
 	if (Octaves > 1)
 	{
 		double Amp = 1.0;
 		double Freq = 1.0;
-		const double Bounding = CalcFractalBounding(Octaves, Persistence);
-
-		Curl *= Amp;
 
 		for (int32 i = 1; i < Octaves; ++i)
 		{
 			Amp *= Persistence;
 			Freq *= Lacunarity;
-			Curl += ComputeCurl(Position * Freq) * Amp;
+			Acc += Compute(Position * Freq) * Amp;
 		}
 
-		Curl *= Bounding;
+		Acc *= FractalBounding;
 	}
+
+	return Acc;
+}
+
+double FPCGExNoiseCurl::GetDouble(const FVector& Position) const
+{
+	const double CurlX = AccumulateOctaves<double>(Position, [this](const FVector& P) { return ComputeCurlX(P); });
+	return ApplyRemap(CurlX * 0.5 + 0.5);
+}
+
+FVector2D FPCGExNoiseCurl::GetVector2D(const FVector& Position) const
+{
+	const FVector2D Curl = AccumulateOctaves<FVector2D>(Position, [this](const FVector& P) { return FVector2D(ComputeCurlX(P), ComputeCurlY(P)); });
+	return FVector2D(
+		ApplyRemap(Curl.X * 0.5 + 0.5),
+		ApplyRemap(Curl.Y * 0.5 + 0.5)
+		);
+}
+
+FVector FPCGExNoiseCurl::GetVector(const FVector& Position) const
+{
+	FVector Curl = AccumulateOctaves<FVector>(Position, [this](const FVector& P) { return ComputeCurl(P); });
 
 	for (int i = 0; i < 3; i++)
 	{
@@ -171,7 +147,7 @@ FVector4 FPCGExNoiseCurl::GetVector4(const FVector& Position) const
 	return FVector4(Curl.X, Curl.Y, Curl.Z, Curl.Size());
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryCurl::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryCurl::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseCurl)
 	PCGEX_FORWARD_NOISE3D_CONFIG

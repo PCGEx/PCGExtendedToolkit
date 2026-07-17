@@ -45,16 +45,27 @@ struct FPCGExProbeConfigIndex : public FPCGExProbeConfigBase
 	EPCGExIndexSafety IndexSafety = EPCGExIndexSafety::Ignore;
 
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType IndexInput = EPCGExInputValueType::Constant;
+	/** Target index. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index"))
+	FPCGExInputShorthandSelectorInteger32Abs Index = FPCGExInputShorthandSelectorInteger32Abs(FName("@Last"), 1, false);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index (Attr)", EditCondition="IndexInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector IndexAttribute;
+#pragma region DEPRECATED
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index", ClampMin=0, EditCondition="IndexInput == EPCGExInputValueType::Constant", EditConditionHides))
-	int32 IndexConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType IndexInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Index, int32)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector IndexAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 IndexConstant_DEPRECATED = 1;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	virtual void ApplyDeprecation() override;
+	virtual void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const override;
+#endif
 };
 
 /**
@@ -103,6 +114,8 @@ class UPCGExProbeIndexProviderSettings : public UPCGExProbeFactoryProviderSettin
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeIndex, "Probe : Index", "Connects to a specific index, ignoring search radius.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExTensorsTransform.h"
 
+#include "PCGExVersion.h"
 #include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExTensorFactoryProvider.h"
@@ -21,6 +22,28 @@ TArray<FPCGPinProperties> UPCGExTensorsTransformSettings::InputPinProperties() c
 }
 
 PCGEX_INITIALIZE_ELEMENT(TensorsTransform)
+
+#if WITH_EDITOR
+void UPCGExTensorsTransformSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		TensorHandlerDetails.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExTensorsTransformSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		TensorHandlerDetails.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGExData::EIOInit UPCGExTensorsTransformSettings::GetMainDataInitializationPolicy() const
 {

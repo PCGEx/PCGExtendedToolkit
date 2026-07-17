@@ -563,7 +563,7 @@ namespace PCGExMatching
 		}
 
 		int32 OutLimit = 0;
-		if (!PCGExData::Helpers::TryGetSettingDataValue<int32>(nullptr, InDataCandidate.Data, Details->LimitInput, Details->LimitAttribute, Details->Limit, OutLimit))
+		if (!Details->LimitValue.TryReadDataValue(nullptr, InDataCandidate.Data, OutLimit))
 		{
 			return MAX_int32;
 		}

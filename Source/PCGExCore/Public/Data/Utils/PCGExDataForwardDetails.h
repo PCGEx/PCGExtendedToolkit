@@ -16,9 +16,10 @@ class UPCGData;
 
 namespace PCGExData
 {
-	struct FConstPoint;
+	struct FElement;
 	class IAttributeBroadcaster;
 	class FDataForwardHandler;
+	class FPointIO;
 }
 
 USTRUCT(BlueprintType)
@@ -102,9 +103,11 @@ struct PCGEXCORE_API FPCGExAttributeToTagDetails
 	// FFacade/FPointIO. SourceDataFacade is left null; Tag(...) is unaffected as it reads getters by row index.
 	bool Init(const FPCGExContext* InContext, const UPCGData* InSourceData, const TSet<FName>* IgnoreAttributes = nullptr);
 
-	void Tag(const PCGExData::FConstPoint& TagSource, TSet<FString>& InTags) const;
-	void Tag(const PCGExData::FConstPoint& TagSource, const TSharedPtr<PCGExData::FPointIO>& PointIO) const;
-	void Tag(const PCGExData::FConstPoint& TagSource, UPCGMetadata* InMetadata) const;
+	// TagSource only carries the row/point index -- FConstPoint (an FElement) binds directly, and raw
+	// param rows tag via FElement(RowIndex) with no point data involved.
+	void Tag(const PCGExData::FElement& TagSource, TSet<FString>& InTags) const;
+	void Tag(const PCGExData::FElement& TagSource, const TSharedPtr<PCGExData::FPointIO>& PointIO) const;
+	void Tag(const PCGExData::FElement& TagSource, UPCGMetadata* InMetadata) const;
 
 	// Format one promoted value as a data tag, matching Tag()'s per-getter rule: bools tag by presence;
 	// everything else becomes "Name:Value" (or just "Value" when not prefixed); empty strings are skipped.

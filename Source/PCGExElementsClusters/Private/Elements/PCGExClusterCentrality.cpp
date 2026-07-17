@@ -21,6 +21,16 @@ PCGEX_INITIALIZE_ELEMENT(ClusterCentrality)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(ClusterCentrality)
 
 #if WITH_EDITOR
+void UPCGExClusterCentralitySettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 73, 0)
+	{
+		RandomDownsampling.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
 void UPCGExClusterCentralitySettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGEX_IF_VERSION_LOWER(1, 73, 0)

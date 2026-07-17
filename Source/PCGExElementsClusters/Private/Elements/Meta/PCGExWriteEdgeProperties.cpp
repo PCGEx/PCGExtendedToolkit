@@ -3,7 +3,7 @@
 
 #include "Elements/Meta/PCGExWriteEdgeProperties.h"
 
-
+#include "PCGExVersion.h"
 #include "PCGExHeuristicsCommon.h"
 #include "PCGExHeuristicsHandler.h"
 #include "Blenders/PCGExMetadataBlender.h"
@@ -28,7 +28,28 @@ PCGExData::EIOInit UPCGExWriteEdgePropertiesSettings::GetEdgeOutputInitMode() co
 	return WantsDataStealing() ? PCGExData::EIOInit::Forward : PCGExData::EIOInit::Duplicate;
 }
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExWriteEdgePropertiesSettings, SolidificationLerp, double, SolidificationLerpInput, SolidificationLerpAttribute, SolidificationLerpConstant)
+#if WITH_EDITOR
+void UPCGExWriteEdgePropertiesSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		// Rewire Solidification Lerp
+		PCGEX_SHORTHAND_RENAME_PIN(SolidificationLerpAttribute, SolidificationLerpConstant, SolidificationLerp)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExWriteEdgePropertiesSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		SolidificationLerp.Update(SolidificationLerpInput_DEPRECATED, SolidificationLerpAttribute_DEPRECATED, SolidificationLerpConstant_DEPRECATED);
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 TArray<FPCGPinProperties> UPCGExWriteEdgePropertiesSettings::InputPinProperties() const
 {
@@ -157,7 +178,7 @@ namespace PCGExWriteEdgeProperties
 			PCGEX_FOREACH_XYZ(PCGEX_CREATE_LOCAL_AXIS_SET_CONST)
 #undef PCGEX_CREATE_LOCAL_AXIS_SET_CONST
 
-			SolidificationLerp = Settings->GetValueSettingSolidificationLerp();
+			SolidificationLerp = Settings->SolidificationLerp.GetValueSetting();
 			if (!SolidificationLerp->Init(EdgeDataFacade, false))
 			{
 				return false;

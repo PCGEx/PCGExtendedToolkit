@@ -8,11 +8,15 @@
 #include "Core/PCGExFillControlOperation.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
 #include "Core/PCGExHeuristicsFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
 
 #include "PCGExFillControlHxThreshold.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 UENUM(BlueprintType)
 enum class EPCGExFloodFillThresholdSource : uint8
@@ -37,19 +41,22 @@ struct FPCGExFillControlConfigHeuristicsThreshold : public FPCGExFillControlConf
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	EPCGExHeuristicScoreMode HeuristicScoreMode = EPCGExHeuristicScoreMode::WeightedAverage;
 
-	/** Threshold input type. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
+	/** Threshold. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Threshold"))
+	FPCGExInputShorthandNameDouble ThresholdValue = FPCGExInputShorthandNameDouble(FName("Threshold"), 0.5, false);
 
-	/** Threshold attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Threshold (Attr)", EditCondition = "ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName ThresholdAttribute = FName("Threshold");
+#pragma region DEPRECATED
 
-	/** Threshold constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Threshold", EditCondition = "ThresholdInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double Threshold = 0.5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ThresholdInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Threshold, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName ThresholdAttribute_DEPRECATED = FName("Threshold");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Threshold_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Comparison mode. Candidate is valid if: ThresholdSource [Comparison] Threshold */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
@@ -62,6 +69,11 @@ struct FPCGExFillControlConfigHeuristicsThreshold : public FPCGExFillControlConf
 	/** What value to compare against the threshold. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExFloodFillThresholdSource ThresholdSource = EPCGExFloodFillThresholdSource::EdgeScore;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -131,6 +143,8 @@ class UPCGExFillControlsHeuristicsThresholdProviderSettings : public UPCGExFillC
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsHeuristicsThreshold, "Fill Control : Heuristics Threshold", "Stop diffusion when instantaneous heuristic crosses a threshold.", FName(GetDisplayName()))
 
 	virtual FLinearColor GetNodeTitleColor() const override

@@ -65,7 +65,7 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(AssetStaging, "Staging : Distribute", "Distribute PCGEx Asset Collection entries to points.", FName(GetDisplayName()));
@@ -86,6 +86,8 @@ public:
 	}
 
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
+
+	virtual TOptional<FPCGNodeThumbnailProxy> GetNodeThumbnail() const override;
 #endif
 
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
@@ -283,6 +285,17 @@ namespace PCGExAssetStaging
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExAssetStagingContext, UPCGExAssetStagingSettings>
 	{
 	protected:
+		// The range loop runs twice with different bodies: an optional selector pre-resolve
+		// stage before the main points loop, then the material-writing stage after it.
+		enum class ERangeStage : uint8
+		{
+			PreResolve = 0,
+			Materials  = 1,
+		};
+
+		ERangeStage RangeStage = ERangeStage::Materials;
+		bool bFiltersPrimed = false;
+
 		int32 NumPoints = 0;
 		int32 NumInvalid = 0;
 
@@ -335,5 +348,13 @@ namespace PCGExAssetStaging
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 		virtual void OnRangeProcessingComplete() override;
 		virtual void Write() override;
+
+	protected:
+		/**
+		 * Pre-resolve pass body. bCommit=false: parallel per-scope filter + first choices.
+		 * bCommit=true: sequential whole-range commit -- MUST be called with a single scope
+		 * covering all points, in point-index order (that ordering is the claim priority).
+		 */
+		void PreResolveScope(const PCGExMT::FScope& Scope, bool bCommit);
 	};
 }

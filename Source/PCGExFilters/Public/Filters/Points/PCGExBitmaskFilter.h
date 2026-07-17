@@ -10,8 +10,12 @@
 
 #include "Core/PCGExPointFilter.h"
 #include "Data/Bitmasks/PCGExBitmaskDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExBitmaskFilter.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 
 USTRUCT(BlueprintType)
@@ -31,17 +35,22 @@ struct PCGEXFILTERS_API FPCGExBitmaskFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExBitflagComparison Comparison = EPCGExBitflagComparison::MatchPartial;
 
-	/** Type of Mask */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType MaskInput = EPCGExInputValueType::Constant;
-
 	/** Mask for testing -- Must be int64. (Operand B) */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Bitmask (Attr)", EditCondition="MaskInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName BitmaskAttribute = FName("Mask");
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Bitmask"))
+	FPCGExInputShorthandNameInteger64 BitmaskValue = FPCGExInputShorthandNameInteger64(FName("Mask"), 0, false);
 
-	/** (Operand B) */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Bitmask", EditCondition="MaskInput == EPCGExInputValueType::Constant", EditConditionHides))
-	int64 Bitmask = 0;
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaskInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName BitmaskAttribute_DEPRECATED = FName("Mask");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int64 Bitmask_DEPRECATED = 0;
+
+#pragma endregion
 
 	/** External compositions applied to Operand B (whether it's a constant or not) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
@@ -51,7 +60,10 @@ struct PCGEXFILTERS_API FPCGExBitmaskFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvertResult = false;
 
-	PCGEX_SETTING_VALUE_DECL(Bitmask, int64)
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -82,7 +94,7 @@ namespace PCGExPointFilter
 		explicit FBitmaskFilter(const TObjectPtr<const UPCGExBitmaskFilterFactory>& InDefinition)
 			: ISimpleFilter(InDefinition)
 			  , TypedFilterFactory(InDefinition)
-			  , Bitmask(InDefinition->Config.Bitmask)
+			  , Bitmask(InDefinition->Config.BitmaskValue.Constant)
 		{
 		}
 
@@ -115,6 +127,8 @@ class UPCGExBitmaskFilterProviderSettings : public UPCGExFilterProviderSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(BitmaskFilterFactory, "Filter : Bitmask", "Filter using bitflag comparison.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

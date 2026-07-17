@@ -19,8 +19,10 @@ void FPCGExEdgeNeighborsCountFilterConfigCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	ThresholdInputHandle = PropertyHandle->GetChildHandle(TEXT("ThresholdInput"));
-	ThresholdConstantHandle = PropertyHandle->GetChildHandle(TEXT("ThresholdConstant"));
+	// Threshold migrated to the input-shorthand struct: Input/Constant now live as nested child handles.
+	const TSharedPtr<IPropertyHandle> ThresholdHandle = PropertyHandle->GetChildHandle(TEXT("Threshold"));
+	ThresholdInputHandle = ThresholdHandle.IsValid() ? ThresholdHandle->GetChildHandle(TEXT("Input")) : nullptr;
+	ThresholdConstantHandle = ThresholdHandle.IsValid() ? ThresholdHandle->GetChildHandle(TEXT("Constant")) : nullptr;
 	ModeHandle = PropertyHandle->GetChildHandle(TEXT("Mode"));
 	ComparisonHandle = PropertyHandle->GetChildHandle(TEXT("Comparison"));
 	ToleranceHandle = PropertyHandle->GetChildHandle(TEXT("Tolerance"));

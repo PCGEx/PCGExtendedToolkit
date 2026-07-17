@@ -38,7 +38,6 @@ bool UPCGExNumericSelfCompareFilterFactory::RegisterConsumableAttributesWithData
 
 	FName Consumable = NAME_None;
 	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.IndexAttribute, Consumable)
 
 	return true;
 }
@@ -67,6 +66,7 @@ bool PCGExPointFilter::FNumericSelfCompareFilter::Init(FPCGExContext* InContext,
 	}
 
 	Index = TypedFilterFactory->Config.GetValueSettingIndex(PCGEX_QUIET_HANDLING);
+	Index->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!Index->Init(PointDataFacade))
 	{
 		return false;

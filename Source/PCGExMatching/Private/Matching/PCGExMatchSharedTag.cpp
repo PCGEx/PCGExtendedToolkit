@@ -3,6 +3,7 @@
 
 #include "Matching/PCGExMatchSharedTag.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
@@ -19,6 +20,19 @@ void FPCGExMatchSharedTagConfig::Init()
 
 	FPCGExMatchRuleConfigBase::Init();
 }
+
+#if WITH_EDITOR
+void FPCGExMatchSharedTagConfig::ApplyDeprecation()
+{
+	TagNameValue.Update(TagNameInput_DEPRECATED, TagNameAttribute_DEPRECATED, TagName_DEPRECATED);
+}
+
+void FPCGExMatchSharedTagConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("TagName")), FName(TEXT("TagNameValue")), FName(TEXT("Constant")), FName(TEXT("Tag Name")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("TagNameAttribute")), FName(TEXT("TagNameValue")), FName(TEXT("Attribute")), FName(TEXT("Tag Name (Attr)")));
+}
+#endif
 
 bool FPCGExMatchSharedTag::PrepareForMatchableSources(FPCGExContext* InContext, const TSharedPtr<TArray<FPCGExTaggedData>>& InMatchableSources)
 {
@@ -38,16 +52,16 @@ bool FPCGExMatchSharedTag::PrepareForMatchableSources(FPCGExContext* InContext, 
 	}
 
 	// Only setup attribute getters for Specific mode with attribute input
-	if (Config.Mode == EPCGExTagMatchMode::Specific && Config.TagNameInput == EPCGExInputValueType::Attribute)
+	if (Config.Mode == EPCGExTagMatchMode::Specific && Config.TagNameValue.Input == EPCGExInputValueType::Attribute)
 	{
 		TagNameGetters.Reserve(MatchableSourcesRef.Num());
 		for (const FPCGExTaggedData& TaggedData : MatchableSourcesRef)
 		{
 			TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> Getter = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
 
-			if (!Getter->PrepareForSingleFetch(Config.TagNameAttribute, TaggedData))
+			if (!Getter->PrepareForSingleFetch(Config.TagNameValue.Attribute, TaggedData))
 			{
-				PCGEX_LOG_INVALID_ATTR_C(InContext, Tag Name, Config.TagNameAttribute)
+				PCGEX_LOG_INVALID_ATTR_C(InContext, Tag Name, Config.TagNameValue.Attribute)
 				return false;
 			}
 
@@ -78,7 +92,7 @@ bool FPCGExMatchSharedTag::Test(const PCGExData::FConstPoint& InTargetElement, c
 	{
 	case EPCGExTagMatchMode::Specific:
 	{
-		FString TestTagName = TagNameGetters.IsEmpty() ? Config.TagName : TagNameGetters[InTargetElement.IO]->FetchSingle(InTargetElement, TEXT(""));
+		FString TestTagName = TagNameGetters.IsEmpty() ? Config.TagNameValue.Constant : TagNameGetters[InTargetElement.IO]->FetchSingle(InTargetElement, TEXT(""));
 		bool bDoValueMatch = Config.bDoValueMatch;
 
 		// If the raw string in the tag:value format, enforce value check
@@ -234,13 +248,33 @@ bool FPCGExMatchSharedTag::Test(const PCGExData::FConstPoint& InTargetElement, c
 bool UPCGExMatchSharedTagFactory::WantsPoints() const
 {
 	return Config.Mode == EPCGExTagMatchMode::Specific &&
-		Config.TagNameInput == EPCGExInputValueType::Attribute &&
-		!PCGExMetaHelpers::IsDataDomainAttribute(Config.TagNameAttribute);
+		Config.TagNameValue.Input == EPCGExInputValueType::Attribute &&
+		!PCGExMetaHelpers::IsDataDomainAttribute(Config.TagNameValue.Attribute);
 }
 
 PCGEX_MATCH_RULE_BOILERPLATE(SharedTag)
 
 #if WITH_EDITOR
+void UPCGExCreateMatchSharedTagSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateMatchSharedTagSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExCreateMatchSharedTagSettings::GetDisplayName() const
 {
 	switch (Config.Mode)
@@ -248,7 +282,7 @@ FString UPCGExCreateMatchSharedTagSettings::GetDisplayName() const
 	case EPCGExTagMatchMode::Specific:
 	{
 		FString NameStr = TEXT("Share ");
-		NameStr += Config.TagNameInput == EPCGExInputValueType::Constant ? Config.TagName : TEXT("Tag \"") + Config.TagNameAttribute.ToString() + TEXT("\"");
+		NameStr += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : TEXT("Tag \"") + Config.TagNameValue.Attribute.ToString() + TEXT("\"");
 		return NameStr;
 	}
 	case EPCGExTagMatchMode::AnyShared:

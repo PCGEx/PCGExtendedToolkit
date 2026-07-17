@@ -110,7 +110,7 @@ namespace PCGExNoise3D
 		void Generate(TArrayView<const FVector> Positions, TArrayView<FVector4> OutResults) const;
 
 		//
-		// Parallel batch generation
+		// Parallel batch generation (chunked; preserves the batch fast path)
 		//
 
 		void GenerateParallel(TArrayView<const FVector> Positions, TArrayView<double> OutResults, int32 MinBatchSize = 256) const;
@@ -119,6 +119,15 @@ namespace PCGExNoise3D
 		void GenerateParallel(TArrayView<const FVector> Positions, TArrayView<FVector4> OutResults, int32 MinBatchSize = 256) const;
 
 	private:
+		/** Batch core. Scratch must be OutResults-sized when more than one operation is stacked (unused otherwise). */
+		template <typename ValueType>
+		void GenerateImpl(TArrayView<const FVector> Positions, TArrayView<ValueType> OutResults, TArrayView<ValueType> Scratch) const;
+
+		template <typename ValueType>
+		void GenerateTyped(TArrayView<const FVector> Positions, TArrayView<ValueType> OutResults) const;
+
+		template <typename ValueType>
+		void GenerateParallelImpl(TArrayView<const FVector> Positions, TArrayView<ValueType> OutResults, int32 MinBatchSize) const;
 		//
 		// Single-value blend (used for single-point generation)
 		//

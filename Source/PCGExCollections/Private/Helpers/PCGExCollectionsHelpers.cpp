@@ -245,6 +245,68 @@ namespace PCGExCollections
 		return bAny ? Result : nullptr;
 	}
 
+	bool FSelectorHelper::AnyPickerWantsPreResolve() const
+	{
+		if (MainPickerOp && MainPickerOp->WantsPreResolve())
+		{
+			return true;
+		}
+		for (const TSharedPtr<FPCGExEntryPickerOperation>& Op : CategoryPickerOpsByIndex)
+		{
+			if (Op && Op->WantsPreResolve())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void FSelectorHelper::BeginPreResolve(const int32 NumPoints) const
+	{
+		if (MainPickerOp && MainPickerOp->WantsPreResolve())
+		{
+			MainPickerOp->BeginPreResolve(NumPoints);
+		}
+		for (const TSharedPtr<FPCGExEntryPickerOperation>& Op : CategoryPickerOpsByIndex)
+		{
+			if (Op && Op->WantsPreResolve())
+			{
+				Op->BeginPreResolve(NumPoints);
+			}
+		}
+	}
+
+	FPCGExEntryPickerOperation* FSelectorHelper::ResolvePreResolveOp(const int32 PointIndex, const FSelectorScratches* Scratches, FPCGExPickerScratchBase*& OutScratch) const
+	{
+		int32 CategorySlot = -1;
+		// Ops are owned mutably (TSharedPtr members); the const routing method is reused.
+		FPCGExEntryPickerOperation* Op = const_cast<FPCGExEntryPickerOperation*>(ResolvePickerForPoint(PointIndex, CategorySlot));
+		if (!Op || !Op->WantsPreResolve())
+		{
+			return nullptr;
+		}
+		OutScratch = Scratches ? Scratches->GetSlot(CategorySlot) : nullptr;
+		return Op;
+	}
+
+	void FSelectorHelper::PreResolveFirstChoice(const int32 PointIndex, const int32 Seed, const FSelectorScratches* Scratches) const
+	{
+		FPCGExPickerScratchBase* Scratch = nullptr;
+		if (FPCGExEntryPickerOperation* Op = ResolvePreResolveOp(PointIndex, Scratches, Scratch))
+		{
+			Op->PreResolveFirstChoice(PointIndex, Seed, Scratch);
+		}
+	}
+
+	void FSelectorHelper::CommitPreResolve(const int32 PointIndex, const int32 Seed, const FSelectorScratches* Scratches) const
+	{
+		FPCGExPickerScratchBase* Scratch = nullptr;
+		if (FPCGExEntryPickerOperation* Op = ResolvePreResolveOp(PointIndex, Scratches, Scratch))
+		{
+			Op->CommitPreResolve(PointIndex, Seed, Scratch);
+		}
+	}
+
 	// Entry picking: resolve the active picker (category-aware) -> pick a raw entries index
 	// -> resolve entry -> handle subcollection recursion via the "fallback to WeightedRandom"
 	// policy (matches current behavior when the picked entry is a subcollection).
@@ -257,11 +319,7 @@ namespace PCGExCollections
 			return FPCGExEntryAccessResult{};
 		}
 
-		FPCGExPickerScratchBase* Scratch = nullptr;
-		if (Scratches)
-		{
-			Scratch = CategorySlot < 0 ? Scratches->Main.Get() : Scratches->ByCategory[CategorySlot].Get();
-		}
+		FPCGExPickerScratchBase* Scratch = Scratches ? Scratches->GetSlot(CategorySlot) : nullptr;
 
 		const int32 Raw = Op->Pick(PointIndex, Seed, Scratch);
 		FPCGExEntryAccessResult Result = Collection->GetEntryRaw(Raw);
@@ -286,11 +344,7 @@ namespace PCGExCollections
 			return FPCGExEntryAccessResult{};
 		}
 
-		FPCGExPickerScratchBase* Scratch = nullptr;
-		if (Scratches)
-		{
-			Scratch = CategorySlot < 0 ? Scratches->Main.Get() : Scratches->ByCategory[CategorySlot].Get();
-		}
+		FPCGExPickerScratchBase* Scratch = Scratches ? Scratches->GetSlot(CategorySlot) : nullptr;
 
 		const int32 Raw = Op->Pick(PointIndex, Seed, Scratch);
 		FPCGExEntryAccessResult Result = Collection->GetEntryRaw(Raw, TagInheritance, OutTags);
@@ -820,6 +874,37 @@ namespace PCGExCollections
 
 		// Null when no op anywhere wants scratch -- consumers skip routing entirely.
 		return Result;
+	}
+
+	bool FCollectionSource::AnyPickerWantsPreResolve() const
+	{
+		if (Helper && Helper->AnyPickerWantsPreResolve())
+		{
+			return true;
+		}
+		for (const TSharedPtr<FSelectorHelper>& MappedHelper : Helpers)
+		{
+			if (MappedHelper && MappedHelper->AnyPickerWantsPreResolve())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void FCollectionSource::BeginPreResolve(const int32 NumPoints) const
+	{
+		if (Helper)
+		{
+			Helper->BeginPreResolve(NumPoints);
+		}
+		for (const TSharedPtr<FSelectorHelper>& MappedHelper : Helpers)
+		{
+			if (MappedHelper)
+			{
+				MappedHelper->BeginPreResolve(NumPoints);
+			}
+		}
 	}
 
 	bool FCollectionSource::TryGetHelpers(int32 Index, FSelectorHelper*& OutHelper, FMicroSelectorHelper*& OutMicroHelper)

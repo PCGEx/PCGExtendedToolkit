@@ -11,6 +11,7 @@
 #include "Data/External/PCGExMeshCommon.h"
 #include "Data/External/PCGExMeshImportDetails.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Fitting/PCGExFitting.h"
 #include "Graphs/PCGExGraphDetails.h"
 #include "PCGExMeshToClusters.generated.h"
@@ -43,6 +44,9 @@ class UPCGExMeshToClustersSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(MeshToClusters, "Mesh to Clusters", "Creates clusters from mesh topology.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
@@ -86,21 +90,26 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExTriangulationType GraphOutputType = EPCGExTriangulationType::Raw;
 
-	/** Mesh source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType StaticMeshInput = EPCGExInputValueType::Constant;
-
-	/** Static mesh path attribute -- Either FString, FName or FSoftObjectPath*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Static Mesh (Attr)", EditCondition="StaticMeshInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName StaticMeshAttribute = "Mesh";
-
-	/** Static mesh constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Static Mesh", EditCondition="StaticMeshInput == EPCGExInputValueType::Constant", EditConditionHides))
-	TSoftObjectPtr<UStaticMesh> StaticMeshConstant;
+	/** Mesh source. Attribute path can be FString, FName or FSoftObjectPath. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Static Mesh", AllowedClasses="/Script/Engine.StaticMesh"))
+	FPCGExInputShorthandNameSoftObjectPath StaticMesh = FPCGExInputShorthandNameSoftObjectPath(FName("Mesh"));
 
 	/** Static mesh path attribute type*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="StaticMeshInput != EPCGExInputValueType::Constant", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExMeshAttributeHandling AttributeHandling; // TODO : Refactor this to support both. We care about primitives, not where they come from.
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType StaticMeshInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName StaticMeshAttribute_DEPRECATED = "Mesh";
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	TSoftObjectPtr<UStaticMesh> StaticMeshConstant_DEPRECATED;
+
+#pragma endregion
 
 	/** Target inherit behavior */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))

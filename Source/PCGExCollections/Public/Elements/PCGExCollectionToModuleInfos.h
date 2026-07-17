@@ -41,6 +41,8 @@ public:
 	{
 		return EPCGSettingsType::Param;
 	}
+
+	virtual TOptional<FPCGNodeThumbnailProxy> GetNodeThumbnail() const override;
 #endif
 
 protected:

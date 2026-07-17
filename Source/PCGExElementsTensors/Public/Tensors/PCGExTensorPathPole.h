@@ -67,6 +67,8 @@ class UPCGExCreateTensorPathPoleSettings : public UPCGExTensorSplineFactoryProvi
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(TensorPathPole, "Tensor : Path Pole", "A tensor that represent a vector/flow field along a path")
 
 #endif

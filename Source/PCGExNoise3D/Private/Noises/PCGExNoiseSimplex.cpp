@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseSimplex.h"
@@ -119,7 +119,7 @@ double FPCGExNoiseSimplex::GenerateRaw(const FVector& Position) const
 	return 32.0 * (N0 + N1 + N2 + N3) * 0.5 + 0.5;
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactorySimplex::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactorySimplex::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseSimplex)
 	PCGEX_FORWARD_NOISE3D_CONFIG

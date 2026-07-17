@@ -63,6 +63,32 @@ namespace PCGExMetaHelpers
 
 	PCGEXCORE_API bool TryGetAttributeName(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, FName& OutName);
 
+	/**
+	 * Domain-qualified name for a resolved attribute selector ("@Data.Foo" when the selector targets
+	 * a named domain, bare attribute name otherwise). Round-trips through
+	 * GetAttributeIdentifier(FName, InData) so consumers can resolve the domain per-data later.
+	 * Returns NAME_None if the selector doesn't resolve to an attribute.
+	 */
+	PCGEXCORE_API FName GetDomainQualifiedName(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData);
+
+	/** GetDomainQualifiedName for a selector that is ALREADY resolved (CopyAndFixLast done by the caller) -- skips the redundant fix pass. Works for input and output selectors alike. */
+	PCGEXCORE_API FName GetDomainQualifiedName(const FPCGAttributePropertySelector& InFixedSelector);
+
+	/**
+	 * Single-resolution combo used by the consumable-registration macros: one CopyAndFixLast produces
+	 * both the bare attribute name (legacy out-param contract) and the domain-qualified registration
+	 * name, with a single success gate so the two can never drift.
+	 */
+	PCGEXCORE_API bool TryGetQualifiedAttributeName(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, FName& OutName, FName& OutQualifiedName);
+
+	/**
+	 * Resolve a selector's metadata domain on the given data, normalized so the abstract Default ID
+	 * maps to the data's concrete default domain. Two selectors addressing the same physical domain
+	 * through different spellings ("Foo" vs "@Elements.Foo") normalize to equal IDs; unknown domain
+	 * names normalize to Invalid.
+	 */
+	PCGEXCORE_API FPCGMetadataDomainID GetNormalizedDomainID(const UPCGData* InData, const FPCGAttributePropertySelector& InSelector);
+
 	/** Number of addressable items in a data object: point count for point data, metadata entry count otherwise. Returns 0 for null data or data without metadata. */
 	PCGEXCORE_API int32 GetElementsCount(const UPCGData* InData);
 

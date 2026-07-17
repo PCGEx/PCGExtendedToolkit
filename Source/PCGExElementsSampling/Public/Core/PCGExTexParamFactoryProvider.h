@@ -97,17 +97,21 @@ struct PCGEXELEMENTSSAMPLING_API FPCGExTextureParamConfig
 	double Scale = 1;
 
 
-	/** Resolution input type */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Texture Array", meta = (PCG_NotOverridable))
-	EPCGExInputValueType TextureIndexInput = EPCGExInputValueType::Constant;
-
-	/** Texture Index Attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Texture Array", meta=(PCG_Overridable, DisplayName="Texture Index (Attr)", EditCondition="TextureIndexInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName TextureIndexAttribute = FName("TextureIndex");
-
-	/** Texture Index Constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Texture Array", meta=(PCG_Overridable, DisplayName="Texture Index", EditCondition="TextureIndexInput == EPCGExInputValueType::Constant", EditConditionHides))
+	/** Index into the texture array to sample (-1 for non-array textures). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Texture Array", meta=(PCG_Overridable, DisplayName="Texture Index"))
 	int32 TextureIndex = -1;
+
+#pragma region DEPRECATED
+	// The attribute/input path was never consumed (only the constant was ever read); removed as dead UI.
+	// Kept as load-only stubs so old serialized data resolves by name without unknown-property noise.
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType TextureIndexInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName TextureIndexAttribute_DEPRECATED = FName("TextureIndex");
+
+#pragma endregion
 
 	TArray<int32> OutChannels;
 

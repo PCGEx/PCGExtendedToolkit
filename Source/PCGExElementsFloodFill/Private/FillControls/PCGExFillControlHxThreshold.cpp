@@ -3,13 +3,25 @@
 
 #include "FillControls/PCGExFillControlHxThreshold.h"
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "UObject/ObjectMacros.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigHeuristicsThreshold, Threshold, double, ThresholdInput, ThresholdAttribute, Threshold)
+#if WITH_EDITOR
+void FPCGExFillControlConfigHeuristicsThreshold::ApplyDeprecation()
+{
+	ThresholdValue.Update(ThresholdInput_DEPRECATED, ThresholdAttribute_DEPRECATED, Threshold_DEPRECATED);
+}
+
+void FPCGExFillControlConfigHeuristicsThreshold::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Threshold")), FName(TEXT("ThresholdValue")), FName(TEXT("Constant")), FName(TEXT("Threshold")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ThresholdAttribute")), FName(TEXT("ThresholdValue")), FName(TEXT("Attribute")), FName(TEXT("Threshold (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlHeuristicsThreshold::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -25,7 +37,8 @@ bool FPCGExFillControlHeuristicsThreshold::PrepareForDiffusions(FPCGExContext* I
 	Tolerance = TypedFactory->Config.Tolerance;
 
 	// Initialize threshold setting value
-	Threshold = TypedFactory->Config.GetValueSettingThreshold();
+	Threshold = TypedFactory->Config.ThresholdValue.GetValueSetting();
+	Threshold->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!Threshold->Init(GetSourceFacade()))
 	{
 		return false;
@@ -148,6 +161,26 @@ UPCGExFactoryData* UPCGExFillControlsHeuristicsThresholdProviderSettings::Create
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsHeuristicsThresholdProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsHeuristicsThresholdProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsHeuristicsThresholdProviderSettings::GetDisplayName() const
 {
 	return GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control : Heuristics"), TEXT("FC × HX"));

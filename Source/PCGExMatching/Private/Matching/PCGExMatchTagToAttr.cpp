@@ -3,6 +3,7 @@
 
 #include "Matching/PCGExMatchTagToAttr.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExPointIO.h"
 #include "Factories/PCGExFactoryData.h"
@@ -20,6 +21,19 @@ void FPCGExMatchTagToAttrConfig::Init()
 	FPCGExMatchRuleConfigBase::Init();
 }
 
+#if WITH_EDITOR
+void FPCGExMatchTagToAttrConfig::ApplyDeprecation()
+{
+	TagNameValue.Update(TagNameInput_DEPRECATED, TagNameAttribute_DEPRECATED, TagName_DEPRECATED);
+}
+
+void FPCGExMatchTagToAttrConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("TagName")), FName(TEXT("TagNameValue")), FName(TEXT("Constant")), FName(TEXT("Tag Name")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("TagNameAttribute")), FName(TEXT("TagNameValue")), FName(TEXT("Attribute")), FName(TEXT("Tag Name (Attr)")));
+}
+#endif
+
 bool FPCGExMatchTagToAttr::PrepareForMatchableSources(FPCGExContext* InContext, const TSharedPtr<TArray<FPCGExTaggedData>>& InMatchableSources)
 {
 	if (!FPCGExMatchRuleOperation::PrepareForMatchableSources(InContext, InMatchableSources))
@@ -30,15 +44,15 @@ bool FPCGExMatchTagToAttr::PrepareForMatchableSources(FPCGExContext* InContext, 
 	TArray<FPCGExTaggedData>& MatchableSourcesRef = *InMatchableSources.Get();
 
 	TagNameGetters.Reserve(MatchableSourcesRef.Num());
-	if (Config.TagNameInput == EPCGExInputValueType::Attribute)
+	if (Config.TagNameValue.Input == EPCGExInputValueType::Attribute)
 	{
 		for (const FPCGExTaggedData& TaggedData : MatchableSourcesRef)
 		{
 			TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> Getter = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
 
-			if (!Getter->PrepareForSingleFetch(Config.TagNameAttribute, TaggedData))
+			if (!Getter->PrepareForSingleFetch(Config.TagNameValue.Attribute, TaggedData))
 			{
-				PCGEX_LOG_INVALID_ATTR_C(InContext, Tag Name, Config.TagNameAttribute)
+				PCGEX_LOG_INVALID_ATTR_C(InContext, Tag Name, Config.TagNameValue.Attribute)
 				return false;
 			}
 
@@ -90,7 +104,7 @@ bool FPCGExMatchTagToAttr::PrepareForMatchableSources(FPCGExContext* InContext, 
 
 bool FPCGExMatchTagToAttr::Test(const PCGExData::FConstPoint& InTargetElement, const FPCGExTaggedData& InCandidate, const PCGExMatching::FScope& InMatchingScope) const
 {
-	const FString TestTagName = TagNameGetters.IsEmpty() ? Config.TagName : TagNameGetters[InTargetElement.IO]->FetchSingle(InTargetElement, TEXT(""));
+	const FString TestTagName = TagNameGetters.IsEmpty() ? Config.TagNameValue.Constant : TagNameGetters[InTargetElement.IO]->FetchSingle(InTargetElement, TEXT(""));
 
 	if (!Config.bDoValueMatch)
 	{
@@ -132,7 +146,7 @@ bool FPCGExMatchTagToAttr::Test(const PCGExData::FConstPoint& InTargetElement, c
 
 bool UPCGExMatchTagToAttrFactory::WantsPoints() const
 {
-	if (Config.TagNameInput == EPCGExInputValueType::Attribute && !PCGExMetaHelpers::IsDataDomainAttribute(Config.TagNameAttribute))
+	if (Config.TagNameValue.Input == EPCGExInputValueType::Attribute && !PCGExMetaHelpers::IsDataDomainAttribute(Config.TagNameValue.Attribute))
 	{
 		return true;
 	}
@@ -146,9 +160,29 @@ bool UPCGExMatchTagToAttrFactory::WantsPoints() const
 PCGEX_MATCH_RULE_BOILERPLATE(TagToAttr)
 
 #if WITH_EDITOR
+void UPCGExCreateMatchTagToAttrSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateMatchTagToAttrSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExCreateMatchTagToAttrSettings::GetDisplayName() const
 {
-	FString TagSourceStr = Config.TagNameInput == EPCGExInputValueType::Constant ? Config.TagName : TEXT("Tag \"") + Config.TagNameAttribute.ToString() + TEXT("\"");
+	FString TagSourceStr = Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : TEXT("Tag \"") + Config.TagNameValue.Attribute.ToString() + TEXT("\"");
 
 	if (Config.bDoValueMatch)
 	{
@@ -168,7 +202,7 @@ FString UPCGExCreateMatchTagToAttrSettings::GetDisplayName() const
 	else
 	{
 		TagSourceStr += PCGExCompare::ToString(Config.NameMatch) + TEXT("Target' @");
-		TagSourceStr += Config.TagNameInput == EPCGExInputValueType::Constant ? Config.TagName : Config.TagNameAttribute.ToString();
+		TagSourceStr += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : Config.TagNameValue.Attribute.ToString();
 	}
 
 	return TagSourceStr;

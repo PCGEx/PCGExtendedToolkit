@@ -32,7 +32,7 @@
 
 #if WITH_EDITOR
 
-void UPCGExPathSplineMeshSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+void UPCGExPathSplineMeshSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
 	// Resolve the deferred selector default ONCE, and only while still Unset so explicit user choices
 	// are never overwritten. Nodes predating the Unset default (< 1.75.19) keep the legacy inline
@@ -46,7 +46,12 @@ void UPCGExPathSplineMeshSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* In
 		}
 	}
 
-	Super::ApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MutationDetails.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
 void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
@@ -66,7 +71,22 @@ void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 		}
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MutationDetails.ApplyDeprecation();
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
+}
+
+TOptional<FPCGNodeThumbnailProxy> UPCGExPathSplineMeshSettings::GetNodeThumbnail() const
+{
+	if (!bUseStagedPoints && CollectionSource == EPCGExCollectionSource::Asset && !AssetCollection.IsNull())
+	{
+		return FPCGNodeThumbnailProxy::FromAssetPath(AssetCollection.ToSoftObjectPath());
+	}
+
+	return {};
 }
 
 void UPCGExPathSplineMeshSettings::PostInitProperties()
@@ -90,7 +110,6 @@ bool UPCGExPathSplineMeshSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin
 	}
 	return Super::IsPinUsedByNodeExecution(InPin);
 }
-
 
 PCGEX_INITIALIZE_ELEMENT(PathSplineMesh)
 
@@ -186,8 +205,9 @@ bool FPCGExPathSplineMeshElement::Boot(FPCGExContext* InContext) const
 	}
 
 	Context->SelectorSharedDataCache = MakeShared<PCGExCollections::FSelectorSharedDataCache>();
-	// Batch total for AllInputs-scoped selector state; must precede any GetOrBuild (see OnCached).
-	Context->SelectorSharedDataCache->AllInputsPointCount = Context->MainPoints->GetTotalNum(PCGExData::EIOSide::In);
+	// Batch totals for AllInputs-scoped selector state (global budget + deterministic
+	// per-input pre-split); must precede any GetOrBuild (see OnCached).
+	Context->SelectorSharedDataCache->SetBatchPointCounts(*Context->MainPoints);
 
 	if (Settings->bUseStagedPoints)
 	{
@@ -544,9 +564,77 @@ namespace PCGExPathSplineMesh
 
 		DataTags = PointDataFacade->Source->Tags->FlattenToArrayOfNames();
 
-		StartParallelLoopForPoints();
+		// Capacity-claiming selectors (Quota max caps) resolve every pick deterministically
+		// before the main loop: parallel first-choice pass, then a sequential point-order
+		// commit in OnRangeProcessingComplete. Zero cost when no such selector is connected.
+		if (bLocalFitting && Source && Source->AnyPickerWantsPreResolve())
+		{
+			Source->BeginPreResolve(PointDataFacade->GetNum());
+			StartParallelLoopForRange(PointDataFacade->GetNum());
+		}
+		else
+		{
+			StartParallelLoopForPoints();
+		}
 
 		return true;
+	}
+
+	void FProcessor::PreResolveScope(const PCGExMT::FScope& Scope, const bool bCommit)
+	{
+		if (!bCommit)
+		{
+			PointDataFacade->Fetch(Scope);
+			FilterScope(Scope);
+		}
+
+		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetIn()->GetConstSeedValueRange();
+		const UPCGComponent* Component = Context->GetComponent();
+		const TSharedPtr<PCGExCollections::FSourceScratches> PickScratches = Source->CreateScratches(Scope.Count);
+
+		PCGEX_SCOPE_LOOP(Index)
+		{
+			// Mirror the main loop's pick gating exactly -- a point that won't pick must not
+			// influence quota capacity.
+			if (!PointFilterCache[Index] || (Index == LastIndex && !bClosedLoop))
+			{
+				continue;
+			}
+
+			PCGExCollections::FSelectorHelper* Helper = nullptr;
+			PCGExCollections::FMicroSelectorHelper* MicroHelper = nullptr;
+			if (!Source->TryGetHelpers(Index, Helper, MicroHelper))
+			{
+				continue;
+			}
+
+			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
+			const PCGExCollections::FSelectorScratches* Scratches = PickScratches ? PickScratches->GetFor(Helper) : nullptr;
+			if (bCommit)
+			{
+				Helper->CommitPreResolve(Index, Seed, Scratches);
+			}
+			else
+			{
+				Helper->PreResolveFirstChoice(Index, Seed, Scratches);
+			}
+		}
+	}
+
+	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
+	{
+		PreResolveScope(Scope, false);
+	}
+
+	void FProcessor::OnRangeProcessingComplete()
+	{
+		// Sequential commit in ascending point-index order -- this ordering IS the
+		// deterministic claim priority for capped entries.
+		PreResolveScope(PCGExMT::FScope(0, PointDataFacade->GetNum()), true);
+
+		// The pre-pass filled the full filter cache; the main loop skips re-evaluation.
+		bFiltersPrimed = true;
+		StartParallelLoopForPoints();
 	}
 
 	void FProcessor::PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops)
@@ -560,7 +648,10 @@ namespace PCGExPathSplineMesh
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::PathSplineMesh::ProcessPoints);
 
 		PointDataFacade->Fetch(Scope);
-		FilterScope(Scope);
+		if (!bFiltersPrimed)
+		{
+			FilterScope(Scope);
+		}
 
 		const UPCGBasePointData* InPointData = PointDataFacade->GetIn();
 

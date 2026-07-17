@@ -5,7 +5,11 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExMatchRuleFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "PCGExMatchRandom.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 namespace PCGExData
 {
@@ -24,21 +28,31 @@ struct FPCGExMatchRandomConfig : public FPCGExMatchRuleConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	int32 RandomSeed = 42;
 
-	/** Type of Threshold value source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
-
 	/** Pass threshold -- Value is expected to fit within a 0-1 range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold (Attr)", EditCondition="ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ThresholdAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	FPCGExInputShorthandSelectorDouble01 ThresholdValue = FPCGExInputShorthandSelectorDouble01(FString(TEXT("@Data.Threshold")), 0.5, false);
 
-	/** Pass threshold */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", EditCondition="ThresholdInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0, ClampMax=1))
-	double Threshold = 0.5;
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ThresholdInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ThresholdAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Threshold_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Invert the threshold comparison (pass becomes fail and vice versa). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvertThreshold = false;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -79,6 +93,8 @@ class UPCGExCreateMatchRandomSettings : public UPCGExMatchRuleFactoryProviderSet
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(MatchRandom, "Match : Random", "Randomly pass or fail match", FName (GetDisplayName ()))
 
 #endif

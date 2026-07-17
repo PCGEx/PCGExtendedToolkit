@@ -29,7 +29,18 @@ void FPCGExAttributeBlendWeight::Init()
 		});
 }
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExAttributeBlendWeight, Weight, double, WeightInput, WeightAttribute, Weight)
+#if WITH_EDITOR
+void FPCGExAttributeBlendWeight::ApplyDeprecation()
+{
+	WeightValue.Update(WeightInput_DEPRECATED, WeightAttribute_DEPRECATED, Weight_DEPRECATED);
+}
+
+void FPCGExAttributeBlendWeight::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Weight")), FName(TEXT("WeightValue")), FName(TEXT("Constant")), FName(TEXT("Weight")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WeightAttribute")), FName(TEXT("WeightValue")), FName(TEXT("Attribute")), FName(TEXT("Weight (Attr)")));
+}
+#endif
 
 void FPCGExAttributeBlendConfig::Init()
 {
@@ -44,7 +55,8 @@ void FPCGExAttributeBlendConfig::Init()
 
 bool FPCGExBlendOperation::PrepareForData(FPCGExContext* InContext)
 {
-	Weight = Config.Weighting.GetValueSettingWeight();
+	Weight = Config.Weighting.WeightValue.GetValueSetting();
+	Weight->bRegisterConsumable &= bCleanupConsumableAttributes;
 	if (!Weight->Init(WeightFacade))
 	{
 		return false;
@@ -480,6 +492,7 @@ TSharedPtr<FPCGExBlendOperation> UPCGExBlendOpFactory::CreateOperation(FPCGExCon
 	NewOperation->Config = Config;
 	NewOperation->ConstantA = ConstantA;
 	NewOperation->ConstantB = ConstantB;
+	NewOperation->bCleanupConsumableAttributes = bCleanupConsumableAttributes;
 	return NewOperation;
 }
 

@@ -19,8 +19,39 @@
 #define LOCTEXT_NAMESPACE "PCGExBevelPathElement"
 #define PCGEX_NAMESPACE BevelPath
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExBevelPathSettings, Width, double, WidthInput, WidthAttribute, WidthConstant)
 PCGEX_SETTING_VALUE_IMPL(UPCGExBevelPathSettings, Subdivisions, double, SubdivisionAmountInput, SubdivisionAmount, SubdivideMethod == EPCGExSubdivideMode::Count ? SubdivisionCount : SubdivisionDistance)
+
+#if WITH_EDITOR
+void UPCGExBevelPathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		// Rewire Width
+		PCGEX_SHORTHAND_RENAME_PIN(WidthAttribute, WidthConstant, Width)
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		ManhattanDetails.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBevelPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		Width.Update(WidthInput_DEPRECATED, WidthAttribute_DEPRECATED, WidthConstant_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		ManhattanDetails.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 TArray<FPCGPinProperties> UPCGExBevelPathSettings::InputPinProperties() const
 {
@@ -620,7 +651,7 @@ namespace PCGExBevelPath
 
 		Bevels.Init(nullptr, NumPoints);
 
-		WidthGetter = Settings->GetValueSettingWidth();
+		WidthGetter = Settings->Width.GetValueSetting();
 		if (!WidthGetter->Init(PointDataFacade))
 		{
 			return false;

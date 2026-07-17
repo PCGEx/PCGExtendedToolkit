@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExRelaxClusterOperation.h"
 #include "Data/Utils/PCGExDataPreloader.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Elements/Meta/NeighborSamplers/PCGExNeighborSampleAttribute.h"
 #include "PCGExVerletRelax.generated.h"
@@ -35,63 +36,57 @@ public:
 	virtual void RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 
 
-	/** Type of Gravity */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType GravityInput = EPCGExInputValueType::Constant;
+	/** Gravity. Think of it as gravity vector. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Gravity"))
+	FPCGExInputShorthandSelectorVector GravityValue = FPCGExInputShorthandSelectorVector(FString(TEXT("")), FVector(0, 0, -100), false);
 
-	/** Attribute to read weight value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Gravity (Attr)", EditCondition="GravityInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector GravityAttribute;
+	/** Friction. Expected to be in the [0..1] range. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Friction"))
+	FPCGExInputShorthandSelectorDouble01 FrictionValue = FPCGExInputShorthandSelectorDouble01(FString(TEXT("")), 0, false);
 
-	/** Constant Gravity value. Think of it as gravity vector. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Gravity", EditCondition="GravityInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector Gravity = FVector(0, 0, -100);
+	/** Edge Scaling. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Edge Scaling"))
+	FPCGExInputShorthandSelectorDouble EdgeScalingValue = FPCGExInputShorthandSelectorDouble(FString(TEXT("")), 1, false);
 
-	PCGEX_SETTING_VALUE_INLINE(Gravity, FVector, GravityInput, GravityAttribute, Gravity)
+	/** Edge Stiffness. Expected to be in the [0..1] range. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Edge Stiffness"))
+	FPCGExInputShorthandSelectorDouble01 EdgeStiffnessValue = FPCGExInputShorthandSelectorDouble01(FString(TEXT("")), 0.5, false);
 
-	/** Type of Friction */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType FrictionInput = EPCGExInputValueType::Constant;
+#pragma region DEPRECATED
 
-	/** Attribute to read friction value from. Expected to be in the [0..1] range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Friction (Attr)", EditCondition="FrictionInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector FrictionAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType GravityInput_DEPRECATED = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector GravityAttribute_DEPRECATED;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector Gravity_DEPRECATED = FVector(0, 0, -100);
 
-	/** Constant friction value. Expected to be in the [0..1] range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Friction", EditCondition="FrictionInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0, ClampMax=1, UIMin=0, UIMax=1))
-	double Friction = 0;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType FrictionInput_DEPRECATED = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector FrictionAttribute_DEPRECATED;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Friction_DEPRECATED = 0;
 
-	PCGEX_SETTING_VALUE_INLINE(Friction, double, FrictionInput, FrictionAttribute, Friction)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType EdgeScalingInput_DEPRECATED = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector EdgeScalingAttribute_DEPRECATED;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double EdgeScaling_DEPRECATED = 1;
 
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType EdgeStiffnessInput_DEPRECATED = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector EdgeStiffnessAttribute_DEPRECATED;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double EdgeStiffness_DEPRECATED = 0.5;
 
-	/** Type of Edge Scaling */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType EdgeScalingInput = EPCGExInputValueType::Constant;
+#pragma endregion
 
-	/** Attribute to read edge scaling value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Edge Scaling (Attr)", EditCondition="EdgeScalingInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector EdgeScalingAttribute;
-
-	/** Constant Edge scaling value. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Edge Scaling", EditCondition="EdgeScalingInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double EdgeScaling = 1;
-
-	PCGEX_SETTING_VALUE_INLINE(EdgeScaling, double, EdgeScalingInput, EdgeScalingAttribute, EdgeScaling)
-
-
-	/** Type of Edge stiffness */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType EdgeStiffnessInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read edge stiffness value from. Expected to be in the [0..1] range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Edge Stiffness (Attr)", EditCondition="EdgeStiffnessInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector EdgeStiffnessAttribute;
-
-	/** Constant Edge stiffness value. Expected to be in the [0..1] range. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Edge Stiffness", EditCondition="EdgeStiffnessInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0, ClampMax=1, UIMin=0, UIMax=1))
-	double EdgeStiffness = 0.5;
-
-	PCGEX_SETTING_VALUE_INLINE(EdgeStiffness, double, EdgeStiffnessInput, EdgeStiffnessAttribute, EdgeStiffness)
+#if WITH_EDITOR
+	virtual void ApplyShorthandDeprecation() override;
+#endif
 
 	/** If this was a physic simulation, represent the time advance each iteration */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))

@@ -4,13 +4,28 @@
 #include "Probes/PCGExProbeDirection.h"
 
 #include "PCGExH.h"
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExProbingCandidates.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Math/PCGExMath.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExProbeConfigDirection, Direction, FVector, DirectionInput, DirectionAttribute, DirectionConstant)
 PCGEX_CREATE_PROBE_FACTORY(Direction, {}, {})
+
+#if WITH_EDITOR
+void FPCGExProbeConfigDirection::ApplyDeprecation()
+{
+	FPCGExProbeConfigBase::ApplyDeprecation();
+	Direction.Update(DirectionInput_DEPRECATED, DirectionAttribute_DEPRECATED, DirectionConstant_DEPRECATED);
+}
+
+void FPCGExProbeConfigDirection::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	FPCGExProbeConfigBase::RenamePins(InSettings, InOutNode);
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("DirectionAttribute")), FName(TEXT("Direction")), FName(TEXT("Attribute")), FName(TEXT("Direction (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("DirectionConstant")), FName(TEXT("Direction")), FName(TEXT("Constant")), FName(TEXT("Direction")));
+}
+#endif
 
 bool FPCGExProbeDirection::RequiresChainProcessing() const
 {
@@ -28,7 +43,7 @@ bool FPCGExProbeDirection::Prepare(FPCGExContext* InContext)
 	MinDot = PCGExMath::DegreesToDot(Config.MaxAngle);
 	DirectionMultiplier = Config.bInvertDirection ? -1 : 1;
 
-	Direction = Config.GetValueSettingDirection();
+	Direction = Config.Direction.GetValueSetting();
 	if (!Direction->Init(PrimaryDataFacade))
 	{
 		return false;
@@ -221,6 +236,26 @@ void FPCGExProbeDirection::ProcessBestCandidate(const int32 Index, PCGExProbing:
 }
 
 #if WITH_EDITOR
+void UPCGExProbeDirectionProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeDirectionProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExProbeDirectionProviderSettings::GetDisplayName() const
 {
 	return TEXT("");

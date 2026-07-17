@@ -13,7 +13,27 @@
 #define LOCTEXT_NAMESPACE "PCGExFindPointOnBoundsClusters"
 #define PCGEX_NAMESPACE FindPointOnBoundsClusters
 
-PCGEX_SETTING_DATA_VALUE_IMPL(UPCGExFindPointOnBoundsClustersSettings, UVW, FVector, UVWInput, LocalUVW, UVW)
+#if WITH_EDITOR
+void UPCGExFindPointOnBoundsClustersSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire UVW
+		PCGEX_SHORTHAND_RENAME_PIN(LocalUVW, UVW, UVWValue)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFindPointOnBoundsClustersSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		UVWValue.Update(UVWInput_DEPRECATED, LocalUVW_DEPRECATED, UVW_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGExData::EIOInit UPCGExFindPointOnBoundsClustersSettings::GetEdgeOutputInitMode() const
 {
@@ -139,7 +159,7 @@ namespace PCGExFindPointOnBoundsClusters
 		}
 
 		FBox Bounds = FBox(ForceInit);
-		FVector UVW = Settings->GetValueSettingUVW(Context, Settings->ClusterElement == EPCGExClusterElement::Edge ? EdgeDataFacade->GetIn() : VtxDataFacade->GetIn())->Read(0);
+		FVector UVW = Settings->UVWValue.GetValueSetting(Context, Settings->ClusterElement == EPCGExClusterElement::Edge ? EdgeDataFacade->GetIn() : VtxDataFacade->GetIn())->Read(0);
 
 		if (Settings->bBestFitBounds)
 		{

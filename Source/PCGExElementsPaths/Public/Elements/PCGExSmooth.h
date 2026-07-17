@@ -10,6 +10,7 @@
 
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExBlendingDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
 #include "PCGExSmooth.generated.h"
@@ -36,6 +37,9 @@ class UPCGExSmoothSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(PathSmooth, "Path : Smooth", "Smooth paths points.");
 #endif
 
@@ -67,33 +71,35 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, Instanced, meta=(PCG_Overridable, NoResetToDefault, ShowOnlyInnerProperties))
 	TObjectPtr<UPCGExSmoothingInstancedFactory> SmoothingMethod;
 
-	/** Fetch the influence from a local attribute.*/
+	/** Blend between unsmoothed (0) and fully smoothed (1) result. Negative values invert the smoothing. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType InfluenceInput = EPCGExInputValueType::Constant;
+	FPCGExInputShorthandSelectorDouble11 Influence = FPCGExInputShorthandSelectorDouble11(FName("@Last"), 1.0, false);
 
-	/** Fetch the influence from a local attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Influence (Attr)", EditCondition="InfluenceInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector InfluenceAttribute;
+	/** The amount of smoothing applied. Range of this value is highly dependant on the chosen smoothing method. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Smoothing"))
+	FPCGExInputShorthandSelectorDoubleAbs SmoothingAmount = FPCGExInputShorthandSelectorDoubleAbs(FName("@Last"), 5, false);
 
-	/** The amount of smoothing applied. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Influence", ClampMin=-1, ClampMax=1, EditCondition="InfluenceInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double InfluenceConstant = 1.0;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(Influence, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType InfluenceInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Fetch the smoothing from a local attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType SmoothingAmountType = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector InfluenceAttribute_DEPRECATED;
 
-	/** Fetch the smoothing amount from a local attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Smoothing (Attr)", EditCondition="SmoothingAmountType != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector SmoothingAmountAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double InfluenceConstant_DEPRECATED = 1.0;
 
-	/** The amount of smoothing applied.  Range of this value is highly dependant on the chosen smoothing method. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Smoothing", ClampMin=1, EditCondition="SmoothingAmountType == EPCGExInputValueType::Constant", EditConditionHides))
-	double SmoothingAmountConstant = 5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType SmoothingAmountType_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(SmoothingAmount, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector SmoothingAmountAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double SmoothingAmountConstant_DEPRECATED = 5;
+
+#pragma endregion
 
 	/** Static multiplier for the local smoothing amount. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0.001))

@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 
 #include "Core/PCGExPointsProcessor.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 
 #include "Misc/Guid.h"
@@ -78,19 +79,22 @@ struct PCGEXFOUNDATIONS_API FPCGExGUIDDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExFoundations.EPCGExGUIDUniquenessFlags"))
 	uint8 Uniqueness = static_cast<uint8>(EPCGExGUIDUniquenessFlags::All);
 
-	/** Where the unique key base value comes from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType UniqueKeyInput = EPCGExInputValueType::Constant;
-
 	/** A base value for the GUID. Treat it like a seed. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Unique Key (Attr)", EditCondition="UniqueKeyInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector UniqueKeyAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FPCGExInputShorthandSelectorInteger32Abs UniqueKey = FPCGExInputShorthandSelectorInteger32Abs(FName("@Last"), 42, false);
 
-	/** A base value for the GUID. Treat it like a seed.  */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Unique Key", EditCondition="UniqueKeyInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0))
-	int32 UniqueKeyConstant = 42;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(UniqueKey, int32)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType UniqueKeyInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector UniqueKeyAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 UniqueKeyConstant_DEPRECATED = 42;
+
+#pragma endregion
 
 	EGuidFormats GUIDFormat = EGuidFormats::Digits;
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> UniqueKeyReader;
@@ -130,6 +134,9 @@ class UPCGExWriteGUIDSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(WriteGUID, "Write GUID", "Write a GUID on the point.", Config.OutputAttributeName);
 
 	virtual EPCGSettingsType GetType() const override

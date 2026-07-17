@@ -103,7 +103,7 @@ void FPCGExAttributeToTagDetails::PostSerialize(const FArchive& Ar)
 #endif
 }
 
-void FPCGExAttributeToTagDetails::Tag(const PCGExData::FConstPoint& TagSource, TSet<FString>& InTags) const
+void FPCGExAttributeToTagDetails::Tag(const PCGExData::FElement& TagSource, TSet<FString>& InTags) const
 {
 	if (bAddIndexTag)
 	{
@@ -138,14 +138,14 @@ void FPCGExAttributeToTagDetails::Tag(const PCGExData::FConstPoint& TagSource, T
 	}
 }
 
-void FPCGExAttributeToTagDetails::Tag(const PCGExData::FConstPoint& TagSource, const TSharedPtr<PCGExData::FPointIO>& PointIO) const
+void FPCGExAttributeToTagDetails::Tag(const PCGExData::FElement& TagSource, const TSharedPtr<PCGExData::FPointIO>& PointIO) const
 {
 	TSet<FString> Tags;
 	Tag(TagSource, Tags);
 	PointIO->Tags->Append(Tags);
 }
 
-void FPCGExAttributeToTagDetails::Tag(const PCGExData::FConstPoint& TagSource, UPCGMetadata* InMetadata) const
+void FPCGExAttributeToTagDetails::Tag(const PCGExData::FElement& TagSource, UPCGMetadata* InMetadata) const
 {
 	if (bAddIndexTag)
 	{

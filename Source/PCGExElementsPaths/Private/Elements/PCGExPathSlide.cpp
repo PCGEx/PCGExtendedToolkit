@@ -12,6 +12,28 @@
 #define LOCTEXT_NAMESPACE "PCGExPathSlideElement"
 #define PCGEX_NAMESPACE PathSlide
 
+#if WITH_EDITOR
+void UPCGExPathSlideSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire Slide Amount
+		PCGEX_SHORTHAND_RENAME_PIN(SlideAmountAttribute, SlideAmountConstant, SlideAmount)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExPathSlideSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		SlideAmount.Update(SlideAmountInput_DEPRECATED, SlideAmountAttribute_DEPRECATED, SlideAmountConstant_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 PCGEX_INITIALIZE_ELEMENT(PathSlide)
 
 PCGExData::EIOInit UPCGExPathSlideSettings::GetMainDataInitializationPolicy() const
@@ -20,8 +42,6 @@ PCGExData::EIOInit UPCGExPathSlideSettings::GetMainDataInitializationPolicy() co
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(PathSlide)
-
-PCGEX_SETTING_VALUE_IMPL(UPCGExPathSlideSettings, SlideAmount, double, SlideAmountInput, SlideAmountAttribute, SlideAmountConstant)
 
 bool FPCGExPathSlideElement::Boot(FPCGExContext* InContext) const
 {
@@ -99,7 +119,7 @@ namespace PCGExPathSlide
 			Path = MakeShared<PCGExPaths::FPath>(PointDataFacade->GetIn(), 0);
 			Path->IOIndex = PointDataFacade->Source->IOIndex;
 
-			SlideAmountGetter = Settings->GetValueSettingSlideAmount();
+			SlideAmountGetter = Settings->SlideAmount.GetValueSetting();
 			if (!SlideAmountGetter->Init(PointDataFacade, false))
 			{
 				return false;

@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Tensors/PCGExTensorSplinePole.h"
+#include "PCGExVersion.h"
 
 PRAGMA_DISABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 #include "Data/PCGSplineStruct.h"
@@ -51,11 +52,33 @@ PCGExFactories::EPreparationResult UPCGExTensorSplinePoleFactory::Prepare(FPCGEx
 PCGEX_TENSOR_BOILERPLATE(
 	SplinePole,
 	{
-	NewFactory->Config.Potency *=NewFactory->Config.PotencyScale;
+	NewFactory->Config.PotencyValue.Constant *= NewFactory->Config.PotencyScale;
 	},
 	{
 	NewOperation->Splines = &Splines;
 	})
+
+#if WITH_EDITOR
+void UPCGExCreateTensorSplinePoleSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateTensorSplinePoleSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE
 #undef PCGEX_NAMESPACE

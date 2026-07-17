@@ -8,6 +8,11 @@
 
 class UPCGExSelectorFactoryData;
 
+namespace PCGExData
+{
+	class FPointIOCollection;
+}
+
 namespace PCGExCollections
 {
 	class FSelectorSharedDataCache;
@@ -57,6 +62,20 @@ namespace PCGExCollections
 		 * state to the full batch (-1 -> they fall back to per-facade behavior).
 		 */
 		int64 AllInputsPointCount = -1;
+
+		/**
+		 * In-side point count per input, indexed by FPointIO::IOIndex. Set once at Boot
+		 * alongside AllInputsPointCount. Consumed by AllInputs-scoped state that pre-splits
+		 * global budgets deterministically across inputs (Quota max caps). Empty -> unknown;
+		 * dependents fall back to their shared-counter behavior.
+		 */
+		TArray<int64> PerInputPointCounts;
+
+		/**
+		 * Fill AllInputsPointCount and PerInputPointCounts from the consumer's main input
+		 * collection. Call once at Boot, BEFORE any GetOrBuild call.
+		 */
+		void SetBatchPointCounts(const PCGExData::FPointIOCollection& InCollection);
 
 		/**
 		 * Return cached shared data for (Factory, Target), building it lazily on first access.

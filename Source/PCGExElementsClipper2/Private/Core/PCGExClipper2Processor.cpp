@@ -3,6 +3,7 @@
 
 #include "Core/PCGExClipper2Processor.h"
 
+#include "PCGExVersion.h"
 #include "Async/ParallelFor.h"
 #include "Blenders/PCGExUnionBlender.h"
 #include "Clipper2Lib/clipper.h"
@@ -209,6 +210,38 @@ UPCGExClipper2ProcessorSettings::UPCGExClipper2ProcessorSettings(const FObjectIn
 		}
 	}
 }
+
+#if WITH_EDITOR
+void UPCGExClipper2ProcessorSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		// MainDataMatching and OperandsDataMatching both embed the Limit shorthand in the same settings walk,
+		// so their old & new pins are path-qualified (MainDataMatching/... vs OperandsDataMatching/...).
+		// Resolve each explicitly with the full property-path suffix; the struct-level RenamePins would be ambiguous here.
+		const FName MainAttr[] = {FName(TEXT("MainDataMatching")), FName(TEXT("LimitValue")), FName(TEXT("Attribute"))};
+		const FName MainConst[] = {FName(TEXT("MainDataMatching")), FName(TEXT("LimitValue")), FName(TEXT("Constant"))};
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("MainDataMatching/LimitAttribute")), MainAttr, FName(TEXT("Limit (Attr)")));
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("MainDataMatching/Limit")), MainConst, FName(TEXT("Limit")));
+
+		const FName OperandsAttr[] = {FName(TEXT("OperandsDataMatching")), FName(TEXT("LimitValue")), FName(TEXT("Attribute"))};
+		const FName OperandsConst[] = {FName(TEXT("OperandsDataMatching")), FName(TEXT("LimitValue")), FName(TEXT("Constant"))};
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("OperandsDataMatching/LimitAttribute")), OperandsAttr, FName(TEXT("Limit (Attr)")));
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("OperandsDataMatching/Limit")), OperandsConst, FName(TEXT("Limit")));
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExClipper2ProcessorSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MainDataMatching.ApplyDeprecation();
+		OperandsDataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool UPCGExClipper2ProcessorSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {

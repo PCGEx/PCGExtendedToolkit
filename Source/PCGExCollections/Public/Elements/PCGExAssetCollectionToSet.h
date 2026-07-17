@@ -71,6 +71,8 @@ public:
 	{
 		return true;
 	}
+
+	virtual TOptional<FPCGNodeThumbnailProxy> GetNodeThumbnail() const override;
 #endif
 
 protected:

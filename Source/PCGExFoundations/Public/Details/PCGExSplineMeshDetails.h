@@ -6,11 +6,15 @@
 #include "CoreMinimal.h"
 #include "Components/SplineMeshComponent.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Paths/PCGExPathsCommon.h"
 
 #include "PCGExSplineMeshDetails.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 namespace PCGExData
 {
@@ -54,19 +58,22 @@ struct PCGEXFOUNDATIONS_API FPCGExSplineMeshMutationDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bPushStart = false;
 
-	/** Whether push amount comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bPushStart", EditConditionHides))
-	EPCGExInputValueType StartPushInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read start push amount from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Amount (Attr)", EditCondition="bPushStart && StartPushInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector StartPushInputAttribute;
-
 	/** How far to push the start point. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Amount", EditCondition="bPushStart && StartPushInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double StartPushConstant = 0.1;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Amount", EditCondition="bPushStart", EditConditionHides))
+	FPCGExInputShorthandSelectorDouble StartPush = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0.1, false);
 
-	PCGEX_SETTING_VALUE_DECL(StartPush, double);
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType StartPushInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector StartPushInputAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double StartPushConstant_DEPRECATED = 0.1;
+
+#pragma endregion
 
 	/** If enabled, value will relative to the size of the segment */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Relative", EditCondition="bPushStart", EditConditionHides))
@@ -76,19 +83,22 @@ struct PCGEXFOUNDATIONS_API FPCGExSplineMeshMutationDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bPushEnd = false;
 
-	/** Whether push amount comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bPushEnd", EditConditionHides))
-	EPCGExInputValueType EndPushInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read end push amount from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Amount (Attr)", EditCondition="bPushEnd && EndPushInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector EndPushInputAttribute;
-
 	/** How far to push the end point. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Amount", EditCondition="bPushEnd && EndPushInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double EndPushConstant = 0.1;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" ├─ Amount", EditCondition="bPushEnd", EditConditionHides))
+	FPCGExInputShorthandSelectorDouble EndPush = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0.1, false);
 
-	PCGEX_SETTING_VALUE_DECL(EndPush, double);
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType EndPushInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector EndPushInputAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double EndPushConstant_DEPRECATED = 0.1;
+
+#pragma endregion
 
 	/** If enabled, value will relative to the size of the segment */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Relative", EditCondition="bPushEnd", EditConditionHides))
@@ -96,6 +106,12 @@ struct PCGEXFOUNDATIONS_API FPCGExSplineMeshMutationDetails
 
 	bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade);
 	void Mutate(const int32 PointIndex, PCGExPaths::FSplineMeshSegment& InSegment);
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** Rewires the pre-shorthand override pins; call from the embedder's PCGExApplyDeprecationBeforeUpdatePins under the same version gate as ApplyDeprecation. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<double>> StartAmount;

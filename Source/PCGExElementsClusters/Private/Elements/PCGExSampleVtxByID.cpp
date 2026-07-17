@@ -21,18 +21,32 @@
 #define LOCTEXT_NAMESPACE "PCGExSampleVtxByIDElement"
 #define PCGEX_NAMESPACE SampleVtxByID
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExSampleVtxByIDSettings, LookAtUp, FVector, LookAtUpInput, LookAtUpSource, LookAtUpConstant)
-
 UPCGExSampleVtxByIDSettings::UPCGExSampleVtxByIDSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 }
 
 #if WITH_EDITOR
-void UPCGExSampleVtxByIDSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+void UPCGExSampleVtxByIDSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
 	InOutNode->RenameInputPin(PCGPinConstants::DefaultInputLabel, PCGExSampling::Labels::SourceSourceLabel);
-	Super::ApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+	
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire LookAtUp
+		PCGEX_SHORTHAND_RENAME_PIN(LookAtUpSource, LookAtUpConstant, LookAtUp)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExSampleVtxByIDSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		LookAtUp.Update(LookAtUpInput_DEPRECATED, LookAtUpSource_DEPRECATED, LookAtUpConstant_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
 
@@ -211,7 +225,7 @@ namespace PCGExSampleVtxByID
 		}
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
-		LookAtUpGetter = Settings->GetValueSettingLookAtUp();
+		LookAtUpGetter = Settings->LookAtUp.GetValueSetting();
 		if (!LookAtUpGetter->Init(PointDataFacade))
 		{
 			return false;

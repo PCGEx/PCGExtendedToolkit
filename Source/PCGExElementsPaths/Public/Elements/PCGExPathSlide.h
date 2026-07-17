@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
 #include "Core/PCGExPathProcessor.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Factories/PCGExFactories.h"
 #include "Core/PCGExFilterTypeSets.h"
@@ -43,6 +44,9 @@ class UPCGExPathSlideSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(PathSlide, "Path : Slide", "Slide points of a path along the path, either toward the next or previous point");
 #endif
 
@@ -66,18 +70,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode != EPCGExSlideMode::Restore", EditConditionHides))
 	EPCGExMeanMeasure AmountMeasure = EPCGExMeanMeasure::Relative;
 
+	/** Slide amount. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode != EPCGExSlideMode::Restore", EditConditionHides))
-	EPCGExInputValueType SlideAmountInput = EPCGExInputValueType::Constant;
+	FPCGExInputShorthandSelectorDouble SlideAmount = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0.5, false);
 
-	/** Slide amount. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Slide Amount (Attr)", EditCondition="SlideAmountInput == EPCGExInputValueType::Attribute && Mode != EPCGExSlideMode::Restore", EditConditionHides))
-	FPCGAttributePropertyInputSelector SlideAmountAttribute;
+#pragma region DEPRECATED
 
-	/** Slide amount. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Slide Amount", EditCondition="SlideAmountInput == EPCGExInputValueType::Constant && Mode != EPCGExSlideMode::Restore", EditConditionHides))
-	double SlideAmountConstant = 0.5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType SlideAmountInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(SlideAmount, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector SlideAmountAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double SlideAmountConstant_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Whether to store the old position */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode != EPCGExSlideMode::Restore", EditConditionHides))

@@ -105,8 +105,8 @@ public:
 			OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
 		}
 
-		OutMetrics.Potency = BaseConfig.Potency * PotencyFalloffLUT->Eval(OutFactor);
-		OutMetrics.Weight = BaseConfig.Weight * WeightFalloffLUT->Eval(OutFactor);
+		OutMetrics.Potency = BaseConfig.PotencyValue.Constant * PotencyFalloffLUT->Eval(OutFactor);
+		OutMetrics.Weight = BaseConfig.WeightValue.Constant * WeightFalloffLUT->Eval(OutFactor);
 
 		return true;
 	}

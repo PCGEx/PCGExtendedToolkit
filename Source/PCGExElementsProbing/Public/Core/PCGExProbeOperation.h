@@ -7,11 +7,15 @@
 #include "PCGExOctree.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Details/PCGExSettingsMacros.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Factories/PCGExOperation.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 
 #include "UObject/Object.h"
 #include "PCGExProbeOperation.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 namespace PCGExMT
 {
@@ -47,24 +51,36 @@ struct PCGEXELEMENTSPROBING_API FPCGExProbeConfigBase
 	{
 	}
 
+	virtual ~FPCGExProbeConfigBase() = default;
+
 	UPROPERTY(meta=(PCG_NotOverridable))
 	bool bSupportRadius = true; // Internal toggle, hidden
 
-	/** Whether to read search radius from an attribute or use a constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bSupportRadius", EditConditionHides, HideEditConditionToggle))
-	EPCGExInputValueType SearchRadiusInput = EPCGExInputValueType::Constant;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Search Radius (Attr)", EditCondition="bSupportRadius && SearchRadiusInput != EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
-	FPCGAttributePropertyInputSelector SearchRadiusAttribute;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Search Radius", ClampMin=0, EditCondition="bSupportRadius && SearchRadiusInput == EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
-	double SearchRadiusConstant = 100;
+	/** Search radius. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Search Radius", EditCondition="bSupportRadius", EditConditionHides, HideEditConditionToggle))
+	FPCGExInputShorthandSelectorDoubleAbs SearchRadius = FPCGExInputShorthandSelectorDoubleAbs(FName("@Last"), 100, false);
 
 	/** A convenient static offset added to the attribute value. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Offset", EditCondition="bSupportRadius && SearchRadiusInput != EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Offset", EditCondition="bSupportRadius && SearchRadius.Input != EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
 	double SearchRadiusOffset = 0;
 
-	PCGEX_SETTING_VALUE_DECL(SearchRadius, double)
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType SearchRadiusInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector SearchRadiusAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double SearchRadiusConstant_DEPRECATED = 100;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	virtual void ApplyDeprecation();
+	virtual void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**

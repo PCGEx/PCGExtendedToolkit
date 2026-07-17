@@ -2,11 +2,34 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExGlobalProbeKNN.h"
+#include "PCGExVersion.h"
 
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 
 PCGEX_CREATE_PROBE_FACTORY(KNN, {}, {})
+
+#if WITH_EDITOR
+void UPCGExProbeKNNProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeKNNProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExProbeKNN::IsGlobalProbe() const
 {

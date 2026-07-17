@@ -4,6 +4,7 @@
 #include "Elements/Meta/VtxProperties/PCGExVtxPropertyEdgeMatch.h"
 
 #include "PCGPin.h"
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -12,6 +13,20 @@
 
 #define LOCTEXT_NAMESPACE "PCGExVtxPropertyEdgeMatch"
 #define PCGEX_NAMESPACE PCGExVtxPropertyEdgeMatch
+
+#if WITH_EDITOR
+void FPCGExEdgeMatchConfig::ApplyDeprecation()
+{
+	DirectionValue.Update(DirectionInput_DEPRECATED, Direction_DEPRECATED, DirectionConstant_DEPRECATED);
+	DirectionValue.bFlip = bInvertDirection_DEPRECATED;
+}
+
+void FPCGExEdgeMatchConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("DirectionConstant")), FName(TEXT("DirectionValue")), FName(TEXT("Constant")), FName(TEXT("Direction")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Direction")), FName(TEXT("DirectionValue")), FName(TEXT("Attribute")), FName(TEXT("Direction (Attr)")));
+}
+#endif
 
 bool FPCGExVtxPropertyEdgeMatch::PrepareForCluster(FPCGExContext* InContext, TSharedPtr<PCGExClusters::FCluster> InCluster, const TSharedPtr<PCGExData::FFacade>& InVtxDataFacade, const TSharedPtr<PCGExData::FFacade>& InEdgeDataFacade)
 {
@@ -32,14 +47,14 @@ bool FPCGExVtxPropertyEdgeMatch::PrepareForCluster(FPCGExContext* InContext, TSh
 		return false;
 	}
 
-	DirCache = PCGExDetails::MakeSettingValue(Config.DirectionInput, Config.Direction, Config.DirectionConstant);
+	DirCache = Config.DirectionValue.GetValueSetting();
 	if (!DirCache->Init(PrimaryDataFacade, false))
 	{
 		bIsValidOperation = false;
 		return false;
 	}
 
-	DirectionMultiplier = Config.bInvertDirection ? -1 : 1;
+	DirectionMultiplier = Config.DirectionValue.bFlip ? -1 : 1;
 
 	Config.MatchingEdge.Init(InVtxDataFacade.ToSharedRef());
 
@@ -86,6 +101,26 @@ void FPCGExVtxPropertyEdgeMatch::ProcessNode(PCGExClusters::FNode& Node, const T
 }
 
 #if WITH_EDITOR
+void UPCGExVtxPropertyEdgeMatchSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExVtxPropertyEdgeMatchSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExVtxPropertyEdgeMatchSettings::GetDisplayName() const
 {
 	/*

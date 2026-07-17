@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Elements/PCGExPathStitch.h"
+#include "PCGExVersion.h"
 
 #include "PCGExMatchingCommon.h"
 #include "PCGExOctree.h"
@@ -31,6 +32,27 @@ TArray<FPCGPinProperties> UPCGExPathStitchSettings::InputPinProperties() const
 }
 
 PCGEX_INITIALIZE_ELEMENT(PathStitch)
+
+#if WITH_EDITOR
+void UPCGExPathStitchSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MatchingDetails.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExPathStitchSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MatchingDetails.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(PathStitch)
 
 bool FPCGExPathStitchElement::Boot(FPCGExContext* InContext) const

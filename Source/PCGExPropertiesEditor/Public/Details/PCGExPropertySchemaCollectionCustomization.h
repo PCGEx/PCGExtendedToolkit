@@ -5,6 +5,7 @@
 
 #include "IPropertyTypeCustomization.h"
 #include "UObject/StructOnScope.h"
+#include "PCGExProperty.h" // FPCGExPropertyOverrideEntry (ParkedOverrideBuffers member)
 
 class IDetailPropertyRow;
 class IPropertyUtilities;
@@ -81,6 +82,9 @@ private:
 	 */
 	void ReconcileAndNotify();
 
+	/** ReconcileImportOverrides without freeing memory the still-mounted rows alias (see .cpp). */
+	void ReconcileImportOverridesPreservingLiveRows(FPCGExPropertySchemaCollection& Collection);
+
 	/** Subscribe to OnSchemaAssetChanged on every asset reachable through ImportedSchemas (BFS). */
 	void SubscribeToImportedAssets();
 
@@ -137,6 +141,10 @@ private:
 
 	/** Active OnSchemaAssetChanged subscriptions. Cleared on customization teardown / rebuild. */
 	TArray<TPair<TWeakObjectPtr<UPCGExPropertySchemaAsset>, FDelegateHandle>> AssetDelegateHandles;
+
+	/** Old override buffers kept alive so rows aliasing their memory outlive a reallocating reconcile;
+	 *  each dies with this customization instance, after the rebuild disconnects those rows. */
+	TArray<TArray<FPCGExPropertyOverrideEntry>> ParkedOverrideBuffers;
 
 	/** Cached resolved entry count for GetHeaderText (called per Slate redraw). -1 means unset. */
 	mutable int32 CachedResolvedCount = -1;

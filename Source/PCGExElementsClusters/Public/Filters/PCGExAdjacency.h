@@ -74,7 +74,7 @@ struct FPCGExAdjacencySettings
 	EPCGExMeanMeasure ThresholdType = EPCGExMeanMeasure::Discrete;
 
 	/** Define the nodes subset' size that must meet requirements. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, PCG_Overridable, EditCondition="Mode == EPCGExAdjacencyTestMode::Some", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExAdjacencyTestMode::Some", EditConditionHides))
 	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
 
 	/** Discrete threshold value */
