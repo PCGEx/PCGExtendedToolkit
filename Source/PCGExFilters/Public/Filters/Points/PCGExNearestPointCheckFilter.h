@@ -115,6 +115,8 @@ class UPCGExNearestPointCheckFilterProviderSettings : public UPCGExFilterProvide
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NearestPointCheckFilterFactory, "Filter : Check Nearest", "Finds the nearest target point and tests it against a set of filters.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

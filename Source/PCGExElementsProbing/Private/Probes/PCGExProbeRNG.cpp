@@ -2,12 +2,35 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExProbeRNG.h"
+#include "PCGExVersion.h"
 
 #include "PCGExH.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExProbingCandidates.h"
 
 PCGEX_CREATE_PROBE_FACTORY(RNG, {}, {})
+
+#if WITH_EDITOR
+void UPCGExProbeRNGProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeRNGProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExProbeRNG::Prepare(FPCGExContext* InContext)
 {

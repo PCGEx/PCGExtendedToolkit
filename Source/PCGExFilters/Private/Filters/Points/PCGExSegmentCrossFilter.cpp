@@ -3,6 +3,7 @@
 
 #include "Filters/Points/PCGExSegmentCrossFilter.h"
 
+#include "PCGExVersion.h"
 
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -134,6 +135,24 @@ TArray<FPCGPinProperties> UPCGExSegmentCrossFilterProviderSettings::InputPinProp
 PCGEX_CREATE_FILTER_FACTORY(SegmentCross)
 
 #if WITH_EDITOR
+void UPCGExSegmentCrossFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExSegmentCrossFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExSegmentCrossFilterProviderSettings::GetDisplayName() const
 {
 	return GetDefaultNodeTitle().ToString();

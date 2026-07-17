@@ -17,8 +17,31 @@
 #define LOCTEXT_NAMESPACE "PCGExSmoothElement"
 #define PCGEX_NAMESPACE Smooth
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExSmoothSettings, Influence, double, InfluenceInput, InfluenceAttribute, InfluenceConstant)
-PCGEX_SETTING_VALUE_IMPL(UPCGExSmoothSettings, SmoothingAmount, double, SmoothingAmountType, SmoothingAmountAttribute, SmoothingAmountConstant)
+#if WITH_EDITOR
+void UPCGExSmoothSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 6)
+	{
+		// Rewire Influence
+		PCGEX_SHORTHAND_RENAME_PIN(InfluenceAttribute, InfluenceConstant, Influence)
+
+		// Rewire Smoothing Amount
+		PCGEX_SHORTHAND_RENAME_PIN(SmoothingAmountAttribute, SmoothingAmountConstant, SmoothingAmount)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExSmoothSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 6)
+	{
+		Influence.Update(InfluenceInput_DEPRECATED, InfluenceAttribute_DEPRECATED, InfluenceConstant_DEPRECATED);
+		SmoothingAmount.Update(SmoothingAmountType_DEPRECATED, SmoothingAmountAttribute_DEPRECATED, SmoothingAmountConstant_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 TArray<FPCGPinProperties> UPCGExSmoothSettings::InputPinProperties() const
 {
@@ -164,13 +187,13 @@ namespace PCGExSmooth
 			DataBlender = MakeShared<PCGExBlending::FDummyBlender>();
 		}
 
-		Influence = Settings->GetValueSettingInfluence();
+		Influence = Settings->Influence.GetValueSetting();
 		if (!Influence->Init(PointDataFacade))
 		{
 			return false;
 		}
 
-		Smoothing = Settings->GetValueSettingSmoothingAmount();
+		Smoothing = Settings->SmoothingAmount.GetValueSetting();
 		if (!Smoothing->Init(PointDataFacade))
 		{
 			return false;

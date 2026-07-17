@@ -5,11 +5,15 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExFilterFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Math/PCGExMath.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
 
 #include "PCGExSegmentLengthFilter.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 USTRUCT(BlueprintType)
 struct FPCGExSegmentLengthFilterConfig
@@ -18,23 +22,26 @@ struct FPCGExSegmentLengthFilterConfig
 
 	FPCGExSegmentLengthFilterConfig() = default;
 
-	/** Whether to read the threshold from an attribute on the point or a constant. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType ThresholdInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to fetch threshold from */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold (Attr)", EditCondition="ThresholdInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ThresholdAttribute;
-
 	/** Constant threshold distance for comparison. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", ClampMin=1, EditCondition="ThresholdInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double ThresholdConstant = 100;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	FPCGExInputShorthandSelectorDoubleAbs Threshold = FPCGExInputShorthandSelectorDoubleAbs(FString(TEXT("")), 100, false);
 
 	/** If enabled, will compare against the squared distance. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Squared Distance"))
 	bool bCompareAgainstSquaredDistance = false;
 
-	PCGEX_SETTING_VALUE_DECL(Threshold, double)
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ThresholdInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ThresholdAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double ThresholdConstant_DEPRECATED = 100;
+
+#pragma endregion
 
 	/** Comparison check */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -82,6 +89,11 @@ struct FPCGExSegmentLengthFilterConfig
 	void Sanitize()
 	{
 	}
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -108,7 +120,6 @@ public:
 	}
 
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
-	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 };
 
 namespace PCGExPointFilter
@@ -155,6 +166,8 @@ class UPCGExSegmentLengthFilterProviderSettings : public UPCGExFilterProviderSet
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(SegmentLengthFilterFactory, "Filter : Segment Length", "Creates a filter definition that compares the distance between the tested point and another inside the same dataset.")
 #endif
 	//~End UPCGSettings

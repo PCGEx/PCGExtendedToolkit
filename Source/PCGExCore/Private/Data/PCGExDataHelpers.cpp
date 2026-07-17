@@ -68,11 +68,34 @@ namespace PCGExData::Helpers
 		}
 	}
 
+	PCGMetadataEntryKey GetDataValueKey(const FPCGMetadataAttributeBase* Attribute)
+	{
+		if (!Attribute)
+		{
+			return PCGDefaultValueKey;
+		}
+
+		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
+		return (Domain && Domain->GetItemCountForChild() > 0) ? PCGFirstEntryKey : PCGDefaultValueKey;
+	}
+
+	bool HasPropertyCopyableValue(const FPCGMetadataAttributeBase* Attribute, const PCGMetadataEntryKey Key)
+	{
+		return Attribute && Attribute->GetReadAddressFromEntryKey_Unsafe(Key) != nullptr;
+	}
+
 	bool PropertyCopyAttribute(
 		const FPCGMetadataAttributeBase* SourceAttr, const PCGMetadataEntryKey SourceKey,
 		FPCGMetadataAttributeBase* TargetAttr, const PCGMetadataEntryKey TargetKey)
 	{
-		if (!SourceAttr || !TargetAttr)
+		return PropertyCopyAttribute(SourceAttr, SourceKey, TargetAttr, MakeArrayView(&TargetKey, 1));
+	}
+
+	bool PropertyCopyAttribute(
+		const FPCGMetadataAttributeBase* SourceAttr, const PCGMetadataEntryKey SourceKey,
+		FPCGMetadataAttributeBase* TargetAttr, const TArrayView<const PCGMetadataEntryKey> TargetKeys)
+	{
+		if (!SourceAttr || !TargetAttr || TargetKeys.IsEmpty())
 		{
 			return false;
 		}
@@ -94,7 +117,11 @@ namespace PCGExData::Helpers
 			return false;
 		}
 
-		TargetAttr->SetValueFromProperty(TargetKey, SrcAddr, TempProp);
+		for (const PCGMetadataEntryKey TargetKey : TargetKeys)
+		{
+			TargetAttr->SetValueFromProperty(TargetKey, SrcAddr, TempProp);
+		}
+
 		delete TempProp;
 		return true;
 	}
@@ -224,14 +251,8 @@ namespace PCGExData::Helpers
 			return T();
 		}
 
-		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
-		if (Domain && Domain->GetItemCountForChild() > 0)
-		{
-			return Attribute->GetValueFromItemKey<T>(PCGFirstEntryKey);
-		}
-
 		// PCGDefaultValueKey == PCGInvalidEntryKey routes GetValueFromItemKey to the default slot.
-		return Attribute->GetValueFromItemKey<T>(PCGDefaultValueKey);
+		return Attribute->GetValueFromItemKey<T>(GetDataValueKey(Attribute));
 	}
 
 	template <typename T>

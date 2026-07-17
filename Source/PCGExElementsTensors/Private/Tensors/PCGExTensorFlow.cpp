@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Tensors/PCGExTensorFlow.h"
+#include "PCGExVersion.h"
 
 
 #include "Containers/PCGExManagedObjects.h"
@@ -99,6 +100,28 @@ namespace PCGExTensor
 
 
 PCGEX_TENSOR_BOILERPLATE(Flow, {}, {})
+
+#if WITH_EDITOR
+void UPCGExCreateTensorFlowSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateTensorFlowSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 TSharedPtr<PCGExTensor::FEffectorsArray> UPCGExTensorFlowFactory::GetEffectorsArray() const
 {

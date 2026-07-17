@@ -5,8 +5,11 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExMatchRuleFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "PCGExMatchSharedTag.generated.h"
 
+class UPCGSettings;
+class UPCGNode;
 struct FPCGExTaggedData;
 
 namespace PCGExData
@@ -38,17 +41,22 @@ struct FPCGExMatchSharedTagConfig : public FPCGExMatchRuleConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExTagMatchMode Mode = EPCGExTagMatchMode::Specific;
 
-	/** Type of Tag Name value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExTagMatchMode::Specific", EditConditionHides))
-	EPCGExInputValueType TagNameInput = EPCGExInputValueType::Constant;
+	/** Tag name value. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tag Name", EditCondition="Mode == EPCGExTagMatchMode::Specific", EditConditionHides))
+	FPCGExInputShorthandNameString TagNameValue = FPCGExInputShorthandNameString(FName("ReadTagFrom"), FString(TEXT("Tag")), false);
 
-	/** Attribute to read tag name value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tag Name (Attr)", EditCondition="Mode == EPCGExTagMatchMode::Specific && TagNameInput != EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
-	FName TagNameAttribute = FName("ReadTagFrom");
+#pragma region DEPRECATED
 
-	/** Constant tag name value. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tag Name", EditCondition="Mode == EPCGExTagMatchMode::Specific && TagNameInput == EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
-	FString TagName = TEXT("Tag");
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType TagNameInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName TagNameAttribute_DEPRECATED = FName("ReadTagFrom");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FString TagName_DEPRECATED = TEXT("Tag");
+
+#pragma endregion
 
 	/** Whether to do a tag value match or not. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="Mode == EPCGExTagMatchMode::Specific", EditConditionHides))
@@ -59,6 +67,11 @@ struct FPCGExMatchSharedTagConfig : public FPCGExMatchRuleConfigBase
 	bool bMatchTagValues = false;
 
 	virtual void Init() override;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -101,6 +114,8 @@ class UPCGExCreateMatchSharedTagSettings : public UPCGExMatchRuleFactoryProvider
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(MatchSharedTag, "Match : Shared Tag", "Match data that share common tags", FName(GetDisplayName()))
 
 #endif

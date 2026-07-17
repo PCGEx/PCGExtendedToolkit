@@ -10,6 +10,7 @@
 #include "UObject/Object.h"
 
 #include "PCGExProxyDataBlending.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Factories/PCGExFactoryData.h"
 #include "Factories/PCGExFactoryProvider.h"
@@ -17,6 +18,9 @@
 #include "Utils/PCGExCurveLookup.h"
 
 #include "PCGExBlendOpFactory.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 namespace PCGExDetails
 {
@@ -45,17 +49,22 @@ struct PCGEXBLENDING_API FPCGExAttributeBlendWeight
 
 	~FPCGExAttributeBlendWeight() = default;
 
-	/** Type of Weight */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType WeightInput = EPCGExInputValueType::Constant;
+	/** Weight. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Weight"))
+	FPCGExInputShorthandSelectorDouble WeightValue = FPCGExInputShorthandSelectorDouble(FName("Weight"), 0.5, false);
 
-	/** Attribute to read weight value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Weight (Attr)", EditCondition="WeightInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector WeightAttribute;
+#pragma region DEPRECATED
 
-	/** Constant weight value. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Weight", EditCondition="WeightInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double Weight = 0.5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType WeightInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector WeightAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Weight_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Whether to use in-editor curve or an external asset. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
@@ -77,7 +86,10 @@ struct PCGEXBLENDING_API FPCGExAttributeBlendWeight
 
 	void Init();
 
-	PCGEX_SETTING_VALUE_DECL(Weight, double)
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 USTRUCT(BlueprintType)
@@ -170,6 +182,10 @@ public:
 	TSharedPtr<PCGExData::FFacade> ConstantB;
 
 	bool bUsedForMultiBlendOnly = false;
+
+	// Mirrored from the owning factory at CreateOperation time; gates the Weight setting-value's
+	// consumable auto-registration (ops carry no factory backref).
+	bool bCleanupConsumableAttributes = false;
 
 	int32 OpIdx = -1;
 	TSharedPtr<TArray<TSharedPtr<FPCGExBlendOperation>>> SiblingOperations;

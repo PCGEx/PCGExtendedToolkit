@@ -13,6 +13,7 @@
 #include "Core/PCGExProbingCandidates.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExArrayHelpers.h"
 
 namespace PCGExProbing
@@ -94,7 +95,7 @@ namespace PCGExProbing
 			{
 				bUseVariableRadius = true;
 			}
-			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadiusConstant);
+			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadius.Constant);
 
 			if (NewOperation->RequiresChainProcessing())
 			{

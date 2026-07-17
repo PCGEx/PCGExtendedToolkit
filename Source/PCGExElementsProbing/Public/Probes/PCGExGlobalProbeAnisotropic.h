@@ -82,6 +82,8 @@ class UPCGExProbeGlobalAnisotropicProviderSettings : public UPCGExProbeFactoryPr
 
 public:
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(ProbeGlobalAnisotropic, "G-Probe : GlobalAnisotropic", "Ellipsoidal distance metric for directional connectivity")
 #endif
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;

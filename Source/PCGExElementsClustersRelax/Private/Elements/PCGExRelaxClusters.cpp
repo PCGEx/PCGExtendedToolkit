@@ -38,6 +38,27 @@ TArray<FPCGPinProperties> UPCGExRelaxClustersSettings::InputPinProperties() cons
 PCGEX_INITIALIZE_ELEMENT(RelaxClusters)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(RelaxClusters)
 
+#if WITH_EDITOR
+void UPCGExRelaxClustersSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		InfluenceDetails.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExRelaxClustersSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		InfluenceDetails.ApplyDeprecation();
+		if (Relaxing) { Relaxing->ApplyShorthandDeprecation(); }
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 bool FPCGExRelaxClustersElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExClustersProcessorElement::Boot(InContext))

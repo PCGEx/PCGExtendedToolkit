@@ -44,22 +44,26 @@ struct FPCGExProbeConfigDirection : public FPCGExProbeConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bUnsignedCheck = false;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType DirectionInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read the direction from */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction (Attr)", EditCondition="DirectionInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector DirectionAttribute;
+	/** Direction to probe in. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction"))
+	FPCGExInputShorthandSelectorVector Direction = FPCGExInputShorthandSelectorVector(FName("@Last"), FVector::ForwardVector, false);
 
 	/** Invert the probe direction. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="DirectionInput != EPCGExInputValueType::Constant", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="Direction.Input != EPCGExInputValueType::Constant", EditConditionHides))
 	bool bInvertDirection = false;
 
-	/** Constant direction */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction", EditCondition="DirectionInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector DirectionConstant = FVector::ForwardVector;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(Direction, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType DirectionInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector DirectionAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector DirectionConstant_DEPRECATED = FVector::ForwardVector;
+
+#pragma endregion
 
 	/** Transform the direction with the point's */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -72,6 +76,11 @@ struct FPCGExProbeConfigDirection : public FPCGExProbeConfigBase
 	/** This probe will sample candidates after the other. Can yield different results. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bDoChainedProcessing = false;
+
+#if WITH_EDITOR
+	virtual void ApplyDeprecation() override;
+	virtual void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const override;
+#endif
 };
 
 /**
@@ -121,6 +130,8 @@ class UPCGExProbeDirectionProviderSettings : public UPCGExProbeFactoryProviderSe
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeDirection, "Probe : Direction", "Probe in a given direction.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

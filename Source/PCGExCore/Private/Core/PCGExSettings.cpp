@@ -51,9 +51,13 @@ void UPCGExSettings::ResolveDataVersion()
 	// Source the deprecation version from the package custom version: the engine fills UserDataVersion
 	// from GetUserCustomVersionGuid() during Serialize, and it lives in the archive header so it is never
 	// dropped by delta serialization. Legacy assets predating the custom version have UserDataVersion < 0:
-	// keep their captured per-object PCGExDataVersion if present, else (never stamped) assume current.
+	// keep their captured per-object PCGExDataVersion if present, else (never stamped) treat as oldest.
 	if (UserDataVersion >= 0) { PCGExDataVersion = UserDataVersion; }
-	else if (PCGExDataVersion == INDEX_NONE) { PCGExDataVersion = PCGExVersion::Latest; }
+	else if (PCGExDataVersion == INDEX_NONE) { PCGExDataVersion = 0; }
+	// A node in a legacy package (UserDataVersion < 0) that was never version-stamped (INDEX_NONE) predates
+	// deprecation stamping entirely, so it must run ALL deprecation -> treat as oldest (0), NOT current.
+	// Genuinely-new nodes never reach this branch: any package a current build saves records the PCGEx
+	// custom version in its archive header, so they load with UserDataVersion >= 0 (the branch above).
 	// else: keep the captured legacy PCGExDataVersion as-is.
 }
 
@@ -94,6 +98,10 @@ void UPCGExSettings::Serialize(FArchive& Ar)
 #if WITH_EDITOR
 	// After Super, UserDataVersion holds this package's PCGEx custom version (-1 if it predates it).
 	// Resolve the effective deprecation version before PostLoad and the graph's deprecation pass run.
+	// Fresh nodes need no explicit stamp: any package saved by a current build writes the PCGEx custom
+	// version, so UserDataVersion >= 0 on reload and ResolveDataVersion resolves them via that (never the
+	// INDEX_NONE->oldest path). Do NOT stamp on save here — it mutates the CDO/templates and poisons the
+	// delta-serialization baseline, making legacy assets inherit Latest and skip all deprecation.
 	if (Ar.IsLoading()) { ResolveDataVersion(); }
 #endif
 }

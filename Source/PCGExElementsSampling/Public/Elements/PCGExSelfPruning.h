@@ -8,6 +8,7 @@
 #include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Factories/PCGExFactories.h"
 #include "Math/PCGExMathMean.h"
@@ -45,6 +46,9 @@ class UPCGExSelfPruningSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(SelfPruning, "Self Pruning", "A slower, more precise self pruning node.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -110,38 +114,39 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_NotOverridable))
 	EPCGExSelfPruningExpandOrder PrimaryMode = EPCGExSelfPruningExpandOrder::None;
 
-	/** Type of primary expansion */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" ├─ Input", EditCondition="PrimaryMode != EPCGExSelfPruningExpandOrder::None", EditConditionHides))
-	EPCGExInputValueType PrimaryExpansionInput = EPCGExInputValueType::Constant;
-
 	/** Primary Expansion value. Uniform, discrete offset applied to bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" └─ Primary Expansion (Attr)", EditCondition="PrimaryMode != EPCGExSelfPruningExpandOrder::None && PrimaryExpansionInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector PrimaryExpansionAttribute;
-
-	/** Primary Expansion value. Uniform, discrete offset applied to bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" └─ Primary Expansion", EditCondition="PrimaryMode != EPCGExSelfPruningExpandOrder::None && PrimaryExpansionInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double PrimaryExpansion = 0;
-
-	PCGEX_SETTING_VALUE_DECL(PrimaryExpansion, double)
-
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" └─ Primary Expansion", EditCondition="PrimaryMode != EPCGExSelfPruningExpandOrder::None", EditConditionHides))
+	FPCGExInputShorthandSelectorDouble PrimaryExpansionValue = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0, false);
 
 	/** If and how to expand the primary bounds (bounds used for neighbors points against the main point being evaluated) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_NotOverridable))
 	EPCGExSelfPruningExpandOrder SecondaryMode = EPCGExSelfPruningExpandOrder::None;
 
-	/** Type of secondary expansion */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" ├─ Input", EditCondition="SecondaryMode != EPCGExSelfPruningExpandOrder::None", EditConditionHides))
-	EPCGExInputValueType SecondaryExpansionInput = EPCGExInputValueType::Constant;
-
 	/** Secondary Expansion value. Uniform, discrete offset applied to bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" └─ Secondary Expansion (Attr)", EditCondition="SecondaryMode != EPCGExSelfPruningExpandOrder::None && SecondaryExpansionInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector SecondaryExpansionAttribute;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" └─ Secondary Expansion", EditCondition="SecondaryMode != EPCGExSelfPruningExpandOrder::None", EditConditionHides))
+	FPCGExInputShorthandSelectorDouble SecondaryExpansionValue = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0, false);
 
-	/** Secondary Expansion value. Uniform, discrete offset applied to bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta=(PCG_Overridable, DisplayName=" └─ Secondary Expansion", EditCondition="SecondaryMode != EPCGExSelfPruningExpandOrder::None && SecondaryExpansionInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double SecondaryExpansion = 0;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(SecondaryExpansion, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType PrimaryExpansionInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector PrimaryExpansionAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double PrimaryExpansion_DEPRECATED = 0;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType SecondaryExpansionInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector SecondaryExpansionAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double SecondaryExpansion_DEPRECATED = 0;
+
+#pragma endregion
 };
 
 struct FPCGExSelfPruningContext final : FPCGExPointsProcessorContext

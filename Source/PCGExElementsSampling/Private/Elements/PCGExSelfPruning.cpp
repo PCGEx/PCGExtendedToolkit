@@ -16,9 +16,31 @@
 #define LOCTEXT_NAMESPACE "PCGExSelfPruningElement"
 #define PCGEX_NAMESPACE SelfPruning
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExSelfPruningSettings, PrimaryExpansion, double, PrimaryExpansionInput, PrimaryExpansionAttribute, PrimaryExpansion)
-PCGEX_SETTING_VALUE_IMPL(UPCGExSelfPruningSettings, SecondaryExpansion, double, SecondaryExpansionInput, SecondaryExpansionAttribute, SecondaryExpansion)
+#if WITH_EDITOR
+void UPCGExSelfPruningSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		// Rewire Primary Expansion
+		PCGEX_SHORTHAND_RENAME_PIN(PrimaryExpansionAttribute, PrimaryExpansion, PrimaryExpansionValue)
 
+		// Rewire Secondary Expansion
+		PCGEX_SHORTHAND_RENAME_PIN(SecondaryExpansionAttribute, SecondaryExpansion, SecondaryExpansionValue)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExSelfPruningSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		PrimaryExpansionValue.Update(PrimaryExpansionInput_DEPRECATED, PrimaryExpansionAttribute_DEPRECATED, PrimaryExpansion_DEPRECATED);
+		SecondaryExpansionValue.Update(SecondaryExpansionInput_DEPRECATED, SecondaryExpansionAttribute_DEPRECATED, SecondaryExpansion_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool UPCGExSelfPruningSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {
@@ -129,7 +151,7 @@ namespace PCGExSelfPruning
 
 		if (Settings->PrimaryMode != EPCGExSelfPruningExpandOrder::None)
 		{
-			PrimaryExpansion = Settings->GetValueSettingPrimaryExpansion();
+			PrimaryExpansion = Settings->PrimaryExpansionValue.GetValueSetting();
 			if (!PrimaryExpansion->Init(PointDataFacade))
 			{
 				return false;
@@ -138,7 +160,7 @@ namespace PCGExSelfPruning
 
 		if (Settings->SecondaryMode != EPCGExSelfPruningExpandOrder::None)
 		{
-			SecondaryExpansion = Settings->GetValueSettingSecondaryExpansion();
+			SecondaryExpansion = Settings->SecondaryExpansionValue.GetValueSetting();
 			if (!SecondaryExpansion->Init(PointDataFacade))
 			{
 				return false;

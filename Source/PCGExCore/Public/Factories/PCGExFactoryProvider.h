@@ -18,7 +18,7 @@
 
 #include "PCGExFactoryProvider.generated.h"
 
-#define PCGEX_FACTORY_NAME_PRIORITY FName( Priority != 0 ? FString::Printf(TEXT("[%d] "), Priority) +  GetDisplayName() : GetDisplayName())
+#define PCGEX_FACTORY_NAME_PRIORITY FName( Priority != 0 ? FString::Printf(TEXT("[%d] "), Priority) + (bCleanupConsumableAttributes ? FString(TEXT("🆑 ")) : FString(TEXT(""))) + GetDisplayName() : GetDisplayName())
 #define PCGEX_FACTORY_TYPE_ID(_TYPE) virtual const FPCGDataTypeBaseId& GetFactoryTypeId() const{ return _TYPE::AsId(); }
 
 ///

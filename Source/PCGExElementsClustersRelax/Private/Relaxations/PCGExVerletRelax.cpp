@@ -5,16 +5,26 @@
 
 #pragma region UPCGExVerletRelax
 
+#if WITH_EDITOR
+void UPCGExVerletRelax::ApplyShorthandDeprecation()
+{
+	GravityValue.Update(GravityInput_DEPRECATED, GravityAttribute_DEPRECATED, Gravity_DEPRECATED);
+	FrictionValue.Update(FrictionInput_DEPRECATED, FrictionAttribute_DEPRECATED, Friction_DEPRECATED);
+	EdgeScalingValue.Update(EdgeScalingInput_DEPRECATED, EdgeScalingAttribute_DEPRECATED, EdgeScaling_DEPRECATED);
+	EdgeStiffnessValue.Update(EdgeStiffnessInput_DEPRECATED, EdgeStiffnessAttribute_DEPRECATED, EdgeStiffness_DEPRECATED);
+}
+#endif
+
 void UPCGExVerletRelax::RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterPrimaryBuffersDependencies(InContext, FacadePreloader);
-	if (GravityInput == EPCGExInputValueType::Attribute)
+	if (GravityValue.Input == EPCGExInputValueType::Attribute)
 	{
-		FacadePreloader.Register<FVector>(InContext, GravityAttribute);
+		FacadePreloader.Register<FVector>(InContext, GravityValue.Attribute);
 	}
-	if (FrictionInput == EPCGExInputValueType::Attribute)
+	if (FrictionValue.Input == EPCGExInputValueType::Attribute)
 	{
-		FacadePreloader.Register<FVector>(InContext, FrictionAttribute);
+		FacadePreloader.Register<double>(InContext, FrictionValue.Attribute);
 	}
 }
 
@@ -25,25 +35,25 @@ bool UPCGExVerletRelax::PrepareForCluster(FPCGExContext* InContext, const TShare
 		return false;
 	}
 
-	GravityBuffer = GetValueSettingGravity();
+	GravityBuffer = GravityValue.GetValueSetting();
 	if (!GravityBuffer->Init(PrimaryDataFacade))
 	{
 		return false;
 	}
 
-	FrictionBuffer = GetValueSettingFriction();
+	FrictionBuffer = FrictionValue.GetValueSetting();
 	if (!FrictionBuffer->Init(PrimaryDataFacade))
 	{
 		return false;
 	}
 
-	ScalingBuffer = GetValueSettingEdgeScaling();
+	ScalingBuffer = EdgeScalingValue.GetValueSetting();
 	if (!ScalingBuffer->Init(SecondaryDataFacade))
 	{
 		return false;
 	}
 
-	StiffnessBuffer = GetValueSettingEdgeStiffness();
+	StiffnessBuffer = EdgeStiffnessValue.GetValueSetting();
 	if (!StiffnessBuffer->Init(SecondaryDataFacade))
 	{
 		return false;

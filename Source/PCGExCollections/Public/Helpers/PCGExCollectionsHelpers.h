@@ -109,6 +109,13 @@ namespace PCGExCollections
 
 		TSharedPtr<FPCGExPickerScratchBase> Main;
 		TArray<TSharedPtr<FPCGExPickerScratchBase>> ByCategory;
+
+	public:
+		/** Scratch slot for a routed pick: Main when CategorySlot < 0, the category's slot otherwise. */
+		FPCGExPickerScratchBase* GetSlot(const int32 CategorySlot) const
+		{
+			return CategorySlot < 0 ? Main.Get() : ByCategory[CategorySlot].Get();
+		}
 	};
 
 	/**
@@ -177,6 +184,13 @@ namespace PCGExCollections
 		 */
 		const FPCGExEntryPickerOperation* ResolvePickerForPoint(int32 PointIndex, int32& OutCategorySlot) const;
 
+		/**
+		 * Shared pre-resolve routing: resolve the point's op (same category routing as GetEntry),
+		 * bail unless it opted in, and resolve its scratch slot. Returns null when the point has
+		 * no pre-resolving op.
+		 */
+		FPCGExEntryPickerOperation* ResolvePreResolveOp(int32 PointIndex, const FSelectorScratches* Scratches, FPCGExPickerScratchBase*& OutScratch) const;
+
 	public:
 		FPCGExAssetDistributionDetails Details;
 
@@ -213,6 +227,26 @@ namespace PCGExCollections
 		 * @param MaxPointsInScope Upper bound of points the scope will process; forwarded to ops.
 		 */
 		TSharedPtr<FSelectorScratches> CreateScratches(int32 MaxPointsInScope) const;
+
+		// ========== Deterministic pre-resolve (see FPCGExEntryPickerOperation contract) ==========
+
+		/** True when any of this helper's ops needs the pre-resolve passes. */
+		bool AnyPickerWantsPreResolve() const;
+
+		/** Allocate pre-resolve storage on every opted-in op. Single-threaded, once per facade. */
+		void BeginPreResolve(int32 NumPoints) const;
+
+		/**
+		 * Parallel pass: route the point to its op (same category routing as GetEntry) and record
+		 * its first choice. No-op when the routed op didn't opt in.
+		 */
+		void PreResolveFirstChoice(int32 PointIndex, int32 Seed, const FSelectorScratches* Scratches) const;
+
+		/**
+		 * Sequential pass: route the point to its op and commit its pick, claiming capacity.
+		 * MUST be called in ascending point-index order from a single thread.
+		 */
+		void CommitPreResolve(int32 PointIndex, int32 Seed, const FSelectorScratches* Scratches) const;
 
 		/**
 		 * Get an entry for a specific point
@@ -534,6 +568,12 @@ namespace PCGExCollections
 		 * across any helper wants scratch -- null is always safe to skip.
 		 */
 		TSharedPtr<FSourceScratches> CreateScratches(int32 MaxPointsInScope) const;
+
+		/** True when any op across the wrapped helpers needs the deterministic pre-resolve passes. */
+		bool AnyPickerWantsPreResolve() const;
+
+		/** Allocate pre-resolve storage on every opted-in op across the wrapped helpers. */
+		void BeginPreResolve(int32 NumPoints) const;
 
 		/**
 		 * Get helpers for a specific point index

@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExPathProcessor.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Details/PCGExSubdivisionDetails.h"
 #include "Factories/PCGExFactories.h"
@@ -71,6 +72,9 @@ class UPCGExBevelPathSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(BevelPath, "Path : Bevel", "Bevel paths points.");
 #endif
 
@@ -92,17 +96,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExMeanMeasure WidthMeasure = EPCGExMeanMeasure::Relative;
 
-	/** Bevel width source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExInputValueType WidthInput = EPCGExInputValueType::Constant;
+	/** Bevel width. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FPCGExInputShorthandSelectorDouble Width = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0.1, false);
 
-	/** Bevel width attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Width (Attr)", EditCondition="WidthInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector WidthAttribute;
+#pragma region DEPRECATED
 
-	/** Bevel width constant.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Width", EditCondition="WidthInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double WidthConstant = 0.1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType WidthInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector WidthAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double WidthConstant_DEPRECATED = 0.1;
+
+#pragma endregion
 
 	/** Bevel limit type */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -193,7 +202,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Flags", meta = (PCG_Overridable, EditCondition="bFlagSubdivision"))
 	FName SubdivisionFlagName = "IsSubdivision";
 
-	PCGEX_SETTING_VALUE_DECL(Width, double)
 	PCGEX_SETTING_VALUE_DECL(Subdivisions, double)
 
 	void InitOutputFlags(const TSharedPtr<PCGExData::FPointIO>& InPointIO) const;

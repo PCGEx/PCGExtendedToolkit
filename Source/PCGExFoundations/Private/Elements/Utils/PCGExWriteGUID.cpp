@@ -14,7 +14,27 @@
 #define LOCTEXT_NAMESPACE "PCGExWriteGUIDElement"
 #define PCGEX_NAMESPACE WriteGUID
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExGUIDDetails, UniqueKey, int32, UniqueKeyInput, UniqueKeyAttribute, UniqueKeyConstant)
+#if WITH_EDITOR
+void UPCGExWriteGUIDSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire Unique Key
+		PCGEX_SHORTHAND_RENAME_PIN(UniqueKeyAttribute, UniqueKeyConstant, UniqueKey)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExWriteGUIDSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		Config.UniqueKey.Update(Config.UniqueKeyInput_DEPRECATED, Config.UniqueKeyAttribute_DEPRECATED, Config.UniqueKeyConstant_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExGUIDDetails::Init(FPCGExContext* InContext, TSharedRef<PCGExData::FFacade>& InFacade)
 {
@@ -59,13 +79,15 @@ bool FPCGExGUIDDetails::Init(FPCGExContext* InContext, TSharedRef<PCGExData::FFa
 	bUseSeed = (Uniqueness & static_cast<uint8>(EPCGExGUIDUniquenessFlags::Seed)) != 0;
 	bUsePosition = (Uniqueness & static_cast<uint8>(EPCGExGUIDUniquenessFlags::Position)) != 0;
 
-	UniqueKeyReader = GetValueSettingUniqueKey();
+	UniqueKeyReader = UniqueKey.GetValueSetting();
 	if (!UniqueKeyReader->Init(InFacade))
 	{
 		return false;
 	}
 
-	const uint32 BaseUniqueKey = UniqueKeyReader->IsConstant() ? 0 : UniqueKeyConstant;
+	// Constant keys fold into the grid hash once here; attribute keys are hashed per-point in GetGUID.
+	// Read(0) instead of UniqueKey.Constant: selector-backed readers can resolve to a constant too.
+	const uint32 BaseUniqueKey = UniqueKeyReader->IsConstant() ? static_cast<uint32>(UniqueKeyReader->Read(0)) : 0;
 	if ((Uniqueness & static_cast<uint8>(EPCGExGUIDUniquenessFlags::Grid)) != 0)
 	{
 		const FBox RefBounds = PCGHelpers::GetGridBounds(InContext->GetTargetActor(InFacade->Source->GetIn()), InContext->GetComponent());
@@ -87,7 +109,7 @@ void FPCGExGUIDDetails::GetGUID(const int32 Index, const PCGExData::FConstPoint&
 	const uint32 SeededBase = bUseSeed ? InPoint.Data->GetSeed(InPoint.Index) : 0;
 	OutGUID = FGuid(
 		GridHash, bUseIndex ? Index : -1,
-		UniqueKeyReader->IsConstant() ? HashCombine(SeededBase, static_cast<uint32>(UniqueKeyReader->Read(Index))) : SeededBase,
+		UniqueKeyReader->IsConstant() ? SeededBase : HashCombine(SeededBase, static_cast<uint32>(UniqueKeyReader->Read(Index))),
 		bUsePosition ? PCGEx::GH3(InPoint.GetLocation() + PositionHashOffset, AdjustedPositionHashCollision) : 0);
 }
 

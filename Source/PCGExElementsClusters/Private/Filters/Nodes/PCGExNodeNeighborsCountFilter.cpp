@@ -3,7 +3,6 @@
 
 #include "Filters/Nodes/PCGExNodeNeighborsCountFilter.h"
 
-
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/Utils/PCGExDataPreloader.h"
@@ -24,19 +23,6 @@ void UPCGExNodeNeighborsCountFilterFactory::RegisterBuffersDependencies(FPCGExCo
 	}
 }
 
-bool UPCGExNodeNeighborsCountFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.LocalCount, Consumable)
-
-	return true;
-}
-
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExNodeNeighborsCountFilterFactory::CreateFilter() const
 {
 	return MakeShared<PCGExNodeNeighborsCount::FFilter>(this);
@@ -52,6 +38,7 @@ namespace PCGExNodeNeighborsCount
 		}
 
 		LocalCount = TypedFilterFactory->Config.GetValueSettingLocalCount(PCGEX_QUIET_HANDLING);
+		LocalCount->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!LocalCount->Init(PointDataFacade, false))
 		{
 			return false;

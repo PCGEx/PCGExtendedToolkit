@@ -87,6 +87,8 @@ class UPCGExCreateTensorSpinSettings : public UPCGExTensorPointFactoryProviderSe
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(TensorSpin, "Tensor : Spin", "A tensor that represent a spin around a given axis")
 
 #endif

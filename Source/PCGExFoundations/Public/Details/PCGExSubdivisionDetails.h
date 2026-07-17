@@ -5,10 +5,14 @@
 
 #include "CoreMinimal.h"
 #include "Data/PCGExDataCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Math/PCGExMathAxis.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "PCGExSubdivisionDetails.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 struct FPCGExContext;
 
@@ -70,44 +74,58 @@ struct PCGEXFOUNDATIONS_API FPCGExManhattanDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExAxisOrder Order = EPCGExAxisOrder::XYZ;
 
-	/** Whether grid size comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="bSupportAttribute", EditConditionHides))
-	EPCGExInputValueType GridSizeInput = EPCGExInputValueType::Constant;
+	/** Grid Size -- If using count, values will be rounded down to the nearest int. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Grid Size", EditCondition="Method != EPCGExManhattanMethod::Simple", EditConditionHides))
+	FPCGExInputShorthandNameVector GridSizeValue = FPCGExInputShorthandNameVector(FName("GridSize"), FVector(10), false);
 
-	/** Max Length Attribute */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Grid Size (Attr)", EditCondition="bSupportAttribute && Method != EPCGExManhattanMethod::Simple && GridSizeInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName GridSizeAttribute = FName("GridSize");
+#pragma region DEPRECATED
 
-	/** Grid Size Constant -- If using count, values will be rounded down to the nearest int. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Grid Size", EditCondition="Method != EPCGExManhattanMethod::Simple && (!bSupportAttribute || GridSizeInput == EPCGExInputValueType::Constant)", EditConditionHides))
-	FVector GridSize = FVector(10);
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType GridSizeInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(GridSize, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName GridSizeAttribute_DEPRECATED = FName("GridSize");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector GridSize_DEPRECATED = FVector(10);
+
+#pragma endregion
 
 	/** How subdivision space is aligned. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExManhattanAlign SpaceAlign = EPCGExManhattanAlign::World;
 
-	/** Whether orientation comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bSupportAttribute && SpaceAlign == EPCGExManhattanAlign::Custom", EditConditionHides))
-	EPCGExInputValueType OrientInput = EPCGExInputValueType::Constant;
+	/** Orientation of the subdivision space. Represented as a rotator; attribute source is read as a rotator. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Orient", EditCondition="SpaceAlign == EPCGExManhattanAlign::Custom", EditConditionHides))
+	FPCGExInputShorthandSelectorRotator OrientValue = FPCGExInputShorthandSelectorRotator(FName("@Last"), FRotator::ZeroRotator, false);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Orient (Attr)", EditCondition="bSupportAttribute && OrientInput != EPCGExInputValueType::Constant && SpaceAlign == EPCGExManhattanAlign::Custom", EditConditionHides))
-	FPCGAttributePropertyInputSelector OrientAttribute;
+#pragma region DEPRECATED
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Orient", ClampMin=0, EditCondition="SpaceAlign == EPCGExManhattanAlign::Custom && (!bSupportAttribute || OrientInput == EPCGExInputValueType::Constant)", EditConditionHides))
-	FQuat OrientConstant = FQuat::Identity;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType OrientInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Orient, FQuat)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector OrientAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FQuat OrientConstant_DEPRECATED = FQuat::Identity;
+
+#pragma endregion
 
 	bool IsValid() const;
 	bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade);
 	int32 ComputeSubdivisions(const FVector& A, const FVector& B, const int32 Index, TArray<FVector>& OutSubdivisions, double& OutDist) const;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** Rewires the pre-shorthand override pins; call from the embedder's PCGExApplyDeprecationBeforeUpdatePins under the same version gate as ApplyDeprecation. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 
 protected:
 	bool bInitialized = false;
 
 	int32 Comps[3] = {0, 0, 0};
 	TSharedPtr<PCGExDetails::TSettingValue<FVector>> GridSizeBuffer;
-	TSharedPtr<PCGExDetails::TSettingValue<FQuat>> OrientBuffer;
+	TSharedPtr<PCGExDetails::TSettingValue<FRotator>> OrientBuffer;
 };

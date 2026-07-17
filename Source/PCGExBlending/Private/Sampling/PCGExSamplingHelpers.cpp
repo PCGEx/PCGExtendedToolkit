@@ -14,83 +14,44 @@
 
 namespace PCGExSampling::Helpers
 {
-	double GetAngle(const EPCGExAngleRange Mode, const FVector& A, const FVector& B)
+	double MapAngle(const EPCGExAngleRange Mode, const double Radians, const bool bFlipWinding)
 	{
-		double OutAngle = 0;
-
-		const FVector N1 = A.GetSafeNormal();
-		const FVector N2 = B.GetSafeNormal();
-
-		const double MainDot = N1.Dot(N2);
-		const FVector C = FVector::CrossProduct(N1, N2);
+		const double Degrees = FMath::RadiansToDegrees(Radians); // 0 .. 180
 
 		switch (Mode)
 		{
-		case EPCGExAngleRange::URadians: // 0 .. 3.14
-			OutAngle = FMath::Acos(MainDot);
-			break;
-		case EPCGExAngleRange::PIRadians: // -3.14 .. 3.14
-			OutAngle = FMath::Acos(MainDot) * FMath::Sign(MainDot);
-			break;
-		case EPCGExAngleRange::TAURadians: // 0 .. 6.28
-			if (C.Z < 0)
-			{
-				OutAngle = TWO_PI - FMath::Atan2(C.Size(), MainDot);
-			}
-			else
-			{
-				OutAngle = FMath::Atan2(C.Size(), MainDot);
-			}
-			break;
+		default:
+		case EPCGExAngleRange::URadians: // 0 .. PI
+			return Radians;
+		case EPCGExAngleRange::PIRadians: // -PI .. PI
+			return bFlipWinding ? -Radians : Radians;
+		case EPCGExAngleRange::TAURadians: // 0 .. TAU
+			return bFlipWinding ? TWO_PI - Radians : Radians;
 		case EPCGExAngleRange::UDegrees: // 0 .. 180
-			OutAngle = FMath::RadiansToDegrees(FMath::Acos(MainDot));
-			break;
+			return Degrees;
 		case EPCGExAngleRange::PIDegrees: // -180 .. 180
-			OutAngle = FMath::RadiansToDegrees(FMath::Acos(MainDot)) * FMath::Sign(MainDot);
-			break;
+			return bFlipWinding ? -Degrees : Degrees;
 		case EPCGExAngleRange::TAUDegrees: // 0 .. 360
-			if (C.Z < 0)
-			{
-				OutAngle = 360 - FMath::RadiansToDegrees(FMath::Atan2(C.Size(), MainDot));
-			}
-			else
-			{
-				OutAngle = FMath::RadiansToDegrees(FMath::Atan2(C.Size(), MainDot));
-			}
-			break;
+			return bFlipWinding ? 360 - Degrees : Degrees;
 		case EPCGExAngleRange::NormalizedHalf: // 0 .. 180 -> 0 .. 1
-			OutAngle = FMath::RadiansToDegrees(FMath::Acos(MainDot)) / 180;
-			break;
+			return Degrees / 180;
 		case EPCGExAngleRange::Normalized: // 0 .. 360 -> 0 .. 1
-			if (C.Z < 0)
-			{
-				OutAngle = 360 - FMath::RadiansToDegrees(FMath::Atan2(C.Size(), MainDot));
-			}
-			else
-			{
-				OutAngle = FMath::RadiansToDegrees(FMath::Atan2(C.Size(), MainDot));
-			}
-			OutAngle /= 360;
-			break;
+			return (bFlipWinding ? 360 - Degrees : Degrees) / 360;
 		case EPCGExAngleRange::InvertedNormalizedHalf: // 0 .. 180 -> 1 .. 0
-			OutAngle = 1 - (FMath::RadiansToDegrees(FMath::Acos(MainDot)) / 180);
-			break;
+			return 1 - (Degrees / 180);
 		case EPCGExAngleRange::InvertedNormalized: // 0 .. 360 -> 1 .. 0
-			if (C.Z < 0)
-			{
-				OutAngle = 360 - FMath::RadiansToDegrees(FMath::Atan2(C.Size(), MainDot));
-			}
-			else
-			{
-				OutAngle = FMath::RadiansToDegrees(FMath::Atan2(C.Size(), MainDot));
-			}
-			OutAngle /= 360;
-			OutAngle = 1 - OutAngle;
-			break;
-		default: ;
+			return 1 - ((bFlipWinding ? 360 - Degrees : Degrees) / 360);
 		}
+	}
 
-		return OutAngle;
+	double GetAngle(const EPCGExAngleRange Mode, const FVector& A, const FVector& B, const FVector& Up)
+	{
+		const FVector N1 = A.GetSafeNormal();
+		const FVector N2 = B.GetSafeNormal();
+		const FVector C = FVector::CrossProduct(N1, N2);
+
+		// Atan2 form is immune to FP rounding pushing an Acos input outside [-1, 1]
+		return MapAngle(Mode, FMath::Atan2(C.Size(), N1.Dot(N2)), C.Dot(Up) < 0);
 	}
 
 	bool GetIncludedActors(const FPCGContext* InContext, const TSharedRef<PCGExData::FFacade>& InFacade, const FName ActorReferenceName, TMap<AActor*, int32>& OutActorSet)

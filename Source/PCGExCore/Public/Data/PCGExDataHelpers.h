@@ -23,6 +23,16 @@ namespace PCGExData
 
 namespace PCGExData::Helpers
 {
+	/**
+	 * Canonical read slot for a single-value (@Data-like) attribute: first entry when the domain
+	 * carries items, default-value slot otherwise. Single source of truth for ReadDataValue and
+	 * every promotion/copy path that reads a data-domain value.
+	 */
+	PCGEXCORE_API PCGMetadataEntryKey GetDataValueKey(const FPCGMetadataAttributeBase* Attribute);
+
+	/** True when the attribute holds a readable value address at the given key (pre-validation for property-based copies, e.g. before destructive delete/recreate sequences). */
+	PCGEXCORE_API bool HasPropertyCopyableValue(const FPCGMetadataAttributeBase* Attribute, PCGMetadataEntryKey Key);
+
 	template <typename T>
 	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute);
 
@@ -119,6 +129,16 @@ extern template void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifi
 	PCGEXCORE_API bool PropertyCopyAttribute(
 		const FPCGMetadataAttributeBase* SourceAttr, PCGMetadataEntryKey SourceKey,
 		FPCGMetadataAttributeBase* TargetAttr, PCGMetadataEntryKey TargetKey);
+
+	/**
+	 * Multi-target variant of PropertyCopyAttribute: reads the source value once and writes it to
+	 * every provided target key with a single transient FProperty (the single-key version allocates
+	 * one per call -- see the PERF note in the implementation). Use whenever the same value lands in
+	 * more than one slot (default value + materialized entry, etc.).
+	 */
+	PCGEXCORE_API bool PropertyCopyAttribute(
+		const FPCGMetadataAttributeBase* SourceAttr, PCGMetadataEntryKey SourceKey,
+		FPCGMetadataAttributeBase* TargetAttr, TArrayView<const PCGMetadataEntryKey> TargetKeys);
 
 	/**
 	 * Element-range property-aware copy from one source IO's attribute into a property-backed

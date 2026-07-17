@@ -3,6 +3,7 @@
 
 #include "Filters/Points/PCGExNearestPointCheckFilter.h"
 
+#include "PCGExVersion.h"
 #include "HAL/PlatformAtomics.h"
 
 #include "Containers/PCGExManagedObjects.h"
@@ -202,6 +203,24 @@ UPCGExFactoryData* UPCGExNearestPointCheckFilterProviderSettings::CreateFactory(
 }
 
 #if WITH_EDITOR
+void UPCGExNearestPointCheckFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExNearestPointCheckFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExNearestPointCheckFilterProviderSettings::GetDisplayName() const
 {
 	return GetDefaultNodeTitle().ToString();

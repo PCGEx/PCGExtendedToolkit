@@ -55,7 +55,7 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
 	PCGEX_NODE_INFOS(PathSplineMesh, "Staging : Spline Mesh", "Create spline mesh components from paths using asset collections.");
@@ -319,12 +319,26 @@ namespace PCGExPathSplineMesh
 		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
 
+		// Range loop = selector pre-resolve only in this processor (parallel first-choice pass,
+		// sequential point-order commit on completion, then the main points loop launches).
+		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
+		virtual void OnRangeProcessingComplete() override;
+
 		virtual void OnPointsProcessingComplete() override;
 		void ProcessSegment(const int32 Index);
 
 		virtual void CompleteWork() override;
 
 	protected:
+		bool bFiltersPrimed = false;
+
+		/**
+		 * Pre-resolve pass body. bCommit=false: parallel per-scope filter + first choices.
+		 * bCommit=true: sequential whole-range commit -- MUST be called with a single scope
+		 * covering all points, in point-index order (that ordering is the claim priority).
+		 */
+		void PreResolveScope(const PCGExMT::FScope& Scope, bool bCommit);
+
 		void HandleInvalidPoint(const int32 Index) const;
 	};
 }

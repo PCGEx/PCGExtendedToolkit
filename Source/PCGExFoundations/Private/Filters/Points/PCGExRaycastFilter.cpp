@@ -101,6 +101,7 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 	if (Config.OriginMode != EPCGExRaycastOriginMode::PointPosition)
 	{
 		OriginGetter = Config.Origin.GetValueSetting();
+		OriginGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!OriginGetter->Init(InPointDataFacade))
 		{
 			return false;
@@ -108,12 +109,14 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 	}
 
 	DirectionGetter = Config.Direction.GetValueSetting();
+	DirectionGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!DirectionGetter->Init(InPointDataFacade))
 	{
 		return false;
 	}
 
 	MaxDistanceGetter = Config.MaxDistance.GetValueSetting();
+	MaxDistanceGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!MaxDistanceGetter->Init(InPointDataFacade))
 	{
 		return false;
@@ -122,6 +125,7 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 	if (CollisionSettings.TraceMode == EPCGExTraceMode::Sphere)
 	{
 		SphereRadiusGetter = CollisionSettings.SphereRadius.GetValueSetting();
+		SphereRadiusGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!SphereRadiusGetter->Init(InPointDataFacade))
 		{
 			return false;
@@ -130,6 +134,7 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 	else if (CollisionSettings.TraceMode == EPCGExTraceMode::Box)
 	{
 		BoxHalfExtentsGetter = CollisionSettings.BoxHalfExtents.GetValueSetting();
+		BoxHalfExtentsGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!BoxHalfExtentsGetter->Init(InPointDataFacade))
 		{
 			return false;
@@ -139,6 +144,7 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 	if (Config.TestMode == EPCGExRaycastTestMode::CompareDistance)
 	{
 		DistanceThresholdGetter = Config.DistanceThreshold.GetValueSetting();
+		DistanceThresholdGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!DistanceThresholdGetter->Init(InPointDataFacade))
 		{
 			return false;

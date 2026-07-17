@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Tensors/PCGExTensorSurface.h"
+#include "PCGExVersion.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -69,8 +70,8 @@ PCGExTensor::FTensorSample FPCGExTensorSurface::Sample(const int32 InSeedIndex, 
 
 	// Compute factor for falloff curves (0 = at surface, 1 = at max distance)
 	const double Factor = FMath::Clamp(Hit.Distance / Config.MaxDistance, 0.0, 1.0);
-	const double Potency = Config.Potency * Config.PotencyScale * PotencyFalloffLUT->Eval(Factor);
-	const double Weight = Config.Weight * WeightFalloffLUT->Eval(Factor);
+	const double Potency = Config.PotencyValue.Constant * Config.PotencyScale * PotencyFalloffLUT->Eval(Factor);
+	const double Weight = Config.WeightValue.Constant * WeightFalloffLUT->Eval(Factor);
 
 	PCGExTensor::FEffectorSamples Samples;
 	Samples.Emplace_GetRef(Direction, Potency, Weight);
@@ -375,6 +376,28 @@ FVector FPCGExTensorSurface::ComputeDirection(const FTransform& InProbe, const F
 // Factory implementation
 
 PCGEX_TENSOR_BOILERPLATE(Surface, {}, {})
+
+#if WITH_EDITOR
+void UPCGExCreateTensorSurfaceSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCreateTensorSurfaceSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGExFactories::EPreparationResult UPCGExTensorSurfaceFactory::InitInternalData(FPCGExContext* InContext)
 {

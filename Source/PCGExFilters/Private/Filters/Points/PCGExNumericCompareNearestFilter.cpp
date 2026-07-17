@@ -10,7 +10,6 @@
 #include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 #include "PCGExMatching/Public/Helpers/PCGExTargetsHandler.h"
 
-
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
@@ -56,19 +55,6 @@ void UPCGExNumericCompareNearestFilterFactory::RegisterBuffersDependencies(FPCGE
 	Config.OperandBValue.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
-bool UPCGExNumericCompareNearestFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.OperandBValue.Input == EPCGExInputValueType::Attribute, Config.OperandBValue.Attribute, Consumable)
-
-	return true;
-}
-
 #if WITH_EDITOR
 void UPCGExNumericCompareNearestFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
@@ -77,6 +63,12 @@ void UPCGExNumericCompareNearestFilterProviderSettings::PCGExApplyDeprecationBef
 		// Rewire the old Operand B override pins onto the new shorthand pins (ApplyDeprecation only migrates the inline value).
 		PCGEX_SHORTHAND_RENAME_PIN(OperandB, OperandBConstant, OperandBValue)
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.RenamePins(this, InOutNode);
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -86,6 +78,12 @@ void UPCGExNumericCompareNearestFilterProviderSettings::PCGExApplyDeprecation(UP
 	{
 		Config.OperandBValue.Update(Config.CompareAgainst_DEPRECATED, Config.OperandB_DEPRECATED, Config.OperandBConstant_DEPRECATED);
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.DataMatching.ApplyDeprecation();
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
@@ -93,6 +91,7 @@ void UPCGExNumericCompareNearestFilterProviderSettings::PCGExApplyDeprecation(UP
 bool PCGExPointFilter::FNumericCompareNearestFilter::InitNearest(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 {
 	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(PointDataFacade, false))
 	{
 		return false;

@@ -130,5 +130,7 @@ struct PCGEXCORE_API FPCGExRandomRatioDetails
 
 #if WITH_EDITOR
 	void ApplyDeprecation();
+	/** Rewires the pre-shorthand override pins; call from the embedder's PCGExApplyDeprecationBeforeUpdatePins under the same version gate as ApplyDeprecation. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
 #endif
 };

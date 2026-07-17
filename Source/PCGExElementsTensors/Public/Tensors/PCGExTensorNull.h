@@ -55,6 +55,8 @@ class UPCGExCreateTensorNullSettings : public UPCGExTensorPointFactoryProviderSe
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(TensorNull, "Tensor : Null", "A tensor that represent a Null field")
 
 #endif

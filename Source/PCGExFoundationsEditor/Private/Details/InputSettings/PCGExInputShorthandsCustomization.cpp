@@ -8,13 +8,172 @@
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExCustomizationMacros.h"
-#include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Metadata/PCGAttributePropertySelector.h"
+#include "Styling/AppStyle.h"
 #include "UObject/TextProperty.h"
+#include "Widgets/Images/SImage.h"
+#include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SSeparator.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
+
+namespace PCGExInputShorthandsCustomization
+{
+	// One icon+label row inside the options popover; same active/inactive color language as the
+	// inline ActionIcon buttons (dark plate + white icon when active, transparent + gray otherwise).
+	// TextGlyph takes precedence over IconName (e.g. the 🆑 marker shared with node titles).
+	TSharedRef<SWidget> CreateOptionRow(
+		const FText& Label, const FText& Tooltip, const FString& IconName,
+		TFunction<bool()> IsActive, TFunction<void()> OnClick, TAttribute<bool> Enabled = true,
+		const FText& TextGlyph = FText::GetEmpty())
+	{
+		TSharedRef<SHorizontalBox> Content = SNew(SHorizontalBox);
+
+		if (!TextGlyph.IsEmpty())
+		{
+			Content->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 6, 0)
+			[
+				SNew(STextBlock)
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+				.Text(TextGlyph)
+				// Color emoji glyphs ignore color tint; alpha is the only channel that dims them.
+				.ColorAndOpacity_Lambda([IsActive] { return FSlateColor(IsActive() ? FLinearColor::White : FLinearColor(1.f, 1.f, 1.f, 0.3f)); })
+			];
+		}
+		else if (!IconName.IsEmpty())
+		{
+			Content->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 6, 0)
+			[
+				SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush(*IconName))
+				.ColorAndOpacity_Lambda([IsActive] { return IsActive() ? FLinearColor::White : FLinearColor::Gray; })
+			];
+		}
+
+		Content->AddSlot().FillWidth(1).VAlign(VAlign_Center)
+		[
+			SNew(STextBlock)
+			.Font(IDetailLayoutBuilder::GetDetailFont())
+			.Text(Label)
+		];
+
+		return SNew(SButton)
+			.ToolTipText(Tooltip)
+			.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
+			.IsEnabled(Enabled)
+			.ButtonColorAndOpacity_Lambda([IsActive] { return IsActive() ? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f) : FLinearColor::Transparent; })
+			.OnClicked_Lambda(
+				[OnClick]()
+				{
+					OnClick();
+					return FReply::Handled();
+				})
+			[
+				Content
+			];
+	}
+
+	// Gear popover collapsing the shorthand's per-row options (Input mode + bCleanupAttribute) into
+	// a single trailing button, instead of three inline ActionIcon buttons per row.
+	TSharedRef<SWidget> CreateOptionsPopover(const TSharedPtr<IPropertyHandle>& InputHandle, const TSharedPtr<IPropertyHandle>& CleanupHandle)
+	{
+		TSharedRef<SVerticalBox> Menu = SNew(SVerticalBox);
+
+		// Input mode rows, driven by the enum's own ActionIcon metadata (same source as the old radio group).
+		if (UEnum* Enum = FindFirstObjectSafe<UEnum>(TEXT("EPCGExInputValueType")))
+		{
+			for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+			{
+				if (Enum->HasMetaData(TEXT("Hidden"), i))
+				{
+					continue;
+				}
+
+				const FString KeyName = Enum->GetNameStringByIndex(i);
+				FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+				if (!IconName.IsEmpty())
+				{
+					IconName = TEXT("PCGEx.ActionIcon.") + IconName;
+				}
+
+				Menu->AddSlot().AutoHeight().Padding(2, 1)
+				[
+					CreateOptionRow(
+						Enum->GetDisplayNameTextByIndex(i), Enum->GetToolTipTextByIndex(i), IconName,
+						[InputHandle, KeyName]()
+						{
+							FString CurrentValue;
+							InputHandle->GetValueAsFormattedString(CurrentValue);
+							return CurrentValue == KeyName;
+						},
+						[InputHandle, KeyName]()
+						{
+							InputHandle->SetValueFromFormattedString(KeyName);
+						})
+				];
+			}
+		}
+
+		Menu->AddSlot().AutoHeight().Padding(2, 4)
+		[
+			SNew(SSeparator)
+		];
+
+		Menu->AddSlot().AutoHeight().Padding(2, 1)
+		[
+			CreateOptionRow(
+				CleanupHandle->GetPropertyDisplayName(), CleanupHandle->GetToolTipText(), FString(),
+				[CleanupHandle]()
+				{
+					bool bValue = false;
+					CleanupHandle->GetValue(bValue);
+					return bValue;
+				},
+				[CleanupHandle]()
+				{
+					bool bValue = false;
+					CleanupHandle->GetValue(bValue);
+					CleanupHandle->SetValue(!bValue);
+				},
+				// EditCondition parity: only meaningful in Attribute mode.
+				MakeAttributeLambda(
+					[InputHandle]()
+					{
+						uint8 V = 0;
+						InputHandle->GetValue(V);
+						return V != 0;
+					}),
+				// Same marker the node title shows when consumable cleanup is active.
+				FText::FromString(TEXT("🆑")))
+		];
+
+		return SNew(SComboButton)
+			.HasDownArrow(false)
+			.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("PCGEx.ActionIcon"))
+			.ContentPadding(0)
+			.ToolTipText(NSLOCTEXT("PCGExInputShorthands", "ShorthandOptions", "Input options"))
+			.ButtonContent()
+			[
+				SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("PCGEx.ActionIcon.Settings"))
+				.DesiredSizeOverride(FVector2D(16.f, 16.f))
+				.ColorAndOpacity(FLinearColor::White)
+			]
+			.MenuContent()
+			[
+				SNew(SBox)
+				.Padding(4)
+				.MinDesiredWidth(140)
+				[
+					Menu
+				]
+			];
+	}
+}
 
 TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandCustomization::MakeInstance()
 {
@@ -30,6 +189,7 @@ void FPCGExInputShorthandCustomization::CustomizeHeader(
 	TSharedPtr<IPropertyHandle> InputHandle = PropertyHandle->GetChildHandle(FName("Input"));
 	TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));
 	TSharedPtr<IPropertyHandle> AttributeHandle = PropertyHandle->GetChildHandle(FName("Attribute"));
+	TSharedPtr<IPropertyHandle> CleanupHandle = PropertyHandle->GetChildHandle(FName("bCleanupAttribute"));
 
 	HeaderRow.NameContent()
 		[
@@ -69,9 +229,9 @@ void FPCGExInputShorthandCustomization::CustomizeHeader(
 					CreateAttributeWidget(AttributeHandle)
 				]
 			]
-			+ SHorizontalBox::Slot().Padding(1).AutoWidth()
+			+ SHorizontalBox::Slot().Padding(1).AutoWidth().VAlign(VAlign_Center)
 			[
-				PCGExEnumCustomization::CreateRadioGroup(InputHandle, TEXT("EPCGExInputValueType"))
+				PCGExInputShorthandsCustomization::CreateOptionsPopover(InputHandle, CleanupHandle)
 			]
 		];
 }
@@ -169,13 +329,14 @@ void FPCGExInputShorthandDirectionCustomization::CustomizeHeader(TSharedRef<IPro
 	TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));
 	TSharedPtr<IPropertyHandle> AttributeHandle = PropertyHandle->GetChildHandle(FName("Attribute"));
 	TSharedPtr<IPropertyHandle> FlipHandle = PropertyHandle->GetChildHandle(FName("bFlip"));
+	TSharedPtr<IPropertyHandle> CleanupHandle = PropertyHandle->GetChildHandle(FName("bCleanupAttribute"));
 
 	HeaderRow.NameContent()
 		[
 			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().Padding(1).AutoWidth()
+			+ SHorizontalBox::Slot().Padding(1).AutoWidth().VAlign(VAlign_Center)
 			[
-				PCGExEnumCustomization::CreateRadioGroup(InputHandle, TEXT("EPCGExInputValueType"))
+				PCGExInputShorthandsCustomization::CreateOptionsPopover(InputHandle, CleanupHandle)
 			]
 			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[

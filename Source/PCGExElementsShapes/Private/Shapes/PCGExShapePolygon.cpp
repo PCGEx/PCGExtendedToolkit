@@ -301,8 +301,8 @@ void UPCGExCreateShapePolygonSettings::PCGExApplyDeprecationBeforeUpdatePins(UPC
 		// Rewire NumVertices
 		PCGEX_SHORTHAND_RENAME_PIN(NumVerticesAttribute, NumVerticesConstant, NumVertices)
 
-		// Rewire Add Skeleton
-		PCGEX_SHORTHAND_RENAME_PIN(AddSkeletonAttribute, AddSkeleton, AddSkeleton)
+		// Rewire Add Skeleton — old bool constant was `bAddSkeleton` (derived display "Add Skeleton")
+		PCGEX_SHORTHAND_RENAME_PIN(AddSkeletonAttribute, bAddSkeleton, AddSkeleton)
 	}
 
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);

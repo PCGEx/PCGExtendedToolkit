@@ -10,6 +10,7 @@
 
 #include "Core/PCGExPathProcessor.h"
 #include "Data/Descriptors/PCGExComponentDescriptors.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSplineMeshDetails.h"
 #include "Math/PCGExMathAxis.h"
 #include "Tangents/PCGExTangentsInstancedFactory.h"
@@ -42,6 +43,7 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
 	PCGEX_NODE_INFOS(PathSplineMeshSimple, "Path : Spline Mesh (Simple)", "Create spline mesh components from paths.");
@@ -119,33 +121,35 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExTangentsDetails Tangents;
 
-	/** Type of Start Offset */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_NotOverridable))
-	EPCGExInputValueType StartOffsetInput = EPCGExInputValueType::Constant;
+	/** Start Offset (Vector 2 expected when read from an attribute) */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_Overridable, DisplayName="Start Offset"))
+	FPCGExInputShorthandNameVector2 StartOffsetValue = FPCGExInputShorthandNameVector2(FName("StartOffset"), FVector2D::ZeroVector, false);
 
-	/** Start Offset Attribute (Vector 2 expected)*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_Overridable, DisplayName="Start Offset (Attr)", EditCondition="StartOffsetInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName StartOffsetAttribute = FName("StartOffset");
+	/** End Offset (Vector 2 expected when read from an attribute) */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_Overridable, DisplayName="End Offset"))
+	FPCGExInputShorthandNameVector2 EndOffsetValue = FPCGExInputShorthandNameVector2(FName("EndOffset"), FVector2D::ZeroVector, false);
 
-	/** Start Offset Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_Overridable, DisplayName="Start Offset", EditCondition="StartOffsetInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector2D StartOffset = FVector2D::ZeroVector;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(StartOffset, FVector2D)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType StartOffsetInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Type of End Offset */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_NotOverridable))
-	EPCGExInputValueType EndOffsetInput = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName StartOffsetAttribute_DEPRECATED = FName("StartOffset");
 
-	/** End Offset Attribute (Vector 2 expected)*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_Overridable, DisplayName="End Offset (Attr)", EditCondition="EndOffsetInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName EndOffsetAttribute = FName("EndOffset");
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector2D StartOffset_DEPRECATED = FVector2D::ZeroVector;
 
-	/** End Offset Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations|Offsets", meta=(PCG_Overridable, DisplayName="End Offset", EditCondition="EndOffsetInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector2D EndOffset = FVector2D::ZeroVector;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType EndOffsetInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(EndOffset, FVector2D)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName EndOffsetAttribute_DEPRECATED = FName("EndOffset");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector2D EndOffset_DEPRECATED = FVector2D::ZeroVector;
+
+#pragma endregion
 
 	/** Push details */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mutations", meta=(PCG_Overridable, DisplayName="Expansion"))

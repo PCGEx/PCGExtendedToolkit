@@ -180,7 +180,14 @@ namespace PCGExTypes
 	template <typename T>
 	FORCEINLINE bool AreEqual(const T& A, const T& B)
 	{
-		return A == B;
+		if constexpr (std::is_same_v<T, FTransform>)
+		{
+			return A.Equals(B);
+		}
+		else
+		{
+			return A == B;
+		}
 	}
 
 	// Lerp between values

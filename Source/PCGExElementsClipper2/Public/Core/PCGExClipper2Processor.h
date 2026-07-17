@@ -249,6 +249,9 @@ public:
 	{
 		return PCGEX_NODE_COLOR_NAME(Path);
 	}
+
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 #endif
 	//~End UPCGSettings
 

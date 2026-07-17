@@ -84,6 +84,8 @@ class UPCGExCreateTensorNoiseBoundedSettings : public UPCGExTensorPointFactoryPr
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(TensorNoiseBounded, "Tensor : Noise (Bounded)", "A tensor that uses 3D noises as direction, within effector bounds")
 
 #endif

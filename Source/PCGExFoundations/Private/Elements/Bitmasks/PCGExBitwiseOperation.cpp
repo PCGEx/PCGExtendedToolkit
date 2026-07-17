@@ -10,7 +10,27 @@
 #define LOCTEXT_NAMESPACE "PCGExBitwiseOperationElement"
 #define PCGEX_NAMESPACE BitwiseOperation
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExBitwiseOperationSettings, Mask, int64, MaskInput, MaskAttribute, Bitmask)
+#if WITH_EDITOR
+void UPCGExBitwiseOperationSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire Mask
+		PCGEX_SHORTHAND_RENAME_PIN(MaskAttribute, Bitmask, Mask)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBitwiseOperationSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		Mask.Update(MaskInput_DEPRECATED, MaskAttribute_DEPRECATED, Bitmask_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGEX_INITIALIZE_ELEMENT(BitwiseOperation)
 
@@ -32,11 +52,6 @@ bool FPCGExBitwiseOperationElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_VALIDATE_NAME(Settings->FlagAttribute)
 
-	if (Settings->MaskInput == EPCGExInputValueType::Attribute)
-	{
-		PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->MaskAttribute)
-	}
-
 	return true;
 }
 
@@ -49,16 +64,10 @@ bool FPCGExBitwiseOperationElement::AdvanceWork(FPCGExContext* InContext, const 
 
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		PCGEX_ON_INVALILD_INPUTS(FTEXT("Some inputs are missing the specified MaskAttribute and won't be processed."))
-
+		// Selector validity (incl. properties and @Data) is handled by Mask->Init in the processor.
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Settings->MaskInput == EPCGExInputValueType::Attribute && !Entry->GetIn()->Metadata->HasAttribute(Settings->MaskAttribute))
-				{
-					bHasInvalidInputs = true;
-					return false;
-				}
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
@@ -88,7 +97,7 @@ namespace PCGExBitwiseOperation
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		Mask = Settings->GetValueSettingMask();
+		Mask = Settings->Mask.GetValueSetting();
 		if (!Mask->Init(PointDataFacade))
 		{
 			return false;

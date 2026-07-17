@@ -5,12 +5,19 @@
 
 #pragma region UPCGExBoxFittingRelax2
 
+#if WITH_EDITOR
+void UPCGExBoxFittingRelax2::ApplyShorthandDeprecation()
+{
+	ExtentsValue.Update(ExtentsInput_DEPRECATED, ExtentsAttribute_DEPRECATED, Extents_DEPRECATED);
+}
+#endif
+
 void UPCGExBoxFittingRelax2::RegisterPrimaryBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterPrimaryBuffersDependencies(InContext, FacadePreloader);
-	if (ExtentsInput == EPCGExInputValueType::Attribute)
+	if (ExtentsValue.Input == EPCGExInputValueType::Attribute)
 	{
-		FacadePreloader.Register<FVector>(InContext, ExtentsAttribute);
+		FacadePreloader.Register<FVector>(InContext, ExtentsValue.Attribute);
 	}
 }
 
@@ -21,7 +28,7 @@ bool UPCGExBoxFittingRelax2::PrepareForCluster(FPCGExContext* InContext, const T
 		return false;
 	}
 
-	ExtentsBuffer = GetValueSettingExtents();
+	ExtentsBuffer = ExtentsValue.GetValueSetting();
 	if (!ExtentsBuffer->Init(PrimaryDataFacade))
 	{
 		return false;
