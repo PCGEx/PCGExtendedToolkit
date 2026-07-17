@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -75,9 +75,10 @@ protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 
 private:
-	FVector GetSpotCenter(int32 CellX, int32 CellY, int32 CellZ) const;
-	double GetSpotRadius(int32 CellX, int32 CellY, int32 CellZ) const;
-	double GetSpotValue(int32 CellX, int32 CellY, int32 CellZ) const;
+	// All per-cell randomness derives from one hash: bit lanes for the center, remix channels for radius/value
+	FVector GetSpotCenter(int32 CellX, int32 CellY, int32 CellZ, uint32 CellHash) const;
+	double GetSpotRadius(uint32 CellHash) const;
+	double GetSpotValue(uint32 CellHash) const;
 	double ComputeShapeDistance(const FVector& Offset, double Radius) const;
 };
 
@@ -92,7 +93,7 @@ public:
 	UPROPERTY()
 	FPCGExNoiseConfigSpots Config;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const override;
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const override;
 	PCGEX_NOISE3D_FACTORY_BOILERPLATE
 };
 

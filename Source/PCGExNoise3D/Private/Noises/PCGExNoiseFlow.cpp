@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseFlow.h"
@@ -6,6 +6,27 @@
 #include "Helpers/PCGExNoise3DMath.h"
 
 using namespace PCGExNoise3D::Math;
+
+void FPCGExNoiseFlow::PostInitDerived()
+{
+	for (int32 Hash = 0; Hash < 256; ++Hash)
+	{
+		const FVector BaseGrad = GetGrad3(Hash);
+
+		// Unique rotation rate for this cell, rotated in XY plane
+		const double Rate = HashToDouble(Hash) * RotationSpeed;
+		const double Angle = Time * Rate * 2.0 * PI;
+
+		const double CosA = FMath::Cos(Angle);
+		const double SinA = FMath::Sin(Angle);
+
+		RotatedGradients[Hash] = FVector(
+			BaseGrad.X * CosA - BaseGrad.Y * SinA,
+			BaseGrad.X * SinA + BaseGrad.Y * CosA,
+			BaseGrad.Z
+			);
+	}
+}
 
 double FPCGExNoiseFlow::GenerateRaw(const FVector& Position) const
 {
@@ -33,15 +54,14 @@ double FPCGExNoiseFlow::GenerateRaw(const FVector& Position) const
 	const int32 BAB = Hash3D(X0S + 1, Y0, Z0 + 1);
 	const int32 BBB = Hash3D(X0S + 1, Y0 + 1, Z0 + 1);
 
-	// Get rotated gradients
-	const FVector G_AAA = GetRotatedGradient(AAA, Time);
-	const FVector G_BAA = GetRotatedGradient(BAA, Time);
-	const FVector G_ABA = GetRotatedGradient(ABA, Time);
-	const FVector G_BBA = GetRotatedGradient(BBA, Time);
-	const FVector G_AAB = GetRotatedGradient(AAB, Time);
-	const FVector G_BAB = GetRotatedGradient(BAB, Time);
-	const FVector G_ABB = GetRotatedGradient(ABB, Time);
-	const FVector G_BBB = GetRotatedGradient(BBB, Time);
+	const FVector& G_AAA = RotatedGradients[AAA];
+	const FVector& G_BAA = RotatedGradients[BAA];
+	const FVector& G_ABA = RotatedGradients[ABA];
+	const FVector& G_BBA = RotatedGradients[BBA];
+	const FVector& G_AAB = RotatedGradients[AAB];
+	const FVector& G_BAB = RotatedGradients[BAB];
+	const FVector& G_ABB = RotatedGradients[ABB];
+	const FVector& G_BBB = RotatedGradients[BBB];
 
 	// Dot products with rotated gradients
 	const double D_AAA = FVector::DotProduct(G_AAA, FVector(Xf, Yf, Zf));
@@ -65,7 +85,7 @@ double FPCGExNoiseFlow::GenerateRaw(const FVector& Position) const
 	return Lerp(XY0, XY1, W) * 0.5 + 0.5;
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryFlow::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryFlow::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseFlow)
 	PCGEX_FORWARD_NOISE3D_CONFIG

@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseWhite.h"
@@ -18,7 +18,7 @@ double FPCGExNoiseWhite::GenerateRaw(const FVector& Position) const
 	return Hash32ToDouble01(H);
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWhite::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWhite::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseWhite)
 	PCGEX_FORWARD_NOISE3D_CONFIG

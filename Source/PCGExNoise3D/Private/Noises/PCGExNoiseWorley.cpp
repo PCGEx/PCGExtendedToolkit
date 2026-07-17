@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseWorley.h"
@@ -6,6 +6,17 @@
 #include "Helpers/PCGExNoise3DMath.h"
 
 using namespace PCGExNoise3D::Math;
+
+void FPCGExNoiseWorley::PostInitDerived()
+{
+	// Approximate normalization per distance function
+	MaxDist = 1.0;
+	if (DistanceFunction == EPCGExWorleyDistanceFunc::EuclideanSq ||
+		DistanceFunction == EPCGExWorleyDistanceFunc::Manhattan)
+	{
+		MaxDist = 3.0;
+	}
+}
 
 double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 {
@@ -15,7 +26,9 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 
 	double WF1 = TNumericLimits<double>::Max();
 	double WF2 = TNumericLimits<double>::Max();
-	double CellVal = 0.0;
+	int32 WinnerX = CellX;
+	int32 WinnerY = CellY;
+	int32 WinnerZ = CellZ;
 
 	// Search 3x3x3 neighborhood
 	for (int32 DZ = -1; DZ <= 1; ++DZ)
@@ -36,7 +49,9 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 				{
 					WF2 = WF1;
 					WF1 = Dist;
-					CellVal = Hash32ToDouble01(Hash32(NX + Seed, NY, NZ));
+					WinnerX = NX;
+					WinnerY = NY;
+					WinnerZ = NZ;
 				}
 				else if (Dist < WF2)
 				{
@@ -46,15 +61,9 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 		}
 	}
 
-	// Normalize distances (approximate for different distance functions)
-	double MaxDist = 1.0;
-	if (DistanceFunction == EPCGExWorleyDistanceFunc::EuclideanSq)
+	if (ReturnType == EPCGExWorleyReturnType::CellValue)
 	{
-		MaxDist = 3.0;
-	}
-	else if (DistanceFunction == EPCGExWorleyDistanceFunc::Manhattan)
-	{
-		MaxDist = 3.0;
+		return Hash32ToDouble01(Hash32(WinnerX + Seed, WinnerY, WinnerZ));
 	}
 
 	WF1 = FMath::Min(WF1 / MaxDist, 1.0);
@@ -78,9 +87,6 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 	case EPCGExWorleyReturnType::F1TimesF2:
 		Result = WF1 * WF2;
 		break;
-	case EPCGExWorleyReturnType::CellValue:
-		Result = CellVal;
-		break;
 	default:
 		Result = WF1;
 	}
@@ -88,7 +94,7 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 	return Result;
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWorley::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWorley::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseWorley)
 	PCGEX_FORWARD_NOISE3D_CONFIG

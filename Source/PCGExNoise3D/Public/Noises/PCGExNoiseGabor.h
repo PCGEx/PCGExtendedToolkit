@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -51,38 +51,42 @@ public:
 
 	virtual ~FPCGExNoiseGabor() override = default;
 
+	virtual void PostInitDerived() override;
+
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 
 private:
-	FORCEINLINE double GaborKernel(const FVector& Offset, double K, double A) const
+	/** Precomputed in PostInitDerived */
+	int32 SearchRadius = 2;
+	double KernelRadiusSq = 2.25;
+	double Normalization = 1.0;
+	double GaussCoeff = -PI;
+	double PhaseCoeff = 2.0 * PI;
+
+	FORCEINLINE double GaborKernel(const FVector& Offset) const
 	{
 		const double R2 = Offset.SizeSquared();
-		if (R2 > KernelRadius * KernelRadius)
+		if (R2 > KernelRadiusSq)
 		{
 			return 0.0;
 		}
 
 		// Gaussian envelope
-		const double Gaussian = FMath::Exp(-PI * A * A * R2);
+		const double Gaussian = FMath::Exp(GaussCoeff * R2);
 
 		// Sinusoidal carrier
-		const double Phase = 2.0 * PI * K * FVector::DotProduct(Direction, Offset);
+		const double Phase = PhaseCoeff * FVector::DotProduct(Direction, Offset);
 
 		return Gaussian * FMath::Cos(Phase);
 	}
 
-	FORCEINLINE FVector RandomImpulse(int32 CellX, int32 CellY, int32 CellZ, int32 Idx) const
+	/** Offset within the cell + signed weight, both derived from a single hash */
+	FORCEINLINE FVector RandomImpulse(int32 CellX, int32 CellY, int32 CellZ, int32 Idx, double& OutWeight) const
 	{
-		const uint32 H1 = PCGExNoise3D::Math::Hash32(CellX + Seed, CellY + Idx, CellZ);
-		const uint32 H2 = PCGExNoise3D::Math::Hash32(CellX + Idx, CellY + Seed, CellZ);
-		const uint32 H3 = PCGExNoise3D::Math::Hash32(CellX, CellY, CellZ + Seed + Idx);
-
-		return FVector(
-			PCGExNoise3D::Math::Hash32ToDouble01(H1),
-			PCGExNoise3D::Math::Hash32ToDouble01(H2),
-			PCGExNoise3D::Math::Hash32ToDouble01(H3)
-			);
+		const uint32 H = PCGExNoise3D::Math::Hash32(CellX + Seed, CellY + Idx, CellZ);
+		OutWeight = PCGExNoise3D::Math::Hash32ToDouble01(PCGExNoise3D::Math::Hash32Remix(H)) * 2.0 - 1.0;
+		return PCGExNoise3D::Math::Hash32ToVector01(H);
 	}
 };
 
@@ -97,7 +101,7 @@ public:
 	UPROPERTY()
 	FPCGExNoiseConfigGabor Config;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const override;
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const override;
 	PCGEX_NOISE3D_FACTORY_BOILERPLATE
 };
 
