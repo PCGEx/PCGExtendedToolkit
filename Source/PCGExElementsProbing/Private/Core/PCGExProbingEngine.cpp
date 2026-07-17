@@ -13,6 +13,7 @@
 #include "Core/PCGExProbingCandidates.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExArrayHelpers.h"
 
 namespace PCGExProbing
