@@ -4,14 +4,11 @@
 #include "Core/PCGExNoise3DOperation.h"
 #include "Helpers/PCGExNoise3DMath.h"
 
-void FPCGExNoise3DOperation::ComputeFractalBounding() const
+void FPCGExNoise3DOperation::PostInit()
 {
-	if (bFractalBoundingComputed)
-	{
-		return;
-	}
 	FractalBounding = PCGExNoise3D::Math::CalcFractalBounding(Octaves, Persistence);
-	bFractalBoundingComputed = true;
+	bApplyContrast = !FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER);
+	PostInitDerived();
 }
 
 double FPCGExNoise3DOperation::GenerateFractal(const FVector& Position) const
@@ -20,8 +17,6 @@ double FPCGExNoise3DOperation::GenerateFractal(const FVector& Position) const
 	{
 		return GenerateRaw(Position * Frequency);
 	}
-
-	ComputeFractalBounding();
 
 	double Sum = 0.0;
 	double Amp = 1.0;

@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -67,12 +67,6 @@ private:
 	{
 		return ((X % P) + P) % P;
 	}
-
-	/** Hash with periodic wrapping */
-	FORCEINLINE int32 HashPeriodic(int32 X, int32 Y, int32 Z, int32 PX, int32 PY, int32 PZ) const
-	{
-		return PCGExNoise3D::Math::Hash3D(Mod(X + Seed, PX), Mod(Y, PY), Mod(Z, PZ));
-	}
 };
 
 ////
@@ -86,7 +80,7 @@ public:
 	UPROPERTY()
 	FPCGExNoiseConfigTiling Config;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const override;
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const override;
 	PCGEX_NOISE3D_FACTORY_BOILERPLATE
 };
 

@@ -18,6 +18,18 @@
 
 #pragma region UPCGSettings interface
 
+#if WITH_EDITOR
+TOptional<FPCGNodeThumbnailProxy> UPCGExCollectionToModuleInfosSettings::GetNodeThumbnail() const
+{
+	if (!AssetCollection.IsNull())
+	{
+		return FPCGNodeThumbnailProxy::FromAssetPath(AssetCollection.ToSoftObjectPath());
+	}
+
+	return {};
+}
+#endif
+
 TArray<FPCGPinProperties> UPCGExCollectionToModuleInfosSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;

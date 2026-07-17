@@ -25,6 +25,16 @@ bool UPCGExNoise3DFactoryData::RegisterConsumableAttributesWithData(FPCGExContex
 
 TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryData::CreateOperation(FPCGExContext* InContext) const
 {
+	TSharedPtr<FPCGExNoise3DOperation> Operation = CreateOperationInternal(InContext);
+	if (Operation)
+	{
+		Operation->PostInit();
+	}
+	return Operation;
+}
+
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryData::CreateOperationInternal(FPCGExContext* InContext) const
+{
 	return nullptr;
 }
 

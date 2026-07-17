@@ -79,6 +79,16 @@ void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
+TOptional<FPCGNodeThumbnailProxy> UPCGExPathSplineMeshSettings::GetNodeThumbnail() const
+{
+	if (!bUseStagedPoints && CollectionSource == EPCGExCollectionSource::Asset && !AssetCollection.IsNull())
+	{
+		return FPCGNodeThumbnailProxy::FromAssetPath(AssetCollection.ToSoftObjectPath());
+	}
+
+	return {};
+}
+
 void UPCGExPathSplineMeshSettings::PostInitProperties()
 {
 	if (!HasAnyFlags(RF_ClassDefaultObject) && IsInGameThread())

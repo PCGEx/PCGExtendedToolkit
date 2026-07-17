@@ -61,6 +61,13 @@ public:
 
 	virtual ~FPCGExNoise3DOperation() override = default;
 
+	/**
+	 * Finalizes derived state once all config members are set.
+	 * Called by UPCGExNoise3DFactoryData::CreateOperation; hot paths assume it ran
+	 * (no lazy computation on sampling threads).
+	 */
+	void PostInit();
+
 	//
 	// Single-point generation (override in derived classes)
 	//
@@ -111,6 +118,11 @@ protected:
 	// Internal helpers
 	//
 
+	/** Per-noise precompute hook; base state (FractalBounding, bApplyContrast) is already computed when this runs */
+	virtual void PostInitDerived()
+	{
+	}
+
 	/** Transform world position to noise space */
 	FORCEINLINE FVector TransformPosition(const FVector& Position) const
 	{
@@ -140,7 +152,7 @@ protected:
 		{
 			Value = RemapLUT->Eval(Value);
 		}
-		if (!FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
+		if (bApplyContrast)
 		{
 			Value = PCGExMath::Contrast::ApplyContrast(Value, Contrast, static_cast<int32>(ContrastCurve));
 		}
@@ -152,9 +164,7 @@ protected:
 	 */
 	double GenerateFractal(const FVector& Position) const;
 
-	/** Precomputed fractal normalization factor */
-	mutable double FractalBounding = 1.0;
-	mutable bool bFractalBoundingComputed = false;
-
-	void ComputeFractalBounding() const;
+	/** Precomputed by PostInit */
+	double FractalBounding = 1.0;
+	bool bApplyContrast = false;
 };

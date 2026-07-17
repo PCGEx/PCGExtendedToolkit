@@ -83,6 +83,16 @@ void UPCGExAssetStagingSettings::PostEditChangeProperty(struct FPropertyChangedE
 	EntryTypeFilter.PostEditChangeProperty(PropertyChangedEvent);
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
+
+TOptional<FPCGNodeThumbnailProxy> UPCGExAssetStagingSettings::GetNodeThumbnail() const
+{
+	if (SourceCollection.Input == EPCGExInputValueType::Constant && SourceCollection.Constant.IsValid())
+	{
+		return FPCGNodeThumbnailProxy::FromAssetPath(SourceCollection.Constant);
+	}
+
+	return {};
+}
 #endif
 
 bool UPCGExAssetStagingSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const

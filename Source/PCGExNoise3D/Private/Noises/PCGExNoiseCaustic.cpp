@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseCaustic.h"
@@ -7,25 +7,41 @@
 
 using namespace PCGExNoise3D::Math;
 
+void FPCGExNoiseCaustic::PostInitDerived()
+{
+	// Property clamps don't apply to override-pin values; unclamped WaveLayers would assert in SetNum or over-allocate
+	WaveLayers = FMath::Clamp(WaveLayers, 1, 64);
+
+	InvWavelength = 1.0 / Wavelength;
+	InvWaveLayers = 1.0 / WaveLayers;
+
+	Layers.SetNum(WaveLayers);
+	for (int32 LayerIndex = 0; LayerIndex < WaveLayers; ++LayerIndex)
+	{
+		// Each layer has a different angle and phase
+		const double AngleOffset = LayerIndex * PI * 2.0 / WaveLayers;
+		const double PhaseOffset = LayerIndex * 1.7;
+
+		FWaveLayer& Layer = Layers[LayerIndex];
+		Layer.CosA = FMath::Cos(AngleOffset);
+		Layer.SinA = FMath::Sin(AngleOffset);
+		Layer.TimeOffset = Time * AnimationSpeed + PhaseOffset;
+	}
+}
+
 double FPCGExNoiseCaustic::GenerateWaveLayer(const FVector& Position, const int32 LayerIndex) const
 {
-	// Each layer has a different angle and phase
-	const double AngleOffset = LayerIndex * PI * 2.0 / WaveLayers;
-	const double PhaseOffset = LayerIndex * 1.7;
-	const double TimeOffset = Time * AnimationSpeed + PhaseOffset;
-
-	// Create wave direction from angle
-	const double CosA = FMath::Cos(AngleOffset);
-	const double SinA = FMath::Sin(AngleOffset);
+	const FWaveLayer& Layer = Layers[LayerIndex];
+	const double TimeOffset = Layer.TimeOffset;
 
 	// Project position onto wave direction
-	const double ProjXY = Position.X * CosA + Position.Y * SinA;
-	const double ProjXZ = Position.X * SinA + Position.Z * CosA;
+	const double ProjXY = Position.X * Layer.CosA + Position.Y * Layer.SinA;
+	const double ProjXZ = Position.X * Layer.SinA + Position.Z * Layer.CosA;
 
 	// Multiple overlapping sine waves for complexity
-	const double Wave1 = FMath::Sin((ProjXY / Wavelength + TimeOffset) * PI * 2.0);
-	const double Wave2 = FMath::Sin((ProjXZ / Wavelength * 0.7 + TimeOffset * 1.3) * PI * 2.0);
-	const double Wave3 = FMath::Sin(((ProjXY + ProjXZ) / Wavelength * 0.5 + TimeOffset * 0.8) * PI * 2.0);
+	const double Wave1 = FMath::Sin((ProjXY * InvWavelength + TimeOffset) * PI * 2.0);
+	const double Wave2 = FMath::Sin((ProjXZ * InvWavelength * 0.7 + TimeOffset * 1.3) * PI * 2.0);
+	const double Wave3 = FMath::Sin(((ProjXY + ProjXZ) * InvWavelength * 0.5 + TimeOffset * 0.8) * PI * 2.0);
 
 	return (Wave1 + Wave2 * 0.7 + Wave3 * 0.5) / 2.2;
 }
@@ -41,7 +57,7 @@ double FPCGExNoiseCaustic::GenerateRaw(const FVector& Position) const
 	}
 
 	// Normalize
-	Sum /= WaveLayers;
+	Sum *= InvWaveLayers;
 
 	// Convert to [0, 1] range
 	Sum = Sum * 0.5 + 0.5;
@@ -55,7 +71,7 @@ double FPCGExNoiseCaustic::GenerateRaw(const FVector& Position) const
 	return FMath::Clamp(Sum, 0.0, 1.0);
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryCaustic::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryCaustic::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseCaustic)
 	PCGEX_FORWARD_NOISE3D_CONFIG

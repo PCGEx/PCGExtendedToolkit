@@ -71,6 +71,8 @@ public:
 	}
 
 	virtual void PostInitProperties() override;
+
+	virtual TOptional<FPCGNodeThumbnailProxy> GetNodeThumbnail() const override;
 #endif
 
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
