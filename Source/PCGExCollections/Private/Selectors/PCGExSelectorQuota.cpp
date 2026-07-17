@@ -14,12 +14,83 @@
 namespace PCGExSelectorQuota
 {
 	constexpr double GoldenRatioConjugate = 0.6180339887498948482;
+
+	// Largest-remainder split of a global cap across inputs, proportional to per-input point
+	// counts. Deterministic: leftover units go to the largest fractional remainders, ties
+	// broken by input order. Returns the slice owned by InputIndex.
+	int32 SliceCapForInput(const int32 Cap, const TConstArrayView<int64> Counts, const int32 InputIndex)
+	{
+		if (Cap <= 0)
+		{
+			return 0;
+		}
+		if (!Counts.IsValidIndex(InputIndex))
+		{
+			// Facade outside the known batch (defensive) -- behave like Per Input Data.
+			return Cap;
+		}
+
+		int64 Total = 0;
+		for (const int64 Count : Counts)
+		{
+			Total += FMath::Max<int64>(0, Count);
+		}
+		if (Total <= 0)
+		{
+			return 0;
+		}
+
+		const int32 NumInputs = Counts.Num();
+		int32 Distributed = 0;
+		int32 MyFloor = 0;
+
+		// Floor shares + fractional remainders (kept as exact int64 numerators: Cap * n_j mod Total).
+		TArray<TPair<int64, int32>, TInlineAllocator<16>> Remainders;
+		Remainders.Reserve(NumInputs);
+		for (int32 j = 0; j < NumInputs; ++j)
+		{
+			const int64 Count = FMath::Max<int64>(0, Counts[j]);
+			const int64 Numerator = static_cast<int64>(Cap) * Count;
+			const int32 Floor = static_cast<int32>(Numerator / Total);
+			Distributed += Floor;
+			if (j == InputIndex)
+			{
+				MyFloor = Floor;
+			}
+			Remainders.Emplace(Numerator % Total, j);
+		}
+
+		int32 Leftover = Cap - Distributed;
+		if (Leftover <= 0)
+		{
+			return MyFloor;
+		}
+
+		// Descending remainder, ascending input index on ties.
+		Remainders.Sort([](const TPair<int64, int32>& A, const TPair<int64, int32>& B)
+		{
+			return A.Key != B.Key ? A.Key > B.Key : A.Value < B.Value;
+		});
+
+		for (int32 r = 0; r < Leftover && r < Remainders.Num(); ++r)
+		{
+			if (Remainders[r].Value == InputIndex)
+			{
+				return MyFloor + 1;
+			}
+		}
+		return MyFloor;
+	}
 }
 
 #pragma region FPCGExQuotaSharedData
 
 void FPCGExQuotaSharedData::OnCached(const PCGExCollections::FSelectorSharedDataCache& InCache)
 {
+	// Per-input totals enable the deterministic AllInputs pre-split at op init; the shared
+	// counter block below stays as the legacy fallback when this stays empty.
+	PerInputPointCounts = InCache.PerInputPointCounts;
+
 	// Finalize the AllInputs Proportion budget against the batch total: per-facade accumulation
 	// let early facades pick against a partial cap. Runs under the cache lock, before any op
 	// can observe this instance.
@@ -59,6 +130,11 @@ int32 FPCGExEntryQuotaPickerOp::ResolveCount(const double RawValue) const
 		: FMath::RoundToInt32(RawValue);
 }
 
+double FPCGExEntryQuotaPickerOp::ReservationU(const int32 PointIndex) const
+{
+	return FMath::Frac((PointIndex + 0.5) * PCGExSelectorQuota::GoldenRatioConjugate + ReservationPhase);
+}
+
 bool FPCGExEntryQuotaPickerOp::OnInitForData(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade)
 {
 	const UPCGBasePointData* PointData = InDataFacade->Source->GetIn();
@@ -83,8 +159,47 @@ bool FPCGExEntryQuotaPickerOp::OnInitForData(FPCGExContext* InContext, const TSh
 	}
 
 	// --- Max caps: resolve the effective counter block per scope ---
-	if (Scope == EPCGExQuotaScope::AllInputs && Shared->SharedRemaining)
+	bHasMaxCaps = false;
+	for (int32 i = 0; i < NumEntries; ++i)
 	{
+		if (Shared->MaxValues[i] >= 0.0)
+		{
+			bHasMaxCaps = true;
+			break;
+		}
+	}
+
+	if (Scope == EPCGExQuotaScope::AllInputs && !Shared->PerInputPointCounts.IsEmpty())
+	{
+		// Deterministic pre-split: slice each global cap across inputs proportionally to their
+		// point counts (largest remainder, stable input order). Local counters -- no cross-input
+		// coupling, so results are independent of input processing order.
+		int64 TotalPoints = 0;
+		for (const int64 Count : Shared->PerInputPointCounts)
+		{
+			TotalPoints += FMath::Max<int64>(0, Count);
+		}
+
+		const int32 InputIndex = InDataFacade->Source->IOIndex;
+		LocalRemaining = MakeUnique<std::atomic<int32>[]>(NumEntries);
+		for (int32 i = 0; i < NumEntries; ++i)
+		{
+			const double MaxValue = Shared->MaxValues[i];
+			int32 Slice = -1;
+			if (MaxValue >= 0.0)
+			{
+				const int32 GlobalCap = Mode == EPCGExQuotaMode::Proportion
+					? FMath::CeilToInt32(FMath::Clamp(MaxValue, 0.0, 1.0) * static_cast<double>(TotalPoints))
+					: FMath::RoundToInt32(MaxValue);
+				Slice = PCGExSelectorQuota::SliceCapForInput(GlobalCap, Shared->PerInputPointCounts, InputIndex);
+			}
+			LocalRemaining[i].store(Slice, std::memory_order_relaxed);
+		}
+		Remaining = LocalRemaining.Get();
+	}
+	else if (Scope == EPCGExQuotaScope::AllInputs && Shared->SharedRemaining)
+	{
+		// Legacy shared pool (no per-input totals wired): first-come across inputs.
 		Remaining = Shared->SharedRemaining.Get();
 		if (Mode == EPCGExQuotaMode::Proportion && !Shared->bBudgetFinalized)
 		{
@@ -169,6 +284,19 @@ TSharedPtr<FPCGExPickerScratchBase> FPCGExEntryQuotaPickerOp::CreateScratchForSc
 
 int32 FPCGExEntryQuotaPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch) const
 {
+	// Pre-resolved consumers (Distribute, Spline Mesh): the commit pass already claimed
+	// capacity in point-index order -- return its result, scheduling-independent.
+	if (Resolved.IsValidIndex(PointIndex) && Resolved[PointIndex] != NotResolved)
+	{
+		return Resolved[PointIndex];
+	}
+
+	// Live path: legacy consumers, or points the consumer's pre-resolve predicate skipped.
+	return ResolvePick(PointIndex, Seed, NotResolved, Scratch);
+}
+
+int32 FPCGExEntryQuotaPickerOp::ResolvePick(const int32 PointIndex, const int32 Seed, const int32 SeededRaw, FPCGExPickerScratchBase* Scratch) const
+{
 	checkSlow(Target && !Target->IsEmpty());
 	check(Remaining);
 
@@ -179,7 +307,7 @@ int32 FPCGExEntryQuotaPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerS
 	// to under-minimum entries before the inner selector runs (±1 accurate per entry). ---
 	if (ReservationFraction > 0.0)
 	{
-		const double U = FMath::Frac((PointIndex + 0.5) * PCGExSelectorQuota::GoldenRatioConjugate + ReservationPhase);
+		const double U = ReservationU(PointIndex);
 		if (U < ReservationFraction)
 		{
 			// Map the reserved slot through the cumulative min counts.
@@ -205,12 +333,22 @@ int32 FPCGExEntryQuotaPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerS
 	}
 
 	// --- Normal path: filtered inner pick + CAS claim. Bounded: every lost claim race
-	// permanently exhausts one entry, so NumEntries + 1 attempts always suffice. ---
+	// permanently exhausts one entry, so NumEntries + 1 attempts always suffice.
+	// Attempt 0 may consume a pre-computed first choice (pre-resolve commit pass); every
+	// retry re-picks against live availability. ---
 	for (int32 Attempt = 0; Attempt <= NumEntries; ++Attempt)
 	{
-		const int32 Raw = ChildOp
-			? ChildOp->PickFiltered(PointIndex, Seed, Availability, ChildScratch)
-			: PCGExCollections::Selectors::FilteredWeightedPick(Target, Availability, Seed);
+		int32 Raw;
+		if (Attempt == 0 && SeededRaw != NotResolved)
+		{
+			Raw = SeededRaw;
+		}
+		else
+		{
+			Raw = ChildOp
+				? ChildOp->PickFiltered(PointIndex, Seed, Availability, ChildScratch)
+				: PCGExCollections::Selectors::FilteredWeightedPick(Target, Availability, Seed);
+		}
 
 		if (Raw == -1)
 		{
@@ -244,6 +382,57 @@ int32 FPCGExEntryQuotaPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExPickerS
 		return ChildOp ? ChildOp->Pick(PointIndex, Seed, ChildScratch) : Target->GetPickRandomWeighted(Seed);
 	}
 	return -1;
+}
+
+bool FPCGExEntryQuotaPickerOp::WantsPreResolve() const
+{
+	// Without max caps there is no shared capacity to race on -- picks are already
+	// deterministic (min reservation is a pure per-point function).
+	return bHasMaxCaps;
+}
+
+void FPCGExEntryQuotaPickerOp::BeginPreResolve(const int32 NumPoints)
+{
+	FirstChoice.Init(NotResolved, NumPoints);
+	Resolved.Init(NotResolved, NumPoints);
+}
+
+void FPCGExEntryQuotaPickerOp::PreResolveFirstChoice(const int32 PointIndex, const int32 Seed, FPCGExPickerScratchBase* Scratch)
+{
+	if (!FirstChoice.IsValidIndex(PointIndex))
+	{
+		return; // BeginPreResolve wasn't run for this facade -- live path will cover the point.
+	}
+
+	// Reserved points resolve through the min-reservation formula in the commit pass --
+	// their inner pick would be discarded, skip it.
+	if (ReservationFraction > 0.0 && ReservationU(PointIndex) < ReservationFraction)
+	{
+		return;
+	}
+
+	// This facade's commit hasn't started, so the counter view is the initial availability.
+	// Read-only here -- safe across parallel scopes. (Legacy AllInputs shared pool: another
+	// facade may be committing concurrently; that path is documented as first-come.)
+	FPCGExPickerScratchBase* ChildScratch = Scratch ? static_cast<FPCGExQuotaScratch*>(Scratch)->ChildScratch.Get() : nullptr;
+	const FPCGExPickAvailability Availability{Remaining};
+
+	FirstChoice[PointIndex] = ChildOp
+		? ChildOp->PickFiltered(PointIndex, Seed, Availability, ChildScratch)
+		: PCGExCollections::Selectors::FilteredWeightedPick(Target, Availability, Seed);
+}
+
+void FPCGExEntryQuotaPickerOp::CommitPreResolve(const int32 PointIndex, const int32 Seed, FPCGExPickerScratchBase* Scratch)
+{
+	if (!Resolved.IsValidIndex(PointIndex))
+	{
+		return; // BeginPreResolve wasn't run for this facade -- live path will cover the point.
+	}
+
+	Resolved[PointIndex] = ResolvePick(
+		PointIndex, Seed,
+		FirstChoice.IsValidIndex(PointIndex) ? FirstChoice[PointIndex] : NotResolved,
+		Scratch);
 }
 
 #pragma endregion

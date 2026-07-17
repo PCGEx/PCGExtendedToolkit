@@ -278,8 +278,9 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 	}
 
 	Context->SelectorSharedDataCache = MakeShared<PCGExCollections::FSelectorSharedDataCache>();
-	// Batch total for AllInputs-scoped selector state; must precede any GetOrBuild (see OnCached).
-	Context->SelectorSharedDataCache->AllInputsPointCount = Context->MainPoints->GetTotalNum(PCGExData::EIOSide::In);
+	// Batch totals for AllInputs-scoped selector state (global budget + deterministic
+	// per-input pre-split); must precede any GetOrBuild (see OnCached).
+	Context->SelectorSharedDataCache->SetBatchPointCounts(*Context->MainPoints);
 
 	if (Settings->bDoOutputSockets)
 	{
@@ -537,9 +538,58 @@ namespace PCGExAssetStaging
 			Source->RegisterSocketsTo(*SocketHelper);
 		}
 
-		StartParallelLoopForPoints();
+		// Capacity-claiming selectors (Quota max caps) resolve every pick deterministically
+		// before the main loop: parallel first-choice pass, then a sequential point-order
+		// commit in OnRangeProcessingComplete. Zero cost when no such selector is connected.
+		if (Source->AnyPickerWantsPreResolve())
+		{
+			Source->BeginPreResolve(NumPoints);
+			RangeStage = ERangeStage::PreResolve;
+			StartParallelLoopForRange(NumPoints);
+		}
+		else
+		{
+			StartParallelLoopForPoints();
+		}
 
 		return true;
+	}
+
+	void FProcessor::PreResolveScope(const PCGExMT::FScope& Scope, const bool bCommit)
+	{
+		if (!bCommit)
+		{
+			PointDataFacade->Fetch(Scope);
+			FilterScope(Scope);
+		}
+
+		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetIn()->GetConstSeedValueRange();
+		const UPCGComponent* Component = Context->GetComponent();
+		const TSharedPtr<PCGExCollections::FSourceScratches> PickScratches = Source->CreateScratches(Scope.Count);
+
+		PCGEX_SCOPE_LOOP(Index)
+		{
+			PCGExCollections::FSelectorHelper* Helper = nullptr;
+			PCGExCollections::FMicroSelectorHelper* MicroHelper = nullptr;
+
+			// Mirror the main loop's gating exactly -- a point that won't pick must not
+			// influence quota capacity.
+			if (!PointFilterCache[Index] || !Source->TryGetHelpers(Index, Helper, MicroHelper))
+			{
+				continue;
+			}
+
+			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
+			const PCGExCollections::FSelectorScratches* Scratches = PickScratches ? PickScratches->GetFor(Helper) : nullptr;
+			if (bCommit)
+			{
+				Helper->CommitPreResolve(Index, Seed, Scratches);
+			}
+			else
+			{
+				Helper->PreResolveFirstChoice(Index, Seed, Scratches);
+			}
+		}
 	}
 
 	void FProcessor::PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops)
@@ -553,7 +603,10 @@ namespace PCGExAssetStaging
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::AssetStaging::ProcessPoints);
 
 		PointDataFacade->Fetch(Scope);
-		FilterScope(Scope);
+		if (!bFiltersPrimed)
+		{
+			FilterScope(Scope);
+		}
 
 		const bool bLocalApplyFitting = bApplyFitting;
 		const bool bLocalOutputWeight = bOutputWeight;
@@ -813,9 +866,16 @@ namespace PCGExAssetStaging
 		OnRangeProcessingComplete();
 	}
 
-	// Writes material override paths to per-slot attributes based on the picks made in ProcessPoints
+	// PreResolve stage: selector first-choice pass. Materials stage: writes material override
+	// paths to per-slot attributes based on the picks made in ProcessPoints.
 	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
 	{
+		if (RangeStage == ERangeStage::PreResolve)
+		{
+			PreResolveScope(Scope, false);
+			return;
+		}
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			const int32 Pick = MaterialPick[Index];
@@ -862,6 +922,19 @@ namespace PCGExAssetStaging
 
 	void FProcessor::OnRangeProcessingComplete()
 	{
+		if (RangeStage == ERangeStage::PreResolve)
+		{
+			// Sequential commit in ascending point-index order -- this ordering IS the
+			// deterministic claim priority for capped entries.
+			PreResolveScope(PCGExMT::FScope(0, NumPoints), true);
+
+			// The pre-pass filled the full filter cache; the main loop skips re-evaluation.
+			bFiltersPrimed = true;
+			RangeStage = ERangeStage::Materials;
+			StartParallelLoopForPoints();
+			return;
+		}
+
 		PointDataFacade->WriteBuffers(
 			TaskManager,
 			[PCGEX_ASYNC_THIS_CAPTURE]()

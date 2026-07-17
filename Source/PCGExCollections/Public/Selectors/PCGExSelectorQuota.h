@@ -26,7 +26,7 @@ UENUM()
 enum class EPCGExQuotaScope : uint8
 {
 	PerInputData = 1 UMETA(DisplayName = "Per Input Data", ToolTip="Each input data gets its own independent caps."),
-	AllInputs    = 0 UMETA(DisplayName = "All Inputs", ToolTip="Caps are shared across every input data processed by the consuming node. Requires the consumer to wire a selector shared-data cache (Staging Distribute and Spline Mesh do); falls back to per-input otherwise."),
+	AllInputs    = 0 UMETA(DisplayName = "All Inputs", ToolTip="Caps apply to the whole batch: each global cap is pre-split across inputs proportionally to their point counts (deterministic; unused budget does not spill over between inputs). Requires the consumer to wire a selector shared-data cache with per-input totals (Staging Distribute and Spline Mesh do); falls back to a first-come shared pool otherwise."),
 };
 
 /** What to do when every available entry is exhausted. */
@@ -91,7 +91,13 @@ public:
 	// AllInputs scope only. Count mode: initialized from MaxValues at build. Proportion mode:
 	// finalized against the batch total in OnCached; starts empty-capped (0) with a per-facade
 	// grow fallback when no total was provided (see bBudgetFinalized).
+	// LEGACY path: only consumed when PerInputPointCounts is unavailable -- with per-input
+	// counts, ops slice the global caps deterministically and use local counters instead.
 	TUniquePtr<std::atomic<int32>[]> SharedRemaining;
+
+	// Per-input In-side point counts (by IOIndex), copied from the cache in OnCached. Non-empty
+	// enables the deterministic AllInputs pre-split; empty falls back to SharedRemaining.
+	TArray<int64> PerInputPointCounts;
 
 	// bProportionBudget: counters are proportion-mode (set at build). bBudgetFinalized: OnCached
 	// filled them from the batch total -- ops skip the per-facade fallback. Plain bools: written
@@ -124,8 +130,11 @@ public:
  * points (spread evenly by the golden-ratio sequence over point order) is force-assigned to
  * under-minimum entries before the inner selector runs. Accurate to ±1 per entry, per input data.
  *
- * MAX counts are EXACT; WHICH points receive capped entries depends on thread scheduling and is
- * not reproducible run-to-run (documented on the node).
+ * MAX counts are EXACT. WHICH points receive capped entries is deterministic (point-index-order
+ * claim priority) when the consumer drives the pre-resolve passes (Staging Distribute and Spline
+ * Mesh do): a parallel first-choice pass, then a sequential point-order commit that claims
+ * capacity. Consumers that skip pre-resolve fall back to the legacy live CAS path, where the
+ * point assignment depends on thread scheduling.
  */
 class PCGEXCOLLECTIONS_API FPCGExEntryQuotaPickerOp : public PCGExCollections::Selectors::TTypedSharedPickerOpBase<FPCGExQuotaSharedData>
 {
@@ -141,6 +150,11 @@ public:
 
 	virtual TSharedPtr<FPCGExPickerScratchBase> CreateScratchForScope(int32 MaxPointsInScope) const override;
 	virtual int32 Pick(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch = nullptr) const override;
+
+	virtual bool WantsPreResolve() const override;
+	virtual void BeginPreResolve(int32 NumPoints) override;
+	virtual void PreResolveFirstChoice(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch) override;
+	virtual void CommitPreResolve(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch) override;
 
 protected:
 	// Effective counter block: points at Shared->SharedRemaining (AllInputs) or LocalRemaining
@@ -160,11 +174,29 @@ protected:
 	double ReservationFraction = 0.0;      // TotalMinCount / NumPoints, clamped to [0, 1]
 	double NumPointsD = 0.0;
 
+	// Pre-resolve state (see FPCGExEntryPickerOperation contract). NotResolved marks
+	// "not computed" in both arrays -- committed points short-circuit Pick(), anything
+	// else falls back to the live path.
+	static constexpr int32 NotResolved = -2;
+	bool bHasMaxCaps = false;
+	TArray<int32> FirstChoice; // raw pick vs initial availability; -1 = inner found none
+	TArray<int32> Resolved;    // final raw pick per point
+
 	virtual void OnSharedDataMissing(FPCGExContext* InContext) const override;
 	virtual bool OnInitForData(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade) override;
 
 	/** Resolve a raw quota property value into a count for this facade. */
 	int32 ResolveCount(double RawValue) const;
+
+	/** Golden-ratio low-discrepancy value deciding min-reservation membership for a point. */
+	double ReservationU(int32 PointIndex) const;
+
+	/**
+	 * Shared pick body: min reservation, then filtered inner pick + capacity claim.
+	 * SeededRaw != NotResolved short-circuits attempt 0 with a pre-computed first choice
+	 * (pre-resolve commit pass); every retry re-picks against live availability.
+	 */
+	int32 ResolvePick(int32 PointIndex, int32 Seed, int32 SeededRaw, FPCGExPickerScratchBase* Scratch) const;
 };
 
 /**
@@ -202,7 +234,7 @@ public:
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(
 		SelectorQuota, "Selector Modifier : Quota",
-		"Wraps any selector with exact per-entry max caps and near-exact (±1) min guarantees sourced from numeric collection properties. Max counts are exact; WHICH points receive capped entries depends on thread scheduling.",
+		"Wraps any selector with exact per-entry max caps and near-exact (±1) min guarantees sourced from numeric collection properties. Deterministic: capped entries are claimed in point-index order.",
 		FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

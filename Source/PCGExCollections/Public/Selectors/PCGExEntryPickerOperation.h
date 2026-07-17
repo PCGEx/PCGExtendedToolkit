@@ -128,4 +128,38 @@ public:
 	 * built-in selectors do.
 	 */
 	virtual int32 PickFiltered(int32 PointIndex, int32 Seed, const FPCGExPickAvailability& InAvailability, FPCGExPickerScratchBase* Scratch = nullptr) const;
+
+	// ========== Deterministic pre-resolve (opt-in) ==========
+	// Ops whose picks race on shared capacity (Quota max caps) resolve every point's pick
+	// up-front: a parallel first-choice pass, then a sequential point-order commit pass driven
+	// by the consumer BEFORE its main loop. Pick() then returns the committed result regardless
+	// of thread scheduling. Ops that stay pure functions of (point, seed) ignore all of this.
+
+	/** True when this op needs the pre-resolve passes to produce deterministic results. */
+	virtual bool WantsPreResolve() const
+	{
+		return false;
+	}
+
+	/** Allocate per-point resolve storage. Called once per facade, single-threaded, before either pass. */
+	virtual void BeginPreResolve(int32 NumPoints)
+	{
+	}
+
+	/**
+	 * Parallel pass: record this point's first choice against the op's INITIAL availability.
+	 * Must only write per-point slots (unique PointIndex per call) -- no shared mutation.
+	 */
+	virtual void PreResolveFirstChoice(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch)
+	{
+	}
+
+	/**
+	 * Sequential pass: claim capacity and finalize this point's pick. MUST be invoked in
+	 * ascending point-index order from a single thread -- point order IS the deterministic
+	 * claim priority. Points never committed fall back to the live Pick() path.
+	 */
+	virtual void CommitPreResolve(int32 PointIndex, int32 Seed, FPCGExPickerScratchBase* Scratch)
+	{
+	}
 };
