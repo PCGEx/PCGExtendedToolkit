@@ -8,7 +8,6 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 
-
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
@@ -32,8 +31,6 @@ bool UPCGExStringSelfCompareFilterFactory::RegisterConsumableAttributesWithData(
 	}
 
 	InContext->AddConsumableAttributeName(Config.OperandA);
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.IndexAttribute, Consumable)
 
 	return true;
 }
@@ -61,6 +58,7 @@ bool PCGExPointFilter::FStringSelfCompareFilter::Init(FPCGExContext* InContext, 
 	}
 
 	Index = TypedFilterFactory->Config.GetValueSettingIndex(PCGEX_QUIET_HANDLING);
+	Index->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!Index->Init(PointDataFacade))
 	{
 		return false;

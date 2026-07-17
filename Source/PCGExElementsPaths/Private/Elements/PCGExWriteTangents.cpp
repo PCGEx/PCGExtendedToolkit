@@ -15,10 +15,31 @@
 #define LOCTEXT_NAMESPACE "PCGExWriteTangentsElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExWriteTangentsSettings, ArriveScale, FVector, ArriveScaleInput, ArriveScaleAttribute, FVector(ArriveScaleConstant))
-PCGEX_SETTING_VALUE_IMPL(UPCGExWriteTangentsSettings, LeaveScale, FVector, LeaveScaleInput, LeaveScaleAttribute, FVector(LeaveScaleConstant))
-
 #if WITH_EDITOR
+void UPCGExWriteTangentsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		// Rewire Arrive Scale
+		PCGEX_SHORTHAND_RENAME_PIN(ArriveScaleAttribute, ArriveScaleConstant, ArriveScale)
+
+		// Rewire Leave Scale
+		PCGEX_SHORTHAND_RENAME_PIN(LeaveScaleAttribute, LeaveScaleConstant, LeaveScale)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExWriteTangentsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 8)
+	{
+		ArriveScale.Update(ArriveScaleInput_DEPRECATED, ArriveScaleAttribute_DEPRECATED, FVector(ArriveScaleConstant_DEPRECATED));
+		LeaveScale.Update(LeaveScaleInput_DEPRECATED, LeaveScaleAttribute_DEPRECATED, FVector(LeaveScaleConstant_DEPRECATED));
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 void UPCGExWriteTangentsSettings::PostInitProperties()
 {
 	if (!HasAnyFlags(RF_ClassDefaultObject) && IsInGameThread())
@@ -59,13 +80,14 @@ UPCGExWriteTangentsSettings::UPCGExWriteTangentsSettings(const FObjectInitialize
 	: Super(ObjectInitializer)
 {
 #if WITH_EDITOR
-	if (ArriveScaleAttribute.GetName() == FName("@Last"))
+	// Legacy default fixup, kept on the deprecated members so unserialized legacy defaults still forward through PCGExApplyDeprecation
+	if (ArriveScaleAttribute_DEPRECATED.GetName() == FName("@Last"))
 	{
-		ArriveScaleAttribute.Update(TEXT("$Scale"));
+		ArriveScaleAttribute_DEPRECATED.Update(TEXT("$Scale"));
 	}
-	if (LeaveScaleAttribute.GetName() == FName("@Last"))
+	if (LeaveScaleAttribute_DEPRECATED.GetName() == FName("@Last"))
 	{
-		LeaveScaleAttribute.Update(TEXT("$Scale"));
+		LeaveScaleAttribute_DEPRECATED.Update(TEXT("$Scale"));
 	}
 #endif
 }
@@ -158,13 +180,13 @@ namespace PCGExWriteTangents
 			return false;
 		}
 
-		ArriveScaleReader = Settings->GetValueSettingArriveScale();
+		ArriveScaleReader = Settings->ArriveScale.GetValueSetting();
 		if (!ArriveScaleReader->Init(PointDataFacade))
 		{
 			return false;
 		}
 
-		LeaveScaleReader = Settings->GetValueSettingLeaveScale();
+		LeaveScaleReader = Settings->LeaveScale.GetValueSetting();
 		if (!LeaveScaleReader->Init(PointDataFacade))
 		{
 			return false;

@@ -7,6 +7,7 @@
 #include "Core/PCGExClustersProcessor.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Details/PCGExBoundsCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "PCGExFindPointOnBoundsClusters.generated.h"
 
@@ -18,6 +19,9 @@ class UPCGExFindPointOnBoundsClustersSettings : public UPCGExClustersProcessorSe
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(FindPointOnBoundsClusters, "Cluster : Find point on Bounds", "Find the closest vtx or edge on each cluster' bounds.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -64,23 +68,26 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Use Best Fit bounds axis", EditCondition="bBestFitBounds"))
 	EPCGExAxisOrder AxisOrder = EPCGExAxisOrder::YXZ;
 
-	/** Type of UVW value source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType UVWInput = EPCGExInputValueType::Constant;
+	/** UVW position of the target within bounds. Attribute source is read from the @Data domain. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="UVW"))
+	FPCGExInputShorthandSelectorVector UVWValue = FPCGExInputShorthandSelectorVector(FName("@Data.UVW"), FVector(-1, -1, 0), false);
 
-	/** Fetch the UVW value from a @Data attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="UVW (Attr)", EditCondition="UVWInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector LocalUVW;
-
-	/** Cluster element source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Element", EditCondition="UVWInput != EPCGExInputValueType::Constant", EditConditionHides))
+	/** Cluster element the UVW attribute is read from when using attribute input. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Element"))
 	EPCGExClusterElement ClusterElement = EPCGExClusterElement::Edge;
 
-	/** UVW position of the target within bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="UVW", EditCondition="UVWInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector UVW = FVector(-1, -1, 0);
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_DATA_VALUE_DECL(UVW, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType UVWInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LocalUVW_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector UVW_DEPRECATED = FVector(-1, -1, 0);
+
+#pragma endregion
 
 	/** Offset to apply to the closest point, away from the bounds center. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

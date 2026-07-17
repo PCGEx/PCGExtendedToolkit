@@ -3,6 +3,7 @@
 
 
 #include "Elements/PCGExCopyToPaths.h"
+#include "PCGExVersion.h"
 
 #include "Misc/CoreMiscDefines.h"
 PRAGMA_DISABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
@@ -27,6 +28,27 @@ PRAGMA_ENABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 #define PCGEX_NAMESPACE CopyToPaths
 
 PCGEX_INITIALIZE_ELEMENT(CopyToPaths)
+
+#if WITH_EDITOR
+void UPCGExCopyToPathsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCopyToPathsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(CopyToPaths)
 
 TArray<FPCGPinProperties> UPCGExCopyToPathsSettings::InputPinProperties() const

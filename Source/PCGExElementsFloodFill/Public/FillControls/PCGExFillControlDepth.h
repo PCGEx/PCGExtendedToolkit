@@ -6,10 +6,14 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExFillControlOperation.h"
 #include "Core/PCGExFillControlsFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "UObject/Object.h"
 
 #include "PCGExFillControlDepth.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 USTRUCT(BlueprintType)
 struct FPCGExFillControlConfigDepth : public FPCGExFillControlConfigBase
@@ -18,19 +22,27 @@ struct FPCGExFillControlConfigDepth : public FPCGExFillControlConfigBase
 
 	FPCGExFillControlConfigDepth() = default;
 
-	/** Whether the max depth is a constant or from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType MaxDepthInput = EPCGExInputValueType::Constant;
+	/** Max depth. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Depth"))
+	FPCGExInputShorthandNameInteger32Abs MaxDepthValue = FPCGExInputShorthandNameInteger32Abs(FName("MaxDepth"), 10, false);
 
-	/** Max depth Attribute */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Depth (Attr)", EditCondition="MaxDepthInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName MaxDepthAttribute = FName("MaxDepth");
+#pragma region DEPRECATED
 
-	/** Max depth Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Depth", EditCondition="MaxDepthInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=1))
-	int32 MaxDepth = 10;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaxDepthInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(MaxDepth, int32)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName MaxDepthAttribute_DEPRECATED = FName("MaxDepth");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 MaxDepth_DEPRECATED = 10;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -73,6 +85,8 @@ class UPCGExFillControlsDepthProviderSettings : public UPCGExFillControlsFactory
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsDepth, "Fill Control : Depth", "Control fill based on diffusion depth.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

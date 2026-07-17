@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExCopyClustersToPoints.h"
 
+#include "PCGExVersion.h"
 
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
@@ -32,6 +33,26 @@ PCGExData::EIOInit UPCGExCopyClustersToPointsSettings::GetEdgeOutputInitMode() c
 
 PCGEX_INITIALIZE_ELEMENT(CopyClustersToPoints)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(CopyClustersToPoints)
+
+#if WITH_EDITOR
+void UPCGExCopyClustersToPointsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExCopyClustersToPointsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		DataMatching.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 TArray<FPCGPinProperties> UPCGExCopyClustersToPointsSettings::InputPinProperties() const
 {

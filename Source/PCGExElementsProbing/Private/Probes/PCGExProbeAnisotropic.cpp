@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExProbeAnisotropic.h"
+#include "PCGExVersion.h"
 
 
 #include "PCGExH.h"
@@ -10,6 +11,28 @@
 #include "Math/PCGExMath.h"
 
 PCGEX_CREATE_PROBE_FACTORY(Anisotropic, {}, {})
+
+#if WITH_EDITOR
+void UPCGExProbeAnisotropicProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeAnisotropicProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExProbeAnisotropic::Prepare(FPCGExContext* InContext)
 {

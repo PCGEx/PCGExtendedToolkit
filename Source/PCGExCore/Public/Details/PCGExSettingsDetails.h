@@ -15,6 +15,7 @@ namespace PCGExMT
 
 enum class EPCGExInputValueType : uint8;
 struct FPCGExContext;
+class UPCGData;
 
 namespace PCGExData
 {
@@ -36,12 +37,29 @@ namespace PCGExDetails
 	{
 	public:
 		virtual ~TSettingValue() = default;
-		virtual bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) = 0;
+
+		/**
+		 * Template method: runs the subclass' InitInternal, then registers this value's consumable
+		 * attribute (if any) with the facade's context -- one registration site for the whole
+		 * hierarchy, subclasses only declare what they consume via GetConsumableName.
+		 */
+		bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false);
+
 		FORCEINLINE virtual void SetConstant(T InConstant)
 		{
 		}
 
 		bool bQuiet = false;
+
+		/**
+		 * Whether Init auto-registers the consumed attribute with the context. A veto chain:
+		 * shorthand getters seed this from their per-operand bCleanupAttribute toggle, factory-driven
+		 * consumers (filters, fill controls, blend ops...) AND-in their factory's own toggle
+		 * (bRegisterConsumable &= Factory->bCleanupConsumableAttributes), and Init checks the node's
+		 * context toggle last. Factory Register* overrides remain only for operands read through raw
+		 * FNames/broadcasters that never flow through a TSettingValue.
+		 */
+		bool bRegisterConsumable = true;
 
 		FORCEINLINE virtual bool IsConstant()
 		{
@@ -54,6 +72,15 @@ namespace PCGExDetails
 		FORCEINLINE virtual T Min() = 0;
 		FORCEINLINE virtual T Max() = 0;
 		FORCEINLINE virtual uint32 ReadValueHash(const int32 Index) = 0;
+
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) = 0;
+
+		/** Name of the attribute this value consumes (domain-qualified when selector-driven), or NAME_None. */
+		virtual FName GetConsumableName(const UPCGData* InData) const
+		{
+			return NAME_None;
+		}
 	};
 
 	template <typename T>
@@ -69,14 +96,20 @@ namespace PCGExDetails
 		{
 		}
 
-		virtual bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) override;
-
 		virtual T Read(const int32 Index) override;
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual T Min() override;
 		virtual T Max() override;
 		virtual uint32 ReadValueHash(const int32 Index) override;
+
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+
+		virtual FName GetConsumableName(const UPCGData* InData) const override
+		{
+			return Name;
+		}
 	};
 
 	template <typename T>
@@ -94,7 +127,9 @@ namespace PCGExDetails
 		{
 		}
 
-		virtual bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) override;
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+		virtual FName GetConsumableName(const UPCGData* InData) const override;
 	};
 
 	template <typename T>
@@ -108,8 +143,6 @@ namespace PCGExDetails
 			: Constant(InConstant)
 		{
 		}
-
-		virtual bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) override;
 
 		FORCEINLINE virtual bool IsConstant() override
 		{
@@ -139,6 +172,9 @@ namespace PCGExDetails
 		}
 
 		virtual uint32 ReadValueHash(const int32 Index) override;
+
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
 	};
 
 	template <typename T>
@@ -154,7 +190,9 @@ namespace PCGExDetails
 		{
 		}
 
-		virtual bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) override;
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+		virtual FName GetConsumableName(const UPCGData* InData) const override;
 	};
 
 	template <typename T>
@@ -170,7 +208,13 @@ namespace PCGExDetails
 		{
 		}
 
-		virtual bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) override;
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+
+		virtual FName GetConsumableName(const UPCGData* InData) const override
+		{
+			return Name;
+		}
 	};
 
 	template <typename T>
@@ -197,6 +241,7 @@ namespace PCGExDetails
 #pragma region externalization
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
+extern template class TSettingValue<_TYPE>; \
 extern template class TSettingValueBuffer<_TYPE>; \
 extern template class TSettingValueSelector<_TYPE>; \
 extern template class TSettingValueConstant<_TYPE>; \

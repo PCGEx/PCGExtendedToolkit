@@ -13,6 +13,7 @@
 #include "Core/PCGExTensor.h"
 #include "Data/PCGExPointElements.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Math/PCGExMathAxis.h"
 #include "Paths/PCGExPathIntersectionDetails.h"
@@ -96,6 +97,9 @@ class UPCGExExtrudeTensorsSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(ExtrudeTensors, "Tensors : Extrude", "Extrude input points into paths along tensors.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
@@ -149,37 +153,39 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_NotOverridable))
 	bool bUseMaxLength = false;
 
-	/** Whether the max length is a constant or from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_NotOverridable, EditCondition="bUseMaxLength", EditConditionHides))
-	EPCGExInputValueType MaxLengthInput = EPCGExInputValueType::Constant;
-
-	/** Max length Attribute */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Length (Attr)", EditCondition="bUseMaxLength && MaxLengthInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName MaxLengthAttribute = FName("MaxLength");
-
-	/** Max length Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Length", EditCondition="bUseMaxLength && MaxLengthInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=1))
-	double MaxLength = 100;
-
-	PCGEX_SETTING_VALUE_DECL(MaxLength, double)
+	/** Max length of the generated path */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Length", EditCondition="bUseMaxLength", EditConditionHides))
+	FPCGExInputShorthandNameDoubleAbs MaxLengthValue = FPCGExInputShorthandNameDoubleAbs(FName("MaxLength"), 100, false);
 
 	/** Whether to limit the number of points in a generated path */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_NotOverridable))
 	bool bUseMaxPointsCount = false;
 
-	/** Whether the max points count is a constant or from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_NotOverridable, EditCondition="bUseMaxPointsCount", EditConditionHides))
-	EPCGExInputValueType MaxPointsCountInput = EPCGExInputValueType::Constant;
+	/** Max number of points in a generated path */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Points Count", EditCondition="bUseMaxPointsCount", EditConditionHides))
+	FPCGExInputShorthandNameInteger32Abs MaxPointsCountValue = FPCGExInputShorthandNameInteger32Abs(FName("MaxPointsCount"), 100, false);
 
-	/** Max length Attribute */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Points Count (Attr)", EditCondition="bUseMaxPointsCount && MaxPointsCountInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FName MaxPointsCountAttribute = FName("MaxPointsCount");
+#pragma region DEPRECATED
 
-	/** Max length Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Points Count", EditCondition="bUseMaxPointsCount && MaxPointsCountInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=1))
-	int32 MaxPointsCount = 100;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaxLengthInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(MaxPointsCount, int32)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName MaxLengthAttribute_DEPRECATED = FName("MaxLength");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double MaxLength_DEPRECATED = 100;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType MaxPointsCountInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName MaxPointsCountAttribute_DEPRECATED = FName("MaxPointsCount");
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 MaxPointsCount_DEPRECATED = 100;
+
+#pragma endregion
 
 	/** Whether to limit path length or not */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, ClampMin=0.001))

@@ -13,7 +13,27 @@
 #define LOCTEXT_NAMESPACE "PCGExFindPointOnBoundsElement"
 #define PCGEX_NAMESPACE FindPointOnBounds
 
-PCGEX_SETTING_DATA_VALUE_IMPL(UPCGExFindPointOnBoundsSettings, UVW, FVector, UVWInput, LocalUVW, UVW)
+#if WITH_EDITOR
+void UPCGExFindPointOnBoundsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		// Rewire UVW
+		PCGEX_SHORTHAND_RENAME_PIN(LocalUVW, UVW, UVWValue)
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFindPointOnBoundsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 7)
+	{
+		UVWValue.Update(UVWInput_DEPRECATED, LocalUVW_DEPRECATED, UVW_DEPRECATED);
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGEX_INITIALIZE_ELEMENT(FindPointOnBounds)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(FindPointOnBounds)
@@ -110,7 +130,7 @@ namespace PCGExFindPointOnBounds
 		}
 
 		FBox Bounds = FBox(ForceInit);
-		FVector UVW = Settings->GetValueSettingUVW(Context, PointDataFacade->GetIn())->Read(0);
+		FVector UVW = Settings->UVWValue.GetValueSetting(Context, PointDataFacade->GetIn())->Read(0);
 
 		if (Settings->bBestFitBounds)
 		{

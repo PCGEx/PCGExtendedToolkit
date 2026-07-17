@@ -3,6 +3,7 @@
 
 #include "Elements/Bounds/PCGExBoundsToPoints.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 
@@ -12,6 +13,26 @@
 
 PCGEX_INITIALIZE_ELEMENT(BoundsToPoints)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(BoundsToPoints)
+
+#if WITH_EDITOR
+void UPCGExBoundsToPointsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		UVW.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExBoundsToPointsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		UVW.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 bool FPCGExBoundsToPointsElement::Boot(FPCGExContext* InContext) const
 {

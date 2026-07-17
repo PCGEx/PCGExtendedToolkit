@@ -5,9 +5,12 @@
 
 #include "Core/PCGExTensorSampler.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExTensorHandler.generated.h"
 
+class UPCGSettings;
+class UPCGNode;
 class UPCGExTensorFactoryData;
 
 namespace PCGExTensor
@@ -66,7 +69,7 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorHandlerDetails
 
 	FPCGExTensorHandlerDetails()
 	{
-		SizeAttribute.Update("ExtrusionSize");
+		SizeAttribute_DEPRECATED.Update("ExtrusionSize");
 	}
 
 	virtual ~FPCGExTensorHandlerDetails()
@@ -81,19 +84,22 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorHandlerDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bNormalize = true;
 
-	/** Type of Size */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" ├─ Size Input"))
-	EPCGExInputValueType SizeInput = EPCGExInputValueType::Constant;
+	/** Size applied after normalization. This will be scaled */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Size", EditCondition="bNormalize", EditConditionHides))
+	FPCGExInputShorthandSelectorDouble Size = FPCGExInputShorthandSelectorDouble(FName("ExtrusionSize"), 100, false);
 
-	/** Start Offset Attribute (Vector 2 expected)*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Size (Attr)", EditCondition="bNormalize && SizeInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector SizeAttribute;
+#pragma region DEPRECATED
 
-	/** Constant size applied after normalization. This will be scaled */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = " └─ Size", EditCondition="bNormalize && SizeInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double SizeConstant = 100;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType SizeInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Size, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector SizeAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double SizeConstant_DEPRECATED = 100;
+
+#pragma endregion
 
 	/** Uniform scale factor applied to sampling after all other mutations are accounted for. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -102,6 +108,11 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorHandlerDetails
 	/** Uniform scale factor applied to sampling after all other mutations are accounted for. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExTensorSamplerDetails SamplerSettings;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 namespace PCGExTensor

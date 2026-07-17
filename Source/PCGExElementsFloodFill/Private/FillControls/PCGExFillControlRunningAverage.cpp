@@ -5,6 +5,7 @@
 #include "FillControls/PCGExFillControlRunningAverage.h"
 
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -13,8 +14,21 @@
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigRunningAverage, WindowSize, int32, WindowSizeInput, WindowSizeAttribute, WindowSize)
-PCGEX_SETTING_VALUE_IMPL(FPCGExFillControlConfigRunningAverage, Tolerance, double, ToleranceInput, ToleranceAttribute, Tolerance)
+#if WITH_EDITOR
+void FPCGExFillControlConfigRunningAverage::ApplyDeprecation()
+{
+	WindowSizeValue.Update(WindowSizeInput_DEPRECATED, WindowSizeAttribute_DEPRECATED, WindowSize_DEPRECATED);
+	ToleranceValue.Update(ToleranceInput_DEPRECATED, ToleranceAttribute_DEPRECATED, Tolerance_DEPRECATED);
+}
+
+void FPCGExFillControlConfigRunningAverage::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WindowSize")), FName(TEXT("WindowSizeValue")), FName(TEXT("Constant")), FName(TEXT("Window Size")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WindowSizeAttribute")), FName(TEXT("WindowSizeValue")), FName(TEXT("Attribute")), FName(TEXT("Window Size (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Tolerance")), FName(TEXT("ToleranceValue")), FName(TEXT("Constant")), FName(TEXT("Tolerance")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ToleranceAttribute")), FName(TEXT("ToleranceValue")), FName(TEXT("Attribute")), FName(TEXT("Tolerance (Attr)")));
+}
+#endif
 
 bool FPCGExFillControlRunningAverage::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -25,13 +39,15 @@ bool FPCGExFillControlRunningAverage::PrepareForDiffusions(FPCGExContext* InCont
 
 	const UPCGExFillControlsFactoryRunningAverage* TypedFactory = Cast<UPCGExFillControlsFactoryRunningAverage>(Factory);
 
-	WindowSize = TypedFactory->Config.GetValueSettingWindowSize();
+	WindowSize = TypedFactory->Config.WindowSizeValue.GetValueSetting();
+	WindowSize->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!WindowSize->Init(GetSourceFacade()))
 	{
 		return false;
 	}
 
-	Tolerance = TypedFactory->Config.GetValueSettingTolerance();
+	Tolerance = TypedFactory->Config.ToleranceValue.GetValueSetting();
+	Tolerance->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!Tolerance->Init(GetSourceFacade()))
 	{
 		return false;
@@ -89,8 +105,8 @@ void UPCGExFillControlsFactoryRunningAverage::RegisterBuffersDependencies(FPCGEx
 
 	if (Config.Source == EPCGExFloodFillSettingSource::Vtx)
 	{
-		FacadePreloader.Register<int32>(InContext, Config.WindowSizeAttribute);
-		FacadePreloader.Register<double>(InContext, Config.ToleranceAttribute);
+		FacadePreloader.Register<int32>(InContext, Config.WindowSizeValue.Attribute);
+		FacadePreloader.Register<double>(InContext, Config.ToleranceValue.Attribute);
 	}
 }
 
@@ -102,6 +118,26 @@ UPCGExFactoryData* UPCGExFillControlsRunningAverageProviderSettings::CreateFacto
 }
 
 #if WITH_EDITOR
+void UPCGExFillControlsRunningAverageProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExFillControlsRunningAverageProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExFillControlsRunningAverageProviderSettings::GetDisplayName() const
 {
 	FString DName = GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Fill Control"), TEXT("FC")) + TEXT(" @ ");

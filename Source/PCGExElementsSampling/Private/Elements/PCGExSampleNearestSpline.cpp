@@ -69,13 +69,9 @@ void UPCGExSampleNearestSplineSettings::PCGExApplyDeprecationBeforeUpdatePins(UP
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMaxAttribute, RangeMax, MaxRange)
 	}
 
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExSampleNearestSplineSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
 	InOutNode->RenameInputPin(PCGPinConstants::DefaultInputLabel, PCGExSampling::Labels::SourceSourceLabel);
-	Super::ApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+	
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
 void UPCGExSampleNearestSplineSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)

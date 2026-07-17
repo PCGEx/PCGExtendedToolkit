@@ -10,7 +10,6 @@
 #include "PCGExMatching/Public/Helpers/PCGExMatchingHelpers.h"
 #include "PCGExMatching/Public/Helpers/PCGExTargetsHandler.h"
 
-
 #define LOCTEXT_NAMESPACE "PCGExNearestFilter"
 #define PCGEX_NAMESPACE NearestFilter
 
@@ -71,20 +70,6 @@ void UPCGExNearestFilterFactoryData::RegisterBuffersDependencies(FPCGExContext* 
 	NearestConfig->MaxDistance.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
-bool UPCGExNearestFilterFactoryData::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
-{
-	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
-	{
-		return false;
-	}
-
-	check(NearestConfig);
-	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(NearestConfig->MaxDistance.Input == EPCGExInputValueType::Attribute, NearestConfig->MaxDistance.Attribute, Consumable)
-
-	return true;
-}
-
 void UPCGExNearestFilterFactoryData::BeginDestroy()
 {
 	TargetsHandler.Reset();
@@ -110,6 +95,7 @@ bool PCGExPointFilter::FNearestFilter::Init(FPCGExContext* InContext, const TSha
 	const FPCGExNearestFilterConfigBase& Cfg = NearestFactory->GetNearestConfig();
 
 	MaxDistance = Cfg.MaxDistance.GetValueSetting(PCGEX_QUIET_HANDLING);
+	MaxDistance->bRegisterConsumable &= NearestFactory->bCleanupConsumableAttributes;
 	if (!MaxDistance->Init(PointDataFacade, false))
 	{
 		return false;

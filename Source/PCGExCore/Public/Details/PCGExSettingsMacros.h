@@ -28,6 +28,16 @@ TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> V = PCGExDetails::MakeSettingValu
 V->bQuiet = bQuiet;\
 return V; }
 
+// Shorthand variant: seeds the value's consumable auto-registration from the shorthand's own
+// per-operand bCleanupAttribute toggle (see FPCGExInputShorthandBase). Call sites may still veto
+// further via &= (factory gate); the node toggle is checked at Init time.
+#define PCGEX_SETTING_VALUE_IMPL_SHORTHAND(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT)\
+TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> _CLASS::GetValueSetting##_NAME(const bool bQuiet) const{ \
+TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> V = PCGExDetails::MakeSettingValue<_TYPE>(_INPUT, _SOURCE, _CONSTANT);\
+V->bQuiet = bQuiet;\
+V->bRegisterConsumable = bCleanupAttribute;\
+return V; }
+
 #define PCGEX_SETTING_VALUE_IMPL_BOOL(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT) PCGEX_SETTING_VALUE_IMPL(_CLASS, _NAME, _TYPE, ((_INPUT) ? EPCGExInputValueType::Attribute : EPCGExInputValueType::Constant), _SOURCE, _CONSTANT);
 #define PCGEX_SETTING_VALUE_IMPL_TOGGLE(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT, _DISABLED) PCGEX_SETTING_VALUE_IMPL(_CLASS, _NAME, _TYPE, ((_INPUT != EPCGExInputValueToggle::Disabled) ? static_cast<EPCGExInputValueType>(_INPUT) : EPCGExInputValueType::Constant), _SOURCE, (_INPUT == EPCGExInputValueToggle::Disabled ? _DISABLED : _CONSTANT));
 
@@ -44,6 +54,15 @@ return V; }
 TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> _CLASS::GetValueSetting##_NAME(FPCGExContext* InContext, const UPCGData* InData, const bool bQuiet) const{\
 TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> V = PCGExDetails::MakeSettingValue<_TYPE>(InContext, InData, _INPUT, _SOURCE, _CONSTANT);\
 V->bQuiet = bQuiet;\
+return V; }
+
+// Shorthand variant: mirrors PCGEX_SETTING_VALUE_IMPL_SHORTHAND — the shorthand's per-operand
+// bCleanupAttribute toggle seeds the value's consumable auto-registration.
+#define PCGEX_SETTING_DATA_VALUE_IMPL_SHORTHAND(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT)\
+TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> _CLASS::GetValueSetting##_NAME(FPCGExContext* InContext, const UPCGData* InData, const bool bQuiet) const{\
+TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> V = PCGExDetails::MakeSettingValue<_TYPE>(InContext, InData, _INPUT, _SOURCE, _CONSTANT);\
+V->bQuiet = bQuiet;\
+V->bRegisterConsumable = bCleanupAttribute;\
 return V; }
 
 #define PCGEX_SETTING_DATA_VALUE_IMPL_BOOL(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT) PCGEX_SETTING_DATA_VALUE_IMPL(_CLASS, _NAME, _TYPE, ((_INPUT) ? EPCGExInputValueType::Attribute : EPCGExInputValueType::Constant), _SOURCE, _CONSTANT);

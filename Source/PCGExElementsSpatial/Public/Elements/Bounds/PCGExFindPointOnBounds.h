@@ -8,6 +8,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Details/PCGExBoundsCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Math/PCGExMathAxis.h"
 
 #include "PCGExFindPointOnBounds.generated.h"
@@ -23,6 +24,9 @@ class UPCGExFindPointOnBoundsSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(FindPointOnBounds, "Find point on Bounds", "Find the closest point on the dataset bounds.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -52,19 +56,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Use Best Fit bounds axis", EditCondition="bBestFitBounds"))
 	EPCGExAxisOrder AxisOrder = EPCGExAxisOrder::YXZ;
 
-	/** Type of UVW value source */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType UVWInput = EPCGExInputValueType::Constant;
+	/** UVW position of the target within bounds. Attribute source is read from the @Data domain. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="UVW"))
+	FPCGExInputShorthandSelectorVector UVWValue = FPCGExInputShorthandSelectorVector(FName("@Data.UVW"), FVector::OneVector, false);
 
-	/** Fetch the UVW value from a @Data attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="UVW (Attr)", EditCondition="UVWInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector LocalUVW;
+#pragma region DEPRECATED
 
-	/** UVW position of the target within bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="UVW", EditCondition="UVWInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector UVW = FVector::OneVector;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType UVWInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_DATA_VALUE_DECL(UVW, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LocalUVW_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector UVW_DEPRECATED = FVector::OneVector;
+
+#pragma endregion
 
 	/** Offset to apply to the closest point, away from the bounds center. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

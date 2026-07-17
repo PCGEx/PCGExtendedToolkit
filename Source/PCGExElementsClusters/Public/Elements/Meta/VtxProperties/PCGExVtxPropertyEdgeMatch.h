@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExVtxPropertyFactoryProvider.h"
 #include "Clusters/PCGExClusterCommon.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Factories/PCGExFactoryProvider.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
@@ -14,6 +15,8 @@
 
 ///
 
+class UPCGSettings;
+class UPCGNode;
 class UPCGExPointFilterFactoryData;
 
 USTRUCT(BlueprintType)
@@ -25,21 +28,25 @@ struct FPCGExEdgeMatchConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExAdjacencyDirectionOrigin Origin = EPCGExAdjacencyDirectionOrigin::FromNode;
 
-	/** Where to read the compared direction from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType DirectionInput = EPCGExInputValueType::Constant;
-
 	/** Direction for computing the dot product against the edge's. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction (Attr)", EditCondition="DirectionInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector Direction;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction"))
+	FPCGExInputShorthandSelectorDirection DirectionValue = FPCGExInputShorthandSelectorDirection(FName("Direction"), FVector::ForwardVector, false);
 
-	/** Flip the direction vector before comparison. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="DirectionInput != EPCGExInputValueType::Constant", EditConditionHides))
-	bool bInvertDirection = false;
+#pragma region DEPRECATED
 
-	/** Direction for computing the dot product against the edge's. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction", EditCondition="DirectionInput == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector DirectionConstant = FVector::ForwardVector;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType DirectionInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector Direction_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bInvertDirection_DEPRECATED = false;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector DirectionConstant_DEPRECATED = FVector::ForwardVector;
+
+#pragma endregion
 
 	/** Whether to transform the direction source by the vtx' transform */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -55,8 +62,13 @@ struct FPCGExEdgeMatchConfig
 
 	void Sanitize()
 	{
-		DirectionConstant = DirectionConstant.GetSafeNormal();
+		DirectionValue.Constant = DirectionValue.Constant.GetSafeNormal();
 	}
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -95,6 +107,8 @@ class UPCGExVtxPropertyEdgeMatchSettings : public UPCGExVtxPropertyProviderSetti
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(VtxEdgeMatch, "Vtx : Edge Match", "Find the edge that matches the closest provided direction.", FName(GetDisplayName()))
 #endif
 

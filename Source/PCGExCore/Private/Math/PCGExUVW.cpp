@@ -11,25 +11,21 @@
 #include "Math/PCGExMathAxis.h"
 #include "Math/PCGExMathBounds.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExUVW, U, double, UInput, UAttribute, UConstant)
-PCGEX_SETTING_VALUE_IMPL(FPCGExUVW, V, double, VInput, VAttribute, VConstant)
-PCGEX_SETTING_VALUE_IMPL(FPCGExUVW, W, double, WInput, WAttribute, WConstant)
-
 bool FPCGExUVW::Init(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade)
 {
-	UGetter = GetValueSettingU();
+	UGetter = U.GetValueSetting();
 	if (!UGetter->Init(InDataFacade))
 	{
 		return false;
 	}
 
-	VGetter = GetValueSettingV();
+	VGetter = V.GetValueSetting();
 	if (!VGetter->Init(InDataFacade))
 	{
 		return false;
 	}
 
-	WGetter = GetValueSettingW();
+	WGetter = W.GetValueSetting();
 	if (!WGetter->Init(InDataFacade))
 	{
 		return false;
@@ -100,6 +96,25 @@ FVector FPCGExUVW::GetPosition(const int32 PointIndex, FVector& OutOffset, const
 	OutOffset = (Bounds.GetExtent() * GetUVW(PointIndex, Axis, bMirrorAxis));
 	return PointData->GetTransform(PointIndex).TransformPositionNoScale(Bounds.GetCenter() + OutOffset);
 }
+
+#if WITH_EDITOR
+void FPCGExUVW::ApplyDeprecation()
+{
+	U.Update(UInput_DEPRECATED, UAttribute_DEPRECATED, UConstant_DEPRECATED);
+	V.Update(VInput_DEPRECATED, VAttribute_DEPRECATED, VConstant_DEPRECATED);
+	W.Update(WInput_DEPRECATED, WAttribute_DEPRECATED, WConstant_DEPRECATED);
+}
+
+void FPCGExUVW::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("UAttribute")), FName(TEXT("U")), FName(TEXT("Attribute")), FName(TEXT("U (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("UConstant")), FName(TEXT("U")), FName(TEXT("Constant")), FName(TEXT("U")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("VAttribute")), FName(TEXT("V")), FName(TEXT("Attribute")), FName(TEXT("V (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("VConstant")), FName(TEXT("V")), FName(TEXT("Constant")), FName(TEXT("V")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WAttribute")), FName(TEXT("W")), FName(TEXT("Attribute")), FName(TEXT("W (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("WConstant")), FName(TEXT("W")), FName(TEXT("Constant")), FName(TEXT("W")));
+}
+#endif
 
 namespace PCGExMath
 {

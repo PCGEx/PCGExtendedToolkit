@@ -3,6 +3,7 @@
 
 #include "Elements/Utils/PCGExMergePoints.h"
 
+#include "PCGExVersion.h"
 #include "PCGExMatchingCommon.h"
 #include "Data/PCGExDataTags.h"
 #include "Details/PCGExMatchingDetails.h"
@@ -57,6 +58,24 @@ void FPCGExMergeList::Write(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager
 TArray<FText> UPCGExMergePointsSettings::GetNodeTitleAliases() const
 {
 	return {FTEXT("PCGEx | Merge Points by Tag")};
+}
+
+void UPCGExMergePointsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MatchingDetails.RenamePins(this, InOutNode);
+	}
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExMergePointsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		MatchingDetails.ApplyDeprecation();
+	}
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
 

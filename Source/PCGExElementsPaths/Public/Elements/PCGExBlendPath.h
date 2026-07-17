@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExBlendingDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Paths/PCGExPathsCommon.h"
 
 #include "PCGExBlendPath.generated.h"
@@ -39,6 +40,9 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(BlendPath, "Path : Blend", "Blend path individual points between its start and end points.");
 #endif
 
@@ -53,18 +57,22 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExBlendOver BlendOver = EPCGExBlendOver::Distance;
 
+	/** Fixed lerp value. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="BlendOver == EPCGExBlendOver::Fixed", EditConditionHides))
-	EPCGExInputValueType LerpInput = EPCGExInputValueType::Constant;
+	FPCGExInputShorthandSelectorDoubleAbs Lerp = FPCGExInputShorthandSelectorDoubleAbs(FName("@Last"), 0.5, false);
 
-	/** Attribute to read the direction from */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Lerp (Attr)", EditCondition="BlendOver == EPCGExBlendOver::Fixed && LerpInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector LerpAttribute;
+#pragma region DEPRECATED
 
-	/** Constant direction */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Lerp", ClampMin=0, EditCondition="BlendOver == EPCGExBlendOver::Fixed && LerpInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double LerpConstant = 0.5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType LerpInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(Lerp, double)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LerpAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double LerpConstant_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Blending settings used to smooth attributes.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))

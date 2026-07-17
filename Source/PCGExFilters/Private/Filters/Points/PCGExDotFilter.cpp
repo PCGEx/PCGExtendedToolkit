@@ -9,7 +9,6 @@
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
-
 #define LOCTEXT_NAMESPACE "PCGExDotFilterDefinition"
 #define PCGEX_NAMESPACE PCGExDotFilterDefinition
 
@@ -55,7 +54,6 @@ bool UPCGExDotFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext*
 
 	FName Consumable = NAME_None;
 	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
-	PCGEX_CONSUMABLE_CONDITIONAL(Config.CompareAgainst == EPCGExInputValueType::Attribute, Config.OperandB, Consumable)
 	Config.DotComparisonDetails.RegisterConsumableAttributesWithData(InContext, InData);
 
 	return true;
@@ -74,7 +72,6 @@ bool PCGExPointFilter::FDotFilter::Init(FPCGExContext* InContext, const TSharedP
 		return false;
 	}
 
-
 	OperandA = PointDataFacade->GetBroadcaster<FVector>(TypedFilterFactory->Config.OperandA, true, false, PCGEX_QUIET_HANDLING);
 	OperandAMultiplier = TypedFilterFactory->Config.bInvertOperandA ? -1 : 1;
 	if (!OperandA)
@@ -84,6 +81,7 @@ bool PCGExPointFilter::FDotFilter::Init(FPCGExContext* InContext, const TSharedP
 	}
 
 	OperandB = TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(PointDataFacade))
 	{
 		return false;

@@ -99,6 +99,22 @@ extern template void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifi
 		const TArray<int32>& SourcePointIndices,
 		const TSet<FName>* IgnoreList = nullptr);
 
+	/** Canonical read slot for a @Data attribute: first entry when the domain has items, else the default slot. */
+	PCGEXCORE_API PCGMetadataEntryKey GetDataValueKey(const FPCGMetadataAttributeBase* Attribute);
+
+	/** True when a value can be read from Attribute at Key (on 5.7 this reduces to Attribute existing). */
+	PCGEXCORE_API bool HasPropertyCopyableValue(const FPCGMetadataAttributeBase* Attribute, PCGMetadataEntryKey Key);
+
+	/** Single-value attribute copy (data domain): reads SourceAttr at SourceKey and writes it to TargetKey. Source and target must share the same type. */
+	PCGEXCORE_API bool PropertyCopyAttribute(
+		const FPCGMetadataAttributeBase* SourceAttr, PCGMetadataEntryKey SourceKey,
+		FPCGMetadataAttributeBase* TargetAttr, PCGMetadataEntryKey TargetKey);
+
+	/** Multi-target variant: reads the source value once and writes it to every provided target key. */
+	PCGEXCORE_API bool PropertyCopyAttribute(
+		const FPCGMetadataAttributeBase* SourceAttr, PCGMetadataEntryKey SourceKey,
+		FPCGMetadataAttributeBase* TargetAttr, TArrayView<const PCGMetadataEntryKey> TargetKeys);
+
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
 extern template bool TryReadDataValue<_TYPE>(FPCGExContext* InContext, const UPCGData* InData, const FPCGAttributePropertyInputSelector& InSelector, _TYPE& OutValue, const bool bQuiet); \
 extern template bool TryReadDataValue<_TYPE>(FPCGExContext* InContext, const UPCGData* InData, const FName& InName, _TYPE& OutValue, const bool bQuiet); \

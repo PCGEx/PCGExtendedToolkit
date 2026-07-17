@@ -42,6 +42,8 @@ class UPCGExCopyTagsSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(CopyTags, "Copy Tags", "Copy missing tags from matched Targets onto Sources. Sources are forwarded untouched apart from the added tags.");
 
 	virtual EPCGSettingsType GetType() const override

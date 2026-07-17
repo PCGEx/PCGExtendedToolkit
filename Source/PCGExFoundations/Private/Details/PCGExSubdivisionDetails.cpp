@@ -8,9 +8,6 @@
 #include "Types/PCGExTypes.h"
 
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExManhattanDetails, GridSize, FVector, GridSizeInput, GridSizeAttribute, GridSize)
-PCGEX_SETTING_VALUE_IMPL(FPCGExManhattanDetails, Orient, FQuat, OrientInput, OrientAttribute, OrientConstant)
-
 bool FPCGExManhattanDetails::IsValid() const
 {
 	return bInitialized;
@@ -20,7 +17,7 @@ bool FPCGExManhattanDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCG
 {
 	if (bSupportAttribute)
 	{
-		GridSizeBuffer = GetValueSettingGridSize();
+		GridSizeBuffer = GridSizeValue.GetValueSetting();
 		if (!GridSizeBuffer->Init(InDataFacade))
 		{
 			return false;
@@ -28,11 +25,11 @@ bool FPCGExManhattanDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCG
 
 		if (SpaceAlign == EPCGExManhattanAlign::Custom)
 		{
-			OrientBuffer = GetValueSettingOrient();
+			OrientBuffer = OrientValue.GetValueSetting();
 		}
 		else if (SpaceAlign == EPCGExManhattanAlign::World)
 		{
-			OrientBuffer = PCGExDetails::MakeSettingValue(FQuat::Identity);
+			OrientBuffer = PCGExDetails::MakeSettingValue(FRotator::ZeroRotator);
 		}
 
 		if (OrientBuffer && !OrientBuffer->Init(InDataFacade))
@@ -42,16 +39,16 @@ bool FPCGExManhattanDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCG
 	}
 	else
 	{
-		GridSize = PCGExTypes::Abs(GridSize);
-		//GridIntSize = FIntVector3(FMath::Floor(GridSize.X), FMath::Floor(GridSize.Y), FMath::Floor(GridSize.Z));
-		GridSizeBuffer = PCGExDetails::MakeSettingValue(GridSize);
+		// Attribute support disabled for this embedder: force the constant path regardless of the shorthand's Input toggle.
+		GridSizeValue.Constant = PCGExTypes::Abs(GridSizeValue.Constant);
+		GridSizeBuffer = PCGExDetails::MakeSettingValue(GridSizeValue.Constant);
 		if (SpaceAlign == EPCGExManhattanAlign::Custom)
 		{
-			OrientBuffer = PCGExDetails::MakeSettingValue(OrientConstant);
+			OrientBuffer = PCGExDetails::MakeSettingValue(OrientValue.Constant);
 		}
 		else if (SpaceAlign == EPCGExManhattanAlign::World)
 		{
-			OrientBuffer = PCGExDetails::MakeSettingValue(FQuat::Identity);
+			OrientBuffer = PCGExDetails::MakeSettingValue(FRotator::ZeroRotator);
 		}
 	}
 
@@ -72,7 +69,7 @@ int32 FPCGExManhattanDetails::ComputeSubdivisions(const FVector& A, const FVecto
 	{
 	case EPCGExManhattanAlign::World:
 	case EPCGExManhattanAlign::Custom:
-		Rotation = OrientBuffer->Read(Index);
+		Rotation = OrientBuffer->Read(Index).Quaternion();
 		break;
 	case EPCGExManhattanAlign::SegmentX:
 		Rotation = FRotationMatrix::MakeFromX(DirectionAndSize).ToQuat();
@@ -172,3 +169,21 @@ int32 FPCGExManhattanDetails::ComputeSubdivisions(const FVector& A, const FVecto
 
 	return OutSubdivisions.Num() - StartIndex;
 }
+
+#if WITH_EDITOR
+void FPCGExManhattanDetails::ApplyDeprecation()
+{
+	GridSizeValue.Update(GridSizeInput_DEPRECATED, GridSizeAttribute_DEPRECATED, GridSize_DEPRECATED);
+	// FQuat constant forwarded as a rotator (see header: Orient migrated FQuat -> FRotator).
+	OrientValue.Update(OrientInput_DEPRECATED, OrientAttribute_DEPRECATED, OrientConstant_DEPRECATED.Rotator());
+}
+
+void FPCGExManhattanDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	// GridSize: only the constant was PCG_Overridable (Input/Attribute were NotOverridable -> no pins).
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("GridSize")), FName(TEXT("GridSizeValue")), FName(TEXT("Constant")), FName(TEXT("Grid Size")));
+	// Orient: attribute + constant pins existed.
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OrientAttribute")), FName(TEXT("OrientValue")), FName(TEXT("Attribute")), FName(TEXT("Orient (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OrientConstant")), FName(TEXT("OrientValue")), FName(TEXT("Constant")), FName(TEXT("Orient")));
+}
+#endif

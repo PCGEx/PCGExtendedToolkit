@@ -38,12 +38,12 @@ PCGExTensor::FTensorSample FPCGExTensorNoise::Sample(const int32 InSeedIndex, co
 		if (const double Mask = NoiseMaskGenerator->GetDouble(InPosition);
 			!FMath::IsNearlyZero(Mask))
 		{
-			Samples.Emplace_GetRef(Noise, Config.Potency * Mask, Config.Weight * Mask);
+			Samples.Emplace_GetRef(Noise, Config.PotencyValue.Constant * Mask, Config.WeightValue.Constant * Mask);
 		}
 	}
 	else
 	{
-		Samples.Emplace_GetRef(Noise, Config.Potency, Config.Weight);
+		Samples.Emplace_GetRef(Noise, Config.PotencyValue.Constant, Config.WeightValue.Constant);
 	}
 
 	return Config.Mutations.Mutate(InProbe, Samples.Flatten(Config.TensorWeight));
@@ -53,11 +53,11 @@ PCGEX_TENSOR_BOILERPLATE(
 	Noise,
 	{
 	NewFactory->Config.Mutations = Mutations;
-	NewFactory->Config.Potency = Potency;
-	NewFactory->Config.PotencyInput = EPCGExInputValueType::Constant;
-	NewFactory->Config.Weight = 1;
+	NewFactory->Config.PotencyValue.Constant = Potency;
+	NewFactory->Config.PotencyValue.Input = EPCGExInputValueType::Constant;
+	NewFactory->Config.WeightValue.Constant = 1;
 	NewFactory->Config.TensorWeight = TensorWeight;
-	NewFactory->Config.WeightInput = EPCGExInputValueType::Constant;
+	NewFactory->Config.WeightValue.Input = EPCGExInputValueType::Constant;
 	NewFactory->Config.bNormalizeNoiseSampling = bNormalizeNoiseSampling;
 	NewFactory->NoiseGenerator = MakeShared<PCGExNoise3D::FNoiseGenerator>();
 	if (!NewFactory->NoiseGenerator->Init(InContext)) { return nullptr; }
@@ -71,13 +71,13 @@ PCGEX_TENSOR_BOILERPLATE(
 
 PCGExFactories::EPreparationResult UPCGExTensorNoiseFactory::InitInternalData(FPCGExContext* InContext)
 {
-	if (Config.PotencyInput == EPCGExInputValueType::Attribute)
+	if (Config.PotencyValue.Input == EPCGExInputValueType::Attribute)
 	{
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Attribute-driven Potency is not supported on Noise Tensor."));
 		return PCGExFactories::EPreparationResult::Fail;
 	}
 
-	if (Config.WeightInput == EPCGExInputValueType::Attribute)
+	if (Config.WeightValue.Input == EPCGExInputValueType::Attribute)
 	{
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Attribute-driven Weight is not supported on Noise Tensor."));
 		return PCGExFactories::EPreparationResult::Fail;

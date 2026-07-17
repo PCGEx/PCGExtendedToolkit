@@ -7,10 +7,13 @@
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "PropertyHandle.h"
+#include "Misc/Attribute.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Filters/Points/PCGExBitmaskFilter.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -178,12 +181,54 @@ TSharedRef<IPropertyTypeCustomization> FPCGExBitmaskFilterConfigCustomization::M
 	return MakeShareable(new FPCGExBitmaskFilterConfigCustomization());
 }
 
+void FPCGExBitmaskFilterConfigCustomization::CustomizeChildren(
+	TSharedRef<IPropertyHandle> PropertyHandle,
+	IDetailChildrenBuilder& ChildBuilder,
+	IPropertyTypeCustomizationUtils& CustomizationUtils)
+{
+	// The Bitmask value now lives inside the BitmaskValue shorthand; render it via the bits grid and
+	// let every other editable property fall through. Load-only _DEPRECATED stubs carry no CPF_Edit.
+	uint32 NumChildren = 0;
+	PropertyHandle->GetNumChildren(NumChildren);
+
+	for (uint32 i = 0; i < NumChildren; ++i)
+	{
+		TSharedPtr<IPropertyHandle> Handle = PropertyHandle->GetChildHandle(i);
+		if (!Handle.IsValid() || !Handle->GetProperty() || !Handle->GetProperty()->HasAnyPropertyFlags(CPF_Edit))
+		{
+			continue;
+		}
+
+		if (Handle->GetProperty()->GetFName() == GET_MEMBER_NAME_CHECKED(FPCGExBitmaskFilterConfig, BitmaskValue))
+		{
+			BuildGrid(PropertyHandle, ChildBuilder);
+		}
+		else
+		{
+			ChildBuilder.AddProperty(Handle.ToSharedRef());
+		}
+	}
+}
+
 void FPCGExBitmaskFilterConfigCustomization::BuildGrid(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder) const
 {
-	TSharedPtr<IPropertyHandle> BitmaskHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExBitmaskFilterConfig, Bitmask));
-	TSharedPtr<IPropertyHandle> InputHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExBitmaskFilterConfig, MaskInput));
+	TSharedPtr<IPropertyHandle> ValueHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExBitmaskFilterConfig, BitmaskValue));
+	if (!ValueHandle.IsValid())
+	{
+		return;
+	}
 
-	// Create a grid of [bool], the grid itself will only be visible in composite view
+	TSharedPtr<IPropertyHandle> InputHandle = ValueHandle->GetChildHandle(FName("Input"));
+	TSharedPtr<IPropertyHandle> ConstantHandle = ValueHandle->GetChildHandle(FName("Constant"));
+	TSharedPtr<IPropertyHandle> AttributeHandle = ValueHandle->GetChildHandle(FName("Attribute"));
+
+	if (!InputHandle.IsValid() || !ConstantHandle.IsValid() || !AttributeHandle.IsValid())
+	{
+		return;
+	}
+
+	// Input mode toggle beside the label; the value slot swaps between the 64-bit grid (Constant)
+	// and the attribute selector (Attribute). EPCGExInputValueType::Constant is the zero value.
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Bitmask"))
 		.NameContent()
@@ -198,15 +243,49 @@ void FPCGExBitmaskFilterConfigCustomization::BuildGrid(TSharedRef<IPropertyHandl
 			]
 			+ SHorizontalBox::Slot()
 			.Padding(1)
-			.MinWidth(100)
+			.AutoWidth()
 			.VAlign(VAlign_Center)
 			[
-				BitmaskHandle->CreatePropertyValueWidget()
+				PCGExEnumCustomization::CreateRadioGroup(InputHandle, "EPCGExInputValueType")
 			]
 		]
 		.ValueContent()
-		//.MinDesiredWidth(400)
 		[
-			PCGExBitmaskCustomization::BitsGrid(BitmaskHandle)
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.Padding(1)
+			.FillWidth(1)
+			[
+				SNew(SBox)
+				.Visibility(
+					MakeAttributeLambda(
+						[InputHandle]()
+						{
+							uint8 V = 0;
+							InputHandle->GetValue(V);
+							return V ? EVisibility::Collapsed : EVisibility::Visible;
+						}))
+				[
+					PCGExBitmaskCustomization::BitsGrid(ConstantHandle)
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.Padding(1)
+			.FillWidth(1)
+			.VAlign(VAlign_Center)
+			[
+				SNew(SBox)
+				.Visibility(
+					MakeAttributeLambda(
+						[InputHandle]()
+						{
+							uint8 V = 0;
+							InputHandle->GetValue(V);
+							return V ? EVisibility::Visible : EVisibility::Collapsed;
+						}))
+				[
+					AttributeHandle->CreatePropertyValueWidget()
+				]
+			]
 		];
 }

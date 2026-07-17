@@ -120,6 +120,8 @@ class UPCGExProbeBitmasksProviderSettings : public UPCGExProbeFactoryProviderSet
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeBitmasks, "Probe : Bitmasks", "Probe using bitmasks references & collections.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings

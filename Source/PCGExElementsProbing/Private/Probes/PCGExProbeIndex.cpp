@@ -3,11 +3,26 @@
 
 #include "Probes/PCGExProbeIndex.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExProbeConfigIndex, Index, int32, IndexInput, IndexAttribute, IndexConstant)
 PCGEX_CREATE_PROBE_FACTORY(Index, {}, {})
+
+#if WITH_EDITOR
+void FPCGExProbeConfigIndex::ApplyDeprecation()
+{
+	FPCGExProbeConfigBase::ApplyDeprecation();
+	Index.Update(IndexInput_DEPRECATED, IndexAttribute_DEPRECATED, IndexConstant_DEPRECATED);
+}
+
+void FPCGExProbeConfigIndex::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	FPCGExProbeConfigBase::RenamePins(InSettings, InOutNode);
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("IndexAttribute")), FName(TEXT("Index")), FName(TEXT("Attribute")), FName(TEXT("Index (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("IndexConstant")), FName(TEXT("Index")), FName(TEXT("Constant")), FName(TEXT("Index")));
+}
+#endif
 
 bool FPCGExProbeIndex::IsDirectProbe() const
 {
@@ -53,7 +68,7 @@ bool FPCGExProbeIndex::Prepare(FPCGExContext* InContext)
 	case EPCGExProbeTargetMode::OneWayOffset: PCGEX_FOREACH_SANITIZEINDEX(PCGEX_TARGET_CONNECT_ONEWAY, _VALUE) break;\
 	case EPCGExProbeTargetMode::TwoWayOffset: PCGEX_FOREACH_SANITIZEINDEX(PCGEX_TARGET_CONNECT_TWOWAY, _VALUE) break; }
 
-	TargetCache = Config.GetValueSettingIndex();
+	TargetCache = Config.Index.GetValueSetting();
 	if (!TargetCache->Init(PrimaryDataFacade))
 	{
 		return false;
@@ -71,6 +86,26 @@ bool FPCGExProbeIndex::Prepare(FPCGExContext* InContext)
 }
 
 #if WITH_EDITOR
+void UPCGExProbeIndexProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExProbeIndexProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExProbeIndexProviderSettings::GetDisplayName() const
 {
 	return TEXT("");
