@@ -56,18 +56,6 @@ namespace PCGExNoise3D
 			FVector(1, 1, 0), FVector(-1, 1, 0), FVector(0, -1, 1), FVector(0, -1, -1)
 		};
 
-		// Simplex corners for 3D
-		inline const int32 SimplexCorners[64][3] = {
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1},
-			{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1}, {1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1}
-		};
-
 		//
 		// Hashing Functions
 		//
@@ -77,18 +65,6 @@ namespace PCGExNoise3D
 		{
 			const int32 Xi = static_cast<int32>(X);
 			return X < Xi ? Xi - 1 : Xi;
-		}
-
-		/** Fast 1D hash */
-		FORCEINLINE uint8 Hash(const int32 X)
-		{
-			return Perm[(X & 255)];
-		}
-
-		/** Fast 2D hash */
-		FORCEINLINE uint8 Hash2D(const int32 X, const int32 Y)
-		{
-			return Perm[(Perm[(X & 255)] + Y) & 255];
 		}
 
 		/** Fast 3D hash */
@@ -138,16 +114,6 @@ namespace PCGExNoise3D
 			return 30.0 * T * T * (T * (T - 2.0) + 1.0);
 		}
 
-		/** Cubic Hermite interpolation */
-		FORCEINLINE double CubicLerp(const double A, const double B, const double C, const double D, const double T)
-		{
-			const double P = (D - C) - (A - B);
-			const double Q = (A - B) - P;
-			const double R = C - A;
-			const double S = B;
-			return P * T * T * T + Q * T * T + R * T + S;
-		}
-
 		//
 		// Gradient Functions
 		//
@@ -181,28 +147,40 @@ namespace PCGExNoise3D
 			return static_cast<double>(H) / 4294967295.0;
 		}
 
-		/** Convert 32-bit hash to normalized value [0, 1] */
-		FORCEINLINE double Hash32ToDouble(const uint32 H)
+		/**
+		 * Derive three decorrelated [0, 1] values from a single 32-bit hash (10 bits per axis).
+		 * Hash32's avalanche makes the bit lanes independent; 1024 levels is far below visual threshold.
+		 */
+		FORCEINLINE FVector Hash32ToVector01(const uint32 H)
 		{
-			return Hash32ToDouble01(H);
+			return FVector(
+				static_cast<double>(H & 0x3FFu) * (1.0 / 1023.0),
+				static_cast<double>((H >> 10) & 0x3FFu) * (1.0 / 1023.0),
+				static_cast<double>((H >> 20) & 0x3FFu) * (1.0 / 1023.0)
+				);
+		}
+
+		/** Cheap secondary channel from an existing hash - decorrelates without a second full Hash32 */
+		FORCEINLINE uint32 Hash32Remix(const uint32 H)
+		{
+			uint32 R = (H ^ 0x9E3779B9u) * 0x85EBCA6Bu;
+			R ^= R >> 16;
+			return R;
 		}
 
 		//
 		// Cellular/Voronoi Helpers
 		//
 
-		/** Get jittered point position within a cell */
+		/** Get jittered point position within a cell. Single hash, per-axis jitters from disjoint bit lanes. */
 		FORCEINLINE FVector GetCellPoint(const int32 CellX, const int32 CellY, const int32 CellZ, const double Jitter, const int32 Seed)
 		{
-			const uint32 H = Hash32(CellX + Seed, CellY, CellZ);
-			const double Jx = Hash32ToDouble01(H) - 0.5;
-			const double Jy = Hash32ToDouble01(Hash32(CellX, CellY + Seed, CellZ)) - 0.5;
-			const double Jz = Hash32ToDouble01(Hash32(CellX, CellY, CellZ + Seed)) - 0.5;
+			const FVector J = Hash32ToVector01(Hash32(CellX + Seed, CellY, CellZ));
 
 			return FVector(
-				CellX + 0.5 + Jx * Jitter,
-				CellY + 0.5 + Jy * Jitter,
-				CellZ + 0.5 + Jz * Jitter
+				CellX + 0.5 + (J.X - 0.5) * Jitter,
+				CellY + 0.5 + (J.Y - 0.5) * Jitter,
+				CellZ + 0.5 + (J.Z - 0.5) * Jitter
 				);
 		}
 
@@ -251,22 +229,60 @@ namespace PCGExNoise3D
 		// Remapping
 		//
 
-		/** Remap from [-1,1] to [0,1] */
-		FORCEINLINE double RemapTo01(const double Value)
-		{
-			return Value * 0.5 + 0.5;
-		}
+		//
+		// Noise Cores
+		//
 
-		/** Remap from [0,1] to [-1,1] */
-		FORCEINLINE double RemapToNeg11(const double Value)
+		/** Classic Perlin gradient noise core, output in [-1, 1] */
+		FORCEINLINE double Perlin3D(const FVector& Position, const int32 Seed)
 		{
-			return Value * 2.0 - 1.0;
-		}
+			// Find unit cube containing point
+			const int32 X0 = FastFloor(Position.X);
+			const int32 Y0 = FastFloor(Position.Y);
+			const int32 Z0 = FastFloor(Position.Z);
 
-		/** Remap from [-1,1] to custom range */
-		FORCEINLINE double RemapToRange(const double Value, const double Min, const double Max)
-		{
-			return Min + (Value * 0.5 + 0.5) * (Max - Min);
+			// Relative position within cube
+			const double Xf = Position.X - X0;
+			const double Yf = Position.Y - Y0;
+			const double Zf = Position.Z - Z0;
+
+			// Quintic interpolation curves
+			const double U = SmoothStep(Xf);
+			const double V = SmoothStep(Yf);
+			const double W = SmoothStep(Zf);
+
+			const int32 X0S = (X0 + Seed) & 255;
+
+			// Hash all 8 corners
+			const int32 AAA = Hash3D(X0S, Y0, Z0);
+			const int32 ABA = Hash3D(X0S, Y0 + 1, Z0);
+			const int32 AAB = Hash3D(X0S, Y0, Z0 + 1);
+			const int32 ABB = Hash3D(X0S, Y0 + 1, Z0 + 1);
+			const int32 BAA = Hash3D(X0S + 1, Y0, Z0);
+			const int32 BBA = Hash3D(X0S + 1, Y0 + 1, Z0);
+			const int32 BAB = Hash3D(X0S + 1, Y0, Z0 + 1);
+			const int32 BBB = Hash3D(X0S + 1, Y0 + 1, Z0 + 1);
+
+			// Gradient dot products
+			const double G_AAA = GradDot3(AAA, Xf, Yf, Zf);
+			const double G_BAA = GradDot3(BAA, Xf - 1.0, Yf, Zf);
+			const double G_ABA = GradDot3(ABA, Xf, Yf - 1.0, Zf);
+			const double G_BBA = GradDot3(BBA, Xf - 1.0, Yf - 1.0, Zf);
+			const double G_AAB = GradDot3(AAB, Xf, Yf, Zf - 1.0);
+			const double G_BAB = GradDot3(BAB, Xf - 1.0, Yf, Zf - 1.0);
+			const double G_ABB = GradDot3(ABB, Xf, Yf - 1.0, Zf - 1.0);
+			const double G_BBB = GradDot3(BBB, Xf - 1.0, Yf - 1.0, Zf - 1.0);
+
+			// Trilinear interpolation
+			const double X00 = Lerp(G_AAA, G_BAA, U);
+			const double X10 = Lerp(G_ABA, G_BBA, U);
+			const double X01 = Lerp(G_AAB, G_BAB, U);
+			const double X11 = Lerp(G_ABB, G_BBB, U);
+
+			const double XY0 = Lerp(X00, X10, V);
+			const double XY1 = Lerp(X01, X11, V);
+
+			return Lerp(XY0, XY1, W);
 		}
 	}
 }

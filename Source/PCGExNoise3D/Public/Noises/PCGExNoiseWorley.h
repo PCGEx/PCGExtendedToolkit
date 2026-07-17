@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -66,10 +66,15 @@ public:
 
 	virtual ~FPCGExNoiseWorley() override = default;
 
+	virtual void PostInitDerived() override;
+
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 
 private:
+	/** Approximate normalization for the configured distance function, precomputed in PostInitDerived */
+	double MaxDist = 1.0;
+
 	FORCEINLINE double CalcDistance(const FVector& A, const FVector& B) const
 	{
 		switch (DistanceFunction)
@@ -99,7 +104,7 @@ public:
 	UPROPERTY()
 	FPCGExNoiseConfigWorley Config;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const override;
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const override;
 	PCGEX_NOISE3D_FACTORY_BOILERPLATE
 };
 

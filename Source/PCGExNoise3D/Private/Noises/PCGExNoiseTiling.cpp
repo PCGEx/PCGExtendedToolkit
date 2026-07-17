@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Noises/PCGExNoiseTiling.h"
@@ -21,15 +21,22 @@ double FPCGExNoiseTiling::GenerateRaw(const FVector& Position) const
 	const double V = SmoothStep(Yf);
 	const double W = SmoothStep(Zf);
 
-	// Hash with periodic wrapping
-	const int32 AAA = HashPeriodic(X0, Y0, Z0, PeriodX, PeriodY, PeriodZ);
-	const int32 ABA = HashPeriodic(X0, Y0 + 1, Z0, PeriodX, PeriodY, PeriodZ);
-	const int32 AAB = HashPeriodic(X0, Y0, Z0 + 1, PeriodX, PeriodY, PeriodZ);
-	const int32 ABB = HashPeriodic(X0, Y0 + 1, Z0 + 1, PeriodX, PeriodY, PeriodZ);
-	const int32 BAA = HashPeriodic(X0 + 1, Y0, Z0, PeriodX, PeriodY, PeriodZ);
-	const int32 BBA = HashPeriodic(X0 + 1, Y0 + 1, Z0, PeriodX, PeriodY, PeriodZ);
-	const int32 BAB = HashPeriodic(X0 + 1, Y0, Z0 + 1, PeriodX, PeriodY, PeriodZ);
-	const int32 BBB = HashPeriodic(X0 + 1, Y0 + 1, Z0 + 1, PeriodX, PeriodY, PeriodZ);
+	// Periodic wrapping: one modulo per axis, +1 corners wrap incrementally
+	const int32 MX0 = Mod(X0 + Seed, PeriodX);
+	const int32 MY0 = Mod(Y0, PeriodY);
+	const int32 MZ0 = Mod(Z0, PeriodZ);
+	const int32 MX1 = MX0 + 1 == PeriodX ? 0 : MX0 + 1;
+	const int32 MY1 = MY0 + 1 == PeriodY ? 0 : MY0 + 1;
+	const int32 MZ1 = MZ0 + 1 == PeriodZ ? 0 : MZ0 + 1;
+
+	const int32 AAA = Hash3D(MX0, MY0, MZ0);
+	const int32 ABA = Hash3D(MX0, MY1, MZ0);
+	const int32 AAB = Hash3D(MX0, MY0, MZ1);
+	const int32 ABB = Hash3D(MX0, MY1, MZ1);
+	const int32 BAA = Hash3D(MX1, MY0, MZ0);
+	const int32 BBA = Hash3D(MX1, MY1, MZ0);
+	const int32 BAB = Hash3D(MX1, MY0, MZ1);
+	const int32 BBB = Hash3D(MX1, MY1, MZ1);
 
 	// Gradient dot products
 	const double G_AAA = GradDot3(AAA, Xf, Yf, Zf);
@@ -65,7 +72,6 @@ double FPCGExNoiseTiling::GetDouble(const FVector& Position) const
 	double Sum = 0.0;
 	double Amp = 1.0;
 	double Freq = Frequency;
-	const double Bounding = CalcFractalBounding(Octaves, Persistence);
 
 	for (int32 i = 0; i < Octaves; ++i)
 	{
@@ -74,10 +80,10 @@ double FPCGExNoiseTiling::GetDouble(const FVector& Position) const
 		Freq *= Lacunarity;
 	}
 
-	return ApplyRemap(Sum * Bounding * 0.5 + 0.5);
+	return ApplyRemap(Sum * FractalBounding * 0.5 + 0.5);
 }
 
-TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryTiling::CreateOperation(FPCGExContext* InContext) const
+TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryTiling::CreateOperationInternal(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NoiseTiling)
 	PCGEX_FORWARD_NOISE3D_CONFIG

@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -56,13 +56,22 @@ public:
 	virtual FVector GetVector(const FVector& Position) const override;
 	virtual FVector4 GetVector4(const FVector& Position) const override;
 
-protected:
-	virtual double GenerateRaw(const FVector& Position) const override;
+	virtual void PostInitDerived() override;
 
 private:
-	double BaseNoise(const FVector& Position) const;
+	/** Precomputed in PostInitDerived */
+	double InvE2 = 500.0;
+
 	FVector GetPotentialField(const FVector& Position) const;
 	FVector ComputeCurl(const FVector& Position) const;
+
+	/** Single-component curl paths; must produce the exact same values as the matching ComputeCurl component */
+	double ComputeCurlX(const FVector& Position) const;
+	double ComputeCurlY(const FVector& Position) const;
+
+	/** Octave accumulation shared by all output arities */
+	template <typename ValueType, typename ComputeFn>
+	ValueType AccumulateOctaves(const FVector& Position, ComputeFn&& Compute) const;
 };
 
 ////
@@ -76,7 +85,7 @@ public:
 	UPROPERTY()
 	FPCGExNoiseConfigCurl Config;
 
-	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperation(FPCGExContext* InContext) const override;
+	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const override;
 	PCGEX_NOISE3D_FACTORY_BOILERPLATE
 };
 
