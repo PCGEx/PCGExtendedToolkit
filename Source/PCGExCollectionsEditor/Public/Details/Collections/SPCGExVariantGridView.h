@@ -50,6 +50,14 @@ struct FPCGExVariantGridItem
 	FSoftObjectPath OverrideThumbPath;
 	FText Label;
 
+	// Effective grammar symbols, snapshotted by RebuildItems (NAME_None = no symbol to show).
+	// Source resolves against the source host, override against the variant host — the latter
+	// is exactly what runtime consumers see after a swap.
+	FName SourceSymbol = NAME_None;
+	FLinearColor SourceSymbolColor = FLinearColor::White;
+	FName OverrideSymbol = NAME_None;
+	FLinearColor OverrideSymbolColor = FLinearColor::White;
+
 	EPCGExVariantTileState GetState() const
 	{
 		if (bIsRuleDefinition) { return EPCGExVariantTileState::RuleDefinition; }
@@ -114,6 +122,9 @@ private:
 
 	/** Pooled, cache-backed thumbnail widget for an arbitrary asset path (0-size path → placeholder text). */
 	TSharedRef<SWidget> MakeThumbnail(const FSoftObjectPath& AssetPath, float InSize) const;
+
+	/** Grammar symbol badge, styled like the regular collection editor's (DebugColor background). */
+	TSharedRef<SWidget> MakeSymbolBadge(FName Symbol, const FLinearColor& Color, const FText& Tooltip) const;
 };
 
 /**

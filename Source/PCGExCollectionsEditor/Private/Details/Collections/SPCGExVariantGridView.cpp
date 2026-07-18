@@ -18,6 +18,7 @@
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExAssetCollectionTypes.h"
+#include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/SPCGExCollectionCategoryGroup.h"
 #include "Helpers/PCGExStreamingHelpers.h"
@@ -93,7 +94,11 @@ void SPCGExVariantGridTile::UpdateItem(const FPCGExVariantGridItem& InItem)
 		Item.GetState() != InItem.GetState()
 		|| Item.SourceThumbPath != InItem.SourceThumbPath
 		|| Item.OverrideThumbPath != InItem.OverrideThumbPath
-		|| !Item.Label.EqualTo(InItem.Label);
+		|| !Item.Label.EqualTo(InItem.Label)
+		|| Item.SourceSymbol != InItem.SourceSymbol
+		|| Item.OverrideSymbol != InItem.OverrideSymbol
+		|| Item.SourceSymbolColor != InItem.SourceSymbolColor
+		|| Item.OverrideSymbolColor != InItem.OverrideSymbolColor;
 
 	Item = InItem;
 
@@ -255,6 +260,86 @@ void SPCGExVariantGridTile::RebuildContent()
 		]
 	];
 
+	// Grammar symbol badges (bottom-right, above the label bar) — same visibility rule as the
+	// regular collection editor: hidden when the resolved symbol is None. Swapped tiles show the
+	// payload's effective symbol; a payload without one displays the source's symbol instead
+	// (DISPLAY-ONLY inheritance — runtime resolves the payload grammar as-is). When both are set
+	// and differ, source stacks above variant, matching the tile's before/after language.
+	FName PrimarySymbol = NAME_None;
+	FLinearColor PrimaryColor = FLinearColor::White;
+	FName SecondarySymbol = NAME_None; // the "before" symbol when both show
+	FLinearColor SecondaryColor = FLinearColor::White;
+	bool bInheritedDisplay = false;
+
+	if (State == EPCGExVariantTileState::PassThrough)
+	{
+		PrimarySymbol = Item.SourceSymbol;
+		PrimaryColor = Item.SourceSymbolColor;
+	}
+	else if (State == EPCGExVariantTileState::Swapped || State == EPCGExVariantTileState::SwappedByRule)
+	{
+		if (Item.OverrideSymbol.IsNone())
+		{
+			PrimarySymbol = Item.SourceSymbol;
+			PrimaryColor = Item.SourceSymbolColor;
+			bInheritedDisplay = !Item.SourceSymbol.IsNone();
+		}
+		else
+		{
+			PrimarySymbol = Item.OverrideSymbol;
+			PrimaryColor = Item.OverrideSymbolColor;
+			if (!Item.SourceSymbol.IsNone() && Item.SourceSymbol != Item.OverrideSymbol)
+			{
+				SecondarySymbol = Item.SourceSymbol;
+				SecondaryColor = Item.SourceSymbolColor;
+			}
+		}
+	}
+
+	if (!PrimarySymbol.IsNone())
+	{
+		// Stacked source-over-variant (before above, after below) — long symbols truncate
+		// when inlined side by side, and stacking needs no separator glyph.
+		const TSharedRef<SVerticalBox> SymbolStack = SNew(SVerticalBox);
+
+		if (!SecondarySymbol.IsNone())
+		{
+			SymbolStack->AddSlot()
+			           .AutoHeight()
+			           .HAlign(HAlign_Right)
+			           .Padding(0.f, 0.f, 0.f, 2.f)
+			[
+				MakeSymbolBadge(SecondarySymbol, SecondaryColor, LOCTEXT("SourceSymbolTooltip", "Source entry symbol"))
+			];
+		}
+
+		SymbolStack->AddSlot()
+		           .AutoHeight()
+		           .HAlign(HAlign_Right)
+		[
+			MakeSymbolBadge(
+				PrimarySymbol, PrimaryColor,
+				bInheritedDisplay
+					? LOCTEXT("InheritedSymbolTooltip", "Symbol inherited from the source entry (the swap payload defines none)")
+					: SecondarySymbol.IsNone()
+					? FText::GetEmpty()
+					: LOCTEXT("VariantSymbolTooltip", "Variant override symbol"))
+		];
+
+		Overlay->AddSlot()
+		.HAlign(HAlign_Right)
+		.VAlign(VAlign_Bottom)
+		.Padding(FMargin(3.f, 0.f, 3.f, 22.f)) // bottom clearance for the label bar
+		[
+			SNew(SBox)
+			.MaxDesiredWidth(TileSize - 6.f)
+			.Clipping(EWidgetClipping::ClipToBounds)
+			[
+				SymbolStack
+			]
+		];
+	}
+
 	RootBorder->SetContent(Overlay);
 }
 
@@ -305,6 +390,24 @@ TSharedRef<SWidget> SPCGExVariantGridTile::MakeThumbnail(const FSoftObjectPath& 
 	FAssetThumbnailConfig ThumbnailConfig;
 	ThumbnailConfig.bAllowFadeIn = false;
 	return Thumbnail->MakeThumbnailWidget(ThumbnailConfig);
+}
+
+TSharedRef<SWidget> SPCGExVariantGridTile::MakeSymbolBadge(const FName Symbol, const FLinearColor& Color, const FText& Tooltip) const
+{
+	FLinearColor Bg = Color;
+	Bg.A = 0.85f;
+
+	return SNew(SBorder)
+		.BorderImage(PCGExCollectionEditorSlateUtils::GetBadgeBrush())
+		.BorderBackgroundColor(FSlateColor(Bg))
+		.Padding(FMargin(3, 1))
+		.ToolTipText(Tooltip)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromName(Symbol))
+			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 8))
+			.ColorAndOpacity(PCGExCollectionEditorSlateUtils::PickReadableTextColor(Color))
+		];
 }
 
 #pragma endregion
@@ -533,6 +636,12 @@ void SPCGExVariantGridView::RebuildItems()
 			NewItem.SourceThumbPath = Entry->EDITOR_GetThumbnailAssetPath();
 			NewItem.Label = FText::FromString(NewItem.SourceThumbPath.GetAssetName());
 
+			if (const FPCGExAssetGrammarDetails* Grammar = Entry->GetEffectiveGrammar(Src))
+			{
+				NewItem.SourceSymbol = Grammar->Symbol;
+				NewItem.SourceSymbolColor = Grammar->DebugColor;
+			}
+
 			if (const int32* Row = IdToRow.Find(Entry->EntryId))
 			{
 				NewItem.OverrideRowIdx = *Row;
@@ -540,6 +649,11 @@ void SPCGExVariantGridView::RebuildItems()
 				if (const FPCGExAssetCollectionEntry* Payload = Group.Overrides[*Row].Entry.GetPtr<FPCGExAssetCollectionEntry>())
 				{
 					NewItem.OverrideThumbPath = Payload->EDITOR_GetThumbnailAssetPath();
+					if (const FPCGExAssetGrammarDetails* Grammar = Payload->GetEffectiveGrammar(Variant))
+					{
+						NewItem.OverrideSymbol = Grammar->Symbol;
+						NewItem.OverrideSymbolColor = Grammar->DebugColor;
+					}
 				}
 			}
 			else if (!Entry->bIsSubCollection)
@@ -551,6 +665,11 @@ void SPCGExVariantGridView::RebuildItems()
 					if (const FPCGExAssetCollectionEntry* Payload = Variant->PathOverrides[*Rule].Entry.GetPtr<FPCGExAssetCollectionEntry>())
 					{
 						NewItem.OverrideThumbPath = Payload->EDITOR_GetThumbnailAssetPath();
+						if (const FPCGExAssetGrammarDetails* Grammar = Payload->GetEffectiveGrammar(Variant))
+						{
+							NewItem.OverrideSymbol = Grammar->Symbol;
+							NewItem.OverrideSymbolColor = Grammar->DebugColor;
+						}
 					}
 				}
 			}
