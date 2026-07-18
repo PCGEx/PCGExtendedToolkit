@@ -403,7 +403,7 @@ void FPCGExPCGDataAssetLoaderContext::RegisterNonSpatialData(const FPCGTaggedDat
 
 void UPCGExPCGDataAssetLoaderSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from staging nodes.", Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from staging nodes.", Required)
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 

@@ -16,7 +16,7 @@ PCGEX_INITIALIZE_ELEMENT(SocketStaging)
 void UPCGExSocketStagingSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(SocketStaging)
