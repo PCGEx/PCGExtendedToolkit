@@ -86,7 +86,7 @@ void UPCGExAssetStagingSettings::PostEditChangeProperty(struct FPropertyChangedE
 
 TOptional<FPCGNodeThumbnailProxy> UPCGExAssetStagingSettings::GetNodeThumbnail() const
 {
-	if (SourceCollection.Input == EPCGExInputValueType::Constant && SourceCollection.Constant.IsValid())
+	if (SourceMode == EPCGExDistributeSourceMode::Default && SourceCollection.Input == EPCGExInputValueType::Constant && SourceCollection.Constant.IsValid())
 	{
 		return FPCGNodeThumbnailProxy::FromAssetPath(SourceCollection.Constant);
 	}
@@ -106,7 +106,9 @@ bool UPCGExAssetStagingSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) 
 
 bool UPCGExAssetStagingSettings::WantsDataStealing() const
 {
-	return Super::WantsDataStealing() && !bPruneEmptyPoints;
+	// CollectionMap source mode never prunes (unresolvable points pass through untouched),
+	// so pruning doesn't disqualify stealing there.
+	return Super::WantsDataStealing() && (!bPruneEmptyPoints || SourceMode == EPCGExDistributeSourceMode::CollectionMap);
 }
 
 PCGExData::EIOInit UPCGExAssetStagingSettings::GetMainDataInitializationPolicy() const
@@ -120,6 +122,11 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(AssetStaging)
 
 void UPCGExAssetStagingSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
+	if (SourceMode == EPCGExDistributeSourceMode::CollectionMap)
+	{
+		PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
+	}
+
 	if (SelectorMode != EPCGExSelectorMode::Legacy)
 	{
 		PCGEX_PIN_FACTORY(PCGExCollections::Labels::SourceSelectorLabel, "External selector factory driving entry picks.", Required, FPCGExDataTypeInfoSelector::AsId())
@@ -169,6 +176,17 @@ void FPCGExAssetStagingContext::RegisterAssetDependencies()
 
 #pragma region FPCGExAssetStagingElement
 
+bool FPCGExAssetStagingElement::CanExecuteOnlyOnMainThread(FPCGContext* Context) const
+{
+	if (!Context)
+	{
+		return false;
+	}
+
+	return Context->CurrentPhase == EPCGExecutionPhase::PrepareData
+		&& Context->GetInputSettings<UPCGExAssetStagingSettings>()->SourceMode == EPCGExDistributeSourceMode::CollectionMap;
+}
+
 bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 {
 	PCGEX_CONTEXT_AND_SETTINGS(AssetStaging)
@@ -217,7 +235,67 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 		return Context->CancelExecution("Invalid Asset Selector");
 	}
 
-	if (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute)
+	if (Settings->SourceMode == EPCGExDistributeSourceMode::CollectionMap)
+	{
+		// Collection Map mode: no asset/attribute loading. Rebuild the upstream collections from the
+		// map pin, then index every sub-collection entry so points staged on one can be redistributed.
+		Context->CollectionPickUnpacker = MakeShared<PCGExCollections::FPickUnpacker>();
+		Context->CollectionPickUnpacker->UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
+
+		if (!Context->CollectionPickUnpacker->HasValidMapping())
+		{
+			PCGE_LOG(Error, GraphAndLog, FTEXT("Could not rebuild a valid asset mapping from the provided map."));
+			return false;
+		}
+
+		for (const TPair<uint32, UPCGExAssetCollection*>& Pair : Context->CollectionPickUnpacker->GetCollections())
+		{
+			UPCGExAssetCollection* Host = Pair.Value;
+			if (!Host)
+			{
+				continue;
+			}
+
+			const uint32 HostGUID = Host->GetCollectionGUID();
+			Host->ForEachEntry(
+				[&](FPCGExAssetCollectionEntry* Entry, const int32 EntryIndex)
+				{
+					if (!Entry->HasValidSubCollection())
+					{
+						return;
+					}
+
+					UPCGExAssetCollection* SubCollection = Entry->GetSubCollection<UPCGExAssetCollection>();
+					const uint32 SubGUID = SubCollection->GetCollectionGUID();
+
+					// GUID 0 is indistinguishable from the "not redistributable" routing key (and packs
+					// degenerate pick hashes framework-wide). Pathological but possible -- skip loudly.
+					if (SubGUID == 0)
+					{
+						PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("A sub-collection has a degenerate GUID (0) and was skipped -- re-save the collection asset to regenerate it."));
+						return;
+					}
+
+					// First sighting only: RegisterTrackingKeys walks the whole sub-collection subtree,
+					// so a sub-collection shared by many entries must not be re-walked per entry.
+					if (!Context->SubCollectionSources.Contains(SubGUID))
+					{
+						SubCollection->EDITOR_RegisterTrackingKeys(Context);
+						Context->SubCollectionSources.Add(SubGUID, SubCollection);
+					}
+
+					// Truncation mirrors PickHash::Pack -- staged hashes only carry 16-bit raw indices,
+					// so the lookup side must key on the same truncated value.
+					Context->EntryToSubCollectionKey.Add(PCGExCollections::PickHash::MakeEntryKey(HostGUID, static_cast<uint16>(EntryIndex)), SubGUID);
+				});
+		}
+
+		if (Context->SubCollectionSources.IsEmpty() && !Settings->bQuietEmptyCollectionError)
+		{
+			PCGE_LOG(Warning, GraphAndLog, FTEXT("The provided Collection Map contains no sub-collection entries -- all points will be passed through untouched."));
+		}
+	}
+	else if (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute)
 	{
 		// Per-point / @Data mode: discover now (the loader is @Data/per-point aware); the framework loads the
 		// collections before processing.
@@ -285,6 +363,13 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 	if (Context->OutputMode == EPCGExStagingOutputMode::CollectionMap)
 	{
 		Context->CollectionPickDatasetPacker = MakeShared<PCGExCollections::FPickPacker>(Context);
+
+		// Collection Map source mode: the output map is a superset of the input map (same pattern
+		// as Staging : Swap) -- pass-through pick hashes must stay resolvable downstream.
+		if (Context->CollectionPickUnpacker)
+		{
+			Context->CollectionPickUnpacker->RegisterCollectionsTo(*Context->CollectionPickDatasetPacker);
+		}
 	}
 
 	Context->SelectorSharedDataCache = MakeShared<PCGExCollections::FSelectorSharedDataCache>();
@@ -311,7 +396,11 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 FString UPCGExAssetStagingSettings::GetDisplayName() const
 {
 	FString DisplayName;
-	if (SourceCollection.Input == EPCGExInputValueType::Attribute)
+	if (SourceMode == EPCGExDistributeSourceMode::CollectionMap)
+	{
+		DisplayName = TEXT("Collection Map");
+	}
+	else if (SourceCollection.Input == EPCGExInputValueType::Attribute)
 	{
 		DisplayName = SourceCollection.Attribute.ToString();
 	}
@@ -328,7 +417,11 @@ bool FPCGExAssetStagingElement::PostBoot(FPCGExContext* InContext) const
 {
 	PCGEX_CONTEXT_AND_SETTINGS(AssetStaging)
 
-	if (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute)
+	if (Settings->SourceMode == EPCGExDistributeSourceMode::CollectionMap)
+	{
+		// Nothing to validate: an empty sub-collection set means full pass-through (warned in Boot).
+	}
+	else if (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute)
 	{
 		if (Context->CollectionsLoader && Context->CollectionsLoader->IsEmpty())
 		{
@@ -360,7 +453,8 @@ bool FPCGExAssetStagingElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		const bool bAttributeMode = (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute);
+		const bool bMapMode = (Settings->SourceMode == EPCGExDistributeSourceMode::CollectionMap);
+		const bool bAttributeMode = !bMapMode && (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute);
 
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
@@ -369,7 +463,9 @@ bool FPCGExAssetStagingElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				if (bAttributeMode)
+				// Map mode mirrors attribute mode: mapped per-point sources, and pruning never
+				// applies (nothing fails), so no batch-level write step either.
+				if (bAttributeMode || bMapMode)
 				{
 					NewBatch->bSkipCompletion = true;
 				}
@@ -424,8 +520,55 @@ namespace PCGExAssetStaging
 
 		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
+		const bool bMapMode = (Settings->SourceMode == EPCGExDistributeSourceMode::CollectionMap);
+
 		bApplyFitting = Settings->bApplyFitting;
+		bPruneEnabled = Settings->bPruneEmptyPoints && !bMapMode;
 		NumPoints = PointDataFacade->GetNum();
+
+		if (bMapMode)
+		{
+			// Redistribute mode: derive per-point routing keys from the staged pick hashes before any
+			// writer/buffer allocation -- inputs with nothing redistributable pass through untouched.
+			if (Context->SubCollectionSources.IsEmpty())
+			{
+				return true; // Warned in Boot.
+			}
+
+			// Full (unscoped) read: keys must cover the whole range before the parallel loop starts.
+			const TSharedPtr<PCGExData::TBuffer<int64>> HashReader = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, false);
+			if (!HashReader)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("An input has no staged entry attribute and was passed through untouched."));
+				return true;
+			}
+
+			// Lazily allocated on the first redistributable pick -- pass-through inputs skip the
+			// full-size key array entirely.
+			for (int32 i = 0; i < NumPoints; i++)
+			{
+				const uint64 Hash = static_cast<uint64>(HashReader->Read(i));
+				if (Hash == 0)
+				{
+					continue;
+				}
+
+				if (const PCGExValueHash* SubKey = Context->EntryToSubCollectionKey.Find(PCGExCollections::PickHash::GetEntryKey(Hash)))
+				{
+					if (!SourceKeys)
+					{
+						SourceKeys = MakeShared<TArray<PCGExValueHash>>();
+						SourceKeys->Init(0, NumPoints);
+					}
+					(*SourceKeys)[i] = *SubKey;
+				}
+			}
+
+			if (!SourceKeys)
+			{
+				return true; // No sub-collection picks on this input -- pass through.
+			}
+		}
 
 		if (Context->bPickMaterials)
 		{
@@ -459,7 +602,15 @@ namespace PCGExAssetStaging
 		Source->EntryDistributionSettings = Settings->EntryDistributionSettings;
 		Source->SetSharedDataCache(Context->SelectorSharedDataCache);
 
-		if (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute)
+		if (bMapMode)
+		{
+			if (!Source->Init(Context->SubCollectionSources, SourceKeys, Context->SelectorFactory))
+			{
+				// Every reachable sub-collection failed to init (e.g. all empty) -- pass through untouched.
+				return true;
+			}
+		}
+		else if (Settings->SourceCollection.Input == EPCGExInputValueType::Attribute)
 		{
 			if (!Source->Init(Context->CollectionsLoader->AssetsMap, Context->CollectionsLoader->GetKeys(PointDataFacade->Source->IOIndex), Context->SelectorFactory))
 			{
@@ -483,13 +634,17 @@ namespace PCGExAssetStaging
 		bNormalizedWeight = Settings->WeightToAttribute != EPCGExWeightOutputMode::Raw;
 		bOneMinusWeight = Settings->WeightToAttribute == EPCGExWeightOutputMode::NormalizedInverted || Settings->WeightToAttribute == EPCGExWeightOutputMode::NormalizedInvertedToDensity;
 
+		// Map mode inherits so pass-through points keep their upstream weight instead of being
+		// zeroed by a New buffer (untouched-pass-through contract).
+		const PCGExData::EBufferInit UntouchedSafeInit = bMapMode ? PCGExData::EBufferInit::Inherit : PCGExData::EBufferInit::New;
+
 		if (Settings->WeightToAttribute == EPCGExWeightOutputMode::Raw)
 		{
-			WeightWriter = PointDataFacade->GetWritable<int32>(Settings->WeightAttributeName, PCGExData::EBufferInit::New);
+			WeightWriter = PointDataFacade->GetWritable<int32>(Settings->WeightAttributeName, UntouchedSafeInit);
 		}
 		else if (Settings->WeightToAttribute == EPCGExWeightOutputMode::Normalized)
 		{
-			NormalizedWeightWriter = PointDataFacade->GetWritable<double>(Settings->WeightAttributeName, PCGExData::EBufferInit::New);
+			NormalizedWeightWriter = PointDataFacade->GetWritable<double>(Settings->WeightAttributeName, UntouchedSafeInit);
 		}
 
 		if (Settings->bWriteEntryType)
@@ -497,15 +652,17 @@ namespace PCGExAssetStaging
 			EntryTypeWriter = PointDataFacade->GetWritable<FName>(Settings->EntryTypeAttributeName, NAME_None, true, PCGExData::EBufferInit::Inherit);
 		}
 
-		// bInherit: if the attribute already exists, preserve values for invalid points instead of clearing them
+		// bInherit: if the attribute already exists, preserve values for invalid points instead of clearing them.
+		// In CollectionMap source mode this is unconditional: points that don't resolve to a sub-collection
+		// pick are passed through untouched, never invalidated (no sentinel, no pruning).
 		if (Context->OutputMode == EPCGExStagingOutputMode::Attributes)
 		{
-			bInherit = PointDataFacade->GetIn()->Metadata->HasAttribute(Settings->AssetPathAttributeName);
+			bInherit = bMapMode || PointDataFacade->GetIn()->Metadata->HasAttribute(Settings->AssetPathAttributeName);
 			PathWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->AssetPathAttributeName, bInherit ? PCGExData::EBufferInit::Inherit : PCGExData::EBufferInit::New);
 		}
 		else
 		{
-			bInherit = PointDataFacade->GetIn()->Metadata->HasAttribute(PCGExCollections::Labels::Tag_EntryIdx);
+			bInherit = bMapMode || PointDataFacade->GetIn()->Metadata->HasAttribute(PCGExCollections::Labels::Tag_EntryIdx);
 			HashWriter = PointDataFacade->GetWritable<int64>(PCGExCollections::Labels::Tag_EntryIdx, bInherit ? PCGExData::EBufferInit::Inherit : PCGExData::EBufferInit::New);
 		}
 
@@ -527,7 +684,7 @@ namespace PCGExAssetStaging
 
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
-		if (Settings->bPruneEmptyPoints)
+		if (bPruneEnabled)
 		{
 			Mask.Init(1, PointDataFacade->GetNum());
 		}
@@ -645,7 +802,7 @@ namespace PCGExAssetStaging
 
 			// Keep existing values from upstream staging
 
-			if (Settings->bPruneEmptyPoints)
+			if (bPruneEnabled)
 			{
 				Mask[Index] = 0;
 				LocalNumInvalid++;
@@ -859,10 +1016,14 @@ namespace PCGExAssetStaging
 			{
 				MaterialWriters.Init(nullptr, WriterCount);
 
+				// Map mode inherits so pass-through points keep upstream material picks instead of
+				// being cleared by a New buffer (untouched-pass-through contract).
+				const PCGExData::EBufferInit MaterialInit = Settings->SourceMode == EPCGExDistributeSourceMode::CollectionMap ? PCGExData::EBufferInit::Inherit : PCGExData::EBufferInit::New;
+
 				for (int i = 0; i < WriterCount; i++)
 				{
 					const FName AttributeName = FName(FString::Printf(TEXT("%s_%d"), *Settings->MaterialAttributePrefix.ToString(), i));
-					MaterialWriters[i] = PointDataFacade->GetWritable<FSoftObjectPath>(AttributeName, FSoftObjectPath(), true, PCGExData::EBufferInit::New);
+					MaterialWriters[i] = PointDataFacade->GetWritable<FSoftObjectPath>(AttributeName, FSoftObjectPath(), true, MaterialInit);
 				}
 
 				// Second parallel pass to write material picks (separate from main loop for buffer allocation)
@@ -890,7 +1051,7 @@ namespace PCGExAssetStaging
 		{
 			const int32 Pick = MaterialPick[Index];
 
-			if (Pick == -1 || (Settings->bPruneEmptyPoints && !Mask[Index]))
+			if (Pick == -1 || (bPruneEnabled && !Mask[Index]))
 			{
 				continue;
 			}
@@ -956,7 +1117,7 @@ namespace PCGExAssetStaging
 
 	void FProcessor::Write()
 	{
-		if (Settings->bPruneEmptyPoints)
+		if (bPruneEnabled)
 		{
 			// Release Source before Gather since Gather will invalidate indices it references
 			Source.Reset();

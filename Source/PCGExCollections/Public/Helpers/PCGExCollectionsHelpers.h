@@ -382,6 +382,23 @@ namespace PCGExCollections
 		{
 			return static_cast<int16>(PCGEx::H32B(PCGEx::H64B(InHash))) - 1;
 		}
+
+		/**
+		 * Collection+entry identity key with the secondary pick stripped: H64(CollectionGUID, RawEntryIndex).
+		 * The canonical key for per-entry maps matched against staged picks (Swap contributions,
+		 * Distribute sub-collection routing). The uint16 parameter enforces the 16-bit raw-index
+		 * contract at build sites -- callers with wider indices must truncate explicitly, mirroring Pack().
+		 */
+		FORCEINLINE uint64 MakeEntryKey(const uint32 InCollectionGUID, const uint16 InRawEntryIndex)
+		{
+			return PCGEx::H64(InCollectionGUID, InRawEntryIndex);
+		}
+
+		/** Entry identity key of a packed pick hash -- see MakeEntryKey. */
+		FORCEINLINE uint64 GetEntryKey(const uint64 InHash)
+		{
+			return MakeEntryKey(GetCollectionGUID(InHash), GetRawEntryIndex(InHash));
+		}
 	}
 
 	class PCGEXCOLLECTIONS_API FPickPacker : public TSharedFromThis<FPickPacker>
@@ -465,6 +482,14 @@ namespace PCGExCollections
 		{
 			return CollectionMap;
 		}
+
+		/**
+		 * Register every unpacked collection into the given packer. Consumers that emit a superset
+		 * output map (pass-through pick hashes must stay resolvable downstream -- e.g. Staging : Swap,
+		 * Staging : Distribute in CollectionMap mode) call this once after UnpackPin, before adding
+		 * their own contributions.
+		 */
+		void RegisterCollectionsTo(FPickPacker& InPacker) const;
 
 		/** Unpack collection mappings from an attribute set */
 		bool UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet);

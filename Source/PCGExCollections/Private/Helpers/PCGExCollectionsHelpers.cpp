@@ -537,6 +537,17 @@ namespace PCGExCollections
 		return true;
 	}
 
+	void FPickUnpacker::RegisterCollectionsTo(FPickPacker& InPacker) const
+	{
+		for (const TPair<uint32, UPCGExAssetCollection*>& Pair : CollectionMap)
+		{
+			if (Pair.Value)
+			{
+				InPacker.RegisterCollection(Pair.Value);
+			}
+		}
+	}
+
 	void FPickUnpacker::UnpackPin(FPCGContext* InContext, const FName InPinLabel)
 	{
 		for (TArray<FPCGTaggedData> Params = InContext->InputData.GetParamsByPin(InPinLabel.IsNone() ? Labels::SourceCollectionMapLabel : InPinLabel);
