@@ -98,7 +98,7 @@ TArray<FPCGPinProperties> UPCGExGetCollectionDataSettings::InputPinProperties() 
 		PCGEX_PIN_ANY(PCGExGetCollectionData::SourcesPin, TEXT("Input attribute sets and/or point data providing collection references."), Required)
 		if (SourceShape == EPCGExGetCollectionDataSourceShape::EntryIdAndMap)
 		{
-			PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, TEXT("Upstream Collection Map used to resolve entry hashes back to sub-collection entries."), Required)
+			PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, TEXT("Upstream Collection Map used to resolve entry hashes back to sub-collection entries."), Required)
 		}
 	}
 	return PinProperties;

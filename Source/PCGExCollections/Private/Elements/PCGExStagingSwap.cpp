@@ -16,7 +16,7 @@
 
 void UPCGExStagingSwapSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 
@@ -93,13 +93,7 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 	// The output map is a superset of the input map: every original collection plus the
 	// variants that actually contribute mappings. Register originals up-front.
 	Context->CollectionPickDatasetPacker = MakeShared<PCGExCollections::FPickPacker>(Context);
-	for (const TPair<uint32, UPCGExAssetCollection*>& Pair : Context->CollectionPickUnpacker->GetCollections())
-	{
-		if (Pair.Value)
-		{
-			Context->CollectionPickDatasetPacker->RegisterCollection(Pair.Value);
-		}
-	}
+	Context->CollectionPickUnpacker->RegisterCollectionsTo(*Context->CollectionPickDatasetPacker);
 
 	// Classify slots: constant/@Data (CanSupportDataOnly) resolve one path per IO; a per-point,
 	// non-@Data attribute gets its own loader (one per slot keeps per-point keys isolated).
@@ -517,10 +511,7 @@ namespace PCGExStagingSwap
 					continue;
 				}
 
-				const uint32 CollectionGUID = PCGExCollections::PickHash::GetCollectionGUID(Hash);
-				const uint32 RawEntryIndex = PCGExCollections::PickHash::GetRawEntryIndex(Hash);
-
-				if (const uint64* NewHash = SwapMap->Find(PCGEx::H64(CollectionGUID, RawEntryIndex)))
+				if (const uint64* NewHash = SwapMap->Find(PCGExCollections::PickHash::GetEntryKey(Hash)))
 				{
 					HashWriter->SetValue(Index, static_cast<int64>(*NewHash));
 				}
@@ -543,7 +534,7 @@ namespace PCGExStagingSwap
 				continue;
 			}
 
-			const uint64 Key = PCGEx::H64(PCGExCollections::PickHash::GetCollectionGUID(Hash), PCGExCollections::PickHash::GetRawEntryIndex(Hash));
+			const uint64 Key = PCGExCollections::PickHash::GetEntryKey(Hash);
 
 			const uint64* NewHash = nullptr;
 			for (const FPCGExStagingSwapVariantLayer& Layer : *Layers)

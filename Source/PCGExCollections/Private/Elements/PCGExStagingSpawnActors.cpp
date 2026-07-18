@@ -32,7 +32,7 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(StagingSpawnActors)
 
 void UPCGExStagingSpawnActorsSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 
