@@ -4,11 +4,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "DetailLayoutBuilder.h"
 #include "Widgets/Text/STextBlock.h"
 
 namespace PCGExCollectionEditorSlateUtils
 {
+	/** Rounded badge brush shared by collection grid tiles. Function-local static: one brush
+	 *  per process, so SBorder can safely hold the pointer. White fill is intentional --
+	 *  per-badge BorderBackgroundColor applies a multiplicative tint. */
+	inline const FSlateBrush* GetBadgeBrush()
+	{
+		static const FSlateRoundedBoxBrush Brush(FLinearColor::White, 3.0f);
+		return &Brush;
+	}
+
 	inline TSharedRef<SWidget> MakeSmallLabel(const FString& Text)
 	{
 		return SNew(STextBlock)

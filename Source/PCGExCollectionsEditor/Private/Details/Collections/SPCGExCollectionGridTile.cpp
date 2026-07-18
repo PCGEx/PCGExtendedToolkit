@@ -20,7 +20,6 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Text/STextBlock.h"
-#include "Brushes/SlateRoundedBoxBrush.h"
 
 namespace PCGExCollectionGrid
 {
@@ -88,11 +87,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 	TWeakObjectPtr<UPCGExAssetCollection> WeakColl = Collection;
 	const int32 Idx = EntryIndex;
 
-	// Function-local static so the brush object is constructed once per process and
-	// shared across all tiles. White fill is intentional -- per-badge SBorder applies
-	// BorderBackgroundColor as a multiplicative tint, matching the prior Brushes.White
-	// behavior so radius is the only thing that changes.
-	static const FSlateRoundedBoxBrush BadgeBrush(FLinearColor::White, 3.0f);
+	// Shared with the variant grid tiles so badge styling stays in lockstep.
+	const FSlateBrush* BadgeBrush = PCGExCollectionEditorSlateUtils::GetBadgeBrush();
 
 	// Build picker widget via delegate (type-specific)
 	TSharedRef<SWidget> PickerWidget = SNullWidget::NullWidget;
@@ -493,7 +489,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 						.Padding(2.f)
 						[
 							SNew(SBorder)
-							.BorderImage(&BadgeBrush)
+							.BorderImage(BadgeBrush)
 							.BorderBackgroundColor(FLinearColor(0, 0, 0, 0.7f))
 							.Padding(FMargin(5, 2))
 							[
@@ -553,7 +549,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 										V.ScaleMin != FVector::OneVector || V.ScaleMax != FVector::OneVector;
 									return bHasVariations ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 								})
-								.BorderImage(&BadgeBrush)
+								.BorderImage(BadgeBrush)
 								.BorderBackgroundColor(FLinearColor(0.6f, 0.4f, 0.1f, 0.85f))
 								.Padding(FMargin(3, 1))
 								[
@@ -584,7 +580,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									}
 									return !Result.Entry->Staging.Sockets.IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 								})
-								.BorderImage(&BadgeBrush)
+								.BorderImage(BadgeBrush)
 								.BorderBackgroundColor(FLinearColor(0.1f, 0.5f, 0.6f, 0.85f))
 								.Padding(FMargin(3, 1))
 								[
@@ -628,7 +624,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									}
 									return !Result.Entry->Tags.IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 								})
-								.BorderImage(&BadgeBrush)
+								.BorderImage(BadgeBrush)
 								.BorderBackgroundColor(FLinearColor(0.4f, 0.2f, 0.6f, 0.85f))
 								.Padding(FMargin(3, 1))
 								[
@@ -659,7 +655,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									}
 									return Result.Entry->PropertyOverrides.GetEnabledCount() > 0 ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 								})
-								.BorderImage(&BadgeBrush)
+								.BorderImage(BadgeBrush)
 								.BorderBackgroundColor(FLinearColor(0.2f, 0.6f, 0.3f, 0.85f))
 								.Padding(FMargin(3, 1))
 								[
@@ -706,7 +702,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							.AutoHeight()
 							[
 								SNew(SBorder)
-								.BorderImage(&BadgeBrush)
+								.BorderImage(BadgeBrush)
 								.BorderBackgroundColor_Lambda([WeakColl, Idx]() -> FSlateColor
 								{
 									const UPCGExAssetCollection* Coll = WeakColl.Get();
