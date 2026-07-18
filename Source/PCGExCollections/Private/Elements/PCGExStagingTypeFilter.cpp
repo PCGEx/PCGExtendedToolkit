@@ -50,7 +50,7 @@ void UPCGExStagedTypeFilterSettings::PostEditChangeProperty(FPropertyChangedEven
 TArray<FPCGPinProperties> UPCGExStagedTypeFilterSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from staging nodes.", Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from staging nodes.", Required)
 	return PinProperties;
 }
 

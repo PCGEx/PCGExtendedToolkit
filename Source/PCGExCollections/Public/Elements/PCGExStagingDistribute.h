@@ -55,6 +55,13 @@ enum class EPCGExStagingOutputMode : uint8
 	CollectionMap = 1 UMETA(DisplayName = "Collection Map", ToolTip="Write collection reference & pick for later use"),
 };
 
+UENUM()
+enum class EPCGExDistributeSourceMode : uint8
+{
+	Default       = 0 UMETA(DisplayName = "Default", ToolTip="Read the collection to distribute from an asset reference or a per-point path attribute."),
+	CollectionMap = 1 UMETA(DisplayName = "Collection Map", ToolTip="Redistribute already-staged picks read from an upstream Collection Map: points whose picked entry is a sub-collection get a new pick from that sub-collection; all other points pass through untouched."),
+};
+
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(Keywords = "stage prepare spawn proxy", PCGExNodeLibraryDoc="staging/staging-distribute"))
 class UPCGExAssetStagingSettings : public UPCGExPointsProcessorSettings
 {
@@ -109,8 +116,15 @@ protected:
 	//~End UPCGSettings
 
 public:
+	/** Where the collection(s) to distribute from come from.
+	 * Default reads SourceCollection (asset reference or per-point path attribute).
+	 * Collection Map reads already-staged picks from an upstream Collection Map and redistributes
+	 * points whose picked entry is a sub-collection; all other points pass through untouched. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
+	EPCGExDistributeSourceMode SourceMode = EPCGExDistributeSourceMode::Default;
+
 	/** Asset collection to stage from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExAssetCollection"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExAssetCollection", EditCondition="SourceMode == EPCGExDistributeSourceMode::Default", EditConditionHides))
 	FPCGExInputShorthandNameSoftObjectPath SourceCollection;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
@@ -177,8 +191,9 @@ public:
 	FPCGExFittingVariationsDetails Variations;
 
 
-	//** If enabled, filter output based on whether a staging has been applied or not (empty entry).  Current implementation is slow. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(PCG_Overridable))
+	//** If enabled, filter output based on whether a staging has been applied or not (empty entry).  Current implementation is slow.
+	// Not applicable in Collection Map source mode, where unresolvable points always pass through untouched. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(PCG_Overridable, EditCondition="SourceMode != EPCGExDistributeSourceMode::CollectionMap"))
 	bool bPruneEmptyPoints = true;
 
 	/** Filter output based on the type of collection entry. */
@@ -258,6 +273,17 @@ struct FPCGExAssetStagingContext final : FPCGExPointsProcessorContext
 	TObjectPtr<UPCGExAssetCollection> MainCollection;
 	bool bPickMaterials = false;
 
+	/** CollectionMap source mode: rebuilt from the upstream Collection Map pin. Kept alive by its own asset handles. */
+	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
+
+	/** CollectionMap source mode: unique sub-collections reachable from unpacked entries, keyed by CollectionGUID.
+	 * Feeds the mapped FCollectionSource; the referenced assets are hard refs of the unpacked collections. */
+	TMap<PCGExValueHash, TObjectPtr<UPCGExAssetCollection>> SubCollectionSources;
+
+	/** CollectionMap source mode: H64(HostGUID, RawEntryIndex) -> sub-collection GUID. Built once in Boot;
+	 * per-point routing keys are pure lookups against this. */
+	TMap<uint64, PCGExValueHash> EntryToSubCollectionKey;
+
 	const UPCGExSelectorFactoryData* SelectorFactory = nullptr;
 
 	TSharedPtr<PCGExCollections::FPickPacker> CollectionPickDatasetPacker;
@@ -275,6 +301,11 @@ class FPCGExAssetStagingElement final : public FPCGExPointsProcessorElement
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(AssetStaging)
 
+	// CollectionMap source mode unpacks (and blocking-loads) the upstream map in Boot; the loader's
+	// miss path marshals to the game thread and requires game-thread affinity during PrepareData
+	// (see LoadAndCacheBlockingSet in PCGExStreamingHelpers.cpp). Gated on the mode so Default-mode
+	// nodes keep off-thread preparation -- same pattern as FPCGExStagingFittingElement.
+	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override;
 	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool PostBoot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
@@ -300,6 +331,9 @@ namespace PCGExAssetStaging
 		int32 NumInvalid = 0;
 
 		bool bInherit = false;
+		// Effective pruning: settings toggle, forced off in CollectionMap source mode where
+		// nothing ever fails (unresolvable points pass through untouched).
+		bool bPruneEnabled = false;
 		bool bOutputWeight = false;
 		bool bOneMinusWeight = false;
 		bool bNormalizedWeight = false;
@@ -311,6 +345,7 @@ namespace PCGExAssetStaging
 		FPCGExFittingDetailsHandler FittingHandler;
 		FPCGExFittingVariationsDetails Variations;
 
+		// CollectionMap source mode: per-point routing keys (sub-collection GUID, 0 = pass through).
 		TSharedPtr<TArray<PCGExValueHash>> SourceKeys;
 		TSharedPtr<PCGExCollections::FCollectionSource> Source;
 		TSharedPtr<PCGExCollections::FSocketHelper> SocketHelper;
