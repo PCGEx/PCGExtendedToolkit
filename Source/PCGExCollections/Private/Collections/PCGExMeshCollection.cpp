@@ -285,30 +285,38 @@ void FPCGExMeshCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 
 void FPCGExMeshCollectionEntry::ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection)
 {
-	const UPCGExMeshCollection* TypedCollection = Cast<UPCGExMeshCollection>(InSourceCollection);
-	if (!TypedCollection)
+	if (!InSourceCollection)
+	{
+		return;
+	}
+
+	FPCGExMeshCollectionGlobals Globals;
+	if (!InSourceCollection->GetTypeGlobals(Globals))
 	{
 		return;
 	}
 
 	// Mirror the effective-descriptor rule from InitPCGSoftISMDescriptor: Global source or
 	// collection-level Overrule means the collection's globals were what actually applied.
-	if (DescriptorSource == EPCGExEntryVariationMode::Global || TypedCollection->GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule)
+	if (DescriptorSource == EPCGExEntryVariationMode::Global || Globals.GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule)
 	{
-		ISMDescriptor = TypedCollection->GlobalISMDescriptor;
-		SMDescriptor = TypedCollection->GlobalSMDescriptor;
+		ISMDescriptor = Globals.GlobalISMDescriptor;
+		SMDescriptor = Globals.GlobalSMDescriptor;
 		ISMDescriptor.StaticMesh = StaticMesh; // globals don't carry the entry's asset
 		DescriptorSource = EPCGExEntryVariationMode::Local;
 	}
 }
 
-// Resolves descriptor inheritance: Global/Overrule → use collection-level descriptor,
-// Local → use entry-level ISMDescriptor. Always appends entry tags to component tags.
-void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExMeshCollection* ParentCollection, FPCGSoftISMComponentDescriptor& TargetDescriptor) const
+// Resolves descriptor inheritance: Global/Overrule → collection-level descriptor (via the
+// seam), Local → entry-level ISMDescriptor. Always appends entry tags to component tags.
+void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGSoftISMComponentDescriptor& TargetDescriptor) const
 {
-	if (ParentCollection && (DescriptorSource == EPCGExEntryVariationMode::Global || ParentCollection->GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule))
+	FPCGExMeshCollectionGlobals Globals;
+	const bool bHasGlobals = ParentCollection && ParentCollection->GetTypeGlobals(Globals);
+
+	if (bHasGlobals && (DescriptorSource == EPCGExEntryVariationMode::Global || Globals.GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule))
 	{
-		PCGExPropertyHelpers::CopyStructProperties(&ParentCollection->GlobalISMDescriptor, &TargetDescriptor, FSoftISMComponentDescriptor::StaticStruct(), FPCGSoftISMComponentDescriptor::StaticStruct());
+		PCGExPropertyHelpers::CopyStructProperties(&Globals.GlobalISMDescriptor, &TargetDescriptor, FSoftISMComponentDescriptor::StaticStruct(), FPCGSoftISMComponentDescriptor::StaticStruct());
 
 		TargetDescriptor.StaticMesh = StaticMesh;
 		TargetDescriptor.ComponentTags.Append(ParentCollection->CollectionTags.Array());
@@ -351,6 +359,20 @@ void FPCGExMeshCollectionEntry::BuildMicroCache()
 	}
 
 	MicroCache = NewCache;
+}
+
+bool UPCGExMeshCollection::GetTypeGlobalsInternal(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const
+{
+	if (!StructType || !StructType->IsChildOf(FPCGExMeshCollectionGlobals::StaticStruct()))
+	{
+		return Super::GetTypeGlobalsInternal(StructType, OutGlobals);
+	}
+
+	FPCGExMeshCollectionGlobals& Out = static_cast<FPCGExMeshCollectionGlobals&>(OutGlobals);
+	Out.GlobalDescriptorMode = GlobalDescriptorMode;
+	Out.GlobalISMDescriptor = GlobalISMDescriptor;
+	Out.GlobalSMDescriptor = GlobalSMDescriptor;
+	return true;
 }
 
 

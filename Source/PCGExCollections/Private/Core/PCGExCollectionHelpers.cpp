@@ -7,6 +7,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Details/PCGExStagingDetails.h"
+#include "UObject/UnrealType.h"
 
 namespace PCGExCollectionHelpers
 {
@@ -344,4 +345,63 @@ namespace PCGExCollectionHelpers
 
 		return WriteIndex > 0;
 	}
+
+	void GetEntryAssetHalves(const UPCGExAssetCollection* Collection, bool& bOutAnyActor, bool& bOutAnyNonActor)
+	{
+		bOutAnyActor = false;
+		bOutAnyNonActor = false;
+
+		if (!Collection)
+		{
+			return;
+		}
+
+		// Typed Actor collections keep their legacy classification even when empty.
+		if (Collection->IsType(PCGExAssetCollection::TypeIds::Actor))
+		{
+			bOutAnyActor = true;
+		}
+
+		Collection->ForEachEntry([&bOutAnyActor, &bOutAnyNonActor](const FPCGExAssetCollectionEntry* Entry, int32)
+		{
+			if (Entry->bIsSubCollection)
+			{
+				return;
+			}
+
+			if (Entry->IsType(PCGExAssetCollection::TypeIds::Actor))
+			{
+				bOutAnyActor = true;
+			}
+			else
+			{
+				bOutAnyNonActor = true;
+			}
+		});
+	}
+
+#if WITH_EDITOR
+	void DuplicateInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory, UObject* NewOuter)
+	{
+		if (!Struct || !StructMemory || !NewOuter)
+		{
+			return;
+		}
+
+		for (TFieldIterator<FObjectPropertyBase> It(Struct); It; ++It)
+		{
+			const FObjectPropertyBase* ObjProp = *It;
+			if (!ObjProp->HasAnyPropertyFlags(CPF_InstancedReference))
+			{
+				continue;
+			}
+
+			UObject* Current = ObjProp->GetObjectPropertyValue_InContainer(StructMemory);
+			if (Current && Current->GetOuter() != NewOuter)
+			{
+				ObjProp->SetObjectPropertyValue_InContainer(StructMemory, DuplicateObject(Current, NewOuter));
+			}
+		}
+	}
+#endif
 }

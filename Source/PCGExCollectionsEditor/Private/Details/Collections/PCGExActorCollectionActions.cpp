@@ -38,6 +38,10 @@ namespace
 						{
 							return PCGExCollectionsEditorMenuUtils::DoesAssetInheritFromAActor(Asset);
 						};
+
+						// Tile-picker contribution (per-row resolution + typed editor default).
+						Info.TilePickerPropertyName = FName("Actor");
+						Info.TilePickerAllowedClass = AActor::StaticClass();
 					});
 			});
 		}

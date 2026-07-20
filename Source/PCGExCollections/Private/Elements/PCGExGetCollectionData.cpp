@@ -9,6 +9,7 @@
 #include "Collections/PCGExActorCollection.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExCollectionHelpers.h"
 #include "Core/PCGExMTCommon.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
@@ -283,13 +284,15 @@ namespace PCGExGetCollectionData
 		return (ResolvedPtr && *ResolvedPtr) ? *ResolvedPtr : nullptr;
 	}
 
-	/** Set the AssetPath / AssetClass declaration flags on U based on a single collection's type.
-	 *  Used by the non-merged paths where each output is tied to exactly one collection. */
+	/** Set AssetPath / AssetClass declaration flags from the collection's entry content --
+	 *  per-entry union, not collection class (heterogeneous hosts may hold both). */
 	FORCEINLINE static void SetAssetHalves(FUniqueOutput& U, const UPCGExAssetCollection* Collection)
 	{
-		const bool bIsActor = Cast<UPCGExActorCollection>(Collection) != nullptr;
-		U.bWantAssetPath = !bIsActor;
-		U.bWantAssetClass = bIsActor;
+		bool bAnyActor = false;
+		bool bAnyNonActor = false;
+		PCGExCollectionHelpers::GetEntryAssetHalves(Collection, bAnyActor, bAnyNonActor);
+		U.bWantAssetPath = bAnyNonActor || !bAnyActor;
+		U.bWantAssetClass = bAnyActor;
 	}
 
 	/** Append flattened entries from `Collection` into U.Entries. Never clobbers, so it's safe
@@ -1048,14 +1051,13 @@ namespace PCGExGetCollectionData
 			RootIdx = UniqueCollections.Num();
 			UniqueCollections.Add(Collection);
 			Collection->EDITOR_RegisterTrackingKeys(InContext);
-			if (Cast<UPCGExActorCollection>(Collection))
-			{
-				bAnyActor = true;
-			}
-			else
-			{
-				bAnyNonActor = true;
-			}
+
+			// Per-entry union so heterogeneous hosts declare both halves.
+			bool bCollectionAnyActor = false;
+			bool bCollectionAnyNonActor = false;
+			PCGExCollectionHelpers::GetEntryAssetHalves(Collection, bCollectionAnyActor, bCollectionAnyNonActor);
+			bAnyActor |= bCollectionAnyActor;
+			bAnyNonActor |= bCollectionAnyNonActor || (!bCollectionAnyActor && !bCollectionAnyNonActor);
 		}
 
 		// Allocate the single shared output. Packer registration covers every contributing host.

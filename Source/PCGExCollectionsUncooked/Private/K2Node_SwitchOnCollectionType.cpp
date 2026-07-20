@@ -35,18 +35,18 @@ void UK2Node_SwitchOnCollectionType::AllocateDefaultPins()
 
 	for (const FName TypeId : TypeIds)
 	{
-		const PCGExAssetCollection::FTypeInfo* TypeInfo = Registry.Find(TypeId);
-		UClass* CollectionClass = TypeInfo ? TypeInfo->CollectionClass.Get() : nullptr;
+		PCGExAssetCollection::FTypeInfo TypeInfo;
+		UClass* CollectionClass = Registry.GetInfo(TypeId, TypeInfo) ? TypeInfo.CollectionClass.Get() : nullptr;
 		if (!CollectionClass)
 		{
 			continue;
 		}
 
 		UEdGraphPin* ExecOut = CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Exec, TypeId);
-		ExecOut->PinFriendlyName = TypeInfo->DisplayName;
+		ExecOut->PinFriendlyName = TypeInfo.DisplayName;
 
 		UEdGraphPin* TypedOut = CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Object, CollectionClass, MakeTypedOutPinName(TypeId));
-		TypedOut->PinFriendlyName = FText::Format(LOCTEXT("TypedOutFriendlyName", "As {0}"), TypeInfo->DisplayName);
+		TypedOut->PinFriendlyName = FText::Format(LOCTEXT("TypedOutFriendlyName", "As {0}"), TypeInfo.DisplayName);
 	}
 
 	UEdGraphPin* DefaultExec = CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Exec, DefaultExecPinName);
@@ -162,8 +162,8 @@ void UK2Node_SwitchOnCollectionType::ExpandNode(FKismetCompilerContext& Compiler
 			continue;
 		}
 
-		const PCGExAssetCollection::FTypeInfo* TypeInfo = Registry.Find(TypeId);
-		UClass* TargetClass = TypeInfo ? TypeInfo->CollectionClass.Get() : nullptr;
+		PCGExAssetCollection::FTypeInfo TypeInfo;
+		UClass* TargetClass = Registry.GetInfo(TypeId, TypeInfo) ? TypeInfo.CollectionClass.Get() : nullptr;
 		if (!TargetClass)
 		{
 			CompilerContext.MessageLog.Error(
@@ -215,8 +215,8 @@ void UK2Node_SwitchOnCollectionType::GetSortedTypeIds(TArray<FName>& OutTypeIds)
 	OutTypeIds.Reset(AllIds.Num());
 	for (const FName TypeId : AllIds)
 	{
-		const PCGExAssetCollection::FTypeInfo* TypeInfo = Registry.Find(TypeId);
-		if (TypeInfo && TypeInfo->CollectionClass.IsValid())
+		PCGExAssetCollection::FTypeInfo TypeInfo;
+		if (Registry.GetInfo(TypeId, TypeInfo) && TypeInfo.CollectionClass.IsValid())
 		{
 			OutTypeIds.Add(TypeId);
 		}

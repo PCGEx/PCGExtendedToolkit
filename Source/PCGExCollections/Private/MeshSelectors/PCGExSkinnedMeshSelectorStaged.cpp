@@ -138,8 +138,8 @@ bool UPCGExSkinnedMeshSelectorStaged::SelectInstances(FPCGSkinnedMeshSpawnerCont
 			}
 			else
 			{
-				// Host may not be a skinned mesh collection (heterogeneous hosts); null parent falls back to the entry's local descriptor.
-				Entry->InitPCGSoftSkinnedDescriptor(Cast<UPCGExSkinnedMeshCollection>(Result.Host), OutDescriptor);
+				// Globals via the host's seam; hosts without a block fall back to the local descriptor.
+				Entry->InitPCGSoftSkinnedDescriptor(Result.Host, OutDescriptor);
 			}
 
 			if (bForceDisableCollisions)

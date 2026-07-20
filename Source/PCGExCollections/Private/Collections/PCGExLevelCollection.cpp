@@ -69,7 +69,13 @@ void FPCGExLevelCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 #if WITH_EDITOR
 	if (const UWorld* World = Level.Get())
 	{
-		const UPCGExLevelCollection* LevelCollection = CastChecked<UPCGExLevelCollection>(OwningCollection);
+		// Globals via the seam; hosts without a block behave like null filter/evaluator.
+		FPCGExLevelCollectionGlobals Globals;
+		if (OwningCollection)
+		{
+			OwningCollection->GetTypeGlobals(Globals);
+		}
+		UPCGExAssetCollection* MutableHost = const_cast<UPCGExAssetCollection*>(OwningCollection);
 
 		FBox CombinedBounds(ForceInit);
 
@@ -95,16 +101,15 @@ void FPCGExLevelCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 				}
 
 				if (!UPCGExActorContentFilter::StaticPassesFilter(
-					LevelCollection->ContentFilter, Actor,
-					const_cast<UPCGExLevelCollection*>(LevelCollection), InInternalIndex))
+					Globals.ContentFilter, Actor, MutableHost, InInternalIndex))
 				{
 					continue;
 				}
 
-				if (LevelCollection->BoundsEvaluator)
+				if (Globals.BoundsEvaluator)
 				{
-					CombinedBounds += LevelCollection->BoundsEvaluator->EvaluateActorBounds(
-						Actor, const_cast<UPCGExLevelCollection*>(LevelCollection), InInternalIndex);
+					CombinedBounds += Globals.BoundsEvaluator->EvaluateActorBounds(
+						Actor, MutableHost, InInternalIndex);
 				}
 			}
 		}
@@ -149,6 +154,19 @@ void FPCGExLevelCollectionEntry::EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath
 #endif
 
 #pragma endregion
+
+bool UPCGExLevelCollection::GetTypeGlobalsInternal(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const
+{
+	if (!StructType || !StructType->IsChildOf(FPCGExLevelCollectionGlobals::StaticStruct()))
+	{
+		return Super::GetTypeGlobalsInternal(StructType, OutGlobals);
+	}
+
+	FPCGExLevelCollectionGlobals& Out = static_cast<FPCGExLevelCollectionGlobals&>(OutGlobals);
+	Out.ContentFilter = ContentFilter;
+	Out.BoundsEvaluator = BoundsEvaluator;
+	return true;
+}
 
 #if WITH_EDITOR
 void UPCGExLevelCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData)

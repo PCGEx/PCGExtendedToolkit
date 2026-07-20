@@ -17,6 +17,16 @@ class UPCGExAssetCollection;
 namespace PCGExCollectionEditorHelpers
 {
 	/**
+	 * Create a collection asset of CollectionClass (or return the existing one the user
+	 * targets via the save dialog). Null on cancel/failure. Caller populates and saves.
+	 */
+	PCGEXCOLLECTIONSEDITOR_API UPCGExAssetCollection* CreateCollectionAsset(
+		const FString& AnchorPackagePath,
+		UClass* CollectionClass,
+		const TCHAR* DefaultAssetName,
+		bool bOpenSaveDialog = true);
+
+	/**
 	 * Create a new collection asset of CollectionClass and append the source assets to it.
 	 * When bOpenSaveDialog is true, the user picks the destination folder and asset name via a
 	 * modal save dialog; otherwise the asset is created as DefaultAssetName in the same package
@@ -27,6 +37,12 @@ namespace PCGExCollectionEditorHelpers
 		UClass* CollectionClass,
 		const TCHAR* DefaultAssetName,
 		bool bOpenSaveDialog = true);
+
+	/**
+	 * Merge the selected collection assets into an Omni picked via the save dialog (new or
+	 * existing). Copy/transfer semantics live in EDITOR_AppendCollections; sources untouched.
+	 */
+	PCGEXCOLLECTIONSEDITOR_API void MergeCollectionsIntoOmni(const TArray<FAssetData>& SelectedCollections);
 
 	/** Append the given source assets to each selected collection. */
 	PCGEXCOLLECTIONSEDITOR_API void UpdateCollectionsFromTyped(

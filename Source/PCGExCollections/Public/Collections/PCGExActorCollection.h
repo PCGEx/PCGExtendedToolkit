@@ -16,13 +16,29 @@
 
 class UPCGExActorCollection;
 
+/** Actor collection-level globals. Mirrors UPCGExActorCollection's import members 1:1 -- keep names in sync. */
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Actor Collection Globals")
+struct PCGEXCOLLECTIONS_API FPCGExActorCollectionGlobals : public FPCGExCollectionTypeGlobals
+{
+	GENERATED_BODY()
+
+	/** Bounds evaluator for bounds computation. If null, basic GetActorBounds fallback is used. */
+	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
+	TObjectPtr<UPCGExBoundsEvaluator> BoundsEvaluator;
+
+	/** Policy used when merging actor-component schemas into the host's CollectionProperties
+	 *  on staging rebuild (see RebuildActorPropertiesFromComponents). */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	EPCGExSchemaMergePolicy SchemaMergePolicy = EPCGExSchemaMergePolicy::StrictTypeMatch;
+};
+
 /**
  * Actor collection entry. References an actor class (TSoftClassPtr<AActor>) or, via the
  * base SubCollection property, any collection type as a subcollection. Simpler than
  * FPCGExMeshCollectionEntry -- no MicroCache, no descriptors. UpdateStaging() spawns a
  * temporary actor in-editor to compute bounds (with configurable collision/child-actor inclusion).
  */
-USTRUCT(BlueprintType, DisplayName="[PCGEx] Actor Collection Entry")
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Actor Collection Entry", meta=(ShortName="Actor"))
 struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetCollectionEntry
 {
 	GENERATED_BODY()
@@ -121,6 +137,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings|Import")
 	EPCGExSchemaMergePolicy SchemaMergePolicy = EPCGExSchemaMergePolicy::StrictTypeMatch;
 
+protected:
+	virtual bool GetTypeGlobalsInternal(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const override;
+
+public:
+
 	/**
 	 * Scan each entry's source actor for a UPCGExPropertyCollectionComponent, merge its
 	 * schemas into CollectionProperties, and populate per-entry PropertyOverrides from the
@@ -147,6 +168,16 @@ public:
 	 *                          through to DeltaSourceLevel resolution. May be empty.
 	 */
 	void RebuildPropertiesFromActorComponents(
+		EPCGExSchemaMergePolicy Policy = EPCGExSchemaMergePolicy::StrictTypeMatch,
+		TArrayView<AActor*> RepresentativeInstances = {});
+
+	/**
+	 * Host-agnostic core of RebuildPropertiesFromActorComponents: scans ACTOR-typed leaf
+	 * entries of ANY collection; non-actor entries contribute nothing but still re-sync
+	 * against the merged schema. RepresentativeInstances is indexed by raw entry index.
+	 */
+	static void RebuildActorPropertiesFromComponents(
+		UPCGExAssetCollection* Host,
 		EPCGExSchemaMergePolicy Policy = EPCGExSchemaMergePolicy::StrictTypeMatch,
 		TArrayView<AActor*> RepresentativeInstances = {});
 
