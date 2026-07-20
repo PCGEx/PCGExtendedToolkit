@@ -3,51 +3,68 @@
 
 #include "Details/Collections/PCGExActorCollectionActions.h"
 
-#include "FileHelpers.h"
-#include "ToolMenuSection.h"
-#include "AssetRegistry/AssetRegistryModule.h"
+#include "PCGExCollectionsEditorMenuUtils.h"
 #include "Collections/PCGExActorCollection.h"
 #include "Details/Collections/PCGExActorCollectionEditor.h"
-#include "Details/Collections/PCGExAssetCollectionEditor.h"
-#include "Details/Collections/PCGExCollectionEditorUtils.h"
-#include "Misc/MessageDialog.h"
-#include "UObject/Package.h"
-#include "UObject/UObjectGlobals.h"
-#include "Widgets/Views/SListView.h"
+#include "Details/Collections/PCGExCollectionEditorHelpers.h"
+#include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
+#include "GameFramework/Actor.h"
+
+PCGEX_REGISTER_COLLECTION_EDITOR_TYPE(
+	Actor,
+	UPCGExActorCollection,
+	AActor,
+	"SMC_NewActorCollection",
+	FLinearColor(FColor(67, 142, 245)),
+	"Actor Collection",
+	"A weighted collection of actor classes for spawning.",
+	FPCGExActorCollectionEditor)
+
+// Actor BPs surface as UBlueprint, not AActor -- override the default IsInstanceOf detection
+// to walk the ParentClass tag instead.
+namespace
+{
+	struct FCustomizeActorEditorTypeInfo
+	{
+		FCustomizeActorEditorTypeInfo()
+		{
+			FCollectionEditorTypeRegistry::AddPendingRegistration([]()
+			{
+				FCollectionEditorTypeRegistry::Get().Customize(
+					PCGExAssetCollection::TypeIds::Actor,
+					[](FCollectionEditorTypeInfo& Info)
+					{
+						Info.DetectSourceAsset = [](const FAssetData& Asset)
+						{
+							return PCGExCollectionsEditorMenuUtils::DoesAssetInheritFromAActor(Asset);
+						};
+
+						// Tile-picker contribution (per-row resolution + typed editor default).
+						Info.TilePickerPropertyName = FName("Actor");
+						Info.TilePickerAllowedClass = AActor::StaticClass();
+					});
+			});
+		}
+	} GCustomizeActorEditorTypeInfo;
+}
 
 namespace PCGExActorCollectionActions
 {
 	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
 	{
-		PCGExCollectionEditorUtils::CreateCollectionFromSelection(
-			UPCGExActorCollection::StaticClass(),
-			TEXT("SMC_NewActorCollection"),
-			SelectedAssets);
+		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExActorCollection::StaticClass(), TEXT("SMC_NewActorCollection"));
 	}
 
 	void UpdateCollectionsFrom(
 		const TArray<TObjectPtr<UPCGExActorCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets,
-		bool bIsNewCollection)
+		const TArray<FAssetData>& SelectedAssets)
 	{
-		if (SelectedCollections.IsEmpty() || SelectedAssets.IsEmpty())
+		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
+		AsBase.Reserve(SelectedCollections.Num());
+		for (const TObjectPtr<UPCGExActorCollection>& C : SelectedCollections)
 		{
-			return;
+			AsBase.Add(C);
 		}
-
-		for (const TObjectPtr<UPCGExActorCollection>& Collection : SelectedCollections)
-		{
-			Collection->EDITOR_AddBrowserSelectionTyped(SelectedAssets);
-		}
+		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
 	}
-}
-
-EAssetCommandResult UAssetDefinition_PCGExActorCollection::OpenAssets(const FAssetOpenArgs& OpenArgs) const
-{
-	for (UPCGExActorCollection* Collection : OpenArgs.LoadObjects<UPCGExActorCollection>())
-	{
-		TSharedRef<FPCGExActorCollectionEditor> Editor = MakeShared<FPCGExActorCollectionEditor>();
-		Editor->InitEditor(Collection, OpenArgs.GetToolkitMode(), OpenArgs.ToolkitHost);
-	}
-	return EAssetCommandResult::Handled;
 }

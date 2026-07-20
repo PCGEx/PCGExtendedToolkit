@@ -4,10 +4,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AssetDefinitionDefault.h"
 #include "PCGExDataAssetFactory.h"
 #include "AssetRegistry/AssetData.h"
 #include "Collections/PCGExLevelCollection.h"
+#include "Details/Collections/PCGExCollectionAssetDefinitionBase.h"
 #include "Engine/World.h"
 
 #include "PCGExLevelCollectionActions.generated.h"
@@ -19,8 +19,7 @@ namespace PCGExLevelCollectionActions
 	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets);
 	void UpdateCollectionsFrom(
 		const TArray<TObjectPtr<UPCGExLevelCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets,
-		bool bIsNewCollection = false);
+		const TArray<FAssetData>& SelectedAssets);
 };
 
 UCLASS()
@@ -36,36 +35,13 @@ public:
 };
 
 UCLASS()
-class UAssetDefinition_PCGExLevelCollection : public UAssetDefinitionDefault
+class UAssetDefinition_PCGExLevelCollection : public UAssetDefinition_PCGExCollectionBase
 {
 	GENERATED_BODY()
 
 public:
-	virtual FText GetAssetDisplayName() const override
-	{
-		return INVTEXT("Level Collection");
-	}
-
-	virtual FLinearColor GetAssetColor() const override
-	{
-		return FLinearColor(FColor(255, 156, 0));
-	}
-
-	virtual FText GetAssetDescription(const FAssetData& AssetData) const override
-	{
-		return INVTEXT("A weighted collection of level assets.");
-	}
-
 	virtual TSoftClassPtr<UObject> GetAssetClass() const override
 	{
 		return UPCGExLevelCollection::StaticClass();
 	}
-
-	virtual TConstArrayView<FAssetCategoryPath> GetAssetCategories() const override
-	{
-		static const auto Categories = {FAssetCategoryPath(INVTEXT("PCGEx")) / INVTEXT("Collections")};
-		return Categories;
-	}
-
-	virtual EAssetCommandResult OpenAssets(const FAssetOpenArgs& OpenArgs) const override;
 };

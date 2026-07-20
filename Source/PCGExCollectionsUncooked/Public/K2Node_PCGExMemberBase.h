@@ -104,8 +104,10 @@ protected:
 	UEdGraphPin* GetValuePin() const;
 	UEdGraphPin* GetSuccessPin() const;
 
-	/** Registry info per ExplicitTypeId or the Collection pin's connected static type; null when unresolved. */
-	const PCGExAssetCollection::FTypeInfo* ResolveTypeInfo() const;
+	/** Registry info per ExplicitTypeId or the Collection pin's connected static type.
+	 *  Copy-out (registry interior pointers must not escape its lock); returns false when
+	 *  neither the explicit type id nor the connected pin's class resolves to a type. */
+	bool ResolveTypeInfo(PCGExAssetCollection::FTypeInfo& OutInfo) const;
 
 	/** Reflection root the member menu and edit-time validation walk (never null). */
 	const UStruct* ResolveRootStruct() const;

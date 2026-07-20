@@ -124,10 +124,10 @@ int32 FPCGExStagedTypeFilterContext::FindTypeBucket(PCGExAssetCollection::FTypeI
 	}
 
 	// Walk parent chain
-	const PCGExAssetCollection::FTypeInfo* Info = PCGExAssetCollection::FTypeRegistry::Get().Find(TypeId);
-	if (Info && Info->ParentType != PCGExAssetCollection::TypeIds::None)
+	const PCGExAssetCollection::FTypeId ParentType = PCGExAssetCollection::FTypeRegistry::Get().GetParentType(TypeId);
+	if (ParentType != PCGExAssetCollection::TypeIds::None)
 	{
-		return FindTypeBucket(Info->ParentType);
+		return FindTypeBucket(ParentType);
 	}
 
 	return -1;

@@ -3,51 +3,64 @@
 
 #include "Details/Collections/PCGExPCGDataAssetCollectionActions.h"
 
-#include "FileHelpers.h"
-#include "ToolMenuSection.h"
-#include "AssetRegistry/AssetRegistryModule.h"
+#include "PCGDataAsset.h"
 #include "Collections/PCGExPCGDataAssetCollection.h"
-#include "Details/Collections/PCGExAssetCollectionEditor.h"
-#include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExCollectionEditorHelpers.h"
+#include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExPCGDataAssetCollectionEditor.h"
-#include "Misc/MessageDialog.h"
-#include "UObject/Package.h"
-#include "UObject/UObjectGlobals.h"
-#include "Widgets/Views/SListView.h"
+
+PCGEX_REGISTER_COLLECTION_EDITOR_TYPE(
+	PCGDataAsset,
+	UPCGExPCGDataAssetCollection,
+	UPCGDataAsset,
+	"SMC_NewPCGDataAssetCollection",
+	FLinearColor(FColor(100, 150, 200)),
+	"PCGDataAsset Collection",
+	"A weighted collection of PCG Data Assets.",
+	FPCGExPCGDataAssetCollectionEditor)
+
+// PCGDataAsset collections aren't created from the content-browser right-click flow.
+namespace
+{
+	struct FCustomizePCGDataAssetEditorTypeInfo
+	{
+		FCustomizePCGDataAssetEditorTypeInfo()
+		{
+			FCollectionEditorTypeRegistry::AddPendingRegistration([]()
+			{
+				FCollectionEditorTypeRegistry::Get().Customize(
+					PCGExAssetCollection::TypeIds::PCGDataAsset,
+					[](FCollectionEditorTypeInfo& Info)
+					{
+						Info.bSupportsMenuCreation = false;
+
+						// Tile-picker contribution. Covers the DataAsset source mode; Level-mode
+						// rows are edited through the entry details.
+						Info.TilePickerPropertyName = FName("DataAsset");
+						Info.TilePickerAllowedClass = UPCGDataAsset::StaticClass();
+					});
+			});
+		}
+	} GCustomizePCGDataAssetEditorTypeInfo;
+}
 
 namespace PCGExPCGDataAssetCollectionActions
 {
 	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
 	{
-		PCGExCollectionEditorUtils::CreateCollectionFromSelection(
-			UPCGExPCGDataAssetCollection::StaticClass(),
-			TEXT("SMC_NewPCGDataAssetCollection"),
-			SelectedAssets);
+		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExPCGDataAssetCollection::StaticClass(), TEXT("SMC_NewPCGDataAssetCollection"));
 	}
 
 	void UpdateCollectionsFrom(
 		const TArray<TObjectPtr<UPCGExPCGDataAssetCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets,
-		bool bIsNewCollection)
+		const TArray<FAssetData>& SelectedAssets)
 	{
-		if (SelectedCollections.IsEmpty() || SelectedAssets.IsEmpty())
+		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
+		AsBase.Reserve(SelectedCollections.Num());
+		for (const TObjectPtr<UPCGExPCGDataAssetCollection>& C : SelectedCollections)
 		{
-			return;
+			AsBase.Add(C);
 		}
-
-		for (const TObjectPtr<UPCGExPCGDataAssetCollection>& Collection : SelectedCollections)
-		{
-			Collection->EDITOR_AddBrowserSelectionTyped(SelectedAssets);
-		}
+		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
 	}
-}
-
-EAssetCommandResult UAssetDefinition_PCGExPCGDataAssetCollection::OpenAssets(const FAssetOpenArgs& OpenArgs) const
-{
-	for (UPCGExPCGDataAssetCollection* Collection : OpenArgs.LoadObjects<UPCGExPCGDataAssetCollection>())
-	{
-		TSharedRef<FPCGExPCGDataAssetCollectionEditor> Editor = MakeShared<FPCGExPCGDataAssetCollectionEditor>();
-		Editor->InitEditor(Collection, OpenArgs.GetToolkitMode(), OpenArgs.ToolkitHost);
-	}
-	return EAssetCommandResult::Handled;
 }

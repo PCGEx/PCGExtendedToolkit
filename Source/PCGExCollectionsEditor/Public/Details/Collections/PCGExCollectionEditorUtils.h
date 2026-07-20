@@ -4,12 +4,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Templates/SubclassOf.h"
+#include "AssetRegistry/AssetData.h"
 
 class UPCGExAssetCollection;
 class UPackage;
-struct FAssetData;
-struct FSoftObjectPath;
+
+class UScriptStruct;
 
 /** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
 namespace PCGExCollectionEditorUtils
@@ -20,21 +20,19 @@ namespace PCGExCollectionEditorUtils
 	 */
 	PCGEXCOLLECTIONSEDITOR_API FAssetData ResolveEntryAssetData(const FSoftObjectPath& AssetPath);
 
-	/** Add Content Browser selection to this collection. */
-	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);
+	/** UI label for an entry struct: the ShortName meta ("Actor") with display-name fallback. */
+	PCGEXCOLLECTIONSEDITOR_API FText GetEntryTypeLabel(const UScriptStruct* EntryStruct);
 
 	/**
-	 * Create a new collection of InCollectionClass from a content-browser selection, then add that
-	 * selection to it. When bOpenSaveDialog is true, the user picks the destination folder and name
-	 * through the Save Asset dialog; otherwise the asset is created next to the first selected asset
-	 * using InDefaultAssetName. Returns the target collection, or nullptr if the user cancelled the
-	 * dialog or creation failed.
+	 * Every registered concrete entry type (base entry struct excluded), sorted by label.
+	 * The registry-wide sibling of UPCGExAssetCollection::EDITOR_GetAddableEntryTypes --
+	 * use the collection virtual when the list must reflect a specific HOST's policy, and
+	 * this when any concrete entry type is acceptable (e.g. variant swap payloads).
 	 */
-	PCGEXCOLLECTIONSEDITOR_API UPCGExAssetCollection* CreateCollectionFromSelection(
-		TSubclassOf<UPCGExAssetCollection> InCollectionClass,
-		const FString& InDefaultAssetName,
-		const TArray<FAssetData>& InSelectedAssets,
-		bool bOpenSaveDialog = true);
+	PCGEXCOLLECTIONSEDITOR_API void GetAllConcreteEntryTypes(TArray<const UScriptStruct*>& OutTypes);
+
+	/** Add Content Browser selection to this collection. */
+	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);
 
 #pragma region Tools
 

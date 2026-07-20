@@ -76,6 +76,7 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		const TSharedPtr<FSlateStyleSet> InStyle = Style;
 
 		PCGEX_ADD_CLASS_ICON(PCGExAssetCollection)
+		PCGEX_ADD_CLASS_ICON(PCGExOmniCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExMeshCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExActorCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExLevelCollection)

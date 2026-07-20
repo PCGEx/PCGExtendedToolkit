@@ -6,6 +6,8 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetThumbnail.h"
 #include "DragAndDrop/AssetDragDropOp.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "IStructureDetailsView.h"
 #include "Misc/ITransaction.h"
@@ -18,6 +20,7 @@
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExAssetCollectionTypes.h"
+#include "Core/PCGExCollectionHelpers.h"
 #include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/SPCGExCollectionCategoryGroup.h"
@@ -198,7 +201,7 @@ void SPCGExVariantGridTile::RebuildContent()
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 			.ToolTipText(State == EPCGExVariantTileState::SwappedByRule
 				             ? LOCTEXT("SpecializeSwapTooltip", "Specialize: declare an explicit swap for this entry, overriding the asset rule")
-				             : LOCTEXT("DeclareSwapTooltip", "Declare a swap for this entry (starts as a copy of the source entry)"))
+				             : LOCTEXT("DeclareSwapTooltip", "Declare a swap for this entry -- choose the replacement's entry type, or start from a copy of the source entry"))
 			.OnClicked_Lambda([this]() { OnDeclareSwap.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
 			[
 				SNew(SImage).Image(FAppStyle::Get().GetBrush("Icons.Plus"))
@@ -836,6 +839,80 @@ void SPCGExVariantGridView::DeclareSwap(const int32 ItemIndex)
 		return;
 	}
 
+	UPCGExAssetCollection* Src = Variant->Sources[Item.GroupIdx].Source.Get();
+	if (!Src)
+	{
+		return;
+	}
+
+	const FPCGExEntryAccessResult SourceEntry = Src->GetEntryRaw(Item.SourceRawIndex);
+	if (!SourceEntry.IsValid())
+	{
+		return;
+	}
+
+	// Type chooser at the cursor -- same picker the heterogeneous "+ Add" uses. First item
+	// keeps the legacy one-click behavior (full copy of the source entry); the rest start
+	// the replacement as a fresh payload of the chosen type. Row creation re-validates, so
+	// a stale menu (undo while open) degrades to a no-op.
+	const FText SourceTypeLabel = PCGExCollectionEditorUtils::GetEntryTypeLabel(
+		PCGExAssetCollection::FTypeRegistry::Get().GetEntryStruct(SourceEntry.Entry->GetTypeId()));
+
+	FMenuBuilder MenuBuilder(/*bInShouldCloseWindowAfterMenuSelection=*/true, nullptr);
+
+	MenuBuilder.BeginSection(NAME_None, LOCTEXT("DeclareSwapCopySection", "Declare Swap"));
+	MenuBuilder.AddMenuEntry(
+		FText::Format(LOCTEXT("DeclareSwapCopy", "Copy Source Entry ({0})"), SourceTypeLabel),
+		LOCTEXT("DeclareSwapCopyTooltip", "The replacement starts as a full copy of the source entry -- swap-the-asset becomes a one-field edit; weights, variations and tags carry over."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateSPLambda(this, [this, ItemIndex]()
+		{
+			DeclareSwapAs(ItemIndex, nullptr);
+		})));
+	MenuBuilder.EndSection();
+
+	MenuBuilder.BeginSection(NAME_None, LOCTEXT("DeclareSwapTypeSection", "Swap With Type"));
+	TArray<const UScriptStruct*> EntryTypes;
+	PCGExCollectionEditorUtils::GetAllConcreteEntryTypes(EntryTypes);
+	for (const UScriptStruct* EntryStruct : EntryTypes)
+	{
+		const FText Label = PCGExCollectionEditorUtils::GetEntryTypeLabel(EntryStruct);
+		MenuBuilder.AddMenuEntry(
+			Label,
+			FText::Format(LOCTEXT("DeclareSwapTypeTooltip", "The replacement starts as a fresh {0} entry; the source's weight, category, tags and variations carry over."), Label),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateSPLambda(this, [this, ItemIndex, EntryStruct]()
+			{
+				DeclareSwapAs(ItemIndex, EntryStruct);
+			})));
+	}
+	MenuBuilder.EndSection();
+
+	FSlateApplication::Get().PushMenu(
+		AsShared(),
+		FWidgetPath(),
+		MenuBuilder.MakeWidget(),
+		FSlateApplication::Get().GetCursorPos(),
+		FPopupTransitionEffect(FPopupTransitionEffect::ContextMenu));
+}
+
+void SPCGExVariantGridView::DeclareSwapAs(const int32 ItemIndex, const UScriptStruct* EntryStruct)
+{
+	UPCGExVariantCollection* Variant = Collection.Get();
+	if (!Variant || !Items.IsValidIndex(ItemIndex))
+	{
+		return;
+	}
+
+	const FPCGExVariantGridItem& Item = Items[ItemIndex];
+	const EPCGExVariantTileState State = Item.GetState();
+
+	if ((State != EPCGExVariantTileState::PassThrough && State != EPCGExVariantTileState::SwappedByRule)
+		|| !Variant->Sources.IsValidIndex(Item.GroupIdx))
+	{
+		return;
+	}
+
 	FPCGExVariantSource& Group = Variant->Sources[Item.GroupIdx];
 	UPCGExAssetCollection* Src = Group.Source.Get();
 	if (!Src)
@@ -843,15 +920,17 @@ void SPCGExVariantGridView::DeclareSwap(const int32 ItemIndex)
 		return;
 	}
 
-	// The replacement starts as a full copy of the source entry — swap-the-asset becomes a
-	// one-field edit and weights/variations/tags carry over. Struct type resolved from the
+	// Null EntryStruct = full copy of the source entry. Struct type resolved from the
 	// ENTRY's own type id (not the host class): hosts may be heterogeneous — notably another
 	// variant collection, which is a legal source for daisy-chained swap nodes.
 	const FPCGExEntryAccessResult SourceEntry = Src->GetEntryRaw(Item.SourceRawIndex);
-	const PCGExAssetCollection::FTypeInfo* TypeInfo = SourceEntry.IsValid()
-		                                                  ? PCGExAssetCollection::FTypeRegistry::Get().Find(SourceEntry.Entry->GetTypeId())
-		                                                  : nullptr;
-	const UScriptStruct* EntryStruct = TypeInfo ? TypeInfo->EntryStruct : nullptr;
+	const bool bCopySource = EntryStruct == nullptr;
+	if (bCopySource)
+	{
+		EntryStruct = SourceEntry.IsValid()
+			              ? PCGExAssetCollection::FTypeRegistry::Get().GetEntryStruct(SourceEntry.Entry->GetTypeId())
+			              : nullptr;
+	}
 
 	if (!EntryStruct || !SourceEntry.IsValid())
 	{
@@ -865,12 +944,36 @@ void SPCGExVariantGridView::DeclareSwap(const int32 ItemIndex)
 
 		FPCGExVariantEntryOverride& NewRow = Group.Overrides.AddDefaulted_GetRef();
 		NewRow.SourceEntryId = Item.SourceEntryId;
-		NewRow.Entry.InitializeAs(EntryStruct, reinterpret_cast<const uint8*>(SourceEntry.Entry));
+
+		if (bCopySource)
+		{
+			// Full copy — swap-the-asset becomes a one-field edit and everything carries over.
+			NewRow.Entry.InitializeAs(EntryStruct, reinterpret_cast<const uint8*>(SourceEntry.Entry));
+		}
+		else
+		{
+			// Fresh payload of the chosen type; carry the source's BASE fields over
+			// (weight/category/tags/variations, staging until the next rebuild) so the swap
+			// slots into the same pick distribution. Base offsets are shared across derived
+			// entry structs, so a base-struct copy into the derived payload is well-defined
+			// (same reasoning as the globals seam's derived-block copy-out).
+			NewRow.Entry.InitializeAs(EntryStruct);
+			FPCGExAssetCollectionEntry::StaticStruct()->CopyScriptStruct(
+				NewRow.Entry.GetMutableMemory(), SourceEntry.Entry, 1);
+		}
+
+		// Cross-ASSET copy: any Instanced subobject refs the payload carried (e.g. a PCGData
+		// entry's ExportedDataAsset) are SHALLOW -- duplicate them into the variant, per the
+		// standing rule for every cross-asset copy of an entry payload. No-op for payloads
+		// without instanced refs.
+		PCGExCollectionHelpers::DuplicateInstancedSubobjects(EntryStruct, NewRow.Entry.GetMutableMemory(), Variant);
 
 		// The copy carried the SOURCE entry's identity; zero it so the variant's own
 		// SyncEntryIds assigns a fresh one on the next staging rebuild. Also bake the
 		// source collection's Global channels into the payload — the variant host cannot
 		// provide typed globals (ISM/skinned descriptors), they'd be silently lost.
+		// (For a cross-type payload this resolves the CHOSEN type's channels against the
+		// source host — a no-op unless the source actually provides globals for that type.)
 		if (FPCGExAssetCollectionEntry* Payload = NewRow.Entry.GetMutablePtr<FPCGExAssetCollectionEntry>())
 		{
 			Payload->EntryId = 0;
@@ -965,11 +1068,12 @@ void SPCGExVariantGridView::UpdateDetailForSelection()
 			{
 				if (UPCGExAssetCollection* Src = Variant->Sources[Item.GroupIdx].Source.Get())
 				{
-					const PCGExAssetCollection::FTypeInfo* TypeInfo = PCGExAssetCollection::FTypeRegistry::Get().FindByClass(Src->GetClass());
+					PCGExAssetCollection::FTypeInfo TypeInfo;
+					const bool bFound = PCGExAssetCollection::FTypeRegistry::Get().GetInfoByClass(Src->GetClass(), TypeInfo);
 					const FPCGExEntryAccessResult SourceEntry = Src->GetEntryRaw(Item.SourceRawIndex);
-					if (TypeInfo && TypeInfo->EntryStruct && SourceEntry.IsValid())
+					if (bFound && TypeInfo.EntryStruct && SourceEntry.IsValid())
 					{
-						PayloadStruct = TypeInfo->EntryStruct;
+						PayloadStruct = TypeInfo.EntryStruct;
 						PayloadMemory = const_cast<uint8*>(reinterpret_cast<const uint8*>(SourceEntry.Entry));
 					}
 				}
