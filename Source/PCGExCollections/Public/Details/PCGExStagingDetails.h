@@ -46,7 +46,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetDistributionIndexDetails
 
 	/** Whether to remap index input value to collection size */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExTruncateMode TruncateRemap = EPCGExTruncateMode::None;
+	EPCGExTruncateMode TruncateRemap = EPCGExTruncateMode::Round;
 };
 
 USTRUCT(BlueprintType)

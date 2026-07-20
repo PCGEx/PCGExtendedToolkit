@@ -19,6 +19,7 @@
 #include "Data/PCGVolumeData.h"
 #include "Data/Utils/PCGExDataForward.h"
 #include "Elements/PCGExStagingLoadProperties.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPCGDataAssetLoaderElement"
@@ -436,6 +437,12 @@ TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties(
 
 PCGEX_INITIALIZE_ELEMENT(PCGDataAssetLoader)
 PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(PCGDataAssetLoader)
+
+void FPCGExPCGDataAssetLoaderElement::DisabledPassThroughData(FPCGContext* Context) const
+{
+	FPCGExPointsProcessorElement::DisabledPassThroughData(Context);
+	PCGExCollections::ForwardCollectionMap(Context);
+}
 
 bool FPCGExPCGDataAssetLoaderElement::Boot(FPCGExContext* InContext) const
 {
