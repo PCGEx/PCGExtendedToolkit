@@ -403,6 +403,8 @@ bool FPCGExAttributesToTagsElement::AdvanceWork(FPCGExContext* InContext, const 
 				Details = &Context->Details[0];
 				SourceNum = Context->Sources[0].NumRows;
 				break;
+			default:
+				return;
 			}
 
 			TArray<int32> PickedIndices;

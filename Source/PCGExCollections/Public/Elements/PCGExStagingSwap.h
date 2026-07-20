@@ -8,6 +8,7 @@
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExInputShorthandsDetails.h"
+#include "Details/PCGExStagingDetails.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 
 #include "PCGExStagingSwap.generated.h"
@@ -71,7 +72,7 @@ public:
 	{
 		return PCGEX_NODE_COLOR_OPTIN_NAME(Sampling);
 	}
-	
+
 	virtual bool CanDynamicallyTrackKeys() const override
 	{
 		return true;
@@ -111,7 +112,20 @@ public:
 	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bSkipStaleMappings = true;
-	
+
+	/** Re-pick the micro cache selection of swapped points. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bRedistributeMicroCache = false;
+
+	/**
+	 * Re-picks the micro cache selection (secondary index, e.g. mesh material variants) of swapped
+	 * points from the VARIANT entry's micro cache -- when disabled, swapped points get their
+	 * secondary pick reset instead. Unswapped points are never touched. Same semantics as
+	 * Distribute's Distribution (Micro-cache).
+	 */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Distribution (Micro-cache)", EditCondition="bRedistributeMicroCache"))
+	FPCGExMicroCacheDistributionDetails EntryDistributionSettings;
+
 	/** Suppress no applicable variant warnings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(PCG_NotOverridable))
 	bool bQuietNoApplicableVariantsWarning = false;
@@ -158,6 +172,13 @@ struct FPCGExStagingSwapContext final : FPCGExPointsProcessorContext
 	/** Per-IO ordered variant layers (keyed by IOIndex), built in PostLoad, consumed per point (later wins). */
 	TMap<int32, TArray<FPCGExStagingSwapVariantLayer>> LayersPerIO;
 
+	/**
+	 * Micro redistribution: refreshable micro caches of swapped-to entries, keyed by swapped
+	 * entry key (H64(VariantGUID, RawIndex)); built in PostLoad. Shared refs, so a collection
+	 * cache rebuild can't free a cache this map still points at mid-generation.
+	 */
+	TMap<uint64, TSharedPtr<const PCGExAssetCollection::FMicroCache>> MicroCacheByEntryKey;
+
 	/** Registers every resolved variant path for batch pre-loading. */
 	virtual void RegisterAssetDependencies() override;
 
@@ -169,6 +190,8 @@ class FPCGExStagingSwapElement final : public FPCGExPointsProcessorElement
 {
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(StagingSwap)
+
+	virtual void DisabledPassThroughData(FPCGContext* Context) const override;
 
 	PCGEX_ELEMENT_MAIN_THREAD_ONLY_IN_PREPARE()
 	virtual bool Boot(FPCGExContext* InContext) const override;
@@ -189,6 +212,9 @@ namespace PCGExStagingSwap
 
 		// Per-point path: this IO's ordered layers (points into context; later wins). Null on the fast path.
 		const TArray<FPCGExStagingSwapVariantLayer>* Layers = nullptr;
+
+		// Null when micro redistribution is off or no swapped-to entry here has a micro cache.
+		TSharedPtr<PCGExCollections::FMicroSelectorHelper> MicroHelper;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

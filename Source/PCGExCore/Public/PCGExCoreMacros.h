@@ -196,6 +196,7 @@ FPCGElementPtr UPCGEx##_NAME##Settings::CreateElement() const{	return MakeShared
 // Typed context and settings from ExecutionContext (for async tasks)
 #define PCGEX_TYPED_CONTEXT_AND_SETTINGS(_NAME) \
 	FPCGEx##_NAME##Context* Context = static_cast<FPCGEx##_NAME##Context*>(ExecutionContext); \
+	check(Context); \
 	const UPCGEx##_NAME##Settings* Settings = Context->GetInputSettings<UPCGEx##_NAME##Settings>(); \
 	check(Settings);
 

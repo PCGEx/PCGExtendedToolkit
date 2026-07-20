@@ -32,22 +32,6 @@
 #define LOCTEXT_NAMESPACE "PCGExAssetStagingElement"
 #define PCGEX_NAMESPACE AssetStaging
 
-namespace PCGExAssetStaging
-{
-	// Shared by Boot's detection scan and the processor's resolve pre-pass so the warning
-	// predicate and the runtime gate cannot drift. Mesh-only: only mesh-type micro caches
-	// produce secondary indices during distribution.
-	const PCGExMeshCollection::FMicroCache* GetRefreshableMicroCache(const FPCGExAssetCollectionEntry* InEntry)
-	{
-		const PCGExAssetCollection::FMicroCache* MicroCache = InEntry->MicroCache.Get();
-		if (!MicroCache || MicroCache->GetTypeId() != PCGExAssetCollection::TypeIds::Mesh || MicroCache->IsEmpty())
-		{
-			return nullptr;
-		}
-		return static_cast<const PCGExMeshCollection::FMicroCache*>(MicroCache);
-	}
-}
-
 #pragma region UPCGExAssetStagingSettings
 
 UPCGExAssetStagingSettings::UPCGExAssetStagingSettings()
@@ -94,6 +78,15 @@ void UPCGExAssetStagingSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
+TArray<FPCGPreConfiguredSettingsInfo> UPCGExAssetStagingSettings::GetPreconfiguredInfo() const
+{
+	TArray<FPCGPreConfiguredSettingsInfo> Configs;
+	Configs.Emplace(0, GetDefaultNodeTitle());
+	Configs.Emplace(1, FTEXT("PCGEx | Staging : Redistribute"));
+	Configs.Emplace(2, FTEXT("PCGEx | Staging : Randomize Materials"));
+	return Configs;
+}
+
 void UPCGExAssetStagingSettings::PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent)
 {
 	EntryTypeFilter.PostEditChangeProperty(PropertyChangedEvent);
@@ -110,6 +103,20 @@ TOptional<FPCGNodeThumbnailProxy> UPCGExAssetStagingSettings::GetNodeThumbnail()
 	return {};
 }
 #endif
+
+void UPCGExAssetStagingSettings::ApplyPreconfiguredSettings(const FPCGPreConfiguredSettingsInfo& PreconfigureInfo)
+{
+	if (PreconfigureInfo.PreconfiguredIndex != 0)
+	{
+		SourceMode = EPCGExDistributeSourceMode::CollectionMap;
+		RedistributionMode = EPCGExRedistributionMode::Collections;
+
+		if (PreconfigureInfo.PreconfiguredIndex == 2)
+		{
+			RedistributionMode = EPCGExRedistributionMode::MicroCache;
+		}
+	}
+}
 
 bool UPCGExAssetStagingSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {
@@ -143,13 +150,13 @@ void UPCGExAssetStagingSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinP
 		PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from, or merged from, Staging nodes.", Required)
 	}
 
-	if (SelectorMode != EPCGExSelectorMode::Legacy)
+	if (SelectorMode != EPCGExSelectorMode::Legacy && !IsMicroRedistribution())
 	{
 		PCGEX_PIN_FACTORY(PCGExCollections::Labels::SourceSelectorLabel, "External selector factory driving entry picks.", Required, FPCGExDataTypeInfoSelector::AsId())
 	}
 	else
 	{
-		PCGEX_PIN_FACTORY(PCGExCollections::Labels::SourceSelectorLabel, "External selector factory driving entry picks.", Advanced, FPCGExDataTypeInfoSelector::AsId())
+		PCGEX_PIN_FACTORY(PCGExCollections::Labels::SourceSelectorLabel, "External selector factory driving entry picks. Unused by Legacy nodes; optional in Micro Cache redistribution (drives the re-pick when connected, inline Distribution (Micro-cache) settings otherwise).", Advanced, FPCGExDataTypeInfoSelector::AsId())
 	}
 
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
@@ -196,16 +203,7 @@ void FPCGExAssetStagingContext::RegisterAssetDependencies()
 void FPCGExAssetStagingElement::DisabledPassThroughData(FPCGContext* Context) const
 {
 	FPCGExPointsProcessorElement::DisabledPassThroughData(Context);
-
-	//Forward collection map data
-	TArray<FPCGTaggedData> MapSources = Context->InputData.GetInputsByPin(PCGExCollections::Labels::SourceCollectionMapLabel);
-	for (const FPCGTaggedData& TaggedData : MapSources)
-	{
-		FPCGTaggedData& TaggedDataCopy = Context->OutputData.TaggedData.Emplace_GetRef();
-		TaggedDataCopy.Data = TaggedData.Data;
-		TaggedDataCopy.Tags.Append(TaggedData.Tags);
-		TaggedDataCopy.Pin = PCGExCollections::Labels::SourceCollectionMapLabel;
-	}
+	PCGExCollections::ForwardCollectionMap(Context);
 }
 
 bool FPCGExAssetStagingElement::CanExecuteOnlyOnMainThread(FPCGContext* Context) const
@@ -246,18 +244,22 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->SelectorMode != EPCGExSelectorMode::Legacy)
 	{
+		// Micro-cache redistribution never picks entries -- the Selector is optional there.
 		TArray<TObjectPtr<const UPCGExSelectorFactoryData>> Factories;
-		if (!PCGExFactories::GetInputFactories<UPCGExSelectorFactoryData>(Context, PCGExCollections::Labels::SourceSelectorLabel, Factories, {FPCGExDataTypeInfoSelector::AsId()}))
+		if (PCGExFactories::GetInputFactories<UPCGExSelectorFactoryData>(Context, PCGExCollections::Labels::SourceSelectorLabel, Factories, {FPCGExDataTypeInfoSelector::AsId()}, !bMicroRedistribute))
+		{
+			if (Factories.Num() != 1)
+			{
+				PCGE_LOG(Error, GraphAndLog, FTEXT("Exactly one Selector factory is expected on the Selector input pin."));
+				return false;
+			}
+			Context->SelectorFactory = Factories[0];
+		}
+		else if (!bMicroRedistribute)
 		{
 			PCGE_LOG(Error, GraphAndLog, FTEXT("External distribution mode requires a Selector factory on the Selector input pin."));
 			return false;
 		}
-		if (Factories.Num() != 1)
-		{
-			PCGE_LOG(Error, GraphAndLog, FTEXT("Exactly one Selector factory is expected on the Selector input pin."));
-			return false;
-		}
-		Context->SelectorFactory = Factories[0];
 	}
 	else
 	{
@@ -265,7 +267,7 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 		Context->SelectorFactory = PCGExCollections::BuildLegacyFactory(Context, Settings->DistributionSettings, Settings->EntryDistributionSettings);
 	}
 
-	if (!Context->SelectorFactory)
+	if (!Context->SelectorFactory && !bMicroRedistribute)
 	{
 		return Context->CancelExecution("Invalid Asset Selector");
 	}
@@ -332,7 +334,7 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 					Host->ForEachEntry(
 						[&](FPCGExAssetCollectionEntry* Entry, const int32)
 						{
-							if (PCGExAssetStaging::GetRefreshableMicroCache(Entry))
+							if (PCGExCollections::GetRefreshableMicroCache(Entry))
 							{
 								bAnyMicroCache = true;
 							}
@@ -668,11 +670,11 @@ namespace PCGExAssetStaging
 					const FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, StagedSecondaryIndex);
 					if (Result.IsValid() && (!bFilterEntryType || EntryTypeFilter.Matches(Result.Entry->GetTypeId())))
 					{
-						if (const PCGExMeshCollection::FMicroCache* Refreshable = GetRefreshableMicroCache(Result.Entry))
+						if (const PCGExMeshCollection::FMicroCache* Refreshable = PCGExCollections::GetRefreshableMicroCache(Result.Entry))
 						{
 							FMicroRefreshTarget& Target = MicroTargets.Emplace_GetRef();
 							Target.Entry = Result.Entry;
-							Target.MicroCache = Refreshable;
+							Target.MicroCache = Result.Entry->MicroCache;
 							Target.HostGUID = Result.Host->GetCollectionGUID();
 							Target.RawEntryIndex = PCGExCollections::PickHash::GetRawEntryIndex(Hash);
 							Target.HighestSlotIndex = Refreshable->GetHighestIndex();
@@ -702,10 +704,11 @@ namespace PCGExAssetStaging
 				return true; // Nothing refreshable on this input -- pass through untouched.
 			}
 
+			// A null SelectorFactory (no Selector connected) falls back to the inline micro details.
 			MicroRedistributeHelper = MakeShared<PCGExCollections::FMicroSelectorHelper>(Settings->EntryDistributionSettings);
 			if (!MicroRedistributeHelper->Init(PointDataFacade, Context->SelectorFactory))
 			{
-				PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("The Selector does not provide a valid micro (entry) distribution."));
+				PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Could not initialize a valid micro (entry) distribution."));
 				return false;
 			}
 
@@ -1213,10 +1216,10 @@ namespace PCGExAssetStaging
 		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetIn()->GetConstSeedValueRange();
 		const UPCGComponent* Component = Context->GetComponent();
 
-		// Seed config comes from the connected Selector -- the same source FSelectorHelper::Init
-		// syncs from for the main loop.
-		const uint8 SeedComponents = Context->SelectorFactory->BaseConfig.SeedComponents;
-		const int32 LocalSeed = Context->SelectorFactory->BaseConfig.LocalSeed;
+		// Connected Selector seed config wins (same source the main loop syncs from); the inline
+		// micro details expose no seed knobs yet, so without a Selector the node Seed is the knob.
+		const uint8 SeedComponents = Context->SelectorFactory ? Context->SelectorFactory->BaseConfig.SeedComponents : Settings->EntryDistributionSettings.SeedComponents;
+		const int32 LocalSeed = Context->SelectorFactory ? Context->SelectorFactory->BaseConfig.LocalSeed : Settings->EntryDistributionSettings.LocalSeed;
 
 		const bool bLocalPickMaterials = Context->bPickMaterials;
 		const FMicroRefreshTarget* Targets = MicroTargets.GetData();
@@ -1240,7 +1243,7 @@ namespace PCGExAssetStaging
 			// Folding the node's Seed in (Settings overload of GetSeed) decorrelates the re-pick
 			// from the upstream staging chain -- it's the refresh knob.
 			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], SeedComponents, LocalSeed, Settings, Component);
-			const int32 NewPick = MicroHelper->GetPick(Target.MicroCache, Index, PCGExRandomHelpers::GetSeed(Seed, Index, Settings));
+			const int32 NewPick = MicroHelper->GetPick(Target.MicroCache.Get(), Index, PCGExRandomHelpers::GetSeed(Seed, Index, Settings));
 			if (NewPick < 0)
 			{
 				continue;

@@ -288,6 +288,9 @@ namespace PCGExMeshToCluster
 
 			if (bWantsColor || bWantsNormals || NumUVChannels)
 			{
+				// Import flags are only set when RawData.bIsValid, which guarantees Buffers
+				check(VertexBuffers);
+
 				// After MakeDual, Triangles hold raw vertex indices; after MakeHollowDual they hold dense ones.
 				const bool bRawTriangles = Mesh->DesiredTriangulationType == EPCGExTriangulationType::Dual;
 				const TArray<int32>& RawIndices = Mesh->RawIndices;

@@ -5,6 +5,7 @@
 
 #include "PCGManagedResource.h"
 #include "PCGParamData.h"
+#include "Collections/PCGExMeshCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGExData.h"
@@ -46,6 +47,28 @@ namespace PCGExCollections
 		Factory->BaseConfig.MissingCategoryBehavior = InDetails.MissingCategoryBehavior;
 
 		return Factory;
+	}
+
+	const PCGExMeshCollection::FMicroCache* GetRefreshableMicroCache(const FPCGExAssetCollectionEntry* InEntry)
+	{
+		const PCGExAssetCollection::FMicroCache* MicroCache = InEntry->MicroCache.Get();
+		if (!MicroCache || MicroCache->GetTypeId() != PCGExAssetCollection::TypeIds::Mesh || MicroCache->IsEmpty())
+		{
+			return nullptr;
+		}
+		return static_cast<const PCGExMeshCollection::FMicroCache*>(MicroCache);
+	}
+
+	void ForwardCollectionMap(FPCGContext* InContext)
+	{
+		TArray<FPCGTaggedData> MapSources = InContext->InputData.GetInputsByPin(Labels::SourceCollectionMapLabel);
+		for (const FPCGTaggedData& TaggedData : MapSources)
+		{
+			FPCGTaggedData& TaggedDataCopy = InContext->OutputData.TaggedData.Emplace_GetRef();
+			TaggedDataCopy.Data = TaggedData.Data;
+			TaggedDataCopy.Tags.Append(TaggedData.Tags);
+			TaggedDataCopy.Pin = Labels::OutputCollectionMapLabel;
+		}
 	}
 
 	void FinalizeSpawnedActor(AActor* InActor, UPCGManagedActors* InManagedActors, bool bIsPreview)

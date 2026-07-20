@@ -37,6 +37,11 @@ namespace PCGExCollections
 	class FSelectorSharedDataCache;
 }
 
+namespace PCGExMeshCollection
+{
+	class FMicroCache;
+}
+
 /**
  * Runtime helpers for consuming collections in PCG nodes.
  *
@@ -69,6 +74,17 @@ namespace PCGExCollections
 {
 	PCGEXCOLLECTIONS_API
 	UPCGExSelectorFactoryData* BuildLegacyFactory(FPCGExContext* InContext, const FPCGExAssetDistributionDetails& InDetails, const FPCGExMicroCacheDistributionDetails& InEntryDetails);
+
+	/**
+	 * Entry's micro cache if it can be refreshed (secondary index re-picked), null otherwise.
+	 * Mesh-only: only mesh-type micro caches produce secondary indices during distribution.
+	 */
+	PCGEXCOLLECTIONS_API
+	const PCGExMeshCollection::FMicroCache* GetRefreshableMicroCache(const FPCGExAssetCollectionEntry* InEntry);
+
+	/** Copies Collection Map inputs to the output map pin -- for DisabledPassThroughData overrides. */
+	PCGEXCOLLECTIONS_API
+	void ForwardCollectionMap(FPCGContext* InContext);
 
 	/**
 	 * Resolves a soft-path-referenced root actor with a per-batch cache, falling back to the

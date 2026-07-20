@@ -37,6 +37,11 @@ namespace PCGExMeshCollection
 	class FMicroCache;
 }
 
+namespace PCGExAssetCollection
+{
+	class FMicroCache;
+}
+
 namespace PCGExMT
 {
 	template <typename T>
@@ -100,11 +105,15 @@ public:
 		return true;
 	}
 
+	virtual TArray<FPCGPreConfiguredSettingsInfo> GetPreconfiguredInfo() const override;
+	
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 
 	virtual TOptional<FPCGNodeThumbnailProxy> GetNodeThumbnail() const override;
 #endif
 
+	virtual void ApplyPreconfiguredSettings(const FPCGPreConfiguredSettingsInfo& PreconfigureInfo) override;
+	
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 
 	virtual bool WantsDataStealing() const override;
@@ -179,10 +188,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Distribution", EditCondition="SelectorMode == EPCGExSelectorMode::Legacy", EditConditionHides))
 	FPCGExAssetDistributionDetails DistributionSettings;
 
-	/** Distribution details that are specific to the picked entry -- what it picks depends on the type of collection being staged. 
-	 * For Mesh Collections, this let you control how materials are picked. 
-	 * Note : LEGACY Nodes only. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Distribution (Entry)", EditCondition="SelectorMode == EPCGExSelectorMode::Legacy", EditConditionHides))
+	/** Distribution details that are specific to the picked entry -- what it picks depends on the type of collection being staged.
+	 * For Mesh Collections, this let you control how materials are picked.
+	 * Drives Micro Cache redistribution when no Selector is connected; otherwise LEGACY Nodes only. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName="Distribution (Micro-cache)", EditCondition="SelectorMode == EPCGExSelectorMode::Legacy || (SourceMode == EPCGExDistributeSourceMode::CollectionMap && RedistributionMode == EPCGExRedistributionMode::MicroCache)", EditConditionHides))
 	FPCGExMicroCacheDistributionDetails EntryDistributionSettings;
 
 
@@ -382,7 +391,8 @@ namespace PCGExAssetStaging
 		struct FMicroRefreshTarget
 		{
 			const FPCGExAssetCollectionEntry* Entry = nullptr;
-			const PCGExMeshCollection::FMicroCache* MicroCache = nullptr;
+			// Shared ref so a collection cache rebuild can't free the cache mid-generation.
+			TSharedPtr<const PCGExAssetCollection::FMicroCache> MicroCache;
 			uint32 HostGUID = 0;
 			uint16 RawEntryIndex = 0;
 			int32 HighestSlotIndex = -1;

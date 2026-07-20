@@ -364,13 +364,17 @@ namespace PCGExData
 
 		const FSubSelectionChain& Compiled = CachedCompiled;
 
-		if (Compiled.Steps.IsEmpty())
+		// Single Num() read: the analyzer can't correlate separate IsEmpty()/Num() calls
+		// and otherwise assumes a negative LastIdx below (C6385)
+		const int32 NumSteps = Compiled.Steps.Num();
+
+		if (NumSteps == 0)
 		{
 			PCGExTypeOps::FConversionTable::Convert(SourceType, Source, TargetType, Target);
 			return;
 		}
 
-		const int32 LastIdx = Compiled.Steps.Num() - 1;
+		const int32 LastIdx = NumSteps - 1;
 
 		// All steps must have a SetFn for inject to work.
 		for (const FSubSelectionStep& Step : Compiled.Steps)
@@ -384,9 +388,9 @@ namespace PCGExData
 
 		// Extract phase: walk forward to populate intermediates.
 		constexpr int32 MaxSteps = 4;
-		checkf(Compiled.Steps.Num() <= MaxSteps,
+		checkf(NumSteps <= MaxSteps,
 		       TEXT("FSubSelection chain exceeded MaxSteps (%d > %d)"),
-		       Compiled.Steps.Num(), MaxSteps);
+		       NumSteps, MaxSteps);
 
 		alignas(16) uint8 Buffers[MaxSteps][96];
 
