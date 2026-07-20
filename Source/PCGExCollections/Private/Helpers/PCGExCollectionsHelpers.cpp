@@ -28,23 +28,23 @@
 
 namespace PCGExCollections
 {
-	// Synthesize a transient Classic factory that mirrors the Legacy Details struct. Used when
-	// the caller did not provide an ExternalFactory. Keeps the post-Init code path unified:
-	// everything downstream reads from ActiveFactory->BaseConfig regardless of mode.
-	UPCGExSelectorFactoryData* BuildLegacyFactory(FPCGExContext* InContext, const FPCGExAssetDistributionDetails& InDetails)
+	// Synthesize a transient Classic factory mirroring the Legacy Details structs, so downstream
+	// code reads ActiveFactory->BaseConfig regardless of mode. Entry (micro) details must be
+	// mirrored too: legacy consumers always pass this factory, and CreateMicroOperation
+	// dispatches on BaseConfig.SubDistribution.
+	UPCGExSelectorFactoryData* BuildLegacyFactory(FPCGExContext* InContext, const FPCGExAssetDistributionDetails& InDetails, const FPCGExMicroCacheDistributionDetails& InEntryDetails)
 	{
 		UPCGExSelectorClassicFactoryData* Factory = InContext->ManagedObjects->New<UPCGExSelectorClassicFactoryData>();
 
 		Factory->Config.Mode = InDetails.Distribution;
 		Factory->Config.IndexConfig = InDetails.IndexSettings;
+		Factory->BaseConfig.SubDistribution = InEntryDetails;
 		Factory->BaseConfig.SeedComponents = InDetails.SeedComponents;
 		Factory->BaseConfig.LocalSeed = InDetails.LocalSeed;
 		Factory->BaseConfig.bUseCategories = InDetails.bUseCategories;
 		Factory->BaseConfig.Category = InDetails.Category;
 		Factory->BaseConfig.MissingCategoryBehavior = InDetails.MissingCategoryBehavior;
 
-		// BaseConfig.EntryDistribution stays default -- the Legacy EntryDistributionSettings
-		// lives on the consuming node and is plumbed through FMicroSelectorHelper separately.
 		return Factory;
 	}
 
