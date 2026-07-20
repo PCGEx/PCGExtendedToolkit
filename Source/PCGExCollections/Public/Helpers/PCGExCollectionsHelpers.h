@@ -68,7 +68,7 @@ namespace PCGExCollections
 namespace PCGExCollections
 {
 	PCGEXCOLLECTIONS_API
-	UPCGExSelectorFactoryData* BuildLegacyFactory(FPCGExContext* InContext, const FPCGExAssetDistributionDetails& InDetails);
+	UPCGExSelectorFactoryData* BuildLegacyFactory(FPCGExContext* InContext, const FPCGExAssetDistributionDetails& InDetails, const FPCGExMicroCacheDistributionDetails& InEntryDetails);
 
 	/**
 	 * Resolves a soft-path-referenced root actor with a per-batch cache, falling back to the
