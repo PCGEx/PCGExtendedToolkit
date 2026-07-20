@@ -219,7 +219,11 @@ namespace PCGExData
 
 	void FCachedSubSelection::ApplySet(void* Target, const void* Source) const
 	{
-		if (CompiledChain.Steps.IsEmpty())
+		// Single Num() read: the analyzer can't correlate separate IsEmpty()/Num() calls
+		// and otherwise assumes a negative LastIdx below (C6385)
+		const int32 NumSteps = CompiledChain.Steps.Num();
+
+		if (NumSteps == 0)
 		{
 			if (ConvertWorkingToReal)
 			{
@@ -227,8 +231,6 @@ namespace PCGExData
 			}
 			return;
 		}
-
-		const int32 NumSteps = CompiledChain.Steps.Num();
 
 		// Any step without a SetFn (e.g., axis) disqualifies the whole chain
 		// for inject. Defensive check -- AppliesToTargetWrite also guards.

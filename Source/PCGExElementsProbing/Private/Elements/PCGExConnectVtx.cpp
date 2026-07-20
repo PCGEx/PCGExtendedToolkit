@@ -159,6 +159,9 @@ bool FPCGExConnectVtxElement::LaunchVtxMerge(FPCGExConnectVtxContext* Context, c
 {
 	using namespace PCGExConnectVtx;
 
+	// PCGE_LOG_C's internal null-test makes the analyzer treat Context as nullable (C6011)
+	check(Context);
+
 	Context->VtxMerger = MakeShared<PCGExGraphs::FVtxMerger>();
 
 	int32 ClusterIdOffset = 0;
@@ -283,6 +286,9 @@ bool FPCGExConnectVtxElement::LaunchProbing(FPCGExConnectVtxContext* Context, co
 bool FPCGExConnectVtxElement::LaunchPatching(FPCGExConnectVtxContext* Context, const UPCGExConnectVtxSettings* Settings) const
 {
 	using namespace PCGExConnectVtx;
+
+	// PCGE_LOG_C's internal null-test makes the analyzer treat Context as nullable (C6011)
+	check(Context);
 
 	Context->Patcher = MakeShared<PCGExGraphs::FGraphPatcher>(Context->MergedFacade.ToSharedRef());
 
