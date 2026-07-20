@@ -15,6 +15,34 @@ namespace PCGExCollectionEditorUtils
 #define PCGEX_IF_TYPE(_NAME, _BODY) { if (UPCGEx##_NAME##Collection* Collection = Cast<UPCGEx##_NAME##Collection>(InCollection)) { _BODY; return; }}
 #define PCGEX_PER_COLLECTION(_BODY)	PCGEX_FOREACH_COLLECTION_TYPE(PCGEX_IF_TYPE, _BODY)
 
+	FText GetEntryTypeLabel(const UScriptStruct* EntryStruct)
+	{
+		static const FName ShortNameMeta = FName("ShortName");
+		const FString ShortName = EntryStruct ? EntryStruct->GetMetaData(ShortNameMeta) : FString();
+		return ShortName.IsEmpty()
+			       ? (EntryStruct ? EntryStruct->GetDisplayNameText() : FText::GetEmpty())
+			       : FText::FromString(ShortName);
+	}
+
+	void GetAllConcreteEntryTypes(TArray<const UScriptStruct*>& OutTypes)
+	{
+		// Registry-wide walk; the base entry struct (Variant's nominal EntryStruct) is not a
+		// concrete authoring type. Struct pointer VALUES are stable objects -- safe to keep
+		// outside the registry lock.
+		PCGExAssetCollection::FTypeRegistry::Get().ForEach([&OutTypes](const PCGExAssetCollection::FTypeInfo& Info)
+		{
+			if (Info.EntryStruct && Info.EntryStruct != FPCGExAssetCollectionEntry::StaticStruct())
+			{
+				OutTypes.AddUnique(Info.EntryStruct);
+			}
+		});
+
+		OutTypes.Sort([](const UScriptStruct& A, const UScriptStruct& B)
+		{
+			return GetEntryTypeLabel(&A).CompareTo(GetEntryTypeLabel(&B)) < 0;
+		});
+	}
+
 	FAssetData ResolveEntryAssetData(const FSoftObjectPath& AssetPath)
 	{
 		const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();

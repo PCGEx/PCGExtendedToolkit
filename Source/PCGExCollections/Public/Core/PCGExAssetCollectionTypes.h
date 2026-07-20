@@ -4,12 +4,16 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "StructUtils/InstancedStruct.h"
 #include "UObject/Class.h"
 
 #include "PCGExAssetCollectionTypes.generated.h"
 
 class UPCGExAssetCollection;
 struct FPCGExAssetCollectionEntry;
+#if WITH_EDITOR
+struct FAssetData;
+#endif
 
 /**
  * Runtime type registry for collection types. Allows the system to discover, query,
@@ -27,10 +31,16 @@ struct FPCGExAssetCollectionEntry;
  *   3. Your collection's GetTypeId() should return your FTypeId.
  *
  * Querying:
- *   FTypeRegistry::Get().Find(TypeIds::Mesh)       -- get FTypeInfo by ID
- *   FTypeRegistry::Get().FindByClass(UClass*)       -- reverse lookup from UClass
- *   FTypeRegistry::Get().IsA(Mesh, Base)            -- inheritance check
- *   Entry->IsType(TypeIds::Mesh)                    -- check entry type
+ *   FTypeRegistry::Get().GetInfo(TypeIds::Mesh, Out)   -- copy FTypeInfo out by ID
+ *   FTypeRegistry::Get().GetInfoByClass(UClass*, Out)  -- reverse lookup from UClass
+ *   FTypeRegistry::Get().IsA(Mesh, Base)               -- inheritance check
+ *   Entry->IsType(TypeIds::Mesh)                       -- check entry type
+ *
+ * Thread safety: storage is a value TMap guarded by an FRWLock, and late registrations
+ * (hot-reload, late-loaded plugins) can relocate every stored FTypeInfo. Interior pointers
+ * must therefore NEVER escape the lock -- which is why every lookup is copy-out. Pointer
+ * VALUES copied out of an info (EntryStruct, GlobalsStruct, CollectionClass/StateClass
+ * targets) are stable UObjects and safe to keep.
  */
 
 namespace PCGExAssetCollection
@@ -49,6 +59,7 @@ namespace PCGExAssetCollection
 		inline const FTypeId PCGDataAsset = FName(TEXT("PCGDataAsset"));
 		inline const FTypeId Level = FName(TEXT("Level"));
 		inline const FTypeId Variant = FName(TEXT("Variant"));
+		inline const FTypeId Omni = FName(TEXT("Omni"));
 	}
 
 	/**
@@ -58,9 +69,41 @@ namespace PCGExAssetCollection
 	{
 		FTypeId Id = NAME_None;
 		TWeakObjectPtr<UClass> CollectionClass = nullptr;
+
+		// Null for heterogeneous collection types (Omni) with no single entry struct --
+		// resolve per entry via Entry->GetTypeId() -> Find(TypeId)->EntryStruct instead.
 		UScriptStruct* EntryStruct = nullptr;
+
+		// The type's globals-block struct, when it has one. Consumed by conversion/merge
+		// and config-block UI. Registered via AddPendingCustomization.
+		UScriptStruct* GlobalsStruct = nullptr;
+
+		// The type's machinery state/processor class (UPCGExCollectionTypeState derivative),
+		// when the type has cross-entry collection machinery. Heterogeneous hosts instantiate
+		// one per present entry type and dispatch their lifecycle into it; a registered class
+		// is also what makes such hosts answer SupportsTypeMachinery for the type.
+		TWeakObjectPtr<UClass> StateClass = nullptr;
+
 		FText DisplayName;
 		FTypeId ParentType = NAME_None; // For inheritance checking
+
+#if WITH_EDITOR
+		/**
+		 * True when the given content-browser asset can seed an entry of this type (drives
+		 * Omni drop routing). Register via AddPendingCustomization; null = doesn't participate.
+		 */
+		TFunction<bool(const FAssetData&)> DetectSourceAsset;
+
+		/**
+		 * Optional: build a fully-initialized entry payload from a detected asset, when the
+		 * generic InitializeAs + SetAssetPath path isn't enough (e.g. Actor resolves the
+		 * Blueprint's GeneratedClass). Return false to reject the asset after all.
+		 */
+		TFunction<bool(const FAssetData&, FInstancedStruct&)> MakeEntryFromSourceAsset;
+
+		/** Lower values are offered the asset first when several detectors could claim it. */
+		int32 SourceDetectPriority = 100;
+#endif
 
 		bool IsValid() const
 		{
@@ -82,14 +125,35 @@ namespace PCGExAssetCollection
 		 */
 		FTypeId Register(const FTypeInfo& Info);
 
-		/** Find type info by ID */
-		const FTypeInfo* Find(FTypeId Id) const;
+		/** Copy type info out by ID. Returns false when the id is unregistered. */
+		bool GetInfo(FTypeId Id, FTypeInfo& OutInfo) const;
 
-		/** Find type info by collection class */
-		const FTypeInfo* FindByClass(const UClass* Class) const;
+		/** Copy type info out by collection class (walks super classes). */
+		bool GetInfoByClass(const UClass* Class, FTypeInfo& OutInfo) const;
 
-		/** Find type info by entry struct */
-		const FTypeInfo* FindByEntryStruct(const UScriptStruct* Struct) const;
+		/** Copy type info out by entry struct (walks super structs). */
+		bool GetInfoByEntryStruct(const UScriptStruct* Struct, FTypeInfo& OutInfo) const;
+
+		/**
+		 * Copy type info out by ID, resolving machinery inheritance: when the type itself
+		 * registers no GlobalsStruct / StateClass, the nearest ancestor's (ParentType chain)
+		 * fills them in. Everything else in the copy is the LEAF registration. This is how
+		 * capability queries and per-type setup stay consistent with the lineage-aware entry
+		 * checks (IsA/IsType) -- a type derived from PCGDataAsset runs the base machinery.
+		 */
+		bool GetInfoResolved(FTypeId Id, FTypeInfo& OutInfo) const;
+
+		/** The registered parent type id, or None when unregistered / root. */
+		FTypeId GetParentType(FTypeId Id) const;
+
+		/** The registered entry struct, or null. (UScriptStruct values are stable objects.) */
+		const UScriptStruct* GetEntryStruct(FTypeId Id) const;
+
+		/**
+		 * Apply a mutator to a registered entry. Must NOT re-enter the registry (FRWLock is
+		 * non-recursive). Prefer AddPendingCustomization when registration order isn't guaranteed.
+		 */
+		void Customize(FTypeId Id, TFunctionRef<void(FTypeInfo&)> Mutator);
 
 		/** Check if a type is or derives from another type */
 		bool IsA(FTypeId Type, FTypeId BaseType) const;
@@ -97,7 +161,11 @@ namespace PCGExAssetCollection
 		/** Get all registered type IDs */
 		void GetAllTypeIds(TArray<FTypeId>& OutIds) const;
 
-		/** Iterate over all registered types */
+		/**
+		 * Iterate over all registered types under the read lock. The callback must NOT
+		 * re-enter the registry (FRWLock is non-recursive) and must NOT retain references or
+		 * pointers to the visited infos -- copy values out instead (see class doc).
+		 */
 		template <typename Func>
 		void ForEach(Func&& Callback) const
 		{
@@ -109,12 +177,27 @@ namespace PCGExAssetCollection
 		}
 
 		static void AddPendingRegistration(TFunction<void()>&& Func);
+
+		/**
+		 * Queue a customization applied AFTER every pending registration (or immediately if
+		 * registration already ran) -- cross-TU static-init ordering never matters.
+		 */
+		static void AddPendingCustomization(FTypeId Id, TFunction<void(FTypeInfo&)>&& Mutator);
+
 		static void ProcessPendingRegistrations();
 
 	private:
 		FTypeRegistry() = default;
 
+		/** Interior lookup -- caller must hold RegistryLock. The returned pointer is only
+		 *  valid while the lock is held (storage relocates on later registrations). */
+		const FTypeInfo* FindUnsafe(FTypeId Id) const
+		{
+			return Types.Find(Id);
+		}
+
 		static TArray<TFunction<void()>>& GetPendingRegistrations();
+		static TArray<TPair<FTypeId, TFunction<void(FTypeInfo&)>>>& GetPendingCustomizations();
 		static bool& IsProcessed();
 
 		mutable FRWLock RegistryLock;

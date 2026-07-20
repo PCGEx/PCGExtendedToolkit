@@ -203,7 +203,16 @@ private:
 	void PopulateGroupTiles(FName GroupName);
 
 	void OnTileClicked(int32 ItemIndex);
+
+	/** Opens the swap-declaration type menu at the cursor: copy the source entry, or start
+	 *  the replacement as a fresh payload of any registered entry type. */
 	void DeclareSwap(int32 ItemIndex);
+
+	/** Creates the override row. Null EntryStruct = full copy of the source entry (legacy
+	 *  behavior); a concrete struct = fresh payload of that type with the source's BASE
+	 *  fields (weight/category/tags/variations...) carried over. */
+	void DeclareSwapAs(int32 ItemIndex, const UScriptStruct* EntryStruct);
+
 	void RevokeSwap(int32 ItemIndex);
 
 	void ApplySelectionVisuals();

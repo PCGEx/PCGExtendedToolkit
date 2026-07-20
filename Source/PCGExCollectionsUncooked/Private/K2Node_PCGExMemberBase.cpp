@@ -151,15 +151,15 @@ void UK2Node_PCGExMemberBase::GetNodeContextMenuActions(UToolMenu* Menu, UGraphN
 
 		for (const FName TypeId : TypeIds)
 		{
-			const PCGExAssetCollection::FTypeInfo* TypeInfo = PCGExAssetCollection::FTypeRegistry::Get().Find(TypeId);
-			if (!TypeInfo)
+			PCGExAssetCollection::FTypeInfo TypeInfo;
+			if (!PCGExAssetCollection::FTypeRegistry::Get().GetInfo(TypeId, TypeInfo))
 			{
 				continue;
 			}
 
 			Section.AddMenuEntry(
 				NAME_None,
-				TypeInfo->DisplayName,
+				TypeInfo.DisplayName,
 				FText::FromName(TypeId),
 				FSlateIcon(),
 				FUIAction(FExecuteAction::CreateLambda([ConstThis, TypeId]()
@@ -174,41 +174,39 @@ void UK2Node_PCGExMemberBase::GetNodeContextMenuActions(UToolMenu* Menu, UGraphN
 	}
 }
 
-const PCGExAssetCollection::FTypeInfo* UK2Node_PCGExMemberBase::ResolveTypeInfo() const
+bool UK2Node_PCGExMemberBase::ResolveTypeInfo(PCGExAssetCollection::FTypeInfo& OutInfo) const
 {
 	PCGExAssetCollection::FTypeRegistry& Registry = PCGExAssetCollection::FTypeRegistry::Get();
 
-	if (!ExplicitTypeId.IsNone())
+	if (!ExplicitTypeId.IsNone() && Registry.GetInfo(ExplicitTypeId, OutInfo))
 	{
-		if (const PCGExAssetCollection::FTypeInfo* TypeInfo = Registry.Find(ExplicitTypeId))
-		{
-			return TypeInfo;
-		}
+		return true;
 	}
 
 	const UEdGraphPin* CollectionPin = GetCollectionPin();
 	const UEdGraphPin* Source = (CollectionPin && CollectionPin->LinkedTo.Num() > 0) ? CollectionPin->LinkedTo[0] : nullptr;
 	const UClass* PinClass = Source ? Cast<UClass>(Source->PinType.PinSubCategoryObject.Get()) : nullptr;
 
-	return PinClass ? Registry.FindByClass(PinClass) : nullptr;
+	return PinClass ? Registry.GetInfoByClass(PinClass, OutInfo) : false;
 }
 
 const UStruct* UK2Node_PCGExMemberBase::ResolveRootStruct() const
 {
-	const PCGExAssetCollection::FTypeInfo* TypeInfo = ResolveTypeInfo();
+	PCGExAssetCollection::FTypeInfo TypeInfo;
+	const bool bFound = ResolveTypeInfo(TypeInfo);
 
 	if (IsEntryScoped())
 	{
-		if (TypeInfo && TypeInfo->EntryStruct)
+		if (bFound && TypeInfo.EntryStruct)
 		{
-			return TypeInfo->EntryStruct;
+			return TypeInfo.EntryStruct;
 		}
 		return FPCGExAssetCollectionEntry::StaticStruct();
 	}
 
-	if (TypeInfo && TypeInfo->CollectionClass.IsValid())
+	if (bFound && TypeInfo.CollectionClass.IsValid())
 	{
-		return TypeInfo->CollectionClass.Get();
+		return TypeInfo.CollectionClass.Get();
 	}
 
 	// Collection scope without registry info: prefer the connected pin's static class so BP

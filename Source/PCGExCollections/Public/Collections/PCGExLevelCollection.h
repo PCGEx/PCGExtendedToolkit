@@ -16,12 +16,27 @@
 
 class UPCGExLevelCollection;
 
+/** Level collection-level globals. Mirrors UPCGExLevelCollection's import members 1:1 -- keep names in sync. */
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Level Collection Globals")
+struct PCGEXCOLLECTIONS_API FPCGExLevelCollectionGlobals : public FPCGExCollectionTypeGlobals
+{
+	GENERATED_BODY()
+
+	/** Actor content filter for bounds computation. If null, default infrastructure checks are used. */
+	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
+	TObjectPtr<UPCGExActorContentFilter> ContentFilter;
+
+	/** Bounds evaluator for bounds computation. If null, bounds default to empty. */
+	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
+	TObjectPtr<UPCGExBoundsEvaluator> BoundsEvaluator;
+};
+
 /**
  * Level collection entry. References a UWorld level asset or, via the base SubCollection
  * property, any collection type as a subcollection. UpdateStaging() loads the level
  * package in-editor to compute combined bounds from spatial actors.
  */
-USTRUCT(BlueprintType, DisplayName="[PCGEx] Level Collection Entry")
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Level Collection Entry", meta=(ShortName="Level"))
 struct PCGEXCOLLECTIONS_API FPCGExLevelCollectionEntry : public FPCGExAssetCollectionEntry
 {
 	GENERATED_BODY()
@@ -80,6 +95,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	TArray<FPCGExLevelCollectionEntry> Entries;
 
+protected:
+	virtual bool GetTypeGlobalsInternal(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const override;
+
+public:
 #if WITH_EDITOR
 	// Editor Functions
 	virtual void EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData) override;

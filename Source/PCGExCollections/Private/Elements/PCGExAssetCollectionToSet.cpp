@@ -7,6 +7,7 @@
 #include "PCGParamData.h"
 #include "PCGPin.h"
 #include "Collections/PCGExActorCollection.h"
+#include "Core/PCGExCollectionHelpers.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
@@ -122,14 +123,21 @@ bool FPCGExAssetCollectionToSetElement::AdvanceWork(FPCGExContext* InContext, co
 	const bool bOutputCategory = Settings->bWriteCategory;
 	const EPCGExCategoryInheritance CategoryInheritance = bOutputCategory ? Settings->CategoryInheritance : EPCGExCategoryInheritance::None;
 
-	// Output actor as FSoftClassPath
-	if (Cast<UPCGExActorCollection>(MainCollection))
+	// Actor entries output FSoftClassPath, everything else a soft object path -- classified
+	// per entry so heterogeneous hosts can declare both halves.
 	{
-		bOutputAssetPath = false;
-	}
-	else
-	{
-		bOutputAssetClass = false;
+		bool bAnyActor = false;
+		bool bAnyNonActor = false;
+		PCGExCollectionHelpers::GetEntryAssetHalves(MainCollection, bAnyActor, bAnyNonActor);
+
+		if (bAnyActor && !bAnyNonActor)
+		{
+			bOutputAssetPath = false;
+		}
+		else if (!bAnyActor)
+		{
+			bOutputAssetClass = false;
+		}
 	}
 
 #define PCGEX_DECLARE_ATT(_NAME, _TYPE, _DEFAULT, _VALUE) \

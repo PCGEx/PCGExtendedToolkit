@@ -9,6 +9,7 @@
 
 #include "PCGExAssetCollectionTypes.h"
 #include "PCGExAssetGrammar.h"
+#include "PCGExCollectionGlobals.h"
 #include "PCGExProperty.h"
 #include "PCGExSchemaMerging.h"
 #include "Core/PCGExContext.h"
@@ -27,6 +28,7 @@ struct FAssetData;
 
 class UPCGExAssetCollection;
 class UPCGExCollectionStagingPipeline;
+class UPCGExCollectionTypeState;
 
 namespace PCGExAssetCollection
 {
@@ -173,15 +175,16 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 	/**
 	 * Bake collection-level ("Global") inheritance channels into local values, reading the
-	 * globals from the given source collection. Call when an entry is copied OUT of its
-	 * collection (e.g. into a variant collection payload) -- the new host cannot provide the
-	 * typed globals, so they must be resolved into the entry or they are silently lost.
-	 * Base is a no-op; typed entries override for their descriptor channels.
+	 * source's globals through GetTypeGlobals. Call when an entry is copied OUT of its
+	 * collection and the destination won't carry an equivalent globals block -- otherwise
+	 * global-sourced values are silently lost. Base is a no-op.
 	 */
 	virtual void ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection)
 	{
 	}
 
+#pragma region Core
+	
 	/**
 	 * Stable identity for external entry references (e.g. variant collections) across source
 	 * edits -- reorder, rename, duplicate. 0 = unassigned. NEVER assign in the ctor: it would
@@ -202,36 +205,11 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 	UPROPERTY(EditAnywhere, Category = Settings)
 	bool bIsSubCollection = false;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
-	EPCGExEntryVariationMode VariationMode = EPCGExEntryVariationMode::None;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variations", EditCondition="!bIsSubCollection && VariationMode == EPCGExEntryVariationMode::Local", EditConditionHides, ShowOnlyInnerProperties))
-	FPCGExFittingVariations Variations;
-
-	/**
-	 * Where this entry's Scale to Fit comes from when a staging node considers entry overrides.
-	 * None = the node's settings apply; Local = this entry's; Global = the collection's.
-	 */
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
-	EPCGExEntryVariationMode ScaleToFitSource = EPCGExEntryVariationMode::None;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Scale to Fit", EditCondition="!bIsSubCollection && ScaleToFitSource == EPCGExEntryVariationMode::Local", EditConditionHides))
-	FPCGExLeanScaleToFitDetails ScaleToFit;
-
-	/**
-	 * Where this entry's Justification comes from when a staging node considers entry overrides.
-	 * None = the node's settings apply; Local = this entry's; Global = the collection's.
-	 */
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
-	EPCGExEntryVariationMode JustificationSource = EPCGExEntryVariationMode::None;
-
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Justification", EditCondition="!bIsSubCollection && JustificationSource == EPCGExEntryVariationMode::Local", EditConditionHides))
-	FPCGExLeanJustificationDetails Justification;
-
-	UPROPERTY(EditAnywhere, Category = Settings)
-	TSet<FName> Tags;
-
+	
+#pragma endregion
+	
+#pragma region Grammar
+	
 	/**
 	 * Property overrides for this entry.
 	 * Values here take precedence over collection-level defaults.
@@ -262,10 +240,46 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	FPCGExCollectionGrammarDetails CollectionGrammar_DEPRECATED;
 
 #pragma endregion
+	
+#pragma endregion
+
+#pragma region Fitting
+	
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	EPCGExEntryVariationMode VariationMode = EPCGExEntryVariationMode::None;
+
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variations", EditCondition="!bIsSubCollection && VariationMode == EPCGExEntryVariationMode::Local", EditConditionHides, ShowOnlyInnerProperties))
+	FPCGExFittingVariations Variations;
+
+	/**
+	 * Where this entry's Scale to Fit comes from when a staging node considers entry overrides.
+	 * None = the node's settings apply; Local = this entry's; Global = the collection's.
+	 */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	EPCGExEntryVariationMode ScaleToFitSource = EPCGExEntryVariationMode::None;
+
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Scale to Fit", EditCondition="!bIsSubCollection && ScaleToFitSource == EPCGExEntryVariationMode::Local", EditConditionHides))
+	FPCGExLeanScaleToFitDetails ScaleToFit;
+
+	/**
+	 * Where this entry's Justification comes from when a staging node considers entry overrides.
+	 * None = the node's settings apply; Local = this entry's; Global = the collection's.
+	 */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	EPCGExEntryVariationMode JustificationSource = EPCGExEntryVariationMode::None;
+
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Justification", EditCondition="!bIsSubCollection && JustificationSource == EPCGExEntryVariationMode::Local", EditConditionHides))
+	FPCGExLeanJustificationDetails Justification;
+
+	UPROPERTY(EditAnywhere, Category = Settings)
+	TSet<FName> Tags;
+
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	FPCGExAssetStagingData Staging;
 
+#pragma endregion
+	
 	/**
 	 * Subcollection to draw picks from when bIsSubCollection is enabled. Accepts any collection type;
 	 * consuming nodes type-check resolved entries, so mixed-type nesting must be routed through type
@@ -690,6 +704,78 @@ public:
 		return PCGExAssetCollection::FTypeRegistry::Get().IsA(GetTypeId(), TypeId);
 	}
 
+	/**
+	 * True when this host runs TypeId's cross-entry collection machinery (post-rebuild
+	 * passes, save-time lifecycle -- e.g. the PCGDataAsset shared-collection compaction).
+	 * Entry code gating on machinery must use this, never a concrete host cast.
+	 * Base: only the native type lineage runs its own machinery. Heterogeneous hosts
+	 * override to answer for every type with a registered state class.
+	 */
+	virtual bool SupportsTypeMachinery(PCGExAssetCollection::FTypeId TypeId) const
+	{
+		return IsType(TypeId);
+	}
+
+	/**
+	 * First machinery state of (or derived from) StateClass this host owns; null when it
+	 * has none. Accessor semantics (one-directional IsChildOf on purpose): the result IS-A
+	 * StateClass, so the typed template below stays cast-safe. Hosts with per-type
+	 * machinery override this (Omni: TypeStates array; typed collections: their owned
+	 * state) -- the generic way to reach a host's machinery state without concrete casts.
+	 */
+	virtual UPCGExCollectionTypeState* FindTypeState(const UClass* StateClass) const
+	{
+		return nullptr;
+	}
+
+	template <typename T>
+	T* FindTypeState() const
+	{
+		return static_cast<T*>(FindTypeState(T::StaticClass()));
+	}
+
+#pragma endregion
+
+#pragma region Type Globals
+
+	/**
+	 * Copy this host's globals block matching T into OutGlobals; false when the host has no
+	 * such block (callers fall back to entry-local values). This is how entries read
+	 * collection-level settings -- NEVER cast a host collection to a concrete class for them.
+	 * Copy-out by design: no lifetime coupling, any-thread safe. Called per resolved entry;
+	 * do not introduce per-point calls.
+	 */
+	template <typename T>
+	bool GetTypeGlobals(T& OutGlobals) const
+	{
+		static_assert(std::is_base_of_v<FPCGExCollectionTypeGlobals, T>, "T must derive from FPCGExCollectionTypeGlobals");
+		return GetTypeGlobalsInternal(T::StaticStruct(), OutGlobals);
+	}
+
+	/** Type-erased flavor. OutGlobals' concrete type must match or derive from StructType. */
+	bool GetTypeGlobals(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const
+	{
+		return GetTypeGlobalsInternal(StructType, OutGlobals);
+	}
+
+	/**
+	 * Globals-block struct types this host can answer GetTypeGlobals for. Base: the
+	 * collection's registered GlobalsStruct; heterogeneous hosts: each stored block's
+	 * concrete struct. Consumed by conversion/merge.
+	 */
+	virtual void GetTypeGlobalsStructs(TArray<const UScriptStruct*>& OutStructs) const;
+
+protected:
+	/**
+	 * Fill OutGlobals if this collection provides a block StructType matches or derives from.
+	 * Unhandled types must route to Super so provider chains compose. Base provides none.
+	 */
+	virtual bool GetTypeGlobalsInternal(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const
+	{
+		return false;
+	}
+
+public:
 #pragma endregion
 
 #pragma region Cache
@@ -728,6 +814,30 @@ public:
 	{
 		return GetMutableEntryAtRawIndex(Index);
 	}
+
+	/**
+	 * Concrete script struct of the entry payload at the given raw index (base: the Entries
+	 * inner struct; heterogeneous collections: per row). Null when the row has no payload.
+	 * Editor UI must use this instead of reflecting the Entries array inner type.
+	 */
+	virtual const UScriptStruct* EDITOR_GetEntryScriptStruct(int32 RawIndex) const;
+
+	/**
+	 * Payload types a grid "+ Add" affordance should offer. Base leaves it empty (untyped
+	 * adds); heterogeneous collections fill it so the UI presents a type choice.
+	 */
+	virtual void EDITOR_GetAddableEntryTypes(TArray<const UScriptStruct*>& OutTypes) const
+	{
+	}
+
+	/**
+	 * Append one default-initialized entry; null EntryStruct = the native entry type. Base
+	 * accepts the Entries inner struct or a base of it (element is created NATIVE, caller
+	 * copies the requested portion); Omni accepts any entry-derived payload. Null on
+	 * rejection -- doubles as the compatibility arbiter for cross-collection transfers.
+	 * Caller owns transaction/Modify/PostEditChange.
+	 */
+	virtual FPCGExAssetCollectionEntry* EDITOR_AddEntry(const UScriptStruct* EntryStruct = nullptr);
 #endif
 
 	/** Get entry by index with pick mode */
@@ -921,9 +1031,10 @@ public:
 	 * type is accepted. Skips inputs that would create a cycle, that point at self, or that
 	 * are already referenced by an existing subcollection entry.
 	 * Does NOT open a transaction or mark dirty -- caller is responsible (matches the
-	 * EDITOR_AddBrowserSelectionTyped contract).
+	 * EDITOR_AddBrowserSelectionTyped contract). Base reflects over a homogeneous `Entries`
+	 * array; wrapper-row collections (Omni) override.
 	 */
-	void EDITOR_AddSubCollectionEntries(const TArray<UPCGExAssetCollection*>& InSubCollections);
+	virtual void EDITOR_AddSubCollectionEntries(const TArray<UPCGExAssetCollection*>& InSubCollections);
 
 	/**
 	 * Post-rebuild extension point. Called once at the tail of any user-triggered editor

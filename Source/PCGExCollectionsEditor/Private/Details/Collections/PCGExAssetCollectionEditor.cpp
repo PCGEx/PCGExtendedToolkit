@@ -16,6 +16,8 @@
 #include "PropertyEditorModule.h"
 #include "ScopedTransaction.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExAssetCollectionTypes.h"
+#include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/SPCGExCollectionGridView.h"
 #include "Grammit/PCGExGrammitExport.h"
@@ -466,6 +468,45 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildSubCollectionPickerSlot(
 		];
 }
 
+FName FPCGExAssetCollectionEditor::GetTilePickerPropertyName() const
+{
+	const UPCGExAssetCollection* Coll = EditedCollection.Get();
+	const FCollectionEditorTypeInfo* Info = Coll ? FCollectionEditorTypeRegistry::Get().FindByCollectionClass(Coll->GetClass()) : nullptr;
+	return Info ? Info->TilePickerPropertyName : NAME_None;
+}
+
+const UClass* FPCGExAssetCollectionEditor::GetTilePickerAllowedClass() const
+{
+	const UPCGExAssetCollection* Coll = EditedCollection.Get();
+	const FCollectionEditorTypeInfo* Info = Coll ? FCollectionEditorTypeRegistry::Get().FindByCollectionClass(Coll->GetClass()) : nullptr;
+	return Info ? Info->TilePickerAllowedClass.Get() : nullptr;
+}
+
+void FPCGExAssetCollectionEditor::ResolveTilePickerForRow(int32 EntryIndex, FName& OutPropertyName, const UClass*& OutAllowedClass) const
+{
+	// Editor-wide values first (virtuals win for typed editors)...
+	OutPropertyName = GetTilePickerPropertyName();
+	OutAllowedClass = GetTilePickerAllowedClass();
+
+	// ...then the row's entry type refines them (no-op on typed rows).
+	const UPCGExAssetCollection* Coll = EditedCollection.Get();
+	if (!Coll)
+	{
+		return;
+	}
+
+	const UScriptStruct* RowStruct = Coll->EDITOR_GetEntryScriptStruct(EntryIndex);
+	PCGExAssetCollection::FTypeInfo RuntimeInfo;
+	const bool bRuntimeInfoFound = RowStruct && PCGExAssetCollection::FTypeRegistry::Get().GetInfoByEntryStruct(RowStruct, RuntimeInfo);
+	const FCollectionEditorTypeInfo* EditorInfo = bRuntimeInfoFound ? FCollectionEditorTypeRegistry::Get().Find(RuntimeInfo.Id) : nullptr;
+
+	if (EditorInfo && !EditorInfo->TilePickerPropertyName.IsNone())
+	{
+		OutPropertyName = EditorInfo->TilePickerPropertyName;
+		OutAllowedClass = EditorInfo->TilePickerAllowedClass.Get();
+	}
+}
+
 TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 	TWeakObjectPtr<UPCGExAssetCollection> InCollection,
 	int32 EntryIndex,
@@ -474,8 +515,9 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 	TWeakObjectPtr<UPCGExAssetCollection> WeakColl = InCollection;
 	const int32 Idx = EntryIndex;
 
-	const FName PickerPropName = GetTilePickerPropertyName();
-	const UClass* AllowedClass = GetTilePickerAllowedClass();
+	FName PickerPropName = NAME_None;
+	const UClass* AllowedClass = nullptr;
+	ResolveTilePickerForRow(Idx, PickerPropName, AllowedClass);
 
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
 
@@ -485,20 +527,16 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 		BuildSubCollectionPickerSlot(WeakColl, Idx, OnPropertyEdited)
 	];
 
-	// Asset picker (visible when bIsSubCollection is false). Detect property type once at construction.
+	// Asset picker (visible when bIsSubCollection is false). Property type detected once at
+	// construction, from the ROW's payload struct (per-row on heterogeneous hosts).
 	if (!PickerPropName.IsNone())
 	{
 		bool bIsClassProperty = false;
-		if (UPCGExAssetCollection* Coll = WeakColl.Get())
+		if (const UPCGExAssetCollection* Coll = WeakColl.Get())
 		{
-			FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
-			if (ArrayProp)
+			if (const UScriptStruct* RowStruct = Coll->EDITOR_GetEntryScriptStruct(Idx))
 			{
-				FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-				if (InnerProp && InnerProp->Struct)
-				{
-					bIsClassProperty = CastField<FSoftClassProperty>(InnerProp->Struct->FindPropertyByName(PickerPropName)) != nullptr;
-				}
+				bIsClassProperty = CastField<FSoftClassProperty>(RowStruct->FindPropertyByName(PickerPropName)) != nullptr;
 			}
 		}
 
@@ -524,34 +562,23 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 					.MetaClass(AllowedClass)
 					.SelectedClass_Lambda([WeakColl, Idx, PickerPropName]() -> const UClass*
 					{
-						UPCGExAssetCollection* Coll = WeakColl.Get();
+						const UPCGExAssetCollection* Coll = WeakColl.Get();
 						if (!Coll)
 						{
 							return nullptr;
 						}
-						FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
-						if (!ArrayProp)
+						const UScriptStruct* RowStruct = Coll->EDITOR_GetEntryScriptStruct(Idx);
+						const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+						if (!RowStruct || !Result.IsValid())
 						{
 							return nullptr;
 						}
-						FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-						if (!InnerProp || !InnerProp->Struct)
-						{
-							return nullptr;
-						}
-						void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
-						FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
-						if (Idx < 0 || Idx >= ArrayHelper.Num())
-						{
-							return nullptr;
-						}
-						const uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
-						const FSoftClassProperty* ClassProp = CastField<FSoftClassProperty>(InnerProp->Struct->FindPropertyByName(PickerPropName));
+						const FSoftClassProperty* ClassProp = CastField<FSoftClassProperty>(RowStruct->FindPropertyByName(PickerPropName));
 						if (!ClassProp)
 						{
 							return nullptr;
 						}
-						const FSoftObjectPtr& SoftRef = *ClassProp->GetPropertyValuePtr_InContainer(EntryPtr);
+						const FSoftObjectPtr& SoftRef = *ClassProp->GetPropertyValuePtr_InContainer(reinterpret_cast<const uint8*>(Result.Entry));
 						return Cast<UClass>(SoftRef.Get());
 					})
 					.OnSetClass_Lambda([WeakColl, Idx, PickerPropName, OnPropertyEdited](const UClass* NewClass)
@@ -561,24 +588,13 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 						{
 							return;
 						}
-						FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
-						if (!ArrayProp)
+						const UScriptStruct* RowStruct = Coll->EDITOR_GetEntryScriptStruct(Idx);
+						uint8* EntryPtr = reinterpret_cast<uint8*>(Coll->GetMutableEntryRaw(Idx));
+						if (!RowStruct || !EntryPtr)
 						{
 							return;
 						}
-						FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-						if (!InnerProp || !InnerProp->Struct)
-						{
-							return;
-						}
-						void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
-						FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
-						if (Idx < 0 || Idx >= ArrayHelper.Num())
-						{
-							return;
-						}
-						uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
-						const FSoftClassProperty* ClassProp = CastField<FSoftClassProperty>(InnerProp->Struct->FindPropertyByName(PickerPropName));
+						const FSoftClassProperty* ClassProp = CastField<FSoftClassProperty>(RowStruct->FindPropertyByName(PickerPropName));
 						if (!ClassProp)
 						{
 							return;
@@ -616,30 +632,19 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 					.AllowedClass(AllowedClass)
 					.ObjectPath_Lambda([WeakColl, Idx, PickerPropName]() -> FString
 					{
-						UPCGExAssetCollection* Coll = WeakColl.Get();
+						const UPCGExAssetCollection* Coll = WeakColl.Get();
 						if (!Coll)
 						{
 							return FString();
 						}
-						FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
-						if (!ArrayProp)
+						const UScriptStruct* RowStruct = Coll->EDITOR_GetEntryScriptStruct(Idx);
+						const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+						if (!RowStruct || !Result.IsValid())
 						{
 							return FString();
 						}
-						FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-						if (!InnerProp || !InnerProp->Struct)
-						{
-							return FString();
-						}
-						void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
-						FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
-						if (Idx < 0 || Idx >= ArrayHelper.Num())
-						{
-							return FString();
-						}
-
-						const uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
-						const FProperty* Prop = InnerProp->Struct->FindPropertyByName(PickerPropName);
+						const uint8* EntryPtr = reinterpret_cast<const uint8*>(Result.Entry);
+						const FProperty* Prop = RowStruct->FindPropertyByName(PickerPropName);
 						if (!Prop)
 						{
 							return FString();
@@ -666,25 +671,13 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 						{
 							return;
 						}
-						FArrayProperty* ArrayProp = CastField<FArrayProperty>(Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
-						if (!ArrayProp)
+						const UScriptStruct* RowStruct = Coll->EDITOR_GetEntryScriptStruct(Idx);
+						uint8* EntryPtr = reinterpret_cast<uint8*>(Coll->GetMutableEntryRaw(Idx));
+						if (!RowStruct || !EntryPtr)
 						{
 							return;
 						}
-						FStructProperty* InnerProp = CastField<FStructProperty>(ArrayProp->Inner);
-						if (!InnerProp || !InnerProp->Struct)
-						{
-							return;
-						}
-						void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(Coll);
-						FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
-						if (Idx < 0 || Idx >= ArrayHelper.Num())
-						{
-							return;
-						}
-
-						uint8* EntryPtr = ArrayHelper.GetRawPtr(Idx);
-						const FProperty* Prop = InnerProp->Struct->FindPropertyByName(PickerPropName);
+						const FProperty* Prop = RowStruct->FindPropertyByName(PickerPropName);
 						if (!Prop)
 						{
 							return;

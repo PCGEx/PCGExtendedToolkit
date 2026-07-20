@@ -139,10 +139,10 @@ private:
 	void OnTileReorderInCategory(FName Category, TSharedRef<FPCGExCollectionTileDragDropOp> DragOp, int32 InsertBeforeLocalIndex);
 
 	/**
-	 * Cross-collection drop: move-or-copy entries from a different collection into this one.
-	 * Validates that the source and target share the same entry struct type; on mismatch,
-	 * shows a notification and aborts. When !bIsCopy, originals are removed from the source.
-	 * Both collections are wrapped in a single transaction.
+	 * Cross-collection drop: move-or-copy entries into this collection at PAYLOAD level.
+	 * Per-row compatibility is arbitrated by EDITOR_AddEntry; incompatible rows skip with a
+	 * notification. When !bIsCopy, only transferred originals leave the source. Single
+	 * transaction for both collections.
 	 */
 	void HandleCrossCollectionDrop(
 		const UPCGExAssetCollection* SourceColl,
@@ -184,9 +184,22 @@ private:
 	bool bIsBatchOperation = false;
 	bool bPendingCategoryRefresh = false;
 
-	// Entry struct reflection helpers
-	UScriptStruct* GetEntryScriptStruct() const;
+	// Per-row payload access via collection virtuals (payload struct + payload base pointer).
+	// Element-level array ops (add/duplicate/reorder) keep using GetEntriesAccess -- element
+	// and payload struct differ on wrapper-row hosts.
+	UScriptStruct* GetEntryScriptStruct(int32 Index) const;
 	uint8* GetEntryRawPtr(int32 Index) const;
+
+	/** Destination-side property for cross-entry copies: same struct reuses SrcProp;
+	 *  different structs match by name + SameType. Null when incompatible. */
+	static const FProperty* ResolveMatchingProperty(const FProperty* SrcProp, const UScriptStruct* SrcStruct, const UScriptStruct* DstStruct);
+
+	/** Single entry point for every add affordance: untyped direct add on homogeneous
+	 *  collections, payload-type dropdown on heterogeneous hosts. */
+	void RequestAddEntry(FName Category);
+
+	/** Shared add-entry body (transaction, category, selection, refresh). EntryStruct null = untyped. */
+	void AddEntryOfStruct(const UScriptStruct* EntryStruct, FName Category);
 
 	// Encapsulates reflection boilerplate for Entries array access
 	struct FEntriesArrayAccess

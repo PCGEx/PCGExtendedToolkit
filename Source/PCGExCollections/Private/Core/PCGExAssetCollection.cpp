@@ -758,6 +758,18 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRaw(int32 RawIndex) const
 	return Result;
 }
 
+void UPCGExAssetCollection::GetTypeGlobalsStructs(TArray<const UScriptStruct*>& OutStructs) const
+{
+	// Lineage-resolved: a derived type without its own registered block still answers its
+	// ancestor's struct through the seam (GetTypeGlobalsInternal chains to Super), so that
+	// is the block it provides.
+	PCGExAssetCollection::FTypeInfo TypeInfo;
+	if (PCGExAssetCollection::FTypeRegistry::Get().GetInfoResolved(GetTypeId(), TypeInfo) && TypeInfo.GlobalsStruct)
+	{
+		OutStructs.AddUnique(TypeInfo.GlobalsStruct);
+	}
+}
+
 FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed, EPCGExIndexPickMode PickMode) const
 {
 	FPCGExEntryAccessResult Result;
@@ -2200,5 +2212,41 @@ void UPCGExAssetCollection::EDITOR_AddSubCollectionEntries(const TArray<UPCGExAs
 void UPCGExAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData)
 {
 	// Override in derived classes
+}
+
+const UScriptStruct* UPCGExAssetCollection::EDITOR_GetEntryScriptStruct(int32 RawIndex) const
+{
+	const FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FStructProperty* InnerProp = ArrayProp ? CastField<FStructProperty>(ArrayProp->Inner) : nullptr;
+
+	if (InnerProp && InnerProp->Struct && InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
+	{
+		return InnerProp->Struct;
+	}
+
+	return nullptr;
+}
+
+FPCGExAssetCollectionEntry* UPCGExAssetCollection::EDITOR_AddEntry(const UScriptStruct* EntryStruct)
+{
+	FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FStructProperty* InnerProp = ArrayProp ? CastField<FStructProperty>(ArrayProp->Inner) : nullptr;
+
+	if (!InnerProp || !InnerProp->Struct || !InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
+	{
+		return nullptr;
+	}
+
+	// Requests for a BASE of the native type are honored: the element is created native and
+	// the caller copies the base portion (how subcollection rows transfer in).
+	if (EntryStruct && !InnerProp->Struct->IsChildOf(EntryStruct))
+	{
+		return nullptr;
+	}
+
+	void* ArrayData = ArrayProp->ContainerPtrToValuePtr<void>(this);
+	FScriptArrayHelper ArrayHelper(ArrayProp, ArrayData);
+	const int32 NewIndex = ArrayHelper.AddValue();
+	return reinterpret_cast<FPCGExAssetCollectionEntry*>(ArrayHelper.GetRawPtr(NewIndex));
 }
 #endif

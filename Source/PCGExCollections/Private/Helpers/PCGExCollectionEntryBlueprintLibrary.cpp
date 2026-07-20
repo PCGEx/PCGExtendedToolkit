@@ -205,18 +205,33 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 	{
 		const PCGExAssetCollection::FTypeRegistry& Registry = PCGExAssetCollection::FTypeRegistry::Get();
 
-		const PCGExAssetCollection::FTypeInfo* TypeInfo = Registry.Find(Collection->GetTypeId());
-		if (!TypeInfo || !TypeInfo->EntryStruct)
+		PCGExAssetCollection::FTypeInfo TypeInfo;
+		bool bFound = Registry.GetInfo(Collection->GetTypeId(), TypeInfo);
+		if (!bFound || !TypeInfo.EntryStruct)
 		{
-			TypeInfo = Registry.FindByClass(Collection->GetClass());
+			bFound = Registry.GetInfoByClass(Collection->GetClass(), TypeInfo);
 		}
 
-		if (TypeInfo && TypeInfo->EntryStruct)
+		if (bFound && TypeInfo.EntryStruct)
 		{
-			return TypeInfo->EntryStruct;
+			return TypeInfo.EntryStruct;
 		}
 
 		return FPCGExAssetCollectionEntry::StaticStruct();
+	}
+
+	// Per-entry refinement of ResolveEntryMemberRoot (heterogeneous hosts have no single
+	// entry struct). Subcollection rows fall through to the collection root (legacy behavior).
+	const UStruct* ResolveEntryMemberRootForEntry(const UPCGExAssetCollection* Collection, const FPCGExAssetCollectionEntry* Entry)
+	{
+		if (Entry)
+		{
+			if (const UScriptStruct* EntryStruct = PCGExAssetCollection::FTypeRegistry::Get().GetEntryStruct(Entry->GetTypeId()))
+			{
+				return EntryStruct;
+			}
+		}
+		return ResolveEntryMemberRoot(Collection);
 	}
 
 	PCGExMemberPath::FResolvedMember ResolveEntryMember(UPCGExAssetCollection* Collection, int32 EntryIndex, FName MemberPath)
@@ -226,7 +241,7 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 		{
 			return PCGExMemberPath::FResolvedMember();
 		}
-		return PCGExMemberPath::Resolve(ResolveEntryMemberRoot(Collection), Entry, MemberPath);
+		return PCGExMemberPath::Resolve(ResolveEntryMemberRootForEntry(Collection, Entry), Entry, MemberPath);
 	}
 
 	PCGExMemberPath::FResolvedMember ResolveEntryMemberConst(const UPCGExAssetCollection* Collection, int32 EntryIndex, FName MemberPath)
@@ -238,7 +253,7 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 		{
 			return PCGExMemberPath::FResolvedMember();
 		}
-		return PCGExMemberPath::Resolve(ResolveEntryMemberRoot(Collection), const_cast<FPCGExAssetCollectionEntry*>(Entry), MemberPath);
+		return PCGExMemberPath::Resolve(ResolveEntryMemberRootForEntry(Collection, Entry), const_cast<FPCGExAssetCollectionEntry*>(Entry), MemberPath);
 	}
 
 	PCGExMemberPath::FResolvedMember ResolveCollectionMember(UPCGExAssetCollection* Collection, FName MemberPath)

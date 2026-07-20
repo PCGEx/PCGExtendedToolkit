@@ -9,6 +9,8 @@
 class UPCGExAssetCollection;
 class UPackage;
 
+class UScriptStruct;
+
 /** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
 namespace PCGExCollectionEditorUtils
 {
@@ -17,6 +19,17 @@ namespace PCGExCollectionEditorUtils
 	 * a trailing "_C" so actor entries (generated class path) resolve to their Blueprint asset.
 	 */
 	PCGEXCOLLECTIONSEDITOR_API FAssetData ResolveEntryAssetData(const FSoftObjectPath& AssetPath);
+
+	/** UI label for an entry struct: the ShortName meta ("Actor") with display-name fallback. */
+	PCGEXCOLLECTIONSEDITOR_API FText GetEntryTypeLabel(const UScriptStruct* EntryStruct);
+
+	/**
+	 * Every registered concrete entry type (base entry struct excluded), sorted by label.
+	 * The registry-wide sibling of UPCGExAssetCollection::EDITOR_GetAddableEntryTypes --
+	 * use the collection virtual when the list must reflect a specific HOST's policy, and
+	 * this when any concrete entry type is acceptable (e.g. variant swap payloads).
+	 */
+	PCGEXCOLLECTIONSEDITOR_API void GetAllConcreteEntryTypes(TArray<const UScriptStruct*>& OutTypes);
 
 	/** Add Content Browser selection to this collection. */
 	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);

@@ -45,6 +45,19 @@ namespace PCGExSkinnedMeshCollection
 	};
 }
 
+/** Skinned mesh collection-level globals. Mirrors UPCGExSkinnedMeshCollection's global members 1:1 -- keep names in sync. */
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Skinned Mesh Collection Globals")
+struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionGlobals : public FPCGExCollectionTypeGlobals
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = Settings)
+	EPCGExGlobalVariationRule GlobalDescriptorMode = EPCGExGlobalVariationRule::PerEntry;
+
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Global Skinned Mesh Settings"))
+	FPCGSoftSkinnedMeshComponentDescriptor GlobalDescriptor;
+};
+
 /**
  * Skinned mesh collection entry. References a USkinnedAsset (or, via the base SubCollection
  * property, any collection type as a subcollection). Mirrors FPCGExMeshCollectionEntry
@@ -54,7 +67,7 @@ namespace PCGExSkinnedMeshCollection
  * AnimationIndex on each spawned FPCGSkinnedMeshInstance is a per-instance selector-scoped
  * concern handled by the staged selector, not by the collection entry.
  */
-USTRUCT(BlueprintType, DisplayName="[PCGEx] Skinned Mesh Collection Entry")
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Skinned Mesh Collection Entry", meta=(ShortName="Skinned Mesh"))
 struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAssetCollectionEntry
 {
 	GENERATED_BODY()
@@ -103,7 +116,11 @@ struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAsse
 	virtual void SetAssetPath(const FSoftObjectPath& InPath) override;
 	virtual void ResolveGlobalsToLocal(const UPCGExAssetCollection* InSourceCollection) override;
 
-	void InitPCGSoftSkinnedDescriptor(const UPCGExSkinnedMeshCollection* ParentCollection, FPCGSoftSkinnedMeshComponentDescriptor& TargetDescriptor) const;
+	/**
+	 * Resolve descriptor inheritance into TargetDescriptor. Accepts any host -- globals read
+	 * through the seam; hosts without a block (or null) fall back to the local descriptor.
+	 */
+	void InitPCGSoftSkinnedDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGSoftSkinnedMeshComponentDescriptor& TargetDescriptor) const;
 
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize() override;
@@ -148,7 +165,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	TArray<FPCGExSkinnedMeshCollectionEntry> Entries;
 
+protected:
+	virtual bool GetTypeGlobalsInternal(const UScriptStruct* StructType, FPCGExCollectionTypeGlobals& OutGlobals) const override;
 
+public:
 #if WITH_EDITOR
 	// Editor Functions
 

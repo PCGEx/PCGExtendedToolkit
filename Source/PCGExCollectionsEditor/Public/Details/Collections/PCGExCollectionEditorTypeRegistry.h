@@ -41,6 +41,12 @@ struct PCGEXCOLLECTIONSEDITOR_API FCollectionEditorTypeInfo
 	// participate in the "Create from selection" right-click flow.
 	bool bSupportsMenuCreation = true;
 
+	// Tile-picker contribution: the entry-struct property holding the primary asset ref +
+	// its picker class filter. Resolved PER ROW on heterogeneous grids; typed editors
+	// default to them. Registered via Customize alongside the main registration.
+	FName TilePickerPropertyName = NAME_None;
+	TWeakObjectPtr<const UClass> TilePickerAllowedClass = nullptr;
+
 	TFunction<bool(const FAssetData&)> DetectSourceAsset;
 	TFunction<bool(const FAssetData&)> DetectCollectionAsset;
 

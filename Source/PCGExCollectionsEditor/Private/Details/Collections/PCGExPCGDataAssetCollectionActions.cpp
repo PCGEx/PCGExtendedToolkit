@@ -33,6 +33,11 @@ namespace
 					[](FCollectionEditorTypeInfo& Info)
 					{
 						Info.bSupportsMenuCreation = false;
+
+						// Tile-picker contribution. Covers the DataAsset source mode; Level-mode
+						// rows are edited through the entry details.
+						Info.TilePickerPropertyName = FName("DataAsset");
+						Info.TilePickerAllowedClass = UPCGDataAsset::StaticClass();
 					});
 			});
 		}
