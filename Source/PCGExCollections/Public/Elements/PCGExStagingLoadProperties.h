@@ -116,12 +116,21 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, EditCondition="bWriteBoundsMax"))
 	FName BoundsMaxAttributeName = FName("BoundsMax");
 
-	/** Write the host collection's type id (e.g. Mesh, Actor, Level, PCGDataAsset, Niagara). */
+	/** Write the host collection's type id. NOTE: the CONTAINER's type -- rows in
+	 *  heterogeneous hosts all report the host type; use Entry Type for the per-entry id. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteCollectionType = false;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, EditCondition="bWriteCollectionType"))
 	FName CollectionTypeAttributeName = FName("CollectionType");
+
+	/** Write the resolved entry's own type id -- differentiates rows inside heterogeneous
+	 *  hosts and matches what Staging Type Filter dispatches on. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bWriteEntryType = false;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, EditCondition="bWriteEntryType"))
+	FName EntryTypeAttributeName = FName("EntryType");
 
 	/** Output attribute name for the joined entry tags. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, EditCondition="bWriteEntryTags"))
@@ -274,7 +283,8 @@ MACRO(Category, FName, NAME_None, Entry->Category)\
 MACRO(Extents, FVector, FVector::ZeroVector, Entry->Staging.Bounds.GetExtent())\
 MACRO(BoundsMin, FVector, FVector::ZeroVector, Entry->Staging.Bounds.Min)\
 MACRO(BoundsMax, FVector, FVector::ZeroVector, Entry->Staging.Bounds.Max)\
-MACRO(CollectionType, FName, NAME_None, Host ? Host->GetTypeId() : NAME_None)
+MACRO(CollectionType, FName, NAME_None, Host ? Host->GetTypeId() : NAME_None)\
+MACRO(EntryType, FName, NAME_None, Entry->GetTypeId())
 
 		// Symbol/DebugColor are axis-invariant -- one writer + cache each, sourced from the effective
 		// grammar pointer (not a per-axis Module).

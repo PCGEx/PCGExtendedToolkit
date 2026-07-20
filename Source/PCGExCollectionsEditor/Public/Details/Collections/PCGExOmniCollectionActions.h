@@ -6,31 +6,31 @@
 #include "CoreMinimal.h"
 
 #include "PCGExDataAssetFactory.h"
-#include "Collections/PCGExVariantCollection.h"
+#include "Collections/PCGExOmniCollection.h"
 #include "Details/Collections/PCGExCollectionAssetDefinitionBase.h"
 
-#include "PCGExVariantCollectionActions.generated.h"
+#include "PCGExOmniCollectionActions.generated.h"
 
 UCLASS()
-class UPCGExVariantCollectionFactory : public UPCGExDataAssetFactoryBase
+class UPCGExOmniCollectionFactory : public UPCGExDataAssetFactoryBase
 {
 	GENERATED_BODY()
 
 public:
-	UPCGExVariantCollectionFactory()
+	UPCGExOmniCollectionFactory()
 	{
-		SupportedClass = UPCGExVariantCollection::StaticClass();
+		SupportedClass = UPCGExOmniCollection::StaticClass();
 	}
 };
 
 UCLASS()
-class UAssetDefinition_PCGExVariantCollection : public UAssetDefinition_PCGExCollectionBase
+class UAssetDefinition_PCGExOmniCollection : public UAssetDefinition_PCGExCollectionBase
 {
 	GENERATED_BODY()
 
 public:
 	virtual TSoftClassPtr<UObject> GetAssetClass() const override
 	{
-		return UPCGExVariantCollection::StaticClass();
+		return UPCGExOmniCollection::StaticClass();
 	}
 };

@@ -4,11 +4,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AssetDefinitionDefault.h"
 
 #include "PCGExDataAssetFactory.h"
 #include "AssetRegistry/AssetData.h"
 #include "Collections/PCGExMeshCollection.h"
+#include "Details/Collections/PCGExCollectionAssetDefinitionBase.h"
 #include "Engine/World.h"
 
 #include "PCGExMeshCollectionActions.generated.h"
@@ -20,8 +20,7 @@ namespace PCGExMeshCollectionActions
 	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets);
 	void UpdateCollectionsFrom(
 		const TArray<TObjectPtr<UPCGExMeshCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets,
-		bool bIsNewCollection = false);
+		const TArray<FAssetData>& SelectedAssets);
 };
 
 UCLASS()
@@ -37,36 +36,13 @@ public:
 };
 
 UCLASS()
-class UAssetDefinition_PCGExMeshCollection : public UAssetDefinitionDefault
+class UAssetDefinition_PCGExMeshCollection : public UAssetDefinition_PCGExCollectionBase
 {
 	GENERATED_BODY()
 
 public:
-	virtual FText GetAssetDisplayName() const override
-	{
-		return INVTEXT("Mesh Collection");
-	}
-
-	virtual FLinearColor GetAssetColor() const override
-	{
-		return FLinearColor(FColor(0, 255, 255));
-	}
-
-	virtual FText GetAssetDescription(const FAssetData& AssetData) const override
-	{
-		return INVTEXT("A weighted collection of static meshes with optional material overrides.");
-	}
-
 	virtual TSoftClassPtr<UObject> GetAssetClass() const override
 	{
 		return UPCGExMeshCollection::StaticClass();
 	}
-
-	virtual TConstArrayView<FAssetCategoryPath> GetAssetCategories() const override
-	{
-		static const auto Categories = {FAssetCategoryPath(INVTEXT("PCGEx")) / INVTEXT("Collections")};
-		return Categories;
-	}
-
-	virtual EAssetCommandResult OpenAssets(const FAssetOpenArgs& OpenArgs) const override;
 };

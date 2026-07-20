@@ -3,6 +3,8 @@
 
 #include "Core/PCGExAssetCollectionTypes.h"
 
+#include "PCGExLog.h"
+
 namespace PCGExAssetCollection
 {
 	FTypeRegistry& FTypeRegistry::Get()
@@ -44,6 +46,20 @@ namespace PCGExAssetCollection
 	}
 
 
+	void FTypeRegistry::Customize(FTypeId Id, TFunctionRef<void(FTypeInfo&)> Mutator)
+	{
+		FWriteScopeLock Lock(RegistryLock);
+
+		FTypeInfo* Info = Types.Find(Id);
+		if (!Info)
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("PCGExAssetCollection: Cannot customize unregistered type '%s'"), *Id.ToString());
+			return;
+		}
+
+		Mutator(*Info);
+	}
+
 	// Two-phase registration: before module startup, registrations are queued.
 	// ProcessPendingRegistrations() flushes the queue during module init.
 	// Late registrations (e.g. hot-reload or plugins loaded after init) execute immediately.
@@ -56,6 +72,18 @@ namespace PCGExAssetCollection
 		else
 		{
 			GetPendingRegistrations().Add(MoveTemp(Func));
+		}
+	}
+
+	void FTypeRegistry::AddPendingCustomization(FTypeId Id, TFunction<void(FTypeInfo&)>&& Mutator)
+	{
+		if (IsProcessed())
+		{
+			Get().Customize(Id, Mutator);
+		}
+		else
+		{
+			GetPendingCustomizations().Emplace(Id, MoveTemp(Mutator));
 		}
 	}
 
@@ -73,11 +101,25 @@ namespace PCGExAssetCollection
 		}
 		GetPendingRegistrations().Empty();
 		GetPendingRegistrations().Shrink();
+
+		// Customizations run after every registration -- cross-TU static-init order never matters.
+		for (auto& Pair : GetPendingCustomizations())
+		{
+			Get().Customize(Pair.Key, Pair.Value);
+		}
+		GetPendingCustomizations().Empty();
+		GetPendingCustomizations().Shrink();
 	}
 
 	TArray<TFunction<void()>>& FTypeRegistry::GetPendingRegistrations()
 	{
 		static TArray<TFunction<void()>> Pending;
+		return Pending;
+	}
+
+	TArray<TPair<FTypeId, TFunction<void(FTypeInfo&)>>>& FTypeRegistry::GetPendingCustomizations()
+	{
+		static TArray<TPair<FTypeId, TFunction<void(FTypeInfo&)>>> Pending;
 		return Pending;
 	}
 
@@ -87,66 +129,118 @@ namespace PCGExAssetCollection
 		return bProcessed;
 	}
 
-	const FTypeInfo* FTypeRegistry::Find(FTypeId Id) const
+	bool FTypeRegistry::GetInfo(FTypeId Id, FTypeInfo& OutInfo) const
 	{
 		FReadScopeLock Lock(RegistryLock);
-		return Types.Find(Id);
+		if (const FTypeInfo* Info = FindUnsafe(Id))
+		{
+			OutInfo = *Info;
+			return true;
+		}
+		return false;
 	}
 
-	const FTypeInfo* FTypeRegistry::FindByClass(const UClass* Class) const
+	bool FTypeRegistry::GetInfoByClass(const UClass* Class, FTypeInfo& OutInfo) const
 	{
 		if (!Class)
 		{
-			return nullptr;
+			return false;
 		}
 
 		FReadScopeLock Lock(RegistryLock);
 
-		// Direct lookup
-		if (const FTypeId* Id = ClassToType.Find(MakeWeakObjectPtr(const_cast<UClass*>(Class))))
-		{
-			return Types.Find(*Id);
-		}
-
-		// Check parent classes
-		for (const UClass* Current = Class->GetSuperClass(); Current; Current = Current->GetSuperClass())
+		// Direct lookup, then parent classes
+		for (const UClass* Current = Class; Current; Current = Current->GetSuperClass())
 		{
 			if (const FTypeId* Id = ClassToType.Find(MakeWeakObjectPtr(const_cast<UClass*>(Current))))
 			{
-				return Types.Find(*Id);
+				if (const FTypeInfo* Info = FindUnsafe(*Id))
+				{
+					OutInfo = *Info;
+					return true;
+				}
 			}
 		}
 
-		return nullptr;
+		return false;
 	}
 
-	const FTypeInfo* FTypeRegistry::FindByEntryStruct(const UScriptStruct* Struct) const
+	bool FTypeRegistry::GetInfoByEntryStruct(const UScriptStruct* Struct, FTypeInfo& OutInfo) const
 	{
 		if (!Struct)
 		{
-			return nullptr;
+			return false;
 		}
 
 		FReadScopeLock Lock(RegistryLock);
 
-		// Direct lookup
-		if (const FTypeId* Id = StructToType.Find(Struct))
-		{
-			return Types.Find(*Id);
-		}
-
-		// Check parent structs
-		for (const UScriptStruct* Current = Cast<UScriptStruct>(Struct->GetSuperStruct());
+		// Direct lookup, then parent structs
+		for (const UScriptStruct* Current = Struct;
 		     Current;
 		     Current = Cast<UScriptStruct>(Current->GetSuperStruct()))
 		{
 			if (const FTypeId* Id = StructToType.Find(Current))
 			{
-				return Types.Find(*Id);
+				if (const FTypeInfo* Info = FindUnsafe(*Id))
+				{
+					OutInfo = *Info;
+					return true;
+				}
 			}
 		}
 
-		return nullptr;
+		return false;
+	}
+
+	bool FTypeRegistry::GetInfoResolved(FTypeId Id, FTypeInfo& OutInfo) const
+	{
+		FReadScopeLock Lock(RegistryLock);
+
+		const FTypeInfo* Leaf = FindUnsafe(Id);
+		if (!Leaf)
+		{
+			return false;
+		}
+
+		OutInfo = *Leaf;
+
+		// Fill missing machinery slots from the nearest ancestor registration.
+		FTypeId Current = Leaf->ParentType;
+		while (Current != NAME_None && (!OutInfo.GlobalsStruct || !OutInfo.StateClass.IsValid()))
+		{
+			const FTypeInfo* Ancestor = FindUnsafe(Current);
+			if (!Ancestor)
+			{
+				break;
+			}
+
+			if (!OutInfo.GlobalsStruct)
+			{
+				OutInfo.GlobalsStruct = Ancestor->GlobalsStruct;
+			}
+			if (!OutInfo.StateClass.IsValid())
+			{
+				OutInfo.StateClass = Ancestor->StateClass;
+			}
+
+			Current = Ancestor->ParentType;
+		}
+
+		return true;
+	}
+
+	FTypeId FTypeRegistry::GetParentType(FTypeId Id) const
+	{
+		FReadScopeLock Lock(RegistryLock);
+		const FTypeInfo* Info = FindUnsafe(Id);
+		return Info ? Info->ParentType : NAME_None;
+	}
+
+	const UScriptStruct* FTypeRegistry::GetEntryStruct(FTypeId Id) const
+	{
+		FReadScopeLock Lock(RegistryLock);
+		const FTypeInfo* Info = FindUnsafe(Id);
+		return Info ? Info->EntryStruct : nullptr;
 	}
 
 	// Walks the ParentType chain from Type upward, checking for BaseType at each level.

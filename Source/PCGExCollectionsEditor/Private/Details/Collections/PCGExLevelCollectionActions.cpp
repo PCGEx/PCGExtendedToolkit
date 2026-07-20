@@ -3,51 +3,55 @@
 
 #include "Details/Collections/PCGExLevelCollectionActions.h"
 
-#include "FileHelpers.h"
-#include "ToolMenuSection.h"
-#include "AssetRegistry/AssetRegistryModule.h"
 #include "Collections/PCGExLevelCollection.h"
-#include "Details/Collections/PCGExAssetCollectionEditor.h"
-#include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExCollectionEditorHelpers.h"
+#include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExLevelCollectionEditor.h"
-#include "Misc/MessageDialog.h"
-#include "UObject/Package.h"
-#include "UObject/UObjectGlobals.h"
-#include "Widgets/Views/SListView.h"
+#include "Engine/World.h"
+
+PCGEX_REGISTER_COLLECTION_EDITOR_TYPE(
+	Level,
+	UPCGExLevelCollection,
+	UWorld,
+	"SMC_NewLevelCollection",
+	FLinearColor(FColor(255, 156, 0)),
+	"Level Collection",
+	"A weighted collection of level assets.",
+	FPCGExLevelCollectionEditor)
 
 namespace PCGExLevelCollectionActions
 {
+	// Tile-picker contribution (per-row resolution + typed editor default).
+	struct FRegisterTilePicker
+	{
+		FRegisterTilePicker()
+		{
+			FCollectionEditorTypeRegistry::AddPendingRegistration([]()
+			{
+				FCollectionEditorTypeRegistry::Get().Customize(PCGExAssetCollection::TypeIds::Level, [](FCollectionEditorTypeInfo& Info)
+				{
+					Info.TilePickerPropertyName = FName("Level");
+					Info.TilePickerAllowedClass = UWorld::StaticClass();
+				});
+			});
+		}
+	} GRegisterLevelTilePicker;
+
 	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
 	{
-		PCGExCollectionEditorUtils::CreateCollectionFromSelection(
-			UPCGExLevelCollection::StaticClass(),
-			TEXT("SMC_NewLevelCollection"),
-			SelectedAssets);
+		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExLevelCollection::StaticClass(), TEXT("SMC_NewLevelCollection"));
 	}
 
 	void UpdateCollectionsFrom(
 		const TArray<TObjectPtr<UPCGExLevelCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets,
-		bool bIsNewCollection)
+		const TArray<FAssetData>& SelectedAssets)
 	{
-		if (SelectedCollections.IsEmpty() || SelectedAssets.IsEmpty())
+		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
+		AsBase.Reserve(SelectedCollections.Num());
+		for (const TObjectPtr<UPCGExLevelCollection>& C : SelectedCollections)
 		{
-			return;
+			AsBase.Add(C);
 		}
-
-		for (const TObjectPtr<UPCGExLevelCollection>& Collection : SelectedCollections)
-		{
-			Collection->EDITOR_AddBrowserSelectionTyped(SelectedAssets);
-		}
+		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
 	}
-}
-
-EAssetCommandResult UAssetDefinition_PCGExLevelCollection::OpenAssets(const FAssetOpenArgs& OpenArgs) const
-{
-	for (UPCGExLevelCollection* Collection : OpenArgs.LoadObjects<UPCGExLevelCollection>())
-	{
-		TSharedRef<FPCGExLevelCollectionEditor> Editor = MakeShared<FPCGExLevelCollectionEditor>();
-		Editor->InitEditor(Collection, OpenArgs.GetToolkitMode(), OpenArgs.ToolkitHost);
-	}
-	return EAssetCommandResult::Handled;
 }

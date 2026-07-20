@@ -70,6 +70,7 @@ bool FPCGExStagingSpawnActorsElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+
 	return true;
 }
 
@@ -229,7 +230,7 @@ namespace PCGExStagingSpawnActors
 				continue;
 			}
 
-			if (Result.Entry->GetTypeId() != PCGExAssetCollection::TypeIds::Actor)
+			if (!Result.Entry->IsType(PCGExAssetCollection::TypeIds::Actor))
 			{
 				if (!Settings->bQuietInvalidEntryWarnings)
 				{

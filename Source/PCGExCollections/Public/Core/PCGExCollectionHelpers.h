@@ -20,6 +20,23 @@
 namespace PCGExCollectionHelpers
 {
 	/**
+	 * Per-type slot identity: base and derived globals blocks / machinery state classes
+	 * answer the same queries, so they share ONE slot. Both directions on purpose -- see
+	 * UPCGExOmniCollection::EDITOR_AppendCollections' conflict handling, which set the
+	 * precedent. Every block/state ownership or existence check must use this (one-directional
+	 * IsChildOf makes the answer depend on registry iteration order).
+	 */
+	inline bool MatchesTypeSlot(const UScriptStruct* A, const UScriptStruct* B)
+	{
+		return A && B && (A->IsChildOf(B) || B->IsChildOf(A));
+	}
+
+	inline bool MatchesTypeSlot(const UClass* A, const UClass* B)
+	{
+		return A && B && (A->IsChildOf(B) || B->IsChildOf(A));
+	}
+
+	/**
 	 * Build a collection from an attribute set
 	 * @param InCollection Target collection to populate
 	 * @param InContext PCG context
@@ -101,4 +118,24 @@ namespace PCGExCollectionHelpers
 	bool FlattenCollection(
 		const UPCGExAssetCollection* Source,
 		UPCGExAssetCollection* Target);
+
+	/**
+	 * Classify a collection's LEAF entries for actor-vs-asset output declaration (actor =
+	 * asset CLASS, everything else = asset PATH); heterogeneous hosts may hold both.
+	 * Subcollection entries are skipped. A typed Actor collection reports bOutAnyActor even
+	 * when empty (legacy declaration behavior).
+	 */
+	PCGEXCOLLECTIONS_API
+	void GetEntryAssetHalves(const UPCGExAssetCollection* Collection, bool& bOutAnyActor, bool& bOutAnyNonActor);
+
+#if WITH_EDITOR
+	/**
+	 * Deep-copy Instanced subobjects referenced by a struct into a new owner. Raw struct
+	 * copies are SHALLOW for object refs and sharing EditInlineNew subobjects across assets
+	 * is illegal -- run this on every cross-asset copy of a globals block or entry payload.
+	 * Top-level properties only (built-in structs keep instanced refs flat).
+	 */
+	PCGEXCOLLECTIONS_API
+	void DuplicateInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory, UObject* NewOuter);
+#endif
 }

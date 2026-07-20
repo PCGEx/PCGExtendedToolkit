@@ -43,10 +43,10 @@ bool FPCGExStagedTypeFilterDetails::Matches(PCGExAssetCollection::FTypeId TypeId
 	if (!Value)
 	{
 		// Unknown type - check parent types
-		const PCGExAssetCollection::FTypeInfo* Info = PCGExAssetCollection::FTypeRegistry::Get().Find(TypeId);
-		if (Info && Info->ParentType != PCGExAssetCollection::TypeIds::None)
+		const PCGExAssetCollection::FTypeId ParentType = PCGExAssetCollection::FTypeRegistry::Get().GetParentType(TypeId);
+		if (ParentType != PCGExAssetCollection::TypeIds::None)
 		{
-			return Matches(Info->ParentType);
+			return Matches(ParentType);
 		}
 		return bIncludeInvalid;
 	}
