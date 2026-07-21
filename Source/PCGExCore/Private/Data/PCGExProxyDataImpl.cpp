@@ -62,7 +62,7 @@ namespace PCGExData
 	}
 
 	// Explicit instantiations
-#define PCGEX_TPL(_TYPE, _NAME, ...) template class TRawBufferProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) template class PCGEXCORE_API TRawBufferProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -165,7 +165,7 @@ namespace PCGExData
 	}
 
 	// Explicit instantiations
-#define PCGEX_TPL(_TYPE, _NAME, ...) template class TAttributeBufferProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) template class PCGEXCORE_API TAttributeBufferProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -514,7 +514,7 @@ namespace PCGExData
 	}
 
 	// Explicit instantiations
-#define PCGEX_TPL(_TYPE, _NAME, ...) template class TConstantProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) template class PCGEXCORE_API TConstantProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -609,7 +609,7 @@ namespace PCGExData
 	}
 
 	// Explicit instantiations
-#define PCGEX_TPL(_TYPE, _NAME, ...) template class TDirectAttributeProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) template class PCGEXCORE_API TDirectAttributeProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -704,7 +704,7 @@ namespace PCGExData
 	}
 
 	// Explicit instantiations
-#define PCGEX_TPL(_TYPE, _NAME, ...) template class TDirectDataAttributeProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) template class PCGEXCORE_API TDirectDataAttributeProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 

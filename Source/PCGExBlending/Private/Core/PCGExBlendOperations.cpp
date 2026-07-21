@@ -204,21 +204,21 @@ namespace PCGExBlending
 
 	// Explicit template instantiations
 
-	template class TBlendOperationImpl<bool>;
-	template class TBlendOperationImpl<int32>;
-	template class TBlendOperationImpl<int64>;
-	template class TBlendOperationImpl<float>;
-	template class TBlendOperationImpl<double>;
-	template class TBlendOperationImpl<FVector2D>;
-	template class TBlendOperationImpl<FVector>;
-	template class TBlendOperationImpl<FVector4>;
-	template class TBlendOperationImpl<FQuat>;
-	template class TBlendOperationImpl<FRotator>;
-	template class TBlendOperationImpl<FTransform>;
-	template class TBlendOperationImpl<FString>;
-	template class TBlendOperationImpl<FName>;
-	template class TBlendOperationImpl<FSoftObjectPath>;
-	template class TBlendOperationImpl<FSoftClassPath>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<bool>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<int32>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<int64>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<float>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<double>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FVector2D>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FVector>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FVector4>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FQuat>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FRotator>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FTransform>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FString>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FName>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FSoftObjectPath>;
+	template class PCGEXBLENDING_API TBlendOperationImpl<FSoftClassPath>;
 
 	// Explicit instantiation of blend function getters
 #define INST_BLEND_FUNC_GETTER(TYPE) \

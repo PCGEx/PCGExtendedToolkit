@@ -102,6 +102,17 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
 	FBox Bounds = FBox(ForceInit);
 
 	/**
+	 * Staging content (bounds, sockets) was authored by an external system (e.g. a generated
+	 * collection whose entries carry authoritative bounds) instead of being derived from the
+	 * asset. Entry types honor this in UpdateStaging() by refreshing identity fields only
+	 * (InternalIndex, Path) and leaving content untouched, so no rebuild path -- editor
+	 * toolbar, grid, stale-entry batch, pipelines -- can clobber authored staging.
+	 * Cooked (not editor-only): runtime staging refreshes must preserve it too.
+	 */
+	UPROPERTY(VisibleAnywhere, Category = Settings)
+	bool bAuthored = false;
+
+	/**
 	 * Optional modifier that derives AlteredBounds (the bounds used for fitting, spacing and
 	 * best-fit selection) from the original asset-derived Bounds. Null = AlteredBounds mirrors
 	 * Bounds. The bounds applied to the mesh itself always remain the original ones.
@@ -927,6 +938,12 @@ public:
 	virtual void PostLoad() override;
 	virtual void BeginDestroy() override;
 
+	/**
+	 * Re-stage every entry (SyncEntryIds -> per-entry UpdateStaging/PostUpdateStaging ->
+	 * cache invalidation). Entries whose Staging.bAuthored is set keep their staging content
+	 * (their UpdateStaging only refreshes identity fields) -- id sync and cache invalidation
+	 * still run collection-wide.
+	 */
 	void RebuildStagingData(bool bRecursive);
 	void EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const;
 

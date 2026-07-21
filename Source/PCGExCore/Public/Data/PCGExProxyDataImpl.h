@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExData.h"
 #include "PCGExDataCommon.h"
 #include "PCGExProxyData.h"
@@ -47,7 +48,7 @@ namespace PCGExData
 
 #pragma region externalization TAttributeBufferProxy
 
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TRawBufferProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TRawBufferProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -77,7 +78,7 @@ namespace PCGExData
 
 #pragma region externalization TAttributeBufferProxy
 
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TAttributeBufferProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TAttributeBufferProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -154,7 +155,7 @@ namespace PCGExData
 
 #pragma region externalization TConstantProxy
 
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TConstantProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TConstantProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -185,7 +186,7 @@ namespace PCGExData
 
 #pragma region externalization TDirectAttributeProxy
 
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TDirectAttributeProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TDirectAttributeProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -247,7 +248,7 @@ namespace PCGExData
 
 #pragma region externalization TDirectDataAttributeProxy
 
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TDirectDataAttributeProxy<_TYPE>;
+#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TDirectDataAttributeProxy<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
