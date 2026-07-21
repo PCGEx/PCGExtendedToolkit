@@ -677,6 +677,9 @@ void FPCGExAssetCollectionEntry::PostUpdateStaging()
 
 void FPCGExAssetCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 {
+	// A new asset invalidates externally-authored staging content -- the authoring system
+	// re-pins bAuthored on its next rebuild if it is still authoritative.
+	Staging.bAuthored = false;
 	Staging.Path = InPath;
 }
 

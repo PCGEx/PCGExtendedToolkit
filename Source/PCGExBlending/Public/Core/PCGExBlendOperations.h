@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExBlendingCommon.h"
 #include "PCGExOpStats.h"
 #include "Types/PCGExTypeOpsImpl.h"
@@ -494,7 +495,7 @@ namespace PCGExBlending
 
 	// Extern template declarations (instantiated in cpp)
 #define PCGEX_DECLARE_BLEND_OP_EXTERN(_TYPE, _NAME, ...) \
-	extern template class TBlendOperationImpl<_TYPE>;
+	extern template class PCGEX_TPL_EXPORT(PCGEXBLENDING_API) TBlendOperationImpl<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_BLEND_OP_EXTERN)
 #undef PCGEX_DECLARE_BLEND_OP_EXTERN
 

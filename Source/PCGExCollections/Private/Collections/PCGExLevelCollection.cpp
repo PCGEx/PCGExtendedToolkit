@@ -55,6 +55,16 @@ bool FPCGExLevelCollectionEntry::Validate(const UPCGExAssetCollection* ParentCol
 
 void FPCGExLevelCollectionEntry::UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive)
 {
+	// Authored staging (e.g. bonding-rules-generated entries carrying authoritative bounds):
+	// recomputing would force-load the level, walk its actors and clobber the authored
+	// bounds/sockets. Refresh identity fields only (base stamps InternalIndex).
+	if (Staging.bAuthored && !bIsSubCollection)
+	{
+		Staging.Path = Level.ToSoftObjectPath();
+		FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
+		return;
+	}
+
 	ClearManagedSockets();
 
 	if (bIsSubCollection)
