@@ -4,9 +4,28 @@
 #pragma once
 
 #include "PCGExVersion.h"
+#include "HAL/Platform.h"
 
 #ifndef PCGEX_MACROS
 #define PCGEX_MACROS
+
+
+/// EXPLICIT TEMPLATE INSTANTIATION EXPORT
+/// Attribute for `extern template` declarations in headers whose matching explicit
+/// instantiation definition in the .cpp carries the module's _API macro.
+/// Windows: the dllexport on the .cpp definition does the export, and MSVC forbids
+/// dllexport on the extern declaration (C4910) -- so this expands to nothing.
+/// Mac/Linux: clang only honors visibility on the FIRST declaration of a specialization;
+/// without this on the extern declaration the symbols keep hidden visibility and consumer
+/// modules fail to link (undefined symbols on FAB Mac builds).
+/// Usage -- header: `extern template class PCGEX_TPL_EXPORT(MYMODULE_API) TFoo<T>;`
+///          cpp:    `template class MYMODULE_API TFoo<T>;`
+
+#if PLATFORM_MAC || PLATFORM_LINUX
+#define PCGEX_TPL_EXPORT(_API) _API
+#else
+#define PCGEX_TPL_EXPORT(_API)
+#endif
 
 
 /// BASIC UTILITIES

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExSettingsMacros.h" // Boilerplate dependency
 #include "Helpers/PCGExMetaHelpersMacros.h"
 #include "Metadata/PCGAttributePropertySelector.h"
@@ -241,12 +242,12 @@ namespace PCGExDetails
 #pragma region externalization
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
-extern template class TSettingValue<_TYPE>; \
-extern template class TSettingValueBuffer<_TYPE>; \
-extern template class TSettingValueSelector<_TYPE>; \
-extern template class TSettingValueConstant<_TYPE>; \
-extern template class TSettingValueSelectorConstant<_TYPE>; \
-extern template class TSettingValueBufferConstant<_TYPE>; \
+extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValue<_TYPE>; \
+extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueBuffer<_TYPE>; \
+extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueSelector<_TYPE>; \
+extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueConstant<_TYPE>; \
+extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueSelectorConstant<_TYPE>; \
+extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueBufferConstant<_TYPE>; \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const _TYPE InConstant); \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant); \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \

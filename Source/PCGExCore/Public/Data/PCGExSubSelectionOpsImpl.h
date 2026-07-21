@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExSubSelectionOps.h"
 #include "Types/PCGExTypeOpsImpl.h"
 
@@ -336,7 +337,7 @@ namespace PCGExData
 
 	// Extern template declarations (instantiated in cpp)
 #define PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN(_TYPE, _NAME, ...) \
-	extern template class TSubSelectorOpsImpl<_TYPE>;
+	extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSubSelectorOpsImpl<_TYPE>;
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN)
 #undef PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN
 
