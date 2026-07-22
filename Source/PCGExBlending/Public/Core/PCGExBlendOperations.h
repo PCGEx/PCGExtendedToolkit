@@ -4,7 +4,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PCGExCoreMacros.h"
 #include "PCGExBlendingCommon.h"
 #include "PCGExOpStats.h"
 #include "Types/PCGExTypeOpsImpl.h"
@@ -432,7 +431,7 @@ namespace PCGExBlending
 	// Blend mode selection is done via function pointer at construction time.
 	//
 	template <typename T>
-	class TBlendOperationImpl final : public IBlendOperation
+	class PCGEXBLENDING_API TBlendOperationImpl final : public IBlendOperation
 	{
 	public:
 		TBlendOperationImpl(EPCGExABBlendingType InMode, bool bInResetForMulti)
@@ -495,8 +494,8 @@ namespace PCGExBlending
 
 	// Extern template declarations (instantiated in cpp)
 #define PCGEX_DECLARE_BLEND_OP_EXTERN(_TYPE, _NAME, ...) \
-	extern template class PCGEX_TPL_EXPORT(PCGEXBLENDING_API) TBlendOperationImpl<_TYPE>;
-	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_BLEND_OP_EXTERN)
+	extern template class TBlendOperationImpl<_TYPE>;
+	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_BLEND_OP_EXTERN) // omitted: extern-template of dllexport class = C4910 (MSVC)
 #undef PCGEX_DECLARE_BLEND_OP_EXTERN
 
 	//

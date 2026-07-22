@@ -47,7 +47,7 @@ public:
 	
 	/** Value applied by default to node cache loaded resources when `Default` is selected. */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
-	bool bCacheLoadedResources = false;
+	bool bCacheLoadedResources = true;
 
 	/** */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
