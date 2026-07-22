@@ -436,7 +436,7 @@ namespace PCGExBlending
 	// Blend mode selection is done via function pointer at construction time.
 	//
 	template <typename T>
-	class PCGEXBLENDING_API TBlendOperationImpl final : public IBlendOperation
+	class TBlendOperationImpl final : public IBlendOperation
 	{
 	public:
 		TBlendOperationImpl(EPCGExABBlendingType InMode, bool bInResetForMulti)
@@ -500,7 +500,7 @@ namespace PCGExBlending
 	// Extern template declarations (instantiated in cpp)
 #define PCGEX_DECLARE_BLEND_OP_EXTERN(_TYPE, _NAME, ...) \
 	extern template class TBlendOperationImpl<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_BLEND_OP_EXTERN) // omitted: extern-template of dllexport class = C4910 (MSVC)
+	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_BLEND_OP_EXTERN)
 #undef PCGEX_DECLARE_BLEND_OP_EXTERN
 
 	//

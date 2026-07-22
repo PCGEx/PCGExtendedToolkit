@@ -85,7 +85,7 @@ namespace PCGExData
 	 * 14×14 template combinations.
 	 */
 	template <typename T>
-	class PCGEXCORE_API TSubSelectorOpsImpl : public ISubSelectorOps
+	class TSubSelectorOpsImpl : public ISubSelectorOps
 	{
 	public:
 		using Traits = PCGExTypes::TTraits<T>;
@@ -337,7 +337,7 @@ namespace PCGExData
 	// Extern template declarations (instantiated in cpp)
 #define PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN(_TYPE, _NAME, ...) \
 	extern template class TSubSelectorOpsImpl<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN) // omitted: extern-template of dllexport class = C4910 (MSVC)
+	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN)
 #undef PCGEX_DECLARE_SUBSELECTOR_OPS_EXTERN
 
 	// FSubSelectorRegistry template implementation
