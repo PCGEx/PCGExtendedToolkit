@@ -47,13 +47,17 @@ public:
 	bool bCheckOnly = false;
 	
 	/** */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(InlineEditConditionToggle, ScriptName="output_is_empty_enabled"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ScriptName="output_is_empty_enabled"))
 	bool bOutputIsEmpty = false;
 	
 	/**  */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bOutputIsEmpty"))
 	FName OutputIsEmpty = PCGExCullOnEmpty::IsEmptyName;
 
+	/** If enabled, inverts the output bool */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bOutputIsEmpty"))
+	bool bInvert = false;
+	
 	virtual bool OutputPinsCanBeDeactivated() const override
 	{
 		return true;
