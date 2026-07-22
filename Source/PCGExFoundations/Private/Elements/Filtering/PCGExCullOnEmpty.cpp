@@ -19,6 +19,7 @@ TArray<FPCGPreConfiguredSettingsInfo> UPCGExCullOnEmptySettings::GetPreconfigure
 	TArray<FPCGPreConfiguredSettingsInfo> Configs;
 	Configs.Emplace(0, GetDefaultNodeTitle());
 	Configs.Emplace(1, FTEXT("PCGEx | Is Data Empty"));
+	Configs.Emplace(2, FTEXT("PCGEx | Is Data NOT Empty"));
 	return Configs;
 }
 
@@ -30,9 +31,10 @@ bool UPCGExCullOnEmptySettings::ShouldDrawNodeCompact() const
 
 void UPCGExCullOnEmptySettings::ApplyPreconfiguredSettings(const FPCGPreConfiguredSettingsInfo& PreconfigureInfo)
 {
-	if (PreconfigureInfo.PreconfiguredIndex == 1)
+	if (PreconfigureInfo.PreconfiguredIndex != 0)
 	{
 		bCheckOnly = true;
+		bInvert = PreconfigureInfo.PreconfiguredIndex == 2;
 	}
 }
 
@@ -145,6 +147,11 @@ bool FPCGExCullOnEmptyElement::ExecuteInternal(FPCGContext* Context) const
 		{
 			Context->OutputData.InactiveOutputPinBitmask |= 1ULL << 0;
 		}
+	}
+	
+	if (Settings->bInvert)
+	{
+		bHasValidData = !bHasValidData;
 	}
 
 	{
