@@ -4,28 +4,31 @@
 #pragma once
 
 #include "PCGExVersion.h"
-#include "HAL/Platform.h"
 
 #ifndef PCGEX_MACROS
 #define PCGEX_MACROS
 
 
-/// EXPLICIT TEMPLATE INSTANTIATION EXPORT
-/// Attribute for `extern template` declarations in headers whose matching explicit
-/// instantiation definition in the .cpp carries the module's _API macro.
-/// Windows: the dllexport on the .cpp definition does the export, and MSVC forbids
-/// dllexport on the extern declaration (C4910) -- so this expands to nothing.
-/// Mac/Linux: clang only honors visibility on the FIRST declaration of a specialization;
-/// without this on the extern declaration the symbols keep hidden visibility and consumer
-/// modules fail to link (undefined symbols on FAB Mac builds).
-/// Usage -- header: `extern template class PCGEX_TPL_EXPORT(MYMODULE_API) TFoo<T>;`
-///          cpp:    `template class MYMODULE_API TFoo<T>;`
-
-#if PLATFORM_MAC || PLATFORM_LINUX
-#define PCGEX_TPL_EXPORT(_API) _API
-#else
-#define PCGEX_TPL_EXPORT(_API)
-#endif
+/// EXPORTING EXPLICITLY-INSTANTIATED CLASS TEMPLATES (cross-platform, PCH-safe)
+/// When a class template's out-of-line members are referenced from other modules, the
+/// members must be exported. The pattern that works on MSVC, clang and gcc -- AND
+/// survives being pulled into a shared PCH -- is:
+///   - Put the module's _API macro on the CLASS TEMPLATE DEFINITION itself. This is what
+///     actually exports the members (grants default visibility on Mac):
+///       `template <typename T> class MYMODULE_API TFoo { ... };`
+///   - Put the _API macro on the .cpp explicit instantiation (the export driver):
+///       `template class MYMODULE_API TFoo<T>;`
+///   - Do NOT emit any `extern template class TFoo<T>;` declaration for it. Comment the
+///     invocation out (see TBuffer / TDataValue). You lose per-TU implicit-instantiation
+///     suppression for that class; that is the accepted cost.
+/// Why no extern-class decl: a dllexport class + ANY `extern template class` declaration
+/// of it is C4910 on MSVC (the class's dllexport propagates onto the extern decl -- this
+/// bites even with no attribute on the extern line itself). And an *attributed* extern in
+/// a shared-PCH header segfaults clang's ASTReader on Mac. So the extern-class decl must
+/// be absent, not merely bare.
+/// FUNCTION templates are exempt: `extern template <func>;` is fine and can stay active
+/// (free functions are not dllexport classes). See MakeSettingValue for that case.
+/// See TBuffer / TDataValue for the reference implementation.
 
 
 /// BASIC UTILITIES

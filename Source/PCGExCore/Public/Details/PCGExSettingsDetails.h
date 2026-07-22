@@ -4,7 +4,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PCGExCoreMacros.h"
 #include "PCGExSettingsMacros.h" // Boilerplate dependency
 #include "Helpers/PCGExMetaHelpersMacros.h"
 #include "Metadata/PCGAttributePropertySelector.h"
@@ -34,7 +33,7 @@ namespace PCGExDetails
 #pragma region Settings
 
 	template <typename T>
-	class TSettingValue : public TSharedFromThis<TSettingValue<T>>
+	class PCGEXCORE_API TSettingValue : public TSharedFromThis<TSettingValue<T>>
 	{
 	public:
 		virtual ~TSettingValue() = default;
@@ -85,7 +84,7 @@ namespace PCGExDetails
 	};
 
 	template <typename T>
-	class TSettingValueBuffer : public TSettingValue<T>
+	class PCGEXCORE_API TSettingValueBuffer : public TSettingValue<T>
 	{
 	protected:
 		TSharedPtr<PCGExData::TBuffer<T>> Buffer = nullptr;
@@ -114,7 +113,7 @@ namespace PCGExDetails
 	};
 
 	template <typename T>
-	class TSettingValueSelector final : public TSettingValueBuffer<T>
+	class PCGEXCORE_API TSettingValueSelector final : public TSettingValueBuffer<T>
 	{
 		using TSettingValueBuffer<T>::Buffer;
 
@@ -134,7 +133,7 @@ namespace PCGExDetails
 	};
 
 	template <typename T>
-	class TSettingValueConstant : public TSettingValue<T>
+	class PCGEXCORE_API TSettingValueConstant : public TSettingValue<T>
 	{
 	protected:
 		T Constant = T{};
@@ -179,7 +178,7 @@ namespace PCGExDetails
 	};
 
 	template <typename T>
-	class TSettingValueSelectorConstant final : public TSettingValueConstant<T>
+	class PCGEXCORE_API TSettingValueSelectorConstant final : public TSettingValueConstant<T>
 	{
 	protected:
 		FPCGAttributePropertyInputSelector Selector;
@@ -197,7 +196,7 @@ namespace PCGExDetails
 	};
 
 	template <typename T>
-	class TSettingValueBufferConstant final : public TSettingValueConstant<T>
+	class PCGEXCORE_API TSettingValueBufferConstant final : public TSettingValueConstant<T>
 	{
 	protected:
 		FName Name = NAME_None;
@@ -241,13 +240,12 @@ namespace PCGExDetails
 
 #pragma region externalization
 
+// NOTE: the TSettingValue* classes are dllexport (PCGEXCORE_API on the class definition), so they
+// intentionally have NO `extern template class` declarations -- an extern explicit instantiation of a
+// dllexport class is C4910 on MSVC. Export comes from the class-def macro + the .cpp instantiation
+// (same pattern as TBuffer / TDataValue). The MakeSettingValue *function* instantiations below are
+// free functions, not dllexport classes, so they can be externalized normally.
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
-extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValue<_TYPE>; \
-extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueBuffer<_TYPE>; \
-extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueSelector<_TYPE>; \
-extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueConstant<_TYPE>; \
-extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueSelectorConstant<_TYPE>; \
-extern template class PCGEX_TPL_EXPORT(PCGEXCORE_API) TSettingValueBufferConstant<_TYPE>; \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const _TYPE InConstant); \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant); \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
