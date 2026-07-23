@@ -170,6 +170,18 @@ protected:
 	FPCGExAssetCollectionEntry* ResolveRawIndex(int32 Index);
 	const FPCGExAssetCollectionEntry* ResolveRawIndex(int32 Index) const;
 
+	/** Flat raw index -> the row's payload. Sole owner of the flat-index traversal, so the entry
+	 *  pointer and its type can't disagree. */
+	const FInstancedStruct* ResolveRawPayload(int32 Index) const;
+
+#if WITH_EDITOR
+public:
+	/** Rows carry their own payload type; the base `Entries` reflection finds nothing here. */
+	virtual const UScriptStruct* EDITOR_GetEntryScriptStruct(int32 RawIndex) const override;
+
+protected:
+#endif
+
 	/**
 	 * Cached flat-view structure: FlatGroupOffsets[g] = flat start index of Sources[g]'s rows,
 	 * with one trailing element = start of the PathOverrides payload tail. FlatTotalEntries < 0

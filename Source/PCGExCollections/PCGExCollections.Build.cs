@@ -52,7 +52,9 @@ public class PCGExCollections : ModuleRules
 			{
 				"GeometryCore",
 				"GeometryFramework",
-				"DeveloperSettings"
+				"DeveloperSettings",
+				// Direct, not transitive: EDITOR_ComputeEntrySourceFingerprint reads the registry cache.
+				"AssetRegistry"
 			}
 		);
 

@@ -20,11 +20,16 @@ private:
 	FDelegateHandle OnFilesLoadedHandle;
 	FDelegateHandle OnAssetUpdatedOnDiskHandle;
 	FDelegateHandle OnObjectsReinstancedHandle;
+	FDelegateHandle OnAssetLoadedHandle;
 	FDelegateHandle OnPostEngineInitHandle;
 	bool bThumbnailRendererRegistered = false;
 
 	void OnFilesLoaded();
+
+	// The three staleness triggers: source re-saved, Blueprint recompiled, collection loaded.
 	void OnAssetUpdatedOnDisk(const FAssetData& AssetData);
 	void OnObjectsReinstanced(const TMap<UObject*, UObject*>& OldToNewMap);
+	void OnAssetLoaded(UObject* InObject);
+
 	void RegisterThumbnailRenderer();
 };
