@@ -278,6 +278,13 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	FPCGExAssetStagingData Staging;
 
+#if WITH_EDITORONLY_DATA
+	/** Content digest of this entry's source packages at last rebuild. Content, not mtime: VCS
+	 *  checkouts rewrite mtimes, re-dirtying forever. 0 = no baseline, read as "not stale". */
+	UPROPERTY()
+	uint64 StagingSourceFingerprint = 0;
+#endif
+
 #pragma endregion
 	
 	/**
@@ -1022,7 +1029,8 @@ public:
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData_Project();
 
-	void EDITOR_SanitizeAndRebuildStagingData(bool bRecursive);
+	/** Sanitize + re-stage every entry. Returns the number that actually changed. */
+	int32 EDITOR_SanitizeAndRebuildStagingData(bool bRecursive);
 	void EDITOR_AddBrowserSelectionTyped(const TArray<FAssetData>& InAssetData);
 
 	/**
@@ -1052,11 +1060,15 @@ public:
 	{
 	}
 
-	/** Re-stage a single entry. Mirrors the dirty/broadcast behaviour of editing the entry's properties so UI refreshes. Returns true if the entry was rebuilt. */
+	/** Re-stage one entry, mirroring a property edit's dirty/broadcast. True only if it changed. */
 	bool EDITOR_RebuildEntryStaging(int32 EntryIndex);
 
-	/** Walks entries and re-stages any whose referenced asset's file mtime is newer than LastRebuiltUtc. Per-entry scope (not a full rebuild). No-op if LastRebuiltUtc is MinValue. Returns the number of entries re-staged. */
+	/** Re-stages entries whose source digest no longer matches their baseline. No baseline = skip. */
 	int32 EDITOR_RebuildStaleEntries();
+
+	/** Content digest of an entry's source packages, from the registry's cached PackageSavedHash --
+	 *  loads nothing. 0 = "cannot determine" (incl. partial resolve); never read it as "changed". */
+	static uint64 EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry);
 
 	/** Sync PropertyOverrides in all entries to match CollectionProperties schema */
 	void SyncPropertyOverridesToEntries();
@@ -1085,6 +1097,17 @@ protected:
 
 	/** True when at least one StagingPipelines slot holds a valid pipeline. */
 	bool EDITOR_HasAnyStagingPipeline() const;
+
+	/** Sanitize + re-stage one entry and refresh its fingerprint. Modify(false) snapshots without
+	 *  dirtying, leaving that to the caller. Undiffable rows report changed. */
+	bool EDITOR_RestageEntryIfChanged(FPCGExAssetCollectionEntry* InEntry, int32 EntryIndex, bool bRecursive);
+
+	/** Shared body of EDITOR_RebuildStagingData / _Recursive. */
+	void EDITOR_RebuildStagingDataInternal(bool bRecursive);
+
+	/** Whole-object state as bytes for before/after comparison -- catches collection-level
+	 *  mutations by pipeline hooks. Refs written as paths so pointer churn doesn't count. */
+	void EDITOR_SnapshotForComparison(TArray<uint8>& OutBytes);
 #endif
 
 	static uint32 GenerateNewGUID()
@@ -1132,12 +1155,8 @@ public:
 #if WITH_EDITORONLY_DATA
 	bool bSuppressStagingRebuild = false;
 
-	/** Set at the end of every full rebuild (EDITOR_RebuildStagingData / _Recursive) to UtcNow.
-	 *  Used by EDITOR_RebuildStaleEntries to detect entries whose referenced asset's file mtime
-	 *  is newer than this -- i.e. modified since the last collection-wide rebuild.
-	 *  MinValue means "no baseline yet" -- the stale check is skipped entirely until the user
-	 *  triggers a manual rebuild once. Per-entry rebuilds do NOT update this field, otherwise
-	 *  they'd mask staleness in unrelated entries that haven't been re-staged. */
+	/** When a full rebuild last changed something. Diagnostics only -- staleness is per entry via
+	 *  StagingSourceFingerprint. Not written on no-op rebuilds, which would churn every file. */
 	UPROPERTY()
 	FDateTime LastRebuiltUtc = FDateTime::MinValue();
 #endif
