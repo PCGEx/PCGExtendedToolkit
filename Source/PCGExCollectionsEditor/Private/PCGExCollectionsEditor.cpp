@@ -71,6 +71,11 @@ void FPCGExCollectionsEditorModule::StartupModule()
 		OnPostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FPCGExCollectionsEditorModule::RegisterThumbnailRenderer);
 	}
 
+	// Covers what the other two triggers miss: source changed while the editor was closed.
+	// Subscribed here, not in OnFilesLoaded: unlike OnAssetUpdatedOnDisk this doesn't fire
+	// spuriously during the initial scan, and a pre-scan load is already inert (zero fingerprint).
+	OnAssetLoadedHandle = FCoreUObjectDelegates::OnAssetLoaded.AddRaw(this, &FPCGExCollectionsEditorModule::OnAssetLoaded);
+
 	// Defer subscription until the AssetRegistry's initial scan completes -- it fires
 	// OnAssetUpdatedOnDisk for every asset it discovers at startup, when referenced data
 	// isn't yet ready. Acting then would clobber saved staging.
@@ -104,6 +109,7 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 		AssetRegistry.OnAssetUpdatedOnDisk().Remove(OnAssetUpdatedOnDiskHandle);
 	}
 	FCoreUObjectDelegates::OnObjectsReinstanced.Remove(OnObjectsReinstancedHandle);
+	FCoreUObjectDelegates::OnAssetLoaded.Remove(OnAssetLoadedHandle);
 	FCoreDelegates::OnPostEngineInit.Remove(OnPostEngineInitHandle);
 
 	if (bThumbnailRendererRegistered && UObjectInitialized())
@@ -198,6 +204,39 @@ void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& Asset
 			});
 		}
 	}
+}
+
+void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
+{
+	UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(InObject);
+	if (!Collection)
+	{
+		return;
+	}
+
+	// Never during a cook -- WITH_EDITOR is still 1 there, so this guard is load-bearing: the
+	// rebuild would re-harvest levels from an uninitialized world (transforms read as Identity).
+	if (!GEditor || !GEditor->IsTimerManagerValid() || IsRunningCookCommandlet())
+	{
+		return;
+	}
+
+	if (!GetDefault<UPCGExCollectionsEditorSettings>()->bRebuildStaleEntriesOnOpen)
+	{
+		return;
+	}
+
+	// Defer a tick: the rebuild cascades into UpdateStaging -> SpawnActor, unsafe inside EndLoad.
+	// A graph that triggered this soft-load sees pre-rebuild state for its current run.
+	TWeakObjectPtr<UPCGExAssetCollection> WeakCollection(Collection);
+	GEditor->GetTimerManager()->SetTimerForNextTick(
+		[WeakCollection]()
+		{
+			if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
+			{
+				Loaded->EDITOR_RebuildStaleEntries();
+			}
+		});
 }
 
 void FPCGExCollectionsEditorModule::OnObjectsReinstanced(const TMap<UObject*, UObject*>& OldToNewMap)
