@@ -384,6 +384,8 @@ public:
 	 * members in OnPreRebuild instead, where the session stages them naturally. When called
 	 * from inside a pipeline hook the restage is finalize-quiet (the owning session fires the
 	 * post-rebuild work once at its own tail). Editor-only; returns false in cooked targets.
+	 *
+	 * True only when the restage actually changed the entry -- false means "nothing to do".
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PCGEx|Collection")
 	static bool RestageEntry(UPCGExAssetCollection* Collection, int32 EntryIndex);

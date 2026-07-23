@@ -347,6 +347,12 @@ FPCGExAssetCollectionEntry* UPCGExVariantCollection::ResolveRawIndex(const int32
 
 const FPCGExAssetCollectionEntry* UPCGExVariantCollection::ResolveRawIndex(const int32 Index) const
 {
+	const FInstancedStruct* Payload = ResolveRawPayload(Index);
+	return Payload ? Payload->GetPtr<FPCGExAssetCollectionEntry>() : nullptr;
+}
+
+const FInstancedStruct* UPCGExVariantCollection::ResolveRawPayload(const int32 Index) const
+{
 	if (Index < 0)
 	{
 		return nullptr;
@@ -362,13 +368,13 @@ const FPCGExAssetCollectionEntry* UPCGExVariantCollection::ResolveRawIndex(const
 		const int32 PathBase = FlatGroupOffsets.Last();
 		if (Index >= PathBase)
 		{
-			return PathOverrides[Index - PathBase].Entry.GetPtr<FPCGExAssetCollectionEntry>();
+			return &PathOverrides[Index - PathBase].Entry;
 		}
 
 		// Offsets are ascending (empty groups collapse onto the next start); UpperBound lands
 		// past every start <= Index, so -1 is the last group actually containing the index.
 		const int32 GroupIdx = Algo::UpperBound(FlatGroupOffsets, Index) - 1;
-		return Sources[GroupIdx].Overrides[Index - FlatGroupOffsets[GroupIdx]].Entry.GetPtr<FPCGExAssetCollectionEntry>();
+		return &Sources[GroupIdx].Overrides[Index - FlatGroupOffsets[GroupIdx]].Entry;
 	}
 
 	// Fallback: flat view not built yet (fresh object before any load/edit notification).
@@ -378,13 +384,21 @@ const FPCGExAssetCollectionEntry* UPCGExVariantCollection::ResolveRawIndex(const
 		const int32 Count = Group.Overrides.Num();
 		if (Index < Offset + Count)
 		{
-			return Group.Overrides[Index - Offset].Entry.GetPtr<FPCGExAssetCollectionEntry>();
+			return &Group.Overrides[Index - Offset].Entry;
 		}
 		Offset += Count;
 	}
 	if (PathOverrides.IsValidIndex(Index - Offset))
 	{
-		return PathOverrides[Index - Offset].Entry.GetPtr<FPCGExAssetCollectionEntry>();
+		return &PathOverrides[Index - Offset].Entry;
 	}
 	return nullptr;
 }
+
+#if WITH_EDITOR
+const UScriptStruct* UPCGExVariantCollection::EDITOR_GetEntryScriptStruct(const int32 RawIndex) const
+{
+	const FInstancedStruct* Payload = ResolveRawPayload(RawIndex);
+	return Payload ? Payload->GetScriptStruct() : nullptr;
+}
+#endif
