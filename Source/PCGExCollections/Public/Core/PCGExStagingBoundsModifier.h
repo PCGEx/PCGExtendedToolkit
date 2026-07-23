@@ -97,3 +97,25 @@ struct PCGEXCOLLECTIONS_API FPCGExStagingBoundsModifierPad : public FPCGExStagin
 protected:
 	virtual FBox Modify(const FBox& InBounds) const override;
 };
+
+/**
+ * Scales the box extents about its center, then offsets the center.
+ * Result = FBox((Center + Offset) - Extent * Scale, (Center + Offset) + Extent * Scale).
+ * A single-op scale+offset (as opposed to chaining a Scale and an Offset modifier).
+ */
+USTRUCT(BlueprintType, DisplayName="Scale + Offset")
+struct PCGEXCOLLECTIONS_API FPCGExStagingBoundsModifierScaleOffset : public FPCGExStagingBoundsModifier
+{
+	GENERATED_BODY()
+
+	/** Per-axis multiplier applied to the box extents about its center. */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	FVector Scale = FVector::OneVector;
+
+	/** Offset added to the box center after scaling. */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	FVector Offset = FVector::ZeroVector;
+
+protected:
+	virtual FBox Modify(const FBox& InBounds) const override;
+};
