@@ -1,5 +1,7 @@
-#include "Shapes/PCGExShapePolygon.h"
+// Copyright 2026 Timothé Lapetite and contributors
+// Released under the MIT license https://opensource.org/license/MIT/
 
+#include "Shapes/PCGExShapePolygon.h"
 
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"

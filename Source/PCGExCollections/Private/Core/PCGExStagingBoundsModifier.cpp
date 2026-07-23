@@ -63,3 +63,14 @@ FBox FPCGExStagingBoundsModifierPad::Modify(const FBox& InBounds) const
 }
 
 #pragma endregion
+
+#pragma region FPCGExStagingBoundsModifierScaleOffset
+
+FBox FPCGExStagingBoundsModifierScaleOffset::Modify(const FBox& InBounds) const
+{
+	const FVector Center = InBounds.GetCenter() + Offset;
+	const FVector Extent = InBounds.GetExtent() * Scale;
+	return FBox(Center - Extent, Center + Extent);
+}
+
+#pragma endregion
