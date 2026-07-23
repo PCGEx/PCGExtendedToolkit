@@ -368,8 +368,12 @@ namespace PCGExMath
 	{
 		if constexpr (Safety == EPCGExIndexSafety::Yoyo)
 		{
-			const T L = 2 * MaxIndex;
-			const T C = Index % L;
+			const T L = FMath::Max<T>(2 * MaxIndex, 1);
+			T C = Index % L;
+			if constexpr (std::is_signed_v<T>)
+			{
+				C += C < 0 ? L : 0;
+			}
 			return C <= MaxIndex ? C : L - C;
 		}
 		else if constexpr (Safety == EPCGExIndexSafety::Tile)
