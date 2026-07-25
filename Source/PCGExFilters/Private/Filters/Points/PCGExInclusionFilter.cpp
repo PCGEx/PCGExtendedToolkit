@@ -81,6 +81,11 @@ namespace PCGExPointFilter
 			return false;
 		}
 
+		if (!Handler->IsUsable())
+		{
+			return false;
+		}
+
 		const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
 			&& TypedFilterFactory->HasMatchRuleFactories();
 
@@ -122,8 +127,15 @@ namespace PCGExPointFilter
 #define PCGEX_CHECK_MAX if (TypedFilterFactory->Config.bUseMaxInclusionCount && InclusionsCount > TypedFilterFactory->Config.MaxInclusionCount) { return TypedFilterFactory->Config.bInvert; }
 #define PCGEX_CHECK_MIN if (TypedFilterFactory->Config.bUseMinInclusionCount && InclusionsCount < TypedFilterFactory->Config.MinInclusionCount) { return TypedFilterFactory->Config.bInvert; }
 
+	// Collection mode keeps filters that failed Init (see FManager::Init), so the per-data entry points
+	// re-check what Init already rejected. The per-point Test(int32) relies on the Init guard instead.
 	bool FInclusionFilter::Test(const PCGExData::FProxyPoint& Point) const
 	{
+		if (!Handler->IsUsable())
+		{
+			return false;
+		}
+
 		int32 InclusionsCount = 0;
 		PCGExPathInclusion::EFlags Flags = Handler->GetInclusionFlags(Point.GetTransform(), Point.GetBoundsMin(), Point.GetBoundsMax(), InclusionsCount, TypedFilterFactory->Config.Pick == EPCGExSplineFilterPick::Closest);
 
@@ -155,6 +167,11 @@ namespace PCGExPointFilter
 
 	bool FInclusionFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
 	{
+		if (!Handler->IsUsable())
+		{
+			return false;
+		}
+
 		PCGExData::FProxyPoint ProxyPoint;
 		IO->GetDataAsProxyPoint(ProxyPoint);
 

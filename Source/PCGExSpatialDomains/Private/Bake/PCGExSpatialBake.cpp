@@ -5,9 +5,17 @@
 
 #include "PCGContext.h"
 #include "PCGData.h"
+#include "PCGElement.h"
+#include "Components/BrushComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataTags.h"
+#include "Data/PCGPrimitiveData.h"
 #include "Data/PCGSplineData.h"
+#include "Data/PCGVolumeData.h"
+#include "GameFramework/Volume.h"
+#include "PCGExCoreMacros.h"
+#include "PhysicsEngine/BodySetup.h"
 PRAGMA_DISABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 #include "Data/PCGSplineStruct.h"
 PRAGMA_ENABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
@@ -168,6 +176,17 @@ namespace PCGExSpatial::Bake
 			}
 			return Emitted;
 		}
+
+		// Fallback when a UObject-backed input cannot answer an overlap query: an
+		// approximate box beats a region that reports "no overlap" forever.
+		bool EmitBoundsOBB(const FBox& WorldBounds, FName ChannelKey, TArray<FBakedEntry>& OutEntries)
+		{
+			FBakedEntry& Out = OutEntries.Emplace_GetRef();
+			Out.ChannelKey = ChannelKey;
+			Out.Shape.InitializeAs<FPCGExFootprintShape_OBB>(
+				PCGExMath::OBB::Factory::FromAABB(WorldBounds, INDEX_NONE));
+			return true;
+		}
 	}
 
 	FName ResolveChannelKey(
@@ -236,6 +255,95 @@ namespace PCGExSpatial::Bake
 		if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(RawData))
 		{
 			return Detail::BakePointsToOBBs(PointData, OutEntries, ChannelKey) > 0;
+		}
+
+		// Nothing roots the actor -- UPCGVolumeData holds it weakly too -- so the
+		// shape stays weak and every pair test re-resolves it; a dead actor drops out.
+		if (const UPCGVolumeData* VolumeData = Cast<UPCGVolumeData>(RawData))
+		{
+			const FBox WorldBounds = VolumeData->GetBounds();
+			if (!WorldBounds.IsValid)
+			{
+				return false;
+			}
+
+			// bThreadsafeTest: off the game thread the no-arg IsValid() reports false
+			// for a live actor during a GC mark phase.
+			const TWeakObjectPtr<AVolume> Actor = VolumeData->GetVolumeActor();
+			const AVolume* Volume = Actor.IsValid(/*bEvenIfPendingKill*/false, /*bThreadsafeTest*/true)
+				                        ? Actor.Get()
+				                        : nullptr;
+			const UBrushComponent* Brush = Volume ? Volume->GetBrushComponent() : nullptr;
+
+			// Bounds-only volume data (Get Actor Data on a partitioned component, HiGen
+			// cells, runtime-gen Self, WorldVolumetric) has no actor; its box is exact.
+			if (!Brush)
+			{
+				return Detail::EmitBoundsOBB(WorldBounds, ChannelKey, OutEntries);
+			}
+
+			// A NoCollision brush has no physics actor, so every overlap query answers
+			// false. Stock Post Process / NavMesh Bounds / Audio / Level Streaming
+			// volumes all ship that way -- common, not exotic.
+			if (Brush->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
+			{
+				PCGE_LOG_C(
+					Warning, GraphAndLog, InContext,
+					FTEXT("Volume input has collision disabled on its brush, so it cannot answer overlap queries. Falling back to its bounding box -- enable collision on the volume for an exact region."));
+				return Detail::EmitBoundsOBB(WorldBounds, ChannelKey, OutEntries);
+			}
+
+			FBakedEntry& Out = OutEntries.Emplace_GetRef();
+			Out.ChannelKey = ChannelKey;
+			Out.Shape.InitializeAs<FPCGExFootprintShape_Volume>(Actor, WorldBounds);
+			return true;
+		}
+
+		if (const UPCGPrimitiveData* PrimitiveData = Cast<UPCGPrimitiveData>(RawData))
+		{
+			const TWeakObjectPtr<UPrimitiveComponent> CompPtr = PrimitiveData->GetComponent();
+			UPrimitiveComponent* Comp = CompPtr.IsValid(/*bEvenIfPendingKill*/false, /*bThreadsafeTest*/true)
+				                            ? CompPtr.Get()
+				                            : nullptr;
+			if (!Comp)
+			{
+				return false;
+			}
+
+			// GetBounds() is RENDER bounds but the pair test asks COLLISION geometry,
+			// and the broadphase AABB gate is a hard reject -- union the collision AABB
+			// in so it can never cull a candidate the narrow phase would accept.
+			UBodySetup* BodySetup = Comp->GetBodySetup();
+			const bool bHasSimpleCollision = BodySetup && BodySetup->AggGeom.GetElementCount() > 0;
+
+			FBox WorldBounds = PrimitiveData->GetBounds();
+			if (bHasSimpleCollision)
+			{
+				const FBox CollisionAABB = BodySetup->AggGeom.CalcAABB(Comp->GetComponentTransform());
+				if (CollisionAABB.IsValid)
+				{
+					WorldBounds = WorldBounds.IsValid ? (WorldBounds + CollisionAABB) : CollisionAABB;
+				}
+			}
+			if (!WorldBounds.IsValid)
+			{
+				return false;
+			}
+
+			// OverlapComponent queries simple collision only, so a complex-only mesh or
+			// a disabled component answers false everywhere.
+			if (!bHasSimpleCollision || Comp->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
+			{
+				PCGE_LOG_C(
+					Warning, GraphAndLog, InContext,
+					FTEXT("Primitive input has no queryable simple collision, so it cannot answer overlap queries. Falling back to its bounding box -- add simple collision (or set Use Complex As Simple) for an exact region."));
+				return Detail::EmitBoundsOBB(WorldBounds, ChannelKey, OutEntries);
+			}
+
+			FBakedEntry& Out = OutEntries.Emplace_GetRef();
+			Out.ChannelKey = ChannelKey;
+			Out.Shape.InitializeAs<FPCGExFootprintShape_Primitive>(CompPtr, WorldBounds);
+			return true;
 		}
 
 		return false;

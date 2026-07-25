@@ -47,6 +47,13 @@ namespace PCGExPaths
 
 		PCGEXCORE_API bool GetClosedLoop(const TSharedPtr<PCGExData::FPointIO>& InData);
 
+		/**
+		 * Hole state, carried only by the HoleIdentifier @Data attribute.
+		 *
+		 * KNOWN GAP: nothing writes it onto UPCGSplineData (Write Path Properties
+		 * and Watabou both emit point data), so spline holes can only be
+		 * hand-authored. Nodes accepting splines should say so.
+		 */
 		PCGEXCORE_API void SetIsHole(UPCGData* InData, const bool bIsHole);
 
 		PCGEXCORE_API void SetIsHole(const TSharedPtr<PCGExData::FPointIO>& InData, const bool bIsHole);

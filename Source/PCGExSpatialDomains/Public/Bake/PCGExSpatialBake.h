@@ -104,6 +104,13 @@ namespace PCGExSpatial::Bake
 	 * Bake one tagged data into shape entries. Per-input-type dispatch:
 	 *   UPCGSplineData    -> FPCGExFootprintShape_Polygon (one per spline)
 	 *   UPCGBasePointData -> FPCGExFootprintShape_OBB (one per point)
+	 *   UPCGVolumeData    -> FPCGExFootprintShape_Volume (its AVolume brush)
+	 *   UPCGPrimitiveData -> FPCGExFootprintShape_Primitive (its component)
+	 *
+	 * The UObject-backed kinds fall back to _OBB over the input's world bounds
+	 * when the backing object cannot answer an overlap query -- an approximate box
+	 * beats a region that silently reports empty. Warns, except for the no-actor
+	 * case (bounds-only volume data, where the box is exact).
 	 *
 	 * Returns true on any successful contribution; false on unknown input
 	 * type or total failure (caller decides whether to warn / skip).

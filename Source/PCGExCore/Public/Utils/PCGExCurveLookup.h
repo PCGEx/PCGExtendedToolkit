@@ -10,6 +10,7 @@
 #include "Curves/RichCurve.h"
 //#include "Templates/SharedPointer.h"
 //#include "Templates/SharedPointerFwd.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "UObject/SoftObjectPath.h"
 
 #include "PCGExCurveLookup.generated.h"
@@ -199,7 +200,7 @@ public:
 	}
 
 protected:
-	TSharedPtr<FStreamableHandle> ExternalCurveHandle = nullptr;
+	PCGExHelpers::FPCGExSharedAssetHandlePtr ExternalCurveHandle;
 
 	/** Clamped lerp equivalent of a 2-key linear curve with constant extrapolation -- what the
 	 * default weight-distribution ramps are. Set up by Init, bypasses FRichCurve::Eval entirely. */
