@@ -10,6 +10,7 @@
 #include "Curves/RichCurve.h"
 //#include "Templates/SharedPointer.h"
 //#include "Templates/SharedPointerFwd.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "UObject/SoftObjectPath.h"
 
 #include "PCGExCurveLookup.generated.h"
@@ -188,7 +189,7 @@ public:
 	}
 
 protected:
-	TSharedPtr<FStreamableHandle> ExternalCurveHandle = nullptr;
+	PCGExHelpers::FPCGExSharedAssetHandlePtr ExternalCurveHandle;
 
 	FORCEINLINE float EvalLUT(const float InTime) const
 	{
