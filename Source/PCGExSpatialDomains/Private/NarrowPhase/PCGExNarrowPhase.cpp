@@ -4,6 +4,7 @@
 #include "NarrowPhase/PCGExNarrowPhase.h"
 
 #include "Containers/Map.h"
+#include "NarrowPhase/PCGExNarrowPhaseRegistrations.h"
 
 namespace PCGExSpatial::NarrowPhase
 {
@@ -156,6 +157,14 @@ namespace PCGExSpatial::NarrowPhase
 		S.QueryPointFns.Reset();
 	}
 
+	void RegisterBuiltInPairTests()
+	{
+		// The one list -- tests restore through it, so a kind cannot be half-registered.
+		RegisterOBBPairTests();
+		RegisterPolygonPairTests();
+		RegisterVolumePrimitivePairTests();
+	}
+
 	void RegisterQueryPoint(UScriptStruct* Struct, FQueryPointFn Fn)
 	{
 		if (!ensureMsgf(Struct, TEXT("PCGExSpatial::NarrowPhase::RegisterQueryPoint: null UScriptStruct*")))
@@ -178,6 +187,17 @@ namespace PCGExSpatial::NarrowPhase
 		}
 
 		S.QueryPointFns[Tag] = Fn;
+	}
+
+	bool HasQueryPoint(const UScriptStruct* Struct)
+	{
+		const FShapeKindTag Tag = FindShapeKindTag(Struct);
+		if (Tag == InvalidKindTag)
+		{
+			return false;
+		}
+		const FRegistryState& S = State();
+		return S.QueryPointFns.IsValidIndex(Tag) && S.QueryPointFns[Tag] != nullptr;
 	}
 
 	float QueryPoint(FShapeKindTag StoredKind, const FVector& Point, const FPCGExFootprintShape& Stored)

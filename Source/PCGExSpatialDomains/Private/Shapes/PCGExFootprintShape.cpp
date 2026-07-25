@@ -27,15 +27,18 @@ FPCGExFootprintShape_OBB::~FPCGExFootprintShape_OBB() = default;
 
 FBox FPCGExFootprintShape_OBB::GetWorldAABB() const
 {
-	// Walk the eight corners and accumulate -- accounts for the orientation
-	// component cleanly without a separate fast path. Single-element OBBs
-	// hit this once per Append, not in the hot query loop.
-	FBox AABB(ForceInit);
-	Bounds.ForEachCorner([&AABB](const FVector& World)
-	{
-		AABB += World;
-	});
-	return AABB;
+	// Hot path -- the broadphase calls this on the candidate per Overlaps(), i.e.
+	// per lattice cell and per placement attempt. Not cached: callers mutate
+	// Bounds.Origin in place between queries.
+	const FVector& Extents = Bounds.GetExtents();
+	const FQuat& Rotation = Bounds.GetRotation();
+	const FVector HalfSize =
+		Rotation.GetAxisX().GetAbs() * Extents.X +
+		Rotation.GetAxisY().GetAbs() * Extents.Y +
+		Rotation.GetAxisZ().GetAbs() * Extents.Z;
+
+	const FVector& Origin = Bounds.GetOrigin();
+	return FBox(Origin - HalfSize, Origin + HalfSize);
 }
 
 // =============================================================================
@@ -50,3 +53,34 @@ FPCGExFootprintShape_Polygon::FPCGExFootprintShape_Polygon(FPCGExSpatialPolygonE
 }
 
 FPCGExFootprintShape_Polygon::~FPCGExFootprintShape_Polygon() = default;
+
+// =============================================================================
+// FPCGExFootprintShape_Volume
+// =============================================================================
+//
+// AVolume / UPrimitiveComponent stay incomplete here: TWeakObjectPtr is
+// type-erased, so copy + destroy need no Engine headers.
+
+FPCGExFootprintShape_Volume::FPCGExFootprintShape_Volume() = default;
+
+FPCGExFootprintShape_Volume::FPCGExFootprintShape_Volume(const TWeakObjectPtr<AVolume>& InVolume, const FBox& InWorldAABB)
+	: Volume(InVolume)
+	  , WorldAABB(InWorldAABB)
+{
+}
+
+FPCGExFootprintShape_Volume::~FPCGExFootprintShape_Volume() = default;
+
+// =============================================================================
+// FPCGExFootprintShape_Primitive
+// =============================================================================
+
+FPCGExFootprintShape_Primitive::FPCGExFootprintShape_Primitive() = default;
+
+FPCGExFootprintShape_Primitive::FPCGExFootprintShape_Primitive(const TWeakObjectPtr<UPrimitiveComponent>& InPrimitive, const FBox& InWorldAABB)
+	: Primitive(InPrimitive)
+	  , WorldAABB(InWorldAABB)
+{
+}
+
+FPCGExFootprintShape_Primitive::~FPCGExFootprintShape_Primitive() = default;

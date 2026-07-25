@@ -213,6 +213,10 @@ namespace PCGExPathInclusion
 
 		explicit FHandler(const UPCGExPolyPathFilterFactory* InFactory);
 
+		// False when the source factory produced no polypaths (null octree). Filters must fail init rather than
+		// let a Test path reach the octree, which is dereferenced unguarded.
+		bool IsUsable() const { return Octree.IsValid(); }
+
 		// InPrecision is intentionally non-defaulted: every caller must state its bounds mode explicitly so the
 		// shared handler (also used by Time/SegmentCross filters) can never silently inherit a precision setting.
 		void Init(const EPCGExSplineCheckType InCheckType, const EPCGExDistance InPrecision);

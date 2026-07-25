@@ -70,6 +70,11 @@ namespace PCGExPointFilter
 			return false;
 		}
 
+		if (!Handler->IsUsable())
+		{
+			return false;
+		}
+
 		const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
 			&& TypedFilterFactory->HasMatchRuleFactories();
 
@@ -103,8 +108,15 @@ namespace PCGExPointFilter
 		return true;
 	}
 
+	// Collection mode keeps filters that failed Init (see FManager::Init), so this per-data entry point
+	// re-checks what Init already rejected. The per-point Test(int32) relies on the Init guard instead.
 	bool FTimeFilter::Test(const PCGExData::FProxyPoint& Point) const
 	{
+		if (!Handler->IsUsable())
+		{
+			return false;
+		}
+
 		const FVector WorldPosition = Point.Transform.GetLocation();
 		float Alpha = 0;
 

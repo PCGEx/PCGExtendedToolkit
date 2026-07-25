@@ -87,11 +87,7 @@ namespace PCGExPaths
 
 		bool GetIsHole(const UPCGData* InData)
 		{
-			if (const UPCGSplineData* SplineData = Cast<UPCGSplineData>(InData))
-			{
-				return SplineData->IsClosed();
-			}
-
+			// Attribute-only for every data type: a closed spline is not implicitly a hole.
 			const FPCGMetadataAttributeBase* Attr = PCGExMetaHelpers::TryGetConstAttribute<bool>(InData, Labels::HoleIdentifier);
 			return Attr ? PCGExData::Helpers::ReadDataValue<bool>(Attr) : false;
 		}
