@@ -93,7 +93,16 @@ bool FPCGExFactoryProviderElement::AdvanceWork(FPCGExContext* InContext, const U
 			Context->SetState(PCGExCommon::States::State_WaitingOnAsyncWork);
 			TSharedPtr<PCGExMT::FTaskManager> TaskManager = Context->GetTaskManager();
 			PCGEX_ASYNC_SCHEDULING_SCOPE(TaskManager, true)
-			Context->OutFactory->PrepResult = Context->OutFactory->Prepare(Context, TaskManager);
+
+			// Prepare()'s work can complete inline (loop dispatch is synchronous), so a completion callback may
+			// already have written the real result -- its return value only seeds PrepResult, never overrides it.
+			Context->OutFactory->PrepResult = PCGExFactories::EPreparationResult::None;
+			const PCGExFactories::EPreparationResult SeedResult = Context->OutFactory->Prepare(Context, TaskManager);
+			if (Context->OutFactory->PrepResult == PCGExFactories::EPreparationResult::None)
+			{
+				Context->OutFactory->PrepResult = SeedResult;
+			}
+
 			return false;
 		}
 	}

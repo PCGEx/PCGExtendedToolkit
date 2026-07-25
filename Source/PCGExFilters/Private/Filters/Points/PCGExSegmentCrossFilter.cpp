@@ -53,6 +53,11 @@ namespace PCGExPointFilter
 			return false;
 		}
 
+		if (!Handler->IsUsable())
+		{
+			return false;
+		}
+
 		const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
 			&& TypedFilterFactory->HasMatchRuleFactories();
 
