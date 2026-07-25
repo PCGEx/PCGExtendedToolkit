@@ -15,6 +15,7 @@
 #include "Data/PCGVolumeData.h"
 #include "GameFramework/Volume.h"
 #include "PCGExCoreMacros.h"
+#include "Core/PCGExContext.h"
 #include "PhysicsEngine/BodySetup.h"
 PRAGMA_DISABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 #include "Data/PCGSplineStruct.h"
