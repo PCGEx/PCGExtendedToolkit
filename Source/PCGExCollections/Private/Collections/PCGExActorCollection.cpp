@@ -16,6 +16,7 @@
 #include "Engine/Blueprint.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
 
 // Static-init type registration: TypeId=Actor, parent=Base
@@ -74,15 +75,9 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 			return;
 		}
 
-		// SpawnActor asserts hard if the world is mid-transition. UpdateStaging is reached
-		// from several paths (manual rebuild, OnAssetUpdatedOnDisk, deferred PostLoad,
-		// recursive cascades from the level exporter) and not all guarantee a settled
-		// world. IsAsyncLoading is intentionally NOT checked: it's globally true during
-		// PCG graph execution that soft-loads assets, and would silently strip bounds.
-		if (World->bIsTearingDown
-			|| !World->PersistentLevel
-			|| World->WorldType == EWorldType::Inactive
-			|| World->WorldType == EWorldType::None)
+		// The guard, the spawn and the teardown all live in PCGExHelpers::WithTempActor -- shared
+		// with every other caller that needs a real instance to inspect.
+		if (!PCGExHelpers::IsSpawnSafe(World))
 		{
 			UE_LOG(LogPCGEx, Warning,
 			       TEXT("World not in a spawn-safe state (type=%d, tearing=%d, hasLevel=%d); skipping bounds for '%s'."),
@@ -93,59 +88,51 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 			return;
 		}
 
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.bNoFail = true;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const bool bSpawned = PCGExHelpers::WithTempActor(
+			World, ActorClass, [&](AActor* TempActor)
+			{
+				// Evaluator via the type-globals seam; hosts without a block take the GetActorBounds fallback.
+				FPCGExActorCollectionGlobals Globals;
+				const bool bHasGlobals = OwningCollection && OwningCollection->GetTypeGlobals(Globals);
+				if (bHasGlobals && Globals.BoundsEvaluator)
+				{
+					const FBox WorldBounds = Globals.BoundsEvaluator->EvaluateActorBounds(
+						TempActor, const_cast<UPCGExAssetCollection*>(OwningCollection), InInternalIndex);
+					Staging.Bounds = WorldBounds.IsValid ? WorldBounds : FBox(ForceInit);
+				}
+				else
+				{
+					FVector Origin, Extents;
+					TempActor->GetActorBounds(false, Origin, Extents);
+					Staging.Bounds = FBox(Origin - Extents, Origin + Extents);
+				}
 
-		AActor* TempActor = World->SpawnActor<AActor>(ActorClass, FTransform(), SpawnParams);
-		if (!TempActor)
+				// Inspect for PCG components
+				TInlineComponentArray<UPCGComponent*, 1> PCGComps;
+				TempActor->GetComponents(PCGComps);
+				bHasPCGComponent = !PCGComps.IsEmpty();
+				CachedPCGGraph = (bHasPCGComponent && PCGComps[0]->GetGraph())
+					? TSoftObjectPtr<UPCGGraphInterface>(FSoftObjectPath(PCGComps[0]->GetGraph()))
+					: nullptr;
+
+				// Temp actor is at FTransform::Identity, so component world transform == relative to actor
+				TArray<UPCGExSocketComponent*> SocketComps;
+				TempActor->GetComponents<UPCGExSocketComponent>(SocketComps);
+				for (UPCGExSocketComponent* SC : SocketComps)
+				{
+					FPCGExSocket& NewSocket = Staging.Sockets.Emplace_GetRef(
+						SC->GetSocketName_Implementation(),
+						SC->GetSocketTransform_Implementation(),
+						SC->GetSocketTag_Implementation());
+					NewSocket.bManaged = true;
+				}
+			});
+
+		if (!bSpawned)
 		{
 			UE_LOG(LogPCGEx, Error, TEXT("Failed to create temp actor!"));
 			return;
 		}
-
-		// Evaluator via the type-globals seam; hosts without a block take the GetActorBounds fallback.
-		FPCGExActorCollectionGlobals Globals;
-		const bool bHasGlobals = OwningCollection && OwningCollection->GetTypeGlobals(Globals);
-		if (bHasGlobals && Globals.BoundsEvaluator)
-		{
-			const FBox WorldBounds = Globals.BoundsEvaluator->EvaluateActorBounds(
-				TempActor, const_cast<UPCGExAssetCollection*>(OwningCollection), InInternalIndex);
-			Staging.Bounds = WorldBounds.IsValid ? WorldBounds : FBox(ForceInit);
-		}
-		else
-		{
-			FVector Origin, Extents;
-			TempActor->GetActorBounds(false, Origin, Extents);
-			Staging.Bounds = FBox(Origin - Extents, Origin + Extents);
-		}
-
-		// Inspect for PCG components
-		TInlineComponentArray<UPCGComponent*, 1> PCGComps;
-		TempActor->GetComponents(PCGComps);
-		bHasPCGComponent = !PCGComps.IsEmpty();
-		CachedPCGGraph = (bHasPCGComponent && PCGComps[0]->GetGraph())
-			? TSoftObjectPtr<UPCGGraphInterface>(FSoftObjectPath(PCGComps[0]->GetGraph()))
-			: nullptr;
-
-		// Temp actor is at FTransform::Identity, so component world transform == relative to actor
-		TArray<UPCGExSocketComponent*> SocketComps;
-		TempActor->GetComponents<UPCGExSocketComponent>(SocketComps);
-		for (UPCGExSocketComponent* SC : SocketComps)
-		{
-			FPCGExSocket& NewSocket = Staging.Sockets.Emplace_GetRef(
-				SC->GetSocketName_Implementation(),
-				SC->GetSocketTransform_Implementation(),
-				SC->GetSocketTag_Implementation());
-			NewSocket.bManaged = true;
-		}
-
-		// Hide the actor to ensure it doesn't affect gameplay or rendering
-		TempActor->SetActorHiddenInGame(true);
-		TempActor->SetActorEnableCollision(false);
-
-		// Destroy the temporary actor
-		TempActor->Destroy();
 
 #else
 		Staging.Bounds = FBox(ForceInit);

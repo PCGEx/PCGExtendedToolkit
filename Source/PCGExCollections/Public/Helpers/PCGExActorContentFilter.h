@@ -25,7 +25,7 @@ public:
 	/** Infrastructure checks shared by all callers: hidden, editor-only,
 	 *  main-world-only, ALevelScriptActor, AInfo, ABrush (excluding AVolume), ANavigationData,
 	 *  and any class registered via RegisterSystemActorClass. */
-	static bool IsInfrastructureActor(AActor* Actor);
+	static bool IsInfrastructureActor(const AActor* Actor);
 
 	/** Convenience: delegates to filter if non-null, else falls back to IsInfrastructureActor. */
 	static bool StaticPassesFilter(
