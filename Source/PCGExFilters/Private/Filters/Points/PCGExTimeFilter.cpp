@@ -193,7 +193,10 @@ namespace PCGExPointFilter
 	bool FTimeFilter::Test(const int32 PointIndex) const
 	{
 		// Matching failed for the whole collection (no candidate matched) -> every point takes the fallback result.
-		if (bCheckAgainstDataBounds) { return bCollectionTestResult; }
+		if (bCheckAgainstDataBounds)
+		{
+			return bCollectionTestResult;
+		}
 
 		const FVector WorldPosition = InTransforms[PointIndex].GetLocation();
 		float Alpha = 0;
@@ -317,7 +320,7 @@ FString UPCGExTimeFilterProviderSettings::GetDisplayName() const
 		DisplayName += FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.OperandBConstant) / 1000.0));
 	}
 
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

@@ -237,7 +237,7 @@ UPCGExFactoryData* UPCGExEdgeEndpointsCheckFilterProviderSettings::CreateFactory
 #if WITH_EDITOR
 FString UPCGExEdgeEndpointsCheckFilterProviderSettings::GetDisplayName() const
 {
-	return GetDefaultNodeTitle().ToString();
+	return PCGExCommon::FlagInvertLabel(GetDefaultNodeTitle().ToString(), Config.bInvert);
 }
 #endif
 

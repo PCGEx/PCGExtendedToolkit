@@ -124,7 +124,9 @@ PCGEX_CREATE_FILTER_FACTORY(Angle)
 #if WITH_EDITOR
 FString UPCGExAngleFilterProviderSettings::GetDisplayName() const
 {
-	return (Config.Mode == EPCGExAngleFilterMode::Curvature ? TEXT("Curvature") : TEXT("Spread")) + Config.DotComparisonDetails.GetDisplayComparison();
+	return PCGExCommon::FlagInvertLabel(
+		(Config.Mode == EPCGExAngleFilterMode::Curvature ? TEXT("Curvature") : TEXT("Spread")) + Config.DotComparisonDetails.GetDisplayComparison(),
+		Config.bInvert);
 }
 #endif
 

@@ -190,7 +190,7 @@ FString UPCGExBitmaskFilterProviderSettings::GetDisplayName() const
 		break;
 	}
 
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvertResult);
 }
 #endif
 

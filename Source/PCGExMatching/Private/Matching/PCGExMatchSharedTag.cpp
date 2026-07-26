@@ -277,21 +277,27 @@ void UPCGExCreateMatchSharedTagSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 FString UPCGExCreateMatchSharedTagSettings::GetDisplayName() const
 {
+	FString DisplayName = TEXT("");
 	switch (Config.Mode)
 	{
 	case EPCGExTagMatchMode::Specific:
 	{
-		FString NameStr = TEXT("Share ");
-		NameStr += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : TEXT("Tag \"") + Config.TagNameValue.Attribute.ToString() + TEXT("\"");
-		return NameStr;
+		DisplayName = TEXT("Share ");
+		DisplayName += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : TEXT("Tag \"") + Config.TagNameValue.Attribute.ToString() + TEXT("\"");
 	}
+	break;
 	case EPCGExTagMatchMode::AnyShared:
-		return TEXT("Any Shared Tag");
+		DisplayName = TEXT("Any Shared Tag");
+		break;
 	case EPCGExTagMatchMode::AllShared:
-		return TEXT("All Tags Shared");
+		DisplayName = TEXT("All Tags Shared");
+		break;
 	default:
-		return TEXT("Shared Tag");
+		DisplayName = TEXT("Shared Tag");
+		break;
 	}
+
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

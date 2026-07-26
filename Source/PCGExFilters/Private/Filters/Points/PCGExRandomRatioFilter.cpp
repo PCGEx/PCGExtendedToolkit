@@ -91,7 +91,7 @@ PCGEX_CREATE_FILTER_FACTORY(RandomRatio)
 #if WITH_EDITOR
 FString UPCGExRandomRatioFilterProviderSettings::GetDisplayName() const
 {
-	return TEXT("Random Ratio");
+	return PCGExCommon::FlagInvertLabel(TEXT("Random Ratio"), Config.bInvertResult);
 }
 #endif
 

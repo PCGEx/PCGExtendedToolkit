@@ -55,7 +55,10 @@ bool UPCGExNearestPointCheckFilterFactory::BuildTargetCaches(FPCGExContext* InCo
 		{
 			// Index-aligned slot; -1 == not yet evaluated. Left empty on manager failure (unused).
 			TArray<int8>& Slot = TargetResultCache->Emplace_GetRef();
-			if (bManagerOk) { Slot.Init(-1, Target->Source->GetNum()); }
+			if (bManagerOk)
+			{
+				Slot.Init(-1, Target->Source->GetNum());
+			}
 		}
 
 		if (!bManagerOk)
@@ -124,8 +127,14 @@ bool PCGExPointFilter::FNearestPointCheckFilter::Test(const int32 PointIndex) co
 			QueryBounds,
 			[&](const PCGExData::FConstPoint& Target)
 			{
-				if (bAnyPass) { return; } // first pass wins
-				if (TargetsHandler->GetDistSquared(SourcePt, Target) > MaxDistSquared) { return; } // trim AABB to true radius
+				if (bAnyPass)
+				{
+					return;
+				} // first pass wins
+				if (TargetsHandler->GetDistSquared(SourcePt, Target) > MaxDistSquared)
+				{
+					return;
+				} // trim AABB to true radius
 
 				bAnyCandidate = true;
 
@@ -137,7 +146,10 @@ bool PCGExPointFilter::FNearestPointCheckFilter::Test(const int32 PointIndex) co
 					FPlatformAtomics::AtomicStore(&Cache[Target.IO][Target.Index], Cached);
 				}
 
-				if (Cached == 1) { bAnyPass = true; }
+				if (Cached == 1)
+				{
+					bAnyPass = true;
+				}
 			},
 			ExcludePtr);
 
@@ -222,7 +234,7 @@ void UPCGExNearestPointCheckFilterProviderSettings::PCGExApplyDeprecation(UPCGNo
 
 FString UPCGExNearestPointCheckFilterProviderSettings::GetDisplayName() const
 {
-	return GetDefaultNodeTitle().ToString();
+	return PCGExCommon::FlagInvertLabel(GetDefaultNodeTitle().ToString(), Config.bInvert);
 }
 #endif
 

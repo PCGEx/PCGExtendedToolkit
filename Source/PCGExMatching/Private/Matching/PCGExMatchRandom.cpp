@@ -98,7 +98,7 @@ void UPCGExCreateMatchRandomSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 
 FString UPCGExCreateMatchRandomSettings::GetDisplayName() const
 {
-	return TEXT("Random");
+	return PCGExCommon::FlagInvertLabel(TEXT("Random"), Config.bInvert);
 }
 #endif
 

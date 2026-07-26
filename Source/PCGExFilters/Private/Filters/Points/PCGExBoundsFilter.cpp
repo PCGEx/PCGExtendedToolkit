@@ -195,9 +195,12 @@ namespace PCGExBoundsFilterLocal
 	{
 		switch (Mode)
 		{
-		case EPCGExBoxCheckMode::Box: return EPCGExBoxCheckMode::ExpandedBox;
-		case EPCGExBoxCheckMode::Sphere: return EPCGExBoxCheckMode::ExpandedSphere;
-		default: return Mode;
+		case EPCGExBoxCheckMode::Box:
+			return EPCGExBoxCheckMode::ExpandedBox;
+		case EPCGExBoxCheckMode::Sphere:
+			return EPCGExBoxCheckMode::ExpandedSphere;
+		default:
+			return Mode;
 		}
 	}
 
@@ -244,7 +247,10 @@ bool PCGExPointFilter::FBoundsFilter::TestPoint(const FTransform& Transform, con
 				break;
 			}
 
-			if (bPass) { return !bInvert; }
+			if (bPass)
+			{
+				return !bInvert;
+			}
 		}
 
 		return bInvert;
@@ -265,14 +271,17 @@ bool PCGExPointFilter::FBoundsFilter::TestPoint(const FTransform& Transform, con
 			break;
 		case EPCGExBoundsCheckType::IsInsideOrOn:
 			bPass = Collection->Contains(QueryOBB, ToBoundaryInclusiveMode(CheckMode),
-			                              IsExpandedMode(CheckMode) ? Expansion + KINDA_SMALL_NUMBER : KINDA_SMALL_NUMBER);
+			                             IsExpandedMode(CheckMode) ? Expansion + KINDA_SMALL_NUMBER : KINDA_SMALL_NUMBER);
 			break;
 		case EPCGExBoundsCheckType::IsInsideOrIntersects:
 			bPass = Collection->ContainsOrOverlaps(QueryOBB, CheckMode, Expansion);
 			break;
 		}
 
-		if (bPass) { return !bInvert; }
+		if (bPass)
+		{
+			return !bInvert;
+		}
 	}
 
 	return bInvert;
@@ -367,18 +376,24 @@ void UPCGExBoundsFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 FString UPCGExBoundsFilterProviderSettings::GetDisplayName() const
 {
+	FString DisplayName = TEXT("");
 	switch (Config.CheckType)
 	{
 	default:
 	case EPCGExBoundsCheckType::Intersects:
-		return TEXT("Intersects");
+		DisplayName = TEXT("Intersects");
+		break;
 	case EPCGExBoundsCheckType::IsInside:
-		return TEXT("Is Inside");
+		DisplayName = TEXT("Is Inside");
+		break;
 	case EPCGExBoundsCheckType::IsInsideOrOn:
-		return TEXT("Is Inside or On");
+		DisplayName = TEXT("Is Inside or On");
+		break;
 	case EPCGExBoundsCheckType::IsInsideOrIntersects:
-		return TEXT("Is Inside or Intersects");
+		DisplayName = TEXT("Is Inside or Intersects");
+		break;
 	}
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

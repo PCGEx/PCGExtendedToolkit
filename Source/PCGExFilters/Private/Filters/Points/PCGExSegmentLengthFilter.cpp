@@ -147,7 +147,7 @@ FString UPCGExSegmentLengthFilterProviderSettings::GetDisplayName() const
 	FString TargetStr = Config.CompareAgainst == EPCGExInputValueType::Attribute ? PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute) : FString::Printf(TEXT("%d"), Config.IndexConstant);
 	FString OtherStr = Config.Threshold.Input == EPCGExInputValueType::Attribute ? PCGExMetaHelpers::GetSelectorDisplayName(Config.Threshold.Attribute) : FString::Printf(TEXT("%.1f"), Config.Threshold.Constant);
 	FString Str = TEXT("Dist to ") + TargetStr + PCGExCompare::ToString(Config.Comparison) + OtherStr;
-	return Str;
+	return PCGExCommon::FlagInvertLabel(Str, Config.bInvert);
 }
 #endif
 

@@ -343,18 +343,25 @@ PCGEX_CREATE_FILTER_FACTORY(Volume)
 #if WITH_EDITOR
 FString UPCGExVolumeFilterProviderSettings::GetDisplayName() const
 {
+	FString DisplayName = TEXT("");
 	switch (Config.CheckType)
 	{
 	default:
 	case EPCGExVolumeCheckType::IsInside:
-		return TEXT("Is Inside");
+		DisplayName = TEXT("Is Inside");
+		break;
 	case EPCGExVolumeCheckType::Intersects:
-		return TEXT("Intersects");
+		DisplayName = TEXT("Intersects");
+		break;
 	case EPCGExVolumeCheckType::IsInsideOrIntersects:
-		return TEXT("Is Inside or Intersects");
+		DisplayName = TEXT("Is Inside or Intersects");
+		break;
 	case EPCGExVolumeCheckType::IsOutsideOrIntersects:
-		return TEXT("Is Outside or Intersects");
+		DisplayName = TEXT("Is Outside or Intersects");
+		break;
 	}
+
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

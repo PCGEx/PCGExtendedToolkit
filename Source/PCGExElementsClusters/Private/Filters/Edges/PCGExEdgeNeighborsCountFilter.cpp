@@ -134,7 +134,7 @@ FString UPCGExEdgeNeighborsCountFilterProviderSettings::GetDisplayName() const
 		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.Threshold.Attribute);
 	}
 
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

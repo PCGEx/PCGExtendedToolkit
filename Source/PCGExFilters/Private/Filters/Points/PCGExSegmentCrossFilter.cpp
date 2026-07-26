@@ -160,7 +160,7 @@ void UPCGExSegmentCrossFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* I
 
 FString UPCGExSegmentCrossFilterProviderSettings::GetDisplayName() const
 {
-	return GetDefaultNodeTitle().ToString();
+	return PCGExCommon::FlagInvertLabel(GetDefaultNodeTitle().ToString(), Config.bInvert);
 }
 #endif
 
