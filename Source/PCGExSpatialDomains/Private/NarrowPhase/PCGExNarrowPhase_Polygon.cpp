@@ -9,7 +9,7 @@
 
 namespace PCGExSpatial::NarrowPhase
 {
-	namespace
+	namespace PolygonPair
 	{
 		/**
 		 * OBB-vs-Polygon precise overlap test: project the OBB shadow into
@@ -110,16 +110,16 @@ namespace PCGExSpatial::NarrowPhase
 		Register(
 			FPCGExFootprintShape_OBB::StaticStruct(),
 			FPCGExFootprintShape_Polygon::StaticStruct(),
-			{&OBBvsPolygon_Overlap, /*Penetration*/ nullptr});
+			{&PolygonPair::OBBvsPolygon_Overlap, /*Penetration*/ nullptr});
 
 		// Polygon-vs-Polygon. Same Penetration story as above.
 		Register(
 			FPCGExFootprintShape_Polygon::StaticStruct(),
 			FPCGExFootprintShape_Polygon::StaticStruct(),
-			{&PolygonVsPolygon_Overlap, /*Penetration*/ nullptr});
+			{&PolygonPair::PolygonVsPolygon_Overlap, /*Penetration*/ nullptr});
 
 		RegisterQueryPoint(
 			FPCGExFootprintShape_Polygon::StaticStruct(),
-			&Polygon_QueryPoint);
+			&PolygonPair::Polygon_QueryPoint);
 	}
 }

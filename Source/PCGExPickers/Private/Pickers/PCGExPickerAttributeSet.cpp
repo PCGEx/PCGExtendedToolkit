@@ -26,7 +26,7 @@ FString UPCGExPickerAttributeSetSettings::GetDisplayName() const
 	{
 		//DisplayName += FString::Printf(TEXT("%d"), Config.DiscreteIndex);
 	}
-
+	
 	return DisplayName;
 }
 #endif

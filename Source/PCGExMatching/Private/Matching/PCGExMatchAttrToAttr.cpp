@@ -116,9 +116,14 @@ FString UPCGExCreateMatchAttrToAttrSettings::GetDisplayName() const
 {
 	if (Config.Check == EPCGExComparisonDataType::Numeric)
 	{
-		return Config.bSwapOperands ? Config.TargetAttributeName.ToString() + PCGExCompare::ToString(Config.NumericComparison) + Config.CandidateAttributeName.ToString() : Config.CandidateAttributeName.ToString() + PCGExCompare::ToString(Config.NumericComparison) + Config.TargetAttributeName.ToString();
+		return PCGExCommon::FlagInvertLabel(
+			Config.bSwapOperands ? Config.TargetAttributeName.ToString() + PCGExCompare::ToString(Config.NumericComparison) + Config.CandidateAttributeName.ToString() : Config.CandidateAttributeName.ToString() + PCGExCompare::ToString(Config.NumericComparison) + Config.TargetAttributeName.ToString(),
+			Config.bInvert);
 	}
-	return Config.bSwapOperands ? Config.TargetAttributeName.ToString() + PCGExCompare::ToString(Config.StringComparison) + Config.CandidateAttributeName.ToString() : Config.CandidateAttributeName.ToString() + PCGExCompare::ToString(Config.StringComparison) + Config.TargetAttributeName.ToString();
+	
+	return PCGExCommon::FlagInvertLabel(
+		Config.bSwapOperands ? Config.TargetAttributeName.ToString() + PCGExCompare::ToString(Config.StringComparison) + Config.CandidateAttributeName.ToString() : Config.CandidateAttributeName.ToString() + PCGExCompare::ToString(Config.StringComparison) + Config.TargetAttributeName.ToString(),
+		Config.bInvert);
 }
 #endif
 

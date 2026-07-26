@@ -148,7 +148,7 @@ PCGEX_CREATE_FILTER_FACTORY(Primitive)
 #if WITH_EDITOR
 FString UPCGExPrimitiveFilterProviderSettings::GetDisplayName() const
 {
-	return TEXT("Overlaps");
+	return PCGExCommon::FlagInvertLabel(TEXT("Overlaps"), Config.bInvert);
 }
 #endif
 

@@ -9,7 +9,7 @@
 
 namespace PCGExSpatial::NarrowPhase
 {
-	namespace
+	namespace OBBPair
 	{
 		/**
 		 * OBB-vs-OBB precise overlap test. Sphere pre-cull + SAT (the
@@ -45,10 +45,10 @@ namespace PCGExSpatial::NarrowPhase
 		Register(
 			FPCGExFootprintShape_OBB::StaticStruct(),
 			FPCGExFootprintShape_OBB::StaticStruct(),
-			{&OBBvsOBB_Overlap, &OBBvsOBB_Penetration});
+			{&OBBPair::OBBvsOBB_Overlap, &OBBPair::OBBvsOBB_Penetration});
 
 		RegisterQueryPoint(
 			FPCGExFootprintShape_OBB::StaticStruct(),
-			&OBB_QueryPoint);
+			&OBBPair::OBB_QueryPoint);
 	}
 }

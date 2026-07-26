@@ -129,11 +129,13 @@ FString UPCGExDataMatchFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Data Match : ");
 	DisplayName += Config.Mode == EPCGExMapMatchMode::All ? TEXT("All") : TEXT("Any");
+	
 	if (Config.bInvert)
 	{
 		DisplayName += TEXT(" (Inverted)");
 	}
-	return DisplayName;
+
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

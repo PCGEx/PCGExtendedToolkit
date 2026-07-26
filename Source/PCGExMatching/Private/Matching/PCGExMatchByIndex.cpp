@@ -100,9 +100,13 @@ FString UPCGExCreateMatchByIndexSettings::GetDisplayName() const
 {
 	if (Config.Source == EPCGExMatchByIndexSource::Target)
 	{
-		return TEXT("Target' ") + PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute) + TEXT(" == Input Index");
+		return PCGExCommon::FlagInvertLabel(
+			TEXT("Target' ") + PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute) + TEXT(" == Input Index"),
+			Config.bInvert);
 	}
-	return TEXT("Input' ") + PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute) + TEXT(" == Target Index");
+	return PCGExCommon::FlagInvertLabel(
+		TEXT("Input' ") + PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute) + TEXT(" == Target Index"),
+		Config.bInvert);
 }
 #endif
 

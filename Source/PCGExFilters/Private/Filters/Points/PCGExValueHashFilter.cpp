@@ -278,7 +278,7 @@ FString UPCGExValueHashFilterProviderSettings::GetDisplayName() const
 		DisplayName += TEXT(" in all set");
 	}
 
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

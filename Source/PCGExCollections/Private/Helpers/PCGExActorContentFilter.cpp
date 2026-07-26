@@ -24,9 +24,10 @@ TSet<FName> UPCGExActorContentFilter::KnownSystemActorClasses =
 	TEXT("GameplayDebuggerPlayerManager"),
 	TEXT("Valency Editor Cache"),
 	TEXT("ValencyEditorCache"),
+	TEXT("BuoyancyManager"),
 };
 
-bool UPCGExActorContentFilter::IsInfrastructureActor(AActor* Actor)
+bool UPCGExActorContentFilter::IsInfrastructureActor(const AActor* Actor)
 {
 	if (!Actor)
 	{

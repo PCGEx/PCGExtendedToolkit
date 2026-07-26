@@ -163,7 +163,7 @@ FString UPCGExWithinRangeFilterProviderSettings::GetDisplayName() const
 	DisplayName += TEXT(" .. ");
 	DisplayName += FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.RangeMax) / 1000.0));
 
-	return DisplayName + TEXT("]");
+	return PCGExCommon::FlagInvertLabel(DisplayName + TEXT("]"), Config.bInvert);
 }
 #endif
 

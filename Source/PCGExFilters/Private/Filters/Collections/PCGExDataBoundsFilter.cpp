@@ -167,7 +167,7 @@ FString UPCGExDataBoundsFilterProviderSettings::GetDisplayName() const
 	}
 
 	DisplayName += Config.OperandB.GetDisplayNamePostfix();
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

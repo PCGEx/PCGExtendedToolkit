@@ -72,7 +72,9 @@ PCGEX_CREATE_FILTER_FACTORY(EdgeEndpointsCompareStr)
 #if WITH_EDITOR
 FString UPCGExEdgeEndpointsCompareStrFilterProviderSettings::GetDisplayName() const
 {
-	return PCGExMetaHelpers::GetSelectorDisplayName(Config.Attribute) + PCGExCompare::ToString(Config.Comparison);
+	return PCGExCommon::FlagInvertLabel(
+		PCGExMetaHelpers::GetSelectorDisplayName(Config.Attribute) + PCGExCompare::ToString(Config.Comparison),
+		Config.bInvert);
 }
 #endif
 

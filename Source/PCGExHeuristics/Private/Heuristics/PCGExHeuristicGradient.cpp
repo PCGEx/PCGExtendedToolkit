@@ -175,7 +175,9 @@ UPCGExFactoryData* UPCGExHeuristicsGradientProviderSettings::CreateFactory(FPCGE
 #if WITH_EDITOR
 FString UPCGExHeuristicsGradientProviderSettings::GetDisplayName() const
 {
-	return TEXT("HX : Gradient ") + PCGExMetaHelpers::GetSelectorDisplayName(Config.Attribute) + TEXT(" @ ") + FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0));
+	return PCGExCommon::FlagInvertLabel(
+		TEXT("HX : Gradient ") + PCGExMetaHelpers::GetSelectorDisplayName(Config.Attribute) + TEXT(" @ ") + FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0)),
+		Config.bInvert);
 }
 #endif
 

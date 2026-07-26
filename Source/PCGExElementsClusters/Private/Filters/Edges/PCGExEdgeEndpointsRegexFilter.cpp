@@ -78,7 +78,9 @@ PCGEX_CREATE_FILTER_FACTORY(EdgeEndpointsRegex)
 #if WITH_EDITOR
 FString UPCGExEdgeEndpointsRegexFilterProviderSettings::GetDisplayName() const
 {
-	return PCGExMetaHelpers::GetSelectorDisplayName(Config.Attribute) + TEXT(" =~ /") + Config.RegexPattern + TEXT("/");
+	return PCGExCommon::FlagInvertLabel(
+		PCGExMetaHelpers::GetSelectorDisplayName(Config.Attribute) + TEXT(" =~ /") + Config.RegexPattern + TEXT("/"),
+		Config.bInvert);
 }
 #endif
 

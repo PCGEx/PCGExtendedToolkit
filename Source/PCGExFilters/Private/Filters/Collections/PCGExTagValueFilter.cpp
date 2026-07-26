@@ -77,7 +77,8 @@ FString UPCGExTagValueFilterProviderSettings::GetDisplayName() const
 	FString DisplayName = Config.Tag + TEXT(" ") + PCGExCompare::ToString(Config.StringComparison);
 	DisplayName += FString::Printf(TEXT(" %s"), *Config.StringOperandB);
 	DisplayName += Config.MultiMatch == EPCGExFilterGroupMode::OR ? TEXT(" (Any)") : TEXT(" (All)");
-	return DisplayName;
+	
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

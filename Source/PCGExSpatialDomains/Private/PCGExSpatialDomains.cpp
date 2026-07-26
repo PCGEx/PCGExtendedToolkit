@@ -4,7 +4,6 @@
 #include "PCGExSpatialDomains.h"
 
 #include "NarrowPhase/PCGExNarrowPhase.h"
-#include "NarrowPhase/PCGExNarrowPhaseRegistrations.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExSpatialDomainModule"
 
@@ -12,11 +11,7 @@ void FPCGExSpatialDomainsModule::StartupModule()
 {
 	IPCGExModuleInterface::StartupModule();
 
-	// Register all built-in pair tests. Each entry-point lives next to its
-	// pair-test implementations; new shape kinds add a Register*PairTests()
-	// declaration to PCGExNarrowPhaseRegistrations.h and a call here.
-	PCGExSpatial::NarrowPhase::RegisterOBBPairTests();
-	PCGExSpatial::NarrowPhase::RegisterPolygonPairTests();
+	PCGExSpatial::NarrowPhase::RegisterBuiltInPairTests();
 }
 
 void FPCGExSpatialDomainsModule::ShutdownModule()

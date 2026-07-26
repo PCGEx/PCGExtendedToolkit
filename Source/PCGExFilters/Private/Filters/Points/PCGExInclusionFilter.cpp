@@ -224,7 +224,7 @@ void UPCGExInclusionFilterProviderSettings::ApplyPreconfiguredSettings(const FPC
 #if WITH_EDITOR
 FString UPCGExInclusionFilterProviderSettings::GetDisplayName() const
 {
-	return PCGExPathInclusion::ToString(Config.CheckType);
+	return PCGExCommon::FlagInvertLabel(PCGExPathInclusion::ToString(Config.CheckType), Config.bInvert);
 }
 #endif
 
