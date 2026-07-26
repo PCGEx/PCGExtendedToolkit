@@ -5,11 +5,19 @@
 
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "UObject/UObjectThreadContext.h"
 
 namespace PCGExHelpers
 {
 	bool IsSpawnSafe(const UWorld* InWorld)
 	{
+		// Spawning runs construction scripts, and ProcessEvent hard-asserts while the loader is
+		// routing PostLoad -- no world is spawn-safe during that window regardless of its own state.
+		if (FUObjectThreadContext::Get().IsRoutingPostLoad)
+		{
+			return false;
+		}
+
 		return InWorld
 			&& !InWorld->bIsTearingDown
 			&& InWorld->PersistentLevel

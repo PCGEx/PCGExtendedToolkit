@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
+#include "UObject/UObjectThreadContext.h"
 
 // Static-init type registration: TypeId=Actor, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(Actor, UPCGExActorCollection, FPCGExActorCollectionEntry, "Actor Collection", Base)
@@ -80,10 +81,11 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 		if (!PCGExHelpers::IsSpawnSafe(World))
 		{
 			UE_LOG(LogPCGEx, Warning,
-			       TEXT("World not in a spawn-safe state (type=%d, tearing=%d, hasLevel=%d); skipping bounds for '%s'."),
+			       TEXT("World not in a spawn-safe state (type=%d, tearing=%d, hasLevel=%d, routingPostLoad=%d); skipping bounds for '%s'."),
 			       static_cast<int32>(World->WorldType.GetValue()),
 			       World->bIsTearingDown ? 1 : 0,
 			       World->PersistentLevel ? 1 : 0,
+			       FUObjectThreadContext::Get().IsRoutingPostLoad ? 1 : 0,
 			       *ActorClass->GetPathName());
 			return;
 		}
