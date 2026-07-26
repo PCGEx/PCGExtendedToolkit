@@ -102,6 +102,13 @@ namespace PCGExSpatial::NarrowPhase
 	PCGEXSPATIALDOMAINS_API void UnregisterAll();
 
 	/**
+	 * The full built-in registration list. Anything that calls UnregisterAll()
+	 * must restore through this -- the registry is one process-wide instance, so a
+	 * hand-maintained restore that misses a kind disables it session-wide.
+	 */
+	PCGEXSPATIALDOMAINS_API void RegisterBuiltInPairTests();
+
+	/**
 	 * Tag-dispatched overlap query. The fast path -- single 2D array index +
 	 * one branch (for the swap flag) per pair test. Callers cache tags on
 	 * their stored entries (see broadphase FEntry::KindTag); the candidate's
@@ -145,11 +152,18 @@ namespace PCGExSpatial::NarrowPhase
 		FQueryPointFn Fn);
 
 	/**
+	 * True when the shape kind has a signed-distance implementation. Check before
+	 * trusting QueryPoint's +INFINITY default: "maximally outside" is only safe
+	 * when another entry in the channel can answer -- for an all-overlap-only
+	 * channel it inverts inside/outside tests.
+	 */
+	PCGEXSPATIALDOMAINS_API bool HasQueryPoint(const UScriptStruct* Struct);
+
+	/**
 	 * Tag-dispatched signed-distance query. The hot path used by
 	 * FPCGExSpatialDomain_Broadphase::QueryPoint -- single table read +
 	 * one indirect call per stored entry. Returns +INFINITY for unregistered
-	 * kinds (the safe direction: "no info => maximally outside", which leaves
-	 * union/min combinations unaffected).
+	 * kinds (see HasQueryPoint -- that default is NOT safe in isolation).
 	 *
 	 * Tag must be valid (>= 0 and bounded). Out-of-range tags trip a check.
 	 */

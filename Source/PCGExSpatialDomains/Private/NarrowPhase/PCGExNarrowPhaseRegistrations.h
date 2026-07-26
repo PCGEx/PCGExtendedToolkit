@@ -8,14 +8,13 @@
 namespace PCGExSpatial::NarrowPhase
 {
 	/**
-	 * Per-shape pair-test registration entry points. Each pair-test .cpp
-	 * defines static pair-test functions and exposes a single Register*
-	 * function that the module's StartupModule calls during init.
+	 * Pair-test registration entry points, one per shape .cpp. Helpers live in a
+	 * file-named namespace, not an anonymous one -- unity builds merge TUs.
 	 *
-	 * Adding a new shape kind: add a Register* declaration here, implement
-	 * it in a new .cpp file alongside the pair-test functions, call it from
-	 * the module's StartupModule. Existing files unchanged.
+	 * New shape kind: declare here, implement alongside its pair tests, call from
+	 * RegisterBuiltInPairTests(). StartupModule and the tests share that list.
 	 */
 	void RegisterOBBPairTests();
 	void RegisterPolygonPairTests();
+	void RegisterVolumePrimitivePairTests();
 }
