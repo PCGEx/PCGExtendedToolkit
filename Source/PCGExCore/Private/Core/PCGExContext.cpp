@@ -3,6 +3,7 @@
 
 #include "Core/PCGExContext.h"
 
+#include <atomic>
 #include "PCGComponent.h"
 #include "PCGExCoreMacros.h"
 #include "PCGExSubSystem.h"
@@ -29,6 +30,18 @@
 #include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExContext"
+
+namespace PCGEx
+{
+	// External-linkage global (not file-static -- unity-build safe by unique name). Relaxed
+	// ordering is enough: consumers only poll a boolean snapshot from the game thread.
+	std::atomic<int32> GPCGExLiveContextCount{0};
+
+	bool AnyGenerationInFlight()
+	{
+		return GPCGExLiveContextCount.load(std::memory_order_relaxed) > 0;
+	}
+}
 
 UPCGExInstancedFactory* FPCGExContext::RegisterInstancedFactory(UPCGExInstancedFactory* BaseOperation, const FName OverridePinLabel)
 {
@@ -281,6 +294,8 @@ bool FPCGExContext::IsRuntimeGen() const
 
 FPCGExContext::FPCGExContext()
 {
+	PCGEx::GPCGExLiveContextCount.fetch_add(1, std::memory_order_relaxed);
+	
 	// Create the PCG handle once, up front: the single source of truth for this context's lifetime,
 	// read everywhere via GetWeakSelfHandle() so it is never resurrected after Release(). Must run
 	// before ManagedObjects, which captures it.
@@ -299,6 +314,8 @@ FPCGExContext::~FPCGExContext()
 	ManagedObjects->Flush(); // So cleanups can be recursively triggered while manager is still alive
 	PCGExHelpers::SafeReleaseHandles(TrackedAssets);
 	TrackedCachedAssets.Empty(); // wrappers self-release on drop (RAII); the subsystem cache may keep the asset warm
+	
+	PCGEx::GPCGExLiveContextCount.fetch_sub(1, std::memory_order_relaxed);
 }
 
 void FPCGExContext::ExecuteOnNotifyActors(const TArray<FName>& FunctionNames)
