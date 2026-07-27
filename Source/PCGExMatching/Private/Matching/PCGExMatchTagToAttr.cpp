@@ -205,7 +205,7 @@ FString UPCGExCreateMatchTagToAttrSettings::GetDisplayName() const
 		TagSourceStr += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : Config.TagNameValue.Attribute.ToString();
 	}
 
-	return TagSourceStr;
+	return PCGExCommon::FlagInvertLabel(TagSourceStr, Config.bInvert);
 }
 #endif
 

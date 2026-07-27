@@ -77,7 +77,7 @@ PCGEX_CREATE_FILTER_FACTORY(NodeEdgeAngle)
 #if WITH_EDITOR
 FString UPCGExNodeEdgeAngleFilterProviderSettings::GetDisplayName() const
 {
-	return TEXT("Edge Angle");
+	return PCGExCommon::FlagInvertLabel(TEXT("Edge Angle"), Config.bInvert);
 	// TODO : Proper display name
 	//FString DisplayName = TEXT("Edge Angle ") + PCGExCompare::ToString(Config.DotComparisonDetails.Comparison);
 	//return DisplayName;

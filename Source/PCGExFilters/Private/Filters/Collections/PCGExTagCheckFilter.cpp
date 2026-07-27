@@ -27,7 +27,7 @@ FString UPCGExTagCheckFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Tags that... ") + PCGExCompare::ToString(Config.Match);
 	DisplayName += FString::Printf(TEXT(" \"%s\""), *Config.Tag);
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

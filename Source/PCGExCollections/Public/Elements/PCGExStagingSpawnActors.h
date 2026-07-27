@@ -129,7 +129,7 @@ public:
 
 	/** Suppress warnings for invalid collection entries. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
-	bool bQuietInvalidEntryWarnings = false;
+	bool bQuietInvalidEntryWarnings = true;
 };
 
 struct FPCGExStagingSpawnActorsContext final : FPCGExPointsProcessorContext

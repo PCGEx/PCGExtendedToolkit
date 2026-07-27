@@ -57,7 +57,7 @@ namespace PCGExFilters
 	};
 
 	namespace Labels
-	{
+	{		
 		const FName OutputFilterLabel = FName("Filter");
 		const FName OutputColFilterLabel = FName("Data Filter");
 		const FName OutputFilterLabelNode = FName("Vtx Filter");
@@ -80,6 +80,7 @@ namespace PCGExFilters
 		const FName OutputOutsideFiltersLabel = FName("Outside");
 
 		const FName SourceUseValueIfFilters = TEXT("UsableValueFilters");
+
 	}
 }
 
