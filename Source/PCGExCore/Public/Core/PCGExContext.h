@@ -43,6 +43,8 @@ namespace PCGEx
 {
 	class FManagedObjects;
 	class FWorkHandle;
+	
+	PCGEXCORE_API bool AnyGenerationInFlight();
 }
 
 namespace PCGExHelpers
