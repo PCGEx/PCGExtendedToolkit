@@ -19,7 +19,8 @@ namespace PCGExHelpers
 	 * PostLoad, asset-updated-on-disk callbacks, editor-mode refreshes, recursive cascades from the
 	 * level exporter). IsAsyncLoading is intentionally NOT part of this test: it is globally true
 	 * during PCG graph execution that soft-loads assets, so testing it would silently strip results
-	 * from every such run.
+	 * from every such run. Always false while the loader is routing PostLoad: spawning runs
+	 * construction scripts, and ProcessEvent hard-asserts in that window.
 	 */
 	PCGEXCORE_API bool IsSpawnSafe(const UWorld* InWorld);
 
