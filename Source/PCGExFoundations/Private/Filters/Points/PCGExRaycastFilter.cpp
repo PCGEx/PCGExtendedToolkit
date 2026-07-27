@@ -334,7 +334,7 @@ FString UPCGExRaycastFilterProviderSettings::GetDisplayName() const
 		break;
 	}
 
-	return FString::Printf(TEXT("%s, %s"), *TraceModeStr, *TestModeStr);
+	return PCGExCommon::FlagInvertLabel(FString::Printf(TEXT("%s, %s"), *TraceModeStr, *TestModeStr), Config.bInvert);
 }
 #endif
 

@@ -172,7 +172,7 @@ FString UPCGExMeanFilterProviderSettings::GetDisplayName() const
 	default: ;
 	}
 
-	return DisplayName;
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

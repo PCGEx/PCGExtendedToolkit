@@ -83,7 +83,7 @@ PCGEX_CREATE_FILTER_FACTORY(StringRegex)
 #if WITH_EDITOR
 FString UPCGExStringRegexFilterProviderSettings::GetDisplayName() const
 {
-	return Config.OperandA.ToString() + TEXT(" =~ /") + Config.RegexPattern + TEXT("/");
+	return PCGExCommon::FlagInvertLabel(Config.OperandA.ToString() + TEXT(" =~ /") + Config.RegexPattern + TEXT("/"), Config.bInvert);
 }
 #endif
 

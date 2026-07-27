@@ -75,6 +75,16 @@ namespace PCGExCommon
 
 #define PCGEX_CTX_STATE(_NAME) const PCGExCommon::ContextState _NAME = FName(#_NAME);
 
+	inline FString FlagInvertLabel(const FString& InLabel, const bool bInverted = false)
+	{
+		if (bInverted)
+		{
+			return FString(TEXT("🚩 ")) + InLabel;
+		}
+			
+		return InLabel;
+	}
+	
 	namespace States
 	{
 		PCGEX_CTX_STATE(State_Preparation)

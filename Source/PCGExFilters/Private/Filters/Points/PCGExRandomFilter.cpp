@@ -189,7 +189,7 @@ void UPCGExRandomFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 FString UPCGExRandomFilterProviderSettings::GetDisplayName() const
 {
-	return TEXT("Random");
+	return PCGExCommon::FlagInvertLabel(TEXT("Random"), Config.bInvertResult);
 }
 #endif
 

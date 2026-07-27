@@ -110,6 +110,8 @@ void UPCGExHeuristicsTensorProviderSettings::PCGExApplyDeprecation(UPCGNode* InO
 
 FString UPCGExHeuristicsTensorProviderSettings::GetDisplayName() const
 {
-	return GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Heuristics"), TEXT("HX")) + TEXT(" @ ") + FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0));
+	return PCGExCommon::FlagInvertLabel(
+		GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Heuristics"), TEXT("HX")) + TEXT(" @ ") + FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0)),
+		Config.bInvert);
 }
 #endif
