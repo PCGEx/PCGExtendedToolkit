@@ -57,8 +57,26 @@ namespace PCGExMatching::Helpers
 		// This is primarily aimed to help clipper2 module to create sub-groups of paths
 		// as well as MergeByTags to deprecate existing API and support non-exclusive groups.
 
+		TArray<FPCGExTaggedData> Sources;
+		Sources.Reserve(Facades.Num());
+		for (const TSharedPtr<PCGExData::FFacade>& Facade : Facades)
+		{
+			Sources.Add(Facade->Source->GetTaggedData());
+		}
+
+		return GetMatchingSourcePartitions(Matcher, Sources, OutPartitions, bExclusive, OnceIndices);
+	}
+
+	int32 GetMatchingSourcePartitions(const TSharedPtr<FDataMatcher>& Matcher, TArray<TArray<int32>>& OutPartitions, const bool bExclusive, const TSet<int32>* OnceIndices)
+	{
+		return GetMatchingSourcePartitions(Matcher, Matcher->GetSources(), OutPartitions, bExclusive, OnceIndices);
+	}
+
+	int32 GetMatchingSourcePartitions(const TSharedPtr<FDataMatcher>& Matcher, const TArray<FPCGExTaggedData>& Sources, TArray<TArray<int32>>& OutPartitions, const bool bExclusive, const TSet<int32>* OnceIndices)
+	{
+		// Partition entries are positions in Sources, which must mirror the matcher's registration.
 		const int32 NumSources = Matcher->GetNumSources();
-		check(NumSources == Facades.Num())
+		check(NumSources == Sources.Num())
 
 		if (NumSources == 0)
 		{
@@ -84,7 +102,7 @@ namespace PCGExMatching::Helpers
 				Partition.Reserve(NumSources);
 
 				FScope Scope = FScope(NumSources, true);
-				Matcher->GetMatchingSourcesIndices(Facades[i]->Source->GetTaggedData(), Scope, Partition, &DistributedIndicesSet);
+				Matcher->GetMatchingSourcesIndices(Sources[i], Scope, Partition, &DistributedIndicesSet);
 				Partition.AddUnique(i);
 
 				// Remove any indices that were already distributed (defensive check for recursive matching)
@@ -114,7 +132,7 @@ namespace PCGExMatching::Helpers
 			Partition.Reserve(NumSources);
 
 			FScope Scope = FScope(NumSources, true);
-			Matcher->GetMatchingSourcesIndices(Facades[i]->Source->GetTaggedData(), Scope, Partition);
+			Matcher->GetMatchingSourcesIndices(Sources[i], Scope, Partition);
 			Partition.AddUnique(i);
 
 			// Remove OnceIndices that have already been distributed to a previous partition
