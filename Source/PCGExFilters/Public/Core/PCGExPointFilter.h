@@ -286,11 +286,15 @@ namespace PCGExPointFilter
 		virtual bool Test(const PCGExGraphs::FEdge& Edge);
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection);
 
+		// Writes at absolute point Index -- OutResults must span the full point count, not just the scope.
 		virtual int32 Test(const PCGExMT::FScope Scope, TArray<int8>& OutResults, const bool bParallel = false);
 		virtual int32 Test(const PCGExMT::FScope Scope, TBitArray<>& OutResults, const bool bParallel = false);
 
+		// Node overloads write at Node.PointIndex (vtx-point space) -- OutResults must cover the tested
+		// nodes' point-index space (callers pass vtx-point-sized buffers, shareable across clusters).
 		virtual int32 Test(const TArrayView<PCGExClusters::FNode> Items, const TArrayView<int8> OutResults, const bool bParallel = false);
 		virtual int32 Test(const TArrayView<PCGExClusters::FNode> Items, const TSharedPtr<TArray<int8>>& OutResultsPtr, const bool bParallel = false);
+		// Edge overload writes view-relative (result i = Items[i]) -- OutResults must match Items.Num().
 		virtual int32 Test(const TArrayView<PCGExGraphs::FEdge> Items, const TArrayView<int8> OutResults, const bool bParallel = false);
 
 		virtual ~FManager()
