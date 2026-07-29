@@ -123,6 +123,9 @@ namespace PCGExClusters
 
 		const TSet<FName> ProtectedClusterAttributes = {Attr_PCGExEdgeIdx, Attr_PCGExVtxIdx};
 
+		/** Reserved vtx<->edges pairing tag keys -- strip before forwarding input tags onto cluster IOs. */
+		const TSet<FName> ProtectedClusterTags = {Tag_PCGExCluster, Tag_PCGExVtx, Tag_PCGExEdges};
+
 		// TODO : Move at the right place
 
 		const FName SourceProbesLabel = TEXT("Probes");
