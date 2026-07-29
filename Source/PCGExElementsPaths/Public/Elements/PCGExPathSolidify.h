@@ -188,7 +188,7 @@ public:
 
 	/** Type of arithmetic path point cross direction.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Normal", EditCondition="NormalType_DEPRECATED == EPCGExInputValueType::Constant", EditConditionHides))
-	EPCGExPathNormalDirection Normal = EPCGExPathNormalDirection::Binormal;
+	EPCGExPathNormalDirection Normal = EPCGExPathNormalDirection::Normal;
 
 	/** Custom offset direction **/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Normal == EPCGExPathNormalDirection::Custom", EditConditionHides))
