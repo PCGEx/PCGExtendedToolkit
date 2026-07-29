@@ -479,7 +479,6 @@ namespace PCGExCollections
 		TMap<uint32, UPCGExAssetCollection*> CollectionMap;
 		TArray<PCGExHelpers::FPCGExSharedAssetHandlePtr> CollectionsHandles;
 		int32 NumUniqueEntries = 0;
-		const UPCGBasePointData* PointData = nullptr;
 
 	public:
 		TMap<int64, TSharedPtr<TArray<int32>>> HashedPartitions;
@@ -515,7 +514,19 @@ namespace PCGExCollections
 		/** Build point partitions from point data */
 		bool BuildPartitions(const UPCGBasePointData* InPointData, TArray<FPCGMeshInstanceList>& InstanceLists);
 
-		void InsertEntry(const uint64 EntryHash, const int32 EntryIndex, TArray<FPCGMeshInstanceList>& InstanceLists);
+		/**
+		 * Recover the hash -> list mapping from instance lists that already exist, leaving their
+		 * point indices alone. O(lists), by reading back the entry hash off AttributePartitionIndex.
+		 *
+		 * This is how a time-sliced consumer resumes: the unpacker is rebuilt per invocation but
+		 * InstanceLists survives, and using BuildPartitions to recover the map would re-insert every
+		 * index the previous slice already placed and append a second set of lists that orphans the
+		 * first.
+		 */
+		void ReindexPartitions(const TArray<FPCGMeshInstanceList>& InstanceLists);
+
+		/** Add one point to its partition. InPointData only seeds a new list; pass the same data throughout. */
+		void InsertEntry(const UPCGBasePointData* InPointData, const uint64 EntryHash, const int32 EntryIndex, TArray<FPCGMeshInstanceList>& InstanceLists);
 
 		/**
 		 * Resolve a packed hash to an entry

@@ -112,8 +112,9 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 	}
 	else
 	{
-		// Retrieve existing partitions
-		CollectionMap->BuildPartitions(InPointData, OutMeshInstances);
+		// Recover the partitions the previous slice built, rather than re-deriving them from points:
+		// BuildPartitions would re-insert every index already placed and orphan the earlier lists.
+		CollectionMap->ReindexPartitions(OutMeshInstances);
 
 		const int32 NumPoints = InPointData->GetNumPoints();
 
@@ -122,7 +123,7 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			TConstPCGValueRange<int64> MetadataEntries = InPointData->GetConstMetadataEntryValueRange();
 			while (Context.CurrentPointIndex < NumPoints)
 			{
-				CollectionMap->InsertEntry(HashAttribute->GetValueFromItemKey(MetadataEntries[Context.CurrentPointIndex]), Context.CurrentPointIndex, OutMeshInstances);
+				CollectionMap->InsertEntry(InPointData, HashAttribute->GetValueFromItemKey(MetadataEntries[Context.CurrentPointIndex]), Context.CurrentPointIndex, OutMeshInstances);
 				Context.CurrentPointIndex++;
 				if (Context.ShouldStop())
 				{
