@@ -643,15 +643,30 @@ namespace PCGExCollections
 		return !IndexedPartitions.IsEmpty();
 	}
 
-	void FPickUnpacker::InsertEntry(const uint64 EntryHash, const int32 EntryIndex, TArray<FPCGMeshInstanceList>& InstanceLists)
+	void FPickUnpacker::ReindexPartitions(const TArray<FPCGMeshInstanceList>& InstanceLists)
+	{
+		IndexedPartitions.Reset();
+		for (int32 i = 0; i < InstanceLists.Num(); i++)
+		{
+			const int64 EntryHash = InstanceLists[i].AttributePartitionIndex;
+			if (EntryHash != INDEX_NONE)
+			{
+				IndexedPartitions.Add(EntryHash, i);
+			}
+		}
+	}
+
+	void FPickUnpacker::InsertEntry(const UPCGBasePointData* InPointData, const uint64 EntryHash, const int32 EntryIndex, TArray<FPCGMeshInstanceList>& InstanceLists)
 	{
 		if (const int32* Index = IndexedPartitions.Find(EntryHash);
 			!Index)
 		{
 			FPCGMeshInstanceList& NewInstanceList = InstanceLists.Emplace_GetRef();
 			NewInstanceList.AttributePartitionIndex = EntryHash;
-			NewInstanceList.PointData = PointData;
-			NewInstanceList.InstancesIndices.Reserve(PointData->GetNumPoints() / (NumUniqueEntries * 2));
+			NewInstanceList.PointData = InPointData;
+			// Max(1) guards a collection with no valid entries; this branch only became reachable
+			// once callers stopped pre-filling every partition.
+			NewInstanceList.InstancesIndices.Reserve(InPointData->GetNumPoints() / FMath::Max(1, NumUniqueEntries * 2));
 			NewInstanceList.InstancesIndices.Emplace(EntryIndex);
 
 			IndexedPartitions.Add(EntryHash, InstanceLists.Num() - 1);
