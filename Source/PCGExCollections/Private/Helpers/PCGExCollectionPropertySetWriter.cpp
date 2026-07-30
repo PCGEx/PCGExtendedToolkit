@@ -54,7 +54,19 @@ namespace PCGExCollections
 		return nullptr;
 	}
 
-	const FInstancedStruct* FPCGExCollectionPropertySetWriter::FCollectionPrototypeProvider::FindPrototypeProperty(const FName PropertyName) const
+	void FCollectionPrototypeProvider::SetSearchOrder(TConstArrayView<const UPCGExAssetCollection*> InCollections)
+	{
+		SearchOrder.Reset(InCollections.Num());
+		for (const UPCGExAssetCollection* Collection : InCollections)
+		{
+			if (Collection)
+			{
+				SearchOrder.AddUnique(Collection);
+			}
+		}
+	}
+
+	const FInstancedStruct* FCollectionPrototypeProvider::FindPrototypeProperty(const FName PropertyName) const
 	{
 		return PCGExCollections::FindPrototypeProperty(PropertyName, SearchOrder);
 	}
@@ -66,21 +78,13 @@ namespace PCGExCollections
 		TConstArrayView<const UPCGExAssetCollection*> FallbackHosts,
 		UPCGMetadata* Metadata)
 	{
-		// Build the search list onto our member provider (Inner holds a const* to it during writes,
-		// so it has to outlive the call -- member storage is the right scope).
-		Provider.SearchOrder.Reset();
-		Provider.SearchOrder.Reserve(FallbackHosts.Num() + 1);
-		if (RootCollection)
-		{
-			Provider.SearchOrder.Add(RootCollection);
-		}
-		for (const UPCGExAssetCollection* Host : FallbackHosts)
-		{
-			if (Host && Host != RootCollection)
-			{
-				Provider.SearchOrder.Add(Host);
-			}
-		}
+		// Root first, then fallbacks. Inner holds a const* to our member provider during writes, so
+		// it has to outlive this call -- member storage is the right scope.
+		TArray<const UPCGExAssetCollection*> Order;
+		Order.Reserve(FallbackHosts.Num() + 1);
+		Order.Add(RootCollection);
+		Order.Append(FallbackHosts.GetData(), FallbackHosts.Num());
+		Provider.SetSearchOrder(Order);
 
 		return Inner.Initialize(InContext, &Provider, OutputSettings, Metadata);
 	}

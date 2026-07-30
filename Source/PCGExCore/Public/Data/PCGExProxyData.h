@@ -258,7 +258,7 @@ namespace PCGExData
 			if constexpr (TypeTraits::TIsComplexType<T>)
 			{
 				// Complex type - use scoped value for proper lifecycle
-				PCGExTypes::FScopedTypedValue WorkingValue(WorkingType);
+				PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
 				GetVoid(Index, WorkingValue.GetRaw());
 
 				if (RequestedType == WorkingType)
@@ -282,7 +282,7 @@ namespace PCGExData
 				}
 
 				// Working type might be complex, use scoped value
-				PCGExTypes::FScopedTypedValue WorkingValue(WorkingType);
+				PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
 				GetVoid(Index, WorkingValue.GetRaw());
 
 				if (RequestedType == WorkingType)
@@ -309,7 +309,7 @@ namespace PCGExData
 			}
 
 			// Need conversion - use scoped value for working type
-			PCGExTypes::FScopedTypedValue WorkingValue(WorkingType);
+			PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
 			PCGExTypeOps::FConversionTable::Convert(ValueType, &Value, WorkingType, WorkingValue.GetRaw());
 			SetVoid(Index, WorkingValue.GetRaw());
 		}
@@ -320,7 +320,7 @@ namespace PCGExData
 			constexpr EPCGMetadataTypes RequestedType = PCGExTypes::TTraits<T>::Type;
 
 			// Always use scoped value for safety
-			PCGExTypes::FScopedTypedValue WorkingValue(WorkingType);
+			PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
 			GetCurrentVoid(Index, WorkingValue.GetRaw());
 
 			if (RequestedType == WorkingType)
@@ -345,11 +345,10 @@ namespace PCGExData
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_CONVERTING_READ)
 #undef PCGEX_CONVERTING_READ
 
-		// Helper to create a scoped value for this proxy's working type
-		FORCEINLINE PCGExTypes::FScopedTypedValue CreateScopedWorkingValue() const
-		{
-			return PCGExTypes::FScopedTypedValue(WorkingType);
-		}
+		// Scoped storage for the void accessors: property-aware for property-backed proxies (which
+		// perform no Real->Working conversion), plain WorkingType otherwise. Always use this -- not
+		// FScopedTypedValue(WorkingType) -- for storage handed to GetVoid/SetVoid/GetCurrentVoid.
+		PCGExTypes::FScopedTypedValue CreateScopedWorkingValue() const;
 	};
 
 	// One pool slot. Weak is always set and drives the liveness check; Strong is set only

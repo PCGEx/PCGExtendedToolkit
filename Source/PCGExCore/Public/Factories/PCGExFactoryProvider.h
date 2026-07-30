@@ -42,12 +42,6 @@ class PCGEXCORE_API UPCGExFactoryProviderSettings : public UPCGExSettings
 public:
 	
 	UPCGExFactoryProviderSettings(const FObjectInitializer& ObjectInitializer);
-	
-	//~Begin UObject interface
-#if WITH_EDITOR
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-	//~End UObject interface
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
@@ -69,9 +63,6 @@ public:
 	}
 
 protected:
-	UPROPERTY()
-	int32 InternalCacheInvalidator = 0;
-
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual FPCGElementPtr CreateElement() const override;

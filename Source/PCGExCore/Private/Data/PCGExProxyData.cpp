@@ -248,11 +248,22 @@ namespace PCGExData
 		// Default: no-op. Override in property proxies.
 	}
 
+	PCGExTypes::FScopedTypedValue IBufferProxy::CreateScopedWorkingValue() const
+	{
+		// Property-backed buffers deep-copy the property's own representation into this storage --
+		// it must be property-initialized and -sized, or the copy leaks and mis-sizes.
+		if (const TSharedPtr<IBuffer> Buf = GetBuffer(); Buf && Buf->GetSourceProperty())
+		{
+			return Buf->MakeScopedValue();
+		}
+		return PCGExTypes::FScopedTypedValue(WorkingType);
+	}
+
 	// Converting read implementations - Now using FScopedTypedValue for safety
 #define PCGEX_CONVERTING_READ_IMPL(_TYPE, _NAME, ...) \
 	_TYPE IBufferProxy::ReadAs##_NAME(const int32 Index) const \
 	{ \
-		PCGExTypes::FScopedTypedValue WorkingValue(WorkingType); \
+		PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue(); \
 		GetVoid(Index, WorkingValue.GetRaw()); \
 		constexpr EPCGMetadataTypes TargetType = PCGExTypes::TTraits<_TYPE>::Type; \
 		if (TargetType == WorkingType) \

@@ -88,8 +88,9 @@ bool UPCGExSkinnedMeshSelectorStaged::SelectInstances(FPCGSkinnedMeshSpawnerCont
 	}
 	else
 	{
-		// Retrieve existing partitions
-		CollectionMap->BuildPartitions<FPCGSkinnedMeshInstanceList>(InPointData, OutMeshInstances);
+		// Recover the partitions the previous slice built, rather than re-deriving them from points:
+		// BuildPartitions would re-insert every index already placed and orphan the earlier lists.
+		CollectionMap->ReindexPartitions<FPCGSkinnedMeshInstanceList>(OutMeshInstances);
 
 		const int32 NumPoints = InPointData->GetNumPoints();
 
@@ -98,7 +99,7 @@ bool UPCGExSkinnedMeshSelectorStaged::SelectInstances(FPCGSkinnedMeshSpawnerCont
 			TConstPCGValueRange<int64> MetadataEntries = InPointData->GetConstMetadataEntryValueRange();
 			while (Context.CurrentPointIndex < NumPoints)
 			{
-				CollectionMap->InsertEntry<FPCGSkinnedMeshInstanceList>(HashAttribute->GetValueFromItemKey<int64>(MetadataEntries[Context.CurrentPointIndex]), Context.CurrentPointIndex, OutMeshInstances);
+				CollectionMap->InsertEntry<FPCGSkinnedMeshInstanceList>(InPointData, HashAttribute->GetValueFromItemKey<int64>(MetadataEntries[Context.CurrentPointIndex]), Context.CurrentPointIndex, OutMeshInstances);
 				Context.CurrentPointIndex++;
 				if (Context.ShouldStop())
 				{

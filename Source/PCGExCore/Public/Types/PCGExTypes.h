@@ -126,6 +126,12 @@ namespace PCGExTypes
 			return Property;
 		}
 
+		// Ownership-aware transport between this value and raw storage. Dst/Src MUST point to a live
+		// value of the same type -- these are assignments (property copy / typed assign / POD memcpy).
+		// Never raw-memcpy GetRaw() of a non-POD value: it shallow-aliases heap owned by one side.
+		void ExportTo(void* Dst) const;
+		void ImportFrom(const void* Src);
+
 		// Manual lifecycle control (for reuse scenarios)
 		void Destruct();
 		void Initialize(EPCGMetadataTypes NewType);

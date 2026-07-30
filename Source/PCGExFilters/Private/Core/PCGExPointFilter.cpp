@@ -363,7 +363,13 @@ namespace PCGExPointFilter
 	int32 FManager::Test(const TArrayView<PCGExClusters::FNode> Items, const TArrayView<int8> OutResults, const bool bParallel)
 	{
 		const int32 NumItems = Items.Num();
-		check(NumItems == OutResults.Num());
+
+		// Results are written at Node.PointIndex (vtx-point space), NOT at the node's position in Items.
+		// OutResults must cover the point-index space of every tested node -- callers pass vtx-point-sized
+		// buffers, which stay valid for sparse clusters and multi-cluster vtx datasets (each cluster touches
+		// disjoint PointIndex slots). Nodes carry distinct point indices, so >= NumItems is a necessary
+		// bound; exact per-write bounds are enforced by TArrayView's RangeCheck in DO_CHECK builds.
+		check(OutResults.Num() >= NumItems);
 
 		int32 NumPass = 0;
 
@@ -394,31 +400,7 @@ namespace PCGExPointFilter
 
 	int32 FManager::Test(const TArrayView<PCGExClusters::FNode> Items, const TSharedPtr<TArray<int8>>& OutResultsPtr, const bool bParallel)
 	{
-		int32 NumPass = 0;
-		TArray<int8>& OutResults = *OutResultsPtr.Get();
-
-		if (bParallel)
-		{
-			ParallelFor(Items.Num(), [&](const int32 i)
-			{
-				const PCGExClusters::FNode& Node = Items[i];
-				PCGEX_TEST_STACK(Node, Node.PointIndex)
-				if (bResult)
-				{
-					FPlatformAtomics::InterlockedIncrement(&NumPass);
-				}
-			});
-		}
-		else
-		{
-			for (const PCGExClusters::FNode& Node : Items)
-			{
-				PCGEX_TEST_STACK(Node, Node.PointIndex)
-				NumPass += bResult;
-			}
-		}
-
-		return NumPass;
+		return Test(Items, TArrayView<int8>(*OutResultsPtr.Get()), bParallel);
 	}
 
 	int32 FManager::Test(const TArrayView<PCGExGraphs::FEdge> Items, const TArrayView<int8> OutResults, const bool bParallel)

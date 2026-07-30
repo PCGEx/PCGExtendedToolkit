@@ -50,67 +50,130 @@ namespace PCGExDataHash
 		}
 	}
 
-	uint32 HashBox(const FBox& InBox)
+	// Deliberately not GetTypeHash / HashCombine: TypeHash.h states its results are "not expected
+	// to leave the running process", so the seed would be hostage to engine internals. Everything
+	// below is integer-only and self-contained, so the same input shape yields the same seed on
+	// every session, platform, build and engine version.
+	constexpr uint64 FnvOffsetBasis = 14695981039346656037ULL;
+	constexpr uint64 FnvPrime = 1099511628211ULL;
+
+	// Word-wise rather than byte-wise so byte order never enters the result.
+	FORCEINLINE uint64 Mix(const uint64 InHash, const uint64 InValue)
 	{
-		uint32 H = GetTypeHash(InBox.Min.X);
-		H = HashCombine(H, GetTypeHash(InBox.Min.Y));
-		H = HashCombine(H, GetTypeHash(InBox.Min.Z));
-		H = HashCombine(H, GetTypeHash(InBox.Max.X));
-		H = HashCombine(H, GetTypeHash(InBox.Max.Y));
-		H = HashCombine(H, GetTypeHash(InBox.Max.Z));
-		return H;
+		return (InHash ^ InValue) * FnvPrime;
 	}
 
-	// FCrc::StrCrc32 is deterministic across sessions, platforms, and builds.
-	// We use it instead of GetTypeHash(FName) which depends on FName pool insertion order.
-	uint32 StableClassHash(const UPCGData* Data)
+	// Murmur3 finalizer. FNV alone diffuses poorly into FRandomStream's single-step LCG, which
+	// would let near-identical inputs produce near-identical first draws.
+	FORCEINLINE uint64 Avalanche(uint64 InHash)
+	{
+		InHash ^= InHash >> 33;
+		InHash *= 0xff51afd7ed558ccdULL;
+		InHash ^= InHash >> 33;
+		InHash *= 0xc4ceb9fe1a85ec53ULL;
+		InHash ^= InHash >> 33;
+		return InHash;
+	}
+
+	// Hashed instead of the concrete class name: pcg.EnablePointArrayData swaps UPCGPointData for
+	// UPCGPointArrayData, which would otherwise silently re-roll every value.
+	constexpr uint64 CategoryNull = 0;
+	constexpr uint64 CategoryPoint = 1;
+	constexpr uint64 CategoryPolyLine = 2;
+	constexpr uint64 CategoryParam = 3;
+	constexpr uint64 CategorySpatial = 4;
+	constexpr uint64 CategoryOther = 5;
+
+	// Bounds are FP-derived, so hashing raw bits would make the seed sensitive to one-ULP upstream
+	// drift. The scale MUST stay a power of two: multiplying only shifts the exponent, so it is
+	// exact and MSVC's /fp:fast has no alternative form to pick. A division, or any
+	// non-power-of-two scale, would reintroduce cross-compiler divergence.
+	constexpr double QuantumScale = 1024.0;
+
+	// Past this the double -> int64 conversion would be undefined; +/-Inf rails out here too.
+	constexpr double QuantumRail = 9.0e18;
+
+	// Placed in the gap real quantized values can never occupy (|value| <= QuantumRail).
+	constexpr uint64 SentinelNaN = 0x8000000000000001ULL;
+	constexpr uint64 SentinelOverflowPos = 0x8000000000000002ULL;
+	constexpr uint64 SentinelOverflowNeg = 0x8000000000000003ULL;
+
+	uint64 QuantizeCoord(const double InValue)
+	{
+		// Bit-pattern test, not (A != A), so /fp:fast cannot fold it away.
+		if (FMath::IsNaN(InValue))
+		{
+			return SentinelNaN;
+		}
+
+		const double Scaled = InValue * QuantumScale;
+
+		if (Scaled >= QuantumRail)
+		{
+			return SentinelOverflowPos;
+		}
+
+		if (Scaled <= -QuantumRail)
+		{
+			return SentinelOverflowNeg;
+		}
+
+		// Also normalizes -0.0 to 0.
+		return static_cast<uint64>(FMath::FloorToInt64(Scaled));
+	}
+
+	uint64 HashBox(uint64 InHash, const FBox& InBox)
+	{
+		// Distinguishes "no bounds" from "a degenerate box at the origin".
+		InHash = Mix(InHash, InBox.IsValid ? 1ULL : 0ULL);
+		InHash = Mix(InHash, QuantizeCoord(InBox.Min.X));
+		InHash = Mix(InHash, QuantizeCoord(InBox.Min.Y));
+		InHash = Mix(InHash, QuantizeCoord(InBox.Min.Z));
+		InHash = Mix(InHash, QuantizeCoord(InBox.Max.X));
+		InHash = Mix(InHash, QuantizeCoord(InBox.Max.Y));
+		InHash = Mix(InHash, QuantizeCoord(InBox.Max.Z));
+		return InHash;
+	}
+
+	uint64 HashInput(uint64 InHash, const UPCGData* Data)
 	{
 		if (!Data)
 		{
-			return 0u;
+			return Mix(InHash, CategoryNull);
 		}
-		// GetClass()->GetName() returns the class's short name (e.g. "PCGBasePointData"),
-		// stable as long as the class isn't renamed at the C++ level.
-		return FCrc::StrCrc32(*Data->GetClass()->GetName());
-	}
-
-	uint32 HashInput(const UPCGData* Data)
-	{
-		if (!Data)
-		{
-			return 0u;
-		}
-
-		uint32 H = StableClassHash(Data);
 
 		if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(Data))
 		{
-			H = HashCombine(H, GetTypeHash(PointData->GetNumPoints()));
-			H = HashCombine(H, HashBox(PointData->GetBounds()));
-			return H;
+			InHash = Mix(InHash, CategoryPoint);
+			InHash = Mix(InHash, static_cast<uint64>(PointData->GetNumPoints()));
+			return HashBox(InHash, PointData->GetBounds());
 		}
 
 		if (const UPCGPolyLineData* PolyLineData = Cast<UPCGPolyLineData>(Data))
 		{
-			H = HashCombine(H, GetTypeHash(PolyLineData->GetNumSegments()));
-			H = HashCombine(H, HashBox(PolyLineData->GetBounds()));
-			return H;
+			InHash = Mix(InHash, CategoryPolyLine);
+			InHash = Mix(InHash, static_cast<uint64>(PolyLineData->GetNumSegments()));
+			return HashBox(InHash, PolyLineData->GetBounds());
 		}
 
 		if (const UPCGParamData* ParamData = Cast<UPCGParamData>(Data))
 		{
 			const UPCGMetadata* Metadata = ParamData->ConstMetadata();
-			H = HashCombine(H, GetTypeHash(Metadata ? Metadata->GetLocalItemCount() : 0));
-			return H;
+			InHash = Mix(InHash, CategoryParam);
+			return Mix(InHash, static_cast<uint64>(Metadata ? Metadata->GetLocalItemCount() : 0));
 		}
 
 		if (const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data))
 		{
-			H = HashCombine(H, HashBox(SpatialData->GetBounds()));
-			return H;
+			InHash = Mix(InHash, CategorySpatial);
+			return HashBox(InHash, SpatialData->GetBounds());
 		}
 
-		return H;
+		// Nothing shape-like to read, so fall back to the class name. FCrc::StrCrc32 is a table CRC
+		// over code points and treats every char width as 32-bit, so unlike GetTypeHash(FName) it
+		// depends on neither pool insertion order nor platform.
+		InHash = Mix(InHash, CategoryOther);
+		return Mix(InHash, static_cast<uint64>(FCrc::StrCrc32(*Data->GetClass()->GetName())));
 	}
 
 	// Computes [Min,Max] given the user's range settings and the value type.
@@ -237,7 +300,7 @@ FPCGDataTypeIdentifier UPCGExDataHashSettings::GetCurrentPinTypesID(const UPCGPi
 TArray<FPCGPinProperties> UPCGExDataHashSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_ANY(PCGPinConstants::DefaultInputLabel, "Any combination of data. The output value is a deterministic function of the inputs' class, element count, spatial bounds, plus the Salt.", Normal)
+	PCGEX_PIN_ANY(PCGPinConstants::DefaultInputLabel, "Any combination of data. The output value is a deterministic function of the inputs' kind, element count, spatial bounds, plus the Salt.", Normal)
 	return PinProperties;
 }
 
@@ -267,17 +330,22 @@ bool FPCGExDataHashElement::ExecuteInternal(FPCGContext* Context) const
 
 	// Hash all inputs on the default pin. Order matters: changing connection order
 	// changes the value, consistent with how PCG iterates pin inputs.
-	uint32 Hash = GetTypeHash(Settings->Salt);
+	uint64 Hash = PCGExDataHash::FnvOffsetBasis;
+
+	// Via uint32 so a negative salt doesn't sign-extend into the high word.
+	Hash = PCGExDataHash::Mix(Hash, static_cast<uint64>(static_cast<uint32>(Settings->Salt)));
 
 	const TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
-	Hash = HashCombine(Hash, GetTypeHash(Inputs.Num()));
+	Hash = PCGExDataHash::Mix(Hash, static_cast<uint64>(Inputs.Num()));
 
 	for (const FPCGTaggedData& Tagged : Inputs)
 	{
-		Hash = HashCombine(Hash, PCGExDataHash::HashInput(Tagged.Data));
+		Hash = PCGExDataHash::HashInput(Hash, Tagged.Data);
 	}
 
-	FRandomStream Stream(static_cast<int32>(Hash));
+	Hash = PCGExDataHash::Avalanche(Hash);
+
+	FRandomStream Stream(static_cast<int32>(static_cast<uint32>(Hash ^ (Hash >> 32))));
 
 	UPCGParamData* OutputData = FPCGContext::NewObject_AnyThread<UPCGParamData>(Context);
 	check(OutputData && OutputData->Metadata);
