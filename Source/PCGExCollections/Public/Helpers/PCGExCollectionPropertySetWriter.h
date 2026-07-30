@@ -35,6 +35,35 @@ namespace PCGExCollections
 		FName PropertyName);
 
 	/**
+	 * IPCGExPropertyProvider that answers prototype lookups from a collection search order and
+	 * nothing else. Per-entry resolution never goes through it: the dynamic (Entry, Host) shape
+	 * doesn't fit the provider's per-source-index lookup, so consumers call
+	 * ResolveEntrySourceProperty directly.
+	 *
+	 * Shared by every collection-backed writer and packer -- a per-consumer copy is how the
+	 * search-order rules drift apart.
+	 */
+	struct PCGEXCOLLECTIONS_API FCollectionPrototypeProvider final : IPCGExPropertyProvider
+	{
+		TArray<const UPCGExAssetCollection*> SearchOrder;
+
+		/** Lookup is first-match-wins, so callers own precedence: pass hosts in the order they should win. */
+		void SetSearchOrder(TConstArrayView<const UPCGExAssetCollection*> InCollections);
+
+		virtual TConstArrayView<FInstancedStruct> GetProperties(int32 /*Index*/) const override
+		{
+			return {};
+		}
+
+		virtual TConstArrayView<FPCGExPropertyRegistryEntry> GetPropertyRegistry() const override
+		{
+			return {};
+		}
+
+		virtual const FInstancedStruct* FindPrototypeProperty(FName PropertyName) const override;
+	};
+
+	/**
 	 * @Data-domain counterpart to FPCGExCollectionPropertySetWriter: writes each configured
 	 * schema property as a single @Data value on InData, sourced from Host->CollectionProperties.
 	 * Entry overrides are NOT consulted (schema only) -- this is the annotation path, not the
@@ -136,27 +165,6 @@ namespace PCGExCollections
 		}
 
 	protected:
-		/** Lightweight IPCGExPropertyProvider used purely for prototype lookup during Initialize.
-		 *  Per-entry source resolution is handled by WriteEntry directly (via WriteAt + the existing
-		 *  ResolveEntrySourceProperty helper) -- the dynamic (Entry, Host) shape doesn't fit the
-		 *  per-source-index lookup that provider-based WriteEntry expects. */
-		struct FCollectionPrototypeProvider final : IPCGExPropertyProvider
-		{
-			TArray<const UPCGExAssetCollection*> SearchOrder;
-
-			virtual TConstArrayView<FInstancedStruct> GetProperties(int32 /*Index*/) const override
-			{
-				return {};
-			}
-
-			virtual TConstArrayView<FPCGExPropertyRegistryEntry> GetPropertyRegistry() const override
-			{
-				return {};
-			}
-
-			virtual const FInstancedStruct* FindPrototypeProperty(FName PropertyName) const override;
-		};
-
 		FCollectionPrototypeProvider Provider;
 		FPCGExPropertySetWriter Inner;
 	};

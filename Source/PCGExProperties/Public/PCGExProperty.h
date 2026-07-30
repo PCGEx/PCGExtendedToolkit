@@ -81,8 +81,7 @@ struct PCGEXPROPERTIES_API FPCGExPropertyRegistryEntry
  *        FMyValueType Value;  // <-- your authored value
  *
  *    protected:
- *        TSharedPtr<PCGExData::TBuffer<FMyOutputType>> OutputBuffer;
- *        // Note: OutputType can differ from Value type (see Color: FLinearColor -> FVector4)
+ *        TSharedPtr<PCGExData::TBuffer<FMyOutputType>> OutputBuffer;  // may differ from Value's type
  *
  *    public:
  *        // Override ALL virtual methods listed below.
@@ -109,12 +108,10 @@ struct PCGEXPROPERTIES_API FPCGExPropertyRegistryEntry
  *    InitializeOutput() -> creates a TBuffer on a facade
  *    WriteOutput()      -> writes Value to buffer at a point index
  *    WriteOutputFrom()  -> writes from source property directly (thread-safe)
- *    Used by: Collections, Distribute Tuple, any node outputting properties to points
  *
  * B) METADATA ATTRIBUTE OUTPUT (via Tuple node):
  *    CreateMetadataAttribute() -> creates attribute on UPCGParamData
  *    WriteMetadataValue()      -> writes Value to a metadata entry key
- *    Used by: Tuple node for creating param data tables
  *
  * Both paths are optional. Return false/nullptr from SupportsOutput()/
  * CreateMetadataAttribute() if your type doesn't support a path.
@@ -124,7 +121,12 @@ struct PCGEXPROPERTIES_API FPCGExPropertyRegistryEntry
  *    while SupportsOutput() stays false. Consumers read a per-point time, call
  *    SampleAt(time) on the resolved source property, and write the double result
  *    into their own output buffer.
- *    Used by: Staging : Load Properties (Sampled Properties Mapping)
+ *
+ * D) FLOAT PACKING (via GetPackedFloatCount / PackFloats):
+ *    Projects the value into a flat float array -- the shape GPU-side consumers want
+ *    (ISM Custom Primitive Data, custom float instance data). Also orthogonal to A/B:
+ *    the default derives everything from GetOutputType(), so every type that reports
+ *    a packable output type works with no per-type code.
  *
  * ============================================================================
  * THREAD SAFETY
@@ -404,6 +406,32 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 		              "TrySetValue<T>: T must be a PCG-supported metadata type.");
 		return TryReadValue(PCGExTypes::TTraits<T>::Type, &In);
 	}
+
+	// --- Float Packing Interface ---
+
+	/**
+	 * How many floats PackFloats writes; 0 means no float projection at all.
+	 *
+	 * Must be constant for a given property *type*. Consumers resolve a slot layout from schema
+	 * prototypes once and then fill it per entry, so a count that varied with the authored value
+	 * would shift every slot after it.
+	 */
+	virtual int32 GetPackedFloatCount() const;
+
+	/**
+	 * Write this property's value into OutFloats; false means no value was produced and the slot
+	 * has no data. A type can report a packable count and still fail here -- reporting a width it
+	 * never fills would bake a silent zero into the layout.
+	 *
+	 * Component order matches the engine packers: Vector2 (X,Y), Vector (X,Y,Z),
+	 * Vector4/Quat (X,Y,Z,W), Rotator (Roll, Pitch, Yaw).
+	 *
+	 * Override alongside GetPackedFloatCount for types with no packable GetOutputType but a float
+	 * layout of their own. An override MUST refuse to write when OutFloats is narrower than what
+	 * it intends to emit: the two virtuals are coupled only by convention, and callers size the
+	 * view from GetPackedFloatCount().
+	 */
+	virtual bool PackFloats(TArrayView<float> OutFloats) const;
 
 	/**
 	 * Append every soft asset path this property contributes (its FSoftObjectPath /
@@ -1117,6 +1145,16 @@ struct PCGEXPROPERTIES_API FPCGExWeightedPropertyOverrides : public FPCGExProper
  */
 namespace PCGExProperties
 {
+	/**
+	 * Floats a value of InType projects to; 0 for types with no projection.
+	 *
+	 * Value-identical to the engine's PCGInstanceDataPackerBase::GetTypePackingSize so packed
+	 * layouts interoperate with the stock PCG packers, but owned here on purpose: that table is
+	 * PCG-private with no compatibility guarantee, and inheriting it would let an engine upgrade
+	 * silently re-lay-out every packed float consumer. Keep them in sync deliberately.
+	 */
+	PCGEXPROPERTIES_API int32 GetPackedFloatWidth(EPCGMetadataTypes InType);
+
 	/**
 	 * Get first property of specified type, optionally filtered by name.
 	 * @param Properties - Array view of FInstancedStruct containing properties

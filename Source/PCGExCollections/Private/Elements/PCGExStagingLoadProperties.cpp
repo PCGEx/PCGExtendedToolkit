@@ -193,16 +193,10 @@ namespace PCGExStagingLoadProperties
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagingLoadProperties::BuildPropertyCaches);
 
-		// Flatten collections from the unpacker into a search order, once.
+		// Prototype lookup is first-match-wins, so map order would decide the output attribute's
+		// type whenever hosts disagree on it.
 		TArray<const UPCGExAssetCollection*> SearchOrder;
-		SearchOrder.Reserve(Context->CollectionPickUnpacker->GetCollections().Num());
-		for (const auto& CollectionPair : Context->CollectionPickUnpacker->GetCollections())
-		{
-			if (CollectionPair.Value)
-			{
-				SearchOrder.Add(CollectionPair.Value);
-			}
-		}
+		Context->CollectionPickUnpacker->GetCollectionsInStableOrder(SearchOrder);
 
 		TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
 		Context->PropertyOutputSettings.GetEffectiveConfigs(EffectiveConfigs);
@@ -280,16 +274,10 @@ namespace PCGExStagingLoadProperties
 			return;
 		}
 
-		// Flatten collections from the unpacker into a search order, once.
+		// Prototype lookup is first-match-wins, so map order would decide the output attribute's
+		// type whenever hosts disagree on it.
 		TArray<const UPCGExAssetCollection*> SearchOrder;
-		SearchOrder.Reserve(Context->CollectionPickUnpacker->GetCollections().Num());
-		for (const auto& CollectionPair : Context->CollectionPickUnpacker->GetCollections())
-		{
-			if (CollectionPair.Value)
-			{
-				SearchOrder.Add(CollectionPair.Value);
-			}
-		}
+		Context->CollectionPickUnpacker->GetCollectionsInStableOrder(SearchOrder);
 
 		SampledPropertyCaches.Reserve(Context->SampledPropertyOutputs.Num());
 

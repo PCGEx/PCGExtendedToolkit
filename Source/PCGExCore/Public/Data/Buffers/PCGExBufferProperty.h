@@ -136,6 +136,16 @@ namespace PCGExData
 		// semantics and safety checks. Used by FContainerIndexAccessor's
 		// StepSetFn to obtain a writable destination for CopyCompleteValue.
 		static void* GetMutableArrayElementAt(void* ArrayBytes, int32 Index, int32 ElementSize);
+
+	protected:
+		// Content hash: FProperty::GetValueTypeHash when supported (CPF_HasGetValueTypeHash), CRC of
+		// the raw bytes otherwise (container wrappers and FText fall back to CRC over header bytes).
+		PCGExValueHash HashValue(const void* ValuePtr) const;
+
+	private:
+		// Unvalidated worker -- all construction, including recursion, re-enters the public wrapper,
+		// which gates GetSize() > 0 on each constructed property.
+		static FProperty* CreateInnerPropertyFromDescInternal(const FPCGMetadataAttributeDesc& Desc, FFieldVariant PropertyScope);
 	};
 
 	class PCGEXCORE_API FPropertyArrayBuffer : public FPropertyBuffer
@@ -160,6 +170,11 @@ namespace PCGExData
 		virtual void ReadVoid(const int32 Index, PCGExTypes::FScopedTypedValue& OutValue) const override;
 		virtual void SetVoid(const int32 Index, const PCGExTypes::FScopedTypedValue& Value) override;
 		virtual void GetVoid(const int32 Index, PCGExTypes::FScopedTypedValue& OutValue) override;
+
+		// Single deep copy against the byte slot -- see IBuffer for the live-destination contract.
+		virtual void ReadRawValue(const int32 Index, void* Dst) const override;
+		virtual void GetRawValue(const int32 Index, void* Dst) override;
+		virtual void SetRawValue(const int32 Index, const void* Src) override;
 
 		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
 		virtual PCGExValueHash GetValueHash(const int32 Index) override;
@@ -212,12 +227,27 @@ namespace PCGExData
 		virtual void SetVoid(const int32 Index, const PCGExTypes::FScopedTypedValue& Value) override;
 		virtual void GetVoid(const int32 Index, PCGExTypes::FScopedTypedValue& OutValue) override;
 
+		// Single deep copy against the value slot -- see IBuffer for the live-destination contract.
+		virtual void ReadRawValue(const int32 Index, void* Dst) const override;
+		virtual void GetRawValue(const int32 Index, void* Dst) override;
+		virtual void SetRawValue(const int32 Index, const void* Src) override;
+
 		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
 		virtual PCGExValueHash GetValueHash(const int32 Index) override;
 
 		virtual void Write(const bool bEnsureValidKeys = true) override;
 
+		virtual void Flush() override;
+
 		bool InitForRead(const EIOSide InSide = EIOSide::In);
 		bool InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init = EBufferInit::Inherit);
+
+	private:
+		// Single owner of the read-aliases-write routing: bReadFromOutput serves reads from OutValue
+		// (InValue stays empty). All read-side paths must come through here, never InValue directly.
+		const TArray<uint8>& GetReadSource() const
+		{
+			return bReadFromOutput ? OutValue : InValue;
+		}
 	};
 }

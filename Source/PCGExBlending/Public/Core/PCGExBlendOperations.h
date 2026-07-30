@@ -629,6 +629,9 @@ namespace PCGExBlending
 
 		virtual void BeginMulti(void* Accumulator, const void* /*InitialValue*/, PCGEx::FOpStats& OutTracker) const override
 		{
+			// Accumulator arrives constructed (BeginMultiBlend deep-copies into it) -- destroy before
+			// re-initializing or the owned FString/container heap is orphaned.
+			TypedProperty->DestroyValue(Accumulator);
 			TypedProperty->InitializeValue(Accumulator);
 			OutTracker.Count = 0;
 			OutTracker.TotalWeight = 0;

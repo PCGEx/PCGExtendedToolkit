@@ -53,6 +53,11 @@ public:
 		return EPCGDataType::Param;
 	} //PointOrParam would be best but it's gray and I don't like it
 
+	/** There are never any points (except tensors) so UPCGBasePointData::AddToCrc early-outs
+	 *  before reading metadata : a full data Crc (which commandlets force on) collapses every instance of every
+	 *  factory onto one identical value. Object identity is the only sound Crc for this shape of data. */
+	virtual bool SupportsFullDataCrc() const override { return false; }
+
 	virtual void OutputConfigToMetadata();
 };
 

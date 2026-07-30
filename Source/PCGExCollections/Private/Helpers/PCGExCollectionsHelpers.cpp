@@ -689,7 +689,21 @@ namespace PCGExCollections
 	}
 
 	template <typename T>
-	void FPickUnpacker::InsertEntry(const uint64 EntryHash, const int32 EntryIndex, TArray<T>& InstanceLists)
+	void FPickUnpacker::ReindexPartitions(const TArray<T>& InstanceLists)
+	{
+		IndexedPartitions.Reset();
+		for (int32 i = 0; i < InstanceLists.Num(); i++)
+		{
+			const int64 EntryHash = InstanceLists[i].AttributePartitionIndex;
+			if (EntryHash != INDEX_NONE)
+			{
+				IndexedPartitions.Add(EntryHash, i);
+			}
+		}
+	}
+
+	template <typename T>
+	void FPickUnpacker::InsertEntry(const UPCGBasePointData* InPointData, const uint64 EntryHash, const int32 EntryIndex, TArray<T>& InstanceLists)
 	{
 		using FTraits = TInstanceListTraits<T>;
 
@@ -698,9 +712,11 @@ namespace PCGExCollections
 		{
 			T& NewInstanceList = InstanceLists.Emplace_GetRef();
 			NewInstanceList.AttributePartitionIndex = EntryHash;
-			FTraits::SetPointData(NewInstanceList, PointData);
+			FTraits::SetPointData(NewInstanceList, InPointData);
 			TArray<int32>& Indices = FTraits::GetIndices(NewInstanceList);
-			Indices.Reserve(PointData->GetNumPoints() / (NumUniqueEntries * 2));
+			// Max(1) guards a collection with no valid entries; this branch only became reachable
+			// once callers stopped pre-filling every partition.
+			Indices.Reserve(InPointData->GetNumPoints() / FMath::Max(1, NumUniqueEntries * 2));
 			Indices.Emplace(EntryIndex);
 
 			IndexedPartitions.Add(EntryHash, InstanceLists.Num() - 1);
@@ -711,12 +727,31 @@ namespace PCGExCollections
 		}
 	}
 
-	// Explicit instantiations. Add a new pair here when introducing a new instance-list type
+	// Explicit instantiations. Add a new set here when introducing a new instance-list type
 	// alongside its TInstanceListTraits specialization above.
 	template bool FPickUnpacker::BuildPartitions<FPCGMeshInstanceList>(const UPCGBasePointData*, TArray<FPCGMeshInstanceList>&);
 	template bool FPickUnpacker::BuildPartitions<FPCGSkinnedMeshInstanceList>(const UPCGBasePointData*, TArray<FPCGSkinnedMeshInstanceList>&);
-	template void FPickUnpacker::InsertEntry<FPCGMeshInstanceList>(const uint64, const int32, TArray<FPCGMeshInstanceList>&);
-	template void FPickUnpacker::InsertEntry<FPCGSkinnedMeshInstanceList>(const uint64, const int32, TArray<FPCGSkinnedMeshInstanceList>&);
+	template void FPickUnpacker::ReindexPartitions<FPCGMeshInstanceList>(const TArray<FPCGMeshInstanceList>&);
+	template void FPickUnpacker::ReindexPartitions<FPCGSkinnedMeshInstanceList>(const TArray<FPCGSkinnedMeshInstanceList>&);
+	template void FPickUnpacker::InsertEntry<FPCGMeshInstanceList>(const UPCGBasePointData*, const uint64, const int32, TArray<FPCGMeshInstanceList>&);
+	template void FPickUnpacker::InsertEntry<FPCGSkinnedMeshInstanceList>(const UPCGBasePointData*, const uint64, const int32, TArray<FPCGSkinnedMeshInstanceList>&);
+
+	void FPickUnpacker::GetCollectionsInStableOrder(TArray<const UPCGExAssetCollection*>& OutCollections) const
+	{
+		OutCollections.Reset(CollectionMap.Num());
+		for (const TPair<uint32, UPCGExAssetCollection*>& Pair : CollectionMap)
+		{
+			if (Pair.Value)
+			{
+				OutCollections.Add(Pair.Value);
+			}
+		}
+
+		OutCollections.Sort([](const UPCGExAssetCollection& A, const UPCGExAssetCollection& B)
+		{
+			return A.GetPathName().Compare(B.GetPathName(), ESearchCase::CaseSensitive) < 0;
+		});
+	}
 
 	UPCGExAssetCollection* FPickUnpacker::UnpackHash(uint64 EntryHash, int16& OutPrimaryIndex, int16& OutSecondaryIndex)
 	{

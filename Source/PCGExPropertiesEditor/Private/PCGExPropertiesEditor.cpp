@@ -8,6 +8,7 @@
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExPropertiesEditorStyle.h"
 #include "PCGExProperty.h"
+#include "PCGExPropertyFloatPacker.h"
 #include "PCGExPropertyType_Struct.h"
 #include "PCGExPropertyTypes.h"
 #include "PCGExPropertyWriter.h"
@@ -16,6 +17,7 @@
 #include "Details/PCGExEnumSelectorCustomization.h"
 #include "Details/PCGExNumericRangeCustomization.h"
 #include "Details/PCGExObjectPropertyOverrideDescriptionCustomization.h"
+#include "Details/PCGExPackedFloatSlotCustomization.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
 #include "Details/PCGExPropertyFloatCurveCustomization.h"
 #include "Details/PCGExPropertyOutputConfigCustomization.h"
@@ -88,6 +90,12 @@ void FPCGExPropertiesEditorModule::StartupModule()
 	PropertyModule.RegisterCustomPropertyTypeLayout(
 		FPCGExPropertySampledOutputConfig::StaticStruct()->GetFName(),
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyOutputConfigCustomization::MakeInstance)
+		);
+
+	// Register FPCGExPackedFloatSlot customization - compact inline [x] Prop -> Offset row
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FPCGExPackedFloatSlot::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPackedFloatSlotCustomization::MakeInstance)
 		);
 
 	// FPCGObjectPropertyOverrideDescription (engine struct) -> compact inline [source] -> [target]. Global by FName.

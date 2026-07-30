@@ -258,6 +258,80 @@ namespace PCGExTypes
 		}
 	}
 
+	void FScopedTypedValue::ExportTo(void* Dst) const
+	{
+		check(Dst && bConstructed);
+
+		if (Property)
+		{
+			Property->CopyCompleteValue(Dst, ActiveStorage);
+			return;
+		}
+
+		if (NeedsLifecycleManagement(Type))
+		{
+			switch (Type)
+			{
+			case EPCGMetadataTypes::String:
+				*static_cast<FString*>(Dst) = As<FString>();
+				return;
+			case EPCGMetadataTypes::Name:
+				*static_cast<FName*>(Dst) = As<FName>();
+				return;
+			case EPCGMetadataTypes::SoftObjectPath:
+				*static_cast<FSoftObjectPath*>(Dst) = As<FSoftObjectPath>();
+				return;
+			case EPCGMetadataTypes::SoftClassPath:
+				*static_cast<FSoftClassPath*>(Dst) = As<FSoftClassPath>();
+				return;
+			case EPCGMetadataTypes::Text:
+				*static_cast<FText*>(Dst) = As<FText>();
+				return;
+			default:
+				break;
+			}
+		}
+
+		FMemory::Memcpy(Dst, ActiveStorage, ValueSize);
+	}
+
+	void FScopedTypedValue::ImportFrom(const void* Src)
+	{
+		check(Src && bConstructed);
+
+		if (Property)
+		{
+			Property->CopyCompleteValue(ActiveStorage, Src);
+			return;
+		}
+
+		if (NeedsLifecycleManagement(Type))
+		{
+			switch (Type)
+			{
+			case EPCGMetadataTypes::String:
+				As<FString>() = *static_cast<const FString*>(Src);
+				return;
+			case EPCGMetadataTypes::Name:
+				As<FName>() = *static_cast<const FName*>(Src);
+				return;
+			case EPCGMetadataTypes::SoftObjectPath:
+				As<FSoftObjectPath>() = *static_cast<const FSoftObjectPath*>(Src);
+				return;
+			case EPCGMetadataTypes::SoftClassPath:
+				As<FSoftClassPath>() = *static_cast<const FSoftClassPath*>(Src);
+				return;
+			case EPCGMetadataTypes::Text:
+				As<FText>() = *static_cast<const FText*>(Src);
+				return;
+			default:
+				break;
+			}
+		}
+
+		FMemory::Memcpy(ActiveStorage, Src, ValueSize);
+	}
+
 	bool FScopedTypedValue::NeedsLifecycleManagement(EPCGMetadataTypes InType)
 	{
 		switch (InType)

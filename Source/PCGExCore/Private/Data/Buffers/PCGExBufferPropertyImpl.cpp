@@ -29,6 +29,20 @@ namespace PCGExData
 
 	FProperty* FPropertyBuffer::CreateInnerPropertyFromDesc(const FPCGMetadataAttributeDesc& Desc, FFieldVariant PropertyScope)
 	{
+		FProperty* Prop = CreateInnerPropertyFromDescInternal(Desc, PropertyScope);
+
+		// Single gate for the "runtime-constructed properties skip LinkInternal -- set size explicitly"
+		// rule; recursion re-enters here, so container inner/key/leaf properties are validated too.
+		if (Prop && !ensureMsgf(Prop->GetSize() > 0, TEXT("[PCGEx] Runtime-constructed property '%s' has no element size -- missing SetElementSize in CreateInnerPropertyFromDescInternal."), *Prop->GetClass()->GetName()))
+		{
+			delete Prop;
+			return nullptr;
+		}
+		return Prop;
+	}
+
+	FProperty* FPropertyBuffer::CreateInnerPropertyFromDescInternal(const FPCGMetadataAttributeDesc& Desc, FFieldVariant PropertyScope)
+	{
 		// Construct an FProperty matching a metadata attribute's full descriptor.
 		// Mirrors PCG::Private::CreatePropertyFromDesc -- supports containers (Array/Set/Map),
 		// nested containers (TArray<TArray<T>>), all scalar legacy types, struct/enum, and
@@ -171,6 +185,11 @@ namespace PCGExData
 				UnderlyingProp->SetPropertyFlags(CPF_HasGetValueTypeHash | CPF_IsPlainOldData);
 				Prop->SetEnum(const_cast<UEnum*>(Enum));
 				Prop->AddCppProperty(UnderlyingProp);
+				// FEnumProperty is not a TProperty: LinkInternal normally derives ElementSize and the POD
+				// flags, and runtime-constructed properties never link. Without them GetSize() is 0 and
+				// the base FProperty value internals (Initialize/Copy/Destroy) are checkf(0).
+				Prop->SetElementSize(UnderlyingProp->GetElementSize());
+				Prop->SetPropertyFlags(CPF_IsPlainOldData | CPF_NoDestructor | CPF_ZeroConstructor);
 				return Prop;
 			}
 			break;
@@ -410,6 +429,18 @@ namespace PCGExData
 		return static_cast<uint8*>(Arr->GetData()) + static_cast<SIZE_T>(Index) * static_cast<SIZE_T>(ElementSize);
 	}
 
+	PCGExValueHash FPropertyBuffer::HashValue(const void* ValuePtr) const
+	{
+		check(CachedInnerProperty && ValuePtr && ElementSize > 0);
+
+		// A raw CRC over non-POD bytes hashes heap pointers -- prefer the property's content hash.
+		if (CachedInnerProperty->HasAnyPropertyFlags(CPF_HasGetValueTypeHash))
+		{
+			return CachedInnerProperty->GetValueTypeHash(ValuePtr);
+		}
+		return FCrc::MemCrc32(ValuePtr, ElementSize);
+	}
+
 	bool FPropertyBuffer::InitProperty(const FPCGMetadataAttributeBase* InGenericAttribute)
 	{
 		if (!InGenericAttribute)
@@ -447,12 +478,8 @@ namespace PCGExData
 
 	FPropertyArrayBuffer::~FPropertyArrayBuffer()
 	{
-		// Each element in InBytes/OutBytes was initialized via CachedInnerProperty->InitializeValue
-		// (and possibly CopyCompleteValue), so we owe a matching DestroyValue to release any
-		// allocated state -- array allocator memory, FString character storage, FText shared data, etc.
-		// Without this, container-typed and string-typed attributes would leak per-element heap on every Flush.
-		DestroyAllElements(InBytes);
-		DestroyAllElements(OutBytes);
+		// Explicitly qualified -- cleanup rules live in Flush, and dispatch narrows during destruction.
+		FPropertyArrayBuffer::Flush();
 	}
 
 	void FPropertyArrayBuffer::DestroyAllElements(const TSharedPtr<TArray<uint8>>& Bytes) const
@@ -525,15 +552,7 @@ namespace PCGExData
 		const int32 Offset = Index * ElementSize;
 		check(Offset + ElementSize <= InBytes->Num());
 
-		if (const FProperty* Prop = OutValue.GetProperty())
-		{
-			// Property-backed: use reflection for deep copy (handles TArray, TSet, etc.)
-			Prop->CopyCompleteValue(OutValue.GetRaw(), InBytes->GetData() + Offset);
-		}
-		else
-		{
-			FMemory::Memcpy(OutValue.GetRaw(), InBytes->GetData() + Offset, ElementSize);
-		}
+		OutValue.ImportFrom(InBytes->GetData() + Offset);
 	}
 
 	void FPropertyArrayBuffer::SetVoid(const int32 Index, const PCGExTypes::FScopedTypedValue& Value)
@@ -543,14 +562,7 @@ namespace PCGExData
 		const int32 Offset = Index * ElementSize;
 		check(Offset + ElementSize <= OutBytes->Num());
 
-		if (const FProperty* Prop = Value.GetProperty())
-		{
-			Prop->CopyCompleteValue(OutBytes->GetData() + Offset, Value.GetRaw());
-		}
-		else
-		{
-			FMemory::Memcpy(OutBytes->GetData() + Offset, Value.GetRaw(), ElementSize);
-		}
+		Value.ExportTo(OutBytes->GetData() + Offset);
 	}
 
 	void FPropertyArrayBuffer::GetVoid(const int32 Index, PCGExTypes::FScopedTypedValue& OutValue)
@@ -561,33 +573,52 @@ namespace PCGExData
 			const int32 Offset = Index * ElementSize;
 			check(Offset + ElementSize <= OutBytes->Num());
 
-			if (const FProperty* Prop = OutValue.GetProperty())
-			{
-				Prop->CopyCompleteValue(OutValue.GetRaw(), OutBytes->GetData() + Offset);
-			}
-			else
-			{
-				FMemory::Memcpy(OutValue.GetRaw(), OutBytes->GetData() + Offset, ElementSize);
-			}
+			OutValue.ImportFrom(OutBytes->GetData() + Offset);
 			return;
 		}
 		ReadVoid(Index, OutValue);
 	}
 
+	void FPropertyArrayBuffer::ReadRawValue(const int32 Index, void* Dst) const
+	{
+		check(InBytes && CachedInnerProperty && ElementSize > 0);
+		const int32 Offset = Index * ElementSize;
+		check(Offset + ElementSize <= InBytes->Num());
+		CachedInnerProperty->CopyCompleteValue(Dst, InBytes->GetData() + Offset);
+	}
+
+	void FPropertyArrayBuffer::GetRawValue(const int32 Index, void* Dst)
+	{
+		if (!OutBytes)
+		{
+			ReadRawValue(Index, Dst);
+			return;
+		}
+		check(CachedInnerProperty && ElementSize > 0);
+		const int32 Offset = Index * ElementSize;
+		check(Offset + ElementSize <= OutBytes->Num());
+		CachedInnerProperty->CopyCompleteValue(Dst, OutBytes->GetData() + Offset);
+	}
+
+	void FPropertyArrayBuffer::SetRawValue(const int32 Index, const void* Src)
+	{
+		SetFromVoidProperty(Index, Src);
+	}
+
 	PCGExValueHash FPropertyArrayBuffer::ReadValueHash(const int32 Index)
 	{
-		if (!InBytes || ElementSize <= 0)
+		if (!InBytes || !CachedInnerProperty || ElementSize <= 0)
 		{
 			return 0;
 		}
-		return FCrc::MemCrc32(InBytes->GetData() + Index * ElementSize, ElementSize);
+		return HashValue(InBytes->GetData() + Index * ElementSize);
 	}
 
 	PCGExValueHash FPropertyArrayBuffer::GetValueHash(const int32 Index)
 	{
-		if (OutBytes && ElementSize > 0)
+		if (OutBytes && CachedInnerProperty && ElementSize > 0)
 		{
-			return FCrc::MemCrc32(OutBytes->GetData() + Index * ElementSize, ElementSize);
+			return HashValue(OutBytes->GetData() + Index * ElementSize);
 		}
 		return ReadValueHash(Index);
 	}
@@ -783,9 +814,14 @@ namespace PCGExData
 
 	void FPropertyArrayBuffer::Flush()
 	{
-		// Property-aware cleanup: release per-element allocator state before dropping the byte storage.
+		// Each element was InitializeValue'd, so we owe a matching DestroyValue (FString chars,
+		// container allocators, FText shared data). EnsureReadable may alias InBytes = OutBytes
+		// (same TSharedPtr) -- destroy each array once.
 		DestroyAllElements(InBytes);
-		DestroyAllElements(OutBytes);
+		if (OutBytes != InBytes)
+		{
+			DestroyAllElements(OutBytes);
+		}
 		InBytes.Reset();
 		OutBytes.Reset();
 	}
@@ -816,20 +852,30 @@ namespace PCGExData
 
 	FPropertySingleValueBuffer::~FPropertySingleValueBuffer()
 	{
-		// Symmetric with FPropertyArrayBuffer: release per-slot allocator state before the inline
-		// TArray<uint8>'s storage is freed. Without this, FString/container-typed single values leak
-		// their per-element heap on every buffer drop.
+		// Explicitly qualified -- cleanup rules live in Flush, and dispatch narrows during destruction.
+		FPropertySingleValueBuffer::Flush();
+	}
+
+	void FPropertySingleValueBuffer::Flush()
+	{
+		// Owed DestroyValue for each initialized slot. bReadFromOutput means InValue was never
+		// initialized -- OutValue is the only owned value.
 		if (CachedInnerProperty && ElementSize > 0)
 		{
-			if (bReadInitialized && InValue.Num() >= ElementSize)
+			if (bReadInitialized && !bReadFromOutput && InValue.Num() >= ElementSize)
 			{
 				CachedInnerProperty->DestroyValue(InValue.GetData());
 			}
-			if (bWriteInitialized && OutValue.Num() >= ElementSize && !bReadFromOutput)
+			if (bWriteInitialized && OutValue.Num() >= ElementSize)
 			{
 				CachedInnerProperty->DestroyValue(OutValue.GetData());
 			}
 		}
+		InValue.Empty();
+		OutValue.Empty();
+		bReadInitialized = false;
+		bWriteInitialized = false;
+		bReadFromOutput = false;
 	}
 
 	int32 FPropertySingleValueBuffer::GetNumValues(const EIOSide InSide)
@@ -869,7 +915,8 @@ namespace PCGExData
 			}
 			if (bWriteInitialized && OutValue.Num() > 0)
 			{
-				InValue = OutValue;
+				// Route reads through OutValue rather than snapshotting bytes -- a byte copy would
+				// shallow-alias OutValue's heap (stale after the next SetVoid, double-freed at teardown).
 				bReadFromOutput = true;
 				bReadInitialized = true;
 				return true;
@@ -881,17 +928,13 @@ namespace PCGExData
 
 	void FPropertySingleValueBuffer::ReadVoid(const int32 Index, PCGExTypes::FScopedTypedValue& OutVal) const
 	{
-		check(InValue.Num() >= ElementSize && ElementSize > 0);
+		// Reads track writes when aliased, matching TSingleValueBuffer<T>.
+		const TArray<uint8>& Src = GetReadSource();
+
+		check(Src.Num() >= ElementSize && ElementSize > 0);
 		check(OutVal.GetValueSize() == ElementSize);
 
-		if (const FProperty* Prop = OutVal.GetProperty())
-		{
-			Prop->CopyCompleteValue(OutVal.GetRaw(), InValue.GetData());
-		}
-		else
-		{
-			FMemory::Memcpy(OutVal.GetRaw(), InValue.GetData(), ElementSize);
-		}
+		OutVal.ImportFrom(Src.GetData());
 	}
 
 	void FPropertySingleValueBuffer::SetVoid(const int32 Index, const PCGExTypes::FScopedTypedValue& Value)
@@ -899,14 +942,7 @@ namespace PCGExData
 		check(OutValue.Num() >= ElementSize && ElementSize > 0);
 		check(Value.GetValueSize() == ElementSize);
 
-		if (const FProperty* Prop = Value.GetProperty())
-		{
-			Prop->CopyCompleteValue(OutValue.GetData(), Value.GetRaw());
-		}
-		else
-		{
-			FMemory::Memcpy(OutValue.GetData(), Value.GetRaw(), ElementSize);
-		}
+		Value.ExportTo(OutValue.GetData());
 	}
 
 	void FPropertySingleValueBuffer::GetVoid(const int32 Index, PCGExTypes::FScopedTypedValue& OutVal)
@@ -915,33 +951,52 @@ namespace PCGExData
 		{
 			check(OutVal.GetValueSize() == ElementSize);
 
-			if (const FProperty* Prop = OutVal.GetProperty())
-			{
-				Prop->CopyCompleteValue(OutVal.GetRaw(), OutValue.GetData());
-			}
-			else
-			{
-				FMemory::Memcpy(OutVal.GetRaw(), OutValue.GetData(), ElementSize);
-			}
+			OutVal.ImportFrom(OutValue.GetData());
 			return;
 		}
 		ReadVoid(Index, OutVal);
 	}
 
+	void FPropertySingleValueBuffer::ReadRawValue(const int32 Index, void* Dst) const
+	{
+		const TArray<uint8>& Src = GetReadSource();
+		check(CachedInnerProperty && Src.Num() >= ElementSize && ElementSize > 0);
+		CachedInnerProperty->CopyCompleteValue(Dst, Src.GetData());
+	}
+
+	void FPropertySingleValueBuffer::GetRawValue(const int32 Index, void* Dst)
+	{
+		if (OutValue.Num() >= ElementSize)
+		{
+			check(CachedInnerProperty && ElementSize > 0);
+			CachedInnerProperty->CopyCompleteValue(Dst, OutValue.GetData());
+			return;
+		}
+		ReadRawValue(Index, Dst);
+	}
+
+	void FPropertySingleValueBuffer::SetRawValue(const int32 Index, const void* Src)
+	{
+		check(CachedInnerProperty && OutValue.Num() >= ElementSize && ElementSize > 0);
+		CachedInnerProperty->CopyCompleteValue(OutValue.GetData(), Src);
+	}
+
 	PCGExValueHash FPropertySingleValueBuffer::ReadValueHash(const int32 Index)
 	{
-		if (InValue.Num() < ElementSize || ElementSize <= 0)
+		const TArray<uint8>& Src = GetReadSource();
+
+		if (Src.Num() < ElementSize || !CachedInnerProperty || ElementSize <= 0)
 		{
 			return 0;
 		}
-		return FCrc::MemCrc32(InValue.GetData(), ElementSize);
+		return HashValue(Src.GetData());
 	}
 
 	PCGExValueHash FPropertySingleValueBuffer::GetValueHash(const int32 Index)
 	{
-		if (OutValue.Num() >= ElementSize && ElementSize > 0)
+		if (OutValue.Num() >= ElementSize && CachedInnerProperty && ElementSize > 0)
 		{
-			return FCrc::MemCrc32(OutValue.GetData(), ElementSize);
+			return HashValue(OutValue.GetData());
 		}
 		return ReadValueHash(Index);
 	}

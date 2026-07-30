@@ -480,7 +480,6 @@ namespace PCGExCollections
 		TMap<uint32, UPCGExAssetCollection*> CollectionMap;
 		TArray<PCGExHelpers::FPCGExSharedAssetHandlePtr> CollectionsHandles;
 		int32 NumUniqueEntries = 0;
-		const UPCGBasePointData* PointData = nullptr;
 
 	public:
 		TMap<int64, TSharedPtr<TArray<int32>>> HashedPartitions;
@@ -498,6 +497,17 @@ namespace PCGExCollections
 		{
 			return CollectionMap;
 		}
+
+		/**
+		 * Unpacked collections ordered by asset path.
+		 *
+		 * Use this over iterating GetCollections() anywhere order decides an outcome -- notably
+		 * first-match-wins schema lookups, where hosts declaring one property name with different
+		 * types let iteration order pick the resulting attribute type or packed slot width. TMap
+		 * order is hash order, and CollectionGUID order is regenerated on asset duplicate/import,
+		 * so neither survives asset edits; path order only changes on rename or move.
+		 */
+		void GetCollectionsInStableOrder(TArray<const UPCGExAssetCollection*>& OutCollections) const;
 
 		/**
 		 * Register every unpacked collection into the given packer. Consumers that emit a superset
@@ -524,8 +534,21 @@ namespace PCGExCollections
 		template <typename T>
 		bool BuildPartitions(const UPCGBasePointData* InPointData, TArray<T>& InstanceLists);
 
+		/**
+		 * Recover the hash -> list mapping from instance lists that already exist, leaving their
+		 * point indices alone. O(lists), by reading back the entry hash off AttributePartitionIndex.
+		 *
+		 * This is how a time-sliced consumer resumes: the unpacker is rebuilt per invocation but
+		 * InstanceLists survives, and using BuildPartitions to recover the map would re-insert every
+		 * index the previous slice already placed and append a second set of lists that orphans the
+		 * first.
+		 */
 		template <typename T>
-		void InsertEntry(const uint64 EntryHash, const int32 EntryIndex, TArray<T>& InstanceLists);
+		void ReindexPartitions(const TArray<T>& InstanceLists);
+
+		/** Add one point to its partition. InPointData only seeds a new list; pass the same data throughout. */
+		template <typename T>
+		void InsertEntry(const UPCGBasePointData* InPointData, const uint64 EntryHash, const int32 EntryIndex, TArray<T>& InstanceLists);
 
 		/**
 		 * Resolve a packed hash to an entry

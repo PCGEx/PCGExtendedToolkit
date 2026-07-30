@@ -11,7 +11,9 @@
 
 #include "Collections/PCGExMeshCollection.h"
 #include "Engine/StaticMesh.h"
+#include "Helpers/PCGExCollectionPropertyFloatPacker.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "SceneTypes.h"
 #include "Tasks/Task.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(PCGExMeshSelectorStaged)
@@ -40,7 +42,32 @@ namespace PCGExMeshSelectorStaged
 
 		return NewInstanceList;
 	}
+
+#if WITH_EDITOR
+	FString DescribeFloats(TConstArrayView<float> InFloats)
+	{
+		return FString::JoinBy(InFloats, TEXT(", "), [](const float Value) { return FString::SanitizeFloat(Value); });
+	}
+#endif
 }
+
+#if WITH_EDITOR
+void UPCGExMeshSelectorStaged::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	static const FName PopulateFromSchemaName = GET_MEMBER_NAME_CHECKED(FPCGExPackedFloatLayout, PopulateFromSchema);
+
+	if (PropertyChangedEvent.GetPropertyName() == PopulateFromSchemaName && CustomPrimitiveDataLayout.PopulateFromSchema)
+	{
+		CustomPrimitiveDataLayout.EDITOR_PopulateFromSchemaAsset(CustomPrimitiveDataLayout.PopulateFromSchema);
+
+		// One-shot: the rows are the data now, and leaving the asset assigned would read as a live
+		// reference that re-expands.
+		CustomPrimitiveDataLayout.PopulateFromSchema = nullptr;
+	}
+}
+#endif
 
 bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext& Context, const UPCGStaticMeshSpawnerSettings* Settings, const UPCGBasePointData* InPointData, TArray<FPCGMeshInstanceList>& OutMeshInstances, UPCGBasePointData* OutPointData) const
 {
@@ -112,8 +139,9 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 	}
 	else
 	{
-		// Retrieve existing partitions
-		CollectionMap->BuildPartitions(InPointData, OutMeshInstances);
+		// Recover the partitions the previous slice built, rather than re-deriving them from points:
+		// BuildPartitions would re-insert every index already placed and orphan the earlier lists.
+		CollectionMap->ReindexPartitions(OutMeshInstances);
 
 		const int32 NumPoints = InPointData->GetNumPoints();
 
@@ -122,7 +150,7 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			TConstPCGValueRange<int64> MetadataEntries = InPointData->GetConstMetadataEntryValueRange();
 			while (Context.CurrentPointIndex < NumPoints)
 			{
-				CollectionMap->InsertEntry(HashAttribute->GetValueFromItemKey<int64>(MetadataEntries[Context.CurrentPointIndex]), Context.CurrentPointIndex, OutMeshInstances);
+				CollectionMap->InsertEntry(InPointData, HashAttribute->GetValueFromItemKey<int64>(MetadataEntries[Context.CurrentPointIndex]), Context.CurrentPointIndex, OutMeshInstances);
 				Context.CurrentPointIndex++;
 				if (Context.ShouldStop())
 				{
@@ -136,6 +164,31 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 		TRACE_CPUPROFILER_EVENT_SCOPE(UPCGExMeshSelectorStaged::SelectEntries);
 
 		TConstPCGValueRange<FTransform> InTransforms = InPointData->GetConstTransformValueRange();
+
+		// One layout for the whole selection: a per-entry one would move a property between entries,
+		// and the material reading that slot has no way to notice.
+		PCGExCollections::FPCGExCollectionPropertyFloatPacker CustomDataPacker;
+		bool bPackCustomData = false;
+
+		if (!CustomPrimitiveDataLayout.IsEmpty())
+		{
+			TArray<const UPCGExAssetCollection*> Hosts;
+			CollectionMap->GetCollectionsInStableOrder(Hosts);
+
+			// Anything wider than the renderer stores also defeats ISM reuse, whose match compares
+			// the stored array against the one we hand it.
+			bPackCustomData = CustomDataPacker.Initialize(
+				&Context, CustomPrimitiveDataLayout, Hosts, FCustomPrimitiveData::NumCustomPrimitiveDataFloats);
+
+#if WITH_EDITOR
+			if (bPackCustomData && bDebugCustomPrimitiveData)
+			{
+				PCGE_LOG_C(Log, LogOnly, &Context, FText::Format(
+					           FTEXT("Custom Primitive Data layout ({0} floats): {1}"),
+					           CustomDataPacker.GetNumFloats(), FText::FromString(CustomDataPacker.DescribeLayout())));
+			}
+#endif
+		}
 
 		for (const TPair<int64, int32>& Partition : CollectionMap->IndexedPartitions)
 		{
@@ -174,6 +227,21 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			if (bApplyMaterialOverrides)
 			{
 				Entry->ApplyMaterials(MaterialPick, OutDescriptor);
+			}
+
+			if (bPackCustomData)
+			{
+				CustomDataPacker.PackEntry(Entry, Result.Host, InstanceList.CustomPrimitiveData);
+
+#if WITH_EDITOR
+				if (bDebugCustomPrimitiveData)
+				{
+					PCGE_LOG_C(Log, LogOnly, &Context, FText::Format(
+						           FTEXT("Custom Primitive Data for entry '{0}': {1}"),
+						           FText::FromString(Entry->Staging.Path.ToString()),
+						           FText::FromString(PCGExMeshSelectorStaged::DescribeFloats(InstanceList.CustomPrimitiveData))));
+				}
+#endif
 			}
 
 			const TArray<int32>& InstanceIndices = InstanceList.InstancesIndices;

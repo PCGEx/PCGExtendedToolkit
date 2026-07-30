@@ -87,6 +87,12 @@ namespace PCGExMatching
 			return NumSources;
 		}
 
+		/** Registered matchable sources, in registration order -- partition helpers index into this. */
+		FORCEINLINE const TArray<FPCGExTaggedData>& GetSources() const
+		{
+			return *MatchableSources;
+		}
+
 		bool FindIndex(const UPCGData* InData, int32& OutIndex) const;
 
 		void SetDetails(const FPCGExMatchingDetails* InDetails);

@@ -17,6 +17,114 @@ void FPCGExPropertiesModule::RegisterToEditor(const TSharedPtr<FSlateStyleSet>& 
 
 PCGEX_IMPLEMENT_MODULE(FPCGExPropertiesModule, PCGExProperties)
 
+#pragma region FPCGExProperty
+
+int32 PCGExProperties::GetPackedFloatWidth(const EPCGMetadataTypes InType)
+{
+	switch (InType)
+	{
+	case EPCGMetadataTypes::Boolean:
+	case EPCGMetadataTypes::Float:
+	case EPCGMetadataTypes::Double:
+	case EPCGMetadataTypes::Integer32:
+	case EPCGMetadataTypes::Integer64:
+		return 1;
+	case EPCGMetadataTypes::Vector2:
+		return 2;
+	case EPCGMetadataTypes::Vector:
+	case EPCGMetadataTypes::Rotator:
+		return 3;
+	case EPCGMetadataTypes::Vector4:
+	case EPCGMetadataTypes::Quaternion:
+		return 4;
+	default:
+		return 0;
+	}
+}
+
+int32 FPCGExProperty::GetPackedFloatCount() const
+{
+	return PCGExProperties::GetPackedFloatWidth(GetOutputType());
+}
+
+bool FPCGExProperty::PackFloats(TArrayView<float> OutFloats) const
+{
+	const EPCGMetadataTypes OutputType = GetOutputType();
+
+	// Bound against the width this body writes, not the virtual count -- a subclass that narrows
+	// GetPackedFloatCount() would otherwise hand us a short view we'd overrun.
+	if (OutFloats.Num() < PCGExProperties::GetPackedFloatWidth(OutputType))
+	{
+		return false;
+	}
+
+	// Component order mirrors PCGInstanceDataPackerBase; diverging misaligns the stock packers.
+	switch (OutputType)
+	{
+	case EPCGMetadataTypes::Boolean:
+	case EPCGMetadataTypes::Float:
+	case EPCGMetadataTypes::Double:
+	case EPCGMetadataTypes::Integer32:
+	case EPCGMetadataTypes::Integer64:
+		{
+			double Value = 0;
+			if (!TryGetValue<double>(Value)) { return false; }
+			OutFloats[0] = static_cast<float>(Value);
+			return true;
+		}
+	case EPCGMetadataTypes::Vector2:
+		{
+			FVector2D Value = FVector2D::ZeroVector;
+			if (!TryGetValue<FVector2D>(Value)) { return false; }
+			OutFloats[0] = static_cast<float>(Value.X);
+			OutFloats[1] = static_cast<float>(Value.Y);
+			return true;
+		}
+	case EPCGMetadataTypes::Vector:
+		{
+			FVector Value = FVector::ZeroVector;
+			if (!TryGetValue<FVector>(Value)) { return false; }
+			OutFloats[0] = static_cast<float>(Value.X);
+			OutFloats[1] = static_cast<float>(Value.Y);
+			OutFloats[2] = static_cast<float>(Value.Z);
+			return true;
+		}
+	case EPCGMetadataTypes::Vector4:
+		{
+			FVector4 Value = FVector4::Zero();
+			if (!TryGetValue<FVector4>(Value)) { return false; }
+			OutFloats[0] = static_cast<float>(Value.X);
+			OutFloats[1] = static_cast<float>(Value.Y);
+			OutFloats[2] = static_cast<float>(Value.Z);
+			OutFloats[3] = static_cast<float>(Value.W);
+			return true;
+		}
+	case EPCGMetadataTypes::Quaternion:
+		{
+			FQuat Value = FQuat::Identity;
+			if (!TryGetValue<FQuat>(Value)) { return false; }
+			OutFloats[0] = static_cast<float>(Value.X);
+			OutFloats[1] = static_cast<float>(Value.Y);
+			OutFloats[2] = static_cast<float>(Value.Z);
+			OutFloats[3] = static_cast<float>(Value.W);
+			return true;
+		}
+	case EPCGMetadataTypes::Rotator:
+		{
+			FRotator Value = FRotator::ZeroRotator;
+			if (!TryGetValue<FRotator>(Value)) { return false; }
+			OutFloats[0] = static_cast<float>(Value.Roll);
+			OutFloats[1] = static_cast<float>(Value.Pitch);
+			OutFloats[2] = static_cast<float>(Value.Yaw);
+			return true;
+		}
+	default:
+		return false;
+	}
+}
+
+#pragma endregion
+
 #pragma region FPCGExPropertySchema
 
 FPCGExPropertySchema::FPCGExPropertySchema()

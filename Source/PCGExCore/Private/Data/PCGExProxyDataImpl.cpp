@@ -415,28 +415,21 @@ namespace PCGExData
 	void FPropertyBufferProxy::GetVoid(const int32 Index, void* OutValue) const
 	{
 		check(Buffer);
-		// Buffer-driven scoped value: property buffers return FProperty-aware (correctly
-		// sized for extended scalars and containers); typed TBuffer<T> returns TTraits<T>-sized.
-		// Constructing FScopedTypedValue(WorkingType) directly would miss container/struct sizing.
-		PCGExTypes::FScopedTypedValue Wrapped = Buffer->MakeScopedValue();
-		Buffer->ReadVoid(Index, Wrapped);
-		FMemory::Memcpy(OutValue, Wrapped.GetRaw(), Wrapped.GetValueSize());
+		// OutValue must be a live value of the buffer's type (built by MakeScopedValue /
+		// CreateScopedWorkingValue) -- the raw-value transport is an assignment, not a byte copy.
+		Buffer->ReadRawValue(Index, OutValue);
 	}
 
 	void FPropertyBufferProxy::SetVoid(const int32 Index, const void* Value) const
 	{
 		check(Buffer);
-		PCGExTypes::FScopedTypedValue Wrapped = Buffer->MakeScopedValue();
-		FMemory::Memcpy(Wrapped.GetRaw(), Value, Wrapped.GetValueSize());
-		Buffer.Get()->SetVoid(Index, Wrapped);
+		Buffer.Get()->SetRawValue(Index, Value);
 	}
 
 	void FPropertyBufferProxy::GetCurrentVoid(const int32 Index, void* OutValue) const
 	{
 		check(Buffer);
-		PCGExTypes::FScopedTypedValue Wrapped = Buffer->MakeScopedValue();
-		Buffer.Get()->GetVoid(Index, Wrapped);
-		FMemory::Memcpy(OutValue, Wrapped.GetRaw(), Wrapped.GetValueSize());
+		Buffer.Get()->GetRawValue(Index, OutValue);
 	}
 
 	TSharedPtr<IBuffer> FPropertyBufferProxy::GetBuffer() const

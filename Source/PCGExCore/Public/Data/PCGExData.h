@@ -171,6 +171,30 @@ namespace PCGExData
 		// TBuffer<T> uses compile-time TTraits<T>::Type; FPropertyBuffer uses its cached FProperty.
 		virtual PCGExTypes::FScopedTypedValue MakeScopedValue() const = 0;
 
+		// Raw-pointer value transport. Src/Dst MUST point to a live value of this buffer's value type
+		// (e.g. built by MakeScopedValue) -- these are assignments, not byte copies. Defaults route
+		// through a scoped intermediate; property buffers override with a single direct deep copy.
+		virtual void ReadRawValue(const int32 Index, void* Dst) const
+		{
+			PCGExTypes::FScopedTypedValue Wrapped = MakeScopedValue();
+			ReadVoid(Index, Wrapped);
+			Wrapped.ExportTo(Dst);
+		}
+
+		virtual void GetRawValue(const int32 Index, void* Dst)
+		{
+			PCGExTypes::FScopedTypedValue Wrapped = MakeScopedValue();
+			GetVoid(Index, Wrapped);
+			Wrapped.ExportTo(Dst);
+		}
+
+		virtual void SetRawValue(const int32 Index, const void* Src)
+		{
+			PCGExTypes::FScopedTypedValue Wrapped = MakeScopedValue();
+			Wrapped.ImportFrom(Src);
+			SetVoid(Index, Wrapped);
+		}
+
 		// Source FProperty backing this buffer. nullptr for typed TBuffer<T>; non-null for
 		// FPropertyBuffer post-InitProperty. Use for FProperty-aware operations (deep copy via
 		// CopyCompleteValue, sized scoped values). Lifetime tied to this buffer.

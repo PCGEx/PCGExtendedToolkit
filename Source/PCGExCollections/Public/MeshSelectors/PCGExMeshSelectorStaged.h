@@ -4,6 +4,7 @@
 #pragma once
 
 #include "MeshSelectors/PCGMeshSelectorBase.h"
+#include "PCGExPropertyFloatPacker.h"
 #include "PCGExMeshSelectorStaged.generated.h"
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), DisplayName="[PCGEx] Staging Data")
@@ -23,9 +24,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = MeshSelector, meta=(InlineEditConditionToggle))
 	bool bUseTemplateDescriptor = true;
 
-	/** If enabled, will ignore the collection descriptor details and only push mesh, materials & tags from the collection. 
-	 * This is enabled by default for legacy reasons but if you set per-entry settings in your collections, turn this off!
-	 */
+	/** Ignores per-entry collection descriptors, pushing only mesh, materials & tags. On by default for legacy reasons -- turn it off if your collections set per-entry details. */
 	UPROPERTY(EditAnywhere, Category = MeshSelector, meta=(DisplayName="Descriptor Override", EditCondition="bUseTemplateDescriptor"))
 	FPCGSoftISMComponentDescriptor TemplateDescriptor;
 
@@ -38,4 +37,22 @@ public:
 	/** When enabled, silently skips input data that is missing the staging hash attribute instead of logging an error. */
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bQuietMissingStagingDataWarning = false;
+
+	/** Per-entry collection properties packed into the spawned component's Custom Primitive Data. */
+	// No ShowOnlyInnerProperties: it re-categorizes promoted members under THEIR own Category,
+	// scattering them into "Settings" instead of showing them here.
+	UPROPERTY(EditAnywhere, Category = "MeshSelector|Custom Primitive Data", meta=(DisplayName="Layout"))
+	FPCGExPackedFloatLayout CustomPrimitiveDataLayout;
+
+#if WITH_EDITORONLY_DATA
+	/** Logs the resolved layout and each entry's floats. PCGNoHash: hashing diagnostics would rebuild every ISM on toggle. */
+	UPROPERTY(EditAnywhere, Category = "MeshSelector|Custom Primitive Data", meta=(DisplayName="Debug Layout", PCGNoHash))
+	bool bDebugCustomPrimitiveData = false;
+#endif
+
+#if WITH_EDITOR
+	/** Drives Layout > Populate From. A CallInEditor button can't: FObjectDetails renders those from
+	 *  a class layout that only runs for a details view's root objects, never a nested sub-object. */
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };
