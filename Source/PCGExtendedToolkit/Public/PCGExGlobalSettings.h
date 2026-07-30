@@ -35,7 +35,7 @@ public:
 
 	/** Value applied by default to node caching when `Default` is selected -- note that some nodes may stop working as expected when working with cached data.*/
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
-	bool bDefaultCacheNodeOutput = true;
+	bool bDefaultCacheNodeOutput = false;
 
 	/** Value applied by default to node caching when `Default` is selected. */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
