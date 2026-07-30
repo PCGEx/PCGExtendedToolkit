@@ -13,14 +13,6 @@
 #define LOCTEXT_NAMESPACE "PCGExFactoryProvider"
 #define PCGEX_NAMESPACE PCGExFactoryProvider
 
-#if WITH_EDITOR
-void UPCGExFactoryProviderSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-	InternalCacheInvalidator++;
-	Super::PostEditChangeProperty(PropertyChangedEvent);
-}
-#endif
-
 TArray<FPCGPinProperties> UPCGExFactoryProviderSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
@@ -130,10 +122,6 @@ bool FPCGExFactoryProviderElement::AdvanceWork(FPCGExContext* InContext, const U
 			Context->OutFactory->AddDataDependency(TaggedData.Data);
 		}
 	}
-
-	// We use a dummy attribute to update the factory CRC
-	FPCGAttributeIdentifier CacheInvalidation(FName("PCGEx/CRC"), PCGMetadataDomainID::Data);
-	Context->OutFactory->Metadata->CreateAttribute<int32>(CacheInvalidation, Settings->InternalCacheInvalidator, false, false);
 
 	Context->StageOutput(Context->OutFactory, Settings->GetMainOutputPin());
 
