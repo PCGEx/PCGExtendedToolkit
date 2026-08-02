@@ -57,7 +57,7 @@ void FPCGExVtxPropertySpecialNeighbors::ProcessNode(PCGExClusters::FNode& Node, 
 
 	if (ILargest != -1)
 	{
-		Config.LargestNeighbor.Set(Node.PointIndex, Adjacency[ILargest], Cluster->GetNode(Adjacency[ILargest].NodeIndex)->Num());
+		Config.LargestNeighbor.Set(Node.PointIndex, Adjacency[ILargest], LLargest);
 	}
 	else
 	{
@@ -66,7 +66,7 @@ void FPCGExVtxPropertySpecialNeighbors::ProcessNode(PCGExClusters::FNode& Node, 
 
 	if (ISmallest != -1)
 	{
-		Config.SmallestNeighbor.Set(Node.PointIndex, Adjacency[ISmallest], Cluster->GetNode(Adjacency[ISmallest].NodeIndex)->Num());
+		Config.SmallestNeighbor.Set(Node.PointIndex, Adjacency[ISmallest], LSmallest);
 	}
 	else
 	{
