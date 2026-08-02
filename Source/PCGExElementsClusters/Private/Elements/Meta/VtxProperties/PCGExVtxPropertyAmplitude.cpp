@@ -109,8 +109,6 @@ void FPCGExVtxPropertyAmplitude::ProcessNode(PCGExClusters::FNode& Node, const T
 	FVector MinAmplitude = FVector(TNumericLimits<double>::Max());
 	FVector MaxAmplitude = FVector(TNumericLimits<double>::Lowest());
 
-	TArray<double> Sizes;
-	Sizes.SetNum(NumAdjacency);
 	double MaxSize = 0;
 
 	for (int i = 0; i < NumAdjacency; i++)
@@ -119,7 +117,7 @@ void FPCGExVtxPropertyAmplitude::ProcessNode(PCGExClusters::FNode& Node, const T
 
 		const FVector DirAndSize = A.Direction * A.Length;
 
-		MaxSize = FMath::Max(MaxSize, (Sizes[i] = bUseSize ? A.Length : 1));
+		MaxSize = FMath::Max(MaxSize, bUseSize ? A.Length : 1);
 
 		AverageDirection += A.Direction;
 		MinAmplitude = PCGExTypeOps::FTypeOps<FVector>::Min(DirAndSize, MinAmplitude);
@@ -135,18 +133,10 @@ void FPCGExVtxPropertyAmplitude::ProcessNode(PCGExClusters::FNode& Node, const T
 
 		if (Config.UpMode == EPCGExVtxAmplitudeUpMode::UpVector)
 		{
+			const FVector UpDir = DirCache->Read(Node.PointIndex);
 			for (int i = 0; i < NumAdjacency; i++)
 			{
-				Sign += FVector::DotProduct(DirCache->Read(Node.PointIndex), Adjacency[i].Direction) * (Sizes[i] / MaxSize);
-			}
-
-			if (Config.SignOutputMode == EPCGExVtxAmplitudeSignOutput::NormalizedSize)
-			{
-				Sign /= NumAdjacency;
-			}
-			else
-			{
-				Sign /= NumAdjacency;
+				Sign += FVector::DotProduct(UpDir, Adjacency[i].Direction) * ((bUseSize ? Adjacency[i].Length : 1) / MaxSize);
 			}
 		}
 		else
@@ -155,8 +145,9 @@ void FPCGExVtxPropertyAmplitude::ProcessNode(PCGExClusters::FNode& Node, const T
 			{
 				Sign += FVector::DotProduct(AverageDirection, Adjacency[i].Direction);
 			}
-			Sign /= NumAdjacency;
 		}
+
+		Sign /= NumAdjacency;
 
 		if (Config.SignOutputMode != EPCGExVtxAmplitudeSignOutput::Sign)
 		{
