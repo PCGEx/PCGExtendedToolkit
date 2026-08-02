@@ -492,6 +492,13 @@ namespace PCGExGraphs
 		{
 			return false;
 		}
+
+		// Commit() stamps ComponentIndex and EdgePointIndex together, and only ever for a component it created.
+		checkf(
+			ComponentEdgeIOs.IsValidIndex(E.ComponentIndex),
+			TEXT("Graph patcher: staged edge %d resolved to component %d of %d (edge point %d)."),
+			EdgeHandle, E.ComponentIndex, ComponentEdgeIOs.Num(), E.EdgePointIndex);
+
 		OutEdgesIO = ComponentEdgeIOs[E.ComponentIndex];
 		OutEdgePointIndex = E.EdgePointIndex;
 		return true;

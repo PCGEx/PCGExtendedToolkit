@@ -39,7 +39,7 @@ bool FNodeEdgeAngleFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 	}
 
 	bLeavesFallback = TypedFilterFactory->Config.LeavesFallback == EPCGExFilterFallback::Pass;
-	bNonBinaryFallback = TypedFilterFactory->Config.LeavesFallback == EPCGExFilterFallback::Pass;
+	bNonBinaryFallback = TypedFilterFactory->Config.NonBinaryFallback == EPCGExFilterFallback::Pass;
 
 	if (TypedFilterFactory->Config.bInvert)
 	{

@@ -63,8 +63,6 @@ bool FPCGExVtxPropertyEdgeMatch::PrepareForCluster(FPCGExContext* InContext, TSh
 
 void FPCGExVtxPropertyEdgeMatch::ProcessNode(PCGExClusters::FNode& Node, const TArray<PCGExClusters::FAdjacencyData>& Adjacency, const PCGExMath::FBestFitPlane& BFP)
 {
-	const FTransform& PointTransform = PrimaryDataFacade->Source->GetIn()->GetTransform(Node.PointIndex);
-
 	double BestDot = TNumericLimits<double>::Lowest();
 	int32 IBest = -1;
 	const double DotThreshold = Config.DotComparisonDetails.GetComparisonThreshold(Node.PointIndex);
@@ -72,7 +70,7 @@ void FPCGExVtxPropertyEdgeMatch::ProcessNode(PCGExClusters::FNode& Node, const T
 	FVector NodeDirection = DirCache->Read(Node.PointIndex).GetSafeNormal() * DirectionMultiplier;
 	if (Config.bTransformDirection)
 	{
-		NodeDirection = PointTransform.TransformVectorNoScale(NodeDirection);
+		NodeDirection = Cluster->VtxTransforms[Node.PointIndex].TransformVectorNoScale(NodeDirection);
 	}
 
 	for (int i = 0; i < Adjacency.Num(); i++)
