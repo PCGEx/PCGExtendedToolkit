@@ -14,6 +14,36 @@
 
 namespace PCGExSampling::Helpers
 {
+	double MapAngle(const EPCGExAngleRange Mode, const double Radians, const bool bFlipWinding)
+	{
+		const double Degrees = FMath::RadiansToDegrees(Radians); // 0 .. 180
+
+		switch (Mode)
+		{
+		default:
+		case EPCGExAngleRange::URadians: // 0 .. PI
+			return Radians;
+		case EPCGExAngleRange::PIRadians: // -PI .. PI
+			return bFlipWinding ? -Radians : Radians;
+		case EPCGExAngleRange::TAURadians: // 0 .. TAU
+			return bFlipWinding ? TWO_PI - Radians : Radians;
+		case EPCGExAngleRange::UDegrees: // 0 .. 180
+			return Degrees;
+		case EPCGExAngleRange::PIDegrees: // -180 .. 180
+			return bFlipWinding ? -Degrees : Degrees;
+		case EPCGExAngleRange::TAUDegrees: // 0 .. 360
+			return bFlipWinding ? 360 - Degrees : Degrees;
+		case EPCGExAngleRange::NormalizedHalf: // 0 .. 180 -> 0 .. 1
+			return Degrees / 180;
+		case EPCGExAngleRange::Normalized: // 0 .. 360 -> 0 .. 1
+			return (bFlipWinding ? 360 - Degrees : Degrees) / 360;
+		case EPCGExAngleRange::InvertedNormalizedHalf: // 0 .. 180 -> 1 .. 0
+			return 1 - (Degrees / 180);
+		case EPCGExAngleRange::InvertedNormalized: // 0 .. 360 -> 1 .. 0
+			return 1 - ((bFlipWinding ? 360 - Degrees : Degrees) / 360);
+		}
+	}
+
 	double GetAngle(const EPCGExAngleRange Mode, const FVector& A, const FVector& B)
 	{
 		double OutAngle = 0;

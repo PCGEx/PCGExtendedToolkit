@@ -17,6 +17,10 @@ enum class EPCGExAngleRange : uint8;
 
 namespace PCGExSampling::Helpers
 {
+	/** Maps an unsigned angle (radians, 0..PI) onto the requested range; bFlipWinding selects the negative/reflex side of winding-aware ranges. */
+	PCGEXBLENDING_API
+	double MapAngle(const EPCGExAngleRange Mode, const double Radians, const bool bFlipWinding);
+
 	PCGEXBLENDING_API
 	double GetAngle(const EPCGExAngleRange Mode, const FVector& A, const FVector& B);
 

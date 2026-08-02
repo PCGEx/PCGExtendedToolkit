@@ -149,6 +149,10 @@ namespace PCGExWriteVtxProperties
 		TPCGValueRange<FVector> OutBoundsMin;
 		TPCGValueRange<FVector> OutBoundsMax;
 
+		// Operations only consume the raw plane; the transform (matrix-to-quat) is worth building
+		// only for the normal writer or OOB mutation.
+		const bool bUseBFPTransform = VtxNormalWriter || Settings->bMutateVtxToOOB;
+
 		if (Settings->bMutateVtxToOOB)
 		{
 			OutTransforms = VtxDataFacade->GetOut()->GetTransformValueRange(false);
@@ -182,20 +186,23 @@ namespace PCGExWriteVtxProperties
 				}, Settings->bUseMinBoxFit)
 				: PCGExMath::FBestFitPlane();
 
-			const FTransform BFPT = BestFitPlane.GetTransform(Settings->AxisOrder);
-
-			if (VtxNormalWriter)
+			if (bUseBFPTransform)
 			{
-				VtxNormalWriter->SetValue(Node.PointIndex, BFPT.GetUnitAxis(NormalAxis));
-			}
+				const FTransform BFPT = BestFitPlane.GetTransform(Settings->AxisOrder);
 
-			if (Settings->bMutateVtxToOOB)
-			{
-				const int32 PtIndex = Node.PointIndex;
-				FVector Extents = BestFitPlane.GetExtents(Settings->AxisOrder);
-				OutTransforms[PtIndex] = BFPT;
-				OutBoundsMin[PtIndex] = Extents * -1;
-				OutBoundsMax[PtIndex] = Extents;
+				if (VtxNormalWriter)
+				{
+					VtxNormalWriter->SetValue(Node.PointIndex, BFPT.GetUnitAxis(NormalAxis));
+				}
+
+				if (Settings->bMutateVtxToOOB)
+				{
+					const int32 PtIndex = Node.PointIndex;
+					FVector Extents = BestFitPlane.GetExtents(Settings->AxisOrder);
+					OutTransforms[PtIndex] = BFPT;
+					OutBoundsMin[PtIndex] = Extents * -1;
+					OutBoundsMax[PtIndex] = Extents;
+				}
 			}
 
 			for (const TSharedPtr<FPCGExVtxPropertyOperation>& Op : Operations)

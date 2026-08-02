@@ -114,8 +114,7 @@ namespace PCGExClusters::Helpers
 			Data.NodeIndex = Lk.Node;
 			Data.NodePointIndex = OtherNode->PointIndex;
 			Data.EdgeIndex = Lk.Edge;
-			Data.Direction = (NodePosition - OtherPosition).GetSafeNormal();
-			Data.Length = FVector::Dist(NodePosition, OtherPosition);
+			(NodePosition - OtherPosition).ToDirectionAndLength(Data.Direction, Data.Length);
 		}
 	}
 
