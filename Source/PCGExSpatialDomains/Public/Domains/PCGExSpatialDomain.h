@@ -155,6 +155,24 @@ public:
 	{
 	}
 
+	/**
+	 * Bulk-append scope. Between these calls a mutable domain may suspend the
+	 * incremental maintenance of its query accelerator, so a known-size batch
+	 * pays one index build instead of one every N appends.
+	 *
+	 * CONTRACT: no query may run inside the scope -- the accelerator is stale
+	 * until EndBulkAppend. Calls do not nest; a second Begin is ignored, and an
+	 * End without a matching Begin is a no-op. Default no-op so static
+	 * subclasses (Polygon2D, SDF) inherit it without opting out.
+	 */
+	virtual void BeginBulkAppend()
+	{
+	}
+
+	virtual void EndBulkAppend()
+	{
+	}
+
 	// ========== Snapshot API ==========
 
 	/**

@@ -249,6 +249,43 @@ void FPCGExSpatialDomain_Broadphase::Reserve(int32 ExpectedCount)
 	BroadphaseAABBs.Reserve(ExpectedCount);
 }
 
+void FPCGExSpatialDomain_Broadphase::BeginBulkAppend()
+{
+	if (BulkSavedRebuildInterval != INDEX_NONE)
+	{
+		return; // already scoped -- keep the original cadence to restore
+	}
+
+	// A rebuild cadence no pending-count can reach makes every Append in the scope
+	// storage-only. Without this, an N-append batch rebuilds the octree N/32 times,
+	// each walking every entry so far -- O(N^2) insertion for a one-shot load.
+	BulkSavedRebuildInterval = BroadphaseAABBs.RebuildInterval;
+	BulkEntryCountAtBegin = Entries.Num();
+	BroadphaseAABBs.RebuildInterval = MAX_int32;
+}
+
+void FPCGExSpatialDomain_Broadphase::EndBulkAppend()
+{
+	if (BulkSavedRebuildInterval == INDEX_NONE)
+	{
+		return; // no matching Begin
+	}
+
+	BroadphaseAABBs.RebuildInterval = BulkSavedRebuildInterval;
+	BulkSavedRebuildInterval = INDEX_NONE;
+
+	// An empty scope leaves the accelerator exactly as it was found -- rebuilding here
+	// would discard a good octree and re-add every entry for nothing.
+	if (Entries.Num() == BulkEntryCountAtBegin)
+	{
+		return;
+	}
+
+	// Everything appended in the scope is still pending (and therefore linear-scanned
+	// by queries) until this lands.
+	BroadphaseAABBs.BuildOctree();
+}
+
 FPCGExSpatialDomain::FSnapshotHandle FPCGExSpatialDomain_Broadphase::BeginSnapshotScope()
 {
 	// High-water mark; rollback flips ValidMask bits past the handle.

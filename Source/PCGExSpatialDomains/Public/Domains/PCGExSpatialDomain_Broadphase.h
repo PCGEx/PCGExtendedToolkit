@@ -104,6 +104,8 @@ public:
 		int32 OwnerIndex,
 		uint32 ChannelMask = 0) override;
 	virtual void Reserve(int32 ExpectedCount) override;
+	virtual void BeginBulkAppend() override;
+	virtual void EndBulkAppend() override;
 	virtual FSnapshotHandle BeginSnapshotScope() override;
 	virtual void RollbackToScope(FSnapshotHandle Handle) override;
 
@@ -160,6 +162,16 @@ private:
 	 * AABB-vs-AABB. Bounds.Index = storage index (into Entries[]).
 	 */
 	PCGExMath::OBB::FDynamicCollection BroadphaseAABBs;
+
+	/**
+	 * BroadphaseAABBs' rebuild cadence saved by BeginBulkAppend, restored by
+	 * EndBulkAppend. INDEX_NONE = not inside a bulk scope (the cadence is a
+	 * positive count, so the sentinel can't collide with a real value).
+	 */
+	int32 BulkSavedRebuildInterval = INDEX_NONE;
+
+	/** Entry count at BeginBulkAppend -- an unchanged count means there is nothing to index. */
+	int32 BulkEntryCountAtBegin = 0;
 
 	/**
 	 * Borrowed-pointer to the channel-interaction matrix consulted before
