@@ -507,10 +507,13 @@ namespace PCGExData
 			FWriteScopeLock WriteScopeLock(InKeysLock);
 			InKeys.Reset();
 		}
-		{
-			FWriteScopeLock WriteScopeLock(OutKeysLock);
-			OutKeys.Reset();
-		}
+		ClearCachedOutKeys();
+	}
+
+	void FPointIO::ClearCachedOutKeys()
+	{
+		FWriteScopeLock WriteScopeLock(OutKeysLock);
+		OutKeys.Reset();
 	}
 
 	FPointIO::~FPointIO()
