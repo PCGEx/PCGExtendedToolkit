@@ -34,7 +34,7 @@ namespace PCGExMath::OBB
 		}
 
 		const FVector Extent = WorldBounds.GetExtent();
-		const float MaxExtent = FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f;
+		const float MaxExtent = FMath::Max(FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f, 1.0f);
 
 		Octree = MakeUnique<PCGExOctree::FItemOctree>(WorldBounds.GetCenter(), MaxExtent);
 
@@ -450,7 +450,7 @@ namespace PCGExMath::OBB
 
 		const FVector Center = WorldBounds.GetCenter();
 		const FVector Extent = WorldBounds.GetExtent();
-		const float MaxExtent = FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f;
+		const float MaxExtent = FMath::Max(FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f, 1.0f);
 
 		Octree = MakeUnique<PCGExOctree::FItemOctree>(Center, MaxExtent);
 
