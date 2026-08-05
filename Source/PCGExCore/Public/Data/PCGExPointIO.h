@@ -356,6 +356,9 @@ namespace PCGExData
 
 		void ClearCachedKeys();
 
+		/** Out-side only: growing or shrinking Out invalidates its key snapshot, but never the In one. */
+		void ClearCachedOutKeys();
+
 		void Disable()
 		{
 			bIsEnabled.store(false, std::memory_order_release);
