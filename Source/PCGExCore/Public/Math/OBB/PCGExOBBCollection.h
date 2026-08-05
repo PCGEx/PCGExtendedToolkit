@@ -65,7 +65,7 @@ namespace PCGExMath::OBB
 
 		// Building
 
-		void Reserve(int32 Count);
+		virtual void Reserve(int32 Count);
 
 		virtual void Add(const FOBB& Box);
 
@@ -314,6 +314,9 @@ namespace PCGExMath::OBB
 		/** Insert a new OBB. Expands world bounds and triggers periodic octree rebuild. Returns entry index. */
 		virtual void Add(const FOBB& Box) override;
 
+		/** Also pre-sizes the validity bits the base has no knowledge of. */
+		virtual void Reserve(int32 Count) override;
+
 		/** Rebuild octree from all valid (non-invalidated) entries. */
 		virtual void BuildOctree() override;
 
@@ -352,7 +355,7 @@ namespace PCGExMath::OBB
 		/** Count valid (non-invalidated) entries. */
 		int32 NumValid() const;
 
-		/** How many inserts between octree rebuilds. */
+		/** How many pending inserts before the octree is brought up to date. */
 		int32 RebuildInterval = 32;
 
 	private:
@@ -361,8 +364,34 @@ namespace PCGExMath::OBB
 		/** Entries [0..OctreeCount-1] are in the octree; [OctreeCount..Num()-1] are pending. */
 		int32 OctreeCount = 0;
 
-		/** Check if pending count warrants a rebuild. */
+		/**
+		 * World box the current octree was built to span. Pending entries that fit inside
+		 * it are inserted incrementally; anything outside needs a re-centered octree.
+		 */
+		FBox OctreeCoverage = FBox(ForceInit);
+
+		/**
+		 * How many items were actually inserted into the current octree. NOT OctreeCount,
+		 * which is an index boundary and counts entries that were skipped as invalid --
+		 * using it as the purge denominator understates staleness.
+		 */
+		int32 OctreeInsertedCount = 0;
+
+		/**
+		 * How many of OctreeInsertedCount have since been masked out by Invalidate. They keep
+		 * costing traversal until a rebuild drops them, so this drives the purge threshold.
+		 */
+		int32 OctreeStaleCount = 0;
+
+		/** Bring the octree up to date -- incrementally when possible, else a full rebuild. */
 		void MaybeRebuildOctree();
+
+		/**
+		 * Insert the pending tail into the existing octree. Fails (mutating nothing) when
+		 * any pending entry falls outside OctreeCoverage, leaving a rebuild as the caller's
+		 * only option.
+		 */
+		bool TryFlushPendingIncremental();
 
 		/** Templated overlap implementation for code reuse. */
 		template <typename FilterFn>

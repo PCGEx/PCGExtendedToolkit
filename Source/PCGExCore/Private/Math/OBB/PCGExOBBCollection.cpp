@@ -34,7 +34,7 @@ namespace PCGExMath::OBB
 		}
 
 		const FVector Extent = WorldBounds.GetExtent();
-		const float MaxExtent = FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f;
+		const float MaxExtent = FMath::Max(FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f, 1.0f);
 
 		Octree = MakeUnique<PCGExOctree::FItemOctree>(WorldBounds.GetCenter(), MaxExtent);
 
@@ -442,14 +442,24 @@ namespace PCGExMath::OBB
 		{
 			Octree.Reset();
 			OctreeCount = 0;
+			OctreeCoverage = FBox(ForceInit);
+			OctreeInsertedCount = 0;
+			OctreeStaleCount = 0;
 			return;
 		}
 
 		const FVector Center = WorldBounds.GetCenter();
 		const FVector Extent = WorldBounds.GetExtent();
-		const float MaxExtent = FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f;
+		const float MaxExtent = FMath::Max(FMath::Max3(Extent.X, Extent.Y, Extent.Z) * 1.5f, 1.0f);
 
 		Octree = MakeUnique<PCGExOctree::FItemOctree>(Center, MaxExtent);
+
+		// The cube the octree actually spans -- incremental inserts test against this.
+		OctreeCoverage = FBox(Center - FVector(MaxExtent), Center + FVector(MaxExtent));
+
+		// A rebuild re-adds only valid entries, so masked-out ones are gone.
+		OctreeInsertedCount = 0;
+		OctreeStaleCount = 0;
 
 		const int32 Count = Bounds.Num();
 		for (int32 i = 0; i < Count; ++i)
@@ -463,9 +473,16 @@ namespace PCGExMath::OBB
 			Octree->AddElement(PCGExOctree::FItem(
 				i,
 				FBoxSphereBounds(B.Origin, FVector(B.Radius), B.Radius)));
+			OctreeInsertedCount++;
 		}
 
 		OctreeCount = Count;
+	}
+
+	void FDynamicCollection::Reserve(int32 Count)
+	{
+		FCollection::Reserve(Count);
+		ValidMask.Reserve(Count);
 	}
 
 	void FDynamicCollection::Reset()
@@ -473,13 +490,28 @@ namespace PCGExMath::OBB
 		FCollection::Reset();
 		ValidMask.Empty();
 		OctreeCount = 0;
+		OctreeCoverage = FBox(ForceInit);
+		OctreeInsertedCount = 0;
+		OctreeStaleCount = 0;
 	}
 
 	void FDynamicCollection::Invalidate(int32 FromIndex)
 	{
 		for (int32 i = FromIndex; i < ValidMask.Num(); ++i)
 		{
+			if (!ValidMask[i])
+			{
+				continue;
+			}
 			ValidMask[i] = false;
+
+			// Was valid and already inserted, so it stays in the octree as a masked-out
+			// item until a rebuild drops it. Entries past OctreeCount are still pending
+			// and get skipped at flush time, so they never inflate the count.
+			if (i < OctreeCount)
+			{
+				OctreeStaleCount++;
+			}
 		}
 	}
 
@@ -496,10 +528,67 @@ namespace PCGExMath::OBB
 		return Count;
 	}
 
+	bool FDynamicCollection::TryFlushPendingIncremental()
+	{
+		if (!Octree || !OctreeCoverage.IsValid)
+		{
+			return false;
+		}
+
+		const int32 Count = Num();
+
+		// Probe before mutating: one entry outside the span means the octree must be
+		// re-centered, and a half-inserted octree would be worse than either outcome.
+		for (int32 i = OctreeCount; i < Count; ++i)
+		{
+			if (!ValidMask[i])
+			{
+				continue;
+			}
+			const FBounds& B = Bounds[i];
+			if (!OctreeCoverage.IsInside(FBox(B.Origin - FVector(B.Radius), B.Origin + FVector(B.Radius))))
+			{
+				return false;
+			}
+		}
+
+		for (int32 i = OctreeCount; i < Count; ++i)
+		{
+			if (!ValidMask[i])
+			{
+				continue;
+			}
+			const FBounds& B = Bounds[i];
+			Octree->AddElement(PCGExOctree::FItem(
+				i,
+				FBoxSphereBounds(B.Origin, FVector(B.Radius), B.Radius)));
+			OctreeInsertedCount++;
+		}
+
+		OctreeCount = Count;
+		return true;
+	}
+
 	void FDynamicCollection::MaybeRebuildOctree()
 	{
 		const int32 PendingCount = Num() - OctreeCount;
-		if (PendingCount >= RebuildInterval)
+		if (PendingCount < RebuildInterval)
+		{
+			return;
+		}
+
+		// Purge once masked-out entries dominate the octree: they cost traversal on every
+		// query and nothing but a rebuild removes them. Checked before the incremental
+		// path, which would otherwise let them accumulate indefinitely under backtracking.
+		if (OctreeStaleCount * 2 > OctreeInsertedCount)
+		{
+			BuildOctree();
+			return;
+		}
+
+		// Inserting the pending tail is O(pending * log n); a rebuild re-adds every entry,
+		// which made a steady append stream cost O(N^2) overall.
+		if (!TryFlushPendingIncremental())
 		{
 			BuildOctree();
 		}
