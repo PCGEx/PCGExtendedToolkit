@@ -298,6 +298,19 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	TObjectPtr<UPCGExAssetCollection> SubCollection;
 
 
+	/**
+	 * Level this entry sources its content from, or null when it has none.
+	 *
+	 * For consumers that read authoring data OUT of the source level rather than out of the entry's
+	 * staged asset -- Valency pulls a level's cage cache this way. An entry whose staged asset merely
+	 * derives from a level (an exported PCGDataAsset) still answers with that level; one referencing
+	 * a finished asset directly answers null.
+	 */
+	virtual FSoftObjectPath GetSourceLevelPath() const
+	{
+		return FSoftObjectPath();
+	}
+	
 	// Subcollection Access
 
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const

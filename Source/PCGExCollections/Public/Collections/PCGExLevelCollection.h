@@ -54,6 +54,11 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelCollectionEntry : public FPCGExAssetColle
 
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level = nullptr;
+	
+	virtual FSoftObjectPath GetSourceLevelPath() const override
+	{
+		return bIsSubCollection ? FSoftObjectPath() : Level.ToSoftObjectPath();
+	}
 
 	// Lifecycle
 	virtual bool Validate(const UPCGExAssetCollection* ParentCollection) override;
