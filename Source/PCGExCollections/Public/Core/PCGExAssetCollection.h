@@ -310,6 +310,17 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	TObjectPtr<UPCGExAssetCollection> SubCollection;
 
 
+	/**
+	 * Level this entry sources its content from, or null when it has none -- for consumers reading
+	 * authoring data OUT of the source level rather than out of the staged asset. An entry whose
+	 * staged asset merely derives from a level still answers with that level.
+	 */
+	virtual FSoftObjectPath GetSourceLevelPath() const
+	{
+		return FSoftObjectPath();
+	}
+
+
 	// Subcollection Access
 
 	virtual const UPCGExAssetCollection* GetSubCollectionPtr() const
