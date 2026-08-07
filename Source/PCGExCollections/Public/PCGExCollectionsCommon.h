@@ -134,4 +134,6 @@ namespace PCGExCollections::Labels
 	const FName MeshesPin = TEXT("Meshes");
 	const FName ActorsPin = TEXT("Actors");
 	const FName LevelsPin = TEXT("Levels");
+	
+	const FName StaticIgnore = TEXT("StaticIgnore");
 }

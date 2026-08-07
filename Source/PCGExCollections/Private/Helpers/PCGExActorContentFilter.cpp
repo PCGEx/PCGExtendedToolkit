@@ -3,6 +3,7 @@
 
 #include "Helpers/PCGExActorContentFilter.h"
 
+#include "PCGExCollectionsCommon.h"
 #include "PCGExCollectionsSettingsCache.h"
 #include "PCGExSocketProvider.h"
 #include "GameFramework/Actor.h"
@@ -25,6 +26,7 @@ TSet<FName> UPCGExActorContentFilter::KnownSystemActorClasses =
 	TEXT("Valency Editor Cache"),
 	TEXT("ValencyEditorCache"),
 	TEXT("BuoyancyManager"),
+	TEXT("PCGExValencyModuleCage"),
 };
 
 bool UPCGExActorContentFilter::IsInfrastructureActor(const AActor* Actor)
@@ -102,6 +104,11 @@ bool UPCGExActorContentFilter::StaticPassesFilter(
 		return false;
 	}
 
+	if (Actor->ActorHasTag(PCGExCollections::Labels::StaticIgnore))
+	{
+		return false;
+	}
+	
 	// Socket providers that strip themselves are excluded from all content scans
 	if (const IPCGExSocketProvider* Provider = Cast<IPCGExSocketProvider>(Actor))
 	{

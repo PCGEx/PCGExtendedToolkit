@@ -86,6 +86,14 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source == EPCGExDataAssetEntrySource::Level && !bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level;
 
+	/** Only in Level mode: a DataAsset-sourced entry references a finished asset with no level behind it. */
+	virtual FSoftObjectPath GetSourceLevelPath() const override
+	{
+		return (!bIsSubCollection && Source == EPCGExDataAssetEntrySource::Level)
+				   ? Level.ToSoftObjectPath()
+				   : FSoftObjectPath();
+	}
+	
 	/** Embedded exported data asset (hidden, serialized, outered to collection in embedded
 	 *  mode; null in external mode -- see ExternalExportedDataAsset). */
 	UPROPERTY(Instanced)
