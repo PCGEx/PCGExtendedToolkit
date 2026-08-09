@@ -6,6 +6,7 @@
 #include "AssetToolsModule.h"
 #include "ContentBrowserMenuContexts.h"
 #include "Editor.h"
+#include "FileHelpers.h"
 #include "PCGExAssetTypesMacros.h"
 #include "PCGExCollectionsEditorMenuUtils.h"
 #include "PCGExCollectionsEditorSettings.h"
@@ -26,10 +27,14 @@
 #include "Details/Collections/PCGExPCGDataAssetCollectionActions.h"
 #include "Details/Collections/PCGExSelectorClosestMatchAxisCustomization.h"
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
+#include "Helpers/PCGExExternalPackageProducer.h"
 #include "Misc/CoreDelegates.h"
+#include "PCGExLog.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Thumbnails/PCGExCollectionThumbnailRenderer.h"
+#include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
+#include "UObject/UObjectHash.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExCollectionsEditorModule"
 
@@ -76,6 +81,10 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// spuriously during the initial scan, and a pre-scan load is already inert (zero fingerprint).
 	OnAssetLoadedHandle = FCoreUObjectDelegates::OnAssetLoaded.AddRaw(this, &FPCGExCollectionsEditorModule::OnAssetLoaded);
 
+	// Coordinated external-package save: when a saved package hosts an
+	// IPCGExExternalPackageProducer, its dirty generated packages save alongside it.
+	OnPackageSavedHandle = UPackage::PackageSavedWithContextEvent.AddRaw(this, &FPCGExCollectionsEditorModule::OnPackageSaved);
+
 	// Defer subscription until the AssetRegistry's initial scan completes -- it fires
 	// OnAssetUpdatedOnDisk for every asset it discovers at startup, when referenced data
 	// isn't yet ready. Acting then would clobber saved staging.
@@ -111,6 +120,7 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 	FCoreUObjectDelegates::OnObjectsReinstanced.Remove(OnObjectsReinstancedHandle);
 	FCoreUObjectDelegates::OnAssetLoaded.Remove(OnAssetLoadedHandle);
 	FCoreDelegates::OnPostEngineInit.Remove(OnPostEngineInitHandle);
+	UPackage::PackageSavedWithContextEvent.Remove(OnPackageSavedHandle);
 
 	if (bThumbnailRendererRegistered && UObjectInitialized())
 	{
@@ -214,8 +224,8 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 		return;
 	}
 
-	// Never during a cook -- WITH_EDITOR is still 1 there, so this guard is load-bearing: the
-	// rebuild would re-harvest levels from an uninitialized world (transforms read as Identity).
+	// Never during a cook -- WITH_EDITOR is still 1 there, so this guard is load-bearing: a cook
+	// must stay read-only w.r.t. source content, and the rebuild dirties the collection package.
 	if (!GEditor || !GEditor->IsTimerManagerValid() || IsRunningCookCommandlet())
 	{
 		return;
@@ -237,6 +247,94 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 				Loaded->EDITOR_RebuildStaleEntries();
 			}
 		});
+}
+
+void FPCGExCollectionsEditorModule::OnPackageSaved(const FString& PackageFilename, UPackage* Package, FObjectPostSaveContext Context)
+{
+	if (!GEditor || !GEditor->IsTimerManagerValid() || !Package)
+	{
+		return;
+	}
+
+	// User-initiated editor saves only. Procedural saves (cook, autosave, resave commandlets)
+	// must never fan out writes to source content -- same prohibition as
+	// UPCGExPCGDataTypeState::OnHostPreSave documents for cook-time SavePackage.
+	if (Context.IsProceduralSave() || IsRunningCookCommandlet() || bIsSavingExternalPackages)
+	{
+		return;
+	}
+
+	// Top-level assets only: producers are assets, and nested subobjects reach the same
+	// implementations through their outer anyway.
+	TSet<UPackage*> ExternalPackages;
+	ForEachObjectWithPackage(Package, [&ExternalPackages](UObject* Object)
+	{
+		if (const IPCGExExternalPackageProducer* Producer = Cast<IPCGExExternalPackageProducer>(Object))
+		{
+			Producer->EDITOR_GetExternalPackages(ExternalPackages);
+		}
+		return true;
+	}, /*bIncludeNestedObjects=*/ false);
+
+	if (ExternalPackages.IsEmpty())
+	{
+		return;
+	}
+
+	for (UPackage* ExternalPackage : ExternalPackages)
+	{
+		PendingExternalPackageSaves.Add(ExternalPackage);
+	}
+
+	// One deferred flush per burst: saving inside the save callback is illegal
+	// (GIsSavingPackage), and a Save-All fires this event once per package.
+	if (!bExternalSaveFlushScheduled)
+	{
+		bExternalSaveFlushScheduled = true;
+		GEditor->GetTimerManager()->SetTimerForNextTick(
+			[this]()
+			{
+				FlushPendingExternalPackageSaves();
+			});
+	}
+}
+
+void FPCGExCollectionsEditorModule::FlushPendingExternalPackageSaves()
+{
+	bExternalSaveFlushScheduled = false;
+
+	TArray<UPackage*> PackagesToSave;
+	for (const TWeakObjectPtr<UPackage>& WeakPackage : PendingExternalPackageSaves)
+	{
+		UPackage* Package = WeakPackage.Get();
+		if (Package && Package->IsDirty())
+		{
+			PackagesToSave.Add(Package);
+		}
+	}
+	PendingExternalPackageSaves.Reset();
+
+	if (PackagesToSave.IsEmpty())
+	{
+		return;
+	}
+
+	// Silent, checkout-aware save -- same policy as OFPA external actors saving with their map.
+	// A Save-All that already wrote these packages leaves them clean, so this no-ops.
+	TGuardValue<bool> ReentryGuard(bIsSavingExternalPackages, true);
+	TArray<UPackage*> FailedPackages;
+	const FEditorFileUtils::EPromptReturnCode Result =
+		FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, /*bCheckDirty=*/ true, /*bPromptToSave=*/ false, &FailedPackages);
+
+	if (Result != FEditorFileUtils::PR_Success)
+	{
+		for (const UPackage* Failed : FailedPackages)
+		{
+			UE_LOG(LogPCGEx, Warning,
+			       TEXT("Generated external package '%s' could not be saved alongside its producing asset -- it stays dirty; save it manually (its on-disk content is out of sync until then)."),
+			       Failed ? *Failed->GetName() : TEXT("<null>"));
+		}
+	}
 }
 
 void FPCGExCollectionsEditorModule::OnObjectsReinstanced(const TMap<UObject*, UObject*>& OldToNewMap)

@@ -632,6 +632,17 @@ void UPCGExOmniCollection::EDITOR_OnPostStagingRebuild()
 	}
 }
 
+void UPCGExOmniCollection::EDITOR_GetExternalPackages(TSet<UPackage*>& OutPackages) const
+{
+	for (const TObjectPtr<UPCGExCollectionTypeState>& State : TypeStates)
+	{
+		if (State)
+		{
+			State->EDITOR_AppendExternalPackages(this, OutPackages);
+		}
+	}
+}
+
 TSet<PCGExAssetCollection::FTypeId> UPCGExOmniCollection::EDITOR_CollectPresentLeafTypeIds() const
 {
 	// Leaf entries only: subcollection rows' content is configured on the referenced

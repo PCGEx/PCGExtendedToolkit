@@ -12,6 +12,7 @@
 #include "PCGExCollectionsSettingsCache.h"
 #include "PCGExLog.h"
 #include "PCGExSocketProvider.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExBoundsEvaluator.h"
 
 // Static-init type registration: TypeId=Level, parent=Base
@@ -67,8 +68,12 @@ void FPCGExLevelCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 	TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(Level.ToSoftObjectPath());
 
 #if WITH_EDITOR
-	if (const UWorld* World = Level.Get())
+	if (UWorld* World = Level.Get())
 	{
+		// Asset-loaded worlds carry identity ComponentToWorld/Bounds until this runs -- the
+		// bounds evaluator and socket providers below read live component state.
+		PCGExHelpers::EnsureWorldTransformsCurrent(World);
+
 		// Globals via the seam; hosts without a block behave like null filter/evaluator.
 		FPCGExLevelCollectionGlobals Globals;
 		if (OwningCollection)
