@@ -317,8 +317,6 @@ void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExAssetCollec
 	if (bHasGlobals && (DescriptorSource == EPCGExEntryVariationMode::Global || Globals.GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule))
 	{
 		PCGExPropertyHelpers::CopyStructProperties(&Globals.GlobalISMDescriptor, &TargetDescriptor, FSoftISMComponentDescriptor::StaticStruct(), FPCGSoftISMComponentDescriptor::StaticStruct());
-
-		TargetDescriptor.StaticMesh = StaticMesh;
 		TargetDescriptor.ComponentTags.Append(ParentCollection->CollectionTags.Array());
 	}
 	else
@@ -326,6 +324,9 @@ void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExAssetCollec
 		PCGExPropertyHelpers::CopyStructProperties(&ISMDescriptor, &TargetDescriptor, FSoftISMComponentDescriptor::StaticStruct(), FPCGSoftISMComponentDescriptor::StaticStruct());
 	}
 
+	// The entry's asset is authoritative: globals don't carry one, and a local descriptor only
+	// mirrors it through SetAssetPath/EDITOR_Sanitize -- which programmatic authoring bypasses.
+	TargetDescriptor.StaticMesh = StaticMesh;
 	TargetDescriptor.ComponentTags.Append(Tags.Array());
 }
 

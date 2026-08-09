@@ -197,9 +197,9 @@ int32 FPCGExSpatialDomain_Broadphase::Append(
 	int32 OwnerIndex,
 	uint32 ChannelMask)
 {
-	// Owner-index >= 0 contract: INDEX_NONE is the skip-nothing sentinel
-	// and would silently make this entry untargetable by skip-by-owner.
-	check(OwnerIndex >= 0);
+	// Owner contract: a real placed index (>= 0) or the explicit ObstacleOwner sentinel.
+	// INDEX_NONE is the skip-nothing sentinel and would mark an accidental unowned entry.
+	check(OwnerIndex >= 0 || OwnerIndex == FPCGExSpatialDomain::ObstacleOwner);
 
 	UScriptStruct* StructType = Shape.GetScriptStruct();
 	if (!StructType)
