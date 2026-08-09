@@ -27,6 +27,7 @@
 #include "Data/PCGPointArrayData.h"
 #include "Data/PCGSpatialData.h"
 #include "Engine/Level.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExCollectionExternalization.h"
 #include "Helpers/PCGExCollectionSortKeys.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
@@ -188,6 +189,10 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 			FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
 			return;
 		}
+
+		// Asset-loaded worlds carry identity ComponentToWorld/Bounds until this runs -- the
+		// exporter, the bounds evaluators and the socket scan below all read live component state.
+		PCGExHelpers::EnsureWorldTransformsCurrent(LoadedWorld);
 
 		// Always recreate ExportedDataAsset fresh. Reusing + resetting TaggedData leaves orphaned
 		// UPCGBasePointData subobjects in the outer chain that still serialize into the .uasset,
@@ -1246,6 +1251,41 @@ void UPCGExPCGDataAssetCollection::InternalizeSubobjectsFor(FPCGExPCGDataAssetMa
 #endif
 }
 
+void UPCGExPCGDataAssetCollection::CollectExternalPackagesFor(
+	const UPCGExAssetCollection* Host,
+	const UPCGExMeshCollection* InSharedMesh,
+	const UPCGExLevelCollection* InSharedLevel,
+	const TArray<const FPCGExPCGDataAssetCollectionEntry*>& InEntries,
+	TSet<UPackage*>& OutPackages)
+{
+#if WITH_EDITOR
+	// Host and transient packages are excluded here so embedded-mode storage (outered to the
+	// host) contributes nothing -- callers never need an external-active gate.
+	UPackage* HostPackage = Host ? Host->GetOutermost() : nullptr;
+
+	auto AddPackageFor = [&OutPackages, HostPackage](const UObject* Obj)
+	{
+		if (!Obj)
+		{
+			return;
+		}
+		UPackage* Pkg = Obj->GetOutermost();
+		if (Pkg && Pkg != GetTransientPackage() && Pkg != HostPackage)
+		{
+			OutPackages.Add(Pkg);
+		}
+	};
+
+	AddPackageFor(InSharedMesh);
+	AddPackageFor(InSharedLevel);
+	for (const FPCGExPCGDataAssetCollectionEntry* Entry : InEntries)
+	{
+		AddPackageFor(Entry->EmbeddedActorCollection);
+		AddPackageFor(Entry->ExportedDataAsset);
+	}
+#endif
+}
+
 void UPCGExPCGDataAssetCollection::SaveExternalPackagesFor(FPCGExPCGDataAssetMachinery& State)
 {
 #if WITH_EDITOR
@@ -1254,40 +1294,14 @@ void UPCGExPCGDataAssetCollection::SaveExternalPackagesFor(FPCGExPCGDataAssetMac
 		return;
 	}
 
-	// TSet dedup is defensive -- Shared* and per-entry packages are distinct by GUID-prefixed
-	// name, but unrelated future callers could legitimately produce duplicates.
+	TArray<const FPCGExPCGDataAssetCollectionEntry*> ConstEntries;
+	ConstEntries.Append(State.Entries);
+
 	TSet<UPackage*> Packages;
-
-	auto AddPackageFor = [&Packages](UObject* Obj)
-	{
-		if (!Obj)
-		{
-			return;
-		}
-		if (UPackage* Pkg = Obj->GetOutermost())
-		{
-			if (Pkg != GetTransientPackage())
-			{
-				Packages.Add(Pkg);
-			}
-		}
-	};
-
-	AddPackageFor(*State.SharedMeshCollection);
-	AddPackageFor(*State.SharedLevelCollection);
-	for (const FPCGExPCGDataAssetCollectionEntry* Entry : State.Entries)
-	{
-		AddPackageFor(Entry->EmbeddedActorCollection);
-		AddPackageFor(Entry->ExportedDataAsset);
-	}
+	CollectExternalPackagesFor(State.Host, *State.SharedMeshCollection, *State.SharedLevelCollection, ConstEntries, Packages);
 
 	for (UPackage* Pkg : Packages)
 	{
-		if (Pkg == State.Host->GetOutermost())
-		{
-			continue;
-		} // never re-enter saving the host itself
-
 		const FString FileName = FPackageName::LongPackageNameToFilename(Pkg->GetName(), FPackageName::GetAssetPackageExtension());
 		FSavePackageArgs SaveArgs;
 		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
@@ -1438,6 +1452,14 @@ void UPCGExPCGDataAssetCollection::EDITOR_OnPostStagingRebuild()
 	if (MachineryState)
 	{
 		MachineryState->EDITOR_OnHostPostStagingRebuild(this);
+	}
+}
+
+void UPCGExPCGDataAssetCollection::EDITOR_GetExternalPackages(TSet<UPackage*>& OutPackages) const
+{
+	if (MachineryState)
+	{
+		MachineryState->EDITOR_AppendExternalPackages(this, OutPackages);
 	}
 }
 
@@ -1703,6 +1725,26 @@ void UPCGExPCGDataTypeState::AppendCookDependencyAssetPaths(const UPCGExAssetCol
 		SharedMeshCollection, SharedLevelCollection,
 		ExternalSharedMeshCollection, ExternalSharedLevelCollection,
 		EntryPtrs, OutPaths);
+}
+
+void UPCGExPCGDataTypeState::EDITOR_AppendExternalPackages(const UPCGExAssetCollection* Host, TSet<UPackage*>& OutPackages) const
+{
+	// Same view as AppendCookDependencyAssetPaths: THIS state's storage + the host's
+	// PCGData-typed leaf payloads.
+	TArray<const FPCGExPCGDataAssetCollectionEntry*> EntryPtrs;
+	if (Host)
+	{
+		Host->ForEachEntry([&EntryPtrs](const FPCGExAssetCollectionEntry* Entry, int32)
+		{
+			if (Entry->IsType(PCGExAssetCollection::TypeIds::PCGDataAsset))
+			{
+				EntryPtrs.Add(static_cast<const FPCGExPCGDataAssetCollectionEntry*>(Entry));
+			}
+		});
+	}
+
+	UPCGExPCGDataAssetCollection::CollectExternalPackagesFor(
+		Host, SharedMeshCollection, SharedLevelCollection, EntryPtrs, OutPackages);
 }
 
 void UPCGExPCGDataTypeState::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)

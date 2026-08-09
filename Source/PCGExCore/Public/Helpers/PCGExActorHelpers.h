@@ -37,4 +37,22 @@ namespace PCGExHelpers
 	 * in its own idiom.
 	 */
 	PCGEXCORE_API bool WithTempActor(UWorld* InWorld, UClass* InClass, TFunctionRef<void(AActor*)> Body);
+
+	/**
+	 * Make every scene component's ComponentToWorld and Bounds trustworthy on a world that may
+	 * have been loaded as an ASSET (never initialized, components never registered).
+	 *
+	 * ComponentToWorld is transient: on an asset-loaded world it sits at identity, so
+	 * GetActorTransform / GetComponentTransform / world-space instance transforms /
+	 * GetComponentsBoundingBox all read garbage until registration recomputes them -- which for
+	 * an asset world never happens. This walks the persistent level's actors and calls
+	 * ConditionalUpdateComponentToWorld on every scene component: the engine recomputes from the
+	 * SERIALIZED RelativeLocation/Rotation/Scale3D, parent-first and socket-aware, and refreshes
+	 * Bounds along the way. No registration, no world init, no render/physics state -- and a
+	 * no-op on worlds that are live in the editor (their update flags are already set).
+	 *
+	 * Call this before harvesting transforms/bounds from any world obtained via a plain asset
+	 * load (e.g. LoadBlocking_AnyThread on a TSoftObjectPtr<UWorld>).
+	 */
+	PCGEXCORE_API void EnsureWorldTransformsCurrent(UWorld* InWorld);
 }
