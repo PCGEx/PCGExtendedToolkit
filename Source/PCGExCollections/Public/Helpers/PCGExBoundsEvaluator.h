@@ -10,6 +10,7 @@
 
 class AActor;
 class UPCGExAssetCollection;
+class UPrimitiveComponent;
 
 /**
  * Abstract base for actor bounds evaluation.
@@ -28,6 +29,13 @@ public:
 	FBox EvaluateActorBounds(AActor* Actor, UPCGExAssetCollection* OwningCollection, int32 EntryIndex) const;
 
 	virtual FBox EvaluateActorBounds_Implementation(AActor* Actor, UPCGExAssetCollection* OwningCollection, int32 EntryIndex) const;
+
+	/** Same qualification as EvaluateActorBounds, but accumulated in the ACTOR's own frame (actor
+	 *  scale excluded -- pair with the actor transform to build an oriented box). Invalid = none. */
+	UFUNCTION(BlueprintNativeEvent, Category = "PCGEx|Bounds")
+	FBox EvaluateActorLocalBounds(AActor* Actor, UPCGExAssetCollection* OwningCollection, int32 EntryIndex) const;
+
+	virtual FBox EvaluateActorLocalBounds_Implementation(AActor* Actor, UPCGExAssetCollection* OwningCollection, int32 EntryIndex) const;
 };
 
 /**
@@ -56,4 +64,9 @@ public:
 	bool bIncludeFromChildActors = false;
 
 	virtual FBox EvaluateActorBounds_Implementation(AActor* Actor, UPCGExAssetCollection* OwningCollection, int32 EntryIndex) const override;
+	virtual FBox EvaluateActorLocalBounds_Implementation(AActor* Actor, UPCGExAssetCollection* OwningCollection, int32 EntryIndex) const override;
+
+protected:
+	/** Single source of component qualification for both the world and actor-frame accumulators. */
+	bool QualifiesForBounds(const UPrimitiveComponent* PrimComp) const;
 };

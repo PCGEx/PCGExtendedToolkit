@@ -41,6 +41,10 @@ public:
 		return false;
 	}
 
+	/** Owner index for deliberately history-less entries (obstacles). Never matches a real placed
+	 *  index or the INDEX_NONE no-skip sentinel, so obstacle entries can never be skip-targeted. */
+	static constexpr int32 ObstacleOwner = -2;
+
 	// ========== Query API ==========
 
 	/**
@@ -130,7 +134,8 @@ public:
 	 * stores; static subclasses like Polygon2D / SDF check(false) loudly so
 	 * generic callers get a clear failure rather than a silent no-op).
 	 *
-	 * OwnerIndex must be >= 0 -- INDEX_NONE is the skip-nothing sentinel.
+	 * OwnerIndex must be >= 0, or ObstacleOwner for deliberately history-less
+	 * entries -- INDEX_NONE is the skip-nothing sentinel and is rejected.
 	 *
 	 * ChannelMask is a bitmask over the project's channel registry (see
 	 * UPCGExSpatialDomainsSettings::SpatialChannels). Bit N set = the entry
