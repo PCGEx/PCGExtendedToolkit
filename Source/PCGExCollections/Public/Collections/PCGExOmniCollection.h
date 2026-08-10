@@ -143,6 +143,9 @@ public:
 	 *  post-rebuild hook into every type state. */
 	virtual void EDITOR_OnPostStagingRebuild() override;
 
+	/** IPCGExExternalPackageProducer via every type state. */
+	virtual void EDITOR_GetExternalPackages(TSet<UPackage*>& OutPackages) const override;
+
 	/**
 	 * Ensure the per-type setup for every present LEAF entry type: a TypeGlobals block
 	 * (seeded from the registered typed collection's CDO through the globals seam, so

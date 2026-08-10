@@ -23,6 +23,10 @@ namespace PCGExSharedCompact
 		UPackage* CurrentPackage = Source->GetOutermost();
 		if (CurrentPackage && CurrentPackage->GetName() == DesiredPackagePath && Source->GetName() == DesiredAssetName)
 		{
+			// Already in place -- taken on every rebuild after the first externalization (names are
+			// GUID-stable). Callers invoke this right after regenerating Source's content, so the
+			// package must dirty here too or in-place refills never reach disk.
+			CurrentPackage->MarkPackageDirty();
 			return FSoftObjectPath(Source);
 		}
 

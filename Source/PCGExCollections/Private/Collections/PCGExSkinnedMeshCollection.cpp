@@ -222,8 +222,6 @@ void FPCGExSkinnedMeshCollectionEntry::InitPCGSoftSkinnedDescriptor(const UPCGEx
 	if (bHasGlobals && (DescriptorSource == EPCGExEntryVariationMode::Global || Globals.GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule))
 	{
 		PCGExPropertyHelpers::CopyStructProperties(&Globals.GlobalDescriptor, &TargetDescriptor, FPCGSoftSkinnedMeshComponentDescriptor::StaticStruct(), FPCGSoftSkinnedMeshComponentDescriptor::StaticStruct());
-
-		TargetDescriptor.SkinnedAsset = SkinnedAsset;
 		TargetDescriptor.ComponentTags.Append(ParentCollection->CollectionTags.Array());
 	}
 	else
@@ -231,6 +229,9 @@ void FPCGExSkinnedMeshCollectionEntry::InitPCGSoftSkinnedDescriptor(const UPCGEx
 		PCGExPropertyHelpers::CopyStructProperties(&Descriptor, &TargetDescriptor, FPCGSoftSkinnedMeshComponentDescriptor::StaticStruct(), FPCGSoftSkinnedMeshComponentDescriptor::StaticStruct());
 	}
 
+	// The entry's asset is authoritative: globals don't carry one, and a local descriptor only
+	// mirrors it through SetAssetPath/EDITOR_Sanitize -- which programmatic authoring bypasses.
+	TargetDescriptor.SkinnedAsset = SkinnedAsset;
 	TargetDescriptor.ComponentTags.Append(Tags.Array());
 }
 

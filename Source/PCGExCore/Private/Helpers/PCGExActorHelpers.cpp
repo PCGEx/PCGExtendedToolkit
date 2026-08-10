@@ -3,6 +3,8 @@
 
 #include "Helpers/PCGExActorHelpers.h"
 
+#include "Components/SceneComponent.h"
+#include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "UObject/UObjectThreadContext.h"
@@ -51,5 +53,32 @@ namespace PCGExHelpers
 		TempActor->Destroy();
 
 		return true;
+	}
+
+	void EnsureWorldTransformsCurrent(UWorld* InWorld)
+	{
+		if (!InWorld || !InWorld->PersistentLevel)
+		{
+			return;
+		}
+
+		TInlineComponentArray<USceneComponent*> SceneComponents;
+		for (AActor* Actor : InWorld->PersistentLevel->Actors)
+		{
+			if (!Actor)
+			{
+				continue;
+			}
+
+			SceneComponents.Reset();
+			Actor->GetComponents<USceneComponent>(SceneComponents);
+			for (USceneComponent* Component : SceneComponents)
+			{
+				// Per-component (not per-root): AttachChildren is rebuilt at registration, so on an
+				// unregistered world a parent's update does not propagate down. Parent-first ordering
+				// is handled inside the engine call regardless of iteration order.
+				Component->ConditionalUpdateComponentToWorld();
+			}
+		}
 	}
 }
