@@ -18,6 +18,7 @@
 #include "Fitting/PCGExFittingOverrides.h"
 #include "Fitting/PCGExFittingVariations.h"
 #include "Helpers/PCGExCookDependencyProvider.h"
+#include "Helpers/PCGExExternalPackageProducer.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 
 #include "PCGExAssetCollection.generated.h"
@@ -706,7 +707,7 @@ namespace PCGExAssetCollection
  * All return FPCGExEntryAccessResult with entry + host collection.
  */
 UCLASS(Abstract, BlueprintType, DisplayName="[PCGEx] Asset Collection")
-class PCGEXCOLLECTIONS_API UPCGExAssetCollection : public UDataAsset, public IPCGExCookDependencyProvider
+class PCGEXCOLLECTIONS_API UPCGExAssetCollection : public UDataAsset, public IPCGExCookDependencyProvider, public IPCGExExternalPackageProducer
 {
 	mutable FRWLock CacheLock;
 
@@ -948,6 +949,14 @@ public:
 	//~ Begin IPCGExCookDependencyProvider
 	virtual void GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 	//~ End IPCGExCookDependencyProvider
+
+	//~ Begin IPCGExExternalPackageProducer
+	/** Base: nothing. Hosts with externalizing machinery (typed PCGData, Omni) dispatch into
+	 *  their type states' EDITOR_AppendExternalPackages. */
+	virtual void EDITOR_GetExternalPackages(TSet<UPackage*>& OutPackages) const override
+	{
+	}
+	//~ End IPCGExExternalPackageProducer
 #endif
 
 #pragma region Lifecycle
