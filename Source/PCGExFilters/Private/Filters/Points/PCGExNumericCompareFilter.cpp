@@ -96,6 +96,13 @@ bool PCGExPointFilter::FNumericCompareFilter::Test(const TSharedPtr<PCGExData::F
 	return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
 }
 
+#if WITH_EDITOR
+TArray<FText> UPCGExNumericCompareFilterProviderSettings::GetNodeTitleAliases() const
+{
+	return {FTEXT("PCGEx | Filter : by Attribute (numeric)")};
+}
+#endif
+
 PCGEX_CREATE_FILTER_FACTORY(NumericCompare)
 
 #if WITH_EDITOR

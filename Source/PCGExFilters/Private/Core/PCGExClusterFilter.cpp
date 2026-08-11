@@ -3,8 +3,6 @@
 
 #include "Core/PCGExClusterFilter.h"
 
-#include "Core/PCGExFilterTypeSets.h"
-
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -98,19 +96,11 @@ namespace PCGExClusterFilter
 	{
 	}
 
-	// Routes filter initialization based on factory type: cluster-aware filters go through
-	// the cluster Init() path with full topology access, while regular point filters use
-	// the standard Init(FFacade). When bUseEdgeAsPrimary is set, non-cluster filters
-	// receive edge data instead of vertex data.
+	// Every filter gets the cluster offered; virtual dispatch decides what to do with it. Cluster-aware
+	// filters consume it, everything else falls back to the point Init() through the base implementation.
 	bool FManager::InitFilter(FPCGExContext* InContext, const TSharedPtr<PCGExPointFilter::IFilter>& Filter)
 	{
-		if (PCGExFactories::SupportsClusterFilters().Contains(Filter->Factory->GetDataTypeId()))
-		{
-			const TSharedPtr<IFilter> ClusterFilter = StaticCastSharedPtr<IFilter>(Filter);
-			return ClusterFilter->Init(InContext, Cluster, PointDataFacade, EdgeDataFacade);
-		}
-
-		return Filter->Init(InContext, bUseEdgeAsPrimary ? EdgeDataFacade : PointDataFacade);
+		return Filter->Init(InContext, Cluster, PointDataFacade, EdgeDataFacade);
 	}
 
 	void FManager::InitCache()

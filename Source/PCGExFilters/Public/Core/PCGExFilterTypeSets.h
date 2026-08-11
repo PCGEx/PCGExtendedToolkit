@@ -72,19 +72,6 @@ namespace PCGExFactories
 		return Set;
 	}
 
-	// Filters that operate on cluster data (vtx, edge, cluster state) plus group & collection.
-	inline const TSet<FPCGDataTypeBaseId>& SupportsClusterFilters()
-	{
-		static const TSet<FPCGDataTypeBaseId> Set = {
-			FPCGExDataTypeInfoFilterEdge::AsId(),
-			FPCGExDataTypeInfoFilterVtx::AsId(),
-			FPCGExDataTypeInfoClusterState::AsId(),
-			FPCGExDataTypeInfoFilter::AsId(),
-			FPCGExDataTypeInfoFilterCollection::AsId()
-		};
-		return Set;
-	}
-
 	// Cluster-only filters: vtx, edge, cluster state.
 	inline const TSet<FPCGDataTypeBaseId>& ClusterOnlyFilters()
 	{
