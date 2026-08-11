@@ -47,6 +47,11 @@ namespace PCGExPointFilter
 		return true;
 	}
 
+	bool IFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
+	{
+		return Init(InContext, bUseEdgeAsPrimary ? InEdgeDataFacade : InPointDataFacade);
+	}
+
 	void IFilter::PostInit()
 	{
 		if (!bCacheResults)
