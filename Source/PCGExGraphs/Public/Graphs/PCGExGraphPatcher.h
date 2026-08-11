@@ -148,6 +148,26 @@ namespace PCGExGraphs
 		int32 AddEdge(const int32 VtxPointIndexA, const int32 VtxPointIndexB);
 
 		/**
+		 * Retarget an INPUT edge's endpoints at Commit: the merged copy of the group's edge at
+		 * EdgeLocalIndex (its row in the group's source edge IO) gets its endpoint ids rewritten to
+		 * (NewStartVtx, NewEndVtx), its point moved to their midpoint, and the touched vtx adjacency
+		 * counts adjusted. Old endpoints must be the edge's current vtx point indices; new vtx may be
+		 * initial or staged, and are unioned into the group's component. Built for edge SPLITS
+		 * (retarget one end to a staged vtx + AddEdge the replacement half) -- it does not
+		 * re-partition a group whose internal connectivity a retarget would sever.
+		 * Returns a handle usable with GetRetargetOutput after ResolveAndMergeAsync.
+		 */
+		int32 RetargetEdge(
+			const int32 GroupIndex, const int32 EdgeLocalIndex,
+			const int32 OldStartVtx, const int32 OldEndVtx,
+			const int32 NewStartVtx, const int32 NewEndVtx);
+
+		/** Resolve a retarget handle to the retargeted edge's output IO + point index (valid after
+		 *  ResolveAndMergeAsync). After Commit, a retarget that was dropped resolves false -- the
+		 *  row's endpoints were never rewritten, so callers must not treat it as retargeted. */
+		bool GetRetargetOutput(const int32 RetargetHandle, TSharedPtr<PCGExData::FPointIO>& OutEdgesIO, int32& OutEdgePointIndex) const;
+
+		/**
 		 * Phase 1: emit one merged edge IO per connected component into OutEdges (async on TaskManager).
 		 * InCarryOver must be valid and should carry the edge attributes, incl. Attr_PCGExEdgeIdx.
 		 */
@@ -198,10 +218,22 @@ namespace PCGExGraphs
 			int32 EdgePointIndex = -1; // filled during Commit
 		};
 
+		struct FEdgeRetarget
+		{
+			int32 GroupIndex = -1;
+			int32 EdgeLocalIndex = -1;
+			int32 OldStart = -1;
+			int32 OldEnd = -1;
+			int32 NewStart = -1;
+			int32 NewEnd = -1;
+			bool bApplied = false; // set by ApplyRetargets; a dropped retarget must not resolve
+		};
+
 		TArray<FEdgeGroup> Groups;
 		TArray<FTransform> NewVtxTransforms;
 		TArray<int32> NewVtxInheritFrom; // parallel to NewVtxTransforms; AddVtx-resolved initial vtx point index, or INDEX_NONE
 		TArray<FPendingEdge> PendingEdges;
+		TArray<FEdgeRetarget> Retargets;
 
 		TSet<FName> InheritExclusions;
 		EPCGPointNativeProperties InheritedProperties = EPCGPointNativeProperties::None;
@@ -236,8 +268,9 @@ namespace PCGExGraphs
 			TMap<int32, uint32> ResolvedEndpointIds;
 
 			// Keyed by entry key, not point index: the attribute holds one value per entry, so points
-			// sharing an entry must accumulate into it rather than overwrite each other.
-			TMap<PCGMetadataEntryKey, uint32> EdgeCountDelta;
+			// sharing an entry must accumulate into it rather than overwrite each other. Signed:
+			// retargets subtract from the endpoint they leave.
+			TMap<PCGMetadataEntryKey, int32> EdgeCountDelta;
 
 			TArray<TMap<uint32, int32>> SourceLookups;
 			TArray<bool> SourceValid;
@@ -250,8 +283,14 @@ namespace PCGExGraphs
 		void RenumberMergedVtx(FCommitScratch& Scratch);
 		void StageComponentEdges(FCommitScratch& Scratch);
 		void RenumberMergedEdges(FCommitScratch& Scratch);
+		void ResolveNamedEndpointIds(FCommitScratch& Scratch);
+		void ApplyRetargets(FCommitScratch& Scratch);
 		void AppendStagedEdges(FCommitScratch& Scratch);
 		void FlushEndpointIds(FCommitScratch& Scratch);
+
+		/** Endpoint id of a vtx: from the staging arrays where covered, else the batched attribute
+		 *  read ResolveNamedEndpointIds performed. */
+		uint32 EndpointIdFor(const FCommitScratch& Scratch, const int32 VtxPointIndex) const;
 
 		/** Copy each staged vtx's inheritable attributes from the source AddVtx resolved for it. */
 		void InheritStagedVtxData(UPCGBasePointData* InVtxData) const;
