@@ -135,6 +135,13 @@ bool PCGExPointFilter::FStringCompareFilter::Test(const TSharedPtr<PCGExData::FP
 	return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
 }
 
+#if WITH_EDITOR
+TArray<FText> UPCGExStringCompareFilterProviderSettings::GetNodeTitleAliases() const
+{
+	return {FTEXT("PCGEx | Filter : by Attribute (string/name)")};
+}
+#endif
+
 PCGEX_CREATE_FILTER_FACTORY(StringCompare)
 
 #if WITH_EDITOR

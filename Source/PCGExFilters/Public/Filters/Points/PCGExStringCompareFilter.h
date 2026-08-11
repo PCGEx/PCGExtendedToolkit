@@ -120,6 +120,8 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(StringCompareFilterFactory, "Filter : Compare (String)", "Creates a filter definition that compares two string attribute values.", PCGEX_FACTORY_NAME_PRIORITY)
+	
+	virtual TArray<FText> GetNodeTitleAliases() const override;
 #endif
 	//~End UPCGSettings
 
