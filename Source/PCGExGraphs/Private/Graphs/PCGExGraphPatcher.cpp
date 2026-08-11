@@ -150,6 +150,47 @@ namespace PCGExGraphs
 		return Handle;
 	}
 
+	int32 FGraphPatcher::RetargetEdge(
+		const int32 GroupIndex, const int32 EdgeLocalIndex,
+		const int32 OldStartVtx, const int32 OldEndVtx,
+		const int32 NewStartVtx, const int32 NewEndVtx)
+	{
+		// Same window as AddVtx/AddEdge: components are decided in ResolveAndMergeAsync.
+		check(!bResolved);
+		const int32 Handle = Retargets.Num();
+		Retargets.Add(FEdgeRetarget{GroupIndex, EdgeLocalIndex, OldStartVtx, OldEndVtx, NewStartVtx, NewEndVtx});
+		return Handle;
+	}
+
+	bool FGraphPatcher::GetRetargetOutput(const int32 RetargetHandle, TSharedPtr<PCGExData::FPointIO>& OutEdgesIO, int32& OutEdgePointIndex) const
+	{
+		if (!bResolved || !Retargets.IsValidIndex(RetargetHandle))
+		{
+			return false;
+		}
+
+		const FEdgeRetarget& R = Retargets[RetargetHandle];
+		if (bCommitted && !R.bApplied)
+		{
+			return false;
+		}
+		if (!Groups.IsValidIndex(R.GroupIndex))
+		{
+			return false;
+		}
+
+		const FEdgeGroup& Group = Groups[R.GroupIndex];
+		if (Group.ComponentIndex == INDEX_NONE || !ComponentEdgeIOs.IsValidIndex(Group.ComponentIndex) ||
+			R.EdgeLocalIndex < 0 || R.EdgeLocalIndex >= Group.OutWriteScope.Count)
+		{
+			return false;
+		}
+
+		OutEdgesIO = ComponentEdgeIOs[Group.ComponentIndex];
+		OutEdgePointIndex = Group.OutWriteScope.Start + R.EdgeLocalIndex;
+		return true;
+	}
+
 	int32 FGraphPatcher::Find(const int32 X)
 	{
 		int32 Root = X;
@@ -247,6 +288,22 @@ namespace PCGExGraphs
 				DSUUnion(EA, EB);
 			}
 		}
+		// A retargeted edge physically links its new endpoints into its group's component.
+		for (const FEdgeRetarget& R : Retargets)
+		{
+			if (!Groups.IsValidIndex(R.GroupIndex))
+			{
+				continue;
+			}
+			for (const int32 V : {R.NewStart, R.NewEnd})
+			{
+				const int32 EV = VtxElement(V);
+				if (EV != INDEX_NONE)
+				{
+					DSUUnion(R.GroupIndex, EV);
+				}
+			}
+		}
 
 		// one output edge collection per connected component (keyed by group-root)
 		TMap<int32, int32> RootToComponent;
@@ -301,80 +358,146 @@ namespace PCGExGraphs
 
 	bool FGraphPatcher::Commit()
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FGraphPatcher::Commit);
+
 		if (bCommitted)
 		{
 			return bCommitOk;
 		}
 		bCommitted = true;
 
-		UPCGBasePointData* VtxData = VtxFacade->GetOut();
-		FPCGMetadataAttribute<int64>* VtxIdxAttr = VtxData->MutableMetadata()->GetMutableTypedAttribute_Unsafe<int64>(PCGExClusters::Labels::Attr_PCGExVtxIdx);
-		if (!VtxIdxAttr)
+		FCommitScratch Scratch;
+		Scratch.VtxIdxAttr = VtxFacade->GetOut()->MutableMetadata()->GetMutableTypedAttribute_Unsafe<int64>(PCGExClusters::Labels::Attr_PCGExVtxIdx);
+		if (!Scratch.VtxIdxAttr)
 		{
 			return false;
 		} // not compiled cluster vtx; nothing is appended, so staged indices never come to exist
 
-		const int32 NumNewVtx = NewVtxTransforms.Num();
+		// Merged mode renumbers every initial vtx; otherwise only staged vtx are ever written, so the
+		// staging arrays start past them.
+		Scratch.VtxBase = VtxSources.IsEmpty() ? NumInitialVtx : 0;
 
-		// ---- Grow + fill staged vtx (shared, once) ----
-		if (NumNewVtx > 0)
+		GrowAndStageVtx(Scratch);
+		RenumberMergedVtx(Scratch);
+		StageComponentEdges(Scratch);
+		RenumberMergedEdges(Scratch);
+		ResolveNamedEndpointIds(Scratch);
+		ApplyRetargets(Scratch); // after RenumberMergedEdges, so a retarget overrides its row's renumbered pair
+		AppendStagedEdges(Scratch);
+		FlushEndpointIds(Scratch);
+
+		// Pair vtx <-> edges LAST: the async merges Append the source edges' old cluster tags onto each
+		// output, which would clobber an earlier pairing. Derive the PairId from the vtx, then mark both.
+		const PCGExDataId PairId = VtxFacade->Source->Tags->Set<int64>(
+			PCGExClusters::Labels::TagStr_PCGExCluster, VtxFacade->Source->GetOutIn()->GetUniqueID());
+		PCGExClusters::Helpers::MarkClusterVtx(VtxFacade->Source, PairId);
+		for (const TSharedPtr<PCGExData::FPointIO>& IO : ComponentEdgeIOs)
 		{
-			// InheritedProperties joins the grow: the self-copy in InheritStagedVtxData captures its read
-			// ranges before allocating, so everything it touches has to be allocated by the time it runs.
-			PCGExPointArrayDataHelpers::SetNumPointsAllocated(
-				VtxData, NumInitialVtx + NumNewVtx,
-				EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::BoundsMin |
-				EPCGPointNativeProperties::BoundsMax | EPCGPointNativeProperties::Seed | InheritedProperties);
+			PCGExClusters::Helpers::MarkClusterEdges(IO, PairId);
+		}
 
-			TPCGValueRange<int64> NewEntries = VtxData->GetMetadataEntryValueRange();
-			TPCGValueRange<FTransform> NewTransforms = VtxData->GetTransformValueRange(false);
-			for (int32 i = 0; i < NumNewVtx; ++i)
+		bCommitOk = true;
+		return true;
+	}
+
+	void FGraphPatcher::GrowAndStageVtx(FCommitScratch& Scratch)
+	{
+		UPCGBasePointData* VtxData = VtxFacade->GetOut();
+
+		const int32 NumNewVtx = NewVtxTransforms.Num();
+		const int32 NumVtx = NumInitialVtx + NumNewVtx;
+
+		Scratch.VtxIds.SetNumZeroed(NumVtx - Scratch.VtxBase);
+		Scratch.VtxIdsDirty.Init(false, NumVtx - Scratch.VtxBase);
+
+		if (NumNewVtx == 0)
+		{
+			return;
+		}
+
+		// InheritedProperties joins the grow: the self-copy in InheritStagedVtxData captures its read
+		// ranges before allocating, so everything it touches has to be allocated by the time it runs.
+		PCGExPointArrayDataHelpers::SetNumPointsAllocated(
+			VtxData, NumVtx,
+			EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::BoundsMin |
+			EPCGPointNativeProperties::BoundsMax | EPCGPointNativeProperties::Seed | InheritedProperties);
+
+		// The grow invalidates the Out key snapshot FPointIO caches; In-side keys are unaffected.
+		VtxFacade->Source->ClearCachedOutKeys();
+
+		TPCGValueRange<int64> NewEntries = VtxData->GetMetadataEntryValueRange();
+		TPCGValueRange<FTransform> NewTransforms = VtxData->GetTransformValueRange(false);
+
+		// Same predicate UPCGMetadata::InitializeOnSet applies per key, hoisted so the whole batch takes
+		// the metadata domain's item lock once instead of once per staged vtx.
+		const int64 ItemKeyOffset = VtxData->Metadata->GetItemKeyCountForParent();
+		TArray<int64*> EntriesNeedingInit;
+		EntriesNeedingInit.Reserve(NumNewVtx);
+
+		for (int32 i = 0; i < NumNewVtx; ++i)
+		{
+			const int32 P = NumInitialVtx + i;
+			NewTransforms[P] = NewVtxTransforms[i];
+
+			int64& Entry = NewEntries[P];
+			if (Entry == PCGInvalidEntryKey || Entry < ItemKeyOffset)
 			{
-				const int32 P = NumInitialVtx + i;
-				VtxData->Metadata->InitializeOnSet(NewEntries[P]);
-				NewTransforms[P] = NewVtxTransforms[i];
-			}
-
-			// Before the endpoint-id stamp below: inheriting brings the source's Attr_PCGExVtxIdx along,
-			// and the id a staged vtx ships with is the patcher's to decide, not the source's.
-			InheritStagedVtxData(VtxData);
-
-			for (int32 i = 0; i < NumNewVtx; ++i)
-			{
-				const int32 P = NumInitialVtx + i;
-				// Endpoint id of a new vtx is its own point index; edge count is set in the bump pass below.
-				VtxIdxAttr->SetValue(NewEntries[P], static_cast<int64>(PCGEx::H64(static_cast<uint32>(P), 0)));
+				EntriesNeedingInit.Add(&Entry);
 			}
 		}
 
-		TConstPCGValueRange<int64> VtxEntries = VtxData->GetConstMetadataEntryValueRange();
-		TConstPCGValueRange<FTransform> VtxTransforms = VtxData->GetConstTransformValueRange();
-
-		// ---- Merged-sources endpoint renumbering ----
-		// Per-source endpoint ids collide once datasets are merged (each source numbered its vtx from 0).
-		// Renumber every initial vtx to H64(mergedPointIndex, adjacency) - guaranteeing globally-unique
-		// ids - then rewrite each merged edge group's Attr_PCGExEdgeIdx to match. Old endpoint ids are
-		// read from the SOURCE vtx/edge data (authoritative), never from the merged output whose copy the
-		// edge carry-over may have stripped. Runs before anything below reads VtxIdxAttr.
-		if (!VtxSources.IsEmpty())
+		if (!EntriesNeedingInit.IsEmpty())
 		{
-			const int32 NumVtxSources = VtxSources.Num();
+			VtxData->Metadata->AddEntriesInPlace(EntriesNeedingInit);
+		}
 
-			// Per-source old endpoint id -> local index (from the source vtx's own endpoint attribute).
-			TArray<TMap<uint32, int32>> SourceLookups;
-			SourceLookups.SetNum(NumVtxSources);
-			TArray<bool> SourceValid;
-			SourceValid.Init(true, NumVtxSources);
+		// Inheriting copies the source's Attr_PCGExVtxIdx onto the staged vtx; the flush overwrites it,
+		// because the id a staged vtx ships with is the patcher's to decide, not the source's.
+		InheritStagedVtxData(VtxData);
 
-			for (int32 s = 0; s < NumVtxSources; ++s)
+		for (int32 i = 0; i < NumNewVtx; ++i)
+		{
+			const int32 P = NumInitialVtx + i;
+			// Endpoint id of a new vtx is its own point index; edge counts land in EdgeCountDelta.
+			Scratch.VtxIds[P - Scratch.VtxBase] = static_cast<int64>(PCGEx::H64(static_cast<uint32>(P), 0));
+			Scratch.VtxIdsDirty[P - Scratch.VtxBase] = true;
+		}
+	}
+
+	void FGraphPatcher::RenumberMergedVtx(FCommitScratch& Scratch)
+	{
+		const int32 NumVtxSources = VtxSources.Num();
+		if (NumVtxSources == 0)
+		{
+			return;
+		}
+
+		TRACE_CPUPROFILER_EVENT_SCOPE(FGraphPatcher::Commit::RenumberVtx);
+
+		// Per-source endpoint ids collide once datasets are merged (each source numbered its vtx from 0).
+		// Renumber every initial vtx to H64(mergedPointIndex, adjacency), which is globally unique. Old
+		// ids are read from the SOURCE vtx data (authoritative), never from the merged output whose copy
+		// the carry-over may have stripped.
+		Scratch.SourceLookups.SetNum(NumVtxSources);
+		Scratch.SourceValid.Init(true, NumVtxSources);
+
+		// FPointIO::GetInKeys builds lazily under a write lock; warm every source up front or all but
+		// the first of the lookups below spin on it.
+		for (const FVtxSource& Source : VtxSources)
+		{
+			(void)Source.VtxIO->GetInKeys();
+		}
+
+		PCGExMT::ParallelOrSequential(
+			NumVtxSources,
+			[&](const int32 s)
 			{
-				const FVtxSource& Source = VtxSources[s];
-				const int32 Offset = Source.Offset;
-				const int32 Count = Source.VtxIO->GetNum();
+				const int32 Offset = VtxSources[s].Offset;
+				const int32 Count = VtxSources[s].VtxIO->GetNum();
 
 				TArray<int32> Adjacency;
-				const bool bLookupOk = PCGExGraphs::Helpers::BuildEndpointsLookup(Source.VtxIO, SourceLookups[s], Adjacency);
-				SourceValid[s] = bLookupOk;
+				const bool bLookupOk = PCGExGraphs::Helpers::BuildEndpointsLookup(VtxSources[s].VtxIO, Scratch.SourceLookups[s], Adjacency);
+				Scratch.SourceValid[s] = bLookupOk;
 
 				// Always assign each merged vtx an id equal to its point index (unique across the whole
 				// merged set) so a single source's read failure can never make ids collide across sources.
@@ -382,38 +505,175 @@ namespace PCGExGraphs
 				{
 					const int32 P = Offset + Local;
 					const uint32 Adj = (bLookupOk && Adjacency.IsValidIndex(Local)) ? static_cast<uint32>(Adjacency[Local]) : 0;
-					VtxIdxAttr->SetValue(VtxEntries[P], static_cast<int64>(PCGEx::H64(static_cast<uint32>(P), Adj)));
+					Scratch.VtxIds[P] = static_cast<int64>(PCGEx::H64(static_cast<uint32>(P), Adj));
+					Scratch.VtxIdsDirty[P] = true;
+				}
+			}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
+	}
+
+	void FGraphPatcher::StageComponentEdges(FCommitScratch& Scratch)
+	{
+		const int32 NumComponents = ComponentEdgeIOs.Num();
+		const int32 NumVtx = NumInitialVtx + NewVtxTransforms.Num();
+
+		Scratch.ComponentPendingEdges.SetNum(NumComponents);
+
+		// Endpoints are range-checked once, here, so every later index into the vtx staging arrays is
+		// known good; AddEdge cannot do it because staged vtx may still be added after it runs.
+		bool bDroppedEdges = false;
+		for (int32 h = 0; h < PendingEdges.Num(); ++h)
+		{
+			const FPendingEdge& E = PendingEdges[h];
+			if (!Scratch.ComponentPendingEdges.IsValidIndex(E.ComponentIndex))
+			{
+				continue;
+			}
+
+			if (E.A < 0 || E.A >= NumVtx || E.B < 0 || E.B >= NumVtx)
+			{
+				bDroppedEdges = true;
+				continue;
+			}
+
+			Scratch.ComponentPendingEdges[E.ComponentIndex].Add(h);
+		}
+
+		UE_CLOG(bDroppedEdges, LogPCGEx, Warning, TEXT("Graph patcher: staged edges naming a vtx outside the shared vtx were dropped."));
+
+		// Which components the merged pass will rewrite; only components some pass actually writes get
+		// their endpoint attribute created.
+		TArray<bool> HasMergedWrite;
+		HasMergedWrite.Init(false, NumComponents);
+		if (!VtxSources.IsEmpty())
+		{
+			for (const FEdgeGroup& Group : Groups)
+			{
+				if (Group.VtxSourceIndex != INDEX_NONE && Group.OutWriteScope.Count > 0 && HasMergedWrite.IsValidIndex(Group.ComponentIndex))
+				{
+					HasMergedWrite[Group.ComponentIndex] = true;
+				}
+			}
+		}
+
+		// Retargets write below FirstNewEdge, so their component's staging arrays must cover from 0
+		// even without a merged pass (untouched rows stay non-dirty and are never flushed).
+		TArray<bool> HasRetarget;
+		HasRetarget.Init(false, NumComponents);
+		for (const FEdgeRetarget& R : Retargets)
+		{
+			if (Groups.IsValidIndex(R.GroupIndex) && HasRetarget.IsValidIndex(Groups[R.GroupIndex].ComponentIndex))
+			{
+				HasRetarget[Groups[R.GroupIndex].ComponentIndex] = true;
+			}
+		}
+
+		Scratch.Components.SetNum(NumComponents);
+
+		for (int32 c = 0; c < NumComponents; ++c)
+		{
+			const int32 NumNewEdges = Scratch.ComponentPendingEdges[c].Num();
+			if (NumNewEdges == 0 && !HasMergedWrite[c] && !HasRetarget[c])
+			{
+				continue;
+			}
+
+			FComponentEdges& Comp = Scratch.Components[c];
+			Comp.Data = ComponentEdgeFacades[c]->GetOut();
+			Comp.IdxAttr = Comp.Data->MutableMetadata()->FindOrCreateAttribute<int64>(PCGExClusters::Labels::Attr_PCGExEdgeIdx);
+			if (!Comp.IdxAttr)
+			{
+				Comp.Data = nullptr;
+				continue;
+			}
+
+			Comp.FirstNewEdge = Comp.Data->GetNumPoints();
+
+			if (NumNewEdges > 0)
+			{
+				Comp.Data->SetNumPoints(Comp.FirstNewEdge + NumNewEdges);
+				Comp.Data->AllocateProperties(EPCGPointNativeProperties::Transform);
+				ComponentEdgeFacades[c]->Source->ClearCachedOutKeys();
+
+				TPCGValueRange<int64> EdgeEntries = Comp.Data->GetMetadataEntryValueRange();
+				const int64 ItemKeyOffset = Comp.Data->Metadata->GetItemKeyCountForParent();
+
+				TArray<int64*> EntriesNeedingInit;
+				EntriesNeedingInit.Reserve(NumNewEdges);
+
+				for (int32 i = 0; i < NumNewEdges; ++i)
+				{
+					int64& Entry = EdgeEntries[Comp.FirstNewEdge + i];
+					if (Entry == PCGInvalidEntryKey || Entry < ItemKeyOffset)
+					{
+						EntriesNeedingInit.Add(&Entry);
+					}
+				}
+
+				if (!EntriesNeedingInit.IsEmpty())
+				{
+					Comp.Data->Metadata->AddEntriesInPlace(EntriesNeedingInit);
 				}
 			}
 
-			// An endpoint that cannot be resolved gets this sentinel id - no merged vtx owns it, so the
-			// edge fails visibly downstream (Sanitize Cluster) instead of silently aliasing a real vtx.
-			constexpr uint32 InvalidEndpoint = TNumericLimits<uint32>::Max();
-			bool bUnresolvedEndpoints = false;
+			// The merged pass (and any retarget) rewrites pre-existing edges; without either, only the
+			// appended tail is written, so the staging arrays need cover nothing below it.
+			Comp.Base = (HasMergedWrite[c] || HasRetarget[c]) ? 0 : Comp.FirstNewEdge;
 
-			for (const FEdgeGroup& Group : Groups)
+			const int32 NumStaged = Comp.Data->GetNumPoints() - Comp.Base;
+			Comp.Ids.SetNumZeroed(NumStaged);
+			Comp.Dirty.Init(false, NumStaged);
+		}
+	}
+
+	void FGraphPatcher::RenumberMergedEdges(FCommitScratch& Scratch)
+	{
+		if (VtxSources.IsEmpty())
+		{
+			return;
+		}
+
+		TRACE_CPUPROFILER_EVENT_SCOPE(FGraphPatcher::Commit::RenumberEdges);
+
+		// An endpoint that cannot be resolved gets this sentinel id - no merged vtx owns it, so the
+		// edge fails visibly downstream (Sanitize Cluster) instead of silently aliasing a real vtx.
+		constexpr uint32 InvalidEndpoint = TNumericLimits<uint32>::Max();
+
+		TArray<bool> GroupUnresolved;
+		GroupUnresolved.Init(false, Groups.Num());
+
+		for (const FEdgeGroup& Group : Groups)
+		{
+			if (Group.EdgesIO) { (void)Group.EdgesIO->GetInKeys(); }
+		}
+
+		// Parallel across groups: the merger hands every group a disjoint write scope, so two groups
+		// sharing a component still touch disjoint elements of its staging arrays.
+		PCGExMT::ParallelOrSequential(
+			Groups.Num(),
+			[&](const int32 g)
 			{
-				if (Group.VtxSourceIndex == INDEX_NONE || Group.ComponentIndex == INDEX_NONE || Group.OutWriteScope.Count <= 0)
+				const FEdgeGroup& Group = Groups[g];
+				if (!Group.EdgesIO || Group.VtxSourceIndex == INDEX_NONE || Group.ComponentIndex == INDEX_NONE || Group.OutWriteScope.Count <= 0)
 				{
-					continue;
+					return;
 				}
 
-				UPCGBasePointData* GroupEdgeData = ComponentEdgeFacades[Group.ComponentIndex]->GetOut();
-				FPCGMetadataAttribute<int64>* GroupEdgeIdxAttr = GroupEdgeData->MutableMetadata()->FindOrCreateAttribute<int64>(PCGExClusters::Labels::Attr_PCGExEdgeIdx);
-				if (!GroupEdgeIdxAttr)
+				FComponentEdges& Comp = Scratch.Components[Group.ComponentIndex];
+				if (!Comp.IdxAttr)
 				{
-					continue;
+					return;
 				}
 
-				const TConstPCGValueRange<int64> GroupEdgeEntries = GroupEdgeData->GetConstMetadataEntryValueRange();
-				const TMap<uint32, int32>& Lookup = SourceLookups[Group.VtxSourceIndex];
+				const TMap<uint32, int32>& Lookup = Scratch.SourceLookups[Group.VtxSourceIndex];
 				const int32 Offset = VtxSources[Group.VtxSourceIndex].Offset;
 
 				// Read the old (pre-merge) endpoints straight from the source edge IO - the merged output's
 				// own copy may have been stripped, which would decode to a bogus (0,0) self-pair.
 				const TUniquePtr<PCGExData::TArrayBuffer<int64>> SrcEdgeIds = MakeUnique<PCGExData::TArrayBuffer<int64>>(Group.EdgesIO.ToSharedRef(), PCGExClusters::Labels::Attr_PCGExEdgeIdx);
-				const bool bEdgeReadOk = SourceValid[Group.VtxSourceIndex] && SrcEdgeIds->InitForRead();
+				const bool bEdgeReadOk = Scratch.SourceValid[Group.VtxSourceIndex] && SrcEdgeIds->InitForRead();
 				const TArray<int64>* OldEdgeValues = bEdgeReadOk ? SrcEdgeIds->GetInValues().Get() : nullptr;
+
+				bool bUnresolved = false;
 
 				for (int32 i = 0; i < Group.OutWriteScope.Count; ++i)
 				{
@@ -432,97 +692,264 @@ namespace PCGExGraphs
 						if (const int32* LB = Lookup.Find(OldB)) { NewB = static_cast<uint32>(Offset + *LB); }
 					}
 
-					if (NewA == InvalidEndpoint || NewB == InvalidEndpoint) { bUnresolvedEndpoints = true; }
+					if (NewA == InvalidEndpoint || NewB == InvalidEndpoint) { bUnresolved = true; }
 
-					GroupEdgeIdxAttr->SetValue(GroupEdgeEntries[P], static_cast<int64>(PCGEx::H64(NewA, NewB)));
+					Comp.Ids[P - Comp.Base] = static_cast<int64>(PCGEx::H64(NewA, NewB));
+					Comp.Dirty[P - Comp.Base] = true;
 				}
-			}
 
-			UE_CLOG(bUnresolvedEndpoints, LogPCGEx, Warning, TEXT("Graph patcher: some merged edge endpoints could not be resolved and were marked invalid; input vtx/edges pairing is corrupt (run Sanitize Cluster)."));
-		}
+				GroupUnresolved[g] = bUnresolved;
+			}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
-		// Existing vtx keep their stored endpoint id; staged vtx use their own point index.
-		auto VtxEndpointId = [&](const int32 V) -> uint32
+		UE_CLOG(GroupUnresolved.Contains(true), LogPCGEx, Warning, TEXT("Graph patcher: some merged edge endpoints could not be resolved and were marked invalid; input vtx/edges pairing is corrupt (run Sanitize Cluster)."));
+	}
+
+	void FGraphPatcher::ResolveNamedEndpointIds(FCommitScratch& Scratch)
+	{
+		// Endpoint ids of vtx the staging arrays don't cover come from the attribute in one batched
+		// read -- staged edges AND retargets both name such vtx, hence the shared pass.
+		const int32 NumVtx = NumInitialVtx + NewVtxTransforms.Num();
+		TArray<int32> ToRead;
+
+		auto Gather = [&](const int32 V)
 		{
-			if (V >= NumInitialVtx)
+			if (V >= 0 && V < Scratch.VtxBase && !Scratch.ResolvedEndpointIds.Contains(V))
 			{
-				return static_cast<uint32>(V);
+				Scratch.ResolvedEndpointIds.Add(V, 0);
+				ToRead.Add(V);
 			}
-			return PCGEx::H64A(static_cast<uint64>(VtxIdxAttr->GetValueFromItemKey(VtxEntries[V])));
 		};
 
-		// ---- Append + patch staged edges, per component ----
-		TMap<int32, int32> EdgeCountDelta;
-
-		const int32 NumComponents = ComponentEdgeIOs.Num();
-		for (int32 c = 0; c < NumComponents; ++c)
+		for (const TArray<int32>& Handles : Scratch.ComponentPendingEdges)
 		{
-			int32 NumNewEdges = 0;
-			for (const FPendingEdge& E : PendingEdges)
+			for (const int32 Handle : Handles)
 			{
-				if (E.ComponentIndex == c)
-				{
-					++NumNewEdges;
-				}
+				Gather(PendingEdges[Handle].A);
+				Gather(PendingEdges[Handle].B);
 			}
-			if (NumNewEdges == 0)
+		}
+		for (const FEdgeRetarget& R : Retargets)
+		{
+			if (R.NewStart < NumVtx) { Gather(R.NewStart); }
+			if (R.NewEnd < NumVtx) { Gather(R.NewEnd); }
+		}
+
+		if (ToRead.IsEmpty())
+		{
+			return;
+		}
+
+		const TConstPCGValueRange<int64> VtxEntries = VtxFacade->GetOut()->GetConstMetadataEntryValueRange();
+
+		TArray<PCGMetadataEntryKey> Keys;
+		Keys.SetNumUninitialized(ToRead.Num());
+		for (int32 i = 0; i < ToRead.Num(); ++i) { Keys[i] = VtxEntries[ToRead[i]]; }
+
+		TArray<int64> Values;
+		Values.SetNumZeroed(ToRead.Num());
+		Scratch.VtxIdxAttr->GetValuesFromItemKeys(TConstArrayView<PCGMetadataEntryKey>(Keys), TArrayView<int64>(Values));
+
+		for (int32 i = 0; i < ToRead.Num(); ++i)
+		{
+			Scratch.ResolvedEndpointIds[ToRead[i]] = PCGEx::H64A(static_cast<uint64>(Values[i]));
+		}
+	}
+
+	uint32 FGraphPatcher::EndpointIdFor(const FCommitScratch& Scratch, const int32 VtxPointIndex) const
+	{
+		return VtxPointIndex >= Scratch.VtxBase
+			       ? PCGEx::H64A(static_cast<uint64>(Scratch.VtxIds[VtxPointIndex - Scratch.VtxBase]))
+			       : Scratch.ResolvedEndpointIds.FindRef(VtxPointIndex);
+	}
+
+	void FGraphPatcher::ApplyRetargets(FCommitScratch& Scratch)
+	{
+		if (Retargets.IsEmpty())
+		{
+			return;
+		}
+
+		UPCGBasePointData* VtxData = VtxFacade->GetOut();
+		const TConstPCGValueRange<int64> VtxEntries = VtxData->GetConstMetadataEntryValueRange();
+		const TConstPCGValueRange<FTransform> VtxTransforms = VtxData->GetConstTransformValueRange();
+		const int32 NumVtx = NumInitialVtx + NewVtxTransforms.Num();
+
+		TMap<int32, TPCGValueRange<FTransform>> ComponentTransforms;
+		bool bDropped = false;
+
+		for (FEdgeRetarget& R : Retargets)
+		{
+			if (!Groups.IsValidIndex(R.GroupIndex) ||
+				R.NewStart < 0 || R.NewStart >= NumVtx || R.NewEnd < 0 || R.NewEnd >= NumVtx)
+			{
+				bDropped = true;
+				continue;
+			}
+
+			const FEdgeGroup& Group = Groups[R.GroupIndex];
+			if (Group.ComponentIndex == INDEX_NONE ||
+				R.EdgeLocalIndex < 0 || R.EdgeLocalIndex >= Group.OutWriteScope.Count)
+			{
+				bDropped = true;
+				continue;
+			}
+
+			FComponentEdges& Comp = Scratch.Components[Group.ComponentIndex];
+			if (!Comp.IdxAttr)
+			{
+				bDropped = true;
+				continue;
+			}
+
+			const int32 EdgeP = Group.OutWriteScope.Start + R.EdgeLocalIndex;
+			Comp.Ids[EdgeP - Comp.Base] = static_cast<int64>(PCGEx::H64(EndpointIdFor(Scratch, R.NewStart), EndpointIdFor(Scratch, R.NewEnd)));
+			Comp.Dirty[EdgeP - Comp.Base] = true;
+
+			// Keep the edge point where downstream expects it: midway between its (new) endpoints.
+			TPCGValueRange<FTransform>* EdgeTransforms = ComponentTransforms.Find(Group.ComponentIndex);
+			if (!EdgeTransforms)
+			{
+				Comp.Data->AllocateProperties(EPCGPointNativeProperties::Transform);
+				EdgeTransforms = &ComponentTransforms.Add(Group.ComponentIndex, Comp.Data->GetTransformValueRange(false));
+			}
+			(*EdgeTransforms)[EdgeP].SetLocation(FMath::Lerp(VtxTransforms[R.NewStart].GetLocation(), VtxTransforms[R.NewEnd].GetLocation(), 0.5));
+
+			R.bApplied = true;
+
+			// Adjacency deltas per side; a side whose vtx is unchanged contributes nothing.
+			if (R.OldStart != R.NewStart)
+			{
+				if (R.OldStart >= 0 && R.OldStart < NumVtx) { Scratch.EdgeCountDelta.FindOrAdd(VtxEntries[R.OldStart])--; }
+				Scratch.EdgeCountDelta.FindOrAdd(VtxEntries[R.NewStart])++;
+			}
+			if (R.OldEnd != R.NewEnd)
+			{
+				if (R.OldEnd >= 0 && R.OldEnd < NumVtx) { Scratch.EdgeCountDelta.FindOrAdd(VtxEntries[R.OldEnd])--; }
+				Scratch.EdgeCountDelta.FindOrAdd(VtxEntries[R.NewEnd])++;
+			}
+		}
+
+		UE_CLOG(bDropped, LogPCGEx, Warning, TEXT("Graph patcher: retargets naming an unknown group, edge, or vtx were dropped."));
+	}
+
+	void FGraphPatcher::AppendStagedEdges(FCommitScratch& Scratch)
+	{
+		if (PendingEdges.IsEmpty())
+		{
+			return;
+		}
+
+		UPCGBasePointData* VtxData = VtxFacade->GetOut();
+		const TConstPCGValueRange<int64> VtxEntries = VtxData->GetConstMetadataEntryValueRange();
+		const TConstPCGValueRange<FTransform> VtxTransforms = VtxData->GetConstTransformValueRange();
+
+		for (int32 c = 0; c < Scratch.Components.Num(); ++c)
+		{
+			FComponentEdges& Comp = Scratch.Components[c];
+			const TArray<int32>& Handles = Scratch.ComponentPendingEdges[c];
+			if (!Comp.IdxAttr || Handles.IsEmpty())
 			{
 				continue;
 			}
 
-			UPCGBasePointData* EdgeData = ComponentEdgeFacades[c]->GetOut();
-			FPCGMetadataAttribute<int64>* EdgeIdxAttr = EdgeData->MutableMetadata()->GetMutableTypedAttribute_Unsafe<int64>(PCGExClusters::Labels::Attr_PCGExEdgeIdx);
-			if (!EdgeIdxAttr)
+			TPCGValueRange<FTransform> EdgeTransforms = Comp.Data->GetTransformValueRange(false);
+
+			for (int32 i = 0; i < Handles.Num(); ++i)
 			{
-				continue;
-			}
-
-			const int32 FirstNewEdge = EdgeData->GetNumPoints();
-			EdgeData->SetNumPoints(FirstNewEdge + NumNewEdges);
-			EdgeData->AllocateProperties(EPCGPointNativeProperties::Transform);
-
-			TPCGValueRange<int64> EdgeEntries = EdgeData->GetMetadataEntryValueRange();
-			TPCGValueRange<FTransform> EdgeTransforms = EdgeData->GetTransformValueRange(false);
-
-			int32 LocalEdge = 0;
-			for (FPendingEdge& E : PendingEdges)
-			{
-				if (E.ComponentIndex != c)
-				{
-					continue;
-				}
-				const int32 EdgeP = FirstNewEdge + LocalEdge++;
+				FPendingEdge& E = PendingEdges[Handles[i]];
+				const int32 EdgeP = Comp.FirstNewEdge + i;
 				E.EdgePointIndex = EdgeP;
 
-				EdgeData->Metadata->InitializeOnSet(EdgeEntries[EdgeP]);
-				EdgeIdxAttr->SetValue(EdgeEntries[EdgeP], static_cast<int64>(PCGEx::H64(VtxEndpointId(E.A), VtxEndpointId(E.B))));
+				Comp.Ids[EdgeP - Comp.Base] = static_cast<int64>(PCGEx::H64(EndpointIdFor(Scratch, E.A), EndpointIdFor(Scratch, E.B)));
+				Comp.Dirty[EdgeP - Comp.Base] = true;
+
 				EdgeTransforms[EdgeP].SetLocation(FMath::Lerp(VtxTransforms[E.A].GetLocation(), VtxTransforms[E.B].GetLocation(), 0.5));
 
-				EdgeCountDelta.FindOrAdd(E.A)++;
-				EdgeCountDelta.FindOrAdd(E.B)++;
+				Scratch.EdgeCountDelta.FindOrAdd(VtxEntries[E.A])++;
+				Scratch.EdgeCountDelta.FindOrAdd(VtxEntries[E.B])++;
 			}
 		}
+	}
 
-		// ---- Bump per-vtx edge counts (independent keys; map iteration order is irrelevant) ----
-		for (const TPair<int32, int32>& It : EdgeCountDelta)
+	void FGraphPatcher::FlushEndpointIds(FCommitScratch& Scratch)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FGraphPatcher::Commit::FlushIds);
+
+		auto Flush = [](FPCGMetadataAttribute<int64>* Attr, const TConstPCGValueRange<int64>& Entries, const int32 Base, const TArray<int64>& Ids, const TArray<bool>& Dirty)
 		{
-			const int64 Key = VtxEntries[It.Key];
-			const uint64 Current = static_cast<uint64>(VtxIdxAttr->GetValueFromItemKey(Key));
-			VtxIdxAttr->SetValue(Key, static_cast<int64>(PCGEx::H64(PCGEx::H64A(Current), PCGEx::H64B(Current) + static_cast<uint32>(It.Value))));
+			int32 NumDirty = 0;
+			for (const bool bDirty : Dirty) { NumDirty += bDirty ? 1 : 0; }
+
+			if (NumDirty == 0)
+			{
+				return;
+			}
+
+			// No whole-range shortcut: FPCGMetadataAttribute::SetValues has no TConstPCGValueRange
+			// overload before 5.8, so the entry keys always get compacted into a contiguous copy.
+			TArray<PCGMetadataEntryKey> Keys;
+			TArray<int64> Values;
+			Keys.Reserve(NumDirty);
+			Values.Reserve(NumDirty);
+
+			for (int32 i = 0; i < Ids.Num(); ++i)
+			{
+				if (!Dirty[i]) { continue; }
+				Keys.Add(Entries[Base + i]);
+				Values.Add(Ids[i]);
+			}
+
+			Attr->SetValues(TConstArrayView<PCGMetadataEntryKey>(Keys), TConstArrayView<int64>(Values));
+		};
+
+		Flush(Scratch.VtxIdxAttr, VtxFacade->GetOut()->GetConstMetadataEntryValueRange(), Scratch.VtxBase, Scratch.VtxIds, Scratch.VtxIdsDirty);
+
+		for (const FComponentEdges& Comp : Scratch.Components)
+		{
+			if (!Comp.IdxAttr) { continue; }
+			Flush(Comp.IdxAttr, Comp.Data->GetConstMetadataEntryValueRange(), Comp.Base, Comp.Ids, Comp.Dirty);
 		}
 
-		// Pair vtx <-> edges LAST: the async merges Append the source edges' old cluster tags onto each
-		// output, which would clobber an earlier pairing. Derive the PairId from the vtx, then mark both.
-		const PCGExDataId PairId = VtxFacade->Source->Tags->Set<int64>(
-			PCGExClusters::Labels::TagStr_PCGExCluster, VtxFacade->Source->GetOutIn()->GetUniqueID());
-		PCGExClusters::Helpers::MarkClusterVtx(VtxFacade->Source, PairId);
-		for (const TSharedPtr<PCGExData::FPointIO>& IO : ComponentEdgeIOs)
+		if (Scratch.EdgeCountDelta.IsEmpty())
 		{
-			PCGExClusters::Helpers::MarkClusterEdges(IO, PairId);
+			return;
 		}
 
-		bCommitOk = true;
-		return true;
+		// Counts land last, read back against what the flush above just wrote: the attribute holds one
+		// value per entry, so vtx sharing an entry must accumulate into it, not overwrite each other.
+		TArray<PCGMetadataEntryKey> Keys;
+		TArray<int32> Deltas;
+		Keys.Reserve(Scratch.EdgeCountDelta.Num());
+		Deltas.Reserve(Scratch.EdgeCountDelta.Num());
+
+		for (const TPair<PCGMetadataEntryKey, int32>& It : Scratch.EdgeCountDelta)
+		{
+			if (It.Value == 0)
+			{
+				continue;
+			}
+			Keys.Add(It.Key);
+			Deltas.Add(It.Value);
+		}
+
+		if (Keys.IsEmpty())
+		{
+			return;
+		}
+
+		TArray<int64> Values;
+		Values.SetNumZeroed(Keys.Num());
+		Scratch.VtxIdxAttr->GetValuesFromItemKeys(TConstArrayView<PCGMetadataEntryKey>(Keys), TArrayView<int64>(Values));
+
+		for (int32 i = 0; i < Values.Num(); ++i)
+		{
+			const uint64 Current = static_cast<uint64>(Values[i]);
+			// Signed accumulate, floored at 0: retargets can subtract.
+			const int64 NewCount = FMath::Max<int64>(0, static_cast<int64>(PCGEx::H64B(Current)) + Deltas[i]);
+			Values[i] = static_cast<int64>(PCGEx::H64(PCGEx::H64A(Current), static_cast<uint32>(NewCount)));
+		}
+
+		Scratch.VtxIdxAttr->SetValues(TConstArrayView<PCGMetadataEntryKey>(Keys), TConstArrayView<int64>(Values));
 	}
 
 	void FGraphPatcher::InheritStagedVtxData(UPCGBasePointData* InVtxData) const
@@ -618,13 +1045,15 @@ namespace PCGExGraphs
 			return;
 		}
 
-		// Per-edge bool flag: resolve the attribute + entry range once per distinct output edge IO.
+		// Per-edge bool flag: resolve the attribute + entry range once per distinct output edge IO,
+		// then flush each IO's keys in one batched write.
 		if (InConfig.bFlagEdge)
 		{
 			struct FEdgeTarget
 			{
 				FPCGMetadataAttribute<bool>* Attr = nullptr;
 				TConstPCGValueRange<int64> Entries;
+				TArray<PCGMetadataEntryKey> Keys;
 			};
 			TMap<PCGExData::FPointIO*, FEdgeTarget> EdgeTargets;
 
@@ -648,34 +1077,64 @@ namespace PCGExGraphs
 
 				if (Target->Attr)
 				{
-					Target->Attr->SetValue(Target->Entries[EdgePointIndex], true);
+					Target->Keys.Add(Target->Entries[EdgePointIndex]);
 				}
+			}
+
+			for (TPair<PCGExData::FPointIO*, FEdgeTarget>& It : EdgeTargets)
+			{
+				FEdgeTarget& Target = It.Value;
+				if (!Target.Attr || Target.Keys.IsEmpty())
+				{
+					continue;
+				}
+
+				TArray<bool> Values;
+				Values.Init(true, Target.Keys.Num());
+				Target.Attr->SetValues(TConstArrayView<PCGMetadataEntryKey>(Target.Keys), TConstArrayView<bool>(Values));
 			}
 		}
 
-		// Per-vtx int32 count: accumulate across all endpoints, then apply one read-modify-write per vtx.
-		if (InConfig.bFlagVtx)
+		// Per-vtx int32 count: accumulate across all endpoints, then one batched read-modify-write.
+		if (InConfig.bFlagVtx && !InEndpoints.IsEmpty())
 		{
-			TMap<int32, int32> Counts;
-			Counts.Reserve(InEndpoints.Num() * 2);
+			UPCGBasePointData* VtxOut = InVtxFacade->GetOut();
+			FPCGMetadataAttribute<int32>* VtxAttr = VtxOut->MutableMetadata()->FindOrCreateAttribute<int32>(InConfig.VtxFlagName, 0);
+			if (!VtxAttr)
+			{
+				return;
+			}
+
+			const TConstPCGValueRange<int64> VtxEntries = VtxOut->GetConstMetadataEntryValueRange();
+
+			// Keyed by entry key, not point index: the attribute holds one value per entry, so vtx
+			// sharing an entry must accumulate into it rather than overwrite each other.
+			TMap<PCGMetadataEntryKey, int32> Counts;
+			Counts.Reserve(InEndpoints.Num());
 			for (const uint64 Endpoint : InEndpoints)
 			{
-				Counts.FindOrAdd(static_cast<int32>(PCGEx::H64A(Endpoint)))++;
-				Counts.FindOrAdd(static_cast<int32>(PCGEx::H64B(Endpoint)))++;
+				Counts.FindOrAdd(VtxEntries[static_cast<int32>(PCGEx::H64A(Endpoint))])++;
+				Counts.FindOrAdd(VtxEntries[static_cast<int32>(PCGEx::H64B(Endpoint))])++;
 			}
 
-			if (!Counts.IsEmpty())
+			TArray<PCGMetadataEntryKey> Keys;
+			TArray<int32> Values;
+			Keys.Reserve(Counts.Num());
+			Values.Reserve(Counts.Num());
+
+			for (const TPair<PCGMetadataEntryKey, int32>& It : Counts)
 			{
-				UPCGBasePointData* VtxOut = InVtxFacade->GetOut();
-				FPCGMetadataAttribute<int32>* VtxAttr = VtxOut->MutableMetadata()->FindOrCreateAttribute<int32>(InConfig.VtxFlagName, 0);
-				const TConstPCGValueRange<int64> VtxEntries = VtxOut->GetConstMetadataEntryValueRange();
-
-				for (const TPair<int32, int32>& It : Counts)
-				{
-					const int64 Key = VtxEntries[It.Key];
-					VtxAttr->SetValue(Key, VtxAttr->GetValueFromItemKey(Key) + It.Value);
-				}
+				Keys.Add(It.Key);
+				Values.Add(It.Value);
 			}
+
+			TArray<int32> Current;
+			Current.SetNumZeroed(Keys.Num());
+			VtxAttr->GetValuesFromItemKeys(TConstArrayView<PCGMetadataEntryKey>(Keys), TArrayView<int32>(Current));
+
+			for (int32 i = 0; i < Values.Num(); ++i) { Values[i] += Current[i]; }
+
+			VtxAttr->SetValues(TConstArrayView<PCGMetadataEntryKey>(Keys), TConstArrayView<int32>(Values));
 		}
 	}
 }
