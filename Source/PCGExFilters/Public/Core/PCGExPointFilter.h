@@ -26,6 +26,7 @@ namespace PCGExGraphs
 namespace PCGExClusters
 {
 	struct FNode;
+	class FCluster;
 }
 
 class UPCGExFilterProviderSettings;
@@ -173,6 +174,11 @@ namespace PCGExPointFilter
 		}
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade);
+
+		// Cluster-context init. Overriding this is what makes a filter cluster-aware -- managers dispatch here
+		// unconditionally, never on factory type. The base forwards to the point Init(), dropping the cluster.
+		virtual bool Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade);
+
 		virtual void PostInit();
 
 		virtual bool Test(const int32 Index) const;

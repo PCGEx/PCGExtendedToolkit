@@ -105,11 +105,15 @@ namespace PCGExFilterGroup
 			ManagedFilters.Add(NewFilter);
 		};
 
+		// Fail beats Pass. The false constant replaces the stack outright so the group reads false under both
+		// AND and OR; the true constant only ever stands in for an empty stack, since adding it alongside real
+		// filters is a no-op under AND but would force an OR group to always pass.
 		if (bWantsFalseConstant)
 		{
+			ManagedFilters.Reset();
 			RegisterConstant(false);
 		}
-		if (bWantsTrueConstant)
+		else if (bWantsTrueConstant && ManagedFilters.IsEmpty())
 		{
 			RegisterConstant(true);
 		}
@@ -117,39 +121,30 @@ namespace PCGExFilterGroup
 		return PostInitManaged(InContext);
 	}
 
-	// Routes child filter initialization based on its type:
-	// - Groups: recurse through the group Init path (supporting nested AND/OR)
-	// - Cluster-only filters: require cluster context, fail gracefully if unavailable
-	// - Point filters: standard Init, using edge data when bUseEdgeAsPrimary is set
+	// With a cluster in hand every child is offered it and virtual dispatch sorts it out. Without one,
+	// cluster-only children can't init at all -- rejected here rather than through their own Init guard,
+	// which always logs and so can't honor bQuiet.
 	bool FFilterGroup::InitManagedFilter(FPCGExContext* InContext, const TSharedPtr<PCGExPointFilter::IFilter>& Filter, const bool bQuiet) const
 	{
+		Filter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
+
+		if (bInitForCluster)
+		{
+			return Filter->Init(InContext, Cluster.ToSharedRef(), PointDataFacade.ToSharedRef(), EdgeDataFacade.ToSharedRef());
+		}
+
 		if (Filter->GetFilterType() == PCGExFilters::EType::Group)
 		{
-			if (bInitForCluster)
-			{
-				FFilterGroup* FilterGroup = static_cast<FFilterGroup*>(Filter.Get());
-				FilterGroup->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
-				return FilterGroup->Init(InContext, Cluster.ToSharedRef(), PointDataFacade.ToSharedRef(), EdgeDataFacade.ToSharedRef());
-			}
-
 			return Filter->Init(InContext, PointDataFacade);
 		}
 
 		if (PCGExFactories::ClusterOnlyFilters.Contains(Filter->Factory->GetFactoryType()))
 		{
-			if (!bInitForCluster)
+			if (!bQuiet)
 			{
-				// Other filter types require cluster data, which we don't have :/
-				if (!bQuiet)
-				{
-					PCGEX_LOG_INVALID_INPUT(InContext, FTEXT("Using a Cluster filter without cluster data"));
-				}
-				return false;
+				PCGEX_LOG_INVALID_INPUT(InContext, FTEXT("Using a Cluster filter without cluster data"));
 			}
-
-			IFilter* ClusterFilter = static_cast<IFilter*>(Filter.Get());
-			ClusterFilter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
-			return ClusterFilter->Init(InContext, Cluster.ToSharedRef(), PointDataFacade.ToSharedRef(), EdgeDataFacade.ToSharedRef());
+			return false;
 		}
 
 		return Filter->Init(InContext, bUseEdgeAsPrimary ? EdgeDataFacade : PointDataFacade);
