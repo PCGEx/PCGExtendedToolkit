@@ -61,7 +61,7 @@ struct PCGEXGRAPHS_API FPCGExGraphBuilderDetails
 	explicit FPCGExGraphBuilderDetails(const EPCGExMinimalAxis InDefaultSolidificationAxis = EPCGExMinimalAxis::None);
 
 	/** Don't output Clusters if they have less points than a specified amount. */
-	UPROPERTY(BlueprintReadWrite, Category = Settings, EditAnywhere, meta = (PCG_Overridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, Category = Settings, EditAnywhere, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteEdgePosition = true;
 
 	/** Edge position interpolation between start and end point positions. */
@@ -105,19 +105,19 @@ struct PCGEXGRAPHS_API FPCGExGraphBuilderDetails
 	EPCGExOptionState BuildAndCacheClusters = EPCGExOptionState::Default;
 
 	/** Pre-build planar face enumerator for cell-finding operations. */
-	UPROPERTY(BlueprintReadWrite, Category = "Settings|Pre-Built Cache", EditAnywhere, meta = (PCG_Overridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, Category = "Settings|Pre-Built Cache", EditAnywhere, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bPreBuildFaceEnumerator = false;
 
 	/** Projection settings for the pre-built face enumerator. Downstream nodes with matching projection will reuse the cache. */
-	UPROPERTY(BlueprintReadWrite, Category = "Settings|Pre-Built Cache", EditAnywhere, meta = (PCG_Overridable, DisplayName="Pre Build Face Enumerator", EditCondition="bPreBuildFaceEnumerator"))
+	UPROPERTY(BlueprintReadWrite, Category = "Settings|Pre-Built Cache", EditAnywhere, meta = (PCG_NotOverridable, DisplayName="Pre Build Face Enumerator", EditCondition="bPreBuildFaceEnumerator"))
 	FPCGExGeo2DProjectionDetails FaceEnumeratorProjection;
 
 	/** Pre-build node chains for path extraction and cluster simplification operations. */
-	UPROPERTY(BlueprintReadWrite, Category = "Settings|Pre-Built Cache", EditAnywhere, meta = (PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, Category = "Settings|Pre-Built Cache", EditAnywhere, meta = (PCG_NotOverridable))
 	bool bPreBuildChains = false;
 
 	/** Write edge length to an attribute. */
-	UPROPERTY(BlueprintReadWrite, Category = "Settings|Extra Data", EditAnywhere, meta = (PCG_Overridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, Category = "Settings|Extra Data", EditAnywhere, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bOutputEdgeLength = false;
 
 	/** Whether to output edge length to a 'double' attribute. */
