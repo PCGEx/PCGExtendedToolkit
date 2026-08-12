@@ -609,7 +609,7 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrides
 	GENERATED_BODY()
 
 	/** Overrides array - parallel with schema (same size, same order) */
-	UPROPERTY(EditAnywhere, Category = Settings)
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(NoResetToDefault))
 	TArray<FPCGExPropertyOverrideEntry> Overrides;
 
 	/**
