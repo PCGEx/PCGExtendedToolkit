@@ -41,6 +41,10 @@ public:
 		return false;
 	}
 
+	/** Owner index for deliberately history-less entries (obstacles). Never matches a real placed
+	 *  index or the INDEX_NONE no-skip sentinel, so obstacle entries can never be skip-targeted. */
+	static constexpr int32 ObstacleOwner = -2;
+
 	// ========== Query API ==========
 
 	/**
@@ -130,7 +134,8 @@ public:
 	 * stores; static subclasses like Polygon2D / SDF check(false) loudly so
 	 * generic callers get a clear failure rather than a silent no-op).
 	 *
-	 * OwnerIndex must be >= 0 -- INDEX_NONE is the skip-nothing sentinel.
+	 * OwnerIndex must be >= 0, or ObstacleOwner for deliberately history-less
+	 * entries -- INDEX_NONE is the skip-nothing sentinel and is rejected.
 	 *
 	 * ChannelMask is a bitmask over the project's channel registry (see
 	 * UPCGExSpatialDomainsSettings::SpatialChannels). Bit N set = the entry
@@ -152,6 +157,24 @@ public:
 	 * (placement-op setup); calling mid-sequence is allowed but pointless.
 	 */
 	virtual void Reserve(int32 ExpectedCount)
+	{
+	}
+
+	/**
+	 * Bulk-append scope. Between these calls a mutable domain may suspend the
+	 * incremental maintenance of its query accelerator, so a known-size batch
+	 * pays one index build instead of one every N appends.
+	 *
+	 * CONTRACT: no query may run inside the scope -- the accelerator is stale
+	 * until EndBulkAppend. Calls do not nest; a second Begin is ignored, and an
+	 * End without a matching Begin is a no-op. Default no-op so static
+	 * subclasses (Polygon2D, SDF) inherit it without opting out.
+	 */
+	virtual void BeginBulkAppend()
+	{
+	}
+
+	virtual void EndBulkAppend()
 	{
 	}
 

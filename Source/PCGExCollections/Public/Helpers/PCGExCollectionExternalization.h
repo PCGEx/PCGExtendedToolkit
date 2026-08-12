@@ -19,6 +19,8 @@ namespace PCGExSharedCompact
 	 * Rename Source into DesiredPackagePath as DesiredAssetName (evicting any occupant to transient
 	 * first) and notify the asset registry. Idempotent. Source keeps its identity, so a hard pointer
 	 * to it stays valid afterward. Returns the resulting soft path (empty if Source was null).
+	 * The target package is ALWAYS marked dirty, including the already-in-place path -- callers
+	 * invoke this right after regenerating Source's content.
 	 */
 	PCGEXCOLLECTIONS_API FSoftObjectPath ExternalizeUObject(UObject* Source, const FString& DesiredPackagePath, const FString& DesiredAssetName);
 

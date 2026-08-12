@@ -86,6 +86,14 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source == EPCGExDataAssetEntrySource::Level && !bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level;
 
+	/** Only in Level mode: a DataAsset-sourced entry references a finished asset with no level behind it. */
+	virtual FSoftObjectPath GetSourceLevelPath() const override
+	{
+		return (!bIsSubCollection && Source == EPCGExDataAssetEntrySource::Level)
+			       ? Level.ToSoftObjectPath()
+			       : FSoftObjectPath();
+	}
+
 	/** Embedded exported data asset (hidden, serialized, outered to collection in embedded
 	 *  mode; null in external mode -- see ExternalExportedDataAsset). */
 	UPROPERTY(Instanced)
@@ -298,6 +306,7 @@ public:
 #if WITH_EDITOR
 	virtual void EDITOR_OnHostPostStagingRebuild(UPCGExAssetCollection* Host) override;
 	virtual void AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const override;
+	virtual void EDITOR_AppendExternalPackages(const UPCGExAssetCollection* Host, TSet<UPackage*>& OutPackages) const override;
 
 	/** External-storage toggle reactions -- the engine delivers property edits to the
 	 *  instanced state FIRST, then walks up to the host (whose base PostEditChangeProperty
@@ -439,6 +448,17 @@ public:
 	static void InternalizeSubobjectsFor(FPCGExPCGDataAssetMachinery& State);
 	static void SaveExternalPackagesFor(FPCGExPCGDataAssetMachinery& State);
 
+	/** Shared package-collection walk over the machinery storage: the loaded packages the
+	 *  shared collections and per-entry exports currently live in, minus the host's own and
+	 *  the transient package (so embedded mode contributes nothing). Drives both the manual
+	 *  SaveExternalPackages utility and the editor-save coordination seam. */
+	static void CollectExternalPackagesFor(
+		const UPCGExAssetCollection* Host,
+		const UPCGExMeshCollection* InSharedMesh,
+		const UPCGExLevelCollection* InSharedLevel,
+		const TArray<const FPCGExPCGDataAssetCollectionEntry*>& InEntries,
+		TSet<UPackage*>& OutPackages);
+
 	/** Orchestrator: compaction -> shared/actor externalization -> collection maps -> data
 	 *  asset externalization, in the order the soft-path baking requires. */
 	static void RebuildSharedCollectionsFor(FPCGExPCGDataAssetMachinery& State);
@@ -491,6 +511,9 @@ public:
 #if WITH_EDITOR
 	virtual void EDITOR_OnPostStagingRebuild() override;
 	virtual void EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData) override;
+
+	/** IPCGExExternalPackageProducer via the owned machinery state. */
+	virtual void EDITOR_GetExternalPackages(TSet<UPackage*>& OutPackages) const override;
 
 	/**
 	 * Cook-path override -- adds the references that GetAssetPaths intentionally omits

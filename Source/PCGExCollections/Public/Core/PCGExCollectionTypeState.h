@@ -10,6 +10,7 @@
 #include "PCGExCollectionTypeState.generated.h"
 
 class UPCGExAssetCollection;
+class UPackage;
 
 /**
  * Per-type collection machinery state/processor, hosted by heterogeneous collections (Omni).
@@ -65,6 +66,15 @@ public:
 	}
 
 	virtual void AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const
+	{
+	}
+
+	/**
+	 * Append the LOADED packages this state's externalized assets currently live in (see
+	 * IPCGExExternalPackageProducer -- hosts dispatch their EDITOR_GetExternalPackages here).
+	 * Read-only; embedded-mode objects resolve to the host package, which the caller skips.
+	 */
+	virtual void EDITOR_AppendExternalPackages(const UPCGExAssetCollection* Host, TSet<UPackage*>& OutPackages) const
 	{
 	}
 

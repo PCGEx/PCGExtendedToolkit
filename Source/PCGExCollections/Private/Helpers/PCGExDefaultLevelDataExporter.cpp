@@ -477,6 +477,14 @@ namespace PCGExDefaultLevelDataExporterInternal
 				Key.DescriptorFingerprint = FingerprintDescriptor(TentativeSM);
 			}
 
+			// When capturing, variants are the sole material carrier: sec=-1 must mean mesh
+			// defaults, so the stored descriptor must not bake one contributor's overrides.
+			if (bCaptureMaterialOverrides)
+			{
+				TentativeISM.OverrideMaterials.Reset();
+				TentativeSM.OverrideMaterials.Reset();
+			}
+
 			FMeshInfo& Info = InOutMeshInfoMap.FindOrAdd(Key);
 
 			// First contribution stores the descriptor; subsequent contributors are
@@ -1191,7 +1199,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 				}
 
 				// Material variants
-				if (bCaptureMaterialOverrides && Elem.Value.UniqueVariantMaterials.Num() > 1)
+				if (bCaptureMaterialOverrides && !Elem.Value.UniqueVariantMaterials.IsEmpty())
 				{
 					MeshEntry.MaterialVariants = EPCGExMaterialVariantsMode::Multi;
 
@@ -1385,7 +1393,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 					continue;
 				}
 
-				const int16 SecIdx = (bCaptureMaterialOverrides && Point.MaterialVariantIndex > 0)
+				const int16 SecIdx = (bCaptureMaterialOverrides && Point.MaterialVariantIndex >= 0)
 					? static_cast<int16>(Point.MaterialVariantIndex)
 					: static_cast<int16>(-1);
 

@@ -197,9 +197,9 @@ int32 FPCGExSpatialDomain_Broadphase::Append(
 	int32 OwnerIndex,
 	uint32 ChannelMask)
 {
-	// Owner-index >= 0 contract: INDEX_NONE is the skip-nothing sentinel
-	// and would silently make this entry untargetable by skip-by-owner.
-	check(OwnerIndex >= 0);
+	// Owner contract: a real placed index (>= 0) or the explicit ObstacleOwner sentinel.
+	// INDEX_NONE is the skip-nothing sentinel and would mark an accidental unowned entry.
+	check(OwnerIndex >= 0 || OwnerIndex == FPCGExSpatialDomain::ObstacleOwner);
 
 	UScriptStruct* StructType = Shape.GetScriptStruct();
 	if (!StructType)
@@ -247,6 +247,43 @@ void FPCGExSpatialDomain_Broadphase::Reserve(int32 ExpectedCount)
 	Entries.Reserve(ExpectedCount);
 	ValidMask.Reserve(ExpectedCount);
 	BroadphaseAABBs.Reserve(ExpectedCount);
+}
+
+void FPCGExSpatialDomain_Broadphase::BeginBulkAppend()
+{
+	if (BulkSavedRebuildInterval != INDEX_NONE)
+	{
+		return; // already scoped -- keep the original cadence to restore
+	}
+
+	// A rebuild cadence no pending-count can reach makes every Append in the scope
+	// storage-only. Without this, an N-append batch rebuilds the octree N/32 times,
+	// each walking every entry so far -- O(N^2) insertion for a one-shot load.
+	BulkSavedRebuildInterval = BroadphaseAABBs.RebuildInterval;
+	BulkEntryCountAtBegin = Entries.Num();
+	BroadphaseAABBs.RebuildInterval = MAX_int32;
+}
+
+void FPCGExSpatialDomain_Broadphase::EndBulkAppend()
+{
+	if (BulkSavedRebuildInterval == INDEX_NONE)
+	{
+		return; // no matching Begin
+	}
+
+	BroadphaseAABBs.RebuildInterval = BulkSavedRebuildInterval;
+	BulkSavedRebuildInterval = INDEX_NONE;
+
+	// An empty scope leaves the accelerator exactly as it was found -- rebuilding here
+	// would discard a good octree and re-add every entry for nothing.
+	if (Entries.Num() == BulkEntryCountAtBegin)
+	{
+		return;
+	}
+
+	// Everything appended in the scope is still pending (and therefore linear-scanned
+	// by queries) until this lands.
+	BroadphaseAABBs.BuildOctree();
 }
 
 FPCGExSpatialDomain::FSnapshotHandle FPCGExSpatialDomain_Broadphase::BeginSnapshotScope()
