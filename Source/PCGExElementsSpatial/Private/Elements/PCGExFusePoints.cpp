@@ -1,4 +1,5 @@
 // Copyright 2026 Timothé Lapetite and contributors
+// * 12/08/26 NRG-Nad Write union metadata in Keep Most Central mode
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Elements/PCGExFusePoints.h"
@@ -168,7 +169,9 @@ bool FPCGExFusePointsElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				NewBatch->bRequiresWriteStep = Settings->Mode != EPCGExFusedPointOutput::MostCentral;
+				const FPCGExPointUnionMetadataDetails& PtUnionDetails = Settings->PointPointIntersectionDetails.PointUnionData;
+				NewBatch->bRequiresWriteStep = Settings->Mode != EPCGExFusedPointOutput::MostCentral ||
+					PtUnionDetails.bWriteIsUnion || PtUnionDetails.bWriteUnionSize;
 			}))
 		{
 			return Context->CancelExecution(TEXT("Could not find any points to fuse."));
@@ -457,6 +460,35 @@ namespace PCGExFusePoints
 				});
 
 			PointDataFacade->Source->ConsumeIdxMapping(PointDataFacade->GetAllocations());
+
+			const FPCGExPointUnionMetadataDetails& PtUnionDetails = Settings->PointPointIntersectionDetails.PointUnionData;
+			if (PtUnionDetails.bWriteIsUnion)
+			{
+				IsUnionWriter = PointDataFacade->GetWritable<bool>(PtUnionDetails.IsUnionAttributeName, false, true, PCGExData::EBufferInit::New);
+			}
+
+			if (PtUnionDetails.bWriteUnionSize)
+			{
+				UnionSizeWriter = PointDataFacade->GetWritable<int32>(PtUnionDetails.UnionSizeAttributeName, 1, true, PCGExData::EBufferInit::New);
+			}
+
+			if (IsUnionWriter || UnionSizeWriter)
+			{
+				PCGExMT::ParallelOrSequential(
+					NumUnionEntries,
+					[&](const int32 i)
+					{
+						const int32 UnionSize = Table->Get(i).Num();
+						if (IsUnionWriter)
+						{
+							IsUnionWriter->SetValue(i, UnionSize > 1);
+						}
+						if (UnionSizeWriter)
+						{
+							UnionSizeWriter->SetValue(i, UnionSize);
+						}
+					});
+			}
 
 			if (Settings->FusedBoundsMode != EPCGExFusedBoundsMode::None)
 			{
