@@ -144,6 +144,8 @@ namespace PCGExFusePoints
 		TSharedPtr<PCGExData::TBuffer<bool>> IsUnionWriter;
 		TSharedPtr<PCGExData::TBuffer<int32>> UnionSizeWriter;
 
+		void InitUnionMetadataWriters();
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
