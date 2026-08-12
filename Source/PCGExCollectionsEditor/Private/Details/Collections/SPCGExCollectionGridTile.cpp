@@ -4,10 +4,13 @@
 #include "Details/Collections/SPCGExCollectionGridTile.h"
 
 #include "AssetThumbnail.h"
+#include "AssetToolsModule.h"
 #include "Editor.h"
+#include "IAssetTypeActions.h"
 #include "ScopedTransaction.h"
 #include "Subsystems/AssetEditorSubsystem.h"
 #include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
@@ -65,6 +68,48 @@ namespace PCGExCollectionGrid
 			];
 		}
 		return Row;
+	}
+
+	/** Content-Browser-equivalent activation, mirroring ContentBrowserAssetDataCore::EditOrPreviewAssetFileItems.
+	 *
+	 *  Opening straight through UAssetEditorSubsystem skips UAssetDefinition::PrepareToActivateAssets, where a
+	 *  type's activation preconditions live -- for UWorld that is the save-dirty-packages prompt, so a level
+	 *  would otherwise open and silently discard unsaved work (including OFPA external actor packages, which
+	 *  leave the .umap itself clean).
+	 */
+	void ActivateAsset(const FSoftObjectPath& AssetPath)
+	{
+		IAssetRegistry* AssetRegistry = IAssetRegistry::Get();
+		if (!AssetRegistry || !GEditor) { return; }
+
+		// Resolved without loading: preconditions must run before the target package is pulled in.
+		FAssetData AssetData = AssetRegistry->GetAssetByObjectPath(AssetPath);
+		if (!AssetData.IsValid() || AssetData.IsRedirector())
+		{
+			// Redirectors and objects the registry doesn't index (embedded subobjects) need a load to resolve.
+			UObject* Resolved = AssetPath.TryLoad();
+			if (!Resolved) { return; }
+			AssetData = FAssetData(Resolved);
+		}
+
+		TArray<FAssetData> AssetsToOpen{AssetData};
+		if (UClass* AssetClass = AssetData.GetClass())
+		{
+			IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get();
+			if (const TSharedPtr<IAssetTypeActions> TypeActions = AssetTools.GetAssetTypeActionsForClass(AssetClass).Pin())
+			{
+				// Comes back empty when the user declines -- that is the cancel, not a failure.
+				AssetsToOpen = TypeActions->GetValidAssetsForPreviewOrEdit(AssetsToOpen, /*bIsPreview=*/false);
+			}
+		}
+
+		UAssetEditorSubsystem* AssetEditor = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
+		if (!AssetEditor) { return; }
+
+		for (const FAssetData& Asset : AssetsToOpen)
+		{
+			if (UObject* Loaded = Asset.GetAsset()) { AssetEditor->OpenEditorForAsset(Loaded); }
+		}
 	}
 }
 
@@ -832,16 +877,7 @@ FReply SPCGExCollectionGridTile::OnMouseButtonDoubleClick(const FGeometry& MyGeo
 		return FReply::Unhandled();
 	}
 
-	if (UObject* Asset = AssetPath.TryLoad())
-	{
-		if (GEditor)
-		{
-			if (UAssetEditorSubsystem* AssetEditor = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
-			{
-				AssetEditor->OpenEditorForAsset(Asset);
-			}
-		}
-	}
+	PCGExCollectionGrid::ActivateAsset(AssetPath);
 
 	return FReply::Handled();
 }
