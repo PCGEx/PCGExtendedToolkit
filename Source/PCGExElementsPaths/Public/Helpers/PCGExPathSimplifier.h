@@ -153,14 +153,14 @@ namespace PCGExPaths
 			double MaxError,
 			bool bIsClosed);
 
+		// EndIndex may be Points.Num(), the closed-loop virtual chain's terminal index, which resolves to point 0.
 		static void SimplifyRecursive(
 			const TConstPCGValueRange<FTransform>& Points,
 			const TArray<int8>& RemovableFlags,
 			TArray<int32>& SelectedIndices,
 			int32 StartIndex,
 			int32 EndIndex,
-			double MaxError,
-			bool bIsClosed);
+			double MaxError);
 
 		static double PointToLineDistance(const FVector& Point, const FVector& LineStart, const FVector& LineEnd);
 

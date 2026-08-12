@@ -239,24 +239,30 @@ namespace PCGExPaths
 		double MaxError,
 		bool bIsClosed)
 	{
+		const int32 NumPoints = Points.Num();
+
 		TArray<int32> ResultIndices;
 
-		if (Points.Num() < 3)
+		if (NumPoints < 3)
 		{
-			for (int32 i = 0; i < Points.Num(); ++i)
+			for (int32 i = 0; i < NumPoints; ++i)
 			{
 				ResultIndices.Add(i);
 			}
 			return ResultIndices;
 		}
 
+		// Closed loops are walked as the virtual open chain 0..N-1..0, so the wrap edge is a DP span like any other
+		// and point 0 is the only index pinned. Both recursion anchors must survive or their spans go unbounded.
+		const int32 TerminalIndex = bIsClosed ? NumPoints : NumPoints - 1;
+
 		ResultIndices.Add(0);
 		if (!bIsClosed)
 		{
-			ResultIndices.Add(Points.Num() - 1);
+			ResultIndices.Add(NumPoints - 1);
 		}
 
-		for (int32 i = 1; i < Points.Num() - 1; ++i)
+		for (int32 i = 1; i < NumPoints; ++i)
 		{
 			if (!RemovableFlags[i])
 			{
@@ -264,12 +270,7 @@ namespace PCGExPaths
 			}
 		}
 
-		if (bIsClosed && !RemovableFlags[Points.Num() - 1])
-		{
-			ResultIndices.AddUnique(Points.Num() - 1);
-		}
-
-		SimplifyRecursive(Points, RemovableFlags, ResultIndices, 0, Points.Num() - 1, MaxError, bIsClosed);
+		SimplifyRecursive(Points, RemovableFlags, ResultIndices, 0, TerminalIndex, MaxError);
 
 		ResultIndices.Sort();
 		for (int32 i = ResultIndices.Num() - 1; i > 0; --i)
@@ -289,8 +290,7 @@ namespace PCGExPaths
 		TArray<int32>& SelectedIndices,
 		int32 StartIndex,
 		int32 EndIndex,
-		double MaxError,
-		bool bIsClosed)
+		double MaxError)
 	{
 		if (EndIndex - StartIndex <= 1)
 		{
@@ -300,8 +300,9 @@ namespace PCGExPaths
 		double MaxDistance = 0.0;
 		int32 MaxIndex = -1;
 
+		// Only EndIndex can be the virtual terminal; StartIndex and every candidate are strictly below it.
 		FVector StartPoint = Points[StartIndex].GetLocation();
-		FVector EndPoint = Points[EndIndex].GetLocation();
+		FVector EndPoint = Points[EndIndex == Points.Num() ? 0 : EndIndex].GetLocation();
 
 		for (int32 i = StartIndex + 1; i < EndIndex; ++i)
 		{
@@ -323,8 +324,8 @@ namespace PCGExPaths
 		if (MaxDistance > MaxError && MaxIndex != -1)
 		{
 			SelectedIndices.AddUnique(MaxIndex);
-			SimplifyRecursive(Points, RemovableFlags, SelectedIndices, StartIndex, MaxIndex, MaxError, bIsClosed);
-			SimplifyRecursive(Points, RemovableFlags, SelectedIndices, MaxIndex, EndIndex, MaxError, bIsClosed);
+			SimplifyRecursive(Points, RemovableFlags, SelectedIndices, StartIndex, MaxIndex, MaxError);
+			SimplifyRecursive(Points, RemovableFlags, SelectedIndices, MaxIndex, EndIndex, MaxError);
 		}
 	}
 

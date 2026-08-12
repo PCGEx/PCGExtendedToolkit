@@ -163,6 +163,13 @@ namespace PCGExPathReduce
 			}
 		}
 
+		// The simplifier yields nothing below two surviving points; leave the path whole rather than emptying it.
+		if (SimplifiedResult.IsEmpty())
+		{
+			PointDataFacade->WriteFastest(TaskManager);
+			return true;
+		}
+
 		TPCGValueRange<FTransform> OutTransforms = PointDataFacade->GetOut()->GetTransformValueRange();
 
 		TArray<int32> SimplifiedIndices;
@@ -174,17 +181,10 @@ namespace PCGExPathReduce
 			SimplifiedIndices[Point.OriginalIndex] = i;
 		}
 
+		// Survivors are exactly what the simplifier returned, filter-preserved anchors included; those carry fitted
+		// tangents too, otherwise a kept anchor contributes nothing to the curve it was preserved to shape.
 		for (int i = 0; i < PointDataFacade->GetNum(); i++)
 		{
-			if (!PointFilterCache[i])
-			{
-				if (!bPreserve)
-				{
-					Mask[i] = false;
-				}
-				continue;
-			}
-
 			const int j = SimplifiedIndices[i];
 			if (j == INDEX_NONE)
 			{
