@@ -194,6 +194,7 @@ void FPCGExMeshCollectionEntry::ApplyMaterials(int32 PickIndex, UStaticMeshCompo
 	}
 }
 
+// PickIndex comes from a serialized collection map and can outlive the variants it indexed.
 void FPCGExMeshCollectionEntry::ApplyMaterials(int32 PickIndex, FPCGSoftISMComponentDescriptor& Descriptor) const
 {
 	if (PickIndex == -1 || MaterialVariants == EPCGExMaterialVariantsMode::None)
@@ -203,12 +204,20 @@ void FPCGExMeshCollectionEntry::ApplyMaterials(int32 PickIndex, FPCGSoftISMCompo
 
 	if (MaterialVariants == EPCGExMaterialVariantsMode::Single)
 	{
+		if (!MaterialOverrideVariants.IsValidIndex(PickIndex))
+		{
+			return;
+		}
 		const int32 WriteSlotIndex = SlotIndex == -1 ? 0 : SlotIndex;
 		Descriptor.OverrideMaterials.SetNum(WriteSlotIndex + 1);
 		Descriptor.OverrideMaterials[WriteSlotIndex] = MaterialOverrideVariants[PickIndex].Material;
 	}
 	else if (MaterialVariants == EPCGExMaterialVariantsMode::Multi)
 	{
+		if (!MaterialOverrideVariantsList.IsValidIndex(PickIndex))
+		{
+			return;
+		}
 		const FPCGExMaterialOverrideCollection& SubList = MaterialOverrideVariantsList[PickIndex];
 
 		const int32 HiIndex = SubList.GetHighestIndex();
