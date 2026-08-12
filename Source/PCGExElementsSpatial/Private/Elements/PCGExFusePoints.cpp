@@ -1,5 +1,6 @@
 // Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
+// * 12/08/26 NRG-Nad Write union metadata in Keep Most Central mode
 
 #include "Elements/PCGExFusePoints.h"
 
@@ -168,7 +169,8 @@ bool FPCGExFusePointsElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				NewBatch->bRequiresWriteStep = Settings->Mode != EPCGExFusedPointOutput::MostCentral;
+				NewBatch->bRequiresWriteStep = Settings->Mode != EPCGExFusedPointOutput::MostCentral ||
+					Settings->PointPointIntersectionDetails.PointUnionData.WriteAny();
 			}))
 		{
 			return Context->CancelExecution(TEXT("Could not find any points to fuse."));
@@ -400,6 +402,21 @@ namespace PCGExFusePoints
 		}
 	}
 
+	void FProcessor::InitUnionMetadataWriters()
+	{
+		const FPCGExPointUnionMetadataDetails& PtUnionDetails = Settings->PointPointIntersectionDetails.PointUnionData;
+
+		if (PtUnionDetails.bWriteIsUnion)
+		{
+			IsUnionWriter = PointDataFacade->GetWritable<bool>(PtUnionDetails.IsUnionAttributeName, false, true, PCGExData::EBufferInit::New);
+		}
+
+		if (PtUnionDetails.bWriteUnionSize)
+		{
+			UnionSizeWriter = PointDataFacade->GetWritable<int32>(PtUnionDetails.UnionSizeAttributeName, 1, true, PCGExData::EBufferInit::New);
+		}
+	}
+
 	void FProcessor::CompleteWork()
 	{
 		// Finalize the build phase: compile the per-scope records into the immutable, packed FUnionTable.
@@ -428,6 +445,9 @@ namespace PCGExFusePoints
 			// Local non-null reference for the parallel-for body to capture cleanly.
 			const TSharedRef<PCGExData::FUnionTable> Table = UnionTable.ToSharedRef();
 
+			// No blender in this mode, so writables can be created up-front and filled by the mapping pass.
+			InitUnionMetadataWriters();
+
 			PCGExMT::ParallelOrSequential(
 				NumUnionEntries,
 				[&](const int32 i)
@@ -454,6 +474,15 @@ namespace PCGExFusePoints
 						BestIndex = Span[0].Index;
 					}
 					IdxMapping[i] = BestIndex;
+
+					if (IsUnionWriter)
+					{
+						IsUnionWriter->SetValue(i, Span.Num() > 1);
+					}
+					if (UnionSizeWriter)
+					{
+						UnionSizeWriter->SetValue(i, Span.Num());
+					}
 				});
 
 			PointDataFacade->Source->ConsumeIdxMapping(PointDataFacade->GetAllocations());
@@ -542,17 +571,7 @@ namespace PCGExFusePoints
 		}
 
 		// Initialize writables AFTER we initialize Union Blender, so these don't get captured in the mix
-		const FPCGExPointUnionMetadataDetails& PtUnionDetails = Settings->PointPointIntersectionDetails.PointUnionData;
-
-		if (PtUnionDetails.bWriteIsUnion)
-		{
-			IsUnionWriter = PointDataFacade->GetWritable<bool>(PtUnionDetails.IsUnionAttributeName, false, true, PCGExData::EBufferInit::New);
-		}
-
-		if (PtUnionDetails.bWriteUnionSize)
-		{
-			UnionSizeWriter = PointDataFacade->GetWritable<int32>(PtUnionDetails.UnionSizeAttributeName, 1, true, PCGExData::EBufferInit::New);
-		}
+		InitUnionMetadataWriters();
 
 		StartParallelLoopForRange(NumUnionEntries);
 	}
