@@ -195,4 +195,28 @@ public:
 	virtual void RollbackToScope(FSnapshotHandle Handle)
 	{
 	}
+
+	// ========== Per-owner validity ==========
+
+	/**
+	 * Retire every entry belonging to OwnerIndex, returning how many were flipped.
+	 * The targeted counterpart to RollbackToScope, which can only invalidate FORWARD from a
+	 * high-water mark and so cannot express "this one placement went away". Required by
+	 * generative growth's retraction path, where a module is removed from the middle of the
+	 * placement history and must stop occupying space.
+	 *
+	 * INDEX_NONE is the skip-nothing sentinel and matches no entry (see Append's owner contract).
+	 * Default no-op returning 0 -- static domains have nothing to retire.
+	 */
+	virtual int32 InvalidateOwner(int32 OwnerIndex)
+	{
+		return 0;
+	}
+
+	/** Undo of InvalidateOwner, for journal rewinds. RollbackToScope can never serve as this
+	 *  inverse: it only ever clears validity, never restores it. */
+	virtual int32 RevalidateOwner(int32 OwnerIndex)
+	{
+		return 0;
+	}
 };
