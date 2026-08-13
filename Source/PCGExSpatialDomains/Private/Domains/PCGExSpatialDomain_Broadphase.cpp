@@ -331,3 +331,54 @@ void FPCGExSpatialDomain_Broadphase::RollbackToScope(FSnapshotHandle Handle)
 		WorldBounds = FBox(ForceInit);
 	}
 }
+
+int32 FPCGExSpatialDomain_Broadphase::InvalidateOwner(const int32 OwnerIndex)
+{
+	// Append rejects INDEX_NONE as an owner, so matching it could only ever be a caller bug.
+	if (OwnerIndex == INDEX_NONE)
+	{
+		return 0;
+	}
+
+	int32 Flipped = 0;
+	for (int32 i = 0; i < Entries.Num(); ++i)
+	{
+		if (Entries[i].OwnerIndex == OwnerIndex && ValidMask[i])
+		{
+			ValidMask[i] = false;
+			--NumValidEntries;
+			++Flipped;
+		}
+	}
+
+	// WorldBounds is deliberately not shrunk -- same over-approximation contract as a partial
+	// RollbackToScope, and its only consumer is a permissive-direction pre-cull.
+	if (NumValidEntries == 0)
+	{
+		WorldBounds = FBox(ForceInit);
+	}
+
+	return Flipped;
+}
+
+int32 FPCGExSpatialDomain_Broadphase::RevalidateOwner(const int32 OwnerIndex)
+{
+	if (OwnerIndex == INDEX_NONE)
+	{
+		return 0;
+	}
+
+	int32 Flipped = 0;
+	for (int32 i = 0; i < Entries.Num(); ++i)
+	{
+		if (Entries[i].OwnerIndex == OwnerIndex && !ValidMask[i])
+		{
+			ValidMask[i] = true;
+			++NumValidEntries;
+			++Flipped;
+			WorldBounds += Entries[i].WorldAABB;
+		}
+	}
+
+	return Flipped;
+}

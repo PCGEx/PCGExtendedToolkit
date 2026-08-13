@@ -42,6 +42,11 @@
  *   RollbackToScope(handle) flips ValidMask bits past handle to invalid.
  *   O(1) amortized, no realloc, no per-entry walk on partial rollback.
  *
+ *   InvalidateOwner / RevalidateOwner flip a single owner's bits anywhere in the array (O(N)
+ *   scan, for the rare retraction path). Only THIS mask is touched -- the broadphase
+ *   collection's own ValidMask is left alone, because every query routes each culled entry
+ *   through a SkipPredicate that already consults ValidMask[StorageIdx].
+ *
  *   GetBounds() may return an over-approximation after partial rollback:
  *   invalid entries' AABBs aren't subtracted out (that'd be O(N)). Consumers
  *   must treat GetBounds() as a cull hint, never a tight extent. Full rollback
@@ -108,6 +113,8 @@ public:
 	virtual void EndBulkAppend() override;
 	virtual FSnapshotHandle BeginSnapshotScope() override;
 	virtual void RollbackToScope(FSnapshotHandle Handle) override;
+	virtual int32 InvalidateOwner(int32 OwnerIndex) override;
+	virtual int32 RevalidateOwner(int32 OwnerIndex) override;
 
 	// ========== Inspection (tests / debug) ==========
 
