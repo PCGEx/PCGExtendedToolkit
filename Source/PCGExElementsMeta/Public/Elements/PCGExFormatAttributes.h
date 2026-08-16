@@ -10,6 +10,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
 #include "Core/PCGExSettings.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExFormatAttributes.generated.h"
 
@@ -39,9 +40,9 @@ struct FPCGExFormatTokenRule
 {
 	GENERATED_BODY()
 
-	/** Literal text to find inside target string attributes. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	FString Token;
+	/** Text to find inside target string attributes. When attribute-driven, read from this rule's source (per Source Mode), with the same broadcast/per-row pairing as the replacement value. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Token"))
+	FPCGExInputShorthandSelectorString TokenValue;
 
 	/** Where to read this rule's replacement value from. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
@@ -66,6 +67,13 @@ struct FPCGExFormatTokenRule
 	/** Literal value substituted in place of the source attribute when the source can't be read. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(EditCondition="bHasFallback"))
 	FString FallbackValue;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FString Token_DEPRECATED;
+
+#pragma endregion
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="metadata/modify/format-attributes"))
@@ -76,6 +84,8 @@ class UPCGExFormatAttributesSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(FormatAttributes, "Format Attributes", "Replace literal tokens in FName/FString attributes using values from other attributes (self or external).");
 
 	virtual EPCGSettingsType GetType() const override

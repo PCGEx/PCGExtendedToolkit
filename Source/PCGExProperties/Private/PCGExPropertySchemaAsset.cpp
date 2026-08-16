@@ -8,6 +8,8 @@
 #endif
 
 #if WITH_EDITOR
+FOnPCGExSchemaAssetChanged UPCGExPropertySchemaAsset::OnAnySchemaAssetChanged;
+
 void UPCGExPropertySchemaAsset::PostLoad()
 {
 	Super::PostLoad();
@@ -28,6 +30,7 @@ void UPCGExPropertySchemaAsset::PostEditChangeProperty(FPropertyChangedEvent& Pr
 	Collection.SyncAllSchemas();
 
 	OnSchemaAssetChanged.Broadcast(this);
+	OnAnySchemaAssetChanged.Broadcast(this);
 }
 
 EDataValidationResult UPCGExPropertySchemaAsset::IsDataValid(FDataValidationContext& Context) const

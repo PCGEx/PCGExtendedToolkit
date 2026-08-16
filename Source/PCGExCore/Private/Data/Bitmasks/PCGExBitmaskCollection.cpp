@@ -51,17 +51,27 @@ bool PCGExBitmaskCollection::FCache::TryGetBitmask(const FName Identifier, PCGEx
 	return true;
 }
 
-// Double-checked locking: first attempt a read-only check for an existing cache,
-// then fall through to BuildCache() which acquires a write lock and re-checks
-// before actually constructing the cache. This avoids write-lock contention
-// on the common path where the cache is already built.
+// Thread-safe lazy cache initialization. Read-lock fast path returns only a fresh cache;
+// stale drops happen under the write lock (resetting the shared ptr under a read lock races
+// concurrent readers on the control block).
 PCGExBitmaskCollection::FCache* UPCGExBitmaskCollection::LoadCache()
 {
 	{
 		FReadScopeLock ReadScopeLock(CacheLock);
+		if (!bCacheNeedsRebuild && Cache)
+		{
+			return Cache.Get();
+		}
+	}
+
+	{
+		FWriteScopeLock WriteScopeLock(CacheLock);
 		if (bCacheNeedsRebuild)
 		{
-			InvalidateCache();
+			// Clearing the flag claims the rebuild -- a peer must not drop the cache this thread
+			// is about to build.
+			Cache.Reset();
+			bCacheNeedsRebuild = false;
 		}
 		if (Cache)
 		{
@@ -69,12 +79,17 @@ PCGExBitmaskCollection::FCache* UPCGExBitmaskCollection::LoadCache()
 		}
 	}
 
+	// Outside the lock -- BuildCache takes the write lock itself (FRWLock is non-reentrant).
 	BuildCache();
+
+	FReadScopeLock ReadScopeLock(CacheLock);
 	return Cache.Get();
 }
 
 void UPCGExBitmaskCollection::InvalidateCache()
 {
+	// Takes the write lock -- never call while holding CacheLock.
+	FWriteScopeLock WriteScopeLock(CacheLock);
 	Cache.Reset();
 	bCacheNeedsRebuild = true;
 }

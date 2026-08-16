@@ -147,6 +147,15 @@ void FPCGExPropertiesEditorModule::StartupModule()
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyFloatCurveCustomization::MakeInstance)
 		);
 
+	// Identifier-gated: raw FRuntimeFloatCurve rows owned by FPCGExProperty subclasses must never
+	// instantiate the engine FCurveStructCustomization (ctor-registered undo client + skipped
+	// header on CustomWidget rows = crash on undo -- see FPCGExRuntimeFloatCurveCustomization).
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FRuntimeFloatCurve::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExRuntimeFloatCurveCustomization::MakeInstance),
+		MakeShared<FPCGExPropertyOwnedCurveIdentifier>()
+		);
+
 	// Register built-in compact inline widgets for Vector / Vector2D / Rotator property types
 	PCGExBuiltInInlineWidgets::RegisterAll();
 }

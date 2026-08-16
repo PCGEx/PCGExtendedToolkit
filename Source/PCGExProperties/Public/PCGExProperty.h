@@ -1093,6 +1093,12 @@ struct PCGEXPROPERTIES_API FPCGExPropertySchemaCollection
 	/** Overload that accepts a precomputed Resolved view -- avoids re-walking the tree. */
 	bool ReconcileImportOverrides(const TArray<FPCGExPropertyResolved>& Resolved);
 
+#if WITH_EDITOR
+	/** True when Asset is reachable through ImportedSchemas (any depth, cycle-safe). The filter for
+	 *  UPCGExPropertySchemaAsset::OnAnySchemaAssetChanged listeners. */
+	bool ImportsAssetTransitive(const UPCGExPropertySchemaAsset* Asset) const;
+#endif
+
 	/**
 	 * Rebuild this collection's structure to match Archetype, preserving Value overrides for
 	 * entries whose identity matches between this and Archetype.
