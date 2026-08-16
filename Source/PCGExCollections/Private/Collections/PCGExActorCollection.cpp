@@ -487,6 +487,11 @@ void UPCGExActorCollection::RebuildActorPropertiesFromComponents(
 		}
 	});
 
+	// This is a fourth schema-sync funnel: it replaces CollectionProperties wholesale and rolls its
+	// own per-entry loop above, so it never reaches SyncPropertyOverridesToEntries. Category rows
+	// must be re-synced here too or they silently drift out of the schema on Actor/Omni rebuilds.
+	Host->SyncCategoryOverridesToSchema(CanonicalSchema);
+
 	Host->RebuildPropertyRegistry();
 
 	for (TSharedPtr<FStreamableHandle>& H : LevelHandles)

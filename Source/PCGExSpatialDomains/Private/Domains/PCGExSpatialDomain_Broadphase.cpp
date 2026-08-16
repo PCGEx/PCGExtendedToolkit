@@ -234,6 +234,7 @@ int32 FPCGExSpatialDomain_Broadphase::Append(
 	ValidMask.Add(true);
 	++NumValidEntries;
 	WorldBounds += WorldAABB;
+	EntriesByOwner.FindOrAdd(OwnerIndex).Add(StorageIdx);
 
 	// Lens AABB as identity-orientation OBB; Bounds.Index = StorageIdx so
 	// the broadphase walk's per-entry callbacks can recover the entry.
@@ -340,12 +341,18 @@ int32 FPCGExSpatialDomain_Broadphase::InvalidateOwner(const int32 OwnerIndex)
 		return 0;
 	}
 
-	int32 Flipped = 0;
-	for (int32 i = 0; i < Entries.Num(); ++i)
+	const TArray<int32>* Owned = EntriesByOwner.Find(OwnerIndex);
+	if (!Owned)
 	{
-		if (Entries[i].OwnerIndex == OwnerIndex && ValidMask[i])
+		return 0;
+	}
+
+	int32 Flipped = 0;
+	for (const int32 StorageIdx : *Owned)
+	{
+		if (ValidMask[StorageIdx])
 		{
-			ValidMask[i] = false;
+			ValidMask[StorageIdx] = false;
 			--NumValidEntries;
 			++Flipped;
 		}
@@ -368,15 +375,21 @@ int32 FPCGExSpatialDomain_Broadphase::RevalidateOwner(const int32 OwnerIndex)
 		return 0;
 	}
 
-	int32 Flipped = 0;
-	for (int32 i = 0; i < Entries.Num(); ++i)
+	const TArray<int32>* Owned = EntriesByOwner.Find(OwnerIndex);
+	if (!Owned)
 	{
-		if (Entries[i].OwnerIndex == OwnerIndex && !ValidMask[i])
+		return 0;
+	}
+
+	int32 Flipped = 0;
+	for (const int32 StorageIdx : *Owned)
+	{
+		if (!ValidMask[StorageIdx])
 		{
-			ValidMask[i] = true;
+			ValidMask[StorageIdx] = true;
 			++NumValidEntries;
 			++Flipped;
-			WorldBounds += Entries[i].WorldAABB;
+			WorldBounds += Entries[StorageIdx].WorldAABB;
 		}
 	}
 

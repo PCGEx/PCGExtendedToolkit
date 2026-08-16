@@ -39,6 +39,23 @@ bool FPCGExEntryAccessResult::IsType(PCGExAssetCollection::FTypeId TypeId) const
 	return Entry ? Entry->IsType(TypeId) : false;
 }
 
+double FPCGExEntryAccessResult::GetWeightNormalizer() const
+{
+	if (Pool)
+	{
+		return Pool->RawWeightSum;
+	}
+
+	// No pick produced this entry, so the honest denominator is the pool its host owns in full.
+	if (!Host)
+	{
+		return 0;
+	}
+
+	const PCGExAssetCollection::FCache* Cache = const_cast<UPCGExAssetCollection*>(Host)->LoadCache();
+	return Cache && Cache->Main ? Cache->Main->RawWeightSum : 0;
+}
+
 #pragma region FPCGExAssetStagingData
 
 bool FPCGExAssetStagingData::FindSocket(FName InName, const FPCGExSocket*& OutSocket) const
@@ -331,6 +348,7 @@ namespace PCGExAssetCollection
 		const_cast<FPCGExAssetCollectionEntry*>(InEntry)->BuildMicroCache();
 		Indices.Add(Index);
 		Weights.Add(InEntry->Weight + 1);
+		RawWeightSum += InEntry->Weight;
 	}
 
 	void FCategory::Compile()
@@ -346,11 +364,12 @@ namespace PCGExAssetCollection
 	FCache::FCache()
 	{
 		Main = MakeShared<FCategory>(NAME_None);
+		Uncategorized = MakeShared<FCategory>(NAME_None);
 	}
 
-	// Every valid entry goes into Main. Additionally, entries with a non-None Category
-	// are registered to a named sub-category (created on first encounter, assigned a dense
-	// index in CategoryNameToIndex). Subsequent entries on the same name reuse that slot.
+	// Every valid entry goes into Main. An entry with a Category additionally gets a named
+	// sub-category slot (created on first encounter, dense index in CategoryNameToIndex); an
+	// entry without one goes to Uncategorized, which is NOT name-addressable.
 	void FCache::RegisterEntry(int32 Index, const FPCGExAssetCollectionEntry* InEntry)
 	{
 		check(InEntry);
@@ -368,6 +387,13 @@ namespace PCGExAssetCollection
 		}
 
 		Main->RegisterEntry(Index, InEntry);
+
+		if (InEntry->Category.IsNone())
+		{
+			Uncategorized->RegisterEntry(Index, InEntry);
+			return;
+		}
+
 		if (const int32* IdxPtr = CategoryNameToIndex.Find(InEntry->Category))
 		{
 			Categories[*IdxPtr]->RegisterEntry(Index, InEntry);
@@ -384,6 +410,7 @@ namespace PCGExAssetCollection
 	void FCache::Compile()
 	{
 		Main->Compile();
+		Uncategorized->Compile();
 		for (const TSharedPtr<FCategory>& Category : Categories)
 		{
 			Category->Compile();
@@ -394,25 +421,71 @@ namespace PCGExAssetCollection
 
 #pragma region FPCGExAssetCollectionEntry
 
-const FPCGExProperty* FPCGExAssetCollectionEntry::GetResolvedPropertyBase(const UPCGExAssetCollection* OwningCollection, FName PropertyName) const
+const FInstancedStruct* FPCGExAssetCollectionEntry::ResolvePropertySlot(
+	const UPCGExAssetCollection* OwningCollection, const FName PropertyName, const UScriptStruct* RequiredType) const
 {
-	if (const FInstancedStruct* Override = PropertyOverrides.GetOverride(PropertyName))
+	// FPCGExPropertyOverrides::GetOverride has no IsNone guard while both collection-tier entry
+	// points do; guard once here so a nameless enabled slot can never satisfy a NAME_None query.
+	if (PropertyName.IsNone() || !RequiredType)
 	{
-		if (const FPCGExProperty* Base = Override->GetPtr<FPCGExProperty>())
+		return nullptr;
+	}
+
+	auto Accept = [RequiredType](const FInstancedStruct* Slot) -> bool
+	{
+		if (!Slot || !Slot->IsValid())
 		{
-			return Base;
+			return false;
+		}
+		const UScriptStruct* Type = Slot->GetScriptStruct();
+		return Type && Type->IsChildOf(RequiredType);
+	};
+
+	// Scans the whole tier rather than stopping at the first name match: a duplicate-named slot of
+	// the wrong type must not shadow a correct one behind it (GetOverride stops at the first).
+	auto FindInTier = [&Accept, PropertyName](const FPCGExPropertyOverrides& Tier) -> const FInstancedStruct*
+	{
+		for (const FPCGExPropertyOverrideEntry& Slot : Tier.Overrides)
+		{
+			if (Slot.bEnabled && Slot.GetPropertyName() == PropertyName && Accept(&Slot.Value))
+			{
+				return &Slot.Value;
+			}
+		}
+		return nullptr;
+	};
+
+	if (const FInstancedStruct* Slot = FindInTier(PropertyOverrides))
+	{
+		return Slot;
+	}
+
+	if (!OwningCollection)
+	{
+		return nullptr;
+	}
+
+	if (const FPCGExPropertyOverrides* Layer = OwningCollection->FindCategoryOverrides(Category))
+	{
+		if (const FInstancedStruct* Slot = FindInTier(*Layer))
+		{
+			return Slot;
 		}
 	}
 
-	if (OwningCollection)
+	// GetPropertyByName, not FindByName: the latter ignores the schema's ImportOverrides.
+	if (const FInstancedStruct* Slot = OwningCollection->CollectionProperties.GetPropertyByName(PropertyName); Accept(Slot))
 	{
-		if (const FInstancedStruct* Default = OwningCollection->CollectionProperties.GetPropertyByName(PropertyName))
-		{
-			return Default->GetPtr<FPCGExProperty>();
-		}
+		return Slot;
 	}
 
 	return nullptr;
+}
+
+const FPCGExProperty* FPCGExAssetCollectionEntry::GetResolvedPropertyBase(const UPCGExAssetCollection* OwningCollection, FName PropertyName) const
+{
+	const FInstancedStruct* Slot = ResolvePropertySlot(OwningCollection, PropertyName, FPCGExProperty::StaticStruct());
+	return Slot ? Slot->GetPtr<FPCGExProperty>() : nullptr;
 }
 
 const FPCGExFittingVariations& FPCGExAssetCollectionEntry::GetVariations(const UPCGExAssetCollection* ParentCollection) const
@@ -743,11 +816,13 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryAt(int32 Index) const
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 Pick = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPick(Index, EPCGExIndexPickMode::Ascending);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 Pick = ThisCache->Main->GetPick(Index, EPCGExIndexPickMode::Ascending);
 	if (const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(Pick))
 	{
 		Result.Entry = Entry;
 		Result.Host = this;
+		Result.Pool = ThisCache->Main.Get();
 	}
 	return Result;
 }
@@ -780,7 +855,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPick(Index, PickMode);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPick(Index, PickMode);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -795,6 +871,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -802,7 +879,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed) const
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPickRandom(Seed);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPickRandom(Seed);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -817,6 +895,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed) const
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -824,7 +903,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPickRandomWeighted(Seed);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPickRandomWeighted(Seed);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -839,6 +919,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -848,7 +929,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryAt(int32 Index, uint8 Tag
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPick(Index, EPCGExIndexPickMode::Ascending);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPick(Index, EPCGExIndexPickMode::Ascending);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -870,6 +952,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryAt(int32 Index, uint8 Tag
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -905,7 +988,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPick(Index, PickMode);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPick(Index, PickMode);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -933,6 +1017,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -940,7 +1025,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed, uint8 
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPickRandom(Seed);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPickRandom(Seed);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -968,6 +1054,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed, uint8 
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -975,7 +1062,8 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 {
 	FPCGExEntryAccessResult Result;
 
-	const int32 PickedIndex = const_cast<UPCGExAssetCollection*>(this)->LoadCache()->Main->GetPickRandomWeighted(Seed);
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32 PickedIndex = ThisCache->Main->GetPickRandomWeighted(Seed);
 	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
 
 	if (!Entry)
@@ -1003,6 +1091,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 
 	Result.Entry = Entry;
 	Result.Host = this;
+	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -1499,9 +1588,15 @@ void UPCGExAssetCollection::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths, PCGEx
 
 void UPCGExAssetCollection::GatherPropertySoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const
 {
-	// Collection-level defaults, then every entry's overrides. Shared by the editor
-	// cook-dependency walk and runtime preloading.
+	// Collection-level defaults, category rows, then every entry's overrides. Shared by the
+	// editor cook-dependency walk and runtime preloading -- every tier that can hold a soft
+	// path must be represented here or packaged builds resolve it to null with no editor symptom.
 	PCGExProperties::GatherSoftObjectPaths(CollectionProperties, OutPaths);
+
+	for (const FPCGExCategoryOverrides& Row : CategoryOverrides)
+	{
+		PCGExProperties::GatherSoftObjectPaths(Row.PropertyOverrides, OutPaths);
+	}
 
 	ForEachEntry([&OutPaths](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)
 	{
@@ -1622,6 +1717,25 @@ void UPCGExAssetCollection::RefreshCollectionPropertiesFromEntries(
 			InEntry->PropertyOverrides.SyncToSchema(CanonicalSchema);
 		});
 
+#if WITH_EDITOR
+	// Category rows are NOT schema contributors -- they can only refine a declared name -- but
+	// they carry the same HeaderId binding and must be realigned the same way.
+	for (FPCGExCategoryOverrides& Row : CategoryOverrides)
+	{
+		for (FPCGExPropertyOverrideEntry& Slot : Row.PropertyOverrides.Overrides)
+		{
+			if (FPCGExProperty* P = Slot.GetPropertyMutable())
+			{
+				if (const int32* CanonicalId = CanonicalHeaderIdsByName.Find(P->PropertyName))
+				{
+					P->HeaderId = *CanonicalId;
+				}
+			}
+		}
+	}
+#endif
+	SyncCategoryOverridesToSchema(CanonicalSchema);
+
 	RebuildPropertyRegistry();
 }
 
@@ -1631,12 +1745,30 @@ bool UPCGExAssetCollection::SyncPropertySchemaAndRemapEntries()
 	CollectionProperties.SyncAllSchemasAndRemap([this, &bRemapped](TConstArrayView<FPCGExHeaderIdRemap> Remaps)
 	{
 		bRemapped = true;
+
+		for (FPCGExCategoryOverrides& Row : CategoryOverrides)
+		{
+			Row.PropertyOverrides.ApplyHeaderIdRemap(Remaps);
+		}
+
 		ForEachEntry([&Remaps](FPCGExAssetCollectionEntry* InEntry, int32 /*i*/)
 		{
 			InEntry->PropertyOverrides.ApplyHeaderIdRemap(Remaps);
 		});
 	});
 	return bRemapped;
+}
+
+void UPCGExAssetCollection::SyncCategoryOverridesToSchema(const TArray<FInstancedStruct>& Schema)
+{
+#if WITH_EDITOR
+	// Editor-only: outside it SyncToSchema's identity maps are compiled out and every slot is
+	// rebuilt from schema defaults with bEnabled=false, i.e. it would wipe authored rows.
+	for (FPCGExCategoryOverrides& Row : CategoryOverrides)
+	{
+		Row.PropertyOverrides.SyncToSchema(Schema);
+	}
+#endif
 }
 
 #if WITH_EDITOR
@@ -1677,6 +1809,21 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 
 			bIsValueOnlyLeafEdit = !bArrayShapeChange && bLeafIsFPCGExPropertyValue;
 			bIsStructuralSchemaChange = !bIsValueOnlyLeafEdit;
+		}
+		// Rows only refine already-declared names, so a value edit here can't alter the schema.
+		// Shape changes still have to re-sync: EditFixedSize suppresses add/insert/delete/duplicate
+		// and reset-to-default, but NOT paste, which can change both row count and slot types.
+		else if (PropName == GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CategoryOverrides))
+		{
+			const bool bArrayShapeChange =
+				ChangeType == EPropertyChangeType::ArrayAdd ||
+				ChangeType == EPropertyChangeType::ArrayRemove ||
+				ChangeType == EPropertyChangeType::ArrayClear ||
+				ChangeType == EPropertyChangeType::ArrayMove ||
+				ChangeType == EPropertyChangeType::Duplicate;
+
+			bIsValueOnlyLeafEdit = !bArrayShapeChange;
+			bIsStructuralSchemaChange = bArrayShapeChange;
 		}
 		// Programmatic / reflection edits that bypass the outer CollectionProperties UPROPERTY.
 		else if (const UStruct* OwnerStruct = PropertyChangedEvent.MemberProperty->GetOwnerStruct();
@@ -1752,6 +1899,131 @@ void UPCGExAssetCollection::SyncPropertyOverridesToEntries()
 	ForEachEntry([&Schema](FPCGExAssetCollectionEntry* InEntry, int32 i)
 	{
 		InEntry->PropertyOverrides.SyncToSchema(Schema);
+	});
+	SyncCategoryOverridesToSchema(Schema);
+}
+
+void UPCGExAssetCollection::EDITOR_CollectUsedCategories(TSet<FName>& OutCategories) const
+{
+	ForEachEntry([&OutCategories](const FPCGExAssetCollectionEntry* InEntry, int32 /*i*/)
+	{
+		if (InEntry && !InEntry->Category.IsNone())
+		{
+			OutCategories.Add(InEntry->Category);
+		}
+	});
+}
+
+FPCGExCategoryOverrides* UPCGExAssetCollection::EDITOR_FindCategoryOverridesRow(const FName InCategory)
+{
+	if (InCategory.IsNone())
+	{
+		return nullptr;
+	}
+	return CategoryOverrides.FindByPredicate(
+		[InCategory](const FPCGExCategoryOverrides& Row) { return Row.Category == InCategory; });
+}
+
+FPCGExCategoryOverrides* UPCGExAssetCollection::EDITOR_FindOrAddCategoryOverrides(const FName InCategory)
+{
+	if (InCategory.IsNone())
+	{
+		return nullptr;
+	}
+
+	for (FPCGExCategoryOverrides& Row : CategoryOverrides)
+	{
+		if (Row.Category == InCategory)
+		{
+			return &Row;
+		}
+	}
+
+	FPCGExCategoryOverrides& Row = CategoryOverrides.Emplace_GetRef(InCategory);
+	Row.PropertyOverrides.SyncToSchema(CollectionProperties.BuildSchema());
+	return &Row;
+}
+
+bool UPCGExAssetCollection::EDITOR_RenameCategoryOverrides(const FName OldCategory, const FName NewCategory)
+{
+	if (OldCategory == NewCategory || OldCategory.IsNone() || NewCategory.IsNone())
+	{
+		return false;
+	}
+
+	const int32 SourceIdx = CategoryOverrides.IndexOfByPredicate(
+		[OldCategory](const FPCGExCategoryOverrides& Row) { return Row.Category == OldCategory; });
+
+	if (SourceIdx == INDEX_NONE)
+	{
+		return false;
+	}
+
+	const int32 DestIdx = CategoryOverrides.IndexOfByPredicate(
+		[NewCategory](const FPCGExCategoryOverrides& Row) { return Row.Category == NewCategory; });
+
+	// A destination that exists but authors nothing is a vacancy, not a conflict: rekey into it so
+	// the source's values survive. Keyed on authored content, never on the row's mere presence.
+	if (DestIdx == INDEX_NONE || !CategoryOverrides[DestIdx].HasAnyEnabled())
+	{
+		if (DestIdx != INDEX_NONE)
+		{
+			CategoryOverrides.RemoveAt(DestIdx);
+		}
+		const int32 MovedIdx = (DestIdx != INDEX_NONE && DestIdx < SourceIdx) ? SourceIdx - 1 : SourceIdx;
+		CategoryOverrides[MovedIdx].Category = NewCategory;
+		return true;
+	}
+
+	// Enabled source slots the destination will not reproduce. Empty = the destination already
+	// says the same thing, so absorbing the source is a silent no-op.
+	TArray<FName> Dropped;
+	const FPCGExPropertyOverrides& Dest = CategoryOverrides[DestIdx].PropertyOverrides;
+	for (const FPCGExPropertyOverrideEntry& Slot : CategoryOverrides[SourceIdx].PropertyOverrides.Overrides)
+	{
+		if (!Slot.bEnabled)
+		{
+			continue;
+		}
+		const FName SlotName = Slot.GetPropertyName();
+		if (SlotName.IsNone())
+		{
+			continue;
+		}
+		const FInstancedStruct* DestSlot = Dest.GetOverride(SlotName);
+		if (!DestSlot || !DestSlot->Identical(&Slot.Value, PPF_DeepComparison))
+		{
+			Dropped.Add(SlotName);
+		}
+	}
+
+	if (!Dropped.IsEmpty())
+	{
+		TArray<FString> Names;
+		Names.Reserve(Dropped.Num());
+		for (const FName DroppedName : Dropped)
+		{
+			Names.Add(DroppedName.ToString());
+		}
+		UE_LOG(LogTemp, Warning,
+		       TEXT("Merged category \"%s\" into existing \"%s\" in \"%s\": the destination's values win, so these overrides were dropped: %s"),
+		       *OldCategory.ToString(), *NewCategory.ToString(), *GetNameSafe(this), *FString::Join(Names, TEXT(", ")));
+	}
+
+	CategoryOverrides.RemoveAt(SourceIdx);
+	return true;
+}
+
+int32 UPCGExAssetCollection::EDITOR_CleanupUnusedCategoryOverrides()
+{
+	TSet<FName> Used;
+	EDITOR_CollectUsedCategories(Used);
+
+	// Category-matches-no-entry is the ONLY criterion: an all-disabled row is what in-progress
+	// authoring looks like, so removing on emptiness would delete exactly that.
+	return CategoryOverrides.RemoveAll([&Used](const FPCGExCategoryOverrides& Row)
+	{
+		return Row.Category.IsNone() || !Used.Contains(Row.Category);
 	});
 }
 

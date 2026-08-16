@@ -324,8 +324,8 @@ bool UK2Node_PCGExMemberBase::IsMemberEligible(const FProperty* Property, bool b
 		}
 		else
 		{
-			// Schema container with sync invariants -- use the collection's own UI/API.
-			if (MemberName == FName(TEXT("CollectionProperties")))
+			// Schema containers with sync invariants -- use the collection's own UI/API.
+			if (MemberName == FName(TEXT("CollectionProperties")) || MemberName == FName(TEXT("CategoryOverrides")))
 			{
 				return false;
 			}

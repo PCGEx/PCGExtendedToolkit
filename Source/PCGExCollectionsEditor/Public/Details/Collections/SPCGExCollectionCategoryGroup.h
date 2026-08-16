@@ -18,6 +18,7 @@ DECLARE_DELEGATE_TwoParams(FOnCategoryRenamed, FName /*OldName*/, FName /*NewNam
 DECLARE_DELEGATE_ThreeParams(FOnTileDropOnCategory, FName /*TargetCategory*/, TSharedRef<FPCGExCollectionTileDragDropOp> /*DragOp*/, int32 /*InsertBeforeLocalIndex*/);
 DECLARE_DELEGATE_TwoParams(FOnAssetDropOnCategory, FName /*TargetCategory*/, const TArray<FAssetData>& /*Assets*/);
 DECLARE_DELEGATE_OneParam(FOnAddToCategory, FName /*Category*/);
+DECLARE_DELEGATE_OneParam(FOnEditCategoryOverrides, FName /*Category*/);
 DECLARE_DELEGATE_TwoParams(FOnCategoryExpansionChanged, FName /*Category*/, bool /*bIsExpanded*/);
 DECLARE_DELEGATE_ThreeParams(FOnTileReorderInCategory, FName /*Category*/, TSharedRef<FPCGExCollectionTileDragDropOp> /*DragOp*/, int32 /*InsertBeforeLocalIndex*/);
 
@@ -46,6 +47,9 @@ public:
 		SLATE_EVENT(FOnTileDropOnCategory, OnTileDropOnCategory)
 		SLATE_EVENT(FOnAssetDropOnCategory, OnAssetDropOnCategory)
 		SLATE_EVENT(FOnAddToCategory, OnAddToCategory)
+		/** Unbound hides the overrides button -- grids whose groups aren't real categories
+		 *  (e.g. the variant grid's source collections) leave it that way. */
+		SLATE_EVENT(FOnEditCategoryOverrides, OnEditCategoryOverrides)
 		SLATE_EVENT(FOnCategoryExpansionChanged, OnExpansionChanged)
 		SLATE_EVENT(FOnTileReorderInCategory, OnTileReorderInCategory)
 	SLATE_END_ARGS()
@@ -80,6 +84,7 @@ private:
 	FOnCategoryRenamed OnCategoryRenamed;
 	FOnTileDropOnCategory OnTileDropOnCategory;
 	FOnAddToCategory OnAddToCategory;
+	FOnEditCategoryOverrides OnEditCategoryOverrides;
 	FOnAssetDropOnCategory OnAssetDropOnCategory;
 	FOnCategoryExpansionChanged OnExpansionChanged;
 	FOnTileReorderInCategory OnTileReorderInCategory;
