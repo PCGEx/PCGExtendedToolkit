@@ -688,6 +688,10 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeChildren(
 		if (TSharedPtr<IPropertyHandle> ImportedSchemasHandle = PropertyHandle->GetChildHandle(TEXT("ImportedSchemas")))
 		{
 			ImportedSchemasHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPCGExPropertySchemaCollectionCustomization::OnImportedSchemasArrayChanged));
+			// Assigning an asset into a slot notifies only the ELEMENT node -- the array-level hook
+			// above never fires for it (FPropertyNode broadcasts to parents on the child channel only).
+			// Child hooks are safe here, unlike on Schemas: elements are discrete asset-picker commits.
+			ImportedSchemasHandle->SetOnChildPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPCGExPropertySchemaCollectionCustomization::OnImportedSchemasArrayChanged));
 			ChildBuilder.AddProperty(ImportedSchemasHandle.ToSharedRef());
 		}
 	}

@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "IPropertyTypeCustomization.h"
+#include "PropertyEditorModule.h"
 
 class IPropertyHandle;
 
@@ -31,4 +32,33 @@ public:
 private:
 	/** Handle to the FRuntimeFloatCurve 'Value' member of FPCGExProperty_FloatCurve. */
 	TSharedPtr<IPropertyHandle> ValueHandle;
+};
+
+/**
+ * Raw FRuntimeFloatCurve rows owned by FPCGExProperty subclasses (identifier-gated GLOBAL
+ * registration -- identifier callbacks are consulted before the identifier-less engine one).
+ *
+ * Load-bearing safety: the engine FCurveStructCustomization calls GEditor->RegisterForUndo in
+ * its CONSTRUCTOR, but a row whose widget is replaced via CustomWidget() never runs
+ * CustomizeHeader (FDetailPropertyRow::OnItemNodeInitialized instantiates the type
+ * customization unconditionally, then skips the header for user-customized rows) -- leaving a
+ * live undo client with a null StructPropertyHandle that crashes on the next undo. This class
+ * is instantiation-safe by construction and renders through the shared PCGEx curve widget.
+ */
+class FPCGExRuntimeFloatCurveCustomization : public IPropertyTypeCustomization
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+
+	//~ Begin IPropertyTypeCustomization interface
+	virtual void CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+	virtual void CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+	//~ End IPropertyTypeCustomization interface
+};
+
+/** Matches FRuntimeFloatCurve properties declared inside FPCGExProperty-derived structs. */
+class FPCGExPropertyOwnedCurveIdentifier : public IPropertyTypeIdentifier
+{
+public:
+	virtual bool IsPropertyTypeCustomized(const IPropertyHandle& PropertyHandle) const override;
 };
