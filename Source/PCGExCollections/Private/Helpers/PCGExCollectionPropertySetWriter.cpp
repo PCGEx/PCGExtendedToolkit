@@ -37,13 +37,10 @@ namespace PCGExCollections
 	{
 		if (Entry)
 		{
-			if (const FInstancedStruct* Override = Entry->PropertyOverrides.GetOverride(PropertyName);
-				Override && Override->IsValid())
-			{
-				return Override;
-			}
+			return Entry->ResolvePropertySlot(Host, PropertyName, FPCGExProperty::StaticStruct());
 		}
-		if (Host)
+		// Host-only reads have no entry to carry a Category, so they see collection defaults only.
+		if (Host && !PropertyName.IsNone())
 		{
 			if (const FInstancedStruct* Default = Host->CollectionProperties.GetPropertyByName(PropertyName);
 				Default && Default->IsValid())

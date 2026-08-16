@@ -106,7 +106,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetDistributionDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bUseCategories"))
 	FPCGExInputShorthandNameName Category = FPCGExInputShorthandNameName(FName("Category"), FName("MyCategory"), false);
 
-	/** What to do when a point's Category attribute does not match any named category in the collection. */
+	/** What to do when a point asks for a category the collection cannot serve. A blank key selects the uncategorized entries, and only counts as missing when there are none. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName = " └─ Missing Category Behavior", EditCondition="bUseCategories", HideEditConditionToggle))
 	EPCGExMissingCategoryBehavior MissingCategoryBehavior = EPCGExMissingCategoryBehavior::Skip;
 

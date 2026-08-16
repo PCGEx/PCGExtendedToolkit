@@ -26,8 +26,12 @@ namespace PCGExCollections
 		TConstArrayView<const UPCGExAssetCollection*> Collections);
 
 	/**
-	 * Resolve the effective source property for a given entry: per-entry override first,
-	 * then the host collection's default. Returns nullptr if neither is present/valid.
+	 * Resolve the effective source property for a given entry: per-entry override, then Host's row
+	 * for the entry's Category, then Host's default. Null when none is present and valid.
+	 * Host MUST be the collection that owns Entry (i.e. FPCGExEntryAccessResult::Host) -- the
+	 * category tier reads Host's rows under Entry's category name, so passing a root collection for
+	 * an entry that came from a nested one leaks the root's values into the nested entry.
+	 * A null Entry reads Host's defaults only.
 	 */
 	PCGEXCOLLECTIONS_API const FInstancedStruct* ResolveEntrySourceProperty(
 		const FPCGExAssetCollectionEntry* Entry,

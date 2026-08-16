@@ -9,7 +9,11 @@
 #include "ToolMenus.h"
 #include "Engine/AssetManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "Framework/MultiBox/SToolBarButtonBlock.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Notifications/SNotificationList.h"
 
 #include "PCGExProperty.h"
 #include "PropertyCustomizationHelpers.h"
@@ -43,6 +47,24 @@ FPCGExAssetCollectionEditor::~FPCGExAssetCollectionEditor()
 
 bool FPCGExAssetCollectionEditor::IsPropertyUnderEntries(const FPropertyAndParent& PropertyAndParent)
 {
+	// Category rows are collection-level, but their innards look exactly like an entry's to both
+	// tests below: they hold a member named PropertyOverrides (hence "Overrides") whose leaves are
+	// owned by FPCGExProperty subtypes. Reject the whole subtree first or it leaks into this tab.
+	{
+		const FName CategoryOverridesName = GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CategoryOverrides);
+		if (PropertyAndParent.Property.GetFName() == CategoryOverridesName)
+		{
+			return false;
+		}
+		for (const FProperty* Parent : PropertyAndParent.ParentProperties)
+		{
+			if (Parent && Parent->GetFName() == CategoryOverridesName)
+			{
+				return false;
+			}
+		}
+	}
+
 	// Check if property IS "Entries"
 	if (PropertyAndParent.Property.GetFName() == PCGExAssetCollectionEditor::EntriesName)
 	{
@@ -1007,6 +1029,59 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 							];
 				})
 			);
+	}
+	ToolbarBuilder.EndSection();
+
+	ToolbarBuilder.BeginSection("CategoriesSection");
+	{
+		const TSharedPtr<FToolBarButtonBlock> CleanupCategoriesButton = ToolbarBuilder.AddToolBarButton(
+			FUIAction(
+				FExecuteAction::CreateLambda([this]()
+				{
+					UPCGExAssetCollection* Collection = EditedCollection.Get();
+					if (!Collection)
+					{
+						return;
+					}
+
+					// Probe first: an unconditional transaction would push an empty undo step on a
+					// no-op click.
+					TSet<FName> Used;
+					Collection->EDITOR_CollectUsedCategories(Used);
+					const bool bHasStaleRows = Collection->CategoryOverrides.ContainsByPredicate(
+						[&Used](const FPCGExCategoryOverrides& Row)
+						{
+							return Row.Category.IsNone() || !Used.Contains(Row.Category);
+						});
+
+					int32 Removed = 0;
+					if (bHasStaleRows)
+					{
+						FScopedTransaction Transaction(INVTEXT("Cleanup Unused Category Overrides"));
+						Collection->Modify();
+						Removed = Collection->EDITOR_CleanupUnusedCategoryOverrides();
+						Collection->PostEditChange();
+					}
+
+					FNotificationInfo Info(Removed > 0
+						                       ? FText::Format(INVTEXT("Removed {0} unused category override row(s)."), Removed)
+						                       : FText(INVTEXT("No unused category overrides to remove.")));
+					Info.ExpireDuration = 4.0f;
+					Info.bFireAndForget = true;
+					FSlateNotificationManager::Get().AddNotification(Info);
+				})),
+			NAME_None,
+			FText::FromString(TEXT("Cleanup Categories")),
+			INVTEXT("Remove category override rows whose category no longer matches any entry. Rows with no enabled overrides are KEPT -- that is what in-progress authoring looks like."),
+			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Delete"));
+
+		// Icon-only in the bar, matching the combo buttons beside it. Per-block, not
+		// FToolBarBuilder::SetLabelVisibility, which is sticky and would swallow the label of
+		// anything a subclass appends afterwards. The label survives for the overflow menu.
+		if (CleanupCategoriesButton)
+		{
+			CleanupCategoriesButton->SetLabelVisibility(EVisibility::Collapsed);
+		}
 	}
 	ToolbarBuilder.EndSection();
 

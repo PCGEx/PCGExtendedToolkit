@@ -552,6 +552,26 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			SourceAppended++;
 		});
 
+		// Category rows travel with the entries that reference them. Same conflict policy as the
+		// globals blocks: a row this target already has is the user's and wins; the incoming one is
+		// dropped with a warning rather than merged, since two rows can enable the same property
+		// with different values and any per-slot union would match neither source.
+		for (const FPCGExCategoryOverrides& SourceRow : Source->CategoryOverrides)
+		{
+			if (SourceRow.Category.IsNone())
+			{
+				continue;
+			}
+			if (const FPCGExPropertyOverrides* Existing = FindCategoryOverrides(SourceRow.Category))
+			{
+				UE_LOG(LogTemp, Warning,
+				       TEXT("Merging \"%s\" into \"%s\": category \"%s\" already has overrides here, so the source's were dropped. Re-author them if needed."),
+				       *GetNameSafe(Source), *GetNameSafe(this), *SourceRow.Category.ToString());
+				continue;
+			}
+			CategoryOverrides.Add(SourceRow);
+		}
+
 		// Ensure per-type STATES for what THIS source contributed, seeding newly created
 		// ones from it (adopts external-storage settings -- closes the gap where merged
 		// PCGData machinery silently fell back to embedded). Must run per source, before the
