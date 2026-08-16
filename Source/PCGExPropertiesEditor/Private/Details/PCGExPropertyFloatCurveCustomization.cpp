@@ -46,4 +46,41 @@ void FPCGExPropertyFloatCurveCustomization::CustomizeChildren(TSharedRef<IProper
 		];
 }
 
+#pragma region FPCGExRuntimeFloatCurveCustomization
+
+TSharedRef<IPropertyTypeCustomization> FPCGExRuntimeFloatCurveCustomization::MakeInstance()
+{
+	return MakeShared<FPCGExRuntimeFloatCurveCustomization>();
+}
+
+void FPCGExRuntimeFloatCurveCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils)
+{
+	// Rows that fully replace their widget (AddCompactValueRow / AddComplexValueRows) never call
+	// this; it serves any path that surfaces the raw curve with a default header.
+	HeaderRow
+		.ShouldAutoExpand(true)
+		.NameContent()
+		[
+			PropertyHandle->CreatePropertyNameWidget()
+		];
+}
+
+void FPCGExRuntimeFloatCurveCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils)
+{
+	ChildBuilder.AddCustomRow(LOCTEXT("CurveEditorRow", "Curve Editor"))
+		.WholeRowContent()
+		[
+			SNew(SPCGExPropertyCurveValueWidget, PropertyHandle)
+		];
+}
+
+bool FPCGExPropertyOwnedCurveIdentifier::IsPropertyTypeCustomized(const IPropertyHandle& PropertyHandle) const
+{
+	const FProperty* Property = PropertyHandle.GetProperty();
+	const UScriptStruct* OwnerStruct = Property ? Cast<UScriptStruct>(Property->GetOwnerStruct()) : nullptr;
+	return OwnerStruct && OwnerStruct->IsChildOf(FPCGExProperty::StaticStruct());
+}
+
+#pragma endregion
+
 #undef LOCTEXT_NAMESPACE

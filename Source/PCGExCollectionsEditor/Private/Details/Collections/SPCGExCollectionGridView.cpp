@@ -109,6 +109,11 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 	FCoreUObjectDelegates::OnObjectModified.AddSP(
 		this, &SPCGExCollectionGridView::OnObjectModified);
 
+	// OnObjectModified only fires from Modify(); reconciles routed through NotifyPostChange or
+	// synthetic PostEditChangeProperty (imported-schema-asset changes) bypass it entirely.
+	FCoreUObjectDelegates::OnObjectPropertyChanged.AddSP(
+		this, &SPCGExCollectionGridView::OnCollectionPropertyChanged);
+
 	if (const UPCGExCollectionsEditorSettings* Settings = GetDefault<UPCGExCollectionsEditorSettings>())
 	{
 		GridPaneSplit = FMath::Max(Settings->GridPaneSplit, 0.05f);
@@ -2517,6 +2522,24 @@ void SPCGExCollectionGridView::OnObjectModified(UObject* Object)
 	{
 		return;
 	}
+	ScheduleExternalRefresh();
+}
+
+void SPCGExCollectionGridView::OnCollectionPropertyChanged(UObject* Object, FPropertyChangedEvent& Event)
+{
+	if (Object != Collection.Get())
+	{
+		return;
+	}
+	if (Event.ChangeType == EPropertyChangeType::Interactive)
+	{
+		return;
+	}
+	ScheduleExternalRefresh();
+}
+
+void SPCGExCollectionGridView::ScheduleExternalRefresh()
+{
 	if (bIsSyncing || bIsBatchOperation)
 	{
 		return;

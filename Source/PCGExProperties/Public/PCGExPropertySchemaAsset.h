@@ -62,6 +62,13 @@ public:
 	 */
 	FOnPCGExSchemaAssetChanged OnSchemaAssetChanged;
 
+	/**
+	 * Class-wide counterpart of OnSchemaAssetChanged, fired for EVERY schema asset edit.
+	 * Host modules subscribe once here and filter with ImportsAssetTransitive -- unlike the
+	 * per-instance delegate, no live details customization is needed for hosts to reconcile.
+	 */
+	static FOnPCGExSchemaAssetChanged OnAnySchemaAssetChanged;
+
 	virtual void PostLoad() override;
 
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

@@ -31,6 +31,8 @@
 #include "Helpers/PCGExExternalPackageProducer.h"
 #include "Misc/CoreDelegates.h"
 #include "PCGExLog.h"
+#include "PCGExPropertySchemaAsset.h"
+#include "UObject/UObjectIterator.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Thumbnails/PCGExCollectionThumbnailRenderer.h"
 #include "UObject/Package.h"
@@ -83,6 +85,10 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// -> zero fingerprint -> "cannot determine").
 	OnAssetLoadedHandle = FCoreUObjectDelegates::OnAssetLoaded.AddRaw(this, &FPCGExCollectionsEditorModule::OnAssetLoaded);
 
+	// Schema-asset edits must reach importing collections even when no details panel is open on
+	// them -- the per-instance OnSchemaAssetChanged relay lives in a customization and dies with it.
+	OnAnySchemaAssetChangedHandle = UPCGExPropertySchemaAsset::OnAnySchemaAssetChanged.AddRaw(this, &FPCGExCollectionsEditorModule::OnAnySchemaAssetChanged);
+
 	// Coordinated external-package save: when a saved package hosts an
 	// IPCGExExternalPackageProducer, its dirty generated packages save alongside it.
 	OnPackageSavedHandle = UPackage::PackageSavedWithContextEvent.AddRaw(this, &FPCGExCollectionsEditorModule::OnPackageSaved);
@@ -121,6 +127,7 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 	}
 	FCoreUObjectDelegates::OnObjectsReinstanced.Remove(OnObjectsReinstancedHandle);
 	FCoreUObjectDelegates::OnAssetLoaded.Remove(OnAssetLoadedHandle);
+	UPCGExPropertySchemaAsset::OnAnySchemaAssetChanged.Remove(OnAnySchemaAssetChangedHandle);
 	FCoreDelegates::GetOnPostEngineInit().Remove(OnPostEngineInitHandle);
 	UPackage::PackageSavedWithContextEvent.Remove(OnPackageSavedHandle);
 
@@ -250,6 +257,38 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 				Loaded->EDITOR_RebuildStaleEntries();
 			}
 		});
+}
+
+void FPCGExCollectionsEditorModule::OnAnySchemaAssetChanged(UPCGExPropertySchemaAsset* Asset)
+{
+	// Cook guard mirrors OnAssetLoaded: WITH_EDITOR is still 1 there and this dirties packages.
+	if (!GEditor || IsRunningCookCommandlet() || !Asset)
+	{
+		return;
+	}
+
+	FProperty* MemberProp = UPCGExAssetCollection::StaticClass()->FindPropertyByName(
+		GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CollectionProperties));
+
+	for (TObjectIterator<UPCGExAssetCollection> It; It; ++It)
+	{
+		UPCGExAssetCollection* Coll = *It;
+		if (!IsValid(Coll) || Coll->IsTemplate())
+		{
+			continue;
+		}
+		if (!Coll->CollectionProperties.ImportsAssetTransitive(Asset))
+		{
+			continue;
+		}
+
+		// Synthetic classified event: routes through the standard structural path (registry rebuild,
+		// entry/category SyncToSchema, staging, OnObjectPropertyChanged -> view refresh). Deliberately
+		// NOT reconciling collection-level ImportOverrides here: in-place reshape under live aliased
+		// rows is unsafe -- the schema customization owns that via its parked-buffer path.
+		FPropertyChangedEvent ChangedEvent(MemberProp, EPropertyChangeType::ValueSet);
+		Coll->PostEditChangeProperty(ChangedEvent);
+	}
 }
 
 void FPCGExCollectionsEditorModule::OnPackageSaved(const FString& PackageFilename, UPackage* Package, FObjectPostSaveContext Context)

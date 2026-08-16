@@ -515,6 +515,44 @@ bool FPCGExPropertySchemaCollection::ReconcileImportOverrides(const TArray<FPCGE
 	return ImportOverrides.SyncToSchema(ImportedOnlySchema);
 }
 
+#if WITH_EDITOR
+bool FPCGExPropertySchemaCollection::ImportsAssetTransitive(const UPCGExPropertySchemaAsset* Asset) const
+{
+	if (!Asset)
+	{
+		return false;
+	}
+
+	TSet<const UPCGExPropertySchemaAsset*> Visited;
+	TArray<const FPCGExPropertySchemaCollection*> Frontier;
+	Frontier.Add(this);
+
+	while (!Frontier.IsEmpty())
+	{
+		const FPCGExPropertySchemaCollection* Current = Frontier.Pop(EAllowShrinking::No);
+		for (const TObjectPtr<UPCGExPropertySchemaAsset>& AssetPtr : Current->ImportedSchemas)
+		{
+			const UPCGExPropertySchemaAsset* Imported = AssetPtr.Get();
+			if (!Imported)
+			{
+				continue;
+			}
+			if (Imported == Asset)
+			{
+				return true;
+			}
+			bool bAlreadyVisited = false;
+			Visited.Add(Imported, &bAlreadyVisited);
+			if (!bAlreadyVisited)
+			{
+				Frontier.Add(&Imported->Collection);
+			}
+		}
+	}
+	return false;
+}
+#endif
+
 void FPCGExPropertySchemaCollection::SyncFromArchetype(const FPCGExPropertySchemaCollection& Archetype)
 {
 #if WITH_EDITOR

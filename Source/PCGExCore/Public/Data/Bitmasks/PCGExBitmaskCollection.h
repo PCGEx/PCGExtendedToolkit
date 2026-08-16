@@ -129,8 +129,6 @@ protected:
 #if WITH_EDITOR
 	void EDITOR_SetDirty()
 	{
-		Cache.Reset();
-		bCacheNeedsRebuild = true;
 		InvalidateCache();
 	}
 #endif

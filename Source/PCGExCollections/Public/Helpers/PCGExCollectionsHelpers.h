@@ -185,8 +185,12 @@ namespace PCGExCollections
 	class PCGEXCOLLECTIONS_API FSelectorHelper : public TSharedFromThis<FSelectorHelper>
 	{
 	protected:
-		PCGExAssetCollection::FCache* Cache = nullptr;
+		TSharedPtr<PCGExAssetCollection::FCache> Cache;
 		UPCGExAssetCollection* Collection = nullptr;
+
+		// Pins for every transitively reachable subcollection cache: per-point subcollection hops
+		// re-fetch their host's cache raw, so this helper's lifetime must keep those generations alive.
+		TArray<TSharedPtr<PCGExAssetCollection::FCache>> CachePins;
 
 		// Effective state resolved at Init time. In Legacy mode, a transient built-in factory
 		// is synthesized from Details; in External mode, the caller-provided factory is used.

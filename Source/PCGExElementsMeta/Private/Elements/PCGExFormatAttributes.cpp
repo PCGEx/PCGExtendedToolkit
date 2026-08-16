@@ -23,6 +23,21 @@
 
 #pragma region UPCGSettings interface
 
+#if WITH_EDITOR
+void UPCGExFormatAttributesSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 12)
+	{
+		for (FPCGExFormatTokenRule& Rule : Rules)
+		{
+			Rule.TokenValue.Update(EPCGExInputValueType::Constant, FPCGAttributePropertyInputSelector(), Rule.Token_DEPRECATED);
+		}
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
 void UPCGExFormatAttributesSettings::GatherExternalPinNames(TSet<FName>& OutPins) const
 {
 	for (const FPCGExFormatTokenRule& Rule : Rules)
@@ -64,11 +79,10 @@ FPCGElementPtr UPCGExFormatAttributesSettings::CreateElement() const
 
 namespace PCGExFormatAttributes
 {
-	// One rule's replacement value for one input. Broadcast holds a single value used across every
-	// row (1-row sources or fallback); per-row holds an aligned array. Broadcast avoids an N-copy
-	// of the same string in the common case (single-source self-attribute, single-row external set,
-	// or fallback).
-	struct FRuleReplacement
+	// One rule's resolved string (token or replacement) for one input. Broadcast holds a single value
+	// used across every row (constants, 1-row sources, fallback); per-row holds an aligned array.
+	// Broadcast avoids an N-copy of the same string in the common case.
+	struct FRuleValue
 	{
 		FString BroadcastValue;
 		TArray<FString> PerRowValues;
@@ -96,7 +110,8 @@ namespace PCGExFormatAttributes
 		UPCGData* DupData = nullptr;
 		IPCGAttributeAccessorKeys* WriteKeys = nullptr;
 		int32 NumRows = 0;
-		TArray<FRuleReplacement> RuleReplacements;
+		TArray<FRuleValue> RuleTokens;
+		TArray<FRuleValue> RuleReplacements;
 		TArray<bool> RuleOK;
 	};
 
@@ -112,11 +127,11 @@ namespace PCGExFormatAttributes
 	// Source row count rules:
 	//   NumSourceRows == NumTargetRows (> 1) -> per-row pairing
 	//   anything else                        -> broadcast row 0 (covers 1-row sources and mismatches)
-	bool ReadSourceIntoReplacement(
+	bool ReadSourceIntoValue(
 		const UPCGData* SourceData,
 		const FPCGAttributePropertyInputSelector& InSelector,
 		const int32 NumTargetRows,
-		FRuleReplacement& Out)
+		FRuleValue& Out)
 	{
 		if (!SourceData || NumTargetRows <= 0) { return false; }
 
@@ -182,7 +197,7 @@ namespace PCGExFormatAttributes
 		}
 	}
 
-	void ResolveRuleReplacements(
+	void ResolveRuleValues(
 		FPCGExContext* InContext,
 		const UPCGExFormatAttributesSettings* Settings,
 		const FFormatPrecomputed& Precomputed,
@@ -193,6 +208,7 @@ namespace PCGExFormatAttributes
 	{
 		const TArray<FPCGExFormatTokenRule>& Rules = Settings->Rules;
 		const int32 NumRules = Rules.Num();
+		State.RuleTokens.SetNum(NumRules);
 		State.RuleReplacements.SetNum(NumRules);
 		State.RuleOK.Init(false, NumRules);
 
@@ -204,7 +220,26 @@ namespace PCGExFormatAttributes
 				                             ? InputData
 				                             : ResolveExternalSource(Precomputed.ExternalListByRule[i], InputIdx);
 
-			if (SourceData && ReadSourceIntoReplacement(SourceData, Rule.Source, NumRows, State.RuleReplacements[i]))
+			// Token first -- a rule with an unreadable token can't match anything, fallback included.
+			FRuleValue& RuleToken = State.RuleTokens[i];
+			if (Rule.TokenValue.Input == EPCGExInputValueType::Constant)
+			{
+				RuleToken.bIsBroadcast = true;
+				RuleToken.BroadcastValue = Rule.TokenValue.Constant;
+				RuleToken.PerRowValues.Reset();
+			}
+			else if (!SourceData || !ReadSourceIntoValue(SourceData, Rule.TokenValue.Attribute, NumRows, RuleToken))
+			{
+				if (!Settings->bQuietMissingSourceWarning)
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
+						        FTEXT(PCGEX_FORMAT_LOG_PREFIX "rule #{0} could not read its token attribute on input #{1}. Rule will be skipped for this input."),
+						        FText::AsNumber(i), FText::AsNumber(InputIdx)));
+				}
+				continue;
+			}
+
+			if (SourceData && ReadSourceIntoValue(SourceData, Rule.Source, NumRows, State.RuleReplacements[i]))
 			{
 				State.RuleOK[i] = true;
 				continue;
@@ -212,7 +247,7 @@ namespace PCGExFormatAttributes
 
 			if (Rule.bHasFallback)
 			{
-				FRuleReplacement& R = State.RuleReplacements[i];
+				FRuleValue& R = State.RuleReplacements[i];
 				R.bIsBroadcast = true;
 				R.BroadcastValue = Rule.FallbackValue;
 				R.PerRowValues.Reset();
@@ -232,27 +267,42 @@ namespace PCGExFormatAttributes
 	void ApplyRulesSequential(
 		TArray<FString>& Values,
 		TConstArrayView<int32> ApplicableRuleIndices,
-		const TArray<FPCGExFormatTokenRule>& Rules,
-		const TArray<FRuleReplacement>& RuleReplacements,
+		const TArray<FRuleValue>& RuleTokens,
+		const TArray<FRuleValue>& RuleReplacements,
 		const TArray<bool>& RuleOK)
 	{
 		const int32 NumRows = Values.Num();
 		for (const int32 RuleIdx : ApplicableRuleIndices)
 		{
 			if (!RuleOK[RuleIdx]) { continue; }
-			const FString& Token = Rules[RuleIdx].Token;
-			if (Token.IsEmpty()) { continue; }
 
-			const FRuleReplacement& Repl = RuleReplacements[RuleIdx];
-			if (Repl.bIsBroadcast)
+			const FRuleValue& Tok = RuleTokens[RuleIdx];
+			const FRuleValue& Repl = RuleReplacements[RuleIdx];
+
+			if (Tok.bIsBroadcast)
 			{
-				const FString& Replacement = Repl.BroadcastValue;
-				for (int32 r = 0; r < NumRows; r++) { Values[r].ReplaceInline(*Token, *Replacement, ESearchCase::CaseSensitive); }
+				const FString& Token = Tok.BroadcastValue;
+				if (Token.IsEmpty()) { continue; }
+
+				if (Repl.bIsBroadcast)
+				{
+					const FString& Replacement = Repl.BroadcastValue;
+					for (int32 r = 0; r < NumRows; r++) { Values[r].ReplaceInline(*Token, *Replacement, ESearchCase::CaseSensitive); }
+				}
+				else
+				{
+					const TArray<FString>& PerRow = Repl.PerRowValues;
+					for (int32 r = 0; r < NumRows; r++) { Values[r].ReplaceInline(*Token, *PerRow[r], ESearchCase::CaseSensitive); }
+				}
 			}
 			else
 			{
-				const TArray<FString>& PerRow = Repl.PerRowValues;
-				for (int32 r = 0; r < NumRows; r++) { Values[r].ReplaceInline(*Token, *PerRow[r], ESearchCase::CaseSensitive); }
+				for (int32 r = 0; r < NumRows; r++)
+				{
+					const FString& Token = Tok.PerRowValues[r];
+					if (Token.IsEmpty()) { continue; }
+					Values[r].ReplaceInline(*Token, *Repl.Get(r), ESearchCase::CaseSensitive);
+				}
 			}
 		}
 	}
@@ -266,8 +316,8 @@ namespace PCGExFormatAttributes
 	void ApplyRulesSinglePass(
 		TArray<FString>& Values,
 		TConstArrayView<int32> ApplicableRuleIndices,
-		const TArray<FPCGExFormatTokenRule>& Rules,
-		const TArray<FRuleReplacement>& RuleReplacements,
+		const TArray<FRuleValue>& RuleTokens,
+		const TArray<FRuleValue>& RuleReplacements,
 		const TArray<bool>& RuleOK)
 	{
 		const int32 NumRows = Values.Num();
@@ -295,7 +345,7 @@ namespace PCGExFormatAttributes
 				for (const int32 RuleIdx : ApplicableRuleIndices)
 				{
 					if (!RuleOK[RuleIdx]) { continue; }
-					const FString& Token = Rules[RuleIdx].Token;
+					const FString& Token = RuleTokens[RuleIdx].Get(r);
 					const int32 TokenLen = Token.Len();
 					if (TokenLen == 0 || Pos + TokenLen > InputLen) { continue; }
 					if (FCString::Strncmp(OrigData + Pos, *Token, TokenLen) == 0)
@@ -374,11 +424,11 @@ namespace PCGExFormatAttributes
 
 		if (Settings->ReplacementMode == EPCGExFormatReplacementMode::Sequential)
 		{
-			ApplyRulesSequential(Values, ApplicableRules, Settings->Rules, State.RuleReplacements, State.RuleOK);
+			ApplyRulesSequential(Values, ApplicableRules, State.RuleTokens, State.RuleReplacements, State.RuleOK);
 		}
 		else
 		{
-			ApplyRulesSinglePass(Values, ApplicableRules, Settings->Rules, State.RuleReplacements, State.RuleOK);
+			ApplyRulesSinglePass(Values, ApplicableRules, State.RuleTokens, State.RuleReplacements, State.RuleOK);
 		}
 
 		FName OutputName = TargetName;
@@ -479,7 +529,7 @@ bool FPCGExFormatAttributesElement::AdvanceWork(FPCGExContext* InContext, const 
 				State.DupData = DupData;
 				State.WriteKeys = WriteKeys.Get();
 				State.NumRows = NumRows;
-				PCGExFormatAttributes::ResolveRuleReplacements(InContext, Settings, Precomputed, DupData, InputIdx, NumRows, State);
+				PCGExFormatAttributes::ResolveRuleValues(InContext, Settings, Precomputed, DupData, InputIdx, NumRows, State);
 
 				const int32 NumTargets = Context->TargetSelectors.Num();
 				for (int32 t = 0; t < NumTargets; t++)

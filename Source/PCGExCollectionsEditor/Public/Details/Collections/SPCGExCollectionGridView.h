@@ -22,6 +22,7 @@ class STextBlock;
 class SPCGExCollectionCategoryGroup;
 class FPCGExCollectionTileDragDropOp;
 class FScriptArrayHelper;
+struct FPropertyChangedEvent;
 
 /** Flags describing what kind of structural change happened, so StructuralRefresh() can do the minimum work. */
 enum class EPCGExStructuralRefreshFlags : uint8
@@ -309,5 +310,13 @@ private:
 	// External modification detection (toolbar buttons, etc.)
 	// Deferred to next tick because Modify() fires BEFORE changes are applied.
 	void OnObjectModified(UObject* Object);
+
+	/** Catches PostEditChangeProperty-driven mutations that never call Modify() -- e.g. schema
+	 *  reconciles routed through IPropertyHandle::NotifyPostChange or synthetic change events. */
+	void OnCollectionPropertyChanged(UObject* Object, FPropertyChangedEvent& Event);
+
+	/** Shared deferred-refresh body for both external-change listeners above. */
+	void ScheduleExternalRefresh();
+
 	bool bPendingExternalRefresh = false;
 };
