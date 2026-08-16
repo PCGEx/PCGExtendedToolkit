@@ -9,6 +9,7 @@
 
 #include "PCGExAssetCollectionTypes.h"
 #include "PCGExAssetGrammar.h"
+#include "PCGExCategoryOverrides.h"
 #include "PCGExCollectionGlobals.h"
 #include "PCGExProperty.h"
 #include "PCGExSchemaMerging.h"
@@ -56,6 +57,13 @@ struct PCGEXCOLLECTIONS_API FPCGExEntryAccessResult
 {
 	const FPCGExAssetCollectionEntry* Entry = nullptr;
 	const UPCGExAssetCollection* Host = nullptr;
+
+	// Pool the pick drew this entry from. Null when no pick was involved -- direct index access,
+	// or a packed-hash lookup, where the pool that originally produced the entry isn't recoverable.
+	const PCGExAssetCollection::FCategory* Pool = nullptr;
+
+	/** Sum of raw entry weights to normalize Entry->Weight against. Falls back to Host's full pool when Pool is null; 0 when unresolvable. */
+	double GetWeightNormalizer() const;
 
 	FORCEINLINE operator bool() const
 	{
@@ -432,18 +440,25 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	// Property Resolution
 
 	/**
-	 * Get resolved property by type: checks entry overrides first, then collection defaults.
-	 * @param OwningCollection The collection this entry belongs to
-	 * @param PropertyName Optional name filter (NAME_None matches first of type)
+	 * Single funnel for property resolution. Tiers, in order: this entry's enabled overrides ->
+	 * OwningCollection's row for this entry's Category -> OwningCollection's defaults.
+	 * A tier whose slot is absent, disabled, invalid, or not a RequiredType falls THROUGH to the
+	 * next one -- a type mismatch must never blank the value.
+	 * @param RequiredType Struct every returned slot must be a child of. Null returns null.
+	 */
+	const FInstancedStruct* ResolvePropertySlot(
+		const UPCGExAssetCollection* OwningCollection, FName PropertyName, const UScriptStruct* RequiredType) const;
+
+	/**
+	 * Get resolved property by type. Same tiers as ResolvePropertySlot.
 	 * @return Pointer to property if found, nullptr otherwise
 	 */
 	template <typename T>
-	const T* GetResolvedProperty(const UPCGExAssetCollection* OwningCollection, FName PropertyName = NAME_None) const;
+	const T* GetResolvedProperty(const UPCGExAssetCollection* OwningCollection, FName PropertyName) const;
 
 	/**
-	 * Type-erased resolve: returns the FPCGExProperty base pointer for PropertyName,
-	 * preferring enabled overrides on this entry, then falling back to collection defaults.
-	 * Returns nullptr if the property isn't defined.
+	 * Type-erased resolve: returns the FPCGExProperty base pointer for PropertyName.
+	 * Same tiers as ResolvePropertySlot.
 	 *
 	 * Use this when you don't know (or don't care about) the concrete property type --
 	 * typically in combination with TryGetPropertyValue<T> for type-erased value reads.
@@ -588,7 +603,15 @@ namespace PCGExAssetCollection
 	{
 	public:
 		FName Name = NAME_None;
+
+		// Sum over Weights, which hold Weight+1 per entry -- i.e. Sum(Weight) + Num(). This is the
+		// domain GetPickRandomWeighted rolls in, NOT a sum of authored weights. For normalization
+		// (a value meant to sum to 1 across the pool) use RawWeightSum.
 		double WeightSum = 0;
+
+		/** Sum of authored entry weights. */
+		double RawWeightSum = 0;
+
 		TArray<int32> Indices;
 		TArray<int32> Weights;
 		TArray<int32> Order;
@@ -628,18 +651,23 @@ namespace PCGExAssetCollection
 	};
 
 	/**
-	 * Top-level cache built from the collection's Entries array. Contains one "Main"
-	 * category (all valid entries) plus named sub-categories. Built lazily on first
-	 * access via LoadCache(). Thread-safe (guarded by FRWLock on the collection).
+	 * Top-level cache built from the collection's Entries array. Contains "Main" (all valid
+	 * entries), "Uncategorized" (those with no Category), and one pool per named category.
+	 * Built lazily on first access via LoadCache(). Thread-safe (guarded by FRWLock on the
+	 * collection).
 	 */
 	class PCGEXCOLLECTIONS_API FCache : public TSharedFromThis<FCache>
 	{
 	public:
-		int32 WeightSum = 0;
 		TSharedPtr<FCategory> Main;
 
-		// Dense array of named sub-categories, in registration order. Indexed by the value side
-		// of CategoryNameToIndex, which is the canonical name -> slot lookup.
+		// Entries whose Category is NAME_None. Deliberately OUTSIDE Categories/CategoryNameToIndex:
+		// uncategorized means "ignored when a specific category is asked for", so it must never be
+		// addressable by name. Reached only via EPCGExMissingCategoryBehavior::UseUncategorized.
+		TSharedPtr<FCategory> Uncategorized;
+
+		// Dense array of named sub-categories (never NAME_None), in registration order. Indexed by
+		// the value side of CategoryNameToIndex, which is the canonical name -> slot lookup.
 		TArray<TSharedPtr<FCategory>> Categories;
 
 		// Name -> index into Categories. Populated incrementally by RegisterEntry; stable for
@@ -676,7 +704,8 @@ namespace PCGExAssetCollection
  *     └─ TArray<FMyEntry> Entries          -- the authored list
  *     └─ FCache (built lazily)
  *         ├─ FCategory "Main"              -- all valid entries, weight-sorted
- *         └─ FCategory per unique name     -- entries grouped by Category FName
+ *         ├─ FCategory "Uncategorized"     -- entries with no Category; not name-addressable
+ *         └─ FCategory per unique name     -- entries with a non-None Category
  *             └─ per entry: FMicroCache    -- optional sub-selections (material variants, etc.)
  *
  * Creating a custom collection type:
@@ -1095,6 +1124,36 @@ public:
 	/** Sync PropertyOverrides in all entries to match CollectionProperties schema */
 	void SyncPropertyOverridesToEntries();
 
+	/**
+	 * Row for InCategory, minting a schema-synced one when absent. Null for NAME_None.
+	 * Callers own the transaction and Modify(); a freshly minted row must be synced (this does it)
+	 * or its details panel renders empty until the schema is next edited.
+	 */
+	FPCGExCategoryOverrides* EDITOR_FindOrAddCategoryOverrides(FName InCategory);
+
+	/** Row for InCategory, or null. Never mints -- a live editor panel must not resurrect a row the
+	 *  user just cleaned up. Use EDITOR_FindOrAddCategoryOverrides to create one. */
+	FPCGExCategoryOverrides* EDITOR_FindCategoryOverridesRow(FName InCategory);
+
+	/**
+	 * Re-key OldCategory's row to NewCategory. Move, not copy: leaving the original behind lets a
+	 * later category of the same name resurrect stale overrides. Destination wins on a real
+	 * conflict -- a populated NewCategory row keeps its values and the source row is dropped with
+	 * a warning naming the discarded properties; a value-identical or absent destination absorbs
+	 * the source silently. Returns true if CategoryOverrides changed.
+	 */
+	bool EDITOR_RenameCategoryOverrides(FName OldCategory, FName NewCategory);
+
+	/**
+	 * Drop rows whose Category matches no entry. Never automatic -- an all-disabled row is what
+	 * in-progress authoring looks like, so emptiness is not a removal criterion.
+	 * Returns the number of rows removed.
+	 */
+	int32 EDITOR_CleanupUnusedCategoryOverrides();
+
+	/** Categories actually referenced by entries, excluding NAME_None. */
+	void EDITOR_CollectUsedCategories(TSet<FName>& OutCategories) const;
+
 protected:
 	virtual void EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData);
 
@@ -1254,6 +1313,40 @@ public:
 	FPCGExPropertySchemaCollection CollectionProperties;
 
 	/**
+	 * Middle resolution tier: an entry whose Category names a row here reads that row's enabled
+	 * slots before falling back to CollectionProperties. Cooked -- runtime resolution reads it.
+	 * Rows only refine names CollectionProperties already declares; they never declare their own.
+	 * EditFixedSize is load-bearing: it suppresses the details panel's add/insert/delete AND
+	 * reset-to-default, the latter of which would otherwise wipe every row in one click (the CDO
+	 * default is empty). Rows are minted and re-keyed through the EDITOR_* helpers below.
+	 */
+	UPROPERTY(EditAnywhere, EditFixedSize, Category = Settings, meta=(TitleProperty="{Category}", NoResetToDefault))
+	TArray<FPCGExCategoryOverrides> CategoryOverrides;
+
+	/**
+	 * Override layer for InCategory, or null when there is none. NAME_None never matches: an
+	 * uncategorized entry contributes no layer. Enforced here, NOT by cache shape.
+	 */
+	const FPCGExPropertyOverrides* FindCategoryOverrides(const FName InCategory) const
+	{
+		if (InCategory.IsNone())
+		{
+			return nullptr;
+		}
+		for (const FPCGExCategoryOverrides& Row : CategoryOverrides)
+		{
+			if (Row.Category == InCategory)
+			{
+				return &Row.PropertyOverrides;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Sync every category row against Schema. Editor-only: outside it SyncToSchema is a wipe. */
+	void SyncCategoryOverridesToSchema(const TArray<FInstancedStruct>& Schema);
+
+	/**
 	 * Read-only registry of available properties (built from CollectionProperties).
 	 * Used for UI display and validation.
 	 */
@@ -1362,17 +1455,8 @@ protected: \
 template <typename T>
 const T* FPCGExAssetCollectionEntry::GetResolvedProperty(const UPCGExAssetCollection* OwningCollection, FName PropertyName) const
 {
-	// Check entry overrides first
-	if (const T* Override = PropertyOverrides.GetProperty<T>(PropertyName))
-	{
-		return Override;
-	}
+	static_assert(TIsDerivedFrom<T, FPCGExProperty>::Value, "T must derive from FPCGExProperty");
 
-	// Fall back to collection defaults
-	if (OwningCollection)
-	{
-		return OwningCollection->GetProperty<T>(PropertyName);
-	}
-
-	return nullptr;
+	const FInstancedStruct* Slot = ResolvePropertySlot(OwningCollection, PropertyName, T::StaticStruct());
+	return Slot ? Slot->GetPtr<T>() : nullptr;
 }

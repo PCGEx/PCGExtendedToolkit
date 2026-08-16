@@ -48,12 +48,17 @@ enum class EPCGExSelectorMode : uint8
 	Unset    = 8 UMETA(Hidden),
 };
 
-/** Behavior when a point's Category attribute does not match any named category in the collection. */
+/**
+ * Behavior when a point asks for a category the collection cannot serve -- either a name it does
+ * not have, or a blank key when it has no uncategorized entries. A blank key against a collection
+ * that DOES have uncategorized entries is not a miss: it selects those.
+ */
 UENUM()
 enum class EPCGExMissingCategoryBehavior : uint8
 {
-	Skip    = 0 UMETA(DisplayName = "Skip", ToolTip="Skip the point -- no entry is picked."),
-	UseMain = 1 UMETA(DisplayName = "Use Main", ToolTip="Fall back to picking from the collection's main pool."),
+	Skip             = 0 UMETA(DisplayName = "Skip", ToolTip="Skip the point -- no entry is picked."),
+	UseMain          = 1 UMETA(DisplayName = "Use Main", ToolTip="Fall back to picking from the collection's main pool, categorized entries included."),
+	UseUncategorized = 2 UMETA(DisplayName = "Use Uncategorized", ToolTip="Fall back to picking from entries that have no category. Skips the point when the collection has none."),
 };
 
 UENUM()

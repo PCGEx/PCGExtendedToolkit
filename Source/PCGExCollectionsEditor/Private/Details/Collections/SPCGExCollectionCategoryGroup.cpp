@@ -20,6 +20,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 {
 	CategoryName = InArgs._CategoryName;
 	OnCategoryRenamed = InArgs._OnCategoryRenamed;
+	OnEditCategoryOverrides = InArgs._OnEditCategoryOverrides;
 	OnTileDropOnCategory = InArgs._OnTileDropOnCategory;
 	OnAssetDropOnCategory = InArgs._OnAssetDropOnCategory;
 	OnAddToCategory = InArgs._OnAddToCategory;
@@ -135,6 +136,33 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 					.FillWidth(1.f)
 					[
 						SNullWidget::NullWidget
+					]
+
+					// Category overrides button. Hidden on the uncategorized group -- no category
+					// means no layer -- and on grids that leave the delegate unbound.
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(4, 0, 0, 0)
+					[
+						SNew(SButton)
+						.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+						.ContentPadding(FMargin(1, 1))
+						.Visibility(bIsUncategorized || !InArgs._OnEditCategoryOverrides.IsBound()
+							            ? EVisibility::Collapsed
+							            : EVisibility::Visible)
+						.OnClicked_Lambda([this]() -> FReply
+						{
+							OnEditCategoryOverrides.ExecuteIfBound(CategoryName);
+							return FReply::Handled();
+						})
+						.ToolTipText(INVTEXT("Edit property overrides for this category"))
+						[
+							SNew(SImage)
+							.Image(FAppStyle::GetBrush("Icons.Settings"))
+							.DesiredSizeOverride(FVector2D(12, 12))
+							.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.6f)))
+						]
 					]
 
 					// Add button

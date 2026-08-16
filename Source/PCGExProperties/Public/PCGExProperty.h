@@ -572,8 +572,8 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrideEntry
  *       }
  *   }
  *
- * Schema Source: The editor customization looks for a "CollectionProperties" or "Properties"
- * property on the outer object to determine available property types for the picker.
+ * The customization needs no schema of its own: Overrides is kept parallel to it by SyncToSchema,
+ * so the holder can live on any object, not just one exposing a schema property.
  */
 USTRUCT(BlueprintType)
 struct PCGEXPROPERTIES_API FPCGExPropertyOverrides

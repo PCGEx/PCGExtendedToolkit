@@ -1079,7 +1079,12 @@ namespace PCGExAssetStaging
 
 			if (bLocalOutputWeight)
 			{
-				double Weight = bNormalizedWeight ? static_cast<double>(Entry->Weight) / static_cast<double>(const_cast<UPCGExAssetCollection*>(EntryHost)->LoadCache()->WeightSum) : Entry->Weight;
+				double Weight = Entry->Weight;
+				if (bNormalizedWeight)
+				{
+					const double Normalizer = Result.GetWeightNormalizer();
+					Weight = Normalizer > 0 ? Weight / Normalizer : 0.0;
+				}
 				if (bOneMinusWeight)
 				{
 					Weight = 1 - Weight;

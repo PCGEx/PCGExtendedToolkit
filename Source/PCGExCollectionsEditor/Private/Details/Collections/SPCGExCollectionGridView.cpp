@@ -8,6 +8,9 @@
 #include "IStructureDetailsView.h"
 #include "PropertyEditorModule.h"
 
+#include "PCGExCollectionsEditorSettings.h"
+#include "Core/PCGExCategoryOverrides.h"
+
 #include "InputCoreTypes.h"
 #include "ScopedTransaction.h"
 #include "Framework/Application/SlateApplication.h"
@@ -106,15 +109,23 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 	FCoreUObjectDelegates::OnObjectModified.AddSP(
 		this, &SPCGExCollectionGridView::OnObjectModified);
 
+	if (const UPCGExCollectionsEditorSettings* Settings = GetDefault<UPCGExCollectionsEditorSettings>())
+	{
+		GridPaneSplit = FMath::Max(Settings->GridPaneSplit, 0.05f);
+		DetailPaneSplit = FMath::Max(Settings->DetailPaneSplit, 0.05f);
+	}
+
 	ChildSlot
 	[
 		SNew(SSplitter)
 		.Orientation(Orient_Horizontal)
 		.PhysicalSplitterHandleSize(4.f)
+		.OnSplitterFinishedResizing(FSimpleDelegate::CreateSP(this, &SPCGExCollectionGridView::OnSplitterFinishedResizing))
 
 		// Left pane: Grouped tile layout
 		+ SSplitter::Slot()
-		.Value(0.65f)
+		.Value(TAttribute<float>::CreateSP(this, &SPCGExCollectionGridView::GetGridPaneSplit))
+		.OnSlotResized(SSplitter::FOnSlotResized::CreateSP(this, &SPCGExCollectionGridView::OnGridPaneResized))
 		[
 			SNew(SOverlay)
 
@@ -146,9 +157,50 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 
 		// Right pane: Detail panel
 		+ SSplitter::Slot()
-		.Value(0.35f)
+		.Value(TAttribute<float>::CreateSP(this, &SPCGExCollectionGridView::GetDetailPaneSplit))
+		.OnSlotResized(SSplitter::FOnSlotResized::CreateSP(this, &SPCGExCollectionGridView::OnDetailPaneResized))
 		[
 			SNew(SVerticalBox)
+
+			// Category mode banner: the panel is shared with entry editing, so it has to say which
+			// it is showing and offer the way back. Tile selection survives underneath.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(4, 4, 4, 0)
+			[
+				SNew(SHorizontalBox)
+				.Visibility_Lambda([this]()
+				{
+					return ActiveOverridesCategory.IsNone() ? EVisibility::Collapsed : EVisibility::Visible;
+				})
+
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.f)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+					.Text_Lambda([this]()
+					{
+						return FText::Format(INVTEXT("Category overrides: {0}"), FText::FromName(ActiveOverridesCategory));
+					})
+				]
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				[
+					SNew(SButton)
+					.Text(INVTEXT("Back"))
+					.ToolTipText(INVTEXT("Return the panel to the selected entry"))
+					.OnClicked_Lambda([this]() -> FReply
+					{
+						ActiveOverridesCategory = NAME_None;
+						UpdateDetailForSelection();
+						return FReply::Handled();
+					})
+				]
+			]
 
 			// Action buttons (operate on tile selection)
 			+ SVerticalBox::Slot()
@@ -367,6 +419,7 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 			.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
 			.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
 			.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
+			.OnEditCategoryOverrides(FOnEditCategoryOverrides::CreateSP(this, &SPCGExCollectionGridView::OnEditCategoryOverrides))
 			.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
 			.OnTileReorderInCategory(FOnTileReorderInCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileReorderInCategory))
 		];
@@ -495,6 +548,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 			.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
 			.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
 			.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
+			.OnEditCategoryOverrides(FOnEditCategoryOverrides::CreateSP(this, &SPCGExCollectionGridView::OnEditCategoryOverrides))
 			.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
 			.OnTileReorderInCategory(FOnTileReorderInCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileReorderInCategory))
 		];
@@ -617,6 +671,9 @@ TArray<int32> SPCGExCollectionGridView::GetSelectedIndices() const
 
 void SPCGExCollectionGridView::SelectIndex(int32 Index, bool bCtrl, bool bShift)
 {
+	// Any tile interaction hands the panel back to entry mode.
+	ActiveOverridesCategory = NAME_None;
+
 	if (bShift && LastClickedIndex != INDEX_NONE)
 	{
 		// Range select in visual order
@@ -670,6 +727,7 @@ void SPCGExCollectionGridView::SelectIndex(int32 Index, bool bCtrl, bool bShift)
 
 void SPCGExCollectionGridView::ClearSelection()
 {
+	ActiveOverridesCategory = NAME_None;
 	SelectedIndices.Reset();
 	LastClickedIndex = INDEX_NONE;
 	ApplySelectionVisuals();
@@ -1157,6 +1215,17 @@ void SPCGExCollectionGridView::OnCategoryRenamed(FName OldName, FName NewName)
 			}
 		}
 
+		// Move the override row with the name. Leaving it behind would let a later category of the
+		// old name resurrect these values on unrelated entries.
+		Coll->EDITOR_RenameCategoryOverrides(OldName, NewName);
+
+		// Follow the row: either branch of the rename leaves the surviving row keyed NewName. If it
+		// merged away entirely, UpdateDetailForCategoryOverrides drops the mode on the next refresh.
+		if (ActiveOverridesCategory == OldName)
+		{
+			ActiveOverridesCategory = NewName;
+		}
+
 		Coll->PostEditChange();
 	}
 	bIsBatchOperation = false;
@@ -1169,6 +1238,44 @@ void SPCGExCollectionGridView::OnAddToCategory(FName Category)
 	// Same type-aware entry point as the main [+] -- a raw element add would create unset
 	// (blank) rows on wrapper-row hosts.
 	RequestAddEntry(Category);
+}
+
+void SPCGExCollectionGridView::OnEditCategoryOverrides(FName Category)
+{
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll || Category.IsNone())
+	{
+		return;
+	}
+
+	// Second click on the same gear hands the panel back to the tile selection.
+	if (ActiveOverridesCategory == Category)
+	{
+		ActiveOverridesCategory = NAME_None;
+		UpdateDetailForSelection();
+		return;
+	}
+
+	// Only transact when a row must actually be created: merely opening the panel must not dirty the
+	// package, push an undo step, or trigger a rebuild.
+	if (!Coll->FindCategoryOverrides(Category))
+	{
+		bIsBatchOperation = true;
+		{
+			FScopedTransaction Transaction(INVTEXT("Add Category Overrides"));
+			Coll->Modify();
+			// Schema-synced on mint -- an unsynced FPCGExPropertyOverrides renders as an empty panel.
+			Coll->EDITOR_FindOrAddCategoryOverrides(Category);
+			Coll->PostEditChange();
+		}
+		bIsBatchOperation = false;
+	}
+
+	// Tile selection is deliberately left intact -- this mode layers over it, and leaving restores the
+	// entry panel with the same selection. Actions that would write through the panel are gated on
+	// CurrentDetailIndex, which UpdateDetailForCategoryOverrides clears.
+	ActiveOverridesCategory = Category;
+	UpdateDetailForSelection();
 }
 
 void SPCGExCollectionGridView::OnCategoryExpansionChanged(FName Category, bool bIsExpanded)
@@ -1342,6 +1449,15 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 		FSlateApplication::Get().SetKeyboardFocus(SharedThis(this), EFocusCause::Cleared);
 	}
 
+	// Category mode owns the panel. The dispatch lives here rather than at the call sites because
+	// every refresh route -- undo, external modify, structural, the deferred timer -- funnels through
+	// this function and would otherwise recompute the panel from the tile selection.
+	// Falls through when the row is gone; UpdateDetailForCategoryOverrides has cleared the mode.
+	if (!ActiveOverridesCategory.IsNone() && UpdateDetailForCategoryOverrides())
+	{
+		return;
+	}
+
 	if (SelectedIndices.IsEmpty())
 	{
 		CurrentDetailIndex = INDEX_NONE;
@@ -1391,6 +1507,95 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	{
 		StructDetailView->SetStructureData(CurrentStructScope);
 	}
+}
+
+void SPCGExCollectionGridView::OnSplitterFinishedResizing()
+{
+	UPCGExCollectionsEditorSettings* Settings = GetMutableDefault<UPCGExCollectionsEditorSettings>();
+	Settings->GridPaneSplit = GridPaneSplit;
+	Settings->DetailPaneSplit = DetailPaneSplit;
+	Settings->SaveConfig();
+}
+
+bool SPCGExCollectionGridView::UpdateDetailForCategoryOverrides()
+{
+	UPCGExAssetCollection* Coll = Collection.Get();
+	FPCGExCategoryOverrides* Row = Coll ? Coll->EDITOR_FindCategoryOverridesRow(ActiveOverridesCategory) : nullptr;
+
+	// Row gone (Cleanup, undo, a rename that merged it away): drop the mode so the caller falls back
+	// to the entry panel rather than sitting on a name that no longer resolves.
+	if (!Row)
+	{
+		ActiveOverridesCategory = NAME_None;
+		return false;
+	}
+
+	// Owning copy, same contract as the entry path: a schema sync re-shapes a row's slot memory in
+	// place and must never be able to reach a scope the live panel is bound to.
+	UScriptStruct* RowStruct = FPCGExCategoryOverrides::StaticStruct();
+	CurrentStructScope = MakeShared<FStructOnScope>(RowStruct);
+	RowStruct->CopyScriptStruct(CurrentStructScope->GetStructMemory(), Row);
+
+	// Keeps every entry-index consumer -- sync-back, push -- inert while this mode is up.
+	CurrentDetailIndex = INDEX_NONE;
+
+	if (StructDetailView.IsValid())
+	{
+		StructDetailView->SetStructureData(CurrentStructScope);
+	}
+
+	return true;
+}
+
+void SPCGExCollectionGridView::SyncStructToCategoryOverrides()
+{
+	if (!CurrentStructScope.IsValid() || ActiveOverridesCategory.IsNone())
+	{
+		return;
+	}
+
+	// Type guard mirrors the entry path's: a scope built for a different struct would copy across
+	// mismatched layouts.
+	if (CurrentStructScope->GetStruct() != FPCGExCategoryOverrides::StaticStruct())
+	{
+		return;
+	}
+
+	UPCGExAssetCollection* Coll = Collection.Get();
+	if (!Coll)
+	{
+		return;
+	}
+
+	// Find, never FindOrAdd: a row removed between show and commit must stay removed.
+	FPCGExCategoryOverrides* Row = Coll->EDITOR_FindCategoryOverridesRow(ActiveOverridesCategory);
+	if (!Row)
+	{
+		return;
+	}
+
+	const FProperty* OverridesProp = FPCGExCategoryOverrides::StaticStruct()->FindPropertyByName(
+		GET_MEMBER_NAME_CHECKED(FPCGExCategoryOverrides, PropertyOverrides));
+	if (!OverridesProp)
+	{
+		return;
+	}
+
+	Coll->Modify();
+
+	// Member-scoped, not a whole-struct copy: Category is the row's key, and writing it back from a
+	// scope taken before a rename would restore the retired name.
+	const int32 Offset = OverridesProp->GetOffset_ForInternal();
+	OverridesProp->CopyCompleteValue(
+		reinterpret_cast<uint8*>(Row) + Offset,
+		CurrentStructScope->GetStructMemory() + Offset);
+
+	// Classified event, not a bare PostEditChange(): a null MemberProperty reads as structural and
+	// pays the grammar-context and circular-dependency walks on every commit.
+	FProperty* MemberProp = UPCGExAssetCollection::StaticClass()->FindPropertyByName(
+		GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CategoryOverrides));
+	FPropertyChangedEvent ChangedEvent(MemberProp, EPropertyChangeType::ValueSet);
+	Coll->PostEditChangeProperty(ChangedEvent);
 }
 
 void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMemberProperty, const FProperty* ChangedLeafProperty)
@@ -1824,13 +2029,23 @@ void SPCGExCollectionGridView::ExecutePush(const PCGExAssetCollectionEditor::FPu
 
 void SPCGExCollectionGridView::OnDetailPropertyChanged(const FPropertyChangedEvent& Event)
 {
+	const bool bCategoryMode = !ActiveOverridesCategory.IsNone();
+
 	bIsSyncing = true;
-	SyncStructToCollection(Event.MemberProperty, Event.Property);
+	if (bCategoryMode)
+	{
+		SyncStructToCategoryOverrides();
+	}
+	else
+	{
+		SyncStructToCollection(Event.MemberProperty, Event.Property);
+	}
 	bIsSyncing = false;
 
-	// Check if category changed -- need to rebuild groups
+	// Check if category changed -- need to rebuild groups. Gated on entry mode: the test matches on
+	// FName alone and FPCGExCategoryOverrides carries a member named Category too.
 	static const FName CategoryPropertyName = GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category);
-	if (Event.MemberProperty && Event.MemberProperty->GetFName() == CategoryPropertyName)
+	if (!bCategoryMode && Event.MemberProperty && Event.MemberProperty->GetFName() == CategoryPropertyName)
 	{
 		// Defer grid refresh to avoid destroying widgets during their own event handling
 		if (!bPendingCategoryRefresh)
