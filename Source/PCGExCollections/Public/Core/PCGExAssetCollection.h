@@ -217,8 +217,6 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	
 #pragma endregion
 	
-#pragma region Grammar
-	
 	/**
 	 * Property overrides for this entry.
 	 * Values here take precedence over collection-level defaults.
@@ -226,7 +224,9 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	FPCGExPropertyOverrides PropertyOverrides;
-
+	
+#pragma region Grammar
+	
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, InvalidEnumValues="None"))
 	EPCGExEntryVariationMode GrammarSource = EPCGExEntryVariationMode::Local;
 
@@ -664,6 +664,7 @@ namespace PCGExAssetCollection
 		// Entries whose Category is NAME_None. Deliberately OUTSIDE Categories/CategoryNameToIndex:
 		// uncategorized means "ignored when a specific category is asked for", so it must never be
 		// addressable by name. Reached only via EPCGExMissingCategoryBehavior::UseUncategorized.
+		// ALIASES Main after Compile when no entry is categorized (identical content, one pool).
 		TSharedPtr<FCategory> Uncategorized;
 
 		// Dense array of named sub-categories (never NAME_None), in registration order. Indexed by
@@ -831,6 +832,15 @@ public:
 #pragma region Cache
 
 	PCGExAssetCollection::FCache* LoadCache();
+
+	/** LoadCache + shared ref. Hold for an execution's lifetime: keeps this cache generation (and its
+	 *  categories) alive across editor invalidation. Entry pointers inside still reference the authored
+	 *  Entries array. */
+	TSharedPtr<PCGExAssetCollection::FCache> PinCache();
+
+	/** PinCache for self + every transitively reachable subcollection (FlatHosts), appended to OutPins. */
+	void PinCaches(TArray<TSharedPtr<PCGExAssetCollection::FCache>>& OutPins);
+
 	virtual void InvalidateCache();
 	virtual void BuildCache();
 
@@ -1159,8 +1169,6 @@ protected:
 
 	void EDITOR_SetDirty()
 	{
-		Cache.Reset();
-		bCacheNeedsRebuild = true;
 		InvalidateCache();
 	}
 

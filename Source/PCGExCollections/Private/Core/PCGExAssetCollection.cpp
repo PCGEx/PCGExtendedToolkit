@@ -51,7 +51,7 @@ double FPCGExEntryAccessResult::GetWeightNormalizer() const
 		return 0;
 	}
 
-	const PCGExAssetCollection::FCache* Cache = const_cast<UPCGExAssetCollection*>(Host)->LoadCache();
+	const TSharedPtr<PCGExAssetCollection::FCache> Cache = const_cast<UPCGExAssetCollection*>(Host)->PinCache();
 	return Cache && Cache->Main ? Cache->Main->RawWeightSum : 0;
 }
 
@@ -344,7 +344,6 @@ namespace PCGExAssetCollection
 	void FCategory::RegisterEntry(int32 Index, const FPCGExAssetCollectionEntry* InEntry)
 	{
 		Entries.Add(InEntry);
-		const_cast<FPCGExAssetCollectionEntry*>(InEntry)->BuildMicroCache();
 		Indices.Add(Index);
 		Weights.Add(InEntry->Weight + 1);
 		RawWeightSum += InEntry->Weight;
@@ -385,6 +384,9 @@ namespace PCGExAssetCollection
 			Staging.AlteredBounds = Staging.Bounds;
 		}
 
+		// Once per entry, not per pool -- every entry registers into two pools below.
+		MutableEntry->BuildMicroCache();
+
 		Main->RegisterEntry(Index, InEntry);
 
 		if (InEntry->Category.IsNone())
@@ -409,6 +411,15 @@ namespace PCGExAssetCollection
 	void FCache::Compile()
 	{
 		Main->Compile();
+
+		// No categorized entries means Uncategorized holds exactly Main's content: alias it and
+		// drop the duplicate. Pool-pointer-keyed consumers (shared-data cache) dedupe for free.
+		if (Categories.IsEmpty())
+		{
+			Uncategorized = Main;
+			return;
+		}
+
 		Uncategorized->Compile();
 		for (const TSharedPtr<FCategory>& Category : Categories)
 		{
@@ -1095,15 +1106,27 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 
 #pragma region Cache
 
-// Thread-safe lazy cache initialization. First checks under read lock (fast path),
-// then builds under write lock (inside BuildCacheFromEntries) if needed.
+// Thread-safe lazy cache initialization. Read-lock fast path returns only a fresh cache;
+// stale drops happen under the write lock (resetting the shared ptr under a read lock races
+// concurrent readers on the control block).
 PCGExAssetCollection::FCache* UPCGExAssetCollection::LoadCache()
 {
 	{
 		FReadScopeLock ReadScopeLock(CacheLock);
+		if (!bCacheNeedsRebuild && Cache)
+		{
+			return Cache.Get();
+		}
+	}
+
+	{
+		FWriteScopeLock WriteScopeLock(CacheLock);
 		if (bCacheNeedsRebuild)
 		{
-			InvalidateCache();
+			// Clearing the flag claims the rebuild -- a peer must not drop the cache this thread
+			// is about to build.
+			Cache.Reset();
+			bCacheNeedsRebuild = false;
 		}
 		if (Cache)
 		{
@@ -1111,19 +1134,53 @@ PCGExAssetCollection::FCache* UPCGExAssetCollection::LoadCache()
 		}
 	}
 
+	// Outside the lock -- BuildCacheFromEntryPtrs takes the write lock itself (FRWLock is non-reentrant).
 	BuildCache();
+
+	FReadScopeLock ReadScopeLock(CacheLock);
 	return Cache.Get();
+}
+
+TSharedPtr<PCGExAssetCollection::FCache> UPCGExAssetCollection::PinCache()
+{
+	LoadCache();
+	FReadScopeLock ReadScopeLock(CacheLock);
+	return Cache;
+}
+
+void UPCGExAssetCollection::PinCaches(TArray<TSharedPtr<PCGExAssetCollection::FCache>>& OutPins)
+{
+	const TSharedPtr<PCGExAssetCollection::FCache> Pinned = PinCache();
+	if (!Pinned)
+	{
+		return;
+	}
+
+	OutPins.Add(Pinned);
+
+	// FlatHosts is already transitive -- one flat pass pins the whole subcollection tree.
+	for (UPCGExAssetCollection* Host : Pinned->FlatHosts)
+	{
+		if (Host && Host != this)
+		{
+			if (TSharedPtr<PCGExAssetCollection::FCache> SubPinned = Host->PinCache())
+			{
+				OutPins.Add(MoveTemp(SubPinned));
+			}
+		}
+	}
 }
 
 void UPCGExAssetCollection::InvalidateCache()
 {
+	// Takes the write lock -- never call while holding CacheLock.
+	FWriteScopeLock WriteScopeLock(CacheLock);
 	Cache.Reset();
 	bCacheNeedsRebuild = true;
 }
 
 void UPCGExAssetCollection::BuildCache()
 {
-	bCacheNeedsRebuild = false;
 	// Per-class implementation calls BuildCacheFromEntries(Entries)
 }
 
@@ -1784,6 +1841,7 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	// field" identification opts out, and array shape changes always force structural anyway.
 	bool bIsValueOnlyLeafEdit = false;
 	bool bIsStructuralSchemaChange = false;
+	bool bIsSchemaValueLeafEdit = false;
 
 	if (PropertyChangedEvent.MemberProperty)
 	{
@@ -1805,6 +1863,7 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 
 			bIsValueOnlyLeafEdit = !bArrayShapeChange && bLeafIsFPCGExPropertyValue;
 			bIsStructuralSchemaChange = !bIsValueOnlyLeafEdit;
+			bIsSchemaValueLeafEdit = bIsValueOnlyLeafEdit;
 		}
 		// Rows only refine already-declared names, so a value edit here can't alter the schema.
 		// Shape changes still have to re-sync: EditFixedSize suppresses add/insert/delete/duplicate
@@ -1851,6 +1910,14 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	if (bIsStructuralSchemaChange)
 	{
 		RebuildPropertyRegistry();
+		SyncPropertyOverridesToEntries();
+	}
+	else if (bIsSchemaValueLeafEdit)
+	{
+		// Schema-authored structural meta (AllowedClass, Range) lives on FPCGExProperty leaf fields
+		// and reaches entry/category mirrors only through SyncToSchema's SyncStructuralFromSchema
+		// pass. Value-leaf edits take the fast path: no reallocation, override values preserved.
+		// Registry prototypes heal separately via the cache invalidation below.
 		SyncPropertyOverridesToEntries();
 	}
 

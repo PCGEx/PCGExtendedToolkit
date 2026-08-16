@@ -10,6 +10,7 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 
 class UPackage;
+class UPCGExPropertySchemaAsset;
 
 class FPCGExCollectionsEditorModule final : public IPCGExEditorModuleInterface
 {
@@ -27,6 +28,7 @@ private:
 	FDelegateHandle OnAssetLoadedHandle;
 	FDelegateHandle OnPostEngineInitHandle;
 	FDelegateHandle OnPackageSavedHandle;
+	FDelegateHandle OnAnySchemaAssetChangedHandle;
 	bool bThumbnailRendererRegistered = false;
 
 	// Coordinated external-package save (IPCGExExternalPackageProducer): packages queued by
@@ -41,6 +43,10 @@ private:
 	void OnAssetUpdatedOnDisk(const FAssetData& AssetData);
 	void OnObjectsReinstanced(const TMap<UObject*, UObject*>& OldToNewMap);
 	void OnAssetLoaded(UObject* InObject);
+
+	/** Reconciles every loaded collection importing the changed schema asset (any depth), so
+	 *  propagation never depends on a details customization being alive to relay the broadcast. */
+	void OnAnySchemaAssetChanged(UPCGExPropertySchemaAsset* Asset);
 
 	void OnPackageSaved(const FString& PackageFilename, UPackage* Package, FObjectPostSaveContext Context);
 	void FlushPendingExternalPackageSaves();

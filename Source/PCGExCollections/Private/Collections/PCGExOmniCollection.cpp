@@ -511,6 +511,7 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 		int32 SourceAppended = 0;
 		int32 SourceSkipped = 0;
 		TSet<PCGExAssetCollection::FTypeId> SourceLeafTypeIds;
+		TSet<FName> AppendedCategories;
 
 		Source->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, const int32 Index)
 		{
@@ -535,6 +536,11 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			// Bake source CollectionTags into the copy (FlattenCollection semantics).
 			Payload->Tags.Append(Source->CollectionTags);
 
+			if (!Payload->Category.IsNone())
+			{
+				AppendedCategories.Add(Payload->Category);
+			}
+
 			if (!Payload->bIsSubCollection)
 			{
 				SourceLeafTypeIds.Add(Payload->GetTypeId());
@@ -552,13 +558,15 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			SourceAppended++;
 		});
 
-		// Category rows travel with the entries that reference them. Same conflict policy as the
-		// globals blocks: a row this target already has is the user's and wins; the incoming one is
-		// dropped with a warning rather than merged, since two rows can enable the same property
-		// with different values and any per-slot union would match neither source.
+		// Category rows travel ONLY with appended entries that carry their category -- copying a row
+		// no entry references would mint a stale row (Cleanup bait), and rows copied without entries
+		// would skip the AppendedCount-gated tail refresh that re-syncs them to the target schema.
+		// Conflict policy matches the globals blocks: a row this target already has is the user's and
+		// wins; the incoming one is dropped with a warning rather than merged, since two rows can
+		// enable the same property with different values and any per-slot union would match neither.
 		for (const FPCGExCategoryOverrides& SourceRow : Source->CategoryOverrides)
 		{
-			if (SourceRow.Category.IsNone())
+			if (SourceRow.Category.IsNone() || !AppendedCategories.Contains(SourceRow.Category))
 			{
 				continue;
 			}

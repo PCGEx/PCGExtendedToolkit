@@ -28,7 +28,7 @@ namespace PCGExVersion
 	// Purposefully not in sync with .uplugin
 	// I was having too many issues trying keeping those in sync with iterative deprecation code
 	// that required bumping the internal version more often than the user-facing one
-	PCGEX_VERSION_DECL_LATEST(1, 76, 10)
+	PCGEX_VERSION_DECL_LATEST(1, 76, 12)
 }
 
 #endif
