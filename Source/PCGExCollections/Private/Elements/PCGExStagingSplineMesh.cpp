@@ -763,7 +763,12 @@ namespace PCGExPathSplineMesh
 
 			if (bOutputWeight)
 			{
-				double Weight = bNormalizedWeight ? static_cast<double>(MeshEntry->Weight) / static_cast<double>(const_cast<UPCGExAssetCollection*>(Result.Host)->LoadCache()->WeightSum) : MeshEntry->Weight;
+				double Weight = MeshEntry->Weight;
+				if (bNormalizedWeight)
+				{
+					const double Normalizer = Result.GetWeightNormalizer();
+					Weight = Normalizer > 0 ? Weight / Normalizer : 0.0;
+				}
 				if (bOneMinusWeight)
 				{
 					Weight = 1 - Weight;

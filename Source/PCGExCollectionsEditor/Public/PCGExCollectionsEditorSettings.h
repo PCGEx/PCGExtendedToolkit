@@ -42,6 +42,13 @@ public:
 	UPROPERTY(Config)
 	TSet<FName> HiddenPropertyNames;
 
+	/** Grid tab splitter fractions, written on drag end. Config-only, not a Project Settings knob. */
+	UPROPERTY(Config)
+	float GridPaneSplit = 0.65f;
+
+	UPROPERTY(Config)
+	float DetailPaneSplit = 0.35f;
+
 	/** When a collection tile references a Blueprint class that isn't loaded yet, kick an async load so the picker shows the class name instead of "None". Disable if this causes editor stalls on open. */
 	UPROPERTY(EditAnywhere, config, Category = Settings)
 	bool bAsyncLoadPickerClasses = true;

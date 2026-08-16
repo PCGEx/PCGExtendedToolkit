@@ -200,6 +200,22 @@ namespace PCGExCollections
 					CategoryPickerOpsByIndex[i] = Op;
 				}
 			}
+
+			// Needed by the blank-key path regardless of MissingCategoryBehavior, so it cannot be
+			// gated on that arm. Left null when the pool is empty: "no uncategorized entries" must
+			// degrade to a miss, not to a picker that draws nothing.
+			if (PCGExAssetCollection::FCategory* UncategorizedPtr = Cache->Uncategorized.Get();
+				UncategorizedPtr && !UncategorizedPtr->IsEmpty())
+			{
+				if (TSharedPtr<FPCGExEntryPickerOperation> Op = ActiveFactory->CreateEntryOperation(Ctx))
+				{
+					Op->SharedData = ObtainSharedData(UncategorizedPtr);
+					if (Op->PrepareForData(Ctx, InDataFacade, UncategorizedPtr, Collection))
+					{
+						UncategorizedPickerOp = Op;
+					}
+				}
+			}
 		}
 
 		// Sync the inline Details struct with the effective factory config so callers can
@@ -210,40 +226,80 @@ namespace PCGExCollections
 		return true;
 	}
 
-	// Resolve which picker to use for this point. When categories are enabled and the point's
-	// Category attribute doesn't match any named category, MissingCategoryBehavior controls
-	// whether we skip (return nullptr) or fall back to MainPickerOp.
+	// Resolve which picker to use for this point. With categories in use a blank key is a real
+	// selector value meaning "the uncategorized group" -- it must never widen to the whole pool, or
+	// blank-keyed points would start receiving categorized entries. When the collection has no
+	// uncategorized entries there is nothing to ask for, so it degrades to a miss and
+	// MissingCategoryBehavior decides -- same as a key naming a category that doesn't exist.
 	// Returns nullptr when the result should be an empty FPCGExEntryAccessResult.
 	const FPCGExEntryPickerOperation* FSelectorHelper::ResolvePickerForPoint(int32 PointIndex, int32& OutCategorySlot) const
 	{
-		OutCategorySlot = -1;
+		OutCategorySlot = CategorySlot_Main;
 
 		if (!CategoryGetter)
 		{
 			return MainPickerOp.Get();
 		}
 
-		const FName CategoryKey = CategoryGetter->Read(PointIndex);
-		if (const int32* IdxPtr = Cache->CategoryNameToIndex.Find(CategoryKey))
+		auto UseUncategorized = [this, &OutCategorySlot]() -> const FPCGExEntryPickerOperation*
 		{
-			if (CategoryPickerOpsByIndex.IsValidIndex(*IdxPtr))
+			if (!UncategorizedPickerOp)
 			{
-				if (const TSharedPtr<FPCGExEntryPickerOperation>& Op = CategoryPickerOpsByIndex[*IdxPtr])
+				return nullptr;
+			}
+			OutCategorySlot = CategorySlot_Uncategorized;
+			return UncategorizedPickerOp.Get();
+		};
+
+		const FName CategoryKey = CategoryGetter->Read(PointIndex);
+
+		if (!CategoryKey.IsNone())
+		{
+			if (const int32* IdxPtr = Cache->CategoryNameToIndex.Find(CategoryKey))
+			{
+				if (CategoryPickerOpsByIndex.IsValidIndex(*IdxPtr))
 				{
-					OutCategorySlot = *IdxPtr;
-					return Op.Get();
+					if (const TSharedPtr<FPCGExEntryPickerOperation>& Op = CategoryPickerOpsByIndex[*IdxPtr])
+					{
+						OutCategorySlot = *IdxPtr;
+						return Op.Get();
+					}
 				}
 			}
 		}
+		else if (const FPCGExEntryPickerOperation* Op = UseUncategorized())
+		{
+			return Op;
+		}
 
-		return ActiveFactory->BaseConfig.MissingCategoryBehavior == EPCGExMissingCategoryBehavior::UseMain
-			? MainPickerOp.Get()
-			: nullptr;
+		switch (ActiveFactory->BaseConfig.MissingCategoryBehavior)
+		{
+		case EPCGExMissingCategoryBehavior::UseMain:
+			OutCategorySlot = CategorySlot_Main;
+			return MainPickerOp.Get();
+		case EPCGExMissingCategoryBehavior::UseUncategorized:
+			return UseUncategorized();
+		case EPCGExMissingCategoryBehavior::Skip:
+			return nullptr;
+		default:
+			// Unresolvable enumerator -- fail loud rather than silently aliasing another arm.
+			checkNoEntry();
+			return nullptr;
+		}
 	}
 
-	// Scratch slots parallel the op layout (Main + CategoryPickerOpsByIndex). Ops that don't
-	// override CreateScratchForScope leave their slot null; a fully-null set collapses to
-	// nullptr so consumers can skip the routing entirely.
+	const PCGExAssetCollection::FCategory* FSelectorHelper::GetPool(const int32 CategorySlot) const
+	{
+		if (CategorySlot == CategorySlot_Uncategorized)
+		{
+			return Cache->Uncategorized.Get();
+		}
+		return Cache->Categories.IsValidIndex(CategorySlot) ? Cache->Categories[CategorySlot].Get() : Cache->Main.Get();
+	}
+
+	// Scratch slots parallel the op layout (Main + Uncategorized + CategoryPickerOpsByIndex). Ops
+	// that don't override CreateScratchForScope leave their slot null; a fully-null set collapses
+	// to nullptr so consumers can skip the routing entirely.
 	TSharedPtr<FSelectorScratches> FSelectorHelper::CreateScratches(const int32 MaxPointsInScope) const
 	{
 		bool bAny = false;
@@ -253,6 +309,12 @@ namespace PCGExCollections
 		{
 			Result->Main = MainPickerOp->CreateScratchForScope(MaxPointsInScope);
 			bAny |= Result->Main.IsValid();
+		}
+
+		if (UncategorizedPickerOp)
+		{
+			Result->Uncategorized = UncategorizedPickerOp->CreateScratchForScope(MaxPointsInScope);
+			bAny |= Result->Uncategorized.IsValid();
 		}
 
 		Result->ByCategory.SetNum(CategoryPickerOpsByIndex.Num());
@@ -274,6 +336,10 @@ namespace PCGExCollections
 		{
 			return true;
 		}
+		if (UncategorizedPickerOp && UncategorizedPickerOp->WantsPreResolve())
+		{
+			return true;
+		}
 		for (const TSharedPtr<FPCGExEntryPickerOperation>& Op : CategoryPickerOpsByIndex)
 		{
 			if (Op && Op->WantsPreResolve())
@@ -290,6 +356,10 @@ namespace PCGExCollections
 		{
 			MainPickerOp->BeginPreResolve(NumPoints);
 		}
+		if (UncategorizedPickerOp && UncategorizedPickerOp->WantsPreResolve())
+		{
+			UncategorizedPickerOp->BeginPreResolve(NumPoints);
+		}
 		for (const TSharedPtr<FPCGExEntryPickerOperation>& Op : CategoryPickerOpsByIndex)
 		{
 			if (Op && Op->WantsPreResolve())
@@ -301,7 +371,7 @@ namespace PCGExCollections
 
 	FPCGExEntryPickerOperation* FSelectorHelper::ResolvePreResolveOp(const int32 PointIndex, const FSelectorScratches* Scratches, FPCGExPickerScratchBase*& OutScratch) const
 	{
-		int32 CategorySlot = -1;
+		int32 CategorySlot = CategorySlot_Main;
 		// Ops are owned mutably (TSharedPtr members); the const routing method is reused.
 		FPCGExEntryPickerOperation* Op = const_cast<FPCGExEntryPickerOperation*>(ResolvePickerForPoint(PointIndex, CategorySlot));
 		if (!Op || !Op->WantsPreResolve())
@@ -348,8 +418,10 @@ namespace PCGExCollections
 		FPCGExEntryAccessResult Result = Collection->GetEntryRaw(Raw);
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
+			// The nested pick reports its own pool -- the root's slot didn't produce this entry.
 			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed);
 		}
+		Result.Pool = GetPool(CategorySlot);
 		return Result;
 	}
 
@@ -373,8 +445,10 @@ namespace PCGExCollections
 		FPCGExEntryAccessResult Result = Collection->GetEntryRaw(Raw, TagInheritance, OutTags);
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
+			// The nested pick reports its own pool -- the root's slot didn't produce this entry.
 			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed, TagInheritance, OutTags);
 		}
+		Result.Pool = GetPool(CategorySlot);
 		return Result;
 	}
 

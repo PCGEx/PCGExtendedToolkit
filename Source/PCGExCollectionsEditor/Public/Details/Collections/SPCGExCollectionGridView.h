@@ -117,6 +117,27 @@ private:
 	TSharedPtr<FStructOnScope> CurrentStructScope;
 	int32 CurrentDetailIndex = INDEX_NONE;
 
+	/**
+	 * Non-None => the panel shows this category's overrides row instead of an entry. Layered OVER the
+	 * tile selection, which is deliberately preserved: leaving the mode restores the entry panel with
+	 * the same selection. CurrentDetailIndex is INDEX_NONE while set, which is what keeps the entry
+	 * sync-back inert. Keyed by name, never by index -- CategoryOverrides is re-shaped by mint,
+	 * rename and cleanup, and every row shares one struct type so a stale index would not fail loudly.
+	 */
+	FName ActiveOverridesCategory = NAME_None;
+
+	// Splitter fractions, seeded from UPCGExCollectionsEditorSettings and flushed back on drag end.
+	// Binding OnSlotResized makes SSplitter stop writing the slot value itself, so Value must be
+	// bound to these getters too or the handle will not move.
+	float GridPaneSplit = 0.65f;
+	float DetailPaneSplit = 0.35f;
+
+	float GetGridPaneSplit() const { return GridPaneSplit; }
+	float GetDetailPaneSplit() const { return DetailPaneSplit; }
+	void OnGridPaneResized(const float NewValue) { GridPaneSplit = NewValue; }
+	void OnDetailPaneResized(const float NewValue) { DetailPaneSplit = NewValue; }
+	void OnSplitterFinishedResizing();
+
 	// Category cache rebuild
 	void RebuildCategoryCache();
 
@@ -135,6 +156,7 @@ private:
 	void OnAssetDropOnCategory(FName TargetCategory, const TArray<FAssetData>& Assets);
 	void OnCategoryRenamed(FName OldName, FName NewName);
 	void OnAddToCategory(FName Category);
+	void OnEditCategoryOverrides(FName Category);
 	void OnCategoryExpansionChanged(FName Category, bool bIsExpanded);
 	void OnTileReorderInCategory(FName Category, TSharedRef<FPCGExCollectionTileDragDropOp> DragOp, int32 InsertBeforeLocalIndex);
 
@@ -167,7 +189,13 @@ private:
 
 	// Detail panel management
 	void UpdateDetailForSelection();
+
+	/** Bind the panel to ActiveOverridesCategory's row. False when the row is gone -- the mode has
+	 *  already been cleared and the caller must fall through to the entry panel. */
+	bool UpdateDetailForCategoryOverrides();
+
 	void SyncStructToCollection(const FProperty* ChangedMemberProperty, const FProperty* ChangedLeafProperty);
+	void SyncStructToCategoryOverrides();
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
 
 	/**

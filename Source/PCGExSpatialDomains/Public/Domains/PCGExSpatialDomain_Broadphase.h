@@ -42,10 +42,12 @@
  *   RollbackToScope(handle) flips ValidMask bits past handle to invalid.
  *   O(1) amortized, no realloc, no per-entry walk on partial rollback.
  *
- *   InvalidateOwner / RevalidateOwner flip a single owner's bits anywhere in the array (O(N)
- *   scan, for the rare retraction path). Only THIS mask is touched -- the broadphase
- *   collection's own ValidMask is left alone, because every query routes each culled entry
- *   through a SkipPredicate that already consults ValidMask[StorageIdx].
+ *   InvalidateOwner / RevalidateOwner flip a single owner's bits anywhere in the array, resolved
+ *   through EntriesByOwner rather than a full scan -- retraction runs per placement and grammar
+ *   pruning cascades, so a scan would make a K-placement subtree retraction O(K * N). Only THIS
+ *   mask is touched -- the broadphase collection's own ValidMask is left alone, because every
+ *   query routes each culled entry through a SkipPredicate that already consults
+ *   ValidMask[StorageIdx].
  *
  *   GetBounds() may return an over-approximation after partial rollback:
  *   invalid entries' AABBs aren't subtracted out (that'd be O(N)). Consumers
@@ -154,6 +156,14 @@ private:
 	TArray<FEntry> Entries;
 	TBitArray<> ValidMask;
 	int32 NumValidEntries = 0;
+
+	/**
+	 * Owner index -> the storage indices that owner contributed. Entries is append-only (rollback
+	 * and invalidation only flip ValidMask), so an index recorded here stays addressable for the
+	 * domain's lifetime and may name an already-invalid slot; both flip paths consult ValidMask
+	 * before touching one, which is what keeps this a pure index with no semantics of its own.
+	 */
+	TMap<int32, TArray<int32>> EntriesByOwner;
 
 	/**
 	 * Union AABB of all entries that have ever been appended (never shrunk on
