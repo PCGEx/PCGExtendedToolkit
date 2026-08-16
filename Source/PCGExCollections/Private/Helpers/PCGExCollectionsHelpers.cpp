@@ -130,13 +130,16 @@ namespace PCGExCollections
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::FSelectorHelper::Init);
 
-		Cache = Collection->LoadCache();
+		Cache = Collection->PinCache();
 
-		if (Cache->IsEmpty())
+		if (!Cache || Cache->IsEmpty())
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InDataFacade->GetContext(), FTEXT("FSelectorHelper got an empty Collection."));
 			return false;
 		}
+
+		// Subcollection hops resolve their host's cache per point -- pin the whole reachable tree.
+		Collection->PinCaches(CachePins);
 
 		FPCGExContext* Ctx = InDataFacade->GetContext();
 
