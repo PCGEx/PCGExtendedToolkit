@@ -126,7 +126,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 					.AutoWidth()
 					.VAlign(VAlign_Center)
 					[
-						SNew(STextBlock)
+						SAssignNew(CountTextBlock, STextBlock)
 						.Text(CountText)
 						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
 						.ColorAndOpacity(FSlateColor(FLinearColor(1, 1, 1, 0.4f)))
@@ -248,6 +248,14 @@ void SPCGExCollectionCategoryGroup::ClearTiles()
 	if (TilesWrapBox.IsValid())
 	{
 		TilesWrapBox->ClearChildren();
+	}
+}
+
+void SPCGExCollectionCategoryGroup::SetEntryCount(const int32 InCount)
+{
+	if (CountTextBlock.IsValid())
+	{
+		CountTextBlock->SetText(FText::Format(INVTEXT("({0})"), FText::AsNumber(InCount)));
 	}
 }
 

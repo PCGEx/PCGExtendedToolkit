@@ -126,4 +126,39 @@ void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGE
 	}
 }
 
+void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const TFunctionRef<float(float)> InSampleTransform, const int32 InNumSamples)
+{
+	Curve = InCurve;
+	CurvePtr = Curve.GetRichCurveConst();
+	Mode = EPCGExCurveLUTMode::Lookup;
+	bFastLinear = false;
+	LUT.Reset();
+
+	float TMin = 0.0f;
+	float TMax = 1.0f;
+	const bool bHasKeys = CurvePtr && CurvePtr->GetNumKeys() > 0;
+	if (bHasKeys)
+	{
+		CurvePtr->GetTimeRange(TMin, TMax);
+	}
+	TimeMin = TMin;
+	TimeMax = TMax;
+
+	const float TimeDelta = TimeMax - TimeMin;
+	TimeToNormalized = FMath::IsNearlyZero(TimeDelta) ? 1.0f : 1.0f / TimeDelta;
+
+	// Count + 2 entries with a duplicated tail: LUTMaxIdx = Count maps t=1 exactly onto the last
+	// real sample (no endpoint skew), and Hi = Lo + 1 stays in range without a branch.
+	const int32 Count = FMath::Max(InNumSamples, 32);
+	LUT.SetNumUninitialized(Count + 2);
+	LUTMaxIdx = static_cast<float>(Count);
+
+	for (int32 i = 0; i <= Count; i++)
+	{
+		const float T = TimeMin + (static_cast<float>(i) / static_cast<float>(Count)) * TimeDelta;
+		LUT[i] = InSampleTransform(bHasKeys ? CurvePtr->Eval(T) : 0.0f);
+	}
+	LUT[Count + 1] = LUT[Count];
+}
+
 #pragma endregion
