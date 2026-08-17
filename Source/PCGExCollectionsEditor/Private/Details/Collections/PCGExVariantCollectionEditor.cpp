@@ -16,6 +16,7 @@
 
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/SPCGExVariantGridView.h"
 #include "Helpers/PCGExObjectNotifyHelpers.h"
 
@@ -181,42 +182,11 @@ void FPCGExVariantCollectionEditor::OnSwapAssetPicked(const FAssetData& AssetDat
 	}
 
 	// Seed the payload from the first source entry staging this asset — gives the rule a
-	// concrete type and sensible defaults. Falls back to an unset payload (typed later via
-	// the Collection Settings tab) when nothing matches yet.
+	// concrete type and sensible defaults. Falls back to an unset payload when nothing
+	// matches yet: the tile then renders as an unswapped rule whose "+" declares the payload.
 	const UScriptStruct* SeedStruct = nullptr;
-	const FPCGExAssetCollectionEntry* SeedEntry = nullptr;
 	const UPCGExAssetCollection* SeedCollection = nullptr;
-
-	for (const FPCGExVariantSource& Group : Variant->Sources)
-	{
-		const UPCGExAssetCollection* Src = Group.Source.Get();
-		if (!Src)
-		{
-			continue;
-		}
-
-		Src->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, int32)
-		{
-			if (!SeedEntry && !Entry->bIsSubCollection && Entry->Staging.Path == MatchPath)
-			{
-				SeedEntry = Entry;
-			}
-		});
-
-		if (SeedEntry)
-		{
-			// Struct resolved from the ENTRY's type id — hosts may be heterogeneous
-			// (variant sources), where the host class only maps to the base entry struct.
-			SeedStruct = PCGExAssetCollection::FTypeRegistry::Get().GetEntryStruct(SeedEntry->GetTypeId());
-			SeedCollection = Src;
-			if (!SeedStruct)
-			{
-				SeedEntry = nullptr;
-				continue;
-			}
-			break;
-		}
-	}
+	const FPCGExAssetCollectionEntry* SeedEntry = PCGExCollectionEditorUtils::FindRuleSeedEntry(Variant, MatchPath, SeedStruct, SeedCollection);
 
 	{
 		FScopedTransaction Transaction(LOCTEXT("AddAssetSwapTransaction", "Add Asset Swap Rule"));
@@ -244,7 +214,7 @@ void FPCGExVariantCollectionEditor::OnSwapAssetPicked(const FAssetData& AssetDat
 		}
 		else
 		{
-			FNotificationInfo Info(LOCTEXT("RuleNoMatchYet", "No declared source currently stages this asset — the rule is inert until one does. Set its payload type via Collection Settings."));
+			FNotificationInfo Info(LOCTEXT("RuleNoMatchYet", "No declared source currently stages this asset — the rule is inert until a payload is declared. Use the tile's + button to declare what it swaps to."));
 			Info.ExpireDuration = 5.f;
 			FSlateNotificationManager::Get().AddNotification(Info);
 		}

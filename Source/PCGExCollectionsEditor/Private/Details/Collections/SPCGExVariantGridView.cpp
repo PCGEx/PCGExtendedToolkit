@@ -60,6 +60,16 @@ namespace PCGExVariantGrid
 			&& InAsset.IsInstanceOf(UPCGExAssetCollection::StaticClass())
 			&& InAsset.GetSoftObjectPath() != FSoftObjectPath(InVariant);
 	}
+
+	// Identity = same underlying row/entry; display fields may differ (tiles update in place).
+	inline bool SameIdentity(const FPCGExVariantGridItem& A, const FPCGExVariantGridItem& B)
+	{
+		return A.bIsRuleDefinition == B.bIsRuleDefinition
+			&& A.GroupIdx == B.GroupIdx
+			&& A.SourceRawIndex == B.SourceRawIndex
+			&& A.SourceEntryId == B.SourceEntryId
+			&& (!A.bIsRuleDefinition || A.PathRuleIdx == B.PathRuleIdx);
+	}
 }
 
 #pragma region SPCGExVariantGridTile
@@ -74,6 +84,7 @@ void SPCGExVariantGridTile::Construct(const FArguments& InArgs)
 	OnTileClicked = InArgs._OnTileClicked;
 	OnDeclareSwap = InArgs._OnDeclareSwap;
 	OnRevokeSwap = InArgs._OnRevokeSwap;
+	OnDeleteRule = InArgs._OnDeleteRule;
 
 	// The root (and its selection highlight) persists across content rebuilds — only the
 	// inner overlay re-instantiates when display data changes.
@@ -91,8 +102,10 @@ void SPCGExVariantGridTile::Construct(const FArguments& InArgs)
 	RebuildContent();
 }
 
-void SPCGExVariantGridTile::UpdateItem(const FPCGExVariantGridItem& InItem)
+void SPCGExVariantGridTile::UpdateItem(const int32 InItemIndex, const FPCGExVariantGridItem& InItem)
 {
+	ItemIndex = InItemIndex;
+
 	const bool bDisplayChanged =
 		Item.GetState() != InItem.GetState()
 		|| Item.SourceThumbPath != InItem.SourceThumbPath
@@ -136,8 +149,8 @@ void SPCGExVariantGridTile::RebuildContent()
 		]
 	];
 
-	// Pass-through dim + orphan tint
-	if (State == EPCGExVariantTileState::PassThrough)
+	// Pass-through/unset-rule dim + orphan tint
+	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::RuleUnset)
 	{
 		Overlay->AddSlot()
 		[
@@ -189,18 +202,36 @@ void SPCGExVariantGridTile::RebuildContent()
 		];
 	}
 
-	// Actions (top-right): declare/specialize ("+") or revoke/delete ("×"), by state.
-	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::SwappedByRule)
+	// Actions (top-right): declare/specialize ("+") or revoke ("×"), by state. Rule tiles
+	// prepend a delete button — revoke only clears the payload, delete removes the whole rule.
+	const TSharedRef<SHorizontalBox> ActionsBox = SNew(SHorizontalBox);
+
+	if (Item.bIsRuleDefinition)
 	{
-		Overlay->AddSlot()
-		.HAlign(HAlign_Right)
-		.VAlign(VAlign_Top)
-		.Padding(3.f)
+		ActionsBox->AddSlot()
+		.AutoWidth()
+		[
+			SNew(SButton)
+			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+			.ToolTipText(LOCTEXT("DeleteRuleTooltip", "Delete this asset swap rule -- the asset reference and its payload are removed from the collection"))
+			.OnClicked_Lambda([this]() { OnDeleteRule.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
+			[
+				SNew(SImage).Image(FAppStyle::Get().GetBrush("Icons.Delete"))
+			]
+		];
+	}
+
+	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::SwappedByRule || State == EPCGExVariantTileState::RuleUnset)
+	{
+		ActionsBox->AddSlot()
+		.AutoWidth()
 		[
 			SNew(SButton)
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 			.ToolTipText(State == EPCGExVariantTileState::SwappedByRule
 				             ? LOCTEXT("SpecializeSwapTooltip", "Specialize: declare an explicit swap for this entry, overriding the asset rule")
+				             : State == EPCGExVariantTileState::RuleUnset
+				             ? LOCTEXT("DeclareRuleSwapTooltip", "Declare what this asset swaps to -- choose the replacement's entry type, or start from a copy of a source entry staging the asset")
 				             : LOCTEXT("DeclareSwapTooltip", "Declare a swap for this entry -- choose the replacement's entry type, or start from a copy of the source entry"))
 			.OnClicked_Lambda([this]() { OnDeclareSwap.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
 			[
@@ -210,15 +241,13 @@ void SPCGExVariantGridTile::RebuildContent()
 	}
 	else
 	{
-		Overlay->AddSlot()
-		.HAlign(HAlign_Right)
-		.VAlign(VAlign_Top)
-		.Padding(3.f)
+		ActionsBox->AddSlot()
+		.AutoWidth()
 		[
 			SNew(SButton)
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 			.ToolTipText(State == EPCGExVariantTileState::RuleDefinition
-				             ? LOCTEXT("DeleteRuleTooltip", "Delete this asset swap rule (all entries it covers revert to pass-through)")
+				             ? LOCTEXT("RevokeRuleSwapTooltip", "Remove this rule's swap payload -- the asset reference stays as an unswapped rule; covered entries revert to pass-through")
 				             : LOCTEXT("RevokeSwapTooltip", "Remove this swap (the source entry passes through unchanged)"))
 			.OnClicked_Lambda([this]() { OnRevokeSwap.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
 			[
@@ -226,6 +255,14 @@ void SPCGExVariantGridTile::RebuildContent()
 			]
 		];
 	}
+
+	Overlay->AddSlot()
+	.HAlign(HAlign_Right)
+	.VAlign(VAlign_Top)
+	.Padding(3.f)
+	[
+		ActionsBox
+	];
 
 	// Rule-coverage indicator (top-left) on tiles swapped via an asset rule.
 	if (State == EPCGExVariantTileState::SwappedByRule)
@@ -485,10 +522,11 @@ void SPCGExVariantGridView::RefreshGrid(const bool bRefreshDetailPanel)
 		bPrevWasRule = Items[SelectedItem].bIsRuleDefinition;
 	}
 
-	// Snapshot for structure comparison — payload edits and declare/revoke keep the tile
-	// structure identical, and must not tear the layout down (flash + scroll jump).
+	// Snapshot the old model: ReconcileLayout diffs against it per group, reusing every
+	// widget whose group membership is unchanged.
 	TArray<FPCGExVariantGridItem> OldItems = MoveTemp(Items);
 	TArray<FName> OldGroupNames = MoveTemp(SortedGroupNames);
+	TMap<FName, TArray<int32>> OldGroupToItems = MoveTemp(GroupToItems);
 
 	RebuildItems();
 
@@ -516,43 +554,7 @@ void SPCGExVariantGridView::RefreshGrid(const bool bRefreshDetailPanel)
 		}
 	}
 
-	// Items are built per group in deterministic order, so identical group names + identical
-	// flat item identities imply an identical layout structure.
-	bool bSameStructure = OldGroupNames == SortedGroupNames && OldItems.Num() == Items.Num();
-	if (bSameStructure)
-	{
-		for (int32 i = 0; i < Items.Num(); i++)
-		{
-			const FPCGExVariantGridItem& A = OldItems[i];
-			const FPCGExVariantGridItem& B = Items[i];
-			if (A.bIsRuleDefinition != B.bIsRuleDefinition
-				|| A.GroupIdx != B.GroupIdx
-				|| A.SourceRawIndex != B.SourceRawIndex
-				|| A.SourceEntryId != B.SourceEntryId
-				|| (A.bIsRuleDefinition && A.PathRuleIdx != B.PathRuleIdx))
-			{
-				bSameStructure = false;
-				break;
-			}
-		}
-	}
-
-	if (bSameStructure)
-	{
-		// In-place: tiles persist (and so does scroll position); only changed content rebuilds.
-		for (const TPair<int32, TSharedPtr<SPCGExVariantGridTile>>& Pair : ActiveTiles)
-		{
-			if (Pair.Value.IsValid() && Items.IsValidIndex(Pair.Key))
-			{
-				Pair.Value->UpdateItem(Items[Pair.Key]);
-			}
-		}
-		ApplySelectionVisuals();
-	}
-	else
-	{
-		RebuildLayout();
-	}
+	ReconcileLayout(OldItems, OldGroupNames, OldGroupToItems);
 
 	if (bRefreshDetailPanel)
 	{
@@ -716,6 +718,7 @@ void SPCGExVariantGridView::RebuildItems()
 
 			FPCGExVariantGridItem& RuleItem = Items.Emplace_GetRef();
 			RuleItem.bIsRuleDefinition = true;
+			RuleItem.bRulePayloadSet = Rule.Entry.IsValid();
 			RuleItem.PathRuleIdx = r;
 			RuleItem.SourceThumbPath = Rule.MatchAsset;
 			if (const FPCGExAssetCollectionEntry* Payload = Rule.Entry.GetPtr<FPCGExAssetCollectionEntry>())
@@ -731,55 +734,137 @@ void SPCGExVariantGridView::RebuildItems()
 	}
 }
 
-void SPCGExVariantGridView::RebuildLayout()
+void SPCGExVariantGridView::ReconcileLayout(const TArray<FPCGExVariantGridItem>& OldItems, const TArray<FName>& OldGroupNames, const TMap<FName, TArray<int32>>& OldGroupToItems)
 {
-	GroupScrollBox->ClearChildren();
-	GroupWidgets.Reset();
-	ActiveTiles.Reset();
+	TMap<FName, TSharedPtr<SPCGExCollectionCategoryGroup>> NewGroupWidgets;
+	TMap<int32, TSharedPtr<SPCGExVariantGridTile>> ReusedTiles;
+	TArray<FName> GroupsToPopulate;
 
 	for (const FName& GroupName : SortedGroupNames)
 	{
-		const TArray<int32>* GroupItems = GroupToItems.Find(GroupName);
-		const int32 Count = GroupItems ? GroupItems->Num() : 0;
-		const bool bCollapsed = CollapsedGroups.Contains(GroupName);
+		if (NewGroupWidgets.Contains(GroupName))
+		{
+			// Same-named source assets merge in GroupToItems — one widget serves the merged group.
+			continue;
+		}
 
-		TSharedRef<SPCGExCollectionCategoryGroup> GroupWidget =
-			SNew(SPCGExCollectionCategoryGroup)
-			.CategoryName(GroupName)
-			.EntryCount(Count)
-			.bIsCollapsed(bCollapsed)
-			.bAllowRename(false) // group names mirror source asset names — never editable here
-			// Group widgets swallow asset drops (Handled); route them to the shared add-source path.
-			.OnAssetDropOnCategory_Lambda([this](const FName, const TArray<FAssetData>& InAssets)
+		const TSharedPtr<SPCGExCollectionCategoryGroup>* ExistingWidget = GroupWidgets.Find(GroupName);
+		const TArray<int32>* NewIdx = GroupToItems.Find(GroupName);
+		const TArray<int32>* OldIdx = OldGroupToItems.Find(GroupName);
+		const int32 Count = NewIdx ? NewIdx->Num() : 0;
+
+		bool bSameMembers = ExistingWidget && ExistingWidget->IsValid() && OldIdx && NewIdx && OldIdx->Num() == NewIdx->Num();
+		if (bSameMembers)
+		{
+			for (int32 k = 0; k < Count; k++)
 			{
-				AddSourcesFromAssets(InAssets);
-			})
-			.OnExpansionChanged_Lambda([this](const FName InGroup, const bool bIsExpanded)
+				if (!PCGExVariantGrid::SameIdentity(OldItems[(*OldIdx)[k]], Items[(*NewIdx)[k]]))
+				{
+					bSameMembers = false;
+					break;
+				}
+			}
+		}
+
+		if (bSameMembers)
+		{
+			// Widget and tiles survive as-is; global item indices may have shifted, so tiles
+			// rebind their index and refresh display data in place.
+			NewGroupWidgets.Add(GroupName, *ExistingWidget);
+			for (int32 k = 0; k < Count; k++)
 			{
-				if (bIsExpanded)
+				if (const TSharedPtr<SPCGExVariantGridTile>* Tile = ActiveTiles.Find((*OldIdx)[k]); Tile && Tile->IsValid())
 				{
-					CollapsedGroups.Remove(InGroup);
-					PopulateGroupTiles(InGroup);
+					(*Tile)->UpdateItem((*NewIdx)[k], Items[(*NewIdx)[k]]);
+					ReusedTiles.Add((*NewIdx)[k], *Tile);
 				}
-				else
-				{
-					CollapsedGroups.Add(InGroup);
-				}
-			});
+			}
+		}
+		else
+		{
+			// Membership changed: keep the widget shell when one exists (header, expansion
+			// state, scroll anchoring) and rebuild only its tiles below.
+			TSharedPtr<SPCGExCollectionCategoryGroup> GroupWidget = ExistingWidget && ExistingWidget->IsValid() ? *ExistingWidget : nullptr;
+			if (GroupWidget.IsValid())
+			{
+				GroupWidget->SetEntryCount(Count);
+			}
+			else
+			{
+				GroupWidget = MakeGroupWidget(GroupName, Count);
+			}
+			NewGroupWidgets.Add(GroupName, GroupWidget);
+			GroupsToPopulate.Add(GroupName);
+		}
+	}
 
-		GroupWidgets.Add(GroupName, GroupWidget);
-		GroupScrollBox->AddSlot()
-		[
-			GroupWidget
-		];
+	// Re-slot the scroll box only when the ordered group list changed (group added/removed/
+	// renamed) — re-adding the same widget instances keeps their children (tiles, thumbnails)
+	// alive, so this is a relayout, not a rebuild.
+	if (OldGroupNames != SortedGroupNames)
+	{
+		GroupScrollBox->ClearChildren();
+		TSet<FName> Slotted;
+		for (const FName& GroupName : SortedGroupNames)
+		{
+			if (Slotted.Contains(GroupName))
+			{
+				continue;
+			}
+			Slotted.Add(GroupName);
+			GroupScrollBox->AddSlot()
+			[
+				NewGroupWidgets.FindChecked(GroupName).ToSharedRef()
+			];
+		}
+	}
 
-		if (!bCollapsed)
+	GroupWidgets = MoveTemp(NewGroupWidgets);
+	ActiveTiles = MoveTemp(ReusedTiles); // stale tiles of changed/removed groups drop here
+
+	for (const FName& GroupName : GroupsToPopulate)
+	{
+		if (CollapsedGroups.Contains(GroupName))
+		{
+			// Collapsed: drop stale tile children now; expansion repopulates from live Items.
+			if (const TSharedPtr<SPCGExCollectionCategoryGroup>* GroupWidget = GroupWidgets.Find(GroupName); GroupWidget && GroupWidget->IsValid())
+			{
+				(*GroupWidget)->ClearTiles();
+			}
+		}
+		else
 		{
 			PopulateGroupTiles(GroupName);
 		}
 	}
 
 	ApplySelectionVisuals();
+}
+
+TSharedRef<SPCGExCollectionCategoryGroup> SPCGExVariantGridView::MakeGroupWidget(const FName GroupName, const int32 EntryCount)
+{
+	return SNew(SPCGExCollectionCategoryGroup)
+		.CategoryName(GroupName)
+		.EntryCount(EntryCount)
+		.bIsCollapsed(CollapsedGroups.Contains(GroupName))
+		.bAllowRename(false) // group names mirror source asset names — never editable here
+		// Group widgets swallow asset drops (Handled); route them to the shared add-source path.
+		.OnAssetDropOnCategory_Lambda([this](const FName, const TArray<FAssetData>& InAssets)
+		{
+			AddSourcesFromAssets(InAssets);
+		})
+		.OnExpansionChanged_Lambda([this](const FName InGroup, const bool bIsExpanded)
+		{
+			if (bIsExpanded)
+			{
+				CollapsedGroups.Remove(InGroup);
+				PopulateGroupTiles(InGroup);
+			}
+			else
+			{
+				CollapsedGroups.Add(InGroup);
+			}
+		});
 }
 
 void SPCGExVariantGridView::PopulateGroupTiles(const FName GroupName)
@@ -804,7 +889,8 @@ void SPCGExVariantGridView::PopulateGroupTiles(const FName GroupName)
 			.ThumbnailCachePtr(&ThumbnailCache)
 			.OnTileClicked_Raw(this, &SPCGExVariantGridView::OnTileClicked)
 			.OnDeclareSwap_Raw(this, &SPCGExVariantGridView::DeclareSwap)
-			.OnRevokeSwap_Raw(this, &SPCGExVariantGridView::RevokeSwap);
+			.OnRevokeSwap_Raw(this, &SPCGExVariantGridView::RevokeSwap)
+			.OnDeleteRule_Raw(this, &SPCGExVariantGridView::DeleteRule);
 
 		ActiveTiles.Add(ItemIdx, Tile);
 		(*GroupWidget)->AddTile(Tile);
@@ -830,6 +916,62 @@ void SPCGExVariantGridView::DeclareSwap(const int32 ItemIndex)
 
 	const FPCGExVariantGridItem& Item = Items[ItemIndex];
 	const EPCGExVariantTileState State = Item.GetState();
+
+	// Unset rule tiles get the same chooser, targeting the rule's payload; the copy option
+	// only shows when a loaded source actually stages the matched asset (the seed entry).
+	if (State == EPCGExVariantTileState::RuleUnset)
+	{
+		if (!Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx))
+		{
+			return;
+		}
+
+		const UScriptStruct* SeedStruct = nullptr;
+		const UPCGExAssetCollection* SeedHost = nullptr;
+		const FPCGExAssetCollectionEntry* Seed = PCGExCollectionEditorUtils::FindRuleSeedEntry(
+			Variant, Variant->PathOverrides[Item.PathRuleIdx].MatchAsset, SeedStruct, SeedHost);
+
+		FMenuBuilder RuleMenuBuilder(/*bInShouldCloseWindowAfterMenuSelection=*/true, nullptr);
+
+		if (Seed)
+		{
+			RuleMenuBuilder.BeginSection(NAME_None, LOCTEXT("DeclareSwapCopySection", "Declare Swap"));
+			RuleMenuBuilder.AddMenuEntry(
+				FText::Format(LOCTEXT("DeclareSwapCopy", "Copy Source Entry ({0})"), PCGExCollectionEditorUtils::GetEntryTypeLabel(SeedStruct)),
+				LOCTEXT("DeclareRuleCopyTooltip", "The payload starts as a full copy of the first source entry staging this asset -- swap-the-asset becomes a one-field edit; weights, variations and tags carry over."),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateSPLambda(this, [this, ItemIndex]()
+				{
+					DeclareRuleSwapAs(ItemIndex, nullptr);
+				})));
+			RuleMenuBuilder.EndSection();
+		}
+
+		RuleMenuBuilder.BeginSection(NAME_None, LOCTEXT("DeclareSwapTypeSection", "Swap With Type"));
+		TArray<const UScriptStruct*> RuleEntryTypes;
+		PCGExCollectionEditorUtils::GetAllConcreteEntryTypes(RuleEntryTypes);
+		for (const UScriptStruct* EntryStruct : RuleEntryTypes)
+		{
+			const FText Label = PCGExCollectionEditorUtils::GetEntryTypeLabel(EntryStruct);
+			RuleMenuBuilder.AddMenuEntry(
+				Label,
+				FText::Format(LOCTEXT("DeclareRuleTypeTooltip", "The payload starts as a fresh {0} entry."), Label),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateSPLambda(this, [this, ItemIndex, EntryStruct]()
+				{
+					DeclareRuleSwapAs(ItemIndex, EntryStruct);
+				})));
+		}
+		RuleMenuBuilder.EndSection();
+
+		FSlateApplication::Get().PushMenu(
+			AsShared(),
+			FWidgetPath(),
+			RuleMenuBuilder.MakeWidget(),
+			FSlateApplication::Get().GetCursorPos(),
+			FPopupTransitionEffect(FPopupTransitionEffect::ContextMenu));
+		return;
+	}
 
 	// Declare on pass-through, or specialize a rule-covered entry (explicit rows take
 	// precedence over rules at bake time, so this cleanly overrides the rule per-entry).
@@ -988,6 +1130,87 @@ void SPCGExVariantGridView::DeclareSwapAs(const int32 ItemIndex, const UScriptSt
 	RefreshGrid();
 }
 
+void SPCGExVariantGridView::DeclareRuleSwapAs(const int32 ItemIndex, const UScriptStruct* EntryStruct)
+{
+	UPCGExVariantCollection* Variant = Collection.Get();
+	if (!Variant || !Items.IsValidIndex(ItemIndex))
+	{
+		return;
+	}
+
+	const FPCGExVariantGridItem& Item = Items[ItemIndex];
+	if (Item.GetState() != EPCGExVariantTileState::RuleUnset || !Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx))
+	{
+		return;
+	}
+
+	FPCGExVariantPathOverride& Rule = Variant->PathOverrides[Item.PathRuleIdx];
+
+	// Re-resolve the seed — the menu may be stale (undo while open); a vanished seed degrades
+	// the copy option to a no-op, same contract as DeclareSwapAs.
+	const UScriptStruct* SeedStruct = nullptr;
+	const UPCGExAssetCollection* SeedHost = nullptr;
+	const FPCGExAssetCollectionEntry* Seed = PCGExCollectionEditorUtils::FindRuleSeedEntry(Variant, Rule.MatchAsset, SeedStruct, SeedHost);
+
+	const bool bCopySeed = EntryStruct == nullptr;
+	if (bCopySeed)
+	{
+		if (!Seed)
+		{
+			return;
+		}
+		EntryStruct = SeedStruct;
+	}
+
+	if (!EntryStruct)
+	{
+		return;
+	}
+
+	{
+		FScopedTransaction Transaction(LOCTEXT("DeclareRuleSwap", "Declare Asset Swap"));
+		bIsSyncing = true;
+		Variant->Modify();
+
+		if (bCopySeed)
+		{
+			// Full copy — swap-the-asset becomes a one-field edit and everything carries over.
+			Rule.Entry.InitializeAs(EntryStruct, reinterpret_cast<const uint8*>(Seed));
+		}
+		else
+		{
+			// Fresh payload of the chosen type; when a seed exists, carry its BASE fields over
+			// (weight/category/tags/variations) so the swap slots into the same pick distribution.
+			Rule.Entry.InitializeAs(EntryStruct);
+			if (Seed)
+			{
+				FPCGExAssetCollectionEntry::StaticStruct()->CopyScriptStruct(Rule.Entry.GetMutableMemory(), Seed, 1);
+			}
+		}
+
+		// Cross-ASSET copy: duplicate any Instanced subobject refs the payload carried into the
+		// variant, per the standing rule for every cross-asset copy of an entry payload.
+		PCGExCollectionHelpers::DuplicateInstancedSubobjects(EntryStruct, Rule.Entry.GetMutableMemory(), Variant);
+
+		if (FPCGExAssetCollectionEntry* Payload = Rule.Entry.GetMutablePtr<FPCGExAssetCollectionEntry>())
+		{
+			Payload->EntryId = 0;
+			// Bake the seed collection's Global channels into the payload — the variant host
+			// cannot provide typed globals (ISM/skinned descriptors).
+			if (SeedHost)
+			{
+				Payload->ResolveGlobalsToLocal(SeedHost);
+			}
+		}
+
+		Variant->PostEditChange();
+		bIsSyncing = false;
+	}
+
+	SelectedItem = ItemIndex;
+	RefreshGrid();
+}
+
 void SPCGExVariantGridView::RevokeSwap(const int32 ItemIndex)
 {
 	UPCGExVariantCollection* Variant = Collection.Get();
@@ -1000,15 +1223,17 @@ void SPCGExVariantGridView::RevokeSwap(const int32 ItemIndex)
 
 	if (Item.bIsRuleDefinition)
 	{
-		if (!Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx))
+		if (!Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx) || !Variant->PathOverrides[Item.PathRuleIdx].Entry.IsValid())
 		{
 			return;
 		}
 
-		FScopedTransaction Transaction(LOCTEXT("DeleteRule", "Delete Asset Swap Rule"));
+		// Payload only — the rule and its asset reference survive as an unset rule
+		// (DeleteRule is the whole-rule removal).
+		FScopedTransaction Transaction(LOCTEXT("RevokeRuleSwap", "Remove Asset Swap Payload"));
 		bIsSyncing = true;
 		Variant->Modify();
-		Variant->PathOverrides.RemoveAt(Item.PathRuleIdx);
+		Variant->PathOverrides[Item.PathRuleIdx].Entry.Reset();
 		Variant->PostEditChange();
 		bIsSyncing = false;
 
@@ -1026,6 +1251,32 @@ void SPCGExVariantGridView::RevokeSwap(const int32 ItemIndex)
 		bIsSyncing = true;
 		Variant->Modify();
 		Variant->Sources[Item.GroupIdx].Overrides.RemoveAt(Item.OverrideRowIdx);
+		Variant->PostEditChange();
+		bIsSyncing = false;
+	}
+
+	RefreshGrid();
+}
+
+void SPCGExVariantGridView::DeleteRule(const int32 ItemIndex)
+{
+	UPCGExVariantCollection* Variant = Collection.Get();
+	if (!Variant || !Items.IsValidIndex(ItemIndex))
+	{
+		return;
+	}
+
+	const FPCGExVariantGridItem& Item = Items[ItemIndex];
+	if (!Item.bIsRuleDefinition || !Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx))
+	{
+		return;
+	}
+
+	{
+		FScopedTransaction Transaction(LOCTEXT("DeleteRule", "Delete Asset Swap Rule"));
+		bIsSyncing = true;
+		Variant->Modify();
+		Variant->PathOverrides.RemoveAt(Item.PathRuleIdx);
 		Variant->PostEditChange();
 		bIsSyncing = false;
 	}

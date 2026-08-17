@@ -7,9 +7,11 @@
 #include "AssetRegistry/AssetData.h"
 
 class UPCGExAssetCollection;
+class UPCGExVariantCollection;
 class UPackage;
 
 class UScriptStruct;
+struct FPCGExAssetCollectionEntry;
 
 /** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
 namespace PCGExCollectionEditorUtils
@@ -30,6 +32,15 @@ namespace PCGExCollectionEditorUtils
 	 * this when any concrete entry type is acceptable (e.g. variant swap payloads).
 	 */
 	PCGEXCOLLECTIONSEDITOR_API void GetAllConcreteEntryTypes(TArray<const UScriptStruct*>& OutTypes);
+
+	/**
+	 * First source entry of the variant staging the given asset (Staging.Path match, source
+	 * declaration order, subcollections skipped), with its resolved concrete struct and host.
+	 * Null when no LOADED source stages the asset or the entry's type is unregistered.
+	 */
+	PCGEXCOLLECTIONSEDITOR_API const FPCGExAssetCollectionEntry* FindRuleSeedEntry(
+		const UPCGExVariantCollection* InVariant, const FSoftObjectPath& InAssetPath,
+		const UScriptStruct*& OutEntryStruct, const UPCGExAssetCollection*& OutHost);
 
 	/** Add Content Browser selection to this collection. */
 	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);

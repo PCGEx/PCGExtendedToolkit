@@ -8,6 +8,7 @@
 #include "ScopedTransaction.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
+#include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExAssetCollection.h"
 
 namespace PCGExCollectionEditorUtils
@@ -41,6 +42,53 @@ namespace PCGExCollectionEditorUtils
 		{
 			return GetEntryTypeLabel(&A).CompareTo(GetEntryTypeLabel(&B)) < 0;
 		});
+	}
+
+	const FPCGExAssetCollectionEntry* FindRuleSeedEntry(
+		const UPCGExVariantCollection* InVariant, const FSoftObjectPath& InAssetPath,
+		const UScriptStruct*& OutEntryStruct, const UPCGExAssetCollection*& OutHost)
+	{
+		OutEntryStruct = nullptr;
+		OutHost = nullptr;
+
+		if (!InVariant || InAssetPath.IsNull())
+		{
+			return nullptr;
+		}
+
+		for (const FPCGExVariantSource& Group : InVariant->Sources)
+		{
+			const UPCGExAssetCollection* Src = Group.Source.Get();
+			if (!Src)
+			{
+				continue;
+			}
+
+			const FPCGExAssetCollectionEntry* Match = nullptr;
+			Src->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, int32)
+			{
+				if (!Match && !Entry->bIsSubCollection && Entry->Staging.Path == InAssetPath)
+				{
+					Match = Entry;
+				}
+			});
+
+			if (!Match)
+			{
+				continue;
+			}
+
+			// Struct resolved from the ENTRY's type id -- hosts may be heterogeneous (variant
+			// sources), where the host class only maps to the base entry struct.
+			if (const UScriptStruct* EntryStruct = PCGExAssetCollection::FTypeRegistry::Get().GetEntryStruct(Match->GetTypeId()))
+			{
+				OutEntryStruct = EntryStruct;
+				OutHost = Src;
+				return Match;
+			}
+		}
+
+		return nullptr;
 	}
 
 	FAssetData ResolveEntryAssetData(const FSoftObjectPath& AssetPath)
