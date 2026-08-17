@@ -566,7 +566,7 @@ namespace PCGExPCGDataAssetLoader
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::NoInit)
 
 		// Get hash attribute
-		EntryHashGetter = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
+		EntryHashGetter = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, true);
 		if (!EntryHashGetter)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Missing staging hash attribute. Make sure points were staged with Collection Map output."));

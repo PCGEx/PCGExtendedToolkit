@@ -37,14 +37,23 @@ FPCGElementPtr UPCGExCollectionToModuleInfosSettings::CreateElement() const
 	return MakeShared<FPCGExCollectionToModuleInfosElement>();
 }
 
+#if WITH_EDITOR
+void UPCGExCollectionToModuleInfosSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	EntryAttributeName = GetEntryIdxAttributeName();
+}
+#endif
+
 #pragma endregion
 
+// Entry is not in this list: its attribute name resolves from StagingLayer (the locked
+// EntryAttributeName UPROPERTY is display-only), so it's declared and written explicitly.
 #define PCGEX_FOREACH_MODULE_FIELD(MACRO)\
 MACRO(Symbol, FName, Infos.Symbol, NAME_None)\
 MACRO(Size, double, Infos.Size, 0)\
 MACRO(Scalable, bool, Infos.bScalable, true)\
 MACRO(DebugColor, FVector4, Infos.DebugColor, FVector4(1,1,1,1))\
-MACRO(Entry, int64, Idx, 0)\
 MACRO(Category, FName, Entry->Category, NAME_None)
 
 bool FPCGExCollectionToModuleInfosElement::IsCacheable(const UPCGSettings* InSettings) const
@@ -85,6 +94,10 @@ bool FPCGExCollectionToModuleInfosElement::AdvanceWork(FPCGExContext* InContext,
 	PCGEX_VALIDATE_NAME(Settings->_NAME##AttributeName) _NAME##Attribute = Metadata->FindOrCreateAttribute<_TYPE>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->_NAME##AttributeName, OutputModules), _DEFAULT, false, true);
 	PCGEX_FOREACH_MODULE_FIELD(PCGEX_DECLARE_ATT);
 #undef PCGEX_DECLARE_ATT
+
+	const FName EntryIdxAttributeName = Settings->GetEntryIdxAttributeName();
+	PCGEX_VALIDATE_NAME(EntryIdxAttributeName)
+	FPCGMetadataAttribute<int64>* EntryAttribute = Metadata->FindOrCreateAttribute<int64>(PCGExMetaHelpers::GetAttributeIdentifier(EntryIdxAttributeName, OutputModules), 0, false, true);
 
 	TSet<FName> UniqueSymbols;
 	UniqueSymbols.Reserve(100);
@@ -129,6 +142,8 @@ bool FPCGExCollectionToModuleInfosElement::AdvanceWork(FPCGExContext* InContext,
 #define PCGEX_MODULE_OUT(_NAME, _TYPE, _GETTER, _DEFAULT) _NAME##Attribute->SetValue(Key, Module._GETTER);
 		PCGEX_FOREACH_MODULE_FIELD(PCGEX_MODULE_OUT)
 #undef PCGEX_MODULE_OUT
+
+		EntryAttribute->SetValue(Key, Module.Idx);
 
 		PropertyWriter.WriteEntry(Key, Module.Entry, Module.Host);
 	}

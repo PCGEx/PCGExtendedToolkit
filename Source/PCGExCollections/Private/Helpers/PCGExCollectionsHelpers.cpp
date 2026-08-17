@@ -675,7 +675,7 @@ namespace PCGExCollections
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPickUnpacker::BuildPartitions);
 
 		FPCGAttributePropertyInputSelector HashSelector;
-		HashSelector.Update(Labels::Tag_EntryIdx.ToString());
+		HashSelector.Update(EntryIdxAttributeName.ToString());
 
 		TUniquePtr<const IPCGAttributeAccessor> HashAttributeAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InPointData, HashSelector);
 		TUniquePtr<const IPCGAttributeAccessorKeys> HashKeys = PCGAttributeAccessorHelpers::CreateConstKeys(InPointData, HashSelector);
