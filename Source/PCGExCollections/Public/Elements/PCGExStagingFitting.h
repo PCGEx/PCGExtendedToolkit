@@ -67,6 +67,12 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExFittingSource Source = EPCGExFittingSource::CollectionMap;
 
+	/** Staging layer this node reads staged picks from. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Source == EPCGExFittingSource::CollectionMap", EditConditionHides), AdvancedDisplay)
+	FName StagingLayer = NAME_None;
+
+	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
+
 	/** The name of the attribute containing the static mesh path. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Source == EPCGExFittingSource::MeshAttribute", EditConditionHides))
 	FName AssetPathAttributeName = "AssetPath";

@@ -41,6 +41,8 @@ public:
 	{
 		return EPCGSettingsType::Param;
 	}
+
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 
 protected:
@@ -86,8 +88,14 @@ protected:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName="DebugColor"))
 	FName DebugColorAttributeName = FName("DebugColor");
 
-	/** Mesh collection entry Idx. Serialize the id of the parent collection (in the collection map) and entry index within that collection.
-	 * This is a critical piece of data that will be used by the Grammar Staging node to retrieve the corresponding mesh. */
+	/** Staging layer the entry hash attribute is written to. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). Downstream consumers must read the same layer. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable), AdvancedDisplay)
+	FName StagingLayer = NAME_None;
+
+	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
+
+	/** Mesh collection entry Idx: id of the parent collection (in the collection map) and entry index within that collection,
+	 * consumed by staging nodes to retrieve the corresponding mesh. Resolved from Staging Layer (display only). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName="Entry", EditCondition="false"))
 	FName EntryAttributeName = PCGExCollections::Labels::Tag_EntryIdx;
 

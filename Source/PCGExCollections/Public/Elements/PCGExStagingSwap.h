@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCollectionsCommon.h"
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExPointsProcessor.h"
@@ -48,6 +49,8 @@ struct FPCGExStagingSwapVariantLayer
  * (Tag_EntryIdx) from (SourceCollectionGUID, RawIndex) to the variant's (GUID, RawIndex)
  * using the variant's baked mapping, and emits an updated Collection Map that includes the
  * variant collections. Points whose entry has no override pass through untouched.
+ * Can read one staging layer and write another (Output Staging Layer), deriving a complete
+ * new layer -- unswapped points then copy their source pick instead of passing through.
  *
  * Place after a staging node (picks must exist) and before consumers (spawn/load/selector
  * nodes). Fitting transforms were computed against the SOURCE entry's bounds -- re-adapt with
@@ -112,6 +115,21 @@ public:
 	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bSkipStaleMappings = true;
+
+	/** Staging layer whose picks are swapped. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
+	FName StagingLayer = NAME_None;
+
+	/** Write swapped picks to a different staging layer instead of rewriting in place, deriving one layer from another. The output layer is written for EVERY point (unswapped points copy their source pick) so it is complete for downstream consumers. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle), AdvancedDisplay)
+	bool bOutputToDifferentLayer = false;
+
+	/** Staging layer swapped picks are written to. None = default layer. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Output Staging Layer", EditCondition="bOutputToDifferentLayer"), AdvancedDisplay)
+	FName OutputStagingLayer = NAME_None;
+
+	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
+	FName GetOutputEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(bOutputToDifferentLayer ? OutputStagingLayer : StagingLayer); }
 
 	/** Re-pick the micro cache selection of swapped points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
@@ -212,6 +230,9 @@ namespace PCGExStagingSwap
 
 		// Per-point path: this IO's ordered layers (points into context; later wins). Null on the fast path.
 		const TArray<FPCGExStagingSwapVariantLayer>* Layers = nullptr;
+
+		// Reading and writing different staging layers: every point writes (unswapped copy their source pick).
+		bool bCrossLayer = false;
 
 		// Null when micro redistribution is off or no swapped-to entry here has a micro cache.
 		TSharedPtr<PCGExCollections::FMicroSelectorHelper> MicroHelper;

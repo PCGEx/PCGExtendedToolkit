@@ -314,7 +314,13 @@ public:
 
 	// Always-on outputs
 
-	/** Name of the entry hash attribute. Always written; downstream consumers (LoadPCGData, LoadProperties, etc.) read this fixed name. */
+	/** Staging layer the entry hash attribute is written to. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). Downstream consumers must read the same layer. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable), AdvancedDisplay)
+	FName StagingLayer = NAME_None;
+
+	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
+
+	/** Name of the entry hash attribute. Always written; resolved from Staging Layer (display only). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Settings|Outputs", meta=(DisplayName="Entry"))
 	FName EntryAttributeName = PCGExCollections::Labels::Tag_EntryIdx;
 

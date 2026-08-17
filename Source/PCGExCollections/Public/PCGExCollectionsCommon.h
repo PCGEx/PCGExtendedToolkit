@@ -134,6 +134,12 @@ namespace PCGExCollections::Labels
 	const FName Tag_CollectionIdx = FName(PCGExCommon::PCGExPrefix + TEXT("Collection/Idx"));
 	const FName Tag_EntryIdx = FName(PCGExCommon::PCGExPrefix + TEXT("CollectionEntry"));
 
+	/** Staged entry-hash attribute name for a staging layer. None = bare Tag_EntryIdx (legacy name). */
+	inline FName EntryIdxName(const FName InLayer)
+	{
+		return InLayer.IsNone() ? Tag_EntryIdx : FName(Tag_EntryIdx.ToString() + TEXT("/") + InLayer.ToString());
+	}
+
 	const FName CollectionMapPin = TEXT("CollectionMap");
 
 	const FName MeshesPin = TEXT("Meshes");
