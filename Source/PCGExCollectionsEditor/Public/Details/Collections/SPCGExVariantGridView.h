@@ -28,7 +28,8 @@ enum class EPCGExVariantTileState : uint8
 	PassThrough,    // Source entry with no override — dimmed, offers "declare swap"
 	Swapped,        // Explicit override declared — shows replacement, offers revoke
 	SwappedByRule,  // Covered by an asset-path rule — shows the rule's replacement, offers "specialize"
-	RuleDefinition, // A path rule itself (synthetic "Asset Swaps" group) — offers delete
+	RuleDefinition, // A path rule with a declared payload ("Asset Swaps" group) — offers revoke + delete
+	RuleUnset,      // A path rule with no payload yet — dimmed like PassThrough, offers declare + delete
 	Orphaned,       // Override row whose SourceEntryId no longer exists on the source
 };
 
@@ -45,6 +46,7 @@ struct FPCGExVariantGridItem
 	int32 OverrideRowIdx = INDEX_NONE; // index into the group's Overrides (INDEX_NONE = no explicit row)
 	int32 PathRuleIdx = INDEX_NONE;    // index into Variant->PathOverrides when rule-covered / rule tile
 	bool bIsRuleDefinition = false;    // tile in the synthetic "Asset Swaps" group
+	bool bRulePayloadSet = false;      // rule tiles only: the rule's Entry payload is a valid struct
 
 	FSoftObjectPath SourceThumbPath;
 	FSoftObjectPath OverrideThumbPath;
@@ -60,7 +62,7 @@ struct FPCGExVariantGridItem
 
 	EPCGExVariantTileState GetState() const
 	{
-		if (bIsRuleDefinition) { return EPCGExVariantTileState::RuleDefinition; }
+		if (bIsRuleDefinition) { return bRulePayloadSet ? EPCGExVariantTileState::RuleDefinition : EPCGExVariantTileState::RuleUnset; }
 		if (SourceRawIndex == INDEX_NONE) { return EPCGExVariantTileState::Orphaned; }
 		if (OverrideRowIdx != INDEX_NONE) { return EPCGExVariantTileState::Swapped; }
 		return PathRuleIdx != INDEX_NONE ? EPCGExVariantTileState::SwappedByRule : EPCGExVariantTileState::PassThrough;
@@ -88,6 +90,7 @@ public:
 		SLATE_EVENT(FOnVariantTileAction, OnTileClicked)
 		SLATE_EVENT(FOnVariantTileAction, OnDeclareSwap)
 		SLATE_EVENT(FOnVariantTileAction, OnRevokeSwap)
+		SLATE_EVENT(FOnVariantTileAction, OnDeleteRule)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
@@ -95,9 +98,10 @@ public:
 	/**
 	 * Refresh displayed item data in place — the tile widget itself persists in its parent
 	 * wrap box (no teardown, no scroll jump); inner content only rebuilds when display-relevant
-	 * fields actually changed.
+	 * fields actually changed. InItemIndex rebinds the action callbacks: global item indices
+	 * shift when items are added/removed elsewhere in the grid.
 	 */
-	void UpdateItem(const FPCGExVariantGridItem& InItem);
+	void UpdateItem(int32 InItemIndex, const FPCGExVariantGridItem& InItem);
 
 	void SetSelected(const bool bInSelected) { bIsSelected = bInSelected; }
 	bool IsSelected() const { return bIsSelected; }
@@ -119,6 +123,7 @@ private:
 	FOnVariantTileAction OnTileClicked;
 	FOnVariantTileAction OnDeclareSwap;
 	FOnVariantTileAction OnRevokeSwap;
+	FOnVariantTileAction OnDeleteRule;
 
 	/** Pooled, cache-backed thumbnail widget for an arbitrary asset path (0-size path → placeholder text). */
 	TSharedRef<SWidget> MakeThumbnail(const FSoftObjectPath& AssetPath, float InSize) const;
@@ -151,9 +156,10 @@ public:
 
 	/**
 	 * Rebuild the item model from the live sources and refresh the display. Preserves selection
-	 * by identity. When the item structure is unchanged (payload edits, declare/revoke), tiles
-	 * update in place — no layout teardown, no scroll jump; a full layout rebuild only happens
-	 * on structural changes (source or rule added/removed).
+	 * by identity. The layout reconciles per group: groups whose item identities are unchanged
+	 * keep their widget and tiles (updated in place — no teardown, no scroll jump, no thumbnail
+	 * flash); only groups whose membership changed rebuild their tiles, and the scroll box
+	 * re-slots (reusing widget instances) only when the group list itself changed.
 	 * @param bRefreshDetailPanel Pass false when the edit originated from the details pane itself.
 	 */
 	void RefreshGrid(bool bRefreshDetailPanel = true);
@@ -199,13 +205,21 @@ private:
 	bool bIsSyncing = false;
 
 	void RebuildItems();
-	void RebuildLayout();
+
+	/** Diff the new item model against the old snapshot and update the layout with minimal
+	 *  churn (see RefreshGrid). Sole owner of GroupWidgets/ActiveTiles lifetime. */
+	void ReconcileLayout(const TArray<FPCGExVariantGridItem>& OldItems, const TArray<FName>& OldGroupNames, const TMap<FName, TArray<int32>>& OldGroupToItems);
+
+	/** Fresh group widget wired to the shared drop/expansion handlers. */
+	TSharedRef<SPCGExCollectionCategoryGroup> MakeGroupWidget(FName GroupName, int32 EntryCount);
+
 	void PopulateGroupTiles(FName GroupName);
 
 	void OnTileClicked(int32 ItemIndex);
 
 	/** Opens the swap-declaration type menu at the cursor: copy the source entry, or start
-	 *  the replacement as a fresh payload of any registered entry type. */
+	 *  the replacement as a fresh payload of any registered entry type. Also serves unset
+	 *  rule tiles (copy option offered when a loaded source stages the matched asset). */
 	void DeclareSwap(int32 ItemIndex);
 
 	/** Creates the override row. Null EntryStruct = full copy of the source entry (legacy
@@ -213,7 +227,17 @@ private:
 	 *  fields (weight/category/tags/variations...) carried over. */
 	void DeclareSwapAs(int32 ItemIndex, const UScriptStruct* EntryStruct);
 
+	/** Rule counterpart of DeclareSwapAs: initializes the rule's payload. Null EntryStruct =
+	 *  full copy of the seed entry; a concrete struct = fresh payload with the seed's BASE
+	 *  fields carried over when a seed exists. */
+	void DeclareRuleSwapAs(int32 ItemIndex, const UScriptStruct* EntryStruct);
+
+	/** Swapped/orphan tiles: removes the override row. Rule tiles: resets the payload only —
+	 *  the rule (and its asset reference) survives as an unset rule. */
 	void RevokeSwap(int32 ItemIndex);
+
+	/** Deletes a rule outright — asset reference and payload both leave PathOverrides. */
+	void DeleteRule(int32 ItemIndex);
 
 	void ApplySelectionVisuals();
 	void UpdateDetailForSelection();

@@ -56,7 +56,7 @@ public:
 	//~ End IPropertyTypeCustomization interface
 };
 
-/** Matches FRuntimeFloatCurve properties declared inside FPCGExProperty-derived structs. */
+/** Matches FRuntimeFloatCurve properties declared inside FPCGExProperty-derived structs or FPCGExWeightCurve. */
 class FPCGExPropertyOwnedCurveIdentifier : public IPropertyTypeIdentifier
 {
 public:

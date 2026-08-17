@@ -25,7 +25,9 @@
 #include "Details/PCGExPropertyOverridesCustomization.h"
 #include "Details/PCGExPropertySchemaCollectionCustomization.h"
 #include "Details/PCGExPropertySchemaCustomization.h"
+#include "Details/PCGExWeightCurveCustomization.h"
 #include "Details/PCGExWeightedPropertyOverridesCustomization.h"
+#include "Utils/PCGExWeightCurve.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExPropertiesEditorModule"
 
@@ -154,6 +156,13 @@ void FPCGExPropertiesEditorModule::StartupModule()
 		FRuntimeFloatCurve::StaticStruct()->GetFName(),
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExRuntimeFloatCurveCustomization::MakeInstance),
 		MakeShared<FPCGExPropertyOwnedCurveIdentifier>()
+		);
+
+	// FPCGExWeightCurve (PCGExCore): any host property of this type gets the inline curve editor,
+	// with optional PCGExCurveTimeMin/Max + PCGExCurveValueMin/Max clamp metas read off the host row.
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FPCGExWeightCurve::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExWeightCurveCustomization::MakeInstance)
 		);
 
 	// Register built-in compact inline widgets for Vector / Vector2D / Rotator property types

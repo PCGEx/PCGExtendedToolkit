@@ -12,6 +12,7 @@ class SBox;
 class SWrapBox;
 class SBorder;
 class SImage;
+class STextBlock;
 class FPCGExCollectionTileDragDropOp;
 
 DECLARE_DELEGATE_TwoParams(FOnCategoryRenamed, FName /*OldName*/, FName /*NewName*/);
@@ -62,6 +63,9 @@ public:
 	/** Clear all tiles from the wrap box */
 	void ClearTiles();
 
+	/** Update the header's entry count — for grids that reuse group widgets across refreshes. */
+	void SetEntryCount(int32 InCount);
+
 	/** Get the category name */
 	FName GetCategoryName() const
 	{
@@ -92,6 +96,7 @@ private:
 	int32 DropInsertIndex = INDEX_NONE;
 
 	TSharedPtr<SWrapBox> TilesWrapBox;
+	TSharedPtr<STextBlock> CountTextBlock;
 	TSharedPtr<SBorder> DropHighlightBorder;
 	TSharedPtr<SBox> BodyContainer;
 	TSharedPtr<SBox> InsertIndicator;

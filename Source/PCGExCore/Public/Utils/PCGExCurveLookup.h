@@ -107,6 +107,10 @@ public:
 
 	void Init(const FRuntimeFloatCurve& InCurve, const EPCGExCurveLUTMode InMode = EPCGExCurveLUTMode::Lookup, const int32 InNumSamples = 256);
 
+	/** Bake with a per-sample transform applied to every value. Always builds a LUT (a transform
+	 *  cannot ride the Direct or fast-linear closed forms), with exact endpoint samples. */
+	void Init(const FRuntimeFloatCurve& InCurve, TFunctionRef<float(float)> InSampleTransform, const int32 InNumSamples = 256);
+
 	// Evaluate at time T - same signature as FRichCurve::Eval()
 	FORCEINLINE double Eval(const double InTime) const
 	{
@@ -196,6 +200,13 @@ public:
 	{
 		PCGExFloatLUT NewLUT = MakeShared<FPCGExCurveFloatLookup>();
 		NewLUT->Init(InCurve, InMode, InNumSamples);
+		return NewLUT;
+	}
+
+	static PCGExFloatLUT Make(const FRuntimeFloatCurve& InCurve, const TFunctionRef<float(float)> InSampleTransform, const int32 InNumSamples = 256)
+	{
+		PCGExFloatLUT NewLUT = MakeShared<FPCGExCurveFloatLookup>();
+		NewLUT->Init(InCurve, InSampleTransform, InNumSamples);
 		return NewLUT;
 	}
 

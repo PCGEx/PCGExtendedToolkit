@@ -7,8 +7,9 @@
 #include "Curves/RichCurve.h"
 #include "Widgets/SCompoundWidget.h"
 
+#include "PCGExPropertyCurveEditController.h"
+
 class IPropertyHandle;
-class FPCGExPropertyCurveEditController;
 
 /**
  * Self-contained inline curve editor bound to an FRuntimeFloatCurve property handle
@@ -29,6 +30,8 @@ class SPCGExPropertyCurveValueWidget : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SPCGExPropertyCurveValueWidget) {}
+		/** Optional per-axis edit clamps (default: both axes free). */
+		SLATE_ARGUMENT(FPCGExPropertyCurveClamps, Clamps)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, const TSharedRef<IPropertyHandle>& InValueHandle);
