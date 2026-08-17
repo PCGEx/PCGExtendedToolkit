@@ -7,6 +7,7 @@
 #include "IDetailChildrenBuilder.h"
 #include "PCGExPropertyTypes.h"
 #include "PropertyHandle.h"
+#include "Utils/PCGExWeightCurve.h"
 
 #include "Widgets/SPCGExPropertyCurveValueWidget.h"
 
@@ -43,6 +44,7 @@ void FPCGExPropertyFloatCurveCustomization::CustomizeChildren(TSharedRef<IProper
 		.WholeRowContent()
 		[
 			SNew(SPCGExPropertyCurveValueWidget, ValueHandle.ToSharedRef())
+			.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
 		];
 }
 
@@ -71,6 +73,7 @@ void FPCGExRuntimeFloatCurveCustomization::CustomizeChildren(TSharedRef<IPropert
 		.WholeRowContent()
 		[
 			SNew(SPCGExPropertyCurveValueWidget, PropertyHandle)
+			.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
 		];
 }
 
@@ -78,7 +81,9 @@ bool FPCGExPropertyOwnedCurveIdentifier::IsPropertyTypeCustomized(const IPropert
 {
 	const FProperty* Property = PropertyHandle.GetProperty();
 	const UScriptStruct* OwnerStruct = Property ? Cast<UScriptStruct>(Property->GetOwnerStruct()) : nullptr;
-	return OwnerStruct && OwnerStruct->IsChildOf(FPCGExProperty::StaticStruct());
+	// FPCGExWeightCurve's inner curve is covered too: its own layout never surfaces the raw row, but
+	// any path that would must not instantiate the engine customization (see class comment).
+	return OwnerStruct && (OwnerStruct->IsChildOf(FPCGExProperty::StaticStruct()) || OwnerStruct == FPCGExWeightCurve::StaticStruct());
 }
 
 #pragma endregion

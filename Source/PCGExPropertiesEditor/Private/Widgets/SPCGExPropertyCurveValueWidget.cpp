@@ -37,6 +37,7 @@ void SPCGExPropertyCurveValueWidget::Construct(const FArguments& InArgs, const T
 	PullFromProperty();
 
 	Controller = MakeShared<FPCGExPropertyCurveEditController>(CurveData.ToSharedRef());
+	Controller->SetClamps(InArgs._Clamps);
 	Controller->OnChanged.AddSP(this, &SPCGExPropertyCurveValueWidget::HandleCurveChanged);
 
 	ChildSlot

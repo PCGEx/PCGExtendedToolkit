@@ -5,6 +5,7 @@
 
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExPropertyTypes.h"
+#include "PropertyHandle.h"
 #include "Details/PCGExEnumSelectorWidget.h"
 #include "Details/PCGExInlineNumericWidgets.h"
 #include "Details/PCGExPropertyInlineWidgets.h"
@@ -68,7 +69,11 @@ namespace PCGExBuiltInInlineWidgets
 			EPCGExInlineWidgetMode::Compact,
 			[](const TSharedRef<IPropertyHandle>& ValueHandle) -> TSharedRef<SWidget>
 			{
-				return SNew(SPCGExPropertyCurveValueWidget, ValueHandle);
+				// Clamp metas live on the HOST property (the FPCGExProperty_FloatCurve member), one
+				// level above the inner-curve handle this factory receives.
+				const TSharedPtr<IPropertyHandle> HostHandle = ValueHandle->GetParentHandle();
+				return SNew(SPCGExPropertyCurveValueWidget, ValueHandle)
+					.Clamps(FPCGExPropertyCurveClamps::FromProperty(HostHandle ? HostHandle->GetProperty() : nullptr));
 			});
 	}
 }

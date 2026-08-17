@@ -14,6 +14,37 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FPCGExOnPropertyCurveChanged, bool /*bIntera
 /** Broadcast when the selected key changes (or selection is cleared). */
 DECLARE_MULTICAST_DELEGATE(FPCGExOnPropertyCurveSelectionChanged);
 
+class FProperty;
+
+/** Optional per-axis edit clamps (from the host property's PCGExCurveTimeMin/Max, PCGExCurveValueMin/Max
+ *  metas). Unset members leave that side free. Clamps constrain EDITS only -- keys already outside
+ *  (hand-authored data) render as-is until touched, so opening the editor never mutates data. */
+struct FPCGExPropertyCurveClamps
+{
+	TOptional<float> TimeMin;
+	TOptional<float> TimeMax;
+	TOptional<float> ValueMin;
+	TOptional<float> ValueMax;
+
+	/** Sole owner of the clamp-meta vocabulary: parse the host UPROPERTY's metas. Null property,
+	 *  absent metas, or unparsable values leave that side free. */
+	static FPCGExPropertyCurveClamps FromProperty(const FProperty* Property);
+
+	float ClampTime(float Time) const
+	{
+		if (TimeMin.IsSet()) { Time = FMath::Max(Time, TimeMin.GetValue()); }
+		if (TimeMax.IsSet()) { Time = FMath::Min(Time, TimeMax.GetValue()); }
+		return Time;
+	}
+
+	float ClampValue(float Value) const
+	{
+		if (ValueMin.IsSet()) { Value = FMath::Max(Value, ValueMin.GetValue()); }
+		if (ValueMax.IsSet()) { Value = FMath::Min(Value, ValueMax.GetValue()); }
+		return Value;
+	}
+};
+
 /**
  * Shared edit state for the inline ramp widgets (graph + key strip).
  *
@@ -22,7 +53,8 @@ DECLARE_MULTICAST_DELEGATE(FPCGExOnPropertyCurveSelectionChanged);
  *   - no key is special: any key can be deleted (while >= 1 remains), moved, or reordered past any
  *     other by dragging (SetKeyTime re-sorts; the FKeyHandle survives the reorder)
  *
- * Both axes are fully free (no value/position clamp, negative positions allowed) and auto-frame to
+ * Both axes are free by default (no value/position clamp, negative positions allowed) unless the
+ * owner installs FPCGExPropertyCurveClamps, and auto-frame to
  * the key range: the value frame fits keys plus padding; the time frame fits keys but always spans at
  * least [0,1] (edge-to-edge, no padding). Both frames freeze during an interactive drag so the view's
  * screen<->data mapping stays a stable reference (no feedback loop), then refit on commit.
@@ -37,6 +69,9 @@ public:
 
 	FRichCurve& GetCurve() const { return *Curve; }
 	int32 NumKeys() const { return Curve->Keys.Num(); }
+
+	/** Install edit clamps (defaults to none). Applies to subsequent edits only. */
+	void SetClamps(const FPCGExPropertyCurveClamps& InClamps) { Clamps = InClamps; }
 
 	// --- Read by index (for painting / hit-testing) ---
 	float GetKeyTimeAt(int32 Index) const;
@@ -66,6 +101,12 @@ public:
 	void MoveKey(FKeyHandle Handle, float NewTime, float NewValue, bool bInteractive);
 	void SetKeyValue(FKeyHandle Handle, float NewValue, bool bInteractive);
 	void SetKeyInterp(FKeyHandle Handle, ERichCurveInterpMode Mode);
+
+	/** Mirror key times across the keys' own [min,max] (new = min + max - old): an exact involution,
+	 *  so flipping twice restores the original curve. Reverses key order, segment interps and tangents. */
+	void FlipTime();
+	/** Mirror key values across the keys' own [min,max]. Same involution guarantee as FlipTime. */
+	void FlipValues();
 
 	/** Close an interactive gesture: refit both frames tightly and emit a final (undoable) change. */
 	void CommitInteractive();
@@ -105,6 +146,8 @@ private:
 	void RefitTimeFrame();
 
 	TSharedRef<FRichCurve> Curve;
+
+	FPCGExPropertyCurveClamps Clamps;
 
 	FKeyHandle SelectedKey = FKeyHandle::Invalid();
 
