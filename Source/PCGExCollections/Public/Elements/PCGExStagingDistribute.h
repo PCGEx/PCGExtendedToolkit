@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCollectionsCommon.h"
 #include "PCGExFilterCommon.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExRoamingAssetCollectionDetails.h"
@@ -154,6 +155,12 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	EPCGExStagingOutputMode OutputMode = EPCGExStagingOutputMode::CollectionMap;
+
+	/** Staging layer this node writes to. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>), letting multiple staging layers stack on the same data. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
+	FName StagingLayer = NAME_None;
+
+	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
 
 #pragma region DEPRECATED
 	

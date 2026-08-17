@@ -458,6 +458,7 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 	}
 
 	PCGEX_VALIDATE_NAME(Settings->AssetPathAttributeName)
+	PCGEX_VALIDATE_NAME(Settings->GetEntryIdxAttributeName())
 
 	if (!bMicroRedistribute && (Settings->WeightToAttribute == EPCGExWeightOutputMode::Raw || Settings->WeightToAttribute == EPCGExWeightOutputMode::Normalized))
 	{
@@ -635,7 +636,7 @@ namespace PCGExAssetStaging
 		{
 			// Micro-cache redistribution: minimal pipeline -- no fitting, weight, entry-type or
 			// socket output; anything unresolvable passes through untouched.
-			const TSharedPtr<PCGExData::TBuffer<int64>> StagedHashReader = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, false);
+			const TSharedPtr<PCGExData::TBuffer<int64>> StagedHashReader = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, false);
 			if (!StagedHashReader)
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("An input has no staged entry attribute and was passed through untouched."));
@@ -720,7 +721,7 @@ namespace PCGExAssetStaging
 
 			// Always refresh the staged hash (guaranteed present -- read above) so the re-pick is
 			// never discarded in Attributes output mode; Inherit keeps untouched points' values.
-			HashWriter = PointDataFacade->GetWritable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EBufferInit::Inherit);
+			HashWriter = PointDataFacade->GetWritable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EBufferInit::Inherit);
 			if (Context->OutputMode == EPCGExStagingOutputMode::Attributes)
 			{
 				PathWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->AssetPathAttributeName, PCGExData::EBufferInit::Inherit);
@@ -740,7 +741,7 @@ namespace PCGExAssetStaging
 			}
 
 			// Full (unscoped) read: keys must cover the whole range before the parallel loop starts.
-			const TSharedPtr<PCGExData::TBuffer<int64>> HashReader = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, false);
+			const TSharedPtr<PCGExData::TBuffer<int64>> HashReader = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, false);
 			if (!HashReader)
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("An input has no staged entry attribute and was passed through untouched."));
@@ -866,8 +867,9 @@ namespace PCGExAssetStaging
 		}
 		else
 		{
-			bInherit = bMapMode || PointDataFacade->GetIn()->Metadata->HasAttribute(PCGExCollections::Labels::Tag_EntryIdx);
-			HashWriter = PointDataFacade->GetWritable<int64>(PCGExCollections::Labels::Tag_EntryIdx, bInherit ? PCGExData::EBufferInit::Inherit : PCGExData::EBufferInit::New);
+			const FName EntryIdxName = Settings->GetEntryIdxAttributeName();
+			bInherit = bMapMode || PointDataFacade->GetIn()->Metadata->HasAttribute(EntryIdxName);
+			HashWriter = PointDataFacade->GetWritable<int64>(EntryIdxName, bInherit ? PCGExData::EBufferInit::Inherit : PCGExData::EBufferInit::New);
 		}
 
 		EPCGPointNativeProperties AllocateFor = EPCGPointNativeProperties::None;

@@ -85,7 +85,8 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 		return true;
 	}
 
-	const FPCGMetadataAttributeBase* HashAttribute = PCGExMetaHelpers::TryGetConstAttribute<int64>(InPointData->Metadata, PCGExCollections::Labels::Tag_EntryIdx);
+	const FName EntryIdxAttributeName = PCGExCollections::Labels::EntryIdxName(StagingLayer);
+	const FPCGMetadataAttributeBase* HashAttribute = PCGExMetaHelpers::TryGetConstAttribute<int64>(InPointData->Metadata, EntryIdxAttributeName);
 
 	if (!HashAttribute)
 	{
@@ -113,12 +114,13 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			OutPointData->SetNumPoints(NumPoints);
 			InPointData->CopyPointsTo(OutPointData, 0, 0, InPointData->GetNumPoints());
 
-			OutPointData->Metadata->DeleteAttribute(PCGExCollections::Labels::Tag_EntryIdx);
+			OutPointData->Metadata->DeleteAttribute(EntryIdxAttributeName);
 		}
 	}
 
-	// 1- Build collection map from override attribute set		
+	// 1- Build collection map from override attribute set
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionMap = MakeShared<PCGExCollections::FPickUnpacker>();
+	CollectionMap->EntryIdxAttributeName = EntryIdxAttributeName;
 
 	CollectionMap->UnpackPin(&Context, PCGPinConstants::DefaultParamsLabel);
 
