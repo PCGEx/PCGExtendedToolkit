@@ -14,6 +14,10 @@ class UPCGExSkinnedMeshSelectorStaged : public UPCGSkinnedMeshSelector
 public:
 	virtual bool SelectInstances(FPCGSkinnedMeshSpawnerContext& Context, const UPCGSkinnedMeshSpawnerSettings* Settings, const UPCGPointData* InPointData, TArray<FPCGSkinnedMeshInstanceList>& OutMeshInstances, UPCGPointData* OutPointData) const override;
 
+	/** Staging layer this selector reads staged picks from (and strips from output points). None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). Other layers' attributes pass through untouched. */
+	UPROPERTY(EditAnywhere, Category = MeshSelector, AdvancedDisplay)
+	FName StagingLayer = NAME_None;
+
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bApplyMaterialOverrides = true;
 

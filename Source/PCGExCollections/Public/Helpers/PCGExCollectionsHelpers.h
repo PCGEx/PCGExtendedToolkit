@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCollectionsCommon.h"
 #include "PCGExCommon.h"
 #include "PCGExH.h"
 #include "Core/PCGExAssetCollection.h"
@@ -508,6 +509,9 @@ namespace PCGExCollections
 	public:
 		TMap<int64, TSharedPtr<TArray<int32>>> HashedPartitions;
 		TMap<int64, int32> IndexedPartitions;
+
+		/** Resolved staged-hash attribute name BuildPartitions reads. Set before use when consuming a non-default staging layer. */
+		FName EntryIdxAttributeName = Labels::Tag_EntryIdx;
 
 		FPickUnpacker() = default;
 

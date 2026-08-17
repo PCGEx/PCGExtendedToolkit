@@ -719,7 +719,7 @@ namespace PCGExCollections
 		using FTraits = TInstanceListTraits<T>;
 
 		FPCGAttributePropertyInputSelector HashSelector;
-		HashSelector.Update(Labels::Tag_EntryIdx.ToString());
+		HashSelector.Update(EntryIdxAttributeName.ToString());
 
 		TUniquePtr<const IPCGAttributeAccessor> HashAttributeAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InPointData, HashSelector);
 		TUniquePtr<const IPCGAttributeAccessorKeys> HashKeys = PCGAttributeAccessorHelpers::CreateConstKeys(InPointData, HashSelector);

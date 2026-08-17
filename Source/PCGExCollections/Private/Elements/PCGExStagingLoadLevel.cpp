@@ -308,7 +308,7 @@ namespace PCGExStagingLoadLevel
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Forward)
 
-		EntryHashGetter = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
+		EntryHashGetter = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, true);
 		if (!EntryHashGetter)
 		{
 			return false;

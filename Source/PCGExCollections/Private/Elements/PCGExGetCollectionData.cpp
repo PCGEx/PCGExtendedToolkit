@@ -88,6 +88,7 @@ void UPCGExGetCollectionDataSettings::PostEditChangeProperty(FPropertyChangedEve
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 	bWriteAssetClass = bWriteAssetPath;
 	AssetClassAttributeName = AssetPathAttributeName;
+	EntryAttributeName = GetEntryIdxAttributeName();
 }
 #endif
 
@@ -175,6 +176,7 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	FPCGExGetCollectionDataContext* Context = static_cast<FPCGExGetCollectionDataContext*>(InContext);
 
 	// Validate attribute names up-front -- abort early on bad config.
+	PCGEX_VALIDATE_NAME_C(InContext, Settings->GetEntryIdxAttributeName())
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteAssetPath, AssetPathAttributeName)
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteWeight, WeightAttributeName)
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteCategory, CategoryAttributeName)
@@ -505,7 +507,7 @@ namespace PCGExGetCollectionData
 #undef PCGEX_GCD_DECLARE_PERAXIS
 			}
 
-			U.EntryAttr = Metadata->CreateAttribute<int64>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->EntryAttributeName, U.OutputSet), 0, false, true);
+			U.EntryAttr = Metadata->CreateAttribute<int64>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->GetEntryIdxAttributeName(), U.OutputSet), 0, false, true);
 		} // end DeclareAttrs scope
 
 		// Property writer (gated -- skips an allocation per output when no properties configured).

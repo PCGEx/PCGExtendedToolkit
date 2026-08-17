@@ -89,6 +89,9 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(StagingSwap)
 
+	PCGEX_VALIDATE_NAME(Settings->GetEntryIdxAttributeName())
+	PCGEX_VALIDATE_NAME(Settings->GetOutputEntryIdxAttributeName())
+
 	Context->CollectionPickUnpacker = MakeShared<PCGExCollections::FPickUnpacker>();
 	Context->CollectionPickUnpacker->UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
 
@@ -485,13 +488,20 @@ namespace PCGExStagingSwap
 
 		const int32 IOIndex = PointDataFacade->Source->IOIndex;
 
+		const FName SourceAttributeName = Settings->GetEntryIdxAttributeName();
+		const FName TargetAttributeName = Settings->GetOutputEntryIdxAttributeName();
+		bCrossLayer = SourceAttributeName != TargetAttributeName;
+
 		// No mapping for this input -> pass through untouched (the init policy already forwarded/duplicated it).
+		// Cross-layer must still run so the output layer exists on every output (pure copy of source picks).
+		bool bHasMapping = false;
 		if (Context->bHasPerPointSlots)
 		{
 			Layers = Context->LayersPerIO.Find(IOIndex);
-			if (!Layers || Layers->IsEmpty())
+			bHasMapping = Layers && !Layers->IsEmpty();
+			if (!bHasMapping)
 			{
-				return true;
+				Layers = nullptr;
 			}
 		}
 		else
@@ -501,25 +511,33 @@ namespace PCGExStagingSwap
 				SwapMap = *Found;
 			}
 
-			if (!SwapMap || SwapMap->IsEmpty())
+			bHasMapping = SwapMap && !SwapMap->IsEmpty();
+			if (!bHasMapping)
 			{
-				return true;
+				SwapMap = nullptr;
 			}
 		}
 
-		HashReader = PointDataFacade->GetReadable<int64>(PCGExCollections::Labels::Tag_EntryIdx, PCGExData::EIOSide::In, true);
+		if (!bHasMapping && !bCrossLayer)
+		{
+			return true;
+		}
+
+		HashReader = PointDataFacade->GetReadable<int64>(SourceAttributeName, PCGExData::EIOSide::In, true);
 		if (!HashReader)
 		{
 			return false;
 		}
 
-		HashWriter = PointDataFacade->GetWritable<int64>(PCGExCollections::Labels::Tag_EntryIdx, 0, true, PCGExData::EBufferInit::Inherit);
+		// Cross-layer writes every index (unswapped points copy their source pick), so New is safe and
+		// avoids inheriting stale values from a pre-existing target-layer attribute.
+		HashWriter = PointDataFacade->GetWritable<int64>(TargetAttributeName, 0, true, bCrossLayer ? PCGExData::EBufferInit::New : PCGExData::EBufferInit::Inherit);
 		if (!HashWriter)
 		{
 			return false;
 		}
 
-		if (Settings->bRedistributeMicroCache && !Context->MicroCacheByEntryKey.IsEmpty())
+		if (bHasMapping && Settings->bRedistributeMicroCache && !Context->MicroCacheByEntryKey.IsEmpty())
 		{
 			// The fast path knows this IO's full target set up front -- skip the helper (and its
 			// transient factory) when no target has a micro cache. Layered targets are per-point,
@@ -591,18 +609,19 @@ namespace PCGExStagingSwap
 			HashWriter->SetValue(Index, static_cast<int64>(NewHash));
 		};
 
-		if (SwapMap)
+		if (SwapMap || !Layers)
 		{
-			// All-uniform fast path: one map governs the whole IO.
+			// All-uniform fast path: one map governs the whole IO. Also hosts the no-mapping
+			// cross-layer case (null SwapMap), where the loop is a pure source->target copy.
 			PCGEX_SCOPE_LOOP(Index)
 			{
-				if (!PointFilterCache[Index])
+				const uint64 Hash = static_cast<uint64>(HashReader->Read(Index));
+				if (bCrossLayer)
 				{
-					continue;
+					HashWriter->SetValue(Index, static_cast<int64>(Hash));
 				}
 
-				const uint64 Hash = static_cast<uint64>(HashReader->Read(Index));
-				if (Hash == 0)
+				if (!PointFilterCache[Index] || Hash == 0 || !SwapMap)
 				{
 					continue;
 				}
@@ -619,13 +638,13 @@ namespace PCGExStagingSwap
 		// Per-point path: walk this IO's variant layers in slot order, keeping the last that remaps the pick.
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			if (!PointFilterCache[Index])
+			const uint64 Hash = static_cast<uint64>(HashReader->Read(Index));
+			if (bCrossLayer)
 			{
-				continue;
+				HashWriter->SetValue(Index, static_cast<int64>(Hash));
 			}
 
-			const uint64 Hash = static_cast<uint64>(HashReader->Read(Index));
-			if (Hash == 0)
+			if (!PointFilterCache[Index] || Hash == 0)
 			{
 				continue;
 			}
