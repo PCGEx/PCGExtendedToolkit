@@ -1,7 +1,7 @@
 ﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
-#include "Elements/PCGExSanitizeClusters.h"
+#include "Elements/PCGExRepairClusters.h"
 
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -25,28 +25,35 @@ PCGExData::EIOInit UPCGExSanitizeClustersSettings::GetEdgeOutputInitMode() const
 }
 
 #pragma endregion
+TArray<FText> UPCGExSanitizeClustersSettings::GetNodeTitleAliases() const
+{
+	return {FTEXT("PCGEx | Cluster : Sanitize")};
+}
 
-PCGEX_INITIALIZE_ELEMENT(SanitizeClusters)
-PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(SanitizeClusters)
+FPCGElementPtr UPCGExSanitizeClustersSettings::CreateElement() const{ return MakeShared<FPCGExRepairClustersElement>();}
+PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(RepairClusters)
 
-bool FPCGExSanitizeClustersElement::Boot(FPCGExContext* InContext) const
+bool FPCGExRepairClustersElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExClustersProcessorElement::Boot(InContext))
 	{
 		return false;
 	}
 
-	PCGEX_CONTEXT_AND_SETTINGS(SanitizeClusters)
+	PCGEX_CONTEXT(RepairClusters) 
+	PCGEX_SETTINGS(SanitizeClusters)
 	PCGEX_FWD(GraphBuilderDetails)
 
 	return true;
 }
 
-bool FPCGExSanitizeClustersElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+bool FPCGExRepairClustersElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExSanitizeClustersElement::Execute);
 
-	PCGEX_CONTEXT_AND_SETTINGS(SanitizeClusters)
+	PCGEX_CONTEXT(RepairClusters) 
+	PCGEX_SETTINGS(SanitizeClusters)
+	
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
@@ -72,7 +79,7 @@ bool FPCGExSanitizeClustersElement::AdvanceWork(FPCGExContext* InContext, const 
 	return Context->TryComplete();
 }
 
-namespace PCGExSanitizeClusters
+namespace PCGExRepairClusters
 {
 	FProcessor::~FProcessor()
 	{

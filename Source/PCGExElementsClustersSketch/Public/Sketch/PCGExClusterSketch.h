@@ -77,6 +77,10 @@ public:
 	/** Basis from the snap provider; false when there is no provider or it forms no usable lattice. */
 	bool BuildBasis(FPCGExLatticeBasis& OutBasis) const;
 
+	/** Model extent through this sketch's OWN basis -- the same resolution the print path applies, so
+	 *  staged bounds match what a consumer actually gets. */
+	FBox GetBounds() const;
+
 	/** Union of the provider's and enabled decorators' soft dependencies -- load these before printing. */
 	void CollectAssetDependencies(TArray<FSoftObjectPath>& OutPaths) const;
 

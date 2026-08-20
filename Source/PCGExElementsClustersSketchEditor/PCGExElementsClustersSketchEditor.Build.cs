@@ -29,6 +29,8 @@ public class PCGExElementsClustersSketchEditor : ModuleRules
 				// Lattice basis: the edit controller snaps against it directly.
 				"PCGExGraphs",
 				"PCGExCoreEditor",
+				// Base collection toolkit + editor type registry for the sketch collection actions.
+				"PCGExCollectionsEditor",
 				"AssetDefinition"
 			}
 		);

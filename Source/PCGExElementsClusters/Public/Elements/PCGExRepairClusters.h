@@ -5,7 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExClustersProcessor.h"
-#include "PCGExSanitizeClusters.generated.h"
+#include "PCGExRepairClusters.generated.h"
 
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/utilities/cluster-sanitize"))
@@ -16,12 +16,14 @@ class UPCGExSanitizeClustersSettings : public UPCGExClustersProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(SanitizeClusters, "Cluster : Sanitize", "Ensure the input set of vertex and edges outputs clean, interconnected clusters. May create new clusters, but does not creates nor deletes points/edges.");
+	PCGEX_NODE_INFOS(SanitizeClusters, "Cluster : Repair", "Ensure the input set of vertex and edges outputs clean, interconnected clusters. May create new clusters, but does not creates nor deletes points/edges.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{
 		return PCGEX_NODE_COLOR_NAME(ClusterOp);
 	}
+	
+	virtual TArray<FText> GetNodeTitleAliases() const override;
 #endif
 
 protected:
@@ -39,27 +41,27 @@ public:
 	FPCGExGraphBuilderDetails GraphBuilderDetails;
 };
 
-struct FPCGExSanitizeClustersContext final : FPCGExClustersProcessorContext
+struct FPCGExRepairClustersContext final : FPCGExClustersProcessorContext
 {
 	friend class UPCGExSanitizeClustersSettings;
-	friend class FPCGExSanitizeClustersElement;
+	friend class FPCGExRepairClustersElement;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL
 };
 
-class FPCGExSanitizeClustersElement final : public FPCGExClustersProcessorElement
+class FPCGExRepairClustersElement final : public FPCGExClustersProcessorElement
 {
 protected:
-	PCGEX_ELEMENT_CREATE_CONTEXT(SanitizeClusters)
+	PCGEX_ELEMENT_CREATE_CONTEXT(RepairClusters)
 
 	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };
 
-namespace PCGExSanitizeClusters
+namespace PCGExRepairClusters
 {
-	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExSanitizeClustersContext, UPCGExSanitizeClustersSettings>
+	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExRepairClustersContext, UPCGExSanitizeClustersSettings>
 	{
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)

@@ -222,6 +222,16 @@ FVector FPCGExClusterSketchModel::ResolvedLocation(const FPCGExClusterSketchVert
 	return (V.bLatticeBound && Basis) ? Basis->CoordToWorld(V.LatticeCoord) : V.Transform.GetLocation();
 }
 
+FBox FPCGExClusterSketchModel::GetBounds(const FPCGExLatticeBasis* Basis) const
+{
+	FBox Bounds(ForceInit);
+	for (const FPCGExClusterSketchVertex& V : Vertices)
+	{
+		Bounds += ResolvedLocation(V, Basis);
+	}
+	return Bounds;
+}
+
 int32 FPCGExClusterSketchModel::AddVertex(const FTransform& InTransform)
 {
 	const int32 Index = Vertices.Num();

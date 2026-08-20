@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Core/PCGExAssetCollectionTypes.h"
@@ -45,6 +45,24 @@ namespace PCGExAssetCollection
 		return Info.Id;
 	}
 
+
+	void FTypeRegistry::Unregister(FTypeId Id)
+	{
+		FWriteScopeLock Lock(RegistryLock);
+
+		const FTypeInfo* Info = Types.Find(Id);
+		if (!Info)
+		{
+			return;
+		}
+
+		ClassToType.Remove(Info->CollectionClass);
+		if (Info->EntryStruct)
+		{
+			StructToType.Remove(Info->EntryStruct);
+		}
+		Types.Remove(Id);
+	}
 
 	void FTypeRegistry::Customize(FTypeId Id, TFunctionRef<void(FTypeInfo&)> Mutator)
 	{

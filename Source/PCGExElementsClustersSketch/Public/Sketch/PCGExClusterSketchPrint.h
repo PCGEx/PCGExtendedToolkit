@@ -68,6 +68,10 @@ namespace PCGExSketch
 
 		const FPCGExGraphBuilderDetails* BuilderDetails = nullptr;
 
+		/** Applied AFTER basis resolution, so a lattice coord resolves in sketch space and the whole
+		 *  result is then placed. Identity prints in sketch space. */
+		FTransform LocalToWorld = FTransform::Identity;
+
 		/** Quiet the model-integrity warnings (dropped edges, isolated vertices, skipped channels). */
 		bool bQuiet = false;
 

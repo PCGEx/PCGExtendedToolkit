@@ -169,6 +169,10 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	 *  a free one through its transform. */
 	static FVector ResolvedLocation(const FPCGExClusterSketchVertex& V, const FPCGExLatticeBasis* Basis);
 
+	/** Extent of the resolved vertex locations -- bound vertices measure where they PRINT, not where
+	 *  their transform says. Invalid (ForceInit) box when there are no vertices. */
+	FBox GetBounds(const FPCGExLatticeBasis* Basis) const;
+
 	/** Append a free vertex. Extends every vertex channel. @return the new vertex index. */
 	int32 AddVertex(const FTransform& InTransform);
 

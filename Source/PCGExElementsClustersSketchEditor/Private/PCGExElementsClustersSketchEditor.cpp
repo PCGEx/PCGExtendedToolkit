@@ -4,6 +4,8 @@
 #include "PCGExElementsClustersSketchEditor.h"
 
 #include "AssetToolsModule.h"
+#include "Collections/PCGExClusterSketchCollectionActions.h"
+#include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "IAssetTools.h"
 #include "Engine/Engine.h"
 #include "Helpers/PCGExObjectNotifyHelpers.h"
@@ -31,6 +33,10 @@ void FPCGExElementsClustersSketchEditorModule::StartupModule()
 {
 	IPCGExEditorModuleInterface::StartupModule();
 	// Factories and asset definitions self-register through the AssetDefinition subsystem.
+
+	// Out-of-module collection type: PCGExCollectionsEditor flushed its registry in its own
+	// StartupModule, so this cannot ride a static auto-registrar.
+	PCGExClusterSketchCollectionActions::RegisterEditorType();
 
 	// Topology thumbnails for sketch assets. GEngine != null means engine init is done and
 	// UThumbnailManager is safe to touch; otherwise defer to PostEngineInit.
@@ -89,6 +95,9 @@ void FPCGExElementsClustersSketchEditorModule::RegisterThumbnailRenderer()
 void FPCGExElementsClustersSketchEditorModule::ShutdownModule()
 {
 	PCGExSketch::GSaveSketchAsAssetFn = nullptr;
+
+	// The registry outlives this module and holds closures compiled into its DLL.
+	FCollectionEditorTypeRegistry::Get().Unregister(PCGExSketch::CollectionTypeId);
 
 	PCGExElementsClustersSketchEditor::OnPostEngineInit().Remove(OnPostEngineInitHandle);
 

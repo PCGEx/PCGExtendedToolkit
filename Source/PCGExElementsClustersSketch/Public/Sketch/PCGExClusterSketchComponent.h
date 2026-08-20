@@ -201,6 +201,7 @@ public:
 		bool bQuiet = false,
 		TFunction<void(const TSharedRef<PCGExGraphs::FGraphBuilder>&, bool)> OnCompiled = nullptr) const;
 
+#if WITH_EDITOR
 	/** Rebuild the draw snapshot from the payload in force and repaint. Call after mutating the model
 	 *  through anything other than the details panel (the edit controller, script). */
 	void RefreshSketchVisual();
@@ -228,9 +229,12 @@ public:
 	bool DrawsHoverAsMesh() const;
 	/** True when crossing ghosts render as phantom-style meshes, so hosts skip drawing ghost markers. */
 	bool DrawsGhostsAsMesh() const;
+#endif
 
 	//~ Begin UPrimitiveComponent
+#if WITH_EDITOR
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+#endif
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
@@ -264,6 +268,7 @@ public:
 #endif
 
 private:
+#if WITH_EDITOR
 	void BuildVisualSnapshot();
 	/** Rebuild the instanced-mesh preview (one ISM per element kind). Kinds with no mesh configured
 	 *  fall back to the immediate-mode snapshot instead. */
@@ -293,7 +298,9 @@ private:
 	/** Hover and selection also GROW an element. Hover wins when both apply, matching the colour rule. */
 	double ResolveVertexSizeScale(int32 ModelIndex) const;
 	double ResolveEdgeSizeScale(int32 ModelIndex) const;
+#endif // WITH_EDITOR
 
+#if WITH_EDITORONLY_DATA
 	UPROPERTY(Transient)
 	TObjectPtr<UInstancedStaticMeshComponent> VertexInstances;
 
@@ -322,6 +329,7 @@ private:
 
 	/** See SetEditState. */
 	FPCGExClusterSketchEditState EditState;
+#endif // WITH_EDITORONLY_DATA
 
 #if WITH_EDITOR
 	/** Editing the REFERENCED asset must repaint every instance of it -- this is the other half of the

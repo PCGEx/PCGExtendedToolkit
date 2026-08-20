@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -15,8 +15,8 @@ struct FCollectionEditorTypeInfo;
  *
  * Subclasses override only GetAssetClass() to identify themselves; display name, color,
  * description, and OpenAssets behavior all resolve through the FCollectionEditorTypeRegistry
- * keyed by GetAssetClass(). The TypeInfo pointer is cached on the CDO after first resolution
- * since the registry is immutable post-ProcessPendingRegistrations.
+ * keyed by GetAssetClass(). Resolved per call, never cached: out-of-module types register from
+ * their own StartupModule, so the registry is NOT immutable after ProcessPendingRegistrations.
  */
 UCLASS(Abstract)
 class PCGEXCOLLECTIONSEDITOR_API UAssetDefinition_PCGExCollectionBase : public UAssetDefinitionDefault
@@ -32,6 +32,4 @@ public:
 
 private:
 	const FCollectionEditorTypeInfo* ResolveTypeInfo() const;
-
-	mutable const FCollectionEditorTypeInfo* CachedTypeInfo = nullptr;
 };

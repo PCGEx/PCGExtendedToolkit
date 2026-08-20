@@ -40,6 +40,10 @@ public class PCGExElementsClustersSketch : ModuleRules
 				"PCG",
 				"PCGExCore",
 				"PCGExFoundations",
+				// PUBLIC: the collection type and its entry derive from PCGExCollections types in a
+				// public header. The arrow points THIS way on purpose -- Collections stays free of
+				// the graph/cluster stack, and owns only the ClusterSketch type id.
+				"PCGExCollections",
 				// PUBLIC: sketch public headers reach into Lattice (PCGExLatticeBasis) and the graph
 				// builder (PCGExGraphs::FGraphBuilder, FPCGExGraphBuilderDetails).
 				"PCGExGraphs",

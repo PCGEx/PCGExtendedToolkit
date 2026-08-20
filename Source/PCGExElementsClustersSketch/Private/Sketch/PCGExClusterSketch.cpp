@@ -20,6 +20,12 @@ bool UPCGExClusterSketch::BuildBasis(FPCGExLatticeBasis& OutBasis) const
 	return SnapProvider ? SnapProvider->BuildBasis(OutBasis) : false;
 }
 
+FBox UPCGExClusterSketch::GetBounds() const
+{
+	FPCGExLatticeBasis Basis;
+	return Model.GetBounds(BuildBasis(Basis) ? &Basis : nullptr);
+}
+
 void UPCGExClusterSketch::CollectAssetDependencies(TArray<FSoftObjectPath>& OutPaths) const
 {
 	if (SnapProvider)

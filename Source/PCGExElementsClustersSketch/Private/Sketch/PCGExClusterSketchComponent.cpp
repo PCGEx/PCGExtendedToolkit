@@ -26,6 +26,7 @@ namespace PCGExClusterSketchComponent
 	/** Bounds fallback so an empty sketch still has a pickable, non-degenerate footprint. */
 	constexpr double EmptyBoundsExtent = 50.0;
 
+#if WITH_EDITOR
 	class FSceneProxy final : public FPrimitiveSceneProxy
 	{
 	public:
@@ -88,6 +89,7 @@ namespace PCGExClusterSketchComponent
 	private:
 		FPCGExClusterSketchVisualSnapshot Snapshot;
 	};
+#endif // WITH_EDITOR
 }
 
 UPCGExClusterSketchComponent::UPCGExClusterSketchComponent()
@@ -167,6 +169,7 @@ TSharedPtr<PCGExGraphs::FGraphBuilder> UPCGExClusterSketchComponent::Print(
 		InVtxIO, InTaskManager, InPrintContext, InBuilderDetails, bQuiet, MoveTemp(OnCompiled));
 }
 
+#if WITH_EDITOR
 const FPCGExSketchElementStyle& UPCGExClusterSketchComponent::ResolveVertexStyle() const
 {
 	const UPCGExClusterSketchStyleSettings* Style = UPCGExClusterSketchStyleSettings::Get();
@@ -692,24 +695,31 @@ FPrimitiveSceneProxy* UPCGExClusterSketchComponent::CreateSceneProxy()
 	}
 	return new PCGExClusterSketchComponent::FSceneProxy(this);
 }
+#endif // WITH_EDITOR
 
 FBoxSphereBounds UPCGExClusterSketchComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-	if (!VisualSnapshot.LocalBounds.IsValid)
-	{
-		return FBoxSphereBounds(FBox(FVector(-PCGExClusterSketchComponent::EmptyBoundsExtent), FVector(PCGExClusterSketchComponent::EmptyBoundsExtent))).TransformBy(LocalToWorld);
-	}
+#if WITH_EDITOR
 	// Padded so points, whose screen size has no world extent, never frustum-cull at the edge.
-	return FBoxSphereBounds(VisualSnapshot.LocalBounds.ExpandBy(PCGExClusterSketchComponent::EmptyBoundsExtent)).TransformBy(LocalToWorld);
+	if (VisualSnapshot.LocalBounds.IsValid)
+	{
+		return FBoxSphereBounds(VisualSnapshot.LocalBounds.ExpandBy(PCGExClusterSketchComponent::EmptyBoundsExtent)).TransformBy(LocalToWorld);
+	}
+#endif
+	// Runtime has no draw snapshot and never renders, so the nominal footprint is all it needs.
+	return FBoxSphereBounds(FBox(FVector(-PCGExClusterSketchComponent::EmptyBoundsExtent), FVector(PCGExClusterSketchComponent::EmptyBoundsExtent))).TransformBy(LocalToWorld);
 }
 
 void UPCGExClusterSketchComponent::OnRegister()
 {
+#if WITH_EDITOR
 	// BEFORE Super: registration builds the render state, and CreateSceneProxy returns null on an
 	// empty snapshot -- so a sketch would stay invisible until something else dirtied it.
 	BuildVisualSnapshot();
+#endif
 	Super::OnRegister();
 
+#if WITH_EDITOR
 	// AFTER Super, in contrast: the mesh layer lives in CHILD components, which can only be created and
 	// registered once this one is itself registered and has a world. Without this a sketch stayed
 	// invisible on level load until something happened to call RefreshSketchVisual.
@@ -720,7 +730,6 @@ void UPCGExClusterSketchComponent::OnRegister()
 	UpdateBounds();
 	MarkRenderStateDirty();
 
-#if WITH_EDITOR
 	// Editing the REFERENCED asset repaints every instance of it -- the other half of the asset's
 	// NotifyObjectChanged calls (and of the property editor's own broadcasts).
 	if (!OnObjectPropertyChangedHandle.IsValid())
@@ -764,6 +773,7 @@ void UPCGExClusterSketchComponent::OnUnregister()
 
 void UPCGExClusterSketchComponent::OnComponentDestroyed(const bool bDestroyingHierarchy)
 {
+#if WITH_EDITOR
 	for (TObjectPtr<UInstancedStaticMeshComponent>* Slot : {&VertexInstances, &EdgeInstances, &GhostInstances, &HoverOutlineInstances})
 	{
 		if (UInstancedStaticMeshComponent* Child = Slot->Get())
@@ -772,6 +782,7 @@ void UPCGExClusterSketchComponent::OnComponentDestroyed(const bool bDestroyingHi
 		}
 		*Slot = nullptr;
 	}
+#endif
 
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }

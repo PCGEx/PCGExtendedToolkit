@@ -207,6 +207,9 @@ namespace PCGExSketch
 		TPCGValueRange<int32> OutSeeds = OutData->GetSeedValueRange();
 		// Collocation is judged on RESOLVED output locations -- the only definition that also catches a
 		// rank-collapsed basis projecting distinct coords onto one spot.
+		// Collocation and seeds are judged on FINAL locations, so a placement that collapses distinct
+		// vertices onto one spot is caught too.
+		const bool bPlaced = !InRequest.LocalToWorld.Equals(FTransform::Identity);
 		TSet<FVector> SeenLocations;
 		SeenLocations.Reserve(NumVtx);
 		int32 CollocatedCount = 0;
@@ -215,8 +218,11 @@ namespace PCGExSketch
 			const FPCGExClusterSketchVertex& V = Model.Vertices[i];
 			// A bound vertex's location ALWAYS derives from its coord -- a stale cached transform
 			// location can never reach output. Rotation/scale stay authored either way.
-			const FVector Location = (V.bLatticeBound && bHasBasis) ? InRequest.Basis->CoordToWorld(V.LatticeCoord) : V.Transform.GetLocation();
-			OutTransforms[i] = FTransform(V.Transform.GetRotation(), Location, V.Transform.GetScale3D());
+			const FVector Local = (V.bLatticeBound && bHasBasis) ? InRequest.Basis->CoordToWorld(V.LatticeCoord) : V.Transform.GetLocation();
+			OutTransforms[i] = bPlaced
+				                   ? FTransform(V.Transform.GetRotation(), Local, V.Transform.GetScale3D()) * InRequest.LocalToWorld
+				                   : FTransform(V.Transform.GetRotation(), Local, V.Transform.GetScale3D());
+			const FVector Location = OutTransforms[i].GetLocation();
 			// Seeds ride the compile reorder as a native property, so they can be written up front.
 			OutSeeds[i] = PCGExRandomHelpers::ComputeSpatialSeed(Location);
 
