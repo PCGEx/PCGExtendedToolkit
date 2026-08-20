@@ -21,7 +21,7 @@ class UStaticMesh;
  * so a project that never assigns meshes still sees its sketches.
  */
 USTRUCT(BlueprintType)
-struct PCGEXGRAPHS_API FPCGExSketchElementStyle
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExSketchElementStyle
 {
 	GENERATED_BODY()
 
@@ -69,7 +69,7 @@ namespace PCGExSketchStyle
 	 * Half-extent rather than sphere radius: a unit cube and a unit sphere then read as the same
 	 * "radius", where the sphere-radius normalizer would shrink the cube by its diagonal.
 	 */
-	PCGEXGRAPHS_API FTransform MakePointInstanceTransform(const FBoxSphereBounds& InMeshBounds, const FVector& InLocation, double InRadius);
+	PCGEXELEMENTSCLUSTERSSKETCH_API FTransform MakePointInstanceTransform(const FBoxSphereBounds& InMeshBounds, const FVector& InLocation, double InRadius);
 
 	/**
 	 * Instance transform for a SEGMENT: the mesh's length axis is stretched so its full bounds length
@@ -77,7 +77,7 @@ namespace PCGExSketchStyle
 	 * centre lands on the segment midpoint -- so a mesh spanning 0..1, -0.5..0.5 or 0..100 all behave
 	 * identically.
 	 */
-	PCGEXGRAPHS_API FTransform MakeSegmentInstanceTransform(const FBoxSphereBounds& InMeshBounds, EPCGExAxis InLengthAxis, const FVector& InStart, const FVector& InEnd, double InRadius);
+	PCGEXELEMENTSCLUSTERSSKETCH_API FTransform MakeSegmentInstanceTransform(const FBoxSphereBounds& InMeshBounds, EPCGExAxis InLengthAxis, const FVector& InStart, const FVector& InEnd, double InRadius);
 }
 
 /**
@@ -89,7 +89,7 @@ namespace PCGExSketchStyle
  * like a different tool. Only colors are overridable per component.
  */
 UCLASS(Config = Editor, DefaultConfig, meta = (DisplayName = "PCGEx | Cluster Sketch"))
-class PCGEXGRAPHS_API UPCGExClusterSketchStyleSettings : public UDeveloperSettings
+class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketchStyleSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 

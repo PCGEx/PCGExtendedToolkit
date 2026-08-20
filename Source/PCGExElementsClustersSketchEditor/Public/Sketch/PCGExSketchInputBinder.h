@@ -32,7 +32,7 @@ class UInputRouter;
  * Plain clicks and drags on empty space are deliberately NOT captured, so camera navigation stays stock.
  */
 UCLASS()
-class PCGEXGRAPHSEDITOR_API UPCGExSketchInputBinder
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API UPCGExSketchInputBinder
 	: public UObject,
 	  public IInputBehaviorSource,
 	  public IClickBehaviorTarget,

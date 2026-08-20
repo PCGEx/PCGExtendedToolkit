@@ -17,7 +17,7 @@ class UPCGExClusterSnapProvider;
  * editor, below), a component or a cage later. The controller performs EVERY mutation through the
  * model's mutation API against this seam, so hosts share selection/gesture/undo logic wholesale.
  */
-class PCGEXGRAPHSEDITOR_API IPCGExSketchEditTarget
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API IPCGExSketchEditTarget
 {
 public:
 	virtual ~IPCGExSketchEditTarget() = default;
@@ -37,7 +37,7 @@ public:
 };
 
 /** The standalone editor's target: edits a UPCGExClusterSketch asset in place, identity transform. */
-class PCGEXGRAPHSEDITOR_API FPCGExSketchAssetEditTarget final : public IPCGExSketchEditTarget
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchAssetEditTarget final : public IPCGExSketchEditTarget
 {
 public:
 	explicit FPCGExSketchAssetEditTarget(UPCGExClusterSketch* InSketch);
@@ -54,7 +54,7 @@ private:
 };
 
 /** What a ray hit in the sketch. */
-struct PCGEXGRAPHSEDITOR_API FPCGExSketchHit
+struct PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchHit
 {
 	enum class EType : uint8 { None, Vertex, Edge, Crossing };
 
@@ -80,7 +80,7 @@ struct PCGEXGRAPHSEDITOR_API FPCGExSketchHit
  *  - Connect-drag from a vertex (bConnect): release on a vertex links them; release on nothing adds a
  *    snapped vertex there AND links it (the drafting gesture); the far vertex becomes the selection.
  */
-class PCGEXGRAPHSEDITOR_API FPCGExSketchEditController
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchEditController
 {
 public:
 	enum class EDragMode : uint8 { None, Move, Connect };

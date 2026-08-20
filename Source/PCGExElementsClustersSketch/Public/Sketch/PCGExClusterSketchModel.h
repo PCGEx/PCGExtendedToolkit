@@ -27,7 +27,7 @@ enum class EPCGExClusterDataChannelType : uint8
  * mutation API.
  */
 USTRUCT(BlueprintType)
-struct PCGEXGRAPHS_API FPCGExClusterDataChannel
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterDataChannel
 {
 	GENERATED_BODY()
 
@@ -62,7 +62,7 @@ struct PCGEXGRAPHS_API FPCGExClusterDataChannel
 
 /** One authored sketch vertex. */
 USTRUCT(BlueprintType)
-struct PCGEXGRAPHS_API FPCGExClusterSketchVertex
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchVertex
 {
 	GENERATED_BODY()
 
@@ -89,7 +89,7 @@ struct PCGEXGRAPHS_API FPCGExClusterSketchVertex
 
 /** One authored sketch edge -- a pair of vertex array indices, undirected. */
 USTRUCT(BlueprintType)
-struct PCGEXGRAPHS_API FPCGExClusterSketchEdge
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchEdge
 {
 	GENERATED_BODY()
 
@@ -102,7 +102,7 @@ struct PCGEXGRAPHS_API FPCGExClusterSketchEdge
 
 /** Aggregate result of FPCGExClusterSketchModel::Validate -- counts, never element indices, so the
  *  caller can warn once per issue class. */
-struct PCGEXGRAPHS_API FPCGExClusterSketchValidation
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchValidation
 {
 	int32 InvalidEdges = 0;      // out-of-range vertex index
 	int32 SelfLoops = 0;
@@ -132,7 +132,7 @@ struct PCGEXGRAPHS_API FPCGExClusterSketchValidation
 /** One hypothetical crossing: two edges sharing a point that is not a vertex. Offered as a ghost in the
  *  editor and materialized on demand -- never cut automatically, since an X-brace with no joint is
  *  legitimate authoring. Edge indices are only valid until the model is mutated. */
-struct PCGEXGRAPHS_API FPCGExClusterSketchCrossing
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchCrossing
 {
 	int32 EdgeA = INDEX_NONE;
 	int32 EdgeB = INDEX_NONE;
@@ -146,7 +146,7 @@ struct PCGEXGRAPHS_API FPCGExClusterSketchCrossing
  * panel) are a supported surface -- print-time validation and the owning asset's edit hooks absorb them.
  */
 USTRUCT(BlueprintType)
-struct PCGEXGRAPHS_API FPCGExClusterSketchModel
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 {
 	GENERATED_BODY()
 
@@ -320,5 +320,5 @@ namespace PCGExSketch
 	 * endpoints are collocation -- neither is a crossing). OutPoint = the crossing location. The ONE
 	 * crossing definition shared by insertion, the editor highlight, and the print warning.
 	 */
-	PCGEXGRAPHS_API bool SegmentsCross(const FVector& A1, const FVector& B1, const FVector& A2, const FVector& B2, FVector& OutPoint);
+	PCGEXELEMENTSCLUSTERSSKETCH_API bool SegmentsCross(const FVector& A1, const FVector& B1, const FVector& A2, const FVector& B2, FVector& OutPoint);
 }

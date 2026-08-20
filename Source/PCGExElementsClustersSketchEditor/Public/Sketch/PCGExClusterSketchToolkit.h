@@ -22,7 +22,7 @@ class UPCGExClusterSketchComponent;
  *  - the viewport tab must be invoked + focused in PostInitAssetEditor or it never ticks;
  *  - the base CreateEditorViewportClient leaks a raw FPreviewScene -- always overridden here.
  */
-class PCGEXGRAPHSEDITOR_API FPCGExClusterSketchToolkit : public FBaseAssetToolkit
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExClusterSketchToolkit : public FBaseAssetToolkit
 {
 public:
 	explicit FPCGExClusterSketchToolkit(UAssetEditor* InOwningAssetEditor);

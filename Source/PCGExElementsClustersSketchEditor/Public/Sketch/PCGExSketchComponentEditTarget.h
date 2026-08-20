@@ -17,7 +17,7 @@ class UPCGExClusterSketchComponent;
  * Read-only while the component references an asset: GetModel() (mutable) forwards the component's
  * null, and every authoring path in the controller already no-ops on it.
  */
-class PCGEXGRAPHSEDITOR_API FPCGExSketchComponentEditTarget final : public IPCGExSketchEditTarget
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchComponentEditTarget final : public IPCGExSketchEditTarget
 {
 public:
 	explicit FPCGExSketchComponentEditTarget(UPCGExClusterSketchComponent* InComponent);

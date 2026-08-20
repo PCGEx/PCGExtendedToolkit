@@ -5,16 +5,16 @@ using System;
 using System.IO;
 using UnrealBuildTool;
 
-public class PCGExGraphsEditor : ModuleRules
+public class PCGExElementsClustersSketchEditor : ModuleRules
 {
-	public PCGExGraphsEditor(ReadOnlyTargetRules Target) : base(Target)
+	public PCGExElementsClustersSketchEditor(ReadOnlyTargetRules Target) : base(Target)
 	{
 		bool bNoPCH = Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH"));
 		PCHUsage = bNoPCH ? PCHUsageMode.NoPCHs : PCHUsageMode.UseExplicitOrSharedPCHs;
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
-		ShortName = "PCGExGraphsEd";
+		ShortName = "PCGExClustersSketchEd";
 
 		PublicDependencyModuleNames.AddRange(
 			new[]
@@ -25,6 +25,8 @@ public class PCGExGraphsEditor : ModuleRules
 				"UnrealEd",
 				"PCG",
 				"PCGExCore",
+				"PCGExElementsClustersSketch",
+				// Lattice basis: the edit controller snaps against it directly.
 				"PCGExGraphs",
 				"PCGExCoreEditor",
 				"AssetDefinition"

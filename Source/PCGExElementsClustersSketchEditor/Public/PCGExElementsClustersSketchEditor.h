@@ -6,7 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExEditorModuleInterface.h"
 
-class FPCGExGraphsEditorModule final : public IPCGExEditorModuleInterface
+class FPCGExElementsClustersSketchEditorModule final : public IPCGExEditorModuleInterface
 {
 	PCGEX_MODULE_BODY
 

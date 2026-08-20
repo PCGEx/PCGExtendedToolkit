@@ -33,7 +33,7 @@ namespace PCGExMT
  * the printed output. Allocated by the caller, filled by PrintClusterSketch, alive until the compile's
  * end callback has run.
  */
-struct PCGEXGRAPHS_API FPCGExClusterSketchPrintContext
+struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchPrintContext
 {
 	/** The printed model. Must outlive the async compile (asset-owned in practice). */
 	const FPCGExClusterSketchModel* Model = nullptr;
@@ -56,7 +56,7 @@ struct PCGEXGRAPHS_API FPCGExClusterSketchPrintContext
 namespace PCGExSketch
 {
 	/** Inputs of one print. Model / BuilderDetails / decorator objects must outlive the async compile. */
-	struct PCGEXGRAPHS_API FPrintRequest
+	struct PCGEXELEMENTSCLUSTERSSKETCH_API FPrintRequest
 	{
 		const FPCGExClusterSketchModel* Model = nullptr;
 
@@ -89,7 +89,7 @@ namespace PCGExSketch
 	 * sketch HOST (the asset, the component). Builds the basis from InSnapProvider; the basis may be a
 	 * local, since PrintClusterSketch consumes it synchronously and copies it into the print context.
 	 */
-	PCGEXGRAPHS_API TSharedPtr<PCGExGraphs::FGraphBuilder> PrintResolved(
+	PCGEXELEMENTSCLUSTERSSKETCH_API TSharedPtr<PCGExGraphs::FGraphBuilder> PrintResolved(
 		FPCGExContext* InContext,
 		const FPCGExClusterSketchModel& InModel,
 		const UPCGExClusterSnapProvider* InSnapProvider,
@@ -101,7 +101,7 @@ namespace PCGExSketch
 		bool bQuiet = false,
 		TFunction<void(const TSharedRef<PCGExGraphs::FGraphBuilder>&, bool)> OnCompiled = nullptr);
 
-	PCGEXGRAPHS_API TSharedPtr<PCGExGraphs::FGraphBuilder> PrintClusterSketch(
+	PCGEXELEMENTSCLUSTERSSKETCH_API TSharedPtr<PCGExGraphs::FGraphBuilder> PrintClusterSketch(
 		FPCGExContext* InContext,
 		const FPrintRequest& InRequest,
 		const TSharedPtr<PCGExData::FPointIO>& InVtxIO,

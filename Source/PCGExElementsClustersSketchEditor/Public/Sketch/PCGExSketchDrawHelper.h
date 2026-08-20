@@ -14,7 +14,7 @@ class UPCGExClusterSketchComponent;
  * controller seam, so the standalone viewport and any later level-viewport host draw identically.
  * Everything draws in SDPG_Foreground: this is an authoring overlay, never occluded by the scene.
  */
-struct PCGEXGRAPHSEDITOR_API FPCGExSketchDrawHelper
+struct PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchDrawHelper
 {
 	/**
 	 * What the host's MESH layer already covers, per kind -- this draws only what it does not. A host

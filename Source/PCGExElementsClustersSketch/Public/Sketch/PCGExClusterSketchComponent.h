@@ -135,7 +135,7 @@ struct FPCGExClusterSketchEditState
  */
 UCLASS(BlueprintType, ClassGroup = (PCGEx), meta = (BlueprintSpawnableComponent, DisplayName = "PCGEx Cluster Sketch"),
 	HideCategories = (Physics, Collision, Lighting, Rendering, Tags, Activation, Cooking, AssetUserData, Navigation, Mobility, LOD, HLOD))
-class PCGEXGRAPHS_API UPCGExClusterSketchComponent : public UPrimitiveComponent
+class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketchComponent : public UPrimitiveComponent
 {
 	GENERATED_BODY()
 

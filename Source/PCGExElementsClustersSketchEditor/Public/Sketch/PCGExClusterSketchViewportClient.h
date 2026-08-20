@@ -19,7 +19,7 @@ class UPCGExSketchInputBinder;
  * This class only supplies host policy (one fixed controller, one preview-scene sketch component) and
  * hosts the binder on the mode manager's always-live ITF router.
  */
-class PCGEXGRAPHSEDITOR_API FPCGExClusterSketchViewportClient final : public FEditorViewportClient
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExClusterSketchViewportClient final : public FEditorViewportClient
 {
 public:
 	FPCGExClusterSketchViewportClient(FEditorModeTools* InModeTools, FPreviewScene* InPreviewScene, const TSharedPtr<FPCGExSketchEditController>& InController, UPCGExClusterSketchComponent* InSketchComponent);

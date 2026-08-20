@@ -24,7 +24,7 @@ namespace PCGExGraphs
  * that needs mutable working state must instead be duplicated per-execution by its element.
  */
 UCLASS(Abstract, BlueprintType, EditInlineNew, DefaultToInstanced, CollapseCategories)
-class PCGEXGRAPHS_API UPCGExClusterSketchDecorator : public UObject
+class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketchDecorator : public UObject
 {
 	GENERATED_BODY()
 

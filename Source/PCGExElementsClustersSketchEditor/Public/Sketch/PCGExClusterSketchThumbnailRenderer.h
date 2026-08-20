@@ -24,7 +24,7 @@ class FRenderTarget;
  * thumbnail on save, so unloaded sketches show their topology in the content browser too.
  */
 UCLASS()
-class PCGEXGRAPHSEDITOR_API UPCGExClusterSketchThumbnailRenderer : public UThumbnailRenderer
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API UPCGExClusterSketchThumbnailRenderer : public UThumbnailRenderer
 {
 	GENERATED_BODY()
 

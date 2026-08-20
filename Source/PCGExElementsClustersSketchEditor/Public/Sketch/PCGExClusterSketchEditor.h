@@ -15,7 +15,7 @@ class UPCGExClusterSketch;
  * Kept alive by UAssetEditorSubsystem's OwnedAssetEditors from Initialize until the toolkit closes.
  */
 UCLASS(Transient)
-class PCGEXGRAPHSEDITOR_API UPCGExClusterSketchEditor : public UAssetEditor
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API UPCGExClusterSketchEditor : public UAssetEditor
 {
 	GENERATED_BODY()
 

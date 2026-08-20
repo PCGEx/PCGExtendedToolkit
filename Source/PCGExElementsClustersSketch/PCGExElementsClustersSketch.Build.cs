@@ -5,24 +5,17 @@ using System;
 using System.IO;
 using UnrealBuildTool;
 
-public class PCGExGraphs : ModuleRules
+public class PCGExElementsClustersSketch : ModuleRules
 {
-	public PCGExGraphs(ReadOnlyTargetRules Target) : base(Target)
+	public PCGExElementsClustersSketch(ReadOnlyTargetRules Target) : base(Target)
 	{
 		bool bNoPCH = Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH"));
-		if (bNoPCH)
-		{
-			PCHUsage = PCHUsageMode.NoPCHs;
-		}
-		else
-		{
-			PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-			PrivatePCHHeaderFile = "Public/PCGExGraphsPCH.h";
-			SharedPCHHeaderFile = "Public/PCGExGraphsPCH.h";
-		}
+		PCHUsage = bNoPCH ? PCHUsageMode.NoPCHs : PCHUsageMode.UseExplicitOrSharedPCHs;
+
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExClustersSketch";
 
 		PublicIncludePaths.AddRange(
 			new string[]
@@ -46,11 +39,13 @@ public class PCGExGraphs : ModuleRules
 				"Engine",
 				"PCG",
 				"PCGExCore",
-				"PCGExBlending",
-				"PCGExFilters",
-				"PCGExHeuristics",
-				"PCGExMatching",
 				"PCGExFoundations",
+				// PUBLIC: sketch public headers reach into Lattice (PCGExLatticeBasis) and the graph
+				// builder (PCGExGraphs::FGraphBuilder, FPCGExGraphBuilderDetails).
+				"PCGExGraphs",
+				// PUBLIC: UPCGExClusterSketchStyleSettings derives from UDeveloperSettings in a public
+				// header, so dependents need the include path -- a private dep would not propagate it.
+				"DeveloperSettings",
 			}
 		);
 
@@ -58,8 +53,6 @@ public class PCGExGraphs : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"GeometryCore",
-				"GeometryFramework",
 			}
 		);
 

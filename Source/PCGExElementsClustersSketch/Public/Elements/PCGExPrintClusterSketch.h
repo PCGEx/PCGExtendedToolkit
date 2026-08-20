@@ -86,7 +86,7 @@ public:
 	//~End UPCGExPointsProcessorSettings
 
 	/** Cluster Sketch to print. Constant, or a per-point attribute path. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Sketch", AllowedClasses="/Script/PCGExGraphs.PCGExClusterSketch"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Sketch", AllowedClasses="/Script/PCGExElementsClustersSketch.PCGExClusterSketch"))
 	FPCGExInputShorthandNameSoftObjectPath Sketch = FPCGExInputShorthandNameSoftObjectPath(FName("Sketch"));
 
 	/** How each printed cluster inherits its target point's transform. */

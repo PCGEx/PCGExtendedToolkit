@@ -35,7 +35,7 @@ namespace PCGExSketch
 	/**
 	 * Editor-only bridge: create a NEW Cluster Sketch asset through the standard save dialog, seeded
 	 * with the given payload (instanced subobjects are DUPLICATED into the new asset, never shared with
-	 * the source). Set by PCGExGraphsEditor at startup, so a runtime host can offer "save this to an
+	 * the source). Set by PCGExElementsClustersSketchEditor at startup, so a runtime host can offer "save this to an
 	 * asset" without depending on editor modules.
 	 *
 	 * Deliberately not editor-gated -- it is a plain null pointer in cooked builds, so callers null-check.
@@ -47,7 +47,7 @@ namespace PCGExSketch
 		TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>> InDecorators,
 		const FString& InDefaultAssetName)>;
 
-	PCGEXGRAPHS_API extern FSaveSketchAsAssetFn GSaveSketchAsAssetFn;
+	PCGEXELEMENTSCLUSTERSSKETCH_API extern FSaveSketchAsAssetFn GSaveSketchAsAssetFn;
 }
 
 /**
@@ -57,7 +57,7 @@ namespace PCGExSketch
  * duplicates it per target.
  */
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "PCGEx")
-class PCGEXGRAPHS_API UPCGExClusterSketch : public UDataAsset
+class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketch : public UDataAsset
 {
 	GENERATED_BODY()
 

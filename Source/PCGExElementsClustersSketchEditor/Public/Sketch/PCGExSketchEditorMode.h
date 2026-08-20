@@ -37,7 +37,7 @@ struct FPCGExSketchModeBinding
  * drawer is live at any time and lines never double up.
  */
 UCLASS()
-class PCGEXGRAPHSEDITOR_API UPCGExSketchEditorMode : public UBaseLegacyWidgetEdMode
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API UPCGExSketchEditorMode : public UBaseLegacyWidgetEdMode
 {
 	GENERATED_BODY()
 

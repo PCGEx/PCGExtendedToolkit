@@ -18,7 +18,7 @@
  * touches the basis, never this object.
  */
 UCLASS(Abstract, BlueprintType, EditInlineNew, DefaultToInstanced, CollapseCategories)
-class PCGEXGRAPHS_API UPCGExClusterSnapProvider : public UObject
+class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSnapProvider : public UObject
 {
 	GENERATED_BODY()
 
@@ -46,7 +46,7 @@ public:
 
 /** Axis-aligned (optionally rotated) uniform grid -- the built-in snap model. */
 UCLASS(BlueprintType, DisplayName = "Uniform Grid")
-class PCGEXGRAPHS_API UPCGExClusterSnapProvider_UniformGrid : public UPCGExClusterSnapProvider
+class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSnapProvider_UniformGrid : public UPCGExClusterSnapProvider
 {
 	GENERATED_BODY()
 
