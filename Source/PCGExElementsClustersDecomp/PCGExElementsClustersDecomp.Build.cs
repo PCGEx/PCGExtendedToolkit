@@ -14,6 +14,7 @@ public class PCGExElementsClustersDecomp : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExClustersDecomp";
 
 		PublicIncludePaths.AddRange(
 			new string[]

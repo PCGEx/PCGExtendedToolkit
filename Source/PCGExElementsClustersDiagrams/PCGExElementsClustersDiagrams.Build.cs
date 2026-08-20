@@ -14,6 +14,7 @@ public class PCGExElementsClustersDiagrams : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExClustersDiagrams";
 
 		PublicIncludePaths.AddRange(
 			new string[]

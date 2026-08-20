@@ -14,6 +14,7 @@ public class PCGExFoundationsEditor : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExFoundationsEd";
 
 		PublicIncludePaths.AddRange(
 			new string[]

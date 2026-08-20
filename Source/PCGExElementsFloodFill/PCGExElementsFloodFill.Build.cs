@@ -14,6 +14,7 @@ public class PCGExElementsFloodFill : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExFloodFill";
 
 		PublicIncludePaths.AddRange(
 			new string[]

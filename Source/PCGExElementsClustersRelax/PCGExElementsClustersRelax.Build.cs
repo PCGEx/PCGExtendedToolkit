@@ -14,6 +14,7 @@ public class PCGExElementsClustersRelax : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExClustersRelax";
 
 		PublicIncludePaths.AddRange(
 			new string[]

@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -154,6 +154,13 @@ namespace PCGExAssetCollection
 		 * non-recursive). Prefer AddPendingCustomization when registration order isn't guaranteed.
 		 */
 		void Customize(FTypeId Id, TFunctionRef<void(FTypeInfo&)> Mutator);
+
+		/**
+		 * Drop a type and both its reverse mappings. A module that registered from its own
+		 * StartupModule MUST call this from ShutdownModule: FTypeInfo holds a raw UScriptStruct* and
+		 * closures compiled into that module's DLL, and this registry outlives it.
+		 */
+		void Unregister(FTypeId Id);
 
 		/** Check if a type is or derives from another type */
 		bool IsA(FTypeId Type, FTypeId BaseType) const;

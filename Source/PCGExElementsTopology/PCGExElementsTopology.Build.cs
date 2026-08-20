@@ -14,6 +14,7 @@ public class PCGExElementsTopology : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExTopology";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
@@ -28,7 +28,7 @@ PCGExAssetCollection::FTypeId FCollectionEditorTypeRegistry::Register(FCollectio
 	const PCGExAssetCollection::FTypeId Id = Info.Id;
 	const TWeakObjectPtr<UClass> ClassKey = Info.CollectionClass;
 
-	Types.Add(Id, MoveTemp(Info));
+	Types.Add(Id, MakeShared<FCollectionEditorTypeInfo>(MoveTemp(Info)));
 
 	if (ClassKey.IsValid())
 	{
@@ -41,7 +41,8 @@ PCGExAssetCollection::FTypeId FCollectionEditorTypeRegistry::Register(FCollectio
 const FCollectionEditorTypeInfo* FCollectionEditorTypeRegistry::Find(PCGExAssetCollection::FTypeId Id) const
 {
 	FReadScopeLock Lock(RegistryLock);
-	return Types.Find(Id);
+	const TSharedPtr<FCollectionEditorTypeInfo>* Found = Types.Find(Id);
+	return Found ? Found->Get() : nullptr;
 }
 
 const FCollectionEditorTypeInfo* FCollectionEditorTypeRegistry::FindByCollectionClass(const UClass* Class) const
@@ -55,7 +56,8 @@ const FCollectionEditorTypeInfo* FCollectionEditorTypeRegistry::FindByCollection
 
 	if (const PCGExAssetCollection::FTypeId* Id = ClassToType.Find(MakeWeakObjectPtr(const_cast<UClass*>(Class))))
 	{
-		return Types.Find(*Id);
+		const TSharedPtr<FCollectionEditorTypeInfo>* Found = Types.Find(*Id);
+		return Found ? Found->Get() : nullptr;
 	}
 
 	// Subclasses inherit their parent's editor metadata.
@@ -63,7 +65,8 @@ const FCollectionEditorTypeInfo* FCollectionEditorTypeRegistry::FindByCollection
 	{
 		if (const PCGExAssetCollection::FTypeId* Id = ClassToType.Find(MakeWeakObjectPtr(const_cast<UClass*>(Current))))
 		{
-			return Types.Find(*Id);
+			const TSharedPtr<FCollectionEditorTypeInfo>* Found = Types.Find(*Id);
+			return Found ? Found->Get() : nullptr;
 		}
 	}
 
@@ -73,9 +76,9 @@ const FCollectionEditorTypeInfo* FCollectionEditorTypeRegistry::FindByCollection
 void FCollectionEditorTypeRegistry::Customize(PCGExAssetCollection::FTypeId Id, TFunctionRef<void(FCollectionEditorTypeInfo&)> Mutator)
 {
 	FWriteScopeLock Lock(RegistryLock);
-	if (FCollectionEditorTypeInfo* Info = Types.Find(Id))
+	if (const TSharedPtr<FCollectionEditorTypeInfo>* Found = Types.Find(Id))
 	{
-		Mutator(*Info);
+		Mutator(**Found);
 	}
 	else
 	{
@@ -83,13 +86,24 @@ void FCollectionEditorTypeRegistry::Customize(PCGExAssetCollection::FTypeId Id, 
 	}
 }
 
+void FCollectionEditorTypeRegistry::Unregister(PCGExAssetCollection::FTypeId Id)
+{
+	FWriteScopeLock Lock(RegistryLock);
+
+	if (const TSharedPtr<FCollectionEditorTypeInfo>* Found = Types.Find(Id))
+	{
+		ClassToType.Remove((*Found)->CollectionClass);
+		Types.Remove(Id);
+	}
+}
+
 void FCollectionEditorTypeRegistry::GetAll(TArray<const FCollectionEditorTypeInfo*>& OutInfos) const
 {
 	FReadScopeLock Lock(RegistryLock);
 	OutInfos.Reset(Types.Num());
-	for (const TPair<PCGExAssetCollection::FTypeId, FCollectionEditorTypeInfo>& Pair : Types)
+	for (const TPair<PCGExAssetCollection::FTypeId, TSharedPtr<FCollectionEditorTypeInfo>>& Pair : Types)
 	{
-		OutInfos.Add(&Pair.Value);
+		OutInfos.Add(Pair.Value.Get());
 	}
 }
 
