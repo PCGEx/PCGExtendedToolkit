@@ -13,7 +13,7 @@
 
 class UPCGPin;
 
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="PCGEx", Description="Configure PCG Extended Toolkit settings"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="PCGEx", Description="Configure PCG Extended Toolkit settings", PCGExNodeLibraryDoc="common-settings/plugin-settings"))
 class PCGEXTENDEDTOOLKIT_API UPCGExGlobalSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()

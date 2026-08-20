@@ -10,7 +10,7 @@
 
 #include "PCGExPropertyWriter.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="staging/common-settings/property-output-settings"))
 struct PCGEXPROPERTIES_API FPCGExPropertyOutputConfig
 {
 	GENERATED_BODY()

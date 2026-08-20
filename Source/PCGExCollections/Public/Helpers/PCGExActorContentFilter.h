@@ -16,7 +16,7 @@ class UPCGExAssetCollection;
  * Instanced on collections/exporters via EditInlineNew/DefaultToInstanced.
  * All actual work is editor-only.
  */
-UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced, meta=(PCGExNodeLibraryDoc="staging/collections/helpers/actor-content-filter"))
 class PCGEXCOLLECTIONS_API UPCGExActorContentFilter : public UObject
 {
 	GENERATED_BODY()

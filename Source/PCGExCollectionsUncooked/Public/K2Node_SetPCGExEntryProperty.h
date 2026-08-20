@@ -29,7 +29,7 @@ class UToolMenu;
  * Compiles down to a CustomThunk call to UPCGExCollectionEntryBlueprintLibrary::
  * TrySetEntryPropertyOverride with the resolved type stamped onto both wildcards.
  */
-UCLASS()
+UCLASS(meta=(DisplayName="Set Entry Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/set-entry-property"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_SetPCGExEntryProperty : public UK2Node
 {
 	GENERATED_BODY()

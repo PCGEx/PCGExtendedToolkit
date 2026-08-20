@@ -33,7 +33,7 @@ public:
 /**
  * 
  */
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExNodeLibraryDoc="paths/transform/path-orient/orient-operation"))
 class PCGEXELEMENTSPATHS_API UPCGExOrientInstancedFactory : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()

@@ -66,7 +66,7 @@ protected:
 /**
  * Factory for BSP Occupancy decomposition.
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : BSP Occupancy"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : BSP Occupancy", PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomp-bsp-occupancy"))
 class UPCGExDecompBSPOccupancy : public UPCGExDecompositionInstancedFactory
 {
 	GENERATED_BODY()

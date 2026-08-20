@@ -57,7 +57,7 @@ public:
 	}
 };
 
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExNodeLibraryDoc="filters/common-settings/filter-definition/cluster-filter-definition"))
 class UPCGExClusterFilterProviderSettings : public UPCGExFilterProviderSettings
 {
 	GENERATED_BODY()

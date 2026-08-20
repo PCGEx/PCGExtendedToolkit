@@ -62,7 +62,7 @@ protected:
 	virtual void InheritFromOtherTensor(const UPCGExTensorFactoryData* InOtherTensor);
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="tensors/tensors/tensor"))
 class PCGEXELEMENTSTENSORS_API UPCGExTensorFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

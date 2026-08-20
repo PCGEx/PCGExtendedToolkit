@@ -120,7 +120,7 @@ protected:
 /**
  * Factory for Max Boxes Extended decomposition.
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Max Boxes (Extended)"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Max Boxes (Extended)", PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomp-max-boxes-extended"))
 class UPCGExDecompMaxBoxesExt : public UPCGExDecompositionInstancedFactory
 {
 	GENERATED_BODY()

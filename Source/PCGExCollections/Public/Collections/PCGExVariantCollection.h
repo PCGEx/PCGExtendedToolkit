@@ -102,7 +102,7 @@ struct PCGEXCOLLECTIONS_API FPCGExVariantPathOverride
  * declaration order. Unset rows still consume a raw index (they are skipped by iteration and
  * cache build) so baked indices stay stable when rows are partially authored.
  */
-UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Variant", meta=(ToolTip = "Per-entry overrides for one or more source collections, for end-of-pipeline asset swapping (biomes, themes)."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Variant", meta=(ToolTip = "Per-entry overrides for one or more source collections, for end-of-pipeline asset swapping (biomes, themes).", PCGExNodeLibraryDoc="staging/collections/variant-collection"))
 class PCGEXCOLLECTIONS_API UPCGExVariantCollection : public UPCGExAssetCollection
 {
 	GENERATED_BODY()

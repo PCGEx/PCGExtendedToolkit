@@ -45,7 +45,7 @@ struct PCGEXCOLLECTIONS_API FPCGExOmniCollectionEntry
  * provided through TypeGlobals blocks answering the type-globals seam -- an Omni host with
  * a matching block behaves exactly like the native typed collection.
  */
-UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Omni", meta=(ToolTip = "A weighted collection of mixed entry types -- meshes, actors, levels, data assets and custom types in a single list."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Omni", meta=(ToolTip = "A weighted collection of mixed entry types -- meshes, actors, levels, data assets and custom types in a single list.", PCGExNodeLibraryDoc="staging/collections/omni-collection"))
 class PCGEXCOLLECTIONS_API UPCGExOmniCollection : public UPCGExAssetCollection
 {
 	GENERATED_BODY()

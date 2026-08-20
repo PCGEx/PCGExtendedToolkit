@@ -153,7 +153,7 @@ struct PCGEXPROPERTIES_API FPCGExPropertyCollectionInstanceData : public FActorC
  * Custom property types defined in any module will appear in the schema
  * collection's FInstancedStruct picker automatically.
  */
-UCLASS(ClassGroup = "PCGEx", meta = (BlueprintSpawnableComponent, DisplayName = "PCGEx Property Collection"))
+UCLASS(ClassGroup = "PCGEx", meta = (BlueprintSpawnableComponent, DisplayName = "PCGEx Property Collection", PCGExNodeLibraryDoc="metadata/keys/property-collection-component"))
 class PCGEXPROPERTIES_API UPCGExPropertyCollectionComponent : public UActorComponent
 {
 	GENERATED_BODY()

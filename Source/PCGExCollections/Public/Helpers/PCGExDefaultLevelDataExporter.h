@@ -57,7 +57,7 @@ enum class EPCGExActorExportType : uint8
  * Skips: hidden actors, editor-only actors, level script actors, info actors, brushes.
  * Supports tag/class include/exclude filtering (same pattern as level collection bounds).
  */
-UCLASS(DisplayName = "Default Level Data Exporter")
+UCLASS(DisplayName = "Default Level Data Exporter", meta=(PCGExNodeLibraryDoc="staging/collections/pcg-data-asset-collection/level-data-exporter-default"))
 class PCGEXCOLLECTIONS_API UPCGExDefaultLevelDataExporter : public UPCGExLevelDataExporter
 {
 	GENERATED_BODY()

@@ -6,7 +6,7 @@
 #include "MeshSelectors/PCGSkinnedMeshSelector.h"
 #include "PCGExSkinnedMeshSelectorStaged.generated.h"
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), DisplayName="[PCGEx] Staging Data (Skinned)")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), DisplayName="[PCGEx] Staging Data (Skinned)", meta=(PCGExNodeLibraryDoc="staging/utilities/staging-data-skinned-mesh-selector"))
 class UPCGExSkinnedMeshSelectorStaged : public UPCGSkinnedMeshSelector
 {
 	GENERATED_BODY()

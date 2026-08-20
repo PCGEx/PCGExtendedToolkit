@@ -13,7 +13,7 @@
 /**
  * 
  */
-UCLASS(MinimalAPI, DisplayName = "RK4", meta=(DisplayName = "RK4", ToolTip ="Samples the field using Runge-Kutta 4 method"))
+UCLASS(MinimalAPI, DisplayName = "RK4", meta=(DisplayName = "RK4", ToolTip ="Samples the field using Runge-Kutta 4 method", PCGExNodeLibraryDoc="tensors/samplers/tensor-sampler-rk4"))
 class UPCGExTensorSamplerRK4 : public UPCGExTensorSampler
 {
 	GENERATED_BODY()

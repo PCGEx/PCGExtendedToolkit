@@ -139,7 +139,7 @@ struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAsse
  * Concrete collection for skinned meshes (UE 5.8+ SkinnedMeshComponent / SkinnedAsset).
  * Mirrors UPCGExMeshCollection but holds a single global descriptor.
  */
-UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Skinned Mesh", meta=(ToolTip = "A weighted collection of skinned meshes with optional material overrides."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Skinned Mesh", meta=(ToolTip = "A weighted collection of skinned meshes with optional material overrides.", PCGExNodeLibraryDoc="staging/collections/skinned-mesh-collection"))
 class PCGEXCOLLECTIONS_API UPCGExSkinnedMeshCollection : public UPCGExAssetCollection
 {
 	GENERATED_BODY()

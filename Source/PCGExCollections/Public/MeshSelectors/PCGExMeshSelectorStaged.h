@@ -7,7 +7,7 @@
 #include "PCGExPropertyFloatPacker.h"
 #include "PCGExMeshSelectorStaged.generated.h"
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), DisplayName="[PCGEx] Staging Data")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), DisplayName="[PCGEx] Staging Data", meta=(PCGExNodeLibraryDoc="staging/utilities/staging-data-mesh-selector"))
 class UPCGExMeshSelectorStaged : public UPCGMeshSelectorBase
 {
 	GENERATED_BODY()

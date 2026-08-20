@@ -13,7 +13,7 @@ class PCGExTensorOperation;
 /**
  * 
  */
-UCLASS(DisplayName = "Default", meta=(DisplayName = "Default", ToolTip ="Samples a single location in the tensor field."))
+UCLASS(DisplayName = "Default", meta=(DisplayName = "Default", ToolTip ="Samples a single location in the tensor field.", PCGExNodeLibraryDoc="tensors/samplers/tensor-sampler-default"))
 class PCGEXELEMENTSTENSORS_API UPCGExTensorSampler : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()

@@ -39,7 +39,7 @@ class UPCGExAssetCollection;
  * only ever invoked from WITH_EDITOR rebuild paths (the collection-side StagingPipelines
  * list is editor-only data and never exists in cooked targets).
  */
-UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced, meta=(DisplayName="Collection Staging Pipeline", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline"))
 class PCGEXCOLLECTIONS_API UPCGExCollectionStagingPipeline : public UObject
 {
 	GENERATED_BODY()

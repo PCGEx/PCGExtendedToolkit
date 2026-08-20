@@ -7,7 +7,7 @@
 #include "Core/PCGExTensorSampler.h"
 #include "PCGExTensorSamplerAdaptive.generated.h"
 
-UCLASS(MinimalAPI, DisplayName = "Adaptive RK", meta=(DisplayName = "Adaptive RK", ToolTip = "Adaptive step size based on field curvature. More accurate in curved regions."))
+UCLASS(MinimalAPI, DisplayName = "Adaptive RK", meta=(DisplayName = "Adaptive RK", ToolTip = "Adaptive step size based on field curvature. More accurate in curved regions.", PCGExNodeLibraryDoc="tensors/samplers/tensor-sampler-adaptive-rk"))
 class UPCGExTensorSamplerAdaptive : public UPCGExTensorSampler
 {
 	GENERATED_BODY()

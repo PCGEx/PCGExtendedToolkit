@@ -48,7 +48,7 @@ protected:
 /**
  * 
  */
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExNodeLibraryDoc="paths/common-settings/sub-points-blending/sub-point-blending-operation"))
 class PCGEXBLENDING_API UPCGExSubPointsBlendInstancedFactory : public UPCGExSubPointsInstancedFactory
 {
 	GENERATED_BODY()

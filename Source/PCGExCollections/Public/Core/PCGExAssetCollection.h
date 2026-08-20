@@ -736,7 +736,7 @@ namespace PCGExAssetCollection
  * - GetEntryWeightedRandom(Seed)-- weighted random
  * All return FPCGExEntryAccessResult with entry + host collection.
  */
-UCLASS(Abstract, BlueprintType, DisplayName="[PCGEx] Asset Collection")
+UCLASS(Abstract, BlueprintType, DisplayName="[PCGEx] Asset Collection", meta=(PCGExNodeLibraryDoc="staging/collections/asset-collection-base"))
 class PCGEXCOLLECTIONS_API UPCGExAssetCollection : public UDataAsset, public IPCGExCookDependencyProvider, public IPCGExExternalPackageProducer
 {
 	mutable FRWLock CacheLock;

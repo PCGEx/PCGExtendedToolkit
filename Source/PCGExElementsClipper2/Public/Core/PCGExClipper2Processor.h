@@ -235,7 +235,7 @@ namespace PCGExClipper2
 /**
  * 
  */
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path", meta=(PCGExNodeLibraryDoc="paths/common-settings/clipper2-processor"))
 class PCGEXELEMENTSCLIPPER2_API UPCGExClipper2ProcessorSettings : public UPCGExPathProcessorSettings
 {
 	GENERATED_BODY()

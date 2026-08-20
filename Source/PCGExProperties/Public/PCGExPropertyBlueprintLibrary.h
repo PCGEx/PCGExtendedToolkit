@@ -22,7 +22,7 @@ class UPCGExPropertyCollectionComponent;
  * standard right-click palette -- UK2Node_GetPCGExProperty is the user-facing entry,
  * and it expands to a call to this function at compile time.
  */
-UCLASS()
+UCLASS(meta=(DisplayName="Property Blueprint Library", PCGExNodeLibraryDoc="staging/utilities/property-schema-asset/property-blueprint-library-internal"))
 class PCGEXPROPERTIES_API UPCGExPropertyBlueprintLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()

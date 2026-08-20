@@ -25,7 +25,7 @@ namespace PCGExClusters
 /**
  * 
  */
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Path", meta=(PCGExNodeLibraryDoc="paths/common-settings/path-processor-settings"))
 class PCGEXFOUNDATIONS_API UPCGExPathProcessorSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()

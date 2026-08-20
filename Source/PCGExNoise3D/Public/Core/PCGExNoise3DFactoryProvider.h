@@ -133,7 +133,7 @@ protected:
 	virtual TSharedPtr<FPCGExNoise3DOperation> CreateOperationInternal(FPCGExContext* InContext) const;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Noise")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Noise", meta=(PCGExNodeLibraryDoc="utilities/noise/noise-3d"))
 class PCGEXNOISE3D_API UPCGExNoise3DFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

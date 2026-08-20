@@ -220,7 +220,7 @@ struct FPCGExDataTypeInfoBlendOp : public FPCGExFactoryDataTypeInfo
 	PCG_DECLARE_TYPE_INFO(PCGEXBLENDING_API)
 };
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Blending")
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Blending", meta=(PCGExNodeLibraryDoc="metadata/blending/blend-op-factory"))
 class PCGEXBLENDING_API UPCGExBlendOpFactory : public UPCGExFactoryData
 {
 	GENERATED_BODY()

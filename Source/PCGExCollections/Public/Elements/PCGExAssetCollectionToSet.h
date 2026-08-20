@@ -41,7 +41,7 @@ enum class EPCGExCategoryInheritance : uint8
 	Replace   = 2 UMETA(DisplayName = "Replace", Tooltip="The closest non-None category from the ancestor chain of sub-collection entries always wins. The entry's own category survives only when no ancestor provides one."),
 };
 
-UCLASS(Hidden, MinimalAPI, BlueprintType, ClassGroup = (Procedural), meta=(PCGExNodeLibraryDoc="staging/utilities/asset-collection-to-set"))
+UCLASS(Hidden, MinimalAPI, BlueprintType, ClassGroup = (Procedural))
 class UPCGExAssetCollectionToSetSettings : public UPCGExSettings
 {
 	GENERATED_BODY()

@@ -155,7 +155,7 @@ protected:
 /**
  * Abstract instanced factory for decomposition operations.
  */
-UCLASS(Abstract, DefaultToInstanced, EditInlineNew, BlueprintType)
+UCLASS(Abstract, DefaultToInstanced, EditInlineNew, BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomposition-factory"))
 class UPCGExDecompositionInstancedFactory : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()

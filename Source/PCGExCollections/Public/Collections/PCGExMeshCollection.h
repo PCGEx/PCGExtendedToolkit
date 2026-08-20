@@ -221,7 +221,7 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
  * - Global descriptor settings (ISM/SM) can overrule per-entry descriptors
  * - EDITOR_AddBrowserSelectionInternal handles drag-drop from content browser
  */
-UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Mesh", meta=(ToolTip = "A weighted collection of static meshes with optional material overrides."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Mesh", meta=(ToolTip = "A weighted collection of static meshes with optional material overrides.", PCGExNodeLibraryDoc="staging/collections/mesh-collection"))
 class PCGEXCOLLECTIONS_API UPCGExMeshCollection : public UPCGExAssetCollection
 {
 	GENERATED_BODY()

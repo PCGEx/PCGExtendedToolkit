@@ -66,7 +66,7 @@ struct FPCGExDataTypeInfoFilterPoint : public FPCGExDataTypeInfoFilter
  * - MissingDataPolicy: What happens when required input data is missing
  * - Priority: Controls evaluation order in the filter stack (lower = evaluated first)
  */
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data", meta=(PCGExNodeLibraryDoc="filters/common-settings/filter-definition/point-filter-definition"))
 class PCGEXFILTERS_API UPCGExFilterFactoryData : public UPCGExFactoryData
 {
 	GENERATED_BODY()
