@@ -14,6 +14,7 @@ public class PCGExElementsPathfinding : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExPathfinding";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

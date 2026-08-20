@@ -14,6 +14,7 @@ public class PCGExElementsMeta : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExMeta";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

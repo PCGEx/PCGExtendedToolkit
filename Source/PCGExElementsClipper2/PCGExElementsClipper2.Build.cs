@@ -15,6 +15,7 @@ public class PCGExElementsClipper2 : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExClipper2";
 		
 		PublicDependencyModuleNames.AddRange(
 			new string[]

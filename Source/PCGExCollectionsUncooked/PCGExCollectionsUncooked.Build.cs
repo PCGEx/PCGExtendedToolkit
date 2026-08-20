@@ -18,6 +18,7 @@ public class PCGExCollectionsUncooked : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExCollectionsUnc";
 
 		PublicIncludePaths.AddRange(
 			new string[]
