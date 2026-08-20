@@ -14,6 +14,7 @@ public class PCGExPropertiesEditor : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExPropertiesEd";
 
 		PublicIncludePaths.AddRange(
 			new string[]

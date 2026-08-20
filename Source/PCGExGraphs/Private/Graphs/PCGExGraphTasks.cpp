@@ -26,7 +26,7 @@ namespace PCGExGraphTask
 			return;
 		}
 
-		VtxDupe->IOIndex = TaskIndex;
+		VtxDupe->IOIndex = OutIOIndex;
 
 		PCGExDataId OutId;
 		PCGExClusters::Helpers::SetClusterVtx(VtxDupe, OutId);
@@ -53,7 +53,7 @@ namespace PCGExGraphTask
 				return;
 			}
 
-			EdgeDupe->IOIndex = TaskIndex;
+			EdgeDupe->IOIndex = OutIOIndex;
 			PCGExClusters::Helpers::MarkClusterEdges(EdgeDupe, OutId);
 
 			if (AttributesToTags && PointIO)

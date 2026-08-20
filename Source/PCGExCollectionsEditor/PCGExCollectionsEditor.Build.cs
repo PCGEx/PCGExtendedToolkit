@@ -14,6 +14,7 @@ public class PCGExCollectionsEditor : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExCollectionsEd";
 		bUseUnity = true;
 
 		PublicIncludePaths.AddRange(

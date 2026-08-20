@@ -51,9 +51,6 @@ public class PCGExGraphs : ModuleRules
 				"PCGExHeuristics",
 				"PCGExMatching",
 				"PCGExFoundations",
-				// PUBLIC: UPCGExClusterSketchStyleSettings derives from UDeveloperSettings in a public
-				// header, so dependents need the include path -- a private dep would not propagate it.
-				"DeveloperSettings",
 			}
 		);
 

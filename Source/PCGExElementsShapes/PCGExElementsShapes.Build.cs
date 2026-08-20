@@ -14,6 +14,7 @@ public class PCGExElementsShapes : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExShapes";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

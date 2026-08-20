@@ -14,6 +14,7 @@ public class PCGExElementsMetaEditor : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExMetaEd";
 
 		PublicDependencyModuleNames.AddRange(
 			new[]

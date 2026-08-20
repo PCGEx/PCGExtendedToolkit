@@ -14,6 +14,7 @@ public class PCGExElementsPathfindingNavmesh : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExPathfindingNavmesh";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(
