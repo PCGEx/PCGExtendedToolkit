@@ -25,7 +25,7 @@ namespace PCGExCollectionToGrammar
 	};
 }
 
-UCLASS(Hidden, MinimalAPI, BlueprintType, ClassGroup = (Procedural), meta=(PCGExNodeLibraryDoc="staging/utilities/collection-to-module-infos"))
+UCLASS(Hidden, MinimalAPI, BlueprintType, ClassGroup = (Procedural))
 class UPCGExCollectionToModuleInfosSettings : public UPCGExSettings
 {
 	GENERATED_BODY()

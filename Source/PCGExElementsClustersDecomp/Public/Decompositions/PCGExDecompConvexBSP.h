@@ -26,7 +26,7 @@ public:
 /**
  * Factory for Convex BSP decomposition.
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Convex BSP"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Convex BSP", PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomp-convex-bsp"))
 class UPCGExDecompConvexBSP : public UPCGExDecompositionInstancedFactory
 {
 	GENERATED_BODY()

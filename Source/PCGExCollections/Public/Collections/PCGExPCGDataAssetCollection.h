@@ -338,7 +338,7 @@ private:
 	FPCGExPCGDataEntryScrubKeep ScrubKeep;
 };
 
-UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | PCGDataAsset", meta=(ToolTip = "A weighted collection of PCG Data Assets."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | PCGDataAsset", meta=(ToolTip = "A weighted collection of PCG Data Assets.", PCGExNodeLibraryDoc="staging/collections/pcg-data-asset-collection"))
 class PCGEXCOLLECTIONS_API UPCGExPCGDataAssetCollection : public UPCGExAssetCollection
 {
 	GENERATED_BODY()

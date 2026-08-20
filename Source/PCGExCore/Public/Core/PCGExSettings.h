@@ -12,7 +12,7 @@
 class UPCGExInstancedFactory;
 struct FPCGExContext;
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), meta=(PCGExNodeLibraryDoc="common-settings/shared-settings"))
 class PCGEXCORE_API UPCGExSettings : public UPCGSettings
 {
 	GENERATED_BODY()

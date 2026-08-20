@@ -39,7 +39,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnPCGExSchemaAssetChanged, UPCGExPropertySc
  */
 
 // Property Schema
-UCLASS(BlueprintType, DisplayName="[PCGEx] Property Schema", meta=(ToolTip = "A composable and inheritable library of properties definition."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Property Schema", meta=(ToolTip = "A composable and inheritable library of properties definition.", PCGExNodeLibraryDoc="staging/utilities/property-schema-asset"))
 class PCGEXPROPERTIES_API UPCGExPropertySchemaAsset : public UDataAsset
 {
 	GENERATED_BODY()

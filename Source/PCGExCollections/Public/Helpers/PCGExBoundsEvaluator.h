@@ -17,7 +17,7 @@ class UPrimitiveComponent;
  * Instanced on collections/exporters via EditInlineNew/DefaultToInstanced.
  * Returns world-space FBox from qualifying components.
  */
-UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced, meta=(PCGExNodeLibraryDoc="staging/collections/helpers/bounds-evaluator"))
 class PCGEXCOLLECTIONS_API UPCGExBoundsEvaluator : public UObject
 {
 	GENERATED_BODY()

@@ -59,7 +59,7 @@ namespace PCGExDetails
 struct FPCGExPointsProcessorContext;
 class FPCGExPointsProcessorElement;
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), meta=(PCGExNodeLibraryDoc="common-settings/shared-settings/points-processor-settings"))
 class PCGEXFOUNDATIONS_API UPCGExPointsProcessorSettings : public UPCGExSettings
 {
 	GENERATED_BODY()

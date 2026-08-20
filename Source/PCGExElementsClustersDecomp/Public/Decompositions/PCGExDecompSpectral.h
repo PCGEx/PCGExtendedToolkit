@@ -60,7 +60,7 @@ protected:
 /**
  * Factory for Spectral decomposition.
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Spectral"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Spectral", PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomp-spectral"))
 class UPCGExDecompSpectral : public UPCGExDecompositionInstancedFactory
 {
 	GENERATED_BODY()

@@ -96,7 +96,7 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelExportContext
  *    those responsibilities live on the caller. Default impl on the base forwards
  *    to the BP-facing path.
  */
-UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced, meta=(DisplayName="Level Data Exporter", PCGExNodeLibraryDoc="staging/collections/pcg-data-asset-collection/level-data-exporter"))
 class PCGEXCOLLECTIONS_API UPCGExLevelDataExporter : public UObject
 {
 	GENERATED_BODY()

@@ -28,7 +28,7 @@ UPCGExFactoryData* UPCGEx##_FILTERID##FilterProviderSettings::CreateFactory(FPCG
 	if(!NewFactory->Init(InContext)){ InContext->ManagedObjects->Destroy(NewFactory); return nullptr; }\
 	return NewFactory; }
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="filters/common-settings/filter-definition"))
 class PCGEXFILTERS_API UPCGExFilterProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

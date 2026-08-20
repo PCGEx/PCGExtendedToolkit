@@ -11,7 +11,7 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /** Writes a reflected member on the collection object itself (impure). See UK2Node_PCGExMemberBase. */
-UCLASS()
+UCLASS(meta=(DisplayName="Set Collection Member", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/set-collection-member"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_SetPCGExCollectionMember : public UK2Node_PCGExMemberBase
 {
 	GENERATED_BODY()

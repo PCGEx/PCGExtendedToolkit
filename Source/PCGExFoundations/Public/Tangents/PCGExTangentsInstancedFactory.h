@@ -67,7 +67,7 @@ public:
 /**
  * 
  */
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExNodeLibraryDoc="paths/common-settings/tangents/tangents-base"))
 class PCGEXFOUNDATIONS_API UPCGExTangentsInstancedFactory : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()

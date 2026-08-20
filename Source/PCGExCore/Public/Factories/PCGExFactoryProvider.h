@@ -31,7 +31,7 @@ namespace PCGExData
 
 struct FPCGExFactoryProviderContext;
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="common-settings/shared-settings/factory-provider-base"))
 class PCGEXCORE_API UPCGExFactoryProviderSettings : public UPCGExSettings
 {
 	GENERATED_BODY()

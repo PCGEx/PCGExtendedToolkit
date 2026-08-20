@@ -32,7 +32,7 @@ public:
 /**
  * Factory for Grid Partition decomposition.
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Grid"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Grid", PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomp-grid-partition"))
 class UPCGExDecompGridPartition : public UPCGExDecompositionInstancedFactory
 {
 	GENERATED_BODY()

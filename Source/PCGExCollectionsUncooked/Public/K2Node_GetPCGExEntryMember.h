@@ -11,7 +11,7 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /** Reads a reflected member from a collection entry by raw index (pure). See UK2Node_PCGExMemberBase. */
-UCLASS()
+UCLASS(meta=(DisplayName="Get Entry Member", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/get-entry-member"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExEntryMember : public UK2Node_PCGExMemberBase
 {
 	GENERATED_BODY()

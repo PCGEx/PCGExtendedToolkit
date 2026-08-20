@@ -29,7 +29,7 @@ class UToolMenu;
  * UPCGExCollectionEntryBlueprintLibrary::TryGetEntryPropertyValue with the user's chosen
  * output type stamped onto the call's wildcard parameter.
  */
-UCLASS()
+UCLASS(meta=(DisplayName="Get Entry Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/get-entry-property"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExEntryProperty : public UK2Node
 {
 	GENERATED_BODY()

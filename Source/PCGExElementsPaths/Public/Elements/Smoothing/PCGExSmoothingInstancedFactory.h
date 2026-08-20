@@ -38,7 +38,7 @@ protected:
 /**
  * 
  */
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExNodeLibraryDoc="paths/transform/path-smooth/smoothing"))
 class PCGEXELEMENTSPATHS_API UPCGExSmoothingInstancedFactory : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()

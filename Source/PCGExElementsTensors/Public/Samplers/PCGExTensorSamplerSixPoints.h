@@ -12,7 +12,7 @@
 /**
  * 
  */
-UCLASS(MinimalAPI, DisplayName = "Six Points", meta=(DisplayName = "Six Points", ToolTip ="Samples the field using six points around the sampling target location, and averaging the results."))
+UCLASS(MinimalAPI, DisplayName = "Six Points", meta=(DisplayName = "Six Points", ToolTip ="Samples the field using six points around the sampling target location, and averaging the results.", PCGExNodeLibraryDoc="tensors/samplers/tensor-sampler-six-points"))
 class UPCGExTensorSamplerSixPoints : public UPCGExTensorSampler
 {
 	GENERATED_BODY()

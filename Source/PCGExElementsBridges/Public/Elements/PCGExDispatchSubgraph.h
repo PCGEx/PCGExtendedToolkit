@@ -23,7 +23,7 @@ class UPCGGraphInterface;
  * soft-path attribute, then executes each unique (graph + overrides) combination once as a dynamic
  * subgraph and routes the gathered outputs to matching output pins.
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta=(Keywords = "subgraph dispatch execute graph dynamic"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta=(Keywords = "subgraph dispatch execute graph dynamic", PCGExNodeLibraryDoc="utilities/control-flow/dispatch-subgraphs"))
 class UPCGExDispatchSubgraphSettings : public UPCGExSettings
 {
 	GENERATED_BODY()

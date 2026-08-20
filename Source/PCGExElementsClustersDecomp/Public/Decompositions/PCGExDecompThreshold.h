@@ -32,7 +32,7 @@ public:
 /**
  * Factory for Threshold decomposition.
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Threshold"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Decompose : Threshold", PCGExNodeLibraryDoc="clusters/analyze/cluster-decomposition/decomp-threshold"))
 class UPCGExDecompThreshold : public UPCGExDecompositionInstancedFactory
 {
 	GENERATED_BODY()

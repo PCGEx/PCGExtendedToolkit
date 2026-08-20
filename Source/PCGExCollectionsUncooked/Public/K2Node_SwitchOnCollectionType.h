@@ -28,7 +28,7 @@ class UEdGraphPin;
  * orphaned on reconstruction (standard broken-link warnings). A user TypeId literally
  * named "Selection" or "Default" would collide with the internal switch pins -- avoid.
  */
-UCLASS()
+UCLASS(meta=(DisplayName="Switch on Collection Type", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/switch-on-collection-type"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_SwitchOnCollectionType : public UK2Node
 {
 	GENERATED_BODY()

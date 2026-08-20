@@ -154,7 +154,7 @@ namespace PCGExPointStates
 	};
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="metadata/bitmasks/write-states/state-point"))
 class PCGEXFILTERS_API UPCGExStateFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

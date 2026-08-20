@@ -16,7 +16,7 @@ class AActor;
  * Determines whether an actor should be treated as a mesh container
  * (parsed for UStaticMeshComponent / UInstancedStaticMeshComponent).
  */
-UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced, meta=(PCGExNodeLibraryDoc="staging/collections/helpers/actor-mesh-classificator"))
 class PCGEXCOLLECTIONS_API UPCGExActorMeshClassificator : public UObject
 {
 	GENERATED_BODY()

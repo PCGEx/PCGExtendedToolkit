@@ -49,7 +49,7 @@ public:
  * Discovered by level and PCGDataAsset collection staging to populate level-entry sockets.
  * Stripped from bounds and data-asset export by default.
  */
-UCLASS(BlueprintType, Blueprintable, DisplayName = "[PCGEx] Socket Actor")
+UCLASS(BlueprintType, Blueprintable, DisplayName = "[PCGEx] Socket Actor", meta=(PCGExNodeLibraryDoc="staging/common-settings/socket-provider"))
 class PCGEXCOLLECTIONS_API APCGExSocketActor : public AActor, public IPCGExSocketProvider
 {
 	GENERATED_BODY()
