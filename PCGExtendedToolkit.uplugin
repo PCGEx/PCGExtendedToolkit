@@ -425,6 +425,16 @@
       ]
     },
     {
+      "Name": "PCGExGraphsEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default",
+      "PlatformAllowList": [
+        "Win64",
+        "Mac",
+        "Linux"
+      ]
+    },
+    {
       "Name": "PCGExHeuristics",
       "Type": "Runtime",
       "LoadingPhase": "Default",

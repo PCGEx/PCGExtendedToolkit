@@ -18,6 +18,7 @@
 #include "Graphs/PCGExGraph.h"
 #include "Graphs/PCGExGraphBuilder.h"
 #include "Graphs/PCGExGraphCommon.h"
+#include "Graphs/PCGExGraphTasks.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Math/Geo/PCGExDelaunay.h"
 #include "Math/Geo/PCGExGeo.h"
@@ -55,70 +56,6 @@ namespace PCGExMesh
 namespace PCGExGeoTask
 {
 	class FLloydRelax3;
-}
-
-namespace PCGExGraphTask
-{
-	class FCopyGraphToPoint final : public PCGExMT::FPCGExIndexedTask
-	{
-	public:
-		FCopyGraphToPoint(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExGraphs::FGraphBuilder>& InGraphBuilder, const TSharedPtr<PCGExData::FPointIOCollection>& InVtxCollection, const TSharedPtr<PCGExData::FPointIOCollection>& InEdgeCollection, FPCGExTransformDetails* InTransformDetails)
-			: FPCGExIndexedTask(InTaskIndex)
-			  , PointIO(InPointIO)
-			  , GraphBuilder(InGraphBuilder)
-			  , VtxCollection(InVtxCollection)
-			  , EdgeCollection(InEdgeCollection)
-			  , TransformDetails(InTransformDetails)
-		{
-		}
-
-		TSharedPtr<PCGExData::FPointIO> PointIO;
-		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
-
-		TSharedPtr<PCGExData::FPointIOCollection> VtxCollection;
-		TSharedPtr<PCGExData::FPointIOCollection> EdgeCollection;
-
-		FPCGExTransformDetails* TransformDetails = nullptr;
-
-		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override
-		{
-			if (!GraphBuilder || !GraphBuilder->bCompiledSuccessfully)
-			{
-				return;
-			}
-
-			const TSharedPtr<PCGExData::FPointIO> VtxDupe = VtxCollection->Emplace_GetRef(GraphBuilder->NodeDataFacade->GetOut(), PCGExData::EIOInit::Duplicate);
-			if (!VtxDupe)
-			{
-				return;
-			}
-
-			VtxDupe->IOIndex = TaskIndex;
-
-			PCGExDataId OutId;
-			PCGExClusters::Helpers::SetClusterVtx(VtxDupe, OutId);
-
-			PCGEX_MAKE_SHARED(VtxTask, PCGExFitting::Tasks::FTransformPointIO, TaskIndex, PointIO, VtxDupe, TransformDetails);
-			Launch(VtxTask);
-
-			for (const TSharedPtr<PCGExData::FPointIO>& Edges : GraphBuilder->EdgesIO->Pairs)
-			{
-				TSharedPtr<PCGExData::FPointIO> EdgeDupe = EdgeCollection->Emplace_GetRef(Edges->GetOut(), PCGExData::EIOInit::Duplicate);
-				if (!EdgeDupe)
-				{
-					return;
-				}
-
-				EdgeDupe->IOIndex = TaskIndex;
-				PCGExClusters::Helpers::MarkClusterEdges(EdgeDupe, OutId);
-
-				PCGEX_MAKE_SHARED(EdgeTask, PCGExFitting::Tasks::FTransformPointIO, TaskIndex, PointIO, EdgeDupe, TransformDetails);
-				Launch(EdgeTask);
-			}
-
-			// TODO : Copy & Transform cluster as well for a big perf boost
-		}
-	};
 }
 
 
