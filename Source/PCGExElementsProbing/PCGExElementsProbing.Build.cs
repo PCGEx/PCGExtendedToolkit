@@ -14,6 +14,7 @@ public class PCGExElementsProbing : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExProbing";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

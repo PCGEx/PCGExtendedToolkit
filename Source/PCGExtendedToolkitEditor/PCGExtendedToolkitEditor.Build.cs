@@ -14,6 +14,7 @@ public class PCGExtendedToolkitEditor : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExtendedToolkitEd";
 		
 		PublicDependencyModuleNames.AddRange(
 			new[]

@@ -14,6 +14,7 @@ public class PCGExCoreEditor : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExCoreEd";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

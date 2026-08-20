@@ -14,6 +14,7 @@ public class PCGExElementsClustersRefine : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExClustersRefine";
 
 		PublicIncludePaths.AddRange(
 			new string[]

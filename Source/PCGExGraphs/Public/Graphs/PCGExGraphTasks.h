@@ -41,7 +41,8 @@ namespace PCGExGraphTask
 			const TSharedPtr<PCGExData::FPointIOCollection>& InEdgeCollection,
 			FPCGExTransformDetails* InTransformDetails,
 			const FPCGExAttributeToTagDetails* InAttributesToTags = nullptr,
-			const TSharedPtr<PCGExData::FDataForwardHandler>& InForwardHandler = nullptr)
+			const TSharedPtr<PCGExData::FDataForwardHandler>& InForwardHandler = nullptr,
+			const int32 InOutIOIndex = INDEX_NONE)
 			: FPCGExIndexedTask(InTaskIndex)
 			  , PointIO(InPointIO)
 			  , GraphBuilder(InGraphBuilder)
@@ -50,6 +51,7 @@ namespace PCGExGraphTask
 			  , TransformDetails(InTransformDetails)
 			  , AttributesToTags(InAttributesToTags)
 			  , ForwardHandler(InForwardHandler)
+			  , OutIOIndex(InOutIOIndex == INDEX_NONE ? InTaskIndex : InOutIOIndex)
 		{
 		}
 
@@ -66,6 +68,13 @@ namespace PCGExGraphTask
 
 		/** Optional: forwards target attributes onto the copied vtx metadata. */
 		TSharedPtr<PCGExData::FDataForwardHandler> ForwardHandler;
+
+		/**
+		 * IOIndex stamped on the copies. TaskIndex indexes THIS PointIO's points, so a caller feeding
+		 * several point datas must pass a globally unique value here -- StageOutputs sorts on IOIndex
+		 * with an unstable sort, and ties make output order nondeterministic. Defaults to TaskIndex.
+		 */
+		int32 OutIOIndex = INDEX_NONE;
 
 
 		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;

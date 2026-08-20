@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -86,13 +86,20 @@ public:
 	 */
 	void Customize(PCGExAssetCollection::FTypeId Id, TFunctionRef<void(FCollectionEditorTypeInfo&)> Mutator);
 
+	/**
+	 * Drop a type. A module that registered from its own StartupModule MUST call this from
+	 * ShutdownModule: the stored closures point at code in that module's DLL, and this registry
+	 * outlives it.
+	 */
+	void Unregister(PCGExAssetCollection::FTypeId Id);
+
 	template <typename Func>
 	void ForEach(Func&& Callback) const
 	{
 		FReadScopeLock Lock(RegistryLock);
 		for (const auto& Pair : Types)
 		{
-			Callback(Pair.Value);
+			Callback(*Pair.Value);
 		}
 	}
 
@@ -106,7 +113,10 @@ private:
 	static bool& IsProcessed();
 
 	mutable FRWLock RegistryLock;
-	TMap<PCGExAssetCollection::FTypeId, FCollectionEditorTypeInfo> Types;
+	// Indirect on purpose: out-of-module types register from their own StartupModule, i.e. AFTER
+	// ProcessPendingRegistrations. A value TMap would relocate every entry on such an insert and
+	// dangle pointers already handed out by Find/GetAll.
+	TMap<PCGExAssetCollection::FTypeId, TSharedPtr<FCollectionEditorTypeInfo>> Types;
 	TMap<TWeakObjectPtr<UClass>, PCGExAssetCollection::FTypeId> ClassToType;
 };
 

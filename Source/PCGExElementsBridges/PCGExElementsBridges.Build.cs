@@ -14,6 +14,7 @@ public class PCGExElementsBridges : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExBridges";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(

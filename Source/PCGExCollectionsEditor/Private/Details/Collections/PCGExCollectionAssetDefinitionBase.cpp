@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/PCGExCollectionAssetDefinitionBase.h"
@@ -8,11 +8,7 @@
 
 const FCollectionEditorTypeInfo* UAssetDefinition_PCGExCollectionBase::ResolveTypeInfo() const
 {
-	if (!CachedTypeInfo)
-	{
-		CachedTypeInfo = FCollectionEditorTypeRegistry::Get().FindByCollectionClass(GetAssetClass().Get());
-	}
-	return CachedTypeInfo;
+	return FCollectionEditorTypeRegistry::Get().FindByCollectionClass(GetAssetClass().Get());
 }
 
 FText UAssetDefinition_PCGExCollectionBase::GetAssetDisplayName() const

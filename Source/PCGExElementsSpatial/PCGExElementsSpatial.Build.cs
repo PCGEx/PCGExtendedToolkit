@@ -14,6 +14,7 @@ public class PCGExElementsSpatial : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExSpatial";
 		IWYUSupport = IWYUSupport.Full;
 		
 		PublicIncludePaths.AddRange(

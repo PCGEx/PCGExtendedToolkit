@@ -14,6 +14,7 @@ public class PCGExElementsSampling : ModuleRules
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
 		PrecompileForTargets = PrecompileTargetsType.Any;
+		ShortName = "PCGExSampling";
 		IWYUSupport = IWYUSupport.Full;
 
 		PublicIncludePaths.AddRange(
