@@ -10,6 +10,13 @@ class SWidget;
 
 namespace PCGExEnumCustomization
 {
+	/** Enum indices in the order a group should present them, honoring the enum's PCGExDisplayOrder
+	 *  meta (comma-separated enumerator names). Entries the meta omits follow in declaration order.
+	 *  The hook lives on the ENUM because the inline customizations are registered by name alone and
+	 *  have nowhere to receive an ordering argument. */
+	PCGEXCOREEDITOR_API
+	TArray<int32> GetEnumDisplayOrder(const UEnum* Enum);
+
 	/** Radio group that honors the property's ValidEnumValues / InvalidEnumValues metadata (plus UMETA(Hidden)). */
 	PCGEXCOREEDITOR_API
 	TSharedRef<SWidget> CreateRadioGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum);
