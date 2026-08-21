@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Enums/PCGExGridEnumCustomization.h"
+#include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "DetailWidgetRow.h"
 #include "PropertyHandle.h"
 #include "Widgets/Images/SImage.h"
@@ -69,7 +70,7 @@ TSharedRef<SWidget> FPCGExGridEnumCustomization::GenerateEnumButtons(UEnum* Enum
 
 	int32 ItemIndex = 0;
 
-	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+	for (const int32 i : PCGExEnumCustomization::GetEnumDisplayOrder(Enum))
 	{
 		if (Enum->HasMetaData(TEXT("Hidden"), i))
 		{

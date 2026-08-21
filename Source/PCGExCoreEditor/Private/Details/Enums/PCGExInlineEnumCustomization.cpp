@@ -72,6 +72,45 @@ namespace PCGExEnumCustomization
 		return SkipIndices;
 	}
 
+	TArray<int32> GetEnumDisplayOrder(const UEnum* Enum)
+	{
+		const int32 NumValues = Enum ? Enum->NumEnums() - 1 : 0;
+
+		TArray<int32> Order;
+		if (NumValues <= 0)
+		{
+			return Order;
+		}
+
+		Order.Reserve(NumValues);
+
+		const FString OrderMeta = Enum->GetMetaData(TEXT("PCGExDisplayOrder"));
+		if (!OrderMeta.IsEmpty())
+		{
+			TArray<FString> Names;
+			OrderMeta.ParseIntoArray(Names, TEXT(","), true);
+			for (FString& Name : Names)
+			{
+				Name.TrimStartAndEndInline();
+				const int32 Index = Enum->GetIndexByNameString(Name);
+				// NumValues excludes the always-appended _MAX, which is never a presentable entry.
+				if (Index != INDEX_NONE && Index < NumValues)
+				{
+					Order.AddUnique(Index);
+				}
+			}
+		}
+
+		// Declaration order for whatever the meta left out, so a partial list promotes its own
+		// entries to the front and can never hide the rest.
+		for (int32 i = 0; i < NumValues; ++i)
+		{
+			Order.AddUnique(i);
+		}
+
+		return Order;
+	}
+
 	TSharedRef<SWidget> CreateRadioGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum)
 	{
 		return CreateRadioGroup(PropertyHandle, Enum, GetMetaSkipIndices(PropertyHandle, Enum));
@@ -86,7 +125,7 @@ namespace PCGExEnumCustomization
 	{
 		TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox);
 
-		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+		for (const int32 i : GetEnumDisplayOrder(Enum))
 		{
 			if (Enum->HasMetaData(TEXT("Hidden"), i) || SkipIndices.Contains(i))
 			{
@@ -168,7 +207,7 @@ namespace PCGExEnumCustomization
 	{
 		TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox);
 
-		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+		for (const int32 i : GetEnumDisplayOrder(Enum))
 		{
 			if (Enum->HasMetaData(TEXT("Hidden"), i))
 			{
@@ -244,7 +283,7 @@ namespace PCGExEnumCustomization
 			.OnGetMenuContent_Lambda([PropertyHandle, Enum, SkipIndices]() -> TSharedRef<SWidget>
 			{
 				FMenuBuilder MenuBuilder(/*bCloseSelfOnly=*/true, /*CommandList=*/nullptr);
-				for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+				for (const int32 i : GetEnumDisplayOrder(Enum))
 				{
 					if (Enum->HasMetaData(TEXT("Hidden"), i) || SkipIndices.Contains(i))
 					{
@@ -298,7 +337,7 @@ namespace PCGExEnumCustomization
 	{
 		TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox);
 
-		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+		for (const int32 i : GetEnumDisplayOrder(Enum))
 		{
 			if (Enum->HasMetaData(TEXT("Hidden"), i) || SkipIndices.Contains(i))
 			{
@@ -391,19 +430,19 @@ namespace PCGExEnumCustomization
 
 	static int32 FindNextVisibleEnumIndex(const UEnum* Enum, int32 FromIndex)
 	{
-		const int32 NumValues = Enum->NumEnums() - 1;
-		if (NumValues <= 0)
+		const TArray<int32> Order = GetEnumDisplayOrder(Enum);
+		if (Order.IsEmpty())
 		{
 			return INDEX_NONE;
 		}
-		if (FromIndex < 0)
-		{
-			FromIndex = -1;
-		}
 
-		for (int32 Step = 1; Step <= NumValues; ++Step)
+		// Cycles through the DISPLAYED order, so the button walks the same sequence a radio group
+		// lays out. An unknown current value lands on INDEX_NONE (-1) and starts the walk at Order[0].
+		const int32 From = Order.IndexOfByKey(FromIndex);
+
+		for (int32 Step = 1; Step <= Order.Num(); ++Step)
 		{
-			const int32 Next = (FromIndex + Step) % NumValues;
+			const int32 Next = Order[(From + Step) % Order.Num()];
 			if (!Enum->HasMetaData(TEXT("Hidden"), Next))
 			{
 				return Next;
@@ -634,7 +673,7 @@ namespace PCGExEnumCustomization
 	{
 		TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox);
 
-		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+		for (const int32 i : GetEnumDisplayOrder(Enum))
 		{
 			if (Enum->HasMetaData(TEXT("Hidden"), i) || SkipIndices.Contains(i))
 			{
