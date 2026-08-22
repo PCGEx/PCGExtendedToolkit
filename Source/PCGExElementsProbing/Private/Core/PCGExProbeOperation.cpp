@@ -80,7 +80,16 @@ void FPCGExProbeOperation::ProcessAll(TSet<uint64>& OutEdges) const
 {
 }
 
+double FPCGExProbeOperation::GetSearchRadiusRaw(const int32 Index) const
+{
+	// Abs because the squaring below discards the sign anyway -- a negative offset large enough to flip
+	// the radius still yields a positive GetSearchRadius, so the volume sized from this value has to
+	// cover the same span, or gathering would miss candidates the comparison would have accepted.
+	return FMath::Abs(SearchRadius->Read(Index) + SearchRadiusOffset);
+}
+
 double FPCGExProbeOperation::GetSearchRadius(const int32 Index) const
 {
-	return FMath::Square(SearchRadius->Read(Index) + SearchRadiusOffset);
+	// Derived from the raw accessor so the two can never drift into different units.
+	return FMath::Square(GetSearchRadiusRaw(Index));
 }
