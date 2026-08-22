@@ -20,7 +20,7 @@ PCGEX_REGISTER_COLLECTION_EDITOR_TYPE(
 	FPCGExPCGDataAssetCollectionEditor)
 
 // PCGDataAsset collections aren't created from the content-browser right-click flow.
-namespace
+namespace PCGExPCGDataAssetCollectionActions
 {
 	struct FCustomizePCGDataAssetEditorTypeInfo
 	{
