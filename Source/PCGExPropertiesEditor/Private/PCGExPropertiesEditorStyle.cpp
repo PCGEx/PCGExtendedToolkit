@@ -13,8 +13,17 @@ namespace PCGExPropertiesEditorStyleNames
 {
 	// Single source of truth for the brush ids, shared by registration and lookup. Function-local statics
 	// (not namespace-scope FName globals) so there's no static-init-order dependency on FName's tables.
-	inline FName Key() { static const FName Name(TEXT("PCGExProperties.Key")); return Name; }
-	inline FName Slider() { static const FName Name(TEXT("PCGExProperties.Slider")); return Name; }
+	inline FName Key()
+	{
+		static const FName Name(TEXT("PCGExProperties.Key"));
+		return Name;
+	}
+
+	inline FName Slider()
+	{
+		static const FName Name(TEXT("PCGExProperties.Slider"));
+		return Name;
+	}
 }
 
 FName FPCGExPropertiesEditorStyle::StaticStyleSetName()

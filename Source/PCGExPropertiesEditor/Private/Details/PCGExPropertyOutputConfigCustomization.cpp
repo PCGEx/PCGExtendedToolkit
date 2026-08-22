@@ -8,10 +8,10 @@
 #include "IDetailPropertyRow.h"
 #include "PCGExPropertyWriter.h"
 #include "PropertyHandle.h"
+#include "Details/PCGExDetailRowWidgets.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBox.h"
-#include "Details/PCGExDetailRowWidgets.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExPropertyOutputConfigCustomization::MakeInstance()
 {

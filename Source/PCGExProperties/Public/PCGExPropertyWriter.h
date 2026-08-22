@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -160,9 +160,20 @@ public:
 		TConstArrayView<FPCGExPropertyOutputConfig> EffectiveConfigs,
 		UPCGMetadata* Metadata);
 
-	int32 Num() const { return Writers.Num(); }
-	bool HasOutputs() const { return !Writers.IsEmpty(); }
-	FName GetPropertyName(int32 WriterIdx) const { return Writers[WriterIdx].PropertyName; }
+	int32 Num() const
+	{
+		return Writers.Num();
+	}
+
+	bool HasOutputs() const
+	{
+		return !Writers.IsEmpty();
+	}
+
+	FName GetPropertyName(int32 WriterIdx) const
+	{
+		return Writers[WriterIdx].PropertyName;
+	}
 
 	/** Silent no-op on script-struct mismatch -- the type-erased FPCGExProperty interface can't
 	 *  transfer values between different concrete types. */
@@ -206,12 +217,18 @@ public:
 		const FPCGExPropertyOutputSettings& OutputSettings
 		);
 
+	/** Skips GetEffectiveConfigs -- pass pre-assembled configs (e.g. synthesized from a schema collection). */
+	bool Initialize(
+		const IPCGExPropertyProvider* InProvider,
+		const TSharedRef<PCGExData::FFacade>& OutputFacade,
+		TConstArrayView<FPCGExPropertyOutputConfig> EffectiveConfigs
+		);
+
 	void WriteProperties(int32 PointIndex, int32 SourceIndex);
 
 	bool HasOutputs() const;
 
 protected:
-	FPCGExPropertyOutputSettings Settings;
 	const IPCGExPropertyProvider* Provider = nullptr;
 
 	/** Cloned per-output prototypes that own their FFacade output buffer (allocated during
@@ -219,3 +236,26 @@ protected:
 	 *  then flush via WriteOutput. */
 	TMap<FName, FInstancedStruct> WriterInstances;
 };
+
+namespace PCGExProperties
+{
+	/**
+	 * Write InProperty's value into OutData's @Data domain under OutName via
+	 * PCGExData::Helpers::SetDataValue, which keeps the default-value and first-entry slots in
+	 * agreement. The domain holds ONE value per data -- never call this from a per-point loop.
+	 *
+	 * Not routed through FPCGExProperty::InitializeOutput / CreateMetadataAttribute: both take a bare
+	 * FName that resolves to the DEFAULT metadata domain, so neither can address @Data at all.
+	 *
+	 * @return false when the property reports no output support, has no convertible value, or its
+	 * output type is not a supported PCG metadata type.
+	 */
+	PCGEXPROPERTIES_API bool WriteDataDomainValue(UPCGData* OutData, FName OutName, const FPCGExProperty& InProperty);
+
+	/**
+	 * Writes each resolved entry into OutData's @Data domain under its sanitized name. Takes resolved
+	 * entries, not a collection, so a caller targeting several datas resolves the import tree once.
+	 * @return the number of values written.
+	 */
+	PCGEXPROPERTIES_API int32 WriteResolvedToDataDomain(UPCGData* OutData, TConstArrayView<FPCGExPropertyResolved> InResolved);
+}

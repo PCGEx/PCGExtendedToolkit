@@ -7,10 +7,10 @@
 #include "IDetailChildrenBuilder.h"
 #include "IDetailPropertyRow.h"
 #include "PropertyHandle.h"
+#include "Details/PCGExEditorCustomizationUtils.h"
 #include "UObject/StructOnScope.h"
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Layout/SBox.h"
-#include "Details/PCGExEditorCustomizationUtils.h"
 
 namespace PCGExInlineWidgetRegistry_Private
 {
@@ -157,17 +157,18 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 
 		if (ValueFactory && PropName == TEXT("Value"))
 		{
-			if (TSharedPtr<IPropertyHandle> ValueHandle = PropRow.GetPropertyHandle(); ValueHandle.IsValid())
+			if (TSharedPtr<IPropertyHandle> ValueHandle = PropRow.GetPropertyHandle();
+				ValueHandle.IsValid())
 			{
 				PropRow.CustomWidget(/*bShowChildren=*/false)
 				       .WholeRowContent()
+				[
+					SNew(SBox)
+					.IsEnabled(IsEnabled)
 					[
-						SNew(SBox)
-						.IsEnabled(IsEnabled)
-						[
-							(*ValueFactory)(ValueHandle.ToSharedRef())
-						]
-					];
+						(*ValueFactory)(ValueHandle.ToSharedRef())
+					]
+				];
 			}
 		}
 	}

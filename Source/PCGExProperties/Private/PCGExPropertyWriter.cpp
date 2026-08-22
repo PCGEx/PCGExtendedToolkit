@@ -1,10 +1,11 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExPropertyWriter.h"
 #include "PCGExProperty.h"
 #include "PCGExPropertySchemaAsset.h"
 #include "Core/PCGExContext.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
 
@@ -232,11 +233,23 @@ bool FPCGExPropertyWriter::Initialize(
 		return false;
 	}
 
-	Provider = InProvider;
-	Settings = OutputSettings;
-
 	TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
-	Settings.GetEffectiveConfigs(EffectiveConfigs);
+	OutputSettings.GetEffectiveConfigs(EffectiveConfigs);
+
+	return Initialize(InProvider, OutputFacade, EffectiveConfigs);
+}
+
+bool FPCGExPropertyWriter::Initialize(
+	const IPCGExPropertyProvider* InProvider,
+	const TSharedRef<PCGExData::FFacade>& OutputFacade,
+	TConstArrayView<FPCGExPropertyOutputConfig> EffectiveConfigs)
+{
+	if (!InProvider)
+	{
+		return false;
+	}
+
+	Provider = InProvider;
 
 	for (const FPCGExPropertyOutputConfig& OutputConfig : EffectiveConfigs)
 	{
@@ -298,9 +311,13 @@ void FPCGExPropertyWriter::WriteProperties(int32 PointIndex, int32 SourceIndex)
 
 		if (const FInstancedStruct* SourceProp = Provider->GetPropertyAt(SourceIndex, PropName))
 		{
-			if (const FPCGExProperty* Source = SourceProp->GetPtr<FPCGExProperty>())
+			// Guards CopyValueFrom: the type-erased interface static_casts, so a mismatched source reinterprets memory.
+			if (SourceProp->GetScriptStruct() == KV.Value.GetScriptStruct())
 			{
-				Writer->CopyValueFrom(Source);
+				if (const FPCGExProperty* Source = SourceProp->GetPtr<FPCGExProperty>())
+				{
+					Writer->CopyValueFrom(Source);
+				}
 			}
 		}
 
@@ -311,4 +328,48 @@ void FPCGExPropertyWriter::WriteProperties(int32 PointIndex, int32 SourceIndex)
 bool FPCGExPropertyWriter::HasOutputs() const
 {
 	return WriterInstances.Num() > 0;
+}
+
+namespace PCGExProperties
+{
+	bool WriteDataDomainValue(UPCGData* OutData, const FName OutName, const FPCGExProperty& InProperty)
+	{
+		if (!OutData || OutName.IsNone() || !InProperty.SupportsOutput())
+		{
+			return false;
+		}
+
+		bool bWritten = false;
+		// An unsupported output type falls through the dispatcher's default arm, leaving bWritten false.
+		PCGExMetaHelpers::ExecuteWithRightType(InProperty.GetOutputType(), [&](auto DummyValue)
+		{
+			using T = decltype(DummyValue);
+			T Value{};
+			if (!InProperty.TryGetValue<T>(Value))
+			{
+				return;
+			}
+			PCGExData::Helpers::SetDataValue<T>(OutData, OutName, Value);
+			bWritten = true;
+		});
+		return bWritten;
+	}
+
+	int32 WriteResolvedToDataDomain(UPCGData* OutData, const TConstArrayView<FPCGExPropertyResolved> InResolved)
+	{
+		int32 NumWritten = 0;
+		for (const FPCGExPropertyResolved& Entry : InResolved)
+		{
+			const FPCGExProperty* Property = Entry.GetEffectiveProperty().GetPtr<FPCGExProperty>();
+			if (!Property)
+			{
+				continue;
+			}
+			if (WriteDataDomainValue(OutData, PCGExMetaHelpers::SanitizeAttributeName(Entry.Source->Name), *Property))
+			{
+				++NumWritten;
+			}
+		}
+		return NumWritten;
+	}
 }

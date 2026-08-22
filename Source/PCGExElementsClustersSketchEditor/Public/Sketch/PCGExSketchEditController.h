@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Lattice/PCGExLatticeBasis.h"
 #include "Sketch/PCGExClusterSketchModel.h"
+#include "Sketch/PCGExSketchPlacement.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
 class FScopedTransaction;
@@ -26,8 +27,34 @@ public:
 	virtual const FPCGExClusterSketchModel* GetModel() const = 0;
 	virtual const UPCGExClusterSnapProvider* GetSnapProvider() const = 0;
 
+	/** Whether authoring is allowed AT ALL. Distinct from a null GetModel(), which conflates "read-only"
+	 *  (a component instancing an asset -- alive, inspectable, never authored through) with "host died". */
+	virtual bool CanEdit() const = 0;
+
+	/** Why CanEdit() is false, for the panel's banner. Only reached when it IS false. */
+	virtual FText GetReadOnlyReason() const;
+
 	/** The object Modify() is called on inside every transaction (the asset / the component). */
 	virtual UObject* GetTransactionObject() = 0;
+
+	/**
+	 * The object the panel's details view is rooted at. Not the transaction object: a component keeps its
+	 * authored tier in a payload subobject, so rooting there gives both hosts the same shape -- Model,
+	 * SnapProvider, Decorators as top-level rows. Null means there is nothing authored to show.
+	 */
+	virtual UObject* GetDetailsObject()
+	{
+		return GetTransactionObject();
+	}
+
+	/**
+	 * Open an authoring edit. Transacts the host AND the authored-tier subobject (which is a separate
+	 * UObject, so a host-only Modify leaves record edits outside the transaction), and lets a host
+	 * record that its content is now its own.
+	 *
+	 * Use this at EVERY mutation site instead of GetTransactionObject()->Modify().
+	 */
+	virtual void BeginAuthoring();
 
 	/** Model space -> world. Identity for the asset editor; a component host returns its transform. */
 	virtual FTransform GetLocalToWorld() const = 0;
@@ -45,8 +72,14 @@ public:
 	virtual FPCGExClusterSketchModel* GetModel() override;
 	virtual const FPCGExClusterSketchModel* GetModel() const override;
 	virtual const UPCGExClusterSnapProvider* GetSnapProvider() const override;
+	virtual bool CanEdit() const override;
 	virtual UObject* GetTransactionObject() override;
-	virtual FTransform GetLocalToWorld() const override { return FTransform::Identity; }
+
+	virtual FTransform GetLocalToWorld() const override
+	{
+		return FTransform::Identity;
+	}
+
 	virtual void NotifyChanged() override;
 
 private:
@@ -56,16 +89,33 @@ private:
 /** What a ray hit in the sketch. */
 struct PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchHit
 {
-	enum class EType : uint8 { None, Vertex, Edge, Crossing };
+	enum class EType : uint8
+	{
+		None,
+		Vertex,
+		Edge,
+		Crossing
+	};
 
 	EType Type = EType::None;
 	int32 Index = INDEX_NONE;
 	/** Ray parameter of the hit (world units along the ray) -- the ITF hit depth. */
 	double RayT = 0.0;
 
-	bool IsHit() const { return Type != EType::None; }
-	bool IsVertex() const { return Type == EType::Vertex; }
-	bool IsCrossing() const { return Type == EType::Crossing; }
+	bool IsHit() const
+	{
+		return Type != EType::None;
+	}
+
+	bool IsVertex() const
+	{
+		return Type == EType::Vertex;
+	}
+
+	bool IsCrossing() const
+	{
+		return Type == EType::Crossing;
+	}
 };
 
 /**
@@ -83,7 +133,12 @@ struct PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchHit
 class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchEditController
 {
 public:
-	enum class EDragMode : uint8 { None, Move, Connect };
+	enum class EDragMode : uint8
+	{
+		None,
+		Move,
+		Connect
+	};
 
 	explicit FPCGExSketchEditController(const TSharedRef<IPCGExSketchEditTarget>& InTarget);
 	~FPCGExSketchEditController();
@@ -99,7 +154,6 @@ public:
 	void HandleClick(const FRay& WorldRay, bool bAdditive, bool bAddOnEmpty);
 
 	//~ Drag
-	bool CanBeginDrag(const FRay& WorldRay) const;
 	void BeginDrag(const FRay& WorldRay, bool bConnect);
 	void UpdateDrag(const FRay& WorldRay);
 	void EndDrag(const FRay& WorldRay);
@@ -114,17 +168,41 @@ public:
 	 *  @return true if one was materialized. */
 	bool MaterializeCrossingAtRay(const FRay& WorldRay);
 
+	//~ Authored-data cleanup, and the ONLY entry point for it. Each is one transaction on the target, so
+	//~ a component's inline sketch gets them exactly as an asset does.
+	/** Merge every vertex resolving onto an already-occupied printed location. @return merges performed. */
+	int32 MergeCollocatedVertices();
+	/** Drop out-of-range, self-loop and duplicate edges. @return edges removed. */
+	int32 RemoveInvalidEdges();
+	/** Split edges through vertices and materialize every crossing. @return splits + crossings. */
+	int32 SplitOverlappingEdges();
+	/** Drop records no item references, both layers. @return records removed. */
+	int32 PurgeUnusedDataRecords();
+
 	/** Recompute the ghost crossings. Cheap at sketch scale; called after every mutation. */
 	void RefreshCrossings();
 
+	/** Refresh ghosts, then tell the host. Every mutation ends here -- including one a panel made
+	 *  directly on the model (record authoring), which is why this is public. */
+	void NotifyModelChanged();
+
+	/** Fired by NotifyModelChanged, so it carries SELECTION changes as well as model mutations. */
+	FSimpleMulticastDelegate OnChanged;
+
 	/** Hypothetical crossings offered as ghosts -- never cut automatically. */
-	const TArray<FPCGExClusterSketchCrossing>& GetCrossings() const { return Crossings; }
+	const TArray<FPCGExClusterSketchCrossing>& GetCrossings() const
+	{
+		return Crossings;
+	}
 
 	/** Bumped by every geometry mutation, INCLUDING the live per-frame ones a drag makes (which
 	 *  deliberately skip NotifyChanged -- that is the completed-operation notify, far too heavy to fire
 	 *  per mouse move). A host whose visuals are built rather than drawn per frame watches this to know
 	 *  its geometry went stale. */
-	int32 GetModelRevision() const { return ModelRevision; }
+	int32 GetModelRevision() const
+	{
+		return ModelRevision;
+	}
 
 	/** Delete the element under the ray -- vertex (with its edges) or edge, whichever the hit-test
 	 *  yields (the Alt+click gesture). Side-effect vertices orphaned by the removal go with it.
@@ -132,37 +210,156 @@ public:
 	bool DeleteAtRay(const FRay& WorldRay);
 
 	//~ Snapping
-	bool IsSnapEnabled() const { return bSnapEnabled; }
-	void SetSnapEnabled(const bool bEnabled) { bSnapEnabled = bEnabled; }
+	bool IsSnapEnabled() const
+	{
+		return bSnapEnabled;
+	}
+
+	void SetSnapEnabled(const bool bEnabled)
+	{
+		bSnapEnabled = bEnabled;
+	}
 
 	//~ Gesture options
 	/** When true, a connect drag may also latch the vertex under the POINTER (tight radius) as its
 	 *  target; the snapped-release-point resolution is always on (the collocation guarantee). */
-	bool IsConnectToHoverEnabled() const { return bConnectToHover; }
-	void SetConnectToHoverEnabled(const bool bEnabled) { bConnectToHover = bEnabled; }
+	bool IsConnectToHoverEnabled() const
+	{
+		return bConnectToHover;
+	}
+
+	void SetConnectToHoverEnabled(const bool bEnabled)
+	{
+		bConnectToHover = bEnabled;
+	}
 
 	/** Host sets this while its delete modifier is held; the hovered element draws as a delete target. */
-	void SetDeleteIntent(const bool bIntent) { bDeleteIntent = bIntent; }
-	bool GetDeleteIntent() const { return bDeleteIntent; }
+	void SetDeleteIntent(const bool bIntent)
+	{
+		bDeleteIntent = bIntent;
+	}
+
+	bool GetDeleteIntent() const
+	{
+		return bDeleteIntent;
+	}
+
+	/** Host sets this while its ADD modifier is held. Hovering then previews where a vertex would land,
+	 *  guide included -- an inferred guide the user cannot see before committing is one they cannot
+	 *  steer. */
+	void SetAddIntent(bool bIntent);
+
+	bool GetAddIntent() const
+	{
+		return bAddIntent;
+	}
+
+	//~ Placement guides
+	/** Step the active guide to the next candidate; past the last one, back to inference. Re-resolves
+	 *  against the last cursor ray, since the key that triggers this carries none. @return true when a
+	 *  gesture was live to steer. */
+	bool CyclePlacementGuide();
+	/** Drop the active guide until the next cycle. @return true when there was one to drop. */
+	bool ReleasePlacementGuide();
+	/** Re-run the live gesture against the last cursor ray. For modifier and key changes, which reach a
+	 *  drag WITHOUT a fresh ray -- the ITF hands a capture the keyboard state, whose mouse data is
+	 *  invalid, so no drag update follows on its own. */
+	void RefreshPlacement();
+
+	const FPCGExSketchPlacementSolver& GetPlacement() const
+	{
+		return Placement;
+	}
+
+	/** True while a gesture (drag or add-intent hover) has a live placement point to draw. */
+	bool HasPlacementPreview() const
+	{
+		return DragMode != EDragMode::None || bHasAddPreview;
+	}
+
+	/** Where the live gesture currently points, in MODEL space. A drag outranks the add ghost, so
+	 *  consumers never have to rank the two themselves and cannot disagree about which is live. */
+	const FVector& GetPlacementPoint() const
+	{
+		return DragMode != EDragMode::None ? DragPreviewLocal : AddPreviewLocal;
+	}
+
 	/** Basis from the target's provider; false when there is none. Rebuilt on demand -- never cached. */
 	bool GetBasis(FPCGExLatticeBasis& OutBasis) const;
 
 	//~ Draw-state accessors (consumed by FPCGExSketchDrawHelper; indices may be stale after external
 	//~ edits -- consumers must IsValidIndex-guard, the controller sanitizes on its own operations)
-	const IPCGExSketchEditTarget& GetTarget() const { return Target.Get(); }
-	const TSet<int32>& GetSelectedVertices() const { return SelectedVertices; }
-	const TSet<int32>& GetSelectedEdges() const { return SelectedEdges; }
-	const FPCGExSketchHit& GetHover() const { return Hover; }
-	EDragMode GetDragMode() const { return DragMode; }
-	int32 GetDragVertex() const { return DragVertexIndex; }
-	int32 GetDragTargetVertex() const { return DragTargetVertexIndex; }
+	const IPCGExSketchEditTarget& GetTarget() const
+	{
+		return Target.Get();
+	}
+
+	/** Authoring seam for panels that write the model directly (record assignment): they need the
+	 *  transaction object and the mutable model, then end on NotifyModelChanged like everything else. */
+	IPCGExSketchEditTarget& GetTarget()
+	{
+		return Target.Get();
+	}
+
+	const TSet<int32>& GetSelectedVertices() const
+	{
+		return SelectedVertices;
+	}
+
+	const TSet<int32>& GetSelectedEdges() const
+	{
+		return SelectedEdges;
+	}
+
+	const FPCGExSketchHit& GetHover() const
+	{
+		return Hover;
+	}
+
+	EDragMode GetDragMode() const
+	{
+		return DragMode;
+	}
+
+	int32 GetDragVertex() const
+	{
+		return DragVertexIndex;
+	}
+
+	int32 GetDragTargetVertex() const
+	{
+		return DragTargetVertexIndex;
+	}
+
 	/** Current drag point in MODEL space (snap already applied) -- the move ghost / connect line end. */
-	const FVector& GetDragPreviewLocal() const { return DragPreviewLocal; }
+	const FVector& GetDragPreviewLocal() const
+	{
+		return DragPreviewLocal;
+	}
+
+	/** Where an ADD would land right now, in MODEL space; only meaningful while GetAddIntent() and
+	 *  nothing is hovered. */
+	bool HasAddPreview() const
+	{
+		return bHasAddPreview;
+	}
+
+	const FVector& GetAddPreviewLocal() const
+	{
+		return AddPreviewLocal;
+	}
+
 	/** Vertex the dragged one would MERGE into on release (clusters cannot hold collocated vertices);
 	 *  INDEX_NONE when the drop point is clear. Drawn as the merge highlight. */
-	int32 GetMergeCandidate() const { return MergeCandidateVertex; }
+	int32 GetMergeCandidate() const
+	{
+		return MergeCandidateVertex;
+	}
 
-	bool HasSelection() const { return !SelectedVertices.IsEmpty() || !SelectedEdges.IsEmpty(); }
+	bool HasSelection() const
+	{
+		return !SelectedVertices.IsEmpty() || !SelectedEdges.IsEmpty();
+	}
 
 private:
 	//~ Internals (model space)
@@ -188,9 +385,37 @@ private:
 	static double GhostPickFloor();
 	static double EdgePickFloor();
 	FVector VertexLocation(const FPCGExClusterSketchVertex& V, const FPCGExLatticeBasis* Basis) const;
-	/** Ray point on the gesture plane: through InAnchor, lattice-plane normal for a 2-axis basis, else
-	 *  Z-up; falls back to a fixed distance along the ray when near-parallel. */
-	FVector RayPointOnWorkPlane(const FRay& LocalRay, const FVector& InAnchor, const FPCGExLatticeBasis* Basis) const;
+
+	/** Which gesture the placement solver is currently anchored for. */
+	enum class EPlacementGesture : uint8
+	{
+		None,
+		Add,
+		Move,
+		Connect
+	};
+
+	/** Point the solver at a gesture. Re-anchors -- which DROPS the guide latch -- only when the gesture
+	 *  or its anchor actually changed, so a hover keeps its hysteresis from frame to frame. */
+	void EnsurePlacementGesture(EPlacementGesture InGesture, int32 InAnchorVertex, const FVector& InAnchor, const FPCGExLatticeBasis* Basis, bool bPointWillSnap);
+
+	/** Everything an add gesture resolves to, previewed and committed through the same call so the two
+	 *  can never disagree about where the vertex goes. */
+	struct FAddPlacement
+	{
+		FVector Point = FVector::ZeroVector;
+		/** Anchor's lattice coord, donated to the new vertex so an add in a rank-collapsed basis stays
+		 *  on the anchor's hidden layer. Only when bHasAnchorLayer. */
+		FIntVector AnchorCoord = FIntVector::ZeroValue;
+		bool bHasAnchorLayer = false;
+		bool bResolved = false;
+	};
+
+	FAddPlacement ResolveAddPlacement(const FRay& LocalRay, const FPCGExLatticeBasis* Basis);
+
+	/** The drag body, against a MODEL-space ray. Split out so a modifier or key change can re-run it
+	 *  against the cached ray, which is the only one those events carry. */
+	void ApplyDrag(const FRay& LocalRay);
 	/** Nearest vertex (excluding IgnoreVertex) whose resolved location sits within merge reach of
 	 *  LocalPoint -- pick radius, capped below half a cell so it can never bridge adjacent lattice
 	 *  nodes. Drives merge-on-drop and place-reuse. LayerRef breaks projection stacks: under a
@@ -199,8 +424,6 @@ private:
 	int32 FindNearbyVertex(const FRay& LocalRay, const FVector& LocalPoint, int32 IgnoreVertex, const FPCGExLatticeBasis* Basis, const FIntVector* LayerRef = nullptr) const;
 	void DropInvalidIndices();
 	void EndTransaction();
-	/** Refresh ghosts, then tell the host. Every mutation ends here. */
-	void NotifyModelChanged();
 
 	TSharedRef<IPCGExSketchEditTarget> Target;
 
@@ -228,15 +451,28 @@ private:
 	int32 DragTargetVertexIndex = INDEX_NONE;
 	int32 MergeCandidateVertex = INDEX_NONE;
 	FVector DragPreviewLocal = FVector::ZeroVector;
-	FVector DragPlaneAnchor = FVector::ZeroVector;
-	FVector DragPlaneNormal = FVector::UpVector;
 	/** Basis snapshot for the duration of one drag, so mid-drag provider edits can't tear it. */
 	FPCGExLatticeBasis DragBasis;
 	bool bDragHasBasis = false;
 
 	TUniquePtr<FScopedTransaction> ActiveTransaction;
 
+	/** Cursor ray to work plane and guides, for every gesture. */
+	FPCGExSketchPlacementSolver Placement;
+	EPlacementGesture PlacementGesture = EPlacementGesture::None;
+	int32 PlacementAnchorVertex = INDEX_NONE;
+	FVector PlacementAnchor = FVector::ZeroVector;
+
+	/** Last cursor ray in MODEL space. A key or modifier event reaches a live gesture carrying no valid
+	 *  mouse data, so re-resolving one has nothing else to aim at. */
+	FRay LastLocalRay;
+	bool bHasLastLocalRay = false;
+
+	FVector AddPreviewLocal = FVector::ZeroVector;
+	bool bHasAddPreview = false;
+
 	bool bSnapEnabled = true;
 	bool bConnectToHover = true;
 	bool bDeleteIntent = false;
+	bool bAddIntent = false;
 };

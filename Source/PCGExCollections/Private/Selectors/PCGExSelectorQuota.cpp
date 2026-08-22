@@ -5,6 +5,7 @@
 
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExAssetCollectionProperties.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExData.h"

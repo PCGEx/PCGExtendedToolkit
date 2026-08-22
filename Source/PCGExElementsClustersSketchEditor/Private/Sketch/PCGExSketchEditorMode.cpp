@@ -13,7 +13,9 @@
 #include "Sketch/PCGExSketchComponentEditTarget.h"
 #include "Sketch/PCGExSketchDrawHelper.h"
 #include "Sketch/PCGExSketchEditController.h"
+#include "Sketch/PCGExSketchEditorModeToolkit.h"
 #include "Sketch/PCGExSketchInputBinder.h"
+#include "Sketch/SPCGExSketchPanel.h"
 #include "Tools/EdModeInteractiveToolsContext.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSketchEditorMode"
@@ -50,7 +52,10 @@ void UPCGExSketchEditorMode::Enter()
 
 		InputBinder = NewObject<UPCGExSketchInputBinder>(this);
 		InputBinder->Initialize(
-			[this](const FRay& WorldRay) { return ResolveController(WorldRay); },
+			[this](const FRay& WorldRay)
+			{
+				return ResolveController(WorldRay);
+			},
 			[this](TFunctionRef<void(FPCGExSketchEditController&)> InFn)
 			{
 				for (const FPCGExSketchModeBinding& Binding : Bindings)
@@ -136,7 +141,10 @@ void UPCGExSketchEditorMode::RebuildBindings()
 		for (UPCGExClusterSketchComponent* Component : Components)
 		{
 			const int32 Existing = Previous.IndexOfByPredicate(
-				[Component](const FPCGExSketchModeBinding& InBinding) { return InBinding.Component.Get() == Component; });
+				[Component](const FPCGExSketchModeBinding& InBinding)
+				{
+					return InBinding.Component.Get() == Component;
+				});
 
 			if (Existing != INDEX_NONE)
 			{
@@ -150,6 +158,13 @@ void UPCGExSketchEditorMode::RebuildBindings()
 			Binding.Component = Component;
 			Binding.Target = MakeShared<FPCGExSketchComponentEditTarget>(Component);
 			Binding.Controller = MakeShared<FPCGExSketchEditController>(Binding.Target.ToSharedRef());
+
+			TWeakPtr<FPCGExSketchEditController> WeakController = Binding.Controller;
+			Binding.ChangedHandle = Binding.Controller->OnChanged.AddWeakLambda(
+				this, [this, WeakController]()
+				{
+					LastInteracted = WeakController;
+				});
 
 			// The component keeps its MESH layer (recoloured to the edit palette) and stands its
 			// immediate-mode fallback down; this mode draws that plus the state chrome. A selected
@@ -168,6 +183,10 @@ void UPCGExSketchEditorMode::ReleaseBindingsIn(const TArray<FPCGExSketchModeBind
 {
 	for (const FPCGExSketchModeBinding& Binding : InBindings)
 	{
+		if (Binding.Controller && Binding.ChangedHandle.IsValid())
+		{
+			Binding.Controller->OnChanged.Remove(Binding.ChangedHandle);
+		}
 		if (UPCGExClusterSketchComponent* Component = Binding.Component.Get())
 		{
 			Component->SetEditState(FPCGExClusterSketchEditState());
@@ -179,6 +198,74 @@ void UPCGExSketchEditorMode::ReleaseBindings()
 {
 	ReleaseBindingsIn(Bindings);
 	Bindings.Reset();
+}
+
+void UPCGExSketchEditorMode::CreateToolkit()
+{
+	Toolkit = MakeShareable(new FPCGExSketchEditorModeToolkit());
+}
+
+const FPCGExSketchModeBinding* UPCGExSketchEditorMode::GetActiveBinding() const
+{
+	if (const TSharedPtr<FPCGExSketchEditController> Pinned = LastInteracted.Pin())
+	{
+		if (const FPCGExSketchModeBinding* Found = Bindings.FindByPredicate(
+			[&Pinned](const FPCGExSketchModeBinding& InBinding)
+			{
+				return InBinding.Controller == Pinned;
+			}))
+		{
+			return Found;
+		}
+	}
+	// Nothing acted on yet, or it left the selection: the first binding is an arbitrary but valid answer.
+	return Bindings.IsEmpty() ? nullptr : &Bindings[0];
+}
+
+TSharedPtr<FPCGExSketchEditController> UPCGExSketchEditorMode::GetActiveController() const
+{
+	const FPCGExSketchModeBinding* Binding = GetActiveBinding();
+	return Binding ? Binding->Controller : nullptr;
+}
+
+UObject* UPCGExSketchEditorMode::GetActiveSketchObject() const
+{
+	const FPCGExSketchModeBinding* Binding = GetActiveBinding();
+	return Binding ? Binding->Component.Get() : nullptr;
+}
+
+void UPCGExSketchEditorMode::EnumerateSketches(TArray<FPCGExSketchPanelEntry>& OutEntries) const
+{
+	OutEntries.Reset(Bindings.Num());
+	for (const FPCGExSketchModeBinding& Binding : Bindings)
+	{
+		const UPCGExClusterSketchComponent* Component = Binding.Component.Get();
+		if (!Component || !Binding.Controller)
+		{
+			continue;
+		}
+
+		FPCGExSketchPanelEntry& Entry = OutEntries.AddDefaulted_GetRef();
+		const AActor* ComponentOwner = Component->GetOwner();
+		Entry.Label = FText::FromString(FString::Printf(
+			TEXT("%s / %s"),
+			ComponentOwner ? *ComponentOwner->GetActorNameOrLabel() : TEXT("?"),
+			*Component->GetName()));
+		Entry.Controller = Binding.Controller;
+	}
+}
+
+void UPCGExSketchEditorMode::SetActiveController(const TSharedPtr<FPCGExSketchEditController>& InController)
+{
+	LastInteracted = InController;
+}
+
+void UPCGExSketchEditorMode::RequestViewportRefresh() const
+{
+	if (GEditor)
+	{
+		GEditor->RedrawLevelEditingViewports();
+	}
 }
 
 TSharedPtr<FPCGExSketchEditController> UPCGExSketchEditorMode::ResolveController(const FRay& WorldRay) const
@@ -256,6 +343,12 @@ bool UPCGExSketchEditorMode::InputKey(FEditorViewportClient* ViewportClient, FVi
 {
 	if (Event == IE_Pressed && InputBinder && InputBinder->HandleKeyDown(Key))
 	{
+		// A level viewport is not realtime: a key that only moves a placement guide changes nothing the
+		// viewport would repaint for on its own.
+		if (ViewportClient)
+		{
+			ViewportClient->Invalidate();
+		}
 		return true;
 	}
 	return Super::InputKey(ViewportClient, Viewport, Key, Event);

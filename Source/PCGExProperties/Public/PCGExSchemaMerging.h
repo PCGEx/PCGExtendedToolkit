@@ -4,7 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PCGExProperty.h"
+#include "PCGExPropertySchema.h"
 #include "StructUtils/InstancedStruct.h"
 
 #include "PCGExSchemaMerging.generated.h"

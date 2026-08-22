@@ -8,9 +8,9 @@
 #include "IDetailPropertyRow.h"
 #include "PCGExPropertyFloatPacker.h"
 #include "PropertyHandle.h"
+#include "Details/PCGExDetailRowWidgets.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBox.h"
-#include "Details/PCGExDetailRowWidgets.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPackedFloatSlotCustomization"
 

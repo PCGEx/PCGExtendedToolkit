@@ -41,11 +41,11 @@ void FPCGExPropertyFloatCurveCustomization::CustomizeChildren(TSharedRef<IProper
 	}
 
 	ChildBuilder.AddCustomRow(LOCTEXT("CurveEditorRow", "Curve Editor"))
-		.WholeRowContent()
-		[
-			SNew(SPCGExPropertyCurveValueWidget, ValueHandle.ToSharedRef())
-			.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
-		];
+	            .WholeRowContent()
+	[
+		SNew(SPCGExPropertyCurveValueWidget, ValueHandle.ToSharedRef())
+		.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
+	];
 }
 
 #pragma region FPCGExRuntimeFloatCurveCustomization
@@ -70,11 +70,11 @@ void FPCGExRuntimeFloatCurveCustomization::CustomizeHeader(TSharedRef<IPropertyH
 void FPCGExRuntimeFloatCurveCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
 	ChildBuilder.AddCustomRow(LOCTEXT("CurveEditorRow", "Curve Editor"))
-		.WholeRowContent()
-		[
-			SNew(SPCGExPropertyCurveValueWidget, PropertyHandle)
-			.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
-		];
+	            .WholeRowContent()
+	[
+		SNew(SPCGExPropertyCurveValueWidget, PropertyHandle)
+		.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
+	];
 }
 
 bool FPCGExPropertyOwnedCurveIdentifier::IsPropertyTypeCustomized(const IPropertyHandle& PropertyHandle) const

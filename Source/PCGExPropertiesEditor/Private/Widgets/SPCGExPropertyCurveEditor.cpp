@@ -11,12 +11,12 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Styling/AppStyle.h"
 #include "Textures/SlateIcon.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
-#include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
 #define LOCTEXT_NAMESPACE "SPCGExPropertyCurveEditor"
@@ -166,15 +166,28 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 		.VAlign(VAlign_Center)
 		[
 			SNew(SNumericEntryBox<float>)
-			.AllowSpin(true)
+			                             .AllowSpin(true)
 			// No hard min/max: positions are free (incl. negative and > 1). The slider still spans the
 			// canonical [0,1] for convenience; typing goes beyond it.
-			.MinSliderValue(0.0f).MaxSliderValue(1.0f)
-			.Delta(0.01f)
-			.IsEnabled_Lambda([this]() { return HasSelection(); })
-			.Value_Lambda([this]() { return GetSelectedTime(); })
-			.OnValueChanged_Lambda([this](float V) { SetSelectedTime(V, /*bInteractive=*/true); })
-			.OnValueCommitted_Lambda([this](float V, ETextCommit::Type) { SetSelectedTime(V, /*bInteractive=*/false); })
+			                             .MinSliderValue(0.0f)
+			                             .MaxSliderValue(1.0f)
+			                             .Delta(0.01f)
+			                             .IsEnabled_Lambda([this]()
+			                             {
+				                             return HasSelection();
+			                             })
+			                             .Value_Lambda([this]()
+			                             {
+				                             return GetSelectedTime();
+			                             })
+			                             .OnValueChanged_Lambda([this](float V)
+			                             {
+				                             SetSelectedTime(V, /*bInteractive=*/true);
+			                             })
+			                             .OnValueCommitted_Lambda([this](float V, ETextCommit::Type)
+			                             {
+				                             SetSelectedTime(V, /*bInteractive=*/false);
+			                             })
 		]
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
@@ -190,10 +203,22 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 			SNew(SNumericEntryBox<float>)
 			.AllowSpin(true)
 			.Delta(0.01f)
-			.IsEnabled_Lambda([this]() { return HasSelection(); })
-			.Value_Lambda([this]() { return GetSelectedValue(); })
-			.OnValueChanged_Lambda([this](float V) { SetSelectedValue(V, /*bInteractive=*/true); })
-			.OnValueCommitted_Lambda([this](float V, ETextCommit::Type) { SetSelectedValue(V, /*bInteractive=*/false); })
+			.IsEnabled_Lambda([this]()
+			{
+				return HasSelection();
+			})
+			.Value_Lambda([this]()
+			{
+				return GetSelectedValue();
+			})
+			.OnValueChanged_Lambda([this](float V)
+			{
+				SetSelectedValue(V, /*bInteractive=*/true);
+			})
+			.OnValueCommitted_Lambda([this](float V, ETextCommit::Type)
+			{
+				SetSelectedValue(V, /*bInteractive=*/false);
+			})
 		]
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
@@ -212,11 +237,17 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 			.MinDesiredWidth(72.0f)
 			[
 				SNew(SComboButton)
-				.IsEnabled_Lambda([this]() { return HasSelection(); })
+				.IsEnabled_Lambda([this]()
+				{
+					return HasSelection();
+				})
 				.OnGetMenuContent(FOnGetContent::CreateSP(this, &SPCGExPropertyCurveEditor::BuildInterpMenu))
 				.ButtonContent()
 				[
-					SNew(STextBlock).Text_Lambda([this]() { return GetSelectedInterpText(); })
+					SNew(STextBlock).Text_Lambda([this]()
+					{
+						return GetSelectedInterpText();
+					})
 				]
 			]
 		]
@@ -229,7 +260,11 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 			.ContentPadding(FMargin(2.0f))
 			.ToolTipText(LOCTEXT("FlipHorizontalTooltip", "Flip Horizontal: mirror key positions across their own min/max. Flipping twice restores the original curve."))
-			.OnClicked_Lambda([this]() { Controller->FlipTime(); return FReply::Handled(); })
+			.OnClicked_Lambda([this]()
+			{
+				Controller->FlipTime();
+				return FReply::Handled();
+			})
 			[
 				SNew(SImage)
 				.Image(FAppStyle::GetBrush("GenericCurveEditor.FlipCurveHorizontal"))
@@ -245,7 +280,11 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 			.ContentPadding(FMargin(2.0f))
 			.ToolTipText(LOCTEXT("FlipVerticalTooltip", "Flip Vertical: mirror key values across their own min/max. Flipping twice restores the original curve."))
-			.OnClicked_Lambda([this]() { Controller->FlipValues(); return FReply::Handled(); })
+			.OnClicked_Lambda([this]()
+			{
+				Controller->FlipValues();
+				return FReply::Handled();
+			})
 			[
 				SNew(SImage)
 				.Image(FAppStyle::GetBrush("GenericCurveEditor.FlipCurveVertical"))

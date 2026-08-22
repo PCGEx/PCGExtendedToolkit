@@ -78,10 +78,19 @@ bool FPCGExProperty_Struct::SyncStructuralFromSchema(const FPCGExProperty& Schem
 	const UScriptStruct* SchemaStruct = Typed.Value.GetScriptStruct();
 	const UScriptStruct* CurrentStruct = Value.GetScriptStruct();
 
-	if (CurrentStruct == SchemaStruct) { return false; }
+	if (CurrentStruct == SchemaStruct)
+	{
+		return false;
+	}
 
-	if (!SchemaStruct) { Value.Reset(); }
-	else { Value.InitializeAs(SchemaStruct); }
+	if (!SchemaStruct)
+	{
+		Value.Reset();
+	}
+	else
+	{
+		Value.InitializeAs(SchemaStruct);
+	}
 	return true;
 }
 

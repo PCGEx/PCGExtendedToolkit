@@ -32,7 +32,10 @@ int32 FPCGExPackedFloatLayout::EDITOR_PopulateFromSchemaAsset(const UPCGExProper
 			continue;
 		}
 
-		if (Slots.ContainsByPredicate([&Entry](const FPCGExPackedFloatSlot& In) { return In.PropertyName == Entry.Source->Name; }))
+		if (Slots.ContainsByPredicate([&Entry](const FPCGExPackedFloatSlot& In)
+		{
+			return In.PropertyName == Entry.Source->Name;
+		}))
 		{
 			continue;
 		}
@@ -87,7 +90,7 @@ bool FPCGExPropertyFloatPacker::Initialize(
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext,
 			           FText::FromString(FString::Printf(TEXT("Property '%s' is auto-positioned, but '%s' above it could not be resolved and would move it. Pin '%s' to a float index, or fix '%s'."),
-			                                             *Row.PropertyName.ToString(), *FirstDroppedName.ToString(), *Row.PropertyName.ToString(), *FirstDroppedName.ToString())));
+				           *Row.PropertyName.ToString(), *FirstDroppedName.ToString(), *Row.PropertyName.ToString(), *FirstDroppedName.ToString())));
 			Slots.Reset();
 			Defaults.Reset();
 			return false;
@@ -99,7 +102,7 @@ bool FPCGExPropertyFloatPacker::Initialize(
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext,
 			           FText::FromString(FString::Printf(TEXT("Property '%s' is pinned to float %d, which overlaps the slot above it (next free float is %d)."),
-			                                             *Row.PropertyName.ToString(), Row.Offset, Cursor)));
+				           *Row.PropertyName.ToString(), Row.Offset, Cursor)));
 			Slots.Reset();
 			Defaults.Reset();
 			return false;
@@ -115,7 +118,10 @@ bool FPCGExPropertyFloatPacker::Initialize(
 				           FText::FromString(FString::Printf(TEXT("Property '%s' not found in any schema source; its floats are left at zero. Enable 'Quiet Missing Property Warnings' to silence this."), *Row.PropertyName.ToString())));
 			}
 			Cursor = Start;
-			if (FirstDroppedName.IsNone()) { FirstDroppedName = Row.PropertyName; }
+			if (FirstDroppedName.IsNone())
+			{
+				FirstDroppedName = Row.PropertyName;
+			}
 			continue;
 		}
 
@@ -124,9 +130,12 @@ bool FPCGExPropertyFloatPacker::Initialize(
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext,
 			           FText::FromString(FString::Printf(TEXT("Property '%s' (%s) has no float representation; its floats are left at zero."),
-			                                             *Row.PropertyName.ToString(), *PrototypeProp->GetDisplayTypeName().ToString())));
+				           *Row.PropertyName.ToString(), *PrototypeProp->GetDisplayTypeName().ToString())));
 			Cursor = Start;
-			if (FirstDroppedName.IsNone()) { FirstDroppedName = Row.PropertyName; }
+			if (FirstDroppedName.IsNone())
+			{
+				FirstDroppedName = Row.PropertyName;
+			}
 			continue;
 		}
 
@@ -134,9 +143,12 @@ bool FPCGExPropertyFloatPacker::Initialize(
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext,
 			           FText::FromString(FString::Printf(TEXT("Property '%s' would occupy floats %d..%d, past the %d-float budget; its floats are left at zero."),
-			                                             *Row.PropertyName.ToString(), Start, Start + Count - 1, MaxFloats)));
+				           *Row.PropertyName.ToString(), Start, Start + Count - 1, MaxFloats)));
 			Cursor = Start;
-			if (FirstDroppedName.IsNone()) { FirstDroppedName = Row.PropertyName; }
+			if (FirstDroppedName.IsNone())
+			{
+				FirstDroppedName = Row.PropertyName;
+			}
 			continue;
 		}
 
@@ -149,9 +161,12 @@ bool FPCGExPropertyFloatPacker::Initialize(
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext,
 			           FText::FromString(FString::Printf(TEXT("Property '%s' (%s) reports %d float(s) but produced no value; its floats are left at zero."),
-			                                             *Row.PropertyName.ToString(), *PrototypeProp->GetDisplayTypeName().ToString(), Count)));
+				           *Row.PropertyName.ToString(), *PrototypeProp->GetDisplayTypeName().ToString(), Count)));
 			Cursor = Start;
-			if (FirstDroppedName.IsNone()) { FirstDroppedName = Row.PropertyName; }
+			if (FirstDroppedName.IsNone())
+			{
+				FirstDroppedName = Row.PropertyName;
+			}
 			continue;
 		}
 

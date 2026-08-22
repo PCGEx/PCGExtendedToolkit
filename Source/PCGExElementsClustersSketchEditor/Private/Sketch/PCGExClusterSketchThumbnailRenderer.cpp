@@ -13,7 +13,7 @@ namespace PCGExClusterSketchThumbnail
 	constexpr float BaseThumbnailSize = 256.f;
 
 	// The standalone editor's backdrop, so a thumbnail reads as a small view of that viewport.
-	const FLinearColor BackgroundColor = FLinearColor(0.016f, 0.018f, 0.022f);
+	constexpr FLinearColor BackgroundColor = FLinearColor(0.016f, 0.018f, 0.022f);
 
 	// All as a fraction of the thumbnail's smaller side, so every size holds at any zoom.
 	constexpr float FramePadding = 0.08f;
@@ -113,9 +113,19 @@ void UPCGExClusterSketchThumbnailRenderer::Draw(UObject* Object, int32 X, int32 
 	const bool bFitX = Extent.X > UE_DOUBLE_KINDA_SMALL_NUMBER;
 	const bool bFitY = Extent.Y > UE_DOUBLE_KINDA_SMALL_NUMBER;
 	double Scale = 1.0;
-	if (bFitX && bFitY) { Scale = FMath::Min(FitWidth / Extent.X, FitHeight / Extent.Y); }
-	else if (bFitX) { Scale = FitWidth / Extent.X; }
-	else if (bFitY) { Scale = FitHeight / Extent.Y; }
+	if (bFitX && bFitY)
+	{
+		Scale = FMath::Min(FitWidth / Extent.X, FitHeight / Extent.Y);
+	}
+	else if (bFitX)
+	{
+		Scale = FitWidth / Extent.X;
+	}
+	else
+		if (bFitY)
+		{
+			Scale = FitHeight / Extent.Y;
+		}
 
 	// Uniform scale about the projected centre, landing on the thumbnail's centre.
 	const FVector2D SourceCentre = (Min + Max) * 0.5;

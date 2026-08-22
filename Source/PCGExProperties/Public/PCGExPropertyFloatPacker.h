@@ -62,7 +62,10 @@ struct PCGEXPROPERTIES_API FPCGExPackedFloatLayout
 	TObjectPtr<UPCGExPropertySchemaAsset> PopulateFromSchema;
 #endif
 
-	bool IsEmpty() const { return Slots.IsEmpty(); }
+	bool IsEmpty() const
+	{
+		return Slots.IsEmpty();
+	}
 
 #if WITH_EDITOR
 	/** Appends one row per resolved schema property, skipping names already present.
@@ -107,12 +110,25 @@ public:
 		int32 MaxFloats = MAX_int32);
 
 	/** Packed width, gaps included. A row that resolved to nothing does not extend it. */
-	int32 GetNumFloats() const { return Defaults.Num(); }
+	int32 GetNumFloats() const
+	{
+		return Defaults.Num();
+	}
 
-	bool HasOutputs() const { return !Slots.IsEmpty(); }
+	bool HasOutputs() const
+	{
+		return !Slots.IsEmpty();
+	}
 
-	int32 GetNumSlots() const { return Slots.Num(); }
-	FName GetSlotPropertyName(const int32 SlotIndex) const { return Slots[SlotIndex].PropertyName; }
+	int32 GetNumSlots() const
+	{
+		return Slots.Num();
+	}
+
+	FName GetSlotPropertyName(const int32 SlotIndex) const
+	{
+		return Slots[SlotIndex].PropertyName;
+	}
 
 	/** Fill OutFloats from ResolveSource. A null or differently-typed source keeps the prototype default. */
 	void Pack(TArray<float>& OutFloats, TFunctionRef<const FInstancedStruct*(FName)> ResolveSource) const;

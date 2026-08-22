@@ -37,9 +37,15 @@ namespace PCGExEditorCustomizationUtils
 			TDelegate<void(const FPropertyChangedEvent&)>::CreateLambda(
 				[WeakOwner](const FPropertyChangedEvent& InEvent)
 				{
-					if (InEvent.ChangeType == EPropertyChangeType::Interactive) { return; }
+					if (InEvent.ChangeType == EPropertyChangeType::Interactive)
+					{
+						return;
+					}
 					UObject* Live = WeakOwner.Get();
-					if (!Live) { return; }
+					if (!Live)
+					{
+						return;
+					}
 					Live->Modify();
 					FPropertyChangedEvent Event(InEvent.Property, EPropertyChangeType::ValueSet);
 					FCoreUObjectDelegates::OnObjectPropertyChanged.Broadcast(Live, Event);

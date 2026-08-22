@@ -11,7 +11,7 @@
 #include "PCGExAssetGrammar.h"
 #include "PCGExCategoryOverrides.h"
 #include "PCGExCollectionGlobals.h"
-#include "PCGExProperty.h"
+#include "PCGExPropertySchema.h"
 #include "PCGExSchemaMerging.h"
 #include "Core/PCGExContext.h"
 #include "Details/PCGExSocket.h"
@@ -31,6 +31,10 @@ struct FAssetData;
 class UPCGExAssetCollection;
 class UPCGExCollectionStagingPipeline;
 class UPCGExCollectionTypeState;
+
+// Only reached from template bodies here; TUs that instantiate them include PCGExProperty.h
+// themselves. Keeping the base out is what decouples this header from property edits.
+struct FPCGExProperty;
 
 namespace PCGExAssetCollection
 {
@@ -488,14 +492,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 *   if (Entry->TryGetPropertyValue<double>(Collection, TEXT("Weight"), Out)) { ... }
 	 */
 	template <typename T>
-	bool TryGetPropertyValue(const UPCGExAssetCollection* OwningCollection, FName PropertyName, T& Out) const
-	{
-		if (const FPCGExProperty* Base = GetResolvedPropertyBase(OwningCollection, PropertyName))
-		{
-			return Base->TryGetValue(Out);
-		}
-		return false;
-	}
+	bool TryGetPropertyValue(const UPCGExAssetCollection* OwningCollection, FName PropertyName, T& Out) const;
 
 	/**
 	 * Check if this entry has an override for a specific property name.
@@ -1015,11 +1012,7 @@ public:
 	void EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const;
 
 	/** Rebuild property registry from CollectionProperties. Called automatically during cache build. */
-	void RebuildPropertyRegistry()
-	{
-		TArray<FInstancedStruct> Schema = CollectionProperties.BuildSchema();
-		PCGExProperties::BuildRegistry(Schema, PropertyRegistry);
-	}
+	void RebuildPropertyRegistry();
 
 	/**
 	 * Sync CollectionProperties' schemas and propagate any HeaderId remaps to every entry's
@@ -1485,12 +1478,4 @@ protected: \
 	virtual FPCGExAssetCollectionEntry* GetMutableEntryAtRawIndex(int32 Index) override \
 	{ return Entries.IsValidIndex(Index) ? &Entries[Index] : nullptr; }
 
-// Entry Property Resolution Implementation
-template <typename T>
-const T* FPCGExAssetCollectionEntry::GetResolvedProperty(const UPCGExAssetCollection* OwningCollection, FName PropertyName) const
-{
-	static_assert(TIsDerivedFrom<T, FPCGExProperty>::Value, "T must derive from FPCGExProperty");
-
-	const FInstancedStruct* Slot = ResolvePropertySlot(OwningCollection, PropertyName, T::StaticStruct());
-	return Slot ? Slot->GetPtr<T>() : nullptr;
-}
+// Entry property template definitions live in Core/PCGExAssetCollectionProperties.h.

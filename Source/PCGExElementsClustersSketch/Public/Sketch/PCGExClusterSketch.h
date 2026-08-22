@@ -51,10 +51,10 @@ namespace PCGExSketch
 }
 
 /**
- * A hand-authored, spawnable cluster: the sketch model (vertices + edges + channels), an optional snap
- * provider, and print-time decorators. Print-on-demand by design -- the asset holds NO baked point data
- * and no derived state; a consumer prints a live Vtx/Edges pair from the model at execute time and
- * duplicates it per target.
+ * A hand-authored, spawnable cluster: the sketch model (vertices, edges, and the authored data tier
+ * annotating them), an optional snap provider, and print-time decorators. Print-on-demand by design --
+ * the asset holds NO baked point data and no derived state; a consumer prints a live Vtx/Edges pair from
+ * the model at execute time and duplicates it per target.
  */
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "PCGEx")
 class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketch : public UDataAsset
@@ -108,6 +108,10 @@ public:
 	 * Coord/position coherence (the sketch's one editing rule): a bound vertex's location is derived from
 	 * its coord. Editing the COORD re-derives the location (coord wins); any other model edit re-snaps
 	 * coords from locations first, so a hand-edited transform can never dangle off-lattice.
+	 *
+	 * ALSO the authored tier's one legal sync site: FPCGExPropertyOverrides::SyncToSchema matches identity
+	 * only under WITH_EDITOR and wipes to schema defaults otherwise, so the sync may never be reached from
+	 * load, from the print path, or from any model mutation.
 	 */
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 
@@ -120,29 +124,5 @@ public:
 
 	/** See PostEditChangeProperty. No-op without a usable basis. */
 	void EDITOR_SyncBoundVertices(bool bResnapFromLocation);
-
-	/**
-	 * Merge every vertex that RESOLVES to an already-occupied printed location (duplicate coords,
-	 * overlapping free positions, or a rank-collapsed snap basis projecting distinct coords together)
-	 * into the earliest vertex there. Explicit and undoable -- printing warns but never does this.
-	 */
-	UFUNCTION(CallInEditor, Category = Settings, DisplayName = "Merge Collocated Vertices")
-	void MergeCollocatedVertices();
-
-	/**
-	 * Drop structurally invalid edges: out-of-range endpoints (DORMANT edges -- invisible until the
-	 * vertex array grows past their indices, then they materialize as "random" edges), self-loops, and
-	 * duplicates. The editor draws dormant edges as warning stubs; this removes them, undoably.
-	 */
-	UFUNCTION(CallInEditor, Category = Settings, DisplayName = "Remove Invalid Edges")
-	void RemoveInvalidEdges();
-
-	/**
-	 * Resolve every edge overlap, undoably: an edge passing through a vertex splits into the chain
-	 * between them (collinear A-B-C carries A-B + B-C, never A-C), and two crossing edges gain a
-	 * side-effect vertex at the crossing and split through it. Both run to a fixed point.
-	 */
-	UFUNCTION(CallInEditor, Category = Settings, DisplayName = "Split Overlapping Edges")
-	void SplitOverlappingEdges();
 #endif
 };

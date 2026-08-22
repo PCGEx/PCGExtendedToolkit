@@ -4,6 +4,7 @@
 #include "PCGExSchemaMerging.h"
 
 #include "PCGExLog.h"
+#include "PCGExProperty.h"
 
 namespace PCGExProperties
 {
