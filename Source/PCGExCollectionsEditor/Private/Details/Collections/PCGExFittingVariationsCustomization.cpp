@@ -16,7 +16,7 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
 
-namespace
+namespace PCGExFittingVariationsCustomization
 {
 	// Row-prefix tints: softer-than-canon axis colors so vertical stacking still reads as
 	// separate axes (since this layout is vertical rather than UE's canonical inline triplet),
@@ -182,7 +182,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" X", AxisRowTintX)
+				PCGEX_AXIS_LABEL(" X", PCGExFittingVariationsCustomization::AxisRowTintX)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -199,7 +199,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" Y", AxisRowTintY)
+				PCGEX_AXIS_LABEL(" Y", PCGExFittingVariationsCustomization::AxisRowTintY)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -216,7 +216,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" Z", AxisRowTintZ)
+				PCGEX_AXIS_LABEL(" Z", PCGExFittingVariationsCustomization::AxisRowTintZ)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -278,7 +278,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" R", AxisRowTintX)
+				PCGEX_AXIS_LABEL(" R", PCGExFittingVariationsCustomization::AxisRowTintX)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -295,7 +295,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" P", AxisRowTintY)
+				PCGEX_AXIS_LABEL(" P", PCGExFittingVariationsCustomization::AxisRowTintY)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -312,7 +312,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" Y", AxisRowTintZ)
+				PCGEX_AXIS_LABEL(" Y", PCGExFittingVariationsCustomization::AxisRowTintZ)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -371,7 +371,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 			.Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" X", AxisRowTintX)
+				PCGEX_AXIS_LABEL(" X", PCGExFittingVariationsCustomization::AxisRowTintX)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -394,7 +394,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 					UniformScaleHandle->GetValue(bUniform);
 					return !bUniform;
 				})
-				PCGEX_AXIS_LABEL(" Y", AxisRowTintY)
+				PCGEX_AXIS_LABEL(" Y", PCGExFittingVariationsCustomization::AxisRowTintY)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)
@@ -417,7 +417,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 					UniformScaleHandle->GetValue(bUniform);
 					return !bUniform;
 				})
-				PCGEX_AXIS_LABEL(" Z", AxisRowTintZ)
+				PCGEX_AXIS_LABEL(" Z", PCGExFittingVariationsCustomization::AxisRowTintZ)
 				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
 				[
 					SNew(SHorizontalBox)

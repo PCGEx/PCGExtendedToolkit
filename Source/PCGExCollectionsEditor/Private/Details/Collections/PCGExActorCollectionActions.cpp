@@ -22,7 +22,7 @@ PCGEX_REGISTER_COLLECTION_EDITOR_TYPE(
 
 // Actor BPs surface as UBlueprint, not AActor -- override the default IsInstanceOf detection
 // to walk the ParentClass tag instead.
-namespace
+namespace PCGExActorCollectionActions
 {
 	struct FCustomizeActorEditorTypeInfo
 	{
