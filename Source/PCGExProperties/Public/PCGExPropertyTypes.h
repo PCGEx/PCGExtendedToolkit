@@ -4,10 +4,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Curves/CurveFloat.h"
 #include "PCGExEnumSelector.h"
 #include "PCGExProperty.h"
 #include "PCGSettings.h"
+#include "Curves/CurveFloat.h"
 
 #include "PCGExPropertyTypes.generated.h"
 
@@ -89,7 +89,11 @@ struct PCGEXPROPERTIES_API FPCGExNumericRange
 		return bClampMin == Other.bClampMin && Min == Other.Min
 			&& bClampMax == Other.bClampMax && Max == Other.Max;
 	}
-	bool operator!=(const FPCGExNumericRange& Other) const { return !(*this == Other); }
+
+	bool operator!=(const FPCGExNumericRange& Other) const
+	{
+		return !(*this == Other);
+	}
 #endif
 };
 

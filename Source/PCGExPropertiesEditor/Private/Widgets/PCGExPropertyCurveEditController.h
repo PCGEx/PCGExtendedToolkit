@@ -5,8 +5,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Curves/RichCurve.h"
 #include "Curves/KeyHandle.h"
+#include "Curves/RichCurve.h"
 
 /** Broadcast after the working curve mutates. bInteractive = mid-drag (coalesce undo, only grow the value frame). */
 DECLARE_MULTICAST_DELEGATE_OneParam(FPCGExOnPropertyCurveChanged, bool /*bInteractive*/);
@@ -32,15 +32,27 @@ struct FPCGExPropertyCurveClamps
 
 	float ClampTime(float Time) const
 	{
-		if (TimeMin.IsSet()) { Time = FMath::Max(Time, TimeMin.GetValue()); }
-		if (TimeMax.IsSet()) { Time = FMath::Min(Time, TimeMax.GetValue()); }
+		if (TimeMin.IsSet())
+		{
+			Time = FMath::Max(Time, TimeMin.GetValue());
+		}
+		if (TimeMax.IsSet())
+		{
+			Time = FMath::Min(Time, TimeMax.GetValue());
+		}
 		return Time;
 	}
 
 	float ClampValue(float Value) const
 	{
-		if (ValueMin.IsSet()) { Value = FMath::Max(Value, ValueMin.GetValue()); }
-		if (ValueMax.IsSet()) { Value = FMath::Min(Value, ValueMax.GetValue()); }
+		if (ValueMin.IsSet())
+		{
+			Value = FMath::Max(Value, ValueMin.GetValue());
+		}
+		if (ValueMax.IsSet())
+		{
+			Value = FMath::Min(Value, ValueMax.GetValue());
+		}
 		return Value;
 	}
 };
@@ -67,11 +79,21 @@ class FPCGExPropertyCurveEditController
 public:
 	explicit FPCGExPropertyCurveEditController(const TSharedRef<FRichCurve>& InCurve);
 
-	FRichCurve& GetCurve() const { return *Curve; }
-	int32 NumKeys() const { return Curve->Keys.Num(); }
+	FRichCurve& GetCurve() const
+	{
+		return *Curve;
+	}
+
+	int32 NumKeys() const
+	{
+		return Curve->Keys.Num();
+	}
 
 	/** Install edit clamps (defaults to none). Applies to subsequent edits only. */
-	void SetClamps(const FPCGExPropertyCurveClamps& InClamps) { Clamps = InClamps; }
+	void SetClamps(const FPCGExPropertyCurveClamps& InClamps)
+	{
+		Clamps = InClamps;
+	}
 
 	// --- Read by index (for painting / hit-testing) ---
 	float GetKeyTimeAt(int32 Index) const;
@@ -86,9 +108,21 @@ public:
 	bool IsValidKey(FKeyHandle Handle) const;
 
 	// --- Selection ---
-	FKeyHandle GetSelectedKey() const { return SelectedKey; }
-	int32 GetSelectedIndex() const { return GetKeyIndex(SelectedKey); }
-	bool HasSelection() const { return SelectedKey.IsValid() && IsValidKey(SelectedKey); }
+	FKeyHandle GetSelectedKey() const
+	{
+		return SelectedKey;
+	}
+
+	int32 GetSelectedIndex() const
+	{
+		return GetKeyIndex(SelectedKey);
+	}
+
+	bool HasSelection() const
+	{
+		return SelectedKey.IsValid() && IsValidKey(SelectedKey);
+	}
+
 	void SetSelectedKeyByIndex(int32 Index);
 	void ClearSelection();
 
@@ -112,14 +146,30 @@ public:
 	void CommitInteractive();
 
 	// --- Value-axis framing (Y) ---
-	float GetFrameMin() const { return FrameMin; }
-	float GetFrameMax() const { return FrameMax; }
+	float GetFrameMin() const
+	{
+		return FrameMin;
+	}
+
+	float GetFrameMax() const
+	{
+		return FrameMax;
+	}
+
 	float ValueToFrameAlpha(float Value) const;
 	float FrameAlphaToValue(float Alpha) const;
 
 	// --- Time-axis framing (X) -- always spans at least [0,1], expands to include out-of-range keys ---
-	float GetTimeFrameMin() const { return TimeFrameMin; }
-	float GetTimeFrameMax() const { return TimeFrameMax; }
+	float GetTimeFrameMin() const
+	{
+		return TimeFrameMin;
+	}
+
+	float GetTimeFrameMax() const
+	{
+		return TimeFrameMax;
+	}
+
 	float TimeToFrameAlpha(float Time) const;
 	float FrameAlphaToTime(float Alpha) const;
 
@@ -127,7 +177,10 @@ public:
 	FPCGExOnPropertyCurveSelectionChanged OnSelectionChanged;
 
 private:
-	void NotifyChanged(bool bInteractive) { OnChanged.Broadcast(bInteractive); }
+	void NotifyChanged(bool bInteractive)
+	{
+		OnChanged.Broadcast(bInteractive);
+	}
 
 	/** index -> handle via the curve's public ordered handle iterator. Invalid handle if out of range. */
 	FKeyHandle GetKeyHandle(int32 Index) const;

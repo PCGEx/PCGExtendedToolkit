@@ -4,8 +4,8 @@
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
-#include "UObject/StructOnScope.h"
 #include "PCGExProperty.h" // FPCGExPropertyOverrideEntry (ParkedOverrideBuffers member)
+#include "UObject/StructOnScope.h"
 
 class IDetailPropertyRow;
 class IPropertyUtilities;

@@ -15,7 +15,7 @@ void PCGExSketch::RegisterCollectionType()
 	using namespace PCGExAssetCollection;
 
 	FTypeInfo Info;
-	Info.Id = PCGExSketch::CollectionTypeId;
+	Info.Id = CollectionTypeId;
 	Info.CollectionClass = UPCGExClusterSketchCollection::StaticClass();
 	Info.EntryStruct = FPCGExClusterSketchCollectionEntry::StaticStruct();
 	Info.DisplayName = NSLOCTEXT("PCGEx", "ClusterSketchCollection", "Cluster Sketch Collection");
@@ -25,11 +25,14 @@ void PCGExSketch::RegisterCollectionType()
 #if WITH_EDITOR
 	// Omni drag-drop ingestion. Must follow Register: Customize mutates an existing entry.
 	FTypeRegistry::Get().Customize(
-		PCGExSketch::CollectionTypeId,
+		CollectionTypeId,
 		[](FTypeInfo& Info)
 		{
 			Info.SourceDetectPriority = 15;
-			Info.DetectSourceAsset = [](const FAssetData& Asset) { return Asset.IsInstanceOf<UPCGExClusterSketch>(); };
+			Info.DetectSourceAsset = [](const FAssetData& Asset)
+			{
+				return Asset.IsInstanceOf<UPCGExClusterSketch>();
+			};
 		});
 #endif
 }

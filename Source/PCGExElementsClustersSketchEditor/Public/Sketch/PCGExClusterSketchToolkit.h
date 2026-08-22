@@ -10,6 +10,7 @@ class AActor;
 class FAdvancedPreviewScene;
 class FPCGExSketchAssetEditTarget;
 class FPCGExSketchEditController;
+class SPCGExSketchPanel;
 class UPCGExClusterSketch;
 class UPCGExClusterSketchComponent;
 
@@ -29,20 +30,48 @@ public:
 	virtual ~FPCGExClusterSketchToolkit() override;
 
 	//~ FAssetEditorToolkit
-	virtual FName GetToolkitFName() const override { return FName("PCGExClusterSketchEditor"); }
-	virtual FText GetBaseToolkitName() const override { return INVTEXT("Cluster Sketch Editor"); }
-	virtual FString GetWorldCentricTabPrefix() const override { return TEXT("Cluster Sketch"); }
-	virtual FLinearColor GetWorldCentricTabColorScale() const override { return FLinearColor(0.1f, 0.75f, 0.65f); }
+	virtual FName GetToolkitFName() const override
+	{
+		return FName("PCGExClusterSketchEditor");
+	}
+
+	virtual FText GetBaseToolkitName() const override
+	{
+		return INVTEXT("Cluster Sketch Editor");
+	}
+
+	virtual FString GetWorldCentricTabPrefix() const override
+	{
+		return TEXT("Cluster Sketch");
+	}
+
+	virtual FLinearColor GetWorldCentricTabColorScale() const override
+	{
+		return FLinearColor(0.1f, 0.75f, 0.65f);
+	}
+
 	virtual void PostInitAssetEditor() override;
 
 	//~ FBaseAssetToolkit
 	virtual void CreateWidgets() override;
 	virtual void CreateEditorModeManager() override;
 	virtual TSharedPtr<FEditorViewportClient> CreateEditorViewportClient() const override;
+	/** No-op: the panel is the details surface, so the base's DetailsView is never shown or populated. */
+	virtual void SetEditingObject(UObject* InObject) override;
 
-	TSharedPtr<FPCGExSketchEditController> GetController() const { return Controller; }
+	TSharedPtr<FPCGExSketchEditController> GetController() const
+	{
+		return Controller;
+	}
+
+protected:
+	/** The Details tab is where the shared panel lands here. Overriding this rather than
+	 *  RegisterTabSpawners, which would trip the base's duplicate-spawner ensure. */
+	virtual TSharedRef<SDockTab> SpawnTab_Details(const FSpawnTabArgs& Args) override;
 
 private:
+	void EnsurePanelCreated();
+
 	/** Give the preview scene a real sketch component, so this editor renders through the SAME mesh
 	 *  layer the in-level mode does instead of an immediate-mode lookalike. Needs an owning actor: the
 	 *  component parents its instanced-mesh children to GetOwner(). */
@@ -51,6 +80,7 @@ private:
 	TSharedPtr<FAdvancedPreviewScene> ObjectScene;
 	TSharedPtr<FPCGExSketchAssetEditTarget> EditTarget;
 	TSharedPtr<FPCGExSketchEditController> Controller;
+	TSharedPtr<SPCGExSketchPanel> Panel;
 
 	/** Owned by the preview world, which roots them; weak so teardown order cannot matter. */
 	TWeakObjectPtr<AActor> PreviewActor;

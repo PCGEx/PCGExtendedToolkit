@@ -112,9 +112,21 @@ public:
 #endif
 
 	//~ Begin UDeveloperSettings
-	virtual FName GetContainerName() const override { return "Editor"; }
-	virtual FName GetCategoryName() const override { return "Plugins"; }
-	virtual FName GetSectionName() const override { return FName("PCGEx | Cluster Sketch"); }
+	virtual FName GetContainerName() const override
+	{
+		return "Editor";
+	}
+
+	virtual FName GetCategoryName() const override
+	{
+		return "Plugins";
+	}
+
+	virtual FName GetSectionName() const override
+	{
+		return FName("PCGEx | Cluster Sketch");
+	}
+
 	//~ End UDeveloperSettings
 
 	// ========== Preview (unedited) ==========
@@ -189,6 +201,28 @@ public:
 	/** Lattice axes drawn at the basis origin while editing. */
 	UPROPERTY(EditAnywhere, Config, Category = "Edit|Affordances")
 	FLinearColor BasisColor = FLinearColor(0.35f, 0.5f, 0.9f, 0.6f);
+
+	/** Placement guide along a lattice AXIS. Colour is what tells the two lattice guide kinds apart on
+	 *  a skewed basis, where an axis and a diagonal look alike. */
+	UPROPERTY(EditAnywhere, Config, Category = "Edit|Guides")
+	FLinearColor GuideAxisColor = FLinearColor(0.35f, 0.62f, 1.0f);
+
+	/** Placement guide along one of the lattice's other declared step directions. */
+	UPROPERTY(EditAnywhere, Config, Category = "Edit|Guides")
+	FLinearColor GuideWalkColor = FLinearColor(0.45f, 0.45f, 0.95f);
+
+	/** Placement guide LEAVING the lattice plane -- the one direction snapping would discard. */
+	UPROPERTY(EditAnywhere, Config, Category = "Edit|Guides")
+	FLinearColor GuideComplementColor = FLinearColor(0.95f, 0.75f, 0.25f);
+
+	/** Placement guide along the line of an existing edge. */
+	UPROPERTY(EditAnywhere, Config, Category = "Edit|Guides")
+	FLinearColor GuideEdgeColor = FLinearColor(0.4f, 0.9f, 0.75f);
+
+	/** Opacity of a guide the gesture is NOT on, at rest. It rises toward full as the cursor nears
+	 *  capturing that guide, so the rail about to take over announces itself first. */
+	UPROPERTY(EditAnywhere, Config, Category = "Edit|Guides", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float GuideCandidateOpacity = 0.22f;
 
 	/** Canonical three-quarter view of a sketch: the standalone editor opens on it, and thumbnails are
 	 *  projected along it. Deliberately neither axis-aligned nor 45 degrees -- a lattice sketch is mostly

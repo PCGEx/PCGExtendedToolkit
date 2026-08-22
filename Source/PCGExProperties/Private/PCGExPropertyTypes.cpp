@@ -283,7 +283,10 @@ bool FPCGExProperty_Enum::SyncStructuralFromSchema(const FPCGExProperty& Schema)
 	// here; if it no longer corresponds to a member of the new class, the picker UI will
 	// surface the raw integer and the user can re-pick.
 	const FPCGExProperty_Enum& Typed = static_cast<const FPCGExProperty_Enum&>(Schema);
-	if (Value.Class == Typed.Value.Class) { return false; }
+	if (Value.Class == Typed.Value.Class)
+	{
+		return false;
+	}
 	Value.Class = Typed.Value.Class;
 	return true;
 }

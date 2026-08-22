@@ -15,17 +15,17 @@ namespace PCGExClusterSketchViewportClient
 {
 	// Dark authoring backdrop. Sketch geometry draws unlit in the foreground, so the scene's job is
 	// orientation, not lighting: the ground grid carries up/down and the backdrop stays out of the way.
-	const FLinearColor BackgroundColor = FLinearColor(0.016f, 0.018f, 0.022f);
-	const FColor GridColorAxis = FColor(96, 96, 104);
-	const FColor GridColorMajor = FColor(52, 52, 58);
-	const FColor GridColorMinor = FColor(30, 30, 34);
+	constexpr FLinearColor BackgroundColor = FLinearColor(0.016f, 0.018f, 0.022f);
+	constexpr FColor GridColorAxis = FColor(96, 96, 104);
+	constexpr FColor GridColorMajor = FColor(52, 52, 58);
+	constexpr FColor GridColorMinor = FColor(30, 30, 34);
 }
 
 FPCGExClusterSketchViewportClient::FPCGExClusterSketchViewportClient(FEditorModeTools* InModeTools, FPreviewScene* InPreviewScene, const TSharedPtr<FPCGExSketchEditController>& InController, UPCGExClusterSketchComponent* InSketchComponent)
 	: FEditorViewportClient(InModeTools, InPreviewScene)
-	, Controller(InController)
-	, OwnerModeTools(InModeTools)
-	, SketchComponent(InSketchComponent)
+	  , Controller(InController)
+	  , OwnerModeTools(InModeTools)
+	  , SketchComponent(InSketchComponent)
 {
 	// Continuous redraw: hover/drag affordances live in Draw, not in a scene component.
 	SetRealtime(true);
@@ -43,7 +43,10 @@ FPCGExClusterSketchViewportClient::FPCGExClusterSketchViewportClient(FEditorMode
 	const TSharedPtr<FPCGExSketchEditController> Fixed = Controller;
 	InputBinder = NewObject<UPCGExSketchInputBinder>();
 	InputBinder->Initialize(
-		[Fixed](const FRay&) { return Fixed; },
+		[Fixed](const FRay&)
+		{
+			return Fixed;
+		},
 		[Fixed](TFunctionRef<void(FPCGExSketchEditController&)> InFn)
 		{
 			if (Fixed)

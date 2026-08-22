@@ -82,15 +82,24 @@ namespace PCGExStagingLoadSketch
 					else
 					{
 						const FSoftObjectPath Path = static_cast<const FPCGExClusterSketchCollectionEntry*>(Result.Entry)->Sketch.ToSoftObjectPath();
-						if (!Path.IsNull()) { Verdict = Context->UniqueSketchPaths.AddUnique(Path); }
+						if (!Path.IsNull())
+						{
+							Verdict = Context->UniqueSketchPaths.AddUnique(Path);
+						}
 					}
 				}
 
 				Cached = &HashToIndex.Add(Hash, Verdict);
 			}
 
-			if (*Cached == BrokenPick) { ++Context->NumUnresolvedTargets; }
-			else { Target.SketchIdx[i] = *Cached; }
+			if (*Cached == BrokenPick)
+			{
+				++Context->NumUnresolvedTargets;
+			}
+			else
+			{
+				Target.SketchIdx[i] = *Cached;
+			}
 		}
 
 		return true;
@@ -353,7 +362,10 @@ bool FPCGExStagingLoadSketchElement::AdvanceWork(FPCGExContext* InContext, const
 			}
 			for (FPCGExStagingLoadSketchContext::FTargets& Target : Context->Targets)
 			{
-				for (int32& Index : Target.SketchIdx) { Index = ConstantIndex; }
+				for (int32& Index : Target.SketchIdx)
+				{
+					Index = ConstantIndex;
+				}
 			}
 		}
 
@@ -385,7 +397,10 @@ bool FPCGExStagingLoadSketchElement::AdvanceWork(FPCGExContext* InContext, const
 		TArray<FSoftObjectPath> NestedDependencies;
 		for (const TObjectPtr<UPCGExClusterSketch>& Sketch : Context->UniqueSketches)
 		{
-			if (!Sketch) { continue; }
+			if (!Sketch)
+			{
+				continue;
+			}
 			Context->EDITOR_TrackPath(FSoftObjectPath(Sketch));
 			Sketch->CollectAssetDependencies(NestedDependencies);
 		}
@@ -416,7 +431,10 @@ bool FPCGExStagingLoadSketchElement::AdvanceWork(FPCGExContext* InContext, const
 
 		for (int32 i = 0; i < NumUnique; ++i)
 		{
-			if (!Context->UniqueSketches[i]) { continue; }
+			if (!Context->UniqueSketches[i])
+			{
+				continue;
+			}
 
 			const TSharedPtr<PCGExData::FPointIO> RootIO = Context->RootVtx->Emplace_GetRef<UPCGExClusterNodesData>();
 			if (!RootIO)

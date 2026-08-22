@@ -5,134 +5,10 @@
 
 #include "PCGExH.h"
 #include "Clusters/PCGExClusterCommon.h"
-
-#pragma region FPCGExClusterDataChannel
-
-int32 FPCGExClusterDataChannel::Num() const
-{
-	switch (Type)
-	{
-	case EPCGExClusterDataChannelType::Double: return DoubleValues.Num();
-	case EPCGExClusterDataChannelType::Integer: return IntegerValues.Num();
-	case EPCGExClusterDataChannelType::Name: return NameValues.Num();
-	case EPCGExClusterDataChannelType::Vector: return VectorValues.Num();
-	default: checkNoEntry();
-		return 0;
-	}
-}
-
-void FPCGExClusterDataChannel::SetNumDefaulted(const int32 InNum)
-{
-	DoubleValues.Empty();
-	IntegerValues.Empty();
-	NameValues.Empty();
-	VectorValues.Empty();
-	switch (Type)
-	{
-	case EPCGExClusterDataChannelType::Double: DoubleValues.SetNumZeroed(InNum);
-		break;
-	case EPCGExClusterDataChannelType::Integer: IntegerValues.SetNumZeroed(InNum);
-		break;
-	case EPCGExClusterDataChannelType::Name: NameValues.SetNum(InNum);
-		break;
-	case EPCGExClusterDataChannelType::Vector: VectorValues.SetNumZeroed(InNum);
-		break;
-	default: checkNoEntry();
-		break;
-	}
-}
-
-void FPCGExClusterDataChannel::RemoveAt(const int32 Index)
-{
-	switch (Type)
-	{
-	case EPCGExClusterDataChannelType::Double: if (DoubleValues.IsValidIndex(Index)) { DoubleValues.RemoveAt(Index); }
-		break;
-	case EPCGExClusterDataChannelType::Integer: if (IntegerValues.IsValidIndex(Index)) { IntegerValues.RemoveAt(Index); }
-		break;
-	case EPCGExClusterDataChannelType::Name: if (NameValues.IsValidIndex(Index)) { NameValues.RemoveAt(Index); }
-		break;
-	case EPCGExClusterDataChannelType::Vector: if (VectorValues.IsValidIndex(Index)) { VectorValues.RemoveAt(Index); }
-		break;
-	default: checkNoEntry();
-		break;
-	}
-}
-
-void FPCGExClusterDataChannel::InsertDefaulted(const int32 Index)
-{
-	switch (Type)
-	{
-	case EPCGExClusterDataChannelType::Double: DoubleValues.Insert(0.0, FMath::Clamp(Index, 0, DoubleValues.Num()));
-		break;
-	case EPCGExClusterDataChannelType::Integer: IntegerValues.Insert(0, FMath::Clamp(Index, 0, IntegerValues.Num()));
-		break;
-	case EPCGExClusterDataChannelType::Name: NameValues.Insert(NAME_None, FMath::Clamp(Index, 0, NameValues.Num()));
-		break;
-	case EPCGExClusterDataChannelType::Vector: VectorValues.Insert(FVector::ZeroVector, FMath::Clamp(Index, 0, VectorValues.Num()));
-		break;
-	default: checkNoEntry();
-		break;
-	}
-}
-
-#pragma endregion
+#include "Helpers/PCGExMetaHelpers.h"
 
 namespace PCGExClusterSketchModel
 {
-	/** One captured edge-channel row, so split segments can inherit the parent edge's values. */
-	struct FChannelValueSnapshot
-	{
-		double Double = 0.0;
-		int64 Integer = 0;
-		FName Name = NAME_None;
-		FVector Vector = FVector::ZeroVector;
-	};
-
-	void CaptureEdgeChannelValues(const TArray<FPCGExClusterDataChannel>& Channels, const int32 EdgeIndex, TArray<FChannelValueSnapshot>& OutValues)
-	{
-		OutValues.Reset();
-		OutValues.Reserve(Channels.Num());
-		for (const FPCGExClusterDataChannel& Channel : Channels)
-		{
-			FChannelValueSnapshot& Value = OutValues.AddDefaulted_GetRef();
-			switch (Channel.Type)
-			{
-			case EPCGExClusterDataChannelType::Double: if (Channel.DoubleValues.IsValidIndex(EdgeIndex)) { Value.Double = Channel.DoubleValues[EdgeIndex]; }
-				break;
-			case EPCGExClusterDataChannelType::Integer: if (Channel.IntegerValues.IsValidIndex(EdgeIndex)) { Value.Integer = Channel.IntegerValues[EdgeIndex]; }
-				break;
-			case EPCGExClusterDataChannelType::Name: if (Channel.NameValues.IsValidIndex(EdgeIndex)) { Value.Name = Channel.NameValues[EdgeIndex]; }
-				break;
-			case EPCGExClusterDataChannelType::Vector: if (Channel.VectorValues.IsValidIndex(EdgeIndex)) { Value.Vector = Channel.VectorValues[EdgeIndex]; }
-				break;
-			default: checkNoEntry();
-				break;
-			}
-		}
-	}
-
-	void ApplyEdgeChannelValues(TArray<FPCGExClusterDataChannel>& Channels, const int32 EdgeIndex, const TArray<FChannelValueSnapshot>& Values)
-	{
-		for (int32 c = 0; c < Channels.Num() && c < Values.Num(); ++c)
-		{
-			FPCGExClusterDataChannel& Channel = Channels[c];
-			switch (Channel.Type)
-			{
-			case EPCGExClusterDataChannelType::Double: if (Channel.DoubleValues.IsValidIndex(EdgeIndex)) { Channel.DoubleValues[EdgeIndex] = Values[c].Double; }
-				break;
-			case EPCGExClusterDataChannelType::Integer: if (Channel.IntegerValues.IsValidIndex(EdgeIndex)) { Channel.IntegerValues[EdgeIndex] = Values[c].Integer; }
-				break;
-			case EPCGExClusterDataChannelType::Name: if (Channel.NameValues.IsValidIndex(EdgeIndex)) { Channel.NameValues[EdgeIndex] = Values[c].Name; }
-				break;
-			case EPCGExClusterDataChannelType::Vector: if (Channel.VectorValues.IsValidIndex(EdgeIndex)) { Channel.VectorValues[EdgeIndex] = Values[c].Vector; }
-				break;
-			default: checkNoEntry();
-				break;
-			}
-		}
-	}
-
 	/** Stable identity of an edge while enforcement runs: indices shift on every split, but vertex
 	 *  indices do not (enforcement only appends vertices). */
 	FORCEINLINE uint64 EdgeKey(const FPCGExClusterSketchEdge& E)
@@ -232,21 +108,18 @@ FBox FPCGExClusterSketchModel::GetBounds(const FPCGExLatticeBasis* Basis) const
 	return Bounds;
 }
 
-int32 FPCGExClusterSketchModel::AddVertex(const FTransform& InTransform)
+int32 FPCGExClusterSketchModel::AddVertex(const FTransform& InTransform, const FGuid InDataId)
 {
 	const int32 Index = Vertices.Num();
 	FPCGExClusterSketchVertex& V = Vertices.AddDefaulted_GetRef();
 	V.Transform = InTransform;
-	for (FPCGExClusterDataChannel& Channel : VertexChannels)
-	{
-		Channel.InsertDefaulted(Index);
-	}
+	V.DataId = InDataId;
 	return Index;
 }
 
-int32 FPCGExClusterSketchModel::AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis)
+int32 FPCGExClusterSketchModel::AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis, const FGuid InDataId)
 {
-	const int32 Index = AddVertex(FTransform(InBasis.CoordToWorld(InCoord)));
+	const int32 Index = AddVertex(FTransform(InBasis.CoordToWorld(InCoord)), InDataId);
 	FPCGExClusterSketchVertex& V = Vertices[Index];
 	V.bLatticeBound = true;
 	V.LatticeCoord = InCoord;
@@ -266,10 +139,6 @@ bool FPCGExClusterSketchModel::RemoveVertex(const int32 Index)
 		if (Edges[e].A == Index || Edges[e].B == Index)
 		{
 			Edges.RemoveAt(e);
-			for (FPCGExClusterDataChannel& Channel : EdgeChannels)
-			{
-				Channel.RemoveAt(e);
-			}
 		}
 	}
 	for (FPCGExClusterSketchEdge& E : Edges)
@@ -285,10 +154,6 @@ bool FPCGExClusterSketchModel::RemoveVertex(const int32 Index)
 	}
 
 	Vertices.RemoveAt(Index);
-	for (FPCGExClusterDataChannel& Channel : VertexChannels)
-	{
-		Channel.RemoveAt(Index);
-	}
 	return true;
 }
 
@@ -317,10 +182,6 @@ int32 FPCGExClusterSketchModel::Connect(const int32 A, const int32 B, bool* bOut
 	FPCGExClusterSketchEdge& E = Edges.AddDefaulted_GetRef();
 	E.A = A;
 	E.B = B;
-	for (FPCGExClusterDataChannel& Channel : EdgeChannels)
-	{
-		Channel.InsertDefaulted(Index);
-	}
 	return Index;
 }
 
@@ -337,10 +198,6 @@ bool FPCGExClusterSketchModel::RemoveEdgeAt(const int32 EdgeIndex)
 	}
 
 	Edges.RemoveAt(EdgeIndex);
-	for (FPCGExClusterDataChannel& Channel : EdgeChannels)
-	{
-		Channel.RemoveAt(EdgeIndex);
-	}
 	return true;
 }
 
@@ -379,10 +236,12 @@ int32 FPCGExClusterSketchModel::MergeVertices(const int32 InAbsorbed, const int3
 		}
 
 		Edges.RemoveAt(e);
-		for (FPCGExClusterDataChannel& Channel : EdgeChannels)
-		{
-			Channel.RemoveAt(e);
-		}
+	}
+
+	// Survivor inherits only when it holds none: records are sparse, dropping the annotation is the worse failure.
+	if (!Vertices[InSurvivor].DataId.IsValid())
+	{
+		Vertices[InSurvivor].DataId = Vertices[InAbsorbed].DataId;
 	}
 
 #if WITH_EDITORONLY_DATA
@@ -391,7 +250,7 @@ int32 FPCGExClusterSketchModel::MergeVertices(const int32 InAbsorbed, const int3
 #endif
 
 	const int32 SurvivorAfterRemoval = InSurvivor > InAbsorbed ? InSurvivor - 1 : InSurvivor;
-	RemoveVertex(InAbsorbed); // no edges touch it anymore -- pure vertex/channel removal + index remap
+	RemoveVertex(InAbsorbed); // no edges touch it anymore -- pure vertex removal + index remap
 	return SurvivorAfterRemoval;
 }
 
@@ -534,17 +393,15 @@ int32 FPCGExClusterSketchModel::SplitEdgeByContainedVertices(const int32 EdgeInd
 	{
 		return 0;
 	}
-	Contained.Sort([](const TPair<double, int32>& Lhs, const TPair<double, int32>& Rhs) { return Lhs.Key < Rhs.Key; });
+	Contained.Sort([](const TPair<double, int32>& Lhs, const TPair<double, int32>& Rhs)
+	{
+		return Lhs.Key < Rhs.Key;
+	});
 
-	// New chain segments inherit the parent edge's channel values.
-	TArray<PCGExClusterSketchModel::FChannelValueSnapshot> ParentValues;
-	PCGExClusterSketchModel::CaptureEdgeChannelValues(EdgeChannels, EdgeIndex, ParentValues);
+	// Only newly created segments take the parent's record; one deduped onto existing connectivity keeps its own.
+	const FGuid ParentDataId = Edge.DataId;
 
 	Edges.RemoveAt(EdgeIndex);
-	for (FPCGExClusterDataChannel& Channel : EdgeChannels)
-	{
-		Channel.RemoveAt(EdgeIndex);
-	}
 
 	int32 NumSegments = 0;
 	int32 Prev = Edge.A;
@@ -554,7 +411,7 @@ int32 FPCGExClusterSketchModel::SplitEdgeByContainedVertices(const int32 EdgeInd
 		const int32 NewIndex = Connect(From, To, &bCreated);
 		if (bCreated)
 		{
-			PCGExClusterSketchModel::ApplyEdgeChannelValues(EdgeChannels, NewIndex, ParentValues);
+			Edges[NewIndex].DataId = ParentDataId;
 		}
 		if (NewIndex != INDEX_NONE)
 		{
@@ -629,7 +486,10 @@ int32 FPCGExClusterSketchModel::EnforceSeparationAroundVertex(const int32 Vertex
 			{
 				ChainKeys.Reset();
 				TotalChanges += SplitEdgeByContainedVertices(e, Basis, &ChainKeys);
-				for (const uint64 Key : ChainKeys) { Touched.Add(Key); } // the chain inherits the parent's scope
+				for (const uint64 Key : ChainKeys)
+				{
+					Touched.Add(Key);
+				} // the chain inherits the parent's scope
 				bChanged = true;
 				break;
 			}
@@ -845,13 +705,61 @@ int32 FPCGExClusterSketchModel::RemoveInvalidEdges()
 			continue;
 		}
 		Edges.RemoveAt(e);
-		for (FPCGExClusterDataChannel& Channel : EdgeChannels)
-		{
-			Channel.RemoveAt(e);
-		}
 		++NumRemoved;
 	}
+
+#if WITH_EDITORONLY_DATA
+	// Dropping edges can strand tool residue, same as every other edge-removing operation.
+	RemoveOrphanSideEffectVertices();
+#endif
 	return NumRemoved;
+}
+
+int32 FPCGExClusterSketchModel::MergeCollocatedVertices(const FPCGExLatticeBasis* Basis)
+{
+	int32 NumMerged = 0;
+
+	// Every merge remaps indices, so rescan from scratch after each one; the guard bounds the loop by the
+	// only thing it can shrink.
+	bool bMergedAny = true;
+	int32 Guard = Vertices.Num() + 1;
+	while (bMergedAny && Guard-- > 0)
+	{
+		bMergedAny = false;
+		TMap<FVector, int32> FirstAtLocation;
+		FirstAtLocation.Reserve(Vertices.Num());
+		for (int32 i = 0; i < Vertices.Num(); ++i)
+		{
+			const FVector Key = PCGExSketch::QuantizedLocationKey(ResolvedLocation(Vertices[i], Basis));
+			if (const int32* First = FirstAtLocation.Find(Key))
+			{
+				MergeVertices(i, *First);
+				++NumMerged;
+				bMergedAny = true;
+				break;
+			}
+			FirstAtLocation.Add(Key, i);
+		}
+	}
+
+	// Merging retargets edges, which can leave them passing THROUGH vertices (the collinear D-onto-A
+	// case) -- genuinely degenerate, so the cleanup must resolve it. Crossings it may also create are
+	// left alone: they are legitimate geometry, offered as ghosts and materialized on demand.
+	SplitAllOverlappingEdges(Basis);
+
+#if WITH_EDITORONLY_DATA
+	// Merges can also strand tool residue.
+	RemoveOrphanSideEffectVertices();
+#endif
+	return NumMerged;
+}
+
+int32 FPCGExClusterSketchModel::SplitOverlappingEdges(const FPCGExLatticeBasis* Basis)
+{
+	// Pass order is free: materializing a crossing enforces separation around its inserted vertex, so no
+	// containment residue survives. Sequenced through a local: both calls mutate, evaluation order unspecified.
+	const int32 NumSplits = SplitAllOverlappingEdges(Basis);
+	return NumSplits + InsertCrossingVertices(Basis);
 }
 
 void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummary) const
@@ -897,7 +805,7 @@ void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummar
 	// Collocation: bound-vs-bound by exact coord, free-vs-free by position. (Cross-kind collisions need
 	// a basis to resolve bound locations and are the editor's job to prevent, not this basis-less scan's.)
 	{
-		constexpr double PositionEpsilonSq = 0.01 * 0.01;
+		constexpr double PositionEpsilonSq = PCGExSketch::CoincidenceTolerance * PCGExSketch::CoincidenceTolerance;
 		TSet<FIntVector> SeenCoords;
 		TArray<FVector> FreeLocations;
 		for (const FPCGExClusterSketchVertex& V : Vertices)
@@ -927,25 +835,148 @@ void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummar
 		}
 	}
 
-	auto ValidateChannels = [](const TArray<FPCGExClusterDataChannel>& Channels, const int32 DomainCount, FPCGExClusterSketchValidation::FChannelIssues& OutIssues)
+	// Names are validated on the SANITIZED output name -- that is what actually reaches the attribute.
+	// "My.Prop" and "My_Prop" collide only after sanitization, and a literal "PCGEx/VData" survives it
+	// intact, so a check on the raw schema name would miss both.
+	auto ValidateLayerNames = [](const FPCGExPropertySchemaCollection& InSchema, FPCGExClusterSketchValidation::FLayerIssues& OutIssues)
 	{
-		TSet<FName> Names;
-		for (const FPCGExClusterDataChannel& Channel : Channels)
+		TArray<FPCGExPropertyResolved> Resolved;
+		InSchema.Resolve(Resolved);
+
+		TSet<FName> SanitizedNames;
+		SanitizedNames.Reserve(Resolved.Num());
+		for (const FPCGExPropertyResolved& Entry : Resolved)
 		{
+			const FName Sanitized = PCGExMetaHelpers::SanitizeAttributeName(Entry.Source->Name);
 			bool bAlreadySeen = false;
-			Names.Add(Channel.Name, &bAlreadySeen);
-			if (Channel.Name.IsNone() || bAlreadySeen || PCGExClusters::Labels::ProtectedClusterAttributes.Contains(Channel.Name))
+			SanitizedNames.Add(Sanitized, &bAlreadySeen);
+			if (Sanitized.IsNone() || bAlreadySeen || PCGExClusters::Labels::ProtectedClusterAttributes.Contains(Sanitized))
 			{
-				OutIssues.InvalidNames.AddUnique(Channel.Name);
-			}
-			if (Channel.Num() != DomainCount)
-			{
-				OutIssues.Misaligned.AddUnique(Channel.Name);
+				// Keyed by the SCHEMA name: that is what the print path holds when it asks Rejects().
+				OutIssues.InvalidNames.AddUnique(Entry.Source->Name);
 			}
 		}
 	};
-	ValidateChannels(VertexChannels, NumVtx, OutSummary.VertexChannelIssues);
-	ValidateChannels(EdgeChannels, Edges.Num(), OutSummary.EdgeChannelIssues);
+
+	auto ValidateLayerRecords = [](const FPCGExSketchDataLayer& InLayer, const TArray<FGuid>& InLiveIds, FPCGExClusterSketchValidation::FLayerIssues& OutIssues)
+	{
+		TSet<FGuid> RecordIds;
+		RecordIds.Reserve(InLayer.Records.Num());
+		for (const FPCGExSketchDataRecord& Record : InLayer.Records)
+		{
+			bool bAlreadySeen = false;
+			RecordIds.Add(Record.Id, &bAlreadySeen);
+			if (bAlreadySeen || !Record.Id.IsValid())
+			{
+				++OutIssues.DuplicateRecordIds;
+			}
+		}
+		for (const FGuid& Id : InLiveIds)
+		{
+			if (!RecordIds.Contains(Id))
+			{
+				++OutIssues.DanglingRefs;
+			}
+		}
+	};
+
+	TArray<FGuid> LiveVertexIds;
+	TArray<FGuid> LiveEdgeIds;
+	GatherLiveDataIds(LiveVertexIds, LiveEdgeIds);
+
+	ValidateLayerNames(Data.SketchProperties, OutSummary.SketchLayerIssues);
+	ValidateLayerNames(Data.VertexLayer.Schema, OutSummary.VertexLayerIssues);
+	ValidateLayerNames(Data.EdgeLayer.Schema, OutSummary.EdgeLayerIssues);
+	ValidateLayerRecords(Data.VertexLayer, LiveVertexIds, OutSummary.VertexLayerIssues);
+	ValidateLayerRecords(Data.EdgeLayer, LiveEdgeIds, OutSummary.EdgeLayerIssues);
+}
+
+FGuid FPCGExClusterSketchModel::ResolveExtrudeEdgeDataId(const int32 InVertexIndex) const
+{
+	// Guarded, not assumed: an edge defaults to A/B = -1, so INDEX_NONE would match raw-authored blanks.
+	if (!Vertices.IsValidIndex(InVertexIndex))
+	{
+		return FGuid();
+	}
+
+	int32 Sole = INDEX_NONE;
+	for (int32 e = 0; e < Edges.Num(); ++e)
+	{
+		const FPCGExClusterSketchEdge& E = Edges[e];
+		if (E.A != InVertexIndex && E.B != InVertexIndex)
+		{
+			continue;
+		}
+		if (Sole != INDEX_NONE)
+		{
+			return FGuid(); // a junction: no single parent to speak for the extrusion
+		}
+		Sole = e;
+	}
+	return Sole == INDEX_NONE ? FGuid() : Edges[Sole].DataId;
+}
+
+void FPCGExClusterSketchModel::GatherLiveDataIds(TArray<FGuid>& OutVertexIds, TArray<FGuid>& OutEdgeIds) const
+{
+	OutVertexIds.Reset();
+	OutEdgeIds.Reset();
+	for (const FPCGExClusterSketchVertex& V : Vertices)
+	{
+		if (V.DataId.IsValid())
+		{
+			OutVertexIds.Add(V.DataId);
+		}
+	}
+	for (const FPCGExClusterSketchEdge& E : Edges)
+	{
+		if (E.DataId.IsValid())
+		{
+			OutEdgeIds.Add(E.DataId);
+		}
+	}
+}
+
+int32 FPCGExClusterSketchModel::CountVertexReferences(const FGuid& InDataId) const
+{
+	if (!InDataId.IsValid())
+	{
+		return 0;
+	}
+	int32 Count = 0;
+	for (const FPCGExClusterSketchVertex& V : Vertices)
+	{
+		if (V.DataId == InDataId)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+int32 FPCGExClusterSketchModel::CountEdgeReferences(const FGuid& InDataId) const
+{
+	if (!InDataId.IsValid())
+	{
+		return 0;
+	}
+	int32 Count = 0;
+	for (const FPCGExClusterSketchEdge& E : Edges)
+	{
+		if (E.DataId == InDataId)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+int32 FPCGExClusterSketchModel::PurgeUnreferencedRecords()
+{
+
+	TArray<FGuid> LiveVertexIds;
+	TArray<FGuid> LiveEdgeIds;
+	GatherLiveDataIds(LiveVertexIds, LiveEdgeIds);
+	return Data.VertexLayer.PurgeUnreferenced(LiveVertexIds) + Data.EdgeLayer.PurgeUnreferenced(LiveEdgeIds);
 }
 
 #pragma endregion

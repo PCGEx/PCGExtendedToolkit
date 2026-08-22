@@ -27,7 +27,7 @@ void SPCGExPropertyCurveWidgetBase::HandleSelectionChanged()
 
 float SPCGExPropertyCurveWidgetBase::TimeToLocalX(float Time, const FVector2D& Size) const
 {
-	const float Left = Padding;
+	constexpr float Left = Padding;
 	const float Right = Size.X - Padding;
 	// Map through the time frame (no clamp): a key dragged past the frozen frame's edge tracks the cursor
 	// beyond the plot and pulls back into view when the frame refits on release.
@@ -37,7 +37,7 @@ float SPCGExPropertyCurveWidgetBase::TimeToLocalX(float Time, const FVector2D& S
 
 float SPCGExPropertyCurveWidgetBase::LocalXToTime(float LocalX, const FVector2D& Size) const
 {
-	const float Left = Padding;
+	constexpr float Left = Padding;
 	const float Right = Size.X - Padding;
 	const float Alpha = (LocalX - Left) / FMath::Max(Right - Left, 1.0f);
 	return Controller->FrameAlphaToTime(Alpha);

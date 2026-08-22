@@ -18,7 +18,10 @@ class FPCGExPropertyCurveEditController;
 class SPCGExPropertyCurveEditor : public SCompoundWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SPCGExPropertyCurveEditor) {}
+	SLATE_BEGIN_ARGS(SPCGExPropertyCurveEditor)
+		{
+		}
+
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, const TSharedRef<FPCGExPropertyCurveEditController>& InController);

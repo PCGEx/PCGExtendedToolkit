@@ -32,7 +32,10 @@ class SPCGExPropertyCurveWidgetBase : public SLeafWidget
 {
 public:
 	//~ Begin SWidget interface
-	virtual bool SupportsKeyboardFocus() const override { return true; }
+	virtual bool SupportsKeyboardFocus() const override
+	{
+		return true;
+	}
 
 	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;

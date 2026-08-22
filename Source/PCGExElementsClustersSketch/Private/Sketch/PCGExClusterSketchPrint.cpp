@@ -3,7 +3,10 @@
 
 #include "Sketch/PCGExClusterSketchPrint.h"
 
+#include "Sketch/PCGExClusterSketchData.h"
+
 #include "PCGExH.h"
+#include "PCGExPropertyWriter.h"
 #include "Core/PCGExElement.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExData.h"
@@ -15,56 +18,20 @@
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Sketch/PCGExClusterSketchDecorator.h"
 #include "Sketch/PCGExClusterSketchModel.h"
+#include "Sketch/PCGExClusterSketchPropertyProvider.h"
 #include "Sketch/PCGExClusterSnapProvider.h"
 
 namespace PCGExClusterSketchPrint
 {
-	template <typename T>
-	void WriteVertexValues(PCGExData::FFacade& Facade, const FName Name, const TArray<T>& Values)
+	/** One enabled config per resolved schema entry, minus the names validation refused for that layer
+	 *  (unnamed, colliding after sanitization, or reserved by the cluster compile). */
+	void BuildLayerConfigs(const FPCGExSketchDataLayer& InLayer, const FPCGExClusterSketchValidation::FLayerIssues& InIssues, TArray<FPCGExPropertyOutputConfig>& OutConfigs)
 	{
-		const TSharedPtr<PCGExData::TBuffer<T>> Buffer = Facade.GetWritable<T>(Name, T{}, false, PCGExData::EBufferInit::New);
-		if (!Buffer)
+		InLayer.BuildOutputConfigs(OutConfigs);
+		OutConfigs.RemoveAll([&InIssues](const FPCGExPropertyOutputConfig& Config)
 		{
-			return;
-		}
-		for (int32 i = 0; i < Values.Num(); ++i)
-		{
-			Buffer->SetValue(i, Values[i]);
-		}
-	}
-
-	template <typename T>
-	void WriteEdgeValues(PCGExData::FFacade& Facade, const FName Name, const TArray<T>& Values, const PCGExGraphs::FSubGraphPreCompileData& Data, const TArray<int32>& ParentToModelEdge)
-	{
-		const TSharedPtr<PCGExData::TBuffer<T>> Buffer = Facade.GetWritable<T>(Name, T{}, false, PCGExData::EBufferInit::New);
-		if (!Buffer)
-		{
-			return;
-		}
-		const int32 Num = Data.FlattenedEdges.Num();
-		for (int32 i = 0; i < Num; ++i)
-		{
-			// Writer index = output edge point; EdgeKeys[i].Index = parent graph edge = print edge order.
-			const int32 Parent = Data.EdgeKeys[i].Index;
-			const int32 ModelEdge = ParentToModelEdge.IsValidIndex(Parent) ? ParentToModelEdge[Parent] : INDEX_NONE;
-			Buffer->SetValue(i, Values.IsValidIndex(ModelEdge) ? Values[ModelEdge] : T{});
-		}
-	}
-
-	/** Dispatch one channel to its typed writer. Issues are taken for the channel's OWN domain -- a name
-	 *  that failed validation is skipped for every channel carrying it there (fail closed on dupes),
-	 *  and never for the same name in the other domain. */
-	template <typename WriteFn>
-	void ForEachWritableChannel(const TArray<FPCGExClusterDataChannel>& Channels, const FPCGExClusterSketchValidation::FChannelIssues& Issues, WriteFn&& Write)
-	{
-		for (const FPCGExClusterDataChannel& Channel : Channels)
-		{
-			if (Issues.Rejects(Channel.Name))
-			{
-				continue;
-			}
-			Write(Channel);
-		}
+			return InIssues.Rejects(Config.PropertyName);
+		});
 	}
 }
 
@@ -170,9 +137,9 @@ namespace PCGExSketch
 					           FTEXT("{0} isolated sketch vertex/vertices will not be printed (clusters cannot represent them)."),
 					           FText::AsNumber(Validation.IsolatedVertices)));
 			}
-			if (Validation.HasChannelIssues())
+			if (Validation.HasLayerIssues())
 			{
-				PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Some sketch channels were skipped: unnamed, duplicated, reserved, or misaligned with their domain."));
+				PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("The sketch's authored data has issues: schema entries skipped (unnamed, duplicated, or reserved), items pointing at a missing record, or records sharing an id."));
 			}
 		}
 
@@ -220,14 +187,14 @@ namespace PCGExSketch
 			// location can never reach output. Rotation/scale stay authored either way.
 			const FVector Local = (V.bLatticeBound && bHasBasis) ? InRequest.Basis->CoordToWorld(V.LatticeCoord) : V.Transform.GetLocation();
 			OutTransforms[i] = bPlaced
-				                   ? FTransform(V.Transform.GetRotation(), Local, V.Transform.GetScale3D()) * InRequest.LocalToWorld
-				                   : FTransform(V.Transform.GetRotation(), Local, V.Transform.GetScale3D());
+				? FTransform(V.Transform.GetRotation(), Local, V.Transform.GetScale3D()) * InRequest.LocalToWorld
+				: FTransform(V.Transform.GetRotation(), Local, V.Transform.GetScale3D());
 			const FVector Location = OutTransforms[i].GetLocation();
 			// Seeds ride the compile reorder as a native property, so they can be written up front.
 			OutSeeds[i] = PCGExRandomHelpers::ComputeSpatialSeed(Location);
 
 			bool bAlreadySeen = false;
-			SeenLocations.Add(PCGExSketch::QuantizedLocationKey(Location), &bAlreadySeen);
+			SeenLocations.Add(QuantizedLocationKey(Location), &bAlreadySeen);
 			if (bAlreadySeen)
 			{
 				++CollocatedCount;
@@ -288,27 +255,41 @@ namespace PCGExSketch
 			}
 		}
 
-		// --- Vertex-domain writes: channels, then decorators, then ONE synchronous commit ---
+		const FPCGExSketchData& SketchData = Model.Data;
+
+		// Built before the compile starts; the edge hook and every decorator only ever read them.
+		InPrintContext->VertexDataProvider = MakeShared<FPCGExSketchLayerPropertyProvider>(SketchData.VertexLayer, TConstArrayView<FPCGExClusterSketchVertex>(Model.Vertices));
+		InPrintContext->EdgeDataProvider = MakeShared<FPCGExSketchLayerPropertyProvider>(SketchData.EdgeLayer, TConstArrayView<FPCGExClusterSketchEdge>(Model.Edges));
+
+		// --- Vertex-domain writes: authored layer, then decorators, then ONE synchronous commit ---
 		// Point index == model vertex index here. Committing before the compile is MANDATORY: committed
 		// values ride the reorder via MetadataEntry, an uncommitted buffer would flush positionally onto
 		// the reordered points.
-		PCGExClusterSketchPrint::ForEachWritableChannel(
-			Model.VertexChannels, Validation.VertexChannelIssues, [&](const FPCGExClusterDataChannel& Channel)
+		const TSharedRef<PCGExData::FFacade> VtxFacade = InPrintContext->VtxFacade.ToSharedRef();
+
+		// Resolved once: Resolve walks the whole import tree and allocates, and @Data is one value per output.
+		TArray<FPCGExPropertyResolved> SketchProperties;
+		{
+			SketchData.SketchProperties.Resolve(SketchProperties);
+			SketchProperties.RemoveAll([&Validation](const FPCGExPropertyResolved& Entry)
 			{
-				switch (Channel.Type)
-				{
-				case EPCGExClusterDataChannelType::Double: PCGExClusterSketchPrint::WriteVertexValues<double>(*InPrintContext->VtxFacade, Channel.Name, Channel.DoubleValues);
-					break;
-				case EPCGExClusterDataChannelType::Integer: PCGExClusterSketchPrint::WriteVertexValues<int64>(*InPrintContext->VtxFacade, Channel.Name, Channel.IntegerValues);
-					break;
-				case EPCGExClusterDataChannelType::Name: PCGExClusterSketchPrint::WriteVertexValues<FName>(*InPrintContext->VtxFacade, Channel.Name, Channel.NameValues);
-					break;
-				case EPCGExClusterDataChannelType::Vector: PCGExClusterSketchPrint::WriteVertexValues<FVector>(*InPrintContext->VtxFacade, Channel.Name, Channel.VectorValues);
-					break;
-				default: checkNoEntry();
-					break;
-				}
+				return Validation.SketchLayerIssues.Rejects(Entry.Source->Name);
 			});
+			PCGExProperties::WriteResolvedToDataDomain(VtxFacade->GetOut(), SketchProperties);
+
+			TArray<FPCGExPropertyOutputConfig> VertexConfigs;
+			PCGExClusterSketchPrint::BuildLayerConfigs(SketchData.VertexLayer, Validation.VertexLayerIssues, VertexConfigs);
+
+			// This phase is serial, so one writer for the whole pass is legal here -- unlike the edge one.
+			FPCGExPropertyWriter Writer;
+			if (Writer.Initialize(InPrintContext->VertexDataProvider.Get(), VtxFacade, VertexConfigs))
+			{
+				for (int32 i = 0; i < NumVtx; ++i)
+				{
+					Writer.WriteProperties(i, i);
+				}
+			}
+		}
 
 		for (const UPCGExClusterSketchDecorator* Decorator : EnabledDecorators)
 		{
@@ -318,7 +299,7 @@ namespace PCGExSketch
 		InPrintContext->VtxFacade->WriteSynchronous();
 
 		// --- Build + compile the cluster ---
-		const TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(InPrintContext->VtxFacade.ToSharedRef(), InRequest.BuilderDetails);
+		const TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(VtxFacade, InRequest.BuilderDetails);
 		GraphBuilder->bInheritNodeData = false;
 		// Skips the Morton sort; output order is component-grouped, NEVER authored order -- all mapping
 		// goes through VtxIndexMap below, never through order.
@@ -333,30 +314,37 @@ namespace PCGExSketch
 			return MakeShared<PCGExGraphs::FSubGraphUserContext>();
 		};
 
-		// Edge-domain writes, per subgraph: channels then decorators. Fires after FlattenedEdges is
+		// Edge-domain writes, per subgraph: authored layer then decorators. Fires after FlattenedEdges is
 		// built, before the EData write; buffers created here are flushed by the subgraph itself.
 		const TSharedPtr<FPCGExClusterSketchPrintContext> PrintContext = InPrintContext;
-		FPCGExClusterSketchValidation ChannelValidation = Validation;
-		GraphBuilder->OnPreCompile = [PrintContext, EnabledDecorators, ChannelValidation](PCGExGraphs::FSubGraphUserContext&, const PCGExGraphs::FSubGraphPreCompileData& Data)
+		const bool bMirrorSketchProperties = InRequest.bWriteSketchPropertiesToEdges;
+		TArray<FPCGExPropertyOutputConfig> EdgeConfigs;
+		{
+			PCGExClusterSketchPrint::BuildLayerConfigs(SketchData.EdgeLayer, Validation.EdgeLayerIssues, EdgeConfigs);
+		}
+
+		GraphBuilder->OnPreCompile = [PrintContext, EnabledDecorators, EdgeConfigs, bMirrorSketchProperties, SketchProperties](PCGExGraphs::FSubGraphUserContext&, const PCGExGraphs::FSubGraphPreCompileData& Data)
 		{
 			const TSharedRef<PCGExData::FFacade> EdgesFacade = Data.EdgesDataFacade.ToSharedRef();
-			PCGExClusterSketchPrint::ForEachWritableChannel(
-				PrintContext->Model->EdgeChannels, ChannelValidation.EdgeChannelIssues, [&](const FPCGExClusterDataChannel& Channel)
+
+			if (bMirrorSketchProperties)
+			{
+				PCGExProperties::WriteResolvedToDataDomain(EdgesFacade->GetOut(), SketchProperties);
+			}
+
+			// The writer MUST be a local: this hook runs concurrently across subgraphs, and a property's
+			// output buffer binds to exactly one facade -- a hoisted writer would write every subgraph's
+			// edges into the first one's output.
+			FPCGExPropertyWriter Writer;
+			if (Writer.Initialize(PrintContext->EdgeDataProvider.Get(), EdgesFacade, EdgeConfigs))
+			{
+				const int32 Num = Data.FlattenedEdges.Num();
+				for (int32 i = 0; i < Num; ++i)
 				{
-					switch (Channel.Type)
-					{
-					case EPCGExClusterDataChannelType::Double: PCGExClusterSketchPrint::WriteEdgeValues<double>(*EdgesFacade, Channel.Name, Channel.DoubleValues, Data, PrintContext->ParentToModelEdge);
-						break;
-					case EPCGExClusterDataChannelType::Integer: PCGExClusterSketchPrint::WriteEdgeValues<int64>(*EdgesFacade, Channel.Name, Channel.IntegerValues, Data, PrintContext->ParentToModelEdge);
-						break;
-					case EPCGExClusterDataChannelType::Name: PCGExClusterSketchPrint::WriteEdgeValues<FName>(*EdgesFacade, Channel.Name, Channel.NameValues, Data, PrintContext->ParentToModelEdge);
-						break;
-					case EPCGExClusterDataChannelType::Vector: PCGExClusterSketchPrint::WriteEdgeValues<FVector>(*EdgesFacade, Channel.Name, Channel.VectorValues, Data, PrintContext->ParentToModelEdge);
-						break;
-					default: checkNoEntry();
-						break;
-					}
-				});
+					// Writer index = output edge point; EdgeKeys[i].Index = parent graph edge = print edge order.
+					Writer.WriteProperties(i, PrintContext->ParentToModelEdge[Data.EdgeKeys[i].Index]);
+				}
+			}
 
 			for (const UPCGExClusterSketchDecorator* Decorator : EnabledDecorators)
 			{

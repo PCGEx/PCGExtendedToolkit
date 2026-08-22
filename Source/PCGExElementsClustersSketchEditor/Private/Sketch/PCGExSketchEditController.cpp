@@ -4,24 +4,21 @@
 #include "Sketch/PCGExSketchEditController.h"
 
 #include "ScopedTransaction.h"
+#include "Helpers/PCGExObjectNotifyHelpers.h"
 #include "Sketch/PCGExClusterSketch.h"
+#include "Sketch/PCGExClusterSketchAuthoringSettings.h"
 #include "Sketch/PCGExClusterSketchStyle.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSketchEditController"
 
 namespace PCGExSketchEditController
 {
-	// Screen-constant pick radius: world radius grows with distance so elements keep a steady picking
-	// footprint. The floor keeps close-up picking from collapsing to a point.
-	constexpr double PickTan = 0.0125;
-	constexpr double MinPickRadius = 4.0;
-
 	// Vertices win over edges when both are within reach; the factor keeps a vertex pickable at the
 	// junction of its own edges.
 	constexpr double EdgePickFactor = 0.75;
 
-	// Fallback placement distance along the ray when the work plane is near-parallel to it.
-	constexpr double FallbackPlaceDistance = 500.0;
+	// A gesture re-anchors -- dropping its guide latch -- once its anchor moves further than this.
+	constexpr double AnchorDriftTolerance = 0.01;
 
 	// A connect drag only latches the vertex under the pointer at a TIGHTER radius than picking:
 	// hover-radius latching connected vertices the user never aimed at (screen-space generous AND
@@ -34,6 +31,19 @@ namespace PCGExSketchEditController
 FPCGExSketchAssetEditTarget::FPCGExSketchAssetEditTarget(UPCGExClusterSketch* InSketch)
 	: Sketch(InSketch)
 {
+}
+
+FText IPCGExSketchEditTarget::GetReadOnlyReason() const
+{
+	return NSLOCTEXT("PCGExSketchEditTarget", "ReadOnlyGeneric", "Read-only: this host does not author its own sketch.");
+}
+
+void IPCGExSketchEditTarget::BeginAuthoring()
+{
+	if (UObject* Host = GetTransactionObject())
+	{
+		Host->Modify();
+	}
 }
 
 FPCGExClusterSketchModel* FPCGExSketchAssetEditTarget::GetModel()
@@ -54,6 +64,11 @@ const UPCGExClusterSnapProvider* FPCGExSketchAssetEditTarget::GetSnapProvider() 
 	return Pinned ? Pinned->SnapProvider.Get() : nullptr;
 }
 
+bool FPCGExSketchAssetEditTarget::CanEdit() const
+{
+	return Sketch.IsValid();
+}
+
 UObject* FPCGExSketchAssetEditTarget::GetTransactionObject()
 {
 	return Sketch.Get();
@@ -61,11 +76,11 @@ UObject* FPCGExSketchAssetEditTarget::GetTransactionObject()
 
 void FPCGExSketchAssetEditTarget::NotifyChanged()
 {
-	// PostEditChange (empty event) refreshes any details panel showing the asset; the viewport itself
-	// is realtime and reads the model every frame.
+	// Same notification pair as the component host, so a sketch reaches downstream consumers identically
+	// whichever host carries it. The viewport itself is realtime and reads the model every frame.
 	if (UPCGExClusterSketch* Pinned = Sketch.Get())
 	{
-		Pinned->PostEditChange();
+		PCGExEditor::NotifyObjectChanged(Pinned);
 	}
 }
 
@@ -129,8 +144,7 @@ double FPCGExSketchEditController::EdgePickFloor()
 
 double FPCGExSketchEditController::PickRadiusAt(const FRay& LocalRay, const FVector& LocalPos, const double InMinWorldRadius) const
 {
-	const double Dist = FVector::Dist(LocalRay.Origin, LocalPos);
-	return FMath::Max3(PCGExSketchEditController::MinPickRadius, InMinWorldRadius, Dist * PCGExSketchEditController::PickTan);
+	return PCGExSketchPlacement::ScreenRadiusAt(LocalRay, LocalPos, InMinWorldRadius);
 }
 
 FVector FPCGExSketchEditController::VertexLocation(const FPCGExClusterSketchVertex& V, const FPCGExLatticeBasis* Basis) const
@@ -240,12 +254,39 @@ void FPCGExSketchEditController::UpdateHover(const FRay& WorldRay)
 
 	// Connect-drag targeting lives in UpdateDrag, not here -- hover alone is too loose to pick a
 	// link target from.
-	Hover = HitTestLocal(ToLocal(WorldRay));
+	const FRay LocalRay = ToLocal(WorldRay);
+	Hover = HitTestLocal(LocalRay);
+
+	LastLocalRay = LocalRay;
+	bHasLastLocalRay = true;
+
+	// Add-intent preview, so the guide an add would take is visible BEFORE the click commits it. Not
+	// while dragging: the drag owns the solver then.
+	if (DragMode == EDragMode::None)
+	{
+		if (bAddIntent && !Hover.IsHit())
+		{
+			FPCGExLatticeBasis Basis;
+			const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
+			AddPreviewLocal = ResolveAddPlacement(LocalRay, BasisPtr).Point;
+			bHasAddPreview = true;
+		}
+		else
+		{
+			bHasAddPreview = false;
+		}
+	}
 }
 
 void FPCGExSketchEditController::ClearHover()
 {
 	Hover = FPCGExSketchHit();
+	bHasAddPreview = false;
+	if (DragMode == EDragMode::None)
+	{
+		PlacementGesture = EPlacementGesture::None;
+		Placement.ResetGuide();
+	}
 }
 
 void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bAdditive, const bool bAddOnEmpty)
@@ -308,11 +349,6 @@ void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bA
 	NotifyModelChanged();
 }
 
-bool FPCGExSketchEditController::CanBeginDrag(const FRay& WorldRay) const
-{
-	return HitTest(WorldRay).IsVertex();
-}
-
 void FPCGExSketchEditController::BeginDrag(const FRay& WorldRay, const bool bConnect)
 {
 	CancelDrag();
@@ -338,31 +374,32 @@ void FPCGExSketchEditController::BeginDrag(const FRay& WorldRay, const bool bCon
 	DragVertexIndex = Hit.Index;
 	DragTargetVertexIndex = INDEX_NONE;
 	MergeCandidateVertex = INDEX_NONE;
-	DragPlaneAnchor = VertexLocation(Model->Vertices[Hit.Index], BasisPtr);
-	DragPreviewLocal = DragPlaneAnchor;
+	DragPreviewLocal = VertexLocation(Model->Vertices[Hit.Index], BasisPtr);
+
+	// THE gesture-start reset. Hover termination normally clears the add ghost first, but that only
+	// fires when a hover capture was live, and a stale one would misdirect the guide's reach.
+	bHasAddPreview = false;
+	LastLocalRay = LocalRay;
+	bHasLastLocalRay = true;
+
+	// A bound vertex snaps regardless of the toggle, so its complement guide would be dead either way.
+	const bool bWillSnap = BasisPtr && (bSnapEnabled || Model->Vertices[Hit.Index].bLatticeBound);
+	EnsurePlacementGesture(
+		DragMode == EDragMode::Move ? EPlacementGesture::Move : EPlacementGesture::Connect,
+		DragVertexIndex, DragPreviewLocal, BasisPtr, bWillSnap);
 
 	if (DragMode == EDragMode::Move)
 	{
-		// Screen-plane translate: the plane through the grab point facing the viewer. One transaction
-		// spans the whole drag; Modify() snapshots the pre-drag state exactly once.
-		DragPlaneNormal = -LocalRay.Direction;
+		// One transaction spans the whole drag; Modify() snapshots the pre-drag state exactly once.
 		ActiveTransaction = MakeUnique<FScopedTransaction>(LOCTEXT("MoveVertex", "Move Sketch Vertex"));
-		if (UObject* TransactionObject = Target->GetTransactionObject())
-		{
-			TransactionObject->Modify();
-		}
+		Target->BeginAuthoring();
 		if (!SelectedVertices.Contains(DragVertexIndex))
 		{
 			ClearSelection();
 			SelectVertex(DragVertexIndex);
 		}
 	}
-	else
-	{
-		// Connect previews only; the transaction opens at release, when something actually mutates.
-		FVector Unused[3];
-		DragPlaneNormal = (bDragHasBasis && DragBasis.NumAxes == 2 && DragBasis.GetComplementBasis(Unused) > 0) ? Unused[0] : FVector::UpVector;
-	}
+	// Connect previews only; its transaction opens at release, when something actually mutates.
 }
 
 void FPCGExSketchEditController::UpdateDrag(const FRay& WorldRay)
@@ -372,21 +409,32 @@ void FPCGExSketchEditController::UpdateDrag(const FRay& WorldRay)
 		return;
 	}
 
-	const FRay LocalRay = ToLocal(WorldRay);
 	UpdateHover(WorldRay);
+	ApplyDrag(ToLocal(WorldRay));
+}
 
-	// Ray onto the drag plane; near-parallel rays keep the previous preview instead of shooting off.
-	const double Denominator = FVector::DotProduct(LocalRay.Direction, DragPlaneNormal);
-	if (FMath::Abs(Denominator) > 1.0e-4)
-	{
-		const double T = FVector::DotProduct(DragPlaneAnchor - LocalRay.Origin, DragPlaneNormal) / Denominator;
-		if (T > 0.0)
-		{
-			DragPreviewLocal = LocalRay.Origin + LocalRay.Direction * T;
-		}
-	}
+void FPCGExSketchEditController::ApplyDrag(const FRay& LocalRay)
+{
+	LastLocalRay = LocalRay;
+	bHasLastLocalRay = true;
 
 	const FPCGExLatticeBasis* BasisPtr = bDragHasBasis ? &DragBasis : nullptr;
+
+	// Re-anchoring is suppressed by passing the gesture's own anchor back; this only refreshes the
+	// candidates against the current options and snap state.
+	const FPCGExClusterSketchModel* ReadModel = GetReadModel();
+	const bool bBound = ReadModel && ReadModel->Vertices.IsValidIndex(DragVertexIndex) && ReadModel->Vertices[DragVertexIndex].bLatticeBound;
+	EnsurePlacementGesture(
+		DragMode == EDragMode::Move ? EPlacementGesture::Move : EPlacementGesture::Connect,
+		DragVertexIndex, PlacementAnchor, BasisPtr, BasisPtr && (bSnapEnabled || bBound));
+
+	// An unresolvable ray keeps the previous preview instead of shooting the vertex off.
+	FVector Resolved = FVector::ZeroVector;
+	if (Placement.Resolve(LocalRay, Resolved))
+	{
+		DragPreviewLocal = Resolved;
+	}
+
 	if (bSnapEnabled && BasisPtr)
 	{
 		DragPreviewLocal = BasisPtr->CoordToWorld(BasisPtr->SnapWorldToCoord(DragPreviewLocal));
@@ -511,10 +559,7 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 			if (ExistingTarget != INDEX_NONE && Model->Vertices.IsValidIndex(ExistingTarget))
 			{
 				const FScopedTransaction Transaction(LOCTEXT("ConnectVertices", "Connect Sketch Vertices"));
-				if (UObject* TransactionObject = Target->GetTransactionObject())
-				{
-					TransactionObject->Modify();
-				}
+				Target->BeginAuthoring();
 				Model->Connect(Source, ExistingTarget);
 				// Deliberately wired by hand -- both ends are now authored.
 				Model->MarkVertexAuthored(Source);
@@ -528,10 +573,14 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 			{
 				// The drafting gesture: release over nothing extrudes a new (snapped) vertex + edge.
 				const FScopedTransaction Transaction(LOCTEXT("ExtrudeVertex", "Extrude Sketch Vertex"));
-				if (UObject* TransactionObject = Target->GetTransactionObject())
-				{
-					TransactionObject->Modify();
-				}
+				Target->BeginAuthoring();
+
+				// Resolved against the PRE-GESTURE model, BY VALUE: the adds below reallocate Vertices,
+				// and the extruded edge would otherwise count toward the source's own degree.
+				const UPCGExClusterSketchAuthoringSettings* Options = UPCGExClusterSketchAuthoringSettings::Get();
+				const FGuid InheritedVertexData = Options->bExtrudeInheritsVertexData ? Model->Vertices[Source].DataId : FGuid();
+				const FGuid InheritedEdgeData = Options->bExtrudeInheritsEdgeData ? Model->ResolveExtrudeEdgeDataId(Source) : FGuid();
+
 				if (bSnapEnabled && bHasBasis)
 				{
 					// Inherit the source's unspanned components: extruding in a rank-collapsed basis
@@ -539,15 +588,23 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 					// (which is what wired edges across unrelated layers).
 					const FPCGExClusterSketchVertex& SourceVertex = Model->Vertices[Source];
 					const FIntVector Coord = SourceVertex.bLatticeBound
-						                         ? Basis.SnapWorldToCoordPreserving(PlacePoint, SourceVertex.LatticeCoord)
-						                         : Basis.SnapWorldToCoord(PlacePoint);
-					FarVertex = Model->AddLatticeVertex(Coord, Basis);
+						? Basis.SnapWorldToCoordPreserving(PlacePoint, SourceVertex.LatticeCoord)
+						: Basis.SnapWorldToCoord(PlacePoint);
+					FarVertex = Model->AddLatticeVertex(Coord, Basis, InheritedVertexData);
 				}
 				else
 				{
-					FarVertex = Model->AddVertex(FTransform(PlacePoint));
+					FarVertex = Model->AddVertex(FTransform(PlacePoint), InheritedVertexData);
 				}
-				Model->Connect(Source, FarVertex);
+
+				// Stamped before enforcement: a split then carries the record like any parent edge.
+				bool bEdgeCreated = false;
+				const int32 NewEdge = Model->Connect(Source, FarVertex, &bEdgeCreated);
+				if (bEdgeCreated && InheritedEdgeData.IsValid())
+				{
+					Model->Edges[NewEdge].DataId = InheritedEdgeData;
+				}
+
 				Model->MarkVertexAuthored(Source); // extruding FROM a tool-inserted vertex adopts it
 				Model->EnforceSeparationAroundVertex(FarVertex, bHasBasis ? &Basis : nullptr);
 			}
@@ -566,6 +623,8 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 	DragVertexIndex = INDEX_NONE;
 	DragTargetVertexIndex = INDEX_NONE;
 	MergeCandidateVertex = INDEX_NONE;
+	PlacementGesture = EPlacementGesture::None;
+	Placement.ResetGuide();
 }
 
 void FPCGExSketchEditController::CancelDrag()
@@ -582,6 +641,8 @@ void FPCGExSketchEditController::CancelDrag()
 	DragVertexIndex = INDEX_NONE;
 	DragTargetVertexIndex = INDEX_NONE;
 	MergeCandidateVertex = INDEX_NONE;
+	PlacementGesture = EPlacementGesture::None;
+	Placement.ResetGuide();
 
 	// A rollback CHANGES GEOMETRY as surely as the drag did: crossings were computed against the
 	// dragged shape, and a host whose visuals are built would otherwise keep showing where the vertex
@@ -603,23 +664,26 @@ void FPCGExSketchEditController::DeleteSelection()
 	}
 
 	const FScopedTransaction Transaction(LOCTEXT("DeleteSelection", "Delete Sketch Selection"));
-	if (UObject* TransactionObject = Target->GetTransactionObject())
-	{
-		TransactionObject->Modify();
-	}
+	Target->BeginAuthoring();
 
 	// Edges first (their indices die with vertex removal); both descending so indices stay valid.
 	// BY INDEX: Disconnect resolves through FindEdge, which would remove the first edge sharing the
 	// pair -- a different one whenever duplicates exist.
 	TArray<int32> EdgeIndices = SelectedEdges.Array();
-	EdgeIndices.Sort([](const int32 A, const int32 B) { return A > B; });
+	EdgeIndices.Sort([](const int32 A, const int32 B)
+	{
+		return A > B;
+	});
 	for (const int32 e : EdgeIndices)
 	{
 		Model->RemoveEdgeAt(e);
 	}
 
 	TArray<int32> VertexIndices = SelectedVertices.Array();
-	VertexIndices.Sort([](const int32 A, const int32 B) { return A > B; });
+	VertexIndices.Sort([](const int32 A, const int32 B)
+	{
+		return A > B;
+	});
 	for (const int32 v : VertexIndices)
 	{
 		Model->RemoveVertex(v);
@@ -679,10 +743,7 @@ bool FPCGExSketchEditController::DeleteAtRay(const FRay& WorldRay)
 			return false;
 		}
 		const FScopedTransaction Transaction(LOCTEXT("DeleteVertex", "Delete Sketch Vertex"));
-		if (UObject* TransactionObject = Target->GetTransactionObject())
-		{
-			TransactionObject->Modify();
-		}
+		Target->BeginAuthoring();
 		Model->RemoveVertex(Hit.Index);
 		Model->RemoveOrphanSideEffectVertices();
 	}
@@ -693,10 +754,7 @@ bool FPCGExSketchEditController::DeleteAtRay(const FRay& WorldRay)
 			return false;
 		}
 		const FScopedTransaction Transaction(LOCTEXT("DeleteEdge", "Delete Sketch Edge"));
-		if (UObject* TransactionObject = Target->GetTransactionObject())
-		{
-			TransactionObject->Modify();
-		}
+		Target->BeginAuthoring();
 		Model->RemoveEdgeAt(Hit.Index);
 		Model->RemoveOrphanSideEffectVertices();
 	}
@@ -720,27 +778,11 @@ int32 FPCGExSketchEditController::AddVertexAtRay(const FRay& WorldRay)
 	FPCGExLatticeBasis Basis;
 	const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
 
-	// Anchor: the vertex selected LAST if it is still valid, else the lattice origin. A bound anchor
-	// also donates its hidden layer, so adding in a rank-collapsed basis stays on it.
-	FVector Anchor = BasisPtr ? BasisPtr->Origin : FVector::ZeroVector;
-	FIntVector AnchorCoord = FIntVector::ZeroValue;
-	const FIntVector* AnchorLayer = nullptr;
-	if (SelectedVertices.Contains(LastSelectedVertex) && Model->Vertices.IsValidIndex(LastSelectedVertex))
-	{
-		const FPCGExClusterSketchVertex& AnchorVertex = Model->Vertices[LastSelectedVertex];
-		Anchor = VertexLocation(AnchorVertex, BasisPtr);
-		if (AnchorVertex.bLatticeBound)
-		{
-			AnchorCoord = AnchorVertex.LatticeCoord;
-			AnchorLayer = &AnchorCoord;
-		}
-	}
-
-	FVector PlacePoint = RayPointOnWorkPlane(LocalRay, Anchor, BasisPtr);
-	if (bSnapEnabled && BasisPtr)
-	{
-		PlacePoint = BasisPtr->CoordToWorld(BasisPtr->SnapWorldToCoord(PlacePoint));
-	}
+	// Resolved through the same call the hover preview uses, so the vertex lands exactly where the
+	// preview showed it -- guide included.
+	const FAddPlacement Placed = ResolveAddPlacement(LocalRay, BasisPtr);
+	const FVector PlacePoint = Placed.Point;
+	const FIntVector* AnchorLayer = Placed.bHasAnchorLayer ? &Placed.AnchorCoord : nullptr;
 
 	// An occupied spot is reused, never twinned -- clusters cannot hold collocated vertices.
 	const int32 Existing = FindNearbyVertex(LocalRay, PlacePoint, INDEX_NONE, BasisPtr, AnchorLayer);
@@ -753,17 +795,14 @@ int32 FPCGExSketchEditController::AddVertexAtRay(const FRay& WorldRay)
 	}
 
 	const FScopedTransaction Transaction(LOCTEXT("AddVertex", "Add Sketch Vertex"));
-	if (UObject* TransactionObject = Target->GetTransactionObject())
-	{
-		TransactionObject->Modify();
-	}
+	Target->BeginAuthoring();
 
 	int32 NewVertex;
 	if (bSnapEnabled && BasisPtr)
 	{
 		const FIntVector Coord = AnchorLayer
-			                         ? BasisPtr->SnapWorldToCoordPreserving(PlacePoint, AnchorCoord)
-			                         : BasisPtr->SnapWorldToCoord(PlacePoint);
+			? BasisPtr->SnapWorldToCoordPreserving(PlacePoint, Placed.AnchorCoord)
+			: BasisPtr->SnapWorldToCoord(PlacePoint);
 		NewVertex = Model->AddLatticeVertex(Coord, *BasisPtr);
 	}
 	else
@@ -851,28 +890,124 @@ int32 FPCGExSketchEditController::FindNearbyVertex(const FRay& LocalRay, const F
 	return BestSameLayer != INDEX_NONE ? BestSameLayer : Best;
 }
 
-FVector FPCGExSketchEditController::RayPointOnWorkPlane(const FRay& LocalRay, const FVector& InAnchor, const FPCGExLatticeBasis* Basis) const
+void FPCGExSketchEditController::EnsurePlacementGesture(const EPlacementGesture InGesture, const int32 InAnchorVertex, const FVector& InAnchor, const FPCGExLatticeBasis* Basis, const bool bPointWillSnap)
 {
-	FVector Normal = FVector::UpVector;
-	if (Basis && Basis->NumAxes == 2)
+	if (PlacementGesture != InGesture || PlacementAnchorVertex != InAnchorVertex ||
+		!InAnchor.Equals(PlacementAnchor, PCGExSketchEditController::AnchorDriftTolerance))
 	{
-		FVector Complement[3];
-		if (Basis->GetComplementBasis(Complement) > 0)
+		PlacementGesture = InGesture;
+		PlacementAnchorVertex = InAnchorVertex;
+		PlacementAnchor = InAnchor;
+		Placement.BeginGesture(InAnchor, Basis);
+	}
+
+	// Rebuilt every frame so a guide option or the snap toggle takes effect mid-gesture; the latch keys
+	// on guide identity rather than array position, so this never drops what was captured.
+	Placement.BuildCandidates(GetReadModel(), InAnchorVertex, Basis, bPointWillSnap);
+}
+
+FPCGExSketchEditController::FAddPlacement FPCGExSketchEditController::ResolveAddPlacement(const FRay& LocalRay, const FPCGExLatticeBasis* Basis)
+{
+	FAddPlacement Result;
+
+	// Anchor: the vertex selected LAST if it is still valid, else the lattice origin. A bound anchor
+	// also donates its hidden layer, so adding in a rank-collapsed basis stays on it.
+	FVector Anchor = Basis ? Basis->Origin : FVector::ZeroVector;
+	int32 AnchorVertex = INDEX_NONE;
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (Model && SelectedVertices.Contains(LastSelectedVertex) && Model->Vertices.IsValidIndex(LastSelectedVertex))
+	{
+		const FPCGExClusterSketchVertex& AnchorVtx = Model->Vertices[LastSelectedVertex];
+		Anchor = VertexLocation(AnchorVtx, Basis);
+		AnchorVertex = LastSelectedVertex;
+		if (AnchorVtx.bLatticeBound)
 		{
-			Normal = Complement[0];
+			Result.AnchorCoord = AnchorVtx.LatticeCoord;
+			Result.bHasAnchorLayer = true;
 		}
 	}
 
-	const double Denominator = FVector::DotProduct(LocalRay.Direction, Normal);
-	if (FMath::Abs(Denominator) > 1.0e-4)
+	EnsurePlacementGesture(EPlacementGesture::Add, AnchorVertex, Anchor, Basis, bSnapEnabled && Basis != nullptr);
+
+	Result.bResolved = Placement.Resolve(LocalRay, Result.Point);
+	if (!Result.bResolved)
 	{
-		const double T = FVector::DotProduct(InAnchor - LocalRay.Origin, Normal) / Denominator;
-		if (T > 0.0)
-		{
-			return LocalRay.Origin + LocalRay.Direction * T;
-		}
+		// A held guide seen end-on cannot answer. Freeze on the last previewed point, exactly as a drag
+		// freezes -- teleporting down the ray would place a vertex nowhere near the ghost that was
+		// showing. Only a gesture that has never previewed has nothing better to fall back to.
+		Result.Point = bHasAddPreview
+			? AddPreviewLocal
+			: LocalRay.Origin + LocalRay.Direction * PCGExSketchPlacement::FallbackPlaceDistance;
 	}
-	return LocalRay.Origin + LocalRay.Direction * PCGExSketchEditController::FallbackPlaceDistance;
+
+	if (bSnapEnabled && Basis)
+	{
+		Result.Point = Basis->CoordToWorld(Basis->SnapWorldToCoord(Result.Point));
+	}
+	return Result;
+}
+
+void FPCGExSketchEditController::SetAddIntent(const bool bIntent)
+{
+	if (bAddIntent == bIntent)
+	{
+		return;
+	}
+	bAddIntent = bIntent;
+	if (!bAddIntent)
+	{
+		bHasAddPreview = false;
+	}
+	RefreshPlacement();
+}
+
+bool FPCGExSketchEditController::CyclePlacementGuide()
+{
+	// Gated on a LIVE preview, not merely on a solver that still remembers a gesture: the key has other
+	// meanings everywhere else and must fall through untouched.
+	if (!HasPlacementPreview())
+	{
+		return false;
+	}
+	Placement.CycleGuide();
+	RefreshPlacement();
+	return true;
+}
+
+bool FPCGExSketchEditController::ReleasePlacementGuide()
+{
+	if (!HasPlacementPreview() || !Placement.ReleaseGuide())
+	{
+		return false;
+	}
+	RefreshPlacement();
+	return true;
+}
+
+void FPCGExSketchEditController::RefreshPlacement()
+{
+	if (!bHasLastLocalRay)
+	{
+		return;
+	}
+
+	if (DragMode != EDragMode::None)
+	{
+		ApplyDrag(LastLocalRay);
+		return;
+	}
+
+	if (bAddIntent && !Hover.IsHit())
+	{
+		FPCGExLatticeBasis Basis;
+		const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
+		AddPreviewLocal = ResolveAddPlacement(LastLocalRay, BasisPtr).Point;
+		bHasAddPreview = true;
+	}
+	else
+	{
+		bHasAddPreview = false;
+	}
 }
 
 void FPCGExSketchEditController::DropInvalidIndices()
@@ -907,6 +1042,94 @@ void FPCGExSketchEditController::NotifyModelChanged()
 	++ModelRevision;
 	RefreshCrossings();
 	Target->NotifyChanged();
+	OnChanged.Broadcast();
+}
+
+int32 FPCGExSketchEditController::MergeCollocatedVertices()
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model)
+	{
+		return 0;
+	}
+
+	FPCGExLatticeBasis Basis;
+	const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
+
+	const FScopedTransaction Transaction(LOCTEXT("MergeCollocated", "Merge Collocated Sketch Vertices"));
+	UObject* TransactionObject = Target->GetTransactionObject();
+	Target->BeginAuthoring();
+
+	const int32 NumMerged = Model->MergeCollocatedVertices(BasisPtr);
+
+	ClearSelection();
+	ClearHover();
+	PCGExEditor::NotifyObjectChanged(TransactionObject);
+	NotifyModelChanged();
+	return NumMerged;
+}
+
+int32 FPCGExSketchEditController::RemoveInvalidEdges()
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model)
+	{
+		return 0;
+	}
+
+	const FScopedTransaction Transaction(LOCTEXT("RemoveInvalidEdges", "Remove Invalid Sketch Edges"));
+	UObject* TransactionObject = Target->GetTransactionObject();
+	Target->BeginAuthoring();
+
+	const int32 NumRemoved = Model->RemoveInvalidEdges();
+
+	ClearSelection();
+	ClearHover();
+	PCGExEditor::NotifyObjectChanged(TransactionObject);
+	NotifyModelChanged();
+	return NumRemoved;
+}
+
+int32 FPCGExSketchEditController::SplitOverlappingEdges()
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model)
+	{
+		return 0;
+	}
+
+	FPCGExLatticeBasis Basis;
+	const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
+
+	const FScopedTransaction Transaction(LOCTEXT("SplitOverlappingEdges", "Split Overlapping Sketch Edges"));
+	UObject* TransactionObject = Target->GetTransactionObject();
+	Target->BeginAuthoring();
+
+	const int32 NumSplits = Model->SplitOverlappingEdges(BasisPtr);
+
+	ClearSelection();
+	ClearHover();
+	PCGExEditor::NotifyObjectChanged(TransactionObject);
+	NotifyModelChanged();
+	return NumSplits;
+}
+
+int32 FPCGExSketchEditController::PurgeUnusedDataRecords()
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model)
+	{
+		return 0;
+	}
+
+	const FScopedTransaction Transaction(LOCTEXT("PurgeDataRecords", "Purge Unused Sketch Data Records"));
+	UObject* TransactionObject = Target->GetTransactionObject();
+	Target->BeginAuthoring();
+
+	const int32 NumPurged = Model->PurgeUnreferencedRecords();
+	PCGExEditor::NotifyObjectChanged(TransactionObject);
+	NotifyModelChanged();
+	return NumPurged;
 }
 
 void FPCGExSketchEditController::RefreshCrossings()
@@ -943,10 +1166,7 @@ bool FPCGExSketchEditController::MaterializeCrossingAtRay(const FRay& WorldRay)
 	const FPCGExClusterSketchCrossing Crossing = Crossings[Hit.Index];
 
 	FScopedTransaction Transaction(LOCTEXT("MaterializeCrossing", "Materialize Sketch Crossing"));
-	if (UObject* TransactionObject = Target->GetTransactionObject())
-	{
-		TransactionObject->Modify();
-	}
+	Target->BeginAuthoring();
 
 	FPCGExLatticeBasis Basis;
 	const int32 NewVertex = Model->MaterializeCrossing(Crossing.EdgeA, Crossing.EdgeB, Crossing.Location, GetBasis(Basis) ? &Basis : nullptr);

@@ -7,6 +7,7 @@
 #include "Lattice/PCGExLatticeBasis.h"
 
 struct FPCGExContext;
+class FPCGExSketchLayerPropertyProvider;
 class UPCGExClusterSketchDecorator;
 class UPCGExClusterSnapProvider;
 struct FPCGExClusterSketchModel;
@@ -48,6 +49,13 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchPrintContext
 	/** Parent graph edge index -> model edge index (the print's validated, deduped edge order). */
 	TArray<int32> ParentToModelEdge;
 
+	/** Authored-tier read seam, indexed by MODEL vertex / model edge index. READ-ONLY once the print
+	 *  reaches the graph build: DecorateEdges runs concurrently across subgraphs and shares this
+	 *  context, so any mutation here -- memoization included -- is a data race. */
+	/** Null when the sketch has no authored tier at all. */
+	TSharedPtr<const FPCGExSketchLayerPropertyProvider> VertexDataProvider;
+	TSharedPtr<const FPCGExSketchLayerPropertyProvider> EdgeDataProvider;
+
 	/** Model vertex index -> OUTPUT point index; INDEX_NONE for pruned (isolated) vertices.
 	 *  Filled when the compile succeeds, BEFORE the request's OnCompiled fires. */
 	TArray<int32> VtxIndexMap;
@@ -72,8 +80,14 @@ namespace PCGExSketch
 		 *  result is then placed. Identity prints in sketch space. */
 		FTransform LocalToWorld = FTransform::Identity;
 
-		/** Quiet the model-integrity warnings (dropped edges, isolated vertices, skipped channels). */
+		/** Quiet the model-integrity warnings (dropped edges, isolated vertices, skipped schema entries). */
 		bool bQuiet = false;
+
+		/** Also write the sketch-level @Data properties onto every edges output. Off prints them on the
+		 *  vtx output only. Authored values are UNIFORM across every duplicate of a sketch -- a consumer
+		 *  duplicating the print builds no facade, so per-target variation exists only through tags or
+		 *  whole-data forwarding. */
+		bool bWriteSketchPropertiesToEdges = true;
 
 		/** Fires from the compile's end callback, after VtxIndexMap is filled, with the success flag. */
 		TFunction<void(const TSharedRef<PCGExGraphs::FGraphBuilder>&, bool)> OnCompiled;
@@ -81,8 +95,9 @@ namespace PCGExSketch
 
 	/**
 	 * Print a sketch model into InVtxIO (caller-emplaced, no points yet) and launch the cluster compile.
-	 * Runs the whole §recipe: validate + dedup edges, allocate + write transforms/seeds, write vertex
-	 * channels + decorators, commit, build graph, hook edge channels + decorators, CompileAsync.
+	 * Runs the whole §recipe: validate + dedup edges, allocate + write transforms/seeds, write the
+	 * authored vertex layer + decorators, commit, build graph, hook the authored edge layer +
+	 * decorators, CompileAsync.
 	 *
 	 * @return the builder (compile launched), or null when the model prints nothing (caller disables the
 	 * vtx IO). On ASYNC failure (bCompiledSuccessfully false) the vtx IO still holds every point but no

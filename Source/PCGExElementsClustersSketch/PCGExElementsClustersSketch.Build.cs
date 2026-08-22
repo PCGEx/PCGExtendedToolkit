@@ -44,6 +44,10 @@ public class PCGExElementsClustersSketch : ModuleRules
 				// public header. The arrow points THIS way on purpose -- Collections stays free of
 				// the graph/cluster stack, and owns only the ClusterSketch type id.
 				"PCGExCollections",
+				// PUBLIC: the authored data tier names FPCGExPropertySchemaCollection, FPCGExPropertyOverrides
+				// and FPCGExPropertyOutputConfig in a public header. Transitive through Collections today,
+				// but the dependency is this module's own.
+				"PCGExProperties",
 				// PUBLIC: sketch public headers reach into Lattice (PCGExLatticeBasis) and the graph
 				// builder (PCGExGraphs::FGraphBuilder, FPCGExGraphBuilderDetails).
 				"PCGExGraphs",
