@@ -4,9 +4,11 @@
 #include "Sketch/PCGExSketchDrawHelper.h"
 
 #include "SceneManagement.h"
+#include "Sketch/PCGExClusterSketchAuthoringSettings.h"
 #include "Sketch/PCGExClusterSketchComponent.h"
 #include "Sketch/PCGExClusterSketchStyle.h"
 #include "Sketch/PCGExSketchEditController.h"
+#include "Sketch/PCGExSketchPlacement.h"
 
 namespace PCGExSketchDrawHelper
 {
@@ -20,6 +22,64 @@ namespace PCGExSketchDrawHelper
 	constexpr float SelectedEdgeThickness = 3.0f;
 	constexpr float SideEffectScale = 0.6f;
 	constexpr double GhostRingRadius = 12.0;
+
+	// A guide has to read as a LINE, not a tether, so it always overshoots the point it is placing.
+	constexpr double GuideOvershoot = 1.5;
+	constexpr double GuideMinReach = 100.0;
+
+	// DOTTED, not dashed: the connect preview owns the dashed look, and two affordances that can be on
+	// screen at once must not share a line style. Short mark, long gap.
+	constexpr double GuideDotSize = 2.0;
+	constexpr double GuideGapSize = 9.0;
+	constexpr double CandidateDotSize = 1.5;
+	constexpr double CandidateGapSize = 13.0;
+
+	// Candidates sit on a short stub either side of the anchor; only the ACTIVE guide runs the full
+	// length of the placement, and always overshoots them.
+	constexpr double CandidateReachScale = 0.75;
+
+	/**
+	 * Independent mark and gap, which DrawDashedLine cannot express -- it hardcodes a 1:1 duty cycle,
+	 * so shrinking its dash only ever yields a finer dash.
+	 *
+	 * DrawTranslucentLine, never DrawLine: the latter is documented to IGNORE Color.A (FBatchedElements
+	 * forces it to 1), and guide opacity is what ranks a candidate against the one in force.
+	 */
+	void DrawDottedLine(FPrimitiveDrawInterface* PDI, const FVector& Start, const FVector& End, const FLinearColor& Color, const double DotSize, const double GapSize, const uint8 DepthPriority)
+	{
+		FVector Dir = End - Start;
+		const double Length = Dir.Size();
+		if (Length <= UE_DOUBLE_SMALL_NUMBER)
+		{
+			return;
+		}
+		Dir /= Length;
+
+		const double Step = DotSize + GapSize;
+		PDI->AddReserveLines(DepthPriority, FMath::CeilToInt32(Length / Step));
+
+		for (double At = 0.0; At < Length; At += Step)
+		{
+			PDI->DrawTranslucentLine(Start + Dir * At, Start + Dir * FMath::Min(At + DotSize, Length), Color, DepthPriority);
+		}
+	}
+
+	FLinearColor GuideColor(const UPCGExClusterSketchStyleSettings* Style, const EPCGExSketchGuideSource Source)
+	{
+		switch (Source)
+		{
+		case EPCGExSketchGuideSource::LatticeAxis:
+			return Style->GuideAxisColor;
+		case EPCGExSketchGuideSource::LatticeWalk:
+			return Style->GuideWalkColor;
+		case EPCGExSketchGuideSource::Complement:
+			return Style->GuideComplementColor;
+		case EPCGExSketchGuideSource::IncidentEdge:
+			return Style->GuideEdgeColor;
+		default:
+			return Style->PreviewAffordanceColor;
+		}
+	}
 }
 
 void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, FPrimitiveDrawInterface* PDI, const FMeshCoverage& InCoverage)
@@ -137,11 +197,26 @@ void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, 
 		// delete modifier is held, the hovered edge reads as a delete target.
 		const bool bDegenerate = Model->FindVertexOnEdgeInterior(e, LocalLocations) != INDEX_NONE;
 		FLinearColor Color = Style->EditEdge.Color;
-		if (CrossingEdges.Contains(e)) { Color = Style->EditVertexPhantom.Color; }
-		if (bSelected) { Color = Style->SelectedColor; }
-		if (bDegenerate) { Color = Style->MergeAffordanceColor; }
-		if (DoomedEdges.Contains(e)) { Color = Style->DeleteIntentColor; }
-		if (bHovered) { Color = Controller.GetDeleteIntent() ? Style->DeleteIntentColor : Style->HoverColor; }
+		if (CrossingEdges.Contains(e))
+		{
+			Color = Style->EditVertexPhantom.Color;
+		}
+		if (bSelected)
+		{
+			Color = Style->SelectedColor;
+		}
+		if (bDegenerate)
+		{
+			Color = Style->MergeAffordanceColor;
+		}
+		if (DoomedEdges.Contains(e))
+		{
+			Color = Style->DeleteIntentColor;
+		}
+		if (bHovered)
+		{
+			Color = Controller.GetDeleteIntent() ? Style->DeleteIntentColor : Style->HoverColor;
+		}
 		// Meshes carry idle, selection, hover and the crossing tint; only DEGENERATE, which they have no
 		// instance for, still shouts from here.
 		if (bMeshEdges && (!bHovered || bMeshHover) && !bDegenerate)
@@ -162,8 +237,14 @@ void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, 
 #endif
 		// Same precedence as the mesh layer, from the same settings: provenance outranks the bound tint.
 		FLinearColor Color = Style->EditVertexIdle.Color;
-		if (Model->Vertices[i].bLatticeBound) { Color = Style->EditVertexBoundColor; }
-		if (bSideEffect) { Color = Style->EditVertexSideEffectColor; }
+		if (Model->Vertices[i].bLatticeBound)
+		{
+			Color = Style->EditVertexBoundColor;
+		}
+		if (bSideEffect)
+		{
+			Color = Style->EditVertexSideEffectColor;
+		}
 		if (bSelected)
 		{
 			Color = Style->SelectedColor;
@@ -209,10 +290,59 @@ void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, 
 		if (bHovered && !(bMeshGhosts && bMeshHover))
 		{
 			// A hovered ghost reads as "click to place a vertex here": ring it.
-			const double Radius = PCGExSketchDrawHelper::GhostRingRadius;
+			constexpr double Radius = PCGExSketchDrawHelper::GhostRingRadius;
 			DrawCircle(PDI, Pos, FVector::XAxisVector, FVector::YAxisVector, Color, Radius, 16, SDPG_Foreground, 1.0f);
 			DrawCircle(PDI, Pos, FVector::XAxisVector, FVector::ZAxisVector, Color, Radius, 16, SDPG_Foreground, 1.0f);
 		}
+	}
+
+	// Placement guides, under the affordances they steer. Dotted throughout: the connect preview owns
+	// the dashed look and the two can share the screen.
+	if (Controller.HasPlacementPreview())
+	{
+		const FPCGExSketchPlacementSolver& Solver = Controller.GetPlacement();
+		const FPCGExSketchGuide& Active = Solver.GetActiveGuide();
+		const double CellReach = (bHasBasis && Basis.NumAxes > 0) ? LocalToWorld.TransformVector(Basis.AxisVecs[0]).Size() * 2.0 : PCGExSketchDrawHelper::GuideMinReach;
+
+		// The rails the gesture COULD take, faint and short, brightening as the cursor swings toward one
+		// so a capture announces itself before it happens.
+		if (UPCGExClusterSketchAuthoringSettings::Get()->bShowGuideCandidates)
+		{
+			const TArray<FPCGExSketchGuide>& Candidates = Solver.GetCandidates();
+			for (int32 g = 0; g < Candidates.Num(); ++g)
+			{
+				if (Candidates[g] == Active)
+				{
+					continue;
+				}
+				const FVector Origin = LocalToWorld.TransformPosition(Candidates[g].Origin);
+				const FVector Dir = LocalToWorld.TransformVector(Candidates[g].Direction).GetSafeNormal() * (CellReach * PCGExSketchDrawHelper::CandidateReachScale);
+
+				FLinearColor Color = PCGExSketchDrawHelper::GuideColor(Style, Candidates[g].Source);
+				Color.A = FMath::Lerp(Style->GuideCandidateOpacity, 1.0f, static_cast<float>(Solver.GetCaptureProximity(g)));
+
+				PCGExSketchDrawHelper::DrawDottedLine(PDI, Origin - Dir, Origin + Dir, Color,
+				                                      PCGExSketchDrawHelper::CandidateDotSize, PCGExSketchDrawHelper::CandidateGapSize, SDPG_Foreground);
+			}
+		}
+
+		if (Active.IsValid())
+		{
+			const FVector Origin = LocalToWorld.TransformPosition(Active.Origin);
+			const FVector PlacedPos = LocalToWorld.TransformPosition(Controller.GetPlacementPoint());
+			const FVector Dir = LocalToWorld.TransformVector(Active.Direction).GetSafeNormal();
+			const double Reach = FMath::Max(CellReach, FVector::Dist(Origin, PlacedPos) * PCGExSketchDrawHelper::GuideOvershoot);
+
+			PCGExSketchDrawHelper::DrawDottedLine(PDI, Origin - Dir * Reach, Origin + Dir * Reach,
+			                                      PCGExSketchDrawHelper::GuideColor(Style, Active.Source),
+			                                      PCGExSketchDrawHelper::GuideDotSize, PCGExSketchDrawHelper::GuideGapSize, SDPG_Foreground);
+		}
+	}
+
+	// Where a Ctrl+click would land right now -- the add gesture's own ghost.
+	if (Controller.HasAddPreview())
+	{
+		PDI->DrawPoint(LocalToWorld.TransformPosition(Controller.GetAddPreviewLocal()), Style->PreviewAffordanceColor, PCGExSketchDrawHelper::VertexSize, SDPG_Foreground);
 	}
 
 	// Drag affordances: move ghost or connect preview line.

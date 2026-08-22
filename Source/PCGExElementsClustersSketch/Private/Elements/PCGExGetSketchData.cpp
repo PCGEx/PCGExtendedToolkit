@@ -3,13 +3,15 @@
 
 #include "Elements/PCGExGetSketchData.h"
 
-#include "GameFramework/Actor.h"
+#include "Containers/PCGExManagedObjects.h"
+
 #include "Clusters/PCGExClusterCommon.h"
 #include "Data/PCGBasePointData.h" // PCGPointDataConstants::ActorReferenceAttribute
 #include "Data/PCGExClusterData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h" // SetDataValue
 #include "Data/PCGExPointIO.h"
+#include "GameFramework/Actor.h"
 #include "Graphs/PCGExGraphBuilder.h"
 #include "Helpers/PCGHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
@@ -35,6 +37,7 @@ namespace PCGExGetSketchData
 		FPCGExGetSketchDataContext::FSketchSource& Source = Context->Sources.AddDefaulted_GetRef();
 
 		Source.Model = Component->GetModel(); // copied: the print runs off-thread
+
 		Source.bHasBasis = Component->BuildBasis(Source.Basis);
 		Source.Decorators.Append(Component->GetDecorators());
 		Source.LocalToWorld = Component->GetComponentTransform();
@@ -44,7 +47,10 @@ namespace PCGExGetSketchData
 	/** Walks one actor's components through the selector, snapshotting every sketch found. */
 	void SnapshotActor(FPCGExGetSketchDataContext* Context, const UPCGExGetSketchDataSettings* Settings, AActor* Actor)
 	{
-		if (!IsValid(Actor)) { return; }
+		if (!IsValid(Actor))
+		{
+			return;
+		}
 
 		const FSoftObjectPath ActorPath(Actor);
 
@@ -53,9 +59,18 @@ namespace PCGExGetSketchData
 
 		for (UActorComponent* Component : Components)
 		{
-			if (!Component) { continue; }
-			if (!Settings->ComponentSelector.FilterComponent(Component)) { continue; }
-			if (Settings->bIgnorePCGGeneratedComponents && Component->ComponentTags.Contains(PCGHelpers::DefaultPCGTag)) { continue; }
+			if (!Component)
+			{
+				continue;
+			}
+			if (!Settings->ComponentSelector.FilterComponent(Component))
+			{
+				continue;
+			}
+			if (Settings->bIgnorePCGGeneratedComponents && Component->ComponentTags.Contains(PCGHelpers::DefaultPCGTag))
+			{
+				continue;
+			}
 
 			if (const UPCGExClusterSketchComponent* Sketch = Cast<UPCGExClusterSketchComponent>(Component))
 			{
@@ -68,12 +83,18 @@ namespace PCGExGetSketchData
 	 *  OutUnresolved counts references that named something but resolved to no loaded actor. */
 	void GatherActorsFromData(const UPCGData* InData, const FPCGAttributePropertyInputSelector& InSelector, TArray<AActor*>& OutActors, int32& OutUnresolved)
 	{
-		if (!InData) { return; }
+		if (!InData)
+		{
+			return;
+		}
 
 		const FPCGAttributePropertyInputSelector Resolved = InSelector.CopyAndFixLast(InData);
 		const TUniquePtr<const IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InData, Resolved);
 		const TUniquePtr<const IPCGAttributeAccessorKeys> Keys = PCGAttributeAccessorHelpers::CreateConstKeys(InData, Resolved);
-		if (!Accessor || !Keys || Keys->GetNum() == 0) { return; }
+		if (!Accessor || !Keys || Keys->GetNum() == 0)
+		{
+			return;
+		}
 
 		TArray<FSoftObjectPath> Paths;
 		Paths.SetNum(Keys->GetNum());
@@ -84,10 +105,19 @@ namespace PCGExGetSketchData
 
 		for (const FSoftObjectPath& Path : Paths)
 		{
-			if (Path.IsNull()) { continue; }
+			if (Path.IsNull())
+			{
+				continue;
+			}
 			// Already-loaded only: a streamed-out actor cannot be inspected for components.
-			if (AActor* Actor = Cast<AActor>(Path.ResolveObject())) { OutActors.AddUnique(Actor); }
-			else { ++OutUnresolved; }
+			if (AActor* Actor = Cast<AActor>(Path.ResolveObject()))
+			{
+				OutActors.AddUnique(Actor);
+			}
+			else
+			{
+				++OutUnresolved;
+			}
 		}
 	}
 }
@@ -120,7 +150,10 @@ PCGEX_INITIALIZE_ELEMENT(GetSketchData)
 
 bool FPCGExGetSketchDataElement::Boot(FPCGExContext* InContext) const
 {
-	if (!IPCGExElement::Boot(InContext)) { return false; }
+	if (!IPCGExElement::Boot(InContext))
+	{
+		return false;
+	}
 
 	PCGEX_CONTEXT_AND_SETTINGS(GetSketchData)
 
@@ -154,7 +187,10 @@ bool FPCGExGetSketchDataElement::Boot(FPCGExContext* InContext) const
 
 		AActor* Self = ExecutionSource->GetExecutionState().GetTypedTarget<AActor>();
 
-		TFunction<bool(const AActor*)> BoundsCheck = [](const AActor*) -> bool { return true; };
+		TFunction<bool(const AActor*)> BoundsCheck = [](const AActor*) -> bool
+		{
+			return true;
+		};
 		if (Settings->ActorSelector.bMustOverlapSelf)
 		{
 			const FBox SelfBounds = Self ? PCGHelpers::GetGridBounds(Self, ExecutionSource) : FBox(ForceInit);
@@ -165,14 +201,20 @@ bool FPCGExGetSketchDataElement::Boot(FPCGExContext* InContext) const
 			};
 		}
 
-		TFunction<bool(const AActor*)> SelfIgnoreCheck = [](const AActor*) -> bool { return true; };
+		TFunction<bool(const AActor*)> SelfIgnoreCheck = [](const AActor*) -> bool
+		{
+			return true;
+		};
 		if (Settings->ActorSelector.bIgnoreSelfAndChildren)
 		{
 			SelfIgnoreCheck = [Self](const AActor* Other) -> bool
 			{
 				for (const AActor* Current = Other; Current; Current = Current->GetParentActor())
 				{
-					if (Current == Self) { return false; }
+					if (Current == Self)
+					{
+						return false;
+					}
 				}
 				return true;
 			};
@@ -234,7 +276,10 @@ bool FPCGExGetSketchDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 			FPCGExGetSketchDataContext::FSketchSource& Source = Context->Sources[i];
 
 			const TSharedPtr<PCGExData::FPointIO> VtxIO = Context->VtxCollection->Emplace_GetRef<UPCGExClusterNodesData>();
-			if (!VtxIO) { return Context->CancelExecution(TEXT("")); }
+			if (!VtxIO)
+			{
+				return Context->CancelExecution(TEXT(""));
+			}
 			Context->VtxIOs[i] = VtxIO;
 
 			PCGExSketch::FPrintRequest Request;
@@ -260,8 +305,8 @@ bool FPCGExGetSketchDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	PCGEX_ON_ASYNC_STATE_READY(PCGExGetSketchData::State_PrintingSketches)
 	{
 		const FName RefName = Settings->ActorReferenceAttributeName.IsNone()
-			                      ? PCGPointDataConstants::ActorReferenceAttribute
-			                      : Settings->ActorReferenceAttributeName;
+			? PCGPointDataConstants::ActorReferenceAttribute
+			: Settings->ActorReferenceAttributeName;
 
 		for (int32 i = 0; i < Context->GraphBuilders.Num(); ++i)
 		{

@@ -22,9 +22,9 @@ namespace PCGExDetailRowWidgets
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 4, 0)
 			[
 				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("\x2192"))) // -> arrow
-				.Font(IDetailLayoutBuilder::GetDetailFont())
-				.ColorAndOpacity(FSlateColor(FLinearColor::Gray))
+				                .Text(FText::FromString(TEXT("\x2192"))) // -> arrow
+				                .Font(IDetailLayoutBuilder::GetDetailFont())
+				                .ColorAndOpacity(FSlateColor(FLinearColor::Gray))
 			]
 			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[

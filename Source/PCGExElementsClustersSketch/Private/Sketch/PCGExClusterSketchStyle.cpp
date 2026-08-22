@@ -62,7 +62,7 @@ void UPCGExClusterSketchStyleSettings::PostEditChangeProperty(FPropertyChangedEv
 namespace PCGExSketchStyle
 {
 	// Degenerate-axis floor: a flat mesh (a plane used as a billboard) has a zero extent on one
-		// axis, and dividing by it would explode the instance.
+	// axis, and dividing by it would explode the instance.
 	constexpr double MinExtent = 1.e-4;
 
 	/** Component index of an axis, and whether it points backwards along it. */
@@ -70,13 +70,34 @@ namespace PCGExSketchStyle
 	{
 		switch (InAxis)
 		{
-		case EPCGExAxis::Forward: OutIndex = 0; OutSign = 1.0; break;
-		case EPCGExAxis::Backward: OutIndex = 0; OutSign = -1.0; break;
-		case EPCGExAxis::Right: OutIndex = 1; OutSign = 1.0; break;
-		case EPCGExAxis::Left: OutIndex = 1; OutSign = -1.0; break;
-		case EPCGExAxis::Up: OutIndex = 2; OutSign = 1.0; break;
-		case EPCGExAxis::Down: OutIndex = 2; OutSign = -1.0; break;
-		default: OutIndex = 0; OutSign = 1.0; break;
+		case EPCGExAxis::Forward:
+			OutIndex = 0;
+			OutSign = 1.0;
+			break;
+		case EPCGExAxis::Backward:
+			OutIndex = 0;
+			OutSign = -1.0;
+			break;
+		case EPCGExAxis::Right:
+			OutIndex = 1;
+			OutSign = 1.0;
+			break;
+		case EPCGExAxis::Left:
+			OutIndex = 1;
+			OutSign = -1.0;
+			break;
+		case EPCGExAxis::Up:
+			OutIndex = 2;
+			OutSign = 1.0;
+			break;
+		case EPCGExAxis::Down:
+			OutIndex = 2;
+			OutSign = -1.0;
+			break;
+		default:
+			OutIndex = 0;
+			OutSign = 1.0;
+			break;
 		}
 	}
 
@@ -117,9 +138,15 @@ namespace PCGExSketchStyle
 		FQuat Rotation;
 		switch (AxisIndex)
 		{
-		case 1: Rotation = FRotationMatrix::MakeFromY(Dir).ToQuat(); break;
-		case 2: Rotation = FRotationMatrix::MakeFromZ(Dir).ToQuat(); break;
-		default: Rotation = FRotationMatrix::MakeFromX(Dir).ToQuat(); break;
+		case 1:
+			Rotation = FRotationMatrix::MakeFromY(Dir).ToQuat();
+			break;
+		case 2:
+			Rotation = FRotationMatrix::MakeFromZ(Dir).ToQuat();
+			break;
+		default:
+			Rotation = FRotationMatrix::MakeFromX(Dir).ToQuat();
+			break;
 		}
 
 		// Bounds centre lands on the midpoint, so where the mesh sits in its own space is irrelevant.

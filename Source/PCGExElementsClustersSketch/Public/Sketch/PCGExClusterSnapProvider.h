@@ -4,8 +4,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UObject/Object.h"
 #include "Lattice/PCGExLatticeBasis.h"
+#include "UObject/Object.h"
 
 #include "PCGExClusterSnapProvider.generated.h"
 

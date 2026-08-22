@@ -11,15 +11,18 @@
 #if WITH_EDITOR
 namespace PCGExClusterSnapProvider
 {
-	/** A provider is outered to whichever host owns it -- the asset or a component -- so both must be
-	 *  reached, or an inline provider's edits never re-derive the vertices they moved. */
+	/** A provider's host must be reached or its edits never re-derive the vertices they moved. The asset
+	 *  is an ancestor; an inline provider's component is not -- only its payload is. */
 	void NotifyHost(UObject* InProvider)
 	{
 		if (UPCGExClusterSketch* Asset = InProvider->GetTypedOuter<UPCGExClusterSketch>())
 		{
 			Asset->EDITOR_OnSnapProviderChanged();
+			return;
 		}
-		else if (UPCGExClusterSketchComponent* Component = InProvider->GetTypedOuter<UPCGExClusterSketchComponent>())
+
+		const UPCGExClusterSketchPayload* Payload = InProvider->GetTypedOuter<UPCGExClusterSketchPayload>();
+		if (UPCGExClusterSketchComponent* Component = Payload ? Payload->FindOwningComponent() : nullptr)
 		{
 			Component->EDITOR_OnSnapProviderChanged();
 		}

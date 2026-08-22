@@ -29,7 +29,10 @@ class IPropertyHandle;
 class SPCGExPropertyCurveValueWidget : public SCompoundWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SPCGExPropertyCurveValueWidget) {}
+	SLATE_BEGIN_ARGS(SPCGExPropertyCurveValueWidget)
+		{
+		}
+
 		/** Optional per-axis edit clamps (default: both axes free). */
 		SLATE_ARGUMENT(FPCGExPropertyCurveClamps, Clamps)
 	SLATE_END_ARGS()

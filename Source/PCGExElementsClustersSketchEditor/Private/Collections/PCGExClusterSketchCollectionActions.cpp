@@ -24,8 +24,14 @@ namespace PCGExClusterSketchCollectionActions
 		Info.AssetColor = FLinearColor(FColor(224, 128, 255));
 		Info.DisplayName = INVTEXT("Cluster Sketch Collection");
 		Info.AssetDescription = INVTEXT("A weighted collection of Cluster Sketch assets.");
-		Info.DetectSourceAsset = [](const FAssetData& Asset) { return Asset.IsInstanceOf<UPCGExClusterSketch>(); };
-		Info.DetectCollectionAsset = [](const FAssetData& Asset) { return Asset.IsInstanceOf<UPCGExClusterSketchCollection>(); };
+		Info.DetectSourceAsset = [](const FAssetData& Asset)
+		{
+			return Asset.IsInstanceOf<UPCGExClusterSketch>();
+		};
+		Info.DetectCollectionAsset = [](const FAssetData& Asset)
+		{
+			return Asset.IsInstanceOf<UPCGExClusterSketchCollection>();
+		};
 
 		// Base toolkit: a sketch entry has no type-specific authoring surface, so there is nothing
 		// for a bespoke editor to add.

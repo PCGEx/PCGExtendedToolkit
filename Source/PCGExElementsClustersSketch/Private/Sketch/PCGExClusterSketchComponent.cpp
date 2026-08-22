@@ -3,15 +3,16 @@
 
 #include "Sketch/PCGExClusterSketchComponent.h"
 
-#include "Components/InstancedStaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
-#include "GameFramework/Actor.h"
-#include "Materials/MaterialInterface.h"
 #include "MeshElementCollector.h"
+#include "PCGExLog.h"
 #include "PrimitiveDrawingUtils.h"
 #include "PrimitiveSceneProxy.h"
 #include "PrimitiveViewRelevance.h"
 #include "SceneView.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "GameFramework/Actor.h"
+#include "Materials/MaterialInterface.h"
 #include "Sketch/PCGExClusterSketchPrint.h"
 
 #if WITH_EDITOR
@@ -21,7 +22,7 @@
 
 namespace PCGExClusterSketchComponent
 {
-	const FLinearColor BasisColor = FLinearColor(0.35f, 0.5f, 0.9f, 0.6f);
+	constexpr FLinearColor BasisColor = FLinearColor(0.35f, 0.5f, 0.9f, 0.6f);
 
 	/** Bounds fallback so an empty sketch still has a pickable, non-degenerate footprint. */
 	constexpr double EmptyBoundsExtent = 50.0;
@@ -79,7 +80,10 @@ namespace PCGExClusterSketchComponent
 			return Result;
 		}
 
-		virtual uint32 GetMemoryFootprint() const override { return sizeof(*this) + GetAllocatedSize(); }
+		virtual uint32 GetMemoryFootprint() const override
+		{
+			return sizeof(*this) + GetAllocatedSize();
+		}
 
 		uint32 GetAllocatedSize() const
 		{
@@ -92,6 +96,51 @@ namespace PCGExClusterSketchComponent
 #endif // WITH_EDITOR
 }
 
+#pragma region UPCGExClusterSketchPayload
+
+UPCGExClusterSketchPayload::UPCGExClusterSketchPayload()
+{
+	// Undo records THIS object: UActorComponent::Modify redirects to the owner for construction-script
+	// components (ActorComponent.cpp:1289) and never reaches a subobject. Without the flag,
+	// SaveToTransactionBuffer bails (UObjectGlobals.cpp:3215) and every Modify() here is a silent no-op.
+	SetFlags(RF_Transactional);
+}
+
+UPCGExClusterSketchComponent* UPCGExClusterSketchPayload::FindOwningComponent() const
+{
+	AActor* Actor = GetTypedOuter<AActor>();
+	if (!Actor)
+	{
+		return nullptr;
+	}
+
+	TInlineComponentArray<UPCGExClusterSketchComponent*> Sketches(Actor);
+	for (UPCGExClusterSketchComponent* Sketch : Sketches)
+	{
+		if (Sketch->InlinePayload.Get() == this)
+		{
+			return Sketch;
+		}
+	}
+	return nullptr;
+}
+
+#if WITH_EDITOR
+void UPCGExClusterSketchPayload::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	if (UPCGExClusterSketchComponent* Component = FindOwningComponent())
+	{
+		Component->EDITOR_OnPayloadChanged(PropertyChangedEvent);
+	}
+}
+#endif
+
+#pragma endregion
+
+#pragma region UPCGExClusterSketchComponent
+
 UPCGExClusterSketchComponent::UPCGExClusterSketchComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -103,30 +152,56 @@ UPCGExClusterSketchComponent::UPCGExClusterSketchComponent()
 
 const FPCGExClusterSketchModel& UPCGExClusterSketchComponent::GetModel() const
 {
-	return SketchAsset ? SketchAsset->Model : InlineModel;
+	if (InlinePayload)
+	{
+		return InlinePayload->Model;
+	}
+	if (const UPCGExClusterSketch* Asset = ResolveSketchAsset())
+	{
+		return Asset->Model;
+	}
+
+	// Neither authored nor referenced: a shared empty, so every caller can hold a reference unguarded.
+	static const FPCGExClusterSketchModel EmptyModel;
+	return EmptyModel;
 }
 
 const UPCGExClusterSnapProvider* UPCGExClusterSketchComponent::GetSnapProvider() const
 {
-	return SketchAsset ? SketchAsset->SnapProvider.Get() : InlineSnapProvider.Get();
+	if (InlinePayload)
+	{
+		return InlinePayload->SnapProvider.Get();
+	}
+	const UPCGExClusterSketch* Asset = ResolveSketchAsset();
+	return Asset ? Asset->SnapProvider.Get() : nullptr;
 }
 
 TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>> UPCGExClusterSketchComponent::GetDecorators() const
 {
-	// Explicit on both branches: the asset's array is reached mutably through TObjectPtr::operator->,
+	// Explicit on every branch: the asset's array is reached mutably through TObjectPtr::operator->,
 	// so a ternary would have to reconcile two different view constnesses.
-	if (SketchAsset)
+	if (InlinePayload)
 	{
-		return TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>>(SketchAsset->Decorators);
+		return TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>>(InlinePayload->Decorators);
 	}
-	return TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>>(InlineDecorators);
+	if (const UPCGExClusterSketch* Asset = ResolveSketchAsset())
+	{
+		return TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>>(Asset->Decorators);
+	}
+	return TConstArrayView<TObjectPtr<UPCGExClusterSketchDecorator>>();
+}
+
+void UPCGExClusterSketchComponent::SetSketchAsset(UPCGExClusterSketch* InAsset)
+{
+	Modify();
+	SketchAsset = InAsset;
 }
 
 FPCGExClusterSketchModel* UPCGExClusterSketchComponent::GetMutableModel()
 {
-	// Read-only while an asset drives this component: authoring here would rewrite topology shared by
-	// every other instance referencing it. Inline the asset first.
-	return SketchAsset ? nullptr : &InlineModel;
+	// Editing an asset here would rewrite topology every other instance shares, and with no inline sketch
+	// there is nothing to edit.
+	return InlinePayload ? &InlinePayload->Model : nullptr;
 }
 
 bool UPCGExClusterSketchComponent::BuildBasis(FPCGExLatticeBasis& OutBasis) const
@@ -137,16 +212,23 @@ bool UPCGExClusterSketchComponent::BuildBasis(FPCGExLatticeBasis& OutBasis) cons
 
 void UPCGExClusterSketchComponent::CollectAssetDependencies(TArray<FSoftObjectPath>& OutPaths) const
 {
-	if (SketchAsset)
+	if (const UPCGExClusterSketch* Asset = ResolveSketchAsset())
 	{
-		SketchAsset->CollectAssetDependencies(OutPaths);
+		Asset->CollectAssetDependencies(OutPaths);
 		return;
 	}
-	if (InlineSnapProvider)
+	if (!InlinePayload)
 	{
-		InlineSnapProvider->CollectAssetDependencies(OutPaths);
+		return;
 	}
-	for (const TObjectPtr<UPCGExClusterSketchDecorator>& Decorator : InlineDecorators)
+
+	if (InlinePayload->SnapProvider)
+	{
+		InlinePayload->SnapProvider->CollectAssetDependencies(OutPaths);
+	}
+	// The inline authored tier contributes nothing here: FPCGExPropertySchemaCollection::ImportedSchemas
+	// are HARD refs, already loaded with the payload that names them.
+	for (const TObjectPtr<UPCGExClusterSketchDecorator>& Decorator : InlinePayload->Decorators)
 	{
 		if (Decorator && Decorator->bEnabled)
 		{
@@ -241,9 +323,15 @@ FLinearColor UPCGExClusterSketchComponent::ResolveVertexColor(const int32 ModelI
 	if (Model.Vertices.IsValidIndex(ModelIndex))
 	{
 #if WITH_EDITORONLY_DATA
-		if (Model.Vertices[ModelIndex].bSideEffect) { return Style->EditVertexSideEffectColor; }
+		if (Model.Vertices[ModelIndex].bSideEffect)
+		{
+			return Style->EditVertexSideEffectColor;
+		}
 #endif
-		if (Model.Vertices[ModelIndex].bLatticeBound) { return Style->EditVertexBoundColor; }
+		if (Model.Vertices[ModelIndex].bLatticeBound)
+		{
+			return Style->EditVertexBoundColor;
+		}
 	}
 	return Style->EditVertexIdle.Color;
 }
@@ -279,21 +367,39 @@ FLinearColor UPCGExClusterSketchComponent::ResolveEdgeColor(const int32 ModelInd
 
 double UPCGExClusterSketchComponent::ResolveVertexSizeScale(const int32 ModelIndex) const
 {
-	if (!EditState.bActive) { return 1.0; }
+	if (!EditState.bActive)
+	{
+		return 1.0;
+	}
 	const UPCGExClusterSketchStyleSettings* Style = UPCGExClusterSketchStyleSettings::Get();
 	// Same precedence as the colour, so size and colour always describe the SAME state.
 	const bool bSelected = EditState.SelectedVertices.Contains(ModelIndex);
-	if (EditState.HoveredVertex == ModelIndex && !(bSelected && DrawsHoverAsMesh())) { return 1.0 + Style->HoverSizeBonus; }
-	if (bSelected) { return 1.0 + Style->SelectedSizeBonus; }
+	if (EditState.HoveredVertex == ModelIndex && !(bSelected && DrawsHoverAsMesh()))
+	{
+		return 1.0 + Style->HoverSizeBonus;
+	}
+	if (bSelected)
+	{
+		return 1.0 + Style->SelectedSizeBonus;
+	}
 	return 1.0;
 }
 
 double UPCGExClusterSketchComponent::ResolveEdgeSizeScale(const int32 ModelIndex) const
 {
-	if (!EditState.bActive) { return 1.0; }
+	if (!EditState.bActive)
+	{
+		return 1.0;
+	}
 	const UPCGExClusterSketchStyleSettings* Style = UPCGExClusterSketchStyleSettings::Get();
-	if (EditState.HoveredEdge == ModelIndex) { return 1.0 + Style->HoverSizeBonus; }
-	if (EditState.SelectedEdges.Contains(ModelIndex)) { return 1.0 + Style->SelectedSizeBonus; }
+	if (EditState.HoveredEdge == ModelIndex)
+	{
+		return 1.0 + Style->HoverSizeBonus;
+	}
+	if (EditState.SelectedEdges.Contains(ModelIndex))
+	{
+		return 1.0 + Style->SelectedSizeBonus;
+	}
 	return 1.0;
 }
 
@@ -459,8 +565,14 @@ void UPCGExClusterSketchComponent::RebuildInstances()
 	TArray<FVector> Locations;
 	ResolveVertexLocations(Locations);
 
-	if (VertexISM) { VertexISM->ClearInstances(); }
-	if (EdgeISM) { EdgeISM->ClearInstances(); }
+	if (VertexISM)
+	{
+		VertexISM->ClearInstances();
+	}
+	if (EdgeISM)
+	{
+		EdgeISM->ClearInstances();
+	}
 
 	if (VertexISM && bShowSketch)
 	{
@@ -534,7 +646,10 @@ void UPCGExClusterSketchComponent::UpdateInstanceAppearance()
 		for (int32 i = 0; i < VertexInstanceToModel.Num(); ++i)
 		{
 			const int32 ModelIndex = VertexInstanceToModel[i];
-			if (!Locations.IsValidIndex(ModelIndex)) { continue; }
+			if (!Locations.IsValidIndex(ModelIndex))
+			{
+				continue;
+			}
 			const bool bLast = i == VertexInstanceToModel.Num() - 1;
 			VertexInstances->UpdateInstanceTransform(
 				i, PCGExSketchStyle::MakePointInstanceTransform(MeshBounds, Locations[ModelIndex], VertexStyle.Size * ResolveVertexSizeScale(ModelIndex)), false, bLast);
@@ -553,9 +668,15 @@ void UPCGExClusterSketchComponent::UpdateInstanceAppearance()
 		for (int32 i = 0; i < EdgeInstanceToModel.Num(); ++i)
 		{
 			const int32 ModelIndex = EdgeInstanceToModel[i];
-			if (!Model.Edges.IsValidIndex(ModelIndex)) { continue; }
+			if (!Model.Edges.IsValidIndex(ModelIndex))
+			{
+				continue;
+			}
 			const FPCGExClusterSketchEdge& E = Model.Edges[ModelIndex];
-			if (!Locations.IsValidIndex(E.A) || !Locations.IsValidIndex(E.B)) { continue; }
+			if (!Locations.IsValidIndex(E.A) || !Locations.IsValidIndex(E.B))
+			{
+				continue;
+			}
 
 			const bool bLast = i == EdgeInstanceToModel.Num() - 1;
 			EdgeInstances->UpdateInstanceTransform(
@@ -710,6 +831,24 @@ FBoxSphereBounds UPCGExClusterSketchComponent::CalcBounds(const FTransform& Loca
 	return FBoxSphereBounds(FBox(FVector(-PCGExClusterSketchComponent::EmptyBoundsExtent), FVector(PCGExClusterSketchComponent::EmptyBoundsExtent))).TransformBy(LocalToWorld);
 }
 
+void UPCGExClusterSketchComponent::PostLoad()
+{
+	Super::PostLoad();
+
+	// Both are instance-only, and EditInstanceOnly hides them on a template without stopping script or an
+	// older package from storing one. A template holding SketchAsset would make every instance follow it.
+	if (IsTemplate())
+	{
+		InlinePayload = nullptr;
+		SketchAsset = nullptr;
+	}
+	else if (InlinePayload)
+	{
+		// Packages saved before the constructor flagged it would otherwise load un-transactional.
+		InlinePayload->SetFlags(RF_Transactional);
+	}
+}
+
 void UPCGExClusterSketchComponent::OnRegister()
 {
 #if WITH_EDITOR
@@ -718,6 +857,13 @@ void UPCGExClusterSketchComponent::OnRegister()
 	BuildVisualSnapshot();
 #endif
 	Super::OnRegister();
+
+	// FActorComponentInstanceData caches nothing for a UCS component (its writer is gated on
+	// IsEditableWhenInherited, false for UserConstructionScript), so an inline sketch would not survive a
+	// construction-script rerun. Add this component through the Components panel instead.
+	ensureMsgf(CreationMethod != EComponentCreationMethod::UserConstructionScript,
+	           TEXT("%s was added by a construction script; an inline sketch cannot survive reconstruction there."),
+	           *GetPathName());
 
 #if WITH_EDITOR
 	// AFTER Super, in contrast: the mesh layer lives in CHILD components, which can only be created and
@@ -737,7 +883,8 @@ void UPCGExClusterSketchComponent::OnRegister()
 		OnObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddWeakLambda(
 			this, [this](UObject* Object, FPropertyChangedEvent&)
 			{
-				if (Object && SketchAsset && Object == SketchAsset)
+				if (const UPCGExClusterSketch* Asset = ResolveSketchAsset();
+					Object && Asset && Object == Asset)
 				{
 					RefreshSketchVisual();
 				}
@@ -748,7 +895,10 @@ void UPCGExClusterSketchComponent::OnRegister()
 	// to push a repaint -- nothing else would notice it.
 	if (!OnStyleChangedHandle.IsValid())
 	{
-		OnStyleChangedHandle = UPCGExClusterSketchStyleSettings::OnChanged().AddWeakLambda(this, [this] { RefreshSketchVisual(); });
+		OnStyleChangedHandle = UPCGExClusterSketchStyleSettings::OnChanged().AddWeakLambda(this, [this]
+		{
+			RefreshSketchVisual();
+		});
 	}
 #endif
 }
@@ -794,22 +944,39 @@ void UPCGExClusterSketchComponent::PostEditChangeProperty(FPropertyChangedEvent&
 
 	const FName MemberName = PropertyChangedEvent.MemberProperty ? PropertyChangedEvent.MemberProperty->GetFName() : NAME_None;
 
-	if (MemberName == GET_MEMBER_NAME_CHECKED(UPCGExClusterSketchComponent, InlineModel))
+	if (InlinePayload && MemberName == GET_MEMBER_NAME_CHECKED(UPCGExClusterSketchComponent, InlinePayload))
 	{
-		// Hand-editing a vertex adopts it, and the coord/location pair must stay coherent -- the same
-		// rule the asset host applies, or a typed-in location on a bound vertex is silently dead data.
-		const int32 EditedVertex = PropertyChangedEvent.GetArrayIndex(GET_MEMBER_NAME_STRING_CHECKED(FPCGExClusterSketchModel, Vertices));
-		if (EditedVertex != INDEX_NONE)
-		{
-			InlineModel.MarkVertexAuthored(EditedVertex);
-		}
-
-		const FName LeafName = PropertyChangedEvent.Property ? PropertyChangedEvent.Property->GetFName() : NAME_None;
-		const bool bCoordEdit = LeafName == GET_MEMBER_NAME_CHECKED(FPCGExClusterSketchVertex, LatticeCoord);
-		EDITOR_SyncBoundVertices(!bCoordEdit);
+		EDITOR_OnPayloadChanged(PropertyChangedEvent);
+		return;
 	}
 
-	// Any property here can move the drawing: payload, override, provider params, display settings.
+	// Any property here can move the drawing: override pick, display settings.
+	RefreshSketchVisual();
+}
+
+void UPCGExClusterSketchComponent::EDITOR_OnPayloadChanged(const FPropertyChangedEvent& PropertyChangedEvent)
+{
+	if (!InlinePayload)
+	{
+		return;
+	}
+
+	// Hand-editing a vertex adopts it, and the coord/location pair must stay coherent -- the same rule
+	// the asset host applies, or a typed-in location on a bound vertex is silently dead data.
+	const int32 EditedVertex = PropertyChangedEvent.GetArrayIndex(GET_MEMBER_NAME_STRING_CHECKED(FPCGExClusterSketchModel, Vertices));
+	if (EditedVertex != INDEX_NONE)
+	{
+		InlinePayload->Model.MarkVertexAuthored(EditedVertex);
+	}
+
+	const FName LeafName = PropertyChangedEvent.Property ? PropertyChangedEvent.Property->GetFName() : NAME_None;
+	const bool bCoordEdit = LeafName == GET_MEMBER_NAME_CHECKED(FPCGExClusterSketchVertex, LatticeCoord);
+	EDITOR_SyncBoundVertices(!bCoordEdit);
+
+	// A schema edit arrives as a payload change like any other, so the gate is deliberately coarse.
+	// Idempotent, and reachable only from an editor edit hook (here, or the panel's transacted write-back).
+	InlinePayload->Model.Data.EDITOR_SyncAll();
+
 	RefreshSketchVisual();
 }
 
@@ -844,43 +1011,72 @@ void UPCGExClusterSketchComponent::EDITOR_SyncBoundVertices(const bool bResnapFr
 	Mutable->SyncBoundVertices(Basis, bResnapFromLocation);
 }
 
-void UPCGExClusterSketchComponent::InlineSketchAsset()
+void UPCGExClusterSketchComponent::CreateInlineSketch()
 {
-	if (!SketchAsset)
+	// 5.7 renders CallInEditor buttons on templates and silently no-ops them; 5.8 hides them. Guard here
+	// so the rule holds in both: a template never holds inline data.
+	AActor* Owner = GetOwner();
+	if (IsTemplate() || InlinePayload || !Owner)
 	{
 		return;
 	}
 
-	const FScopedTransaction Transaction(NSLOCTEXT("PCGExClusterSketchComponent", "InlineSketchAsset", "Inline Cluster Sketch Asset"));
+	const FScopedTransaction Transaction(NSLOCTEXT("PCGExClusterSketchComponent", "CreateInlineSketch", "Create Inline Cluster Sketch"));
 	Modify();
 
-	InlineModel = SketchAsset->Model;
+	// Resolved BEFORE the payload exists: ResolveSketchAsset reports null the moment one does.
+	const UPCGExClusterSketch* Asset = ResolveSketchAsset();
 
-	// Instanced subobjects must be OURS, not shared with the asset -- duplicate rather than assign.
-	InlineSnapProvider = SketchAsset->SnapProvider
-		                     ? DuplicateObject<UPCGExClusterSnapProvider>(SketchAsset->SnapProvider, this)
-		                     : nullptr;
+	// Outered to the ACTOR, and auto-named because siblings share that outer -- see the declaration.
+	InlinePayload = NewObject<UPCGExClusterSketchPayload>(Owner, NAME_None, RF_Transactional);
 
-	InlineDecorators.Reset(SketchAsset->Decorators.Num());
-	for (const TObjectPtr<UPCGExClusterSketchDecorator>& Decorator : SketchAsset->Decorators)
+	// Seeded from the asset in force, so authoring starts from what is on screen rather than an empty
+	// sketch. Instanced subobjects must be the PAYLOAD's -- duplicate rather than share the asset's.
+	if (Asset)
 	{
-		InlineDecorators.Add(Decorator ? DuplicateObject<UPCGExClusterSketchDecorator>(Decorator, this) : nullptr);
-	}
+		InlinePayload->Model = Asset->Model;
 
-	SketchAsset = nullptr;
+		InlinePayload->SnapProvider = Asset->SnapProvider
+			? DuplicateObject<UPCGExClusterSnapProvider>(Asset->SnapProvider, InlinePayload)
+			: nullptr;
+
+		InlinePayload->Decorators.Reset(Asset->Decorators.Num());
+		for (const TObjectPtr<UPCGExClusterSketchDecorator>& Decorator : Asset->Decorators)
+		{
+			InlinePayload->Decorators.Add(Decorator ? DuplicateObject<UPCGExClusterSketchDecorator>(Decorator, InlinePayload) : nullptr);
+		}
+	}
 
 	RefreshSketchVisual();
 	PostEditChange();
 	PCGExEditor::NotifyObjectChanged(this);
 }
-#endif
 
-#if WITH_EDITOR
+void UPCGExClusterSketchComponent::DeleteInlineSketch()
+{
+	if (IsTemplate() || !InlinePayload)
+	{
+		return;
+	}
+
+	const FScopedTransaction Transaction(NSLOCTEXT("PCGExClusterSketchComponent", "DeleteInlineSketch", "Delete Inline Cluster Sketch"));
+	Modify();
+
+	// Only the reference goes: the payload object itself stays alive in the transaction buffer, so undo
+	// restores the whole authored tier -- provider and decorators included -- by restoring this pointer.
+	InlinePayload = nullptr;
+
+	RefreshSketchVisual();
+	PostEditChange();
+	PCGExEditor::NotifyObjectChanged(this);
+}
+
 void UPCGExClusterSketchComponent::SaveToAsset()
 {
 	// The dialog + package creation live in the editor module; runtime reaches them through the bridge,
-	// which is a plain null in cooked builds.
-	if (!PCGExSketch::GSaveSketchAsAssetFn)
+	// which is a plain null in cooked builds. Template-guarded like the other two buttons: SetSketchAsset
+	// writes the instance-only pick, which is inert on a template.
+	if (IsTemplate() || !PCGExSketch::GSaveSketchAsAssetFn)
 	{
 		return;
 	}
@@ -894,14 +1090,15 @@ void UPCGExClusterSketchComponent::SaveToAsset()
 		return; // cancelled
 	}
 
-	// Referencing the new asset AFTER it is filled: the component becomes an instance of what it just
-	// externalized, and its inline payload is preserved (read-only) behind the reference.
+	// Recorded as this instance's pick so Delete Inline Sketch lands on what was just externalized. While
+	// a payload exists it overrules this, so the component keeps drawing its own sketch either way.
 	const FScopedTransaction Transaction(NSLOCTEXT("PCGExClusterSketchComponent", "SaveToAsset", "Save Cluster Sketch To Asset"));
-	Modify();
-	SketchAsset = NewAsset;
+	SetSketchAsset(NewAsset);
 
 	RefreshSketchVisual();
 	PostEditChange();
 	PCGExEditor::NotifyObjectChanged(this);
 }
 #endif
+
+#pragma endregion

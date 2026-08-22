@@ -4,8 +4,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Misc/Attribute.h"
 #include "Framework/SlateDelegates.h"
+#include "Misc/Attribute.h"
 
 class SWidget;
 

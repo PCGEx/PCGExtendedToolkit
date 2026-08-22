@@ -5,7 +5,7 @@
 
 #include "CoreMinimal.h"
 
-#include "PCGExProperty.h"
+#include "PCGExPropertySchema.h"
 
 #include "PCGExCategoryOverrides.generated.h"
 

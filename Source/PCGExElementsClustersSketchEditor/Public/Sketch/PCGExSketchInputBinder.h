@@ -65,10 +65,16 @@ public:
 	 */
 	bool HandleAltClick(const FRay& WorldRay);
 
-	bool IsAltDown() const { return bAltDown; }
+	bool IsAltDown() const
+	{
+		return bAltDown;
+	}
 
 	//~ IInputBehaviorSource
-	virtual const UInputBehaviorSet* GetInputBehaviors() const override { return BehaviorSet; }
+	virtual const UInputBehaviorSet* GetInputBehaviors() const override
+	{
+		return BehaviorSet;
+	}
 
 	//~ IClickBehaviorTarget
 	virtual FInputRayHit IsHitByClick(const FInputDeviceRay& ClickPos) override;

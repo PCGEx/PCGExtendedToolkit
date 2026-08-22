@@ -41,7 +41,7 @@ FVector2D SPCGExPropertyCurveGraph::ComputeDesiredSize(float LayoutScaleMultipli
 
 float SPCGExPropertyCurveGraph::ValueToLocalY(float Value, const FVector2D& Size) const
 {
-	const float Top = Padding;
+	constexpr float Top = Padding;
 	const float Bottom = Size.Y - Padding;
 	const float Alpha = Controller->ValueToFrameAlpha(Value);
 	return Bottom - Alpha * FMath::Max(Bottom - Top, 1.0f);
@@ -49,7 +49,7 @@ float SPCGExPropertyCurveGraph::ValueToLocalY(float Value, const FVector2D& Size
 
 float SPCGExPropertyCurveGraph::LocalYToValue(float LocalY, const FVector2D& Size) const
 {
-	const float Top = Padding;
+	constexpr float Top = Padding;
 	const float Bottom = Size.Y - Padding;
 	const float Alpha = (Bottom - LocalY) / FMath::Max(Bottom - Top, 1.0f);
 	// No clamp: the value follows the cursor unbounded. The frame is frozen mid-drag (stable mapping,
@@ -102,9 +102,9 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 	const FVector2D Size = AllottedGeometry.GetLocalSize();
 	const FSlateBrush* WhiteBrush = FCoreStyle::Get().GetDefaultBrush();
 
-	const float Left = Padding;
+	constexpr float Left = Padding;
 	const float Right = Size.X - Padding;
-	const float Top = Padding;
+	constexpr float Top = Padding;
 	const float Bottom = Size.Y - Padding;
 
 	// Background panel.
