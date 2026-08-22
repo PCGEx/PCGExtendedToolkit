@@ -62,7 +62,8 @@ void FPCGExProbeRNG::ProcessCandidates(const int32 Index, TArray<PCGExProbing::F
 				break;
 			}
 
-			const double DijSq = Cj.Distance * Cj.Distance;
+			// Candidate distances are already squared.
+			const double DijSq = Cj.Distance;
 			const FVector& Pj = Positions[Cj.PointIndex];
 
 			bool bBlocked = false;
@@ -93,7 +94,7 @@ void FPCGExProbeRNG::ProcessCandidates(const int32 Index, TArray<PCGExProbing::F
 		// β-skeleton sphere centers: C1 = Pi + HalfBeta*(Pj-Pi), C2 = Pj + HalfBeta*(Pi-Pj)
 		// Edge (i,j) blocked if any k lies inside both spheres.
 		// For any β ∈ [1,2], a blocking k must satisfy d_ik < d_ij (triangle inequality on C2),
-		// so we only examine candidates with Ck.Distance < Dij.
+		// so we only examine candidates with Ck.Distance < DijSq.
 		for (int32 c = 0; c < Candidates.Num(); ++c)
 		{
 			const PCGExProbing::FCandidate& Cj = Candidates[c];
@@ -102,8 +103,10 @@ void FPCGExProbeRNG::ProcessCandidates(const int32 Index, TArray<PCGExProbing::F
 				break;
 			}
 
-			const double Dij = Cj.Distance;
-			const double RadiusSq = HalfBetaSq * Dij * Dij;
+			// Candidate distances are already squared, so the sphere radius (HalfBeta * d_ij)
+			// squares to HalfBetaSq * DijSq -- no second multiply by DijSq.
+			const double DijSq = Cj.Distance;
+			const double RadiusSq = HalfBetaSq * DijSq;
 			const FVector& Pj = Positions[Cj.PointIndex];
 			const FVector C1 = Pi + HalfBeta * (Pj - Pi);
 			const FVector C2 = Pj + HalfBeta * (Pi - Pj);
@@ -112,7 +115,7 @@ void FPCGExProbeRNG::ProcessCandidates(const int32 Index, TArray<PCGExProbing::F
 			for (int32 k = 0; k < c; ++k)
 			{
 				const PCGExProbing::FCandidate& Ck = Candidates[k];
-				if (Ck.Distance >= Dij)
+				if (Ck.Distance >= DijSq)
 				{
 					break;
 				}
