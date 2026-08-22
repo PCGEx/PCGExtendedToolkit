@@ -13,6 +13,10 @@
 #include "Sketch/PCGExClusterSketchStyle.h"
 #include "Sketch/PCGExClusterSketchViewportClient.h"
 #include "Sketch/PCGExSketchEditController.h"
+#include "Sketch/SPCGExSketchPanel.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Docking/SDockTab.h"
+#include "Widgets/Layout/SScrollBox.h"
 
 FPCGExClusterSketchToolkit::FPCGExClusterSketchToolkit(UAssetEditor* InOwningAssetEditor)
 	: FBaseAssetToolkit(InOwningAssetEditor)
@@ -23,25 +27,25 @@ FPCGExClusterSketchToolkit::FPCGExClusterSketchToolkit(UAssetEditor* InOwningAss
 		->AddArea
 		(
 			FTabManager::NewPrimaryArea()->SetOrientation(Orient_Vertical)
-			->Split
-			(
-				FTabManager::NewSplitter()->SetOrientation(Orient_Horizontal)
-				->Split
-				(
-					FTabManager::NewStack()
-					->SetSizeCoefficient(0.75f)
-					->AddTab(ViewportTabID, ETabState::OpenedTab)
-					->SetHideTabWell(true)
-				)
-				->Split
-				(
-					FTabManager::NewStack()
-					->SetSizeCoefficient(0.25f)
-					->AddTab(DetailsTabID, ETabState::OpenedTab)
-					->SetHideTabWell(true)
-				)
-			)
-		);
+			                             ->Split
+			                             (
+				                             FTabManager::NewSplitter()->SetOrientation(Orient_Horizontal)
+				                                                       ->Split
+				                                                       (
+					                                                       FTabManager::NewStack()
+					                                                       ->SetSizeCoefficient(0.75f)
+					                                                       ->AddTab(ViewportTabID, ETabState::OpenedTab)
+					                                                       ->SetHideTabWell(true)
+					                                                       )
+				                                                       ->Split
+				                                                       (
+					                                                       FTabManager::NewStack()
+					                                                       ->SetSizeCoefficient(0.25f)
+					                                                       ->AddTab(DetailsTabID, ETabState::OpenedTab)
+					                                                       ->SetHideTabWell(true)
+					                                                       )
+				                             )
+			);
 
 	ObjectScene = MakeShared<FAdvancedPreviewScene>(FPreviewScene::ConstructionValues());
 
@@ -100,7 +104,7 @@ void FPCGExClusterSketchToolkit::CreatePreviewSketch(UPCGExClusterSketch* InSket
 	UPCGExClusterSketchComponent* Component = NewObject<UPCGExClusterSketchComponent>(Actor, NAME_None, RF_Transient);
 	// Referencing the asset makes the component READ-ONLY by its own rule -- exactly right here: every
 	// mutation goes through the controller's asset target, and this is purely the renderer.
-	Component->SketchAsset = InSketch;
+	Component->SetSketchAsset(InSketch);
 	Actor->SetRootComponent(Component);
 	Component->RegisterComponent();
 
@@ -111,6 +115,71 @@ void FPCGExClusterSketchToolkit::CreatePreviewSketch(UPCGExClusterSketch* InSket
 
 	PreviewActor = Actor;
 	PreviewComponent = Component;
+}
+
+void FPCGExClusterSketchToolkit::EnsurePanelCreated()
+{
+	if (Panel.IsValid())
+	{
+		return;
+	}
+
+	FPCGExSketchPanelContext Context;
+	Context.ResolveActiveController = [this]()
+	{
+		return Controller;
+	};
+	Context.ResolveSketchObject = [this]() -> UObject*
+	{
+		const UPCGExClusterSketchEditor* SketchEditor = Cast<UPCGExClusterSketchEditor>(OwningAssetEditor);
+		return SketchEditor ? SketchEditor->GetSketch() : nullptr;
+	};
+	Context.RequestBodyRefresh = FSimpleDelegate::CreateLambda([this]()
+	{
+		if (ViewportClient)
+		{
+			ViewportClient->Invalidate();
+		}
+	});
+
+	// No enumerator: this host edits exactly one sketch, so the panel's picker stays collapsed.
+	SAssignNew(Panel, SPCGExSketchPanel, Context);
+}
+
+TSharedRef<SDockTab> FPCGExClusterSketchToolkit::SpawnTab_Details(const FSpawnTabArgs& Args)
+{
+	EnsurePanelCreated();
+
+	// The panel IS this editor's details surface -- it already reaches the asset's snap provider and
+	// decorators, so the base's DetailsView would only mirror it a second time.
+	return SNew(SDockTab)
+		.Label(INVTEXT("Details"))
+		[
+			SNew(SVerticalBox)
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				Panel->MakeHeader()
+			]
+
+			+ SVerticalBox::Slot()
+			.FillHeight(1.0f)
+			[
+				// The mode host supplies this itself; here the toolkit owns it.
+				SNew(SScrollBox)
+				+ SScrollBox::Slot()
+				[
+					Panel->MakeBody()
+				]
+			]
+		];
+}
+
+void FPCGExClusterSketchToolkit::SetEditingObject(UObject* /*InObject*/)
+{
+	// Deliberately empty. CreateWidgets check()s DetailsView into existence, but this editor never shows
+	// it -- left unpopulated it stops rebuilding an invisible layout on every asset change.
 }
 
 void FPCGExClusterSketchToolkit::CreateEditorModeManager()

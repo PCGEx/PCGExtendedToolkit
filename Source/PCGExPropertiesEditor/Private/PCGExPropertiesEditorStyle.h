@@ -19,7 +19,7 @@ class FPCGExPropertiesEditorStyle : public FSlateStyleSet
 {
 public:
 	FPCGExPropertiesEditorStyle();
-	virtual ~FPCGExPropertiesEditorStyle();
+	virtual ~FPCGExPropertiesEditorStyle() override;
 
 	static FName StaticStyleSetName();
 

@@ -45,12 +45,11 @@ class PCGEXPROPERTIES_API UPCGExPropertySchemaAsset : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1, MultiLine))
 	FString Notes;
 #endif
-	
+
 	/** Schemas (and further imports) carried by this asset. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Settings)
 	FPCGExPropertySchemaCollection Collection;

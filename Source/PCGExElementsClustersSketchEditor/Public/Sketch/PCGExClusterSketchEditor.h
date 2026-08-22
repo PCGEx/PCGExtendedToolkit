@@ -26,7 +26,10 @@ public:
 	virtual void GetObjectsToEdit(TArray<UObject*>& OutObjects) override;
 	virtual TSharedPtr<FBaseAssetToolkit> CreateToolkit() override;
 
-	UPCGExClusterSketch* GetSketch() const { return Sketch; }
+	UPCGExClusterSketch* GetSketch() const
+	{
+		return Sketch;
+	}
 
 protected:
 	UPROPERTY()

@@ -1,4 +1,4 @@
-// Copyright 2026 Timothé Lapetite and contributors
+﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExProperties.h"
@@ -17,6 +17,46 @@ void FPCGExPropertiesModule::RegisterToEditor(const TSharedPtr<FSlateStyleSet>& 
 
 PCGEX_IMPLEMENT_MODULE(FPCGExPropertiesModule, PCGExProperties)
 
+#pragma region FPCGExPropertyOverrideEntry
+
+#if WITH_EDITORONLY_DATA
+void FPCGExPropertyOverrideEntry::SeedOuterIdentityFromInner()
+{
+	if (const FPCGExProperty* Prop = Value.GetPtr<FPCGExProperty>())
+	{
+		PropertyName = Prop->PropertyName;
+		HeaderId = Prop->HeaderId;
+	}
+}
+#endif
+
+FName FPCGExPropertyOverrideEntry::GetPropertyName() const
+{
+#if WITH_EDITORONLY_DATA
+	if (!PropertyName.IsNone())
+	{
+		return PropertyName;
+	}
+#endif
+	if (const FPCGExProperty* Prop = Value.GetPtr<FPCGExProperty>())
+	{
+		return Prop->PropertyName;
+	}
+	return NAME_None;
+}
+
+const FPCGExProperty* FPCGExPropertyOverrideEntry::GetProperty() const
+{
+	return Value.GetPtr<FPCGExProperty>();
+}
+
+FPCGExProperty* FPCGExPropertyOverrideEntry::GetPropertyMutable()
+{
+	return Value.GetMutablePtr<FPCGExProperty>();
+}
+
+#pragma endregion
+
 #pragma region FPCGExPropertySchema
 
 FPCGExPropertySchema::FPCGExPropertySchema()
@@ -24,6 +64,27 @@ FPCGExPropertySchema::FPCGExPropertySchema()
 #if WITH_EDITOR
 	Property.InitializeAs<FPCGExProperty_Float>();
 #endif
+}
+
+void FPCGExPropertySchema::SyncPropertyName()
+{
+	if (FPCGExProperty* Prop = GetPropertyMutable())
+	{
+		Prop->PropertyName = Name;
+#if WITH_EDITOR
+		Prop->HeaderId = HeaderId;
+#endif
+	}
+}
+
+const FPCGExProperty* FPCGExPropertySchema::GetProperty() const
+{
+	return Property.GetPtr<FPCGExProperty>();
+}
+
+FPCGExProperty* FPCGExPropertySchema::GetPropertyMutable()
+{
+	return Property.GetMutablePtr<FPCGExProperty>();
 }
 
 #pragma endregion
@@ -306,7 +367,10 @@ void FPCGExPropertySchemaCollection::SyncAllSchemas(TArray<FPCGExHeaderIdRemap>&
 	auto GenerateUniqueHeaderId = [&SeenHeaderIds]() -> int32
 	{
 		int32 NewId = 0;
-		do { NewId = GetTypeHash(FGuid::NewGuid()); }
+		do
+		{
+			NewId = GetTypeHash(FGuid::NewGuid());
+		}
 		while (NewId == 0 || SeenHeaderIds.Contains(NewId));
 		return NewId;
 	};
@@ -825,10 +889,16 @@ namespace PCGExPropertySoftPaths
 		// each one's Collection to surface its leaf soft paths.
 		for (const TObjectPtr<UPCGExPropertySchemaAsset>& Asset : Collection.ImportedSchemas)
 		{
-			if (!Asset) { continue; }
+			if (!Asset)
+			{
+				continue;
+			}
 			bool bAlreadyVisited = false;
 			Visited.Add(Asset.Get(), &bAlreadyVisited);
-			if (bAlreadyVisited) { continue; }
+			if (bAlreadyVisited)
+			{
+				continue;
+			}
 			WalkCollection(Asset->Collection, Visited, OutPaths);
 		}
 	}
@@ -840,7 +910,10 @@ namespace PCGExProperties
 	{
 		for (const FPCGExPropertyOverrideEntry& Entry : Overrides.Overrides)
 		{
-			if (!Entry.bEnabled) { continue; }
+			if (!Entry.bEnabled)
+			{
+				continue;
+			}
 			if (const FPCGExProperty* Prop = Entry.GetProperty())
 			{
 				Prop->GatherSoftObjectPaths(OutPaths);
@@ -852,6 +925,22 @@ namespace PCGExProperties
 	{
 		TSet<const UPCGExPropertySchemaAsset*> Visited;
 		PCGExPropertySoftPaths::WalkCollection(Collection, Visited, OutPaths);
+	}
+
+	const FInstancedStruct* ResolveEffective(
+		const FPCGExPropertySchemaCollection& InSchema, const FPCGExPropertyOverrides* InOverrides, const FName InName)
+	{
+		// Already walks locals -> ImportOverrides -> imported defaults.
+		const FInstancedStruct* SchemaEntry = InSchema.GetPropertyByName(InName);
+		if (!InOverrides || !SchemaEntry)
+		{
+			return SchemaEntry;
+		}
+
+		// A type mismatch means the schema was retyped without this override being re-synced. Every
+		// CopyValueFrom is an unchecked static_cast, so handing the override back would type-pun.
+		const FInstancedStruct* Override = InOverrides->GetOverride(InName);
+		return Override && Override->GetScriptStruct() == SchemaEntry->GetScriptStruct() ? Override : SchemaEntry;
 	}
 }
 

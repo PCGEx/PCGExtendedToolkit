@@ -1416,6 +1416,12 @@ void UPCGExAssetCollection::BeginDestroy()
 	Super::BeginDestroy();
 }
 
+void UPCGExAssetCollection::RebuildPropertyRegistry()
+{
+	TArray<FInstancedStruct> Schema = CollectionProperties.BuildSchema();
+	PCGExProperties::BuildRegistry(Schema, PropertyRegistry);
+}
+
 void UPCGExAssetCollection::RebuildStagingData(bool bRecursive)
 {
 	SyncEntryIds();

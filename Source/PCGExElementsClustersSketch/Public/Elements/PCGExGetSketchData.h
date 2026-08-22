@@ -16,6 +16,12 @@
 class UPCGExClusterSketchDecorator;
 struct FPCGExClusterSketchPrintContext;
 
+namespace PCGExData
+{
+	class FPointIO;
+	class FPointIOCollection;
+}
+
 namespace PCGExGraphs
 {
 	class FGraphBuilder;

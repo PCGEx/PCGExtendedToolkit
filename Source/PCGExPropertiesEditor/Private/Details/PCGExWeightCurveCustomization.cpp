@@ -41,11 +41,11 @@ void FPCGExWeightCurveCustomization::CustomizeChildren(TSharedRef<IPropertyHandl
 
 	// Clamps come from the HOST property's metas -- the wrapper struct itself stays clamp-agnostic.
 	ChildBuilder.AddCustomRow(LOCTEXT("CurveEditorRow", "Curve Editor"))
-		.WholeRowContent()
-		[
-			SNew(SPCGExPropertyCurveValueWidget, CurveHandle.ToSharedRef())
-			.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
-		];
+	            .WholeRowContent()
+	[
+		SNew(SPCGExPropertyCurveValueWidget, CurveHandle.ToSharedRef())
+		.Clamps(FPCGExPropertyCurveClamps::FromProperty(PropertyHandle->GetProperty()))
+	];
 }
 
 #undef LOCTEXT_NAMESPACE

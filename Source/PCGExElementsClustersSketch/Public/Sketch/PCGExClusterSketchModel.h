@@ -6,59 +6,9 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 #include "Lattice/PCGExLatticeBasis.h"
+#include "Sketch/PCGExClusterSketchData.h"
 
 #include "PCGExClusterSketchModel.generated.h"
-
-/** Value type of one annotation channel. Enumerator identifiers are a wire format -- never rename. */
-UENUM(BlueprintType)
-enum class EPCGExClusterDataChannelType : uint8
-{
-	Double  = 0 UMETA(ToolTip = "Double-precision scalar."),
-	Integer = 1 UMETA(ToolTip = "64-bit integer."),
-	Name    = 2 UMETA(ToolTip = "FName."),
-	Vector  = 3 UMETA(ToolTip = "3D vector."),
-};
-
-/**
- * One named, typed annotation channel over a sketch domain (vertices or edges, decided by which array
- * holds it). Uninterpreted by core -- clients own their channels by naming convention. At print time a
- * channel becomes a PCG attribute of the same name on the printed Vtx or Edges output.
- * Only the array matching Type is used; element count is kept aligned with the domain by the model's
- * mutation API.
- */
-USTRUCT(BlueprintType)
-struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterDataChannel
-{
-	GENERATED_BODY()
-
-	/** Attribute name on the printed output. Reserved cluster attributes (PCGEx/VData, PCGEx/EData) are refused. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
-	FName Name = NAME_None;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
-	EPCGExClusterDataChannelType Type = EPCGExClusterDataChannelType::Double;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Type == EPCGExClusterDataChannelType::Double", EditConditionHides))
-	TArray<double> DoubleValues;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Type == EPCGExClusterDataChannelType::Integer", EditConditionHides))
-	TArray<int64> IntegerValues;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Type == EPCGExClusterDataChannelType::Name", EditConditionHides))
-	TArray<FName> NameValues;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (EditCondition = "Type == EPCGExClusterDataChannelType::Vector", EditConditionHides))
-	TArray<FVector> VectorValues;
-
-	/** Element count of the active array. */
-	int32 Num() const;
-
-	/** Resize the active array, default-initializing new elements. Clears the inactive arrays. */
-	void SetNumDefaulted(int32 InNum);
-
-	void RemoveAt(int32 Index);
-	void InsertDefaulted(int32 Index);
-};
 
 /** One authored sketch vertex. */
 USTRUCT(BlueprintType)
@@ -77,6 +27,11 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchVertex
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	bool bLatticeBound = false;
+
+	/** Record this vertex reads its authored values from; invalid (the default) resolves every field to
+	 *  the schema's own value. Duplicate ids across vertices are LEGAL -- never de-duplicate. */
+	UPROPERTY()
+	FGuid DataId;
 
 #if WITH_EDITORONLY_DATA
 	/** Authoring provenance: true for vertices the TOOL inserted (edge splits at crossings) rather than
@@ -98,35 +53,62 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchEdge
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	int32 B = -1;
+
+	/** See FPCGExClusterSketchVertex::DataId. Splitting an edge hands every NEW segment the parent's
+	 *  id, so one record still describes the whole original span. */
+	UPROPERTY()
+	FGuid DataId;
 };
 
 /** Aggregate result of FPCGExClusterSketchModel::Validate -- counts, never element indices, so the
  *  caller can warn once per issue class. */
 struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchValidation
 {
-	int32 InvalidEdges = 0;      // out-of-range vertex index
+	int32 InvalidEdges = 0; // out-of-range vertex index
 	int32 SelfLoops = 0;
-	int32 DuplicateEdges = 0;    // undirected duplicates beyond the first occurrence
-	int32 IsolatedVertices = 0;  // dropped by cluster compile (clusters cannot represent them)
+	int32 DuplicateEdges = 0;   // undirected duplicates beyond the first occurrence
+	int32 IsolatedVertices = 0; // dropped by cluster compile (clusters cannot represent them)
 	/** Vertices sharing an earlier vertex's lattice coord (bound) or position (free) -- clusters cannot
 	 *  carry collocated vertices; the editor merges on drop, raw edits get warned at print. */
 	int32 CollocatedVertices = 0;
-	/** PER DOMAIN: a channel name is only meaningful within its own domain, so a broken edge channel
-	 *  must never suppress a healthy vertex channel that happens to share its name. */
-	struct FChannelIssues
-	{
-		TArray<FName> Misaligned;   // channel length != domain count
-		TArray<FName> InvalidNames; // None, duplicate, or reserved cluster attribute
 
-		bool IsEmpty() const { return Misaligned.IsEmpty() && InvalidNames.IsEmpty(); }
-		bool Rejects(const FName InName) const { return InvalidNames.Contains(InName) || Misaligned.Contains(InName); }
+	/** PER LAYER: a property name is only meaningful within its own domain, so a broken edge entry must
+	 *  never suppress a healthy vertex entry that happens to share its name. */
+	struct FLayerIssues
+	{
+		/** Schema entries rejected for OUTPUT: the name is None after sanitization, collides with
+		 *  another entry's sanitized name, or is a reserved cluster attribute. Keyed by the SCHEMA
+		 *  name, which is what the print path holds. */
+		TArray<FName> InvalidNames;
+		/** Items whose DataId is set but names no record -- printed as schema defaults. */
+		int32 DanglingRefs = 0;
+		/** Records sharing an Id; only the first is ever addressable. */
+		int32 DuplicateRecordIds = 0;
+
+		bool IsEmpty() const
+		{
+			return InvalidNames.IsEmpty() && DanglingRefs == 0 && DuplicateRecordIds == 0;
+		}
+
+		bool Rejects(const FName InName) const
+		{
+			return InvalidNames.Contains(InName);
+		}
 	};
 
-	FChannelIssues VertexChannelIssues;
-	FChannelIssues EdgeChannelIssues;
+	FLayerIssues SketchLayerIssues;
+	FLayerIssues VertexLayerIssues;
+	FLayerIssues EdgeLayerIssues;
 
-	bool HasEdgeIssues() const { return InvalidEdges > 0 || SelfLoops > 0 || DuplicateEdges > 0; }
-	bool HasChannelIssues() const { return !VertexChannelIssues.IsEmpty() || !EdgeChannelIssues.IsEmpty(); }
+	bool HasEdgeIssues() const
+	{
+		return InvalidEdges > 0 || SelfLoops > 0 || DuplicateEdges > 0;
+	}
+
+	bool HasLayerIssues() const
+	{
+		return !SketchLayerIssues.IsEmpty() || !VertexLayerIssues.IsEmpty() || !EdgeLayerIssues.IsEmpty();
+	}
 };
 
 /** One hypothetical crossing: two edges sharing a point that is not a vertex. Offered as a ghost in the
@@ -140,10 +122,12 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchCrossing
 };
 
 /**
- * The authored cluster-sketch model: vertices + undirected edges + annotation channels, all plain
+ * The authored cluster-sketch model: vertices + undirected edges + the authored data tier, all plain
  * serialized arrays. Edges reference vertices by array index; ALL mutations must go through the API
- * below, which keeps edge indices and channel arrays aligned through removals. Raw array edits (details
+ * below, which keeps edge indices and record references coherent through removals. Raw array edits (details
  * panel) are a supported surface -- print-time validation and the owning asset's edit hooks absorb them.
+ *
+ * Every mutation here is PURE: the host owns the transaction, the change notify, and the schema sync.
  */
 USTRUCT(BlueprintType)
 struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
@@ -156,14 +140,20 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	TArray<FPCGExClusterSketchEdge> Edges;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
-	TArray<FPCGExClusterDataChannel> VertexChannels;
+	/** The authored tier. Travels with the model through Save To Asset / Create Inline Sketch, and the
+	 *  two sharing rules (merge-inherit, split-share) sit next to the mutations that apply them. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (ShowOnlyInnerProperties))
+	FPCGExSketchData Data;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
-	TArray<FPCGExClusterDataChannel> EdgeChannels;
+	int32 NumVertices() const
+	{
+		return Vertices.Num();
+	}
 
-	int32 NumVertices() const { return Vertices.Num(); }
-	int32 NumEdges() const { return Edges.Num(); }
+	int32 NumEdges() const
+	{
+		return Edges.Num();
+	}
 
 	/** THE location rule, in one place: a bound vertex resolves through the basis (when one exists),
 	 *  a free one through its transform. */
@@ -173,21 +163,26 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	 *  their transform says. Invalid (ForceInit) box when there are no vertices. */
 	FBox GetBounds(const FPCGExLatticeBasis* Basis) const;
 
-	/** Append a free vertex. Extends every vertex channel. @return the new vertex index. */
-	int32 AddVertex(const FTransform& InTransform);
+	/**
+	 * Append a free vertex. InDataId is the record it reads from, defaulting to none; it is taken BY
+	 * VALUE because the append reallocates Vertices, so a reference INTO that array would dangle.
+	 * @return the new vertex index.
+	 */
+	int32 AddVertex(const FTransform& InTransform, FGuid InDataId = FGuid());
 
-	/** Append a lattice-bound vertex at Coord; location derived through the basis. Extends channels. */
-	int32 AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis);
+	/** Append a lattice-bound vertex at Coord; location derived through the basis. InDataId as AddVertex. */
+	int32 AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis, FGuid InDataId = FGuid());
 
-	/** Remove a vertex, its edges, and its channel entries; remaining edge indices are remapped. */
+	/** Remove a vertex and its edges; remaining edge indices are remapped. Records are left alone --
+	 *  an unreferenced one is purged deliberately, never as a side effect. */
 	bool RemoveVertex(int32 Index);
 
 	/** Add the undirected edge (A,B). Idempotent: an existing edge is returned rather than duplicated.
-	 *  @param bOutCreated set true only when a NEW edge was appended (channel entries defaulted).
+	 *  @param bOutCreated set true only when a NEW edge was appended (referencing no record).
 	 *  @return the edge index, or INDEX_NONE for an invalid pair (out of range or self-loop). */
 	int32 Connect(int32 A, int32 B, bool* bOutCreated = nullptr);
 
-	/** Remove the undirected edge (A,B) and its channel entries. @return true if an edge was removed. */
+	/** Remove the undirected edge (A,B). @return true if an edge was removed. */
 	bool Disconnect(int32 A, int32 B);
 
 	/** Remove one edge BY INDEX. Callers holding edge indices must use this: Disconnect resolves through
@@ -197,8 +192,9 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	/**
 	 * Merge InAbsorbed into InSurvivor: every edge of the absorbed vertex retargets its endpoint onto
 	 * the survivor (edges that would become self-loops or duplicates are dropped, the survivor edge's
-	 * channel values winning), then the absorbed vertex and its channel entries are removed. The
-	 * editor's drop-on-vertex gesture and any raw cleanup both go through this.
+	 * record winning), then the absorbed vertex is removed. The survivor INHERITS the absorbed vertex's
+	 * record only when it has none of its own. The editor's drop-on-vertex gesture and any raw cleanup
+	 * both go through this.
 	 * @return the survivor's index AFTER the removal remap, or INDEX_NONE for an invalid pair.
 	 */
 	int32 MergeVertices(int32 InAbsorbed, int32 InSurvivor);
@@ -228,7 +224,8 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	/**
 	 * Replace an edge that passes through vertices with the chain of segments between them (sorted along
 	 * the edge), deduping against existing edges -- so retarget-created degeneracies dissolve into the
-	 * connectivity that is already there. Every NEW segment inherits the parent edge's channel values.
+	 * connectivity that is already there. Every NEWLY CREATED segment inherits the parent edge's record;
+	 * a segment deduped onto a pre-existing edge keeps its own.
 	 * @return the number of edges the chain replaced the original with (0 = nothing contained, untouched).
 	 */
 	int32 SplitEdgeByContainedVertices(int32 EdgeIndex, const FPCGExLatticeBasis* Basis, TArray<uint64>* OutSegmentKeys = nullptr);
@@ -291,14 +288,55 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 
 	/**
 	 * Drop every structurally invalid edge -- out-of-range endpoints, self-loops, undirected duplicates
-	 * (first occurrence kept) -- with their channel entries. Out-of-range edges are DORMANT hazards:
+	 * (first occurrence kept). Out-of-range edges are DORMANT hazards:
 	 * invisible and unprintable today, they silently reactivate the moment the vertex array grows past
 	 * their indices, materializing as "random" edges onto new vertices. Never called automatically (a
 	 * details-panel edit passes through invalid states mid-typing); the editor surfaces them and the
-	 * sketch's cleanup button invokes this deliberately.
+	 * sketch's cleanup button invokes this deliberately. Tool residue the removal strands goes with it.
 	 * @return the number of edges removed.
 	 */
 	int32 RemoveInvalidEdges();
+
+	/**
+	 * Merge every vertex that RESOLVES to an already-occupied printed location (duplicate coords,
+	 * overlapping free positions, or a rank-collapsed snap basis projecting distinct coords together)
+	 * into the earliest vertex there, then resolve the degeneracies the retargeting creates.
+	 * @return the number of merges performed.
+	 */
+	int32 MergeCollocatedVertices(const FPCGExLatticeBasis* Basis);
+
+	/**
+	 * Resolve every edge overlap: an edge passing through a vertex splits into the chain between them,
+	 * and two crossing edges gain a side-effect vertex at the crossing and split through it. The full
+	 * cleanup, where SplitAllOverlappingEdges only does the containment half.
+	 * @return chain splits plus crossing vertices inserted.
+	 */
+	int32 SplitOverlappingEdges(const FPCGExLatticeBasis* Basis);
+
+	/**
+	 * Record an edge extruded FROM InVertexIndex inherits: the one its source vertex's SOLE edge holds,
+	 * so a drafted chain keeps a single description of its span. A junction (2+ edges) or a loose end
+	 * (0) has no unambiguous parent and yields an invalid id.
+	 *
+	 * Resolve against the PRE-GESTURE model: the extruded edge itself would otherwise count toward the
+	 * source's degree, and enforcement splits shift edges under any index a caller held.
+	 */
+	FGuid ResolveExtrudeEdgeDataId(int32 InVertexIndex) const;
+
+	/** Every record id the model currently references, per domain -- including duplicates, so a caller
+	 *  can count shares. Invalid ids are skipped. */
+	void GatherLiveDataIds(TArray<FGuid>& OutVertexIds, TArray<FGuid>& OutEdgeIds) const;
+
+	/** How many items reference InDataId. Drives the panel's "shared by N". */
+	int32 CountVertexReferences(const FGuid& InDataId) const;
+	int32 CountEdgeReferences(const FGuid& InDataId) const;
+
+	/**
+	 * Drop every record no item references, in both layers. NEVER automatic: PostSaveRoot is not
+	 * transacted, so an auto-purge lets delete-vertex -> save -> undo resurrect an item pointing at a
+	 * record that no longer exists. @return the number of records removed.
+	 */
+	int32 PurgeUnreferencedRecords();
 
 	/** Aggregate integrity summary; cheap, never mutates. */
 	void Validate(FPCGExClusterSketchValidation& OutSummary) const;

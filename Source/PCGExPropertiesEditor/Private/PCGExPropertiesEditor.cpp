@@ -11,7 +11,6 @@
 #include "PCGExPropertyTypes.h"
 #include "PCGExPropertyWriter.h"
 #include "PropertyEditorModule.h"
-#include "Metadata/PCGObjectPropertyOverride.h"
 #include "Details/PCGExEnumSelectorCustomization.h"
 #include "Details/PCGExNumericRangeCustomization.h"
 #include "Details/PCGExObjectPropertyOverrideDescriptionCustomization.h"
@@ -24,6 +23,7 @@
 #include "Details/PCGExPropertySchemaCustomization.h"
 #include "Details/PCGExWeightCurveCustomization.h"
 #include "Details/PCGExWeightedPropertyOverridesCustomization.h"
+#include "Metadata/PCGObjectPropertyOverride.h"
 #include "Utils/PCGExWeightCurve.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExPropertiesEditorModule"

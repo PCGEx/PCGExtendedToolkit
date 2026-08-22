@@ -5,13 +5,13 @@
 
 #include "CoreMinimal.h"
 
+#include "PCGExCollectionsCommon.h"
 #include "Clusters/PCGExClusterCommon.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Fitting/PCGExFitting.h"
 #include "Graphs/PCGExGraphDetails.h"
-#include "PCGExCollectionsCommon.h"
 
 #include "PCGExStagingLoadSketch.generated.h"
 
@@ -98,7 +98,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="Source == EPCGExClusterSketchSource::CollectionMap", EditConditionHides), AdvancedDisplay)
 	FName StagingLayer = NAME_None;
 
-	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
+	FName GetEntryIdxAttributeName() const
+	{
+		return PCGExCollections::Labels::EntryIdxName(StagingLayer);
+	}
 
 	/** Cluster Sketch to print. Constant, or a per-point attribute path. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Sketch", EditCondition="Source == EPCGExClusterSketchSource::Asset", EditConditionHides, AllowedClasses="/Script/PCGExElementsClustersSketch.PCGExClusterSketch"))
@@ -116,7 +119,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Forwarding", meta = (PCG_Overridable))
 	FPCGExAttributeToTagDetails TargetsAttributesToClusterTags;
 
-	/** Which target attributes to forward onto the printed Vtx data. */
+	/** Which target attributes to forward onto the printed Vtx data. A forwarded name equal to an
+	 *  authored sketch attribute REPLACES it on that duplicate -- forwarding recreates the attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Forwarding", meta = (PCG_Overridable))
 	FPCGExForwardDetails TargetsForwarding;
 

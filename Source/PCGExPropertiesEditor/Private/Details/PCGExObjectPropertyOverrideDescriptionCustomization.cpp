@@ -6,16 +6,19 @@
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "PropertyHandle.h"
+#include "Details/PCGExDetailRowWidgets.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/PCGObjectPropertyOverride.h"
-#include "Details/PCGExDetailRowWidgets.h"
 
 namespace PCGExObjectPropertyOverrideDescriptionCustomization
 {
 	// Bare property/attribute name: drops the '$' and '@domain.' qualifiers, skips reserved (@Last/@Source) and empty.
 	FString DeriveTargetName(const TSharedPtr<IPropertyHandle>& InputSourceHandle)
 	{
-		if (!InputSourceHandle.IsValid()) { return FString(); }
+		if (!InputSourceHandle.IsValid())
+		{
+			return FString();
+		}
 
 		void* RawData = nullptr;
 		if (InputSourceHandle->GetValueData(RawData) != FPropertyAccess::Success || !RawData)
@@ -41,7 +44,10 @@ TSharedRef<IPropertyTypeCustomization> FPCGExObjectPropertyOverrideDescriptionCu
 
 void FPCGExObjectPropertyOverrideDescriptionCustomization::OnInputSourceChanged()
 {
-	if (!PropertyTargetHandle.IsValid()) { return; }
+	if (!PropertyTargetHandle.IsValid())
+	{
+		return;
+	}
 
 	const FString NewDerived = PCGExObjectPropertyOverrideDescriptionCustomization::DeriveTargetName(InputSourceHandle);
 
@@ -71,7 +77,7 @@ void FPCGExObjectPropertyOverrideDescriptionCustomization::CustomizeHeader(
 	{
 		// Fall back to the default widgets if the struct layout changes.
 		HeaderRow.NameContent()[PropertyHandle->CreatePropertyNameWidget()]
-		         .ValueContent()[PropertyHandle->CreatePropertyValueWidget()];
+			.ValueContent()[PropertyHandle->CreatePropertyValueWidget()];
 		return;
 	}
 
@@ -83,7 +89,10 @@ void FPCGExObjectPropertyOverrideDescriptionCustomization::CustomizeHeader(
 	auto GetTargetText = [TargetHandle = PropertyTargetHandle]()
 	{
 		FString Value;
-		if (TargetHandle.IsValid()) { TargetHandle->GetValue(Value); }
+		if (TargetHandle.IsValid())
+		{
+			TargetHandle->GetValue(Value);
+		}
 		return FText::FromString(Value);
 	};
 
@@ -91,8 +100,14 @@ void FPCGExObjectPropertyOverrideDescriptionCustomization::CustomizeHeader(
 	auto GetTargetHint = [InputHandle = InputSourceHandle, TargetHandle = PropertyTargetHandle]()
 	{
 		FString Value;
-		if (TargetHandle.IsValid()) { TargetHandle->GetValue(Value); }
-		if (!Value.IsEmpty()) { return FText::GetEmpty(); }
+		if (TargetHandle.IsValid())
+		{
+			TargetHandle->GetValue(Value);
+		}
+		if (!Value.IsEmpty())
+		{
+			return FText::GetEmpty();
+		}
 
 		const FString Derived = PCGExObjectPropertyOverrideDescriptionCustomization::DeriveTargetName(InputHandle);
 		return Derived.IsEmpty() ? FText::GetEmpty() : FText::FromString(Derived);
@@ -100,7 +115,10 @@ void FPCGExObjectPropertyOverrideDescriptionCustomization::CustomizeHeader(
 
 	auto OnTargetCommitted = [TargetHandle = PropertyTargetHandle](const FText& InText, ETextCommit::Type)
 	{
-		if (!TargetHandle.IsValid()) { return; }
+		if (!TargetHandle.IsValid())
+		{
+			return;
+		}
 		TargetHandle->SetValue(InText.ToString().TrimStartAndEnd());
 	};
 
