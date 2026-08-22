@@ -82,6 +82,11 @@ namespace PCGExSketchDrawHelper
 	}
 }
 
+void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, FPrimitiveDrawInterface* PDI)
+{
+	Draw(Controller, PDI, FMeshCoverage());
+}
+
 void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, FPrimitiveDrawInterface* PDI, const FMeshCoverage& InCoverage)
 {
 	const FPCGExClusterSketchModel* Model = Controller.GetTarget().GetModel();

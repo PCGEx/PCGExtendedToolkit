@@ -25,10 +25,13 @@ PCGExData::EIOInit UPCGExSanitizeClustersSettings::GetEdgeOutputInitMode() const
 }
 
 #pragma endregion
+
+#if WITH_EDITOR
 TArray<FText> UPCGExSanitizeClustersSettings::GetNodeTitleAliases() const
 {
 	return {FTEXT("PCGEx | Cluster : Sanitize")};
 }
+#endif
 
 FPCGElementPtr UPCGExSanitizeClustersSettings::CreateElement() const{ return MakeShared<FPCGExRepairClustersElement>();}
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(RepairClusters)
