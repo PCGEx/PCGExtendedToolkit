@@ -5,7 +5,10 @@
 
 #include "CoreMinimal.h"
 
+#include "PCGExCoreMacros.h"
+#include "PCGExCoreSettingsCache.h"
 #include "Core/PCGExElement.h"
+#include "Core/PCGExSettings.h"
 #include "Elements/PCGActorSelector.h"
 #include "Graphs/PCGExGraphDetails.h"
 #include "Lattice/PCGExLatticeBasis.h"
