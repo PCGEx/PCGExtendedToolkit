@@ -15,29 +15,32 @@
 #include "GameFramework/Actor.h"
 #include "Misc/PackageName.h"
 
-static void AddOrUpdateActorEntry(UPCGExActorCollection* Collection, AActor* Actor)
+namespace PCGExActorCollectionEditor
 {
-	TSoftClassPtr<AActor> ActorClass(Actor->GetClass());
-	FSoftObjectPath WorldPath(Actor->GetWorld());
-	FName ActorFName = Actor->GetFName();
+	void AddOrUpdateActorEntry(UPCGExActorCollection* Collection, AActor* Actor)
+	{
+		TSoftClassPtr<AActor> ActorClass(Actor->GetClass());
+		FSoftObjectPath WorldPath(Actor->GetWorld());
+		FName ActorFName = Actor->GetFName();
 
-	FPCGExActorCollectionEntry* Existing = Collection->Entries.FindByPredicate(
-		[&](const FPCGExActorCollectionEntry& E)
+		FPCGExActorCollectionEntry* Existing = Collection->Entries.FindByPredicate(
+			[&](const FPCGExActorCollectionEntry& E)
+			{
+				return E.DeltaSourceActorName == ActorFName
+					&& E.DeltaSourceLevel.ToSoftObjectPath() == WorldPath;
+			});
+
+		if (Existing)
 		{
-			return E.DeltaSourceActorName == ActorFName
-				&& E.DeltaSourceLevel.ToSoftObjectPath() == WorldPath;
-		});
-
-	if (Existing)
-	{
-		Existing->Actor = ActorClass;
-	}
-	else
-	{
-		FPCGExActorCollectionEntry& New = Collection->Entries.Emplace_GetRef();
-		New.Actor = ActorClass;
-		New.DeltaSourceLevel = TSoftObjectPtr<UWorld>(WorldPath);
-		New.DeltaSourceActorName = ActorFName;
+			Existing->Actor = ActorClass;
+		}
+		else
+		{
+			FPCGExActorCollectionEntry& New = Collection->Entries.Emplace_GetRef();
+			New.Actor = ActorClass;
+			New.DeltaSourceLevel = TSoftObjectPtr<UWorld>(WorldPath);
+			New.DeltaSourceActorName = ActorFName;
+		}
 	}
 }
 
@@ -192,7 +195,7 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 					{
 						if (AActor* Actor = Cast<AActor>(Selection->GetSelectedObject(i)))
 						{
-							AddOrUpdateActorEntry(Collection, Actor);
+							PCGExActorCollectionEditor::AddOrUpdateActorEntry(Collection, Actor);
 						}
 					}
 
@@ -253,7 +256,7 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 							}
 							if (Actor->GetFName().ToString().Contains(SearchTerm, ESearchCase::IgnoreCase))
 							{
-								AddOrUpdateActorEntry(Collection, Actor);
+								PCGExActorCollectionEditor::AddOrUpdateActorEntry(Collection, Actor);
 								Added++;
 							}
 						}
