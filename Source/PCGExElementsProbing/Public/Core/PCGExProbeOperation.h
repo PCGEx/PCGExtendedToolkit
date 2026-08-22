@@ -113,7 +113,10 @@ public:
 	const TArray<int8>* AcceptConnections = nullptr;
 
 	double SearchRadiusOffset = 0;
+	/** Squared search radius, to be compared against FCandidate::Distance -- which is squared too. */
 	double GetSearchRadius(const int32 Index) const;
+	/** Same radius in raw world units, for callers sizing a volume rather than comparing distances. */
+	double GetSearchRadiusRaw(const int32 Index) const;
 	TSharedPtr<PCGExDetails::TSettingValue<double>> SearchRadius;
 
 protected:

@@ -372,6 +372,8 @@ namespace PCGExProbing
 
 			if (!RadiusSources.IsEmpty())
 			{
+				// Raw world units, not squared -- this sizes the octree query box. SharedSearchRadius is
+				// already raw, so the variable branch must read raw radii too.
 				double MaxRadius = 0;
 				if (!bUseVariableRadius)
 				{
@@ -381,7 +383,7 @@ namespace PCGExProbing
 				{
 					for (int i = 0; i < NumRadiusSources; i++)
 					{
-						MaxRadius = FMath::Max(MaxRadius, RadiusSources[i]->GetSearchRadius(Index));
+						MaxRadius = FMath::Max(MaxRadius, RadiusSources[i]->GetSearchRadiusRaw(Index));
 					}
 				}
 
