@@ -35,7 +35,11 @@ struct PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchDrawHelper
 		bool bGhosts = false;
 	};
 
-	static void Draw(const FPCGExSketchEditController& Controller, FPrimitiveDrawInterface* PDI, const FMeshCoverage& InCoverage = FMeshCoverage());
+	static void Draw(const FPCGExSketchEditController& Controller, FPrimitiveDrawInterface* PDI, const FMeshCoverage& InCoverage);
+
+	/** Host with no mesh layer: draws everything. An overload, not a default argument -- Clang rejects a
+	 *  nested type's default member initializers being needed while the enclosing class is still open. */
+	static void Draw(const FPCGExSketchEditController& Controller, FPrimitiveDrawInterface* PDI);
 
 	/**
 	 * The whole editing render pass for a host that carries a MESH LAYER: push the controller's live
