@@ -9,6 +9,7 @@
 #include "PropertyHandle.h"
 #include "ScopedTransaction.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Properties/PCGExProperty_CollectionEntry.h"
@@ -247,6 +248,14 @@ namespace PCGExCollectionEntryPickerWidget
 		int32 EntryId = 0;
 		FSoftObjectPath ThumbPath;
 		FText Label;
+
+		FName Category = NAME_None;
+		/** Effective grammar symbol (may come from the collection's global grammar); None = no badge. */
+		FName Symbol = NAME_None;
+		FLinearColor SymbolColor = FLinearColor::White;
+
+		/** A category header row: label only, never selectable. */
+		bool bIsHeader = false;
 	};
 
 	/** Dropdown listing every entry of the picked collection. Lives while the combo menu is open. */
@@ -270,7 +279,7 @@ namespace PCGExCollectionEntryPickerWidget
 			ThumbnailPool = MakeShared<FAssetThumbnailPool>(64);
 
 			BuildItems();
-			Filtered = Items;
+			OnFilterChanged(FText::GetEmpty());
 
 			ChildSlot
 			[
@@ -301,12 +310,13 @@ namespace PCGExCollectionEntryPickerWidget
 		void BuildItems()
 		{
 			Items.Reset();
+			bHasCategories = false;
 			const UPCGExAssetCollection* Coll = Collection.Get();
 			if (!Coll)
 			{
 				return;
 			}
-			Coll->ForEachEntry([this](const FPCGExAssetCollectionEntry* Entry, const int32 RawIndex)
+			Coll->ForEachEntry([this, Coll](const FPCGExAssetCollectionEntry* Entry, const int32 RawIndex)
 			{
 				TSharedPtr<FEntryItem> Item = MakeShared<FEntryItem>();
 				Item->RawIndex = RawIndex;
@@ -314,20 +324,87 @@ namespace PCGExCollectionEntryPickerWidget
 				Item->ThumbPath = Entry->EDITOR_GetThumbnailAssetPath();
 				const FString AssetName = Item->ThumbPath.GetAssetName();
 				Item->Label = AssetName.IsEmpty() ? FText::Format(LOCTEXT("EntryByIndex", "Entry {0}"), RawIndex) : FText::FromString(AssetName);
+				Item->Category = Entry->Category;
+				bHasCategories |= !Entry->Category.IsNone();
+
+				// Effective, not raw: a subcollection routing to the host's global grammar shows what
+				// actually prints -- the same resolve the grid tiles badge with.
+				if (const FPCGExAssetGrammarDetails* Grammar = Entry->GetEffectiveGrammar(Coll))
+				{
+					Item->Symbol = Grammar->Symbol;
+					Item->SymbolColor = Grammar->DebugColor;
+				}
 				Items.Add(Item);
 			});
+
+			// Grouped only when at least one entry declares a category; a flat collection stays a flat
+			// list. Categories sort by name, uncategorized entries last; within a group, collection order
+			// (the raw index the rows display) is preserved.
+			if (bHasCategories)
+			{
+				TArray<FName> Order;
+				for (const TSharedPtr<FEntryItem>& Item : Items)
+				{
+					Order.AddUnique(Item->Category);
+				}
+				Order.Sort([](const FName& A, const FName& B)
+				{
+					if (A.IsNone() != B.IsNone())
+					{
+						return B.IsNone(); // uncategorized sinks to the bottom
+					}
+					return A.LexicalLess(B);
+				});
+				TArray<TSharedPtr<FEntryItem>> Sorted;
+				Sorted.Reserve(Items.Num());
+				for (const FName& Category : Order)
+				{
+					for (const TSharedPtr<FEntryItem>& Item : Items)
+					{
+						if (Item->Category == Category)
+						{
+							Sorted.Add(Item);
+						}
+					}
+				}
+				Items = MoveTemp(Sorted);
+			}
+		}
+
+		static FText CategoryLabel(const FName InCategory)
+		{
+			return InCategory.IsNone() ? LOCTEXT("Uncategorized", "Uncategorized") : FText::FromName(InCategory);
 		}
 
 		void OnFilterChanged(const FText& InText)
 		{
 			const FString Needle = InText.ToString();
 			Filtered.Reset();
+			FName OpenCategory;
+			bool bAnyGroupOpen = false;
 			for (const TSharedPtr<FEntryItem>& Item : Items)
 			{
-				if (Needle.IsEmpty() || Item->Label.ToString().Contains(Needle))
+				// Symbol and category match too: "wall" finds the group and the grammar alike.
+				const bool bMatches = Needle.IsEmpty()
+					|| Item->Label.ToString().Contains(Needle)
+					|| (!Item->Symbol.IsNone() && Item->Symbol.ToString().Contains(Needle))
+					|| (!Item->Category.IsNone() && Item->Category.ToString().Contains(Needle));
+				if (!bMatches)
 				{
-					Filtered.Add(Item);
+					continue;
 				}
+				// Headers are synthesized per surviving group, so an emptied-out category never lingers.
+				if (bHasCategories && (!bAnyGroupOpen || OpenCategory != Item->Category))
+				{
+					bAnyGroupOpen = true;
+					OpenCategory = Item->Category;
+					TSharedPtr<FEntryItem> Header = MakeShared<FEntryItem>();
+					Header->bIsHeader = true;
+					Header->Category = Item->Category;
+					Header->Label = CategoryLabel(Item->Category);
+					Filtered.Add(Header);
+				}
+				Filtered.Add(Item);
 			}
 			if (ListView.IsValid())
 			{
@@ -351,8 +428,51 @@ namespace PCGExCollectionEntryPickerWidget
 
 		TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FEntryItem> Item, const TSharedRef<STableViewBase>& OwnerTable)
 		{
+			if (Item->bIsHeader)
+			{
+				// No hover, no selection affordance: a label, not an option.
+				return SNew(STableRow<TSharedPtr<FEntryItem>>, OwnerTable)
+					.Style(&FAppStyle::Get().GetWidgetStyle<FTableRowStyle>("TableView.NoHoverTableRow"))
+					.Padding(FMargin(2, 4, 2, 1))
+					[
+						SNew(STextBlock)
+						.Text(Item->Label)
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 8))
+						.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					];
+			}
+
+			TSharedRef<SVerticalBox> NameBox = SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock)
+					.Text(Item->Label)
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 10))
+				];
+
+			// The grammar badge, styled exactly as the grid tiles' (shared brush + readable-text rule),
+			// so an entry reads the same in the picker as in the collection editor.
+			if (!Item->Symbol.IsNone())
+			{
+				FLinearColor Tint = Item->SymbolColor;
+				Tint.A = 0.85f;
+				NameBox->AddSlot().AutoHeight().HAlign(HAlign_Left).Padding(0, 1, 0, 0)
+				[
+					SNew(SBorder)
+					.BorderImage(PCGExCollectionEditorSlateUtils::GetBadgeBrush())
+					.BorderBackgroundColor(FSlateColor(Tint))
+					.Padding(FMargin(3, 1))
+					[
+						SNew(STextBlock)
+						.Text(FText::FromName(Item->Symbol))
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 8))
+						.ColorAndOpacity(PCGExCollectionEditorSlateUtils::PickReadableTextColor(Item->SymbolColor))
+					]
+				];
+			}
+
 			return SNew(STableRow<TSharedPtr<FEntryItem>>, OwnerTable)
-				.Padding(FMargin(2))
+				.Padding(FMargin(bHasCategories ? 10 : 2, 2, 2, 2))
 				[
 					SNew(SHorizontalBox)
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 6, 0)
@@ -361,9 +481,7 @@ namespace PCGExCollectionEntryPickerWidget
 					]
 					+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 					[
-						SNew(STextBlock)
-						.Text(Item->Label)
-						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 10))
+						NameBox
 					]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 2, 0)
 					[
@@ -379,6 +497,15 @@ namespace PCGExCollectionEntryPickerWidget
 		{
 			if (SelectInfo == ESelectInfo::Direct || !Selected.IsValid())
 			{
+				return;
+			}
+			if (Selected->bIsHeader)
+			{
+				// A label, not an option: bounce the selection off.
+				if (ListView.IsValid())
+				{
+					ListView->ClearSelection();
+				}
 				return;
 			}
 			if (!ValueHandle.IsValid() || !ValueHandle->IsValidHandle())
@@ -406,6 +533,7 @@ namespace PCGExCollectionEntryPickerWidget
 		TSharedPtr<SListView<TSharedPtr<FEntryItem>>> ListView;
 		TArray<TSharedPtr<FEntryItem>> Items;
 		TArray<TSharedPtr<FEntryItem>> Filtered;
+		bool bHasCategories = false;
 	};
 
 	// ---------- Row ------------------------------------------------------------------------------
