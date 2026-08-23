@@ -173,9 +173,9 @@ protected:
 
 class PCGEXGRAPHS_API FPCGExClustersProcessorElement : public FPCGExPointsProcessorElement
 {
-	virtual void DisabledPassThroughData(FPCGContext* Context) const override;
-
 protected:
+	virtual void DisabledPassThroughData(FPCGContext* Context) const override;
+	
 	PCGEX_ELEMENT_CREATE_CONTEXT(ClustersProcessor)
 	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual void InitializeData(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
