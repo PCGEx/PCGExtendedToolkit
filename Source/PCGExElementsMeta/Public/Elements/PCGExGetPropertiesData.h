@@ -102,6 +102,12 @@ public:
 		meta=(PCG_Overridable, EditCondition="OutputMode == EPCGExPropertyOutputMode::Explicit", EditConditionHides, ShowOnlyInnerProperties))
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
 
+	/** Map sidecar is emitted in AllFound mode (its settings struct is hidden there) or when the struct's toggle is on. */
+	bool WantsOutputMap() const
+	{
+		return OutputMode == EPCGExPropertyOutputMode::AllFound || PropertyOutputSettings.bOutputMap;
+	}
+
 	/** Forward each input's tags to the corresponding output. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source")
 	bool bForwardInputTags = true;
@@ -194,6 +200,13 @@ struct FPCGExGetPropertiesDataContext final : FPCGExContext
 	// Pre-resolved Required schema set -- TSet for O(1) membership check during the recursive
 	// import-tree walk in Phase 3b.
 	TSet<const UPCGExPropertySchemaAsset*> RequiredSchemaSet;
+
+	// Sources pin inputs, captured in Boot so slot/schema resolution (phases 1-3c) can run there and
+	// expose per-property output dependencies to RegisterAssetDependencies before the write.
+	TArray<FPCGTaggedData> Inputs;
+
+	/** Registers FPCGExProperty::GatherOutputDependencies across every resolved component schema. */
+	virtual void RegisterAssetDependencies() override;
 };
 
 class FPCGExGetPropertiesDataElement final : public IPCGExElement

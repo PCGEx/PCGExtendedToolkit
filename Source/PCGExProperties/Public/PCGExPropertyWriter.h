@@ -64,6 +64,10 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOutputSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(DisplayName="Properties Mapping", TitleProperty="{PropertyName}"))
 	TArray<FPCGExPropertyOutputConfig> Configs;
 
+	/** Emit the "Map" attribute set describing external resources referenced by written properties (e.g. Collection Entry picks). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, AdvancedDisplay, meta=(DisplayName="Output Map"))
+	bool bOutputMap = false;
+
 	/** Each asset's Collection is resolved recursively (locals + ImportedSchemas, cycle-safe);
 	 *  every resolved entry contributes an enabled config keyed by its Name. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(DisplayName="Included Schemas"))
@@ -128,6 +132,7 @@ public:
 class FPCGMetadataAttributeBase;
 class UPCGMetadata;
 struct FPCGExContext;
+struct FPCGPinProperties;
 
 /**
  * Metadata-attribute writer (single-threaded per instance). Pair with FPCGExPropertyWriter when
@@ -182,6 +187,9 @@ public:
 	/** Returns the count of successful writes (compare to Num() for partial-match detection).
 	 *  Returns 0 when no Provider was set during Initialize. */
 	int32 WriteEntry(int64 Key, int32 SourceIndex);
+
+	/** Appends copies of the clones that declare a sidecar pin -- for writers that die before a single-threaded flush can run. */
+	void CopySidecarClones(TArray<FInstancedStruct>& OutClones) const;
 
 protected:
 	struct FWriter
@@ -239,6 +247,29 @@ protected:
 
 namespace PCGExProperties
 {
+	/**
+	 * Invoke GetOrCreate(pin) + WriteOutputSidecar for every property declaring a sidecar pin. GetOrCreate
+	 * must return the same metadata for repeated pins (the node owns allocation + staging). Single-threaded.
+	 */
+	PCGEXPROPERTIES_API void FlushSidecars(TConstArrayView<const FPCGExProperty*> InProperties, TFunctionRef<UPCGMetadata*(FName)> GetOrCreate);
+
+	/**
+	 * FlushSidecars + one param data per pin + staging, in one call -- THE node-side sidecar epilogue.
+	 * ExistingForPin lets a node merge a pin into a data it already emits (return null to allocate).
+	 * Single-threaded; call after the last row, before Done().
+	 */
+	PCGEXPROPERTIES_API void StageSidecars(FPCGExContext* InContext, TConstArrayView<const FPCGExProperty*> InProperties, TFunctionRef<UPCGMetadata*(FName)> ExistingForPin);
+	PCGEXPROPERTIES_API void StageSidecars(FPCGExContext* InContext, TConstArrayView<const FPCGExProperty*> InProperties);
+	/** Overload over clone copies (see CopySidecarClones). */
+	PCGEXPROPERTIES_API void StageSidecars(FPCGExContext* InContext, TConstArrayView<FInstancedStruct> InClones, TFunctionRef<UPCGMetadata*(FName)> ExistingForPin);
+	PCGEXPROPERTIES_API void StageSidecars(FPCGExContext* InContext, TConstArrayView<FInstancedStruct> InClones);
+
+	/** Declares the optional "Map" sidecar output pin: Normal when bVisible, Advanced otherwise. */
+	PCGEXPROPERTIES_API void AddOutputMapPin(TArray<FPCGPinProperties>& PinProperties, bool bVisible);
+
+	/** FPCGExProperty::GatherOutputDependencies over every valid property in InProperties. */
+	PCGEXPROPERTIES_API void GatherOutputDependencies(TConstArrayView<FInstancedStruct> InProperties, TSet<FSoftObjectPath>& OutPaths);
+
 	/**
 	 * Write InProperty's value into OutData's @Data domain under OutName via
 	 * PCGExData::Helpers::SetDataValue, which keeps the default-value and first-entry slots in

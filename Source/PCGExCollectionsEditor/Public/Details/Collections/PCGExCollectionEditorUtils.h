@@ -45,6 +45,13 @@ namespace PCGExCollectionEditorUtils
 	/** Add Content Browser selection to this collection. */
 	PCGEXCOLLECTIONSEDITOR_API void AddBrowserSelection(UPCGExAssetCollection* InCollection);
 
+	/**
+	 * Mint EntryIds for every entry still at 0 (never staging-rebuilt since ids landed). Dirties the
+	 * collection and, when bNotify, raises a toast naming it -- the ids only persist once it is saved.
+	 * No-op during cook. Returns true when anything was minted.
+	 */
+	PCGEXCOLLECTIONSEDITOR_API bool EnsureEntryIds(UPCGExAssetCollection* InCollection, bool bNotify);
+
 #pragma region Tools
 
 	/** Sort collection by weights in ascending order. */

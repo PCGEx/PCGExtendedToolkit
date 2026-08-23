@@ -238,6 +238,44 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 		return GetTypeName();
 	}
 
+	// --- Output naming & sidecars ---
+
+	/**
+	 * Final attribute name for this property's output, given the effective (validated) config name.
+	 * Identity by default; types that write under a derived/namespaced name override. Every site that
+	 * creates an output for a property MUST route the name through here.
+	 */
+	virtual FName ResolveOutputAttributeName(const FName InEffectiveName) const
+	{
+		return InEffectiveName;
+	}
+
+	/**
+	 * Pin label of the attribute set this property contributes side data to (PCGExProperties::Labels),
+	 * NAME_None when it contributes nothing. Writers group contributions per pin; the hosting node
+	 * allocates the data and stages it.
+	 */
+	virtual FName GetOutputSidecarPin() const
+	{
+		return NAME_None;
+	}
+
+	/**
+	 * Append this property's sidecar rows to the pin's attribute set. Must be idempotent across
+	 * instances contributing to the same data (dedupe against existing rows).
+	 */
+	virtual void WriteOutputSidecar(UPCGMetadata* InSidecar) const
+	{
+	}
+
+	/**
+	 * Assets that must be RESIDENT for this property to write its output (not its value's own soft paths --
+	 * see GatherSoftObjectPaths). Hosting nodes register these as async asset dependencies before writing.
+	 */
+	virtual void GatherOutputDependencies(TSet<FSoftObjectPath>& OutPaths) const
+	{
+	}
+
 	// --- Metadata Interface (for Tuple/ParamData) ---
 
 	/**
@@ -421,6 +459,12 @@ struct PCGEXPROPERTIES_API FPCGExProperty
  */
 namespace PCGExProperties
 {
+	namespace Labels
+	{
+		/** Attribute set describing external resources referenced by property values (e.g. a collection map). */
+		const FName OutputMapLabel = TEXT("Map");
+	}
+
 	/**
 	 * Floats a value of InType projects to; 0 for types with no projection.
 	 *
@@ -552,6 +596,10 @@ namespace PCGExProperties
 	 */
 	PCGEXPROPERTIES_API void GatherSoftObjectPaths(const FPCGExPropertyOverrides& Overrides, TSet<FSoftObjectPath>& OutPaths);
 	PCGEXPROPERTIES_API void GatherSoftObjectPaths(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths);
+
+	/** Same walks as GatherSoftObjectPaths, collecting FPCGExProperty::GatherOutputDependencies instead. */
+	PCGEXPROPERTIES_API void GatherOutputDependencies(const FPCGExPropertyOverrides& Overrides, TSet<FSoftObjectPath>& OutPaths);
+	PCGEXPROPERTIES_API void GatherOutputDependencies(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths);
 
 	/**
 	 * Effective property for InName: the overrides' enabled entry when there is one, else the schema's

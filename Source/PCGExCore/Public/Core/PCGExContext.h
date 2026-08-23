@@ -256,6 +256,7 @@ public:
 
 	virtual void RegisterAssetDependencies();
 	void AddAssetDependency(const FSoftObjectPath& Dependency);
+	void AddAssetDependencies(const TSet<FSoftObjectPath>& Dependencies);
 	// Returns true when an asset-dependency load was initiated (state advanced to
 	// State_LoadingAssetDependencies), false when there was nothing to load. On return, bWarmDependencies
 	// reflects whether the load completed synchronously from the resource cache (no async yield needed).

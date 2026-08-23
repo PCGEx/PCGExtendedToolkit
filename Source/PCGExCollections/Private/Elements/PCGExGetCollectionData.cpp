@@ -207,6 +207,33 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	return PCGExGetCollectionData::ParseSourceInputsIntoSlots(Context, Settings);
 }
 
+void FPCGExGetCollectionDataContext::RegisterAssetDependencies()
+{
+	FPCGExContext::RegisterAssetDependencies();
+
+	// Every slot collection is resident after Boot (blocking load), so nested picks resolve in one pass.
+	// Sub-collections are hard refs; their entries flatten into the output too, hence FlatHosts.
+	TSet<FSoftObjectPath> Paths;
+	TSet<const UPCGExAssetCollection*> Visited;
+	for (const TPair<FSoftObjectPath, UPCGExAssetCollection*>& Pair : ResolvedCollections)
+	{
+		if (!Pair.Value)
+		{
+			continue;
+		}
+		for (const TObjectPtr<UPCGExAssetCollection>& Host : Pair.Value->GetFlatHosts())
+		{
+			bool bAlreadyVisited = false;
+			Visited.Add(Host.Get(), &bAlreadyVisited);
+			if (Host && !bAlreadyVisited)
+			{
+				Host->GatherPropertyOutputDependencies(Paths);
+			}
+		}
+	}
+	AddAssetDependencies(Paths);
+}
+
 namespace PCGExGetCollectionData
 {
 	/** All the writable attribute pointers + property writer + entry list for a single unique output.
@@ -251,12 +278,23 @@ namespace PCGExGetCollectionData
 	/** Derived settings + ambient state passed to FlattenInto / WriteFromEntries. Bundled so the
 	 *  Collection-mode fast path, the Merged path, and the slot-based FromInputs path can all share
 	 *  the same helpers without dragging a dozen positional params. */
+	/** Sidecar contributions gathered across the (parallel) write helpers, flushed single-threaded into
+	 *  the node's Map output. Clones come from per-output property writers; Sources are collection-level
+	 *  properties written by the @Data/@Element annotation paths. */
+	struct FSidecarSink
+	{
+		FCriticalSection Lock;
+		TArray<FInstancedStruct> Clones;
+		TArray<const FPCGExProperty*> Sources;
+	};
+
 	struct FOutputProcessParams
 	{
 		const UPCGExGetCollectionDataSettings* Settings = nullptr;
 		FPCGExContext* InContext = nullptr;
 		PCGExCollections::FPickPacker* Packer = nullptr;
 		const FProcessEntryContext* FlattenCtx = nullptr;
+		FSidecarSink* Sidecars = nullptr;
 
 		bool bOutputWeight = false;
 		EPCGExWeightNormalization WeightNorm = EPCGExWeightNormalization::None;
@@ -667,6 +705,13 @@ namespace PCGExGetCollectionData
 
 			U.PropertyWriter.WriteEntry(Key, E, EH.Host);
 		}
+
+		// Runs in parallel across outputs; the writer dies with U, so its sidecar clones are copied out here.
+		if (P.Sidecars && U.PropertyWriter.HasOutputs())
+		{
+			FScopeLock ScopeLock(&P.Sidecars->Lock);
+			U.PropertyWriter.CopySidecarClones(P.Sidecars->Clones);
+		}
 	}
 
 	/** Per-slot precomputed identity for the AnnotateSources pass. Built once per node invocation
@@ -701,7 +746,8 @@ namespace PCGExGetCollectionData
 		FPCGExGetCollectionDataContext* Context,
 		const UPCGExGetCollectionDataSettings* Settings,
 		const FProcessEntryContext& FlattenCtx,
-		const TMap<UPCGExAssetCollection*, int32>& CollectionToRootIdx)
+		const TMap<UPCGExAssetCollection*, int32>& CollectionToRootIdx,
+		FSidecarSink* Sidecars)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_AnnotateSources);
 
@@ -774,6 +820,22 @@ namespace PCGExGetCollectionData
 					Id.Hash = *H;
 				}
 			}
+		}
+
+		// Sidecar sources for the schema annotations -- gathered here, single-threaded, before the parallel write.
+		if (Sidecars && bWantSchema)
+		{
+			TArray<const UPCGExAssetCollection*> Hosts;
+			Hosts.Reserve(SlotIdentity.Num());
+			for (const FSlotIdentity& Id : SlotIdentity)
+			{
+				if (Id.Collection)
+				{
+					Hosts.AddUnique(Id.Collection);
+				}
+			}
+			FScopeLock ScopeLock(&Sidecars->Lock);
+			PCGExCollections::GatherSchemaSidecarSources(Settings->SchemaPropertyAnnotations, Hosts, Sidecars->Sources);
 		}
 
 		// Bucket slots by input. Slots are stored input-major, row-minor today, but explicit
@@ -1007,6 +1069,11 @@ namespace PCGExGetCollectionData
 				TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_WriteSchemaToDataDomain);
 				PCGExCollections::WriteSchemaToDataDomain(
 					InContext, Settings->SchemaPropertyAnnotations, MainCollection, U.OutputSet);
+				if (P.Sidecars)
+				{
+					const UPCGExAssetCollection* Hosts[] = {MainCollection};
+					PCGExCollections::GatherSchemaSidecarSources(Settings->SchemaPropertyAnnotations, Hosts, P.Sidecars->Sources);
+				}
 			}
 		}
 
@@ -1111,7 +1178,7 @@ namespace PCGExGetCollectionData
 
 		if (Settings->bAnnotateSources)
 		{
-			AnnotateSources(Context, Settings, *P.FlattenCtx, CollectionToRootIdx);
+			AnnotateSources(Context, Settings, *P.FlattenCtx, CollectionToRootIdx, P.Sidecars);
 		}
 	}
 
@@ -1244,7 +1311,7 @@ namespace PCGExGetCollectionData
 		// maps Collection -> RootCollectionIndex), so no extra prep is needed in this path.
 		if (Settings->bAnnotateSources)
 		{
-			AnnotateSources(Context, Settings, *P.FlattenCtx, CollectionToIndex);
+			AnnotateSources(Context, Settings, *P.FlattenCtx, CollectionToIndex, P.Sidecars);
 		}
 	}
 
@@ -1291,11 +1358,16 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	// Shared FPickPacker (covers every fanout path).
 	TSharedPtr<PCGExCollections::FPickPacker> Packer = MakeShared<PCGExCollections::FPickPacker>(InContext);
 
+	// Always on: this node emits a Map regardless of the output-settings toggle, so property sidecars
+	// targeting that pin merge into it for free.
+	PCGExGetCollectionData::FSidecarSink Sidecars;
+
 	PCGExGetCollectionData::FOutputProcessParams ProcessParams;
 	ProcessParams.Settings = Settings;
 	ProcessParams.InContext = InContext;
 	ProcessParams.Packer = Packer.Get();
 	ProcessParams.FlattenCtx = &Ctx;
+	ProcessParams.Sidecars = &Sidecars;
 	ProcessParams.bOutputWeight = bOutputWeight;
 	ProcessParams.WeightNorm = WeightNorm;
 	ProcessParams.bWeightAsFloat = bWeightAsFloat;
@@ -1325,6 +1397,17 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 		FPCGTaggedData& MapData = InContext->OutputData.TaggedData.Emplace_GetRef();
 		MapData.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
 		MapData.Data = OutputMap;
+
+		// Property sidecars: the "Map" pin merges into the packed map (AppendMapRows dedupes).
+		TArray<const FPCGExProperty*> Contributors = Sidecars.Sources;
+		for (const FInstancedStruct& Clone : Sidecars.Clones)
+		{
+			Contributors.Add(Clone.GetPtr<FPCGExProperty>());
+		}
+		PCGExProperties::StageSidecars(InContext, Contributors, [&](const FName Pin) -> UPCGMetadata*
+		{
+			return Pin == PCGExCollections::Labels::OutputCollectionMapLabel ? OutputMap->Metadata.Get() : nullptr;
+		});
 	}
 
 	InContext->Done();
