@@ -117,7 +117,7 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorHandlerDetails
 
 namespace PCGExTensor
 {
-	class FTensorsHandler : public TSharedFromThis<FTensorsHandler>
+	class PCGEXELEMENTSTENSORS_API FTensorsHandler : public TSharedFromThis<FTensorsHandler>
 	{
 		TArray<TSharedPtr<PCGExTensorOperation>> Tensors;
 		FPCGExTensorHandlerDetails Config;
