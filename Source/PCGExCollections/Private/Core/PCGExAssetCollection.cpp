@@ -837,6 +837,18 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryAt(int32 Index) const
 	return Result;
 }
 
+int32 UPCGExAssetCollection::FindRawIndexByEntryId(const int32 InEntryId) const
+{
+	if (InEntryId == 0)
+	{
+		return INDEX_NONE;
+	}
+
+	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
+	const int32* RawIndex = ThisCache->EntryIdToRawIndex.Find(InEntryId);
+	return RawIndex ? *RawIndex : INDEX_NONE;
+}
+
 FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRaw(int32 RawIndex) const
 {
 	FPCGExEntryAccessResult Result;
@@ -1463,7 +1475,19 @@ bool UPCGExAssetCollection::BuildCacheFromEntryPtrs(TConstArrayView<FPCGExAssetC
 
 		// Null = unset row in a heterogeneous collection. Skipped, but still consumes
 		// raw index i so pointer-array order stays aligned with raw entry indices.
-		if (!Entry || !Entry->Validate(this))
+		if (!Entry)
+		{
+			continue;
+		}
+
+		if (Entry->EntryId != 0)
+		{
+			// FindOrAdd, not Add: copy-paste can leave duplicate ids until SyncEntryIds runs, and
+			// first-seen-keeps-its-id is that function's contract too.
+			Cache->EntryIdToRawIndex.FindOrAdd(Entry->EntryId, i);
+		}
+
+		if (!Entry->Validate(this))
 		{
 			continue;
 		}
@@ -1534,8 +1558,9 @@ void UPCGExAssetCollection::SyncEntryIds()
 {
 	TSet<int32> SeenIds;
 	SeenIds.Reserve(NumEntries());
+	bool bAnyChanged = false;
 
-	ForEachEntry([&SeenIds](FPCGExAssetCollectionEntry* InEntry, int32 i)
+	ForEachEntry([&SeenIds, &bAnyChanged](FPCGExAssetCollectionEntry* InEntry, int32 i)
 	{
 		// Copy-paste preserves the source's EntryId; without this catch, external references
 		// (variant collections) would alias the duplicates. First-seen keeps its id.
@@ -1552,8 +1577,15 @@ void UPCGExAssetCollection::SyncEntryIds()
 			}
 			while (InEntry->EntryId == 0 || SeenIds.Contains(InEntry->EntryId));
 			SeenIds.Add(InEntry->EntryId);
+			bAnyChanged = true;
 		}
 	});
+
+	// The cache indexes ids (FCache::EntryIdToRawIndex); callers outside RebuildStagingData rely on this.
+	if (bAnyChanged)
+	{
+		InvalidateCache();
+	}
 }
 
 void UPCGExAssetCollection::EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const
@@ -1663,6 +1695,21 @@ void UPCGExAssetCollection::GatherPropertySoftObjectPaths(TSet<FSoftObjectPath>&
 	ForEachEntry([&OutPaths](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)
 	{
 		PCGExProperties::GatherSoftObjectPaths(Entry->PropertyOverrides, OutPaths);
+	});
+}
+
+void UPCGExAssetCollection::GatherPropertyOutputDependencies(TSet<FSoftObjectPath>& OutPaths) const
+{
+	PCGExProperties::GatherOutputDependencies(CollectionProperties, OutPaths);
+
+	for (const FPCGExCategoryOverrides& Row : CategoryOverrides)
+	{
+		PCGExProperties::GatherOutputDependencies(Row.PropertyOverrides, OutPaths);
+	}
+
+	ForEachEntry([&OutPaths](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)
+	{
+		PCGExProperties::GatherOutputDependencies(Entry->PropertyOverrides, OutPaths);
 	});
 }
 

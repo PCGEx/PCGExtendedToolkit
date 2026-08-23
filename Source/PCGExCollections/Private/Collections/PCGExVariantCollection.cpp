@@ -5,25 +5,8 @@
 
 #include "PCGExLog.h"
 #include "Algo/BinarySearch.h"
-#include "Helpers/PCGExStreamingHelpers.h"
-#include "UObject/ObjectSaveContext.h"
 
 PCGEX_REGISTER_COLLECTION_TYPE(Variant, UPCGExVariantCollection, FPCGExAssetCollectionEntry, "Variant Collection", Base)
-
-namespace PCGExVariantCollection
-{
-	// Order-sensitive digest of the source's EntryIds in raw order. Catches same-count
-	// reorders that the entry-count stamp alone would miss.
-	inline uint32 ComputeSourceOrderHash(const UPCGExAssetCollection* InSource)
-	{
-		uint32 Hash = 0;
-		InSource->ForEachEntry([&Hash](const FPCGExAssetCollectionEntry* Entry, int32)
-		{
-			Hash = HashCombineFast(Hash, GetTypeHash(Entry->EntryId));
-		});
-		return Hash;
-	}
-}
 
 bool UPCGExVariantCollection::IsValidIndex(const int32 InIndex) const
 {
@@ -118,28 +101,78 @@ void UPCGExVariantCollection::ForEachEntry(FForEachEntryFunc Iterator)
 	}
 }
 
-void UPCGExVariantCollection::SyncVariantMappings()
+void UPCGExVariantCollection::BuildGroupMapping(const int32 GroupIdx, TArray<FIntPoint>& OutPairs) const
 {
-	int32 FlatOffset = 0;
+	OutPairs.Reset();
 
-	// Path rules resolve here, against the declared sources only -- pure authoring shorthand
-	// over the explicit rows: the baked output has the same shape. Rule payloads occupy the
-	// flat raw-index view after all source-group rows.
-	int32 PathPayloadBase = 0;
-	for (const FPCGExVariantSource& Group : Sources)
+	if (!Sources.IsValidIndex(GroupIdx))
 	{
-		PathPayloadBase += Group.Overrides.Num();
+		return;
+	}
+
+	const FPCGExVariantSource& Group = Sources[GroupIdx];
+	const UPCGExAssetCollection* Src = Group.SourceCollection;
+	if (!Src)
+	{
+		return;
+	}
+
+	// Flat offset of this group's rows + start of the PathOverrides payload tail. Derived locally --
+	// one definition of the flat layout lives in RebuildFlatView; this mirrors it without depending
+	// on the cache having been built.
+	int32 FlatOffset = 0;
+	int32 PathPayloadBase = 0;
+	for (int32 g = 0; g < Sources.Num(); g++)
+	{
+		if (g < GroupIdx)
+		{
+			FlatOffset += Sources[g].Overrides.Num();
+		}
+		PathPayloadBase += Sources[g].Overrides.Num();
 	}
 
 	// Pick hashes carry raw entry indices in 16 bits by design (see PCGExCollections::PickHash).
 	// A flattened view beyond that ceiling would truncate silently -- near impossible in real
-	// projects, so just say it loudly if it ever happens.
-	if (PathPayloadBase + PathOverrides.Num() > MAX_uint16)
+	// projects, so just say it loudly if it ever happens. Variant-level diagnostics (this and the
+	// duplicate-rule warning) fire on the first group only: consumers call per group, per execution.
+	if (GroupIdx == 0 && PathPayloadBase + PathOverrides.Num() > MAX_uint16)
 	{
 		UE_LOG(LogPCGEx, Error, TEXT("[%s] Variant flat entry count (%d) exceeds the 16-bit pick-index ceiling (%d) -- picks swapped to entries beyond it will resolve to the WRONG entry."),
 		       *GetName(), PathPayloadBase + PathOverrides.Num(), MAX_uint16);
 	}
 
+	bool bAnyResolved = false;
+	bool bAnyBound = false;
+	for (int32 o = 0; o < Group.Overrides.Num(); o++)
+	{
+		const FPCGExVariantEntryOverride& Row = Group.Overrides[o];
+		if (Row.SourceEntryId == 0 || !Row.Entry.IsValid())
+		{
+			continue;
+		}
+
+		bAnyBound = true;
+		const int32 SourceRawIndex = Src->FindRawIndexByEntryId(Row.SourceEntryId);
+		if (SourceRawIndex != INDEX_NONE)
+		{
+			bAnyResolved = true;
+			OutPairs.Emplace(SourceRawIndex, FlatOffset + o);
+		}
+		else
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("[%s] Variant row %d for source '%s' references EntryId %d which no longer exists -- orphaned row skipped."),
+			       *GetName(), o, *Src->GetName(), Row.SourceEntryId);
+		}
+	}
+
+	if (bAnyBound && !bAnyResolved && Src->NumEntries() > 0)
+	{
+		UE_LOG(LogPCGEx, Warning, TEXT("[%s] Variant source '%s' rows resolved nothing -- if the source was never staging-rebuilt since EntryId support landed, rebuild & save it."),
+		       *GetName(), *Src->GetName());
+	}
+
+	// Asset-path swap rules fill source entries not claimed by an explicit row (specific beats
+	// general). First matching rule wins; rule payloads occupy the flat tail after all group rows.
 	TMap<FSoftObjectPath, int32> PathToRule;
 	PathToRule.Reserve(PathOverrides.Num());
 	for (int32 r = 0; r < PathOverrides.Num(); r++)
@@ -151,130 +184,44 @@ void UPCGExVariantCollection::SyncVariantMappings()
 		}
 		if (PathToRule.Contains(Rule.MatchAsset))
 		{
-			UE_LOG(LogPCGEx, Warning, TEXT("[%s] Duplicate asset swap rule for '%s' -- first rule wins."),
-			       *GetName(), *Rule.MatchAsset.ToString());
+			if (GroupIdx == 0)
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("[%s] Duplicate asset swap rule for '%s' -- first rule wins."),
+				       *GetName(), *Rule.MatchAsset.ToString());
+			}
 			continue;
 		}
 		PathToRule.Add(Rule.MatchAsset, r);
 	}
 
-	for (FPCGExVariantSource& Group : Sources)
+	if (!PathToRule.IsEmpty())
 	{
-		const int32 GroupCount = Group.Overrides.Num();
-
-		Group.BakedPairs.Reset();
-		Group.SourceNumEntriesAtBake = -1;
-		Group.SourceOrderHashAtBake = 0;
-		Group.SourceGUIDAtBake = 0;
-
-		if (Group.Source.IsNull())
+		TSet<int32> ClaimedRawIndices;
+		ClaimedRawIndices.Reserve(OutPairs.Num());
+		for (const FIntPoint& Pair : OutPairs)
 		{
-			FlatOffset += GroupCount;
-			continue;
+			ClaimedRawIndices.Add(Pair.X);
 		}
 
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(Group.Source);
-		const UPCGExAssetCollection* Src = Group.Source.Get();
-
-		if (!Src)
+		Src->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, const int32 RawIndex)
 		{
-			UE_LOG(LogPCGEx, Warning, TEXT("[%s] Variant source '%s' could not be loaded -- group mapping not baked."),
-			       *GetName(), *Group.Source.ToSoftObjectPath().ToString());
-			FlatOffset += GroupCount;
-			continue;
-		}
-
-		// EntryId -> raw index lookup over the live source
-		TMap<int32, int32> IdToRawIndex;
-		IdToRawIndex.Reserve(Src->NumEntries());
-		Src->ForEachEntry([&IdToRawIndex](const FPCGExAssetCollectionEntry* Entry, const int32 RawIndex)
-		{
-			if (Entry->EntryId != 0)
+			if (Entry->bIsSubCollection || ClaimedRawIndices.Contains(RawIndex))
 			{
-				IdToRawIndex.Add(Entry->EntryId, RawIndex);
+				return;
+			}
+			if (const int32* Rule = PathToRule.Find(Entry->Staging.Path))
+			{
+				OutPairs.Emplace(RawIndex, PathPayloadBase + *Rule);
 			}
 		});
-
-		if (IdToRawIndex.IsEmpty() && Src->NumEntries() > 0)
-		{
-			UE_LOG(LogPCGEx, Warning, TEXT("[%s] Variant source '%s' has no EntryIds -- it was never staging-rebuilt since EntryId support landed. Rebuild & save the source, then re-save this variant."),
-			       *GetName(), *Src->GetName());
-		}
-
-		for (int32 o = 0; o < GroupCount; o++)
-		{
-			const FPCGExVariantEntryOverride& Row = Group.Overrides[o];
-			if (Row.SourceEntryId == 0 || !Row.Entry.IsValid())
-			{
-				continue;
-			}
-
-			if (const int32* SourceRawIndex = IdToRawIndex.Find(Row.SourceEntryId))
-			{
-				Group.BakedPairs.Emplace(*SourceRawIndex, FlatOffset + o);
-			}
-			else
-			{
-				UE_LOG(LogPCGEx, Warning, TEXT("[%s] Variant row %d for source '%s' references EntryId %d which no longer exists -- orphaned row skipped."),
-				       *GetName(), o, *Src->GetName(), Row.SourceEntryId);
-			}
-		}
-
-		// Path rules fill entries not claimed by an explicit row (specific beats general).
-		if (!PathToRule.IsEmpty())
-		{
-			TSet<int32> ClaimedRawIndices;
-			ClaimedRawIndices.Reserve(Group.BakedPairs.Num());
-			for (const FIntPoint& Pair : Group.BakedPairs)
-			{
-				ClaimedRawIndices.Add(Pair.X);
-			}
-
-			Src->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, const int32 RawIndex)
-			{
-				if (Entry->bIsSubCollection || ClaimedRawIndices.Contains(RawIndex))
-				{
-					return;
-				}
-				if (const int32* Rule = PathToRule.Find(Entry->Staging.Path))
-				{
-					Group.BakedPairs.Emplace(RawIndex, PathPayloadBase + *Rule);
-				}
-			});
-		}
-
-		Group.SourceNumEntriesAtBake = Src->NumEntries();
-		Group.SourceOrderHashAtBake = PCGExVariantCollection::ComputeSourceOrderHash(Src);
-		Group.SourceGUIDAtBake = Src->GetCollectionGUID();
-
-		FlatOffset += GroupCount;
 	}
-
-	// Sync is a guaranteed pre-consumption checkpoint (PreSave/cook + editor Sync button) --
-	// refresh the flat-view cache here too, covering programmatic mutations that bypassed
-	// the PostEditChange notification path.
-	RebuildFlatView();
-}
-
-bool UPCGExVariantCollection::IsMappingStale(const FPCGExVariantSource& InSourceGroup) const
-{
-	const UPCGExAssetCollection* Src = InSourceGroup.Source.Get();
-	if (!Src)
-	{
-		// Unloaded source -- cannot verify, report not-stale rather than blocking consumers.
-		return false;
-	}
-
-	return Src->NumEntries() != InSourceGroup.SourceNumEntriesAtBake
-		|| PCGExVariantCollection::ComputeSourceOrderHash(Src) != InSourceGroup.SourceOrderHashAtBake
-		|| Src->GetCollectionGUID() != InSourceGroup.SourceGUIDAtBake;
 }
 
 const FPCGExVariantSource* UPCGExVariantCollection::FindSourceGroup(const FSoftObjectPath& InSourcePath) const
 {
 	for (const FPCGExVariantSource& Group : Sources)
 	{
-		if (Group.Source.ToSoftObjectPath() == InSourcePath)
+		if (FSoftObjectPath(Group.SourceCollection) == InSourcePath)
 		{
 			return &Group;
 		}
@@ -282,35 +229,41 @@ const FPCGExVariantSource* UPCGExVariantCollection::FindSourceGroup(const FSoftO
 	return nullptr;
 }
 
-void UPCGExVariantCollection::PreSave(FObjectPreSaveContext SaveContext)
-{
-	SyncVariantMappings();
-	Super::PreSave(SaveContext);
-}
-
 void UPCGExVariantCollection::PostLoad()
 {
 	Super::PostLoad();
+
+	// Soft -> hard source migration. The sync load is editor/cook-only (both sync-load-tolerant, game
+	// thread); cooked packages are re-serialized by the cook, so packaged data is always migrated and
+	// the runtime branch only ever heals in-editor-runtime edge cases via resident resolve. The carrier
+	// is kept on failure so a later load can retry, and cleared once the hard ref holds.
+	for (FPCGExVariantSource& Group : Sources)
+	{
+		if (!Group.SourceCollection && !Group.Source_DEPRECATED.IsNull())
+		{
+#if WITH_EDITOR
+			Group.SourceCollection = Cast<UPCGExAssetCollection>(Group.Source_DEPRECATED.ToSoftObjectPath().TryLoad());
+#else
+			Group.SourceCollection = Group.Source_DEPRECATED.Get();
+#endif
+			if (!Group.SourceCollection)
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("[%s] Variant source '%s' could not be resolved during migration -- group inert until it resolves."),
+				       *GetName(), *Group.Source_DEPRECATED.ToSoftObjectPath().ToString());
+				continue;
+			}
+		}
+		Group.Source_DEPRECATED.Reset();
+	}
+
 	RebuildFlatView();
 }
 
 #if WITH_EDITOR
 void UPCGExVariantCollection::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
-	{
-		// Value drags can't change the mapping shape.
-		RebuildFlatView();
-		Super::PostEditChangeProperty(PropertyChangedEvent);
-		return;
-	}
-
-	// Bake BEFORE Super: its notification chain re-triggers PCG components tracking this
-	// asset, and those regenerations read BakedPairs. Ends with RebuildFlatView.
-	// KNOWN COST: every non-interactive edit block-loads each source group and walks its
-	// entries twice (order hash + id map), on top of the staging rebuild Super triggers.
-	// If "editor stutters while editing variants" ever comes up, look here first.
-	SyncVariantMappings();
+	// No bake step: mappings derive live at consumption. Only the flat view depends on shape.
+	RebuildFlatView();
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
 #endif

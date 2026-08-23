@@ -69,5 +69,4 @@ private:
 	TSharedRef<SWidget> MakeAddAssetSwapMenu();
 	void OnSwapAssetPicked(const FAssetData& AssetData);
 
-	FReply OnSyncMappings();
 };

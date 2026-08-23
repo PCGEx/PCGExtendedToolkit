@@ -41,6 +41,7 @@ public:
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual void InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const override;
+	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters which points get properties.", PCGExFactories::PointFilters, false)
 	//~End UPCGSettings
 
@@ -199,6 +200,14 @@ struct FPCGExStagingLoadPropertiesContext final : FPCGExPointsProcessorContext
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
 	TArray<FPCGExPropertySampledOutputConfig> SampledPropertyOutputs;
+
+	// Source properties declaring a sidecar pin, unioned across processors (lock: processors finish in
+	// parallel). Flushed once into the Map output after StageOutputs when PropertyOutputSettings.bOutputMap.
+	FCriticalSection SidecarLock;
+	TArray<const FPCGExProperty*> SidecarSources;
+
+	/** Output dependencies of every property hosted by the unpacked collections (e.g. Collection Entry picks). */
+	virtual void RegisterAssetDependencies() override;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL

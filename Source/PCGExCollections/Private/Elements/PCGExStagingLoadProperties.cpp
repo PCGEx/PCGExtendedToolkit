@@ -23,6 +23,33 @@ void UPCGExStagingLoadPropertiesSettings::InputPinPropertiesBeforeFilters(TArray
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 
+TArray<FPCGPinProperties> UPCGExStagingLoadPropertiesSettings::OutputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
+	PCGExProperties::AddOutputMapPin(PinProperties, PropertyOutputSettings.bOutputMap);
+	return PinProperties;
+}
+
+void FPCGExStagingLoadPropertiesContext::RegisterAssetDependencies()
+{
+	FPCGExPointsProcessorContext::RegisterAssetDependencies();
+
+	if (!CollectionPickUnpacker)
+	{
+		return;
+	}
+
+	TSet<FSoftObjectPath> Paths;
+	for (const TPair<uint32, UPCGExAssetCollection*>& Pair : CollectionPickUnpacker->GetCollections())
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->GatherPropertyOutputDependencies(Paths);
+		}
+	}
+	AddAssetDependencies(Paths);
+}
+
 PCGExData::EIOInit UPCGExStagingLoadPropertiesSettings::GetMainDataInitializationPolicy() const
 {
 	return WantsDataStealing() ? PCGExData::EIOInit::Forward : PCGExData::EIOInit::Duplicate;
@@ -122,6 +149,12 @@ bool FPCGExStagingLoadPropertiesElement::AdvanceWork(FPCGExContext* InContext, c
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
 	Context->MainPoints->StageOutputs();
+
+	if (Settings->PropertyOutputSettings.bOutputMap && !Context->SidecarSources.IsEmpty())
+	{
+		PCGExProperties::StageSidecars(Context, Context->SidecarSources);
+	}
+
 	return Context->TryComplete();
 }
 
@@ -234,7 +267,7 @@ namespace PCGExStagingLoadProperties
 			// Initialize the output buffer
 			if (FPCGExProperty* Prop = Cache.Writer.GetMutablePtr<FPCGExProperty>())
 			{
-				if (!Prop->InitializeOutput(PointDataFacade, OutputName))
+				if (!Prop->InitializeOutput(PointDataFacade, Prop->ResolveOutputAttributeName(OutputName)))
 				{
 					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
 						           FTEXT("Failed to initialize output buffer for property '{0}', skipping."),
@@ -262,10 +295,30 @@ namespace PCGExStagingLoadProperties
 
 				if (const FInstancedStruct* Source = PCGExCollections::ResolveEntrySourceProperty(Result.Entry, Result.Host, PropName))
 				{
+					// Same-name/different-type across hosts: WriteOutputFrom static_casts to the writer's
+					// concrete type, so a mismatched source would be reinterpreted memory. Validate here.
+					if (Source->GetScriptStruct() != Cache.Writer.GetScriptStruct())
+					{
+						PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+							           FTEXT("Property '{0}' has conflicting types across staged collections -- mismatched entries keep the default value."),
+							           FText::FromName(PropName)));
+						continue;
+					}
 					if (const FPCGExProperty* SourceProp = Source->GetPtr<FPCGExProperty>())
 					{
 						Cache.SourceByHash.Add(Hash, SourceProp);
 					}
+				}
+			}
+
+			// Parallel writes go through WriteOutputFrom (no clone bookkeeping), so sidecar rows come from
+			// the unique sources resolved above.
+			if (Context->PropertyOutputSettings.bOutputMap && !Cache.WriterPtr->GetOutputSidecarPin().IsNone())
+			{
+				FScopeLock ScopeLock(&Context->SidecarLock);
+				for (const TPair<uint64, const FPCGExProperty*>& Pair : Cache.SourceByHash)
+				{
+					Context->SidecarSources.AddUnique(Pair.Value);
 				}
 			}
 		}

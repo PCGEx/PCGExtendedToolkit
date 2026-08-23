@@ -690,6 +690,10 @@ namespace PCGExAssetCollection
 		// collection→GUID mappings without per-point lock contention.
 		TArray<TObjectPtr<UPCGExAssetCollection>> FlatHosts;
 
+		// EntryId -> raw Entries index for every non-null entry with a non-zero id (validity is NOT a
+		// condition: an id must keep resolving to its row even when the entry fails Validate).
+		TMap<int32, int32> EntryIdToRawIndex;
+
 		FCache();
 		~FCache() = default;
 
@@ -868,6 +872,9 @@ public:
 	/** Get entry by raw Entries array index (bypasses cache). Use for indices from FCategory, packed hashes, etc. */
 	FPCGExEntryAccessResult GetEntryRaw(int32 RawIndex) const;
 
+	/** Raw Entries index of the entry carrying InEntryId, INDEX_NONE when unknown (or InEntryId == 0). Cache-backed, thread-safe. */
+	int32 FindRawIndexByEntryId(int32 InEntryId) const;
+
 	/** Mutable access to entry at raw array index (bypasses cache). For programmatic mutation
 	 *  (staging pipeline hooks, the entry Blueprint library). Caller owns Modify /
 	 *  MarkPackageDirty / InvalidateCache as appropriate for what it mutates. */
@@ -981,6 +988,9 @@ public:
 	 * editor cook-dependency walk shares the same extraction.
 	 */
 	void GatherPropertySoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const;
+
+	/** GatherPropertySoftObjectPaths' counterpart for FPCGExProperty::GatherOutputDependencies (same three tiers). */
+	void GatherPropertyOutputDependencies(TSet<FSoftObjectPath>& OutPaths) const;
 
 #if WITH_EDITOR
 	//~ Begin IPCGExCookDependencyProvider

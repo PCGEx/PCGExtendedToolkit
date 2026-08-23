@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "PCGExLog.h"
 
 #include "PCGManagedResource.h"
 #include "PCGParamData.h"
@@ -536,19 +537,84 @@ namespace PCGExCollections
 	// (the soft path needed to reload the collection on the consumption side).
 	void FPickPacker::PackToDataset(const UPCGParamData* InAttributeSet)
 	{
-		FPCGMetadataAttribute<int32>* CollectionIdx = InAttributeSet->Metadata->FindOrCreateAttribute<int32>(
+		TArray<const UPCGExAssetCollection*> Collections;
+		{
+			FReadScopeLock ReadScopeLock(AssetCollectionsLock);
+			CollectionMap.GetKeys(Collections);
+		}
+		AppendMapRows(InAttributeSet->Metadata, Collections);
+	}
+
+	void FPickPacker::AppendMapRows(UPCGMetadata* InMetadata, TConstArrayView<const UPCGExAssetCollection*> InCollections)
+	{
+		if (!InMetadata || InCollections.IsEmpty())
+		{
+			return;
+		}
+
+		FPCGMetadataAttribute<int32>* CollectionIdx = InMetadata->FindOrCreateAttribute<int32>(
 			Labels::Tag_CollectionIdx, 0,
 			false, true, true);
-		FPCGMetadataAttribute<FSoftObjectPath>* CollectionPath = InAttributeSet->Metadata->FindOrCreateAttribute<FSoftObjectPath>(
+		FPCGMetadataAttribute<FSoftObjectPath>* CollectionPath = InMetadata->FindOrCreateAttribute<FSoftObjectPath>(
 			Labels::Tag_CollectionPath, FSoftObjectPath(),
 			false, true, true);
 
-		for (const TPair<const UPCGExAssetCollection*, uint32>& Pair : CollectionMap)
+		if (!CollectionIdx || !CollectionPath)
 		{
-			const int64 Key = InAttributeSet->Metadata->AddEntry();
-			CollectionIdx->SetValue(Key, Pair.Value);
-			CollectionPath->SetValue(Key, FSoftObjectPath(Pair.Key));
+			return;
 		}
+
+		TMap<uint32, FSoftObjectPath> Seen;
+		const int64 NumExisting = InMetadata->GetItemCountForChild();
+		Seen.Reserve(NumExisting + InCollections.Num());
+		for (int64 i = 0; i < NumExisting; i++)
+		{
+			Seen.Add(static_cast<uint32>(CollectionIdx->GetValueFromItemKey(i)), CollectionPath->GetValueFromItemKey(i));
+		}
+
+		for (const UPCGExAssetCollection* Collection : InCollections)
+		{
+			if (!Collection)
+			{
+				continue;
+			}
+
+			const uint32 GUID = Collection->GetCollectionGUID();
+			const FSoftObjectPath Path = FSoftObjectPath(Collection);
+			if (const FSoftObjectPath* Existing = Seen.Find(GUID))
+			{
+				// Two DISTINCT collections on one GUID (out-of-band asset copy): picks against the dropped
+				// one would resolve into the survivor's entries. Cannot be made correct here -- be loud.
+				if (*Existing != Path)
+				{
+					UE_LOG(LogPCGEx, Error, TEXT("Collection GUID collision: '%s' and '%s' share GUID %u -- picks into the former will resolve against the latter. Re-save a duplicate of one to re-mint its GUID."),
+					       *Path.ToString(), *Existing->ToString(), GUID);
+				}
+				continue;
+			}
+			Seen.Add(GUID, Path);
+
+			const int64 Key = InMetadata->AddEntry();
+			CollectionIdx->SetValue(Key, static_cast<int32>(GUID));
+			CollectionPath->SetValue(Key, Path);
+		}
+	}
+
+	void FPickPacker::AppendMapRows(UPCGMetadata* InMetadata, UPCGExAssetCollection* InCollection)
+	{
+		if (!InCollection)
+		{
+			return;
+		}
+
+		const TArray<TObjectPtr<UPCGExAssetCollection>>& FlatHosts = InCollection->GetFlatHosts();
+		TArray<const UPCGExAssetCollection*> Collections;
+		Collections.Reserve(FlatHosts.Num());
+		for (const TObjectPtr<UPCGExAssetCollection>& Host : FlatHosts)
+		{
+			Collections.Add(Host.Get());
+		}
+		AppendMapRows(InMetadata, Collections);
 	}
 
 	// --- Pick Unpacker ---

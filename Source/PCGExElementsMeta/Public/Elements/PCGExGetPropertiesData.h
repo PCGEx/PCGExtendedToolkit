@@ -18,13 +18,6 @@ class UPCGExPropertyCollectionComponent;
 class UPCGExPropertySchemaAsset;
 
 UENUM()
-enum class EPCGExPropertyOutputMode : uint8
-{
-	AllFound = 0 UMETA(DisplayName = "All Found", Tooltip = "Output every property the resolved component carries. Output attribute names match property names."),
-	Explicit = 1 UMETA(DisplayName = "Explicit", Tooltip = "Use the Property Output Settings to pick which properties to output and rename them."),
-};
-
-UENUM()
 enum class EPCGExSchemaPresenceMode : uint8
 {
 	AllRequired = 0 UMETA(DisplayName = "All Required", Tooltip = "Keep rows whose resolved component imports every one of the required schema assets (recursively)."),
@@ -101,6 +94,12 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source",
 		meta=(PCG_Overridable, EditCondition="OutputMode == EPCGExPropertyOutputMode::Explicit", EditConditionHides, ShowOnlyInnerProperties))
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
+
+	/** Map sidecar is emitted in AllFound mode (its settings struct is hidden there) or when the struct's toggle is on. */
+	bool WantsOutputMap() const
+	{
+		return OutputMode == EPCGExPropertyOutputMode::AllFound || PropertyOutputSettings.bOutputMap;
+	}
 
 	/** Forward each input's tags to the corresponding output. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source")
@@ -194,6 +193,13 @@ struct FPCGExGetPropertiesDataContext final : FPCGExContext
 	// Pre-resolved Required schema set -- TSet for O(1) membership check during the recursive
 	// import-tree walk in Phase 3b.
 	TSet<const UPCGExPropertySchemaAsset*> RequiredSchemaSet;
+
+	// Sources pin inputs, captured in Boot so slot/schema resolution (phases 1-3c) can run there and
+	// expose per-property output dependencies to RegisterAssetDependencies before the write.
+	TArray<FPCGTaggedData> Inputs;
+
+	/** Registers FPCGExProperty::GatherOutputDependencies across every resolved component schema. */
+	virtual void RegisterAssetDependencies() override;
 };
 
 class FPCGExGetPropertiesDataElement final : public IPCGExElement

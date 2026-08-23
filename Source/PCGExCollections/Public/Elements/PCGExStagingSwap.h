@@ -108,13 +108,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExVariantCollection"))
 	TArray<FPCGExInputShorthandNameSoftObjectPath> VariantCollections;
 
-	/**
-	 * Skip source groups whose baked mapping is stale against the live source collection
-	 * (entries were added/removed/reordered since the variant was last saved) instead of
-	 * applying a potentially wrong mapping. Re-save the variant asset to refresh its bake.
-	 */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	bool bSkipStaleMappings = true;
+	/** Obsolete: mappings resolve live against hard-referenced variant sources; nothing to skip. */
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bSkipStaleMappings_DEPRECATED = true;
 
 	/** Staging layer whose picks are swapped. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
