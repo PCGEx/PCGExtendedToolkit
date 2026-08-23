@@ -9,6 +9,12 @@
 
 #include "PCGExClusterSketchData.generated.h"
 
+namespace PCGExSketch
+{
+	/** Record id value meaning "no record": an item carrying it resolves every field to the schema default. */
+	inline constexpr uint32 InvalidRecordId = 0;
+}
+
 /**
  * One shared value set: overrides layered over the owning layer's schema defaults. Many items may
  * reference the same record; that sharing is what makes an edge split lossless.
@@ -18,10 +24,10 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExSketchDataRecord
 {
 	GENERATED_BODY()
 
-	/** Stable identity, minted by the authoring panel and never reused. Bare UPROPERTY on purpose: even
-	 *  VisibleAnywhere renders FGuidStructCustomization's editable text box. */
+	/** Stable identity within its layer, minted from the layer's counter and never reused. Bare UPROPERTY
+	 *  so the details panel cannot hand-edit it. */
 	UPROPERTY()
-	FGuid Id;
+	uint32 Id = PCGExSketch::InvalidRecordId;
 
 	/** What the record picker shows. Renaming is free -- Id is the key. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
@@ -51,8 +57,13 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExSketchDataLayer
 	UPROPERTY()
 	TArray<FPCGExSketchDataRecord> Records;
 
-	const FPCGExSketchDataRecord* FindRecord(const FGuid& InId) const;
-	FPCGExSketchDataRecord* FindRecordMutable(const FGuid& InId);
+	/** Next record id to mint. Per layer: ids are only ever resolved within their own layer. A counter
+	 *  rather than a GUID because it is deterministic -- minting at execute time would be CRC-stable. */
+	UPROPERTY()
+	uint32 NextRecordId = 1;
+
+	const FPCGExSketchDataRecord* FindRecord(uint32 InId) const;
+	FPCGExSketchDataRecord* FindRecordMutable(uint32 InId);
 
 	/**
 	 * Effective property for InName given an ALREADY-RESOLVED record (null = no record), so a caller
@@ -67,23 +78,22 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExSketchDataLayer
 	const FInstancedStruct* ResolveEffectiveFrom(const FPCGExSketchDataRecord* InRecord, FName InName) const;
 
 	/** Id -> Records index, built once. The print providers hold one for the whole print. */
-	void BuildRecordIndex(TMap<FGuid, int32>& OutIndex) const;
+	void BuildRecordIndex(TMap<uint32, int32>& OutIndex) const;
 
 	/** One enabled output config per resolved schema entry, so a writer prints the whole layer dense.
 	 *  OutConfigs is Reset before population. */
 	void BuildOutputConfigs(TArray<FPCGExPropertyOutputConfig>& OutConfigs) const;
 
 	/** Mints a record and syncs it to the schema in one call, or its panel page renders empty until the
-	 *  schema is next edited. EDITOR-ONLY BY CONTRACT: a GUID minted at execute time changes PCG output
-	 *  every run and defeats CRC caching. */
-	FGuid AddRecord(FName InLabel);
+	 *  schema is next edited. */
+	uint32 AddRecord(FName InLabel);
 
 	/** Drop every record no live reference names. @return the number removed. */
-	int32 PurgeUnreferenced(TConstArrayView<FGuid> InLiveIds);
+	int32 PurgeUnreferenced(TConstArrayView<uint32> InLiveIds);
 
-	/** Re-mint records whose Id is invalid or duplicates an earlier one (first wins). Both states are
-	 *  reachable through load and duplication, and only the first holder of an Id is ever addressable.
-	 *  @return the number re-minted. */
+	/** Re-mint records whose Id is invalid or duplicates an earlier one (first wins), and keep the counter
+	 *  ahead of every id in use. Both states are reachable through load and duplication, and only the
+	 *  first holder of an Id is ever addressable. @return the number re-minted. */
 	int32 RepairRecordIds();
 
 #if WITH_EDITOR

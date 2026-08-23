@@ -663,20 +663,20 @@ FPCGExSketchDataLayer* SPCGExSketchPanel::ResolveLayerMutable(const EDomain InDo
 	return &Model->Data.GetLayer(InDomain == EDomain::Vertex);
 }
 
-FGuid SPCGExSketchPanel::PrimaryDataId() const
+uint32 SPCGExSketchPanel::PrimaryDataId() const
 {
 	const EDomain Domain = SelectionDomain();
 	const FPCGExClusterSketchModel* Model = PCGExSketchPanel::ReadModel(ActiveController());
 	if (!Model || Domain == EDomain::None)
 	{
-		return FGuid();
+		return PCGExSketch::InvalidRecordId;
 	}
 
 	TArray<int32> Indices;
 	GatherDomainSelection(Domain, Indices);
 	if (Indices.IsEmpty())
 	{
-		return FGuid();
+		return PCGExSketch::InvalidRecordId;
 	}
 
 	// The primary speaks for a multi-selection: the picker shows its record, and picking assigns to all.
@@ -726,7 +726,7 @@ void SPCGExSketchPanel::RefreshNow(const bool bForceReseed)
 	UObject* Host = Context.ResolveSketchObject ? Context.ResolveSketchObject() : nullptr;
 	UObject* DetailsObject = Controller ? Controller->GetTarget().GetDetailsObject() : nullptr;
 	const EDomain Domain = SelectionDomain();
-	const FGuid DataId = PrimaryDataId();
+	const uint32 DataId = PrimaryDataId();
 
 	if (bForceReseed)
 	{
@@ -989,8 +989,9 @@ void SPCGExSketchPanel::OnHostPropertyChanged(UObject* Object, FPropertyChangedE
 		return;
 	}
 
-	// The tier is a struct on the host's model, so a tier edit arrives as a host change like any other.
-	if (Context.ResolveSketchObject && Context.ResolveSketchObject() != Object)
+	// The tier is a struct on the host's model, so a tier edit arrives as a host (or payload) change.
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	if (!Controller || !Controller->GetTarget().OwnsObject(Object))
 	{
 		return;
 	}
@@ -1003,7 +1004,10 @@ void SPCGExSketchPanel::OnObjectTransacted(UObject* Object, const FTransactionOb
 	{
 		return;
 	}
-	if (Context.ResolveSketchObject && Context.ResolveSketchObject() != Object)
+	// Through the target, not the host object: a construction-script component is never transacted
+	// itself (Modify redirects to its actor), and the model lives in a payload subobject.
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	if (!Controller || !Controller->GetTarget().OwnsObject(Object))
 	{
 		return;
 	}
@@ -1014,7 +1018,7 @@ void SPCGExSketchPanel::OnObjectTransacted(UObject* Object, const FTransactionOb
 
 #pragma region Record authoring
 
-void SPCGExSketchPanel::AssignRecord(const FGuid InRecordId)
+void SPCGExSketchPanel::AssignRecord(const uint32 InRecordId)
 {
 	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
 	FPCGExClusterSketchModel* Model = EditableModel();
@@ -1042,14 +1046,7 @@ void SPCGExSketchPanel::AssignRecord(const FGuid InRecordId)
 		// gesture, and duplicate ids across items are legal by design.
 		for (const int32 Index : Indices)
 		{
-			if (Domain == EDomain::Vertex)
-			{
-				Model->Vertices[Index].DataId = InRecordId;
-			}
-			else
-			{
-				Model->Edges[Index].DataId = InRecordId;
-			}
+			Domain == EDomain::Vertex ? Model->SetVertexDataId(Index, InRecordId) : Model->SetEdgeDataId(Index, InRecordId);
 		}
 
 		if (Host)
@@ -1098,9 +1095,7 @@ FReply SPCGExSketchPanel::OnMakeUniqueClicked()
 		const FScopedTransaction Transaction(LOCTEXT("MakeRecordUnique", "Make Sketch Data Record Unique"));
 		Controller->GetTarget().BeginAuthoring();
 
-		// The panel is the ONLY mint site, and it is editor-only: a GUID minted at execute time changes
-		// PCG output every run and defeats CRC caching.
-		const FGuid NewId = Layer->AddRecord(SeedLabel);
+		const uint32 NewId = Layer->AddRecord(SeedLabel);
 		if (!SeedOverrides.IsEmpty())
 		{
 			if (FPCGExSketchDataRecord* Minted = Layer->FindRecordMutable(NewId))
@@ -1111,14 +1106,7 @@ FReply SPCGExSketchPanel::OnMakeUniqueClicked()
 
 		for (const int32 Index : Indices)
 		{
-			if (Domain == EDomain::Vertex)
-			{
-				Model->Vertices[Index].DataId = NewId;
-			}
-			else
-			{
-				Model->Edges[Index].DataId = NewId;
-			}
+			Domain == EDomain::Vertex ? Model->SetVertexDataId(Index, NewId) : Model->SetEdgeDataId(Index, NewId);
 		}
 
 		if (Host)
@@ -1136,7 +1124,7 @@ FReply SPCGExSketchPanel::OnMakeUniqueClicked()
 
 FReply SPCGExSketchPanel::OnBreakLinkClicked()
 {
-	AssignRecord(FGuid());
+	AssignRecord(PCGExSketch::InvalidRecordId);
 	return FReply::Handled();
 }
 
@@ -1148,7 +1136,7 @@ TSharedRef<SWidget> SPCGExSketchPanel::MakeRecordMenu()
 		LOCTEXT("NoRecord", "<None>"),
 		LOCTEXT("NoRecordTip", "Store nothing; every field resolves to the layer schema's own value."),
 		FSlateIcon(),
-		FUIAction(FExecuteAction::CreateSP(this, &SPCGExSketchPanel::AssignRecord, FGuid())));
+		FUIAction(FExecuteAction::CreateSP(this, &SPCGExSketchPanel::AssignRecord, PCGExSketch::InvalidRecordId)));
 
 	if (const FPCGExSketchDataLayer* Layer = ResolveLayer(SelectionDomain()))
 	{
@@ -1223,8 +1211,8 @@ FText SPCGExSketchPanel::SelectionSummaryText() const
 
 FText SPCGExSketchPanel::CurrentRecordText() const
 {
-	const FGuid DataId = PrimaryDataId();
-	if (!DataId.IsValid())
+	const uint32 DataId = PrimaryDataId();
+	if (DataId == PCGExSketch::InvalidRecordId)
 	{
 		return LOCTEXT("NoRecordShort", "<None>");
 	}
@@ -1239,8 +1227,8 @@ FText SPCGExSketchPanel::SharedCountText() const
 	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
 	const FPCGExClusterSketchModel* Model = PCGExSketchPanel::ReadModel(Controller);
 	const EDomain Domain = SelectionDomain();
-	const FGuid DataId = PrimaryDataId();
-	if (!Model || Domain == EDomain::None || !DataId.IsValid())
+	const uint32 DataId = PrimaryDataId();
+	if (!Model || Domain == EDomain::None || DataId == PCGExSketch::InvalidRecordId)
 	{
 		return FText::GetEmpty();
 	}
@@ -1300,8 +1288,8 @@ EVisibility SPCGExSketchPanel::SharedCountVisibility() const
 
 EVisibility SPCGExSketchPanel::DanglingVisibility() const
 {
-	const FGuid DataId = PrimaryDataId();
-	if (!DataId.IsValid())
+	const uint32 DataId = PrimaryDataId();
+	if (DataId == PCGExSketch::InvalidRecordId)
 	{
 		return EVisibility::Collapsed;
 	}

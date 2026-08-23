@@ -123,6 +123,9 @@ struct FPCGExGetSketchDataContext final : FPCGExContext
 {
 	friend class FPCGExGetSketchDataElement;
 
+	/** The snapshotted decorators are read by the async compile; nothing reflected holds them here. */
+	virtual void AddExtraStructReferencedObjects(FReferenceCollector& Collector) override;
+
 	FPCGExGraphBuilderDetails GraphBuilderDetails;
 
 	/**

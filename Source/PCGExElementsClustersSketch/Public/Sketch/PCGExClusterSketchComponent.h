@@ -147,6 +147,9 @@ class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketchPayload : public UObjec
 public:
 	UPCGExClusterSketchPayload();
 
+	/** Record-id repair only; the schema sync is editor-only and never runs from load. */
+	virtual void PostLoad() override;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (ShowOnlyInnerProperties))
 	FPCGExClusterSketchModel Model;
 
@@ -358,6 +361,9 @@ public:
 
 private:
 #if WITH_EDITOR
+	/** Re-outers the payload to the CURRENT owner when something left it on a dead one (Blueprint
+	 *  reinstancing) or on this component (older saves). Idempotent; runs at every registration. */
+	void EnsurePayloadOuter();
 	void BuildVisualSnapshot();
 	/** Rebuild the instanced-mesh preview (one ISM per element kind). Kinds with no mesh configured
 	 *  fall back to the immediate-mode snapshot instead. */

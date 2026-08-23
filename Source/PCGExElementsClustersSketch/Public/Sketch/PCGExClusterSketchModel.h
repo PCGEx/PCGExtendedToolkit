@@ -10,11 +10,22 @@
 
 #include "PCGExClusterSketchModel.generated.h"
 
+namespace PCGExSketch
+{
+	/** Element id value meaning "not yet minted" -- what a raw details-panel row add or a pre-id asset carries. */
+	inline constexpr uint32 InvalidElementId = 0;
+}
+
 /** One authored sketch vertex. */
 USTRUCT(BlueprintType)
 struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchVertex
 {
 	GENERATED_BODY()
+
+	/** Identity that survives every reorder and removal, unlike the array index. Minted by the model from
+	 *  its counter; never reused. Bare UPROPERTY so the details panel cannot hand-edit it. */
+	UPROPERTY()
+	uint32 Id = PCGExSketch::InvalidElementId;
 
 	/** Authoritative for FREE vertices. For lattice-bound ones the LOCATION is derived from LatticeCoord
 	 *  (rotation/scale stay authored); a hand-edited location re-snaps the coord instead of dangling. */
@@ -31,7 +42,7 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchVertex
 	/** Record this vertex reads its authored values from; invalid (the default) resolves every field to
 	 *  the schema's own value. Duplicate ids across vertices are LEGAL -- never de-duplicate. */
 	UPROPERTY()
-	FGuid DataId;
+	uint32 DataId = PCGExSketch::InvalidRecordId;
 
 #if WITH_EDITORONLY_DATA
 	/** Authoring provenance: true for vertices the TOOL inserted (edge splits at crossings) rather than
@@ -48,6 +59,10 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchEdge
 {
 	GENERATED_BODY()
 
+	/** See FPCGExClusterSketchVertex::Id. Shares the vertex counter, so an id names an element of either kind. */
+	UPROPERTY()
+	uint32 Id = PCGExSketch::InvalidElementId;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	int32 A = -1;
 
@@ -57,7 +72,7 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchEdge
 	/** See FPCGExClusterSketchVertex::DataId. Splitting an edge hands every NEW segment the parent's
 	 *  id, so one record still describes the whole original span. */
 	UPROPERTY()
-	FGuid DataId;
+	uint32 DataId = PCGExSketch::InvalidRecordId;
 };
 
 /** Aggregate result of FPCGExClusterSketchModel::Validate -- counts, never element indices, so the
@@ -145,6 +160,23 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (ShowOnlyInnerProperties))
 	FPCGExSketchData Data;
 
+	/** Next element id to mint. Serialized with the model so ids stay unique across sessions; a counter
+	 *  rather than a GUID because it is deterministic and cheap to hash. */
+	UPROPERTY()
+	uint32 NextElementId = 1;
+
+	/** Array index of the element carrying InId, or INDEX_NONE. Linear -- ids are for holding identity
+	 *  across edits, not for per-frame lookup; a consumer needing that builds its own map per revision. */
+	int32 FindVertexIndex(uint32 InId) const;
+	int32 FindEdgeIndex(uint32 InId) const;
+
+	/**
+	 * Give every element with an unminted or duplicated id a fresh one (first holder wins), and keep the
+	 * counter ahead of every id in use -- raw row edits and pre-id assets both reach here. Runtime-safe;
+	 * hosts call it from PostLoad and from their edit hooks. @return the number re-minted.
+	 */
+	int32 RepairElementIds();
+
 	int32 NumVertices() const
 	{
 		return Vertices.Num();
@@ -163,15 +195,12 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	 *  their transform says. Invalid (ForceInit) box when there are no vertices. */
 	FBox GetBounds(const FPCGExLatticeBasis* Basis) const;
 
-	/**
-	 * Append a free vertex. InDataId is the record it reads from, defaulting to none; it is taken BY
-	 * VALUE because the append reallocates Vertices, so a reference INTO that array would dangle.
-	 * @return the new vertex index.
-	 */
-	int32 AddVertex(const FTransform& InTransform, FGuid InDataId = FGuid());
+	/** Append a free vertex. InDataId is the record it reads from, defaulting to none.
+	 *  @return the new vertex index. */
+	int32 AddVertex(const FTransform& InTransform, uint32 InDataId = PCGExSketch::InvalidRecordId);
 
 	/** Append a lattice-bound vertex at Coord; location derived through the basis. InDataId as AddVertex. */
-	int32 AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis, FGuid InDataId = FGuid());
+	int32 AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis, uint32 InDataId = PCGExSketch::InvalidRecordId);
 
 	/** Remove a vertex and its edges; remaining edge indices are remapped. Records are left alone --
 	 *  an unreferenced one is purged deliberately, never as a side effect. */
@@ -321,15 +350,20 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	 * Resolve against the PRE-GESTURE model: the extruded edge itself would otherwise count toward the
 	 * source's degree, and enforcement splits shift edges under any index a caller held.
 	 */
-	FGuid ResolveExtrudeEdgeDataId(int32 InVertexIndex) const;
+	uint32 ResolveExtrudeEdgeDataId(int32 InVertexIndex) const;
+
+	/** Point an item at a record (or at none with an invalid id). THE write path for DataId outside the
+	 *  model's own sharing rules, so a future per-item invariant has one site. @return false if out of range. */
+	bool SetVertexDataId(int32 Index, uint32 InDataId);
+	bool SetEdgeDataId(int32 Index, uint32 InDataId);
 
 	/** Every record id the model currently references, per domain -- including duplicates, so a caller
 	 *  can count shares. Invalid ids are skipped. */
-	void GatherLiveDataIds(TArray<FGuid>& OutVertexIds, TArray<FGuid>& OutEdgeIds) const;
+	void GatherLiveDataIds(TArray<uint32>& OutVertexIds, TArray<uint32>& OutEdgeIds) const;
 
 	/** How many items reference InDataId. Drives the panel's "shared by N". */
-	int32 CountVertexReferences(const FGuid& InDataId) const;
-	int32 CountEdgeReferences(const FGuid& InDataId) const;
+	int32 CountVertexReferences(uint32 InDataId) const;
+	int32 CountEdgeReferences(uint32 InDataId) const;
 
 	/**
 	 * Drop every record no item references, in both layers. NEVER automatic: PostSaveRoot is not
@@ -340,6 +374,9 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 
 	/** Aggregate integrity summary; cheap, never mutates. */
 	void Validate(FPCGExClusterSketchValidation& OutSummary) const;
+
+private:
+	uint32 MintElementId();
 };
 
 namespace PCGExSketch

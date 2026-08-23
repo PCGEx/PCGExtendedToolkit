@@ -108,16 +108,80 @@ FBox FPCGExClusterSketchModel::GetBounds(const FPCGExLatticeBasis* Basis) const
 	return Bounds;
 }
 
-int32 FPCGExClusterSketchModel::AddVertex(const FTransform& InTransform, const FGuid InDataId)
+uint32 FPCGExClusterSketchModel::MintElementId()
+{
+	// Wrapping back to the invalid value is unreachable in practice; guarded so it can never alias.
+	if (NextElementId == PCGExSketch::InvalidElementId)
+	{
+		++NextElementId;
+	}
+	return NextElementId++;
+}
+
+int32 FPCGExClusterSketchModel::FindVertexIndex(const uint32 InId) const
+{
+	if (InId == PCGExSketch::InvalidElementId)
+	{
+		return INDEX_NONE;
+	}
+	return Vertices.IndexOfByPredicate([InId](const FPCGExClusterSketchVertex& V) { return V.Id == InId; });
+}
+
+int32 FPCGExClusterSketchModel::FindEdgeIndex(const uint32 InId) const
+{
+	if (InId == PCGExSketch::InvalidElementId)
+	{
+		return INDEX_NONE;
+	}
+	return Edges.IndexOfByPredicate([InId](const FPCGExClusterSketchEdge& E) { return E.Id == InId; });
+}
+
+int32 FPCGExClusterSketchModel::RepairElementIds()
+{
+	// Counter first: it must clear every id already in use before any re-mint draws from it.
+	TSet<uint32> Seen;
+	Seen.Reserve(Vertices.Num() + Edges.Num());
+	auto Scan = [&](const uint32 Id)
+	{
+		if (Id != PCGExSketch::InvalidElementId && Id >= NextElementId)
+		{
+			NextElementId = Id + 1;
+		}
+	};
+	for (const FPCGExClusterSketchVertex& V : Vertices) { Scan(V.Id); }
+	for (const FPCGExClusterSketchEdge& E : Edges) { Scan(E.Id); }
+
+	int32 NumRepaired = 0;
+	auto Repair = [&](uint32& Id)
+	{
+		bool bAlreadySeen = false;
+		if (Id != PCGExSketch::InvalidElementId)
+		{
+			Seen.Add(Id, &bAlreadySeen);
+		}
+		if (Id == PCGExSketch::InvalidElementId || bAlreadySeen)
+		{
+			Id = MintElementId();
+			Seen.Add(Id);
+			++NumRepaired;
+		}
+	};
+	for (FPCGExClusterSketchVertex& V : Vertices) { Repair(V.Id); }
+	for (FPCGExClusterSketchEdge& E : Edges) { Repair(E.Id); }
+	return NumRepaired;
+}
+
+int32 FPCGExClusterSketchModel::AddVertex(const FTransform& InTransform, const uint32 InDataId)
 {
 	const int32 Index = Vertices.Num();
 	FPCGExClusterSketchVertex& V = Vertices.AddDefaulted_GetRef();
+	V.Id = MintElementId();
 	V.Transform = InTransform;
 	V.DataId = InDataId;
 	return Index;
 }
 
-int32 FPCGExClusterSketchModel::AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis, const FGuid InDataId)
+int32 FPCGExClusterSketchModel::AddLatticeVertex(const FIntVector& InCoord, const FPCGExLatticeBasis& InBasis, const uint32 InDataId)
 {
 	const int32 Index = AddVertex(FTransform(InBasis.CoordToWorld(InCoord)), InDataId);
 	FPCGExClusterSketchVertex& V = Vertices[Index];
@@ -180,6 +244,7 @@ int32 FPCGExClusterSketchModel::Connect(const int32 A, const int32 B, bool* bOut
 	}
 	const int32 Index = Edges.Num();
 	FPCGExClusterSketchEdge& E = Edges.AddDefaulted_GetRef();
+	E.Id = MintElementId();
 	E.A = A;
 	E.B = B;
 	return Index;
@@ -239,7 +304,7 @@ int32 FPCGExClusterSketchModel::MergeVertices(const int32 InAbsorbed, const int3
 	}
 
 	// Survivor inherits only when it holds none: records are sparse, dropping the annotation is the worse failure.
-	if (!Vertices[InSurvivor].DataId.IsValid())
+	if (Vertices[InSurvivor].DataId == PCGExSketch::InvalidRecordId)
 	{
 		Vertices[InSurvivor].DataId = Vertices[InAbsorbed].DataId;
 	}
@@ -399,7 +464,7 @@ int32 FPCGExClusterSketchModel::SplitEdgeByContainedVertices(const int32 EdgeInd
 	});
 
 	// Only newly created segments take the parent's record; one deduped onto existing connectivity keeps its own.
-	const FGuid ParentDataId = Edge.DataId;
+	const uint32 ParentDataId = Edge.DataId;
 
 	Edges.RemoveAt(EdgeIndex);
 
@@ -858,20 +923,20 @@ void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummar
 		}
 	};
 
-	auto ValidateLayerRecords = [](const FPCGExSketchDataLayer& InLayer, const TArray<FGuid>& InLiveIds, FPCGExClusterSketchValidation::FLayerIssues& OutIssues)
+	auto ValidateLayerRecords = [](const FPCGExSketchDataLayer& InLayer, const TArray<uint32>& InLiveIds, FPCGExClusterSketchValidation::FLayerIssues& OutIssues)
 	{
-		TSet<FGuid> RecordIds;
+		TSet<uint32> RecordIds;
 		RecordIds.Reserve(InLayer.Records.Num());
 		for (const FPCGExSketchDataRecord& Record : InLayer.Records)
 		{
 			bool bAlreadySeen = false;
 			RecordIds.Add(Record.Id, &bAlreadySeen);
-			if (bAlreadySeen || !Record.Id.IsValid())
+			if (bAlreadySeen || Record.Id == PCGExSketch::InvalidRecordId)
 			{
 				++OutIssues.DuplicateRecordIds;
 			}
 		}
-		for (const FGuid& Id : InLiveIds)
+		for (const uint32 Id : InLiveIds)
 		{
 			if (!RecordIds.Contains(Id))
 			{
@@ -880,8 +945,8 @@ void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummar
 		}
 	};
 
-	TArray<FGuid> LiveVertexIds;
-	TArray<FGuid> LiveEdgeIds;
+	TArray<uint32> LiveVertexIds;
+	TArray<uint32> LiveEdgeIds;
 	GatherLiveDataIds(LiveVertexIds, LiveEdgeIds);
 
 	ValidateLayerNames(Data.SketchProperties, OutSummary.SketchLayerIssues);
@@ -891,12 +956,12 @@ void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummar
 	ValidateLayerRecords(Data.EdgeLayer, LiveEdgeIds, OutSummary.EdgeLayerIssues);
 }
 
-FGuid FPCGExClusterSketchModel::ResolveExtrudeEdgeDataId(const int32 InVertexIndex) const
+uint32 FPCGExClusterSketchModel::ResolveExtrudeEdgeDataId(const int32 InVertexIndex) const
 {
 	// Guarded, not assumed: an edge defaults to A/B = -1, so INDEX_NONE would match raw-authored blanks.
 	if (!Vertices.IsValidIndex(InVertexIndex))
 	{
-		return FGuid();
+		return PCGExSketch::InvalidRecordId;
 	}
 
 	int32 Sole = INDEX_NONE;
@@ -909,36 +974,56 @@ FGuid FPCGExClusterSketchModel::ResolveExtrudeEdgeDataId(const int32 InVertexInd
 		}
 		if (Sole != INDEX_NONE)
 		{
-			return FGuid(); // a junction: no single parent to speak for the extrusion
+			return PCGExSketch::InvalidRecordId; // a junction: no single parent to speak for the extrusion
 		}
 		Sole = e;
 	}
-	return Sole == INDEX_NONE ? FGuid() : Edges[Sole].DataId;
+	return Sole == INDEX_NONE ? PCGExSketch::InvalidRecordId : Edges[Sole].DataId;
 }
 
-void FPCGExClusterSketchModel::GatherLiveDataIds(TArray<FGuid>& OutVertexIds, TArray<FGuid>& OutEdgeIds) const
+bool FPCGExClusterSketchModel::SetVertexDataId(const int32 Index, const uint32 InDataId)
+{
+	if (!Vertices.IsValidIndex(Index))
+	{
+		return false;
+	}
+	Vertices[Index].DataId = InDataId;
+	return true;
+}
+
+bool FPCGExClusterSketchModel::SetEdgeDataId(const int32 Index, const uint32 InDataId)
+{
+	if (!Edges.IsValidIndex(Index))
+	{
+		return false;
+	}
+	Edges[Index].DataId = InDataId;
+	return true;
+}
+
+void FPCGExClusterSketchModel::GatherLiveDataIds(TArray<uint32>& OutVertexIds, TArray<uint32>& OutEdgeIds) const
 {
 	OutVertexIds.Reset();
 	OutEdgeIds.Reset();
 	for (const FPCGExClusterSketchVertex& V : Vertices)
 	{
-		if (V.DataId.IsValid())
+		if (V.DataId != PCGExSketch::InvalidRecordId)
 		{
 			OutVertexIds.Add(V.DataId);
 		}
 	}
 	for (const FPCGExClusterSketchEdge& E : Edges)
 	{
-		if (E.DataId.IsValid())
+		if (E.DataId != PCGExSketch::InvalidRecordId)
 		{
 			OutEdgeIds.Add(E.DataId);
 		}
 	}
 }
 
-int32 FPCGExClusterSketchModel::CountVertexReferences(const FGuid& InDataId) const
+int32 FPCGExClusterSketchModel::CountVertexReferences(const uint32 InDataId) const
 {
-	if (!InDataId.IsValid())
+	if (InDataId == PCGExSketch::InvalidRecordId)
 	{
 		return 0;
 	}
@@ -953,9 +1038,9 @@ int32 FPCGExClusterSketchModel::CountVertexReferences(const FGuid& InDataId) con
 	return Count;
 }
 
-int32 FPCGExClusterSketchModel::CountEdgeReferences(const FGuid& InDataId) const
+int32 FPCGExClusterSketchModel::CountEdgeReferences(const uint32 InDataId) const
 {
-	if (!InDataId.IsValid())
+	if (InDataId == PCGExSketch::InvalidRecordId)
 	{
 		return 0;
 	}
@@ -972,9 +1057,8 @@ int32 FPCGExClusterSketchModel::CountEdgeReferences(const FGuid& InDataId) const
 
 int32 FPCGExClusterSketchModel::PurgeUnreferencedRecords()
 {
-
-	TArray<FGuid> LiveVertexIds;
-	TArray<FGuid> LiveEdgeIds;
+	TArray<uint32> LiveVertexIds;
+	TArray<uint32> LiveEdgeIds;
 	GatherLiveDataIds(LiveVertexIds, LiveEdgeIds);
 	return Data.VertexLayer.PurgeUnreferenced(LiveVertexIds) + Data.EdgeLayer.PurgeUnreferenced(LiveEdgeIds);
 }

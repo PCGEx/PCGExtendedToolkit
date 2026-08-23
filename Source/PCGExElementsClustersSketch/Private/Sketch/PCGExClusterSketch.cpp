@@ -10,6 +10,14 @@ namespace PCGExSketch
 	FSaveSketchAsAssetFn GSaveSketchAsAssetFn;
 }
 
+void UPCGExClusterSketch::PostLoad()
+{
+	Super::PostLoad();
+	// Only the first holder of an id is addressable; duplicates are reachable through load. Runtime-safe.
+	Model.RepairElementIds();
+	Model.Data.RepairRecordIds();
+}
+
 bool UPCGExClusterSketch::BuildBasis(FPCGExLatticeBasis& OutBasis) const
 {
 	return SnapProvider ? SnapProvider->BuildBasis(OutBasis) : false;
@@ -65,6 +73,9 @@ void UPCGExClusterSketch::PostEditChangeProperty(FPropertyChangedEvent& Property
 
 	if (MemberName == GET_MEMBER_NAME_CHECKED(UPCGExClusterSketch, Model))
 	{
+		// A raw row add or duplicate arrives without an id, or with a copied one.
+		Model.RepairElementIds();
+
 		// Hand-editing a vertex adopts it: tool-inserted provenance survives only until the user
 		// deliberately touches the vertex (here, or through a gesture in the editor).
 		const int32 EditedVertex = PropertyChangedEvent.GetArrayIndex(GET_MEMBER_NAME_STRING_CHECKED(FPCGExClusterSketchModel, Vertices));

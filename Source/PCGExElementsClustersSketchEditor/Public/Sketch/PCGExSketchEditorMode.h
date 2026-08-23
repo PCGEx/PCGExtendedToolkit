@@ -85,6 +85,10 @@ private:
 
 	void OnRenderCallback(IToolsContextRenderAPI* RenderAPI);
 	void OnSelectionChanged(UObject* Object);
+	/** A construction-script rerun (every undo on a Blueprint actor) or a reinstancing replaces the bound
+	 *  components WITHOUT a selection event; the bindings follow the replacement so the controller and
+	 *  its selection survive. */
+	void OnObjectsReplaced(const TMap<UObject*, UObject*>& OldToNew);
 
 	/** Rebuild bindings from the current actor selection (and re-apply visual suppression). */
 	void RebuildBindings();
@@ -106,4 +110,5 @@ private:
 
 	FDelegateHandle OnRenderHandle;
 	FDelegateHandle OnSelectionChangedHandle;
+	FDelegateHandle OnObjectsReplacedHandle;
 };

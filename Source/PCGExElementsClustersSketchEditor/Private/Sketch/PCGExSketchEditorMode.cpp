@@ -73,6 +73,7 @@ void UPCGExSketchEditorMode::Enter()
 	{
 		OnSelectionChangedHandle = GEditor->GetSelectedActors()->SelectionChangedEvent.AddUObject(this, &UPCGExSketchEditorMode::OnSelectionChanged);
 	}
+	OnObjectsReplacedHandle = FCoreUObjectDelegates::OnObjectsReplaced.AddUObject(this, &UPCGExSketchEditorMode::OnObjectsReplaced);
 
 	// Selection events do not fire for what is ALREADY selected when the mode opens.
 	RebuildBindings();
@@ -85,6 +86,8 @@ void UPCGExSketchEditorMode::Exit()
 		GEditor->GetSelectedActors()->SelectionChangedEvent.Remove(OnSelectionChangedHandle);
 		OnSelectionChangedHandle.Reset();
 	}
+	FCoreUObjectDelegates::OnObjectsReplaced.Remove(OnObjectsReplacedHandle);
+	OnObjectsReplacedHandle.Reset();
 
 	if (UEditorInteractiveToolsContext* ToolsContext = GetInteractiveToolsContext())
 	{
@@ -112,6 +115,55 @@ void UPCGExSketchEditorMode::Exit()
 void UPCGExSketchEditorMode::OnSelectionChanged(UObject* Object)
 {
 	RebuildBindings();
+}
+
+void UPCGExSketchEditorMode::OnObjectsReplaced(const TMap<UObject*, UObject*>& OldToNew)
+{
+	bool bAnyReplaced = false;
+	for (int32 i = Bindings.Num() - 1; i >= 0; --i)
+	{
+		FPCGExSketchModeBinding& Binding = Bindings[i];
+		// The old component is already garbage by the time this fires, so a plain Get() would be null.
+		UObject* const* Found = OldToNew.Find(Binding.Component.GetEvenIfUnreachable());
+		if (!Found)
+		{
+			continue;
+		}
+
+		UPCGExClusterSketchComponent* Replacement = Cast<UPCGExClusterSketchComponent>(*Found);
+		if (!Replacement)
+		{
+			// Gone for good (the Blueprint dropped the component): release like a deselection would.
+			if (Binding.Controller && Binding.ChangedHandle.IsValid())
+			{
+				Binding.Controller->OnChanged.Remove(Binding.ChangedHandle);
+			}
+			Bindings.RemoveAt(i);
+			bAnyReplaced = true;
+			continue;
+		}
+
+		Binding.Component = Replacement;
+		if (Binding.Target)
+		{
+			Binding.Target->SetComponent(Replacement);
+		}
+		// The replacement registered with the passive visual; the controller's full state is pushed on
+		// the next render, this only flips the palette so nothing double-draws until then.
+		FPCGExClusterSketchEditState State;
+		State.bActive = true;
+		Replacement->SetEditState(State);
+		if (Binding.Controller)
+		{
+			Binding.Controller->NotifyExternalChange();
+		}
+		bAnyReplaced = true;
+	}
+
+	if (bAnyReplaced)
+	{
+		RequestViewportRefresh();
+	}
 }
 
 void UPCGExSketchEditorMode::RebuildBindings()

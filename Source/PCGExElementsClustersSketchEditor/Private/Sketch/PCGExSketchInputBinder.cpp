@@ -126,6 +126,7 @@ bool UPCGExSketchInputBinder::HandleKeyDown(const FKey& InKey)
 			else if (Controller.HasSelection())
 			{
 				Controller.ClearSelection();
+				Controller.NotifyModelChanged();
 				bHandled = true;
 			}
 		});

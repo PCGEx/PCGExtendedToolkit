@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExClusterSketchModel.h"
 #include "Lattice/PCGExLatticeBasis.h"
 
 struct FPCGExContext;
@@ -36,8 +37,12 @@ namespace PCGExMT
  */
 struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchPrintContext
 {
-	/** The printed model. Must outlive the async compile (asset-owned in practice). */
+	/** The printed model -- always &OwnedModel. A pointer so decorators read one shape whatever the host. */
 	const FPCGExClusterSketchModel* Model = nullptr;
+
+	/** The print's OWN copy of the model, taken synchronously at print start: the async compile and the
+	 *  concurrent edge hooks then never read a host the editor may be mutating. */
+	FPCGExClusterSketchModel OwnedModel;
 
 	/** Snap-lattice basis, copied in (POD). Valid only when bHasBasis. */
 	FPCGExLatticeBasis Basis;
@@ -51,8 +56,8 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchPrintContext
 
 	/** Authored-tier read seam, indexed by MODEL vertex / model edge index. READ-ONLY once the print
 	 *  reaches the graph build: DecorateEdges runs concurrently across subgraphs and shares this
-	 *  context, so any mutation here -- memoization included -- is a data race. */
-	/** Null when the sketch has no authored tier at all. */
+	 *  context, so any mutation here -- memoization included -- is a data race. Always built; an
+	 *  unannotated sketch resolves every name to its schema default. */
 	TSharedPtr<const FPCGExSketchLayerPropertyProvider> VertexDataProvider;
 	TSharedPtr<const FPCGExSketchLayerPropertyProvider> EdgeDataProvider;
 
@@ -63,9 +68,10 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchPrintContext
 
 namespace PCGExSketch
 {
-	/** Inputs of one print. Model / BuilderDetails / decorator objects must outlive the async compile. */
+	/** Inputs of one print. BuilderDetails and the decorator objects must outlive the async compile. */
 	struct PCGEXELEMENTSCLUSTERSSKETCH_API FPrintRequest
 	{
+		/** Copied into the print context synchronously; need only outlive the PrintClusterSketch call. */
 		const FPCGExClusterSketchModel* Model = nullptr;
 
 		/** Optional snap basis (copied into the print context). */

@@ -80,7 +80,10 @@ namespace PCGExSketch
 		check(InTaskManager)
 		check(InPrintContext)
 
-		const FPCGExClusterSketchModel& Model = *InRequest.Model;
+		// Snapshot FIRST: everything below, and the async compile after it, reads only the print's own copy.
+		InPrintContext->OwnedModel = *InRequest.Model;
+		InPrintContext->Model = &InPrintContext->OwnedModel;
+		const FPCGExClusterSketchModel& Model = InPrintContext->OwnedModel;
 		const int32 NumVtx = Model.NumVertices();
 
 		if (NumVtx < 2)
@@ -172,10 +175,8 @@ namespace PCGExSketch
 		UPCGBasePointData* OutData = InVtxIO->GetOut();
 		TPCGValueRange<FTransform> OutTransforms = OutData->GetTransformValueRange();
 		TPCGValueRange<int32> OutSeeds = OutData->GetSeedValueRange();
-		// Collocation is judged on RESOLVED output locations -- the only definition that also catches a
-		// rank-collapsed basis projecting distinct coords onto one spot.
-		// Collocation and seeds are judged on FINAL locations, so a placement that collapses distinct
-		// vertices onto one spot is caught too.
+		// Collocation and seeds are judged on FINAL output locations -- the only definition that also
+		// catches a rank-collapsed basis, or the placement, projecting distinct vertices onto one spot.
 		const bool bPlaced = !InRequest.LocalToWorld.Equals(FTransform::Identity);
 		TSet<FVector> SeenLocations;
 		SeenLocations.Reserve(NumVtx);
@@ -236,7 +237,6 @@ namespace PCGExSketch
 		}
 
 		// --- Print context ---
-		InPrintContext->Model = InRequest.Model;
 		InPrintContext->bHasBasis = bHasBasis;
 		if (bHasBasis)
 		{

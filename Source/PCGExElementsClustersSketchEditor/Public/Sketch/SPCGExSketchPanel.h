@@ -117,7 +117,7 @@ private:
 	void GatherDomainSelection(EDomain InDomain, TArray<int32>& OutIndices) const;
 	const FPCGExSketchDataLayer* ResolveLayer(EDomain InDomain) const;
 	FPCGExSketchDataLayer* ResolveLayerMutable(EDomain InDomain) const;
-	FGuid PrimaryDataId() const;
+	uint32 PrimaryDataId() const;
 
 	//~ Refresh
 	/** Deferred to the next frame: a refresh triggered from inside a widget's own event handling would
@@ -162,7 +162,7 @@ private:
 
 	//~ Record authoring. By value, not by reference: these are delegate payload targets, and payloads
 	//~ deduce the parameter type from the bound value.
-	void AssignRecord(FGuid InRecordId);
+	void AssignRecord(uint32 InRecordId);
 	void ActivateSketch(TSharedPtr<FPCGExSketchEditController> InController);
 	FReply OnMakeUniqueClicked();
 	FReply OnBreakLinkClicked();
@@ -206,7 +206,7 @@ private:
 	/** Tracked separately: creating or deleting an inline sketch moves this while the host stands still. */
 	TWeakObjectPtr<UObject> SeededDetailsObject;
 	EDomain SeededDomain = EDomain::None;
-	FGuid SeededRecordId;
+	uint32 SeededRecordId = 0;
 
 	TWeakPtr<FPCGExSketchEditController> BoundController;
 	FDelegateHandle BoundChangedHandle;

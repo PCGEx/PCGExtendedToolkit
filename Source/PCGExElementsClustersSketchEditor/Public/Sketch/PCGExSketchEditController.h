@@ -10,8 +10,10 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 
 class FScopedTransaction;
+class FTransactionObjectEvent;
 class UPCGExClusterSketch;
 class UPCGExClusterSnapProvider;
+struct FPropertyChangedEvent;
 
 /**
  * What the sketch edit controller edits. One implementation per authoring host: the asset (standalone
@@ -36,6 +38,14 @@ public:
 
 	/** The object Modify() is called on inside every transaction (the asset / the component). */
 	virtual UObject* GetTransactionObject() = 0;
+
+	/**
+	 * Whether a transaction or property event on InObject concerns THIS sketch. The set is wider than the
+	 * transaction object: a construction-script component is never transacted itself (Modify redirects
+	 * to its actor), and the model lives in a payload subobject. Consumers watching the engine's
+	 * object-level delegates must filter through this, never by pointer equality with one host object.
+	 */
+	virtual bool OwnsObject(const UObject* InObject) const = 0;
 
 	/**
 	 * The object the panel's details view is rooted at. Not the transaction object: a component keeps its
@@ -74,6 +84,7 @@ public:
 	virtual const UPCGExClusterSnapProvider* GetSnapProvider() const override;
 	virtual bool CanEdit() const override;
 	virtual UObject* GetTransactionObject() override;
+	virtual bool OwnsObject(const UObject* InObject) const override;
 
 	virtual FTransform GetLocalToWorld() const override
 	{
@@ -185,6 +196,14 @@ public:
 	/** Refresh ghosts, then tell the host. Every mutation ends here -- including one a panel made
 	 *  directly on the model (record authoring), which is why this is public. */
 	void NotifyModelChanged();
+
+	/**
+	 * The model changed UNDER the controller -- undo, a details-panel edit, a provider swap. Bumps the
+	 * revision (undo cannot rewind it), drops stale indices, re-derives ghosts and broadcasts OnChanged,
+	 * but does NOT notify the host: it already knows. Wired to the engine's transaction and
+	 * property-change delegates through IPCGExSketchEditTarget::OwnsObject.
+	 */
+	void NotifyExternalChange();
 
 	/** Fired by NotifyModelChanged, so it carries SELECTION changes as well as model mutations. */
 	FSimpleMulticastDelegate OnChanged;
@@ -368,9 +387,17 @@ private:
 	 *  component instancing an asset) returns null and inspection dies along with editing. */
 	const FPCGExClusterSketchModel* GetReadModel() const;
 
+	//~ Selection. IDS are the source of truth -- they survive every reorder, removal and undo -- and the
+	//~ index sets the draw helper, panel and mesh layer read are a cache, re-derived by
+	//~ ResolveSelectionIndices whenever the model may have moved under them.
 	/** Select a vertex and record it as the most recent one: gestures anchor on "last selected", which
 	 *  a TSet cannot answer (its iteration follows sparse-array slots, not selection order). */
 	void SelectVertex(int32 VertexIndex);
+	void SelectEdge(int32 EdgeIndex);
+	void DeselectVertex(int32 VertexIndex);
+	void DeselectEdge(int32 EdgeIndex);
+	/** Rebuild the index caches from the ids, dropping ids the model no longer carries. */
+	void ResolveSelectionIndices();
 
 	FRay ToLocal(const FRay& WorldRay) const;
 	FPCGExSketchHit HitTestLocal(const FRay& LocalRay) const;
@@ -422,16 +449,27 @@ private:
 	 *  rank-collapsed basis many vertices resolve to one spot, and a candidate sharing LayerRef's
 	 *  UNSPANNED coord components (the gesture source's layer) wins over a merely-nearest one. */
 	int32 FindNearbyVertex(const FRay& LocalRay, const FVector& LocalPoint, int32 IgnoreVertex, const FPCGExLatticeBasis* Basis, const FIntVector* LayerRef = nullptr) const;
-	void DropInvalidIndices();
 	void EndTransaction();
 
+	void OnObjectTransacted(UObject* InObject, const FTransactionObjectEvent& InEvent);
+	void OnObjectPropertyChanged(UObject* InObject, FPropertyChangedEvent& InEvent);
+
 	TSharedRef<IPCGExSketchEditTarget> Target;
+
+	FDelegateHandle TransactedHandle;
+	FDelegateHandle PropertyChangedHandle;
+	/** Host notifications re-enter through the property-change delegate; the echo is skipped. */
+	bool bNotifying = false;
 
 	/** See GetModelRevision. */
 	int32 ModelRevision = 0;
 
-	/** Most recently selected vertex, or INDEX_NONE. */
+	/** Most recently selected vertex, or INDEX_NONE; the index cache of LastSelectedVertexId. */
 	int32 LastSelectedVertex = INDEX_NONE;
+	uint32 LastSelectedVertexId = 0;
+
+	TSet<uint32> SelectedVertexIds;
+	TSet<uint32> SelectedEdgeIds;
 
 	/** Model shape the cached Crossings were derived from. Recomputing them is O(E^2), and hovering
 	 *  cannot change the model, so the sweep only re-runs when this fingerprint moves. */
@@ -439,6 +477,7 @@ private:
 	int32 CrossingsVertexCount = INDEX_NONE;
 	int32 CrossingsEdgeCount = INDEX_NONE;
 
+	/** Index caches -- see ResolveSelectionIndices. */
 	TSet<int32> SelectedVertices;
 	TSet<int32> SelectedEdges;
 	FPCGExSketchHit Hover;

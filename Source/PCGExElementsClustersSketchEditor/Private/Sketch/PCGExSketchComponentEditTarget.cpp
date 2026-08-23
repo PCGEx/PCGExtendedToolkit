@@ -68,6 +68,23 @@ UObject* FPCGExSketchComponentEditTarget::GetTransactionObject()
 	return Component.Get();
 }
 
+bool FPCGExSketchComponentEditTarget::OwnsObject(const UObject* InObject) const
+{
+	const UPCGExClusterSketchComponent* Pinned = Component.Get();
+	if (!Pinned || !InObject)
+	{
+		return false;
+	}
+	// The actor: a construction-script component's Modify lands there. The payload and anything in it
+	// (snap provider, decorators): where the model actually transacts.
+	if (InObject == Pinned || InObject == Pinned->GetOwner())
+	{
+		return true;
+	}
+	const UPCGExClusterSketchPayload* Payload = Pinned->InlinePayload;
+	return Payload && (InObject == Payload || InObject->IsIn(Payload));
+}
+
 UObject* FPCGExSketchComponentEditTarget::GetDetailsObject()
 {
 	const UPCGExClusterSketchComponent* Pinned = Component.Get();
