@@ -26,6 +26,7 @@ class UInputRouter;
  * Input map:
  *  - click            select (Ctrl toggles; Ctrl on empty space ADDS a vertex)
  *  - drag from vertex move it (bound vertices stay snapped)
+ *  - drag from edge   move both its endpoints (constraints then reshape the result)
  *  - Shift+drag       connect; releasing on empty space extrudes a new vertex + edge
  *  - Alt+click        delete the vertex or edge under the cursor (LEGACY click path -- see HandleAltClick)
  *  - Delete / Escape  delete selection / cancel drag then clear selection

@@ -94,6 +94,9 @@ void UPCGExClusterSketch::PostEditChangeProperty(FPropertyChangedEvent& Property
 		// own member -- so the gate is deliberately coarse. Idempotent, and reachable only from an editor
 		// edit hook (here, or the panel's transacted write-back).
 		Model.Data.EDITOR_SyncAll();
+
+		// A typed-in transform is a proposal like any gesture: the constraints get the last word.
+		EDITOR_SolveConstraints();
 	}
 }
 
@@ -112,6 +115,14 @@ void UPCGExClusterSketch::PostEditUndo()
 void UPCGExClusterSketch::EDITOR_OnSnapProviderChanged()
 {
 	EDITOR_SyncBoundVertices(false);
+	EDITOR_SolveConstraints();
+}
+
+void UPCGExClusterSketch::EDITOR_SolveConstraints()
+{
+	FPCGExLatticeBasis Basis;
+	const bool bHasBasis = BuildBasis(Basis);
+	Model.SolveConstraints(bHasBasis ? &Basis : nullptr, {});
 }
 
 void UPCGExClusterSketch::EDITOR_SyncBoundVertices(const bool bResnapFromLocation)

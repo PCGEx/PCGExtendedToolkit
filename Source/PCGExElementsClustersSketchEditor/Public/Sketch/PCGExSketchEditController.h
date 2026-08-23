@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Lattice/PCGExLatticeBasis.h"
+#include "Sketch/PCGExClusterSketchConstraint.h"
 #include "Sketch/PCGExClusterSketchModel.h"
 #include "Sketch/PCGExSketchPlacement.h"
 #include "UObject/WeakObjectPtrTemplates.h"
@@ -127,6 +128,11 @@ struct PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API FPCGExSketchHit
 	{
 		return Type == EType::Crossing;
 	}
+
+	bool IsEdge() const
+	{
+		return Type == EType::Edge;
+	}
 };
 
 /**
@@ -148,7 +154,9 @@ public:
 	{
 		None,
 		Move,
-		Connect
+		Connect,
+		/** Both endpoints translate by the cursor delta -- the edge itself never moves, its vertices do. */
+		MoveEdge
 	};
 
 	explicit FPCGExSketchEditController(const TSharedRef<IPCGExSketchEditTarget>& InTarget);
@@ -164,7 +172,7 @@ public:
 	//~ Click
 	void HandleClick(const FRay& WorldRay, bool bAdditive, bool bAddOnEmpty);
 
-	//~ Drag
+	//~ Drag. A press on a vertex moves it (or connects from it); a press on an edge moves both endpoints.
 	void BeginDrag(const FRay& WorldRay, bool bConnect);
 	void UpdateDrag(const FRay& WorldRay);
 	void EndDrag(const FRay& WorldRay);
@@ -190,6 +198,27 @@ public:
 	/** Drop records no item references, both layers. @return records removed. */
 	int32 PurgeUnusedDataRecords();
 
+	//~ Constraints. Each is one transaction; the solve runs inside it.
+	/** Selected element ids, for the type pickers. */
+	void GatherSelectedIds(TArray<uint32>& OutVertexIds, TArray<uint32>& OutEdgeIds) const;
+	/** Whether InType would attach to the current selection -- what a picker offers. */
+	bool CanAddConstraint(const UScriptStruct* InType) const;
+	/** Attach a constraint of InType to the selection (subjects built by the type, parameters seeded from
+	 *  the geometry). @return the constraint id, or 0 when the selection does not fit. */
+	uint32 AddConstraintToSelection(const UScriptStruct* InType);
+	/** Remove one constraint. @return false when the id is unknown. */
+	bool RemoveConstraint(uint32 InConstraintId);
+	/** Remove every constraint naming a selected element. @return the number removed. */
+	int32 ClearConstraintsOnSelection();
+	/** Toggle one constraint. @return false when the id is unknown. */
+	bool SetConstraintEnabled(uint32 InConstraintId, bool bEnabled);
+
+	/** Residuals from the last solve or evaluation, keyed by constraint id. Refreshed with the crossings. */
+	const TMap<uint32, FPCGExSketchConstraintResidual>& GetConstraintResiduals() const
+	{
+		return ConstraintResiduals;
+	}
+
 	/** Recompute the ghost crossings. Cheap at sketch scale; called after every mutation. */
 	void RefreshCrossings();
 
@@ -204,6 +233,10 @@ public:
 	 * property-change delegates through IPCGExSketchEditTarget::OwnsObject.
 	 */
 	void NotifyExternalChange();
+
+	/** A panel slider is moving the model every tick: bump the revision (mesh layer + crossings follow)
+	 *  and refresh residuals, with no host notify -- the commit does that once, on release. */
+	void NotifyInteractiveChange();
 
 	/** Fired by NotifyModelChanged, so it carries SELECTION changes as well as model mutations. */
 	FSimpleMulticastDelegate OnChanged;
@@ -301,6 +334,25 @@ public:
 	const FVector& GetPlacementPoint() const
 	{
 		return DragMode != EDragMode::None ? DragPreviewLocal : AddPreviewLocal;
+	}
+
+	/**
+	 * Where the cursor PROPOSED the dragged element before the constraints had their say, in MODEL space
+	 * -- drawn as a ghost tethered to where it actually landed, so the hand sees it was heard. Empty
+	 * when nothing is dragged; one point for a vertex, two for an edge.
+	 */
+	TConstArrayView<FVector> GetDragProposal() const
+	{
+		return DragProposalLocal;
+	}
+
+	/** True while the proposal and the solved result differ: the tether is worth drawing. */
+	bool IsDragProposalDiverging() const;
+
+	/** Edge being dragged in MoveEdge, else INDEX_NONE. */
+	int32 GetDragEdge() const
+	{
+		return DragEdgeIndex;
 	}
 
 	/** Basis from the target's provider; false when there is none. Rebuilt on demand -- never cached. */
@@ -451,6 +503,18 @@ private:
 	int32 FindNearbyVertex(const FRay& LocalRay, const FVector& LocalPoint, int32 IgnoreVertex, const FPCGExLatticeBasis* Basis, const FIntVector* LayerRef = nullptr) const;
 	void EndTransaction();
 
+	/** Run the model's constraint solve inside the CURRENT transaction and refresh the residual cache.
+	 *  Every mutation ends with this before NotifyModelChanged; a drag frame runs it per update. */
+	void SolveConstraints(const FPCGExLatticeBasis* Basis, TConstArrayView<uint32> InPinnedIds = {});
+	void RefreshConstraintResiduals();
+	/** Which of the vertices a gesture holds stay pinned through the solve: those no constraint names
+	 *  DIRECTLY. A direct subject (an Along) is projected instead -- the hand proposes, the constraint
+	 *  disposes -- while an edge-reached one (a Length endpoint) follows the hand. */
+	void GatherDragPins(TConstArrayView<int32> InHeldVertices, TArray<uint32>& OutPinnedIds) const;
+	/** Snap a proposed point for a vertex: bound vertices re-snap through the basis, free ones only when
+	 *  snapping is on. Writes the vertex; returns what it got. */
+	FVector CommitProposedLocation(int32 VertexIndex, const FVector& Proposed, const FPCGExLatticeBasis* Basis);
+
 	void OnObjectTransacted(UObject* InObject, const FTransactionObjectEvent& InEvent);
 	void OnObjectPropertyChanged(UObject* InObject, FPropertyChangedEvent& InEvent);
 
@@ -490,6 +554,18 @@ private:
 	int32 DragTargetVertexIndex = INDEX_NONE;
 	int32 MergeCandidateVertex = INDEX_NONE;
 	FVector DragPreviewLocal = FVector::ZeroVector;
+
+	/** MoveEdge: the edge, its endpoints' positions at press, and the placement point at press -- the
+	 *  delta from that point is what both endpoints receive. */
+	int32 DragEdgeIndex = INDEX_NONE;
+	FVector DragEdgeStartA = FVector::ZeroVector;
+	FVector DragEdgeStartB = FVector::ZeroVector;
+	FVector DragStartPoint = FVector::ZeroVector;
+
+	/** See GetDragProposal. */
+	TArray<FVector, TInlineAllocator<2>> DragProposalLocal;
+
+	TMap<uint32, FPCGExSketchConstraintResidual> ConstraintResiduals;
 	/** Basis snapshot for the duration of one drag, so mid-drag provider edits can't tear it. */
 	FPCGExLatticeBasis DragBasis;
 	bool bDragHasBasis = false;

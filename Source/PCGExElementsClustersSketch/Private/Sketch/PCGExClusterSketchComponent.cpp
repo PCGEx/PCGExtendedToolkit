@@ -1008,6 +1008,9 @@ void UPCGExClusterSketchComponent::EDITOR_OnPayloadChanged(const FPropertyChange
 	// Idempotent, and reachable only from an editor edit hook (here, or the panel's transacted write-back).
 	InlinePayload->Model.Data.EDITOR_SyncAll();
 
+	// A typed-in transform is a proposal like any gesture: the constraints get the last word.
+	EDITOR_SolveConstraints();
+
 	RefreshSketchVisual();
 }
 
@@ -1027,7 +1030,20 @@ void UPCGExClusterSketchComponent::PostEditUndo()
 void UPCGExClusterSketchComponent::EDITOR_OnSnapProviderChanged()
 {
 	EDITOR_SyncBoundVertices(false);
+	EDITOR_SolveConstraints();
 	RefreshSketchVisual();
+}
+
+void UPCGExClusterSketchComponent::EDITOR_SolveConstraints()
+{
+	FPCGExClusterSketchModel* Mutable = GetMutableModel();
+	if (!Mutable)
+	{
+		return;
+	}
+	FPCGExLatticeBasis Basis;
+	const bool bHasBasis = BuildBasis(Basis);
+	Mutable->SolveConstraints(bHasBasis ? &Basis : nullptr, {});
 }
 
 void UPCGExClusterSketchComponent::EDITOR_SyncBoundVertices(const bool bResnapFromLocation)

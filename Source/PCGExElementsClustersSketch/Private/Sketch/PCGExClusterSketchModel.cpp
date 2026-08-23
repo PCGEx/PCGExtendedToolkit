@@ -4,6 +4,7 @@
 #include "Sketch/PCGExClusterSketchModel.h"
 
 #include "PCGExH.h"
+#include "Sketch/PCGExClusterSketchConstraint.h"
 #include "Clusters/PCGExClusterCommon.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
@@ -150,6 +151,12 @@ int32 FPCGExClusterSketchModel::RepairElementIds()
 	};
 	for (const FPCGExClusterSketchVertex& V : Vertices) { Scan(V.Id); }
 	for (const FPCGExClusterSketchEdge& E : Edges) { Scan(E.Id); }
+#if WITH_EDITORONLY_DATA
+	for (const FInstancedStruct& Entry : Constraints)
+	{
+		if (const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>()) { Scan(C->Id); }
+	}
+#endif
 
 	int32 NumRepaired = 0;
 	auto Repair = [&](uint32& Id)
@@ -168,6 +175,12 @@ int32 FPCGExClusterSketchModel::RepairElementIds()
 	};
 	for (FPCGExClusterSketchVertex& V : Vertices) { Repair(V.Id); }
 	for (FPCGExClusterSketchEdge& E : Edges) { Repair(E.Id); }
+#if WITH_EDITORONLY_DATA
+	for (FInstancedStruct& Entry : Constraints)
+	{
+		if (FPCGExSketchConstraint* C = Entry.GetMutablePtr<FPCGExSketchConstraint>()) { Repair(C->Id); }
+	}
+#endif
 	return NumRepaired;
 }
 
@@ -197,11 +210,19 @@ bool FPCGExClusterSketchModel::RemoveVertex(const int32 Index)
 		return false;
 	}
 
+#if WITH_EDITORONLY_DATA
+	TArray<uint32> RemovedIds;
+	RemovedIds.Add(Vertices[Index].Id);
+#endif
+
 	// Drop touching edges (descending, so earlier indices stay valid), then remap the survivors.
 	for (int32 e = Edges.Num() - 1; e >= 0; --e)
 	{
 		if (Edges[e].A == Index || Edges[e].B == Index)
 		{
+#if WITH_EDITORONLY_DATA
+			RemovedIds.Add(Edges[e].Id);
+#endif
 			Edges.RemoveAt(e);
 		}
 	}
@@ -218,6 +239,9 @@ bool FPCGExClusterSketchModel::RemoveVertex(const int32 Index)
 	}
 
 	Vertices.RemoveAt(Index);
+#if WITH_EDITORONLY_DATA
+	OnElementsRemoved(RemovedIds);
+#endif
 	return true;
 }
 
@@ -262,7 +286,13 @@ bool FPCGExClusterSketchModel::RemoveEdgeAt(const int32 EdgeIndex)
 		return false;
 	}
 
+#if WITH_EDITORONLY_DATA
+	const uint32 RemovedId = Edges[EdgeIndex].Id;
+#endif
 	Edges.RemoveAt(EdgeIndex);
+#if WITH_EDITORONLY_DATA
+	OnElementsRemoved(MakeArrayView(&RemovedId, 1));
+#endif
 	return true;
 }
 
@@ -272,6 +302,36 @@ int32 FPCGExClusterSketchModel::MergeVertices(const int32 InAbsorbed, const int3
 	{
 		return INDEX_NONE;
 	}
+
+#if WITH_EDITORONLY_DATA
+	// Absorbed subject slots retarget to the survivor; a constraint that would then name the survivor
+	// twice has lost its meaning and goes. Done BEFORE the edge pass so dropped edges clean up after.
+	{
+		const uint32 AbsorbedId = Vertices[InAbsorbed].Id;
+		const uint32 SurvivorId = Vertices[InSurvivor].Id;
+		for (int32 c = Constraints.Num() - 1; c >= 0; --c)
+		{
+			FPCGExSketchConstraint* C = Constraints[c].GetMutablePtr<FPCGExSketchConstraint>();
+			if (!C || !C->Subjects.Contains(AbsorbedId))
+			{
+				continue;
+			}
+			if (C->Subjects.Contains(SurvivorId))
+			{
+				Constraints.RemoveAt(c);
+				continue;
+			}
+			for (uint32& Subject : C->Subjects)
+			{
+				if (Subject == AbsorbedId)
+				{
+					Subject = SurvivorId;
+				}
+			}
+		}
+	}
+	TArray<uint32> RemovedEdgeIds;
+#endif
 
 	// Descending, in place: FindEdge sees already-retargeted edges, so two absorbed edges toward the
 	// same far vertex cannot both retarget and mint the duplicate this merge exists to prevent.
@@ -300,8 +360,14 @@ int32 FPCGExClusterSketchModel::MergeVertices(const int32 InAbsorbed, const int3
 			}
 		}
 
+#if WITH_EDITORONLY_DATA
+		RemovedEdgeIds.Add(E.Id);
+#endif
 		Edges.RemoveAt(e);
 	}
+#if WITH_EDITORONLY_DATA
+	OnElementsRemoved(RemovedEdgeIds);
+#endif
 
 	// Survivor inherits only when it holds none: records are sparse, dropping the annotation is the worse failure.
 	if (Vertices[InSurvivor].DataId == PCGExSketch::InvalidRecordId)
@@ -467,6 +533,10 @@ int32 FPCGExClusterSketchModel::SplitEdgeByContainedVertices(const int32 EdgeInd
 	const uint32 ParentDataId = Edge.DataId;
 
 	Edges.RemoveAt(EdgeIndex);
+#if WITH_EDITORONLY_DATA
+	// A constraint on the parent (a Length, say) is undefined over a chain: it goes with the edge.
+	OnElementsRemoved(MakeArrayView(&Edge.Id, 1));
+#endif
 
 	int32 NumSegments = 0;
 	int32 Prev = Edge.A;
@@ -954,6 +1024,24 @@ void FPCGExClusterSketchModel::Validate(FPCGExClusterSketchValidation& OutSummar
 	ValidateLayerNames(Data.EdgeLayer.Schema, OutSummary.EdgeLayerIssues);
 	ValidateLayerRecords(Data.VertexLayer, LiveVertexIds, OutSummary.VertexLayerIssues);
 	ValidateLayerRecords(Data.EdgeLayer, LiveEdgeIds, OutSummary.EdgeLayerIssues);
+
+#if WITH_EDITORONLY_DATA
+	// Basis-less on purpose, like the collocation scan: bound vertices measure through their cached
+	// transform here, which only ever drifts by the last solve's own snap.
+	TArray<FPCGExSketchConstraintResidual> Residuals;
+	EvaluateConstraints(nullptr, Residuals);
+	for (const FPCGExSketchConstraintResidual& R : Residuals)
+	{
+		if (R.bDangling)
+		{
+			++OutSummary.ConstraintIssues.Dangling;
+		}
+		else if (!R.IsSatisfied())
+		{
+			++OutSummary.ConstraintIssues.Unsatisfied;
+		}
+	}
+#endif
 }
 
 uint32 FPCGExClusterSketchModel::ResolveExtrudeEdgeDataId(const int32 InVertexIndex) const
@@ -1062,5 +1150,306 @@ int32 FPCGExClusterSketchModel::PurgeUnreferencedRecords()
 	GatherLiveDataIds(LiveVertexIds, LiveEdgeIds);
 	return Data.VertexLayer.PurgeUnreferenced(LiveVertexIds) + Data.EdgeLayer.PurgeUnreferenced(LiveEdgeIds);
 }
+
+#if WITH_EDITORONLY_DATA
+uint32 FPCGExClusterSketchModel::AddConstraint(FInstancedStruct&& InConstraint, const FPCGExLatticeBasis* Basis)
+{
+	FPCGExSketchConstraint* Constraint = InConstraint.GetMutablePtr<FPCGExSketchConstraint>();
+	if (!Constraint)
+	{
+		return PCGExSketch::InvalidElementId;
+	}
+	Constraint->Id = MintElementId();
+
+	FPCGExSketchSolveContext Ctx;
+	Ctx.Build(*this, Basis, {});
+	Constraint->InitializeFromGeometry(Ctx);
+
+	const uint32 Id = Constraint->Id;
+	Constraints.Add(MoveTemp(InConstraint));
+	return Id;
+}
+
+bool FPCGExClusterSketchModel::RemoveConstraint(const uint32 InId)
+{
+	const int32 Index = FindConstraintIndex(InId);
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	Constraints.RemoveAt(Index);
+	return true;
+}
+
+int32 FPCGExClusterSketchModel::FindConstraintIndex(const uint32 InId) const
+{
+	if (InId == PCGExSketch::InvalidElementId)
+	{
+		return INDEX_NONE;
+	}
+	return Constraints.IndexOfByPredicate([InId](const FInstancedStruct& Entry)
+	{
+		const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+		return C && C->Id == InId;
+	});
+}
+
+const FPCGExSketchConstraint* FPCGExClusterSketchModel::FindConstraint(const uint32 InId) const
+{
+	const int32 Index = FindConstraintIndex(InId);
+	return Index == INDEX_NONE ? nullptr : Constraints[Index].GetPtr<FPCGExSketchConstraint>();
+}
+
+FPCGExSketchConstraint* FPCGExClusterSketchModel::FindConstraintMutable(const uint32 InId)
+{
+	const int32 Index = FindConstraintIndex(InId);
+	return Index == INDEX_NONE ? nullptr : Constraints[Index].GetMutablePtr<FPCGExSketchConstraint>();
+}
+
+void FPCGExClusterSketchModel::GatherConstraintsOf(const uint32 InElementId, TArray<int32>& OutConstraintIndices) const
+{
+	OutConstraintIndices.Reset();
+	if (InElementId == PCGExSketch::InvalidElementId)
+	{
+		return;
+	}
+	for (int32 c = 0; c < Constraints.Num(); ++c)
+	{
+		const FPCGExSketchConstraint* C = Constraints[c].GetPtr<FPCGExSketchConstraint>();
+		if (C && C->Subjects.Contains(InElementId))
+		{
+			OutConstraintIndices.Add(c);
+		}
+	}
+}
+
+int32 FPCGExClusterSketchModel::RemoveConstraintsOf(const uint32 InElementId)
+{
+	const int32 Before = Constraints.Num();
+	OnElementsRemoved(MakeArrayView(&InElementId, 1));
+	return Before - Constraints.Num();
+}
+
+bool FPCGExClusterSketchModel::IsVertexDirectSubject(const uint32 InVertexId) const
+{
+	for (const FInstancedStruct& Entry : Constraints)
+	{
+		const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+		if (!C || !C->bEnabled)
+		{
+			continue;
+		}
+		const int32 Expected = C->GetNumSubjects();
+		for (int32 Slot = 0; Slot < C->Subjects.Num(); ++Slot)
+		{
+			const int32 KindSlot = Expected == PCGExSketch::VariadicSubjects ? 0 : Slot;
+			if (C->Subjects[Slot] == InVertexId && C->GetSubjectKind(KindSlot) == EPCGExSketchSubjectKind::Vertex)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool FPCGExClusterSketchModel::AbsorbProposal(const uint32 InVertexId, const FVector& InProposed, const FPCGExLatticeBasis* Basis)
+{
+	if (Constraints.IsEmpty() || InVertexId == PCGExSketch::InvalidElementId)
+	{
+		return false;
+	}
+	FPCGExSketchSolveContext Ctx;
+	Ctx.Build(*this, Basis, {});
+
+	bool bAbsorbed = false;
+	for (FInstancedStruct& Entry : Constraints)
+	{
+		FPCGExSketchConstraint* C = Entry.GetMutablePtr<FPCGExSketchConstraint>();
+		if (C && C->bEnabled && C->Subjects.Contains(InVertexId) && C->ResolvesIn(Ctx))
+		{
+			bAbsorbed |= C->AbsorbProposal(Ctx, InVertexId, InProposed);
+		}
+	}
+	return bAbsorbed;
+}
+
+void FPCGExClusterSketchModel::OnElementsRemoved(const TConstArrayView<uint32> InRemovedIds)
+{
+	if (InRemovedIds.IsEmpty() || Constraints.IsEmpty())
+	{
+		return;
+	}
+	Constraints.RemoveAll([&InRemovedIds](const FInstancedStruct& Entry)
+	{
+		const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+		if (!C)
+		{
+			return true; // a null entry is nothing to keep
+		}
+		for (const uint32 Subject : C->Subjects)
+		{
+			if (InRemovedIds.Contains(Subject))
+			{
+				return true;
+			}
+		}
+		return false;
+	});
+}
+
+bool FPCGExClusterSketchModel::SolveConstraints(const FPCGExLatticeBasis* Basis, const TConstArrayView<uint32> InPinnedIds, TArray<FPCGExSketchConstraintResidual>* OutResiduals)
+{
+	if (Constraints.IsEmpty())
+	{
+		if (OutResiduals)
+		{
+			OutResiduals->Reset();
+		}
+		return false;
+	}
+
+	FPCGExSketchSolveContext Ctx;
+	Ctx.Build(*this, Basis, InPinnedIds);
+
+	// Ordered projection: each pass runs the list in order, so the LAST constraint has the final say on
+	// a contested vertex, and a few passes let the earlier ones settle around it.
+	constexpr int32 NumPasses = 8;
+	for (int32 Pass = 0; Pass < NumPasses; ++Pass)
+	{
+		for (const FInstancedStruct& Entry : Constraints)
+		{
+			const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+			if (C && C->bEnabled && C->ResolvesIn(Ctx))
+			{
+				C->Project(Ctx);
+			}
+		}
+	}
+
+	// Write back. Bound vertices re-snap: the lattice is the final projection until it is itself a
+	// constraint in this list.
+	bool bAnyMoved = false;
+	constexpr double MoveTolSq = UE_DOUBLE_SMALL_NUMBER;
+	for (int32 i = 0; i < Vertices.Num(); ++i)
+	{
+		if (!Ctx.bMovable[i])
+		{
+			continue;
+		}
+		FPCGExClusterSketchVertex& V = Vertices[i];
+		FVector NewLocation = Ctx.Positions[i];
+		if (V.bLatticeBound && Basis)
+		{
+			V.LatticeCoord = Basis->SnapWorldToCoordPreserving(NewLocation, V.LatticeCoord);
+			NewLocation = Basis->CoordToWorld(V.LatticeCoord);
+		}
+		if (FVector::DistSquared(NewLocation, V.Transform.GetLocation()) > MoveTolSq)
+		{
+			V.Transform.SetLocation(NewLocation);
+			bAnyMoved = true;
+		}
+		Ctx.Positions[i] = NewLocation;
+	}
+
+	if (OutResiduals)
+	{
+		// Against what was actually written -- the snap may have undone part of a projection.
+		EvaluateConstraints(Basis, *OutResiduals);
+	}
+	return bAnyMoved;
+}
+
+void FPCGExClusterSketchModel::EvaluateConstraints(const FPCGExLatticeBasis* Basis, TArray<FPCGExSketchConstraintResidual>& OutResiduals) const
+{
+	OutResiduals.Reset();
+	if (Constraints.IsEmpty())
+	{
+		return;
+	}
+
+	FPCGExSketchSolveContext Ctx;
+	Ctx.Build(*this, Basis, {});
+
+	OutResiduals.Reserve(Constraints.Num());
+	for (const FInstancedStruct& Entry : Constraints)
+	{
+		const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+		if (!C || !C->bEnabled)
+		{
+			continue;
+		}
+		FPCGExSketchConstraintResidual& R = OutResiduals.AddDefaulted_GetRef();
+		R.ConstraintId = C->Id;
+		R.bDangling = !C->ResolvesIn(Ctx);
+		R.Residual = R.bDangling ? 0.0 : C->Residual(Ctx);
+	}
+}
+
+bool FPCGExClusterSketchModel::InferAlongAnchors(const uint32 InVertexId, uint32& OutAnchorA, uint32& OutAnchorB) const
+{
+	const int32 Start = FindVertexIndex(InVertexId);
+	if (Start == INDEX_NONE)
+	{
+		return false;
+	}
+
+	// Which vertices already ride an Along: the chain walks THROUGH those and stops at the first that does not.
+	TSet<uint32> AlongSubjects;
+	for (const FInstancedStruct& Entry : Constraints)
+	{
+		const FPCGExSketchConstraint_Along* Along = Entry.GetPtr<FPCGExSketchConstraint_Along>();
+		if (Along && Along->Subjects.Num() == 3)
+		{
+			AlongSubjects.Add(Along->Subjects[PCGExSketch::AlongRole::Subject]);
+		}
+	}
+
+	// Neighbours per vertex, once.
+	TArray<TArray<int32, TInlineAllocator<4>>> Adjacency;
+	Adjacency.SetNum(Vertices.Num());
+	for (const FPCGExClusterSketchEdge& E : Edges)
+	{
+		if (Vertices.IsValidIndex(E.A) && Vertices.IsValidIndex(E.B) && E.A != E.B)
+		{
+			Adjacency[E.A].AddUnique(E.B);
+			Adjacency[E.B].AddUnique(E.A);
+		}
+	}
+	if (Adjacency[Start].Num() != 2)
+	{
+		return false; // a junction or a loose end cannot sit "between" anything
+	}
+
+	auto Walk = [&](int32 From, int32 Towards, uint32& OutAnchor) -> bool
+	{
+		TSet<int32> Visited;
+		Visited.Add(From);
+		int32 Prev = From;
+		int32 Current = Towards;
+		while (true)
+		{
+			if (Visited.Contains(Current))
+			{
+				return false; // a loop with no fixed vertex on it
+			}
+			Visited.Add(Current);
+			if (!AlongSubjects.Contains(Vertices[Current].Id))
+			{
+				OutAnchor = Vertices[Current].Id;
+				return true;
+			}
+			if (Adjacency[Current].Num() != 2)
+			{
+				return false; // an Along subject at a junction: no single way through
+			}
+			const int32 Next = Adjacency[Current][0] == Prev ? Adjacency[Current][1] : Adjacency[Current][0];
+			Prev = Current;
+			Current = Next;
+		}
+	};
+
+	return Walk(Start, Adjacency[Start][0], OutAnchorA) && Walk(Start, Adjacency[Start][1], OutAnchorB) && OutAnchorA != OutAnchorB;
+}
+#endif
 
 #pragma endregion

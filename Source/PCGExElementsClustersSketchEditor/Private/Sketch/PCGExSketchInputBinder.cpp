@@ -186,7 +186,8 @@ FInputRayHit UPCGExSketchInputBinder::CanBeginClickDragSequence(const FInputDevi
 
 	const TSharedPtr<FPCGExSketchEditController> Controller = Resolve(PressPos.WorldRay);
 	const FPCGExSketchHit Hit = Controller ? Controller->HitTest(PressPos.WorldRay) : FPCGExSketchHit();
-	return Hit.IsVertex() ? FInputRayHit(Hit.RayT) : FInputRayHit();
+	// Vertices move or connect; an edge drag moves both its endpoints.
+	return (Hit.IsVertex() || Hit.IsEdge()) ? FInputRayHit(Hit.RayT) : FInputRayHit();
 }
 
 void UPCGExSketchInputBinder::OnClickPress(const FInputDeviceRay& PressPos)

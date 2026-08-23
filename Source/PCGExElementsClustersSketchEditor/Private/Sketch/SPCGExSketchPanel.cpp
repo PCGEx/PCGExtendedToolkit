@@ -14,6 +14,8 @@
 #include "Misc/TransactionObjectEvent.h"
 #include "Modules/ModuleManager.h"
 #include "Sketch/PCGExClusterSketchAuthoringSettings.h"
+#include "Sketch/PCGExClusterSketch.h"
+#include "Sketch/PCGExClusterSketchConstraint.h"
 #include "Sketch/PCGExClusterSketchData.h"
 #include "Sketch/PCGExSketchEditController.h"
 #include "Styling/AppStyle.h"
@@ -91,6 +93,7 @@ void SPCGExSketchPanel::Construct(const FArguments& InArgs, const FPCGExSketchPa
 	}
 	DataDetailsView->GetOnFinishedChangingPropertiesDelegate().AddSP(this, &SPCGExSketchPanel::OnDataPropertyChanged);
 	HostDetailsView->SetIsPropertyEditingEnabledDelegate(EditingEnabled);
+
 
 	// No editing gate and no re-seeding: this view is rooted at a CDO that outlives every sketch.
 	OptionsDetailsView = PropertyModule.CreateDetailView(DetailsArgs);
@@ -446,10 +449,84 @@ TSharedRef<SWidget> SPCGExSketchPanel::BuildSelectionPage()
 
 			+ SVerticalBox::Slot()
 			.AutoHeight()
+			.Padding(0, 6, 0, 0)
+			[
+				SNew(SHorizontalBox)
+				.Visibility_Lambda([this]()
+				{
+					const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+					return (Controller && Controller->HasSelection()) ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SComboButton)
+					.IsEnabled(this, &SPCGExSketchPanel::IsEditingEnabled)
+					.OnGetMenuContent(FOnGetContent::CreateSP(this, &SPCGExSketchPanel::MakeAddConstraintMenu))
+					.ButtonContent()
+					[
+						SNew(STextBlock).Text(LOCTEXT("AddConstraint", "Add Constraint"))
+					]
+				]
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 2, 0, 0)
+			[
+				SAssignNew(SelectionConstraintsBox, SVerticalBox)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
 			.Padding(0, 4, 0, 0)
 			[
 				RecordDetailsView->GetWidget().ToSharedRef()
 			];
+}
+
+TSharedRef<SWidget> SPCGExSketchPanel::MakeAddConstraintMenu()
+{
+	FMenuBuilder MenuBuilder(true, nullptr);
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+
+	// Discovered, not listed: any FPCGExSketchConstraint-derived USTRUCT, from any module, offers itself
+	// when its own BuildSubjectsFromSelection accepts the selection.
+	TArray<const UScriptStruct*> Types;
+	PCGExSketch::GatherConstraintTypes(Types);
+	int32 NumOffered = 0;
+	for (const UScriptStruct* Type : Types)
+	{
+		if (!Controller || !Controller->CanAddConstraint(Type))
+		{
+			continue;
+		}
+		++NumOffered;
+		MenuBuilder.AddMenuEntry(
+			Type->GetDisplayNameText(),
+			Type->GetToolTipText(),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateSP(this, &SPCGExSketchPanel::AddConstraintOfType, Type)));
+	}
+	if (NumOffered == 0)
+	{
+		MenuBuilder.AddMenuEntry(
+			LOCTEXT("NoConstraintFits", "No constraint fits this selection"),
+			LOCTEXT("NoConstraintFitsTip", "Types attach to one vertex between two unconstrained neighbours (Along) or to one edge (Length)."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction(), FCanExecuteAction::CreateLambda([]() { return false; })));
+	}
+	return MenuBuilder.MakeWidget();
+}
+
+void SPCGExSketchPanel::AddConstraintOfType(const UScriptStruct* InType)
+{
+	if (const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController())
+	{
+		Controller->AddConstraintToSelection(InType);
+	}
+	QueueRefresh(/*bForceReseed*/ true);
 }
 
 TSharedRef<SWidget> SPCGExSketchPanel::BuildSketchPage()
@@ -582,6 +659,290 @@ TSharedRef<SWidget> SPCGExSketchPanel::BuildOptionsPage()
 void SPCGExSketchPanel::OnAuthoringOptionChanged(const FPropertyChangedEvent& Event)
 {
 	GetMutableDefault<UPCGExClusterSketchAuthoringSettings>()->SaveConfig();
+}
+
+void SPCGExSketchPanel::SeedSelectionConstraintBodies(const bool bForce)
+{
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	const FPCGExClusterSketchModel* Model = PCGExSketchPanel::ReadModel(Controller);
+
+	TArray<uint32> VertexIds;
+	TArray<uint32> EdgeIds;
+	if (Controller)
+	{
+		Controller->GatherSelectedIds(VertexIds, EdgeIds);
+	}
+
+	// Identity = selection + which constraints name it. Values are NOT part of it: a rebuild drops the
+	// focused field, so a value change refreshes the live scopes instead.
+	uint64 Key = 0;
+	for (const uint32 Id : VertexIds) { Key = HashCombine(Key, ::GetTypeHash(Id)); }
+	for (const uint32 Id : EdgeIds) { Key = HashCombine(Key, ::GetTypeHash(Id) ^ 0x9E3779B9u); }
+#if WITH_EDITORONLY_DATA
+	// Which constraints are ABOUT the selection -- the ones it moves, not the ones that merely read it.
+	TArray<const FInstancedStruct*> Concerned;
+	if (Model)
+	{
+		FPCGExSketchSolveContext Ctx;
+		Ctx.Build(*Model, nullptr, {});
+		for (const FInstancedStruct& Entry : Model->Constraints)
+		{
+			const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+			if (C && C->Concerns(Ctx, VertexIds, EdgeIds))
+			{
+				Concerned.Add(&Entry);
+				Key = HashCombine(Key, ::GetTypeHash(C->Id) ^ 0x85EBCA6Bu);
+			}
+		}
+	}
+#endif
+	if (!bForce && Key == SeededConstraintsKey)
+	{
+		RefreshSelectionConstraintValues();
+		return;
+	}
+	SeededConstraintsKey = Key;
+
+	SelectionConstraintEntries.Reset();
+	if (SelectionConstraintsBox.IsValid())
+	{
+		SelectionConstraintsBox->ClearChildren();
+	}
+	if (!Model || !SelectionConstraintsBox.IsValid() || (VertexIds.IsEmpty() && EdgeIds.IsEmpty()))
+	{
+		return;
+	}
+
+#if WITH_EDITORONLY_DATA
+	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	FDetailsViewArgs DetailsArgs;
+	DetailsArgs.bUpdatesFromSelection = false;
+	DetailsArgs.bLockable = false;
+	DetailsArgs.bAllowSearch = false;
+	DetailsArgs.bHideSelectionTip = true;
+	DetailsArgs.bShowScrollBar = false;
+	DetailsArgs.bShowObjectLabel = false;
+	DetailsArgs.NotifyHook = this; // live edits -- see NotifyPostChange
+	const FStructureDetailsViewArgs StructArgs;
+	const FIsPropertyEditingEnabled EditingEnabled = FIsPropertyEditingEnabled::CreateSP(this, &SPCGExSketchPanel::IsEditingEnabled);
+	const TWeakPtr<FPCGExSketchEditController> WeakController = Controller;
+
+	for (const FInstancedStruct* EntryPtr : Concerned)
+	{
+		const FInstancedStruct& Entry = *EntryPtr;
+		const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+
+		// Rooted at the CONCRETE struct: only the body renders, and the type can never be swapped here.
+		const UScriptStruct* Struct = Entry.GetScriptStruct();
+		FSelectionConstraintEntry& Row = SelectionConstraintEntries.AddDefaulted_GetRef();
+		Row.Id = C->Id;
+		Row.Scope = MakeShared<FStructOnScope>(Struct);
+		Struct->CopyScriptStruct(Row.Scope->GetStructMemory(), Entry.GetMemory());
+		Row.View = PropertyModule.CreateStructureDetailView(DetailsArgs, StructArgs, Row.Scope);
+		if (IDetailsView* Inner = Row.View->GetDetailsView())
+		{
+			Inner->SetIsPropertyEditingEnabledDelegate(EditingEnabled);
+		}
+		const uint32 Id = C->Id;
+		Row.View->GetOnFinishedChangingPropertiesDelegate().AddSP(this, &SPCGExSketchPanel::OnSelectionConstraintChanged, Id);
+
+		SelectionConstraintsBox->AddSlot()
+		.AutoHeight()
+		.Padding(0, 2)
+		[
+			SNew(SBorder)
+			.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+			.Padding(FMargin(4, 2))
+			[
+				SNew(SVerticalBox)
+
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(SHorizontalBox)
+
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.0f)
+					.VAlign(VAlign_Center)
+					[
+						SNew(STextBlock)
+						.Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+						.Text(C->GetDisplayName())
+					]
+
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(4, 0)
+					[
+						SNew(STextBlock)
+						.ColorAndOpacity(FStyleColors::Warning)
+						.Text(this, &SPCGExSketchPanel::ConstraintResidualText, Id)
+					]
+
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					[
+						SNew(SButton)
+						.ButtonStyle(FAppStyle::Get(), "SimpleButton")
+						.ToolTipText(LOCTEXT("RemoveConstraintTip", "Remove this constraint."))
+						.IsEnabled(this, &SPCGExSketchPanel::IsEditingEnabled)
+						.OnClicked_Lambda([this, WeakController, Id]() -> FReply
+						{
+							if (const TSharedPtr<FPCGExSketchEditController> Pinned = WeakController.Pin())
+							{
+								Pinned->RemoveConstraint(Id);
+							}
+							QueueRefresh(/*bForceReseed*/ true);
+							return FReply::Handled();
+						})
+						[
+							SNew(STextBlock).Text(INVTEXT("\u2715"))
+						]
+					]
+				]
+
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					Row.View->GetWidget().ToSharedRef()
+				]
+			]
+		];
+	}
+#endif
+}
+
+void SPCGExSketchPanel::RefreshSelectionConstraintValues()
+{
+#if WITH_EDITORONLY_DATA
+	const FPCGExClusterSketchModel* Model = PCGExSketchPanel::ReadModel(ActiveController());
+	if (!Model)
+	{
+		return;
+	}
+	for (const FSelectionConstraintEntry& Row : SelectionConstraintEntries)
+	{
+		const int32 Index = Model->FindConstraintIndex(Row.Id);
+		if (Index == INDEX_NONE || !Row.Scope.IsValid() || Model->Constraints[Index].GetScriptStruct() != Row.Scope->GetStruct())
+		{
+			continue;
+		}
+		Model->Constraints[Index].GetScriptStruct()->CopyScriptStruct(Row.Scope->GetStructMemory(), Model->Constraints[Index].GetMemory());
+	}
+#endif
+}
+
+void SPCGExSketchPanel::WriteBackSelectionConstraints()
+{
+#if WITH_EDITORONLY_DATA
+	FPCGExClusterSketchModel* Model = EditableModel();
+	if (!Model)
+	{
+		return;
+	}
+	for (const FSelectionConstraintEntry& Row : SelectionConstraintEntries)
+	{
+		// Re-resolved by id, same type only: the array may have moved since the seed. Id and Subjects
+		// ride the copy untouched -- bare UPROPERTYs the body never exposed.
+		const int32 Index = Model->FindConstraintIndex(Row.Id);
+		if (Index == INDEX_NONE || !Row.Scope.IsValid() || Model->Constraints[Index].GetScriptStruct() != Row.Scope->GetStruct())
+		{
+			continue;
+		}
+		Model->Constraints[Index].GetScriptStruct()->CopyScriptStruct(Model->Constraints[Index].GetMutableMemory(), Row.Scope->GetStructMemory());
+	}
+#endif
+}
+
+void SPCGExSketchPanel::NotifyPreChange(FProperty* PropertyAboutToChange)
+{
+	// First touch of an edit: snapshot BEFORE anything reaches the model, so undo restores the pre-drag state.
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	if (!ConstraintEditTransaction.IsValid() && Controller && EditableModel())
+	{
+		ConstraintEditTransaction = MakeUnique<FScopedTransaction>(LOCTEXT("EditConstraint", "Edit Sketch Constraint"));
+		Controller->GetTarget().BeginAuthoring();
+	}
+}
+
+void SPCGExSketchPanel::NotifyPostChange(const FPropertyChangedEvent& PropertyChangedEvent, FProperty* PropertyThatChanged)
+{
+	if (PropertyChangedEvent.ChangeType != EPropertyChangeType::Interactive)
+	{
+		return; // the commit comes through OnSelectionConstraintChanged
+	}
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	FPCGExClusterSketchModel* Model = EditableModel();
+	if (!Controller || !Model)
+	{
+		return;
+	}
+
+	// Per tick, inside the open transaction: write through and solve, but no host notify and no PCG
+	// re-execution -- the revision bump is what repaints the mesh layer.
+	TGuardValue<bool> SyncGuard(bIsSyncing, true);
+	WriteBackSelectionConstraints();
+#if WITH_EDITORONLY_DATA
+	FPCGExLatticeBasis Basis;
+	Model->SolveConstraints(Controller->GetBasis(Basis) ? &Basis : nullptr, {});
+#endif
+	Controller->NotifyInteractiveChange();
+	Context.RequestBodyRefresh.ExecuteIfBound();
+}
+
+void SPCGExSketchPanel::OnSelectionConstraintChanged(const FPropertyChangedEvent& Event, const uint32 InConstraintId)
+{
+#if WITH_EDITORONLY_DATA
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	FPCGExClusterSketchModel* Model = EditableModel();
+	if (!Controller || !Model)
+	{
+		ConstraintEditTransaction.Reset();
+		return;
+	}
+
+	UObject* Host = Controller->GetTarget().GetTransactionObject();
+	{
+		TGuardValue<bool> SyncGuard(bIsSyncing, true);
+		// A commit with no preceding pre-change (a checkbox) opens its own.
+		if (!ConstraintEditTransaction.IsValid())
+		{
+			ConstraintEditTransaction = MakeUnique<FScopedTransaction>(LOCTEXT("EditConstraint", "Edit Sketch Constraint"));
+			Controller->GetTarget().BeginAuthoring();
+		}
+
+		WriteBackSelectionConstraints();
+
+		FPCGExLatticeBasis Basis;
+		Model->SolveConstraints(Controller->GetBasis(Basis) ? &Basis : nullptr, {});
+
+		if (Host)
+		{
+			Host->PostEditChange();
+			PCGExEditor::NotifyObjectChanged(Host);
+		}
+		Controller->NotifyModelChanged();
+		Context.RequestBodyRefresh.ExecuteIfBound();
+		ConstraintEditTransaction.Reset();
+	}
+	// Identity unchanged, so no rebuild: the solve may have clamped a value, and that flows back in place.
+	RefreshSelectionConstraintValues();
+#else
+	ConstraintEditTransaction.Reset();
+#endif
+}
+
+FText SPCGExSketchPanel::ConstraintResidualText(const uint32 InConstraintId) const
+{
+	const TSharedPtr<FPCGExSketchEditController> Controller = ActiveController();
+	const FPCGExSketchConstraintResidual* R = Controller ? Controller->GetConstraintResiduals().Find(InConstraintId) : nullptr;
+	if (!R || R->IsSatisfied())
+	{
+		return FText::GetEmpty();
+	}
+	return R->bDangling ? LOCTEXT("ConstraintDangling", "names a missing element") : FText::Format(LOCTEXT("ConstraintResidual", "off by {0}"), FText::AsNumber(FMath::RoundToInt(R->Residual)));
 }
 
 #pragma endregion
@@ -733,6 +1094,9 @@ void SPCGExSketchPanel::RefreshNow(const bool bForceReseed)
 		bValidationDirty = true;
 	}
 	RefreshValidation();
+
+	// Selection-scoped: re-seeds when the selection or the model revision moved (or on force).
+	SeedSelectionConstraintBodies(bForceReseed);
 
 	const bool bIdentityMoved =
 		bForceReseed
@@ -898,11 +1262,19 @@ bool SPCGExSketchPanel::IsHostCustomRowVisible(const FName InRowName, const FNam
 
 bool SPCGExSketchPanel::IsHostPropertyVisible(const FPropertyAndParent& PropertyAndParent) const
 {
-	// Whole subtrees the page owns.
-	static const TSet<FName> Subtrees = {FName("SnapProvider"), FName("Decorators")};
+	// Whole subtrees the page owns. Constraints is the model's array of instanced structs: the engine's
+	// own array UI (add, remove, reorder, expand, type picker) is the authoring surface, exactly as
+	// Valency's grammar rules. Its parent Model is ShowOnlyInnerProperties, so it surfaces flat.
+	static const TSet<FName> Subtrees = {FName("SnapProvider"), FName("Decorators"), FName("Constraints")};
 
 	const FName Name = PropertyAndParent.Property.GetFName();
 	if (Subtrees.Contains(Name))
+	{
+		return true;
+	}
+	// The container Constraints lives in must pass for its children to be generated at all; its other
+	// members fail the subtree test below and stay hidden.
+	if (Name == GET_MEMBER_NAME_CHECKED(UPCGExClusterSketch, Model) && PropertyAndParent.ParentProperties.IsEmpty())
 	{
 		return true;
 	}
@@ -1264,6 +1636,9 @@ FText SPCGExSketchPanel::ValidationText() const
 		AddCount(InIssues.DanglingRefs, FText::Format(LOCTEXT("VDangling", "{0}: references naming no record"), InName));
 		AddCount(InIssues.DuplicateRecordIds, FText::Format(LOCTEXT("VDupeIds", "{0}: records sharing an id"), InName));
 	};
+
+	AddCount(Validation.ConstraintIssues.Unsatisfied, LOCTEXT("VUnsatisfied", "Unsatisfied constraints"));
+	AddCount(Validation.ConstraintIssues.Dangling, LOCTEXT("VDanglingConstraints", "Constraints naming a missing element"));
 
 	AddLayer(Validation.SketchLayerIssues, LOCTEXT("LayerSketch", "Sketch properties"));
 	AddLayer(Validation.VertexLayerIssues, LOCTEXT("LayerVertex", "Vertex layer"));

@@ -127,5 +127,8 @@ public:
 
 	/** See PostEditChangeProperty. No-op without a usable basis. */
 	void EDITOR_SyncBoundVertices(bool bResnapFromLocation);
+
+	/** Re-run the authoring constraints against the geometry as it stands. Inside the caller's transaction. */
+	void EDITOR_SolveConstraints();
 #endif
 };

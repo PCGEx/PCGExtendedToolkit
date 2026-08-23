@@ -7,6 +7,7 @@
 #include "Containers/ArrayView.h"
 #include "Lattice/PCGExLatticeBasis.h"
 #include "Sketch/PCGExClusterSketchData.h"
+#include "StructUtils/InstancedStruct.h"
 
 #include "PCGExClusterSketchModel.generated.h"
 
@@ -75,6 +76,9 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchEdge
 	uint32 DataId = PCGExSketch::InvalidRecordId;
 };
 
+struct FPCGExSketchConstraint;
+struct FPCGExSketchConstraintResidual;
+
 /** Aggregate result of FPCGExClusterSketchModel::Validate -- counts, never element indices, so the
  *  caller can warn once per issue class. */
 struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchValidation
@@ -114,6 +118,22 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchValidation
 	FLayerIssues SketchLayerIssues;
 	FLayerIssues VertexLayerIssues;
 	FLayerIssues EdgeLayerIssues;
+
+	/** Authoring constraints (editor-only data; zero in a cooked build). */
+	struct FConstraintIssues
+	{
+		/** Enabled constraints whose residual exceeds the tolerance after the last solve. */
+		int32 Unsatisfied = 0;
+		/** Constraints naming an element that no longer exists. */
+		int32 Dangling = 0;
+
+		bool IsEmpty() const
+		{
+			return Unsatisfied == 0 && Dangling == 0;
+		}
+	};
+
+	FConstraintIssues ConstraintIssues;
 
 	bool HasEdgeIssues() const
 	{
@@ -164,6 +184,16 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	 *  rather than a GUID because it is deterministic and cheap to hash. */
 	UPROPERTY()
 	uint32 NextElementId = 1;
+
+#if WITH_EDITORONLY_DATA
+	/**
+	 * Authoring constraints (FPCGExSketchConstraint-derived), ORDERED: a later entry projects later and so
+	 * wins a conflict -- list order IS priority. Sparse; most sketches hold none. Editor-only by nature:
+	 * the solver bakes positions into the vertices, and that is all a print reads.
+	 */
+	UPROPERTY(EditAnywhere, Category = Settings, meta = (BaseStruct = "/Script/PCGExElementsClustersSketch.PCGExSketchConstraint", ExcludeBaseStruct))
+	TArray<FInstancedStruct> Constraints;
+#endif
 
 	/** Array index of the element carrying InId, or INDEX_NONE. Linear -- ids are for holding identity
 	 *  across edits, not for per-frame lookup; a consumer needing that builds its own map per revision. */
@@ -375,8 +405,58 @@ struct PCGEXELEMENTSCLUSTERSSKETCH_API FPCGExClusterSketchModel
 	/** Aggregate integrity summary; cheap, never mutates. */
 	void Validate(FPCGExClusterSketchValidation& OutSummary) const;
 
+#if WITH_EDITORONLY_DATA
+	//~ Constraints. Every mutation above already keeps these coherent (a constraint losing a subject is
+	//~ REMOVED -- it has no meaning without it, unlike a record).
+
+	/** Attach a constraint, minting its id and seeding its parameters from the geometry as it stands.
+	 *  Appended LAST, so it outranks everything before it. @return the new id, or 0 if InConstraint is
+	 *  not a FPCGExSketchConstraint. */
+	uint32 AddConstraint(FInstancedStruct&& InConstraint, const FPCGExLatticeBasis* Basis);
+	bool RemoveConstraint(uint32 InId);
+	int32 FindConstraintIndex(uint32 InId) const;
+	const FPCGExSketchConstraint* FindConstraint(uint32 InId) const;
+	FPCGExSketchConstraint* FindConstraintMutable(uint32 InId);
+	/** Indices of every constraint naming InElementId as a subject. */
+	void GatherConstraintsOf(uint32 InElementId, TArray<int32>& OutConstraintIndices) const;
+	/** Remove every constraint naming InElementId. @return the number removed. */
+	int32 RemoveConstraintsOf(uint32 InElementId);
+
+	/** A gesture proposes InProposed for the vertex: every enabled constraint naming it DIRECTLY gets to
+	 *  re-parameterise itself (an Along takes the new fraction) before the solve. @return true if any did. */
+	bool AbsorbProposal(uint32 InVertexId, const FVector& InProposed, const FPCGExLatticeBasis* Basis);
+
+	/** True when an enabled constraint names the vertex in a VERTEX slot (an Along's subject) -- as opposed
+	 *  to reaching it only as the endpoint of a subject edge. A gesture pins the vertex it holds unless
+	 *  this is true, in which case the constraint has the last word. */
+	bool IsVertexDirectSubject(uint32 InVertexId) const;
+
+	/**
+	 * Project every enabled constraint in list order, a few passes, then write the positions back
+	 * (bound vertices re-snap through the basis, free ones take the position). Subjects of no constraint
+	 * never move; InPinnedIds never move either. Transacted by the CALLER -- never run from load or print.
+	 * @return true when any vertex moved.
+	 */
+	bool SolveConstraints(const FPCGExLatticeBasis* Basis, TConstArrayView<uint32> InPinnedIds, TArray<FPCGExSketchConstraintResidual>* OutResiduals = nullptr);
+
+	/** Residuals against the geometry as it stands -- no projection. */
+	void EvaluateConstraints(const FPCGExLatticeBasis* Basis, TArray<FPCGExSketchConstraintResidual>& OutResiduals) const;
+
+	/**
+	 * Default anchors for an Along on InVertexId: walk the chain both ways, through degree-2 vertices
+	 * that are themselves Along subjects, to the first vertex that is neither. A junction or a loose end
+	 * before that yields false -- the user picks by hand.
+	 */
+	bool InferAlongAnchors(uint32 InVertexId, uint32& OutAnchorA, uint32& OutAnchorB) const;
+#endif
+
 private:
 	uint32 MintElementId();
+
+#if WITH_EDITORONLY_DATA
+	/** Drop constraints naming any of InRemovedIds. */
+	void OnElementsRemoved(TConstArrayView<uint32> InRemovedIds);
+#endif
 };
 
 namespace PCGExSketch

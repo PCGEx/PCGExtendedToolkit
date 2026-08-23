@@ -7,12 +7,15 @@
 #include "Sketch/PCGExClusterSketchModel.h"
 #include "Templates/Function.h"
 #include "UObject/WeakObjectPtrTemplates.h"
+#include "Misc/NotifyHook.h"
+#include "ScopedTransaction.h"
 #include "Widgets/SCompoundWidget.h"
 
 class FPCGExSketchEditController;
 class IDetailsView;
 class IStructureDetailsView;
 class SWidgetSwitcher;
+class SVerticalBox;
 struct FPropertyAndParent;
 struct FPropertyChangedEvent;
 class FStructOnScope;
@@ -58,7 +61,7 @@ struct FPCGExSketchPanelContext
  * Every mutation the panel makes is one FScopedTransaction on the target's transaction object, and
  * ends on FPCGExSketchEditController::NotifyModelChanged like every gesture does.
  */
-class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API SPCGExSketchPanel : public SCompoundWidget
+class PCGEXELEMENTSCLUSTERSSKETCHEDITOR_API SPCGExSketchPanel : public SCompoundWidget, public FNotifyHook
 {
 public:
 	/** Declaration order IS the switcher's slot order -- SetPage indexes it by cast. */
@@ -95,6 +98,15 @@ public:
 	//~ Begin SWidget
 	virtual void Tick(const FGeometry& AllottedGeometry, double InCurrentTime, float InDeltaTime) override;
 	//~ End SWidget
+
+	//~ Begin FNotifyHook (the constraint bodies only). A slider drag reaches the model on every tick, inside
+	//~ one transaction opened at the first pre-change and closed by the commit.
+	// The FEditPropertyChain overloads stay reachable, or Clang's -Woverloaded-virtual fails the build.
+	using FNotifyHook::NotifyPreChange;
+	using FNotifyHook::NotifyPostChange;
+	virtual void NotifyPreChange(FProperty* PropertyAboutToChange) override;
+	virtual void NotifyPostChange(const FPropertyChangedEvent& PropertyChangedEvent, FProperty* PropertyThatChanged) override;
+	//~ End FNotifyHook
 
 private:
 	//~ Resolution
@@ -182,6 +194,36 @@ private:
 	EPage ActivePage = EPage::Selection;
 
 	TSharedPtr<SWidgetSwitcher> PageSwitcher;
+
+	//~ Constraints, Selection page. "Add Constraint" is the ONE way in (it offers only the types that fit
+	//~ the selection and attaches them to it). Each constraint naming a selected element is then shown as
+	//~ its own details BODY -- an owning copy rooted at the constraint's concrete struct, so no array
+	//~ machinery and no type picker can detach it from its subjects -- written back by id. Ordering is
+	//~ the Sketch page's global list.
+	TSharedRef<SWidget> MakeAddConstraintMenu();
+	void AddConstraintOfType(const UScriptStruct* InType);
+
+	struct FSelectionConstraintEntry
+	{
+		uint32 Id = 0;
+		TSharedPtr<FStructOnScope> Scope;
+		TSharedPtr<IStructureDetailsView> View;
+	};
+
+	TSharedPtr<SVerticalBox> SelectionConstraintsBox;
+	TArray<FSelectionConstraintEntry> SelectionConstraintEntries;
+	/** Identity the bodies were seeded from: selection ids + the ids of the constraints shown. A VALUE
+	 *  change never rebuilds them (that would drop focus mid-edit); values refresh into the live scopes. */
+	uint64 SeededConstraintsKey = 0;
+	void SeedSelectionConstraintBodies(bool bForce);
+	/** Model -> every body's scope memory, in place; the widgets read it without a rebuild. */
+	void RefreshSelectionConstraintValues();
+	/** Every body's scope -> model, by id, same-type-guarded. No transaction handling, no notify. */
+	void WriteBackSelectionConstraints();
+	void OnSelectionConstraintChanged(const FPropertyChangedEvent& Event, uint32 InConstraintId);
+	FText ConstraintResidualText(uint32 InConstraintId) const;
+	/** Open from the first NotifyPreChange of an edit to its commit. */
+	TUniquePtr<FScopedTransaction> ConstraintEditTransaction;
 
 	/** Owning copies. The Records array carries no CPF_Edit flag, so no property handle can reach it --
 	 *  a copy fed to an IStructureDetailsView is the only binding that exists. */

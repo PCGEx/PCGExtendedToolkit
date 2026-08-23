@@ -339,6 +339,8 @@ public:
 	 *  sketch behaves identically whichever host carries it. Called by the inline snap provider. */
 	void EDITOR_OnSnapProviderChanged();
 	void EDITOR_SyncBoundVertices(bool bResnapFromLocation);
+	/** Re-run the INLINE payload's authoring constraints. No-op for an asset-driven component. */
+	void EDITOR_SolveConstraints();
 
 	/**
 	 * Save the payload IN FORCE as a NEW Cluster Sketch asset (standard save dialog) and reference it.
