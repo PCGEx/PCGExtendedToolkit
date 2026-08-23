@@ -20,6 +20,7 @@
 #include "Details/Collections/PCGExAssetEntryCustomization.h"
 #include "Details/Collections/PCGExAssetGrammarCustomization.h"
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/PCGExFittingVariationsCustomization.h"
 #include "Details/Collections/PCGExLevelCollectionActions.h"
 #include "Details/Collections/PCGExMaterialPicksCustomization.h"
@@ -28,7 +29,11 @@
 #include "Details/Collections/PCGExSelectorClosestMatchAxisCustomization.h"
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
 #include "Details/Collections/PCGExSkinnedMeshCollectionActions.h"
+#include "Details/Properties/PCGExCollectionEntryPickerWidget.h"
 #include "Helpers/PCGExExternalPackageProducer.h"
+#include "PCGExInlineWidgetRegistry.h"
+#include "Details/PCGExPropertyCompiledCustomization.h"
+#include "Properties/PCGExProperty_CollectionEntry.h"
 #include "Misc/CoreDelegates.h"
 #include "PCGExLog.h"
 #include "PCGExPropertySchemaAsset.h"
@@ -67,6 +72,21 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	PCGEX_FOREACH_ENTRY_TYPE_ALL(PCGEX_REGISTER_ENTRY_CUSTOMIZATION)
 
 #undef PCGEX_REGISTER_ENTRY_CUSTOMIZATION
+
+	// Schema-authoring rows route concrete property types through the compiled customization, which is
+	// registered PER TYPE NAME -- foreign-module types must self-register or the schema UI falls back
+	// to raw struct fields.
+	PCGEX_REGISTER_CUSTO("PCGExProperty_CollectionEntry", FPCGExPropertyCompiledCustomization)
+
+	// Inline value editor for the Collection Entry property type. Edit mode = schema authoring
+	// (collection box + lock + default pick); Compact mode = override rows (entry pick; collection
+	// box only while unlocked).
+	FPCGExInlineWidgetRegistry::Register(
+		FPCGExProperty_CollectionEntry::StaticStruct()->GetFName(), EPCGExInlineWidgetMode::Edit,
+		[](const TSharedRef<IPropertyHandle>& ValueHandle) { return PCGExCollectionEntryPickerWidget::Make(ValueHandle, true); });
+	FPCGExInlineWidgetRegistry::Register(
+		FPCGExProperty_CollectionEntry::StaticStruct()->GetFName(), EPCGExInlineWidgetMode::Compact,
+		[](const TSharedRef<IPropertyHandle>& ValueHandle) { return PCGExCollectionEntryPickerWidget::Make(ValueHandle, false); });
 
 	// Mosaic thumbnail renderer for all collection types. GEngine != null means engine init is
 	// done and UThumbnailManager is safe to touch; otherwise defer to PostEngineInit.
@@ -119,6 +139,8 @@ void FPCGExCollectionsEditorModule::OnFilesLoaded()
 
 void FPCGExCollectionsEditorModule::ShutdownModule()
 {
+	FPCGExInlineWidgetRegistry::UnregisterAllModes(FPCGExProperty_CollectionEntry::StaticStruct()->GetFName());
+
 	if (FAssetRegistryModule* AssetRegistryModule = FModuleManager::GetModulePtr<FAssetRegistryModule>("AssetRegistry"))
 	{
 		IAssetRegistry& AssetRegistry = AssetRegistryModule->Get();
@@ -255,6 +277,9 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 			if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
 			{
 				Loaded->EDITOR_RebuildStaleEntries();
+				// Ids only mint on staging rebuilds; heal never-rebuilt collections here so entry
+				// references (Collection Entry properties, variants) have something to bind to.
+				PCGExCollectionEditorUtils::EnsureEntryIds(Loaded, /*bNotify=*/false);
 			}
 		});
 }

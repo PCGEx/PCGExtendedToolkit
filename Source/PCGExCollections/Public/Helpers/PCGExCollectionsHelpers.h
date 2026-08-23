@@ -473,6 +473,16 @@ namespace PCGExCollections
 
 		/** Write collection mapping to an attribute set */
 		void PackToDataset(const UPCGParamData* InAttributeSet);
+
+		/**
+		 * Append Map rows (Tag_CollectionIdx / Tag_CollectionPath) for InCollections to InMetadata, skipping
+		 * GUIDs already present. The ONE row-layout definition: PackToDataset and every other Map producer
+		 * (e.g. FPCGExProperty_CollectionEntry sidecars) route through here.
+		 */
+		static void AppendMapRows(UPCGMetadata* InMetadata, TConstArrayView<const UPCGExAssetCollection*> InCollections);
+
+		/** AppendMapRows for InCollection and every host reachable from it (FlatHosts), mirroring RegisterCollection. */
+		static void AppendMapRows(UPCGMetadata* InMetadata, UPCGExAssetCollection* InCollection);
 	};
 
 	/**

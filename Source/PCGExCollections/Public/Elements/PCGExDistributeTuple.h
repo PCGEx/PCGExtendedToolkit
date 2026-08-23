@@ -86,11 +86,28 @@ public:
 	/** Name of the attribute to write the picked row's weight to */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta=(PCG_Overridable, EditCondition="bOutputWeight"))
 	FName WeightAttributeName = "TupleWeight";
+
+	/** Emit the "Map" attribute set describing external resources referenced by written values (e.g. Collection Entry picks). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", AdvancedDisplay, meta=(DisplayName="Output Map"))
+	bool bOutputMap = false;
+
+protected:
+	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
+
+public:
 };
 
 struct FPCGExDistributeTupleContext final : FPCGExPointsProcessorContext
 {
 	friend class FPCGExDistributeTupleElement;
+
+	// Source properties declaring a sidecar pin, unioned across processors (lock: processors finish in
+	// parallel). Flushed once after StageOutputs when bOutputMap.
+	FCriticalSection SidecarLock;
+	TArray<const FPCGExProperty*> SidecarSources;
+
+	/** Output dependencies of every authored value (e.g. Collection Entry picks). */
+	virtual void RegisterAssetDependencies() override;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
