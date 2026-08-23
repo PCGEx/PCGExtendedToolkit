@@ -106,12 +106,6 @@ void FPCGExVariantCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Too
 		LOCTEXT("AddAssetSwapTooltip", "Add an asset-path swap rule: every source entry staging the picked asset swaps to the rule's payload (unless an explicit per-entry swap overrides it)."),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Link"));
 
-	ToolbarBuilder.AddToolBarButton(
-		FUIAction(FExecuteAction::CreateLambda([this]() { OnSyncMappings(); })),
-		NAME_None,
-		LOCTEXT("SyncMappings", "Sync Mappings"),
-		LOCTEXT("SyncMappingsTooltip", "Re-resolve and bake the swap mappings against the live sources (also runs automatically on save)."),
-		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Refresh"));
 }
 
 TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddSourceMenu()
@@ -226,31 +220,6 @@ void FPCGExVariantCollectionEditor::OnSwapAssetPicked(const FAssetData& AssetDat
 	{
 		VariantGrid->RefreshGrid();
 	}
-}
-
-FReply FPCGExVariantCollectionEditor::OnSyncMappings()
-{
-	UPCGExVariantCollection* Variant = Cast<UPCGExVariantCollection>(EditedCollection.Get());
-	if (!Variant)
-	{
-		return FReply::Handled();
-	}
-
-	{
-		FScopedTransaction Transaction(LOCTEXT("SyncMappingsTransaction", "Sync Variant Mappings"));
-		Variant->Modify();
-		Variant->SyncVariantMappings();
-	}
-
-	// Mutation happened outside any PostEditChangeProperty path -- notify PCG trackers manually.
-	PCGExEditor::NotifyObjectChanged(Variant);
-
-	if (VariantGrid.IsValid())
-	{
-		VariantGrid->RefreshGrid();
-	}
-
-	return FReply::Handled();
 }
 
 #undef LOCTEXT_NAMESPACE

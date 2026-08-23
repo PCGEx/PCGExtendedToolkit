@@ -2,8 +2,12 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExPropertyWriter.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExProperty.h"
 #include "PCGExPropertySchemaAsset.h"
+#include "PCGParamData.h"
+#include "PCGPin.h"
+#include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
@@ -110,6 +114,30 @@ FName FPCGExPropertyOutputConfig::GetEffectiveOutputName() const
 	return OutputAttributeName;
 }
 
+void FPCGExPropertySetWriter::CopySidecarClones(TArray<FInstancedStruct>& OutClones) const
+{
+	for (const FWriter& Writer : Writers)
+	{
+		const FPCGExProperty* Clone = Writer.WriterInstance.GetPtr<FPCGExProperty>();
+		if (Clone && !Clone->GetOutputSidecarPin().IsNone())
+		{
+			OutClones.Add(Writer.WriterInstance);
+		}
+	}
+}
+
+void FPCGExPropertyWriter::CopySidecarClones(TArray<FInstancedStruct>& OutClones) const
+{
+	for (const TPair<FName, FInstancedStruct>& Pair : WriterInstances)
+	{
+		const FPCGExProperty* Clone = Pair.Value.GetPtr<FPCGExProperty>();
+		if (Clone && !Clone->GetOutputSidecarPin().IsNone())
+		{
+			OutClones.Add(Pair.Value);
+		}
+	}
+}
+
 bool FPCGExPropertySetWriter::Initialize(
 	FPCGExContext* InContext,
 	const IPCGExPropertyProvider* InProvider,
@@ -170,7 +198,7 @@ bool FPCGExPropertySetWriter::Initialize(
 
 		if (FPCGExProperty* MutableWriter = Writer.WriterInstance.GetMutablePtr<FPCGExProperty>())
 		{
-			Writer.Attribute = MutableWriter->CreateMetadataAttribute(Metadata, OutputName);
+			Writer.Attribute = MutableWriter->CreateMetadataAttribute(Metadata, PrototypeProp->ResolveOutputAttributeName(OutputName));
 		}
 
 		if (!Writer.Attribute)
@@ -279,7 +307,7 @@ bool FPCGExPropertyWriter::Initialize(
 
 		// Initialize output buffers
 		FPCGExProperty* Writer = WriterInstance.GetMutablePtr<FPCGExProperty>();
-		if (!Writer || !Writer->InitializeOutput(OutputFacade, OutputName))
+		if (!Writer || !Writer->InitializeOutput(OutputFacade, ProtoBase->ResolveOutputAttributeName(OutputName)))
 		{
 			continue;
 		}
@@ -355,6 +383,92 @@ namespace PCGExProperties
 		return bWritten;
 	}
 
+	void FlushSidecars(const TConstArrayView<const FPCGExProperty*> InProperties, const TFunctionRef<UPCGMetadata*(FName)> GetOrCreate)
+	{
+		for (const FPCGExProperty* Property : InProperties)
+		{
+			if (!Property)
+			{
+				continue;
+			}
+			const FName Pin = Property->GetOutputSidecarPin();
+			if (Pin.IsNone())
+			{
+				continue;
+			}
+			if (UPCGMetadata* Sidecar = GetOrCreate(Pin))
+			{
+				Property->WriteOutputSidecar(Sidecar);
+			}
+		}
+	}
+
+	void StageSidecars(FPCGExContext* InContext, const TConstArrayView<const FPCGExProperty*> InProperties, const TFunctionRef<UPCGMetadata*(FName)> ExistingForPin)
+	{
+		TMap<FName, UPCGParamData*> Sidecars;
+		FlushSidecars(InProperties, [&](const FName Pin) -> UPCGMetadata*
+		{
+			if (UPCGMetadata* Existing = ExistingForPin(Pin))
+			{
+				return Existing;
+			}
+			UPCGParamData*& Data = Sidecars.FindOrAdd(Pin);
+			if (!Data)
+			{
+				Data = InContext->ManagedObjects->New<UPCGParamData>();
+			}
+			return Data->Metadata;
+		});
+
+		for (const TPair<FName, UPCGParamData*>& Pair : Sidecars)
+		{
+			FPCGTaggedData& OutTagged = InContext->OutputData.TaggedData.Emplace_GetRef();
+			OutTagged.Pin = Pair.Key;
+			OutTagged.Data = Pair.Value;
+		}
+	}
+
+	void StageSidecars(FPCGExContext* InContext, const TConstArrayView<const FPCGExProperty*> InProperties)
+	{
+		StageSidecars(InContext, InProperties, [](FName) -> UPCGMetadata* { return nullptr; });
+	}
+
+	void StageSidecars(FPCGExContext* InContext, const TConstArrayView<FInstancedStruct> InClones, const TFunctionRef<UPCGMetadata*(FName)> ExistingForPin)
+	{
+		TArray<const FPCGExProperty*> Properties;
+		Properties.Reserve(InClones.Num());
+		for (const FInstancedStruct& Clone : InClones)
+		{
+			Properties.Add(Clone.GetPtr<FPCGExProperty>());
+		}
+		StageSidecars(InContext, Properties, ExistingForPin);
+	}
+
+	void StageSidecars(FPCGExContext* InContext, const TConstArrayView<FInstancedStruct> InClones)
+	{
+		StageSidecars(InContext, InClones, [](FName) -> UPCGMetadata* { return nullptr; });
+	}
+
+	void AddOutputMapPin(TArray<FPCGPinProperties>& PinProperties, const bool bVisible)
+	{
+		PCGEX_PIN_PARAM(Labels::OutputMapLabel, TEXT("External resources referenced by written properties (e.g. the Collection Map of Collection Entry picks)."), Normal)
+		if (!bVisible)
+		{
+			PinProperties.Last().SetAdvancedPin();
+		}
+	}
+
+	void GatherOutputDependencies(const TConstArrayView<FInstancedStruct> InProperties, TSet<FSoftObjectPath>& OutPaths)
+	{
+		for (const FInstancedStruct& Instance : InProperties)
+		{
+			if (const FPCGExProperty* Property = Instance.GetPtr<FPCGExProperty>())
+			{
+				Property->GatherOutputDependencies(OutPaths);
+			}
+		}
+	}
+
 	int32 WriteResolvedToDataDomain(UPCGData* OutData, const TConstArrayView<FPCGExPropertyResolved> InResolved)
 	{
 		int32 NumWritten = 0;
@@ -365,7 +479,7 @@ namespace PCGExProperties
 			{
 				continue;
 			}
-			if (WriteDataDomainValue(OutData, PCGExMetaHelpers::SanitizeAttributeName(Entry.Source->Name), *Property))
+			if (WriteDataDomainValue(OutData, Property->ResolveOutputAttributeName(PCGExMetaHelpers::SanitizeAttributeName(Entry.Source->Name)), *Property))
 			{
 				++NumWritten;
 			}

@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExDistributeTuple.h"
 
+#include "PCGExPropertyWriter.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExRandomHelpers.h"
@@ -16,6 +17,32 @@
 #define PCGEX_NAMESPACE DistributeTuple
 
 #pragma region UPCGExDistributeTupleSettings
+
+TArray<FPCGPinProperties> UPCGExDistributeTupleSettings::OutputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
+	PCGExProperties::AddOutputMapPin(PinProperties, bOutputMap);
+	return PinProperties;
+}
+
+void FPCGExDistributeTupleContext::RegisterAssetDependencies()
+{
+	FPCGExPointsProcessorContext::RegisterAssetDependencies();
+
+	const UPCGExDistributeTupleSettings* Settings = GetInputSettings<UPCGExDistributeTupleSettings>();
+	if (!Settings)
+	{
+		return;
+	}
+
+	TSet<FSoftObjectPath> Paths;
+	PCGExProperties::GatherOutputDependencies(Settings->Composition, Paths);
+	for (const FPCGExWeightedPropertyOverrides& Row : Settings->Values)
+	{
+		PCGExProperties::GatherOutputDependencies(Row, Paths);
+	}
+	AddAssetDependencies(Paths);
+}
 
 #if WITH_EDITOR
 void UPCGExDistributeTupleSettings::PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent)
@@ -159,6 +186,12 @@ bool FPCGExDistributeTupleElement::AdvanceWork(FPCGExContext* InContext, const U
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
 	Context->MainPoints->StageOutputs();
+
+	if (Settings->bOutputMap && !Context->SidecarSources.IsEmpty())
+	{
+		PCGExProperties::StageSidecars(Context, Context->SidecarSources);
+	}
+
 	Context->Done();
 
 	return Context->TryComplete();
@@ -232,7 +265,7 @@ namespace PCGExDistributeTuple
 			Col.OwnedProperty = EffectiveProperty;
 
 			FPCGExProperty* OutputProperty = Col.OwnedProperty.GetMutablePtr<FPCGExProperty>();
-			if (!OutputProperty || !OutputProperty->InitializeOutput(PointDataFacade, Entry.Source->Name))
+			if (!OutputProperty || !OutputProperty->InitializeOutput(PointDataFacade, OutputProperty->ResolveOutputAttributeName(Entry.Source->Name)))
 			{
 				Col.OwnedProperty.Reset();
 				continue;
@@ -252,6 +285,20 @@ namespace PCGExDistributeTuple
 				else
 				{
 					Col.RowSources[RowIdx] = nullptr;
+				}
+			}
+
+			// Parallel writes go through WriteOutputFrom (no clone bookkeeping): sidecar rows come from
+			// the per-row sources.
+			if (Settings->bOutputMap && !OutputProperty->GetOutputSidecarPin().IsNone())
+			{
+				FScopeLock ScopeLock(&Context->SidecarLock);
+				for (const FPCGExProperty* RowSource : Col.RowSources)
+				{
+					if (RowSource)
+					{
+						Context->SidecarSources.AddUnique(RowSource);
+					}
 				}
 			}
 		}
