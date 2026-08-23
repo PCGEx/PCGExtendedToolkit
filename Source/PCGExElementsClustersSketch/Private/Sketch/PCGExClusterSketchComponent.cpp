@@ -106,10 +106,19 @@ UPCGExClusterSketchPayload::UPCGExClusterSketchPayload()
 	SetFlags(RF_Transactional);
 }
 
+void UPCGExClusterSketchPayload::PostLoad()
+{
+	Super::PostLoad();
+	// Only the first holder of an id is addressable; duplicates are reachable through load. Runtime-safe:
+	// touches no schema.
+	Model.RepairElementIds();
+	Model.Data.RepairRecordIds();
+}
+
 UPCGExClusterSketchComponent* UPCGExClusterSketchPayload::FindOwningComponent() const
 {
 	AActor* Actor = GetTypedOuter<AActor>();
-	if (!Actor)
+	if (!IsValid(Actor))
 	{
 		return nullptr;
 	}
@@ -852,18 +861,22 @@ void UPCGExClusterSketchComponent::PostLoad()
 void UPCGExClusterSketchComponent::OnRegister()
 {
 #if WITH_EDITOR
+	EnsurePayloadOuter();
+
 	// BEFORE Super: registration builds the render state, and CreateSceneProxy returns null on an
 	// empty snapshot -- so a sketch would stay invisible until something else dirtied it.
 	BuildVisualSnapshot();
 #endif
 	Super::OnRegister();
 
+#if WITH_EDITOR
 	// FActorComponentInstanceData caches nothing for a UCS component (its writer is gated on
 	// IsEditableWhenInherited, false for UserConstructionScript), so an inline sketch would not survive a
 	// construction-script rerun. Add this component through the Components panel instead.
-	ensureMsgf(CreationMethod != EComponentCreationMethod::UserConstructionScript,
-	           TEXT("%s was added by a construction script; an inline sketch cannot survive reconstruction there."),
+	ensureMsgf(!InlinePayload || CreationMethod != EComponentCreationMethod::UserConstructionScript,
+	           TEXT("%s was added by a construction script; its inline sketch cannot survive reconstruction there."),
 	           *GetPathName());
+#endif
 
 #if WITH_EDITOR
 	// AFTER Super, in contrast: the mesh layer lives in CHILD components, which can only be created and
@@ -938,6 +951,21 @@ void UPCGExClusterSketchComponent::OnComponentDestroyed(const bool bDestroyingHi
 }
 
 #if WITH_EDITOR
+void UPCGExClusterSketchComponent::EnsurePayloadOuter()
+{
+	AActor* Owner = GetOwner();
+	if (IsTemplate() || !InlinePayload || !IsValid(Owner) || InlinePayload->GetOuter() == Owner)
+	{
+		return;
+	}
+
+	// Blueprint reinstancing rebuilds SCS components from the OLD actor's instance-data cache, which stores
+	// this pointer verbatim (KismetReinstanceUtilities.cpp:1591) -- so the payload arrives still outered to
+	// the actor that was just destroyed. Adopt it. Also adopts a payload outered to this component by an
+	// older save. DoNotDirty: on load this must not dirty the level; reinstancing already has.
+	InlinePayload->Rename(nullptr, Owner, REN_DoNotDirty | REN_DontCreateRedirectors | REN_NonTransactional);
+}
+
 void UPCGExClusterSketchComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
@@ -961,6 +989,9 @@ void UPCGExClusterSketchComponent::EDITOR_OnPayloadChanged(const FPropertyChange
 		return;
 	}
 
+	// A raw row add or duplicate arrives without an id, or with a copied one.
+	InlinePayload->Model.RepairElementIds();
+
 	// Hand-editing a vertex adopts it, and the coord/location pair must stay coherent -- the same rule
 	// the asset host applies, or a typed-in location on a bound vertex is silently dead data.
 	const int32 EditedVertex = PropertyChangedEvent.GetArrayIndex(GET_MEMBER_NAME_STRING_CHECKED(FPCGExClusterSketchModel, Vertices));
@@ -976,6 +1007,9 @@ void UPCGExClusterSketchComponent::EDITOR_OnPayloadChanged(const FPropertyChange
 	// A schema edit arrives as a payload change like any other, so the gate is deliberately coarse.
 	// Idempotent, and reachable only from an editor edit hook (here, or the panel's transacted write-back).
 	InlinePayload->Model.Data.EDITOR_SyncAll();
+
+	// A typed-in transform is a proposal like any gesture: the constraints get the last word.
+	EDITOR_SolveConstraints();
 
 	RefreshSketchVisual();
 }
@@ -996,7 +1030,20 @@ void UPCGExClusterSketchComponent::PostEditUndo()
 void UPCGExClusterSketchComponent::EDITOR_OnSnapProviderChanged()
 {
 	EDITOR_SyncBoundVertices(false);
+	EDITOR_SolveConstraints();
 	RefreshSketchVisual();
+}
+
+void UPCGExClusterSketchComponent::EDITOR_SolveConstraints()
+{
+	FPCGExClusterSketchModel* Mutable = GetMutableModel();
+	if (!Mutable)
+	{
+		return;
+	}
+	FPCGExLatticeBasis Basis;
+	const bool bHasBasis = BuildBasis(Basis);
+	Mutable->SolveConstraints(bHasBasis ? &Basis : nullptr, {});
 }
 
 void UPCGExClusterSketchComponent::EDITOR_SyncBoundVertices(const bool bResnapFromLocation)

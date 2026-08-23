@@ -27,6 +27,13 @@ public:
 		return Component.Get();
 	}
 
+	/** Re-point at the component that REPLACED the bound one (construction-script rerun, reinstancing);
+	 *  the controller and its selection carry across untouched. */
+	void SetComponent(UPCGExClusterSketchComponent* InComponent)
+	{
+		Component = InComponent;
+	}
+
 	virtual FPCGExClusterSketchModel* GetModel() override;
 	virtual const FPCGExClusterSketchModel* GetModel() const override;
 	virtual const UPCGExClusterSnapProvider* GetSnapProvider() const override;
@@ -34,6 +41,7 @@ public:
 	virtual void BeginAuthoring() override;
 	virtual FText GetReadOnlyReason() const override;
 	virtual UObject* GetTransactionObject() override;
+	virtual bool OwnsObject(const UObject* InObject) const override;
 	virtual UObject* GetDetailsObject() override;
 	/** The component transform IS the sketch frame, so rays convert into model space through it. */
 	virtual FTransform GetLocalToWorld() const override;

@@ -6,6 +6,7 @@
 #include "SceneManagement.h"
 #include "Sketch/PCGExClusterSketchAuthoringSettings.h"
 #include "Sketch/PCGExClusterSketchComponent.h"
+#include "Sketch/PCGExClusterSketchConstraint.h"
 #include "Sketch/PCGExClusterSketchStyle.h"
 #include "Sketch/PCGExSketchEditController.h"
 #include "Sketch/PCGExSketchPlacement.h"
@@ -22,6 +23,11 @@ namespace PCGExSketchDrawHelper
 	constexpr float SelectedEdgeThickness = 3.0f;
 	constexpr float SideEffectScale = 0.6f;
 	constexpr double GhostRingRadius = 12.0;
+	/** Ring around a vertex some constraint could not satisfy. */
+	constexpr double UnsatisfiedRingRadius = 16.0;
+	/** Phantom edge (an Along's anchor span): dotted, a touch sparser than a guide so the two read apart. */
+	constexpr double PhantomDotSize = 3.0;
+	constexpr double PhantomGapSize = 7.0;
 
 	// A guide has to read as a LINE, not a tether, so it always overshoots the point it is placing.
 	constexpr double GuideOvershoot = 1.5;
@@ -177,6 +183,61 @@ void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, 
 	{
 		Model->GatherVertexRemovalCascade(Hover.Index, DoomedVertices, DoomedEdges);
 	}
+
+#if WITH_EDITORONLY_DATA
+	// Constraints: the phantom span an Along rides (while its subject is selected, hovered or dragged),
+	// and a warning ring on every vertex a constraint could not satisfy or no longer resolves.
+	TSet<int32> UnsatisfiedVertices;
+	if (!Model->Constraints.IsEmpty())
+	{
+		FPCGExSketchSolveContext Ctx;
+		Ctx.Build(*Model, bHasBasis ? &Basis : nullptr, {});
+		const TMap<uint32, FPCGExSketchConstraintResidual>& Residuals = Controller.GetConstraintResiduals();
+		TArray<int32> Movable;
+
+		for (const FInstancedStruct& Entry : Model->Constraints)
+		{
+			const FPCGExSketchConstraint* C = Entry.GetPtr<FPCGExSketchConstraint>();
+			if (!C || !C->bEnabled)
+			{
+				continue;
+			}
+
+			const FPCGExSketchConstraintResidual* R = Residuals.Find(C->Id);
+			if (R && !R->IsSatisfied())
+			{
+				Movable.Reset();
+				C->GatherMovableVertices(Ctx, Movable);
+				UnsatisfiedVertices.Append(Movable);
+			}
+
+			if (const FPCGExSketchConstraint_Along* Along = Entry.GetPtr<FPCGExSketchConstraint_Along>(); Along && Along->ResolvesIn(Ctx))
+			{
+				const int32 S = Ctx.VertexIndex(Along->Subjects[PCGExSketch::AlongRole::Subject]);
+				const bool bLive = SelectedVertices.Contains(S)
+					|| (Hover.IsVertex() && Hover.Index == S)
+					|| Controller.GetDragVertex() == S;
+				if (!bLive)
+				{
+					continue;
+				}
+				const FVector A = Locations[Ctx.VertexIndex(Along->Subjects[PCGExSketch::AlongRole::AnchorA])];
+				const FVector B = Locations[Ctx.VertexIndex(Along->Subjects[PCGExSketch::AlongRole::AnchorB])];
+				PCGExSketchDrawHelper::DrawDottedLine(PDI, A, B, Style->GuideEdgeColor, PCGExSketchDrawHelper::PhantomDotSize, PCGExSketchDrawHelper::PhantomGapSize, SDPG_Foreground);
+			}
+		}
+	}
+	for (const int32 i : UnsatisfiedVertices)
+	{
+		if (!Locations.IsValidIndex(i))
+		{
+			continue;
+		}
+		constexpr double Radius = PCGExSketchDrawHelper::UnsatisfiedRingRadius;
+		DrawCircle(PDI, Locations[i], FVector::XAxisVector, FVector::YAxisVector, Style->MergeAffordanceColor, Radius, 16, SDPG_Foreground, 1.0f);
+		DrawCircle(PDI, Locations[i], FVector::XAxisVector, FVector::ZAxisVector, Style->MergeAffordanceColor, Radius, 16, SDPG_Foreground, 1.0f);
+	}
+#endif
 
 	// Edges under vertices.
 	const double StubLength = (bHasBasis && Basis.NumAxes > 0) ? Basis.AxisVecs[0].Size() * 0.35 : 35.0;
@@ -372,6 +433,44 @@ void FPCGExSketchDrawHelper::Draw(const FPCGExSketchEditController& Controller, 
 		else
 		{
 			PDI->DrawPoint(LocalToWorld.TransformPosition(Controller.GetDragPreviewLocal()), Style->PreviewAffordanceColor, PCGExSketchDrawHelper::VertexSize, SDPG_Foreground);
+		}
+	}
+
+	// What the hand asked for, when the constraints made something else of it: a faint ghost of the
+	// proposal tethered to where the element actually landed, so the input visibly registered.
+	if (Controller.IsDragProposalDiverging())
+	{
+		const TConstArrayView<FVector> Proposal = Controller.GetDragProposal();
+		FLinearColor Ghost = Style->PreviewAffordanceColor;
+		Ghost.A = 0.5f;
+
+		TArray<FVector, TInlineAllocator<2>> Landed;
+		if (Controller.GetDragMode() == FPCGExSketchEditController::EDragMode::Move && Locations.IsValidIndex(Controller.GetDragVertex()))
+		{
+			Landed.Add(Locations[Controller.GetDragVertex()]);
+		}
+		else if (Controller.GetDragMode() == FPCGExSketchEditController::EDragMode::MoveEdge && Model->Edges.IsValidIndex(Controller.GetDragEdge()))
+		{
+			const FPCGExClusterSketchEdge& E = Model->Edges[Controller.GetDragEdge()];
+			if (Locations.IsValidIndex(E.A) && Locations.IsValidIndex(E.B))
+			{
+				Landed.Add(Locations[E.A]);
+				Landed.Add(Locations[E.B]);
+			}
+		}
+
+		if (Landed.Num() == Proposal.Num())
+		{
+			for (int32 i = 0; i < Proposal.Num(); ++i)
+			{
+				const FVector P = LocalToWorld.TransformPosition(Proposal[i]);
+				PDI->DrawPoint(P, Ghost, PCGExSketchDrawHelper::VertexSize, SDPG_Foreground);
+				PCGExSketchDrawHelper::DrawDottedLine(PDI, P, Landed[i], Ghost, PCGExSketchDrawHelper::GuideDotSize, PCGExSketchDrawHelper::GuideGapSize, SDPG_Foreground);
+			}
+			if (Proposal.Num() == 2)
+			{
+				PDI->DrawTranslucentLine(LocalToWorld.TransformPosition(Proposal[0]), LocalToWorld.TransformPosition(Proposal[1]), Ghost, SDPG_Foreground, PCGExSketchDrawHelper::EdgeThickness);
+			}
 		}
 	}
 }

@@ -3,8 +3,6 @@
 
 #include "Elements/PCGExGetSketchData.h"
 
-#include "Containers/PCGExManagedObjects.h"
-
 #include "Clusters/PCGExClusterCommon.h"
 #include "Data/PCGBasePointData.h" // PCGPointDataConstants::ActorReferenceAttribute
 #include "Data/PCGExClusterData.h"
@@ -121,6 +119,19 @@ namespace PCGExGetSketchData
 		}
 	}
 }
+
+#pragma region FPCGExGetSketchDataContext
+
+void FPCGExGetSketchDataContext::AddExtraStructReferencedObjects(FReferenceCollector& Collector)
+{
+	FPCGExContext::AddExtraStructReferencedObjects(Collector);
+	for (FSketchSource& Source : Sources)
+	{
+		Collector.AddReferencedObjects(Source.Decorators);
+	}
+}
+
+#pragma endregion
 
 #pragma region UPCGExGetSketchDataSettings
 

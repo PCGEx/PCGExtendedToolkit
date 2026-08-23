@@ -25,7 +25,8 @@ namespace PCGExGraphs
  *
  * Writes must be SYNCHRONOUS: the print's commits are instants, not barriers, so a write deferred to a
  * task is dropped. Authored values are read through Ctx.VertexDataProvider / Ctx.EdgeDataProvider,
- * indexed by model item index -- both null when the sketch annotates nothing, so guard before use.
+ * indexed by model item index; both are always built, and resolve to schema defaults when nothing is
+ * annotated.
  */
 UCLASS(Abstract, BlueprintType, EditInlineNew, DefaultToInstanced, CollapseCategories)
 class PCGEXELEMENTSCLUSTERSSKETCH_API UPCGExClusterSketchDecorator : public UObject
@@ -58,9 +59,9 @@ public:
 	 * point index; resolve the model edge as Ctx.ParentToModelEdge[Data.EdgeKeys[i].Index].
 	 *
 	 * Off the game thread AND concurrent across subgraphs on the SAME instance -- hence the const +
-	 * stateless contract above. Ctx is shared by all of them; read it, never write it.
+	 * stateless contract above. Ctx is shared by all of them, hence const.
 	 */
-	virtual void DecorateEdges(FPCGExClusterSketchPrintContext& Ctx, const PCGExGraphs::FSubGraphPreCompileData& Data) const
+	virtual void DecorateEdges(const FPCGExClusterSketchPrintContext& Ctx, const PCGExGraphs::FSubGraphPreCompileData& Data) const
 	{
 	}
 };

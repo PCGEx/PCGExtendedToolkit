@@ -5,6 +5,8 @@
 
 #include "ScopedTransaction.h"
 #include "Helpers/PCGExObjectNotifyHelpers.h"
+#include "Misc/TransactionObjectEvent.h"
+#include "UObject/UnrealType.h"
 #include "Sketch/PCGExClusterSketch.h"
 #include "Sketch/PCGExClusterSketchAuthoringSettings.h"
 #include "Sketch/PCGExClusterSketchStyle.h"
@@ -74,6 +76,13 @@ UObject* FPCGExSketchAssetEditTarget::GetTransactionObject()
 	return Sketch.Get();
 }
 
+bool FPCGExSketchAssetEditTarget::OwnsObject(const UObject* InObject) const
+{
+	const UPCGExClusterSketch* Pinned = Sketch.Get();
+	// Inners too: the snap provider and decorators transact as their own objects.
+	return Pinned && InObject && (InObject == Pinned || InObject->IsIn(Pinned));
+}
+
 void FPCGExSketchAssetEditTarget::NotifyChanged()
 {
 	// Same notification pair as the component host, so a sketch reaches downstream consumers identically
@@ -91,11 +100,35 @@ void FPCGExSketchAssetEditTarget::NotifyChanged()
 FPCGExSketchEditController::FPCGExSketchEditController(const TSharedRef<IPCGExSketchEditTarget>& InTarget)
 	: Target(InTarget)
 {
+	// Host -> controller. The host never knows its controllers, so the engine's object-level delegates
+	// are the channel; OwnsObject is the filter.
+	TransactedHandle = FCoreUObjectDelegates::OnObjectTransacted.AddRaw(this, &FPCGExSketchEditController::OnObjectTransacted);
+	PropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &FPCGExSketchEditController::OnObjectPropertyChanged);
 }
 
 FPCGExSketchEditController::~FPCGExSketchEditController()
 {
+	FCoreUObjectDelegates::OnObjectTransacted.Remove(TransactedHandle);
+	FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(PropertyChangedHandle);
 	CancelDrag();
+}
+
+void FPCGExSketchEditController::OnObjectTransacted(UObject* InObject, const FTransactionObjectEvent& InEvent)
+{
+	if (InEvent.GetEventType() == ETransactionObjectEventType::UndoRedo && Target->OwnsObject(InObject))
+	{
+		NotifyExternalChange();
+	}
+}
+
+void FPCGExSketchEditController::OnObjectPropertyChanged(UObject* InObject, FPropertyChangedEvent& InEvent)
+{
+	// Interactive edits (a slider mid-drag) are skipped: only the committed value matters here, and a
+	// per-tick O(E^2) crossing sweep is not free.
+	if (!bNotifying && InEvent.ChangeType != EPropertyChangeType::Interactive && Target->OwnsObject(InObject))
+	{
+		NotifyExternalChange();
+	}
 }
 
 bool FPCGExSketchEditController::GetBasis(FPCGExLatticeBasis& OutBasis) const
@@ -112,8 +145,108 @@ const FPCGExClusterSketchModel* FPCGExSketchEditController::GetReadModel() const
 
 void FPCGExSketchEditController::SelectVertex(const int32 VertexIndex)
 {
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model || !Model->Vertices.IsValidIndex(VertexIndex))
+	{
+		return;
+	}
+	SelectedVertexIds.Add(Model->Vertices[VertexIndex].Id);
 	SelectedVertices.Add(VertexIndex);
+	LastSelectedVertexId = Model->Vertices[VertexIndex].Id;
 	LastSelectedVertex = VertexIndex;
+}
+
+void FPCGExSketchEditController::SelectEdge(const int32 EdgeIndex)
+{
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model || !Model->Edges.IsValidIndex(EdgeIndex))
+	{
+		return;
+	}
+	SelectedEdgeIds.Add(Model->Edges[EdgeIndex].Id);
+	SelectedEdges.Add(EdgeIndex);
+}
+
+void FPCGExSketchEditController::DeselectVertex(const int32 VertexIndex)
+{
+	if (const FPCGExClusterSketchModel* Model = GetReadModel(); Model && Model->Vertices.IsValidIndex(VertexIndex))
+	{
+		SelectedVertexIds.Remove(Model->Vertices[VertexIndex].Id);
+	}
+	SelectedVertices.Remove(VertexIndex);
+	if (LastSelectedVertex == VertexIndex)
+	{
+		LastSelectedVertex = INDEX_NONE;
+		LastSelectedVertexId = PCGExSketch::InvalidElementId;
+	}
+}
+
+void FPCGExSketchEditController::DeselectEdge(const int32 EdgeIndex)
+{
+	if (const FPCGExClusterSketchModel* Model = GetReadModel(); Model && Model->Edges.IsValidIndex(EdgeIndex))
+	{
+		SelectedEdgeIds.Remove(Model->Edges[EdgeIndex].Id);
+	}
+	SelectedEdges.Remove(EdgeIndex);
+}
+
+void FPCGExSketchEditController::ResolveSelectionIndices()
+{
+	SelectedVertices.Reset();
+	SelectedEdges.Reset();
+	LastSelectedVertex = INDEX_NONE;
+
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model)
+	{
+		SelectedVertexIds.Reset();
+		SelectedEdgeIds.Reset();
+		LastSelectedVertexId = PCGExSketch::InvalidElementId;
+		return;
+	}
+
+	// One pass over the model, not one FindVertexIndex per id.
+	for (int32 i = 0; i < Model->Vertices.Num(); ++i)
+	{
+		const uint32 Id = Model->Vertices[i].Id;
+		if (SelectedVertexIds.Contains(Id))
+		{
+			SelectedVertices.Add(i);
+			if (Id == LastSelectedVertexId)
+			{
+				LastSelectedVertex = i;
+			}
+		}
+	}
+	for (int32 e = 0; e < Model->Edges.Num(); ++e)
+	{
+		if (SelectedEdgeIds.Contains(Model->Edges[e].Id))
+		{
+			SelectedEdges.Add(e);
+		}
+	}
+
+	// Ids the model no longer carries leave the selection for good.
+	if (SelectedVertices.Num() != SelectedVertexIds.Num())
+	{
+		SelectedVertexIds.Reset();
+		for (const int32 i : SelectedVertices)
+		{
+			SelectedVertexIds.Add(Model->Vertices[i].Id);
+		}
+	}
+	if (SelectedEdges.Num() != SelectedEdgeIds.Num())
+	{
+		SelectedEdgeIds.Reset();
+		for (const int32 e : SelectedEdges)
+		{
+			SelectedEdgeIds.Add(Model->Edges[e].Id);
+		}
+	}
+	if (LastSelectedVertex == INDEX_NONE)
+	{
+		LastSelectedVertexId = PCGExSketch::InvalidElementId;
+	}
 }
 
 FRay FPCGExSketchEditController::ToLocal(const FRay& WorldRay) const
@@ -291,7 +424,7 @@ void FPCGExSketchEditController::ClearHover()
 
 void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bAdditive, const bool bAddOnEmpty)
 {
-	DropInvalidIndices();
+	ResolveSelectionIndices();
 
 	const FPCGExSketchHit Hit = HitTest(WorldRay);
 
@@ -320,7 +453,7 @@ void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bA
 	{
 		if (bAdditive && SelectedVertices.Contains(Hit.Index))
 		{
-			SelectedVertices.Remove(Hit.Index);
+			DeselectVertex(Hit.Index);
 		}
 		else
 		{
@@ -335,7 +468,7 @@ void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bA
 	{
 		if (bAdditive && SelectedEdges.Contains(Hit.Index))
 		{
-			SelectedEdges.Remove(Hit.Index);
+			DeselectEdge(Hit.Index);
 		}
 		else
 		{
@@ -343,7 +476,7 @@ void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bA
 			{
 				ClearSelection();
 			}
-			SelectedEdges.Add(Hit.Index);
+			SelectEdge(Hit.Index);
 		}
 	}
 	NotifyModelChanged();
@@ -352,11 +485,11 @@ void FPCGExSketchEditController::HandleClick(const FRay& WorldRay, const bool bA
 void FPCGExSketchEditController::BeginDrag(const FRay& WorldRay, const bool bConnect)
 {
 	CancelDrag();
-	DropInvalidIndices();
+	ResolveSelectionIndices();
 
 	const FRay LocalRay = ToLocal(WorldRay);
 	const FPCGExSketchHit Hit = HitTestLocal(LocalRay);
-	if (!Hit.IsVertex())
+	if (!Hit.IsVertex() && !Hit.IsEdge())
 	{
 		return;
 	}
@@ -370,17 +503,50 @@ void FPCGExSketchEditController::BeginDrag(const FRay& WorldRay, const bool bCon
 	bDragHasBasis = GetBasis(DragBasis);
 	const FPCGExLatticeBasis* BasisPtr = bDragHasBasis ? &DragBasis : nullptr;
 
-	DragMode = bConnect ? EDragMode::Connect : EDragMode::Move;
-	DragVertexIndex = Hit.Index;
-	DragTargetVertexIndex = INDEX_NONE;
-	MergeCandidateVertex = INDEX_NONE;
-	DragPreviewLocal = VertexLocation(Model->Vertices[Hit.Index], BasisPtr);
-
-	// THE gesture-start reset. Hover termination normally clears the add ghost first, but that only
-	// fires when a hover capture was live, and a stale one would misdirect the guide's reach.
 	bHasAddPreview = false;
 	LastLocalRay = LocalRay;
 	bHasLastLocalRay = true;
+	DragProposalLocal.Reset();
+
+	if (Hit.IsEdge())
+	{
+		// Connect has no meaning from an edge; a press on one always moves it, whatever the modifier.
+		const FPCGExClusterSketchEdge& E = Model->Edges[Hit.Index];
+		if (!Model->Vertices.IsValidIndex(E.A) || !Model->Vertices.IsValidIndex(E.B))
+		{
+			return;
+		}
+		DragMode = EDragMode::MoveEdge;
+		DragEdgeIndex = Hit.Index;
+		DragVertexIndex = INDEX_NONE;
+		DragTargetVertexIndex = INDEX_NONE;
+		MergeCandidateVertex = INDEX_NONE;
+		DragEdgeStartA = VertexLocation(Model->Vertices[E.A], BasisPtr);
+		DragEdgeStartB = VertexLocation(Model->Vertices[E.B], BasisPtr);
+		DragPreviewLocal = (DragEdgeStartA + DragEdgeStartB) * 0.5;
+
+		// Anchored at the midpoint: the edge's own line is then a candidate guide, and the work plane
+		// passes through the grab.
+		EnsurePlacementGesture(EPlacementGesture::Move, INDEX_NONE, DragPreviewLocal, BasisPtr, false);
+		FVector Start;
+		DragStartPoint = Placement.Resolve(LocalRay, Start) ? Start : DragPreviewLocal;
+
+		ActiveTransaction = MakeUnique<FScopedTransaction>(LOCTEXT("MoveEdge", "Move Sketch Edge"));
+		Target->BeginAuthoring();
+		if (!SelectedEdges.Contains(DragEdgeIndex))
+		{
+			ClearSelection();
+			SelectEdge(DragEdgeIndex);
+		}
+		return;
+	}
+
+	DragMode = bConnect ? EDragMode::Connect : EDragMode::Move;
+	DragVertexIndex = Hit.Index;
+	DragEdgeIndex = INDEX_NONE;
+	DragTargetVertexIndex = INDEX_NONE;
+	MergeCandidateVertex = INDEX_NONE;
+	DragPreviewLocal = VertexLocation(Model->Vertices[Hit.Index], BasisPtr);
 
 	// A bound vertex snaps regardless of the toggle, so its complement guide would be dead either way.
 	const bool bWillSnap = BasisPtr && (bSnapEnabled || Model->Vertices[Hit.Index].bLatticeBound);
@@ -419,6 +585,49 @@ void FPCGExSketchEditController::ApplyDrag(const FRay& LocalRay)
 	bHasLastLocalRay = true;
 
 	const FPCGExLatticeBasis* BasisPtr = bDragHasBasis ? &DragBasis : nullptr;
+	DragProposalLocal.Reset();
+
+	if (DragMode == EDragMode::MoveEdge)
+	{
+		FPCGExClusterSketchModel* Model = Target->GetModel();
+		if (!Model || !Model->Edges.IsValidIndex(DragEdgeIndex))
+		{
+			return;
+		}
+		const int32 A = Model->Edges[DragEdgeIndex].A;
+		const int32 B = Model->Edges[DragEdgeIndex].B;
+		if (!Model->Vertices.IsValidIndex(A) || !Model->Vertices.IsValidIndex(B))
+		{
+			return;
+		}
+
+		EnsurePlacementGesture(EPlacementGesture::Move, INDEX_NONE, PlacementAnchor, BasisPtr, false);
+		FVector Resolved;
+		if (!Placement.Resolve(LocalRay, Resolved))
+		{
+			return; // unresolvable ray: keep the previous frame
+		}
+		const FVector Delta = Resolved - DragStartPoint;
+
+		// Both endpoints receive the same delta; each then snaps by its own rule.
+		DragProposalLocal.Add(DragEdgeStartA + Delta);
+		DragProposalLocal.Add(DragEdgeStartB + Delta);
+		const FVector CommittedA = CommitProposedLocation(A, DragProposalLocal[0], BasisPtr);
+		const FVector CommittedB = CommitProposedLocation(B, DragProposalLocal[1], BasisPtr);
+		++ModelRevision;
+
+		// A directly constrained endpoint re-parameterises its constraint from the proposal (an Along
+		// slides), so the solve lands it where the hand went rather than where it was.
+		Model->AbsorbProposal(Model->Vertices[A].Id, CommittedA, BasisPtr);
+		Model->AbsorbProposal(Model->Vertices[B].Id, CommittedB, BasisPtr);
+
+		// The constraints reshape the proposal; a held endpoint only yields to a constraint naming it directly.
+		TArray<uint32> Pins;
+		GatherDragPins({A, B}, Pins);
+		SolveConstraints(BasisPtr, Pins);
+		DragPreviewLocal = (VertexLocation(Model->Vertices[A], BasisPtr) + VertexLocation(Model->Vertices[B], BasisPtr)) * 0.5;
+		return;
+	}
 
 	// Re-anchoring is suppressed by passing the gesture's own anchor back; this only refreshes the
 	// candidates against the current options and snap state.
@@ -447,24 +656,27 @@ void FPCGExSketchEditController::ApplyDrag(const FRay& LocalRay)
 		{
 			return;
 		}
-		FPCGExClusterSketchVertex& V = Model->Vertices[DragVertexIndex];
-		if (V.bLatticeBound && BasisPtr)
-		{
-			// Coords stay authoritative for bound vertices: snap regardless of the toggle, so a bound
-			// vertex can never be dragged off-lattice while a basis exists. Preserving: dragging in a
-			// rank-collapsed basis edits the spanned components only, the stash survives.
-			V.LatticeCoord = BasisPtr->SnapWorldToCoordPreserving(DragPreviewLocal, V.LatticeCoord);
-			V.Transform.SetLocation(BasisPtr->CoordToWorld(V.LatticeCoord));
-			DragPreviewLocal = V.Transform.GetLocation();
-		}
-		else
-		{
-			V.Transform.SetLocation(DragPreviewLocal);
-		}
+		// The cursor proposes; the snap and then the constraints dispose. What the hand asked for is
+		// kept for the ghost.
+		DragProposalLocal.Add(DragPreviewLocal);
+		DragPreviewLocal = CommitProposedLocation(DragVertexIndex, DragPreviewLocal, BasisPtr);
 
 		// A drag moves geometry EVERY FRAME without a completed-operation notify (which would refresh
 		// details panels per mouse move). Hosts that build their visuals still have to know.
 		++ModelRevision;
+
+		// The constraints naming this vertex directly take the proposal as their new parameter (an
+		// Along slides along its span); the solve below then lands the vertex on it.
+		Model->AbsorbProposal(Model->Vertices[DragVertexIndex].Id, DragPreviewLocal, BasisPtr);
+
+		// A directly constrained vertex is PROJECTED while dragged, never pinned: the constraint is what
+		// the user declared, the hand is only proposing. Any other held vertex is pinned, so a Length
+		// endpoint follows the hand and its partner does the stretching.
+		TArray<uint32> Pins;
+		GatherDragPins({DragVertexIndex}, Pins);
+		SolveConstraints(BasisPtr, Pins);
+		const FPCGExClusterSketchVertex& V = Model->Vertices[DragVertexIndex];
+		DragPreviewLocal = VertexLocation(V, BasisPtr);
 
 		// Dropping onto another vertex MERGES into it (clusters cannot hold collocated vertices).
 		// Layer-aware: under a rank-collapsed basis, prefer the stack member on the dragged vertex's
@@ -512,7 +724,25 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 
 	UpdateDrag(WorldRay);
 
-	if (DragMode == EDragMode::Move)
+	if (DragMode == EDragMode::MoveEdge)
+	{
+		FPCGExClusterSketchModel* Model = Target->GetModel();
+		if (Model && Model->Edges.IsValidIndex(DragEdgeIndex))
+		{
+			// Both ends are hand-placed now, and each may have landed on an edge or swept one across a vertex.
+			const int32 A = Model->Edges[DragEdgeIndex].A;
+			const int32 B = Model->Edges[DragEdgeIndex].B;
+			const FPCGExLatticeBasis* BasisPtr = bDragHasBasis ? &DragBasis : nullptr;
+			Model->MarkVertexAuthored(A);
+			Model->MarkVertexAuthored(B);
+			Model->EnforceSeparationAroundVertex(A, BasisPtr);
+			Model->EnforceSeparationAroundVertex(B, BasisPtr);
+			SolveConstraints(BasisPtr);
+		}
+		EndTransaction();
+		NotifyModelChanged();
+	}
+	else if (DragMode == EDragMode::Move)
 	{
 		// Drop-on-vertex merges into it, still inside the drag's open transaction so the whole
 		// move+merge is one undo step. Edges re-anchor onto the survivor; the absorbed vertex goes.
@@ -536,6 +766,7 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 			// edge splits it, and merge-retargeted edges dissolve through the vertices they now cross
 			// (collinear A-B-C never keeps A-C -- it splits and dedups into the existing chain).
 			Model->EnforceSeparationAroundVertex(FinalVertex, bDragHasBasis ? &DragBasis : nullptr);
+			SolveConstraints(bDragHasBasis ? &DragBasis : nullptr);
 		}
 		EndTransaction();
 		NotifyModelChanged();
@@ -567,6 +798,7 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 				// A deliberate long link across collinear vertices splits into the chain (A-C never
 				// survives when B sits on it).
 				Model->EnforceSeparationAroundVertex(ExistingTarget, bHasBasis ? &Basis : nullptr);
+				SolveConstraints(bHasBasis ? &Basis : nullptr);
 				FarVertex = ExistingTarget;
 			}
 			else
@@ -578,8 +810,8 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 				// Resolved against the PRE-GESTURE model, BY VALUE: the adds below reallocate Vertices,
 				// and the extruded edge would otherwise count toward the source's own degree.
 				const UPCGExClusterSketchAuthoringSettings* Options = UPCGExClusterSketchAuthoringSettings::Get();
-				const FGuid InheritedVertexData = Options->bExtrudeInheritsVertexData ? Model->Vertices[Source].DataId : FGuid();
-				const FGuid InheritedEdgeData = Options->bExtrudeInheritsEdgeData ? Model->ResolveExtrudeEdgeDataId(Source) : FGuid();
+				const uint32 InheritedVertexData = Options->bExtrudeInheritsVertexData ? Model->Vertices[Source].DataId : PCGExSketch::InvalidRecordId;
+				const uint32 InheritedEdgeData = Options->bExtrudeInheritsEdgeData ? Model->ResolveExtrudeEdgeDataId(Source) : PCGExSketch::InvalidRecordId;
 
 				if (bSnapEnabled && bHasBasis)
 				{
@@ -600,13 +832,14 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 				// Stamped before enforcement: a split then carries the record like any parent edge.
 				bool bEdgeCreated = false;
 				const int32 NewEdge = Model->Connect(Source, FarVertex, &bEdgeCreated);
-				if (bEdgeCreated && InheritedEdgeData.IsValid())
+				if (bEdgeCreated && InheritedEdgeData != PCGExSketch::InvalidRecordId)
 				{
 					Model->Edges[NewEdge].DataId = InheritedEdgeData;
 				}
 
 				Model->MarkVertexAuthored(Source); // extruding FROM a tool-inserted vertex adopts it
 				Model->EnforceSeparationAroundVertex(FarVertex, bHasBasis ? &Basis : nullptr);
+				SolveConstraints(bHasBasis ? &Basis : nullptr);
 			}
 
 			if (FarVertex != INDEX_NONE)
@@ -621,8 +854,10 @@ void FPCGExSketchEditController::EndDrag(const FRay& WorldRay)
 
 	DragMode = EDragMode::None;
 	DragVertexIndex = INDEX_NONE;
+	DragEdgeIndex = INDEX_NONE;
 	DragTargetVertexIndex = INDEX_NONE;
 	MergeCandidateVertex = INDEX_NONE;
+	DragProposalLocal.Reset();
 	PlacementGesture = EPlacementGesture::None;
 	Placement.ResetGuide();
 }
@@ -639,8 +874,10 @@ void FPCGExSketchEditController::CancelDrag()
 	}
 	DragMode = EDragMode::None;
 	DragVertexIndex = INDEX_NONE;
+	DragEdgeIndex = INDEX_NONE;
 	DragTargetVertexIndex = INDEX_NONE;
 	MergeCandidateVertex = INDEX_NONE;
+	DragProposalLocal.Reset();
 	PlacementGesture = EPlacementGesture::None;
 	Placement.ResetGuide();
 
@@ -655,7 +892,7 @@ void FPCGExSketchEditController::CancelDrag()
 
 void FPCGExSketchEditController::DeleteSelection()
 {
-	DropInvalidIndices();
+	ResolveSelectionIndices();
 
 	FPCGExClusterSketchModel* Model = Target->GetModel();
 	if (!Model || (!HasSelection()))
@@ -692,6 +929,9 @@ void FPCGExSketchEditController::DeleteSelection()
 	// Tool residue never outlives the geometry that justified it.
 	Model->RemoveOrphanSideEffectVertices();
 
+	FPCGExLatticeBasis Basis;
+	SolveConstraints(GetBasis(Basis) ? &Basis : nullptr);
+
 	ClearSelection();
 	ClearHover();
 	NotifyModelChanged();
@@ -704,30 +944,31 @@ void FPCGExSketchEditController::SelectAll()
 	{
 		return;
 	}
-	SelectedVertices.Reset();
-	LastSelectedVertex = INDEX_NONE;
-	SelectedEdges.Reset();
+	ClearSelection();
 	for (int32 i = 0; i < Model->Vertices.Num(); ++i)
 	{
-		SelectedVertices.Add(i);
+		SelectVertex(i);
 	}
 	for (int32 e = 0; e < Model->Edges.Num(); ++e)
 	{
-		SelectedEdges.Add(e);
+		SelectEdge(e);
 	}
 	NotifyModelChanged();
 }
 
 void FPCGExSketchEditController::ClearSelection()
 {
+	SelectedVertexIds.Reset();
+	SelectedEdgeIds.Reset();
 	SelectedVertices.Reset();
-	LastSelectedVertex = INDEX_NONE;
 	SelectedEdges.Reset();
+	LastSelectedVertex = INDEX_NONE;
+	LastSelectedVertexId = PCGExSketch::InvalidElementId;
 }
 
 bool FPCGExSketchEditController::DeleteAtRay(const FRay& WorldRay)
 {
-	DropInvalidIndices();
+	ResolveSelectionIndices();
 
 	FPCGExClusterSketchModel* Model = Target->GetModel();
 	const FPCGExSketchHit Hit = HitTest(WorldRay);
@@ -758,6 +999,9 @@ bool FPCGExSketchEditController::DeleteAtRay(const FRay& WorldRay)
 		Model->RemoveEdgeAt(Hit.Index);
 		Model->RemoveOrphanSideEffectVertices();
 	}
+
+	FPCGExLatticeBasis Basis;
+	SolveConstraints(GetBasis(Basis) ? &Basis : nullptr);
 
 	ClearSelection();
 	ClearHover();
@@ -812,6 +1056,7 @@ int32 FPCGExSketchEditController::AddVertexAtRay(const FRay& WorldRay)
 
 	// A vertex landing on an edge SPLITS it -- edges never pass through vertices.
 	Model->EnforceSeparationAroundVertex(NewVertex, BasisPtr);
+	SolveConstraints(BasisPtr);
 
 	ClearSelection();
 	SelectVertex(NewVertex);
@@ -1010,27 +1255,6 @@ void FPCGExSketchEditController::RefreshPlacement()
 	}
 }
 
-void FPCGExSketchEditController::DropInvalidIndices()
-{
-	const FPCGExClusterSketchModel* Model = GetReadModel();
-	const int32 NumVtx = Model ? Model->Vertices.Num() : 0;
-	const int32 NumEdges = Model ? Model->Edges.Num() : 0;
-	for (auto It = SelectedVertices.CreateIterator(); It; ++It)
-	{
-		if (*It < 0 || *It >= NumVtx)
-		{
-			It.RemoveCurrent();
-		}
-	}
-	for (auto It = SelectedEdges.CreateIterator(); It; ++It)
-	{
-		if (*It < 0 || *It >= NumEdges)
-		{
-			It.RemoveCurrent();
-		}
-	}
-}
-
 void FPCGExSketchEditController::EndTransaction()
 {
 	ActiveTransaction.Reset();
@@ -1040,9 +1264,291 @@ void FPCGExSketchEditController::EndTransaction()
 void FPCGExSketchEditController::NotifyModelChanged()
 {
 	++ModelRevision;
+	// Structural repair (splits, merges, orphan sweeps) may have shifted whatever the operation selected.
+	ResolveSelectionIndices();
 	RefreshCrossings();
-	Target->NotifyChanged();
+	RefreshConstraintResiduals();
+	{
+		TGuardValue<bool> NotifyGuard(bNotifying, true);
+		Target->NotifyChanged();
+	}
 	OnChanged.Broadcast();
+}
+
+void FPCGExSketchEditController::NotifyInteractiveChange()
+{
+	// The revision alone repaints: both hosts push it into the mesh layer every frame via DrawWithComponent.
+	++ModelRevision;
+	RefreshConstraintResiduals();
+}
+
+void FPCGExSketchEditController::NotifyExternalChange()
+{
+	++ModelRevision;
+	ResolveSelectionIndices();
+	// Counts may match across an undo that only moved geometry, so the fingerprint gate is bypassed.
+	CrossingsRevision = INDEX_NONE;
+	RefreshCrossings();
+	RefreshConstraintResiduals();
+	OnChanged.Broadcast();
+}
+
+void FPCGExSketchEditController::GatherDragPins(const TConstArrayView<int32> InHeldVertices, TArray<uint32>& OutPinnedIds) const
+{
+	OutPinnedIds.Reset();
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model)
+	{
+		return;
+	}
+	for (const int32 Index : InHeldVertices)
+	{
+		if (Model->Vertices.IsValidIndex(Index) && !Model->IsVertexDirectSubject(Model->Vertices[Index].Id))
+		{
+			OutPinnedIds.Add(Model->Vertices[Index].Id);
+		}
+	}
+}
+
+void FPCGExSketchEditController::SolveConstraints(const FPCGExLatticeBasis* Basis, const TConstArrayView<uint32> InPinnedIds)
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model)
+	{
+		return;
+	}
+	TArray<FPCGExSketchConstraintResidual> Residuals;
+	if (Model->SolveConstraints(Basis, InPinnedIds, &Residuals))
+	{
+		++ModelRevision;
+	}
+	ConstraintResiduals.Reset();
+	for (const FPCGExSketchConstraintResidual& R : Residuals)
+	{
+		ConstraintResiduals.Add(R.ConstraintId, R);
+	}
+}
+
+void FPCGExSketchEditController::RefreshConstraintResiduals()
+{
+	ConstraintResiduals.Reset();
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model)
+	{
+		return;
+	}
+	FPCGExLatticeBasis Basis;
+	TArray<FPCGExSketchConstraintResidual> Residuals;
+	Model->EvaluateConstraints(GetBasis(Basis) ? &Basis : nullptr, Residuals);
+	for (const FPCGExSketchConstraintResidual& R : Residuals)
+	{
+		ConstraintResiduals.Add(R.ConstraintId, R);
+	}
+}
+
+FVector FPCGExSketchEditController::CommitProposedLocation(const int32 VertexIndex, const FVector& Proposed, const FPCGExLatticeBasis* Basis)
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model || !Model->Vertices.IsValidIndex(VertexIndex))
+	{
+		return Proposed;
+	}
+	FPCGExClusterSketchVertex& V = Model->Vertices[VertexIndex];
+	if (V.bLatticeBound && Basis)
+	{
+		// Coords stay authoritative for bound vertices: snap regardless of the toggle, so a bound
+		// vertex can never be dragged off-lattice while a basis exists. Preserving: dragging in a
+		// rank-collapsed basis edits the spanned components only, the stash survives.
+		V.LatticeCoord = Basis->SnapWorldToCoordPreserving(Proposed, V.LatticeCoord);
+		V.Transform.SetLocation(Basis->CoordToWorld(V.LatticeCoord));
+	}
+	else if (bSnapEnabled && Basis)
+	{
+		V.Transform.SetLocation(Basis->CoordToWorld(Basis->SnapWorldToCoord(Proposed)));
+	}
+	else
+	{
+		V.Transform.SetLocation(Proposed);
+	}
+	return V.Transform.GetLocation();
+}
+
+bool FPCGExSketchEditController::IsDragProposalDiverging() const
+{
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model || DragProposalLocal.IsEmpty())
+	{
+		return false;
+	}
+	FPCGExLatticeBasis Basis;
+	const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
+	constexpr double TolSq = 1.0; // below a unit the tether would only be noise
+	if (DragMode == EDragMode::Move && Model->Vertices.IsValidIndex(DragVertexIndex))
+	{
+		return FVector::DistSquared(DragProposalLocal[0], VertexLocation(Model->Vertices[DragVertexIndex], BasisPtr)) > TolSq;
+	}
+	if (DragMode == EDragMode::MoveEdge && Model->Edges.IsValidIndex(DragEdgeIndex) && DragProposalLocal.Num() == 2)
+	{
+		const FPCGExClusterSketchEdge& E = Model->Edges[DragEdgeIndex];
+		if (!Model->Vertices.IsValidIndex(E.A) || !Model->Vertices.IsValidIndex(E.B))
+		{
+			return false;
+		}
+		return FVector::DistSquared(DragProposalLocal[0], VertexLocation(Model->Vertices[E.A], BasisPtr)) > TolSq
+			|| FVector::DistSquared(DragProposalLocal[1], VertexLocation(Model->Vertices[E.B], BasisPtr)) > TolSq;
+	}
+	return false;
+}
+
+void FPCGExSketchEditController::GatherSelectedIds(TArray<uint32>& OutVertexIds, TArray<uint32>& OutEdgeIds) const
+{
+	OutVertexIds.Reset();
+	OutEdgeIds.Reset();
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model)
+	{
+		return;
+	}
+	for (const int32 i : SelectedVertices)
+	{
+		if (Model->Vertices.IsValidIndex(i))
+		{
+			OutVertexIds.Add(Model->Vertices[i].Id);
+		}
+	}
+	for (const int32 e : SelectedEdges)
+	{
+		if (Model->Edges.IsValidIndex(e))
+		{
+			OutEdgeIds.Add(Model->Edges[e].Id);
+		}
+	}
+}
+
+bool FPCGExSketchEditController::CanAddConstraint(const UScriptStruct* InType) const
+{
+	const FPCGExClusterSketchModel* Model = GetReadModel();
+	if (!Model || !InType || !InType->IsChildOf(FPCGExSketchConstraint::StaticStruct()) || !Target->CanEdit())
+	{
+		return false;
+	}
+	TArray<uint32> VertexIds;
+	TArray<uint32> EdgeIds;
+	GatherSelectedIds(VertexIds, EdgeIds);
+
+	// A scratch instance answers; nothing is attached.
+	FInstancedStruct Scratch;
+	Scratch.InitializeAs(InType);
+	return Scratch.GetMutable<FPCGExSketchConstraint>().BuildSubjectsFromSelection(*Model, VertexIds, EdgeIds);
+}
+
+uint32 FPCGExSketchEditController::AddConstraintToSelection(const UScriptStruct* InType)
+{
+	ResolveSelectionIndices();
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model || !InType || !InType->IsChildOf(FPCGExSketchConstraint::StaticStruct()))
+	{
+		return PCGExSketch::InvalidElementId;
+	}
+	TArray<uint32> VertexIds;
+	TArray<uint32> EdgeIds;
+	GatherSelectedIds(VertexIds, EdgeIds);
+
+	FInstancedStruct Entry;
+	Entry.InitializeAs(InType);
+	if (!Entry.GetMutable<FPCGExSketchConstraint>().BuildSubjectsFromSelection(*Model, VertexIds, EdgeIds))
+	{
+		return PCGExSketch::InvalidElementId;
+	}
+
+	FPCGExLatticeBasis Basis;
+	const FPCGExLatticeBasis* BasisPtr = GetBasis(Basis) ? &Basis : nullptr;
+
+	const FScopedTransaction Transaction(LOCTEXT("AddConstraint", "Add Sketch Constraint"));
+	Target->BeginAuthoring();
+	const uint32 Id = Model->AddConstraint(MoveTemp(Entry), BasisPtr);
+	SolveConstraints(BasisPtr);
+	NotifyModelChanged();
+	return Id;
+}
+
+bool FPCGExSketchEditController::RemoveConstraint(const uint32 InConstraintId)
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model || !Model->FindConstraint(InConstraintId))
+	{
+		return false;
+	}
+	const FScopedTransaction Transaction(LOCTEXT("RemoveConstraint", "Remove Sketch Constraint"));
+	Target->BeginAuthoring();
+	Model->RemoveConstraint(InConstraintId);
+	FPCGExLatticeBasis Basis;
+	SolveConstraints(GetBasis(Basis) ? &Basis : nullptr);
+	NotifyModelChanged();
+	return true;
+}
+
+int32 FPCGExSketchEditController::ClearConstraintsOnSelection()
+{
+	ResolveSelectionIndices();
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	if (!Model || !HasSelection())
+	{
+		return 0;
+	}
+
+	TArray<uint32> Ids;
+	for (const int32 i : SelectedVertices)
+	{
+		Ids.Add(Model->Vertices[i].Id);
+	}
+	for (const int32 e : SelectedEdges)
+	{
+		Ids.Add(Model->Edges[e].Id);
+	}
+
+	FScopedTransaction Transaction(LOCTEXT("ClearConstraints", "Clear Sketch Constraints"));
+	Target->BeginAuthoring();
+
+	int32 NumRemoved = 0;
+	for (const uint32 Id : Ids)
+	{
+		NumRemoved += Model->RemoveConstraintsOf(Id);
+	}
+	if (NumRemoved == 0)
+	{
+		// Nothing changed: Modify() already dirtied the host, so the transaction must not stand.
+		Transaction.Cancel();
+		return 0;
+	}
+
+	FPCGExLatticeBasis Basis;
+	SolveConstraints(GetBasis(Basis) ? &Basis : nullptr);
+	NotifyModelChanged();
+	return NumRemoved;
+}
+
+bool FPCGExSketchEditController::SetConstraintEnabled(const uint32 InConstraintId, const bool bEnabled)
+{
+	FPCGExClusterSketchModel* Model = Target->GetModel();
+	FPCGExSketchConstraint* Constraint = Model ? Model->FindConstraintMutable(InConstraintId) : nullptr;
+	if (!Constraint)
+	{
+		return false;
+	}
+	if (Constraint->bEnabled == bEnabled)
+	{
+		return true;
+	}
+
+	const FScopedTransaction Transaction(bEnabled ? LOCTEXT("EnableConstraint", "Enable Sketch Constraint") : LOCTEXT("DisableConstraint", "Disable Sketch Constraint"));
+	Target->BeginAuthoring();
+	Constraint->bEnabled = bEnabled;
+
+	FPCGExLatticeBasis Basis;
+	SolveConstraints(GetBasis(Basis) ? &Basis : nullptr);
+	NotifyModelChanged();
+	return true;
 }
 
 int32 FPCGExSketchEditController::MergeCollocatedVertices()
@@ -1064,6 +1570,10 @@ int32 FPCGExSketchEditController::MergeCollocatedVertices()
 
 	ClearSelection();
 	ClearHover();
+	{
+		FPCGExLatticeBasis SolveBasis;
+		SolveConstraints(GetBasis(SolveBasis) ? &SolveBasis : nullptr);
+	}
 	PCGExEditor::NotifyObjectChanged(TransactionObject);
 	NotifyModelChanged();
 	return NumMerged;
@@ -1085,6 +1595,10 @@ int32 FPCGExSketchEditController::RemoveInvalidEdges()
 
 	ClearSelection();
 	ClearHover();
+	{
+		FPCGExLatticeBasis SolveBasis;
+		SolveConstraints(GetBasis(SolveBasis) ? &SolveBasis : nullptr);
+	}
 	PCGExEditor::NotifyObjectChanged(TransactionObject);
 	NotifyModelChanged();
 	return NumRemoved;
@@ -1109,6 +1623,10 @@ int32 FPCGExSketchEditController::SplitOverlappingEdges()
 
 	ClearSelection();
 	ClearHover();
+	{
+		FPCGExLatticeBasis SolveBasis;
+		SolveConstraints(GetBasis(SolveBasis) ? &SolveBasis : nullptr);
+	}
 	PCGExEditor::NotifyObjectChanged(TransactionObject);
 	NotifyModelChanged();
 	return NumSplits;
@@ -1127,6 +1645,10 @@ int32 FPCGExSketchEditController::PurgeUnusedDataRecords()
 	Target->BeginAuthoring();
 
 	const int32 NumPurged = Model->PurgeUnreferencedRecords();
+	{
+		FPCGExLatticeBasis SolveBasis;
+		SolveConstraints(GetBasis(SolveBasis) ? &SolveBasis : nullptr);
+	}
 	PCGExEditor::NotifyObjectChanged(TransactionObject);
 	NotifyModelChanged();
 	return NumPurged;
@@ -1181,6 +1703,7 @@ bool FPCGExSketchEditController::MaterializeCrossingAtRay(const FRay& WorldRay)
 		return false;
 	}
 
+	SolveConstraints(GetBasis(Basis) ? &Basis : nullptr);
 	ClearSelection();
 	SelectVertex(NewVertex);
 	ClearHover();

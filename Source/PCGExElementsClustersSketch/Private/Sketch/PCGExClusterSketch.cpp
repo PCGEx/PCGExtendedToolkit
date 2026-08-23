@@ -10,6 +10,14 @@ namespace PCGExSketch
 	FSaveSketchAsAssetFn GSaveSketchAsAssetFn;
 }
 
+void UPCGExClusterSketch::PostLoad()
+{
+	Super::PostLoad();
+	// Only the first holder of an id is addressable; duplicates are reachable through load. Runtime-safe.
+	Model.RepairElementIds();
+	Model.Data.RepairRecordIds();
+}
+
 bool UPCGExClusterSketch::BuildBasis(FPCGExLatticeBasis& OutBasis) const
 {
 	return SnapProvider ? SnapProvider->BuildBasis(OutBasis) : false;
@@ -65,6 +73,9 @@ void UPCGExClusterSketch::PostEditChangeProperty(FPropertyChangedEvent& Property
 
 	if (MemberName == GET_MEMBER_NAME_CHECKED(UPCGExClusterSketch, Model))
 	{
+		// A raw row add or duplicate arrives without an id, or with a copied one.
+		Model.RepairElementIds();
+
 		// Hand-editing a vertex adopts it: tool-inserted provenance survives only until the user
 		// deliberately touches the vertex (here, or through a gesture in the editor).
 		const int32 EditedVertex = PropertyChangedEvent.GetArrayIndex(GET_MEMBER_NAME_STRING_CHECKED(FPCGExClusterSketchModel, Vertices));
@@ -83,6 +94,9 @@ void UPCGExClusterSketch::PostEditChangeProperty(FPropertyChangedEvent& Property
 		// own member -- so the gate is deliberately coarse. Idempotent, and reachable only from an editor
 		// edit hook (here, or the panel's transacted write-back).
 		Model.Data.EDITOR_SyncAll();
+
+		// A typed-in transform is a proposal like any gesture: the constraints get the last word.
+		EDITOR_SolveConstraints();
 	}
 }
 
@@ -101,6 +115,14 @@ void UPCGExClusterSketch::PostEditUndo()
 void UPCGExClusterSketch::EDITOR_OnSnapProviderChanged()
 {
 	EDITOR_SyncBoundVertices(false);
+	EDITOR_SolveConstraints();
+}
+
+void UPCGExClusterSketch::EDITOR_SolveConstraints()
+{
+	FPCGExLatticeBasis Basis;
+	const bool bHasBasis = BuildBasis(Basis);
+	Model.SolveConstraints(bHasBasis ? &Basis : nullptr, {});
 }
 
 void UPCGExClusterSketch::EDITOR_SyncBoundVertices(const bool bResnapFromLocation)

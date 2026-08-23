@@ -65,6 +65,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
 	FPCGExClusterSketchModel Model;
 
+	/** Record-id repair only; the schema sync is editor-only and never runs from load. */
+	virtual void PostLoad() override;
+
 	/** Snap-lattice model this sketch is authored against. None = free-form (bound vertices then fall
 	 *  back to their cached locations, with a print-time warning). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced, Category = Settings)
@@ -124,5 +127,8 @@ public:
 
 	/** See PostEditChangeProperty. No-op without a usable basis. */
 	void EDITOR_SyncBoundVertices(bool bResnapFromLocation);
+
+	/** Re-run the authoring constraints against the geometry as it stands. Inside the caller's transaction. */
+	void EDITOR_SolveConstraints();
 #endif
 };
