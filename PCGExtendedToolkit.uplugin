@@ -223,29 +223,6 @@
       ]
     },
     {
-      "Name": "PCGExElementsClustersSketch",
-      "Type": "Runtime",
-      "LoadingPhase": "Default",
-      "PlatformAllowList": [
-        "Win64",
-        "Mac",
-        "IOS",
-        "Android",
-        "Linux",
-        "LinuxArm64"
-      ]
-    },
-    {
-      "Name": "PCGExElementsClustersSketchEditor",
-      "Type": "Editor",
-      "LoadingPhase": "Default",
-      "PlatformAllowList": [
-        "Win64",
-        "Mac",
-        "Linux"
-      ]
-    },
-    {
       "Name": "PCGExElementsFloodFill",
       "Type": "Runtime",
       "LoadingPhase": "Default",
