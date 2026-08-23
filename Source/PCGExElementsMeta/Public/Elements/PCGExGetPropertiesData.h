@@ -18,13 +18,6 @@ class UPCGExPropertyCollectionComponent;
 class UPCGExPropertySchemaAsset;
 
 UENUM()
-enum class EPCGExPropertyOutputMode : uint8
-{
-	AllFound = 0 UMETA(DisplayName = "All Found", Tooltip = "Output every property the resolved component carries. Output attribute names match property names."),
-	Explicit = 1 UMETA(DisplayName = "Explicit", Tooltip = "Use the Property Output Settings to pick which properties to output and rename them."),
-};
-
-UENUM()
 enum class EPCGExSchemaPresenceMode : uint8
 {
 	AllRequired = 0 UMETA(DisplayName = "All Required", Tooltip = "Keep rows whose resolved component imports every one of the required schema assets (recursively)."),

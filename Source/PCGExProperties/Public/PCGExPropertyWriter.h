@@ -10,6 +10,14 @@
 
 #include "PCGExPropertyWriter.generated.h"
 
+/** How a property-writing node picks which properties to output. */
+UENUM()
+enum class EPCGExPropertyOutputMode : uint8
+{
+	AllFound = 0 UMETA(DisplayName = "All Found", Tooltip = "Output every property the source carries. Output attribute names match property names."),
+	Explicit = 1 UMETA(DisplayName = "Explicit", Tooltip = "Use the Property Output Settings to pick which properties to output and rename them."),
+};
+
 USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="staging/common-settings/property-output-settings"))
 struct PCGEXPROPERTIES_API FPCGExPropertyOutputConfig
 {
@@ -235,6 +243,9 @@ public:
 	void WriteProperties(int32 PointIndex, int32 SourceIndex);
 
 	bool HasOutputs() const;
+
+	/** Appends copies of the clones that declare a sidecar pin -- for writers that die before a single-threaded flush can run. */
+	void CopySidecarClones(TArray<FInstancedStruct>& OutClones) const;
 
 protected:
 	const IPCGExPropertyProvider* Provider = nullptr;

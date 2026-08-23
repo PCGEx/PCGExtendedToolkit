@@ -126,6 +126,18 @@ void FPCGExPropertySetWriter::CopySidecarClones(TArray<FInstancedStruct>& OutClo
 	}
 }
 
+void FPCGExPropertyWriter::CopySidecarClones(TArray<FInstancedStruct>& OutClones) const
+{
+	for (const TPair<FName, FInstancedStruct>& Pair : WriterInstances)
+	{
+		const FPCGExProperty* Clone = Pair.Value.GetPtr<FPCGExProperty>();
+		if (Clone && !Clone->GetOutputSidecarPin().IsNone())
+		{
+			OutClones.Add(Pair.Value);
+		}
+	}
+}
+
 bool FPCGExPropertySetWriter::Initialize(
 	FPCGExContext* InContext,
 	const IPCGExPropertyProvider* InProvider,
