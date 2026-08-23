@@ -76,6 +76,7 @@ public class PCGExCore : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
+					"Projects",
 					"Settings",
 					"Slate",
 					"SlateCore",

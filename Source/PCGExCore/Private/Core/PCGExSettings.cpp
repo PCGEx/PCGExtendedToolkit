@@ -12,6 +12,8 @@
 #include "PCGPin.h"
 #include "Core/PCGExContext.h"
 #include "Styling/SlateStyle.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/PackageName.h"
 
 #include "Helpers/PCGSettingsHelpers.h"
 
@@ -138,10 +140,19 @@ bool UPCGExSettings::WantsResourcesCached() const
 #if WITH_EDITOR
 void UPCGExSettings::EDITOR_OpenNodeDocumentation() const
 {
-	const FString META_PCGExDocURL = TEXT("PCGExNodeLibraryDoc");
-	const FString META_PCGExDocNodeLibraryBaseURL = TEXT("https://pcgex.gitbook.io/pcgex/node-library/");
+	// Node pages live at <owning plugin DocsURL>/node-library/<PCGExNodeLibraryDoc>; companion plugins ship their own book.
+	FString BaseURL = TEXT("https://pcgex.gitbook.io/pcgex");
 
-	const FString URL = META_PCGExDocNodeLibraryBaseURL + GetClass()->GetMetaData(*META_PCGExDocURL);
+	FStringView ModuleName;
+	if (FPackageName::TryConvertScriptPackageNameToModuleName(WriteToString<256>(GetClass()->GetOutermost()->GetFName()), ModuleName))
+	{
+		const TSharedPtr<IPlugin> OwnerPlugin = IPluginManager::Get().GetModuleOwnerPlugin(FName(ModuleName));
+		if (OwnerPlugin && !OwnerPlugin->GetDescriptor().DocsURL.IsEmpty()) { BaseURL = OwnerPlugin->GetDescriptor().DocsURL; }
+	}
+
+	BaseURL.RemoveFromEnd(TEXT("/"));
+
+	const FString URL = BaseURL + TEXT("/node-library/") + GetClass()->GetMetaData(TEXT("PCGExNodeLibraryDoc"));
 	FPlatformProcess::LaunchURL(*URL, nullptr, nullptr);
 }
 #endif
