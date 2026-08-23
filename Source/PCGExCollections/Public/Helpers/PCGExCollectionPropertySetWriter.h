@@ -168,8 +168,24 @@ namespace PCGExCollections
 			return Inner.HasOutputs();
 		}
 
+		/** See FPCGExPropertySetWriter::CopySidecarClones. */
+		void CopySidecarClones(TArray<FInstancedStruct>& OutClones) const
+		{
+			Inner.CopySidecarClones(OutClones);
+		}
+
 	protected:
 		FCollectionPrototypeProvider Provider;
 		FPCGExPropertySetWriter Inner;
 	};
+
+	/**
+	 * Collection-level (CollectionProperties) source properties that OutputSettings writes and that declare a
+	 * sidecar pin, across Hosts -- the WriteSchemaTo*Domain counterpart of CopySidecarClones. Pointers stay
+	 * valid while the hosts are resident. Single-threaded.
+	 */
+	PCGEXCOLLECTIONS_API void GatherSchemaSidecarSources(
+		const FPCGExPropertyOutputSettings& OutputSettings,
+		TConstArrayView<const UPCGExAssetCollection*> Hosts,
+		TArray<const FPCGExProperty*>& OutSources);
 }

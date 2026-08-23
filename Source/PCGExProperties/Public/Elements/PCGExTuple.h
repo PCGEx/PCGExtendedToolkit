@@ -78,11 +78,21 @@ public:
 	/** A list of tags separated by a comma, for easy overrides. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FString CommaSeparatedTags;
+
+	/** Emit the "Map" attribute set describing external resources referenced by written values (e.g. Collection Entry picks). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay, meta=(DisplayName="Output Map"))
+	bool bOutputMap = false;
+};
+
+struct FPCGExTupleContext final : FPCGExContext
+{
+	/** Output dependencies of every authored value (e.g. Collection Entry picks). */
+	virtual void RegisterAssetDependencies() override;
 };
 
 class FPCGExTupleElement final : public IPCGExElement
 {
 protected:
-	PCGEX_ELEMENT_CREATE_DEFAULT_CONTEXT
+	PCGEX_ELEMENT_CREATE_CONTEXT(Tuple)
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };

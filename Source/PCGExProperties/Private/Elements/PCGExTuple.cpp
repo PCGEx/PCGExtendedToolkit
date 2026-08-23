@@ -7,6 +7,7 @@
 #include "PCGGraph.h"
 #include "PCGParamData.h"
 #include "PCGPin.h"
+#include "PCGExPropertyWriter.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Helpers/PCGExArrayHelpers.h"
 
@@ -101,12 +102,32 @@ TArray<FPCGPinProperties> UPCGExTupleSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
 	PCGEX_PIN_PARAM(FName("Tuple"), TEXT("Tuple."), Required)
+	PCGExProperties::AddOutputMapPin(PinProperties, bOutputMap);
 	return PinProperties;
 }
 
 FPCGElementPtr UPCGExTupleSettings::CreateElement() const
 {
 	return MakeShared<FPCGExTupleElement>();
+}
+
+void FPCGExTupleContext::RegisterAssetDependencies()
+{
+	FPCGExContext::RegisterAssetDependencies();
+
+	const UPCGExTupleSettings* Settings = GetInputSettings<UPCGExTupleSettings>();
+	if (!Settings)
+	{
+		return;
+	}
+
+	TSet<FSoftObjectPath> Paths;
+	PCGExProperties::GatherOutputDependencies(Settings->Composition, Paths);
+	for (const FPCGExPropertyOverrides& Row : Settings->Values)
+	{
+		PCGExProperties::GatherOutputDependencies(Row, Paths);
+	}
+	AddAssetDependencies(Paths);
 }
 
 
@@ -132,18 +153,18 @@ bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSetti
 
 	for (const FPCGExPropertyResolved& Entry : Resolved)
 	{
-		const FName ColumnName = Entry.Source->Name;
-		const FPCGMetadataAttributeBase* ExistingAttr = TupleData->Metadata->GetConstAttribute(ColumnName);
-		if (ExistingAttr)
+		const FPCGExProperty* Property = Entry.GetEffectiveProperty().GetPtr<FPCGExProperty>();
+		if (!Property)
 		{
-			PCGEX_LOG_INVALID_ATTR_C(Context, Header Name, ColumnName)
 			Attributes.Add(nullptr);
 			continue;
 		}
 
-		const FPCGExProperty* Property = Entry.GetEffectiveProperty().GetPtr<FPCGExProperty>();
-		if (!Property)
+		const FName ColumnName = Property->ResolveOutputAttributeName(Entry.Source->Name);
+		const FPCGMetadataAttributeBase* ExistingAttr = TupleData->Metadata->GetConstAttribute(ColumnName);
+		if (ExistingAttr)
 		{
+			PCGEX_LOG_INVALID_ATTR_C(Context, Header Name, ColumnName)
 			Attributes.Add(nullptr);
 			continue;
 		}
@@ -158,6 +179,7 @@ bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSetti
 	}
 
 	// Metadata output path. For POINT ATTRIBUTE output, see FPCGExPropertyWriter.
+	TArray<const FPCGExProperty*> SidecarSources;
 	for (int i = 0; i < ColCount; ++i)
 	{
 		FPCGMetadataAttributeBase* Attribute = Attributes[i];
@@ -178,6 +200,10 @@ bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSetti
 			if (const FPCGExProperty* Property = Row.Overrides[i].GetProperty())
 			{
 				Property->WriteMetadataValue(Attribute, Keys[k]);
+				if (Settings->bOutputMap && !Property->GetOutputSidecarPin().IsNone())
+				{
+					SidecarSources.AddUnique(Property);
+				}
 			}
 		}
 	}
@@ -185,6 +211,11 @@ bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSetti
 	TSet<FString> Tags;
 	PCGExArrayHelpers::AppendEntriesFromCommaSeparatedList(Settings->CommaSeparatedTags, Tags);
 	Context->StageOutput(TupleData, FName("Tuple"), PCGExData::EStaging::None, Tags);
+
+	if (!SidecarSources.IsEmpty())
+	{
+		PCGExProperties::StageSidecars(Context, SidecarSources);
+	}
 
 	Context->Done();
 	return Context->TryComplete();

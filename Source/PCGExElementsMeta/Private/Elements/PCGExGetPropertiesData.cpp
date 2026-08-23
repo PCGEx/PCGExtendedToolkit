@@ -46,7 +46,20 @@ TArray<FPCGPinProperties> UPCGExGetPropertiesDataSettings::OutputPinProperties()
 {
 	TArray<FPCGPinProperties> PinProperties;
 	PCGEX_PIN_ANY(PCGExGetPropertiesData::SourcesPin, TEXT("One forwarded copy of each input, augmented with resolved property attributes."), Required)
+	PCGExProperties::AddOutputMapPin(PinProperties, WantsOutputMap());
 	return PinProperties;
+}
+
+void FPCGExGetPropertiesDataContext::RegisterAssetDependencies()
+{
+	FPCGExContext::RegisterAssetDependencies();
+
+	TSet<FSoftObjectPath> Paths;
+	for (const TArray<FInstancedStruct>& Schema : SchemaPerComponent)
+	{
+		PCGExProperties::GatherOutputDependencies(Schema, Paths);
+	}
+	AddAssetDependencies(Paths);
 }
 
 #pragma endregion
@@ -515,7 +528,8 @@ namespace PCGExGetPropertiesData
 		const TArray<FPCGExPropertyOutputConfig>& EffectiveConfigs,
 		const UPCGData* InData,
 		const TArray<int32>& SlotIndicesForInput,
-		TSharedPtr<PCGExData::FPointIO>& OutPointIO /* set iff input is point data; caller stages it */)
+		TSharedPtr<PCGExData::FPointIO>& OutPointIO, /* set iff input is point data; caller stages it */
+		TArray<FInstancedStruct>* OutSidecarClones /* non-null when the Map sidecar is wanted */)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::WriteInput);
 
@@ -654,6 +668,12 @@ namespace PCGExGetPropertiesData
 					Outcomes[r] = ESlotOutcome::Partial;
 				}
 			}
+
+			// The writer is local to this (parallel) task; sidecars flush single-threaded in the post-pass.
+			if (OutSidecarClones)
+			{
+				Writer.CopySidecarClones(*OutSidecarClones);
+			}
 		}
 
 		// Row-filter step. FailedSchema rows are always dropped when the user enabled the
@@ -754,6 +774,19 @@ bool FPCGExGetPropertiesDataElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
+	// Phases 1-3c: build slots, resolve, dedupe components, build schemas, apply presence filter,
+	// pre-build name lookup tables (per-component + global prototype map). In Boot (not AdvanceWork) so
+	// RegisterAssetDependencies can see the resolved schemas. Resolution never loads anything.
+	Context->Inputs = InContext->InputData.GetInputsByPin(PCGExGetPropertiesData::SourcesPin);
+	if (!Context->Inputs.IsEmpty())
+	{
+		PCGExGetPropertiesData::ParseInputsIntoSlots(Context, Settings, Context->Inputs);
+		PCGExGetPropertiesData::ResolveSlots(Context);
+		PCGExGetPropertiesData::BuildUniqueSchemas(Context);
+		PCGExGetPropertiesData::ApplyPresenceFilter(Context, Settings->SchemaPresenceMode);
+		PCGExGetPropertiesData::BuildSchemaLookups(Context);
+	}
+
 	return true;
 }
 
@@ -764,20 +797,12 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 	PCGEX_SETTINGS_C(InContext, GetPropertiesData)
 	FPCGExGetPropertiesDataContext* Context = static_cast<FPCGExGetPropertiesDataContext*>(InContext);
 
-	TArray<FPCGTaggedData> Inputs = InContext->InputData.GetInputsByPin(PCGExGetPropertiesData::SourcesPin);
+	const TArray<FPCGTaggedData>& Inputs = Context->Inputs;
 	if (Inputs.IsEmpty())
 	{
 		InContext->Done();
 		return InContext->TryComplete();
 	}
-
-	// Phases 1-3c: build slots, resolve, dedupe components, build schemas, apply presence filter,
-	// pre-build name lookup tables (per-component + global prototype map).
-	PCGExGetPropertiesData::ParseInputsIntoSlots(Context, Settings, Inputs);
-	PCGExGetPropertiesData::ResolveSlots(Context);
-	PCGExGetPropertiesData::BuildUniqueSchemas(Context);
-	PCGExGetPropertiesData::ApplyPresenceFilter(Context, Settings->SchemaPresenceMode);
-	PCGExGetPropertiesData::BuildSchemaLookups(Context);
 
 	// Phase 4: build effective output config list (AllFound = union across components, Explicit = settings).
 	TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
@@ -815,7 +840,9 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		// Set iff input was a UPCGBasePointData -- the stage path goes through FPointIO::StageOutput.
 		TSharedPtr<PCGExData::FPointIO> PointIO;
 		TSet<FString> Tags;
+		TArray<FInstancedStruct> SidecarClones;
 	};
+	const bool bWantsMap = Settings->WantsOutputMap();
 	TArray<FInputResult> ParallelResults;
 	ParallelResults.SetNum(Inputs.Num());
 
@@ -829,7 +856,8 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 
 		FInputResult& Result = ParallelResults[InputIdx];
 		UPCGData* Out = PCGExGetPropertiesData::WriteInput(
-			Context, Settings, EffectiveConfigs, InputTagged.Data, SlotsPerInput[InputIdx], Result.PointIO);
+			Context, Settings, EffectiveConfigs, InputTagged.Data, SlotsPerInput[InputIdx], Result.PointIO,
+			bWantsMap ? &Result.SidecarClones : nullptr);
 		if (!Out)
 		{
 			Result.PointIO.Reset();
@@ -870,6 +898,17 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		OutTagged.Pin = PCGExGetPropertiesData::SourcesPin;
 		OutTagged.Data = Result.Data;
 		OutTagged.Tags = MoveTemp(Result.Tags);
+	}
+
+	// Sidecars: one attribute set per pin across all inputs, staged to that pin.
+	if (bWantsMap)
+	{
+		TArray<FInstancedStruct> Clones;
+		for (FInputResult& Result : ParallelResults)
+		{
+			Clones.Append(MoveTemp(Result.SidecarClones));
+		}
+		PCGExProperties::StageSidecars(InContext, Clones);
 	}
 
 	InContext->Done();

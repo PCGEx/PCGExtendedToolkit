@@ -231,42 +231,47 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 		Contribution = MakeShared<TMap<uint64, uint64>>();
 		const uint32 VariantGUID = Variant->GetCollectionGUID();
 
-		for (const FPCGExVariantSource& Group : Variant->Sources)
+		TArray<FIntPoint> Pairs;
+		for (int32 g = 0; g < Variant->Sources.Num(); g++)
 		{
-			if (Group.BakedPairs.IsEmpty())
+			const UPCGExAssetCollection* Src = Variant->Sources[g].SourceCollection;
+			if (!Src)
 			{
 				continue;
 			}
 
-			// Only groups whose source is actually present in the incoming map matter here.
-			if (!MappedCollections.Contains(Group.SourceGUIDAtBake))
+			// Only groups whose source is actually present in the incoming map matter here. The GUID
+			// is read live off the hard-referenced source, so it can never be stale.
+			const uint32 SourceGUID = Src->GetCollectionGUID();
+			if (!MappedCollections.Contains(SourceGUID))
 			{
-				// The source may be present under a different GUID (re-imported/duplicated since
-				// the variant was baked) -- that's a stale bake, not a missing source. Say so
-				// instead of silently not swapping.
-				for (const TPair<uint32, UPCGExAssetCollection*>& Pair : MappedCollections)
+				continue;
+			}
+
+			// Live (SourceRawIndex, VariantFlatIndex) mapping -- resolved against the source right now.
+			Variant->BuildGroupMapping(g, Pairs);
+
+			if (Pairs.IsEmpty())
+			{
+				// Bound rows that resolve nothing = the source's ids drifted or were never persisted.
+				// Node-visible on purpose: the graph would otherwise silently stop swapping.
+				for (const FPCGExVariantEntryOverride& Row : Variant->Sources[g].Overrides)
 				{
-					if (Pair.Value && FSoftObjectPath(Pair.Value) == Group.Source.ToSoftObjectPath())
+					if (Row.SourceEntryId != 0 && Row.Entry.IsValid())
 					{
-						PCGE_LOG(Warning, GraphAndLog, FTEXT("A variant source is present in the map but its GUID changed since the variant was baked -- mapping skipped. Re-save the variant asset to refresh it."));
+						PCGE_LOG(Warning, GraphAndLog, FTEXT("A variant source group resolved no swaps (its source's entry ids no longer match). Open and re-save the source collection, then the variant."));
 						break;
 					}
 				}
 				continue;
 			}
 
-			if (Settings->bSkipStaleMappings && Variant->IsMappingStale(Group))
-			{
-				PCGE_LOG(Warning, GraphAndLog, FTEXT("A variant source mapping is stale (source collection changed since the variant was saved) and was skipped. Re-save the variant asset to refresh it."));
-				continue;
-			}
-
-			for (const FIntPoint& Pair : Group.BakedPairs)
+			for (const FIntPoint& Pair : Pairs)
 			{
 				// Secondary pick (e.g. material variant) is reset: it indexed the SOURCE
 				// entry's micro-cache and is meaningless against the replacement entry.
 				Contribution->Add(
-					PCGEx::H64(Group.SourceGUIDAtBake, Pair.X),
+					PCGEx::H64(SourceGUID, Pair.X),
 					PCGExCollections::PickHash::Pack(VariantGUID, static_cast<uint16>(Pair.Y)));
 
 				if (Settings->bRedistributeMicroCache)
