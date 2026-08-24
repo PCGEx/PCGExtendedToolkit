@@ -483,6 +483,44 @@ def check_generated_last(tree):
     return out
 
 
+# Getters whose return type is routinely only forward-declared at the call site. Each entry:
+# (defining engine header, type name, regex of a deref of the getter's result).
+FWD_DEREFS = [
+    ("UObject/Package.h", "UPackage",
+     re.compile(r'\b(GetOutermost|GetPackage|GetTransientPackage)\s*\(\s*\)\s*->')),
+]
+
+
+@check("fwd-decl-deref", "warn",
+       "A getter returning a commonly forward-declared engine type (UPackage) is dereferenced, "
+       "but the defining header is nowhere in the file's include closure. MSVC editor builds get "
+       "the definition transitively; FAB's clean Clang build may only see the forward declaration "
+       "(C2027 'use of undefined type'). Warn-level: a transitive engine include can legitimately "
+       "supply it, but a direct include is the only spelling a clean build guarantees.")
+def check_fwd_decl_deref(tree):
+    inc_res = {hdr: re.compile(r'^\s*#\s*include\s+["<]' + re.escape(hdr) + r'[">]', re.M)
+               for hdr, _, _ in FWD_DEREFS}
+    out = []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        cl = None
+        for hdr, ty, rx in FWD_DEREFS:
+            hits = list(rx.finditer(t))
+            if not hits:
+                continue
+            if cl is None:
+                cl = tree.closure(p)
+            if any(inc_res[hdr].search(tree.stripped(f)) for f in cl):
+                continue
+            for m in hits:
+                out.append(Finding("fwd-decl-deref", "warn", p,
+                                   t[:m.start()].count("\n") + 1,
+                                   f"{m.group(1)}()-> needs the complete {ty} type, and "
+                                   f'"{hdr}" is not in the include closure',
+                                   f'add #include "{hdr}"'))
+    return out
+
+
 # ----------------------------------------------------------------------- selftest
 
 SELFTEST = {
@@ -536,6 +574,7 @@ SELFTEST = {
         "__forceinline int Fast() { return 1; }\n"
         "void UPCGExBadSettings::EditorOnly() const\n"
         "{\n"
+        "\tGetClass()->GetOutermost()->GetFName();\n"
         "}\n"),
 
     # Everything below is CORRECT code. Any finding pointing at a "Negative" path means a
@@ -543,6 +582,7 @@ SELFTEST = {
     "ModB/Public/PCGExNegative.h": (
         "#pragma once\n"
         "#include \"PCGExBase.h\"\n"
+        "#include \"UObject/Package.h\"\n"
         "#include \"PCGExNegative.generated.h\"\n"
         "class UPCGExNegativeSettings : public UPCGExSettings\n"
         "{\n"
@@ -580,13 +620,14 @@ SELFTEST = {
         "#if WITH_EDITOR\n"
         "void UPCGExNegativeSettings::EditorOnly() const\n"
         "{\n"
+        "\tGetClass()->GetOutermost()->GetFName();\n"
         "}\n"
         "#endif\n"),
 }
 
 SELFTEST_EXPECT = {
     "missing-include", "editor-guard", "nsdmi-default-arg", "extern-template-api",
-    "unity-collision", "msvc-only", "include-case", "generated-last",
+    "unity-collision", "msvc-only", "include-case", "generated-last", "fwd-decl-deref",
 }
 
 
