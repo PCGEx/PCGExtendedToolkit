@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Core/PCGExSettings.h"
@@ -13,6 +13,7 @@
 #include "Core/PCGExContext.h"
 #include "Styling/SlateStyle.h"
 #include "Interfaces/IPluginManager.h"
+#include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
 
@@ -149,6 +150,36 @@ void UPCGExSettings::EDITOR_OpenNodeDocumentation() const
 	{
 		const TSharedPtr<IPlugin> OwnerPlugin = IPluginManager::Get().GetModuleOwnerPlugin(FName(ModuleName));
 		if (OwnerPlugin && !OwnerPlugin->GetDescriptor().DocsURL.IsEmpty()) { BaseURL = OwnerPlugin->GetDescriptor().DocsURL; }
+
+#if PCGEX_PRO_BUNDLE
+		// Merged bundle: every module resolves to the umbrella plugin, whose DocsURL is the
+		// root book. PCGEx Pack records each merged module's original book in the
+		// [ModuleDocsURLs] section of Config/PCGExBundle.ini -- restore it from there.
+		// The function-local static means the file is read and parsed ONCE, on the first
+		// docs click of the session; every later call is a plain TMap lookup.
+		if (OwnerPlugin)
+		{
+			static const TMap<FName, FString> ModuleDocsURLs = [&OwnerPlugin]
+			{
+				TMap<FName, FString> URLs;
+				TArray<FString> Lines;
+				FFileHelper::LoadFileToStringArray(Lines, *(OwnerPlugin->GetBaseDir() / TEXT("Config/PCGExBundle.ini")));
+				bool bInSection = false;
+				for (FString& Line : Lines)
+				{
+					Line.TrimStartAndEndInline();
+					if (Line.IsEmpty() || Line.StartsWith(TEXT(";")) || Line.StartsWith(TEXT("#"))) { continue; }
+					if (Line.StartsWith(TEXT("["))) { bInSection = Line.Equals(TEXT("[ModuleDocsURLs]")); continue; }
+					FString Key;
+					FString Value;
+					if (bInSection && Line.Split(TEXT("="), &Key, &Value)) { URLs.Add(FName(Key.TrimStartAndEnd()), Value.TrimStartAndEnd()); }
+				}
+				return URLs;
+			}();
+
+			if (const FString* ModuleDocsURL = ModuleDocsURLs.Find(FName(ModuleName))) { BaseURL = *ModuleDocsURL; }
+		}
+#endif
 	}
 
 	BaseURL.RemoveFromEnd(TEXT("/"));
