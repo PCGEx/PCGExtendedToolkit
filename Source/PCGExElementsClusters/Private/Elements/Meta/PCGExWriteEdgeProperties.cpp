@@ -37,6 +37,48 @@ void UPCGExWriteEdgePropertiesSettings::PCGExApplyDeprecationBeforeUpdatePins(UP
 		PCGEX_SHORTHAND_RENAME_PIN(SolidificationLerpAttribute, SolidificationLerpConstant, SolidificationLerp)
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 13)
+	{
+		// Rewire the per-component radius pins onto the secondary/tertiary slot writing the same
+		// local component — the mapping depends on the serialized solidification axis (see PCGExApplyDeprecation).
+		auto RewireRadius = [&](const TCHAR* Axis, const TCHAR* Target)
+		{
+			const FName TargetName(Target);
+			const FName EnabledSuffix[] = {TargetName, FName(TEXT("bEnabled"))};
+			PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(*FString::Printf(TEXT("bWriteRadius%s"), Axis)), EnabledSuffix);
+			const FName SourceSuffix[] = {TargetName, FName(TEXT("Source"))};
+			PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(*FString::Printf(TEXT("Radius%sSource"), Axis)), SourceSuffix);
+			const FName RadAttrSuffix[] = {TargetName, FName(TEXT("Radius")), FName(TEXT("Attribute"))};
+			PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(*FString::Printf(TEXT("Radius%sSourceAttribute"), Axis)), RadAttrSuffix, FName(*FString::Printf(TEXT("Radius %s (Attr)"), Axis)));
+			const FName RadConstSuffix[] = {TargetName, FName(TEXT("Radius")), FName(TEXT("Constant"))};
+			PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(*FString::Printf(TEXT("Radius%sConstant"), Axis)), RadConstSuffix, FName(*FString::Printf(TEXT("Radius %s"), Axis)));
+			// The old slide shorthands sat among clashing Attribute/Constant leaves, so their pins carry full-path labels.
+			const FName SlideAttrSuffix[] = {TargetName, FName(TEXT("Slide")), FName(TEXT("Attribute"))};
+			PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(*FString::Printf(TEXT("Radius%sSlide/Attribute"), Axis)), SlideAttrSuffix);
+			const FName SlideConstSuffix[] = {TargetName, FName(TEXT("Slide")), FName(TEXT("Constant"))};
+			PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(*FString::Printf(TEXT("Radius%sSlide/Constant"), Axis)), SlideConstSuffix);
+		};
+
+		switch (SolidificationAxis)
+		{
+		case EPCGExMinimalAxis::Y:
+			RewireRadius(TEXT("Z"), TEXT("SecondaryAxis"));
+			RewireRadius(TEXT("X"), TEXT("TertiaryAxis"));
+			break;
+		case EPCGExMinimalAxis::Z:
+			RewireRadius(TEXT("X"), TEXT("SecondaryAxis"));
+			RewireRadius(TEXT("Y"), TEXT("TertiaryAxis"));
+			break;
+		default:
+			RewireRadius(TEXT("Y"), TEXT("SecondaryAxis"));
+			RewireRadius(TEXT("Z"), TEXT("TertiaryAxis"));
+			break;
+		}
+
+		const FName PositionLerpSuffix[] = {FName(TEXT("EdgePositionLerpValue")), FName(TEXT("Constant"))};
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("EdgePositionLerp")), PositionLerpSuffix, FName(TEXT("Edge Position Lerp")));
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -45,6 +87,34 @@ void UPCGExWriteEdgePropertiesSettings::PCGExApplyDeprecation(UPCGNode* InOutNod
 	PCGEX_IF_VERSION_LOWER(1, 76, 8)
 	{
 		SolidificationLerp.Update(SolidificationLerpInput_DEPRECATED, SolidificationLerpAttribute_DEPRECATED, SolidificationLerpConstant_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 13)
+	{
+#define PCGEX_RADIUS_COPY_TO(_SOURCE, _TARGET)\
+		_TARGET.bEnabled = bWriteRadius##_SOURCE##_DEPRECATED;\
+		_TARGET.Source = Radius##_SOURCE##Source_DEPRECATED;\
+		_TARGET.Radius.Update(Radius##_SOURCE##Input_DEPRECATED, Radius##_SOURCE##SourceAttribute_DEPRECATED, Radius##_SOURCE##Constant_DEPRECATED);\
+		_TARGET.Slide = Radius##_SOURCE##Slide_DEPRECATED;
+
+		switch (SolidificationAxis)
+		{
+		case EPCGExMinimalAxis::Y:
+			PCGEX_RADIUS_COPY_TO(Z, SecondaryAxis)
+			PCGEX_RADIUS_COPY_TO(X, TertiaryAxis)
+			break;
+		case EPCGExMinimalAxis::Z:
+			PCGEX_RADIUS_COPY_TO(X, SecondaryAxis)
+			PCGEX_RADIUS_COPY_TO(Y, TertiaryAxis)
+			break;
+		default: // X, or None (radii unused then — mapped as X purely to preserve values)
+			PCGEX_RADIUS_COPY_TO(Y, SecondaryAxis)
+			PCGEX_RADIUS_COPY_TO(Z, TertiaryAxis)
+			break;
+		}
+#undef PCGEX_RADIUS_COPY_TO
+
+		EdgePositionLerpValue.Constant = EdgePositionLerp_DEPRECATED;
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -170,16 +240,65 @@ namespace PCGExWriteEdgeProperties
 
 		if (bSolidify)
 		{
-#define PCGEX_CREATE_LOCAL_AXIS_SET_CONST(_AXIS) if (Settings->bWriteRadius##_AXIS){\
-			SolidificationRad##_AXIS = PCGExDetails::MakeSettingValue(Settings->Radius##_AXIS##Input, Settings->Radius##_AXIS##SourceAttribute, Settings->Radius##_AXIS##Constant);\
-			if(!SolidificationRad##_AXIS->Init(Settings->Radius##_AXIS##Source == EPCGExClusterElement::Edge ? EdgeDataFacade : VtxDataFacade, false)){ return false; }\
-			SolidificationSlide##_AXIS = Settings->Radius##_AXIS##Slide.GetValueSetting();\
-			if(!SolidificationSlide##_AXIS->Init(EdgeDataFacade, false)){ return false; } }
-			PCGEX_FOREACH_XYZ(PCGEX_CREATE_LOCAL_AXIS_SET_CONST)
-#undef PCGEX_CREATE_LOCAL_AXIS_SET_CONST
+			switch (Settings->SolidificationAxis)
+			{
+			default:
+			case EPCGExMinimalAxis::X:
+				PrimaryComponent = 0;
+				SecondaryComponent = 1;
+				TertiaryComponent = 2;
+				break;
+			case EPCGExMinimalAxis::Y:
+				PrimaryComponent = 1;
+				SecondaryComponent = 2;
+				TertiaryComponent = 0;
+				break;
+			case EPCGExMinimalAxis::Z:
+				PrimaryComponent = 2;
+				SecondaryComponent = 0;
+				TertiaryComponent = 1;
+				break;
+			}
+
+			auto InitRadius = [&](const FPCGExEdgeSolidificationRadiusDetails& InDetails, TSharedPtr<PCGExDetails::TSettingValue<double>>& OutRadius, TSharedPtr<PCGExDetails::TSettingValue<double>>& OutSlide, bool& bOutFromVtx) -> bool
+			{
+				if (!InDetails.bEnabled)
+				{
+					return true;
+				}
+
+				bOutFromVtx = InDetails.Source == EPCGExClusterElement::Vtx;
+
+				OutRadius = InDetails.Radius.GetValueSetting();
+				if (!OutRadius->Init(bOutFromVtx ? VtxDataFacade : EdgeDataFacade, false))
+				{
+					return false;
+				}
+
+				OutSlide = InDetails.Slide.GetValueSetting();
+				return OutSlide->Init(EdgeDataFacade, false);
+			};
+
+			if (!InitRadius(Settings->SecondaryAxis, SecondaryRadius, SecondarySlide, bSecondaryFromVtx))
+			{
+				return false;
+			}
+			if (!InitRadius(Settings->TertiaryAxis, TertiaryRadius, TertiarySlide, bTertiaryFromVtx))
+			{
+				return false;
+			}
 
 			SolidificationLerp = Settings->SolidificationLerp.GetValueSetting();
 			if (!SolidificationLerp->Init(EdgeDataFacade, false))
+			{
+				return false;
+			}
+		}
+
+		if (Settings->bWriteEdgePosition)
+		{
+			EdgePositionLerp = Settings->EdgePositionLerpValue.GetValueSetting();
+			if (!EdgePositionLerp->Init(EdgeDataFacade, false))
 			{
 				return false;
 			}
@@ -284,22 +403,24 @@ namespace PCGExWriteEdgeProperties
 				double BlendWeightStart = FMath::Clamp(SolidificationLerp->Read(EdgeIndex), 0, 1);
 				double BlendWeightEnd = 1 - BlendWeightStart;
 
-#define PCGEX_SOLIDIFY_DIMENSION(_AXIS)\
-if (Settings->SolidificationAxis == EPCGExMinimalAxis::_AXIS){\
-TargetBoundsMin._AXIS = (-EdgeLength * BlendWeightEnd) * InvScale._AXIS;\
-TargetBoundsMax._AXIS = (EdgeLength * BlendWeightStart) * InvScale._AXIS;\
-}else if(SolidificationRad##_AXIS){\
-double Rad = 0;\
-if (Settings->Radius##_AXIS##Source == EPCGExClusterElement::Vtx) { Rad = FMath::Lerp(SolidificationRad##_AXIS->Read(Edge.Start), SolidificationRad##_AXIS->Read(Edge.End), BlendWeightStart); }\
-else { Rad = SolidificationRad##_AXIS->Read(EdgeIndex); }\
-Rad = FMath::Abs(Rad);\
-const double Slide = FMath::Clamp(SolidificationSlide##_AXIS->Read(EdgeIndex), 0.0, 1.0);\
-TargetBoundsMin._AXIS = (2.0 * (Slide - 1.0) * Rad) * InvScale._AXIS;\
-TargetBoundsMax._AXIS = (2.0 * Slide * Rad) * InvScale._AXIS;\
-}
+				TargetBoundsMin[PrimaryComponent] = (-EdgeLength * BlendWeightEnd) * InvScale[PrimaryComponent];
+				TargetBoundsMax[PrimaryComponent] = (EdgeLength * BlendWeightStart) * InvScale[PrimaryComponent];
 
-				PCGEX_FOREACH_XYZ(PCGEX_SOLIDIFY_DIMENSION)
-#undef PCGEX_SOLIDIFY_DIMENSION
+				auto SolidifyRadius = [&](const TSharedPtr<PCGExDetails::TSettingValue<double>>& InRadius, const TSharedPtr<PCGExDetails::TSettingValue<double>>& InSlide, const int32 Component, const bool bFromVtx)
+				{
+					if (!InRadius)
+					{
+						return;
+					}
+
+					const double Rad = FMath::Abs(bFromVtx ? FMath::Lerp(InRadius->Read(Edge.Start), InRadius->Read(Edge.End), BlendWeightStart) : InRadius->Read(EdgeIndex));
+					const double Slide = FMath::Clamp(InSlide->Read(EdgeIndex), 0.0, 1.0);
+					TargetBoundsMin[Component] = (2.0 * (Slide - 1.0) * Rad) * InvScale[Component];
+					TargetBoundsMax[Component] = (2.0 * Slide * Rad) * InvScale[Component];
+				};
+
+				SolidifyRadius(SecondaryRadius, SecondarySlide, SecondaryComponent, bSecondaryFromVtx);
+				SolidifyRadius(TertiaryRadius, TertiarySlide, TertiaryComponent, bTertiaryFromVtx);
 
 				switch (Settings->SolidificationAxis)
 				{
@@ -314,7 +435,7 @@ TargetBoundsMax._AXIS = (2.0 * Slide * Rad) * InvScale._AXIS;\
 					break;
 				}
 
-				Transforms[EdgeIndex] = FTransform(EdgeRot, FMath::Lerp(A, B, Settings->bWriteEdgePosition ? Settings->EdgePositionLerp : BlendWeightEnd), TargetScale);
+				Transforms[EdgeIndex] = FTransform(EdgeRot, FMath::Lerp(A, B, EdgePositionLerp ? FMath::Clamp(EdgePositionLerp->Read(EdgeIndex), 0.0, 1.0) : BlendWeightEnd), TargetScale);
 
 				BoundsMin[EdgeIndex] = TargetBoundsMin;
 				BoundsMax[EdgeIndex] = TargetBoundsMax;
@@ -323,7 +444,7 @@ TargetBoundsMax._AXIS = (2.0 * Slide * Rad) * InvScale._AXIS;\
 			}
 			else if (Settings->bWriteEdgePosition)
 			{
-				Transforms[EdgeIndex].SetLocation(FMath::Lerp(A, B, Settings->EdgePositionLerp));
+				Transforms[EdgeIndex].SetLocation(FMath::Lerp(A, B, FMath::Clamp(EdgePositionLerp->Read(EdgeIndex), 0.0, 1.0)));
 				DataBlender->Blend(Edge.Start, Edge.End, EdgeIndex, Settings->EndpointsWeights);
 			}
 			else
