@@ -35,6 +35,33 @@ enum class EPCGExHeuristicsWriteMode : uint8
 	Highest        = 2 UMETA(DisplayName = "Highest Score", ToolTip="Compute heuristics both ways a keep highest score."),
 };
 
+USTRUCT(BlueprintType)
+struct FPCGExEdgeSolidificationRadiusDetails
+{
+	GENERATED_BODY()
+
+	FPCGExEdgeSolidificationRadiusDetails() = default;
+
+	/** Whether to write bounds over this axis. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	bool bEnabled = false;
+
+	/** Radius for this axis. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bEnabled"))
+	FPCGExInputShorthandSelectorDouble Radius = FPCGExInputShorthandSelectorDouble(NAME_None, 1, false);
+
+	/** Element the radius attribute is read from. Vtx reads both endpoints, lerped by the solidification lerp. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Source", EditCondition="bEnabled && Radius.Input == EPCGExInputValueType::Attribute", EditConditionHides))
+	EPCGExClusterElement Source = EPCGExClusterElement::Vtx;
+
+	/** Slide factor that shifts the bounds along this axis while preserving their size (2*Radius).
+	 *  0.5 = centered (min = -Radius, max = +Radius),
+	 *  0   = shifted fully negative (min = -2*Radius, max = 0),
+	 *  1   = shifted fully positive (min = 0, max = +2*Radius). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bEnabled"))
+	FPCGExInputShorthandSelectorDouble01 Slide = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
+};
+
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/analyze/cluster-edge-properties"))
 class UPCGExWriteEdgePropertiesSettings : public UPCGExClustersProcessorSettings
 {
@@ -130,9 +157,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable))
 	bool bWriteEdgePosition = false;
 
-	/** Position position lerp between start & end points*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable, EditCondition="bWriteEdgePosition", ClampMin=0, ClampMax=1))
-	double EdgePositionLerp = 0.5;
+	/** Position lerp between start & end points. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta=(PCG_Overridable, DisplayName="Edge Position Lerp", EditCondition="bWriteEdgePosition"))
+	FPCGExInputShorthandSelectorDouble01 EdgePositionLerpValue = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double EdgePositionLerp_DEPRECATED = 0.5;
+
+#pragma endregion
 
 	/** Align the edge point to the edge direction over the selected axis. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta = (PCG_Overridable))
@@ -155,81 +189,75 @@ public:
 
 #pragma endregion
 
-	// Edge radiuses
+	// Edge radiuses.
+	// Secondary/tertiary map onto local components cyclically from the solidification axis:
+	// X -> (Y, Z), Y -> (Z, X), Z -> (X, Y).
 
-	/** Whether or not to write the edge extents over the local X axis.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="SolidificationAxis != EPCGExMinimalAxis::X && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	bool bWriteRadiusX = false;
+	/** Secondary axis bounds, relative to the solidification axis. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta = (PCG_Overridable, DisplayName="Axis - Secondary", EditCondition="SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
+	FPCGExEdgeSolidificationRadiusDetails SecondaryAxis;
 
-	/** Type of Radius X value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="bWriteRadiusX && SolidificationAxis != EPCGExMinimalAxis::X && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	EPCGExInputValueType RadiusXInput = EPCGExInputValueType::Constant;
+	/** Tertiary axis bounds, relative to the solidification axis. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification", meta = (PCG_Overridable, DisplayName="Axis - Tertiary", EditCondition="SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
+	FPCGExEdgeSolidificationRadiusDetails TertiaryAxis;
 
-	/** Source from which to fetch the Radius X value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="bWriteRadiusX && SolidificationAxis != EPCGExMinimalAxis::X && SolidificationAxis != EPCGExMinimalAxis::None && RadiusXInput != EPCGExInputValueType::Constant", EditConditionHides))
-	EPCGExClusterElement RadiusXSource = EPCGExClusterElement::Vtx;
+#pragma region DEPRECATED
 
-	/** Attribute read on edge endpoints */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius X (Attr)", EditCondition="bWriteRadiusX && SolidificationAxis != EPCGExMinimalAxis::X && SolidificationAxis != EPCGExMinimalAxis::None && RadiusXInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector RadiusXSourceAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bWriteRadiusX_DEPRECATED = false;
 
-	/** Radius X Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius X", EditCondition="bWriteRadiusX && SolidificationAxis != EPCGExMinimalAxis::X && SolidificationAxis != EPCGExMinimalAxis::None && RadiusXInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double RadiusXConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType RadiusXInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Slide factor that shifts the X bounds along the axis while preserving their size (2*Radius). 0.5 = centered, 0 = fully negative, 1 = fully positive. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius X Slide", EditCondition="bWriteRadiusX && SolidificationAxis != EPCGExMinimalAxis::X && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	FPCGExInputShorthandSelectorDouble01 RadiusXSlide = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExClusterElement RadiusXSource_DEPRECATED = EPCGExClusterElement::Vtx;
 
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector RadiusXSourceAttribute_DEPRECATED;
 
-	/** Whether or not to write the edge extents over the local Y axis. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="SolidificationAxis != EPCGExMinimalAxis::Y && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	bool bWriteRadiusY = false;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double RadiusXConstant_DEPRECATED = 1;
 
-	/** Type of Radius Y value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="bWriteRadiusY && SolidificationAxis != EPCGExMinimalAxis::Y && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	EPCGExInputValueType RadiusYInput = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGExInputShorthandSelectorDouble01 RadiusXSlide_DEPRECATED = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
 
-	/** Source from which to fetch the Radius Y value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="bWriteRadiusY && SolidificationAxis != EPCGExMinimalAxis::Y && SolidificationAxis != EPCGExMinimalAxis::None && RadiusYInput != EPCGExInputValueType::Constant", EditConditionHides))
-	EPCGExClusterElement RadiusYSource = EPCGExClusterElement::Vtx;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bWriteRadiusY_DEPRECATED = false;
 
-	/** Attribute read on edge endpoints */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius Y (Attr)", EditCondition="bWriteRadiusY && SolidificationAxis != EPCGExMinimalAxis::Y && SolidificationAxis != EPCGExMinimalAxis::None && RadiusYInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector RadiusYSourceAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType RadiusYInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Radius Y Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius Y", EditCondition="bWriteRadiusY && SolidificationAxis != EPCGExMinimalAxis::Y && SolidificationAxis != EPCGExMinimalAxis::None && RadiusYInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double RadiusYConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExClusterElement RadiusYSource_DEPRECATED = EPCGExClusterElement::Vtx;
 
-	/** Slide factor that shifts the Y bounds along the axis while preserving their size (2*Radius). 0.5 = centered, 0 = fully negative, 1 = fully positive. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius Y Slide", EditCondition="bWriteRadiusY && SolidificationAxis != EPCGExMinimalAxis::Y && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	FPCGExInputShorthandSelectorDouble01 RadiusYSlide = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector RadiusYSourceAttribute_DEPRECATED;
 
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double RadiusYConstant_DEPRECATED = 1;
 
-	/** Whether or not to write the edge extents over the local Z axis. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="SolidificationAxis != EPCGExMinimalAxis::Z && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	bool bWriteRadiusZ = false;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGExInputShorthandSelectorDouble01 RadiusYSlide_DEPRECATED = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
 
-	/** Type of Radius Z value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="bWriteRadiusZ && SolidificationAxis != EPCGExMinimalAxis::Z && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	EPCGExInputValueType RadiusZInput = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bWriteRadiusZ_DEPRECATED = false;
 
-	/** Source from which to fetch the Radius Z value */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta=(PCG_Overridable, EditCondition="bWriteRadiusZ && SolidificationAxis != EPCGExMinimalAxis::Z && SolidificationAxis != EPCGExMinimalAxis::None && RadiusZInput != EPCGExInputValueType::Constant", EditConditionHides))
-	EPCGExClusterElement RadiusZSource = EPCGExClusterElement::Vtx;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType RadiusZInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Attribute read on edge endpoints */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius Z (Attr)", EditCondition="bWriteRadiusZ && SolidificationAxis != EPCGExMinimalAxis::Z && SolidificationAxis != EPCGExMinimalAxis::None && RadiusZInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector RadiusZSourceAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExClusterElement RadiusZSource_DEPRECATED = EPCGExClusterElement::Vtx;
 
-	/** Radius Z Constant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius Z", EditCondition="bWriteRadiusZ && SolidificationAxis != EPCGExMinimalAxis::Z && SolidificationAxis != EPCGExMinimalAxis::None && RadiusZInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double RadiusZConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector RadiusZSourceAttribute_DEPRECATED;
 
-	/** Slide factor that shifts the Z bounds along the axis while preserving their size (2*Radius). 0.5 = centered, 0 = fully negative, 1 = fully positive. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Solidification|Radiuses", meta = (PCG_Overridable, DisplayName="Radius Z Slide", EditCondition="bWriteRadiusZ && SolidificationAxis != EPCGExMinimalAxis::Z && SolidificationAxis != EPCGExMinimalAxis::None", EditConditionHides))
-	FPCGExInputShorthandSelectorDouble01 RadiusZSlide = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double RadiusZConstant_DEPRECATED = 1;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGExInputShorthandSelectorDouble01 RadiusZSlide_DEPRECATED = FPCGExInputShorthandSelectorDouble01(NAME_None, 0.5, false);
+
+#pragma endregion
 
 private:
 	friend class FPCGExWriteEdgePropertiesElement;
@@ -267,18 +295,23 @@ namespace PCGExWriteEdgeProperties
 		TSharedPtr<PCGExBlending::IBlender> DataBlender;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> SolidificationLerp;
+		TSharedPtr<PCGExDetails::TSettingValue<double>> EdgePositionLerp;
 
 		PCGEX_FOREACH_FIELD_EDGEEXTRAS(PCGEX_OUTPUT_DECL)
 
 		bool bSolidify = false;
 
-#define PCGEX_LOCAL_EDGE_GETTER_DECL(_AXIS) TSharedPtr<PCGExDetails::TSettingValue<double>> SolidificationRad##_AXIS;
-		PCGEX_FOREACH_XYZ(PCGEX_LOCAL_EDGE_GETTER_DECL)
-#undef PCGEX_LOCAL_EDGE_GETTER_DECL
+		TSharedPtr<PCGExDetails::TSettingValue<double>> SecondaryRadius;
+		TSharedPtr<PCGExDetails::TSettingValue<double>> SecondarySlide;
+		TSharedPtr<PCGExDetails::TSettingValue<double>> TertiaryRadius;
+		TSharedPtr<PCGExDetails::TSettingValue<double>> TertiarySlide;
 
-#define PCGEX_LOCAL_SLIDE_GETTER_DECL(_AXIS) TSharedPtr<PCGExDetails::TSettingValue<double>> SolidificationSlide##_AXIS;
-		PCGEX_FOREACH_XYZ(PCGEX_LOCAL_SLIDE_GETTER_DECL)
-#undef PCGEX_LOCAL_SLIDE_GETTER_DECL
+		// Local bounds components mapped cyclically from the solidification axis: X -> (Y, Z), Y -> (Z, X), Z -> (X, Y).
+		int32 PrimaryComponent = 0;
+		int32 SecondaryComponent = 1;
+		int32 TertiaryComponent = 2;
+		bool bSecondaryFromVtx = true;
+		bool bTertiaryFromVtx = true;
 
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
