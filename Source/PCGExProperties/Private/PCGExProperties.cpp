@@ -870,20 +870,35 @@ namespace PCGExPropertySoftPaths
 	// because Resolve dedups locals/imports by Name (first-wins) and walks override
 	// layers as a chain -- both wrong here, which must surface every soft path
 	// regardless of shadowing.
+	static void WalkOverrides(const FPCGExPropertyOverrides& Overrides, const TFunctionRef<void(const FPCGExProperty&)> Visitor)
+	{
+		for (const FPCGExPropertyOverrideEntry& Entry : Overrides.Overrides)
+		{
+			if (!Entry.bEnabled)
+			{
+				continue;
+			}
+			if (const FPCGExProperty* Prop = Entry.GetProperty())
+			{
+				Visitor(*Prop);
+			}
+		}
+	}
+
 	static void WalkCollection(
 		const FPCGExPropertySchemaCollection& Collection,
 		TSet<const UPCGExPropertySchemaAsset*>& Visited,
-		TSet<FSoftObjectPath>& OutPaths)
+		const TFunctionRef<void(const FPCGExProperty&)> Visitor)
 	{
 		for (const FPCGExPropertySchema& Schema : Collection.Schemas)
 		{
 			if (const FPCGExProperty* Prop = Schema.GetProperty())
 			{
-				Prop->GatherSoftObjectPaths(OutPaths);
+				Visitor(*Prop);
 			}
 		}
 
-		PCGExProperties::GatherSoftObjectPaths(Collection.ImportOverrides, OutPaths);
+		WalkOverrides(Collection.ImportOverrides, Visitor);
 
 		// Imported schema assets are auto-cooked via hard refs, but we still walk into
 		// each one's Collection to surface its leaf soft paths.
@@ -899,7 +914,7 @@ namespace PCGExPropertySoftPaths
 			{
 				continue;
 			}
-			WalkCollection(Asset->Collection, Visited, OutPaths);
+			WalkCollection(Asset->Collection, Visited, Visitor);
 		}
 	}
 }
@@ -908,23 +923,24 @@ namespace PCGExProperties
 {
 	void GatherSoftObjectPaths(const FPCGExPropertyOverrides& Overrides, TSet<FSoftObjectPath>& OutPaths)
 	{
-		for (const FPCGExPropertyOverrideEntry& Entry : Overrides.Overrides)
-		{
-			if (!Entry.bEnabled)
-			{
-				continue;
-			}
-			if (const FPCGExProperty* Prop = Entry.GetProperty())
-			{
-				Prop->GatherSoftObjectPaths(OutPaths);
-			}
-		}
+		PCGExPropertySoftPaths::WalkOverrides(Overrides, [&OutPaths](const FPCGExProperty& Prop) { Prop.GatherSoftObjectPaths(OutPaths); });
 	}
 
 	void GatherSoftObjectPaths(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths)
 	{
 		TSet<const UPCGExPropertySchemaAsset*> Visited;
-		PCGExPropertySoftPaths::WalkCollection(Collection, Visited, OutPaths);
+		PCGExPropertySoftPaths::WalkCollection(Collection, Visited, [&OutPaths](const FPCGExProperty& Prop) { Prop.GatherSoftObjectPaths(OutPaths); });
+	}
+
+	void GatherOutputDependencies(const FPCGExPropertyOverrides& Overrides, TSet<FSoftObjectPath>& OutPaths)
+	{
+		PCGExPropertySoftPaths::WalkOverrides(Overrides, [&OutPaths](const FPCGExProperty& Prop) { Prop.GatherOutputDependencies(OutPaths); });
+	}
+
+	void GatherOutputDependencies(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths)
+	{
+		TSet<const UPCGExPropertySchemaAsset*> Visited;
+		PCGExPropertySoftPaths::WalkCollection(Collection, Visited, [&OutPaths](const FPCGExProperty& Prop) { Prop.GatherOutputDependencies(OutPaths); });
 	}
 
 	const FInstancedStruct* ResolveEffective(

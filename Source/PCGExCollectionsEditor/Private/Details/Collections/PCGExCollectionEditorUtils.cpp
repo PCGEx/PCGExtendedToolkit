@@ -6,6 +6,8 @@
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "ScopedTransaction.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Collections/PCGExVariantCollection.h"
@@ -58,7 +60,7 @@ namespace PCGExCollectionEditorUtils
 
 		for (const FPCGExVariantSource& Group : InVariant->Sources)
 		{
-			const UPCGExAssetCollection* Src = Group.Source.Get();
+			const UPCGExAssetCollection* Src = Group.SourceCollection;
 			if (!Src)
 			{
 				continue;
@@ -115,6 +117,38 @@ namespace PCGExCollectionEditorUtils
 	{
 		(void)InCollection->MarkPackageDirty();
 		FCoreUObjectDelegates::BroadcastOnObjectModified(InCollection);
+	}
+
+	bool EnsureEntryIds(UPCGExAssetCollection* InCollection, const bool bNotify)
+	{
+		if (!InCollection || IsRunningCookCommandlet())
+		{
+			return false;
+		}
+
+		bool bAnyMissing = false;
+		InCollection->ForEachEntry([&bAnyMissing](const FPCGExAssetCollectionEntry* Entry, int32)
+		{
+			bAnyMissing |= Entry->EntryId == 0;
+		});
+		if (!bAnyMissing)
+		{
+			return false;
+		}
+
+		InCollection->Modify();
+		InCollection->SyncEntryIds();
+		InCollection->MarkPackageDirty();
+
+		if (bNotify)
+		{
+			FNotificationInfo Info(FText::Format(
+				NSLOCTEXT("PCGExCollectionEditorUtils", "EntryIdsMinted", "Assigned entry ids to '{0}'. Save it so references to its entries persist."),
+				FText::FromString(InCollection->GetName())));
+			Info.ExpireDuration = 6.0f;
+			FSlateNotificationManager::Get().AddNotification(Info);
+		}
+		return true;
 	}
 
 	void AddBrowserSelection(UPCGExAssetCollection* InCollection)

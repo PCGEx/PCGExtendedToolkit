@@ -347,6 +347,9 @@ struct FPCGExGetCollectionDataContext final : FPCGExContext
 	};
 
 	TArray<FSlot> Slots;
+
+	/** Output dependencies of every property hosted by the resolved collections (e.g. Collection Entry picks). */
+	virtual void RegisterAssetDependencies() override;
 };
 
 class FPCGExGetCollectionDataElement final : public IPCGExElement

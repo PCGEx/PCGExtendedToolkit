@@ -554,6 +554,20 @@ void FPCGExContext::AddAssetDependency(const FSoftObjectPath& Dependency)
 	RequiredAssets->Add(Dependency);
 }
 
+void FPCGExContext::AddAssetDependencies(const TSet<FSoftObjectPath>& Dependencies)
+{
+	if (Dependencies.IsEmpty())
+	{
+		return;
+	}
+	FWriteScopeLock WriteScopeLock(AssetsLock);
+	if (!RequiredAssets)
+	{
+		RequiredAssets = MakeShared<TSet<FSoftObjectPath>>();
+	}
+	RequiredAssets->Append(Dependencies);
+}
+
 bool FPCGExContext::LoadAssets()
 {
 	bWarmDependencies = false;

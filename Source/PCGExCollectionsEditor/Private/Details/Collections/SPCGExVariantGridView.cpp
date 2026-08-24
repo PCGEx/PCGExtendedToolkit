@@ -24,7 +24,6 @@
 #include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/SPCGExCollectionCategoryGroup.h"
-#include "Helpers/PCGExStreamingHelpers.h"
 
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
@@ -40,13 +39,13 @@
 namespace PCGExVariantGrid
 {
 	// Group display name for a source slot: asset name, or a placeholder for unset slots.
-	inline FName MakeGroupName(const TSoftObjectPtr<UPCGExAssetCollection>& Source, const int32 GroupIdx)
+	inline FName MakeGroupName(const UPCGExAssetCollection* Source, const int32 GroupIdx)
 	{
-		if (Source.IsNull())
+		if (!Source)
 		{
 			return FName(*FString::Printf(TEXT("Unset Source [%d]"), GroupIdx));
 		}
-		return FName(*Source.ToSoftObjectPath().GetAssetName());
+		return FName(*Source->GetName());
 	}
 
 	// Synthetic group hosting the asset-path swap rules.
@@ -589,35 +588,20 @@ void SPCGExVariantGridView::RebuildItems()
 	for (int32 GroupIdx = 0; GroupIdx < Variant->Sources.Num(); GroupIdx++)
 	{
 		FPCGExVariantSource& Group = Variant->Sources[GroupIdx];
-		const FName GroupName = PCGExVariantGrid::MakeGroupName(Group.Source, GroupIdx);
+		const FName GroupName = PCGExVariantGrid::MakeGroupName(Group.SourceCollection, GroupIdx);
 
 		SortedGroupNames.Add(GroupName);
 		TArray<int32>& GroupItems = GroupToItems.FindOrAdd(GroupName);
 
-		if (Group.Source.IsNull())
-		{
-			continue;
-		}
-
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(Group.Source);
-		UPCGExAssetCollection* Src = Group.Source.Get();
+		// Hard ref: loaded with the variant, or genuinely unset.
+		UPCGExAssetCollection* Src = Group.SourceCollection;
 		if (!Src)
 		{
 			continue;
 		}
 
-		// A never-rebuilt legacy source has no EntryIds — assign them now so tiles are bindable.
-		// Scoped to id assignment only (no staging rebuild); dirties the source once.
-		bool bAnyMissingId = false;
-		Src->ForEachEntry([&bAnyMissingId](const FPCGExAssetCollectionEntry* Entry, int32)
-		{
-			bAnyMissingId |= Entry->EntryId == 0;
-		});
-		if (bAnyMissingId)
-		{
-			Src->Modify();
-			Src->SyncEntryIds();
-		}
+		// A never-rebuilt legacy source has no EntryIds -- assign them now so tiles are bindable.
+		PCGExCollectionEditorUtils::EnsureEntryIds(Src, /*bNotify=*/false);
 
 		// EntryId -> override row for this group
 		TMap<int32, int32> IdToRow;
@@ -981,7 +965,7 @@ void SPCGExVariantGridView::DeclareSwap(const int32 ItemIndex)
 		return;
 	}
 
-	UPCGExAssetCollection* Src = Variant->Sources[Item.GroupIdx].Source.Get();
+	UPCGExAssetCollection* Src = Variant->Sources[Item.GroupIdx].SourceCollection;
 	if (!Src)
 	{
 		return;
@@ -1056,7 +1040,7 @@ void SPCGExVariantGridView::DeclareSwapAs(const int32 ItemIndex, const UScriptSt
 	}
 
 	FPCGExVariantSource& Group = Variant->Sources[Item.GroupIdx];
-	UPCGExAssetCollection* Src = Group.Source.Get();
+	UPCGExAssetCollection* Src = Group.SourceCollection;
 	if (!Src)
 	{
 		return;
@@ -1317,7 +1301,7 @@ void SPCGExVariantGridView::UpdateDetailForSelection()
 			if (const UPCGExVariantCollection* Variant = Collection.Get();
 				Variant && Variant->Sources.IsValidIndex(Item.GroupIdx))
 			{
-				if (UPCGExAssetCollection* Src = Variant->Sources[Item.GroupIdx].Source.Get())
+				if (UPCGExAssetCollection* Src = Variant->Sources[Item.GroupIdx].SourceCollection)
 				{
 					PCGExAssetCollection::FTypeInfo TypeInfo;
 					const bool bFound = PCGExAssetCollection::FTypeRegistry::Get().GetInfoByClass(Src->GetClass(), TypeInfo);
@@ -1471,7 +1455,7 @@ int32 SPCGExVariantGridView::AddSourcesFromAssets(const TArray<FAssetData>& InAs
 			Variant->Modify();
 			for (UPCGExAssetCollection* Source : ToAdd)
 			{
-				Variant->Sources.AddDefaulted_GetRef().Source = Source;
+				Variant->Sources.AddDefaulted_GetRef().SourceCollection = Source;
 			}
 			Variant->PostEditChange();
 			bIsSyncing = false;

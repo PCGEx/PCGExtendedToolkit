@@ -125,6 +125,8 @@ namespace PCGExCollections
 				continue;
 			}
 
+			const FName ResolvedName = SourceProp->ResolveOutputAttributeName(OutputName);
+
 			// Type dispatch: pull the property's value as its declared output type and write it as
 			// a single @Data attribute. SetDataValue handles attribute creation + default-value.
 			PCGExMetaHelpers::ExecuteWithRightType(SourceProp->GetOutputType(), [&](auto Dummy)
@@ -133,9 +135,39 @@ namespace PCGExCollections
 				T_VALUE Value = T_VALUE{};
 				if (SourceProp->TryGetValue<T_VALUE>(Value))
 				{
-					PCGExData::Helpers::SetDataValue<T_VALUE>(InData, OutputName, Value);
+					PCGExData::Helpers::SetDataValue<T_VALUE>(InData, ResolvedName, Value);
 				}
 			});
+		}
+	}
+
+	void GatherSchemaSidecarSources(
+		const FPCGExPropertyOutputSettings& OutputSettings,
+		const TConstArrayView<const UPCGExAssetCollection*> Hosts,
+		TArray<const FPCGExProperty*>& OutSources)
+	{
+		TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
+		OutputSettings.GetEffectiveConfigs(EffectiveConfigs);
+
+		for (const UPCGExAssetCollection* Host : Hosts)
+		{
+			if (!Host)
+			{
+				continue;
+			}
+			for (const FPCGExPropertyOutputConfig& Config : EffectiveConfigs)
+			{
+				if (!Config.IsValid())
+				{
+					continue;
+				}
+				const FInstancedStruct* Source = Host->CollectionProperties.GetPropertyByName(Config.PropertyName);
+				const FPCGExProperty* SourceProp = Source && Source->IsValid() ? Source->GetPtr<FPCGExProperty>() : nullptr;
+				if (SourceProp && SourceProp->SupportsOutput() && !SourceProp->GetOutputSidecarPin().IsNone())
+				{
+					OutSources.AddUnique(SourceProp);
+				}
+			}
 		}
 	}
 
@@ -216,6 +248,8 @@ namespace PCGExCollections
 				continue;
 			}
 
+			const FName ResolvedName = ProtoProp->ResolveOutputAttributeName(OutputName);
+
 			// Type dispatch: the prototype's GetOutputType drives the values array's T. Per-row,
 			// pull the value from the row's own host schema (with N-to-N type coercion via the
 			// FConversionTable inside TryGetValue) -- falls back to the prototype's value when the
@@ -260,11 +294,11 @@ namespace PCGExCollections
 				{
 					return;
 				}
-				const FPCGAttributeIdentifier Id = PCGExMetaHelpers::GetAttributeIdentifier(OutputName, InData);
+				const FPCGAttributeIdentifier Id = PCGExMetaHelpers::GetAttributeIdentifier(ResolvedName, InData);
 				M->FindOrCreateAttribute<T_VALUE>(Id, DefaultValue, false, true);
 
 				FPCGAttributePropertyInputSelector Selector;
-				Selector.Update(OutputName.ToString());
+				Selector.Update(ResolvedName.ToString());
 				Selector = Selector.CopyAndFixLast(InData);
 				TUniquePtr<IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateAccessor(InData, Selector);
 				if (Accessor)
