@@ -3,6 +3,8 @@
 
 #include "Helpers/PCGExCollectionExternalization.h"
 
+#include "PCGExLog.h"
+#include "Misc/PackageName.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -12,6 +14,39 @@
 
 namespace PCGExSharedCompact
 {
+	FString ResolveStaleMountPoint(const FString& InPath, const UObject* Owner)
+	{
+		if (InPath.IsEmpty() || InPath[0] != TEXT('/') || !Owner)
+		{
+			return InPath;
+		}
+
+		// Live mount (user /Game folders, or this plugin's own mount in a standalone
+		// install): hands off.
+		if (!FPackageName::GetPackageMountPoint(InPath).IsNone())
+		{
+			return InPath;
+		}
+
+		const UPackage* OwnerPackage = Owner->GetPackage();
+		const FName OwnerMount = OwnerPackage ? FPackageName::GetPackageMountPoint(OwnerPackage->GetName()) : NAME_None;
+		if (OwnerMount.IsNone())
+		{
+			// Transient owner -- nothing better to offer.
+			return InPath;
+		}
+
+		// Graft the mount-relative remainder onto the owner's current mount.
+		int32 SecondSlash = INDEX_NONE;
+		if (!InPath.RightChop(1).FindChar(TEXT('/'), SecondSlash))
+		{
+			return InPath;
+		}
+		const FString Healed = FString::Printf(TEXT("/%s%s"), *OwnerMount.ToString(), *InPath.RightChop(1 + SecondSlash));
+		UE_LOG(LogPCGEx, Log, TEXT("Remapped stale content path '%s' -> '%s' (owner: %s)"), *InPath, *Healed, *OwnerPackage->GetName());
+		return Healed;
+	}
+
 	FSoftObjectPath ExternalizeUObject(UObject* Source, const FString& DesiredPackagePath, const FString& DesiredAssetName)
 	{
 #if WITH_EDITOR
@@ -20,8 +55,12 @@ namespace PCGExSharedCompact
 			return FSoftObjectPath();
 		}
 
+		// ExportFolder values authored under a re-mounted plugin (merged bundle, migrated
+		// content) heal here, against the owning package's current mount.
+		const FString ResolvedPackagePath = ResolveStaleMountPoint(DesiredPackagePath, Source);
+
 		UPackage* CurrentPackage = Source->GetOutermost();
-		if (CurrentPackage && CurrentPackage->GetName() == DesiredPackagePath && Source->GetName() == DesiredAssetName)
+		if (CurrentPackage && CurrentPackage->GetName() == ResolvedPackagePath && Source->GetName() == DesiredAssetName)
 		{
 			// Already in place -- taken on every rebuild after the first externalization (names are
 			// GUID-stable). Callers invoke this right after regenerating Source's content, so the
@@ -30,7 +69,7 @@ namespace PCGExSharedCompact
 			return FSoftObjectPath(Source);
 		}
 
-		UPackage* TargetPackage = CreatePackage(*DesiredPackagePath);
+		UPackage* TargetPackage = CreatePackage(*ResolvedPackagePath);
 		check(TargetPackage);
 
 		// An on-disk destination not loaded this session comes back as an unloaded stub, which
