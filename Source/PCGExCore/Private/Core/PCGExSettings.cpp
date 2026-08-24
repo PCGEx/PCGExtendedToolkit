@@ -14,6 +14,7 @@
 #include "Styling/SlateStyle.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/PackageName.h"
+#include "UObject/Package.h"
 
 #include "Helpers/PCGSettingsHelpers.h"
 
