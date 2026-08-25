@@ -53,9 +53,9 @@ FName UPCGExUberFilterCollectionsSettings::GetMainOutputPin() const
 	return PCGExFilters::Labels::OutputInsideFiltersLabel;
 }
 
-bool UPCGExUberFilterCollectionsSettings::GetIsMainTransactional() const
+PCGExData::EIOHandling UPCGExUberFilterCollectionsSettings::GetMainDataHandling() const
 {
-	return true;
+	return PCGExData::EIOHandling::Transactional;
 }
 
 bool FPCGExUberFilterCollectionsElement::Boot(FPCGExContext* InContext) const
@@ -69,8 +69,8 @@ bool FPCGExUberFilterCollectionsElement::Boot(FPCGExContext* InContext) const
 
 	PCGExFactories::GetInputFactories(Context, PCGExPickers::Labels::SourcePickersLabel, Context->PickerFactories, {FPCGExDataTypeInfoPicker::AsId()}, false);
 
-	Context->Inside = MakeShared<PCGExData::FPointIOCollection>(Context, true);
-	Context->Outside = MakeShared<PCGExData::FPointIOCollection>(Context, true);
+	Context->Inside = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExData::EIOHandling::Transactional);
+	Context->Outside = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExData::EIOHandling::Transactional);
 
 	Context->Inside->OutputPin = PCGExFilters::Labels::OutputInsideFiltersLabel;
 	Context->Outside->OutputPin = PCGExFilters::Labels::OutputOutsideFiltersLabel;

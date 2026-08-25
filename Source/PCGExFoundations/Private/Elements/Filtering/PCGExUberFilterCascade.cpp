@@ -3,7 +3,10 @@
 
 #include "Elements/Filtering/PCGExUberFilterCascade.h"
 
+#include "PCGParamData.h"
 #include "Containers/PCGExScopedContainers.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataAttributeTpl.h"
 #include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
@@ -73,11 +76,11 @@ TArray<FPCGPinProperties> UPCGExUberFilterCascadeSettings::OutputPinProperties()
 
 	TArray<FPCGPinProperties> PinProperties;
 
-	PCGEX_PIN_POINTS(PCGExFilters::Labels::OutputOutsideFiltersLabel, "Points that didn't pass any branch's filters.", Normal)
+	PCGEX_PIN_ANY(PCGExFilters::Labels::OutputOutsideFiltersLabel, "Elements that didn't pass any branch's filters.", Normal)
 
 	for (int i = 0; i < NumBranches; i++)
 	{
-		PCGEX_PIN_POINTS(OutputLabels[i], "Points that matched this branch's filters.", Normal)
+		PCGEX_PIN_ANY(OutputLabels[i], "Elements that matched this branch's filters.", Normal)
 	}
 
 	return PinProperties;
@@ -100,6 +103,11 @@ FName UPCGExUberFilterCascadeSettings::GetMainOutputPin() const
 	// Partition mode: the first output pin (Outside) is the main output, ensuring a proper forward when the node is disabled.
 	// Write mode: use the default single "Out" pin.
 	return Mode == EPCGExUberFilterMode::Partition ? PCGExFilters::Labels::OutputOutsideFiltersLabel : Super::GetMainOutputPin();
+}
+
+PCGExData::EIOHandling UPCGExUberFilterCascadeSettings::GetMainDataHandling() const
+{
+	return PCGExData::EIOHandling::Dynamic;
 }
 
 #pragma endregion
@@ -246,7 +254,10 @@ namespace PCGExUberFilterCascade
 			return false;
 		}
 
-		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
+		// Attribute-set inputs are processed as their temp point conversion but output as param data.
+		ParamSource = Cast<UPCGParamData>(PointDataFacade->Source->InitializationData);
+
+		PCGEX_INIT_IO(PointDataFacade->Source, ParamSource ? PCGExData::EIOInit::NoInit : Settings->GetMainDataInitializationPolicy())
 
 		const int32 NumBranches = Settings->NumBranches;
 		BranchManagers.SetNum(NumBranches);
@@ -265,7 +276,14 @@ namespace PCGExUberFilterCascade
 
 		if (Settings->Mode == EPCGExUberFilterMode::Write)
 		{
-			PartitionBuffer = PointDataFacade->GetWritable<int32>(Settings->PartitionAttributeName, Settings->DefaultValue, false, PCGExData::EBufferInit::New);
+			if (ParamSource)
+			{
+				ParamPartitionValues.SetNumUninitialized(PointDataFacade->GetNum());
+			}
+			else
+			{
+				PartitionBuffer = PointDataFacade->GetWritable<int32>(Settings->PartitionAttributeName, Settings->DefaultValue, false, PCGExData::EBufferInit::New);
+			}
 		}
 
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
@@ -307,20 +325,41 @@ namespace PCGExUberFilterCascade
 		{
 			const int32 Base = Settings->DefaultValue;
 
-			PCGEX_SCOPE_LOOP(Index)
+			if (ParamSource)
 			{
-				// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
-				int32 Depth = 0;
-				for (int32 i = 0; i < NumBranches; i++)
+				PCGEX_SCOPE_LOOP(Index)
 				{
-					if (BranchManagers[i] && BranchManagers[i]->Test(Index))
+					// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
+					int32 Depth = 0;
+					for (int32 i = 0; i < NumBranches; i++)
 					{
-						Depth = i + 1;
-						break;
+						if (BranchManagers[i] && BranchManagers[i]->Test(Index))
+						{
+							Depth = i + 1;
+							break;
+						}
 					}
-				}
 
-				PartitionBuffer->SetValue(Index, Base + Depth);
+					ParamPartitionValues[Index] = Base + Depth;
+				}
+			}
+			else
+			{
+				PCGEX_SCOPE_LOOP(Index)
+				{
+					// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
+					int32 Depth = 0;
+					for (int32 i = 0; i < NumBranches; i++)
+					{
+						if (BranchManagers[i] && BranchManagers[i]->Test(Index))
+						{
+							Depth = i + 1;
+							break;
+						}
+					}
+
+					PartitionBuffer->SetValue(Index, Base + Depth);
+				}
 			}
 
 			return;
@@ -372,7 +411,53 @@ namespace PCGExUberFilterCascade
 
 		if (Settings->Mode == EPCGExUberFilterMode::Write)
 		{
+			if (ParamSource)
+			{
+				// Write onto the original under the StealData contract, otherwise onto a managed duplicate.
+				const bool bSteal = Context->bWantsDataStealing;
+				UPCGData* Target = bSteal
+					                   ? const_cast<UPCGParamData*>(ParamSource)
+					                   : Context->ManagedObjects->DuplicateData<UPCGData>(ParamSource);
+				if (!Target)
+				{
+					return;
+				}
+
+				const int32 NumRows = ParamPartitionValues.Num();
+				if (FPCGMetadataAttribute<int32>* PartitionAttribute = Target->MutableMetadata()->FindOrCreateAttribute<int32>(Settings->PartitionAttributeName, Settings->DefaultValue))
+				{
+					TArray<PCGMetadataEntryKey> Keys;
+					Keys.SetNumUninitialized(NumRows);
+					for (int i = 0; i < NumRows; i++)
+					{
+						Keys[i] = i;
+					}
+
+					PartitionAttribute->SetValues(Keys, ParamPartitionValues);
+				}
+
+				PointDataFacade->Source->SetOutputOverride(Target, !bSteal);
+				return;
+			}
+
 			PointDataFacade->WriteFastest(TaskManager);
+			return;
+		}
+
+		if (ParamSource)
+		{
+			PCGExBucketDispatchHelpers::DispatchParamBuckets(
+				Context,
+				ParamSource,
+				Context->BranchOutputs,
+				Context->DefaultOutput,
+				BranchCounts,
+				BranchIndices,
+				PointDataFacade->GetNum(),
+				[this](const TSharedRef<PCGExData::FPointIOCollection>& InCollection)
+				{
+					return CreateIO(InCollection, PCGExData::EIOInit::NoInit);
+				});
 			return;
 		}
 

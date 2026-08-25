@@ -21,7 +21,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExDataMatchFilterFactory::CreateFilter
 PCGExFactories::EPreparationResult UPCGExDataMatchFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
 {
 	// Load targets from pin
-	const TSharedPtr<PCGExData::FPointIOCollection> Targets = MakeShared<PCGExData::FPointIOCollection>(InContext, PCGExCommon::Labels::SourceTargetsLabel, PCGExData::EIOInit::NoInit, true);
+	const TSharedPtr<PCGExData::FPointIOCollection> Targets = MakeShared<PCGExData::FPointIOCollection>(InContext, PCGExCommon::Labels::SourceTargetsLabel, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 	if (Targets->IsEmpty())
 	{
 		return PCGExFactories::EPreparationResult::MissingData;

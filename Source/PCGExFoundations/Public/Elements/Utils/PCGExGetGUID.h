@@ -40,7 +40,7 @@ protected:
 
 	//~Begin UPCGExPointsProcessorSettings
 public:
-	virtual bool GetIsMainTransactional() const override;
+	virtual PCGExData::EIOHandling GetMainDataHandling() const override;
 	//~End UPCGExPointsProcessorSettings
 
 	/** Point Index */

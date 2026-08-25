@@ -9,7 +9,7 @@
 #include "Details/PCGExSettingsDetails.h"
 
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExCompareSelectorDouble, , double, Input, Attribute, Constant)
+PCGEX_SETTING_VALUE_IMPL_SHORTHAND(FPCGExCompareSelectorDouble, , double, Input, Attribute, Constant)
 
 bool FPCGExCompareSelectorDouble::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, double& OutValue, const bool bQuiet) const
 {
@@ -32,7 +32,7 @@ FString FPCGExCompareSelectorDouble::GetDisplayNamePostfix() const
 }
 #endif
 
-void FPCGExCompareSelectorDouble::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
+void FPCGExCompareSelectorDouble::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	if (Input == EPCGExInputValueType::Attribute)
 	{

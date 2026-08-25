@@ -995,7 +995,7 @@ bool FPCGExClipper2ProcessorElement::Boot(FPCGExContext* InContext) const
 	TArray<int32> OperandIndices;
 	if (Settings->WantsOperands())
 	{
-		Context->OperandsCollection = MakeShared<PCGExData::FPointIOCollection>(InContext, PCGExClipper2::Labels::SourceOperandsLabel, PCGExData::EIOInit::NoInit, false);
+		Context->OperandsCollection = MakeShared<PCGExData::FPointIOCollection>(InContext, PCGExClipper2::Labels::SourceOperandsLabel, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Points);
 
 		if (Context->OperandsCollection->IsEmpty())
 		{

@@ -112,9 +112,11 @@ public:
 		return true;
 	}
 
-	virtual bool GetIsMainTransactional() const
+	/** How the main pin handles non-point inputs. Points = point data only; Transactional = accept
+	 * anything, forward originals untouched; Dynamic = accept anything, node restages per input type. */
+	virtual PCGExData::EIOHandling GetMainDataHandling() const
 	{
-		return false;
+		return PCGExData::EIOHandling::Points;
 	}
 
 	virtual PCGExData::EIOInit GetMainOutputInitMode() const;

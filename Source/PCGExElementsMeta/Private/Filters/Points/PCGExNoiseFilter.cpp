@@ -40,7 +40,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExNoiseFilterFactory::CreateFilter() c
 void UPCGExNoiseFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
-	Config.Comparison.RegisterBuffersDependencies(InContext, FacadePreloader);
+	Config.Comparison.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 bool PCGExPointFilter::FNoiseFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)

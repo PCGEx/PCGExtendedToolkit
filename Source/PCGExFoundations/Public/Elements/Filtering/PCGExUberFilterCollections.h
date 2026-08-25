@@ -60,7 +60,7 @@ protected:
 	//~Begin UPCGExPointsProcessorSettings
 public:
 	virtual FName GetMainOutputPin() const override;
-	virtual bool GetIsMainTransactional() const override;
+	virtual PCGExData::EIOHandling GetMainDataHandling() const override;
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), true)
 	//~End UPCGExPointsProcessorSettings
 

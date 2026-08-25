@@ -6,6 +6,9 @@
 #include "CoreMinimal.h"
 #include "Data/PCGExDataCommon.h"
 
+class UPCGParamData;
+struct FPCGExContext;
+
 namespace PCGExData
 {
 	class FPointIO;
@@ -49,4 +52,27 @@ namespace PCGExBucketDispatchHelpers
 		TConstArrayView<TSharedPtr<PCGExMT::TScopedArray<int32>>> ScopedIndices,
 		int32 NumPoints,
 		FCreateIOFn CreateIO);
+
+	using FCreateRawIOFn = TFunctionRef<
+		TSharedPtr<PCGExData::FPointIO>(
+			const TSharedRef<PCGExData::FPointIOCollection>& InCollection)>;
+
+	/** Build a new managed param data holding the given rows of InSource (entry keys, order preserved). */
+	PCGEXCORE_API UPCGParamData* ExtractParamRows(FPCGExContext* InContext, const UPCGParamData* InSource, TConstArrayView<int32> InRows);
+
+	/**
+	 * Param-data counterpart of DispatchBuckets, same bucket layout contract. Each non-empty bucket
+	 * becomes a row-subset param data staged through its IO's output override; if every row landed in a
+	 * single bucket, the original param data is forwarded untouched (zero-copy).
+	 * CreateIO must place a NoInit FPointIO into the collection's Pairs slot and return it.
+	 */
+	PCGEXCORE_API void DispatchParamBuckets(
+		FPCGExContext* InContext,
+		const UPCGParamData* InSourceParam,
+		TConstArrayView<TSharedPtr<PCGExData::FPointIOCollection>> Buckets,
+		const TSharedPtr<PCGExData::FPointIOCollection>& UnmatchedBucket,
+		TConstArrayView<int32> Counts,
+		TConstArrayView<TSharedPtr<PCGExMT::TScopedArray<int32>>> ScopedIndices,
+		int32 NumRows,
+		FCreateRawIOFn CreateIO);
 }
