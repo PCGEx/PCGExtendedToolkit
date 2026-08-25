@@ -85,6 +85,12 @@ namespace PCGExClusters
 
 		const FCluster* Cluster = nullptr;
 
+		/** Node-indexed 3D positions for cluster-free builds (feeds FRawFace::Bounds3D). Empty on cluster builds. */
+		TArray<FVector> StandalonePositions3D;
+
+		/** Node count for cluster-free builds (see GetNumNodes). */
+		int32 StandaloneNumNodes = 0;
+
 		/** Node-indexed projected positions (size = NumNodes, access via NodeIndex). nullptr when bIsLocalTangent. */
 		TSharedPtr<TArray<FVector2D>> ProjectedPositions;
 
@@ -123,6 +129,30 @@ namespace PCGExClusters
 		 * @param InNodeIndexedPositions Pre-computed 2D positions indexed by node index (size must equal cluster node count)
 		 */
 		void Build(const TSharedRef<FCluster>& InCluster, const TSharedPtr<TArray<FVector2D>>& InNodeIndexedPositions);
+
+		/**
+		 * Cluster-free core build: undirected edges as node-index pairs + node-indexed projected positions.
+		 * Face enumeration, containment queries and wrapper detection work on this path; cell building
+		 * (BuildCellFromFace and the Enumerate*Cells convenience methods) still requires a cluster-built enumerator.
+		 * @param InNumNodes Node count; InNodeIndexedPositions must be this size.
+		 * @param InEdges Undirected edges as PCGEx::H64(NodeA, NodeB) — NODE indices, not point indices.
+		 * @param InNodeIndexedPositions Projected 2D positions, node-indexed. Held by the enumerator.
+		 * @param InNodePositions3D Optional node-indexed 3D positions feeding FRawFace::Bounds3D; empty = 2D positions lifted at Z=0. Copied.
+		 */
+		void Build(
+			int32 InNumNodes,
+			TConstArrayView<uint64> InEdges,
+			const TSharedPtr<TArray<FVector2D>>& InNodeIndexedPositions,
+			TConstArrayView<FVector> InNodePositions3D = TConstArrayView<FVector>());
+
+		/**
+		 * Cluster-free LOCAL-TANGENT build: node-indexed 3D positions + node-index edge pairs, no shared
+		 * 2D space. Faces enumerate through the two-phase piecewise-planar path (planar patches, then a
+		 * parallel-transported walk); cell building still requires a cluster-built enumerator.
+		 * @param InNumNodes Node count; InNodePositions3D must be this size. Copied.
+		 * @param InEdges Undirected edges as PCGEx::H64(NodeA, NodeB) — NODE indices.
+		 */
+		void Build(int32 InNumNodes, TConstArrayView<uint64> InEdges, TConstArrayView<FVector> InNodePositions3D);
 
 		/**
 		 * Build the DCEL structure using per-node local tangent frames for non-planar clusters.
@@ -179,11 +209,19 @@ namespace PCGExClusters
 			bool bDetectWrapper = false);
 
 		/**
-		 * Find the face containing a given 2D point.
+		 * Find the interior face containing a given 2D point. The wrapper (unbounded exterior)
+		 * face is never returned; points outside the hull yield -1.
 		 * @param Point The 2D point to test
 		 * @return Face index, or -1 if not found
 		 */
 		int32 FindFaceContaining(const FVector2D& Point) const;
+
+		/**
+		 * Ordered projected polygon of a face. Requires raw faces enumerated (FaceIndex populated).
+		 * @param FaceIndex The face to query
+		 * @param OutPolygon Output polygon; empty for LocalTangent builds or an unknown face
+		 */
+		void GetFacePolygon(int32 FaceIndex, TArray<FVector2D>& OutPolygon) const;
 
 		/**
 		 * Get the outer (wrapper) face index.
@@ -301,5 +339,22 @@ namespace PCGExClusters
 			const TArray<int32>& FaceNodes,
 			TSharedPtr<FCell>& OutCell,
 			const TSharedRef<FCellConstraints>& Constraints) const;
+
+		/** Node 3D position regardless of build path: cluster, standalone array, or 2D lifted at Z=0. */
+		FVector GetNodePos3D(int32 NodeIdx) const;
+
+		/** Node count regardless of build path. */
+		int32 GetNumNodes() const;
+
+		/** Walk a face's projected polygon starting from one of its half-edges. Global-projection builds only. */
+		void BuildFacePolygonFrom(int32 StartHalfEdge, TArray<FVector2D>& OutPolygon) const;
+
+		/** LocalTangent phase 1: exact faces of every maximal COPLANAR patch (floors, walls of a
+		 *  piecewise-planar complex), each run through the planar path via a throwaway cluster-free build. */
+		void EnumeratePlanarPatchFaces(TArray<bool>& VisitedHalfEdges);
+
+		/** LocalTangent phase 2: parallel-transported face walk over whatever phase 1 left unclaimed
+		 *  (the outer face, genuinely curved regions). */
+		void EnumerateRawFacesTransported(TArray<bool>& VisitedHalfEdges);
 	};
 }

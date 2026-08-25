@@ -677,4 +677,41 @@ namespace PCGExClusters
 	void FCell::PostProcessPoints(UPCGBasePointData* InMutablePoints)
 	{
 	}
+
+	bool FCell::ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, const double InMaxPlaneDistSq, double* OutPlaneDistSq) const
+	{
+		if (OutPlaneDistSq)
+		{
+			*OutPlaneDistSq = 0;
+		}
+
+		if (Polygon.IsEmpty())
+		{
+			return false;
+		}
+
+		// Same rotation-only mapping BuildCellFromFace used (see FPCGExGeo2DProjectionDetails::Project)
+		if (bHasFacePlane && (InMaxPlaneDistSq >= 0 || bPolygonInFaceFrame || OutPlaneDistSq))
+		{
+			const FVector Rotated = FacePlaneQuat.UnrotateVector(InPos3D);
+			const double PlaneDistSq = FMath::Square(Rotated.Z - FacePlaneZ);
+
+			if (OutPlaneDistSq)
+			{
+				*OutPlaneDistSq = PlaneDistSq;
+			}
+			if (InMaxPlaneDistSq >= 0 && PlaneDistSq > InMaxPlaneDistSq)
+			{
+				return false;
+			}
+
+			if (bPolygonInFaceFrame)
+			{
+				const FVector2D Point2D(Rotated.X, Rotated.Y);
+				return Bounds2D.IsInside(Point2D) && PCGExMath::Geo::IsPointInPolygon(Point2D, Polygon);
+			}
+		}
+
+		return Bounds2D.IsInside(InGlobalProjected) && PCGExMath::Geo::IsPointInPolygon(InGlobalProjected, Polygon);
+	}
 }
