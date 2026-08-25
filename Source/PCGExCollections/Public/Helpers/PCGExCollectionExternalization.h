@@ -16,11 +16,23 @@
 namespace PCGExSharedCompact
 {
 	/**
+	 * Resolve a ContentDir-style package path whose mount point may no longer exist.
+	 * ContentDir paths (ExportFolder pickers) are authored alongside their owning asset, under
+	 * its plugin's mount; a merged bundle or a content migration moves both while preserving the
+	 * mount-relative layout. A path under a live mount is returned untouched (user /Game folders,
+	 * standalone installs); a stale mount is substituted with the owning package's current mount,
+	 * which reconstructs the folder's merged/migrated location.
+	 */
+	PCGEXCOLLECTIONS_API FString ResolveStaleMountPoint(const FString& InPath, const UObject* Owner);
+
+	/**
 	 * Rename Source into DesiredPackagePath as DesiredAssetName (evicting any occupant to transient
 	 * first) and notify the asset registry. Idempotent. Source keeps its identity, so a hard pointer
 	 * to it stays valid afterward. Returns the resulting soft path (empty if Source was null).
 	 * The target package is ALWAYS marked dirty, including the already-in-place path -- callers
 	 * invoke this right after regenerating Source's content.
+	 * DesiredPackagePath is routed through ResolveStaleMountPoint (Source's package as owner), so
+	 * ExportFolder values authored under a re-mounted plugin heal transparently.
 	 */
 	PCGEXCOLLECTIONS_API FSoftObjectPath ExternalizeUObject(UObject* Source, const FString& DesiredPackagePath, const FString& DesiredAssetName);
 
