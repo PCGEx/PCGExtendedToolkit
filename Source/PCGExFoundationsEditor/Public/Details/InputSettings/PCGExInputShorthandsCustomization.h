@@ -8,6 +8,12 @@
 
 class SWidget;
 
+namespace PCGExInputShorthandsCustomization
+{
+	/** Trailing gear popover collapsing a shorthand row's options (Input mode + bCleanupAttribute) into one button. */
+	TSharedRef<SWidget> CreateOptionsPopover(const TSharedPtr<IPropertyHandle>& InputHandle, const TSharedPtr<IPropertyHandle>& CleanupHandle);
+}
+
 class FPCGExInputShorthandCustomization : public IPropertyTypeCustomization
 {
 public:

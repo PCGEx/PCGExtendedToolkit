@@ -1,7 +1,7 @@
 ﻿// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
-#include "Elements/ControlFlow/PCGExRecursionTracker.h"
+#include "Elements/ControlFlow/PCGExFlowBreak.h"
 
 #include "Core/PCGExFilterTypeSets.h"
 #include "PCGGraph.h"
@@ -127,12 +127,12 @@ TArray<FPCGPinProperties> UPCGExRecursionTrackerSettings::OutputPinProperties() 
 
 FPCGElementPtr UPCGExRecursionTrackerSettings::CreateElement() const
 {
-	return MakeShared<FPCGExRecursionTrackerElement>();
+	return MakeShared<FPCGExFlowBreakElement>();
 }
 
 #pragma endregion
 
-bool FPCGExRecursionTrackerElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+bool FPCGExFlowBreakElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	PCGEX_CONTEXT()
 	PCGEX_SETTINGS(RecursionTracker)
@@ -159,7 +159,7 @@ bool FPCGExRecursionTrackerElement::AdvanceWork(FPCGExContext* InContext, const 
 	EPCGExRecursionTrackerMode SafeMode = Settings->Mode;
 
 	TArray<FPCGTaggedData> TaggedData = Context->InputData.GetParamsByPin(PCGExRecursionTracker::SourceTrackerLabel);
-	TSharedPtr<PCGExData::FPointIOCollection> TrackersCollection = MakeShared<PCGExData::FPointIOCollection>(Context, TaggedData, PCGExData::EIOInit::NoInit, true);
+	TSharedPtr<PCGExData::FPointIOCollection> TrackersCollection = MakeShared<PCGExData::FPointIOCollection>(Context, TaggedData, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 	TSharedPtr<PCGExPointFilter::FManager> CollectionFilters = nullptr;
 
 	TArray<TSharedPtr<PCGExData::FPointIO>> ValidInputs;
@@ -341,7 +341,7 @@ Context->StageOutput(Extra, PCGExRecursionTracker::Output##_NAME##Label, PCGExDa
 
 			if (bDoAdditionalDataTesting)
 			{
-				TSharedPtr<PCGExData::FPointIOCollection> TestDataCollection = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExRecursionTracker::SourceTestData, PCGExData::EIOInit::NoInit, true);
+				TSharedPtr<PCGExData::FPointIOCollection> TestDataCollection = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExRecursionTracker::SourceTestData, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 
 				if (TestDataCollection->IsEmpty())
 				{

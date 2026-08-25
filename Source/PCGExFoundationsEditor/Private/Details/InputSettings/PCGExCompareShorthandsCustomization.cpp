@@ -7,10 +7,8 @@
 #include "DetailWidgetRow.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExCustomizationMacros.h"
-#include "Details/Enums/PCGExInlineEnumCustomization.h"
-#include "UObject/TextProperty.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExCompareShorthandCustomization::MakeInstance()
@@ -29,6 +27,7 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 	TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));
 	TSharedPtr<IPropertyHandle> AttributeHandle = PropertyHandle->GetChildHandle(FName("Attribute"));
 	TSharedPtr<IPropertyHandle> ToleranceHandle = PropertyHandle->GetChildHandle(FName("Tolerance"));
+	TSharedPtr<IPropertyHandle> CleanupHandle = PropertyHandle->GetChildHandle(FName("bCleanupAttribute"));
 
 	HeaderRow.NameContent()
 		[
@@ -36,10 +35,6 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 			+ SHorizontalBox::Slot().Padding(1).MinWidth(30)
 			[
 				ComparisonHandle->CreatePropertyValueWidget()
-			]
-			+ SHorizontalBox::Slot().Padding(1).AutoWidth()
-			[
-				PCGExEnumCustomization::CreateRadioGroup(InputHandle, TEXT("EPCGExInputValueType"))
 			]
 			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[
@@ -50,7 +45,7 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 		.MinDesiredWidth(400)
 		[
 			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().Padding(1)
+			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[
 				SNew(SBox)
 				.Visibility(
@@ -65,7 +60,7 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 					CreateValueWidget(ConstantHandle)
 				]
 			]
-			+ SHorizontalBox::Slot().Padding(1)
+			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[
 				SNew(SBox)
 				.Visibility(
@@ -100,35 +95,10 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 					ToleranceHandle->CreatePropertyValueWidget()
 				]
 			]
-		];
-}
-
-void FPCGExCompareShorthandCustomization::CustomizeChildren(
-	TSharedRef<IPropertyHandle> PropertyHandle,
-	IDetailChildrenBuilder& ChildBuilder,
-	IPropertyTypeCustomizationUtils& CustomizationUtils)
-{
-}
-
-TSharedRef<SWidget> FPCGExCompareShorthandCustomization::CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle)
-{
-	return ValueHandle->CreatePropertyValueWidget();
-}
-
-TSharedRef<SWidget> FPCGExCompareShorthandCustomization::CreateAttributeWidget(TSharedPtr<IPropertyHandle> AttributeHandle)
-{
-	FProperty* Prop = AttributeHandle->GetProperty();
-	if (CastField<FNameProperty>(Prop) || CastField<FTextProperty>(Prop))
-	{
-		return AttributeHandle->CreatePropertyValueWidget();
-	}
-
-	// Reuse PCG's selector widget (falls back to the default widget if the type has no customization).
-	return SNew(SBox)
-		.VAlign(VAlign_Center)
-		.MaxDesiredHeight(22.0f)
-		[
-			AttributeHandle->CreatePropertyValueWidgetWithCustomization(nullptr)
+			+ SHorizontalBox::Slot().Padding(1).AutoWidth().VAlign(VAlign_Center)
+			[
+				PCGExInputShorthandsCustomization::CreateOptionsPopover(InputHandle, CleanupHandle)
+			]
 		];
 }
 
