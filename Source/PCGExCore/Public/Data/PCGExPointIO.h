@@ -55,9 +55,13 @@ namespace PCGExData
 		TSharedPtr<IPCGAttributeAccessorKeys> OutKeys;
 
 
-		const UPCGData* OriginalIn = nullptr;  // Input PointData	
-		const UPCGBasePointData* In = nullptr; // Input PointData	
+		const UPCGData* OriginalIn = nullptr;  // Input PointData
+		const UPCGBasePointData* In = nullptr; // Input PointData
 		UPCGBasePointData* Out = nullptr;      // Output PointData
+
+		// Non-point output payload; when set, StageOutput stages it instead of Out.
+		TObjectPtr<UPCGData> OutputOverride = nullptr;
+		bool bOwnsOutputOverride = false;
 
 		TWeakPtr<FPointIO> RootIO;
 		std::atomic<bool> bIsEnabled{true};
@@ -103,7 +107,11 @@ namespace PCGExData
 		bool InitializeOutput(const EIOInit InitOut = EIOInit::NoInit)
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(FPointIO::InitializeOutput);
-			
+
+			// Converted inputs are read-only: any Out derived from the temp conversion would parent
+			// its metadata to transient data (see PCGExPointIO::ToPointData).
+			check(InitOut == EIOInit::NoInit || !IsConvertedInput())
+
 			PCGEX_SHARED_CONTEXT(ContextHandle)
 
 			if (LastInit == InitOut)
@@ -374,6 +382,25 @@ namespace PCGExData
 			return bIsEnabled.load(std::memory_order_acquire);
 		}
 
+		/** True when In is a temp conversion of a non-point input (see PCGExPointIO::ToPointData). */
+		FORCEINLINE bool IsConvertedInput() const
+		{
+			return InitializationData && InitializationData != In;
+		}
+
+		/** Route staging to a non-point payload (e.g. a param data rebuilt from the original input).
+		 * bOwned: this IO's context created the data (staged Managed|Mutable); otherwise it forwards an input. */
+		void SetOutputOverride(UPCGData* InData, const bool bOwned)
+		{
+			OutputOverride = InData;
+			bOwnsOutputOverride = bOwned;
+		}
+
+		FORCEINLINE bool HasOutputOverride() const
+		{
+			return OutputOverride != nullptr;
+		}
+
 		bool StageOutput(FPCGExContext* TargetContext) const;
 		bool StageOutput(FPCGExContext* TargetContext, const int32 MinPointCount, const int32 MaxPointCount) const;
 		bool StageAnyOutput(FPCGExContext* TargetContext) const;
@@ -475,12 +502,12 @@ namespace PCGExData
 	protected:
 		mutable FRWLock PairsLock;
 		TWeakPtr<FPCGContextHandle> ContextHandle;
-		bool bTransactional = false;
+		EIOHandling Handling = EIOHandling::Points;
 
 	public:
-		explicit FPointIOCollection(FPCGExContext* InContext, bool bIsTransactional = false);
-		FPointIOCollection(FPCGExContext* InContext, FName InputLabel, EIOInit InitOut = EIOInit::NoInit, bool bIsTransactional = false);
-		FPointIOCollection(FPCGExContext* InContext, TArray<FPCGTaggedData>& Sources, EIOInit InitOut = EIOInit::NoInit, bool bIsTransactional = false);
+		explicit FPointIOCollection(FPCGExContext* InContext, EIOHandling InHandling = EIOHandling::Points);
+		FPointIOCollection(FPCGExContext* InContext, FName InputLabel, EIOInit InitOut = EIOInit::NoInit, EIOHandling InHandling = EIOHandling::Points);
+		FPointIOCollection(FPCGExContext* InContext, TArray<FPCGTaggedData>& Sources, EIOInit InitOut = EIOInit::NoInit, EIOHandling InHandling = EIOHandling::Points);
 
 		~FPointIOCollection();
 

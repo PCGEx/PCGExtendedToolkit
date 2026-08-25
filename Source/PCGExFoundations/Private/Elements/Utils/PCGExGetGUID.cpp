@@ -21,9 +21,9 @@ TArray<FPCGPinProperties> UPCGExGetGUIDSettings::OutputPinProperties() const
 
 PCGEX_INITIALIZE_ELEMENT(GetGUID)
 
-bool UPCGExGetGUIDSettings::GetIsMainTransactional() const
+PCGExData::EIOHandling UPCGExGetGUIDSettings::GetMainDataHandling() const
 {
-	return true;
+	return PCGExData::EIOHandling::Transactional;
 }
 
 bool FPCGExGetGUIDElement::Boot(FPCGExContext* InContext) const

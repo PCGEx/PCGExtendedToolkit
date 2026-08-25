@@ -92,7 +92,7 @@ bool FPCGExSampleVtxByIDElement::Boot(FPCGExContext* InContext) const
 
 	FBox OctreeBounds = FBox(ForceInit);
 
-	TSharedPtr<PCGExData::FPointIOCollection> Targets = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExClusters::Labels::SourceVerticesLabel, PCGExData::EIOInit::NoInit, true);
+	TSharedPtr<PCGExData::FPointIOCollection> Targets = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExClusters::Labels::SourceVerticesLabel, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 
 	if (Targets->IsEmpty())
 	{

@@ -782,7 +782,7 @@ namespace PCGExExtrudeTensors
 		if (Settings->bDoExternalPathIntersections)
 		{
 			// Gather external paths synchronously
-			TSharedPtr<PCGExData::FPointIOCollection> PathCollection = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExPaths::Labels::SourcePathsLabel, PCGExData::EIOInit::NoInit, false);
+			TSharedPtr<PCGExData::FPointIOCollection> PathCollection = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExPaths::Labels::SourcePathsLabel, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Points);
 
 			if (!PathCollection->Pairs.IsEmpty())
 			{

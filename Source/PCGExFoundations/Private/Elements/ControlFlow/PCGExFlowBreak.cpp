@@ -159,7 +159,7 @@ bool FPCGExFlowBreakElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 	EPCGExRecursionTrackerMode SafeMode = Settings->Mode;
 
 	TArray<FPCGTaggedData> TaggedData = Context->InputData.GetParamsByPin(PCGExRecursionTracker::SourceTrackerLabel);
-	TSharedPtr<PCGExData::FPointIOCollection> TrackersCollection = MakeShared<PCGExData::FPointIOCollection>(Context, TaggedData, PCGExData::EIOInit::NoInit, true);
+	TSharedPtr<PCGExData::FPointIOCollection> TrackersCollection = MakeShared<PCGExData::FPointIOCollection>(Context, TaggedData, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 	TSharedPtr<PCGExPointFilter::FManager> CollectionFilters = nullptr;
 
 	TArray<TSharedPtr<PCGExData::FPointIO>> ValidInputs;
@@ -341,7 +341,7 @@ Context->StageOutput(Extra, PCGExRecursionTracker::Output##_NAME##Label, PCGExDa
 
 			if (bDoAdditionalDataTesting)
 			{
-				TSharedPtr<PCGExData::FPointIOCollection> TestDataCollection = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExRecursionTracker::SourceTestData, PCGExData::EIOInit::NoInit, true);
+				TSharedPtr<PCGExData::FPointIOCollection> TestDataCollection = MakeShared<PCGExData::FPointIOCollection>(Context, PCGExRecursionTracker::SourceTestData, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 
 				if (TestDataCollection->IsEmpty())
 				{

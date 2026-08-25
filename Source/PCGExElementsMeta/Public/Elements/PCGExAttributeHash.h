@@ -36,8 +36,6 @@ protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
 
-	virtual bool GetIsMainTransactional() const override;
-
 public:
 	/** Configuration for which attributes to hash and how. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
