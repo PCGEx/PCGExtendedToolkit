@@ -88,6 +88,9 @@ namespace PCGExClusters
 		/** Node-indexed 3D positions for cluster-free builds (feeds FRawFace::Bounds3D). Empty on cluster builds. */
 		TArray<FVector> StandalonePositions3D;
 
+		/** Node count for cluster-free builds (see GetNumNodes). */
+		int32 StandaloneNumNodes = 0;
+
 		/** Node-indexed projected positions (size = NumNodes, access via NodeIndex). nullptr when bIsLocalTangent. */
 		TSharedPtr<TArray<FVector2D>> ProjectedPositions;
 
@@ -141,6 +144,15 @@ namespace PCGExClusters
 			TConstArrayView<uint64> InEdges,
 			const TSharedPtr<TArray<FVector2D>>& InNodeIndexedPositions,
 			TConstArrayView<FVector> InNodePositions3D = TConstArrayView<FVector>());
+
+		/**
+		 * Cluster-free LOCAL-TANGENT build: node-indexed 3D positions + node-index edge pairs, no shared
+		 * 2D space. Faces enumerate through the two-phase piecewise-planar path (planar patches, then a
+		 * parallel-transported walk); cell building still requires a cluster-built enumerator.
+		 * @param InNumNodes Node count; InNodePositions3D must be this size. Copied.
+		 * @param InEdges Undirected edges as PCGEx::H64(NodeA, NodeB) — NODE indices.
+		 */
+		void Build(int32 InNumNodes, TConstArrayView<uint64> InEdges, TConstArrayView<FVector> InNodePositions3D);
 
 		/**
 		 * Build the DCEL structure using per-node local tangent frames for non-planar clusters.
@@ -330,6 +342,9 @@ namespace PCGExClusters
 
 		/** Node 3D position regardless of build path: cluster, standalone array, or 2D lifted at Z=0. */
 		FVector GetNodePos3D(int32 NodeIdx) const;
+
+		/** Node count regardless of build path. */
+		int32 GetNumNodes() const;
 
 		/** Walk a face's projected polygon starting from one of its half-edges. Global-projection builds only. */
 		void BuildFacePolygonFrom(int32 StartHalfEdge, TArray<FVector2D>& OutPolygon) const;

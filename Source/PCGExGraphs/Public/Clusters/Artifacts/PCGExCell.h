@@ -276,12 +276,16 @@ namespace PCGExClusters
 		int32 CustomIndex = -1;
 		int32 FaceIndex = -1; // Index from the planar face enumerator (for adjacency lookups)
 
-		/** LocalTangent only: the per-face frame Polygon was built in (rotation-only mapping, see
-		 *  FPCGExGeo2DProjectionDetails::Project) and the face plane's Z in that frame. Containment
-		 *  queries against this cell must re-project through these -- there is no shared 2D space. */
-		FQuat LocalProjectionQuat = FQuat::Identity;
-		double LocalPlaneZ = 0;
-		bool bHasLocalProjection = false;
+		/** The cell's own best-fit plane, ALL modes: a rotation-only frame (see
+		 *  FPCGExGeo2DProjectionDetails::Project) plus the plane's Z in it. Drives distance-to-plane
+		 *  gating in ContainsPoint; in LocalTangent it is also the frame Polygon was built in. */
+		FQuat FacePlaneQuat = FQuat::Identity;
+		double FacePlaneZ = 0;
+		bool bHasFacePlane = false;
+
+		/** LocalTangent only: Polygon's 2D coordinates live in the face frame above, not in a shared
+		 *  global projection -- containment queries must re-project through it. */
+		bool bPolygonInFaceFrame = false;
 
 		// Expansion tracking (populated when seeds grow)
 		int32 ExpansionPickCount = 0; // Number of times this cell was selected (by seeds/growth)
@@ -302,9 +306,9 @@ namespace PCGExClusters
 		 * Point-in-cell test in the cell's OWN 2D space: the shared global projection normally, the
 		 * per-face frame when built with LocalTangent (InPos3D is then re-projected here).
 		 * @param InGlobalProjected The point in the shared global projection (ignored on the local path)
-		 * @param InPos3D The point's world position (ignored on the global path)
-		 * @param InMaxPlaneDistSq Local path only: reject when the point sits further than this (squared)
-		 *        from the face plane; < 0 disables the gate
+		 * @param InPos3D The point's world position (also feeds the plane-distance gate, all modes)
+		 * @param InMaxPlaneDistSq Reject when the point sits further than this (squared) from the cell's
+		 *        best-fit plane; < 0 disables the gate
 		 */
 		bool ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, double InMaxPlaneDistSq = -1) const;
 	};

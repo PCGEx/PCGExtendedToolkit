@@ -69,6 +69,7 @@ namespace PCGExClusters
 
 		Cluster = nullptr;
 		StandalonePositions3D = TArray<FVector>(InNodePositions3D);
+		StandaloneNumNodes = InNumNodes;
 		ProjectedPositions = InNodeIndexedPositions;
 		NodeTangentFrames = nullptr;
 		bIsLocalTangent = false;
@@ -161,6 +162,47 @@ namespace PCGExClusters
 			// This gives us faces with interior on the LEFT (CCW traversal)
 			const int32 NextPosInList = (TwinPosInList + 1) % TargetOutgoing.Num();
 			HE.NextIndex = TargetOutgoing[NextPosInList];
+		}
+
+		NumFaces = 0;
+		bRawFacesEnumerated = false;
+		CachedRawFaces.Reset();
+	}
+
+	void FPlanarFaceEnumerator::Build(const int32 InNumNodes, TConstArrayView<uint64> InEdges, TConstArrayView<FVector> InNodePositions3D)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::Build::StandaloneLocalTangent);
+
+		Cluster = nullptr;
+		StandalonePositions3D = TArray<FVector>(InNodePositions3D);
+		StandaloneNumNodes = InNumNodes;
+		ProjectedPositions = nullptr;
+		NodeTangentFrames = nullptr;
+		bIsLocalTangent = true;
+
+		// Half-edges + twins only: the two-phase LocalTangent enumeration computes its own successor
+		// choices, so no angles and no next-linking are needed here.
+		const int32 NumEdges = InEdges.Num();
+		HalfEdges.Reset();
+		HalfEdges.Reserve(NumEdges * 2);
+		HalfEdgeMap.Reset();
+		HalfEdgeMap.Reserve(NumEdges * 2);
+
+		for (int32 EdgeIdx = 0; EdgeIdx < NumEdges; ++EdgeIdx)
+		{
+			const int32 NodeA = PCGEx::H64A(InEdges[EdgeIdx]);
+			const int32 NodeB = PCGEx::H64B(InEdges[EdgeIdx]);
+
+			const int32 IndexAB = HalfEdges.Num();
+			HalfEdges.Emplace(NodeA, NodeB, 0);
+			HalfEdgeMap.Add(PCGEx::H64(NodeA, NodeB), IndexAB);
+
+			const int32 IndexBA = HalfEdges.Num();
+			HalfEdges.Emplace(NodeB, NodeA, 0);
+			HalfEdgeMap.Add(PCGEx::H64(NodeB, NodeA), IndexBA);
+
+			HalfEdges[IndexAB].TwinIndex = IndexBA;
+			HalfEdges[IndexBA].TwinIndex = IndexAB;
 		}
 
 		NumFaces = 0;
@@ -381,11 +423,16 @@ namespace PCGExClusters
 		return FVector(Pos2D.X, Pos2D.Y, 0);
 	}
 
+	int32 FPlanarFaceEnumerator::GetNumNodes() const
+	{
+		return Cluster ? Cluster->Nodes->Num() : StandaloneNumNodes;
+	}
+
 	void FPlanarFaceEnumerator::EnumeratePlanarPatchFaces(TArray<bool>& VisitedHalfEdges)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::EnumeratePlanarPatchFaces);
 
-		const int32 NumNodes = Cluster->Nodes->Num();
+		const int32 NumNodes = GetNumNodes();
 		const TArray<FQuat>* Frames = NodeTangentFrames.Get();
 
 		// Undirected edge list + per-node incidence, from the half-edges themselves
@@ -409,7 +456,7 @@ namespace PCGExClusters
 				NodeUEdges[HE.OriginNode].Add(UIdx);
 				NodeUEdges[HE.TargetNode].Add(UIdx);
 			}
-			NodeBounds += Cluster->GetPos(HE.OriginNode);
+			NodeBounds += GetNodePos3D(HE.OriginNode);
 		}
 
 		const int32 NumUEdges = UEdges.Num();
@@ -426,13 +473,13 @@ namespace PCGExClusters
 		TArray<bool> InPatch; // scratch, reused per growth
 		InPatch.SetNumZeroed(NumUEdges);
 
-		auto EdgeDir = [&](const FUEdge& E) { return (Cluster->GetPos(E.B) - Cluster->GetPos(E.A)).GetSafeNormal(); };
+		auto EdgeDir = [&](const FUEdge& E) { return (GetNodePos3D(E.B) - GetNodePos3D(E.A)).GetSafeNormal(); };
 
 		// Grow the maximal set of edges coplanar with (PlaneOrigin, PlaneNormal), starting from SeedEdge.
 		auto GrowPatch = [&](const int32 SeedEdge, const FVector& PlaneOrigin, const FVector& PlaneNormal, TArray<int32>& OutEdges)
 		{
 			OutEdges.Reset();
-			auto OnPlane = [&](const int32 NodeIdx) { return FMath::Abs(FVector::DotProduct(Cluster->GetPos(NodeIdx) - PlaneOrigin, PlaneNormal)) <= PlaneTol; };
+			auto OnPlane = [&](const int32 NodeIdx) { return FMath::Abs(FVector::DotProduct(GetNodePos3D(NodeIdx) - PlaneOrigin, PlaneNormal)) <= PlaneTol; };
 
 			TArray<int32> NodeQueue;
 			auto Absorb = [&](const int32 UIdx)
@@ -468,6 +515,10 @@ namespace PCGExClusters
 		TArray<int32> PatchEdges;
 		TArray<int32> BestPatchEdges;
 
+		// One shared projection buffer across every patch: throwaway enumerators release their reference
+		// at the end of each iteration, so re-zeroing is safe and saves a NumNodes-sized allocation per patch.
+		const TSharedPtr<TArray<FVector2D>> PatchPositions = MakeShared<TArray<FVector2D>>();
+
 		for (int32 SeedEdge = 0; SeedEdge < NumUEdges; ++SeedEdge)
 		{
 			if (EdgeSeeded[SeedEdge])
@@ -479,7 +530,7 @@ namespace PCGExClusters
 			// plane absorbing the most edges (a bogus diagonal plane absorbs almost nothing).
 			const FUEdge& Seed = UEdges[SeedEdge];
 			const FVector SeedDir = EdgeDir(Seed);
-			const FVector SeedOrigin = Cluster->GetPos(Seed.A);
+			const FVector SeedOrigin = GetNodePos3D(Seed.A);
 
 			FVector BestNormal = FVector::ZeroVector;
 			BestPatchEdges.Reset();
@@ -541,7 +592,6 @@ namespace PCGExClusters
 			// (X, Y, n) right-handed so CCW-in-basis = CCW about the aligned normal
 			BasisY = FVector::CrossProduct(BestNormal, BasisX);
 
-			const TSharedPtr<TArray<FVector2D>> PatchPositions = MakeShared<TArray<FVector2D>>();
 			PatchPositions->SetNumZeroed(NumNodes);
 			TArray<uint64> PatchEdgePairs;
 			PatchEdgePairs.Reserve(BestPatchEdges.Num());
@@ -550,7 +600,7 @@ namespace PCGExClusters
 				const FUEdge& E = UEdges[UIdx];
 				for (const int32 NodeIdx : {E.A, E.B})
 				{
-					const FVector Rel = Cluster->GetPos(NodeIdx) - SeedOrigin;
+					const FVector Rel = GetNodePos3D(NodeIdx) - SeedOrigin;
 					(*PatchPositions)[NodeIdx] = FVector2D(FVector::DotProduct(Rel, BasisX), FVector::DotProduct(Rel, BasisY));
 				}
 				PatchEdgePairs.Add(PCGEx::H64(E.A, E.B));
@@ -613,7 +663,7 @@ namespace PCGExClusters
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::EnumerateRawFacesTransported);
 
-		const int32 NumNodes = Cluster->Nodes->Num();
+		const int32 NumNodes = GetNumNodes();
 
 		// Outgoing half-edges per node (Build's local copy is long gone)
 		TArray<TArray<int32>> OutgoingByNode;
@@ -659,8 +709,8 @@ namespace PCGExClusters
 				HalfEdges[CurrentHE].FaceIndex = NumFaces;
 
 				const FHalfEdge& HE = HalfEdges[CurrentHE];
-				const FVector Target = Cluster->GetPos(HE.TargetNode);
-				const FVector Dir = (Target - Cluster->GetPos(HE.OriginNode)).GetSafeNormal();
+				const FVector Target = GetNodePos3D(HE.TargetNode);
+				const FVector Dir = (Target - GetNodePos3D(HE.OriginNode)).GetSafeNormal();
 
 				// Transport the normal across this edge
 				if (!Dir.IsNearlyZero())
@@ -699,7 +749,7 @@ namespace PCGExClusters
 						continue;
 					}
 
-					const FVector CandDir = (Cluster->GetPos(HalfEdges[CandHE].TargetNode) - Target).GetSafeNormal();
+					const FVector CandDir = (GetNodePos3D(HalfEdges[CandHE].TargetNode) - Target).GetSafeNormal();
 					const double NormalDot = FVector::DotProduct(CandDir, Normal);
 					const FVector InPlane = CandDir - NormalDot * Normal;
 					const double InPlaneLen = InPlane.Size();
@@ -1188,33 +1238,30 @@ namespace PCGExClusters
 		OutCell->Polygon.SetNumUninitialized(NumOutputNodes);
 		OutCell->Bounds2D = FBox2D(ForceInit);
 
-		// Per-face local projection for LocalTangent (computed once, used for polygon + holes)
+		// Per-face best-fit plane, BOTH modes: LocalTangent polygons live in it, and ContainsPoint's
+		// distance-to-plane gate reads it whatever the projection (rotation is linear, so the plane's Z
+		// in the rotated frame is just the rotated centroid's Z).
+		PCGExMath::FBestFitPlane FacePlane(NumUniqueNodes,
+		                                   [&](int32 i)
+		                                   {
+			                                   return Cluster->GetPos(FaceNodes[i]);
+		                                   });
 		FPCGExGeo2DProjectionDetails FaceProjection;
+		FaceProjection.Init(FacePlane);
+
+		OutCell->FacePlaneQuat = FaceProjection.ProjectionQuat;
+		OutCell->FacePlaneZ = FaceProjection.Project(OutCell->Data.Centroid).Z;
+		OutCell->bHasFacePlane = true;
+		OutCell->bPolygonInFaceFrame = bIsLocalTangent;
 
 		if (bIsLocalTangent)
 		{
-			// Compute best-fit plane from the face nodes' 3D positions
-			PCGExMath::FBestFitPlane FacePlane(NumUniqueNodes,
-			                                   [&](int32 i)
-			                                   {
-				                                   return Cluster->GetPos(FaceNodes[i]);
-			                                   });
-			FaceProjection.Init(FacePlane);
-
-			double PlaneZ = 0;
 			for (int32 i = 0; i < NumOutputNodes; ++i)
 			{
 				const FVector Projected = FaceProjection.Project(Cluster->GetPos(OutCell->Nodes[i]));
 				OutCell->Polygon[i] = FVector2D(Projected.X, Projected.Y);
 				OutCell->Bounds2D += OutCell->Polygon[i];
-				PlaneZ += Projected.Z;
 			}
-
-			// Kept on the cell: containment queries must re-project through THIS frame -- LocalTangent
-			// has no shared 2D space (see FCell::ContainsPoint).
-			OutCell->LocalProjectionQuat = FaceProjection.ProjectionQuat;
-			OutCell->LocalPlaneZ = PlaneZ / NumOutputNodes;
-			OutCell->bHasLocalProjection = true;
 		}
 		else
 		{

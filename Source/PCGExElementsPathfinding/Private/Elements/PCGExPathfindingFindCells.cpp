@@ -302,7 +302,7 @@ namespace PCGExFindContours
 					{
 						continue;
 					}
-					const double DistSq = Cell->bHasLocalProjection ? FMath::Square(Cell->LocalProjectionQuat.UnrotateVector(SeedPos).Z - Cell->LocalPlaneZ) : 0.0;
+					const double DistSq = Cell->bHasFacePlane ? FMath::Square(Cell->FacePlaneQuat.UnrotateVector(SeedPos).Z - Cell->FacePlaneZ) : 0.0;
 					if (DistSq < BestDistSq)
 					{
 						BestDistSq = DistSq;
