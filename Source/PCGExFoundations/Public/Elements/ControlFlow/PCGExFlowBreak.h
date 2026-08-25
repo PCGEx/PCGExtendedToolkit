@@ -8,7 +8,7 @@
 #include "PCGExVersion.h"
 #include "Core/PCGExPointsProcessor.h"
 
-#include "PCGExRecursionTracker.generated.h"
+#include "PCGExFlowBreak.generated.h"
 
 UENUM()
 enum class EPCGExRecursionTrackerType : uint8
@@ -44,7 +44,7 @@ class UPCGExRecursionTrackerSettings : public UPCGExSettings
 {
 	GENERATED_BODY()
 
-	friend class FPCGExRecursionTrackerElement;
+	friend class FPCGExFlowBreakElement;
 
 public:
 	//~Begin UPCGSettings
@@ -150,7 +150,7 @@ protected:
 	bool bGroupBranchPins = false;
 };
 
-class FPCGExRecursionTrackerElement final : public IPCGExElement
+class FPCGExFlowBreakElement final : public IPCGExElement
 {
 public:
 	PCGEX_ELEMENT_CREATE_DEFAULT_CONTEXT
