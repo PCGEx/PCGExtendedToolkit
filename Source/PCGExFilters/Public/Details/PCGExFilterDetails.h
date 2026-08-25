@@ -10,6 +10,9 @@
 class UPCGData;
 struct FPCGExContext;
 
+template <typename T>
+class FPCGMetadataAttribute;
+
 namespace PCGExMT
 {
 	struct FScope;
@@ -114,6 +117,11 @@ struct PCGEXFILTERS_API FPCGExFilterResultDetails
 	void Write(const PCGExMT::FScope& Scope, const TArray<int8>& Results) const;
 	void Write(const PCGExMT::FScope& Scope, const TBitArray<>& Results) const;
 
+	/** Metadata counterpart of Init for non-point data (attribute sets): creates or loads the result attribute on InData. */
+	bool InitForData(UPCGData* InData);
+	/** Applies per-row results to entry keys 0..Results.Num()-1 of the data passed to InitForData. */
+	void WriteToData(const TArray<int8>& Results) const;
+
 #if WITH_EDITOR
 	void ApplyDeprecation()
 	{
@@ -128,6 +136,10 @@ protected:
 	TSharedPtr<PCGExData::TBuffer<bool>> BoolBuffer;
 	TSharedPtr<PCGExData::TBuffer<double>> IncrementBuffer;
 	TSharedPtr<PCGExData::TBuffer<int64>> BitmaskBuffer;
+
+	FPCGMetadataAttribute<bool>* BoolAttribute = nullptr;
+	FPCGMetadataAttribute<double>* IncrementAttribute = nullptr;
+	FPCGMetadataAttribute<int64>* BitmaskAttribute = nullptr;
 };
 
 namespace PCGEx

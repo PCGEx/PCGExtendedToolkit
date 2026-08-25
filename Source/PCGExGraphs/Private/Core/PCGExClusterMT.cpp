@@ -173,89 +173,134 @@ namespace PCGExClusterMT
 					TSharedPtr<TArray<FQuat>> TangentFrames = MakeShared<TArray<FQuat>>();
 					TangentFrames->SetNumUninitialized(ClusterNumNodes);
 
-					// Step 1: Compute raw normal for each node from adjacent edges
+					// Step 1: Compute raw normal for each node from adjacent edges. A node whose links are
+					// COLLINEAR (straight chains, leaves) has no normal of its own -- Cross/CrossLen there is
+					// 0/0 = NaN, which used to reach MakeFromZX and trip TMatrix::ToQuat. Such nodes are
+					// marked and inherit a neighbor's normal during propagation instead.
 					TArray<FVector> NodeNormals;
 					NodeNormals.SetNumUninitialized(ClusterNumNodes);
+					TArray<bool> ValidNormals;
+					ValidNormals.SetNumZeroed(ClusterNumNodes);
 
-					for (int32 NodeIdx = 0; NodeIdx < ClusterNumNodes; ++NodeIdx)
-					{
-						const PCGExClusters::FNode& Node = NodesRef[NodeIdx];
-						const FVector NodePos = Cluster->GetPos(NodeIdx);
-						FVector Normal = FVector::ZeroVector;
+					// Per-node independent, so a solo-cluster workload may fan it out -- with many
+					// clusters in flight the batch already owns the parallelism (bSoloClusterWorkload).
+					const int32 NestedParallelThreshold = bSoloClusterWorkload ? 4096 : MAX_int32;
 
-						if (Node.Num() >= 2)
+					PCGExMT::ParallelOrSequential(
+						ClusterNumNodes, [&](const int32 NodeIdx)
 						{
-							// Find the two most linearly independent edges for a robust cross product
-							double BestCross = -1.0;
-							FVector BestNormal = FVector::UpVector;
+							const PCGExClusters::FNode& Node = NodesRef[NodeIdx];
+							const FVector NodePos = Cluster->GetPos(NodeIdx);
+							FVector Normal = FVector::UpVector; // placeholder for nodes propagation never reaches
 
-							for (int32 i = 0; i < Node.Num(); ++i)
+							if (Node.Num() >= 2)
 							{
-								const FVector DirA = (Cluster->GetPos(Node.Links[i].Node) - NodePos).GetSafeNormal();
-								for (int32 j = i + 1; j < Node.Num(); ++j)
+								// Link directions once per node -- the pair scan below would otherwise
+								// renormalize each one O(degree) times
+								TArray<FVector, TInlineAllocator<8>> LinkDirs;
+								LinkDirs.Reserve(Node.Num());
+								for (const PCGExGraphs::FLink& Link : Node.Links)
 								{
-									const FVector DirB = (Cluster->GetPos(Node.Links[j].Node) - NodePos).GetSafeNormal();
-									const FVector Cross = FVector::CrossProduct(DirA, DirB);
-									const double CrossLen = Cross.Size();
-									if (CrossLen > BestCross)
+									LinkDirs.Add((Cluster->GetPos(Link.Node) - NodePos).GetSafeNormal());
+								}
+
+								// Find the two most linearly independent edges for a robust cross product
+								double BestCross = 0.0;
+								FVector BestNormal = FVector::ZeroVector;
+
+								for (int32 i = 0; i < LinkDirs.Num(); ++i)
+								{
+									for (int32 j = i + 1; j < LinkDirs.Num(); ++j)
 									{
-										BestCross = CrossLen;
-										BestNormal = Cross / CrossLen;
+										const FVector Cross = FVector::CrossProduct(LinkDirs[i], LinkDirs[j]);
+										const double CrossLen = Cross.Size();
+										if (CrossLen > BestCross)
+										{
+											BestCross = CrossLen;
+											BestNormal = Cross / CrossLen;
+										}
 									}
 								}
+
+								if (BestCross > UE_DOUBLE_KINDA_SMALL_NUMBER)
+								{
+									Normal = BestNormal;
+									ValidNormals[NodeIdx] = true;
+								}
 							}
-							Normal = BestNormal;
-						}
-						else
-						{
-							Normal = FVector::UpVector;
-						}
 
-						NodeNormals[NodeIdx] = Normal;
-					}
+							NodeNormals[NodeIdx] = Normal;
+						}, NestedParallelThreshold);
 
-					// Step 2: BFS normal consistency propagation (flip normals that disagree with parent)
+					// Step 2: BFS normal consistency propagation, per CONNECTED COMPONENT (a cluster may
+					// hold several). Roots prefer a valid-normal node so a placeholder never dictates a
+					// component's orientation; a normal-less node inherits its BFS parent's outright.
 					TArray<bool> Visited;
 					Visited.SetNumZeroed(ClusterNumNodes);
 					TArray<int32> BFSQueue;
 					BFSQueue.Reserve(ClusterNumNodes);
-					BFSQueue.Add(0);
-					Visited[0] = true;
 
-					for (int32 QueueIdx = 0; QueueIdx < BFSQueue.Num(); ++QueueIdx)
+					auto Propagate = [&](const int32 RootNode)
 					{
-						const int32 CurrentNode = BFSQueue[QueueIdx];
-						const PCGExClusters::FNode& Node = NodesRef[CurrentNode];
+						Visited[RootNode] = true;
+						BFSQueue.Reset();
+						BFSQueue.Add(RootNode);
 
-						for (const PCGExGraphs::FLink& Link : Node.Links)
+						for (int32 QueueIdx = 0; QueueIdx < BFSQueue.Num(); ++QueueIdx)
 						{
-							const int32 NeighborNode = Link.Node;
-							if (Visited[NeighborNode])
-							{
-								continue;
-							}
+							const int32 CurrentNode = BFSQueue[QueueIdx];
+							const PCGExClusters::FNode& Node = NodesRef[CurrentNode];
 
-							// Flip neighbor normal if it disagrees with current
-							if (FVector::DotProduct(NodeNormals[CurrentNode], NodeNormals[NeighborNode]) < 0)
+							for (const PCGExGraphs::FLink& Link : Node.Links)
 							{
-								NodeNormals[NeighborNode] = -NodeNormals[NeighborNode];
-							}
+								const int32 NeighborNode = Link.Node;
+								if (Visited[NeighborNode])
+								{
+									continue;
+								}
 
-							Visited[NeighborNode] = true;
-							BFSQueue.Add(NeighborNode);
+								if (!ValidNormals[NeighborNode])
+								{
+									NodeNormals[NeighborNode] = NodeNormals[CurrentNode];
+								}
+								// Flip neighbor normal if it disagrees with current
+								else if (FVector::DotProduct(NodeNormals[CurrentNode], NodeNormals[NeighborNode]) < 0)
+								{
+									NodeNormals[NeighborNode] = -NodeNormals[NeighborNode];
+								}
+
+								Visited[NeighborNode] = true;
+								BFSQueue.Add(NeighborNode);
+							}
+						}
+					};
+
+					for (int32 NodeIdx = 0; NodeIdx < ClusterNumNodes; ++NodeIdx)
+					{
+						if (!Visited[NodeIdx] && ValidNormals[NodeIdx])
+						{
+							Propagate(NodeIdx);
+						}
+					}
+					for (int32 NodeIdx = 0; NodeIdx < ClusterNumNodes; ++NodeIdx)
+					{
+						if (!Visited[NodeIdx])
+						{
+							Propagate(NodeIdx); // components with no usable normal at all keep placeholders
 						}
 					}
 
 					// Step 3: Build quaternions from oriented normals
 					// Use adaptive X hint per node to avoid degeneracy when normal ≈ hint direction
-					for (int32 NodeIdx = 0; NodeIdx < ClusterNumNodes; ++NodeIdx)
-					{
-						const FVector& N = NodeNormals[NodeIdx];
-						const FVector XHint = FMath::Abs(FVector::DotProduct(N, FVector::ForwardVector)) < 0.95
-							? FVector::ForwardVector
-							: FVector::RightVector;
-						(*TangentFrames)[NodeIdx] = FRotationMatrix::MakeFromZX(N, XHint).ToQuat();
-					}
+					PCGExMT::ParallelOrSequential(
+						ClusterNumNodes, [&](const int32 NodeIdx)
+						{
+							const FVector& N = NodeNormals[NodeIdx];
+							const FVector XHint = FMath::Abs(FVector::DotProduct(N, FVector::ForwardVector)) < 0.95
+								? FVector::ForwardVector
+								: FVector::RightVector;
+							(*TangentFrames)[NodeIdx] = FRotationMatrix::MakeFromZX(N, XHint).ToQuat();
+						}, NestedParallelThreshold);
 
 					// Cache on cluster
 					TSharedPtr<PCGExClusters::FCachedTangentFrames> CachedFrames = MakeShared<PCGExClusters::FCachedTangentFrames>();
@@ -817,6 +862,7 @@ namespace PCGExClusterMT
 				}
 
 				NewProcessor->bIsTrivial = IO->GetNum() < PCGEX_CORE_SETTINGS.SmallClusterSize;
+				NewProcessor->bSoloClusterWorkload = bSoloClusterWorkload;
 				Candidates[i] = NewProcessor;
 			}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 

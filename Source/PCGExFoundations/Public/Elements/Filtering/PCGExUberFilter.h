@@ -12,6 +12,7 @@
 #include "PCGExUberFilter.generated.h"
 
 class UPCGExPickerFactoryData;
+class UPCGParamData;
 
 namespace PCGExData
 {
@@ -63,6 +64,7 @@ public:
 
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 	virtual bool OutputPinsCanBeDeactivated() const override;
+	virtual bool HasDynamicPins() const override;
 
 protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
@@ -80,6 +82,7 @@ public:
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
 	virtual FName GetMainOutputPin() const override;
+	virtual PCGExData::EIOHandling GetMainDataHandling() const override;
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters, true)
 	//~End UPCGExPointsProcessorSettings
 
@@ -176,6 +179,9 @@ namespace PCGExUberFilter
 
 		bool bUsePicks = false;
 		TSet<int32> Picks;
+
+		// Non-null when the input is a converted attribute set; outputs are then rebuilt as param data.
+		const UPCGParamData* ParamSource = nullptr;
 
 	public:
 		TSharedPtr<PCGExData::FPointIO> Inside;

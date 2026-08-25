@@ -13,38 +13,9 @@ namespace PCGExMath
 {
 	namespace BestFitPlaneInternal
 	{
-		// Fast PCA-based best fit plane computation using covariance matrix
-		template <typename PointAccessor>
-		void ComputePCA(const int32 NumPoints, PointAccessor&& GetPoint, FVector& OutCentroid, FVector OutAxis[3], FVector& OutExtents, int32 OutSwizzle[3])
+		// Eigen-solve a symmetric 3x3 covariance into variance-ordered, right-handed axes (power iteration)
+		void SolveAxesFromCovariance(const double Cov[6], FVector OutAxis[3], int32 OutSwizzle[3])
 		{
-			// Compute centroid
-			OutCentroid = FVector::ZeroVector;
-			for (int32 i = 0; i < NumPoints; i++)
-			{
-				OutCentroid += GetPoint(i);
-			}
-			OutCentroid /= NumPoints;
-
-			// Build covariance matrix (symmetric 3x3)
-			double Cov[6] = {0, 0, 0, 0, 0, 0}; // XX, YY, ZZ, XY, XZ, YZ
-			for (int32 i = 0; i < NumPoints; i++)
-			{
-				const FVector P = GetPoint(i) - OutCentroid;
-				Cov[0] += P.X * P.X; // XX
-				Cov[1] += P.Y * P.Y; // YY
-				Cov[2] += P.Z * P.Z; // ZZ
-				Cov[3] += P.X * P.Y; // XY
-				Cov[4] += P.X * P.Z; // XZ
-				Cov[5] += P.Y * P.Z; // YZ
-			}
-
-			// Normalize
-			const double Scale = 1.0 / NumPoints;
-			for (int32 i = 0; i < 6; i++)
-			{
-				Cov[i] *= Scale;
-			}
-
 			// Find largest eigenvalue/eigenvector using power iteration (primary axis)
 			// Try different starting vectors in case one aligns with a zero-variance direction
 			const FVector StartVectors[3] = {FVector(1, 0, 0), FVector(0, 1, 0), FVector(0, 0, 1)};
@@ -159,6 +130,48 @@ namespace PCGExMath
 			OutAxis[0] = X;
 			OutAxis[1] = Y;
 			OutAxis[2] = Z;
+		}
+
+		// Normalized covariance of points around a given centroid (symmetric 3x3)
+		template <typename PointAccessor>
+		void BuildCovariance(const int32 NumPoints, PointAccessor&& GetPoint, const FVector& InCentroid, double OutCov[6])
+		{
+			for (int32 i = 0; i < 6; i++)
+			{
+				OutCov[i] = 0; // XX, YY, ZZ, XY, XZ, YZ
+			}
+			for (int32 i = 0; i < NumPoints; i++)
+			{
+				const FVector P = GetPoint(i) - InCentroid;
+				OutCov[0] += P.X * P.X; // XX
+				OutCov[1] += P.Y * P.Y; // YY
+				OutCov[2] += P.Z * P.Z; // ZZ
+				OutCov[3] += P.X * P.Y; // XY
+				OutCov[4] += P.X * P.Z; // XZ
+				OutCov[5] += P.Y * P.Z; // YZ
+			}
+			const double Scale = 1.0 / NumPoints;
+			for (int32 i = 0; i < 6; i++)
+			{
+				OutCov[i] *= Scale;
+			}
+		}
+
+		// Fast PCA-based best fit plane computation using covariance matrix
+		template <typename PointAccessor>
+		void ComputePCA(const int32 NumPoints, PointAccessor&& GetPoint, FVector& OutCentroid, FVector OutAxis[3], FVector& OutExtents, int32 OutSwizzle[3])
+		{
+			// Compute centroid
+			OutCentroid = FVector::ZeroVector;
+			for (int32 i = 0; i < NumPoints; i++)
+			{
+				OutCentroid += GetPoint(i);
+			}
+			OutCentroid /= NumPoints;
+
+			double Cov[6];
+			BuildCovariance(NumPoints, GetPoint, OutCentroid, Cov);
+			SolveAxesFromCovariance(Cov, OutAxis, OutSwizzle);
 
 			// Compute extents by projecting all points onto axes
 			FVector MinProj(TNumericLimits<double>::Max(), TNumericLimits<double>::Max(), TNumericLimits<double>::Max());
@@ -411,6 +424,20 @@ namespace PCGExMath
 				Centroid, Axis, Extents, Swizzle
 				);
 		}
+	}
+
+	FBestFitPlane FBestFitPlane::PlaneOnly(const int32 NumElements, FGetElementPositionCallback&& GetPointFunc, const FVector& InKnownCentroid)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FBestFitPlane::PlaneOnly);
+
+		FBestFitPlane Result;
+		Result.Centroid = InKnownCentroid;
+
+		double Cov[6];
+		BestFitPlaneInternal::BuildCovariance(NumElements, GetPointFunc, InKnownCentroid, Cov);
+		BestFitPlaneInternal::SolveAxesFromCovariance(Cov, Result.Axis, Result.Swizzle);
+
+		return Result;
 	}
 
 	FTransform FBestFitPlane::GetTransform() const
