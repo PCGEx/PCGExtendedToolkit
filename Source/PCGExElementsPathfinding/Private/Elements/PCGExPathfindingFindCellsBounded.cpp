@@ -449,6 +449,35 @@ namespace PCGExFindContoursBounded
 		}
 
 		EnumeratedCells = MoveTemp(AllCells);
+
+		// LocalTangent: arbitrate seed claims up front -- a seed sandwiched between STACKED parallel
+		// cells projects inside both, and only the nearest plane may own it.
+		if (Enumerator->IsLocalTangent())
+		{
+			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
+			const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
+
+			SeedBestFace.Init(INDEX_NONE, NumSeeds);
+			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
+			{
+				const FVector SeedPos = SeedTransforms[SeedIdx].GetLocation();
+				double BestDistSq = TNumericLimits<double>::Max();
+				for (const TSharedPtr<PCGExClusters::FCell>& Cell : EnumeratedCells)
+				{
+					if (!Cell || !Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedPos, MaxPlaneDistSq))
+					{
+						continue;
+					}
+					const double DistSq = Cell->bHasLocalProjection ? FMath::Square(Cell->LocalProjectionQuat.UnrotateVector(SeedPos).Z - Cell->LocalPlaneZ) : 0.0;
+					if (DistSq < BestDistSq)
+					{
+						BestDistSq = DistSq;
+						SeedBestFace[SeedIdx] = Cell->FaceIndex;
+					}
+				}
+			}
+		}
+
 		StartParallelLoopForRange(EnumeratedCells.Num(), 64);
 
 		return true;
@@ -486,10 +515,15 @@ namespace PCGExFindContoursBounded
 
 			CandidateSeeds.Reset();
 
-			// Find all seeds inside this cell
+			// Find all seeds inside this cell. When SeedBestFace was arbitrated (LocalTangent), only the
+			// nearest-plane containing cell may collect a seed -- containment alone is ambiguous there.
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
-				if (Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
+				const bool bClaimed = SeedBestFace.IsEmpty()
+					? Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq)
+					: SeedBestFace[SeedIdx] == Cell->FaceIndex;
+
+				if (bClaimed)
 				{
 					CandidateSeeds.Add(SeedIdx);
 
