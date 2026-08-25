@@ -18,12 +18,6 @@ bool UPCGExAttributeHashSettings::HasDynamicPins() const
 }
 
 PCGEX_INITIALIZE_ELEMENT(AttributeHash)
-
-bool UPCGExAttributeHashSettings::GetIsMainTransactional() const
-{
-	return Super::GetIsMainTransactional();
-}
-
 PCGEX_ELEMENT_BATCH_POINT_IMPL(AttributeHash)
 
 bool FPCGExAttributeHashElement::Boot(FPCGExContext* InContext) const

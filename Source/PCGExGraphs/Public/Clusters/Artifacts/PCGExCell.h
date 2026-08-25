@@ -180,6 +180,11 @@ namespace PCGExClusters
 
 		bool bBuildWrapper = true;
 
+		/** Compute each cell's best-fit FacePlane* during build. LocalTangent builds always do (the
+		 *  polygon lives in that frame); planar consumers opt in when distance-to-plane gating is on --
+		 *  otherwise the fit is dead work on every cell. */
+		bool bComputeFacePlanes = false;
+
 		TSharedPtr<FCell> WrapperCell;
 		TSharedPtr<FProjectedPointSet> Holes;
 		TSharedPtr<FPlanarFaceEnumerator> Enumerator;
@@ -276,6 +281,17 @@ namespace PCGExClusters
 		int32 CustomIndex = -1;
 		int32 FaceIndex = -1; // Index from the planar face enumerator (for adjacency lookups)
 
+		/** The cell's own best-fit plane, ALL modes: a rotation-only frame (see
+		 *  FPCGExGeo2DProjectionDetails::Project) plus the plane's Z in it. Drives distance-to-plane
+		 *  gating in ContainsPoint; in LocalTangent it is also the frame Polygon was built in. */
+		FQuat FacePlaneQuat = FQuat::Identity;
+		double FacePlaneZ = 0;
+		bool bHasFacePlane = false;
+
+		/** LocalTangent only: Polygon's 2D coordinates live in the face frame above, not in a shared
+		 *  global projection -- containment queries must re-project through it. */
+		bool bPolygonInFaceFrame = false;
+
 		// Expansion tracking (populated when seeds grow)
 		int32 ExpansionPickCount = 0; // Number of times this cell was selected (by seeds/growth)
 		int32 ExpansionMinDepth = 0;  // Minimum depth at which cell was picked (0 = direct seed)
@@ -290,6 +306,18 @@ namespace PCGExClusters
 
 		uint64 GetCellHash();
 		void PostProcessPoints(UPCGBasePointData* InMutablePoints);
+
+		/**
+		 * Point-in-cell test in the cell's OWN 2D space: the shared global projection normally, the
+		 * per-face frame when built with LocalTangent (InPos3D is then re-projected here).
+		 * @param InGlobalProjected The point in the shared global projection (ignored on the local path)
+		 * @param InPos3D The point's world position (also feeds the plane-distance gate, all modes)
+		 * @param InMaxPlaneDistSq Reject when the point sits further than this (squared) from the cell's
+		 *        best-fit plane; < 0 disables the gate
+		 * @param OutPlaneDistSq When set, receives the squared distance to the face plane (0 without one) --
+		 *        saves the caller re-rotating the point for arbitration
+		 */
+		bool ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, double InMaxPlaneDistSq = -1, double* OutPlaneDistSq = nullptr) const;
 	};
 
 #pragma endregion

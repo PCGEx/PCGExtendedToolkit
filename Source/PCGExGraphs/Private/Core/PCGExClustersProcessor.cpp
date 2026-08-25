@@ -382,6 +382,20 @@ bool FPCGExClustersProcessorContext::StartProcessingClusters(FBatchProcessingVal
 		return false;
 	}
 
+	// Exactly one cluster in the whole execution: intra-cluster parallelism competes with nothing,
+	// so processors are told they may nest ParallelFor (bSoloClusterWorkload).
+	{
+		int32 TotalClusters = 0;
+		for (const TSharedPtr<PCGExClusterMT::IBatch>& Batch : Batches)
+		{
+			TotalClusters += Batch->Edges.Num();
+		}
+		if (TotalClusters == 1)
+		{
+			Batches[0]->bSoloClusterWorkload = true;
+		}
+	}
+
 	bBatchProcessingEnabled = true;
 
 	if (!bDaisyChainClusterBatches)

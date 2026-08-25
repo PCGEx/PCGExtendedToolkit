@@ -3,6 +3,8 @@
 
 #include "Data/PCGExPointIO.h"
 
+#include "PCGElement.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExLog.h"
 #include "PCGParamData.h"
 #include "Core/PCGExContext.h"
@@ -29,10 +31,12 @@ namespace PCGExData
 	}
 
 	FPointIO::FPointIO(const TSharedRef<FPointIO>& InPointIO)
-		: In(InPointIO->GetIn())
+		: OriginalIn(InPointIO->OriginalIn)
+		  , In(InPointIO->GetIn())
 		  , ContextHandle(InPointIO->GetContextHandle())
 	{
 		RootIO = InPointIO;
+		InitializationData = InPointIO->InitializationData;
 
 		TSet<FString> TagDump;
 		InPointIO->Tags->DumpTo(TagDump); // Not ideal.
@@ -65,7 +69,11 @@ namespace PCGExData
 	bool FPointIO::InitializeOutput(const EIOInit InitOut)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIO::InitializeOutput);
-		
+
+		// Converted inputs are read-only: any Out derived from the temp conversion would parent
+		// its metadata to transient data (see PCGExPointIO::ToPointData).
+		check(InitOut == EIOInit::NoInit || !IsConvertedInput())
+
 		PCGEX_SHARED_CONTEXT(ContextHandle)
 
 		if (LastInit == InitOut)
@@ -524,7 +532,23 @@ namespace PCGExData
 	{
 		check(!bTransactional)
 
-		if (!IsEnabled() || !Out || (!bAllowEmptyOutput && Out->IsEmpty()))
+		if (!IsEnabled())
+		{
+			return false;
+		}
+
+		// Non-point payload set by the node (e.g. param data rebuilt from the original input).
+		if (OutputOverride)
+		{
+			const EStaging Staging =
+				(bOwnsOutputOverride ? EStaging::MutableAndManaged : TargetContext->bWantsDataStealing ? EStaging::Mutable : EStaging::None) |
+				(bPinless ? EStaging::Pinless : EStaging::None);
+
+			TargetContext->StageOutput(OutputOverride, OutputPin, Staging, Tags->Flatten());
+			return true;
+		}
+
+		if (!Out || (!bAllowEmptyOutput && Out->IsEmpty()))
 		{
 			return false;
 		}
@@ -561,6 +585,12 @@ namespace PCGExData
 
 	bool FPointIO::StageOutput(FPCGExContext* TargetContext, const int32 MinPointCount, const int32 MaxPointCount) const
 	{
+		// Point-count gates don't apply to non-point payloads.
+		if (OutputOverride)
+		{
+			return StageOutput(TargetContext);
+		}
+
 		if (Out)
 		{
 			const int64 OutNumPoints = Out->GetNumPoints();
@@ -586,6 +616,11 @@ namespace PCGExData
 		if (!IsEnabled())
 		{
 			return false;
+		}
+
+		if (OutputOverride)
+		{
+			return StageOutput(TargetContext);
 		}
 
 		if (bTransactional)
@@ -756,21 +791,21 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 
 #pragma region FPointIOCollection
 
-	FPointIOCollection::FPointIOCollection(FPCGExContext* InContext, const bool bIsTransactional)
+	FPointIOCollection::FPointIOCollection(FPCGExContext* InContext, const EIOHandling InHandling)
 		: ContextHandle(InContext->GetWeakSelfHandle())
-		  , bTransactional(bIsTransactional)
+		  , Handling(InHandling)
 	{
 	}
 
-	FPointIOCollection::FPointIOCollection(FPCGExContext* InContext, const FName InputLabel, const EIOInit InitOut, const bool bIsTransactional)
-		: FPointIOCollection(InContext, bIsTransactional)
+	FPointIOCollection::FPointIOCollection(FPCGExContext* InContext, const FName InputLabel, const EIOInit InitOut, const EIOHandling InHandling)
+		: FPointIOCollection(InContext, InHandling)
 	{
 		TArray<FPCGTaggedData> Sources = InContext->InputData.GetInputsByPin(InputLabel);
 		Initialize(Sources, InitOut);
 	}
 
-	FPointIOCollection::FPointIOCollection(FPCGExContext* InContext, TArray<FPCGTaggedData>& Sources, const EIOInit InitOut, const bool bIsTransactional)
-		: FPointIOCollection(InContext, bIsTransactional)
+	FPointIOCollection::FPointIOCollection(FPCGExContext* InContext, TArray<FPCGTaggedData>& Sources, const EIOInit InitOut, const EIOHandling InHandling)
+		: FPointIOCollection(InContext, InHandling)
 	{
 		Initialize(Sources, InitOut);
 	}
@@ -798,11 +833,20 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 			} // Dedupe
 
 			const UPCGBasePointData* SourcePointData = PCGExPointIO::GetPointData(SharedContext.Get(), Source);
-			if (!SourcePointData && bTransactional)
+			if (!SourcePointData && Handling != EIOHandling::Points)
 			{
-				// Only allowed for execution-time only
-				// Otherwise find a way to ensure conversion is plugged to the outputs, pin-less
+				// Conversion is execution-time only: converted IOs must stay NoInit, the node
+				// restages per-input-type (Dynamic) or forwards the original (Transactional).
 				check(InitOut == EIOInit::NoInit)
+
+				// Dynamic only converts attribute sets: nodes can't rebuild spatial outputs from a temp
+				// conversion without inheriting its transient metadata (see ToPointData).
+				if (Handling == EIOHandling::Dynamic && !Cast<UPCGParamData>(Source.Data))
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, SharedContext.Get(), FTEXT("An input is neither point nor attribute set data and was skipped."));
+					continue;
+				}
+
 				SourcePointData = PCGExPointIO::ToPointData(SharedContext.Get(), Source);
 			}
 
@@ -812,7 +856,7 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 			}
 			const TSharedPtr<FPointIO> NewIO = Emplace_GetRef(SourcePointData, InitOut, &Source.Tags);
 			NewIO->OriginalIn = Source.Data;
-			NewIO->bTransactional = bTransactional;
+			NewIO->bTransactional = Handling == EIOHandling::Transactional;
 			NewIO->InitializationIndex = i;
 			NewIO->InitializationData = Source.Data;
 		}
@@ -1209,7 +1253,7 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 	TSharedPtr<FPointIO> TryGetSingleInput(FPCGExContext* InContext, const FName InputPinLabel, const bool bTransactional, const bool bRequired)
 	{
 		TSharedPtr<FPointIO> SingleIO;
-		const TSharedPtr<FPointIOCollection> Collection = MakeShared<FPointIOCollection>(InContext, InputPinLabel, EIOInit::NoInit, bTransactional);
+		const TSharedPtr<FPointIOCollection> Collection = MakeShared<FPointIOCollection>(InContext, InputPinLabel, EIOInit::NoInit, bTransactional ? EIOHandling::Transactional : EIOHandling::Points);
 
 		if (!Collection->Pairs.IsEmpty() && Collection->Pairs[0]->GetNum() > 0)
 		{

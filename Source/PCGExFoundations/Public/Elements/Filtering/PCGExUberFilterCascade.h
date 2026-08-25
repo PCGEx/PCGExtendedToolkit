@@ -13,6 +13,8 @@
 
 #include "PCGExUberFilterCascade.generated.h"
 
+class UPCGParamData;
+
 namespace PCGExData
 {
 	template <typename T>
@@ -77,6 +79,7 @@ public:
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
 	virtual FName GetMainOutputPin() const override;
+	virtual PCGExData::EIOHandling GetMainDataHandling() const override;
 	//~End UPCGExPointsProcessorSettings
 
 	/** Number of filter groups (branches) to evaluate. */
@@ -141,6 +144,11 @@ namespace PCGExUberFilterCascade
 		TArray<int32> BranchCounts;
 
 		TSharedPtr<PCGExData::TBuffer<int32>> PartitionBuffer;
+
+		// Non-null when the input is a converted attribute set; outputs are then rebuilt as param data.
+		const UPCGParamData* ParamSource = nullptr;
+		// Write-mode results for param sources; each index is written by exactly one thread.
+		TArray<int32> ParamPartitionValues;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

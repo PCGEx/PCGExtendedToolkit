@@ -7,6 +7,7 @@
 #include "PCGExCommon.h"
 #include "PCGExSettingsMacros.h"
 #include "Metadata/PCGAttributePropertySelector.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Utils/PCGExCompare.h"
 #include "PCGExCompareShorthandsDetails.generated.h"
 
@@ -18,7 +19,7 @@ namespace PCGExData
 struct FPCGExContext;
 
 USTRUCT(BlueprintType)
-struct PCGEXCORE_API FPCGExCompareSelectorDouble
+struct PCGEXCORE_API FPCGExCompareSelectorDouble : public FPCGExInputShorthandSelectorBase
 {
 	GENERATED_BODY()
 
@@ -42,14 +43,6 @@ struct PCGEXCORE_API FPCGExCompareSelectorDouble
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::NearlyEqual;
 
-	/** Whether value comes from constant or attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType Input = EPCGExInputValueType::Constant;
-
-	/** Attribute to read comparison value from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGAttributePropertyInputSelector Attribute;
-
 	/** Constant comparison value. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	double Constant = 0;
@@ -67,5 +60,5 @@ struct PCGEXCORE_API FPCGExCompareSelectorDouble
 	FString GetDisplayNamePostfix() const;
 #endif
 
-	void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const;
+	void RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const;
 };

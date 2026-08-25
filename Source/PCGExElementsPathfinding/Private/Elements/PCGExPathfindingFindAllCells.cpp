@@ -197,6 +197,7 @@ namespace PCGExFindAllCells
 
 			// Find cells that failed due to holes and expand exclusion
 			const int32 NumHoles = Context->HolesFacade->GetNum();
+			const TConstPCGValueRange<FTransform> HoleTransforms = Context->HolesFacade->GetIn()->GetConstTransformValueRange();
 			for (const TSharedPtr<PCGExClusters::FCell>& FailedCell : FailedCells)
 			{
 				if (!FailedCell || FailedCell->Polygon.IsEmpty() || FailedCell->FaceIndex < 0)
@@ -204,14 +205,12 @@ namespace PCGExFindAllCells
 					continue;
 				}
 
-				// Check if this cell contains a hole
+				// Check if this cell contains a hole (per-face frame in LocalTangent -- see FCell::ContainsPoint)
 				bool bContainsHole = false;
 				int32 HoleIndex = -1;
 				for (int32 i = 0; i < NumHoles && !bContainsHole; ++i)
 				{
-					const FVector2D& HolePoint = Holes->GetProjected(i);
-					if (FailedCell->Bounds2D.IsInside(HolePoint) &&
-						PCGExMath::Geo::IsPointInPolygon(HolePoint, FailedCell->Polygon))
+					if (FailedCell->ContainsPoint(Holes->GetProjected(i), HoleTransforms[i].GetLocation()))
 					{
 						bContainsHole = true;
 						HoleIndex = i;

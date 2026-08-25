@@ -6,6 +6,8 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataAttributeTpl.h"
 
 namespace PCGEx
 {
@@ -84,6 +86,95 @@ void FPCGExFilterResultDetails::Init(const TSharedPtr<PCGExData::FFacade>& InDat
 	case EPCGExResultWriteAction::Bitmask:
 		BitmaskBuffer = InDataFacade->GetWritable<int64>(ResultAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
 		break;
+	}
+}
+
+bool FPCGExFilterResultDetails::InitForData(UPCGData* InData)
+{
+	UPCGMetadata* Metadata = InData ? InData->MutableMetadata() : nullptr;
+	if (!Metadata)
+	{
+		return false;
+	}
+
+	switch (Action)
+	{
+	case EPCGExResultWriteAction::Bool:
+		BoolAttribute = Metadata->FindOrCreateAttribute<bool>(ResultAttributeName, false);
+		return BoolAttribute != nullptr;
+	case EPCGExResultWriteAction::Counter:
+		IncrementAttribute = Metadata->FindOrCreateAttribute<double>(ResultAttributeName, 0);
+		return IncrementAttribute != nullptr;
+	case EPCGExResultWriteAction::Bitmask:
+		BitmaskAttribute = Metadata->FindOrCreateAttribute<int64>(ResultAttributeName, 0);
+		return BitmaskAttribute != nullptr;
+	default:
+		checkNoEntry();
+		return false;
+	}
+}
+
+void FPCGExFilterResultDetails::WriteToData(const TArray<int8>& Results) const
+{
+	const int32 NumRows = Results.Num();
+
+	TArray<PCGMetadataEntryKey> Keys;
+	Keys.SetNumUninitialized(NumRows);
+	for (int i = 0; i < NumRows; i++)
+	{
+		Keys[i] = i;
+	}
+
+	if (Action == EPCGExResultWriteAction::Bool)
+	{
+		check(BoolAttribute)
+
+		TArray<bool> Values;
+		Values.SetNumUninitialized(NumRows);
+		for (int i = 0; i < NumRows; i++)
+		{
+			Values[i] = static_cast<bool>(Results[i]);
+		}
+
+		BoolAttribute->SetValues(Keys, Values);
+	}
+	else if (Action == EPCGExResultWriteAction::Counter)
+	{
+		check(IncrementAttribute)
+
+		TArray<double> Values;
+		Values.SetNumUninitialized(NumRows);
+		for (int i = 0; i < NumRows; i++)
+		{
+			Values[i] = IncrementAttribute->GetValueFromItemKey(Keys[i]) + (Results[i] ? PassIncrement : FailIncrement);
+		}
+
+		IncrementAttribute->SetValues(Keys, Values);
+	}
+	else if (Action == EPCGExResultWriteAction::Bitmask)
+	{
+		check(BitmaskAttribute)
+
+		TArray<int64> Values;
+		Values.SetNumUninitialized(NumRows);
+		for (int i = 0; i < NumRows; i++)
+		{
+			int64 Flags = BitmaskAttribute->GetValueFromItemKey(Keys[i]);
+			if (Results[i])
+			{
+				if (bDoBitmaskOpOnPass)
+				{
+					PassBitmask.Mutate(Flags);
+				}
+			}
+			else if (bDoBitmaskOpOnFail)
+			{
+				FailBitmask.Mutate(Flags);
+			}
+			Values[i] = Flags;
+		}
+
+		BitmaskAttribute->SetValues(Keys, Values);
 	}
 }
 
