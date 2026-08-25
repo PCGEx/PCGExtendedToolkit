@@ -44,15 +44,37 @@ namespace PCGExClusters
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::Build);
 
+		const TArray<FEdge>& Edges = *InCluster->Edges;
+		PCGEx::FIndexLookup* NodeLookup = InCluster->NodeIndexLookup.Get();
+
+		// Edge.Start and Edge.End are POINT indices, convert to node indices for the core build
+		TArray<uint64> NodeEdges;
+		NodeEdges.Reserve(Edges.Num());
+		for (const FEdge& Edge : Edges)
+		{
+			NodeEdges.Add(PCGEx::H64(NodeLookup->Get(Edge.Start), NodeLookup->Get(Edge.End)));
+		}
+
+		Build(InCluster->Nodes->Num(), NodeEdges, InNodeIndexedPositions);
 		Cluster = &InCluster.Get();
+	}
+
+	void FPlanarFaceEnumerator::Build(
+		const int32 InNumNodes,
+		TConstArrayView<uint64> InEdges,
+		const TSharedPtr<TArray<FVector2D>>& InNodeIndexedPositions,
+		TConstArrayView<FVector> InNodePositions3D)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::Build);
+
+		Cluster = nullptr;
+		StandalonePositions3D = TArray<FVector>(InNodePositions3D);
 		ProjectedPositions = InNodeIndexedPositions;
+		NodeTangentFrames = nullptr;
 		bIsLocalTangent = false;
 
-		const TArray<FNode>& Nodes = *Cluster->Nodes;
-		const TArray<FEdge>& Edges = *Cluster->Edges;
-		PCGEx::FIndexLookup* NodeLookup = Cluster->NodeIndexLookup.Get();
-		const int32 NumEdges = Edges.Num();
-		const int32 NumNodes = Nodes.Num();
+		const int32 NumEdges = InEdges.Num();
+		const int32 NumNodes = InNumNodes;
 		const TArray<FVector2D>& Positions = *ProjectedPositions;
 
 		// Step 1: Create all half-edges (2 per edge)
@@ -63,12 +85,9 @@ namespace PCGExClusters
 
 		for (int32 EdgeIdx = 0; EdgeIdx < NumEdges; ++EdgeIdx)
 		{
-			const FEdge& Edge = Edges[EdgeIdx];
-			// Edge.Start and Edge.End are POINT indices, convert to node indices
-			const int32 NodeA = NodeLookup->Get(Edge.Start);
-			const int32 NodeB = NodeLookup->Get(Edge.End);
+			const int32 NodeA = PCGEx::H64A(InEdges[EdgeIdx]);
+			const int32 NodeB = PCGEx::H64B(InEdges[EdgeIdx]);
 
-			// Get 2D positions using NODE indices (not point indices)
 			const FVector2D& PosA = Positions[NodeA];
 			const FVector2D& PosB = Positions[NodeB];
 
@@ -156,6 +175,7 @@ namespace PCGExClusters
 		Cluster = &InCluster.Get();
 		NodeTangentFrames = InNodeTangentFrames;
 		ProjectedPositions = nullptr;
+		StandalonePositions3D.Reset();
 		bIsLocalTangent = true;
 
 		const TArray<FNode>& Nodes = *Cluster->Nodes;
@@ -269,13 +289,343 @@ namespace PCGExClusters
 
 		bRawFacesEnumerated = true;
 
-		// Mark all half-edges as unvisited
-		TArray<bool> Visited;
-		Visited.SetNumZeroed(HalfEdges.Num());
+		if (bIsLocalTangent)
+		{
+			// Static per-node frames cannot order edges at a CREASE (a fold's floor and wall edges either
+			// collapse onto one projected ray or project to zero length). Two phases instead:
+			// 1. Exact planar-patch faces -- maximal coplanar regions each run the proven PLANAR path,
+			//    which nails piecewise-planar complexes (floors + walls) deterministically.
+			// 2. A parallel-transported walk over whatever remains (the outer face, curved regions).
+			// Both write NextIndex, keeping downstream DCEL consumers (polygon walks, region tracing) coherent.
+			TArray<bool> Visited;
+			Visited.SetNumZeroed(HalfEdges.Num());
+			NumFaces = 0;
+			EnumeratePlanarPatchFaces(Visited);
+			EnumerateRawFacesTransported(Visited);
+		}
+		else
+		{
+			// Mark all half-edges as unvisited
+			TArray<bool> Visited;
+			Visited.SetNumZeroed(HalfEdges.Num());
 
-		NumFaces = 0;
+			NumFaces = 0;
 
-		// Enumerate faces by following "next" pointers
+			// Enumerate faces by following "next" pointers
+			for (int32 StartHE = 0; StartHE < HalfEdges.Num(); ++StartHE)
+			{
+				if (Visited[StartHE])
+				{
+					continue;
+				}
+
+				FRawFace& RawFace = CachedRawFaces.Emplace_GetRef(NumFaces);
+				RawFace.Nodes.Reserve(64);
+
+				int32 CurrentHE = StartHE;
+				const int32 MaxSteps = HalfEdges.Num();
+
+				for (int32 Step = 0; Step < MaxSteps; ++Step)
+				{
+					if (CurrentHE < 0 || CurrentHE >= HalfEdges.Num())
+					{
+						RawFace.Nodes.Reset();
+						break;
+					}
+
+					if (Visited[CurrentHE])
+					{
+						if (CurrentHE != StartHE)
+						{
+							RawFace.Nodes.Reset();
+						}
+						break;
+					}
+
+					Visited[CurrentHE] = true;
+					RawFace.Nodes.Add(HalfEdges[CurrentHE].OriginNode);
+					HalfEdges[CurrentHE].FaceIndex = NumFaces;
+
+					CurrentHE = HalfEdges[CurrentHE].NextIndex;
+				}
+
+				if (RawFace.Nodes.Num() >= 3)
+				{
+					NumFaces++;
+				}
+				else
+				{
+					CachedRawFaces.Pop();
+				}
+			}
+		}
+
+		// Compute 3D bounds for each face (for early culling in bounded operations)
+		for (FRawFace& RawFace : CachedRawFaces)
+		{
+			RawFace.Bounds3D = FBox(ForceInit);
+			for (const int32 NodeIdx : RawFace.Nodes)
+			{
+				RawFace.Bounds3D += GetNodePos3D(NodeIdx);
+			}
+		}
+
+		return CachedRawFaces;
+	}
+
+	FVector FPlanarFaceEnumerator::GetNodePos3D(const int32 NodeIdx) const
+	{
+		if (Cluster) { return Cluster->GetPos(NodeIdx); }
+		if (StandalonePositions3D.IsValidIndex(NodeIdx)) { return StandalonePositions3D[NodeIdx]; }
+		const FVector2D& Pos2D = (*ProjectedPositions)[NodeIdx];
+		return FVector(Pos2D.X, Pos2D.Y, 0);
+	}
+
+	void FPlanarFaceEnumerator::EnumeratePlanarPatchFaces(TArray<bool>& VisitedHalfEdges)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::EnumeratePlanarPatchFaces);
+
+		const int32 NumNodes = Cluster->Nodes->Num();
+		const TArray<FQuat>* Frames = NodeTangentFrames.Get();
+
+		// Undirected edge list + per-node incidence, from the half-edges themselves
+		struct FUEdge
+		{
+			int32 A = -1;
+			int32 B = -1;
+		};
+		TArray<FUEdge> UEdges;
+		UEdges.Reserve(HalfEdges.Num() / 2);
+		TArray<TArray<int32>> NodeUEdges;
+		NodeUEdges.SetNum(NumNodes);
+
+		FBox NodeBounds(ForceInit);
+		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
+		{
+			const FHalfEdge& HE = HalfEdges[HEIdx];
+			if (HE.OriginNode < HE.TargetNode)
+			{
+				const int32 UIdx = UEdges.Add({HE.OriginNode, HE.TargetNode});
+				NodeUEdges[HE.OriginNode].Add(UIdx);
+				NodeUEdges[HE.TargetNode].Add(UIdx);
+			}
+			NodeBounds += Cluster->GetPos(HE.OriginNode);
+		}
+
+		const int32 NumUEdges = UEdges.Num();
+		if (NumUEdges < 3)
+		{
+			return;
+		}
+
+		// Coplanarity tolerance, scaled to the cluster so huge and tiny sketches behave alike
+		const double PlaneTol = FMath::Max(NodeBounds.GetSize().GetMax() * 1.0e-4, 0.01);
+
+		TArray<bool> EdgeSeeded;
+		EdgeSeeded.SetNumZeroed(NumUEdges);
+		TArray<bool> InPatch; // scratch, reused per growth
+		InPatch.SetNumZeroed(NumUEdges);
+
+		auto EdgeDir = [&](const FUEdge& E) { return (Cluster->GetPos(E.B) - Cluster->GetPos(E.A)).GetSafeNormal(); };
+
+		// Grow the maximal set of edges coplanar with (PlaneOrigin, PlaneNormal), starting from SeedEdge.
+		auto GrowPatch = [&](const int32 SeedEdge, const FVector& PlaneOrigin, const FVector& PlaneNormal, TArray<int32>& OutEdges)
+		{
+			OutEdges.Reset();
+			auto OnPlane = [&](const int32 NodeIdx) { return FMath::Abs(FVector::DotProduct(Cluster->GetPos(NodeIdx) - PlaneOrigin, PlaneNormal)) <= PlaneTol; };
+
+			TArray<int32> NodeQueue;
+			auto Absorb = [&](const int32 UIdx)
+			{
+				InPatch[UIdx] = true;
+				OutEdges.Add(UIdx);
+				NodeQueue.Add(UEdges[UIdx].A);
+				NodeQueue.Add(UEdges[UIdx].B);
+			};
+
+			Absorb(SeedEdge);
+			for (int32 QueueIdx = 0; QueueIdx < NodeQueue.Num(); ++QueueIdx)
+			{
+				for (const int32 UIdx : NodeUEdges[NodeQueue[QueueIdx]])
+				{
+					if (InPatch[UIdx])
+					{
+						continue;
+					}
+					if (OnPlane(UEdges[UIdx].A) && OnPlane(UEdges[UIdx].B))
+					{
+						Absorb(UIdx);
+					}
+				}
+			}
+
+			for (const int32 UIdx : OutEdges)
+			{
+				InPatch[UIdx] = false; // reset scratch
+			}
+		};
+
+		TArray<int32> PatchEdges;
+		TArray<int32> BestPatchEdges;
+
+		for (int32 SeedEdge = 0; SeedEdge < NumUEdges; ++SeedEdge)
+		{
+			if (EdgeSeeded[SeedEdge])
+			{
+				continue;
+			}
+
+			// Best plane through this edge: try every independent partner at either endpoint, keep the
+			// plane absorbing the most edges (a bogus diagonal plane absorbs almost nothing).
+			const FUEdge& Seed = UEdges[SeedEdge];
+			const FVector SeedDir = EdgeDir(Seed);
+			const FVector SeedOrigin = Cluster->GetPos(Seed.A);
+
+			FVector BestNormal = FVector::ZeroVector;
+			BestPatchEdges.Reset();
+
+			for (const int32 EndNode : {Seed.A, Seed.B})
+			{
+				for (const int32 PartnerIdx : NodeUEdges[EndNode])
+				{
+					if (PartnerIdx == SeedEdge)
+					{
+						continue;
+					}
+					const FVector Cross = FVector::CrossProduct(SeedDir, EdgeDir(UEdges[PartnerIdx]));
+					if (Cross.SizeSquared() <= UE_DOUBLE_KINDA_SMALL_NUMBER)
+					{
+						continue;
+					}
+					const FVector PlaneNormal = Cross.GetSafeNormal();
+					GrowPatch(SeedEdge, SeedOrigin, PlaneNormal, PatchEdges);
+					if (PatchEdges.Num() > BestPatchEdges.Num())
+					{
+						BestPatchEdges = PatchEdges;
+						BestNormal = PlaneNormal;
+					}
+				}
+			}
+
+			// Whatever the outcome, this edge had its shot -- the transported walk owns leftovers.
+			for (const int32 UIdx : BestPatchEdges)
+			{
+				EdgeSeeded[UIdx] = true;
+			}
+			EdgeSeeded[SeedEdge] = true;
+
+			if (BestPatchEdges.Num() < 3)
+			{
+				continue;
+			}
+
+			// Sign-align the patch plane with the (BFS-consistent) node frames, so every patch winds with
+			// the same global orientation and the two half-edges of a fold land in different patches' faces.
+			if (Frames)
+			{
+				FVector FrameSum = FVector::ZeroVector;
+				for (const int32 UIdx : BestPatchEdges)
+				{
+					FrameSum += (*Frames)[UEdges[UIdx].A].GetAxisZ();
+					FrameSum += (*Frames)[UEdges[UIdx].B].GetAxisZ();
+				}
+				if (FVector::DotProduct(BestNormal, FrameSum) < 0)
+				{
+					BestNormal = -BestNormal;
+				}
+			}
+
+			// Project the patch and run the exact PLANAR enumeration on it (cluster-free build)
+			FVector BasisX, BasisY;
+			BestNormal.FindBestAxisVectors(BasisX, BasisY);
+			// (X, Y, n) right-handed so CCW-in-basis = CCW about the aligned normal
+			BasisY = FVector::CrossProduct(BestNormal, BasisX);
+
+			const TSharedPtr<TArray<FVector2D>> PatchPositions = MakeShared<TArray<FVector2D>>();
+			PatchPositions->SetNumZeroed(NumNodes);
+			TArray<uint64> PatchEdgePairs;
+			PatchEdgePairs.Reserve(BestPatchEdges.Num());
+			for (const int32 UIdx : BestPatchEdges)
+			{
+				const FUEdge& E = UEdges[UIdx];
+				for (const int32 NodeIdx : {E.A, E.B})
+				{
+					const FVector Rel = Cluster->GetPos(NodeIdx) - SeedOrigin;
+					(*PatchPositions)[NodeIdx] = FVector2D(FVector::DotProduct(Rel, BasisX), FVector::DotProduct(Rel, BasisY));
+				}
+				PatchEdgePairs.Add(PCGEx::H64(E.A, E.B));
+			}
+
+			FPlanarFaceEnumerator PatchEnum;
+			PatchEnum.Build(NumNodes, PatchEdgePairs, PatchPositions);
+			const TArray<FRawFace>& PatchFaces = PatchEnum.EnumerateRawFaces();
+			const int32 PatchWrapper = PatchEnum.GetWrapperFaceIndex();
+
+			for (const FRawFace& PatchFace : PatchFaces)
+			{
+				if (PatchFace.FaceIndex == PatchWrapper || PatchFace.Nodes.Num() < 3)
+				{
+					continue;
+				}
+
+				// Map the cycle onto GLOBAL half-edges; on a claim collision try the reversed winding
+				// (safety net for orientation drift), else skip -- another patch owns those half-edges.
+				TArray<int32> Cycle = PatchFace.Nodes;
+				bool bClaimable = false;
+				for (int32 Attempt = 0; Attempt < 2 && !bClaimable; ++Attempt)
+				{
+					bClaimable = true;
+					for (int32 i = 0; i < Cycle.Num(); ++i)
+					{
+						const int32* HEIdx = HalfEdgeMap.Find(PCGEx::H64(Cycle[i], Cycle[(i + 1) % Cycle.Num()]));
+						if (!HEIdx || VisitedHalfEdges[*HEIdx])
+						{
+							bClaimable = false;
+							break;
+						}
+					}
+					if (!bClaimable && Attempt == 0)
+					{
+						Algo::Reverse(Cycle);
+					}
+				}
+				if (!bClaimable)
+				{
+					continue;
+				}
+
+				FRawFace& GlobalFace = CachedRawFaces.Emplace_GetRef(NumFaces);
+				GlobalFace.Nodes = Cycle;
+				for (int32 i = 0; i < Cycle.Num(); ++i)
+				{
+					const int32 HEIdx = HalfEdgeMap.FindChecked(PCGEx::H64(Cycle[i], Cycle[(i + 1) % Cycle.Num()]));
+					const int32 NextHEIdx = HalfEdgeMap.FindChecked(PCGEx::H64(Cycle[(i + 1) % Cycle.Num()], Cycle[(i + 2) % Cycle.Num()]));
+					VisitedHalfEdges[HEIdx] = true;
+					HalfEdges[HEIdx].FaceIndex = NumFaces;
+					HalfEdges[HEIdx].NextIndex = NextHEIdx;
+				}
+				NumFaces++;
+			}
+		}
+	}
+
+	void FPlanarFaceEnumerator::EnumerateRawFacesTransported(TArray<bool>& VisitedHalfEdges)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::EnumerateRawFacesTransported);
+
+		const int32 NumNodes = Cluster->Nodes->Num();
+
+		// Outgoing half-edges per node (Build's local copy is long gone)
+		TArray<TArray<int32>> OutgoingByNode;
+		OutgoingByNode.SetNum(NumNodes);
+		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
+		{
+			OutgoingByNode[HalfEdges[HEIdx].OriginNode].Add(HEIdx);
+		}
+
+		TArray<bool>& Visited = VisitedHalfEdges;
+		const TArray<FQuat>* Frames = NodeTangentFrames.Get();
+
 		for (int32 StartHE = 0; StartHE < HalfEdges.Num(); ++StartHE)
 		{
 			if (Visited[StartHE])
@@ -286,17 +636,15 @@ namespace PCGExClusters
 			FRawFace& RawFace = CachedRawFaces.Emplace_GetRef(NumFaces);
 			RawFace.Nodes.Reserve(64);
 
+			// The face's normal, seeded from the start node's tangent frame then CARRIED along the walk
+			// (re-orthogonalized against each edge = parallel transport, which also follows curvature).
+			FVector Normal = Frames ? (*Frames)[HalfEdges[StartHE].OriginNode].GetAxisZ() : FVector::UpVector;
+
 			int32 CurrentHE = StartHE;
 			const int32 MaxSteps = HalfEdges.Num();
 
 			for (int32 Step = 0; Step < MaxSteps; ++Step)
 			{
-				if (CurrentHE < 0 || CurrentHE >= HalfEdges.Num())
-				{
-					RawFace.Nodes.Reset();
-					break;
-				}
-
 				if (Visited[CurrentHE])
 				{
 					if (CurrentHE != StartHE)
@@ -310,7 +658,90 @@ namespace PCGExClusters
 				RawFace.Nodes.Add(HalfEdges[CurrentHE].OriginNode);
 				HalfEdges[CurrentHE].FaceIndex = NumFaces;
 
-				CurrentHE = HalfEdges[CurrentHE].NextIndex;
+				const FHalfEdge& HE = HalfEdges[CurrentHE];
+				const FVector Target = Cluster->GetPos(HE.TargetNode);
+				const FVector Dir = (Target - Cluster->GetPos(HE.OriginNode)).GetSafeNormal();
+
+				// Transport the normal across this edge
+				if (!Dir.IsNearlyZero())
+				{
+					const FVector Transported = (Normal - FVector::DotProduct(Normal, Dir) * Dir).GetSafeNormal();
+					if (!Transported.IsNearlyZero())
+					{
+						Normal = Transported;
+					}
+				}
+
+				// The planar rule made crease-proof: successor = sharpest CCW turn from the back-direction,
+				// measured in the TRANSPORTED plane. An edge perpendicular to that plane (the other side of
+				// a fold) has no azimuth here and belongs to another face's walk.
+				const FVector Ref = -Dir;
+				const TArray<int32>& Outgoing = OutgoingByNode[HE.TargetNode];
+
+				int32 BestHE = INDEX_NONE;
+				double BestAngle = TNumericLimits<double>::Max();
+				int32 FallbackHE = INDEX_NONE;
+				double FallbackDot = TNumericLimits<double>::Max();
+
+				for (const int32 CandHE : Outgoing)
+				{
+					// A half-edge already claimed by another face is off-limits -- EXCEPT the walk's own
+					// start, which is how a cycle closes. This is what routes the outer walk up a wall
+					// instead of onto a fold half-edge the planar patches already own.
+					if (Visited[CandHE] && CandHE != StartHE)
+					{
+						continue;
+					}
+
+					// The twin is a dead-end bounce, legal only when nothing else leaves the node
+					if (CandHE == HE.TwinIndex && Outgoing.Num() > 1)
+					{
+						continue;
+					}
+
+					const FVector CandDir = (Cluster->GetPos(HalfEdges[CandHE].TargetNode) - Target).GetSafeNormal();
+					const double NormalDot = FVector::DotProduct(CandDir, Normal);
+					const FVector InPlane = CandDir - NormalDot * Normal;
+					const double InPlaneLen = InPlane.Size();
+
+					if (const double AbsDot = FMath::Abs(NormalDot); AbsDot < FallbackDot)
+					{
+						FallbackDot = AbsDot;
+						FallbackHE = CandHE;
+					}
+
+					if (InPlaneLen <= UE_DOUBLE_KINDA_SMALL_NUMBER)
+					{
+						continue;
+					}
+
+					const FVector Projected = InPlane / InPlaneLen;
+					double Angle = FMath::Atan2(FVector::DotProduct(Normal, FVector::CrossProduct(Ref, Projected)), FVector::DotProduct(Ref, Projected));
+					if (Angle <= UE_DOUBLE_KINDA_SMALL_NUMBER)
+					{
+						Angle += UE_DOUBLE_TWO_PI; // continuing straight back reads as a full turn
+					}
+
+					if (Angle < BestAngle)
+					{
+						BestAngle = Angle;
+						BestHE = CandHE;
+					}
+				}
+
+				if (BestHE == INDEX_NONE)
+				{
+					// Every departure is perpendicular to the carried plane (or only the twin exists):
+					// take the least out-of-plane one rather than stalling the walk.
+					BestHE = FallbackHE != INDEX_NONE ? FallbackHE : HE.TwinIndex;
+				}
+
+				HalfEdges[CurrentHE].NextIndex = BestHE;
+				CurrentHE = BestHE;
+				if (CurrentHE == StartHE)
+				{
+					break;
+				}
 			}
 
 			if (RawFace.Nodes.Num() >= 3)
@@ -322,18 +753,6 @@ namespace PCGExClusters
 				CachedRawFaces.Pop();
 			}
 		}
-
-		// Compute 3D bounds for each face (for early culling in bounded operations)
-		for (FRawFace& RawFace : CachedRawFaces)
-		{
-			RawFace.Bounds3D = FBox(ForceInit);
-			for (const int32 NodeIdx : RawFace.Nodes)
-			{
-				RawFace.Bounds3D += Cluster->GetPos(NodeIdx);
-			}
-		}
-
-		return CachedRawFaces;
 	}
 
 	ECellResult FPlanarFaceEnumerator::BuildCellFromRawFace(
@@ -347,6 +766,11 @@ namespace PCGExClusters
 	void FPlanarFaceEnumerator::EnumerateAllFaces(TArray<TSharedPtr<FCell>>& OutCells, const TSharedRef<FCellConstraints>& Constraints, TArray<TSharedPtr<FCell>>* OutFailedCells, bool bDetectWrapper)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::EnumerateAllFaces);
+
+		if (!ensureMsgf(Cluster, TEXT("Cell building requires a cluster-built enumerator")))
+		{
+			return;
+		}
 
 		const TArray<FRawFace>& RawFaces = EnumerateRawFaces();
 		const int32 NumRawFaces = RawFaces.Num();
@@ -485,6 +909,11 @@ namespace PCGExClusters
 		bool bDetectWrapper)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPlanarFaceEnumerator::EnumerateFacesWithinBounds);
+
+		if (!ensureMsgf(Cluster, TEXT("Cell building requires a cluster-built enumerator")))
+		{
+			return;
+		}
 
 		const TArray<FRawFace>& RawFaces = EnumerateRawFaces();
 		const int32 NumRawFaces = RawFaces.Num();
@@ -648,6 +1077,12 @@ namespace PCGExClusters
 		TSharedPtr<FCell>& OutCell,
 		const TSharedRef<FCellConstraints>& Constraints) const
 	{
+		// Cell building reads cluster nodes for FCell metrics — cluster-free builds only support face enumeration/queries
+		if (!ensureMsgf(Cluster, TEXT("Cell building requires a cluster-built enumerator")))
+		{
+			return ECellResult::MalformedCluster;
+		}
+
 		const int32 NumUniqueNodes = FaceNodes.Num();
 		if (NumUniqueNodes < 3)
 		{
@@ -766,12 +1201,20 @@ namespace PCGExClusters
 			                                   });
 			FaceProjection.Init(FacePlane);
 
+			double PlaneZ = 0;
 			for (int32 i = 0; i < NumOutputNodes; ++i)
 			{
 				const FVector Projected = FaceProjection.Project(Cluster->GetPos(OutCell->Nodes[i]));
 				OutCell->Polygon[i] = FVector2D(Projected.X, Projected.Y);
 				OutCell->Bounds2D += OutCell->Polygon[i];
+				PlaneZ += Projected.Z;
 			}
+
+			// Kept on the cell: containment queries must re-project through THIS frame -- LocalTangent
+			// has no shared 2D space (see FCell::ContainsPoint).
+			OutCell->LocalProjectionQuat = FaceProjection.ProjectionQuat;
+			OutCell->LocalPlaneZ = PlaneZ / NumOutputNodes;
+			OutCell->bHasLocalProjection = true;
 		}
 		else
 		{
@@ -863,45 +1306,22 @@ namespace PCGExClusters
 		// Simple point-in-polygon test for each face
 		// This could be optimized with spatial indexing
 		TArray<FVector2D> FacePolygon;
+		TSet<int32> ProcessedFaces;
+
+		// Containment test is orientation-independent, so the wrapper's polygon contains every
+		// point inside the hull -- it must be excluded or it shadows the interior faces.
+		const int32 WrapperFaceIdx = GetWrapperFaceIndex();
 
 		for (int32 StartHE = 0; StartHE < HalfEdges.Num(); ++StartHE)
 		{
 			const int32 FaceIdx = HalfEdges[StartHE].FaceIndex;
-			if (FaceIdx < 0)
+			if (FaceIdx < 0 || FaceIdx == WrapperFaceIdx || ProcessedFaces.Contains(FaceIdx))
 			{
 				continue;
 			}
+			ProcessedFaces.Add(FaceIdx);
 
-			// Check if we've already tested this face
-			bool bAlreadyTested = false;
-			for (int32 PrevHE = 0; PrevHE < StartHE; ++PrevHE)
-			{
-				if (HalfEdges[PrevHE].FaceIndex == FaceIdx)
-				{
-					bAlreadyTested = true;
-					break;
-				}
-			}
-			if (bAlreadyTested)
-			{
-				continue;
-			}
-
-			// Build face polygon (ProjectedPositions is node-indexed)
-			FacePolygon.Reset();
-			int32 CurrentHE = StartHE;
-			const int32 MaxSteps = HalfEdges.Num();
-
-			for (int32 Step = 0; Step < MaxSteps; ++Step)
-			{
-				const FHalfEdge& HE = HalfEdges[CurrentHE];
-				FacePolygon.Add((*ProjectedPositions)[HE.OriginNode]);
-				CurrentHE = HE.NextIndex;
-				if (CurrentHE == StartHE)
-				{
-					break;
-				}
-			}
+			BuildFacePolygonFrom(StartHE, FacePolygon);
 
 			if (FacePolygon.Num() >= 3 && PCGExMath::Geo::IsPointInPolygon(Point, FacePolygon))
 			{
@@ -910,6 +1330,45 @@ namespace PCGExClusters
 		}
 
 		return -1;
+	}
+
+	void FPlanarFaceEnumerator::GetFacePolygon(const int32 FaceIndex, TArray<FVector2D>& OutPolygon) const
+	{
+		OutPolygon.Reset();
+
+		if (bIsLocalTangent || FaceIndex < 0)
+		{
+			return;
+		}
+
+		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
+		{
+			if (HalfEdges[HEIdx].FaceIndex == FaceIndex)
+			{
+				BuildFacePolygonFrom(HEIdx, OutPolygon);
+				return;
+			}
+		}
+	}
+
+	void FPlanarFaceEnumerator::BuildFacePolygonFrom(const int32 StartHalfEdge, TArray<FVector2D>& OutPolygon) const
+	{
+		// ProjectedPositions is node-indexed
+		OutPolygon.Reset();
+
+		int32 CurrentHE = StartHalfEdge;
+		const int32 MaxSteps = HalfEdges.Num();
+
+		for (int32 Step = 0; Step < MaxSteps; ++Step)
+		{
+			const FHalfEdge& HE = HalfEdges[CurrentHE];
+			OutPolygon.Add((*ProjectedPositions)[HE.OriginNode]);
+			CurrentHE = HE.NextIndex;
+			if (CurrentHE == StartHalfEdge)
+			{
+				break;
+			}
+		}
 	}
 
 	TMap<int32, TSet<int32>> FPlanarFaceEnumerator::BuildCellAdjacencyMap(int32 WrapperFaceIndex) const
@@ -1195,21 +1654,7 @@ namespace PCGExClusters
 			}
 			ProcessedFaces.Add(FaceIdx);
 
-			// Build face polygon (ProjectedPositions is node-indexed)
-			FacePolygon.Reset();
-			int32 CurrentHE = StartHE;
-			const int32 MaxSteps = HalfEdges.Num();
-
-			for (int32 Step = 0; Step < MaxSteps; ++Step)
-			{
-				const FHalfEdge& HE = HalfEdges[CurrentHE];
-				FacePolygon.Add((*ProjectedPositions)[HE.OriginNode]);
-				CurrentHE = HE.NextIndex;
-				if (CurrentHE == StartHE)
-				{
-					break;
-				}
-			}
+			BuildFacePolygonFrom(StartHE, FacePolygon);
 
 			if (FacePolygon.Num() >= 3)
 			{

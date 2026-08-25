@@ -276,6 +276,13 @@ namespace PCGExClusters
 		int32 CustomIndex = -1;
 		int32 FaceIndex = -1; // Index from the planar face enumerator (for adjacency lookups)
 
+		/** LocalTangent only: the per-face frame Polygon was built in (rotation-only mapping, see
+		 *  FPCGExGeo2DProjectionDetails::Project) and the face plane's Z in that frame. Containment
+		 *  queries against this cell must re-project through these -- there is no shared 2D space. */
+		FQuat LocalProjectionQuat = FQuat::Identity;
+		double LocalPlaneZ = 0;
+		bool bHasLocalProjection = false;
+
 		// Expansion tracking (populated when seeds grow)
 		int32 ExpansionPickCount = 0; // Number of times this cell was selected (by seeds/growth)
 		int32 ExpansionMinDepth = 0;  // Minimum depth at which cell was picked (0 = direct seed)
@@ -290,6 +297,16 @@ namespace PCGExClusters
 
 		uint64 GetCellHash();
 		void PostProcessPoints(UPCGBasePointData* InMutablePoints);
+
+		/**
+		 * Point-in-cell test in the cell's OWN 2D space: the shared global projection normally, the
+		 * per-face frame when built with LocalTangent (InPos3D is then re-projected here).
+		 * @param InGlobalProjected The point in the shared global projection (ignored on the local path)
+		 * @param InPos3D The point's world position (ignored on the global path)
+		 * @param InMaxPlaneDistSq Local path only: reject when the point sits further than this (squared)
+		 *        from the face plane; < 0 disables the gate
+		 */
+		bool ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, double InMaxPlaneDistSq = -1) const;
 	};
 
 #pragma endregion
