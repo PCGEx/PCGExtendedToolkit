@@ -678,19 +678,29 @@ namespace PCGExClusters
 	{
 	}
 
-	bool FCell::ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, const double InMaxPlaneDistSq) const
+	bool FCell::ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, const double InMaxPlaneDistSq, double* OutPlaneDistSq) const
 	{
+		if (OutPlaneDistSq)
+		{
+			*OutPlaneDistSq = 0;
+		}
+
 		if (Polygon.IsEmpty())
 		{
 			return false;
 		}
 
 		// Same rotation-only mapping BuildCellFromFace used (see FPCGExGeo2DProjectionDetails::Project)
-		if (bHasFacePlane && (InMaxPlaneDistSq >= 0 || bPolygonInFaceFrame))
+		if (bHasFacePlane && (InMaxPlaneDistSq >= 0 || bPolygonInFaceFrame || OutPlaneDistSq))
 		{
 			const FVector Rotated = FacePlaneQuat.UnrotateVector(InPos3D);
+			const double PlaneDistSq = FMath::Square(Rotated.Z - FacePlaneZ);
 
-			if (InMaxPlaneDistSq >= 0 && FMath::Square(Rotated.Z - FacePlaneZ) > InMaxPlaneDistSq)
+			if (OutPlaneDistSq)
+			{
+				*OutPlaneDistSq = PlaneDistSq;
+			}
+			if (InMaxPlaneDistSq >= 0 && PlaneDistSq > InMaxPlaneDistSq)
 			{
 				return false;
 			}

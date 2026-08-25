@@ -476,12 +476,13 @@ namespace PCGExClusters
 		auto EdgeDir = [&](const FUEdge& E) { return (GetNodePos3D(E.B) - GetNodePos3D(E.A)).GetSafeNormal(); };
 
 		// Grow the maximal set of edges coplanar with (PlaneOrigin, PlaneNormal), starting from SeedEdge.
+		TArray<int32> NodeQueue; // scratch, reused per growth
 		auto GrowPatch = [&](const int32 SeedEdge, const FVector& PlaneOrigin, const FVector& PlaneNormal, TArray<int32>& OutEdges)
 		{
 			OutEdges.Reset();
+			NodeQueue.Reset();
 			auto OnPlane = [&](const int32 NodeIdx) { return FMath::Abs(FVector::DotProduct(GetNodePos3D(NodeIdx) - PlaneOrigin, PlaneNormal)) <= PlaneTol; };
 
-			TArray<int32> NodeQueue;
 			auto Absorb = [&](const int32 UIdx)
 			{
 				InPatch[UIdx] = true;
@@ -515,9 +516,13 @@ namespace PCGExClusters
 		TArray<int32> PatchEdges;
 		TArray<int32> BestPatchEdges;
 
-		// One shared projection buffer across every patch: throwaway enumerators release their reference
-		// at the end of each iteration, so re-zeroing is safe and saves a NumNodes-sized allocation per patch.
+		// Shared across every patch iteration: the throwaway enumerator releases its buffer reference at
+		// the end of each Build cycle, so overwriting is safe and capacity is retained throughout.
 		const TSharedPtr<TArray<FVector2D>> PatchPositions = MakeShared<TArray<FVector2D>>();
+		FPlanarFaceEnumerator PatchEnum;
+		TMap<int32, int32> GlobalToLocal;
+		TArray<int32> LocalToGlobal;
+		TArray<uint64> PatchEdgePairs;
 
 		for (int32 SeedEdge = 0; SeedEdge < NumUEdges; ++SeedEdge)
 		{
@@ -552,7 +557,7 @@ namespace PCGExClusters
 					GrowPatch(SeedEdge, SeedOrigin, PlaneNormal, PatchEdges);
 					if (PatchEdges.Num() > BestPatchEdges.Num())
 					{
-						BestPatchEdges = PatchEdges;
+						Swap(BestPatchEdges, PatchEdges); // GrowPatch resets its output anyway
 						BestNormal = PlaneNormal;
 					}
 				}
@@ -592,22 +597,38 @@ namespace PCGExClusters
 			// (X, Y, n) right-handed so CCW-in-basis = CCW about the aligned normal
 			BasisY = FVector::CrossProduct(BestNormal, BasisX);
 
-			PatchPositions->SetNumZeroed(NumNodes);
-			TArray<uint64> PatchEdgePairs;
+			// The throwaway build works in a COMPACT patch-local index space: sizing anything to the full
+			// cluster node count would make this phase O(Patches x NumNodes) instead of O(total edges).
+			GlobalToLocal.Reset();
+			LocalToGlobal.Reset();
+			PatchEdgePairs.Reset();
 			PatchEdgePairs.Reserve(BestPatchEdges.Num());
+
+			auto LocalIdx = [&](const int32 GlobalIdx)
+			{
+				if (const int32* Found = GlobalToLocal.Find(GlobalIdx))
+				{
+					return *Found;
+				}
+				const int32 Local = LocalToGlobal.Add(GlobalIdx);
+				GlobalToLocal.Add(GlobalIdx, Local);
+				return Local;
+			};
+
 			for (const int32 UIdx : BestPatchEdges)
 			{
 				const FUEdge& E = UEdges[UIdx];
-				for (const int32 NodeIdx : {E.A, E.B})
-				{
-					const FVector Rel = GetNodePos3D(NodeIdx) - SeedOrigin;
-					(*PatchPositions)[NodeIdx] = FVector2D(FVector::DotProduct(Rel, BasisX), FVector::DotProduct(Rel, BasisY));
-				}
-				PatchEdgePairs.Add(PCGEx::H64(E.A, E.B));
+				PatchEdgePairs.Add(PCGEx::H64(LocalIdx(E.A), LocalIdx(E.B)));
 			}
 
-			FPlanarFaceEnumerator PatchEnum;
-			PatchEnum.Build(NumNodes, PatchEdgePairs, PatchPositions);
+			PatchPositions->SetNumUninitialized(LocalToGlobal.Num(), EAllowShrinking::No);
+			for (int32 Local = 0; Local < LocalToGlobal.Num(); ++Local)
+			{
+				const FVector Rel = GetNodePos3D(LocalToGlobal[Local]) - SeedOrigin;
+				(*PatchPositions)[Local] = FVector2D(FVector::DotProduct(Rel, BasisX), FVector::DotProduct(Rel, BasisY));
+			}
+
+			PatchEnum.Build(LocalToGlobal.Num(), PatchEdgePairs, PatchPositions);
 			const TArray<FRawFace>& PatchFaces = PatchEnum.EnumerateRawFaces();
 			const int32 PatchWrapper = PatchEnum.GetWrapperFaceIndex();
 
@@ -618,9 +639,15 @@ namespace PCGExClusters
 					continue;
 				}
 
-				// Map the cycle onto GLOBAL half-edges; on a claim collision try the reversed winding
-				// (safety net for orientation drift), else skip -- another patch owns those half-edges.
-				TArray<int32> Cycle = PatchFace.Nodes;
+				// Back to GLOBAL node ids, then map the cycle onto global half-edges; on a claim collision
+				// try the reversed winding (safety net for orientation drift), else skip -- another patch
+				// owns those half-edges.
+				TArray<int32> Cycle;
+				Cycle.Reserve(PatchFace.Nodes.Num());
+				for (const int32 Local : PatchFace.Nodes)
+				{
+					Cycle.Add(LocalToGlobal[Local]);
+				}
 				bool bClaimable = false;
 				for (int32 Attempt = 0; Attempt < 2 && !bClaimable; ++Attempt)
 				{
@@ -1238,21 +1265,24 @@ namespace PCGExClusters
 		OutCell->Polygon.SetNumUninitialized(NumOutputNodes);
 		OutCell->Bounds2D = FBox2D(ForceInit);
 
-		// Per-face best-fit plane, BOTH modes: LocalTangent polygons live in it, and ContainsPoint's
-		// distance-to-plane gate reads it whatever the projection (rotation is linear, so the plane's Z
-		// in the rotated frame is just the rotated centroid's Z).
-		PCGExMath::FBestFitPlane FacePlane(NumUniqueNodes,
-		                                   [&](int32 i)
-		                                   {
-			                                   return Cluster->GetPos(FaceNodes[i]);
-		                                   });
+		// Per-face best-fit plane: LocalTangent polygons live in it; planar builds only pay for it when a
+		// consumer opted into distance-to-plane gating (bComputeFacePlanes) -- unread otherwise. The fit
+		// reuses the centroid computed above and skips extents (PlaneOnly); the plane's Z in the rotated
+		// frame is just the rotated centroid's Z (rotation is linear).
 		FPCGExGeo2DProjectionDetails FaceProjection;
-		FaceProjection.Init(FacePlane);
+		if (bIsLocalTangent || Constraints->bComputeFacePlanes)
+		{
+			const PCGExMath::FBestFitPlane FacePlane = PCGExMath::FBestFitPlane::PlaneOnly(
+				NumUniqueNodes,
+				[&](const int32 i) { return Cluster->GetPos(FaceNodes[i]); },
+				OutCell->Data.Centroid);
+			FaceProjection.Init(FacePlane);
 
-		OutCell->FacePlaneQuat = FaceProjection.ProjectionQuat;
-		OutCell->FacePlaneZ = FaceProjection.Project(OutCell->Data.Centroid).Z;
-		OutCell->bHasFacePlane = true;
-		OutCell->bPolygonInFaceFrame = bIsLocalTangent;
+			OutCell->FacePlaneQuat = FaceProjection.ProjectionQuat;
+			OutCell->FacePlaneZ = FaceProjection.Project(OutCell->Data.Centroid).Z;
+			OutCell->bHasFacePlane = true;
+			OutCell->bPolygonInFaceFrame = bIsLocalTangent;
+		}
 
 		if (bIsLocalTangent)
 		{

@@ -180,6 +180,11 @@ namespace PCGExClusters
 
 		bool bBuildWrapper = true;
 
+		/** Compute each cell's best-fit FacePlane* during build. LocalTangent builds always do (the
+		 *  polygon lives in that frame); planar consumers opt in when distance-to-plane gating is on --
+		 *  otherwise the fit is dead work on every cell. */
+		bool bComputeFacePlanes = false;
+
 		TSharedPtr<FCell> WrapperCell;
 		TSharedPtr<FProjectedPointSet> Holes;
 		TSharedPtr<FPlanarFaceEnumerator> Enumerator;
@@ -309,8 +314,10 @@ namespace PCGExClusters
 		 * @param InPos3D The point's world position (also feeds the plane-distance gate, all modes)
 		 * @param InMaxPlaneDistSq Reject when the point sits further than this (squared) from the cell's
 		 *        best-fit plane; < 0 disables the gate
+		 * @param OutPlaneDistSq When set, receives the squared distance to the face plane (0 without one) --
+		 *        saves the caller re-rotating the point for arbitration
 		 */
-		bool ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, double InMaxPlaneDistSq = -1) const;
+		bool ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, double InMaxPlaneDistSq = -1, double* OutPlaneDistSq = nullptr) const;
 	};
 
 #pragma endregion

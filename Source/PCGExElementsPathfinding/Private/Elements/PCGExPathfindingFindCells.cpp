@@ -237,6 +237,9 @@ namespace PCGExFindContours
 		// Set up cell constraints
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
+		// Face planes cost a fit per cell; only pay when the distance gate reads them (LocalTangent
+		// always builds its own -- the polygon lives in that frame).
+		CellsConstraints->bComputeFacePlanes = Settings->SeedPicking.MaxDistance > 0;
 
 		// Build or get the shared enumerator from constraints (enables reuse)
 		TSharedPtr<PCGExClusters::FPlanarFaceEnumerator> Enumerator = CellsConstraints->GetOrBuildEnumerator(Cluster.ToSharedRef(), ProjectionDetails);
@@ -292,22 +295,40 @@ namespace PCGExFindContours
 			const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
 
 			SeedBestFace.Init(INDEX_NONE, NumSeeds);
+			FailedCellsOnly = FailedCells;
+
+			// Parallel when the pair count is heavy, or earlier when this is the only cluster in flight
+			// (nested parallelism then competes with nothing -- bSoloClusterWorkload).
+			const int64 PairOps = static_cast<int64>(NumSeeds) * EnumeratedCells.Num();
+			const int32 NestedParallelThreshold = (bSoloClusterWorkload && PairOps > 4096) || PairOps > 65536 ? 32 : MAX_int32;
+
+			PCGExMT::ParallelOrSequential(
+				NumSeeds, [&](const int32 SeedIdx)
+				{
+					const FVector SeedPos = SeedTransforms[SeedIdx].GetLocation();
+					const FVector2D SeedProjected = Seeds->GetProjected(SeedIdx);
+					double BestDistSq = TNumericLimits<double>::Max();
+					for (const TSharedPtr<PCGExClusters::FCell>& Cell : EnumeratedCells)
+					{
+						double DistSq = 0;
+						if (!Cell || !Cell->ContainsPoint(SeedProjected, SeedPos, MaxPlaneDistSq, &DistSq))
+						{
+							continue;
+						}
+						if (DistSq < BestDistSq)
+						{
+							BestDistSq = DistSq;
+							SeedBestFace[SeedIdx] = Cell->FaceIndex;
+						}
+					}
+				}, NestedParallelThreshold);
+
+			// Inverse map, so ProcessRange resolves each cell's claimants with one lookup.
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
-				const FVector SeedPos = SeedTransforms[SeedIdx].GetLocation();
-				double BestDistSq = TNumericLimits<double>::Max();
-				for (const TSharedPtr<PCGExClusters::FCell>& Cell : EnumeratedCells)
+				if (SeedBestFace[SeedIdx] != INDEX_NONE)
 				{
-					if (!Cell || !Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedPos, MaxPlaneDistSq))
-					{
-						continue;
-					}
-					const double DistSq = Cell->bHasFacePlane ? FMath::Square(Cell->FacePlaneQuat.UnrotateVector(SeedPos).Z - Cell->FacePlaneZ) : 0.0;
-					if (DistSq < BestDistSq)
-					{
-						BestDistSq = DistSq;
-						SeedBestFace[SeedIdx] = Cell->FaceIndex;
-					}
+					SeedFaceClaims.FindOrAdd(SeedBestFace[SeedIdx]).Add(SeedIdx);
 				}
 			}
 		}
@@ -350,22 +371,28 @@ namespace PCGExFindContours
 
 			CandidateSeeds.Reset();
 
-			// Find all seeds inside this cell. When SeedBestFace was arbitrated (LocalTangent), only the
-			// nearest-plane containing cell may collect a seed -- containment alone is ambiguous there.
-			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
+			if (!SeedBestFace.IsEmpty())
 			{
-				const bool bClaimed = SeedBestFace.IsEmpty()
-					? Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq)
-					: SeedBestFace[SeedIdx] == Cell->FaceIndex;
-
-				if (bClaimed)
+				// Arbitrated (LocalTangent): the inverse map already holds this cell's claimants.
+				if (const TArray<int32>* Claims = SeedFaceClaims.Find(Cell->FaceIndex))
 				{
-					CandidateSeeds.Add(SeedIdx);
-
-					// For SeedOrder mode, first match wins - break early
-					if (!bNeedsAllCandidates)
+					CandidateSeeds = *Claims;
+				}
+			}
+			else
+			{
+				// Find all seeds inside this cell
+				for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
+				{
+					if (Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
 					{
-						break;
+						CandidateSeeds.Add(SeedIdx);
+
+						// For SeedOrder mode, first match wins - break early
+						if (!bNeedsAllCandidates)
+						{
+							break;
+						}
 					}
 				}
 			}
@@ -600,10 +627,14 @@ namespace PCGExFindContours
 				}
 			}
 
-			// Also mark seeds inside failed cells as consumed
+			// Also mark seeds inside failed cells as consumed. Arbitration (when it ran) already proves
+			// membership in a VALID cell, so only the failed cells still need testing.
 			const int32 NumSeeds = Seeds->Num();
 			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
 			const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
+
+			const bool bArbitrated = !SeedBestFace.IsEmpty();
+			const TArray<TSharedPtr<PCGExClusters::FCell>>& ConsumptionCells = bArbitrated ? FailedCellsOnly : AllCellsIncludingFailed;
 
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
@@ -612,9 +643,15 @@ namespace PCGExFindContours
 					continue;
 				}
 
+				if (bArbitrated && SeedBestFace[SeedIdx] != INDEX_NONE)
+				{
+					ConsumedSeeds.Add(SeedIdx);
+					continue;
+				}
+
 				const FVector2D& SeedPoint = Seeds->GetProjected(SeedIdx);
 
-				for (const TSharedPtr<PCGExClusters::FCell>& Cell : AllCellsIncludingFailed)
+				for (const TSharedPtr<PCGExClusters::FCell>& Cell : ConsumptionCells)
 				{
 					if (Cell && Cell->ContainsPoint(SeedPoint, SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
 					{

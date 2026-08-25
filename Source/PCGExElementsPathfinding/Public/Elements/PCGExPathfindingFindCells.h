@@ -191,6 +191,14 @@ namespace PCGExFindContours
 		 *  Empty on planar builds, where faces are disjoint in the shared 2D space. */
 		TArray<int32> SeedBestFace;
 
+		/** Inverse of SeedBestFace, built once after arbitration: FaceIndex -> its claiming seeds.
+		 *  Turns ProcessRange's per-cell seed scan into a single lookup. */
+		TMap<int32, TArray<int32>> SeedFaceClaims;
+
+		/** LocalTangent only: the failed cells alone -- arbitration already proves membership in VALID
+		 *  cells, so the wrapper consumption sweep only needs to test these. */
+		TArray<TSharedPtr<PCGExClusters::FCell>> FailedCellsOnly;
+
 		TSharedPtr<PCGExMT::TScopedArray<TSharedPtr<PCGExClusters::FCell>>> ScopedValidCells;
 		TArray<TSharedPtr<PCGExClusters::FCell>> ValidCells;
 		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOIndices;

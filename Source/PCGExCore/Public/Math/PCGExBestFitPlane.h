@@ -30,6 +30,10 @@ namespace PCGExMath
 		FBestFitPlane(const int32 NumElements, FGetElementPositionCallback&& GetPointFunc, bool bUsePreciseBounds = false);
 		FBestFitPlane(const int32 NumElements, FGetElementPositionCallback&& GetPointFunc, const FVector& Extra, bool bUsePreciseBounds = false);
 
+		/** Axes-only fit reusing an already-known centroid: skips the centroid AND extents passes
+		 *  (2 of ComputePCA's 3 point sweeps). Extents stay at their default -- do not read them. */
+		static FBestFitPlane PlaneOnly(int32 NumElements, FGetElementPositionCallback&& GetPointFunc, const FVector& InKnownCentroid);
+
 		FVector Centroid = FVector::ZeroVector;
 		FVector Extents = FVector::OneVector;
 
