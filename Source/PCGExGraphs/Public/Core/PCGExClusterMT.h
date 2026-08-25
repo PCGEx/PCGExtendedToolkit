@@ -129,6 +129,10 @@ namespace PCGExClusterMT
 		bool bIsTrivial = false;
 		bool bIsOneToOne = false;
 
+		/** The whole node execution holds exactly ONE cluster: intra-cluster parallelism competes with
+		 *  nothing, so processors may nest ParallelFor where their workload warrants it. */
+		bool bSoloClusterWorkload = false;
+
 		int32 BatchIndex = -1;
 
 		TMap<uint32, int32>* EndpointsLookup = nullptr;
@@ -275,6 +279,12 @@ namespace PCGExClusterMT
 		bool bSkipCompletion = false;
 		bool bRequiresWriteStep = false;
 		bool bWriteVtxDataFacade = false;
+
+		/** Set by StartProcessingClusters when the whole node execution holds exactly ONE cluster --
+		 *  forwarded to every processor (bSoloClusterWorkload) so intra-cluster nested parallelism can
+		 *  be a principled decision everywhere instead of a per-site guess. */
+		bool bSoloClusterWorkload = false;
+
 		EPCGPointNativeProperties AllocateVtxProperties = EPCGPointNativeProperties::None;
 
 		TArray<TSharedPtr<PCGExData::FPointIO>> Edges;
