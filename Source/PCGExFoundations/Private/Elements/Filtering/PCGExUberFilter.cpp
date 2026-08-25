@@ -6,6 +6,7 @@
 
 #include "PCGExPickersCommon.h"
 #include "PCGExVersion.h"
+#include "PCGParamData.h"
 #include "Containers/PCGExScopedContainers.h"
 #include "Core/PCGExPickerFactoryProvider.h"
 #include "Core/PCGExPointFilter.h"
@@ -13,6 +14,7 @@
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExBucketDispatchHelpers.h"
 
 
 #define LOCTEXT_NAMESPACE "PCGExUberFilter"
@@ -52,6 +54,11 @@ bool UPCGExUberFilterSettings::OutputPinsCanBeDeactivated() const
 	return Mode != EPCGExUberFilterMode::Write;
 }
 
+bool UPCGExUberFilterSettings::HasDynamicPins() const
+{
+	return true;
+}
+
 TArray<FPCGPinProperties> UPCGExUberFilterSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
@@ -67,10 +74,10 @@ TArray<FPCGPinProperties> UPCGExUberFilterSettings::OutputPinProperties() const
 	}
 
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_POINTS(PCGExFilters::Labels::OutputInsideFiltersLabel, "Points that passed the filters.", Required)
+	PCGEX_PIN_ANY(PCGExFilters::Labels::OutputInsideFiltersLabel, "Elements that passed the filters.", Required)
 	if (bOutputDiscardedElements)
 	{
-		PCGEX_PIN_POINTS(PCGExFilters::Labels::OutputOutsideFiltersLabel, "Points that didn't pass the filters.", Required)
+		PCGEX_PIN_ANY(PCGExFilters::Labels::OutputOutsideFiltersLabel, "Elements that didn't pass the filters.", Required)
 	}
 	return PinProperties;
 }
@@ -92,6 +99,11 @@ FName UPCGExUberFilterSettings::GetMainOutputPin() const
 {
 	// Ensure proper forward when node is disabled
 	return Mode == EPCGExUberFilterMode::Partition ? PCGExFilters::Labels::OutputInsideFiltersLabel : Super::GetMainOutputPin();
+}
+
+PCGExData::EIOHandling UPCGExUberFilterSettings::GetMainDataHandling() const
+{
+	return PCGExData::EIOHandling::Dynamic;
 }
 
 bool FPCGExUberFilterElement::Boot(FPCGExContext* InContext) const
@@ -192,14 +204,20 @@ namespace PCGExUberFilter
 			return false;
 		}
 
-		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
+		// Attribute-set inputs are processed as their temp point conversion but output as param data.
+		ParamSource = Cast<UPCGParamData>(PointDataFacade->Source->InitializationData);
+
+		PCGEX_INIT_IO(PointDataFacade->Source, ParamSource ? PCGExData::EIOInit::NoInit : Settings->GetMainDataInitializationPolicy())
 
 		bUsePicks = PCGExPickers::GetPicks(Context->PickerFactories, PointDataFacade, Picks);
 
 		if (Settings->Mode == EPCGExUberFilterMode::Write)
 		{
 			Results = Settings->ResultDetails;
-			Results.Init(PointDataFacade);
+			if (!ParamSource)
+			{
+				Results.Init(PointDataFacade);
+			}
 		}
 		else
 		{
@@ -213,7 +231,7 @@ namespace PCGExUberFilter
 
 	void FProcessor::PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops)
 	{
-		if (!Results.bEnabled)
+		if (Settings->Mode == EPCGExUberFilterMode::Partition)
 		{
 			const int32 MaxRange = PCGExMT::FScope::GetMaxRange(Loops);
 
@@ -251,7 +269,7 @@ namespace PCGExUberFilter
 			}
 		}
 
-		if (!Results.bEnabled)
+		if (Settings->Mode == EPCGExUberFilterMode::Partition)
 		{
 			TArray<int32>& IndicesInsideRef = IndicesInside->Get_Ref(Scope);
 			TArray<int32>& IndicesOutsideRef = IndicesOutside->Get_Ref(Scope);
@@ -293,7 +311,11 @@ namespace PCGExUberFilter
 				}
 			}
 
-			Results.Write(Scope, PointFilterCache);
+			// Param sources have no facade buffers; results are applied at completion, from PointFilterCache.
+			if (!ParamSource && Results.bEnabled)
+			{
+				Results.Write(Scope, PointFilterCache);
+			}
 		}
 	}
 
@@ -331,6 +353,26 @@ namespace PCGExUberFilter
 				PointDataFacade->Source->Tags->AddRaw(Settings->NoPointPassedTag);
 			}
 
+			if (ParamSource)
+			{
+				// Write onto the original under the StealData contract, otherwise onto a managed duplicate.
+				const bool bSteal = Context->bWantsDataStealing;
+				UPCGData* Target = bSteal
+					                   ? const_cast<UPCGParamData*>(ParamSource)
+					                   : Context->ManagedObjects->DuplicateData<UPCGData>(ParamSource);
+				if (!Target)
+				{
+					return;
+				}
+
+				if (Results.bEnabled && Results.InitForData(Target))
+				{
+					Results.WriteToData(PointFilterCache);
+				}
+
+				PointDataFacade->Source->SetOutputOverride(Target, !bSteal);
+				return;
+			}
 
 			PointDataFacade->WriteFastest(TaskManager);
 			return;
@@ -338,16 +380,21 @@ namespace PCGExUberFilter
 
 		if (NumInside == 0 || NumOutside == 0)
 		{
+			// Single-side fast path: forward the untouched input (param sources forward the original data).
 			if (NumInside == 0)
 			{
 				if (!Settings->bOutputDiscardedElements)
 				{
 					return;
 				}
-				Outside = CreateIO(Context->Outside.ToSharedRef(), PCGExData::EIOInit::Forward);
+				Outside = CreateIO(Context->Outside.ToSharedRef(), ParamSource ? PCGExData::EIOInit::NoInit : PCGExData::EIOInit::Forward);
 				if (!Outside)
 				{
 					return;
+				}
+				if (ParamSource)
+				{
+					Outside->SetOutputOverride(const_cast<UPCGParamData*>(ParamSource), false);
 				}
 				if (Settings->bTagIfNoPointPassed)
 				{
@@ -356,10 +403,14 @@ namespace PCGExUberFilter
 			}
 			else
 			{
-				Inside = CreateIO(Context->Inside.ToSharedRef(), PCGExData::EIOInit::Forward);
+				Inside = CreateIO(Context->Inside.ToSharedRef(), ParamSource ? PCGExData::EIOInit::NoInit : PCGExData::EIOInit::Forward);
 				if (!Inside)
 				{
 					return;
+				}
+				if (ParamSource)
+				{
+					Inside->SetOutputOverride(const_cast<UPCGParamData*>(ParamSource), false);
 				}
 				if (Settings->bTagIfAnyPointPassed)
 				{
@@ -373,21 +424,27 @@ namespace PCGExUberFilter
 			return;
 		}
 
-		const int32 NumPoints = PointDataFacade->GetNum();
-		TArray<int32> Indices;
-		PCGExArrayHelpers::InitArray(Indices, NumPoints);
-
 		TArray<int32> ReadIndices;
 		IndicesInside->Collapse(ReadIndices);
 
-		Inside = CreateIO(Context->Inside.ToSharedRef(), PCGExData::EIOInit::New);
+		Inside = CreateIO(Context->Inside.ToSharedRef(), ParamSource ? PCGExData::EIOInit::NoInit : PCGExData::EIOInit::New);
 		if (!Inside)
 		{
 			return;
 		}
 
-		PCGExPointArrayDataHelpers::SetNumPointsAllocated(Inside->GetOut(), ReadIndices.Num(), Inside->GetAllocations());
-		Inside->InheritProperties(ReadIndices, Inside->GetAllocations());
+		if (ParamSource)
+		{
+			if (UPCGParamData* InsideParam = PCGExBucketDispatchHelpers::ExtractParamRows(Context, ParamSource, ReadIndices))
+			{
+				Inside->SetOutputOverride(InsideParam, true);
+			}
+		}
+		else
+		{
+			PCGExPointArrayDataHelpers::SetNumPointsAllocated(Inside->GetOut(), ReadIndices.Num(), Inside->GetAllocations());
+			Inside->InheritProperties(ReadIndices, Inside->GetAllocations());
+		}
 
 		if (Settings->bTagIfAnyPointPassed)
 		{
@@ -401,15 +458,25 @@ namespace PCGExUberFilter
 
 		ReadIndices.Reset();
 		IndicesOutside->Collapse(ReadIndices);
-		Outside = CreateIO(Context->Outside.ToSharedRef(), PCGExData::EIOInit::New);
+		Outside = CreateIO(Context->Outside.ToSharedRef(), ParamSource ? PCGExData::EIOInit::NoInit : PCGExData::EIOInit::New);
 
 		if (!Outside)
 		{
 			return;
 		}
 
-		PCGExPointArrayDataHelpers::SetNumPointsAllocated(Outside->GetOut(), ReadIndices.Num(), Outside->GetAllocations());
-		Outside->InheritProperties(ReadIndices, Outside->GetAllocations());
+		if (ParamSource)
+		{
+			if (UPCGParamData* OutsideParam = PCGExBucketDispatchHelpers::ExtractParamRows(Context, ParamSource, ReadIndices))
+			{
+				Outside->SetOutputOverride(OutsideParam, true);
+			}
+		}
+		else
+		{
+			PCGExPointArrayDataHelpers::SetNumPointsAllocated(Outside->GetOut(), ReadIndices.Num(), Outside->GetAllocations());
+			Outside->InheritProperties(ReadIndices, Outside->GetAllocations());
+		}
 	}
 }
 

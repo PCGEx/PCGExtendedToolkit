@@ -48,7 +48,7 @@ TArray<FPCGPinProperties> UPCGExPointsProcessorSettings::InputPinProperties() co
 
 	if (!IsInputless())
 	{
-		if (!GetIsMainTransactional())
+		if (GetMainDataHandling() == PCGExData::EIOHandling::Points)
 		{
 			if (GetMainAcceptMultipleData())
 			{
@@ -61,14 +61,7 @@ TArray<FPCGPinProperties> UPCGExPointsProcessorSettings::InputPinProperties() co
 		}
 		else
 		{
-			if (GetMainAcceptMultipleData())
-			{
-				PCGEX_PIN_ANY(GetMainInputPin(), "The data to be processed.", Required)
-			}
-			else
-			{
-				PCGEX_PIN_ANY(GetMainInputPin(), "The data to be processed.", Required)
-			}
+			PCGEX_PIN_ANY(GetMainInputPin(), "The data to be processed.", Required)
 		}
 	}
 
@@ -97,7 +90,14 @@ void UPCGExPointsProcessorSettings::InputPinPropertiesBeforeFilters(TArray<FPCGP
 TArray<FPCGPinProperties> UPCGExPointsProcessorSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_POINTS(GetMainOutputPin(), "The processed input.", Normal)
+	if (GetMainDataHandling() == PCGExData::EIOHandling::Points)
+	{
+		PCGEX_PIN_POINTS(GetMainOutputPin(), "The processed input.", Normal)
+	}
+	else
+	{
+		PCGEX_PIN_ANY(GetMainOutputPin(), "The processed input.", Normal)
+	}
 	return PinProperties;
 }
 
@@ -312,7 +312,7 @@ bool FPCGExPointsProcessorElement::Boot(FPCGExContext* InContext) const
 		return false;
 	} //Get rid of errors and warning when there is no input
 
-	Context->MainPoints = MakeShared<PCGExData::FPointIOCollection>(Context, Settings->GetIsMainTransactional());
+	Context->MainPoints = MakeShared<PCGExData::FPointIOCollection>(Context, Settings->GetMainDataHandling());
 	Context->MainPoints->OutputPin = Settings->GetMainOutputPin();
 
 	TArray<FPCGTaggedData> Sources = Context->InputData.GetInputsByPin(Settings->GetMainInputPin());

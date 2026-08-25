@@ -66,6 +66,16 @@ namespace PCGExData
 		Out
 	};
 
+	// How a collection treats non-point inputs. Points skips them; the other two convert them
+	// to temp point data for processing (see PCGExPointIO::ToPointData). Transactional restages the
+	// untouched original (StageAnyOutput); Dynamic leaves output staging to the node, per input type.
+	enum class EIOHandling : uint8
+	{
+		Points,
+		Transactional,
+		Dynamic,
+	};
+
 	enum class EStaging : uint8
 	{
 		None              = 0,

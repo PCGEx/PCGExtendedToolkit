@@ -18,7 +18,7 @@ namespace PCGExMatching
 	{
 		FBox OctreeBounds = FBox(ForceInit);
 
-		TSharedPtr<PCGExData::FPointIOCollection> Targets = MakeShared<PCGExData::FPointIOCollection>(InContext, InPinLabel, PCGExData::EIOInit::NoInit, true);
+		TSharedPtr<PCGExData::FPointIOCollection> Targets = MakeShared<PCGExData::FPointIOCollection>(InContext, InPinLabel, PCGExData::EIOInit::NoInit, PCGExData::EIOHandling::Transactional);
 
 		if (Targets->IsEmpty())
 		{
