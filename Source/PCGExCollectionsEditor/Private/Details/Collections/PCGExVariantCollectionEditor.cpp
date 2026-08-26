@@ -119,7 +119,7 @@ TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddSourceMenu()
 		{
 			// Other variants ARE legal sources: their payload entries carry stable EntryIds,
 			// so theming a variant enables daisy-chained Swap nodes (X→A, then A→B). Only
-			// self-reference is excluded. Bakes never recurse into a source's own mappings,
+			// self-reference is excluded. Mappings never recurse into a source's own mappings,
 			// so even accidental A↔B setups are inert rather than cyclic.
 			if (const UPCGExAssetCollection* Edited = WeakEdited.Get();
 				Edited && Asset.GetSoftObjectPath() == FSoftObjectPath(Edited))

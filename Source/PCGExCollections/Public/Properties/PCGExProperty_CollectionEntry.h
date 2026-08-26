@@ -36,11 +36,14 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionEntryRef
 /**
  * Entry-picker property: outputs the canonical pick hash (PickHash::Pack) of the authored entry as int64,
  * under the staging-layer name PCGEx/CollectionEntry/<output name>, and contributes the collection to the
- * hosting node's "Map" sidecar. Downstream, any FPickUnpacker consumer reads it with StagingLayer = <name>.
+ * hosting node's "Map" sidecar. Downstream, any FPickUnpacker consumer reads it with StagingLayer = <name> --
+ * consumers default to StagingLayer = None (the bare default layer), which a column can never produce:
+ * schema columns are always named, and the bare layer is reserved for staging producers (by design).
  *
  * "Loaded or null": the property never loads its collection. Hosting nodes preload it through
  * RegisterAssetDependencies (GatherSoftObjectPaths surfaces the path); an unloaded collection or an unknown
- * EntryId resolves to hash 0 (unresolvable downstream) with one warning per clone.
+ * EntryId resolves to hash 0 (unresolvable downstream) with one warning per (collection, property) per session;
+ * an unset pick (EntryId 0) resolves to 0 silently.
  *
  * Collection is structural: the schema pins it, overrides pick the entry (SyncStructuralFromSchema).
  */
@@ -60,14 +63,15 @@ protected:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UPCGExAssetCollection>> TouchedCollections;
 
-	// Clone-side warning dedup (writers are single-threaded per instance); shared-instance paths
-	// (WriteMetadataValue, TryWriteValue, WriteOutputFrom) never mutate ANY state.
-	mutable TSet<FSoftObjectPath> WarnedCollections;
-
 	/** Hash for InRef, 0 when its collection isn't loaded or the id is unknown. OutCollection set only on success. */
 	static uint64 ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection*& OutCollection);
 
-	/** ResolveHash on Value, with a one-shot warning on failure. WriteOutput (clone path) only. */
+	/** ResolveHash plus a once-per-(collection, property)-per-session warning on failure. Stateless
+	 *  w.r.t. the property instance -- safe on SHARED source instances (Tuple rows, Distribute) and
+	 *  from parallel writers. */
+	static uint64 ResolveHashWarned(const FPCGExCollectionEntryRef& InRef, FName InPropertyName, UPCGExAssetCollection*& OutCollection);
+
+	/** ResolveHashWarned on Value. */
 	uint64 ResolveOwnHash() const;
 
 public:
