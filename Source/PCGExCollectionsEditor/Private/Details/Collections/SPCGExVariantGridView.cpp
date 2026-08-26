@@ -573,7 +573,7 @@ void SPCGExVariantGridView::RebuildItems()
 		return;
 	}
 
-	// Asset-path rules (matching key mirrors the bake: Staging.Path, first rule wins).
+	// Asset-path rules (matching key mirrors BuildGroupMapping: Staging.Path, first rule wins).
 	TMap<FSoftObjectPath, int32> PathToRule;
 	PathToRule.Reserve(Variant->PathOverrides.Num());
 	for (int32 r = 0; r < Variant->PathOverrides.Num(); r++)

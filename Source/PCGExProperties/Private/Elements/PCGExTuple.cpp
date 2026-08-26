@@ -131,6 +131,26 @@ void FPCGExTupleContext::RegisterAssetDependencies()
 }
 
 
+bool FPCGExTupleElement::Boot(FPCGExContext* InContext) const
+{
+	if (!IPCGExElement::Boot(InContext))
+	{
+		return false;
+	}
+
+	PCGEX_SETTINGS_C(InContext, Tuple)
+
+	// Duplicate columns resolve first-seen-wins downstream -- same hard failure as Tuple : Distribute.
+	TArray<FName> Duplicates;
+	if (!Settings->Composition.ValidateUniqueNames(Duplicates))
+	{
+		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Composition has duplicate column names."));
+		return false;
+	}
+
+	return true;
+}
+
 bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	PCGEX_CONTEXT()
@@ -164,7 +184,9 @@ bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSetti
 		const FPCGMetadataAttributeBase* ExistingAttr = TupleData->Metadata->GetConstAttribute(ColumnName);
 		if (ExistingAttr)
 		{
-			PCGEX_LOG_INVALID_ATTR_C(Context, Header Name, ColumnName)
+			// Resolved-name aliasing (e.g. a column literally named like another column's resolved
+			// staging-layer attribute) -- plain duplicates are already rejected in Boot.
+			PCGE_LOG_C(Error, GraphAndLog, Context, FText::Format(FTEXT("Output attribute \"{0}\" is declared by more than one column (resolved names collide) -- later column skipped."), FText::FromName(ColumnName)));
 			Attributes.Add(nullptr);
 			continue;
 		}

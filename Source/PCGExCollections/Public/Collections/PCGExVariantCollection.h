@@ -22,8 +22,9 @@ struct PCGEXCOLLECTIONS_API FPCGExVariantEntryOverride
 
 	/**
 	 * EntryId of the source entry this row replaces (see FPCGExAssetCollectionEntry::EntryId).
-	 * 0 = unbound row (never swapped). Ids are assigned on the source by SyncEntryIds during
-	 * its staging rebuild -- a source that was never rebuilt has no ids to bind against.
+	 * 0 = unbound row (never swapped). Ids are minted on the source by SyncEntryIds -- staging
+	 * rebuilds do it, and the editor heals missing ids on load, in the variant grid, and from
+	 * the entry picker (minting dirties the source, which then needs a save to persist).
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	int32 SourceEntryId = 0;
@@ -53,8 +54,8 @@ struct PCGEXCOLLECTIONS_API FPCGExVariantSource
 
 /**
  * Authoring shorthand: "any source entry staging this asset swaps to this payload."
- * Resolves at bake time against the DECLARED sources only -- a rule with no match in any
- * source simply bakes nothing. Explicit per-entry rows always take precedence over rules.
+ * Resolved live by BuildGroupMapping against the declared sources -- a rule with no match in
+ * any source simply maps nothing. Explicit per-entry rows always take precedence over rules.
  */
 USTRUCT(BlueprintType)
 struct PCGEXCOLLECTIONS_API FPCGExVariantPathOverride
@@ -82,7 +83,8 @@ struct PCGEXCOLLECTIONS_API FPCGExVariantPathOverride
  *
  * The flattened raw-index view is the concatenation of Sources[*].Overrides[*].Entry in
  * declaration order. Unset rows still consume a raw index (they are skipped by iteration and
- * cache build) so baked indices stay stable when rows are partially authored.
+ * cache build) so flat indices already referenced by emitted pick hashes stay stable when
+ * rows are partially authored.
  */
 UCLASS(BlueprintType, DisplayName="[PCGEx] Collection | Variant", meta=(ToolTip = "Per-entry overrides for one or more source collections, for end-of-pipeline asset swapping (biomes, themes)."))
 class PCGEXCOLLECTIONS_API UPCGExVariantCollection : public UPCGExAssetCollection
@@ -123,6 +125,13 @@ public:
 	 * unclaimed source entries. Pure derivation, no baked state. Orphaned rows warn and are skipped.
 	 */
 	void BuildGroupMapping(int32 GroupIdx, TArray<FIntPoint>& OutPairs) const;
+
+	/**
+	 * Variant-level diagnostics: the 16-bit pick-index ceiling and duplicate asset swap rules.
+	 * Not part of BuildGroupMapping -- consumers filter which groups they map (null or unmapped
+	 * sources are skipped), so per-group gating would miss whole executions. Call once per execution.
+	 */
+	void LogFlatViewDiagnostics() const;
 
 	/** Find the override group for a given source collection path. Null if not themed here. */
 	const FPCGExVariantSource* FindSourceGroup(const FSoftObjectPath& InSourcePath) const;

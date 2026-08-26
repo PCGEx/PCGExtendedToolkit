@@ -113,8 +113,9 @@ bool FPCGExAssetCollectionToSetElement::AdvanceWork(FPCGExContext* InContext, co
 	const bool bOutputCategory = Settings->bWriteCategory;
 	const EPCGExCategoryInheritance CategoryInheritance = bOutputCategory ? Settings->CategoryInheritance : EPCGExCategoryInheritance::None;
 
-	// Actor entries output FSoftClassPath, everything else a soft object path -- classified
-	// per entry so heterogeneous hosts can declare both halves.
+	// Actor entries output FSoftClassPath, everything else FSoftObjectPath. Both halves share one
+	// attribute name, so a heterogeneous mix collapses to the FSoftObjectPath half -- Staging.Path
+	// already holds the class path, and FindOrCreateAttribute deletes the first half on type mismatch.
 	{
 		bool bAnyActor = false;
 		bool bAnyNonActor = false;
@@ -124,7 +125,7 @@ bool FPCGExAssetCollectionToSetElement::AdvanceWork(FPCGExContext* InContext, co
 		{
 			bOutputAssetPath = false;
 		}
-		else if (!bAnyActor)
+		else
 		{
 			bOutputAssetClass = false;
 		}
