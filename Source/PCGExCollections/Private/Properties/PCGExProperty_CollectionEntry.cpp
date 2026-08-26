@@ -37,7 +37,9 @@ uint64 FPCGExProperty_CollectionEntry::ResolveHashWarned(const FPCGExCollectionE
 {
 	const uint64 Hash = ResolveHash(InRef, OutCollection);
 
-	if (!OutCollection && !InRef.Collection.IsNull())
+	// EntryId 0 is the documented "no pick" state (the picker shows "None") -- only a STALE
+	// pick (a stored id that no longer resolves) is worth a warning.
+	if (!OutCollection && !InRef.Collection.IsNull() && InRef.EntryId != 0)
 	{
 		// Global dedup: shared source instances must stay stateless and clones are per-execution,
 		// so per-instance bookkeeping either races or re-warns every run.

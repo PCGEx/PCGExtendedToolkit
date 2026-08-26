@@ -42,7 +42,8 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionEntryRef
  *
  * "Loaded or null": the property never loads its collection. Hosting nodes preload it through
  * RegisterAssetDependencies (GatherSoftObjectPaths surfaces the path); an unloaded collection or an unknown
- * EntryId resolves to hash 0 (unresolvable downstream) with one warning per (collection, property) per session.
+ * EntryId resolves to hash 0 (unresolvable downstream) with one warning per (collection, property) per session;
+ * an unset pick (EntryId 0) resolves to 0 silently.
  *
  * Collection is structural: the schema pins it, overrides pick the entry (SyncStructuralFromSchema).
  */
