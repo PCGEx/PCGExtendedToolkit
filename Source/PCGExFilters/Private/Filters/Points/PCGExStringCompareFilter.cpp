@@ -132,7 +132,7 @@ bool PCGExPointFilter::FStringCompareFilter::Test(const TSharedPtr<PCGExData::FP
 		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, FName(A), FName(B));
 	}
 
-	return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
+	return TypedFilterFactory->Config.bSwapOperands ? PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, B, A) : PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
 }
 
 PCGEX_CREATE_FILTER_FACTORY(StringCompare)

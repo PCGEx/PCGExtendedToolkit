@@ -76,12 +76,14 @@ void PCGExPointFilter::FMeanFilter::PostInit()
 	// DataMin/DataMax are recomputed from normalized values for subsequent mean calculation.
 	if (TypedFilterFactory->Config.Measure == EPCGExMeanMeasure::Relative)
 	{
+		// A zero max would divide by zero; fall back to a divisor of 1 (values pass through unscaled).
+		const double SafeMax = FMath::IsNearlyZero(DataMax) ? 1 : DataMax;
 		double RelativeMinEdgeLength = TNumericLimits<double>::Max();
 		double RelativeMaxEdgeLength = TNumericLimits<double>::Min();
 		SumValue = 0;
 		for (int i = 0; i < NumPoints; i++)
 		{
-			const double Normalized = (Values[i] /= DataMax);
+			const double Normalized = (Values[i] /= SafeMax);
 			RelativeMinEdgeLength = FMath::Min(Normalized, RelativeMinEdgeLength);
 			RelativeMaxEdgeLength = FMath::Max(Normalized, RelativeMaxEdgeLength);
 			SumValue += Normalized;
@@ -101,11 +103,13 @@ void PCGExPointFilter::FMeanFilter::PostInit()
 	case EPCGExMeanMethod::Fixed:
 		ReferenceValue = TypedFilterFactory->Config.MeanValue;
 		break;
+	// ModeMin/ModeMax enum tokens are wire format and cannot be renamed; their display names
+	// ("Mode (Highest)" / "Mode (Lowest)") are authoritative, hence the crossed-looking bools.
 	case EPCGExMeanMethod::ModeMin:
-		ReferenceValue = PCGExMath::GetMode(Values, false, TypedFilterFactory->Config.ModeTolerance);
+		ReferenceValue = PCGExMath::GetMode(Values, true, TypedFilterFactory->Config.ModeTolerance);
 		break;
 	case EPCGExMeanMethod::ModeMax:
-		ReferenceValue = PCGExMath::GetMode(Values, true, TypedFilterFactory->Config.ModeTolerance);
+		ReferenceValue = PCGExMath::GetMode(Values, false, TypedFilterFactory->Config.ModeTolerance);
 		break;
 	case EPCGExMeanMethod::Central:
 		ReferenceValue = DataMin + (DataMax - DataMin) * 0.5;
@@ -158,10 +162,10 @@ FString UPCGExMeanFilterProviderSettings::GetDisplayName() const
 		DisplayName += "' Median";
 		break;
 	case EPCGExMeanMethod::ModeMin:
-		DisplayName += "' Mode (min)";
+		DisplayName += "' Mode (Highest)";
 		break;
 	case EPCGExMeanMethod::ModeMax:
-		DisplayName += "' Mode (max)";
+		DisplayName += "' Mode (Lowest)";
 		break;
 	case EPCGExMeanMethod::Central:
 		DisplayName += "' Central";

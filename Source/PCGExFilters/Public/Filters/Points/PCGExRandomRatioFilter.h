@@ -95,7 +95,7 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(RandomCompareFilterFactory, "Filter : Random (Ratio)", "Filter using a random value.", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(RandomCompareFilterFactory, "Filter : Random (Ratio)", "Passes an exact ratio or count of elements, selected at random.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings
 

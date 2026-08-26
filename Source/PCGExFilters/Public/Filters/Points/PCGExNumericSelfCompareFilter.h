@@ -41,7 +41,7 @@ struct FPCGExNumericSelfCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExIndexMode IndexMode = EPCGExIndexMode::Offset;
 
-	/** Type of OperandB */
+	/** Whether the compared index is a constant or read from an attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
 

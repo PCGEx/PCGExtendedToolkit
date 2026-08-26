@@ -37,7 +37,7 @@ class PCGEXGRAPHS_API UPCGExClustersProcessorSettings : public UPCGExPointsProce
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(ClustersProcessorSettings, "Edges Processor Settings", "TOOLTIP_TEXT");
+	PCGEX_NODE_INFOS(ClustersProcessorSettings, "Edges Processor Settings", "Processes vtx/edges cluster pairs.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{
@@ -71,7 +71,7 @@ public:
 	virtual bool GetMainAcceptMultipleData() const override;
 	//~End UPCGExPointsProcessorSettings
 
-	/** Whether scoped attribute read is enabled or not. Disabling this on small dataset may greatly improve performance. It's enabled by default for legacy reasons. */
+	/** Whether endpoint index lookups are built per-scope rather than upfront. Default follows the plugin's Performance settings (disabled unless changed there). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable, AdvancedDisplay))
 	EPCGExOptionState ScopedIndexLookupBuild = EPCGExOptionState::Default;
 
@@ -92,7 +92,6 @@ struct PCGEXGRAPHS_API FPCGExClustersProcessorContext : FPCGExPointsProcessorCon
 
 	virtual ~FPCGExClustersProcessorContext() override;
 
-	bool bQuietMissingClusterPairElement = false;
 
 	TSharedPtr<PCGExData::FPointIOCollection> MainEdges;
 	TSharedPtr<PCGExClusters::FDataLibrary> ClusterDataLibrary;

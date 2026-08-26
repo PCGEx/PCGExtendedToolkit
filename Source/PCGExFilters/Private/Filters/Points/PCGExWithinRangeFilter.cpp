@@ -19,16 +19,7 @@ bool UPCGExWithinRangeFilterFactory::DomainCheck()
 
 bool UPCGExWithinRangeFilterFactory::Init(FPCGExContext* InContext)
 {
-	if (Config.Source == EPCGExRangeSource::AttributeSet)
-	{
-		FPCGExPickerAttributeSetRangesConfig DummyConfig;
-		DummyConfig.Attributes = Config.Attributes;
-		if (!UPCGExPickerAttributeSetRangesFactory::GetUniqueRanges(InContext, FName("Ranges"), DummyConfig, Ranges))
-		{
-			return false;
-		}
-	}
-	else
+	if (Config.Source != EPCGExRangeSource::AttributeSet)
 	{
 		FPCGExPickerConstantRangeConfig& Range = Ranges.Emplace_GetRef();
 		Range.RelativeStartIndex = Config.RangeMin;
@@ -37,6 +28,30 @@ bool UPCGExWithinRangeFilterFactory::Init(FPCGExContext* InContext)
 	}
 
 	return Super::Init(InContext);
+}
+
+bool UPCGExWithinRangeFilterFactory::WantsPreparation(FPCGExContext* InContext)
+{
+	return Config.Source == EPCGExRangeSource::AttributeSet;
+}
+
+// Ranges resolve during preparation so an empty pin routes through MissingDataPolicy instead of erroring out.
+PCGExFactories::EPreparationResult UPCGExWithinRangeFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
+{
+	PCGExFactories::EPreparationResult Result = Super::Prepare(InContext, TaskManager);
+	if (Result != PCGExFactories::EPreparationResult::Success)
+	{
+		return Result;
+	}
+
+	FPCGExPickerAttributeSetRangesConfig DummyConfig;
+	DummyConfig.Attributes = Config.Attributes;
+	if (!UPCGExPickerAttributeSetRangesFactory::GetUniqueRanges(InContext, FName("Ranges"), DummyConfig, Ranges, MissingDataPolicy != EPCGExFilterNoDataFallback::Error))
+	{
+		return PCGExFactories::EPreparationResult::MissingData;
+	}
+
+	return Result;
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExWithinRangeFilterFactory::CreateFilter() const

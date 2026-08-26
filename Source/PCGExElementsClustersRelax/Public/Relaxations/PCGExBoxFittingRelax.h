@@ -13,7 +13,7 @@
 /**
  *
  */
-UCLASS(MinimalAPI, meta=(DisplayName = "Box Fitting", PCGExNodeLibraryDoc="clusters/relax-cluster/box-fitting"))
+UCLASS(MinimalAPI, meta=(DisplayName = "Box Fitting", PCGExNodeLibraryDoc="clusters/transform/cluster-relax/box-fitting"))
 class UPCGExBoxFittingRelax : public UPCGExFittingRelaxBase
 {
 	GENERATED_BODY()

@@ -26,7 +26,7 @@ struct FPCGExMeanFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
 	FPCGAttributePropertyInputSelector Target;
 
-	/** Measure mode. If using relative, threshold values should be kept between 0-1, while absolute use the world-space length of the edge. */
+	/** Measure mode. Relative normalizes the read values against their max before the mean is computed; Discrete uses the raw values as-is. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExMeanMeasure Measure = EPCGExMeanMeasure::Relative;
 
@@ -34,7 +34,7 @@ struct FPCGExMeanFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExMeanMethod MeanMethod = EPCGExMeanMethod::Average;
 
-	/** Minimum value threshold */
+	/** Fixed value used as the reference mean. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditConditionHides, EditCondition="MeanMethod == EPCGExMeanMethod::Fixed", ClampMin=0))
 	double MeanValue = 0;
 
@@ -42,19 +42,19 @@ struct FPCGExMeanFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditConditionHides, EditCondition="MeanMethod == EPCGExMeanMethod::ModeMin || MeanMethod == EPCGExMeanMethod::ModeMax", ClampMin=0))
 	double ModeTolerance = 5;
 
-	/** Exclude if value is below a specific threshold. */
+	/** Exclude values that fall too far below the mean. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bDoExcludeBelowMean = false;
 
-	/** Minimum value threshold. */
+	/** Margin below the mean; values further below the mean than this are excluded. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bDoExcludeBelowMean"))
 	double ExcludeBelow = 0.2;
 
-	/** Exclude if value is above a specific threshold. */
+	/** Exclude values that fall too far above the mean. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bDoExcludeAboveMean = false;
 
-	/** Maximum threshold. */
+	/** Margin above the mean; values further above the mean than this are excluded. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bDoExcludeAboveMean"))
 	double ExcludeAbove = 0.2;
 

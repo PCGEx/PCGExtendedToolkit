@@ -34,7 +34,7 @@ enum class EPCGExRefineEdgesOutput : uint8
 	Attribute = 3 UMETA(DisplayName = "Attribute", ToolTip="Writes the result of the filters to an attribute."),
 };
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(Keywords = "filter edge mst minimum spanning tree skeleton gabriel"), meta=(PCGExNodeLibraryDoc="clusters/refine-cluster"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(Keywords = "filter edge mst minimum spanning tree skeleton gabriel"), meta=(PCGExNodeLibraryDoc="clusters/refine/cluster-refine"))
 class UPCGExRefineEdgesSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

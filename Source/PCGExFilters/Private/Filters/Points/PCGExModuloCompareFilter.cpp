@@ -91,8 +91,9 @@ namespace PCGExModuloCompareFilter
 	// which catches values landing just below a multiple (179.996 % 90 -> 89.996 ~= 0 cyclically).
 	bool Evaluate(const FPCGExModuloCompareFilterConfig& Config, const double A, const double B, const double C)
 	{
+		// Only a zero modulo base is undefined; A == 0 is a valid input (0 % B == 0) and goes through the comparison.
 		const double OffsetB = B + Config.OperandBOffset;
-		if (A == 0 || OffsetB == 0) { return Config.ZeroResult; }
+		if (OffsetB == 0) { return Config.ZeroResult; }
 
 		const double M = FMath::Fmod(A, OffsetB);
 

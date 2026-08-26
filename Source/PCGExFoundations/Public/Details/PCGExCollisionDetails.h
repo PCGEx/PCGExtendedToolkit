@@ -72,7 +72,7 @@ struct PCGEXFOUNDATIONS_API FPCGExCollisionDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="CollisionType == EPCGExCollisionFilterType::Profile", EditConditionHides))
 	FName CollisionProfileName = NAME_None;
 
-	/** Ignore this graph' PCG content */
+	/** Ignore the actor that owns the PCG component -- everything on that actor, not just its PCG content. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bIgnoreSelf = true;
 

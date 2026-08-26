@@ -11,7 +11,7 @@
 
 class UPCGExBitmaskCollection;
 
-USTRUCT(BlueprintType, DisplayName="[PCGEx] Bitmask Library Entry")
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Bitmask Collection Entry")
 struct PCGEXCORE_API FPCGExBitmaskCollectionEntry
 {
 	GENERATED_BODY()
@@ -69,7 +69,7 @@ namespace PCGExBitmaskCollection
 	};
 }
 
-UCLASS(BlueprintType, DisplayName="[PCGEx] Bitmask Library", meta=(ToolTip = "A library of named bitmask values for tagging and adjacency testing."))
+UCLASS(BlueprintType, DisplayName="[PCGEx] Bitmask Collection", meta=(ToolTip = "A collection of named bitmask values for tagging and adjacency testing."))
 class PCGEXCORE_API UPCGExBitmaskCollection : public UDataAsset
 {
 	mutable FRWLock CacheLock;

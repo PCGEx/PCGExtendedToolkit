@@ -74,7 +74,7 @@ bool PCGExPointFilter::FStringSelfCompareFilter::Test(const int32 PointIndex) co
 
 	if (TargetIndex == -1)
 	{
-		return false;
+		return TypedFilterFactory->Config.InvalidIndexFallback == EPCGExFilterFallback::Pass;
 	}
 
 	const FString A = OperandA->FetchSingle(PointDataFacade->Source->GetInPoint(PointIndex), TEXT(""));

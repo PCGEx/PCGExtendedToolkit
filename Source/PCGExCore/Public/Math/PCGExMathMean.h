@@ -19,8 +19,8 @@ enum class EPCGExMeanMethod : uint8
 {
 	Average = 0 UMETA(DisplayName = "Average", ToolTip="Average"),
 	Median  = 1 UMETA(DisplayName = "Median", ToolTip="Median"),
-	ModeMin = 2 UMETA(DisplayName = "Mode (Highest)", ToolTip="Mode length (~= highest most common value)"),
-	ModeMax = 3 UMETA(DisplayName = "Mode (Lowest)", ToolTip="Mode length (~= lowest most common value)"),
+	ModeMin = 2 UMETA(DisplayName = "Mode (Highest)", ToolTip="Most common value; ties resolve to the highest one"),
+	ModeMax = 3 UMETA(DisplayName = "Mode (Lowest)", ToolTip="Most common value; ties resolve to the lowest one"),
 	Central = 4 UMETA(DisplayName = "Central", ToolTip="Central uses the middle value between Min/Max input values."),
 	Fixed   = 5 UMETA(DisplayName = "Fixed", ToolTip="Fixed threshold"),
 };

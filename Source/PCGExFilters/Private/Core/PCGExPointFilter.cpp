@@ -164,7 +164,6 @@ namespace PCGExPointFilter
 			}
 
 			TSharedPtr<IFilter> NewFilter = Factory->CreateFilter();
-			NewFilter->bUseDataDomainSelectorsOnly = Factory->GetOnlyUseDataDomain();
 			NewFilter->bCacheResults = bCacheResultsPerFilter;
 			NewFilter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
 			NewFilter->SetSupportedTypes(SupportedFactoriesTypes);
@@ -214,7 +213,6 @@ namespace PCGExPointFilter
 			ManagedFilters.Reset();
 			PCGEX_FILTERS_SUBSYSTEM
 			const TSharedPtr<IFilter> NewFilter = PCGExFiltersSubsystem->GetConstantFilter(false);
-			NewFilter->bUseDataDomainSelectorsOnly = true;
 			NewFilter->bCacheResults = bCacheResultsPerFilter;
 			NewFilter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
 			NewFilter->bWillBeUsedWithCollections = bWillBeUsedWithCollections;
@@ -227,7 +225,6 @@ namespace PCGExPointFilter
 		{
 			PCGEX_FILTERS_SUBSYSTEM
 			const TSharedPtr<IFilter> NewFilter = PCGExFiltersSubsystem->GetConstantFilter(true);
-			NewFilter->bUseDataDomainSelectorsOnly = true;
 			NewFilter->bCacheResults = bCacheResultsPerFilter;
 			NewFilter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
 			NewFilter->bWillBeUsedWithCollections = bWillBeUsedWithCollections;

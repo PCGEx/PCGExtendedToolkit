@@ -25,7 +25,7 @@ struct FPCGExEntryCountFilterConfig
 
 	/** Comparison */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExComparison Comparison = EPCGExComparison::NearlyEqual;
+	EPCGExComparison Comparison = EPCGExComparison::EqualOrGreater;
 
 	/** Type of OperandB */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -37,7 +37,7 @@ struct FPCGExEntryCountFilterConfig
 
 	/** Operand B to test Entries count against */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0))
-	int32 OperandB = 0;
+	int32 OperandB = 1;
 
 	/** Near-equality tolerance */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))

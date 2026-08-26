@@ -10,15 +10,6 @@
 
 #include "PCGExEdgeEndpointsCompareNumFilter.generated.h"
 
-UENUM()
-enum class EPCGExEdgeEndpointCompareAgainstMode : uint8
-{
-	AgainstEach     = 0 UMETA(DisplayName = "Start <-> End", Tooltip="Compare Edge's start point value against Edge's end point value."),
-	AgainstStart    = 1 UMETA(DisplayName = "Edge <-> Start", Tooltip="Compare the Edge's start point value against the Edge itself."),
-	AgainstEnd      = 2 UMETA(DisplayName = "Edge <-> End", Tooltip="Compare the Edge's end point value against the Edge itself."),
-	AgainstSelfBoth = 3 UMETA(DisplayName = "Edge <-> Start, End", Tooltip="Compare the Edge's value against each of its end points."),
-};
-
 USTRUCT(BlueprintType)
 struct FPCGExEdgeEndpointsCompareNumFilterConfig
 {
@@ -36,7 +27,7 @@ struct FPCGExEdgeEndpointsCompareNumFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Comparison"))
 	EPCGExComparison Comparison = EPCGExComparison::StrictlyGreater;
 
-	/** Rounding mode for approx. comparison modes */
+	/** Near-equality tolerance for approximate comparison modes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = DBL_COMPARE_TOLERANCE;
 

@@ -25,7 +25,7 @@ enum class EPCGExBoxFittingSeparation : uint8
  * Relaxation using axis-aligned bounding boxes for collision detection.
  * More accurate than radius-based for rectangular or elongated objects.
  */
-UCLASS(MinimalAPI, meta=(DisplayName = "Box Fitting v2", PCGExNodeLibraryDoc="clusters/relax-cluster/box-fitting"))
+UCLASS(MinimalAPI, meta=(DisplayName = "Box Fitting v2", PCGExNodeLibraryDoc="clusters/transform/cluster-relax/box-fitting-v2"))
 class UPCGExBoxFittingRelax2 : public UPCGExFittingRelaxBase
 {
 	GENERATED_BODY()

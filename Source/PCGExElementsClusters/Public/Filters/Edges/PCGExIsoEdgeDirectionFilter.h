@@ -21,11 +21,11 @@ struct FPCGExIsoEdgeDirectionFilterConfig
 
 	FPCGExIsoEdgeDirectionFilterConfig() = default;
 
-	/** Defines the direction in which points will be ordered to form the final paths. */
+	/** Defines how the edge's endpoints are ordered to establish its direction. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExEdgeDirectionSettings DirectionSettings;
 
-	/** Type of check; Note that Fast comparison ignores adjacency consolidation. */
+	/** Type of check. Dot compares angles precisely; Hash (Fast) compares quantized directions. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExDirectionCheckMode ComparisonQuality = EPCGExDirectionCheckMode::Dot;
 
@@ -33,7 +33,7 @@ struct FPCGExIsoEdgeDirectionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
 
-	/** Operand B for testing -- Will be translated to `double` under the hood. */
+	/** Direction to compare the edge against -- Read as an FVector direction. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
 	FPCGAttributePropertyInputSelector Direction;
 
