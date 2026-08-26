@@ -85,8 +85,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="VoxelSizeMode == EPCGExDecompVoxelSizeMode::Manual", EditConditionHides))
 	FVector VoxelSize = FVector(100.0);
 
-	/** Maximum dimensions for output cells in world units. Extracted boxes larger than this are subdivided. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	/** Maximum dimensions for output cells in world units. Extracted boxes larger than this are subdivided. A zero axis means no size limit on that axis. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
 	FVector MaxCellSize = FVector(500.0);
 
 	/** Minimum occupied voxels per cell. Cells below this threshold are discarded (CellID = -1). */

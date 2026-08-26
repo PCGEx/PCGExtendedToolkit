@@ -280,7 +280,11 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 		}
 	}
 
-	// Find point closest to each centroid
+	// Find point closest to each centroid. Claimed points are excluded so two converged
+	// centroids can't resolve to the same hub (a duplicate becomes a self-loop edge downstream).
+	TSet<int32> Claimed;
+	Claimed.Reserve(K);
+
 	for (int32 c = 0; c < K; ++c)
 	{
 		double BestDist = TNumericLimits<double>::Max();
@@ -288,7 +292,7 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 
 		for (int32 i = 0; i < NumPoints; ++i)
 		{
-			if (!CanGenerateRef[i])
+			if (!CanGenerateRef[i] || Claimed.Contains(i))
 			{
 				continue;
 			}
@@ -303,6 +307,7 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 
 		if (BestPoint != INDEX_NONE)
 		{
+			Claimed.Add(BestPoint);
 			OutHubs.Add(BestPoint);
 		}
 	}

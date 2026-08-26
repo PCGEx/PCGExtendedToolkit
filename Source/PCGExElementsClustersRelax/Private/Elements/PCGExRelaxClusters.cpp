@@ -203,17 +203,20 @@ namespace PCGExRelaxClusters
 	{
 		CurrentStep++;
 
+		// Valid step indices are 0..Steps-1; reaching Steps means one full cycle completed.
+		if (CurrentStep >= Steps)
+		{
+			CurrentStep = 0;
+			Iterations--;
+		}
+
+		// Checked AFTER the rollover so the call that ends the last cycle doesn't dispatch a fresh
+		// step (or swap buffers via PrepareNextStep(0)) -- WriteBuffer holds the final cycle's result.
 		if (Iterations <= 0)
 		{
 			// Wrap up
 			StartParallelLoopForNodes();
 			return;
-		}
-
-		if (CurrentStep > Steps)
-		{
-			Iterations--;
-			CurrentStep = 0;
 		}
 
 		StepSource = RelaxOperation->PrepareNextStep(CurrentStep);

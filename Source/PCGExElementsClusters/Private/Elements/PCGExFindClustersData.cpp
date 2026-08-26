@@ -109,9 +109,13 @@ bool FPCGExFindClustersDataElement::AdvanceWork(FPCGExContext* InContext, const 
 	}
 
 	const TSharedPtr<PCGExClusters::FDataLibrary> Library = MakeShared<PCGExClusters::FDataLibrary>(true);
-	if (!Library->Build(Context->MainPoints))
+	const bool bValidLibrary = Library->Build(Context->MainPoints);
+
+	// Prints on success too, so partial problems surface (and the skip toggles always apply).
+	Library->PrintLogs(Context, Settings->bSkipTrivialWarnings, Settings->bSkipImportantWarnings);
+
+	if (!bValidLibrary)
 	{
-		Library->PrintLogs(Context, Settings->bSkipTrivialWarnings, Settings->bSkipImportantWarnings);
 		PCGEX_LOG_MISSING_INPUT(Context, FTEXT("Could not find any valid vtx/edge pairs."))
 		return Context->CancelExecution();
 	}

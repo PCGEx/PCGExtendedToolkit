@@ -13,9 +13,17 @@
 
 void FPCGExEdgeDirectionSettings::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader, const TArray<FPCGExSortRuleConfig>* InSortingRules) const
 {
-	if (DirectionMethod == EPCGExEdgeDirectionMethod::EndpointsSort)
+	// EndpointsSort reads the sorting-rule attributes on the vtx facade. DirSourceAttribute belongs to
+	// EdgeDotAttribute, which reads it from the EDGE facade -- never through this (vtx) preloader.
+	if (DirectionMethod == EPCGExEdgeDirectionMethod::EndpointsSort && InSortingRules)
 	{
-		FacadePreloader.Register<double>(InContext, DirSourceAttribute);
+		for (const FPCGExSortRuleConfig& Rule : *InSortingRules)
+		{
+			if (!Rule.bReadDataTag)
+			{
+				FacadePreloader.Register<double>(InContext, Rule.Selector);
+			}
+		}
 	}
 }
 
@@ -30,7 +38,9 @@ bool FPCGExEdgeDirectionSettings::Init(FPCGExContext* InContext, const TSharedRe
 		}
 
 		Sorter = MakeShared<PCGExSorting::FSorter>(InContext, InVtxDataFacade, *InSortingRules);
-		Sorter->SortDirection = DirectionChoice == EPCGExEdgeDirectionChoice::GreatestToSmallest ? EPCGExSortDirection::Descending : EPCGExSortDirection::Ascending;
+		// The sorter stays Ascending: it answers "does Start sort before End", and bAscendingDesired applies
+		// DirectionChoice in SortEndpoints. Deriving both from the choice makes them cancel out.
+		Sorter->SortDirection = EPCGExSortDirection::Ascending;
 		if (!Sorter->Init(InContext))
 		{
 			return false;

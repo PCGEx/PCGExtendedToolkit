@@ -36,14 +36,13 @@ namespace PCGExGraphs
 
 	bool FGraph::InsertEdge_Unsafe(const int32 A, const int32 B, FEdge& OutEdge, const int32 IOIndex)
 	{
-		
-#if WITH_EDITOR
+		// Not editor-only: a self-loop makes FCluster::BuildFrom reject the whole cluster.
+		// ensure() still evaluates its expression when compiled out, so the skip holds in all targets.
 		if (!ensure(A != B))
 		{
 			return false;
 		}
-#endif
-		
+
 		const uint64 Hash = PCGEx::H64U(A, B);
 		if (const int32* EdgeIndex = UniqueEdges.Find(Hash))
 		{
@@ -118,14 +117,13 @@ namespace PCGExGraphs
 			}
 
 			PCGEx::H64(E, A, B);
-			
-#if WITH_EDITOR
+
+			// Not editor-only: a self-loop makes FCluster::BuildFrom reject the whole cluster.
 			if (!ensure(A != B))
 			{
 				continue;
 			}
-#endif
-			
+
 			const int32 EdgeIndex = Edges.Emplace(Edges.Num(), A, B, -1, InIOIndex);
 
 			UniqueEdges.Add(E, EdgeIndex);
@@ -257,12 +255,11 @@ namespace PCGExGraphs
 
 			PCGEx::H64(E, A, B);
 
-#if WITH_EDITOR
+			// Not editor-only: a self-loop makes FCluster::BuildFrom reject the whole cluster.
 			if (!ensure(A != B))
 			{
 				continue;
 			}
-#endif
 
 			const int32 EdgeIndex = Edges.Emplace(Edges.Num(), A, B);
 			UniqueEdges.Add(E, EdgeIndex);

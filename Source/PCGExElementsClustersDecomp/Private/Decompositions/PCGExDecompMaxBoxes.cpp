@@ -449,17 +449,18 @@ void FPCGExDecompMaxBoxes::SubdivideAndClaim(
 {
 	const FIntVector BoxSize = BoxMax - BoxMin + FIntVector(1, 1, 1);
 
-	// How many chunks per axis
+	// How many chunks per axis. Ceil as (N-1)/D+1, not (N+D-1)/D: MaxExtent is MAX_int32 on
+	// unlimited axes, and the additive form overflows into negative or zero chunk counts.
 	const FIntVector NumChunks = FIntVector(
-		(BoxSize.X + MaxExtent.X - 1) / MaxExtent.X,
-		(BoxSize.Y + MaxExtent.Y - 1) / MaxExtent.Y,
-		(BoxSize.Z + MaxExtent.Z - 1) / MaxExtent.Z);
+		(BoxSize.X - 1) / MaxExtent.X + 1,
+		(BoxSize.Y - 1) / MaxExtent.Y + 1,
+		(BoxSize.Z - 1) / MaxExtent.Z + 1);
 
 	// Even chunk size per axis (last chunk may be smaller due to clamping to BoxMax)
 	const FIntVector ChunkSize = FIntVector(
-		(BoxSize.X + NumChunks.X - 1) / NumChunks.X,
-		(BoxSize.Y + NumChunks.Y - 1) / NumChunks.Y,
-		(BoxSize.Z + NumChunks.Z - 1) / NumChunks.Z);
+		(BoxSize.X - 1) / NumChunks.X + 1,
+		(BoxSize.Y - 1) / NumChunks.Y + 1,
+		(BoxSize.Z - 1) / NumChunks.Z + 1);
 
 	for (int32 CZ = 0; CZ < NumChunks.Z; CZ++)
 	{

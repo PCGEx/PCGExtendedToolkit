@@ -40,7 +40,7 @@ struct PCGEXCORE_API FPCGExCoreSettingsCache
 	bool bToneDownOptionalPins = true;
 
 	bool bCacheClusters = true;
-	bool bDefaultScopedIndexLookupBuild = true;
+	bool bDefaultScopedIndexLookupBuild = false;
 	bool bDefaultBuildAndCacheClusters = true;
 
 	int32 SmallPointsSize = 1024;
