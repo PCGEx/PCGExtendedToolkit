@@ -64,27 +64,27 @@ public:
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), true)
 	//~End UPCGExPointsProcessorSettings
 
-	/** Write result to point instead of split outputs */
+	/** How many points must pass the filters for a collection to pass: all of them, any of them, or a Partial threshold. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExUberFilterCollectionsMode Mode = EPCGExUberFilterCollectionsMode::All;
 
-	/** Partial value type */
+	/** How the Partial threshold is measured: Relative compares the ratio of passing points (0..1), Discrete compares their count. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExUberFilterCollectionsMode::Partial", EditConditionHides))
 	EPCGExMeanMeasure Measure = EPCGExMeanMeasure::Relative;
 
-	/** Partial value comparison */
+	/** Comparison between the measured passing ratio/count and the threshold. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExUberFilterCollectionsMode::Partial", EditConditionHides))
 	EPCGExComparison Comparison = EPCGExComparison::EqualOrGreater;
 
-	/** Partial value type */
+	/** Ratio of passing points (0..1) a collection is compared against. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExUberFilterCollectionsMode::Partial && Measure == EPCGExMeanMeasure::Relative", EditConditionHides, ClampMin=0, ClampMax=1))
 	double DblThreshold = 0.5;
 
-	/** Partial value type */
+	/** Number of passing points a collection is compared against. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode == EPCGExUberFilterCollectionsMode::Partial && Measure == EPCGExMeanMeasure::Discrete", EditConditionHides, ClampMin=0))
 	int32 IntThreshold = 10;
 
-	/** Rounding mode for relative measures */
+	/** Tolerance for nearly equal/not equal comparisons; only applies to the Relative (ratio) measure. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = DBL_COMPARE_TOLERANCE;
 

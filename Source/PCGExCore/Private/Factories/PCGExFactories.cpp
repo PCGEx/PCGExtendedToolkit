@@ -57,7 +57,9 @@ namespace PCGExFactories
 			return false;
 		}
 
-		OutFactories.Sort([](const UPCGExFactoryData& A, const UPCGExFactoryData& B)
+		// Stable: factories without an explicit Priority (e.g. probes) keep their input/pin order,
+		// which is load-bearing wherever earlier factories claim shared state (direction coincidence).
+		OutFactories.StableSort([](const UPCGExFactoryData& A, const UPCGExFactoryData& B)
 		{
 			return A.Priority < B.Priority;
 		});

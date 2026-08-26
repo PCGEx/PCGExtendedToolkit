@@ -23,7 +23,7 @@ struct FPCGExStringSelfCompareFilterConfig
 
 	FPCGExStringSelfCompareFilterConfig() = default;
 
-	/** Operand A for testing -- Will be translated to `double` under the hood. */
+	/** Operand A for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName OperandA = NAME_None;
 
@@ -35,7 +35,7 @@ struct FPCGExStringSelfCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExIndexMode IndexMode = EPCGExIndexMode::Offset;
 
-	/** Type of OperandB */
+	/** Whether the compared index is a constant or read from an attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
 

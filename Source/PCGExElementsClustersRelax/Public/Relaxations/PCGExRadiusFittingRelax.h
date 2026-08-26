@@ -16,7 +16,7 @@
 /**
  *
  */
-UCLASS(MinimalAPI, meta=(DisplayName = "Radius Fitting", PCGExNodeLibraryDoc="clusters/relax-cluster/radius-fitting"))
+UCLASS(MinimalAPI, meta=(DisplayName = "Radius Fitting", PCGExNodeLibraryDoc="clusters/transform/cluster-relax/radius-fitting"))
 class UPCGExRadiusFittingRelax : public UPCGExFittingRelaxBase
 {
 	GENERATED_BODY()

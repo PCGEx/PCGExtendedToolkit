@@ -11,6 +11,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExNoiseGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
@@ -30,6 +31,13 @@ bool UPCGExNoiseFilterFactory::Init(FPCGExContext* InContext)
 	}
 
 	return true;
+}
+
+// Makes the collection-level Test reachable: noise is sampled from the transform/bounds alone,
+// so only the comparison operand gates data-domain-only evaluation.
+bool UPCGExNoiseFilterFactory::DomainCheck()
+{
+	return Config.Comparison.Input == EPCGExInputValueType::Constant || PCGExMetaHelpers::IsDataDomainAttribute(Config.Comparison.Attribute);
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExNoiseFilterFactory::CreateFilter() const

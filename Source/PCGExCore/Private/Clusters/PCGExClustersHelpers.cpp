@@ -4,6 +4,7 @@
 #include "Clusters/PCGExClustersHelpers.h"
 
 #include "PCGExCoreSettingsCache.h"
+#include "PCGExLog.h"
 #include "PCGExSettingsCacheBody.h"
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClusterCommon.h"
@@ -23,6 +24,12 @@ namespace PCGExClusters::Helpers
 
 	void MarkClusterVtx(const TSharedPtr<PCGExData::FPointIO>& IO, const PCGExDataId& Id)
 	{
+		if (!Id)
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("Missing or malformed '%s' pair tag on input #%d ('%s') -- vtx left unmarked."), *Labels::TagStr_PCGExCluster, IO->IOIndex, *GetNameSafe(IO->GetOutIn()));
+			return;
+		}
+
 		IO->Tags->Set(Labels::TagStr_PCGExCluster, Id);
 		IO->Tags->AddRaw(Labels::TagStr_PCGExVtx);
 		IO->Tags->Remove(Labels::TagStr_PCGExEdges);
@@ -31,6 +38,12 @@ namespace PCGExClusters::Helpers
 
 	void MarkClusterEdges(const TSharedPtr<PCGExData::FPointIO>& IO, const PCGExDataId& Id)
 	{
+		if (!Id)
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("Missing or malformed '%s' pair tag on input #%d ('%s') -- edges left unmarked."), *Labels::TagStr_PCGExCluster, IO->IOIndex, *GetNameSafe(IO->GetOutIn()));
+			return;
+		}
+
 		IO->Tags->Set(Labels::TagStr_PCGExCluster, Id);
 		IO->Tags->AddRaw(Labels::TagStr_PCGExEdges);
 		IO->Tags->Remove(Labels::TagStr_PCGExVtx);

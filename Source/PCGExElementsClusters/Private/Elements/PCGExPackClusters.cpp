@@ -108,7 +108,7 @@ namespace PCGExPackClusters
 		PackedIO = Context->PackedClusters->Emplace_GetRef(EdgeDataFacade->Source, PCGExData::EIOInit::Duplicate);
 		PackedIOFacade = MakeShared<PCGExData::FFacade>(PackedIO.ToSharedRef());
 
-		PackedIO->Tags->Set<int32>(PCGExClusters::Labels::TagStr_PCGExCluster, EdgeDataFacade->GetIn()->GetUniqueID());
+		PackedIO->Tags->Set<int64>(PCGExClusters::Labels::TagStr_PCGExCluster, EdgeDataFacade->GetIn()->GetUniqueID());
 		WriteMark(PackedIO.ToSharedRef(), PCGExClusters::Labels::Tag_PackedClusterEdgeCount, NumEdges);
 
 		// Copy vtx points after edge points

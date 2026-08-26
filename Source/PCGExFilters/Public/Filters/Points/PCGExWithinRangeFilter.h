@@ -52,7 +52,7 @@ struct FPCGExWithinRangeFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Source == EPCGExRangeSource::Constant", EditConditionHides))
 	double RangeMax = 100;
 
-	/** Whether the test should be inclusive of min/max values */
+	/** Whether the max end of the range is inclusive. The min end is always included. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInclusive = false;
 
@@ -78,6 +78,9 @@ public:
 
 	virtual bool DomainCheck() override;
 	virtual bool Init(FPCGExContext* InContext) override;
+
+	virtual bool WantsPreparation(FPCGExContext* InContext) override;
+	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
@@ -141,5 +144,10 @@ public:
 
 #if WITH_EDITOR
 	virtual FString GetDisplayName() const override;
+
+	virtual bool ShowMissingDataPolicy_Internal() const override
+	{
+		return Config.Source == EPCGExRangeSource::AttributeSet;
+	}
 #endif
 };

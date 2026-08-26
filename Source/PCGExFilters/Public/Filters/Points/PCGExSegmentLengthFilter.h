@@ -47,7 +47,7 @@ struct FPCGExSegmentLengthFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::StrictlyGreater;
 
-	/** Rounding mode for approx. comparison modes */
+	/** Near-equality tolerance for approximate comparison modes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = 0;
 
@@ -168,7 +168,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS(SegmentLengthFilterFactory, "Filter : Segment Length", "Creates a filter definition that compares the distance between the tested point and another inside the same dataset.")
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(SegmentLengthFilterFactory, "Filter : Segment Length", "Creates a filter definition that compares the distance between the tested point and another inside the same dataset.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings
 

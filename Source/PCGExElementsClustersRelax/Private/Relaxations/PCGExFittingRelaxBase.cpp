@@ -13,7 +13,6 @@ bool UPCGExFittingRelaxBase::PrepareForCluster(FPCGExContext* InContext, const T
 	{
 		return false;
 	}
-	Deltas.Init(FInt64Vector3(0), Cluster->Nodes->Num());
 
 	if (EdgeFitting == EPCGExRelaxEdgeFitting::Attribute)
 	{

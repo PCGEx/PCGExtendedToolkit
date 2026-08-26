@@ -112,6 +112,12 @@ namespace PCGExPointFilter
 	// re-checks what Init already rejected. The per-point Test(int32) relies on the Init guard instead.
 	bool FTimeFilter::Test(const PCGExData::FProxyPoint& Point) const
 	{
+		// Matching failed for the whole collection (no candidate matched) -> fallback result.
+		if (bCheckAgainstDataBounds)
+		{
+			return bCollectionTestResult;
+		}
+
 		if (!Handler->IsUsable())
 		{
 			return false;
@@ -185,7 +191,8 @@ namespace PCGExPointFilter
 			}
 		}
 
-		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, TypedFilterFactory->Config.OperandBConstant, TypedFilterFactory->Config.Tolerance);
+		// No point index in proxy/collection mode; the getter resolves constants and @Data attributes at any index.
+		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, OperandB->Read(0), TypedFilterFactory->Config.Tolerance);
 	}
 
 	// Compare the spline parametric time (alpha) at the closest projection of each point.
@@ -267,7 +274,7 @@ namespace PCGExPointFilter
 			}
 		}
 
-		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, TypedFilterFactory->Config.OperandBConstant, TypedFilterFactory->Config.Tolerance);
+		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, OperandB->Read(PointIndex), TypedFilterFactory->Config.Tolerance);
 	}
 
 	bool FTimeFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const

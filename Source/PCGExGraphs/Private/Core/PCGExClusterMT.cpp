@@ -132,7 +132,7 @@ namespace PCGExClusterMT
 
 			if (!Cluster->BuildFrom(*EndpointsLookup, ExpectedAdjacency))
 			{
-				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("A cluster could not be rebuilt correctly. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Sanitize Cluster' to ensure clusters are validated."));
+				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("A cluster could not be rebuilt correctly. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Cluster : Repair' to ensure clusters are validated."));
 				Cluster.Reset();
 				return false;
 			}
@@ -688,7 +688,7 @@ namespace PCGExClusterMT
 		{
 			if (!PCGExGraphs::Helpers::BuildEndpointsLookup(VtxDataFacade->Source, EndpointsLookup, ExpectedAdjacency))
 			{
-				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Some vtx data is missing its PCGEx endpoint attribute. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Sanitize Cluster' to ensure clusters are validated."));
+				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Some vtx data is missing its PCGEx endpoint attribute. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Cluster : Repair' to ensure clusters are validated."));
 				return;
 			}
 
@@ -711,7 +711,7 @@ namespace PCGExClusterMT
 			const FPCGMetadataAttributeBase* RawLookupAttributeBase = PCGExMetaHelpers::TryGetConstAttribute<int64>(VtxDataFacade->GetIn(), PCGExClusters::Labels::Attr_PCGExVtxIdx);
 			if (!RawLookupAttributeBase)
 			{
-				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Some vtx data is missing its PCGEx endpoint attribute. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Sanitize Cluster' to ensure clusters are validated."));
+				PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Some vtx data is missing its PCGEx endpoint attribute. If you did change the content of vtx/edges collections using non cluster-friendly nodes, make sure to use a 'Cluster : Repair' to ensure clusters are validated."));
 				return;
 			}
 
@@ -811,6 +811,7 @@ namespace PCGExClusterMT
 
 		if (VtxDataFacade->GetNum() <= 1)
 		{
+			PCGEX_LOG_INVALID_INPUT(ExecutionContext, FTEXT("A vtx dataset has fewer than 2 points; the whole cluster pair is skipped."))
 			return;
 		}
 		if (VtxFilterFactories)

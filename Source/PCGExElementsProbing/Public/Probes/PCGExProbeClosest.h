@@ -97,7 +97,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeClosest, "Probe : Closests", "Probe in a given Closest.", FName(GetDisplayName()))
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeClosest, "Probe : Closest", "Connects to the closest candidates within the search radius.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
 

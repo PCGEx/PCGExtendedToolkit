@@ -60,7 +60,7 @@ struct PCGEXGRAPHS_API FPCGExGraphBuilderDetails
 
 	explicit FPCGExGraphBuilderDetails(const EPCGExMinimalAxis InDefaultSolidificationAxis = EPCGExMinimalAxis::None);
 
-	/** Don't output Clusters if they have less points than a specified amount. */
+	/** Write edge point positions as an interpolation between their endpoints. */
 	UPROPERTY(BlueprintReadWrite, Category = Settings, EditAnywhere, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteEdgePosition = true;
 
@@ -120,7 +120,7 @@ struct PCGEXGRAPHS_API FPCGExGraphBuilderDetails
 	UPROPERTY(BlueprintReadWrite, Category = "Settings|Extra Data", EditAnywhere, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bOutputEdgeLength = false;
 
-	/** Whether to output edge length to a 'double' attribute. */
+	/** Name of the 'double' attribute edge length is written to. */
 	UPROPERTY(BlueprintReadWrite, Category = "Settings|Extra Data", EditAnywhere, meta = (PCG_Overridable, EditCondition="bOutputEdgeLength"))
 	FName EdgeLengthName = FName("EdgeLength");
 
