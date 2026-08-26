@@ -231,6 +231,10 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 		Contribution = MakeShared<TMap<uint64, uint64>>();
 		const uint32 VariantGUID = Variant->GetCollectionGUID();
 
+		// Once per variant per execution -- the group loop below skips null/unmapped sources,
+		// so variant-level diagnostics can't live inside BuildGroupMapping.
+		Variant->LogFlatViewDiagnostics();
+
 		TArray<FIntPoint> Pairs;
 		for (int32 g = 0; g < Variant->Sources.Num(); g++)
 		{
@@ -259,7 +263,7 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 				{
 					if (Row.SourceEntryId != 0 && Row.Entry.IsValid())
 					{
-						PCGE_LOG(Warning, GraphAndLog, FTEXT("A variant source group resolved no swaps (its source's entry ids no longer match). Open and re-save the source collection, then the variant."));
+						PCGE_LOG(Warning, GraphAndLog, FTEXT("A variant source group resolved no swaps (its source's entry ids no longer match). Open and re-save the source collection."));
 						break;
 					}
 				}

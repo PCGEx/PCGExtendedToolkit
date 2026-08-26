@@ -334,11 +334,20 @@ void FPCGExPropertySchemaCollection::Resolve(TArray<FPCGExPropertyResolved>& Out
 
 	if (ImportedSchemas.IsEmpty())
 	{
+		// Same first-seen-wins contract as the imports path below -- duplicate names must resolve
+		// identically either way. ValidateUniqueNames is the loud, caller-facing check.
+		TSet<FName> LocalSeen;
 		Out.Reserve(Schemas.Num());
 		for (int32 i = 0; i < Schemas.Num(); ++i)
 		{
 			const FPCGExPropertySchema& Schema = Schemas[i];
-			if (Schema.IsValid())
+			if (!Schema.IsValid())
+			{
+				continue;
+			}
+			bool bAlreadySeen = false;
+			LocalSeen.Add(Schema.Name, &bAlreadySeen);
+			if (!bAlreadySeen)
 			{
 				Out.Emplace(&Schema, nullptr, i);
 			}

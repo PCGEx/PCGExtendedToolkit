@@ -26,7 +26,7 @@ void UPCGExStagingLoadPropertiesSettings::InputPinPropertiesBeforeFilters(TArray
 TArray<FPCGPinProperties> UPCGExStagingLoadPropertiesSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGExProperties::AddOutputMapPin(PinProperties, PropertyOutputSettings.bOutputMap);
+	PCGExProperties::AddOutputMapPin(PinProperties, bOutputMap);
 	return PinProperties;
 }
 
@@ -76,6 +76,7 @@ bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 	}
 
 	PCGEX_FWD(PropertyOutputSettings)
+	PCGEX_FWD(bOutputMap)
 	PCGEX_FWD(SampledPropertyOutputs)
 
 	// Roll up "any output configured?" across all output families so the warning only fires
@@ -95,6 +96,7 @@ bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 	PCGEX_LOAD_PROP_FIELD_BOOT(BoundsMin)
 	PCGEX_LOAD_PROP_FIELD_BOOT(BoundsMax)
 	PCGEX_LOAD_PROP_FIELD_BOOT(CollectionType)
+	PCGEX_LOAD_PROP_FIELD_BOOT(EntryType)
 	PCGEX_LOAD_PROP_FIELD_BOOT(Symbol)
 	PCGEX_LOAD_PROP_FIELD_BOOT(Size)
 	PCGEX_LOAD_PROP_FIELD_BOOT(Scalable)
@@ -150,7 +152,7 @@ bool FPCGExStagingLoadPropertiesElement::AdvanceWork(FPCGExContext* InContext, c
 
 	Context->MainPoints->StageOutputs();
 
-	if (Settings->PropertyOutputSettings.bOutputMap && !Context->SidecarSources.IsEmpty())
+	if (Settings->bOutputMap && !Context->SidecarSources.IsEmpty())
 	{
 		PCGExProperties::StageSidecars(Context, Context->SidecarSources);
 	}
@@ -307,7 +309,7 @@ namespace PCGExStagingLoadProperties
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping), so sidecar rows come from
 			// the unique sources resolved above.
-			if (Context->PropertyOutputSettings.bOutputMap && !Cache.WriterPtr->GetOutputSidecarPin().IsNone())
+			if (Context->bOutputMap && !Cache.WriterPtr->GetOutputSidecarPin().IsNone())
 			{
 				FScopeLock ScopeLock(&Context->SidecarLock);
 				for (const TPair<uint64, const FPCGExProperty*>& Pair : Cache.SourceByHash)

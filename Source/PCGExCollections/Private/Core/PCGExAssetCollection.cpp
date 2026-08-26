@@ -1555,7 +1555,7 @@ bool UPCGExAssetCollection::BuildCacheFromEntryPtrs(TConstArrayView<FPCGExAssetC
 	return true;
 }
 
-void UPCGExAssetCollection::SyncEntryIds()
+bool UPCGExAssetCollection::SyncEntryIds()
 {
 	TSet<int32> SeenIds;
 	SeenIds.Reserve(NumEntries());
@@ -1587,6 +1587,7 @@ void UPCGExAssetCollection::SyncEntryIds()
 	{
 		InvalidateCache();
 	}
+	return bAnyChanged;
 }
 
 void UPCGExAssetCollection::EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const
@@ -2337,9 +2338,17 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
 		EDITOR_DispatchPipelinePreRebuild();
 	}
 
+	// Same identity contract as the runtime RebuildStagingData: ids are settled before entries
+	// re-stage. After pipeline pre-rebuild hooks, which may add or replace entries.
+	const bool bIdsChanged = SyncEntryIds();
+
 	// Dirty on actual change, not on "a rebuild ran" -- else every project-wide rebuild rewrites
 	// every collection on disk. Undo snapshots happen per entry, so bailing here is safe.
 	int32 NumChanged = EDITOR_SanitizeAndRebuildStagingData(bRecursive);
+	if (bIdsChanged)
+	{
+		NumChanged++;
+	}
 
 	if (NumChanged == 0 && bDiffWholeObject)
 	{
