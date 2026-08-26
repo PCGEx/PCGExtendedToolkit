@@ -47,7 +47,7 @@ struct FPCGExSegmentLengthFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::StrictlyGreater;
 
-	/** Rounding mode for approx. comparison modes */
+	/** Near-equality tolerance for approximate comparison modes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = 0;
 

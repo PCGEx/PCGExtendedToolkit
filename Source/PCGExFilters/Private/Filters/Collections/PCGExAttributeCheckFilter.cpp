@@ -6,6 +6,8 @@
 
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExPointIO.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataDomain.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -24,6 +26,17 @@ bool PCGExPointFilter::FAttributeCheckFilter::Test(const TSharedPtr<PCGExData::F
 	const FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(FName(TypedFilterFactory->Config.AttributeName), IO->GetIn());
 	const FString IdentifierStr = Identifier.Name.ToString();
 
+	// An unprefixed name resolves to the Default domain id, which compares equal to no concrete domain --
+	// resolve it to the data's actual default so Match works for plain names.
+	FPCGMetadataDomainID MatchDomain = Identifier.MetadataDomain;
+	if (MatchDomain.IsDefault())
+	{
+		if (const FPCGMetadataDomain* DefaultDomain = IO->GetIn()->Metadata->GetConstDefaultMetadataDomain())
+		{
+			MatchDomain = DefaultDomain->GetDomainID();
+		}
+	}
+
 	for (const PCGExData::FAttributeIdentity& Identity : Infos->Identities)
 	{
 		if (TypedFilterFactory->Config.Domain != EPCGExAttribtueDomainCheck::Any)
@@ -36,7 +49,7 @@ bool PCGExPointFilter::FAttributeCheckFilter::Test(const TSharedPtr<PCGExData::F
 			{
 				continue;
 			}
-			if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Match && Identity.MetadataDomain != Identifier.MetadataDomain)
+			if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Match && Identity.MetadataDomain != MatchDomain)
 			{
 				continue;
 			}

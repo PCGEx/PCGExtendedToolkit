@@ -190,7 +190,7 @@ bool FNodeEdgeDirectionFilter::TestDot(const PCGExClusters::FNode& Node) const
 		}
 	}
 
-	return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold);
+	return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold, Adjacency.ThresholdTolerance);
 }
 
 bool FNodeEdgeDirectionFilter::TestHash(const PCGExClusters::FNode& Node) const
@@ -256,7 +256,7 @@ bool FNodeEdgeDirectionFilter::TestHash(const PCGExClusters::FNode& Node) const
 		}
 	}
 
-	return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold);
+	return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold, Adjacency.ThresholdTolerance);
 }
 
 FNodeEdgeDirectionFilter::~FNodeEdgeDirectionFilter()

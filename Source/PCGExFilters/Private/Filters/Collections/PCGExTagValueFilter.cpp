@@ -66,7 +66,7 @@ FString UPCGExTagValueFilterProviderSettings::GetDisplayName() const
 		FString DisplayName = Config.Tag + TEXT(" ") + PCGExCompare::ToString(Config.NumericComparison);
 		DisplayName += FString::Printf(TEXT("%.1f"), Config.NumericOperandB);
 		DisplayName += Config.MultiMatch == EPCGExFilterGroupMode::OR ? TEXT(" (Any)") : TEXT(" (All)");
-		return DisplayName;
+		return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 	}
 	FString DisplayName = Config.Tag + TEXT(" ") + PCGExCompare::ToString(Config.StringComparison);
 	DisplayName += FString::Printf(TEXT(" %s"), *Config.StringOperandB);

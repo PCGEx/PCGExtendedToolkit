@@ -31,7 +31,7 @@ enum class EPCGExPointBoundsSource : uint8
 	ScaledBounds  = 0 UMETA(DisplayName = "Scaled Bounds", ToolTip="Bounds with the point scale applied", ActionIcon="ScaledBounds"),
 	DensityBounds = 1 UMETA(DisplayName = "Density Bounds", ToolTip="Bounds expanded by steepness (unscaled)", ActionIcon="DensityBounds"),
 	Bounds        = 2 UMETA(DisplayName = "Bounds", ToolTip="Raw bounds, unscaled", ActionIcon="Bounds"),
-	Center        = 3 UMETA(DisplayName = "Center", ToolTip="A tiny size 1 box.", ActionIcon="Center")
+	Center        = 3 UMETA(DisplayName = "Center", ToolTip="A negligible box around the point center (0.002 units).", ActionIcon="Center")
 };
 
 UENUM(BlueprintType)
