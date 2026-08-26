@@ -3,8 +3,10 @@
 
 #include "Filters/Points/PCGExRaycastFilter.h"
 
+#include "Components/PrimitiveComponent.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
+#include "Data/PCGPrimitiveData.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Elements/Debug/PCGExDrawAttributes.h"
 #include "Engine/HitResult.h"
@@ -24,32 +26,80 @@ bool UPCGExRaycastFilterFactory::Init(FPCGExContext* InContext)
 	Config.Sanitize();
 	Config.CollisionSettings.Init(InContext);
 
-	bUseInclude = Config.SurfaceSource == EPCGExSurfaceSource::ActorReferences;
-	if (bUseInclude)
+	bUseInclude = Config.SurfaceSource != EPCGExSurfaceSource::All;
+	if (Config.SurfaceSource == EPCGExSurfaceSource::ActorReferences)
 	{
+		if (!PCGExMetaHelpers::IsWritableAttributeName(Config.ActorReference))
 		{
-			if (!PCGExMetaHelpers::IsWritableAttributeName(Config.ActorReference))
-			{
-				PCGEX_LOG_INVALID_ATTR_C(InContext, Actor Reference, Config.ActorReference)
-				return false;
-			}
-
-			InContext->AddConsumableAttributeName(Config.ActorReference);
+			PCGEX_LOG_INVALID_ATTR_C(InContext, Actor Reference, Config.ActorReference)
+			return false;
 		}
 
-		const TSharedPtr<PCGExData::FFacade> ActorReferenceDataFacade = PCGExData::TryGetSingleFacade(InContext, PCGExRaycastFilter::SourceActorReferencesLabel, false, true);
+		InContext->AddConsumableAttributeName(Config.ActorReference);
+	}
+
+	return true;
+}
+
+bool UPCGExRaycastFilterFactory::WantsPreparation(FPCGExContext* InContext)
+{
+	return bUseInclude;
+}
+
+PCGExFactories::EPreparationResult UPCGExRaycastFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
+{
+	PCGExFactories::EPreparationResult Result = Super::Prepare(InContext, TaskManager);
+	if (Result != PCGExFactories::EPreparationResult::Success)
+	{
+		return Result;
+	}
+
+	const bool bLogErrors = MissingDataPolicy == EPCGExFilterNoDataFallback::Error;
+
+	if (Config.SurfaceSource == EPCGExSurfaceSource::ActorReferences)
+	{
+		const TSharedPtr<PCGExData::FFacade> ActorReferenceDataFacade = PCGExData::TryGetSingleFacade(InContext, PCGExRaycastFilter::SourceActorReferencesLabel, false, bLogErrors);
 		if (!ActorReferenceDataFacade)
 		{
-			return false;
+			return PCGExFactories::EPreparationResult::MissingData;
 		}
 
 		if (!PCGExSampling::Helpers::GetIncludedActors(InContext, ActorReferenceDataFacade.ToSharedRef(), Config.ActorReference, IncludedActors))
 		{
-			return false;
+			return PCGExFactories::EPreparationResult::MissingData;
+		}
+	}
+	else if (Config.SurfaceSource == EPCGExSurfaceSource::Primitives)
+	{
+		const TArray<FPCGTaggedData> Inputs = InContext->InputData.GetInputsByPin(PCGExRaycastFilter::SourcePrimitivesLabel);
+		for (const FPCGTaggedData& TaggedData : Inputs)
+		{
+			const UPCGPrimitiveData* PrimitiveData = Cast<UPCGPrimitiveData>(TaggedData.Data);
+			if (!PrimitiveData)
+			{
+				continue;
+			}
+
+			UPrimitiveComponent* Component = PrimitiveData->GetComponent().Get();
+			if (!IsValid(Component))
+			{
+				continue;
+			}
+
+			IncludedPrimitives.Add(Component);
+		}
+
+		if (IncludedPrimitives.IsEmpty())
+		{
+			if (bLogErrors)
+			{
+				PCGEX_LOG_MISSING_INPUT(InContext, FTEXT("Missing primitive data."))
+			}
+			return PCGExFactories::EPreparationResult::MissingData;
 		}
 	}
 
-	return true;
+	return Result;
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExRaycastFilterFactory::CreateFilter() const
@@ -200,13 +250,28 @@ bool PCGExPointFilter::FRaycastFilter::DoTraceMulti(const FVector& Start, const 
 		return false;
 	}
 
-	// Find the first hit that matches an included actor
-	for (const FHitResult& Hit : HitResults)
+	// Find the first hit that matches an included actor (Actor References) or component (Primitives)
+	if (TypedFilterFactory->Config.SurfaceSource == EPCGExSurfaceSource::Primitives)
 	{
-		if (IncludedActors.Contains(Hit.GetActor()))
+		const TSet<UPrimitiveComponent*>& IncludedPrimitives = TypedFilterFactory->IncludedPrimitives;
+		for (const FHitResult& Hit : HitResults)
 		{
-			OutHit = Hit;
-			return true;
+			if (IncludedPrimitives.Contains(Hit.GetComponent()))
+			{
+				OutHit = Hit;
+				return true;
+			}
+		}
+	}
+	else
+	{
+		for (const FHitResult& Hit : HitResults)
+		{
+			if (IncludedActors.Contains(Hit.GetActor()))
+			{
+				OutHit = Hit;
+				return true;
+			}
 		}
 	}
 
@@ -299,6 +364,10 @@ TArray<FPCGPinProperties> UPCGExRaycastFilterProviderSettings::InputPinPropertie
 	if (Config.SurfaceSource == EPCGExSurfaceSource::ActorReferences)
 	{
 		PCGEX_PIN_POINT(PCGExRaycastFilter::SourceActorReferencesLabel, "Points with actor reference paths.", Required)
+	}
+	else if (Config.SurfaceSource == EPCGExSurfaceSource::Primitives)
+	{
+		PCGEX_PIN_PRIMITIVES(PCGExRaycastFilter::SourcePrimitivesLabel, "Primitive data to test against.", Required)
 	}
 
 	return PinProperties;

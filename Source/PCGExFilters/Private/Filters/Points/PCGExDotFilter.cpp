@@ -100,8 +100,9 @@ bool PCGExPointFilter::FDotFilter::Init(FPCGExContext* InContext, const TSharedP
 // then compute their dot product. Multipliers of -1 flip the operand direction (inversion).
 bool PCGExPointFilter::FDotFilter::Test(const int32 PointIndex) const
 {
+	const FVector A = (OperandA->Read(PointIndex) * OperandAMultiplier).GetSafeNormal();
 	const FVector B = OperandB->Read(PointIndex).GetSafeNormal() * OperandBMultiplier;
-	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(OperandA->Read(PointIndex) * OperandAMultiplier) : OperandA->Read(PointIndex) * OperandAMultiplier, TypedFilterFactory->Config.bTransformOperandB ? InTransforms[PointIndex].TransformVectorNoScale(B) : B), PointIndex);
+	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(A) : A, TypedFilterFactory->Config.bTransformOperandB ? InTransforms[PointIndex].TransformVectorNoScale(B) : B), PointIndex);
 }
 
 bool PCGExPointFilter::FDotFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const

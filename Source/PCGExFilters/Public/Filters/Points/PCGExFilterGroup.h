@@ -162,7 +162,7 @@ protected:
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FilterGroup, "Filter Group", "Creates an Filter Group.", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FilterGroup, "Filter Group", "Creates a Filter Group.", PCGEX_FACTORY_NAME_PRIORITY)
 
 	virtual EPCGSettingsType GetType() const override
 	{
@@ -212,6 +212,14 @@ public:
 	/** Whether to draw this node as a compact node */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable), AdvancedDisplay)
 	bool bDrawAsCompactNode = true;
+
+	/** How to handle failed attribute initialization of the group itself or its subfilters. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(PCG_NotOverridable))
+	EPCGExFilterNoDataFallback InitializationFailurePolicy = EPCGExFilterNoDataFallback::Error;
+
+	/** How to handle missing data on subfilters that rely on local data pins. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(PCG_NotOverridable))
+	EPCGExFilterNoDataFallback MissingDataPolicy = EPCGExFilterNoDataFallback::Fail;
 };
 
 #pragma endregion

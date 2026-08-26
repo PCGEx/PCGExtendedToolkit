@@ -68,20 +68,20 @@ enum class EPCGExEquality : uint8
 UENUM(BlueprintType)
 enum class EPCGExStringComparison : uint8
 {
-	StrictlyEqual         = 0 UMETA(DisplayName = " == ", Tooltip="Operand A Strictly Equal to Operand B"),
-	StrictlyNotEqual      = 1 UMETA(DisplayName = " != ", Tooltip="Operand A Strictly Not Equal to Operand B"),
-	LengthStrictlyEqual   = 2 UMETA(DisplayName = " == (Length) ", Tooltip="Operand A Strictly Equal to Operand B"),
-	LengthStrictlyUnequal = 3 UMETA(DisplayName = " != (Length) ", Tooltip="Operand A Strictly Not Equal to Operand B"),
-	LengthEqualOrGreater  = 4 UMETA(DisplayName = " >= (Length)", Tooltip="Operand A Equal or Greater to Operand B"),
-	LengthEqualOrSmaller  = 5 UMETA(DisplayName = " <= (Length)", Tooltip="Operand A Equal or Smaller to Operand B"),
-	StrictlyGreater       = 6 UMETA(DisplayName = " > (Length)", Tooltip="Operand A Strictly Greater to Operand B"),
-	StrictlySmaller       = 7 UMETA(DisplayName = " < (Length)", Tooltip="Operand A Strictly Smaller to Operand B"),
-	LocaleStrictlyGreater = 8 UMETA(DisplayName = " > (Locale)", Tooltip="Operand A Locale Strictly Greater to Operand B Locale"),
-	LocaleStrictlySmaller = 9 UMETA(DisplayName = " < (Locale)", Tooltip="Operand A Locale Strictly Smaller to Operand B Locale"),
-	Contains              = 10 UMETA(DisplayName = " Contains ", Tooltip="Operand A contains Operand B"),
-	StartsWith            = 11 UMETA(DisplayName = " Starts With ", Tooltip="Operand A starts with Operand B"),
-	EndsWith              = 12 UMETA(DisplayName = " Ends With ", Tooltip="Operand A ends with Operand B"),
-	Matches               = 13 UMETA(DisplayName = " Matches", Tooltip="Wildcard matching. Supports * or ? as wildcards.")
+	StrictlyEqual         = 0 UMETA(DisplayName = " == ", Tooltip="Operand A equals Operand B (case-insensitive)"),
+	StrictlyNotEqual      = 1 UMETA(DisplayName = " != ", Tooltip="Operand A does not equal Operand B (case-insensitive)"),
+	LengthStrictlyEqual   = 2 UMETA(DisplayName = " == (Length) ", Tooltip="Operand A's length equals Operand B's length"),
+	LengthStrictlyUnequal = 3 UMETA(DisplayName = " != (Length) ", Tooltip="Operand A's length differs from Operand B's length"),
+	LengthEqualOrGreater  = 4 UMETA(DisplayName = " >= (Length)", Tooltip="Operand A's length is greater than or equal to Operand B's length"),
+	LengthEqualOrSmaller  = 5 UMETA(DisplayName = " <= (Length)", Tooltip="Operand A's length is smaller than or equal to Operand B's length"),
+	StrictlyGreater       = 6 UMETA(DisplayName = " > (Length)", Tooltip="Operand A's length is strictly greater than Operand B's length"),
+	StrictlySmaller       = 7 UMETA(DisplayName = " < (Length)", Tooltip="Operand A's length is strictly smaller than Operand B's length"),
+	LocaleStrictlyGreater = 8 UMETA(DisplayName = " > (Locale)", Tooltip="Operand A sorts after Operand B (case-insensitive character-code order, not locale-aware)"),
+	LocaleStrictlySmaller = 9 UMETA(DisplayName = " < (Locale)", Tooltip="Operand A sorts before Operand B (case-insensitive character-code order, not locale-aware)"),
+	Contains              = 10 UMETA(DisplayName = " Contains ", Tooltip="Operand A contains Operand B (case-insensitive)"),
+	StartsWith            = 11 UMETA(DisplayName = " Starts With ", Tooltip="Operand A starts with Operand B (case-insensitive)"),
+	EndsWith              = 12 UMETA(DisplayName = " Ends With ", Tooltip="Operand A ends with Operand B (case-insensitive)"),
+	Matches               = 13 UMETA(DisplayName = " Matches", Tooltip="Wildcard matching (case-insensitive). Supports * or ? as wildcards.")
 };
 
 UENUM()

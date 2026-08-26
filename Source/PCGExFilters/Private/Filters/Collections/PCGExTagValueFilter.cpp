@@ -20,9 +20,9 @@ bool PCGExPointFilter::FTagValueFilter::Test(const TSharedPtr<PCGExData::FPointI
 	if (TArray<TSharedPtr<PCGExData::IDataValue>> TagValues;
 		PCGExCompare::GetMatchingValueTags(IO->Tags, TypedFilterFactory->Config.Tag, TypedFilterFactory->Config.Match, TagValues))
 	{
-		// AND mode: assume true, break on first failure. OR mode: override below if any matched.
-		bool bAtLeastOneMatch = false;
-		bResult = true;
+		// AND: every matching tag value must pass. OR: any single passing value is enough.
+		const bool bAnyMode = TypedFilterFactory->Config.MultiMatch == EPCGExFilterGroupMode::OR;
+		bResult = !bAnyMode;
 
 		if (TypedFilterFactory->Config.ValueType == EPCGExComparisonDataType::Numeric)
 		{
@@ -30,12 +30,12 @@ bool PCGExPointFilter::FTagValueFilter::Test(const TSharedPtr<PCGExData::FPointI
 
 			for (const TSharedPtr<PCGExData::IDataValue>& TagValue : TagValues)
 			{
-				if (!PCGExCompare::Compare(TypedFilterFactory->Config.NumericComparison, TagValue, B, TypedFilterFactory->Config.Tolerance))
+				const bool bPass = PCGExCompare::Compare(TypedFilterFactory->Config.NumericComparison, TagValue, B, TypedFilterFactory->Config.Tolerance);
+				if (bPass == bAnyMode)
 				{
-					bResult = false;
+					bResult = bAnyMode;
 					break;
 				}
-				bAtLeastOneMatch = true;
 			}
 		}
 		else
@@ -43,19 +43,13 @@ bool PCGExPointFilter::FTagValueFilter::Test(const TSharedPtr<PCGExData::FPointI
 			FString B = TypedFilterFactory->Config.StringOperandB;
 			for (const TSharedPtr<PCGExData::IDataValue>& TagValue : TagValues)
 			{
-				if (!PCGExCompare::Compare(TypedFilterFactory->Config.StringComparison, TagValue, B))
+				const bool bPass = PCGExCompare::Compare(TypedFilterFactory->Config.StringComparison, TagValue, B);
+				if (bPass == bAnyMode)
 				{
-					bResult = false;
+					bResult = bAnyMode;
 					break;
 				}
-				bAtLeastOneMatch = true;
 			}
-		}
-
-		// In OR mode, override AND-failure: pass if at least one tag value matched.
-		if (TypedFilterFactory->Config.MultiMatch == EPCGExFilterGroupMode::OR && bAtLeastOneMatch)
-		{
-			bResult = true;
 		}
 	}
 

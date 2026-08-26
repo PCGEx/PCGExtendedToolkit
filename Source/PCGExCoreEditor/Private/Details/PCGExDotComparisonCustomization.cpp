@@ -150,7 +150,7 @@ double FPCGExDotComparisonCustomization::GetComparisonThreshold() const
 		{
 			DegreesConstantHandle->GetValue(Degrees);
 		}
-		RawDot = PCGExMath::DegreesToDot(180.0 - Degrees);
+		RawDot = PCGExMath::DegreesToDot(Degrees);
 	}
 	else
 	{
@@ -203,7 +203,6 @@ double FPCGExDotComparisonCustomization::GetComparisonTolerance() const
 	if (bIsStaticVariant)
 	{
 		// Mirror FPCGExStaticDotComparisonDetails::Init()
-		double RawTol = 0.0;
 		if (Domain == EPCGExAngularDomain::Degrees)
 		{
 			double DegTol = 0.1;
@@ -211,24 +210,23 @@ double FPCGExDotComparisonCustomization::GetComparisonTolerance() const
 			{
 				DegreesToleranceHandle->GetValue(DegTol);
 			}
-			RawTol = PCGExMath::DegreesToDot(180.0 - DegTol);
+			// Angular tolerance is a width: T degrees -> dot-space span 1-cos(T), halved for the signed [0,1] remap.
+			const double Width = 1.0 - PCGExMath::DegreesToDot(DegTol);
+			return bIsUnsigned ? Width : Width * 0.5;
 		}
-		else
+
+		double DotTol = 0.1;
+		if (DotToleranceHandle.IsValid())
 		{
-			double DotTol = 0.1;
-			if (DotToleranceHandle.IsValid())
-			{
-				DotToleranceHandle->GetValue(DotTol);
-			}
-			RawTol = DotTol;
+			DotToleranceHandle->GetValue(DotTol);
 		}
 
 		if (bIsUnsigned)
 		{
-			return FMath::Abs(RawTol);
+			return FMath::Abs(DotTol);
 		}
 
-		return (1.0 + RawTol) * 0.5;
+		return (1.0 + DotTol) * 0.5;
 	}
 
 	// Mirror FPCGExDotComparisonDetails::Init()
@@ -240,7 +238,7 @@ double FPCGExDotComparisonCustomization::GetComparisonTolerance() const
 		{
 			DegreesToleranceHandle->GetValue(DegTol);
 		}
-		return (1.0 + PCGExMath::DegreesToDot(180.0 - DegTol)) * 0.5;
+		return (1.0 - PCGExMath::DegreesToDot(DegTol)) * 0.5;
 	}
 
 	double DotTol = 0.1;

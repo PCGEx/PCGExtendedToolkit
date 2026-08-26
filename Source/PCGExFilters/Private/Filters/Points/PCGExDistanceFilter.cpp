@@ -52,7 +52,7 @@ void UPCGExDistanceFilterFactory::RegisterBuffersDependencies(FPCGExContext* InC
 PCGExFactories::EPreparationResult UPCGExDistanceFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
 {
 	TargetsHandler = MakeShared<PCGExMatching::FTargetsHandler>();
-	if (!TargetsHandler->Init(InContext, PCGExCommon::Labels::SourceTargetsLabel))
+	if (!TargetsHandler->Init(InContext, PCGExCommon::Labels::SourceTargetsLabel, MissingDataPolicy != EPCGExFilterNoDataFallback::Error))
 	{
 		return PCGExFactories::EPreparationResult::MissingData;
 	}
@@ -184,7 +184,7 @@ bool PCGExPointFilter::FDistanceFilter::Test(const TSharedPtr<PCGExData::FPointI
 TArray<FPCGPinProperties> UPCGExDistanceFilterProviderSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	PCGEX_PIN_POINTS(PCGExCommon::Labels::SourceTargetsLabel, TEXT("Target points to read operand B from"), Required)
+	PCGEX_PIN_POINTS(PCGExCommon::Labels::SourceTargetsLabel, TEXT("Target points distances are measured against (the threshold is read from the tested points)"), Required)
 	PCGExMatching::Helpers::DeclareMatchingRulesInputs(Config.DataMatching, PinProperties);
 	return PinProperties;
 }

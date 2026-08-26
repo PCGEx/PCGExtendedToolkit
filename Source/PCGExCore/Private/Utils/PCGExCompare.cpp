@@ -272,12 +272,14 @@ void FPCGExStaticDotComparisonDetails::Init()
 	// Remap threshold and tolerance from their native domain into the comparison space.
 	// Signed: remap [-1,1] → [0,1] via (1+x)*0.5
 	// Unsigned: use absolute value (already in [0,1])
+	// Degrees D maps to the dot of that angle, cos(D), so Degrees and Scalar denote the same angle.
+	// Angular tolerances are widths: T degrees maps to the dot-space span 1-cos(T) (zero at T=0), scaled per space.
 	if (bUnsignedComparison)
 	{
 		if (Domain == EPCGExAngularDomain::Degrees)
 		{
-			ComparisonThreshold = FMath::Abs(PCGExMath::DegreesToDot(180 - DegreesConstant));
-			ComparisonTolerance = FMath::Abs(PCGExMath::DegreesToDot(180 - DegreesTolerance));
+			ComparisonThreshold = FMath::Abs(PCGExMath::DegreesToDot(DegreesConstant));
+			ComparisonTolerance = 1 - PCGExMath::DegreesToDot(DegreesTolerance);
 		}
 		else
 		{
@@ -289,8 +291,8 @@ void FPCGExStaticDotComparisonDetails::Init()
 	{
 		if (Domain == EPCGExAngularDomain::Degrees)
 		{
-			ComparisonThreshold = (1 + PCGExMath::DegreesToDot(180 - DegreesConstant)) * 0.5;
-			ComparisonTolerance = (1 + PCGExMath::DegreesToDot(180 - DegreesTolerance)) * 0.5;
+			ComparisonThreshold = (1 + PCGExMath::DegreesToDot(DegreesConstant)) * 0.5;
+			ComparisonTolerance = (1 - PCGExMath::DegreesToDot(DegreesTolerance)) * 0.5;
 		}
 		else
 		{
@@ -317,7 +319,8 @@ bool FPCGExDotComparisonDetails::Init(FPCGExContext* InContext, const TSharedRef
 
 	if (Domain == EPCGExAngularDomain::Degrees)
 	{
-		ComparisonTolerance = (1 + PCGExMath::DegreesToDot(180 - DegreesTolerance)) * 0.5;
+		// Angular tolerance is a width: T degrees maps to the dot-space span 1-cos(T) (zero at T=0), halved for the [0,1] remap.
+		ComparisonTolerance = (1 - PCGExMath::DegreesToDot(DegreesTolerance)) * 0.5;
 	}
 	else
 	{
@@ -333,7 +336,8 @@ double FPCGExDotComparisonDetails::GetComparisonThreshold(const int32 PointIndex
 	{
 		return ThresholdGetter->Read(PointIndex);
 	}
-	return PCGExMath::DegreesToDot(180 - ThresholdGetter->Read(PointIndex));
+	// An angle of D degrees corresponds to a dot of cos(D), keeping Degrees and Scalar consistent.
+	return PCGExMath::DegreesToDot(ThresholdGetter->Read(PointIndex));
 }
 
 bool FPCGExDotComparisonDetails::Test(const double A, const double B) const

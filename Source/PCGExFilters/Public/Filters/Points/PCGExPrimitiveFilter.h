@@ -105,19 +105,21 @@ namespace PCGExPointFilter
 		bool TestPoint(const PointType& Point) const
 		{
 			const FTransform& Transform = Point.GetTransform();
+			// GetLocalBounds already applies scale per BoundsSource -- transform by rotation/translation only.
 			const FBox LocalBox = PCGExMath::GetLocalBounds(Point, BoundsSource);
+			const FBox WorldBox = LocalBox.TransformBy(Transform.ToMatrixNoScale());
 
 			FCollisionShape CollisionShape;
-			CollisionShape.SetBox(FVector3f(LocalBox.GetExtent() * Transform.GetScale3D()));
+			CollisionShape.SetBox(FVector3f(LocalBox.GetExtent()));
 
-			const FVector BoxCenter = Transform.TransformPosition(LocalBox.GetCenter());
-			const FVector ScaledExtent = FVector(CollisionShape.GetBox());
+			const FVector BoxCenter = WorldBox.GetCenter();
 			const FQuat Rotation = Transform.GetRotation();
 
 			bool bResult = bInvert;
 
+			// Broad phase uses the rotated box's AABB so elongated rotated boxes aren't missed.
 			Octree->FindElementsWithBoundsTest(
-				FBoxCenterAndExtent(BoxCenter, ScaledExtent),
+				FBoxCenterAndExtent(BoxCenter, WorldBox.GetExtent()),
 				[&](const PCGExOctree::FItem& Item)
 				{
 					if (bResult != bInvert)

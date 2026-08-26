@@ -118,7 +118,10 @@ PCGExFactories::EPreparationResult UPCGExPolyPathFilterFactory::Prepare(FPCGExCo
 		if (PolyPaths.IsEmpty())
 		{
 			PrepResult = PCGExFactories::EPreparationResult::MissingData;
-			PCGEX_LOG_MISSING_INPUT(SharedContext.Get(), FTEXT("No polypaths to work with (no input matches criteria or empty dataset)"))
+			if (MissingDataPolicy == EPCGExFilterNoDataFallback::Error)
+			{
+				PCGEX_LOG_MISSING_INPUT(SharedContext.Get(), FTEXT("No polypaths to work with (no input matches criteria or empty dataset)"))
+			}
 			return;
 		}
 
@@ -393,7 +396,9 @@ namespace PCGExPathInclusion
 			return false;
 		};
 
-		if (bFastCheck)
+		// Closest picks need per-shape distances, which the fast path never computes (it would report whichever
+		// shape the octree visited last) -- route them through the distance path below.
+		if (bFastCheck && !bClosestOnly)
 		{
 			Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, QueryExtent), [&](const PCGExOctree::FItem& Item)
 			{
@@ -401,8 +406,7 @@ namespace PCGExPathInclusion
 
 				const bool bInside = PathArray[Item.Index]->IsInsideProjection(WorldPosition);
 				InclusionCount += bInside;
-				if (bClosestOnly) { OutFlags = bInside ? Inside : Outside; }
-				else { OutFlags |= bInside ? Inside : Outside; }
+				OutFlags |= bInside ? Inside : Outside;
 			});
 		}
 		else

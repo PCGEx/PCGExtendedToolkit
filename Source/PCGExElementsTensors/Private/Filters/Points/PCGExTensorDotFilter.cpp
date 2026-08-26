@@ -13,14 +13,25 @@
 #define LOCTEXT_NAMESPACE "PCGExTensorDotFilterDefinition"
 #define PCGEX_NAMESPACE PCGExTensorDotFilterDefinition
 
-bool UPCGExTensorDotFilterFactory::Init(FPCGExContext* InContext)
+bool UPCGExTensorDotFilterFactory::WantsPreparation(FPCGExContext* InContext)
 {
-	if (!Super::Init(InContext))
+	return true;
+}
+
+PCGExFactories::EPreparationResult UPCGExTensorDotFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
+{
+	PCGExFactories::EPreparationResult Result = Super::Prepare(InContext, TaskManager);
+	if (Result != PCGExFactories::EPreparationResult::Success)
 	{
-		return false;
+		return Result;
 	}
 
-	return PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, TensorFactories, {FPCGExDataTypeInfoTensor::AsId()});
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, TensorFactories, {FPCGExDataTypeInfoTensor::AsId()}, MissingDataPolicy == EPCGExFilterNoDataFallback::Error))
+	{
+		return PCGExFactories::EPreparationResult::MissingData;
+	}
+
+	return Result;
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExTensorDotFilterFactory::CreateFilter() const
@@ -86,7 +97,7 @@ bool PCGExPointFilter::FTensorDotFilter::Test(const int32 PointIndex) const
 		return false;
 	}
 
-	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? OperandA->Read(PointIndex) : InTransforms[PointIndex].TransformVectorNoScale(OperandA->Read(PointIndex)), Sample.DirectionAndSize.GetSafeNormal()), DotComparison.GetComparisonThreshold(PointIndex));
+	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(OperandA->Read(PointIndex)) : OperandA->Read(PointIndex), Sample.DirectionAndSize.GetSafeNormal()), DotComparison.GetComparisonThreshold(PointIndex));
 }
 
 PCGEX_CREATE_FILTER_FACTORY(TensorDot)

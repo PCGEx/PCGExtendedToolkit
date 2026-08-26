@@ -14,7 +14,7 @@
 
 namespace PCGExMatching
 {
-	int32 FTargetsHandler::Init(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn)
+	int32 FTargetsHandler::Init(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn, const bool bQuiet)
 	{
 		FBox OctreeBounds = FBox(ForceInit);
 
@@ -22,7 +22,10 @@ namespace PCGExMatching
 
 		if (Targets->IsEmpty())
 		{
-			PCGEX_LOG_MISSING_INPUT(InContext, FTEXT("No targets (empty datasets)"))
+			if (!bQuiet)
+			{
+				PCGEX_LOG_MISSING_INPUT(InContext, FTEXT("No targets (empty datasets)"))
+			}
 			return 0;
 		}
 
@@ -81,12 +84,12 @@ namespace PCGExMatching
 		return TargetFacades.Num();
 	}
 
-	int32 FTargetsHandler::Init(FPCGExContext* InContext, const FName InPinLabel)
+	int32 FTargetsHandler::Init(FPCGExContext* InContext, const FName InPinLabel, const bool bQuiet)
 	{
 		return Init(InContext, InPinLabel, [](const TSharedPtr<PCGExData::FPointIO>& IO, const int32 Idx)
 		{
 			return IO->GetIn()->GetBounds();
-		});
+		}, bQuiet);
 	}
 
 	void FTargetsHandler::SetDistances(const FPCGExDistanceDetails& InDetails)

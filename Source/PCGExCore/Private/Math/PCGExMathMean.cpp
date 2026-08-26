@@ -16,7 +16,7 @@ namespace PCGExMath
 			const double AdjustedValue = FMath::RoundToZero(Value / Tolerance) * Tolerance;
 			const int32* Count = Map.Find(AdjustedValue);
 			const int32 UpdatedCount = Count ? *Count + 1 : 1;
-			Map.Add(Value, UpdatedCount);
+			Map.Add(AdjustedValue, UpdatedCount);
 
 			if (LastCount < UpdatedCount)
 			{

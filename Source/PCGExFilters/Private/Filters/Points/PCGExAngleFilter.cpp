@@ -23,11 +23,6 @@ bool UPCGExAngleFilterFactory::Init(FPCGExContext* InContext)
 	return true;
 }
 
-bool UPCGExAngleFilterFactory::DomainCheck()
-{
-	return Config.DotComparisonDetails.GetOnlyUseDataDomain();
-}
-
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExAngleFilterFactory::CreateFilter() const
 {
 	return MakeShared<PCGExPointFilter::FAngleFilter>(this);

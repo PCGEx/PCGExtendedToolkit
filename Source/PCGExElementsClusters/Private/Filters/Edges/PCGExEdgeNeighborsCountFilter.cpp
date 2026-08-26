@@ -41,7 +41,8 @@ namespace PCGExEdgeNeighborsCount
 
 		ThresholdBuffer = TypedFilterFactory->Config.Threshold.GetValueSetting(PCGEX_QUIET_HANDLING);
 		ThresholdBuffer->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!ThresholdBuffer->Init(PointDataFacade))
+		// Threshold is read at Edge.PointIndex, an index into the edges dataset -- bind to the edge facade.
+		if (!ThresholdBuffer->Init(EdgeDataFacade))
 		{
 			return false;
 		}

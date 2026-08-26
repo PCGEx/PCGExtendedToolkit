@@ -24,77 +24,33 @@ bool PCGExPointFilter::FAttributeCheckFilter::Test(const TSharedPtr<PCGExData::F
 	const FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(FName(TypedFilterFactory->Config.AttributeName), IO->GetIn());
 	const FString IdentifierStr = Identifier.Name.ToString();
 
-	if (TypedFilterFactory->Config.bDoCheckType)
+	for (const PCGExData::FAttributeIdentity& Identity : Infos->Identities)
 	{
-		for (const PCGExData::FAttributeIdentity& Identity : Infos->Identities)
+		if (TypedFilterFactory->Config.Domain != EPCGExAttribtueDomainCheck::Any)
 		{
-			const FString Str = Identity.Name.ToString();
-			bool bMatches = false;
-
-			if (TypedFilterFactory->Config.Domain != EPCGExAttribtueDomainCheck::Any)
+			if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Data && !Identity.InDataDomain())
 			{
-				if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Data && !Identity.InDataDomain())
-				{
-					continue;
-				}
-				if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Elements && Identity.InDataDomain())
-				{
-					continue;
-				}
-				if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Match && Identity.MetadataDomain != Identifier.MetadataDomain)
-				{
-					continue;
-				}
+				continue;
 			}
-
-			if (PCGExCompare::Compare(TypedFilterFactory->Config.Match, Str, IdentifierStr))
+			if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Elements && Identity.InDataDomain())
 			{
-				bMatches = true;
+				continue;
 			}
-
-			if (bMatches && Identity.ValueType == TypedFilterFactory->Config.Type)
+			if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Match && Identity.MetadataDomain != Identifier.MetadataDomain)
 			{
-				bResult = true;
-				break;
+				continue;
 			}
 		}
-	}
-	else
-	{
-		// NOTE: When not checking type, the Data domain filter below uses the opposite
-		// condition compared to the bDoCheckType branch (line 36 uses !InDataDomain()).
-		// This means the "no type check" branch skips Data-domain attributes when Domain==Data.
-		for (const PCGExData::FAttributeIdentity& Identity : Infos->Identities)
+
+		if (!PCGExCompare::Compare(TypedFilterFactory->Config.Match, Identity.Name.ToString(), IdentifierStr))
 		{
-			const FString Str = Identity.Name.ToString();
-			bool bMatches = false;
+			continue;
+		}
 
-			if (TypedFilterFactory->Config.Domain != EPCGExAttribtueDomainCheck::Any)
-			{
-				if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Data && Identity.InDataDomain())
-				{
-					continue;
-				}
-				if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Elements && Identity.InDataDomain())
-				{
-					continue;
-				}
-				if (TypedFilterFactory->Config.Domain == EPCGExAttribtueDomainCheck::Match && Identity.MetadataDomain != Identifier.MetadataDomain)
-				{
-					continue;
-				}
-			}
-
-			if (PCGExCompare::Compare(TypedFilterFactory->Config.Match, Str, IdentifierStr))
-			{
-				bMatches = true;
-			}
-
-			if (bMatches)
-			{
-				bResult = true;
-				break;
-			}
+		if (!TypedFilterFactory->Config.bDoCheckType || Identity.ValueType == TypedFilterFactory->Config.Type)
+		{
+			bResult = true;
+			break;
 		}
 	}
 

@@ -16,9 +16,12 @@
 
 #include "PCGExRaycastFilter.generated.h"
 
+class UPrimitiveComponent;
+
 namespace PCGExRaycastFilter
 {
 	const FName SourceActorReferencesLabel = FName("Actor References");
+	const FName SourcePrimitivesLabel = FName("Primitives");
 }
 
 UENUM()
@@ -122,8 +125,11 @@ public:
 
 	bool bUseInclude = false;
 	TMap<AActor*, int32> IncludedActors;
+	TSet<UPrimitiveComponent*> IncludedPrimitives;
 
 	virtual bool Init(FPCGExContext* InContext) override;
+	virtual bool WantsPreparation(FPCGExContext* InContext) override;
+	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 };
@@ -192,5 +198,10 @@ public:
 
 #if WITH_EDITOR
 	virtual FString GetDisplayName() const override;
+
+	virtual bool ShowMissingDataPolicy_Internal() const override
+	{
+		return Config.SurfaceSource != EPCGExSurfaceSource::All;
+	}
 #endif
 };

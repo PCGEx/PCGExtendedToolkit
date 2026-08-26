@@ -24,9 +24,9 @@ enum class EPCGExFilterResult : uint8
 UENUM(BlueprintType)
 enum class EPCGExFilterNoDataFallback : uint8
 {
-	Error = 0 UMETA(DisplayName = "Throw Error", ToolTip="This filter will throw an error if there is no data.", ActionIcon="MissingData_Error"),
-	Pass  = 1 UMETA(DisplayName = "Pass", ToolTip="This filter will pass if there is no data", ActionIcon="MissingData_Pass"),
-	Fail  = 2 UMETA(DisplayName = "Fail", ToolTip="This filter will fail if there is no data", ActionIcon="MissingData_Fail"),
+	Error = 0 UMETA(DisplayName = "Error", ToolTip="Log the problem (missing data or failed initialization); no fallback filter is substituted.", ActionIcon="MissingData_Error"),
+	Pass  = 1 UMETA(DisplayName = "Pass", ToolTip="Silently substitute an always-pass filter when data is missing or initialization fails.", ActionIcon="MissingData_Pass"),
+	Fail  = 2 UMETA(DisplayName = "Fail", ToolTip="Silently substitute an always-fail filter when data is missing or initialization fails.", ActionIcon="MissingData_Fail"),
 };
 
 UENUM()
