@@ -20,8 +20,8 @@ enum class EPCGExEdgeDirectionMethod : uint8
 UENUM()
 enum class EPCGExEdgeDirectionChoice : uint8
 {
-	SmallestToGreatest = 0 UMETA(DisplayName = "Smallest to Greatest", ToolTip="Direction points from smallest to greatest value"),
-	GreatestToSmallest = 1 UMETA(DisplayName = "Greatest to Smallest", ToolTip="Direction points from the greatest to smallest value")
+	SmallestToGreatest = 0 UMETA(DisplayName = "Smallest to Greatest", ToolTip="Endpoints are ordered smallest to greatest; the resulting direction vector points AT the smallest-value endpoint."),
+	GreatestToSmallest = 1 UMETA(DisplayName = "Greatest to Smallest", ToolTip="Endpoints are ordered greatest to smallest; the resulting direction vector points AT the greatest-value endpoint.")
 };
 
 namespace PCGExGraphs

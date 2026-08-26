@@ -53,7 +53,10 @@ bool UPCGExStringCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* I
 			if (!LocalOperandA)
 			{
 				bBreak = true;
-				PCGEX_LOG_INVALID_SELECTOR_C(InContext, Operand A, Config.OperandA)
+				if (MissingDataPolicy == EPCGExFilterNoDataFallback::Error)
+				{
+					PCGEX_LOG_INVALID_SELECTOR_C(InContext, Operand A, Config.OperandA)
+				}
 			}
 		}
 		else
@@ -63,7 +66,10 @@ bool UPCGExStringCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* I
 			if (!LocalOperandA)
 			{
 				bBreak = true;
-				PCGEX_LOG_INVALID_SELECTOR_C(InContext, Operand A, Config.OperandA)
+				if (MissingDataPolicy == EPCGExFilterNoDataFallback::Error)
+				{
+					PCGEX_LOG_INVALID_SELECTOR_C(InContext, Operand A, Config.OperandA)
+				}
 			}
 		}
 	});
@@ -133,13 +139,25 @@ bool PCGExPointFilter::FStringCompareNearestFilter::Test(const int32 PointIndex)
 	// OperandA: closest target's cached buffer via TargetPt.IO; OperandB: the source point.
 	if (bUseNameComparison)
 	{
-		const FName A = (OperandAName->GetData() + TargetPt.IO)->Get()->Read(TargetPt.Index);
+		const PCGExData::TBuffer<FName>* Buffer = (OperandAName->GetData() + TargetPt.IO)->Get();
+		if (!Buffer)
+		{
+			return bNoMatchResult;
+		}
+
+		const FName A = Buffer->Read(TargetPt.Index);
 		const FName B = OperandBName->Read(PointIndex);
 		// Equality is symmetric, so bSwapOperands is a no-op here.
 		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
 	}
 
-	const FString A = (OperandAString->GetData() + TargetPt.IO)->Get()->Read(TargetPt.Index);
+	const PCGExData::TBuffer<FString>* Buffer = (OperandAString->GetData() + TargetPt.IO)->Get();
+	if (!Buffer)
+	{
+		return bNoMatchResult;
+	}
+
+	const FString A = Buffer->Read(TargetPt.Index);
 	const FString B = OperandBString->Read(PointIndex);
 	return TypedFilterFactory->Config.bSwapOperands
 		       ? PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, B, A)
@@ -149,7 +167,7 @@ bool PCGExPointFilter::FStringCompareNearestFilter::Test(const int32 PointIndex)
 TArray<FPCGPinProperties> UPCGExStringCompareNearestFilterProviderSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	PCGEX_PIN_POINTS(PCGExCommon::Labels::SourceTargetsLabel, TEXT("Target points to read operand A from"), Required)
+	PCGEX_PIN_POINTS(PCGExCommon::Labels::SourceTargetsLabel, TEXT("Target points Operand A is read from (compared against Operand B, read from the tested points)"), Required)
 	PCGExMatching::Helpers::DeclareMatchingRulesInputs(Config.DataMatching, PinProperties);
 	return PinProperties;
 }

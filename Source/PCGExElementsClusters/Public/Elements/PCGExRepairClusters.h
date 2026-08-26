@@ -8,7 +8,7 @@
 #include "PCGExRepairClusters.generated.h"
 
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/utilities/cluster-sanitize"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/utilities/cluster-repair"))
 class UPCGExSanitizeClustersSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

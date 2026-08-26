@@ -44,7 +44,7 @@ struct PCGEXCORE_API FPCGExEdgeDirectionSettings
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="DirectionMethod == EPCGExEdgeDirectionMethod::EdgeDotAttribute", EditConditionHides))
 	FPCGAttributePropertyInputSelector DirSourceAttribute;
 
-	/** Further refine the direction method. Not all methods make use of this property.*/
+	/** Which way the edge direction points relative to the method's endpoint ordering. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExEdgeDirectionChoice DirectionChoice = EPCGExEdgeDirectionChoice::SmallestToGreatest;
 

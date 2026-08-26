@@ -10,7 +10,7 @@
 /**
  *
  */
-UCLASS(MinimalAPI, meta=(DisplayName = "Laplacian (Poisson)", PCGExNodeLibraryDoc="clusters/relax-cluster/laplacian-poisson"))
+UCLASS(MinimalAPI, meta=(DisplayName = "Laplacian (Poisson)", PCGExNodeLibraryDoc="clusters/transform/cluster-relax/laplacian-poisson"))
 class UPCGExLaplacianRelax : public UPCGExRelaxClusterOperation
 {
 	GENERATED_BODY()

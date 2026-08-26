@@ -149,10 +149,7 @@ bool FPCGExClustersProcessorContext::AdvancePointsIO(const bool bCleanupKeys)
 		TaggedEdges = nullptr;
 	}
 
-	if (!TaggedEdges && !bQuietMissingClusterPairElement)
-	{
-		PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Some input vtx have no associated edges."));
-	}
+	// No warning here: the data library's Boot report is the single source for missing-pair warnings.
 
 	return true;
 }
@@ -337,9 +334,9 @@ bool FPCGExClustersProcessorContext::StartProcessingClusters(FBatchProcessingVal
 
 	while (AdvancePointsIO(false))
 	{
+		// Missing pairs were already reported once by the data library at Boot.
 		if (!TaggedEdges)
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Some input points have no bound edges."));
 			continue;
 		}
 
@@ -490,8 +487,6 @@ bool FPCGExClustersProcessorElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(ClustersProcessor)
 
-	Context->bQuietMissingClusterPairElement = Settings->bQuietMissingClusterPairElement;
-
 	Context->bHasValidHeuristics = PCGExFactories::GetInputFactories(Context, PCGExHeuristics::Labels::SourceHeuristicsLabel, Context->HeuristicsFactories, {FPCGExDataTypeInfoHeuristics::AsId()}, false);
 
 	Context->ClusterDataLibrary = MakeShared<PCGExClusters::FDataLibrary>(true);
@@ -504,9 +499,21 @@ bool FPCGExClustersProcessorElement::Boot(FPCGExContext* InContext) const
 	TArray<FPCGTaggedData> Sources = Context->InputData.GetInputsByPin(PCGExClusters::Labels::SourceEdgesLabel);
 	Context->MainEdges->Initialize(Sources);
 
-	if (!Context->ClusterDataLibrary->Build(Context->MainPoints, Context->MainEdges))
+	const bool bValidLibrary = Context->ClusterDataLibrary->Build(Context->MainPoints, Context->MainEdges);
+
+	// Prints on success too: partial problems (wrong-pin data, duplicate pair ids, roaming elements)
+	// must surface even when other pairs built fine. No-ops when nothing was recorded. This is the
+	// single reporter for missing-pair warnings, honoring the quiet toggle through the muted set.
+	TSet<PCGExClusters::EProblem> MutedProblems;
+	if (Settings->bQuietMissingClusterPairElement)
 	{
-		Context->ClusterDataLibrary->PrintLogs(Context);
+		MutedProblems.Add(PCGExClusters::EProblem::RoamingVtx);
+		MutedProblems.Add(PCGExClusters::EProblem::RoamingEdges);
+	}
+	Context->ClusterDataLibrary->PrintLogs(Context, false, false, &MutedProblems);
+
+	if (!bValidLibrary)
+	{
 		PCGEX_LOG_MISSING_INPUT(Context, FTEXT("Could not find any valid vtx/edge pairs."))
 		return false;
 	}

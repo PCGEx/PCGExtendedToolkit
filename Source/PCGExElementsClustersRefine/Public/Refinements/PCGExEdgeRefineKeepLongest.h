@@ -23,7 +23,7 @@ public:
 /**
  *
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Keep Longest", PCGExNodeLibraryDoc="clusters/refine-cluster/edge-length"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Keep Longest", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/length-based-refinements"))
 class UPCGExEdgeKeepLongest : public UPCGExEdgeRefineInstancedFactory
 {
 	GENERATED_BODY()

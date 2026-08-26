@@ -17,7 +17,8 @@
  * The provider must have a Config member that gets copied to the factory.
  *
  * Flow: create factory UObject → copy policies → copy Config → Super::CreateFactory
- * → Init (validate settings against data) → on failure, destroy and return nullptr.
+ * (which also copies MissingDataPolicy and Priority) → Init (validate settings against data)
+ * → on failure, destroy and return nullptr.
  */
 #define PCGEX_CREATE_FILTER_FACTORY(_FILTERID)\
 UPCGExFactoryData* UPCGEx##_FILTERID##FilterProviderSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const{\

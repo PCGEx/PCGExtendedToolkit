@@ -73,7 +73,7 @@ struct FPCGExProbeConfigDirection : public FPCGExProbeConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExProbeDirectionPriorization Favor = EPCGExProbeDirectionPriorization::Dist;
 
-	/** This probe will sample candidates after the other. Can yield different results. */
+	/** Elect a single best candidate ahead of the regular probe pass (chained probes commit first and claim directions). Can yield different results. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bDoChainedProcessing = false;
 

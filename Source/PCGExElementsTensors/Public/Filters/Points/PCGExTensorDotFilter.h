@@ -56,7 +56,8 @@ public:
 
 	TSharedPtr<PCGExTensor::FTensorsHandler> TensorsHandler;
 
-	virtual bool Init(FPCGExContext* InContext) override;
+	virtual bool WantsPreparation(FPCGExContext* InContext) override;
+	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 
 	virtual bool SupportsCollectionEvaluation() const override
 	{

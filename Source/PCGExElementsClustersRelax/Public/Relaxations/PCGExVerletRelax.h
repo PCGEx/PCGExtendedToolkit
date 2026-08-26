@@ -22,7 +22,7 @@ enum class EPCGExRelaxEdgeRestLength : uint8
 /**
  *
  */
-UCLASS(MinimalAPI, meta=(DisplayName = "Verlet (Gravity)", PCGExNodeLibraryDoc="clusters/relax-cluster/Gravity"))
+UCLASS(MinimalAPI, meta=(DisplayName = "Verlet (Gravity)", PCGExNodeLibraryDoc="clusters/transform/cluster-relax/verlet-gravity"))
 class UPCGExVerletRelax : public UPCGExRelaxClusterOperation
 {
 	GENERATED_BODY()

@@ -19,7 +19,7 @@ struct FPCGExNumericCompareNearestFilterConfig : public FPCGExNearestFilterConfi
 
 	FPCGExNumericCompareNearestFilterConfig() = default;
 
-	/** Operand A for testing -- Will be translated to `double` under the hood; read from the target points. */
+	/** Operand A for testing -- Will be translated to `double` under the hood; read from the closest target point. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
 
@@ -115,7 +115,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NumericCompareNearestFilterFactory, "Filter : Compare Nearest (Numeric)", "Creates a filter definition that compares two numeric attribute values.", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NumericCompareNearestFilterFactory, "Filter : Compare Nearest (Numeric)", "Creates a filter definition that compares two numeric attribute values, reading operand A from the closest target.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings
 

@@ -20,7 +20,7 @@ public:
 /**
  *
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Remove Shortest", PCGExNodeLibraryDoc="clusters/refine-cluster/edge-length"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Remove Shortest", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/length-based-refinements"))
 class UPCGExEdgeRemoveShortest : public UPCGExEdgeRefineInstancedFactory
 {
 	GENERATED_BODY()

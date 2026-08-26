@@ -20,7 +20,7 @@ class UPCGVolumeData;
 UENUM()
 enum class EPCGExVolumeCheckType : uint8
 {
-	IsInside              = 0 UMETA(DisplayName = "Is Inside", Tooltip="Point (or sphere) overlaps any volume", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside Volume"),
+	IsInside              = 0 UMETA(DisplayName = "Is Inside", Tooltip="Point center is inside any volume (the sphere radius is ignored)", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside Volume"),
 	Intersects            = 1 UMETA(DisplayName = "Intersects", Tooltip="Point sphere overlaps the volume boundary but center is outside", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Intersects Volume"),
 	IsInsideOrIntersects  = 2 UMETA(DisplayName = "Is Inside or Intersects", Tooltip="Point is inside OR sphere overlaps any volume", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside Intersects Volume"),
 	IsOutsideOrIntersects = 3 UMETA(DisplayName = "Is Outside or Intersects", Tooltip="Point is outside all volumes OR sphere overlaps any volume boundary", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside Intersects Volume"),

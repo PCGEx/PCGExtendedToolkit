@@ -329,7 +329,7 @@ namespace PCGExProbing
 			{
 				for (int i = 0; i < NumChainedOps; i++)
 				{
-					ChainedOperations[i]->ProcessCandidateChained(i, EmplaceIndex, Candidates[EmplaceIndex], BestCandidates[i], ChainedOpsContainers[i].Get());
+					ChainedOperations[i]->ProcessCandidateChained(CurrentIndex, EmplaceIndex, Candidates[EmplaceIndex], BestCandidates[i], ChainedOpsContainers[i].Get());
 				}
 			}
 		};
@@ -391,15 +391,19 @@ namespace PCGExProbing
 
 				// Find candidates within radius
 				Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(Origin, FVector(MaxRadius)), ProcessPoint);
-				Candidates.Sort([&](const FCandidate& A, const FCandidate& B)
-				{
-					return A.Distance < B.Distance;
-				});
 
+				// Chained best-candidates hold indices into the UNSORTED array -- consume them before the sort
+				// reorders it, or the probe connects to whichever candidate lands on that slot afterwards.
 				for (int i = 0; i < NumChainedOps; i++)
 				{
 					ChainedOperations[i]->ProcessBestCandidate(Index, BestCandidates[i], Candidates, LocalCoincidence.Get(), CWCoincidenceTolerance, LocalUniqueEdges, ChainedOpsContainers[i].Get());
 				}
+
+				// Shared probes expect nearest-first ordering.
+				Candidates.Sort([&](const FCandidate& A, const FCandidate& B)
+				{
+					return A.Distance < B.Distance;
+				});
 
 				for (int i = 0; i < NumSharedOps; i++)
 				{

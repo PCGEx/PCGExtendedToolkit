@@ -16,9 +16,9 @@ namespace PCGExMath
 		case EPCGExPointBoundsSource::ScaledBounds:
 			return GetLocalBounds<EPCGExPointBoundsSource::ScaledBounds>(Point);
 		case EPCGExPointBoundsSource::DensityBounds:
-			return GetLocalBounds<EPCGExPointBoundsSource::Bounds>(Point);
-		case EPCGExPointBoundsSource::Bounds:
 			return GetLocalBounds<EPCGExPointBoundsSource::DensityBounds>(Point);
+		case EPCGExPointBoundsSource::Bounds:
+			return GetLocalBounds<EPCGExPointBoundsSource::Bounds>(Point);
 		case EPCGExPointBoundsSource::Center:
 			return GetLocalBounds<EPCGExPointBoundsSource::Center>(Point);
 		default:
@@ -33,9 +33,9 @@ namespace PCGExMath
 		case EPCGExPointBoundsSource::ScaledBounds:
 			return GetLocalBounds<EPCGExPointBoundsSource::ScaledBounds>(Point);
 		case EPCGExPointBoundsSource::DensityBounds:
-			return GetLocalBounds<EPCGExPointBoundsSource::Bounds>(Point);
-		case EPCGExPointBoundsSource::Bounds:
 			return GetLocalBounds<EPCGExPointBoundsSource::DensityBounds>(Point);
+		case EPCGExPointBoundsSource::Bounds:
+			return GetLocalBounds<EPCGExPointBoundsSource::Bounds>(Point);
 		case EPCGExPointBoundsSource::Center:
 			return GetLocalBounds<EPCGExPointBoundsSource::Center>(Point);
 		default:

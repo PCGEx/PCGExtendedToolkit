@@ -13,14 +13,25 @@
 #define LOCTEXT_NAMESPACE "PCGExTensorDotFilterDefinition"
 #define PCGEX_NAMESPACE PCGExTensorDotFilterDefinition
 
-bool UPCGExTensorDotFilterFactory::Init(FPCGExContext* InContext)
+bool UPCGExTensorDotFilterFactory::WantsPreparation(FPCGExContext* InContext)
 {
-	if (!Super::Init(InContext))
+	return true;
+}
+
+PCGExFactories::EPreparationResult UPCGExTensorDotFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
+{
+	PCGExFactories::EPreparationResult Result = Super::Prepare(InContext, TaskManager);
+	if (Result != PCGExFactories::EPreparationResult::Success)
 	{
-		return false;
+		return Result;
 	}
 
-	return PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, TensorFactories, {FPCGExDataTypeInfoTensor::AsId()});
+	if (!PCGExFactories::GetInputFactories(InContext, PCGExTensor::SourceTensorsLabel, TensorFactories, {FPCGExDataTypeInfoTensor::AsId()}, MissingDataPolicy == EPCGExFilterNoDataFallback::Error))
+	{
+		return PCGExFactories::EPreparationResult::MissingData;
+	}
+
+	return Result;
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExTensorDotFilterFactory::CreateFilter() const
@@ -62,6 +73,13 @@ bool PCGExPointFilter::FTensorDotFilter::Init(FPCGExContext* InContext, const TS
 		return false;
 	}
 
+	// Binds the threshold getter; without this GetComparisonThreshold reads through a null TSharedPtr.
+	DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
+	if (!DotComparison.Init(InContext, InPointDataFacade.ToSharedRef()))
+	{
+		return false;
+	}
+
 	OperandA = PointDataFacade->GetBroadcaster<FVector>(TypedFilterFactory->Config.OperandA, true, false, PCGEX_QUIET_HANDLING);
 	if (!OperandA)
 	{
@@ -86,7 +104,9 @@ bool PCGExPointFilter::FTensorDotFilter::Test(const int32 PointIndex) const
 		return false;
 	}
 
-	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? OperandA->Read(PointIndex) : InTransforms[PointIndex].TransformVectorNoScale(OperandA->Read(PointIndex)), Sample.DirectionAndSize.GetSafeNormal()), DotComparison.GetComparisonThreshold(PointIndex));
+	// Both sides normalized so the dot stays in [-1,1] and the threshold denotes an angle.
+	const FVector A = OperandA->Read(PointIndex).GetSafeNormal();
+	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(A) : A, Sample.DirectionAndSize.GetSafeNormal()), DotComparison.GetComparisonThreshold(PointIndex));
 }
 
 PCGEX_CREATE_FILTER_FACTORY(TensorDot)
