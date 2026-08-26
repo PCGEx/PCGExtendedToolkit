@@ -131,16 +131,6 @@ void UPCGExVariantCollection::BuildGroupMapping(const int32 GroupIdx, TArray<FIn
 		PathPayloadBase += Sources[g].Overrides.Num();
 	}
 
-	// Pick hashes carry raw entry indices in 16 bits by design (see PCGExCollections::PickHash).
-	// A flattened view beyond that ceiling would truncate silently -- near impossible in real
-	// projects, so just say it loudly if it ever happens. Variant-level diagnostics (this and the
-	// duplicate-rule warning) fire on the first group only: consumers call per group, per execution.
-	if (GroupIdx == 0 && PathPayloadBase + PathOverrides.Num() > MAX_uint16)
-	{
-		UE_LOG(LogPCGEx, Error, TEXT("[%s] Variant flat entry count (%d) exceeds the 16-bit pick-index ceiling (%d) -- picks swapped to entries beyond it will resolve to the WRONG entry."),
-		       *GetName(), PathPayloadBase + PathOverrides.Num(), MAX_uint16);
-	}
-
 	bool bAnyResolved = false;
 	bool bAnyBound = false;
 	for (int32 o = 0; o < Group.Overrides.Num(); o++)
@@ -184,11 +174,7 @@ void UPCGExVariantCollection::BuildGroupMapping(const int32 GroupIdx, TArray<FIn
 		}
 		if (PathToRule.Contains(Rule.MatchAsset))
 		{
-			if (GroupIdx == 0)
-			{
-				UE_LOG(LogPCGEx, Warning, TEXT("[%s] Duplicate asset swap rule for '%s' -- first rule wins."),
-				       *GetName(), *Rule.MatchAsset.ToString());
-			}
+			// Duplicate-rule warning lives in LogFlatViewDiagnostics -- once per execution, not per group.
 			continue;
 		}
 		PathToRule.Add(Rule.MatchAsset, r);
@@ -214,6 +200,41 @@ void UPCGExVariantCollection::BuildGroupMapping(const int32 GroupIdx, TArray<FIn
 				OutPairs.Emplace(RawIndex, PathPayloadBase + *Rule);
 			}
 		});
+	}
+}
+
+void UPCGExVariantCollection::LogFlatViewDiagnostics() const
+{
+	int32 TotalRows = 0;
+	for (const FPCGExVariantSource& Group : Sources)
+	{
+		TotalRows += Group.Overrides.Num();
+	}
+
+	// Pick hashes carry raw entry indices in 16 bits by design (see PCGExCollections::PickHash).
+	// A flattened view beyond that ceiling would truncate silently -- near impossible in real
+	// projects, so just say it loudly if it ever happens.
+	if (TotalRows + PathOverrides.Num() > MAX_uint16)
+	{
+		UE_LOG(LogPCGEx, Error, TEXT("[%s] Variant flat entry count (%d) exceeds the 16-bit pick-index ceiling (%d) -- picks swapped to entries beyond it will resolve to the WRONG entry."),
+		       *GetName(), TotalRows + PathOverrides.Num(), MAX_uint16);
+	}
+
+	TSet<FSoftObjectPath> SeenRules;
+	SeenRules.Reserve(PathOverrides.Num());
+	for (const FPCGExVariantPathOverride& Rule : PathOverrides)
+	{
+		if (Rule.MatchAsset.IsNull() || !Rule.Entry.IsValid())
+		{
+			continue;
+		}
+		bool bAlreadySeen = false;
+		SeenRules.Add(Rule.MatchAsset, &bAlreadySeen);
+		if (bAlreadySeen)
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("[%s] Duplicate asset swap rule for '%s' -- first rule wins."),
+			       *GetName(), *Rule.MatchAsset.ToString());
+		}
 	}
 }
 
