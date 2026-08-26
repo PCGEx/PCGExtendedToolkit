@@ -213,13 +213,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable), AdvancedDisplay)
 	bool bDrawAsCompactNode = true;
 
-	/** How to handle failed attribute initialization of the group itself or its subfilters. */
+	/** How the consumer handles this group failing to initialize. Grouped filters apply their own policy, not this one. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(PCG_NotOverridable))
 	EPCGExFilterNoDataFallback InitializationFailurePolicy = EPCGExFilterNoDataFallback::Error;
 
-	/** How to handle missing data on subfilters that rely on local data pins. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(PCG_NotOverridable))
-	EPCGExFilterNoDataFallback MissingDataPolicy = EPCGExFilterNoDataFallback::Fail;
+	// No MissingDataPolicy: a group has no data pins of its own, so the setting would be inert.
 };
 
 #pragma endregion

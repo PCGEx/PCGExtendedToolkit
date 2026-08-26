@@ -425,7 +425,6 @@ UPCGExFactoryData* UPCGExFilterGroupProviderSettings::CreateFactory(FPCGExContex
 	}
 
 	NewFactory->InitializationFailurePolicy = InitializationFailurePolicy;
-	NewFactory->MissingDataPolicy = MissingDataPolicy;
 
 	if (!PCGExFactories::GetInputFactories(InContext, PCGExFilters::Labels::SourceFiltersLabel, NewFactory->FilterFactories, PCGExFactories::AnyFilters()))
 	{

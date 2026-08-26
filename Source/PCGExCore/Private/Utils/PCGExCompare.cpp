@@ -273,7 +273,8 @@ void FPCGExStaticDotComparisonDetails::Init()
 	// Signed: remap [-1,1] → [0,1] via (1+x)*0.5
 	// Unsigned: use absolute value (already in [0,1])
 	// Degrees D maps to the dot of that angle, cos(D), so Degrees and Scalar denote the same angle.
-	// Angular tolerances are widths: T degrees maps to the dot-space span 1-cos(T) (zero at T=0), scaled per space.
+	// Tolerances are WIDTHS: a raw-dot width halves under the signed remap and stays as-is unsigned;
+	// an angular width T maps to the raw dot span 1-cos(T) (zero at T=0).
 	if (bUnsignedComparison)
 	{
 		if (Domain == EPCGExAngularDomain::Degrees)
@@ -297,7 +298,7 @@ void FPCGExStaticDotComparisonDetails::Init()
 		else
 		{
 			ComparisonThreshold = (1 + DotConstant) * 0.5;
-			ComparisonTolerance = (1 + DotTolerance) * 0.5;
+			ComparisonTolerance = DotTolerance * 0.5;
 		}
 	}
 }
@@ -317,14 +318,16 @@ bool FPCGExDotComparisonDetails::Init(FPCGExContext* InContext, const TSharedRef
 		return false;
 	}
 
+	// Tolerances are WIDTHS in the comparison space: signed compares remap through (1+x)*0.5 (span halved),
+	// unsigned compares raw magnitudes. An angular width T maps to the raw dot span 1-cos(T) (zero at T=0).
 	if (Domain == EPCGExAngularDomain::Degrees)
 	{
-		// Angular tolerance is a width: T degrees maps to the dot-space span 1-cos(T) (zero at T=0), halved for the [0,1] remap.
-		ComparisonTolerance = (1 - PCGExMath::DegreesToDot(DegreesTolerance)) * 0.5;
+		const double Width = 1 - PCGExMath::DegreesToDot(DegreesTolerance);
+		ComparisonTolerance = bUnsignedComparison ? Width : Width * 0.5;
 	}
 	else
 	{
-		ComparisonTolerance = DotTolerance;
+		ComparisonTolerance = bUnsignedComparison ? FMath::Abs(DotTolerance) : DotTolerance * 0.5;
 	}
 
 	return true;

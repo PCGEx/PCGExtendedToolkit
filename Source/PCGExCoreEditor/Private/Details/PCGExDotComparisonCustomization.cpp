@@ -200,37 +200,8 @@ double FPCGExDotComparisonCustomization::GetComparisonTolerance() const
 		UnsignedHandle->GetValue(bIsUnsigned);
 	}
 
-	if (bIsStaticVariant)
-	{
-		// Mirror FPCGExStaticDotComparisonDetails::Init()
-		if (Domain == EPCGExAngularDomain::Degrees)
-		{
-			double DegTol = 0.1;
-			if (DegreesToleranceHandle.IsValid())
-			{
-				DegreesToleranceHandle->GetValue(DegTol);
-			}
-			// Angular tolerance is a width: T degrees -> dot-space span 1-cos(T), halved for the signed [0,1] remap.
-			const double Width = 1.0 - PCGExMath::DegreesToDot(DegTol);
-			return bIsUnsigned ? Width : Width * 0.5;
-		}
-
-		double DotTol = 0.1;
-		if (DotToleranceHandle.IsValid())
-		{
-			DotToleranceHandle->GetValue(DotTol);
-		}
-
-		if (bIsUnsigned)
-		{
-			return FMath::Abs(DotTol);
-		}
-
-		return (1.0 + DotTol) * 0.5;
-	}
-
-	// Mirror FPCGExDotComparisonDetails::Init()
-	// No unsigned-specific tolerance path in the dynamic variant
+	// Mirror the runtime Init() of both structs (they now share the same width mapping):
+	// tolerances are widths, halved under the signed [0,1] remap, raw for unsigned magnitudes.
 	if (Domain == EPCGExAngularDomain::Degrees)
 	{
 		double DegTol = 0.1;
@@ -238,7 +209,8 @@ double FPCGExDotComparisonCustomization::GetComparisonTolerance() const
 		{
 			DegreesToleranceHandle->GetValue(DegTol);
 		}
-		return (1.0 - PCGExMath::DegreesToDot(DegTol)) * 0.5;
+		const double Width = 1.0 - PCGExMath::DegreesToDot(DegTol);
+		return bIsUnsigned ? Width : Width * 0.5;
 	}
 
 	double DotTol = 0.1;
@@ -246,7 +218,7 @@ double FPCGExDotComparisonCustomization::GetComparisonTolerance() const
 	{
 		DotToleranceHandle->GetValue(DotTol);
 	}
-	return DotTol;
+	return bIsUnsigned ? FMath::Abs(DotTol) : DotTol * 0.5;
 }
 
 bool FPCGExDotComparisonCustomization::IsAttributeMode() const

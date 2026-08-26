@@ -222,7 +222,7 @@ bool FNodeEdgeDirectionFilter::TestHash(const PCGExClusters::FNode& Node) const
 	{
 		for (int i = 0; i < Hashes.Num(); i++)
 		{
-			Hashes[i] = PCGEx::SH3(Cluster->GetDir(Node.Index, Node.Links[i].Node), CWTolerance);
+			Hashes[i] = PCGEx::SH3(Cluster->GetDir(Node.Links[i].Node, Node.Index), CWTolerance);
 		}
 	}
 

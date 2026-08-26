@@ -42,8 +42,6 @@ namespace PCGExEdgeLength
 			return false;
 		}
 
-		TConstPCGValueRange<FTransform> VtxTransforms = InPointDataFacade->Source->GetIn()->GetConstTransformValueRange();
-
 		Threshold = TypedFilterFactory->Config.Threshold.GetValueSetting(PCGEX_QUIET_HANDLING);
 		Threshold->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		// Threshold is read at Edge.PointIndex, an index into the edges dataset -- bind to the edge facade.

@@ -65,11 +65,11 @@ namespace PCGExEdgeNeighborsCount
 
 		if (Mode == EPCGExRefineEdgeThresholdMode::Both)
 		{
-			bResult = PCGExCompare::Compare(Comparison, From->Num(), Threshold) && PCGExCompare::Compare(Comparison, To->Num(), Threshold, Tolerance);
+			bResult = PCGExCompare::Compare(Comparison, From->Num(), Threshold, Tolerance) && PCGExCompare::Compare(Comparison, To->Num(), Threshold, Tolerance);
 		}
 		else if (Mode == EPCGExRefineEdgeThresholdMode::Any)
 		{
-			bResult = PCGExCompare::Compare(Comparison, From->Num(), Threshold) || PCGExCompare::Compare(Comparison, To->Num(), Threshold, Tolerance);
+			bResult = PCGExCompare::Compare(Comparison, From->Num(), Threshold, Tolerance) || PCGExCompare::Compare(Comparison, To->Num(), Threshold, Tolerance);
 		}
 		else if (Mode == EPCGExRefineEdgeThresholdMode::Sum)
 		{

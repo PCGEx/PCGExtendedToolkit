@@ -30,7 +30,7 @@ struct FPCGExEdgeNeighborsCountFilterConfig
 
 	FPCGExEdgeNeighborsCountFilterConfig() = default;
 
-	/** The number of connection endpoints must have to be considered a Bridge. */
+	/** Neighbor-count threshold the edge endpoints are compared against. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
 	FPCGExInputShorthandSelectorInteger32Abs Threshold = FPCGExInputShorthandSelectorInteger32Abs(FString(TEXT("")), 2, false);
 

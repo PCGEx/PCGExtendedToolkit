@@ -73,6 +73,13 @@ bool PCGExPointFilter::FTensorDotFilter::Init(FPCGExContext* InContext, const TS
 		return false;
 	}
 
+	// Binds the threshold getter; without this GetComparisonThreshold reads through a null TSharedPtr.
+	DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
+	if (!DotComparison.Init(InContext, InPointDataFacade.ToSharedRef()))
+	{
+		return false;
+	}
+
 	OperandA = PointDataFacade->GetBroadcaster<FVector>(TypedFilterFactory->Config.OperandA, true, false, PCGEX_QUIET_HANDLING);
 	if (!OperandA)
 	{

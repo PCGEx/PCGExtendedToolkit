@@ -116,13 +116,22 @@ bool PCGExPointFilter::FDotFilter::Test(const TSharedPtr<PCGExData::FPointIO>& I
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
+	// Inversion mirrors the per-point path: Operand B's toggle only applies to attribute input (hidden for constants).
 	B = B.GetSafeNormal();
+	if (TypedFilterFactory->Config.bInvertOperandB && TypedFilterFactory->Config.CompareAgainst != EPCGExInputValueType::Constant)
+	{
+		B *= -1;
+	}
 
 	if (!PCGExData::Helpers::TryReadDataValue(IO, TypedFilterFactory->Config.OperandA, A, PCGEX_QUIET_HANDLING))
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
 	A = A.GetSafeNormal();
+	if (TypedFilterFactory->Config.bInvertOperandA)
+	{
+		A *= -1;
+	}
 
 	FPCGExDotComparisonDetails TempComparison = TypedFilterFactory->Config.DotComparisonDetails;
 	PCGEX_MAKE_SHARED(TempFacade, PCGExData::FFacade, IO.ToSharedRef())
