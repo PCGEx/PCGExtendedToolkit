@@ -83,7 +83,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta = (PCG_Overridable))
 	bool bOutputSites = false;
 
-	/** Mark points & edges that lie on the hull */
+	/** Mark points that lie on the hull. Edges are never marked. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bMarkSiteHull = false;
 
@@ -95,17 +95,13 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta = (PCG_Overridable, EditCondition="bUrquhart && bOutputSites", EditConditionHides))
 	EPCGExUrquhartSiteMergeMode UrquhartSitesMerge = EPCGExUrquhartSiteMergeMode::None;
 
-	/** Mark points & edges that lie on the hull */
+	/** Mark points that lie on the hull. Edges are never marked. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bMarkHull = false;
 
 	/** Name of the attribute to output the Hull boolean to. True if point is on the hull, otherwise false. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bMarkHull"))
 	FName HullAttributeName = "bIsOnHull";
-
-	/** When true, edges that have at least a point on the Hull as marked as being on the hull. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bMarkEdgeOnTouch = false;
 
 	/** Projection settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))

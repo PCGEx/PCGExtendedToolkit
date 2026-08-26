@@ -66,8 +66,9 @@ void UPCGExBoxFittingRelax::Step2(const PCGExClusters::FNode& Node)
 			continue;
 		}
 
-		// Overlap resolution
-		FVector OverlapSize = CurrentBox.GetExtent() + OtherBox.GetExtent() - PCGExTypes::Abs(Delta);
+		// Overlap resolution. Measured between the boxes, not between the pivots: local bounds may
+		// sit off-pivot, and a pivot-distance estimate goes negative there and pulls instead of pushes.
+		const FVector OverlapSize = FVector::Min(CurrentBox.Max, OtherBox.Max) - FVector::Max(CurrentBox.Min, OtherBox.Min);
 
 		AddDelta(OtherNode->Index, Node.Index, (RepulsionConstant * OverlapSize * (Delta / Distance)));
 	}

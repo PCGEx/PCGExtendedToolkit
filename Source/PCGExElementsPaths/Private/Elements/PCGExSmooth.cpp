@@ -184,6 +184,9 @@ namespace PCGExSmooth
 
 		if (!DataBlender)
 		{
+			// Individual with nothing on the Blend Ops pin: the rules still run but every write is
+			// discarded, so the path comes out unchanged. Say so rather than return the input silently.
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Blending Interface is set to Individual but no Blend Ops are connected -- nothing will be smoothed."));
 			DataBlender = MakeShared<PCGExBlending::FDummyBlender>();
 		}
 

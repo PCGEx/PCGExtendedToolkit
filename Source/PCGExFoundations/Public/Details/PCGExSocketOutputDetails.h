@@ -8,7 +8,7 @@
 
 #include "PCGExSocketOutputDetails.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="staging/common-settings/socket-output-details"))
 struct PCGEXFOUNDATIONS_API FPCGExSocketOutputDetails
 {
 	GENERATED_BODY()

@@ -75,7 +75,7 @@ void FPCGExPickClosestClustersContext::ClusterProcessing_InitialProcessingDone()
 			for (int j = 0; j < Processors.Num(); j++)
 			{
 				const double Dist = Processors[j]->Distances[i];
-				if (Closest > Dist && Processors[j]->Picker == 0)
+				if (Closest > Dist && Processors[j]->Picker == -1)
 				{
 					Closest = Dist;
 					Pick = j;
@@ -200,9 +200,10 @@ namespace PCGExPickClosestClusters
 
 				if (!bFound && This->Settings->bExpandSearchOutsideTargetBounds)
 				{
+					// Edge octree: Item.Index is an edge index, so it needs the edge accessor, not GetPos.
 					This->Cluster->GetEdgeOctree()->FindNearbyElements(TargetLocation, [&](const PCGExOctree::FItem& Item)
 					{
-						This->Distances[Index] = FMath::Min(This->Distances[Index], FVector::DistSquared(TargetLocation, This->Cluster->GetPos(Item.Index)));
+						This->Distances[Index] = FMath::Min(This->Distances[Index], FVector::DistSquared(TargetLocation, This->Cluster->GetClosestPointOnEdge(Item.Index, TargetLocation)));
 						bFound = true;
 					});
 				}
@@ -258,13 +259,8 @@ namespace PCGExPickClosestClusters
 		}
 		else
 		{
-			if (Picker == -1)
-			{
-				EdgeDataFacade->Source->Tags->AddRaw(Context->OmitTag);
-				return;
-			}
-
-			EdgeDataFacade->Source->Tags->AddRaw(Context->KeepTag);
+			// Tag: every cluster is kept and labelled, picked or not.
+			EdgeDataFacade->Source->Tags->AddRaw(Picker == -1 ? Context->OmitTag : Context->KeepTag);
 		}
 
 		if (!Settings->TargetForwarding.bEnabled)
@@ -283,8 +279,17 @@ namespace PCGExPickClosestClusters
 				PCGEX_INIT_IO_VOID(VtxDataFacade->Source, PCGExData::EIOInit::Duplicate)
 			}
 
-			Context->TargetForwardHandler->Forward(Picker, EdgeDataFacade);
-			Context->TargetForwardHandler->Forward(Picker, VtxDataFacade);
+			if (Picker != -1)
+			{
+				Context->TargetForwardHandler->Forward(Picker, EdgeDataFacade);
+				Context->TargetForwardHandler->Forward(Picker, VtxDataFacade);
+			}
+		}
+
+		// Omit and Tag both stage clusters that matched no target; there is no target point to read from.
+		if (Picker == -1)
+		{
+			return;
 		}
 
 		const PCGExData::FConstPoint PickerPt = Context->TargetDataFacade->GetInPoint(Picker);

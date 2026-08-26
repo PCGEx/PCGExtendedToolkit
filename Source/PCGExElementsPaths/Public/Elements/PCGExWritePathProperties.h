@@ -147,11 +147,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path", meta=(DisplayName="PathDirection", PCG_Overridable, EditCondition="bWritePathDirection"))
 	FName PathDirectionAttributeName = FName("@Data.PathDirection");
 
-	/** Output averaged path direction. */
+	/** Output the average of every point position. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWritePathCentroid = false;
 
-	/** Name of the 'FVector' attribute to write averaged direction to.*/
+	/** Name of the 'FVector' attribute to write the path centroid to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path", meta=(DisplayName="PathCentroid", PCG_Overridable, EditCondition="bWritePathCentroid"))
 	FName PathCentroidAttributeName = FName("@Data.PathCentroid");
 
@@ -208,7 +208,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteBoundingBoxOrientation = false;
 
-	/** Name of the 'FRotator' attribute to write bounding box orientation to. **/
+	/** Name of the 'FQuat' attribute to write bounding box orientation to. **/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(DisplayName="Orientation", EditCondition="bWriteBoundingBoxOrientation"))
 	FName BoundingBoxOrientationAttributeName = FName("@Data.OBBOrientation");
 
@@ -240,11 +240,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteDot = false;
 
-	/** Name of the 'double' attribute to write distance to next point to.*/
+	/** Name of the 'double' attribute to write the prev/next dot product to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="Dot", PCG_Overridable, EditCondition="bWriteDot"))
 	FName DotAttributeName = FName("Dot");
 
-	/** Output Dot product of Prev/Next directions. */
+	/** Output the angle between Prev/Next directions. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteAngle = false;
 
@@ -280,10 +280,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="DistanceToNext", PCG_Overridable, EditCondition="bWriteDistanceToNext"))
 	FName DistanceToNextAttributeName = FName("DistanceToNext");
 
-	/** Output normalized distance to next. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, EditCondition="bWriteDistanceToNext", EditConditionHides, HideEditConditionToggle))
-	bool bNormalizeDistanceToNext = false;
-
 	/** Output distance to prev. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteDistanceToPrev = false;
@@ -306,16 +302,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteDistanceToEnd = false;
 
-	/** Name of the 'double' attribute to write distance to start to.*/
+	/** Name of the 'double' attribute to write distance to end to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="DistanceToEnd", PCG_Overridable, EditCondition="bWriteDistanceToEnd"))
 	FName DistanceToEndAttributeName = FName("DistanceToEnd");
 
 
-	/** Output distance to end. */
+	/** Output the point's normalized position along the path (0 at start, 1 at end). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWritePointTime = false;
 
-	/** Name of the 'double' attribute to write distance to start to.*/
+	/** Name of the 'double' attribute to write point time to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="PointTime", PCG_Overridable, EditCondition="bWritePointTime"))
 	FName PointTimeAttributeName = FName("PointTime");
 
@@ -331,7 +327,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="PointNormal", PCG_Overridable, EditCondition="bWritePointNormal"))
 	FName PointNormalAttributeName = FName("PointNormal");
 
-	/** Output point normal. */
+	/** Output point averaged normal. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWritePointAvgNormal = false;
 
@@ -339,7 +335,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="PointAverageNormal", PCG_Overridable, EditCondition="bWritePointAvgNormal"))
 	FName PointAvgNormalAttributeName = FName("PointAvgNormal");
 
-	/** Output point normal. */
+	/** Output point binormal. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWritePointBinormal = false;
 

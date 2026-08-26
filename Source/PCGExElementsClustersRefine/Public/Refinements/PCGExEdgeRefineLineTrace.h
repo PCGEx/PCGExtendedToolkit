@@ -71,9 +71,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bScatter = false;
 
+	/** How many traces are fired per endpoint. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Samples", EditCondition="bScatter", EditConditionHides, ClampMin=1))
 	double ScatterSamples = 10;
 
+	/** World-space radius the extra traces are scattered within, around the endpoint. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Radius", EditCondition="bScatter", EditConditionHides))
 	double ScatterRadius = 10;
 

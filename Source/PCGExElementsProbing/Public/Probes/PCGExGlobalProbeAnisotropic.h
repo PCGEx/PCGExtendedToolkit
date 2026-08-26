@@ -39,12 +39,13 @@ struct FPCGExProbeConfigGlobalAnisotropic : public FPCGExProbeConfigBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, ClampMin="0.1"))
 	double TertiaryScale = 2.0;
 
-	/** Number of nearest neighbors (in GlobalAnisotropic distance) */
+	/** Number of nearest neighbors, measured in the ellipsoidal distance the scales define */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 K = 5;
 
-	/** If true, uses per-point normals as primary axis */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable))
+	// TODO : not implemented -- ProcessAll has no per-point normal source yet. Kept unreflected so
+	// the panel does not offer a toggle that changes nothing.
+	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable))
 	bool bUsePerPointNormal = false;
 };
 

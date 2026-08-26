@@ -106,7 +106,7 @@ struct FPCGExAmplitudeConfig
 	FName AmplitudeSignAttributeName = "AmplitudeSign";
 
 	/** How the sign value is computed and output. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Absolute", EditCondition="bWriteAmplitudeSign", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Mode", EditCondition="bWriteAmplitudeSign", EditConditionHides, HideEditConditionToggle))
 	EPCGExVtxAmplitudeSignOutput SignOutputMode = EPCGExVtxAmplitudeSignOutput::Size;
 
 	/** Use absolute value for sign calculation. */

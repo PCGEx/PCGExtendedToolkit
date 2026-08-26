@@ -20,7 +20,7 @@ class UPCGNode;
  * Used when data from different pins needs to be paired together
  * by using either tags or @Data attribute but no access to points.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="utilities/data-matching/matching-details"))
 struct PCGEXMATCHING_API FPCGExMatchingDetails
 {
 	GENERATED_BODY()

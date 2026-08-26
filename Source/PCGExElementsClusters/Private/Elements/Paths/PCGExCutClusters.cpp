@@ -314,10 +314,6 @@ namespace PCGExCutEdges
 
 					return false;
 				});
-
-				if (Edge.bValid == static_cast<int8>(Settings->bInvert))
-				{
-				}
 			}
 		}
 	}
@@ -347,7 +343,10 @@ namespace PCGExCutEdges
 			const PCGExData::FConstPoint NodePoint(InVtxPointData, Node.PointIndex);
 			const FTransform& NodeTransform = NodePoint.GetTransform();
 			const FVector A1 = NodeTransform.GetLocation();
-			FBox PointBox = PCGExMath::GetLocalBounds<EPCGExPointBoundsSource::Bounds>(NodePoint).ExpandBy(Settings->NodeExpansion + Settings->IntersectionDetails.ToleranceSquared).TransformBy(NodeTransform);
+			// Tolerance is a world-space linear distance, so it widens the box after the transform, and it
+			// comes from the context copy -- Settings->IntersectionDetails is never Init()ed, leaving its
+			// ToleranceSquared at the member default whatever the user typed.
+			FBox PointBox = PCGExMath::GetLocalBounds<EPCGExPointBoundsSource::Bounds>(NodePoint).ExpandBy(Settings->NodeExpansion).TransformBy(NodeTransform).ExpandBy(Context->IntersectionDetails.Tolerance);
 
 			for (const TSharedRef<PCGExPaths::FPath>& Path : Context->Paths)
 			{
@@ -398,10 +397,6 @@ namespace PCGExCutEdges
 					}
 					return false;
 				});
-
-				if (Node.bValid == static_cast<int8>(Settings->bInvert))
-				{
-				}
 			}
 		}
 	}

@@ -19,7 +19,8 @@ struct FPCGExProbeConfigTheta : public FPCGExProbeConfigBase
 	{
 	}
 
-	/** Number of cones (typically 6-8). Higher = denser graph, better spanner. */
+	/** Number of cones (typically 6-8), fanned around Cone Axis. Higher = denser graph in that plane,
+	 * but each cone is also narrower, so points further off the plane are matched by no cone at all. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, ClampMin="4", ClampMax="32"))
 	int32 NumCones = 6;
 

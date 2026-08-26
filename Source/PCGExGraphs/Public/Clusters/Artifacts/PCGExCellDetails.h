@@ -392,7 +392,7 @@ struct PCGEXGRAPHS_API FPCGExCellOBBAttributesDetails
 	FVector MinExtent = FVector(1);
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="pathfinding/cells/common-settings/cell-artifacts-details"))
 struct PCGEXGRAPHS_API FPCGExCellArtifactsDetails
 {
 	GENERATED_BODY()

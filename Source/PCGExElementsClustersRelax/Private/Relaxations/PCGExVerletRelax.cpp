@@ -88,10 +88,19 @@ EPCGExClusterElement UPCGExVerletRelax::PrepareNextStep(const int32 InStep)
 
 void UPCGExVerletRelax::Step1(const PCGExClusters::FNode& Node)
 {
+	const FVector P = (*ReadBuffer)[Node.Index].GetLocation();
+
+	if (FrictionBuffer->Read(Node.PointIndex) >= 1)
+	{
+		// Pinned, same threshold Step3 uses. Hold the current position: skipping the write entirely
+		// would leave the previous iteration's position in the buffer and step the Vtx backwards.
+		(*WriteBuffer)[Node.Index].SetLocation(P);
+		return;
+	}
+
 	const double F = (1 - FrictionBuffer->Read(Node.PointIndex)) * DampingScale;
 
 	const FVector G = GravityBuffer->Read(Node.PointIndex);
-	const FVector P = (*ReadBuffer)[Node.Index].GetLocation();
 
 	// Write buffer is the old position at this point
 	const FVector V = (P - (*WriteBuffer)[Node.Index].GetLocation()) * F;

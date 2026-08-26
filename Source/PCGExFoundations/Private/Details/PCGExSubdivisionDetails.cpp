@@ -102,7 +102,9 @@ int32 FPCGExManhattanDetails::ComputeSubdivisions(const FVector& A, const FVecto
 			OutDist += Dist;
 			Sub[Axis] = Dist;
 
-			if (Sub == B)
+			// Sub is an offset from A in rotated space (see the unrotate pass below), so it is compared
+			// against the rotated segment vector, not against B's world position.
+			if (Sub.Equals(DirectionAndSize))
 			{
 				break;
 			}
@@ -146,7 +148,7 @@ int32 FPCGExManhattanDetails::ComputeSubdivisions(const FVector& A, const FVecto
 				OutDist += Dist;
 				Sub[Axis] += Dist * Sign[Axis];
 
-				if (Sub == B)
+				if (Sub.Equals(DirectionAndSize))
 				{
 					bAdvance = false;
 					break;

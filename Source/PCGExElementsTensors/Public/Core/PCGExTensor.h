@@ -66,7 +66,7 @@ enum class EPCGExTensorStopConditionHandling : uint8
 	Include = 1 UMETA(DisplayName = "Include", Tooltip="Include the stopping sample to the path.")
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="tensors/common-settings/tensor-sampling-mutations-details"))
 struct PCGEXELEMENTSTENSORS_API FPCGExTensorSamplingMutationsDetails
 {
 	GENERATED_BODY()

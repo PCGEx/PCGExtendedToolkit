@@ -530,7 +530,7 @@ struct PCGEXCORE_API FPCGExStaticDotComparisonDetails
  * Dot product comparison with support for per-point attribute thresholds.
  * Use FPCGExStaticDotComparisonDetails if constant threshold is sufficient.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/dot-comparison-details"))
 struct PCGEXCORE_API FPCGExDotComparisonDetails
 {
 	GENERATED_BODY()

@@ -109,7 +109,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteEdgeLength = false;
 
-	/** Name of the 'boolean' attribute to write sampling success to.*/
+	/** Name of the 'double' attribute to write the edge length to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="EdgeLength", PCG_Overridable, EditCondition="bWriteEdgeLength"))
 	FName EdgeLengthAttributeName = FName("EdgeLength");
 
@@ -117,7 +117,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteEdgeDirection = false;
 
-	/** Name of the 'boolean' attribute to write sampling success to.*/
+	/** Name of the 'FVector' attribute to write the edge direction to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="EdgeDirection", PCG_Overridable, EditCondition="bWriteEdgeDirection"))
 	FName EdgeDirectionAttributeName = FName("EdgeDirection");
 
@@ -125,8 +125,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta = (PCG_Overridable))
 	bool bEndpointsBlending = false;
 
-	/** Balance between start/end point ( When enabled, this value will be overriden by EdgePositionLerp, and Solidification, in that order. )*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, EditCondition="bEndpointsBlending && !bWriteEdgePosition && SolidificationAxis == EPCGExMinimalAxis::None", ClampMin=0, ClampMax=1))
+	/** Balance between start/end point. Solidification computes its own balance and overrides this; Edge Position Lerp does not. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, EditCondition="bEndpointsBlending && SolidificationAxis == EPCGExMinimalAxis::None", ClampMin=0, ClampMax=1))
 	double EndpointsWeights = 0.5;
 
 	/** How to blend data from sampled points */

@@ -53,7 +53,7 @@ struct PCGEXGRAPHS_API FPCGExBasicEdgeSolidificationDetails
 	void Mutate(PCGExData::FMutablePoint& InEdgePoint, const PCGExData::FConstPoint& InStart, const PCGExData::FConstPoint& InEnd, const double InLerp) const;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/common-settings/graph-builder-details"))
 struct PCGEXGRAPHS_API FPCGExGraphBuilderDetails
 {
 	GENERATED_BODY()

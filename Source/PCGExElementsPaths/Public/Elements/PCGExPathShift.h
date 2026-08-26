@@ -103,7 +103,7 @@ public:
 	uint8 CherryPickedProperties = 0;
 
 	/** Attributes to be shifted */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="ShiftType == EPCGExShiftType::CherryPick", EditConditionHides, Bitmask, BitmaskEnum="/Script/PCGExCore.EPCGExPointNativeProperties"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="ShiftType == EPCGExShiftType::CherryPick", EditConditionHides))
 	TArray<FName> CherryPickedAttributes;
 
 	/** Suppress warning when path data has already been shifted. */

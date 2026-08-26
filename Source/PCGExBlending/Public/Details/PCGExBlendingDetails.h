@@ -143,7 +143,7 @@ struct PCGEXBLENDING_API FPCGExPropertiesBlendingDetails
 #pragma endregion
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/blending-details-monolithic"))
 struct PCGEXBLENDING_API FPCGExBlendingDetails
 {
 	GENERATED_BODY()

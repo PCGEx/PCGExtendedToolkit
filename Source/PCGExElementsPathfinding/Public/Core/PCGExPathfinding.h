@@ -61,7 +61,7 @@ enum class EPCGExPathfindingOutputMode : uint8
 	Visited = 1 UMETA(DisplayName = "Visited", Tooltip="Do not output paths. Instead, forward Vtx & Edges and write, per element, how many output paths visit it."),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="pathfinding/common-settings/path-statistics"))
 struct PCGEXELEMENTSPATHFINDING_API FPCGExPathStatistics
 {
 	GENERATED_BODY()

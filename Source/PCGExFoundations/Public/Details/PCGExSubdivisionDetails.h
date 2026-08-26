@@ -53,7 +53,7 @@ enum class EPCGExManhattanAlign : uint8
 	SegmentZ = 7 UMETA(DisplayName = "Segment Z", ToolTip=""),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/manhattan-details"))
 struct PCGEXFOUNDATIONS_API FPCGExManhattanDetails
 {
 	GENERATED_BODY()

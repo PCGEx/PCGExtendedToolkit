@@ -41,7 +41,7 @@ enum class EPCGExProjectionMethod : uint8
 	LocalTangent = 2 UMETA(DisplayName = "3D Surface", ToolTip="No shared projection plane: the graph is treated as a folded/curved 3D surface. By far the most expensive method, use only when no single plane fits."),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/projection-details"))
 struct PCGEXCORE_API FPCGExGeo2DProjectionDetails
 {
 	GENERATED_BODY()

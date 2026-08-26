@@ -322,7 +322,9 @@ namespace PCGExProbing
 			}
 
 			const FVector Position = WorkingPositions[OtherPointIndex];
-			const FVector Dir = (Origin - Position).GetSafeNormal();
+			// Bearing runs probing point -> candidate, so a configured direction names the side
+			// candidates are taken from.
+			const FVector Dir = (Position - Origin).GetSafeNormal();
 			const int32 EmplaceIndex = Candidates.Emplace(OtherPointIndex, Dir, FVector::DistSquared(Position, Origin), bPreventCoincidence ? PCGEx::SH3(Dir, CWCoincidenceTolerance) : 0);
 
 			if (NumChainedOps > 0)

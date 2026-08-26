@@ -209,14 +209,14 @@ namespace PCGExCopyClustersToPoints
 			case EPCGExClusterComponentTagMatchMode::Any:
 				if (bSameAnyChecks)
 				{
-					if (Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
+					if (!Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
 					{
 						continue;
 					}
 				}
 				else
 				{
-					if (Context->MainDataMatcher->Test(TargetPoint, VtxAsCandidate, InfiniteScope) || Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
+					if (!Context->MainDataMatcher->Test(TargetPoint, VtxAsCandidate, InfiniteScope) && !Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
 					{
 						continue;
 					}

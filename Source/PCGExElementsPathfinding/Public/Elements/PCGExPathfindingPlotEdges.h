@@ -101,7 +101,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	bool bAddSeedToPath = false;
 
-	/** Add goal point at the beginning of the path */
+	/** Add goal point at the end of the path */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	bool bAddGoalToPath = false;
 

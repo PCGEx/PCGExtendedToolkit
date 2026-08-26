@@ -102,7 +102,7 @@ struct PCGEXELEMENTSTOPOLOGY_API FPCGExTopologyUVDetails
 		UE::Geometry::FDynamicMesh3& InMesh) const;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="topology/common-settings/topology-details"))
 struct PCGEXELEMENTSTOPOLOGY_API FPCGExTopologyDetails
 {
 	GENERATED_BODY()

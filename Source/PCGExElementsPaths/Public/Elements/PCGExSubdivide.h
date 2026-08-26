@@ -68,8 +68,8 @@ public:
 
 	PCGEX_SETTING_VALUE_DECL(SubdivisionAmount, double)
 	
-	/** How to round count based on distance subdivision. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, EditCondition="SubdivideMethod == EPCGExSubdivideMode::Distance"))
+	/** How the subdivision count is rounded. Applies to Count as well, whose amount is read as a double. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExTruncateMode TruncateMethod = EPCGExTruncateMode::Floor;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="SubdivideMethod != EPCGExSubdivideMode::Manhattan && SubdivideMethod == EPCGExSubdivideMode::Distance", EditConditionHides))

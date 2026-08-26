@@ -39,11 +39,11 @@ struct FPCGExStringSelfCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
 
-	/** Operand B for testing -- Will be translated to `int32` under the hood. */
+	/** Index to compare against -- Will be translated to `int32` under the hood. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
 	FPCGAttributePropertyInputSelector IndexAttribute;
 
-	/** Operand B for testing */
+	/** Index to compare against */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
 	int32 IndexConstant = -1;
 

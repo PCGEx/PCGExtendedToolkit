@@ -7,13 +7,13 @@
 
 void FPCGExEdgeRemoveLeaves::ProcessNode(PCGExClusters::FNode& Node)
 {
-	int32 CurrentNodeIndex = Node.Index;
-	int32 PrevNodeIndex = -1;
-
 	if (!Node.IsLeaf())
 	{
 		return;
 	}
+
+	int32 CurrentNodeIndex = Node.Index;
+	int32 PrevNodeIndex = -1;
 
 	while (CurrentNodeIndex != -1)
 	{
@@ -21,19 +21,35 @@ void FPCGExEdgeRemoveLeaves::ProcessNode(PCGExClusters::FNode& Node)
 
 		if (From->IsComplex())
 		{
+			// Junction: it anchors the chain and keeps its remaining edges.
 			return;
 		}
 
-		if (PrevNodeIndex == CurrentNodeIndex)
+		// Step onto the neighbour we did not arrive from. Every node walked is degree 1 or 2, so a
+		// chain reachable from a leaf cannot close on itself and the walk always terminates.
+		int32 NextNodeIndex = -1;
+		int32 NextEdgeIndex = -1;
+		for (const PCGExGraphs::FLink& Lk : From->Links)
+		{
+			if (Lk.Node != PrevNodeIndex)
+			{
+				NextNodeIndex = Lk.Node;
+				NextEdgeIndex = Lk.Edge;
+				break;
+			}
+		}
+
+		From->bValid = false;
+
+		if (NextNodeIndex == -1)
 		{
 			return;
 		}
 
-		From->bValid = false;
-		PrevNodeIndex = CurrentNodeIndex;
-		CurrentNodeIndex = Node.Links[0].Node;
+		Cluster->GetEdge(NextEdgeIndex)->bValid = false;
 
-		Cluster->GetEdge(Node.Links[0])->bValid = false;
+		PrevNodeIndex = CurrentNodeIndex;
+		CurrentNodeIndex = NextNodeIndex;
 	}
 }
 

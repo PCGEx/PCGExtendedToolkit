@@ -319,10 +319,6 @@ public:
 	FPCGExTensorHandlerDetails TensorHandlerDetails;
 
 
-	/** Whether to give a new seed to the points. If disabled, they will inherit the original one. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(PCG_NotOverridable))
-	bool bRefreshSeed = true;
-
 	/** ... */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(DisplayName="Paths Output Settings"))
 	FPCGExPathOutputDetails PathOutputDetails;

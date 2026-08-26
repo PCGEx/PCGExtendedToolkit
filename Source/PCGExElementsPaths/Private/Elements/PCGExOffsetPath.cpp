@@ -225,11 +225,11 @@ namespace PCGExOffsetPath
 					}
 					else if (Settings->Adjustment == EPCGExOffsetAdjustment::Mitre)
 					{
-						double MitreLength = Offset / FMath::Sin(PathAngles->Get(EdgeIndex) / 2);
-						if (MitreLength > Settings->MitreLimit * Offset)
-						{
-							Offset *= Settings->MitreLimit;
-						} // Should bevel :(
+						// The mitre distance is what keeps the offset walls meeting at the corner; the
+						// limit only caps it. Applying the cap alone left every corner wider than the
+						// limit's break-even angle offset as if no adjustment had been picked.
+						const double MitreLength = Offset / FMath::Sin(PathAngles->Get(EdgeIndex) / 2);
+						Offset = FMath::Min(MitreLength, Settings->MitreLimit * Offset);
 					}
 				}
 
