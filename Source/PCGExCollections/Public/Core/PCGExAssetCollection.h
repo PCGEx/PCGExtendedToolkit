@@ -213,7 +213,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 * Stable identity for external entry references (e.g. variant collections) across source
 	 * edits -- reorder, rename, duplicate. 0 = unassigned. NEVER assign in the ctor: it would
 	 * defeat UE's CDO->instance propagation for arrays-of-structs (see FPCGExProperty::HeaderId).
-	 * Assigned and deduplicated by UPCGExAssetCollection::SyncEntryIds (RebuildStagingData).
+	 * Assigned and deduplicated by UPCGExAssetCollection::SyncEntryIds (all staging rebuild paths).
 	 * Cooked deliberately (not editor-only) so packaged builds can match entries by identity.
 	 */
 	UPROPERTY()
@@ -1092,10 +1092,11 @@ public:
 	/**
 	 * Assigns a unique non-zero EntryId to every entry that has none, and re-assigns
 	 * copy-paste-introduced duplicates (first-seen entry keeps its id, so external
-	 * references keep resolving to the original). Runs at the top of RebuildStagingData
-	 * so identity is settled before any derived data (e.g. variant bakes) reads it.
+	 * references keep resolving to the original). Runs at the top of every staging rebuild
+	 * (runtime and editor) so identity is settled before any derived data reads it.
+	 * Returns true when any id was minted or re-assigned.
 	 */
-	void SyncEntryIds();
+	bool SyncEntryIds();
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -1238,6 +1239,7 @@ public:
 	// Properties
 
 #if WITH_EDITORONLY_DATA
+	/** Freeform authoring notes. Editor-only, never cooked. */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1, MultiLine))
 	FString Notes;
 
@@ -1255,6 +1257,7 @@ public:
 	TObjectPtr<UPCGExCollectionStagingPipeline> StagingPipeline_DEPRECATED;
 #endif
 
+	/** Tags carried by this collection: appended to spawned components' ComponentTags, and merged into entry tags wherever this collection is consumed as a subcollection or flattened. */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1))
 	TSet<FName> CollectionTags;
 
@@ -1279,15 +1282,19 @@ public:
 	FDateTime LastRebuiltUtc = FDateTime::MinValue();
 #endif
 
+	/** Collection-level rule for entry variation overrides: let entries choose (PerEntry) or force GlobalVariations on all of them (Overrule). */
 	UPROPERTY(EditAnywhere, Category = "Settings|Global")
 	EPCGExGlobalVariationRule GlobalVariationMode = EPCGExGlobalVariationRule::PerEntry;
 
+	/** Collection-level fitting variations, consumed by entries whose Variation Mode is Global (or by all entries when Overrule). */
 	UPROPERTY(EditAnywhere, Category = "Settings|Global")
 	FPCGExFittingVariations GlobalVariations;
 
+	/** Collection-level rule for entry grammar overrides: let entries choose (PerEntry) or force GlobalAssetGrammar on all of them (Overrule). */
 	UPROPERTY(EditAnywhere, Category = "Settings|Global")
 	EPCGExGlobalVariationRule GlobalGrammarMode = EPCGExGlobalVariationRule::PerEntry;
 
+	/** Collection-level grammar, consumed by entries whose grammar source is Global (or by all entries when Overrule). */
 	UPROPERTY(EditAnywhere, Category = "Settings|Global")
 	FPCGExAssetGrammarDetails GlobalAssetGrammar = FPCGExAssetGrammarDetails(FName("N/A"));
 
@@ -1332,6 +1339,7 @@ public:
 	UPROPERTY()
 	int32 FittingSchemaVersion = 0;
 
+	/** Exclude entries whose asset slot is EMPTY from the pickable set. Off (default): empty entries stay valid picks that stage nothing -- weighted "spawn nothing" slots. Governs only empty asset slots, nothing else. */
 	UPROPERTY(EditAnywhere, Category = "Settings|Utils")
 	bool bDoNotIgnoreInvalidEntries = false;
 

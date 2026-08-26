@@ -57,7 +57,7 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = Settings)
 	bool bAutoRebuildOnStale = true;
 
-	/** When opening a collection editor, scan entries for ones whose referenced asset's file mtime is newer than the last full rebuild and re-stage them. Catches changes made offline between editor sessions. Requires at least one prior manual rebuild to establish a baseline. */
+	/** When a collection loads in the editor, re-stage entries whose source packages' content digest no longer matches the fingerprint recorded at their last rebuild (content, not file dates -- VCS checkouts rewrite mtimes). Catches changes made offline between sessions. Entries with no recorded fingerprint (never rebuilt since fingerprints landed) are skipped until a manual rebuild sets the baseline. */
 	UPROPERTY(EditAnywhere, config, Category = Settings)
 	bool bRebuildStaleEntriesOnOpen = true;
 

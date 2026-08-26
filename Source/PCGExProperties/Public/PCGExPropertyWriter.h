@@ -72,10 +72,6 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOutputSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(DisplayName="Properties Mapping", TitleProperty="{PropertyName}"))
 	TArray<FPCGExPropertyOutputConfig> Configs;
 
-	/** Emit the "Map" attribute set describing external resources referenced by written properties (e.g. Collection Entry picks). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, AdvancedDisplay, meta=(DisplayName="Output Map"))
-	bool bOutputMap = false;
-
 	/** Each asset's Collection is resolved recursively (locals + ImportedSchemas, cycle-safe);
 	 *  every resolved entry contributes an enabled config keyed by its Name. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(DisplayName="Included Schemas"))

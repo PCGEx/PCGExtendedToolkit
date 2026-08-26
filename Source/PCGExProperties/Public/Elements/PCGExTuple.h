@@ -94,5 +94,6 @@ class FPCGExTupleElement final : public IPCGExElement
 {
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(Tuple)
+	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };

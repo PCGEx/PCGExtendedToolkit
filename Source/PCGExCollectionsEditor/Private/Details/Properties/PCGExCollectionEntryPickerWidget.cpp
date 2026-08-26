@@ -135,15 +135,18 @@ namespace PCGExCollectionEntryPickerWidget
 		{
 			return LOCTEXT("NoEntry", "None");
 		}
+		// Ids are minted from GetTypeHash(FGuid) and half of them are negative -- unsigned hex
+		// reads as the opaque token it is, not as a signed count.
+		const FText IdText = FText::FromString(FString::Printf(TEXT("%08X"), static_cast<uint32>(Ref.EntryId)));
 		const UPCGExAssetCollection* Collection = Ref.Collection.Get();
 		if (!Collection)
 		{
-			return FText::Format(LOCTEXT("EntryUnloaded", "Entry {0} (not loaded)"), Ref.EntryId);
+			return FText::Format(LOCTEXT("EntryUnloaded", "Entry {0} (not loaded)"), IdText);
 		}
 		const int32 RawIndex = Collection->FindRawIndexByEntryId(Ref.EntryId);
 		if (RawIndex == INDEX_NONE)
 		{
-			return FText::Format(LOCTEXT("EntryOrphaned", "Orphaned ({0})"), Ref.EntryId);
+			return FText::Format(LOCTEXT("EntryOrphaned", "Orphaned ({0})"), IdText);
 		}
 		return FText::Format(LOCTEXT("EntryLabelWithIndex", "{0}  [{1}]"), EntryLabel(Collection, RawIndex), RawIndex);
 	}

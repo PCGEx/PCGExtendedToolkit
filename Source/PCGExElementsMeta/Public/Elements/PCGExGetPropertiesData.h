@@ -63,6 +63,7 @@ public:
 	{
 		return true;
 	}
+
 #endif
 
 	// Output pin mirrors the input shape: PCGEX_PIN_ANY on both sides relies on dynamic pin
@@ -95,10 +96,15 @@ public:
 		meta=(PCG_Overridable, EditCondition="OutputMode == EPCGExPropertyOutputMode::Explicit", EditConditionHides, ShowOnlyInnerProperties))
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
 
-	/** Map sidecar is emitted in AllFound mode (its settings struct is hidden there) or when the struct's toggle is on. */
+	/** Emit the "Map" attribute set describing external resources referenced by written properties. Always emitted in AllFound mode (the toggle is hidden there). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source", AdvancedDisplay,
+		meta=(DisplayName="Output Map", EditCondition="OutputMode == EPCGExPropertyOutputMode::Explicit", EditConditionHides))
+	bool bOutputMap = false;
+
+	/** Map sidecar is emitted in AllFound mode or when the node-level toggle is on. */
 	bool WantsOutputMap() const
 	{
-		return OutputMode == EPCGExPropertyOutputMode::AllFound || PropertyOutputSettings.bOutputMap;
+		return OutputMode == EPCGExPropertyOutputMode::AllFound || bOutputMap;
 	}
 
 	/** Forward each input's tags to the corresponding output. */

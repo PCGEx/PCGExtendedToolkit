@@ -544,7 +544,9 @@ struct PCGEXPROPERTIES_API FPCGExPropertySchemaCollection
 	 *  have the same meaning as Resolve's. */
 	TArray<FInstancedStruct> BuildSchema(TConstArrayView<const FPCGExPropertyOverrides*> FallbackChain = {}, bool bIncludeOwnOverrides = true) const;
 
-	/** Validate all property names are unique (returns true if valid) */
+	/** Validate all LOCAL property names are unique (returns true if valid). Deliberately does not
+	 *  span imports: same-name shadowing across layers is the designed first-seen-wins behavior
+	 *  (see Resolve); a duplicate among locals is an authoring error. */
 	bool ValidateUniqueNames(TArray<FName>& OutDuplicates) const;
 
 	/** Get typed property by name */

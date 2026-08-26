@@ -275,9 +275,6 @@ namespace PCGExGetCollectionData
 		PCGExCollections::FPCGExCollectionPropertySetWriter PropertyWriter;
 	};
 
-	/** Derived settings + ambient state passed to FlattenInto / WriteFromEntries. Bundled so the
-	 *  Collection-mode fast path, the Merged path, and the slot-based FromInputs path can all share
-	 *  the same helpers without dragging a dozen positional params. */
 	/** Sidecar contributions gathered across the (parallel) write helpers, flushed single-threaded into
 	 *  the node's Map output. Clones come from per-output property writers; Sources are collection-level
 	 *  properties written by the @Data/@Element annotation paths. */
@@ -288,6 +285,9 @@ namespace PCGExGetCollectionData
 		TArray<const FPCGExProperty*> Sources;
 	};
 
+	/** Derived settings + ambient state passed to FlattenInto / WriteFromEntries. Bundled so the
+	 *  Collection-mode fast path, the Merged path, and the slot-based FromInputs path can all share
+	 *  the same helpers without dragging a dozen positional params. */
 	struct FOutputProcessParams
 	{
 		const UPCGExGetCollectionDataSettings* Settings = nullptr;
@@ -474,11 +474,14 @@ namespace PCGExGetCollectionData
 		TArray<FFlattenedEntry>& Entries = *U.Entries;
 		UPCGMetadata* Metadata = U.OutputSet->Metadata;
 
-		// Choose which asset halves to declare. bWantAssetPath/bWantAssetClass are pre-computed
+		// Choose which asset half to declare. bWantAssetPath/bWantAssetClass are pre-computed
 		// per-mode (single-collection: based on actor-vs-mesh type; merged: OR'd across all
-		// contributing collections so heterogeneous mixes get both halves).
+		// contributing collections). Both halves share AssetPathAttributeName, so a heterogeneous
+		// mix collapses to the FSoftObjectPath half -- Staging.Path already holds the class path
+		// for actor entries, and a second CreateAttribute under the same identifier with a
+		// different type would fail and return nullptr.
 		const bool bOutputAssetPath = Settings->bWriteAssetPath && U.bWantAssetPath;
-		const bool bOutputAssetClass = Settings->bWriteAssetPath && U.bWantAssetClass;
+		const bool bOutputAssetClass = Settings->bWriteAssetPath && U.bWantAssetClass && !bOutputAssetPath;
 
 		// Resolve grammars once, accumulate the union of axes used across all entries -- drives
 		// the per-axis attribute declarations below and the per-row Fix dispatch in the write loop.

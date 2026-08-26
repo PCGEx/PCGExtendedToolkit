@@ -262,11 +262,6 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 		return;
 	}
 
-	if (!GetDefault<UPCGExCollectionsEditorSettings>()->bRebuildStaleEntriesOnOpen)
-	{
-		return;
-	}
-
 	// Defer a tick: the rebuild cascades into UpdateStaging -> SpawnActor, unsafe inside EndLoad
 	// (re-entrant load chain, GWorld mid-transition). A graph that triggered this soft-load sees
 	// pre-rebuild state for its current run; later runs see fresh data.
@@ -276,9 +271,12 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 		{
 			if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
 			{
-				Loaded->EDITOR_RebuildStaleEntries();
-				// Ids only mint on staging rebuilds; heal never-rebuilt collections here so entry
-				// references (Collection Entry properties, variants) have something to bind to.
+				if (GetDefault<UPCGExCollectionsEditorSettings>()->bRebuildStaleEntriesOnOpen)
+				{
+					Loaded->EDITOR_RebuildStaleEntries();
+				}
+				// Not gated on the staleness preference: entry references (Collection Entry
+				// properties, variants) need ids to bind to, so never-rebuilt collections heal here.
 				PCGExCollectionEditorUtils::EnsureEntryIds(Loaded, /*bNotify=*/false);
 			}
 		});
