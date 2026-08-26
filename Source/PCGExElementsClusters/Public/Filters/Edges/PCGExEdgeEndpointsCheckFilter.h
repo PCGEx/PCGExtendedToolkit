@@ -13,7 +13,7 @@
 UENUM()
 enum class EPCGExEdgeEndpointsCheckMode : uint8
 {
-	None   = 0 UMETA(DisplayName = "None", Tooltip="None of the endpoint must has the expected result."),
+	None   = 0 UMETA(DisplayName = "None", Tooltip="Neither endpoint may have the expected result."),
 	Both   = 1 UMETA(DisplayName = "Both", Tooltip="Both endpoints must have the expected result."),
 	Any    = 2 UMETA(DisplayName = "Any Pass", Tooltip="At least one endpoint must have the expected result."),
 	Start  = 3 UMETA(DisplayName = "Start", Tooltip="Start must have the expected result."),
@@ -121,7 +121,7 @@ class UPCGExEdgeEndpointsCheckFilterProviderSettings : public UPCGExEdgeFilterPr
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EdgeEndpointsCheckFilterFactory, "Edge Filter : Endpoints Check", "Uses filters applied to the edge endpoints' in order to determine whether this filter result'.", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EdgeEndpointsCheckFilterFactory, "Edge Filter : Endpoints Check", "Tests filters against the edge's endpoints to determine the edge's filter result.", PCGEX_FACTORY_NAME_PRIORITY)
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{

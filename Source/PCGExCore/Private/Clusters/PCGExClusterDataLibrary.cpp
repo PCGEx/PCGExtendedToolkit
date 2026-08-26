@@ -180,11 +180,16 @@ namespace PCGExClusters
 		return nullptr;
 	}
 
-	void FDataLibrary::PrintLogs(FPCGExContext* InContext, bool bSkipTrivial, bool bSkipImportant)
+	void FDataLibrary::PrintLogs(FPCGExContext* InContext, bool bSkipTrivial, bool bSkipImportant, const TSet<EProblem>* InMuted)
 	{
 		for (int i = 0; i < ProblemsTracker.Num(); i++)
 		{
 			if (ProblemsTracker[i] <= 0)
+			{
+				continue;
+			}
+
+			if (InMuted && InMuted->Contains(static_cast<EProblem>(i)))
 			{
 				continue;
 			}

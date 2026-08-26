@@ -111,6 +111,11 @@ bool FPCGExFilterVtxElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	if (Settings->Mode == EPCGExVtxFilterOutput::Attribute && !Settings->ResultOutputVtx.Validate(Context))
+	{
+		return false;
+	}
+
 	if (Settings->Mode == EPCGExVtxFilterOutput::Clusters)
 	{
 		GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
@@ -323,9 +328,14 @@ namespace PCGExFilterVtx
 
 		if (Settings->Mode == EPCGExVtxFilterOutput::Attribute)
 		{
+			// bEnabled false -> buffers were never initialized, skip writes but keep the mode's no-prune reset.
+			const bool bWriteResults = ResultOutputVtx.bEnabled;
 			for (PCGExClusters::FNode& Node : Nodes)
 			{
-				ResultOutputVtx.Write(Node.PointIndex, static_cast<bool>(Node.bValid));
+				if (bWriteResults)
+				{
+					ResultOutputVtx.Write(Node.PointIndex, static_cast<bool>(Node.bValid));
+				}
 				Node.bValid = true;
 			}
 
@@ -413,7 +423,7 @@ namespace PCGExFilterVtx
 	{
 		PCGEX_TYPED_CONTEXT_AND_SETTINGS(FilterVtx)
 
-		if (Settings->Mode == EPCGExVtxFilterOutput::Attribute)
+		if (Settings->Mode == EPCGExVtxFilterOutput::Attribute && Settings->ResultOutputVtx.bEnabled)
 		{
 			ResultOutputVtx = Settings->ResultOutputVtx;
 			ResultOutputVtx.Init(VtxDataFacade);

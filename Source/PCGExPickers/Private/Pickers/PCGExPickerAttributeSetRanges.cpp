@@ -30,12 +30,15 @@ FString UPCGExPickerAttributeSetRangesSettings::GetDisplayName() const
 }
 #endif
 
-bool UPCGExPickerAttributeSetRangesFactory::GetUniqueRanges(FPCGExContext* InContext, const FName InPinLabel, const FPCGExPickerAttributeSetRangesConfig& InConfig, TArray<FPCGExPickerConstantRangeConfig>& OutRanges)
+bool UPCGExPickerAttributeSetRangesFactory::GetUniqueRanges(FPCGExContext* InContext, const FName InPinLabel, const FPCGExPickerAttributeSetRangesConfig& InConfig, TArray<FPCGExPickerConstantRangeConfig>& OutRanges, const bool bQuiet)
 {
 	TArray<TSharedPtr<PCGExData::FFacade>> Facades;
 	if (!TryGetFacades(InContext, InPinLabel, Facades, false, true))
 	{
-		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("No valid data was found."));
+		if (!bQuiet)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("No valid data was found."));
+		}
 		return false;
 	}
 

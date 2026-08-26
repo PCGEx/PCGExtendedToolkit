@@ -58,6 +58,8 @@ void UPCGExConstantFilterProviderSettings::ApplyPreconfiguredSettings(const FPCG
 {
 	Super::ApplyPreconfiguredSettings(PreconfigureInfo);
 	Config.Value = PreconfigureInfo.PreconfiguredIndex == 1;
+	// Presets state an absolute outcome; a leftover inversion would silently negate it.
+	Config.bInvert = false;
 }
 
 PCGEX_CREATE_FILTER_FACTORY(Constant)
@@ -65,7 +67,8 @@ PCGEX_CREATE_FILTER_FACTORY(Constant)
 #if WITH_EDITOR
 FString UPCGExConstantFilterProviderSettings::GetDisplayName() const
 {
-	return Config.Value ? TEXT("Always pass") : TEXT("Always fail");
+	// Reflect the evaluated constant, inversion included.
+	return (Config.bInvert ? !Config.Value : Config.Value) ? TEXT("Always pass") : TEXT("Always fail");
 }
 #endif
 

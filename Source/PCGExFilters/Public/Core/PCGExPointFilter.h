@@ -155,7 +155,6 @@ namespace PCGExPointFilter
 		}
 
 		bool bWillBeUsedWithCollections = false;
-		bool bUseDataDomainSelectorsOnly = false;
 		bool bCollectionTestResult = true;
 		bool bUseEdgeAsPrimary = false; // This shouldn't be there but...
 

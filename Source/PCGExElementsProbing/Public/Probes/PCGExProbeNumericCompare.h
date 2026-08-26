@@ -49,7 +49,7 @@ struct FPCGExProbeConfigNumericCompare : public FPCGExProbeConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Comparison"))
 	EPCGExComparison Comparison = EPCGExComparison::StrictlyGreater;
 
-	/** Rounding mode for approx. comparison modes */
+	/** Near-equality tolerance for approximate comparison modes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = DBL_COMPARE_TOLERANCE;
 

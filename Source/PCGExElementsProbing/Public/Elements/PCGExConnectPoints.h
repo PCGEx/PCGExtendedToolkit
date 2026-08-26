@@ -56,10 +56,11 @@ public:
 
 	//~End UPCGExPointsProcessorSettings
 
-	/** Prevent connections between coincident points. */
+	/** Deduplicate connections that share (almost) the same direction from a point -- in practice this prevents connecting stacked/coincident points more than once. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bPreventCoincidence = true;
 
+	/** Quantization cell size for the direction hash; smaller values allow closer directions to count as distinct. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bPreventCoincidence", ClampMin=0.00001, ClampMax=1))
 	double CoincidenceTolerance = 0.001;
 

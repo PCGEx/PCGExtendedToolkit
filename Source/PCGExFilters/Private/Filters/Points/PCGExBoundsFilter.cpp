@@ -92,6 +92,29 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 		return false;
 	}
 
+	// Indices of bounds data eligible for this input; bIgnoreSelf drops bounds sourced from the tested data itself.
+	TArray<int32> EligibleIndices;
+	EligibleIndices.Reserve(TypedFilterFactory->BoundsDataFacades.Num());
+	const UPCGData* SelfData = TypedFilterFactory->Config.bIgnoreSelf ? InPointDataFacade->GetIn() : nullptr;
+	for (int32 i = 0; i < TypedFilterFactory->BoundsDataFacades.Num(); i++)
+	{
+		if (SelfData && TypedFilterFactory->BoundsDataFacades[i]->GetIn() == SelfData)
+		{
+			continue;
+		}
+		EligibleIndices.Add(i);
+	}
+
+	if (EligibleIndices.Num() != TypedFilterFactory->Collections.Num())
+	{
+		FilteredCollections.Reserve(EligibleIndices.Num());
+		for (const int32 i : EligibleIndices)
+		{
+			FilteredCollections.Add(TypedFilterFactory->Collections[i]);
+		}
+		Collections = &FilteredCollections;
+	}
+
 	const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
 		&& !TypedFilterFactory->MatchRuleFactories.IsEmpty();
 
@@ -107,8 +130,9 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 		SingleSource.Add(InPointDataFacade);
 		if (InverseMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
 		{
-			BoundsCandidates.Reserve(TypedFilterFactory->BoundsDataFacades.Num());
-			for (int32 i = 0; i < TypedFilterFactory->BoundsDataFacades.Num(); i++)
+			// Candidates stay positionally parallel to the (possibly self-filtered) Collections list.
+			BoundsCandidates.Reserve(EligibleIndices.Num());
+			for (const int32 i : EligibleIndices)
 			{
 				BoundsCandidates.Add(TypedFilterFactory->BoundsDataFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
 			}
@@ -130,8 +154,8 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 		if (StaticMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
 		{
 			TArray<FPCGExTaggedData> StaticCandidates;
-			StaticCandidates.Reserve(TypedFilterFactory->BoundsDataFacades.Num());
-			for (int32 i = 0; i < TypedFilterFactory->BoundsDataFacades.Num(); i++)
+			StaticCandidates.Reserve(EligibleIndices.Num());
+			for (const int32 i : EligibleIndices)
 			{
 				StaticCandidates.Add(TypedFilterFactory->BoundsDataFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
 			}
@@ -147,8 +171,9 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 
 			if (!IgnoreList.IsEmpty())
 			{
-				FilteredCollections.Reserve(TypedFilterFactory->Collections.Num());
-				for (int32 i = 0; i < TypedFilterFactory->Collections.Num(); i++)
+				FilteredCollections.Reset();
+				FilteredCollections.Reserve(EligibleIndices.Num());
+				for (const int32 i : EligibleIndices)
 				{
 					if (!IgnoreList.Contains(TypedFilterFactory->BoundsDataFacades[i]->GetIn()))
 					{
@@ -221,7 +246,8 @@ bool PCGExPointFilter::FBoundsFilter::TestPoint(const FTransform& Transform, con
 
 	if (bUseCollectionBounds)
 	{
-		const FBox QueryWorldBox = LocalBox.TransformBy(Transform);
+		// GetLocalBounds already applies scale per BoundsSource -- transform by rotation/translation only.
+		const FBox QueryWorldBox = LocalBox.TransformBy(Transform.ToMatrixNoScale());
 		const float CollectionRuntimeExpansion = IsExpandedMode(CheckMode) ? Expansion : 0.0f;
 
 		for (const TSharedPtr<PCGExMath::OBB::FCollection>& Collection : InCollections)
@@ -307,7 +333,7 @@ bool PCGExPointFilter::FBoundsFilter::Test(const int32 PointIndex) const
 		// Bounds filter needs an include list rather than an exclude set because TestPoint iterates
 		// collections directly with no octree-level data-pointer indirection to filter on.
 		TArray<TSharedPtr<PCGExMath::OBB::FCollection>, TInlineAllocator<8>> PerPointCollections;
-		if (!InverseMatcher->BuildPerPointInclude(Point, BoundsCandidates, TypedFilterFactory->Collections, PerPointCollections))
+		if (!InverseMatcher->BuildPerPointInclude(Point, BoundsCandidates, *Collections, PerPointCollections))
 		{
 			return bNoMatchResult;
 		}

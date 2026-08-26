@@ -12,7 +12,7 @@
 /**
  * 
  */
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(DisplayName="Relax Operation", PCGExNodeLibraryDoc="clusters/transform/cluster-relax/relax-operation"))
 class UPCGExRelaxClusterOperation : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()
@@ -39,6 +39,8 @@ public:
 	virtual bool PrepareForCluster(FPCGExContext* InContext, const TSharedPtr<PCGExClusters::FCluster>& InCluster)
 	{
 		Cluster = InCluster;
+		// Sized here so any rule may AddDelta without its own init; delta-driven rules re-zero per cycle.
+		Deltas.Init(FInt64Vector3(0), InCluster->Nodes->Num());
 		return true;
 	}
 
@@ -46,12 +48,6 @@ public:
 	{
 		return 1;
 	}
-
-	virtual EPCGExClusterElement GetStepSource(const int32 InStep)
-	{
-		return EPCGExClusterElement::Vtx;
-	}
-
 
 	virtual EPCGExClusterElement PrepareNextStep(const int32 InStep)
 	{

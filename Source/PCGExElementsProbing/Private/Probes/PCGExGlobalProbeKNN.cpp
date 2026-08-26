@@ -86,13 +86,17 @@ void FPCGExProbeKNN::ProcessAll(TSet<uint64>& OutEdges) const
 			continue;
 		}
 
-		const int32 ActualK = FMath::Min(K->Read(i), NumPoints - 1);
-
-		// Compute distances to all other points
+		// Compute distances to all other points; sentinel-keyed entries (self, non-connectable)
+		// must never be picked, so K is capped by the connectable count, not the dataset size.
+		int32 NumConnectable = 0;
 		for (int32 j = 0; j < NumPoints; ++j)
 		{
-			Distances[j] = {(AcceptConnectionsRef[j] && j != i) ? FVector::DistSquared(Positions[i], Positions[j]) : TNumericLimits<double>::Max(), j};
+			const bool bConnectable = AcceptConnectionsRef[j] && j != i;
+			NumConnectable += bConnectable ? 1 : 0;
+			Distances[j] = {bConnectable ? FVector::DistSquared(Positions[i], Positions[j]) : TNumericLimits<double>::Max(), j};
 		}
+
+		const int32 ActualK = FMath::Min(K->Read(i), NumConnectable);
 
 		// Partial sort to get K smallest
 		Algo::Sort(Distances, [](const auto& A, const auto& B)

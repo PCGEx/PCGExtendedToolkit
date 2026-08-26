@@ -36,7 +36,7 @@ struct FPCGExNodeEdgeDirectionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
 
-	/** Operand B for testing -- Will be translated to `double` under the hood. */
+	/** Direction to compare adjacent edges against -- Read as an FVector direction. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
 	FPCGAttributePropertyInputSelector Direction;
 

@@ -23,7 +23,7 @@ namespace PCGExMT
 	class TScopedNumericValue;
 }
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/relax-cluster"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/transform/cluster-relax"))
 class UPCGExRelaxClustersSettings : public UPCGExClustersProcessorSettings
 {
 	GENERATED_BODY()

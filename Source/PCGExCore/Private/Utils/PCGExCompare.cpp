@@ -272,12 +272,15 @@ void FPCGExStaticDotComparisonDetails::Init()
 	// Remap threshold and tolerance from their native domain into the comparison space.
 	// Signed: remap [-1,1] → [0,1] via (1+x)*0.5
 	// Unsigned: use absolute value (already in [0,1])
+	// Degrees D maps to the dot of that angle, cos(D), so Degrees and Scalar denote the same angle.
+	// Tolerances are WIDTHS: a raw-dot width halves under the signed remap and stays as-is unsigned;
+	// an angular width T maps to the raw dot span 1-cos(T) (zero at T=0).
 	if (bUnsignedComparison)
 	{
 		if (Domain == EPCGExAngularDomain::Degrees)
 		{
-			ComparisonThreshold = FMath::Abs(PCGExMath::DegreesToDot(180 - DegreesConstant));
-			ComparisonTolerance = FMath::Abs(PCGExMath::DegreesToDot(180 - DegreesTolerance));
+			ComparisonThreshold = FMath::Abs(PCGExMath::DegreesToDot(DegreesConstant));
+			ComparisonTolerance = 1 - PCGExMath::DegreesToDot(DegreesTolerance);
 		}
 		else
 		{
@@ -289,13 +292,13 @@ void FPCGExStaticDotComparisonDetails::Init()
 	{
 		if (Domain == EPCGExAngularDomain::Degrees)
 		{
-			ComparisonThreshold = (1 + PCGExMath::DegreesToDot(180 - DegreesConstant)) * 0.5;
-			ComparisonTolerance = (1 + PCGExMath::DegreesToDot(180 - DegreesTolerance)) * 0.5;
+			ComparisonThreshold = (1 + PCGExMath::DegreesToDot(DegreesConstant)) * 0.5;
+			ComparisonTolerance = (1 - PCGExMath::DegreesToDot(DegreesTolerance)) * 0.5;
 		}
 		else
 		{
 			ComparisonThreshold = (1 + DotConstant) * 0.5;
-			ComparisonTolerance = (1 + DotTolerance) * 0.5;
+			ComparisonTolerance = DotTolerance * 0.5;
 		}
 	}
 }
@@ -315,13 +318,16 @@ bool FPCGExDotComparisonDetails::Init(FPCGExContext* InContext, const TSharedRef
 		return false;
 	}
 
+	// Tolerances are WIDTHS in the comparison space: signed compares remap through (1+x)*0.5 (span halved),
+	// unsigned compares raw magnitudes. An angular width T maps to the raw dot span 1-cos(T) (zero at T=0).
 	if (Domain == EPCGExAngularDomain::Degrees)
 	{
-		ComparisonTolerance = (1 + PCGExMath::DegreesToDot(180 - DegreesTolerance)) * 0.5;
+		const double Width = 1 - PCGExMath::DegreesToDot(DegreesTolerance);
+		ComparisonTolerance = bUnsignedComparison ? Width : Width * 0.5;
 	}
 	else
 	{
-		ComparisonTolerance = DotTolerance;
+		ComparisonTolerance = bUnsignedComparison ? FMath::Abs(DotTolerance) : DotTolerance * 0.5;
 	}
 
 	return true;
@@ -333,7 +339,8 @@ double FPCGExDotComparisonDetails::GetComparisonThreshold(const int32 PointIndex
 	{
 		return ThresholdGetter->Read(PointIndex);
 	}
-	return PCGExMath::DegreesToDot(180 - ThresholdGetter->Read(PointIndex));
+	// An angle of D degrees corresponds to a dot of cos(D), keeping Degrees and Scalar consistent.
+	return PCGExMath::DegreesToDot(ThresholdGetter->Read(PointIndex));
 }
 
 bool FPCGExDotComparisonDetails::Test(const double A, const double B) const

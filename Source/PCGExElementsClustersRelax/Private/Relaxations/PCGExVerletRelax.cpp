@@ -59,8 +59,6 @@ bool UPCGExVerletRelax::PrepareForCluster(FPCGExContext* InContext, const TShare
 		return false;
 	}
 
-	Deltas.Init(FInt64Vector3(0), Cluster->Nodes->Num());
-
 	Cluster->ComputeEdgeLengths();
 	EdgeLengths = Cluster->EdgeLengths;
 

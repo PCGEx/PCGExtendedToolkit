@@ -184,12 +184,14 @@ namespace PCGExUberFilterCollections
 		bUsePicks = PCGExPickers::GetPicks(Context->PickerFactories, PointDataFacade, Picks);
 		NumPoints = bUsePicks ? Picks.Num() : PointDataFacade->GetNum();
 
-		if (Settings->Measure == EPCGExMeanMeasure::Discrete)
+		// Early out only in Partial mode -- Measure is hidden (and meaningless) under All/Any, so a stale
+		// Discrete value must not gate them. Staging is left to Output(), which runs for every valid
+		// processor; adding here as well would stage the same dataset twice.
+		if (Settings->Mode == EPCGExUberFilterCollectionsMode::Partial && Settings->Measure == EPCGExMeanMeasure::Discrete)
 		{
 			if ((Settings->Comparison == EPCGExComparison::StrictlyGreater || Settings->Comparison == EPCGExComparison::EqualOrGreater) && NumPoints < Settings->IntThreshold)
 			{
-				// Not enough points to meet requirements.
-				Context->Outside->Add(PointDataFacade->Source);
+				// Not enough points to ever pass; skip the per-point loop. NumInside stays 0, so Output() routes to Outside.
 				return true;
 			}
 		}

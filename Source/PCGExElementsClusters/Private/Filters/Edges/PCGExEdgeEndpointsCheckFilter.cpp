@@ -206,6 +206,8 @@ UPCGExFactoryData* UPCGExEdgeEndpointsCheckFilterProviderSettings::CreateFactory
 {
 	UPCGExEdgeEndpointsCheckFilterFactory* NewFactory = InContext->ManagedObjects->New<UPCGExEdgeEndpointsCheckFilterFactory>();
 
+	NewFactory->InitializationFailurePolicy = InitializationFailurePolicy;
+	NewFactory->MissingDataPolicy = MissingDataPolicy;
 	NewFactory->Config = Config;
 
 	Super::CreateFactory(InContext, NewFactory);

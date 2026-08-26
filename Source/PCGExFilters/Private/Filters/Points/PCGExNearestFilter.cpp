@@ -36,7 +36,7 @@ PCGExFactories::EPreparationResult UPCGExNearestFilterFactoryData::Prepare(FPCGE
 	const FPCGExNearestFilterConfigBase& Cfg = *NearestConfig;
 
 	TargetsHandler = MakeShared<PCGExMatching::FTargetsHandler>();
-	if (!TargetsHandler->Init(InContext, PCGExCommon::Labels::SourceTargetsLabel))
+	if (!TargetsHandler->Init(InContext, PCGExCommon::Labels::SourceTargetsLabel, MissingDataPolicy != EPCGExFilterNoDataFallback::Error))
 	{
 		return PCGExFactories::EPreparationResult::MissingData;
 	}

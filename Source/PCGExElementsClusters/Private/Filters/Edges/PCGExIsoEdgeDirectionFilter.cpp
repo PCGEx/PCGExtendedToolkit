@@ -153,6 +153,8 @@ UPCGExFactoryData* UPCGExIsoEdgeDirectionFilterProviderSettings::CreateFactory(F
 {
 	UPCGExIsoEdgeDirectionFilterFactory* NewFactory = InContext->ManagedObjects->New<UPCGExIsoEdgeDirectionFilterFactory>();
 
+	NewFactory->InitializationFailurePolicy = InitializationFailurePolicy;
+	NewFactory->MissingDataPolicy = MissingDataPolicy;
 	NewFactory->Config = Config;
 	if (Config.DirectionSettings.DirectionMethod == EPCGExEdgeDirectionMethod::EndpointsSort)
 	{
@@ -164,6 +166,7 @@ UPCGExFactoryData* UPCGExIsoEdgeDirectionFilterProviderSettings::CreateFactory(F
 	if (!NewFactory->Init(InContext))
 	{
 		InContext->ManagedObjects->Destroy(NewFactory);
+		return nullptr;
 	}
 	return NewFactory;
 }

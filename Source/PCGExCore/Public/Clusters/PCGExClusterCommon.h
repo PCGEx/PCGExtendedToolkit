@@ -24,8 +24,8 @@ enum class EPCGExClusterElement : uint8
 UENUM()
 enum class EPCGExAdjacencyDirectionOrigin : uint8
 {
-	FromNode     = 0 UMETA(DisplayName = "From Node to Neighbor", Tooltip="..."),
-	FromNeighbor = 1 UMETA(DisplayName = "From Neighbor to Node", Tooltip="..."),
+	FromNode     = 0 UMETA(DisplayName = "From Node to Neighbor", Tooltip="Directions are computed from the tested node toward each neighbor."),
+	FromNeighbor = 1 UMETA(DisplayName = "From Neighbor to Node", Tooltip="Directions are computed from each neighbor toward the tested node."),
 };
 
 USTRUCT(BlueprintType)

@@ -56,7 +56,6 @@ namespace PCGExFilterGroup
 			}
 
 			TSharedPtr<PCGExPointFilter::IFilter> NewFilter = ManagedFactory->CreateFilter();
-			NewFilter->bUseDataDomainSelectorsOnly = ManagedFactory->GetOnlyUseDataDomain();
 			NewFilter->bCacheResults = false;
 			NewFilter->SetSupportedTypes(SupportedFactoriesTypes);
 			NewFilter->bWillBeUsedWithCollections = bWillBeUsedWithCollections;
@@ -96,7 +95,6 @@ namespace PCGExFilterGroup
 		{
 			PCGEX_FILTERS_SUBSYSTEM
 			const TSharedPtr<PCGExPointFilter::IFilter> NewFilter = PCGExFiltersSubsystem->GetConstantFilter(bConstant);
-			NewFilter->bUseDataDomainSelectorsOnly = true;
 			NewFilter->bCacheResults = bCacheResults;
 			NewFilter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
 			NewFilter->bWillBeUsedWithCollections = bWillBeUsedWithCollections;
@@ -425,6 +423,8 @@ UPCGExFactoryData* UPCGExFilterGroupProviderSettings::CreateFactory(FPCGExContex
 	{
 		NewFactory = InContext->ManagedObjects->New<UPCGExFilterGroupFactoryDataOR>();
 	}
+
+	NewFactory->InitializationFailurePolicy = InitializationFailurePolicy;
 
 	if (!GetInputFactories(InContext, PCGExFilters::Labels::SourceFiltersLabel, NewFactory->FilterFactories, PCGExFactories::AnyFilters))
 	{
