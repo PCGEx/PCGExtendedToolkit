@@ -76,7 +76,8 @@ namespace PCGExClusters
 
 		TSharedPtr<PCGExData::FPointIOTaggedEntries> GetAssociatedEdges(const TSharedPtr<PCGExData::FPointIO>& InVtxIO) const;
 
-		void PrintLogs(FPCGExContext* InContext, bool bSkipTrivial = false, bool bSkipImportant = false);
+		/** InMuted skips specific problems, letting callers honor their own quiet toggles (e.g. missing-pair warnings). */
+		void PrintLogs(FPCGExContext* InContext, bool bSkipTrivial = false, bool bSkipImportant = false, const TSet<EProblem>* InMuted = nullptr);
 
 	protected:
 		bool BuildDictionary();

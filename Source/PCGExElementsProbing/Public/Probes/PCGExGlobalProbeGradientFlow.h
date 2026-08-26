@@ -91,7 +91,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS(ProbeGradientFlow, "G-Probe : Gradient Flow", "K-Nearest Neighbors")
+	PCGEX_NODE_INFOS(ProbeGradientFlow, "G-Probe : Gradient Flow", "Connects points along the gradient of an attribute (e.g. downhill/uphill flow)")
 #endif
 	//~End UPCGSettings
 

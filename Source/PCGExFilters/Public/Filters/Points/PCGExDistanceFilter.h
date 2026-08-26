@@ -130,6 +130,7 @@ namespace PCGExPointFilter
 		TSet<const UPCGData*> IgnoreList;
 
 		bool bCheckAgainstDataBounds = false;
+		bool bInflateQueryBounds = false;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> DistanceThresholdGetter;
 

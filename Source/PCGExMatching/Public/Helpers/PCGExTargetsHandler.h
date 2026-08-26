@@ -83,8 +83,9 @@ namespace PCGExMatching
 			return MaxNumTargets;
 		}
 
-		int32 Init(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn);
-		int32 Init(FPCGExContext* InContext, const FName InPinLabel);
+		/** bQuiet suppresses the missing-input log so callers can honor their own MissingDataPolicy. */
+		int32 Init(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn, const bool bQuiet = false);
+		int32 Init(FPCGExContext* InContext, const FName InPinLabel, const bool bQuiet = false);
 
 		void SetDistances(const FPCGExDistanceDetails& InDetails);
 		void SetDistances(const EPCGExDistance Source, const EPCGExDistance Target, const bool bOverlapIsZero);

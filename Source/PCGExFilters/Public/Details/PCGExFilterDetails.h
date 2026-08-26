@@ -48,7 +48,7 @@ UENUM()
 enum class EPCGExResultWriteAction : uint8
 {
 	Bool    = 0 UMETA(DisplayName = "Boolean", Tooltip="Set a boolean attribute on the points. True when filters pass, False if they don't."),
-	Counter = 1 UMETA(DisplayName = "Counter", Tooltip="Mutates a int32 counter with the specified increment/decrement associated with pass/fail. (i.e +1 on pass, -2 on fail)"),
+	Counter = 1 UMETA(DisplayName = "Counter", Tooltip="Mutates a double counter with the specified increment/decrement associated with pass/fail. (i.e +1 on pass, -2 on fail)"),
 	Bitmask = 2 UMETA(DisplayName = "Bitmask", Tooltip="Mutates a bitmask flag with the operations associated with pass/fail."),
 };
 

@@ -35,12 +35,12 @@ enum class EPCGExDataBoundsComponent : uint8
 UENUM(BlueprintType)
 enum class EPCGExDataBoundsRatio : uint8
 {
-	XY = 0 UMETA(DisplayName = "XY"),
-	XZ = 1 UMETA(DisplayName = "XZ"),
-	YZ = 2 UMETA(DisplayName = "YZ"),
-	YX = 3 UMETA(DisplayName = "YX"),
-	ZX = 4 UMETA(DisplayName = "ZX"),
-	ZY = 5 UMETA(DisplayName = "ZY")
+	XY = 0 UMETA(DisplayName = "XY", ToolTip="Size.X / Size.Y"),
+	XZ = 1 UMETA(DisplayName = "XZ", ToolTip="Size.X / Size.Z"),
+	YZ = 2 UMETA(DisplayName = "YZ", ToolTip="Size.Y / Size.Z"),
+	YX = 3 UMETA(DisplayName = "YX", ToolTip="Size.Y / Size.X"),
+	ZX = 4 UMETA(DisplayName = "ZX", ToolTip="Size.Z / Size.X"),
+	ZY = 5 UMETA(DisplayName = "ZY", ToolTip="Size.Z / Size.Y")
 };
 
 USTRUCT(BlueprintType)

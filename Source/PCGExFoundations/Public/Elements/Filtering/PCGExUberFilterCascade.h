@@ -82,8 +82,8 @@ public:
 	virtual PCGExData::EIOHandling GetMainDataHandling() const override;
 	//~End UPCGExPointsProcessorSettings
 
-	/** Number of filter groups (branches) to evaluate. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=1))
+	/** Number of filter groups (branches) to evaluate. Not overridable: branch pins are built at edit time, so a runtime override cannot change them. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, ClampMin=1))
 	int32 NumBranches = 3;
 
 	/** How results are output. Partition splits points into per-branch pins; Write records the matched branch index onto a single output. */

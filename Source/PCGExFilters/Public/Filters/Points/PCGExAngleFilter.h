@@ -67,10 +67,9 @@ public:
 
 	virtual bool Init(FPCGExContext* InContext) override;
 
-	virtual bool DomainCheck() override;
-
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 
+	// Needs prev/next path neighbors; collection-level evaluation is meaningless here.
 	virtual bool SupportsCollectionEvaluation() const override
 	{
 		return false;

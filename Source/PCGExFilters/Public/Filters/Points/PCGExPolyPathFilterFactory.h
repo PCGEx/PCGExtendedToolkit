@@ -37,21 +37,21 @@ enum class EPCGExSplineSamplingIncludeMode : uint8
 UENUM()
 enum class EPCGExSplineCheckType : uint8
 {
-	IsInside       = 0 UMETA(DisplayName = "Is Inside", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside"),
-	IsInsideOrOn   = 1 UMETA(DisplayName = "Is Inside or On", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside or On"),
-	IsInsideAndOn  = 2 UMETA(DisplayName = "Is Inside and On", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside and On"),
-	IsOutside      = 3 UMETA(DisplayName = "Is Outside", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside"),
-	IsOutsideOrOn  = 4 UMETA(DisplayName = "Is Outside or On", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside or On"),
-	IsOutsideAndOn = 5 UMETA(DisplayName = "Is Outside and On", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside and On"),
-	IsOn           = 6 UMETA(DisplayName = "Is On", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Is On"),
-	IsNotOn        = 7 UMETA(DisplayName = "Is not On", Tooltip="...", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Not On"),
+	IsInside       = 0 UMETA(DisplayName = "Is Inside", Tooltip="Point is inside a closed shape (and not on its path when a tolerance or precision mode is set)", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside"),
+	IsInsideOrOn   = 1 UMETA(DisplayName = "Is Inside or On", Tooltip="Point is inside a closed shape, or on a path within tolerance", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside or On"),
+	IsInsideAndOn  = 2 UMETA(DisplayName = "Is Inside and On", Tooltip="Point is inside a closed shape and on its path within tolerance", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Inside and On"),
+	IsOutside      = 3 UMETA(DisplayName = "Is Outside", Tooltip="Point is outside every closed shape (and not on a path when a tolerance or precision mode is set)", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside"),
+	IsOutsideOrOn  = 4 UMETA(DisplayName = "Is Outside or On", Tooltip="Point is outside the closed shapes, or on a path within tolerance", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside or On"),
+	IsOutsideAndOn = 5 UMETA(DisplayName = "Is Outside and On", Tooltip="Point is outside a closed shape and on its path within tolerance", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Outside and On"),
+	IsOn           = 6 UMETA(DisplayName = "Is On", Tooltip="Point lies on a path within tolerance", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Is On"),
+	IsNotOn        = 7 UMETA(DisplayName = "Is not On", Tooltip="Point does not lie on any path within tolerance", ActionIcon="PCGEx.Pin.OUT_Filter", SearchHints = "Not On"),
 };
 
 UENUM()
 enum class EPCGExSplineFilterPick : uint8
 {
-	Closest = 0 UMETA(DisplayName = "Closest", Tooltip="..."),
-	All     = 1 UMETA(DisplayName = "All", Tooltip="...")
+	Closest = 0 UMETA(DisplayName = "Closest", Tooltip="Only the closest path decides the result"),
+	All     = 1 UMETA(DisplayName = "All", Tooltip="Every path is tested and the results are combined")
 };
 
 /**

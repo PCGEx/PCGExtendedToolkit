@@ -24,7 +24,7 @@ enum class EPCGExRelaxEdgeFitting : uint8
 /**
  *
  */
-UCLASS(Abstract, MinimalAPI, DisplayName = "Abstract Fitting")
+UCLASS(Abstract, MinimalAPI, DisplayName = "Abstract Fitting", meta=(PCGExNodeLibraryDoc="clusters/transform/cluster-relax/abstract-fitting"))
 class UPCGExFittingRelaxBase : public UPCGExRelaxClusterOperation
 {
 	GENERATED_BODY()

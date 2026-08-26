@@ -9,6 +9,8 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
+#include "Types/PCGExTypes.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -221,9 +223,26 @@ bool PCGExPointFilter::FValueHashFilter::Test(const int32 PointIndex) const
 
 bool PCGExPointFilter::FValueHashFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
 {
-	double H = 0;
+	const UPCGData* InData = IO->GetIn();
 
-	if (!PCGExData::Helpers::TryReadDataValue(IO, TypedFilterFactory->Config.OperandA, H, PCGEX_QUIET_HANDLING))
+	FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(TypedFilterFactory->Config.OperandA, InData);
+	Identifier.MetadataDomain = EPCGMetadataDomainFlag::Data;
+
+	const FPCGMetadataAttributeBase* Attribute = PCGExMetaHelpers::TryGetConstAttribute(InData, Identifier);
+	if (!Attribute)
+	{
+		PCGEX_QUIET_HANDLING_RET
+	}
+
+	// Hash the raw @Data value at its native type, matching how set values are hashed (ReadValueHash).
+	PCGExValueHash H = 0;
+	const bool bValidType = PCGExMetaHelpers::ExecuteWithRightType(Attribute, [&](auto DummyValue)
+	{
+		using T_VALUE = decltype(DummyValue);
+		H = PCGExTypes::ComputeHash(PCGExData::Helpers::ReadDataValue<T_VALUE>(Attribute));
+	});
+
+	if (!bValidType)
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
@@ -269,7 +288,8 @@ PCGEX_CREATE_FILTER_FACTORY(ValueHash)
 FString UPCGExValueHashFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Is ") + Config.OperandA.ToString();
-	if (Config.Mode == EPCGExValueHashMode::Individual || Config.Inclusion == EPCGExValueHashSetInclusionMode::Any)
+	// Mirrors the runtime bAnyPass resolution: Merged mode always behaves as "any".
+	if (Config.Mode == EPCGExValueHashMode::Merged || Config.Inclusion == EPCGExValueHashSetInclusionMode::Any)
 	{
 		DisplayName += TEXT(" in any set");
 	}

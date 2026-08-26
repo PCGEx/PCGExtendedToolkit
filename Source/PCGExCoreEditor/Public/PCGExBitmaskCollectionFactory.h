@@ -30,7 +30,7 @@ class UAssetDefinition_PCGExBitmaskCollection : public UAssetDefinitionDefault
 public:
 	virtual FText GetAssetDisplayName() const override
 	{
-		return INVTEXT("Bitmask Library");
+		return INVTEXT("Bitmask Collection");
 	}
 
 	virtual FLinearColor GetAssetColor() const override

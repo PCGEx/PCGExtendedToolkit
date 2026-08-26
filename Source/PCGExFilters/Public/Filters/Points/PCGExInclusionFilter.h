@@ -55,7 +55,7 @@ struct FPCGExInclusionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bSplineScalesTolerance = false;
 
-	/** If non-zero, will apply an offset (inset) to the data used for inclusion testing. */
+	/** If non-zero, offsets the projected shape used for inclusion testing: positive = outset, negative = inset. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	double InclusionOffset = 0;
 

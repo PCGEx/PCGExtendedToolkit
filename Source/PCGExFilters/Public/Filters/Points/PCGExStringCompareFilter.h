@@ -28,7 +28,7 @@ struct FPCGExStringCompareFilterConfig
 	{
 	}
 
-	/** Operand A for testing -- Will be translated to `double` under the hood. */
+	/** Operand A for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName OperandA = NAME_None;
 
@@ -40,7 +40,7 @@ struct FPCGExStringCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
 
-	/** Operand B for testing -- Will be translated to `double` under the hood. */
+	/** Operand B for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
 	FName OperandB = NAME_None;
 

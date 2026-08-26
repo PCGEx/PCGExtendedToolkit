@@ -100,8 +100,9 @@ bool PCGExPointFilter::FDotFilter::Init(FPCGExContext* InContext, const TSharedP
 // then compute their dot product. Multipliers of -1 flip the operand direction (inversion).
 bool PCGExPointFilter::FDotFilter::Test(const int32 PointIndex) const
 {
+	const FVector A = (OperandA->Read(PointIndex) * OperandAMultiplier).GetSafeNormal();
 	const FVector B = OperandB->Read(PointIndex).GetSafeNormal() * OperandBMultiplier;
-	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(OperandA->Read(PointIndex) * OperandAMultiplier) : OperandA->Read(PointIndex) * OperandAMultiplier, TypedFilterFactory->Config.bTransformOperandB ? InTransforms[PointIndex].TransformVectorNoScale(B) : B), PointIndex);
+	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(A) : A, TypedFilterFactory->Config.bTransformOperandB ? InTransforms[PointIndex].TransformVectorNoScale(B) : B), PointIndex);
 }
 
 bool PCGExPointFilter::FDotFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
@@ -115,13 +116,22 @@ bool PCGExPointFilter::FDotFilter::Test(const TSharedPtr<PCGExData::FPointIO>& I
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
+	// Inversion mirrors the per-point path: Operand B's toggle only applies to attribute input (hidden for constants).
 	B = B.GetSafeNormal();
+	if (TypedFilterFactory->Config.bInvertOperandB && TypedFilterFactory->Config.CompareAgainst != EPCGExInputValueType::Constant)
+	{
+		B *= -1;
+	}
 
 	if (!PCGExData::Helpers::TryReadDataValue(IO, TypedFilterFactory->Config.OperandA, A, PCGEX_QUIET_HANDLING))
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
 	A = A.GetSafeNormal();
+	if (TypedFilterFactory->Config.bInvertOperandA)
+	{
+		A *= -1;
+	}
 
 	FPCGExDotComparisonDetails TempComparison = TypedFilterFactory->Config.DotComparisonDetails;
 	PCGEX_MAKE_SHARED(TempFacade, PCGExData::FFacade, IO.ToSharedRef())

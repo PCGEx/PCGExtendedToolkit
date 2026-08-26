@@ -22,10 +22,6 @@ struct PCGEXFILTERS_API FPCGExPickerFilterConfig
 	{
 	}
 
-	/** If enabled, will force per-point evaluation when used in collections only. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	bool bForcePerPointEvaluation = false;
-
 	/** Invert the filter */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvert = false;

@@ -22,7 +22,7 @@ struct FPCGExBooleanCompareFilterConfig
 	{
 	}
 
-	/** Operand A for testing -- Will be translated to `double` under the hood. */
+	/** Operand A for testing -- Will be translated to `bool` under the hood (numeric values read true when > 0). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
 
@@ -49,7 +49,7 @@ struct FPCGExBooleanCompareFilterConfig
 /**
  * 
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="filters/point-filters/attribute/filter-bool-compare"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter")
 class UPCGExBooleanCompareFilterFactory : public UPCGExPointFilterFactoryData
 {
 	GENERATED_BODY()
@@ -93,7 +93,7 @@ namespace PCGExPointFilter
 
 ///
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter")
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="filters/point-filters/attribute/filter-bool-compare"))
 class UPCGExBooleanCompareFilterProviderSettings : public UPCGExFilterProviderSettings
 {
 	GENERATED_BODY()

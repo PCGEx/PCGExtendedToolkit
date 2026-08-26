@@ -18,8 +18,8 @@ bool PCGExPointFilter::FDataBoundsFilter::Test(const TSharedPtr<PCGExData::FPoin
 	double A = 0;
 	FVector AV = FVector::ZeroVector;
 	const FBox Bounds = IO->GetIn()->GetBounds();
-	double MinRatio = 0;
-	double MaxRatio = 0;
+	double RatioNum = 0;
+	double RatioDen = 0;
 
 	switch (TypedFilterFactory->Config.OperandA)
 	{
@@ -41,44 +41,45 @@ bool PCGExPointFilter::FDataBoundsFilter::Test(const TSharedPtr<PCGExData::FPoin
 		break;
 	case EPCGExDataBoundsAspect::AspectRatio:
 		AV = Bounds.GetSize();
+		// The enum reads Numerator|Denominator: XY is X/Y.
 		switch (TypedFilterFactory->Config.Ratio)
 		{
 		case EPCGExDataBoundsRatio::XY:
-			MinRatio = AV.X;
-			MaxRatio = AV.Y;
+			RatioNum = AV.X;
+			RatioDen = AV.Y;
 			break;
 		case EPCGExDataBoundsRatio::XZ:
-			MinRatio = AV.X;
-			MaxRatio = AV.Z;
+			RatioNum = AV.X;
+			RatioDen = AV.Z;
 			break;
 		case EPCGExDataBoundsRatio::YZ:
-			MinRatio = AV.Y;
-			MaxRatio = AV.Z;
+			RatioNum = AV.Y;
+			RatioDen = AV.Z;
 			break;
 		case EPCGExDataBoundsRatio::YX:
-			MinRatio = AV.Y;
-			MaxRatio = AV.X;
+			RatioNum = AV.Y;
+			RatioDen = AV.X;
 			break;
 		case EPCGExDataBoundsRatio::ZX:
-			MinRatio = AV.Z;
-			MaxRatio = AV.X;
+			RatioNum = AV.Z;
+			RatioDen = AV.X;
 			break;
 		case EPCGExDataBoundsRatio::ZY:
-			MinRatio = AV.Z;
-			MaxRatio = AV.Y;
+			RatioNum = AV.Z;
+			RatioDen = AV.Y;
 			break;
 		}
 		break;
 	case EPCGExDataBoundsAspect::SortedRatio:
 		AV = Bounds.GetSize();
-		MinRatio = FMath::Min3(AV.X, AV.Y, AV.Z);
-		MaxRatio = FMath::Max3(AV.X, AV.Y, AV.Z);
+		RatioNum = FMath::Max3(AV.X, AV.Y, AV.Z);
+		RatioDen = FMath::Min3(AV.X, AV.Y, AV.Z);
 		break;
 	}
 
 	if (TypedFilterFactory->Config.OperandA == EPCGExDataBoundsAspect::AspectRatio || TypedFilterFactory->Config.OperandA == EPCGExDataBoundsAspect::SortedRatio)
 	{
-		A = MaxRatio / MinRatio;
+		A = RatioNum / RatioDen;
 	}
 	else
 	{
