@@ -68,6 +68,17 @@ PCGExFactories::EPreparationResult UPCGExRaycastFilterFactory::Prepare(FPCGExCon
 		{
 			return PCGExFactories::EPreparationResult::MissingData;
 		}
+
+		// GetIncludedActors returns true even when no reference resolves; an empty include list would
+		// silently fail every trace, so route it through the policy like any other missing data.
+		if (IncludedActors.IsEmpty())
+		{
+			if (bLogErrors)
+			{
+				PCGEX_LOG_MISSING_INPUT(InContext, FTEXT("No actor references could be resolved."))
+			}
+			return PCGExFactories::EPreparationResult::MissingData;
+		}
 	}
 	else if (Config.SurfaceSource == EPCGExSurfaceSource::Primitives)
 	{

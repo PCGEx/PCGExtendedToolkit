@@ -113,6 +113,8 @@ bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSh
 		return true;
 	}
 
+	bInflateQueryBounds = TypedFilterFactory->Config.DistanceDetails.Source != EPCGExDistance::Center;
+
 	DistanceThresholdGetter = TypedFilterFactory->Config.GetValueSettingDistanceThreshold(PCGEX_QUIET_HANDLING);
 	DistanceThresholdGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!DistanceThresholdGetter->Init(InPointDataFacade))
@@ -165,7 +167,9 @@ bool PCGExPointFilter::FDistanceFilter::Test(const int32 PointIndex) const
 	// instead of FindNearbyElements, which can miss targets when the probe falls outside
 	// the octree's root bounds. Targets beyond threshold+tolerance fail the comparison
 	// anyway, so the bounded search is sufficient for all comparison types.
-	const double SearchExtent = B + TypedFilterFactory->Config.Tolerance;
+	// Bounds-based source modes offset the measured center up to GetScaledExtents().Length(), so pad
+	// the query box by that reach (Center mode needs none); the metric still rejects out-of-range hits.
+	const double SearchExtent = B + TypedFilterFactory->Config.Tolerance + (bInflateQueryBounds ? SourcePt.GetScaledExtents().Length() : 0.0);
 	const FBoxCenterAndExtent QueryBounds(InTransforms[PointIndex].GetLocation(), FVector(SearchExtent));
 
 	double BestDist = TNumericLimits<double>::Max();

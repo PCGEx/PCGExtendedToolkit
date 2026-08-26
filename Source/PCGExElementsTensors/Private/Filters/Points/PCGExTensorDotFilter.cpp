@@ -104,7 +104,9 @@ bool PCGExPointFilter::FTensorDotFilter::Test(const int32 PointIndex) const
 		return false;
 	}
 
-	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(OperandA->Read(PointIndex)) : OperandA->Read(PointIndex), Sample.DirectionAndSize.GetSafeNormal()), DotComparison.GetComparisonThreshold(PointIndex));
+	// Both sides normalized so the dot stays in [-1,1] and the threshold denotes an angle.
+	const FVector A = OperandA->Read(PointIndex).GetSafeNormal();
+	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformOperandA ? InTransforms[PointIndex].TransformVectorNoScale(A) : A, Sample.DirectionAndSize.GetSafeNormal()), DotComparison.GetComparisonThreshold(PointIndex));
 }
 
 PCGEX_CREATE_FILTER_FACTORY(TensorDot)

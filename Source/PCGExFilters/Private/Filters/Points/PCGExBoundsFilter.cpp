@@ -246,7 +246,8 @@ bool PCGExPointFilter::FBoundsFilter::TestPoint(const FTransform& Transform, con
 
 	if (bUseCollectionBounds)
 	{
-		const FBox QueryWorldBox = LocalBox.TransformBy(Transform);
+		// GetLocalBounds already applies scale per BoundsSource -- transform by rotation/translation only.
+		const FBox QueryWorldBox = LocalBox.TransformBy(Transform.ToMatrixNoScale());
 		const float CollectionRuntimeExpansion = IsExpandedMode(CheckMode) ? Expansion : 0.0f;
 
 		for (const TSharedPtr<PCGExMath::OBB::FCollection>& Collection : InCollections)

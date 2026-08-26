@@ -37,7 +37,10 @@ bool UPCGExNumericCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* 
 		if (!LocalOperandA)
 		{
 			bBreak = true;
-			PCGEX_LOG_INVALID_SELECTOR_C(InContext, Operand A, Config.OperandA)
+			if (MissingDataPolicy == EPCGExFilterNoDataFallback::Error)
+			{
+				PCGEX_LOG_INVALID_SELECTOR_C(InContext, Operand A, Config.OperandA)
+			}
 		}
 	});
 
