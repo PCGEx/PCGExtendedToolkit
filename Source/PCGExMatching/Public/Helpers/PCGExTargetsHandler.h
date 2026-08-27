@@ -84,8 +84,10 @@ namespace PCGExMatching
 		}
 
 		/** bQuiet suppresses the missing-input log so callers can honor their own MissingDataPolicy. */
-		int32 Init(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn, const bool bQuiet = false);
 		int32 Init(FPCGExContext* InContext, const FName InPinLabel, const bool bQuiet = false);
+
+		/** As Init, but InitFn supplies per-data bounds; returning an invalid box prunes that data. */
+		int32 InitWithBounds(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn, const bool bQuiet = false);
 
 		void SetDistances(const FPCGExDistanceDetails& InDetails);
 		void SetDistances(const EPCGExDistance Source, const EPCGExDistance Target, const bool bOverlapIsZero);
