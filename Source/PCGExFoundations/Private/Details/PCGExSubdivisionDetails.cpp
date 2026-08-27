@@ -99,7 +99,7 @@ int32 FPCGExManhattanDetails::ComputeSubdivisions(const FVector& A, const FVecto
 				continue;
 			}
 
-			OutDist += Dist;
+			OutDist += FMath::Abs(Dist);
 			Sub[Axis] = Dist;
 
 			// Sub is an offset from A in rotated space (see the unrotate pass below), so it is compared

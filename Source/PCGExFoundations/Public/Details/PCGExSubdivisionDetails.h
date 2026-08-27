@@ -114,6 +114,7 @@ struct PCGEXFOUNDATIONS_API FPCGExManhattanDetails
 
 	bool IsValid() const;
 	bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade);
+	/** OutDist accumulates the staircase length walked from A to B; callers chaining segments seed it once, the rest pass 0. */
 	int32 ComputeSubdivisions(const FVector& A, const FVector& B, const int32 Index, TArray<FVector>& OutSubdivisions, double& OutDist) const;
 
 #if WITH_EDITOR
