@@ -308,7 +308,7 @@ bool FPCGExPathfindingPlotEdgesElement::Boot(FPCGExContext* InContext) const
 	Context->OutputPaths->OutputPin = PCGExPaths::Labels::OutputPathsLabel;
 
 	Context->PlotsHandler = MakeShared<PCGExMatching::FTargetsHandler>();
-	Context->PlotsHandler->Init(
+	Context->PlotsHandler->InitWithBounds(
 		Context, PCGExClusters::Labels::SourcePlotsLabel,
 		[&](const TSharedPtr<PCGExData::FPointIO>& IO, const int32 Idx)-> FBox
 		{
