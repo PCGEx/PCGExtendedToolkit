@@ -67,7 +67,7 @@ TArray<FPCGPinProperties> UPCGExWritePathPropertiesSettings::OutputPinProperties
 	{
 		PCGEX_PIN_POINTS(PCGExWritePathProperties::OutputPathOuter, "Paths that aren't inside any other path", Normal)
 		PCGEX_PIN_POINTS(PCGExWritePathProperties::OutputPathInner, "Paths that are inside at least another path", Normal)
-		PCGEX_PIN_POINTS(PCGExWritePathProperties::OutputPathMedian, "Paths that are inside at least another path, with an even inclusion depth", Normal)
+		PCGEX_PIN_POINTS(PCGExWritePathProperties::OutputPathMedian, "Paths that are inside at least another path, with an odd inclusion depth", Normal)
 	}
 	if (WriteAnyPathData())
 	{
@@ -310,11 +310,12 @@ namespace PCGExWritePathProperties
 
 		if (!bClosedLoop)
 		{
-			// Open path endpoints have no corner: prev/next dirs are anti-parallel, a flat PI angle
-			PCGEX_OUTPUT_VALUE(Dot, 0, -1);
+			// Open path endpoints have no corner: prev/next dirs are anti-parallel, a flat PI angle.
+			// Dot is written as -(ToPrev . ToNext) above, so anti-parallel reads +1, not -1.
+			PCGEX_OUTPUT_VALUE(Dot, 0, 1);
 			PCGEX_OUTPUT_VALUE(Angle, 0, PCGExSampling::Helpers::MapAngle(Settings->AngleRange, UE_DOUBLE_PI, false));
 
-			PCGEX_OUTPUT_VALUE(Dot, Path->LastIndex, -1);
+			PCGEX_OUTPUT_VALUE(Dot, Path->LastIndex, 1);
 			PCGEX_OUTPUT_VALUE(Angle, Path->LastIndex, PCGExSampling::Helpers::MapAngle(Settings->AngleRange, UE_DOUBLE_PI, false));
 		}
 

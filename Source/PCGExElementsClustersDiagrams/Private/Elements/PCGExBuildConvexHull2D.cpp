@@ -161,13 +161,7 @@ namespace PCGExBuildConvexHull2D
 				const int32 CurrentIndex = ConvexHullIndices[i];
 				const int32 NextIndex = ConvexHullIndices[i == LastIndex ? 0 : i + 1];
 
-				ProjectedPoints.Emplace(ActivePositions[CurrentIndex]);
 				GraphBuilder->Graph->InsertEdge(CurrentIndex, NextIndex, E);
-			}
-
-			if (!PCGExMath::IsWinded(Settings->Winding, UE::Geometry::CurveUtil::SignedArea2<double, FVector2D>(ProjectedPoints) < 0))
-			{
-				Algo::Reverse(ConvexHullIndices);
 			}
 
 			PointDataFacade->Source->InheritPoints(ConvexHullIndices, 0);

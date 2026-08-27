@@ -82,7 +82,7 @@ struct FPCGExSegmentLengthFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExFilterFallback InvalidPointFallback = EPCGExFilterFallback::Fail;
 
-	/** Whether the result of the filter should be inverted or not. Note that this will also invert fallback results! */
+	/** Whether the result of the filter should be inverted or not. This also inverts fallback results. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bInvert = false;
 

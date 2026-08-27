@@ -114,17 +114,24 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 		double Dist;
 	};
 
-	TArray<FEdgeCandidate> Candidates;
-	Candidates.Reserve(FMath::Min(Config.MaxEdgeCandidates, NumPoints * (NumPoints - 1) / 2));
+	// Kept as a bounded max-heap on distance so the cap retains the SHORTEST pairs. Breaking the
+	// enumeration on the cap instead would truncate in point-index order, before the sort below,
+	// and leave later points unreachable however close they sit.
+	auto ByLongest = [](const FEdgeCandidate& A, const FEdgeCandidate& B) { return A.Dist > B.Dist; };
 
-	for (int32 i = 0; i < NumPoints && Candidates.Num() < Config.MaxEdgeCandidates; ++i)
+	const int32 MaxCandidates = FMath::Max(Config.MaxEdgeCandidates, 1);
+
+	TArray<FEdgeCandidate> Candidates;
+	Candidates.Reserve(FMath::Min(MaxCandidates, NumPoints * (NumPoints - 1) / 2));
+
+	for (int32 i = 0; i < NumPoints; ++i)
 	{
 		if (!CanGenerateRef[i] && !AcceptConnectionsRef[i])
 		{
 			continue;
 		}
 
-		for (int32 j = i + 1; j < NumPoints && Candidates.Num() < Config.MaxEdgeCandidates; ++j)
+		for (int32 j = i + 1; j < NumPoints; ++j)
 		{
 			if (!CanGenerateRef[j] && !AcceptConnectionsRef[j])
 			{
@@ -135,7 +142,17 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 				continue;
 			}
 
-			Candidates.Add({i, j, FVector::Dist(Positions[i], Positions[j])});
+			const double Dist = FVector::Dist(Positions[i], Positions[j]);
+
+			if (Candidates.Num() < MaxCandidates)
+			{
+				Candidates.HeapPush(FEdgeCandidate{i, j, Dist}, ByLongest);
+			}
+			else if (Dist < Candidates.HeapTop().Dist)
+			{
+				Candidates.HeapPopDiscard(ByLongest, EAllowShrinking::No);
+				Candidates.HeapPush(FEdgeCandidate{i, j, Dist}, ByLongest);
+			}
 		}
 	}
 

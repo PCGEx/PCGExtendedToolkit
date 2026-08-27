@@ -46,14 +46,14 @@ enum class EPCGExManhattanMethod : uint8
 UENUM()
 enum class EPCGExManhattanAlign : uint8
 {
-	World    = 0 UMETA(DisplayName = "World", ToolTip=""),
-	Custom   = 1 UMETA(DisplayName = "Custom", ToolTip=""),
-	SegmentX = 5 UMETA(DisplayName = "Segment X", ToolTip=""),
-	SegmentY = 6 UMETA(DisplayName = "Segment Y", ToolTip=""),
-	SegmentZ = 7 UMETA(DisplayName = "Segment Z", ToolTip=""),
+	World    = 0 UMETA(DisplayName = "World", ToolTip="Steps run along the world X, Y and Z axes."),
+	Custom   = 1 UMETA(DisplayName = "Custom", ToolTip="Orient the subdivision frame with the Orient setting, taken as a constant or read per point."),
+	SegmentX = 5 UMETA(DisplayName = "Segment X", ToolTip="Orient the subdivision frame from the segment direction, taken as the frame's X axis."),
+	SegmentY = 6 UMETA(DisplayName = "Segment Y", ToolTip="Orient the subdivision frame from the segment direction, taken as the frame's Y axis."),
+	SegmentZ = 7 UMETA(DisplayName = "Segment Z", ToolTip="Orient the subdivision frame from the segment direction, taken as the frame's Z axis."),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/manhattan-details"))
 struct PCGEXFOUNDATIONS_API FPCGExManhattanDetails
 {
 	GENERATED_BODY()
@@ -114,6 +114,7 @@ struct PCGEXFOUNDATIONS_API FPCGExManhattanDetails
 
 	bool IsValid() const;
 	bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade);
+	/** OutDist accumulates the staircase length walked from A to B; callers chaining segments seed it once, the rest pass 0. */
 	int32 ComputeSubdivisions(const FVector& A, const FVector& B, const int32 Index, TArray<FVector>& OutSubdivisions, double& OutDist) const;
 
 #if WITH_EDITOR

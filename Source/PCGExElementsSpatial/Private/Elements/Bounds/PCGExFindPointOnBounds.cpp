@@ -192,6 +192,9 @@ namespace PCGExFindPointOnBounds
 		if (Settings->OutputMode == EPCGExPointOnBoundsOutputMode::Merged)
 		{
 			const int32 TargetIndex = PointDataFacade->Source->IOIndex;
+			// MergeBestCandidatesAttributes skips every -1, so an unrecorded index costs the merged
+			// output every attribute it should have inherited.
+			Context->BestIndices[TargetIndex] = BestIndex;
 
 			TPCGValueRange<FTransform> OutTransforms = Context->MergedOut->GetOut()->GetTransformValueRange(false);
 			TPCGValueRange<int64> OutMetadataEntry = Context->MergedOut->GetOut()->GetMetadataEntryValueRange(false);

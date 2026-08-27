@@ -60,14 +60,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" ├─ Precise Fit", EditCondition="bMutateVtxToOOB", EditConditionHides))
 	bool bUseMinBoxFit = true;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable, DisplayName=" └─ Axis Order", EditCondition="bMutateVtxToOOB", EditConditionHides))
+	/** Which fitted axis maps onto X, Y and Z. Also decides which axis Normal reads. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable, DisplayName=" └─ Axis Order", EditCondition="bMutateVtxToOOB || bWriteVtxNormal", EditConditionHides))
 	EPCGExAxisOrder AxisOrder = EPCGExAxisOrder::XYZ;
 
-	/** Write normal from edges on vertices. */
+	/** Write each vertex's edge count. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteVtxEdgeCount = false;
 
-	/** Name of the 'normal' vertex attribute to write normal to.*/
+	/** Name of the 'int32' vertex attribute to write the edge count to.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="EdgeCount", PCG_Overridable, EditCondition="bWriteVtxEdgeCount"))
 	FName VtxEdgeCountAttributeName = FName("EdgeCount");
 
@@ -80,7 +81,7 @@ public:
 	FName VtxNormalAttributeName = FName("Normal");
 
 	/** Which axis of the vtx OOB to use as normal.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName=" └─ Axis", PCG_Overridable, EditCondition="bWriteVtxNormal", HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName=" └─ Axis", PCG_Overridable, EditCondition="bWriteVtxNormal", HideEditConditionToggle, InvalidEnumValues="None"))
 	EPCGExMinimalAxis NormalAxis = EPCGExMinimalAxis::Z;
 
 	/** Include the vertex position in the oriented bounding box calculation. */

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/WeakObjectPtr.h"
 #include "PropertyHandle.h"
 
 namespace PCGExEditorCustomizationUtils

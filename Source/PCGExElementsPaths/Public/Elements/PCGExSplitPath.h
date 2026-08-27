@@ -76,7 +76,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="SplitAction == EPCGExPathSplitAction::Switch || SplitAction == EPCGExPathSplitAction::Partition", EditConditionHides))
 	EPCGExPathSplitInitialValue InitialBehavior = EPCGExPathSplitInitialValue::Constant;
 
-	/** The initial switch value to start from. If false, will only starting to create paths after the first true result. If false, will start to create paths from the beginning and stop at the first true result instead.*/
+	/** The initial switch value to start from. If false, paths only start being created after the first true result. If true, paths start from the beginning and stop at the first true result instead.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="InitialBehavior == EPCGExPathSplitInitialValue::Constant && (SplitAction == EPCGExPathSplitAction::Switch || SplitAction == EPCGExPathSplitAction::Partition)", EditConditionHides))
 	bool bInitialValue = false;
 

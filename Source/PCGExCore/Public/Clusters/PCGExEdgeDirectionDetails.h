@@ -31,7 +31,7 @@ namespace PCGExData
 	class TBuffer;
 }
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/common-settings/edge-direction-settings"))
 struct PCGEXCORE_API FPCGExEdgeDirectionSettings
 {
 	GENERATED_BODY()

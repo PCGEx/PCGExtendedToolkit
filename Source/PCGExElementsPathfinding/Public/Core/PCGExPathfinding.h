@@ -49,9 +49,9 @@ namespace PCGExHeuristics
 UENUM()
 enum class EPCGExPathComposition : uint8
 {
-	Vtx         = 0 UMETA(DisplayName = "Vtx", Tooltip="..."),
-	Edges       = 1 UMETA(DisplayName = "Edge", Tooltip="..."),
-	VtxAndEdges = 2 UMETA(Hidden, DisplayName = "Vtx & Edges", Tooltip="..."),
+	Vtx         = 0 UMETA(DisplayName = "Vtx", Tooltip="Path points are the Vtx the route runs through, copied from the Vtx data with its attributes."),
+	Edges       = 1 UMETA(DisplayName = "Edge", Tooltip="Path points are the edge points of the traversed edges, copied from the Edges data with its attributes. One point fewer than the Vtx composition."),
+	VtxAndEdges = 2 UMETA(Hidden, DisplayName = "Vtx & Edges", Tooltip="Not implemented. Hidden in the UI; a graph forced onto it produces no path points."),
 };
 
 UENUM()
@@ -61,7 +61,7 @@ enum class EPCGExPathfindingOutputMode : uint8
 	Visited = 1 UMETA(DisplayName = "Visited", Tooltip="Do not output paths. Instead, forward Vtx & Edges and write, per element, how many output paths visit it."),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="pathfinding/common-settings/path-statistics"))
 struct PCGEXELEMENTSPATHFINDING_API FPCGExPathStatistics
 {
 	GENERATED_BODY()

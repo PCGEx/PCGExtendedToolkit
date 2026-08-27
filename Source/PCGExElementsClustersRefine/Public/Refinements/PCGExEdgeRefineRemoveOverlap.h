@@ -69,7 +69,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0))
 	double Tolerance = DBL_INTERSECTION_TOLERANCE;
 
-	/** . */
+	/** Only consider overlaps whose crossing angle is at least Min Angle. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bUseMinAngle = true;
 
@@ -77,7 +77,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bUseMinAngle", Units="Degrees", ClampMin=0, ClampMax=90))
 	double MinAngle = 0;
 
-	/** . */
+	/** Only consider overlaps whose crossing angle is at most Max Angle. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bUseMaxAngle = true;
 

@@ -30,7 +30,7 @@ namespace PCGExDetails
 	class TSettingValue;
 }
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/uvw"))
 struct PCGEXCORE_API FPCGExUVW
 {
 	GENERATED_BODY()

@@ -21,7 +21,7 @@ public:
 /**
  *
  */
-UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Refine : DFS (Trajan)", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/refine-dfs-tarjan"))
+UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Refine : DFS (Tarjan)", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/refine-dfs-tarjan"))
 class UPCGExEdgeRefineTrajanDFS : public UPCGExEdgeRefineInstancedFactory
 {
 	GENERATED_BODY()

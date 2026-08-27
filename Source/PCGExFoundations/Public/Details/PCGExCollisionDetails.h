@@ -31,7 +31,7 @@ enum class EPCGExTraceMode : uint8
 	Box    = 2 UMETA(DisplayName = "Box", Tooltip="Box sweep"),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/collision-details"))
 struct PCGEXFOUNDATIONS_API FPCGExCollisionDetails
 {
 	GENERATED_BODY()

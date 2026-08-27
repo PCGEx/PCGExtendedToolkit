@@ -3,6 +3,8 @@
 
 #pragma once
 
+class SWidget;
+
 #include "PCGExAssetCollectionEditor.h"
 #include "Toolkits/AssetEditorToolkit.h"
 

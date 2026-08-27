@@ -21,8 +21,8 @@ namespace PCGExPaths
 UENUM()
 enum class EPCGExResampleMode : uint8
 {
-	Sweep        = 0 UMETA(DisplayName = "Sweep", ToolTip="..."),
-	Redistribute = 1 UMETA(DisplayName = "Redistribute", ToolTip="..."),
+	Sweep        = 0 UMETA(DisplayName = "Sweep", ToolTip="Walk the path at a fixed interval and emit a new point at each step. Output point count comes from the resolution, and attributes are blended between the two source points each sample falls between."),
+	Redistribute = 1 UMETA(DisplayName = "Redistribute", ToolTip="Keep the input points and only move them, spreading them evenly along the original polyline. Point count and attributes are left alone, so the blending settings do not apply."),
 };
 
 /**

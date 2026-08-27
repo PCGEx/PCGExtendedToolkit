@@ -139,7 +139,7 @@ struct PCGEXCORE_API FPCGExSingleJustifyDetails
 	void JustifyAxis(const int32 Axis, const int32 Index, const FVector& InCenter, const FVector& InSize, const FVector& OutCenter, const FVector& OutSize, FVector& OutTranslation) const;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/transform-details/justification-details"))
 struct PCGEXCORE_API FPCGExJustificationDetails
 {
 	GENERATED_BODY()

@@ -61,8 +61,8 @@ void FPCGExProbeKNN::ProcessAll(TSet<uint64>& OutEdges) const
 		return;
 	}
 
-	const TArray<int8> CanGenerateRef = *CanGenerate;
-	const TArray<int8> AcceptConnectionsRef = *AcceptConnections;
+	const TArray<int8>& CanGenerateRef = *CanGenerate;
+	const TArray<int8>& AcceptConnectionsRef = *AcceptConnections;
 
 	// TODO : Use octree for faster queries, this is crude
 

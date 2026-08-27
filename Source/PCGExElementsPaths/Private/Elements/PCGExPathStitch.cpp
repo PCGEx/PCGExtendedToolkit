@@ -27,7 +27,9 @@ TArray<FPCGPinProperties> UPCGExPathStitchSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 	PCGExMatching::Helpers::DeclareMatchingRulesInputs(MatchingDetails, PinProperties);
-	PCGEX_PIN_FILTERS(PCGExClusters::Labels::SourceEdgeSortingRules, "Sort-in-place to order the data if needed", Normal)
+	// OnInitialPostProcess reads PCGExSorting::Labels::SourceSortingRules, so that is the pin that has
+	// to exist -- the old filter-typed "Direction Sorting" pin was never read.
+	PCGExSorting::DeclareSortingRulesInputs(PinProperties, EPCGPinStatus::Normal);
 	return PinProperties;
 }
 

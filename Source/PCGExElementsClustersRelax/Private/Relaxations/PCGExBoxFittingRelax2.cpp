@@ -82,7 +82,7 @@ void UPCGExBoxFittingRelax2::Step2(const PCGExClusters::FNode& Node)
 			const int32 MinAxis = (OverlapSize.X <= OverlapSize.Y && OverlapSize.X <= OverlapSize.Z) ? 0 : (OverlapSize.Y <= OverlapSize.Z) ? 1 : 2;
 
 			SeparationDir = FVector::ZeroVector;
-			SeparationDir[MinAxis] = (CurrentPos[MinAxis] < OtherPos[MinAxis]) ? -1.0 : 1.0;
+			SeparationDir[MinAxis] = (CurrentPos[MinAxis] < OtherPos[MinAxis]) ? 1.0 : -1.0;
 			SeparationMagnitude = OverlapSize[MinAxis];
 		}
 		break;
@@ -111,7 +111,7 @@ void UPCGExBoxFittingRelax2::Step2(const PCGExClusters::FNode& Node)
 				// Fall back to minimum penetration for non-connected nodes
 				const int32 MinAxis = (OverlapSize.X <= OverlapSize.Y && OverlapSize.X <= OverlapSize.Z) ? 0 : (OverlapSize.Y <= OverlapSize.Z) ? 1 : 2;
 				SeparationDir = FVector::ZeroVector;
-				SeparationDir[MinAxis] = (CurrentPos[MinAxis] < OtherPos[MinAxis]) ? -1.0 : 1.0;
+				SeparationDir[MinAxis] = (CurrentPos[MinAxis] < OtherPos[MinAxis]) ? 1.0 : -1.0;
 				SeparationMagnitude = OverlapSize[MinAxis];
 			}
 		}

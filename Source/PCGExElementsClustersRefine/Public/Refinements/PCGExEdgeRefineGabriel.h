@@ -44,7 +44,7 @@ public:
 
 	virtual bool WantsIndividualEdgeProcessing() const override
 	{
-		return !bInvert;
+		return true;
 	}
 
 	/** Invert the refinement result (keep edges that would be removed and vice versa). */

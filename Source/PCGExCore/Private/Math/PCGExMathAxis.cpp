@@ -273,17 +273,17 @@ namespace PCGExMath
 		switch (Dir)
 		{
 		default: case EPCGExAxis::Forward:
-			return FRotationMatrix::MakeFromX(InForward * -1).ToQuat();
-		case EPCGExAxis::Backward:
 			return FRotationMatrix::MakeFromX(InForward).ToQuat();
+		case EPCGExAxis::Backward:
+			return FRotationMatrix::MakeFromX(InForward * -1).ToQuat();
 		case EPCGExAxis::Right:
-			return FRotationMatrix::MakeFromY(InForward * -1).ToQuat();
-		case EPCGExAxis::Left:
 			return FRotationMatrix::MakeFromY(InForward).ToQuat();
+		case EPCGExAxis::Left:
+			return FRotationMatrix::MakeFromY(InForward * -1).ToQuat();
 		case EPCGExAxis::Up:
-			return FRotationMatrix::MakeFromZ(InForward * -1).ToQuat();
-		case EPCGExAxis::Down:
 			return FRotationMatrix::MakeFromZ(InForward).ToQuat();
+		case EPCGExAxis::Down:
+			return FRotationMatrix::MakeFromZ(InForward * -1).ToQuat();
 		}
 	}
 
@@ -292,17 +292,17 @@ namespace PCGExMath
 		switch (Dir)
 		{
 		default: case EPCGExAxis::Forward:
-			return FRotationMatrix::MakeFromXZ(InForward * -1, InUp).ToQuat();
-		case EPCGExAxis::Backward:
 			return FRotationMatrix::MakeFromXZ(InForward, InUp).ToQuat();
+		case EPCGExAxis::Backward:
+			return FRotationMatrix::MakeFromXZ(InForward * -1, InUp).ToQuat();
 		case EPCGExAxis::Right:
-			return FRotationMatrix::MakeFromYZ(InForward * -1, InUp).ToQuat();
-		case EPCGExAxis::Left:
 			return FRotationMatrix::MakeFromYZ(InForward, InUp).ToQuat();
+		case EPCGExAxis::Left:
+			return FRotationMatrix::MakeFromYZ(InForward * -1, InUp).ToQuat();
 		case EPCGExAxis::Up:
-			return FRotationMatrix::MakeFromZY(InForward * -1, InUp).ToQuat();
-		case EPCGExAxis::Down:
 			return FRotationMatrix::MakeFromZY(InForward, InUp).ToQuat();
+		case EPCGExAxis::Down:
+			return FRotationMatrix::MakeFromZY(InForward * -1, InUp).ToQuat();
 		}
 	}
 

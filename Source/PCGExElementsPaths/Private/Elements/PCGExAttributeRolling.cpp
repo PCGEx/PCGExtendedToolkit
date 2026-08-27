@@ -240,16 +240,19 @@ namespace PCGExAttributeRolling
 		{
 			const int32 TargetIndex = Settings->bReverseRolling ? MaxIndex - Index : Index;
 
+			// Everything below walks in TargetIndex space: under Reverse Rolling the loop counter runs
+			// the opposite way, and reading the blend source at the raw Index would take it from the
+			// far end of the path.
 			if (Settings->ValueControl == EPCGExRollingValueControl::Pin)
 			{
-				if (PinFilterManager->Test(Index))
+				if (PinFilterManager->Test(TargetIndex))
 				{
-					SourceIndex = Index;
+					SourceIndex = TargetIndex;
 				}
 			}
 			else if (Settings->ValueControl == EPCGExRollingValueControl::Previous)
 			{
-				SourceIndex = Index + SourceOffset;
+				SourceIndex = TargetIndex + (Settings->bReverseRolling ? -SourceOffset : SourceOffset);
 				if (SourceIndex < 0 || SourceIndex > MaxIndex)
 				{
 					// TODO : Handle closed paths?

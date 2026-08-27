@@ -27,24 +27,24 @@ enum class EPCGExBoundAxisPriority : uint8
 UENUM()
 enum class EPCGExAxisDirectionConstraint : uint8
 {
-	None  = 0 UMETA(DisplayName = "None", ToolTip="..."),
-	Avoid = 1 UMETA(DisplayName = "Avoid", ToolTip="..."),
-	Favor = 2 UMETA(DisplayName = "Favor", ToolTip="..."),
+	None  = 0 UMETA(DisplayName = "None", ToolTip="Apply no direction shift to the picked axis."),
+	Avoid = 1 UMETA(DisplayName = "Avoid", ToolTip="When the picked axis is the one most aligned with Direction, fall back to the median-length axis."),
+	Favor = 2 UMETA(DisplayName = "Favor", ToolTip="When the picked axis is not the one most aligned with Direction, step one rank toward the longer axes."),
 };
 
 UENUM()
 enum class EPCGExAxisSizeConstraint : uint8
 {
-	None    = 0 UMETA(DisplayName = "None", ToolTip="..."),
-	Greater = 1 UMETA(DisplayName = "Greater", ToolTip="..."),
-	Smaller = 1 UMETA(DisplayName = "Smaller", ToolTip="..."),
+	None    = 0 UMETA(DisplayName = "None", ToolTip="Apply no size shift to the picked axis."),
+	Greater = 1 UMETA(DisplayName = "Greater", ToolTip="Step one rank toward the longer axes for every remaining axis whose extent is under Threshold."),
+	Smaller = 1 UMETA(DisplayName = "Smaller", ToolTip="Shares its value with Greater, so picking it selects Greater and reads back as Greater. The step-toward-shorter branch is unreachable."),
 };
 
 UENUM()
 enum class EPCGExAxisConstraintSorting : uint8
 {
-	SizeMatters      = 0 UMETA(DisplayName = "Size matters more", ToolTip="..."),
-	DirectionMatters = 1 UMETA(DisplayName = "Direction matters more", ToolTip="..."),
+	SizeMatters      = 0 UMETA(DisplayName = "Size matters more", ToolTip="Apply the direction constraint first and the size constraint second, so size has the final say."),
+	DirectionMatters = 1 UMETA(DisplayName = "Direction matters more", ToolTip="Apply the size constraint first and the direction constraint second, so direction has the final say."),
 };
 
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/analyze/bounds-axis-to-points"))

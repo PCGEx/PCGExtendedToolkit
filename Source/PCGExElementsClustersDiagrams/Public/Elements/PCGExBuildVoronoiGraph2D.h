@@ -127,23 +127,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="Method == EPCGExCellCenter::Circumcenter"))
 	bool bPruneOutOfBounds = false;
 
-	/** Mark points & edges that lie on the hull */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
-	bool bMarkHull = false;
-
-	/** Name of the attribute to output the Hull boolean to. True if point is on the hull, otherwise false. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bMarkHull"))
-	FName HullAttributeName = "bIsOnHull";
-
-	/** When true, edges that have at least a point on the Hull as marked as being on the hull. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bMarkEdgeOnTouch = false;
-
 	/** Projection settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExGeo2DProjectionDetails ProjectionDetails;
 
-	/** Graph & Edges output properties. Only available if bPruneOutsideBounds as it otherwise generates a complete graph. */
+	/** Graph & Edges output properties. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Output Settings"))
 	FPCGExGraphBuilderDetails GraphBuilderDetails = FPCGExGraphBuilderDetails(EPCGExMinimalAxis::X);
 
@@ -152,12 +140,12 @@ public:
 	bool bOutputSites = true;
 
 
-	/** If enabled, sites that belong to an removed (out-of-bound) cell will be removed from the output. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta = (PCG_Overridable, EditCondition="bOutputSites && bPruneOutOfBounds"))
+	/** If enabled, sites whose cell is open -- on the hull, or dropped as out-of-bounds -- are removed from the output. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta = (PCG_Overridable, EditCondition="bOutputSites"))
 	bool bPruneOpenSites = true;
 
 	/** Flag sites belonging to an open cell with a boolean attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta = (PCG_Overridable, EditCondition="bOutputSites && bPruneOutOfBounds && !bPruneOpenSites"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta = (PCG_Overridable, EditCondition="bOutputSites && !bPruneOpenSites"))
 	FName OpenSiteFlag = "OpenSite";
 
 	/** Additional data to output for each Voronoi site. */
@@ -202,7 +190,6 @@ namespace PCGExBuildVoronoiGraph2D
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 
 		TSharedPtr<PCGExData::FFacade> SiteDataFacade;
-		TSharedPtr<PCGExData::TBuffer<bool>> HullMarkPointWriter;
 		TSharedPtr<PCGExData::TBuffer<bool>> OpenSiteWriter;
 
 		FPCGExVoronoiSitesOutputDetails SitesOutputDetails;

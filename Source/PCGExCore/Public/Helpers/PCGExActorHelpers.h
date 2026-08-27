@@ -5,6 +5,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/SoftObjectPtr.h"
 
 class AActor;
 class UWorld;

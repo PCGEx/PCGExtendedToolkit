@@ -20,11 +20,11 @@ enum class EPCGExBinSeedMode : uint8
 UENUM()
 enum class EPCGExSpaceSplitMode : uint8
 {
-	Minimal      = 0 UMETA(DisplayName = "Minimal", ToolTip="..."),
-	MinimalCross = 1 UMETA(DisplayName = "Minimal (Cross Axis)", ToolTip="..."),
-	EqualSplit   = 2 UMETA(DisplayName = "Equal Split", ToolTip="..."),
-	Cone         = 3 UMETA(Hidden, DisplayName = "Cone", ToolTip="..."),
-	ConeCross    = 4 UMETA(Hidden, DisplayName = "Cone (Cross Axis)", ToolTip="..."),
+	Minimal      = 0 UMETA(DisplayName = "Minimal", ToolTip="Six partitions: the space directly before and after the item along the main axis, then four slabs around it. Fewest candidate spaces to search."),
+	MinimalCross = 1 UMETA(DisplayName = "Minimal (Cross Axis)", ToolTip="The same six-partition split as Minimal with the two side axes swapped, so the slabs that ran full width now run narrow and the narrow ones run full width."),
+	EqualSplit   = 2 UMETA(DisplayName = "Equal Split", ToolTip="Up to twenty-six partitions, one per cell of the 3x3x3 grid around the item. The most candidate spaces, and the most to search."),
+	Cone         = 3 UMETA(Hidden, DisplayName = "Cone", ToolTip="Not implemented. The splitter emits no partitions, so the space around a placed item is discarded and nothing else can go in it."),
+	ConeCross    = 4 UMETA(Hidden, DisplayName = "Cone (Cross Axis)", ToolTip="Not implemented. The splitter emits no partitions, so the space around a placed item is discarded and nothing else can go in it."),
 };
 
 namespace PCGExLayout

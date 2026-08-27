@@ -209,7 +209,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta = (PCG_Overridable))
 	bool bIgnoreRequiredPin = false;
 
-	/** If enabled, only output component data once per unique actor. Otherwise, output data as many time as found. Note that when enabled, TargetIndexToTag will be disabled. */
+	/** If enabled, only output component data once per unique actor. Otherwise, output data as many time as found. When enabled, TargetIndexToTag is disabled. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output")
 	bool bDedupeData = true;
 

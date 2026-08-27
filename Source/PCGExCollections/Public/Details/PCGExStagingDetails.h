@@ -121,7 +121,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetDistributionDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Index Settings", EditCondition="Distribution == EPCGExDistribution::Index"))
 	FPCGExAssetDistributionIndexDetails IndexSettings;
 
-	/** Note that this is only accounted for if selected in the seed component. */
+	/** Only accounted for if selected in the seed component. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	int32 LocalSeed = 0;
 };
@@ -144,7 +144,7 @@ struct PCGEXCOLLECTIONS_API FPCGExMicroCacheDistributionDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Index Settings", EditCondition="Distribution == EPCGExDistribution::Index"))
 	FPCGExAssetDistributionIndexDetails IndexSettings;
 
-	/** Note that this is only accounted for if selected in the seed component. */
+	/** Only accounted for if selected in the seed component. */
 	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	int32 LocalSeed = 0;
 };
