@@ -62,8 +62,10 @@ void UPCGExForceDirectedRelax::CalculateRepulsiveForce(FVector& Force, const FVe
 	const double Distance = FMath::Max(Displacement.Length(), 1e-5);
 	Displacement /= Distance;
 
-	// Calculate the force magnitude using Coulomb's law
-	const double ForceMagnitude = ElectrostaticConstant / (Distance * Distance);
+	// Calculate the force magnitude using Coulomb's law. Capped at the pair's own distance: the
+	// result is applied as a raw displacement, and an inverse square left uncapped throws
+	// near-coincident Vtx billions of units apart in a single iteration.
+	const double ForceMagnitude = FMath::Min(ElectrostaticConstant / (Distance * Distance), Distance);
 	Force -= Displacement * ForceMagnitude;
 }
 

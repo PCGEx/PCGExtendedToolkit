@@ -26,7 +26,7 @@ struct FPCGExProbeConfigAnisotropic : public FPCGExProbeConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0, ClampMax=11.25))
 	double MaxAngle = 5;
 
-	/** Transform the direction with the point's */
+	/** Rotate the sixteen fixed search directions by the point's transform, so the search cones follow point rotation. Scale is ignored. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bTransformDirection = true;
 };

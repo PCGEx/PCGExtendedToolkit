@@ -18,7 +18,7 @@ namespace PCGExData
 	class FFacadePreloader;
 }
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/intersections/path-edge"))
 struct PCGEXCORE_API FPCGExPathEdgeIntersectionDetails
 {
 	GENERATED_BODY()

@@ -131,10 +131,16 @@ bool FPCGExClustersProcessorContext::AdvancePointsIO(const bool bCleanupKeys)
 
 	CurrentEdgesIndex = -1;
 
-	if (!FPCGExPointsProcessorContext::AdvancePointsIO(bCleanupKeys))
+	// A Vtx dataset invalidated as a duplicate stays in MainPoints->Pairs. Visiting it would re-stamp
+	// the shared Edges with this disabled dataset's id, leaving the surviving Vtx unpaired on output.
+	do
 	{
-		return false;
+		if (!FPCGExPointsProcessorContext::AdvancePointsIO(bCleanupKeys))
+		{
+			return false;
+		}
 	}
+	while (!CurrentIO->IsEnabled());
 
 	TaggedEdges = ClusterDataLibrary->GetAssociatedEdges(CurrentIO);
 

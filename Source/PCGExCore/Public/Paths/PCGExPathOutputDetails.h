@@ -7,7 +7,7 @@
 
 #include "PCGExPathOutputDetails.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="paths/common-settings/paths-output-settings"))
 struct PCGEXCORE_API FPCGExPathOutputDetails
 {
 	GENERATED_BODY()

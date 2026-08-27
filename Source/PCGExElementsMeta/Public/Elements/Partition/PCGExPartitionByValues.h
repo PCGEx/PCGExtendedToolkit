@@ -71,7 +71,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteKeySum = false;
 
-	/** The Attribute name to write key sum to. Note that this value is not guaranteed to be unique. */
+	/** The Attribute name to write key sum to. This value is not guaranteed to be unique. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bWriteKeySum"))
 	FName KeySumAttributeName = "KeySum";
 

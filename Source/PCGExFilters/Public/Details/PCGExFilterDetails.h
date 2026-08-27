@@ -61,7 +61,7 @@ enum class EPCGExResultWriteAction : uint8
  *
  * Call Init() to create the output buffer, then Write() per-point or in batch via FScope.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="filters/common-settings/filter-result-details"))
 struct PCGEXFILTERS_API FPCGExFilterResultDetails
 {
 	GENERATED_BODY()

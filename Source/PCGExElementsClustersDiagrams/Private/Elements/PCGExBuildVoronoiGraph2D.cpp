@@ -125,7 +125,6 @@ bool FPCGExBuildVoronoiGraph2DElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(BuildVoronoiGraph2D)
 
-	PCGEX_VALIDATE_NAME(Settings->HullAttributeName)
 	if (!Settings->SitesOutputDetails.Validate(Context))
 	{
 		return false;
@@ -363,7 +362,7 @@ namespace PCGExBuildVoronoiGraph2D
 				}
 			}
 
-			if (Settings->bPruneOutOfBounds && !Settings->bPruneOpenSites)
+			if (!Settings->bPruneOpenSites)
 			{
 				OpenSiteWriter = SiteDataFacade->GetWritable<bool>(Settings->OpenSiteFlag, PCGExData::EBufferInit::New);
 			}
@@ -449,10 +448,10 @@ namespace PCGExBuildVoronoiGraph2D
 
 				PCGEX_SCOPE_LOOP(Index)
 				{
-					const bool bIsWithinBounds = This->IsVtxValid[Index];
 					if (This->OpenSiteWriter)
 					{
-						This->OpenSiteWriter->SetValue(Index, bIsWithinBounds);
+						// IsVtxValid marks a CLOSED cell; the flag names the open ones.
+						This->OpenSiteWriter->SetValue(Index, !This->IsVtxValid[Index]);
 					}
 					This->SitesOutputDetails.Output(Index);
 					if (SitesInfluenceCountDetails[Index] == 0)

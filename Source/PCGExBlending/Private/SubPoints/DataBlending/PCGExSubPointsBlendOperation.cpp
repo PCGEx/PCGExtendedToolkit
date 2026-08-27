@@ -70,6 +70,14 @@ void FPCGExSubPointsBlendOperation::BlendSubPoints(PCGExData::FScope& Scope, con
 UPCGExSubPointsBlendInstancedFactory::UPCGExSubPointsBlendInstancedFactory(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+}
+
+void UPCGExSubPointsBlendInstancedFactory::PostInitProperties()
+{
+	Super::PostInitProperties();
+
+	// Not in the constructor: virtual dispatch cannot reach a subclass from a base constructor, so
+	// every rule would take the base's Lerp regardless of its own override.
 	if (BlendingDetails.DefaultBlending == EPCGExBlendingType::Unset)
 	{
 		BlendingDetails.DefaultBlending = GetDefaultBlending();

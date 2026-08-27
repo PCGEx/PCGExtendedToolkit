@@ -130,7 +130,7 @@ struct PCGEXBLENDING_API FPCGExPointEdgeIntersectionDetails
 	FName IsIntersectorAttributeName = "bIsIntersector";
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/intersections/edge-edge"))
 struct PCGEXBLENDING_API FPCGExEdgeEdgeIntersectionDetails
 {
 	GENERATED_BODY()

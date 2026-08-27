@@ -75,22 +75,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExGraphBuilderDetails GraphBuilderDetails;
 
-	/** Write original edge length to new vertices */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Attributes", meta = (PCG_Overridable, InlineEditConditionToggle))
-	bool bWriteEdgeLength = false;
-
-	/** Attribute name for original edge length */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Attributes", meta = (PCG_Overridable, EditCondition="bWriteEdgeLength"))
-	FName EdgeLengthAttributeName = FName("EdgeLength");
-
-	/** Write original edge index to new vertices */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Attributes", meta = (PCG_Overridable, InlineEditConditionToggle))
-	bool bWriteOriginalEdgeIndex = false;
-
-	/** Attribute name for original edge index */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Attributes", meta = (PCG_Overridable, EditCondition="bWriteOriginalEdgeIndex"))
-	FName OriginalEdgeIndexAttributeName = FName("OriginalEdgeIndex");
-
 	/** Defines how original edge attributes are blended to new vertices. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Blending (Vtx from Edges)", meta = (PCG_Overridable))
 	FPCGExBlendingDetails VtxBlendingDetails = FPCGExBlendingDetails(EPCGExBlendingType::None, EPCGExBlendingType::None);
@@ -139,6 +123,7 @@ namespace PCGExBuildDualGraph
 		TSharedPtr<PCGExData::FFacade> DualVtxFacade;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 		TSharedPtr<PCGExClusters::FPlanarFaceEnumerator> FaceEnumerator;
+		FPCGExGeo2DProjectionDetails ProjectionDetails;
 
 		int32 NumValidEdges = 0;
 		TSet<uint64> DualEdgeHashes;

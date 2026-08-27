@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "UObject/WeakObjectPtr.h"
+
 #include "IPropertyTypeCustomization.h"
 #include "PCGExProperty.h" // FPCGExPropertyOverrideEntry (ParkedOverrideBuffers member)
 #include "UObject/StructOnScope.h"

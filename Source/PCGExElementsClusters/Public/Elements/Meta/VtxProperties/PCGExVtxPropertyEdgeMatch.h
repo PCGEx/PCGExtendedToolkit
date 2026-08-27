@@ -28,7 +28,7 @@ struct FPCGExEdgeMatchConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExAdjacencyDirectionOrigin Origin = EPCGExAdjacencyDirectionOrigin::FromNode;
 
-	/** Direction for computing the dot product against the edge's. */
+	/** Direction to compare each adjacent edge against. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction"))
 	FPCGExInputShorthandSelectorDirection DirectionValue = FPCGExInputShorthandSelectorDirection(FName("Direction"), FVector::ForwardVector, false);
 

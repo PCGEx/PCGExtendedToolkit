@@ -39,11 +39,11 @@ struct PCGEXELEMENTSFLOODFILL_API FPCGExFillControlConfigBase
 	UPROPERTY()
 	bool bSupportSteps = true;
 
-	/** Where to fetch the attribute from. Note that this may not be supported by all controls..*/
+	/** Where to fetch the attribute from. Not every control supports this. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, EditCondition="bSupportSource", EditConditionHides, HideEditConditionToggle))
 	EPCGExFloodFillSettingSource Source = EPCGExFloodFillSettingSource::Seed;
 
-	/** At which diffusion step should this control be applied. Note that this may not be supported by all controls. */
+	/** At which diffusion step should this control be applied. Not every control supports this. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExElementsFloodFill.EPCGExFloodFillControlStepsFlags", EditCondition="bSupportSteps", EditConditionHides, HideEditConditionToggle))
 	uint8 Steps = static_cast<uint8>(EPCGExFloodFillControlStepsFlags::Candidate);
 

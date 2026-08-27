@@ -131,20 +131,16 @@ public:
 	float VertexMergeHashTolerance = static_cast<float>(PCGExMesh::DefaultVertexMergeHashTolerance);
 
 	/**
-	 * Use two overlapping spatial hashes to detect vertex proximity. True (default) is more accurate but
-	 * slightly slower and uses slightly more memory during processing. (Specifically, the overhead is two
-	 * hash lookups versus one per vertex, and memory overhead is on the order of 2 to 3 MB for 100K vertices.)
+	 * Use two overlapping spatial hashes to detect vertex proximity. More accurate, but slightly slower and
+	 * uses slightly more memory during processing. (Specifically, the overhead is two hash lookups versus one
+	 * per vertex, and memory overhead is on the order of 2 to 3 MB for 100K vertices.)
 	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable), AdvancedDisplay)
 	bool bPreciseVertexMerge = false;
 
-	/** Graph & Edges output properties. Only available if bPruneOutsideBounds as it otherwise generates a complete graph. */
+	/** Graph & Edges output properties. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Output Settings"))
 	FPCGExGraphBuilderDetails GraphBuilderDetails;
-
-	/** Which input points attributes to forward on clusters. NOTE : Not implemented */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExForwardDetails AttributesForwarding;
 
 private:
 	friend class FPCGExMeshToClustersElement;

@@ -16,7 +16,7 @@ class UPCGExSanitizeClustersSettings : public UPCGExClustersProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(SanitizeClusters, "Cluster : Repair", "Ensure the input set of vertex and edges outputs clean, interconnected clusters. May create new clusters, but does not creates nor deletes points/edges.");
+	PCGEX_NODE_INFOS(SanitizeClusters, "Cluster : Repair", "Ensure the input set of vertex and edges outputs clean, interconnected clusters. May create new clusters, and deletes unresolvable edges, duplicates and stranded vtx.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{
@@ -36,7 +36,7 @@ public:
 	virtual PCGExData::EIOInit GetEdgeOutputInitMode() const override;
 	//~End UPCGExClustersProcessorSettings interface
 
-	/** Graph & Edges output properties. Note that pruning isolated points is ignored. */
+	/** Graph & Edges output properties. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ShowOnlyInnerProperties, DisplayName="Cluster Output Settings"))
 	FPCGExGraphBuilderDetails GraphBuilderDetails;
 };

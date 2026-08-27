@@ -206,6 +206,9 @@ namespace PCGExSubdivide
 			{
 				TSharedPtr<TArray<FVector>> Subs = MakeShared<TArray<FVector>>();
 				TArray<FVector>& SubPoints = *Subs.Get();
+				// ComputeSubdivisions accumulates onto its distance argument, so Dist becomes the
+				// staircase length the Alpha output divides by -- not the straight-line distance.
+				Sub.Dist = 0;
 				Sub.NumSubdivisions = ManhattanDetails.ComputeSubdivisions(InTransforms[Sub.InStart].GetLocation(), InTransforms[Sub.InEnd].GetLocation(), Index, SubPoints, Sub.Dist);
 
 				if (Sub.NumSubdivisions > 0)

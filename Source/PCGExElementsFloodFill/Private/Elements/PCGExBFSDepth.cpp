@@ -154,10 +154,12 @@ namespace PCGExBFSDepth
 			Parents.Init(-1, NumNodes);
 			ChildCount.Init(0, NumNodes);
 
-			// Init sentinel for cascade: -1.0 = unset
-			for (int32 i = 0; i < VtxDataFacade->GetNum(); i++)
+			// Init sentinel for cascade: -1.0 = unset. Scoped to this cluster's nodes: the writer is
+			// batch-owned and sibling processors run concurrently on the same Vtx dataset.
+			const TArray<PCGExClusters::FNode>& ClusterNodes = *Cluster->Nodes;
+			for (int32 i = 0; i < NumNodes; i++)
 			{
-				NormalizedDepthData[i] = -1.0;
+				NormalizedDepthData[ClusterNodes[i].PointIndex] = -1.0;
 			}
 		}
 
@@ -437,16 +439,21 @@ namespace PCGExBFSDepth
 
 		if (MaxBFSDepth <= 0)
 		{
+			// Nothing was reached; the row still promises 0-1, so clear the sentinel rather than ship -1.
+			PCGEX_PARALLEL_FOR(
+				TotalNodes,
+				NormalizedDepthData[Nodes[i].PointIndex] = 0.0;
+				);
 			return;
 		}
 
 		if (Settings->NormalizedDepthMode == EPCGExBFSNormalizedDepthMode::Global)
 		{
-			// Simple depth / MaxDepth -- parallelizable
+			// Simple depth / MaxDepth -- parallelizable. Unreached nodes land on 0, as Cascade clamps them.
 			const double InvMax = 1.0 / static_cast<double>(MaxBFSDepth);
 			PCGEX_PARALLEL_FOR(
 				TotalNodes,
-				if (Depths[i] >= 0) { NormalizedDepthData[Nodes[i].PointIndex] = static_cast<double>(Depths[i]) * InvMax; }
+				NormalizedDepthData[Nodes[i].PointIndex] = Depths[i] >= 0 ? static_cast<double>(Depths[i]) * InvMax : 0.0;
 				);
 			return;
 		}
@@ -537,10 +544,11 @@ namespace PCGExBFSDepth
 			}
 		}
 
-		// Clamp remaining -1.0 sentinels to 0.0 (unreachable nodes)
+		// Clamp remaining -1.0 sentinels to 0.0 (unreachable nodes), over this cluster's nodes only.
 		PCGEX_PARALLEL_FOR(
-			VtxDataFacade->GetNum(),
-			if (NormalizedDepthData[i] < 0.0) { NormalizedDepthData[i] = 0.0; }
+			TotalNodes,
+			const int32 PtIdx = Nodes[i].PointIndex;
+			if (NormalizedDepthData[PtIdx] < 0.0) { NormalizedDepthData[PtIdx] = 0.0; }
 			);
 	}
 

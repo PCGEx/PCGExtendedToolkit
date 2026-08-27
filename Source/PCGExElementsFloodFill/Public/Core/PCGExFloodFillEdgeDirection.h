@@ -35,7 +35,7 @@ namespace PCGExData
  * Edge Direction Settings (the same logic as 'Cluster : Edge Properties'). bInvertDirection negates
  * the final written vector for all edges.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/common-settings/flood-fill-edge-direction-details"))
 struct PCGEXELEMENTSFLOODFILL_API FPCGExFloodFillEdgeDirectionDetails
 {
 	GENERATED_BODY()

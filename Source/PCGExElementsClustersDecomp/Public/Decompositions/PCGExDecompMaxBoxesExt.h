@@ -152,9 +152,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 MinVoxelsPerCell = 1;
 
-	/** Penalizes elongated strips in favor of compact, cube-like boxes.
-	 *  0 = pure volume (largest box first, may produce thin strips).
-	 *  Higher values strongly prefer square-like shapes over thin rectangles. */
+	/** Penalizes elongated strips in favor of a square footprint. Compactness is measured on the two
+	 *  LARGEST dimensions only, so a slab scores the same as a cube.
+	 *  0 = pure volume (largest box first, may produce thin strips). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
 	double Balance = 1.0;
 
@@ -181,7 +181,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, EditCondition="Weight.Input == EPCGExInputValueType::Attribute", EditConditionHides))
 	EPCGExDecompWeightMode WeightMode = EPCGExDecompWeightMode::Multiplier;
 
-	/** For Priority mode: minimum average weight for a box to be extracted in the first pass. */
+	/** For Priority mode: minimum average weight for a box to be extracted in the first pass. Compared against
+	 *  the raw attribute average, so a weight on a larger scale clears it everywhere and collapses the two passes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weight", meta=(PCG_Overridable, ClampMin="0", ClampMax="1", EditCondition="Weight.Input == EPCGExInputValueType::Attribute && WeightMode == EPCGExDecompWeightMode::Priority", EditConditionHides))
 	double PriorityThreshold = 0.5;
 

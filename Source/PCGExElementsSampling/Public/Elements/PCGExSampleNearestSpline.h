@@ -50,9 +50,9 @@ namespace PCGExMT
 UENUM()
 enum class EPCGExSplineDepthMode : uint8
 {
-	Min     = 0 UMETA(DisplayName = "Min", ToolTip="..."),
-	Max     = 1 UMETA(DisplayName = "Max", ToolTip="..."),
-	Average = 2 UMETA(DisplayName = "Average", ToolTip="..."),
+	Min     = 0 UMETA(DisplayName = "Min", ToolTip="Keep the smallest depth across every spline the point looks at, so the closest one wins. Distance is clamped to Range then divided by it, giving 0 on the spline and 1 at Range."),
+	Max     = 1 UMETA(DisplayName = "Max", ToolTip="Keep the largest depth across every spline the point looks at, so the furthest one wins. Distance is clamped to Range then divided by it."),
+	Average = 2 UMETA(DisplayName = "Average", ToolTip="Average the depth across every spline the point looks at. Range does not divide the result here, so it stays in world units and runs up to Range instead of 0-1."),
 };
 
 UENUM()
@@ -314,7 +314,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" │ └─ OneMinus", EditCondition="bWriteDistance && bOutputNormalizedDistance", EditConditionHides, HideEditConditionToggle))
 	bool bOutputOneMinusDistance = false;
 
-	/** Scale factor applied to the distance output; allows to easily invert it using -1 */
+	/** Scale factor applied to the distance output; allows inverting it with -1 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" └─ Scale", EditCondition="bWriteDistance", EditConditionHides, HideEditConditionToggle))
 	double DistanceScale = 1;
 
@@ -334,7 +334,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" ├─ Only if Closed Spline", EditCondition="bWriteSignedDistance && SampleInputs == EPCGExSplineSamplingIncludeMode::All", EditConditionHides, HideEditConditionToggle))
 	bool bOnlySignIfClosed = false;
 
-	/** Scale factor applied to the signed distance output; allows to easily invert it using -1 */
+	/** Scale factor applied to the signed distance output; allows inverting it with -1 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" └─ Scale", EditCondition="bWriteSignedDistance", EditConditionHides, HideEditConditionToggle))
 	double SignedDistanceScale = 1;
 

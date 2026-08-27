@@ -23,7 +23,7 @@ struct FPCGExProbeConfigSpanner : public FPCGExProbeConfigBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, ClampMin="1.0", ClampMax="10.0"))
 	double StretchFactor = 2.0;
 
-	/** Max edges to consider (performance limit) */
+	/** Max edges to consider (performance limit). The shortest pairs are the ones kept. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, ClampMin="100"))
 	int32 MaxEdgeCandidates = 50000;
 };

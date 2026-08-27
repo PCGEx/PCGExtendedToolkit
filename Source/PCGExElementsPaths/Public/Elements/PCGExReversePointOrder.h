@@ -30,9 +30,9 @@ namespace PCGExData
 UENUM()
 enum class EPCGExPointReverseMethod : uint8
 {
-	None         = 0 UMETA(DisplayName = "Unconditional", ToolTip="..."),
-	SortingRules = 1 UMETA(DisplayName = "Sorting Rules", ToolTip="..."),
-	Winding      = 2 UMETA(DisplayName = "Winding", ToolTip="..."),
+	None         = 0 UMETA(DisplayName = "Unconditional", ToolTip="Always reverse."),
+	SortingRules = 1 UMETA(DisplayName = "Sorting Rules", ToolTip="Compare the first and last point with the rules on the Sorting Rules pin, and reverse when the first already sorts ahead of the last."),
+	Winding      = 2 UMETA(DisplayName = "Winding", ToolTip="Project the points to 2D and reverse only when the resulting winding differs from the one selected below."),
 };
 
 USTRUCT(BlueprintType)

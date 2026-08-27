@@ -71,7 +71,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, Instanced, meta=(PCG_Overridable, NoResetToDefault, ShowOnlyInnerProperties))
 	TObjectPtr<UPCGExSmoothingInstancedFactory> SmoothingMethod;
 
-	/** Blend between unsmoothed (0) and fully smoothed (1) result. Negative values invert the smoothing. */
+	/** Scales every contributor's weight. Average blending ignores weights, so under the Monolithic
+	 * default this only distinguishes 0 (no smoothing) from non-zero. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExInputShorthandSelectorDouble11 Influence = FPCGExInputShorthandSelectorDouble11(FName("@Last"), 1.0, false);
 

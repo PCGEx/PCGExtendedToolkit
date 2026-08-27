@@ -40,7 +40,7 @@ UENUM()
 enum class EPCGExExtrudeProfileType : uint8
 {
 	Line   = 0 UMETA(DisplayName = "Line", ToolTip="Straight extrusion, subdivided evenly."),
-	Arc    = 1 UMETA(DisplayName = "Arc", ToolTip="Seamless arc, tangent to the path at the endpoint (a perpendicular extrusion direction gives a half-circle). Needs an extrusion direction not parallel to the path (Custom direction or a non-zero offset), else it stays a straight line."),
+	Arc    = 1 UMETA(DisplayName = "Arc", ToolTip="Arc tangent to the path at the endpoint (a perpendicular extrusion direction gives a half-circle). Needs an extrusion direction not parallel to the path (Custom direction or a non-zero offset), else it stays a straight line."),
 	Custom = 2 UMETA(DisplayName = "Custom", ToolTip="Custom profile applied to the new segment. Needs an extrusion direction angled from the path (Custom direction or a non-zero offset), else it falls back to no profile."),
 };
 

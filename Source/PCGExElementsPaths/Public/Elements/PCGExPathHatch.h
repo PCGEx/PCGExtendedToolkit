@@ -112,7 +112,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Lines", meta=(PCG_Overridable))
 	FPCGExInputShorthandNameDouble LineOriginSlide = FPCGExInputShorthandNameDouble(FName("HatchLineSlide"), 0.0, false);
 
-	/** If enabled, lines pushed outside the cross-axis extent by the slide wrap around to the opposite side, keeping the box fully tiled. If disabled, shifted-out lines simply produce no crossings (existing behavior). */
+	/** If enabled, lines pushed outside the cross-axis extent by the slide wrap around to the opposite side, keeping the box fully tiled. If disabled, shifted-out lines produce no crossings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Lines", meta=(PCG_NotOverridable))
 	bool bWrapSlide = true;
 

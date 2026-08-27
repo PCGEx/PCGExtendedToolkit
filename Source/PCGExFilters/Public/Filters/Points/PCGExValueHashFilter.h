@@ -56,10 +56,6 @@ struct FPCGExValueHashFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName SetAttributeName = NAME_None;
 
-	/** If enabled, the hash comparison will be less sensitive. */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	bool bTypeInsensitive = false;
-
 	/** Whether to invert the result of the filter */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvert = false;

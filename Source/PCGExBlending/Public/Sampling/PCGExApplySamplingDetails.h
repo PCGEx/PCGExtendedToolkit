@@ -10,7 +10,7 @@ namespace PCGExData
 	struct FMutablePoint;
 }
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="sampling/common-settings/apply-sampling-details"))
 struct PCGEXBLENDING_API FPCGExApplySamplingDetails
 {
 	GENERATED_BODY()

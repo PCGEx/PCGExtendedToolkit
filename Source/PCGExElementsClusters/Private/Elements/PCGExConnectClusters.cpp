@@ -143,7 +143,7 @@ namespace PCGExConnectClusters
 
 		if (Processors.Num() != NumValidClusters)
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext, FTEXT("Some vtx/edges groups have invalid clusters. Make sure to sanitize the input first."));
+			PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext, FTEXT("Some vtx/edges groups have invalid clusters. Run Cluster : Repair on the input first."));
 		}
 
 		if (ValidClusters.IsEmpty())

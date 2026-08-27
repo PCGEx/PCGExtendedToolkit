@@ -119,9 +119,9 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 		if (Settings->SecondaryCountDetails.ValueSource == EPCGExInputValueType::Attribute)
 		{
 			const TUniquePtr<PCGExData::TAttributeBroadcaster<int32>> Getter = MakeUnique<PCGExData::TAttributeBroadcaster<int32>>();
-			if (!Getter->Prepare(Settings->PrimaryCountDetails.CountAttribute, PointIO))
+			if (!Getter->Prepare(Settings->SecondaryCountDetails.CountAttribute, PointIO))
 			{
-				PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Could not read secondary Distance attribute on some inputs."));
+				PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Could not read secondary Count attribute on some inputs."));
 			}
 			End = Getter->FetchSingle(PointIO->GetInPoint(EndIndex), 0);
 		}

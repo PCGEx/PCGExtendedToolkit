@@ -77,7 +77,8 @@ namespace PCGExProbeBitmasks
 TSharedPtr<PCGExMT::FScopedContainer> FPCGExProbeBitmasks::GetScopedContainer(const PCGExMT::FScope& InScope) const
 {
 	TSharedPtr<PCGExProbeBitmasks::FScopedContainer> ScopedContainer = MakeShared<PCGExProbeBitmasks::FScopedContainer>(InScope);
-	ScopedContainer->Init(BitmaskData, Config.bTransformDirection); // dir count
+	// Copy the base directions only when they are used as-is; the transform path overwrites every entry.
+	ScopedContainer->Init(BitmaskData, !Config.bTransformDirection);
 	return ScopedContainer;
 }
 

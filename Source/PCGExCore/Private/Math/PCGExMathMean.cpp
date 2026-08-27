@@ -5,15 +5,19 @@
 
 namespace PCGExMath
 {
-	double GetMode(const TArray<double>& Values, const bool bHighest, const uint32 Tolerance)
+	double GetMode(const TArray<double>& Values, const bool bHighest, const double Tolerance)
 	{
 		TMap<double, int32> Map;
 		int32 LastCount = 0;
 		double Mode = 0;
 
+		// Double, not integral: callers pass a user-authored tolerance, and a relative measure needs
+		// buckets finer than 1. Floored so the bucketing can never divide by zero.
+		const double BucketSize = FMath::Max(Tolerance, UE_DOUBLE_SMALL_NUMBER);
+
 		for (const double Value : Values)
 		{
-			const double AdjustedValue = FMath::RoundToZero(Value / Tolerance) * Tolerance;
+			const double AdjustedValue = FMath::RoundToZero(Value / BucketSize) * BucketSize;
 			const int32* Count = Map.Find(AdjustedValue);
 			const int32 UpdatedCount = Count ? *Count + 1 : 1;
 			Map.Add(AdjustedValue, UpdatedCount);

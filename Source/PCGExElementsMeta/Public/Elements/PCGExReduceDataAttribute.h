@@ -19,11 +19,11 @@ class FPCGMetadataAttributeBase;
 UENUM()
 enum class EPCGExReduceDataDomainMethod : uint8
 {
-	Min          = 0 UMETA(DisplayName = "Min", ToolTip=""),
-	Max          = 1 UMETA(DisplayName = "Max", ToolTip=""),
-	Sum          = 2 UMETA(DisplayName = "Sum", ToolTip=""),
-	Average      = 3 UMETA(DisplayName = "Average", ToolTip=""),
-	Join         = 4 UMETA(DisplayName = "Join", ToolTip=""),
+	Min          = 0 UMETA(DisplayName = "Min", ToolTip="Keep the smallest value across every input, component by component for vector types."),
+	Max          = 1 UMETA(DisplayName = "Max", ToolTip="Keep the largest value across every input, component by component for vector types."),
+	Sum          = 2 UMETA(DisplayName = "Sum", ToolTip="Add every input value together."),
+	Average      = 3 UMETA(DisplayName = "Average", ToolTip="Add every input value together, then divide by the number of inputs."),
+	Join         = 4 UMETA(DisplayName = "Join", ToolTip="Concatenate every input value as text, separated by Join Delimiter. The output is forced to String, so Custom Output Type has no effect."),
 	Hash         = 5 UMETA(DisplayName = "Hash", ToolTip="Hashed in order of inputs"),
 	UnsignedHash = 6 UMETA(DisplayName = "Hash (Sorted)", ToolTip="Sorted, then hashed in sorted order"),
 };

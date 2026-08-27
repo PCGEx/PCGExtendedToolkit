@@ -84,7 +84,7 @@ PCGExFactories::EPreparationResult UPCGExValueHashFilterFactory::Prepare(FPCGExC
 			{
 				if (MissingDataPolicy == EPCGExFilterNoDataFallback::Error)
 				{
-					PCGEX_LOG_MISSING_INPUT(SharedContext.Get(), FTEXT("Merged sets are empty"))
+					PCGEX_LOG_MISSING_INPUT(SharedContext.Get(), FTEXT("Every set is empty"))
 				}
 				PrepResult = PCGExFactories::EPreparationResult::MissingData;
 			}

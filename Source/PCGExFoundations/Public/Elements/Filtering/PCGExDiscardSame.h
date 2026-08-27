@@ -96,7 +96,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bTestPositions = true;
 
-	/** Test point positions equality, within tolerance. Note that it computes space occupation, and does not account for point count. */
+	/** Test point positions equality, within tolerance. It computes space occupation, and does not account for point count. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bTestPositions", ClampMin = 0.000001))
 	double TestPositionTolerance = 0.1;
 

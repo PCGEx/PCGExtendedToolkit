@@ -79,7 +79,7 @@ protected:
 /**
  * 
  */
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExNodeLibraryDoc="clusters/refine/cluster-refine/refine-operation"))
 class UPCGExEdgeRefineInstancedFactory : public UPCGExInstancedFactory
 {
 	GENERATED_BODY()

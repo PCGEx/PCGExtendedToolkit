@@ -199,6 +199,12 @@ namespace PCGExClusterDecomposition
 				}
 			}
 		}
+		else
+		{
+			// Buffers keep their defaults on failure, which is indistinguishable from a successful
+			// single-cell decomposition -- say so rather than ship a graph that looks like it worked.
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Decomposition failed on a cluster; its Vtx keep the default cell values."));
+		}
 
 		return true;
 	}

@@ -194,6 +194,10 @@ public:
 		return true;
 	}
 
+#if WITH_EDITOR
+	virtual bool CanEditChange(const FProperty* InProperty) const override;
+#endif
+
 	virtual FName GetMainOutputPin() const override;
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
 

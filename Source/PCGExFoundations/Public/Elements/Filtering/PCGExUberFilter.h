@@ -30,7 +30,7 @@ UENUM()
 enum class EPCGExUberFilterMode : uint8
 {
 	Partition = 0 UMETA(DisplayName = "Partition points", ToolTip="Create inside/outside dataset from the filter results."),
-	Write     = 1 UMETA(DisplayName = "Write result", ToolTip="Simply write filter result to an attribute but doesn't change point structure."),
+	Write     = 1 UMETA(DisplayName = "Write result", ToolTip="Write the filter result to an attribute without changing point structure."),
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="filters/uber-filter"))
