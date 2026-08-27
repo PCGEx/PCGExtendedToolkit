@@ -14,7 +14,7 @@
 
 namespace PCGExMatching
 {
-	int32 FTargetsHandler::Init(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn, const bool bQuiet)
+	int32 FTargetsHandler::InitWithBounds(FPCGExContext* InContext, const FName InPinLabel, FInitData&& InitFn, const bool bQuiet)
 	{
 		FBox OctreeBounds = FBox(ForceInit);
 
@@ -86,7 +86,7 @@ namespace PCGExMatching
 
 	int32 FTargetsHandler::Init(FPCGExContext* InContext, const FName InPinLabel, const bool bQuiet)
 	{
-		return Init(InContext, InPinLabel, [](const TSharedPtr<PCGExData::FPointIO>& IO, const int32 Idx)
+		return InitWithBounds(InContext, InPinLabel, [](const TSharedPtr<PCGExData::FPointIO>& IO, const int32 Idx)
 		{
 			return IO->GetIn()->GetBounds();
 		}, bQuiet);

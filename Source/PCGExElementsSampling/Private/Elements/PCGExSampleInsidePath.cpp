@@ -152,7 +152,7 @@ bool FPCGExSampleInsidePathElement::Boot(FPCGExContext* InContext) const
 	PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {FPCGExDataTypeInfoBlendOp::AsId()}, false);
 
 	Context->TargetsHandler = MakeShared<PCGExMatching::FTargetsHandler>();
-	Context->NumMaxTargets = Context->TargetsHandler->Init(Context, PCGExCommon::Labels::SourceTargetsLabel, [&](const TSharedPtr<PCGExData::FPointIO>& IO, const int32 Idx)-> FBox
+	Context->NumMaxTargets = Context->TargetsHandler->InitWithBounds(Context, PCGExCommon::Labels::SourceTargetsLabel, [&](const TSharedPtr<PCGExData::FPointIO>& IO, const int32 Idx)-> FBox
 	{
 		const bool bClosedLoop = PCGExPaths::Helpers::GetClosedLoop(IO->GetIn());
 
