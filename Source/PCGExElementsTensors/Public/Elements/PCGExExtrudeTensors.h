@@ -314,12 +314,12 @@ public:
 	FString IsFollowUpTag = TEXT("IsFollowUp");
 
 
-	/** Tensor sampling settings. Note that these are applied on the flattened sample, e.g after & on top of individual tensors' mutations. */
+	/** Tensor sampling settings. These are applied on the flattened sample, e.g after & on top of individual tensors' mutations. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Tensor Sampling Settings"))
 	FPCGExTensorHandlerDetails TensorHandlerDetails;
 
 
-	/** ... */
+	/** Point-count limits deciding which generated paths are kept. Paths with fewer than 2 points are always dropped. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(DisplayName="Paths Output Settings"))
 	FPCGExPathOutputDetails PathOutputDetails;
 

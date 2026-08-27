@@ -42,15 +42,15 @@ public:
 	virtual void ApplyPreconfiguredSettings(const FPCGPreConfiguredSettingsInfo& PreconfigureInfo) override;
 	virtual FPCGDataTypeIdentifier GetCurrentPinTypesID(const UPCGPin* InPin) const override;
 	
-	/** */
+	/** Only report whether the inputs were empty. The data output pin is removed, so nothing is forwarded. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	bool bCheckOnly = false;
 	
-	/** */
+	/** Also emit the Is Empty result on its own pin, alongside the forwarded data. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ScriptName="output_is_empty_enabled"))
 	bool bOutputIsEmpty = false;
 	
-	/**  */
+	/** Name of the 'bool' attribute the Is Empty result is written to. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bOutputIsEmpty"))
 	FName OutputIsEmpty = PCGExCullOnEmpty::IsEmptyName;
 

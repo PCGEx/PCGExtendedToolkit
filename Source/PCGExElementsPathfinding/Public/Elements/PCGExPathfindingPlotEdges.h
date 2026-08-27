@@ -139,7 +139,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	bool bOmitCompletePathOnFailedPlot = false;
 
-	/** ... */
+	/** Point-count limits deciding which generated paths are kept. Paths with fewer than 2 points are always dropped. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Paths Output Settings", EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	FPCGExPathOutputDetails PathOutputDetails;
 

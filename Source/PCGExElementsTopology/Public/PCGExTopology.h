@@ -123,13 +123,13 @@ struct PCGEXELEMENTSTOPOLOGY_API FPCGExTopologyDetails
 	UPROPERTY(EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	FPCGExTopologyUVDetails UVChannels;
 
-	/** Default primitive options
-	 * Note that those are applied when triangulation is appended to the dynamic mesh. */
+	/** Default primitive options.
+	 * Applied when triangulation is appended to the dynamic mesh. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	FGeometryScriptPrimitiveOptions PrimitiveOptions;
 
-	/** Triangulation options
-	 * Note that those are applied when triangulation is appended to the dynamic mesh. */
+	/** Triangulation options.
+	 * Applied when triangulation is appended to the dynamic mesh. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	FGeometryScriptPolygonsTriangulationOptions TriangulationOptions;
 
