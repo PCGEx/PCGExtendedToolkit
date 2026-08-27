@@ -66,7 +66,14 @@ namespace PCGExPointStates
 
 	void FState::ProcessFlags(const bool bSuccess, int64& InFlags) const
 	{
-		// TODO : Implement
+		if (BaseConfig.bOnTestPass && bSuccess)
+		{
+			BaseConfig.PassStateFlags.Mutate(InFlags);
+		}
+		else if (BaseConfig.bOnTestFail && !bSuccess)
+		{
+			BaseConfig.FailStateFlags.Mutate(InFlags);
+		}
 	}
 
 	FStateManager::FStateManager(const TSharedPtr<TArray<int64>>& InFlags, const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
@@ -95,6 +102,21 @@ namespace PCGExPointStates
 		return true;
 	}
 }
+
+#if WITH_EDITOR
+bool UPCGExStateFactoryProviderSettings::CanEditChange(const FProperty* InProperty) const
+{
+	const bool bParentVal = Super::CanEditChange(InProperty);
+
+	if (InProperty && InProperty->GetFName() == GET_MEMBER_NAME_CHECKED(UPCGExStateFactoryProviderSettings, bOutputBitmasks))
+	{
+		// States that cannot emit bitmasks gate off both the pins and the emit; the toggle would be inert.
+		return bParentVal && CanOutputBitmasks();
+	}
+
+	return bParentVal;
+}
+#endif
 
 bool UPCGExStateFactoryProviderSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {

@@ -70,7 +70,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExUnionMetadataDetails UnionDetails;
 
-	/** Distance used to consider point to be overlapping. */
+	/** Drop paths that arrive with fewer than 2 points. Separate from the inherited Omit Invalid Paths
+	 * Outputs, which judges the result: both must be off for a short input to reach the output. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
 	bool bOmitInvalidPathsFromOutput = true;
 };

@@ -32,7 +32,8 @@ class UPCGExDecompConvexBSP : public UPCGExDecompositionInstancedFactory
 	GENERATED_BODY()
 
 public:
-	/** Maximum allowed concavity ratio. 0 = all must be on hull. */
+	/** Maximum share of a region's Vtx allowed to sit off that region's own convex hull. 0 = all must be on it.
+	 *  This is an interior-point count, not a shape measure: a dense convex blob reads as highly concave. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0", ClampMax="1"))
 	double MaxConcavityRatio = 0.01;
 

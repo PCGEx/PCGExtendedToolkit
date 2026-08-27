@@ -20,13 +20,6 @@ namespace PCGExBlending
 
 class UPCGExSubPointsBlendInstancedFactory;
 
-UENUM()
-enum class EPCGExPathBlendMode : uint8
-{
-	Full   = 0 UMETA(DisplayName = "Start to End", ToolTip="Blend properties & attributes of all path' points from start point to last point"),
-	Switch = 1 UMETA(DisplayName = "Switch", ToolTip="Switch between pruning/non-pruning based on filters"),
-};
-
 /**
  * 
  */
@@ -73,10 +66,6 @@ public:
 	double LerpConstant_DEPRECATED = 0.5;
 
 #pragma endregion
-
-	/** Blending settings used to smooth attributes.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExBlendingDetails BlendingSettings = FPCGExBlendingDetails(EPCGExBlendingType::Lerp, EPCGExBlendingType::None);
 
 	/** If enabled, will apply blending to othe first point. Can be useful with some blendmodes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

@@ -151,7 +151,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bPreserveFirstMetadata = false;
 
-	/** If enabled, the point cut from the start will inherit from the original last point */
+	/** If enabled, the point cut from the end will inherit from the original last point */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bPreserveLastMetadata = false;
 

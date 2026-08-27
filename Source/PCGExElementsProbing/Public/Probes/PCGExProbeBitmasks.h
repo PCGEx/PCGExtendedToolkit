@@ -52,7 +52,7 @@ struct FPCGExProbeConfigBitmasks : public FPCGExProbeConfigBase
 	{
 	}
 
-	/** Transform the direction with the point's */
+	/** Rotate the bitmask's directions by the point's transform, so the search cones follow point rotation. Scale is ignored. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bTransformDirection = true;
 

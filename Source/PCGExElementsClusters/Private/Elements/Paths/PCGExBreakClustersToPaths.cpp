@@ -292,9 +292,14 @@ namespace PCGExBreakClustersToPaths
 					ProjectedPoints[i] = PP[PtIndex];
 				}
 
-				if (!PCGExMath::IsWinded(Settings->Winding, UE::Geometry::CurveUtil::SignedArea2<double, FVector2D>(ProjectedPoints) < 0))
+				// Winding is measured on the chain order, but the path is emitted reversed when Direction
+				// Settings says so, and reversing flips the signed area. Judge the order that ships, then
+				// flip the decision rather than forcing it true -- otherwise Winding can never undo a
+				// reversal Direction Settings just made.
+				const bool bEmittedClockwise = (UE::Geometry::CurveUtil::SignedArea2<double, FVector2D>(ProjectedPoints) < 0) != bReverse;
+				if (!PCGExMath::IsWinded(Settings->Winding, bEmittedClockwise))
 				{
-					bDoReverse = true;
+					bDoReverse = !bDoReverse;
 				}
 			}
 			else

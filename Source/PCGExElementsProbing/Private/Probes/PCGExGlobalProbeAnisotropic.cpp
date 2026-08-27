@@ -95,7 +95,8 @@ void FPCGExProbeGlobalAnisotropic::ProcessAll(TSet<uint64>& OutEdges) const
 		}
 
 		const FVector& Pos = Positions[i];
-		double BaseRadius = FMath::Sqrt(GetSearchRadius(i));
+		const double BaseRadiusSq = GetSearchRadius(i);
+		const double BaseRadius = GetSearchRadiusRaw(i);
 		const double LocalSearchRadius = BaseRadius * MaxScale;
 		const double LocalSearchRadiusSq = FMath::Square(LocalSearchRadius);
 
@@ -130,7 +131,7 @@ void FPCGExProbeGlobalAnisotropic::ProcessAll(TSet<uint64>& OutEdges) const
 				}
 
 				const double AnisoDist = ComputeGlobalAnisotropicDistSq(Delta, Transform);
-				if (AnisoDist <= BaseRadius)
+				if (AnisoDist <= BaseRadiusSq)
 				{
 					Candidates.Add({AnisoDist, j});
 				}

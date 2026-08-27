@@ -23,13 +23,6 @@ namespace PCGExMatching
 	class FDataMatcher;
 }
 
-UENUM()
-enum class EPCGExCopyToPathsUnit : uint8
-{
-	Alpha    = 0 UMETA(DisplayName = "Alpha", Tooltip="..."),
-	Distance = 1 UMETA(DisplayName = "Distance", Tooltip="..."),
-};
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="paths/generate/copy-to-path"))
 class UPCGExCopyToPathsSettings : public UPCGExPointsProcessorSettings
 {
@@ -128,10 +121,6 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Deform", meta = (PCG_Overridable, EditCondition="bDoTwist"))
 	FPCGExAxisDeformDetails TwistSettings = FPCGExAxisDeformDetails(TEXT("StartTwistAmount"), TEXT("EndTwistAmount"), 0, 0);
-
-	/** Used to shrink the scope per-target, to distribute points only on a subselection. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Deform", meta = (PCG_Overridable))
-	FPCGExAxisDeformDetails TargetMaskSettings = FPCGExAxisDeformDetails(TEXT("MaskStart"), TEXT("MaskEnd"));
 
 #pragma endregion
 

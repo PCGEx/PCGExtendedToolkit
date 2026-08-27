@@ -17,9 +17,9 @@
 UENUM()
 enum class EPCGExSplineTimeConsolidation : uint8
 {
-	Min     = 0 UMETA(DisplayName = "Min", Tooltip="..."),
-	Max     = 1 UMETA(DisplayName = "Max", Tooltip="..."),
-	Average = 2 UMETA(DisplayName = "Average", Tooltip="...")
+	Min     = 0 UMETA(DisplayName = "Min", Tooltip="Test against the smallest of the per-path times."),
+	Max     = 1 UMETA(DisplayName = "Max", Tooltip="Test against the largest of the per-path times."),
+	Average = 2 UMETA(DisplayName = "Average", Tooltip="Test against the mean of the per-path times.")
 };
 
 USTRUCT(BlueprintType)

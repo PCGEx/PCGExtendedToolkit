@@ -33,7 +33,7 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Defaults")
 	FVector WorldForward = FVector::ForwardVector;
 
-	/** Value applied by default to node caching when `Default` is selected -- note that some nodes may stop working as expected when working with cached data.*/
+	/** Value applied by default to node caching when `Default` is selected. Some nodes may stop working as expected when working with cached data. */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
 	bool bDefaultCacheNodeOutput = false;
 
@@ -49,7 +49,7 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
 	bool bCacheLoadedResources = true;
 
-	/** */
+	/** Under runtime generation, force every node's prepare and execute phases off the game thread, as if Force Off Thread were set on each of them. */
 	UPROPERTY(EditAnywhere, config, Category = "Performance|Defaults")
 	bool bRuntimeAlwaysOffThread = false;
 

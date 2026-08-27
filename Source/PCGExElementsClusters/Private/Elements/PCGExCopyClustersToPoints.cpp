@@ -178,8 +178,6 @@ namespace PCGExCopyClustersToPoints
 	{
 		int32 Copies = 0;
 
-		const bool bSameAnyChecks = Context->MainDataMatcher == Context->EdgeDataMatcher;
-
 		FPCGExTaggedData EdgesAsCandidate = EdgeDataFacade->Source->GetTaggedData();
 		FPCGExTaggedData VtxAsCandidate = VtxDataFacade->Source->GetTaggedData();
 
@@ -207,19 +205,9 @@ namespace PCGExCopyClustersToPoints
 				}
 				break;
 			case EPCGExClusterComponentTagMatchMode::Any:
-				if (bSameAnyChecks)
+				if (!Context->MainDataMatcher->Test(TargetPoint, VtxAsCandidate, InfiniteScope) && !Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
 				{
-					if (Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
-					{
-						continue;
-					}
-				}
-				else
-				{
-					if (Context->MainDataMatcher->Test(TargetPoint, VtxAsCandidate, InfiniteScope) || Context->EdgeDataMatcher->Test(TargetPoint, EdgesAsCandidate, MatchScope))
-					{
-						continue;
-					}
+					continue;
 				}
 				break;
 			}

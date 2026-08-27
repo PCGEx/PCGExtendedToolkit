@@ -27,7 +27,10 @@ public:
 
 		const FVector Origin = InTransforms[TargetIndex].GetLocation();
 
-		Blender->BeginMultiBlend(TargetIndex, Trackers);
+		// Gathered before the blend opens: BeginMultiBlend zeroes the target and EndMultiBlend
+		// early-returns on a zero contributor count, so opening a blend nothing feeds leaves every
+		// channel at zero. The target is excluded from its own query, so an isolated point hits that.
+		TArray<TPair<int32, double>, TInlineAllocator<32>> Contributors;
 
 		Path->GetIn()->GetPointOctree().FindElementsWithBoundsTest(FBoxCenterAndExtent(Origin, FVector(Smoothing)), [&](const PCGPointOctree::FPointRef& PointRef)
 		{
@@ -37,8 +40,20 @@ public:
 				return;
 			}
 
-			Blender->MultiBlend(PointRef.Index, TargetIndex, (1 - (Dist / RadiusSquared)) * Influence, Trackers);
+			Contributors.Emplace(PointRef.Index, (1 - (Dist / RadiusSquared)) * Influence);
 		});
+
+		if (Contributors.IsEmpty())
+		{
+			return;
+		}
+
+		Blender->BeginMultiBlend(TargetIndex, Trackers);
+
+		for (const TPair<int32, double>& Contributor : Contributors)
+		{
+			Blender->MultiBlend(Contributor.Key, TargetIndex, Contributor.Value, Trackers);
+		}
 
 		Blender->EndMultiBlend(TargetIndex, Trackers);
 	}

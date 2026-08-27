@@ -73,10 +73,13 @@ void FPCGExVtxPropertyEdgeMatch::ProcessNode(PCGExClusters::FNode& Node, const T
 		NodeDirection = Cluster->VtxTransforms[Node.PointIndex].TransformVectorNoScale(NodeDirection);
 	}
 
+	// FAdjacencyData::Direction is the neighbor -> node reading; From Node is its opposite.
+	const double OriginSign = Config.Origin == EPCGExAdjacencyDirectionOrigin::FromNode ? -1.0 : 1.0;
+
 	for (int i = 0; i < Adjacency.Num(); i++)
 	{
 		const PCGExClusters::FAdjacencyData& A = Adjacency[i];
-		const double DotA = FVector::DotProduct(NodeDirection, A.Direction);
+		const double DotA = FVector::DotProduct(NodeDirection, A.Direction * OriginSign);
 
 		if (Config.DotComparisonDetails.Test(DotA, DotThreshold))
 		{

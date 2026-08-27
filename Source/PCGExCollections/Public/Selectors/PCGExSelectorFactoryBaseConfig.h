@@ -18,7 +18,7 @@
  * seed configuration, the entry-level (micro) distribution used for material variants, and
  * category scoping with its missing-key behavior.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="staging/common-settings/selector-base-config"))
 struct PCGEXCOLLECTIONS_API FPCGExSelectorFactoryBaseConfig
 {
 	GENERATED_BODY()

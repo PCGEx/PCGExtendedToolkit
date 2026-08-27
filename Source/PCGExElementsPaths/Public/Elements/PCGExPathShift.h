@@ -21,11 +21,11 @@ namespace PCGExData
 UENUM()
 enum class EPCGExShiftType : uint8
 {
-	Index                 = 0 UMETA(DisplayName = "Index", ToolTip="..."),
-	Metadata              = 1 UMETA(DisplayName = "Metadata", ToolTip="..."),
-	Properties            = 2 UMETA(DisplayName = "Properties", ToolTip="..."),
-	MetadataAndProperties = 3 UMETA(DisplayName = "Metadata and Properties", ToolTip="..."),
-	CherryPick            = 4 UMETA(DisplayName = "CherryPick", ToolTip="...")
+	Index                 = 0 UMETA(DisplayName = "Index", ToolTip="Inert: the rotated order is computed and then discarded, so the output is an unchanged copy of the input."),
+	Metadata              = 1 UMETA(DisplayName = "Metadata", ToolTip="Leave the points where they are and move only their attributes between them. Transform, bounds and every other native property stay put."),
+	Properties            = 2 UMETA(DisplayName = "Properties", ToolTip="Leave the points where they are and move only their native properties between them, transform and bounds included. Attributes stay put."),
+	MetadataAndProperties = 3 UMETA(DisplayName = "Metadata and Properties", ToolTip="Leave the points where they are and move everything they carry between them, attributes and native properties alike. The result looks like a rotated path while the point order is unchanged."),
+	CherryPick            = 4 UMETA(DisplayName = "CherryPick", ToolTip="Leave the points where they are and move only the native properties and attributes selected below. Everything else stays put.")
 };
 
 UENUM()
@@ -103,7 +103,7 @@ public:
 	uint8 CherryPickedProperties = 0;
 
 	/** Attributes to be shifted */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="ShiftType == EPCGExShiftType::CherryPick", EditConditionHides, Bitmask, BitmaskEnum="/Script/PCGExCore.EPCGExPointNativeProperties"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="ShiftType == EPCGExShiftType::CherryPick", EditConditionHides))
 	TArray<FName> CherryPickedAttributes;
 
 	/** Suppress warning when path data has already been shifted. */

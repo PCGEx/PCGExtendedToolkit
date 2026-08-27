@@ -28,7 +28,7 @@ enum class EPCGExAdjacencyDirectionOrigin : uint8
 	FromNeighbor = 1 UMETA(DisplayName = "From Neighbor to Node", Tooltip="Directions are computed from each neighbor toward the tested node."),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/common-settings/node-selection-details"))
 struct PCGEXCORE_API FPCGExNodeSelectionDetails
 {
 	GENERATED_BODY()

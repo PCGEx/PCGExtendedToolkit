@@ -41,12 +41,12 @@ enum class EPCGExAxisOrder : uint8
 UENUM()
 enum class EPCGExAxisAlign : uint8
 {
-	Forward  = 0 UMETA(DisplayName = "Forward", ToolTip="..."),
-	Backward = 1 UMETA(DisplayName = "Backward", ToolTip="..."),
-	Right    = 2 UMETA(DisplayName = "Right", ToolTip="..."),
-	Left     = 3 UMETA(DisplayName = "Left", ToolTip="..."),
-	Up       = 4 UMETA(DisplayName = "Up", ToolTip="..."),
-	Down     = 5 UMETA(DisplayName = "Down", ToolTip="..."),
+	Forward  = 0 UMETA(DisplayName = "Forward", ToolTip="Align the +X (forward) axis. In a look-at, +X ends up pointing at the target."),
+	Backward = 1 UMETA(DisplayName = "Backward", ToolTip="Align the -X (backward) axis. In a look-at, +X ends up pointing away from the target."),
+	Right    = 2 UMETA(DisplayName = "Right", ToolTip="Align the +Y (right) axis. In a look-at, +Y ends up pointing at the target."),
+	Left     = 3 UMETA(DisplayName = "Left", ToolTip="Align the -Y (left) axis. In a look-at, +Y ends up pointing away from the target."),
+	Up       = 4 UMETA(DisplayName = "Up", ToolTip="Align the +Z (up) axis. In a look-at, +Z points at the target and the up vector drives +Y instead of +Z."),
+	Down     = 5 UMETA(DisplayName = "Down", ToolTip="Align the -Z (down) axis. In a look-at, +Z points away from the target and the up vector drives +Y instead of +Z."),
 };
 
 UENUM(BlueprintType)
