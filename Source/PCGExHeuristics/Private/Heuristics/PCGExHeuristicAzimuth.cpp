@@ -42,7 +42,7 @@ double FPCGExHeuristicAzimuth::GetEdgeScore(const PCGExClusters::FNode& From, co
 		EdgeDir = -EdgeDir;
 	} // Reverse if traversing opposite direction
 
-	const double Dot = FVector::DotProduct(EdgeDir, Cluster->GetDir(From, Goal)) * -1;
+	const double Dot = FVector::DotProduct(EdgeDir, Cluster->GetDir(From, Goal));
 	return GetScoreInternal(PCGExMath::Remap(Dot, -1, 1, 1, 0));
 }
 
