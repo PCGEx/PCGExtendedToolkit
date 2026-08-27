@@ -5,6 +5,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+class SWidget;
 #include "Curves/RichCurve.h"
 #include "Widgets/SCompoundWidget.h"
 

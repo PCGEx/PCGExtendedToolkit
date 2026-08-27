@@ -4,6 +4,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+class SWidget;
+#include "UObject/WeakObjectPtr.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
 

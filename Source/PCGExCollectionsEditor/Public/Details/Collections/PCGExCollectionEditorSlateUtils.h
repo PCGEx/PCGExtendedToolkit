@@ -4,6 +4,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+class SWidget;
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "DetailLayoutBuilder.h"
 #include "Widgets/Text/STextBlock.h"

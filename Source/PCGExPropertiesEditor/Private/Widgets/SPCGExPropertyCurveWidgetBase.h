@@ -5,6 +5,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+class SWidget;
 #include "Curves/KeyHandle.h"
 #include "Widgets/SLeafWidget.h"
 
