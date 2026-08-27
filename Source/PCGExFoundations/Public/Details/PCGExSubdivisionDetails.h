@@ -46,11 +46,11 @@ enum class EPCGExManhattanMethod : uint8
 UENUM()
 enum class EPCGExManhattanAlign : uint8
 {
-	World    = 0 UMETA(DisplayName = "World", ToolTip=""),
-	Custom   = 1 UMETA(DisplayName = "Custom", ToolTip=""),
-	SegmentX = 5 UMETA(DisplayName = "Segment X", ToolTip=""),
-	SegmentY = 6 UMETA(DisplayName = "Segment Y", ToolTip=""),
-	SegmentZ = 7 UMETA(DisplayName = "Segment Z", ToolTip=""),
+	World    = 0 UMETA(DisplayName = "World", ToolTip="Steps run along the world X, Y and Z axes."),
+	Custom   = 1 UMETA(DisplayName = "Custom", ToolTip="Orient the subdivision frame with the Orient setting, taken as a constant or read per point."),
+	SegmentX = 5 UMETA(DisplayName = "Segment X", ToolTip="Orient the subdivision frame from the segment direction, taken as the frame's X axis."),
+	SegmentY = 6 UMETA(DisplayName = "Segment Y", ToolTip="Orient the subdivision frame from the segment direction, taken as the frame's Y axis."),
+	SegmentZ = 7 UMETA(DisplayName = "Segment Z", ToolTip="Orient the subdivision frame from the segment direction, taken as the frame's Z axis."),
 };
 
 USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/manhattan-details"))

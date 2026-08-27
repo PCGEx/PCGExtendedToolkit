@@ -100,7 +100,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fitting", meta = (PCG_Overridable))
 	EPCGExAxis SplitAxis = EPCGExAxis::Up;
 
-	/** The cross stacking axis is the axis that will generate the largest free space on the "sides" of the main axis. */
+	/** How the space left around a placed item is cut into new free partitions. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fitting", meta = (PCG_Overridable))
 	EPCGExSpaceSplitMode SplitMode = EPCGExSpaceSplitMode::Minimal;
 

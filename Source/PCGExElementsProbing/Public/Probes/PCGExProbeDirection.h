@@ -65,7 +65,7 @@ struct FPCGExProbeConfigDirection : public FPCGExProbeConfigBase
 
 #pragma endregion
 
-	/** Transform the direction with the point's */
+	/** Rotate the direction above by the point's transform, so it is read as a local direction. Scale is ignored. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bTransformDirection = true;
 

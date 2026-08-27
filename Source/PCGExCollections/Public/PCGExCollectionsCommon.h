@@ -24,10 +24,10 @@ enum class EPCGExCollectionSource : uint8
 UENUM()
 enum class EPCGExIndexPickMode : uint8
 {
-	Ascending        = 0 UMETA(DisplayName = "Collection order (Ascending)", Tooltip="..."),
-	Descending       = 1 UMETA(DisplayName = "Collection order (Descending)", Tooltip="..."),
-	WeightAscending  = 2 UMETA(DisplayName = "Weight (Descending)", Tooltip="..."),
-	WeightDescending = 3 UMETA(DisplayName = "Weight (Ascending)", Tooltip="..."),
+	Ascending        = 0 UMETA(DisplayName = "Collection order (Ascending)", Tooltip="Walk the entries in declaration order: index 0 picks the first entry."),
+	Descending       = 1 UMETA(DisplayName = "Collection order (Descending)", Tooltip="Walk the entries in reverse declaration order: index 0 picks the last entry."),
+	WeightAscending  = 2 UMETA(DisplayName = "Weight (Descending)", Tooltip="Sort by weight and walk lightest to heaviest: index 0 picks the lowest-weight entry."),
+	WeightDescending = 3 UMETA(DisplayName = "Weight (Ascending)", Tooltip="Sort by weight and walk heaviest to lightest: index 0 picks the highest-weight entry."),
 };
 
 /** Top-level distribution strategy: deterministic index, uniform random, or weighted random. */

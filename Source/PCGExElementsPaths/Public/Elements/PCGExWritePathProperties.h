@@ -68,8 +68,8 @@ namespace PCGExData
 UENUM()
 enum class EPCGExAttributeSetPackingMode : uint8
 {
-	PerInput = 0 UMETA(DisplayName = "Per Input", ToolTip="..."),
-	Merged   = 1 UMETA(DisplayName = "Merged", ToolTip="..."),
+	PerInput = 0 UMETA(DisplayName = "Per Input", ToolTip="Emit one attribute set per input path, each holding a single entry and carrying that path's tags."),
+	Merged   = 1 UMETA(DisplayName = "Merged", ToolTip="Emit a single attribute set holding one entry per input path, in input order. Tags are not carried."),
 };
 
 /**
@@ -188,7 +188,7 @@ public:
 	FName CompactnessAttributeName = FName("@Data.Compactness");
 
 
-	/** Output OBB extents **/
+	/** Output the center of the minimum-volume oriented box around the path. Falls back to the data's axis-aligned bounds if the solve fails. **/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteBoundingBoxCenter = false;
 
@@ -196,7 +196,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(DisplayName="Center", EditCondition="bWriteBoundingBoxCenter"))
 	FName BoundingBoxCenterAttributeName = FName("@Data.OBBCenter");
 
-	/** Output OBB extents **/
+	/** Output the half-size of the minimum-volume oriented box around the path. Falls back to the data's axis-aligned bounds if the solve fails. **/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteBoundingBoxExtent = false;
 
@@ -204,7 +204,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(DisplayName="Extent", EditCondition="bWriteBoundingBoxExtent"))
 	FName BoundingBoxExtentAttributeName = FName("@Data.OBBExtent");
 
-	/** Output OBB orientation **/
+	/** Output the rotation of the minimum-volume oriented box around the path. Identity when the solve fails and the axis-aligned fallback is used. **/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Path|Oriented Bounding Box", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteBoundingBoxOrientation = false;
 
@@ -339,11 +339,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWritePointBinormal = false;
 
-	/** Name of the 'FVector' attribute to write point binormal to. Note that it's stabilized.*/
+	/** Name of the 'FVector' attribute to write point binormal to. The binormal is sign-matched to the segment normal, so it does not flip along the path.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="PointBinormal", PCG_Overridable, EditCondition="bWritePointBinormal"))
 	FName PointBinormalAttributeName = FName("PointBinormal");
 
-	/** Output direction to next normal. */
+	/** Output the unit direction from each point to the next one. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteDirectionToNext = false;
 
@@ -351,7 +351,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(DisplayName="DirectionToNext", PCG_Overridable, EditCondition="bWriteDirectionToNext"))
 	FName DirectionToNextAttributeName = FName("DirectionToNext");
 
-	/** Output direction to prev normal. */
+	/** Output the unit direction from each point to the previous one. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output - Points", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteDirectionToPrev = false;
 
@@ -361,23 +361,23 @@ public:
 
 #pragma endregion
 
-	/** . */
+	/** Tag concave paths. Paths whose convexity cannot be resolved are left untagged. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bTagConcave = false;
 
-	/** . */
+	/** Tag added to concave paths. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable, EditCondition="bTagConcave"))
 	FString ConcaveTag = TEXT("Concave");
 
-	/** . */
+	/** Tag convex paths. Paths whose convexity cannot be resolved are left untagged. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bTagConvex = false;
 
-	/** . */
+	/** Tag added to convex paths. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable, EditCondition="bTagConvex"))
 	FString ConvexTag = TEXT("Convex");
 
-	/** . */
+	/** Tag paths that no other path encloses. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bTagOuter = false;
 
@@ -385,7 +385,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable, EditCondition="bTagOuter"))
 	FString OuterTag = TEXT("Outer");
 
-	/** . */
+	/** Tag paths enclosed by at least one other path. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bTagInner = false;
 
@@ -393,7 +393,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable, EditCondition="bTagInner"))
 	FString InnerTag = TEXT("Inner");
 
-	/** . */
+	/** Tag paths sitting at an odd inclusion depth. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bTagOddInclusionDepth = false;
 
@@ -401,7 +401,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable, EditCondition="bTagOddInclusionDepth"))
 	FString OddInclusionDepthTag = TEXT("OddDepth");
 
-	/** . */
+	/** Give each outer path and the holes directly inside it a shared value tag. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bTagPairing = false;
 
@@ -409,7 +409,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable, EditCondition="bTagPairing"))
 	FString PairingTag = TEXT("PairingTag");
 
-	/** If enabled, will output data to additional pins. Note that all outputs are added to the default Path pin; extra pins contain a filtered list of the same data. */
+	/** If enabled, will output data to additional pins. Every output still goes to the default Path pin; the extra pins carry a filtered view of the same data. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	bool bUseInclusionPins = false;
 
