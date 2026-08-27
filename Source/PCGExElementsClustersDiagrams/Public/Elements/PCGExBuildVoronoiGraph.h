@@ -77,19 +77,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="Method == EPCGExCellCenter::Circumcenter"))
 	bool bPruneOutOfBounds = false;
 
-	/** Mark points & edges that lie on the hull */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
-	bool bMarkHull = false;
-
-	/** Name of the attribute to output the Hull boolean to. True if point is on the hull, otherwise false. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bMarkHull"))
-	FName HullAttributeName = "bIsOnHull";
-
-	/** When true, edges that have at least a point on the Hull as marked as being on the hull. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bMarkEdgeOnTouch = false;
-
-	/** Graph & Edges output properties. Only available if bPruneOutsideBounds as it otherwise generates a complete graph. */
+	/** Graph & Edges output properties. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Cluster Output Settings"))
 	FPCGExGraphBuilderDetails GraphBuilderDetails = FPCGExGraphBuilderDetails(EPCGExMinimalAxis::X);
 
@@ -126,8 +114,6 @@ namespace PCGExBuildVoronoiGraph
 		TSharedPtr<TArray<int32>> OutputIndices;
 		TSharedPtr<PCGExMath::Geo::TVoronoi3> Voronoi;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
-
-		PCGExData::TBuffer<bool>* HullMarkPointWriter = nullptr;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

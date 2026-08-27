@@ -184,6 +184,8 @@ namespace PCGExSmooth
 
 		if (!DataBlender)
 		{
+			// Individual with nothing on the Blend Ops pin is a valid configuration: ops are optional and
+			// may be supplied from outside, so an empty pin is not a mistake and is not worth warning about.
 			DataBlender = MakeShared<PCGExBlending::FDummyBlender>();
 		}
 

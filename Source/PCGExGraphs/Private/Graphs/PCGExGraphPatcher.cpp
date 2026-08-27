@@ -701,7 +701,7 @@ namespace PCGExGraphs
 				GroupUnresolved[g] = bUnresolved;
 			}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
-		UE_CLOG(GroupUnresolved.Contains(true), LogPCGEx, Warning, TEXT("Graph patcher: some merged edge endpoints could not be resolved and were marked invalid; input vtx/edges pairing is corrupt (run Sanitize Cluster)."));
+		UE_CLOG(GroupUnresolved.Contains(true), LogPCGEx, Warning, TEXT("Graph patcher: some merged edge endpoints could not be resolved and were marked invalid; input vtx/edges pairing is corrupt (run Cluster : Repair)."));
 	}
 
 	void FGraphPatcher::ResolveNamedEndpointIds(FCommitScratch& Scratch)

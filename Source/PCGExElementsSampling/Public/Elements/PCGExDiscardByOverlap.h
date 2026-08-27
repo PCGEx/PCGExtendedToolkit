@@ -49,7 +49,7 @@ struct FPCGExOverlapScoresWeighting
 	UPROPERTY(BlueprintReadWrite, Category = "Settings|Dynamic Weights", EditAnywhere, meta = (PCG_Overridable))
 	double OverlapSubCount = 1;
 
-	/** Overlap volume weight (cumulative volume overlap)  Note that each sub point adds its own intersection volume whether or not it occupies an already computed volume in space. */
+	/** Overlap volume weight (cumulative volume overlap). Each sub point adds its own intersection volume whether or not it occupies an already computed volume in space. */
 	UPROPERTY(BlueprintReadWrite, Category = "Settings|Dynamic Weights", EditAnywhere, meta = (PCG_Overridable))
 	double OverlapVolume = 0;
 
@@ -65,7 +65,7 @@ struct FPCGExOverlapScoresWeighting
 	UPROPERTY(BlueprintReadWrite, Category = "Settings|Static Weights", EditAnywhere, meta = (PCG_Overridable))
 	double NumPoints = 1;
 
-	/** Volume weight  Note that each sub point adds its own intersection volume whether or not it occupies an already computed volume in space. */
+	/** Volume weight. Each sub point adds its own intersection volume whether or not it occupies an already computed volume in space. */
 	UPROPERTY(BlueprintReadWrite, Category = "Settings|Static Weights", EditAnywhere, meta = (PCG_Overridable))
 	double Volume = 0;
 

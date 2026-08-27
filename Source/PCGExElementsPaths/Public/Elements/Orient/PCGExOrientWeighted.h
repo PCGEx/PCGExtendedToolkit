@@ -25,11 +25,20 @@ public:
 		const double AB = FVector::DistSquared(A, B);
 		const double BC = FVector::DistSquared(B, C);
 
-		const double Weight = (AB + BC) / FMath::Min(AB, BC);
+		// At an open-path end GetPos clamps, so one segment measures zero; dividing by it hands
+		// SetRotation a non-finite quaternion. Substitute the limit the weighted alpha tends to
+		// there: the lone segment's direction, reversed under Inverse Weight like the interior.
+		const double MinSegment = FMath::Min(AB, BC);
+		double Alpha = bInverseWeight ? 0 : 1;
+		if (MinSegment > UE_DOUBLE_SMALL_NUMBER)
+		{
+			const double Weight = (AB + BC) / MinSegment;
+			Alpha = bInverseWeight ? 1 - Weight : Weight;
+		}
 
 		OutT.SetRotation(PCGExMath::MakeDirection(
 			Factory->OrientAxis,
-			FMath::Lerp(Path->DirToPrevPoint(Point.Index), Path->DirToNextPoint(Point.Index), bInverseWeight ? 1 - Weight : Weight).GetSafeNormal() * DirectionMultiplier,
+			FMath::Lerp(Path->DirToPrevPoint(Point.Index), Path->DirToNextPoint(Point.Index), Alpha).GetSafeNormal() * DirectionMultiplier,
 			PCGExMath::GetDirection(Factory->UpAxis)));
 
 		return OutT;

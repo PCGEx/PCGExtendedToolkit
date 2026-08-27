@@ -90,7 +90,7 @@ bool FPCGExFuseClustersElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->bFindEdgeEdgeIntersections)
 	{
-		Context->UnionProcessor->InitEdgeEdge(Settings->EdgeEdgeIntersectionDetails, Settings->bUseCustomPointEdgeBlending, &Settings->CustomEdgeEdgeBlendingDetails);
+		Context->UnionProcessor->InitEdgeEdge(Settings->EdgeEdgeIntersectionDetails, Settings->bUseCustomEdgeEdgeBlending, &Settings->CustomEdgeEdgeBlendingDetails);
 	}
 
 	return true;

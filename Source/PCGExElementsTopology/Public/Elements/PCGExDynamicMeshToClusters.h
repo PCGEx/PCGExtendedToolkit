@@ -74,8 +74,8 @@ public:
 	float VertexMergeHashTolerance = PCGExMesh::DefaultVertexMergeHashTolerance;
 
 	/**
-	 * Use two overlapping spatial hashes to detect vertex proximity. True (default) is more accurate but
-	 * slightly slower and uses slightly more memory during processing.
+	 * Use two overlapping spatial hashes to detect vertex proximity. More accurate, but slightly slower and
+	 * uses slightly more memory during processing.
 	 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable), AdvancedDisplay)
 	bool bPreciseVertexMerge = false;

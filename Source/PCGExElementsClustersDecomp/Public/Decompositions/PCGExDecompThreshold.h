@@ -22,7 +22,9 @@ enum class EPCGExDecompBinningMode : uint8
 class FPCGExDecompThreshold : public FPCGExDecompositionOperation
 {
 public:
-	FName AttributeName = NAME_None;
+	// The whole selector, not just its name: a component sub-selection (MyVector.X) or a point property
+	// only resolves through GetBroadcaster, which is also what RegisterBuffersDependencies preloads.
+	FPCGAttributePropertyInputSelector AttributeSelector;
 	int32 NumBins = 4;
 	EPCGExDecompBinningMode BinningMode = EPCGExDecompBinningMode::Uniform;
 
@@ -54,7 +56,7 @@ public:
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompThreshold, {
-	                                     Operation->AttributeName = AttributeSelector.GetName();
+	                                     Operation->AttributeSelector = AttributeSelector;
 	                                     Operation->NumBins = NumBins;
 	                                     Operation->BinningMode = BinningMode;
 	                                     })

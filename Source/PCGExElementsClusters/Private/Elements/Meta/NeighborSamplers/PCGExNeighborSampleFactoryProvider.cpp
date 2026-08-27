@@ -288,7 +288,7 @@ UPCGExFactoryData* UPCGExNeighborSampleProviderSettings::CreateFactory(FPCGExCon
 
 	GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, SamplerFactory->VtxFilterFactories, PCGExFactories::ClusterNodeFilters, false);
 
-	GetInputFactories(InContext, PCGExFilters::Labels::SourceVtxFiltersLabel, SamplerFactory->EdgesFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
+	GetInputFactories(InContext, PCGExFilters::Labels::SourceEdgeFiltersLabel, SamplerFactory->EdgesFilterFactories, PCGExFactories::ClusterEdgeFilters, false);
 
 	GetInputFactories(InContext, PCGExFilters::Labels::SourceUseValueIfFilters, SamplerFactory->ValueFilterFactories, PCGExFactories::ClusterNodeFilters, false);
 

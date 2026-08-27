@@ -67,6 +67,12 @@ namespace PCGExGraphs
 
 	bool FGraph::InsertEdge_Unsafe(const FEdge& Edge)
 	{
+		// Not editor-only: a self-loop makes FCluster::BuildFrom reject the whole cluster.
+		if (!ensure(Edge.Start != Edge.End))
+		{
+			return false;
+		}
+
 		uint64 H = Edge.H64U();
 		if (UniqueEdges.Contains(H))
 		{

@@ -43,8 +43,6 @@ bool FPCGExBuildVoronoiGraphElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(BuildVoronoiGraph)
 
-	PCGEX_VALIDATE_NAME(Settings->HullAttributeName)
-
 	Context->SitesOutput = MakeShared<PCGExData::FPointIOCollection>(Context);
 	Context->SitesOutput->OutputPin = PCGExClusters::Labels::OutputSitesLabel;
 

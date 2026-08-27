@@ -22,8 +22,8 @@ namespace PCGExProbing
 UENUM()
 enum class EPCGExProbeKNNMode : uint8
 {
-	Default = 0 UMETA(DisplayName = "Default", ToolTip=""),
-	Mutual  = 1 UMETA(DisplayName = "Mutual", ToolTip=""),
+	Default = 0 UMETA(DisplayName = "Default", ToolTip="Connect every point to its K nearest. An edge survives if either endpoint picked the other, so a point can end up with more than K connections."),
+	Mutual  = 1 UMETA(DisplayName = "Mutual", ToolTip="Keep an edge only when both points list each other among their K nearest. Fewer edges, and no point exceeds K."),
 };
 
 USTRUCT(BlueprintType)

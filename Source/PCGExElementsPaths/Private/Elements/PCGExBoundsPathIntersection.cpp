@@ -106,6 +106,13 @@ bool FPCGExBoundsPathIntersectionElement::Boot(FPCGExContext* InContext) const
 
 	PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {PCGExFactories::EType::Blending}, false);
 
+	if (!Context->BlendingFactories.IsEmpty())
+	{
+		// The factories are gathered and their buffers preloaded, but no blender is built from them yet
+		// (see the TODO in FProcessor). Say so rather than let the wiring look effective.
+		PCGE_LOG(Warning, GraphAndLog, FTEXT("Blend Ops are not applied by this node yet; connected operations will have no effect."));
+	}
+
 	Context->TargetsHandler = MakeShared<PCGExMatching::FTargetsHandler>();
 	Context->NumMaxTargets = Context->TargetsHandler->Init(Context, PCGExCommon::Labels::SourceBoundsLabel);
 

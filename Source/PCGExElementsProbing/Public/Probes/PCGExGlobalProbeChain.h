@@ -15,7 +15,7 @@ enum class EPCGExProbeChainSortMode : uint8
 	ByAttribute      = 0 UMETA(DisplayName = "By Attribute", ToolTip="Sort by a scalar attribute"),
 	ByAxisProjection = 1 UMETA(DisplayName = "By Axis Projection", ToolTip="Sort by projection onto an axis"),
 	BySpatialCurve   = 2 UMETA(DisplayName = "By Spatial Curve (TSP)", ToolTip="Greedy traveling salesman approximation"),
-	ByHilbertCurve   = 3 UMETA(DisplayName = "By Hilbert Curve", ToolTip="Sort by Hilbert curve index for spatial locality"),
+	ByHilbertCurve   = 3 UMETA(DisplayName = "By Morton Curve (Z-Order)", ToolTip="Sort by Morton (Z-order) index for spatial locality"),
 };
 
 USTRUCT(BlueprintType)

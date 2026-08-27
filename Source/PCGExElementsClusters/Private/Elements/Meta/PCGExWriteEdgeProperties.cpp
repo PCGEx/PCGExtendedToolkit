@@ -403,8 +403,13 @@ namespace PCGExWriteEdgeProperties
 				double BlendWeightStart = FMath::Clamp(SolidificationLerp->Read(EdgeIndex), 0, 1);
 				double BlendWeightEnd = 1 - BlendWeightStart;
 
-				TargetBoundsMin[PrimaryComponent] = (-EdgeLength * BlendWeightEnd) * InvScale[PrimaryComponent];
-				TargetBoundsMax[PrimaryComponent] = (EdgeLength * BlendWeightStart) * InvScale[PrimaryComponent];
+				// Where the pivot lands along the edge is what splits the primary bounds around it, so
+				// both read the same alpha. Lerp(A, B, a) sits a*L from A along -EdgeDirection, which
+				// leaves a*L of the edge on the +EdgeDirection side and (1-a)*L on the other.
+				const double PositionAlpha = EdgePositionLerp ? FMath::Clamp(EdgePositionLerp->Read(EdgeIndex), 0.0, 1.0) : BlendWeightEnd;
+
+				TargetBoundsMin[PrimaryComponent] = (-EdgeLength * (1 - PositionAlpha)) * InvScale[PrimaryComponent];
+				TargetBoundsMax[PrimaryComponent] = (EdgeLength * PositionAlpha) * InvScale[PrimaryComponent];
 
 				auto SolidifyRadius = [&](const TSharedPtr<PCGExDetails::TSettingValue<double>>& InRadius, const TSharedPtr<PCGExDetails::TSettingValue<double>>& InSlide, const int32 Component, const bool bFromVtx)
 				{
@@ -435,7 +440,7 @@ namespace PCGExWriteEdgeProperties
 					break;
 				}
 
-				Transforms[EdgeIndex] = FTransform(EdgeRot, FMath::Lerp(A, B, EdgePositionLerp ? FMath::Clamp(EdgePositionLerp->Read(EdgeIndex), 0.0, 1.0) : BlendWeightEnd), TargetScale);
+				Transforms[EdgeIndex] = FTransform(EdgeRot, FMath::Lerp(A, B, PositionAlpha), TargetScale);
 
 				BoundsMin[EdgeIndex] = TargetBoundsMin;
 				BoundsMax[EdgeIndex] = TargetBoundsMax;

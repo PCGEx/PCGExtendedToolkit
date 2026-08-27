@@ -41,7 +41,7 @@ struct FPCGExIsoEdgeDirectionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
 	bool bInvertDirection = false;
 
-	/** Direction for computing the dot product against the edge's. */
+	/** Direction to compare the edge against. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
 	FVector DirectionConstant = FVector::UpVector;
 

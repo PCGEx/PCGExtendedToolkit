@@ -10,7 +10,7 @@
 
 struct FPCGExContext;
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/common-settings/geo-mesh-import-details"))
 struct PCGEXCORE_API FPCGExGeoMeshImportDetails
 {
 	GENERATED_BODY()

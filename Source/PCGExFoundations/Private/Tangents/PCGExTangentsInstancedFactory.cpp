@@ -157,7 +157,7 @@ namespace PCGExTangents
 			LeaveReader = InDataFacade->GetBroadcaster<FVector>(InDetails.LeaveTangentAttribute, true);
 			if (!LeaveReader)
 			{
-				PCGEX_LOG_INVALID_ATTR_C(InContext, Leave Tangent Attribute, InDetails.ArriveTangentAttribute)
+				PCGEX_LOG_INVALID_ATTR_C(InContext, Leave Tangent Attribute, InDetails.LeaveTangentAttribute)
 				return false;
 			}
 		}
@@ -242,8 +242,11 @@ namespace PCGExTangents
 			NextIndex = LastIndex;
 		}
 
-		const FVector StartScale = StartScaleReader->Read(Index);
-		const FVector EndScale = EndScaleReader->Read(NextIndex);
+		// StartScaleReader holds the ARRIVE scale and EndScaleReader the LEAVE scale (see Init). A
+		// segment's start tangent is point Index's LEAVE vector and its end tangent is NextIndex's
+		// ARRIVE vector, so each takes the other reader.
+		const FVector StartScale = EndScaleReader->Read(Index);
+		const FVector EndScale = StartScaleReader->Read(NextIndex);
 
 		if (Mode == EPCGExTangentSource::InPlace)
 		{

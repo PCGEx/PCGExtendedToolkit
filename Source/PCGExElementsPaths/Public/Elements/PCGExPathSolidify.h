@@ -130,7 +130,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta = (PCG_Overridable, InlineEnum))
 	EPCGExAxisOrder SolidificationOrder = EPCGExAxisOrder::XYZ;
 
-	/** .*/
+	/** Read the axis order per point from an attribute instead of using the constant above. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bReadOrderFromAttribute = false;
 
@@ -144,7 +144,7 @@ public:
 	EPCGExIndexSafety OrderSafety = EPCGExIndexSafety::Tile;
 
 
-	/** .*/
+	/** Pick the rotation construction from the axis order through the map below, instead of one construction for every point. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bUseConstructionMapping = false;
 
@@ -156,7 +156,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta = (PCG_Overridable, InlineEnum, EditCondition="!bUseConstructionMapping", HideEditConditionToggle, EditConditionHides))
 	EPCGExMakeRotAxis RotationConstruction = EPCGExMakeRotAxis::X;
 
-	/** .*/
+	/** Read the rotation construction per point from an attribute instead of using the constant above. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Orient", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bReadConstructionFromAttribute = false;
 

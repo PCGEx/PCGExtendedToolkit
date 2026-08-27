@@ -138,7 +138,7 @@ bool FPCGExDecompSpectral::ComputeFiedlerVector(
 				continue;
 			} // Neighbor not in subset
 
-			// Edge weight from heuristics if available, else use inverse distance
+			// Edge weight from heuristics; the fallback is a flat 1 (WantsHeuristics is unconditional)
 			double Weight = 1.0;
 			if (Heuristics)
 			{

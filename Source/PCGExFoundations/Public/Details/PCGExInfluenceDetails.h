@@ -26,7 +26,7 @@ namespace PCGExDetails
 	class TSettingValue;
 }
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/influence-details"))
 struct PCGEXFOUNDATIONS_API FPCGExInfluenceDetails
 {
 	GENERATED_BODY()

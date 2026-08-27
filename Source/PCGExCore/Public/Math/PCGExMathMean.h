@@ -114,5 +114,5 @@ namespace PCGExMath
 		return (Lower + Upper) / 2;
 	}
 
-	PCGEXCORE_API double GetMode(const TArray<double>& Values, const bool bHighest, const uint32 Tolerance = 5);
+	PCGEXCORE_API double GetMode(const TArray<double>& Values, const bool bHighest, const double Tolerance = 5);
 }

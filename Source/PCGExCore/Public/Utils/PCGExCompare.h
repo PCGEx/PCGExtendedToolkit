@@ -87,10 +87,10 @@ enum class EPCGExStringComparison : uint8
 UENUM()
 enum class EPCGExStringMatchMode : uint8
 {
-	Equals     = 0 UMETA(DisplayName = "Equals", ToolTip=""),
-	Contains   = 1 UMETA(DisplayName = "Contains", ToolTip=""),
-	StartsWith = 2 UMETA(DisplayName = "Starts with", ToolTip=""),
-	EndsWith   = 3 UMETA(DisplayName = "Ends with", ToolTip=""),
+	Equals     = 0 UMETA(DisplayName = "Equals", ToolTip="The tested value is the query, ignoring case."),
+	Contains   = 1 UMETA(DisplayName = "Contains", ToolTip="The tested value contains the query anywhere in it, ignoring case."),
+	StartsWith = 2 UMETA(DisplayName = "Starts with", ToolTip="The tested value begins with the query, ignoring case."),
+	EndsWith   = 3 UMETA(DisplayName = "Ends with", ToolTip="The tested value ends with the query, ignoring case."),
 	Matches    = 4 UMETA(DisplayName = "Matches", ToolTip="Wildcard matching. Supports * or ? as wildcards."),
 };
 
@@ -530,7 +530,7 @@ struct PCGEXCORE_API FPCGExStaticDotComparisonDetails
  * Dot product comparison with support for per-point attribute thresholds.
  * Use FPCGExStaticDotComparisonDetails if constant threshold is sufficient.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/dot-comparison-details"))
 struct PCGEXCORE_API FPCGExDotComparisonDetails
 {
 	GENERATED_BODY()

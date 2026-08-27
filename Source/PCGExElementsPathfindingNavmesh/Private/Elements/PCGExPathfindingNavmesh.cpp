@@ -205,7 +205,7 @@ void FSampleNavmeshTask::ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& Ta
 
 	int32 WriteIndex = 0;
 	TPCGValueRange<FTransform> OutTransforms = OutData->GetTransformValueRange(false);
-	Query.CopyPositions(OutTransforms, WriteIndex, Settings->bAddGoalToPath, Settings->bAddGoalToPath);
+	Query.CopyPositions(OutTransforms, WriteIndex, Settings->bAddSeedToPath, Settings->bAddGoalToPath);
 
 	TSharedPtr<FPCGExSubPointsBlendOperation> SubBlending = Context->Blending->CreateOperation();
 	if (!SubBlending->PrepareForData(Context, PathDataFacade, Context->GoalsDataFacade, PCGExData::EIOSide::In))

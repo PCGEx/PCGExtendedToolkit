@@ -428,8 +428,6 @@ namespace PCGExPathCrossings
 			Metadata->InitializeOnSet(OutMetadataEntries[Index]);
 		}
 
-		// BUG : Missing last (or first?) point
-		// We should inherit all points :(
 		ensure(WriteIndices.Num() == InPoints->GetNumPoints());
 
 		PointIO->InheritPoints(WriteIndices);

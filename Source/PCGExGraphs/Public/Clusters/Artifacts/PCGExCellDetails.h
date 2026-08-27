@@ -121,20 +121,20 @@ namespace PCGExCellTriage
 UENUM()
 enum class EPCGExPointPropertyOutput : uint8
 {
-	None      = 0 UMETA(DisplayName = "None", Tooltip="..."),
-	Density   = 1 UMETA(DisplayName = "Density", Tooltip="..."),
-	Steepness = 2 UMETA(DisplayName = "Steepness", Tooltip="..."),
-	ColorR    = 3 UMETA(DisplayName = "R Channel", Tooltip="..."),
-	ColorG    = 4 UMETA(DisplayName = "G Channel", Tooltip="..."),
-	ColorB    = 5 UMETA(DisplayName = "B Channel", Tooltip="..."),
-	ColorA    = 6 UMETA(DisplayName = "A Channel", Tooltip="..."),
+	None      = 0 UMETA(DisplayName = "None", Tooltip="Do not write the value."),
+	Density   = 1 UMETA(DisplayName = "Density", Tooltip="Write the value to the seed point's Density, raw and without clamping to 0-1."),
+	Steepness = 2 UMETA(DisplayName = "Steepness", Tooltip="Write the value to the seed point's Steepness, raw and without clamping to 0-1."),
+	ColorR    = 3 UMETA(DisplayName = "R Channel", Tooltip="Write the value to the red channel of the seed point's Color, raw and without clamping."),
+	ColorG    = 4 UMETA(DisplayName = "G Channel", Tooltip="Write the value to the green channel of the seed point's Color, raw and without clamping."),
+	ColorB    = 5 UMETA(DisplayName = "B Channel", Tooltip="Write the value to the blue channel of the seed point's Color, raw and without clamping."),
+	ColorA    = 6 UMETA(DisplayName = "A Channel", Tooltip="Write the value to the alpha channel of the seed point's Color, raw and without clamping."),
 };
 
 UENUM()
 enum class EPCGExCellOutputOrientation : uint8
 {
-	CCW = 0 UMETA(DisplayName = "Clockwise", Tooltip="..."),
-	CW  = 1 UMETA(DisplayName = "Counter Clockwise", Tooltip="..."),
+	CCW = 0 UMETA(DisplayName = "Clockwise", Tooltip="Unused. No setting reads this enum; cell winding comes from Output Winding on the cell constraints."),
+	CW  = 1 UMETA(DisplayName = "Counter Clockwise", Tooltip="Unused. No setting reads this enum; cell winding comes from Output Winding on the cell constraints."),
 };
 
 UENUM()
@@ -392,7 +392,7 @@ struct PCGEXGRAPHS_API FPCGExCellOBBAttributesDetails
 	FVector MinExtent = FVector(1);
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="pathfinding/cells/common-settings/cell-artifacts-details"))
 struct PCGEXGRAPHS_API FPCGExCellArtifactsDetails
 {
 	GENERATED_BODY()

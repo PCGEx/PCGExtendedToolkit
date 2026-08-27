@@ -39,7 +39,8 @@ void FPCGExSubPointsBlendInterpolate::BlendSubPoints(const PCGExData::FConstPoin
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			//FVector Location = OutTransform[Index].GetLocation();
-			MetadataBlender->Blend(From.Index, To.Index, Index, Index / Divider);
+			// Index is absolute into the output data; the weight has to be scope-relative.
+			MetadataBlender->Blend(From.Index, To.Index, Index, (Index - Scope.Start) / Divider);
 			//OutTransform[Index].SetLocation(Location);
 		}
 	}

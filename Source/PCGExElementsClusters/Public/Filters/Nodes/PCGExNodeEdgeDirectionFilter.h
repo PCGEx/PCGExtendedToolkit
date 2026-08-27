@@ -20,7 +20,7 @@ struct FPCGExNodeEdgeDirectionFilterConfig
 
 	FPCGExNodeEdgeDirectionFilterConfig() = default;
 
-	/** Type of check; Note that Fast comparison ignores adjacency consolidation. */
+	/** Type of check. Fast comparison ignores adjacency consolidation. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExDirectionCheckMode ComparisonQuality = EPCGExDirectionCheckMode::Dot;
 
@@ -44,7 +44,7 @@ struct FPCGExNodeEdgeDirectionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
 	bool bInvertDirection = false;
 
-	/** Direction for computing the dot product against the edge's. */
+	/** Direction to compare adjacent edges against. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
 	FVector DirectionConstant = FVector::UpVector;
 

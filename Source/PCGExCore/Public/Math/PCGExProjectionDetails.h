@@ -41,7 +41,7 @@ enum class EPCGExProjectionMethod : uint8
 	LocalTangent = 2 UMETA(DisplayName = "Local Tangent", ToolTip="Per-vertex tangent plane projection for non-planar clusters (spheres, curved surfaces)"),
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/projection-details"))
 struct PCGEXCORE_API FPCGExGeo2DProjectionDetails
 {
 	GENERATED_BODY()

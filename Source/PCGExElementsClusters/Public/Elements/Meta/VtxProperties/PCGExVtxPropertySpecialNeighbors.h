@@ -16,11 +16,11 @@ struct FPCGExSpecialNeighborsConfig
 {
 	GENERATED_BODY()
 
-	/** Shortest edge. */
+	/** The neighbor holding the most edges of its own. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExEdgeOutputWithIndexSettings LargestNeighbor = FPCGExEdgeOutputWithIndexSettings(TEXT("Largest"));
 
-	/** Longest edge. */
+	/** The neighbor holding the fewest edges of its own. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExEdgeOutputWithIndexSettings SmallestNeighbor = FPCGExEdgeOutputWithIndexSettings(TEXT("Smallest"));
 };

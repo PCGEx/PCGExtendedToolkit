@@ -57,16 +57,18 @@ public:
 	PCGEX_NODE_POINT_FILTER(FName("Flip Conditions"), "Filters used to know whether an orientation should be flipped or not", PCGExFactories::PointFilters, false)
 	//~End UPCGExPointProcessorSettings
 
+	/** Which axis of the point transform is aimed along the direction the rule computes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExAxis OrientAxis = EPCGExAxis::Forward;
 
+	/** World direction used to resolve the remaining roll. Resolved per point, with no continuity between points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExAxis UpAxis = EPCGExAxis::Up;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = Settings, Instanced, meta=(PCG_Overridable, ShowOnlyInnerProperties, NoResetToDefault))
 	TObjectPtr<UPCGExOrientInstancedFactory> Orientation;
 
-	/** Default value, can be overriden per-point through filters. */
+	/** Flip every point's direction. Read only when the filter pin is empty -- wiring filters replaces it entirely. */
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bFlipDirection = false;
 
@@ -82,7 +84,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bOutputDot = false;
 
-	/** Whether to output the dot product between prev/next points.  */
+	/** Name of the attribute the prev/next dot product is written to. */
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bOutputDot"))
 	FName DotAttribute = "Dot";
 };

@@ -92,7 +92,7 @@ struct PCGEXELEMENTSSAMPLING_API FPCGExTextureParamConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Sampling", meta=(PCG_Overridable))
 	EPCGExTexSampleAttributeType OutputType = EPCGExTexSampleAttributeType::Auto;
 
-	/** What components will be sampled. Note that output will be truncated or sparse depending on the selected output type.  */
+	/** What components will be sampled. Output is truncated or sparse depending on the selected output type. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Sampling", meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExElementsSampling.EPCGExTexChannelsFlags"))
 	uint8 SampledChannels = static_cast<uint8>(EPCGExTexChannelsFlags::All);
 

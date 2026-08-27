@@ -132,7 +132,7 @@ protected:
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 
 public:
-	/** Output Object Oriented Bounds. Note that this only accounts for positions and will ignore point bounds. **/
+	/** Output Object Oriented Bounds. This only accounts for positions and ignores point bounds. **/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bOutputOrientedBoundingBox = false;
 

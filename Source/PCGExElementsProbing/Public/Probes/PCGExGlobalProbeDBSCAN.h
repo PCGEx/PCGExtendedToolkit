@@ -19,16 +19,16 @@ struct FPCGExProbeConfigDBSCAN : public FPCGExProbeConfigBase
 	{
 	}
 
-	/** Minimum points within Epsilon to be considered a core point */
+	/** Minimum neighbours within the search radius, not counting the point itself, to be a core point */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 MinPoints = 3;
 
-	/** If true, only connects core points to each other */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable))
+	/** If true, only connects core points to each other, and border points are left with no connection at all */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, DisplayName="Core To Core Only"))
 	bool bCoreToCorOnly = true;
 
 	/** If true, connects border points to their nearest core point only. If false, connects to all reachable core points. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Settings, meta=(PCG_Overridable, EditCondition="!bCoreToCorOnly", EditConditionHides))
 	bool bBorderToNearestCoreOnly = true;
 };
 

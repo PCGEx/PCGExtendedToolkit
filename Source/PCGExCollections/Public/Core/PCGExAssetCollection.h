@@ -277,7 +277,6 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 	/**
 	 * Where this entry's Scale to Fit comes from when a staging node considers entry overrides.
-	 * None = the node's settings apply; Local = this entry's; Global = the collection's.
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	EPCGExEntryVariationMode ScaleToFitSource = EPCGExEntryVariationMode::None;
@@ -287,7 +286,6 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 	/**
 	 * Where this entry's Justification comes from when a staging node considers entry overrides.
-	 * None = the node's settings apply; Local = this entry's; Global = the collection's.
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	EPCGExEntryVariationMode JustificationSource = EPCGExEntryVariationMode::None;
