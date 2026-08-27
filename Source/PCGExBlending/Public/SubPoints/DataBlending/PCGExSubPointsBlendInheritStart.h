@@ -29,6 +29,6 @@ public:
 protected:
 	virtual EPCGExBlendingType GetDefaultBlending() const override
 	{
-		return EPCGExBlendingType::Copy;
+		return EPCGExBlendingType::CopyOther; // = A, the gap's first bracket
 	}
 };

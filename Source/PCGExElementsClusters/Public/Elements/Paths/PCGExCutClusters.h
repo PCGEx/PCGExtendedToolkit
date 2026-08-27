@@ -70,7 +70,7 @@ public:
 	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bInvert && Mode!=EPCGExCutEdgesMode::Edges"))
 	//bool bConservative = false;
 
-	/** Expansion factor of node points to check for initial overlap. Uses scaled bounds expanded by the specified value. */
+	/** Widens the node's local bounds before they are transformed, so the expansion scales with the point. Only widens the candidate search, never the distance that decides a cut. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode != EPCGExCutEdgesMode::Edges"))
 	double NodeExpansion = 1;
 

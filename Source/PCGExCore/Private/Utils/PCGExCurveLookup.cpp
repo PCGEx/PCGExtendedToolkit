@@ -73,6 +73,9 @@ void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGE
 
 	if (!CurvePtr || CurvePtr->GetNumKeys() == 0)
 	{
+		// No LUT is built here, so Lookup mode would index an empty array; Direct returns the
+		// curve's default value (0 for a keyless FRichCurve).
+		Mode = EPCGExCurveLUTMode::Direct;
 		TimeMin = 0.0f;
 		TimeMax = 1.0f;
 		TimeToNormalized = 1.0f;

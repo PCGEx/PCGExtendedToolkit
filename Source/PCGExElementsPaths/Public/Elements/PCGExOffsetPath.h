@@ -22,17 +22,17 @@ namespace PCGExPaths
 UENUM()
 enum class EPCGExOffsetAdjustment : uint8
 {
-	None         = 0 UMETA(DisplayName = "Raw", ToolTip="..."),
-	SmoothCustom = 1 UMETA(DisplayName = "Custom Smooth", ToolTip="..."),
-	SmoothAuto   = 2 UMETA(DisplayName = "Auto Smooth", ToolTip="..."),
-	Mitre        = 3 UMETA(DisplayName = "Mitre", ToolTip="..."),
+	None         = 0 UMETA(DisplayName = "Raw", ToolTip="No correction. Every point moves by exactly the offset distance, so corners end up closer to the source path than the distance asked for."),
+	SmoothCustom = 1 UMETA(DisplayName = "Custom Smooth", ToolTip="Scale the offset by 1 + Scale * cos(corner angle). The corner angle is PI on a straight run and 0 at a hairpin, so a negative Scale widens tight corners."),
+	SmoothAuto   = 2 UMETA(DisplayName = "Auto Smooth", ToolTip="Widen the offset on turns sharper than 90 degrees and leave gentler corners untouched. Peaks near 4.1x the offset at a full hairpin."),
+	Mitre        = 3 UMETA(DisplayName = "Mitre", ToolTip="Extend the offset to Offset / sin(half the corner angle) so the two offset walls meet at a point, capped at Mitre Limit times the offset."),
 };
 
 UENUM()
 enum class EPCGExOffsetMethod : uint8
 {
-	Slide     = 0 UMETA(DisplayName = "Slide", ToolTip="..."),
-	LinePlane = 1 UMETA(DisplayName = "Line/Plane", ToolTip="..."),
+	Slide     = 0 UMETA(DisplayName = "Slide", ToolTip="Move each point along its own offset direction by the offset distance. Corners need the Adjustment setting to land at the requested distance."),
+	LinePlane = 1 UMETA(DisplayName = "Line/Plane", ToolTip="Place each point where its outgoing segment, offset by the distance, crosses the plane of the previous offset segment. Corners hold the distance with no adjustment, and near-parallel segments fall back to a plain slide."),
 };
 
 /**

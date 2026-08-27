@@ -131,7 +131,7 @@ void FPCGExProbeTensor::ProcessCandidates(const int32 Index, TArray<PCGExProbing
 		double Dot = 0;
 		if (Config.bUseComponentWiseAngle)
 		{
-			if (PCGExMath::IsDirectionWithinTolerance(Dir, C.Direction, Config.MaxAngles))
+			if (!PCGExMath::IsDirectionWithinTolerance(Dir, C.Direction, Config.MaxAngles))
 			{
 				continue;
 			}
@@ -203,7 +203,7 @@ void FPCGExProbeTensor::ProcessCandidateChained(const int32 Index, const int32 C
 	double Dot = 0;
 	if (Config.bUseComponentWiseAngle)
 	{
-		if (PCGExMath::IsDirectionWithinTolerance(Dir, Candidate.Direction, Config.MaxAngles))
+		if (!PCGExMath::IsDirectionWithinTolerance(Dir, Candidate.Direction, Config.MaxAngles))
 		{
 			return;
 		}

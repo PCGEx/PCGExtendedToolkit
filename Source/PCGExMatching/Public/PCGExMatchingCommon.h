@@ -31,7 +31,7 @@ enum class EPCGExClusterComponentTagMatchMode : uint8
 	Vtx       = 0 UMETA(DisplayName = "Vtx", ToolTip="Only match vtx (most efficient check)"),
 	Edges     = 1 UMETA(DisplayName = "Edges", ToolTip="Only match edges"),
 	Any       = 2 UMETA(DisplayName = "Any", ToolTip="Match either vtx or edges"),
-	Both      = 3 UMETA(DisplayName = "Vtx and Edges", ToolTip="Match no vtx and edges"),
+	Both      = 3 UMETA(DisplayName = "Vtx and Edges", ToolTip="Match both vtx and edges"),
 	Separated = 4 UMETA(DisplayName = "Separate", ToolTip="Uses two separate set of match handlers -- the default pin will be used on Vtx, the extra one for Edges."),
 };
 

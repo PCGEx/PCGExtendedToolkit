@@ -52,7 +52,7 @@ void FPCGExProbeAnisotropic::ProcessCandidates(const int32 Index, TArray<PCGExPr
 	FVector D[16];
 	int32 BestCandidate[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,};
 	double BestDot[16];
-	if (Config.bTransformDirection)
+	if (!Config.bTransformDirection)
 	{
 		for (int d = 0; d < 16; d++)
 		{

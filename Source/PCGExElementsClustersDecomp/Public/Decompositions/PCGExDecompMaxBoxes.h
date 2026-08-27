@@ -93,9 +93,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 MinVoxelsPerCell = 1;
 
-	/** Penalizes elongated strips in favor of compact, cube-like boxes.
-	 *  0 = pure volume (largest box first, may produce thin strips).
-	 *  Higher values strongly prefer square-like shapes over thin rectangles. */
+	/** Penalizes elongated strips in favor of a square footprint. Compactness is measured on the two
+	 *  LARGEST dimensions only, so a slab scores the same as a cube.
+	 *  0 = pure volume (largest box first, may produce thin strips). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
 	double Balance = 1.0;
 

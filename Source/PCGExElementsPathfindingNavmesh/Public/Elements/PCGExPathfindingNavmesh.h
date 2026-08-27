@@ -72,7 +72,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	bool bAddSeedToPath = true;
 
-	/** Add goal point at the beginning of the path */
+	/** Add goal point at the end of the path */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	bool bAddGoalToPath = true;
 

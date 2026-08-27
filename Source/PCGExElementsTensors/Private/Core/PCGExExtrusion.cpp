@@ -264,7 +264,7 @@ namespace PCGExExtrusion
 			break;
 
 		case EPCGExTensorTransformMode::Align:
-			Head.SetRotation(PCGExMath::MakeDirection(Config.AlignAxis, ExtrusionDirection * -1, Head.GetRotation().GetUpVector()));
+			Head.SetRotation(PCGExMath::MakeDirection(Config.AlignAxis, ExtrusionDirection, Head.GetRotation().GetUpVector()));
 			break;
 		}
 	}

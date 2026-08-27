@@ -8,7 +8,7 @@
 
 #include "PCGExAttachmentRules.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/transform-details/attachment-rules"))
 struct PCGEXCORE_API FPCGExAttachmentRules
 {
 	GENERATED_BODY()

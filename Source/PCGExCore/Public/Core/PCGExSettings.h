@@ -67,7 +67,7 @@ public:
 	/** This node will not make any copy of the data and instead modify the inputs directly.
 	 * When enabling this you must make absolutely sure the data plugged into this node is not plugged in any other node.
 	 * Only supported by nodes set-up in a way that makes in-place mutations possible.
-	 * Note that 'Cleanup Consumable Attributes' and 'Flatten Output' then also apply to the stolen inputs (including forwarded pass-through pins),
+	 * 'Cleanup Consumable Attributes' and 'Flatten Output' then also apply to the stolen inputs (including forwarded pass-through pins),
 	 * and because upstream caches keep referencing the mutated data, re-running only this node against cached inputs is not idempotent. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable))
 	EPCGExOptionState StealData = EPCGExOptionState::Disabled;

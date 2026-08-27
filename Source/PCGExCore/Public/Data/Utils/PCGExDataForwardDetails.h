@@ -51,7 +51,7 @@ struct PCGEXCORE_API FPCGExForwardDetails : public FPCGExNameFiltersDetails
 	TSharedPtr<PCGExData::FDataForwardHandler> TryGetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const TSharedPtr<PCGExData::FFacade>& InTargetDataFacade, bool bForwardToDataDomain = true) const;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/data-utils/attribute-to-tag-details"))
 struct PCGEXCORE_API FPCGExAttributeToTagDetails
 {
 	GENERATED_BODY()

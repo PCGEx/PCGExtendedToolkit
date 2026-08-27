@@ -71,10 +71,11 @@ public:
 	/** Optional attribute name for per-node cell bounds size (FVector, full extent). Empty = disabled.
 	 *
 	 *  The meaning is algorithm-specific:
-	 *  - Box-like algorithms (Grid, Max Boxes, BSP Occupancy) report their quantized cell box, measured
-	 *    along the grid's LOCAL axes. With a Best Fit or Custom transform space the size is in that
-	 *    rotated (and, for a scaled Custom transform, scaled) frame -- it is NOT a world-axis-aligned
-	 *    size. The value is the enclosing box: a non-cuboid cell (an L-shaped BSP Occupancy region, or a
+	 *  - Box-like algorithms (Grid, Max Boxes, BSP Occupancy) report their quantized cell box. For the
+	 *    three that have a transform space (Max Boxes, Max Boxes Extended, BSP Occupancy) that box is
+	 *    measured along the grid's LOCAL axes, so with Best Fit or Custom it is in that rotated (and,
+	 *    for a scaled Custom transform, scaled) frame and is NOT world-axis-aligned. Grid has no
+	 *    transform space: its boxes are world-axis-aligned. The value is the enclosing box: a non-cuboid cell (an L-shaped BSP Occupancy region, or a
 	 *    Grid cell merged from non-adjacent cells) reports the AABB that contains it, which can exceed
 	 *    its filled volume.
 	 *  - Node-grouping algorithms (Convex BSP, Spectral, Threshold) report the world-space AABB of the

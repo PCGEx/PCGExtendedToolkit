@@ -35,14 +35,6 @@ enum class EPCGExAdjacencyGatherMode : uint8
 };
 
 UENUM()
-enum class EPCGExAdjacencyThreshold : uint8
-{
-	AtLeast = 0 UMETA(DisplayName = "At Least", Tooltip="Requirements must be met by at least N adjacent nodes.  (Where N is the Threshold)"),
-	AtMost  = 1 UMETA(DisplayName = "At Most", Tooltip="Requirements must be met by at most N adjacent nodes.  (Where N is the Threshold)"),
-	Exactly = 2 UMETA(DisplayName = "Exactly", Tooltip="Requirements must be met by exactly N adjacent nodes, no more, no less.  (Where N is the Threshold)")
-};
-
-UENUM()
 enum class EPCGExRelativeThresholdRoundingMode : uint8
 {
 	Round = 0 UMETA(DisplayName = "Round", Tooltip="Rounds value to closest integer (0.1 = 0, 0.9 = 1)"),

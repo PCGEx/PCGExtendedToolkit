@@ -48,7 +48,7 @@ namespace PCGExTexture
 UENUM()
 enum class EPCGExTraceSampleDistanceInput : uint8
 {
-	DirectionLength = 0 UMETA(DisplayName = "Direction Length", ToolTip="..."),
+	DirectionLength = 0 UMETA(DisplayName = "Direction Length", ToolTip="Legacy value kept so graphs saved before 1.74.3 can migrate. It resolves to an attribute-driven Distance."),
 	Constant        = 1 UMETA(DisplayName = "Constant", ToolTip="Constant"),
 	Attribute       = 2 UMETA(DisplayName = "Attribute", ToolTip="Attribute"),
 };
@@ -199,7 +199,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" │ └─ OneMinus", EditCondition="bWriteDistance && bOutputNormalizedDistance", EditConditionHides, HideEditConditionToggle))
 	bool bOutputOneMinusDistance = false;
 
-	/** Scale factor applied to the distance output; allows to easily invert it using -1 */
+	/** Scale factor applied to the distance output; allows inverting it with -1 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" └─ Scale", EditCondition="bWriteDistance", EditConditionHides, HideEditConditionToggle))
 	double DistanceScale = 1;
 

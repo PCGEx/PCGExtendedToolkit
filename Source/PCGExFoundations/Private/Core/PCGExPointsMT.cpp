@@ -94,9 +94,11 @@ namespace PCGExPointsMT
 
 #pragma region Primary filters
 
-		if (FilterFactories)
+		// Honour the return value, as the cluster path does (PCGExClusterMT.cpp:340): a filter that fails
+		// to bind otherwise leaves an empty stack behind, and the processor runs unfiltered.
+		if (FilterFactories && !InitPrimaryFilters(FilterFactories))
 		{
-			InitPrimaryFilters(FilterFactories);
+			return false;
 		}
 
 #pragma endregion

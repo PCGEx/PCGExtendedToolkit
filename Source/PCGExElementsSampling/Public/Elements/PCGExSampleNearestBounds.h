@@ -249,7 +249,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" ├─ Axis", EditCondition="bWriteSignedDistance", EditConditionHides, HideEditConditionToggle))
 	EPCGExAxis SignAxis = EPCGExAxis::Forward;
 
-	/** Scale factor applied to the signed distance output; allows to easily invert it using -1 */
+	/** Scale factor applied to the signed distance output; allows inverting it with -1 */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" └─ Scale", EditCondition="bWriteSignedDistance", EditConditionHides, HideEditConditionToggle))
 	double SignedDistanceScale = 1;
 

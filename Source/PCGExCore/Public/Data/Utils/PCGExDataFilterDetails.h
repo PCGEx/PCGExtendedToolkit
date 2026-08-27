@@ -96,7 +96,7 @@ namespace PCGExDataFilter
 	}
 }
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/data-utils/attribute-gather-details"))
 struct PCGEXCORE_API FPCGExAttributeGatherDetails : public FPCGExNameFiltersDetails
 {
 	GENERATED_BODY()

@@ -3,6 +3,10 @@
 
 #pragma once
 
+class SWidget;
+
+#include "UObject/WeakObjectPtr.h"
+
 #include "PCGExAssetCollectionEditor.h"
 #include "Toolkits/AssetEditorToolkit.h"
 

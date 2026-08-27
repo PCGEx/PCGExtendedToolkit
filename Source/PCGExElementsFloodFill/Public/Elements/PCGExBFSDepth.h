@@ -99,7 +99,7 @@ public:
 	FName NormalizedDepthAttributeName = FName("NormalizedBFSDepth");
 
 	/** How to normalize the depth values. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable, EditCondition="bWriteNormalizedDepth", EditCondtionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable, EditCondition="bWriteNormalizedDepth", EditConditionHides, HideEditConditionToggle))
 	EPCGExBFSNormalizedDepthMode NormalizedDepthMode = EPCGExBFSNormalizedDepthMode::Global;
 
 	/** Output the BFS traversal direction onto each edge, in propagation order (away from the seed). */

@@ -59,6 +59,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExBlendingDetails BlendingDetails = FPCGExBlendingDetails(EPCGExBlendingType::Unset, EPCGExBlendingType::None);
 
+	virtual void PostInitProperties() override;
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
 	virtual TSharedPtr<FPCGExSubPointsBlendOperation> CreateOperation() const PCGEX_NOT_IMPLEMENTED_RET(CreateOperation(), nullptr);

@@ -69,7 +69,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	bool bAddSeedToPath = false;
 
-	/** Add goal point at the beginning of the path */
+	/** Add goal point at the end of the path */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	bool bAddGoalToPath = false;
 
@@ -113,7 +113,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Visited", EditCondition="OutputMode==EPCGExPathfindingOutputMode::Visited", EditConditionHides))
 	FPCGExPathStatistics Statistics;
 
-	/** ... */
+	/** Point-count limits deciding which generated paths are kept. Paths with fewer than 2 points are always dropped. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Paths Output Settings", EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	FPCGExPathOutputDetails PathOutputDetails;
 

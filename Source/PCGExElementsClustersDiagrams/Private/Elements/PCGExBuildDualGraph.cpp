@@ -44,17 +44,6 @@ bool FPCGExBuildDualGraphElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(BuildDualGraph)
 
-	
-	// Validate attribute names
-	if (Settings->bWriteEdgeLength)
-	{
-		PCGEX_VALIDATE_NAME_C(Context, Settings->EdgeLengthAttributeName);
-	}
-	if (Settings->bWriteOriginalEdgeIndex)
-	{
-		PCGEX_VALIDATE_NAME_C(Context, Settings->OriginalEdgeIndexAttributeName);
-	}
-
 	PCGEX_FWD(VtxCarryOverDetails)
 	PCGEX_FWD(EdgeCarryOverDetails)
 	Context->VtxCarryOverDetails.Init();
@@ -131,9 +120,17 @@ namespace PCGExBuildDualGraph
 			return true;
 		}
 
-		// Build DCEL
+		// Build DCEL. Project() reads ProjectionQuat, which only Init writes, so the settings struct
+		// has to be initialized against the data before it is handed over.
+		ProjectionDetails = Settings->ProjectionDetails;
+		if (!ProjectionDetails.Init(VtxDataFacade))
+		{
+			bIsProcessorValid = false;
+			return true;
+		}
+
 		FaceEnumerator = MakeShared<PCGExClusters::FPlanarFaceEnumerator>();
-		FaceEnumerator->Build(Cluster.ToSharedRef(), Settings->ProjectionDetails);
+		FaceEnumerator->Build(Cluster.ToSharedRef(), ProjectionDetails);
 
 		if (!FaceEnumerator->IsBuilt())
 		{

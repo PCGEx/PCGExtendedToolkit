@@ -84,7 +84,6 @@ namespace PCGExBitmask
 	TSharedPtr<FBitmaskData> FBitmaskData::Make(const TMap<TObjectPtr<UPCGExBitmaskCollection>, EPCGExBitOp_OR>& InCollections, const TArray<FPCGExBitmaskRef>& InReferences, const double Angle)
 	{
 		TSharedPtr<FBitmaskData> Data = MakeShared<FBitmaskData>();
-		Data = MakeShared<FBitmaskData>();
 		Data->Append(InReferences, Angle);
 		for (const TPair<TObjectPtr<UPCGExBitmaskCollection>, EPCGExBitOp_OR>& Pair : InCollections)
 		{

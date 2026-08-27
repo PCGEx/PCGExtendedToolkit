@@ -21,13 +21,6 @@ namespace PCGExData
 	class TBuffer;
 }
 
-UENUM()
-enum class EPCGExProbeGradientFlowMode : uint8
-{
-	Default = 0 UMETA(DisplayName = "Default", ToolTip=""),
-	Mutual  = 1 UMETA(DisplayName = "Mutual", ToolTip=""),
-};
-
 USTRUCT(BlueprintType)
 struct FPCGExProbeConfigGradientFlow : public FPCGExProbeConfigBase
 {

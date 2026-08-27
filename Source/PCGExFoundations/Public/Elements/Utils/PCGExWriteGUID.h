@@ -35,8 +35,8 @@ using EPCGExGUIDUniquenessFlagsBitmask = TEnumAsByte<EPCGExGUIDUniquenessFlags>;
 UENUM()
 enum class EPCGExGUIDOutputType : uint8
 {
-	Integer = 0 UMETA(DisplayName = "Integer", ToolTip="..."),
-	String  = 1 UMETA(DisplayName = "String", ToolTip="..."),
+	Integer = 0 UMETA(DisplayName = "Integer", ToolTip="Write an int32 holding the type hash of the formatted GUID string."),
+	String  = 1 UMETA(DisplayName = "String", ToolTip="Write the formatted GUID text as a string."),
 };
 
 UENUM()

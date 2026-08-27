@@ -302,7 +302,7 @@ public:
 	}
 
 	/** If enabled, lets you to pick which are matched with which main data.
-	 * Note that the match is done against every single data within a group and then consolidated;
+	 * The match is done against every single data within a group and then consolidated;
 	 * this means if you have a [A,B,C] group, ABC will be executed against operands for A, B and C individually. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Processing", meta=(EditCondition="WantsOperands()", EditConditionHides))
 	FPCGExMatchingDetails OperandsDataMatching = FPCGExMatchingDetails(EPCGExMatchingDetailsUsage::Default);

@@ -15,16 +15,11 @@ bool FPCGExDecompThreshold::Decompose(FPCGExDecompositionResult& OutResult)
 	{
 		return false;
 	}
-	if (AttributeName == NAME_None)
-	{
-		return false;
-	}
-
 	const int32 NumNodes = Cluster->Nodes->Num();
 	const int32 SafeNumBins = FMath::Max(NumBins, 2);
 
 	// Read attribute values from VtxFacade (set as PrimaryDataFacade)
-	const TSharedPtr<PCGExData::TBuffer<double>> Buffer = PrimaryDataFacade->GetReadable<double>(AttributeName);
+	const TSharedPtr<PCGExData::TBuffer<double>> Buffer = PrimaryDataFacade->GetBroadcaster<double>(AttributeSelector);
 	if (!Buffer)
 	{
 		return false;
