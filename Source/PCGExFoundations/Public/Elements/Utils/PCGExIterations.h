@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -30,7 +30,7 @@ class UPCGExIterationsSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(Iterations, "Iterations", "A Simple Iterations data generator. It create a single instance of a lightweight dummy data object and adds duplicate entries to the node output to be used as individual iterations for a loop node.");
+	PCGEX_NODE_INFOS(Iterations, "Iterations", "Generates a chosen number of lightweight dummy data entries for a loop node to iterate over. A single dummy object is created once and duplicated in the node output, so each entry is one iteration.");
 
 	virtual EPCGSettingsType GetType() const override
 	{

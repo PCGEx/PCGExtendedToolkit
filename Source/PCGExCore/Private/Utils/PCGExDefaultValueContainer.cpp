@@ -1,4 +1,5 @@
-﻿// Copyright Epic Games, Inc. All Rights Reserved.
+// Copyright 2026 Timothé Lapetite and contributors
+// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Utils/PCGExDefaultValueContainer.h"
 

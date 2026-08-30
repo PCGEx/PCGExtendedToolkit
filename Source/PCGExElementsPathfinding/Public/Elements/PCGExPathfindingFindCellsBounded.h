@@ -230,6 +230,9 @@ namespace PCGExFindContoursBounded
 		TArray<TSharedPtr<PCGExClusters::FCell>> AllCellsIncludingFailed;
 		TSharedPtr<PCGExClusters::FCell> WrapperCell;
 
+		/** Per-seed result of Seed Picking's cluster-bounds gate, precomputed once (all-true when the gate is off). */
+		TBitArray<> SeedInBounds;
+
 		/** LocalTangent only: per-seed FaceIndex of its nearest-plane containing cell (INDEX_NONE = none).
 		 *  STACKED parallel cells both contain a sandwiched seed's projection; this arbitrates the claim.
 		 *  Empty on planar builds, where faces are disjoint in the shared 2D space. */

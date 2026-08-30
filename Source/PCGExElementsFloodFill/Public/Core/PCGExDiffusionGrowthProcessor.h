@@ -130,9 +130,9 @@ namespace PCGExFloodFill
 				PCGEX_SCOPE_LOOP(Index)
 				{
 					FVector SeedLocation = SeedTransforms[Index].GetLocation();
-					const int32 ClosestIndex = This->Cluster->FindClosestNode(SeedLocation, This->Settings->Seeds.SeedPicking.PickingMethod);
+					const int32 ClosestIndex = This->Settings->Seeds.SeedPicking.PickClosestNode(*This->Cluster, SeedLocation);
 
-					if (ClosestIndex < 0 || !This->Settings->Seeds.SeedPicking.WithinDistance(This->Cluster->GetPos(ClosestIndex), SeedLocation))
+					if (ClosestIndex < 0)
 					{
 						continue;
 					}
