@@ -11,7 +11,7 @@
 // ============================================================================
 //
 // Use this macro when your property's Value type matches its output buffer type
-// (i.e., no type conversion needed). It generates all 6 required method implementations:
+// (i.e., no type conversion needed). It generates all 8 required method implementations:
 //
 //   InitializeOutput   - Creates a writable buffer on the facade
 //   WriteOutput        - Writes this->Value to buffer at PointIndex
@@ -19,6 +19,8 @@
 //   CopyValueFrom      - Copies Source->Value into this->Value
 //   CreateMetadataAttribute - Creates a typed metadata attribute with default = Value
 //   WriteMetadataValue - Writes Value to a metadata entry
+//   TryWriteValue      - Converts Value out to a target metadata type via FConversionTable
+//   TryReadValue       - Sets Value from a source metadata type via FConversionTable
 //
 // For CONVERTING types (Value type != output type), implement manually instead.
 // See FPCGExProperty_Color and FPCGExProperty_Enum below for examples.

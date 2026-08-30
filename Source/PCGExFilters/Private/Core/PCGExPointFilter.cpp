@@ -81,9 +81,9 @@ namespace PCGExPointFilter
 		return bCollectionTestResult;
 	}
 
-	bool ISimpleFilter::Test(const int32 Index) const PCGEX_NOT_IMPLEMENTED_RET(FSimpleFilter::Test(const PCGExClusters::FNode& Node), false)
+	bool ISimpleFilter::Test(const int32 Index) const PCGEX_NOT_IMPLEMENTED_RET(ISimpleFilter::Test(const PCGExClusters::FNode& Node), false)
 
-	bool ISimpleFilter::Test(const PCGExData::FProxyPoint& Point) const PCGEX_NOT_IMPLEMENTED_RET(FSimpleFilter::TestRoamingPoint(const PCGExClusters::PCGExData::FProxyPoint& Point), false)
+	bool ISimpleFilter::Test(const PCGExData::FProxyPoint& Point) const PCGEX_NOT_IMPLEMENTED_RET(ISimpleFilter::TestRoamingPoint(const PCGExClusters::PCGExData::FProxyPoint& Point), false)
 
 	bool ISimpleFilter::Test(const PCGExClusters::FNode& Node) const
 	{
