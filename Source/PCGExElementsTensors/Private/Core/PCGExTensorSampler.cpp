@@ -52,6 +52,13 @@ PCGExTensor::FTensorSample UPCGExTensorSampler::RawSample(
 		return Samples[0];
 	}
 
+	// Every contributor at Weight 0: average uniformly rather than divide by zero.
+	if (TotalWeight <= UE_SMALL_NUMBER)
+	{
+		for (PCGExTensor::FTensorSample& S : Samples) { S.Weight = 1; }
+		TotalWeight = Samples.Num();
+	}
+
 	// Single pass weighted accumulation
 	const double InvTotalWeight = 1.0 / TotalWeight;
 	FVector WeightedDirection = FVector::ZeroVector;

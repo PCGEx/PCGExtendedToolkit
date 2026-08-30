@@ -152,6 +152,8 @@ namespace PCGExMatching
 		int32 GetMatchingSourcesIndices(const FPCGExTaggedData& InDataCandidate, FScope& InMatchingScope, TArray<int32>& OutMatches, const TSet<int32>* InExcludedSources = nullptr) const;
 
 		bool HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward = true) const;
+		// No default on the label overload -- a default would make the two-arg call ambiguous.
+		bool HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward, const FName InPinLabelOverride) const;
 
 		/** Returns true if any operation wants recursive/transitive matching */
 		FORCEINLINE bool WantsRecursion() const

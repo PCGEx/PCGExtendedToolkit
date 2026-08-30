@@ -75,14 +75,14 @@ namespace PCGExClusterFilter
 		return IFilter::Test(Node);
 	}
 
-	bool IVtxFilter::Test(const PCGExGraphs::FEdge& Edge) const PCGEX_NOT_IMPLEMENTED_RET(TVtxFilter::Test(const PCGExGraphs::FIndexedEdge& Edge), false)
+	bool IVtxFilter::Test(const PCGExGraphs::FEdge& Edge) const PCGEX_NOT_IMPLEMENTED_RET(IVtxFilter::Test(const PCGExGraphs::FIndexedEdge& Edge), false)
 
 	bool IEdgeFilter::Test(const int32 Index) const
 	{
 		return IFilter::Test(*Cluster->GetEdge(Index));
 	}
 
-	bool IEdgeFilter::Test(const PCGExClusters::FNode& Node) const PCGEX_NOT_IMPLEMENTED_RET(TEdgeFilter::Test(const PCGExClusters::FNode& Node), false)
+	bool IEdgeFilter::Test(const PCGExClusters::FNode& Node) const PCGEX_NOT_IMPLEMENTED_RET(IEdgeFilter::Test(const PCGExClusters::FNode& Node), false)
 
 	bool IEdgeFilter::Test(const PCGExGraphs::FEdge& Edge) const
 	{

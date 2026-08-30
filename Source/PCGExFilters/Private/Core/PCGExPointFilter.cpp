@@ -81,9 +81,9 @@ namespace PCGExPointFilter
 		return bCollectionTestResult;
 	}
 
-	bool ISimpleFilter::Test(const int32 Index) const PCGEX_NOT_IMPLEMENTED_RET(FSimpleFilter::Test(const PCGExClusters::FNode& Node), false)
+	bool ISimpleFilter::Test(const int32 Index) const PCGEX_NOT_IMPLEMENTED_RET(ISimpleFilter::Test(const PCGExClusters::FNode& Node), false)
 
-	bool ISimpleFilter::Test(const PCGExData::FProxyPoint& Point) const PCGEX_NOT_IMPLEMENTED_RET(FSimpleFilter::TestRoamingPoint(const PCGExClusters::PCGExData::FProxyPoint& Point), false)
+	bool ISimpleFilter::Test(const PCGExData::FProxyPoint& Point) const PCGEX_NOT_IMPLEMENTED_RET(ISimpleFilter::TestRoamingPoint(const PCGExClusters::PCGExData::FProxyPoint& Point), false)
 
 	bool ISimpleFilter::Test(const PCGExClusters::FNode& Node) const
 	{
@@ -463,7 +463,8 @@ namespace PCGExPointFilter
 		}
 
 		// Sort mappings so higher priorities come last, as they have to potential to override values.
-		ManagedFilters.Sort([](const TSharedPtr<IFilter>& A, const TSharedPtr<IFilter>& B)
+		// StableSort: equal priorities keep wiring order, which the docs promise.
+		ManagedFilters.StableSort([](const TSharedPtr<IFilter>& A, const TSharedPtr<IFilter>& B)
 		{
 			return A->Factory->Priority < B->Factory->Priority;
 		});

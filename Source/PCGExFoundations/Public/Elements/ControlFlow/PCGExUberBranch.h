@@ -8,14 +8,6 @@
 #include "Utils/PCGExCompare.h"
 #include "PCGExUberBranch.generated.h"
 
-UENUM(BlueprintType)
-enum class EPCGExUberBranchMode : uint8
-{
-	All     = 0 UMETA(DisplayName = "All", ToolTip="All points must pass the filters."),
-	Any     = 1 UMETA(DisplayName = "Any", ToolTip="At least one point must pass the filter."),
-	Partial = 2 UMETA(DisplayName = "Partial", ToolTip="A given amount of points must pass the filter."),
-};
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/control-flow/uber-branch"))
 class UPCGExUberBranchSettings : public UPCGExPointsProcessorSettings
 {
@@ -61,8 +53,8 @@ public:
 	virtual FName GetMainOutputPin() const override;
 	//~End UPCGExPointsProcessorSettings
 
-	/** Number of branch filter groups to evaluate. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	/** Number of branch filter groups to evaluate. Not overridable: pins and labels are built in-editor and cannot follow a runtime override. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, ClampMin=1))
 	int32 NumBranches = 3;
 
 	UPROPERTY(meta=(PCG_NotOverridable))
