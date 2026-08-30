@@ -167,8 +167,9 @@ protected:
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 
 
+	// InPinLabel stays the canonical constant name -- pins are declared from it and renames must not detach them.
 	template <typename T>
-	void StageConstant(FPCGExContext* InContext, const FName InName, const T& InValue, const UPCGExConstantsSettings* Settings) const
+	void StageConstant(FPCGExContext* InContext, const FName InPinLabel, const FName InName, const T& InValue, const UPCGExConstantsSettings* Settings) const
 	{
 		if (!PCGExMetaHelpers::IsWritableAttributeName(InName))
 		{
@@ -182,7 +183,7 @@ protected:
 		FPCGMetadataAttribute<T>* Attrib = OutputData->Metadata->CreateAttribute<T>(InName, InValue, true, false);
 		Attrib->SetValue(OutputData->Metadata->AddEntry(), InValue);
 
-		InContext->StageOutput(OutputData, InName, PCGExData::EStaging::Managed);
+		InContext->StageOutput(OutputData, InPinLabel, PCGExData::EStaging::Managed);
 	}
 
 public:

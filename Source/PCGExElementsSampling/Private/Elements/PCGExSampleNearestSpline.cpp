@@ -564,7 +564,8 @@ namespace PCGExSampleNearestSpline
 						Time = InputKey * NumSegments;
 						break;
 					case EPCGExSplineSampleAlphaMode::Time:
-						Time = InputKey / NumSegments;
+						// Already a spline input key (0-N, per the enum contract) -- no conversion.
+						Time = InputKey;
 						break;
 					case EPCGExSplineSampleAlphaMode::Distance:
 						Time = (InputKey / Context->Lengths[TargetIndex]) * NumSegments;

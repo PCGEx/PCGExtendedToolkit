@@ -292,7 +292,7 @@ bool FPCGExConstantEnumElement::Boot(FPCGExContext* InContext) const
 	}
 	if (Settings->bOutputFlags)
 	{
-		PCGEX_VALIDATE_NAME(Settings->ValueOutputAttribute)
+		PCGEX_VALIDATE_NAME(Settings->FlagsName)
 	}
 
 	const TObjectPtr<UEnum> EnumClass = Settings->GetEnumClass();

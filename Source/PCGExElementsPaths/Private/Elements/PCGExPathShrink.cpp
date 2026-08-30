@@ -432,13 +432,14 @@ namespace PCGExShrinkPath
 		}
 		else if (Cut == EPCGExPathShrinkDistanceCutType::Closest)
 		{
+			// Dist is measured from To: past the half-segment the cut sits nearer From (Previous), otherwise nearer To (Next).
 			if (Dist > FVector::Dist(PointDataFacade->GetIn()->GetTransform(FromIndex).GetLocation(), PointDataFacade->GetIn()->GetTransform(ToIndex).GetLocation()) * 0.5)
 			{
-				UpdateCut(Point, FromIndex, ToIndex, Dist, EPCGExPathShrinkDistanceCutType::Next);
+				UpdateCut(Point, FromIndex, ToIndex, Dist, EPCGExPathShrinkDistanceCutType::Previous);
 			}
 			else
 			{
-				UpdateCut(Point, FromIndex, ToIndex, Dist, EPCGExPathShrinkDistanceCutType::Previous);
+				UpdateCut(Point, FromIndex, ToIndex, Dist, EPCGExPathShrinkDistanceCutType::Next);
 			}
 		}
 	};

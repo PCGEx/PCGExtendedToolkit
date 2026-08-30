@@ -227,7 +227,8 @@ namespace PCGExMatching
 		if (bMatch)
 		{
 			InMatchingScope.RegisterMatch();
-			if (InMatchingScope.GetCounter() > GetMatchLimitFor(InDataCandidate))
+			// >= like the point-level overload: the Nth match is admitted, then the scope closes.
+			if (InMatchingScope.GetCounter() >= GetMatchLimitFor(InDataCandidate))
 			{
 				InMatchingScope.Invalidate();
 			}
@@ -536,6 +537,11 @@ namespace PCGExMatching
 
 	bool FDataMatcher::HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward) const
 	{
+		return HandleUnmatchedOutput(InFacade, bForward, NAME_None);
+	}
+
+	bool FDataMatcher::HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward, const FName InPinLabelOverride) const
+	{
 		if (!Details->bSplitUnmatched)
 		{
 			if (!Details->bQuietUnmatchedTargetWarning)
@@ -545,10 +551,11 @@ namespace PCGExMatching
 		}
 		else
 		{
-			InFacade->Source->OutputPin = Labels::OutputUnmatchedLabel;
+			InFacade->Source->OutputPin = InPinLabelOverride.IsNone() ? Labels::OutputUnmatchedLabel : InPinLabelOverride;
 		}
 
-		if (bForward && Details->bOutputUnmatched)
+		// Split implies output; bOutputUnmatched only decides the non-split case (it is hidden while splitting).
+		if (bForward && (Details->bSplitUnmatched || Details->bOutputUnmatched))
 		{
 			InFacade->Source->InitializeOutput(PCGExData::EIOInit::Forward);
 		}
@@ -557,7 +564,8 @@ namespace PCGExMatching
 
 	int32 FDataMatcher::GetMatchLimitFor(const FPCGExTaggedData& InDataCandidate) const
 	{
-		if (!Details->bSplitUnmatched)
+		// Gated on bLimitMatches, the setting that owns the limit -- not on bSplitUnmatched.
+		if (!Details->bLimitMatches)
 		{
 			return MAX_int32;
 		}

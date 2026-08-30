@@ -24,9 +24,9 @@ void UPCGExHeuristicsFactory##_TYPE::RegisterAssetDependencies(TSet<FSoftObjectP
 //	InContext->AddAssetDependency(Config.ScoreCurve.ToSoftObjectPath()); _REGISTER_ASSET_BODY }
 
 #define PCGEX_FORWARD_HEURISTIC_FACTORY \
-	NewFactory->WeightFactor = Config.WeightFactor; \
 	NewFactory->Config = Config; \
 	NewFactory->Config.Init(); \
+	NewFactory->WeightFactor = NewFactory->Config.WeightFactor; \
 	NewFactory->ConfigBase = NewFactory->Config;
 
 #define PCGEX_FORWARD_HEURISTIC_CONFIG \
@@ -67,7 +67,7 @@ struct PCGEXHEURISTICS_API FPCGExHeuristicConfigBase
 	bool bRawSettings = false;
 
 	/** The weight factor for this heuristic.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayPriority=-1))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0.001, DisplayPriority=-1))
 	double WeightFactor = 1;
 
 	/** Invert the final heuristics score. */

@@ -184,7 +184,7 @@ public:
 	bool bWaitForMissingComponents = false;
 
 	/** Time after which the search is considered a fail. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Gen & Wait Settings", meta = (PCG_Overridable, DisplayName=" └─ Timeout", EditCondition="bWaitForMissingActors", EditConditionHides, ClampMin=0.001, ClampMax=30))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Gen & Wait Settings", meta = (PCG_Overridable, DisplayName=" └─ Timeout", EditCondition="bWaitForMissingComponents", EditConditionHides, ClampMin=0.001, ClampMax=30))
 	double WaitForComponentTimeout = 1;
 
 	/** How to deal with found components that have the trigger condition 'GenerateOnLoad'*/
