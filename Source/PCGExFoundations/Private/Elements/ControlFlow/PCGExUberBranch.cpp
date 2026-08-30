@@ -83,7 +83,9 @@ bool FPCGExUberBranchElement::Boot(FPCGExContext* InContext) const
 		Context->Facades.Add(Facade);
 	}
 
-	for (int i = 0; i < Settings->NumBranches; i++)
+	// Labels are rebuilt in-editor only; a stale asset can carry fewer labels than NumBranches.
+	const int32 NumBranches = FMath::Min(Settings->NumBranches, FMath::Min(Settings->InputLabels.Num(), Settings->OutputLabels.Num()));
+	for (int i = 0; i < NumBranches; i++)
 	{
 		bool bInitialized = false;
 
@@ -110,7 +112,7 @@ bool FPCGExUberBranchElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
-	Context->Dispatch.Init(0, Settings->NumBranches);
+	Context->Dispatch.Init(0, Context->Managers.Num());
 
 	return true;
 }
@@ -138,7 +140,7 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 					const TSharedPtr<PCGExData::FFacade>& Facade = SharedContext.Get()->Facades[Index];
 
 					bool bDistributed = false;
-					for (int i = 0; i < Settings->NumBranches; i++)
+					for (int i = 0; i < SharedContext.Get()->Managers.Num(); i++)
 					{
 						const TSharedPtr<PCGExPointFilter::FManager> Manager = SharedContext.Get()->Managers[i];
 						if (!Manager)
@@ -168,7 +170,7 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 		PCGEX_ON_ASYNC_STATE_READY(PCGExCommon::States::State_WaitingOnAsyncWork)
 		{
-			for (int i = 0; i < Settings->NumBranches; i++)
+			for (int i = 0; i < Context->Managers.Num(); i++)
 			{
 				if (!Context->Dispatch[i])
 				{
@@ -184,7 +186,7 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 		for (const TSharedPtr<PCGExData::FFacade>& Facade : Context->Facades)
 		{
 			bool bDistributed = false;
-			for (int i = 0; i < Settings->NumBranches; i++)
+			for (int i = 0; i < Context->Managers.Num(); i++)
 			{
 				const TSharedPtr<PCGExPointFilter::FManager> Manager = Context->Managers[i];
 				if (!Manager)
@@ -206,7 +208,7 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			}
 		}
 
-		for (int i = 0; i < Settings->NumBranches; i++)
+		for (int i = 0; i < Context->Managers.Num(); i++)
 		{
 			if (!Context->Dispatch[i])
 			{

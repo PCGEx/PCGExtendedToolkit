@@ -463,7 +463,8 @@ namespace PCGExPointFilter
 		}
 
 		// Sort mappings so higher priorities come last, as they have to potential to override values.
-		ManagedFilters.Sort([](const TSharedPtr<IFilter>& A, const TSharedPtr<IFilter>& B)
+		// StableSort: equal priorities keep wiring order, which the docs promise.
+		ManagedFilters.StableSort([](const TSharedPtr<IFilter>& A, const TSharedPtr<IFilter>& B)
 		{
 			return A->Factory->Priority < B->Factory->Priority;
 		});

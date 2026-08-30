@@ -168,7 +168,7 @@ bool FPCGExConstantsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 		for (const auto Constant : ToOutput)
 		{
-			StageConstant(Context, HasValidOutputNames ? *Settings->AttributeNameMap.Find(Constant.Name) : Constant.Name, Constant.Value, Settings);
+			StageConstant(Context, Constant.Name, HasValidOutputNames ? *Settings->AttributeNameMap.Find(Constant.Name) : Constant.Name, Constant.Value, Settings);
 		}
 	}
 	// Vector constant output
@@ -179,7 +179,7 @@ bool FPCGExConstantsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 		for (const auto Constant : ToOutput.Constants)
 		{
-			StageConstant(Context, HasValidOutputNames ? *Settings->AttributeNameMap.Find(Constant.Name) : Constant.Name, Constant.Value * Settings->CustomMultiplier * (Settings->NegateOutput ? -1.0 : 1.0), Settings);
+			StageConstant(Context, Constant.Name, HasValidOutputNames ? *Settings->AttributeNameMap.Find(Constant.Name) : Constant.Name, Constant.Value * Settings->CustomMultiplier * (Settings->NegateOutput ? -1.0 : 1.0), Settings);
 		}
 	}
 	// Numeric constant output
@@ -197,16 +197,16 @@ bool FPCGExConstantsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 			switch (Settings->NumericOutputType)
 			{
 			case EPCGExNumericOutput::Double:
-				StageConstant<double>(Context, Name, Value, Settings);
+				StageConstant<double>(Context, Constant.Name, Name, Value, Settings);
 				break;
 			case EPCGExNumericOutput::Float:
-				StageConstant<float>(Context, Name, Value, Settings);
+				StageConstant<float>(Context, Constant.Name, Name, Value, Settings);
 				break;
 			case EPCGExNumericOutput::Int32:
-				StageConstant<int32>(Context, Name, Value, Settings);
+				StageConstant<int32>(Context, Constant.Name, Name, Value, Settings);
 				break;
 			case EPCGExNumericOutput::Int64:
-				StageConstant<int64>(Context, Name, Value, Settings);
+				StageConstant<int64>(Context, Constant.Name, Name, Value, Settings);
 				break;
 			}
 		}

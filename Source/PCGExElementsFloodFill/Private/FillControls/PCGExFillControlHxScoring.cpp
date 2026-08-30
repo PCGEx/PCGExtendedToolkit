@@ -68,7 +68,8 @@ void FPCGExFillControlHeuristicsScoring::ScoreCandidate(const PCGExFloodFill::FD
 
 		if (bUsePreviousScore)
 		{
-			OutCandidate.PathScore += LocalScore;
+			// Accumulate along the path, like the sibling controls -- OutCandidate arrives zeroed.
+			OutCandidate.PathScore = From.PathScore + LocalScore;
 			OutCandidate.Score += From.PathScore * ScoreWeight;
 		}
 

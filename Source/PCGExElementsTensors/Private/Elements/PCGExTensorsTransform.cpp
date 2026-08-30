@@ -160,6 +160,12 @@ namespace PCGExTensorsTransform
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::TensorTransform::ProcessPoints);
 
+		// The first pass is framework-driven and would otherwise run even at Iterations <= 0.
+		if (Settings->Iterations <= 0)
+		{
+			return;
+		}
+
 		if (!bIteratedOnce)
 		{
 			PointDataFacade->Fetch(Scope);

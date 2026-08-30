@@ -133,15 +133,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category=Settings)
 	EPCGExControlFlowSelectionMode SelectionMode = EPCGExControlFlowSelectionMode::UserDefined;
 
-	/** User-defined branch conditions and output pins. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="SelectionMode == EPCGExControlFlowSelectionMode::UserDefined", EditConditionHides))
+	/** User-defined branch conditions and output pins. Not overridable: pins are built in-editor from InternalBranches, which a runtime override cannot refresh. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, EditCondition="SelectionMode == EPCGExControlFlowSelectionMode::UserDefined", EditConditionHides))
 	TArray<FPCGExBranchOnDataPin> Branches;
 
 	UPROPERTY(meta = (PCG_NotOverridable))
 	TArray<FPCGExBranchOnDataPin> InternalBranches;
 
 	/** Determines which Enum be used. Enum selection is ignored here, it's only using the class value internally. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category=Settings, meta=(PCG_NotOverridable, EditCondition="SelectionMode != EPCGExControlFlowSelectionMode::UserDefined && EnumSource == EPCGExEnumConstantSourceType::Selector", EditConditionHides, ShowOnlyInnerProperties))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category=Settings, meta=(PCG_NotOverridable, EditCondition="SelectionMode != EPCGExControlFlowSelectionMode::UserDefined", EditConditionHides, ShowOnlyInnerProperties))
 	FPCGExEnumSelector EnumPicker;
 
 	/** Name of the default/fallback output pin. This is exposed because to allow easy disambiguation when 'default' is a valid switch. */

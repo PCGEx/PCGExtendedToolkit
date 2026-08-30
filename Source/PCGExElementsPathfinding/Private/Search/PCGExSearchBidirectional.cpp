@@ -206,11 +206,6 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 			}
 		}
 
-		// Early termination check
-		if (MeetingNode != -1 && QueueForward->IsEmpty() && QueueBackward->IsEmpty())
-		{
-			break;
-		}
 	}
 
 	if (MeetingNode == -1)

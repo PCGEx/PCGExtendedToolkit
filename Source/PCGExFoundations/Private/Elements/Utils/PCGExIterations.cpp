@@ -102,7 +102,7 @@ bool FPCGExIterationsElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 			Metadata->FindOrCreateAttribute<int32>(FName("Iteration"), i);
 			Metadata->FindOrCreateAttribute<int32>(FName("NumIterations"), NumIterations);
-			const double Progress = static_cast<double>(i) / static_cast<double>(NumIterations - 1);
+			const double Progress = NumIterations > 1 ? static_cast<double>(i) / static_cast<double>(NumIterations - 1) : 0;
 			Metadata->FindOrCreateAttribute<double>(FName("OneMinusProgress"), 1 - Progress);
 			Metadata->FindOrCreateAttribute<double>(FName("Progress"), Progress);
 

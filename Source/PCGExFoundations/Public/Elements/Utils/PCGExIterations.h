@@ -58,7 +58,7 @@ protected:
 	int32 Iterations = 0;
 
 	/** Output per-iteration params with useful values. Less optimized than the non-value version */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Type = EPCGExIterationDataType::Params"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Type == EPCGExIterationDataType::Params"))
 	bool bOutputUtils = false;
 };
 

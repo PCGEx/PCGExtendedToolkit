@@ -35,6 +35,14 @@ PCGExTensor::FTensorSample UPCGExTensorSamplerRK4::Sample(const TArray<TSharedPt
 	Result += K4;
 
 	Result.DirectionAndSize = (Radius / 6.0f) * (K1.DirectionAndSize + 2.0f * K2.DirectionAndSize + 2.0f * K3.DirectionAndSize + K4.DirectionAndSize);
+
+	// RK4-weighted (1,2,2,1) incremental slerp -- += composed the stage quats, which is not an average.
+	FQuat Rotation = K1.Rotation;
+	Rotation = FQuat::Slerp(Rotation, K2.Rotation, 2.0 / 3.0);
+	Rotation = FQuat::Slerp(Rotation, K3.Rotation, 2.0 / 5.0);
+	Rotation = FQuat::Slerp(Rotation, K4.Rotation, 1.0 / 6.0);
+	Result.Rotation = Rotation.GetNormalized();
+
 	OutSuccess = Result.Effectors > 0;
 
 	return Result;
