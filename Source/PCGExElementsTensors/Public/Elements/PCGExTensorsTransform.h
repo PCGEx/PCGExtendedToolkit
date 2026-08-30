@@ -81,8 +81,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bTransformRotation && Rotation == EPCGExTensorTransformMode::Align"))
 	EPCGExAxis AlignAxis = EPCGExAxis::Forward;
 
-	/** Number of iterations to apply tensor transforms. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	/** Number of iterations to apply tensor transforms. 0 leaves points untouched. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0))
 	int32 Iterations = 1;
 
 	/** How to deal with points that are stopped */

@@ -161,6 +161,12 @@ namespace PCGExTensorsTransform
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::TensorTransform::ProcessPoints);
 
+		// The first pass is framework-driven and would otherwise run even at Iterations <= 0.
+		if (Settings->Iterations <= 0)
+		{
+			return;
+		}
+
 		if (!bIteratedOnce)
 		{
 			PointDataFacade->Fetch(Scope);
@@ -257,12 +263,20 @@ namespace PCGExTensorsTransform
 			}
 		}
 
+		const TConstPCGValueRange<FTransform> FinalTransforms = PointDataFacade->GetOut()->GetConstTransformValueRange();
+
 		PCGExMT::ParallelOrSequential(
 			NumPoints,
 			[&](const int32 i)
 			{
-				const PCGExPaths::FPathMetrics& Metric = Metrics[i];
+				PCGExPaths::FPathMetrics& Metric = Metrics[i];
 				const int32 UpdateCount = Metric.Count;
+
+				// Adds record pre-step positions only; close the walk on the final location (after capturing the step count).
+				if (UpdateCount > 0)
+				{
+					Metric.Add(FinalTransforms[i].GetLocation());
+				}
 
 				PCGEX_OUTPUT_VALUE(EffectorsPings, i, Pings[i])
 				PCGEX_OUTPUT_VALUE(UpdateCount, i, UpdateCount)

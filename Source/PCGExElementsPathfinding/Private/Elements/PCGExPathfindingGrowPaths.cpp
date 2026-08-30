@@ -253,6 +253,7 @@ bool FPCGExPathfindingGrowPathsElement::Boot(FPCGExContext* InContext) const
 	}
 
 	Context->OutputPaths = MakeShared<PCGExData::FPointIOCollection>(Context);
+	Context->OutputPaths->OutputPin = PCGExPaths::Labels::OutputPathsLabel;
 
 	if (Settings->NumIterations == EPCGExGrowthValueSource::SeedAttribute)
 	{
@@ -347,8 +348,15 @@ namespace PCGExPathfindingGrowPaths
 			PCGEX_GROWTH_GRAB(ExecutionContext, GrowthMaxDistance, VtxDataFacade, double, Settings->GrowthMaxDistanceAttribute)
 		}
 
-		GrowthStop = Settings->bUseGrowthStop ? VtxDataFacade->GetBroadcaster<bool>(Settings->GrowthStopAttribute) : nullptr;
-		NoGrowth = Settings->bUseNoGrowth ? VtxDataFacade->GetBroadcaster<bool>(Settings->NoGrowthAttribute) : nullptr;
+		// Fail loudly like every other growth attribute -- a misspelled name would silently disable the limit.
+		if (Settings->bUseGrowthStop)
+		{
+			PCGEX_GROWTH_GRAB(ExecutionContext, GrowthStop, VtxDataFacade, bool, Settings->GrowthStopAttribute)
+		}
+		if (Settings->bUseNoGrowth)
+		{
+			PCGEX_GROWTH_GRAB(ExecutionContext, NoGrowth, VtxDataFacade, bool, Settings->NoGrowthAttribute)
+		}
 
 		// Growth re-scores every neighbor on every iteration -- always worth baking static edge scores.
 		HeuristicsHandler->BakeStaticEdgeScores();

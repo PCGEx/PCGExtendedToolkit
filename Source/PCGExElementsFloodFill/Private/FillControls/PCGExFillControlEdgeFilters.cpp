@@ -30,8 +30,8 @@ bool FPCGExFillControlEdgeFilters::PrepareForDiffusions(FPCGExContext* InContext
 bool FPCGExFillControlEdgeFilters::IsValidCapture(const PCGExFloodFill::FDiffusion* Diffusion, const PCGExFloodFill::FCandidate& Candidate)
 {
 	const PCGExGraphs::FEdge* E = Cluster->GetEdge(Candidate.Link);
-	// Orient edge in diffusion direction
-	const PCGExGraphs::FEdge Edge(E->Index, Candidate.Link.Node, Candidate.Node->PointIndex, E->PointIndex, E->IOIndex);
+	// Orient edge in diffusion direction. FEdge endpoints are point indices; Link.Node is a node index.
+	const PCGExGraphs::FEdge Edge(E->Index, Cluster->GetNode(Candidate.Link.Node)->PointIndex, Candidate.Node->PointIndex, E->PointIndex, E->IOIndex);
 	return EdgeFilterManager->Test(Edge);
 }
 
@@ -42,16 +42,16 @@ bool FPCGExFillControlEdgeFilters::IsValidProbe(const PCGExFloodFill::FDiffusion
 		return true;
 	}
 	const PCGExGraphs::FEdge* E = Cluster->GetEdge(Candidate.Link);
-	// Orient edge in diffusion direction
-	const PCGExGraphs::FEdge Edge(E->Index, Candidate.Link.Node, Candidate.Node->PointIndex, E->PointIndex, E->IOIndex);
+	// Orient edge in diffusion direction. FEdge endpoints are point indices; Link.Node is a node index.
+	const PCGExGraphs::FEdge Edge(E->Index, Cluster->GetNode(Candidate.Link.Node)->PointIndex, Candidate.Node->PointIndex, E->PointIndex, E->IOIndex);
 	return EdgeFilterManager->Test(Edge);
 }
 
 bool FPCGExFillControlEdgeFilters::IsValidCandidate(const PCGExFloodFill::FDiffusion* Diffusion, const PCGExFloodFill::FCandidate& From, const PCGExFloodFill::FCandidate& Candidate)
 {
 	const PCGExGraphs::FEdge* E = Cluster->GetEdge(Candidate.Link);
-	// Orient edge in diffusion direction
-	const PCGExGraphs::FEdge Edge(E->Index, Candidate.Link.Node, Candidate.Node->PointIndex, E->PointIndex, E->IOIndex);
+	// Orient edge in diffusion direction. FEdge endpoints are point indices; Link.Node is a node index.
+	const PCGExGraphs::FEdge Edge(E->Index, Cluster->GetNode(Candidate.Link.Node)->PointIndex, Candidate.Node->PointIndex, E->PointIndex, E->IOIndex);
 	return EdgeFilterManager->Test(Edge);
 }
 
