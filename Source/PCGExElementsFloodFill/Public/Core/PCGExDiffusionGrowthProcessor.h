@@ -112,7 +112,7 @@ namespace PCGExFloodFill
 				PCGEX_SCOPE_LOOP(Index)
 				{
 					FVector SeedLocation = SeedTransforms[Index].GetLocation();
-					const int32 ClosestIndex = This->Cluster->FindClosestNode(SeedLocation, This->Settings->Seeds.SeedPicking.PickingMethod);
+					const int32 ClosestIndex = This->Settings->Seeds.SeedPicking.PickClosestNode(*This->Cluster, SeedLocation);
 
 					if (ClosestIndex < 0)
 					{
@@ -120,7 +120,7 @@ namespace PCGExFloodFill
 					}
 
 					const PCGExClusters::FNode* SeedNode = &Nodes[ClosestIndex];
-					if (!This->Settings->Seeds.SeedPicking.WithinDistance(This->Cluster->GetPos(SeedNode), SeedLocation) || FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
+					if (FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
 					{
 						continue;
 					}

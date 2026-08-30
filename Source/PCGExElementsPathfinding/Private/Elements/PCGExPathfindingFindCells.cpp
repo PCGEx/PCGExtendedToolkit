@@ -272,6 +272,16 @@ namespace PCGExFindContours
 		Seeds = MakeShared<PCGExClusters::FProjectedPointSet>(Context, Context->SeedsDataFacade.ToSharedRef(), ProjectionDetails);
 		Seeds->EnsureProjected(); // Project once upfront before any loops
 
+		SeedInBounds.Init(true, NumSeeds);
+		if (Settings->SeedPicking.bWithinClusterBounds)
+		{
+			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
+			for (int32 i = 0; i < NumSeeds; i++)
+			{
+				SeedInBounds[i] = Settings->SeedPicking.WithinBounds(Cluster->Bounds, SeedTransforms[i].GetLocation());
+			}
+		}
+
 		// Combine valid and failed internal cells for consumption tracking
 		// (seeds inside ANY internal cell polygon are "consumed" - can't claim wrapper)
 		AllCellsIncludingFailed = AllCells;
@@ -305,6 +315,11 @@ namespace PCGExFindContours
 			PCGExMT::ParallelOrSequential(
 				NumSeeds, [&](const int32 SeedIdx)
 				{
+					if (!SeedInBounds[SeedIdx])
+					{
+						return;
+					}
+
 					const FVector SeedPos = SeedTransforms[SeedIdx].GetLocation();
 					const FVector2D SeedProjected = Seeds->GetProjected(SeedIdx);
 					double BestDistSq = TNumericLimits<double>::Max();
@@ -384,6 +399,11 @@ namespace PCGExFindContours
 				// Find all seeds inside this cell
 				for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 				{
+					if (!SeedInBounds[SeedIdx])
+					{
+						continue;
+					}
+
 					if (Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
 					{
 						CandidateSeeds.Add(SeedIdx);
@@ -425,6 +445,11 @@ namespace PCGExFindContours
 
 		for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 		{
+			if (!SeedInBounds[SeedIdx])
+			{
+				continue;
+			}
+
 			// Check if seed is inside any internal cell (consumed)
 			bool bConsumed = false;
 			const FVector2D& SeedPoint = Seeds->GetProjected(SeedIdx);
@@ -638,7 +663,7 @@ namespace PCGExFindContours
 
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
-				if (ConsumedSeeds.Contains(SeedIdx))
+				if (!SeedInBounds[SeedIdx] || ConsumedSeeds.Contains(SeedIdx))
 				{
 					continue;
 				}
@@ -670,7 +695,7 @@ namespace PCGExFindContours
 
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
-				if (ConsumedSeeds.Contains(SeedIdx))
+				if (!SeedInBounds[SeedIdx] || ConsumedSeeds.Contains(SeedIdx))
 				{
 					continue;
 				}

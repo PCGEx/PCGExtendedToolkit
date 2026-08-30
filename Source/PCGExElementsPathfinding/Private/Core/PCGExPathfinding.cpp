@@ -20,17 +20,12 @@ namespace PCGExPathfinding
 		}
 
 		const FVector SourcePosition = Point.GetLocation();
-		const int32 NodeIndex = InCluster->FindClosestNode(SourcePosition, SelectionDetails.PickingMethod);
+		const int32 NodeIndex = SelectionDetails.PickClosestNode(*InCluster, SourcePosition);
 		if (NodeIndex == -1)
 		{
 			return false;
 		}
 		Node = InCluster->GetNode(NodeIndex);
-		if (!SelectionDetails.WithinDistance(SourcePosition, InCluster->GetPos(Node)))
-		{
-			Node = nullptr;
-			return false;
-		}
 		return true;
 	}
 
