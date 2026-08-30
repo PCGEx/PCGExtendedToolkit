@@ -93,6 +93,11 @@ double FPCGExFillControlAttributeAccumulation::ComputeAccumulation(double Previo
 		return PreviousAccumulated + NewValue;
 
 	case EPCGExAccumulationMode::Max:
+		// Same first-value seeding as Min -- the accumulator starts at 0, which is not a valid max seed.
+		if (Depth <= 1)
+		{
+			return NewValue;
+		}
 		return FMath::Max(PreviousAccumulated, NewValue);
 
 	case EPCGExAccumulationMode::Min:

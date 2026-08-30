@@ -374,10 +374,10 @@ namespace PCGExAttributeRemap
 					OutProxy->Set(i, Rule.OutputClampDetails.GetClampedValue(Rule.RemapDetails.GetRemappedValue(InProxy->Get<double>(i), Rule.SnapCache->Read(i))));
 					)
 				break;
-			default:
+			default: // Neither toggle: remap the raw value -- Abs belongs to the absolute-range strategies only.
 				PCGEX_PARALLEL_FOR(
 					PointDataFacade->GetNum(),
-					OutProxy->Set(i, Rule.OutputClampDetails.GetClampedValue(Rule.RemapDetails.GetRemappedValue(FMath::Abs(InProxy->Get<double>(i)), Rule.SnapCache->Read(i))));
+					OutProxy->Set(i, Rule.OutputClampDetails.GetClampedValue(Rule.RemapDetails.GetRemappedValue(InProxy->Get<double>(i), Rule.SnapCache->Read(i))));
 					)
 				break;
 			}

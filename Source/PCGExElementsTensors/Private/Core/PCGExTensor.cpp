@@ -28,7 +28,7 @@ PCGExTensor::FTensorSample FPCGExTensorSamplingMutationsDetails::Mutate(const FT
 		if (FVector::DotProduct(PCGExMath::GetDirection(InProbe.GetRotation(), BidirectionalAxisReference), InSample.DirectionAndSize.GetSafeNormal()) < 0)
 		{
 			InSample.DirectionAndSize = InSample.DirectionAndSize * -1;
-			InSample.Rotation = FQuat(-InSample.Rotation.X, -InSample.Rotation.Y, -InSample.Rotation.Y, InSample.Rotation.W);
+			InSample.Rotation = InSample.Rotation.Inverse();
 		}
 	}
 
@@ -189,7 +189,7 @@ namespace PCGExTensor
 
 	FTensorSample FTensorSample::operator+(const FTensorSample& Other) const
 	{
-		return FTensorSample(DirectionAndSize + Other.DirectionAndSize, Rotation * Other.Rotation, Effectors + Other.Effectors, Weight + Weight);
+		return FTensorSample(DirectionAndSize + Other.DirectionAndSize, Rotation * Other.Rotation, Effectors + Other.Effectors, Weight + Other.Weight);
 	}
 
 	FTensorSample& FTensorSample::operator+=(const FTensorSample& Other)
@@ -197,7 +197,7 @@ namespace PCGExTensor
 		DirectionAndSize += Other.DirectionAndSize;
 		Rotation *= Other.Rotation;
 		Effectors += Other.Effectors;
-		Weight += Weight;
+		Weight += Other.Weight;
 		return *this;
 	}
 
@@ -210,7 +210,7 @@ namespace PCGExTensor
 	{
 		DirectionAndSize *= Factor;
 		Rotation *= Factor;
-		Weight *= Weight;
+		Weight *= Factor;
 		return *this;
 	}
 

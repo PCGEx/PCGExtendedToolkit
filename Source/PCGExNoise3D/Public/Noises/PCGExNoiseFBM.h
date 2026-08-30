@@ -43,8 +43,8 @@ struct FPCGExNoiseConfigFBM : public FPCGExNoise3DConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExFBMVariant Variant = EPCGExFBMVariant::Standard;
 
-	/** Ridge offset for ridged variant */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "0.0", ClampMax = "2.0", EditCondition = "Variant == EPCGExFBMVariant::Ridged"))
+	/** Ridge offset for the ridged and hybrid variants */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "0.0", ClampMax = "2.0", EditCondition = "Variant == EPCGExFBMVariant::Ridged || Variant == EPCGExFBMVariant::Hybrid"))
 	double RidgeOffset = 1.0;
 
 	/** Warp strength for warped variant */

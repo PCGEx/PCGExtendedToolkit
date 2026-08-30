@@ -164,7 +164,8 @@ namespace PCGExCherryPickPoints
 		{
 			if (TSharedPtr<PCGExData::FPointIO> Discarded = Context->MainPoints->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::New))
 			{
-				PointDataFacade->Source->InheritPoints(DiscardedIndices, 0);
+				Discarded->OutputPin = PCGExCommon::Labels::OutputDiscardedLabel;
+				Discarded->InheritPoints(DiscardedIndices, 0);
 			}
 		}
 

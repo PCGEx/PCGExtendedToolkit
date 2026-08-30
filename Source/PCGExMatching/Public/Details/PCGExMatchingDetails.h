@@ -58,7 +58,7 @@ struct PCGEXMATCHING_API FPCGExMatchingDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, DisplayName=" ├─ Output Unmatched", EditCondition="!bSplitUnmatched && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
 	bool bOutputUnmatched = true;
 
-	/** If enabled, will throw a warning when there is no valid target matches.*/
+	/** If enabled, suppresses the warning thrown when an input has no valid target match.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Quiet Unmatched Warning", EditCondition="!bSplitUnmatched && Usage != EPCGExMatchingDetailsUsage::Filter", EditConditionHides))
 	bool bQuietUnmatchedTargetWarning = true;
 

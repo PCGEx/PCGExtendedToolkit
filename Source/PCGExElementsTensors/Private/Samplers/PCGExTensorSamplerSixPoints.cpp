@@ -19,14 +19,20 @@ PCGExTensor::FTensorSample UPCGExTensorSamplerSixPoints::Sample(const TArray<TSh
 	TRACE_CPUPROFILER_EVENT_SCOPE(UPCGExTensorSamplerSixPoints::Sample);
 
 	PCGExTensor::FTensorSample Result = PCGExTensor::FTensorSample();
+	FQuat AvgRotation = FQuat::Identity;
+
 	for (int i = 0; i < 6; i++)
 	{
 		FTransform PointProbe = InProbe;
 		PointProbe.AddToTranslation(Points[i] * Radius);
-		Result += Super::RawSample(InTensors, InSeedIndex, PointProbe);
+		const PCGExTensor::FTensorSample Sample = Super::RawSample(InTensors, InSeedIndex, PointProbe);
+		// Equal-weight incremental slerp -- += composes quats, which does not average orientations.
+		AvgRotation = FQuat::Slerp(AvgRotation, Sample.Rotation, 1.0 / (i + 1));
+		Result += Sample;
 	}
 
 	Result /= 6;
+	Result.Rotation = AvgRotation.GetNormalized();
 	OutSuccess = Result.Effectors > 0;
 
 	return Result;
