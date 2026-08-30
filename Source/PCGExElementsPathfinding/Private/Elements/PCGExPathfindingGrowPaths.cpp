@@ -367,7 +367,7 @@ namespace PCGExPathfindingGrowPaths
 		for (int i = 0; i < SeedCount; i++)
 		{
 			const FVector SeedPosition = Context->SeedsDataFacade->Source->GetInPoint(i).GetLocation();
-			const int32 NodeIndex = Cluster->FindClosestNode(SeedPosition, Settings->SeedPicking.PickingMethod);
+			const int32 NodeIndex = Settings->SeedPicking.PickClosestNode(*Cluster, SeedPosition);
 
 			if (NodeIndex == -1)
 			{
@@ -375,7 +375,7 @@ namespace PCGExPathfindingGrowPaths
 			}
 
 			const PCGExClusters::FNode& Node = (*Cluster->Nodes)[NodeIndex];
-			if (!Settings->SeedPicking.WithinDistance(Cluster->GetPos(Node), SeedPosition) || Node.IsEmpty())
+			if (Node.IsEmpty())
 			{
 				continue;
 			}

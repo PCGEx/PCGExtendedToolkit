@@ -426,6 +426,16 @@ namespace PCGExFindContoursBounded
 		Seeds = MakeShared<PCGExClusters::FProjectedPointSet>(Context, Context->SeedsDataFacade.ToSharedRef(), ProjectionDetails);
 		Seeds->EnsureProjected();
 
+		SeedInBounds.Init(true, NumSeeds);
+		if (Settings->SeedPicking.bWithinClusterBounds)
+		{
+			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
+			for (int32 i = 0; i < NumSeeds; i++)
+			{
+				SeedInBounds[i] = Settings->SeedPicking.WithinBounds(Cluster->Bounds, SeedTransforms[i].GetLocation());
+			}
+		}
+
 		AllCellsIncludingFailed = AllCells;
 		AllCellsIncludingFailed.Append(FailedCells);
 
@@ -471,6 +481,11 @@ namespace PCGExFindContoursBounded
 			PCGExMT::ParallelOrSequential(
 				NumSeeds, [&](const int32 SeedIdx)
 				{
+					if (!SeedInBounds[SeedIdx])
+					{
+						return;
+					}
+
 					const FVector SeedPos = SeedTransforms[SeedIdx].GetLocation();
 					const FVector2D SeedProjected = Seeds->GetProjected(SeedIdx);
 					double BestDistSq = TNumericLimits<double>::Max();
@@ -549,6 +564,11 @@ namespace PCGExFindContoursBounded
 				// Find all seeds inside this cell
 				for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 				{
+					if (!SeedInBounds[SeedIdx])
+					{
+						continue;
+					}
+
 					if (Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
 					{
 						CandidateSeeds.Add(SeedIdx);
@@ -611,6 +631,11 @@ namespace PCGExFindContoursBounded
 
 		for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 		{
+			if (!SeedInBounds[SeedIdx])
+			{
+				continue;
+			}
+
 			bool bConsumed = false;
 			const FVector2D& SeedPoint = Seeds->GetProjected(SeedIdx);
 
@@ -901,7 +926,7 @@ namespace PCGExFindContoursBounded
 
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
-				if (ConsumedSeeds.Contains(SeedIdx))
+				if (!SeedInBounds[SeedIdx] || ConsumedSeeds.Contains(SeedIdx))
 				{
 					continue;
 				}
@@ -932,7 +957,7 @@ namespace PCGExFindContoursBounded
 
 			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 			{
-				if (ConsumedSeeds.Contains(SeedIdx))
+				if (!SeedInBounds[SeedIdx] || ConsumedSeeds.Contains(SeedIdx))
 				{
 					continue;
 				}

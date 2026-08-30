@@ -167,15 +167,14 @@ namespace PCGExEdgeOrder
 			PCGEX_SCOPE_LOOP(Index)
 			{
 				const FVector SeedLocation = SeedTransforms[Index].GetLocation();
-				const int32 ClosestIndex = This->Cluster->FindClosestNode(SeedLocation, This->Settings->SeedPicking.PickingMethod);
+				const int32 ClosestIndex = This->Settings->SeedPicking.PickClosestNode(*This->Cluster, SeedLocation);
 
 				if (ClosestIndex < 0)
 				{
 					continue;
 				}
 
-				if (!This->Settings->SeedPicking.WithinDistance(This->Cluster->GetPos(ClosestIndex), SeedLocation) ||
-					FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
+				if (FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
 				{
 					continue;
 				}
