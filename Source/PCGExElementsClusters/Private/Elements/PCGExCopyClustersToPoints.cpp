@@ -236,7 +236,7 @@ namespace PCGExCopyClustersToPoints
 	{
 		if (NumCopies == 0)
 		{
-			(void)Context->EdgeDataMatcher->HandleUnmatchedOutput(EdgeDataFacade, true);
+			(void)Context->EdgeDataMatcher->HandleUnmatchedOutput(EdgeDataFacade, true, PCGExMatching::Labels::OutputUnmatchedEdgesLabel);
 		}
 	}
 
@@ -375,7 +375,7 @@ namespace PCGExCopyClustersToPoints
 		{
 			if (GetProcessor<FProcessor>(Pi)->NumCopies == 0)
 			{
-				(void)Context->EdgeDataMatcher->HandleUnmatchedOutput(VtxDataFacade, true);
+				(void)Context->EdgeDataMatcher->HandleUnmatchedOutput(VtxDataFacade, true, PCGExMatching::Labels::OutputUnmatchedVtxLabel);
 				break;
 			}
 		}

@@ -117,7 +117,7 @@ namespace PCGExTensor
 		if (Config.bInvert)
 		{
 			Result.DirectionAndSize *= -1;
-			Result.Rotation = FQuat(-Result.Rotation.X, -Result.Rotation.Y, -Result.Rotation.Y, Result.Rotation.W);
+			Result.Rotation = Result.Rotation.Inverse();
 		}
 
 		Result.DirectionAndSize *= Config.UniformScale;

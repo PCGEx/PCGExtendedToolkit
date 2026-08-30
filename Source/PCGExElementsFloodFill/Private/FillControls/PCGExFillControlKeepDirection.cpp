@@ -55,10 +55,11 @@ bool FPCGExFillControlKeepDirection::IsValidCandidate(const PCGExFloodFill::FDif
 {
 	const int32 Window = WindowSize->Read(GetSettingsIndex(Diffusion));
 
-	int32 PathNodeIndex = PCGEx::NH64A(Diffusion->TravelStack->Get(From.Node->Index));
+	// Walk seeds at From itself so the most recent step (parent -> From) is part of the window.
+	int32 PathNodeIndex = From.Node->Index;
 	int32 PathEdgeIndex = -1;
 
-	if (PathNodeIndex != -1)
+	if (PCGEx::NH64A(Diffusion->TravelStack->Get(From.Node->Index)) != -1)
 	{
 		const FVector CurrentDir = Cluster->GetDir(From.Node->Index, Candidate.Node->Index);
 

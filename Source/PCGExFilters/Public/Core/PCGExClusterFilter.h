@@ -219,7 +219,7 @@ namespace PCGExClusterFilter
 	 * Cluster-aware filter manager. Extends the base FManager to route cluster filter
 	 * initialization through the cluster Init() path (with Cluster + EdgeDataFacade),
 	 * while regular point filters still go through the standard Init(FFacade) path.
-	 * The routing decision in InitFilter() is based on the filter's factory type.
+	 * InitFilter() dispatches unconditionally via the virtual cluster Init(); the base forwards to the point Init().
 	 */
 	class PCGEXFILTERS_API FManager : public PCGExPointFilter::FManager
 	{

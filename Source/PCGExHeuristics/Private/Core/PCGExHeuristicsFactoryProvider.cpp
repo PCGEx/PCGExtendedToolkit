@@ -12,6 +12,8 @@ PCG_DEFINE_TYPE_INFO(FPCGExDataTypeInfoHeuristics, UPCGExHeuristicsFactoryData)
 
 void FPCGExHeuristicConfigBase::Init()
 {
+	// PCG_Overridable bypasses ClampMin; 0 divides in the GeometricMean/HarmonicMean/Min/Max score modes.
+	WeightFactor = FMath::Max(WeightFactor, 0.001);
 	ScoreLUT = ScoreCurveLookup.MakeLookup(bUseLocalCurve, LocalScoreCurve, ScoreCurve);
 }
 
