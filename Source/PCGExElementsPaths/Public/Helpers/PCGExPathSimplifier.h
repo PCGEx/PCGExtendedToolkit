@@ -1,4 +1,4 @@
-﻿// Copyright (c) Nebukam
+// Copyright 2026 Timothé Lapetite and contributors
 
 #pragma once
 
