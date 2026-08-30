@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -25,7 +25,7 @@ class UPCGExSpatialTriageSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(SpatialTriage, "Spatial Triage", "Test relevance of spatial data against singular bounds. Primarily expected to be used with partition bounds to find data that can be uniquely processed by this partition. This is fast box-box check");
+	PCGEX_NODE_INFOS(SpatialTriage, "Spatial Triage", "Tests the relevance of spatial data against a single set of bounds, as a fast box-box check. Primarily meant for partition bounds, to find the data a given partition can uniquely process.");
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{

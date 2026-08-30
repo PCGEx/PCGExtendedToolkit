@@ -28,6 +28,11 @@ enum class EPCGExAdjacencyDirectionOrigin : uint8
 	FromNeighbor = 1 UMETA(DisplayName = "From Neighbor to Node", Tooltip="Directions are computed from each neighbor toward the tested node."),
 };
 
+namespace PCGExClusters
+{
+	class FCluster;
+}
+
 USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="clusters/common-settings/node-selection-details"))
 struct PCGEXCORE_API FPCGExNodeSelectionDetails
 {
@@ -50,11 +55,28 @@ struct PCGEXCORE_API FPCGExNodeSelectionDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExClusterClosestSearchMode PickingMethod = EPCGExClusterClosestSearchMode::Edge;
 
+	/** Requires the point to lie within the cluster bounds (expanded by Bounds Inclusion Offset) to be selected. Resolved before any distance check. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	bool bWithinClusterBounds = false;
+
+	/** Per-axis padding applied to the cluster bounds for the inclusion test. Negative values shrink the bounds. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bWithinClusterBounds"))
+	FVector BoundsInclusionOffset = FVector(100);
+
 	/** Max distance at which a node can be selected. Use <= 0 to ignore distance check. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=-1))
 	double MaxDistance = -1;
 
 	// TODO : Support local attribute
+
+	FORCEINLINE bool WithinBounds(const FBox& InClusterBounds, const FVector& TargetPosition) const
+	{
+		if (!bWithinClusterBounds)
+		{
+			return true;
+		}
+		return InClusterBounds.ExpandBy(BoundsInclusionOffset).IsInsideOrOn(TargetPosition);
+	}
 
 	FORCEINLINE bool WithinDistance(const FVector& NodePosition, const FVector& TargetPosition) const
 	{
@@ -73,6 +95,9 @@ struct PCGEXCORE_API FPCGExNodeSelectionDetails
 		}
 		return SqDist < FMath::Square(MaxDistance);
 	}
+
+	/** Bounds gate -> FindClosestNode (PickingMethod) -> distance gate. Returns -1 on any rejection. */
+	int32 PickClosestNode(const PCGExClusters::FCluster& InCluster, const FVector& TargetPosition) const;
 };
 
 namespace PCGExClusters

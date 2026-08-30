@@ -1,4 +1,4 @@
-// Copyright 2026 Ed Boucher, Timothé Lapetite and contributors
+// Copyright 2026 Edward Boucher, Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Shapes/PCGExShapePolygon.h"
