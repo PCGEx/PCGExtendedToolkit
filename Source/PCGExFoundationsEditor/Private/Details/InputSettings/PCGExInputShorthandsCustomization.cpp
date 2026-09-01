@@ -3,6 +3,8 @@
 
 #include "Details/InputSettings/PCGExInputShorthandsCustomization.h"
 
+#include "UObject/UnrealType.h"
+
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "PropertyCustomizationHelpers.h"
@@ -180,6 +182,31 @@ TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandCustomization::MakeIn
 	return MakeShareable(new FPCGExInputShorthandCustomization());
 }
 
+namespace PCGExInputShorthandsCustomization
+{
+	/**
+	 * The engine strips a leading "b" only from a canonical bool property; a Boolean shorthand is a
+	 * struct, so "bFoo" would read "B Foo". Returns the bool-style display name for such hosts, or
+	 * empty to keep the engine's own (an authored DisplayName always wins).
+	 */
+	FText BoolAwareDisplayName(const TSharedRef<IPropertyHandle>& PropertyHandle)
+	{
+		const FProperty* Property = PropertyHandle->GetProperty();
+		if (!Property || Property->HasMetaData(TEXT("DisplayName")))
+		{
+			return FText::GetEmpty();
+		}
+
+		const TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));
+		if (!ConstantHandle.IsValid() || !CastField<FBoolProperty>(ConstantHandle->GetProperty()))
+		{
+			return FText::GetEmpty();
+		}
+
+		return FText::FromString(FName::NameToDisplayString(Property->GetName(), /*bIsBool=*/true));
+	}
+}
+
 void FPCGExInputShorthandCustomization::CustomizeHeader(
 	TSharedRef<IPropertyHandle> PropertyHandle,
 	FDetailWidgetRow& HeaderRow,
@@ -193,7 +220,7 @@ void FPCGExInputShorthandCustomization::CustomizeHeader(
 
 	HeaderRow.NameContent()
 		[
-			PropertyHandle->CreatePropertyNameWidget()
+			PropertyHandle->CreatePropertyNameWidget(PCGExInputShorthandsCustomization::BoolAwareDisplayName(PropertyHandle))
 		]
 		.ValueContent()
 		.MinDesiredWidth(400)
@@ -340,7 +367,7 @@ void FPCGExInputShorthandDirectionCustomization::CustomizeHeader(TSharedRef<IPro
 			]
 			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
 			[
-				PropertyHandle->CreatePropertyNameWidget()
+				PropertyHandle->CreatePropertyNameWidget(PCGExInputShorthandsCustomization::BoolAwareDisplayName(PropertyHandle))
 			]
 		]
 		.ValueContent()
