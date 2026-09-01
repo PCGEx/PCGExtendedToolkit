@@ -8,9 +8,12 @@
 #include "PCGExSettingsMacros.h"
 #include "Data/PCGExDataCommon.h"
 #include "Metadata/PCGAttributePropertySelector.h"
+#include "Serialization/StructuredArchive.h"
+#include "UObject/StructOpsTypeTraits.h"
 #include "PCGExInputShorthandsDetails.generated.h"
 
 struct FPCGExContext;
+struct FPropertyTag;
 class UPCGSettings;
 class UPCGNode;
 
@@ -70,7 +73,18 @@ struct PCGEXCORE_API FPCGExInputShorthandBase
 #define PCGEX_SHORTHAND_UPDATE_DECL(_NAME, _TYPE)\
 void Update(EPCGExInputValueType InInputType, const FPCGAttributePropertyInputSelector& InSelector, _TYPE InConstant);\
 void Update(EPCGExInputValueType InInputType, FName InSelector, _TYPE InConstant);\
-bool CanSupportDataOnly() const;
+bool CanSupportDataOnly() const;\
+bool SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot);
+
+/**
+ * Opts a shorthand into loading a bare scalar tag (Bool/Int/Int64/Float/Double, Name, Str) into its
+ * Constant, so a literal UPROPERTY can become a shorthand of the same name with no _DEPRECATED stub and
+ * no rename: the old value survives and Input stays Constant. Any other tag returns false and the engine
+ * drops the value with its usual type-mismatch warning. Scalar families only -- the vector / transform /
+ * path families have no literal-tag shape worth accepting.
+ */
+#define PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(_STRUCT)\
+template <> struct TStructOpsTypeTraits<_STRUCT> : public TStructOpsTypeTraitsBase2<_STRUCT> { enum { WithStructuredSerializeFromMismatchedTag = true }; };
 
 // Renames old separate override pins to new shorthand struct pins during deprecation.
 // Target labels are resolved from the live OverridableParams (never hardcoded — nested/Config
@@ -120,6 +134,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameBoolean : public FPCGExInputShortha
 	bool Constant = false;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameBoolean)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameFloat : public FPCGExInputShorthandNameBase
 {
@@ -130,6 +146,34 @@ struct PCGEXCORE_API FPCGExInputShorthandNameFloat : public FPCGExInputShorthand
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	float Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameFloat)
+
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandNameFloatAbs : public FPCGExInputShorthandNameBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_NAME_CTR(FloatAbs, float)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0))
+	float Constant = 0;
+};
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameFloatAbs)
+
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandNameFloat01 : public FPCGExInputShorthandNameBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_NAME_CTR(Float01, float)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0, ClampMax=1, UIMax=1))
+	float Constant = 0;
+};
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameFloat01)
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameDouble : public FPCGExInputShorthandNameBase
@@ -142,6 +186,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameDouble : public FPCGExInputShorthan
 	double Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameDouble)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameDoubleAbs : public FPCGExInputShorthandNameBase
 {
@@ -153,6 +199,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameDoubleAbs : public FPCGExInputShort
 	double Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameDoubleAbs)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameDouble01 : public FPCGExInputShorthandNameBase
 {
@@ -163,6 +211,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameDouble01 : public FPCGExInputShorth
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0, ClampMax=1, UIMax=1))
 	double Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameDouble01)
 
 /** Signed unit-range shorthand (-1..1). */
 USTRUCT(BlueprintType)
@@ -176,6 +226,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameDouble11 : public FPCGExInputShorth
 	double Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameDouble11)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameInteger32 : public FPCGExInputShorthandNameBase
 {
@@ -187,6 +239,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameInteger32 : public FPCGExInputShort
 	int32 Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameInteger32)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameInteger32Abs : public FPCGExInputShorthandNameBase
 {
@@ -197,6 +251,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameInteger32Abs : public FPCGExInputSh
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0))
 	int32 Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameInteger32Abs)
 
 
 USTRUCT(BlueprintType)
@@ -210,6 +266,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameInteger3201 : public FPCGExInputSho
 	int32 Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameInteger3201)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameInteger64 : public FPCGExInputShorthandNameBase
 {
@@ -220,6 +278,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameInteger64 : public FPCGExInputShort
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	int64 Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameInteger64)
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameVector2 : public FPCGExInputShorthandNameBase
@@ -300,6 +360,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameString : public FPCGExInputShorthan
 	FString Constant = TEXT("");
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameString)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameName : public FPCGExInputShorthandNameBase
 {
@@ -310,6 +372,8 @@ struct PCGEXCORE_API FPCGExInputShorthandNameName : public FPCGExInputShorthandN
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName Constant = NAME_None;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameName)
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameSoftObjectPath : public FPCGExInputShorthandNameBase
@@ -365,6 +429,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorBoolean : public FPCGExInputSho
 	bool Constant = false;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorBoolean)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorFloat : public FPCGExInputShorthandSelectorBase
 {
@@ -375,6 +441,34 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorFloat : public FPCGExInputShort
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	float Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorFloat)
+
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandSelectorFloatAbs : public FPCGExInputShorthandSelectorBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_SELECTOR_CTR(FloatAbs, float)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0))
+	float Constant = 0;
+};
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorFloatAbs)
+
+USTRUCT(BlueprintType)
+struct PCGEXCORE_API FPCGExInputShorthandSelectorFloat01 : public FPCGExInputShorthandSelectorBase
+{
+	GENERATED_BODY()
+
+	PCGEX_SHORTHAND_SELECTOR_CTR(Float01, float)
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0, ClampMax=1, UIMax=1))
+	float Constant = 0;
+};
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorFloat01)
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble : public FPCGExInputShorthandSelectorBase
@@ -387,6 +481,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble : public FPCGExInputShor
 	double Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorDouble)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorDoubleAbs : public FPCGExInputShorthandSelectorBase
 {
@@ -398,6 +494,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorDoubleAbs : public FPCGExInputS
 	double Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorDoubleAbs)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble01 : public FPCGExInputShorthandSelectorBase
 {
@@ -408,6 +506,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble01 : public FPCGExInputSh
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin=0, UIMin=0, ClampMax=1, UIMax=1))
 	double Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorDouble01)
 
 /** Signed unit-range shorthand (-1..1). */
 USTRUCT(BlueprintType)
@@ -421,6 +521,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorDouble11 : public FPCGExInputSh
 	double Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorDouble11)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger32 : public FPCGExInputShorthandSelectorBase
 {
@@ -431,6 +533,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger32 : public FPCGExInputS
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	int32 Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorInteger32)
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger32Abs : public FPCGExInputShorthandSelectorBase
@@ -443,6 +547,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger32Abs : public FPCGExInp
 	int32 Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorInteger32Abs)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger3201 : public FPCGExInputShorthandSelectorBase
 {
@@ -454,6 +560,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger3201 : public FPCGExInpu
 	int32 Constant = 0;
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorInteger3201)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger64 : public FPCGExInputShorthandSelectorBase
 {
@@ -464,6 +572,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorInteger64 : public FPCGExInputS
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	int64 Constant = 0;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorInteger64)
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorVector2 : public FPCGExInputShorthandSelectorBase
@@ -549,6 +659,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorString : public FPCGExInputShor
 	FString Constant = TEXT("");
 };
 
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorString)
+
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorName : public FPCGExInputShorthandSelectorBase
 {
@@ -559,6 +671,8 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorName : public FPCGExInputShorth
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName Constant = NAME_None;
 };
+
+PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandSelectorName)
 
 #pragma region DUMMIES
 
