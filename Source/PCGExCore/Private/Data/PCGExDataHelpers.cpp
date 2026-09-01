@@ -4,6 +4,7 @@
 #include "Data/PCGExDataHelpers.h"
 
 #include "PCGExLog.h"
+#include "Core/PCGExContext.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExSubSelection.h"
@@ -313,6 +314,47 @@ template PCGEXCORE_API void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeI
 	bool TryGetSettingDataValue(const TSharedPtr<FPointIO>& InIO, const EPCGExInputValueType Input, const FPCGAttributePropertyInputSelector& InSelector, const T& InConstant, T& OutValue, const bool bQuiet)
 	{
 		return TryGetSettingDataValue(InIO->GetContext(), InIO->GetIn(), Input, InSelector, InConstant, OutValue, bQuiet);
+	}
+
+	void RegisterDataDomainConsumable(FPCGExContext* InContext, const UPCGData* InData, const FPCGAttributePropertyInputSelector& InSelector)
+	{
+		if (!InContext || !InData || !InContext->bCleanupConsumableAttributes)
+		{
+			return;
+		}
+
+		const FPCGAttributePropertyInputSelector Fixed = InSelector.CopyAndFixLast(InData);
+		if (Fixed.GetSelection() != EPCGAttributePropertySelection::Attribute)
+		{
+			return;
+		}
+
+		InContext->AddConsumableAttributeName(FName(TEXT("@Data.") + Fixed.GetAttributeName().ToString()));
+	}
+
+	void RegisterDataDomainConsumable(FPCGExContext* InContext, const UPCGData* InData, const FName& InName)
+	{
+		FPCGAttributePropertyInputSelector Selector;
+		Selector.Update(InName.ToString());
+		RegisterDataDomainConsumable(InContext, InData, Selector);
+	}
+
+	void RegisterDataDomainConsumable(const TSharedPtr<FPointIO>& InIO, const FPCGAttributePropertyInputSelector& InSelector)
+	{
+		if (!InIO)
+		{
+			return;
+		}
+		RegisterDataDomainConsumable(InIO->GetContext(), InIO->GetIn(), InSelector);
+	}
+
+	void RegisterDataDomainConsumable(const TSharedPtr<FPointIO>& InIO, const FName& InName)
+	{
+		if (!InIO)
+		{
+			return;
+		}
+		RegisterDataDomainConsumable(InIO->GetContext(), InIO->GetIn(), InName);
 	}
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
