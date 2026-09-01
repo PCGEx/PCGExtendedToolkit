@@ -7,6 +7,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "UObject/PropertyTag.h"
 
 #if WITH_EDITOR
 #include "PCGExLog.h"
@@ -15,6 +16,41 @@
 #include "PCGSettings.h"
 #endif
 
+namespace PCGExInputShorthandsDetails
+{
+	/** Loads a bare scalar property tag into a shorthand Constant; false leaves it untouched (see PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS). */
+	template <typename T>
+	bool LoadMismatchedConstant(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot, T& OutConstant)
+	{
+		const FName TagType = Tag.GetType().GetName();
+
+		if constexpr (std::is_arithmetic_v<T>)
+		{
+			// A bool tag carries its value in the tag itself; the slot holds no payload.
+			if (TagType == NAME_BoolProperty) { OutConstant = static_cast<T>(Tag.BoolVal != 0); return true; }
+			if (TagType == NAME_IntProperty) { int32 Value = 0; Slot << Value; OutConstant = static_cast<T>(Value); return true; }
+			if (TagType == NAME_Int64Property) { int64 Value = 0; Slot << Value; OutConstant = static_cast<T>(Value); return true; }
+			if (TagType == NAME_FloatProperty) { float Value = 0.0f; Slot << Value; OutConstant = static_cast<T>(Value); return true; }
+			if (TagType == NAME_DoubleProperty) { double Value = 0.0; Slot << Value; OutConstant = static_cast<T>(Value); return true; }
+			return false;
+		}
+		else if constexpr (std::is_same_v<T, FName>)
+		{
+			if (TagType == NAME_NameProperty) { Slot << OutConstant; return true; }
+			return false;
+		}
+		else if constexpr (std::is_same_v<T, FString>)
+		{
+			if (TagType == NAME_StrProperty) { Slot << OutConstant; return true; }
+			return false;
+		}
+		else
+		{
+			return false;
+		}
+	}
+}
+
 #define PCGEX_FOREACH_INPUT_SHORTHAND(MACRO, ...) \
 MACRO(bool, Boolean, __VA_ARGS__)       \
 MACRO(int32, Integer32, __VA_ARGS__)      \
@@ -22,6 +58,8 @@ MACRO(int32, Integer32Abs, __VA_ARGS__)      \
 MACRO(int32, Integer3201, __VA_ARGS__)      \
 MACRO(int64, Integer64, __VA_ARGS__)      \
 MACRO(float, Float, __VA_ARGS__)      \
+MACRO(float, FloatAbs, __VA_ARGS__)      \
+MACRO(float, Float01, __VA_ARGS__)      \
 MACRO(double, Double, __VA_ARGS__)     \
 MACRO(double, DoubleAbs, __VA_ARGS__)     \
 MACRO(double, Double01, __VA_ARGS__)     \
@@ -49,16 +87,18 @@ bool FPCGExInputShorthandSelector##_NAME::CanSupportDataOnly() const { return In
 #define PCGEX_TPL_SHORTHAND_NAME(_TYPE, _NAME, ...)\
 PCGEX_SETTING_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandName##_NAME, , _TYPE, Input, Attribute, Constant)\
 PCGEX_SETTING_DATA_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandName##_NAME, , _TYPE, Input, Attribute, Constant)\
-bool FPCGExInputShorthandName##_NAME::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet) const{return PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet);}\
-bool FPCGExInputShorthandName##_NAME::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet) const{return PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet);}\
+bool FPCGExInputShorthandName##_NAME::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(IO, Attribute); } return true; }\
+bool FPCGExInputShorthandName##_NAME::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, Attribute); } return true; }\
+bool FPCGExInputShorthandName##_NAME::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot){ if (!PCGExInputShorthandsDetails::LoadMismatchedConstant(Tag, Slot, Constant)) { return false; } Input = EPCGExInputValueType::Constant; return true; }\
 void FPCGExInputShorthandName##_NAME::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const { if (Input == EPCGExInputValueType::Attribute) { FacadePreloader.Register<_TYPE>(InContext, Attribute); } }\
 PCGEX_SHORTHAND_UPDATE__NAME_IMPL(_TYPE, _NAME)
 
 #define PCGEX_TPL_SHORTHAND_SELECTOR(_TYPE, _NAME, ...)\
 PCGEX_SETTING_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandSelector##_NAME, , _TYPE, Input, Attribute, Constant)\
 PCGEX_SETTING_DATA_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandSelector##_NAME, , _TYPE, Input, Attribute, Constant)\
-bool FPCGExInputShorthandSelector##_NAME::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet) const{return PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet);}\
-bool FPCGExInputShorthandSelector##_NAME::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet) const{return PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet);}\
+bool FPCGExInputShorthandSelector##_NAME::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(IO, Attribute); } return true; }\
+bool FPCGExInputShorthandSelector##_NAME::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, Attribute); } return true; }\
+bool FPCGExInputShorthandSelector##_NAME::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot){ if (!PCGExInputShorthandsDetails::LoadMismatchedConstant(Tag, Slot, Constant)) { return false; } Input = EPCGExInputValueType::Constant; return true; }\
 void FPCGExInputShorthandSelector##_NAME::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const { if (Input == EPCGExInputValueType::Attribute) { FacadePreloader.Register<_TYPE>(InContext, Attribute); } }\
 PCGEX_SHORTHAND_UPDATE__SELECTOR_IMPL(_TYPE, _NAME)
 

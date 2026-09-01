@@ -57,12 +57,14 @@ V->bQuiet = bQuiet;\
 return V; }
 
 // Shorthand variant: mirrors PCGEX_SETTING_VALUE_IMPL_SHORTHAND — the shorthand's per-operand
-// bCleanupAttribute toggle seeds the value's consumable auto-registration.
+// bCleanupAttribute toggle seeds the value's consumable auto-registration. The eager @Data read never
+// reaches TSettingValue::Init (the returned value is a constant), so the consumable is registered here.
 #define PCGEX_SETTING_DATA_VALUE_IMPL_SHORTHAND(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT)\
 TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> _CLASS::GetValueSetting##_NAME(FPCGExContext* InContext, const UPCGData* InData, const bool bQuiet) const{\
 TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> V = PCGExDetails::MakeSettingValue<_TYPE>(InContext, InData, _INPUT, _SOURCE, _CONSTANT);\
 V->bQuiet = bQuiet;\
 V->bRegisterConsumable = bCleanupAttribute;\
+if (bCleanupAttribute && _INPUT == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, _SOURCE); }\
 return V; }
 
 #define PCGEX_SETTING_DATA_VALUE_IMPL_BOOL(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT) PCGEX_SETTING_DATA_VALUE_IMPL(_CLASS, _NAME, _TYPE, ((_INPUT) ? EPCGExInputValueType::Attribute : EPCGExInputValueType::Constant), _SOURCE, _CONSTANT);
