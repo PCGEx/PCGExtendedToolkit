@@ -99,6 +99,17 @@ extern template void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifi
 	bool TryGetSettingDataValue(const TSharedPtr<FPointIO>& InIO, const EPCGExInputValueType Input, const FPCGAttributePropertyInputSelector& InSelector, const T& InConstant, T& OutValue, const bool bQuiet = false);
 
 	/**
+	 * Registers the @Data attribute a data-value read consumed, so the node's Cleanup Consumable Attributes
+	 * deletes it from the outputs. The registered name is ALWAYS Data-domain qualified: TryReadDataValue forces
+	 * that domain regardless of the selector's own, and a bare name would delete the Elements twin instead.
+	 * No-op without a context, without data, or when the node toggle is off.
+	 */
+	PCGEXCORE_API void RegisterDataDomainConsumable(FPCGExContext* InContext, const UPCGData* InData, const FPCGAttributePropertyInputSelector& InSelector);
+	PCGEXCORE_API void RegisterDataDomainConsumable(FPCGExContext* InContext, const UPCGData* InData, const FName& InName);
+	PCGEXCORE_API void RegisterDataDomainConsumable(const TSharedPtr<FPointIO>& InIO, const FPCGAttributePropertyInputSelector& InSelector);
+	PCGEXCORE_API void RegisterDataDomainConsumable(const TSharedPtr<FPointIO>& InIO, const FName& InName);
+
+	/**
 	 * Copy all pending writable buffer values from a source facade to a target FPointIO.
 	 * Creates a temporary facade for the target, creates matching writable buffers,
 	 * copies values using type-erased GetVoid/SetVoid, and commits synchronously.
