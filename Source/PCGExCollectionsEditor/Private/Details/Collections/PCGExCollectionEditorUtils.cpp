@@ -109,6 +109,17 @@ namespace PCGExCollectionEditorUtils
 			}
 		}
 
+		// Embedded objects (an entry's exported data asset) have no registry row. A live one answers:
+		// FAssetData built from the object keeps its outer path, so the thumbnail pool resolves and
+		// renders it through the class renderer like any asset.
+		if (!AssetData.IsValid() && AssetPath.IsSubobject())
+		{
+			if (const UObject* Object = AssetPath.ResolveObject())
+			{
+				AssetData = FAssetData(Object);
+			}
+		}
+
 		return AssetData;
 	}
 

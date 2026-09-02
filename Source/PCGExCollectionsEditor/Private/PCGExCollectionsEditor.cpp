@@ -40,6 +40,8 @@
 #include "UObject/UObjectIterator.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Thumbnails/PCGExCollectionThumbnailRenderer.h"
+#include "Thumbnails/PCGExPCGDataAssetThumbnailRenderer.h"
+#include "PCGDataAsset.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 #include "UObject/UObjectHash.h"
@@ -164,6 +166,9 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 void FPCGExCollectionsEditorModule::RegisterThumbnailRenderer()
 {
 	UThumbnailManager::Get().RegisterCustomRenderer(UPCGExAssetCollection::StaticClass(), UPCGExCollectionThumbnailRenderer::StaticClass());
+	// Data assets draw their mesh points -- level and assembly exports show their geometry in the
+	// collection grid and the content browser instead of the class icon.
+	UThumbnailManager::Get().RegisterCustomRenderer(UPCGDataAsset::StaticClass(), UPCGExPCGDataAssetThumbnailRenderer::StaticClass());
 	bThumbnailRendererRegistered = true;
 }
 

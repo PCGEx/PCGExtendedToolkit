@@ -573,6 +573,10 @@ namespace PCGExCollections
 		 */
 		void RegisterCollectionsTo(FPickPacker& InPacker) const;
 
+		/** Register one already-loaded collection under its GUID. For readers with no PCG context to hand
+		 *  UnpackDataset (editor tooling, thumbnails); hashes then resolve exactly as after an unpack. */
+		void AddCollection(UPCGExAssetCollection* InCollection);
+
 		/** Unpack collection mappings from an attribute set */
 		bool UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet);
 

@@ -451,6 +451,14 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 * exported data asset rather than the authored UWorld.
 	 */
 	virtual FSoftObjectPath EDITOR_GetThumbnailAssetPath() const;
+
+	/** Editor-only: what a double-click on the entry opens. Defaults to the thumbnail asset; override
+	 *  when the picture and the thing to edit differ (an export drawn from its data asset, opened at
+	 *  its source level). */
+	virtual FSoftObjectPath EDITOR_GetActivationAssetPath() const
+	{
+		return EDITOR_GetThumbnailAssetPath();
+	}
 #endif
 
 

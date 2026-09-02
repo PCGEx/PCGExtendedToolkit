@@ -707,6 +707,21 @@ namespace PCGExCollections
 		return true;
 	}
 
+	void FPickUnpacker::AddCollection(UPCGExAssetCollection* InCollection)
+	{
+		if (!InCollection)
+		{
+			return;
+		}
+		const uint32 Idx = InCollection->GetCollectionGUID();
+		if (CollectionMap.Contains(Idx))
+		{
+			return;
+		}
+		CollectionMap.Add(Idx, InCollection);
+		NumUniqueEntries += InCollection->GetValidEntryNum();
+	}
+
 	void FPickUnpacker::RegisterCollectionsTo(FPickPacker& InPacker) const
 	{
 		for (const TPair<uint32, UPCGExAssetCollection*>& Pair : CollectionMap)

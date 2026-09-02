@@ -455,8 +455,38 @@ FSoftObjectPath FPCGExPCGDataAssetCollectionEntry::EDITOR_GetThumbnailAssetPath(
 		return FPCGExAssetCollectionEntry::EDITOR_GetThumbnailAssetPath();
 	}
 
-	// Export-backed entries stage an embedded ExportedDataAsset inside the collection package;
-	// show the user-facing source instead -- the UWorld, or the actor's level (the closest asset).
+	// Export-backed entries draw their EXPORT: the data-asset thumbnail renderer shows the exported
+	// geometry, which is what the entry stands for. Live embedded object first, externalized asset
+	// next, the source as the fallback before any export exists.
+	switch (Source)
+	{
+	case EPCGExDataAssetEntrySource::DataAsset:
+		return DataAsset.ToSoftObjectPath();
+	case EPCGExDataAssetEntrySource::Level:
+	case EPCGExDataAssetEntrySource::Actor:
+		if (ExportedDataAsset)
+		{
+			return FSoftObjectPath(ExportedDataAsset);
+		}
+		if (!ExternalExportedDataAsset.IsNull())
+		{
+			return ExternalExportedDataAsset.ToSoftObjectPath();
+		}
+		return EDITOR_GetActivationAssetPath();
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		return FSoftObjectPath();
+	}
+}
+
+FSoftObjectPath FPCGExPCGDataAssetCollectionEntry::EDITOR_GetActivationAssetPath() const
+{
+	if (bIsSubCollection)
+	{
+		return FPCGExAssetCollectionEntry::EDITOR_GetActivationAssetPath();
+	}
+
+	// Opening an export means opening what authored it: the level, or the actor's level.
 	switch (Source)
 	{
 	case EPCGExDataAssetEntrySource::DataAsset:
