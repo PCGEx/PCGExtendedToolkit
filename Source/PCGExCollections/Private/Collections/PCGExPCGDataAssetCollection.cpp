@@ -29,11 +29,12 @@
 #include "Engine/Level.h"
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExCollectionExternalization.h"
-#include "Helpers/PCGExCollectionSortKeys.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
 #include "Helpers/PCGExLevelDataExporter.h"
+#include "Helpers/PCGExLevelExportHandler.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Core/PCGExCollectionHelpers.h"
 #include "GameFramework/Actor.h"
 
 
@@ -123,11 +124,21 @@ namespace PCGExPCGDataAssetCollectionInternal
 void FPCGExPCGDataAssetCollectionEntry::ResetEditorContributions()
 {
 #if WITH_EDITORONLY_DATA
-	EditorMeshContributions.Reset();
-	EditorMeshInheritedDefaults.Reset();
-	EditorLocalPicks.Reset();
-	EditorLevelContributions.Reset();
-	EditorLevelLocalPicks.Reset();
+#if WITH_EDITOR
+	// Captured entries may own instanced subobjects (handler payloads) outered to the host; an
+	// unreferenced inner would otherwise linger under it until the next save's traversal.
+	for (FPCGExExportSlotCapture& Capture : Captures)
+	{
+		for (FInstancedStruct& Entry : Capture.Entries)
+		{
+			if (Entry.IsValid())
+			{
+				PCGExCollectionHelpers::RetireInstancedSubobjects(Entry.GetScriptStruct(), Entry.GetMutableMemory());
+			}
+		}
+	}
+#endif
+	Captures.Reset();
 #endif
 }
 
@@ -141,7 +152,7 @@ void FPCGExPCGDataAssetCollectionEntry::ResetExport(const UPCGExAssetCollection*
 		{
 			return;
 		}
-		if (Embedded->GetOuter() == OwningCollection)
+		if (OwningCollection && Embedded->IsIn(OwningCollection))
 		{
 			Embedded->Rename(nullptr, GetTransientPackage(),
 			                 REN_DontCreateRedirectors | REN_NonTransactional);
@@ -149,21 +160,91 @@ void FPCGExPCGDataAssetCollectionEntry::ResetExport(const UPCGExAssetCollection*
 		Embedded = nullptr;
 	};
 	Discard(ExportedDataAsset);
-	Discard(EmbeddedActorCollection);
+	for (FPCGExExportCollectionSlot& Slot : EmbeddedSlots)
+	{
+		Discard(Slot.Collection);
+	}
 
 	Staging.Bounds = FBox(ForceInit);
 	Staging.Path = FSoftObjectPath();
 	ResetEditorContributions();
 }
 
+UPCGExAssetCollection* FPCGExPCGDataAssetCollectionEntry::FindEmbeddedCollection(const FName SlotId) const
+{
+	const FPCGExExportCollectionSlot* Slot = PCGExExportSlots::Find(EmbeddedSlots, SlotId);
+	return Slot ? Slot->Collection.Get() : nullptr;
+}
+
+bool FPCGExPCGDataAssetCollectionEntry::OnHostPostLoad(UPCGExAssetCollection* Host)
+{
+	bool bRewritten = FPCGExAssetCollectionEntry::OnHostPostLoad(Host);
+
+	// Fixed per-entry actor storage -> the "Actors" embedded slot. An already-populated slot wins.
+	if (EmbeddedActorCollection_DEPRECATED || !ExternalActorCollection_DEPRECATED.IsNull())
+	{
+		FPCGExExportCollectionSlot& Slot = PCGExExportSlots::FindOrAdd(EmbeddedSlots, PCGExLevelExport::Slots::Actors);
+		if (!Slot.Collection)
+		{
+			Slot.Collection = EmbeddedActorCollection_DEPRECATED;
+		}
+		if (Slot.External.IsNull())
+		{
+			Slot.External = TSoftObjectPtr<UPCGExAssetCollection>(ExternalActorCollection_DEPRECATED.ToSoftObjectPath());
+		}
+		EmbeddedActorCollection_DEPRECATED = nullptr;
+		ExternalActorCollection_DEPRECATED.Reset();
+		bRewritten = true;
+	}
+
+#if WITH_EDITORONLY_DATA
+	// Fixed mesh/level captures -> keyed captures. Migrated, never dropped: a partial rebuild after the
+	// upgrade recompacts from THESE, and a missing capture would shrink the shared collection and stale
+	// every sibling's hashes. Level picks were identity ints, which is exactly PackLocalPick(local, -1).
+	if (!EditorMeshContributions_DEPRECATED.IsEmpty() || !EditorLocalPicks_DEPRECATED.IsEmpty())
+	{
+		FPCGExExportSlotCapture& Capture = PCGExExportSlots::FindOrAdd(Captures, PCGExLevelExport::Slots::Meshes);
+		if (Capture.Entries.IsEmpty() && Capture.LocalPicks.IsEmpty())
+		{
+			Capture.Entries.Reserve(EditorMeshContributions_DEPRECATED.Num());
+			for (const FPCGExMeshCollectionEntry& Entry : EditorMeshContributions_DEPRECATED)
+			{
+				Capture.Entries.AddDefaulted_GetRef().InitializeAs<FPCGExMeshCollectionEntry>(Entry);
+			}
+			Capture.LocalPicks = MoveTemp(EditorLocalPicks_DEPRECATED);
+		}
+		EditorMeshContributions_DEPRECATED.Reset();
+		EditorLocalPicks_DEPRECATED.Reset();
+		bRewritten = true;
+	}
+
+	if (!EditorLevelContributions_DEPRECATED.IsEmpty() || !EditorLevelLocalPicks_DEPRECATED.IsEmpty())
+	{
+		FPCGExExportSlotCapture& Capture = PCGExExportSlots::FindOrAdd(Captures, PCGExLevelExport::Slots::Levels);
+		if (Capture.Entries.IsEmpty() && Capture.LocalPicks.IsEmpty())
+		{
+			Capture.Entries.Reserve(EditorLevelContributions_DEPRECATED.Num());
+			for (const FPCGExLevelCollectionEntry& Entry : EditorLevelContributions_DEPRECATED)
+			{
+				Capture.Entries.AddDefaulted_GetRef().InitializeAs<FPCGExLevelCollectionEntry>(Entry);
+			}
+			Capture.LocalPicks = MoveTemp(EditorLevelLocalPicks_DEPRECATED);
+		}
+		EditorLevelContributions_DEPRECATED.Reset();
+		EditorLevelLocalPicks_DEPRECATED.Reset();
+		bRewritten = true;
+	}
+#endif
+
+	return bRewritten;
+}
+
 // Shared by the Level and Actor sources once their world is loaded and transform-current.
 //
-// Routes through the 3-arg exporter API so EditorMeshContributions / EditorLocalPicks +
-// EditorLevelContributions / EditorLevelLocalPicks are captured directly into the entry's
-// UPROPERTY storage. Tag_EntryIdx hashes (Meshes + Levels pins) and the CollectionMap pin are
-// NOT written here -- those are produced by the parent collection's CompactSharedMesh /
-// CompactSharedLevel / RebuildCollectionMaps, which see every entry's contributions and
-// resolve final shared indices.
+// Routes through the 3-arg exporter API so per-slot captures land directly in the entry's UPROPERTY
+// storage and per-entry slot collections are rebuilt in place. Shared-slot Tag_EntryIdx hashes and the
+// CollectionMap pin are NOT written here -- those are produced by the host's CompactSharedFor /
+// RebuildCollectionMapsFor, which see every entry's captures and resolve final shared indices.
 bool FPCGExPCGDataAssetCollectionEntry::ExportFromSource(const UPCGExAssetCollection* OwningCollection, const FPCGExLevelExportSource& ExportSource)
 {
 	// Always recreate ExportedDataAsset fresh. Reusing + resetting TaggedData leaves orphaned
@@ -206,37 +287,46 @@ bool FPCGExPCGDataAssetCollectionEntry::ExportFromSource(const UPCGExAssetCollec
 		Exporter = FallbackExporter;
 	}
 
-	// Wire the export context to write directly into the entry's UPROPERTY storage --
-	// no copy at the API boundary. Only available in editor builds; shipping builds run
-	// the exporter without capturing contributions (the shared collections are already
-	// baked into the per-entry ExportedDataAsset hashes at cook time).
+	// Wire the export context to write directly into the entry's UPROPERTY storage -- no copy at the
+	// API boundary. Captures exist in editor builds only; shipping builds run the exporter without
+	// capturing (the shared collections are already baked into the per-entry hashes at cook time).
 	FPCGExLevelExportContext ExportContext;
-	// Reset the capture buffers so a failed export doesn't leave stale data from a prior
-	// rebuild contributing to CompactSharedMesh / CompactSharedLevel.
+	// Reset the capture buffers so a failed export doesn't leave stale data from a prior rebuild
+	// contributing to the shared compaction.
 	ResetEditorContributions();
 #if WITH_EDITORONLY_DATA
-	ExportContext.MeshContributions = &EditorMeshContributions;
-	ExportContext.MeshInheritedDefaults = &EditorMeshInheritedDefaults;
-	ExportContext.MeshLocalPicks = &EditorLocalPicks;
-	ExportContext.LevelContributions = &EditorLevelContributions;
-	ExportContext.LevelLocalPicks = &EditorLevelLocalPicks;
+	ExportContext.Captures = &Captures;
 #endif
-	// The previous actor collection is the exporter's working buffer -- its CollectionGUID
-	// and EntryIds are bound by external references (variants). Cold external sessions load
-	// the externalized asset back. The entry ref stays assigned during export so the object
-	// stays GC-reachable.
-	if (!EmbeddedActorCollection && !ExternalActorCollection.IsNull())
+	ExportContext.CaptureOuter = const_cast<UPCGExAssetCollection*>(OwningCollection);
+
+	// The previous per-entry collections are the exporter's working buffers -- their CollectionGUIDs
+	// and EntryIds are bound by external references (variants). Cold external sessions load the
+	// externalized assets back. The slot refs stay assigned during export so the objects stay
+	// GC-reachable.
+	for (FPCGExExportCollectionSlot& Slot : EmbeddedSlots)
 	{
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(ExternalActorCollection);
-		EmbeddedActorCollection = ExternalActorCollection.Get();
+		if (!Slot.Collection && !Slot.External.IsNull())
+		{
+			PCGExHelpers::LoadBlocking_AnyThreadTpl(Slot.External);
+			Slot.Collection = Slot.External.Get();
+		}
 	}
-	ExportContext.PreviousActorCollection = EmbeddedActorCollection;
-	ExportContext.ActorCollectionOut = &EmbeddedActorCollection;
+	ExportContext.EmbeddedSlots = &EmbeddedSlots;
 
 	const bool bSuccess = Exporter->ExportLevelData(ExportSource, ExportedDataAsset, ExportContext);
 
 	if (bSuccess)
 	{
+		// A slot the exporter did not rebuild this time (no content for it anymore) still points at an
+		// object that was retired with the previous exported asset -- drop it.
+		for (FPCGExExportCollectionSlot& Slot : EmbeddedSlots)
+		{
+			if (Slot.Collection && !Slot.Collection->IsIn(ExportedDataAsset))
+			{
+				Slot.Collection = nullptr;
+			}
+		}
+
 		Staging.Path = FSoftObjectPath(ExportedDataAsset);
 		Staging.Bounds = PCGExPCGDataAssetCollectionInternal::ComputeBoundsFromAsset(ExportedDataAsset);
 
@@ -259,9 +349,12 @@ bool FPCGExPCGDataAssetCollectionEntry::ExportFromSource(const UPCGExAssetCollec
 		Staging.Path = FSoftObjectPath();
 		Staging.Bounds = FBox(ForceInit);
 
-		// Failed exports return before ActorCollectionOut is assigned; the previous
-		// collection's outer chain was just retired -- never serialize it.
-		EmbeddedActorCollection = nullptr;
+		// Failed exports return before any slot is rebuilt; the previous collections' outer chain was
+		// just retired -- never serialize them.
+		for (FPCGExExportCollectionSlot& Slot : EmbeddedSlots)
+		{
+			Slot.Collection = nullptr;
+		}
 		ResetEditorContributions();
 	}
 
@@ -410,7 +503,10 @@ void FPCGExPCGDataAssetCollectionEntry::EDITOR_Sanitize()
 	if (Source != EPCGExDataAssetEntrySource::Level && Source != EPCGExDataAssetEntrySource::Actor)
 	{
 		ExportedDataAsset = nullptr;
-		EmbeddedActorCollection = nullptr;
+		for (FPCGExExportCollectionSlot& Slot : EmbeddedSlots)
+		{
+			Slot.Collection = nullptr;
+		}
 		ResetEditorContributions();
 	}
 }
@@ -508,7 +604,7 @@ FSoftObjectPath FPCGExPCGDataAssetCollectionEntry::EDITOR_GetActivationAssetPath
 
 namespace PCGExSharedCompact
 {
-	static UPCGBasePointData* FindPointDataByPin(UPCGDataAsset* Asset, FName PinName)
+	UPCGBasePointData* FindPointDataByPin(UPCGDataAsset* Asset, FName PinName)
 	{
 		if (!Asset)
 		{
@@ -530,339 +626,102 @@ namespace PCGExSharedCompact
 	// ExternalizeUObject + Internalize live in Helpers/PCGExCollectionExternalization.h now
 	// (shared with the Valency bonding-rules externalization). See that header for contracts.
 
-	// --- Mesh identity ---
-	// Identity hash deliberately omits Weight/Tags/Category/PropertyOverrides -- Weight
-	// accumulates from contributors, the rest are user-owned on the shared entry.
-	// Descriptor fields are not hashed (large structs); ContentEquals resolves collisions.
-	static uint32 MeshContentHash(const FPCGExMeshCollectionEntry& E)
-	{
-		uint32 H = GetTypeHash(E.StaticMesh.ToSoftObjectPath());
-		H = HashCombine(H, GetTypeHash(static_cast<uint8>(E.MaterialVariants)));
-		H = HashCombine(H, GetTypeHash(E.SlotIndex));
-		H = HashCombine(H, GetTypeHash(static_cast<uint8>(E.DescriptorSource)));
-
-		H = HashCombine(H, GetTypeHash(E.MaterialOverrideVariants.Num()));
-		for (const FPCGExMaterialOverrideSingleEntry& S : E.MaterialOverrideVariants)
-		{
-			H = HashCombine(H, GetTypeHash(S.Weight));
-			H = HashCombine(H, GetTypeHash(S.Material.ToSoftObjectPath()));
-		}
-
-		H = HashCombine(H, GetTypeHash(E.MaterialOverrideVariantsList.Num()));
-		for (const FPCGExMaterialOverrideCollection& V : E.MaterialOverrideVariantsList)
-		{
-			H = HashCombine(H, GetTypeHash(V.Weight));
-			H = HashCombine(H, GetTypeHash(V.Overrides.Num()));
-			for (const FPCGExMaterialOverrideEntry& O : V.Overrides)
-			{
-				H = HashCombine(H, GetTypeHash(O.SlotIndex));
-				H = HashCombine(H, GetTypeHash(O.Material.ToSoftObjectPath()));
-			}
-		}
-
-		// Property-component identity. Zero (no source component) hashes as zero, so entries
-		// without a property collection still aggregate alongside each other -- only entries
-		// that actually authored distinct property data split into separate buckets.
-		H = HashCombine(H, E.PropertyComponentHash);
-
-		return H;
-	}
-
-	static bool MaterialOverrideEquals(const FPCGExMaterialOverrideSingleEntry& A, const FPCGExMaterialOverrideSingleEntry& B)
-	{
-		return A.Weight == B.Weight && A.Material.ToSoftObjectPath() == B.Material.ToSoftObjectPath();
-	}
-
-	static bool MaterialOverrideEquals(const FPCGExMaterialOverrideEntry& A, const FPCGExMaterialOverrideEntry& B)
-	{
-		return A.SlotIndex == B.SlotIndex && A.Material.ToSoftObjectPath() == B.Material.ToSoftObjectPath();
-	}
-
-	static bool MaterialOverrideEquals(const FPCGExMaterialOverrideCollection& A, const FPCGExMaterialOverrideCollection& B)
-	{
-		if (A.Weight != B.Weight)
-		{
-			return false;
-		}
-		if (A.Overrides.Num() != B.Overrides.Num())
-		{
-			return false;
-		}
-		for (int32 i = 0; i < A.Overrides.Num(); i++)
-		{
-			if (!MaterialOverrideEquals(A.Overrides[i], B.Overrides[i]))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
-	static bool MeshContentEquals(const FPCGExMeshCollectionEntry& A, const FPCGExMeshCollectionEntry& B)
-	{
-		if (A.StaticMesh.ToSoftObjectPath() != B.StaticMesh.ToSoftObjectPath())
-		{
-			return false;
-		}
-		if (A.MaterialVariants != B.MaterialVariants)
-		{
-			return false;
-		}
-		if (A.SlotIndex != B.SlotIndex)
-		{
-			return false;
-		}
-		if (A.DescriptorSource != B.DescriptorSource)
-		{
-			return false;
-		}
-
-		if (A.MaterialOverrideVariants.Num() != B.MaterialOverrideVariants.Num())
-		{
-			return false;
-		}
-		for (int32 i = 0; i < A.MaterialOverrideVariants.Num(); i++)
-		{
-			if (!MaterialOverrideEquals(A.MaterialOverrideVariants[i], B.MaterialOverrideVariants[i]))
-			{
-				return false;
-			}
-		}
-
-		if (A.MaterialOverrideVariantsList.Num() != B.MaterialOverrideVariantsList.Num())
-		{
-			return false;
-		}
-		for (int32 i = 0; i < A.MaterialOverrideVariantsList.Num(); i++)
-		{
-			if (!MaterialOverrideEquals(A.MaterialOverrideVariantsList[i], B.MaterialOverrideVariantsList[i]))
-			{
-				return false;
-			}
-		}
-
-		if (!FSoftISMComponentDescriptor::StaticStruct()->CompareScriptStruct(&A.ISMDescriptor, &B.ISMDescriptor, 0))
-		{
-			return false;
-		}
-		if (!FPCGExStaticMeshComponentDescriptor::StaticStruct()->CompareScriptStruct(&A.SMDescriptor, &B.SMDescriptor, 0))
-		{
-			return false;
-		}
-
-		// Property-component identity must match for two entries to dedup. Crucial when
-		// otherwise-identical mesh actors carry distinct property values: we want them in
-		// separate shared entries so their per-instance PropertyOverrides survive.
-		if (A.PropertyComponentHash != B.PropertyComponentHash)
-		{
-			return false;
-		}
-
-		return true;
-	}
-
 #if WITH_EDITOR
-	// Policies + CompactShared reference Editor* fields on FPCGExPCGDataAssetCollectionEntry
-	// which are themselves WITH_EDITORONLY_DATA. Their callers (CompactSharedMesh /
-	// CompactSharedLevel) are body-guarded the same way.
-	//
-	// SortKey implementations live in Helpers/PCGExCollectionSortKeys.{h,cpp} as free
-	// functions so they're directly testable from PCGExtendedToolkitTest. FArchiveBlake3
-	// (the process-stable Blake3 archive that backs the descriptor digest) is exposed in
-	// Helpers/PCGExArchiveBlake3.h. The full SortKey contract -- process-stable, fully
-	// discriminating, leading-field stable on mesh path -- is documented on the header
-	// declarations.
-
-	// --- Policy structs supplying entry-specific knowledge to CompactShared<>. ---
-	struct FMeshPolicy
+	const FPCGExExportSlotCapture* FindCapture(const FPCGExPCGDataAssetCollectionEntry& Entry, const FName SlotId)
 	{
-		using EntryType = FPCGExMeshCollectionEntry;
-		using CollectionType = UPCGExMeshCollection;
+		return PCGExExportSlots::Find(Entry.Captures, SlotId);
+	}
 
-		static FName PinName()
-		{
-			return PCGExCollections::Labels::MeshesPin;
-		}
-
-		static uint32 Hash(const FPCGExMeshCollectionEntry& E)
-		{
-			return MeshContentHash(E);
-		}
-
-		static bool Equals(const FPCGExMeshCollectionEntry& A, const FPCGExMeshCollectionEntry& B)
-		{
-			return MeshContentEquals(A, B);
-		}
-
-		static FString SortKey(const FPCGExMeshCollectionEntry& E)
-		{
-			return MeshSortKey(E);
-		}
-
-		// Loose identity for EntryId preservation -- the binding survives variant/descriptor tweaks.
-		static FSoftObjectPath PrimaryPath(const FPCGExMeshCollectionEntry& E)
-		{
-			return E.StaticMesh.ToSoftObjectPath();
-		}
-
-		static const TArray<FPCGExMeshCollectionEntry>& Contributions(const FPCGExPCGDataAssetCollectionEntry& E)
-		{
-			return E.EditorMeshContributions;
-		}
-
-		static const TArray<FInstancedStruct>& InheritedDefaults(const FPCGExPCGDataAssetCollectionEntry& E)
-		{
-			return E.EditorMeshInheritedDefaults;
-		}
-
-		static const TArray<int32>& LocalPicks(const FPCGExPCGDataAssetCollectionEntry& E)
-		{
-			return E.EditorLocalPicks;
-		}
-
-		static int16 UnpackSec(int32 Packed, int32& OutLocal)
-		{
-			int16 Sec;
-			FPCGExLevelExportContext::UnpackLocalPick(Packed, OutLocal, Sec);
-			return Sec;
-		}
-	};
-
-	struct FLevelPolicy
-	{
-		using EntryType = FPCGExLevelCollectionEntry;
-		using CollectionType = UPCGExLevelCollection;
-
-		static FName PinName()
-		{
-			return PCGExCollections::Labels::LevelsPin;
-		}
-
-		static uint32 Hash(const FPCGExLevelCollectionEntry& E)
-		{
-			return GetTypeHash(E.Level.ToSoftObjectPath());
-		}
-
-		static bool Equals(const FPCGExLevelCollectionEntry& A, const FPCGExLevelCollectionEntry& B)
-		{
-			return A.Level.ToSoftObjectPath() == B.Level.ToSoftObjectPath();
-		}
-
-		static FString SortKey(const FPCGExLevelCollectionEntry& E)
-		{
-			return LevelSortKey(E);
-		}
-
-		// Path IS the level identity; present to keep the templated preservation body uniform.
-		static FSoftObjectPath PrimaryPath(const FPCGExLevelCollectionEntry& E)
-		{
-			return E.Level.ToSoftObjectPath();
-		}
-
-		static const TArray<FPCGExLevelCollectionEntry>& Contributions(const FPCGExPCGDataAssetCollectionEntry& E)
-		{
-			return E.EditorLevelContributions;
-		}
-
-		// Level entries don't carry property-component data, so there's no inherited-defaults
-		// view to aggregate. Returning an empty static makes the templated CompactShared body
-		// produce an empty aggregate that flows through to RefreshCollectionPropertiesFromEntries
-		// as the "no opinion, fall through to contributors" signal.
-		static const TArray<FInstancedStruct>& InheritedDefaults(const FPCGExPCGDataAssetCollectionEntry& /*E*/)
-		{
-			static const TArray<FInstancedStruct> Empty;
-			return Empty;
-		}
-
-		static const TArray<int32>& LocalPicks(const FPCGExPCGDataAssetCollectionEntry& E)
-		{
-			return E.EditorLevelLocalPicks;
-		}
-
-		static int16 UnpackSec(int32 Packed, int32& OutLocal)
-		{
-			OutLocal = Packed;
-			return -1;
-		}
-	};
-
-	// Merge every entry's local contributions into one deduplicated shared collection
-	// (identity via TPolicy::Hash + TPolicy::Equals), then rewrite Tag_EntryIdx on the
-	// policy's pin against the resulting shared indices. Tags/Category/PropertyOverrides
-	// on existing shared entries are preserved across rebuilds when identity survives.
-	// Deterministic ordering: by content-derived SortKey ascending -- stable across cold cooks
-	// and editor restarts (does NOT depend on the per-process FName comparison-index hash).
-	template <typename TPolicy>
-	static void CompactShared(
+	// Merge every entry's captured contributions for one slot into its deduplicated shared collection
+	// (identity via the policy's Hash + Equals), then rewrite Tag_EntryIdx on the slot's pin against the
+	// resulting shared indices. Tags/Category on existing shared entries are preserved across rebuilds
+	// when identity survives. Deterministic ordering: by content-derived SortKey ascending -- stable
+	// across cold cooks and editor restarts (does NOT depend on the per-process FName hash).
+	void CompactSharedSlot(
 		UObject* Outer,
 		const TArray<FPCGExPCGDataAssetCollectionEntry*>& Entries,
-		TObjectPtr<typename TPolicy::CollectionType>& SharedCollectionRef,
-		TSoftObjectPtr<typename TPolicy::CollectionType>* ExternalFallback)
+		const FPCGExExportSlotDesc& Desc,
+		const IPCGExExportSlotPolicy& Policy,
+		FPCGExExportCollectionSlot& Slot,
+		const bool bExternalActive)
 	{
-		using TEntry = TPolicy::EntryType;
-		using TCollection = TPolicy::CollectionType;
+		const UScriptStruct* EntryStruct = Desc.EntryStruct;
 
 		// Skip everything when there's nothing to merge AND no existing shared state to clear.
 		// Avoids a synchronous external-asset load on unrelated edits (e.g. weight tweak on a
-		// non-level entry) when no entry contributes to this policy.
+		// non-level entry) when no entry contributes to this slot.
 		bool bHasContributions = false;
 		for (const FPCGExPCGDataAssetCollectionEntry* E : Entries)
 		{
-			if (TPolicy::Contributions(*E).Num() > 0)
+			const FPCGExExportSlotCapture* Capture = FindCapture(*E, Desc.SlotId);
+			if (Capture && Capture->Entries.Num() > 0)
 			{
 				bHasContributions = true;
 				break;
 			}
 		}
-		if (!bHasContributions && !SharedCollectionRef
-			&& (!ExternalFallback || ExternalFallback->IsNull()))
+		if (!bHasContributions && !Slot.Collection && (!bExternalActive || Slot.External.IsNull()))
 		{
 			return;
 		}
 
 		// External mode: if the in-memory ref was nulled by a prior externalization, pull the
 		// asset back into the collection package as the working buffer so the preserved-fields
-		// pass below sees the previous entries' user edits (Tags/Category/PropertyOverrides).
-		// The next ExternalizeSharedAndActorCollections will overwrite the same external uasset.
-		if (!SharedCollectionRef && ExternalFallback && !ExternalFallback->IsNull())
+		// pass below sees the previous entries' user edits (Tags/Category). The next
+		// ExternalizeSlotCollectionsFor will overwrite the same external uasset.
+		if (!Slot.Collection && bExternalActive && !Slot.External.IsNull())
 		{
-			if (TCollection* Loaded = ExternalFallback->LoadSynchronous())
+			if (UPCGExAssetCollection* Loaded = Slot.External.LoadSynchronous())
 			{
 				Loaded->Rename(nullptr, Outer, REN_DontCreateRedirectors | REN_NonTransactional);
-				SharedCollectionRef = Loaded;
+				Slot.Collection = Loaded;
 			}
+		}
+
+		// A slot whose registered class changed cannot keep the object (its rows are another struct).
+		if (Slot.Collection && Slot.Collection->GetClass() != Desc.CollectionClass)
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("Shared slot '%s' held a '%s' but the slot is now registered as '%s'; rebuilding from scratch (external references to it are lost)."),
+			       *Desc.SlotId.ToString(), *Slot.Collection->GetClass()->GetName(), *Desc.CollectionClass->GetName());
+			Slot.Collection->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_NonTransactional);
+			Slot.Collection = nullptr;
 		}
 
 		// Reuse the same UObject across calls so its CollectionGUID -- baked into every
 		// per-entry Tag_EntryIdx -- stays stable. Replacing it would invalidate on-disk hashes.
-		if (!SharedCollectionRef)
+		if (!Slot.Collection)
 		{
-			SharedCollectionRef = NewObject<TCollection>(Outer);
+			Slot.Collection = NewObject<UPCGExAssetCollection>(Outer, Desc.CollectionClass);
 		}
+		UPCGExAssetCollection* SharedCollection = Slot.Collection;
 
 		struct FPreserved
 		{
-			TEntry Identity;
+			FInstancedStruct Identity;
 			TSet<FName> Tags;
 			FName Category = NAME_None;
-			FPCGExPropertyOverrides PropertyOverrides;
+			int32 EntryId = 0;
 			bool bEntryIdConsumed = false; // exact-matched by a merged group; keeps its id out of the loose-fallback bank
 		};
 		TMap<uint32, TArray<FPreserved>> PreservedByHash;
-		for (const TEntry& E : SharedCollectionRef->Entries)
+		SharedCollection->ForEachEntry([&](const FPCGExAssetCollectionEntry* E, int32)
 		{
-			const uint32 H = TPolicy::Hash(E);
+			if (!E)
+			{
+				return;
+			}
+			const uint32 H = Policy.Hash(*E);
 			FPreserved& P = PreservedByHash.FindOrAdd(H).AddDefaulted_GetRef();
-			P.Identity = E;
-			P.Tags = E.Tags;
-			P.Category = E.Category;
-			P.PropertyOverrides = E.PropertyOverrides;
-		}
+			P.Identity.InitializeAs(EntryStruct, reinterpret_cast<const uint8*>(E));
+			P.Tags = E->Tags;
+			P.Category = E->Category;
+			P.EntryId = E->EntryId;
+		});
 
 		struct FGroup
 		{
 			uint32 Hash = 0;
-			const TEntry* Representative = nullptr;
+			const FPCGExAssetCollectionEntry* Representative = nullptr;
 			FString SortKey;
 			TArray<TPair<int32, int32>> Contributors; // (entryIdx, localContribIdx)
 			int32 WeightSum = 0;
@@ -871,17 +730,27 @@ namespace PCGExSharedCompact
 
 		for (int32 EntryIdx = 0; EntryIdx < Entries.Num(); EntryIdx++)
 		{
-			const TArray<TEntry>& Contribs = TPolicy::Contributions(*Entries[EntryIdx]);
-			for (int32 LocalIdx = 0; LocalIdx < Contribs.Num(); LocalIdx++)
+			const FPCGExExportSlotCapture* Capture = FindCapture(*Entries[EntryIdx], Desc.SlotId);
+			if (!Capture)
 			{
-				const TEntry& Contrib = Contribs[LocalIdx];
-				const uint32 H = TPolicy::Hash(Contrib);
+				continue;
+			}
+			for (int32 LocalIdx = 0; LocalIdx < Capture->Entries.Num(); LocalIdx++)
+			{
+				const FInstancedStruct& Instanced = Capture->Entries[LocalIdx];
+				if (Instanced.GetScriptStruct() != EntryStruct)
+				{
+					// A capture written by a different registration of this slot id; it cannot be merged.
+					continue;
+				}
+				const FPCGExAssetCollectionEntry& Contrib = *Instanced.GetPtr<FPCGExAssetCollectionEntry>();
+				const uint32 H = Policy.Hash(Contrib);
 
 				TArray<FGroup>& Bucket = HashBuckets.FindOrAdd(H);
 				FGroup* Match = nullptr;
 				for (FGroup& G : Bucket)
 				{
-					if (TPolicy::Equals(*G.Representative, Contrib))
+					if (Policy.Equals(*G.Representative, Contrib))
 					{
 						Match = &G;
 						break;
@@ -892,7 +761,7 @@ namespace PCGExSharedCompact
 					FGroup NewGroup;
 					NewGroup.Hash = H;
 					NewGroup.Representative = &Contrib;
-					NewGroup.SortKey = TPolicy::SortKey(Contrib);
+					NewGroup.SortKey = Policy.SortKey(Contrib);
 					Match = &Bucket.Add_GetRef(MoveTemp(NewGroup));
 				}
 				Match->Contributors.Emplace(EntryIdx, LocalIdx);
@@ -908,18 +777,16 @@ namespace PCGExSharedCompact
 				AllGroups.Add(MoveTemp(G));
 			}
 		}
-		// Order purely by the content-derived, process-stable SortKey. FGroup::Hash is NOT used
-		// here: it comes from TPolicy::Hash -> GetTypeHash(FSoftObjectPath) -> GetTypeHash(FName),
-		// which is the per-process FName comparison index and reshuffles across sessions/cooks.
-		// TPolicy::SortKey fully discriminates every distinct group (see FMeshPolicy::SortKey), so
-		// no two groups share a key and there is no tie-break to fall back on. Hash is retained
-		// only as an in-process bucket key for grouping/preservation above.
+		// Order purely by the content-derived, process-stable SortKey. FGroup::Hash is NOT used here:
+		// GetTypeHash(FSoftObjectPath) rides the per-process FName comparison index and reshuffles across
+		// sessions/cooks. The policy's SortKey fully discriminates every distinct group, so there is no
+		// tie-break to fall back on. Hash is retained only as an in-process bucket key.
 		AllGroups.Sort([](const FGroup& A, const FGroup& B)
 		{
 			return A.SortKey < B.SortKey;
 		});
 
-		TArray<TEntry> MergedEntries;
+		TArray<FInstancedStruct> MergedEntries;
 		MergedEntries.Reserve(AllGroups.Num());
 
 		TArray<TArray<int32>> LocalToSharedByEntry;
@@ -927,13 +794,16 @@ namespace PCGExSharedCompact
 		for (int32 i = 0; i < Entries.Num(); i++)
 		{
 			// -1 = no shared mapping; rewrite pass leaves the hash unwritten.
-			LocalToSharedByEntry[i].Init(-1, TPolicy::Contributions(*Entries[i]).Num());
+			const FPCGExExportSlotCapture* Capture = FindCapture(*Entries[i], Desc.SlotId);
+			LocalToSharedByEntry[i].Init(-1, Capture ? Capture->Entries.Num() : 0);
 		}
 
 		for (int32 SharedIdx = 0; SharedIdx < AllGroups.Num(); SharedIdx++)
 		{
 			const FGroup& G = AllGroups[SharedIdx];
-			TEntry Merged = *G.Representative;
+			FInstancedStruct& MergedInstanced = MergedEntries.AddDefaulted_GetRef();
+			MergedInstanced.InitializeAs(EntryStruct, reinterpret_cast<const uint8*>(G.Representative));
+			FPCGExAssetCollectionEntry& Merged = *MergedInstanced.GetMutablePtr<FPCGExAssetCollectionEntry>();
 			Merged.Weight = FMath::Max(1, G.WeightSum);
 
 			// Contribution snapshots carry their SOURCE's id, not this collection's; zero is
@@ -944,24 +814,21 @@ namespace PCGExSharedCompact
 			{
 				for (FPreserved& P : *Bucket)
 				{
-					if (TPolicy::Equals(P.Identity, *G.Representative))
+					if (Policy.Equals(*P.Identity.GetPtr<FPCGExAssetCollectionEntry>(), *G.Representative))
 					{
 						Merged.Tags = P.Tags;
 						Merged.Category = P.Category;
 						// PropertyOverrides is intentionally NOT preserved: it's derived from
-						// per-export actor contributions, not user-authored on the shared
-						// collection. Preserving it perpetuates stale values across re-exports.
+						// per-export contributions, not user-authored on the shared collection.
 						// Tags/Category ARE user-authored and have no per-export contributor.
 
 						// EntryId IS preserved: external references bind by id.
-						Merged.EntryId = P.Identity.EntryId;
+						Merged.EntryId = P.EntryId;
 						P.bEntryIdConsumed = true;
 						break;
 					}
 				}
 			}
-
-			MergedEntries.Add(MoveTemp(Merged));
 
 			for (const TPair<int32, int32>& C : G.Contributors)
 			{
@@ -980,64 +847,78 @@ namespace PCGExSharedCompact
 				{
 					if (!P.bEntryIdConsumed)
 					{
-						FallbackIds.Deposit(0, GetTypeHash(TPolicy::PrimaryPath(P.Identity)), P.Identity.EntryId);
+						FallbackIds.Deposit(0, GetTypeHash(Policy.PrimaryPath(*P.Identity.GetPtr<FPCGExAssetCollectionEntry>())), P.EntryId);
 					}
 				}
 			}
 
-			for (TEntry& Merged : MergedEntries)
+			for (FInstancedStruct& MergedInstanced : MergedEntries)
 			{
+				FPCGExAssetCollectionEntry& Merged = *MergedInstanced.GetMutablePtr<FPCGExAssetCollectionEntry>();
 				if (Merged.EntryId == 0)
 				{
-					Merged.EntryId = FallbackIds.ClaimLoose(GetTypeHash(TPolicy::PrimaryPath(Merged)));
+					Merged.EntryId = FallbackIds.ClaimLoose(GetTypeHash(Policy.PrimaryPath(Merged)));
 				}
 			}
 		}
 
-		SharedCollectionRef->Entries = MoveTemp(MergedEntries);
+		// Previous rows are overwritten wholesale; retire the subobjects they owned first, then write the
+		// merged rows with their own duplicates (a capture keeps its originals under the host).
+		SharedCollection->ForEachEntry([EntryStruct](FPCGExAssetCollectionEntry* E, int32)
+		{
+			if (E)
+			{
+				PCGExCollectionHelpers::RetireInstancedSubobjects(EntryStruct, E);
+			}
+		});
+		SharedCollection->InitNumEntries(MergedEntries.Num());
+		for (int32 i = 0; i < MergedEntries.Num(); i++)
+		{
+			FPCGExAssetCollectionEntry* Dst = SharedCollection->GetMutableEntryRaw(i);
+			EntryStruct->CopyScriptStruct(Dst, MergedEntries[i].GetMemory());
+			PCGExCollectionHelpers::DuplicateInstancedSubobjects(EntryStruct, Dst, SharedCollection);
+		}
 
 		// Aggregate the per-export "inherited defaults" views across every contributing entry.
-		// Each entry's view is the actor-class CDO/asset-fallback aggregate computed by the
-		// exporter (FPCGExLevelExportContext::MeshInheritedDefaults). Per property name, only
-		// values unanimously agreed across entries survive; disagreements drop out and fall
-		// through to per-entry contributors at merge time. Level-policy returns an empty array
-		// so this aggregate is naturally empty for the level path.
+		// Per property name, only values unanimously agreed across entries survive; disagreements
+		// drop out and fall through to per-entry contributors at merge time. Slots that capture no
+		// view produce an empty aggregate.
 		TArray<TConstArrayView<FInstancedStruct>> InheritedViews;
 		InheritedViews.Reserve(Entries.Num());
 		for (const FPCGExPCGDataAssetCollectionEntry* E : Entries)
 		{
-			InheritedViews.Emplace(TPolicy::InheritedDefaults(*E));
+			if (const FPCGExExportSlotCapture* Capture = FindCapture(*E, Desc.SlotId))
+			{
+				InheritedViews.Emplace(Capture->InheritedDefaults);
+			}
 		}
 		TArray<FInstancedStruct> InheritedDefaultsAggregate = PCGExProperties::AggregateAgreedValuesByName(InheritedViews);
 
 		// Rebuild CollectionProperties from the union of every merged entry's enabled
-		// PropertyOverrides. Mesh entries authored by UPCGExDefaultLevelDataExporter carry
-		// their source actor's property-component values in their overrides; this collapses
-		// them into a canonical schema on the shared collection and re-syncs the per-entry
-		// overrides against it. No-op for collection types whose entries don't carry
-		// property data (e.g. UPCGExLevelCollection in current usage).
-		SharedCollectionRef->RefreshCollectionPropertiesFromEntries(
+		// PropertyOverrides, and re-sync the per-entry overrides against it. No-op for
+		// collection types whose entries don't carry property data.
+		SharedCollection->RefreshCollectionPropertiesFromEntries(
 			EPCGExSchemaMergePolicy::StrictTypeMatch,
 			InheritedDefaultsAggregate);
 
-		SharedCollectionRef->RebuildStagingData(true);
+		SharedCollection->RebuildStagingData(true);
 
 		// Per-entry Tag_EntryIdx rewrite. CollectionMap is rebuilt separately so it can
-		// register the other shared collection too. Sequential: UPCGMetadata mutation is
-		// not safe on worker threads in editor flow.
+		// register every other slot too. Sequential: UPCGMetadata mutation is not safe on
+		// worker threads in editor flow.
 		PCGExCollections::FPickPacker Packer;
-		Packer.RegisterCollection(SharedCollectionRef);
+		Packer.RegisterCollection(SharedCollection);
 
-		const FName PinName = TPolicy::PinName();
 		for (int32 EntryIdx = 0; EntryIdx < Entries.Num(); EntryIdx++)
 		{
 			FPCGExPCGDataAssetCollectionEntry& Entry = *Entries[EntryIdx];
-			if (!Entry.ExportedDataAsset)
+			const FPCGExExportSlotCapture* Capture = FindCapture(Entry, Desc.SlotId);
+			if (!Entry.ExportedDataAsset || !Capture)
 			{
 				continue;
 			}
 
-			UPCGBasePointData* PD = FindPointDataByPin(Entry.ExportedDataAsset, PinName);
+			UPCGBasePointData* PD = FindPointDataByPin(Entry.ExportedDataAsset, Desc.PinName);
 			if (!PD)
 			{
 				continue;
@@ -1057,7 +938,7 @@ namespace PCGExSharedCompact
 			}
 
 			const TArray<int32>& LocalToShared = LocalToSharedByEntry[EntryIdx];
-			const TArray<int32>& LocalPicks = TPolicy::LocalPicks(Entry);
+			const TArray<int32>& LocalPicks = Capture->LocalPicks;
 			const int32 N = FMath::Min(LocalPicks.Num(), MetaEntries.Num());
 			for (int32 i = 0; i < N; i++)
 			{
@@ -1067,7 +948,12 @@ namespace PCGExSharedCompact
 					continue;
 				}
 				int32 LocalIdx;
-				const int16 Sec = TPolicy::UnpackSec(Packed, LocalIdx);
+				int16 Sec;
+				FPCGExLevelExportContext::UnpackLocalPick(Packed, LocalIdx, Sec);
+				if (!Desc.bSupportsSecondary)
+				{
+					Sec = -1;
+				}
 				if (!LocalToShared.IsValidIndex(LocalIdx))
 				{
 					continue;
@@ -1077,7 +963,7 @@ namespace PCGExSharedCompact
 				{
 					continue;
 				}
-				const uint64 Hash = Packer.GetPickIdx(SharedCollectionRef, static_cast<int16>(SharedIdx), Sec);
+				const uint64 Hash = Packer.GetPickIdx(SharedCollection, static_cast<int16>(SharedIdx), Sec);
 				EntryHashAttr->SetValue(MetaEntries[i], static_cast<int64>(Hash));
 			}
 		}
@@ -1108,6 +994,10 @@ void UPCGExPCGDataAssetCollection::PostLoad()
 	// the state only holds the refs -- same shape as an Omni host.
 	if (MachineryState)
 	{
+		// The state's own PostLoad adopts ITS legacy members; run it first so the slots are settled
+		// before the pre-C1 members below are adopted through the same idempotent helper.
+		MachineryState->ConditionalPostLoad();
+
 		if (bUseExternalAssets_DEPRECATED)
 		{
 			MachineryState->bUseExternalAssets = true;
@@ -1118,26 +1008,14 @@ void UPCGExPCGDataAssetCollection::PostLoad()
 			MachineryState->ExportFolder = ExportFolder_DEPRECATED;
 			ExportFolder_DEPRECATED.Path.Reset();
 		}
-		if (SharedMeshCollection_DEPRECATED)
-		{
-			MachineryState->SharedMeshCollection = SharedMeshCollection_DEPRECATED;
-			SharedMeshCollection_DEPRECATED = nullptr;
-		}
-		if (SharedLevelCollection_DEPRECATED)
-		{
-			MachineryState->SharedLevelCollection = SharedLevelCollection_DEPRECATED;
-			SharedLevelCollection_DEPRECATED = nullptr;
-		}
-		if (!ExternalSharedMeshCollection_DEPRECATED.IsNull())
-		{
-			MachineryState->ExternalSharedMeshCollection = ExternalSharedMeshCollection_DEPRECATED;
-			ExternalSharedMeshCollection_DEPRECATED.Reset();
-		}
-		if (!ExternalSharedLevelCollection_DEPRECATED.IsNull())
-		{
-			MachineryState->ExternalSharedLevelCollection = ExternalSharedLevelCollection_DEPRECATED;
-			ExternalSharedLevelCollection_DEPRECATED.Reset();
-		}
+
+		MachineryState->AdoptLegacySlot(PCGExLevelExport::Slots::Meshes, SharedMeshCollection_DEPRECATED, ExternalSharedMeshCollection_DEPRECATED.ToSoftObjectPath());
+		SharedMeshCollection_DEPRECATED = nullptr;
+		ExternalSharedMeshCollection_DEPRECATED.Reset();
+
+		MachineryState->AdoptLegacySlot(PCGExLevelExport::Slots::Levels, SharedLevelCollection_DEPRECATED, ExternalSharedLevelCollection_DEPRECATED.ToSoftObjectPath());
+		SharedLevelCollection_DEPRECATED = nullptr;
+		ExternalSharedLevelCollection_DEPRECATED.Reset();
 	}
 }
 
@@ -1167,29 +1045,44 @@ FString UPCGExPCGDataAssetCollection::MakeExternalAssetPrefixFor(const UPCGExAss
 	return FString::Printf(TEXT("G_%08X"), Host ? Host->GetCollectionGUID() : 0u);
 }
 
-void UPCGExPCGDataAssetCollection::CompactSharedMeshFor(FPCGExPCGDataAssetMachinery& State)
+void UPCGExPCGDataAssetCollection::CompactSharedFor(FPCGExPCGDataAssetMachinery& State)
 {
-#if WITH_EDITORONLY_DATA
+#if WITH_EDITOR
 	if (!State.IsValid())
 	{
 		return;
 	}
-	PCGExSharedCompact::CompactShared<PCGExSharedCompact::FMeshPolicy>(
-		State.Host, State.Entries, *State.SharedMeshCollection,
-		State.bExternalActive ? State.ExternalSharedMeshCollection : nullptr);
-#endif
-}
 
-void UPCGExPCGDataAssetCollection::CompactSharedLevelFor(FPCGExPCGDataAssetMachinery& State)
-{
-#if WITH_EDITORONLY_DATA
-	if (!State.IsValid())
+	TArray<PCGExLevelExport::FHandlerRegistration> Registrations;
+	PCGExLevelExport::FHandlerRegistry::Get().GetRegistrations(Registrations);
+
+	for (const PCGExLevelExport::FHandlerRegistration& Registration : Registrations)
 	{
-		return;
+		const FPCGExExportSlotDesc& Desc = Registration.Desc;
+		if (Desc.Scope != EPCGExExportSlotScope::Shared || !Registration.Policy)
+		{
+			continue;
+		}
+
+		// No storage is minted for a slot nothing contributes to and nothing held before.
+		bool bHasContributions = false;
+		for (const FPCGExPCGDataAssetCollectionEntry* E : State.Entries)
+		{
+			const FPCGExExportSlotCapture* Capture = PCGExExportSlots::Find(E->Captures, Desc.SlotId);
+			if (Capture && !Capture->Entries.IsEmpty())
+			{
+				bHasContributions = true;
+				break;
+			}
+		}
+		if (!bHasContributions && !PCGExExportSlots::Find(*State.SharedSlots, Desc.SlotId))
+		{
+			continue;
+		}
+
+		FPCGExExportCollectionSlot& Slot = PCGExExportSlots::FindOrAdd(*State.SharedSlots, Desc.SlotId);
+		PCGExSharedCompact::CompactSharedSlot(State.Host, State.Entries, Desc, *Registration.Policy, Slot, State.bExternalActive);
 	}
-	PCGExSharedCompact::CompactShared<PCGExSharedCompact::FLevelPolicy>(
-		State.Host, State.Entries, *State.SharedLevelCollection,
-		State.bExternalActive ? State.ExternalSharedLevelCollection : nullptr);
 #endif
 }
 
@@ -1209,17 +1102,19 @@ void UPCGExPCGDataAssetCollection::RebuildCollectionMapsFor(FPCGExPCGDataAssetMa
 		}
 
 		PCGExCollections::FPickPacker FullPacker;
-		if (*State.SharedMeshCollection)
+		for (const FPCGExExportCollectionSlot& Slot : *State.SharedSlots)
 		{
-			FullPacker.RegisterCollection(*State.SharedMeshCollection);
+			if (Slot.Collection)
+			{
+				FullPacker.RegisterCollection(Slot.Collection);
+			}
 		}
-		if (*State.SharedLevelCollection)
+		for (const FPCGExExportCollectionSlot& Slot : Entry.EmbeddedSlots)
 		{
-			FullPacker.RegisterCollection(*State.SharedLevelCollection);
-		}
-		if (Entry.EmbeddedActorCollection)
-		{
-			FullPacker.RegisterCollection(Entry.EmbeddedActorCollection);
+			if (Slot.Collection)
+			{
+				FullPacker.RegisterCollection(Slot.Collection);
+			}
 		}
 
 		Entry.ExportedDataAsset->Data.TaggedData.RemoveAll([](const FPCGTaggedData& TD)
@@ -1235,7 +1130,7 @@ void UPCGExPCGDataAssetCollection::RebuildCollectionMapsFor(FPCGExPCGDataAssetMa
 	}
 }
 
-void UPCGExPCGDataAssetCollection::ExternalizeSharedAndActorCollectionsFor(FPCGExPCGDataAssetMachinery& State)
+void UPCGExPCGDataAssetCollection::ExternalizeSlotCollectionsFor(FPCGExPCGDataAssetMachinery& State)
 {
 #if WITH_EDITOR
 	if (!State.IsValid() || !State.bExternalActive)
@@ -1245,34 +1140,35 @@ void UPCGExPCGDataAssetCollection::ExternalizeSharedAndActorCollectionsFor(FPCGE
 
 	// Naming uses the collection's GUID for cross-collection uniqueness in a shared export
 	// folder, and is short enough to stay within filesystem path budgets. GUID is stable
-	// across rebuilds -- filenames are reused (P4-friendly overwrites).
+	// across rebuilds -- filenames are reused (P4-friendly overwrites). The slot id is the
+	// suffix, so the built-in slots keep their historical file names.
 	const FString& FolderPath = State.ExportFolderPath;
 	const FString& GuidPrefix = State.ExternalAssetPrefix;
 
-	if (*State.SharedMeshCollection)
+	for (FPCGExExportCollectionSlot& Slot : *State.SharedSlots)
 	{
-		const FString AssetName = GuidPrefix + TEXT("_Meshes");
-		*State.ExternalSharedMeshCollection = PCGExSharedCompact::ExternalizeUObject(*State.SharedMeshCollection, FolderPath / AssetName, AssetName);
-	}
-
-	if (*State.SharedLevelCollection)
-	{
-		const FString AssetName = GuidPrefix + TEXT("_Levels");
-		*State.ExternalSharedLevelCollection = PCGExSharedCompact::ExternalizeUObject(*State.SharedLevelCollection, FolderPath / AssetName, AssetName);
-	}
-
-	// Per-entry actor collections. Done before RebuildCollectionMaps so the soft paths the
-	// packer bakes into the CollectionMap pin already point at the external assets.
-	for (int32 EntryIdx = 0; EntryIdx < State.Entries.Num(); EntryIdx++)
-	{
-		FPCGExPCGDataAssetCollectionEntry& Entry = *State.Entries[EntryIdx];
-		if (!Entry.EmbeddedActorCollection)
+		if (!Slot.Collection)
 		{
 			continue;
 		}
+		const FString AssetName = FString::Printf(TEXT("%s_%s"), *GuidPrefix, *Slot.SlotId.ToString());
+		Slot.External = TSoftObjectPtr<UPCGExAssetCollection>(PCGExSharedCompact::ExternalizeUObject(Slot.Collection, FolderPath / AssetName, AssetName));
+	}
 
-		const FString AssetName = FString::Printf(TEXT("%s_E%03d_Actors"), *GuidPrefix, EntryIdx);
-		Entry.ExternalActorCollection = PCGExSharedCompact::ExternalizeUObject(Entry.EmbeddedActorCollection, FolderPath / AssetName, AssetName);
+	// Per-entry slots. Done before RebuildCollectionMaps so the soft paths the packer bakes into
+	// the CollectionMap pin already point at the external assets.
+	for (int32 EntryIdx = 0; EntryIdx < State.Entries.Num(); EntryIdx++)
+	{
+		FPCGExPCGDataAssetCollectionEntry& Entry = *State.Entries[EntryIdx];
+		for (FPCGExExportCollectionSlot& Slot : Entry.EmbeddedSlots)
+		{
+			if (!Slot.Collection)
+			{
+				continue;
+			}
+			const FString AssetName = FString::Printf(TEXT("%s_E%03d_%s"), *GuidPrefix, EntryIdx, *Slot.SlotId.ToString());
+			Slot.External = TSoftObjectPtr<UPCGExAssetCollection>(PCGExSharedCompact::ExternalizeUObject(Slot.Collection, FolderPath / AssetName, AssetName));
+		}
 	}
 #endif
 }
@@ -1316,18 +1212,23 @@ void UPCGExPCGDataAssetCollection::InternalizeSubobjectsFor(FPCGExPCGDataAssetMa
 	}
 
 	// Pull each externalized subobject back into the host's package and null the
-	// soft refs. Used on External -> Embedded toggle. CompactShared's load-back path
+	// soft refs. Used on External -> Embedded toggle. CompactSharedSlot's load-back path
 	// also rehydrates shared collections lazily, but per-entry assets need explicit
 	// internalization here because they have no equivalent build-time fallback.
 	using namespace PCGExSharedCompact;
 
-	Internalize(*State.SharedMeshCollection, *State.ExternalSharedMeshCollection, State.Host);
-	Internalize(*State.SharedLevelCollection, *State.ExternalSharedLevelCollection, State.Host);
+	for (FPCGExExportCollectionSlot& Slot : *State.SharedSlots)
+	{
+		Internalize(Slot.Collection, Slot.External, State.Host);
+	}
 
 	for (FPCGExPCGDataAssetCollectionEntry* EntryPtr : State.Entries)
 	{
 		FPCGExPCGDataAssetCollectionEntry& Entry = *EntryPtr;
-		Internalize(Entry.EmbeddedActorCollection, Entry.ExternalActorCollection, State.Host);
+		for (FPCGExExportCollectionSlot& Slot : Entry.EmbeddedSlots)
+		{
+			Internalize(Slot.Collection, Slot.External, State.Host);
+		}
 		Internalize(Entry.ExportedDataAsset, Entry.ExternalExportedDataAsset, State.Host);
 		if (Entry.ExportedDataAsset)
 		{
@@ -1339,8 +1240,7 @@ void UPCGExPCGDataAssetCollection::InternalizeSubobjectsFor(FPCGExPCGDataAssetMa
 
 void UPCGExPCGDataAssetCollection::CollectExternalPackagesFor(
 	const UPCGExAssetCollection* Host,
-	const UPCGExMeshCollection* InSharedMesh,
-	const UPCGExLevelCollection* InSharedLevel,
+	const TArray<FPCGExExportCollectionSlot>& InSharedSlots,
 	const TArray<const FPCGExPCGDataAssetCollectionEntry*>& InEntries,
 	TSet<UPackage*>& OutPackages)
 {
@@ -1362,11 +1262,16 @@ void UPCGExPCGDataAssetCollection::CollectExternalPackagesFor(
 		}
 	};
 
-	AddPackageFor(InSharedMesh);
-	AddPackageFor(InSharedLevel);
+	for (const FPCGExExportCollectionSlot& Slot : InSharedSlots)
+	{
+		AddPackageFor(Slot.Collection);
+	}
 	for (const FPCGExPCGDataAssetCollectionEntry* Entry : InEntries)
 	{
-		AddPackageFor(Entry->EmbeddedActorCollection);
+		for (const FPCGExExportCollectionSlot& Slot : Entry->EmbeddedSlots)
+		{
+			AddPackageFor(Slot.Collection);
+		}
 		AddPackageFor(Entry->ExportedDataAsset);
 	}
 #endif
@@ -1384,7 +1289,7 @@ void UPCGExPCGDataAssetCollection::SaveExternalPackagesFor(FPCGExPCGDataAssetMac
 	ConstEntries.Append(State.Entries);
 
 	TSet<UPackage*> Packages;
-	CollectExternalPackagesFor(State.Host, *State.SharedMeshCollection, *State.SharedLevelCollection, ConstEntries, Packages);
+	CollectExternalPackagesFor(State.Host, *State.SharedSlots, ConstEntries, Packages);
 
 	for (UPackage* Pkg : Packages)
 	{
@@ -1399,13 +1304,12 @@ void UPCGExPCGDataAssetCollection::SaveExternalPackagesFor(FPCGExPCGDataAssetMac
 
 void UPCGExPCGDataAssetCollection::RebuildSharedCollectionsFor(FPCGExPCGDataAssetMachinery& State)
 {
-	CompactSharedMeshFor(State);
-	CompactSharedLevelFor(State);
+	CompactSharedFor(State);
 
-	// Externalize Shared* + per-entry actor collections BEFORE the CollectionMap is baked
+	// Externalize shared + per-entry slot collections BEFORE the CollectionMap is baked
 	// so the soft paths recorded in the map already point at their external packages.
 	// Externalize* cores short-circuit internally when external mode isn't active.
-	ExternalizeSharedAndActorCollectionsFor(State);
+	ExternalizeSlotCollectionsFor(State);
 
 	RebuildCollectionMapsFor(State);
 
@@ -1435,25 +1339,26 @@ void UPCGExPCGDataAssetCollection::RebuildSharedCollections()
 	}
 }
 
-void UPCGExPCGDataAssetCollection::ScrubSharedRefsForSave(TObjectPtr<UPCGExMeshCollection>& MeshSlot, TObjectPtr<UPCGExLevelCollection>& LevelSlot, FPCGExPCGDataSharedScrubKeep& OutKeep)
+void UPCGExPCGDataAssetCollection::ScrubSharedRefsForSave(TArray<FPCGExExportCollectionSlot>& Slots, FPCGExPCGDataSharedScrubKeep& OutKeep)
 {
-	OutKeep.MeshSlot = &MeshSlot;
-	OutKeep.LevelSlot = &LevelSlot;
-	OutKeep.KeptMesh = MeshSlot;
-	OutKeep.KeptLevel = LevelSlot;
-	MeshSlot = nullptr;
-	LevelSlot = nullptr;
+	OutKeep.Slots = &Slots;
+	OutKeep.Kept.SetNum(Slots.Num());
+	for (int32 i = 0; i < Slots.Num(); i++)
+	{
+		OutKeep.Kept[i] = Slots[i].Collection;
+		Slots[i].Collection = nullptr;
+	}
 }
 
 void UPCGExPCGDataAssetCollection::RestoreSharedRefsAfterSave(FPCGExPCGDataSharedScrubKeep& Keep)
 {
-	if (Keep.MeshSlot)
+	if (Keep.Slots)
 	{
-		*Keep.MeshSlot = Keep.KeptMesh;
-	}
-	if (Keep.LevelSlot)
-	{
-		*Keep.LevelSlot = Keep.KeptLevel;
+		const int32 N = FMath::Min(Keep.Slots->Num(), Keep.Kept.Num());
+		for (int32 i = 0; i < N; i++)
+		{
+			(*Keep.Slots)[i].Collection = Keep.Kept[i];
+		}
 	}
 	Keep = FPCGExPCGDataSharedScrubKeep();
 }
@@ -1463,15 +1368,21 @@ void UPCGExPCGDataAssetCollection::ScrubEntryRefsForSave(const TArray<FPCGExPCGD
 	OutKeep.Reset();
 	OutKeep.Entries.Reserve(InEntries.Num());
 	OutKeep.Data.Reserve(InEntries.Num());
-	OutKeep.Actors.Reserve(InEntries.Num());
+	OutKeep.Embedded.Reserve(InEntries.Num());
 
 	for (FPCGExPCGDataAssetCollectionEntry* Entry : InEntries)
 	{
 		OutKeep.Entries.Add(Entry);
 		OutKeep.Data.Add(Entry->ExportedDataAsset);
-		OutKeep.Actors.Add(Entry->EmbeddedActorCollection);
 		Entry->ExportedDataAsset = nullptr;
-		Entry->EmbeddedActorCollection = nullptr;
+
+		TArray<TObjectPtr<UPCGExAssetCollection>>& Kept = OutKeep.Embedded.AddDefaulted_GetRef();
+		Kept.SetNum(Entry->EmbeddedSlots.Num());
+		for (int32 i = 0; i < Entry->EmbeddedSlots.Num(); i++)
+		{
+			Kept[i] = Entry->EmbeddedSlots[i].Collection;
+			Entry->EmbeddedSlots[i].Collection = nullptr;
+		}
 	}
 }
 
@@ -1479,8 +1390,14 @@ void UPCGExPCGDataAssetCollection::RestoreEntryRefsAfterSave(FPCGExPCGDataEntryS
 {
 	for (int32 i = 0; i < Keep.Entries.Num(); i++)
 	{
-		Keep.Entries[i]->ExportedDataAsset = Keep.Data[i];
-		Keep.Entries[i]->EmbeddedActorCollection = Keep.Actors[i];
+		FPCGExPCGDataAssetCollectionEntry* Entry = Keep.Entries[i];
+		Entry->ExportedDataAsset = Keep.Data[i];
+		const TArray<TObjectPtr<UPCGExAssetCollection>>& Kept = Keep.Embedded[i];
+		const int32 N = FMath::Min(Kept.Num(), Entry->EmbeddedSlots.Num());
+		for (int32 s = 0; s < N; s++)
+		{
+			Entry->EmbeddedSlots[s].Collection = Kept[s];
+		}
 	}
 	Keep.Reset();
 }
@@ -1625,49 +1542,40 @@ void UPCGExPCGDataAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArr
 }
 
 void UPCGExPCGDataAssetCollection::AppendCookDependencyAssetPathsFor(
-	const UPCGExMeshCollection* InSharedMesh,
-	const UPCGExLevelCollection* InSharedLevel,
-	const TSoftObjectPtr<UPCGExMeshCollection>& InExternalSharedMesh,
-	const TSoftObjectPtr<UPCGExLevelCollection>& InExternalSharedLevel,
+	const TArray<FPCGExExportCollectionSlot>& InSharedSlots,
 	const TArray<const FPCGExPCGDataAssetCollectionEntry*>& InEntries,
 	TSet<FSoftObjectPath>& OutPaths)
 {
-	// Embedded shared collections live in the host's package so the package itself is
-	// already in the cook -- but their *entries* hold soft refs to the actual meshes /
-	// levels which cook traversal won't reach on its own.
-	if (InSharedMesh)
+	// Embedded slot collections live in the host's package so the package itself is already in the
+	// cook -- but their *entries* hold soft refs to the actual meshes / levels / sketches which cook
+	// traversal won't reach on its own. Externalized ones sit in their own packages -- surface them so
+	// the ModifyCook scan force-cooks those packages too; once cooked, the registry scan re-enters them
+	// (they're UPCGExAssetCollection subclasses and implement the interface), so their leaf soft refs
+	// follow automatically.
+	auto AppendSlot = [&OutPaths](const FPCGExExportCollectionSlot& Slot)
 	{
-		InSharedMesh->GetAssetPaths(OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive);
-	}
-	if (InSharedLevel)
+		if (Slot.Collection)
+		{
+			Slot.Collection->GetAssetPaths(OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive);
+		}
+		if (!Slot.External.IsNull())
+		{
+			OutPaths.Add(Slot.External.ToSoftObjectPath());
+		}
+	};
+
+	for (const FPCGExExportCollectionSlot& Slot : InSharedSlots)
 	{
-		InSharedLevel->GetAssetPaths(OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive);
+		AppendSlot(Slot);
 	}
 
-	// Externalized shared collections sit in their own packages -- surface them so the
-	// ModifyCook scan force-cooks those packages too. Once cooked, our registry scan
-	// re-enters them (they're UPCGExAssetCollection subclasses and implement the interface),
-	// so their leaf soft refs follow automatically.
-	if (!InExternalSharedMesh.IsNull())
-	{
-		OutPaths.Add(InExternalSharedMesh.ToSoftObjectPath());
-	}
-	if (!InExternalSharedLevel.IsNull())
-	{
-		OutPaths.Add(InExternalSharedLevel.ToSoftObjectPath());
-	}
-
-	// Per-entry actor collections (embedded + external). Hang off the entry as hard
-	// subobjects rather than entries[], so the base walk skips them.
+	// Per-entry slot collections hang off the entry as hard subobjects rather than entries[], so the
+	// base walk skips them.
 	for (const FPCGExPCGDataAssetCollectionEntry* Entry : InEntries)
 	{
-		if (Entry->EmbeddedActorCollection)
+		for (const FPCGExExportCollectionSlot& Slot : Entry->EmbeddedSlots)
 		{
-			Entry->EmbeddedActorCollection->GetAssetPaths(OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive);
-		}
-		if (!Entry->ExternalActorCollection.IsNull())
-		{
-			OutPaths.Add(Entry->ExternalActorCollection.ToSoftObjectPath());
+			AppendSlot(Slot);
 		}
 	}
 }
@@ -1707,10 +1615,7 @@ FPCGExPCGDataAssetMachinery UPCGExPCGDataTypeState::MakeMachinery(UPCGExAssetCol
 		});
 	}
 
-	State.SharedMeshCollection = &SharedMeshCollection;
-	State.SharedLevelCollection = &SharedLevelCollection;
-	State.ExternalSharedMeshCollection = &ExternalSharedMeshCollection;
-	State.ExternalSharedLevelCollection = &ExternalSharedLevelCollection;
+	State.SharedSlots = &SharedSlots;
 
 	State.bExternalActive = IsExternalActive();
 	State.ExportFolderPath = ExportFolder.Path;
@@ -1784,7 +1689,7 @@ void UPCGExPCGDataTypeState::Serialize(FArchive& Ar)
 	if (IsExternalActive() && Ar.IsSaving() && !Ar.IsTransacting())
 	{
 		FPCGExPCGDataSharedScrubKeep SharedKeep;
-		UPCGExPCGDataAssetCollection::ScrubSharedRefsForSave(SharedMeshCollection, SharedLevelCollection, SharedKeep);
+		UPCGExPCGDataAssetCollection::ScrubSharedRefsForSave(SharedSlots, SharedKeep);
 
 		Super::Serialize(Ar);
 
@@ -1793,6 +1698,37 @@ void UPCGExPCGDataTypeState::Serialize(FArchive& Ar)
 	else
 	{
 		Super::Serialize(Ar);
+	}
+}
+
+void UPCGExPCGDataTypeState::PostLoad()
+{
+	Super::PostLoad();
+
+	AdoptLegacySlot(PCGExLevelExport::Slots::Meshes, SharedMeshCollection_DEPRECATED, ExternalSharedMeshCollection_DEPRECATED.ToSoftObjectPath());
+	SharedMeshCollection_DEPRECATED = nullptr;
+	ExternalSharedMeshCollection_DEPRECATED.Reset();
+
+	AdoptLegacySlot(PCGExLevelExport::Slots::Levels, SharedLevelCollection_DEPRECATED, ExternalSharedLevelCollection_DEPRECATED.ToSoftObjectPath());
+	SharedLevelCollection_DEPRECATED = nullptr;
+	ExternalSharedLevelCollection_DEPRECATED.Reset();
+}
+
+void UPCGExPCGDataTypeState::AdoptLegacySlot(const FName SlotId, UPCGExAssetCollection* Collection, const FSoftObjectPath& External)
+{
+	if (!Collection && External.IsNull())
+	{
+		return;
+	}
+
+	FPCGExExportCollectionSlot& Slot = PCGExExportSlots::FindOrAdd(SharedSlots, SlotId);
+	if (!Slot.Collection && Collection)
+	{
+		Slot.Collection = Collection;
+	}
+	if (Slot.External.IsNull() && !External.IsNull())
+	{
+		Slot.External = TSoftObjectPtr<UPCGExAssetCollection>(External);
 	}
 }
 
@@ -1840,10 +1776,7 @@ void UPCGExPCGDataTypeState::AppendCookDependencyAssetPaths(const UPCGExAssetCol
 		});
 	}
 
-	UPCGExPCGDataAssetCollection::AppendCookDependencyAssetPathsFor(
-		SharedMeshCollection, SharedLevelCollection,
-		ExternalSharedMeshCollection, ExternalSharedLevelCollection,
-		EntryPtrs, OutPaths);
+	UPCGExPCGDataAssetCollection::AppendCookDependencyAssetPathsFor(SharedSlots, EntryPtrs, OutPaths);
 }
 
 void UPCGExPCGDataTypeState::EDITOR_AppendExternalPackages(const UPCGExAssetCollection* Host, TSet<UPackage*>& OutPackages) const
@@ -1862,8 +1795,7 @@ void UPCGExPCGDataTypeState::EDITOR_AppendExternalPackages(const UPCGExAssetColl
 		});
 	}
 
-	UPCGExPCGDataAssetCollection::CollectExternalPackagesFor(
-		Host, SharedMeshCollection, SharedLevelCollection, EntryPtrs, OutPackages);
+	UPCGExPCGDataAssetCollection::CollectExternalPackagesFor(Host, SharedSlots, EntryPtrs, OutPackages);
 }
 
 void UPCGExPCGDataTypeState::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
@@ -1946,13 +1878,20 @@ void UPCGExPCGDataTypeState::OnRemovedFromHost(UPCGExAssetCollection* Host)
 	// Teardown surface: external packages this machinery produced stay on disk (deleting
 	// user-visible assets here would be data loss) -- but with the state gone nothing
 	// references them anymore. Say so instead of orphaning silently.
-	if (!ExternalSharedMeshCollection.IsNull() || !ExternalSharedLevelCollection.IsNull())
+	TArray<FString> Externals;
+	for (const FPCGExExportCollectionSlot& Slot : SharedSlots)
+	{
+		if (!Slot.External.IsNull())
+		{
+			Externals.Add(Slot.External.ToSoftObjectPath().ToString());
+		}
+	}
+	if (!Externals.IsEmpty())
 	{
 		UE_LOG(LogPCGEx, Warning,
-		       TEXT("'%s': the removed PCG Data Asset machinery state still pointed at externalized packages ('%s', '%s'). They remain on disk, now orphaned -- delete them manually, or undo, re-add PCGData entries and disable external storage first to internalize them."),
+		       TEXT("'%s': the removed PCG Data Asset machinery state still pointed at externalized packages (%s). They remain on disk, now orphaned -- delete them manually, or undo, re-add PCGData entries and disable external storage first to internalize them."),
 		       Host ? *Host->GetName() : TEXT("<null>"),
-		       *ExternalSharedMeshCollection.ToSoftObjectPath().ToString(),
-		       *ExternalSharedLevelCollection.ToSoftObjectPath().ToString());
+		       *FString::Join(Externals, TEXT(", ")));
 	}
 }
 

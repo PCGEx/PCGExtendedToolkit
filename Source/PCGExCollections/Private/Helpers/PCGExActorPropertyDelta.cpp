@@ -12,6 +12,7 @@
 #include "Serialization/MemoryWriter.h"
 #include "Serialization/ObjectReader.h"
 #include "Serialization/ObjectWriter.h"
+#include "Serialization/StructuredArchiveAdapters.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/UnrealType.h"
 

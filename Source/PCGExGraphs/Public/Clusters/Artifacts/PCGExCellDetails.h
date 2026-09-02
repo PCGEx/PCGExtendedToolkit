@@ -209,9 +209,6 @@ struct PCGEXGRAPHS_API FPCGExCellConstraintsDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bOmitWrappingBounds = true;
 
-	UPROPERTY()
-	double WrapperClassificationTolerance_DEPRECATED = 0.1;
-
 	/** Keep the wrapper cell if it's the only cell found. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Keep if Sole", EditCondition="bOmitWrappingBounds", EditConditionHides))
 	bool bKeepWrapperIfSolePath = true;
