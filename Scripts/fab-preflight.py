@@ -12,15 +12,28 @@ one such failure that actually happened, or one the coding standard already forb
     python Scripts/fab-preflight.py --list
     python Scripts/fab-preflight.py --only nsdmi-default-arg
     python Scripts/fab-preflight.py --selftest      # prove every detector still fires
+    python Scripts/fab-preflight.py --check-mirror  # every sibling workspace's copy is byte-identical
+    python Scripts/fab-preflight.py --diff-trees ../../../PCGExWorkbench_57/Plugins/PCGExtendedToolkit . \
+        --ignore SomeKnownDelta                     # port drift between two plugin trees
 
 Exit code is 1 if any error-severity finding is reported, so CI can gate on it.
 
 A detector that silently stops matching is worse than no detector -- it reports "clean" over a
 real defect. --selftest builds a throwaway tree containing one instance of every defect and
 fails if any check misses its own case. Run it whenever you touch a pattern in this file.
+
+Deliberately absent (verified against UE 5.8 UnrealBuildTool, Configuration/Rules/CppCompileWarnings.cs):
+  -Wunused-lambda-capture, -Wunused-private-field, -Wunused-variable, -Winconsistent-missing-override,
+  -Wsign-compare and -Wtautological-compare all default to WarningLevel.Off, so UBT passes -Wno-* for
+  them and they cannot fail a FAB build. Do not add detectors for them. -Wall -Werror is still on
+  (Platform/Clang/ClangToolChain.cs), so -Wall members and Clang's default-on diagnostics that UBT
+  does not silence remain FAB-only failures: those are what clang-wall and ctor-reorder cover.
+  Access-control violations (calling a protected virtual through a base pointer) are diagnosed by
+  every compiler on the dev box too, so they are not FAB-only and are not checked here.
 """
 
 import argparse
+import difflib
 import os
 import re
 import shutil
