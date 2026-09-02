@@ -149,6 +149,7 @@ namespace PCGExDetailsCustomization
 
 		PCGEX_ADD_ACTION_ICON(PCGDA_DataAsset, AIS_VerySmall)
 		PCGEX_ADD_ACTION_ICON(PCGDA_Level, AIS_VerySmall)
+		PCGEX_ADD_ACTION_ICON(PCGDA_Actor, AIS_VerySmall)
 
 		FButtonStyle ActionIconButton = FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton");
 

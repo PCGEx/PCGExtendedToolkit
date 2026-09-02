@@ -1202,6 +1202,18 @@ void UPCGExAssetCollection::BuildCache()
 
 #pragma endregion
 
+void UPCGExAssetCollection::PostRename(UObject* OldOuter, const FName OldName)
+{
+	Super::PostRename(OldOuter, OldName);
+
+#if WITH_EDITOR
+	if (GetOutermost() != GetTransientPackage())
+	{
+		EDITOR_OnHostRelocated();
+	}
+#endif
+}
+
 void UPCGExAssetCollection::PostDuplicate(bool bDuplicateForPIE)
 {
 	Super::PostDuplicate(bDuplicateForPIE);
@@ -1320,6 +1332,24 @@ namespace PCGExAssetCollectionMigration
 void UPCGExAssetCollection::PostLoad()
 {
 	Super::PostLoad();
+
+	// Per-entry migrations (see FPCGExAssetCollectionEntry::OnHostPostLoad).
+	{
+		bool bEntryRewritten = false;
+		ForEachEntry([this, &bEntryRewritten](FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
+		{
+			if (Entry && Entry->OnHostPostLoad(this))
+			{
+				bEntryRewritten = true;
+			}
+		});
+#if WITH_EDITOR
+		if (bEntryRewritten)
+		{
+			(void)MarkPackageDirty();
+		}
+#endif
+	}
 
 #if WITH_EDITORONLY_DATA
 	// Single-pipeline slot migration: the legacy StagingPipeline pointer becomes the first

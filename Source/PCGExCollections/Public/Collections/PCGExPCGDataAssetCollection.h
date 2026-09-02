@@ -13,8 +13,10 @@
 
 #include "PCGExPCGDataAssetCollection.generated.h"
 
+class AActor;
 class UPCGDataAsset;
 class UPCGExPCGDataAssetCollection;
+struct FPCGExLevelExportSource;
 class UPCGExLevelDataExporter;
 class UPCGExMeshCollection;
 class UPCGExActorCollection;
@@ -27,6 +29,7 @@ enum class EPCGExDataAssetEntrySource : uint8
 {
 	DataAsset = 0 UMETA(DisplayName = "Data Asset", ToolTip="Reference an existing PCGDataAsset", ActionIcon="PCGDA_DataAsset"),
 	Level     = 1 UMETA(DisplayName = "Level", ToolTip="Export a level to an embedded PCGDataAsset", ActionIcon="PCGDA_Level"),
+	Actor     = 2 UMETA(DisplayName = "Actor", ToolTip="Export an actor's attached subtree, as if it were a level, to an embedded PCGDataAsset. Points are relative to the actor.", ActionIcon="PCGDA_Level"),
 };
 
 /**
@@ -86,7 +89,13 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source == EPCGExDataAssetEntrySource::Level && !bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level;
 
-	/** Only in Level mode: a DataAsset-sourced entry references a finished asset with no level behind it. */
+	/** Root actor whose attached subtree is exported (used when Source == Actor). Its level must not be
+	 *  World Partition: a closed partitioned level cannot be read. */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source == EPCGExDataAssetEntrySource::Actor && !bIsSubCollection", EditConditionHides))
+	TSoftObjectPtr<AActor> SourceActor;
+
+	/** Only in Level mode. An Actor-sourced entry answers null on purpose: its host level is a container,
+	 *  not a level whose content the entry stands for. A DataAsset-sourced entry has no level at all. */
 	virtual FSoftObjectPath GetSourceLevelPath() const override
 	{
 		return (!bIsSubCollection && Source == EPCGExDataAssetEntrySource::Level)
@@ -171,7 +180,19 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	virtual void EDITOR_Sanitize() override;
 	virtual void EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 	virtual FSoftObjectPath EDITOR_GetThumbnailAssetPath() const override;
+	virtual FSoftObjectPath EDITOR_GetActivationAssetPath() const override;
 #endif
+
+private:
+	/** Level and Actor sources share everything past the load: export into a fresh embedded asset,
+	 *  capture contributions, scan sockets. Returns false when the export produced nothing. */
+	bool ExportFromSource(const UPCGExAssetCollection* OwningCollection, const FPCGExLevelExportSource& ExportSource);
+
+	/** Editor-only capture buffers -- every reset site in UpdateStaging goes through here. */
+	void ResetEditorContributions();
+
+	/** Staging + embedded export back to "nothing" -- a failed or impossible export. */
+	void ResetExport(const UPCGExAssetCollection* OwningCollection);
 };
 
 /** Concrete collection for UPCGDataAsset references with optional level-sourced entries.
@@ -305,6 +326,10 @@ public:
 	virtual void OnHostSerializeSave_End(UPCGExAssetCollection* Host) override;
 #if WITH_EDITOR
 	virtual void EDITOR_OnHostPostStagingRebuild(UPCGExAssetCollection* Host) override;
+
+	/** Embedded exports moved with the host; their Staging.Path strings and the CollectionMap rows baked
+	 *  inside them did not. Re-stamps both from the live objects. */
+	virtual void EDITOR_OnHostRelocated(UPCGExAssetCollection* Host) override;
 	virtual void AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const override;
 	virtual void EDITOR_AppendExternalPackages(const UPCGExAssetCollection* Host, TSet<UPackage*>& OutPackages) const override;
 
@@ -510,6 +535,8 @@ public:
 
 #if WITH_EDITOR
 	virtual void EDITOR_OnPostStagingRebuild() override;
+	virtual void EDITOR_RunTypeStatesPostStaging() override;
+	virtual void EDITOR_OnHostRelocated() override;
 	virtual void EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData) override;
 
 	/** IPCGExExternalPackageProducer via the owned machinery state. */
