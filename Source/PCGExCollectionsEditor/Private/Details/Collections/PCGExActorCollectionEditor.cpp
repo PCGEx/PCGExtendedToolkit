@@ -14,20 +14,19 @@
 #include "Collections/PCGExActorCollection.h"
 #include "GameFramework/Actor.h"
 #include "Misc/PackageName.h"
+#include "UObject/Package.h"
 
 namespace PCGExActorCollectionEditor
 {
 	void AddOrUpdateActorEntry(UPCGExActorCollection* Collection, AActor* Actor)
 	{
 		TSoftClassPtr<AActor> ActorClass(Actor->GetClass());
-		FSoftObjectPath WorldPath(Actor->GetWorld());
-		FName ActorFName = Actor->GetFName();
+		const TSoftObjectPtr<AActor> ActorRef(Actor);
 
 		FPCGExActorCollectionEntry* Existing = Collection->Entries.FindByPredicate(
 			[&](const FPCGExActorCollectionEntry& E)
 			{
-				return E.DeltaSourceActorName == ActorFName
-					&& E.DeltaSourceLevel.ToSoftObjectPath() == WorldPath;
+				return E.DeltaSourceActor == ActorRef;
 			});
 
 		if (Existing)
@@ -38,8 +37,7 @@ namespace PCGExActorCollectionEditor
 		{
 			FPCGExActorCollectionEntry& New = Collection->Entries.Emplace_GetRef();
 			New.Actor = ActorClass;
-			New.DeltaSourceLevel = TSoftObjectPtr<UWorld>(WorldPath);
-			New.DeltaSourceActorName = ActorFName;
+			New.DeltaSourceActor = ActorRef;
 		}
 	}
 }
@@ -72,29 +70,19 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 								return;
 							}
 
-							const FSoftObjectPath CurrentWorldPath(World);
+							const FName CurrentWorldPackage = World->GetPackage()->GetFName();
 							Collection->Modify();
 
+							// The current level is loaded, so a path that no longer resolves is a missing actor.
 							const int32 Removed = Collection->Entries.RemoveAll(
 								[&](const FPCGExActorCollectionEntry& E)
 								{
-									if (E.DeltaSourceLevel.ToSoftObjectPath() != CurrentWorldPath)
+									const FSoftObjectPath& Path = E.DeltaSourceActor.ToSoftObjectPath();
+									if (!Path.IsValid() || Path.GetLongPackageFName() != CurrentWorldPackage)
 									{
 										return false;
 									}
-									if (E.DeltaSourceActorName == NAME_None)
-									{
-										return false;
-									}
-
-									for (const AActor* Actor : World->PersistentLevel->Actors)
-									{
-										if (Actor && Actor->GetFName() == E.DeltaSourceActorName)
-										{
-											return false;
-										}
-									}
-									return true;
+									return Path.ResolveObject() == nullptr;
 								});
 
 							if (Removed > 0)
@@ -123,15 +111,10 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 							const int32 Removed = Collection->Entries.RemoveAll(
 								[](const FPCGExActorCollectionEntry& E)
 								{
-									if (!E.DeltaSourceLevel.IsNull())
+									if (!E.DeltaSourceActor.IsNull())
 									{
-										const FString PackageName = E.DeltaSourceLevel.ToSoftObjectPath().GetLongPackageName();
+										const FString PackageName = E.DeltaSourceActor.ToSoftObjectPath().GetLongPackageName();
 										if (PackageName.IsEmpty() || !FPackageName::DoesPackageExist(PackageName))
-										{
-											return true;
-										}
-
-										if (E.DeltaSourceActorName == NAME_None)
 										{
 											return true;
 										}
@@ -155,7 +138,7 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 				),
 			NAME_None,
 			FText::GetEmpty(),
-			INVTEXT("Cleanup\nRemove broken entries:\n- Delta source level that no longer exists\n- Incomplete delta references (level set but no actor name)\n- Empty entries (no actor class and no subcollection)"),
+			INVTEXT("Cleanup\nRemove broken entries:\n- Delta source actor whose level no longer exists\n- Empty entries (no actor class and no subcollection)"),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Adjust")
 			);
 	}

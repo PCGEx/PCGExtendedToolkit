@@ -24,8 +24,10 @@ namespace PCGExDetails
 }
 
 struct FPCGContext;
+struct FStreamableHandle;
 struct FPCGMeshInstanceList;
 struct FPCGSkinnedMeshInstanceList;
+class AActor;
 class UPCGBasePointData;
 class UPCGExSelectorFactoryData;
 class UPCGManagedActors;
@@ -37,6 +39,21 @@ class FPCGExPickerScratchBase;
 namespace PCGExCollections
 {
 	class FSelectorSharedDataCache;
+
+	/**
+	 * Resolve an actor placed in a level from its soft path, for authoring-time reads (delta capture,
+	 * actor-rooted exports). A live actor wins; otherwise the LEVEL package is soft-loaded (an actor's
+	 * package name is always its map's, OFPA included) and the sub-path resolved into it. Partitioned
+	 * levels are refused outright: a cold-loaded one carries no actors. The returned world has had
+	 * PCGExHelpers::EnsureWorldTransformsCurrent run over it -- component transforms are readable.
+	 *
+	 * OutHandle keeps the cold world alive; release it as soon as the read is done and never cache it
+	 * (a resident, referenced world makes a later map open fail its unload).
+	 */
+	PCGEXCOLLECTIONS_API AActor* ResolveLevelActor(
+		const FSoftObjectPath& ActorPath,
+		TSharedPtr<FStreamableHandle>& OutHandle,
+		FString* OutFailure = nullptr);
 }
 
 namespace PCGExMeshCollection
@@ -555,6 +572,10 @@ namespace PCGExCollections
 		 * their own contributions.
 		 */
 		void RegisterCollectionsTo(FPickPacker& InPacker) const;
+
+		/** Register one already-loaded collection under its GUID. For readers with no PCG context to hand
+		 *  UnpackDataset (editor tooling, thumbnails); hashes then resolve exactly as after an unpack. */
+		void AddCollection(UPCGExAssetCollection* InCollection);
 
 		/** Unpack collection mappings from an attribute set */
 		bool UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet);
