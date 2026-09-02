@@ -26,6 +26,7 @@
 #include "Metadata/PCGMetadata.h"
 #include "Serialization/ArchiveCrc32.h"
 #include "Serialization/StructuredArchive.h"
+#include "Serialization/StructuredArchiveAdapters.h"
 
 #pragma region Mesh
 
