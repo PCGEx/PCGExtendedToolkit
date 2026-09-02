@@ -1505,9 +1505,22 @@ void UPCGExPCGDataAssetCollection::PreSave(FObjectPreSaveContext ObjectSaveConte
 
 void UPCGExPCGDataAssetCollection::EDITOR_OnPostStagingRebuild()
 {
+	EDITOR_RunTypeStatesPostStaging();
+}
+
+void UPCGExPCGDataAssetCollection::EDITOR_RunTypeStatesPostStaging()
+{
 	if (MachineryState)
 	{
 		MachineryState->EDITOR_OnHostPostStagingRebuild(this);
+	}
+}
+
+void UPCGExPCGDataAssetCollection::EDITOR_OnHostRelocated()
+{
+	if (MachineryState)
+	{
+		MachineryState->EDITOR_OnHostRelocated(this);
 	}
 }
 
@@ -1759,6 +1772,26 @@ void UPCGExPCGDataTypeState::EDITOR_OnHostPostStagingRebuild(UPCGExAssetCollecti
 {
 	FPCGExPCGDataAssetMachinery State = MakeMachinery(Host);
 	UPCGExPCGDataAssetCollection::RebuildSharedCollectionsFor(State);
+}
+
+void UPCGExPCGDataTypeState::EDITOR_OnHostRelocated(UPCGExAssetCollection* Host)
+{
+	FPCGExPCGDataAssetMachinery State = MakeMachinery(Host);
+	if (!State.IsValid())
+	{
+		return;
+	}
+
+	for (FPCGExPCGDataAssetCollectionEntry* Entry : State.Entries)
+	{
+		if (Entry && Entry->ExportedDataAsset && Entry->ExportedDataAsset->IsIn(Host))
+		{
+			Entry->Staging.Path = FSoftObjectPath(Entry->ExportedDataAsset);
+		}
+	}
+
+	// Re-packs from the live shared / per-entry collections, wherever they now live.
+	UPCGExPCGDataAssetCollection::RebuildCollectionMapsFor(State);
 }
 
 void UPCGExPCGDataTypeState::AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const

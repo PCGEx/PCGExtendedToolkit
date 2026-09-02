@@ -1202,6 +1202,18 @@ void UPCGExAssetCollection::BuildCache()
 
 #pragma endregion
 
+void UPCGExAssetCollection::PostRename(UObject* OldOuter, const FName OldName)
+{
+	Super::PostRename(OldOuter, OldName);
+
+#if WITH_EDITOR
+	if (GetOutermost() != GetTransientPackage())
+	{
+		EDITOR_OnHostRelocated();
+	}
+#endif
+}
+
 void UPCGExAssetCollection::PostDuplicate(bool bDuplicateForPIE)
 {
 	Super::PostDuplicate(bDuplicateForPIE);

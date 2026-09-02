@@ -1021,6 +1021,17 @@ public:
 	virtual void PostLoad() override;
 	virtual void BeginDestroy() override;
 
+	/** Rename / re-outer of THIS object (UObject::Rename, not a content-browser asset rename, which fixes
+	 *  soft paths itself). Dispatches EDITOR_OnHostRelocated unless the move is a retirement to transient. */
+	virtual void PostRename(UObject* OldOuter, const FName OldName) override;
+
+#if WITH_EDITOR
+	/** Hosts with machinery that bakes host-relative paths dispatch into their type states here. */
+	virtual void EDITOR_OnHostRelocated()
+	{
+	}
+#endif
+
 	/**
 	 * Re-stage every entry (SyncEntryIds -> per-entry UpdateStaging/PostUpdateStaging ->
 	 * cache invalidation). Entries whose Staging.bAuthored is set keep their staging content
@@ -1147,6 +1158,18 @@ public:
 	 * calling EDITOR_RebuildEntryStaging per stale index) and fires once at the batch end.
 	 */
 	virtual void EDITOR_OnPostStagingRebuild()
+	{
+	}
+
+	/**
+	 * The per-type machinery that must follow a re-stage: PCGData shared-collection compaction, entry
+	 * hash rewrite, CollectionMap bake. Hosts with type states override it; EDITOR_OnPostStagingRebuild
+	 * runs it for the editor rebuild paths. A caller of the raw RebuildStagingData owns calling it --
+	 * without it, freshly exported assets carry raw attributes and no CollectionMap pin, and every
+	 * downstream Map consumer fails with nothing else to say (the unpacker skips an attribute-less
+	 * dataset silently).
+	 */
+	virtual void EDITOR_RunTypeStatesPostStaging()
 	{
 	}
 

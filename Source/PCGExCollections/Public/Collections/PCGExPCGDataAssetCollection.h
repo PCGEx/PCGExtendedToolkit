@@ -325,6 +325,10 @@ public:
 	virtual void OnHostSerializeSave_End(UPCGExAssetCollection* Host) override;
 #if WITH_EDITOR
 	virtual void EDITOR_OnHostPostStagingRebuild(UPCGExAssetCollection* Host) override;
+
+	/** Embedded exports moved with the host; their Staging.Path strings and the CollectionMap rows baked
+	 *  inside them did not. Re-stamps both from the live objects. */
+	virtual void EDITOR_OnHostRelocated(UPCGExAssetCollection* Host) override;
 	virtual void AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const override;
 	virtual void EDITOR_AppendExternalPackages(const UPCGExAssetCollection* Host, TSet<UPackage*>& OutPackages) const override;
 
@@ -530,6 +534,8 @@ public:
 
 #if WITH_EDITOR
 	virtual void EDITOR_OnPostStagingRebuild() override;
+	virtual void EDITOR_RunTypeStatesPostStaging() override;
+	virtual void EDITOR_OnHostRelocated() override;
 	virtual void EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData) override;
 
 	/** IPCGExExternalPackageProducer via the owned machinery state. */
