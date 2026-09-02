@@ -142,6 +142,8 @@ public:
 	 *  over actor-typed entries (matching a native actor collection), then dispatches the
 	 *  post-rebuild hook into every type state. */
 	virtual void EDITOR_OnPostStagingRebuild() override;
+	virtual void EDITOR_RunTypeStatesPostStaging() override;
+	virtual void EDITOR_OnHostRelocated() override;
 
 	/** IPCGExExternalPackageProducer via every type state. */
 	virtual void EDITOR_GetExternalPackages(TSet<UPackage*>& OutPackages) const override;

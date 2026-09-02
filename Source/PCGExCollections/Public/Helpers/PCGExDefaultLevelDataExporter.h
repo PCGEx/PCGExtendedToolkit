@@ -44,7 +44,7 @@ enum class EPCGExActorExportType : uint8
 /**
  * Default level data exporter that replicates the engine's UPCGLevelToAsset behavior.
  *
- * For each qualifying actor in the level:
+ * For each qualifying actor of the export source (a whole level, or one actor's subtree):
  * - Classifies actors as Mesh or Actor (or Skip)
  * - Creates a point at the actor's transform
  * - Stores mesh/actor references, materials, and bounds as metadata attributes
@@ -117,7 +117,7 @@ public:
 	FName InstanceTagsAttributeName = FName("InstanceTags");
 
 	virtual bool ExportLevelData_Implementation(UWorld* World, UPCGDataAsset* OutAsset) override;
-	virtual bool ExportLevelData(UWorld* World, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext) override;
+	virtual bool ExportLevelData(const FPCGExLevelExportSource& Source, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext) override;
 
 	/** Classify an actor. Override for custom logic.
 	 *  Default behaviour:

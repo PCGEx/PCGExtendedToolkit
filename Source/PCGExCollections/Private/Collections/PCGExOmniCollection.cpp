@@ -648,6 +648,11 @@ void UPCGExOmniCollection::EDITOR_OnPostStagingRebuild()
 		UPCGExActorCollection::RebuildActorPropertiesFromComponents(this, ActorGlobals.SchemaMergePolicy);
 	}
 
+	EDITOR_RunTypeStatesPostStaging();
+}
+
+void UPCGExOmniCollection::EDITOR_RunTypeStatesPostStaging()
+{
 	// Per-type setup safety net (entry-add paths ensure eagerly), then dispatch -- newly
 	// needed machinery (e.g. the first level-sourced PCGData entry) runs within the session.
 	EDITOR_EnsureTypeSetup();
@@ -656,6 +661,17 @@ void UPCGExOmniCollection::EDITOR_OnPostStagingRebuild()
 		if (State)
 		{
 			State->EDITOR_OnHostPostStagingRebuild(this);
+		}
+	}
+}
+
+void UPCGExOmniCollection::EDITOR_OnHostRelocated()
+{
+	for (const TObjectPtr<UPCGExCollectionTypeState>& State : TypeStates)
+	{
+		if (State)
+		{
+			State->EDITOR_OnHostRelocated(this);
 		}
 	}
 }

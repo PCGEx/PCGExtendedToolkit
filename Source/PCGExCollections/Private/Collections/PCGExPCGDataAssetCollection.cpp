@@ -33,6 +33,8 @@
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
 #include "Helpers/PCGExLevelDataExporter.h"
+#include "Helpers/PCGExStreamingHelpers.h"
+#include "GameFramework/Actor.h"
 
 
 // Static-init type registration: TypeId=PCGDataAsset, parent=Base
@@ -67,21 +69,31 @@ namespace PCGExPCGDataAssetCollection
 
 bool FPCGExPCGDataAssetCollectionEntry::Validate(const UPCGExAssetCollection* ParentCollection)
 {
-	if (!bIsSubCollection)
+	if (!bIsSubCollection && ParentCollection->bDoNotIgnoreInvalidEntries)
 	{
-		if (Source == EPCGExDataAssetEntrySource::Level)
+		switch (Source)
 		{
-			if (!Level.ToSoftObjectPath().IsValid() && ParentCollection->bDoNotIgnoreInvalidEntries)
+		case EPCGExDataAssetEntrySource::DataAsset:
+			if (!DataAsset.ToSoftObjectPath().IsValid())
 			{
 				return false;
 			}
-		}
-		else
-		{
-			if (!DataAsset.ToSoftObjectPath().IsValid() && ParentCollection->bDoNotIgnoreInvalidEntries)
+			break;
+		case EPCGExDataAssetEntrySource::Level:
+			if (!Level.ToSoftObjectPath().IsValid())
 			{
 				return false;
 			}
+			break;
+		case EPCGExDataAssetEntrySource::Actor:
+			if (!SourceActor.ToSoftObjectPath().IsValid())
+			{
+				return false;
+			}
+			break;
+		default:
+			ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+			return false;
 		}
 	}
 
@@ -108,209 +120,170 @@ namespace PCGExPCGDataAssetCollectionInternal
 	}
 }
 
-// Loads the PCG data asset (or exports level data) and computes combined bounds.
+void FPCGExPCGDataAssetCollectionEntry::ResetEditorContributions()
+{
+#if WITH_EDITORONLY_DATA
+	EditorMeshContributions.Reset();
+	EditorMeshInheritedDefaults.Reset();
+	EditorLocalPicks.Reset();
+	EditorLevelContributions.Reset();
+	EditorLevelLocalPicks.Reset();
+#endif
+}
+
+void FPCGExPCGDataAssetCollectionEntry::ResetExport(const UPCGExAssetCollection* OwningCollection)
+{
+	// Own subobjects get the transient-rename so they stop serializing; a pointer to another
+	// package's private subobject (cross-asset copy) is only nulled -- it must never survive a save.
+	auto Discard = [OwningCollection](auto& Embedded)
+	{
+		if (!Embedded)
+		{
+			return;
+		}
+		if (Embedded->GetOuter() == OwningCollection)
+		{
+			Embedded->Rename(nullptr, GetTransientPackage(),
+			                 REN_DontCreateRedirectors | REN_NonTransactional);
+		}
+		Embedded = nullptr;
+	};
+	Discard(ExportedDataAsset);
+	Discard(EmbeddedActorCollection);
+
+	Staging.Bounds = FBox(ForceInit);
+	Staging.Path = FSoftObjectPath();
+	ResetEditorContributions();
+}
+
+// Shared by the Level and Actor sources once their world is loaded and transform-current.
 //
-// Level-sourced entries route through the 3-arg exporter API so EditorMeshContributions /
-// EditorLocalPicks + EditorLevelContributions / EditorLevelLocalPicks are captured directly
-// into the entry's UPROPERTY storage. Tag_EntryIdx hashes (Meshes + Levels pins) and the
-// CollectionMap pin are NOT written here -- those are produced by the parent collection's
-// CompactSharedMesh / CompactSharedLevel / RebuildCollectionMaps, which see every entry's
-// contributions and resolve final shared indices.
+// Routes through the 3-arg exporter API so EditorMeshContributions / EditorLocalPicks +
+// EditorLevelContributions / EditorLevelLocalPicks are captured directly into the entry's
+// UPROPERTY storage. Tag_EntryIdx hashes (Meshes + Levels pins) and the CollectionMap pin are
+// NOT written here -- those are produced by the parent collection's CompactSharedMesh /
+// CompactSharedLevel / RebuildCollectionMaps, which see every entry's contributions and
+// resolve final shared indices.
+bool FPCGExPCGDataAssetCollectionEntry::ExportFromSource(const UPCGExAssetCollection* OwningCollection, const FPCGExLevelExportSource& ExportSource)
+{
+	// Always recreate ExportedDataAsset fresh. Reusing + resetting TaggedData leaves orphaned
+	// UPCGBasePointData subobjects in the outer chain that still serialize into the .uasset,
+	// which causes save-time pointer traversal crashes after repeated rebuilds.
+	if (ExportedDataAsset)
+	{
+		ExportedDataAsset->Rename(nullptr, GetTransientPackage(),
+		                          REN_DontCreateRedirectors | REN_NonTransactional);
+	}
+	ExportedDataAsset = NewObject<UPCGDataAsset>(const_cast<UPCGExAssetCollection*>(OwningCollection));
+
+	// Exporter via the type-globals seam, else a transient default. Editor-only data:
+	// cooked builds always take the fallback.
+	UPCGExLevelDataExporter* Exporter = nullptr;
+#if WITH_EDITORONLY_DATA
+	if (OwningCollection)
+	{
+		FPCGExPCGDataAssetCollectionGlobals Globals;
+		if (OwningCollection->GetTypeGlobals(Globals))
+		{
+			Exporter = Globals.LevelExporter;
+		}
+	}
+#endif
+
+	TObjectPtr<UPCGExLevelDataExporter> FallbackExporter;
+	if (!Exporter)
+	{
+		const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
+		UClass* ExporterClass = Settings.DefaultLevelExporterClass
+			? Settings.DefaultLevelExporterClass.Get()
+			: UPCGExDefaultLevelDataExporter::StaticClass();
+#if PCGEX_ENGINE_VERSION < 507
+		FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackage(), ExporterClass);
+#else
+		FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackageAsObject(), ExporterClass);
+#endif
+
+		Exporter = FallbackExporter;
+	}
+
+	// Wire the export context to write directly into the entry's UPROPERTY storage --
+	// no copy at the API boundary. Only available in editor builds; shipping builds run
+	// the exporter without capturing contributions (the shared collections are already
+	// baked into the per-entry ExportedDataAsset hashes at cook time).
+	FPCGExLevelExportContext ExportContext;
+	// Reset the capture buffers so a failed export doesn't leave stale data from a prior
+	// rebuild contributing to CompactSharedMesh / CompactSharedLevel.
+	ResetEditorContributions();
+#if WITH_EDITORONLY_DATA
+	ExportContext.MeshContributions = &EditorMeshContributions;
+	ExportContext.MeshInheritedDefaults = &EditorMeshInheritedDefaults;
+	ExportContext.MeshLocalPicks = &EditorLocalPicks;
+	ExportContext.LevelContributions = &EditorLevelContributions;
+	ExportContext.LevelLocalPicks = &EditorLevelLocalPicks;
+#endif
+	// The previous actor collection is the exporter's working buffer -- its CollectionGUID
+	// and EntryIds are bound by external references (variants). Cold external sessions load
+	// the externalized asset back. The entry ref stays assigned during export so the object
+	// stays GC-reachable.
+	if (!EmbeddedActorCollection && !ExternalActorCollection.IsNull())
+	{
+		PCGExHelpers::LoadBlocking_AnyThreadTpl(ExternalActorCollection);
+		EmbeddedActorCollection = ExternalActorCollection.Get();
+	}
+	ExportContext.PreviousActorCollection = EmbeddedActorCollection;
+	ExportContext.ActorCollectionOut = &EmbeddedActorCollection;
+
+	const bool bSuccess = Exporter->ExportLevelData(ExportSource, ExportedDataAsset, ExportContext);
+
+	if (bSuccess)
+	{
+		Staging.Path = FSoftObjectPath(ExportedDataAsset);
+		Staging.Bounds = PCGExPCGDataAssetCollectionInternal::ComputeBoundsFromAsset(ExportedDataAsset);
+
+		// Same actor set and frame as the export: a socket provider inside a subtree is a
+		// socket of that subtree, expressed root-relative like every other point.
+		for (AActor* Actor : ExportSource.Actors)
+		{
+			if (IPCGExSocketProvider* Provider = Cast<IPCGExSocketProvider>(Actor))
+			{
+				FPCGExSocket& NewSocket = Staging.Sockets.Emplace_GetRef(
+					Provider->GetSocketName_Implementation(),
+					ExportSource.ToFrame(Provider->GetSocketTransform_Implementation()),
+					Provider->GetSocketTag_Implementation());
+				NewSocket.bManaged = true;
+			}
+		}
+	}
+	else
+	{
+		Staging.Path = FSoftObjectPath();
+		Staging.Bounds = FBox(ForceInit);
+
+		// Failed exports return before ActorCollectionOut is assigned; the previous
+		// collection's outer chain was just retired -- never serialize it.
+		EmbeddedActorCollection = nullptr;
+		ResetEditorContributions();
+	}
+
+	return bSuccess;
+}
+
+// Loads the PCG data asset, or exports a level / an actor subtree into an embedded one, and
+// computes combined bounds. See ExportFromSource for the export half.
 void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive)
 {
-	ClearManagedSockets();
-
 	if (bIsSubCollection)
 	{
+		ClearManagedSockets();
 		FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
 		return;
 	}
 
-	if (Source == EPCGExDataAssetEntrySource::Level)
+	switch (Source)
 	{
-		// Level export depends on machinery the host must run -- in hosts that don't,
-		// stage nothing and point at the composition path. Capability query so future
-		// host kinds (per-type processor seam) only change the helper.
-		if (!UPCGExPCGDataAssetCollection::HostSupportsDataAssetMachinery(OwningCollection))
-		{
-			UE_LOG(LogPCGEx, Warning,
-			       TEXT("Level-sourced PCGDataAsset entry ('%s') is hosted by a collection without the level-export machinery -- entry skipped. Author it in a PCGDataAsset collection and reference that collection as a subcollection entry instead."),
-			       *Level.ToSoftObjectPath().ToString());
-
-			// Discard any embedded export carried in via a cross-asset copy: foreign hosts
-			// never consume it, and a pointer to another asset's private subobject must not
-			// survive a save. Own subobjects get the transient-rename (mirrors the recreate
-			// path below); foreign-owned pointers are only nulled.
-			auto DiscardEmbedded = [OwningCollection](auto& Embedded)
-			{
-				if (!Embedded)
-				{
-					return;
-				}
-				if (Embedded->GetOuter() == OwningCollection)
-				{
-					Embedded->Rename(nullptr, GetTransientPackage(),
-					                 REN_DontCreateRedirectors | REN_NonTransactional);
-				}
-				Embedded = nullptr;
-			};
-			DiscardEmbedded(ExportedDataAsset);
-			DiscardEmbedded(EmbeddedActorCollection);
-
-			Staging.Bounds = FBox(ForceInit);
-			Staging.Path = FSoftObjectPath();
-#if WITH_EDITORONLY_DATA
-			EditorMeshContributions.Reset();
-			EditorMeshInheritedDefaults.Reset();
-			EditorLocalPicks.Reset();
-			EditorLevelContributions.Reset();
-			EditorLevelLocalPicks.Reset();
-#endif
-			FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
-			return;
-		}
-
-		// Level source: load world, export to embedded data asset
-		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(Level.ToSoftObjectPath());
-		UWorld* LoadedWorld = Level.Get();
-
-		if (!LoadedWorld)
-		{
-			Staging.Bounds = FBox(ForceInit);
-			Staging.Path = FSoftObjectPath();
-#if WITH_EDITORONLY_DATA
-			EditorMeshContributions.Reset();
-			EditorMeshInheritedDefaults.Reset();
-			EditorLocalPicks.Reset();
-			EditorLevelContributions.Reset();
-			EditorLevelLocalPicks.Reset();
-#endif
-			PCGExHelpers::SafeReleaseHandle(Handle);
-			FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
-			return;
-		}
-
-		// Asset-loaded worlds carry identity ComponentToWorld/Bounds until this runs -- the
-		// exporter, the bounds evaluators and the socket scan below all read live component state.
-		PCGExHelpers::EnsureWorldTransformsCurrent(LoadedWorld);
-
-		// Always recreate ExportedDataAsset fresh. Reusing + resetting TaggedData leaves orphaned
-		// UPCGBasePointData subobjects in the outer chain that still serialize into the .uasset,
-		// which causes save-time pointer traversal crashes after repeated rebuilds.
-		if (ExportedDataAsset)
-		{
-			ExportedDataAsset->Rename(nullptr, GetTransientPackage(),
-			                          REN_DontCreateRedirectors | REN_NonTransactional);
-		}
-		ExportedDataAsset = NewObject<UPCGDataAsset>(const_cast<UPCGExAssetCollection*>(OwningCollection));
-
-		// Exporter via the type-globals seam, else a transient default. Editor-only data:
-		// cooked builds always take the fallback.
-		UPCGExLevelDataExporter* Exporter = nullptr;
-#if WITH_EDITORONLY_DATA
-		if (OwningCollection)
-		{
-			FPCGExPCGDataAssetCollectionGlobals Globals;
-			if (OwningCollection->GetTypeGlobals(Globals))
-			{
-				Exporter = Globals.LevelExporter;
-			}
-		}
-#endif
-
-		TObjectPtr<UPCGExLevelDataExporter> FallbackExporter;
-		if (!Exporter)
-		{
-			const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
-			UClass* ExporterClass = Settings.DefaultLevelExporterClass
-				? Settings.DefaultLevelExporterClass.Get()
-				: UPCGExDefaultLevelDataExporter::StaticClass();
-#if PCGEX_ENGINE_VERSION < 507
-			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackage(), ExporterClass);
-#else
-			FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackageAsObject(), ExporterClass);
-#endif
-
-			Exporter = FallbackExporter;
-		}
-
-		// Wire the export context to write directly into the entry's UPROPERTY storage --
-		// no copy at the API boundary. Only available in editor builds; shipping builds run
-		// the exporter without capturing contributions (the shared collections are already
-		// baked into the per-entry ExportedDataAsset hashes at cook time).
-		FPCGExLevelExportContext ExportContext;
-#if WITH_EDITORONLY_DATA
-		// Reset editor-only capture buffers so a failed export doesn't leave stale data
-		// from a prior rebuild contributing to CompactSharedMesh / CompactSharedLevel.
-		EditorMeshContributions.Reset();
-		EditorMeshInheritedDefaults.Reset();
-		EditorLocalPicks.Reset();
-		EditorLevelContributions.Reset();
-		EditorLevelLocalPicks.Reset();
-		ExportContext.MeshContributions = &EditorMeshContributions;
-		ExportContext.MeshInheritedDefaults = &EditorMeshInheritedDefaults;
-		ExportContext.MeshLocalPicks = &EditorLocalPicks;
-		ExportContext.LevelContributions = &EditorLevelContributions;
-		ExportContext.LevelLocalPicks = &EditorLevelLocalPicks;
-#endif
-		// The previous actor collection is the exporter's working buffer -- its CollectionGUID
-		// and EntryIds are bound by external references (variants). Cold external sessions load
-		// the externalized asset back. The entry ref stays assigned during export so the object
-		// stays GC-reachable.
-		if (!EmbeddedActorCollection && !ExternalActorCollection.IsNull())
-		{
-			PCGExHelpers::LoadBlocking_AnyThreadTpl(ExternalActorCollection);
-			EmbeddedActorCollection = ExternalActorCollection.Get();
-		}
-		ExportContext.PreviousActorCollection = EmbeddedActorCollection;
-		ExportContext.ActorCollectionOut = &EmbeddedActorCollection;
-
-		const bool bSuccess = Exporter->ExportLevelData(LoadedWorld, ExportedDataAsset, ExportContext);
-
-		if (bSuccess)
-		{
-			Staging.Path = FSoftObjectPath(ExportedDataAsset);
-			Staging.Bounds = PCGExPCGDataAssetCollectionInternal::ComputeBoundsFromAsset(ExportedDataAsset);
-
-			// Scan for socket actors after export so the world is in the same initialized
-			// state the exporter used -- transforms are reliable at this point.
-			if (LoadedWorld->PersistentLevel)
-			{
-				for (AActor* Actor : LoadedWorld->PersistentLevel->Actors)
-				{
-					if (IPCGExSocketProvider* Provider = Cast<IPCGExSocketProvider>(Actor))
-					{
-						FPCGExSocket& NewSocket = Staging.Sockets.Emplace_GetRef(
-							Provider->GetSocketName_Implementation(),
-							Provider->GetSocketTransform_Implementation(),
-							Provider->GetSocketTag_Implementation());
-						NewSocket.bManaged = true;
-					}
-				}
-			}
-		}
-		else
-		{
-			Staging.Path = FSoftObjectPath();
-			Staging.Bounds = FBox(ForceInit);
-
-			// Failed exports return before ActorCollectionOut is assigned; the previous
-			// collection's outer chain was just retired -- never serialize it.
-			EmbeddedActorCollection = nullptr;
-#if WITH_EDITORONLY_DATA
-			EditorMeshContributions.Reset();
-			EditorMeshInheritedDefaults.Reset();
-			EditorLocalPicks.Reset();
-			EditorLevelContributions.Reset();
-			EditorLevelLocalPicks.Reset();
-#endif
-		}
-
-		PCGExHelpers::SafeReleaseHandle(Handle);
-	}
-	else
+	case EPCGExDataAssetEntrySource::DataAsset:
 	{
-		// DataAsset source: existing behavior. No mesh/level contributions captured.
+		ClearManagedSockets();
 		Staging.Path = DataAsset.ToSoftObjectPath();
 		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThreadTpl(DataAsset);
 
@@ -323,17 +296,85 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 			Staging.Bounds = FBox(ForceInit);
 		}
 
-#if WITH_EDITORONLY_DATA
 		// DataAsset-sourced entries don't contribute to the shared collections -- clear any
-		// stale contributions left behind by a prior Source==Level rebuild.
-		EditorMeshContributions.Reset();
-		EditorMeshInheritedDefaults.Reset();
-		EditorLocalPicks.Reset();
-		EditorLevelContributions.Reset();
-		EditorLevelLocalPicks.Reset();
-#endif
+		// stale contributions left behind by a prior export-sourced rebuild.
+		ResetEditorContributions();
 
 		PCGExHelpers::SafeReleaseHandle(Handle);
+		break;
+	}
+	case EPCGExDataAssetEntrySource::Level:
+	case EPCGExDataAssetEntrySource::Actor:
+	{
+		const bool bActorSource = Source == EPCGExDataAssetEntrySource::Actor;
+		const FSoftObjectPath SourcePath = bActorSource ? SourceActor.ToSoftObjectPath() : Level.ToSoftObjectPath();
+
+		// Export depends on machinery the host must run -- in hosts that don't, stage nothing
+		// and point at the composition path. Capability query so future host kinds (per-type
+		// processor seam) only change the helper.
+		if (!UPCGExPCGDataAssetCollection::HostSupportsDataAssetMachinery(OwningCollection))
+		{
+			UE_LOG(LogPCGEx, Warning,
+			       TEXT("%s-sourced PCGDataAsset entry ('%s') is hosted by a collection without the level-export machinery -- entry skipped. Author it in a PCGDataAsset collection and reference that collection as a subcollection entry instead."),
+			       bActorSource ? TEXT("Actor") : TEXT("Level"), *SourcePath.ToString());
+			ClearManagedSockets();
+			ResetExport(OwningCollection);
+			break;
+		}
+
+		if (bActorSource)
+		{
+			TSharedPtr<FStreamableHandle> Handle;
+			FString Failure;
+			AActor* Root = PCGExCollections::ResolveLevelActor(SourcePath, Handle, &Failure);
+			if (!Root)
+			{
+				// An unreachable source keeps the last export, sockets included: the actor is usually
+				// unreachable only because its level is closed, and an empty module is worse than a
+				// stale one. A deleted actor is the author's to fix -- the warning names it.
+				UE_LOG(LogPCGEx, Warning,
+				       TEXT("Actor-sourced PCGDataAsset entry: %s -- %s."),
+				       *Failure, ExportedDataAsset ? TEXT("keeping the previous export") : TEXT("no previous export, entry stages nothing"));
+				if (ExportedDataAsset)
+				{
+					Staging.Path = FSoftObjectPath(ExportedDataAsset);
+				}
+				else
+				{
+					ClearManagedSockets();
+					ResetExport(OwningCollection);
+				}
+				break;
+			}
+
+			ClearManagedSockets();
+			ExportFromSource(OwningCollection, FPCGExLevelExportSource::FromActorSubtree(Root));
+			PCGExHelpers::SafeReleaseHandle(Handle);
+			break;
+		}
+
+		ClearManagedSockets();
+		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(SourcePath);
+		UWorld* LoadedWorld = Level.Get();
+		if (!LoadedWorld)
+		{
+			ResetExport(OwningCollection);
+			PCGExHelpers::SafeReleaseHandle(Handle);
+			break;
+		}
+
+		// Asset-loaded worlds carry identity ComponentToWorld/Bounds until this runs -- the
+		// exporter, the bounds evaluators and the socket scan all read live component state.
+		PCGExHelpers::EnsureWorldTransformsCurrent(LoadedWorld);
+		ExportFromSource(OwningCollection, FPCGExLevelExportSource::FromWorld(LoadedWorld));
+		PCGExHelpers::SafeReleaseHandle(Handle);
+		break;
+	}
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		ClearManagedSockets();
+		ResetExport(OwningCollection);
+		break;
 	}
 
 	FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
@@ -343,13 +384,20 @@ void FPCGExPCGDataAssetCollectionEntry::SetAssetPath(const FSoftObjectPath& InPa
 {
 	FPCGExAssetCollectionEntry::SetAssetPath(InPath);
 
-	if (Source == EPCGExDataAssetEntrySource::Level)
+	switch (Source)
 	{
-		Level = TSoftObjectPtr<UWorld>(InPath);
-	}
-	else
-	{
+	case EPCGExDataAssetEntrySource::DataAsset:
 		DataAsset = TSoftObjectPtr<UPCGDataAsset>(InPath);
+		break;
+	case EPCGExDataAssetEntrySource::Level:
+		Level = TSoftObjectPtr<UWorld>(InPath);
+		break;
+	case EPCGExDataAssetEntrySource::Actor:
+		SourceActor = TSoftObjectPtr<AActor>(InPath);
+		break;
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		break;
 	}
 }
 
@@ -358,16 +406,12 @@ void FPCGExPCGDataAssetCollectionEntry::EDITOR_Sanitize()
 {
 	FPCGExAssetCollectionEntry::EDITOR_Sanitize();
 
-	// Clean up embedded data when not in Level mode
-	if (Source != EPCGExDataAssetEntrySource::Level)
+	// Only the export-backed sources carry an embedded asset.
+	if (Source != EPCGExDataAssetEntrySource::Level && Source != EPCGExDataAssetEntrySource::Actor)
 	{
 		ExportedDataAsset = nullptr;
 		EmbeddedActorCollection = nullptr;
-		EditorMeshContributions.Reset();
-		EditorMeshInheritedDefaults.Reset();
-		EditorLocalPicks.Reset();
-		EditorLevelContributions.Reset();
-		EditorLevelLocalPicks.Reset();
+		ResetEditorContributions();
 	}
 }
 
@@ -378,23 +422,29 @@ void FPCGExPCGDataAssetCollectionEntry::EDITOR_GetSourceAssetPaths(TSet<FSoftObj
 		return;
 	}
 
-	// Source refs trigger rebuild -- not Staging.Path, which for Source==Level points at
-	// an embedded ExportedDataAsset inside the collection's own package.
-	if (Source == EPCGExDataAssetEntrySource::Level)
+	// Source refs trigger rebuild -- not Staging.Path, which for the export-backed sources
+	// points at an embedded ExportedDataAsset inside the collection's own package. An actor
+	// path's package is its level's, so the package-name match fires on a level save; OFPA
+	// actor saves reach it through the editor module's outer-path remap.
+	FSoftObjectPath SourcePath;
+	switch (Source)
 	{
-		const FSoftObjectPath LevelPath = Level.ToSoftObjectPath();
-		if (LevelPath.IsValid())
-		{
-			OutPaths.Emplace(LevelPath);
-		}
+	case EPCGExDataAssetEntrySource::DataAsset:
+		SourcePath = DataAsset.ToSoftObjectPath();
+		break;
+	case EPCGExDataAssetEntrySource::Level:
+		SourcePath = Level.ToSoftObjectPath();
+		break;
+	case EPCGExDataAssetEntrySource::Actor:
+		SourcePath = SourceActor.ToSoftObjectPath();
+		break;
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		break;
 	}
-	else
+	if (SourcePath.IsValid())
 	{
-		const FSoftObjectPath AssetPath = DataAsset.ToSoftObjectPath();
-		if (AssetPath.IsValid())
-		{
-			OutPaths.Emplace(AssetPath);
-		}
+		OutPaths.Emplace(SourcePath);
 	}
 }
 
@@ -405,14 +455,50 @@ FSoftObjectPath FPCGExPCGDataAssetCollectionEntry::EDITOR_GetThumbnailAssetPath(
 		return FPCGExAssetCollectionEntry::EDITOR_GetThumbnailAssetPath();
 	}
 
-	// Level-sourced entries stage an embedded ExportedDataAsset inside the collection
-	// package; show the user-facing source (the UWorld) instead.
-	if (Source == EPCGExDataAssetEntrySource::Level)
+	// Export-backed entries draw their EXPORT: the data-asset thumbnail renderer shows the exported
+	// geometry, which is what the entry stands for. Live embedded object first, externalized asset
+	// next, the source as the fallback before any export exists.
+	switch (Source)
 	{
-		return Level.ToSoftObjectPath();
+	case EPCGExDataAssetEntrySource::DataAsset:
+		return DataAsset.ToSoftObjectPath();
+	case EPCGExDataAssetEntrySource::Level:
+	case EPCGExDataAssetEntrySource::Actor:
+		if (ExportedDataAsset)
+		{
+			return FSoftObjectPath(ExportedDataAsset);
+		}
+		if (!ExternalExportedDataAsset.IsNull())
+		{
+			return ExternalExportedDataAsset.ToSoftObjectPath();
+		}
+		return EDITOR_GetActivationAssetPath();
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		return FSoftObjectPath();
+	}
+}
+
+FSoftObjectPath FPCGExPCGDataAssetCollectionEntry::EDITOR_GetActivationAssetPath() const
+{
+	if (bIsSubCollection)
+	{
+		return FPCGExAssetCollectionEntry::EDITOR_GetActivationAssetPath();
 	}
 
-	return DataAsset.ToSoftObjectPath();
+	// Opening an export means opening what authored it: the level, or the actor's level.
+	switch (Source)
+	{
+	case EPCGExDataAssetEntrySource::DataAsset:
+		return DataAsset.ToSoftObjectPath();
+	case EPCGExDataAssetEntrySource::Level:
+		return Level.ToSoftObjectPath();
+	case EPCGExDataAssetEntrySource::Actor:
+		return SourceActor.ToSoftObjectPath().GetWithoutSubPath();
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		return FSoftObjectPath();
+	}
 }
 #endif
 
@@ -1449,9 +1535,22 @@ void UPCGExPCGDataAssetCollection::PreSave(FObjectPreSaveContext ObjectSaveConte
 
 void UPCGExPCGDataAssetCollection::EDITOR_OnPostStagingRebuild()
 {
+	EDITOR_RunTypeStatesPostStaging();
+}
+
+void UPCGExPCGDataAssetCollection::EDITOR_RunTypeStatesPostStaging()
+{
 	if (MachineryState)
 	{
 		MachineryState->EDITOR_OnHostPostStagingRebuild(this);
+	}
+}
+
+void UPCGExPCGDataAssetCollection::EDITOR_OnHostRelocated()
+{
+	if (MachineryState)
+	{
+		MachineryState->EDITOR_OnHostRelocated(this);
 	}
 }
 
@@ -1703,6 +1802,26 @@ void UPCGExPCGDataTypeState::EDITOR_OnHostPostStagingRebuild(UPCGExAssetCollecti
 {
 	FPCGExPCGDataAssetMachinery State = MakeMachinery(Host);
 	UPCGExPCGDataAssetCollection::RebuildSharedCollectionsFor(State);
+}
+
+void UPCGExPCGDataTypeState::EDITOR_OnHostRelocated(UPCGExAssetCollection* Host)
+{
+	FPCGExPCGDataAssetMachinery State = MakeMachinery(Host);
+	if (!State.IsValid())
+	{
+		return;
+	}
+
+	for (FPCGExPCGDataAssetCollectionEntry* Entry : State.Entries)
+	{
+		if (Entry && Entry->ExportedDataAsset && Entry->ExportedDataAsset->IsIn(Host))
+		{
+			Entry->Staging.Path = FSoftObjectPath(Entry->ExportedDataAsset);
+		}
+	}
+
+	// Re-packs from the live shared / per-entry collections, wherever they now live.
+	UPCGExPCGDataAssetCollection::RebuildCollectionMapsFor(State);
 }
 
 void UPCGExPCGDataTypeState::AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const

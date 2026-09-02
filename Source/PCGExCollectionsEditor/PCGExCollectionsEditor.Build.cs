@@ -56,6 +56,7 @@ public class PCGExCollectionsEditor : ModuleRules
 			{
 				"ContentBrowser",
 				"InputCore",
+				"RenderCore",
 				"AssetTools",
 				"AssetRegistry",
 				"Slate",

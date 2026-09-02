@@ -13,6 +13,10 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/Level.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "Helpers/PCGExActorHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #if WITH_EDITOR
 #include "Helpers/PCGDynamicTrackingHelpers.h"
 #endif
@@ -701,6 +705,21 @@ namespace PCGExCollections
 		return true;
 	}
 
+	void FPickUnpacker::AddCollection(UPCGExAssetCollection* InCollection)
+	{
+		if (!InCollection)
+		{
+			return;
+		}
+		const uint32 Idx = InCollection->GetCollectionGUID();
+		if (CollectionMap.Contains(Idx))
+		{
+			return;
+		}
+		CollectionMap.Add(Idx, InCollection);
+		NumUniqueEntries += InCollection->GetValidEntryNum();
+	}
+
 	void FPickUnpacker::RegisterCollectionsTo(FPickPacker& InPacker) const
 	{
 		for (const TPair<uint32, UPCGExAssetCollection*>& Pair : CollectionMap)
@@ -1143,3 +1162,54 @@ namespace PCGExCollections
 		}
 	}
 }
+
+#pragma region ResolveLevelActor
+
+namespace PCGExCollections
+{
+	AActor* ResolveLevelActor(const FSoftObjectPath& ActorPath, TSharedPtr<FStreamableHandle>& OutHandle, FString* OutFailure)
+	{
+		auto Fail = [OutFailure](FString&& Reason) -> AActor*
+		{
+			if (OutFailure)
+			{
+				*OutFailure = MoveTemp(Reason);
+			}
+			return nullptr;
+		};
+
+		if (!ActorPath.IsValid() || !ActorPath.IsSubobject())
+		{
+			return Fail(TEXT("not an actor path"));
+		}
+
+		AActor* Actor = Cast<AActor>(ActorPath.ResolveObject());
+
+		if (!Actor)
+		{
+#if WITH_EDITOR
+			// Asset-registry query, no load. Checked BEFORE loading: ULevel::PostLoad only pulls
+			// external actors into a cold world for non-partitioned levels, so a partitioned one
+			// would load fine and then contain nothing.
+			if (ULevel::GetIsLevelPartitionedFromPackage(ActorPath.GetLongPackageFName()))
+			{
+				return Fail(FString::Printf(TEXT("level '%s' is World Partition -- only an open partitioned level can be read"), *ActorPath.GetLongPackageName()));
+			}
+#endif
+
+			OutHandle = PCGExHelpers::LoadBlocking_AnyThread(ActorPath);
+			Actor = Cast<AActor>(ActorPath.ResolveObject());
+			if (!Actor)
+			{
+				PCGExHelpers::SafeReleaseHandle(OutHandle);
+				return Fail(FString::Printf(TEXT("actor '%s' not found (level missing, actor deleted or renamed)"), *ActorPath.ToString()));
+			}
+		}
+
+		// No-op on a live world; a cold one reads identity transforms until this runs.
+		PCGExHelpers::EnsureWorldTransformsCurrent(Actor->GetWorld());
+		return Actor;
+	}
+}
+
+#pragma endregion

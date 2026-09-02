@@ -79,20 +79,24 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	UPROPERTY()
 	TArray<FSoftObjectPath> DeltaCollateralPaths;
 
-	/** Optional: reference a specific level to capture property deltas from a placed actor.
-	 *  The actor's class must match the Actor class ref. During UpdateStaging,
-	 *  the property delta is computed from that instance vs its CDO. */
+	/** Optional: a placed actor to capture the property delta from (its class must match Actor). During
+	 *  UpdateStaging the delta is computed from that instance vs its CDO. Its level must not be World
+	 *  Partition: a closed partitioned level cannot be read. */
 	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection", EditConditionHides))
-	TSoftObjectPtr<UWorld> DeltaSourceLevel;
+	TSoftObjectPtr<AActor> DeltaSourceActor;
 
-	/** Name of the actor within the level to capture delta from. */
-	UPROPERTY(EditAnywhere, Category = "Settings|Delta", meta=(EditCondition="!bIsSubCollection ", EditConditionHides))
-	FName DeltaSourceActorName;
+	/** LEGACY delta-source pair (level + actor name). Folded into DeltaSourceActor by OnHostPostLoad. */
+	UPROPERTY()
+	TSoftObjectPtr<UWorld> DeltaSourceLevel_DEPRECATED;
+
+	UPROPERTY()
+	FName DeltaSourceActorName_DEPRECATED;
 
 	// Lifecycle
 	virtual bool Validate(const UPCGExAssetCollection* ParentCollection) override;
 	virtual void UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive) override;
 	virtual void SetAssetPath(const FSoftObjectPath& InPath) override;
+	virtual bool OnHostPostLoad(UPCGExAssetCollection* Host) override;
 
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize() override;
@@ -150,7 +154,7 @@ public:
 	 * Source resolution per entry:
 	 *   1. If RepresentativeInstances is non-empty and its slot at the entry's index is
 	 *      non-null, that live actor is the donor. (Level-exporter path: instance in-hand.)
-	 *   2. Else, if entry.DeltaSourceLevel + DeltaSourceActorName resolves to a placed actor
+	 *   2. Else, if entry.DeltaSourceActor resolves to a placed actor
 	 *      whose class matches entry.Actor, that actor is the donor. (Standalone authored
 	 *      path: user pointed the entry at a level-placed actor.)
 	 *   3. Else, the entry contributes no schema and gets no overrides (its row in the merged
@@ -165,7 +169,7 @@ public:
 	 *
 	 * @param Policy            Conflict resolution policy. Defaults to StrictTypeMatch.
 	 * @param RepresentativeInstances Parallel to Entries; entries with null/missing slots fall
-	 *                          through to DeltaSourceLevel resolution. May be empty.
+	 *                          through to DeltaSourceActor resolution. May be empty.
 	 */
 	void RebuildPropertiesFromActorComponents(
 		EPCGExSchemaMergePolicy Policy = EPCGExSchemaMergePolicy::StrictTypeMatch,

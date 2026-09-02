@@ -39,6 +39,8 @@
 #include "UObject/UObjectIterator.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
 #include "Thumbnails/PCGExCollectionThumbnailRenderer.h"
+#include "Thumbnails/PCGExPCGDataAssetThumbnailRenderer.h"
+#include "PCGDataAsset.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 #include "UObject/UObjectHash.h"
@@ -162,6 +164,9 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 void FPCGExCollectionsEditorModule::RegisterThumbnailRenderer()
 {
 	UThumbnailManager::Get().RegisterCustomRenderer(UPCGExAssetCollection::StaticClass(), UPCGExCollectionThumbnailRenderer::StaticClass());
+	// Data assets draw their mesh points -- level and assembly exports show their geometry in the
+	// collection grid and the content browser instead of the class icon.
+	UThumbnailManager::Get().RegisterCustomRenderer(UPCGDataAsset::StaticClass(), UPCGExPCGDataAssetThumbnailRenderer::StaticClass());
 	bThumbnailRendererRegistered = true;
 }
 
@@ -185,9 +190,17 @@ void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& Asset
 		return;
 	}
 
+	// An external (OFPA) actor saves into its own package, which no collection references: the
+	// registry stores its outer under the LEVEL ("/Game/Maps/M.M:PersistentLevel"), so the actor's
+	// object path -- and therefore its long package name -- is the level's. Walk that instead.
+	// Source paths on entries are level-rooted too, so the package-name match below still holds.
+	const FName ReferencedPackage = AssetData.GetOptionalOuterPathName().IsNone()
+		? AssetData.PackageName
+		: AssetData.GetSoftObjectPath().GetLongPackageFName();
+
 	// Find packages that reference this asset (no load).
 	TArray<FName> Referencers;
-	AssetRegistry.GetReferencers(AssetData.PackageName, Referencers, UE::AssetRegistry::EDependencyCategory::Package);
+	AssetRegistry.GetReferencers(ReferencedPackage, Referencers, UE::AssetRegistry::EDependencyCategory::Package);
 	if (Referencers.IsEmpty())
 	{
 		return;
@@ -222,7 +235,7 @@ void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& Asset
 			// a rebuild when updated on disk -- which for some entry types (e.g. PCGDataAsset
 			// entries in Level mode) is NOT Staging.Path. Matching by package name also
 			// handles BP class paths where the path ends in "_C".
-			Collection->ForEachEntry([Collection, &AssetData](const FPCGExAssetCollectionEntry* InEntry, int32 i)
+			Collection->ForEachEntry([Collection, ReferencedPackage](const FPCGExAssetCollectionEntry* InEntry, int32 i)
 			{
 				if (InEntry->bIsSubCollection)
 				{
@@ -234,7 +247,7 @@ void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& Asset
 
 				for (const FSoftObjectPath& SourcePath : SourcePaths)
 				{
-					if (SourcePath.GetLongPackageFName() == AssetData.PackageName)
+					if (SourcePath.GetLongPackageFName() == ReferencedPackage)
 					{
 						Collection->EDITOR_RebuildEntryStaging(i);
 						return;

@@ -421,6 +421,17 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	virtual void SetAssetPath(const FSoftObjectPath& InPath);
 	virtual void GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) const;
 
+	/**
+	 * Host-side load hook, one call per entry from UPCGExAssetCollection::PostLoad. Entries are structs and
+	 * get no PostLoad of their own, so per-entry data migration (deprecated slots folded into their
+	 * successors) lives here. Runs in every build: cooked data saved before a migration still carries the
+	 * old slots. Return true when something was rewritten so the host can dirty its package.
+	 */
+	virtual bool OnHostPostLoad(UPCGExAssetCollection* Host)
+	{
+		return false;
+	}
+
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize();
 
@@ -441,6 +452,14 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 * exported data asset rather than the authored UWorld.
 	 */
 	virtual FSoftObjectPath EDITOR_GetThumbnailAssetPath() const;
+
+	/** Editor-only: what a double-click on the entry opens. Defaults to the thumbnail asset; override
+	 *  when the picture and the thing to edit differ (an export drawn from its data asset, opened at
+	 *  its source level). */
+	virtual FSoftObjectPath EDITOR_GetActivationAssetPath() const
+	{
+		return EDITOR_GetThumbnailAssetPath();
+	}
 #endif
 
 
@@ -1011,6 +1030,17 @@ public:
 	virtual void PostLoad() override;
 	virtual void BeginDestroy() override;
 
+	/** Rename / re-outer of THIS object (UObject::Rename, not a content-browser asset rename, which fixes
+	 *  soft paths itself). Dispatches EDITOR_OnHostRelocated unless the move is a retirement to transient. */
+	virtual void PostRename(UObject* OldOuter, const FName OldName) override;
+
+#if WITH_EDITOR
+	/** Hosts with machinery that bakes host-relative paths dispatch into their type states here. */
+	virtual void EDITOR_OnHostRelocated()
+	{
+	}
+#endif
+
 	/**
 	 * Re-stage every entry (SyncEntryIds -> per-entry UpdateStaging/PostUpdateStaging ->
 	 * cache invalidation). Entries whose Staging.bAuthored is set keep their staging content
@@ -1137,6 +1167,18 @@ public:
 	 * calling EDITOR_RebuildEntryStaging per stale index) and fires once at the batch end.
 	 */
 	virtual void EDITOR_OnPostStagingRebuild()
+	{
+	}
+
+	/**
+	 * The per-type machinery that must follow a re-stage: PCGData shared-collection compaction, entry
+	 * hash rewrite, CollectionMap bake. Hosts with type states override it; EDITOR_OnPostStagingRebuild
+	 * runs it for the editor rebuild paths. A caller of the raw RebuildStagingData owns calling it --
+	 * without it, freshly exported assets carry raw attributes and no CollectionMap pin, and every
+	 * downstream Map consumer fails with nothing else to say (the unpacker skips an attribute-less
+	 * dataset silently).
+	 */
+	virtual void EDITOR_RunTypeStatesPostStaging()
 	{
 	}
 

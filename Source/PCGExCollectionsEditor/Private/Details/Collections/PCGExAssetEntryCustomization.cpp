@@ -3,6 +3,8 @@
 
 #include "Details/Collections/PCGExAssetEntryCustomization.h"
 
+#include "UObject/Package.h"
+
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "Editor.h"
@@ -272,19 +274,17 @@ TSharedRef<IPropertyTypeCustomization> FPCGExActorEntryCustomization::MakeInstan
 void FPCGExActorEntryCustomization::FillCustomizedTopLevelPropertiesNames()
 {
 	FPCGExEntryHeaderCustomizationBase::FillCustomizedTopLevelPropertiesNames();
-	CustomizedTopLevelProperties.Add(FName("DeltaSourceLevel"));
-	CustomizedTopLevelProperties.Add(FName("DeltaSourceActorName"));
+	CustomizedTopLevelProperties.Add(FName("DeltaSourceActor"));
 }
 
 namespace PCGExActorEntryCustomization
 {
 	static TSharedRef<SWidget> MakePickButton(
 		TSharedPtr<IPropertyHandle> ActorClassHandle,
-		TSharedPtr<IPropertyHandle> DeltaSourceLevelHandle,
-		TSharedPtr<IPropertyHandle> DeltaSourceActorNameHandle)
+		TSharedPtr<IPropertyHandle> DeltaSourceActorHandle)
 	{
 		return PropertyCustomizationHelpers::MakeUseSelectedButton(
-			FSimpleDelegate::CreateLambda([ActorClassHandle, DeltaSourceLevelHandle, DeltaSourceActorNameHandle]()
+			FSimpleDelegate::CreateLambda([ActorClassHandle, DeltaSourceActorHandle]()
 			{
 				if (!GEditor)
 				{
@@ -316,65 +316,42 @@ namespace PCGExActorEntryCustomization
 					}
 				}
 
-				DeltaSourceActorNameHandle->SetValue(SelectedActor->GetFName());
-
-				FSoftObjectPath WorldPath(SelectedActor->GetWorld());
-				DeltaSourceLevelHandle->SetValueFromFormattedString(WorldPath.ToString());
+				DeltaSourceActorHandle->SetValueFromFormattedString(FSoftObjectPath(SelectedActor).ToString());
 			}),
 			FText::FromString(TEXT("Pick the currently selected actor from the viewport")));
 	}
 
-	static TSharedRef<SWidget> MakeGoToButton(
-		TSharedPtr<IPropertyHandle> DeltaSourceLevelHandle,
-		TSharedPtr<IPropertyHandle> DeltaSourceActorNameHandle)
+	static FSoftObjectPath GetDeltaSourcePath(const TSharedPtr<IPropertyHandle>& DeltaSourceActorHandle)
+	{
+		FString PathStr;
+		DeltaSourceActorHandle->GetValueAsFormattedString(PathStr);
+		return FSoftObjectPath(PathStr);
+	}
+
+	static TSharedRef<SWidget> MakeGoToButton(TSharedPtr<IPropertyHandle> DeltaSourceActorHandle)
 	{
 		return PropertyCustomizationHelpers::MakeBrowseButton(
-			FSimpleDelegate::CreateLambda([DeltaSourceLevelHandle, DeltaSourceActorNameHandle]()
+			FSimpleDelegate::CreateLambda([DeltaSourceActorHandle]()
 			{
 				if (!GEditor)
 				{
 					return;
 				}
 
-				FString LevelPathStr;
-				DeltaSourceLevelHandle->GetValueAsFormattedString(LevelPathStr);
-
-				FName ActorName;
-				DeltaSourceActorNameHandle->GetValue(ActorName);
-
-				if (LevelPathStr.IsEmpty() || ActorName == NAME_None)
+				const FSoftObjectPath ActorPath = GetDeltaSourcePath(DeltaSourceActorHandle);
+				if (!ActorPath.IsValid())
 				{
 					return;
 				}
 
-				// Check if we need to load a different map
-				FSoftObjectPath StoredLevelPath(LevelPathStr);
+				// Open the actor's map when another one is current; the path then resolves live.
 				UWorld* CurrentWorld = GEditor->GetEditorWorldContext().World();
-				FSoftObjectPath CurrentWorldPath(CurrentWorld);
-
-				if (CurrentWorldPath != StoredLevelPath)
+				if (!CurrentWorld || CurrentWorld->GetPackage()->GetFName() != ActorPath.GetLongPackageFName())
 				{
-					FEditorFileUtils::LoadMap(StoredLevelPath.GetLongPackageName());
+					FEditorFileUtils::LoadMap(ActorPath.GetLongPackageName());
 				}
 
-				// Find the actor in the (now current) world
-				UWorld* World = GEditor->GetEditorWorldContext().World();
-				if (!World || !World->PersistentLevel)
-				{
-					return;
-				}
-
-				AActor* FoundActor = nullptr;
-				for (AActor* LevelActor : World->PersistentLevel->Actors)
-				{
-					if (LevelActor && LevelActor->GetFName() == ActorName)
-					{
-						FoundActor = LevelActor;
-						break;
-					}
-				}
-
-				if (FoundActor)
+				if (AActor* FoundActor = Cast<AActor>(ActorPath.ResolveObject()))
 				{
 					GEditor->SelectNone(false, true);
 					GEditor->SelectActor(FoundActor, true, true);
@@ -384,15 +361,9 @@ namespace PCGExActorEntryCustomization
 			FText::FromString(TEXT("Go to the delta source actor in its level")));
 	}
 
-	static bool HasDeltaSource(
-		const TSharedPtr<IPropertyHandle>& DeltaSourceLevelHandle,
-		const TSharedPtr<IPropertyHandle>& DeltaSourceActorNameHandle)
+	static bool HasDeltaSource(const TSharedPtr<IPropertyHandle>& DeltaSourceActorHandle)
 	{
-		FString LevelStr;
-		DeltaSourceLevelHandle->GetValueAsFormattedString(LevelStr);
-		FName ActorName;
-		DeltaSourceActorNameHandle->GetValue(ActorName);
-		return FSoftObjectPath(LevelStr).IsValid() && ActorName != NAME_None;
+		return GetDeltaSourcePath(DeltaSourceActorHandle).IsValid();
 	}
 }
 
@@ -403,8 +374,7 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 	TSharedPtr<IPropertyHandle> SubCollection = PropertyHandle->GetChildHandle(FName("SubCollection"));
 	TSharedPtr<IPropertyHandle> AssetHandle = PropertyHandle->GetChildHandle(GetAssetName());
 	TSharedPtr<IPropertyHandle> ActorClassHandle = AssetHandle;
-	TSharedPtr<IPropertyHandle> DeltaSourceLevelHandle = PropertyHandle->GetChildHandle(FName("DeltaSourceLevel"));
-	TSharedPtr<IPropertyHandle> DeltaSourceActorNameHandle = PropertyHandle->GetChildHandle(FName("DeltaSourceActorName"));
+	TSharedPtr<IPropertyHandle> DeltaSourceActorHandle = PropertyHandle->GetChildHandle(FName("DeltaSourceActor"));
 
 	return SNew(SHorizontalBox)
 			PCGEX_ENTRY_INDEX
@@ -430,7 +400,7 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 			.Padding(2, 0)
 			[
 				SNew(SBox)
-				.Visibility_Lambda([IsSubCollectionHandle, DeltaSourceLevelHandle, DeltaSourceActorNameHandle]()
+				.Visibility_Lambda([IsSubCollectionHandle, DeltaSourceActorHandle]()
 				{
 					bool bSub = false;
 					IsSubCollectionHandle->GetValue(bSub);
@@ -438,7 +408,7 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 					{
 						return EVisibility::Collapsed;
 					}
-					return PCGExActorEntryCustomization::HasDeltaSource(DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+					return PCGExActorEntryCustomization::HasDeltaSource(DeltaSourceActorHandle)
 						? EVisibility::Collapsed
 						: EVisibility::Visible;
 				})
@@ -454,7 +424,7 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 					.HAlign(HAlign_Left)
 					.Padding(0, 2, 0, 0)
 					[
-						PCGExActorEntryCustomization::MakePickButton(ActorClassHandle, DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+						PCGExActorEntryCustomization::MakePickButton(ActorClassHandle, DeltaSourceActorHandle)
 					]
 				]
 			]
@@ -465,7 +435,7 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 			.Padding(2, 0)
 			[
 				SNew(SBox)
-				.Visibility_Lambda([IsSubCollectionHandle, DeltaSourceLevelHandle, DeltaSourceActorNameHandle]()
+				.Visibility_Lambda([IsSubCollectionHandle, DeltaSourceActorHandle]()
 				{
 					bool bSub = false;
 					IsSubCollectionHandle->GetValue(bSub);
@@ -473,7 +443,7 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 					{
 						return EVisibility::Collapsed;
 					}
-					return PCGExActorEntryCustomization::HasDeltaSource(DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+					return PCGExActorEntryCustomization::HasDeltaSource(DeltaSourceActorHandle)
 						? EVisibility::Visible
 						: EVisibility::Collapsed;
 				})
@@ -484,28 +454,21 @@ TSharedRef<SWidget> FPCGExActorEntryCustomization::GetAssetPicker(
 					.VAlign(VAlign_Center)
 					.Padding(2, 0)
 					[
-						DeltaSourceLevelHandle->CreatePropertyValueWidget()
-					]
-					+ SHorizontalBox::Slot()
-					.FillWidth(1)
-					.VAlign(VAlign_Center)
-					.Padding(2, 0)
-					[
-						DeltaSourceActorNameHandle->CreatePropertyValueWidget()
+						DeltaSourceActorHandle->CreatePropertyValueWidget()
 					]
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
 					.VAlign(VAlign_Center)
 					.Padding(2, 0)
 					[
-						PCGExActorEntryCustomization::MakePickButton(ActorClassHandle, DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+						PCGExActorEntryCustomization::MakePickButton(ActorClassHandle, DeltaSourceActorHandle)
 					]
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
 					.VAlign(VAlign_Center)
 					.Padding(2, 0)
 					[
-						PCGExActorEntryCustomization::MakeGoToButton(DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+						PCGExActorEntryCustomization::MakeGoToButton(DeltaSourceActorHandle)
 					]
 				]
 			];
@@ -521,10 +484,9 @@ void FPCGExActorEntryCustomization::CustomizeChildren(
 
 	TSharedPtr<IPropertyHandle> IsSubCollectionHandle = PropertyHandle->GetChildHandle(FName("bIsSubCollection"));
 	TSharedPtr<IPropertyHandle> ActorClassHandle = PropertyHandle->GetChildHandle(FName("Actor"));
-	TSharedPtr<IPropertyHandle> DeltaSourceLevelHandle = PropertyHandle->GetChildHandle(FName("DeltaSourceLevel"));
-	TSharedPtr<IPropertyHandle> DeltaSourceActorNameHandle = PropertyHandle->GetChildHandle(FName("DeltaSourceActorName"));
+	TSharedPtr<IPropertyHandle> DeltaSourceActorHandle = PropertyHandle->GetChildHandle(FName("DeltaSourceActor"));
 
-	if (!DeltaSourceLevelHandle.IsValid() || !DeltaSourceActorNameHandle.IsValid())
+	if (!DeltaSourceActorHandle.IsValid())
 	{
 		return;
 	}
@@ -541,20 +503,20 @@ void FPCGExActorEntryCustomization::CustomizeChildren(
 	            }))
 	            .NameContent()
 		[
-			DeltaSourceLevelHandle->CreatePropertyValueWidget()
+			DeltaSourceActorHandle->CreatePropertyNameWidget()
 		]
 		.ValueContent()
 		.MinDesiredWidth(300)
 		[
 			SNew(SHorizontalBox)
 
-			// Actor name
+			// Actor reference
 			+ SHorizontalBox::Slot()
 			.FillWidth(1)
 			.VAlign(VAlign_Center)
 			.Padding(2, 0)
 			[
-				DeltaSourceActorNameHandle->CreatePropertyValueWidget()
+				DeltaSourceActorHandle->CreatePropertyValueWidget()
 			]
 
 			// Pick from selected actor
@@ -563,7 +525,7 @@ void FPCGExActorEntryCustomization::CustomizeChildren(
 			.VAlign(VAlign_Center)
 			.Padding(2, 0)
 			[
-				PCGExActorEntryCustomization::MakePickButton(ActorClassHandle, DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+				PCGExActorEntryCustomization::MakePickButton(ActorClassHandle, DeltaSourceActorHandle)
 			]
 
 			// Go to delta source actor
@@ -572,7 +534,7 @@ void FPCGExActorEntryCustomization::CustomizeChildren(
 			.VAlign(VAlign_Center)
 			.Padding(2, 0)
 			[
-				PCGExActorEntryCustomization::MakeGoToButton(DeltaSourceLevelHandle, DeltaSourceActorNameHandle)
+				PCGExActorEntryCustomization::MakeGoToButton(DeltaSourceActorHandle)
 			]
 		];
 }
@@ -594,6 +556,7 @@ void FPCGExPCGDataAssetEntryCustomization::FillCustomizedTopLevelPropertiesNames
 	CustomizedTopLevelProperties.Add(FName("Source"));
 	CustomizedTopLevelProperties.Add(FName("DataAsset"));
 	CustomizedTopLevelProperties.Add(FName("Level"));
+	CustomizedTopLevelProperties.Add(FName("SourceActor"));
 }
 
 TSharedRef<SWidget> FPCGExPCGDataAssetEntryCustomization::GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle)
@@ -602,6 +565,25 @@ TSharedRef<SWidget> FPCGExPCGDataAssetEntryCustomization::GetAssetPicker(TShared
 	TSharedPtr<IPropertyHandle> SourceHandle = PropertyHandle->GetChildHandle(FName("Source"));
 	TSharedPtr<IPropertyHandle> DataAssetHandle = PropertyHandle->GetChildHandle(FName("DataAsset"));
 	TSharedPtr<IPropertyHandle> LevelHandle = PropertyHandle->GetChildHandle(FName("Level"));
+	TSharedPtr<IPropertyHandle> SourceActorHandle = PropertyHandle->GetChildHandle(FName("SourceActor"));
+
+	auto VisibleForSource = [IsSubCollectionHandle, SourceHandle](const EPCGExDataAssetEntrySource Wanted)
+	{
+		return [IsSubCollectionHandle, SourceHandle, Wanted]()
+		{
+			bool bIsSubCollection = false;
+			IsSubCollectionHandle->GetValue(bIsSubCollection);
+			if (bIsSubCollection)
+			{
+				return EVisibility::Collapsed;
+			}
+			uint8 SourceValue = 0;
+			SourceHandle->GetValue(SourceValue);
+			return static_cast<EPCGExDataAssetEntrySource>(SourceValue) == Wanted
+				? EVisibility::Visible
+				: EVisibility::Collapsed;
+		};
+	};
 
 	return SNew(SHorizontalBox)
 			PCGEX_ENTRY_INDEX
@@ -642,20 +624,7 @@ TSharedRef<SWidget> FPCGExPCGDataAssetEntryCustomization::GetAssetPicker(TShared
 			[
 				SNew(SBox)
 				.ToolTipText(DataAssetHandle->GetToolTipText())
-				.Visibility_Lambda([IsSubCollectionHandle, SourceHandle]()
-				{
-					bool bIsSubCollection = false;
-					IsSubCollectionHandle->GetValue(bIsSubCollection);
-					if (bIsSubCollection)
-					{
-						return EVisibility::Collapsed;
-					}
-					uint8 SourceValue = 0;
-					SourceHandle->GetValue(SourceValue);
-					return static_cast<EPCGExDataAssetEntrySource>(SourceValue) == EPCGExDataAssetEntrySource::DataAsset
-						? EVisibility::Visible
-						: EVisibility::Collapsed;
-				})
+				.Visibility_Lambda(VisibleForSource(EPCGExDataAssetEntrySource::DataAsset))
 				[
 					DataAssetHandle->CreatePropertyValueWidget()
 				]
@@ -669,22 +638,23 @@ TSharedRef<SWidget> FPCGExPCGDataAssetEntryCustomization::GetAssetPicker(TShared
 			[
 				SNew(SBox)
 				.ToolTipText(LevelHandle->GetToolTipText())
-				.Visibility_Lambda([IsSubCollectionHandle, SourceHandle]()
-				{
-					bool bIsSubCollection = false;
-					IsSubCollectionHandle->GetValue(bIsSubCollection);
-					if (bIsSubCollection)
-					{
-						return EVisibility::Collapsed;
-					}
-					uint8 SourceValue = 0;
-					SourceHandle->GetValue(SourceValue);
-					return static_cast<EPCGExDataAssetEntrySource>(SourceValue) == EPCGExDataAssetEntrySource::Level
-						? EVisibility::Visible
-						: EVisibility::Collapsed;
-				})
+				.Visibility_Lambda(VisibleForSource(EPCGExDataAssetEntrySource::Level))
 				[
 					LevelHandle->CreatePropertyValueWidget()
+				]
+			]
+
+			// Actor picker (when !subcollection && Source == Actor)
+			+ SHorizontalBox::Slot()
+			.FillWidth(1)
+			.MinWidth(200)
+			.Padding(2, 0)
+			[
+				SNew(SBox)
+				.ToolTipText(SourceActorHandle->GetToolTipText())
+				.Visibility_Lambda(VisibleForSource(EPCGExDataAssetEntrySource::Actor))
+				[
+					SourceActorHandle->CreatePropertyValueWidget()
 				]
 			];
 }

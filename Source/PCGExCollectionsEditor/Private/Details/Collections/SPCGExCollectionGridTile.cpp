@@ -871,7 +871,7 @@ FReply SPCGExCollectionGridTile::OnMouseButtonDoubleClick(const FGeometry& MyGeo
 		return FReply::Unhandled();
 	}
 
-	const FSoftObjectPath AssetPath = Result.Entry->EDITOR_GetThumbnailAssetPath();
+	const FSoftObjectPath AssetPath = Result.Entry->EDITOR_GetActivationAssetPath();
 	if (AssetPath.IsNull())
 	{
 		return FReply::Unhandled();
