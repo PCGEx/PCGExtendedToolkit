@@ -10,7 +10,7 @@ public class PCGExElementsClipper2 : ModuleRules
 {
 	public PCGExElementsClipper2(ReadOnlyTargetRules Target) : base(Target)
 	{
-		bool bNoPCH = Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH")); 
+		bool bNoPCH = System.Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH")); 
 		PCHUsage = bNoPCH ? PCHUsageMode.NoPCHs : PCHUsageMode.UseExplicitOrSharedPCHs;
 		bUseUnity = true;
 		MinSourceFilesForUnityBuildOverride = 4;
