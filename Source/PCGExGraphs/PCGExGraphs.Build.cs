@@ -9,7 +9,7 @@ public class PCGExGraphs : ModuleRules
 {
 	public PCGExGraphs(ReadOnlyTargetRules Target) : base(Target)
 	{
-		bool bNoPCH = Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH"));
+		bool bNoPCH = System.Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH"));
 		if (bNoPCH)
 		{
 			PCHUsage = PCHUsageMode.NoPCHs;

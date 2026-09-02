@@ -18,7 +18,7 @@ public class PCGExCore : ModuleRules
 		bool bIsBundle = File.Exists(Path.Combine(PluginDirectory, "Config", "PCGExBundle.ini"));
 		PublicDefinitions.Add("PCGEX_PRO_BUNDLE=" + (bIsBundle ? "1" : "0"));
 		
-		bool bNoPCH = Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH")); 
+		bool bNoPCH = System.Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH")); 
 		if (bNoPCH)                                                                    
 		{                                                                                                                     
 			PCHUsage = PCHUsageMode.NoPCHs;                                                                                   
