@@ -65,6 +65,12 @@ public:
 	{
 	}
 
+	/** The host was renamed or re-outered (externalized, internalized, moved). Paths baked as strings
+	 *  under the host -- an embedded export's Staging.Path, CollectionMap rows -- did not move with it. */
+	virtual void EDITOR_OnHostRelocated(UPCGExAssetCollection* Host)
+	{
+	}
+
 	virtual void AppendCookDependencyAssetPaths(const UPCGExAssetCollection* Host, TSet<FSoftObjectPath>& OutPaths) const
 	{
 	}

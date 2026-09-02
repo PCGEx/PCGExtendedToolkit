@@ -18,6 +18,8 @@
 #include "Engine/World.h"
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "UObject/UObjectThreadContext.h"
 
 // Static-init type registration: TypeId=Actor, parent=Base
@@ -145,52 +147,35 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 	}
 
 #if WITH_EDITOR
-	// Delta capture from a placed actor in a level
-	if (DeltaSourceLevel.ToSoftObjectPath().IsValid() && DeltaSourceActorName != NAME_None)
+	// Delta capture from a placed actor in a level. An unreachable actor keeps the previous delta.
+	if (DeltaSourceActor.ToSoftObjectPath().IsValid())
 	{
-		TSharedPtr<FStreamableHandle> LevelHandle = PCGExHelpers::LoadBlocking_AnyThread(DeltaSourceLevel.ToSoftObjectPath());
-
-		if (const UWorld* World = DeltaSourceLevel.Get())
+		TSharedPtr<FStreamableHandle> LevelHandle;
+		FString Failure;
+		if (AActor* FoundActor = PCGExCollections::ResolveLevelActor(DeltaSourceActor.ToSoftObjectPath(), LevelHandle, &Failure))
 		{
-			AActor* FoundActor = nullptr;
-			if (World->PersistentLevel)
+			if (Actor.Get() && FoundActor->IsA(Actor.Get()))
 			{
-				for (AActor* LevelActor : World->PersistentLevel->Actors)
-				{
-					if (LevelActor && LevelActor->GetFName() == DeltaSourceActorName)
-					{
-						FoundActor = LevelActor;
-						break;
-					}
-				}
+				DeltaCollateralPaths.Reset();
+				SerializedPropertyDelta = PCGExActorDelta::SerializeActorDelta(FoundActor, &DeltaCollateralPaths);
 			}
-
-			if (FoundActor)
+			else if (!Actor.ToSoftObjectPath().IsValid())
 			{
-				if (Actor.Get() && FoundActor->IsA(Actor.Get()))
-				{
-					DeltaCollateralPaths.Reset();
-					SerializedPropertyDelta = PCGExActorDelta::SerializeActorDelta(FoundActor, &DeltaCollateralPaths);
-				}
-				else if (!Actor.ToSoftObjectPath().IsValid())
-				{
-					// Auto-populate Actor class from the found actor
-					Actor = TSoftClassPtr<AActor>(FSoftClassPath(FoundActor->GetClass()));
-					Staging.Path = Actor.ToSoftObjectPath();
-					DeltaCollateralPaths.Reset();
-					SerializedPropertyDelta = PCGExActorDelta::SerializeActorDelta(FoundActor, &DeltaCollateralPaths);
-				}
-				else
-				{
-					UE_LOG(LogPCGEx, Warning, TEXT("Delta source actor class mismatch -- expected '%s', found '%s'"),
-					       *Actor.ToSoftObjectPath().ToString(), *FSoftClassPath(FoundActor->GetClass()).ToString());
-				}
+				// Auto-populate Actor class from the found actor
+				Actor = TSoftClassPtr<AActor>(FSoftClassPath(FoundActor->GetClass()));
+				Staging.Path = Actor.ToSoftObjectPath();
+				DeltaCollateralPaths.Reset();
+				SerializedPropertyDelta = PCGExActorDelta::SerializeActorDelta(FoundActor, &DeltaCollateralPaths);
 			}
 			else
 			{
-				UE_LOG(LogPCGEx, Warning, TEXT("Delta source actor '%s' not found in level '%s'"),
-				       *DeltaSourceActorName.ToString(), *DeltaSourceLevel.ToSoftObjectPath().ToString());
+				UE_LOG(LogPCGEx, Warning, TEXT("Delta source actor class mismatch -- expected '%s', found '%s'"),
+				       *Actor.ToSoftObjectPath().ToString(), *FSoftClassPath(FoundActor->GetClass()).ToString());
 			}
+		}
+		else
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("Delta source actor unavailable: %s -- keeping the previous delta."), *Failure);
 		}
 
 		PCGExHelpers::SafeReleaseHandle(LevelHandle);
@@ -205,6 +190,27 @@ void FPCGExActorCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 {
 	FPCGExAssetCollectionEntry::SetAssetPath(InPath);
 	Actor = TSoftClassPtr<AActor>(InPath);
+}
+
+bool FPCGExActorCollectionEntry::OnHostPostLoad(UPCGExAssetCollection* Host)
+{
+	const bool bHasLegacyPair = !DeltaSourceLevel_DEPRECATED.IsNull() && DeltaSourceActorName_DEPRECATED != NAME_None;
+	if (!bHasLegacyPair)
+	{
+		return false;
+	}
+
+	// The name lookup this replaces was never more exact than the persistent-level path; an actor
+	// renamed since the last save fails loudly at the next staging instead of silently matching.
+	if (DeltaSourceActor.IsNull())
+	{
+		DeltaSourceActor = TSoftObjectPtr<AActor>(FSoftObjectPath(
+			DeltaSourceLevel_DEPRECATED.ToSoftObjectPath().GetAssetPath(),
+			FString::Printf(TEXT("PersistentLevel.%s"), *DeltaSourceActorName_DEPRECATED.ToString())));
+	}
+	DeltaSourceLevel_DEPRECATED.Reset();
+	DeltaSourceActorName_DEPRECATED = NAME_None;
+	return true;
 }
 
 #if WITH_EDITOR
@@ -244,10 +250,9 @@ void FPCGExActorCollectionEntry::EDITOR_Sanitize()
 namespace PCGExActorCollectionInternal
 {
 	// Resolve the donor actor for a given entry: prefer an explicit live instance from the
-	// caller, fall back to loading entry.DeltaSourceLevel and finding entry.DeltaSourceActorName.
-	// Class match on the level-loaded path mirrors the existing UpdateStaging delta-capture
-	// constraint -- prevents silently scanning the wrong actor when multiple actors share a
-	// name across classes.
+	// caller, fall back to resolving entry.DeltaSourceActor. Class match on the resolved path
+	// mirrors the UpdateStaging delta-capture constraint -- a re-pointed reference must not
+	// silently feed another class's properties into the schema.
 	AActor* ResolveDonorActor(
 		const FPCGExActorCollectionEntry& Entry,
 		AActor* RepresentativeInstance,
@@ -258,32 +263,24 @@ namespace PCGExActorCollectionInternal
 			return RepresentativeInstance;
 		}
 
-		if (!Entry.DeltaSourceLevel.ToSoftObjectPath().IsValid() || Entry.DeltaSourceActorName.IsNone())
+		if (!Entry.DeltaSourceActor.ToSoftObjectPath().IsValid())
 		{
 			return nullptr;
 		}
 
-		OutHandle = PCGExHelpers::LoadBlocking_AnyThread(Entry.DeltaSourceLevel.ToSoftObjectPath());
-		const UWorld* World = Entry.DeltaSourceLevel.Get();
-		if (!World || !World->PersistentLevel)
+		AActor* LevelActor = PCGExCollections::ResolveLevelActor(Entry.DeltaSourceActor.ToSoftObjectPath(), OutHandle);
+		if (!LevelActor)
 		{
 			return nullptr;
 		}
 
 		UClass* ExpectedClass = Entry.Actor.Get();
-		for (AActor* LevelActor : World->PersistentLevel->Actors)
+		if (ExpectedClass && !LevelActor->IsA(ExpectedClass))
 		{
-			if (!LevelActor || LevelActor->GetFName() != Entry.DeltaSourceActorName)
-			{
-				continue;
-			}
-			if (!ExpectedClass || LevelActor->IsA(ExpectedClass))
-			{
-				return LevelActor;
-			}
+			PCGExHelpers::SafeReleaseHandle(OutHandle);
+			return nullptr;
 		}
-
-		return nullptr;
+		return LevelActor;
 	}
 }
 

@@ -9,10 +9,51 @@
 
 #include "PCGExLevelDataExporter.generated.h"
 
+class AActor;
 class UPCGDataAsset;
 class UPCGExActorCollection;
+class UWorld;
 struct FPCGExMeshCollectionEntry;
 struct FPCGExLevelCollectionEntry;
+
+/**
+ * What a level export reads: a world, the actors to consider, and the frame the output is expressed
+ * in. Two shapes -- a whole persistent level (identity frame, today's behaviour) or one actor's
+ * attached subtree exported as if it were a level (frame = the root's transform, root excluded).
+ * The exporter still runs its content filter over Actors; the source only decides candidacy.
+ */
+struct PCGEXCOLLECTIONS_API FPCGExLevelExportSource
+{
+	UWorld* World = nullptr;
+
+	/** Null for a whole-level source. Never exported itself. */
+	AActor* Root = nullptr;
+
+	/** Every written transform is expressed relative to this. */
+	FTransform Frame = FTransform::Identity;
+
+	TArray<AActor*> Actors;
+
+	bool IsValid() const
+	{
+		return World != nullptr;
+	}
+
+	/** Every actor of the persistent level, identity frame. */
+	static FPCGExLevelExportSource FromWorld(UWorld* InWorld);
+
+	/**
+	 * Root's attached descendants, recursively, frame = root's actor transform. When Root implements
+	 * IPCGExAssemblyRoot its prune predicate bounds the descent and its frame is used instead.
+	 */
+	static FPCGExLevelExportSource FromActorSubtree(AActor* InRoot);
+
+	/** World-space to frame-relative. Identity frame returns the input unchanged. */
+	FTransform ToFrame(const FTransform& WorldTransform) const
+	{
+		return Frame.Equals(FTransform::Identity) ? WorldTransform : WorldTransform.GetRelativeTransform(Frame);
+	}
+};
 
 /**
  * Output state populated by UPCGExLevelDataExporter::ExportLevelData (rich C++ overload).
@@ -88,13 +129,14 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelExportContext
  *    Custom BP subclasses override _Implementation. No contribution capture; the
  *    resulting asset carries raw attributes (Mesh / ActorClass / LevelAsset) and no
  *    Tag_EntryIdx / CollectionMap. Standalone use only.
- *  - C++ virtual ExportLevelData(World, OutAsset, FPCGExLevelExportContext&):
+ *  - C++ virtual ExportLevelData(Source, OutAsset, FPCGExLevelExportContext&):
  *    used by UPCGExPCGDataAssetCollection to capture editor-only mesh + level
  *    contributions that feed shared-collection compaction (CompactSharedMesh /
  *    CompactSharedLevel). The exporter never builds inline embedded collections,
  *    never writes Tag_EntryIdx, and never emplaces the CollectionMap pin --
  *    those responsibilities live on the caller. Default impl on the base forwards
- *    to the BP-facing path.
+ *    to the BP-facing path with the source's world -- a BP exporter always sees the
+ *    whole level, never a subtree.
  */
 UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
 class PCGEXCOLLECTIONS_API UPCGExLevelDataExporter : public UObject
@@ -121,14 +163,15 @@ public:
 	/**
 	 * Rich C++-only export entry point. Populates an FPCGExLevelExportContext with
 	 * mesh-entry contributions and per-mesh-point packed local picks for the consumer
-	 * to merge across sibling entries.
+	 * to merge across sibling entries. Every transform written must go through
+	 * Source.ToFrame -- a subtree source is only a level when its output is root-relative.
 	 *
 	 * Default implementation forwards to the BP-facing ExportLevelData; mesh
 	 * contributions are not captured in that path. Override in C++ subclasses
 	 * (see UPCGExDefaultLevelDataExporter) to populate the context.
 	 */
-	virtual bool ExportLevelData(UWorld* World, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext)
+	virtual bool ExportLevelData(const FPCGExLevelExportSource& Source, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext)
 	{
-		return ExportLevelData(World, OutAsset);
+		return ExportLevelData(Source.World, OutAsset);
 	}
 };
