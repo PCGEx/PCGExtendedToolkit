@@ -14,7 +14,17 @@
 #include "PCGExDefaultLevelDataExporter.generated.h"
 
 class AActor;
+class UPCGBasePointData;
+class UPCGExLevelExportHandler;
 class UStaticMeshComponent;
+
+#if WITH_EDITOR
+class FPCGExExportSlotWriter;
+namespace PCGExLevelExport
+{
+	struct FHandlerRegistration;
+}
+#endif
 
 UENUM()
 enum class EPCGExValueTagMode : uint8
@@ -45,14 +55,17 @@ enum class EPCGExActorExportType : uint8
  * Default level data exporter that replicates the engine's UPCGLevelToAsset behavior.
  *
  * For each qualifying actor of the export source (a whole level, or one actor's subtree):
- * - Classifies actors as Mesh or Actor (or Skip)
- * - Creates a point at the actor's transform
- * - Stores mesh/actor references, materials, and bounds as metadata attributes
- * - Organizes output as typed tagged data entries ("Meshes", "Actors")
+ * - Classifies actors as Mesh, Actor or Level (or Skip) -- unless a registered export handler claims
+ *   the actor first (see UPCGExLevelExportHandler)
+ * - Hands every candidate (the subtree root included) to every export handler; the built-in Mesh /
+ *   Actor / Level handlers harvest the actors classified into their slot
+ * - Emits one point data per slot on that slot's pin, with the actor's transform, bounds, name and
+ *   value tags as metadata
  *
- * When bGenerateCollections is enabled, raw metadata is replaced with collection entry
- * hashes (int64 PCGEx/CollectionEntry), and embedded mesh/actor collections are built
- * for downstream consumption via Collection Map.
+ * When bGenerateCollections is enabled, raw metadata is replaced with collection entry hashes
+ * (int64 PCGEx/CollectionEntry): per-entry slots (actors) are built into embedded collections here;
+ * shared slots (meshes, levels, ...) are handed back as captures for the collection's cross-entry
+ * compaction, which writes their hashes and the Collection Map.
  *
  * Skips: hidden actors, editor-only actors, level script actors, info actors, brushes.
  * Supports tag/class include/exclude filtering (same pattern as level collection bounds).
@@ -100,6 +113,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="bGenerateCollections"))
 	EPCGExSchemaMergePolicy SchemaMergePolicy = EPCGExSchemaMergePolicy::StrictTypeMatch;
 
+	/** Run every export handler registered by other modules (e.g. cluster sketches). Off keeps only the
+	 *  built-in Mesh / Actor / Level handlers. */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	bool bUseRegisteredHandlers = true;
+
 	/** Controls how actor tags in the form Name:Value are handled.
 	 *  Parse: plain tags → bool=true attributes; Name:Value tags → typed attributes; tag string not written.
 	 *  ParseAndKeep: same as Parse, but the name-part of each value tag is also included in the tag string.
@@ -129,9 +147,20 @@ public:
 	 *  An actor is either an Actor (full identity, property delta, etc.) or a Mesh
 	 *  container (every SMC-derived component is harvested). The two are mutually
 	 *  exclusive -- Actor-classified actors do NOT contribute mesh points, even when
-	 *  they own ISMCs. */
+	 *  they own ISMCs. Registered handlers get to claim an actor BEFORE this runs. */
 	virtual EPCGExActorExportType ClassifyActor(AActor* Actor) const;
 
 	/** Called after all points are created, before collection generation. */
 	virtual void OnExportComplete(UPCGDataAsset* OutAsset);
+
+#if WITH_EDITOR
+
+private:
+	/** Point data for one slot's items on its pin: transform, bounds, ActorName, value tags, handler attributes. */
+	UPCGBasePointData* EmitSlotPoints(const FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const;
+
+	/** PerEntry slot: (re)build the embedded collection from the writer and write its picks on the pin. */
+	void BuildEmbeddedSlot(const PCGExLevelExport::FHandlerRegistration& Registration, FPCGExExportSlotWriter& Writer, UPCGDataAsset* OutAsset, UPCGBasePointData* PointData, FPCGExLevelExportContext& OutContext) const;
+
+#endif
 };
