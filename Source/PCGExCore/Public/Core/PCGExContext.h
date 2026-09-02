@@ -75,9 +75,6 @@ protected:
 	// finalizer (see CancelExecution) to know when destruction can be deferred onto the game thread.
 	TSharedPtr<PCGExMT::FAsyncContextPinTracker> AsyncPinTracker;
 
-	int32 LoopIndex = INDEX_NONE;
-	int32 TopLoopIndex = INDEX_NONE;
-
 	/**
 	 * Context-family tags, appended by derived-context constructors down the inheritance chain
 	 * (mirrors the ctor chain, so a tag marks "this context IS-A member of that family"). Lets
@@ -111,16 +108,6 @@ public:
 	}
 
 	TSharedPtr<PCGEx::FManagedObjects> ManagedObjects;
-
-	int32 GetLoopIndex() const
-	{
-		return LoopIndex;
-	}
-
-	bool IsExecutingInsideLoop() const
-	{
-		return TopLoopIndex != INDEX_NONE;
-	}
 
 	bool IsRuntimeGen() const;
 

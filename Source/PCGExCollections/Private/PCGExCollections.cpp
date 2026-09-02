@@ -5,6 +5,7 @@
 
 #include "Core/PCGExAssetCollectionTypes.h"
 #include "Helpers/PCGExComponentFixups.h"
+#include "Helpers/PCGExLevelExportBuiltinHandlers.h"
 
 #if WITH_EDITOR
 #include "Styling/AppStyle.h"
@@ -25,12 +26,20 @@ void FPCGExCollectionsModule::StartupModule()
 	PCGExAssetCollection::FTypeRegistry::ProcessPendingRegistrations();
 	IPCGExLegacyModuleInterface::StartupModule();
 	PCGExComponentFixups::RegisterBuiltins();
+#if WITH_EDITOR
+	// Level export handlers read their class default objects at registration, so this cannot ride a
+	// static initializer either. Out-of-module handlers register from their own StartupModule.
+	PCGExLevelExport::RegisterBuiltinHandlers();
+#endif
 }
 
 void FPCGExCollectionsModule::ShutdownModule()
 {
 	// Release built-in fixup handles before the delta registry goes out of scope.
 	PCGExComponentFixups::UnregisterBuiltins();
+#if WITH_EDITOR
+	PCGExLevelExport::UnregisterBuiltinHandlers();
+#endif
 	IPCGExLegacyModuleInterface::ShutdownModule();
 }
 

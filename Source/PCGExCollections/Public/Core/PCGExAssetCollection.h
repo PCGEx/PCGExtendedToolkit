@@ -1068,8 +1068,8 @@ public:
 	 * schema needs to mirror them. Counterpart to UPCGExActorCollection's actor-component
 	 * scan, which builds the schema from the component side. Callers:
 	 *
-	 *   - SharedMeshCollection after CompactSharedMesh has aggregated per-entry mesh
-	 *     contributions (each contribution may carry its own PropertyOverrides extracted
+	 *   - A shared slot collection after CompactSharedFor has aggregated per-entry export
+	 *     captures (each captured entry may carry its own PropertyOverrides extracted
 	 *     from the source actor's UPCGExPropertyCollectionComponent).
 	 *   - Anywhere else a collection's schema should be reconstructed from the data
 	 *     authored on individual entries.

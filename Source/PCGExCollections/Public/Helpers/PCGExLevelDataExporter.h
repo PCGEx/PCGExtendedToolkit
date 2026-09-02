@@ -4,17 +4,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "StructUtils/InstancedStruct.h"
+#include "Core/PCGExExportSlots.h"
 #include "UObject/Object.h"
 
 #include "PCGExLevelDataExporter.generated.h"
 
 class AActor;
 class UPCGDataAsset;
-class UPCGExActorCollection;
 class UWorld;
-struct FPCGExMeshCollectionEntry;
-struct FPCGExLevelCollectionEntry;
 
 /**
  * What a level export reads: a world, the actors to consider, and the frame the output is expressed
@@ -58,56 +55,42 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelExportSource
 /**
  * Output state populated by UPCGExLevelDataExporter::ExportLevelData (rich C++ overload).
  *
- * Assign the output pointers before calling the 3-arg ExportLevelData. The exporter never
- * builds inline UPCGExMeshCollection / UPCGExLevelCollection and never writes Tag_EntryIdx
- * or the CollectionMap pin itself -- it captures contributions through these pointers and
- * leaves final hashing + CollectionMap emission to the caller.
+ * Assign the storage pointers before calling the 3-arg ExportLevelData. The exporter never builds
+ * shared collections, never writes Tag_EntryIdx for shared slots and never emplaces the CollectionMap
+ * pin -- it hands shared-slot contributions back as captures (one per slot) and leaves final hashing +
+ * CollectionMap emission to the caller. Per-entry slots are built into Embedded collections here,
+ * reusing the previous object found under the same slot id (its CollectionGUID and EntryIds survive).
  *
- * MeshLocalPicks layout (one int32 per "Meshes" pin point):
- *   low 16 bits  = local entry index into MeshContributions
+ * LocalPicks layout (one int32 per point on the slot's pin):
+ *   low 16 bits  = local entry index into the capture's Entries
  *   high 16 bits = secondary index + 1 (0 = no variant; matches FPickPacker hash convention)
  *   value == -1  = sentinel, no valid pick for this point
+ * Slots without secondaries pack (local, -1), i.e. the high half is 0.
  *
- * LevelLocalPicks layout (one int32 per "Levels" pin point):
- *   value        = local entry index into LevelContributions (no secondary on levels yet)
- *   value == -1  = sentinel, no valid pick for this point
- *
- * Consumed by UPCGExPCGDataAssetCollection's shared-collection rebuild to merge contributions
- * across sibling entries and rewrite Tag_EntryIdx hashes against the deduplicated collections.
+ * Consumed by UPCGExPCGDataAssetCollection's shared-collection rebuild to merge captures across
+ * sibling entries and rewrite Tag_EntryIdx hashes against the deduplicated collections.
  */
 struct PCGEXCOLLECTIONS_API FPCGExLevelExportContext
 {
-	TArray<FPCGExMeshCollectionEntry>* MeshContributions = nullptr;
-	TArray<int32>* MeshLocalPicks = nullptr;
+	/** Shared-scope hand-off, one capture per slot. Null = shared contributions are not captured. */
+	TArray<FPCGExExportSlotCapture>* Captures = nullptr;
 
-	TArray<FPCGExLevelCollectionEntry>* LevelContributions = nullptr;
-	TArray<int32>* LevelLocalPicks = nullptr;
+	/** Per-entry slots: previous embedded collections in, rebuilt ones out. Null = built but not handed back. */
+	TArray<FPCGExExportCollectionSlot>* EmbeddedSlots = nullptr;
 
-	/** Receives the per-entry actor collection built inline by the exporter. Lets the caller
-	 *  pick it up directly instead of walking the asset's inner-object graph. */
-	TObjectPtr<UPCGExActorCollection>* ActorCollectionOut = nullptr;
+	/** Owner the captures are serialized under (the host collection). Instanced subobjects inside
+	 *  captured entries are outered here so they never cross packages when the export is externalized.
+	 *  Null falls back to the exported asset. */
+	UObject* CaptureOuter = nullptr;
 
-	/** Previous per-entry actor collection, when one exists. Reused as the working buffer
-	 *  (re-outered to the new asset) so its CollectionGUID and EntryIds survive re-exports.
-	 *  The caller keeps it GC-reachable for the duration of the call. */
-	UPCGExActorCollection* PreviousActorCollection = nullptr;
-
-	/** Receives the "common-ancestor" inherited-defaults view computed from the contributing
-	 *  actors' BP class chains -- per property, the value all unique classes agree on at the
-	 *  CDO level, or the asset's authored default when classes disagree. Used by the shared
-	 *  MeshCollection rebuild to set CollectionProperties without falling back to whichever
-	 *  per-instance override was iterated first. Optional: when null, the caller has no opinion
-	 *  and the merge falls through to per-entry contributors. */
-	TArray<FInstancedStruct>* MeshInheritedDefaults = nullptr;
-
-	/** Pack a (local entry index, secondary index) pair into the int32 stored in MeshLocalPicks. */
+	/** Pack a (local entry index, secondary index) pair into the int32 stored in LocalPicks. */
 	static FORCEINLINE int32 PackLocalPick(int32 LocalEntryIdx, int16 SecondaryIdx)
 	{
 		const int32 SecPlus1 = (static_cast<int32>(SecondaryIdx) + 1) & 0xFFFF;
 		return (SecPlus1 << 16) | (LocalEntryIdx & 0xFFFF);
 	}
 
-	/** Unpack a MeshLocalPicks value back into local entry index and secondary index. */
+	/** Unpack a LocalPicks value back into local entry index and secondary index. */
 	static FORCEINLINE void UnpackLocalPick(int32 Packed, int32& OutLocalIdx, int16& OutSecondary)
 	{
 		OutLocalIdx = Packed & 0xFFFF;
@@ -130,15 +113,14 @@ struct PCGEXCOLLECTIONS_API FPCGExLevelExportContext
  *    resulting asset carries raw attributes (Mesh / ActorClass / LevelAsset) and no
  *    Tag_EntryIdx / CollectionMap. Standalone use only.
  *  - C++ virtual ExportLevelData(Source, OutAsset, FPCGExLevelExportContext&):
- *    used by UPCGExPCGDataAssetCollection to capture editor-only mesh + level
- *    contributions that feed shared-collection compaction (CompactSharedMesh /
- *    CompactSharedLevel). The exporter never builds inline embedded collections,
- *    never writes Tag_EntryIdx, and never emplaces the CollectionMap pin --
- *    those responsibilities live on the caller. Default impl on the base forwards
- *    to the BP-facing path with the source's world -- a BP exporter always sees the
- *    whole level, never a subtree.
+ *    used by UPCGExPCGDataAssetCollection to capture editor-only per-slot
+ *    contributions that feed shared-collection compaction (CompactSharedFor).
+ *    The exporter never builds shared collections, never writes their Tag_EntryIdx,
+ *    and never emplaces the CollectionMap pin -- those responsibilities live on the
+ *    caller. Default impl on the base forwards to the BP-facing path with the
+ *    source's world -- a BP exporter always sees the whole level, never a subtree.
  */
-UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced)
+UCLASS(Abstract, Blueprintable, BlueprintType, EditInlineNew, DefaultToInstanced, meta=(DisplayName="Level Data Exporter"))
 class PCGEXCOLLECTIONS_API UPCGExLevelDataExporter : public UObject
 {
 	GENERATED_BODY()
@@ -162,13 +144,13 @@ public:
 
 	/**
 	 * Rich C++-only export entry point. Populates an FPCGExLevelExportContext with
-	 * mesh-entry contributions and per-mesh-point packed local picks for the consumer
-	 * to merge across sibling entries. Every transform written must go through
-	 * Source.ToFrame -- a subtree source is only a level when its output is root-relative.
+	 * per-slot entry captures and packed local picks for the consumer to merge across
+	 * sibling entries. Every transform written must go through Source.ToFrame -- a
+	 * subtree source is only a level when its output is root-relative.
 	 *
-	 * Default implementation forwards to the BP-facing ExportLevelData; mesh
-	 * contributions are not captured in that path. Override in C++ subclasses
-	 * (see UPCGExDefaultLevelDataExporter) to populate the context.
+	 * Default implementation forwards to the BP-facing ExportLevelData; nothing is
+	 * captured in that path. Override in C++ subclasses (see UPCGExDefaultLevelDataExporter)
+	 * to populate the context.
 	 */
 	virtual bool ExportLevelData(const FPCGExLevelExportSource& Source, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext)
 	{
