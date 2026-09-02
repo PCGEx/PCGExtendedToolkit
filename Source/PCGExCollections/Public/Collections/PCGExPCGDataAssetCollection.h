@@ -29,7 +29,7 @@ enum class EPCGExDataAssetEntrySource : uint8
 {
 	DataAsset = 0 UMETA(DisplayName = "Data Asset", ToolTip="Reference an existing PCGDataAsset", ActionIcon="PCGDA_DataAsset"),
 	Level     = 1 UMETA(DisplayName = "Level", ToolTip="Export a level to an embedded PCGDataAsset", ActionIcon="PCGDA_Level"),
-	Actor     = 2 UMETA(DisplayName = "Actor", ToolTip="Export an actor's attached subtree, as if it were a level, to an embedded PCGDataAsset. Points are relative to the actor.", ActionIcon="PCGDA_Level"),
+	Actor     = 2 UMETA(DisplayName = "Actor", ToolTip="Export an actor's attached subtree, as if it were a level, to an embedded PCGDataAsset. Points are relative to the actor.", ActionIcon="PCGDA_Actor"),
 };
 
 /**
