@@ -9,6 +9,7 @@
 #include "Collections/PCGExMeshCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionTypeState.h"
+#include "Core/PCGExExportSlots.h"
 #include "Helpers/PCGExArrayHelpers.h"
 
 #include "PCGExPCGDataAssetCollection.generated.h"
@@ -53,14 +54,12 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionGlobals : public FPCGExC
  * PCG data asset collection entry. References a UPCGDataAsset or a subcollection.
  * UpdateStaging() computes combined bounds from all spatial data in the asset.
  *
- * Level-sourced entries also feed the parent collection's SharedMeshCollection and
- * SharedLevelCollection by capturing editor-only snapshots (EditorMeshContributions +
- * EditorLocalPicks, EditorLevelContributions + EditorLevelLocalPicks) during export.
- * The captured snapshots are merged into the shared collections by
- * UPCGExPCGDataAssetCollection::CompactSharedMeshFor / CompactSharedLevelFor, which then
- * rewrite each ExportedDataAsset's Tag_EntryIdx attribute on the corresponding pin
- * against the deduplicated shared indices. The CollectionMap pin is rebuilt afterward
- * by RebuildCollectionMapsFor() with all shared + per-entry collections registered.
+ * Export-sourced entries also feed the host's shared collection slots by capturing editor-only
+ * per-slot snapshots (Captures) during export. The captures are merged into the shared slots by
+ * UPCGExPCGDataAssetCollection::CompactSharedFor, which then rewrites each ExportedDataAsset's
+ * Tag_EntryIdx attribute on the corresponding pin against the deduplicated shared indices. The
+ * CollectionMap pin is rebuilt afterward by RebuildCollectionMapsFor() with every shared + per-entry
+ * slot collection registered.
  */
 USTRUCT(BlueprintType, DisplayName="[PCGEx] PCGDataAsset Collection Entry", meta=(ShortName="PCG Data Asset"))
 struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAssetCollectionEntry
@@ -108,66 +107,52 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY(Instanced)
 	TObjectPtr<UPCGDataAsset> ExportedDataAsset;
 
-	/** Embedded actor collection built by level exporter when bGenerateCollections is enabled.
-	 *  Actor classes are kept per-entry (no cross-entry mutualization). Null in external mode. */
-	UPROPERTY(Instanced)
-	TObjectPtr<UPCGExActorCollection> EmbeddedActorCollection;
-
-	/** External-mode mirrors of ExportedDataAsset / EmbeddedActorCollection. Populated by the
-	 *  externalization step (UPCGExPCGDataAssetCollection::ExternalizeExportedDataAssetsFor /
-	 *  ExternalizeSharedAndActorCollectionsFor). Soft refs so loading the parent collection does
-	 *  not pull these on-disk assets; LoadPCGData soft-loads via Staging.Path / CollectionMap. */
+	/** External-mode mirror of ExportedDataAsset. Populated by the externalization step
+	 *  (UPCGExPCGDataAssetCollection::ExternalizeExportedDataAssetsFor). Soft ref so loading the parent
+	 *  collection does not pull the on-disk asset; LoadPCGData soft-loads via Staging.Path / CollectionMap. */
 	UPROPERTY()
 	TSoftObjectPtr<UPCGDataAsset> ExternalExportedDataAsset;
 
+	/** Per-entry (PerEntry-scope) slot collections built by the exporter -- the actor collection, and any
+	 *  registered handler's per-entry slot. Each slot's Collection is embedded (an inner of ExportedDataAsset)
+	 *  or externalized to its External mirror. Keyed by slot id; no cross-entry mutualization. */
 	UPROPERTY()
-	TSoftObjectPtr<UPCGExActorCollection> ExternalActorCollection;
+	TArray<FPCGExExportCollectionSlot> EmbeddedSlots;
 
 #if WITH_EDITORONLY_DATA
-	/** Snapshot of mesh entries captured from this entry's source level. Editor-only,
-	 *  stripped at cook. Consumed by UPCGExPCGDataAssetCollection::CompactSharedMeshFor
-	 *  as one input to the cross-entry shared-mesh merge. */
-	UPROPERTY()
-	TArray<FPCGExMeshCollectionEntry> EditorMeshContributions;
-
-	/** Caller-computed "common-ancestor" inherited-defaults view for this export's contributing
-	 *  actors -- i.e., per property, the value the actors would resolve if they had no per-instance
-	 *  override. When all unique BP classes agree at the CDO level, that's the CDO value; when
-	 *  they disagree, the asset's authored default fills in. Transient -- recomputed on every
-	 *  export from the actors in this entry's source level. Consumed by CompactSharedMeshFor to
-	 *  derive the shared MeshCollection's CollectionProperties as a per-property union across all
-	 *  contributing entries' aggregates. */
-	UPROPERTY(Transient)
-	TArray<FInstancedStruct> EditorMeshInheritedDefaults;
-
-	/** Per-mesh-point packed local selection, parallel to ExportedDataAsset's "Meshes" pin.
-	 *  Layout: low 16 bits = local entry index into EditorMeshContributions,
-	 *  high 16 bits = secondary index + 1 (0 = no variant; matches FPickPacker convention).
-	 *  Sentinel value -1 means "no valid pick" (point gets no Tag_EntryIdx hash).
+	/** Shared-scope captures from this entry's last export, one per slot (meshes, levels, ...). Consumed
+	 *  by UPCGExPCGDataAssetCollection::CompactSharedFor as one input to the cross-entry merge.
 	 *
-	 *  Persisted (NOT Transient) on purpose: when ANY sibling entry rebuilds and shifts shared
-	 *  composition, every other entry's Tag_EntryIdx must be rewritten. Storing local picks here
-	 *  lets the rewrite pass run without re-walking source levels -- it just reads local picks,
-	 *  applies the new LocalToShared map, and writes final hashes. Stripped at cook. */
+	 *  Persisted (NOT Transient) on purpose: when ANY sibling entry rebuilds and shifts shared composition,
+	 *  every other entry's Tag_EntryIdx must be rewritten. Storing the captures here lets the rewrite pass
+	 *  run without re-walking source levels -- it just reads local picks, applies the new LocalToShared map,
+	 *  and writes final hashes. Stripped at cook. */
 	UPROPERTY()
-	TArray<int32> EditorLocalPicks;
+	TArray<FPCGExExportSlotCapture> Captures;
+#endif
 
-	/** Snapshot of level entries (nested level instances) captured from this entry's source
-	 *  level. Editor-only, stripped at cook. Consumed by
-	 *  UPCGExPCGDataAssetCollection::CompactSharedLevelFor as one input to the cross-entry
-	 *  shared-level merge. */
-	UPROPERTY()
-	TArray<FPCGExLevelCollectionEntry> EditorLevelContributions;
+	// ----- Deprecated slots (2026-09-02): fixed mesh/level/actor storage became keyed slots. -----
+	// UHT registers these under their unsuffixed names with CPF_Deprecated: legacy assets LOAD into them,
+	// saves always skip them. OnHostPostLoad moves the values into EmbeddedSlots / Captures.
 
-	/** Per-level-point packed local selection, parallel to ExportedDataAsset's "Levels" pin.
-	 *  Layout: identity packing of the local entry index into EditorLevelContributions
-	 *  (no secondary dimension on levels yet). Sentinel -1 means "no valid pick".
-	 *
-	 *  Persisted for the same reason as EditorLocalPicks: when sibling-entry composition
-	 *  shifts SharedLevelCollection indices, the rewrite pass reads local picks and applies
-	 *  the new LocalToShared map without re-walking source levels. Stripped at cook. */
+	UPROPERTY(Instanced)
+	TObjectPtr<UPCGExActorCollection> EmbeddedActorCollection_DEPRECATED;
+
 	UPROPERTY()
-	TArray<int32> EditorLevelLocalPicks;
+	TSoftObjectPtr<UPCGExActorCollection> ExternalActorCollection_DEPRECATED;
+
+#if WITH_EDITORONLY_DATA
+	UPROPERTY()
+	TArray<FPCGExMeshCollectionEntry> EditorMeshContributions_DEPRECATED;
+
+	UPROPERTY()
+	TArray<int32> EditorLocalPicks_DEPRECATED;
+
+	UPROPERTY()
+	TArray<FPCGExLevelCollectionEntry> EditorLevelContributions_DEPRECATED;
+
+	UPROPERTY()
+	TArray<int32> EditorLevelLocalPicks_DEPRECATED;
 #endif
 
 	// Lifecycle
@@ -175,6 +160,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	virtual bool Validate(const UPCGExAssetCollection* ParentCollection) override;
 	virtual void UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive) override;
 	virtual void SetAssetPath(const FSoftObjectPath& InPath) override;
+	virtual bool OnHostPostLoad(UPCGExAssetCollection* Host) override;
 
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize() override;
@@ -183,12 +169,16 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	virtual FSoftObjectPath EDITOR_GetActivationAssetPath() const override;
 #endif
 
+	/** Embedded per-entry slot collection by id, or null. Legacy accessor for the actor slot: FindEmbeddedSlot(Actors). */
+	UPCGExAssetCollection* FindEmbeddedCollection(FName SlotId) const;
+
 private:
 	/** Level and Actor sources share everything past the load: export into a fresh embedded asset,
 	 *  capture contributions, scan sockets. Returns false when the export produced nothing. */
 	bool ExportFromSource(const UPCGExAssetCollection* OwningCollection, const FPCGExLevelExportSource& ExportSource);
 
-	/** Editor-only capture buffers -- every reset site in UpdateStaging goes through here. */
+	/** Editor-only capture buffers -- every reset site in UpdateStaging goes through here. Retires any
+	 *  instanced subobjects the captured entries owned. */
 	void ResetEditorContributions();
 
 	/** Staging + embedded export back to "nothing" -- a failed or impossible export. */
@@ -197,13 +187,11 @@ private:
 
 /** Concrete collection for UPCGDataAsset references with optional level-sourced entries.
  *
- *  Mutualizes mesh + nested-level storage across level-sourced entries via the machinery
- *  state's SharedMeshCollection and SharedLevelCollection: each entry's per-level snapshots
- *  (EditorMeshContributions, EditorLevelContributions) are captured during export, then
- *  merged into the two shared collections (CompactSharedMeshFor, CompactSharedLevelFor).
- *  Per-entry ExportedDataAsset point hashes resolve through the shared collections'
- *  CollectionGUIDs at runtime, eliminating duplicated storage when entries reuse the same
- *  meshes or the same nested levels.
+ *  Mutualizes shared-scope slot storage (meshes, nested levels, and any registered handler's shared
+ *  slot) across export-sourced entries via the machinery state's SharedSlots: each entry's per-slot
+ *  captures are taken during export, then merged per slot (CompactSharedFor). Per-entry
+ *  ExportedDataAsset point hashes resolve through the shared collections' CollectionGUIDs at runtime,
+ *  eliminating duplicated storage when entries reuse the same meshes, levels or sketches.
  *
  *  Phase C1 (per-type processor seam): the machinery storage + external-storage settings
  *  live on an owned UPCGExPCGDataTypeState (always present, default subobject) and every
@@ -211,16 +199,15 @@ private:
  *  state is guaranteed, running the exact same code path as an Omni host. Legacy members
  *  migrate into the state on PostLoad (deprecated slots below).
  *
- *  Actor classes are kept per-entry on Entry.EmbeddedActorCollection (no cross-entry merge).
+ *  Per-entry slots (actors) are kept on Entry.EmbeddedSlots (no cross-entry merge).
  */
 
 /**
  * Host-agnostic view over the state the PCGDataAsset collection machinery operates on
- * (shared-collection compaction, collection maps, externalization). Phase A of the per-type
- * processor seam: the typed collection composes this from its own members (MakeMachinery);
- * heterogeneous hosts will compose it from per-type state blocks in a later phase.
+ * (shared-slot compaction, collection maps, externalization). The typed collection composes it
+ * from its own state (MakeMachinery); heterogeneous hosts compose it from their per-type state.
  *
- * Storage members are POINTERS TO the host's storage so the cores mutate the real refs.
+ * SharedSlots POINTS TO the host state's storage so the cores mutate the real refs.
  * Entries is the PCGData-typed LEAF payload view in host order -- external-asset naming uses
  * the view index, which matches the raw entry index on typed collections.
  */
@@ -229,10 +216,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetMachinery
 	UPCGExAssetCollection* Host = nullptr; // Outer for generated subobjects; GUID / package identity
 	TArray<FPCGExPCGDataAssetCollectionEntry*> Entries;
 
-	TObjectPtr<UPCGExMeshCollection>* SharedMeshCollection = nullptr;
-	TObjectPtr<UPCGExLevelCollection>* SharedLevelCollection = nullptr;
-	TSoftObjectPtr<UPCGExMeshCollection>* ExternalSharedMeshCollection = nullptr;
-	TSoftObjectPtr<UPCGExLevelCollection>* ExternalSharedLevelCollection = nullptr;
+	TArray<FPCGExExportCollectionSlot>* SharedSlots = nullptr;
 
 	bool bExternalActive = false;
 	FString ExportFolderPath;
@@ -240,8 +224,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetMachinery
 
 	bool IsValid() const
 	{
-		return Host && SharedMeshCollection && SharedLevelCollection
-			&& ExternalSharedMeshCollection && ExternalSharedLevelCollection;
+		return Host && SharedSlots;
 	}
 };
 
@@ -253,30 +236,28 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetMachinery
  */
 struct PCGEXCOLLECTIONS_API FPCGExPCGDataSharedScrubKeep
 {
-	TObjectPtr<UPCGExMeshCollection>* MeshSlot = nullptr;
-	TObjectPtr<UPCGExLevelCollection>* LevelSlot = nullptr;
-	TObjectPtr<UPCGExMeshCollection> KeptMesh;
-	TObjectPtr<UPCGExLevelCollection> KeptLevel;
+	TArray<FPCGExExportCollectionSlot>* Slots = nullptr;
+	TArray<TObjectPtr<UPCGExAssetCollection>> Kept;
 };
 
 struct PCGEXCOLLECTIONS_API FPCGExPCGDataEntryScrubKeep
 {
 	TArray<FPCGExPCGDataAssetCollectionEntry*> Entries;
 	TArray<TObjectPtr<UPCGDataAsset>> Data;
-	TArray<TObjectPtr<UPCGExActorCollection>> Actors;
+	TArray<TArray<TObjectPtr<UPCGExAssetCollection>>> Embedded;
 
 	void Reset()
 	{
 		Entries.Reset();
 		Data.Reset();
-		Actors.Reset();
+		Embedded.Reset();
 	}
 };
 
 /**
  * Machinery state/processor for PCGDataAsset-typed entries hosted OUTSIDE a native
  * PCGDataAsset collection (per-type processor seam, Phase B). Owns the same shared/external
- * storage the typed collection keeps as members -- names mirror 1:1 -- and dispatches the
+ * storage the typed collection keeps -- keyed collection slots -- and dispatches the
  * host-agnostic machinery cores against it from the host lifecycle hooks. With this state
  * present, level-sourced entries in an Omni behave like they do in a native collection
  * (export, compaction, collection maps, externalization).
@@ -295,22 +276,49 @@ public:
 	UPROPERTY(EditAnywhere, Category = "External Storage", meta=(EditCondition="bUseExternalAssets", ContentDir, LongPackageName))
 	FDirectoryPath ExportFolder;
 
-	UPROPERTY(Instanced)
-	TObjectPtr<UPCGExMeshCollection> SharedMeshCollection;
+	/** Shared-scope slot collections (meshes, levels, and any registered handler's shared slot), keyed
+	 *  by slot id. Each Collection is an embedded working buffer outered to the host, or externalized
+	 *  to its External mirror. */
+	UPROPERTY()
+	TArray<FPCGExExportCollectionSlot> SharedSlots;
+
+	// ----- Deprecated slots (2026-09-02): the fixed mesh/level members became keyed SharedSlots. -----
+	// Legacy data loads into these (CPF_Deprecated: tagged-property name match, saves skip); PostLoad
+	// adopts them into SharedSlots once.
 
 	UPROPERTY(Instanced)
-	TObjectPtr<UPCGExLevelCollection> SharedLevelCollection;
+	TObjectPtr<UPCGExMeshCollection> SharedMeshCollection_DEPRECATED;
+
+	UPROPERTY(Instanced)
+	TObjectPtr<UPCGExLevelCollection> SharedLevelCollection_DEPRECATED;
 
 	UPROPERTY()
-	TSoftObjectPtr<UPCGExMeshCollection> ExternalSharedMeshCollection;
+	TSoftObjectPtr<UPCGExMeshCollection> ExternalSharedMeshCollection_DEPRECATED;
 
 	UPROPERTY()
-	TSoftObjectPtr<UPCGExLevelCollection> ExternalSharedLevelCollection;
+	TSoftObjectPtr<UPCGExLevelCollection> ExternalSharedLevelCollection_DEPRECATED;
 
 	bool IsExternalActive() const
 	{
 		return bUseExternalAssets && !ExportFolder.Path.IsEmpty();
 	}
+
+	FPCGExExportCollectionSlot* FindSharedSlot(const FName SlotId)
+	{
+		return PCGExExportSlots::Find(SharedSlots, SlotId);
+	}
+
+	const FPCGExExportCollectionSlot* FindSharedSlot(const FName SlotId) const
+	{
+		return PCGExExportSlots::Find(SharedSlots, SlotId);
+	}
+
+	/**
+	 * Adopt a legacy fixed-member pair into the keyed slot. Idempotent and order-agnostic: both the
+	 * host's PostLoad (pre-C1 members) and this object's PostLoad (C1 members) funnel through here, and
+	 * whichever runs first wins nothing -- a slot already holding data is left alone.
+	 */
+	void AdoptLegacySlot(FName SlotId, UPCGExAssetCollection* Collection, const FSoftObjectPath& External);
 
 	/**
 	 * Compose the machinery view: HOST identity (outer/GUID) + THIS state's storage + the
@@ -357,6 +365,9 @@ public:
 	 *  their instanced refs must not bake hard references into the saved package. Entry-level
 	 *  refs live in HOST data and are scrubbed by the OnHostSerializeSave pair instead. */
 	virtual void Serialize(FArchive& Ar) override;
+
+	/** Legacy fixed members -> SharedSlots. */
+	virtual void PostLoad() override;
 
 private:
 	/** OnHostSerializeSave_Begin/End restore buffer -- see FPCGExPCGDataEntryScrubKeep. */
@@ -452,9 +463,9 @@ private:
 
 public:
 	/**
-	 * Manual convenience: recompact both shared collections (mesh + level) from each entry's
-	 * captured editor-only contributions, rewrite per-entry Tag_EntryIdx against the
-	 * resulting shared indices, and rebuild every entry's CollectionMap pin. Idempotent.
+	 * Manual convenience: recompact every shared slot from each entry's captured editor-only
+	 * contributions, rewrite per-entry Tag_EntryIdx against the resulting shared indices, and
+	 * rebuild every entry's CollectionMap pin. Idempotent.
 	 * The automatic paths (post-staging rebuild, cook-time PreSave net, PostDuplicate
 	 * re-stamp) do NOT route through this -- they dispatch through MachineryState's
 	 * lifecycle hooks directly; this exists for explicit tooling-driven recompaction.
@@ -465,26 +476,27 @@ public:
 	// host that can compose a FPCGExPCGDataAssetMachinery can run them (per-type processor
 	// seam, Phase A). The private instance methods below are thin wrappers over these.
 	// All editor-only in effect: bodies guard on WITH_EDITOR(_DATA) like their predecessors.
-	static void CompactSharedMeshFor(FPCGExPCGDataAssetMachinery& State);
-	static void CompactSharedLevelFor(FPCGExPCGDataAssetMachinery& State);
+
+	/** Every registered Shared-scope slot: merge captures, rewrite the slot pin's Tag_EntryIdx. */
+	static void CompactSharedFor(FPCGExPCGDataAssetMachinery& State);
 	static void RebuildCollectionMapsFor(FPCGExPCGDataAssetMachinery& State);
-	static void ExternalizeSharedAndActorCollectionsFor(FPCGExPCGDataAssetMachinery& State);
+	/** Shared slots -> <Prefix>_<SlotId>; per-entry slots -> <Prefix>_E%03d_<SlotId>. */
+	static void ExternalizeSlotCollectionsFor(FPCGExPCGDataAssetMachinery& State);
 	static void ExternalizeExportedDataAssetsFor(FPCGExPCGDataAssetMachinery& State);
 	static void InternalizeSubobjectsFor(FPCGExPCGDataAssetMachinery& State);
 	static void SaveExternalPackagesFor(FPCGExPCGDataAssetMachinery& State);
 
 	/** Shared package-collection walk over the machinery storage: the loaded packages the
-	 *  shared collections and per-entry exports currently live in, minus the host's own and
+	 *  shared slots and per-entry exports currently live in, minus the host's own and
 	 *  the transient package (so embedded mode contributes nothing). Drives both the manual
 	 *  SaveExternalPackages utility and the editor-save coordination seam. */
 	static void CollectExternalPackagesFor(
 		const UPCGExAssetCollection* Host,
-		const UPCGExMeshCollection* InSharedMesh,
-		const UPCGExLevelCollection* InSharedLevel,
+		const TArray<FPCGExExportCollectionSlot>& InSharedSlots,
 		const TArray<const FPCGExPCGDataAssetCollectionEntry*>& InEntries,
 		TSet<UPackage*>& OutPackages);
 
-	/** Orchestrator: compaction -> shared/actor externalization -> collection maps -> data
+	/** Orchestrator: compaction -> shared/per-entry externalization -> collection maps -> data
 	 *  asset externalization, in the order the soft-path baking requires. */
 	static void RebuildSharedCollectionsFor(FPCGExPCGDataAssetMachinery& State);
 
@@ -497,9 +509,9 @@ public:
 	/** External-mode save-scrub cores (see Serialize). Scrub* records the slots and current
 	 *  values into the keep-buffer and nulls the live refs; Restore* writes them back and
 	 *  resets the buffer. The pair must bracket exactly one Serialize call on one thread.
-	 *  Shared refs = the two shared collections; entry refs = each entry's ExportedDataAsset +
-	 *  EmbeddedActorCollection. Any future externalizable ref is added HERE, for every host. */
-	static void ScrubSharedRefsForSave(TObjectPtr<UPCGExMeshCollection>& MeshSlot, TObjectPtr<UPCGExLevelCollection>& LevelSlot, FPCGExPCGDataSharedScrubKeep& OutKeep);
+	 *  Shared refs = every shared slot collection; entry refs = each entry's ExportedDataAsset +
+	 *  every embedded slot collection. */
+	static void ScrubSharedRefsForSave(TArray<FPCGExExportCollectionSlot>& Slots, FPCGExPCGDataSharedScrubKeep& OutKeep);
 	static void RestoreSharedRefsAfterSave(FPCGExPCGDataSharedScrubKeep& Keep);
 	static void ScrubEntryRefsForSave(const TArray<FPCGExPCGDataAssetCollectionEntry*>& InEntries, FPCGExPCGDataEntryScrubKeep& OutKeep);
 	static void RestoreEntryRefsAfterSave(FPCGExPCGDataEntryScrubKeep& Keep);
@@ -510,10 +522,7 @@ public:
 	 *  callers are const contexts and the machinery view is a mutation view. See
 	 *  GetCookDependencyAssetPaths for the embedded-vs-external rationale per block. */
 	static void AppendCookDependencyAssetPathsFor(
-		const UPCGExMeshCollection* InSharedMesh,
-		const UPCGExLevelCollection* InSharedLevel,
-		const TSoftObjectPtr<UPCGExMeshCollection>& InExternalSharedMesh,
-		const TSoftObjectPtr<UPCGExLevelCollection>& InExternalSharedLevel,
+		const TArray<FPCGExExportCollectionSlot>& InSharedSlots,
 		const TArray<const FPCGExPCGDataAssetCollectionEntry*>& InEntries,
 		TSet<FSoftObjectPath>& OutPaths);
 #endif
@@ -544,8 +553,8 @@ public:
 
 	/**
 	 * Cook-path override -- adds the references that GetAssetPaths intentionally omits
-	 * (those are reserved for runtime cherry-picking). Walks embedded shared / actor
-	 * subcollections so their leaf soft refs reach the cook, and surfaces the
+	 * (those are reserved for runtime cherry-picking). Walks embedded shared / per-entry
+	 * slot collections so their leaf soft refs reach the cook, and surfaces the
 	 * externalized-package soft paths so their on-disk assets cook too.
 	 *
 	 * Assumes external assets exist on disk from a prior editor save -- the normal

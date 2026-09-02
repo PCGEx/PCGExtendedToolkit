@@ -137,5 +137,21 @@ namespace PCGExCollectionHelpers
 	 */
 	PCGEXCOLLECTIONS_API
 	void DuplicateInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory, UObject* NewOuter);
+
+	/**
+	 * Move a struct's Instanced subobjects to the transient package and null the refs. For entries about
+	 * to be overwritten: an unreferenced inner left under its outer still shows up in save-time traversal.
+	 * Top-level properties only, like DuplicateInstancedSubobjects.
+	 */
+	PCGEXCOLLECTIONS_API
+	void RetireInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory);
+
+	/**
+	 * Rename a struct's Instanced subobjects under NewOuter (no copy). For subobjects the struct is the
+	 * SOLE owner of -- freshly minted by an export handler -- where a duplicate would only leave an
+	 * orphan behind. Top-level properties only.
+	 */
+	PCGEXCOLLECTIONS_API
+	void ReparentInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory, UObject* NewOuter);
 #endif
 }
