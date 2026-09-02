@@ -7,6 +7,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Details/PCGExStagingDetails.h"
+#include "UObject/Package.h"
 #include "UObject/UnrealType.h"
 
 namespace PCGExCollectionHelpers
@@ -400,6 +401,52 @@ namespace PCGExCollectionHelpers
 			if (Current && Current->GetOuter() != NewOuter)
 			{
 				ObjProp->SetObjectPropertyValue_InContainer(StructMemory, DuplicateObject(Current, NewOuter));
+			}
+		}
+	}
+
+	void RetireInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory)
+	{
+		if (!Struct || !StructMemory)
+		{
+			return;
+		}
+
+		for (TFieldIterator<FObjectPropertyBase> It(Struct); It; ++It)
+		{
+			const FObjectPropertyBase* ObjProp = *It;
+			if (!ObjProp->HasAnyPropertyFlags(CPF_InstancedReference))
+			{
+				continue;
+			}
+
+			if (UObject* Current = ObjProp->GetObjectPropertyValue_InContainer(StructMemory))
+			{
+				Current->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_NonTransactional);
+				ObjProp->SetObjectPropertyValue_InContainer(StructMemory, nullptr);
+			}
+		}
+	}
+
+	void ReparentInstancedSubobjects(const UScriptStruct* Struct, void* StructMemory, UObject* NewOuter)
+	{
+		if (!Struct || !StructMemory || !NewOuter)
+		{
+			return;
+		}
+
+		for (TFieldIterator<FObjectPropertyBase> It(Struct); It; ++It)
+		{
+			const FObjectPropertyBase* ObjProp = *It;
+			if (!ObjProp->HasAnyPropertyFlags(CPF_InstancedReference))
+			{
+				continue;
+			}
+
+			UObject* Current = ObjProp->GetObjectPropertyValue_InContainer(StructMemory);
+			if (Current && Current->GetOuter() != NewOuter)
+			{
+				Current->Rename(nullptr, NewOuter, REN_DontCreateRedirectors | REN_NonTransactional);
 			}
 		}
 	}

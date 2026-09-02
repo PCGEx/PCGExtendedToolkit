@@ -108,10 +108,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExVariantCollection"))
 	TArray<FPCGExInputShorthandNameSoftObjectPath> VariantCollections;
 
-	/** Obsolete: mappings resolve live against hard-referenced variant sources; nothing to skip. */
-	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
-	bool bSkipStaleMappings_DEPRECATED = true;
-
 	/** Staging layer whose picks are swapped. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
 	FName StagingLayer = NAME_None;

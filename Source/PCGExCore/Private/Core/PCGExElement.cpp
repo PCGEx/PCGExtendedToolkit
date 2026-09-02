@@ -295,34 +295,6 @@ bool IPCGExElement::ExecuteInternal(FPCGContext* Context) const
 
 void IPCGExElement::InitializeData(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE(IPCGExElement::InitializeData)
-
-	const FPCGStack* Stack = InContext->GetStack();
-	if (!ensure(Stack))
-	{
-		PCGE_LOG_C(Error, LogOnly, InContext, LOCTEXT("ContextHasNoExecutionStack", "The execution context is malformed and has no call stack."));
-		return;
-	}
-
-	// Extract loop indices from the PCG execution stack to determine if this node
-	// is running inside a loop. LoopIndex is the immediate parent loop (second-to-last frame),
-	// TopLoopIndex is the outermost loop in the stack. These affect execution policy decisions
-	// (e.g. NoPauseButLoop only spin-waits when inside a loop to avoid per-iteration frame delays).
-	const TArray<FPCGStackFrame>& StackFrames = Stack->GetStackFrames();
-
-	if (StackFrames.Num() >= 2)
-	{
-		InContext->LoopIndex = StackFrames.Last(1).LoopIndex;
-	}
-
-	for (const FPCGStackFrame& Frame : StackFrames)
-	{
-		if (Frame.LoopIndex != INDEX_NONE)
-		{
-			InContext->TopLoopIndex = Frame.LoopIndex;
-			break;
-		}
-	}
 }
 
 bool IPCGExElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
