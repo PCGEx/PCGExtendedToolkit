@@ -95,14 +95,19 @@ struct PCGEXCOLLECTIONS_API FPCGExExportItem
 };
 
 /**
- * One actor offered to the harvest pass. The root of a subtree export is never an entry itself; every
- * other candidate carries the slot that claimed it (a handler's Claim, else the exporter's built-in
- * classification), or None when nothing did.
+ * One actor offered to the harvest pass. A root -- the root of a subtree export, or any IPCGExAssemblyRoot
+ * implementer met inside the export (a module cage in a level, a nested root actor) -- is never an entry
+ * itself; every other candidate carries the slot that claimed it (a handler's Claim, else the exporter's
+ * built-in classification).
  */
 struct PCGEXCOLLECTIONS_API FPCGExExportCandidate
 {
 	AActor* Actor = nullptr;
+
+	/** Never an entry: only its components are harvested. */
 	bool bIsRoot = false;
+
+	/** None for a root. */
 	FName ClaimedSlot = NAME_None;
 };
 
@@ -198,8 +203,9 @@ private:
  * Harvest order per export (UPCGExDefaultLevelDataExporter):
  *   1. Claim pass: handlers by priority may claim a filtered actor; unclaimed actors fall to the
  *      exporter's built-in classification (Mesh / Actor / Level).
- *   2. Harvest pass: every handler sees every candidate (the subtree root included, flagged) with
- *      its claimed slot, and appends items to its own writer.
+ *   2. Harvest pass: every handler sees every candidate (roots included, flagged: the subtree root and
+ *      any IPCGExAssemblyRoot implementer inside the export) with its claimed slot, and appends items
+ *      to its own writer.
  *   3. Per slot: points emitted on PinName, entries handed off -- captured for shared compaction, or
  *      built into a per-entry embedded collection.
  * A handler must only parse candidates that will not be spawned as actors: the root, its own claims,

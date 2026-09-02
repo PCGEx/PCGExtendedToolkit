@@ -11,6 +11,7 @@
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExActorMeshClassificator.h"
 #include "LevelInstance/LevelInstanceActor.h"
+#include "PCGExAssemblyRoot.h"
 #include "PCGExCollectionsSettingsCache.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
@@ -177,7 +178,26 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 
 	for (AActor* Actor : Source.Actors)
 	{
-		if (!Actor || !UPCGExActorContentFilter::StaticPassesFilter(ContentFilter, Actor))
+		if (!Actor)
+		{
+			continue;
+		}
+
+		// An assembly root met INSIDE the export (a module cage in a level, a root actor nested in a
+		// subtree) authors nothing itself and is never an entry; like the export root, only its components
+		// are offered to handlers. Decided ahead of the content filter, whose tags mean "not an entry".
+		if (Actor->Implements<UPCGExAssemblyRoot>())
+		{
+			if (!UPCGExActorContentFilter::IsInfrastructureActor(Actor))
+			{
+				FPCGExExportCandidate& RootLike = Candidates.AddDefaulted_GetRef();
+				RootLike.Actor = Actor;
+				RootLike.bIsRoot = true;
+			}
+			continue;
+		}
+
+		if (!UPCGExActorContentFilter::StaticPassesFilter(ContentFilter, Actor))
 		{
 			continue;
 		}
