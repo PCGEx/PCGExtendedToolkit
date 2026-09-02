@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+      }
+
+      .cls-2 {
+        opacity: .25;
+      }
+
+      .cls-3 {
+        fill: #f0d41f;
+      }
+    </style>
+  </defs>
+  <circle cx="52" cy="53" r="30.34"/>
+  <circle class="cls-1" cx="50" cy="50" r="30.34"/>
+  <path class="cls-2" d="M20.33,43.65c-.44,2.05-.67,4.17-.67,6.35,0,16.76,13.59,30.34,30.34,30.34,2.09,0,4.12-.21,6.09-.61-18.37-3.08-32.85-17.65-35.76-36.08Z"/>
+  <ellipse class="cls-3" cx="62.77" cy="34.82" rx="6.64" ry="12.87" transform="translate(-2.4 64.9) rotate(-53.8)"/>
+</svg>

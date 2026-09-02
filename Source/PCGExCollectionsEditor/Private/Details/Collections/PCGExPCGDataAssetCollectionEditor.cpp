@@ -9,6 +9,7 @@
 #include "Collections/PCGExPCGDataAssetCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "UObject/UnrealType.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SComboBox.h"
@@ -20,6 +21,7 @@ FPCGExPCGDataAssetCollectionEditor::FPCGExPCGDataAssetCollectionEditor()
 {
 	SourceOptions.Add(MakeShared<FString>(TEXT("Data Asset")));
 	SourceOptions.Add(MakeShared<FString>(TEXT("Level")));
+	SourceOptions.Add(MakeShared<FString>(TEXT("Actor")));
 }
 
 TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
@@ -33,6 +35,7 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
 	static const FName SourcePropName = GET_MEMBER_NAME_CHECKED(FPCGExPCGDataAssetCollectionEntry, Source);
 	static const FName DataAssetPropName = GET_MEMBER_NAME_CHECKED(FPCGExPCGDataAssetCollectionEntry, DataAsset);
 	static const FName LevelPropName = GET_MEMBER_NAME_CHECKED(FPCGExPCGDataAssetCollectionEntry, Level);
+	static const FName SourceActorPropName = GET_MEMBER_NAME_CHECKED(FPCGExPCGDataAssetCollectionEntry, SourceActor);
 
 	auto GetTypedEntry = [WeakColl, Idx]() -> FPCGExPCGDataAssetCollectionEntry*
 	{
@@ -95,9 +98,15 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
 					return;
 				}
 
-				const EPCGExDataAssetEntrySource NewSource = (*Selected == TEXT("Level"))
-					? EPCGExDataAssetEntrySource::Level
-					: EPCGExDataAssetEntrySource::DataAsset;
+				EPCGExDataAssetEntrySource NewSource = EPCGExDataAssetEntrySource::DataAsset;
+				if (*Selected == TEXT("Level"))
+				{
+					NewSource = EPCGExDataAssetEntrySource::Level;
+				}
+				else if (*Selected == TEXT("Actor"))
+				{
+					NewSource = EPCGExDataAssetEntrySource::Actor;
+				}
 
 				if (Entry->Source == NewSource)
 				{
@@ -119,9 +128,15 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
 					{
 						return INVTEXT("?");
 					}
-					return Entry->Source == EPCGExDataAssetEntrySource::Level
-						? INVTEXT("Level")
-						: INVTEXT("Data Asset");
+					switch (Entry->Source)
+					{
+					case EPCGExDataAssetEntrySource::Level:
+						return INVTEXT("Level");
+					case EPCGExDataAssetEntrySource::Actor:
+						return INVTEXT("Actor");
+					default:
+						return INVTEXT("Data Asset");
+					}
 				})
 				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
 			]
@@ -231,6 +246,61 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
 				Entry->Level = TSoftObjectPtr<UWorld>(AssetData.GetSoftObjectPath());
 				Coll->PostEditChange();
 				OnPropertyEdited.ExecuteIfBound(LevelPropName);
+			})
+			.DisplayThumbnail(false)
+		]
+	];
+
+	// Actor picker (when Source == Actor and not subcollection). SObjectPropertyEntryBox on an
+	// actor class offers the level actor picker.
+	Box->AddSlot()
+	   .AutoHeight()
+	[
+		SNew(SBox)
+		.Visibility_Lambda([GetTypedEntry, WeakColl, Idx]()
+		{
+			const UPCGExAssetCollection* Coll = WeakColl.Get();
+			if (!Coll)
+			{
+				return EVisibility::Collapsed;
+			}
+			const FPCGExEntryAccessResult Result = Coll->GetEntryRaw(Idx);
+			if (!Result.IsValid() || Result.Entry->bIsSubCollection)
+			{
+				return EVisibility::Collapsed;
+			}
+			const FPCGExPCGDataAssetCollectionEntry* Entry = GetTypedEntry();
+			return (Entry && Entry->Source == EPCGExDataAssetEntrySource::Actor) ? EVisibility::Visible : EVisibility::Collapsed;
+		})
+		[
+			SNew(SObjectPropertyEntryBox)
+			.AllowedClass(AActor::StaticClass())
+			.ObjectPath_Lambda([GetTypedEntry]() -> FString
+			{
+				const FPCGExPCGDataAssetCollectionEntry* Entry = GetTypedEntry();
+				if (!Entry)
+				{
+					return FString();
+				}
+				return Entry->SourceActor.ToSoftObjectPath().ToString();
+			})
+			.OnObjectChanged_Lambda([GetTypedEntry, WeakColl, OnPropertyEdited](const FAssetData& AssetData)
+			{
+				UPCGExAssetCollection* Coll = WeakColl.Get();
+				if (!Coll)
+				{
+					return;
+				}
+				FPCGExPCGDataAssetCollectionEntry* Entry = GetTypedEntry();
+				if (!Entry)
+				{
+					return;
+				}
+				FScopedTransaction Transaction(INVTEXT("Set Source Actor"));
+				Coll->Modify();
+				Entry->SourceActor = TSoftObjectPtr<AActor>(AssetData.GetSoftObjectPath());
+				Coll->PostEditChange();
+				OnPropertyEdited.ExecuteIfBound(SourceActorPropName);
 			})
 			.DisplayThumbnail(false)
 		]
