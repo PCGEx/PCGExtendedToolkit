@@ -182,15 +182,18 @@ namespace PCGExDefaultLevelDataExporterInternal
 		}
 	}
 
+	// Bounds stay relative to the actor's own transform (frame-invariant); only the written
+	// transform moves into the source frame.
 	static void WriteActorTransformAndBounds(
 		AActor* Actor, int32 Index,
+		const FPCGExLevelExportSource& Source,
 		const UPCGExBoundsEvaluator* Evaluator,
 		TPCGValueRange<FTransform>& Transforms,
 		TPCGValueRange<FVector>& BoundsMin,
 		TPCGValueRange<FVector>& BoundsMax)
 	{
 		const FTransform ActorTransform = Actor->GetActorTransform();
-		Transforms[Index] = ActorTransform;
+		Transforms[Index] = Source.ToFrame(ActorTransform);
 
 		const FBox WorldBounds = Evaluator ? Evaluator->EvaluateActorBounds(Actor, nullptr, -1) : FBox(ForceInit);
 		WorldBoundsToLocal(WorldBounds, ActorTransform, BoundsMin[Index], BoundsMax[Index]);
@@ -429,6 +432,7 @@ namespace PCGExDefaultLevelDataExporterInternal
 	// belongs on per-entry descriptor data, not a coarse per-actor world AABB.
 	static void ExtractMeshPointsFromActor(
 		AActor* Actor,
+		const FPCGExLevelExportSource& Source,
 		bool bCaptureMaterialOverrides,
 		TArray<FMeshPoint>& OutPoints,
 		TMap<FMeshEntryKey, FMeshInfo>& InOutMeshInfoMap,
@@ -530,7 +534,9 @@ namespace PCGExDefaultLevelDataExporterInternal
 					Point.MaterialVariantIndex = VariantIdx;
 					Point.BoundsMin = MeshBounds.Min;
 					Point.BoundsMax = MeshBounds.Max;
-					ISMC->GetInstanceTransform(Idx, Point.Transform, /*bWorldSpace=*/true);
+					FTransform InstanceWorld;
+					ISMC->GetInstanceTransform(Idx, InstanceWorld, /*bWorldSpace=*/true);
+					Point.Transform = Source.ToFrame(InstanceWorld);
 				}
 			}
 			else
@@ -542,7 +548,7 @@ namespace PCGExDefaultLevelDataExporterInternal
 				Point.SourceComponent = SMC;
 				Point.SourceActor = Actor;
 				Point.MaterialVariantIndex = VariantIdx;
-				Point.Transform = SMC->GetComponentTransform();
+				Point.Transform = Source.ToFrame(SMC->GetComponentTransform());
 				Point.BoundsMin = MeshBounds.Min;
 				Point.BoundsMax = MeshBounds.Max;
 			}
@@ -696,12 +702,12 @@ namespace PCGExDefaultLevelDataExporterInternal
 bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* World, UPCGDataAsset* OutAsset)
 {
 	FPCGExLevelExportContext EmptyContext;
-	return ExportLevelData(World, OutAsset, EmptyContext);
+	return ExportLevelData(FPCGExLevelExportSource::FromWorld(World), OutAsset, EmptyContext);
 }
 
-bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext)
+bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSource& Source, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext)
 {
-	if (!World || !OutAsset)
+	if (!Source.IsValid() || !OutAsset)
 	{
 		return false;
 	}
@@ -713,12 +719,6 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 	// UPCGExPCGDataAssetCollection::CompactSharedMesh / CompactSharedLevel /
 	// RebuildCollectionMaps. The 2-arg BP-facing path delegates here with an empty
 	// context; in that case the asset is produced without hashes (raw attributes only).
-
-	ULevel* PersistentLevel = World->PersistentLevel;
-	if (!PersistentLevel)
-	{
-		return false;
-	}
 
 	// Move any previous inner subobjects to the transient package so they get GC'd
 	// instead of being saved as orphan exports in the collection's .uasset. Otherwise,
@@ -738,9 +738,9 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 
 	// Phase 1: Collect and classify qualifying actors
 	TArray<FClassifiedActor> ClassifiedActors;
-	for (AActor* Actor : PersistentLevel->Actors)
+	for (AActor* Actor : Source.Actors)
 	{
-		if (!UPCGExActorContentFilter::StaticPassesFilter(ContentFilter, Actor))
+		if (!Actor || !UPCGExActorContentFilter::StaticPassesFilter(ContentFilter, Actor))
 		{
 			continue;
 		}
@@ -890,7 +890,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 
 	for (const FClassifiedActor& CA : MeshActors)
 	{
-		ExtractMeshPointsFromActor(CA.Actor, bCaptureMaterialOverrides, AllMeshPoints, MeshInfoMap, PropertySchemaCache);
+		ExtractMeshPointsFromActor(CA.Actor, Source, bCaptureMaterialOverrides, AllMeshPoints, MeshInfoMap, PropertySchemaCache);
 	}
 
 	// Create mesh point data
@@ -994,7 +994,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 
 		for (int32 i = 0; i < ActorActors.Num(); i++)
 		{
-			WriteActorTransformAndBounds(ActorActors[i].Actor, i, BoundsEvaluator, Transforms, BMin, BMax);
+			WriteActorTransformAndBounds(ActorActors[i].Actor, i, Source, BoundsEvaluator, Transforms, BMin, BMax);
 		}
 
 		InitMetadata(ActorPointData, ActorActors.Num());
@@ -1111,7 +1111,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(UWorld* World, UPCGDataAsse
 
 		for (int32 i = 0; i < LevelActors.Num(); i++)
 		{
-			WriteActorTransformAndBounds(LevelActors[i].Actor, i, BoundsEvaluator, Transforms, BMin, BMax);
+			WriteActorTransformAndBounds(LevelActors[i].Actor, i, Source, BoundsEvaluator, Transforms, BMin, BMax);
 		}
 
 		InitMetadata(LevelPointData, LevelActors.Num());

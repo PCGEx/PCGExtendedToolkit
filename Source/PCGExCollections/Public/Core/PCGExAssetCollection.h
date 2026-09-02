@@ -420,6 +420,17 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	virtual void SetAssetPath(const FSoftObjectPath& InPath);
 	virtual void GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) const;
 
+	/**
+	 * Host-side load hook, one call per entry from UPCGExAssetCollection::PostLoad. Entries are structs and
+	 * get no PostLoad of their own, so per-entry data migration (deprecated slots folded into their
+	 * successors) lives here. Runs in every build: cooked data saved before a migration still carries the
+	 * old slots. Return true when something was rewritten so the host can dirty its package.
+	 */
+	virtual bool OnHostPostLoad(UPCGExAssetCollection* Host)
+	{
+		return false;
+	}
+
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize();
 

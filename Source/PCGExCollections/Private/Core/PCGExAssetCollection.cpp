@@ -1321,6 +1321,24 @@ void UPCGExAssetCollection::PostLoad()
 {
 	Super::PostLoad();
 
+	// Per-entry migrations (see FPCGExAssetCollectionEntry::OnHostPostLoad).
+	{
+		bool bEntryRewritten = false;
+		ForEachEntry([this, &bEntryRewritten](FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
+		{
+			if (Entry && Entry->OnHostPostLoad(this))
+			{
+				bEntryRewritten = true;
+			}
+		});
+#if WITH_EDITOR
+		if (bEntryRewritten)
+		{
+			(void)MarkPackageDirty();
+		}
+#endif
+	}
+
 #if WITH_EDITORONLY_DATA
 	// Single-pipeline slot migration: the legacy StagingPipeline pointer becomes the first
 	// element of the composable StagingPipelines array. Runs once; subsequent loads no-op.
