@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExFoundationsEditor.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 
 #include "PCGExAssetTypesMacros.h"

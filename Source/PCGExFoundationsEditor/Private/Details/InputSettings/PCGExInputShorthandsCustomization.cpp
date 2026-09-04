@@ -1,7 +1,8 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/InputSettings/PCGExInputShorthandsCustomization.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "UObject/UnrealType.h"
 

@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Elements/PCGExStagingSwap.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGParamData.h"
 #include "Collections/PCGExMeshCollection.h"

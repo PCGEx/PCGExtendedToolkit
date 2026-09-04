@@ -1,7 +1,8 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Elements/PCGExFloodFillClusters.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 
 #include "PCGExVersion.h"
