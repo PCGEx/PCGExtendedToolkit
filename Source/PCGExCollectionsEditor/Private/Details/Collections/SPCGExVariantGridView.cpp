@@ -9,8 +9,10 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "IDetailsView.h"
 #include "IStructureDetailsView.h"
 #include "Misc/ITransaction.h"
+#include "Details/Collections/PCGExGenericAssetPickerCustomization.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "ScopedTransaction.h"
@@ -473,6 +475,12 @@ void SPCGExVariantGridView::Construct(const FArguments& InArgs)
 
 	StructDetailView = PropertyModule.CreateStructureDetailView(DetailsViewArgs, StructureViewArgs, nullptr);
 	StructDetailView->GetOnFinishedChangingPropertiesDelegate().AddSP(this, &SPCGExVariantGridView::OnDetailPropertyChanged);
+
+	// A structure view never runs the root entry's customization; property-level pickers go here.
+	if (IDetailsView* InnerDetailsView = StructDetailView->GetDetailsView())
+	{
+		PCGExGenericAssetPicker::RegisterOnDetailsView(*InnerDetailsView);
+	}
 
 	ChildSlot
 	[
@@ -1320,6 +1328,13 @@ void SPCGExVariantGridView::UpdateDetailForSelection()
 	{
 		CurrentStructScope = MakeShared<FStructOnScope>(PayloadStruct);
 		PayloadStruct->CopyScriptStruct(CurrentStructScope->GetStructMemory(), PayloadMemory);
+
+		// The copy has no outer; the package lets customizations reach the host (IPropertyHandle::GetOuterPackages).
+		if (const UPCGExVariantCollection* Host = Collection.Get())
+		{
+			CurrentStructScope->SetPackage(Host->GetPackage());
+		}
+
 		StructDetailView->SetStructureData(CurrentStructScope);
 	}
 	else

@@ -20,7 +20,9 @@ struct FAssetData;
  * and check inheritance between collection types without compile-time coupling.
  *
  * Built-in types (registered via PCGEX_REGISTER_COLLECTION_TYPE):
- *   Base → Mesh, Actor, PCGDataAsset
+ *   Base → Mesh, SkinnedMesh, Actor, Level, PCGDataAsset, Variant
+ * Registered by hand: Omni (no single entry struct), Generic (no collection class -- see
+ * PCGExGenericCollectionEntry.cpp).
  *
  * Registering a custom type:
  *   1. Define a FTypeId constant (just an FName):
@@ -60,6 +62,7 @@ namespace PCGExAssetCollection
 		inline const FTypeId Level = FName(TEXT("Level"));
 		inline const FTypeId Variant = FName(TEXT("Variant"));
 		inline const FTypeId Omni = FName(TEXT("Omni"));
+		inline const FTypeId Generic = FName(TEXT("Generic"));
 	}
 
 	/**
@@ -68,6 +71,9 @@ namespace PCGExAssetCollection
 	struct PCGEXCOLLECTIONS_API FTypeInfo
 	{
 		FTypeId Id = NAME_None;
+
+		// Null for entry-only types (Generic) that exist inside heterogeneous hosts and have no
+		// typed collection of their own. Every consumer must guard it.
 		TWeakObjectPtr<UClass> CollectionClass = nullptr;
 
 		// Null for heterogeneous collection types (Omni) with no single entry struct --
@@ -105,9 +111,10 @@ namespace PCGExAssetCollection
 		int32 SourceDetectPriority = 100;
 #endif
 
+		/** A type needs a collection class (typed hosts), an entry struct (entry-only types), or both. */
 		bool IsValid() const
 		{
-			return Id != NAME_None && CollectionClass.IsValid();
+			return Id != NAME_None && (CollectionClass.IsValid() || EntryStruct != nullptr);
 		}
 	};
 
