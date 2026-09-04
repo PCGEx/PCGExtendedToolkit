@@ -13,6 +13,7 @@
 #include "PCGExCollectionsEditorSettings.h"
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
+#include "Details/Collections/PCGExGenericAssetPickerCustomization.h"
 #include "Selection.h"
 #include "Collections/PCGExActorCollection.h"
 #include "Collections/PCGExLevelCollection.h"
@@ -655,6 +656,51 @@ TSharedRef<SWidget> FPCGExPCGDataAssetEntryCustomization::GetAssetPicker(TShared
 				.Visibility_Lambda(VisibleForSource(EPCGExDataAssetEntrySource::Actor))
 				[
 					SourceActorHandle->CreatePropertyValueWidget()
+				]
+			];
+}
+
+#pragma endregion
+
+#pragma region FPCGExGenericEntryCustomization
+
+TSharedRef<IPropertyTypeCustomization> FPCGExGenericEntryCustomization::MakeInstance()
+{
+	TSharedRef<IPropertyTypeCustomization> Ref = MakeShareable(new FPCGExGenericEntryCustomization());
+	static_cast<FPCGExGenericEntryCustomization&>(Ref.Get()).FillCustomizedTopLevelPropertiesNames();
+	return Ref;
+}
+
+// Asset-hosted views only (Entries tab); struct-on-scope panels customize the Asset property instead.
+TSharedRef<SWidget> FPCGExGenericEntryCustomization::GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle)
+{
+	TSharedPtr<IPropertyHandle> SubCollection = PropertyHandle->GetChildHandle(FName("SubCollection"));
+	TSharedPtr<IPropertyHandle> AssetHandle = PropertyHandle->GetChildHandle(GetAssetName());
+
+	return SNew(SHorizontalBox)
+			PCGEX_ENTRY_INDEX
+			+ SHorizontalBox::Slot()
+			.FillWidth(1)
+			.MinWidth(200)
+			.Padding(2, 0)
+			[
+				SNew(SBox)
+				.ToolTipText(SubCollection->GetToolTipText())
+				PCGEX_SUBCOLLECTION_VISIBLE
+				[
+					SubCollection->CreatePropertyValueWidget()
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1)
+			.MinWidth(200)
+			.Padding(2, 0)
+			[
+				SNew(SBox)
+				.ToolTipText(AssetHandle->GetToolTipText())
+				PCGEX_SUBCOLLECTION_COLLAPSED
+				[
+					PCGExGenericAssetPicker::MakeFilteredAssetPicker(AssetHandle.ToSharedRef())
 				]
 			];
 }
