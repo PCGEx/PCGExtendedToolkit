@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Elements/PCGExClusterDiffuse.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExVersion.h"
 #include "Blenders/PCGExUnionOpsManager.h"
