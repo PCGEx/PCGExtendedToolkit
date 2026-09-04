@@ -23,6 +23,7 @@
 #include "Details/Collections/FPCGExCollectionTileDragDropOp.h"
 #include "Details/Collections/PCGExAssetCollectionEditor.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExGenericAssetPickerCustomization.h"
 #include "Details/Collections/SPCGExCollectionCategoryGroup.h"
 #include "Details/Collections/SPCGExCollectionGridTile.h"
 #include "DragAndDrop/AssetDragDropOp.h"
@@ -95,6 +96,9 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 			{
 				return PropertyAndParent.Property.HasAnyPropertyFlags(CPF_EditConst);
 			}));
+
+		// A structure view never runs the root entry's customization; property-level pickers go here.
+		PCGExGenericAssetPicker::RegisterOnDetailsView(*InnerDetailsView);
 	}
 
 	// Wire up property change callback to sync edits back to the collection
@@ -1507,6 +1511,12 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	CurrentStructScope = MakeShared<FStructOnScope>(EntryStruct);
 	EntryStruct->CopyScriptStruct(CurrentStructScope->GetStructMemory(), EntryPtr);
 	CurrentDetailIndex = Index;
+
+	// The copy has no outer; the package lets customizations reach the host (IPropertyHandle::GetOuterPackages).
+	if (const UPCGExAssetCollection* Coll = Collection.Get())
+	{
+		CurrentStructScope->SetPackage(Coll->GetPackage());
+	}
 
 	if (StructDetailView.IsValid())
 	{
