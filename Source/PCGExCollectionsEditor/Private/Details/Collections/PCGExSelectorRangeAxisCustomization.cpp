@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
