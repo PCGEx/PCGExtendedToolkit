@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "Core/PCGExClustersProcessor.h"
 #include "Core/PCGExFloodFill.h"

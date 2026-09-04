@@ -4,6 +4,7 @@
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 /**
  * Compact layout for FPCGExSelectorRangeAxis.

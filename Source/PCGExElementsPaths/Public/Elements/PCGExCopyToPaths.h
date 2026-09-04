@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/PCGExTaggedData.h"
 
 #include "Core/PCGExPointsProcessor.h"
 PRAGMA_DISABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
