@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Templates/SubclassOf.h"
 
 #include "PCGExAssetCollectionTypes.h"
 #include "PCGExAssetGrammar.h"
@@ -1393,8 +1394,15 @@ public:
 
 	/** Staged bounds for entry types with no asset to measure (Generic entries). Tune per entry with the
 	 *  staging bounds modifier. */
-	UPROPERTY(EditAnywhere, Category = Settings)
+	UPROPERTY(EditAnywhere, Category = Settings, AdvancedDisplay)
 	FBox DefaultStagingBounds = FBox(FVector(-50.0), FVector(50.0));
+
+#if WITH_EDITORONLY_DATA
+	/** Narrows the asset picker of Generic entries to this class and its subclasses. None = any asset. Picker
+	 *  only: existing entries are never validated against it. */
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(AllowAbstract="true"), AdvancedDisplay)
+	TSubclassOf<UObject> GenericAllowedClass;
+#endif
 
 	/**
 	 * Collection-level properties with default values.

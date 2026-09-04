@@ -26,6 +26,10 @@ namespace PCGExGenericEntryActions
 				// UObject is SObjectPropertyEntryBox's own default: the unfiltered asset picker.
 				Info.TilePickerPropertyName = FName("Asset");
 				Info.TilePickerAllowedClass = UObject::StaticClass();
+				Info.ResolveTilePickerAllowedClass = [](const UPCGExAssetCollection* Host) -> const UClass*
+				{
+					return (Host && Host->GenericAllowedClass.Get()) ? Host->GenericAllowedClass.Get() : UObject::StaticClass();
+				};
 
 				FCollectionEditorTypeRegistry::Get().Register(MoveTemp(Info));
 			});

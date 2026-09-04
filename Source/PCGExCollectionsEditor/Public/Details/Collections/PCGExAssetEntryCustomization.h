@@ -58,8 +58,7 @@ protected:
 #define PCGEX_FOREACH_ENTRY_TYPE(MACRO)\
 MACRO(Mesh, "StaticMesh")\
 MACRO(SkinnedMesh, "SkinnedAsset")\
-MACRO(Level, "Level")\
-MACRO(Generic, "Asset")
+MACRO(Level, "Level")
 
 #define PCGEX_FOREACH_ENTRY_TYPE_ALL(MACRO)\
 MACRO(Mesh, "StaticMesh")\
@@ -81,6 +80,20 @@ static TSharedRef<IPropertyTypeCustomization> MakeInstance(); \
 PCGEX_FOREACH_ENTRY_TYPE(PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL)
 
 #undef PCGEX_SUBCOLLECTION_ENTRY_BOILERPLATE_DECL
+
+/** Generic entries: the Asset picker is narrowed by the host collection's editor-only GenericAllowedClass. */
+class FPCGExGenericEntryCustomization : public FPCGExEntryHeaderCustomizationBase
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+
+	virtual FName GetAssetName() override
+	{
+		return FName("Asset");
+	}
+
+	virtual TSharedRef<SWidget> GetAssetPicker(TSharedRef<IPropertyHandle> PropertyHandle, TSharedPtr<IPropertyHandle> IsSubCollectionHandle) override;
+};
 
 /** Custom customization for Actor entries -- inlines delta source fields with Pick/GoTo buttons. */
 class FPCGExActorEntryCustomization : public FPCGExEntryHeaderCustomizationBase
