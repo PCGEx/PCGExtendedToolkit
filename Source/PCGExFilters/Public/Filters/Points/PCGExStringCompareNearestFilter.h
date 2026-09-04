@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Utils/PCGExCompare.h"
 
 #include "Filters/Points/PCGExNearestFilter.h"

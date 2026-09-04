@@ -1,4 +1,4 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "CoreMinimal.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Core/PCGExProbeFactoryProvider.h"
 #include "Core/PCGExProbeOperation.h"
 #include "Math/PCGExMath.h"

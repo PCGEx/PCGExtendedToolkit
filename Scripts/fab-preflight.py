@@ -942,6 +942,49 @@ def check_ctor_reorder(tree):
     return out
 
 
+# Member-shaped declarations ONLY: a reference/pointer parameter, a TArray<T>& out-param,
+# or a TArray<T>* member is fine with a forward declaration — flagging those invites
+# "fixes" that create include cycles (BitmaskCommon <-> BitmaskDetails, 2026-08-25).
+VALUE_MEMBER_RE = re.compile(r'^\s*(?:const\s+)?(FPCGEx\w+)\s+\w+\s*(?:=|;|\{)')
+CONTAINER_MEMBER_RE = re.compile(r'^\s*(?:const\s+)?T(?:Array|Set)<\s*(FPCGEx\w+)\s*>\s+\w+\s*(?:=|;|\{)')
+
+
+@check("value-member-include", "error",
+       "A reflected header declares a BY-VALUE member (plain or container) of a project type while "
+       "only a forward declaration is reachable through its includes. The shared PCH supplies the "
+       "definition in normal builds; a no-PCH build fails with C3646 'unknown override specifier'.")
+def check_value_member_include(tree):
+    defines = {}
+    for h in tree.headers:
+        for sym in DEFINES_RE.findall(tree.stripped(h)):
+            defines.setdefault(sym, set()).add(h)
+
+    out = []
+    for h in tree.headers:
+        t = tree.stripped(h)
+        if ".generated.h" not in t:
+            continue
+        cl = None
+        for i, ln in enumerate(t.split("\n")):
+            names = set()
+            for rx in (VALUE_MEMBER_RE, CONTAINER_MEMBER_RE):
+                m = rx.match(ln)
+                if m:
+                    names.add(m.group(1))
+            for ty in sorted(names):
+                owners = defines.get(ty)
+                if not owners:
+                    continue
+                if cl is None:
+                    cl = tree.closure(h)
+                if owners & cl:
+                    continue
+                out.append(Finding("value-member-include", "error", h, i + 1,
+                                   f"by-value use of '{ty}' with only a forward declaration in reach",
+                                   f'add #include "{rel_include(tree, sorted(owners)[0])}"'))
+    return out
+
+
 # Symbols CoreMinimal.h stopped supplying transitively in 5.8 (C7568 / C2065 on a clean build), with
 # the header that owns them. Owner paths verified against the 5.8 engine tree.
 IWYU_SYMBOLS = [
@@ -1081,7 +1124,12 @@ SELFTEST = {
         '{"Name":"ModEd","Type":"Editor"}\n'
         ']}\n'),
     "ModEd/ModEd.Build.cs": "// module marker\n",
-    "ModEd/Public/EditorOnlyThing.h": "#pragma once\n",
+    "ModEd/Public/EditorOnlyThing.h": (
+        "#pragma once\n"
+        "struct FPCGExElsewhere\n"
+        "{\n"
+        "\tint V = 0;\n"
+        "};\n"),
     "ModA/ModA.Build.cs": "// module marker\n",
     "ModA/Public/PCGExBase.h": (
         "#pragma once\n"
@@ -1092,6 +1140,10 @@ SELFTEST = {
         "template <typename T> class MODA_API TExported\n"
         "{\n"
         "\tT V;\n"
+        "};\n"
+        "struct MODA_API FPCGExMisc\n"
+        "{\n"
+        "\tint V = 0;\n"
         "};\n"
         "extern template class TExported<int>;\n"),
     "ModB/ModB.Build.cs": "// module marker\n",
@@ -1110,6 +1162,7 @@ SELFTEST = {
         "\t\tbool bFlag = false;\n"
         "\t};\n"
         "\tstatic void Draw(int A, const FOpts& O = FOpts());\n"
+        "\tFPCGExMisc MiscValue;\n"
         "};\n"),
     "ModB/Public/Extra.h": "#pragma once\n",
     "ModB/Private/PCGExBad.cpp": (
@@ -1254,6 +1307,10 @@ SELFTEST = {
         "\t\tbool bFlag = false;\n"
         "\t};\n"
         "\tFOpts Defaults = FOpts();\n"
+        "\tFPCGExMisc NegMisc;\n"
+        "\tTArray<FPCGExMisc> NegMiscArr;\n"
+        "\tTArray<FPCGExElsewhere>* ElsewherePtr = nullptr;\n"
+        "\tstatic void DrawMany(const TArray<FPCGExElsewhere>& In);\n"
         "\tstatic void Draw(int A, const FOpts& O);\n"
         "\tTSubclassOf<UPCGExSettings> SettingsClass;\n"
         "\tbool IsSet() const { return SettingsClass.Get() != nullptr; }\n"
@@ -1356,6 +1413,7 @@ SELFTEST_EXPECT = {
     "unity-collision": 2, "msvc-only": 1, "include-case": 1, "generated-last": 1, "fwd-decl-deref": 1,
     "subclassof-incomplete": 1, "editor-guard-free": 2, "clang-wall": 6, "ctor-reorder": 1,
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
+    "value-member-include": 1,
 }
 
 
