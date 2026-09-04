@@ -100,6 +100,8 @@ namespace PCGExAssetCollectionEditor
  *
  * See FPCGExMeshCollectionEditor, FPCGExActorCollectionEditor, etc. for reference implementations.
  */
+struct FPropertyChangedEvent;
+
 class PCGEXCOLLECTIONSEDITOR_API FPCGExAssetCollectionEditor : public FAssetEditorToolkit
 {
 public:
@@ -170,6 +172,10 @@ protected:
 	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
 	virtual void ForceRefreshTabs();
 
+	/** Rebuild every picker that snapshots host settings at build time (tile pickers, entry customizations). */
+	void RefreshPickerWidgets();
+	void OnObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& Event);
+
 	/**
 	 * Layout/app identity. Subclasses whose tab set differs from the base MUST override all
 	 * three: tab-manager state persists per layout name in GEditorLayoutIni, and a shared
@@ -221,6 +227,7 @@ protected:
 
 	TArray<PCGExAssetCollectionEditor::TabInfos> Tabs;
 	FDelegateHandle OnHiddenAssetPropertyNamesChanged;
+	FDelegateHandle OnObjectPropertyChangedHandle;
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 	TSharedPtr<SPCGExCollectionGridView> GridView;
 };

@@ -5,6 +5,7 @@
 #include "Details/Collections/PCGExCollectionEditorMacros.h"
 
 #include "AssetThumbnail.h"
+#include "Editor.h"
 #include "PCGExCollectionsEditorSettings.h"
 #include "ToolMenus.h"
 #include "Engine/AssetManager.h"
@@ -38,11 +39,13 @@
 FPCGExAssetCollectionEditor::FPCGExAssetCollectionEditor()
 {
 	OnHiddenAssetPropertyNamesChanged = UPCGExCollectionsEditorSettings::OnHiddenAssetPropertyNamesChanged.AddRaw(this, &FPCGExAssetCollectionEditor::ForceRefreshTabs);
+	OnObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &FPCGExAssetCollectionEditor::OnObjectPropertyChanged);
 }
 
 FPCGExAssetCollectionEditor::~FPCGExAssetCollectionEditor()
 {
 	UPCGExCollectionsEditorSettings::OnHiddenAssetPropertyNamesChanged.Remove(OnHiddenAssetPropertyNamesChanged);
+	FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(OnObjectPropertyChangedHandle);
 }
 
 bool FPCGExAssetCollectionEditor::IsPropertyUnderEntries(const FPropertyAndParent& PropertyAndParent)
@@ -526,6 +529,14 @@ void FPCGExAssetCollectionEditor::ResolveTilePickerForRow(int32 EntryIndex, FNam
 	{
 		OutPropertyName = EditorInfo->TilePickerPropertyName;
 		OutAllowedClass = EditorInfo->TilePickerAllowedClass.Get();
+
+		if (EditorInfo->ResolveTilePickerAllowedClass)
+		{
+			if (const UClass* HostClass = EditorInfo->ResolveTilePickerAllowedClass(Coll))
+			{
+				OutAllowedClass = HostClass;
+			}
+		}
 	}
 }
 
@@ -1268,4 +1279,34 @@ void FPCGExAssetCollectionEditor::ForceRefreshTabs()
 	{
 		GridView->RefreshDetailPanel();
 	}
+}
+
+void FPCGExAssetCollectionEditor::RefreshPickerWidgets()
+{
+	// Details tabs and the grid's struct panel re-run their entry customizations; RefreshGrid rebuilds
+	// every tile, which is where tile pickers are built.
+	ForceRefreshTabs();
+	if (GridView.IsValid())
+	{
+		GridView->RefreshGrid();
+	}
+}
+
+void FPCGExAssetCollectionEditor::OnObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& Event)
+{
+	if (!Object || Object != EditedCollection.Get() || Event.ChangeType == EPropertyChangeType::Interactive)
+	{
+		return;
+	}
+
+	// Host settings that pickers snapshot at build time.
+	static const FName GenericAllowedClassName = GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, GenericAllowedClass);
+	if (Event.GetMemberPropertyName() != GenericAllowedClassName)
+	{
+		return;
+	}
+
+	// Deferred: the change is broadcast from inside the details view that edited it, and ForceRefresh
+	// rebuilds that same view's property tree.
+	GEditor->GetTimerManager()->SetTimerForNextTick(FTimerDelegate::CreateSP(this, &FPCGExAssetCollectionEditor::RefreshPickerWidgets));
 }
