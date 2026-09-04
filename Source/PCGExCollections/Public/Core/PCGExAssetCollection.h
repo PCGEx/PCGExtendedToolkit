@@ -745,6 +745,7 @@ namespace PCGExAssetCollection
  * 4. Override GetTypeId() to return your registered FTypeId
  * 5. Add your TArray<FMyEntry> Entries UPROPERTY
  * 6. Register your type with PCGEX_REGISTER_COLLECTION_TYPE in your .cpp file
+ *    (an entry-only type with no collection class registers by hand -- see PCGExGenericCollectionEntry.cpp)
  * 7. Optionally override EDITOR_AddBrowserSelectionInternal for drag-drop support
  *
  * Picking API (all methods handle subcollection recursion automatically):
@@ -1389,6 +1390,11 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	EPCGExSubcollectionBoundsMode SubcollectionBoundsMode = EPCGExSubcollectionBoundsMode::UnionAABB;
+
+	/** Staged bounds for entry types with no asset to measure (Generic entries). Tune per entry with the
+	 *  staging bounds modifier. */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	FBox DefaultStagingBounds = FBox(FVector(-50.0), FVector(50.0));
 
 	/**
 	 * Collection-level properties with default values.
