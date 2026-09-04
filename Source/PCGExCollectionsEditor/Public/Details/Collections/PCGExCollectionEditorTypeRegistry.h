@@ -48,6 +48,9 @@ struct PCGEXCOLLECTIONSEDITOR_API FCollectionEditorTypeInfo
 	FName TilePickerPropertyName = NAME_None;
 	TWeakObjectPtr<const UClass> TilePickerAllowedClass = nullptr;
 
+	/** Optional per-host refinement of TilePickerAllowedClass (e.g. a collection-level allowed class). A null result keeps the static class. */
+	TFunction<const UClass*(const UPCGExAssetCollection*)> ResolveTilePickerAllowedClass;
+
 	TFunction<bool(const FAssetData&)> DetectSourceAsset;
 	TFunction<bool(const FAssetData&)> DetectCollectionAsset;
 
