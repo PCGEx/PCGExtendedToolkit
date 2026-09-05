@@ -57,7 +57,9 @@ public class PCGExCoreEditor : ModuleRules
 				"PropertyEditor",
 				"EditorWidgets",
 				"InputCore",
-				"ToolMenus" 
+				"ToolMenus",
+				// FPCGExModeToolkitBase re-registers the mode's primary tab through FAssetEditorModeUILayer.
+				"EditorFramework"
 			}
 		);
 
