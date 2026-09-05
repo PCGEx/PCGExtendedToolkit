@@ -9,18 +9,15 @@
 
 namespace PCGExAdjacencyPreviewConstants
 {
-	// Branch colors
 	static constexpr FLinearColor PassBranchColor(0.1f, 0.6f, 0.2f, 0.8f);
 	static constexpr FLinearColor FailBranchColor(0.4f, 0.15f, 0.15f, 0.5f);
 
-	// Node colors
 	static constexpr FLinearColor CentralNodeColor(0.9f, 0.9f, 0.9f, 1.0f);
 
 	// Panel background tints
 	static constexpr FLinearColor PanelPassBg(0.1f, 0.3f, 0.1f, 0.15f);
 	static constexpr FLinearColor PanelFailBg(0.3f, 0.1f, 0.1f, 0.15f);
 
-	// Aggregated mode colors
 	static constexpr FLinearColor AggregatedBranchColor(0.5f, 0.6f, 0.7f, 0.7f);
 	static constexpr FLinearColor AggregatedHighlightColor(0.9f, 0.85f, 0.3f, 0.9f);
 
@@ -93,7 +90,6 @@ void SPCGExAdjacencyPreview::DrawFilledCircle(
 	Vertices.Reserve(NumSegments + 2);
 	Indices.Reserve(NumSegments * 3);
 
-	// Center vertex
 	Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(Center), FVector2f::ZeroVector, VertColor, NoColor));
 
 	const double AngleStep = UE_TWO_PI / NumSegments;
@@ -303,7 +299,6 @@ int32 SPCGExAdjacencyPreview::PaintSomeMode(
 		DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
 		               FVector2D(PanelX, 0), FVector2D(PanelWidth, LocalSize.Y), BgColor);
 
-		// Draw star
 		DrawStarPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
 		              TotalNeighbors, GreenCount, bPass);
 
@@ -316,7 +311,6 @@ int32 SPCGExAdjacencyPreview::PaintSomeMode(
 			CountStr, Font, ESlateDrawEffect::None,
 			PCGExAdjacencyPreviewConstants::LabelColor);
 
-		// Pass/fail label
 		const FString ResultStr = bPass ? TEXT("PASS") : TEXT("FAIL");
 		const FLinearColor ResultColor = bPass
 			? PCGExAdjacencyPreviewConstants::PassBranchColor
@@ -385,7 +379,6 @@ int32 SPCGExAdjacencyPreview::PaintAllIndividualMode(
 			CountStr, Font, ESlateDrawEffect::None,
 			PCGExAdjacencyPreviewConstants::LabelColor);
 
-		// Pass/fail
 		const FString ResultStr = bPass ? TEXT("PASS") : TEXT("FAIL");
 		const FLinearColor ResultColor = bPass
 			? PCGExAdjacencyPreviewConstants::PassBranchColor
@@ -506,7 +499,6 @@ int32 SPCGExAdjacencyPreview::PaintAllAggregatedMode(
 			break;
 		}
 
-		// Draw star
 		DrawAggregatedPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
 		                    Values, HighlightIndex, GatherMode);
 

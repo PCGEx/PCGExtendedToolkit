@@ -169,9 +169,6 @@ namespace PCGExTensor
 			Octree->AddElement(PCGExOctree::FItem(i, FBoxSphereBounds(FBox(Steepness * (-Extents), Steepness * Extents).TransformBy(InTransforms[i])))); // Fetch to max
 		}
 
-		//for (const FPackedEffector& E : PackedEffectors) { MaxEffectorRadius = FMath::Max(MaxEffectorRadius, E.RadiusSquared); }
-		//MaxEffectorRadius = FMath::Sqrt(MaxEffectorRadius);
-
 		return true;
 	}
 

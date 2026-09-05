@@ -16,7 +16,6 @@ bool FPCGExFillControlHeuristicsScoring::PrepareForDiffusions(FPCGExContext* InC
 
 	const UPCGExFillControlsFactoryHxScoring* TypedFactory = Cast<UPCGExFillControlsFactoryHxScoring>(Factory);
 
-	// Extract scoring flags
 	bUseLocalScore = (TypedFactory->Config.Scoring & static_cast<uint8>(EPCGExFloodFillHeuristicFlags::LocalScore)) != 0;
 	bUseGlobalScore = (TypedFactory->Config.Scoring & static_cast<uint8>(EPCGExFloodFillHeuristicFlags::GlobalScore)) != 0;
 	bUsePreviousScore = (TypedFactory->Config.Scoring & static_cast<uint8>(EPCGExFloodFillHeuristicFlags::PreviousScore)) != 0;

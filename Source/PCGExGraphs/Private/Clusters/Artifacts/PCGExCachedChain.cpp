@@ -47,7 +47,6 @@ namespace PCGExClusters
 
 			if (!CachedChains)
 			{
-				// Cache miss - build and cache
 				CachedChains = BuildAndCacheChains(Cluster);
 			}
 
@@ -207,7 +206,6 @@ namespace PCGExClusters
 					return SourceChain->Links;
 				}();
 
-				// Walk through the chain and split at breakpoints
 				TArray<FLink> CurrentSegmentLinks;
 				CurrentSegmentLinks.Reserve(WalkLinks.Num());
 

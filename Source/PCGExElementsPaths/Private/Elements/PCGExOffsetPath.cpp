@@ -80,7 +80,6 @@ bool FPCGExOffsetPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->SetPointsFilterData(&Context->FilterFactories);
 			}))
 		{
 			Context->CancelExecution(TEXT("Could not find any paths to offset."));

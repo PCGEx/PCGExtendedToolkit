@@ -504,7 +504,6 @@ namespace PCGExMatching
 			}
 		}
 
-		// Skip excluded facades
 		while (Exclude && Exclude->Contains(TargetFacades[IOIndex]->GetIn()))
 		{
 			IOIndex++;

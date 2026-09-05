@@ -750,7 +750,6 @@ namespace PCGExBlending
 			int32 InValueSize = 0,
 			int32 InValueAlignment = 1);
 
-		// Clear all cached operations
 		void Clear();
 
 		// Singleton access

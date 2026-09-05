@@ -33,7 +33,6 @@ namespace PCGExTensor
 	{
 		if (!InContext->GetWorkHandle().Pin())
 		{
-			// nuh-uh
 			return false;
 		}
 

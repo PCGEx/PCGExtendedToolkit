@@ -32,7 +32,6 @@ enum class EPCGExConstantListID : uint8
 	FalseBool = 11 UMETA(DisplayName = "False"),
 	MAX_BOOL  = 12 UMETA(Hidden),
 
-	// Additional vectors
 	ADDITIONAL_VECTORS = 2 << 3 UMETA(Hidden),
 	OneVector          = 17 UMETA(DisplayName="Unit Vector"),
 	ZeroVector         = 18 UMETA(DisplayName="Zero Vector"),
@@ -41,7 +40,6 @@ enum class EPCGExConstantListID : uint8
 	RightVector        = 21 UMETA(DisplayName="Right Vector"),
 	ForwardVector      = 22 UMETA(DisplayName="Forward Vector"),
 
-	// Additional numerics
 	ADDITIONAL_NUMERICS = 2 << 4 UMETA(Hidden),
 	Two                 = 33 UMETA(DisplayName="2"),
 	Half                = 34 UMETA(DisplayName="0.5")

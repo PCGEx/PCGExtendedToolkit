@@ -81,7 +81,6 @@ bool UPCGExSkinnedMeshSelectorStaged::SelectInstances(FPCGSkinnedMeshSpawnerCont
 
 	if (!bUseTimeSlicing)
 	{
-		// Partition & write points in one go
 		if (!CollectionMap->BuildPartitions<FPCGSkinnedMeshInstanceList>(InPointData, OutMeshInstances))
 		{
 			PCGE_LOG_C(Error, GraphAndLog, &Context, FTEXT( "Unable to build any partitions"));

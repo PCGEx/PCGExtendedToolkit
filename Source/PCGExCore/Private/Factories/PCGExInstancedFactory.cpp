@@ -99,7 +99,6 @@ void UPCGExInstancedFactory::ApplyOverrides()
 
 	for (const TPair<FName, FPCGMetadataAttributeBase*>& PossibleOverride : PossibleOverrides)
 	{
-		// Find the property by name.
 		FProperty* Property = ObjectClass->FindPropertyByName(PossibleOverride.Key);
 
 		// A migrated triplet's old flat name resolves to its _DEPRECATED stub, so reroute the override into
@@ -158,5 +157,4 @@ void UPCGExInstancedFactory::CopySettingsFrom(const UPCGExInstancedFactory* Othe
 
 void UPCGExInstancedFactory::RegisterAssetDependencies(FPCGExContext* InContext)
 {
-	//InContext->AddAssetDependency();
 }

@@ -176,10 +176,7 @@ namespace PCGExAttributeRemap
 
 		// Attribute Remap is a per-field numeric operation (clamp + remap arithmetic).
 		// It has no meaning on extended-type scalars (Struct, Object, Class, Soft*,
-		// Byte, Text, Enum) or container attributes (TArray/TSet/TMap). Reject those
-		// here -- previously this was caught (incidentally) by TryGetType returning
-		// Unknown and failing Capture; that's no longer true, so the guard is now
-		// explicit.
+		// Byte, Text, Enum) or container attributes (TArray/TSet/TMap). Reject those here.
 		{
 			const bool bIsContainer = InputDescriptor.SourceDesc.IsValid() && !InputDescriptor.SourceDesc.IsSingleValue();
 			if (bIsContainer || !PCGExMetaHelpers::IsLegacyScalarType(InputDescriptor.RealType))
@@ -193,7 +190,6 @@ namespace PCGExAttributeRemap
 		UnderlyingType = InputDescriptor.WorkingType;
 		Dimensions = FMath::Min(4, PCGExData::GetNumFieldsForType(UnderlyingType));
 
-		// Get per-field proxies for input
 		if (!GetPerFieldProxyBuffers(Context, InputDescriptor, Dimensions, UntypedInputProxies))
 		{
 			return false;
@@ -227,7 +223,6 @@ namespace PCGExAttributeRemap
 			// GetPerFieldProxyBuffers expect a valid RealType to work from
 		}
 
-		// Get per-field proxies for output
 		if (!GetPerFieldProxyBuffers(Context, OutputDescriptor, Dimensions, UntypedOutputProxies))
 		{
 			return false;

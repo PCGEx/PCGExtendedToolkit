@@ -472,7 +472,6 @@ namespace PCGExMath
 	{
 		Centroid = Box.Center();
 
-		// Sort by extents with index tie-breaker for determinism
 		Algo::Sort(Swizzle, [&](const int32 A, const int32 B)
 		{
 			if (Box.Extents[A] != Box.Extents[B])
@@ -495,7 +494,6 @@ namespace PCGExMath
 		FVector Z = FVector::CrossProduct(X, Y);
 		Y = FVector::CrossProduct(Z, X);
 
-		// Make sure Z points upward
 		if (FVector::DotProduct(Z, FVector::UpVector) < 0)
 		{
 			Z *= -1;

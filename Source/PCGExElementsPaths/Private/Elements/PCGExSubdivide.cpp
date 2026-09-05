@@ -343,7 +343,6 @@ namespace PCGExSubdivide
 
 		if (!SubBlending->PrepareForData(Context, PointDataFacade, &ProtectedAttributes))
 		{
-			//
 			bIsProcessorValid = false;
 			return;
 		}

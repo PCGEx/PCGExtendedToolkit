@@ -117,9 +117,8 @@ namespace PCGExGraphs
 		GraphBuilder->Graph->NodesUnion = NodesTable;
 		GraphBuilder->Graph->EdgesUnion = EdgesTable;
 
-		// Initialize per-node UnionSize from table sizes (was previously done by WriteNodeMetadata).
-		// Per-edge metadata UnionSize is similarly seeded inside AdoptEdges-time logic via the FGraph.
-		// We do it here in one explicit pass so the source of truth is unambiguous.
+		// Initialize per-node UnionSize from table sizes in one explicit pass. Per-edge UnionSize
+		// is seeded via the FGraph at AdoptEdges time.
 		for (int32 i = 0; i < NumUnionNodes; i++)
 		{
 			GraphBuilder->Graph->GetOrCreateNodeMetadata_Unsafe(i).UnionSize = NodesTable->Size(i);
@@ -160,8 +159,7 @@ namespace PCGExGraphs
 			{
 				const TConstArrayView<PCGExData::FElement> Span = Table->Get(Index);
 
-				// Compute centroid from source point locations -- replaces FUnionNode::GetCenter() which
-				// previously held a running mean accumulated during sequential cluster build.
+				// Centroid of the source point locations.
 				FVector Center = FVector::ZeroVector;
 				int32 ContributingPoints = 0;
 				for (const PCGExData::FElement& E : Span)

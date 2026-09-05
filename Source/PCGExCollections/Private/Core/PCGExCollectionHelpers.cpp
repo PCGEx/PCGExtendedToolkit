@@ -30,7 +30,6 @@ namespace PCGExCollectionHelpers
 			return false;
 		}
 
-		// Get path attribute
 		const FPCGMetadataAttributeBase* PathAttribute = Metadata->GetConstAttribute(Details.AssetPathSourceAttribute);
 		if (!PathAttribute)
 		{
@@ -38,28 +37,24 @@ namespace PCGExCollectionHelpers
 			return false;
 		}
 
-		// Optional weight attribute
 		const FPCGMetadataAttribute<int32>* WeightAttribute = nullptr;
 		if (Details.WeightSourceAttribute != NAME_None)
 		{
 			WeightAttribute = Metadata->GetConstTypedAttribute<int32>(Details.WeightSourceAttribute);
 		}
 
-		// Optional category attribute
 		const FPCGMetadataAttribute<FName>* CategoryAttribute = nullptr;
 		if (Details.CategorySourceAttribute != NAME_None)
 		{
 			CategoryAttribute = Metadata->GetConstTypedAttribute<FName>(Details.CategorySourceAttribute);
 		}
 
-		// Get entry count
 		const int32 NumEntries = Metadata->GetLocalItemCount();
 		if (NumEntries == 0)
 		{
 			return false;
 		}
 
-		// Initialize collection entries
 		InCollection->InitNumEntries(NumEntries);
 
 		// Populate entries
@@ -120,7 +115,6 @@ namespace PCGExCollectionHelpers
 			ValidEntries++;
 		}
 
-		// Trim to valid entries
 		if (ValidEntries < NumEntries)
 		{
 			InCollection->InitNumEntries(ValidEntries);
@@ -297,7 +291,6 @@ namespace PCGExCollectionHelpers
 				}
 				else
 				{
-					// Get target entry
 					FPCGExAssetCollectionEntry* TargetEntry = nullptr;
 					Target->ForEachEntry([&](FPCGExAssetCollectionEntry* E, int32 Idx)
 					{

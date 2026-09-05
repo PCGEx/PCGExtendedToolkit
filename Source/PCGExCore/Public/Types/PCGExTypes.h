@@ -15,9 +15,6 @@
 #include "Types/PCGExTypeOpsString.h"
 #include "Types/PCGExTypeOpsVector.h"
 
-// Type-erased buffers
-//#include "PCGExTypeErasedBuffer.h"
-
 class FPCGMetadataAttributeBase;
 class FProperty;
 

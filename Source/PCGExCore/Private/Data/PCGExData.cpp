@@ -781,17 +781,6 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 					WriteBuffer(nullptr, Buffer, false);
 				}, /*Threshold=*/2);
 				
-				/*
-				for (int i = 0; i < Buffers.Num(); i++)
-				{
-					const TSharedPtr<IBuffer> Buffer = Buffers[i];
-					if (!Buffer.IsValid() || !Buffer->IsWritable() || !Buffer->IsEnabled())
-					{
-						continue;
-					}
-					WriteBuffer(TaskManager, Buffer, false);
-				}
-				*/
 			}
 		}
 

@@ -124,15 +124,6 @@ void UPCGExVtxPropertyEdgeMatchSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 FString UPCGExVtxPropertyEdgeMatchSettings::GetDisplayName() const
 {
-	/*
-	if (Config.SourceAttributes.IsEmpty()) { return TEXT(""); }
-	TArray<FName> Names = Config.SourceAttributes.Array();
-
-	if (Names.Num() == 1) { return Names[0].ToString(); }
-	if (Names.Num() == 2) { return Names[0].ToString() + TEXT(" (+1 other)"); }
-
-	return Names[0].ToString() + FString::Printf(TEXT(" (+%d others)"), (Names.Num() - 1));
-	*/
 	return TEXT("");
 }
 #endif

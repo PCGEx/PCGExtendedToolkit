@@ -263,7 +263,6 @@ namespace PCGExBevelPath
 			ArrivePathDistances.Add(ArriveSlidingLimit);
 			ArrivePathIndices.Add(PrevIdx);
 
-			// Check if previous point has a bevel
 			if (InProcessor->Bevels[PrevIdx])
 			{
 				ArriveBevelIdx = PrevIdx;
@@ -306,7 +305,6 @@ namespace PCGExBevelPath
 			LeavePathDistances.Add(LeaveSlidingLimit);
 			LeavePathIndices.Add(NextIdx);
 
-			// Check if next point has a bevel
 			if (InProcessor->Bevels[NextIdx])
 			{
 				LeaveBevelIdx = NextIdx;
@@ -435,14 +433,11 @@ namespace PCGExBevelPath
 			EffectiveLeaveLimit = LeaveLen * (LeaveAlpha * (1.0 / LeaveAlphaSum));
 		}
 
-		// Apply the most restrictive limit
 		Width = FMath::Min(Width, FMath::Min(EffectiveArriveLimit, EffectiveLeaveLimit));
 	}
 
 	void FBevel::Compute(const FProcessor* InProcessor)
 	{
-		// Balance is now called separately in the processor
-
 		// Compute Arrive and Leave positions
 		if (InProcessor->bSlideAlongPath && ArrivePathPoints.Num() >= 2)
 		{
@@ -570,7 +565,6 @@ namespace PCGExBevelPath
 		{
 			if (const TSharedPtr<FBevel>& Bevel = Bevels[i])
 			{
-				// Apply the sliding limit as the maximum width
 				const double SlidingLimit = FMath::Min(Bevel->ArriveSlidingLimit, Bevel->LeaveSlidingLimit);
 				Bevel->Width = FMath::Min(Bevel->Width, SlidingLimit);
 			}
@@ -584,7 +578,6 @@ namespace PCGExBevelPath
 			return;
 		}
 
-		// Initialize consumed array
 		ConsumedByBevel.Init(false, NumPoints);
 
 		// For each bevel, mark points that are consumed (passed through) by the bevel

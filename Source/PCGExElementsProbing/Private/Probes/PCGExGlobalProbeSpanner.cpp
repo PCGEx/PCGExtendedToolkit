@@ -174,7 +174,6 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 
 		if (GraphDist > Config.StretchFactor * Edge.Dist)
 		{
-			// Add edge
 			OutEdges.Add(PCGEx::H64U(Edge.A, Edge.B));
 			Adjacency[Edge.A].Add(Edge.B);
 			Adjacency[Edge.B].Add(Edge.A);

@@ -256,7 +256,6 @@ namespace PCGExPathInsert
 					const FVector EdgeStart = PathTransforms[Edge.Start].GetLocation();
 					const FVector EdgeEnd = PathTransforms[Edge.End].GetLocation();
 
-					// Find closest point on segment
 					const FVector ClosestPoint = FMath::ClosestPointOnSegment(TargetLocation, EdgeStart, EdgeEnd);
 					const double DistSq = FVector::DistSquared(TargetLocation, ClosestPoint);
 
@@ -287,7 +286,6 @@ namespace PCGExPathInsert
 				// Check for path extension (open paths only)
 				if (bCanExtend)
 				{
-					// Check if target is beyond path start
 					if (BestEdgeIndex == 0 && BestAlpha < KINDA_SMALL_NUMBER)
 					{
 						const double ProjectionDist = FVector::DotProduct(TargetLocation - FirstEdgeStart, FirstEdgeDir);
@@ -303,7 +301,6 @@ namespace PCGExPathInsert
 						}
 					}
 
-					// Check if target is beyond path end
 					if (BestEdgeIndex == Path->LastEdge && BestAlpha > (1.0 - KINDA_SMALL_NUMBER))
 					{
 						const double ProjectionDist = FVector::DotProduct(TargetLocation - LastEdgeEnd, LastEdgeDir);
@@ -387,9 +384,6 @@ namespace PCGExPathInsert
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExPathInsert::Process);
 
-		// Can't support scoped here
-		//PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
-
 		if (!IProcessor::Process(InTaskManager))
 		{
 			return false;
@@ -420,7 +414,6 @@ namespace PCGExPathInsert
 			}
 		}
 
-		// Initialize limit getter if limiting inserts per edge
 		if (Settings->bLimitInsertsPerEdge)
 		{
 			LimitGetter = Settings->InsertLimit.GetValueSetting();
@@ -430,7 +423,6 @@ namespace PCGExPathInsert
 			}
 		}
 
-		// Create sub-blending operation
 		SubBlending = Context->Blending->CreateOperation();
 		SubBlending->bClosedLoop = bClosedLoop;
 
@@ -530,13 +522,11 @@ namespace PCGExPathInsert
 				{
 					const FVector InsertPos = Settings->bSnapToPath ? Insert.PathLocation : Insert.OriginalLocation;
 
-					// Check distance to edge start
 					if (FVector::DistSquared(InsertPos, EdgeStart) < ToleranceSq)
 					{
 						continue;
 					}
 
-					// Check distance to edge end
 					if (FVector::DistSquared(InsertPos, EdgeEnd) < ToleranceSq)
 					{
 						continue;
@@ -625,19 +615,16 @@ namespace PCGExPathInsert
 		{
 			const int32 ProcessorIdx = BatchIndex;
 
-			// Filter pre-path inserts
 			PrePathInserts.SetNum(Algo::StableRemoveIf(PrePathInserts, [&](const FInsertCandidate& Insert)
 			{
 				return !Context->TargetClaimMap->IsClaimedBy(Insert.GetTargetHash(), ProcessorIdx);
 			}));
 
-			// Filter post-path inserts
 			PostPathInserts.SetNum(Algo::StableRemoveIf(PostPathInserts, [&](const FInsertCandidate& Insert)
 			{
 				return !Context->TargetClaimMap->IsClaimedBy(Insert.GetTargetHash(), ProcessorIdx);
 			}));
 
-			// Filter edge inserts
 			for (FEdgeInserts& EI : EdgeInserts)
 			{
 				EI.Inserts.SetNum(Algo::StableRemoveIf(EI.Inserts, [&](const FInsertCandidate& Insert)
@@ -646,7 +633,6 @@ namespace PCGExPathInsert
 				}));
 			}
 
-			// Recalculate total inserts
 			TotalInserts = PrePathInserts.Num() + PostPathInserts.Num();
 			for (const FEdgeInserts& EI : EdgeInserts)
 			{
@@ -771,7 +757,6 @@ namespace PCGExPathInsert
 			ProtectedAttributes.Add(Settings->DirectionAttributeName);
 		}
 
-		// Prepare blending
 		if (!SubBlending->PrepareForData(Context, PointDataFacade, &ProtectedAttributes))
 		{
 			bIsProcessorValid = false;
@@ -841,7 +826,6 @@ namespace PCGExPathInsert
 					DirectionWriter->SetValue(i, Direction);
 				}
 
-				// Forward attributes from target
 				if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[Insert.TargetIOIndex])
 				{
 					Handler->Forward(Insert.TargetPointIndex, i);
@@ -910,7 +894,6 @@ namespace PCGExPathInsert
 					DirectionWriter->SetValue(InsertIndex, Direction);
 				}
 
-				// Forward attributes from target
 				if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[Insert.TargetIOIndex])
 				{
 					Handler->Forward(Insert.TargetPointIndex, InsertIndex);
@@ -1011,7 +994,6 @@ namespace PCGExPathInsert
 					DirectionWriter->SetValue(InsertIndex, Direction);
 				}
 
-				// Forward attributes from target
 				if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[Insert.TargetIOIndex])
 				{
 					Handler->Forward(Insert.TargetPointIndex, InsertIndex);

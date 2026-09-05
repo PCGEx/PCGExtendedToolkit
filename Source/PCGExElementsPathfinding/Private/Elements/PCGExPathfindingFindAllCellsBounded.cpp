@@ -142,7 +142,6 @@ bool FPCGExFindAllCellsBoundedElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	// Get required bounds from spatial input
 	TArray<FPCGTaggedData> BoundsData = Context->InputData.GetSpatialInputsByPin(PCGExFindAllCellsBounded::SourceBoundsLabel);
 	if (BoundsData.IsEmpty())
 	{
@@ -343,7 +342,6 @@ namespace PCGExFindAllCellsBounded
 			}
 		}
 
-		// Set up cell constraints
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
 		CellsConstraints->Holes = Holes;
@@ -427,7 +425,6 @@ namespace PCGExFindAllCellsBounded
 			return true;
 		}
 
-		// Initialize cell processor
 		CellProcessor = MakeShared<PCGExClusters::FCellPathBuilder>();
 		CellProcessor->Cluster = Cluster;
 		CellProcessor->TaskManager = TaskManager;
@@ -481,7 +478,6 @@ namespace PCGExFindAllCellsBounded
 			}
 		}
 
-		// Output CellBounds for each category
 		auto OutputCellBounds = [&](const TArray<TSharedPtr<PCGExClusters::FCell>>& Cells, const TSharedPtr<PCGExData::FPointIOCollection>& OutputCollection, const FString& TriageTag = TEXT(""))
 		{
 			if (!OutputCollection || Cells.IsEmpty())
@@ -522,7 +518,6 @@ namespace PCGExFindAllCellsBounded
 			}
 		}
 
-		// Prepare path outputs
 		auto PreparePathOutputs = [&](TArray<TSharedPtr<PCGExClusters::FCell>>& Cells, TArray<TSharedPtr<PCGExData::FPointIO>>& CellsIO, TArray<FString>& CellTags, const TSharedPtr<PCGExData::FPointIOCollection>& OutputCollection, const FString& TriageTag)
 		{
 			if (!OutputCollection || Cells.IsEmpty())

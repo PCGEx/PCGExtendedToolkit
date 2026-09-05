@@ -62,7 +62,7 @@ PCGExFactories::EPreparationResult UPCGExPolyPathFilterFactory::Prepare(FPCGExCo
 
 	InitConfig_Internal();
 
-	// DataMatching is now populated from the derived Config, so the match-rule factories can be loaded.
+	// DataMatching is populated from the derived Config, so the match-rule factories can be loaded.
 	// They are consumed later (when filter instances are created), which always happens after Prepare().
 	if (DataMatching.IsEnabled())
 	{
@@ -412,7 +412,7 @@ namespace PCGExPathInclusion
 		else
 		{
 			// 'On' band: the nearest boundary lies within the bound's reach toward it plus the tolerance band.
-			// Center -> reach 0, measured as 3D squared distance (unchanged legacy behaviour). Precision -> reach is
+			// Center -> reach 0, measured as 3D squared distance. Precision -> reach is
 			// the sphere radius / oriented-box silhouette, and the distance is measured IN-PLANE (projected) so it
 			// matches the 2D inside test; out-of-plane extent is left to the octree / ExpandZAxis broad-phase.
 			auto ComputeIsOn = [&](const PCGExPaths::FPath& Path, const FTransform& Closest, const double DistSquared3D) -> bool

@@ -164,7 +164,6 @@ protected:
 	// Entry pointer -> Loaded asset (populated after load)
 	TMap<const FPCGExPCGDataAssetCollectionEntry*, TObjectPtr<UPCGDataAsset>> LoadedAssets;
 
-	// Streamable handle
 	TSharedPtr<FStreamableHandle> LoadHandle;
 
 public:
@@ -228,7 +227,6 @@ struct FPCGExPCGDataAssetLoaderContext final : FPCGExPointsProcessorContext
 	// Custom output pin names for routing
 	TSet<FName> CustomPinNames;
 
-	// Output data organized by pin
 	TMap<FName, TArray<FPCGTaggedData>> OutputByPin;
 	TMap<uint32, int32> OutputIndices;
 	mutable FRWLock OutputLock;

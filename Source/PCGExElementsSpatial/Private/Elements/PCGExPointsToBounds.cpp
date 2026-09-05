@@ -176,7 +176,6 @@ bool FPCGExPointsToBoundsElement::AdvanceWork(FPCGExContext* InContext, const UP
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->bRequiresWriteStep = true;
 			}))
 		{
 			return Context->CancelExecution(TEXT("Could not find any points."));
@@ -332,7 +331,6 @@ namespace PCGExPointsToBounds
 
 			for (int i = 0; i < NumPoints; i++)
 			{
-				//FVector Location = InPoints[i].Transform.GetLocation();
 				constexpr double Weight = 1; // FVector::DistSquared(Center, Location) / SqrDist;
 				MetadataBlender->MultiBlend(i, 0, Weight, Trackers);
 			}
@@ -349,8 +347,6 @@ namespace PCGExPointsToBounds
 			OutTransforms[0] = BestFitPlane.GetTransform(Settings->AxisOrder);
 			OutBoundsMin[0] = Bounds.Min;
 			OutBoundsMax[0] = Bounds.Max;
-			//PCGExMath::Swizzle(OutBoundsMin[0], BestFitPlane.Swizzle);
-			//PCGExMath::Swizzle(OutBoundsMax[0], BestFitPlane.Swizzle);
 		}
 		else
 		{

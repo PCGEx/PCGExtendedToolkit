@@ -108,7 +108,6 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 
 #undef PCGEX_FOREACH_EDGE_METADATA
 
-		// Extra edge data
 		TSharedPtr<PCGExData::TBuffer<double>> EdgeLength;
 		TSharedPtr<PCGExData::TBuffer<int64>> EdgeEndpointsWriter;
 

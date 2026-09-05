@@ -242,7 +242,6 @@ namespace PCGExBuildVoronoiGraph2D
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
 	{
-		//HullMarkPointWriter->Values[Index] = Voronoi->Delaunay->DelaunayHull.Contains(Index);
 	}
 
 	void FProcessor::CompleteWork()
@@ -368,7 +367,6 @@ namespace PCGExBuildVoronoiGraph2D
 			}
 		}
 
-		// Create output points from OutputVertices
 		UPCGBasePointData* OutputPoints = PointDataFacade->GetOut();
 		(void)PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutputPoints, NumOutputVertices, PointDataFacade->GetAllocations());
 

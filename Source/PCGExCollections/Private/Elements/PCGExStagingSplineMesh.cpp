@@ -789,8 +789,6 @@ namespace PCGExPathSplineMesh
 
 			PathWriter->SetValue(Index, MeshEntry->Staging.Path);
 
-			//
-
 			FVector OutScale = CurrentScale;
 			FVector OutTranslation = FVector::ZeroVector;
 
@@ -809,8 +807,6 @@ namespace PCGExPathSplineMesh
 					OutTranslation = TranslationGetter->Read(Index);
 				}
 			}
-
-			//
 
 			int32 C1 = 1;
 			int32 C2 = 2;
@@ -875,9 +871,6 @@ namespace PCGExPathSplineMesh
 		{
 			PCGExHelpers::LoadBlockingTracked_AnyThread(MaterialPaths, Context);
 		} // TODO : Refactor this atrocity
-
-		//
-
 
 		TargetActor = Settings->TargetActor.Get() ? Settings->TargetActor.Get() : ExecutionContext->GetTargetActor(nullptr);
 		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);

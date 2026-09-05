@@ -60,7 +60,6 @@ void UPCGExGlobalSettings::UpdateSettingsCaches() const
 
 #if WITH_EDITOR
 
-	// Push colors
 	PCGEX_PUSH_COLOR(Constant)
 	PCGEX_PUSH_COLOR(Debug)
 	PCGEX_PUSH_COLOR(Misc)

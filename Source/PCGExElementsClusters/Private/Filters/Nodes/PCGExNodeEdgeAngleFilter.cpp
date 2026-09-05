@@ -79,8 +79,6 @@ FString UPCGExNodeEdgeAngleFilterProviderSettings::GetDisplayName() const
 {
 	return PCGExCommon::FlagInvertLabel(TEXT("Edge Angle"), Config.bInvert);
 	// TODO : Proper display name
-	//FString DisplayName = TEXT("Edge Angle ") + PCGExCompare::ToString(Config.DotComparisonDetails.Comparison);
-	//return DisplayName;
 }
 #endif
 

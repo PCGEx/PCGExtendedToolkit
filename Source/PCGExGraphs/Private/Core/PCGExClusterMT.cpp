@@ -176,7 +176,7 @@ namespace PCGExClusterMT
 
 					// Step 1: Compute raw normal for each node from adjacent edges. A node whose links are
 					// COLLINEAR (straight chains, leaves) has no normal of its own -- Cross/CrossLen there is
-					// 0/0 = NaN, which used to reach MakeFromZX and trip TMatrix::ToQuat. Such nodes are
+					// 0/0 = NaN (MakeFromZX would trip TMatrix::ToQuat). Such nodes are
 					// marked and inherit a neighbor's normal during propagation instead.
 					TArray<FVector> NodeNormals;
 					NodeNormals.SetNumUninitialized(ClusterNumNodes);
@@ -303,7 +303,6 @@ namespace PCGExClusterMT
 							(*TangentFrames)[NodeIdx] = FRotationMatrix::MakeFromZX(N, XHint).ToQuat();
 						}, NestedParallelThreshold);
 
-					// Cache on cluster
 					TSharedPtr<PCGExClusters::FCachedTangentFrames> CachedFrames = MakeShared<PCGExClusters::FCachedTangentFrames>();
 					CachedFrames->NodeTangentFrames = TangentFrames;
 					Cluster->SetCachedData(CachedTangentFramesKey, CachedFrames);

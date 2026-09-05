@@ -358,9 +358,8 @@ namespace PCGExMetaHelpers
 
 	// Identity-aware dispatch with explicit fallback for extended/container types.
 	// Returns true if the typed branch ran, false if the fallback ran.
-	// Use this everywhere consumers used to call ExecuteWithRightType(Identity.GetType(), ...) --
-	// the fallback branch is where you wire up PropertyBuffer-based copy semantics (or a "drop+log"
-	// for arithmetic-only sites).
+	// The fallback branch is where PropertyBuffer-based copy semantics (or a "drop+log" for
+	// arithmetic-only sites) are wired up.
 	template <typename TypedFn, typename FallbackFn>
 	static bool ExecuteWithRightType(const PCGExData::FAttributeIdentity& Identity, TypedFn&& Typed, FallbackFn&& Fallback)
 	{

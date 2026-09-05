@@ -51,7 +51,6 @@ bool FPCGExCreateShapesElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->bRequiresWriteStep = true;
 			}))
 		{
 			return Context->CancelExecution(TEXT("Could not find any paths to subdivide."));

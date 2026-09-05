@@ -93,8 +93,7 @@ namespace PCGExGraphs
 	{
 		check(!bCompiling)
 
-		// NOTE : We now output nodes to have readable, final positions when we compile the graph, which kindda sucks
-		// It means we need to fully allocate graph data even when ultimately we might prune out a lot of it
+		// Nodes are output with final positions at compile time, so graph data is fully allocated even when much of it is later pruned.
 
 		bCompiling = true;
 		TaskManager = InTaskManager;

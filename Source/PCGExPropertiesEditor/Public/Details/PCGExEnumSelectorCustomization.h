@@ -13,7 +13,7 @@
  * an FPCGExEnumSelector appears as a UPROPERTY in user-defined structs / classes.
  *
  * Registered against FPCGExEnumSelector::StaticStruct() in PCGExPropertiesEditor module
- * startup. Replaces the engine's FEnumSelectorDetails (which we no longer use).
+ * startup. Replaces the engine's FEnumSelectorDetails.
  */
 class PCGEXPROPERTIESEDITOR_API FPCGExEnumSelectorCustomization : public IPropertyTypeCustomization
 {

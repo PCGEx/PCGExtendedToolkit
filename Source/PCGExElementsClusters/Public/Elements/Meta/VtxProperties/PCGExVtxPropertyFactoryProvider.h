@@ -210,7 +210,4 @@ public:
 	virtual FString GetDisplayName() const override;
 #endif
 
-	/** Priority for sampling order. Higher values are processed last. */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayPriority=-1))
-	//int32 Priority = 0;
 };

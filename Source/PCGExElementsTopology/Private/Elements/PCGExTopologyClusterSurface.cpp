@@ -100,7 +100,6 @@ namespace PCGExTopologyClusterSurface
 			Polygon.Vertices->Append(Cell->Polygon);
 		}
 
-		// Handle wrapper cell as sole path if needed
 		if (Polygons.IsEmpty() && CellsConstraints->WrapperCell && Settings->Constraints.bKeepWrapperIfSolePath)
 		{
 			FGeometryScriptSimplePolygon& Polygon = Polygons.Emplace_GetRef();

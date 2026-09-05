@@ -462,7 +462,6 @@ namespace PCGExMetaHelpers
 	{
 		const FString NameStr = InName.ToString();
 
-		// Check for @{Domain}. pattern
 		if (NameStr.StartsWith(TEXT("@")))
 		{
 			const int32 DotIndex = NameStr.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromStart, 1);

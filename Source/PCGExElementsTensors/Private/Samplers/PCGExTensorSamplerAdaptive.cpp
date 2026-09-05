@@ -62,7 +62,6 @@ PCGExTensor::FTensorSample UPCGExTensorSamplerAdaptive::Sample(
 	const double MinStep = BaseStep * MinStepFraction;
 	const double MaxStep = BaseStep * MaxStepFraction;
 
-	// Estimate local curvature
 	const double Curvature = EstimateCurvature(InTensors, InSeedIndex, InProbe, BaseStep * 0.5);
 
 	// Adapt step size based on curvature (higher curvature = smaller step)

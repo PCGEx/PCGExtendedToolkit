@@ -34,7 +34,6 @@ void UPCGExPathSolidifySettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode*
 		PCGEX_SHORTHAND_RENAME_PIN(NormalAttribute, UNDEFINED, NormalValue)
 		InOutNode->RenameInputPin(FName(TEXT("InvertDirection")), FName(TEXT("NormalValue/Flip")));
 
-		// Rewire Solidification lerp
 		PCGEX_SHORTHAND_RENAME_PIN(SolidificationLerpAttribute, SolidificationLerpConstant, SolidificationLerp)
 	}
 
@@ -428,17 +427,14 @@ namespace PCGExPathSolidify
 			const FVector QuatAxes[3] = {Quat.GetAxisX(), Quat.GetAxisY(), Quat.GetAxisZ()};
 			const bool bForwardFlipped = FVector::DotProduct(QuatAxes[A], RealXAxis) < 0;
 			double EdgeLerp = FMath::Clamp(SolidificationLerp->Read(Index), 0.0, 1.0);
-			//if (bForwardFlipped) { EdgeLerp = 1.0 - EdgeLerp; }
 
 			// update transform
 			const FVector Position = Path->GetEdgePositionAtAlpha(Index, bForwardFlipped ? 1.0 - EdgeLerp : EdgeLerp);
 			Transforms[Index] = FTransform(Quat, Position, Scale);
 
-			// bounds per axis index
 			FVector& OutBoundsMin = BoundsMin[Index];
 			FVector& OutBoundsMax = BoundsMax[Index];
 
-			// Yey
 			const double EdgeLerpInv = 1.0 - EdgeLerp;
 
 			OutBoundsMin[A] = (-Length * EdgeLerp) * InvScale[A];

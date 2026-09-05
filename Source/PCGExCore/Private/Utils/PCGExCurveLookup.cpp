@@ -33,8 +33,6 @@ PCGExFloatLUT FPCGExCurveLookupDetails::MakeLookup(
 		InUseLocalCurve, RuntimeCurve, InExternalCurve,
 		[](FRichCurve& CurveData)
 		{
-			//CurveData.AddKey(0, 0);
-			//CurveData.AddKey(1, 1);
 		});
 }
 

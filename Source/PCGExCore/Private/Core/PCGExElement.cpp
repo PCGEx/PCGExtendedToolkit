@@ -232,8 +232,6 @@ void IPCGExElement::AbortInternal(FPCGContext* Context) const
 		return;
 	}
 
-	//UE_LOG(LogTemp, Warning, TEXT(">> ABORTING @%s"), *Context->GetInputSettings<UPCGExSettings>()->GetName());
-
 	FPCGExContext* PCGExContext = static_cast<FPCGExContext*>(Context);
 	PCGExContext->CancelExecution();
 }

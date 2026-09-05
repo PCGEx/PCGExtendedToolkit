@@ -94,15 +94,6 @@ bool FPCGExProbeBitmasks::Prepare(FPCGExContext* InContext)
 		return false;
 	}
 
-	/*
-	bUseBestDot = Config.Favor == EPCGExProbeBitmasksPriorization::Dot;
-	MinDot = PCGExMath::DegreesToDot(Config.MaxAngle);
-	DirectionMultiplier = Config.bInvertDirection ? -1 : 1;
-
-	Direction = Config.GetValueSettingDirection();
-	if (!Direction->Init(PrimaryDataFacade)) { return false; }
-	*/
-
 	return true;
 }
 
@@ -217,10 +208,5 @@ void FPCGExProbeBitmasks::ProcessCandidates(const int32 Index, TArray<PCGExProbi
 FString UPCGExProbeBitmasksProviderSettings::GetDisplayName() const
 {
 	return TEXT("");
-	/*
-	return GetDefaultNodeName().ToString()
-		+ TEXT(" @ ")
-		+ FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0));
-		*/
 }
 #endif

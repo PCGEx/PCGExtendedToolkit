@@ -333,7 +333,6 @@ bool FPCGExConstantEnumElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 
 	switch (Settings->OutputMode)
 	{
-	// Just output the one selected
 	case EPCGExEnumOutputMode::EEOM_Single:
 	{
 		for (int i = 0; i < Unfiltered.Num(); i++)

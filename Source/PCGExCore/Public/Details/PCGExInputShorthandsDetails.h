@@ -30,7 +30,7 @@ namespace PCGExDeprecation
 	 * Rewires the serialized override pin of a removed property onto the current override param whose
 	 * PropertiesNames end with [InMemberName, InLeafName]. New labels are resolved from the settings'
 	 * freshly gathered OverridableParams — the exact source UpdatePins builds pins from — so this stays
-	 * correct across bare/member-path/Config-path label variants (see .claude/Shorthand_Migration_Plan.md).
+	 * correct across bare/member-path/Config-path label variants.
 	 * The old pin is matched by exact label, else by unique segment-qualified ".../InOldName", else by
 	 * legacy display-name labels (explicit InOldDisplayName, then the engine-default prettified name) —
 	 * very old assets carry pins labeled by GetDisplayNameText from before PCG switched to authored names.

@@ -161,7 +161,7 @@ void IPCGExSpatialDataVisualization::ExecuteDebugDisplayHelper(
 	Params[0].Descriptor.Mobility = EComponentMobility::Static;
 	Params[0].Descriptor.BodyInstance.SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 
-	// Note: In the future we may consider enabling culling for performance reasons, but for now culling disabled.
+	// No distance culling.
 	Params[0].Descriptor.InstanceStartCullDistance = Params[0].Descriptor.InstanceEndCullDistance = 0;
 	// Additional performance switches
 	Params[0].Descriptor.bAffectDistanceFieldLighting = false;
@@ -336,10 +336,8 @@ FPCGTableVisualizerInfo IPCGExSpatialDataVisualization::GetTableVisualizerInfoWi
 		AddTypedColumnInfo<int64>(Info, PointData, FPCGAttributePropertySelector{}, Overrides);
 	}
 
-	// Add Metadata Columns
 	CreateMetadataColumnInfos(PointData, Info, PCGMetadataDomainID::Elements);
 
-	// Focus on data behavior
 	Info.FocusOnDataCallback = [](const UPCGData* Data, TArrayView<const int> Indices)
 	{
 		if (const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data))

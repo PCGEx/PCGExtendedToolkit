@@ -31,7 +31,6 @@ void UPCGExMeshToClustersSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNod
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 7)
 	{
-		// Rewire Static Mesh
 		PCGEX_SHORTHAND_RENAME_PIN(StaticMeshAttribute, StaticMeshConstant, StaticMesh)
 	}
 

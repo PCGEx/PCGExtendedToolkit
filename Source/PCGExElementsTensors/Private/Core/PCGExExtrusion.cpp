@@ -184,7 +184,6 @@ namespace PCGExExtrusion
 			}
 		}
 
-		// Now in extruding state - add point
 		State = EExtrusionState::Extruding;
 		bIsExtruding = true;
 
@@ -550,7 +549,6 @@ namespace PCGExExtrusion
 			OutTransforms[i] = ExtrudedPoints[i];
 		}
 
-		// Apply tags via callback
 		if (Callbacks.OnApplyTags)
 		{
 			Callbacks.OnApplyTags(*this, *PointDataFacade->Source);

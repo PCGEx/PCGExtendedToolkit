@@ -112,7 +112,6 @@ public:
 	// Cached surfaces for PCGSurface mode
 	TArray<TWeakObjectPtr<const UPCGSurfaceData>> CachedSurfaces;
 
-	// Collision params
 	FCollisionQueryParams CollisionParams;
 
 	// Flags for what sources are available
@@ -150,13 +149,11 @@ public:
 	UPROPERTY()
 	FPCGExTensorSurfaceConfig Config;
 
-	// Cached world
 	TWeakObjectPtr<UWorld> CachedWorld;
 
 	// Cached primitives from actor references
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> CachedPrimitives;
 
-	// Cached PCG surfaces
 	TArray<TWeakObjectPtr<const UPCGSurfaceData>> CachedSurfaces;
 
 	// Source availability flags

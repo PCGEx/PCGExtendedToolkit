@@ -444,8 +444,7 @@ namespace PCGExGraphs
 				});
 		}
 
-		// Assign compact component ids ordered by minimum node index -- the same
-		// order in which the BFS used to discover components.
+		// Assign compact component ids ordered by minimum node index (BFS discovery order).
 		int32 NumComponents = 0;
 		int32 TotalExportedNodes = 0;
 

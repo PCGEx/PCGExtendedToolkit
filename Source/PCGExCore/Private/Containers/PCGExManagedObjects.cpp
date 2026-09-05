@@ -58,7 +58,6 @@ namespace PCGEx
 			// Flush remaining managed objects & mark them as garbage
 			for (UObject* ObjectPtr : ManagedObjects)
 			{
-				//if (!IsValid(ObjectPtr)) { continue; }
 				/*FCOLLECTOR_IMPL*/
 				ObjectPtr->RemoveFromRoot();
 				RecursivelyClearAsyncFlag_Unsafe(ObjectPtr);
@@ -164,24 +163,10 @@ namespace PCGEx
 	void FManagedObjects::AddExtraStructReferencedObjects(FReferenceCollector& Collector)
 	{
 		//This is causing a deadlock
-		//FReadScopeLock ReadScopeLock(ManagedObjectLock);
-		//for (TObjectPtr<UObject>& Object : ManagedObjects) { Collector.AddReferencedObject(Object); }
 	}
 
 	void FManagedObjects::Destroy(UObject* InObject)
 	{
-		// ♫ Let it go ♫
-
-		/*
-		check(InObject)
-
-		if (IsFlushing()) { return; } // Will be destroyed anyway
-
-		{
-			FReadScopeLock ReadScopeLock(ManagedObjectLock);
-			if (!IsValid(InObject) || !ManagedObjects.Contains(InObject)) { return; }
-		}
-		*/
 
 		Remove(InObject);
 	}

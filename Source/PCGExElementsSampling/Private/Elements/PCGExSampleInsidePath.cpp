@@ -43,10 +43,8 @@ void UPCGExSampleInsidePathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGN
 {
 	PCGEX_IF_VERSION_LOWER(1, 74, 3)
 	{
-		// Rewire Range Min
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMinAttribute, RangeMin, MinRange)
 
-		// Rewire Range Max
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMaxAttribute, RangeMax, MaxRange)
 	}
 
@@ -508,7 +506,6 @@ namespace PCGExSampleInsidePath
 			const double W = Context->WeightCurve->Eval(P.Weight);
 
 			// Don't remap blending if we use external blend ops; they have their own curve
-			//if (Settings->BlendingInterface == EPCGExBlendingInterface::Monolithic) { P.Weight = W; }
 
 			SampleTracker.Count++;
 			SampleTracker.TotalWeight += W;

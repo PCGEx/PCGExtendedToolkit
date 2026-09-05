@@ -17,7 +17,6 @@ bool UPCGExTensorSampler::PrepareForData(FPCGExContext* InContext)
 	return true;
 }
 
-// In PCGExTensorSampler.cpp
 PCGExTensor::FTensorSample UPCGExTensorSampler::RawSample(
 	const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors,
 	const int32 InSeedIndex,

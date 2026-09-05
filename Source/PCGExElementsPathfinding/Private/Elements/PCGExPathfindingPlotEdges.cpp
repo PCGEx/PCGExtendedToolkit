@@ -150,8 +150,6 @@ void FPCGExPathfindingPlotEdgesContext::BuildPath(const TSharedPtr<PCGExPathfind
 		return;
 	} // No path could be resolved
 
-	//
-
 	TArray<int32> IndicesBuffer;
 	IndicesBuffer.Reserve(MaxQueryNumPoints);
 
@@ -258,7 +256,6 @@ void FPCGExPathfindingPlotEdgesContext::BuildPath(const TSharedPtr<PCGExPathfind
 	if (TSharedPtr<PCGExData::FDataForwardHandler> PlotForwardHandler = PlotsForwardHandlers[Query->PlotFacade->Idx])
 	{
 		// TODO: TBD
-		//PlotForwardHandler->Forward(0, PathDataFacade);
 	}
 
 	if (ClusterForwardHandler)

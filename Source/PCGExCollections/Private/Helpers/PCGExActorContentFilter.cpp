@@ -171,7 +171,6 @@ bool UPCGExDefaultActorContentFilter::PassesFilter_Implementation(AActor* Actor,
 		}
 	}
 
-	// Class include filter
 	if (IncludeClasses.Num() > 0)
 	{
 		bool bMatchesClass = false;
@@ -192,7 +191,6 @@ bool UPCGExDefaultActorContentFilter::PassesFilter_Implementation(AActor* Actor,
 		}
 	}
 
-	// Class exclude filter
 	if (ExcludeClasses.Num() > 0)
 	{
 		for (const TSoftClassPtr<AActor>& ClassPtr : ExcludeClasses)

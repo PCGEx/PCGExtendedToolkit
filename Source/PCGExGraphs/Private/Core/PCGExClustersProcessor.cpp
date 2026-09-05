@@ -53,7 +53,6 @@ FPCGExClustersProcessorContext::~FPCGExClustersProcessorContext()
 
 TArray<FPCGPinProperties> UPCGExClustersProcessorSettings::InputPinProperties() const
 {
-	//TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 
 	TArray<FPCGPinProperties> PinProperties;
 

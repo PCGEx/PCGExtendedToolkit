@@ -10,12 +10,10 @@
 
 namespace PCGExEdgeFilterPreview
 {
-	// Endpoint colors
 	static constexpr FLinearColor EndpointPassColor(0.1f, 0.6f, 0.2f, 0.85f);
 	static constexpr FLinearColor EndpointFailColor(0.6f, 0.15f, 0.15f, 0.7f);
 	static constexpr FLinearColor EndpointNeutralColor(0.7f, 0.7f, 0.7f, 0.8f);
 
-	// Edge line
 	static constexpr FLinearColor EdgeLineColor(0.5f, 0.5f, 0.5f, 0.6f);
 
 	// Panel backgrounds
@@ -26,7 +24,6 @@ namespace PCGExEdgeFilterPreview
 	static constexpr FLinearColor LabelColor(0.6f, 0.6f, 0.6f, 0.8f);
 	static constexpr FLinearColor AttributeModeColor(0.3f, 0.3f, 0.3f, 0.3f);
 
-	// Neighbor stubs
 	static constexpr FLinearColor NeighborStubColor(0.4f, 0.5f, 0.6f, 0.5f);
 
 	// Sizes

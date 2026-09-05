@@ -133,8 +133,7 @@ namespace PCGExGraphs
 			const FPCGExPointEdgeIntersectionDetails& Details,
 			TArray<FPECollinear>& Records);
 
-		// TODO (Q7): proper P/E blend. Today the call site is a stub; the design conversation has
-		// the lerp-weight intent. Kept here as a marker so it lives next to its sibling phases.
+		// TODO: proper P/E blend (lerp-weight). The call site is a stub; kept next to its sibling phases.
 		PCGEXGRAPHS_API void BlendIntersection(
 			const FIntersectionAllocations& Allocations,
 			PCGExBlending::FMetadataBlender* Blender,

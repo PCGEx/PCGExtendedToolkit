@@ -322,9 +322,6 @@ namespace PCGExSplitPath
 		{
 			const FSubPath& SubPath = SubPaths[Index];
 
-			//if (PathInfos.Count < 1 || PathInfos.Start == -1) { continue; }                                    // This should never happen
-			//if (PathInfos.End == -1 && (PathInfos.Start + PathInfos.Count) != PointIO->GetNum()) { continue; } // This should never happen
-
 			if (Index == 0 && bWrapLastPath)
 			{
 				continue;

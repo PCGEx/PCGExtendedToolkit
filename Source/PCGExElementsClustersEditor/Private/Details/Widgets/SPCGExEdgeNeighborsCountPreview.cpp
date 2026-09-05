@@ -212,14 +212,11 @@ int32 SPCGExEdgeNeighborsCountPreview::OnPaint(
 		const FVector2D StartPos(PanelX + EdgeMargin, EdgeY);
 		const FVector2D EndPos(PanelX + PanelWidth - EdgeMargin, EdgeY);
 
-		// Draw neighbor stubs
 		DrawNeighborStubs(OutDrawElements, LayerId + 1, AllottedGeometry, StartPos, FC, true);
 		DrawNeighborStubs(OutDrawElements, LayerId + 1, AllottedGeometry, EndPos, TC, false);
 
-		// Draw edge line
 		DrawEdgeLine(OutDrawElements, LayerId + 3, AllottedGeometry, StartPos, EndPos, EdgeLineColor);
 
-		// Draw endpoint circles
 		DrawFilledCircle(OutDrawElements, LayerId + 4, AllottedGeometry, StartPos, EndpointRadius, EndpointNeutralColor);
 		DrawFilledCircle(OutDrawElements, LayerId + 4, AllottedGeometry, EndPos, EndpointRadius, EndpointNeutralColor);
 
@@ -268,7 +265,6 @@ int32 SPCGExEdgeNeighborsCountPreview::OnPaint(
 			DrawFilledCircle(OutDrawElements, LayerId + 5, AllottedGeometry, ToIndPos, 3.0, ToIndColor);
 		}
 
-		// PASS/FAIL label
 		const FString ResultStr = bPass ? TEXT("PASS") : TEXT("FAIL");
 		const FLinearColor ResultColor = bPass ? EndpointPassColor : EndpointFailColor;
 		const FVector2D ResultPos(PanelCenterX - 12.0, EdgeY + EndpointRadius + 18.0);

@@ -61,11 +61,6 @@ struct PCGEXCOLLECTIONS_API FPCGExComponentTaggingDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bForwardInputDataTags = true;
 
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	//bool bOutputTagsToAttributes = false;
-
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	//bool bAddTagsToData = false;
 };
 
 USTRUCT(BlueprintType)

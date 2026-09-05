@@ -43,20 +43,17 @@ void UPCGExForceDirectedRelax::Step1(const PCGExClusters::FNode& Node)
 
 void UPCGExForceDirectedRelax::CalculateAttractiveForce(FVector& Force, const FVector& A, const FVector& B) const
 {
-	// Calculate the displacement vector between the nodes
 	FVector Displacement = B - A;
 
 	const double Distance = FMath::Max(Displacement.Length(), 1e-5);
 	Displacement /= Distance;
 
-	// Calculate the force magnitude using Hooke's law
 	const double ForceMagnitude = SpringConstant * Distance;
 	Force += Displacement * ForceMagnitude;
 }
 
 void UPCGExForceDirectedRelax::CalculateRepulsiveForce(FVector& Force, const FVector& A, const FVector& B) const
 {
-	// Calculate the displacement vector between the nodes
 	FVector Displacement = B - A;
 
 	const double Distance = FMath::Max(Displacement.Length(), 1e-5);

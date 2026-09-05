@@ -215,7 +215,6 @@ namespace PCGExClipper2
 		void Prepare(const TSharedPtr<FOpData>& AllOpData);
 		void PreProcess(const UPCGExClipper2ProcessorSettings* InSettings);
 
-		// Check if this group is valid for processing
 		bool IsValid() const
 		{
 			return !SubjectPaths.empty() || !OpenSubjectPaths.empty();
@@ -224,10 +223,8 @@ namespace PCGExClipper2
 		// Add intersection blend info (thread-safe)
 		void AddIntersectionBlendInfo(int64_t X, int64_t Y, const FIntersectionBlendInfo& Info);
 
-		// Get intersection blend info by position
 		const FIntersectionBlendInfo* GetIntersectionBlendInfo(int64_t X, int64_t Y) const;
 
-		// Create the ZCallback for this group
 		PCGExClipper2Lib::ZCallback64 CreateZCallback();
 	};
 }
@@ -397,7 +394,6 @@ struct PCGEXELEMENTSCLIPPER2_API FPCGExClipper2ProcessorContext : FPCGExPathProc
 
 	TSharedPtr<PCGExClipper2::FOpData> AllOpData;
 
-	// Unified processing groups
 	TArray<TSharedPtr<PCGExClipper2::FProcessingGroup>> ProcessingGroups;
 
 	FPCGExCarryOverDetails CarryOverDetails;

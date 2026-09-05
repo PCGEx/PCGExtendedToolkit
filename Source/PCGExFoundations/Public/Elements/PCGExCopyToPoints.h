@@ -41,7 +41,6 @@ public:
 		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscWrite);
 	}
 
-	//PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), true)
 #endif
 
 protected:

@@ -81,7 +81,6 @@ void FPCGExWeightedPropertyOverridesCustomization::CustomizeChildren(
 	IDetailChildrenBuilder& ChildBuilder,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get the inherited Overrides array handle
 	TSharedPtr<IPropertyHandle> OverridesArrayHandle = PropertyHandle->GetChildHandle(TEXT("Overrides"));
 	if (!OverridesArrayHandle.IsValid())
 	{

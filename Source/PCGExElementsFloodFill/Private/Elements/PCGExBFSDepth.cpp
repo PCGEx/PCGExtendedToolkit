@@ -250,7 +250,6 @@ namespace PCGExBFSDepth
 			SeedOwners.Init(-1, Nodes.Num());
 		}
 
-		// Initialize all seeds at depth 0
 		TArray<int32> Queue;
 		Queue.Reserve(Nodes.Num());
 

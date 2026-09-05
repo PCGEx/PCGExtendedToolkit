@@ -100,7 +100,6 @@ namespace PCGExPropertyHelpers
 			return false;
 		}
 
-		// Iterate over source properties
 		for (TFieldIterator<FProperty> It(CommonBaseClass); It; ++It)
 		{
 			const FProperty* Property = *It;
@@ -115,7 +114,6 @@ namespace PCGExPropertyHelpers
 				continue;
 			}
 
-			// Copy the value from source to target
 			const void* SourceValue = Property->ContainerPtrToValuePtr<void>(Source);
 			void* TargetValue = Property->ContainerPtrToValuePtr<void>(Target);
 			Property->CopyCompleteValue(TargetValue, SourceValue);

@@ -39,7 +39,6 @@ void FPCGExNoiseSwiss::NoiseWithDerivatives(const FVector& Position, double& Out
 	const int32 BAB = Hash3D(X0S + 1, Y0, Z0 + 1);
 	const int32 BBB = Hash3D(X0S + 1, Y0 + 1, Z0 + 1);
 
-	// Gradient dot products
 	const double G_AAA = GradDot3(AAA, Xf, Yf, Zf);
 	const double G_BAA = GradDot3(BAA, Xf - 1.0, Yf, Zf);
 	const double G_ABA = GradDot3(ABA, Xf, Yf - 1.0, Zf);

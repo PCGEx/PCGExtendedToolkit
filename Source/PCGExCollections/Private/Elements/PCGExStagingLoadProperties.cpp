@@ -202,11 +202,9 @@ namespace PCGExStagingLoadProperties
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingLoadProperties::ProcessPoints);
 
-		// Scoped fetch & filtering
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
 
-		// Collect unique hashes
 		TSet<uint64>& LocalSet = ScopedUniqueEntryHashes->Get_Ref(Scope);
 
 		PCGEX_SCOPE_LOOP(Index)
@@ -260,7 +258,6 @@ namespace PCGExStagingLoadProperties
 			Cache.Writer = *Prototype;
 			Cache.SourceByHash.Reserve(UniqueEntryHashes.Num());
 
-			// Initialize the output buffer
 			if (FPCGExProperty* Prop = Cache.Writer.GetMutablePtr<FPCGExProperty>())
 			{
 				if (!Prop->InitializeOutput(PointDataFacade, Prop->ResolveOutputAttributeName(OutputName)))

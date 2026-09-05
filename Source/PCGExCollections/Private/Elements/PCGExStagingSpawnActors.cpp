@@ -144,7 +144,6 @@ namespace PCGExStagingSpawnActors
 			InstanceTagsGetter = PointDataFacade->GetReadable<FString>(Settings->InstanceTagsAttributeName, PCGExData::EIOSide::In, true);
 		}
 
-		// Create ActorReference writer
 		ActorRefWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->ActorReferenceAttribute, FSoftObjectPath(), false, PCGExData::EBufferInit::New);
 
 		// Init forwarding
@@ -441,7 +440,6 @@ namespace PCGExStagingSpawnActors
 			PCGHelpers::AttachToParent(SpawnedActor, TargetActor, Settings->AttachOptions, ExecutionContext);
 		}
 
-		// Apply entry tags to the actor
 		if (Settings->bApplyEntryTags)
 		{
 			for (const FName& Tag : ActorEntry->Tags)
@@ -450,7 +448,6 @@ namespace PCGExStagingSpawnActors
 			}
 		}
 
-		// Apply per-instance tags from InstanceTags attribute
 		if (Settings->bApplyInstanceTags && InstanceTagsGetter)
 		{
 			const FString TagStr = InstanceTagsGetter->Read(PointIndex);

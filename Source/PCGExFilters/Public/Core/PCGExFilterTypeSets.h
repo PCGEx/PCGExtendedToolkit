@@ -9,15 +9,13 @@
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExClusterStates.h"
 
-// Acceptance sets used to filter incoming factories on a pin (replaces the legacy
-// PCGExFactories::EType sets). They live here, in PCGExFilters, because they reference
+// Acceptance sets used to filter incoming factories on a pin. They live here, in PCGExFilters, because they reference
 // FPCGDataTypeInfo structs that belong to this module and are invisible to PCGExCore.
 //
 // Membership is FLAT/EXACT: a factory is accepted when its GetDataTypeId() is contained
 // in the set. We intentionally do NOT use FPCGDataTypeIdentifier compositions here -
 // those auto-reduce a parent + child down to the parent, which would silently widen the
-// "point but not its cluster sub-filters" sets into "any filter". A plain TSet of base
-// ids preserves the legacy semantics exactly.
+// "point but not its cluster sub-filters" sets into "any filter".
 //
 // Accessors are lazy (function-local statics) so they are built on first use, after the
 // reflection system is up - never during cross-module static initialization.

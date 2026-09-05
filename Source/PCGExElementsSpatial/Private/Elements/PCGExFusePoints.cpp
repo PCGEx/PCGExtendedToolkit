@@ -22,7 +22,7 @@ namespace PCGExFusePoints
 	// input-index. Octree mode emits with dense Keys (0..N-1) in creation order, so the table is already
 	// in input-traversal order after stable radix sort -- this collapses to an identity check + early-out.
 	// Voxel mode emits with uint64 spatial-hash Keys, which scrambles entries vs input order; this pass
-	// restores the legacy single-threaded UnionGraph "first-creator-wins" entry ordering.
+	// restores "first-creator-wins" entry ordering.
 	void ReorderUnionTableByPrimary(PCGExData::FUnionTable& Table)
 	{
 		const int32 N = Table.Num();

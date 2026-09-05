@@ -173,7 +173,6 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 						return;
 					}
 
-					// Set the category value
 					UPCGExAssetCollection* Coll = WeakColl.Get();
 					if (!Coll)
 					{
@@ -310,7 +309,6 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 
 	const float ContentWidth = TileSize + 16.f;
 
-	// Index overlay text
 	const FText PrimaryIndexText = FText::AsNumber(EntryIndex);
 	const bool bHasCategoryIndex = (CategoryIndex != INDEX_NONE);
 
@@ -905,7 +903,6 @@ void SPCGExCollectionGridTile::RefreshThumbnail()
 		return;
 	}
 
-	// Check if the visual state has actually changed
 	const UPCGExAssetCollection* Coll = Collection.Get();
 	if (Coll && EntryIndex != INDEX_NONE)
 	{

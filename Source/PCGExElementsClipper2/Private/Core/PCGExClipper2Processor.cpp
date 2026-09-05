@@ -73,7 +73,6 @@ namespace PCGExClipper2
 	{
 		GroupTags = MakeShared<PCGExData::FTags>();
 
-		// Cache subject paths
 		AllOpData->CollectPaths(SubjectIndices, SubjectPaths, OpenSubjectPaths);
 		for (const int32 Idx : SubjectIndices)
 		{
@@ -185,7 +184,6 @@ namespace PCGExClipper2
 			Info.E1Alpha = CalcAlpha(e1bot, e1top, pt);
 			Info.E2Alpha = CalcAlpha(e2bot, e2top, pt);
 
-			// Store intersection info
 			Group->AddIntersectionBlendInfo(pt.x, pt.y, Info);
 
 			// Encode intersection marker in Z - use a special pattern
@@ -516,7 +514,6 @@ void FPCGExClipper2ProcessorContext::OutputPaths64(
 			DominantSourceIdx = RelevantSourceIndices.Num() > 0 ? *RelevantSourceIndices.CreateConstIterator() : INDEX_NONE;
 		}
 
-		// Create new output point data from template
 		TSharedPtr<PCGExData::FPointIO> NewPointIO;
 
 		if (DominantSourceIdx != INDEX_NONE && DominantSourceIdx < AllOpData->Facades.Num())
@@ -595,7 +592,6 @@ void FPCGExClipper2ProcessorContext::OutputPaths64(
 			OutTransform.Blend(E1Interp, E2Interp, 0.5);
 		};
 
-		// Process each point in the path
 		ParallelFor(
 			NumPoints,
 			[&](const int32 i)
@@ -802,7 +798,6 @@ void FPCGExClipper2ProcessorContext::OutputPaths64(
 						OutTransform.SetLocation(UnprojectedPos);
 					}
 
-					// Add to union for blending
 					TSharedPtr<PCGExData::IUnionData> Union = UnionMetadata->NewEntryAt_Unsafe(i);
 
 					if (SourceArrayIdx >= 0 && SourceArrayIdx < AllOpData->Facades.Num())
@@ -916,7 +911,6 @@ void FPCGExClipper2ProcessorContext::OutputPaths64(
 			OutputFacade->WriteFastest(GetTaskManager());
 		}
 
-		// Tag as hole if applicable
 		if (bIsHole && Settings->bTagHoles)
 		{
 			NewPointIO->Tags->AddRaw(Settings->HoleTag);
@@ -1012,7 +1006,6 @@ bool FPCGExClipper2ProcessorElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
-	// Build processing groups
 	BuildProcessingGroups(Context, Settings, MainIndices, OperandIndices);
 
 	if (Context->ProcessingGroups.IsEmpty())
@@ -1339,7 +1332,6 @@ namespace PCGExClipper2Processor
 			}
 		}
 
-		// Open paths as singletons.
 		for (const int32 Idx : OpenSingletons)
 		{
 			Partitions.Add({Idx});
@@ -1442,7 +1434,6 @@ void FPCGExClipper2ProcessorElement::BuildProcessingGroups(
 			}
 			break;
 		case EPCGExGroupingPolicy::Consolidate:
-			// The whole pre-group is one group.
 			MainPartitions.Add(MoveTemp(PreGroup));
 			break;
 		case EPCGExGroupingPolicy::Auto:
@@ -1537,7 +1528,6 @@ void FPCGExClipper2ProcessorElement::BuildProcessingGroups(
 		Context->AllOpData->CollectPaths(OperandIndices, *SharedOperandPaths, *SharedOpenOperandPaths);
 	}
 
-	// Build processing groups
 	Context->ProcessingGroups.Reserve(MainPartitions.Num());
 
 	for (int32 i = 0; i < MainPartitions.Num(); i++)

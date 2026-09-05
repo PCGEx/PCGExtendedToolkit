@@ -20,7 +20,6 @@ void FPCGExDotComparisonCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Cache all child handles
 	DomainHandle = PropertyHandle->GetChildHandle(TEXT("Domain"));
 	ComparisonHandle = PropertyHandle->GetChildHandle(TEXT("Comparison"));
 	UnsignedHandle = PropertyHandle->GetChildHandle(TEXT("bUnsignedComparison"));

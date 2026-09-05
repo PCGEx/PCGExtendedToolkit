@@ -154,7 +154,7 @@ const TSet<const UPCGData*>* PCGExPointFilter::FNearestFilter::ResolveExclude(co
 	}
 
 	// Collection-level ignore list (self-ignore + non-matching targets), built once in Init(). Scratch is unused
-	// now that there is no per-point exclude set; it is kept in the signature for call-site stability.
+	// (no per-point exclude set); it is kept in the signature for call-site stability.
 	return &IgnoreList;
 }
 

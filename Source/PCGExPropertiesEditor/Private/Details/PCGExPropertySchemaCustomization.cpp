@@ -68,7 +68,6 @@ void FPCGExPropertySchemaCustomization::OnSchemaChanged()
 	FPCGExPropertySchema* Schema = static_cast<FPCGExPropertySchema*>(RawData[0]);
 	if (Schema)
 	{
-		// Sync PropertyName and HeaderId into Property
 		Schema->SyncPropertyName();
 	}
 
@@ -143,7 +142,6 @@ void FPCGExPropertySchemaCustomization::CustomizeChildren(
 	IDetailChildrenBuilder& ChildBuilder,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get Name and Property handles
 	TSharedPtr<IPropertyHandle> NameHandle = PropertyHandle->GetChildHandle(TEXT("Name"));
 	TSharedPtr<IPropertyHandle> PropertyInnerHandle = PropertyHandle->GetChildHandle(TEXT("Property"));
 

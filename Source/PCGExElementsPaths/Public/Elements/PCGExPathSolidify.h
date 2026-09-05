@@ -64,9 +64,6 @@ struct FPCGExPathSolidificationAxisDetails
 
 	PCGEX_SETTING_VALUE_DECL(Flip, bool)
 
-	/** How to deal with scale during solidification */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, DisplayPriority=-1))
-	//EPCGExSolidificationSpace Space = EPCGExSolidificationSpace::Local;
 };
 
 USTRUCT(BlueprintType)

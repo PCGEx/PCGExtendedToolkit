@@ -51,9 +51,7 @@ struct PCGEXBLENDING_API FPCGExApplySamplingDetails
 	TArray<int32> TrPosComponents;
 	TArray<int32> TrRotComponents;
 	TArray<int32> TrScaComponents;
-	//TArray<int32> LkPosComponents;
 	TArray<int32> LkRotComponents;
-	//TArray<int32> LkScaComponents;
 
 	bool WantsApply() const;
 

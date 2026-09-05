@@ -34,7 +34,6 @@ PCGExFactories::EPreparationResult UPCGExDataMatchFilterFactory::Prepare(FPCGExC
 		TargetFacades.Add(MakeShared<PCGExData::FFacade>(Targets->Pairs[i].ToSharedRef()));
 	}
 
-	// Setup matching details from config mode
 	MatchingDetails.Mode = Config.Mode;
 
 	// Initialize data matcher with target facades

@@ -111,7 +111,6 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 					Staging.Bounds = FBox(Origin - Extents, Origin + Extents);
 				}
 
-				// Inspect for PCG components
 				TInlineComponentArray<UPCGComponent*, 1> PCGComps;
 				TempActor->GetComponents(PCGComps);
 				bHasPCGComponent = !PCGComps.IsEmpty();
@@ -161,7 +160,6 @@ void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 			}
 			else if (!Actor.ToSoftObjectPath().IsValid())
 			{
-				// Auto-populate Actor class from the found actor
 				Actor = TSoftClassPtr<AActor>(FSoftClassPath(FoundActor->GetClass()));
 				Staging.Path = Actor.ToSoftObjectPath();
 				DeltaCollateralPaths.Reset();
@@ -516,7 +514,6 @@ void UPCGExActorCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAss
 
 	for (const FAssetData& SelectedAsset : InAssetData)
 	{
-		// Handle Blueprint assets
 		if (SelectedAsset.AssetClassPath == UBlueprint::StaticClass()->GetClassPathName())
 		{
 			const UBlueprint* Blueprint = Cast<UBlueprint>(SelectedAsset.GetAsset());

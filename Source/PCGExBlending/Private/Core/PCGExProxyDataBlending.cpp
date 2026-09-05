@@ -256,7 +256,6 @@ namespace PCGExBlending
 		// the fully-probing safe capture.
 		const bool bKnownType = InKnownRealType != EPCGMetadataTypes::Unknown;
 
-		// Setup proxy descriptors
 		PCGExData::FProxyDescriptor Desc_A = PCGExData::FProxyDescriptor(InSourceFacade, PCGExData::EProxyRole::Read);
 		PCGExData::FProxyDescriptor Desc_B = PCGExData::FProxyDescriptor(InTargetFacade, PCGExData::EProxyRole::Read);
 

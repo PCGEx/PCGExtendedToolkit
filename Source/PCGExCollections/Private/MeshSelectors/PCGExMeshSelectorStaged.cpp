@@ -132,7 +132,6 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 
 	if (!bUseTimeSlicing)
 	{
-		// Partition & write points in one go
 		if (!CollectionMap->BuildPartitions(InPointData, OutMeshInstances))
 		{
 			PCGE_LOG_C(Error, GraphAndLog, &Context, FTEXT( "Unable to build any partitions"));

@@ -129,7 +129,7 @@ namespace PCGExCollections
 	 * Host->CollectionProperties default. Type mismatches between source and writer are
 	 * skipped silently (leaves default value on the attribute).
 	 *
-	 * Thin wrapper over FPCGExPropertySetWriter -- this class is now collection-only glue
+	 * Thin wrapper over FPCGExPropertySetWriter -- this class is collection-only glue
 	 * (turn UPCGExAssetCollection* / FPCGExAssetCollectionEntry* into the lookup callables the
 	 * generic writer expects). Anything that wants the same metadata-write machinery on a
 	 * non-collection schema source should use FPCGExPropertySetWriter directly.

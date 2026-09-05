@@ -25,7 +25,6 @@ void FPCGExMaterialOverrideSingleEntryCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get handles
 	TSharedPtr<IPropertyHandle> WeightHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExMaterialOverrideSingleEntry, Weight));
 	TSharedPtr<IPropertyHandle> MaterialHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExMaterialOverrideSingleEntry, Material));
 
@@ -75,7 +74,6 @@ void FPCGExMaterialOverrideEntryCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get handles
 	TSharedPtr<IPropertyHandle> SlotIndexHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExMaterialOverrideEntry, SlotIndex));
 	TSharedPtr<IPropertyHandle> MaterialHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExMaterialOverrideEntry, Material));
 
@@ -167,7 +165,6 @@ void FPCGExMaterialOverrideCollectionCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get handles
 	TSharedPtr<IPropertyHandle> WeightHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExMaterialOverrideCollection, Weight));
 	TSharedPtr<IPropertyHandle> OverridesHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExMaterialOverrideCollection, Overrides));
 

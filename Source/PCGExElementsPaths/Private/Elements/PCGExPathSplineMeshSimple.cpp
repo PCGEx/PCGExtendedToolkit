@@ -29,10 +29,8 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecationBeforeUpdatePins(U
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 8)
 	{
-		// Rewire Start Offset
 		PCGEX_SHORTHAND_RENAME_PIN(StartOffsetAttribute, StartOffset, StartOffsetValue)
 
-		// Rewire End Offset
 		PCGEX_SHORTHAND_RENAME_PIN(EndOffsetAttribute, EndOffset, EndOffsetValue)
 	}
 
@@ -331,7 +329,6 @@ namespace PCGExPathSplineMeshSimple
 
 		auto InvalidPoint = [&]()
 		{
-			// Do nothing
 		};
 
 		const UPCGBasePointData* InPointData = PointDataFacade->GetIn();
@@ -372,15 +369,10 @@ namespace PCGExPathSplineMeshSimple
 			}
 
 			PCGExPaths::FSplineMeshSegment& Segment = Segments[Index];
-			//
 
 			const int32 NextIndex = Index + 1 > LastIndex ? 0 : Index + 1;
 
-			//
-
 			FVector OutScale = Transforms[Index].GetScale3D();
-
-			//
 
 			int32 C1 = 1;
 			int32 C2 = 2;
@@ -438,8 +430,6 @@ namespace PCGExPathSplineMeshSimple
 			bIsProcessorValid = false;
 			return;
 		}
-
-		//
 
 		TargetActor = Settings->TargetActor.Get() ? Settings->TargetActor.Get() : ExecutionContext->GetTargetActor(nullptr);
 		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);

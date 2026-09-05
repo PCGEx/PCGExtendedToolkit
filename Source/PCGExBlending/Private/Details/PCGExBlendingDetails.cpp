@@ -199,8 +199,6 @@ void FPCGExBlendingDetails::GetBlendingParams(const UPCGMetadata* SourceMetadata
 		}
 	}
 
-	// We now have a list of attribute identities we can process
-
 	OutAttributeIdentifiers.Reserve(Identities.Num());
 
 	for (int i = 0; i < Identities.Num(); i++)
@@ -370,8 +368,7 @@ namespace PCGExBlending
 
 	void GetFilteredIdentities(const UPCGMetadata* InMetadata, TArray<PCGExData::FAttributeIdentity>& OutIdentities, const FPCGExBlendingDetails* InBlendingDetails, const FPCGExCarryOverDetails* InCarryOverDetails, const TSet<FName>* IgnoreAttributeSet)
 	{
-		// @Data attributes are included: the union/metadata blenders handle them domain-aware (reduce once / carry over),
-		// so they no longer need to be filtered out here.
+		// @Data attributes are included: the union/metadata blenders handle them domain-aware (reduce once / carry over).
 		PCGExData::FAttributeIdentity::Get(InMetadata, OutIdentities, IgnoreAttributeSet);
 
 		if (InCarryOverDetails)

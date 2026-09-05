@@ -20,10 +20,8 @@ void UPCGExWriteTangentsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 8)
 	{
-		// Rewire Arrive Scale
 		PCGEX_SHORTHAND_RENAME_PIN(ArriveScaleAttribute, ArriveScaleConstant, ArriveScale)
 
-		// Rewire Leave Scale
 		PCGEX_SHORTHAND_RENAME_PIN(LeaveScaleAttribute, LeaveScaleConstant, LeaveScale)
 	}
 

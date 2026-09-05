@@ -87,8 +87,6 @@ namespace PCGExFuseCollinear
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFuseCollinear::Process);
 
-		//PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
-
 		if (!IProcessor::Process(InTaskManager))
 		{
 			return false;
@@ -104,7 +102,6 @@ namespace PCGExFuseCollinear
 		bForceSingleThreadedProcessPoints = true;
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
-		//PointDataFacade->Fetch(Scope);
 		FilterAll();
 
 		// Preserve start & end
@@ -115,8 +112,6 @@ namespace PCGExFuseCollinear
 		{
 			PointFilterCache[Path->LastIndex] = true;
 		}
-
-		// Process path...
 
 		for (int i = 0; i < Path->NumPoints; i++)
 		{

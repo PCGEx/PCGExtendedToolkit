@@ -140,12 +140,10 @@ namespace PCGExBuildCellDiagram
 			}
 		}
 
-		// Set up cell constraints
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
 		CellsConstraints->Holes = Holes;
 
-		// Build or get the shared enumerator
 		TSharedPtr<PCGExClusters::FPlanarFaceEnumerator> Enumerator = CellsConstraints->GetOrBuildEnumerator(Cluster.ToSharedRef(), ProjectionDetails);
 
 		// Enumerate all cells (wrapper is omitted by default for graph)
@@ -516,7 +514,6 @@ namespace PCGExBuildCellDiagram
 	{
 		UPCGBasePointData* CentroidIO = CentroidFacade->GetOut();
 
-		// Get value ranges for writing
 		TPCGValueRange<FTransform> OutTransforms = CentroidIO->GetTransformValueRange();
 		TPCGValueRange<FVector> OutBoundsMin = CentroidIO->GetBoundsMinValueRange();
 		TPCGValueRange<FVector> OutBoundsMax = CentroidIO->GetBoundsMaxValueRange();
@@ -729,7 +726,6 @@ namespace PCGExBuildCellDiagram
 			SetupEdgeTypeTagging();
 		}
 
-		// Compile graph
 		GraphBuilder->CompileAsync(TaskManager, true, nullptr);
 	}
 

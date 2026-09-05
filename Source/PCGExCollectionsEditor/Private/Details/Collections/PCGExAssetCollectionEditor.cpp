@@ -68,7 +68,6 @@ bool FPCGExAssetCollectionEditor::IsPropertyUnderEntries(const FPropertyAndParen
 		}
 	}
 
-	// Check if property IS "Entries"
 	if (PropertyAndParent.Property.GetFName() == PCGExAssetCollectionEditor::EntriesName)
 	{
 		return true;
@@ -196,7 +195,6 @@ void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection
 
 	InitAssetEditor(EToolkitMode::Standalone, InitToolkitHost, GetAppIdentifier(), Layout, bCreateDefaultStandaloneMenu, bCreateDefaultToolbar, ObjectsToEdit);
 
-	// Toolbar extender
 	TSharedRef<FExtender> ToolbarExtender = MakeShared<FExtender>();
 	ToolbarExtender->AddToolBarExtension(
 		"Asset",
@@ -342,10 +340,8 @@ FReply FPCGExAssetCollectionEditor::ToggleFilter(const PCGExAssetCollectionEdito
 
 void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
 {
-	// Property editor module
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 
-	// Details view arguments
 	FDetailsViewArgs DetailsArgs;
 	DetailsArgs.bUpdatesFromSelection = false;
 	DetailsArgs.bLockable = false;
@@ -354,7 +350,6 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 	DetailsArgs.NotifyHook = nullptr;
 	DetailsArgs.bAllowMultipleTopLevelObjects = false;
 
-	// Create the details view
 	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
 	DetailsView->SetIsPropertyVisibleDelegate(
 		FIsPropertyVisible::CreateLambda(
@@ -363,7 +358,6 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 				return PropertyAndParent.Property.GetFName() != TEXT("Entries");
 			}));
 
-	// Set the asset to display
 	DetailsView->SetObject(EditedCollection.Get());
 	
 	CreateEntriesTab(OutTabs);
@@ -378,10 +372,8 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 
 void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
 {
-	// Property editor module
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 
-	// Details view arguments
 	FDetailsViewArgs DetailsArgs;
 	DetailsArgs.bUpdatesFromSelection = false;
 	DetailsArgs.bLockable = false;
@@ -390,12 +382,10 @@ void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEd
 	DetailsArgs.NotifyHook = nullptr;
 	DetailsArgs.bAllowMultipleTopLevelObjects = false;
 
-	// Create the details view
 	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
 	DetailsView->SetIsPropertyVisibleDelegate(
 		FIsPropertyVisible::CreateStatic(&FPCGExAssetCollectionEditor::IsPropertyUnderEntries));
 
-	// Set the asset to display
 	DetailsView->SetObject(EditedCollection.Get());
 	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Assets"), DetailsView);
 	Infos.Icon = TEXT("Entries");

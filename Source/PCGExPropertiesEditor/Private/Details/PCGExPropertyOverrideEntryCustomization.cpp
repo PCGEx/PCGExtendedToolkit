@@ -564,7 +564,6 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 		return;
 	}
 
-	// Check if this type should be inlined
 	const bool bShouldInline = InnerStruct->HasMetaData(TEXT("PCGExInlineValue"));
 
 	// Hold the inner scope on the customization so it is guaranteed to outlive every

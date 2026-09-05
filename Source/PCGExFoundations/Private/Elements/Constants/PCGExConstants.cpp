@@ -157,7 +157,6 @@ bool FPCGExConstantsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 	EPCGExConstantType OutputType = Settings->GetOutputType(Settings->ConstantList);
 
-	// Boolean constant outputs
 	if (OutputType == EPCGExConstantType::Bool)
 	{
 		auto ToOutput = UPCGExConstantsSettings::GetBooleanConstantList(Settings->ConstantList);
@@ -171,7 +170,6 @@ bool FPCGExConstantsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 			StageConstant(Context, Constant.Name, HasValidOutputNames ? *Settings->AttributeNameMap.Find(Constant.Name) : Constant.Name, Constant.Value, Settings);
 		}
 	}
-	// Vector constant output
 	else if (OutputType == EPCGExConstantType::Vector)
 	{
 		auto ToOutput = UPCGExConstantsSettings::GetVectorConstantList(Settings->ConstantList);
