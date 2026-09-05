@@ -587,7 +587,6 @@ namespace PCGExBinPacking3D
 
 		const FBox PaddedBox(PaddedMin, PaddedMin + PaddedSize);
 
-		// Bounds check with padded box
 		if (PaddedBox.Min.X < Bounds.Min.X - KINDA_SMALL_NUMBER ||
 			PaddedBox.Min.Y < Bounds.Min.Y - KINDA_SMALL_NUMBER ||
 			PaddedBox.Min.Z < Bounds.Min.Z - KINDA_SMALL_NUMBER ||
@@ -1224,7 +1223,6 @@ namespace PCGExBinPacking3D
 
 			NewBin->bAbsolutePadding = Settings->bAbsolutePadding;
 
-			// Set bin max weight
 			if (BinMaxWeightBuffer)
 			{
 				NewBin->MaxWeight = BinMaxWeightBuffer->Read(i);

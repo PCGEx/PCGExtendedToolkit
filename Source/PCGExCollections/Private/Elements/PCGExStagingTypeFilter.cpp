@@ -66,7 +66,6 @@ TArray<FPCGPinProperties> UPCGExStagedTypeFilterSettings::OutputPinProperties() 
 			PCGEX_PIN_POINTS(PCGExStagedTypeFilter::OutputFilteredOut, "Points that didn't match any enabled type.", Normal)
 		}
 
-		// Per-type pins
 		for (const FName& Label : TypePinLabels)
 		{
 			PCGEX_PIN_POINTS(Label, "Points matching this collection type.", Normal)
@@ -149,7 +148,6 @@ bool FPCGExStagedTypeFilterElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(StagedTypeFilter)
 
-	// Setup collection unpacker
 	Context->CollectionUnpacker = MakeShared<PCGExCollections::FPickUnpacker>();
 	Context->CollectionUnpacker->UnpackPin(InContext);
 
@@ -269,7 +267,6 @@ bool FPCGExStagedTypeFilterElement::AdvanceWork(FPCGExContext* InContext, const 
 			Context->UnmatchedOutput->PruneNullEntries(true);
 		}
 
-		// Stage outputs and build inactive pin bitmask
 		uint64& Mask = Context->OutputData.InactiveOutputPinBitmask;
 		int32 PinIndex = 0;
 
@@ -444,7 +441,6 @@ namespace PCGExStagedTypeFilter
 		}
 		else
 		{
-			// Include/Exclude mode
 			const bool bIncludeMode = Settings->FilterMode == EPCGExStagedTypeFilterMode::Include;
 			int32 LocalKept = 0;
 
@@ -568,7 +564,6 @@ namespace PCGExStagedTypeFilter
 			}
 		}
 
-		// Gather kept points
 		(void)PointDataFacade->Source->Gather(Mask);
 	}
 }

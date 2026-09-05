@@ -21,7 +21,6 @@ bool UPCGExBlendOpMonolithicFactory::ResolveConfigs(
 	TArray<PCGExBlending::FBlendingParam> Params;
 	TArray<FPCGAttributeIdentifier> AttributeIdentifiers;
 
-	// Gather point property params
 	BlendingDetails.GetPointPropertyBlendingParams(Params);
 
 	// Gather attribute params from source metadata
@@ -100,11 +99,7 @@ bool UPCGExBlendOpMonolithicFactory::RegisterConsumableAttributesWithData(FPCGEx
 TArray<FPCGPreConfiguredSettingsInfo> UPCGExBlendOpMonolithicProviderSettings::GetPreconfiguredInfo() const
 {
 	return {};
-	// Removed preconfigured infos because it was adding too much noise to the search
-	/*
-	const TSet ValuesToSkip = {EPCGExBlendingType::None, EPCGExBlendingType::Unset};
-	return FPCGPreConfiguredSettingsInfo::PopulateFromEnum<EPCGExBlendingType>(ValuesToSkip, FTEXT("Blend All : {0}"));
-	*/
+	// No preconfigured infos: they add too much noise to the node search.
 }
 #endif
 

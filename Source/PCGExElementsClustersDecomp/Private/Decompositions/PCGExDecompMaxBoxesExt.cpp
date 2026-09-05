@@ -20,7 +20,6 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 	// Resolve voxel size (auto-detect from edges or use manual)
 	const FVector ResolvedVoxelSize = FPCGExDecompOccupancyGrid::ResolveVoxelSize(Cluster, VoxelSizeMode, VoxelSize);
 
-	// Build occupancy grid
 	FPCGExDecompOccupancyGrid Grid;
 	if (!Grid.Build(Cluster, TransformSpace, ResolvedVoxelSize, CustomTransform))
 	{
@@ -149,7 +148,6 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 		}
 	}
 
-	// Per-voxel CellID
 	TArray<int32> VoxelCellIDs;
 	VoxelCellIDs.SetNumUninitialized(Grid.TotalVoxels);
 	for (int32& ID : VoxelCellIDs)
@@ -411,7 +409,6 @@ bool FPCGExDecompMaxBoxesExt::FindLargestBox(
 							Score = static_cast<double>(Volume);
 						}
 
-						// Weight scoring
 						if (bUseWeightScoring)
 						{
 							const FIntVector CandMin(StackIdx, Y - StackHeight + 1, Z1);
@@ -421,7 +418,6 @@ bool FPCGExDecompMaxBoxesExt::FindLargestBox(
 							Score *= FMath::Pow(FMath::Max(AvgWeight, KINDA_SMALL_NUMBER), WeightInfluence);
 						}
 
-						// Volume preference scoring
 						if (bUseVolumePreference)
 						{
 							double VolumeFactor = 1.0;

@@ -60,7 +60,6 @@ namespace PCGEx
 		return static_cast<uint32>(A) << 16 | B;
 	}
 
-	// Expand uint32 hash
 	constexpr FORCEINLINE static uint32 H32A(const uint32 Hash)
 	{
 		return static_cast<uint16>(Hash >> 16);
@@ -93,7 +92,6 @@ namespace PCGEx
 		return H64U(A + 1, B + 1);
 	}
 
-	// Expand uint64 hash
 	constexpr FORCEINLINE static uint32 H64A(const uint64 Hash)
 	{
 		return static_cast<uint32>(Hash >> 32);

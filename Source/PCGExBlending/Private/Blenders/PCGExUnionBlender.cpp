@@ -370,7 +370,6 @@ namespace PCGExBlending
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(InitBlenders)
 
-			// Initialize all blending operations
 			for (const TSharedPtr<FMultiSourceBlender>& MultiAttribute : Blenders)
 			{
 				if (!MultiAttribute->Init(InContext, CurrentTargetData, InProxyFlags))

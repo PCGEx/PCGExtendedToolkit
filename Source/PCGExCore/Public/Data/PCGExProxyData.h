@@ -201,7 +201,6 @@ namespace PCGExData
 		void SetSubSelection(const FSubSelection& InSubSelection,
 		                     const FPCGMetadataAttributeDesc* SourceDesc = nullptr);
 
-		// Role-specific initialization
 		virtual void InitForRole(EProxyRole InRole);
 
 		//

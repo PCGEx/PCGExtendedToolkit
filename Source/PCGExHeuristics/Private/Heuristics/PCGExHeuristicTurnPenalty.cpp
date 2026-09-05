@@ -19,7 +19,6 @@ double FPCGExHeuristicTurnPenalty::GetEdgeScore(const PCGExClusters::FNode& From
 		return GetScoreInternal(FallbackScore);
 	}
 
-	// Get the previous node index from TravelStack
 	const int32 PrevNodeIndex = PCGEx::NH64A(TravelStack->Get(From.Index));
 	if (PrevNodeIndex == -1)
 	{

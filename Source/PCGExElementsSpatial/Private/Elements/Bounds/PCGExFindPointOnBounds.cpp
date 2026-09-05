@@ -90,7 +90,6 @@ bool FPCGExFindPointOnBoundsElement::AdvanceWork(FPCGExContext* InContext, const
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->bRequiresWriteStep = true;
 			}))
 		{
 			return Context->CancelExecution(TEXT("Could not find any points."));

@@ -449,7 +449,6 @@ namespace PCGExPointsMT
 		{
 			return;
 		}
-		//PCGEX_ASYNC_MT_LOOP_VALID_PROCESSORS(CompleteWork, bForceSingleThreadedCompletion, { Processor->CompleteWork(); }, {})
 		PCGEX_CHECK_WORK_HANDLE_VOID
 		if (bForceSingleThreadedCompletion)
 		{
@@ -478,7 +477,6 @@ namespace PCGExPointsMT
 
 	void IBatch::Write()
 	{
-		//PCGEX_ASYNC_MT_LOOP_VALID_PROCESSORS(Write, bForceSingleThreadedWrite, { Processor->Write(); }, {})
 		PCGEX_CHECK_WORK_HANDLE_VOID
 		if (bForceSingleThreadedWrite)
 		{
@@ -530,7 +528,6 @@ namespace PCGExPointsMT
 
 	void IBatch::OnProcessingPreparationComplete()
 	{
-		//	PCGEX_ASYNC_MT_LOOP_TPL(Process, bForceSingleThreadedProcessing, { Processor->bIsProcessorValid = Processor->Process(This->TaskManager); }, { Process->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE](){ PCGEX_ASYNC_THIS This->OnInitialPostProcess(); };})
 		PCGEX_CHECK_WORK_HANDLE_VOID
 
 		if (bForceSingleThreadedProcessing)

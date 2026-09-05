@@ -357,8 +357,7 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		FPCGExContext* GetContext() const;
 
 		// Facade-local proxy cache (lazily created, thread-safe). Used by GetProxyBuffer when a
-		// Shared descriptor resolves to this facade, so proxy creation no longer funnels through
-		// a single context-wide pool.
+		// Shared descriptor resolves to this facade.
 		IBufferProxyPool& GetProxyPool();
 
 		explicit FFacade(const TSharedRef<FPointIO>& InSource);

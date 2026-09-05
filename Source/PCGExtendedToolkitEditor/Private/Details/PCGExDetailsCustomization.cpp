@@ -185,8 +185,7 @@ namespace PCGExDetailsCustomization
 
 #pragma region Inlined Enums registration
 
-		// Same as icons, this should be moved to their owning modules
-		// But no harm done if the the enum doesn't exists.
+		// TODO: move to the owning modules (harmless if the enum doesn't exist).
 
 		PCGEX_REGISTER_CUSTO_START
 

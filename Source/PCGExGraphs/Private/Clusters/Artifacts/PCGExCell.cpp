@@ -68,7 +68,6 @@ namespace PCGExClusters
 				return;
 			}
 
-			// Project all points
 			ProjectionDetails.ProjectFlat(PointDataFacade, ProjectedPoints);
 
 			// Compute tight 2D and 3D AABBs
@@ -240,7 +239,6 @@ namespace PCGExClusters
 			return Enumerator;
 		}
 
-		// Compute projection hash for cache lookup
 		const uint32 ProjHash = FFaceEnumeratorCacheFactory::ComputeProjectionHash(ProjectionDetails);
 
 		// Try cluster cache first

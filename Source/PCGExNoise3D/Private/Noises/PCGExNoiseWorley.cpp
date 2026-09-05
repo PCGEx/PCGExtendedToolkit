@@ -41,7 +41,6 @@ double FPCGExNoiseWorley::GenerateRaw(const FVector& Position) const
 				const int32 NY = CellY + DY;
 				const int32 NZ = CellZ + DZ;
 
-				// Get feature point in this cell
 				const FVector FeaturePoint = GetCellPoint(NX, NY, NZ, Jitter, Seed);
 				const double Dist = CalcDistance(Position, FeaturePoint);
 

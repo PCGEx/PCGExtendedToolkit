@@ -256,7 +256,6 @@ namespace PCGExPaths
 	bool FPolyPath::GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition) const
 	{
 		check(EdgeOctree)
-		//EdgeOctree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), OutPosition);
 		return false;
 	}
 

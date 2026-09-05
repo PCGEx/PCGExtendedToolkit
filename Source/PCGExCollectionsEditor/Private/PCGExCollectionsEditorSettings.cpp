@@ -12,18 +12,6 @@ FSimpleMulticastDelegate UPCGExCollectionsEditorSettings::OnHiddenAssetPropertyN
 void UPCGExCollectionsEditorSettings::PostLoad()
 {
 	Super::PostLoad();
-	/*
-#if WITH_EDITOR
-	bool bWantsSaving = false;
-	PCGEX_IF_VERSION_LOWER(1, 71, 2)
-	{
-		HiddenPropertyNames.Add(FName("AssetEditor.Descriptors"));
-		bWantsSaving = true;
-	}
-
-	if (bWantsSaving) { SaveConfig(); }
-#endif
-	*/
 }
 
 void UPCGExCollectionsEditorSettings::ToggleHiddenAssetPropertyName(const FName PropertyName, const bool bHide)

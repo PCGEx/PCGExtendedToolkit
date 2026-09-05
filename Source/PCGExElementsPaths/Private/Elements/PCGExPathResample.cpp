@@ -293,30 +293,10 @@ namespace PCGExResamplePath
 				const FVector Start = Path->GetPos(Sample.Start);
 				const double SampleBreadth = FVector::Dist(Start, Path->GetPos(Sample.End));
 
-				//if (SourcesRange == 1)
-				//{
 				const double Weight = SampleBreadth > 0 ? FVector::Dist(Start, Sample.Location) / SampleBreadth : 0.5;
 				MetadataBlender->Blend(Sample.Start, Sample.End, Index, Weight);
-				//}
 
-				/*
-				// TODO : Complex blending
-				const double MinLength = Sample.Start == 0 ? 0 : PathLength->CumulativeLength[Sample.Start - 1];
-				const double MaxLength = PathLength->CumulativeLength[Path->IsValidEdgeIndex(Sample.End) ? PathLength->TotalLength : Sample.End - 1];
-				const double Range = MaxLength - MinLength;
-				
-				for (int i = 0; i < SourcesRange; i++)
-				{
-					const int 
-					PCGExPaths::FPathEdge& Edge = Path->Edges[Sample.Start + i - 1];
-					const double Weight =  
-				}
-		
-				if (Path->IsValidEdgeIndex(Sample.End))
-				{
-					// Blend with end
-				}
-				*/
+				// TODO : complex blending across the whole SourcesRange
 			}
 		}
 	}

@@ -45,7 +45,6 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	//PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FactoryProvider, "Factory : Provider", "Creates an abstract factory provider.", FName(GetDisplayName()))
 	virtual EPCGSettingsType GetType() const override
 	{
 		return EPCGSettingsType::Param;

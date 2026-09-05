@@ -41,7 +41,6 @@ bool UPCGExSegmentLengthFilterFactory::Init(FPCGExContext* InContext)
 
 bool UPCGExSegmentLengthFilterFactory::DomainCheck()
 {
-	//TODO
 	return false;
 }
 

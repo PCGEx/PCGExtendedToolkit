@@ -31,7 +31,6 @@ namespace PCGExClusters
 
 		for (const TSharedPtr<PCGExData::FPointIO>& MainIO : InMixedCollection->Pairs)
 		{
-			// Vtx ?
 
 			if (MainIO->Tags->IsTagged(Labels::TagStr_PCGExVtx))
 			{
@@ -50,8 +49,6 @@ namespace PCGExClusters
 				TaggedVtx.Add(MainIO);
 				continue;
 			}
-
-			// Edge ?
 
 			if (MainIO->Tags->IsTagged(Labels::TagStr_PCGExEdges))
 			{

@@ -391,7 +391,6 @@ namespace PCGExProbing
 
 				Origin = WorkingPositions[Index];
 
-				// Find candidates within radius
 				Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(Origin, FVector(MaxRadius)), ProcessPoint);
 
 				// Chained best-candidates hold indices into the UNSORTED array -- consume them before the sort

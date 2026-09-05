@@ -250,7 +250,7 @@ namespace PCGExHelpers
 		TArray<FSoftObjectPath> Paths = GetPathsFunc();
 		if (Paths.IsEmpty())
 		{
-			// Empty set -> not-loaded, matching the legacy Load() contract (NOT a behavioral change). Callers
+			// Empty set -> not-loaded, matching the Load() contract. Callers
 			// that cancel on !bSuccess guard with HasAssetRequirements() first, so they never reach here empty.
 			OnLoadEnd(false);
 			return true;

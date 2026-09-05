@@ -223,7 +223,6 @@ namespace PCGExBlending
 	public:
 		virtual ~FProxyDataBlender() = default;
 
-		// Underlying type info
 		EPCGMetadataTypes UnderlyingType = EPCGMetadataTypes::Unknown;
 
 		// Buffer proxies
@@ -249,7 +248,6 @@ namespace PCGExBlending
 		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, const double Weight) const;
 		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, TArrayView<const double> Weights) const;
 
-		// Multi-blend operations
 		PCGEx::FOpStats BeginMultiBlend(const int32 TargetIndex);
 		void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double Weight, PCGEx::FOpStats& Tracker);
 		void EndMultiBlend(const int32 TargetIndex, PCGEx::FOpStats& Tracker);
@@ -257,7 +255,6 @@ namespace PCGExBlending
 		// Division helper
 		void Div(const int32 TargetIndex, const double Divider);
 
-		// Get output buffer
 		TSharedPtr<PCGExData::IBuffer> GetOutputBuffer() const;
 
 		// Initialize from blending param (helper for common setup pattern).
@@ -274,10 +271,6 @@ namespace PCGExBlending
 			PCGExData::EProxyFlags InProxyFlags = PCGExData::EProxyFlags::None,
 			EPCGMetadataTypes InKnownRealType = EPCGMetadataTypes::Unknown,
 			const FPCGMetadataAttributeDesc* InKnownSourceDesc = nullptr);
-
-		// Type-safe set (converts to working type)
-		//template <typename T>
-		//void Set(const int32 TargetIndex, const T& Value) const { if (C) { C->Set(TargetIndex, Value); } }
 
 	protected:
 		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(EPCGMetadataTypes, EPCGExABBlendingType, bool, const UObject*);
@@ -318,7 +311,6 @@ namespace PCGExBlending
 	//
 
 	// Create blender with just type and mode - caller sets A, B, C proxies manually
-	// This replaces the old CreateProxyBlender<T>(BlendMode, bReset) template
 	// ValueTypeObject: UStruct/UEnum/UClass for extended types (Struct, Enum, etc.); nullptr for basic types.
 	// Required for non-basic types so FBlendOperationFactory can compute correct ValueSize.
 	PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(

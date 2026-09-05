@@ -326,15 +326,6 @@ namespace PCGExBreakClustersToPaths
 
 	void FProcessor::ProcessEdges(const PCGExMT::FScope& Scope)
 	{
-		/*
-		if (Settings->OperateOn == EPCGExBreakClusterOperationTarget::Paths)
-		{
-			// We only call process edge in path mode if there's filters
-			EdgeDataFacade->Fetch(PCGExMT::FScope(0, NumEdges));
-			FilterEdgeScope(PCGExMT::FScope(0, NumEdges), true);
-			return;
-		}
-		*/
 
 		TArray<PCGExGraphs::FEdge>& ClusterEdges = *Cluster->Edges;
 
@@ -364,14 +355,6 @@ namespace PCGExBreakClustersToPaths
 
 	void FProcessor::OnEdgesProcessingComplete()
 	{
-		/*
-		if (Settings->OperateOn == EPCGExBreakClusterOperationTarget::Paths)
-		{
-			// We only call process edge in path mode if there's filters
-			// Once filters have been processed, build chains
-			BuildChains();
-		}
-		*/
 	}
 
 	void FProcessor::Cleanup()

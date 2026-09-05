@@ -127,7 +127,6 @@ void FPCGExtendedToolkitModule::StartupModule()
 			}
 		}
 
-		// Now load this module
 		if (!FModuleManager::Get().IsModuleLoaded(*ModuleName))
 		{
 			FModuleManager::Get().LoadModule(*ModuleName);

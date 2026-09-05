@@ -25,10 +25,8 @@ void UPCGExExtrudeTensorsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNod
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 8)
 	{
-		// Rewire Max Length
 		PCGEX_SHORTHAND_RENAME_PIN(MaxLengthAttribute, MaxLength, MaxLengthValue)
 
-		// Rewire Max Points Count
 		PCGEX_SHORTHAND_RENAME_PIN(MaxPointsCountAttribute, MaxPointsCount, MaxPointsCountValue)
 	}
 
@@ -69,7 +67,6 @@ namespace PCGExExtrudeTensors
 		const UPCGExExtrudeTensorsSettings* InSettings,
 		bool bHasStopFilters)
 	{
-		// Transform settings
 		OutConfig.bTransformRotation = InSettings->bTransformRotation;
 		OutConfig.RotationMode = InSettings->Rotation;
 		OutConfig.AlignAxis = InSettings->AlignAxis;
@@ -80,16 +77,13 @@ namespace PCGExExtrudeTensors
 		OutConfig.StopHandling = InSettings->StopConditionHandling;
 		OutConfig.bAllowChildExtrusions = InSettings->bAllowChildExtrusions;
 
-		// External intersection
 		OutConfig.bDoExternalIntersections = InSettings->bDoExternalPathIntersections;
 		OutConfig.bIgnoreIntersectionOnOrigin = InSettings->bIgnoreIntersectionOnOrigin;
 
-		// Self intersection
 		OutConfig.bDoSelfIntersections = InSettings->bDoSelfPathIntersections;
 		OutConfig.bMergeOnProximity = InSettings->bMergeOnProximity;
 		OutConfig.ProximitySegmentBalance = InSettings->ProximitySegmentBalance;
 
-		// Closed loop detection
 		OutConfig.bDetectClosedLoops = InSettings->bDetectClosedLoops;
 		OutConfig.ClosedLoopSquaredDistance = FMath::Square(InSettings->ClosedLoopSearchDistance);
 		OutConfig.ClosedLoopSearchDot = PCGExMath::DegreesToDot(InSettings->ClosedLoopSearchAngle);
@@ -99,10 +93,8 @@ namespace PCGExExtrudeTensors
 		OutConfig.SelfPathIntersections = InSettings->SelfPathIntersections;
 		OutConfig.MergeDetails = InSettings->MergeDetails;
 
-		// Initialize intersection details
 		OutConfig.InitIntersectionDetails();
 
-		// Compute flags
 		OutConfig.ComputeFlags(bHasStopFilters, !InContext->ExternalPaths.IsEmpty());
 	}
 }
@@ -264,7 +256,6 @@ namespace PCGExExtrudeTensors
 		// Initialize config using node-specific settings
 		InitExtrusionConfigFromSettings(Context->ExtrusionConfig, Context, Settings, StopFilters.IsValid());
 
-		// Initialize tensor handler
 		TensorsHandler = MakeShared<PCGExTensor::FTensorsHandler>(Settings->TensorHandlerDetails);
 		if (!TensorsHandler->Init(Context, Context->TensorFactories, PointDataFacade))
 		{
@@ -277,7 +268,6 @@ namespace PCGExExtrudeTensors
 			return false;
 		}
 
-		// Initialize per-point settings
 		PerPointIterations = Settings->GetValueSettingIterations();
 		if (!PerPointIterations->Init(PointDataFacade, false, true))
 		{
@@ -326,7 +316,6 @@ namespace PCGExExtrudeTensors
 
 	void FProcessor::SetupExtrusionCallbacks(const TSharedPtr<FExtrusion>& Extrusion)
 	{
-		// Callback for creating child extrusions
 		Extrusion->Callbacks.OnCreateChild = [this](const TSharedRef<FExtrusion>& Parent) -> TSharedPtr<FExtrusion>
 		{
 			return InitExtrusionFromExtrusion(Parent);
@@ -366,7 +355,6 @@ namespace PCGExExtrudeTensors
 			}
 		};
 
-		// Callback for validating path point count
 		Extrusion->Callbacks.OnValidatePath = [this](int32 PointCount) -> bool
 		{
 			return Settings->PathOutputDetails.Validate(PointCount);
@@ -658,7 +646,6 @@ namespace PCGExExtrudeTensors
 						}
 						else
 						{
-							// Update merge instead
 							Merge.Update(PreMerge);
 						}
 					}

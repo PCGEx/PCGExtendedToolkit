@@ -57,7 +57,6 @@ PCGExTensor::FTensorSample FPCGExTensorSurface::Sample(const int32 InSeedIndex, 
 	{
 		if (Config.bReturnZeroOnMiss)
 		{
-			// Return a zero-weight sample that won't affect results
 			PCGExTensor::FEffectorSamples Samples;
 			Samples.Emplace_GetRef(FVector::ZeroVector, 0, 0);
 			return Samples.Flatten(0);
@@ -295,7 +294,6 @@ void FPCGExTensorSurface::CheckPCGSurfaces(const FVector& Position, FPCGExSurfac
 		}
 		else if (bHasPX && bHasPY)
 		{
-			// Fallback with fewer samples
 			const FVector DX = SamplePX.Transform.GetLocation() - ProjectedLocation;
 			const FVector DY = SamplePY.Transform.GetLocation() - ProjectedLocation;
 			FVector ComputedNormal = FVector::CrossProduct(DX, DY).GetSafeNormal();
@@ -407,7 +405,6 @@ PCGExFactories::EPreparationResult UPCGExTensorSurfaceFactory::InitInternalData(
 		return Result;
 	}
 
-	// Cache world
 	CachedWorld = InContext->GetWorld();
 	if (!CachedWorld.IsValid())
 	{
@@ -415,7 +412,6 @@ PCGExFactories::EPreparationResult UPCGExTensorSurfaceFactory::InitInternalData(
 		return PCGExFactories::EPreparationResult::Fail;
 	}
 
-	// Initialize collision settings
 	Config.CollisionSettings.Init(InContext);
 
 	// Check world collision availability

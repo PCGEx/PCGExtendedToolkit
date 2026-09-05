@@ -1189,7 +1189,6 @@ namespace PCGExClusters
 			const FNode& Node = (*Cluster->Nodes)[NodeIdx];
 			const bool bIsLeaf = Node.IsLeaf();
 
-			// Check for leaves
 			if (bIsLeaf && !Constraints->bKeepCellsWithLeaves)
 			{
 				return ECellResult::Leaf;
@@ -1207,7 +1206,6 @@ namespace PCGExClusters
 			OutCell->Data.Bounds += Pos;
 			OutCell->Data.Centroid += Pos;
 
-			// Compute segment length
 			const double SegmentLength = FVector::Dist(PrevPos, Pos);
 			Perimeter += SegmentLength;
 			PrevPos = Pos;
@@ -1237,7 +1235,6 @@ namespace PCGExClusters
 		// Normalize nodes for hash computation
 		PCGExArrayHelpers::ShiftArrayToSmallest(OutCell->Nodes);
 
-		// Check for duplicate
 		if (!Constraints->IsUniqueCellHash(OutCell))
 		{
 			return ECellResult::Duplicate;
@@ -1247,7 +1244,6 @@ namespace PCGExClusters
 		OutCell->Data.Perimeter = Perimeter;
 		OutCell->Data.bIsClosedLoop = true;
 
-		// Check bounds size
 		const double BoundsSize = OutCell->Data.Bounds.GetSize().Length();
 		if (BoundsSize < Constraints->MinBoundsSize || BoundsSize > Constraints->MaxBoundsSize)
 		{
@@ -1352,7 +1348,6 @@ namespace PCGExClusters
 			return ECellResult::OutsideAreaLimit;
 		}
 
-		// Check concave constraint
 		if (Constraints->bConcaveOnly && OutCell->Data.bIsConvex)
 		{
 			return ECellResult::WrongAspect;
@@ -1459,10 +1454,8 @@ namespace PCGExClusters
 			return AdjacencyMap;
 		}
 
-		// Reserve space for the map
 		AdjacencyMap.Reserve(NumFaces);
 
-		// Iterate through all half-edges
 		for (const FHalfEdge& HE : HalfEdges)
 		{
 			const int32 FaceA = HE.FaceIndex;
@@ -1471,7 +1464,6 @@ namespace PCGExClusters
 				continue;
 			}
 
-			// Get the twin's face
 			if (HE.TwinIndex < 0 || HE.TwinIndex >= HalfEdges.Num())
 			{
 				continue;
@@ -1484,7 +1476,6 @@ namespace PCGExClusters
 				continue;
 			}
 
-			// Add bidirectional adjacency
 			AdjacencyMap.FindOrAdd(FaceA).Add(FaceB);
 			AdjacencyMap.FindOrAdd(FaceB).Add(FaceA);
 		}
@@ -1540,14 +1531,12 @@ namespace PCGExClusters
 				continue;
 			}
 
-			// Get the twin's face
 			if (HE.TwinIndex < 0 || HE.TwinIndex >= HalfEdges.Num())
 			{
 				continue;
 			}
 			const int32 AdjacentFace = HalfEdges[HE.TwinIndex].FaceIndex;
 
-			// Skip if invalid or wrapper
 			if (AdjacentFace < 0 || AdjacentFace == WrapperFaceIndex)
 			{
 				continue;

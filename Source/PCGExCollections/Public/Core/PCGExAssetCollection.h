@@ -86,7 +86,6 @@ struct PCGEXCOLLECTIONS_API FPCGExEntryAccessResult
 		return static_cast<const T*>(Entry);
 	}
 
-	// Check if entry is of a specific type
 	bool IsType(PCGExAssetCollection::FTypeId TypeId) const;
 };
 
@@ -942,7 +941,6 @@ public:
 	/** Get random entry (weighted by entry Weight property) */
 	FPCGExEntryAccessResult GetEntryWeightedRandom(int32 Seed) const;
 
-	// With tag inheritance
 	FPCGExEntryAccessResult GetEntryAt(int32 Index, uint8 TagInheritance, TSet<FName>& OutTags) const;
 	FPCGExEntryAccessResult GetEntryRaw(int32 RawIndex, uint8 TagInheritance, TSet<FName>& OutTags) const;
 	FPCGExEntryAccessResult GetEntry(int32 Index, int32 Seed, EPCGExIndexPickMode PickMode, uint8 TagInheritance, TSet<FName>& OutTags) const;

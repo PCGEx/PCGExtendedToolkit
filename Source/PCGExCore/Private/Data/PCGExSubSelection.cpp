@@ -35,10 +35,7 @@ namespace PCGExData
 		Init(ProxySelector.GetExtraNames());
 	}
 
-	//
-	// Classifier bitmask is populated at Init time (see Init below).
-	// The classifier methods are now inline bit-tests in the header.
-	//
+	// Classifier bitmask is populated at Init time; the classifier methods are inline bit-tests in the header.
 
 	EPCGMetadataTypes FSubSelection::GetSubType(const EPCGMetadataTypes Fallback) const
 	{

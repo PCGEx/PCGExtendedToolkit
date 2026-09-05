@@ -202,12 +202,6 @@ namespace PCGExBestMatchAxis
 			{
 			}
 
-			/*
-			FVector Offset;
-			OutTransforms[Index].SetLocation(UVW.GetPosition(Index, Offset));
-			OutBoundsMin[Index] += Offset;
-			OutBoundsMax[Index] += Offset;
-			*/
 		}
 	}
 }

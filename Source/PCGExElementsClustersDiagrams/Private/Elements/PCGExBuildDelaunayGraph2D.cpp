@@ -394,7 +394,6 @@ namespace PCGExBuildDelaunayGraph2D
 		{
 			OutputIndices = MakeShared<TArray<int32>>();
 			PCGExArrayHelpers::ArrayOfIndices(*OutputIndices, PointDataFacade->GetNum());
-			//	GraphBuilder->OutputPointIndices = OutputIndices;
 		}
 
 		GraphBuilder->Graph->InsertEdges(Delaunay->DelaunayEdges, -1);

@@ -241,7 +241,6 @@ void FPCGExProbeChain::ProcessAll(TSet<uint64>& OutEdges) const
 		}
 	}
 
-	// Close loop if requested
 	if (Config.bClosedLoop && ValidOrder.Num() > 2)
 	{
 		const int32 First = ValidOrder[0];

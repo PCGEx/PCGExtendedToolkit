@@ -314,7 +314,6 @@ namespace PCGExClusters
 		const int32 NumCells = InCells.Num();
 		UPCGBasePointData* OutPointData = OutFacade->Source->GetOut();
 
-		// Allocate output points
 		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutPointData, NumCells);
 
 		// Get cluster transforms (read-only, thread-safe)
@@ -354,7 +353,6 @@ namespace PCGExClusters
 					ArtifactSettings.OBBAttributes.bUseMinBoxFit
 					);
 
-				// Get extents reordered to match axis order
 				FVector Extents = BFP.GetExtents(ArtifactSettings.OBBAttributes.AxisOrder);
 				for (int c = 0; c < 3; c++)
 				{

@@ -71,11 +71,9 @@ namespace PCGExExtrusion
 		Bounded = 1 << 0,
 		// Stop filters are enabled
 		ClosedLoop = 1 << 1,
-		// Check for closed loops
 		AllowsChildren = 1 << 2,
 		// Allow child extrusions after stopping
 		CollisionCheck = 1 << 3,
-		// Check for path intersections
 	};
 
 	ENUM_CLASS_FLAGS(EExtrusionFlags)
@@ -103,16 +101,13 @@ namespace PCGExExtrusion
 		EPCGExTensorStopConditionHandling StopHandling = EPCGExTensorStopConditionHandling::Exclude;
 		bool bAllowChildExtrusions = false;
 
-		// External intersection
 		bool bDoExternalIntersections = false;
 		bool bIgnoreIntersectionOnOrigin = true;
 
-		// Self intersection
 		bool bDoSelfIntersections = false;
 		bool bMergeOnProximity = false;
 		double ProximitySegmentBalance = 0.5;
 
-		// Closed loop detection
 		bool bDetectClosedLoops = false;
 		double ClosedLoopSquaredDistance = 0;
 		double ClosedLoopSearchDot = 0;

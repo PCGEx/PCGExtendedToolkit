@@ -49,10 +49,8 @@ void UPCGExSampleNearestPointSettings::PCGExApplyDeprecationBeforeUpdatePins(UPC
 	
 	PCGEX_IF_VERSION_LOWER(1, 74, 3)
 	{
-		// Rewire Range Min
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMinAttribute, RangeMin, MinRange)
 
-		// Rewire Range Max
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMaxAttribute, RangeMax, MaxRange)
 	}
 

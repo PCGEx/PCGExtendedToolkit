@@ -43,8 +43,8 @@ namespace PCGExOmniCollection
 
 			// TypeId -> globals-block struct for the built-in types; registered here so the
 			// per-collection macro signature stays untouched. PCGDataAsset registers its own
-			// globals + machinery StateClass in PCGExPCGDataAssetCollection.cpp (Phase C1 --
-			// colocated with the machinery it describes).
+			// globals + machinery StateClass in PCGExPCGDataAssetCollection.cpp, colocated
+			// with the machinery it describes.
 			{
 				using FTypeRegistry = PCGExAssetCollection::FTypeRegistry;
 				using FTypeInfo = PCGExAssetCollection::FTypeInfo;

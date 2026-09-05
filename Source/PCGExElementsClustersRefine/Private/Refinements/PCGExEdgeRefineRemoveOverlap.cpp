@@ -23,7 +23,6 @@ void FPCGExEdgeRemoveOverlap::ProcessEdge(PCGExGraphs::FEdge& Edge)
 
 	auto ProcessOverlap = [&](const PCGExOctree::FItem& Item)
 	{
-		//if (!Edge.bValid) { return false; }
 
 		const PCGExGraphs::FEdge& OtherEdge = *Cluster->GetEdge(Item.Index);
 
@@ -59,7 +58,6 @@ void FPCGExEdgeRemoveOverlap::ProcessEdge(PCGExGraphs::FEdge& Edge)
 			return true;
 		}
 
-		// Overlap!
 		if (Keep == EPCGExEdgeOverlapPick::Longest)
 		{
 			if (OtherLength > Length)

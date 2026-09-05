@@ -1286,20 +1286,8 @@ namespace PCGExAssetCollectionMigration
 		return true;
 	}
 
-	// -- Future (option B): true sparse storage for entry variations ---------------------------
-	// v1 (above) makes variations semantically opt-in but keeps the FPCGExFittingVariations
-	// payload inline on every entry. If per-entry memory ever matters, the v2 pass is:
-	//   1. Add sparse storage (e.g. an FInstancedStruct payload populated only for Local
-	//      entries -- after v1 normalization that is exactly the entries with authored ranges).
-	//   2. Rename the inline member Variations -> Variations_DEPRECATED (UE matches the
-	//      serialized 'Variations' tag onto the _DEPRECATED member automatically) and add a
-	//      FittingSchemaVersion < 2 PostLoad pass that moves the payload, then bump to 2.
-	//   3. Fleet-resave production collections (ResavePackages commandlet) so disk data migrates.
-	//   4. Only then delete Variations_DEPRECATED in a later release: a deprecated UPROPERTY
-	//      still occupies its bytes in RAM, so the win only materializes at deletion -- which is
-	//      only safe once no un-resaved asset remains.
-	// GetVariations() is the single read funnel, so consumers won't notice the storage change.
-	// -------------------------------------------------------------------------------------------
+	// TODO: sparse storage for entry variations (FPCGExFittingVariations stays inline on every entry).
+	// GetVariations() is the single read funnel, so consumers won't notice a storage change.
 
 	/** Migrate one entry's grammar data from v0 to v1. Returns true if a downgrade warning
 	 *  should be emitted for this entry (legacy Min/Max/Average on a leaf). */

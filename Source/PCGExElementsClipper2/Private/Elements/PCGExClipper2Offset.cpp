@@ -118,7 +118,6 @@ void FPCGExClipper2OffsetContext::Process(const TSharedPtr<PCGExClipper2::FProce
 				return DefaultOffset * Scale * IterationMultiplier * SignMultiplier;
 			}
 
-			// Read the offset for this specific point
 			const double PointOffset = OffsetReader->Read(static_cast<int32>(PointIdx));
 			return PointOffset * Scale * IterationMultiplier * SignMultiplier;
 		};

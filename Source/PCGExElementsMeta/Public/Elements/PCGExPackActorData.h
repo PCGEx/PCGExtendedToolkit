@@ -616,7 +616,6 @@ struct FPCGExPackActorDataContext final : FPCGExPointsProcessorContext
 {
 	friend class FPCGExPackActorDataElement;
 	UPCGExCustomActorDataPacker* Packer = nullptr;
-	//TArray<UPCGParamData*> OutputParams;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL

@@ -37,8 +37,6 @@ namespace PCGExMT
 	class TScopedArray;
 }
 
-// Triage enums and tags are now in PCGExCellDetails.h
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cells/find-all-cells-bounded"))
 class UPCGExFindAllCellsBoundedSettings : public UPCGExClustersProcessorSettings
 {
@@ -183,7 +181,6 @@ namespace PCGExFindAllCellsBounded
 		TArray<FString> CellTagsTouching;
 		TArray<FString> CellTagsOutside;
 
-		// Hole expansion tracking
 		TSet<int32> ExcludedFaceIndices;           // Faces excluded due to hole expansion
 		TMap<int32, TSet<int32>> CellAdjacencyMap; // Cached adjacency
 

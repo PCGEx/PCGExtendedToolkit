@@ -107,7 +107,6 @@ namespace PCGExMergeVertices
 {
 	TSharedPtr<PCGExClusters::FCluster> FProcessor::HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef)
 	{
-		// Create a heavy copy we'll update and forward
 		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, true, true, true);
 	}
 

@@ -39,7 +39,6 @@ namespace PCGExAdjacencyStates
 
 	void FState::ProcessFlags(const bool bSuccess, int64& InFlags, const int32 Index) const
 	{
-		// TODO : ???
 	}
 
 	void FState::ProcessFlags(const bool bSuccess, int64& InFlags, const PCGExClusters::FNode& Node) const
@@ -93,7 +92,6 @@ namespace PCGExAdjacencyStates
 
 	void FState::ProcessFlags(const bool bSuccess, int64& InFlags, const PCGExGraphs::FEdge& Edge) const
 	{
-		// TODO : ???
 	}
 }
 

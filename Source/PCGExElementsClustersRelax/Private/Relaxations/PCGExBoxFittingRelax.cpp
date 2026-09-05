@@ -50,7 +50,6 @@ void UPCGExBoxFittingRelax::Step2(const PCGExClusters::FNode& Node)
 		// Transform boxes to world space
 		const FBox OtherBox = BoxBuffer[OtherNodeIndex];
 
-		// Check for overlap
 		if (!CurrentBox.Intersect(OtherBox))
 		{
 			continue;

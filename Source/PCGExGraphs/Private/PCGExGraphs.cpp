@@ -18,7 +18,6 @@ void FPCGExGraphsModule::StartupModule()
 {
 	IPCGExLegacyModuleInterface::StartupModule();
 
-	// Register cluster cache factories
 	PCGExClusters::FClusterCacheRegistry::Get().Register(
 		MakeShared<PCGExClusters::FFaceEnumeratorCacheFactory>());
 	PCGExClusters::FClusterCacheRegistry::Get().Register(
@@ -27,7 +26,6 @@ void FPCGExGraphsModule::StartupModule()
 
 void FPCGExGraphsModule::ShutdownModule()
 {
-	// Unregister cluster cache factories
 	PCGExClusters::FClusterCacheRegistry::Get().Unregister(
 		PCGExClusters::FFaceEnumeratorCacheFactory::CacheKey);
 	PCGExClusters::FClusterCacheRegistry::Get().Unregister(

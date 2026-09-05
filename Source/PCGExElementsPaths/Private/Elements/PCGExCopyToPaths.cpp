@@ -89,7 +89,6 @@ bool FPCGExCopyToPathsElement::Boot(FPCGExContext* InContext) const
 	{
 		return false;
 	}
-	//if (!Settings->TwistSettings.Validate(InContext, true)) { return false; }
 
 	if (!Context->Tangents.Init(Context, Settings->Tangents))
 	{

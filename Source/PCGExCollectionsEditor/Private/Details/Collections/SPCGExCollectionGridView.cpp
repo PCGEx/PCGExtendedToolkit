@@ -302,7 +302,6 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 		]
 	];
 
-	// Build grouped layout
 	RebuildGroupedLayout();
 }
 
@@ -362,7 +361,6 @@ void SPCGExCollectionGridView::RebuildCategoryCache()
 		}
 	}
 
-	// Build combo options for category combobox on tiles
 	if (!CategoryComboOptions.IsValid())
 	{
 		CategoryComboOptions = MakeShared<TArray<TSharedPtr<FName>>>();
@@ -606,7 +604,6 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 		}
 	}
 
-	// Apply selection visuals
 	ApplySelectionVisuals();
 }
 
@@ -784,7 +781,6 @@ FReply SPCGExCollectionGridView::OnTileDragDetected(int32 Index, const FPointerE
 		SelectIndex(Index, false, false);
 	}
 
-	// Determine source category
 	FName SourceCategory = NAME_None;
 	for (const auto& Pair : CategoryToEntryIndices)
 	{
@@ -1178,7 +1174,6 @@ void SPCGExCollectionGridView::OnAssetDropOnCategory(FName TargetCategory, const
 
 		Coll->EDITOR_AddBrowserSelectionTyped(Assets);
 
-		// Set the Category on newly added entries
 		const int32 NewCount = Coll->NumEntries();
 		if (!TargetCategory.IsNone())
 		{
@@ -1390,7 +1385,6 @@ void SPCGExCollectionGridView::PopulateCategoryTiles(FName Category)
 		return;
 	}
 
-	// Check if tiles already exist for this category
 	bool bAlreadyPopulated = false;
 	for (int32 EntryIdx : *Indices)
 	{

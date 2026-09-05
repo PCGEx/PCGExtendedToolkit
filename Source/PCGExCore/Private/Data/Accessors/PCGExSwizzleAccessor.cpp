@@ -127,7 +127,6 @@ namespace PCGExData
 			return static_cast<double>(Value);
 		}
 
-		// Write a 2/3/4-component vector to the output buffer.
 		void WriteVector2(void* OutValue, double X, double Y)
 		{
 			*static_cast<FVector2D*>(OutValue) = FVector2D(X, Y);

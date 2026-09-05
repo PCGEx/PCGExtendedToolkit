@@ -301,7 +301,6 @@ void PCGExPCGInterop::FGenerationWatcher::WatchComponentGeneration(UPCGComponent
 			}
 		});
 
-		// Watch for completion
 		Component->OnPCGGraphGeneratedDelegate.AddLambda([WeakWatcher](UPCGComponent* InComp)
 		{
 			if (TSharedPtr<FGenerationWatcher> NestedWatcher = WeakWatcher.Pin())

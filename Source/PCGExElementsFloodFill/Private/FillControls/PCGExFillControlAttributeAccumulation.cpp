@@ -36,7 +36,6 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 	Mode = TypedFactory->Config.Mode;
 	bWriteToAccumulatedValue = TypedFactory->Config.bWriteToAccumulatedValue;
 
-	// Initialize max accumulation setting value
 	MaxAccumulation = TypedFactory->Config.MaxAccumulationValue.GetValueSetting();
 	MaxAccumulation->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!MaxAccumulation->Init(GetSourceFacade()))
@@ -44,7 +43,6 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 		return false;
 	}
 
-	// Get the attribute buffer
 	TSharedPtr<PCGExData::FFacade> SourceFacade = (AttributeSource == EPCGExClusterElement::Vtx)
 		? InHandler->VtxDataFacade
 		: InHandler->EdgeDataFacade;

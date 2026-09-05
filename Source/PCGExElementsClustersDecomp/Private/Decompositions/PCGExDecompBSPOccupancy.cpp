@@ -15,7 +15,6 @@ bool FPCGExDecompBSPOccupancy::Decompose(FPCGExDecompositionResult& OutResult)
 	// Resolve voxel size (auto-detect from edges or use manual)
 	const FVector ResolvedVoxelSize = FPCGExDecompOccupancyGrid::ResolveVoxelSize(Cluster, VoxelSizeMode, VoxelSize);
 
-	// Build occupancy grid
 	FPCGExDecompOccupancyGrid Grid;
 	if (!Grid.Build(Cluster, TransformSpace, ResolvedVoxelSize, CustomTransform))
 	{

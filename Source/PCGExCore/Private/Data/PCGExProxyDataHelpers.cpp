@@ -72,7 +72,6 @@ namespace PCGExData
 			InDescriptor.Selector,
 			InDescriptor.Side == EIOSide::In ? InDataFacade->GetIn() : InDataFacade->GetOut());
 
-		// Check for existing buffer
 		TSharedPtr<TBuffer<T_REAL>> ExistingBuffer = InDataFacade->FindBuffer<T_REAL>(Identifier);
 		TSharedPtr<TBuffer<T_REAL>> Buffer;
 
@@ -350,7 +349,6 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 		{
 			TSharedPtr<IBufferProxy> OutProxy = nullptr;
 
-			// Handle raw proxy
 			if (InDescriptor.HasFlag(EProxyFlags::Raw))
 			{
 				PCGExMetaHelpers::ExecuteWithRightType(InDescriptor.RealType, [&](auto DummyValue)
@@ -366,7 +364,6 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 				return OutProxy;
 			}
 
-			// Handle constant proxy
 			if (InDescriptor.HasFlag(EProxyFlags::Constant))
 			{
 				const PCGMetadataEntryKey Key =
@@ -517,8 +514,7 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 
 		if (InDescriptor.HasFlag(EProxyFlags::Shared))
 		{
-			// Route to the descriptor's facade-local pool so creation no longer funnels through a
-			// single context-wide chokepoint: a per-cluster target facade's pool is uncontended,
+			// Route to the descriptor's facade-local pool: a per-cluster target facade's pool is uncontended,
 			// and shared source facades distribute contention while retaining their read proxies.
 			// Descriptors with no pinnable facade fall back to the context pool.
 			

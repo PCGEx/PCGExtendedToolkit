@@ -110,7 +110,6 @@ namespace PCGExTypeOps
 		// Conversion - implemented by derived to avoid virtual call overhead
 		// Convert from this type to target type
 		virtual void ConvertTo(const void* SrcValue, EPCGMetadataTypes TargetType, void* OutValue) const = 0;
-		// Convert from source type to this type
 		virtual void ConvertFrom(EPCGMetadataTypes SrcType, const void* SrcValue, void* OutValue) const = 0;
 
 		// Blend operations - type-erased versions
@@ -155,7 +154,6 @@ namespace PCGExTypeOps
 	public:
 		static constexpr int32 NumSupportedTypes = 14;
 
-		// Get ops for a specific type
 		static const ITypeOpsBase* Get(EPCGMetadataTypes Type);
 
 		// Get ops with template type

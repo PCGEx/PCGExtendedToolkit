@@ -148,8 +148,6 @@ namespace PCGExAttributeRolling
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExAttributeRolling::Process);
 
-		//PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
-
 		if (!IProcessor::Process(InTaskManager))
 		{
 			return false;

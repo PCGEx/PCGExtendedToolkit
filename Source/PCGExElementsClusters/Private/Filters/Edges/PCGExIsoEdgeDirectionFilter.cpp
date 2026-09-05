@@ -68,7 +68,6 @@ bool FIsoEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<PC
 		return false;
 	}
 
-	// Init for edges
 	if (!DirectionSettings.InitFromParent(InContext, DirectionSettings, InEdgeDataFacade, PCGEX_QUIET_HANDLING))
 	{
 		return false;

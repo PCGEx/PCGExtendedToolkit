@@ -182,7 +182,6 @@ namespace PCGExBuildCellDiagram
 		TArray<TSharedPtr<PCGExClusters::FCell>> ValidCells;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 
-		// Cell adjacency
 		TMap<int32, TSet<int32>> CellAdjacencyMap;
 		TMap<int32, int32> FaceIndexToOutputIndex; // Maps face index to output point index
 

@@ -94,10 +94,8 @@ bool FPCGExClusterDiffusionElement::Boot(FPCGExContext* InContext) const
 
 	PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExBlending::Labels::SourceBlendingLabel, Context->BlendingFactories, {FPCGExDataTypeInfoBlendOp::AsId()}, false);
 
-	// Fill controls are optional
 	PCGExFactories::GetInputFactories<UPCGExFillControlsFactoryData>(Context, PCGExFloodFill::SourceFillControlsLabel, Context->FillControlFactories, {FPCGExDataTypeInfoFillControl::AsId()}, false);
 
-	// Check for deprecated Heuristics pin usage
 	if (Context->bHasValidHeuristics)
 	{
 		PCGE_LOG_C(Warning, GraphAndLog, InContext,
@@ -218,7 +216,6 @@ namespace PCGExClusterDiffusion
 	{
 		TArray<int32> Indices;
 
-		// Diffuse & blend
 		PCGExFloodFill::DiffuseAndBlend(*Diffusion, VtxDataFacade, BlendOpsManager, Indices);
 
 		// Endpoints are derived on demand -- growth doesn't track them anymore.
@@ -271,7 +268,6 @@ namespace PCGExClusterDiffusion
 			return;
 		}
 
-		// Create the path writer for output
 		PathWriter = MakeShared<PCGExFloodFill::FDiffusionPathWriter>(Cluster.ToSharedRef(), VtxDataFacade, Context->Paths.ToSharedRef(), TaskManager, DiffusionDepths);
 
 		// Deterministic path IOIndices: the edges dataset is the base, then each diffusion owns a
@@ -522,7 +518,6 @@ namespace PCGExClusterDiffusion
 		// Base resets the growth state (diffusions + fill controls handler).
 		TDiffusionGrowthProcessor<FPCGExClusterDiffusionContext, UPCGExClusterDiffusionSettings>::Cleanup();
 
-		// Make sure we flush these ASAP
 		BlendOpsManager.Reset();
 		SeedForwardHandler.Reset();
 		PathWriter.Reset();

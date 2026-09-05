@@ -87,8 +87,6 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			const UDynamicMesh* DynamicMesh = DynMeshData->GetDynamicMesh();
 			const TArray<TObjectPtr<UMaterialInterface>>& Materials = DynMeshData->GetMaterials();
 
-			//DynMeshData->InitializeDynamicMeshComponentFromData(Component);
-
 			for (int32 i = 0; i < Materials.Num(); ++i)
 			{
 				DynamicMeshComponent->SetMaterial(i, Materials[i]);

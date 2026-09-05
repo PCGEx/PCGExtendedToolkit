@@ -66,7 +66,6 @@ namespace PCGExMath::Geo
 
 		// this is the vector from a TO the circumsphere center
 		const FVector ToCircumsphereCenter = (ABxAC.Cross(AB) * AC.SquaredLength() + AC.Cross(ABxAC) * AB.SquaredLength()) / (2 * ABxAC.SquaredLength());
-		//float Radius = ToCircumsphereCenter.Length();
 
 		// The 3 space coords of the circumsphere center then:
 		OutCircumcenter = A + ToCircumsphereCenter;

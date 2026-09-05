@@ -131,10 +131,5 @@ void UPCGExProbeNumericCompareProviderSettings::PCGExApplyDeprecation(UPCGNode* 
 FString UPCGExProbeNumericCompareProviderSettings::GetDisplayName() const
 {
 	return TEXT("");
-	/*
-	return GetDefaultNodeName().ToString()
-		+ TEXT(" @ ")
-		+ FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0));
-		*/
 }
 #endif

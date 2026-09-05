@@ -97,7 +97,6 @@ void FPCGExMeshCollectionEntry::GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) c
 		break;
 	}
 
-	// ISM materials
 	for (int32 i = 0; i < ISMDescriptor.OverrideMaterials.Num(); i++)
 	{
 		if (!ISMDescriptor.OverrideMaterials[i].IsNull())

@@ -141,7 +141,6 @@ namespace PCGExFindClusterHull
 		TArray<TSharedPtr<PCGExClusters::FCell>> HullArray;
 		HullArray.Add(CellsConstraints->WrapperCell);
 
-		// Output to CellBounds if enabled
 		if (Settings->Artifacts.bOutputCellBounds)
 		{
 			TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
@@ -158,7 +157,6 @@ namespace PCGExFindClusterHull
 			                                       Context->Artifacts, TaskManager);
 		}
 
-		// Output to Paths if enabled
 		if (Settings->Artifacts.bOutputPaths)
 		{
 			ProcessCell(CellsConstraints->WrapperCell);

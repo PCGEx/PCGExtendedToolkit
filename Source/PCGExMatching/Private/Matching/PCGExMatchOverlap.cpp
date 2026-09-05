@@ -167,7 +167,6 @@ bool FPCGExMatchOverlap::Test(const PCGExData::FConstPoint& InTargetElement, con
 
 	const FBox CandidateBounds = CandidateSpatialData->GetBounds();
 
-	// Check for intersection
 	const bool bIntersects = TargetBounds.Intersect(CandidateBounds);
 
 	if (!bIntersects)
@@ -175,7 +174,6 @@ bool FPCGExMatchOverlap::Test(const PCGExData::FConstPoint& InTargetElement, con
 		return Config.bInvert;
 	}
 
-	// If we need to check overlap ratio
 	if (Config.bUseMinOverlapRatio && MinOverlapRatios.IsValidIndex(InTargetElement.IO))
 	{
 		const double Ratio = ComputeOverlapRatio(TargetBounds, CandidateBounds);

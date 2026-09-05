@@ -96,15 +96,12 @@ struct PCGEXFOUNDATIONS_API FPCGExCollisionDetails
 	bool StrongLinecast(const FVector& From, const FVector& To) const;
 	bool Linecast(const FVector& From, const FVector& To, bool bStrong) const;
 
-	// Multi-line traces
 	bool LinecastMulti(const FVector& From, const FVector& To, TArray<FHitResult>& OutHits) const;
 
-	// Sphere sweeps
 	bool SphereSweep(const FVector& From, const FVector& To, const double Radius, FHitResult& HitResult, const FQuat& Orientation = FQuat::Identity) const;
 	bool SphereSweep(const FVector& From, const FVector& To, const double Radius, const FQuat& Orientation = FQuat::Identity) const;
 	bool SphereSweepMulti(const FVector& From, const FVector& To, const double Radius, TArray<FHitResult>& OutHits, const FQuat& Orientation = FQuat::Identity) const;
 
-	// Box sweeps
 	bool BoxSweep(const FVector& From, const FVector& To, const FVector& HalfExtents, FHitResult& HitResult, const FQuat& Orientation = FQuat::Identity) const;
 	bool BoxSweep(const FVector& From, const FVector& To, const FVector& HalfExtents, const FQuat& Orientation = FQuat::Identity) const;
 	bool BoxSweepMulti(const FVector& From, const FVector& To, const FVector& HalfExtents, TArray<FHitResult>& OutHits, const FQuat& Orientation = FQuat::Identity) const;

@@ -14,7 +14,6 @@ bool FPCGExDecompSpectral::Decompose(FPCGExDecompositionResult& OutResult)
 
 	const int32 NumNodes = Cluster->Nodes->Num();
 
-	// Gather valid nodes
 	TArray<int32> ValidNodes;
 	ValidNodes.Reserve(NumNodes);
 	for (int32 i = 0; i < NumNodes; i++)

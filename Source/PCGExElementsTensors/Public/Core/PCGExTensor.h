@@ -139,11 +139,6 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Guide", meta=(PCG_Overridable, DisplayName="Guide Curve", EditCondition="!bUseLocalGuideCurve", EditConditionHides))
 	TSoftObjectPtr<UCurveVector> GuideCurve;
 
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Guide", meta=(PCG_NotOverridable))
-	//FPCGExCurveLookupDetails GuideCurveLookup;
-
-	//PCGExFloatLUT GuideCurveObj = nullptr;
-
 	// Potency Falloff
 
 	/** Per-point Potency. */

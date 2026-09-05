@@ -216,8 +216,8 @@ namespace PCGExFloodFill
 
 		void Grow()
 		{
-			// Iterative drivers only: growth used to re-enter itself (Grow -> round -> completion -> Grow),
-			// stacking 3+ frames per round -- a stack overflow on large clusters at low fill rates.
+			// Iterative drivers only: Grow must never re-enter itself (Grow -> round -> completion -> Grow
+			// stacks frames per round and overflows on large clusters at low fill rates).
 
 			if (this->Settings->Processing != EPCGExFloodFillProcessing::Parallel)
 			{
@@ -322,7 +322,6 @@ namespace PCGExFloodFill
 		{
 			PCGExClusterMT::TProcessor<TContext, TSettings>::Cleanup();
 
-			// Make sure we flush these ASAP
 			Seeded.Empty();
 			SeedClosestNode.Empty();
 			OngoingDiffusions.Reset();

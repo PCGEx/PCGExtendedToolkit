@@ -42,7 +42,6 @@ namespace PCGExTypeOps
 
 		virtual FString GetTypeName() const override
 		{
-			// TODO!
 			return FString();
 		}
 

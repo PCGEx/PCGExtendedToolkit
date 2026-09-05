@@ -30,7 +30,6 @@ void FPCGExBitmaskRefCustomization::CustomizeHeader(
 		.NameContent()
 		.MinDesiredWidth(50)
 		[
-			//SourceHandle->CreatePropertyValueWidget()
 			SNew(SObjectPropertyEntryBox)
 			.PropertyHandle(SourceHandle)
 			.AllowedClass(UPCGExBitmaskCollection::StaticClass())

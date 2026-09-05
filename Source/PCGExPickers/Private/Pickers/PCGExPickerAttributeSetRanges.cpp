@@ -81,7 +81,6 @@ bool UPCGExPickerAttributeSetRangesFactory::GetUniqueRanges(FPCGExContext* InCon
 		return false;
 	}
 
-	// Create a range config per unique range found
 	for (const FVector2D& Range : UniqueRanges)
 	{
 		FPCGExPickerConstantRangeConfig& RangeConfig = OutRanges.Emplace_GetRef();

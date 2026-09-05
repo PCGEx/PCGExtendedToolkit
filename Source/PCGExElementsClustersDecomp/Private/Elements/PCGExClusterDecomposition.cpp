@@ -176,7 +176,6 @@ namespace PCGExClusterDecomposition
 
 			if (CellCountBuffer)
 			{
-				// Count nodes per cell
 				TMap<int32, int32> CellNodeCounts;
 				for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
 				{

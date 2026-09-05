@@ -39,9 +39,6 @@ struct PCGEXCORE_API FPCGExSortRuleConfig : public FPCGExInputConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bInvertRule = false;
 
-	/** Compare absolute value. */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	//bool bAbsolute = false;
 };
 
 namespace PCGExSorting

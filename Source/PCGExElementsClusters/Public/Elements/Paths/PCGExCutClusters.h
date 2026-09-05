@@ -66,10 +66,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExCutEdgesMode Mode = EPCGExCutEdgesMode::NodesAndEdges;
 
-	/** If enabled, keep edges that connect two preserved nodes even if they don't intersect with the path. */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bInvert && Mode!=EPCGExCutEdgesMode::Edges"))
-	//bool bConservative = false;
-
 	/** Widens the node's local bounds before they are transformed, so the expansion scales with the point. Only widens the candidate search, never the distance that decides a cut. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Mode != EPCGExCutEdgesMode::Edges"))
 	double NodeExpansion = 1;

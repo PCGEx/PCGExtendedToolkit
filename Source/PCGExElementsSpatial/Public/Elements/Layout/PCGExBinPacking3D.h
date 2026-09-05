@@ -421,7 +421,6 @@ namespace PCGExBinPacking3D
 		TSet<uint64> NegativeAffinityPairs;
 		TMap<int32, int32> PositiveAffinityGroup;
 
-		// Per-bin max weight
 		TArray<double> BinMaxWeights;
 
 		FBP3DPlacementCandidate FindBestPlacement(const FBP3DItem& InItem);

@@ -35,7 +35,6 @@ void UPCGExSegmentCrossFilterFactory::InitConfig_Internal()
 	LocalFidelity = Config.Fidelity;
 	LocalExpansion = Config.IntersectionSettings.Tolerance;
 	LocalExpansionZ = -1;
-	//LocalProjection = Config.ProjectionDetails;
 	LocalSampleInputs = Config.SampleInputs;
 	WindingMutation = EPCGExWindingMutation::Unchanged;
 	bScaleTolerance = false;

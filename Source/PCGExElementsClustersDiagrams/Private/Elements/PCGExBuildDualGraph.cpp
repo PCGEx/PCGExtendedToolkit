@@ -283,7 +283,6 @@ namespace PCGExBuildDualGraph
 					EdgeToSharedPoint[i] = SharedPointIdx ? *SharedPointIdx : -1;
 				}
 
-				// Initialize edge blender
 				TSharedPtr<PCGExBlending::FUnionBlender>& EdgeBlender = static_cast<FEdgeBlendContext&>(UserContext).EdgeBlender;
 				EdgeBlender = MakeShared<PCGExBlending::FUnionBlender>(
 					const_cast<FPCGExBlendingDetails*>(&This->Settings->EdgeBlendingDetails),

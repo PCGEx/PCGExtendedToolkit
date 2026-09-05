@@ -288,21 +288,18 @@ bool FPCGExPropertyWriter::Initialize(
 
 		FName OutputName = OutputConfig.GetEffectiveOutputName();
 
-		// Find prototype property from provider
 		const FInstancedStruct* Prototype = Provider->FindPrototypeProperty(OutputConfig.PropertyName);
 		if (!Prototype)
 		{
 			continue;
 		}
 
-		// Check if property supports output
 		const FPCGExProperty* ProtoBase = Prototype->GetPtr<FPCGExProperty>();
 		if (!ProtoBase || !ProtoBase->SupportsOutput())
 		{
 			continue;
 		}
 
-		// Clone as writer instance
 		FInstancedStruct WriterInstance = *Prototype;
 
 		// Initialize output buffers

@@ -65,7 +65,6 @@ int32 SPCGExEdgeEndpointsCompareNumPreview::OnPaint(
 		const FVector2D StartPos(PanelX + EdgeMargin, EdgeY);
 		const FVector2D EndPos(PanelX + PanelWidth - EdgeMargin, EdgeY);
 
-		// Draw edge line
 		DrawEdgeLine(OutDrawElements, LayerId + 1, AllottedGeometry, StartPos, EndPos, EdgeLineColor);
 
 		// Draw value bars above endpoints

@@ -173,7 +173,6 @@ namespace PCGExBlending
 			}
 		}
 
-		// Create new operation outside lock
 		TSharedPtr<IBlendOperation> NewOp = FBlendOperationFactory::Create(WorkingType, BlendMode, bResetForMultiBlend, InValueSize, InValueAlignment);
 
 		if (NewOp.IsValid())

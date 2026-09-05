@@ -93,7 +93,6 @@ bool PCGExPointFilter::FStringCompareNearestFilter::InitNearest(FPCGExContext* I
 {
 	if (bUseNameComparison)
 	{
-		// Build the source-side operand B as FName directly.
 		OperandBName = PCGExDetails::MakeSettingValue<FName>(
 			TypedFilterFactory->Config.OperandBValue.Input,
 			TypedFilterFactory->Config.OperandBValue.Attribute,

@@ -82,8 +82,6 @@ struct FPCGExFuseCollinearContext final : FPCGExPathProcessorContext
 
 	double DotThreshold = 0;
 	double FuseDistSquared = 0;
-	//bool bDoBlend;
-	//UPCGExSubPointsBlendOperation* Blending = nullptr;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL

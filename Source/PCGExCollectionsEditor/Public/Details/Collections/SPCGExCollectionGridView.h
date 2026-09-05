@@ -106,7 +106,6 @@ private:
 	// Thumbnail cache (persists across rebuilds to prevent flash)
 	FThumbnailCacheMap ThumbnailCache;
 
-	// Pinned category header overlay
 	TSharedPtr<SBorder> PinnedCategoryHeader;
 	TSharedPtr<STextBlock> PinnedHeaderText;
 	FName PinnedCategoryName;
@@ -140,10 +139,8 @@ private:
 	void OnDetailPaneResized(const float NewValue) { DetailPaneSplit = NewValue; }
 	void OnSplitterFinishedResizing();
 
-	// Category cache rebuild
 	void RebuildCategoryCache();
 
-	// Grouped layout
 	void RebuildGroupedLayout();
 
 	// Selection

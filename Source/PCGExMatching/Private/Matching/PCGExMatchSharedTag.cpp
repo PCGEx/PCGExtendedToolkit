@@ -15,8 +15,6 @@
 void FPCGExMatchSharedTagConfig::Init()
 {
 	FPCGAttributePropertyInputSelector S;
-	//S.Update(CandidateAttributeName.ToString());
-	//CandidateAttributeName_Sanitized = S.GetAttributeName();
 
 	FPCGExMatchRuleConfigBase::Init();
 }
@@ -132,10 +130,8 @@ bool FPCGExMatchSharedTag::Test(const PCGExData::FConstPoint& InTargetElement, c
 
 	case EPCGExTagMatchMode::AnyShared:
 	{
-		// Check if ANY tag is shared
 		if (Config.bMatchTagValues)
 		{
-			// Check value tags
 			for (const TPair<FString, TSharedPtr<PCGExData::IDataValue>>& Pair : TargetTags->ValueTags)
 			{
 				if (TSharedPtr<PCGExData::IDataValue> CandidateValue = CandidateTags->GetValue(Pair.Key))
@@ -150,7 +146,6 @@ bool FPCGExMatchSharedTag::Test(const PCGExData::FConstPoint& InTargetElement, c
 		}
 		else
 		{
-			// Check raw tags
 			for (const FString& Tag : TargetTags->RawTags)
 			{
 				if (CandidateTags->RawTags.Contains(Tag))

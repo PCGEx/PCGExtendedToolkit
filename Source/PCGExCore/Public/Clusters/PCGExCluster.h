@@ -78,7 +78,6 @@ namespace PCGExClusters
 
 		int32 ClusterID = -1;
 		TSharedPtr<PCGEx::FIndexLookup> NodeIndexLookup; // Point Index -> Node index
-		//TMap<uint64, int32> EdgeIndexLookup;   // Edge Hash -> Edge Index
 		TSharedPtr<TArray<FNode>> Nodes;
 		TSharedPtr<TArray<FBoundedEdge>> BoundedEdges;
 		TSharedPtr<TArray<FEdge>> Edges;

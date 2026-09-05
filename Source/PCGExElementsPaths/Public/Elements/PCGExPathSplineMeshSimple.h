@@ -96,14 +96,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Target Actor", meta = (PCG_Overridable))
 	TSoftObjectPtr<AActor> TargetActor;
 
-	/**  */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Target Actor", meta = (PCG_Overridable))
-	//bool bPerSegmentTargetActor = false;
-
-	/**  */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Target Actor", meta=(PCG_Overridable, EditCondition="bPerSegmentTargetActor", EditConditionHides))
-	//FName TargetActorAttributeName;
-
 #pragma region DEPRECATED
 
 	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))

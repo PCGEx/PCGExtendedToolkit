@@ -120,7 +120,6 @@ int32 SPCGExEdgeEndpointsCheckPreview::OnPaint(
 		const FVector2D StartPos(PanelX + EdgeMargin, EdgeY);
 		const FVector2D EndPos(PanelX + PanelWidth - EdgeMargin, EdgeY);
 
-		// Draw edge line
 		DrawEdgeLine(OutDrawElements, LayerId + 1, AllottedGeometry, StartPos, EndPos, EdgeLineColor);
 
 		// Draw endpoint circles
@@ -129,7 +128,6 @@ int32 SPCGExEdgeEndpointsCheckPreview::OnPaint(
 		DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, StartPos, EndpointRadius, StartColor);
 		DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, EndPos, EndpointRadius, EndColor);
 
-		// S / E labels under endpoints
 		const FVector2D SLabelPos(StartPos.X - 3.0, EdgeY + EndpointRadius + 3.0);
 		FSlateDrawElement::MakeText(
 			OutDrawElements, LayerId + 3,

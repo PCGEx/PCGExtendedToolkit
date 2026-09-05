@@ -186,7 +186,7 @@ void FPCGExBitmaskFilterConfigCustomization::CustomizeChildren(
 	IDetailChildrenBuilder& ChildBuilder,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// The Bitmask value now lives inside the BitmaskValue shorthand; render it via the bits grid and
+	// The Bitmask value lives inside the BitmaskValue shorthand; render it via the bits grid and
 	// let every other editable property fall through. Load-only _DEPRECATED stubs carry no CPF_Edit.
 	uint32 NumChildren = 0;
 	PropertyHandle->GetNumChildren(NumChildren);
