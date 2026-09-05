@@ -147,7 +147,6 @@ namespace PCGExPartitionByValuesBase
 			PCGExArrayHelpers::InitArray(KeySums, NumPoints);
 		}
 
-		// Initialize sorted indices array
 		PCGExArrayHelpers::ArrayOfIndices(SortedIndices, NumPoints);
 
 		FName Consumable = NAME_None;
@@ -250,13 +249,11 @@ namespace PCGExPartitionByValuesBase
 		{
 			const PCGExPartition::FPartitionRange& Range = PartitionRanges[Index];
 
-			// Get the partition IO
 			const TSharedRef<PCGExData::FPointIO> PartitionIO = Context->MainPoints->Pairs[Range.IOIndex].ToSharedRef();
 
 			// Get point indices for this partition as array view
 			TArrayView<const int32> PointIndices = MakeArrayView(&SortedIndices[Range.Start], Range.Count);
 
-			// Allocate and copy points
 			PCGExPointArrayDataHelpers::SetNumPointsAllocated(PartitionIO->GetOut(), Range.Count, PartitionIO->GetAllocations());
 			PartitionIO->InheritProperties(PointIndices, EPCGPointNativeProperties::All);
 

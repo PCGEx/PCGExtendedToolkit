@@ -15,8 +15,6 @@
 void FPCGExMatchTagToAttrConfig::Init()
 {
 	FPCGAttributePropertyInputSelector S;
-	//S.Update(CandidateAttributeName.ToString());
-	//CandidateAttributeName_Sanitized = S.GetAttributeName();
 
 	FPCGExMatchRuleConfigBase::Init();
 }

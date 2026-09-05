@@ -62,7 +62,6 @@ bool FPCGExBlendOperation::PrepareForData(FPCGExContext* InContext)
 		return false;
 	}
 
-	// Fix @Selectors based on siblings 
 	if (!CopyAndFixSiblingSelector(InContext, Config.OperandA))
 	{
 		return false;

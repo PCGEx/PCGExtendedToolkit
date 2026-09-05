@@ -212,7 +212,6 @@ namespace PCGExCopyClustersToPoints
 				break;
 			}
 
-			// Create an edge copy per target point
 			TSharedPtr<PCGExData::FPointIO> EdgeDupe = Context->MainEdges->Emplace_GetRef(EdgeDataFacade->Source, PCGExData::EIOInit::Duplicate);
 			if (!EdgeDupe)
 			{
@@ -329,7 +328,6 @@ namespace PCGExCopyClustersToPoints
 				break;
 			}
 
-			// Create a vtx copy per target point
 			TSharedPtr<PCGExData::FPointIO> VtxDupe = Context->MainPoints->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::Duplicate);
 			if (!VtxDupe)
 			{

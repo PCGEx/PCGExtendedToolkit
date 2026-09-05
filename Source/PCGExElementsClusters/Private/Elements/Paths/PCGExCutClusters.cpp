@@ -269,8 +269,6 @@ namespace PCGExCutEdges
 				// Check paths
 				Path->GetEdgeOctree()->FindFirstElementWithBoundsTest(EdgeBox, [&](const PCGExPaths::FPathEdge* PathEdge)
 				{
-					//if (Settings->bInvert) { if (Edge.bValid) { return false; } }
-					//else if (!Edge.bValid) { return false; }
 
 					if (Context->IntersectionDetails.bUseMinAngle || Context->IntersectionDetails.bUseMaxAngle)
 					{
@@ -286,7 +284,6 @@ namespace PCGExCutEdges
 					FVector B = FVector::ZeroVector;
 
 					FMath::SegmentDistToSegment(A1, B1, A2, B2, A, B);
-					//if (A == A1 || A == B1 || B == A2 || B == B2) { return true; }
 
 					if (FVector::DistSquared(A, B) >= Context->IntersectionDetails.ToleranceSquared)
 					{
@@ -358,8 +355,6 @@ namespace PCGExCutEdges
 				// Check paths
 				Path->GetEdgeOctree()->FindFirstElementWithBoundsTest(PointBox, [&](const PCGExPaths::FPathEdge* PathEdge)
 				{
-					//if (Settings->bInvert) { if (Node.bValid) { return false; } }
-					//else if (!Node.bValid) { return false; }
 
 					const FVector A2 = Path->GetPos_Unsafe(PathEdge->Start);
 					const FVector B2 = Path->GetPos_Unsafe(PathEdge->End);
@@ -448,8 +443,6 @@ namespace PCGExCutEdges
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			PCGExGraphs::FEdge& Edge = *Cluster->GetEdge(Index);
-
-			//if (Edge.bValid)		{			continue;		}
 
 			const PCGExClusters::FNode* StartNode = Cluster->GetEdgeStart(Edge);
 			const PCGExClusters::FNode* EndNode = Cluster->GetEdgeEnd(Edge);

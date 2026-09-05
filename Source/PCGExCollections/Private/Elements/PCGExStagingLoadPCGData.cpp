@@ -453,7 +453,6 @@ bool FPCGExPCGDataAssetLoaderElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(PCGDataAssetLoader)
 
-	// Setup collection unpacker
 	Context->CollectionUnpacker = MakeShared<PCGExCollections::FPickUnpacker>();
 	Context->CollectionUnpacker->UnpackPin(InContext);
 
@@ -463,7 +462,6 @@ bool FPCGExPCGDataAssetLoaderElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	// Setup shared asset pool
 	Context->SharedAssetPool = MakeShared<FPCGExSharedAssetPool>();
 	Context->CustomPinNames.Reserve(Settings->CustomOutputPins.Num());
 
@@ -503,7 +501,6 @@ bool FPCGExPCGDataAssetLoaderElement::AdvanceWork(FPCGExContext* InContext, cons
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
-	// Stage outputs from all pins
 	for (auto& Pair : Context->OutputByPin)
 	{
 		Pair.Value.Sort([&](const FPCGTaggedData& A, const FPCGTaggedData& B)
@@ -516,7 +513,6 @@ bool FPCGExPCGDataAssetLoaderElement::AdvanceWork(FPCGExContext* InContext, cons
 	// Mark unused pins as inactive
 	int32 PinIndex = 0;
 
-	// Check default pin
 	if (!Context->OutputByPin.Contains(PCGExPCGDataAssetLoader::OutputPinDefault) ||
 		Context->OutputByPin[PCGExPCGDataAssetLoader::OutputPinDefault].IsEmpty())
 	{
@@ -565,7 +561,6 @@ namespace PCGExPCGDataAssetLoader
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::NoInit)
 
-		// Get hash attribute
 		EntryHashGetter = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, true);
 		if (!EntryHashGetter)
 		{
@@ -617,7 +612,6 @@ namespace PCGExPCGDataAssetLoader
 				continue;
 			}
 
-			// Check if this is a PCGDataAsset entry
 			if (!Result.Entry->IsType(PCGExAssetCollection::TypeIds::PCGDataAsset))
 			{
 				continue;
@@ -625,7 +619,6 @@ namespace PCGExPCGDataAssetLoader
 
 			const FPCGExPCGDataAssetCollectionEntry* PCGDataEntry = static_cast<const FPCGExPCGDataAssetCollectionEntry*>(Result.Entry);
 
-			// Store hash for this point
 			PointEntryHashes[Index] = Hash;
 
 			// Register to shared pool (thread-safe, deduplicates by hash)
@@ -675,7 +668,6 @@ namespace PCGExPCGDataAssetLoader
 
 		const int32 OutIdx = BatchIndex * 1000000 + PointIndex;
 
-		// Check if this is spatial data
 		UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data);
 
 		if (!SpatialData)
@@ -715,7 +707,6 @@ namespace PCGExPCGDataAssetLoader
 			}
 		}
 
-		// Build output tagged data
 		FPCGTaggedData OutputData;
 		OutputData.Data = DuplicatedData;
 		OutputData.Pin = InTaggedData.Pin;
@@ -724,7 +715,6 @@ namespace PCGExPCGDataAssetLoader
 		// Remap PCGEx cluster tags if present (maintains Vtx/Edges pairing with new IDs)
 		RemapClusterTags(OutputData.Tags, ClusterRemapper);
 
-		// Forward input tags if enabled
 		if (Settings->bForwardInputTags)
 		{
 			PointDataFacade->Source->Tags->DumpTo(OutputData.Tags);
@@ -804,7 +794,6 @@ namespace PCGExPCGDataAssetLoader
 				continue;
 			}
 
-			// Get asset from shared pool
 			UPCGDataAsset* DataAsset = Context->SharedAssetPool->GetAsset(EntryHash);
 			if (!DataAsset)
 			{
@@ -817,7 +806,6 @@ namespace PCGExPCGDataAssetLoader
 			// shares the same remapper so Vtx/Edges pairs maintain their relationship
 			FClusterIdRemapper ClusterRemapper(ClusterIdCounter);
 
-			// Process each data item in the asset
 			for (const FPCGTaggedData& TaggedData : DataAsset->Data.GetAllInputs())
 			{
 				// Strip embedded CollectionMap entries (consumed by merge in FBatch::OnLoadAssetsComplete)
@@ -826,7 +814,6 @@ namespace PCGExPCGDataAssetLoader
 					continue;
 				}
 
-				// Apply tag filtering
 				if (!PassesTagFilter(TaggedData))
 				{
 					continue;
@@ -870,7 +857,6 @@ namespace PCGExPCGDataAssetLoader
 			return;
 		}
 
-		// Load all assets from the shared pool once
 		Context->SharedAssetPool->LoadAllAssets(
 			TaskManager,
 			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess)
@@ -886,7 +872,6 @@ namespace PCGExPCGDataAssetLoader
 		{
 			PCGEX_TYPED_CONTEXT_AND_SETTINGS(PCGDataAssetLoader)
 
-			// Merge embedded collection maps if enabled
 			if (Settings->bMergeEmbeddedCollectionMaps)
 			{
 				Context->MergedMapPacker = MakeShared<PCGExCollections::FPickPacker>();
@@ -923,7 +908,6 @@ namespace PCGExPCGDataAssetLoader
 				// collection through the packer to produce a merged output
 				if (TempUnpacker.HasValidMapping())
 				{
-					// Create merged param data
 					UPCGParamData* MergedMapData = Context->ManagedObjects->New<UPCGParamData>();
 
 					// The unpacker's CollectionMap has (GUID → Collection*) pairs.
@@ -937,7 +921,6 @@ namespace PCGExPCGDataAssetLoader
 
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
 
-					// Output on Map pin
 					FPCGTaggedData MapOutput;
 					MapOutput.Data = MergedMapData;
 					MapOutput.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;

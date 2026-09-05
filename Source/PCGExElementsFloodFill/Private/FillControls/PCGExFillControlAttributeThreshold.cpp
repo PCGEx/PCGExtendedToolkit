@@ -36,7 +36,6 @@ bool FPCGExFillControlAttributeThreshold::PrepareForDiffusions(FPCGExContext* In
 	AttributeSource = TypedFactory->Config.AttributeSource;
 	Comparison = TypedFactory->Config.Comparison;
 
-	// Initialize threshold setting value
 	Threshold = TypedFactory->Config.ThresholdValue.GetValueSetting();
 	Threshold->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
 	if (!Threshold->Init(GetSourceFacade()))
@@ -44,7 +43,6 @@ bool FPCGExFillControlAttributeThreshold::PrepareForDiffusions(FPCGExContext* In
 		return false;
 	}
 
-	// Get the attribute buffer
 	TSharedPtr<PCGExData::FFacade> SourceFacade = (AttributeSource == EPCGExClusterElement::Vtx)
 		? InHandler->VtxDataFacade
 		: InHandler->EdgeDataFacade;

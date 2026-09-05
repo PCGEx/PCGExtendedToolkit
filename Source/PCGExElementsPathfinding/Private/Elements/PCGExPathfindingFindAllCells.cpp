@@ -79,32 +79,11 @@ bool FPCGExFindAllCellsElement::Boot(FPCGExContext* InContext) const
 		Context->HoleGrowth.Init(Context, Context->HolesFacade);
 	}
 
-	//const TSharedPtr<PCGExData::FPointIO> SeedsPoints = PCGExData::TryGetSingleInput(Context, PCGExCommon::Labels::SourceSeedsLabel, true);
-	//if (!SeedsPoints) { return false; }
-
 	Context->OutputPaths = MakeShared<PCGExData::FPointIOCollection>(Context);
 	Context->OutputPaths->OutputPin = PCGExCells::OutputLabels::Paths;
 
 	Context->OutputCellBounds = MakeShared<PCGExData::FPointIOCollection>(Context);
 	Context->OutputCellBounds->OutputPin = PCGExCells::OutputLabels::CellBounds;
-
-	/*
-	if (Settings->bOutputFilteredSeeds)
-	{
-		const int32 NumSeeds = SeedsPoints->GetNum();
-
-		Context->SeedQuality.Init(false, NumSeeds);
-		PCGExArrayHelpers::InitArray(Context->UdpatedSeedPoints, NumSeeds);
-
-		Context->GoodSeeds = NewPointIO(SeedsPoints.ToSharedRef(), PCGExFindAllCells::OutputGoodSeedsLabel);
-		Context->GoodSeeds->InitializeOutput(PCGExData::EIOInit::NewOutput);
-		Context->GoodSeeds->GetOut()->GetMutablePoints().Reserve(NumSeeds);
-
-		Context->BadSeeds = NewPointIO(SeedsPoints.ToSharedRef(), PCGExFindAllCells::OutputBadSeedsLabel);
-		Context->BadSeeds->InitializeOutput(PCGExData::EIOInit::NewOutput);
-		Context->BadSeeds->GetOut()->GetMutablePoints().Reserve(NumSeeds);
-	}
-	*/
 
 	return true;
 }
@@ -175,12 +154,10 @@ namespace PCGExFindAllCells
 			}
 		}
 
-		// Set up cell constraints
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
 		CellsConstraints->Holes = Holes;
 
-		// Build or get the shared enumerator from constraints
 		TSharedPtr<PCGExClusters::FPlanarFaceEnumerator> Enumerator = CellsConstraints->GetOrBuildEnumerator(Cluster.ToSharedRef(), ProjectionDetails);
 
 		// Enumerate all cells - get failed cells too if we need hole expansion
@@ -255,7 +232,6 @@ namespace PCGExFindAllCells
 			}
 		}
 
-		// Initialize cell processor
 		CellProcessor = MakeShared<PCGExClusters::FCellPathBuilder>();
 		CellProcessor->Cluster = Cluster;
 		CellProcessor->TaskManager = TaskManager;

@@ -21,7 +21,6 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get handles
 	TSharedPtr<IPropertyHandle> ComparisonHandle = PropertyHandle->GetChildHandle(FName("Comparison"));
 	TSharedPtr<IPropertyHandle> InputHandle = PropertyHandle->GetChildHandle(FName("Input"));
 	TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));

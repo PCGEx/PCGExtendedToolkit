@@ -245,8 +245,6 @@ bool FPCGExPackActorDataElement::Boot(FPCGExContext* InContext) const
 	PCGEX_BIND_INSTANCED_FACTORY(Packer, UPCGExCustomActorDataPacker, PCGExPackActorData::SourceOverridesPacker)
 	PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->ActorReferenceAttribute)
 
-	//Context->OutputParams.Init(nullptr, Context->MainPoints->Num());
-
 	return true;
 }
 
@@ -281,15 +279,6 @@ bool FPCGExPackActorDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
 	Context->MainPoints->StageOutputs();
-
-	/*
-	for (int i = 0; i < Context->MainPoints->Pairs.Num(); i++)
-	{
-		UPCGParamData* ParamData = Context->OutputParams[i];
-		if (!ParamData) { continue; }
-		Context->StageOutput(TEXT("AttributeSet"), ParamData, Context->MainPoints->Pairs[i]->Tags->Flatten(), false, false);
-	}
-	*/
 
 	return Context->TryComplete();
 }
@@ -508,34 +497,6 @@ namespace PCGExPackActorData
 			(void)PointDataFacade->Source->Gather(PointMask);
 		}
 
-		/*
-		UPCGParamData* ParamData = Context->ManagedObjects->New<UPCGParamData>();
-		Context->OutputParams[PointDataFacade->Source->IOIndex] = ParamData;
-		TArray<FPCGPoint>& MutablePoints = PointDataFacade->GetOut()->GetMutablePoints();
-
-		UPCGMetadata* ParamMetadata = ParamData->Metadata;
-
-		for (int i = 0; i < MutablePoints.Num(); i++)
-		{
-			const int64 Key = ParamMetadata->AddEntry();
-			PCGMetadataEntryKey ItemKey = MutablePoints[i].MetadataEntry;
-			const int32 ValidIndex = ValidIndices[i];
-
-			if (!Packer->InputActors[ValidIndex]) { continue; }
-
-			for (FPCGMetadataAttributeBase* OutAttribute : Attributes)
-			{
-				PCGExMetaHelpers::ExecuteWithRightType(
-					OutAttribute->GetTypeId(), [&](auto DummyValue)
-					{
-						using T_REAL = decltype(DummyValue);
-						FPCGMetadataAttribute<T_REAL>* A = static_cast<FPCGMetadataAttribute<T_REAL>*>(OutAttribute);
-						FPCGMetadataAttribute<T_REAL>* B = ParamMetadata->FindOrCreateAttribute(A->Name, A->GetValueFromItemKey(PCGDefaultValueKey), A->AllowsInterpolation());
-						B->SetValue(Key, A->GetValueFromItemKey(ItemKey));
-					});
-			}
-		}
-		*/
 	}
 }
 

@@ -80,7 +80,6 @@ public:
 		return bIsCollapsed;
 	}
 
-	// Drop target overrides
 	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
 	virtual FReply OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
 	virtual void OnDragLeave(const FDragDropEvent& InDragDropEvent) override;

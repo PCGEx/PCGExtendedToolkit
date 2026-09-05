@@ -45,7 +45,6 @@ void FPCGExEdgeRemoveLeavesRecursive::Process()
 			QueuedForNext[i].store(false, std::memory_order_relaxed);
 		});
 
-		// Process all current leaves in parallel
 		ParallelFor(LeafQueue.Num(), [&](const int32 Idx)
 		{
 			const int32 NodeIndex = LeafQueue[Idx];
@@ -60,7 +59,6 @@ void FPCGExEdgeRemoveLeavesRecursive::Process()
 				return;
 			}
 
-			// Find the single valid link
 			for (const PCGExGraphs::FLink& Lk : Node.Links)
 			{
 				PCGExGraphs::FEdge* Edge = Cluster->GetEdge(Lk.Edge);

@@ -268,10 +268,6 @@ namespace PCGExSampleNearestSurface
 			PCGEX_OUTPUT_VALUE(Normal, Index, Direction*-1) // TODO: expose "precise normal" in which case we line trace to location
 			PCGEX_OUTPUT_VALUE(LookAt, Index, Direction)
 			PCGEX_OUTPUT_VALUE(Distance, Index, MaxDistance)
-			//PCGEX_OUTPUT_VALUE(IsInside, Index, false)
-			//PCGEX_OUTPUT_VALUE(Success, Index, false)
-			//PCGEX_OUTPUT_VALUE(ActorReference, Index, TEXT(""))
-			//PCGEX_OUTPUT_VALUE(PhysMat, Index, TEXT(""))
 		};
 
 
@@ -306,7 +302,6 @@ namespace PCGExSampleNearestSurface
 				UPrimitiveComponent* HitComp = nullptr;
 				for (const FOverlapResult& Overlap : OutOverlaps)
 				{
-					//if (!Overlap.bBlockingHit) { continue; }
 					if (!Context->IncludedActors.IsEmpty() && !Context->IncludedActors.Contains(Overlap.GetActor()))
 					{
 						continue;

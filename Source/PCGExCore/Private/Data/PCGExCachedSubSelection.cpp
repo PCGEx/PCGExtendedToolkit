@@ -96,7 +96,6 @@ namespace PCGExData
 			{
 				if (Step.Accessor == ContainerIndexAccessor && !CurrentDesc.IsSingleValue())
 				{
-					// Build the inner-element property from the stripped Desc.
 					FPCGMetadataAttributeDesc InnerDesc = CurrentDesc;
 					InnerDesc.ContainerTypes.RemoveAt(0);
 					FProperty* ElementProp = FPropertyBuffer::CreateInnerPropertyFromDesc(InnerDesc);

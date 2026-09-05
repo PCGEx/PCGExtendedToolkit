@@ -144,7 +144,6 @@ bool FPCGExRefineEdgesElement::Boot(FPCGExContext* InContext) const
 
 	if (Context->Refinement->SupportFilters())
 	{
-		//GetInputFactories(Context, PCGExRefineEdges::SourceVtxFilters, Context->VtxFilterFactories, PCGExFactories::ClusterNodeFilters(), false);
 		PCGExFactories::GetInputFactories(Context, PCGExClusters::Labels::SourceEdgeFiltersLabel, Context->EdgeFilterFactories, PCGExFactories::ClusterEdgeFilters(), false);
 	}
 
@@ -677,7 +676,6 @@ namespace PCGExRefineEdges
 
 		Context->Refinement->RegisterBuffersDependencies(ExecutionContext, FacadePreloader);
 
-		//PCGExPointFilter::RegisterBuffersDependencies(ExecutionContext, Context->VtxFilterFactories, FacadePreloader);
 		PCGExPointFilter::RegisterBuffersDependencies(ExecutionContext, Context->EdgeFilterFactories, FacadePreloader);
 		PCGExPointFilter::RegisterBuffersDependencies(ExecutionContext, Context->SanitizationFilterFactories, FacadePreloader);
 	}

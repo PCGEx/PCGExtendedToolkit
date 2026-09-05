@@ -83,15 +83,6 @@ namespace PCGExPathfindingGrowPaths
 				continue;
 			}
 
-			/*
-			// TODO : Implement
-			if (Settings->VisitedStopThreshold > 0 && Context->GlobalExtraWeights &&
-				Context->GlobalExtraWeights->GetExtraWeight(AdjacentNodeIndex, Lk.Edge) > Settings->VisitedStopThreshold)
-			{
-				continue;
-			}
-			*/
-
 			if (const double Score = GetGrowthScore(CurrentNode, OtherNode, EdgesRef[Lk.Edge]);
 				Score < BestScore)
 			{
@@ -154,8 +145,6 @@ namespace PCGExPathfindingGrowPaths
 				GrowthDirection = (GrowthDirection + Processor->GrowthDirection->Read(NextNode.PointIndex)).GetSafeNormal();
 			}
 		}
-
-		//Processor->Cluster->VtxTransforms[GoalNode->Index] = Processor->Cluster->GetPos(NextNode) + GrowthDirection * 10000;
 
 		if (Processor->GetSettings()->bUseGrowthStop)
 		{
@@ -370,7 +359,6 @@ namespace PCGExPathfindingGrowPaths
 
 		PCGEX_SHARED_THIS_DECL
 
-		// Find all growth points
 		const int32 SeedCount = Context->SeedsDataFacade->Source->GetNum();
 		for (int i = 0; i < SeedCount; i++)
 		{

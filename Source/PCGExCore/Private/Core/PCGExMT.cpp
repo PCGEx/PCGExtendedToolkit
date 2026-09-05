@@ -189,14 +189,12 @@ namespace PCGExMT
 
 	void IAsyncHandleGroup::NotifyStarted()
 	{
-		//if (!IsAvailable()) { return; }
 		StartedCount.fetch_add(1, std::memory_order_acq_rel);
 		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::NotifyStarted++ (%d)"), HandleIdx, *DEBUG_HandleId(), StartedCount.load());
 	}
 
 	void IAsyncHandleGroup::NotifyCompleted()
 	{
-		//if (!IsAvailable()) { return; }
 
 		CompletedCount.fetch_add(1, std::memory_order_acq_rel);
 		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::NotifyCompleted++ (%d)"), HandleIdx, *DEBUG_HandleId(), CompletedCount.load());
@@ -429,7 +427,6 @@ namespace PCGExMT
 			InTask->HandleIdx = Idx;
 			InTask->SetGroup(SharedThis(this));
 
-			// Launch through manager
 			Manager->LaunchInternal(InTask);
 		}
 	}

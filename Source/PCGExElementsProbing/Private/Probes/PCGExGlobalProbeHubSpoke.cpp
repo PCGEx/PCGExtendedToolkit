@@ -350,7 +350,6 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 
 	TSet<int32> HubSet(Hubs);
 
-	// Connect hubs to each other
 	if (Config.bConnectHubs)
 	{
 		for (int32 i = 0; i < Hubs.Num(); ++i)

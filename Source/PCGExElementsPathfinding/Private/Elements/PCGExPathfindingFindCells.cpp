@@ -108,7 +108,6 @@ bool FPCGExFindContoursElement::Boot(FPCGExContext* InContext) const
 	// Initialize seed growth (will read per-point growth attribute if needed)
 	Context->SeedGrowth.Init(Context, Context->SeedsDataFacade);
 
-	// Initialize seed ownership handler
 	Context->SeedOwnership = MakeShared<PCGExCells::FSeedOwnershipHandler>();
 	Context->SeedOwnership->Method = Settings->SeedOwnership;
 	Context->SeedOwnership->SortDirection = Settings->SortDirection;
@@ -162,7 +161,6 @@ bool FPCGExFindContoursElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 				return true;
 			}, [&](const TSharedPtr<PCGExClusterMT::IBatch>& NewBatch)
 			{
-				//NewBatch->bRequiresWriteStep = Settings->Artifacts.WriteAny();
 				NewBatch->bSkipCompletion = true;
 				NewBatch->SetProjectionDetails(Settings->ProjectionDetails);
 			}))
@@ -217,7 +215,6 @@ namespace PCGExFindContours
 
 		const int32 NumSeeds = Context->SeedsDataFacade->Source->GetNum();
 
-		// Initialize cell processor
 		CellProcessor = MakeShared<PCGExClusters::FCellPathBuilder>();
 		CellProcessor->Cluster = Cluster;
 		CellProcessor->TaskManager = TaskManager;
@@ -234,7 +231,6 @@ namespace PCGExFindContours
 			CellProcessor->SeedMutations = &Settings->SeedMutations;
 		}
 
-		// Set up cell constraints
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
 		// Face planes cost a fit per cell; only pay when the distance gate reads them (LocalTangent
@@ -254,7 +250,6 @@ namespace PCGExFindContours
 		// Build adjacency map if growth is enabled
 		if (Context->SeedGrowth.HasPotentialGrowth())
 		{
-			// Get wrapper face index to exclude from adjacency
 			int32 WrapperFaceIndex = Enumerator->GetWrapperFaceIndex();
 			CellAdjacencyMap = Enumerator->GetOrBuildAdjacencyMap(WrapperFaceIndex);
 
@@ -396,7 +391,6 @@ namespace PCGExFindContours
 			}
 			else
 			{
-				// Find all seeds inside this cell
 				for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 				{
 					if (!SeedInBounds[SeedIdx])
@@ -487,7 +481,6 @@ namespace PCGExFindContours
 			}
 		}
 
-		// Pick winner using seed ownership handler
 		const int32 BestSeedIdx = SeedOwnership->PickWinner(CandidateSeeds, WrapperCell->Data.Centroid);
 
 		if (BestSeedIdx != INDEX_NONE)
@@ -497,7 +490,6 @@ namespace PCGExFindContours
 			TArray<TSharedPtr<PCGExClusters::FCell>> WrapperArray;
 			WrapperArray.Add(WrapperCell);
 
-			// Output to CellBounds if enabled
 			if (Settings->Artifacts.bOutputCellBounds)
 			{
 				TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
@@ -514,7 +506,6 @@ namespace PCGExFindContours
 				                                       Context->Artifacts, TaskManager);
 			}
 
-			// Output to Paths if enabled
 			if (Settings->Artifacts.bOutputPaths)
 			{
 				CellProcessor->ProcessSeededCell(WrapperCell, Context->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxDataFacade->Source, PCGExData::EIOInit::New));
@@ -718,7 +709,6 @@ namespace PCGExFindContours
 				}
 			}
 
-			// Pick winner using seed ownership handler
 			const int32 BestSeedIdx = SeedOwnership->PickWinner(CandidateSeeds, WrapperCell->Data.Centroid);
 
 			if (BestSeedIdx != INDEX_NONE)
@@ -735,7 +725,6 @@ namespace PCGExFindContours
 			return;
 		}
 
-		// Output to CellBounds if enabled
 		if (Settings->Artifacts.bOutputCellBounds)
 		{
 			TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
@@ -752,7 +741,6 @@ namespace PCGExFindContours
 			                                       Context->Artifacts, TaskManager);
 		}
 
-		// Output to Paths if enabled
 		if (Settings->Artifacts.bOutputPaths)
 		{
 			CellsIOIndices.SetNum(NumCells);

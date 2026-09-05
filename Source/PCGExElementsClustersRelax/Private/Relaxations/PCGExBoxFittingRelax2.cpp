@@ -55,7 +55,6 @@ void UPCGExBoxFittingRelax2::Step2(const PCGExClusters::FNode& Node)
 		// Build other node's bounds
 		const FBox OtherBox(OtherPos - OtherExtents, OtherPos + OtherExtents);
 
-		// Check for overlap
 		if (!CurrentBox.Intersect(OtherBox))
 		{
 			continue;

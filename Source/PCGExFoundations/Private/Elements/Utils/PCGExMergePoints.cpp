@@ -149,7 +149,6 @@ bool FPCGExMergePointsElement::Boot(FPCGExContext* InContext) const
 	Context->TagsToAttributes = Settings->TagsToAttributes;
 	Context->TagsToAttributes.Init();
 
-	// Initialize the data matcher
 	Context->DataMatcher = MakeShared<PCGExMatching::FDataMatcher>();
 	Context->DataMatcher->SetDetails(&Context->MatchingDetails);
 
@@ -189,7 +188,6 @@ bool FPCGExMergePointsElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
-	// Remove empty partitions
 	Context->Partitions.RemoveAll([](const TArray<int32>& Partition)
 	{
 		return Partition.IsEmpty();
@@ -219,7 +217,6 @@ bool FPCGExMergePointsElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 			UnmatchedIO->InitializeOutput(PCGExData::EIOInit::Forward);
 		}
 
-		// Build merge lists from partitions
 		Context->MergeLists.Reserve(Context->Partitions.Num());
 
 		for (const TArray<int32>& Partition : Context->Partitions)

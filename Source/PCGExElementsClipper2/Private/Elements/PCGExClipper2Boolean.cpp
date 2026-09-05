@@ -77,7 +77,6 @@ void FPCGExClipper2BooleanContext::Process(const TSharedPtr<PCGExClipper2::FProc
 	PCGExClipper2Lib::Clipper64 Clipper;
 	Clipper.SetZCallback(Group->CreateZCallback());
 
-	// Add subject paths
 	if (!Group->SubjectPaths.empty())
 	{
 		Clipper.AddSubject(Group->SubjectPaths);
@@ -97,7 +96,6 @@ void FPCGExClipper2BooleanContext::Process(const TSharedPtr<PCGExClipper2::FProc
 		Clipper.AddClip(*Group->OpenOperandPaths);
 	}
 
-	// Determine clip type
 	PCGExClipper2Lib::ClipType ClipType;
 	switch (Settings->Operation)
 	{

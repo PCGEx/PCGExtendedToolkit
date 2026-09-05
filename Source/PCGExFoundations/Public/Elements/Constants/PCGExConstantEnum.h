@@ -55,7 +55,6 @@ class UPCGExConstantEnumSettings : public UPCGExSettings
 
 public:
 #if WITH_EDITOR
-	// Begin unrolling of Tim's lovely macro
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EnumConstant, "Enum Constant", "Break an enum into handy constant values.", FName(GetDisplayName())); // Tim says nope! :D
 	FString GetDisplayName() const;
 
@@ -177,13 +176,10 @@ protected:
 	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 
-	// Stage to separate pins for each value
 	static void StageEnumValuesSeparatePins(FPCGExContext* InContext, const UPCGExConstantEnumSettings* Settings, const TArray<PCGExConstantEnumConstants::FMapping>& ValueData, FPCGExBitmask& OutBitflags);
 
-	// Stage all items to a single pin
 	static void StageEnumValuesSinglePin(FPCGExContext* InContext, const UPCGExConstantEnumSettings* Settings, const TArray<PCGExConstantEnumConstants::FMapping>& ValueData, FPCGExBitmask& OutBitflags);
 
-	// Stage bitflags
 	static void StageBitFlags(FPCGExContext* InContext, const UPCGExConstantEnumSettings* Settings, FPCGExBitmask& OutBitflags);
 
 	PCGEX_ELEMENT_CREATE_DEFAULT_CONTEXT

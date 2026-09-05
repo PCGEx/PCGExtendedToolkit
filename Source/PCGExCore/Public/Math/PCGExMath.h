@@ -238,8 +238,6 @@ namespace PCGExMath
 		Box += Center + U * Size;
 		Box += Center + V * Size;
 
-		//UE_LOG(LogPCGEx, Warning, TEXT("Box Min X:%f, Y:%f, Z:%f | Max X:%f, Y:%f, Z:%f"), Box.Min.X, Box.Min.Y, Box.Min.Z, Box.Max.X, Box.Max.Y, Box.Max.Z);
-
 		return Box;
 	}
 

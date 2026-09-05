@@ -61,7 +61,6 @@ bool FPCGExBoundsToPointsElement::AdvanceWork(FPCGExContext* InContext, const UP
 			},
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->bRequiresWriteStep = true;
 			}))
 		{
 			return Context->CancelExecution(TEXT("Missing data."));

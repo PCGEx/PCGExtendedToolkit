@@ -428,7 +428,7 @@ void FPCGExPropertySchemaCollectionCustomization::ApplyLocalSchemaResetOverride(
 {
 	// IsVisible / Handler use captured weak pointers, not Handle->GetOuterObjects.
 	// External-structure handles (the inline rendering path uses one) don't expose the owning
-	// component via outers, so the old approach silently hid the arrow for inline rows.
+	// component via outers, which would silently hide the arrow for inline rows.
 	// FPCGExProperty subclasses carry meta=(NoResetToDefault) on their inner Value field
 	// to suppress UE's broken per-field arrow, so the arrow on this row is the only one users
 	// see -- one click resets the whole entry to the BP-chain parent's value.

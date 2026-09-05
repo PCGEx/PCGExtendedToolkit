@@ -96,7 +96,6 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 			const auto& Pt = Path[i];
 			const uint64 Hash = HashPoint(Pt.x, Pt.y);
 
-			// Skip if already in pool
 			if (VertexMap.Contains(Hash))
 			{
 				continue;
@@ -165,7 +164,6 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 		return;
 	}
 
-	// Helper lambda to find or create vertex index
 	auto FindOrCreateVertexIndex = [&](const PCGExClipper2Lib::Point64& Pt) -> int32
 	{
 		const uint64 Hash = HashPoint(Pt.x, Pt.y);
@@ -320,7 +318,6 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 		return;
 	}
 
-	// Create mesh objects
 	TObjectPtr<UPCGDynamicMeshData> MeshData = ManagedObjects->New<UPCGDynamicMeshData>();
 	if (!MeshData)
 	{
@@ -367,7 +364,6 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 
 	Mesh->EditMesh([&](FDynamicMesh3& InMesh)
 	{
-		// Enable attributes
 		InMesh.EnableAttributes();
 		InMesh.Attributes()->EnablePrimaryColors();
 		InMesh.Attributes()->EnableMaterialID();
@@ -420,16 +416,13 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 			InMesh);
 	}, EDynamicMeshChangeType::GeneralEdit, EDynamicMeshAttributeChangeFlags::Unknown, true);
 
-	// Attempt repair if requested
 	if (Settings->bAttemptRepair)
 	{
 		UGeometryScriptLibrary_MeshRepairFunctions::RepairMeshDegenerateGeometry(Mesh, Settings->RepairDegenerate);
 	}
 
-	// Post-process mesh
 	Settings->Topology.PostProcessMesh(Mesh);
 
-	// Add to staged outputs for deterministic ordering
 	TSet<FString> Tags;
 	if (Group->GroupTags)
 	{
@@ -443,13 +436,11 @@ void FPCGExClipper2TriangulateElement::OutputWork(FPCGExContext* InContext, cons
 {
 	PCGEX_CONTEXT_AND_SETTINGS(Clipper2Triangulate)
 
-	// Sort by OrderIndex for deterministic output
 	Context->StagedOutputs.Sort([](const FPCGExStagedMeshOutput& A, const FPCGExStagedMeshOutput& B)
 	{
 		return A.OrderIndex < B.OrderIndex;
 	});
 
-	// Stage outputs in order
 	for (const FPCGExStagedMeshOutput& Output : Context->StagedOutputs)
 	{
 		if (Output.MeshData)

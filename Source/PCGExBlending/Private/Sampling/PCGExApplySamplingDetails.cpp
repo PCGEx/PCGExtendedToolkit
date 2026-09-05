@@ -27,9 +27,7 @@ if ((_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Z)) != 0)
 
 	if (bApplyLookAt)
 	{
-		//PCGEX_REGISTER_FLAG(LookAtPosition, LkPosComponents)
 		PCGEX_REGISTER_FLAG(LookAtRotation, LkRotComponents)
-		//PCGEX_REGISTER_FLAG(LookAtScale, LkScaComponents)
 	}
 
 #undef PCGEX_REGISTER_FLAG
@@ -72,11 +70,6 @@ void FPCGExApplySamplingDetails::Apply(PCGExData::FMutablePoint& InPoint, const 
 			OutRotation[C] = InLkRot[C];
 		}
 
-		//FVector InLkPos = InLookAt.GetLocation();
-		//for (const int32 C : LkPosComponents) { OutPosition[C] = InLkPos[C]; }
-
-		//FVector InLkSca = InLookAt.GetScale3D();
-		//for (const int32 C : LkScaComponents) { OutScale[C] = InLkSca[C]; }
 	}
 
 	T = FTransform(FQuat::MakeFromEuler(OutRotation), OutPosition, OutScale);

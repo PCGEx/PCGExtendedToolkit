@@ -111,7 +111,6 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 	if (PathNodeIndex != -1)
 	{
 		bSuccess = true;
-		//InQuery->Reserve(VisitedNum);
 
 		InQuery->AddPathNode(GoalNode.Index, PathEdgeIndex);
 

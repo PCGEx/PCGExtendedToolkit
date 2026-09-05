@@ -220,11 +220,9 @@ namespace PCGExData
 		  , WorkingToReal(PCGExTypeOps::FConversionTable::GetConversionFn(InWorkingType == EPCGMetadataTypes::Unknown ? InRealType : InWorkingType, InRealType))
 		  , RealToWorking(PCGExTypeOps::FConversionTable::GetConversionFn(InRealType, InWorkingType == EPCGMetadataTypes::Unknown ? InRealType : InWorkingType))
 	{
-		// Get type ops from registry
 		RealOps = PCGExTypeOps::FTypeOpsRegistry::Get(RealType);
 		WorkingOps = PCGExTypeOps::FTypeOpsRegistry::Get(WorkingType);
 
-		// Cache whether working type needs lifecycle management
 		bWorkingTypeNeedsLifecycle = TypeTraits::NeedsLifecycleManagement(WorkingType);
 	}
 

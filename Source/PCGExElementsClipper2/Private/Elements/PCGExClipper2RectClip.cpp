@@ -144,7 +144,6 @@ namespace PCGExClipper2RectClip
 		const TSharedPtr<PCGExClipper2::FProcessingGroup>& Group,
 		int64_t Tolerance = 2)
 	{
-		// Process each output path
 		for (PCGExClipper2Lib::Path64& OutPath : OutPaths)
 		{
 			const size_t NumPoints = OutPath.size();
@@ -223,7 +222,6 @@ namespace PCGExClipper2RectClip
 
 							Group->AddIntersectionBlendInfo(Pt.x, Pt.y, Info);
 
-							// Mark as intersection point
 							Pt.z = static_cast<int64_t>(PCGEx::H64(
 								PCGExClipper2::INTERSECTION_MARKER,
 								PCGExClipper2::INTERSECTION_MARKER));
@@ -301,7 +299,6 @@ PCGExClipper2Lib::Rect64 FPCGExClipper2RectClipContext::ComputeClipRect(
 		break;
 	}
 
-	// Check if we have valid bounds
 	if (!WorldBounds.IsValid)
 	{
 		return PCGExClipper2Lib::Rect64(); // Return empty rect
@@ -341,7 +338,6 @@ PCGExClipper2Lib::Rect64 FPCGExClipper2RectClipContext::ComputeClipRect(
 	ClipRect.top = FMath::FloorToInt64(MinY * Scale);
 	ClipRect.bottom = FMath::CeilToInt64(MaxY * Scale);
 
-	// Apply padding
 	ApplyPadding(ClipRect, Settings->BoundsPadding, Settings->BoundsPaddingScale, Scale);
 
 	return ClipRect;
@@ -356,7 +352,6 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 		return;
 	}
 
-	// Compute the clipping rectangle
 	PCGExClipper2Lib::Rect64 ClipRect = ComputeClipRect(Group, Settings);
 
 	// Validate rectangle
@@ -526,7 +521,6 @@ void FPCGExClipper2RectClipContext::Process(const TSharedPtr<PCGExClipper2::FPro
 			}
 		}
 
-		// Clip open paths
 		if (!Group->OpenSubjectPaths.empty())
 		{
 			const PCGExClipper2RectClip::FSourceZLookup OpenSubjectSources(Group->OpenSubjectPaths);

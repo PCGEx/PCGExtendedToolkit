@@ -130,8 +130,6 @@ namespace PCGExGraphs
 
 		// Look into the cost of this
 
-		//if (TaskManager) { NewCluster->ExpandEdges(TaskManager); }
-		//else { NewCluster->GetExpandedEdges(true); }
 	}
 
 	int32 FSubGraph::GetFirstInIOIndex()
@@ -224,7 +222,6 @@ namespace PCGExGraphs
 
 			if (InEdgeData)
 			{
-				// We'll cherry pick existing edges
 				TRACE_CPUPROFILER_EVENT_SCOPE(FSubGraph::Compile::CherryPickInheritedEdges);
 
 				TArray<int32> ReadEdgeIndices;
@@ -448,7 +445,7 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 		PCGEX_SCOPE_LOOP(i)
 		{
 			const FEdge& E = FlattenedEdges[i];
-			const int32 EdgeIndex = E.Index; // TODO : This is now i, anyway?
+			const int32 EdgeIndex = E.Index;
 
 			const int32 Start = E.Start;
 			const int32 End = E.End;
@@ -534,7 +531,6 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 			OnSubGraphPostProcess(ThisPtr.ToSharedRef());
 		}
 
-		// Clean up user context
 		UserContext.Reset();
 
 		EdgesDataFacade->WriteFastest(TaskManager);

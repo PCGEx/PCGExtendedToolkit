@@ -27,8 +27,7 @@ TArray<FPCGPinProperties> UPCGExPathStitchSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 	PCGExMatching::Helpers::DeclareMatchingRulesInputs(MatchingDetails, PinProperties);
-	// OnInitialPostProcess reads PCGExSorting::Labels::SourceSortingRules, so that is the pin that has
-	// to exist -- the old filter-typed "Direction Sorting" pin was never read.
+	// OnInitialPostProcess reads PCGExSorting::Labels::SourceSortingRules, so that is the pin that has to exist.
 	PCGExSorting::DeclareSortingRulesInputs(PinProperties, EPCGPinStatus::Normal);
 	return PinProperties;
 }
@@ -114,7 +113,6 @@ bool FPCGExPathStitchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->SetPointsFilterData(&Context->FilterFactories);
 				NewBatch->bRequiresWriteStep = true;
 			}))
 		{

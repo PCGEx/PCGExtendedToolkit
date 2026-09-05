@@ -16,7 +16,6 @@ public:
 		const TConstPCGValueRange<FTransform> InTransforms = InPointData->GetConstTransformValueRange();
 
 		const FVector A = InTransforms[PrevIndex].GetLocation();
-		//const FVector B = InPoints[Index].Transform.GetLocation();
 		const FVector C = InTransforms[NextIndex].GetLocation();
 
 		const FVector Dir = (C - A);

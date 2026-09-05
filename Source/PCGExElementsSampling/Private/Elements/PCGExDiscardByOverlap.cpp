@@ -242,7 +242,6 @@ namespace PCGExDiscardByOverlap
 
 		if (Overlaps.IsEmpty())
 		{
-			// Remove from stack & output.
 			PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::Forward)
 			RemaininStack.Remove(this);
 			return;
@@ -490,9 +489,6 @@ namespace PCGExDiscardByOverlap
 		}
 
 		Overlaps.SetNum(WriteIndex);
-
-		// Sort overlaps so we can process them
-		//Overlaps.Sort([](const TSharedPtr<FOverlap>& A, const TSharedPtr<FOverlap>& B) { return A->HashID < B->HashID; });
 
 		Stats.UpdateRelative(NumPoints, TotalVolume);
 

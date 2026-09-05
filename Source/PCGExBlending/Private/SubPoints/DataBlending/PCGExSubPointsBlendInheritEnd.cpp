@@ -15,9 +15,7 @@ void FPCGExSubPointsBlendInheritEnd::BlendSubPoints(const PCGExData::FConstPoint
 
 	PCGEX_SCOPE_LOOP(Index)
 	{
-		//FVector Location = OutTransform[Index].GetLocation();
 		MetadataBlender->Blend(From.Index, To.Index, Index, 1);
-		//OutTransform[Index].SetLocation(Location);
 	}
 }
 

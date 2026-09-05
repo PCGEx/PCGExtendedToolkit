@@ -158,13 +158,6 @@ namespace PCGExSplineToPath
 			{
 				TPCGValueRange<int64> OutMeta = MutablePoints->GetMetadataEntryValueRange();
 
-				/*
-				for (int64& Key : OutMeta)
-				{
-					MutablePoints->Metadata->InitializeOnSet(Key);
-				}
-				*/
-
 				const TSharedPtr<FPCGAttributeAccessorKeysEntries> Keys = MakeShared<FPCGAttributeAccessorKeysEntries>(SplineData->Metadata);
 
 				for (PCGExData::FAttributeIdentity Identity : SourceAttributes)
@@ -205,7 +198,6 @@ namespace PCGExSplineToPath
 							}
 							else
 							{
-								//PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Attribute {0} could not be copied."), FText::FromName(Identity.Name)));
 							}
 						},
 						[&]()

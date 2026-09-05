@@ -128,10 +128,5 @@ void FPCGExProbeAnisotropic::ProcessCandidates(const int32 Index, TArray<PCGExPr
 FString UPCGExProbeAnisotropicProviderSettings::GetDisplayName() const
 {
 	return TEXT("");
-	/*
-	return GetDefaultNodeName().ToString()
-		+ TEXT(" @ ")
-		+ FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0));
-		*/
 }
 #endif

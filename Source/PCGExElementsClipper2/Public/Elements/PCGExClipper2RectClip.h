@@ -98,7 +98,6 @@ protected:
 	// Compute combined world-space bounds from facade indices
 	FBox ComputeCombinedBounds(const TArray<int32>& Indices);
 
-	// Apply padding to rectangle
 	static void ApplyPadding(PCGExClipper2Lib::Rect64& Rect, double Padding, const FVector2D& Scale, int32 Precision);
 };
 

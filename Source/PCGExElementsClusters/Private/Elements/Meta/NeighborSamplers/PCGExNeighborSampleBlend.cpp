@@ -86,7 +86,6 @@ bool UPCGExNeighborSamplerFactoryBlend::RegisterConsumableAttributes(FPCGExConte
 	{
 		return false;
 	}
-	// TODO !
 	return true;
 }
 

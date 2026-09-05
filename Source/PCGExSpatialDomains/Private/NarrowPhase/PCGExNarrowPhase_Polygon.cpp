@@ -100,13 +100,9 @@ namespace PCGExSpatial::NarrowPhase
 		//   reach for polygons specifically to allow placement in concave
 		//   negative space; over-rejecting kills that benefit.
 		//
-		//   Real polygon-prism vs OBB MTV (2D SAT on the outline + Z-band
-		//   depth, concave-aware) is ~half a day of math. We'll implement
-		//   it when a real user need surfaces, or via the natural extension
-		//   path: a separate shape type (FPCGExFootprintShape_PrecisePolygon2D)
-		//   that opts into the precise math while the existing _Polygon
-		//   keeps its cheap default. Adding it is a pure addition -- new
-		//   USTRUCT + Register calls, no edits here.
+		//   TODO: real polygon-prism vs OBB MTV (2D SAT on the outline + Z-band depth,
+		//   concave-aware), ideally as a separate opt-in shape type
+		//   (FPCGExFootprintShape_PrecisePolygon2D) -- a pure addition, no edits here.
 		Register(
 			FPCGExFootprintShape_OBB::StaticStruct(),
 			FPCGExFootprintShape_Polygon::StaticStruct(),

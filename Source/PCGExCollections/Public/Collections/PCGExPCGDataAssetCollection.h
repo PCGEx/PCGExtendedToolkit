@@ -131,7 +131,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	TArray<FPCGExExportSlotCapture> Captures;
 #endif
 
-	// ----- Deprecated slots (2026-09-02): fixed mesh/level/actor storage became keyed slots. -----
+	// ----- Deprecated slots: fixed mesh/level/actor storage became keyed slots. -----
 	// UHT registers these under their unsuffixed names with CPF_Deprecated: legacy assets LOAD into them,
 	// saves always skip them. OnHostPostLoad moves the values into EmbeddedSlots / Captures.
 
@@ -193,7 +193,7 @@ private:
  *  ExportedDataAsset point hashes resolve through the shared collections' CollectionGUIDs at runtime,
  *  eliminating duplicated storage when entries reuse the same meshes, levels or sketches.
  *
- *  Phase C1 (per-type processor seam): the machinery storage + external-storage settings
+ *  The machinery storage + external-storage settings
  *  live on an owned UPCGExPCGDataTypeState (always present, default subobject) and every
  *  lifecycle override is a dispatch into it -- the typed collection is simply a host whose
  *  state is guaranteed, running the exact same code path as an Omni host. Legacy members
@@ -256,7 +256,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataEntryScrubKeep
 
 /**
  * Machinery state/processor for PCGDataAsset-typed entries hosted OUTSIDE a native
- * PCGDataAsset collection (per-type processor seam, Phase B). Owns the same shared/external
+ * PCGDataAsset collection. Owns the same shared/external
  * storage the typed collection keeps -- keyed collection slots -- and dispatches the
  * host-agnostic machinery cores against it from the host lifecycle hooks. With this state
  * present, level-sourced entries in an Omni behave like they do in a native collection
@@ -282,7 +282,7 @@ public:
 	UPROPERTY()
 	TArray<FPCGExExportCollectionSlot> SharedSlots;
 
-	// ----- Deprecated slots (2026-09-02): the fixed mesh/level members became keyed SharedSlots. -----
+	// ----- Deprecated slots: the fixed mesh/level members became keyed SharedSlots. -----
 	// Legacy data loads into these (CPF_Deprecated: tagged-property name match, saves skip); PostLoad
 	// adopts them into SharedSlots once.
 
@@ -347,9 +347,8 @@ public:
 	 *  internalize the externalized assets. */
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 
-	/** Fresh states adopt the seed source's external-storage SETTINGS (closes the merge
-	 *  gap: converting a PCGData source into an Omni used to silently fall back to
-	 *  embedded). Shared collections / External* soft refs are NOT copied -- session
+	/** Fresh states adopt the seed source's external-storage SETTINGS. Shared collections /
+	 *  External* soft refs are NOT copied -- session
 	 *  buffers and the source's own external packages respectively. */
 	virtual void OnAddedToHost(UPCGExAssetCollection* Host, const UPCGExAssetCollection* SeedSource) override;
 
@@ -405,7 +404,7 @@ public:
 	UPCGExPCGDataAssetCollection();
 
 	/**
-	 * Owned machinery state (per-type processor seam, Phase C1): external-storage settings
+	 * Owned machinery state: external-storage settings
 	 * (bUseExternalAssets / ExportFolder) plus the shared/external collection storage the
 	 * PCGDataAsset machinery operates on. Always present (default subobject); the same
 	 * state class an Omni host instantiates per present PCGData entry type. Shared
@@ -438,7 +437,7 @@ public:
 	}
 
 private:
-	// ----- Phase C1 deprecated slots (2026-07-19) -----
+	// ----- Deprecated slots -----
 	// UHT registers these under their unsuffixed names with CPF_Deprecated: legacy assets
 	// LOAD into them (tagged-property name match), saves always skip them. PostLoad moves
 	// the values into MachineryState and clears them. Remove after a deprecation cycle.
@@ -473,9 +472,8 @@ public:
 	void RebuildSharedCollections();
 
 	// Host-agnostic machinery cores. Each operates purely on the given state view, so any
-	// host that can compose a FPCGExPCGDataAssetMachinery can run them (per-type processor
-	// seam, Phase A). The private instance methods below are thin wrappers over these.
-	// All editor-only in effect: bodies guard on WITH_EDITOR(_DATA) like their predecessors.
+	// host that can compose a FPCGExPCGDataAssetMachinery can run them. The private instance
+	// methods below are thin wrappers over these. All editor-only in effect: bodies guard on WITH_EDITOR(_DATA).
 
 	/** Every registered Shared-scope slot: merge captures, rewrite the slot pin's Tag_EntryIdx. */
 	static void CompactSharedFor(FPCGExPCGDataAssetMachinery& State);

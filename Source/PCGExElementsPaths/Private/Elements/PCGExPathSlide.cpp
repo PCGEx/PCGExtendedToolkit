@@ -17,7 +17,6 @@ void UPCGExPathSlideSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* In
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 7)
 	{
-		// Rewire Slide Amount
 		PCGEX_SHORTHAND_RENAME_PIN(SlideAmountAttribute, SlideAmountConstant, SlideAmount)
 	}
 

@@ -20,7 +20,6 @@ void FPCGExClampDetailsCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Get handles
 	TSharedPtr<IPropertyHandle> ApplyMinHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExClampDetails, bApplyClampMin));
 	TSharedPtr<IPropertyHandle> ClampMinHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExClampDetails, ClampMinValue));
 	TSharedPtr<IPropertyHandle> ApplyMaxHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExClampDetails, bApplyClampMax));

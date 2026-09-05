@@ -24,51 +24,25 @@ namespace PCGExActorDelta
 	// silently skipped by ApplyPropertyDelta -- the user must rebuild the collection to
 	// regenerate deltas in the current format.
 	//
-	// Version history (only v1 and v2 shipped to production; later designs went through
-	// several iterations before settling on the current one):
-	//   v1: magic header; inner delta via FObjectWriter + FStructuredArchiveFromArchive.
-	//       BROKEN across sessions -- FNames encoded as session-local name-table indices,
-	//       causing bogus names after editor restart and a crash at level save.
-	//   v2: FNames serialized as strings in both the outer container and the inner delta.
-	//       Session-portable, but tagged-property roundtrip through the structured-archive
-	//       adapter silently dropped values on some components (bSplineHasBeenEdited never
-	//       flipped on USplineComponent apply).
-	//   v5: per-property format with a trailing subobject section at every object
-	//       level. UObject*& positions that weren't nested-Instanced fell through to
-	//       FObjectWriter's raw-pointer write -- crashed on cross-session apply
-	//       because the persisted bytes were a stale runtime pointer. Asset
-	//       references in EditAnywhere properties were the common trigger.
-	//   v6 (current): same per-property shape as v5, with operator<<(UObject*&)
-	//       writing FSoftObjectPath strings for the fall-through case instead of raw
-	//       pointers, AND operator<<(FObjectPtr&) routing through the same path.
-	//       The FObjectPtr override is critical: in UE 5.6/5.7 FObjectProperty::
-	//       SerializeItem for TObjectPtr<T>-backed storage routes through that
-	//       virtual, NOT through operator<<(UObject*&). Without the override the
-	//       base FObjectWriter writes the raw 8-byte FObjectPtr handle (e.g.
-	//       BillboardComponent::Sprite as TObjectPtr<UTexture2D>) which is a stale
-	//       runtime address after editor restart -- CoreUObject access-violates on
-	//       the first dereference inside component re-registration. Other design
-	//       points unchanged:
-	//       - Outer-ownership detection (Inst->GetOuter() == Object) for subobjects
-	//         instead of CPF_InstancedReference. UHT only sets that flag for the
-	//         Instanced keyword / DefaultToInstanced; plugins using CreateDefaultSubobject
-	//         or NewObject(this, ...) without the keyword still get per-instance lifetime
-	//         but no flag. Runtime outer-ownership is the ground truth.
-	//       - Relaxed filter for subobject contents (non-Edit UPROPERTY fields captured)
-	//         since subobject state is typically internal, not user-facing.
-	//       - Runtime component recreation: class path is stored alongside each component
-	//         delta so apply can NewObject + AddInstanceComponent + SetupAttachment if
-	//         the spawned target doesn't have a subobject by that name.
-	//       - Dynamic components (archetype == class CDO) are captured/applied instead
-	//         of being skipped.
-	//       - operator<<(UObject*&) override intercepts Instanced refs nested in
-	//         struct/TArray/TMap (gated to struct-inner positions only) AND replaces
-	//         the FObjectWriter raw-pointer fall-through with FSoftObjectPath strings
-	//         for any other UObject*& position the value writer reaches.
-	//       - Cycle guard via TSet<const UObject*> threaded through the recursion.
-	//
-	// v3 and v4 were intermediate designs that never shipped; readers don't need to
-	// handle them.
+	// Format (v6): per-property, with a trailing subobject section at every object level.
+	//   - FNames and object references are serialized as strings (FSoftObjectPath for objects) so
+	//     the bytes are session-portable. Both operator<<(UObject*&) AND operator<<(FObjectPtr&)
+	//     route through that path: FObjectProperty::SerializeItem for TObjectPtr<T>-backed storage
+	//     goes through the FObjectPtr virtual, and the base FObjectWriter would write a raw handle
+	//     that is a stale address after editor restart.
+	//   - Outer-ownership detection (Inst->GetOuter() == Object) for subobjects instead of
+	//     CPF_InstancedReference: UHT only sets that flag for the Instanced keyword /
+	//     DefaultToInstanced, so CreateDefaultSubobject / NewObject(this, ...) subobjects would be
+	//     missed. Runtime outer-ownership is the ground truth.
+	//   - Relaxed filter for subobject contents (non-Edit UPROPERTY fields captured)
+	//     since subobject state is typically internal, not user-facing.
+	//   - Runtime component recreation: class path is stored alongside each component
+	//     delta so apply can NewObject + AddInstanceComponent + SetupAttachment if
+	//     the spawned target doesn't have a subobject by that name.
+	//   - Dynamic components (archetype == class CDO) are captured/applied instead of being skipped.
+	//   - operator<<(UObject*&) also intercepts Instanced refs nested in struct/TArray/TMap
+	//     (gated to struct-inner positions only).
+	//   - Cycle guard via TSet<const UObject*> threaded through the recursion.
 	static constexpr uint32 DeltaWireMagic = 0x50434745u; // 'PCGE'
 	static constexpr uint32 DeltaWireVersion = 6u;
 
@@ -784,8 +758,7 @@ namespace PCGExActorDelta
 		//
 		// Entries are keyed by a monotonic uint64 ID so removals don't invalidate bucket
 		// indices. Buckets are TMap<UClass*, TArray<ID>> keyed by the *resolved* target
-		// class -- RunAll walks the component class hierarchy and does O(1) bucket lookups
-		// per super, instead of the earlier O(registrations x components) scan.
+		// class -- RunAll walks the component class hierarchy and does O(1) bucket lookups per super.
 		static TMap<uint64, FEntry>& GetEntries()
 		{
 			static TMap<uint64, FEntry> Instance;

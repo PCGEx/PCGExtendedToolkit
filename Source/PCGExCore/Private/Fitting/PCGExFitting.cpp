@@ -199,7 +199,6 @@ bool FPCGExFittingDetailsHandler::Init(FPCGExContext* InContext, const TSharedRe
 
 void FPCGExFittingDetailsHandler::ComputeTransform(const int32 TargetIndex, FTransform& OutTransform, FBox& InOutBounds, FVector& OutTranslation, const bool bWorldSpace, const PCGExFitting::FOverridesView& InOverrides) const
 {
-	//
 	check(TargetDataFacade);
 	const PCGExData::FConstPoint& TargetPoint = TargetDataFacade->Source->GetInPoint(TargetIndex);
 

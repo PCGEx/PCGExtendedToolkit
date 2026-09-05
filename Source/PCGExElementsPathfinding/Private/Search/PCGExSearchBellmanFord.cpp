@@ -106,7 +106,6 @@ bool FPCGExSearchOperationBellmanFord::ResolveQuery(
 		}
 	}
 
-	// Check for negative weight cycles if requested
 	if (bDetectNegativeCycles)
 	{
 		for (int32 NodeIndex = 0; NodeIndex < NumNodes; NodeIndex++)
@@ -139,7 +138,6 @@ bool FPCGExSearchOperationBellmanFord::ResolveQuery(
 		}
 	}
 
-	// Check if goal is reachable
 	if (Distance[GoalNode.Index] == TNumericLimits<double>::Max())
 	{
 		return false;

@@ -153,7 +153,6 @@ namespace PCGExMath::Geo
 				FacesUsage.Reserve(NumSites);
 			}
 
-			//PCGExArrayHelpers::InitArray(Sites, NumSites);
 			Sites.SetNumUninitialized(NumSites);
 
 			for (int i = 0; i < NumSites; i++)

@@ -95,13 +95,11 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 			double CurrentScore;
 			QueueForward->Dequeue(CurrentNodeIndex, CurrentScore);
 
-			// Check if we've found a better path
 			if (CurrentScore >= BestPathCost)
 			{
 				continue;
 			}
 
-			// Check if backward search has reached this node
 			if (VisitedBackward[CurrentNodeIndex])
 			{
 				const double PathCost = GScoreForward[CurrentNodeIndex] + GScoreBackward[CurrentNodeIndex];
@@ -160,7 +158,6 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 				continue;
 			}
 
-			// Check if forward search has reached this node
 			if (VisitedForward[CurrentNodeIndex])
 			{
 				const double PathCost = GScoreForward[CurrentNodeIndex] + GScoreBackward[CurrentNodeIndex];
@@ -215,7 +212,6 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 		return false;
 	}
 
-	// Reconstruct path
 	ReconstructPath(InQuery, MeetingNode, TravelStackForward, TravelStackBackward, SeedNode.Index, GoalNode.Index);
 
 	return true;

@@ -45,7 +45,6 @@ namespace PCGExFloodFill
 
 	void FDiffusion::Init()
 	{
-		// Initialize heap comparator with sorting mode from config
 		HeapComparator = FCandidateHeapComparator(Config.Sorting);
 
 		const int32 NumNodes = Cluster->Nodes->Num();
@@ -343,8 +342,7 @@ namespace PCGExFloodFill
 
 	bool FFillControlsHandler::PrepareForDiffusions(const TArray<TSharedPtr<FDiffusion>>& Diffusions, const FPCGExFloodFillFlowDetails& Details)
 	{
-		// Note: HeuristicsHandler is now optional - deprecated node-level heuristics
-		// Use 'Heuristics Scoring' fill control instead for modern approach
+		// HeuristicsHandler is optional: node-level heuristics are deprecated in favor of the 'Heuristics Scoring' fill control.
 
 		NumDiffusions = Diffusions.Num();
 
@@ -362,7 +360,6 @@ namespace PCGExFloodFill
 			*(SeedIndices->GetData() + i) = Diffusions[i]->SeedIndex;
 			*(SeedNodeIndices->GetData() + i) = Diffusions[i]->SeedNode->PointIndex;
 
-			// Set config on each diffusion
 			Diffusions[i]->Config = DiffusionConfig;
 		}
 

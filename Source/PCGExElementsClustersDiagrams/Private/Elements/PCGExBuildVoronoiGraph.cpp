@@ -27,7 +27,6 @@ TArray<FPCGPinProperties> UPCGExBuildVoronoiGraphSettings::OutputPinProperties()
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
 	PCGEX_PIN_POINTS(PCGExClusters::Labels::OutputEdgesLabel, "Point data representing edges.", Required)
-	//PCGEX_PIN_POINTS(PCGExClusters::Labels::OutputSitesLabel, "Complete delaunay sites.", Required)
 	return PinProperties;
 }
 
@@ -82,7 +81,6 @@ bool FPCGExBuildVoronoiGraphElement::AdvanceWork(FPCGExContext* InContext, const
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
 	Context->MainPoints->StageOutputs();
-	//Context->SitesOutput->OutputToContext();
 	Context->MainBatch->Output();
 
 	return Context->TryComplete();
@@ -225,7 +223,6 @@ namespace PCGExBuildVoronoiGraph
 			GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(PointDataFacade, &Settings->GraphBuilderDetails);
 			GraphBuilder->Graph->InsertEdges(Voronoi->VoronoiEdges, -1);
 
-			//ExtractValidSites();
 			Voronoi.Reset();
 		}
 
@@ -250,7 +247,6 @@ namespace PCGExBuildVoronoiGraph
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
 	{
-		//HullMarkPointWriter->Values[Index] = Voronoi->Delaunay->DelaunayHull.Contains(Index);
 	}
 
 	void FProcessor::CompleteWork()

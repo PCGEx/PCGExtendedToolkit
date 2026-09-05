@@ -32,7 +32,6 @@ void UPCGExTupleSettings::PostEditChangeProperty(struct FPropertyChangedEvent& P
 		FName PropName = PropertyChangedEvent.MemberProperty->GetFName();
 		EPropertyChangeType::Type ChangeType = PropertyChangedEvent.ChangeType;
 
-		// Check for ANY changes in Composition
 		if (PropName == GET_MEMBER_NAME_CHECKED(UPCGExTupleSettings, Composition))
 		{
 			bNeedsSync = true;
@@ -44,7 +43,6 @@ void UPCGExTupleSettings::PostEditChangeProperty(struct FPropertyChangedEvent& P
 			bNeedsSync = true;
 			bNeedsUIRefresh = true;
 		}
-		// Check for structural values change
 		else if (PropName == GET_MEMBER_NAME_CHECKED(UPCGExTupleSettings, Values) && (ChangeType == EPropertyChangeType::ArrayAdd || ChangeType == EPropertyChangeType::ArrayRemove || ChangeType == EPropertyChangeType::ArrayClear || ChangeType == EPropertyChangeType::ArrayMove))
 		{
 			bNeedsSync = true;

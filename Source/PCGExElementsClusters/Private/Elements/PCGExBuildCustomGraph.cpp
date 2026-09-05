@@ -404,7 +404,6 @@ bool FPCGExBuildCustomGraphElement::AdvanceWork(FPCGExContext* InContext, const 
 			return true;
 		}
 
-		// Prepare graph builders
 		if (Context->Builder->GraphSettings.IsEmpty())
 		{
 			PCGE_LOG(Error, GraphAndLog, FTEXT("Builder generated no graph settings."));

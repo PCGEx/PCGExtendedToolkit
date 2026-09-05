@@ -221,10 +221,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta = (PCG_Overridable, EditCondition="bUseNoGrowth"))
 	bool bInvertNoGrowth = false;
 
-	/** Visited weight threshold over which the growth is stopped if that's the only available option. -1 ignores.*/
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Extra Weighting", meta=(EditCondition="bWeightUpVisited"))
-	//double VisitedStopThreshold = -1;
-
 	/** Copy seed point attributes as tags on output paths. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding")
 	FPCGExAttributeToTagDetails SeedAttributesToPathTags;

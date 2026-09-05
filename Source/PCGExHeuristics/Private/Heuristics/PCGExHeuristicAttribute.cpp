@@ -23,7 +23,6 @@ void FPCGExHeuristicAttribute::PrepareForCluster(const TSharedPtr<const PCGExClu
 
 	const bool bCaptureMinMax = Mode == EPCGExAttributeHeuristicInputMode::AutoCurve;
 
-	// Grab all attribute values
 	const TSharedPtr<PCGExData::TBuffer<double>> Values = DataFacade->GetBroadcaster<double>(Attribute, false, bCaptureMinMax);
 
 	if (!Values)
@@ -54,7 +53,6 @@ void FPCGExHeuristicAttribute::PrepareForCluster(const TSharedPtr<const PCGExClu
 	}
 	else
 	{
-		// Grab min & max
 		const double InMinValue = bCaptureMinMax ? Values->Min : InMin;
 		const double InMaxValue = bCaptureMinMax ? Values->Max : InMax;
 

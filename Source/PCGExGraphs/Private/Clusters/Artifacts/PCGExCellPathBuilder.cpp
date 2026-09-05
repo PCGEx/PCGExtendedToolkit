@@ -59,7 +59,6 @@ namespace PCGExClusters
 	{
 		const int32 NumCellPoints = InCell->Nodes.Num();
 
-		// Allocate points
 		PCGExPointArrayDataHelpers::SetNumPointsAllocated(InPathIO->GetOut(), NumCellPoints);
 
 		// Setup tags
@@ -71,7 +70,6 @@ namespace PCGExClusters
 		// Set IO index
 		InPathIO->IOIndex = InIOIndex;
 
-		// Cleanup cluster data from output
 		Helpers::CleanupClusterData(InPathIO);
 
 		// Create facade for attribute writing
@@ -100,7 +98,6 @@ namespace PCGExClusters
 				SeedAttributesToPathTags->Tag(SeedsDataFacade->GetInPoint(InSeedIndex), InPathIO);
 			}
 
-			// Forward seed attributes
 			if (SeedForwardHandler)
 			{
 				SeedForwardHandler->Forward(InSeedIndex, PathDataFacade);

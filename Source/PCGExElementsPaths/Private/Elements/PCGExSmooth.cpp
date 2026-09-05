@@ -25,7 +25,6 @@ void UPCGExSmoothSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOut
 		// Rewire Influence
 		PCGEX_SHORTHAND_RENAME_PIN(InfluenceAttribute, InfluenceConstant, Influence)
 
-		// Rewire Smoothing Amount
 		PCGEX_SHORTHAND_RENAME_PIN(SmoothingAmountAttribute, SmoothingAmountConstant, SmoothingAmount)
 	}
 

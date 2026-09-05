@@ -12,9 +12,7 @@
 /**
  * Collection Helper Functions
  * 
- * Simplified API for working with asset collections.
- * Most functionality is now in the base UPCGExAssetCollection class.
- * These helpers provide convenience functions and attribute set building.
+ * Simplified API for working with asset collections: convenience functions and attribute set building.
  */
 
 namespace PCGExCollectionHelpers

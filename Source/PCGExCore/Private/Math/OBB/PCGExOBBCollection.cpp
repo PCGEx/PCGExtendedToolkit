@@ -429,7 +429,6 @@ namespace PCGExMath::OBB
 			WorldBounds += EntryBox;
 		}
 
-		// Add to inherited SoA arrays
 		FCollection::Add(Box);
 
 		ValidMask.Add(true);

@@ -62,10 +62,8 @@ void UPCGExSampleNearestSplineSettings::PCGExApplyDeprecationBeforeUpdatePins(UP
 		// Rewire alpha
 		PCGEX_SHORTHAND_RENAME_PIN(SampleAlphaAttribute, SampleAlphaConstant, SampleAlpha)
 
-		// Rewire Range Min
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMinAttribute, RangeMin, MinRange)
 
-		// Rewire Range Max
 		PCGEX_SHORTHAND_RENAME_PIN(RangeMaxAttribute, RangeMax, MaxRange)
 	}
 

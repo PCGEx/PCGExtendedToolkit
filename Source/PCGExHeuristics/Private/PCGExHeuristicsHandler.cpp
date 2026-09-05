@@ -129,7 +129,7 @@ namespace PCGExHeuristics
 	void FHandler::PrepareForCluster(const TSharedPtr<PCGExClusters::FCluster>& InCluster)
 	{
 		// Raw world-space lengths; each op normalizes explicitly (Distance by cluster bounds,
-		// Gradient by MaxEdgeLength) so the scale no longer depends on who computed them first.
+		// Gradient by MaxEdgeLength) so the scale is independent of who computed them first.
 		InCluster->ComputeEdgeLengths();
 
 		Cluster = InCluster;

@@ -367,7 +367,6 @@ namespace PCGExStagingLoadLevel
 				continue;
 			}
 
-			// Check if this is a Level entry
 			if (!Result.Entry->IsType(PCGExAssetCollection::TypeIds::Level))
 			{
 				continue;

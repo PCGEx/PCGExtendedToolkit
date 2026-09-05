@@ -63,7 +63,6 @@ namespace PCGExClusters
 			{
 				const FNode& NewNode = (NewNodes[i] = SourceNodes[i]);
 
-				// Update index lookup
 				NodeIndexLookup->GetMutable(NewNode.PointIndex) = NewNode.Index;
 			}
 

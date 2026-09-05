@@ -439,13 +439,6 @@ namespace PCGExSampleSurfaceGuided
 				PCGEX_OUTPUT_VALUE(Normal, Index, Direction*-1)
 				PCGEX_OUTPUT_VALUE(LookAt, Index, Direction)
 				PCGEX_OUTPUT_VALUE(Distance, Index, MaxDistance)
-				//PCGEX_OUTPUT_VALUE(UVCoords, Index, FVector2D::ZeroVector)
-				//PCGEX_OUTPUT_VALUE(FaceIndex, Index, -1)
-				//PCGEX_OUTPUT_VALUE(RenderMat, Index, -1)
-				//PCGEX_OUTPUT_VALUE(IsInside, Index, false)
-				//PCGEX_OUTPUT_VALUE(Success, Index, false)
-				//PCGEX_OUTPUT_VALUE(ActorReference, Index, TEXT(""))
-				//PCGEX_OUTPUT_VALUE(PhysMat, Index, TEXT(""))
 				if (TexParamLookup)
 				{
 					TexParamLookup->ExtractParams(Index, nullptr);

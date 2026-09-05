@@ -251,7 +251,6 @@ namespace PCGExBevelPath
 		FVector LeaveDir = FVector::ZeroVector;
 		double LeaveAlpha = 0;
 
-		// Sliding limit data
 		double ArriveSlidingLimit = 0; // Total path distance available on arrive side
 		double LeaveSlidingLimit = 0;  // Total path distance available on leave side
 		int32 ArriveBevelIdx = -1;     // Index of the limiting bevel on arrive side (-1 if path end)

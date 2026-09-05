@@ -38,7 +38,6 @@ double FPCGExNoiseTiling::GenerateRaw(const FVector& Position) const
 	const int32 BAB = Hash3D(MX1, MY0, MZ1);
 	const int32 BBB = Hash3D(MX1, MY1, MZ1);
 
-	// Gradient dot products
 	const double G_AAA = GradDot3(AAA, Xf, Yf, Zf);
 	const double G_BAA = GradDot3(BAA, Xf - 1.0, Yf, Zf);
 	const double G_ABA = GradDot3(ABA, Xf, Yf - 1.0, Zf);

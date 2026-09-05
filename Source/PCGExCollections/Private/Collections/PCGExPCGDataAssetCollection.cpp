@@ -41,10 +41,8 @@
 // Static-init type registration: TypeId=PCGDataAsset, parent=Base
 PCGEX_REGISTER_COLLECTION_TYPE(PCGDataAsset, UPCGExPCGDataAssetCollection, FPCGExPCGDataAssetCollectionEntry, "PCG Data Asset Collection", Base)
 
-// Machinery registration: TypeId -> globals block + state class. Colocated with the type
-// (moved here from PCGExOmniCollection.cpp in Phase C1 -- the typed collection owns a
-// UPCGExPCGDataTypeState itself now, so the capability data lives where the machinery does;
-// third-party types with machinery register theirs the same way, in their own module).
+// Machinery registration: TypeId -> globals block + state class. Colocated with the type;
+// third-party types with machinery register theirs the same way, in their own module.
 namespace PCGExPCGDataAssetCollection
 {
 	struct FMachineryRegistration
@@ -977,7 +975,7 @@ namespace PCGExSharedCompact
 
 UPCGExPCGDataAssetCollection::UPCGExPCGDataAssetCollection()
 {
-	// Always-present machinery state (Phase C1). Default subobject: delta-serializes against
+	// Always-present machinery state. Default subobject: delta-serializes against
 	// the CDO's, inherits RF_Transactional from the asset (RF_PropagateToSubObjects), and
 	// guarantees the nested "External Storage" details block is never None.
 	MachineryState = CreateDefaultSubobject<UPCGExPCGDataTypeState>(TEXT("MachineryState"));
@@ -987,7 +985,7 @@ void UPCGExPCGDataAssetCollection::PostLoad()
 {
 	Super::PostLoad();
 
-	// Phase C1 migration (2026-07-19): the machinery members moved into MachineryState.
+	// Legacy machinery members migrate into MachineryState.
 	// The deprecated slots still LOAD legacy data (UHT registers them under their unsuffixed
 	// names with CPF_Deprecated: tagged properties match, saves always skip) -- move the
 	// values over once and clear. Referenced subobjects keep their outer (this collection),
@@ -1036,7 +1034,7 @@ bool UPCGExPCGDataAssetCollection::GetTypeGlobalsInternal(const UScriptStruct* S
 bool UPCGExPCGDataAssetCollection::HostSupportsDataAssetMachinery(const UPCGExAssetCollection* Host)
 {
 	// Native lineage runs its own machinery; heterogeneous hosts answer through their
-	// registered type-state capability (per-type processor seam, Phase B).
+	// registered type-state capability.
 	return Host && Host->SupportsTypeMachinery(PCGExAssetCollection::TypeIds::PCGDataAsset);
 }
 
@@ -1826,9 +1824,7 @@ void UPCGExPCGDataTypeState::PostEditChangeProperty(FPropertyChangedEvent& Prope
 
 void UPCGExPCGDataTypeState::OnAddedToHost(UPCGExAssetCollection* Host, const UPCGExAssetCollection* SeedSource)
 {
-	// Adopt the seed source's external-storage SETTINGS on creation (closes the merge gap:
-	// converting/merging a PCGData source into an Omni used to silently fall back to
-	// embedded). Only fires on FRESH states -- an existing state is the user's and always
+	// Adopt the seed source's external-storage SETTINGS on creation. Only fires on FRESH states -- an existing state is the user's and always
 	// wins (behavior-wins, like globals-block merging). Only settings transfer: shared
 	// collections are session buffers, and External* soft refs address the SOURCE's own
 	// external packages -- adopting them would alias another asset's storage. Sharing the

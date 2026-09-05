@@ -8,7 +8,6 @@
 FPCGExPrimitiveComponentDescriptor::FPCGExPrimitiveComponentDescriptor()
 	: FPCGExPrimitiveComponentDescriptor(NoInit)
 {
-	// Make sure we have proper defaults
 	InitFrom(UPrimitiveComponent::StaticClass()->GetDefaultObject<UPrimitiveComponent>());
 }
 
@@ -207,7 +206,6 @@ void FPCGExPrimitiveComponentDescriptor::GetAssetPaths(TSet<FSoftObjectPath>& In
 FPCGExMeshComponentDescriptor::FPCGExMeshComponentDescriptor()
 	: FPCGExMeshComponentDescriptor(NoInit)
 {
-	// Make sure we have proper defaults
 	InitFrom(UMeshComponent::StaticClass()->GetDefaultObject<UMeshComponent>(), false);
 }
 
@@ -274,7 +272,6 @@ void FPCGExMeshComponentDescriptor::GetAssetPaths(TSet<FSoftObjectPath>& InAsset
 FPCGExStaticMeshComponentDescriptor::FPCGExStaticMeshComponentDescriptor()
 	: FPCGExStaticMeshComponentDescriptor(NoInit)
 {
-	// Make sure we have proper defaults
 	InitFrom(UStaticMeshComponent::StaticClass()->GetDefaultObject<UStaticMeshComponent>(), false);
 }
 

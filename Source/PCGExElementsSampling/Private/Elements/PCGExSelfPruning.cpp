@@ -21,10 +21,8 @@ void UPCGExSelfPruningSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* 
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 8)
 	{
-		// Rewire Primary Expansion
 		PCGEX_SHORTHAND_RENAME_PIN(PrimaryExpansionAttribute, PrimaryExpansion, PrimaryExpansionValue)
 
-		// Rewire Secondary Expansion
 		PCGEX_SHORTHAND_RENAME_PIN(SecondaryExpansionAttribute, SecondaryExpansion, SecondaryExpansionValue)
 	}
 

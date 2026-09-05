@@ -247,7 +247,6 @@ bool FPCGExDrawAttributesElement::Boot(FPCGExContext* InContext) const
 	for (const FPCGExAttributeDebugDrawConfig& Config : Settings->DebugList)
 	{
 		FPCGExAttributeDebugDrawConfig& MutableConfig = (const_cast<FPCGExAttributeDebugDrawConfig&>(Config));
-		//if (ExtraAttributes) { ExtraAttributes->UpdateConfig(MutableConfig); }
 
 		if (!Config.bEnabled)
 		{

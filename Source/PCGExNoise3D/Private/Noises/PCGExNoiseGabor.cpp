@@ -38,7 +38,6 @@ double FPCGExNoiseGabor::GenerateRaw(const FVector& Position) const
 				const int32 NY = CellY + DY;
 				const int32 NZ = CellZ + DZ;
 
-				// Process impulses in this cell
 				for (int32 i = 0; i < ImpulsesPerCell; ++i)
 				{
 					double Weight = 0.0;

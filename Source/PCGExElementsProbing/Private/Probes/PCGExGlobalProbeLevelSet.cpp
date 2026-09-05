@@ -127,7 +127,6 @@ void FPCGExProbeLevelSet::ProcessAll(TSet<uint64>& OutEdges) const
 
 				if (LevelDiff <= Config.MaxLevelDifference)
 				{
-					// Sort by combined distance and level similarity
 					const double Score = DistSq + FMath::Square(LevelDiff * 100.0);
 					Candidates.Add({Score, j});
 				}

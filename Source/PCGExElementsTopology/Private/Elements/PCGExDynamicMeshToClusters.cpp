@@ -236,7 +236,6 @@ namespace PCGExDynMeshToCluster
 				}
 			}
 
-			// Build the graph
 			TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(RootVtxFacade.ToSharedRef(), &Context->GraphBuilderDetails);
 			GraphBuilder->Graph->InsertEdges(Mesh->Edges, -1);
 
@@ -310,7 +309,6 @@ bool FPCGExDynamicMeshToClustersElement::Boot(FPCGExContext* InContext) const
 	PCGEX_CONTEXT_AND_SETTINGS(DynamicMeshToClusters)
 	PCGEX_EXECUTION_CHECK
 
-	// Gather input meshes
 	const TArray<FPCGTaggedData> Inputs = InContext->InputData.GetInputsByPin(PCGExTopology::Labels::SourceMeshLabel);
 	if (Inputs.IsEmpty())
 	{

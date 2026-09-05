@@ -310,7 +310,6 @@ FPCGExContext::FPCGExContext()
 
 FPCGExContext::~FPCGExContext()
 {
-	//WorkHandle.Reset();
 	ManagedObjects->Flush(); // So cleanups can be recursively triggered while manager is still alive
 	PCGExHelpers::SafeReleaseHandles(TrackedAssets);
 	TrackedCachedAssets.Empty(); // wrappers self-release on drop (RAII); the subsystem cache may keep the asset warm

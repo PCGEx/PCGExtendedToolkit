@@ -78,7 +78,6 @@ void FPCGExShapeGridBuilder::PrepareShape(const PCGExData::FConstPoint& Seed)
 			}
 		}
 
-		// Apply per-axis fit adjustments
 		const EPCGExApplySampledComponentFlags FitFlags = static_cast<EPCGExApplySampledComponentFlags>(Config.AdjustFit);
 
 #define PCGEX_ADJUST_FIT(_AXIS) \

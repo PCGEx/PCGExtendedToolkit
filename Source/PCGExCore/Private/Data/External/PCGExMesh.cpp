@@ -145,7 +145,6 @@ namespace PCGExMesh
 				{
 					const uint64 Key = PCGEx::SH3(Position, HashTolerance);
 
-					// Check if exact cell has a match
 					if (const int32* IdxPtr = Data.Find(Key))
 					{
 						return *IdxPtr;

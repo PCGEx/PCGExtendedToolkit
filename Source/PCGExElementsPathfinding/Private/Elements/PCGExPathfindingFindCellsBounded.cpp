@@ -166,7 +166,6 @@ bool FPCGExFindContoursBoundedElement::Boot(FPCGExContext* InContext) const
 	PCGEX_FWD(SeedGrowth)
 	Context->SeedGrowth.Init(Context, Context->SeedsDataFacade);
 
-	// Initialize seed ownership handler
 	Context->SeedOwnership = MakeShared<PCGExCells::FSeedOwnershipHandler>();
 	Context->SeedOwnership->Method = Settings->SeedOwnership;
 	Context->SeedOwnership->SortDirection = Settings->SortDirection;
@@ -175,7 +174,6 @@ bool FPCGExFindContoursBoundedElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	// Get required bounds
 	TArray<FPCGTaggedData> BoundsData = Context->InputData.GetSpatialInputsByPin(PCGExFindContoursBounded::SourceBoundsLabel);
 	if (BoundsData.IsEmpty())
 	{
@@ -386,7 +384,6 @@ namespace PCGExFindContoursBounded
 
 		const int32 NumSeeds = Context->SeedsDataFacade->Source->GetNum();
 
-		// Initialize cell processor
 		CellProcessor = MakeShared<PCGExClusters::FCellPathBuilder>();
 		CellProcessor->Cluster = Cluster;
 		CellProcessor->TaskManager = TaskManager;
@@ -561,7 +558,6 @@ namespace PCGExFindContoursBounded
 			}
 			else
 			{
-				// Find all seeds inside this cell
 				for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
 				{
 					if (!SeedInBounds[SeedIdx])
@@ -599,10 +595,8 @@ namespace PCGExFindContoursBounded
 			return;
 		}
 
-		// Classify wrapper cell
 		const ECellTriageResult WrapperResult = ClassifyCell(WrapperCell);
 
-		// Check if this category is enabled
 		bool bCategoryEnabled = false;
 		switch (WrapperResult)
 		{
@@ -671,7 +665,6 @@ namespace PCGExFindContoursBounded
 			}
 		}
 
-		// Pick winner using seed ownership handler
 		const int32 BestSeedIdx = SeedOwnership->PickWinner(CandidateSeeds, WrapperCell->Data.Centroid);
 
 		if (BestSeedIdx == INDEX_NONE)
@@ -903,7 +896,6 @@ namespace PCGExFindContoursBounded
 			}
 		}
 
-		// Handle wrapper cell
 		if (WrapperCell && (!Settings->Constraints.bOmitWrappingBounds || (Settings->Constraints.bKeepWrapperIfSolePath && ValidCells.IsEmpty())))
 		{
 			TSet<int32> ConsumedSeeds;
@@ -980,7 +972,6 @@ namespace PCGExFindContoursBounded
 				}
 			}
 
-			// Pick winner using seed ownership handler
 			const int32 BestSeedIdx = SeedOwnership->PickWinner(CandidateSeeds, WrapperCell->Data.Centroid);
 
 			if (BestSeedIdx != INDEX_NONE)
@@ -1021,7 +1012,6 @@ namespace PCGExFindContoursBounded
 			return;
 		}
 
-		// Output CellBounds
 		auto OutputCellBounds = [&](const TArray<TSharedPtr<PCGExClusters::FCell>>& Cells, const TSharedPtr<PCGExData::FPointIOCollection>& OutputCollection, const FString& TriageTag = TEXT(""))
 		{
 			if (!OutputCollection || Cells.IsEmpty())
@@ -1063,7 +1053,6 @@ namespace PCGExFindContoursBounded
 			}
 		}
 
-		// Prepare path outputs
 		auto PreparePathOutputs = [&](TArray<TSharedPtr<PCGExClusters::FCell>>& Cells, TArray<TSharedPtr<PCGExData::FPointIO>>& CellsIO, TArray<FString>& CellTags, const TSharedPtr<PCGExData::FPointIOCollection>& OutputCollection, const FString& TriageTag = TEXT(""))
 		{
 			if (!OutputCollection || Cells.IsEmpty())

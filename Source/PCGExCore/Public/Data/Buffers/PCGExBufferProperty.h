@@ -23,11 +23,6 @@
 // The per-element write is sequential -- acceptable since truly opaque types are rare
 // in hot paths. For bulk operations on known types, Tier 2's accessor-based path is faster.
 //
-// ── UE 5.8 migration notes ──
-//
-// FPropertyBuffer is migration-safe: it uses FPCGMetadataAttributeBase's public
-// void* API which is independent of the typed→generic unification. No changes expected.
-//
 
 namespace PCGExData
 {

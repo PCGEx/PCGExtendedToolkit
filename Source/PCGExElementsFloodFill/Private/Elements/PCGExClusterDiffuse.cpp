@@ -81,7 +81,6 @@ bool FPCGExClusterDiffuseElement::Boot(FPCGExContext* InContext) const
 	// Seed Blend Ops (Layer 2) are optional -- they blend attributes from the seeds point cloud.
 	PCGExFactories::GetInputFactories<UPCGExBlendOpFactory>(Context, PCGExClusterDiffuse::SourceSeedBlendingLabel, Context->SeedBlendingFactories, {FPCGExDataTypeInfoBlendOp::AsId()}, false);
 
-	// Fill controls are optional
 	PCGExFactories::GetInputFactories<UPCGExFillControlsFactoryData>(Context, PCGExFloodFill::SourceFillControlsLabel, Context->FillControlFactories, {FPCGExDataTypeInfoFillControl::AsId()}, false);
 
 	Context->SeedsDataFacade = PCGExData::TryGetSingleFacade(Context, PCGExCommon::Labels::SourceSeedsLabel, false, true);

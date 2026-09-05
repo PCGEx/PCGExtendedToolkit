@@ -9,7 +9,6 @@
 void UPCGExGoalPickerAll::CopySettingsFrom(const UPCGExInstancedFactory* Other)
 {
 	Super::CopySettingsFrom(Other);
-	//if (const UPCGExGoalPickerAll* TypedOther = Cast<UPCGExGoalPickerAll>(Other))	{	}
 }
 
 bool UPCGExGoalPickerAll::PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsDataFacade, const TSharedPtr<PCGExData::FFacade>& InGoalsDataFacade)

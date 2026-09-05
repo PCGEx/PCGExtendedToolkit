@@ -130,7 +130,6 @@ bool FPCGExPathCrossingsElement::AdvanceWork(FPCGExContext* InContext, const UPC
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
-				//NewBatch->SetPointsFilterData(&Context->FilterFactories);
 				NewBatch->bRequiresWriteStep = Settings->bDoCrossBlending;
 			}))
 		{
@@ -157,9 +156,6 @@ namespace PCGExPathCrossings
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExPathCrossings::Process);
 
 		const TSharedRef<PCGExData::FPointIO>& PointIO = PointDataFacade->Source;
-
-		// Must be set before process for filters
-		//PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
 
 		if (!IProcessor::Process(InTaskManager))
 		{

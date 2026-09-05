@@ -28,7 +28,6 @@ void FPCGExSubPointsBlendInterpolate::BlendSubPoints(const PCGExData::FConstPoin
 		{
 			FVector Location = OutTransform[Index].GetLocation();
 			MetadataBlender->Blend(From.Index, To.Index, Index, Metrics.GetTime(PathMetrics.Add(Location)));
-			//OutTransform[Index].SetLocation(Location);
 		}
 	}
 	else if (SafeBlendOver == EPCGExBlendOver::Index)
@@ -38,10 +37,8 @@ void FPCGExSubPointsBlendInterpolate::BlendSubPoints(const PCGExData::FConstPoin
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			//FVector Location = OutTransform[Index].GetLocation();
 			// Index is absolute into the output data; the weight has to be scope-relative.
 			MetadataBlender->Blend(From.Index, To.Index, Index, (Index - Scope.Start) / Divider);
-			//OutTransform[Index].SetLocation(Location);
 		}
 	}
 	else if (SafeBlendOver == EPCGExBlendOver::Fixed)
@@ -50,9 +47,7 @@ void FPCGExSubPointsBlendInterpolate::BlendSubPoints(const PCGExData::FConstPoin
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			//FVector Location = OutTransform[Index].GetLocation();
 			MetadataBlender->Blend(From.Index, To.Index, Index, Lerp);
-			//OutTransform[Index].SetLocation(Location);
 		}
 	}
 }

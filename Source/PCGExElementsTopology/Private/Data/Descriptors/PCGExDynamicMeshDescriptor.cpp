@@ -8,7 +8,6 @@
 FPCGExDynamicMeshDescriptor::FPCGExDynamicMeshDescriptor()
 	: FPCGExDynamicMeshDescriptor(NoInit)
 {
-	// Make sure we have proper defaults
 	InitFrom(UDynamicMeshComponent::StaticClass()->GetDefaultObject<UDynamicMeshComponent>(), false);
 }
 

@@ -30,12 +30,6 @@ namespace PCGExFilterGroup
 	{
 		// No internal init yet, will cause issues with local caching
 
-		/*
-		if (!bCacheResults) { return; }
-		const int32 NumResults = GetFilterType() == PCGExFilters::EType::Node ? Cluster->Nodes->Num() : EdgeDataFacade->Source->GetNum();
-		Results.SetNumUninitialized(NumResults);
-		for (bool& Result : Results) { Result = false; }
-		*/
 	}
 
 	void FFilterGroup::SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes)

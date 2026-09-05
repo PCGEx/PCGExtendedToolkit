@@ -127,7 +127,6 @@ namespace PCGExPackClusters
 			MetadataEntries[Index] = PCGInvalidEntryKey;
 		}
 
-		//
 		VtxAttributes = PCGExData::FAttributesInfos::Get(VtxDataFacade->GetIn()->Metadata);
 		if (VtxAttributes->Identities.IsEmpty())
 		{

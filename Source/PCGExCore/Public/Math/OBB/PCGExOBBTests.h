@@ -50,7 +50,6 @@ namespace PCGExMath::OBB
 			&& FMath::Abs(Local.Z) <= B.Extents.Z + Expansion;
 	}
 
-	// SAT overlap test
 	PCGEXCORE_API bool SATOverlap(const FOBB& A, const FOBB& B);
 
 	// SAT penetration depth (positive = overlapping, negative = separated).
@@ -88,7 +87,6 @@ namespace PCGExMath::OBB
 
 	// Mode-based dispatch - maps EPCGExBoxCheckMode to actual tests
 
-	// Point test with mode
 	FORCEINLINE bool TestPoint(const FOBB& Box, const FVector& Point, EPCGExBoxCheckMode Mode, float Expansion = 0.0f)
 	{
 		switch (Mode)

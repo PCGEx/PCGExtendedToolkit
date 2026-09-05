@@ -102,7 +102,6 @@ namespace PCGExClusters
 
 		int32 NumFaces = 0;
 
-		// Cached raw faces for reuse
 		TArray<FRawFace> CachedRawFaces;
 		bool bRawFacesEnumerated = false;
 

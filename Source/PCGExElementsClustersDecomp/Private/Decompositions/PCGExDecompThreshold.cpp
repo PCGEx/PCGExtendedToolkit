@@ -90,7 +90,6 @@ bool FPCGExDecompThreshold::Decompose(FPCGExDecompositionResult& OutResult)
 	}
 	else // Quantile
 	{
-		// Sort by value
 		NodeValues.Sort([](const FNodeValue& A, const FNodeValue& B)
 		{
 			return A.Value < B.Value;

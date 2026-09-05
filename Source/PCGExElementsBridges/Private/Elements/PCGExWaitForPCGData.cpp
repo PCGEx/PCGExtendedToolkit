@@ -59,7 +59,6 @@ bool PCGExWaitForPCGData::FFilterConfig::PassesFilter(const UPCGComponent* Candi
 		return false;
 	}
 
-	// Generation trigger matching
 	if (bDoMatchGenerationTrigger)
 	{
 		const bool bMatches = Candidate->GenerationTrigger == MatchGenerationTrigger;
@@ -272,7 +271,6 @@ bool FPCGExWaitForPCGDataElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
-	// Initialize config structs from settings
 	Context->FilterConfig.InitFrom(Settings);
 	Context->TimeoutConfig.InitFrom(Settings);
 	Context->GenerationConfig.InitFrom(Settings);
@@ -413,7 +411,6 @@ namespace PCGExWaitForPCGData
 				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Some actor references could not be resolved."));
 			}
 
-			// Start component search
 			SearchComponentsToken = TaskManager->TryCreateToken(FName("SearchComponents"));
 			if (!SearchComponentsToken.IsValid())
 			{
@@ -485,7 +482,6 @@ namespace PCGExWaitForPCGData
 				return;
 			}
 
-			// Timeout - log errors
 			if (!WarningConfig.bQuietTimeoutError)
 			{
 				for (const FSoftObjectPath& ActorRef : UniqueActorReferences)
@@ -618,7 +614,6 @@ namespace PCGExWaitForPCGData
 				return true;
 			}
 
-			// Remove if candidate is self
 			if (Self && Candidate == Self)
 			{
 				return true;
@@ -879,7 +874,6 @@ namespace PCGExWaitForPCGData
 
 		TemplateGraph = Context->GraphInstances[PointDataFacade->Source->IOIndex];
 
-		// Setup attribute to tags
 		TargetAttributesToDataTags = Settings->TargetAttributesToDataTags;
 		if (Settings->bDedupeData)
 		{
@@ -965,7 +959,6 @@ namespace PCGExWaitForPCGData
 			}
 		});
 
-		// Start discovery
 		if (!Discovery->Start(UniqueActorReferences))
 		{
 			if (!Context->WarningConfig.bQuietActorNotFoundWarning)

@@ -19,7 +19,6 @@ void FPCGExAdjacencySettingsCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Cache all child handles
 	ModeHandle = PropertyHandle->GetChildHandle(TEXT("Mode"));
 	ConsolidationHandle = PropertyHandle->GetChildHandle(TEXT("Consolidation"));
 	ThresholdComparisonHandle = PropertyHandle->GetChildHandle(TEXT("ThresholdComparison"));

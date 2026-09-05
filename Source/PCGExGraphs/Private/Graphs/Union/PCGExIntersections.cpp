@@ -92,8 +92,7 @@ namespace PCGExGraphs
 		}
 
 		// Single pass: for each valid edge, look up or insert into UniqueRootIOSets. This stores one
-		// TSet per unique RootIndex (typically O(num IO sources) ≪ NumEdges) rather than one per
-		// edge, eliminating the N heap-alloc + element-copy overhead of the old fan-out approach.
+		// TSet per unique RootIndex (typically O(num IO sources) ≪ NumEdges) rather than one per edge.
 		TMap<int32, int32> RootIdxToUniqueIdx;
 		for (int32 i = 0; i < NumEdges; i++)
 		{
@@ -382,8 +381,8 @@ namespace PCGExGraphs
 			PCGExBlending::FMetadataBlender* Blender,
 			const FPECollinear& Record)
 		{
-			// TODO (Q7): finish proper P/E blend. Today's behavior is identical to the legacy stub:
-			// blend the two endpoint attributes at 0.5, then restore the pre-blend location.
+			// TODO: finish proper P/E blend. Current behavior: blend the two endpoint attributes at 0.5,
+			// then restore the pre-blend location.
 			const FEdge& SrcEdge = Allocations.Graph->Edges[Record.EdgeIdx];
 			const TPCGValueRange<FTransform> Transforms = Allocations.PointIO->GetOut()->GetTransformValueRange(false);
 
