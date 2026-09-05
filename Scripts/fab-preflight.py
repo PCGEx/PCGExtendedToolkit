@@ -985,6 +985,123 @@ def check_value_member_include(tree):
     return out
 
 
+# Logging macros whose expansion names a log category their own header never declares. PCGE_LOG and
+# PCGE_LOG_C (PCGElement.h) expand to UE_LOG(LogPCG, ...); LogPCG is declared in PCGModule.h only.
+# On the dev box a Unity neighbour or the shared PCH supplies it; a clean -NoPCH -DisableUnity build
+# (FAB, or BuildPlugin -StrictIncludes) fails with C2065 / 'use of undeclared identifier LogPCG'
+# (Valency 5.7, Windows and Mac, 2026-09-04). Suppliers: the owning header plus the engine headers
+# verified against 5.7 PCG/Public to include it directly.
+LOG_CATEGORY_USES = [
+    (re.compile(r'\b(?:PCGE_LOG|PCGE_LOG_C)\s*\(|\bLogPCG\b'), "LogPCG", "PCGModule.h",
+     ("PCGModule.h", "Metadata/PCGMetadataAttributeTpl.h", "Helpers/PCGSettingsHelpers.h",
+      "Helpers/PCGPointDataPartition.h", "Data/PCGToolData.h")),
+]
+
+
+@check("log-category-include", "error",
+       "A logging macro (PCGE_LOG, PCGE_LOG_C) or LogPCG is used while nothing in the file's include "
+       "closure brings in PCGModule.h, which declares the category. Unity Build and the shared PCH "
+       "supply it from a neighbour on the dev box; FAB's clean build reports C2065 'LogPCG'.")
+def check_log_category_include(tree):
+    table = []
+    for rx, sym, owner, suppliers in LOG_CATEGORY_USES:
+        alts = "|".join(re.escape(s) for s in suppliers)
+        table.append((rx, sym, owner,
+                      re.compile(r'^\s*#\s*include\s+["<](?:[^">]*/)?(?:' + alts + r')[">]', re.M)))
+    out = []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        cl = None
+        for rx, sym, owner, inc_re in table:
+            m = rx.search(t)
+            if not m:
+                continue
+            if cl is None:
+                cl = tree.closure(p)
+            if any(inc_re.search(tree.stripped(f)) for f in cl):
+                continue
+            out.append(Finding("log-category-include", "error", p, t[:m.start()].count("\n") + 1,
+                               f"{sym} is needed by '{m.group(0).rstrip('( ')}' but \"{owner}\" is not "
+                               "in the include closure",
+                               f'add #include "{owner}"'))
+    return out
+
+
+# Global identifiers <MacTypes.h> (CoreServices, reached through any CoreFoundation / Cocoa include
+# on Mac) already defines as typedefs or structs. A global-scope namespace, type, alias, function or
+# macro with one of these names is "redefinition as a different kind of symbol" on Mac alone
+# ('namespace Style = PCGExValencyWidgets::Style;', 5.7 Mac, 2026-09-04). Nested scopes are safe.
+MAC_RESERVED = frozenset("""
+    Boolean Byte SignedByte Ptr Handle Size Fixed Fract UnsignedFixed ShortFixed Float32 Float64
+    Float80 Float96 Duration AbsoluteTime OptionBits ItemCount ByteCount ByteOffset LogicalAddress
+    PhysicalAddress OSErr OSStatus OSType ResType FourCharCode ScriptCode LangCode RegionCode
+    Str15 Str27 Str31 Str32 Str63 Str255 StringPtr StringHandle ConstStringPtr UniChar UniCharPtr
+    UniCharCount Style StyleParameter StyleField TimeValue TimeScale TimeBase TimeRecord Point Rect
+    FixedPoint FixedRect ProcessSerialNumber NumVersion VersRec WideChar
+""".split())
+MAC_GLOBAL_DECL_RE = re.compile(
+    r'^\s*(?:namespace\s+([A-Za-z_]\w*)\s*(?:=|\{|$)'
+    r'|(?:class|struct|union|enum(?:\s+(?:class|struct))?)\s+(?:[A-Z_0-9]+_API\s+)?([A-Za-z_]\w*)\s*(?:final\b|:|\{|;|$)'
+    r'|using\s+([A-Za-z_]\w*)\s*='
+    r'|typedef\s+[^;]*?\b([A-Za-z_]\w*)\s*;'
+    r'|(?:[A-Z_0-9]+_API\s+)?(?:static\s+|inline\s+|extern\s+|constexpr\s+)*'
+    r'[A-Za-z_][\w:<>,\s\*&]*?\s+\*?&?\s*([A-Za-z_]\w*)\s*\()')
+
+
+@check("mac-reserved-global", "error",
+       "A global-scope namespace, type, alias, function or macro named like a <MacTypes.h> typedef "
+       "(Style, Point, Rect, Size, Handle, Ptr, Boolean, Duration, ...). Every Mac TU sees those typedefs "
+       "through CoreFoundation, so the declaration is 'redefinition as a different kind of symbol' on "
+       "Mac only. Windows and Linux compile it fine.")
+def check_mac_reserved_global(tree):
+    out = []
+    for p in tree.headers + tree.sources:
+        lines = tree.stripped(p).split("\n")
+        depth = 0
+        for i, ln in enumerate(lines):
+            if ln.lstrip().startswith("#"):
+                d = re.match(r'^\s*#\s*define\s+([A-Za-z_]\w*)', ln)
+                if d and d.group(1) in MAC_RESERVED:
+                    out.append(Finding("mac-reserved-global", "error", p, i + 1,
+                                       f"macro '{d.group(1)}' rewrites the <MacTypes.h> typedef of the same name",
+                                       "rename the macro"))
+                continue
+            if depth == 0:
+                m = MAC_GLOBAL_DECL_RE.match(ln)
+                if m:
+                    name = next(g for g in m.groups() if g)
+                    if name in MAC_RESERVED:
+                        out.append(Finding("mac-reserved-global", "error", p, i + 1,
+                                           f"global '{name}' collides with the <MacTypes.h> typedef of the same name",
+                                           "rename it (only the global scope clashes; nested declarations are fine)"))
+            depth += ln.count("{") - ln.count("}")
+    return out
+
+
+FUNCREF_ALIAS_RE = re.compile(r'\busing\s+([A-Za-z_]\w*)\s*=\s*TFunctionRef\s*<')
+
+
+@check("functionref-dangling", "error",
+       "A TFunctionRef local (or an alias of one) initialized from a lambda expression. TFunctionRef's "
+       "constructor is UE_LIFETIMEBOUND (5.8 Templates/Function.h), so the lambda temporary it binds dies "
+       "at the ';' and Clang reports -Wdangling (error under -Werror). MSVC says nothing.")
+def check_functionref_dangling(tree):
+    aliases = set()
+    for p in tree.headers + tree.sources:
+        aliases.update(FUNCREF_ALIAS_RE.findall(tree.stripped(p)))
+    names = "|".join([r'TFunctionRef\s*<[^;=\n]*>'] + [re.escape(a) for a in sorted(aliases)])
+    rx = re.compile(r'^\s*(?:const\s+)?(?:[A-Za-z_][\w:]*::)?(' + names + r')\s+([A-Za-z_]\w*)\s*(?:=|\(|\{)\s*\[',
+                    re.M)
+    out = []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        for m in rx.finditer(t):
+            out.append(Finding("functionref-dangling", "error", p, t[:m.start()].count("\n") + 1,
+                               f"'{m.group(2)}' ({m.group(1).split('<')[0].strip()}) is bound to a lambda temporary",
+                               "store the lambda in an 'auto' local first, then bind the TFunctionRef to that"))
+    return out
+
+
 # Symbols CoreMinimal.h stopped supplying transitively in 5.8 (C7568 / C2065 on a clean build), with
 # the header that owns them. Owner paths verified against the 5.8 engine tree.
 IWYU_SYMBOLS = [
@@ -1257,6 +1374,33 @@ SELFTEST = {
         "\tTArray<UObject*> Out;\n"
         "\tGetObjectsWithOuter(Outer, Out);\n"
         "}\n"),
+    # log-category-include: PCGE_LOG_C with no PCGModule.h anywhere in reach.
+    "ModB/Private/PCGExLog.cpp": (
+        "#include \"PCGExBase.h\"\n"
+        "void PCGExLogScan(FPCGContext* Ctx)\n"
+        "{\n"
+        "\tPCGE_LOG_C(Error, GraphAndLog, Ctx, FTEXT(\"no rules\"));\n"
+        "}\n"),
+    # mac-reserved-global: one finding per declaration shape (namespace alias, type, function).
+    "ModB/Private/PCGExMac.cpp": (
+        "#include \"PCGExBase.h\"\n"
+        "namespace Style = PCGExNegative;\n"
+        "struct Point\n"
+        "{\n"
+        "\tint X = 0;\n"
+        "};\n"
+        "int Size();\n"),
+    # functionref-dangling: through an alias and through the spelled-out template.
+    "ModB/Private/PCGExDangling.cpp": (
+        "#include \"PCGExBase.h\"\n"
+        "using FPCGExVisitor = TFunctionRef<void(int)>;\n"
+        "void PCGExDanglingScan()\n"
+        "{\n"
+        "\tFPCGExVisitor V = [](int) {};\n"
+        "\tTFunctionRef<void(int)> W = [](int) {};\n"
+        "\tV(1);\n"
+        "\tW(2);\n"
+        "}\n"),
     # instanced-in-instancedstruct + deprecated-unconsumed.
     "ModB/Public/PCGExPayload.h": (
         "#pragma once\n"
@@ -1295,6 +1439,10 @@ SELFTEST = {
         "\tMODB_API void GuardedMultiLine(int A,\n"
         "\t                               int B);\n"
         "#endif\n"
+        "\tnamespace Style\n"
+        "\t{\n"
+        "\t\tinline int Pad() { return 4; }\n"
+        "\t}\n"
         "}\n"
         "class UPCGExNegativeSettings : public UPCGExSettings\n"
         "{\n"
@@ -1319,6 +1467,7 @@ SELFTEST = {
         "\tint32 B = 0;\n"
         "\tint32 NegLegacy_DEPRECATED = 0;\n"
         "\tint32 NegPasteXInput_DEPRECATED = 0;\n"
+        "\tint32 Style = 0;\n"
         "\tUPCGExNegativeSettings() : A(1), Lookup(TMap<FName, int32>()), B(2)\n"
         "\t{\n"
         "\t}\n"
@@ -1368,6 +1517,7 @@ SELFTEST = {
         "};\n"),
     "ModB/Private/PCGExNegative.cpp": (
         "#include \"PCGExNegative.h\"\n"
+        "#include \"PCGModule.h\"\n"
         "#include \"UObject/UObjectHash.h\"\n"
         "#if WITH_EDITOR\n"
         "#include \"EditorOnlyThing.h\"\n"
@@ -1379,6 +1529,10 @@ SELFTEST = {
         "\t{\n"
         "\t\tTArray<UObject*> Out;\n"
         "\t\tGetObjectsWithOuter(nullptr, Out);\n"
+        "\t\tPCGE_LOG_C(Error, GraphAndLog, nullptr, FTEXT(\"covered\"));\n"
+        "\t\tauto NegFn = [](int) {};\n"
+        "\t\tTFunctionRef<void(int)> NegRef = NegFn;\n"
+        "\t\tNegRef(Style::Pad());\n"
         "\t}\n"
         "\tFAutoConsoleCommand Cmd(TEXT(\"pcgex.Neg\"), TEXT(\"help\"), FConsoleCommandDelegate());\n"
         "}\n"
@@ -1413,7 +1567,8 @@ SELFTEST_EXPECT = {
     "unity-collision": 2, "msvc-only": 1, "include-case": 1, "generated-last": 1, "fwd-decl-deref": 1,
     "subclassof-incomplete": 1, "editor-guard-free": 2, "clang-wall": 6, "ctor-reorder": 1,
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
-    "value-member-include": 1,
+    "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
+    "functionref-dangling": 2,
 }
 
 

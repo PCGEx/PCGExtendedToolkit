@@ -7,6 +7,7 @@
 #include "PCGContext.h"
 #include "PCGData.h"
 #include "PCGDebug.h"
+#include "PCGModule.h"
 #include "PCGPoint.h"
 #include "PCGSettings.h"
 #include "Data/PCGPointArrayData.h"
