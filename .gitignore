@@ -4,6 +4,7 @@ Build/*
 Intermediate/*
 Plugins/*/Intermediate/*
 .claude/*
+Scripts/__pycache__/*
 *.generated.h
 
 # Cache files for the editor to use

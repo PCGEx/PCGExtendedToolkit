@@ -4,6 +4,9 @@
 #pragma once
 
 #include "PCGExVersion.h"
+// PCGEX_LOG_* below expand to PCGE_LOG_C -> UE_LOG(LogPCG, ...); LogPCG is declared here and
+// nowhere else. Without it, a no-PCH / non-unity build fails at every use site (FAB, 2026-09).
+#include "PCGModule.h"
 
 #ifndef PCGEX_MACROS
 #define PCGEX_MACROS
