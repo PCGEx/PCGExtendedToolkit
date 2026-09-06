@@ -9,13 +9,36 @@
 #include "Core/PCGExContext.h"
 #include "PCGExSubSystem.h"
 #include "Engine/AssetManager.h"
+#include "Engine/Level.h"
 #include "Engine/StreamableManager.h"
+#include "Engine/World.h"
 #include "UObject/SoftObjectPath.h"
 
 namespace PCGExStreamingHelpers
 {
 	// File-local helpers for the cached load path. Named (not anonymous / static) so the Unity build can't
 	// collide them with same-named helpers in sibling TUs.
+
+	// True when Path already resolves to an object of a live world: outered under a ULevel whose owning world
+	// is initialized (editor, PIE, game or preview). No package load produces those, and a streamable handle
+	// on one pins the level's whole world -- for a sublevel, past its unload -- so no loader below requests
+	// one. Objects of a level asset merely loaded as data (uninitialized world) still stream and pin as usual.
+	// Game thread only: resolution is a StaticFindObject, which is illegal during GC.
+	bool IsOwnedByLiveWorld(const FSoftObjectPath& Path)
+	{
+		check(IsInGameThread());
+		const UObject* Object = Path.ResolveObject();
+		const ULevel* Level = Object ? Object->GetTypedOuter<ULevel>() : nullptr;
+		if (!Level) { return false; }
+		const UWorld* World = Level->OwningWorld ? Level->OwningWorld.Get() : Level->GetTypedOuter<UWorld>();
+		return World && World->IsInitialized();
+	}
+
+	// Drop live-world-owned paths in place; they count as loaded without a handle.
+	void StripLiveWorldOwned(TArray<FSoftObjectPath>& Paths)
+	{
+		Paths.RemoveAll([](const FSoftObjectPath& Path) { return IsOwnedByLiveWorld(Path); });
+	}
 
 	// Wrap a freshly-loaded handle: through the subsystem (which may cache it) when one exists, else standalone.
 	PCGExHelpers::FPCGExSharedAssetHandlePtr WrapLoadedBatch(UPCGExSubSystem* Subsystem, const TSharedPtr<FStreamableHandle>& Handle, const bool bCacheMisses)
@@ -57,6 +80,8 @@ namespace PCGExStreamingHelpers
 			// or it can deadlock under PCG cancellation.
 			auto LoadMisses = [&Subsystem, &Misses, bCacheMisses]() -> PCGExHelpers::FPCGExSharedAssetHandlePtr
 			{
+				StripLiveWorldOwned(Misses);
+				if (Misses.IsEmpty()) { return nullptr; }
 				const TSharedPtr<FStreamableHandle> Handle = UAssetManager::GetStreamableManager().RequestSyncLoad(MoveTemp(Misses));
 				return WrapLoadedBatch(Subsystem, Handle, bCacheMisses);
 			};
@@ -101,10 +126,13 @@ namespace PCGExHelpers
 		TSharedPtr<FStreamableHandle> Handle;
 		if (IsInGameThread())
 		{
-			Handle = UAssetManager::GetStreamableManager().RequestSyncLoad(Path);
-			if (InContext)
+			if (!PCGExStreamingHelpers::IsOwnedByLiveWorld(Path))
 			{
-				InContext->TrackAssetsHandle(Handle);
+				Handle = UAssetManager::GetStreamableManager().RequestSyncLoad(Path);
+				if (InContext)
+				{
+					InContext->TrackAssetsHandle(Handle);
+				}
 			}
 		}
 		else
@@ -123,10 +151,15 @@ namespace PCGExHelpers
 		TSharedPtr<FStreamableHandle> Handle;
 		if (IsInGameThread())
 		{
-			Handle = UAssetManager::GetStreamableManager().RequestSyncLoad(Paths->Array());
-			if (InContext)
+			TArray<FSoftObjectPath> Streamable = Paths->Array();
+			PCGExStreamingHelpers::StripLiveWorldOwned(Streamable);
+			if (!Streamable.IsEmpty())
 			{
-				InContext->TrackAssetsHandle(Handle);
+				Handle = UAssetManager::GetStreamableManager().RequestSyncLoad(MoveTemp(Streamable));
+				if (InContext)
+				{
+					InContext->TrackAssetsHandle(Handle);
+				}
 			}
 		}
 		else
@@ -208,6 +241,14 @@ namespace PCGExHelpers
 			if (Paths.IsEmpty())
 			{
 				OnLoadEnd(false, nullptr);
+				return;
+			}
+
+			// Live-world-owned paths count as loaded; with nothing left to request there is no handle to hand back.
+			PCGExStreamingHelpers::StripLiveWorldOwned(Paths);
+			if (Paths.IsEmpty())
+			{
+				OnLoadEnd(true, nullptr);
 				return;
 			}
 
@@ -296,6 +337,15 @@ namespace PCGExHelpers
 		const TWeakObjectPtr<UPCGExSubSystem> WeakSubsystem = Subsystem;
 		PCGExMT::ExecuteOnMainThread(TaskManager, [Misses = MoveTemp(Misses), OnLoadEnd, TaskManager, CtxHandle, WeakSubsystem, bCacheMisses]() mutable
 		{
+			// Live-world-owned paths count as loaded and are never cached: a cached handle on one would keep
+			// its world alive past that world's teardown.
+			PCGExStreamingHelpers::StripLiveWorldOwned(Misses);
+			if (Misses.IsEmpty())
+			{
+				OnLoadEnd(true);
+				return;
+			}
+
 			TWeakPtr<PCGExMT::FAsyncToken> LoadToken = TaskManager->TryCreateToken(FName("LoadToken"));
 
 			// Shared by the two mutually-exclusive completion paths below; registers on the context only while
