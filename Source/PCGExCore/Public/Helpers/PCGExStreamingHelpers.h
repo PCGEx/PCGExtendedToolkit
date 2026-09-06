@@ -58,6 +58,9 @@ namespace PCGExHelpers
 
 	using FPCGExSharedAssetHandlePtr = TSharedPtr<FPCGExSharedAssetHandle>;
 
+	// Every loader below skips paths already resolving to an object of a live (initialized) world: no package
+	// load can produce those, and a streamable handle on one would pin that world. Such paths count as
+	// loaded, so a request made only of them completes successfully with a null handle.
 	PCGEXCORE_API
 	TSharedPtr<FStreamableHandle> LoadBlocking_AnyThread(const FSoftObjectPath& Path, FPCGExContext* InContext = nullptr);
 
