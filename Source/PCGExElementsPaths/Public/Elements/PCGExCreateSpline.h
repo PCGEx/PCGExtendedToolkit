@@ -37,8 +37,15 @@ public:
 	}
 #endif
 
+public:
+	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
+
+	/** Whether a selected tangents module reads the Tangent Sources pin, which is then Required instead of Advanced. */
+	bool RequiresTangentSources() const;
+
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
+	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	//~End UPCGSettings
 
@@ -92,10 +99,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay)
 	FPCGExAttachmentRules AttachmentRules;
 
+	/** Single source of truth for "this node computes tangents": per-point types may include Curve Custom Tangent. */
 	UFUNCTION()
 	bool GetApplyTangents() const
 	{
-		return (!bApplyCustomPointType && DefaultPointType == EPCGExSplinePointType::CurveCustomTangent);
+		return bApplyCustomPointType || DefaultPointType == EPCGExSplinePointType::CurveCustomTangent;
 	}
 
 	virtual bool ShouldCache() const override;

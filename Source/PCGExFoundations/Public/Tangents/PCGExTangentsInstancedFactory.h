@@ -31,8 +31,10 @@ class FPCGExTangentsOperation : public FPCGExOperation
 public:
 	bool bClosedLoop = false;
 
-	virtual bool PrepareForData(FPCGExContext* InContext)
+	// Runs once per input data before any Process* call; the base binds PrimaryDataFacade.
+	virtual bool PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade)
 	{
+		PrimaryDataFacade = InDataFacade;
 		return true;
 	}
 
@@ -82,6 +84,12 @@ public:
 		{
 			bClosedLoop = TypedOther->bClosedLoop;
 		}
+	}
+
+	/** Whether this module reads reference splines from the host node's Tangent Sources pin. */
+	virtual bool WantsTangentSources() const
+	{
+		return false;
 	}
 
 	virtual TSharedPtr<FPCGExTangentsOperation> CreateOperation() const PCGEX_NOT_IMPLEMENTED_RET(CreateOperation(), nullptr);
@@ -170,11 +178,21 @@ struct PCGEXFOUNDATIONS_API FPCGExTangentsDetails
 	bool Init(FPCGExContext* InContext, const FPCGExTangentsDetails& InDetails);
 };
 
+struct FPCGPinProperties;
+
 namespace PCGExTangents
 {
 	const FName SourceOverridesTangents = TEXT("Overrides : Tangents");
 	const FName SourceOverridesTangentsStart = TEXT("Overrides : Start Tangents");
 	const FName SourceOverridesTangentsEnd = TEXT("Overrides : End Tangents");
+	const FName SourceTangentSourcesLabel = TEXT("Tangent Sources");
+
+	/** Pins every tangents-hosting node exposes: Tangent Sources (Required when a selected module reads it, Advanced otherwise) plus the three module override pins. */
+	PCGEXFOUNDATIONS_API void DeclareTangentsInputs(TArray<FPCGPinProperties>& PinProperties, const bool bRequiresSources);
+
+	/** True when any of the given modules reads the Tangent Sources pin. */
+	PCGEXFOUNDATIONS_API bool WantsTangentSources(const UPCGExTangentsInstancedFactory* InTangents, const UPCGExTangentsInstancedFactory* InStartTangents, const UPCGExTangentsInstancedFactory* InEndTangents);
+	PCGEXFOUNDATIONS_API bool WantsTangentSources(const FPCGExTangentsDetails& InDetails);
 
 	class PCGEXFOUNDATIONS_API FTangentsHandler : public TSharedFromThis<FTangentsHandler>
 	{
