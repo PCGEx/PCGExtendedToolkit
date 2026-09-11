@@ -110,10 +110,10 @@ public:
 
 	/**
 	 * Append a row default-initialized as EntryStruct (any entry-derived struct, base
-	 * included -- what subcollection rows use); null if invalid. Caller owns Modify /
-	 * MarkPackageDirty / staging rebuild.
+	 * included -- what subcollection rows use); null if invalid or null (untyped adds are
+	 * meaningless on a heterogeneous host). Caller owns Modify / MarkPackageDirty / staging rebuild.
 	 */
-	FPCGExAssetCollectionEntry* AddEntryOfType(const UScriptStruct* EntryStruct);
+	virtual FPCGExAssetCollectionEntry* AddEntryOfType(const UScriptStruct* EntryStruct) override;
 
 #if WITH_EDITOR
 	/**

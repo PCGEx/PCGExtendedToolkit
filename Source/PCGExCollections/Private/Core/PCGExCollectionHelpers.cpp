@@ -4,19 +4,209 @@
 #include "Core/PCGExCollectionHelpers.h"
 
 #include "PCGParamData.h"
+#include "PCGExProperty.h"
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Details/PCGExStagingDetails.h"
+#include "Helpers/PCGExMetaHelpersMacros.h"
+#include "Helpers/PCGExStreamingHelpers.h"
+#include "Metadata/PCGMetadataAttributeTpl.h"
 #include "UObject/Package.h"
 #include "UObject/UnrealType.h"
 
+namespace PCGExAttributeSetBuild
+{
+	struct FPropertyColumn
+	{
+		const FPCGMetadataAttributeBase* Attribute = nullptr;
+		EPCGMetadataTypes Type = EPCGMetadataTypes::Unknown;
+		int32 SchemaIndex = INDEX_NONE; // position in the built schema (== override slot index)
+	};
+
+	/**
+	 * Declare one schema entry per mapped attribute on the host, then resolve each column's slot index
+	 * from the built schema. Schema is built BEFORE any row exists: per-entry values are written by
+	 * parallel index afterwards, never re-derived from rows (the runtime SyncToSchema resets entries
+	 * to schema defaults).
+	 */
+	void CollectPropertyColumns(
+		UPCGExAssetCollection* InCollection, FPCGExContext* InContext, const UPCGMetadata* Metadata,
+		const FPCGExRoamingAssetCollectionDetails& Details, TArray<FPropertyColumn>& OutColumns, TArray<FInstancedStruct>& OutSchema)
+	{
+		FPCGExAttributeGatherDetails Filter = Details.PropertyAttributes;
+		Filter.Init();
+
+		TArray<FName> Names;
+		TArray<EPCGMetadataTypes> Types;
+		Metadata->GetAttributes(Names, Types);
+
+		TArray<FName> ColumnNames;
+		for (int32 i = 0; i < Names.Num(); i++)
+		{
+			const FName Name = Names[i];
+			if (Name == Details.AssetPathSourceAttribute || Name == Details.WeightSourceAttribute || Name == Details.CategorySourceAttribute)
+			{
+				continue;
+			}
+
+			if (!Filter.Test(Name.ToString()))
+			{
+				continue;
+			}
+
+			FInstancedStruct Property;
+			if (!PCGExProperties::MakePropertyForMetadataType(Types[i], Name, Property))
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Attribute '{0}' has no custom property counterpart and was skipped."), FText::FromName(Name)));
+				continue;
+			}
+
+			FPCGExPropertySchema& Schema = InCollection->CollectionProperties.Schemas.Emplace_GetRef();
+			Schema.Name = Name;
+			Schema.Property = MoveTemp(Property);
+			Schema.SyncPropertyName();
+
+			FPropertyColumn& Column = OutColumns.Emplace_GetRef();
+			Column.Attribute = Metadata->GetConstAttribute(Name);
+			Column.Type = Types[i];
+			ColumnNames.Add(Name);
+		}
+
+		if (OutColumns.IsEmpty())
+		{
+			return;
+		}
+
+		TArray<FPCGExHeaderIdRemap> Remaps;
+		InCollection->CollectionProperties.SyncAllSchemas(Remaps);
+		OutSchema = InCollection->CollectionProperties.BuildSchema();
+
+		// Slot index by name rather than insertion order: BuildSchema is the authority on layout.
+		for (int32 c = 0; c < OutColumns.Num(); c++)
+		{
+			OutColumns[c].SchemaIndex = OutSchema.IndexOfByPredicate([&ColumnNames, c](const FInstancedStruct& Slot)
+			{
+				const FPCGExProperty* Prop = Slot.GetPtr<FPCGExProperty>();
+				return Prop && Prop->PropertyName == ColumnNames[c];
+			});
+		}
+	}
+
+	/** Row value -> override slot, converted through the property's TryReadValue. */
+	bool WriteColumn(const FPropertyColumn& Column, const int64 ItemKey, FPCGExProperty* Prop)
+	{
+		switch (Column.Type)
+		{
+#define PCGEX_WRITE_COLUMN(_TYPE, _NAME, ...) \
+		case EPCGMetadataTypes::_NAME: \
+			return Prop->TrySetValue<_TYPE>(static_cast<const FPCGMetadataAttribute<_TYPE>*>(Column.Attribute)->GetValueFromItemKey(ItemKey));
+		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_WRITE_COLUMN)
+#undef PCGEX_WRITE_COLUMN
+		default:
+			return false;
+		}
+	}
+}
+
 namespace PCGExCollectionHelpers
 {
+#pragma region FSourceAssetResolver
+
+	FSourceAssetResolver::FSourceAssetResolver()
+	{
+		PCGExAssetCollection::FTypeRegistry::Get().ForEach([this](const PCGExAssetCollection::FTypeInfo& Info)
+		{
+			if (Info.DetectSourceAsset && Info.EntryStruct)
+			{
+				Detectors.Add(Info);
+			}
+		});
+
+		Detectors.Sort([](const PCGExAssetCollection::FTypeInfo& A, const PCGExAssetCollection::FTypeInfo& B)
+		{
+			return A.SourceDetectPriority < B.SourceDetectPriority;
+		});
+	}
+
+	FSourceAssetResolver::~FSourceAssetResolver()
+	{
+		PCGExHelpers::SafeReleaseHandles(Handles);
+	}
+
+	bool FSourceAssetResolver::Resolve(const FAssetData& InAsset, FInstancedStruct& OutPayload) const
+	{
+		for (const PCGExAssetCollection::FTypeInfo& Info : Detectors)
+		{
+			if (!Info.DetectSourceAsset(InAsset))
+			{
+				continue;
+			}
+
+			FInstancedStruct Payload;
+			if (Info.MakeEntryFromSourceAsset)
+			{
+				// Factory rejected on closer inspection: fall through to lower-priority detectors.
+				if (!Info.MakeEntryFromSourceAsset(InAsset, Payload))
+				{
+					continue;
+				}
+			}
+			else
+			{
+				Payload.InitializeAs(Info.EntryStruct);
+				Payload.GetMutablePtr<FPCGExAssetCollectionEntry>()->SetAssetPath(InAsset.ToSoftObjectPath());
+			}
+
+			if (!Payload.GetPtr<FPCGExAssetCollectionEntry>())
+			{
+				continue;
+			}
+
+			OutPayload = MoveTemp(Payload);
+			return true;
+		}
+
+		return false;
+	}
+
+	bool FSourceAssetResolver::ResolvePath(const FSoftObjectPath& InPath, FInstancedStruct& OutPayload, FPCGExContext* InContext)
+	{
+		if (!InPath.IsValid())
+		{
+			return false;
+		}
+
+		FAssetData Asset;
+		if (const IAssetRegistry* Registry = IAssetRegistry::Get())
+		{
+			Asset = Registry->GetAssetByObjectPath(InPath);
+		}
+
+		if (!Asset.IsValid())
+		{
+			// No registry row (class paths, unscanned assets): resolve through the loaded object. A class
+			// must yield its own row, not its Blueprint's (AllowBlueprintClass).
+			Handles.Add(PCGExHelpers::LoadBlocking_AnyThread(InPath, InContext));
+			const UObject* Object = InPath.ResolveObject();
+			if (!Object)
+			{
+				return false;
+			}
+			Asset = FAssetData(Object, FAssetData::ECreationFlags::AllowBlueprintClass);
+		}
+
+		return Resolve(Asset, OutPayload);
+	}
+
+#pragma endregion
+
 	bool BuildFromAttributeSet(
 		UPCGExAssetCollection* InCollection,
 		FPCGExContext* InContext,
 		const UPCGParamData* InAttributeSet,
-		const FPCGExAssetAttributeSetDetails& Details,
+		const FPCGExRoamingAssetCollectionDetails& Details,
 		bool bBuildStaging)
 	{
 		if (!InCollection || !InAttributeSet)
@@ -30,7 +220,6 @@ namespace PCGExCollectionHelpers
 			return false;
 		}
 
-		// Get path attribute
 		const FPCGMetadataAttributeBase* PathAttribute = Metadata->GetConstAttribute(Details.AssetPathSourceAttribute);
 		if (!PathAttribute)
 		{
@@ -38,74 +227,81 @@ namespace PCGExCollectionHelpers
 			return false;
 		}
 
-		// Optional weight attribute
+		const FPCGMetadataAttribute<FSoftObjectPath>* SoftPathAttribute = PathAttribute->GetTypeId() == PCG::Private::MetadataTypes<FSoftObjectPath>::Id
+			? static_cast<const FPCGMetadataAttribute<FSoftObjectPath>*>(PathAttribute) : nullptr;
+		const FPCGMetadataAttribute<FString>* StringPathAttribute = PathAttribute->GetTypeId() == PCG::Private::MetadataTypes<FString>::Id
+			? static_cast<const FPCGMetadataAttribute<FString>*>(PathAttribute) : nullptr;
+		if (!SoftPathAttribute && !StringPathAttribute)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("Asset path attribute '{0}' must be a Soft Object Path or a String."), FText::FromName(Details.AssetPathSourceAttribute)));
+			return false;
+		}
+
 		const FPCGMetadataAttribute<int32>* WeightAttribute = nullptr;
 		if (Details.WeightSourceAttribute != NAME_None)
 		{
 			WeightAttribute = Metadata->GetConstTypedAttribute<int32>(Details.WeightSourceAttribute);
 		}
 
-		// Optional category attribute
 		const FPCGMetadataAttribute<FName>* CategoryAttribute = nullptr;
 		if (Details.CategorySourceAttribute != NAME_None)
 		{
 			CategoryAttribute = Metadata->GetConstTypedAttribute<FName>(Details.CategorySourceAttribute);
 		}
 
-		// Get entry count
-		const int32 NumEntries = Metadata->GetLocalItemCount();
-		if (NumEntries == 0)
+		const int32 NumRows = Metadata->GetLocalItemCount();
+		if (NumRows == 0)
 		{
 			return false;
 		}
 
-		// Initialize collection entries
-		InCollection->InitNumEntries(NumEntries);
+		InCollection->DefaultStagingBounds = Details.DefaultStagingBounds;
 
-		// Populate entries
-		int32 ValidEntries = 0;
-		for (int64 ItemKey = 0; ItemKey < NumEntries; ItemKey++)
+		TArray<PCGExAttributeSetBuild::FPropertyColumn> Columns;
+		TArray<FInstancedStruct> Schema;
+		PCGExAttributeSetBuild::CollectPropertyColumns(InCollection, InContext, Metadata, Details, Columns, Schema);
+
+		FSourceAssetResolver Resolver;
+		TSet<const UScriptStruct*> RejectedTypes;
+		int32 NumAppended = 0;
+
+#if !WITH_EDITOR
+		TMap<const UScriptStruct*, bool> StageableByType;
+		int32 NumAuthored = 0;
+#endif
+
+		for (int64 ItemKey = 0; ItemKey < NumRows; ItemKey++)
 		{
-			FSoftObjectPath Path;
-
-			// Extract path based on attribute type
-			if (const FPCGMetadataAttribute<FSoftObjectPath>* SoftPathAttr = static_cast<const FPCGMetadataAttribute<FSoftObjectPath>*>(PathAttribute);
-				SoftPathAttr && PathAttribute->GetTypeId() == PCG::Private::MetadataTypes<FSoftObjectPath>::Id)
-			{
-				Path = SoftPathAttr->GetValueFromItemKey(ItemKey);
-			}
-			else if (const FPCGMetadataAttribute<FString>* StringAttr = static_cast<const FPCGMetadataAttribute<FString>*>(PathAttribute);
-				StringAttr && PathAttribute->GetTypeId() == PCG::Private::MetadataTypes<FString>::Id)
-			{
-				Path = FSoftObjectPath(StringAttr->GetValueFromItemKey(ItemKey));
-			}
-			else
-			{
-				continue; // Skip unsupported attribute types
-			}
-
+			const FSoftObjectPath Path = SoftPathAttribute
+				? SoftPathAttribute->GetValueFromItemKey(ItemKey)
+				: FSoftObjectPath(StringPathAttribute->GetValueFromItemKey(ItemKey));
 			if (!Path.IsValid())
 			{
 				continue;
 			}
 
-			// Get mutable entry via ForEach (a bit awkward but maintains abstraction)
-			FPCGExAssetCollectionEntry* Entry = nullptr;
-			int32 CurrentIndex = ValidEntries;
-			InCollection->ForEachEntry([&](FPCGExAssetCollectionEntry* E, int32 Idx)
+			FInstancedStruct Payload;
+			if (!Resolver.ResolvePath(Path, Payload, InContext))
 			{
-				if (Idx == CurrentIndex)
-				{
-					Entry = E;
-				}
-			});
-
-			if (!Entry)
-			{
+				PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Asset '{0}' could not be resolved and was skipped."), FText::FromString(Path.ToString())));
 				continue;
 			}
 
-			Entry->SetAssetPath(Path);
+			const UScriptStruct* PayloadStruct = Payload.GetScriptStruct();
+			FPCGExAssetCollectionEntry* Entry = InCollection->AddEntryOfType(PayloadStruct);
+			if (!Entry)
+			{
+				bool bAlreadyRejected = false;
+				RejectedTypes.Add(PayloadStruct, &bAlreadyRejected);
+				if (!bAlreadyRejected)
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("'{0}' entries are not supported by this collection type; matching rows were skipped."), FText::FromString(PayloadStruct->GetName())));
+				}
+				continue;
+			}
+
+			// The host created the row as its own type; the payload is that type or a base of it.
+			PayloadStruct->CopyScriptStruct(Entry, Payload.GetMemory());
 
 			if (WeightAttribute)
 			{
@@ -117,13 +313,52 @@ namespace PCGExCollectionHelpers
 				Entry->Category = CategoryAttribute->GetValueFromItemKey(ItemKey);
 			}
 
-			ValidEntries++;
+			if (!Columns.IsEmpty())
+			{
+				Entry->PropertyOverrides.SyncToSchema(Schema);
+				for (const PCGExAttributeSetBuild::FPropertyColumn& Column : Columns)
+				{
+					if (!Entry->PropertyOverrides.Overrides.IsValidIndex(Column.SchemaIndex))
+					{
+						continue;
+					}
+					FPCGExPropertyOverrideEntry& Slot = Entry->PropertyOverrides.Overrides[Column.SchemaIndex];
+					FPCGExProperty* Prop = Slot.GetPropertyMutable();
+					Slot.bEnabled = Prop && PCGExAttributeSetBuild::WriteColumn(Column, ItemKey, Prop);
+				}
+			}
+
+#if !WITH_EDITOR
+			// Types whose UpdateStaging can only measure in the editor take the default box instead of
+			// an empty one (after SetAssetPath, which clears bAuthored).
+			bool* bStageable = StageableByType.Find(PayloadStruct);
+			if (!bStageable)
+			{
+				PCGExAssetCollection::FTypeInfo Info;
+				const bool bResolved = PCGExAssetCollection::FTypeRegistry::Get().GetInfoByEntryStruct(PayloadStruct, Info);
+				bStageable = &StageableByType.Add(PayloadStruct, !bResolved || Info.bRuntimeStageable);
+			}
+			if (!*bStageable)
+			{
+				Entry->Staging.Bounds = Details.DefaultStagingBounds;
+				Entry->Staging.bAuthored = true;
+				NumAuthored++;
+			}
+#endif
+
+			NumAppended++;
 		}
 
-		// Trim to valid entries
-		if (ValidEntries < NumEntries)
+#if !WITH_EDITOR
+		if (NumAuthored > 0 && !Details.bQuietRuntimeStagingWarning)
 		{
-			InCollection->InitNumEntries(ValidEntries);
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("{0} entries (actors, levels) cannot be staged outside the editor and use Default Staging Bounds."), NumAuthored));
+		}
+#endif
+
+		if (NumAppended == 0)
+		{
+			return false;
 		}
 
 		if (bBuildStaging)
@@ -131,14 +366,14 @@ namespace PCGExCollectionHelpers
 			InCollection->RebuildStagingData(false);
 		}
 
-		return ValidEntries > 0;
+		return true;
 	}
 
 	bool BuildFromAttributeSet(
 		UPCGExAssetCollection* InCollection,
 		FPCGExContext* InContext,
 		FName InputPin,
-		const FPCGExAssetAttributeSetDetails& Details,
+		const FPCGExRoamingAssetCollectionDetails& Details,
 		bool bBuildStaging)
 	{
 		TArray<FPCGTaggedData> Inputs = InContext->InputData.GetInputsByPin(InputPin);

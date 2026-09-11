@@ -924,13 +924,7 @@ public:
 	{
 	}
 
-	/**
-	 * Append one default-initialized entry; null EntryStruct = the native entry type. Base
-	 * accepts the Entries inner struct or a base of it (element is created NATIVE, caller
-	 * copies the requested portion); Omni accepts any entry-derived payload. Null on
-	 * rejection -- doubles as the compatibility arbiter for cross-collection transfers.
-	 * Caller owns transaction/Modify/PostEditChange.
-	 */
+	/** Editor add: AddEntryOfType plus the host's per-type setup (Omni). Caller owns transaction/Modify/PostEditChange. */
 	virtual FPCGExAssetCollectionEntry* EDITOR_AddEntry(const UScriptStruct* EntryStruct = nullptr);
 #endif
 
@@ -974,6 +968,14 @@ public:
 
 	/** Initialize entries array to given size */
 	virtual void InitNumEntries(int32 Num) PCGEX_NOT_IMPLEMENTED(InitNumEntries)
+
+	/**
+	 * Append one default-initialized entry; null EntryStruct = the native entry type. Base accepts the
+	 * Entries inner struct or a base of it (element is created NATIVE, caller copies the requested
+	 * portion); Omni accepts any entry-derived payload. Null on rejection -- doubles as the
+	 * compatibility arbiter for cross-collection transfers. No Modify/dirty/staging: caller owns them.
+	 */
+	virtual FPCGExAssetCollectionEntry* AddEntryOfType(const UScriptStruct* EntryStruct = nullptr);
 
 	/** ForEach iteration (const) */
 	using FForEachConstEntryFunc = TFunctionRef<void(const FPCGExAssetCollectionEntry*, int32)>;

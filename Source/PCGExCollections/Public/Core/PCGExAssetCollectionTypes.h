@@ -11,9 +11,7 @@
 
 class UPCGExAssetCollection;
 struct FPCGExAssetCollectionEntry;
-#if WITH_EDITOR
 struct FAssetData;
-#endif
 
 /**
  * Runtime type registry for collection types. Allows the system to discover, query,
@@ -93,10 +91,10 @@ namespace PCGExAssetCollection
 		FText DisplayName;
 		FTypeId ParentType = NAME_None; // For inheritance checking
 
-#if WITH_EDITOR
 		/**
-		 * True when the given content-browser asset can seed an entry of this type (drives
-		 * Omni drop routing). Register via AddPendingCustomization; null = doesn't participate.
+		 * True when the given asset can seed an entry of this type. Runtime seam: drives Omni drop
+		 * routing AND attribute-set builds (PCGExCollectionHelpers::FSourceAssetResolver), so it must
+		 * not load in the common case. Register via AddPendingCustomization; null = doesn't participate.
 		 */
 		TFunction<bool(const FAssetData&)> DetectSourceAsset;
 
@@ -109,7 +107,12 @@ namespace PCGExAssetCollection
 
 		/** Lower values are offered the asset first when several detectors could claim it. */
 		int32 SourceDetectPriority = 100;
-#endif
+
+		/**
+		 * False when the type's UpdateStaging can only measure in editor builds (Actor spawns a temp
+		 * actor, Level walks the world). Runtime builders then author a default box instead.
+		 */
+		bool bRuntimeStageable = true;
 
 		/** A type needs a collection class (typed hosts), an entry struct (entry-only types), or both. */
 		bool IsValid() const

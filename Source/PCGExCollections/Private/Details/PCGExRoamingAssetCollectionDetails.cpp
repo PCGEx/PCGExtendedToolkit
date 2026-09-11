@@ -4,37 +4,43 @@
 
 #include "Details/PCGExRoamingAssetCollectionDetails.h"
 
+#include "Collections/PCGExOmniCollection.h"
 #include "Containers/PCGExManagedObjects.h"
-#include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "UObject/Object.h"
 #include "UObject/Package.h"
 
-FPCGExRoamingAssetCollectionDetails::FPCGExRoamingAssetCollectionDetails(const TSubclassOf<UPCGExAssetCollection>& InAssetCollectionType)
-	: bSupportCustomType(false)
-	  , AssetCollectionType(InAssetCollectionType)
-{
-}
-
 bool FPCGExRoamingAssetCollectionDetails::Validate(FPCGExContext* InContext) const
 {
-	if (!AssetCollectionType)
+	if (AssetPathSourceAttribute.IsNone())
 	{
-		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection type is not set."));
+		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Asset path attribute is not set."));
 		return false;
 	}
 
 	return true;
 }
 
+FString FPCGExRoamingAssetCollectionDetails::GetConfigId() const
+{
+	TStringBuilder<512> Builder;
+	Builder << AssetPathSourceAttribute << TEXT('|') << WeightSourceAttribute << TEXT('|') << CategorySourceAttribute;
+	Builder << TEXT('|') << static_cast<int32>(PropertyAttributes.FilterMode)
+		<< TEXT('|') << PropertyAttributes.CommaSeparatedNames
+		<< TEXT('|') << static_cast<int32>(PropertyAttributes.CommaSeparatedNameFilter)
+		<< TEXT('|') << (PropertyAttributes.bPreservePCGExData ? 1 : 0);
+	for (const TPair<FString, EPCGExStringMatchMode>& Match : PropertyAttributes.Matches)
+	{
+		Builder << TEXT('|') << Match.Key << TEXT(':') << static_cast<int32>(Match.Value);
+	}
+	Builder << TEXT('|') << DefaultStagingBounds.ToString();
+	return Builder.ToString();
+}
+
 UPCGExAssetCollection* FPCGExRoamingAssetCollectionDetails::TryBuildCollection(FPCGExContext* InContext, const UPCGParamData* InAttributeSet, const bool bBuildStaging) const
 {
-	if (!AssetCollectionType)
-	{
-		return nullptr;
-	}
-	UPCGExAssetCollection* Collection = InContext->ManagedObjects->New<UPCGExAssetCollection>(GetTransientPackage(), AssetCollectionType.Get(), NAME_None);
+	UPCGExOmniCollection* Collection = InContext->ManagedObjects->New<UPCGExOmniCollection>(GetTransientPackage());
 	if (!Collection)
 	{
 		return nullptr;
@@ -51,11 +57,7 @@ UPCGExAssetCollection* FPCGExRoamingAssetCollectionDetails::TryBuildCollection(F
 
 UPCGExAssetCollection* FPCGExRoamingAssetCollectionDetails::TryBuildCollection(FPCGExContext* InContext, const FName InputPin, const bool bBuildStaging) const
 {
-	if (!AssetCollectionType)
-	{
-		return nullptr;
-	}
-	UPCGExAssetCollection* Collection = InContext->ManagedObjects->New<UPCGExAssetCollection>(GetTransientPackage(), AssetCollectionType.Get(), NAME_None);
+	UPCGExOmniCollection* Collection = InContext->ManagedObjects->New<UPCGExOmniCollection>(GetTransientPackage());
 	if (!Collection)
 	{
 		return nullptr;

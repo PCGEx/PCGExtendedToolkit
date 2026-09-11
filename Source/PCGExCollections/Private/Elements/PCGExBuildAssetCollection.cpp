@@ -11,7 +11,7 @@
 #include "PCGParamData.h"
 #include "PCGPin.h"
 
-#include "Collections/PCGExMeshCollection.h"
+#include "Collections/PCGExOmniCollection.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
@@ -42,13 +42,6 @@ bool UPCGExManagedAssetCollection::Release(bool bHardRelease, TSet<TSoftObjectPt
 #pragma endregion
 
 #pragma region UPCGExBuildAssetCollectionSettings
-
-UPCGExBuildAssetCollectionSettings::UPCGExBuildAssetCollectionSettings()
-{
-	// Mesh is the sensible default: the common case, and the only type that can rebuild staging outside the
-	// editor. bSupportCustomType stays true, so it's user-changeable.
-	AttributeSetDetails.AssetCollectionType = UPCGExMeshCollection::StaticClass();
-}
 
 TArray<FPCGPinProperties> UPCGExBuildAssetCollectionSettings::InputPinProperties() const
 {
@@ -84,20 +77,6 @@ PCGEX_INITIALIZE_ELEMENT(BuildAssetCollection)
 
 #pragma region FPCGExBuildAssetCollectionElement
 
-namespace PCGExBuildAssetCollection
-{
-	// Config-axis half of the reuse key (folded with the input's data CRC in AdvanceWork).
-	FString BuildConfigId(const FPCGExRoamingAssetCollectionDetails& Details)
-	{
-		return FString::Printf(
-			TEXT("%s|%s|%s|%s"),
-			*GetPathNameSafe(Details.AssetCollectionType.Get()),
-			*Details.AssetPathSourceAttribute.ToString(),
-			*Details.WeightSourceAttribute.ToString(),
-			*Details.CategorySourceAttribute.ToString());
-	}
-}
-
 bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExBuildAssetCollectionElement::Execute);
@@ -131,7 +110,7 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 		return Context->TryComplete();
 	};
 
-	// No collection type -> nothing to build.
+	// No asset path attribute -> nothing to build.
 	if (!Settings->AttributeSetDetails.Validate(Context))
 	{
 		return CompleteWith(FSoftObjectPath());
@@ -160,7 +139,7 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 
 	// Reuse key = config string + the input's full data CRC. A 32-bit collision only risks reusing a stale
 	// collection until the next input change, never a crash.
-	const FString ConfigId = PCGExBuildAssetCollection::BuildConfigId(Settings->AttributeSetDetails);
+	const FString ConfigId = Settings->AttributeSetDetails.GetConfigId();
 	uint32 Hash = GetTypeHash(ConfigId);
 	if (const FPCGCrc DataCrc = InParam->GetOrComputeCrc(/*bFullDataCrc=*/true); DataCrc.IsValid())
 	{
@@ -182,8 +161,7 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 	Managed->SetCrc(Crc);
 	Managed->Config = ConfigId;
 
-	UPCGExAssetCollection* Collection = NewObject<UPCGExAssetCollection>(
-		Managed, Settings->AttributeSetDetails.AssetCollectionType.Get(), NAME_None, RF_Transient);
+	UPCGExOmniCollection* Collection = NewObject<UPCGExOmniCollection>(Managed, NAME_None, RF_Transient);
 
 	// Bake staging now (RebuildStagingData self-loads each asset on the GT) so downstream consumes the
 	// collection exactly like a saved asset.

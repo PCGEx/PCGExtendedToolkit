@@ -57,6 +57,15 @@ bool FPCGExActorCollectionEntry::Validate(const UPCGExAssetCollection* ParentCol
 // then immediately destroys it. Only works in editor context (non-editor falls back to empty bounds).
 void FPCGExActorCollectionEntry::UpdateStaging(const UPCGExAssetCollection* OwningCollection, int32 InInternalIndex, bool bRecursive)
 {
+	// Authored staging (e.g. a runtime-built collection carrying default bounds): recomputing would
+	// force-load the class and clobber the authored content. Refresh identity fields only.
+	if (Staging.bAuthored && !bIsSubCollection)
+	{
+		Staging.Path = Actor.ToSoftObjectPath();
+		FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
+		return;
+	}
+
 	ClearManagedSockets();
 
 	if (bIsSubCollection)

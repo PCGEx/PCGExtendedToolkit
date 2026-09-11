@@ -97,11 +97,12 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="!bUseStagedPoints", EditConditionHides))
 	EPCGExCollectionSource CollectionSource = EPCGExCollectionSource::Asset;
 
+	/** Any asset collection host (typed Mesh, Omni, ...); only its Mesh entries ever apply, other entry types are skipped. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="!bUseStagedPoints && CollectionSource == EPCGExCollectionSource::Asset", EditConditionHides))
-	TSoftObjectPtr<UPCGExMeshCollection> AssetCollection;
+	TSoftObjectPtr<UPCGExAssetCollection> AssetCollection;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="!bUseStagedPoints && CollectionSource == EPCGExCollectionSource::AttributeSet", EditConditionHides))
-	FPCGExRoamingAssetCollectionDetails AttributeSetDetails = FPCGExRoamingAssetCollectionDetails(UPCGExMeshCollection::StaticClass());
+	FPCGExRoamingAssetCollectionDetails AttributeSetDetails;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Attribute", EditCondition="!bUseStagedPoints && CollectionSource == EPCGExCollectionSource::Attribute", EditConditionHides))
 	FName CollectionPathAttributeName = "CollectionPath";
@@ -229,7 +230,7 @@ struct FPCGExPathSplineMeshContext final : FPCGExPathProcessorContext
 
 	TSharedPtr<PCGEx::TAssetLoader<UPCGExAssetCollection>> CollectionsLoader;
 
-	TObjectPtr<UPCGExMeshCollection> MainCollection;
+	TObjectPtr<UPCGExAssetCollection> MainCollection;
 
 	const UPCGExSelectorFactoryData* SelectorFactory = nullptr;
 

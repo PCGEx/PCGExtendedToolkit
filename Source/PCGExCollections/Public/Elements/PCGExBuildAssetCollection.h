@@ -42,8 +42,9 @@ public:
 };
 
 /**
- * Builds a transient asset collection (with baked staging) from an input attribute set and outputs its soft
+ * Builds a transient Omni collection (with baked staging) from an input attribute set and outputs its soft
  * path, so Staging : Distribute can consume it via SourceCollection (Constant) as if it were a saved asset.
+ * Entry types are inferred per row from the type registry; extra attributes become custom properties.
  * Inverse of Asset Collection to Set. Anchored by a UPCGExManagedAssetCollection on the component, so
  * identical inputs dedup by CRC and survive regeneration. Main-thread-only + non-cacheable (see below).
  */
@@ -53,11 +54,9 @@ class UPCGExBuildAssetCollectionSettings : public UPCGExSettings
 	GENERATED_BODY()
 
 public:
-	UPCGExBuildAssetCollectionSettings();
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(BuildAssetCollection, "Build Asset Collection", "Builds a transient asset collection from an input attribute set and outputs its soft path for a Staging : Distribute SourceCollection (Constant) override.")
+	PCGEX_NODE_INFOS(BuildAssetCollection, "Build Asset Collection", "Builds a transient Omni collection from an input attribute set (entry types inferred per row, extra attributes mapped to custom properties) and outputs its soft path for a Staging : Distribute SourceCollection (Constant) override.")
 
 	virtual EPCGSettingsType GetType() const override { return EPCGSettingsType::Generic; }
 
@@ -77,7 +76,7 @@ protected:
 	virtual FPCGElementPtr CreateElement() const override;
 
 public:
-	/** Which collection type to build, and which attributes hold the asset path / weight / category. */
+	/** Which attributes hold the asset path / weight / category, which extra attributes become custom properties, and the default staging bounds. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExRoamingAssetCollectionDetails AttributeSetDetails;
 

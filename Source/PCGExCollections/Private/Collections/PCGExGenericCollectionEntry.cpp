@@ -3,9 +3,7 @@
 
 #include "Collections/PCGExGenericCollectionEntry.h"
 
-#if WITH_EDITOR
 #include "AssetRegistry/AssetData.h"
-#endif
 
 // Registered by hand (not via PCGEX_REGISTER_COLLECTION_TYPE): there is no typed collection, so
 // CollectionClass stays null. Static-init registration is safe inside PCGExCollections (the module
@@ -31,14 +29,13 @@ namespace PCGExGenericCollectionEntry
 				FTypeRegistry::Get().Register(Info);
 			});
 
-#if WITH_EDITOR
-			// Catch-all for Omni drops: every real detector must sit below this priority.
+			// Catch-all for Omni drops and attribute-set builds: every real detector must sit below
+			// this priority.
 			FTypeRegistry::AddPendingCustomization(TypeIds::Generic, [](FTypeInfo& Info)
 			{
 				Info.SourceDetectPriority = 1000;
 				Info.DetectSourceAsset = [](const FAssetData&) { return true; };
 			});
-#endif
 		}
 	};
 
