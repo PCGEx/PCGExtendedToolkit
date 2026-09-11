@@ -20,6 +20,47 @@ enum class EPCGExDataCacheWriteMode : uint8
 	ClearAll = 3 UMETA(DisplayName = "Clear All", Tooltip = "Remove every entry on the target cache. Cache ID is ignored."),
 };
 
+class UPCGComponent;
+class UPCGExDataCacheComponent;
+
+UENUM(BlueprintType)
+enum class EPCGExDataCacheChangeType : uint8
+{
+	Written    = 0 UMETA(DisplayName = "Written", Tooltip = "Data was stored under the cache ID."),
+	Cleared    = 1 UMETA(DisplayName = "Cleared", Tooltip = "The entry under the cache ID was dropped, or hidden from a preview generation."),
+	ClearedAll = 2 UMETA(DisplayName = "Cleared All", Tooltip = "Every entry was dropped. Cache ID is None."),
+};
+
+/** What changed on a cache. Fields are additive, so handlers should read the struct rather than positional values. */
+USTRUCT(BlueprintType)
+struct PCGEXELEMENTSBRIDGES_API FPCGExDataCacheChange
+{
+	GENERATED_BODY()
+
+	FPCGExDataCacheChange() = default;
+
+	/** InWriter is any execution source; only a PCG component survives into Writer. */
+	FPCGExDataCacheChange(const FName InCacheID, UObject* InWriter, const EPCGExDataCacheChangeType InChangeType, const bool bInPreviewOnly);
+
+	/** Entry that changed. None for Cleared All. */
+	UPROPERTY(BlueprintReadOnly, Category = "Data Cache")
+	FName CacheID = NAME_None;
+
+	/** Component whose generation made the change. Null for the editor button and for non-component sources. */
+	UPROPERTY(BlueprintReadOnly, Category = "Data Cache")
+	TObjectPtr<UPCGComponent> Writer = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Data Cache")
+	EPCGExDataCacheChangeType ChangeType = EPCGExDataCacheChangeType::Written;
+
+	/** Only the transient preview shadow changed; nothing persisted was touched and no package was dirtied. */
+	UPROPERTY(BlueprintReadOnly, Category = "Data Cache")
+	bool bPreviewOnly = false;
+};
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(FPCGExOnDataCacheChanged, UPCGExDataCacheComponent*, const FPCGExDataCacheChange&);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FPCGExOnDataCacheChangedExternal, UPCGExDataCacheComponent*, Cache, const FPCGExDataCacheChange&, Change);
+
 /** One cached collection. Data objects are outered to the owning cache component so they serialize with the actor. */
 USTRUCT()
 struct PCGEXELEMENTSBRIDGES_API FPCGExDataCacheEntry
@@ -63,6 +104,18 @@ class PCGEXELEMENTSBRIDGES_API UPCGExDataCacheComponent : public UActorComponent
 public:
 	UPCGExDataCacheComponent();
 
+	/**
+	 * Fires on the game thread one tick after any change a reader could observe, never for a no-op, and not gated
+	 * by the Set node's Notify Change -- binding is the opt-in. Writing to the cache from a handler queues another
+	 * event, which then loops tick after tick. The component is created by the first write, so a subscriber that
+	 * cannot resolve it yet should listen to UPCGExSubSystem::OnGlobalEvent and re-read from there.
+	 */
+	FPCGExOnDataCacheChanged OnDataCacheChangedDelegate;
+
+	/** Blueprint twin of OnDataCacheChangedDelegate, same contract. */
+	UPROPERTY(BlueprintAssignable, Category = "Data Cache", meta = (DisplayName = "On Data Cache Changed"))
+	FPCGExOnDataCacheChangedExternal OnDataCacheChangedExternal;
+
 	/** The actor's cache component, or null. Also finds instance components a level copy-paste left unregistered. */
 	static UPCGExDataCacheComponent* Find(const AActor* InActor);
 
@@ -77,6 +130,33 @@ public:
 
 	/** Copies every entry, preview entries shadowing persisted ones with the same ID. Any thread. */
 	void ReadAll(TArray<TPair<FName, TArray<FPCGTaggedData>>>& OutEntries) const;
+
+	/**
+	 * Copies the entry stored under CacheID. Any thread. The collection's per-data Crcs are left empty: those are
+	 * execution-time state, not cached content.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Data Cache")
+	bool GetCachedData(const FName CacheID, FPCGDataCollection& OutData) const;
+
+	/** Copies the entry a change event refers to, so a handler does not have to unpack the payload. Any thread. */
+	UFUNCTION(BlueprintCallable, Category = "Data Cache")
+	bool GetChangedData(const FPCGExDataCacheChange& Change, FPCGDataCollection& OutData) const;
+
+	/** Copies every readable entry, keyed by cache ID. Any thread. */
+	UFUNCTION(BlueprintCallable, Category = "Data Cache")
+	void GetAllCachedData(TMap<FName, FPCGDataCollection>& OutEntries) const;
+
+	/** True when CacheID resolves to an entry a reader can see right now. Any thread. */
+	UFUNCTION(BlueprintPure, Category = "Data Cache")
+	bool HasCachedData(const FName CacheID) const;
+
+	/** Every readable cache ID, hidden ones excluded. Any thread. */
+	UFUNCTION(BlueprintPure, Category = "Data Cache")
+	TArray<FName> GetCachedIDs() const;
+
+	/** Reads CacheID off Actor's cache in one call. False when the actor carries no cache at all. Any thread. */
+	UFUNCTION(BlueprintCallable, Category = "Data Cache", meta = (DefaultToSelf = "Actor"))
+	static bool GetCachedDataFromActor(const AActor* Actor, const FName CacheID, FPCGDataCollection& OutData);
 
 	/**
 	 * Stores InData under InId (replacing or appending). Game thread only. Every data object must be a private
@@ -123,4 +203,13 @@ protected:
 
 	/** Flattens and re-outers each adoptable data object to this component. Returns the data that was adopted. */
 	TArray<FPCGTaggedData> AdoptData(TArray<FPCGTaggedData>&& InData, const bool bPreview) const;
+
+private:
+	/**
+	 * Queues both change delegates plus the subsystem ping onto the next tick. Deferred on purpose: the mutators
+	 * run inside a live PCG task, and a handler that cancels or cleans the writing component from there would
+	 * spin the executor waiting on the very task it is called from. Call outside the lock. Drops the event when
+	 * the world has no subsystem, which is teardown.
+	 */
+	void BroadcastChanged(const FPCGExDataCacheChange& InChange);
 };

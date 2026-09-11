@@ -3,23 +3,38 @@
 
 #include "Components/PCGExDataCacheComponent.h"
 
+#include "PCGComponent.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGSpatialData.h"
 #include "Metadata/PCGMetadata.h"
 
+#include "CoreGlobals.h" // GAllowActorScriptExecutionInEditor
 #include "GameFramework/Actor.h"
 #include "Misc/ScopeRWLock.h"
+#include "Templates/UnrealTemplate.h" // TGuardValue
 #include "UObject/Package.h"
 
 #include "PCGExLog.h"
+#include "PCGExSubSystem.h"
 #include "PCGExVersion.h"
 #include "Helpers/PCGExDataCacheHelpers.h"
 
 #if WITH_EDITOR
-#include "PCGComponent.h"
 #include "PCGWorldActor.h"
 #include "Helpers/PCGExObjectNotifyHelpers.h"
 #endif
+
+#pragma region FPCGExDataCacheChange
+
+FPCGExDataCacheChange::FPCGExDataCacheChange(const FName InCacheID, UObject* InWriter, const EPCGExDataCacheChangeType InChangeType, const bool bInPreviewOnly)
+	: CacheID(InCacheID)
+	  , Writer(Cast<UPCGComponent>(InWriter))
+	  , ChangeType(InChangeType)
+	  , bPreviewOnly(bInPreviewOnly)
+{
+}
+
+#pragma endregion
 
 namespace PCGExDataCacheComponent
 {
@@ -123,6 +138,63 @@ void UPCGExDataCacheComponent::ReadAll(TArray<TPair<FName, TArray<FPCGTaggedData
 	}
 }
 
+bool UPCGExDataCacheComponent::GetCachedData(const FName CacheID, FPCGDataCollection& OutData) const
+{
+	OutData.Reset();
+	return Read(CacheID, OutData.TaggedData);
+}
+
+bool UPCGExDataCacheComponent::GetChangedData(const FPCGExDataCacheChange& Change, FPCGDataCollection& OutData) const
+{
+	// Deliberately not gated on ChangeType: this reports what is readable now, so a Cleared event yields nothing
+	// and a Cleared All (CacheID None) yields nothing, without the caller needing a second rule.
+	return GetCachedData(Change.CacheID, OutData);
+}
+
+void UPCGExDataCacheComponent::GetAllCachedData(TMap<FName, FPCGDataCollection>& OutEntries) const
+{
+	OutEntries.Reset();
+
+	TArray<TPair<FName, TArray<FPCGTaggedData>>> ReadEntries;
+	ReadAll(ReadEntries);
+
+	OutEntries.Reserve(ReadEntries.Num());
+	for (TPair<FName, TArray<FPCGTaggedData>>& Pair : ReadEntries) { OutEntries.Add(Pair.Key).TaggedData = MoveTemp(Pair.Value); }
+}
+
+bool UPCGExDataCacheComponent::HasCachedData(const FName CacheID) const
+{
+	UE::TReadScopeLock ScopedReadLock(Lock);
+
+	if (const FPCGExDataCacheEntry* Preview = PreviewEntries.Find(CacheID)) { return !Preview->bTombstone; }
+	return Entries.Contains(CacheID);
+}
+
+TArray<FName> UPCGExDataCacheComponent::GetCachedIDs() const
+{
+	UE::TReadScopeLock ScopedReadLock(Lock);
+
+	// Same shadowing rule as ReadAll: a preview entry wins, a tombstone hides.
+	TArray<FName> Ids;
+	Ids.Reserve(Entries.Num() + PreviewEntries.Num());
+	for (const TPair<FName, FPCGExDataCacheEntry>& Pair : PreviewEntries)
+	{
+		if (!Pair.Value.bTombstone) { Ids.Add(Pair.Key); }
+	}
+	for (const TPair<FName, FPCGExDataCacheEntry>& Pair : Entries)
+	{
+		if (!PreviewEntries.Contains(Pair.Key)) { Ids.Add(Pair.Key); }
+	}
+	return Ids;
+}
+
+bool UPCGExDataCacheComponent::GetCachedDataFromActor(const AActor* Actor, const FName CacheID, FPCGDataCollection& OutData)
+{
+	OutData.Reset();
+	const UPCGExDataCacheComponent* Cache = Find(Actor);
+	return Cache && Cache->Read(CacheID, OutData.TaggedData);
+}
+
 void UPCGExDataCacheComponent::Write(const FName InId, const bool bAppend, TArray<FPCGTaggedData>&& InData, UObject* InWriter, const bool bPreview, const bool bNotify)
 {
 	check(IsInGameThread());
@@ -153,6 +225,7 @@ void UPCGExDataCacheComponent::Write(const FName InId, const bool bAppend, TArra
 
 	if (!bPreview) { MarkPackageDirty(); }
 	if (bNotify) { NotifyChanged(InWriter); }
+	BroadcastChanged(FPCGExDataCacheChange(InId, InWriter, EPCGExDataCacheChangeType::Written, bPreview));
 }
 
 void UPCGExDataCacheComponent::Clear(const FName InId, UObject* InWriter, const bool bPreview, const bool bNotify)
@@ -187,6 +260,7 @@ void UPCGExDataCacheComponent::Clear(const FName InId, UObject* InWriter, const 
 
 	if (bDirty) { MarkPackageDirty(); }
 	if (bNotify && bChanged) { NotifyChanged(InWriter); }
+	if (bChanged) { BroadcastChanged(FPCGExDataCacheChange(InId, InWriter, EPCGExDataCacheChangeType::Cleared, !bDirty)); }
 }
 
 void UPCGExDataCacheComponent::ClearAll(UObject* InWriter, const bool bPreview, const bool bNotify)
@@ -200,13 +274,20 @@ void UPCGExDataCacheComponent::ClearAll(UObject* InWriter, const bool bPreview, 
 		UE::TWriteScopeLock ScopedWriteLock(Lock);
 		if (bPreview)
 		{
-			// Hide every persisted ID and drop the preview shadows.
-			for (const TPair<FName, FPCGExDataCacheEntry>& Pair : PreviewEntries) { bChanged |= !Pair.Value.bTombstone; }
+			// Hide every persisted ID and drop the preview shadows. Re-hiding an already hidden ID is not a change.
+			TSet<FName> AlreadyHidden;
+			for (const TPair<FName, FPCGExDataCacheEntry>& Pair : PreviewEntries)
+			{
+				if (Pair.Value.bTombstone) { AlreadyHidden.Add(Pair.Key); }
+				else { bChanged = true; }
+			}
+
 			PCGExDataCacheComponent::TakeAll(PreviewEntries, Released);
+
 			for (const TPair<FName, FPCGExDataCacheEntry>& Pair : Entries)
 			{
 				PreviewEntries.Add(Pair.Key).bTombstone = true;
-				bChanged = true;
+				bChanged |= !AlreadyHidden.Contains(Pair.Key);
 			}
 		}
 		else
@@ -222,6 +303,45 @@ void UPCGExDataCacheComponent::ClearAll(UObject* InWriter, const bool bPreview, 
 
 	if (bDirty) { MarkPackageDirty(); }
 	if (bNotify && bChanged) { NotifyChanged(InWriter); }
+	if (bChanged) { BroadcastChanged(FPCGExDataCacheChange(NAME_None, InWriter, EPCGExDataCacheChangeType::ClearedAll, !bDirty)); }
+}
+
+void UPCGExDataCacheComponent::BroadcastChanged(const FPCGExDataCacheChange& InChange)
+{
+	check(IsInGameThread());
+
+	UPCGExSubSystem* Subsystem = UPCGExSubSystem::GetInstance(GetWorld());
+	if (!Subsystem)
+	{
+		UE_LOG(LogPCGEx, Verbose, TEXT("[Data Cache] No subsystem for '%s'; change event dropped."), *GetName());
+		return;
+	}
+
+	// Writer is re-resolved at fire time: a lambda capture is not GC-visible, so a copy could not keep it alive.
+	Subsystem->RegisterBeginTickAction(
+		[WeakThis = TWeakObjectPtr<UPCGExDataCacheComponent>(this), WeakWriter = TWeakObjectPtr<UPCGComponent>(InChange.Writer.Get()),
+			CacheID = InChange.CacheID, ChangeType = InChange.ChangeType, bPreviewOnly = InChange.bPreviewOnly]()
+		{
+			UPCGExDataCacheComponent* Cache = WeakThis.Get();
+			if (!Cache) { return; }
+
+			const FPCGExDataCacheChange Change(CacheID, WeakWriter.Get(), ChangeType, bPreviewOnly);
+			Cache->OnDataCacheChangedDelegate.Broadcast(Cache, Change);
+
+			// A C++ handler may have destroyed the component.
+			if (!WeakThis.IsValid()) { return; }
+
+#if WITH_EDITOR
+			// Engine parity (PCGComponent::BroadcastDynamicDelegate): without this, Blueprint handlers bound on
+			// editor-world actors never run.
+			const TGuardValue ScriptExecutionGuard(GAllowActorScriptExecutionInEditor, true);
+#endif
+			Cache->OnDataCacheChangedExternal.Broadcast(Cache, Change);
+		});
+
+	// Coarse world-wide ping for listeners that never resolved the host actor. Dedup is per writer, so one
+	// generation pings once however many caches and IDs it touched, and every null-writer change shares one event.
+	Subsystem->PollEvent(InChange.Writer.Get(), EPCGExSubsystemEventType::DataCacheChange, 0);
 }
 
 void UPCGExDataCacheComponent::NotifyChanged(UObject* InWriter) const
