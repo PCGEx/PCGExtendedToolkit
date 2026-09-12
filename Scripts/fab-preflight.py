@@ -651,6 +651,41 @@ def check_fwd_decl_deref(tree):
     return out
 
 
+# A UPackage-returning getter passed as the Outer of NewObject / DuplicateObject / Find* / Load*.
+# Those take UObject*, and the UPackage* -> UObject* conversion needs the complete UPackage type:
+# with only a forward declaration it is C2672 'no matching overloaded function' / "cannot convert
+# from 'UPackage *' to 'UObject *'" (PCGExCollectionAssetSave.cpp, MSVC gate 2026-09-12). Unlike
+# fwd-decl-deref this is an error: it fails on every compiler, and the include is always correct.
+UPACKAGE_GETTER = r'(?:GetTransientPackage|GetOutermost|GetPackage)\s*\(\s*\)'
+UPACKAGE_OUTER_CALLEE = (r'(?:NewObject|DuplicateObject|StaticDuplicateObject|FindObject|FindObjectFast|'
+                         r'FindObjectChecked|StaticFindObject|StaticFindObjectFast|LoadObject|StaticLoadObject|'
+                         r'MakeUniqueObjectName)')
+UPACKAGE_OUTER_RE = re.compile(r'\b' + UPACKAGE_OUTER_CALLEE + r'\s*(?:<[^;()]*>)?\s*\(\s*'
+                               r'(?:[A-Za-z_]\w*\s*->\s*)?' + UPACKAGE_GETTER)
+UPACKAGE_INC_RE = re.compile(r'^\s*#\s*include\s+["<](?:[^">]*/)?UObject/Package\.h[">]', re.M)
+
+
+@check("upackage-as-outer", "error",
+       "GetTransientPackage() / GetOutermost() / GetPackage() is passed as the Outer of NewObject, "
+       "DuplicateObject, FindObject or LoadObject, but UObject/Package.h is nowhere in the file's include "
+       "closure. The UPackage* -> UObject* conversion needs the complete type; editor builds usually get it "
+       "through PCH or an unrelated editor header, a clean build fails with C2672.")
+def check_upackage_as_outer(tree):
+    out = []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        hits = list(UPACKAGE_OUTER_RE.finditer(t))
+        if not hits:
+            continue
+        if any(UPACKAGE_INC_RE.search(tree.stripped(f)) for f in tree.closure(p)):
+            continue
+        for m in hits:
+            out.append(Finding("upackage-as-outer", "error", p, t[:m.start()].count("\n") + 1,
+                               "UPackage getter used as a UObject* Outer with UPackage only forward-declared",
+                               'add #include "UObject/Package.h"'))
+    return out
+
+
 CLASS_TPL_RE = re.compile(
     r'\b(TSubclassOf|TSoftClassPtr)\s*<\s*(?:class\s+)?([A-Za-z_]\w*)\s*>\s*(?:const\s+)?&?\s*([A-Za-z_]\w*)\b')
 # Callees whose matching parameter is UClass*: passing the wrapper converts through operator UClass*().
@@ -1459,6 +1494,13 @@ SELFTEST = {
         "\tV(1);\n"
         "\tW(2);\n"
         "}\n"),
+    # upackage-as-outer: transient package as Outer, no UObject/Package.h in reach.
+    "ModB/Private/PCGExTransientOuter.cpp": (
+        "#include \"PCGExBase.h\"\n"
+        "UObject* PCGExMakeProbe()\n"
+        "{\n"
+        "\treturn NewObject<UObject>(GetTransientPackage(), NAME_None, RF_Transient);\n"
+        "}\n"),
     # clang-loop-once: a range-for that returns on its first element.
     "ModB/Private/PCGExLoopOnce.cpp": (
         "#include \"PCGExBase.h\"\n"
@@ -1613,6 +1655,7 @@ SELFTEST = {
         "\t\tauto NegFn = [](int) {};\n"
         "\t\tTFunctionRef<void(int)> NegRef = NegFn;\n"
         "\t\tNegRef(Style::Pad());\n"
+        "\t\tNewObject<UObject>(GetTransientPackage(), NAME_None, RF_Transient);\n"
         "\t\tfor (int i = 0; i < 3; ++i) { if (i == 1) break; }\n"
         "\t\tfor (UObject* O : Out) { if (!O) continue; NegRef(1); break; }\n"
         "\t}\n"
@@ -1651,6 +1694,7 @@ SELFTEST_EXPECT = {
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
+    "upackage-as-outer": 1,
 }
 
 

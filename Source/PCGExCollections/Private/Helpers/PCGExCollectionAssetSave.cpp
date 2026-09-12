@@ -15,6 +15,7 @@
 #include "Details/PCGExRoamingAssetCollectionDetails.h"
 #include "Misc/Crc.h"
 #include "Templates/TypeHash.h"
+#include "UObject/Package.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCollectionAssetSave"
 
