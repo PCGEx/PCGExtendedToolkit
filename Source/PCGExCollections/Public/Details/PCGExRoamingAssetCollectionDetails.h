@@ -28,13 +28,21 @@ struct PCGEXCOLLECTIONS_API FPCGExRoamingAssetCollectionDetails : public FPCGExA
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExAttributeGatherDetails PropertyAttributes;
 
-	/** Staged bounds for entries that cannot measure their asset: Generic entries always, actors and levels when built outside the editor. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	FBox DefaultStagingBounds = FBox(FVector(-50.0), FVector(50.0));
+	/** Minimum corner of the staged bounds for entries that cannot measure their own asset: Generic entries
+	 *  always, actors and levels when built outside the editor. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Staging")
+	FVector DefaultStagingBoundsMin = FVector(-50.0);
 
-	/** Suppress the warning emitted outside the editor when actor or level entries fall back to Default Staging Bounds. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay)
+	/** Maximum corner of the staged bounds. See Default Staging Bounds Min. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Staging")
+	FVector DefaultStagingBoundsMax = FVector(50.0);
+
+	/** Suppress the non-editor warning when actor or level entries fall back to the default staging bounds. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Staging")
 	bool bQuietRuntimeStagingWarning = false;
+
+	/** The authored default bounds as a box. */
+	FBox GetDefaultStagingBounds() const { return FBox(DefaultStagingBoundsMin, DefaultStagingBoundsMax); }
 
 	bool Validate(FPCGExContext* InContext) const;
 

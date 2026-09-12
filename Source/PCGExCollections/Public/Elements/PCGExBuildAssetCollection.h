@@ -11,6 +11,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
 #include "Core/PCGExSettings.h"
+#include "Details/PCGExAssetSaveTargetDetails.h"
 #include "Details/PCGExRoamingAssetCollectionDetails.h"
 
 #include "PCGExBuildAssetCollection.generated.h"
@@ -83,6 +84,16 @@ public:
 	/** Name of the output FSoftObjectPath attribute carrying the built collection's soft path. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName OutputAttributeName = FName("Collection");
+
+	/** Also write the built collection to a real asset. Editor only; ignored in preview, PIE, runtime
+	 *  generation, cooks and partitioned generation. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
+	bool bSaveToAsset = false;
+
+	/** Where the collection is written. Rewrites on every rebuild; entry ids come from the source asset
+	 *  paths, so variant collections stay bound. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bSaveToAsset", DisplayName = "Save to Asset"))
+	FPCGExAssetSaveTargetDetails SaveTarget;
 };
 
 struct FPCGExBuildAssetCollectionContext final : FPCGExContext

@@ -34,7 +34,7 @@ FString FPCGExRoamingAssetCollectionDetails::GetConfigId() const
 	{
 		Builder << TEXT('|') << Match.Key << TEXT(':') << static_cast<int32>(Match.Value);
 	}
-	Builder << TEXT('|') << DefaultStagingBounds.ToString();
+	Builder << TEXT('|') << DefaultStagingBoundsMin.ToString() << TEXT('|') << DefaultStagingBoundsMax.ToString();
 	return Builder.ToString();
 }
 

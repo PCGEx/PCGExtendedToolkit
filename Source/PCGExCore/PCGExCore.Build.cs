@@ -86,7 +86,9 @@ public class PCGExCore : ModuleRules
 					"Settings",
 					"Slate",
 					"SlateCore",
-					"ToolMenus"
+					"ToolMenus",
+					// Direct, not transitive: PCGExAssetSave::FinalizeAsset notifies the registry.
+					"AssetRegistry"
 				});
 		}
 	}

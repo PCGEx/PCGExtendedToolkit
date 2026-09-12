@@ -15,6 +15,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
+#include "Helpers/PCGExCollectionAssetSave.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/PCGMetadataAttribute.h"
@@ -59,7 +60,10 @@ TArray<FPCGPinProperties> UPCGExBuildAssetCollectionSettings::OutputPinPropertie
 
 FPCGDataTypeIdentifier UPCGExBuildAssetCollectionSettings::GetCurrentPinTypesID(const UPCGPin* InPin) const
 {
-	if (InPin && InPin->IsOutputPin())
+	// Super dereferences InPin unconditionally (PCGSettings.cpp, GetCurrentPinTypesID tail).
+	if (!InPin) { return FPCGDataTypeInfoParam::AsId(); }
+
+	if (InPin->IsOutputPin())
 	{
 		// Tag the subtype so the output type-matches soft-path override pins (Distribute's SourceCollection/Constant).
 		FPCGDataTypeIdentifier Id = FPCGDataTypeInfoParam::AsId();
@@ -67,8 +71,9 @@ FPCGDataTypeIdentifier UPCGExBuildAssetCollectionSettings::GetCurrentPinTypesID(
 		return Id;
 	}
 
-	// Arbitrary attribute set -- no single subtype, leave it generic.
-	return FPCGDataTypeInfoParam::AsId();
+	// Super, not a bare Param id: each override pin carries its type in AllowedTypes.CustomSubtype
+	// (PCGSettings.cpp, FillOverridableParamsPins), which an untyped Param answer would erase.
+	return Super::GetCurrentPinTypesID(InPin);
 }
 
 PCGEX_INITIALIZE_ELEMENT(BuildAssetCollection)
@@ -147,11 +152,36 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 	}
 	const FPCGCrc Crc(Hash);
 
+	// A rebuild always writes; a reuse hit writes only when the target is missing, so identical input never
+	// re-writes and deleting the saved asset re-creates it. No editor guard: the helpers no-op there.
+	auto TrySaveToAsset = [&](const bool bOnlyWhenMissing)
+	{
+		if (!Settings->bSaveToAsset || !PCGExAssetSave::CanWriteSourceContent(Context)) { return; }
+
+		FString PackagePath;
+		FString AssetName;
+		FText ResolveError;
+		if (!PCGExAssetSave::ResolveTarget(Settings->SaveTarget, PackagePath, AssetName, ResolveError))
+		{
+			PCGE_LOG_C(Error, GraphAndLog, Context, ResolveError);
+			return;
+		}
+
+		if (bOnlyWhenMissing && PCGExAssetSave::TargetAssetExists(Settings->SaveTarget)) { return; }
+
+		if (PCGExCollectionSave::SaveOmniFromAttributeSet(Settings->SaveTarget, Context, InParam, Settings->AttributeSetDetails))
+		{
+			// Settings-scoped target: with several components on this graph, the last to execute wins.
+			UE_LOG(LogPCGEx, Log, TEXT("Build Asset Collection saved '%s' (source: %s)."), *PackagePath, *Context->GetExecutionSourceName());
+		}
+	};
+
 	// Reuse an identical collection already on this component.
 	if (const UPCGExManagedAssetCollection* Existing = PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedAssetCollection>(
 		Component, Crc,
 		[&ConfigId](const UPCGExManagedAssetCollection* Candidate) { return Candidate->Collection && Candidate->Config == ConfigId; }))
 	{
+		TrySaveToAsset(/*bOnlyWhenMissing=*/true);
 		return CompleteWith(FSoftObjectPath(Existing->Collection));
 	}
 
@@ -175,6 +205,8 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 
 	Managed->Collection = Collection;
 	Component->AddToManagedResources(Managed);
+
+	TrySaveToAsset(/*bOnlyWhenMissing=*/false);
 
 	return CompleteWith(FSoftObjectPath(Collection));
 }

@@ -2345,6 +2345,12 @@ void UPCGExAssetCollection::EDITOR_FinalizeStagingRebuild(bool bHasChanges)
 	EDITOR_EndPipelineSession();
 }
 
+void UPCGExAssetCollection::EDITOR_StampSchemaVersionsCurrent()
+{
+	GrammarSchemaVersion = PCGExAssetCollectionMigration::CurrentGrammarSchemaVersion;
+	FittingSchemaVersion = PCGExAssetCollectionMigration::CurrentFittingSchemaVersion;
+}
+
 void UPCGExAssetCollection::EDITOR_SnapshotForComparison(TArray<uint8>& OutBytes)
 {
 	OutBytes.Reset();

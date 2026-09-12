@@ -1232,6 +1232,10 @@ public:
 	/** Categories actually referenced by entries, excluding NAME_None. */
 	void EDITOR_CollectUsedCategories(TSet<FName>& OutCategories) const;
 
+	/** Stamp the schema versions current on a collection built in code: born at 0, the pre-v1 marker, its
+	 *  first load would re-run both PostLoad migrations and dirty the package. Never call on a loaded one. */
+	void EDITOR_StampSchemaVersionsCurrent();
+
 protected:
 	virtual void EDITOR_AddBrowserSelectionInternal(const TArray<FAssetData>& InAssetData);
 

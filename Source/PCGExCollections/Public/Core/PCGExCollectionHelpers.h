@@ -75,7 +75,7 @@ namespace PCGExCollectionHelpers
 	 * unclaimed assets become Generic), row appended through AddEntryOfType (a typed host rejects foreign
 	 * types -- skipped with a warning), extra attributes mapped to custom properties (schema on the
 	 * collection, enabled override per entry). Outside the editor, non-runtime-stageable types (Actor,
-	 * Level) are authored with Details.DefaultStagingBounds. Also copies Details.DefaultStagingBounds onto
+	 * Level) are authored with the details' default staging bounds, which are also copied onto
 	 * the host. Returns true when at least one entry was appended.
 	 */
 	PCGEXCOLLECTIONS_API

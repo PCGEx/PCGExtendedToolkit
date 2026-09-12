@@ -255,7 +255,7 @@ namespace PCGExCollectionHelpers
 			return false;
 		}
 
-		InCollection->DefaultStagingBounds = Details.DefaultStagingBounds;
+		InCollection->DefaultStagingBounds = Details.GetDefaultStagingBounds();
 
 		TArray<PCGExAttributeSetBuild::FPropertyColumn> Columns;
 		TArray<FInstancedStruct> Schema;
@@ -340,7 +340,7 @@ namespace PCGExCollectionHelpers
 			}
 			if (!*bStageable)
 			{
-				Entry->Staging.Bounds = Details.DefaultStagingBounds;
+				Entry->Staging.Bounds = Details.GetDefaultStagingBounds();
 				Entry->Staging.bAuthored = true;
 				NumAuthored++;
 			}
