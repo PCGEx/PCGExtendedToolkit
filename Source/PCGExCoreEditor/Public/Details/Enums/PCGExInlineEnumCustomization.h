@@ -17,6 +17,11 @@ namespace PCGExEnumCustomization
 	PCGEXCOREEDITOR_API
 	TArray<int32> GetEnumDisplayOrder(const UEnum* Enum);
 
+	/** Icon-only toggle button for an ActionIcon meta value. The icon draws at its brush's ImageSize, never
+	 *  stretched to a row sized by a larger sibling. */
+	PCGEXCOREEDITOR_API
+	TSharedRef<SWidget> CreateActionIconButton(const FString& ActionIcon, const FText& ToolTip, TFunction<bool()> IsActive, TFunction<void()> OnClick);
+
 	/** Radio group that honors the property's ValidEnumValues / InvalidEnumValues metadata (plus UMETA(Hidden)). */
 	PCGEXCOREEDITOR_API
 	TSharedRef<SWidget> CreateRadioGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum);
