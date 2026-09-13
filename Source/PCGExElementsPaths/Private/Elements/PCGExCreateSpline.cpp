@@ -18,11 +18,26 @@
 #define PCGEX_NAMESPACE CreateSpline
 
 #if WITH_EDITOR
+void UPCGExCreateSplineSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
 void UPCGExCreateSplineSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGEX_IF_VERSION_LOWER(1, 70, 11)
 	{
 		Tangents.ApplyDeprecation(bApplyCustomTangents_DEPRECATED, ArriveTangentAttribute_DEPRECATED, LeaveTangentAttribute_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);

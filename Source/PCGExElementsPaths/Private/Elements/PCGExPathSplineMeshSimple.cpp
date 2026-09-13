@@ -41,6 +41,11 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecationBeforeUpdatePins(U
 		MutationDetails.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -61,6 +66,11 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 	PCGEX_IF_VERSION_LOWER(1, 76, 10)
 	{
 		MutationDetails.ApplyDeprecation();
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);

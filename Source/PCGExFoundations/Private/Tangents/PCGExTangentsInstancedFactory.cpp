@@ -11,8 +11,27 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExTangentsScalingDetails, ArriveScale, FVector, ArriveScaleInput, ArriveScaleAttribute, FVector(ArriveScaleConstant))
-PCGEX_SETTING_VALUE_IMPL(FPCGExTangentsScalingDetails, LeaveScale, FVector, LeaveScaleInput, LeaveScaleAttribute, FVector(LeaveScaleConstant))
+#pragma region FPCGExTangentsScalingDetails
+
+#if WITH_EDITOR
+void FPCGExTangentsScalingDetails::ApplyDeprecation()
+{
+	ArriveScale.Update(ArriveScaleInput_DEPRECATED, ArriveScaleAttribute_DEPRECATED, FVector(ArriveScaleConstant_DEPRECATED));
+	LeaveScale.Update(LeaveScaleInput_DEPRECATED, LeaveScaleAttribute_DEPRECATED, FVector(LeaveScaleConstant_DEPRECATED));
+}
+
+void FPCGExTangentsScalingDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ArriveScaleAttribute")), FName(TEXT("ArriveScale")), FName(TEXT("Attribute")), FName(TEXT("Arrive Scale (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ArriveScaleConstant")), FName(TEXT("ArriveScale")), FName(TEXT("Constant")), FName(TEXT("Arrive Scale")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("LeaveScaleAttribute")), FName(TEXT("LeaveScale")), FName(TEXT("Attribute")), FName(TEXT("Leave Scale (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("LeaveScaleConstant")), FName(TEXT("LeaveScale")), FName(TEXT("Constant")), FName(TEXT("Leave Scale")));
+}
+#endif
+
+#pragma endregion
+
+#pragma region FPCGExTangentsDetails
 
 #if WITH_EDITOR
 void FPCGExTangentsDetails::ApplyDeprecation(const bool bUseAttribute, const FName InArriveAttributeName, const FName InLeaveAttributeName)
@@ -28,6 +47,16 @@ void FPCGExTangentsDetails::ApplyDeprecation(const bool bUseAttribute, const FNa
 	Source = bUseAttribute ? EPCGExTangentSource::Attribute : EPCGExTangentSource::None;
 
 	bDeprecationApplied = true;
+}
+
+void FPCGExTangentsDetails::ApplyDeprecation()
+{
+	Scaling.ApplyDeprecation();
+}
+
+void FPCGExTangentsDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	Scaling.RenamePins(InSettings, InOutNode);
 }
 #endif
 
@@ -87,21 +116,25 @@ bool FPCGExTangentsDetails::Init(FPCGExContext* InContext, const FPCGExTangentsD
 	return true;
 }
 
+#pragma endregion
+
 namespace PCGExTangents
 {
+#pragma region FTangentsHandler
+
 	bool FTangentsHandler::Init(FPCGExContext* InContext, const FPCGExTangentsDetails& InDetails, const TSharedPtr<PCGExData::FFacade>& InDataFacade)
 	{
 		Mode = InDetails.Source;
 		PointData = InDataFacade->GetIn();
 		LastIndex = InDataFacade->GetNum() - 1;
 
-		StartScaleReader = InDetails.Scaling.GetValueSettingArriveScale();
+		StartScaleReader = InDetails.Scaling.ArriveScale.GetValueSetting();
 		if (!StartScaleReader->Init(InDataFacade))
 		{
 			return false;
 		}
 
-		EndScaleReader = InDetails.Scaling.GetValueSettingLeaveScale();
+		EndScaleReader = InDetails.Scaling.LeaveScale.GetValueSetting();
 		if (!EndScaleReader->Init(InDataFacade))
 		{
 			return false;
@@ -341,6 +374,8 @@ namespace PCGExTangents
 			}
 		}
 	}
+
+#pragma endregion
 
 	void DeclareTangentsInputs(TArray<FPCGPinProperties>& PinProperties, const bool bRequiresSources)
 	{

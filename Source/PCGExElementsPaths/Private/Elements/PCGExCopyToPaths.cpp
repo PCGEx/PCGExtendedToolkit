@@ -36,6 +36,10 @@ void UPCGExCopyToPathsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* 
 	{
 		DataMatching.RenamePins(this, InOutNode);
 	}
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -44,6 +48,10 @@ void UPCGExCopyToPathsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	PCGEX_IF_VERSION_LOWER(1, 76, 10)
 	{
 		DataMatching.ApplyDeprecation();
+	}
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
 	}
 	Super::PCGExApplyDeprecation(InOutNode);
 }
