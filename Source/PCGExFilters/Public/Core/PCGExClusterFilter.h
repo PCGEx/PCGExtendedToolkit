@@ -90,7 +90,7 @@ public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilterVtx)
 };
 
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExProxyInterface))
 class PCGEXFILTERS_API UPCGExVtxFilterProviderSettings : public UPCGExClusterFilterProviderSettings
 {
 	GENERATED_BODY()
@@ -125,7 +125,7 @@ public:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoFilterEdge)
 };
 
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExProxyInterface))
 class PCGEXFILTERS_API UPCGExEdgeFilterProviderSettings : public UPCGExClusterFilterProviderSettings
 {
 	GENERATED_BODY()

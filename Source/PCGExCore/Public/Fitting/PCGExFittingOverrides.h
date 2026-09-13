@@ -92,6 +92,56 @@ namespace PCGExFitting
 	}
 
 	/**
+	 * Local-frame scale for a target-frame per-axis fit on an asset pre-rotated by R and pre-scaled by S:
+	 * diagonal of R^T * diag(FitScale) * R, times S. Exact for a uniform FitScale (Min/Max/Avg) or a 90-degree rotation; otherwise
+	 * the ideal fit is a skew FTransform cannot hold and this is its least-squares diagonal.
+	 */
+	FORCEINLINE FVector ResolveLocalFitScale(const FQuat& LocalRotation, const FVector& LocalScale, const FVector& FitScale)
+	{
+		const FVector AxisX = LocalRotation.GetAxisX();
+		const FVector AxisY = LocalRotation.GetAxisY();
+		const FVector AxisZ = LocalRotation.GetAxisZ();
+
+		return FVector(
+			LocalScale.X * (FitScale.X * AxisX.X * AxisX.X + FitScale.Y * AxisX.Y * AxisX.Y + FitScale.Z * AxisX.Z * AxisX.Z),
+			LocalScale.Y * (FitScale.X * AxisY.X * AxisY.X + FitScale.Y * AxisY.Y * AxisY.Y + FitScale.Z * AxisY.Z * AxisY.Z),
+			LocalScale.Z * (FitScale.X * AxisZ.X * AxisZ.X + FitScale.Y * AxisZ.Y * AxisZ.Y + FitScale.Z * AxisZ.Z * AxisZ.Z));
+	}
+
+	/** Axis bitmask (1/2/4) of the fits that promise to stay inside the target: Fill (per-axis even in Uniform mode) and Individual Min. */
+	FORCEINLINE uint8 ContainmentAxes(const EPCGExFitMode Mode, const EPCGExScaleToFit UniformFit, const EPCGExScaleToFit FitX, const EPCGExScaleToFit FitY, const EPCGExScaleToFit FitZ)
+	{
+		if (Mode == EPCGExFitMode::Uniform)
+		{
+			return UniformFit == EPCGExScaleToFit::Fill ? 7 : 0;
+		}
+		if (Mode != EPCGExFitMode::Individual)
+		{
+			return 0;
+		}
+
+		uint8 Axes = 0;
+		if (FitX == EPCGExScaleToFit::Fill || FitX == EPCGExScaleToFit::Min) { Axes |= 1; }
+		if (FitY == EPCGExScaleToFit::Fill || FitY == EPCGExScaleToFit::Min) { Axes |= 2; }
+		if (FitZ == EPCGExScaleToFit::Fill || FitZ == EPCGExScaleToFit::Min) { Axes |= 4; }
+		return Axes;
+	}
+
+	/** Uniform factor (<= 1) bringing FootprintSize inside TargetSize on the masked axes; 1 when nothing overflows. Sign-safe for mirrored targets. */
+	FORCEINLINE double ContainmentShrink(const uint8 Axes, const FVector& TargetSize, const FVector& FootprintSize)
+	{
+		double Shrink = 1.0;
+		for (int32 Axis = 0; Axis < 3; Axis++)
+		{
+			if ((Axes & (1 << Axis)) && FootprintSize[Axis] > 0.0)
+			{
+				Shrink = FMath::Min(Shrink, FMath::Abs(TargetSize[Axis]) / FootprintSize[Axis]);
+			}
+		}
+		return Shrink;
+	}
+
+	/**
 	 * Per-axis justification translation from resolved values. Shared by the node-level,
 	 * attribute-driven details (FPCGExSingleJustifyDetails reads its getters then calls this)
 	 * and the lean per-entry representation (plain constants).

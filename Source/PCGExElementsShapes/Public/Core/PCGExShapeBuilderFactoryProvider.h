@@ -44,7 +44,7 @@ public:
 	virtual TSharedPtr<FPCGExShapeBuilderOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="shapes/shape"))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="shapes/shape", PCGExProxyInterface))
 class PCGEXELEMENTSSHAPES_API UPCGExShapeBuilderFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

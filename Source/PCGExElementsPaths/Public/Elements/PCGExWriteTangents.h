@@ -43,6 +43,10 @@ protected:
 
 public:
 	virtual FName GetPointFilterPin() const override;
+	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
+
+	/** Whether a selected tangents module reads the Tangent Sources pin, which is then Required instead of Advanced. */
+	bool RequiresTangentSources() const;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName ArriveName = "ArriveTangent";

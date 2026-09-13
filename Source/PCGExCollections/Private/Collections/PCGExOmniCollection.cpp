@@ -11,21 +11,67 @@
 #include "Collections/PCGExSkinnedMeshCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
 
-#if WITH_EDITOR
 #include "AssetRegistry/AssetData.h"
 #include "PCGDataAsset.h"
 #include "UObject/UnrealType.h"
+#include "Blueprint/BlueprintSupport.h"
 #include "Engine/Blueprint.h"
 #include "Engine/SkinnedAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
-#endif
+#include "Misc/PackageName.h"
 
 // Registered manually (not via PCGEX_REGISTER_COLLECTION_TYPE): Omni has no single entry
 // struct, so EntryStruct stays null -- resolve structs per entry via Entry->GetTypeId().
 namespace PCGExOmniCollection
 {
+	/**
+	 * The actor CLASS path an asset stands for, empty when it isn't an actor source. Registry tags
+	 * first: NativeParentClassPath names a native class, always loaded, so the AActor check costs no
+	 * load (cooked registries carry the tags too). A loaded class object (class-path inputs) answers
+	 * directly. The GetAsset() inspection is the editor-only fallback for tagless rows.
+	 */
+	FSoftObjectPath ResolveActorClassPath(const FAssetData& Asset)
+	{
+		if (Asset.IsInstanceOf<UClass>())
+		{
+			// In-memory resolve, not GetAsset(): class rows only come from already-loaded objects, and
+			// GetAsset() routes through a package find-or-load instead of the object path.
+			const UClass* Class = Cast<UClass>(Asset.GetSoftObjectPath().ResolveObject());
+			return Class && Class->IsChildOf(AActor::StaticClass()) ? FSoftObjectPath(Class) : FSoftObjectPath();
+		}
+
+		// IsInstanceOf so UBlueprint subclass assets are claimed too.
+		if (!Asset.IsInstanceOf<UBlueprint>())
+		{
+			return FSoftObjectPath();
+		}
+
+		FString NativeParent;
+		FString GeneratedClass;
+		if (Asset.GetTagValue(FBlueprintTags::NativeParentClassPath, NativeParent) && Asset.GetTagValue(FBlueprintTags::GeneratedClassPath, GeneratedClass))
+		{
+			const FString ParentPath(FPackageName::ExportTextPathToObjectPath(FStringView(NativeParent)));
+			if (const UClass* ParentClass = FindObject<UClass>(nullptr, *ParentPath))
+			{
+				return ParentClass->IsChildOf(AActor::StaticClass())
+					? FSoftObjectPath(FString(FPackageName::ExportTextPathToObjectPath(FStringView(GeneratedClass))))
+					: FSoftObjectPath();
+			}
+		}
+
+#if WITH_EDITOR
+		const UBlueprint* Blueprint = Cast<UBlueprint>(Asset.GetAsset());
+		if (Blueprint && Blueprint->GeneratedClass && Blueprint->GeneratedClass->IsChildOf(AActor::StaticClass()))
+		{
+			return FSoftObjectPath(Blueprint->GeneratedClass.Get());
+		}
+#endif
+
+		return FSoftObjectPath();
+	}
+
 	struct FTypeRegistration
 	{
 		FTypeRegistration()
@@ -56,9 +102,8 @@ namespace PCGExOmniCollection
 				FTypeRegistry::AddPendingCustomization(TypeIds::Level, [](FTypeInfo& Info) { Info.GlobalsStruct = FPCGExLevelCollectionGlobals::StaticStruct(); });
 			}
 
-#if WITH_EDITOR
-			// Source-asset detection for the built-in types (Omni drag-drop ingestion).
-			// Pending customizations run after ALL registrations -- order-safe.
+			// Source-asset detection for the built-in types (Omni drag-drop ingestion and
+			// attribute-set builds). Pending customizations run after ALL registrations -- order-safe.
 			using FTypeRegistry = PCGExAssetCollection::FTypeRegistry;
 			using FTypeInfo = PCGExAssetCollection::FTypeInfo;
 			namespace TypeIds = PCGExAssetCollection::TypeIds;
@@ -78,27 +123,18 @@ namespace PCGExOmniCollection
 			FTypeRegistry::AddPendingCustomization(TypeIds::Actor, [](FTypeInfo& Info)
 			{
 				Info.SourceDetectPriority = 20;
-				// Loads the asset to inspect GeneratedClass -- acceptable for a user-driven drop.
-				Info.DetectSourceAsset = [](const FAssetData& Asset)
-				{
-					// IsInstanceOf so UBlueprint subclass assets are claimed too.
-					if (!Asset.IsInstanceOf<UBlueprint>())
-					{
-						return false;
-					}
-					const UBlueprint* Blueprint = Cast<UBlueprint>(Asset.GetAsset());
-					return Blueprint && Blueprint->GeneratedClass && Blueprint->GeneratedClass->IsChildOf(AActor::StaticClass());
-				};
+				Info.bRuntimeStageable = false; // temp-actor spawn is editor-only
+				Info.DetectSourceAsset = [](const FAssetData& Asset) { return ResolveActorClassPath(Asset).IsValid(); };
 				// The row must reference the GENERATED CLASS, not the blueprint asset.
 				Info.MakeEntryFromSourceAsset = [](const FAssetData& Asset, FInstancedStruct& OutPayload)
 				{
-					const UBlueprint* Blueprint = Cast<UBlueprint>(Asset.GetAsset());
-					if (!Blueprint || !Blueprint->GeneratedClass || !Blueprint->GeneratedClass->IsChildOf(AActor::StaticClass()))
+					const FSoftObjectPath ClassPath = ResolveActorClassPath(Asset);
+					if (!ClassPath.IsValid())
 					{
 						return false;
 					}
 					OutPayload.InitializeAs(FPCGExActorCollectionEntry::StaticStruct());
-					OutPayload.GetMutablePtr<FPCGExAssetCollectionEntry>()->SetAssetPath(FSoftObjectPath(Blueprint->GeneratedClass.Get()));
+					OutPayload.GetMutablePtr<FPCGExAssetCollectionEntry>()->SetAssetPath(ClassPath);
 					return true;
 				};
 			});
@@ -107,6 +143,7 @@ namespace PCGExOmniCollection
 			FTypeRegistry::AddPendingCustomization(TypeIds::Level, [](FTypeInfo& Info)
 			{
 				Info.SourceDetectPriority = 30;
+				Info.bRuntimeStageable = false; // level actor walk is editor-only
 				Info.DetectSourceAsset = [](const FAssetData& Asset) { return Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName(); };
 			});
 
@@ -124,7 +161,6 @@ namespace PCGExOmniCollection
 					return true;
 				};
 			});
-#endif
 		}
 	};
 
@@ -1022,20 +1058,7 @@ void UPCGExOmniCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAsse
 {
 	UPCGExAssetCollection::EDITOR_AddBrowserSelectionInternal(InAssetData);
 
-	// Detectors by ascending priority -- copied OUT of the registry: interior pointers must
-	// never outlive the lock (registrations can relocate storage; see FTypeRegistry).
-	TArray<PCGExAssetCollection::FTypeInfo> Detectors;
-	PCGExAssetCollection::FTypeRegistry::Get().ForEach([&Detectors](const PCGExAssetCollection::FTypeInfo& Info)
-	{
-		if (Info.DetectSourceAsset && Info.EntryStruct)
-		{
-			Detectors.Add(Info);
-		}
-	});
-	Detectors.Sort([](const PCGExAssetCollection::FTypeInfo& A, const PCGExAssetCollection::FTypeInfo& B)
-	{
-		return A.SourceDetectPriority < B.SourceDetectPriority;
-	});
+	const PCGExCollectionHelpers::FSourceAssetResolver Resolver;
 
 	// Existing (type, path) pairs so the same asset isn't added twice as the same entry type.
 	auto MakeKey = [](const PCGExAssetCollection::FTypeId TypeId, const FSoftObjectPath& Path)
@@ -1067,45 +1090,21 @@ void UPCGExOmniCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAsse
 
 	for (const FAssetData& Asset : InAssetData)
 	{
-		for (const PCGExAssetCollection::FTypeInfo& Info : Detectors)
+		FInstancedStruct Payload;
+		if (!Resolver.Resolve(Asset, Payload))
 		{
-			if (!Info.DetectSourceAsset(Asset))
-			{
-				continue;
-			}
-
-			FInstancedStruct Payload;
-			if (Info.MakeEntryFromSourceAsset)
-			{
-				// Factory rejected on closer inspection: fall through to lower-priority detectors.
-				if (!Info.MakeEntryFromSourceAsset(Asset, Payload))
-				{
-					continue;
-				}
-			}
-			else
-			{
-				Payload.InitializeAs(Info.EntryStruct);
-				Payload.GetMutablePtr<FPCGExAssetCollectionEntry>()->SetAssetPath(Asset.ToSoftObjectPath());
-			}
-
-			const FPCGExAssetCollectionEntry* NewEntry = Payload.GetPtr<FPCGExAssetCollectionEntry>();
-			if (!NewEntry)
-			{
-				continue;
-			}
-
-			const uint64 Key = MakeKey(NewEntry->GetTypeId(), NewEntry->Staging.Path);
-			if (ExistingKeys.Contains(Key))
-			{
-				break;
-			}
-
-			ExistingKeys.Add(Key);
-			FPCGExOmniCollectionEntry& Row = Entries.Emplace_GetRef();
-			Row.Entry = MoveTemp(Payload);
-			break; // Asset claimed by this type.
+			continue;
 		}
+
+		const FPCGExAssetCollectionEntry* NewEntry = Payload.GetPtr<FPCGExAssetCollectionEntry>();
+		const uint64 Key = MakeKey(NewEntry->GetTypeId(), NewEntry->Staging.Path);
+		if (ExistingKeys.Contains(Key))
+		{
+			continue;
+		}
+
+		ExistingKeys.Add(Key);
+		Entries.Emplace_GetRef().Entry = MoveTemp(Payload);
 	}
 
 	// Newly ingested entry types arrive with their per-type setup (globals block + machinery

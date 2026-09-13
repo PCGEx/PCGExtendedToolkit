@@ -11,7 +11,7 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /** Reads a category's resolved custom property (category override row, then collection default) (pure). See UK2Node_PCGExPropertyBase. */
-UCLASS(meta=(DisplayName="Get Category Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/get-category-property"))
+UCLASS(meta=(DisplayName="Get Category Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExCategoryProperty : public UK2Node_PCGExPropertyBase
 {
 	GENERATED_BODY()

@@ -97,7 +97,7 @@ protected:
 	virtual PCGExFactories::EPreparationResult InitInternalData(FPCGExContext* InContext);
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="utilities/pickers/picker"))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="utilities/pickers/picker", PCGExProxyInterface))
 class PCGEXPICKERS_API UPCGExPickerFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

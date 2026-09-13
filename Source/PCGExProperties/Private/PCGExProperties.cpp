@@ -42,6 +42,35 @@ int32 PCGExProperties::GetPackedFloatWidth(const EPCGMetadataTypes InType)
 	}
 }
 
+bool PCGExProperties::MakePropertyForMetadataType(const EPCGMetadataTypes InType, const FName InPropertyName, FInstancedStruct& OutProperty)
+{
+	switch (InType)
+	{
+#define PCGEX_MAKE_PROPERTY_CASE(_TYPE, _STRUCT) case EPCGMetadataTypes::_TYPE: OutProperty.InitializeAs<_STRUCT>(); break;
+	PCGEX_MAKE_PROPERTY_CASE(Float, FPCGExProperty_Float)
+	PCGEX_MAKE_PROPERTY_CASE(Double, FPCGExProperty_Double)
+	PCGEX_MAKE_PROPERTY_CASE(Integer32, FPCGExProperty_Int32)
+	PCGEX_MAKE_PROPERTY_CASE(Integer64, FPCGExProperty_Int64)
+	PCGEX_MAKE_PROPERTY_CASE(Vector2, FPCGExProperty_Vector2)
+	PCGEX_MAKE_PROPERTY_CASE(Vector, FPCGExProperty_Vector)
+	PCGEX_MAKE_PROPERTY_CASE(Vector4, FPCGExProperty_Vector4)
+	PCGEX_MAKE_PROPERTY_CASE(Quaternion, FPCGExProperty_Quat)
+	PCGEX_MAKE_PROPERTY_CASE(Transform, FPCGExProperty_Transform)
+	PCGEX_MAKE_PROPERTY_CASE(String, FPCGExProperty_String)
+	PCGEX_MAKE_PROPERTY_CASE(Boolean, FPCGExProperty_Bool)
+	PCGEX_MAKE_PROPERTY_CASE(Rotator, FPCGExProperty_Rotator)
+	PCGEX_MAKE_PROPERTY_CASE(Name, FPCGExProperty_Name)
+	PCGEX_MAKE_PROPERTY_CASE(SoftObjectPath, FPCGExProperty_SoftObjectPath)
+	PCGEX_MAKE_PROPERTY_CASE(SoftClassPath, FPCGExProperty_SoftClassPath)
+#undef PCGEX_MAKE_PROPERTY_CASE
+	default:
+		return false;
+	}
+
+	OutProperty.GetMutablePtr<FPCGExProperty>()->PropertyName = InPropertyName;
+	return true;
+}
+
 int32 FPCGExProperty::GetPackedFloatCount() const
 {
 	return PCGExProperties::GetPackedFloatWidth(GetOutputType());

@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Nebukam/PCGExtendedToolkit/refs/heads/docs/_sources/smol-logo.png" alt="PCGEx Logo">
+  <img width="320" alt="Logo_Centered" src="https://github.com/user-attachments/assets/f5cd2029-2322-46da-896e-1c776720ed97" />
 </p>
 
 <h1 align="center">PCG Extended Toolkit (PCGEx)</h1>

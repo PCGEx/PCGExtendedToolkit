@@ -11,6 +11,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
 #include "Core/PCGExSettings.h"
+#include "Details/PCGExAssetSaveTargetDetails.h"
 #include "Details/PCGExRoamingAssetCollectionDetails.h"
 
 #include "PCGExBuildAssetCollection.generated.h"
@@ -42,8 +43,9 @@ public:
 };
 
 /**
- * Builds a transient asset collection (with baked staging) from an input attribute set and outputs its soft
+ * Builds a transient Omni collection (with baked staging) from an input attribute set and outputs its soft
  * path, so Staging : Distribute can consume it via SourceCollection (Constant) as if it were a saved asset.
+ * Entry types are inferred per row from the type registry; extra attributes become custom properties.
  * Inverse of Asset Collection to Set. Anchored by a UPCGExManagedAssetCollection on the component, so
  * identical inputs dedup by CRC and survive regeneration. Main-thread-only + non-cacheable (see below).
  */
@@ -53,11 +55,9 @@ class UPCGExBuildAssetCollectionSettings : public UPCGExSettings
 	GENERATED_BODY()
 
 public:
-	UPCGExBuildAssetCollectionSettings();
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(BuildAssetCollection, "Build Asset Collection", "Builds a transient asset collection from an input attribute set and outputs its soft path for a Staging : Distribute SourceCollection (Constant) override.")
+	PCGEX_NODE_INFOS(BuildAssetCollection, "Build Asset Collection", "Builds a transient Omni collection from an input attribute set (entry types inferred per row, extra attributes mapped to custom properties) and outputs its soft path for a Staging : Distribute SourceCollection (Constant) override.")
 
 	virtual EPCGSettingsType GetType() const override { return EPCGSettingsType::Generic; }
 
@@ -77,13 +77,23 @@ protected:
 	virtual FPCGElementPtr CreateElement() const override;
 
 public:
-	/** Which collection type to build, and which attributes hold the asset path / weight / category. */
+	/** Which attributes hold the asset path / weight / category, which extra attributes become custom properties, and the default staging bounds. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExRoamingAssetCollectionDetails AttributeSetDetails;
 
 	/** Name of the output FSoftObjectPath attribute carrying the built collection's soft path. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName OutputAttributeName = FName("Collection");
+
+	/** Also write the built collection to a real asset. Editor only; ignored in preview, PIE, runtime
+	 *  generation, cooks and partitioned generation. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
+	bool bSaveToAsset = false;
+
+	/** Where the collection is written. Rewrites on every rebuild; entry ids come from the source asset
+	 *  paths, so variant collections stay bound. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bSaveToAsset", DisplayName = "Save to Asset"))
+	FPCGExAssetSaveTargetDetails SaveTarget;
 };
 
 struct FPCGExBuildAssetCollectionContext final : FPCGExContext
