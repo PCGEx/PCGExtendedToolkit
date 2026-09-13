@@ -41,6 +41,11 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecationBeforeUpdatePins(U
 		MutationDetails.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -61,6 +66,11 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 	PCGEX_IF_VERSION_LOWER(1, 76, 10)
 	{
 		MutationDetails.ApplyDeprecation();
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -108,6 +118,27 @@ void FPCGExPathSplineMeshSimpleContext::RegisterAssetDependencies()
 	{
 		MaterialLoader->AddAssetDependencies();
 	}
+}
+
+TArray<FPCGPinProperties> UPCGExPathSplineMeshSimpleSettings::InputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+	PCGExTangents::DeclareTangentsInputs(PinProperties, RequiresTangentSources());
+	return PinProperties;
+}
+
+bool UPCGExPathSplineMeshSimpleSettings::RequiresTangentSources() const
+{
+	return PCGExTangents::WantsTangentSources(Tangents);
+}
+
+bool UPCGExPathSplineMeshSimpleSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
+{
+	if (InPin->Properties.Label == PCGExTangents::SourceTangentSourcesLabel && !RequiresTangentSources())
+	{
+		return false;
+	}
+	return Super::IsPinUsedByNodeExecution(InPin);
 }
 
 bool FPCGExPathSplineMeshSimpleElement::Boot(FPCGExContext* InContext) const

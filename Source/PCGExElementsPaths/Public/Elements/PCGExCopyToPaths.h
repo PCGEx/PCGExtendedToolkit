@@ -53,6 +53,9 @@ protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
+
+	/** Whether a selected tangents module reads the Tangent Sources pin, which is then Required instead of Advanced. */
+	bool RequiresTangentSources() const;
 	//~End UPCGSettings
 
 	//~Begin UPCGExPointsProcessorSettings
@@ -125,9 +128,10 @@ public:
 
 #pragma endregion
 
+	/** Single source of truth for "this node computes tangents": per-point types may include Curve Custom Tangent. */
 	bool GetApplyTangents() const
 	{
-		return (!bApplyCustomPointType && DefaultPointType == EPCGExSplinePointType::CurveCustomTangent);
+		return bApplyCustomPointType || DefaultPointType == EPCGExSplinePointType::CurveCustomTangent;
 	}
 };
 

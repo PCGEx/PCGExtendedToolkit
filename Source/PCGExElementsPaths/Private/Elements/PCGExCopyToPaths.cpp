@@ -36,6 +36,10 @@ void UPCGExCopyToPathsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* 
 	{
 		DataMatching.RenamePins(this, InOutNode);
 	}
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -44,6 +48,10 @@ void UPCGExCopyToPathsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	PCGEX_IF_VERSION_LOWER(1, 76, 10)
 	{
 		DataMatching.ApplyDeprecation();
+	}
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
 	}
 	Super::PCGExApplyDeprecation(InOutNode);
 }
@@ -57,6 +65,7 @@ TArray<FPCGPinProperties> UPCGExCopyToPathsSettings::InputPinProperties() const
 	PCGEX_PIN_ANY(PCGExCommon::Labels::SourceTargetsLabel, "Paths or splines to deform along", Required)
 	PCGExMatching::Helpers::DeclareMatchingRulesInputs(DataMatching, PinProperties);
 	PCGEX_PIN_POINTS(PCGExCommon::Labels::SourceBoundsLabel, "Point data that will be used as unified bounds for all inputs", Normal)
+	PCGExTangents::DeclareTangentsInputs(PinProperties, RequiresTangentSources());
 	return PinProperties;
 }
 
@@ -67,11 +76,20 @@ TArray<FPCGPinProperties> UPCGExCopyToPathsSettings::OutputPinProperties() const
 	return PinProperties;
 }
 
+bool UPCGExCopyToPathsSettings::RequiresTangentSources() const
+{
+	return GetApplyTangents() && PCGExTangents::WantsTangentSources(Tangents);
+}
+
 bool UPCGExCopyToPathsSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {
 	if (InPin->Properties.Label == PCGExCommon::Labels::SourceBoundsLabel)
 	{
 		return InPin->EdgeCount() > 0;
+	}
+	if (InPin->Properties.Label == PCGExTangents::SourceTangentSourcesLabel && !RequiresTangentSources())
+	{
+		return false;
 	}
 	return Super::IsPinUsedByNodeExecution(InPin);
 }
@@ -91,9 +109,12 @@ bool FPCGExCopyToPathsElement::Boot(FPCGExContext* InContext) const
 	}
 	//if (!Settings->TwistSettings.Validate(InContext, true)) { return false; }
 
-	if (!Context->Tangents.Init(Context, Settings->Tangents))
+	if (Settings->GetApplyTangents())
 	{
-		return false;
+		if (!Context->Tangents.Init(Context, Settings->Tangents))
+		{
+			return false;
+		}
 	}
 
 	TArray<FPCGTaggedData> UnifiedBounds = Context->InputData.GetSpatialInputsByPin(PCGExCommon::Labels::SourceBoundsLabel);
@@ -484,7 +505,7 @@ namespace PCGExCopyToPaths
 
 		TSharedPtr<PCGExTangents::FTangentsHandler> TangentsHandler = nullptr;
 
-		if (Settings->bApplyCustomPointType || Settings->DefaultPointType == EPCGExSplinePointType::CurveCustomTangent)
+		if (Settings->GetApplyTangents())
 		{
 			TangentsHandler = MakeShared<PCGExTangents::FTangentsHandler>(bClosedLoop);
 			if (!TangentsHandler->Init(Context, Context->Tangents, PathFacade))

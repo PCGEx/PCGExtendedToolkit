@@ -18,11 +18,26 @@
 #define PCGEX_NAMESPACE CreateSpline
 
 #if WITH_EDITOR
+void UPCGExCreateSplineSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
 void UPCGExCreateSplineSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGEX_IF_VERSION_LOWER(1, 70, 11)
 	{
 		Tangents.ApplyDeprecation(bApplyCustomTangents_DEPRECATED, ArriveTangentAttribute_DEPRECATED, LeaveTangentAttribute_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -41,6 +56,27 @@ bool UPCGExCreateSplineSettings::ShouldCache() const
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(CreateSpline)
+
+TArray<FPCGPinProperties> UPCGExCreateSplineSettings::InputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+	PCGExTangents::DeclareTangentsInputs(PinProperties, RequiresTangentSources());
+	return PinProperties;
+}
+
+bool UPCGExCreateSplineSettings::RequiresTangentSources() const
+{
+	return GetApplyTangents() && PCGExTangents::WantsTangentSources(Tangents);
+}
+
+bool UPCGExCreateSplineSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
+{
+	if (InPin->Properties.Label == PCGExTangents::SourceTangentSourcesLabel && !RequiresTangentSources())
+	{
+		return false;
+	}
+	return Super::IsPinUsedByNodeExecution(InPin);
+}
 
 TArray<FPCGPinProperties> UPCGExCreateSplineSettings::OutputPinProperties() const
 {
@@ -63,7 +99,7 @@ bool FPCGExCreateSplineElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(CreateSpline)
 
-	if (Settings->bApplyCustomPointType || Settings->DefaultPointType == EPCGExSplinePointType::CurveCustomTangent)
+	if (Settings->GetApplyTangents())
 	{
 		if (!Context->Tangents.Init(Context, Settings->Tangents))
 		{

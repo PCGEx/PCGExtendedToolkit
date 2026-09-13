@@ -22,6 +22,7 @@
 #include "AdvancedPreviewScene.h"
 #include "EditorViewportClient.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "UObject/Package.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSpatialDataVisualization"
 

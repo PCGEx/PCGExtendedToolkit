@@ -51,6 +51,11 @@ void UPCGExPathSplineMeshSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNod
 		MutationDetails.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.RenamePins(this, InOutNode);
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -76,6 +81,11 @@ void UPCGExPathSplineMeshSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 		MutationDetails.ApplyDeprecation();
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 15)
+	{
+		Tangents.ApplyDeprecation();
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
@@ -92,9 +102,18 @@ void UPCGExPathSplineMeshSettings::PostInitProperties()
 }
 #endif
 
+bool UPCGExPathSplineMeshSettings::RequiresTangentSources() const
+{
+	return PCGExTangents::WantsTangentSources(Tangents);
+}
+
 bool UPCGExPathSplineMeshSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {
 	if (InPin->Properties.Label == PCGExCollections::Labels::SourceSelectorLabel && SelectorMode == EPCGExSelectorMode::Legacy)
+	{
+		return false;
+	}
+	if (InPin->Properties.Label == PCGExTangents::SourceTangentSourcesLabel && !RequiresTangentSources())
 	{
 		return false;
 	}
@@ -133,6 +152,13 @@ void UPCGExPathSplineMeshSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPi
 	}
 
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
+}
+
+TArray<FPCGPinProperties> UPCGExPathSplineMeshSettings::InputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+	PCGExTangents::DeclareTangentsInputs(PinProperties, RequiresTangentSources());
+	return PinProperties;
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(PathSplineMesh)
@@ -229,7 +255,7 @@ bool FPCGExPathSplineMeshElement::Boot(FPCGExContext* InContext) const
 		}
 		else if (Settings->CollectionSource == EPCGExCollectionSource::AttributeSet)
 		{
-			Context->MainCollection = Cast<UPCGExMeshCollection>(Settings->AttributeSetDetails.TryBuildCollection(Context, PCGExCollections::Labels::SourceAssetCollection, false));
+			Context->MainCollection = Settings->AttributeSetDetails.TryBuildCollection(Context, PCGExCollections::Labels::SourceAssetCollection, false);
 			if (!Context->MainCollection)
 			{
 				PCGE_LOG(Error, GraphAndLog, FTEXT("Failed to build collection from attribute set."));
@@ -286,9 +312,10 @@ void FPCGExPathSplineMeshContext::RegisterAssetDependencies()
 		CollectionsLoader->Finalize();
 
 		TSet<FSoftObjectPath>& Required = GetRequiredAssets();
+		// Any host type: non-Mesh entries are skipped per entry at pick time.
 		for (const TPair<PCGExValueHash, TObjectPtr<UPCGExAssetCollection>>& Pair : CollectionsLoader->AssetsMap)
 		{
-			if (!Pair.Value || Pair.Value->GetTypeId() != PCGExAssetCollection::TypeIds::Mesh)
+			if (!Pair.Value)
 			{
 				continue;
 			}
@@ -342,6 +369,19 @@ bool FPCGExPathSplineMeshElement::PostBoot(FPCGExContext* InContext) const
 		return false;
 	}
 	Context->MainCollection->LoadCache(); // Make sure to load the stuff
+
+	// Any host is accepted but only Mesh entries apply; a host with none would silently spawn nothing.
+	// Subcollection rows count as potential carriers (their contents are resolved at pick time).
+	bool bAnyMeshEntry = false;
+	Context->MainCollection->ForEachEntry([&bAnyMeshEntry](const FPCGExAssetCollectionEntry* Entry, int32)
+	{
+		bAnyMeshEntry |= Entry->bIsSubCollection || Entry->IsType(PCGExAssetCollection::TypeIds::Mesh);
+	});
+	if (!bAnyMeshEntry)
+	{
+		PCGE_LOG(Warning, GraphAndLog, FTEXT("The collection has no Mesh entries; Spline Mesh only applies Mesh entries."));
+	}
+
 	return true;
 }
 

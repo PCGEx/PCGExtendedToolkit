@@ -24,12 +24,14 @@ namespace PCGExPointFilter
 
 class UPCGExGridIDTracker;
 
-UENUM()
+// BlueprintType so a listener on OnGlobalEvent can actually switch on the value it receives.
+UENUM(BlueprintType)
 enum class EPCGExSubsystemEventType : uint8
 {
-	None       = 0 UMETA(Hidden),
-	Regenerate = 1 UMETA(DisplayName = "Regenerate", Tooltip="Triggers regeneration on subcribers."),
-	DataUpdate = 2 UMETA(DisplayName = "Data Update", Tooltip="Triggers a data update event."),
+	None            = 0 UMETA(Hidden),
+	Regenerate      = 1 UMETA(DisplayName = "Regenerate", Tooltip="Triggers regeneration on subcribers."),
+	DataUpdate      = 2 UMETA(DisplayName = "Data Update", Tooltip="Triggers a data update event."),
+	DataCacheChange = 3 UMETA(DisplayName = "Data Cache Change", Tooltip="A PCGEx Data Cache was written to or cleared. Coarse: Event Id is unused and Source can be null, so re-read the caches you track."),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnGlobalEvent, UPCGComponent*, Source, EPCGExSubsystemEventType, EventType, uint32, EventId);
@@ -38,13 +40,15 @@ namespace PCGEx
 {
 	struct PCGEXCORE_API FPolledEvent
 	{
-		UPCGComponent* Source = nullptr;
+		// Weak: events are drained on the next tick, and a source can die inside that window. Held as UObject
+		// because UPCGComponent is only forward-declared here and TWeakObjectPtr needs a complete type.
+		TWeakObjectPtr<UObject> Source = nullptr;
 		EPCGExSubsystemEventType Type = EPCGExSubsystemEventType::None;
 		uint32 EventId = 0;
 
 		FPolledEvent() = default;
 
-		FPolledEvent(UPCGComponent* InSource, const EPCGExSubsystemEventType InType, const uint32 InEventId)
+		FPolledEvent(UObject* InSource, const EPCGExSubsystemEventType InType, const uint32 InEventId)
 			: Source(InSource)
 			  , Type(InType)
 			  , EventId(InEventId)

@@ -564,6 +564,13 @@ namespace PCGExProperties
 	PCGEXPROPERTIES_API void GatherOutputDependencies(const FPCGExPropertySchemaCollection& Collection, TSet<FSoftObjectPath>& OutPaths);
 
 	/**
+	 * Initialize OutProperty as the property type storing a value of InType, named InPropertyName
+	 * (HeaderId left at 0 -- schema sync mints it). The 15 legacy PCG attribute types map 1:1; false
+	 * for every other type (Byte/Text/Enum/Struct/Object attributes have no property counterpart).
+	 */
+	PCGEXPROPERTIES_API bool MakePropertyForMetadataType(EPCGMetadataTypes InType, FName InPropertyName, FInstancedStruct& OutProperty);
+
+	/**
 	 * Effective property for InName: the overrides' enabled entry when there is one, else the schema's
 	 * own declared value -- GetOverride returns null for a disabled entry and does not fall through.
 	 *

@@ -7,11 +7,15 @@
 #include "PCGExCoreMacros.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Factories/PCGExInstancedFactory.h"
 #include "Factories/PCGExOperation.h"
 
 #include "PCGExTangentsInstancedFactory.generated.h"
+
+class UPCGSettings;
+class UPCGNode;
 
 namespace PCGExData
 {
@@ -31,8 +35,10 @@ class FPCGExTangentsOperation : public FPCGExOperation
 public:
 	bool bClosedLoop = false;
 
-	virtual bool PrepareForData(FPCGExContext* InContext)
+	// Runs once per input data before any Process* call; the base binds PrimaryDataFacade.
+	virtual bool PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade)
 	{
+		PrimaryDataFacade = InDataFacade;
 		return true;
 	}
 
@@ -84,6 +90,12 @@ public:
 		}
 	}
 
+	/** Whether this module reads reference splines from the host node's Tangent Sources pin. */
+	virtual bool WantsTangentSources() const
+	{
+		return false;
+	}
+
 	virtual TSharedPtr<FPCGExTangentsOperation> CreateOperation() const PCGEX_NOT_IMPLEMENTED_RET(CreateOperation(), nullptr);
 };
 
@@ -94,33 +106,41 @@ struct PCGEXFOUNDATIONS_API FPCGExTangentsScalingDetails
 
 	FPCGExTangentsScalingDetails() = default;
 
-	/** Where the arrive tangent scale comes from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType ArriveScaleInput = EPCGExInputValueType::Constant;
+	/** Scale applied to the arrive tangent. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	FPCGExInputShorthandSelectorVector ArriveScale = FPCGExInputShorthandSelectorVector(FName("@Last"), FVector::OneVector, false);
 
-	/** Attribute to read arrive tangent scale from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Arrive Scale (Attr)", EditCondition="ArriveScaleInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector ArriveScaleAttribute;
+	/** Scale applied to the leave tangent. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	FPCGExInputShorthandSelectorVector LeaveScale = FPCGExInputShorthandSelectorVector(FName("@Last"), FVector::OneVector, false);
 
-	/** Scale multiplier for arrive tangents. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Arrive Scale", EditCondition="ArriveScaleInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double ArriveScaleConstant = 1;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(ArriveScale, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ArriveScaleInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	/** Where the leave tangent scale comes from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType LeaveScaleInput = EPCGExInputValueType::Constant;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector ArriveScaleAttribute_DEPRECATED;
 
-	/** Attribute to read leave tangent scale from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Leave Scale (Attr)", EditCondition="LeaveScaleInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector LeaveScaleAttribute;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double ArriveScaleConstant_DEPRECATED = 1;
 
-	/** Scale multiplier for leave tangents. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Leave Scale", EditCondition="LeaveScaleInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double LeaveScaleConstant = 1;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType LeaveScaleInput_DEPRECATED = EPCGExInputValueType::Constant;
 
-	PCGEX_SETTING_VALUE_DECL(LeaveScale, FVector)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LeaveScaleAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double LeaveScaleConstant_DEPRECATED = 1;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** Rewires the pre-shorthand override pins; call under the same version gate as ApplyDeprecation. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 USTRUCT(BlueprintType)
@@ -165,16 +185,30 @@ struct PCGEXFOUNDATIONS_API FPCGExTangentsDetails
 
 #if WITH_EDITOR
 	void ApplyDeprecation(bool bUseAttribute, FName InArriveAttributeName, FName InLeaveAttributeName);
+	/** Forwards to nested details; not latched by bDeprecationApplied, so the caller owns the version gate. */
+	void ApplyDeprecation();
+	/** Rewires nested pre-shorthand override pins; call under the same version gate as ApplyDeprecation(). */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
 #endif
 
 	bool Init(FPCGExContext* InContext, const FPCGExTangentsDetails& InDetails);
 };
+
+struct FPCGPinProperties;
 
 namespace PCGExTangents
 {
 	const FName SourceOverridesTangents = TEXT("Overrides : Tangents");
 	const FName SourceOverridesTangentsStart = TEXT("Overrides : Start Tangents");
 	const FName SourceOverridesTangentsEnd = TEXT("Overrides : End Tangents");
+	const FName SourceTangentSourcesLabel = TEXT("Tangent Sources");
+
+	/** Pins every tangents-hosting node exposes: Tangent Sources (Required when a selected module reads it, Advanced otherwise) plus the three module override pins. */
+	PCGEXFOUNDATIONS_API void DeclareTangentsInputs(TArray<FPCGPinProperties>& PinProperties, const bool bRequiresSources);
+
+	/** True when any of the given modules reads the Tangent Sources pin. */
+	PCGEXFOUNDATIONS_API bool WantsTangentSources(const UPCGExTangentsInstancedFactory* InTangents, const UPCGExTangentsInstancedFactory* InStartTangents, const UPCGExTangentsInstancedFactory* InEndTangents);
+	PCGEXFOUNDATIONS_API bool WantsTangentSources(const FPCGExTangentsDetails& InDetails);
 
 	class PCGEXFOUNDATIONS_API FTangentsHandler : public TSharedFromThis<FTangentsHandler>
 	{

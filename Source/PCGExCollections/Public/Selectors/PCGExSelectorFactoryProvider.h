@@ -82,7 +82,7 @@ public:
  *
  * Output pin label: "Distribution" (see PCGExCollections::Labels::OutputDistributionLabel).
  */
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExProxyInterface))
 class PCGEXCOLLECTIONS_API UPCGExSelectorFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

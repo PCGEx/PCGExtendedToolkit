@@ -180,7 +180,7 @@ public:
 	virtual void RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const override;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|NeighborSample")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|NeighborSample", meta=(PCGExProxyInterface))
 class PCGEXELEMENTSCLUSTERS_API UPCGExNeighborSampleProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

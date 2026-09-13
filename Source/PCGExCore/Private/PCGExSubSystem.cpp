@@ -3,6 +3,7 @@
 
 #include "PCGExSubSystem.h"
 
+#include "PCGComponent.h"
 #include "PCGExLog.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
@@ -215,7 +216,7 @@ void UPCGExSubSystem::ExecuteBeginTickActions()
 
 	for (const PCGEx::FPolledEvent& Event : Events)
 	{
-		OnGlobalEvent.Broadcast(Event.Source, Event.Type, Event.EventId);
+		OnGlobalEvent.Broadcast(Cast<UPCGComponent>(Event.Source.Get()), Event.Type, Event.EventId);
 	}
 	for (FTickAction& Action : Actions)
 	{

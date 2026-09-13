@@ -67,7 +67,7 @@ protected:
 	virtual void InheritFromOtherTensor(const UPCGExTensorFactoryData* InOtherTensor);
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExProxyInterface))
 class PCGEXELEMENTSTENSORS_API UPCGExTensorFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()
@@ -127,7 +127,7 @@ protected:
 	virtual void PrepareSinglePoint(int32 Index) const;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExProxyInterface))
 class PCGEXELEMENTSTENSORS_API UPCGExTensorPointFactoryProviderSettings : public UPCGExTensorFactoryProviderSettings
 {
 	GENERATED_BODY()
