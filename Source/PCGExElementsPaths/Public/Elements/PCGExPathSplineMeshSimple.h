@@ -61,8 +61,15 @@ public:
 	virtual void PostInitProperties() override;
 #endif
 
+public:
+	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
+
+	/** Whether a selected tangents module reads the Tangent Sources pin, which is then Required instead of Advanced. */
+	bool RequiresTangentSources() const;
+
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
+	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	//~End UPCGSettings
 
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;

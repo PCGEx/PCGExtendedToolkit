@@ -130,7 +130,7 @@ public:
 	double WeightFactor = 1;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="pathfinding/heuristics/heuristics-definition"))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="pathfinding/heuristics/heuristics-definition", PCGExProxyInterface))
 class PCGEXHEURISTICS_API UPCGExHeuristicsFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

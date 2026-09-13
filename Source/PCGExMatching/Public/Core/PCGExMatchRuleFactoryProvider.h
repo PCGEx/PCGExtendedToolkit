@@ -115,7 +115,7 @@ public:
 	virtual TSharedPtr<FPCGExMatchRuleOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|DataMatch", meta=(PCGExNodeLibraryDoc="utilities/data-matching/match-rule"))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|DataMatch", meta=(PCGExNodeLibraryDoc="utilities/data-matching/match-rule", PCGExProxyInterface))
 class PCGEXMATCHING_API UPCGExMatchRuleFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

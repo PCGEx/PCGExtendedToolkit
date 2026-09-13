@@ -11,7 +11,7 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /** Writes a custom property's collection-level default (local entry or import override) and reads back the resolved value. See UK2Node_PCGExPropertyBase. */
-UCLASS(meta=(DisplayName="Set Collection Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/set-collection-property"))
+UCLASS(meta=(DisplayName="Set Collection Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_SetPCGExCollectionProperty : public UK2Node_PCGExPropertyBase
 {
 	GENERATED_BODY()

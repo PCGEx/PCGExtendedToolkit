@@ -11,7 +11,7 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /** Reads a custom property's collection-level default (pure). See UK2Node_PCGExPropertyBase. */
-UCLASS(meta=(DisplayName="Get Collection Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/get-collection-property"))
+UCLASS(meta=(DisplayName="Get Collection Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExCollectionProperty : public UK2Node_PCGExPropertyBase
 {
 	GENERATED_BODY()

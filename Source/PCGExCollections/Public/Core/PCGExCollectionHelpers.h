@@ -7,16 +7,50 @@
 #include "PCGExAssetCollection.h"
 #include "PCGParamData.h"
 #include "Core/PCGExContext.h"
+#include "Details/PCGExRoamingAssetCollectionDetails.h"
 #include "Details/PCGExStagingDetails.h"
+
+struct FAssetData;
+struct FStreamableHandle;
 
 /**
  * Collection Helper Functions
- * 
+ *
  * Simplified API for working with asset collections: convenience functions and attribute set building.
  */
 
 namespace PCGExCollectionHelpers
 {
+	/**
+	 * Registry-driven entry-payload resolution: the highest-priority type whose DetectSourceAsset claims
+	 * an asset builds its payload (MakeEntryFromSourceAsset, else InitializeAs + SetAssetPath). Detectors
+	 * are snapshotted at construction (copied out of the registry -- interior pointers never outlive its
+	 * lock), so build one per operation, not per asset. Shared by Omni drop routing and attribute-set
+	 * builds.
+	 */
+	class PCGEXCOLLECTIONS_API FSourceAssetResolver
+	{
+	public:
+		FSourceAssetResolver();
+		~FSourceAssetResolver();
+		FSourceAssetResolver(const FSourceAssetResolver&) = delete;
+		FSourceAssetResolver& operator=(const FSourceAssetResolver&) = delete;
+
+		/** Payload for a registry row; false when no type claims it (Generic catches every registered asset). */
+		bool Resolve(const FAssetData& InAsset, FInstancedStruct& OutPayload) const;
+
+		/**
+		 * Payload for an object path. Registry row first (no load); paths without one (class paths,
+		 * unscanned assets) load the object and resolve through it. Loads stay pinned for the resolver's
+		 * lifetime.
+		 */
+		bool ResolvePath(const FSoftObjectPath& InPath, FInstancedStruct& OutPayload, FPCGExContext* InContext = nullptr);
+
+	private:
+		TArray<PCGExAssetCollection::FTypeInfo> Detectors;
+		TArray<TSharedPtr<FStreamableHandle>> Handles;
+	};
+
 	/**
 	 * Per-type slot identity: base and derived globals blocks / machinery state classes
 	 * answer the same queries, so they share ONE slot. Both directions on purpose -- see
@@ -35,31 +69,28 @@ namespace PCGExCollectionHelpers
 	}
 
 	/**
-	 * Build a collection from an attribute set
-	 * @param InCollection Target collection to populate
-	 * @param InContext PCG context
-	 * @param InAttributeSet Attribute set containing asset paths
-	 * @param Details Configuration for how to map attributes to entries
-	 * @param bBuildStaging Whether to rebuild staging data after building
-	 * @return true if successful
+	 * Append one entry per attribute-set row to InCollection: entry type from the registry (FSourceAssetResolver,
+	 * unclaimed assets become Generic), row appended through AddEntryOfType (a typed host rejects foreign
+	 * types -- skipped with a warning), extra attributes mapped to custom properties (schema on the
+	 * collection, enabled override per entry). Outside the editor, non-runtime-stageable types (Actor,
+	 * Level) are authored with the details' default staging bounds, which are also copied onto
+	 * the host. Returns true when at least one entry was appended.
 	 */
 	PCGEXCOLLECTIONS_API
 	bool BuildFromAttributeSet(
 		UPCGExAssetCollection* InCollection,
 		FPCGExContext* InContext,
 		const UPCGParamData* InAttributeSet,
-		const FPCGExAssetAttributeSetDetails& Details,
+		const FPCGExRoamingAssetCollectionDetails& Details,
 		bool bBuildStaging = false);
 
-	/**
-	 * Build a collection from an attribute set on a specific input pin
-	 */
+	/** BuildFromAttributeSet over the first attribute set found on InputPin. */
 	PCGEXCOLLECTIONS_API
 	bool BuildFromAttributeSet(
 		UPCGExAssetCollection* InCollection,
 		FPCGExContext* InContext,
 		FName InputPin,
-		const FPCGExAssetAttributeSetDetails& Details,
+		const FPCGExRoamingAssetCollectionDetails& Details,
 		bool bBuildStaging);
 
 	/**

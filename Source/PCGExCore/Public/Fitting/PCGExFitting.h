@@ -272,6 +272,8 @@ struct PCGEXCORE_API FPCGExFittingDetailsHandler
 
 	/** InOverrides members, when set, replace the corresponding node-level details for this computation (per-entry overrides). */
 	void ComputeTransform(const int32 TargetIndex, FTransform& OutTransform, FBox& InOutBounds, FVector& OutTranslation, const bool bWorldSpace = true, const PCGExFitting::FOverridesView& InOverrides = {}) const;
+	/** Fits the asset with InLocalXForm (pre-fit variation, target-local frame) applied, so the fit sees the varied footprint.
+	 *  InOutBounds stays asset-local; rotation and resolved scale land on OutTransform. OutTranslation is justification only. */
 	void ComputeLocalTransform(const int32 TargetIndex, const FTransform& InLocalXForm, FTransform& OutTransform, FBox& InOutBounds, FVector& OutTranslation, const PCGExFitting::FOverridesView& InOverrides = {}) const;
 
 	bool WillChangeBounds() const;

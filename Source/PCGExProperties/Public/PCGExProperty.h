@@ -476,6 +476,13 @@ namespace PCGExProperties
 	PCGEXPROPERTIES_API int32 GetPackedFloatWidth(EPCGMetadataTypes InType);
 
 	/**
+	 * Initialize OutProperty as the property type storing a value of InType, named InPropertyName
+	 * (HeaderId left at 0 -- schema sync mints it). The 15 legacy PCG attribute types map 1:1; false
+	 * for every other type (Byte/Text/Enum/Struct/Object attributes have no property counterpart).
+	 */
+	PCGEXPROPERTIES_API bool MakePropertyForMetadataType(EPCGMetadataTypes InType, FName InPropertyName, FInstancedStruct& OutProperty);
+
+	/**
 	 * Get first property of specified type, optionally filtered by name.
 	 * @param Properties - Array view of FInstancedStruct containing properties
 	 * @param PropertyName - Optional name filter (NAME_None matches any)

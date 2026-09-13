@@ -111,6 +111,38 @@ namespace PCGExEnumCustomization
 		return Order;
 	}
 
+	TSharedRef<SWidget> CreateActionIconButton(const FString& ActionIcon, const FText& ToolTip, TFunction<bool()> IsActive, TFunction<void()> OnClick)
+	{
+		const FString BrushName = TEXT("PCGEx.ActionIcon.") + ActionIcon;
+
+		return SNew(SButton)
+			.ToolTipText(ToolTip)
+			.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
+			// Not Fill: SImage stretches its brush to the allotted size, and the row is as tall as its largest icon.
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			.ButtonColorAndOpacity_Lambda(
+				[IsActive]
+				{
+					return IsActive() ? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f) : FLinearColor::Transparent;
+				})
+			.OnClicked_Lambda(
+				[OnClick]()
+				{
+					OnClick();
+					return FReply::Handled();
+				})
+			[
+				SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush(*BrushName))
+				.ColorAndOpacity_Lambda(
+					[IsActive]
+					{
+						return IsActive() ? FLinearColor::White : FLinearColor::Gray;
+					})
+			];
+	}
+
 	TSharedRef<SWidget> CreateRadioGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum)
 	{
 		return CreateRadioGroup(PropertyHandle, Enum, GetMetaSkipIndices(PropertyHandle, Enum));
@@ -133,7 +165,7 @@ namespace PCGExEnumCustomization
 			}
 			const FString KeyName = Enum->GetNameStringByIndex(i);
 
-			FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+			const FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
 			if (IconName.IsEmpty())
 			{
 				Box->AddSlot().AutoWidth().Padding(2, 2)
@@ -158,39 +190,20 @@ namespace PCGExEnumCustomization
 			}
 			else
 			{
-				IconName = TEXT("PCGEx.ActionIcon.") + IconName;
 				Box->AddSlot().AutoWidth().Padding(2, 2)
 				[
-					SNew(SButton)
-					.ToolTipText(Enum->GetToolTipTextByIndex(i))
-					.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-					.ButtonColorAndOpacity_Lambda(
+					CreateActionIconButton(
+						IconName, Enum->GetToolTipTextByIndex(i),
 						[PropertyHandle, KeyName]
 						{
 							FString CurrentValue;
 							PropertyHandle->GetValueAsFormattedString(CurrentValue);
-							return CurrentValue == KeyName ? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f) : FLinearColor::Transparent;
-						})
-					.OnClicked_Lambda(
-						[PropertyHandle, KeyName]()
+							return CurrentValue == KeyName;
+						},
+						[PropertyHandle, KeyName]
 						{
 							PropertyHandle->SetValueFromFormattedString(KeyName);
-							return FReply::Handled();
 						})
-					[
-						SNew(SImage)
-						.Image(FAppStyle::Get().GetBrush(*IconName))
-						.ColorAndOpacity_Lambda(
-							[PropertyHandle, Enum, i]
-							{
-								FString CurrentValue;
-								PropertyHandle->GetValueAsFormattedString(CurrentValue);
-								const FString KeyName = Enum->GetNameStringByIndex(i);
-								return (CurrentValue == KeyName)
-									? FLinearColor::White
-									: FLinearColor::Gray;
-							})
-					]
 				];
 			}
 		}
@@ -215,7 +228,7 @@ namespace PCGExEnumCustomization
 			}
 			const int32 EnumValue = static_cast<int32>(Enum->GetValueByIndex(i));
 
-			FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+			const FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
 			if (IconName.IsEmpty())
 			{
 				Box->AddSlot().AutoWidth().Padding(2, 2)
@@ -238,34 +251,12 @@ namespace PCGExEnumCustomization
 			}
 			else
 			{
-				IconName = TEXT("PCGEx.ActionIcon.") + IconName;
 				Box->AddSlot().AutoWidth().Padding(2, 2)
 				[
-					SNew(SButton)
-					.ToolTipText(Enum->GetToolTipTextByIndex(i))
-					.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-					.ButtonColorAndOpacity_Lambda(
-						[GetValue, EnumValue]
-						{
-							return GetValue() == EnumValue ? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f) : FLinearColor::Transparent;
-						})
-					.OnClicked_Lambda(
-						[SetValue, EnumValue]()
-						{
-							SetValue(EnumValue);
-							return FReply::Handled();
-						})
-					[
-						SNew(SImage)
-						.Image(FAppStyle::Get().GetBrush(*IconName))
-						.ColorAndOpacity_Lambda(
-							[GetValue, EnumValue]
-							{
-								return GetValue() == EnumValue
-									? FLinearColor::White
-									: FLinearColor::Gray;
-							})
-					]
+					CreateActionIconButton(
+						IconName, Enum->GetToolTipTextByIndex(i),
+						[GetValue, EnumValue] { return GetValue() == EnumValue; },
+						[SetValue, EnumValue] { SetValue(EnumValue); })
 				];
 			}
 		}
@@ -369,7 +360,7 @@ namespace PCGExEnumCustomization
 				return FReply::Handled();
 			};
 
-			FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+			const FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
 
 			if (IconName.IsEmpty())
 			{
@@ -390,32 +381,9 @@ namespace PCGExEnumCustomization
 			}
 			else
 			{
-				IconName = TEXT("PCGEx.ActionIcon.") + IconName;
-
 				Box->AddSlot().AutoWidth().Padding(2, 2)
 				[
-					SNew(SButton)
-					.ToolTipText(Enum->GetToolTipTextByIndex(i))
-					.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-					.ButtonColorAndOpacity_Lambda(
-						[IsActive]
-						{
-							return IsActive()
-								? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f)
-								: FLinearColor::Transparent;
-						})
-					.OnClicked_Lambda(Toggle)
-					[
-						SNew(SImage)
-						.Image(FAppStyle::Get().GetBrush(*IconName))
-						.ColorAndOpacity_Lambda(
-							[IsActive]
-							{
-								return IsActive()
-									? FLinearColor::White
-									: FLinearColor::Gray;
-							})
-					]
+					CreateActionIconButton(IconName, Enum->GetToolTipTextByIndex(i), IsActive, Toggle)
 				];
 			}
 		}
@@ -693,7 +661,7 @@ namespace PCGExEnumCustomization
 				return FReply::Handled();
 			};
 
-			FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+			const FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
 
 			if (IconName.IsEmpty())
 			{
@@ -714,32 +682,9 @@ namespace PCGExEnumCustomization
 			}
 			else
 			{
-				IconName = TEXT("PCGEx.ActionIcon.") + IconName;
-
 				Box->AddSlot().AutoWidth().Padding(2, 2)
 				[
-					SNew(SButton)
-					.ToolTipText(Enum->GetToolTipTextByIndex(i))
-					.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-					.ButtonColorAndOpacity_Lambda(
-						[IsActive]
-						{
-							return IsActive()
-								? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f)
-								: FLinearColor::Transparent;
-						})
-					.OnClicked_Lambda(Toggle)
-					[
-						SNew(SImage)
-						.Image(FAppStyle::Get().GetBrush(*IconName))
-						.ColorAndOpacity_Lambda(
-							[IsActive]
-							{
-								return IsActive()
-									? FLinearColor::White
-									: FLinearColor::Gray;
-							})
-					]
+					CreateActionIconButton(IconName, Enum->GetToolTipTextByIndex(i), IsActive, Toggle)
 				];
 			}
 		}

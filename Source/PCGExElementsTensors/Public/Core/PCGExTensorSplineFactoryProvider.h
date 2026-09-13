@@ -41,7 +41,7 @@ protected:
 	virtual void BeginDestroy() override;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExProxyInterface))
 class PCGEXELEMENTSTENSORS_API UPCGExTensorSplineFactoryProviderSettings : public UPCGExTensorFactoryProviderSettings
 {
 	GENERATED_BODY()

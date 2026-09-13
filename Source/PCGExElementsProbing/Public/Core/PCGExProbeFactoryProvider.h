@@ -39,7 +39,7 @@ public:
 	virtual TSharedPtr<FPCGExProbeOperation> CreateOperation(FPCGExContext* InContext) const;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="clusters/generate/cluster-connect-points/probe-definition"))
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="clusters/generate/cluster-connect-points/probe-definition", PCGExProxyInterface))
 class PCGEXELEMENTSPROBING_API UPCGExProbeFactoryProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()

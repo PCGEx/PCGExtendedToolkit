@@ -11,7 +11,7 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /** Reads an entry's resolved custom property by raw index (pure). See UK2Node_PCGExPropertyBase. */
-UCLASS(meta=(DisplayName="Get Entry Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/get-entry-property"))
+UCLASS(meta=(DisplayName="Get Entry Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExEntryProperty : public UK2Node_PCGExPropertyBase
 {
 	GENERATED_BODY()

@@ -78,7 +78,7 @@ TSharedRef<SWidget> FPCGExGridEnumCustomization::GenerateEnumButtons(UEnum* Enum
 		}
 		const FString KeyName = Enum->GetNameStringByIndex(i);
 
-		FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
+		const FString IconName = Enum->GetMetaData(TEXT("ActionIcon"), i);
 		if (IconName.IsEmpty())
 		{
 			Grid->AddSlot(ItemIndex % Columns, ItemIndex / Columns)
@@ -103,39 +103,20 @@ TSharedRef<SWidget> FPCGExGridEnumCustomization::GenerateEnumButtons(UEnum* Enum
 		}
 		else
 		{
-			IconName = TEXT("PCGEx.ActionIcon.") + IconName;
 			Grid->AddSlot(ItemIndex % Columns, ItemIndex / Columns)
 			[
-				SNew(SButton)
-				.ToolTipText(Enum->GetToolTipTextByIndex(i))
-				.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-				.ButtonColorAndOpacity_Lambda(
+				PCGExEnumCustomization::CreateActionIconButton(
+					IconName, Enum->GetToolTipTextByIndex(i),
 					[this, KeyName]
 					{
 						FString CurrentValue;
 						EnumHandle->GetValueAsFormattedString(CurrentValue);
-						return CurrentValue == KeyName ? FLinearColor(0.005f, 0.005f, 0.005f, 0.8f) : FLinearColor::Transparent;
-					})
-				.OnClicked_Lambda(
-					[this, KeyName]()
+						return CurrentValue == KeyName;
+					},
+					[this, KeyName]
 					{
 						EnumHandle->SetValueFromFormattedString(KeyName);
-						return FReply::Handled();
 					})
-				[
-					SNew(SImage)
-					.Image(FAppStyle::Get().GetBrush(*IconName))
-					.ColorAndOpacity_Lambda(
-						[this, Enum, i]
-						{
-							FString CurrentValue;
-							EnumHandle->GetValueAsFormattedString(CurrentValue);
-							const FString KeyName = Enum->GetNameStringByIndex(i);
-							return (CurrentValue == KeyName)
-								? FLinearColor::White
-								: FLinearColor::Gray;
-						})
-				]
 			];
 		}
 
