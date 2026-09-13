@@ -95,7 +95,7 @@ public:
 	}
 };
 
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExProxyInterface))
 class PCGEXFILTERS_API UPCGExVtxFilterProviderSettings : public UPCGExClusterFilterProviderSettings
 {
 	GENERATED_BODY()
@@ -135,7 +135,7 @@ public:
 	}
 };
 
-UCLASS(Abstract)
+UCLASS(Abstract, meta=(PCGExProxyInterface))
 class PCGEXFILTERS_API UPCGExEdgeFilterProviderSettings : public UPCGExClusterFilterProviderSettings
 {
 	GENERATED_BODY()

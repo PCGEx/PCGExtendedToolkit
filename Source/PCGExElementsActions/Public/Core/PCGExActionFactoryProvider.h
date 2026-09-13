@@ -95,7 +95,7 @@ public:
 	virtual void BeginDestroy() override;
 };
 
-UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Action")
+UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Action", meta=(PCGExProxyInterface))
 class PCGEXELEMENTSACTIONS_API UPCGExActionProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()
