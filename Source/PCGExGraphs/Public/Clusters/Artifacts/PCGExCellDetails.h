@@ -4,8 +4,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExCommon.h"
 #include "Clusters/PCGExEdge.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
+#include "Metadata/PCGAttributePropertySelector.h"
 
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsDetails.h"
@@ -544,6 +546,36 @@ struct PCGEXGRAPHS_API FPCGExCellGrowthDetails
 
 private:
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> GrowthValue;
+};
+
+USTRUCT(BlueprintType)
+struct PCGEXGRAPHS_API FPCGExCellSeedMergeDetails
+{
+	GENERATED_BODY()
+
+	/** Merge adjacent cells whose seeds share the same key value into one closed path per connected region. Works without growth. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
+	bool bMergeBySeedValue = false;
+
+	/** Seed attribute or property whose value identifies a merge group. Compared by hash, so type sensitive (Float 0 != Double 0). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bMergeBySeedValue"))
+	FPCGAttributePropertyInputSelector SeedKey;
+
+	/** Hash the key of every seed. Returns false, leaving the merge disabled, when the key can't be read. */
+	bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsFacade);
+
+	FORCEINLINE bool IsEnabled() const
+	{
+		return !SeedKeys.IsEmpty();
+	}
+
+	FORCEINLINE PCGExValueHash GetKey(const int32 SeedIndex) const
+	{
+		return SeedKeys[SeedIndex];
+	}
+
+private:
+	TArray<PCGExValueHash> SeedKeys;
 };
 
 namespace PCGExClusters

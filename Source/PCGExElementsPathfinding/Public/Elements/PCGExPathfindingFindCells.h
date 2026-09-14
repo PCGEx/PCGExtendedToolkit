@@ -102,17 +102,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta = (PCG_Overridable))
 	FPCGExCellGrowthDetails SeedGrowth;
 
-	/** If true, write expansion metadata to output cells */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta = (PCG_Overridable, InlineEditConditionToggle))
-	bool bWriteExpansionAttributes = false;
-
-	/** Attribute name for pick count (how many times a cell was selected by seeds/growth) */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta = (PCG_Overridable, EditCondition="bWriteExpansionAttributes"))
-	FName PickCountAttributeName = FName("PCGEx/PickCount");
-
-	/** Attribute name for depth (minimum depth at which cell was picked, 0 = direct seed) */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta = (PCG_Overridable, EditCondition="bWriteExpansionAttributes"))
-	FName DepthAttributeName = FName("PCGEx/Depth");
+	/** Merge adjacent cells whose seeds share a key value. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Expansion", meta = (PCG_Overridable))
+	FPCGExCellSeedMergeDetails SeedMerge;
 
 	/** Output a filtered set of points containing only seeds that generated a valid path */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -148,6 +140,7 @@ struct FPCGExFindContoursContext final : FPCGExClustersProcessorContext
 
 	FPCGExCellArtifactsDetails Artifacts;
 	FPCGExCellGrowthDetails SeedGrowth;
+	FPCGExCellSeedMergeDetails SeedMerge;
 
 	TSharedPtr<PCGExData::FFacade> SeedsDataFacade;
 	TSharedPtr<PCGExCells::FSeedOwnershipHandler> SeedOwnership;
