@@ -129,12 +129,14 @@ namespace PCGExGetPathData
 				TypedData->Initialize(SplineComp);
 				PolyData = TypedData;
 				SplineData = TypedData;
+				PCGExPaths::Helpers::SetClosedLoop(TypedData, TypedData->IsClosed());
 			}
 			else if (ULandscapeSplinesComponent* LandscapeComp = Cast<ULandscapeSplinesComponent>(Component))
 			{
 				UPCGLandscapeSplineData* TypedData = FPCGContext::NewObject_AnyThread<UPCGLandscapeSplineData>(Context);
 				TypedData->Initialize(LandscapeComp);
 				PolyData = TypedData;
+				PCGExPaths::Helpers::SetClosedLoop(TypedData, TypedData->IsClosed());
 			}
 			else { continue; }
 
