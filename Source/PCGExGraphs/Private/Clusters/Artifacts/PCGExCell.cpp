@@ -3,6 +3,7 @@
 
 #include "Clusters/Artifacts/PCGExCell.h"
 #include "Algo/Reverse.h"
+#include "Algo/Unique.h"
 #include "Misc/ScopeExit.h"
 
 #include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
@@ -14,6 +15,7 @@
 #include "Data/PCGExPointElements.h"
 #include "Data/PCGExPointIO.h"
 #include "Math/Geo/PCGExGeo.h"
+#include "Math/PCGExBestFitPlane.h"
 
 namespace PCGExClusters
 {
@@ -602,54 +604,68 @@ namespace PCGExClusters
 			MergedCell->Data.bIsClosedLoop = true;
 			MergedCell->Data.bIsConvex = false; // spans multiple faces
 
-			// 2D metrics + winding from the projected polygon (null in LocalTangent mode). Mirrors
-			// BuildCellFromFace; Polygon left empty (merged cells are never containment-tested).
-			if (InProjectedPositions && !InProjectedPositions->IsEmpty())
-			{
-				const TArray<FVector2D>& Positions = *InProjectedPositions;
-				const int32 NumPts = LoopNodes.Num();
-
-				TArray<FVector2D> Polygon;
-				Polygon.SetNumUninitialized(NumPts);
-				MergedCell->Bounds2D = FBox2D(ForceInit);
-				for (int32 i = 0; i < NumPts; ++i)
-				{
-					Polygon[i] = Positions[LoopNodes[i]];
-					MergedCell->Bounds2D += Polygon[i];
-				}
-
-				double Perimeter = 0;
-				for (int32 i = 0; i < NumPts; ++i)
-				{
-					Perimeter += FVector2D::Distance(Polygon[i], Polygon[(i + 1) % NumPts]);
-				}
-
-				const PCGExMath::FPolygonInfos PolyInfos = PCGExMath::FPolygonInfos(Polygon);
-				MergedCell->Data.Area = PolyInfos.Area * 0.01; // QoL scaling, matches BuildCellFromFace
-				MergedCell->Data.Perimeter = Perimeter;
-				MergedCell->Data.Compactness = PolyInfos.Compactness;
-				MergedCell->Data.bIsClockwise = PolyInfos.bIsClockwise;
-
-				if (!PolyInfos.IsWinded(InConstraints->Winding))
-				{
-					Algo::Reverse(LoopNodes);
-				}
-			}
-
-			MergedCell->Nodes = MoveTemp(LoopNodes);
+			const int32 NumPts = LoopNodes.Num();
 
 			// 3D bounds and centroid from the loop's cluster positions.
 			FBox Bounds(ForceInit);
 			FVector Centroid = FVector::ZeroVector;
-			for (const int32 NodeIdx : MergedCell->Nodes)
+			for (const int32 NodeIdx : LoopNodes)
 			{
 				const FVector Pos = InCluster->GetPos(NodeIdx);
 				Bounds += Pos;
 				Centroid += Pos;
 			}
+			Centroid /= NumPts;
 			MergedCell->Data.Bounds = Bounds;
-			MergedCell->Data.Centroid = Centroid / MergedCell->Nodes.Num();
+			MergedCell->Data.Centroid = Centroid;
 
+			// 2D polygon from the shared projection, or (LocalTangent, no shared projection) from the loop's own
+			// best-fit plane, mirroring BuildCellFromFace. Cell Polygon stays empty: merged cells are never containment-tested.
+			TArray<FVector2D> Polygon;
+			Polygon.SetNumUninitialized(NumPts);
+			MergedCell->Bounds2D = FBox2D(ForceInit);
+
+			if (InProjectedPositions && !InProjectedPositions->IsEmpty())
+			{
+				const TArray<FVector2D>& Positions = *InProjectedPositions;
+				for (int32 i = 0; i < NumPts; ++i)
+				{
+					Polygon[i] = Positions[LoopNodes[i]];
+					MergedCell->Bounds2D += Polygon[i];
+				}
+			}
+			else
+			{
+				FPCGExGeo2DProjectionDetails LoopProjection;
+				LoopProjection.Init(PCGExMath::FBestFitPlane::PlaneOnly(
+					NumPts, [&](const int32 i) { return InCluster->GetPos(LoopNodes[i]); }, Centroid));
+
+				for (int32 i = 0; i < NumPts; ++i)
+				{
+					const FVector Projected = LoopProjection.Project(InCluster->GetPos(LoopNodes[i]));
+					Polygon[i] = FVector2D(Projected.X, Projected.Y);
+					MergedCell->Bounds2D += Polygon[i];
+				}
+			}
+
+			double Perimeter = 0;
+			for (int32 i = 0; i < NumPts; ++i)
+			{
+				Perimeter += FVector2D::Distance(Polygon[i], Polygon[(i + 1) % NumPts]);
+			}
+
+			const PCGExMath::FPolygonInfos PolyInfos = PCGExMath::FPolygonInfos(Polygon);
+			MergedCell->Data.Area = PolyInfos.Area * 0.01; // QoL scaling, matches BuildCellFromFace
+			MergedCell->Data.Perimeter = Perimeter;
+			MergedCell->Data.Compactness = PolyInfos.Compactness;
+			MergedCell->Data.bIsClockwise = PolyInfos.bIsClockwise;
+
+			if (!PolyInfos.IsWinded(InConstraints->Winding))
+			{
+				Algo::Reverse(LoopNodes);
+			}
+
+			MergedCell->Nodes = MoveTemp(LoopNodes);
 			Result.Add(MergedCell);
 		}
 
@@ -759,11 +775,12 @@ namespace PCGExClusters
 				FVector Centroid = FVector::ZeroVector;
 				for (const TSharedPtr<FCell>& Cell : Component)
 				{
-					Indices.AddUnique(Cell->CustomIndex);
+					Indices.Add(Cell->CustomIndex);
 					Centroid += Cell->Data.Centroid;
 				}
 				Centroid /= Component.Num();
 				Indices.Sort();
+				Indices.SetNum(Algo::Unique(Indices));
 
 				const int32 Owner = PickOwner(Indices, Centroid);
 
@@ -774,10 +791,11 @@ namespace PCGExClusters
 					continue;
 				}
 
-				for (const TSharedPtr<FCell>& MergedCell : Merged)
+				for (int32 i = 0; i < Merged.Num() - 1; ++i)
 				{
-					MergedCell->ContributorIndices = Indices;
+					Merged[i]->ContributorIndices = Indices;
 				}
+				Merged.Last()->ContributorIndices = MoveTemp(Indices);
 				InOutCells.Append(Merged);
 			}
 		}

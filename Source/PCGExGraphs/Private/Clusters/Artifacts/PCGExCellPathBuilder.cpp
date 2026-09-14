@@ -113,18 +113,41 @@ namespace PCGExClusters
 		// Commit writes
 		PathDataFacade->WriteFastest(TaskManager);
 
-		// Handle seed quality tracking and mutations
+		// Seed mutations only; good-seed flags are set by the processor through MarkSeedsGood.
 		if (InSeedIndex != INDEX_NONE && SeedQuality && GoodSeeds && SeedMutations)
 		{
-			(*SeedQuality)[InSeedIndex] = true;
-
-			// Seeds folded into a merged cell produced a path too; only the owner receives mutations.
-			for (const int32 Contributor : InCell->ContributorIndices)
-			{
-				(*SeedQuality)[Contributor] = true;
-			}
 			PCGExData::FMutablePoint SeedPoint = GoodSeeds->GetOutPoint(InSeedIndex);
 			SeedMutations->ApplyToPoint(InCell.Get(), SeedPoint, InPathIO->GetOut());
+		}
+	}
+
+	void FCellPathBuilder::MarkSeedsGood(const TArray<TSharedPtr<FCell>>& InCells) const
+	{
+		if (!SeedQuality)
+		{
+			return;
+		}
+
+		TArray<int8>& Quality = *SeedQuality;
+		for (const TSharedPtr<FCell>& Cell : InCells)
+		{
+			if (!Cell)
+			{
+				continue;
+			}
+
+			if (Quality.IsValidIndex(Cell->CustomIndex))
+			{
+				Quality[Cell->CustomIndex] = true;
+			}
+
+			for (const int32 Contributor : Cell->ContributorIndices)
+			{
+				if (Quality.IsValidIndex(Contributor))
+				{
+					Quality[Contributor] = true;
+				}
+			}
 		}
 	}
 }
