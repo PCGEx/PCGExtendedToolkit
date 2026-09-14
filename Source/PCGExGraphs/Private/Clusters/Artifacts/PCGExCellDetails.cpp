@@ -12,6 +12,8 @@
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointElements.h"
 #include "Data/PCGExPointIO.h"
+#include "Data/PCGExProxyData.h"
+#include "Data/PCGExProxyDataHelpers.h"
 #include "Data/PCGPointArrayData.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Math/PCGExBestFitPlane.h"
@@ -259,6 +261,49 @@ bool FPCGExCellGrowthDetails::Init(FPCGExContext* InContext, const TSharedPtr<PC
 			           FText::FromString(Growth.Attribute.GetName().ToString())));
 		GrowthValue.Reset();
 		return false;
+	}
+
+	return true;
+}
+
+bool FPCGExCellSeedMergeDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsFacade)
+{
+	SeedKeys.Reset();
+
+	if (!bMergeBySeedValue || !InSeedsFacade)
+	{
+		return false;
+	}
+
+	const int32 NumSeeds = InSeedsFacade->GetNum();
+	if (NumSeeds <= 0)
+	{
+		return false;
+	}
+
+	// Direct proxy reads the native type straight from the data (no fetch); strict capture keeps that type so
+	// hashes match Filter : Contains (Hash).
+	PCGExData::FProxyDescriptor Descriptor(InSeedsFacade, PCGExData::EProxyRole::Read);
+	Descriptor.AddFlags(PCGExData::EProxyFlags::Direct);
+
+	TSharedPtr<PCGExData::IBufferProxy> Proxy;
+	if (Descriptor.CaptureStrict(InContext, SeedKey, PCGExData::EIOSide::In, false))
+	{
+		Proxy = PCGExData::GetProxyBuffer(InContext, Descriptor);
+	}
+
+	if (!Proxy)
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
+			           FTEXT("Seed merge key '{0}' not found on seeds, merging by seed value is disabled."),
+			           FText::FromString(PCGExMetaHelpers::GetSelectorDisplayName(SeedKey))));
+		return false;
+	}
+
+	SeedKeys.SetNumUninitialized(NumSeeds);
+	for (int32 i = 0; i < NumSeeds; ++i)
+	{
+		SeedKeys[i] = Proxy->ReadValueHash(i);
 	}
 
 	return true;

@@ -35,6 +35,15 @@ PCGEX_INITIALIZE_ELEMENT(GetPropertiesData)
 
 #pragma region UPCGSettings
 
+FPCGDataTypeIdentifier UPCGExGetPropertiesDataSettings::GetCurrentPinTypesID(const UPCGPin* InPin) const
+{
+	if (InPin->IsOutputPin() && InPin->Properties.Label != PCGExGetPropertiesData::SourcesPin)
+	{
+		return FPCGDataTypeInfoParam::AsId();
+	}
+	return Super::GetCurrentPinTypesID(InPin);
+}
+
 TArray<FPCGPinProperties> UPCGExGetPropertiesDataSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
