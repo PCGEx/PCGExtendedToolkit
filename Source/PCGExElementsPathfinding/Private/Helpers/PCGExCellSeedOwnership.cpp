@@ -58,8 +58,15 @@ namespace PCGExCells
 		switch (Method)
 		{
 		case EPCGExCellSeedOwnership::SeedOrder:
-			// First candidate wins (should already be first by index order)
-			return Candidates[0];
+		{
+			// Lowest seed index wins, whatever order the candidates arrive in.
+			int32 BestIdx = Candidates[0];
+			for (int32 i = 1; i < Candidates.Num(); ++i)
+			{
+				BestIdx = FMath::Min(BestIdx, Candidates[i]);
+			}
+			return BestIdx;
+		}
 
 		case EPCGExCellSeedOwnership::Closest:
 		{

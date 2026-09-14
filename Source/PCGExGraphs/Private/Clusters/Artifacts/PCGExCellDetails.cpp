@@ -266,6 +266,10 @@ bool FPCGExCellGrowthDetails::Init(FPCGExContext* InContext, const TSharedPtr<PC
 	return true;
 }
 
+#pragma endregion
+
+#pragma region Cell Seed Merge
+
 bool FPCGExCellSeedMergeDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsFacade)
 {
 	SeedKeys.Reset();

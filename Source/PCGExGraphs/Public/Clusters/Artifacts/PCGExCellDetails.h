@@ -553,11 +553,13 @@ struct PCGEXGRAPHS_API FPCGExCellSeedMergeDetails
 {
 	GENERATED_BODY()
 
-	/** Merge adjacent cells whose seeds share the same key value into one closed path per connected region. Works without growth. */
+	/** Merge adjacent cells whose seeds share the same key value into one closed path per connected region.
+	 * Works without growth. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bMergeBySeedValue = false;
 
-	/** Seed attribute or property whose value identifies a merge group. Compared by hash, so type sensitive (Float 0 != Double 0). */
+	/** Seed attribute or property whose value identifies a merge group. Compared by hash, so type sensitive
+	 * (Float 0 != Double 0). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bMergeBySeedValue"))
 	FPCGAttributePropertyInputSelector SeedKey;
 
@@ -569,9 +571,10 @@ struct PCGEXGRAPHS_API FPCGExCellSeedMergeDetails
 		return !SeedKeys.IsEmpty();
 	}
 
-	FORCEINLINE PCGExValueHash GetKey(const int32 SeedIndex) const
+	/** Merge group key: the seed's hashed key value, or the index itself when disabled or out of seed range. */
+	FORCEINLINE uint64 GetKey(const int32 SeedIndex) const
 	{
-		return SeedKeys[SeedIndex];
+		return SeedKeys.IsValidIndex(SeedIndex) ? static_cast<uint64>(SeedKeys[SeedIndex]) : static_cast<uint64>(SeedIndex);
 	}
 
 private:
