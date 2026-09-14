@@ -202,7 +202,7 @@ namespace PCGExFindContours
 		// Expansion tracking
 		TMap<int32, PCGExClusters::FCellExpansionData> CellExpansionMap;  // FaceIndex -> ExpansionData
 		TMap<int32, TSharedPtr<PCGExClusters::FCell>> FaceIndexToCellMap; // FaceIndex -> Cell
-		TMap<int32, TSet<int32>> CellAdjacencyMap;                        // Cached adjacency
+		const TMap<int32, TSet<int32>>* CellAdjacencyMap = nullptr;       // Owned by the enumerator, outlives processing
 
 	public:
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;

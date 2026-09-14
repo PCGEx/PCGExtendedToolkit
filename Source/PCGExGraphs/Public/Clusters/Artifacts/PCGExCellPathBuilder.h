@@ -73,6 +73,9 @@ namespace PCGExClusters
 			const TSharedPtr<PCGExData::FPointIO>& InPathIO,
 			const FString& InTriageTag = TEXT("")) const;
 
+		/** Flags the owner and merged contributors of every cell as good seeds, whatever artifact is output. Not thread-safe. */
+		void MarkSeedsGood(const TArray<TSharedPtr<FCell>>& InCells) const;
+
 	private:
 		void ProcessCellInternal(
 			const TSharedPtr<FCell>& InCell,
