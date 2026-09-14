@@ -656,6 +656,133 @@ namespace PCGExClusters
 		return Result;
 	}
 
+	void SplitCellsByAdjacency(
+		const TArray<TSharedPtr<FCell>>& InCells,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		TArray<TArray<TSharedPtr<FCell>>>& OutComponents)
+	{
+		OutComponents.Reset();
+
+		TMap<int32, int32> FaceToLocal;
+		FaceToLocal.Reserve(InCells.Num());
+		for (int32 i = 0; i < InCells.Num(); ++i)
+		{
+			if (InCells[i] && InCells[i]->FaceIndex >= 0)
+			{
+				FaceToLocal.Add(InCells[i]->FaceIndex, i);
+			}
+		}
+
+		TBitArray<> Visited(false, InCells.Num());
+		TArray<int32> Stack;
+
+		for (int32 i = 0; i < InCells.Num(); ++i)
+		{
+			if (!InCells[i] || Visited[i])
+			{
+				continue;
+			}
+
+			TArray<TSharedPtr<FCell>>& Component = OutComponents.AddDefaulted_GetRef();
+			Visited[i] = true;
+			Stack.Reset();
+			Stack.Add(i);
+
+			while (!Stack.IsEmpty())
+			{
+				const int32 Local = Stack.Pop(EAllowShrinking::No);
+				Component.Add(InCells[Local]);
+
+				const TSet<int32>* Adjacent = InAdjacency.Find(InCells[Local]->FaceIndex);
+				if (!Adjacent)
+				{
+					continue;
+				}
+
+				for (const int32 AdjFace : *Adjacent)
+				{
+					const int32* AdjLocal = FaceToLocal.Find(AdjFace);
+					if (AdjLocal && !Visited[*AdjLocal])
+					{
+						Visited[*AdjLocal] = true;
+						Stack.Add(*AdjLocal);
+					}
+				}
+			}
+		}
+	}
+
+	void MergeCellGroups(
+		TArray<TSharedPtr<FCell>>& InOutCells,
+		const TSharedRef<FCellConstraints>& InConstraints,
+		const FCluster* InCluster,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		TFunctionRef<uint64(const FCell&)> GetGroupKey,
+		TFunctionRef<int32(const TArray<int32>&, const FVector&)> PickOwner)
+	{
+		const TSharedPtr<TArray<FVector2D>> ProjectedPositions = InConstraints->Enumerator ? InConstraints->Enumerator->GetProjectedPositions() : nullptr;
+
+		TMap<uint64, TArray<TSharedPtr<FCell>>> Groups;
+		for (const TSharedPtr<FCell>& Cell : InOutCells)
+		{
+			if (Cell)
+			{
+				Groups.FindOrAdd(GetGroupKey(*Cell)).Add(Cell);
+			}
+		}
+
+		InOutCells.Reset();
+
+		TArray<TArray<TSharedPtr<FCell>>> Components;
+		TArray<int32> Indices;
+
+		for (TPair<uint64, TArray<TSharedPtr<FCell>>>& Pair : Groups)
+		{
+			TArray<TSharedPtr<FCell>>& GroupCells = Pair.Value;
+			if (GroupCells.Num() <= 1)
+			{
+				InOutCells.Append(GroupCells);
+				continue;
+			}
+
+			SplitCellsByAdjacency(GroupCells, InAdjacency, Components);
+
+			for (TArray<TSharedPtr<FCell>>& Component : Components)
+			{
+				if (Component.Num() <= 1)
+				{
+					InOutCells.Append(Component);
+					continue;
+				}
+
+				Indices.Reset();
+				FVector Centroid = FVector::ZeroVector;
+				for (const TSharedPtr<FCell>& Cell : Component)
+				{
+					Indices.AddUnique(Cell->CustomIndex);
+					Centroid += Cell->Data.Centroid;
+				}
+				Centroid /= Component.Num();
+				Indices.Sort();
+
+				const int32 Owner = PickOwner(Indices, Centroid);
+
+				TArray<TSharedPtr<FCell>> Merged = MergeAdjacentCells(Component, InConstraints, InCluster, ProjectedPositions, Owner);
+				if (Merged.IsEmpty())
+				{
+					InOutCells.Append(Component);
+					continue;
+				}
+
+				for (const TSharedPtr<FCell>& MergedCell : Merged)
+				{
+					MergedCell->ContributorIndices = Indices;
+				}
+				InOutCells.Append(Merged);
+			}
+		}
+	}
+
 	void FCellConstraints::Cleanup()
 	{
 		WrapperCell = nullptr;

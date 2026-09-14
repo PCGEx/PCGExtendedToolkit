@@ -108,6 +108,9 @@ bool FPCGExFindContoursElement::Boot(FPCGExContext* InContext) const
 	// Initialize seed growth (will read per-point growth attribute if needed)
 	Context->SeedGrowth.Init(Context, Context->SeedsDataFacade);
 
+	PCGEX_FWD(SeedMerge)
+	Context->SeedMerge.Init(Context, Context->SeedsDataFacade);
+
 	Context->SeedOwnership = MakeShared<PCGExCells::FSeedOwnershipHandler>();
 	Context->SeedOwnership->Method = Settings->SeedOwnership;
 	Context->SeedOwnership->SortDirection = Settings->SortDirection;
@@ -247,12 +250,14 @@ namespace PCGExFindContours
 		Enumerator->EnumerateAllFaces(AllCells, CellsConstraints.ToSharedRef(), &FailedCells, true);
 		WrapperCell = CellsConstraints->WrapperCell;
 
-		// Build adjacency map if growth is enabled
+		// Growth expands through adjacency; merging splits groups by it.
+		if (Context->SeedGrowth.HasPotentialGrowth() || Context->SeedMerge.IsEnabled())
+		{
+			CellAdjacencyMap = Enumerator->GetOrBuildAdjacencyMap(Enumerator->GetWrapperFaceIndex());
+		}
+
 		if (Context->SeedGrowth.HasPotentialGrowth())
 		{
-			int32 WrapperFaceIndex = Enumerator->GetWrapperFaceIndex();
-			CellAdjacencyMap = Enumerator->GetOrBuildAdjacencyMap(WrapperFaceIndex);
-
 			// Build FaceIndex -> Cell map for all valid cells
 			for (const TSharedPtr<PCGExClusters::FCell>& Cell : AllCells)
 			{
@@ -533,7 +538,7 @@ namespace PCGExFindContours
 
 				// Record initial match at depth 0
 				PCGExClusters::FCellExpansionData& Data = CellExpansionMap.FindOrAdd(FaceIndex);
-				Data.RecordPick(SeedIndex, 0);
+				Data.RecordPick(SeedIndex);
 
 				// Expand to adjacent cells
 				const int32 Growth = Context->SeedGrowth.GetGrowth(SeedIndex);
@@ -558,73 +563,42 @@ namespace PCGExFindContours
 			for (const auto& Pair : CellExpansionMap)
 			{
 				const int32 FaceIndex = Pair.Key;
-				const PCGExClusters::FCellExpansionData& ExpData = Pair.Value;
-
 				if (InitialFaceIndices.Contains(FaceIndex))
 				{
-					// Cell already in ValidCells - just update expansion tracking
-					for (TSharedPtr<PCGExClusters::FCell>& Cell : ValidCells)
-					{
-						if (Cell && Cell->FaceIndex == FaceIndex)
-						{
-							Cell->ExpansionPickCount = ExpData.PickCount;
-							Cell->ExpansionMinDepth = ExpData.MinDepth;
-							break;
-						}
-					}
-				}
-				else
-				{
-					// Find the cell for this face index and add it
-					if (TSharedPtr<PCGExClusters::FCell>* CellPtr = FaceIndexToCellMap.Find(FaceIndex))
-					{
-						if (*CellPtr)
-						{
-							// Use ownership handler to pick winner among all seeds that expanded to this cell
-							TArray<int32> CandidateSeeds = ExpData.SourceIndices.Array();
-							const int32 WinnerSeedIndex = SeedOwnership->PickWinner(CandidateSeeds, (*CellPtr)->Data.Centroid);
-							(*CellPtr)->CustomIndex = WinnerSeedIndex;
-							(*CellPtr)->ExpansionPickCount = ExpData.PickCount;
-							(*CellPtr)->ExpansionMinDepth = ExpData.MinDepth;
-							ValidCells.Add(*CellPtr);
-						}
-					}
-				}
-			}
-		}
-
-		// Merge adjacent cells per seed when enabled (only seeds with Growth > 0 can have multiple cells)
-		if (Context->SeedGrowth.bMergeAdjacentCells && Context->SeedGrowth.HasPotentialGrowth())
-		{
-			const TSharedPtr<TArray<FVector2D>> ProjectedPositions = CellsConstraints->Enumerator ? CellsConstraints->Enumerator->GetProjectedPositions() : nullptr;
-
-			TMap<int32, TArray<TSharedPtr<PCGExClusters::FCell>>> CellsBySeed;
-			for (const TSharedPtr<PCGExClusters::FCell>& Cell : ValidCells)
-			{
-				if (Cell)
-				{
-					CellsBySeed.FindOrAdd(Cell->CustomIndex).Add(Cell);
-				}
-			}
-
-			ValidCells.Reset();
-
-			for (auto& Pair : CellsBySeed)
-			{
-				const int32 SeedIndex = Pair.Key;
-				TArray<TSharedPtr<PCGExClusters::FCell>>& SeedCells = Pair.Value;
-
-				if (SeedCells.Num() <= 1 || Context->SeedGrowth.GetGrowth(SeedIndex) == 0)
-				{
-					ValidCells.Append(SeedCells);
 					continue;
 				}
 
-				TArray<TSharedPtr<PCGExClusters::FCell>> Merged = PCGExClusters::MergeAdjacentCells(
-					SeedCells, CellsConstraints.ToSharedRef(), Cluster.Get(), ProjectedPositions, SeedIndex);
+				const TSharedPtr<PCGExClusters::FCell>* CellPtr = FaceIndexToCellMap.Find(FaceIndex);
+				if (!CellPtr || !*CellPtr)
+				{
+					continue;
+				}
 
-				ValidCells.Append(Merged.IsEmpty() ? SeedCells : Merged);
+				// Sorted so SeedOrder ownership resolves to the lowest seed index, not set insertion order.
+				TArray<int32> CandidateSeeds = Pair.Value.SourceIndices.Array();
+				CandidateSeeds.Sort();
+				(*CellPtr)->CustomIndex = SeedOwnership->PickWinner(CandidateSeeds, (*CellPtr)->Data.Centroid);
+				ValidCells.Add(*CellPtr);
 			}
+		}
+
+		// Merge adjacent cells, grouped by seed key value or by owning seed (the latter only differs with growth).
+		const bool bMergeBySeedValue = Context->SeedMerge.IsEnabled();
+		if (bMergeBySeedValue || (Context->SeedGrowth.bMergeAdjacentCells && Context->SeedGrowth.HasPotentialGrowth()))
+		{
+			const FPCGExCellSeedMergeDetails& SeedMerge = Context->SeedMerge;
+			const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
+
+			PCGExClusters::MergeCellGroups(
+				ValidCells, CellsConstraints.ToSharedRef(), Cluster.Get(), CellAdjacencyMap,
+				[&](const PCGExClusters::FCell& Cell) -> uint64
+				{
+					return bMergeBySeedValue ? SeedMerge.GetKey(Cell.CustomIndex) : static_cast<uint64>(Cell.CustomIndex);
+				},
+				[&](const TArray<int32>& SeedIndices, const FVector& Centroid)
+				{
+					return SeedOwnership->PickWinner(SeedIndices, Centroid);
+				});
 		}
 
 		int32 NumCells = ValidCells.Num();
@@ -815,7 +789,7 @@ namespace PCGExFindContours
 
 			// Record this cell selection
 			PCGExClusters::FCellExpansionData& Data = CellExpansionMap.FindOrAdd(FaceIndex);
-			Data.RecordPick(SeedIndex, Depth);
+			Data.RecordPick(SeedIndex);
 
 			// Continue BFS if not at max depth
 			if (Depth < MaxGrowth)

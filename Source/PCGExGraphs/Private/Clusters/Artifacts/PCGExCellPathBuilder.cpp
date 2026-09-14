@@ -117,6 +117,12 @@ namespace PCGExClusters
 		if (InSeedIndex != INDEX_NONE && SeedQuality && GoodSeeds && SeedMutations)
 		{
 			(*SeedQuality)[InSeedIndex] = true;
+
+			// Seeds folded into a merged cell produced a path too; only the owner receives mutations.
+			for (const int32 Contributor : InCell->ContributorIndices)
+			{
+				(*SeedQuality)[Contributor] = true;
+			}
 			PCGExData::FMutablePoint SeedPoint = GoodSeeds->GetOutPoint(InSeedIndex);
 			SeedMutations->ApplyToPoint(InCell.Get(), SeedPoint, InPathIO->GetOut());
 		}

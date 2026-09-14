@@ -63,6 +63,25 @@ namespace PCGExClusters
 		const TSharedPtr<TArray<FVector2D>>& InProjectedPositions,
 		int32 InCustomIndex = -1);
 
+	/** Splits cells into groups connected through the face adjacency map (keyed by FCell::FaceIndex). Cells without a face are singletons. */
+	PCGEXGRAPHS_API void SplitCellsByAdjacency(
+		const TArray<TSharedPtr<FCell>>& InCells,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		TArray<TArray<TSharedPtr<FCell>>>& OutComponents);
+
+	/**
+	 * Groups cells by key, splits each group into adjacency-connected components and merges every multi-cell component
+	 * through MergeAdjacentCells. PickOwner receives a component's sorted custom indices and mean centroid and returns the
+	 * merged cells' CustomIndex; ContributorIndices receives the full list. Components that fail to merge are kept as-is.
+	 */
+	PCGEXGRAPHS_API void MergeCellGroups(
+		TArray<TSharedPtr<FCell>>& InOutCells,
+		const TSharedRef<FCellConstraints>& InConstraints,
+		const FCluster* InCluster,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		TFunctionRef<uint64(const FCell&)> GetGroupKey,
+		TFunctionRef<int32(const TArray<int32>&, const FVector&)> PickOwner);
+
 #pragma endregion
 
 #pragma region Cell
@@ -240,21 +259,15 @@ namespace PCGExClusters
 	 */
 	struct PCGEXGRAPHS_API FCellExpansionData
 	{
-		int32 PickCount = 0;        // How many times this cell was selected
-		int32 MinDepth = MAX_int32; // Minimum depth at which selected (0 = direct match)
-		TSet<int32> SourceIndices;  // Which source indices (seed/hole) selected this cell
+		TSet<int32> SourceIndices; // Which source indices (seed/hole) selected this cell
 
-		FORCEINLINE void RecordPick(const int32 SourceIndex, const int32 Depth)
+		FORCEINLINE void RecordPick(const int32 SourceIndex)
 		{
-			PickCount++;
-			MinDepth = FMath::Min(MinDepth, Depth);
 			SourceIndices.Add(SourceIndex);
 		}
 
 		FORCEINLINE void Reset()
 		{
-			PickCount = 0;
-			MinDepth = MAX_int32;
 			SourceIndices.Reset();
 		}
 	};
@@ -292,9 +305,8 @@ namespace PCGExClusters
 		 *  global projection -- containment queries must re-project through it. */
 		bool bPolygonInFaceFrame = false;
 
-		// Expansion tracking (populated when seeds grow)
-		int32 ExpansionPickCount = 0; // Number of times this cell was selected (by seeds/growth)
-		int32 ExpansionMinDepth = 0;  // Minimum depth at which cell was picked (0 = direct seed)
+		/** Merged cells only: CustomIndex of every cell folded into this one, owner included. Empty otherwise. */
+		TArray<int32> ContributorIndices;
 
 		explicit FCell(const TSharedRef<FCellConstraints>& InConstraints)
 			: Constraints(InConstraints)
