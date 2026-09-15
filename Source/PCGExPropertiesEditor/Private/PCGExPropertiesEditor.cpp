@@ -8,12 +8,14 @@
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExPropertiesEditorStyle.h"
 #include "PCGExProperty.h"
+#include "PCGExPropertyCollectionComponent.h"
 #include "PCGExPropertyTypes.h"
 #include "PCGExPropertyWriter.h"
 #include "PropertyEditorModule.h"
 #include "Details/PCGExEnumSelectorCustomization.h"
 #include "Details/PCGExNumericRangeCustomization.h"
 #include "Details/PCGExObjectPropertyOverrideDescriptionCustomization.h"
+#include "Details/PCGExPropertyCollectionActorDetails.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
 #include "Details/PCGExPropertyFloatCurveCustomization.h"
 #include "Details/PCGExPropertyOutputConfigCustomization.h"
@@ -157,10 +159,29 @@ void FPCGExPropertiesEditorModule::StartupModule()
 
 	// Register built-in compact inline widgets for Vector / Vector2D / Rotator property types
 	PCGExBuiltInInlineWidgets::RegisterAll();
+
+	// Property collection component: duplicate-component warning on the component's own panel,
+	// and its values hoisted into the owning actor's details when the actor is selected.
+	PropertyModule.RegisterCustomClassLayout(
+		UPCGExPropertyCollectionComponent::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(&FPCGExPropertyCollectionComponentDetails::MakeInstance));
+	ActorDetailsExtensionHandle = OnExtendActorDetails.AddStatic(&PCGExPropertyCollectionActorDetails::ExtendActorDetails);
 }
 
 void FPCGExPropertiesEditorModule::ShutdownModule()
 {
+	// A static delegate binding outlives the module DLL unless removed here.
+	OnExtendActorDetails.Remove(ActorDetailsExtensionHandle);
+	ActorDetailsExtensionHandle.Reset();
+
+	if (UObjectInitialized())
+	{
+		if (FPropertyEditorModule* PropertyModule = FModuleManager::GetModulePtr<FPropertyEditorModule>("PropertyEditor"))
+		{
+			PropertyModule->UnregisterCustomClassLayout(UPCGExPropertyCollectionComponent::StaticClass()->GetFName());
+		}
+	}
+
 	FPCGExInlineWidgetRegistry::Clear();
 
 	// Destroying the style unregisters it from the Slate style registry.
