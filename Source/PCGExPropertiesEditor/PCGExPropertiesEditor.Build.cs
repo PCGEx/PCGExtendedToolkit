@@ -59,6 +59,8 @@ public class PCGExPropertiesEditor : ModuleRules
 				"ToolMenus",
 				"StructUtilsEditor", // for OnUserDefinedStructReinstanced delegate (FPCGExProperty_Struct refresh)
 				"Projects",          // IPluginManager -> plugin Resources dir for the Slate style
+				"DetailCustomizations", // OnExtendActorDetails -> property-collection values in the actor's details
+				"ToolWidgets",       // SWarningOrErrorBox
 			}
 		);
 

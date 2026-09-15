@@ -23,10 +23,13 @@ struct FPCGExPropertySchemaCollection;
  * - Trigger refresh when schemas change (add/remove/reorder/type change)
  * - Sync PropertyName and HeaderId when array changes
  *
- * Instance mode (UPCGExPropertyCollectionComponent on a non-template actor):
+ * Values-only mode:
  * - Schema structure is locked (no add/remove/reorder)
  * - Each entry shows name as a read-only label; only the value is editable
- * - Edit the Blueprint to change the schema definition
+ * - Entered for any component with a Blueprint/native archetype chain (the schema is authored
+ *   there), or on request through the PCGExValuesOnly instance metadata the actor-details
+ *   hoist sets (see PCGExPropertyCollectionActorDetails). Hoisted rows also leave the header
+ *   empty so the engine inlines the children under the host category.
  */
 class FPCGExPropertySchemaCollectionCustomization : public IPropertyTypeCustomization
 {
@@ -101,8 +104,8 @@ private:
 	 * customization owns the row and can attach the override directly. Import-override rows
 	 * are built by FPCGExPropertyOverrideEntryCustomization, which handles its own reset.
 	 *
-	 * Only meaningful in bIsInstanceMode (the only context where an archetype exists). Caller
-	 * is responsible for the gate.
+	 * Only meaningful when bHasArchetypeChain (the only context where a reset source exists).
+	 * Caller is responsible for the gate.
 	 */
 	void ApplyLocalSchemaResetOverride(IDetailPropertyRow& Row, int32 SchemaIndex);
 
@@ -116,11 +119,17 @@ private:
 	/** Handle for the OnObjectTransacted binding -- removed in destructor. */
 	FDelegateHandle ObjectTransactedHandle;
 
-	/** True when the outer object is a non-template UPCGExPropertyCollectionComponent instance */
-	bool bIsInstanceMode = false;
+	/** Render values only, schema structure locked. See the class comment for what enters this mode. */
+	bool bValuesOnly = false;
+
+	/** Host component has a Blueprint/native archetype chain: reset arrows have a source to reset toward. */
+	bool bHasArchetypeChain = false;
+
+	/** Hoisted into a foreign layout (PCGExValuesOnly metadata): the header row stays empty. */
+	bool bHoisted = false;
 
 	/**
-	 * Captured at CustomizeHeader for the instance-mode reset-to-archetype delegates.
+	 * Captured at CustomizeHeader for the reset-to-archetype delegates and the owner-dirty hooks.
 	 *
 	 * The handle UE passes to the IsVisible / Handler callbacks belongs to the row UE is
 	 * rendering -- which, for inline-rendered FInstancedStruct content, is an external

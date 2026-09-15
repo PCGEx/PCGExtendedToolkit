@@ -14,6 +14,7 @@
 #include "PCGExPropertySchemaAsset.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExEditorCustomizationUtils.h"
+#include "Details/PCGExPropertyCollectionActorDetails.h"
 #include "GameFramework/Actor.h"
 #include "Misc/TransactionObjectEvent.h"
 #include "Widgets/Layout/SBox.h"
@@ -101,37 +102,49 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeHeader(
 	WeakPropertyUtilities = CustomizationUtils.GetPropertyUtilities();
 	PropertyHandlePtr = PropertyHandle;
 
-	// Detect instance mode: the outer object is a UPCGExPropertyCollectionComponent that was
-	// inherited from a Blueprint class (SCS/UCS/Native), not added directly to the actor instance.
-	// Components added per-instance (CreationMethod == Instance) own their own schema and should
-	// retain full editing; only inherited components should lock the schema and redirect the user
-	// to the Blueprint. Other users of FPCGExPropertySchemaCollection (Tuple nodes, data assets,
-	// etc.) won't cast to the component type, so they are unaffected.
-	bIsInstanceMode = false;
+	// Host resolution goes through the handle's outers, not the details view's selection: when the
+	// collection is hoisted into the actor's details the selection is the actor, while the outer
+	// is always the object that owns the struct (component, asset, node settings).
+	bHoisted = PropertyHandle->HasMetaData(PCGExPropertyCollectionActorDetails::ValuesOnlyMetaKey());
+	bValuesOnly = bHoisted;
+	bHasArchetypeChain = false;
 	WeakLiveComponent.Reset();
 	WeakHostObject.Reset();
-	if (TSharedPtr<IPropertyUtilities> Utils = WeakPropertyUtilities.Pin())
+
+	TArray<UObject*> OuterObjects;
+	PropertyHandle->GetOuterObjects(OuterObjects);
+	for (UObject* Outer : OuterObjects)
 	{
-		for (const TWeakObjectPtr<UObject>& ObjPtr : Utils->GetSelectedObjects())
+		if (!Outer || Outer->IsTemplate())
 		{
-			UObject* Obj = ObjPtr.Get();
-			if (!Obj)
+			continue;
+		}
+		if (!WeakHostObject.IsValid())
+		{
+			WeakHostObject = Outer;
+		}
+		if (UPCGExPropertyCollectionComponent* Comp = Cast<UPCGExPropertyCollectionComponent>(Outer))
+		{
+			WeakLiveComponent = Comp;
+			// Components inherited from a Blueprint/native class (anything but Instance-created) author
+			// their schema on the archetype: lock it here and give the reset arrows a source. No archetype
+			// capture: ApplyLocalSchemaResetOverride walks the BP class chain dynamically at reset time.
+			bHasArchetypeChain = (Comp->CreationMethod != EComponentCreationMethod::Instance);
+			bValuesOnly |= bHasArchetypeChain;
+			break;
+		}
+	}
+
+	// Hosts without outers (struct-on-scope views) fall back to the selection for the undo filter.
+	if (!WeakHostObject.IsValid())
+	{
+		if (const TSharedPtr<IPropertyUtilities> Utils = WeakPropertyUtilities.Pin())
+		{
+			for (const TWeakObjectPtr<UObject>& ObjPtr : Utils->GetSelectedObjects())
 			{
-				continue;
-			}
-			if (!WeakHostObject.IsValid())
-			{
-				WeakHostObject = Obj;
-			}
-			if (UPCGExPropertyCollectionComponent* Comp = Cast<UPCGExPropertyCollectionComponent>(Obj))
-			{
-				if (!Comp->IsTemplate() && Comp->CreationMethod != EComponentCreationMethod::Instance)
+				if (UObject* Obj = ObjPtr.Get())
 				{
-					bIsInstanceMode = true;
-					WeakLiveComponent = Comp;
-					// No archetype capture here: ApplyLocalSchemaResetOverride walks the BP
-					// class chain dynamically at reset time, so a stale-at-customize-time
-					// archetype reference would just trail the live BP CDO state.
+					WeakHostObject = Obj;
 					break;
 				}
 			}
@@ -145,6 +158,12 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeHeader(
 	{
 		ObjectTransactedHandle = FCoreUObjectDelegates::OnObjectTransacted.AddSP(
 			this, &FPCGExPropertySchemaCollectionCustomization::OnObjectTransacted);
+	}
+
+	// An empty header makes FDetailPropertyRow::ShowOnlyChildren inline the rows under the host category.
+	if (bHoisted)
+	{
+		return;
 	}
 
 	HeaderRow
@@ -533,10 +552,15 @@ bool FPCGExPropertySchemaCollectionCustomization::TryRenderFlatInline(
 		return false;
 	}
 
-	if (bIsInstanceMode)
+	// External-scope rows bypass the owner's PostEditChange: every live component needs the dirty hook,
+	// but only one with an archetype chain has anything to reset toward.
+	if (WeakLiveComponent.IsValid())
+	{
+		PCGExEditorCustomizationUtils::HookOwnerChangeOnHandleChanged(Row->GetPropertyHandle(), WeakLiveComponent);
+	}
+	if (bHasArchetypeChain)
 	{
 		ApplyLocalSchemaResetOverride(*Row, ElementHandle->GetIndexInArray());
-		PCGExEditorCustomizationUtils::HookOwnerChangeOnHandleChanged(Row->GetPropertyHandle(), WeakLiveComponent);
 	}
 	return true;
 }
@@ -554,7 +578,7 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeChildren(
 
 	SchemasArrayHandlePtr = SchemasArrayHandle;
 
-	if (bIsInstanceMode)
+	if (bValuesOnly)
 	{
 		// Schema structure is locked -- only values are editable. ReadOnlySchema on the array
 		// handle propagates to children so the fallback path (complex types, delegated to
@@ -582,7 +606,10 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeChildren(
 				// which sees ReadOnlySchema on the parent handle and renders value-only.
 				IDetailPropertyRow& Row = ChildBuilder.AddProperty(ElementHandle.ToSharedRef());
 				Row.ShowPropertyButtons(false);
-				ApplyLocalSchemaResetOverride(Row, ElementHandle->GetIndexInArray());
+				if (bHasArchetypeChain)
+				{
+					ApplyLocalSchemaResetOverride(Row, ElementHandle->GetIndexInArray());
+				}
 			}
 		}
 	}
@@ -681,10 +708,10 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeChildren(
 		EmitImportSections(ChildBuilder, PropertyHandle, Resolved);
 	}
 
-	if (!bIsInstanceMode)
+	if (!bValuesOnly)
 	{
 		// ImportedSchemas array editor (managing the imports list itself) -- structural,
-		// not exposed in instance mode where the schema shape is locked.
+		// not exposed in values-only mode where the schema shape is locked.
 		if (TSharedPtr<IPropertyHandle> ImportedSchemasHandle = PropertyHandle->GetChildHandle(TEXT("ImportedSchemas")))
 		{
 			ImportedSchemasHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPCGExPropertySchemaCollectionCustomization::OnImportedSchemasArrayChanged));
