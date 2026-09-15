@@ -19,4 +19,7 @@ public:
 private:
 	/** Slate style set for the inline curve editor widgets (key/gem SVG brushes). */
 	TSharedPtr<FPCGExPropertiesEditorStyle> Style;
+
+	/** OnExtendActorDetails binding that hoists property-collection values into the actor's details. */
+	FDelegateHandle ActorDetailsExtensionHandle;
 };

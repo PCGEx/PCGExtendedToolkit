@@ -58,6 +58,8 @@ public class PCGExPropertiesEditor : ModuleRules
 				"Kismet",
 				"ToolMenus",
 				"Projects",          // IPluginManager -> plugin Resources dir for the Slate style
+				"DetailCustomizations", // OnExtendActorDetails -> property-collection values in the actor's details
+				"ToolWidgets",       // SWarningOrErrorBox
 			}
 		);
 
