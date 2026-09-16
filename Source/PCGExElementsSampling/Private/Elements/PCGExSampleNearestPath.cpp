@@ -84,6 +84,11 @@ void UPCGExSampleNearestPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 		DataMatching.ApplyDeprecation();
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 76, 16)
+	{
+		bLegacyCurveInput = true;
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
@@ -478,6 +483,7 @@ namespace PCGExSampleNearestPath
 
 		const TSharedPtr<PCGExSampling::FSampingUnionData> Union = MakeShared<PCGExSampling::FSampingUnionData>();
 		Union->Reserve(Context->TargetsHandler->Num());
+		Union->WeightRange = -2; // Weights are resolved per point; the union passes them through verbatim
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -520,20 +526,24 @@ namespace PCGExSampleNearestPath
 			double WeightedTime = 0;
 			double WeightedSegmentTime = 0;
 
-			// Accumulate interpolated sample transforms for geometric outputs
+			// Samples are collected first so weights can be resolved against the sampled range.
 			struct FSampleEntry
 			{
 				FTransform SampleTransform;
+				PCGExData::FElement A;
+				PCGExData::FElement B;
 				double Dist;
+				double EdgeLerp;
 				double Time;
 				double SegmentTime;
+				bool bInside;
 			};
 
 			TArray<FSampleEntry, TInlineAllocator<8>> SampleEntries;
 
-			auto SampleSingle = [&](const PCGExData::FElement& EdgeElement, const double Dist, const PCGExData::FElement& A, const PCGExData::FElement& B, const double InLerp, const double Time, const double SegmentLerp, const int32 NumInsideIncrement, const bool bClosedLoop, const FTransform& SampleTransform)
+			auto SampleSingle = [&](const PCGExData::FElement& EdgeElement, const FSampleEntry& Entry, const int32 NumInsideIncrement, const bool bClosedLoop)
 			{
-				bool bReplaceWithCurrent = Union->IsEmpty();
+				bool bReplaceWithCurrent = SampleEntries.IsEmpty();
 
 				if (bSampleBest)
 				{
@@ -542,7 +552,7 @@ namespace PCGExSampleNearestPath
 						bReplaceWithCurrent = Context->Sorter->Sort(EdgeElement, SinglePick);
 					}
 				}
-				else if ((bSampleClosest && BestDist > Dist) || (bSampleFarthest && BestDist < Dist))
+				else if ((bSampleClosest && BestDist > Entry.Dist) || (bSampleFarthest && BestDist < Entry.Dist))
 				{
 					bReplaceWithCurrent = true;
 				}
@@ -550,26 +560,19 @@ namespace PCGExSampleNearestPath
 				if (bReplaceWithCurrent)
 				{
 					SinglePick = EdgeElement;
-					BestDist = Dist;
-
-					Union->Reset();
-					Union->AddWeighted_Unsafe(A, Dist * (1.0 - InLerp));
-					Union->AddWeighted_Unsafe(B, Dist * InLerp);
+					BestDist = Entry.Dist;
 
 					SampleEntries.Reset();
-					SampleEntries.Add({SampleTransform, Dist, Time, SegmentLerp});
+					SampleEntries.Add(Entry);
 
 					NumInside = NumInsideIncrement;
 					NumInClosed = bSampledClosedLoop = bClosedLoop;
 				}
 			};
 
-			auto SampleMulti = [&](const PCGExData::FElement& EdgeElement, const double Dist, const PCGExData::FElement& A, const PCGExData::FElement& B, const double InLerp, const double Time, const double SegmentLerp, const int32 NumInsideIncrement, const bool bClosedLoop, const FTransform& SampleTransform)
+			auto SampleMulti = [&](const FSampleEntry& Entry, const int32 NumInsideIncrement, const bool bClosedLoop)
 			{
-				Union->AddWeighted_Unsafe(A, Dist * (1.0 - InLerp));
-				Union->AddWeighted_Unsafe(B, Dist * InLerp);
-
-				SampleEntries.Add({SampleTransform, Dist, Time, SegmentLerp});
+				SampleEntries.Add(Entry);
 
 				if (bClosedLoop)
 				{
@@ -608,14 +611,15 @@ namespace PCGExSampleNearestPath
 				}
 
 				const double Time = (static_cast<double>(EdgeIndex) + Lerp) / static_cast<double>(InPath->NumEdges);
+				const FSampleEntry Entry{SampleTransform, A, B, Dist, Lerp, Time, Lerp, bIsInside};
 
 				if (bSingleSample)
 				{
-					SampleSingle(EdgeElement, Dist, A, B, Lerp, Time, Lerp, NumInsideIncrement, bClosedLoop, SampleTransform);
+					SampleSingle(EdgeElement, Entry, NumInsideIncrement, bClosedLoop);
 				}
 				else
 				{
-					SampleMulti(EdgeElement, Dist, A, B, Lerp, Time, Lerp, NumInsideIncrement, bClosedLoop, SampleTransform);
+					SampleMulti(Entry, NumInsideIncrement, bClosedLoop);
 				}
 			};
 
@@ -680,20 +684,11 @@ namespace PCGExSampleNearestPath
 				});
 			}
 
-			if (Union->IsEmpty() || SampleEntries.IsEmpty())
+			if (SampleEntries.IsEmpty())
 			{
 				SamplingFailed(Index);
 				continue;
 			}
-
-			if (Settings->WeightMethod == EPCGExRangeType::FullRange && RangeMax > 0)
-			{
-				Union->WeightRange = RangeMax;
-			}
-			DataBlender->ComputeWeights(Index, Union, OutWeightedPoints);
-
-			// Blend attributes using union weighted points (endpoint blending for attribute data)
-			DataBlender->Blend(Index, OutWeightedPoints, Trackers);
 
 			// Compute geometric outputs from interpolated sample transforms (mirroring spline version)
 			FVector WeightedUp = LookAtUpGetter ? LookAtUpGetter->Read(Index).GetSafeNormal() : SafeUpVector;
@@ -726,8 +721,18 @@ namespace PCGExSampleNearestPath
 
 			for (const FSampleEntry& Entry : SampleEntries)
 			{
-				const double Ratio = SampledRangeWidth > 0 ? FMath::Clamp(Entry.Dist - SampledRangeMin, 0, SampledRangeWidth) / SampledRangeWidth : 0;
-				const double Weight = Context->WeightCurve->Eval(Ratio);
+				const double W = Settings->InsideWeighting.GetWeight(Entry.Dist, Entry.bInside, SampledRangeMin, SampledRangeMax);
+				const double Scale = Settings->InsideWeighting.GetScale(Entry.bInside);
+
+				// Blend ops carry their own weight curve: they get the raw weight, split across the edge's endpoints.
+				Union->AddWeighted_Unsafe(Entry.A, W * Scale * (1.0 - Entry.EdgeLerp));
+				Union->AddWeighted_Unsafe(Entry.B, W * Scale * Entry.EdgeLerp);
+
+				// Legacy nodes fed the curve the normalized distance (0 at the closest edge) instead of the weight.
+				const double CurveInput = Settings->bLegacyCurveInput
+					? (SampledRangeWidth > 0 ? FMath::Clamp(Entry.Dist - SampledRangeMin, 0.0, SampledRangeWidth) / SampledRangeWidth : 0.0)
+					: W;
+				const double Weight = Context->WeightCurve->Eval(CurveInput) * Scale;
 
 				const FQuat SampleQuat = Entry.SampleTransform.GetRotation();
 
@@ -748,6 +753,9 @@ namespace PCGExSampleNearestPath
 			}
 
 			WeightedDistance /= NumSampled;
+
+			DataBlender->ComputeWeights(Index, Union, OutWeightedPoints);
+			DataBlender->Blend(Index, OutWeightedPoints, Trackers);
 
 			if (TotalWeight != 0) // Dodge NaN
 			{

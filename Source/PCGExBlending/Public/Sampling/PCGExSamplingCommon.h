@@ -64,6 +64,73 @@ enum class EPCGExSampleWeightMode : uint8
 	AttributeMult = 2 UMETA(DisplayName = "Att x Dist", ToolTip="Uses a fixed attribute value on the target as a multiplier to distance-based weight"),
 };
 
+UENUM()
+enum class EPCGExInsideWeighting : uint8
+{
+	Distance = 0 UMETA(DisplayName = "Distance", ToolTip="Weight falls off with the distance to the closest edge, inside or out."),
+	Full     = 1 UMETA(DisplayName = "Full", ToolTip="Inside targets always get full weight. Outside targets fall off with distance."),
+	Depth    = 2 UMETA(DisplayName = "Depth", ToolTip="Inside targets weigh more the deeper they are, saturating at Depth Range. Outside targets fall off with distance."),
+};
+
+/**
+ * Inside-aware distance weighting shared by the path samplers. GetWeight yields the unscaled weight
+ * the blend union and the weight curve both consume: 1 at the closest edge, 0 at the far end of the
+ * resolved range. GetScale is applied after the curve so a scale above 1 is not clamped away.
+ */
+USTRUCT(BlueprintType)
+struct PCGEXBLENDING_API FPCGExInsideWeightingDetails
+{
+	GENERATED_BODY()
+
+	/** How targets lying inside a closed shape are weighted relative to those near its edges. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	EPCGExInsideWeighting Mode = EPCGExInsideWeighting::Distance;
+
+	/** Distance from the edge at which depth weight saturates. 0 uses the weighting range's max. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0, EditCondition="Mode == EPCGExInsideWeighting::Depth", EditConditionHides))
+	double DepthRange = 0;
+
+	/** Multiplier applied to inside targets' weight, for blending and weighted outputs alike. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0))
+	double InsideWeightScale = 1;
+
+	/** Multiplier applied to outside targets' weight, for blending and weighted outputs alike. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=0))
+	double OutsideWeightScale = 1;
+
+	/** Unscaled weight in [0..1]. Min/Max is the resolved weighting range; a degenerate range yields 1. */
+	FORCEINLINE double GetWeight(const double Dist, const bool bInside, const double Min, const double Max) const
+	{
+		const double Width = Max - Min;
+		const double T = Width > 0 ? FMath::Clamp((Dist - Min) / Width, 0.0, 1.0) : 0.0;
+
+		switch (Mode)
+		{
+		case EPCGExInsideWeighting::Distance:
+			return 1.0 - T;
+		case EPCGExInsideWeighting::Full:
+			return bInside ? 1.0 : 1.0 - T;
+		case EPCGExInsideWeighting::Depth:
+			if (!bInside)
+			{
+				return 1.0 - T;
+			}
+			{
+				const double Range = DepthRange > 0 ? DepthRange : Max;
+				return Range > 0 ? FMath::Clamp(Dist / Range, 0.0, 1.0) : 1.0;
+			}
+		default:
+			checkNoEntry();
+			return 1.0 - T;
+		}
+	}
+
+	FORCEINLINE double GetScale(const bool bInside) const
+	{
+		return bInside ? InsideWeightScale : OutsideWeightScale;
+	}
+};
+
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true", DisplayName="[PCGEx] Component Flags"))
 enum class EPCGExApplySampledComponentFlags : uint8
 {

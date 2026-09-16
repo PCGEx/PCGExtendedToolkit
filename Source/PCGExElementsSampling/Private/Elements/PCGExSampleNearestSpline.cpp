@@ -48,10 +48,8 @@ UPCGExSampleNearestSplineSettings::UPCGExSampleNearestSplineSettings(const FObje
 	{
 		LookAtUpSource.Update(TEXT("$Transform.Up"));
 	}
-	if (!WeightOverDistance)
-	{
-		WeightOverDistance = PCGExCurves::WeightDistributionLinearInv;
-	}
+	// WeightOverDistance stays empty on purpose: Boot resolves the default per curve-input convention,
+	// which a class default could not do without silently flipping nodes that never serialized the value.
 }
 
 #if WITH_EDITOR
@@ -79,6 +77,11 @@ void UPCGExSampleNearestSplineSettings::PCGExApplyDeprecation(UPCGNode* InOutNod
 		SampleAlpha.Update(SampleAlphaInput_DEPRECATED, SampleAlphaAttribute_DEPRECATED, SampleAlphaConstant_DEPRECATED);
 		MinRange.Update(RangeMinInput_DEPRECATED, RangeMinAttribute_DEPRECATED, RangeMin_DEPRECATED);
 		MaxRange.Update(RangeMaxInput_DEPRECATED, RangeMaxAttribute_DEPRECATED, RangeMax_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 76, 16)
+	{
+		bLegacyCurveInput = true;
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -204,8 +207,15 @@ bool FPCGExSampleNearestSplineElement::Boot(FPCGExContext* InContext) const
 
 	Context->bComputeTangents = Settings->bWriteArriveTangent || Settings->bWriteLeaveTangent;
 
+	// Empty resolves to the default falloff for the curve input in use: legacy nodes fed a distance ratio and shipped the inverse ramp.
+	TSoftObjectPtr<UCurveFloat> WeightCurveAsset = Settings->WeightOverDistance;
+	if (WeightCurveAsset.IsNull())
+	{
+		WeightCurveAsset = Settings->bLegacyCurveInput ? PCGExCurves::WeightDistributionLinearInv : PCGExCurves::WeightDistributionLinear;
+	}
+
 	Context->WeightCurve = Settings->WeightCurveLookup.MakeLookup(
-		Settings->bUseLocalCurve, Settings->LocalWeightOverDistance, Settings->WeightOverDistance,
+		Settings->bUseLocalCurve, Settings->LocalWeightOverDistance, WeightCurveAsset,
 		[](FRichCurve& CurveData)
 		{
 			CurveData.AddKey(0, 0);
@@ -457,14 +467,12 @@ namespace PCGExSampleNearestSpline
 					return;
 				}
 
-				int32 NumInsideIncrement = 0;
+				const bool bIsInside = FVector::DotProduct((SampleLocation - ModifiedOrigin).GetSafeNormal(), Transform.GetRotation().GetRightVector()) > 0;
 
-				if (FVector::DotProduct((SampleLocation - ModifiedOrigin).GetSafeNormal(), Transform.GetRotation().GetRightVector()) > 0)
+				int32 NumInsideIncrement = 0;
+				if (bIsInside && (!bOnlyIncrementInsideNumIfClosed || InSpline.bClosedLoop))
 				{
-					if (!bOnlyIncrementInsideNumIfClosed || InSpline.bClosedLoop)
-					{
-						NumInsideIncrement = 1;
-					}
+					NumInsideIncrement = 1;
 				}
 
 				bool IsNewClosest = false;
@@ -472,6 +480,7 @@ namespace PCGExSampleNearestSpline
 
 				const double NormalizedTime = Time / static_cast<double>(NumSegments);
 				PCGExPolyPath::FSample Infos(Transform, Dist, NormalizedTime);
+				Infos.bInside = bIsInside;
 
 				if (Context->bComputeTangents)
 				{
@@ -646,18 +655,29 @@ namespace PCGExSampleNearestSpline
 			};
 
 
+			auto ResolveWeight = [&](PCGExPolyPath::FSample& TargetInfos)
+			{
+				const double W = Settings->InsideWeighting.GetWeight(TargetInfos.Distance, TargetInfos.bInside, Stats.SampledRangeMin, Stats.SampledRangeMax);
+
+				// Legacy nodes fed the curve the normalized distance (0 at the closest point) instead of the weight.
+				const double CurveInput = Settings->bLegacyCurveInput
+					? (Stats.SampledRangeWidth > 0 ? FMath::Clamp(TargetInfos.Distance - Stats.SampledRangeMin, 0.0, Stats.SampledRangeWidth) / Stats.SampledRangeWidth : 0.0)
+					: W;
+				TargetInfos.Weight = Context->WeightCurve->Eval(CurveInput) * Settings->InsideWeighting.GetScale(TargetInfos.bInside);
+			};
+
 			if (Settings->SampleMethod == EPCGExSampleMethod::ClosestTarget
 				|| Settings->SampleMethod == EPCGExSampleMethod::FarthestTarget)
 			{
 				PCGExPolyPath::FSample& TargetInfos = Settings->SampleMethod == EPCGExSampleMethod::ClosestTarget ? Stats.Closest : Stats.Farthest;
-				TargetInfos.Weight = Context->WeightCurve->Eval(Stats.GetRangeRatio(TargetInfos.Distance));
+				ResolveWeight(TargetInfos);
 				ProcessTargetInfos(TargetInfos);
 			}
 			else
 			{
 				for (PCGExPolyPath::FSample& TargetInfos : Samples)
 				{
-					TargetInfos.Weight = Context->WeightCurve->Eval(Stats.GetRangeRatio(TargetInfos.Distance));
+					ResolveWeight(TargetInfos);
 					ProcessTargetInfos(TargetInfos);
 				}
 			}
