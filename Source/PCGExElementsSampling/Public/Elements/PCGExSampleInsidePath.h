@@ -5,14 +5,11 @@
 
 #include "CoreMinimal.h"
 #include "Details/PCGExInputShorthandsDetails.h"
-#include "Utils/PCGExCurveLookup.h"
-
-#include "Curves/CurveFloat.h"
-#include "Curves/RichCurve.h"
 
 #include "PCGExSampleNearestPath.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExSettingsMacros.h"
+#include "Sampling/PCGExSamplingCommon.h"
 
 #include "PCGExSampleInsidePath.generated.h"
 
@@ -151,21 +148,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable))
 	EPCGExRangeType WeightMethod = EPCGExRangeType::FullRange;
 
-	/** Whether to use in-editor curve or an external asset. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
-	bool bUseLocalCurve = false;
-
-	// TODO: DirtyCache for OnDependencyChanged when this float curve is an external asset
-	/** Curve that balances weight over distance */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta = (PCG_NotOverridable, DisplayName="Weight Over Distance", EditCondition = "bUseLocalCurve", EditConditionHides))
-	FRuntimeFloatCurve LocalWeightOverDistance;
-
-	/** Curve that balances weight over distance */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, EditCondition="!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightOverDistance;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
-	FPCGExCurveLookupDetails WeightCurveLookup;
+	/** How targets lying inside the path are weighted against those near its edges. Blend ops receive the resulting weight and apply their own curve. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable))
+	FPCGExInsideWeightingDetails InsideWeighting;
 
 	/** If enabled, will only output paths that have at least sampled one target point */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable))
@@ -245,7 +230,6 @@ struct FPCGExSampleInsidePathContext final : FPCGExPointsProcessorContext
 	int32 NumMaxTargets = 0;
 
 	TSharedPtr<PCGExSorting::FSorter> Sorter;
-	PCGExFloatLUT WeightCurve = nullptr;
 
 	PCGEX_FOREACH_FIELD_INSIDEPATH(PCGEX_OUTPUT_DECL_TOGGLE)
 

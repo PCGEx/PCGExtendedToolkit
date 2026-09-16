@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExBitmaskCommon.h"
+#include "PCGExBitmaskDetails.h"
 
 class UPCGExBitmaskCollection;
 

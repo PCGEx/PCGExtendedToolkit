@@ -7,6 +7,7 @@
 
 #if WITH_EDITOR
 #include "UObject/UObjectGlobals.h"
+#include "UObject/UnrealType.h"
 #endif
 
 namespace PCGExEditor

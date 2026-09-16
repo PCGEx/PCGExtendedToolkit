@@ -170,27 +170,43 @@ class Tree:
 # ---------------------------------------------------------------------- primitives
 
 IF_RE = re.compile(r'^\s*#\s*(if|ifdef|ifndef|elif|else|endif)\b(.*)$')
-ED_RE = re.compile(r'\bWITH_EDITOR(ONLY_DATA)?\b')
+# WITH_METADATA is WITH_EDITORONLY_DATA (5.8 Misc/CoreMiscDefines.h); the engine gates UField /
+# FField metadata members with it, so a project block using it is an editor guard too.
+ED_RE = re.compile(r'\bWITH_(?:EDITOR(?:ONLY_DATA)?|METADATA)\b')
 CLS_RE = re.compile(
     r'^\s*(?:class|struct)\s+(?:[A-Z_0-9]+_API\s+)?([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^;{]*)?\s*\{?\s*$')
 
 
 def editor_guard_map(lines):
-    """line index -> is it inside an editor-only #if."""
-    out, stack = [], []
+    """line index -> is it inside an editor-only #if.
+
+    A gate token anywhere in the condition ('WITH_EDITOR || X') counts as a guard: the author
+    wrote it as one. A negated gate ('#if !WITH_EDITOR', '#ifndef WITH_EDITOR') is the cooked
+    branch; its #else is the guarded one, but only when the token stands alone in the condition.
+    """
+    out, stack = [], []          # (this branch is guarded, its #else would be)
+
+    def branch(d, rest):
+        m = ED_RE.search(rest)
+        if not m:
+            return False, False
+        if d == "ifndef" or rest[:m.start()].rstrip().endswith("!"):
+            return False, re.fullmatch(r'\s*!?\s*\(?\s*\w+\s*\)?\s*', rest) is not None
+        return True, False
+
     for ln in lines:
         m = IF_RE.match(ln)
         if m:
             d, rest = m.group(1), m.group(2)
             if d in ("if", "ifdef", "ifndef"):
-                stack.append(bool(ED_RE.search(rest)) and d != "ifndef")
+                stack.append(branch(d, rest))
             elif d == "elif" and stack:
-                stack[-1] = bool(ED_RE.search(rest))
+                stack[-1] = branch(d, rest)
             elif d == "else" and stack:
-                stack[-1] = False
+                stack[-1] = (stack[-1][1], False)
             elif d == "endif" and stack:
                 stack.pop()
-        out.append(any(stack))
+        out.append(any(g for g, _ in stack))
     return out
 
 
@@ -839,6 +855,75 @@ def unguarded_callers(tree, name, skip):
                 continue
             hits.append((p, i + 1))
     return hits
+
+
+# Members that exist only under an editor gate, each verified in the 5.8 header named beside it.
+# PCG node vocabulary has no ungated namesake (error); the reflection names also exist ungated
+# elsewhere, e.g. FFieldClass::GetDisplayNameText (warn). Add a name only after reading its #if.
+EDITOR_ONLY_MEMBERS = {
+    "GetElementObject": ("error", "UPCGBlueprintSettings, WITH_EDITOR, Elements/PCGExecuteBlueprint.h"),
+    "GetElementInstance": ("error", "UPCGBlueprintSettings, WITH_EDITOR, Elements/PCGExecuteBlueprint.h"),
+    "GetDefaultNodeName": ("error", "UPCGSettings, WITH_EDITOR, PCGSettings.h"),
+    "GetDefaultNodeTitle": ("error", "UPCGSettings, WITH_EDITOR, PCGSettings.h"),
+    "GetNodeTooltipText": ("error", "UPCGSettings, WITH_EDITOR, PCGSettings.h"),
+    "GetDisplayNameText": ("warn", "UField / FField, WITH_EDITORONLY_DATA, UObject/Class.h + Field.h"),
+    "GetToolTipText": ("warn", "UField / FField, WITH_EDITORONLY_DATA, UObject/Class.h + Field.h"),
+    "GetMetaData": ("warn", "UField / FField / UEnum / UPackage, WITH_METADATA, UObject/Class.h + Field.h + Package.h"),
+    "HasMetaData": ("warn", "UField / FField / UEnum, WITH_METADATA, UObject/Class.h + Field.h"),
+}
+EDITOR_ONLY_CALL_RE = re.compile(r'\b(' + "|".join(EDITOR_ONLY_MEMBERS) + r')\s*\(')
+STR_QUOTE_RE = re.compile(r'(?<!\\)"')
+
+
+def is_member_call(head):
+    """True when the text before 'Name(' makes it a call, not a declaration or definition.
+
+    A qualifier ('Super::', 'UPCGSettings::') is dropped first so a definition
+    ('FText UFoo::Name(') and a qualified call ('return Super::Name(') separate on what precedes
+    it: a type ends in an identifier character, '>', '*' or '&'; a call site does not.
+    """
+    head = re.sub(r'[A-Za-z_][\w<>:]*::$', '', head.rstrip()).rstrip()
+    if not head or head.endswith(("->", ".", "&&", "||")):
+        return True
+    word = re.search(r'(\w+)$', head)
+    if word:
+        return word.group(1) in ("return", "co_return", "else", "do")
+    return head[-1] not in ">*&"
+
+
+@check("editor-only-call", "error",
+       "A call to an engine member that exists only under an editor gate (UPCGSettings node text, "
+       "UPCGBlueprintSettings::GetElementObject, UField::GetDisplayNameText, ...) from a non-editor "
+       "module, outside any #if WITH_EDITOR / WITH_EDITORONLY_DATA / WITH_METADATA block. The editor "
+       "target compiles it; FAB's non-editor target reports C2039 'is not a member'. The PCG node names "
+       "are errors; the reflection names (GetMetaData, HasMetaData, GetDisplayNameText, GetToolTipText) "
+       "also exist ungated on other types and are warnings. The name list is curated: only members "
+       "whose #if was read in the 5.8 header belong in it.")
+def check_editor_only_call(tree):
+    out = []
+    for p in tree.headers + tree.sources:
+        if tree.always_editor(p):
+            continue
+        t = tree.stripped(p)
+        if not EDITOR_ONLY_CALL_RE.search(t):
+            continue
+        lines = t.split("\n")
+        guarded = editor_guard_map(lines)
+        for i, text in logical_lines(lines):
+            if guarded[i] or text.lstrip().startswith("#"):
+                continue
+            for m in EDITOR_ONLY_CALL_RE.finditer(text):
+                head = text[:m.start()]
+                if len(STR_QUOTE_RE.findall(head)) % 2 or not is_member_call(head):
+                    continue
+                name = m.group(1)
+                sev, where = EDITOR_ONLY_MEMBERS[name]
+                out.append(Finding("editor-only-call", sev, p, i + 1,
+                                   f"{name}() is editor-only ({where}) but called unguarded in "
+                                   f"{tree.module_of(p) or 'an unknown'} module",
+                                   "wrap the call in #if WITH_EDITOR / #endif and give the cooked "
+                                   "path its own value"))
+    return out
 
 
 # Bool contexts Clang diagnoses: a condition, an assertion macro argument, or a logical operand.
@@ -1543,6 +1628,82 @@ SELFTEST = {
 
     # Everything below is CORRECT code. Any finding pointing at a "Negative" path means a
     # detector over-fires. These mirror the real false positives this tool has produced.
+    # editor-only-call: five call shapes outside a guard in a Runtime module (->, ., the #else of
+    # a guard, the branch of a negated guard, a qualified call after return).
+    "ModA/Private/PCGExEditorCall.cpp": (
+        "#include \"PCGExEditorCall.h\"\n"
+        "FText PCGExEditorCallTitle(UPCGSettings* S, UPCGBlueprintSettings* B, UField& F)\n"
+        "{\n"
+        "\tB->GetElementObject();\n"
+        "\tF.GetDisplayNameText();\n"
+        "#if WITH_EDITOR\n"
+        "\tS->GetDefaultNodeTitle();\n"
+        "#else\n"
+        "\tS->GetNodeTooltipText();\n"
+        "#endif\n"
+        "#if !WITH_EDITOR\n"
+        "\tB->GetElementInstance();\n"
+        "#endif\n"
+        "\treturn UPCGSettings::GetDefaultNodeTitle();\n"
+        "}\n"),
+    "ModA/Public/PCGExEditorCall.h": (
+        "#pragma once\n"
+        "FText PCGExEditorCallTitle(UPCGSettings* S, UPCGBlueprintSettings* B, UField& F);\n"),
+    # editor-only-call must stay silent: every gate spelling, a nested plain #if inside a gate,
+    # the #else of a negated gate, declarations and definitions, a macro body, a string literal,
+    # and any call at all inside an Editor module.
+    "ModB/Public/PCGExNegativeEditorCall.h": (
+        "#pragma once\n"
+        "class UPCGExNegativeNode\n"
+        "{\n"
+        "public:\n"
+        "\tvirtual FText GetDefaultNodeTitle() const;\n"
+        "\tTObjectPtr<UObject> GetElementObject() const;\n"
+        "\tconst FString& GetMetaData(const TCHAR* Key) const;\n"
+        "};\n"
+        "#define NEG_NODE_TEXT(_NAME) \\\n"
+        "\tvirtual FText GetDefaultNodeTitle() const override { return FText::FromName(GetDefaultNodeName()); }\n"),
+    "ModB/Private/PCGExNegativeEditorCall.cpp": (
+        "#include \"PCGExNegativeEditorCall.h\"\n"
+        "FText UPCGExNegativeNode::GetDefaultNodeTitle() const\n"
+        "{\n"
+        "\treturn FText::GetEmpty();\n"
+        "}\n"
+        "void PCGExNegativeEditorCall(UPCGSettings* S, UPCGBlueprintSettings* B, UField& F, UEnum* E)\n"
+        "{\n"
+        "#if WITH_EDITOR\n"
+        "\tS->GetDefaultNodeTitle();\n"
+        "#if 1\n"
+        "\tB->GetElementObject();\n"
+        "#endif\n"
+        "#endif\n"
+        "#if WITH_EDITORONLY_DATA\n"
+        "\tF.GetDisplayNameText();\n"
+        "#endif\n"
+        "#if WITH_EDITOR || WITH_NEG_OTHER\n"
+        "\tF.GetToolTipText();\n"
+        "#endif\n"
+        "#if WITH_METADATA\n"
+        "\tE->GetMetaData(TEXT(\"Key\"));\n"
+        "#endif\n"
+        "#if !WITH_EDITOR\n"
+        "\tS->GetElementType();\n"
+        "#else\n"
+        "\tB->GetElementInstance();\n"
+        "#endif\n"
+        "#ifndef WITH_EDITOR\n"
+        "\tS->GetElementType();\n"
+        "#else\n"
+        "\tE->HasMetaData(TEXT(\"Key\"));\n"
+        "#endif\n"
+        "\tconst FString Note = TEXT(\"GetMetaData() inside a literal\");\n"
+        "}\n"),
+    "ModEd/Private/PCGExNegativeEditorHost.cpp": (
+        "#include \"EditorOnlyThing.h\"\n"
+        "FText PCGExNegativeEditorHost(UPCGSettings* S)\n"
+        "{\n"
+        "\treturn S->GetDefaultNodeTitle();\n"
+        "}\n"),
     "ModB/Public/PCGExNegative.h": (
         "#pragma once\n"
         "#include \"PCGExBase.h\"\n"
@@ -1694,7 +1855,7 @@ SELFTEST_EXPECT = {
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
-    "upackage-as-outer": 1,
+    "upackage-as-outer": 1, "editor-only-call": 5,
 }
 
 

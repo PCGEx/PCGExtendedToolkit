@@ -76,14 +76,14 @@ namespace PCGExData::Helpers
 		if (!OutPaths.IsEmpty()) { return; }
 
 		// FString fallback for authored-as-string paths.
-		TArray<FSoftObjectPath> Paths;
-		BulkReadRows<FSoftObjectPath>(InData, AttributeName, Paths, Keys);
-		if (Paths.IsEmpty()) { return; }
+		TArray<FString> Strings;
+		BulkReadRows<FString>(InData, AttributeName, Strings, Keys);
+		if (Strings.IsEmpty()) { return; }
 
-		OutPaths.SetNum(Paths.Num());
-		for (int32 i = 0; i < Paths.Num(); i++)
+		OutPaths.SetNum(Strings.Num());
+		for (int32 i = 0; i < Strings.Num(); i++)
 		{
-			OutPaths[i] = FSoftObjectPath(Paths[i]);
+			OutPaths[i] = FSoftObjectPath(Strings[i]);
 		}
 	}
 }
