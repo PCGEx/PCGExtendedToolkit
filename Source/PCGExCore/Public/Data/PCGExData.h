@@ -107,6 +107,7 @@ namespace PCGExData
 			bIsEnabled.store(true, std::memory_order_release);
 		}
 
+		// Snapshots input-side hashes on TArrayBuffer; every other buffer keeps hashing on demand.
 		virtual void EnableValueHashCache();
 
 		// Unsafe read value hash from input

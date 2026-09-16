@@ -68,7 +68,7 @@ int32 FPCGExEntryCurveRemappedPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGE
 
 	if (bConstantTime)
 	{
-		const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(ConstantCumulative), ConstantTotalWeight, Seed);
+		const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(ConstantCumulative), ConstantTotalWeight, Seed);
 		return k == INDEX_NONE ? -1 : Target->Indices[ValidEntryIndices[k]];
 	}
 
@@ -87,7 +87,7 @@ int32 FPCGExEntryCurveRemappedPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGE
 	}
 
 	// All curves gated out at this t -> no pick (streaming roll returns INDEX_NONE on zero total).
-	const int32 k = PCGExCollections::Selectors::RollWeightedStreaming(
+	const int32 k = PCGExRandomHelpers::RollWeightedStreaming(
 		N,
 		[&S](int32 LocalIdx)
 		{

@@ -60,6 +60,10 @@ namespace PCGExData
 
 	protected:
 		virtual void ComputeValueHashes(const PCGExMT::FScope& Scope);
+		// No-op unless the cache is enabled; call once a bulk read completes.
+		void ComputeAllValueHashes();
+		// Sole path that makes InValues alias OutValues; drops the hash cache since aliased reads are live.
+		void AliasInputToOutput();
 
 		virtual void InitForReadInternal(const bool bScoped, const FPCGMetadataAttributeBase* Attribute);
 		virtual void InitForWriteInternal(FPCGMetadataAttributeBase* Attribute, const T& InDefaultValue, const EBufferInit Init);

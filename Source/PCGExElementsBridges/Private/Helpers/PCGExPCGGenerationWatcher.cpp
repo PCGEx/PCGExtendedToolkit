@@ -7,6 +7,7 @@
 #include "PCGSubsystem.h"
 #include "Core/PCGExMT.h"
 #include "GameFramework/Actor.h"
+#include "Misc/ScopeLock.h"
 #include "Utils/PCGExIntTracker.h"
 
 #pragma region FGenerationConfig
@@ -187,14 +188,24 @@ PCGExPCGInterop::FGenerationWatcher::~FGenerationWatcher()
 #if WITH_EDITOR
 void PCGExPCGInterop::FGenerationWatcher::ReleaseIgnoredOrigins(UPCGComponent* ForSource)
 {
-	for (int32 i = IgnoredOrigins.Num() - 1; i >= 0; --i)
+	// Detach matching entries under the lock, then close the engine brackets outside it so our lock
+	// never nests inside the component's own.
+	TArray<FIgnoredOrigin> Released;
 	{
-		const FIgnoredOrigin& Entry = IgnoredOrigins[i];
-		if (ForSource && Entry.Source.Get() != ForSource)
+		FScopeLock Lock(&IgnoredOriginsLock);
+		for (int32 i = IgnoredOrigins.Num() - 1; i >= 0; --i)
 		{
-			continue;
+			if (ForSource && IgnoredOrigins[i].Source.Get() != ForSource)
+			{
+				continue;
+			}
+			Released.Add(MoveTemp(IgnoredOrigins[i]));
+			IgnoredOrigins.RemoveAt(i);
 		}
+	}
 
+	for (const FIgnoredOrigin& Entry : Released)
+	{
 		if (UPCGComponent* Self = Entry.Self.Get())
 		{
 			if (UPCGComponent* SelfOriginal = Self->GetOriginalComponent())
@@ -213,8 +224,6 @@ void PCGExPCGInterop::FGenerationWatcher::ReleaseIgnoredOrigins(UPCGComponent* F
 				}
 			}
 		}
-
-		IgnoredOrigins.RemoveAt(i);
 	}
 }
 #endif
@@ -246,6 +255,7 @@ void PCGExPCGInterop::FGenerationWatcher::ProcessComponent(UPCGComponent* InComp
 #if WITH_EDITOR
 	if (IgnoredOwner)
 	{
+		FScopeLock Lock(&IgnoredOriginsLock);
 		IgnoredOrigins.Add({SelfWeak, IgnoredOwner, InComponent});
 	}
 #endif

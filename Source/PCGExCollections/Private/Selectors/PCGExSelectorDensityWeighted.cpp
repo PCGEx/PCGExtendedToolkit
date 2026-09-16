@@ -101,7 +101,7 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 		{
 			return -1;
 		}
-		const int32 Pick = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(ConstantCumulative), ConstantTotalWeight, Seed);
+		const int32 Pick = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(ConstantCumulative), ConstantTotalWeight, Seed);
 		return Pick == INDEX_NONE ? -1 : Target->Indices[Pick];
 	}
 
@@ -137,7 +137,7 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 		// at full influence) and reduces to a plain weighted roll -- skip the N transcendentals.
 		if (Exponent == 1.0)
 		{
-			const int32 Pick = PCGExCollections::Selectors::RollWeightedStreaming(
+			const int32 Pick = PCGExRandomHelpers::RollWeightedStreaming(
 				N,
 				[&EntryWeights](int32 LocalIdx)
 				{
@@ -160,7 +160,7 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 			TotalWeight += S.EffectiveWeights[i];
 		}
 
-		const int32 Pick = PCGExCollections::Selectors::RollWeightedStreaming(
+		const int32 Pick = PCGExRandomHelpers::RollWeightedStreaming(
 			N,
 			[&S](int32 LocalIdx)
 			{
@@ -180,7 +180,7 @@ int32 FPCGExEntryDensityWeightedPickerOp::Pick(int32 PointIndex, int32 Seed, FPC
 		const double EffectiveDensity = (1.0 - DensityInfluence) + DensityInfluence * Density;
 		const double TotalWeight = N * (1.0 - EffectiveDensity) + EffectiveDensity * Shared->TotalWeight;
 
-		const int32 Pick = PCGExCollections::Selectors::RollWeightedStreaming(
+		const int32 Pick = PCGExRandomHelpers::RollWeightedStreaming(
 			N,
 			[&EntryWeights, EffectiveDensity](int32 LocalIdx)
 			{

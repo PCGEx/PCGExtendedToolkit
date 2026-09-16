@@ -285,15 +285,14 @@ namespace PCGExBlending
 		int32 ValueSize = 0;
 		int32 ValueAlignment = 1;
 
-		// Build a FScopedTypedValue sized for the underlying type. Delegates to the source
-		// buffer when available (property buffers return FProperty-aware values, correct for
-		// containers and heap-owning structs); falls back to descriptor sizing for proxies
-		// without a buffer (TConstantProxy, point-property proxies).
+		// Scratch value in the WORKING type (UnderlyingType), which is what proxy Get/Set and Operation use.
+		// Delegate to the source buffer only when it is property-backed (property-sized, container-aware);
+		// a typed TBuffer<T> would yield the REAL type and its destructor would run over working-type bytes.
 		FORCEINLINE PCGExTypes::FScopedTypedValue MakeScopedValue() const
 		{
 			if (A)
 			{
-				if (TSharedPtr<PCGExData::IBuffer> Buf = A->GetBuffer())
+				if (TSharedPtr<PCGExData::IBuffer> Buf = A->GetBuffer(); Buf && Buf->GetSourceProperty())
 				{
 					return Buf->MakeScopedValue();
 				}

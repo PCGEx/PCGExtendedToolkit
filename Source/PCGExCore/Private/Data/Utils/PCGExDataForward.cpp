@@ -4,8 +4,6 @@
 #include "Data/Utils/PCGExDataForward.h"
 
 #include "PCGExLog.h"
-#include "Algo/RemoveIf.h"
-#include "Algo/Unique.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
@@ -29,14 +27,14 @@ namespace PCGExData
 		Details.Filter(Identities);
 	}
 
-	FDataForwardHandler::FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const bool ElementDomainToDataDomain)
+	FDataForwardHandler::FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const bool ElementDomainToDataDomain, const TSet<FName>* InIgnoredAttributes)
 		: Details(InDetails)
 		  , SourceDataFacade(InSourceDataFacade)
 		  , TargetDataFacade(InTargetDataFacade)
 		  , bElementDomainToDataDomain(ElementDomainToDataDomain)
 	{
 		Details.Init();
-		FAttributeIdentity::Get(InSourceDataFacade->GetIn()->Metadata, Identities);
+		FAttributeIdentity::Get(InSourceDataFacade->GetIn()->Metadata, Identities, InIgnoredAttributes);
 		Details.Filter(Identities);
 
 		const int32 NumAttributes = Identities.Num();
@@ -96,10 +94,36 @@ namespace PCGExData
 
 	void FDataForwardHandler::ValidateIdentities(FValidateFn&& Fn)
 	{
-		Identities.SetNum(Algo::RemoveIf(Identities, [&Fn](const FAttributeIdentity& Identity)
+		// Readers/Writers exist only on prepared (two-facade) handlers and must stay index-aligned with Identities.
+		const bool bPrepared = Readers.Num() == Identities.Num();
+		int32 WriteIndex = 0;
+
+		for (int32 i = 0; i < Identities.Num(); i++)
 		{
-			return !Fn(Identity);
-		}));
+			if (!Fn(Identities[i]))
+			{
+				continue;
+			}
+
+			if (WriteIndex != i)
+			{
+				Identities[WriteIndex] = Identities[i];
+				if (bPrepared)
+				{
+					Readers[WriteIndex] = Readers[i];
+					Writers[WriteIndex] = Writers[i];
+				}
+			}
+
+			WriteIndex++;
+		}
+
+		Identities.SetNum(WriteIndex);
+		if (bPrepared)
+		{
+			Readers.SetNum(WriteIndex);
+			Writers.SetNum(WriteIndex);
+		}
 	}
 
 	void FDataForwardHandler::Forward(const int32 SourceIndex, const int32 TargetIndex)
