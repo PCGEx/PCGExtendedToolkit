@@ -792,10 +792,11 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 				return true;
 			}
 
-			bReadInitialized = true;
-
 			InAttribute = TypedInAttribute;
 			InValue = Helpers::ReadDataValue(TypedInAttribute);
+
+			// IsReadable() is polled lock-free (TryGetBuffer): publish only after InValue is fully assigned.
+			bReadInitialized = true;
 		}
 
 		return bReadInitialized;
