@@ -34,7 +34,7 @@ namespace PCGExData::Helpers
 	 *  attribute discovery on Cast<UPCGSpatialData>(InData), silently rejecting UPCGParamData. */
 	template <typename T>
 	void BulkReadRows(const UPCGData* InData, const FName AttributeName, TArray<T>& OutValues,
-	                  const TSharedPtr<IPCGAttributeAccessorKeys>& InKeys = nullptr)
+	                  const TSharedPtr<const IPCGAttributeAccessorKeys>& InKeys = nullptr)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExData::Helpers::BulkReadRows);
 
@@ -48,7 +48,9 @@ namespace PCGExData::Helpers
 		TUniquePtr<const IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InData, Selector);
 		if (!Accessor) { return; }
 
-		const TSharedPtr<IPCGAttributeAccessorKeys> Keys = InKeys ? InKeys : GetKeys(InData);
+		// Caller-supplied keys cover data whose element count isn't its metadata-entry count (spline control points).
+		TSharedPtr<const IPCGAttributeAccessorKeys> Keys = InKeys;
+		if (!Keys) { Keys = GetKeys(InData); }
 		if (!Keys) { return; }
 
 		const int32 NumValues = Keys->GetNum();
@@ -61,11 +63,13 @@ namespace PCGExData::Helpers
 		}
 	}
 
-	inline void BulkReadSoftPaths(const UPCGData* InData, const FName AttributeName, TArray<FSoftObjectPath>& OutPaths)
+	inline void BulkReadSoftPaths(const UPCGData* InData, const FName AttributeName, TArray<FSoftObjectPath>& OutPaths,
+	                              const TSharedPtr<const IPCGAttributeAccessorKeys>& InKeys = nullptr)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExData::Helpers::BulkReadSoftPaths);
 
-		const TSharedPtr<IPCGAttributeAccessorKeys> Keys = GetKeys(InData);
+		TSharedPtr<const IPCGAttributeAccessorKeys> Keys = InKeys;
+		if (!Keys) { Keys = GetKeys(InData); }
 		if (!Keys)
 		{
 			OutPaths.Reset();
