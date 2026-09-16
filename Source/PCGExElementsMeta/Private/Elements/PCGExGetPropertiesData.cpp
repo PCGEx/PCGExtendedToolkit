@@ -306,6 +306,23 @@ namespace PCGExGetPropertiesData
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::ParseInputsIntoSlots);
 
+		if (Context->bDataDomainOutput)
+		{
+			// One slot per input, its path read as a single @Data value (FString sources convert).
+			Context->Slots.SetNum(Inputs.Num());
+			for (int32 i = 0; i < Inputs.Num(); i++)
+			{
+				FSlot& Slot = Context->Slots[i];
+				Slot.SourceInputIndex = i;
+				Slot.RowIndex = INDEX_NONE;
+				if (Inputs[i].Data)
+				{
+					PCGExData::Helpers::TryReadDataValue<FSoftObjectPath>(Context, Inputs[i].Data.Get(), Settings->SourceAttribute, Slot.Path, true);
+				}
+			}
+			return;
+		}
+
 		struct FInputParse
 		{
 			TArray<FSoftObjectPath> Paths;
@@ -531,6 +548,61 @@ namespace PCGExGetPropertiesData
 	 *  - Param data: direct ManagedObjects->DuplicateData; filtering goes through GatherParamData
 	 *    which builds a fresh UPCGParamData (UPCGMetadata has no entry-removal API).
 	 */
+	/** @Data counterpart of the per-row write: the input's single slot is stamped as one value per
+	 *  property. Returns null when the row filter drops the input, so no output is emitted for it. */
+	UPCGData* WriteInputDataDomain(
+		const FPCGExGetPropertiesDataContext* Context,
+		const UPCGExGetPropertiesDataSettings* Settings,
+		const TArray<FPCGExPropertyOutputConfig>& EffectiveConfigs,
+		UPCGData* DupData,
+		const FSlot& Slot,
+		TArray<const FPCGExProperty*>* OutSidecarSources /* non-null when the Map sidecar is wanted */)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::WriteInputDataDomain);
+
+		if (!Slot.Component)
+		{
+			const bool bDrop = Slot.bSchemaFiltered ? !Context->RequiredSchemaSet.IsEmpty() : Settings->bOmitUnresolvedEntries;
+			return bDrop ? nullptr : DupData;
+		}
+
+		const int32 SourceIdx = Context->ComponentToIdx.FindChecked(Slot.Component);
+		const TMap<FName, const FInstancedStruct*>& Lookup = Context->PropertyLookupPerComponent[SourceIdx];
+
+		// Partial-match detection mirrors the element path: only properties some component declares count as expected.
+		int32 NumExpected = 0;
+		int32 NumWritten = 0;
+		for (const FPCGExPropertyOutputConfig& Config : EffectiveConfigs)
+		{
+			if (!Config.IsValid() || !Context->PrototypeByName.Contains(Config.PropertyName))
+			{
+				continue;
+			}
+			NumExpected++;
+
+			const FInstancedStruct* const* Found = Lookup.Find(Config.PropertyName);
+			const FPCGExProperty* Prop = Found ? (*Found)->GetPtr<FPCGExProperty>() : nullptr;
+			if (!Prop)
+			{
+				continue;
+			}
+
+			if (!PCGExProperties::WriteDataDomainValue(DupData, Prop->ResolveOutputAttributeName(Config.GetEffectiveOutputName()), *Prop))
+			{
+				continue;
+			}
+			NumWritten++;
+
+			if (OutSidecarSources && !Prop->GetOutputSidecarPin().IsNone())
+			{
+				OutSidecarSources->AddUnique(Prop);
+			}
+		}
+
+		const bool bWantOmitPartial = Settings->bOmitPartialMatches && Settings->OutputMode == EPCGExPropertyOutputMode::Explicit;
+		return (bWantOmitPartial && NumWritten < NumExpected) ? nullptr : DupData;
+	}
+
 	UPCGData* WriteInput(
 		FPCGExGetPropertiesDataContext* Context,
 		const UPCGExGetPropertiesDataSettings* Settings,
@@ -538,7 +610,8 @@ namespace PCGExGetPropertiesData
 		const UPCGData* InData,
 		const TArray<int32>& SlotIndicesForInput,
 		TSharedPtr<PCGExData::FPointIO>& OutPointIO, /* set iff input is point data; caller stages it */
-		TArray<FInstancedStruct>* OutSidecarClones /* non-null when the Map sidecar is wanted */)
+		TArray<FInstancedStruct>* OutSidecarClones, /* non-null when the Map sidecar is wanted */
+		TArray<const FPCGExProperty*>* OutSidecarSources /* @Data mode counterpart of OutSidecarClones */)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::WriteInput);
 
@@ -575,6 +648,11 @@ namespace PCGExGetPropertiesData
 		if (!DupData)
 		{
 			return DupData;
+		}
+
+		if (Context->bDataDomainOutput)
+		{
+			return WriteInputDataDomain(Context, Settings, EffectiveConfigs, DupData, Context->Slots[SlotIndicesForInput[0]], OutSidecarSources);
 		}
 
 		UPCGMetadata* Metadata = DupData->MutableMetadata();
@@ -756,6 +834,8 @@ bool FPCGExGetPropertiesDataElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_VALIDATE_NAME_C(InContext, Settings->SourceAttribute)
 
+	Context->bDataDomainOutput = PCGExMetaHelpers::IsDataDomainAttribute(Settings->SourceAttribute) && !Settings->bForceElementOutput;
+
 	if (Settings->OutputMode == EPCGExPropertyOutputMode::Explicit)
 	{
 		TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
@@ -850,6 +930,7 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		TSharedPtr<PCGExData::FPointIO> PointIO;
 		TSet<FString> Tags;
 		TArray<FInstancedStruct> SidecarClones;
+		TArray<const FPCGExProperty*> SidecarSources;
 	};
 	const bool bWantsMap = Settings->WantsOutputMap();
 	TArray<FInputResult> ParallelResults;
@@ -866,7 +947,8 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		FInputResult& Result = ParallelResults[InputIdx];
 		UPCGData* Out = PCGExGetPropertiesData::WriteInput(
 			Context, Settings, EffectiveConfigs, InputTagged.Data, SlotsPerInput[InputIdx], Result.PointIO,
-			bWantsMap ? &Result.SidecarClones : nullptr);
+			bWantsMap ? &Result.SidecarClones : nullptr,
+			bWantsMap ? &Result.SidecarSources : nullptr);
 		if (!Out)
 		{
 			Result.PointIO.Reset();
@@ -909,15 +991,31 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		OutTagged.Tags = MoveTemp(Result.Tags);
 	}
 
-	// Sidecars: one attribute set per pin across all inputs, staged to that pin.
+	// Sidecars: one attribute set per pin across all inputs, staged to that pin. @Data mode wrote
+	// straight from the resident component properties, so it stages sources instead of clones.
 	if (bWantsMap)
 	{
-		TArray<FInstancedStruct> Clones;
-		for (FInputResult& Result : ParallelResults)
+		if (Context->bDataDomainOutput)
 		{
-			Clones.Append(MoveTemp(Result.SidecarClones));
+			TArray<const FPCGExProperty*> Sources;
+			for (const FInputResult& Result : ParallelResults)
+			{
+				for (const FPCGExProperty* Source : Result.SidecarSources)
+				{
+					Sources.AddUnique(Source);
+				}
+			}
+			PCGExProperties::StageSidecars(InContext, TConstArrayView<const FPCGExProperty*>(Sources));
 		}
-		PCGExProperties::StageSidecars(InContext, Clones);
+		else
+		{
+			TArray<FInstancedStruct> Clones;
+			for (FInputResult& Result : ParallelResults)
+			{
+				Clones.Append(MoveTemp(Result.SidecarClones));
+			}
+			PCGExProperties::StageSidecars(InContext, Clones);
+		}
 	}
 
 	InContext->Done();
