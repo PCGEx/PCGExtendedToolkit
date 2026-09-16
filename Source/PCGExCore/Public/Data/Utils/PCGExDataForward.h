@@ -33,7 +33,8 @@ namespace PCGExData
 
 		~FDataForwardHandler() = default;
 		FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const bool ElementDomainToDataDomain = false);
-		FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const bool ElementDomainToDataDomain = false);
+		// InIgnoredAttributes: source attribute names never forwarded, applied before the details name filter.
+		FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const bool ElementDomainToDataDomain = false, const TSet<FName>* InIgnoredAttributes = nullptr);
 
 		void ValidateIdentities(FValidateFn&& Fn);
 

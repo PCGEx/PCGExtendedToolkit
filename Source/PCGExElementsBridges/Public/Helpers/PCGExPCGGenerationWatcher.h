@@ -99,7 +99,10 @@ namespace PCGExPCGInterop
 			TWeakObjectPtr<UPCGComponent> Source;
 		};
 
+		// Reached from the discovery task threads (ProcessComponent, synchronous OnComponentReady) and from
+		// the source's generated/cancelled delegates on the game thread. Every access goes through the lock.
 		TArray<FIgnoredOrigin> IgnoredOrigins;
+		mutable FCriticalSection IgnoredOriginsLock;
 #endif
 
 		// Executing component, used to open the ignore brackets. Read in all configs (passed to TriggerGeneration).

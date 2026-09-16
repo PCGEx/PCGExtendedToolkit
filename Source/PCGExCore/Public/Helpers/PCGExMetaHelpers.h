@@ -36,6 +36,9 @@ namespace PCGExMetaHelpers
 {
 	const FName InvalidName = "INVALID_DATA";
 
+	/** Element-domain row keys for any data: point indices for point data, metadata entries for attribute sets,
+	 *  the engine key factory's keys for anything else (e.g. spline control points -- the mutable variant
+	 *  allocates their metadata entries). Row count matches GetElementsCount. */
 	PCGEXCORE_API TSharedPtr<IPCGAttributeAccessorKeys> MakeMutableKeys(UPCGData* InData);
 	PCGEXCORE_API TSharedPtr<IPCGAttributeAccessorKeys> MakeConstKeys(const UPCGData* InData);
 	
@@ -89,7 +92,9 @@ namespace PCGExMetaHelpers
 	 */
 	PCGEXCORE_API FPCGMetadataDomainID GetNormalizedDomainID(const UPCGData* InData, const FPCGAttributePropertySelector& InSelector);
 
-	/** Number of addressable items in a data object: point count for point data, metadata entry count otherwise. Returns 0 for null data or data without metadata. */
+	/** Number of addressable items: point count for point data, metadata entry count for attribute sets, the
+	 *  engine key factory's element count for anything else (spline control points, allocated or not).
+	 *  Returns 0 for null data or data without metadata. Consistent with MakeMutableKeys / MakeConstKeys. */
 	PCGEXCORE_API int32 GetElementsCount(const UPCGData* InData);
 
 	PCGEXCORE_API bool IsDataDomainAttribute(const FName& InName);

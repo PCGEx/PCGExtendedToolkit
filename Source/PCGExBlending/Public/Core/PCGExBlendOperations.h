@@ -70,6 +70,11 @@ namespace PCGExBlending
 				// Some BlendModes can leverage this
 				if (bResetForMulti)
 				{
+					// Accumulator arrives constructed; placement-new over a live FString/FSoftObjectPath would leak its heap.
+					if (NeedsLifecycleManagement())
+					{
+						DestroyValue(Accumulator);
+					}
 					InitDefault(Accumulator);
 				}
 				else

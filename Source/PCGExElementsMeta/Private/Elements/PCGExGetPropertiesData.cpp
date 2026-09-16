@@ -26,6 +26,7 @@
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
+#include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/PCGMetadata.h"
 
 #define LOCTEXT_NAMESPACE "PCGExGetPropertiesDataElement"
@@ -47,7 +48,7 @@ FPCGDataTypeIdentifier UPCGExGetPropertiesDataSettings::GetCurrentPinTypesID(con
 TArray<FPCGPinProperties> UPCGExGetPropertiesDataSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_ANY(PCGExGetPropertiesData::SourcesPin, TEXT("Input points or attribute sets carrying the actor/component reference attribute."), Required)
+	PCGEX_PIN_ANY(PCGExGetPropertiesData::SourcesPin, TEXT("Input data (points, attribute sets, splines, ...) carrying the actor/component reference attribute."), Required)
 	return PinProperties;
 }
 
@@ -296,6 +297,56 @@ namespace PCGExGetPropertiesData
 		return Dst;
 	}
 
+	/** Read keys for any input. Points / attribute sets keep GetKeys; anything else uses the engine's
+	 *  per-class key factory so the row count is the element count (spline control points) even before
+	 *  metadata entries exist. The selector's attribute name is irrelevant; only the domain matters. */
+	TSharedPtr<const IPCGAttributeAccessorKeys> MakeElementReadKeys(const UPCGData* InData)
+	{
+		if (!InData)
+		{
+			return nullptr;
+		}
+		if (Cast<UPCGBasePointData>(InData) || Cast<UPCGParamData>(InData))
+		{
+			return PCGExData::Helpers::GetKeys(InData);
+		}
+
+		const FPCGAttributePropertySelector Selector = FPCGAttributePropertySelector::CreateAttributeSelector(FName(TEXT("Rows")));
+		TUniquePtr<const IPCGAttributeAccessorKeys> EngineKeys = PCGAttributeAccessorHelpers::CreateConstKeys(InData, Selector);
+		if (EngineKeys)
+		{
+			return MakeShareable(EngineKeys.Release());
+		}
+		return PCGExData::Helpers::GetKeys(InData);
+	}
+
+	/** Write keys for the duplicated output. Attribute sets keep the entries path; other non-point data
+	 *  lets the engine allocate element entries so per-row writes land on real entries. Points use FPointIO::GetOutKeys. */
+	TSharedPtr<IPCGAttributeAccessorKeys> MakeElementWriteKeys(UPCGData* InData)
+	{
+		if (!InData)
+		{
+			return nullptr;
+		}
+		if (Cast<UPCGParamData>(InData))
+		{
+			UPCGMetadata* Metadata = InData->MutableMetadata();
+			if (!Metadata)
+			{
+				return nullptr;
+			}
+			return MakeShared<FPCGAttributeAccessorKeysEntries>(Metadata);
+		}
+
+		const FPCGAttributePropertySelector Selector = FPCGAttributePropertySelector::CreateAttributeSelector(FName(TEXT("Rows")));
+		TUniquePtr<IPCGAttributeAccessorKeys> EngineKeys = PCGAttributeAccessorHelpers::CreateKeys(InData, Selector);
+		if (EngineKeys)
+		{
+			return MakeShareable(EngineKeys.Release());
+		}
+		return PCGExMetaHelpers::MakeMutableKeys(InData);
+	}
+
 	/** Phase 1: read source paths from every input and append one slot per row. Single-threaded
 	 *  outer loop with parallel bulk-reads inside (mirrors GetCollectionData's ParseSourceInputsIntoSlots
 	 *  shape, scaled down for our single fanout mode). */
@@ -332,7 +383,7 @@ namespace PCGExGetPropertiesData
 
 		PCGExMT::ParallelOrSequential(Inputs.Num(), [&](const int32 i)
 		{
-			PCGExData::Helpers::BulkReadSoftPaths(Inputs[i].Data, Settings->SourceAttribute, PerInput[i].Paths);
+			PCGExData::Helpers::BulkReadSoftPaths(Inputs[i].Data, Settings->SourceAttribute, PerInput[i].Paths, MakeElementReadKeys(Inputs[i].Data));
 		}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
 		int32 TotalRows = 0;
@@ -542,11 +593,14 @@ namespace PCGExGetPropertiesData
 	 *  Tracks per-row outcomes so the optional row-filter step at the end can drop rows that
 	 *  failed to resolve or only partially matched.
 	 *
-	 *  Two duplication strategies, picked by input type:
+	 *  Three duplication strategies, picked by input type:
 	 *  - Points: wrap input in FPointIO + InitializeOutput(Duplicate) so we can call Gather on Out
 	 *    in place during the filter step. FPointIO owns the duplicate's lifetime via ManagedObjects.
 	 *  - Param data: direct ManagedObjects->DuplicateData; filtering goes through GatherParamData
 	 *    which builds a fresh UPCGParamData (UPCGMetadata has no entry-removal API).
+	 *  - Anything else (splines, polygons, ...): direct ManagedObjects->DuplicateData<UPCGData>. Rows are
+	 *    the engine key factory's elements and are structural, so the row filter degrades to: drop the
+	 *    whole input when every row is filtered, otherwise forward intact and flag bOutPartialFilterSkipped.
 	 */
 	/** @Data counterpart of the per-row write: the input's single slot is stamped as one value per
 	 *  property. Returns null when the row filter drops the input, so no output is emitted for it. */
@@ -611,7 +665,8 @@ namespace PCGExGetPropertiesData
 		const TArray<int32>& SlotIndicesForInput,
 		TSharedPtr<PCGExData::FPointIO>& OutPointIO, /* set iff input is point data; caller stages it */
 		TArray<FInstancedStruct>* OutSidecarClones, /* non-null when the Map sidecar is wanted */
-		TArray<const FPCGExProperty*>* OutSidecarSources /* @Data mode counterpart of OutSidecarClones */)
+		TArray<const FPCGExProperty*>* OutSidecarSources, /* @Data mode counterpart of OutSidecarClones */
+		bool* bOutPartialFilterSkipped /* optional; set when a non-gatherable input kept rows the filter wanted gone */)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::WriteInput);
 
@@ -644,6 +699,11 @@ namespace PCGExGetPropertiesData
 			}
 			DupData = DupParam;
 		}
+		else
+		{
+			// Any other UPCGData (splines, polygons, textures, ...): generic deep copy.
+			DupData = Context->ManagedObjects->DuplicateData<UPCGData>(InData);
+		}
 
 		if (!DupData)
 		{
@@ -668,8 +728,9 @@ namespace PCGExGetPropertiesData
 		// interface on the FPointIO -- the return value goes unused here (we read int64 keys
 		// directly from the metadata-entry range below), but the call is the canonical way to
 		// trigger entry allocation. Then read int64 keys straight from the duplicated point data.
-		// Param data: existing entries already have keys; the accessor-keys API stores them as
-		// pointers, so we extract pointers and dereference into a flat int64 array.
+		// Param data: existing entries already have keys. Other non-point data (splines, ...): the
+		// engine's mutable key factory allocates element entries on the duplicate first. Both store
+		// keys as pointers, so we extract pointers and dereference into a flat int64 array.
 		TArray<PCGMetadataEntryKey> EntryKeys;
 		EntryKeys.SetNumUninitialized(NumRows);
 		if (OutPointIO)
@@ -683,10 +744,18 @@ namespace PCGExGetPropertiesData
 		}
 		else
 		{
-			TSharedRef<FPCGAttributeAccessorKeysEntries> ParamKeys = MakeShared<FPCGAttributeAccessorKeysEntries>(Metadata);
+			const TSharedPtr<IPCGAttributeAccessorKeys> RowKeys = MakeElementWriteKeys(DupData);
+			if (!RowKeys || RowKeys->GetNum() != NumRows)
+			{
+				// Row count drifted since the Boot-time read; forward untouched rather than misalign attributes.
+				return DupData;
+			}
 			TArray<PCGMetadataEntryKey*> KeyPtrs;
 			KeyPtrs.SetNumUninitialized(NumRows);
-			ParamKeys->GetKeys<PCGMetadataEntryKey>(0, KeyPtrs);
+			if (!RowKeys->GetKeys<PCGMetadataEntryKey>(0, KeyPtrs))
+			{
+				return DupData;
+			}
 			for (int32 r = 0; r < NumRows; r++)
 			{
 				EntryKeys[r] = *KeyPtrs[r];
@@ -814,8 +883,28 @@ namespace PCGExGetPropertiesData
 			{
 				return Rebuilt;
 			}
+			return DupData;
 		}
 
+		// Structural elements (splines, ...) can't be removed per row: drop the input when every row is
+		// filtered out, otherwise forward it intact and let the caller warn once.
+		bool bAllDropped = true;
+		for (int32 r = 0; r < NumRows; r++)
+		{
+			if (KeepMask[r] != 0)
+			{
+				bAllDropped = false;
+				break;
+			}
+		}
+		if (bAllDropped)
+		{
+			return nullptr;
+		}
+		if (bOutPartialFilterSkipped)
+		{
+			*bOutPartialFilterSkipped = true;
+		}
 		return DupData;
 	}
 }
@@ -931,6 +1020,8 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		TSet<FString> Tags;
 		TArray<FInstancedStruct> SidecarClones;
 		TArray<const FPCGExProperty*> SidecarSources;
+		// Non-gatherable input forwarded intact despite filtered rows; reported once in the post-pass.
+		bool bPartialFilterSkipped = false;
 	};
 	const bool bWantsMap = Settings->WantsOutputMap();
 	TArray<FInputResult> ParallelResults;
@@ -948,7 +1039,8 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		UPCGData* Out = PCGExGetPropertiesData::WriteInput(
 			Context, Settings, EffectiveConfigs, InputTagged.Data, SlotsPerInput[InputIdx], Result.PointIO,
 			bWantsMap ? &Result.SidecarClones : nullptr,
-			bWantsMap ? &Result.SidecarSources : nullptr);
+			bWantsMap ? &Result.SidecarSources : nullptr,
+			&Result.bPartialFilterSkipped);
 		if (!Out)
 		{
 			Result.PointIO.Reset();
@@ -961,6 +1053,7 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		}
 	}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
+	bool bAnyPartialFilterSkipped = false;
 	for (int32 InputIdx = 0; InputIdx < ParallelResults.Num(); ++InputIdx)
 	{
 		FInputResult& Result = ParallelResults[InputIdx];
@@ -968,6 +1061,7 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		{
 			continue;
 		}
+		bAnyPartialFilterSkipped |= Result.bPartialFilterSkipped;
 
 		// Points: stage via the FPointIO so output-pin assignment + tag attachment go through the
 		// canonical path the rest of the codebase uses.
@@ -984,11 +1078,18 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 			continue;
 		}
 
-		// Param data: direct TaggedData append.
+		// Param data and any other non-point data (splines, ...): direct TaggedData append.
 		FPCGTaggedData& OutTagged = InContext->OutputData.TaggedData.Emplace_GetRef();
 		OutTagged.Pin = PCGExGetPropertiesData::SourcesPin;
 		OutTagged.Data = Result.Data;
 		OutTagged.Tags = MoveTemp(Result.Tags);
+	}
+
+	// Single-threaded so the graph log isn't touched from the parallel write tasks.
+	if (bAnyPartialFilterSkipped)
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, LOCTEXT("PartialFilterUnsupported",
+			"Row filtering (omit unresolved / partial / schema-filtered) can't remove individual elements from inputs that are neither points nor attribute sets (e.g. splines). Such inputs were forwarded intact and their filtered rows keep default attribute values; inputs where every row was filtered out were dropped."));
 	}
 
 	// Sidecars: one attribute set per pin across all inputs, staged to that pin. @Data mode wrote

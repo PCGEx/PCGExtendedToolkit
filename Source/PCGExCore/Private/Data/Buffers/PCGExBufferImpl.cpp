@@ -129,6 +129,25 @@ namespace PCGExData
 	}
 
 	template <typename T>
+	void TArrayBuffer<T>::ComputeAllValueHashes()
+	{
+		if (!bCacheValueHashes)
+		{
+			return;
+		}
+		ComputeValueHashes(PCGExMT::FScope(0, InValues->Num()));
+	}
+
+	template <typename T>
+	void TArrayBuffer<T>::AliasInputToOutput()
+	{
+		// Output-aliased reads are live: a hash snapshot would go stale, so hashes compute on demand instead.
+		bCacheValueHashes = false;
+		InHashes.Empty();
+		InValues = OutValues;
+	}
+
+	template <typename T>
 	void TArrayBuffer<T>::InitForReadInternal(const bool bScoped, const FPCGMetadataAttributeBase* Attribute)
 	{
 		if (InValues)
@@ -179,26 +198,33 @@ namespace PCGExData
 		{
 			return true;
 		}
-		InValues = OutValues;
+		AliasInputToOutput();
 		return InValues ? true : false;
 	}
 
 	template <typename T>
 	void TArrayBuffer<T>::EnableValueHashCache()
 	{
-		if (bCacheValueHashes)
+		FWriteScopeLock WriteScopeLock(BufferLock);
+
+		if (bCacheValueHashes || (InValues && InValues == OutValues))
 		{
 			return;
 		}
 		bCacheValueHashes = true;
 
+		// Not read-initialized yet: InitForReadInternal sizes InHashes and the read path fills them.
+		if (!InValues)
+		{
+			return;
+		}
+
+		InHashes.Init(0, InValues->Num());
+
+		// Sparse buffers hash each scope inside Fetch(); scopes fetched before enabling are not tracked, so enable before the first Fetch.
 		if (bReadComplete)
 		{
-			if (InHashes.Num() != InValues->Num())
-			{
-				InHashes.Init(0, InValues->Num());
-			}
-			Fetch(PCGExMT::FScope(0, InValues->Num()));
+			ComputeAllValueHashes();
 		}
 	}
 
@@ -235,7 +261,7 @@ namespace PCGExData
 			// Reading from the output side aliases the output array as the read source,
 			// so reads reflect in-progress writes (used for read-modify-write patterns).
 			check(OutValues)
-			InValues = OutValues;
+			AliasInputToOutput();
 			return true;
 		}
 
@@ -261,6 +287,7 @@ namespace PCGExData
 			TArrayView<T> InRange = MakeArrayView(InValues->GetData(), InValues->Num());
 			InAccessor->GetRange<T>(InRange, 0, *Source->GetInKeys());
 			bReadComplete = true;
+			ComputeAllValueHashes();
 		}
 
 		return true;
@@ -288,6 +315,7 @@ namespace PCGExData
 				InternalBroadcaster->GrabAndDump(*InValues, bCaptureMinMax, this->Min, this->Max);
 				bReadComplete = true;
 				bSparseBuffer = false;
+				ComputeAllValueHashes();
 				if (bCaptureMinMax)
 				{
 					this->bMinMaxCaptured = true;
@@ -335,6 +363,7 @@ namespace PCGExData
 		{
 			InternalBroadcaster->GrabAndDump(*InValues, bCaptureMinMax, this->Min, this->Max);
 			bReadComplete = true;
+			ComputeAllValueHashes();
 			if (bCaptureMinMax)
 			{
 				this->bMinMaxCaptured = true;
@@ -655,10 +684,11 @@ namespace PCGExData
 				return true;
 			}
 
-			bReadInitialized = true;
-
 			InAttribute = FoundAttribute;
 			InValue = Helpers::ReadDataValue<T>(FoundAttribute);
+
+			// IsReadable() is polled lock-free (TryGetBuffer): publish only after InValue is fully assigned.
+			bReadInitialized = true;
 		}
 
 		return bReadInitialized;

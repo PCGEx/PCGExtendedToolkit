@@ -516,6 +516,28 @@ bool FPCGExCopyAttributesElement::AdvanceWork(FPCGExContext* InContext, const UP
 				continue;
 			}
 
+			// Never steal a target that is a source's metadata parent: child attributes hold raw pointers to
+			// the parent's attribute objects, and the in-place delete/recreate a stolen target undergoes dangles them.
+			if (const UPCGMetadata* TargetMetadata = Target.Key->ConstMetadata())
+			{
+				bool bIsParentOfASource = false;
+				for (const FPCGTaggedData& Src : Sources)
+				{
+					const UPCGMetadata* SrcMetadata = Src.Data ? Src.Data->ConstMetadata() : nullptr;
+					if (SrcMetadata && SrcMetadata->HasParent(TargetMetadata))
+					{
+						bIsParentOfASource = true;
+						break;
+					}
+				}
+
+				if (bIsParentOfASource)
+				{
+					PCGE_LOG_C(Verbose, LogOnly, Context, LOCTEXT("StealRefusedParentOfSource", "Steal Data skipped on a target that is the metadata parent of a source; it is duplicated instead."));
+					continue;
+				}
+			}
+
 			const TPair<int32, int32>* Source = SourceUse.Find(Target.Key);
 			if (!Source || (Source->Key == 1 && Source->Value == Target.Value.Value))
 			{

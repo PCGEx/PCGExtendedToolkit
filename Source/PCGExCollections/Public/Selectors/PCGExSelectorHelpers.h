@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Algo/BinarySearch.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Helpers/PCGExRandomHelpers.h"
 #include "Math/RandomStream.h"
 #include "Selectors/PCGExEntryPickerOperation.h"
 #include "Selectors/PCGExSelectorSharedData.h"
@@ -159,53 +160,6 @@ namespace PCGExCollections::Selectors
 	FORCEINLINE FVector ExtentFromBoundsScaled(const FVector& Min, const FVector& Max, const FVector& Scale)
 	{
 		return (Max - Min) * 0.5 * Scale.GetAbs();
-	}
-
-	/**
-	 * Roll a uniform value in [0, Total] and return the first index k where Cumulative[k] >= Roll.
-	 * Caller builds Cumulative in parallel to a pool/match array; this returns the pool index.
-	 *
-	 * @return INDEX_NONE for empty / non-positive-total inputs; otherwise an index in [0, Cumulative.Num()).
-	 *         The fallback "last entry" is returned only on numerical drift (Roll just past Cumulative.Last()).
-	 */
-	FORCEINLINE int32 RollCumulativeWeighted(TArrayView<const double> Cumulative, double Total, int32 Seed)
-	{
-		if (Cumulative.IsEmpty() || Total <= 0.0)
-		{
-			return INDEX_NONE;
-		}
-		const double Roll = FRandomStream(Seed).FRandRange(0.0, Total);
-		// Cumulative is monotone non-decreasing by construction (weights >= 0), so the first
-		// bucket with Cumulative[k] >= Roll is a lower-bound binary search. Clamp covers
-		// numerical drift (Roll just past Cumulative.Last()) -- last bucket wins.
-		return FMath::Min(Algo::LowerBound(Cumulative, Roll), Cumulative.Num() - 1);
-	}
-
-	/**
-	 * Streaming variant: caller provides N and a weight getter (callable taking int32 -> double).
-	 * Saves an allocation when the caller already has weights addressable by index and doesn't
-	 * need to materialize a Cumulative array.
-	 *
-	 * @return INDEX_NONE for empty / non-positive-total inputs; otherwise k in [0, N).
-	 */
-	template <typename WeightFn>
-	FORCEINLINE int32 RollWeightedStreaming(int32 N, WeightFn&& GetWeight, double Total, int32 Seed)
-	{
-		if (N <= 0 || Total <= 0.0)
-		{
-			return INDEX_NONE;
-		}
-		const double Roll = FRandomStream(Seed).FRandRange(0.0, Total);
-		double Acc = 0.0;
-		for (int32 k = 0; k < N; ++k)
-		{
-			Acc += GetWeight(k);
-			if (Roll <= Acc)
-			{
-				return k;
-			}
-		}
-		return N - 1;
 	}
 
 	/**

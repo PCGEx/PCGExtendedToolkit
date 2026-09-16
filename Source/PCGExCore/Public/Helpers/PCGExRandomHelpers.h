@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Algo/BinarySearch.h"
 #include "Math/RandomStream.h"
 
 #include "PCGExRandomHelpers.generated.h"
@@ -43,4 +44,47 @@ namespace PCGExRandomHelpers
 	 * so positions within ~1 unit of each other may produce identical seeds.
 	 */
 	PCGEXCORE_API int ComputeSpatialSeed(const FVector& Origin, const FVector& Offset = FVector::ZeroVector);
+
+	/**
+	 * Roll a uniform value in [0, Total) and return the first index k where Cumulative[k] > Roll, so a
+	 * zero-weight bucket is never picked. Cumulative must be monotone non-decreasing (weights >= 0).
+	 *
+	 * @return INDEX_NONE for empty / non-positive-total inputs; otherwise an index in [0, Cumulative.Num()).
+	 *         The last entry is returned only on numerical drift (Roll just past Cumulative.Last()).
+	 */
+	FORCEINLINE int32 RollCumulativeWeighted(TArrayView<const double> Cumulative, const double Total, const int32 Seed)
+	{
+		if (Cumulative.IsEmpty() || Total <= 0.0)
+		{
+			return INDEX_NONE;
+		}
+		const double Roll = FRandomStream(Seed).FRandRange(0.0, Total);
+		return FMath::Min(Algo::UpperBound(Cumulative, Roll), Cumulative.Num() - 1);
+	}
+
+	/**
+	 * Streaming variant: caller provides N and a weight getter (callable taking int32 -> double).
+	 * Saves an allocation when weights are already addressable by index.
+	 *
+	 * @return INDEX_NONE for empty / non-positive-total inputs; otherwise k in [0, N).
+	 */
+	template <typename WeightFn>
+	FORCEINLINE int32 RollWeightedStreaming(const int32 N, WeightFn&& GetWeight, const double Total, const int32 Seed)
+	{
+		if (N <= 0 || Total <= 0.0)
+		{
+			return INDEX_NONE;
+		}
+		const double Roll = FRandomStream(Seed).FRandRange(0.0, Total);
+		double Acc = 0.0;
+		for (int32 k = 0; k < N; ++k)
+		{
+			Acc += GetWeight(k);
+			if (Roll < Acc)
+			{
+				return k;
+			}
+		}
+		return N - 1;
+	}
 }

@@ -26,7 +26,8 @@ enum class EPCGExSchemaPresenceMode : uint8
 
 /**
  * Reads property values from UPCGExPropertyCollectionComponent instances referenced by soft paths
- * on input points or attribute set rows, then writes the resolved values as per-row attributes
+ * on input rows -- points, attribute set entries, spline control points, or the elements of any
+ * other PCG data with per-element metadata -- then writes the resolved values as per-row attributes
  * on a forwarded copy of the input.
  *
  * No loading -- only tentatively resolves references via FSoftObjectPath::ResolveObject(); rows
@@ -117,7 +118,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source")
 	bool bForwardInputTags = true;
 
-	/** Drop rows whose soft path didn't resolve to a UPCGExPropertyCollectionComponent. */
+	/** Drop rows whose soft path didn't resolve to a UPCGExPropertyCollectionComponent.
+	 *  Inputs whose elements can't be removed individually (splines, polygons, ...) are dropped whole
+	 *  when every row is filtered out, and forwarded intact (with a warning) otherwise. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Filtering")
 	bool bOmitUnresolvedEntries = true;
 

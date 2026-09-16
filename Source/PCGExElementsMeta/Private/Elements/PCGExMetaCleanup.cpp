@@ -56,14 +56,26 @@ bool FPCGExMetaCleanupElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 		return true;
 	}
 
-	const int32 NumInputs = Context->InputData.TaggedData.Num();
+	// InputData also carries override-pin data; only the main 'In' pin is pass-through, or override
+	// attribute sets leak to 'Out' (and Forward mode mutates them in place).
+	TArray<const FPCGTaggedData*> Inputs;
+	Inputs.Reserve(Context->InputData.TaggedData.Num());
+	for (const FPCGTaggedData& TaggedData : Context->InputData.TaggedData)
+	{
+		if (TaggedData.Data && TaggedData.Pin == PCGPinConstants::DefaultInputLabel)
+		{
+			Inputs.Add(&TaggedData);
+		}
+	}
+
+	const int32 NumInputs = Inputs.Num();
 	Context->OutputData.TaggedData.Reserve(NumInputs);
 
 	if (Context->Filters.Attributes.FilterMode == EPCGExAttributeFilter::All)
 	{
 		for (int i = 0; i < NumInputs; i++)
 		{
-			const FPCGTaggedData& InData = Context->InputData.TaggedData[i];
+			const FPCGTaggedData& InData = *Inputs[i];
 			FPCGTaggedData& OutData = Context->OutputData.TaggedData.Emplace_GetRef();
 			OutData.Data = InData.Data;
 			OutData.Pin = PCGPinConstants::DefaultOutputLabel;
@@ -85,7 +97,7 @@ bool FPCGExMetaCleanupElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 		case PCGExData::EIOInit::Duplicate:
 			for (int i = 0; i < NumInputs; i++)
 			{
-				const FPCGTaggedData& InData = Context->InputData.TaggedData[i];
+				const FPCGTaggedData& InData = *Inputs[i];
 
 				if (Context->Filters.GetPrunableIdentifiers(InData.Data->ConstMetadata(), Identifiers))
 				{
@@ -116,7 +128,7 @@ bool FPCGExMetaCleanupElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 		case PCGExData::EIOInit::Forward:
 			for (int i = 0; i < NumInputs; i++)
 			{
-				const FPCGTaggedData& InData = Context->InputData.TaggedData[i];
+				const FPCGTaggedData& InData = *Inputs[i];
 				UPCGData* NewOutData = const_cast<UPCGData*>(InData.Data.Get());
 
 				FPCGTaggedData& OutData = Context->OutputData.TaggedData.Emplace_GetRef();

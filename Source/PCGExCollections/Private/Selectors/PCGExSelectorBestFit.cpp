@@ -202,7 +202,7 @@ int32 FPCGExEntryBestFitTopKPickerOp::Pick(int32 PointIndex, int32 Seed, FPCGExP
 		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
 	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
 }
 
@@ -275,7 +275,7 @@ int32 FPCGExEntryBestFitTopKPickerOp::PickFiltered(int32 PointIndex, int32 Seed,
 		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
 	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
 }
 
@@ -332,7 +332,7 @@ int32 FPCGExEntryBestFitTolerancePickerOp::Pick(int32 PointIndex, int32 Seed, FP
 		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
 	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
 }
 
@@ -386,7 +386,7 @@ int32 FPCGExEntryBestFitTolerancePickerOp::PickFiltered(int32 PointIndex, int32 
 		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
 	return k == INDEX_NONE ? -1 : Target->Indices[S.Pool[k]];
 }
 

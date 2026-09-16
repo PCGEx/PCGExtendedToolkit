@@ -146,7 +146,7 @@ int32 FPCGExEntryRangeWeightedRandomPickerOp::Pick(int32 PointIndex, int32 Seed,
 		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
 	return k == INDEX_NONE ? -1 : Target->Indices[S.Matches[k]];
 }
 
@@ -176,7 +176,7 @@ int32 FPCGExEntryRangeWeightedRandomPickerOp::PickFiltered(int32 PointIndex, int
 		S.Cumulative.Add(TotalWeight);
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
+	const int32 k = PCGExRandomHelpers::RollCumulativeWeighted(MakeArrayView(S.Cumulative), TotalWeight, Seed);
 	return k == INDEX_NONE ? -1 : Target->Indices[S.Matches[k]];
 }
 
@@ -301,7 +301,7 @@ int32 FPCGExEntryRangeNarrowestPickerOp::Pick(int32 PointIndex, int32 Seed, FPCG
 		return Target->Indices[S.TieBucket[0]];
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollWeightedStreaming(
+	const int32 k = PCGExRandomHelpers::RollWeightedStreaming(
 		S.TieBucket.Num(),
 		[&](int32 LocalIdx)
 		{
@@ -379,7 +379,7 @@ int32 FPCGExEntryRangeNarrowestPickerOp::PickFiltered(int32 PointIndex, int32 Se
 		return Target->Indices[S.TieBucket[0]];
 	}
 
-	const int32 k = PCGExCollections::Selectors::RollWeightedStreaming(
+	const int32 k = PCGExRandomHelpers::RollWeightedStreaming(
 		S.TieBucket.Num(),
 		[&](int32 LocalIdx)
 		{
