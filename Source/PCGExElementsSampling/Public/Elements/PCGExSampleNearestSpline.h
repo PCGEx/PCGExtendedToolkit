@@ -84,6 +84,7 @@ namespace PCGExPolyPath
 		double Distance = 0;
 		double Time = 0;
 		double Weight = 0;
+		bool bInside = false;
 	};
 
 	struct FSamplesStats
@@ -236,21 +237,29 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable))
 	EPCGExRangeType WeightMethod = EPCGExRangeType::FullRange;
 
+	/** How splines the point lies on the inner side of are weighted against those it is merely near. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable))
+	FPCGExInsideWeightingDetails InsideWeighting;
+
 	/** Whether to use in-editor curve or an external asset. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
 	bool bUseLocalCurve = false;
 
 	// TODO: DirtyCache for OnDependencyChanged when this float curve is an external asset
-	/** Curve that balances weight over distance */
+	/** Curve that remaps the weight (1 at the closest point, 0 at range) for the weighted outputs. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta = (PCG_NotOverridable, DisplayName="Weight Over Distance", EditCondition = "bUseLocalCurve", EditConditionHides))
 	FRuntimeFloatCurve LocalWeightOverDistance;
 
-	/** Curve that balances weight over distance */
+	/** Curve that remaps the weight (1 at the closest point, 0 at range) for the weighted outputs. Empty uses the default linear falloff. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, EditCondition="!bUseLocalCurve", EditConditionHides))
 	TSoftObjectPtr<UCurveFloat> WeightOverDistance;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails WeightCurveLookup;
+
+	/** Feeds the curve the normalized distance (0 at the closest point) instead of the weight, as nodes did before the weighting unification. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable), AdvancedDisplay)
+	bool bLegacyCurveInput = false;
 
 	/** Write whether the sampling was sucessful or not to a boolean attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))

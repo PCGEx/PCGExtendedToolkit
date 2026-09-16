@@ -3,8 +3,8 @@
 
 #pragma once
 
-// NOTE: This header is included at the bottom of PCGExData.h -- do NOT include PCGExData.h here.
-// All base types (IBuffer, FFacade, etc.) are already visible.
+// PCGExData.h includes this header at its tail; #pragma once keeps the cycle safe from either entry point.
+#include "Data/PCGExData.h"
 
 //
 // FPropertyBuffer hierarchy -- Tier 3: truly opaque attribute types.

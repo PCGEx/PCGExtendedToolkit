@@ -32,10 +32,6 @@
 UPCGExSampleInsidePathSettings::UPCGExSampleInsidePathSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	if (!WeightOverDistance)
-	{
-		WeightOverDistance = PCGExCurves::WeightDistributionLinear;
-	}
 }
 
 #if WITH_EDITOR
@@ -205,14 +201,6 @@ bool FPCGExSampleInsidePathElement::Boot(FPCGExContext* InContext) const
 		});
 	}
 
-	Context->WeightCurve = Settings->WeightCurveLookup.MakeLookup(
-		Settings->bUseLocalCurve, Settings->LocalWeightOverDistance, Settings->WeightOverDistance,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
-
 	return true;
 }
 
@@ -367,8 +355,6 @@ namespace PCGExSampleInsidePath
 
 		constexpr int32 Index = 0; // Only support writing to @Data domain, otherwise will write data to the first point of the path
 
-		TConstPCGValueRange<FTransform> InTransforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
-
 		TArray<PCGExData::FWeightedPoint> OutWeightedPoints;
 		OutWeightedPoints.Reserve(256);
 
@@ -378,23 +364,29 @@ namespace PCGExSampleInsidePath
 		const TSharedPtr<PCGExSampling::FSampingUnionData> Union = MakeShared<PCGExSampling::FSampingUnionData>();
 		Union->Reserve(Context->TargetsHandler->Num(), RangeMax ? 8 : Context->NumMaxTargets);
 		Union->Reset();
+		Union->WeightRange = -2; // Weights are resolved below; the union passes them through verbatim
+
+		// Samples are collected first so weights can be resolved against the sampled range.
+		struct FSampleEntry
+		{
+			PCGExData::FElement Element;
+			double Dist = 0;
+			bool bInside = false;
+		};
+
+		TArray<FSampleEntry> Samples;
+		Samples.Reserve(256);
 
 		int32 NumInside = 0;
-		const double RangeMinSquared = FMath::Square(RangeMin);
-		const double RangeMaxSquared = FMath::Square(RangeMax);
 
 		PCGExData::FElement SinglePick(-1, -1);
-		double WeightedDistance = Settings->SampleMethod == EPCGExSampleMethod::ClosestTarget ? TNumericLimits<double>::Max() : TNumericLimits<double>::Min();
-
-		double WeightedTime = 0;
-		double WeightedSegmentTime = 0;
+		double BestDist = Settings->SampleMethod == EPCGExSampleMethod::ClosestTarget ? TNumericLimits<double>::Max() : TNumericLimits<double>::Min();
 
 		auto SampleTarget = [&](const PCGExData::FConstPoint& Target)
 		{
-			const FTransform& Transform = Target.GetTransform();
-			const FVector SampleLocation = Transform.GetLocation();
+			const FVector SampleLocation = Target.GetTransform().GetLocation();
 
-			const bool bIsInside = Path->IsInsideProjection(Transform.GetLocation());
+			const bool bIsInside = Path->IsInsideProjection(SampleLocation);
 
 			if (Settings->bOnlySampleWhenInside && !bIsInside)
 			{
@@ -414,9 +406,9 @@ namespace PCGExSampleInsidePath
 			const int32 EdgeIndex = Path->GetClosestEdge(SampleLocation, Alpha);
 
 			const FVector PathLocation = FMath::Lerp(Path->GetPos(EdgeIndex), Path->GetPos(EdgeIndex + 1), Alpha);
-			const double DistSquared = Distances->GetDistSquared(PathLocation, SampleLocation);
+			const double Dist = Distances->GetDist(PathLocation, SampleLocation);
 
-			if (RangeMax > 0 && (DistSquared < RangeMinSquared || DistSquared > RangeMaxSquared))
+			if (RangeMax > 0 && (Dist < RangeMin || Dist > RangeMax))
 			{
 				if (!Settings->bAlwaysSampleWhenInside || !bIsInside)
 				{
@@ -424,109 +416,82 @@ namespace PCGExSampleInsidePath
 				}
 			}
 
-			const double Time = (static_cast<double>(EdgeIndex) + Alpha) / static_cast<double>(Path->NumEdges);
-
-			///////
+			const FSampleEntry Entry{static_cast<PCGExData::FElement>(Target), Dist, bIsInside};
 
 			if (bSingleSample)
 			{
-				bool bReplaceWithCurrent = Union->IsEmpty();
+				bool bReplaceWithCurrent = Samples.IsEmpty();
 
 				if (Settings->SampleMethod == EPCGExSampleMethod::BestCandidate)
 				{
 					if (SinglePick.Index != -1)
 					{
-						bReplaceWithCurrent = Context->Sorter->Sort(static_cast<PCGExData::FElement>(Target), SinglePick);
+						bReplaceWithCurrent = Context->Sorter->Sort(Entry.Element, SinglePick);
 					}
 				}
-				else if (Settings->SampleMethod == EPCGExSampleMethod::ClosestTarget && WeightedDistance > DistSquared)
+				else if (Settings->SampleMethod == EPCGExSampleMethod::ClosestTarget && BestDist > Dist)
 				{
 					bReplaceWithCurrent = true;
 				}
-				else if (Settings->SampleMethod == EPCGExSampleMethod::FarthestTarget && WeightedDistance < DistSquared)
+				else if (Settings->SampleMethod == EPCGExSampleMethod::FarthestTarget && BestDist < Dist)
 				{
 					bReplaceWithCurrent = true;
 				}
 
 				if (bReplaceWithCurrent)
 				{
-					SinglePick = static_cast<PCGExData::FElement>(Target);
-					WeightedDistance = DistSquared;
+					SinglePick = Entry.Element;
+					BestDist = Dist;
 
-					Union->Reset();
-					Union->AddWeighted_Unsafe(Target, DistSquared);
+					Samples.Reset();
+					Samples.Add(Entry);
 
 					NumInside = NumInsideIncrement;
-
-					WeightedTime = Time;
-					WeightedSegmentTime = Alpha;
 				}
 			}
 			else
 			{
-				// TODO : Adjust dist based on edge lerp
-				WeightedDistance += DistSquared;
-				Union->AddWeighted_Unsafe(Target, DistSquared);
-
-				WeightedTime += Time;
-				WeightedSegmentTime += Alpha;
-
+				Samples.Add(Entry);
 				NumInside += NumInsideIncrement;
 			}
 		};
 
 		Context->TargetsHandler->FindElementsWithBoundsTest(SampleBox, SampleTarget, &IgnoreList);
 
-		if (Union->IsEmpty())
+		if (Samples.IsEmpty())
 		{
 			SamplingFailed(Index);
 			return;
 		}
 
+		double WeightedDistance = 0;
+		double SampledRangeMin = TNumericLimits<double>::Max();
+		double SampledRangeMax = 0;
+		for (const FSampleEntry& Entry : Samples)
+		{
+			WeightedDistance += Entry.Dist;
+			SampledRangeMin = FMath::Min(SampledRangeMin, Entry.Dist);
+			SampledRangeMax = FMath::Max(SampledRangeMax, Entry.Dist);
+		}
+
 		if (Settings->WeightMethod == EPCGExRangeType::FullRange && RangeMax > 0)
 		{
-			Union->WeightRange = RangeMaxSquared;
+			SampledRangeMin = RangeMin;
+			SampledRangeMax = RangeMax;
 		}
+
+		// Blend ops carry their own weight curve, so they get the raw inside-aware weight.
+		for (const FSampleEntry& Entry : Samples)
+		{
+			const double W = Settings->InsideWeighting.GetWeight(Entry.Dist, Entry.bInside, SampledRangeMin, SampledRangeMax);
+			Union->AddWeighted_Unsafe(Entry.Element, W * Settings->InsideWeighting.GetScale(Entry.bInside));
+		}
+
+		NumSampled = Samples.Num();
+		WeightedDistance /= NumSampled;
+
 		DataBlender->ComputeWeights(Index, Union, OutWeightedPoints);
-
-		FTransform WeightedTransform = FTransform::Identity;
-		WeightedTransform.SetScale3D(FVector::ZeroVector);
-
-		NumSampled = Union->Num();
-		WeightedDistance /= NumSampled; // We have two points per samples
-		WeightedTime /= NumSampled;
-		WeightedSegmentTime /= NumSampled;
-
-		double TotalWeight = 0;
-
-		// Post-process weighted points and compute local data
-		PCGEx::FOpStats SampleTracker{};
-		for (PCGExData::FWeightedPoint& P : OutWeightedPoints)
-		{
-			const double W = Context->WeightCurve->Eval(P.Weight);
-
-			// Don't remap blending if we use external blend ops; they have their own curve
-
-			SampleTracker.Count++;
-			SampleTracker.TotalWeight += W;
-
-			const FTransform& TargetTransform = Context->TargetsHandler->GetPoint(P).GetTransform();
-
-			WeightedTransform = PCGExTypeOps::FTypeOps<FTransform>::WeightedAdd(WeightedTransform, TargetTransform, W);
-			TotalWeight += W;
-		}
-
-		// Blend using updated weighted points
 		DataBlender->Blend(Index, OutWeightedPoints, Trackers);
-
-		if (TotalWeight != 0) // Dodge NaN
-		{
-			WeightedTransform = PCGExTypeOps::FTypeOps<FTransform>::NormalizeWeight(WeightedTransform, TotalWeight);
-		}
-		else
-		{
-			WeightedTransform = InTransforms[Index];
-		}
 
 		PCGEX_OUTPUT_VALUE(Distance, Index, WeightedDistance)
 		PCGEX_OUTPUT_VALUE(NumInside, Index, NumInside)

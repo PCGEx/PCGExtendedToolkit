@@ -12,7 +12,7 @@
 #ifndef PCGEX_CLIPPER_H_MINKOWSKI
 #define PCGEX_CLIPPER_H_MINKOWSKI
 
-#include "Clipper2Lib/clipper.core.h"
+#include "Clipper2Lib/clipper.engine.h"
 
 namespace PCGExClipper2Lib
 {

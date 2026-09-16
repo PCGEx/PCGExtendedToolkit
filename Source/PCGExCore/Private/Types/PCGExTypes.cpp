@@ -3,7 +3,7 @@
 
 #include "Types/PCGExTypes.h"
 
-#include "Data/PCGExData.h" // Must precede PCGExBufferProperty.h (which requires IBuffer/FFacade in scope).
+#include "Data/PCGExData.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadataAttribute.h"
 #include "Metadata/PCGMetadataCommon.h"

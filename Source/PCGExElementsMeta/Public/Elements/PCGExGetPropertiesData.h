@@ -84,9 +84,13 @@ protected:
 public:
 	/** Attribute on each input row holding the soft object path of the actor (or the
 	 *  UPCGExPropertyCollectionComponent directly). FString-typed attributes fall back to
-	 *  parsing the string as an FSoftObjectPath. */
+	 *  parsing the string as an FSoftObjectPath. A @Data attribute writes one value per input on @Data unless Force Element Output is on. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source", meta=(PCG_Overridable))
 	FName SourceAttribute = FName(TEXT("ActorReference"));
+
+	/** Keep writing per-element attributes when the source attribute lives on the @Data domain. Off writes one @Data value per input instead. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source", meta=(PCG_Overridable))
+	bool bForceElementOutput = true;
 
 	/** How to pick which properties to write per row. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source", meta=(PCG_NotOverridable))
@@ -205,6 +209,9 @@ struct FPCGExGetPropertiesDataContext final : FPCGExContext
 	// Sources pin inputs, captured in Boot so slot/schema resolution (phases 1-3c) can run there and
 	// expose per-property output dependencies to RegisterAssetDependencies before the write.
 	TArray<FPCGTaggedData> Inputs;
+
+	// @Data source with Force Element Output off: one slot per input, values stamped on @Data.
+	bool bDataDomainOutput = false;
 
 	/** Registers FPCGExProperty::GatherOutputDependencies across every resolved component schema. */
 	virtual void RegisterAssetDependencies() override;
