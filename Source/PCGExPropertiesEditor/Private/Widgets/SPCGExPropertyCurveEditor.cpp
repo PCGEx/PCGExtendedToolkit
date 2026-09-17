@@ -28,6 +28,12 @@ void SPCGExPropertyCurveEditor::Construct(const FArguments& InArgs, const TShare
 	ChildSlot
 	[
 		SNew(SVerticalBox)
+		// Read-only (the controller mirrors an external asset): disabling the whole editor blocks
+		// pointer/keyboard input on the graph, strip and inspector and paints them dimmed.
+		.IsEnabled_Lambda([this]()
+		{
+			return Controller.IsValid() && !Controller->IsReadOnly();
+		})
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[

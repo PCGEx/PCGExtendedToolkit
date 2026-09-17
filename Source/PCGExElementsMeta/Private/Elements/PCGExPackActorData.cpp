@@ -192,6 +192,120 @@ void UPCGExCustomActorDataPacker::ResolveObjectPath(const FName& InAttributeName
 #undef PCGEX_FOREACH_PACKER
 
 
+#pragma region UPCGExPackActorDataLibrary
+
+namespace PCGExPackActorData
+{
+	// Shared guard for actor tag mutation: mirrors AddComponent's requirements.
+	bool CanMutateActorTags(const AActor* InActor, const TCHAR* InFunctionName)
+	{
+		if (!IsInGameThread())
+		{
+			UE_LOG(LogPCGEx, Error, TEXT("%s can only be used on the game thread. Enable `bExecuteOnMainThread` on your packer!"), InFunctionName);
+			return false;
+		}
+
+		if (!IsValid(InActor))
+		{
+			UE_LOG(LogPCGEx, Error, TEXT("%s target actor is NULL"), InFunctionName);
+			return false;
+		}
+
+		return true;
+	}
+}
+
+TArray<FString> UPCGExPackActorDataLibrary::GetStringArrayFromCommaSeparatedList(const FString& InCommaSeparatedString, const bool bTrimWhitespace, const bool bCullEmpty)
+{
+	TArray<FString> Result;
+
+	// Keep empty entries here so that whitespace-only entries can be trimmed, then culled below.
+	InCommaSeparatedString.ParseIntoArray(Result, TEXT(","), false);
+
+	if (bTrimWhitespace)
+	{
+		for (FString& Entry : Result) { Entry.TrimStartAndEndInline(); }
+	}
+
+	if (bCullEmpty)
+	{
+		Result.RemoveAll([](const FString& Entry) { return Entry.IsEmpty(); });
+	}
+
+	return Result;
+}
+
+TArray<FName> UPCGExPackActorDataLibrary::GetNameArrayFromCommaSeparatedList(const FString& InCommaSeparatedString, const bool bTrimWhitespace, const bool bCullEmpty)
+{
+	const TArray<FString> Strings = GetStringArrayFromCommaSeparatedList(InCommaSeparatedString, bTrimWhitespace, bCullEmpty);
+
+	TArray<FName> Result;
+	Result.Reserve(Strings.Num());
+	for (const FString& Entry : Strings) { Result.Add(FName(*Entry)); }
+
+	return Result;
+}
+
+bool UPCGExPackActorDataLibrary::AddActorTags(AActor* InActor, const TArray<FName>& InTags, const bool bMarkDirty)
+{
+	if (!PCGExPackActorData::CanMutateActorTags(InActor, TEXT("AddActorTags"))) { return false; }
+
+	// Gather missing tags first so Modify() is only called when something actually changes.
+	TArray<FName> MissingTags;
+	MissingTags.Reserve(InTags.Num());
+
+	for (const FName& Tag : InTags)
+	{
+		if (Tag.IsNone() || InActor->Tags.Contains(Tag) || MissingTags.Contains(Tag)) { continue; }
+		MissingTags.Add(Tag);
+	}
+
+	if (MissingTags.IsEmpty()) { return false; }
+
+	if (bMarkDirty) { InActor->Modify(); }
+	InActor->Tags.Append(MissingTags);
+
+	return true;
+}
+
+bool UPCGExPackActorDataLibrary::RemoveActorTags(AActor* InActor, const TArray<FName>& InTags, const bool bMarkDirty)
+{
+	if (!PCGExPackActorData::CanMutateActorTags(InActor, TEXT("RemoveActorTags"))) { return false; }
+
+	if (InTags.IsEmpty() || InActor->Tags.IsEmpty()) { return false; }
+
+	bool bHasAnyTagToRemove = false;
+	for (const FName& Tag : InTags)
+	{
+		if (InActor->Tags.Contains(Tag))
+		{
+			bHasAnyTagToRemove = true;
+			break;
+		}
+	}
+
+	if (!bHasAnyTagToRemove) { return false; }
+
+	if (bMarkDirty) { InActor->Modify(); }
+	InActor->Tags.RemoveAll([&InTags](const FName& Tag) { return InTags.Contains(Tag); });
+
+	return true;
+}
+
+bool UPCGExPackActorDataLibrary::ClearActorTags(AActor* InActor, const bool bMarkDirty)
+{
+	if (!PCGExPackActorData::CanMutateActorTags(InActor, TEXT("ClearActorTags"))) { return false; }
+
+	if (InActor->Tags.IsEmpty()) { return false; }
+
+	if (bMarkDirty) { InActor->Modify(); }
+	InActor->Tags.Empty();
+
+	return true;
+}
+
+#pragma endregion
+
 UPCGExPackActorDataSettings::UPCGExPackActorDataSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {

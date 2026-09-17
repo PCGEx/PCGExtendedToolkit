@@ -541,10 +541,10 @@ void FPCGExPropertyCollectionInstanceData::ApplyToComponent(UActorComponent* Com
 		return;
 	}
 
-	// PostUserConstructionScript runs after the construction script writes. Overwriting here
-	// means inspector-authored divergences win over CS writes targeting the same field. CS
-	// writes to fields the instance hasn't diverged on are untouched (we don't capture them).
-	if (CacheApplyPhase != ECacheApplyPhase::PostUserConstructionScript)
+	// Replayed twice per construction run (idempotent): pre-UCS so a construction script reads instance
+	// values, post-UCS so inspector-authored divergences win over CS writes. See the struct comment.
+	if (CacheApplyPhase != ECacheApplyPhase::PostSimpleConstructionScript &&
+		CacheApplyPhase != ECacheApplyPhase::PostUserConstructionScript)
 	{
 		return;
 	}
