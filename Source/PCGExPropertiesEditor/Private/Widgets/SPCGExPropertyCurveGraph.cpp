@@ -102,6 +102,9 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 	const FVector2D Size = AllottedGeometry.GetLocalSize();
 	const FSlateBrush* WhiteBrush = FCoreStyle::Get().GetDefaultBrush();
 
+	// Disabled (read-only preview of an external curve asset) paints dimmed, like any other disabled Slate widget.
+	const ESlateDrawEffect DrawEffects = ShouldBeEnabled(bParentEnabled) ? ESlateDrawEffect::None : ESlateDrawEffect::DisabledEffect;
+
 	constexpr float Left = Padding;
 	const float Right = Size.X - Padding;
 	constexpr float Top = Padding;
@@ -111,7 +114,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 	FSlateDrawElement::MakeBox(
 		OutDrawElements, LayerId,
 		AllottedGeometry.ToPaintGeometry(),
-		WhiteBrush, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::Background);
+		WhiteBrush, DrawEffects, PCGExPropertyCurveGraphColors::Background);
 
 	// Paint order, back to front: background, grid/border, signed-area fill, key->gem connectors, curve,
 	// key markers.
@@ -128,7 +131,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 		TArray<FVector2D> Line;
 		Line.Add(FVector2D(X, Top));
 		Line.Add(FVector2D(X, Bottom));
-		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Line, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::Grid, true, 1.0f);
+		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Line, DrawEffects, PCGExPropertyCurveGraphColors::Grid, true, 1.0f);
 	}
 	for (int32 i = 0; i <= 2; ++i)
 	{
@@ -136,7 +139,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 		TArray<FVector2D> Line;
 		Line.Add(FVector2D(Left, Y));
 		Line.Add(FVector2D(Right, Y));
-		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Line, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::Grid, true, 1.0f);
+		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Line, DrawEffects, PCGExPropertyCurveGraphColors::Grid, true, 1.0f);
 	}
 
 	// Border.
@@ -147,7 +150,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 		Box.Add(FVector2D(Right, Bottom));
 		Box.Add(FVector2D(Left, Bottom));
 		Box.Add(FVector2D(Left, Top));
-		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Box, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::Border, true, 1.0f);
+		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Box, DrawEffects, PCGExPropertyCurveGraphColors::Border, true, 1.0f);
 	}
 
 	// Zero baseline in local space, clamped to the plot so the fill still has a valid edge when value=0
@@ -210,11 +213,11 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 				FSlateDrawElement::MakeBox(
 					OutDrawElements, FillLayer,
 					AllottedGeometry.ToPaintGeometry(FVector2D(BoxW, BoxH), FSlateLayoutTransform(FVector2D(X0, BoxTop))),
-					WhiteBrush, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::Fill);
+					WhiteBrush, DrawEffects, PCGExPropertyCurveGraphColors::Fill);
 			}
 		}
 
-		FSlateDrawElement::MakeLines(OutDrawElements, CurveLayer, AllottedGeometry.ToPaintGeometry(), CurvePoints, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::Curve, true, 1.5f);
+		FSlateDrawElement::MakeLines(OutDrawElements, CurveLayer, AllottedGeometry.ToPaintGeometry(), CurvePoints, DrawEffects, PCGExPropertyCurveGraphColors::Curve, true, 1.5f);
 	}
 
 	// Key markers, each with a vertical drop-line down to its strip gem (dashed + faint when unselected,
@@ -235,7 +238,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 			TArray<FVector2D> Line;
 			Line.Add(FVector2D(Pos.X, Pos.Y));
 			Line.Add(FVector2D(Pos.X, Bottom));
-			FSlateDrawElement::MakeLines(OutDrawElements, ConnectorLayer, AllottedGeometry.ToPaintGeometry(), Line, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::ConnectorSelected, true, 1.0f);
+			FSlateDrawElement::MakeLines(OutDrawElements, ConnectorLayer, AllottedGeometry.ToPaintGeometry(), Line, DrawEffects, PCGExPropertyCurveGraphColors::ConnectorSelected, true, 1.0f);
 		}
 		else
 		{
@@ -246,7 +249,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 				TArray<FVector2D> Seg;
 				Seg.Add(FVector2D(Pos.X, Y));
 				Seg.Add(FVector2D(Pos.X, FMath::Min(Y + Dash, Bottom)));
-				FSlateDrawElement::MakeLines(OutDrawElements, ConnectorLayer, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, PCGExPropertyCurveGraphColors::ConnectorNormal, true, 1.0f);
+				FSlateDrawElement::MakeLines(OutDrawElements, ConnectorLayer, AllottedGeometry.ToPaintGeometry(), Seg, DrawEffects, PCGExPropertyCurveGraphColors::ConnectorNormal, true, 1.0f);
 			}
 		}
 
@@ -256,7 +259,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 		FSlateDrawElement::MakeBox(
 			OutDrawElements, KeyLayer,
 			AllottedGeometry.ToPaintGeometry(FVector2D(MarkerSize, MarkerSize), FSlateLayoutTransform(FVector2D(Pos.X - MarkerSize * 0.5f, Pos.Y - MarkerSize * 0.5f))),
-			KeyMarkerBrush, ESlateDrawEffect::None, MarkerColor);
+			KeyMarkerBrush, DrawEffects, MarkerColor);
 	}
 
 	return KeyLayer + 1;

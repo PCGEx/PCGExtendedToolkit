@@ -4,6 +4,7 @@
 #include "PCGExPropertyTypes.h"
 
 #include "Metadata/PCGMetadata.h"
+#include "Misc/PackageName.h"
 #include "Types/PCGExTypeOps.h"
 
 // ============================================================================
@@ -276,6 +277,96 @@ double FPCGExProperty_FloatCurve::SampleAt(const double InTime) const
 	// curve is assigned), and FRichCurve::Eval is a pure read (binary key search) -- safe to
 	// call from parallel point loops on a shared, immutable property instance.
 	return Value.GetRichCurveConst()->Eval(static_cast<float>(InTime));
+}
+
+bool FPCGExProperty_FloatCurve::TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const
+{
+	// The asset override is the curve's only type-erased view; inline keys have none.
+	const FSoftObjectPath Path(Value.ExternalCurve.Get());
+
+	switch (TargetType)
+	{
+	case EPCGMetadataTypes::SoftObjectPath:
+		*static_cast<FSoftObjectPath*>(OutBuffer) = Path;
+		return true;
+	case EPCGMetadataTypes::String:
+		*static_cast<FString*>(OutBuffer) = Path.ToString();
+		return true;
+	case EPCGMetadataTypes::Name:
+		*static_cast<FName*>(OutBuffer) = Path.IsNull() ? NAME_None : FName(*Path.ToString());
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool FPCGExProperty_FloatCurve::TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer)
+{
+	FSoftObjectPath Path;
+	switch (SourceType)
+	{
+	case EPCGMetadataTypes::SoftObjectPath:
+		Path = *static_cast<const FSoftObjectPath*>(InBuffer);
+		break;
+	case EPCGMetadataTypes::String:
+	case EPCGMetadataTypes::Name:
+		{
+			FString Text;
+			if (SourceType == EPCGMetadataTypes::String)
+			{
+				Text = *static_cast<const FString*>(InBuffer);
+			}
+			else if (const FName& Name = *static_cast<const FName*>(InBuffer); !Name.IsNone())
+			{
+				Text = Name.ToString();
+			}
+
+			if (Text.IsEmpty())
+			{
+				break; // Falls through to the IsNull() clear below.
+			}
+
+			// Text can come from arbitrary attribute / data-table columns: only object-path-shaped text may reach a load.
+			if (!FPackageName::IsValidObjectPath(Text))
+			{
+				return false;
+			}
+			Path = FSoftObjectPath(Text);
+		}
+		break;
+	default:
+		return false;
+	}
+
+	if (Path.IsNull())
+	{
+		// Explicit "None": drop the asset override, the inline keys take over again.
+		Value.ExternalCurve = nullptr;
+		return true;
+	}
+
+	UObject* Resolved = Path.ResolveObject();
+	if (!Resolved && IsInGameThread())
+	{
+		Resolved = Path.TryLoad();
+	}
+
+	UCurveFloat* Curve = Cast<UCurveFloat>(Resolved);
+	if (!Curve)
+	{
+		return false;
+	}
+
+	Value.ExternalCurve = Curve;
+	return true;
+}
+
+void FPCGExProperty_FloatCurve::GatherSoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const
+{
+	if (Value.ExternalCurve)
+	{
+		OutPaths.Add(FSoftObjectPath(Value.ExternalCurve.Get()));
+	}
 }
 
 bool FPCGExProperty_Enum::SyncStructuralFromSchema(const FPCGExProperty& Schema)
