@@ -151,6 +151,11 @@ void FPCGExPropertyCurveEditController::AddKeyAtTime(float Time)
 
 void FPCGExPropertyCurveEditController::AddKeyAtTimeValue(float Time, float Value)
 {
+	if (bReadOnly)
+	{
+		return;
+	}
+
 	// Add exactly where asked, within the owner's optional clamps (free by default).
 	const FKeyHandle Handle = Curve->AddKey(Clamps.ClampTime(Time), Clamps.ClampValue(Value));
 
@@ -183,7 +188,7 @@ void FPCGExPropertyCurveEditController::DeleteKeyByIndex(int32 Index)
 {
 	// Keep at least one key -- a lone key is a valid ramp (it evaluates as a constant). No key is
 	// special, so any key is deletable down to that floor.
-	if (NumKeys() <= 1 || !Curve->Keys.IsValidIndex(Index))
+	if (bReadOnly || NumKeys() <= 1 || !Curve->Keys.IsValidIndex(Index))
 	{
 		return;
 	}
@@ -222,7 +227,7 @@ void FPCGExPropertyCurveEditController::DeleteSelectedKey()
 
 void FPCGExPropertyCurveEditController::MoveKey(FKeyHandle Handle, float NewTime, float NewValue, bool bInteractive)
 {
-	if (!IsValidKey(Handle))
+	if (bReadOnly || !IsValidKey(Handle))
 	{
 		return;
 	}
@@ -249,7 +254,7 @@ void FPCGExPropertyCurveEditController::MoveKey(FKeyHandle Handle, float NewTime
 
 void FPCGExPropertyCurveEditController::SetKeyValue(FKeyHandle Handle, float NewValue, bool bInteractive)
 {
-	if (!IsValidKey(Handle))
+	if (bReadOnly || !IsValidKey(Handle))
 	{
 		return;
 	}
@@ -268,7 +273,7 @@ void FPCGExPropertyCurveEditController::SetKeyValue(FKeyHandle Handle, float New
 
 void FPCGExPropertyCurveEditController::SetKeyInterp(FKeyHandle Handle, ERichCurveInterpMode Mode)
 {
-	if (!IsValidKey(Handle))
+	if (bReadOnly || !IsValidKey(Handle))
 	{
 		return;
 	}
@@ -282,7 +287,7 @@ void FPCGExPropertyCurveEditController::SetKeyInterp(FKeyHandle Handle, ERichCur
 void FPCGExPropertyCurveEditController::FlipTime()
 {
 	const int32 Num = NumKeys();
-	if (Num == 0)
+	if (bReadOnly || Num == 0)
 	{
 		return;
 	}
@@ -363,7 +368,7 @@ void FPCGExPropertyCurveEditController::FlipTime()
 
 void FPCGExPropertyCurveEditController::FlipValues()
 {
-	if (NumKeys() == 0)
+	if (bReadOnly || NumKeys() == 0)
 	{
 		return;
 	}

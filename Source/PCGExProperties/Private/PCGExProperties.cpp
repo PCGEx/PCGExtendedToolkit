@@ -248,17 +248,21 @@ FPCGExProperty* FPCGExPropertySchema::GetPropertyMutable()
 
 namespace PCGExPropertySchemaResolve
 {
+	using FImportPath = TArray<const UPCGExPropertySchemaAsset*, TInlineAllocator<8>>;
+
 	// Depth-first walk: locals first, then ImportedSchemas in array order.
-	// Seen / Visited are accumulated across the whole walk to enforce first-wins dedup
-	// (by Name) and cycle detection (by asset pointer). Override layers apply only to
-	// imported entries -- locals are edited in-place and never read overrides.
+	// Seen / Visited accumulate across the whole walk: first-wins dedup by Name, one resolution per asset.
+	// Path is the active recursion stack: a revisit on Path is a cycle (warned; IsDataValid flags it too),
+	// a revisit off Path is a diamond, which is supported authoring and skipped at Verbose.
+	// Override layers apply only to imported entries -- locals are edited in-place and never read overrides.
 	static void Walk(
 		const FPCGExPropertySchemaCollection& Collection,
 		UPCGExPropertySchemaAsset* OwningAsset,
 		TConstArrayView<const FPCGExPropertyOverrides*> OverrideChain,
 		TArray<FPCGExPropertyResolved>& Out,
 		TSet<FName>& Seen,
-		TSet<const UPCGExPropertySchemaAsset*>& Visited)
+		TSet<const UPCGExPropertySchemaAsset*>& Visited,
+		FImportPath& Path)
 	{
 		for (int32 i = 0; i < Collection.Schemas.Num(); ++i)
 		{
@@ -307,13 +311,24 @@ namespace PCGExPropertySchemaResolve
 			Visited.Add(Asset, &bAlreadyVisited);
 			if (bAlreadyVisited)
 			{
-				UE_LOG(LogPCGEx, Warning,
-				       TEXT("PCGExPropertySchemaCollection: cyclic or duplicate schema asset import skipped: %s"),
-				       *Asset->GetPathName());
+				if (Path.Contains(Asset))
+				{
+					UE_LOG(LogPCGEx, Warning,
+					       TEXT("PCGExPropertySchemaCollection: cyclic schema asset import skipped: %s (imports itself through its own import chain)"),
+					       *Asset->GetPathName());
+				}
+				else
+				{
+					UE_LOG(LogPCGEx, Verbose,
+					       TEXT("PCGExPropertySchemaCollection: schema asset %s already resolved earlier in this walk (redundant import), skipped."),
+					       *Asset->GetPathName());
+				}
 				continue;
 			}
 
-			Walk(Asset->Collection, Asset, OverrideChain, Out, Seen, Visited);
+			Path.Push(Asset);
+			Walk(Asset->Collection, Asset, OverrideChain, Out, Seen, Visited, Path);
+			Path.Pop(EAllowShrinking::No);
 		}
 	}
 
@@ -400,7 +415,8 @@ void FPCGExPropertySchemaCollection::Resolve(TArray<FPCGExPropertyResolved>& Out
 
 	TSet<FName> Seen;
 	TSet<const UPCGExPropertySchemaAsset*> Visited;
-	PCGExPropertySchemaResolve::Walk(*this, nullptr, MakeArrayView(Chain), Out, Seen, Visited);
+	PCGExPropertySchemaResolve::FImportPath Path;
+	PCGExPropertySchemaResolve::Walk(*this, nullptr, MakeArrayView(Chain), Out, Seen, Visited, Path);
 }
 
 const FPCGExPropertySchema* FPCGExPropertySchemaCollection::FindByName(FName PropertyName) const

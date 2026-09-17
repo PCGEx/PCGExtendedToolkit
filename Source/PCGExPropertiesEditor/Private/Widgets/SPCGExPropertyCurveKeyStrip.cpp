@@ -69,11 +69,14 @@ int32 SPCGExPropertyCurveKeyStrip::OnPaint(
 	const FVector2D Size = AllottedGeometry.GetLocalSize();
 	const FSlateBrush* WhiteBrush = FCoreStyle::Get().GetDefaultBrush();
 
+	// Disabled (read-only preview of an external curve asset) paints dimmed, like any other disabled Slate widget.
+	const ESlateDrawEffect DrawEffects = ShouldBeEnabled(bParentEnabled) ? ESlateDrawEffect::None : ESlateDrawEffect::DisabledEffect;
+
 	// Background.
 	FSlateDrawElement::MakeBox(
 		OutDrawElements, LayerId,
 		AllottedGeometry.ToPaintGeometry(),
-		WhiteBrush, ESlateDrawEffect::None, PCGExPropertyCurveStripColors::Background);
+		WhiteBrush, DrawEffects, PCGExPropertyCurveStripColors::Background);
 
 	// Centre track line.
 	{
@@ -81,7 +84,7 @@ int32 SPCGExPropertyCurveKeyStrip::OnPaint(
 		TArray<FVector2D> Line;
 		Line.Add(FVector2D(Padding, Y));
 		Line.Add(FVector2D(Size.X - Padding, Y));
-		FSlateDrawElement::MakeLines(OutDrawElements, LayerId + 1, AllottedGeometry.ToPaintGeometry(), Line, ESlateDrawEffect::None, PCGExPropertyCurveStripColors::Track, true, 1.0f);
+		FSlateDrawElement::MakeLines(OutDrawElements, LayerId + 1, AllottedGeometry.ToPaintGeometry(), Line, DrawEffects, PCGExPropertyCurveStripColors::Track, true, 1.0f);
 	}
 
 	// Gems. White SVG when supplied (tinted per selection below), else the built-in rectangle.
@@ -104,7 +107,7 @@ int32 SPCGExPropertyCurveKeyStrip::OnPaint(
 		FSlateDrawElement::MakeBox(
 			OutDrawElements, GemLayer,
 			AllottedGeometry.ToPaintGeometry(FVector2D(GemWidth, GemHeight), FSlateLayoutTransform(FVector2D(CenterX - GemWidth * 0.5f, GemTop))),
-			GemDrawBrush, ESlateDrawEffect::None, GemColor);
+			GemDrawBrush, DrawEffects, GemColor);
 	}
 
 	return GemLayer + 1;
