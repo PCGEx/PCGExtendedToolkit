@@ -96,12 +96,16 @@ struct PCGEXPROPERTIES_API FPCGExCapturedImportOverride
  * reinstance gap intact.
  *
  * ApplyToComponent walks the captured divergences and overwrites the matching entries on
- * the freshly reinstanced (and structure-synced) component in the PostUserConstructionScript
- * phase. Effect: inspector edits win over CS writes for the same field, while CS writes that
- * match the CDO are not captured (so changing CS logic on the CDO between recompiles works
- * for any field the instance hasn't diverged on). The inner property's per-field reset arrow
- * is the un-stick mechanism -- resetting to CDO restores parity, the entry is no longer
- * captured next recompile, and CS regains control of it.
+ * the freshly reinstanced (and structure-synced) component twice per construction run:
+ * - PostSimpleConstructionScript, so a construction script reads instance-authored values (the
+ *   engine's own SavedProperties path only restores post-UCS).
+ * - PostUserConstructionScript, so inspector edits win over CS writes for the same field.
+ * The early pass leaves divergences on the component when DetermineUCSModifiedProperties diffs it,
+ * hence SkipUCSModifiedProperties on Properties: a flagged struct renders read-only in SActorDetails.
+ * CS writes that match the CDO are not captured (so changing CS logic on the CDO between
+ * recompiles works for any field the instance hasn't diverged on). The inner property's
+ * per-field reset arrow is the un-stick mechanism -- resetting to CDO restores parity, the
+ * entry is no longer captured next recompile, and CS regains control of it.
  *
  * The captured-divergence UPROPERTY arrays are WITH_EDITORONLY_DATA -- cooked builds don't
  * carry them, and the method bodies are WITH_EDITOR-gated to fall through to base behavior.
@@ -216,7 +220,7 @@ public:
 	 * Property collection with schema definitions and default values.
 	 * These compile into runtime property data during cage/pattern builds.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Properties", meta = (SkipUCSModifiedProperties))
 	FPCGExPropertySchemaCollection Properties;
 
 	/**

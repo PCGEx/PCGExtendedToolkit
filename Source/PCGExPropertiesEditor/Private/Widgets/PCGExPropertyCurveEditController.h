@@ -95,6 +95,28 @@ public:
 		Clamps = InClamps;
 	}
 
+	/** Read-only: the working curve mirrors an external asset. Mutators early-out on it as well as the host
+	 *  disabling its widgets, because Slate keyboard routing checks each widget's OWN enabled flag. */
+	void SetReadOnly(const bool bInReadOnly)
+	{
+		bReadOnly = bInReadOnly;
+	}
+
+	bool IsReadOnly() const
+	{
+		return bReadOnly;
+	}
+
+	/** Re-sync framing and selection after the owner replaced the working curve wholesale. Broadcasts a
+	 *  selection change to repaint, deliberately NOT OnChanged: nothing was authored, so no push must run. */
+	void ResetView()
+	{
+		SelectedKey = FKeyHandle::Invalid();
+		RefitValueFrame();
+		RefitTimeFrame();
+		OnSelectionChanged.Broadcast();
+	}
+
 	// --- Read by index (for painting / hit-testing) ---
 	float GetKeyTimeAt(int32 Index) const;
 	float GetKeyValueAt(int32 Index) const;
@@ -201,6 +223,8 @@ private:
 	TSharedRef<FRichCurve> Curve;
 
 	FPCGExPropertyCurveClamps Clamps;
+
+	bool bReadOnly = false;
 
 	FKeyHandle SelectedKey = FKeyHandle::Invalid();
 

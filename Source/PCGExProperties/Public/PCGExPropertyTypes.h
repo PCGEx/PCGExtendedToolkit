@@ -868,14 +868,19 @@ public:
  * Float curve property -- packs an inline FRuntimeFloatCurve per entry.
  *
  * VALUE-ONLY property: the curve is not representable as a PCG metadata attribute, so this
- * type deliberately supports neither attribute output nor metadata output nor type-erased
- * value reads (SupportsOutput=false, GetOutputType=Unknown, TryWriteValue=false). Consumers
- * read it typed via GetResolvedProperty<FPCGExProperty_FloatCurve> -- e.g. the
- * Curve-Remapped Weight selector bakes each entry's curve into a LUT.
+ * type deliberately supports neither attribute output nor metadata output
+ * (SupportsOutput=false, GetOutputType=Unknown). Consumers read it typed via
+ * GetResolvedProperty<FPCGExProperty_FloatCurve> -- e.g. the Curve-Remapped Weight selector
+ * bakes each entry's curve into a LUT.
  *
  * It DOES support the sampling interface (SupportsSampling/SampleAt): generic consumers
  * such as Staging : Load Properties evaluate the curve at a per-point time and write the
  * result as a double attribute.
+ *
+ * ASSET OVERRIDE: Value.ExternalCurve (hard UCurveFloat ref) wins over the inline keys in
+ * GetRichCurveConst, hence in SampleAt and every LUT bake. It is the curve's only type-erased view:
+ * TryWriteValue / TryReadValue project it as a SoftObjectPath (String / Name as path text), which is
+ * what lets the soft-path Set/Get Property nodes assign a curve asset. Inline keys have none.
  */
 // NOT PCGExInlineValue: the curve editor needs a full-width row, not the value-column slot of
 // an inline row (whose width tracks the widget's desired size and jitters while typing).
@@ -908,6 +913,16 @@ struct PCGEXPROPERTIES_API FPCGExProperty_FloatCurve : public FPCGExProperty
 	{
 		return FName("FloatCurve");
 	}
+
+	/** Asset projection: SoftObjectPath / String / Name receive Value.ExternalCurve's path (empty when inline); other targets fail. */
+	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;
+
+	/** Assigns the asset override from a path. An empty / None path clears it and succeeds; anything that is not a
+	 *  UCurveFloat fails and leaves the property untouched. Off the game thread only already-loaded assets resolve. */
+	virtual bool TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer) override;
+
+	/** Reports Value.ExternalCurve so cook dependency walks and runtime preload lists see the asset. */
+	virtual void GatherSoftObjectPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 };
 
 #pragma endregion

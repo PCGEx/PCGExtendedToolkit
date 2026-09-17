@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 
 #include "Factories/PCGExInstancedFactory.h"
 
@@ -546,6 +547,76 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "PCGEx|Getter", meta=(DeterminesOutputType="ObjectClass", DynamicOutputParam="OutObject"))
 	void ResolveObjectPath(const FName& InAttributeName, const int32 InPointIndex, UPARAM(meta = (AllowAbstract = "true")) TSubclassOf<UObject> ObjectClass, UObject*& OutObject, bool& OutIsValid);
+
+#pragma endregion
+};
+
+/**
+ * Static string & actor tag utilities, primarily meant to be used from within a custom actor data packer.
+ */
+UCLASS(DisplayName = "[PCGEx] Pack Actor Data Library")
+class PCGEXELEMENTSMETA_API UPCGExPackActorDataLibrary : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+
+public:
+#pragma region Strings
+
+	/**
+	 * Splits a comma-separated string into an array of strings.
+	 * @param InCommaSeparatedString Source string, e.g. "Foo, Bar,Baz"
+	 * @param bTrimWhitespace Trim leading & trailing whitespace from each entry.
+	 * @param bCullEmpty Discard entries that are empty (after trimming, if enabled).
+	 * @return The individual entries, in order.
+	 */
+	UFUNCTION(BlueprintPure, Category = "PCGEx|String")
+	static TArray<FString> GetStringArrayFromCommaSeparatedList(const FString& InCommaSeparatedString, const bool bTrimWhitespace = true, const bool bCullEmpty = true);
+
+	/**
+	 * Splits a comma-separated string into an array of names. Convenient when feeding actor tags.
+	 * @param InCommaSeparatedString Source string, e.g. "Foo, Bar,Baz"
+	 * @param bTrimWhitespace Trim leading & trailing whitespace from each entry.
+	 * @param bCullEmpty Discard entries that are empty (after trimming, if enabled).
+	 * @return The individual entries, in order.
+	 */
+	UFUNCTION(BlueprintPure, Category = "PCGEx|String")
+	static TArray<FName> GetNameArrayFromCommaSeparatedList(const FString& InCommaSeparatedString, const bool bTrimWhitespace = true, const bool bCullEmpty = true);
+
+#pragma endregion
+
+#pragma region Actor Tags
+
+	/**
+	 * Adds the tags that are not already present on the actor. None tags are ignored.
+	 * Must be called on the game thread -- enable `bExecuteOnMainThread` on your packer.
+	 * @param InActor Target actor
+	 * @param InTags Tags to add
+	 * @param bMarkDirty Calls Modify() on the actor before mutating it (editor undo & dirty tracking). Disable in preview mode.
+	 * @return true if at least one tag was added
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Actor Tags")
+	static bool AddActorTags(AActor* InActor, const TArray<FName>& InTags, const bool bMarkDirty = true);
+
+	/**
+	 * Removes the given tags from the actor, if present.
+	 * Must be called on the game thread -- enable `bExecuteOnMainThread` on your packer.
+	 * @param InActor Target actor
+	 * @param InTags Tags to remove
+	 * @param bMarkDirty Calls Modify() on the actor before mutating it (editor undo & dirty tracking). Disable in preview mode.
+	 * @return true if at least one tag was removed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Actor Tags")
+	static bool RemoveActorTags(AActor* InActor, const TArray<FName>& InTags, const bool bMarkDirty = true);
+
+	/**
+	 * Removes all tags from the actor.
+	 * Must be called on the game thread -- enable `bExecuteOnMainThread` on your packer.
+	 * @param InActor Target actor
+	 * @param bMarkDirty Calls Modify() on the actor before mutating it (editor undo & dirty tracking). Disable in preview mode.
+	 * @return true if the actor had any tag to clear
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Actor Tags")
+	static bool ClearActorTags(AActor* InActor, const bool bMarkDirty = true);
 
 #pragma endregion
 };
