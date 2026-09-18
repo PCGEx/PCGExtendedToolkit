@@ -8,6 +8,7 @@
 #include "PCGData.h"
 #include "Data/PCGBasePointData.h"
 #include "Core/PCGExMTCommon.h"
+#include "Helpers/PCGExMetaHelpers.h"
 
 #define LOCTEXT_NAMESPACE "FlattenElement"
 
@@ -84,6 +85,10 @@ bool FPCGExFlattenElement::ExecuteInternal(FPCGContext* Context) const
 		{
 			Metadata->DeleteAttribute(FName("____FIXUP____"));
 		}
+
+		// The fixup attribute's removal can leave valid keys with no point attribute behind them, and the owning
+		// component flattens again on graph output. See PCGExMetaHelpers::SanitizeMetadataEntries.
+		PCGExMetaHelpers::SanitizeMetadataEntries(Cast<UPCGBasePointData>(Copy));
 	}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
 	Context->OutputData.TaggedData.Reserve(Copies.Num());

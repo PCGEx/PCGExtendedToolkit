@@ -14,6 +14,7 @@
 #include "Core/PCGExMT.h"
 #include "Core/PCGExMTCommon.h"
 #include "Core/PCGExSettings.h"
+#include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataCommon.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExProxyData.h"
@@ -108,7 +109,8 @@ void FPCGExContext::StageOutput(UPCGData* InData, const FName& InPin, const PCGE
 
 void FPCGExContext::AddMutableOutput(const UPCGData* InData)
 {
-	if (!InData || (!bCleanupConsumableAttributes && !bFlattenOutput))
+	// Always recorded: every owned output goes through the unconditional sanitize pass in FinalizeMutableOutputs.
+	if (!InData)
 	{
 		return;
 	}
@@ -168,11 +170,6 @@ void FPCGExContext::FinalizeMutableOutputs()
 		}
 	}
 
-	if (Consumables.IsEmpty() && !bFlattenOutput)
-	{
-		return;
-	}
-
 	// Snapshot for indexed parallel access. Each output is a distinct data object, so per-data
 	// mutation is embarrassingly parallel.
 	TArray<const UPCGData*> Outputs = MutableOutputs.Array();
@@ -216,7 +213,14 @@ void FPCGExContext::FinalizeMutableOutputs()
 		}, /*Threshold=*/16, EParallelForFlags::Unbalanced);
 	}
 
-	// Deliberately a second pass, after ALL deletion: flatten must never materialize attributes
+	// After deletion (which may be what emptied the Elements domain) and before any flatten, ours or the
+	// owning component's on graph output. See PCGExMetaHelpers::SanitizeMetadataEntries.
+	PCGExMT::ParallelOrSequential(Outputs.Num(), [&](const int32 Index)
+	{
+		PCGExMetaHelpers::SanitizeMetadataEntries(Cast<UPCGBasePointData>(const_cast<UPCGData*>(Outputs[Index])));
+	}, /*Threshold=*/16, EParallelForFlags::Unbalanced);
+
+	// Deliberately a later pass, after ALL deletion: flatten must never materialize attributes
 	// that were scheduled for removal. Flatten compacts full value ranges -- expensive enough to
 	// parallelize from two outputs up.
 	if (bFlattenOutput)
