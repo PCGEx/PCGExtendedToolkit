@@ -139,24 +139,29 @@ namespace PCGExOmniCollection
 				};
 			});
 
-			// Levels resolve before PCGDataAsset: a dropped UWorld becomes a Level entry.
 			FTypeRegistry::AddPendingCustomization(TypeIds::Level, [](FTypeInfo& Info)
 			{
-				Info.SourceDetectPriority = 30;
+				Info.SourceDetectPriority = 40;
 				Info.bRuntimeStageable = false; // level actor walk is editor-only
 				Info.DetectSourceAsset = [](const FAssetData& Asset) { return Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName(); };
 			});
 
+			// Claims worlds ahead of the Level type: a dropped UWorld becomes a Level-sourced PCGDataAsset entry
+			// (exported, runtime-stageable), not a Level entry.
 			FTypeRegistry::AddPendingCustomization(TypeIds::PCGDataAsset, [](FTypeInfo& Info)
 			{
-				Info.SourceDetectPriority = 40;
-				Info.DetectSourceAsset = [](const FAssetData& Asset) { return Asset.IsInstanceOf<UPCGDataAsset>(); };
-				// Flip to DataAsset mode BEFORE SetAssetPath -- it routes the path by Source.
+				Info.SourceDetectPriority = 30;
+				Info.DetectSourceAsset = [](const FAssetData& Asset)
+				{
+					return Asset.IsInstanceOf<UPCGDataAsset>() || Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName();
+				};
+				// Source is set BEFORE SetAssetPath -- it routes the path by Source.
 				Info.MakeEntryFromSourceAsset = [](const FAssetData& Asset, FInstancedStruct& OutPayload)
 				{
+					const bool bIsWorld = Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName();
 					OutPayload.InitializeAs(FPCGExPCGDataAssetCollectionEntry::StaticStruct());
 					FPCGExPCGDataAssetCollectionEntry* Entry = OutPayload.GetMutablePtr<FPCGExPCGDataAssetCollectionEntry>();
-					Entry->Source = EPCGExDataAssetEntrySource::DataAsset;
+					Entry->Source = bIsWorld ? EPCGExDataAssetEntrySource::Level : EPCGExDataAssetEntrySource::DataAsset;
 					Entry->SetAssetPath(Asset.ToSoftObjectPath());
 					return true;
 				};

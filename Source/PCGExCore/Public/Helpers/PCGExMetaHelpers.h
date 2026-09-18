@@ -21,6 +21,7 @@ class TPCGValueRange;
 class UPCGMetadata;
 class UPCGManagedComponent;
 class UPCGData;
+class UPCGBasePointData;
 class UPCGComponent;
 class IPCGAttributeAccessorKeys;
 
@@ -43,7 +44,12 @@ namespace PCGExMetaHelpers
 	PCGEXCORE_API TSharedPtr<IPCGAttributeAccessorKeys> MakeConstKeys(const UPCGData* InData);
 	
 	PCGEXCORE_API void InitializeMetadataEntries(UPCGMetadata* Metadata, const TPCGValueRange<int64>& MetadataEntries, const bool bConservative);
-	
+
+	/** Resets every point entry key to PCGInvalidEntryKey when the Elements domain has no attribute (own or inherited).
+	 *  UPCGBasePointData::Flatten short-circuits on the ALL-domain attribute count, so a point data with allocated
+	 *  keys, no point attribute and a @Data attribute leaves it with N dangling keys. Returns true if any key changed. */
+	PCGEXCORE_API bool SanitizeMetadataEntries(UPCGBasePointData* InPointData);
+
 	PCGEXCORE_API bool IsPCGExAttribute(const FString& InStr);
 	PCGEXCORE_API bool IsPCGExAttribute(const FName InName);
 	PCGEXCORE_API bool IsPCGExAttribute(const FText& InText);

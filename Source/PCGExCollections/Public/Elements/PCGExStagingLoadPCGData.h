@@ -56,6 +56,9 @@ namespace PCGExPCGDataAssetLoader
 /**
  * Spawns PCGDataAsset contents onto staged points.
  * Works with data staged by the Asset Staging node using Collection Map output.
+ *
+ * Also accepts attribute sets carrying the staged entry hash (e.g. Get Collection Data's Data output):
+ * each row is loaded and its asset contents are output as-is, without duplication or transform.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(Keywords = "spawn pcgdata asset staged", PCGExNodeLibraryDoc="staging/staging-load-pcgdata"))
 class UPCGExPCGDataAssetLoaderSettings : public UPCGExPointsProcessorSettings
@@ -65,7 +68,7 @@ class UPCGExPCGDataAssetLoaderSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(PCGDataAssetLoader, "Staging : Load PCGData", "Loads and spawns PCGDataAsset contents from staged points.");
+	PCGEX_NODE_INFOS(PCGDataAssetLoader, "Staging : Load PCGData", "Loads and spawns PCGDataAsset contents from staged points, or outputs them raw from staged attribute sets.");
 
 	virtual EPCGSettingsType GetType() const override
 	{
@@ -79,6 +82,13 @@ public:
 #endif
 
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
+
+	/** Accept attribute sets on the main pin: rows are converted to temp identity points for hash
+	 *  resolution, and their loaded contents are output raw (see FProcessor::bPassthrough). */
+	virtual PCGExData::EIOHandling GetMainDataHandling() const override
+	{
+		return PCGExData::EIOHandling::Dynamic;
+	}
 
 protected:
 	virtual bool OutputPinsCanBeDeactivated() const override
@@ -231,9 +241,9 @@ struct FPCGExPCGDataAssetLoaderContext final : FPCGExPointsProcessorContext
 	TMap<uint32, int32> OutputIndices;
 	mutable FRWLock OutputLock;
 
-	// Non-spatial data (forwarded once per unique asset, not duplicated)
-	TSet<uint32> UniqueNonSpatialUIDs;
-	mutable FRWLock NonSpatialLock;
+	// Asset-owned data forwarded as-is (non-spatial, or everything in passthrough): once per unique data, never duplicated
+	TSet<uint32> UniqueDataUIDs;
+	mutable FRWLock UniqueDataLock;
 
 	// Merged collection map from embedded CollectionMap entries (when bMergeEmbeddedCollectionMaps)
 	TSharedPtr<PCGExCollections::FPickPacker> MergedMapPacker;
@@ -241,8 +251,8 @@ struct FPCGExPCGDataAssetLoaderContext final : FPCGExPointsProcessorContext
 	/** Register output data to appropriate pin */
 	void RegisterOutput(const FPCGTaggedData& InTaggedData, bool bAddPinTag, const int32 InIndex);
 
-	/** Register non-spatial data (once per unique asset) */
-	void RegisterNonSpatialData(const FPCGTaggedData& InTaggedData, const int32 InIndex);
+	/** Register asset-owned data as-is, once per unique data (dedupes on data UID). */
+	void RegisterUniqueData(const FPCGTaggedData& InTaggedData, const int32 InIndex);
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
@@ -306,6 +316,10 @@ namespace PCGExPCGDataAssetLoader
 		// Shared counter for generating unique cluster IDs across all points
 		int32 ClusterIdCounter = 0;
 
+		// True when the input is a converted attribute set: loaded contents are output as-is
+		// (no duplicate, no transform), one instance per unique data. Forwarding still duplicates.
+		bool bPassthrough = false;
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
@@ -324,6 +338,9 @@ namespace PCGExPCGDataAssetLoader
 
 		/** Process a single tagged data item for a point */
 		FSpatialTransformResult ProcessTaggedData(int32 PointIndex, const FTransform& TargetTransform, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper);
+
+		/** Passthrough: output asset data as-is (deduped), or a non-transformed duplicate when attribute forwarding is enabled */
+		void ProcessPassthroughData(int32 PointIndex, int32 OutIdx, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper);
 
 		/** Check if data has PCGEx cluster tags and remap them */
 		void RemapClusterTags(TSet<FString>& Tags, FClusterIdRemapper& ClusterRemapper) const;
