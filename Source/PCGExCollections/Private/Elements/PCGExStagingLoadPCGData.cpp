@@ -366,7 +366,7 @@ void FPCGExPCGDataAssetLoaderContext::RegisterOutput(const FPCGTaggedData& InTag
 	}
 }
 
-void FPCGExPCGDataAssetLoaderContext::RegisterNonSpatialData(const FPCGTaggedData& InTaggedData, const int32 InIndex)
+void FPCGExPCGDataAssetLoaderContext::RegisterUniqueData(const FPCGTaggedData& InTaggedData, const int32 InIndex)
 {
 	if (!InTaggedData.Data)
 	{
@@ -376,25 +376,25 @@ void FPCGExPCGDataAssetLoaderContext::RegisterNonSpatialData(const FPCGTaggedDat
 	const uint32 UID = InTaggedData.Data->GetUniqueID();
 
 	{
-		FReadScopeLock ReadLock(NonSpatialLock);
-		if (UniqueNonSpatialUIDs.Contains(UID))
+		FReadScopeLock ReadLock(UniqueDataLock);
+		if (UniqueDataUIDs.Contains(UID))
 		{
 			return;
 		}
 	}
 
 	{
-		FWriteScopeLock WriteLock(NonSpatialLock);
+		FWriteScopeLock WriteLock(UniqueDataLock);
 
 		bool bAlreadyInSet = false;
-		UniqueNonSpatialUIDs.Add(UID, &bAlreadyInSet);
+		UniqueDataUIDs.Add(UID, &bAlreadyInSet);
 		if (bAlreadyInSet)
 		{
 			return;
 		}
 
-		// Non-spatial goes to appropriate pin, with Pin: tag if going to default
-		RegisterOutput(InTaggedData, true, InIndex * -1);
+		// Goes to appropriate pin, with Pin: tag if going to default
+		RegisterOutput(InTaggedData, true, InIndex);
 	}
 }
 
@@ -404,14 +404,14 @@ void FPCGExPCGDataAssetLoaderContext::RegisterNonSpatialData(const FPCGTaggedDat
 
 void UPCGExPCGDataAssetLoaderSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
-	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from staging nodes.", Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::SourceCollectionMapLabel, "Collection map information from staging nodes or Get Collection Data.", Required)
 	Super::InputPinPropertiesBeforeFilters(PinProperties);
 }
 
 TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_ANY(GetMainOutputPin(), "Loaded data. Spatial data is one per input point, other is single instance only.", Normal)
+	PCGEX_PIN_ANY(GetMainOutputPin(), "Loaded data. From points: spatial data is one per input point, other is single instance only. From attribute sets: asset contents as-is, single instance only.", Normal)
 
 	// Add custom output pins first
 	for (const FPCGPinProperties& CustomPin : CustomOutputPins)
@@ -505,7 +505,7 @@ bool FPCGExPCGDataAssetLoaderElement::AdvanceWork(FPCGExContext* InContext, cons
 	{
 		Pair.Value.Sort([&](const FPCGTaggedData& A, const FPCGTaggedData& B)
 		{
-			return Context->OutputIndices[A.Data->GetUniqueID()] < Context->OutputIndices[A.Data->GetUniqueID()];
+			return Context->OutputIndices[A.Data->GetUniqueID()] < Context->OutputIndices[B.Data->GetUniqueID()];
 		});
 		Context->OutputData.TaggedData.Append(Pair.Value);
 	}
@@ -561,10 +561,14 @@ namespace PCGExPCGDataAssetLoader
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::NoInit)
 
+		// Attribute-set inputs arrive as a temp identity-point conversion (see PCGExPointIO::ToPointData);
+		// there is nothing to spawn onto, so loaded contents are output as-is.
+		bPassthrough = PointDataFacade->Source->IsConvertedInput();
+
 		EntryHashGetter = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, true);
 		if (!EntryHashGetter)
 		{
-			PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Missing staging hash attribute. Make sure points were staged with Collection Map output."));
+			PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Missing staging hash attribute. Make sure inputs were staged (points) or come from Get Collection Data (attribute sets), with a matching Collection Map."));
 			return false;
 		}
 
@@ -668,12 +672,19 @@ namespace PCGExPCGDataAssetLoader
 
 		const int32 OutIdx = BatchIndex * 1000000 + PointIndex;
 
+		if (bPassthrough)
+		{
+			// Attribute-set input: no target transform, output loaded contents as-is
+			ProcessPassthroughData(PointIndex, OutIdx, InTaggedData, ClusterRemapper);
+			return FSpatialTransformResult();
+		}
+
 		UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data);
 
 		if (!SpatialData)
 		{
-			// Non-spatial data: register once per unique asset (not per point)
-			Context->RegisterNonSpatialData(InTaggedData, OutIdx);
+			// Non-spatial data: register once per unique asset (not per point), ordered before spatial data
+			Context->RegisterUniqueData(InTaggedData, OutIdx * -1);
 			return FSpatialTransformResult();
 		}
 
@@ -732,6 +743,82 @@ namespace PCGExPCGDataAssetLoader
 		// Register output (Pin: tag added only for default "Out" pin)
 		Context->RegisterOutput(OutputData, true, OutIdx);
 		return TransformResult;
+	}
+
+	/** Emptiness check on the original (un-duplicated) spatial data, mirroring PrepareTransformTask's bOmitIfEmpty rules */
+	bool IsSpatialDataEmpty(const UPCGSpatialData* InData)
+	{
+		if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(InData))
+		{
+			return PointData->IsEmpty();
+		}
+
+		if (const UPCGSplineData* SplineData = Cast<UPCGSplineData>(InData))
+		{
+			return SplineData->GetNumSegments() == 0;
+		}
+
+		if (const UPCGPolyLineData* PolyLineData = Cast<UPCGPolyLineData>(InData))
+		{
+			return PolyLineData->GetNumSegments() == 0;
+		}
+
+		return false;
+	}
+
+	void FProcessor::ProcessPassthroughData(const int32 PointIndex, const int32 OutIdx, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper)
+	{
+		const UPCGData* Data = InTaggedData.Data.Get();
+		if (!Data)
+		{
+			return;
+		}
+
+		if (Settings->bOmitEmptyData)
+		{
+			const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data);
+			if (SpatialData && IsSpatialDataEmpty(SpatialData))
+			{
+				return;
+			}
+		}
+
+		FPCGTaggedData OutputData = InTaggedData;
+
+		if (Settings->bForwardInputTags)
+		{
+			PointDataFacade->Source->Tags->DumpTo(OutputData.Tags);
+		}
+
+		if (!ForwardHandler)
+		{
+			// Raw: asset-owned data goes out untouched, once per unique data. Cluster IDs stay as saved.
+			Context->RegisterUniqueData(OutputData, OutIdx);
+			return;
+		}
+
+		// Attribute forwarding needs writable metadata: duplicate (never transformed), one per row
+		UPCGData* DuplicatedData = Context->ManagedObjects->DuplicateData<UPCGData>(Data);
+		if (!DuplicatedData)
+		{
+			if (!Settings->bQuietUnsupportedTypeWarnings)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext, FText::Format(FTEXT("Failed to duplicate data of type {0}"), FText::FromString(Data->GetClass()->GetName())));
+			}
+			return;
+		}
+
+		OutputData.Data = DuplicatedData;
+
+		// Per-row copies need distinct cluster IDs to keep Vtx/Edges pairs unambiguous
+		RemapClusterTags(OutputData.Tags, ClusterRemapper);
+
+		if (UPCGMetadata* TargetMetadata = DuplicatedData->MutableMetadata())
+		{
+			ForwardHandler->Forward(PointIndex, TargetMetadata);
+		}
+
+		Context->RegisterOutput(OutputData, true, OutIdx);
 	}
 
 	void FProcessor::RemapClusterTags(TSet<FString>& Tags, FClusterIdRemapper& ClusterRemapper) const

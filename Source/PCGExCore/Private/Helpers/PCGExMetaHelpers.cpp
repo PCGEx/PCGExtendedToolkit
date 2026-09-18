@@ -151,6 +151,34 @@ namespace PCGExMetaHelpers
 		}
 	}
 
+	bool SanitizeMetadataEntries(UPCGBasePointData* InPointData)
+	{
+		if (!InPointData || !InPointData->Metadata)
+		{
+			return false;
+		}
+
+		// The Elements domain's OWN attribute map, the criterion FPCGMetadataDomain::FlattenAndCompress uses;
+		// not the summed UPCGMetadata::GetAttributeCount(), which also counts @Data.
+		const FPCGMetadataDomain* ElementsDomain = InPointData->Metadata->GetConstMetadataDomain(PCGMetadataDomainID::Elements);
+		if (!ElementsDomain || ElementsDomain->GetAttributeCount() > 0)
+		{
+			return false;
+		}
+
+		// Already canonical (single invalid value, or property never allocated)?
+		const TConstPCGValueRange<int64> MetadataEntryRange = InPointData->GetConstMetadataEntryValueRange();
+		const TOptional<const int64> SingleValue = MetadataEntryRange.GetSingleValue();
+		if (SingleValue.IsSet() && SingleValue.GetValue() == PCGInvalidEntryKey)
+		{
+			return false;
+		}
+
+		// Single value for all points, releasing the per-point allocation (the engine's own no-attribute flatten path).
+		InPointData->SetMetadataEntry(PCGInvalidEntryKey);
+		return true;
+	}
+
 	bool IsPCGExAttribute(const FString& InStr)
 	{
 		return InStr.Contains(PCGExCommon::PCGExPrefix);
