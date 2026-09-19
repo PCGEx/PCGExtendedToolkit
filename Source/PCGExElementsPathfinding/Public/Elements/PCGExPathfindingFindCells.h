@@ -199,10 +199,8 @@ namespace PCGExFindContours
 		TArray<TSharedPtr<PCGExClusters::FCell>> ValidCells;
 		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOIndices;
 
-		// Expansion tracking
-		TMap<int32, PCGExClusters::FCellExpansionData> CellExpansionMap;  // FaceIndex -> ExpansionData
-		TMap<int32, TSharedPtr<PCGExClusters::FCell>> FaceIndexToCellMap; // FaceIndex -> Cell
-		const TMap<int32, TSet<int32>>* CellAdjacencyMap = nullptr;       // Owned by the enumerator, outlives processing
+		/** Owned by the enumerator, outlives processing. */
+		const TMap<int32, TSet<int32>>* CellAdjacencyMap = nullptr;
 
 	public:
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;
@@ -221,9 +219,6 @@ namespace PCGExFindContours
 		virtual void OnRangeProcessingComplete() override;
 
 		void HandleWrapperOnlyCase(const int32 NumSeeds);
-
-		/** Expand from a seed's initial cell to adjacent cells up to growth depth */
-		void ExpandSeedToAdjacentCells(int32 SeedIndex, int32 InitialFaceIndex, int32 MaxGrowth);
 
 		virtual void Cleanup() override;
 	};

@@ -338,6 +338,14 @@ namespace PCGExBlending
 		}
 	}
 
+	void FBlendOpsManager::MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, const double InSplit, TArray<PCGEx::FOpStats>& Trackers) const
+	{
+		for (const auto Op : CachedOperations)
+		{
+			Op->MultiBlend(SourceIndex, TargetIndex, InWeight, InSplit, Trackers[Op->OpIdx]);
+		}
+	}
+
 	void FBlendOpsManager::EndMultiBlend(const int32 TargetIndex, TArray<PCGEx::FOpStats>& Trackers) const
 	{
 		for (const auto Op : CachedOperations)

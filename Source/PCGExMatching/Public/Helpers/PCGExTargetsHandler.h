@@ -7,8 +7,10 @@
 
 #include "CoreMinimal.h"
 #include "PCGExOctree.h"
+#include "Data/PCGExPointElements.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Utils/PCGPointOctree.h"
+#include "Utils/PCGValueRange.h"
 
 class UPCGData;
 class UPCGExMatchRuleFactoryData;
@@ -45,6 +47,11 @@ namespace PCGExMatching
 		TSharedPtr<PCGExOctree::FItemOctree> TargetsOctree;
 		TArray<TSharedRef<PCGExData::FFacade>> TargetFacades;
 		TArray<const PCGPointOctree::FPointOctree*> TargetOctrees;
+
+		// Per-target caches for hot loops: indexed reads instead of virtual point getters.
+		TArray<const UPCGBasePointData*> TargetDatas;
+		TArray<TConstPCGValueRange<FTransform>> TargetTransforms;
+
 		int32 MaxNumTargets = 0;
 
 		const PCGExMath::IDistances* Distances = nullptr;
@@ -120,6 +127,40 @@ namespace PCGExMatching
 
 		PCGExData::FConstPoint GetPoint(const int32 IO, const int32 Index) const;
 		PCGExData::FConstPoint GetPoint(const PCGExData::FPoint& Point) const;
+
+		FORCEINLINE const UPCGBasePointData* GetData(const int32 IO) const
+		{
+			return TargetDatas[IO];
+		}
+
+		FORCEINLINE const FTransform& GetTransform(const int32 IO, const int32 Index) const
+		{
+			return TargetTransforms[IO][Index];
+		}
+
+		FORCEINLINE const FTransform& GetTransform(const PCGExData::FElement& Element) const
+		{
+			return TargetTransforms[Element.IO][Element.Index];
+		}
+
+		/** Inlined FindElementsWithBoundsTest for hot loops; InFunc(const PCGExData::FConstPoint&), IO set to the facade position. */
+		template <typename Func>
+		void ForEachElementWithBoundsTest(const FBoxCenterAndExtent& QueryBounds, Func&& InFunc, const TSet<const UPCGData*>* Exclude = nullptr) const
+		{
+			TargetsOctree->FindElementsWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item)
+			{
+				const UPCGBasePointData* Data = TargetDatas[Item.Index];
+				if (Exclude && Exclude->Contains(Data))
+				{
+					return;
+				}
+
+				TargetOctrees[Item.Index]->FindElementsWithBoundsTest(QueryBounds, [&](const PCGPointOctree::FPointRef& PointRef)
+				{
+					InFunc(PCGExData::FConstPoint(Data, PointRef.Index, Item.Index));
+				});
+			});
+		}
 
 		// Parallel iteration support
 		int32 GetTotalTargetPointCount(const TSet<const UPCGData*>* Exclude = nullptr) const;

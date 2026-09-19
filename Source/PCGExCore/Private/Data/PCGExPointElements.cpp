@@ -98,6 +98,13 @@ namespace PCGExData
 	{
 	}
 
+	FWeightedPoint::FWeightedPoint(const int32 InIndex, const double InWeight, const int32 InIO, const double InSplit)
+		: FPoint(InIndex, InIO)
+		  , Weight(InWeight)
+		  , Split(InSplit)
+	{
+	}
+
 	FWeightedPoint::FWeightedPoint(const TSharedPtr<FPointIO>& InIO, const uint32 InIndex, const double InWeight)
 		: FPoint(InIO, InIndex)
 		  , Weight(InWeight)
