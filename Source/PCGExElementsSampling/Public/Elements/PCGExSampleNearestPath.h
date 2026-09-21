@@ -17,24 +17,21 @@
 #include "Math/PCGExMathAxis.h"
 #include "Math/PCGExProjectionDetails.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
+#include "Sampling/PCGExSampleOutputs.h"
 #include "Sampling/PCGExSamplingCommon.h"
 #include "Sorting/PCGExSortingCommon.h"
 
 #include "PCGExSampleNearestPath.generated.h"
 
-#define PCGEX_FOREACH_FIELD_NEARESTPATH(MACRO)\
-MACRO(Success, bool, false)\
-MACRO(Transform, FTransform, FTransform::Identity)\
-MACRO(LookAtTransform, FTransform, FTransform::Identity)\
-MACRO(Distance, double, 0)\
-MACRO(SignedDistance, double, 0)\
-MACRO(ComponentWiseDistance, FVector, FVector::ZeroVector)\
-MACRO(Angle, double, 0)\
+#define PCGEX_FOREACH_FIELD_NEARESTPATH_EXTRA(MACRO)\
 MACRO(Time, double, 0)\
 MACRO(SegmentTime, double, 0)\
 MACRO(NumInside, int32, 0)\
-MACRO(NumSamples, int32, 0)\
 MACRO(ClosedLoop, int32, false)
+
+#define PCGEX_FOREACH_FIELD_NEARESTPATH(MACRO)\
+PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
+PCGEX_FOREACH_FIELD_NEARESTPATH_EXTRA(MACRO)
 
 namespace PCGExSorting
 {
@@ -511,7 +508,8 @@ namespace PCGExSampleNearestPath
 		bool bOnlySignIfClosed = false;
 		bool bOnlyIncrementInsideNumIfClosed = false;
 
-		PCGEX_FOREACH_FIELD_NEARESTPATH(PCGEX_OUTPUT_DECL)
+		PCGExSampling::FCommonOutputs Outputs;
+		PCGEX_FOREACH_FIELD_NEARESTPATH_EXTRA(PCGEX_OUTPUT_DECL)
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

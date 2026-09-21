@@ -18,26 +18,23 @@
 #include "Filters/Points/PCGExPolyPathFilterFactory.h"
 #include "Math/PCGExMathAxis.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
+#include "Sampling/PCGExSampleOutputs.h"
 #include "Sampling/PCGExSamplingCommon.h"
 
 #include "PCGExSampleNearestSpline.generated.h"
 
-#define PCGEX_FOREACH_FIELD_NEARESTPOLYLINE(MACRO)\
-MACRO(Success, bool, false)\
-MACRO(Transform, FTransform, FTransform::Identity)\
-MACRO(LookAtTransform, FTransform, FTransform::Identity)\
+#define PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(MACRO)\
 MACRO(ArriveTangent, FVector, FVector::ZeroVector)\
 MACRO(LeaveTangent, FVector, FVector::ZeroVector)\
-MACRO(Distance, double, 0)\
 MACRO(Depth, double, -1)\
-MACRO(SignedDistance, double, 0)\
-MACRO(ComponentWiseDistance, FVector, FVector::ZeroVector)\
-MACRO(Angle, double, 0)\
 MACRO(Time, double, 0)\
 MACRO(NumInside, int32, 0)\
-MACRO(NumSamples, int32, 0)\
-MACRO(ClosedLoop, bool, false) \
+MACRO(ClosedLoop, bool, false)\
 MACRO(TotalWeight, double, 0)
+
+#define PCGEX_FOREACH_FIELD_NEARESTPOLYLINE(MACRO)\
+PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
+PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(MACRO)
 
 class UPCGExPointFilterFactoryData;
 
@@ -542,7 +539,8 @@ namespace PCGExSampleNearestSpline
 		bool bOnlySignIfClosed = false;
 		bool bOnlyIncrementInsideNumIfClosed = false;
 
-		PCGEX_FOREACH_FIELD_NEARESTPOLYLINE(PCGEX_OUTPUT_DECL)
+		PCGExSampling::FCommonOutputs Outputs;
+		PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(PCGEX_OUTPUT_DECL)
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

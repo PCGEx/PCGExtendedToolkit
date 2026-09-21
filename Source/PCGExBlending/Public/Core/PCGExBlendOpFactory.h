@@ -202,6 +202,8 @@ public:
 
 	virtual PCGEx::FOpStats BeginMultiBlend(const int32 TargetIndex);
 	virtual void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, PCGEx::FOpStats& Tracker);
+	/** InSplit multiplies the curved weight; the curve shapes the sample, the split shares it across points. */
+	virtual void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, const double InSplit, PCGEx::FOpStats& Tracker);
 	virtual void EndMultiBlend(const int32 TargetIndex, PCGEx::FOpStats& Tracker);
 
 	virtual void CompleteWork(TSet<TSharedPtr<PCGExData::IBuffer>>& OutDisabledBuffers);

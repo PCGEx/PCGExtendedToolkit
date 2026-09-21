@@ -146,7 +146,7 @@ namespace PCGExBlending
 		}
 		for (const PCGExData::FWeightedPoint& P : InWeightedPoints)
 		{
-			Blenders[P.IO]->MultiBlend(P.Index, WriteIndex, P.Weight, Trackers);
+			Blenders[P.IO]->MultiBlend(P.Index, WriteIndex, P.Weight, P.Split, Trackers);
 		}
 		for (const auto Op : UniqueOps)
 		{

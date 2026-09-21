@@ -93,12 +93,15 @@ namespace PCGExData
 	struct PCGEXCORE_API FWeightedPoint : FPoint
 	{
 		double Weight = 0;
+		// Applied after the blend op's weight curve, so a sample split across several points keeps its shares exact.
+		double Split = 1;
 
 		FWeightedPoint() = default;
 		virtual ~FWeightedPoint() override = default;
 
 		explicit FWeightedPoint(const uint64 Hash, const double InWeight = 1);
 		explicit FWeightedPoint(const int32 InIndex, const double InWeight = 1, const int32 InIO = -1);
+		FWeightedPoint(const int32 InIndex, const double InWeight, const int32 InIO, const double InSplit);
 		FWeightedPoint(const TSharedPtr<FPointIO>& InIO, const uint32 InIndex, const double InWeight = 1);
 	};
 

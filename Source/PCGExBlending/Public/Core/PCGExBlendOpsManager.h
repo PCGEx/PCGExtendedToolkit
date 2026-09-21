@@ -97,6 +97,7 @@ namespace PCGExBlending
 
 		void virtual BeginMultiBlend(const int32 TargetIndex, TArray<PCGEx::FOpStats>& Trackers) const override;
 		void virtual MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, TArray<PCGEx::FOpStats>& Trackers) const override;
+		void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, const double InSplit, TArray<PCGEx::FOpStats>& Trackers) const;
 		void virtual EndMultiBlend(const int32 TargetIndex, TArray<PCGEx::FOpStats>& Trackers) const override;
 
 		void Cleanup(FPCGExContext* InContext);

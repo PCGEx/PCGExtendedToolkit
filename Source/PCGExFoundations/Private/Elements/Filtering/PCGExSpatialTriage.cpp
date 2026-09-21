@@ -10,6 +10,18 @@
 #define LOCTEXT_NAMESPACE "PCGExSpatialTriageElement"
 #define PCGEX_NAMESPACE SpatialTriage
 
+namespace PCGExSpatialTriage
+{
+	// Half-open [Min, Max), as UPCGActorHelpers::GetCellCoord floors: a centre on a face shared by two
+	// abutting boxes belongs to exactly one of them.
+	bool OwnsCenter(const FBox& Box, const FVector& Center)
+	{
+		return Center.X >= Box.Min.X && Center.X < Box.Max.X
+			&& Center.Y >= Box.Min.Y && Center.Y < Box.Max.Y
+			&& Center.Z >= Box.Min.Z && Center.Z < Box.Max.Z;
+	}
+}
+
 TArray<FPCGPinProperties> UPCGExSpatialTriageSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
@@ -80,13 +92,22 @@ bool FPCGExSpatialTriageElement::AdvanceWork(FPCGExContext* InContext, const UPC
 			if (SpatialData)
 			{
 				const FBox Bounds = SpatialData->GetBounds();
-				if (Filter.IsInside(Bounds.GetCenter()))
+				if (Bounds.IsValid)
 				{
-					OutputTo = PCGExSpatialTriage::OutputLabelInside;
-					FPlatformAtomics::InterlockedIncrement(&NumInside);
+					if (PCGExSpatialTriage::OwnsCenter(Filter, Bounds.GetCenter()))
+					{
+						OutputTo = PCGExSpatialTriage::OutputLabelInside;
+						FPlatformAtomics::InterlockedIncrement(&NumInside);
+					}
+					else if (Filter.Intersect(Bounds))
+					{
+						OutputTo = PCGExSpatialTriage::OutputLabelTouching;
+						FPlatformAtomics::InterlockedIncrement(&NumTouching);
+					}
 				}
-				else if (Filter.Intersect(Bounds))
+				else if (!SpatialData->IsBounded())
 				{
+					// Unbounded: overlaps every box, owned by none. An empty box falls through to Outside.
 					OutputTo = PCGExSpatialTriage::OutputLabelTouching;
 					FPlatformAtomics::InterlockedIncrement(&NumTouching);
 				}

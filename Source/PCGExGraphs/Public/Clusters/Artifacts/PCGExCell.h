@@ -82,6 +82,18 @@ namespace PCGExClusters
 		TFunctionRef<uint64(const FCell&)> GetGroupKey,
 		TFunctionRef<int32(const TArray<int32>&, const FVector&)> PickOwner);
 
+	/**
+	 * Grows each seeded cell's claim through the face adjacency map, up to its seed's growth depth, and appends every
+	 * claimable cell reached to InOutCells with PickOwner choosing among the seeds that reached it. Only InClaimableCells
+	 * can be claimed; any other face (constraint-rejected, culled, wrapper) is stepped through but never appended.
+	 */
+	PCGEXGRAPHS_API void GrowSeedClaims(
+		TArray<TSharedPtr<FCell>>& InOutCells,
+		const TArray<TSharedPtr<FCell>>& InClaimableCells,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		const FPCGExCellGrowthDetails& InGrowth,
+		TFunctionRef<int32(const TArray<int32>&, const FVector&)> PickOwner);
+
 #pragma endregion
 
 #pragma region Cell
@@ -251,25 +263,6 @@ namespace PCGExClusters
 		bool bIsClosedLoop = false;
 
 		FCellData() = default;
-	};
-
-	/**
-	 * Expansion tracking data for a cell.
-	 * Used when seeds/holes expand to adjacent cells via growth.
-	 */
-	struct PCGEXGRAPHS_API FCellExpansionData
-	{
-		TSet<int32> SourceIndices; // Which source indices (seed/hole) selected this cell
-
-		FORCEINLINE void RecordPick(const int32 SourceIndex)
-		{
-			SourceIndices.Add(SourceIndex);
-		}
-
-		FORCEINLINE void Reset()
-		{
-			SourceIndices.Reset();
-		}
 	};
 
 	class PCGEXGRAPHS_API FCell : public TSharedFromThis<FCell>
