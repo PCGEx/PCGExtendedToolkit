@@ -409,6 +409,11 @@ void FPCGExBlendOperation::MultiBlend(const int32 SourceIndex, const int32 Targe
 	Blender->MultiBlend(SourceIndex, TargetIndex, Config.Weighting.ScoreLUT->Eval(InWeight), Tracker);
 }
 
+void FPCGExBlendOperation::MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, const double InSplit, PCGEx::FOpStats& Tracker)
+{
+	Blender->MultiBlend(SourceIndex, TargetIndex, Config.Weighting.ScoreLUT->Eval(InWeight) * InSplit, Tracker);
+}
+
 void FPCGExBlendOperation::EndMultiBlend(const int32 TargetIndex, PCGEx::FOpStats& Tracker)
 {
 	Blender->EndMultiBlend(TargetIndex, Tracker);

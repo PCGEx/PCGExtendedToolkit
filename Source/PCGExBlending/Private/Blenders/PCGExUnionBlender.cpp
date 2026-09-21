@@ -460,7 +460,7 @@ namespace PCGExBlending
 			{
 				if (const TSharedPtr<FProxyDataBlender>& Blender = MultiAttribute->SubBlenders[P.IO])
 				{
-					Blender->MultiBlend(P.Index, WriteIndex, P.Weight, Tracking);
+					Blender->MultiBlend(P.Index, WriteIndex, P.Weight * P.Split, Tracking);
 				}
 			}
 

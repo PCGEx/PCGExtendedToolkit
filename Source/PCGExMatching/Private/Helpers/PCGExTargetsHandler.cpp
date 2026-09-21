@@ -31,6 +31,8 @@ namespace PCGExMatching
 
 		TargetFacades.Reserve(Targets->Pairs.Num());
 		TargetOctrees.Reserve(Targets->Pairs.Num());
+		TargetDatas.Reserve(Targets->Pairs.Num());
+		TargetTransforms.Reserve(Targets->Pairs.Num());
 
 		TArray<FBox> Bounds;
 		Bounds.Reserve(Targets->Pairs.Num());
@@ -59,6 +61,8 @@ namespace PCGExMatching
 			TargetFacade->Idx = Idx;
 			TargetFacades.Add(TargetFacade.ToSharedRef());
 			TargetOctrees.Add(&TargetFacade->GetIn()->GetPointOctree());
+			TargetDatas.Add(TargetFacade->GetIn());
+			TargetTransforms.Add(TargetFacade->GetIn()->GetConstTransformValueRange());
 
 			MaxNumTargets = FMath::Max(MaxNumTargets, TargetFacade->GetNum());
 

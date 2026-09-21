@@ -49,6 +49,12 @@ public:
 	UPROPERTY(Config)
 	float DetailPaneSplit = 0.35f;
 
+	/** Collection entry pickers with a type constraint: hide entries the pick cannot use instead of greying them out. Also toggled from the picker menu. */
+	UPROPERTY(EditAnywhere, config, Category = Settings)
+	bool bHideIncompatiblePickerEntries = false;
+
+	void SetHideIncompatiblePickerEntries(bool bHide);
+
 	/** When a collection tile references a Blueprint class that isn't loaded yet, kick an async load so the picker shows the class name instead of "None". Disable if this causes editor stalls on open. */
 	UPROPERTY(EditAnywhere, config, Category = Settings)
 	bool bAsyncLoadPickerClasses = true;

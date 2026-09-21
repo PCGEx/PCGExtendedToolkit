@@ -3,7 +3,6 @@
 
 #include "Elements/PCGExPathfindingFindCells.h"
 
-#include "Containers/Queue.h"
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Clusters/Artifacts/PCGExCell.h"
@@ -254,18 +253,6 @@ namespace PCGExFindContours
 		if (Context->SeedGrowth.HasPotentialGrowth() || Context->SeedMerge.IsEnabled())
 		{
 			CellAdjacencyMap = &Enumerator->GetOrBuildAdjacencyMap(Enumerator->GetWrapperFaceIndex());
-		}
-
-		if (Context->SeedGrowth.HasPotentialGrowth())
-		{
-			// Build FaceIndex -> Cell map for all valid cells
-			for (const TSharedPtr<PCGExClusters::FCell>& Cell : AllCells)
-			{
-				if (Cell && Cell->FaceIndex >= 0)
-				{
-					FaceIndexToCellMap.Add(Cell->FaceIndex, Cell);
-				}
-			}
 		}
 
 		// Create projected seed set (lazy projection with AABB)
@@ -523,67 +510,16 @@ namespace PCGExFindContours
 	{
 		ScopedValidCells->Collapse(ValidCells);
 
-		// Process seed growth expansion if enabled
-		if (Context->SeedGrowth.HasPotentialGrowth() && CellAdjacencyMap && !CellAdjacencyMap->IsEmpty())
+		// Grow seed claims through adjacency; only constraint-passing cells (EnumeratedCells) can be claimed.
+		if (CellAdjacencyMap)
 		{
-			// Record initial seed matches (depth 0) and perform expansion
-			for (const TSharedPtr<PCGExClusters::FCell>& Cell : ValidCells)
-			{
-				if (!Cell || Cell->FaceIndex < 0)
-				{
-					continue;
-				}
-
-				const int32 SeedIndex = Cell->CustomIndex;
-				const int32 FaceIndex = Cell->FaceIndex;
-
-				// The seed's own cell
-				PCGExClusters::FCellExpansionData& Data = CellExpansionMap.FindOrAdd(FaceIndex);
-				Data.RecordPick(SeedIndex);
-
-				// Expand to adjacent cells
-				const int32 Growth = Context->SeedGrowth.GetGrowth(SeedIndex);
-				if (Growth > 0)
-				{
-					ExpandSeedToAdjacentCells(SeedIndex, FaceIndex, Growth);
-				}
-			}
-
-			// Add expanded cells to ValidCells (cells picked by expansion but not initially)
-			TSet<int32> InitialFaceIndices;
-			for (const TSharedPtr<PCGExClusters::FCell>& Cell : ValidCells)
-			{
-				if (Cell && Cell->FaceIndex >= 0)
-				{
-					InitialFaceIndices.Add(Cell->FaceIndex);
-				}
-			}
-
 			const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
-			TArray<int32> CandidateSeeds;
-
-			for (const auto& Pair : CellExpansionMap)
-			{
-				const int32 FaceIndex = Pair.Key;
-				if (InitialFaceIndices.Contains(FaceIndex))
+			PCGExClusters::GrowSeedClaims(
+				ValidCells, EnumeratedCells, *CellAdjacencyMap, Context->SeedGrowth,
+				[&](const TArray<int32>& SeedIndices, const FVector& Centroid)
 				{
-					continue;
-				}
-
-				const TSharedPtr<PCGExClusters::FCell>* CellPtr = FaceIndexToCellMap.Find(FaceIndex);
-				if (!CellPtr || !*CellPtr)
-				{
-					continue;
-				}
-
-				CandidateSeeds.Reset();
-				for (const int32 SeedIdx : Pair.Value.SourceIndices)
-				{
-					CandidateSeeds.Add(SeedIdx);
-				}
-				(*CellPtr)->CustomIndex = SeedOwnership->PickWinner(CandidateSeeds, (*CellPtr)->Data.Centroid);
-				ValidCells.Add(*CellPtr);
-			}
+					return SeedOwnership->PickWinner(SeedIndices, Centroid);
+				});
 		}
 
 		// Merge adjacent cells, grouped by seed key value or by owning seed (the latter only differs with growth).
@@ -755,63 +691,6 @@ namespace PCGExFindContours
 			};
 
 			ProcessCellsTask->StartSubLoops(CellsIOIndices.Num(), 64);
-		}
-	}
-
-	void FProcessor::ExpandSeedToAdjacentCells(int32 SeedIndex, int32 InitialFaceIndex, int32 MaxGrowth)
-	{
-		if (MaxGrowth <= 0)
-		{
-			return;
-		}
-		if (!CellAdjacencyMap || CellAdjacencyMap->IsEmpty())
-		{
-			return;
-		}
-
-		TSet<int32> Visited;
-		Visited.Add(InitialFaceIndex); // Don't re-visit the initial cell
-
-		TQueue<TPair<int32, int32>> Queue; // FaceIndex, CurrentDepth
-
-		// Start with immediate neighbors (depth 1)
-		if (const TSet<int32>* Adjacent = CellAdjacencyMap->Find(InitialFaceIndex))
-		{
-			for (int32 AdjFace : *Adjacent)
-			{
-				if (AdjFace >= 0 && !Visited.Contains(AdjFace))
-				{
-					Queue.Enqueue({AdjFace, 1});
-					Visited.Add(AdjFace);
-				}
-			}
-		}
-
-		while (!Queue.IsEmpty())
-		{
-			TPair<int32, int32> Current;
-			Queue.Dequeue(Current);
-			const int32 FaceIndex = Current.Key;
-			const int32 Depth = Current.Value;
-
-			PCGExClusters::FCellExpansionData& Data = CellExpansionMap.FindOrAdd(FaceIndex);
-			Data.RecordPick(SeedIndex);
-
-			// Continue BFS if not at max depth
-			if (Depth < MaxGrowth)
-			{
-				if (const TSet<int32>* Adjacent = CellAdjacencyMap->Find(FaceIndex))
-				{
-					for (int32 AdjFace : *Adjacent)
-					{
-						if (AdjFace >= 0 && !Visited.Contains(AdjFace))
-						{
-							Queue.Enqueue({AdjFace, Depth + 1});
-							Visited.Add(AdjFace);
-						}
-					}
-				}
-			}
 		}
 	}
 

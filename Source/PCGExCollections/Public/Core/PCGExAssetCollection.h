@@ -452,6 +452,13 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 */
 	virtual FSoftObjectPath EDITOR_GetThumbnailAssetPath() const;
 
+	/** Editor-only: a second asset the grid badges bottom-right on the tile (an entry pairing two things).
+	 *  Empty = no badge. Must not load. */
+	virtual FSoftObjectPath EDITOR_GetSecondaryThumbnailAssetPath() const
+	{
+		return FSoftObjectPath();
+	}
+
 	/** Editor-only: what a double-click on the entry opens. Defaults to the thumbnail asset; override
 	 *  when the picture and the thing to edit differ (an export drawn from its data asset, opened at
 	 *  its source level). */

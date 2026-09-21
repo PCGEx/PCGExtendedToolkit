@@ -21,6 +21,7 @@
 #include "Paths/PCGExPathsCommon.h"
 #include "Paths/PCGExPathsHelpers.h"
 #include "Paths/PCGExPolyPath.h"
+#include "Sampling/PCGExSamplingHelpers.h"
 #include "Sampling/PCGExSamplingUnionData.h"
 #include "Sorting/PCGExPointSorter.h"
 #include "Sorting/PCGExSortingDetails.h"
@@ -539,15 +540,7 @@ namespace PCGExSampleInsidePath
 		}
 
 		PointDataFacade->WriteFastest(TaskManager);
-
-		if (Settings->bTagIfHasSuccesses && bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasSuccessesTag);
-		}
-		if (Settings->bTagIfHasNoSuccesses && !bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasNoSuccessesTag);
-		}
+		PCGExSampling::Helpers::ApplySuccessTags(PointDataFacade, bAnySuccess != 0, Settings->bTagIfHasSuccesses, Settings->HasSuccessesTag, Settings->bTagIfHasNoSuccesses, Settings->HasNoSuccessesTag);
 
 		if (NumSampled == 0 && Settings->OutputMode == EPCGExSampleInsidePathOutput::Split)
 		{

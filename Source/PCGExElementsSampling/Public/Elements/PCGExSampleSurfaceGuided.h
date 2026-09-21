@@ -152,7 +152,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Cross Axis"))
 	FPCGExInputShorthandSelectorDirection CrossAxis = FPCGExInputShorthandSelectorDirection(FString("$Rotation.Forward"), PCGEX_CORE_SETTINGS.WorldForward, true);
 
-	/** Write whether the sampling was sucessful or not to a boolean attribute. */
+	/** Write whether the sampling was successful or not to a boolean attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteSuccess = false;
 

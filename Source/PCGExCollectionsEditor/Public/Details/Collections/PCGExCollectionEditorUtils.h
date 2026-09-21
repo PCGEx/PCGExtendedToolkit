@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "AssetRegistry/AssetData.h"
 
+class IPropertyHandle;
 class UPCGExAssetCollection;
 class UPCGExVariantCollection;
 class UPackage;
@@ -16,6 +17,9 @@ struct FPCGExAssetCollectionEntry;
 /** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
 namespace PCGExCollectionEditorUtils
 {
+	/** Host collection of the entry a handle belongs to: an outer object, else the package a struct-on-scope panel stamps. Null when neither. */
+	PCGEXCOLLECTIONSEDITOR_API const UPCGExAssetCollection* FindHostCollection(const TSharedRef<IPropertyHandle>& PropertyHandle);
+
 	/**
 	 * Resolve an entry's thumbnail/source path to FAssetData without loading. Falls back to stripping
 	 * a trailing "_C" so actor entries (generated class path) resolve to their Blueprint asset.

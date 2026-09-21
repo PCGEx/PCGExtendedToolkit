@@ -21,8 +21,8 @@
 #include "Paths/PCGExPathsCommon.h"
 #include "Paths/PCGExPathsHelpers.h"
 #include "Paths/PCGExPolyPath.h"
+#include "Sampling/PCGExSampleAccumulator.h"
 #include "Sampling/PCGExSamplingHelpers.h"
-#include "Sampling/PCGExSamplingUnionData.h"
 #include "Sorting/PCGExPointSorter.h"
 #include "Sorting/PCGExSortingDetails.h"
 #include "Types/PCGExTypes.h"
@@ -357,7 +357,8 @@ namespace PCGExSampleNearestPath
 
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
-		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
+		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
+		SamplingMask.Init(1, PointDataFacade->GetNum());
 
 		if (Settings->SampleInputs != EPCGExPathSamplingIncludeMode::All)
 		{
@@ -391,8 +392,15 @@ namespace PCGExSampleNearestPath
 		}
 
 		{
+			PCGExSampling::FCommonOutputConfig Config;
+			PCGEX_OUTPUT_CONFIG_FWD_COMMON
+			Config.bScaleFailDistance = true;
+			Config.bWriteAngleOnFailure = true;
+			Config.bNormalizeFailedDistance = true;
+			Outputs.Init(PointDataFacade, Config);
+
 			const TSharedRef<PCGExData::FFacade>& OutputFacade = PointDataFacade;
-			PCGEX_FOREACH_FIELD_NEARESTPATH(PCGEX_OUTPUT_INIT)
+			PCGEX_FOREACH_FIELD_NEARESTPATH_EXTRA(PCGEX_OUTPUT_INIT)
 		}
 
 		RangeMinGetter = Settings->MinRange.GetValueSetting();
@@ -445,18 +453,10 @@ namespace PCGExSampleNearestPath
 
 		TConstPCGValueRange<FTransform> InTransforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
 
-		const double FailSafeDist = RangeMaxGetter->Read(Index);
-		PCGEX_OUTPUT_VALUE(Success, Index, false)
-		PCGEX_OUTPUT_VALUE(Transform, Index, InTransforms[Index])
-		PCGEX_OUTPUT_VALUE(LookAtTransform, Index, InTransforms[Index])
-		PCGEX_OUTPUT_VALUE(Distance, Index, Settings->bOutputNormalizedDistance ? FailSafeDist : FailSafeDist * Settings->DistanceScale)
-		PCGEX_OUTPUT_VALUE(SignedDistance, Index, FailSafeDist * Settings->SignedDistanceScale)
-		PCGEX_OUTPUT_VALUE(ComponentWiseDistance, Index, FVector(FailSafeDist))
-		PCGEX_OUTPUT_VALUE(Angle, Index, 0)
+		Outputs.WriteFailure(Index, InTransforms[Index], RangeMaxGetter->Read(Index));
 		PCGEX_OUTPUT_VALUE(SegmentTime, Index, -1)
 		PCGEX_OUTPUT_VALUE(Time, Index, -1)
 		PCGEX_OUTPUT_VALUE(NumInside, Index, -1)
-		PCGEX_OUTPUT_VALUE(NumSamples, Index, 0)
 		PCGEX_OUTPUT_VALUE(ClosedLoop, Index, false)
 	}
 
@@ -475,20 +475,16 @@ namespace PCGExSampleNearestPath
 
 		TConstPCGValueRange<FTransform> InTransforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
 
-		TArray<PCGExData::FWeightedPoint> OutWeightedPoints;
 		TArray<PCGEx::FOpStats> Trackers;
 		DataBlender->InitTrackers(Trackers);
 
 		const PCGExMath::IDistances* Distances = Context->TargetsHandler->GetDistances();
 
-		const TSharedPtr<PCGExSampling::FSampingUnionData> Union = MakeShared<PCGExSampling::FSampingUnionData>();
-		Union->Reserve(Context->TargetsHandler->Num());
-		Union->WeightRange = -2; // Weights are resolved per point; the union passes them through verbatim
+		const bool bTargetUp = Settings->LookAtUpSelection == EPCGExSampleSource::Target;
+		PCGExSampling::FSampleAccumulator Acc(Settings->SignAxis, Settings->AngleAxis, Settings->LookAtAxisAlign);
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			Union->Reset();
-
 			if (!PointFilterCache[Index])
 			{
 				if (Settings->bProcessFilteredOutAsFails)
@@ -503,17 +499,14 @@ namespace PCGExSampleNearestPath
 
 			bool bSampledClosedLoop = false;
 
+			Acc.Reset(LookAtUpGetter ? LookAtUpGetter->Read(Index).GetSafeNormal() : SafeUpVector);
+
 			double RangeMin = RangeMinGetter->Read(Index);
 			double RangeMax = RangeMaxGetter->Read(Index);
 
 			if (RangeMin > RangeMax)
 			{
 				std::swap(RangeMin, RangeMax);
-			}
-
-			if (RangeMax == 0)
-			{
-				Union->Elements.Reserve(Context->NumMaxTargets);
 			}
 
 			PCGExData::FConstPoint Point = PointDataFacade->GetInPoint(Index);
@@ -690,18 +683,6 @@ namespace PCGExSampleNearestPath
 				continue;
 			}
 
-			// Compute geometric outputs from interpolated sample transforms (mirroring spline version)
-			FVector WeightedUp = LookAtUpGetter ? LookAtUpGetter->Read(Index).GetSafeNormal() : SafeUpVector;
-			FTransform WeightedTransform = FTransform::Identity;
-			WeightedTransform.SetScale3D(FVector::ZeroVector);
-
-			FVector WeightedSignAxis = FVector::ZeroVector;
-			FVector WeightedAngleAxis = FVector::ZeroVector;
-
-			double WeightedDistance = 0;
-			double TotalWeight = 0;
-			const int32 NumSampled = SampleEntries.Num();
-
 			// Compute per-sample range stats for weight curve
 			double SampledRangeMin = TNumericLimits<double>::Max();
 			double SampledRangeMax = 0;
@@ -719,14 +700,16 @@ namespace PCGExSampleNearestPath
 
 			const double SampledRangeWidth = SampledRangeMax - SampledRangeMin;
 
+			Acc.WeightedPoints.Reset(SampleEntries.Num() * 2);
+
 			for (const FSampleEntry& Entry : SampleEntries)
 			{
 				const double W = Settings->InsideWeighting.GetWeight(Entry.Dist, Entry.bInside, SampledRangeMin, SampledRangeMax);
 				const double Scale = Settings->InsideWeighting.GetScale(Entry.bInside);
 
-				// Blend ops carry their own weight curve: they get the raw weight, split across the edge's endpoints.
-				Union->AddWeighted_Unsafe(Entry.A, W * Scale * (1.0 - Entry.EdgeLerp));
-				Union->AddWeighted_Unsafe(Entry.B, W * Scale * Entry.EdgeLerp);
+				// Blend ops curve the sample weight; the edge lerp rides in Split so the curve never bends the endpoint ratio.
+				Acc.WeightedPoints.Emplace(Entry.A.Index, W * Scale, Entry.A.IO, 1.0 - Entry.EdgeLerp);
+				Acc.WeightedPoints.Emplace(Entry.B.Index, W * Scale, Entry.B.IO, Entry.EdgeLerp);
 
 				// Legacy nodes fed the curve the normalized distance (0 at the closest edge) instead of the weight.
 				const double CurveInput = Settings->bLegacyCurveInput
@@ -734,68 +717,41 @@ namespace PCGExSampleNearestPath
 					: W;
 				const double Weight = Context->WeightCurve->Eval(CurveInput) * Scale;
 
-				const FQuat SampleQuat = Entry.SampleTransform.GetRotation();
-
-				WeightedTransform = PCGExTypeOps::FTypeOps<FTransform>::WeightedAdd(WeightedTransform, Entry.SampleTransform, Weight);
-
-				if (Settings->LookAtUpSelection == EPCGExSampleSource::Target)
+				Acc.Add(Entry.SampleTransform, Weight, Entry.Dist);
+				if (bTargetUp)
 				{
-					WeightedUp = PCGExTypeOps::FTypeOps<FVector>::WeightedAdd(WeightedUp, PCGExMath::GetDirection(SampleQuat, Settings->LookAtUpAxis), Weight);
+					Acc.AddUp(PCGExMath::GetDirection(Entry.SampleTransform.GetRotation(), Settings->LookAtUpAxis), Weight);
 				}
-
-				WeightedSignAxis += PCGExMath::GetDirection(SampleQuat, Settings->SignAxis) * Weight;
-				WeightedAngleAxis += PCGExMath::GetDirection(SampleQuat, Settings->AngleAxis) * Weight;
 
 				WeightedTime += Entry.Time * Weight;
 				WeightedSegmentTime += Entry.SegmentTime * Weight;
-				TotalWeight += Weight;
-				WeightedDistance += Entry.Dist;
 			}
 
-			WeightedDistance /= NumSampled;
+			// The uniform fallback only touches Weight; Split keeps every sample on its segment.
+			Acc.ApplyZeroTotalFallback();
+			DataBlender->Blend(Index, Acc.WeightedPoints, Trackers);
+			Acc.Finalize(InTransforms[Index], Origin);
 
-			DataBlender->ComputeWeights(Index, Union, OutWeightedPoints);
-			DataBlender->Blend(Index, OutWeightedPoints, Trackers);
-
-			if (TotalWeight != 0) // Dodge NaN
+			if (Acc.TotalWeight != 0) // Dodge NaN
 			{
-				WeightedUp = PCGExTypeOps::FTypeOps<FVector>::NormalizeWeight(WeightedUp, TotalWeight);
-				WeightedTransform = PCGExTypeOps::FTypeOps<FTransform>::NormalizeWeight(WeightedTransform, TotalWeight);
-				WeightedTime /= TotalWeight;
-				WeightedSegmentTime /= TotalWeight;
-			}
-			else
-			{
-				WeightedTransform = InTransforms[Index];
+				WeightedTime /= Acc.TotalWeight;
+				WeightedSegmentTime /= Acc.TotalWeight;
 			}
 
-			WeightedUp.Normalize();
-
-			const FVector CWDistance = Origin - WeightedTransform.GetLocation();
-			FVector LookAt = CWDistance.GetSafeNormal();
-
-			FTransform LookAtTransform = PCGExMath::MakeLookAtTransform(LookAt, WeightedUp, Settings->LookAtAxisAlign);
 			if (Context->ApplySampling.WantsApply())
 			{
 				PCGExData::FMutablePoint MutablePoint = PointDataFacade->GetOutPoint(Index);
-				Context->ApplySampling.Apply(MutablePoint, WeightedTransform, LookAtTransform);
+				Context->ApplySampling.Apply(MutablePoint, Acc.WeightedTransform, Acc.LookAtTransform);
 			}
 
 			SamplingMask[Index] = true;
-			PCGEX_OUTPUT_VALUE(Success, Index, true)
-			PCGEX_OUTPUT_VALUE(Transform, Index, WeightedTransform)
-			PCGEX_OUTPUT_VALUE(LookAtTransform, Index, LookAtTransform)
-			PCGEX_OUTPUT_VALUE(Distance, Index, Settings->bOutputNormalizedDistance ? WeightedDistance : WeightedDistance * Settings->DistanceScale)
-			PCGEX_OUTPUT_VALUE(SignedDistance, Index, (!bOnlySignIfClosed || NumInClosed > 0) ? FMath::Sign(WeightedSignAxis.Dot(LookAt)) * WeightedDistance : WeightedDistance * Settings->SignedDistanceScale)
-			PCGEX_OUTPUT_VALUE(ComponentWiseDistance, Index, Settings->bAbsoluteComponentWiseDistance ? PCGExTypes::Abs(CWDistance) : CWDistance)
-			PCGEX_OUTPUT_VALUE(Angle, Index, PCGExSampling::Helpers::GetAngle(Settings->AngleRange, WeightedAngleAxis, LookAt))
+			Outputs.WriteSuccess(Index, Acc, !bOnlySignIfClosed || NumInClosed > 0);
 			PCGEX_OUTPUT_VALUE(SegmentTime, Index, WeightedSegmentTime)
 			PCGEX_OUTPUT_VALUE(Time, Index, WeightedTime)
 			PCGEX_OUTPUT_VALUE(NumInside, Index, NumInside)
-			PCGEX_OUTPUT_VALUE(NumSamples, Index, NumSampled)
 			PCGEX_OUTPUT_VALUE(ClosedLoop, Index, bSampledClosedLoop)
 
-			MaxSampledDistanceScoped->Set(Scope, FMath::Max(MaxSampledDistanceScoped->Get(Scope), WeightedDistance));
+			MaxSampledDistanceScoped->Set(Scope, FMath::Max(MaxSampledDistanceScoped->Get(Scope), Acc.Distance));
 			bAnySuccessLocal = true;
 		}
 
@@ -807,34 +763,8 @@ namespace PCGExSampleNearestPath
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
-		if (Settings->bOutputNormalizedDistance && DistanceWriter)
-		{
-			MaxSampledDistance = MaxSampledDistanceScoped->Max();
-
-			const int32 NumPoints = PointDataFacade->GetNum();
-
-			if (Settings->bOutputOneMinusDistance)
-			{
-				const double InvMaxDist = 1.0 / MaxSampledDistance;
-				const double Scale = Settings->DistanceScale;
-
-				for (int i = 0; i < NumPoints; i++)
-				{
-					const double D = DistanceWriter->GetValue(i);
-					DistanceWriter->SetValue(i, (1.0 - D * InvMaxDist) * Scale);
-				}
-			}
-			else
-			{
-				const double Scale = (1.0 / MaxSampledDistance) * Settings->DistanceScale;
-
-				for (int i = 0; i < NumPoints; i++)
-				{
-					const double D = DistanceWriter->GetValue(i);
-					DistanceWriter->SetValue(i, D * Scale);
-				}
-			}
-		}
+		MaxSampledDistance = MaxSampledDistanceScoped->Max();
+		Outputs.NormalizeDistances(SamplingMask, MaxSampledDistance);
 
 		if (UnionBlendOpsManager)
 		{
@@ -842,14 +772,7 @@ namespace PCGExSampleNearestPath
 		}
 		PointDataFacade->WriteFastest(TaskManager);
 
-		if (Settings->bTagIfHasSuccesses && bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasSuccessesTag);
-		}
-		if (Settings->bTagIfHasNoSuccesses && !bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasNoSuccessesTag);
-		}
+		PCGExSampling::Helpers::ApplySuccessTags(PointDataFacade, bAnySuccess != 0, Settings->bTagIfHasSuccesses, Settings->HasSuccessesTag, Settings->bTagIfHasNoSuccesses, Settings->HasNoSuccessesTag);
 	}
 
 	void FProcessor::CompleteWork()

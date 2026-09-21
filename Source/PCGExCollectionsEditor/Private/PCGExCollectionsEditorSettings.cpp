@@ -14,6 +14,16 @@ void UPCGExCollectionsEditorSettings::PostLoad()
 	Super::PostLoad();
 }
 
+void UPCGExCollectionsEditorSettings::SetHideIncompatiblePickerEntries(const bool bHide)
+{
+	if (bHideIncompatiblePickerEntries == bHide)
+	{
+		return;
+	}
+	bHideIncompatiblePickerEntries = bHide;
+	SaveConfig();
+}
+
 void UPCGExCollectionsEditorSettings::ToggleHiddenAssetPropertyName(const FName PropertyName, const bool bHide)
 {
 	if (bHide)

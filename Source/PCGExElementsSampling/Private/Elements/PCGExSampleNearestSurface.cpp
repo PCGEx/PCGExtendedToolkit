@@ -491,43 +491,14 @@ namespace PCGExSampleNearestSurface
 			return;
 		}
 
-		const int32 NumPoints = PointDataFacade->GetNum();
-
-		if (Settings->bOutputOneMinusDistance)
-		{
-			const double InvMaxDist = 1.0 / MaxSampledDistance;
-			const double Scale = Settings->DistanceScale;
-
-			for (int i = 0; i < NumPoints; i++)
-			{
-				const double D = DistanceWriter->GetValue(i);
-				DistanceWriter->SetValue(i, (1.0 - D * InvMaxDist) * Scale);
-			}
-		}
-		else
-		{
-			const double Scale = (1.0 / MaxSampledDistance) * Settings->DistanceScale;
-
-			for (int i = 0; i < NumPoints; i++)
-			{
-				const double D = DistanceWriter->GetValue(i);
-				DistanceWriter->SetValue(i, D * Scale);
-			}
-		}
+		MaxSampledDistance = MaxDistanceValue->Max();
+		PCGExSampling::Helpers::NormalizeDistances(DistanceWriter, PointDataFacade->GetNum(), nullptr, MaxSampledDistance, Settings->bOutputOneMinusDistance, Settings->DistanceScale);
 	}
 
 	void FProcessor::CompleteWork()
 	{
 		PointDataFacade->WriteFastest(TaskManager);
-
-		if (Settings->bTagIfHasSuccesses && bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasSuccessesTag);
-		}
-		if (Settings->bTagIfHasNoSuccesses && !bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasNoSuccessesTag);
-		}
+		PCGExSampling::Helpers::ApplySuccessTags(PointDataFacade, bAnySuccess != 0, Settings->bTagIfHasSuccesses, Settings->HasSuccessesTag, Settings->bTagIfHasNoSuccesses, Settings->HasNoSuccessesTag);
 	}
 
 	void FProcessor::Write()

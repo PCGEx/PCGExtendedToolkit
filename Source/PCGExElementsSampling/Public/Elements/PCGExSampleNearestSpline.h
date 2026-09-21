@@ -19,26 +19,23 @@
 #include "Filters/Points/PCGExPolyPathFilterFactory.h"
 #include "Math/PCGExMathAxis.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
+#include "Sampling/PCGExSampleOutputs.h"
 #include "Sampling/PCGExSamplingCommon.h"
 
 #include "PCGExSampleNearestSpline.generated.h"
 
-#define PCGEX_FOREACH_FIELD_NEARESTPOLYLINE(MACRO)\
-MACRO(Success, bool, false)\
-MACRO(Transform, FTransform, FTransform::Identity)\
-MACRO(LookAtTransform, FTransform, FTransform::Identity)\
+#define PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(MACRO)\
 MACRO(ArriveTangent, FVector, FVector::ZeroVector)\
 MACRO(LeaveTangent, FVector, FVector::ZeroVector)\
-MACRO(Distance, double, 0)\
 MACRO(Depth, double, -1)\
-MACRO(SignedDistance, double, 0)\
-MACRO(ComponentWiseDistance, FVector, FVector::ZeroVector)\
-MACRO(Angle, double, 0)\
 MACRO(Time, double, 0)\
 MACRO(NumInside, int32, 0)\
-MACRO(NumSamples, int32, 0)\
-MACRO(ClosedLoop, bool, false) \
+MACRO(ClosedLoop, bool, false)\
 MACRO(TotalWeight, double, 0)
+
+#define PCGEX_FOREACH_FIELD_NEARESTPOLYLINE(MACRO)\
+PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
+PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(MACRO)
 
 class UPCGExPointFilterFactoryData;
 
@@ -261,7 +258,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable), AdvancedDisplay)
 	bool bLegacyCurveInput = false;
 
-	/** Write whether the sampling was sucessful or not to a boolean attribute. */
+	/** Write whether the sampling was successful or not to a boolean attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteSuccess = false;
 
@@ -278,11 +275,11 @@ public:
 	FName TransformAttributeName = FName("WeightedTransform");
 
 
-	/** Write the sampled transform. */
+	/** Write the look-at transform. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteLookAtTransform = false;
 
-	/** Name of the 'transform' attribute to write sampled Transform to.*/
+	/** Name of the 'transform' attribute to write the look-at transform to. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="LookAt", PCG_Overridable, EditCondition="bWriteLookAtTransform"))
 	FName LookAtTransformAttributeName = FName("WeightedLookAt");
 
@@ -364,7 +361,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteAngle = false;
 
-	/** Name of the 'double' attribute to write sampled Signed distance to.*/
+	/** Name of the 'double' attribute to write the sampled angle to. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="Angle", PCG_Overridable, EditCondition="bWriteAngle"))
 	FName AngleAttributeName = FName("WeightedAngle");
 
@@ -412,7 +409,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta=(PCG_Overridable, DisplayName=" └─ Only if Closed Spline", EditCondition="bWriteNumInside && SampleInputs == EPCGExSplineSamplingIncludeMode::All", EditConditionHides, HideEditConditionToggle))
 	bool bOnlyIncrementInsideNumIfClosed = false;
 
-	/** Write the sampled distance. */
+	/** Write the number of sampled targets. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteNumSamples = false;
 
@@ -543,7 +540,8 @@ namespace PCGExSampleNearestSpline
 		bool bOnlySignIfClosed = false;
 		bool bOnlyIncrementInsideNumIfClosed = false;
 
-		PCGEX_FOREACH_FIELD_NEARESTPOLYLINE(PCGEX_OUTPUT_DECL)
+		PCGExSampling::FCommonOutputs Outputs;
+		PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(PCGEX_OUTPUT_DECL)
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
