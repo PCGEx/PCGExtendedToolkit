@@ -4,6 +4,7 @@
 #include "Clusters/Artifacts/PCGExCell.h"
 #include "Algo/Reverse.h"
 #include "Algo/Unique.h"
+#include "Containers/Queue.h"
 #include "Misc/ScopeExit.h"
 
 #include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
@@ -798,6 +799,122 @@ namespace PCGExClusters
 				Merged.Last()->ContributorIndices = MoveTemp(Indices);
 				InOutCells.Append(Merged);
 			}
+		}
+	}
+
+	void GrowSeedClaims(
+		TArray<TSharedPtr<FCell>>& InOutCells,
+		const TArray<TSharedPtr<FCell>>& InClaimableCells,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		const FPCGExCellGrowthDetails& InGrowth,
+		TFunctionRef<int32(const TArray<int32>&, const FVector&)> PickOwner)
+	{
+		if (!InGrowth.HasPotentialGrowth() || InAdjacency.IsEmpty())
+		{
+			return;
+		}
+
+		TMap<int32, TSharedPtr<FCell>> Claimable;
+		Claimable.Reserve(InClaimableCells.Num());
+		for (const TSharedPtr<FCell>& Cell : InClaimableCells)
+		{
+			if (Cell && Cell->FaceIndex >= 0)
+			{
+				Claimable.Add(Cell->FaceIndex, Cell);
+			}
+		}
+
+		TSet<int32> Seeded;
+		Seeded.Reserve(InOutCells.Num());
+		for (const TSharedPtr<FCell>& Cell : InOutCells)
+		{
+			if (Cell && Cell->FaceIndex >= 0)
+			{
+				Seeded.Add(Cell->FaceIndex);
+			}
+		}
+
+		// FaceIndex -> seeds whose growth reached it. Seeded faces already have an owner and are never re-claimed.
+		TMap<int32, TSet<int32>> Reached;
+		TSet<int32> Visited;
+
+		for (const TSharedPtr<FCell>& Cell : InOutCells)
+		{
+			if (!Cell || Cell->FaceIndex < 0)
+			{
+				continue;
+			}
+
+			const int32 SeedIndex = Cell->CustomIndex;
+			const int32 MaxDepth = InGrowth.GetGrowth(SeedIndex);
+			if (MaxDepth <= 0)
+			{
+				continue;
+			}
+
+			Visited.Reset();
+			Visited.Add(Cell->FaceIndex);
+
+			TQueue<TPair<int32, int32>> Queue; // FaceIndex, depth
+			if (const TSet<int32>* Adjacent = InAdjacency.Find(Cell->FaceIndex))
+			{
+				for (const int32 AdjFace : *Adjacent)
+				{
+					if (AdjFace >= 0 && !Visited.Contains(AdjFace))
+					{
+						Queue.Enqueue({AdjFace, 1});
+						Visited.Add(AdjFace);
+					}
+				}
+			}
+
+			TPair<int32, int32> Current;
+			while (Queue.Dequeue(Current))
+			{
+				const int32 FaceIndex = Current.Key;
+				const int32 Depth = Current.Value;
+
+				if (!Seeded.Contains(FaceIndex))
+				{
+					Reached.FindOrAdd(FaceIndex).Add(SeedIndex);
+				}
+
+				if (Depth >= MaxDepth)
+				{
+					continue;
+				}
+
+				if (const TSet<int32>* Adjacent = InAdjacency.Find(FaceIndex))
+				{
+					for (const int32 AdjFace : *Adjacent)
+					{
+						if (AdjFace >= 0 && !Visited.Contains(AdjFace))
+						{
+							Queue.Enqueue({AdjFace, Depth + 1});
+							Visited.Add(AdjFace);
+						}
+					}
+				}
+			}
+		}
+
+		TArray<int32> Candidates;
+		for (const TPair<int32, TSet<int32>>& Pair : Reached)
+		{
+			const TSharedPtr<FCell>* CellPtr = Claimable.Find(Pair.Key);
+			if (!CellPtr || !*CellPtr)
+			{
+				continue;
+			}
+
+			Candidates.Reset(Pair.Value.Num());
+			for (const int32 SeedIdx : Pair.Value)
+			{
+				Candidates.Add(SeedIdx);
+			}
+
+			(*CellPtr)->CustomIndex = PickOwner(Candidates, (*CellPtr)->Data.Centroid);
+			InOutCells.Add(*CellPtr);
 		}
 	}
 

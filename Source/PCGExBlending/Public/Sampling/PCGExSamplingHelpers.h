@@ -8,6 +8,9 @@
 namespace PCGExData
 {
 	class FFacade;
+
+	template <typename T>
+	class TBuffer;
 }
 
 class AActor;
@@ -27,4 +30,11 @@ namespace PCGExSampling::Helpers
 
 	PCGEXBLENDING_API
 	bool GetIncludedActors(const FPCGContext* InContext, const TSharedRef<PCGExData::FFacade>& InFacade, const FName ActorReferenceName, TMap<AActor*, int32>& OutActorSet);
+
+	/** Normalized-distance pass shared by the samplers. MaxDistance <= 0 leaves values untouched; SkipMask entries at 0 are left as written. */
+	PCGEXBLENDING_API
+	void NormalizeDistances(const TSharedPtr<PCGExData::TBuffer<double>>& Writer, const int32 NumPoints, const TArray<int8>* SkipMask, const double MaxDistance, const bool bOneMinus, const double Scale);
+
+	PCGEXBLENDING_API
+	void ApplySuccessTags(const TSharedRef<PCGExData::FFacade>& InFacade, const bool bAnySuccess, const bool bTagIfHasSuccesses, const FString& HasSuccessesTag, const bool bTagIfHasNoSuccesses, const FString& HasNoSuccessesTag);
 }

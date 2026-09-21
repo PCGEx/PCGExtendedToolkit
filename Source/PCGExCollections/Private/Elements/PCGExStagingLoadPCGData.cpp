@@ -411,9 +411,13 @@ void UPCGExPCGDataAssetLoaderSettings::InputPinPropertiesBeforeFilters(TArray<FP
 TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_ANY(GetMainOutputPin(), "Loaded data. From points: spatial data is one per input point, other is single instance only. From attribute sets: asset contents as-is, single instance only.", Normal)
 
-	// Add custom output pins first
+	// Main output pin, same label as PCGExPCGDataAssetLoader::OutputPinDefault ("Out").
+	// Must be declared once and stay at index 0: RegisterOutput routes unmatched data to it,
+	// and the inactive-pin bitmask in AdvanceWork assumes [Out, CustomOutputPins..., Map].
+	PCGEX_PIN_ANY(GetMainOutputPin(), "Loaded data that doesn't match any custom pin, tagged with Pin:OriginalPinName. From points: spatial data is one per input point, other is single instance only. From attribute sets: asset contents as-is, once per asset, or once per row with Targets Forwarding.", Normal)
+
+	// Custom output pins, routed by exact pin name
 	for (const FPCGPinProperties& CustomPin : CustomOutputPins)
 	{
 		if (!CustomPin.Label.IsNone())
@@ -421,9 +425,6 @@ TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties(
 			PinProperties.Add(CustomPin);
 		}
 	}
-
-	// Default fallback pin for unmatched data
-	PCGEX_PIN_ANY(PCGExPCGDataAssetLoader::OutputPinDefault, "Default output for data that doesn't match custom pins. Tagged with Pin:OriginalPinName.", Normal)
 
 	if (bMergeEmbeddedCollectionMaps)
 	{

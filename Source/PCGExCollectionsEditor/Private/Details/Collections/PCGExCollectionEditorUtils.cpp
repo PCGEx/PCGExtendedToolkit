@@ -5,6 +5,7 @@
 
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
+#include "PropertyHandle.h"
 #include "ScopedTransaction.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
@@ -12,11 +13,46 @@
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExAssetCollection.h"
+#include "UObject/Package.h"
 
 namespace PCGExCollectionEditorUtils
 {
 #define PCGEX_IF_TYPE(_NAME, _BODY) { if (UPCGEx##_NAME##Collection* Collection = Cast<UPCGEx##_NAME##Collection>(InCollection)) { _BODY; return; }}
 #define PCGEX_PER_COLLECTION(_BODY)	PCGEX_FOREACH_COLLECTION_TYPE(PCGEX_IF_TYPE, _BODY)
+
+	const UPCGExAssetCollection* FindHostCollection(const TSharedRef<IPropertyHandle>& PropertyHandle)
+	{
+		TArray<UObject*> Outers;
+		PropertyHandle->GetOuterObjects(Outers);
+		for (UObject* Outer : Outers)
+		{
+			if (!Outer)
+			{
+				continue;
+			}
+			if (const UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(Outer))
+			{
+				return Collection;
+			}
+			if (const UPCGExAssetCollection* Collection = Outer->GetTypedOuter<UPCGExAssetCollection>())
+			{
+				return Collection;
+			}
+		}
+
+		// Struct-on-scope panels have no outer; the grid stamps the host's package on the scope.
+		TArray<UPackage*> Packages;
+		PropertyHandle->GetOuterPackages(Packages);
+		for (const UPackage* Package : Packages)
+		{
+			if (const UPCGExAssetCollection* Collection = Package ? Cast<UPCGExAssetCollection>(Package->FindAssetInPackage()) : nullptr)
+			{
+				return Collection;
+			}
+		}
+
+		return nullptr;
+	}
 
 	FText GetEntryTypeLabel(const UScriptStruct* EntryStruct)
 	{

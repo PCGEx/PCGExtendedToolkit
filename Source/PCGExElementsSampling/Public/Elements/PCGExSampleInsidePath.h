@@ -156,7 +156,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_NotOverridable))
 	EPCGExSampleInsidePathOutput OutputMode = EPCGExSampleInsidePathOutput::All;
 
-	/** Write whether the sampling was sucessful or not to a boolean attribute. */
+	/** Write whether the sampling was successful or not to a boolean attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteSuccess = false;
 
@@ -186,7 +186,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, DisplayName=" └─ Only if Closed Path", EditCondition="bWriteNumInside && ProcessInputs == EPCGExPathSamplingIncludeMode::All", EditConditionHides, HideEditConditionToggle))
 	bool bOnlyIncrementInsideNumIfClosed = false;
 
-	/** Write the sampled distance. */
+	/** Write the number of sampled targets. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteNumSamples = false;
 

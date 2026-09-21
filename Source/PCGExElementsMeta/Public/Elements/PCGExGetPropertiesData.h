@@ -28,7 +28,8 @@ enum class EPCGExSchemaPresenceMode : uint8
  * Reads property values from UPCGExPropertyCollectionComponent instances referenced by soft paths
  * on input rows -- points, attribute set entries, spline control points, or the elements of any
  * other PCG data with per-element metadata -- then writes the resolved values as per-row attributes
- * on a forwarded copy of the input.
+ * on a forwarded copy of the input. A source attribute on @Data with bForceElementOutput off writes one
+ * @Data value per input instead.
  *
  * No loading -- only tentatively resolves references via FSoftObjectPath::ResolveObject(); rows
  * that point to assets not currently in memory are treated as unresolved.

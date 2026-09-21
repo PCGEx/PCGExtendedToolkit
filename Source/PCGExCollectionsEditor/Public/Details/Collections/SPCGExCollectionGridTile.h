@@ -92,6 +92,8 @@ private:
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 	TSharedPtr<FAssetThumbnail> Thumbnail;
 	TSharedPtr<SBox> ThumbnailBox;
+	/** Bottom-right badge host for EDITOR_GetSecondaryThumbnailAssetPath; collapsed when the entry has none. */
+	TSharedPtr<SBox> SecondaryThumbnailBox;
 	TWeakObjectPtr<UPCGExAssetCollection> Collection;
 	int32 EntryIndex = INDEX_NONE;
 	int32 CategoryIndex = INDEX_NONE;
@@ -119,10 +121,17 @@ private:
 	// CachedThumbnailPath is the entry's EDITOR_GetThumbnailAssetPath() result, which
 	// may differ from Staging.Path (e.g. level-sourced PCGDataAsset entries).
 	FSoftObjectPath CachedThumbnailPath;
+	FSoftObjectPath CachedSecondaryThumbnailPath;
 	bool bCachedIsSubCollection = false;
 
 	/** Build the thumbnail widget from the entry's Staging.Path */
 	TSharedRef<SWidget> BuildThumbnailWidget();
+
+	/** Badge content for the entry's secondary thumbnail asset; null widget when it has none. */
+	TSharedRef<SWidget> BuildSecondaryThumbnailWidget();
+
+	/** Shared-cache lookup, else creation at tile resolution; bOutCreated tells a fresh thumbnail from a hit. */
+	TSharedPtr<FAssetThumbnail> GetOrCreateThumbnail(const FSoftObjectPath& AssetPath, bool& bOutCreated);
 
 	void HandlePickerPropertyEdited(FName PropertyName);
 };

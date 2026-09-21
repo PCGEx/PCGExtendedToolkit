@@ -134,6 +134,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 
 	// Shared with the variant grid tiles so badge styling stays in lockstep.
 	const FSlateBrush* BadgeBrush = PCGExCollectionEditorSlateUtils::GetBadgeBrush();
+	const float SecondaryBadgeSize = FMath::RoundToFloat(TileSize * 0.33f);
 
 	// Build picker widget via delegate (type-specific)
 	TSharedRef<SWidget> PickerWidget = SNullWidget::NullWidget;
@@ -525,6 +526,31 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 							]
 						]
 
+						// Secondary asset badge (bottom-right): the "other half" of an entry that pairs two things.
+						+ SOverlay::Slot()
+						.HAlign(HAlign_Right)
+						.VAlign(VAlign_Bottom)
+						.Padding(3.f)
+						[
+							SNew(SBorder)
+							.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+							.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.8f))
+							.Padding(2.f)
+							.Visibility_Lambda([this]()
+							{
+								return CachedSecondaryThumbnailPath.IsNull() ? EVisibility::Collapsed : EVisibility::HitTestInvisible;
+							})
+							[
+								SAssignNew(SecondaryThumbnailBox, SBox)
+								.WidthOverride(SecondaryBadgeSize)
+								.HeightOverride(SecondaryBadgeSize)
+								.Clipping(EWidgetClipping::ClipToBounds)
+								[
+									BuildSecondaryThumbnailWidget()
+								]
+							]
+						]
+
 						// Index tag (top-left)
 						+ SOverlay::Slot()
 						.HAlign(HAlign_Left)
@@ -911,8 +937,9 @@ void SPCGExCollectionGridTile::RefreshThumbnail()
 		{
 			const bool bIsSub = Result.Entry->bIsSubCollection;
 			const FSoftObjectPath CurrentPath = Result.Entry->EDITOR_GetThumbnailAssetPath();
+			const FSoftObjectPath CurrentSecondaryPath = Result.Entry->EDITOR_GetSecondaryThumbnailAssetPath();
 
-			if (CurrentPath == CachedThumbnailPath && bIsSub == bCachedIsSubCollection)
+			if (CurrentPath == CachedThumbnailPath && CurrentSecondaryPath == CachedSecondaryThumbnailPath && bIsSub == bCachedIsSubCollection)
 			{
 				return; // Nothing visual changed, skip rebuild
 			}
@@ -920,6 +947,59 @@ void SPCGExCollectionGridTile::RefreshThumbnail()
 	}
 
 	ThumbnailBox->SetContent(BuildThumbnailWidget());
+	if (SecondaryThumbnailBox.IsValid())
+	{
+		SecondaryThumbnailBox->SetContent(BuildSecondaryThumbnailWidget());
+	}
+}
+
+TSharedPtr<FAssetThumbnail> SPCGExCollectionGridTile::GetOrCreateThumbnail(const FSoftObjectPath& AssetPath, bool& bOutCreated)
+{
+	bOutCreated = false;
+	if (AssetPath.IsNull() || !ThumbnailPool.IsValid())
+	{
+		return nullptr;
+	}
+	if (ThumbnailCachePtr)
+	{
+		if (const TSharedPtr<FAssetThumbnail>* Cached = ThumbnailCachePtr->Find(AssetPath))
+		{
+			return *Cached;
+		}
+	}
+	const FAssetData AssetData = PCGExCollectionEditorUtils::ResolveEntryAssetData(AssetPath);
+	const int32 ThumbnailResolution = FMath::RoundToInt32(TileSize);
+	TSharedPtr<FAssetThumbnail> Created = MakeShared<FAssetThumbnail>(AssetData, ThumbnailResolution, ThumbnailResolution, ThumbnailPool);
+	if (ThumbnailCachePtr)
+	{
+		ThumbnailCachePtr->Add(AssetPath, Created);
+	}
+	bOutCreated = true;
+	return Created;
+}
+
+TSharedRef<SWidget> SPCGExCollectionGridTile::BuildSecondaryThumbnailWidget()
+{
+	CachedSecondaryThumbnailPath.Reset();
+	const UPCGExAssetCollection* Coll = Collection.Get();
+	const FPCGExEntryAccessResult Result = (Coll && EntryIndex != INDEX_NONE) ? Coll->GetEntryRaw(EntryIndex) : FPCGExEntryAccessResult();
+	if (!Result.IsValid())
+	{
+		return SNullWidget::NullWidget;
+	}
+
+	CachedSecondaryThumbnailPath = Result.Entry->EDITOR_GetSecondaryThumbnailAssetPath();
+	bool bCreated = false;
+	const TSharedPtr<FAssetThumbnail> Secondary = GetOrCreateThumbnail(CachedSecondaryThumbnailPath, bCreated);
+	if (!Secondary.IsValid())
+	{
+		// The badge's visibility keys off the cached path: no thumbnail, no badge.
+		CachedSecondaryThumbnailPath.Reset();
+		return SNullWidget::NullWidget;
+	}
+	FAssetThumbnailConfig ThumbnailConfig;
+	ThumbnailConfig.bAllowFadeIn = bCreated;
+	return Secondary->MakeThumbnailWidget(ThumbnailConfig);
 }
 
 TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
@@ -990,37 +1070,17 @@ TSharedRef<SWidget> SPCGExCollectionGridTile::BuildThumbnailWidget()
 			];
 	}
 
-	// Check cache first
-	if (ThumbnailCachePtr)
+	bool bCreated = false;
+	Thumbnail = GetOrCreateThumbnail(AssetPath, bCreated);
+	if (!Thumbnail.IsValid())
 	{
-		if (TSharedPtr<FAssetThumbnail>* Cached = ThumbnailCachePtr->Find(AssetPath))
-		{
-			Thumbnail = *Cached;
-			FAssetThumbnailConfig ThumbnailConfig;
-			ThumbnailConfig.bAllowFadeIn = false;
-			return Thumbnail->MakeThumbnailWidget(ThumbnailConfig);
-		}
+		return SNullWidget::NullWidget;
 	}
 
-	const FAssetData AssetData = PCGExCollectionEditorUtils::ResolveEntryAssetData(AssetPath);
-
-	const int32 ThumbnailResolution = FMath::RoundToInt32(TileSize);
-	Thumbnail = MakeShared<FAssetThumbnail>(AssetData, ThumbnailResolution, ThumbnailResolution, ThumbnailPool);
-
-	// Store in cache
-	if (ThumbnailCachePtr)
-	{
-		ThumbnailCachePtr->Add(AssetPath, Thumbnail);
-	}
-
-	if (Thumbnail.IsValid())
-	{
-		FAssetThumbnailConfig ThumbnailConfig;
-		ThumbnailConfig.bAllowFadeIn = true;
-		return Thumbnail->MakeThumbnailWidget(ThumbnailConfig);
-	}
-
-	return SNullWidget::NullWidget;
+	// A cache hit is already rendered; only a fresh thumbnail fades in.
+	FAssetThumbnailConfig ThumbnailConfig;
+	ThumbnailConfig.bAllowFadeIn = bCreated;
+	return Thumbnail->MakeThumbnailWidget(ThumbnailConfig);
 }
 
 #pragma endregion

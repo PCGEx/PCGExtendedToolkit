@@ -10,7 +10,6 @@
 class IDetailsView;
 class IPropertyHandle;
 class SWidget;
-class UPCGExAssetCollection;
 
 /**
  * The Generic entry's Asset picker, narrowed by the host collection's editor-only GenericAllowedClass.
@@ -22,9 +21,6 @@ class UPCGExAssetCollection;
  */
 namespace PCGExGenericAssetPicker
 {
-	/** Host of the entry a handle belongs to: an outer object, else the package a struct-on-scope panel stamps. */
-	PCGEXCOLLECTIONSEDITOR_API const UPCGExAssetCollection* FindHostCollection(const TSharedRef<IPropertyHandle>& PropertyHandle);
-
 	/** Picker for the Asset handle. Class snapshotted at build (UObject = everything); the editor rebuilds on change. */
 	PCGEXCOLLECTIONSEDITOR_API TSharedRef<SWidget> MakeFilteredAssetPicker(const TSharedRef<IPropertyHandle>& AssetHandle);
 

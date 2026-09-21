@@ -31,6 +31,7 @@
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
 #include "Details/Collections/PCGExSkinnedMeshCollectionActions.h"
 #include "Details/Properties/PCGExCollectionEntryPickerWidget.h"
+#include "Details/Properties/PCGExCollectionEntryRefCustomization.h"
 #include "Helpers/PCGExExternalPackageProducer.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
@@ -80,6 +81,10 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// registered PER TYPE NAME -- foreign-module types must self-register or the schema UI falls back
 	// to raw struct fields.
 	PCGEX_REGISTER_CUSTO("PCGExProperty_CollectionEntry", FPCGExPropertyCompiledCustomization)
+
+	// Every bare FPCGExCollectionEntryRef property renders as the entry picker -- global, so struct-on-scope
+	// panels (where an entry's own customization never runs) get it too.
+	PCGEX_REGISTER_CUSTO("PCGExCollectionEntryRef", FPCGExCollectionEntryRefCustomization)
 
 	// Inline value editor for the Collection Entry property type. Edit mode = schema authoring
 	// (collection box + lock + default pick); Compact mode = override rows (entry pick; collection

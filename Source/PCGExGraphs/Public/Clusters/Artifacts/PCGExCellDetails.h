@@ -518,8 +518,8 @@ struct PCGEXGRAPHS_API FPCGExCellGrowthDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExInputShorthandSelectorInteger32Abs Growth = FPCGExInputShorthandSelectorInteger32Abs(FName("Growth"), 0);
 
-	/** When enabled, all cells assigned to the same seed are merged into a single closed path by dissolving shared interior edges.
-	 * Only effective when Growth > 0. Constraint filtering may still produce multiple output cells if the grown region is non-contiguous. */
+	/** When enabled, adjacent cells are merged into a single closed path by dissolving shared interior edges: per seed on seeded nodes
+	 * (needs Growth > 0), per connected region otherwise. Constraint filtering may still split a non-contiguous region into several cells. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bMergeAdjacentCells = false;
 

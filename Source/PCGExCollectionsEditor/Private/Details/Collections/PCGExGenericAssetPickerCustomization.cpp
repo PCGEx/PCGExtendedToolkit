@@ -10,48 +10,14 @@
 #include "PropertyHandle.h"
 #include "Collections/PCGExGenericCollectionEntry.h"
 #include "Core/PCGExAssetCollection.h"
-#include "UObject/Package.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 
 namespace PCGExGenericAssetPicker
 {
-	const UPCGExAssetCollection* FindHostCollection(const TSharedRef<IPropertyHandle>& PropertyHandle)
-	{
-		TArray<UObject*> Outers;
-		PropertyHandle->GetOuterObjects(Outers);
-		for (UObject* Outer : Outers)
-		{
-			if (!Outer)
-			{
-				continue;
-			}
-			if (const UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(Outer))
-			{
-				return Collection;
-			}
-			if (const UPCGExAssetCollection* Collection = Outer->GetTypedOuter<UPCGExAssetCollection>())
-			{
-				return Collection;
-			}
-		}
-
-		// Struct-on-scope panels have no outer; the grid stamps the host's package on the scope.
-		TArray<UPackage*> Packages;
-		PropertyHandle->GetOuterPackages(Packages);
-		for (const UPackage* Package : Packages)
-		{
-			if (const UPCGExAssetCollection* Collection = Package ? Cast<UPCGExAssetCollection>(Package->FindAssetInPackage()) : nullptr)
-			{
-				return Collection;
-			}
-		}
-
-		return nullptr;
-	}
-
 	TSharedRef<SWidget> MakeFilteredAssetPicker(const TSharedRef<IPropertyHandle>& AssetHandle)
 	{
 		// Snapshot: the Content Browser runs the filter per asset while scrolling.
-		const UPCGExAssetCollection* Host = FindHostCollection(AssetHandle);
+		const UPCGExAssetCollection* Host = PCGExCollectionEditorUtils::FindHostCollection(AssetHandle);
 		const UClass* AllowedClass = (Host && Host->GenericAllowedClass.Get()) ? Host->GenericAllowedClass.Get() : UObject::StaticClass();
 
 		const FOnShouldFilterAsset OnShouldFilter = FOnShouldFilterAsset::CreateLambda([AllowedClass](const FAssetData& AssetData) -> bool

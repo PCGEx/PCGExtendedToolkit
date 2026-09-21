@@ -8,12 +8,60 @@
 #include "PCGModule.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
+#include "Data/PCGExDataTags.h"
+#include "Data/PCGExPointIO.h"
 
 #include "GameFramework/Actor.h"
 #include "Sampling/PCGExSamplingCommon.h"
 
 namespace PCGExSampling::Helpers
 {
+	void NormalizeDistances(const TSharedPtr<PCGExData::TBuffer<double>>& Writer, const int32 NumPoints, const TArray<int8>* SkipMask, const double MaxDistance, const bool bOneMinus, const double Scale)
+	{
+		if (!Writer || MaxDistance <= 0)
+		{
+			return;
+		}
+
+		const double InvMaxDist = 1.0 / MaxDistance;
+
+		if (bOneMinus)
+		{
+			for (int32 i = 0; i < NumPoints; i++)
+			{
+				if (SkipMask && !(*SkipMask)[i])
+				{
+					continue;
+				}
+				Writer->SetValue(i, (1.0 - Writer->GetValue(i) * InvMaxDist) * Scale);
+			}
+		}
+		else
+		{
+			const double Factor = InvMaxDist * Scale;
+			for (int32 i = 0; i < NumPoints; i++)
+			{
+				if (SkipMask && !(*SkipMask)[i])
+				{
+					continue;
+				}
+				Writer->SetValue(i, Writer->GetValue(i) * Factor);
+			}
+		}
+	}
+
+	void ApplySuccessTags(const TSharedRef<PCGExData::FFacade>& InFacade, const bool bAnySuccess, const bool bTagIfHasSuccesses, const FString& HasSuccessesTag, const bool bTagIfHasNoSuccesses, const FString& HasNoSuccessesTag)
+	{
+		if (bTagIfHasSuccesses && bAnySuccess)
+		{
+			InFacade->Source->Tags->AddRaw(HasSuccessesTag);
+		}
+		if (bTagIfHasNoSuccesses && !bAnySuccess)
+		{
+			InFacade->Source->Tags->AddRaw(HasNoSuccessesTag);
+		}
+	}
+
 	double MapAngle(const EPCGExAngleRange Mode, const double Radians, const bool bFlipWinding)
 	{
 		const double Degrees = FMath::RadiansToDegrees(Radians); // 0 .. 180
