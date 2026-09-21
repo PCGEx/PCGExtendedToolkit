@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExOctree.h"
+#include "Data/PCGBasePointData.h"
 #include "Data/PCGExPointElements.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Utils/PCGPointOctree.h"
