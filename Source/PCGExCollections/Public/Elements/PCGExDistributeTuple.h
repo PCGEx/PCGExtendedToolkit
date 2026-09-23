@@ -12,6 +12,8 @@
 
 #include "PCGExDistributeTuple.generated.h"
 
+class UPCGComponent;
+
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(Keywords = "tuple distribute weighted random", PCGExNodeLibraryDoc="metadata/keys/tuple-distribute"))
 class UPCGExDistributeTupleSettings : public UPCGExPointsProcessorSettings
 {
@@ -55,11 +57,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ToolTip="Weighted tuple values. Toggle 'Enabled' per column to include/exclude values. Rows auto-sync with composition changes.", FullyExpand=true))
 	TArray<FPCGExWeightedPropertyOverrides> Values;
 
+	/** Pick one row per input and write it to @Data instead of per point. The input index replaces the point index
+	 *  (Index distribution) and the point seed (Local seed component; without it every input rolls the same row). */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Output to @Data"))
+	bool bOutputToDataDomain = false;
+
 	/** How to distribute rows across points */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExDistribution Distribution = EPCGExDistribution::WeightedRandom;
 
-	/** Index safety mode when Distribution is Index and point count exceeds row count */
+	/** Index safety mode when Distribution is Index and the point (or @Data input) index exceeds the row count */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Distribution == EPCGExDistribution::Index", EditConditionHides))
 	EPCGExIndexSafety IndexSafety = EPCGExIndexSafety::Tile;
 
@@ -97,11 +104,46 @@ protected:
 public:
 };
 
+namespace PCGExDistributeTuple
+{
+	/** One output column, compiled once in Boot and shared by every input. */
+	struct FColumn
+	{
+		FName OutputName;
+
+		/** Schema value or import override: the per-point buffer default and the @Data fallback. */
+		const FInstancedStruct* EffectiveProperty = nullptr;
+
+		/** Per-row source, null where that row disables this column. */
+		TArray<const FPCGExProperty*> RowSources;
+	};
+
+	/** Row selection shared by the per-point and @Data paths. */
+	class FRowPicker
+	{
+	public:
+		/** False when Distribution holds no known enumerator. */
+		bool Init(const UPCGExDistributeTupleSettings* InSettings);
+
+		/** Index drives Index distribution, BaseSeed the random ones. INDEX_NONE when IndexSafety drops Index. */
+		int32 Pick(int32 Index, int32 BaseSeed, const UPCGComponent* Component) const;
+
+	protected:
+		const UPCGExDistributeTupleSettings* Settings = nullptr;
+		TArray<int32> CumulativeWeights;
+		int32 TotalWeight = 0;
+		int32 MaxRowIndex = INDEX_NONE;
+	};
+}
+
 struct FPCGExDistributeTupleContext final : FPCGExPointsProcessorContext
 {
 	friend class FPCGExDistributeTupleElement;
 
-	// Source properties declaring a sidecar pin, unioned across processors (lock: processors finish in
+	PCGExDistributeTuple::FRowPicker RowPicker;
+	TArray<PCGExDistributeTuple::FColumn> Columns;
+
+	// Source properties declaring a sidecar pin, unioned across inputs (lock: per-point processors finish in
 	// parallel). Flushed once after StageOutputs when bOutputMap.
 	FCriticalSection SidecarLock;
 	TArray<const FPCGExProperty*> SidecarSources;
@@ -124,28 +166,21 @@ protected:
 
 namespace PCGExDistributeTuple
 {
-	/** Per-column compiled output data */
+	/** One compiled column bound to this input's output buffer */
 	struct FColumnOutput
 	{
-		/** Deep copy of the schema property that owns the output buffer */
+		/** Deep copy of the column's effective property that owns the output buffer */
 		FInstancedStruct OwnedProperty;
 
 		/** Cached raw pointer to the property (resolved once during init) */
 		const FPCGExProperty* WriterPtr = nullptr;
 
-		/** Per-row source properties (nullptr if that column is disabled in a given row) */
-		TArray<const FPCGExProperty*> RowSources;
+		const FColumn* Column = nullptr;
 	};
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExDistributeTupleContext, UPCGExDistributeTupleSettings>
 	{
-		int32 NumRows = 0;
-
-		/** Cumulative weight array for weighted random distribution */
-		TArray<int32> CumulativeWeights;
-		int32 TotalWeight = 0;
-
-		/** Per-column output data */
+		/** Columns whose output initialized on this input */
 		TArray<FColumnOutput> Columns;
 
 		/** Optional writers */

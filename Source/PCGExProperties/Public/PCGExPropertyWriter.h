@@ -285,8 +285,8 @@ namespace PCGExProperties
 	 * Not routed through FPCGExProperty::InitializeOutput / CreateMetadataAttribute: both take a bare
 	 * FName that resolves to the DEFAULT metadata domain, so neither can address @Data at all.
 	 *
-	 * @return false when the property reports no output support, has no convertible value, or its
-	 * output type is not a supported PCG metadata type.
+	 * @return false when the property reports no output support, has no convertible value, its output
+	 * type is not a supported PCG metadata type, or PCGExData::Helpers::SetDataValue refuses OutName.
 	 */
 	PCGEXPROPERTIES_API bool WriteDataDomainValue(UPCGData* OutData, FName OutName, const FPCGExProperty& InProperty);
 

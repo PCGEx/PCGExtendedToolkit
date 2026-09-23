@@ -5,8 +5,11 @@
 
 #include "PCGExPropertyWriter.h"
 #include "Data/PCGExData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
+#include "Metadata/PCGMetadataAttribute.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -119,6 +122,254 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(DistributeTuple)
 
 #pragma endregion
 
+#pragma region PCGExDistributeTuple::FRowPicker
+
+namespace PCGExDistributeTuple
+{
+	bool FRowPicker::Init(const UPCGExDistributeTupleSettings* InSettings)
+	{
+		Settings = InSettings;
+
+		switch (Settings->Distribution)
+		{
+		case EPCGExDistribution::Index:
+		case EPCGExDistribution::Random:
+		case EPCGExDistribution::WeightedRandom:
+			break;
+		default:
+			return false;
+		}
+
+		const int32 NumRows = Settings->Values.Num();
+		MaxRowIndex = NumRows - 1;
+
+		// Build cumulative weight table
+		CumulativeWeights.SetNum(NumRows);
+		TotalWeight = 0;
+		for (int32 i = 0; i < NumRows; ++i)
+		{
+			TotalWeight += FMath::Max(0, Settings->Values[i].Weight);
+			CumulativeWeights[i] = TotalWeight;
+		}
+
+		if (TotalWeight == 0 && Settings->Distribution == EPCGExDistribution::WeightedRandom)
+		{
+			// All weights are zero - fall back to uniform random
+			TotalWeight = NumRows;
+			for (int32 i = 0; i < NumRows; ++i)
+			{
+				CumulativeWeights[i] = i + 1;
+			}
+		}
+
+		return true;
+	}
+
+	int32 FRowPicker::Pick(const int32 Index, const int32 BaseSeed, const UPCGComponent* Component) const
+	{
+		switch (Settings->Distribution)
+		{
+		case EPCGExDistribution::Index:
+			return PCGExMath::SanitizeIndex(Index, MaxRowIndex, Settings->IndexSafety);
+
+		case EPCGExDistribution::Random:
+			{
+				FRandomStream RandomStream(PCGExRandomHelpers::GetSeed(BaseSeed, Settings->SeedComponents, Settings->LocalSeed, Settings, Component));
+				return RandomStream.RandRange(0, MaxRowIndex);
+			}
+
+		case EPCGExDistribution::WeightedRandom:
+			{
+				FRandomStream RandomStream(PCGExRandomHelpers::GetSeed(BaseSeed, Settings->SeedComponents, Settings->LocalSeed, Settings, Component));
+				const int32 Roll = RandomStream.RandRange(1, TotalWeight);
+
+				// Binary search through cumulative weights
+				int32 Lo = 0, Hi = MaxRowIndex;
+				while (Lo < Hi)
+				{
+					const int32 Mid = (Lo + Hi) >> 1;
+					if (CumulativeWeights[Mid] < Roll)
+					{
+						Lo = Mid + 1;
+					}
+					else
+					{
+						Hi = Mid;
+					}
+				}
+				return Lo;
+			}
+
+		default:
+			// Init rejects unknown enumerators.
+			checkNoEntry();
+			return INDEX_NONE;
+		}
+	}
+}
+
+#pragma endregion
+
+#pragma region PCGExDistributeTuple
+
+namespace PCGExDistributeTuple
+{
+	void CompileColumns(FPCGExDistributeTupleContext* Context, const UPCGExDistributeTupleSettings* Settings)
+	{
+		// ColIdx indexes Values[k].Overrides, which the SyncAllSchemas / ReconcileImportOverrides /
+		// ApplyToOverrides pipeline keeps parallel with Resolve() output.
+		TArray<FPCGExPropertyResolved> Resolved;
+		Settings->Composition.Resolve(Resolved);
+
+		const int32 NumRows = Settings->Values.Num();
+
+		TSet<FName> WrittenNames;
+		auto ClaimName = [&](const FName Name)
+		{
+			bool bAlreadyClaimed = false;
+			WrittenNames.Add(Name, &bAlreadyClaimed);
+			if (bAlreadyClaimed)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("More than one output writes \"{0}\"."), FText::FromName(Name)));
+			}
+		};
+
+		if (Settings->bOutputRowIndex)
+		{
+			ClaimName(Settings->RowIndexAttributeName);
+		}
+
+		if (Settings->bOutputWeight)
+		{
+			ClaimName(Settings->WeightAttributeName);
+		}
+
+		Context->Columns.Reserve(Resolved.Num());
+		for (int32 ColIdx = 0; ColIdx < Resolved.Num(); ++ColIdx)
+		{
+			const FPCGExPropertyResolved& Entry = Resolved[ColIdx];
+			const FInstancedStruct& EffectiveProperty = Entry.GetEffectiveProperty();
+			const FPCGExProperty* Property = EffectiveProperty.GetPtr<FPCGExProperty>();
+
+			if (!Property || !Property->SupportsOutput())
+			{
+				continue;
+			}
+
+			const FName OutputName = Property->ResolveOutputAttributeName(Entry.Source->Name);
+
+			// IsValidName, not IsWritableAttributeName: selector-shaped names ("Foo.X", "@Last") are reparsed, not written verbatim.
+			if (OutputName.IsNone() || !FPCGMetadataAttributeBase::IsValidName(OutputName))
+			{
+				if (Settings->bOutputToDataDomain)
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Column \"{0}\" writes \"{1}\", which is not a valid attribute name -- skipped."), FText::FromName(Entry.Source->Name), FText::FromName(OutputName)));
+					continue;
+				}
+
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Column \"{0}\" writes \"{1}\", which is not a valid attribute name."), FText::FromName(Entry.Source->Name), FText::FromName(OutputName)));
+			}
+
+			ClaimName(OutputName);
+
+			FColumn& Column = Context->Columns.Emplace_GetRef();
+			Column.OutputName = OutputName;
+			Column.EffectiveProperty = &EffectiveProperty;
+			Column.RowSources.SetNumUninitialized(NumRows);
+			for (int32 RowIdx = 0; RowIdx < NumRows; ++RowIdx)
+			{
+				const FPCGExWeightedPropertyOverrides& Row = Settings->Values[RowIdx];
+				Column.RowSources[RowIdx] = Row.IsOverrideEnabled(ColIdx) ? Row.Overrides[ColIdx].GetProperty() : nullptr;
+			}
+		}
+	}
+
+	bool HasDataValue(const UPCGData* InData, const FName Name)
+	{
+		return PCGExMetaHelpers::HasAttribute(InData, PCGExMetaHelpers::MakeDataIdentifier(Name));
+	}
+
+	void WriteDataDomainOutputs(FPCGExDistributeTupleContext* Context, const UPCGExDistributeTupleSettings* Settings)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExDistributeTuple::WriteDataDomainOutputs);
+
+		const UPCGComponent* Component = Context->GetComponent();
+		const bool bSeedFromIndex = (Settings->SeedComponents & static_cast<uint8>(EPCGExSeedComponents::Local)) != 0;
+
+		bool bWriteRowIndex = Settings->bOutputRowIndex;
+		bool bWriteWeight = Settings->bOutputWeight;
+		TBitArray<> RefusedColumns(false, Context->Columns.Num());
+
+		// Nothing picked keeps an existing value, else writes 0: the per-point New-init buffers' fallback.
+		auto WriteOptional = [&](UPCGData* OutData, const bool bPicked, bool& bWrite, const FName Name, const int32 Value)
+		{
+			if (!bWrite || (!bPicked && HasDataValue(OutData, Name)))
+			{
+				return;
+			}
+
+			if (!PCGExData::Helpers::SetDataValue<int32>(OutData, Name, bPicked ? Value : 0))
+			{
+				bWrite = false;
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("\"{0}\" can't be written to @Data -- skipped."), FText::FromName(Name)));
+			}
+		};
+
+		for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
+		{
+			if (!IO->InitializeOutput(Settings->GetMainDataInitializationPolicy()))
+			{
+				continue;
+			}
+
+			UPCGData* OutData = IO->GetOut();
+
+			// Local swaps the point seed for the input index; without it every input rolls the same row.
+			const int32 BaseSeed = bSeedFromIndex ? PCGExRandomHelpers::SeedFromIndex(IO->IOIndex) : 0;
+			const int32 PickedRow = Context->RowPicker.Pick(IO->IOIndex, BaseSeed, Component);
+			const bool bPicked = PickedRow != INDEX_NONE;
+
+			WriteOptional(OutData, bPicked, bWriteRowIndex, Settings->RowIndexAttributeName, PickedRow);
+			WriteOptional(OutData, bPicked, bWriteWeight, Settings->WeightAttributeName, bPicked ? Settings->Values[PickedRow].Weight : 0);
+
+			for (int32 i = 0; i < Context->Columns.Num(); ++i)
+			{
+				if (RefusedColumns[i])
+				{
+					continue;
+				}
+
+				const FColumn& Column = Context->Columns[i];
+				const FPCGExProperty* Source = bPicked ? Column.RowSources[PickedRow] : nullptr;
+				if (!Source)
+				{
+					// Disabled cell or no pick: an existing value survives, as through the per-point Inherit buffer.
+					if (HasDataValue(OutData, Column.OutputName))
+					{
+						continue;
+					}
+
+					Source = Column.EffectiveProperty->GetPtr<FPCGExProperty>();
+				}
+
+				if (!PCGExProperties::WriteDataDomainValue(OutData, Column.OutputName, *Source))
+				{
+					RefusedColumns[i] = true;
+					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Column \"{0}\" ({1}) can't be written to @Data -- skipped."), FText::FromName(Column.OutputName), FText::FromName(Source->GetTypeName())));
+					continue;
+				}
+
+				if (Settings->bOutputMap && !Source->GetOutputSidecarPin().IsNone())
+				{
+					Context->SidecarSources.AddUnique(Source);
+				}
+			}
+		}
+	}
+}
+
+#pragma endregion
+
 #pragma region FPCGExDistributeTupleElement
 
 bool FPCGExDistributeTupleElement::Boot(FPCGExContext* InContext) const
@@ -130,25 +381,36 @@ bool FPCGExDistributeTupleElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(DistributeTuple)
 
-	if (!Settings->Composition.IsEmpty() && !Settings->Values.IsEmpty())
+	// AdvanceWork passes empty tuples through.
+	if (Settings->Composition.IsEmpty() || Settings->Values.IsEmpty())
 	{
-		TArray<FName> Duplicates;
-		if (!Settings->Composition.ValidateUniqueNames(Duplicates))
-		{
-			PCGE_LOG(Error, GraphAndLog, FTEXT("Composition has duplicate column names."));
-			return false;
-		}
-
-		if (Settings->bOutputRowIndex)
-		{
-			PCGEX_VALIDATE_NAME(Settings->RowIndexAttributeName)
-		}
-
-		if (Settings->bOutputWeight)
-		{
-			PCGEX_VALIDATE_NAME(Settings->WeightAttributeName)
-		}
+		return true;
 	}
+
+	TArray<FName> Duplicates;
+	if (!Settings->Composition.ValidateUniqueNames(Duplicates))
+	{
+		PCGE_LOG(Error, GraphAndLog, FTEXT("Composition has duplicate column names."));
+		return false;
+	}
+
+	if (Settings->bOutputRowIndex)
+	{
+		PCGEX_VALIDATE_NAME(Settings->RowIndexAttributeName)
+	}
+
+	if (Settings->bOutputWeight)
+	{
+		PCGEX_VALIDATE_NAME(Settings->WeightAttributeName)
+	}
+
+	if (!Context->RowPicker.Init(Settings))
+	{
+		PCGE_LOG(Error, GraphAndLog, FText::Format(FTEXT("Unresolvable Distribution ({0})."), FText::AsNumber(static_cast<int32>(Settings->Distribution))));
+		return false;
+	}
+
+	PCGExDistributeTuple::CompileColumns(Context, Settings);
 
 	return true;
 }
@@ -169,7 +431,12 @@ bool FPCGExDistributeTupleElement::AdvanceWork(FPCGExContext* InContext, const U
 
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		if (!Context->StartBatchProcessingPoints(
+		// One row per input needs no per-point pass: no batch starts, so the batch step below falls through.
+		if (Settings->bOutputToDataDomain)
+		{
+			PCGExDistributeTuple::WriteDataDomainOutputs(Context, Settings);
+		}
+		else if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
 				return true;
@@ -214,86 +481,30 @@ namespace PCGExDistributeTuple
 
 		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
-		NumRows = Settings->Values.Num();
-		if (NumRows == 0)
+		Columns.Reserve(Context->Columns.Num());
+		for (const FColumn& Column : Context->Columns)
 		{
-			return false;
-		}
-
-		// Build cumulative weight table
-		CumulativeWeights.SetNum(NumRows);
-		TotalWeight = 0;
-		for (int32 i = 0; i < NumRows; ++i)
-		{
-			TotalWeight += FMath::Max(0, Settings->Values[i].Weight);
-			CumulativeWeights[i] = TotalWeight;
-		}
-
-		if (TotalWeight == 0 && Settings->Distribution == EPCGExDistribution::WeightedRandom)
-		{
-			// All weights are zero - fall back to uniform random
-			TotalWeight = NumRows;
-			for (int32 i = 0; i < NumRows; ++i)
-			{
-				CumulativeWeights[i] = i + 1;
-			}
-		}
-
-		// Resolve the composition tree (locals + imports) once. NumColumns drives the per-row
-		// override indexing into Values[k].Overrides, which the SyncAllSchemas /
-		// ReconcileImportOverrides / ApplyToOverrides pipeline keeps parallel with
-		// BuildSchema()/Resolve() output.
-		TArray<FPCGExPropertyResolved> Resolved;
-		Settings->Composition.Resolve(Resolved);
-		const int32 NumColumns = Resolved.Num();
-		Columns.SetNum(NumColumns);
-
-		for (int32 ColIdx = 0; ColIdx < NumColumns; ++ColIdx)
-		{
-			const FPCGExPropertyResolved& Entry = Resolved[ColIdx];
-			const FInstancedStruct& EffectiveProperty = Entry.GetEffectiveProperty();
-			const FPCGExProperty* SchemaProperty = EffectiveProperty.GetPtr<FPCGExProperty>();
-
-			if (!SchemaProperty || !SchemaProperty->SupportsOutput())
-			{
-				continue;
-			}
-
-			FColumnOutput& Col = Columns[ColIdx];
+			FColumnOutput& Col = Columns.Emplace_GetRef();
+			Col.Column = &Column;
 
 			// Deep-copy the effective property (override-or-source) so we own the output buffer
-			Col.OwnedProperty = EffectiveProperty;
+			Col.OwnedProperty = *Column.EffectiveProperty;
 
 			FPCGExProperty* OutputProperty = Col.OwnedProperty.GetMutablePtr<FPCGExProperty>();
-			if (!OutputProperty || !OutputProperty->InitializeOutput(PointDataFacade, OutputProperty->ResolveOutputAttributeName(Entry.Source->Name)))
+			if (!OutputProperty || !OutputProperty->InitializeOutput(PointDataFacade, Column.OutputName))
 			{
-				Col.OwnedProperty.Reset();
+				Columns.Pop(EAllowShrinking::No);
 				continue;
 			}
 
 			Col.WriterPtr = OutputProperty;
-
-			// Build per-row source lookup
-			Col.RowSources.SetNum(NumRows);
-			for (int32 RowIdx = 0; RowIdx < NumRows; ++RowIdx)
-			{
-				const FPCGExWeightedPropertyOverrides& Row = Settings->Values[RowIdx];
-				if (Row.IsOverrideEnabled(ColIdx))
-				{
-					Col.RowSources[RowIdx] = Row.Overrides[ColIdx].GetProperty();
-				}
-				else
-				{
-					Col.RowSources[RowIdx] = nullptr;
-				}
-			}
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping): sidecar rows come from
 			// the per-row sources.
 			if (Settings->bOutputMap && !OutputProperty->GetOutputSidecarPin().IsNone())
 			{
 				FScopeLock ScopeLock(&Context->SidecarLock);
-				for (const FPCGExProperty* RowSource : Col.RowSources)
+				for (const FPCGExProperty* RowSource : Column.RowSources)
 				{
 					if (RowSource)
 					{
@@ -328,58 +539,12 @@ namespace PCGExDistributeTuple
 		const UPCGBasePointData* OutPointData = PointDataFacade->GetOut();
 		const TConstPCGValueRange<int32> Seeds = OutPointData->GetConstSeedValueRange();
 		const UPCGComponent* Component = Context->GetComponent();
-		const int32 MaxRowIndex = NumRows - 1;
+		const FRowPicker& RowPicker = Context->RowPicker;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			int32 PickedRow = -1;
-
-			switch (Settings->Distribution)
-			{
-			case EPCGExDistribution::Index:
-			{
-				PickedRow = PCGExMath::SanitizeIndex(Index, MaxRowIndex, Settings->IndexSafety);
-				if (PickedRow < 0)
-				{
-					continue;
-				}
-			}
-			break;
-
-			case EPCGExDistribution::Random:
-			{
-				const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Settings->SeedComponents, Settings->LocalSeed, Settings, Component);
-				FRandomStream RandomStream(Seed);
-				PickedRow = RandomStream.RandRange(0, MaxRowIndex);
-			}
-			break;
-
-			case EPCGExDistribution::WeightedRandom:
-			{
-				const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Settings->SeedComponents, Settings->LocalSeed, Settings, Component);
-				FRandomStream RandomStream(Seed);
-				const int32 Roll = RandomStream.RandRange(1, TotalWeight);
-
-				// Binary search through cumulative weights
-				int32 Lo = 0, Hi = MaxRowIndex;
-				while (Lo < Hi)
-				{
-					const int32 Mid = (Lo + Hi) >> 1;
-					if (CumulativeWeights[Mid] < Roll)
-					{
-						Lo = Mid + 1;
-					}
-					else
-					{
-						Hi = Mid;
-					}
-				}
-				PickedRow = Lo;
-			}
-			break;
-			}
-
-			if (PickedRow < 0 || PickedRow > MaxRowIndex)
+			const int32 PickedRow = RowPicker.Pick(Index, Seeds[Index], Component);
+			if (PickedRow == INDEX_NONE)
 			{
 				continue;
 			}
@@ -397,18 +562,10 @@ namespace PCGExDistributeTuple
 			// Write column values from the picked row
 			for (const FColumnOutput& Col : Columns)
 			{
-				if (!Col.WriterPtr)
+				if (const FPCGExProperty* RowSource = Col.Column->RowSources[PickedRow])
 				{
-					continue;
+					Col.WriterPtr->WriteOutputFrom(Index, RowSource);
 				}
-
-				const FPCGExProperty* RowSource = Col.RowSources[PickedRow];
-				if (!RowSource)
-				{
-					continue;
-				}
-
-				Col.WriterPtr->WriteOutputFrom(Index, RowSource);
 			}
 		}
 	}

@@ -166,9 +166,52 @@ namespace PCGExData::Helpers
 		return Value;
 	}
 
-	template <typename T>
-	void SetDataValue(FPCGMetadataAttribute<T>* Attribute, const T Value)
+	namespace Internal
 	{
+		// Only the parsed attribute name is kept (domain and sub-selection are dropped); attribute creation validates it.
+		bool TryGetDataValueIdentifier(const FName Name, FPCGAttributeIdentifier& OutIdentifier)
+		{
+			FPCGAttributePropertyInputSelector Selector;
+			Selector.Update(Name.ToString());
+
+			if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute)
+			{
+				return false;
+			}
+
+			OutIdentifier = FPCGAttributeIdentifier(Selector.GetAttributeName(), EPCGMetadataDomainFlag::Data);
+			return true;
+		}
+
+		// Name and target gates shared by the SetDataValue name overloads; null (logged) when either refuses.
+		UPCGMetadata* GetDataValueTarget(UPCGData* InData, const FName Name, FPCGAttributeIdentifier& OutIdentifier)
+		{
+			if (!TryGetDataValueIdentifier(Name, OutIdentifier))
+			{
+				UE_LOG(LogPCGEx, Error, TEXT("Attempting to write @Data value to a non-attribute domain."));
+				return nullptr;
+			}
+
+			// UPCGData::Metadata stays null unless the subclass creates it (spatial and param data do).
+			if (!InData || !InData->Metadata)
+			{
+				UE_LOG(LogPCGEx, Error, TEXT("Cannot write @Data value '%s': no target metadata."), *Name.ToString());
+				return nullptr;
+			}
+
+			return InData->Metadata;
+		}
+	}
+
+	template <typename T>
+	bool SetDataValue(FPCGMetadataAttribute<T>* Attribute, const T Value)
+	{
+		if (!Attribute)
+		{
+			UE_LOG(LogPCGEx, Error, TEXT("Cannot write @Data value: null attribute."));
+			return false;
+		}
+
 		Attribute->SetDefaultValue(Value);
 		
 		const FPCGMetadataDomain* Domain = Attribute->GetMetadataDomain();
@@ -176,36 +219,42 @@ namespace PCGExData::Helpers
 		{
 			Attribute->SetValue(PCGFirstEntryKey, Value);
 		}
+
+		return true;
 	}
 
 	template <typename T>
-	void SetDataValue(UPCGData* InData, FName Name, const T Value)
+	bool SetDataValue(UPCGData* InData, FName Name, const T Value)
 	{
-		FPCGAttributePropertyInputSelector SafetySelector;
-		SafetySelector.Update(Name.ToString());
-
-		if (SafetySelector.GetSelection() != EPCGAttributePropertySelection::Attribute)
+		FPCGAttributeIdentifier Identifier;
+		UPCGMetadata* Metadata = Internal::GetDataValueTarget(InData, Name, Identifier);
+		if (!Metadata)
 		{
-			UE_LOG(LogPCGEx, Error, TEXT("Attempting to write @Data value to a non-attribute domain."))
-			return;
+			return false;
 		}
 
-		FPCGAttributeIdentifier Identifier = FPCGAttributeIdentifier(SafetySelector.GetAttributeName(), EPCGMetadataDomainFlag::Data);
-		SetDataValue<T>(InData->Metadata->FindOrCreateAttribute<T>(Identifier, Value, true, true), Value);
+		FPCGMetadataAttribute<T>* Attribute = Metadata->FindOrCreateAttribute<T>(Identifier, Value, true, true);
+		if (!Attribute)
+		{
+			UE_LOG(LogPCGEx, Error, TEXT("Cannot write @Data value: failed to create @Data attribute '%s'."), *Name.ToString());
+			return false;
+		}
+
+		return SetDataValue<T>(Attribute, Value);
 	}
 
 	template <typename T>
-	void SetDataValue(UPCGData* InData, FPCGAttributeIdentifier Identifier, const T Value)
+	bool SetDataValue(UPCGData* InData, FPCGAttributeIdentifier Identifier, const T Value)
 	{
-		SetDataValue<T>(InData, Identifier.Name, Value);
+		return SetDataValue<T>(InData, Identifier.Name, Value);
 	}
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
 template PCGEXCORE_API _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttribute<_TYPE>* Attribute); \
 template PCGEXCORE_API _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute, _TYPE Fallback); \
-template PCGEXCORE_API void SetDataValue<_TYPE>(FPCGMetadataAttribute<_TYPE>* Attribute, const _TYPE Value); \
-template PCGEXCORE_API void SetDataValue<_TYPE>(UPCGData* InData, FName Name, const _TYPE Value); \
-template PCGEXCORE_API void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifier Identifier, const _TYPE Value);
+template PCGEXCORE_API bool SetDataValue<_TYPE>(FPCGMetadataAttribute<_TYPE>* Attribute, const _TYPE Value); \
+template PCGEXCORE_API bool SetDataValue<_TYPE>(UPCGData* InData, FName Name, const _TYPE Value); \
+template PCGEXCORE_API bool SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifier Identifier, const _TYPE Value);
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 

@@ -377,8 +377,7 @@ namespace PCGExProperties
 			{
 				return;
 			}
-			PCGExData::Helpers::SetDataValue<T>(OutData, OutName, Value);
-			bWritten = true;
+			bWritten = PCGExData::Helpers::SetDataValue<T>(OutData, OutName, Value);
 		});
 		return bWritten;
 	}
