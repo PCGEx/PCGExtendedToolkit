@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExCollectionTags.h"
 
 class UPCGExSelectorFactoryData;
 
@@ -86,6 +87,13 @@ namespace PCGExCollections
 			const UPCGExSelectorFactoryData* Factory,
 			const UPCGExAssetCollection* Collection,
 			const PCGExAssetCollection::FCategory* Target);
+
+		/**
+		 * Tag indices and tag-filtered pools shared by every helper of this execution. Sharing the
+		 * pool OBJECTS (not just their content) is what keeps pool-pointer-keyed state -- GetOrBuild
+		 * above, Quota All-Inputs counters -- coherent across facades when a tag filter is active.
+		 */
+		Tags::FTagPoolStore TagPools;
 
 #if WITH_EDITOR
 		/** Test-only: number of BuildSharedData calls performed by this cache. */

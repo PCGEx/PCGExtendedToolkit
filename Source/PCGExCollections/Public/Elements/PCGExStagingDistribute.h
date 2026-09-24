@@ -339,11 +339,9 @@ class FPCGExAssetStagingElement final : public FPCGExPointsProcessorElement
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(AssetStaging)
 
-	// CollectionMap source mode unpacks (and blocking-loads) the upstream map in Boot; the loader's
-	// miss path marshals to the game thread and requires game-thread affinity during PrepareData
-	// (see LoadAndCacheBlockingSet in PCGExStreamingHelpers.cpp). Gated on the mode so Default-mode
-	// nodes keep off-thread preparation -- same pattern as FPCGExStagingFittingElement.
-	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override;
+	// Every source mode loads collections in Boot; off the game thread that load marshals to it and
+	// waits, and the executor's cancel waits on this task from the game thread: deadlock.
+	PCGEX_ELEMENT_MAIN_THREAD_ONLY_IN_PREPARE()
 	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool PostBoot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
