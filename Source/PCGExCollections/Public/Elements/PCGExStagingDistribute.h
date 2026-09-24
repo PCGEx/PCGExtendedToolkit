@@ -110,6 +110,11 @@ public:
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 
 	virtual bool WantsDataStealing() const override;

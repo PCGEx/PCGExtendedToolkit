@@ -47,6 +47,11 @@ public:
 	}
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 	virtual bool WantsDataStealing() const override;
 	virtual PCGExData::EIOInit GetMainDataInitializationPolicy() const override;
 

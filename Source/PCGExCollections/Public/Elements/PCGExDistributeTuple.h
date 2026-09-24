@@ -37,6 +37,11 @@ public:
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings

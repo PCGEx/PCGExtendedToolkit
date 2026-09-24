@@ -73,6 +73,11 @@ public:
 	virtual void PostInitProperties() override;
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 
 	/** Whether a selected tangents module reads the Tangent Sources pin, which is then Required instead of Advanced. */

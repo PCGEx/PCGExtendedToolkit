@@ -65,6 +65,11 @@ public:
 	}
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 
 protected:
