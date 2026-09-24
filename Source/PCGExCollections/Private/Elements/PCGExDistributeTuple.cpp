@@ -214,13 +214,10 @@ namespace PCGExDistributeTuple
 
 namespace PCGExDistributeTuple
 {
-	void CompileColumns(FPCGExDistributeTupleContext* Context, const UPCGExDistributeTupleSettings* Settings)
+	void CompileColumns(FPCGExDistributeTupleContext* Context, const UPCGExDistributeTupleSettings* Settings, const TArray<FPCGExPropertyResolved>& Resolved)
 	{
 		// ColIdx indexes Values[k].Overrides, which the SyncAllSchemas / ReconcileImportOverrides /
 		// ApplyToOverrides pipeline keeps parallel with Resolve() output.
-		TArray<FPCGExPropertyResolved> Resolved;
-		Settings->Composition.Resolve(Resolved);
-
 		const int32 NumRows = Settings->Values.Num();
 
 		TSet<FName> WrittenNames;
@@ -381,8 +378,13 @@ bool FPCGExDistributeTupleElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(DistributeTuple)
 
+	// Imported schemas are columns too: the resolved table decides, not the locals alone.
+	TArray<FPCGExPropertyResolved> Resolved;
+	Settings->Composition.Resolve(Resolved);
+
 	// AdvanceWork passes empty tuples through.
-	if (Settings->Composition.IsEmpty() || Settings->Values.IsEmpty())
+	Context->bPassThrough = Resolved.IsEmpty() || Settings->Values.IsEmpty();
+	if (Context->bPassThrough)
 	{
 		return true;
 	}
@@ -410,7 +412,7 @@ bool FPCGExDistributeTupleElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	PCGExDistributeTuple::CompileColumns(Context, Settings);
+	PCGExDistributeTuple::CompileColumns(Context, Settings, Resolved);
 
 	return true;
 }
@@ -422,7 +424,7 @@ bool FPCGExDistributeTupleElement::AdvanceWork(FPCGExContext* InContext, const U
 	PCGEX_CONTEXT_AND_SETTINGS(DistributeTuple)
 	PCGEX_EXECUTION_CHECK
 
-	if (Settings->Composition.IsEmpty() || Settings->Values.IsEmpty())
+	if (Context->bPassThrough)
 	{
 		DisabledPassThroughData(InContext);
 		Context->Done();
@@ -500,9 +502,12 @@ namespace PCGExDistributeTuple
 			Col.WriterPtr = OutputProperty;
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping): sidecar rows come from
-			// the per-row sources.
+			// the per-row sources, plus the column's own value wherever a point can be left holding it.
 			if (Settings->bOutputMap && !OutputProperty->GetOutputSidecarPin().IsNone())
 			{
+				// Index + Ignore leaves out-of-range points unpicked; they keep the buffer default.
+				bool bOwnValueReachable = Settings->Distribution == EPCGExDistribution::Index && Settings->IndexSafety == EPCGExIndexSafety::Ignore;
+
 				FScopeLock ScopeLock(&Context->SidecarLock);
 				for (const FPCGExProperty* RowSource : Column.RowSources)
 				{
@@ -510,6 +515,15 @@ namespace PCGExDistributeTuple
 					{
 						Context->SidecarSources.AddUnique(RowSource);
 					}
+					else
+					{
+						bOwnValueReachable = true;
+					}
+				}
+
+				if (bOwnValueReachable)
+				{
+					Context->SidecarSources.AddUnique(Column.EffectiveProperty->GetPtr<FPCGExProperty>());
 				}
 			}
 		}

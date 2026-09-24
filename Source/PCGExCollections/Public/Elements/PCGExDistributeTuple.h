@@ -148,6 +148,9 @@ struct FPCGExDistributeTupleContext final : FPCGExPointsProcessorContext
 	PCGExDistributeTuple::FRowPicker RowPicker;
 	TArray<PCGExDistributeTuple::FColumn> Columns;
 
+	/** Set in Boot when the resolved table (locals and imports) has no column or no row: inputs pass through. */
+	bool bPassThrough = false;
+
 	// Source properties declaring a sidecar pin, unioned across inputs (lock: per-point processors finish in
 	// parallel). Flushed once after StageOutputs when bOutputMap.
 	FCriticalSection SidecarLock;

@@ -32,11 +32,11 @@ namespace PCGExDataUniques
  * input, emits the full @Data row of the first input seen for each combination as an attribute set, and
  * tags each forwarded input with the identifier of the row it belongs to.
  *
- * Uniqueness is decided on the combined PCGExValueHash of the key values (type included), so it works on
- * any basic attribute type without conversions. The hash is 32-bit and never re-checked for equality, so two
- * distinct combinations that collide share a row -- unlikely at typical input counts, but not impossible.
- * String and Name keys compare case-insensitively, like FString/FName equality. Inputs are never duplicated --
- * they are forwarded as-is, with an extra tag when identification is enabled.
+ * Uniqueness is decided on a 63-bit hash of the key values (type included, PCGExHashHelpers) that is the same on
+ * every session and platform, so an identifier can be saved and compared later. It is never re-checked for
+ * equality, so two colliding combinations would share a row. String and Name keys compare case-insensitively
+ * (ASCII), like FString/FName equality. Inputs are never duplicated -- they are forwarded as-is, keeping their
+ * tags and gaining one when identification is enabled.
  *
  * Typical use: Get Properties Data (@Data mode) -> Data Uniques -> loop over the Uniques rows and process,
  * for each row, only the inputs carrying the matching identifier tag.
@@ -105,8 +105,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(PCG_Overridable))
 	FPCGExNameFiltersDetails RowAttributes;
 
-	/** Write the row identifier (combined key value hash) as an extra column on each row AND as a tag on each
-	 *  forwarded input, so rows and inputs can be paired downstream. */
+	/** Write the row identifier (a hash of the key values, the same on every session so it can be saved) as an extra
+	 *  column on each row AND as a tag on each forwarded input, so rows and inputs can be paired downstream. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Identifier", meta=(PCG_Overridable))
 	bool bWriteIdentifier = true;
 

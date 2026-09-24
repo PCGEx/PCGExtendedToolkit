@@ -11,12 +11,11 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Helpers/PCGExHashHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Helpers/PCGExRandomHelpers.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/PCGMetadata.h"
-#include "Templates/TypeHash.h"
-#include "Types/PCGExTypeOps.h"
-#include "Types/PCGExTypeOpsImpl.h"
 
 #define LOCTEXT_NAMESPACE "PCGExDataUniquesElement"
 #define PCGEX_NAMESPACE DataUniques
@@ -58,19 +57,19 @@ namespace PCGExDataUniques
 	struct FInputKey
 	{
 		bool bValid = false;
-		PCGExValueHash Hash = 0;
+		uint64 Hash = 0;
 	};
 
 	struct FBucket
 	{
-		PCGExValueHash Hash = 0;
+		uint64 Hash = 0;
 		int32 RepresentativeInput = INDEX_NONE;
 	};
 
-	// Combined hash of the key values on one input, in key order. Type id is mixed in so int32 5 and int64 5
-	// stay distinct. False when a key is missing or its type id is unhandled (the value would go unread and
-	// collapse every such input into one bucket). Read-only, safe to run in parallel.
-	bool HashKeys(const FPCGExDataUniquesContext* Context, const UPCGData* InData, PCGExValueHash& OutHash)
+	// Stable hash of the key count, then each key's type and value, in key order: the same values give the same
+	// identifier on every session and platform. The type keeps int32 5 and int64 5 apart. False when a key is
+	// missing or its type id is unhandled. Read-only, safe to run in parallel.
+	bool HashKeys(const FPCGExDataUniquesContext* Context, const UPCGData* InData, uint64& OutHash)
 	{
 		const UPCGMetadata* Metadata = InData->ConstMetadata();
 		if (!Metadata)
@@ -78,7 +77,7 @@ namespace PCGExDataUniques
 			return false;
 		}
 
-		uint32 Hash = GetTypeHash(Context->KeyIdentifiers.Num());
+		uint64 Hash = PCGExHashHelpers::MixWord(PCGExHashHelpers::StableSeed, static_cast<uint64>(Context->KeyIdentifiers.Num()));
 
 		for (const FPCGAttributeIdentifier& Identifier : Context->KeyIdentifiers)
 		{
@@ -90,14 +89,14 @@ namespace PCGExDataUniques
 			}
 
 			bool bHashed = false;
-			PCGExValueHash ValueHash = 0;
 
 			PCGExMetaHelpers::ExecuteWithRightType(
 				Attribute->GetTypeId(),
 				[&](auto DummyValue)
 				{
 					using T = decltype(DummyValue);
-					ValueHash = PCGExTypeOps::ComputeHash<T>(PCGExData::Helpers::ReadDataValue<T>(static_cast<const FPCGMetadataAttribute<T>*>(Attribute)));
+					Hash = PCGExHashHelpers::MixWord(Hash, static_cast<uint64>(Attribute->GetTypeId()));
+					Hash = PCGExHashHelpers::MixValue<T>(Hash, PCGExData::Helpers::ReadDataValue<T>(static_cast<const FPCGMetadataAttribute<T>*>(Attribute)));
 					bHashed = true;
 				});
 
@@ -105,12 +104,10 @@ namespace PCGExDataUniques
 			{
 				return false;
 			}
-
-			Hash = HashCombineFast(Hash, static_cast<uint32>(Attribute->GetTypeId()));
-			Hash = HashCombineFast(Hash, ValueHash);
 		}
 
-		OutHash = Hash;
+		// Top bit cleared: the identifier is stored and tagged as a non-negative int64.
+		OutHash = PCGExRandomHelpers::Avalanche(Hash) & static_cast<uint64>(MAX_int64);
 		return true;
 	}
 
@@ -173,14 +170,33 @@ namespace PCGExDataUniques
 		}
 	}
 
-	void WriteIdentifier(const FPCGExDataUniquesContext* Context, UPCGMetadata* OutMetadata, const PCGMetadataEntryKey TargetKey, const PCGExValueHash Hash)
+	void WriteIdentifier(const FPCGExDataUniquesContext* Context, UPCGMetadata* OutMetadata, const PCGMetadataEntryKey TargetKey, const uint64 Hash)
 	{
-		// int64 so the uint32 hash is always stored (and tagged) as a non-negative number.
 		FPCGMetadataAttribute<int64>* Attribute = OutMetadata->FindOrCreateAttribute<int64>(FPCGAttributeIdentifier(Context->IdentifierName), 0, /*bAllowsInterpolation=*/false);
 		if (Attribute)
 		{
 			Attribute->SetValue(TargetKey, static_cast<int64>(Hash));
 		}
+	}
+
+	// Input tags verbatim plus the identifier tag. Prefixed, a value tag already named like the identifier gives
+	// way (StaleTagPrefix is "Name:", matched case-insensitively like FTags keys); nothing else is touched.
+	TSet<FString> MakeTags(const FPCGExDataUniquesContext* Context, const TSet<FString>& InTags, const uint64 Hash, const bool bPrefixed, const FString& StaleTagPrefix)
+	{
+		TSet<FString> OutTags;
+		OutTags.Reserve(InTags.Num() + 1);
+
+		for (const FString& Tag : InTags)
+		{
+			if (bPrefixed && Tag.Len() > StaleTagPrefix.Len() && Tag.StartsWith(StaleTagPrefix, ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			OutTags.Add(Tag);
+		}
+
+		FPCGExAttributeToTagDetails::AppendValueTag<int64>(Context->IdentifierName, static_cast<int64>(Hash), bPrefixed, OutTags);
+		return OutTags;
 	}
 }
 
@@ -305,7 +321,7 @@ bool FPCGExDataUniquesElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 		/*Threshold=*/8, EParallelForFlags::Unbalanced);
 
 	// Phase 2 -- bucket sequentially in input order so bucket order (and thus row order) is deterministic.
-	TMap<PCGExValueHash, int32> HashToBucket;
+	TMap<uint64, int32> HashToBucket;
 	TArray<PCGExDataUniques::FBucket> Buckets;
 	TArray<int32> BucketOfInput;
 	BucketOfInput.Init(INDEX_NONE, ValidInputs.Num());
@@ -370,9 +386,10 @@ bool FPCGExDataUniquesElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 		}
 	}
 
-	// Phase 4 -- forward every input as-is (shared pointer, no duplication), in input order. Matched inputs get
-	// the identifier tag merged into their own tags (FTags round-trip replaces a stale same-key value tag).
+	// Phase 4 -- forward every input as-is (shared pointer, no duplication), in input order. Matched inputs keep
+	// their tags and gain the identifier tag.
 	int32 NumDiscarded = 0;
+	const FString StaleTagPrefix = Context->IdentifierName.ToString() + PCGExData::TagSeparator;
 
 	for (int32 i = 0; i < ValidInputs.Num(); i++)
 	{
@@ -392,14 +409,9 @@ bool FPCGExDataUniquesElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 			continue;
 		}
 
-		TSet<FString> Promoted;
-		FPCGExAttributeToTagDetails::AppendValueTag<int64>(Context->IdentifierName, static_cast<int64>(Keys[i].Hash), Settings->bPrefixTagWithAttributeName, Promoted);
-
-		PCGExData::FTags OutTags;
-		OutTags.Append(InTagged.Tags);
-		OutTags.Append(Promoted);
-
-		Context->StageOutput(Data, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::None, OutTags.Flatten());
+		Context->StageOutput(
+			Data, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::None,
+			PCGExDataUniques::MakeTags(Context, InTagged.Tags, Keys[i].Hash, Settings->bPrefixTagWithAttributeName, StaleTagPrefix));
 	}
 
 	if (!NumDiscarded)
