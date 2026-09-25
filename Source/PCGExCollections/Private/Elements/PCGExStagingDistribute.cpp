@@ -167,17 +167,6 @@ void FPCGExAssetStagingContext::RegisterAssetDependencies()
 
 #pragma region FPCGExAssetStagingElement
 
-bool FPCGExAssetStagingElement::CanExecuteOnlyOnMainThread(FPCGContext* Context) const
-{
-	if (!Context)
-	{
-		return false;
-	}
-
-	return Context->CurrentPhase == EPCGExecutionPhase::PrepareData
-		&& Context->GetInputSettings<UPCGExAssetStagingSettings>()->SourceMode == EPCGExDistributeSourceMode::CollectionMap;
-}
-
 bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 {
 	PCGEX_CONTEXT_AND_SETTINGS(AssetStaging)

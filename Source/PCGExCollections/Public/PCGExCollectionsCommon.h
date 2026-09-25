@@ -61,6 +61,15 @@ enum class EPCGExMissingCategoryBehavior : uint8
 	UseUncategorized = 2 UMETA(DisplayName = "Use Uncategorized", ToolTip="Fall back to picking from entries that have no category. Skips the point when the collection has none."),
 };
 
+/** Behavior when the tag filter leaves the routed pool with nothing to pick. Resolved after category routing. */
+UENUM()
+enum class EPCGExMissingTagBehavior : uint8
+{
+	Skip         = 0 UMETA(DisplayName = "Skip", ToolTip="Skip the point -- no entry is picked."),
+	UseMain      = 1 UMETA(DisplayName = "Use Main", ToolTip="Fall back to the tag-filtered main pool, categorized entries included. Skips the point when that is empty too."),
+	IgnoreFilter = 2 UMETA(DisplayName = "Ignore Filter", ToolTip="Fall back to the routed pool without the tag filter."),
+};
+
 UENUM()
 enum class EPCGExWeightOutputMode : uint8
 {

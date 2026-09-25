@@ -23,7 +23,7 @@ class UPCGExCullOnEmptySettings : public UPCGExSettings
 
 public:
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(CullOnEmpty, "Cull On Empty", "Deactivates output pin if all inputs are empty or missing.");
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(CullOnEmpty, "Cull On Empty", "Deactivates output pin if all inputs are empty or missing.", FName(GetDisplayName()));
 	
 	virtual FLinearColor GetNodeTitleColor() const override
 	{
@@ -37,6 +37,8 @@ public:
 	
 	virtual TArray<FPCGPreConfiguredSettingsInfo> GetPreconfiguredInfo() const override;
 	virtual bool ShouldDrawNodeCompact() const override;
+
+	FString GetDisplayName() const;
 #endif
 	
 	virtual void ApplyPreconfiguredSettings(const FPCGPreConfiguredSettingsInfo& PreconfigureInfo) override;
@@ -51,11 +53,11 @@ public:
 	bool bOutputIsEmpty = false;
 	
 	/** Name of the 'bool' attribute the Is Empty result is written to. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bOutputIsEmpty"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bCheckOnly || bOutputIsEmpty"))
 	FName OutputIsEmpty = PCGExCullOnEmpty::IsEmptyName;
 
 	/** If enabled, inverts the output bool */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bOutputIsEmpty"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bCheckOnly || bOutputIsEmpty"))
 	bool bInvert = false;
 	
 	virtual bool OutputPinsCanBeDeactivated() const override
