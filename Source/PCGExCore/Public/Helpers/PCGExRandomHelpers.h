@@ -32,6 +32,24 @@ namespace PCGExRandomHelpers
 		return (Seed & 0x00FFFFFF) / static_cast<double>(0x01000000);
 	}
 
+	/** Murmur3 fmix64. FRandomStream's single-step LCG maps nearby seeds to nearby first draws: mix low-entropy integers first. */
+	FORCEINLINE uint64 Avalanche(uint64 Hash)
+	{
+		Hash ^= Hash >> 33;
+		Hash *= 0xff51afd7ed558ccdULL;
+		Hash ^= Hash >> 33;
+		Hash *= 0xc4ceb9fe1a85ec53ULL;
+		Hash ^= Hash >> 33;
+		return Hash;
+	}
+
+	/** Well-spread seed for a sequential index; raw consecutive indices roll in sweeps. */
+	FORCEINLINE int32 SeedFromIndex(const int32 Index)
+	{
+		const uint64 Hash = Avalanche(static_cast<uint32>(Index));
+		return static_cast<int32>(static_cast<uint32>(Hash ^ (Hash >> 32)));
+	}
+
 	PCGEXCORE_API int32 GetSeed(const int32 BaseSeed, const uint8 Flags, const int32 Local, const UPCGSettings* Settings = nullptr, const UPCGComponent* Component = nullptr);
 
 	PCGEXCORE_API int32 GetSeed(const int32 BaseSeed, const int32 Local, const UPCGSettings* Settings = nullptr, const UPCGComponent* Component = nullptr);

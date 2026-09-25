@@ -5,6 +5,7 @@
 
 #include "PCGExLog.h"
 #include "Data/PCGExData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Buffers/PCGExBufferProperty.h"
 #include "Helpers/PCGExMetaHelpers.h"
@@ -136,6 +137,19 @@ void FPCGExProperty_Struct::WriteMetadataValue(FPCGMetadataAttributeBase* Attrib
 
 	Attribute->SetValueFromProperty(EntryKey, Value.GetMemory(), TransientProp);
 	delete TransientProp;
+}
+
+bool FPCGExProperty_Struct::WriteDataDomainValue(UPCGData* OutData, const FName OutName) const
+{
+	if (!Value.IsValid())
+	{
+		return false;
+	}
+
+	FPCGMetadataAttributeDesc Desc;
+	Desc.ValueType = EPCGMetadataTypes::Struct;
+	Desc.ValueTypeObject = Value.GetScriptStruct();
+	return PCGExData::Helpers::SetDataValue(OutData, OutName, Desc, Value.GetMemory());
 }
 
 bool FPCGExProperty_Struct::TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const

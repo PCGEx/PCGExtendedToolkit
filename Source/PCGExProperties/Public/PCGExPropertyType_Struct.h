@@ -53,6 +53,10 @@ public:
 
 	virtual FPCGMetadataAttributeBase* CreateMetadataAttribute(UPCGMetadata* Metadata, FName AttributeName) const override;
 	virtual void WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, int64 EntryKey) const override;
+
+	/** Writes Value as a struct-typed @Data attribute; the default only dispatches the 15 legacy types. */
+	virtual bool WriteDataDomainValue(UPCGData* OutData, FName OutName) const override;
+
 	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;
 	virtual bool TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer) override;
 };

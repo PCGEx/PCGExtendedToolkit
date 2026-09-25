@@ -12,6 +12,8 @@
 
 #include "PCGExProperty.generated.h"
 
+class UPCGData;
+
 /**
  * Base struct for all PCGEx property types.
  *
@@ -79,6 +81,10 @@
  *    (ISM Custom Primitive Data, custom float instance data). Also orthogonal to A/B:
  *    the default derives everything from GetOutputType(), so every type that reports
  *    a packable output type works with no per-type code.
+ *
+ * E) @DATA OUTPUT (via PCGExProperties::WriteDataDomainValue):
+ *    WriteDataDomainValue() -> writes the value once per data. The default rides TryWriteValue,
+ *    so only an output type outside the 15 legacy metadata types needs an override (Struct).
  *
  * ============================================================================
  * THREAD SAFETY
@@ -332,6 +338,15 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	{
 		return false;
 	}
+
+	// --- @Data Interface ---
+
+	/**
+	 * Write this property's value as OutData's single @Data value under OutName; call through
+	 * PCGExProperties::WriteDataDomainValue, which gates output support. The default dispatches GetOutputType()
+	 * through TryWriteValue. Must stay const and mutation-free: hosts call it concurrently on shared sources.
+	 */
+	virtual bool WriteDataDomainValue(UPCGData* OutData, FName OutName) const;
 
 	// --- Value Read Interface (type-erased) ---
 

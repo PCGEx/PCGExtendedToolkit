@@ -278,15 +278,15 @@ namespace PCGExProperties
 	PCGEXPROPERTIES_API void GatherOutputDependencies(TConstArrayView<FInstancedStruct> InProperties, TSet<FSoftObjectPath>& OutPaths);
 
 	/**
-	 * Write InProperty's value into OutData's @Data domain under OutName via
-	 * PCGExData::Helpers::SetDataValue, which keeps the default-value and first-entry slots in
+	 * Write InProperty's value into OutData's @Data domain under OutName via its
+	 * FPCGExProperty::WriteDataDomainValue, which keeps the default-value and first-entry slots in
 	 * agreement. The domain holds ONE value per data -- never call this from a per-point loop.
 	 *
 	 * Not routed through FPCGExProperty::InitializeOutput / CreateMetadataAttribute: both take a bare
 	 * FName that resolves to the DEFAULT metadata domain, so neither can address @Data at all.
 	 *
-	 * @return false when the property reports no output support, has no convertible value, or its
-	 * output type is not a supported PCG metadata type.
+	 * @return false when the property reports no output support, has no value its type can write, or
+	 * PCGExData::Helpers::SetDataValue refuses OutName.
 	 */
 	PCGEXPROPERTIES_API bool WriteDataDomainValue(UPCGData* OutData, FName OutName, const FPCGExProperty& InProperty);
 

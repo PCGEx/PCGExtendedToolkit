@@ -9,7 +9,6 @@
 #include "PCGPin.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExContext.h"
-#include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
 
@@ -364,20 +363,7 @@ namespace PCGExProperties
 			return false;
 		}
 
-		bool bWritten = false;
-		// An unsupported output type falls through the dispatcher's default arm, leaving bWritten false.
-		PCGExMetaHelpers::ExecuteWithRightType(InProperty.GetOutputType(), [&](auto DummyValue)
-		{
-			using T = decltype(DummyValue);
-			T Value{};
-			if (!InProperty.TryGetValue<T>(Value))
-			{
-				return;
-			}
-			PCGExData::Helpers::SetDataValue<T>(OutData, OutName, Value);
-			bWritten = true;
-		});
-		return bWritten;
+		return InProperty.WriteDataDomainValue(OutData, OutName);
 	}
 
 	void FlushSidecars(const TConstArrayView<const FPCGExProperty*> InProperties, const TFunctionRef<UPCGMetadata*(FName)> GetOrCreate)
