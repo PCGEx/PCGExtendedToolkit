@@ -11,6 +11,7 @@
 #include "Data/PCGPolyLineData.h"
 #include "Data/PCGSpatialData.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Helpers/PCGExRandomHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Misc/Crc.h"
 
@@ -61,18 +62,6 @@ namespace PCGExDataHash
 	FORCEINLINE uint64 Mix(const uint64 InHash, const uint64 InValue)
 	{
 		return (InHash ^ InValue) * FnvPrime;
-	}
-
-	// Murmur3 finalizer. FNV alone diffuses poorly into FRandomStream's single-step LCG, which
-	// would let near-identical inputs produce near-identical first draws.
-	FORCEINLINE uint64 Avalanche(uint64 InHash)
-	{
-		InHash ^= InHash >> 33;
-		InHash *= 0xff51afd7ed558ccdULL;
-		InHash ^= InHash >> 33;
-		InHash *= 0xc4ceb9fe1a85ec53ULL;
-		InHash ^= InHash >> 33;
-		return InHash;
 	}
 
 	// Hashed instead of the concrete class name: pcg.EnablePointArrayData swaps UPCGPointData for
@@ -343,7 +332,8 @@ bool FPCGExDataHashElement::ExecuteInternal(FPCGContext* Context) const
 		Hash = PCGExDataHash::HashInput(Hash, Tagged.Data);
 	}
 
-	Hash = PCGExDataHash::Avalanche(Hash);
+	// FNV alone diffuses poorly into FRandomStream: near-identical inputs would draw near-identical values.
+	Hash = PCGExRandomHelpers::Avalanche(Hash);
 
 	FRandomStream Stream(static_cast<int32>(static_cast<uint32>(Hash ^ (Hash >> 32))));
 

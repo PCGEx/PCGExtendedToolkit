@@ -39,21 +39,33 @@ namespace PCGExData::Helpers
 	template <typename T>
 	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute, T Fallback);
 
+	/** Writes the attribute's @Data value (slot model: see ReadDataValue). False when Attribute is null. */
 	template <typename T>
-	void SetDataValue(FPCGMetadataAttributeBase* Attribute, const T Value);
+	bool SetDataValue(FPCGMetadataAttributeBase* Attribute, const T Value);
 
+	/**
+	 * Writes Value to the @Data attribute named by Name's attribute part (any domain or sub-selection is dropped).
+	 * False, logged, when nothing was written: a property selector, no target metadata, or a failed attribute creation.
+	 */
 	template <typename T>
-	void SetDataValue(UPCGData* InData, FName Name, const T Value);
+	bool SetDataValue(UPCGData* InData, FName Name, const T Value);
 
+	/** Forwards Identifier.Name to the name overload; the identifier's own domain is ignored. */
 	template <typename T>
-	void SetDataValue(UPCGData* InData, FPCGAttributeIdentifier Identifier, const T Value);
+	bool SetDataValue(UPCGData* InData, FPCGAttributeIdentifier Identifier, const T Value);
+
+	/**
+	 * Name overload for values only a desc can type (Struct, Enum, containers...): InValue points to memory of InDesc's
+	 * type. Same name rules, slot model and replacement of a same-named attribute of another type; InDesc.Name is ignored.
+	 */
+	PCGEXCORE_API bool SetDataValue(UPCGData* InData, FName Name, const FPCGMetadataAttributeDesc& InDesc, const void* InValue);
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
 extern template _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute); \
 extern template _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute, _TYPE Fallback); \
-extern template void SetDataValue<_TYPE>(FPCGMetadataAttributeBase* Attribute, const _TYPE Value); \
-extern template void SetDataValue<_TYPE>(UPCGData* InData, FName Name, const _TYPE Value); \
-extern template void SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifier Identifier, const _TYPE Value);
+extern template bool SetDataValue<_TYPE>(FPCGMetadataAttributeBase* Attribute, const _TYPE Value); \
+extern template bool SetDataValue<_TYPE>(UPCGData* InData, FName Name, const _TYPE Value); \
+extern template bool SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifier Identifier, const _TYPE Value);
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 

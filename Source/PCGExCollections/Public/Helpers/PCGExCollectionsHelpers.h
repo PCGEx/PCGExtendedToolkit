@@ -40,6 +40,11 @@ namespace PCGExCollections
 {
 	class FSelectorSharedDataCache;
 
+	namespace Tags
+	{
+		class FTagPoolStore;
+	}
+
 	/**
 	 * Resolve an actor placed in a level from its soft path, for authoring-time reads (delta capture,
 	 * actor-rooted exports). A live actor wins; otherwise the LEVEL package is soft-loaded (an actor's
@@ -129,37 +134,32 @@ namespace PCGExCollections
 	class FSelectorHelper;
 	class FCollectionSource;
 
-	// Category slot routing. Non-negative indexes Cache->Categories; these name the two pools that
-	// live outside that array.
-	constexpr int32 CategorySlot_Main = -1;
-	constexpr int32 CategorySlot_Uncategorized = -2;
+	// Base slot layout of a helper's pick-slot table: Main, Uncategorized, then one slot per
+	// Cache->Categories entry (same order). Any further slots are appended by the tag filter.
+	constexpr int32 SlotMain = 0;
+	constexpr int32 SlotUncategorized = 1;
+	constexpr int32 SlotFirstCategory = 2;
 
 	/**
-	 * Per-scope pick scratch storage for one FSelectorHelper -- one slot per picker op
-	 * (Main, Uncategorized, and one per named category), parallel to the helper's op layout.
+	 * Per-scope pick scratch storage for one FSelectorHelper -- one entry per pick slot, parallel
+	 * to the helper's slot table.
 	 *
 	 * Created via FSelectorHelper::CreateScratches once per processing scope (single-threaded,
 	 * before entering the point loop of that scope), then passed back into GetEntry for every
 	 * pick within the scope. Since each scope runs on one thread, ops can mutate their scratch
-	 * freely without locking. Slots are null for ops that don't use scratch.
+	 * freely without locking. Entries are null for ops that don't use scratch.
 	 */
 	class PCGEXCOLLECTIONS_API FSelectorScratches
 	{
 		friend class FSelectorHelper;
 
-		TSharedPtr<FPCGExPickerScratchBase> Main;
-		TSharedPtr<FPCGExPickerScratchBase> Uncategorized;
-		TArray<TSharedPtr<FPCGExPickerScratchBase>> ByCategory;
+		TArray<TSharedPtr<FPCGExPickerScratchBase>> Slots;
 
 	public:
-		/** Scratch slot for a routed pick, keyed by the CategorySlot_* constants above. */
-		FPCGExPickerScratchBase* GetSlot(const int32 CategorySlot) const
+		/** Scratch of a pick slot (final slot index as resolved by the helper). */
+		FPCGExPickerScratchBase* GetSlot(const int32 Slot) const
 		{
-			if (CategorySlot == CategorySlot_Uncategorized)
-			{
-				return Uncategorized.Get();
-			}
-			return CategorySlot < 0 ? Main.Get() : ByCategory[CategorySlot].Get();
+			return Slots.IsValidIndex(Slot) ? Slots[Slot].Get() : nullptr;
 		}
 	};
 
@@ -200,6 +200,10 @@ namespace PCGExCollections
 	 * Category support: when bUseCategories is enabled, picks are restricted to the named
 	 * sub-category within the cache. If the picked entry is a subcollection, recursion
 	 * continues into it via GetEntryWeightedRandom.
+	 *
+	 * Tag filter: when bUseTagFilter is enabled, every routed pool is replaced by its tag-filtered
+	 * twin (see PCGExCollectionTags.h). Constant / @Data clauses cost nothing per point; a per-point
+	 * clause resolves every point's slot at Init. Sub-collection hops are not filtered.
 	 */
 	class PCGEXCOLLECTIONS_API FSelectorHelper : public TSharedFromThis<FSelectorHelper>
 	{
@@ -216,39 +220,64 @@ namespace PCGExCollections
 		const UPCGExSelectorFactoryData* ActiveFactory = nullptr;
 
 		TSharedPtr<PCGExDetails::TSettingValue<FName>> CategoryGetter;
-		TSharedPtr<FPCGExEntryPickerOperation> MainPickerOp;
 
-		// Parallel to Cache->Categories (CategoryNameToIndex's values index it). Slots may be null when
-		// the op's PrepareForData failed -- ResolvePickerForPoint treats null as a miss and applies
-		// MissingCategoryBehavior.
-		TArray<TSharedPtr<FPCGExEntryPickerOperation>> CategoryPickerOpsByIndex;
+		// One pool + the op bound to it. An op is owned by exactly one slot; Redirect / PointToSlot
+		// may alias a slot but never copy its op, so per-op passes (scratch, pre-resolve) run once.
+		struct FPickSlot
+		{
+			PCGExAssetCollection::FCategory* Pool = nullptr;
+			TSharedPtr<FPCGExEntryPickerOperation> Op;
+		};
 
-		// Serves EPCGExMissingCategoryBehavior::UseUncategorized only. Null when the collection has
-		// no uncategorized entries, which makes that arm behave as Skip.
-		TSharedPtr<FPCGExEntryPickerOperation> UncategorizedPickerOp;
+		// [SlotMain, SlotUncategorized, one per Cache->Categories], then appended slots (unfiltered
+		// fallbacks, dynamic tag-filter combinations). Pool is null only for a base slot that was
+		// never given one (categories when bUseCategories is off).
+		TArray<FPickSlot> Slots;
+
+		// Per base slot: may category routing land here. A routable slot with no op is a TAG miss
+		// (Redirect decides), never a category miss -- that distinction is the whole contract.
+		TArray<bool> BaseRoutable;
+
+		// Per base slot: final slot to pick from, or INDEX_NONE to skip. Identity without a tag filter.
+		TArray<int32> Redirect;
+
+		// Dynamic tag filter only: final slot per point (INDEX_NONE = skip), fully resolved at Init so
+		// the hot path is one array read. Empty otherwise.
+		TArray<int32> PointToSlot;
 
 		// Optional cache for collection-derived shared state. Typically supplied by the consumer
 		// context (mirrors FPickPacker lifetime pattern). When null, ops self-build as before.
 		TSharedPtr<FSelectorSharedDataCache> SharedDataCache;
 
+		// Tag-filter pools when no shared-data cache is wired. Owns what Slots point at.
+		TSharedPtr<Tags::FTagPoolStore> LocalTagPools;
+
 		/**
-		 * Resolve which picker op applies to a given point. A blank key selects the uncategorized
-		 * entries; a key naming a category the collection lacks, or a blank key when there are no
-		 * uncategorized entries, is a miss and applies MissingCategoryBehavior. OutCategorySlot
-		 * receives a CategorySlot_* constant or a Cache->Categories index, and routes both the
-		 * scratch slot and the pool.
+		 * Category routing over BASE slots. A blank key selects the uncategorized entries; a key naming
+		 * a category the collection lacks, or a blank key when there are no uncategorized entries, is a
+		 * miss and applies MissingCategoryBehavior. Returns a base slot or INDEX_NONE.
 		 */
-		const FPCGExEntryPickerOperation* ResolvePickerForPoint(int32 PointIndex, int32& OutCategorySlot) const;
+		int32 ResolveBaseSlot(int32 PointIndex) const;
 
-		/** Pool behind a slot from ResolvePickerForPoint, keyed by the CategorySlot_* constants. */
-		const PCGExAssetCollection::FCategory* GetPool(int32 CategorySlot) const;
+		/** Final pick slot for a point (INDEX_NONE = nothing to pick), through PointToSlot or Redirect. */
+		FORCEINLINE int32 ResolveSlot(const int32 PointIndex) const
+		{
+			if (!PointToSlot.IsEmpty())
+			{
+				return PointToSlot[PointIndex];
+			}
+			const int32 Base = ResolveBaseSlot(PointIndex);
+			return Base == INDEX_NONE ? INDEX_NONE : Redirect[Base];
+		}
 
 		/**
-		 * Shared pre-resolve routing: resolve the point's op (same category routing as GetEntry),
-		 * bail unless it opted in, and resolve its scratch slot. Returns null when the point has
-		 * no pre-resolving op.
+		 * Shared pre-resolve routing: resolve the point's slot, bail unless its op opted in, and
+		 * resolve its scratch. Returns null when the point has no pre-resolving op.
 		 */
 		FPCGExEntryPickerOperation* ResolvePreResolveOp(int32 PointIndex, const FSelectorScratches* Scratches, FPCGExPickerScratchBase*& OutScratch) const;
+
+		/** Shared body of both GetEntry overloads: slot -> op pick -> raw entry index (-1 when OutSlot is INDEX_NONE). */
+		int32 PickRaw(int32 PointIndex, int32 Seed, const FSelectorScratches* Scratches, int32& OutSlot) const;
 
 	public:
 		FPCGExAssetDistributionDetails Details;

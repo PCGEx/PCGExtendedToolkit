@@ -27,6 +27,17 @@ bool UPCGExCullOnEmptySettings::ShouldDrawNodeCompact() const
 {
 	return bCheckOnly;
 }
+
+FString UPCGExCullOnEmptySettings::GetDisplayName() const
+{
+	// Only describe the IsEmpty output, and only when its polarity is known at edit time
+	if (!(bCheckOnly || bOutputIsEmpty) || IsPropertyOverriddenByPin(GET_MEMBER_NAME_CHECKED(UPCGExCullOnEmptySettings, bInvert)))
+	{
+		return FString();
+	}
+
+	return bInvert ? TEXT("Is Data NOT Empty") : TEXT("Is Data Empty");
+}
 #endif
 
 void UPCGExCullOnEmptySettings::ApplyPreconfiguredSettings(const FPCGPreConfiguredSettingsInfo& PreconfigureInfo)

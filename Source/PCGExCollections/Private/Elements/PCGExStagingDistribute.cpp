@@ -206,17 +206,6 @@ void FPCGExAssetStagingElement::DisabledPassThroughData(FPCGContext* Context) co
 	PCGExCollections::ForwardCollectionMap(Context);
 }
 
-bool FPCGExAssetStagingElement::CanExecuteOnlyOnMainThread(FPCGContext* Context) const
-{
-	if (!Context)
-	{
-		return false;
-	}
-
-	return Context->CurrentPhase == EPCGExecutionPhase::PrepareData
-		&& Context->GetInputSettings<UPCGExAssetStagingSettings>()->SourceMode == EPCGExDistributeSourceMode::CollectionMap;
-}
-
 bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 {
 	PCGEX_CONTEXT_AND_SETTINGS(AssetStaging)

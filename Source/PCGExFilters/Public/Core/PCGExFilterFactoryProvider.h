@@ -70,11 +70,11 @@ public:
 
 
 	/** How to handle failed attribute initialization. Usually, the reason is missing attributes, but can also be unsupported filter type. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(PCG_NotOverridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable), AdvancedDisplay)
 	EPCGExFilterNoDataFallback InitializationFailurePolicy = EPCGExFilterNoDataFallback::Error;
 
 	/** How to handle missing data. This only applies to filters that rely on local data pins to output meaningful results. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta=(EditCondition="ShowMissingDataPolicy()", PCG_NotOverridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(EditCondition="ShowMissingDataPolicy()", PCG_NotOverridable), AdvancedDisplay)
 	EPCGExFilterNoDataFallback MissingDataPolicy = EPCGExFilterNoDataFallback::Fail;
 
 protected:

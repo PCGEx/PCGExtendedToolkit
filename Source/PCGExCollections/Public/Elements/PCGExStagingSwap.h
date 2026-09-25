@@ -82,6 +82,11 @@ public:
 	}
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual void InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const override;

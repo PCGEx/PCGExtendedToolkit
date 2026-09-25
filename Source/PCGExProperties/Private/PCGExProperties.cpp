@@ -6,6 +6,8 @@
 #include "PCGExProperty.h"
 #include "PCGExPropertySchemaAsset.h"
 #include "PCGExPropertyTypes.h"
+#include "Data/PCGExDataHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
 
 #if WITH_EDITOR
 void FPCGExPropertiesModule::RegisterToEditor(const TSharedPtr<FSlateStyleSet>& InStyle)
@@ -168,6 +170,23 @@ bool FPCGExProperty::PackFloats(TArrayView<float> OutFloats) const
 	default:
 		return false;
 	}
+}
+
+bool FPCGExProperty::WriteDataDomainValue(UPCGData* OutData, const FName OutName) const
+{
+	bool bWritten = false;
+	// An unsupported output type falls through the dispatcher's default arm, leaving bWritten false.
+	PCGExMetaHelpers::ExecuteWithRightType(GetOutputType(), [&](auto DummyValue)
+	{
+		using T = decltype(DummyValue);
+		T Value{};
+		if (!this->TryGetValue<T>(Value))
+		{
+			return;
+		}
+		bWritten = PCGExData::Helpers::SetDataValue<T>(OutData, OutName, Value);
+	});
+	return bWritten;
 }
 
 #pragma endregion

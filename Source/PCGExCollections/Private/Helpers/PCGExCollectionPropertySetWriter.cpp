@@ -7,7 +7,6 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGBasePointData.h"
-#include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
@@ -129,19 +128,7 @@ namespace PCGExCollections
 				continue;
 			}
 
-			const FName ResolvedName = SourceProp->ResolveOutputAttributeName(OutputName);
-
-			// Type dispatch: pull the property's value as its declared output type and write it as
-			// a single @Data attribute. SetDataValue handles attribute creation + default-value.
-			PCGExMetaHelpers::ExecuteWithRightType(SourceProp->GetOutputType(), [&](auto Dummy)
-			{
-				using T_VALUE = decltype(Dummy);
-				T_VALUE Value = T_VALUE{};
-				if (SourceProp->TryGetValue<T_VALUE>(Value))
-				{
-					PCGExData::Helpers::SetDataValue<T_VALUE>(InData, ResolvedName, Value);
-				}
-			});
+			PCGExProperties::WriteDataDomainValue(InData, SourceProp->ResolveOutputAttributeName(OutputName), *SourceProp);
 		}
 	}
 

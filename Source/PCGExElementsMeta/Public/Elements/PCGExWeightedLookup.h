@@ -73,6 +73,11 @@ public:
 	}
 #endif
 
+	virtual bool UseSeed() const override
+	{
+		return true;
+	}
+
 	virtual bool HasDynamicPins() const override
 	{
 		return true;

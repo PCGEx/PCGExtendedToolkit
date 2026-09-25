@@ -7,6 +7,7 @@
 #include "PCGExCollectionsCommon.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExStagingDetails.h"
+#include "Selectors/PCGExSelectorTagFilter.h"
 
 #include "PCGExSelectorFactoryBaseConfig.generated.h"
 
@@ -41,6 +42,14 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorFactoryBaseConfig
 	/** What to do when a point asks for a category the collection cannot serve. A blank key selects the uncategorized entries, and only counts as missing when there are none. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName = " └─ Missing Category Behavior", EditCondition="bUseCategories", HideEditConditionToggle))
 	EPCGExMissingCategoryBehavior MissingCategoryBehavior = EPCGExMissingCategoryBehavior::Skip;
+
+	/** If enabled, limit picks to entries whose tags satisfy the tag filter. Applied after category routing, so both can be used together. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bUseTagFilter = false;
+
+	/** Tag predicate over entry tags. Constant or @Data values cost nothing per point; a per-point attribute builds one pool per distinct value. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bUseTagFilter"))
+	FPCGExSelectorTagFilterDetails TagFilter;
 
 
 	/** Which components contribute to per-point seed generation. */

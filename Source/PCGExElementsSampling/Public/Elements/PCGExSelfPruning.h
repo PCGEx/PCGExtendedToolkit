@@ -64,6 +64,7 @@ public:
 
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 	virtual bool OutputPinsCanBeDeactivated() const override { return true; }
+	virtual bool UseSeed() const override { return true; }
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters which points can be processed as overlapping", PCGExFactories::PointFilters(), false)
 
 protected:
