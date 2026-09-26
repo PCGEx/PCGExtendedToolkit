@@ -9,6 +9,7 @@
 #include "Math/PCGExMath.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExNumericSelfCompareFilter.generated.h"
 
@@ -41,27 +42,35 @@ struct FPCGExNumericSelfCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExIndexMode IndexMode = EPCGExIndexMode::Offset;
 
-	/** Whether the compared index is a constant or read from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
 	/** Index value to use according to the selected Index Mode -- Will be translated to `int32` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector IndexAttribute;
-
-	/** Const Index value to use according to the selected Index Mode */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	int32 IndexConstant = -1;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index"))
+	FPCGExInputShorthandSelectorInteger32 Index = FPCGExInputShorthandSelectorInteger32(FPCGAttributePropertyInputSelector(), -1);
 
 	/** Index safety */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExIndexSafety IndexSafety = EPCGExIndexSafety::Clamp;
 
-	PCGEX_SETTING_VALUE_DECL(Index, int32)
-
 	/** How to deal with invalid indices */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExFilterFallback InvalidIndexFallback = EPCGExFilterFallback::Fail;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector IndexAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 IndexConstant_DEPRECATED = -1;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -120,6 +129,8 @@ class UPCGExNumericSelfCompareFilterProviderSettings : public UPCGExFilterProvid
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NumericSelfCompareFilterFactory, "Filter : Self Compare (Numeric)", "Creates a filter definition that compares an attribute numeric value against itself at another index.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

@@ -7,6 +7,7 @@
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "Core/PCGExPointFilter.h"
 
@@ -34,35 +35,42 @@ struct FPCGExDotFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert"))
 	bool bInvertOperandA = false;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
-	/** Operand B for computing the dot product */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector OperandB;
-
-	/** Negate Operand B before dot product. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	bool bInvertOperandB = false;
-
 	/** Operand B for computing the dot product. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector OperandBConstant = FVector::UpVector;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B"))
+	FPCGExInputShorthandSelectorDirection OperandBValue = FPCGExInputShorthandSelectorDirection(FPCGAttributePropertyInputSelector(), FVector::UpVector);
 
 	/** Transform OperandB with the local point' transform */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bTransformOperandB = false;
 
-	PCGEX_SETTING_VALUE_DECL(OperandB, FVector)
-
 	/** Dot comparison settings */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExDotComparisonDetails DotComparisonDetails;
 
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector OperandB_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bInvertOperandB_DEPRECATED = false;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector OperandBConstant_DEPRECATED = FVector::UpVector;
+
+#pragma endregion
+
 	void Sanitize()
 	{
 	}
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -105,7 +113,6 @@ namespace PCGExPointFilter
 		double OperandAMultiplier = 1;
 
 		TSharedPtr<PCGExDetails::TSettingValue<FVector>> OperandB;
-		double OperandBMultiplier = 1;
 
 		TConstPCGValueRange<FTransform> InTransforms;
 
@@ -130,6 +137,8 @@ class UPCGExDotFilterProviderSettings : public UPCGExFilterProviderSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(DotFilterFactory, "Filter : Dot", "Creates a filter definition that compares dot value of two vectors.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

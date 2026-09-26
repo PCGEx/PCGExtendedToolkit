@@ -4,12 +4,23 @@
 
 #include "GoalPickers/PCGExGoalPickerRandom.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExPointElements.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExRandomHelpers.h"
 
-PCGEX_SETTING_VALUE_IMPL(UPCGExGoalPickerRandom, NumGoals, int32, NumGoalsType, NumGoalAttribute, NumGoals)
+#if WITH_EDITOR
+void UPCGExGoalPickerRandom::PCGExApplyDeprecation(const int64 PCGExDataVersion)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		NumGoalsValue.Update(NumGoalsType_DEPRECATED, NumGoalAttribute_DEPRECATED, NumGoals_DEPRECATED);
+	}
+
+	Super::PCGExApplyDeprecation(PCGExDataVersion);
+}
+#endif
 
 void UPCGExGoalPickerRandom::CopySettingsFrom(const UPCGExInstancedFactory* Other)
 {
@@ -18,9 +29,7 @@ void UPCGExGoalPickerRandom::CopySettingsFrom(const UPCGExInstancedFactory* Othe
 	{
 		LocalSeed = TypedOther->LocalSeed;
 		GoalCount = TypedOther->GoalCount;
-		NumGoalsType = TypedOther->NumGoalsType;
-		NumGoals = TypedOther->NumGoals;
-		NumGoalAttribute = TypedOther->NumGoalAttribute;
+		NumGoalsValue = TypedOther->NumGoalsValue;
 	}
 }
 
@@ -31,7 +40,7 @@ bool UPCGExGoalPickerRandom::PrepareForData(FPCGExContext* InContext, const TSha
 		return false;
 	}
 
-	NumGoalsBuffer = GetValueSettingNumGoals();
+	NumGoalsBuffer = NumGoalsValue.GetValueSetting();
 	if (!NumGoalsBuffer->Init(InSeedsDataFacade, false))
 	{
 		return false;

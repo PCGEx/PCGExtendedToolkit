@@ -7,6 +7,7 @@
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExPolyPathFilterFactory.h"
 #include "Core/PCGExPointFilter.h"
@@ -45,23 +46,13 @@ struct FPCGExTimeFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::NearlyEqual;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
-	/** Operand B for testing -- Will be translated to `double` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector OperandB;
-
-	/** Operand B for testing */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	float OperandBConstant = 0;
+	/** Operand B for testing -- Will be translated to `float` under the hood. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B"))
+	FPCGExInputShorthandSelectorFloat OperandBValue;
 
 	/** Near-equality tolerance */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = DBL_COMPARE_TOLERANCE;
-
-	PCGEX_SETTING_VALUE_DECL(OperandB, float)
 
 
 	/** If enabled, invert the result of the test */
@@ -87,6 +78,24 @@ struct FPCGExTimeFilterConfig
 	/** Data matching settings. When enabled, only paths whose data matches the input being tested will be considered. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExFilterMatchingDetails DataMatching;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector OperandB_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	float OperandBConstant_DEPRECATED = 0;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**

@@ -3,6 +3,7 @@
 
 #include "Filters/Points/PCGExStringRegexFilter.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
@@ -11,6 +12,14 @@
 
 #define LOCTEXT_NAMESPACE "PCGExStringRegexFilterDefinition"
 #define PCGEX_NAMESPACE StringRegexFilterDefinition
+
+#if WITH_EDITOR
+void FPCGExStringRegexFilterConfig::ApplyDeprecation()
+{
+	// A legacy FName tag loads through SetAttributeName; re-parse it with Update, as FName-based reads do.
+	if (OperandA.GetSelection() == EPCGAttributePropertySelection::Attribute) { OperandA.Update(OperandA.GetAttributeName().ToString()); }
+}
+#endif
 
 bool UPCGExStringRegexFilterFactory::DomainCheck()
 {
@@ -29,7 +38,8 @@ bool UPCGExStringRegexFilterFactory::RegisterConsumableAttributesWithData(FPCGEx
 		return false;
 	}
 
-	InContext->AddConsumableAttributeName(Config.OperandA);
+	FName Consumable = NAME_None;
+	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
 
 	return true;
 }
@@ -50,7 +60,7 @@ bool PCGExPointFilter::FStringRegexFilter::Init(FPCGExContext* InContext, const 
 	OperandA = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
 	if (!OperandA->Prepare(TypedFilterFactory->Config.OperandA, PointDataFacade->Source))
 	{
-		PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
+		PCGEX_LOG_INVALID_SELECTOR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
 		return false;
 	}
 
@@ -81,9 +91,19 @@ bool PCGExPointFilter::FStringRegexFilter::Test(const TSharedPtr<PCGExData::FPoi
 PCGEX_CREATE_FILTER_FACTORY(StringRegex)
 
 #if WITH_EDITOR
+void UPCGExStringRegexFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExStringRegexFilterProviderSettings::GetDisplayName() const
 {
-	return PCGExCommon::FlagInvertLabel(Config.OperandA.ToString() + TEXT(" =~ /") + Config.RegexPattern + TEXT("/"), Config.bInvert);
+	return PCGExCommon::FlagInvertLabel(PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandA) + TEXT(" =~ /") + Config.RegexPattern + TEXT("/"), Config.bInvert);
 }
 #endif
 

@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "UObject/Object.h"
 
@@ -27,21 +28,31 @@ struct FPCGExEntryCountFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::EqualOrGreater;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
-	/** Operand B for testing -- Will be translated to `int32` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector OperandBAttr;
-
-	/** Operand B to test Entries count against */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0))
-	int32 OperandB = 1;
+	/** Operand B to test Entries count against -- Will be translated to `int32` under the hood. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B"))
+	FPCGExInputShorthandSelectorInteger32Abs OperandBValue = FPCGExInputShorthandSelectorInteger32Abs(FPCGAttributePropertyInputSelector(), 1);
 
 	/** Near-equality tolerance */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = DBL_COMPARE_TOLERANCE;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector OperandBAttr_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 OperandB_DEPRECATED = 1;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -91,6 +102,8 @@ class UPCGExEntryCountFilterProviderSettings : public UPCGExFilterCollectionProv
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EntryCountFilterFactory, "Data Filter : Entry Count", "Does a numeric comparison against the number of entries", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

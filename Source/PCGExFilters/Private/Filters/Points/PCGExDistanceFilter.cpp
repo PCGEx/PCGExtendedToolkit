@@ -15,7 +15,18 @@
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExDistanceFilterConfig, DistanceThreshold, double, CompareAgainst, DistanceThreshold, DistanceThresholdConstant)
+#if WITH_EDITOR
+void FPCGExDistanceFilterConfig::ApplyDeprecation()
+{
+	DistanceThresholdValue.Update(CompareAgainst_DEPRECATED, DistanceThreshold_DEPRECATED, DistanceThresholdConstant_DEPRECATED);
+}
+
+void FPCGExDistanceFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("DistanceThreshold")), FName(TEXT("DistanceThresholdValue")), FName(TEXT("Attribute")), FName(TEXT("Distance Threshold (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("DistanceThresholdConstant")), FName(TEXT("DistanceThresholdValue")), FName(TEXT("Constant")), FName(TEXT("Distance Threshold")));
+}
+#endif
 
 bool UPCGExDistanceFilterFactory::Init(FPCGExContext* InContext)
 {
@@ -32,7 +43,7 @@ bool UPCGExDistanceFilterFactory::Init(FPCGExContext* InContext)
 
 bool UPCGExDistanceFilterFactory::SupportsProxyEvaluation() const
 {
-	return Config.CompareAgainst == EPCGExInputValueType::Constant;
+	return Config.DistanceThresholdValue.Input == EPCGExInputValueType::Constant;
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExDistanceFilterFactory::CreateFilter() const
@@ -43,10 +54,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExDistanceFilterFactory::CreateFilter(
 void UPCGExDistanceFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.DistanceThreshold);
-	}
+	Config.DistanceThresholdValue.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 PCGExFactories::EPreparationResult UPCGExDistanceFilterFactory::Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager)
@@ -115,7 +123,7 @@ bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSh
 
 	bInflateQueryBounds = TypedFilterFactory->Config.DistanceDetails.Source != EPCGExDistance::Center;
 
-	DistanceThresholdGetter = TypedFilterFactory->Config.GetValueSettingDistanceThreshold(PCGEX_QUIET_HANDLING);
+	DistanceThresholdGetter = TypedFilterFactory->Config.DistanceThresholdValue.GetValueSetting(PCGEX_QUIET_HANDLING);
 	DistanceThresholdGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!DistanceThresholdGetter->Init(InPointDataFacade))
 	{
@@ -130,7 +138,7 @@ bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSh
 bool PCGExPointFilter::FDistanceFilter::Test(const PCGExData::FProxyPoint& Point) const
 {
 	const FVector ProbeLocation = Point.GetLocation();
-	const double B = TypedFilterFactory->Config.DistanceThresholdConstant;
+	const double B = TypedFilterFactory->Config.DistanceThresholdValue.Constant;
 	const double SearchExtent = B + TypedFilterFactory->Config.Tolerance;
 	const FBoxCenterAndExtent QueryBounds(ProbeLocation, FVector(SearchExtent));
 
@@ -202,6 +210,13 @@ void UPCGExDistanceFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins
 	{
 		Config.DataMatching.RenamePins(this, InOutNode);
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -211,6 +226,12 @@ void UPCGExDistanceFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOut
 	{
 		Config.DataMatching.ApplyDeprecation();
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
@@ -218,13 +239,13 @@ FString UPCGExDistanceFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Distance ") + PCGExCompare::ToString(Config.Comparison);
 
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
+	if (Config.DistanceThresholdValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.DistanceThreshold);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.DistanceThresholdValue.Attribute);
 	}
 	else
 	{
-		DisplayName += FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.DistanceThresholdConstant) / 1000.0));
+		DisplayName += FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.DistanceThresholdValue.Constant) / 1000.0));
 	}
 
 	return DisplayName;

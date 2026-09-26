@@ -315,10 +315,6 @@ bool PCGExPointFilter::FRaycastFilter::Test(const int32 PointIndex) const
 	}
 
 	FVector Direction = DirectionGetter->Read(PointIndex);
-	if (Config.Direction.bFlip)
-	{
-		Direction *= -1;
-	}
 	if (Config.bTransformDirection)
 	{
 		Direction = Transform.TransformVectorNoScale(Direction);

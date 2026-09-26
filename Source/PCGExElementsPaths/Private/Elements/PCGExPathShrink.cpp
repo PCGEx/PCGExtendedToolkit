@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExPathShrink.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -13,29 +14,105 @@
 #define LOCTEXT_NAMESPACE "PCGExShrinkPathElement"
 #define PCGEX_NAMESPACE ShrinkPath
 
+#pragma region FPCGExShrinkPathEndpointDistanceDetails
+
 bool FPCGExShrinkPathEndpointDistanceDetails::SanityCheck(const FPCGContext* Context) const
 {
-	if (AmountInput == EPCGExInputValueType::Attribute)
+	if (DistanceValue.Input == EPCGExInputValueType::Attribute)
 	{
-		PCGEX_VALIDATE_NAME_C(Context, DistanceAttribute.GetName())
+		PCGEX_VALIDATE_NAME_C(Context, DistanceValue.Attribute.GetName())
 	}
 	return true;
 }
 
+#if WITH_EDITOR
+void FPCGExShrinkPathEndpointDistanceDetails::ApplyDeprecation()
+{
+	DistanceValue.Update(AmountInput_DEPRECATED, DistanceAttribute_DEPRECATED, Distance_DEPRECATED);
+}
+
+void FPCGExShrinkPathEndpointDistanceDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode, const FName InMemberName) const
+{
+	const FString Prefix = InMemberName.ToString() + TEXT("/");
+	const FName AttributeSuffix[] = {InMemberName, FName(TEXT("DistanceValue")), FName(TEXT("Attribute"))};
+	const FName ConstantSuffix[] = {InMemberName, FName(TEXT("DistanceValue")), FName(TEXT("Constant"))};
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(Prefix + TEXT("DistanceAttribute")), AttributeSuffix);
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(Prefix + TEXT("Distance")), ConstantSuffix);
+}
+#endif
+
+#pragma endregion
+
+#pragma region FPCGExShrinkPathEndpointCountDetails
+
 bool FPCGExShrinkPathEndpointCountDetails::SanityCheck(const FPCGContext* Context) const
 {
-	if (ValueSource == EPCGExInputValueType::Attribute)
+	if (CountValue.Input == EPCGExInputValueType::Attribute)
 	{
-		PCGEX_VALIDATE_NAME_C(Context, CountAttribute.GetName())
+		PCGEX_VALIDATE_NAME_C(Context, CountValue.Attribute.GetName())
 	}
 	return true;
 }
+
+#if WITH_EDITOR
+void FPCGExShrinkPathEndpointCountDetails::ApplyDeprecation()
+{
+	CountValue.Update(ValueSource_DEPRECATED, CountAttribute_DEPRECATED, Count_DEPRECATED);
+}
+
+void FPCGExShrinkPathEndpointCountDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode, const FName InMemberName) const
+{
+	const FString Prefix = InMemberName.ToString() + TEXT("/");
+	const FName AttributeSuffix[] = {InMemberName, FName(TEXT("CountValue")), FName(TEXT("Attribute"))};
+	const FName ConstantSuffix[] = {InMemberName, FName(TEXT("CountValue")), FName(TEXT("Constant"))};
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(Prefix + TEXT("CountAttribute")), AttributeSuffix);
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(Prefix + TEXT("Count")), ConstantSuffix);
+}
+#endif
+
+#pragma endregion
+
+#pragma region UPCGExShrinkPathSettings
 
 UPCGExShrinkPathSettings::UPCGExShrinkPathSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	bSupportClosedLoops = false;
 }
+
+#if WITH_EDITOR
+void UPCGExShrinkPathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		PrimaryDistanceDetails.RenamePins(this, InOutNode, GET_MEMBER_NAME_CHECKED(UPCGExShrinkPathSettings, PrimaryDistanceDetails));
+		SecondaryDistanceDetails.RenamePins(this, InOutNode, GET_MEMBER_NAME_CHECKED(UPCGExShrinkPathSettings, SecondaryDistanceDetails));
+		PrimaryCountDetails.RenamePins(this, InOutNode, GET_MEMBER_NAME_CHECKED(UPCGExShrinkPathSettings, PrimaryCountDetails));
+		SecondaryCountDetails.RenamePins(this, InOutNode, GET_MEMBER_NAME_CHECKED(UPCGExShrinkPathSettings, SecondaryCountDetails));
+		RetireInputPin(InOutNode, FName(TEXT("PrimaryDistanceDetails/AmountInput")));
+		RetireInputPin(InOutNode, FName(TEXT("SecondaryDistanceDetails/AmountInput")));
+		RetireInputPin(InOutNode, FName(TEXT("PrimaryCountDetails/ValueSource")));
+		RetireInputPin(InOutNode, FName(TEXT("SecondaryCountDetails/ValueSource")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExShrinkPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		PrimaryDistanceDetails.ApplyDeprecation();
+		SecondaryDistanceDetails.ApplyDeprecation();
+		PrimaryCountDetails.ApplyDeprecation();
+		SecondaryCountDetails.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
+
+#pragma endregion
 
 PCGEX_INITIALIZE_ELEMENT(ShrinkPath)
 
@@ -56,10 +133,10 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 	constexpr int32 StartIndex = 0;
 	const int32 EndIndex = PointIO->GetNum() - 1;
 
-	if (Settings->PrimaryDistanceDetails.AmountInput == EPCGExInputValueType::Attribute)
+	if (Settings->PrimaryDistanceDetails.DistanceValue.Input == EPCGExInputValueType::Attribute)
 	{
 		const TUniquePtr<PCGExData::TAttributeBroadcaster<double>> Getter = MakeUnique<PCGExData::TAttributeBroadcaster<double>>();
-		if (!Getter->Prepare(Settings->PrimaryDistanceDetails.DistanceAttribute, PointIO))
+		if (!Getter->Prepare(Settings->PrimaryDistanceDetails.DistanceValue.Attribute, PointIO))
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Could not read primary Distance value attribute on some inputs."));
 		}
@@ -69,17 +146,17 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 	}
 	else
 	{
-		Start = End = Settings->PrimaryDistanceDetails.Distance;
+		Start = End = Settings->PrimaryDistanceDetails.DistanceValue.Constant;
 	}
 
 	if (Settings->SettingsMode == EPCGExShrinkConstantMode::Separate)
 	{
 		EndCut = Settings->SecondaryDistanceDetails.CutType;
 
-		if (Settings->SecondaryDistanceDetails.AmountInput == EPCGExInputValueType::Attribute)
+		if (Settings->SecondaryDistanceDetails.DistanceValue.Input == EPCGExInputValueType::Attribute)
 		{
 			const TUniquePtr<PCGExData::TAttributeBroadcaster<double>> Getter = MakeUnique<PCGExData::TAttributeBroadcaster<double>>();
-			if (!Getter->Prepare(Settings->SecondaryDistanceDetails.DistanceAttribute, PointIO))
+			if (!Getter->Prepare(Settings->SecondaryDistanceDetails.DistanceValue.Attribute, PointIO))
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Could not read secondary Distance attribute on some inputs."));
 			}
@@ -87,7 +164,7 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 		}
 		else
 		{
-			End = Settings->SecondaryDistanceDetails.Distance;
+			End = Settings->SecondaryDistanceDetails.DistanceValue.Constant;
 		}
 	}
 }
@@ -99,10 +176,10 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 	constexpr int32 StartIndex = 0;
 	const int32 EndIndex = PointIO->GetNum() - 1;
 
-	if (Settings->PrimaryCountDetails.ValueSource == EPCGExInputValueType::Attribute)
+	if (Settings->PrimaryCountDetails.CountValue.Input == EPCGExInputValueType::Attribute)
 	{
 		const TUniquePtr<PCGExData::TAttributeBroadcaster<int32>> Getter = MakeUnique<PCGExData::TAttributeBroadcaster<int32>>();
-		if (!Getter->Prepare(Settings->PrimaryCountDetails.CountAttribute, PointIO))
+		if (!Getter->Prepare(Settings->PrimaryCountDetails.CountValue.Attribute, PointIO))
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Could not read primary Distance value attribute on some inputs."));
 		}
@@ -111,15 +188,15 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 	}
 	else
 	{
-		Start = End = Settings->PrimaryCountDetails.Count;
+		Start = End = Settings->PrimaryCountDetails.CountValue.Constant;
 	}
 
 	if (Settings->SettingsMode == EPCGExShrinkConstantMode::Separate)
 	{
-		if (Settings->SecondaryCountDetails.ValueSource == EPCGExInputValueType::Attribute)
+		if (Settings->SecondaryCountDetails.CountValue.Input == EPCGExInputValueType::Attribute)
 		{
 			const TUniquePtr<PCGExData::TAttributeBroadcaster<int32>> Getter = MakeUnique<PCGExData::TAttributeBroadcaster<int32>>();
-			if (!Getter->Prepare(Settings->SecondaryCountDetails.CountAttribute, PointIO))
+			if (!Getter->Prepare(Settings->SecondaryCountDetails.CountValue.Attribute, PointIO))
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, this, FTEXT("Could not read secondary Count attribute on some inputs."));
 			}
@@ -127,7 +204,7 @@ void FPCGExShrinkPathContext::GetShrinkAmounts(const TSharedRef<PCGExData::FPoin
 		}
 		else
 		{
-			End = Settings->SecondaryCountDetails.Count;
+			End = Settings->SecondaryCountDetails.CountValue.Constant;
 		}
 	}
 

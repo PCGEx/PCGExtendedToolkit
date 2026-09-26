@@ -10,6 +10,7 @@
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "Details/PCGExSettingsMacros.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Filters/PCGExAdjacency.h"
 
 #include "PCGExIsoEdgeDirectionFilter.generated.h"
@@ -30,21 +31,9 @@ struct FPCGExIsoEdgeDirectionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExDirectionCheckMode ComparisonQuality = EPCGExDirectionCheckMode::Dot;
 
-	/** Where to read the compared direction from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
 	/** Direction to compare the edge against -- Read as an FVector direction. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector Direction;
-
-	/** Flip the direction vector before comparison. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Invert", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	bool bInvertDirection = false;
-
-	/** Direction to compare the edge against. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	FVector DirectionConstant = FVector::UpVector;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Direction"))
+	FPCGExInputShorthandSelectorDirection DirectionValue = FPCGExInputShorthandSelectorDirection(FPCGAttributePropertyInputSelector(), FVector::UpVector);
 
 	/** Transform the reference direction with the local point' transform */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -58,7 +47,26 @@ struct FPCGExIsoEdgeDirectionFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="ComparisonQuality == EPCGExDirectionCheckMode::Hash", EditConditionHides))
 	FPCGExVectorHashComparisonDetails HashComparisonDetails;
 
-	PCGEX_SETTING_VALUE_DECL(Direction, FVector)
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector Direction_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool bInvertDirection_DEPRECATED = false;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector DirectionConstant_DEPRECATED = FVector::UpVector;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -90,7 +98,6 @@ public:
 	const UPCGExIsoEdgeDirectionFilterFactory* TypedFilterFactory;
 
 	bool bUseDot = true;
-	double DirectionMultiplier = 1.0;
 
 	FPCGExEdgeDirectionSettings DirectionSettings;
 	FPCGExDotComparisonDetails DotComparison;
@@ -117,6 +124,8 @@ class UPCGExIsoEdgeDirectionFilterProviderSettings : public UPCGExEdgeFilterProv
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(IsoEdgeDirectionFilterFactory, "Edge Filter : Edge Direction", "Dot product comparison of the edge direction against a local attribute or constant.", PCGEX_FACTORY_NAME_PRIORITY)
 
 	virtual FLinearColor GetNodeTitleColor() const override

@@ -217,6 +217,37 @@ namespace PCGExDetails
 		}
 	};
 
+	/**
+	 * Negates every value read from a wrapped setting value (direction shorthands' bFlip).
+	 * Init hands the caller's bQuiet / bRegisterConsumable to the wrapped value, which owns the consumable registration.
+	 * Only instantiated for FVector.
+	 */
+	template <typename T>
+	class PCGEXCORE_API TSettingValueNegated final : public TSettingValue<T>
+	{
+	protected:
+		TSharedPtr<TSettingValue<T>> Inner;
+
+	public:
+		explicit TSettingValueNegated(const TSharedPtr<TSettingValue<T>>& InInner)
+			: Inner(InInner)
+		{
+		}
+
+		virtual bool IsConstant() override;
+		virtual void SetConstant(T InConstant) override;
+
+		virtual T Read(const int32 Index) override;
+		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
+
+		virtual T Min() override;
+		virtual T Max() override;
+		virtual uint32 ReadValueHash(const int32 Index) override;
+
+	protected:
+		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+	};
+
 	template <typename T>
 	TSharedPtr<TSettingValue<T>> MakeSettingValue(const T InConstant);
 

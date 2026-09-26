@@ -23,7 +23,7 @@ struct FPCGExFillControlConfigCount : public FPCGExFillControlConfigBase
 	FPCGExFillControlConfigCount() = default;
 
 	/** Max Count. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Count"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Count", ClampMin=1))
 	FPCGExInputShorthandNameInteger32Abs MaxCountValue = FPCGExInputShorthandNameInteger32Abs(FName("MaxCount"), 10, false);
 
 #pragma region DEPRECATED

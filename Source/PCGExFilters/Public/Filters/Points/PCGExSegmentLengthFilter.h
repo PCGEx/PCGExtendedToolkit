@@ -23,7 +23,7 @@ struct FPCGExSegmentLengthFilterConfig
 	FPCGExSegmentLengthFilterConfig() = default;
 
 	/** Constant threshold distance for comparison. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", ClampMin=1))
 	FPCGExInputShorthandSelectorDoubleAbs Threshold = FPCGExInputShorthandSelectorDoubleAbs(FString(TEXT("")), 100, false);
 
 	/** If enabled, will compare against the squared distance. */
@@ -56,17 +56,10 @@ struct FPCGExSegmentLengthFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExIndexMode IndexMode = EPCGExIndexMode::Offset;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
-	/** Index value to use according to the selected Index Mode -- Will be translated to `int32` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector IndexAttribute;
-
-	/** Const Index value to use according to the selected Index Mode, If offset mode, 1 would be next point, -1 previous point. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	int32 IndexConstant = 1;
+	/** Index value to use according to the selected Index Mode. In Offset mode, 1 is the next point, -1 the previous one.
+	 * Will be translated to `int32` under the hood. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index"))
+	FPCGExInputShorthandSelectorInteger32 Index = FPCGExInputShorthandSelectorInteger32(FPCGAttributePropertyInputSelector(), 1);
 
 	/** Index safety */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -76,8 +69,6 @@ struct FPCGExSegmentLengthFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Tile on closed loops"))
 	bool bForceTileIfClosedLoop = true;
 
-	PCGEX_SETTING_VALUE_DECL(Index, int32)
-
 	/** What should this filter return when the point required for computing length is invalid? (i.e, first or last point) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExFilterFallback InvalidPointFallback = EPCGExFilterFallback::Fail;
@@ -86,6 +77,19 @@ struct FPCGExSegmentLengthFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bInvert = false;
 
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector IndexAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 IndexConstant_DEPRECATED = 1;
+
+#pragma endregion
+
 	void Sanitize()
 	{
 	}
@@ -93,6 +97,10 @@ struct FPCGExSegmentLengthFilterConfig
 #if WITH_EDITOR
 	void ApplyDeprecation();
 	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+
+	// Separate from ApplyDeprecation/RenamePins: those run under an older gate.
+	void ApplyIndexDeprecation();
+	void RenameIndexPins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
 #endif
 };
 

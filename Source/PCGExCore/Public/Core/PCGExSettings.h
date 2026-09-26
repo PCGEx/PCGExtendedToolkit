@@ -146,6 +146,9 @@ protected:
 	/** Breaks the edges of an input pin these settings no longer declare, and warns. Call from PCGExApplyDeprecationBeforeUpdatePins:
 	 * UPCGNode::UpdatePins drops such edges silently, and renames a lone stale pin onto a lone new one, keeping compatible edges. */
 	void RetireInputPin(UPCGNode* InOutNode, const FName InLabel) const;
+
+	/** Forwards the resolved data version to every owned instanced operation (UPCGExInstancedFactory::PCGExApplyDeprecation). */
+	void ApplyInstancedFactoriesDeprecation();
 #endif
 
 	virtual bool SupportsDataStealing() const;

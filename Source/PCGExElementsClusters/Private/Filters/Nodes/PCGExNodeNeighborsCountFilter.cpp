@@ -3,6 +3,7 @@
 
 #include "Filters/Nodes/PCGExNodeNeighborsCountFilter.h"
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/Utils/PCGExDataPreloader.h"
@@ -12,15 +13,23 @@
 #define LOCTEXT_NAMESPACE "PCGExNodeNeighborsCountFilter"
 #define PCGEX_NAMESPACE NodeNeighborsCountFilter
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExNodeNeighborsCountFilterConfig, LocalCount, double, CompareAgainst, LocalCount, Count)
+#if WITH_EDITOR
+void FPCGExNodeNeighborsCountFilterConfig::ApplyDeprecation()
+{
+	CountValue.Update(CompareAgainst_DEPRECATED, LocalCount_DEPRECATED, Count_DEPRECATED);
+}
+
+void FPCGExNodeNeighborsCountFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("LocalCount")), FName(TEXT("CountValue")), FName(TEXT("Attribute")), FName(TEXT("Operand A (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Count")), FName(TEXT("CountValue")), FName(TEXT("Constant")), FName(TEXT("Operand A")));
+}
+#endif
 
 void UPCGExNodeNeighborsCountFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.LocalCount);
-	}
+	Config.CountValue.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExNodeNeighborsCountFilterFactory::CreateFilter() const
@@ -37,7 +46,7 @@ namespace PCGExNodeNeighborsCount
 			return false;
 		}
 
-		LocalCount = TypedFilterFactory->Config.GetValueSettingLocalCount(PCGEX_QUIET_HANDLING);
+		LocalCount = TypedFilterFactory->Config.CountValue.GetValueSetting(PCGEX_QUIET_HANDLING);
 		LocalCount->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!LocalCount->Init(PointDataFacade, false))
 		{
@@ -50,7 +59,7 @@ namespace PCGExNodeNeighborsCount
 	bool FFilter::Test(const PCGExClusters::FNode& Node) const
 	{
 		const double A = Node.Num();
-		const double B = LocalCount ? LocalCount->Read(Node.PointIndex) : TypedFilterFactory->Config.Count;
+		const double B = LocalCount->Read(Node.PointIndex);
 		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
 	}
 
@@ -63,17 +72,38 @@ namespace PCGExNodeNeighborsCount
 PCGEX_CREATE_FILTER_FACTORY(NodeNeighborsCount)
 
 #if WITH_EDITOR
+void UPCGExNodeNeighborsCountFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExNodeNeighborsCountFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExNodeNeighborsCountFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = "Num Edges" + PCGExCompare::ToString(Config.Comparison);
 
-	if (Config.CompareAgainst == EPCGExInputValueType::Constant)
+	if (Config.CountValue.Input == EPCGExInputValueType::Constant)
 	{
-		DisplayName += FString::Printf(TEXT("%d"), Config.Count);
+		DisplayName += FString::SanitizeFloat(Config.CountValue.Constant);
 	}
 	else
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.LocalCount);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.CountValue.Attribute);
 	}
 
 	return DisplayName;

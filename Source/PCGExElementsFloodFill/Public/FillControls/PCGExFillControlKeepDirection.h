@@ -28,7 +28,7 @@ struct FPCGExFillControlConfigKeepDirection : public FPCGExFillControlConfigBase
 	}
 
 	/** Window Size. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Window Size"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Window Size", ClampMin=1))
 	FPCGExInputShorthandSelectorInteger32Abs WindowSizeValue = FPCGExInputShorthandSelectorInteger32Abs(FName("WindowSize"), 1, false);
 
 #pragma region DEPRECATED

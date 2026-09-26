@@ -66,7 +66,6 @@ MACRO(double, Double01, __VA_ARGS__)     \
 MACRO(double, Double11, __VA_ARGS__)     \
 MACRO(FVector2D, Vector2, __VA_ARGS__)  \
 MACRO(FVector, Vector, __VA_ARGS__)    \
-MACRO(FVector, Direction, __VA_ARGS__)    \
 MACRO(FVector4, Vector4, __VA_ARGS__)   \
 MACRO(FRotator, Rotator, __VA_ARGS__)   \
 MACRO(FTransform, Transform, __VA_ARGS__) \
@@ -84,29 +83,48 @@ void FPCGExInputShorthandSelector##_NAME::Update(EPCGExInputValueType InInputTyp
 void FPCGExInputShorthandSelector##_NAME::Update(EPCGExInputValueType InInputType, FName InSelector, _TYPE InConstant){Input = InInputType; Constant = InConstant;	Attribute.Update(InSelector.ToString());}\
 bool FPCGExInputShorthandSelector##_NAME::CanSupportDataOnly() const { return Input == EPCGExInputValueType::Constant ? true : PCGExMetaHelpers::IsDataDomainAttribute(Attribute); }
 
+#define PCGEX_TPL_SHORTHAND_NAME_COMMON(_TYPE, _NAME, ...)\
+bool FPCGExInputShorthandName##_NAME::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot){ if (!PCGExInputShorthandsDetails::LoadMismatchedConstant(Tag, Slot, Constant)) { return false; } Input = EPCGExInputValueType::Constant; return true; }\
+void FPCGExInputShorthandName##_NAME::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const { if (Input == EPCGExInputValueType::Attribute) { FacadePreloader.Register<_TYPE>(InContext, Attribute); } }\
+PCGEX_SHORTHAND_UPDATE__NAME_IMPL(_TYPE, _NAME)
+
 #define PCGEX_TPL_SHORTHAND_NAME(_TYPE, _NAME, ...)\
 PCGEX_SETTING_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandName##_NAME, , _TYPE, Input, Attribute, Constant)\
 PCGEX_SETTING_DATA_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandName##_NAME, , _TYPE, Input, Attribute, Constant)\
 bool FPCGExInputShorthandName##_NAME::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(IO, Attribute); } return true; }\
 bool FPCGExInputShorthandName##_NAME::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, Attribute); } return true; }\
-bool FPCGExInputShorthandName##_NAME::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot){ if (!PCGExInputShorthandsDetails::LoadMismatchedConstant(Tag, Slot, Constant)) { return false; } Input = EPCGExInputValueType::Constant; return true; }\
-void FPCGExInputShorthandName##_NAME::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const { if (Input == EPCGExInputValueType::Attribute) { FacadePreloader.Register<_TYPE>(InContext, Attribute); } }\
-PCGEX_SHORTHAND_UPDATE__NAME_IMPL(_TYPE, _NAME)
+PCGEX_TPL_SHORTHAND_NAME_COMMON(_TYPE, _NAME)
+
+#define PCGEX_TPL_SHORTHAND_SELECTOR_COMMON(_TYPE, _NAME, ...)\
+bool FPCGExInputShorthandSelector##_NAME::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot){ if (!PCGExInputShorthandsDetails::LoadMismatchedConstant(Tag, Slot, Constant)) { return false; } Input = EPCGExInputValueType::Constant; return true; }\
+void FPCGExInputShorthandSelector##_NAME::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const { if (Input == EPCGExInputValueType::Attribute) { FacadePreloader.Register<_TYPE>(InContext, Attribute); } }\
+PCGEX_SHORTHAND_UPDATE__SELECTOR_IMPL(_TYPE, _NAME)
 
 #define PCGEX_TPL_SHORTHAND_SELECTOR(_TYPE, _NAME, ...)\
 PCGEX_SETTING_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandSelector##_NAME, , _TYPE, Input, Attribute, Constant)\
 PCGEX_SETTING_DATA_VALUE_IMPL_SHORTHAND(FPCGExInputShorthandSelector##_NAME, , _TYPE, Input, Attribute, Constant)\
 bool FPCGExInputShorthandSelector##_NAME::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(IO, Attribute); } return true; }\
 bool FPCGExInputShorthandSelector##_NAME::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, _TYPE& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, Attribute); } return true; }\
-bool FPCGExInputShorthandSelector##_NAME::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot){ if (!PCGExInputShorthandsDetails::LoadMismatchedConstant(Tag, Slot, Constant)) { return false; } Input = EPCGExInputValueType::Constant; return true; }\
-void FPCGExInputShorthandSelector##_NAME::RegisterBufferDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const { if (Input == EPCGExInputValueType::Attribute) { FacadePreloader.Register<_TYPE>(InContext, Attribute); } }\
-PCGEX_SHORTHAND_UPDATE__SELECTOR_IMPL(_TYPE, _NAME)
+PCGEX_TPL_SHORTHAND_SELECTOR_COMMON(_TYPE, _NAME)
+
+// Direction applies bFlip in every value path: the constant is flipped once, attribute reads are wrapped.
+#define PCGEX_TPL_SHORTHAND_DIRECTION(_KIND, _UPKIND)\
+PCGEX_TPL_SHORTHAND_##_UPKIND##_COMMON(FVector, Direction)\
+TSharedPtr<PCGExDetails::TSettingValue<FVector>> FPCGExInputShorthand##_KIND##Direction::GetValueSetting(const bool bQuiet) const{ TSharedPtr<PCGExDetails::TSettingValue<FVector>> V = PCGExDetails::MakeSettingValue<FVector>(Input, Attribute, bFlip ? -Constant : Constant); if (bFlip && Input == EPCGExInputValueType::Attribute) { V = MakeShared<PCGExDetails::TSettingValueNegated<FVector>>(V); } V->bQuiet = bQuiet; V->bRegisterConsumable = bCleanupAttribute; return V; }\
+TSharedPtr<PCGExDetails::TSettingValue<FVector>> FPCGExInputShorthand##_KIND##Direction::GetValueSetting(FPCGExContext* InContext, const UPCGData* InData, const bool bQuiet) const{ FVector Value = Constant; PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, Value); TSharedPtr<PCGExDetails::TSettingValue<FVector>> V = PCGExDetails::MakeSettingValue<FVector>(bFlip ? -Value : Value); V->bQuiet = bQuiet; V->bRegisterConsumable = bCleanupAttribute; if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, Attribute); } return V; }\
+bool FPCGExInputShorthand##_KIND##Direction::TryReadDataValue(const TSharedPtr<PCGExData::FPointIO>& IO, FVector& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(IO, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bFlip) { OutValue = -OutValue; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(IO, Attribute); } return true; }\
+bool FPCGExInputShorthand##_KIND##Direction::TryReadDataValue(FPCGExContext* InContext, const UPCGData* InData, FVector& OutValue, const bool bQuiet) const{ if (!PCGExData::Helpers::TryGetSettingDataValue(InContext, InData, Input, Attribute, Constant, OutValue, bQuiet)) { return false; } if (bFlip) { OutValue = -OutValue; } if (bCleanupAttribute && Input == EPCGExInputValueType::Attribute) { PCGExData::Helpers::RegisterDataDomainConsumable(InContext, InData, Attribute); } return true; }
 
 PCGEX_FOREACH_INPUT_SHORTHAND(PCGEX_TPL_SHORTHAND_NAME)
 PCGEX_FOREACH_INPUT_SHORTHAND(PCGEX_TPL_SHORTHAND_SELECTOR)
+PCGEX_TPL_SHORTHAND_DIRECTION(Name, NAME)
+PCGEX_TPL_SHORTHAND_DIRECTION(Selector, SELECTOR)
 
+#undef PCGEX_TPL_SHORTHAND_DIRECTION
 #undef PCGEX_TPL_SHORTHAND_NAME
+#undef PCGEX_TPL_SHORTHAND_NAME_COMMON
 #undef PCGEX_TPL_SHORTHAND_SELECTOR
+#undef PCGEX_TPL_SHORTHAND_SELECTOR_COMMON
 #undef PCGEX_FOREACH_INPUT_SHORTHAND
 
 #if WITH_EDITOR

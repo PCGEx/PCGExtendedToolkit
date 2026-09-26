@@ -14,7 +14,9 @@
 #include "PCGGraph.h"
 #include "PCGNode.h"
 #include "PCGPin.h"
+#include "Factories/PCGExInstancedFactory.h"
 #include "Styling/SlateStyle.h"
+#include "UObject/UnrealType.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
@@ -41,7 +43,8 @@ void UPCGExSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArra
 void UPCGExSettings::ApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGExApplyDeprecation(InOutNode);
-	
+	ApplyInstancedFactoriesDeprecation();
+
 	Super::ApplyDeprecation(InOutNode);
 	
 	PCGEX_UPDATE_DATA_VERSION_TO_LATEST
@@ -51,6 +54,38 @@ void UPCGExSettings::ApplyDeprecation(UPCGNode* InOutNode)
 
 void UPCGExSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
+}
+
+void UPCGExSettings::ApplyInstancedFactoriesDeprecation()
+{
+	// Instanced operations serialize in this package, so the resolved PCGExDataVersion is theirs too.
+	// Walks structs and containers, then each found operation for nested ones; only owned instances are touched.
+	TArray<UPCGExInstancedFactory*> Factories;
+	TSet<const UPCGExInstancedFactory*> Visited;
+
+	auto Gather = [&](const UStruct* InStruct, const void* InContainer)
+	{
+		for (TPropertyValueIterator<FObjectProperty> It(InStruct, InContainer, EPropertyValueIteratorFlags::FullRecursion, EFieldIteratorFlags::ExcludeDeprecated); It; ++It)
+		{
+			if (!It.Key()->HasAnyPropertyFlags(CPF_InstancedReference)) { continue; }
+
+			UPCGExInstancedFactory* Factory = Cast<UPCGExInstancedFactory>(It.Key()->GetObjectPropertyValue(It.Value()));
+			if (!Factory || !Factory->IsIn(this)) { continue; }
+
+			bool bAlreadyVisited = false;
+			Visited.Add(Factory, &bAlreadyVisited);
+			if (!bAlreadyVisited) { Factories.Add(Factory); }
+		}
+	};
+
+	Gather(GetClass(), this);
+
+	for (int32 i = 0; i < Factories.Num(); i++)
+	{
+		UPCGExInstancedFactory* Factory = Factories[i];
+		Gather(Factory->GetClass(), Factory);
+		Factory->PCGExApplyDeprecation(PCGExDataVersion);
+	}
 }
 
 void UPCGExSettings::ResolveDataVersion()

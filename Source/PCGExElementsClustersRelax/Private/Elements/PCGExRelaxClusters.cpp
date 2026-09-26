@@ -52,7 +52,6 @@ void UPCGExRelaxClustersSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	PCGEX_IF_VERSION_LOWER(1, 76, 10)
 	{
 		InfluenceDetails.ApplyDeprecation();
-		if (Relaxing) { Relaxing->ApplyShorthandDeprecation(); }
 	}
 	Super::PCGExApplyDeprecation(InOutNode);
 }

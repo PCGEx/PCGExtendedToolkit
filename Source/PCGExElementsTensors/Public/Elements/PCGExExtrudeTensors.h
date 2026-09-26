@@ -154,7 +154,7 @@ public:
 	bool bUseMaxLength = false;
 
 	/** Max length of the generated path */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Length", EditCondition="bUseMaxLength", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Length", EditCondition="bUseMaxLength", EditConditionHides, ClampMin=1))
 	FPCGExInputShorthandNameDoubleAbs MaxLengthValue = FPCGExInputShorthandNameDoubleAbs(FName("MaxLength"), 100, false);
 
 	/** Whether to limit the number of points in a generated path */
@@ -162,7 +162,7 @@ public:
 	bool bUseMaxPointsCount = false;
 
 	/** Max number of points in a generated path */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Points Count", EditCondition="bUseMaxPointsCount", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Limits", meta=(PCG_Overridable, DisplayName="Max Points Count", EditCondition="bUseMaxPointsCount", EditConditionHides, ClampMin=1))
 	FPCGExInputShorthandNameInteger32Abs MaxPointsCountValue = FPCGExInputShorthandNameInteger32Abs(FName("MaxPointsCount"), 100, false);
 
 #pragma region DEPRECATED

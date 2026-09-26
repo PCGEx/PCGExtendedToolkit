@@ -16,7 +16,18 @@
 #define LOCTEXT_NAMESPACE "PCGExTimeFilterDefinition"
 #define PCGEX_NAMESPACE PCGExTimeFilterDefinition
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExTimeFilterConfig, OperandB, float, CompareAgainst, OperandB, OperandBConstant)
+#if WITH_EDITOR
+void FPCGExTimeFilterConfig::ApplyDeprecation()
+{
+	OperandBValue.Update(CompareAgainst_DEPRECATED, OperandB_DEPRECATED, OperandBConstant_DEPRECATED);
+}
+
+void FPCGExTimeFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandB")), FName(TEXT("OperandBValue")), FName(TEXT("Attribute")), FName(TEXT("Operand B (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandBConstant")), FName(TEXT("OperandBValue")), FName(TEXT("Constant")), FName(TEXT("Operand B")));
+}
+#endif
 
 bool UPCGExTimeFilterFactory::SupportsCollectionEvaluation() const
 {
@@ -25,7 +36,7 @@ bool UPCGExTimeFilterFactory::SupportsCollectionEvaluation() const
 
 bool UPCGExTimeFilterFactory::SupportsProxyEvaluation() const
 {
-	return Config.CompareAgainst == EPCGExInputValueType::Constant;
+	return Config.OperandBValue.Input == EPCGExInputValueType::Constant;
 }
 
 void UPCGExTimeFilterFactory::InitConfig_Internal()
@@ -50,10 +61,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExTimeFilterFactory::CreateFilter() co
 void UPCGExTimeFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.OperandB);
-	}
+	Config.OperandBValue.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 FName UPCGExTimeFilterFactory::GetInputLabel() const
@@ -97,7 +105,7 @@ namespace PCGExPointFilter
 			}
 		}
 
-		OperandB = TypedFilterFactory->Config.GetValueSettingOperandB();
+		OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting();
 		OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 		if (!OperandB->Init(PointDataFacade))
 		{
@@ -302,6 +310,13 @@ void UPCGExTimeFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPC
 	{
 		Config.DataMatching.RenamePins(this, InOutNode);
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -311,6 +326,12 @@ void UPCGExTimeFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode
 	{
 		Config.DataMatching.ApplyDeprecation();
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
@@ -318,13 +339,13 @@ FString UPCGExTimeFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Time ") + PCGExCompare::ToString(Config.Comparison);
 
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
+	if (Config.OperandBValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandB);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandBValue.Attribute);
 	}
 	else
 	{
-		DisplayName += FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.OperandBConstant) / 1000.0));
+		DisplayName += FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.OperandBValue.Constant) / 1000.0));
 	}
 
 	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);

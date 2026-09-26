@@ -346,7 +346,8 @@ namespace PCGExSampleSurfaceGuided
 
 		if (Context->ApplySampling.WantsApply())
 		{
-			const FVector Cross = CrossAxis->Read(Index) * (Settings->CrossAxis.bFlip ? 1 : -1);
+			// Negated by construction; the getter already applied bFlip.
+			const FVector Cross = -CrossAxis->Read(Index);
 			const FQuat Rot = PCGExMath::MakeRot(Settings->RotationConstruction, HitResult.ImpactNormal, Cross);
 			const FTransform OutTransform(Rot, Impact, FVector::OneVector);
 			Context->ApplySampling.Apply(MutablePoint, OutTransform, OutTransform);

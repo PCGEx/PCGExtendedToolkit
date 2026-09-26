@@ -46,7 +46,7 @@ public:
 #pragma endregion
 
 #if WITH_EDITOR
-	virtual void ApplyShorthandDeprecation() override;
+	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion) override;
 #endif
 
 	virtual bool PrepareForCluster(FPCGExContext* InContext, const TSharedPtr<PCGExClusters::FCluster>& InCluster) override;

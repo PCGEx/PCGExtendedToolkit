@@ -3,12 +3,19 @@
 
 #include "Relaxations/PCGExRadiusFittingRelax.h"
 
+#include "PCGExVersion.h"
+
 #pragma region UPCGExRadiusFittingRelax
 
 #if WITH_EDITOR
-void UPCGExRadiusFittingRelax::ApplyShorthandDeprecation()
+void UPCGExRadiusFittingRelax::PCGExApplyDeprecation(const int64 PCGExDataVersion)
 {
-	RadiusValue.Update(RadiusInput_DEPRECATED, RadiusAttribute_DEPRECATED, Radius_DEPRECATED);
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		RadiusValue.Update(RadiusInput_DEPRECATED, RadiusAttribute_DEPRECATED, Radius_DEPRECATED);
+	}
+
+	Super::PCGExApplyDeprecation(PCGExDataVersion);
 }
 #endif
 

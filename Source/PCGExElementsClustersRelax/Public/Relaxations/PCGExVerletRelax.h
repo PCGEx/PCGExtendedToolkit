@@ -85,7 +85,7 @@ public:
 #pragma endregion
 
 #if WITH_EDITOR
-	virtual void ApplyShorthandDeprecation() override;
+	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion) override;
 #endif
 
 	/** If this was a physic simulation, represent the time advance each iteration */

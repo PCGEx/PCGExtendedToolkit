@@ -3,6 +3,7 @@
 
 #include "Filters/Points/PCGExModuloCompareFilter.h"
 
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
@@ -12,12 +13,25 @@
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExModuloCompareFilterConfig, OperandB, double, OperandBSource, OperandB, OperandBConstant)
-PCGEX_SETTING_VALUE_IMPL(FPCGExModuloCompareFilterConfig, OperandC, double, CompareAgainst, OperandC, OperandCConstant)
+#if WITH_EDITOR
+void FPCGExModuloCompareFilterConfig::ApplyDeprecation()
+{
+	OperandBValue.Update(OperandBSource_DEPRECATED, OperandB_DEPRECATED, OperandBConstant_DEPRECATED);
+	OperandCValue.Update(CompareAgainst_DEPRECATED, OperandC_DEPRECATED, OperandCConstant_DEPRECATED);
+}
+
+void FPCGExModuloCompareFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandB")), FName(TEXT("OperandBValue")), FName(TEXT("Attribute")), FName(TEXT("Operand B (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandBConstant")), FName(TEXT("OperandBValue")), FName(TEXT("Constant")), FName(TEXT("Operand B")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandC")), FName(TEXT("OperandCValue")), FName(TEXT("Attribute")), FName(TEXT("Operand C (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandCConstant")), FName(TEXT("OperandCValue")), FName(TEXT("Constant")), FName(TEXT("Operand C")));
+}
+#endif
 
 bool UPCGExModuloCompareFilterFactory::DomainCheck()
 {
-	return PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandA) && (Config.OperandBSource == EPCGExInputValueType::Constant || PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandB)) && (Config.CompareAgainst == EPCGExInputValueType::Constant || PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandC));
+	return PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandA) && Config.OperandBValue.CanSupportDataOnly() && Config.OperandCValue.CanSupportDataOnly();
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExModuloCompareFilterFactory::CreateFilter() const
@@ -29,14 +43,8 @@ void UPCGExModuloCompareFilterFactory::RegisterBuffersDependencies(FPCGExContext
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 	FacadePreloader.Register<double>(InContext, Config.OperandA);
-	if (Config.OperandBSource == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.OperandB);
-	}
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.OperandC);
-	}
+	Config.OperandBValue.RegisterBufferDependencies(InContext, FacadePreloader);
+	Config.OperandCValue.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 bool UPCGExModuloCompareFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
@@ -67,14 +75,14 @@ bool PCGExPointFilter::FModuloComparisonFilter::Init(FPCGExContext* InContext, c
 		return false;
 	}
 
-	OperandB = TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING);
+	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
 	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandB->Init(PointDataFacade))
 	{
 		return false;
 	}
 
-	OperandC = TypedFilterFactory->Config.GetValueSettingOperandC(PCGEX_QUIET_HANDLING);
+	OperandC = TypedFilterFactory->Config.OperandCValue.GetValueSetting(PCGEX_QUIET_HANDLING);
 	OperandC->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandC->Init(PointDataFacade))
 	{
@@ -133,11 +141,11 @@ bool PCGExPointFilter::FModuloComparisonFilter::Test(const TSharedPtr<PCGExData:
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
-	if (!PCGExData::Helpers::TryGetSettingDataValue(IO, TypedFilterFactory->Config.OperandBSource, TypedFilterFactory->Config.OperandB, TypedFilterFactory->Config.OperandBConstant, B, PCGEX_QUIET_HANDLING))
+	if (!TypedFilterFactory->Config.OperandBValue.TryReadDataValue(IO, B, PCGEX_QUIET_HANDLING))
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
-	if (!PCGExData::Helpers::TryGetSettingDataValue(IO, TypedFilterFactory->Config.CompareAgainst, TypedFilterFactory->Config.OperandC, TypedFilterFactory->Config.OperandCConstant, C, PCGEX_QUIET_HANDLING))
+	if (!TypedFilterFactory->Config.OperandCValue.TryReadDataValue(IO, C, PCGEX_QUIET_HANDLING))
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
@@ -148,28 +156,50 @@ bool PCGExPointFilter::FModuloComparisonFilter::Test(const TSharedPtr<PCGExData:
 PCGEX_CREATE_FILTER_FACTORY(ModuloCompare)
 
 #if WITH_EDITOR
+void UPCGExModuloCompareFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("OperandBSource")));
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExModuloCompareFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExModuloCompareFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandA) + " % ";
 
-	if (Config.OperandBSource == EPCGExInputValueType::Attribute)
+	if (Config.OperandBValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandB);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandBValue.Attribute);
 	}
 	else
 	{
-		DisplayName += FString::Printf(TEXT("%.3f "), (static_cast<int32>(1000 * Config.OperandBConstant) / 1000.0));
+		DisplayName += FString::Printf(TEXT("%.3f "), (static_cast<int32>(1000 * Config.OperandBValue.Constant) / 1000.0));
 	}
 
 	DisplayName += PCGExCompare::ToString(Config.Comparison);
 
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
+	if (Config.OperandCValue.Input == EPCGExInputValueType::Attribute)
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandC);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandCValue.Attribute);
 	}
 	else
 	{
-		DisplayName += FString::Printf(TEXT(" %.3f"), (static_cast<int32>(1000 * Config.OperandCConstant) / 1000.0));
+		DisplayName += FString::Printf(TEXT(" %.3f"), (static_cast<int32>(1000 * Config.OperandCValue.Constant) / 1000.0));
 	}
 
 	return DisplayName;

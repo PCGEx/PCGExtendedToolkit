@@ -171,6 +171,57 @@ namespace PCGExDetails
 	}
 
 	template <typename T>
+	bool TSettingValueNegated<T>::IsConstant()
+	{
+		return Inner->IsConstant();
+	}
+
+	template <typename T>
+	void TSettingValueNegated<T>::SetConstant(T InConstant)
+	{
+		Inner->SetConstant(-InConstant);
+	}
+
+	template <typename T>
+	T TSettingValueNegated<T>::Read(const int32 Index)
+	{
+		return -Inner->Read(Index);
+	}
+
+	template <typename T>
+	void TSettingValueNegated<T>::ReadScope(const int32 Start, TArrayView<T> OutResults)
+	{
+		Inner->ReadScope(Start, OutResults);
+		for (T& Value : OutResults) { Value = -Value; }
+	}
+
+	template <typename T>
+	T TSettingValueNegated<T>::Min()
+	{
+		return -Inner->Max();
+	}
+
+	template <typename T>
+	T TSettingValueNegated<T>::Max()
+	{
+		return -Inner->Min();
+	}
+
+	template <typename T>
+	uint32 TSettingValueNegated<T>::ReadValueHash(const int32 Index)
+	{
+		return PCGExTypes::ComputeHash(Read(Index));
+	}
+
+	template <typename T>
+	bool TSettingValueNegated<T>::InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax)
+	{
+		Inner->bQuiet = this->bQuiet;
+		Inner->bRegisterConsumable = this->bRegisterConsumable;
+		return Inner->Init(InDataFacade, bSupportScoped, bCaptureMinMax);
+	}
+
+	template <typename T>
 	TSharedPtr<TSettingValue<T>> MakeSettingValue(const T InConstant)
 	{
 		TSharedPtr<TSettingValueConstant<T>> V = MakeShared<TSettingValueConstant<T>>(InConstant);
@@ -259,6 +310,8 @@ template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const T
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 
 #undef PCGEX_TPL
+
+	template class PCGEXCORE_API TSettingValueNegated<FVector>;
 
 #pragma endregion
 }

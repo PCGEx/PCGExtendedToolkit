@@ -232,11 +232,9 @@ namespace PCGExCompare
 	}
 }
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExVectorHashComparisonDetails, Tolerance, double, HashToleranceInput, HashToleranceAttribute, HashToleranceConstant);
-
 bool FPCGExVectorHashComparisonDetails::Init(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InPrimaryDataFacade, const bool bQuiet)
 {
-	Tolerance = GetValueSettingTolerance(bQuiet);
+	Tolerance = HashTolerance.GetValueSetting(bQuiet);
 	if (!Tolerance->Init(InPrimaryDataFacade, false))
 	{
 		return false;
@@ -253,13 +251,26 @@ FVector FPCGExVectorHashComparisonDetails::GetCWTolerance(const int32 PointIndex
 void FPCGExVectorHashComparisonDetails::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
 {
 	FName Consumable = NAME_None;
-	PCGEX_CONSUMABLE_CONDITIONAL(HashToleranceInput == EPCGExInputValueType::Attribute, HashToleranceAttribute, Consumable)
+	PCGEX_CONSUMABLE_CONDITIONAL(HashTolerance.bCleanupAttribute && HashTolerance.Input == EPCGExInputValueType::Attribute, HashTolerance.Attribute, Consumable)
 }
 
 bool FPCGExVectorHashComparisonDetails::GetOnlyUseDataDomain() const
 {
-	return HashToleranceInput == EPCGExInputValueType::Constant || PCGExMetaHelpers::IsDataDomainAttribute(HashToleranceAttribute);
+	return HashTolerance.CanSupportDataOnly();
 }
+
+#if WITH_EDITOR
+void FPCGExVectorHashComparisonDetails::ApplyDeprecation()
+{
+	HashTolerance.Update(HashToleranceInput_DEPRECATED, HashToleranceAttribute_DEPRECATED, HashToleranceConstant_DEPRECATED);
+}
+
+void FPCGExVectorHashComparisonDetails::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("HashToleranceAttribute")), FName(TEXT("HashTolerance")), FName(TEXT("Attribute")), FName(TEXT("Hash Tolerance (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("HashToleranceConstant")), FName(TEXT("HashTolerance")), FName(TEXT("Constant")), FName(TEXT("Hash Tolerance")));
+}
+#endif
 
 bool FPCGExVectorHashComparisonDetails::Test(const FVector& A, const FVector& B, const int32 PointIndex) const
 {

@@ -308,7 +308,7 @@ struct PCGEXCORE_API FPCGExInputShorthandNameVector : public FPCGExInputShorthan
 	FVector Constant = FVector::ZeroVector;
 };
 
-/** Direction vector shorthand with optional inversion. */
+/** Direction vector shorthand. Every value getter (GetValueSetting, TryReadDataValue) applies bFlip. */
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandNameDirection : public FPCGExInputShorthandNameVector
 {
@@ -607,7 +607,7 @@ struct PCGEXCORE_API FPCGExInputShorthandSelectorVector : public FPCGExInputShor
 	FVector Constant = FVector::ZeroVector;
 };
 
-/** Direction vector shorthand with optional inversion. */
+/** Direction vector shorthand. Every value getter (GetValueSetting, TryReadDataValue) applies bFlip. */
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExInputShorthandSelectorDirection : public FPCGExInputShorthandSelectorBase
 {

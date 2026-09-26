@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "PCGExGoalPicker.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsMacros.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "UObject/Object.h"
@@ -35,15 +36,26 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	EPCGExGoalPickRandomAmount GoalCount = EPCGExGoalPickRandomAmount::Single;
 
-	/** Fetch the smoothing from a local attribute.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType NumGoalsType = EPCGExInputValueType::Constant;
+	/** Number of goals to pick per seed. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Num Goals", EditCondition="GoalCount != EPCGExGoalPickRandomAmount::Single", ClampMin=1))
+	FPCGExInputShorthandSelectorInteger32Abs NumGoalsValue = FPCGExInputShorthandSelectorInteger32Abs(FPCGAttributePropertyInputSelector(), 5);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Num Goals (Attr)", EditCondition="GoalCount != EPCGExGoalPickRandomAmount::Single && NumGoalsType != EPCGExInputValueType::Constant"))
-	FPCGAttributePropertyInputSelector NumGoalAttribute;
+#pragma region DEPRECATED
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Num Goals", EditCondition="GoalCount != EPCGExGoalPickRandomAmount::Single && NumGoalsType == EPCGExInputValueType::Constant", ClampMin=1))
-	int32 NumGoals = 5;
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType NumGoalsType_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector NumGoalAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 NumGoals_DEPRECATED = 5;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion) override;
+#endif
 
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
@@ -54,8 +66,6 @@ public:
 	virtual bool OutputMultipleGoals() const override;
 
 	virtual void Cleanup() override;
-
-	PCGEX_SETTING_VALUE_DECL(NumGoals, int32)
 
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> NumGoalsBuffer;

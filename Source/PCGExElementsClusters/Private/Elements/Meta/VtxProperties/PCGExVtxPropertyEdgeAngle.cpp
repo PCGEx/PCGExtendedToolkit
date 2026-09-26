@@ -45,8 +45,6 @@ bool FPCGExVtxPropertyEdgeAngle::PrepareForCluster(FPCGExContext* InContext, TSh
 		return false;
 	}
 
-	UpMultiplier = Config.UpVector.bFlip ? -1 : 1;
-
 	AngleBuffer = InVtxDataFacade->GetWritable<double>(Config.AngleAttributeName, 0, true, PCGExData::EBufferInit::New);
 
 	return bIsValidOperation;
@@ -62,7 +60,7 @@ void FPCGExVtxPropertyEdgeAngle::ProcessNode(PCGExClusters::FNode& Node, const T
 		return;
 	}
 
-	const FVector Up = UpCache->Read(Node.PointIndex) * UpMultiplier;
+	const FVector Up = UpCache->Read(Node.PointIndex);
 
 	// Adjacency directions are neighbor->node, but dot & cross are invariant when both operands are
 	// negated, so pairwise angles match the outgoing-edge convention: PI = straight-through, 0 = folded.

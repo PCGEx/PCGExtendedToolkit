@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExSampleSockets.h"
 
+#include "PCGExVersion.h"
 #include "PCGComponent.h"
 #include "Engine/StaticMesh.h"
 
@@ -18,6 +19,29 @@
 #define LOCTEXT_NAMESPACE "PCGExSampleSocketsElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
 
+#if WITH_EDITOR
+void UPCGExSampleSocketsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("AssetPathAttributeName")), FName(TEXT("Asset")), FName(TEXT("Attribute")), FName(TEXT(" └─ Asset (Attr)")));
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("StaticMesh")), FName(TEXT("Asset")), FName(TEXT("Constant")), FName(TEXT(" └─ Asset")));
+		RetireInputPin(InOutNode, FName(TEXT("AssetType")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExSampleSocketsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Asset.Update(AssetType_DEPRECATED, AssetPathAttributeName_DEPRECATED, StaticMesh_DEPRECATED.ToSoftObjectPath());
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+#endif
 
 PCGEX_INITIALIZE_ELEMENT(SampleSockets)
 
@@ -51,11 +75,12 @@ bool FPCGExSampleSocketsElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	if (Settings->AssetType == EPCGExInputValueType::Attribute)
+	if (Settings->Asset.Input == EPCGExInputValueType::Attribute)
 	{
-		PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->AssetPathAttributeName)
+		PCGEX_VALIDATE_NAME_C(Context, Settings->Asset.Attribute)
+		if (Settings->Asset.bCleanupAttribute) { Context->AddConsumableAttributeName(Settings->Asset.Attribute); }
 
-		TArray<FName> Names = {Settings->AssetPathAttributeName};
+		TArray<FName> Names = {Settings->Asset.Attribute};
 		Context->StaticMeshLoader = MakeShared<PCGEx::TAssetLoader<UStaticMesh>>(Context, Context->MainPoints, Names);
 		if (!Context->StaticMeshLoader->Discover())
 		{
@@ -64,8 +89,9 @@ bool FPCGExSampleSocketsElement::Boot(FPCGExContext* InContext) const
 	}
 	else
 	{
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(Settings->StaticMesh, Context);
-		Context->StaticMesh = Settings->StaticMesh.Get();
+		const TSoftObjectPtr<UStaticMesh> StaticMeshPtr(Settings->Asset.Constant);
+		PCGExHelpers::LoadBlocking_AnyThreadTpl(StaticMeshPtr, Context);
+		Context->StaticMesh = StaticMeshPtr.Get();
 		if (!Context->StaticMesh)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Static mesh could not be loaded."));
@@ -144,7 +170,7 @@ namespace PCGExSampleSockets
 			return false;
 		}
 
-		if (Settings->AssetType == EPCGExInputValueType::Attribute)
+		if (Settings->Asset.Input == EPCGExInputValueType::Attribute)
 		{
 			Keys = Context->StaticMeshLoader->GetKeys(PointDataFacade->Source->IOIndex);
 		}
