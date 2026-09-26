@@ -79,8 +79,7 @@ namespace PCGExCommon
 	{
 		if (bInverted)
 		{
-			// Suffix, not prefix: UPCGNode::GetNodeTitle clips generated titles from the left.
-			return InLabel + TEXT(" 🚩");
+			return TEXT("🚩 ") + InLabel;
 		}
 			
 		return InLabel;
