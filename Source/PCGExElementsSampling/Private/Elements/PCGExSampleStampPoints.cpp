@@ -44,6 +44,15 @@ UPCGExSampleStampPointsSettings::UPCGExSampleStampPointsSettings(const FObjectIn
 	}
 }
 
+#if WITH_EDITOR
+void UPCGExSampleStampPointsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	RetireInputPin(InOutNode, PCGExFilters::Labels::SourceUseValueIfFilters);
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+#endif
+
 FName UPCGExSampleStampPointsSettings::GetMainInputPin() const
 {
 	return PCGExSampling::Labels::SourceSourceLabel;
@@ -58,8 +67,6 @@ TArray<FPCGPinProperties> UPCGExSampleStampPointsSettings::InputPinProperties() 
 	PCGExMatching::Helpers::DeclareMatchingRulesInputs(DataMatching, PinProperties);
 	PCGExBlending::DeclareBlendOpsInputs(PinProperties, EPCGPinStatus::Normal, BlendingInterface);
 	PCGExSorting::DeclareSortingRulesInputs(PinProperties, SampleMethod == EPCGExSampleMethod::BestCandidate ? EPCGPinStatus::Required : EPCGPinStatus::Advanced);
-
-	PCGEX_PIN_FILTERS(PCGExFilters::Labels::SourceUseValueIfFilters, "Filter which points values will be processed.", Advanced)
 
 	return PinProperties;
 }

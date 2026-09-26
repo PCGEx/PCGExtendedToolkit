@@ -141,6 +141,9 @@ public:
 protected:
 	bool CompileGraphBuilders(const bool bOutputToContext, const PCGExCommon::ContextState NextStateId);
 
+	// Compiled edges from every batch, staged once when compilation completes.
+	TSharedPtr<PCGExData::FPointIOCollection> CompiledEdges;
+
 	TArray<FPCGExSortRuleConfig> EdgeSortingRules;
 
 	TArray<TSharedPtr<PCGExClusterMT::IBatch>> Batches;

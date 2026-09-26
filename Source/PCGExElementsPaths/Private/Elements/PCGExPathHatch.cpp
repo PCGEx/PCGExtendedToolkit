@@ -592,6 +592,9 @@ namespace PCGExPathHatch
 			MergedIO = Context->OutputPaths->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::New);
 			if (!MergedIO) { bIsProcessorValid = false; return; }
 
+			// Inputs emplace concurrently: stage in input order.
+			MergedIO->SetSortKey(PointDataFacade->Source->IOIndex, 0);
+
 			// EIOInit::New inherits the source's @Data attributes, including ClosedLoop=true from the
 			// input loop -- the merged polyline is open, same as the per-segment outputs.
 			PCGExPaths::Helpers::SetClosedLoop(MergedIO, false);
@@ -640,6 +643,12 @@ namespace PCGExPathHatch
 			{
 				bIsProcessorValid = false;
 				return;
+			}
+
+			// Inputs emplace concurrently: stage by input, then by segment.
+			for (int32 s = 0; s < SegmentIOs.Num(); s++)
+			{
+				SegmentIOs[s]->SetSortKey(PointDataFacade->Source->IOIndex, s);
 			}
 
 			// Initialize one segment in isolation. Takes per-call scratch so it's safe to invoke

@@ -297,7 +297,8 @@ namespace PCGExSubdivide
 
 		UPCGMetadata* Metadata = PointIO->GetOut()->Metadata;
 
-		PCGExPointArrayDataHelpers::SetNumPointsAllocated(MutablePoints, NumPoints, InPoints->GetAllocatedProperties());
+		// Subdivision points get their own location and seed even when the input's are uniform (unallocated).
+		PCGExPointArrayDataHelpers::SetNumPointsAllocated(MutablePoints, NumPoints, InPoints->GetAllocatedProperties() | EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::Seed);
 
 		TConstPCGValueRange<int64> InMetadataEntries = InPoints->GetConstMetadataEntryValueRange();
 		TPCGValueRange<int64> OutMetadataEntries = MutablePoints->GetMetadataEntryValueRange();

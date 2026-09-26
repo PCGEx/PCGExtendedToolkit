@@ -574,7 +574,7 @@ namespace PCGExFindAllCellsBounded
 			{
 				if (const TSharedPtr<PCGExData::FPointIO> IO = CellsIOInside[Index])
 				{
-					CellProcessor->ProcessCell(CellsInside[Index], IO, CellTagsInside.IsValidIndex(Index) ? CellTagsInside[Index] : TEXT(""));
+					CellProcessor->ProcessCell(CellsInside[Index], IO, CellTagsInside.IsValidIndex(Index) ? CellTagsInside[Index] : TEXT(""), Index);
 				}
 				CellsInside[Index] = nullptr;
 			}
@@ -583,7 +583,7 @@ namespace PCGExFindAllCellsBounded
 				const int32 LocalIndex = Index - InsideCount;
 				if (const TSharedPtr<PCGExData::FPointIO> IO = CellsIOTouching[LocalIndex])
 				{
-					CellProcessor->ProcessCell(CellsTouching[LocalIndex], IO, CellTagsTouching.IsValidIndex(LocalIndex) ? CellTagsTouching[LocalIndex] : TEXT(""));
+					CellProcessor->ProcessCell(CellsTouching[LocalIndex], IO, CellTagsTouching.IsValidIndex(LocalIndex) ? CellTagsTouching[LocalIndex] : TEXT(""), Index);
 				}
 				CellsTouching[LocalIndex] = nullptr;
 			}
@@ -592,7 +592,7 @@ namespace PCGExFindAllCellsBounded
 				const int32 LocalIndex = Index - InsideCount - TouchingCount;
 				if (const TSharedPtr<PCGExData::FPointIO> IO = CellsIOOutside[LocalIndex])
 				{
-					CellProcessor->ProcessCell(CellsOutside[LocalIndex], IO, CellTagsOutside.IsValidIndex(LocalIndex) ? CellTagsOutside[LocalIndex] : TEXT(""));
+					CellProcessor->ProcessCell(CellsOutside[LocalIndex], IO, CellTagsOutside.IsValidIndex(LocalIndex) ? CellTagsOutside[LocalIndex] : TEXT(""), Index);
 				}
 				CellsOutside[LocalIndex] = nullptr;
 			}

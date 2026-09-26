@@ -322,10 +322,10 @@ namespace PCGExShrinkPath
 		}
 
 		OutData->GetTransformValueRange(false)[0] = NewStart.Transform;
-		OutData->GetMetadataEntryValueRange(false)[0] = NewStart.MetadataEntry;
+		OutData->GetMetadataEntryValueRange()[0] = NewStart.MetadataEntry;
 
 		OutData->GetTransformValueRange(false)[OutData->GetNumPoints() - 1] = NewEnd.Transform;
-		OutData->GetMetadataEntryValueRange(false)[OutData->GetNumPoints() - 1] = NewEnd.MetadataEntry;
+		OutData->GetMetadataEntryValueRange()[OutData->GetNumPoints() - 1] = NewEnd.MetadataEntry;
 
 		return true;
 	}

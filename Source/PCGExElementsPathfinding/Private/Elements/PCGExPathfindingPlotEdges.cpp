@@ -619,7 +619,7 @@ namespace PCGExPathfindingPlotEdges
 		else
 		{
 			Context->BuildPath(Plot, QueriesIO[Plot->QueryIndex]);
-			QueriesIO[Plot->QueryIndex]->IOIndex = EdgeDataFacade->Source->IOIndex * 100000 + Plot->QueryIndex;
+			QueriesIO[Plot->QueryIndex]->SetSortKey(EdgeDataFacade->Source->IOIndex, Plot->QueryIndex);
 		}
 		Plot->Cleanup();
 	}

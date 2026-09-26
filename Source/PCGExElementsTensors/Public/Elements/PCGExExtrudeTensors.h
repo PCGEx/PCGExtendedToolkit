@@ -421,7 +421,7 @@ namespace PCGExExtrudeTensors
 		TSharedPtr<PCGExMT::TScopedArray<TSharedPtr<FExtrusion>>> CompletedExtrusions;
 		TSharedPtr<TArray<TSharedPtr<PCGExPaths::FPath>>> StaticPaths;
 
-		TSharedPtr<FExtrusion> CreateExtrusion(const int32 InSeedIndex, const int32 InMaxIterations);
+		TSharedPtr<FExtrusion> CreateExtrusion(const int32 InSeedIndex, const int32 InMaxIterations, const int32 InGeneration);
 
 		/** Set up callbacks for a newly created extrusion */
 		void SetupExtrusionCallbacks(const TSharedPtr<FExtrusion>& Extrusion);

@@ -3,9 +3,12 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "CoreMinimal.h"
 #include "Curves/CurveFloat.h"
 #include "Curves/RichCurve.h"
+#include "HAL/CriticalSection.h"
 #include "UObject/Object.h"
 
 #include "Core/PCGExFilterFactoryProvider.h"
@@ -54,13 +57,16 @@ namespace PCGExPointFilter
 	class FRandomRatioFilter final : public ISimpleFilter
 	{
 	protected:
-		FRWLock CollectionLock;
 		TSet<int32> PointPicks;
 
-		bool bColPicksBuilt = false;
-		TSet<int32> CollectionPicks;
+		// Data-level draw: one for the whole pin, built on first use and immutable once published.
+		mutable FCriticalSection CollectionPicksLock;
+		mutable std::atomic<bool> bCollectionPicksBuilt{false};
+		mutable bool bCollectionPicksValid = false;
+		mutable TSet<int32> CollectionPicks;
+		mutable const PCGExData::FPointIOCollection* BuiltForCollection = nullptr;
 
-		const TSet<int32>& GetCollectionPicks(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection);
+		void BuildCollectionPicks(const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const;
 
 	public:
 		explicit FRandomRatioFilter(const TObjectPtr<const UPCGExRandomRatioFilterFactory>& InDefinition)

@@ -75,6 +75,8 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+
 	PCGEX_NODE_INFOS(SampleStampPoints, "Sample : Stamp Points", "Targets stamp their values onto sources within each target's range.");
 
 	virtual FLinearColor GetNodeTitleColor() const override

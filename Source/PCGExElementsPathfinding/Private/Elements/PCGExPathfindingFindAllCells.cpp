@@ -330,7 +330,7 @@ namespace PCGExFindAllCells
 		{
 			if (const TSharedPtr<PCGExData::FPointIO> IO = CellsIO[Index])
 			{
-				CellProcessor->ProcessCell(ValidCells[Index], IO);
+				CellProcessor->ProcessCell(ValidCells[Index], IO, TEXT(""), Index);
 			}
 			ValidCells[Index] = nullptr;
 		}

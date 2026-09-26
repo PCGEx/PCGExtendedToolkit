@@ -32,7 +32,9 @@ namespace PCGExGraphTask
 			return;
 		}
 
+		// Copies are emplaced from concurrent tasks: stage by copy, then (edges) by subgraph.
 		VtxDupe->IOIndex = OutIOIndex;
+		VtxDupe->SetSortKey(OutIOIndex);
 
 		PCGExDataId OutId;
 		PCGExClusters::Helpers::SetClusterVtx(VtxDupe, OutId);
@@ -54,6 +56,7 @@ namespace PCGExGraphTask
 		PCGEX_MAKE_SHARED(VtxTask, PCGExFitting::Tasks::FTransformPointIO, TaskIndex, PointIO, VtxDupe, TransformDetails, VtxFitBounds);
 		Launch(VtxTask);
 
+		int32 EdgeOrdinal = 0;
 		for (const TSharedPtr<PCGExData::FPointIO>& Edges : GraphBuilder->EdgesIO->Pairs)
 		{
 			// With cluster caching on, DuplicateData rebinds the builder's bound cluster onto the dupe
@@ -65,6 +68,7 @@ namespace PCGExGraphTask
 			}
 
 			EdgeDupe->IOIndex = OutIOIndex;
+			EdgeDupe->SetSortKey(OutIOIndex, EdgeOrdinal++);
 			PCGExClusters::Helpers::MarkClusterEdges(EdgeDupe, OutId);
 
 			if (AttributesToTags && PointIO)

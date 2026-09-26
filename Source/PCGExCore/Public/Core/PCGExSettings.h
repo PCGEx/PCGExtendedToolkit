@@ -142,6 +142,10 @@ protected:
 #if WITH_EDITOR
 	/** Resolve PCGExDataVersion from the package custom version (UserDataVersion), bridging legacy assets. Called from Serialize on load. */
 	void ResolveDataVersion();
+
+	/** Breaks the edges of an input pin these settings no longer declare, and warns. Call from PCGExApplyDeprecationBeforeUpdatePins:
+	 * UPCGNode::UpdatePins drops such edges silently, and renames a lone stale pin onto a lone new one, keeping compatible edges. */
+	void RetireInputPin(UPCGNode* InOutNode, const FName InLabel) const;
 #endif
 
 	virtual bool SupportsDataStealing() const;

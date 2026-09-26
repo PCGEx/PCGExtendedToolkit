@@ -291,7 +291,7 @@ namespace PCGExFindPointOnBoundsClusters
 			Context->BestIndices[TargetIndex] = BestIndex;
 
 			TPCGValueRange<FTransform> OutTransforms = Context->MergedOut->GetOut()->GetTransformValueRange(false);
-			TPCGValueRange<int64> OutMetadataEntries = Context->MergedOut->GetOut()->GetMetadataEntryValueRange(false);
+			TPCGValueRange<int64> OutMetadataEntries = Context->MergedOut->GetOut()->GetMetadataEntryValueRange();
 
 			const PCGMetadataEntryKey OriginalKey = OutMetadataEntries[TargetIndex];
 
@@ -308,7 +308,7 @@ namespace PCGExFindPointOnBoundsClusters
 			IORef->InheritPoints(BestIndex, 0, 1);
 
 			TPCGValueRange<FTransform> OutTransforms = IORef->GetOut()->GetTransformValueRange(false);
-			TPCGValueRange<int64> OutMetadataEntries = IORef->GetOut()->GetMetadataEntryValueRange(false);
+			TPCGValueRange<int64> OutMetadataEntries = IORef->GetOut()->GetMetadataEntryValueRange();
 
 			OutTransforms[0].AddToTranslation(Offset);
 			IORef->GetOut()->Metadata->InitializeOnSet(OutMetadataEntries[0]);

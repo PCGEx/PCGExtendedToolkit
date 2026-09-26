@@ -534,7 +534,8 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 
 		auto GrabExistingValues = [&]()
 		{
-			TUniquePtr<FPCGAttributeAccessorKeysPointIndices> TempOutKeys = MakeUnique<FPCGAttributeAccessorKeysPointIndices>(Source->GetOut(), false);
+			// Read-only keys: mutable ones flatten a parented Out, and a facade's writable buffers init concurrently.
+			TUniquePtr<FPCGAttributeAccessorKeysPointIndices> TempOutKeys = MakeUnique<FPCGAttributeAccessorKeysPointIndices>(static_cast<const UPCGBasePointData*>(Source->GetOut()));
 			TArrayView<T> OutRange = MakeArrayView(OutValues->GetData(), OutValues->Num());
 			if (!OutAccessor->GetRange<T>(OutRange, 0, *TempOutKeys.Get()))
 			{

@@ -679,7 +679,8 @@ namespace PCGExPathInsert
 		UPCGBasePointData* OutPoints = PointIO->GetOut();
 		UPCGMetadata* Metadata = OutPoints->Metadata;
 
-		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutPoints, NumOutputPoints, InPoints->GetAllocatedProperties());
+		// Inserted points get their own location and seed even when the input's are uniform (unallocated).
+		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutPoints, NumOutputPoints, InPoints->GetAllocatedProperties() | EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::Seed);
 
 		TConstPCGValueRange<int64> InMetadataEntries = InPoints->GetConstMetadataEntryValueRange();
 		TPCGValueRange<int64> OutMetadataEntries = OutPoints->GetMetadataEntryValueRange();

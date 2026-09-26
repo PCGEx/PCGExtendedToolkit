@@ -434,7 +434,11 @@ namespace PCGExFusePoints
 
 		UPCGBasePointData* OutData = PointDataFacade->GetOut();
 
-		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutData, NumUnionEntries, PointDataFacade->GetAllocations());
+		// Fused bounds are written per point, even when the inputs' bounds are uniform (unallocated).
+		EPCGPointNativeProperties OutAllocations = PointDataFacade->GetAllocations();
+		if (Settings->FusedBoundsMode != EPCGExFusedBoundsMode::None) { OutAllocations |= EPCGPointNativeProperties::BoundsMin | EPCGPointNativeProperties::BoundsMax; }
+
+		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutData, NumUnionEntries, OutAllocations);
 
 		if (Settings->Mode == EPCGExFusedPointOutput::MostCentral)
 		{

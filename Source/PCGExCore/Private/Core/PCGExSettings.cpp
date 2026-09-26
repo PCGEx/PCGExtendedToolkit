@@ -7,8 +7,12 @@
 #include "PCGExVersion.h"
 #include "PCGExCoreMacros.h"
 #include "PCGExCoreSettingsCache.h"
+#include "PCGExLog.h"
 #include "Core/PCGExContext.h"
 #include "PCGExSettingsCacheBody.h"
+#include "PCGCommon.h"
+#include "PCGGraph.h"
+#include "PCGNode.h"
 #include "PCGPin.h"
 #include "Styling/SlateStyle.h"
 #include "Interfaces/IPluginManager.h"
@@ -62,6 +66,20 @@ void UPCGExSettings::ResolveDataVersion()
 	// Genuinely-new nodes never reach this branch: any package a current build saves records the PCGEx
 	// custom version in its archive header, so they load with UserDataVersion >= 0 (the branch above).
 	// else: keep the captured legacy PCGExDataVersion as-is.
+}
+
+void UPCGExSettings::RetireInputPin(UPCGNode* InOutNode, const FName InLabel) const
+{
+	UPCGPin* Pin = InOutNode ? InOutNode->GetInputPin(InLabel) : nullptr;
+	if (!Pin || !Pin->IsConnected()) { return; }
+
+	// A label the settings still declare is live, not retired.
+	if (AllInputPinProperties().ContainsByPredicate([&InLabel](const FPCGPinProperties& Properties) { return Properties.Label == InLabel; })) { return; }
+
+	const int32 NumEdges = Pin->EdgeCount();
+	Pin->BreakAllEdges();
+
+	UE_LOG(LogPCGEx, Warning, TEXT("[%s] %s: removed %d connection(s) to the '%s' input pin, which this node no longer has. Re-save the graph to clear this warning."), *GetPathNameSafe(InOutNode->GetGraph()), *InOutNode->GetNodeTitle(EPCGNodeTitleType::ListView).ToString(), NumEdges, *FName::NameToDisplayString(InLabel.ToString(), false));
 }
 
 bool UPCGExSettings::GetPinExtraIcon(const UPCGPin* InPin, FName& OutExtraIcon, FText& OutTooltip) const

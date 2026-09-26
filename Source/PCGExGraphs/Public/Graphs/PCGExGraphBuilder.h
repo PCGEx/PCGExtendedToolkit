@@ -110,7 +110,7 @@ namespace PCGExGraphs
 
 	public:
 		void StageEdgesOutputs() const;
-		void MoveEdgesOutputs(const TSharedPtr<PCGExData::FPointIOCollection>& To, const int32 IndexOffset) const;
+		void MoveEdgesOutputs(const TSharedPtr<PCGExData::FPointIOCollection>& To) const;
 
 		~FGraphBuilder() = default;
 	};

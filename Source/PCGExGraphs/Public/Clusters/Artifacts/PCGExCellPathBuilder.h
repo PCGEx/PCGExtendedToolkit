@@ -19,6 +19,7 @@ namespace PCGExData
 	class FFacade;
 	class FPointIO;
 	class FDataForwardHandler;
+	struct FIOSortKey;
 }
 
 namespace PCGExClusters
@@ -41,7 +42,7 @@ namespace PCGExClusters
 		TSharedPtr<PCGExMT::FTaskManager> TaskManager;
 		const FPCGExCellArtifactsDetails* Artifacts = nullptr;
 
-		//~ For non-seeded variants: use edge-based IOIndex
+		//~ For non-seeded variants: paths stage by edges dataset first
 		TSharedPtr<PCGExData::FFacade> EdgeDataFacade;
 
 		//~ For seeded variants
@@ -57,16 +58,18 @@ namespace PCGExClusters
 
 		/**
 		 * Process a cell as a path output (non-seeded variant).
-		 * Uses edge-based IOIndex calculation.
+		 * Paths stage by edges dataset, then by the cell's first node; InCellOrdinal breaks the tie between cells
+		 * that start on the same node, so pass the cell's index whenever several cells share one collection.
 		 */
 		void ProcessCell(
 			const TSharedPtr<FCell>& InCell,
 			const TSharedPtr<PCGExData::FPointIO>& InPathIO,
-			const FString& InTriageTag = TEXT("")) const;
+			const FString& InTriageTag = TEXT(""),
+			int32 InCellOrdinal = INDEX_NONE) const;
 
 		/**
 		 * Process a seeded cell as a path output.
-		 * Uses cell's CustomIndex as seed index, applies seed forwarding/tagging.
+		 * Uses cell's CustomIndex as seed index, applies seed forwarding/tagging. Paths stage by batch, then seed.
 		 */
 		void ProcessSeededCell(
 			const TSharedPtr<FCell>& InCell,
@@ -81,7 +84,7 @@ namespace PCGExClusters
 			const TSharedPtr<FCell>& InCell,
 			const TSharedPtr<PCGExData::FPointIO>& InPathIO,
 			const FString& InTriageTag,
-			int32 InIOIndex,
+			const PCGExData::FIOSortKey& InSortKey,
 			int32 InSeedIndex) const;
 	};
 }

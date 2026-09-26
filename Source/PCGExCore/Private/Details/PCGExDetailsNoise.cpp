@@ -7,18 +7,26 @@
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGHelpers.h"
 
-int32 FPCGExRandomRatioDetails::GetNumPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems) const
+bool FPCGExRandomRatioDetails::GetNumPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, int32& OutNumPicks, const bool bQuiet) const
 {
+	bool bValid = true;
+
 	int32 NumPicks = 0;
 	if (Units == EPCGExMeanMeasure::Relative)
 	{
 		double NumPicksDbl = 0;
-		RelativeAmount.TryReadDataValue(InContext, InData, NumPicksDbl);
+		if (!RelativeAmount.TryReadDataValue(InContext, InData, NumPicksDbl, bQuiet))
+		{
+			bValid = false;
+		}
 		NumPicks = FMath::Clamp(FMath::RoundToInt(NumMaxItems * NumPicksDbl), 0, NumMaxItems);
 	}
 	else
 	{
-		DiscreteAmount.TryReadDataValue(InContext, InData, NumPicks);
+		if (!DiscreteAmount.TryReadDataValue(InContext, InData, NumPicks, bQuiet))
+		{
+			bValid = false;
+		}
 		NumPicks = FMath::Clamp(NumPicks, 0, NumMaxItems);
 	}
 
@@ -27,13 +35,19 @@ int32 FPCGExRandomRatioDetails::GetNumPicks(FPCGExContext* InContext, const UPCG
 
 	if (bDoClampMin)
 	{
-		ClampMin.TryReadDataValue(InContext, InData, MinPicks);
+		if (!ClampMin.TryReadDataValue(InContext, InData, MinPicks, bQuiet))
+		{
+			bValid = false;
+		}
 		MinPicks = FMath::Clamp(MinPicks, 0, NumMaxItems);
 	}
 
 	if (bDoClampMax)
 	{
-		ClampMax.TryReadDataValue(InContext, InData, MaxPicks);
+		if (!ClampMax.TryReadDataValue(InContext, InData, MaxPicks, bQuiet))
+		{
+			bValid = false;
+		}
 		MaxPicks = FMath::Clamp(MaxPicks, 0, NumMaxItems);
 	}
 
@@ -41,26 +55,31 @@ int32 FPCGExRandomRatioDetails::GetNumPicks(FPCGExContext* InContext, const UPCG
 	{
 		Swap(MinPicks, MaxPicks);
 	}
-	NumPicks = FMath::Clamp(NumPicks, MinPicks, MaxPicks);
+	OutNumPicks = FMath::Clamp(NumPicks, MinPicks, MaxPicks);
 
-	return NumPicks;
+	return bValid;
 }
 
-void FPCGExRandomRatioDetails::GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TSet<int32>& OutPicks) const
+bool FPCGExRandomRatioDetails::GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TSet<int32>& OutPicks, const bool bQuiet) const
 {
 	TArray<int32> Picks;
-	GetPicks(InContext, InData, NumMaxItems, Picks);
+	const bool bValid = GetPicks(InContext, InData, NumMaxItems, Picks, bQuiet);
 	OutPicks.Append(Picks);
+	return bValid;
 }
 
-void FPCGExRandomRatioDetails::GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TArray<int32>& OutPicks) const
+bool FPCGExRandomRatioDetails::GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TArray<int32>& OutPicks, const bool bQuiet) const
 {
-	const int32 NumPicks = GetNumPicks(InContext, InData, NumMaxItems);
+	int32 NumPicks = 0;
+	bool bValid = GetNumPicks(InContext, InData, NumMaxItems, NumPicks, bQuiet);
 
 	PCGExArrayHelpers::ArrayOfIndices(OutPicks, NumMaxItems);
 
 	int32 S = 0;
-	BaseSeed.TryReadDataValue(InContext, InData, S);
+	if (!BaseSeed.TryReadDataValue(InContext, InData, S, bQuiet))
+	{
+		bValid = false;
+	}
 	FRandomStream Random = PCGHelpers::GetRandomStreamFromSeed(PCGHelpers::ComputeSeed(S), InContext->GetInputSettings<UPCGSettings>(), InContext->ExecutionSource.Get());
 
 	for (int32 i = NumMaxItems - 1; i > 0; --i)
@@ -68,6 +87,8 @@ void FPCGExRandomRatioDetails::GetPicks(FPCGExContext* InContext, const UPCGData
 		OutPicks.Swap(i, Random.RandRange(0, i));
 	}
 	OutPicks.SetNum(NumPicks);
+
+	return bValid;
 }
 
 #if WITH_EDITOR
