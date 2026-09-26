@@ -98,6 +98,9 @@ struct PCGEXCORE_API FPCGExNodeSelectionDetails
 
 	/** Bounds gate -> FindClosestNode (PickingMethod) -> distance gate. Returns -1 on any rejection. */
 	int32 PickClosestNode(const PCGExClusters::FCluster& InCluster, const FVector& TargetPosition) const;
+
+	/** Exact distance gate against the cluster's nearest edge; passes without searching when MaxDistance <= 0. */
+	bool WithinDistanceOfEdges(PCGExClusters::FCluster& InCluster, const FVector& TargetPosition) const;
 };
 
 namespace PCGExClusters

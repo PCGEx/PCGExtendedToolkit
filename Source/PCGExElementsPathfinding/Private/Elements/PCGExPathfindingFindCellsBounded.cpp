@@ -645,19 +645,7 @@ namespace PCGExFindContoursBounded
 				continue;
 			}
 
-			const FVector& SeedPos = SeedTransforms[SeedIdx].GetLocation();
-			double ClosestEdgeDistSq = TNumericLimits<double>::Max();
-
-			Cluster->GetEdgeOctree()->FindNearbyElements(SeedPos, [&](const PCGExOctree::FItem& Item)
-			{
-				const double DistSq = Cluster->GetPointDistToEdgeSquared(Item.Index, SeedPos);
-				if (DistSq < ClosestEdgeDistSq)
-				{
-					ClosestEdgeDistSq = DistSq;
-				}
-			});
-
-			if (Settings->SeedPicking.WithinDistanceSquared(ClosestEdgeDistSq))
+			if (Settings->SeedPicking.WithinDistanceOfEdges(*Cluster, SeedTransforms[SeedIdx].GetLocation()))
 			{
 				CandidateSeeds.Add(SeedIdx);
 			}
@@ -864,8 +852,6 @@ namespace PCGExFindContoursBounded
 				}
 			}
 
-			Cluster->RebuildOctree(EPCGExClusterClosestSearchMode::Edge);
-
 			const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
 			TArray<int32> CandidateSeeds;
 			CandidateSeeds.Reserve(NumSeeds);
@@ -877,19 +863,7 @@ namespace PCGExFindContoursBounded
 					continue;
 				}
 
-				const FVector& SeedPos = SeedTransforms[SeedIdx].GetLocation();
-				double ClosestEdgeDistSq = TNumericLimits<double>::Max();
-
-				Cluster->GetEdgeOctree()->FindNearbyElements(SeedPos, [&](const PCGExOctree::FItem& Item)
-				{
-					const double DistSq = Cluster->GetPointDistToEdgeSquared(Item.Index, SeedPos);
-					if (DistSq < ClosestEdgeDistSq)
-					{
-						ClosestEdgeDistSq = DistSq;
-					}
-				});
-
-				if (Settings->SeedPicking.WithinDistanceSquared(ClosestEdgeDistSq))
+				if (Settings->SeedPicking.WithinDistanceOfEdges(*Cluster, SeedTransforms[SeedIdx].GetLocation()))
 				{
 					CandidateSeeds.Add(SeedIdx);
 				}

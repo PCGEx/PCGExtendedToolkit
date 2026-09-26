@@ -111,6 +111,24 @@ PCGEX_FOREACH_INPUT_SHORTHAND(PCGEX_TPL_SHORTHAND_SELECTOR)
 
 #if WITH_EDITOR
 
+#pragma region FPCGExInputShorthandNameBase
+
+FString FPCGExInputShorthandNameBase::GetAttributeDisplayName() const
+{
+	return Attribute.IsNone() ? FString(TEXT("<none>")) : Attribute.ToString();
+}
+
+#pragma endregion
+
+#pragma region FPCGExInputShorthandNameString
+
+FString FPCGExInputShorthandNameString::GetDisplayName() const
+{
+	return Input == EPCGExInputValueType::Constant ? FString::Printf(TEXT("\"%s\""), *Constant) : GetAttributeDisplayName();
+}
+
+#pragma endregion
+
 #pragma region PCGExDeprecation
 
 namespace PCGExDeprecation

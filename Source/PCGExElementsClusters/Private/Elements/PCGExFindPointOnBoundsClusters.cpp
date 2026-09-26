@@ -5,6 +5,7 @@
 
 
 #include "Clusters/PCGExCluster.h"
+#include "Containers/PCGExScopedContainers.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExBlendingHelpers.h"
 #include "Math/PCGExBestFitPlane.h"
@@ -180,7 +181,6 @@ namespace PCGExFindPointOnBoundsClusters
 		}
 
 		SearchPosition = Bounds.GetCenter() + Bounds.GetExtent() * UVW;
-		Cluster->RebuildOctree(Settings->SearchMode);
 
 		if (Settings->SearchMode == EPCGExClusterClosestSearchMode::Vtx)
 		{
@@ -194,54 +194,90 @@ namespace PCGExFindPointOnBoundsClusters
 		return true;
 	}
 
-	void FProcessor::UpdateCandidate(const FVector& InPosition, const int32 InIndex)
+	void FProcessor::PrepareLoopScopesForNodes(const TArray<PCGExMT::FScope>& Loops)
 	{
-		const double Dist = FVector::Dist(InPosition, SearchPosition);
-
-		{
-			FWriteScopeLock WriteLock(BestIndexLock);
-			if (Dist > BestDistance)
-			{
-				return;
-			}
-		}
-
-		{
-			FWriteScopeLock WriteLock(BestIndexLock);
-
-			if (Dist > BestDistance)
-			{
-				return;
-			}
-
-			BestPosition = InPosition;
-			BestIndex = InIndex;
-			BestDistance = Dist;
-		}
+		TProcessor<FPCGExFindPointOnBoundsClustersContext, UPCGExFindPointOnBoundsClustersSettings>::PrepareLoopScopesForNodes(Loops);
+		ScopedCandidates = MakeShared<PCGExMT::TScopedValue<FCandidate>>(Loops, FCandidate());
 	}
 
 	void FProcessor::ProcessNodes(const PCGExMT::FScope& Scope)
 	{
-		TArray<PCGExClusters::FNode>& Nodes = *Cluster->Nodes;
+		const TArray<PCGExClusters::FNode>& Nodes = *Cluster->Nodes;
+		FCandidate ScopeBest;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			PCGExClusters::FNode& Node = Nodes[Index];
-
-			UpdateCandidate(Cluster->GetPos(Node), Node.PointIndex);
+			const PCGExClusters::FNode& Node = Nodes[Index];
+			KeepIfCloser(ScopeBest, Cluster->GetPos(Node), Node.PointIndex);
 		}
+
+		ScopedCandidates->Set(Scope, ScopeBest);
+	}
+
+	void FProcessor::OnNodesProcessingComplete()
+	{
+		TProcessor<FPCGExFindPointOnBoundsClustersContext, UPCGExFindPointOnBoundsClustersSettings>::OnNodesProcessingComplete();
+		ResolveBestCandidate();
+	}
+
+	void FProcessor::PrepareLoopScopesForEdges(const TArray<PCGExMT::FScope>& Loops)
+	{
+		TProcessor<FPCGExFindPointOnBoundsClustersContext, UPCGExFindPointOnBoundsClustersSettings>::PrepareLoopScopesForEdges(Loops);
+		ScopedCandidates = MakeShared<PCGExMT::TScopedValue<FCandidate>>(Loops, FCandidate());
 	}
 
 	void FProcessor::ProcessEdges(const PCGExMT::FScope& Scope)
 	{
+		FCandidate ScopeBest;
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			UpdateCandidate(Cluster->GetClosestPointOnEdge(Index, SearchPosition), Index);
+			const PCGExGraphs::FEdge* Edge = Cluster->GetEdge(Index);
+			KeepIfCloser(ScopeBest, Cluster->GetClosestPointOnEdge(*Edge, SearchPosition), Edge->PointIndex);
 		}
+
+		ScopedCandidates->Set(Scope, ScopeBest);
+	}
+
+	void FProcessor::OnEdgesProcessingComplete()
+	{
+		TProcessor<FPCGExFindPointOnBoundsClustersContext, UPCGExFindPointOnBoundsClustersSettings>::OnEdgesProcessingComplete();
+		ResolveBestCandidate();
+	}
+
+	void FProcessor::KeepIfCloser(FCandidate& InOutBest, const FVector& InPosition, const int32 InPointIndex) const
+	{
+		double Distance = FVector::Dist(InPosition, SearchPosition);
+		if (FMath::IsNaN(Distance))
+		{
+			// NaN ranks last instead of poisoning every later comparison.
+			Distance = TNumericLimits<double>::Max();
+		}
+
+		const FCandidate Candidate{Distance, InPosition, InPointIndex};
+		if (Candidate.IsCloserThan(InOutBest))
+		{
+			InOutBest = Candidate;
+		}
+	}
+
+	void FProcessor::ResolveBestCandidate()
+	{
+		const FCandidate Best = ScopedCandidates->Flatten([](const FCandidate& A, const FCandidate& B) { return A.IsCloserThan(B) ? A : B; });
+		ScopedCandidates.Reset();
+
+		BestPosition = Best.Position;
+		BestIndex = Best.PointIndex;
 	}
 
 	void FProcessor::CompleteWork()
 	{
+		// No candidate means every distance was infinite; skip like a failed cluster rather than read point -1.
+		if (BestIndex == -1)
+		{
+			return;
+		}
+
 		const TSharedPtr<PCGExData::FPointIO> IORef = Settings->SearchMode == EPCGExClusterClosestSearchMode::Vtx ? VtxDataFacade->Source : EdgeDataFacade->Source;
 
 		const FVector Offset = (BestPosition - Cluster->Bounds.GetCenter()).GetSafeNormal() * Settings->Offset;

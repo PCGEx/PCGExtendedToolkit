@@ -101,6 +101,8 @@ bool FPCGExBuildDelaunayGraph2DElement::AdvanceWork(FPCGExContext* InContext, co
 	Context->MainPoints->StageOutputs();
 	if (Context->MainSites)
 	{
+		// Rejected or failed inputs leave null slots, and StageOutputs() sorts before it null-checks.
+		Context->MainSites->PruneNullEntries(true);
 		Context->MainSites->StageOutputs();
 	}
 	Context->MainBatch->Output();
