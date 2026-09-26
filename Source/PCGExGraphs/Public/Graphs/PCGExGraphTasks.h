@@ -23,10 +23,13 @@ namespace PCGExGraphs
 
 namespace PCGExGraphTask
 {
+	/** Untransformed bounds every copy of a compiled builder fits against, Vtx and Edges alike: its Vtx output. */
+	PCGEXGRAPHS_API FBox ComputeClusterFitBounds(const PCGExGraphs::FGraphBuilder& InGraphBuilder, const bool bIgnoreBounds);
+
 	/**
 	 * Duplicates a COMPILED graph builder's cluster (its vtx data + every edges data) onto one target
-	 * point, re-tagging the copy with a fresh pair id and transforming both halves with the same target
-	 * index. The shared tail of every "spawn this cluster at N points" node.
+	 * point, re-tagging the copy with a fresh pair id and transforming both halves with the same fit
+	 * (target index and Vtx bounds). The shared tail of every "spawn this cluster at N points" node.
 	 *
 	 * The source builder is only ever read, so one builder feeds any number of these concurrently.
 	 */
@@ -42,7 +45,8 @@ namespace PCGExGraphTask
 			FPCGExTransformDetails* InTransformDetails,
 			const FPCGExAttributeToTagDetails* InAttributesToTags = nullptr,
 			const TSharedPtr<PCGExData::FDataForwardHandler>& InForwardHandler = nullptr,
-			const int32 InOutIOIndex = INDEX_NONE)
+			const int32 InOutIOIndex = INDEX_NONE,
+			const TOptional<FBox>& InFitBounds = NullOpt)
 			: FPCGExIndexedTask(InTaskIndex)
 			  , PointIO(InPointIO)
 			  , GraphBuilder(InGraphBuilder)
@@ -52,6 +56,7 @@ namespace PCGExGraphTask
 			  , AttributesToTags(InAttributesToTags)
 			  , ForwardHandler(InForwardHandler)
 			  , OutIOIndex(InOutIOIndex == INDEX_NONE ? InTaskIndex : InOutIOIndex)
+			  , FitBounds(InFitBounds)
 		{
 		}
 
@@ -76,6 +81,8 @@ namespace PCGExGraphTask
 		 */
 		int32 OutIOIndex = INDEX_NONE;
 
+		/** Optional: precomputed ComputeClusterFitBounds, for a caller sharing one fit across targets and outputs. */
+		TOptional<FBox> FitBounds;
 
 		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 	};

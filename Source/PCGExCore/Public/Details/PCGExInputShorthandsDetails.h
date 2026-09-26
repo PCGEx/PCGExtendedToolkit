@@ -121,6 +121,11 @@ struct PCGEXCORE_API FPCGExInputShorthandNameBase : public FPCGExInputShorthandB
 	/** Attribute name to read from when Input is set to Attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName Attribute = NAME_None;
+
+#if WITH_EDITOR
+	/** Attribute name for node titles; "<none>" when unset, like PCGExMetaHelpers::GetSelectorDisplayName. */
+	FString GetAttributeDisplayName() const;
+#endif
 };
 
 USTRUCT(BlueprintType)
@@ -358,6 +363,11 @@ struct PCGEXCORE_API FPCGExInputShorthandNameString : public FPCGExInputShorthan
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FString Constant = TEXT("");
+
+#if WITH_EDITOR
+	/** Node-title operand: the constant quoted as a literal, or the bare attribute name. */
+	FString GetDisplayName() const;
+#endif
 };
 
 PCGEX_SHORTHAND_MISMATCHED_TAG_TRAITS(FPCGExInputShorthandNameString)

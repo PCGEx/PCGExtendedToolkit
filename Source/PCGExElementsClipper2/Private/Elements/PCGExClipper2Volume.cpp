@@ -505,7 +505,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 
 			if (!HandlersBySource.Contains(SrcIdx))
 			{
-				TSharedPtr<PCGExData::FDataForwardHandler> NewHandler = ForwardDetails.TryGetHandler(AllOpData->Facades[SrcIdx], false);
+				TSharedPtr<PCGExData::FDataForwardHandler> NewHandler = ForwardDetails.TryGetHandler(AllOpData->Facades[SrcIdx], PCGExData::EForwardDomain::Inherit);
 				if (NewHandler)
 				{
 					NewHandler->ValidateIdentities([](const PCGExData::FAttributeIdentity& Identity)

@@ -9,11 +9,46 @@
 
 namespace PCGExFitting::Tasks
 {
+	FBox ComputeFitBounds(const UPCGBasePointData* InPointData, const bool bIgnoreBounds)
+	{
+		const TConstPCGValueRange<FTransform> Transforms = InPointData->GetConstTransformValueRange();
+		const int32 NumPoints = Transforms.Num();
+
+		FBox Bounds = FBox(ForceInit);
+
+		if (!bIgnoreBounds)
+		{
+			for (int i = 0; i < NumPoints; i++)
+			{
+				Bounds += InPointData->GetLocalBounds(i).TransformBy(Transforms[i]);
+			}
+		}
+		else
+		{
+			for (int i = 0; i < NumPoints; i++)
+			{
+				Bounds += Transforms[i].GetLocation();
+			}
+		}
+
+		return Bounds;
+	}
+
 	FTransformPointIO::FTransformPointIO(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExData::FPointIO>& InToBeTransformedIO, FPCGExTransformDetails* InTransformDetails, bool bAllocate)
 		: FPCGExIndexedTask(InTaskIndex)
 		  , PointIO(InPointIO)
 		  , ToBeTransformedIO(InToBeTransformedIO)
 		  , TransformDetails(InTransformDetails)
+	{
+	}
+
+	FTransformPointIO::FTransformPointIO(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExData::FPointIO>& InToBeTransformedIO, FPCGExTransformDetails* InTransformDetails, const FBox& InFitBounds)
+		: FPCGExIndexedTask(InTaskIndex)
+		  , PointIO(InPointIO)
+		  , ToBeTransformedIO(InToBeTransformedIO)
+		  , TransformDetails(InTransformDetails)
+		  , FitBounds(InFitBounds)
+		  , bHasFitBounds(true)
 	{
 	}
 
@@ -23,63 +58,20 @@ namespace PCGExFitting::Tasks
 		TPCGValueRange<FTransform> OutTransforms = OutPointData->GetTransformValueRange();
 		FTransform TargetTransform = FTransform::Identity;
 
-		FBox PointBounds = FBox(ForceInit);
+		FBox PointBounds = bHasFitBounds ? FitBounds : ComputeFitBounds(OutPointData, TransformDetails->bIgnoreBounds);
 		FVector Translation = FVector::ZeroVector;
-
-		if (!TransformDetails->bIgnoreBounds)
-		{
-			for (int i = 0; i < OutTransforms.Num(); i++)
-			{
-				PointBounds += OutPointData->GetLocalBounds(i).TransformBy(OutTransforms[i]);
-			}
-		}
-		else
-		{
-			for (const FTransform& Pt : OutTransforms)
-			{
-				PointBounds += Pt.GetLocation();
-			}
-		}
 
 		PointBounds = PointBounds.ExpandBy(0.1); // Avoid NaN
 		TransformDetails->ComputeTransform(TaskIndex, TargetTransform, PointBounds, Translation);
 
-		const int Strategy = (TransformDetails->bInheritRotation ? 2 : 0)
-			+ (TransformDetails->bInheritScale ? 1 : 0);
-
-		switch (Strategy)
-		{
-		case 3: // Inherit rotation + inherit scale
-			PCGEX_PARALLEL_FOR(
-				OutTransforms.Num(),
-				OutTransforms[i] *= TargetTransform;
-				)
-			break;
-		case 2: // Inherit rotation only
-			PCGEX_PARALLEL_FOR(
-				OutTransforms.Num(),
-				FTransform& Transform = OutTransforms[i];
-				FQuat OriginalRot = Transform.GetRotation();
-				Transform *= TargetTransform;
-				Transform.SetRotation(OriginalRot);
-				)
-			break;
-		case 1: // Inherit scale only
-			PCGEX_PARALLEL_FOR(
-				OutTransforms.Num(),
-				FTransform& Transform = OutTransforms[i];
-				FVector OriginalScale = Transform.GetScale3D();
-				Transform *= TargetTransform;
-				Transform.SetScale3D(OriginalScale);
-				)
-			break;
-		default:
-			PCGEX_PARALLEL_FOR(
-				OutTransforms.Num(),
-				FTransform& Transform = OutTransforms[i];
-				Transform.SetLocation(TargetTransform.TransformPosition(Transform.GetLocation()));
-				)
-			break;
-		}
+		DispatchInheritStrategy(
+			GetInheritStrategy(TransformDetails->bInheritRotation, TransformDetails->bInheritScale), [&](auto StrategyTag)
+			{
+				using FStrategy = decltype(StrategyTag);
+				PCGEX_PARALLEL_FOR(
+					OutTransforms.Num(),
+					ApplyInheritedTransform<FStrategy::Value>(OutTransforms[i], TargetTransform);
+					)
+			});
 	}
 }

@@ -303,10 +303,7 @@ struct PCGEXCORE_API FPCGExTransformDetails : public FPCGExFittingDetailsHandler
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayAfter="bInheritScale"))
 	bool bInheritRotation = false;
 
-	/**
-	 * Skip bounds calculations and use position only.
-	 * Disables scale-to-fit and justification.
-	 */
+	/** Fit the copied points' locations, not their bounds; scale-to-fit and justification still apply. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayAfter="bInheritRotation"))
 	bool bIgnoreBounds = false;
 };

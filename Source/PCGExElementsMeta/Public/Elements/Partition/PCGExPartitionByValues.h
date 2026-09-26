@@ -17,7 +17,6 @@ namespace PCGExPartition
 	{
 		int32 Start = 0;    // First index in SortedIndices
 		int32 Count = 0;    // Number of points in this partition
-		int32 IOIndex = -1; // Output index (assigned during output creation)
 
 		FPartitionRange() = default;
 
@@ -134,6 +133,7 @@ namespace PCGExPartitionByValuesBase
 
 		TArray<int32> SortedIndices;
 		TArray<PCGExPartition::FPartitionRange> PartitionRanges;
+		TArray<TSharedPtr<PCGExData::FPointIO>> PartitionIOs; // Index-aligned with PartitionRanges
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

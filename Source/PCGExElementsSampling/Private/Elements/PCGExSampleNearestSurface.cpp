@@ -222,7 +222,7 @@ namespace PCGExSampleNearestSurface
 
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
-		SurfacesForward = Context->ActorReferenceDataFacade ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, false) : nullptr;
+		SurfacesForward = Context->ActorReferenceDataFacade ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, PCGExData::EForwardDomain::Inherit) : nullptr;
 
 		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
 

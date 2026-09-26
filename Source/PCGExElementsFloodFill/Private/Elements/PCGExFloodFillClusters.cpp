@@ -126,7 +126,7 @@ bool FPCGExClusterDiffusionElement::Boot(FPCGExContext* InContext) const
 
 	FPCGExForwardDetails FwdDetails = Settings->SeedForwarding;
 	FwdDetails.bFilterToRemove = true;
-	Context->SeedForwardHandler = FwdDetails.GetHandler(Context->SeedsDataFacade, false);
+	Context->SeedForwardHandler = FwdDetails.GetHandler(Context->SeedsDataFacade, PCGExData::EForwardDomain::Inherit);
 
 	return true;
 }

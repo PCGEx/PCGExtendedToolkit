@@ -11,6 +11,12 @@
 #include "Details/PCGExSettingsMacros.h"
 #include "PCGExFindPointOnBoundsClusters.generated.h"
 
+namespace PCGExMT
+{
+	template <typename T>
+	class TScopedValue;
+}
+
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/utilities/cluster-find-point-on-bounds"))
 class UPCGExFindPointOnBoundsClustersSettings : public UPCGExClustersProcessorSettings
 {
@@ -133,11 +139,24 @@ protected:
 
 namespace PCGExFindPointOnBoundsClusters
 {
+	/** Closest element found so far. Exact distance ties go to the highest point index. */
+	struct FCandidate
+	{
+		double Distance = TNumericLimits<double>::Max();
+		FVector Position = FVector::ZeroVector;
+		int32 PointIndex = -1;
+
+		FORCEINLINE bool IsCloserThan(const FCandidate& Other) const
+		{
+			return Distance < Other.Distance || (Distance == Other.Distance && PointIndex > Other.PointIndex);
+		}
+	};
+
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExFindPointOnBoundsClustersContext, UPCGExFindPointOnBoundsClustersSettings>
 	{
-		mutable FRWLock BestIndexLock;
+		/** One candidate per loop scope, merged once the loop completes; the result is independent of scheduling. */
+		TSharedPtr<PCGExMT::TScopedValue<FCandidate>> ScopedCandidates;
 
-		double BestDistance = TNumericLimits<double>::Max();
 		FVector BestPosition = FVector::ZeroVector;
 		FVector SearchPosition = FVector::ZeroVector;
 		int32 BestIndex = -1;
@@ -153,9 +172,19 @@ namespace PCGExFindPointOnBoundsClusters
 		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
-		void UpdateCandidate(const FVector& InPosition, const int32 InIndex);
+
+		virtual void PrepareLoopScopesForNodes(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessNodes(const PCGExMT::FScope& Scope) override;
+		virtual void OnNodesProcessingComplete() override;
+
+		virtual void PrepareLoopScopesForEdges(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessEdges(const PCGExMT::FScope& Scope) override;
+		virtual void OnEdgesProcessingComplete() override;
+
 		virtual void CompleteWork() override;
+
+	protected:
+		void KeepIfCloser(FCandidate& InOutBest, const FVector& InPosition, const int32 InPointIndex) const;
+		void ResolveBestCandidate();
 	};
 }

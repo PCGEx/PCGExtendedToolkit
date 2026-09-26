@@ -70,7 +70,7 @@ bool FPCGExMatchRandom::Test(const PCGExData::FConstPoint& InTargetElement, cons
 
 bool UPCGExMatchRandomFactory::WantsPoints() const
 {
-	return !PCGExMetaHelpers::IsDataDomainAttribute(Config.ThresholdValue.Attribute);
+	return !Config.ThresholdValue.CanSupportDataOnly();
 }
 
 PCGEX_MATCH_RULE_BOILERPLATE(Random)
@@ -98,7 +98,19 @@ void UPCGExCreateMatchRandomSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 
 FString UPCGExCreateMatchRandomSettings::GetDisplayName() const
 {
-	return PCGExCommon::FlagInvertLabel(TEXT("Random"), Config.bInvert);
+	FString DisplayName = TEXT("Random");
+	DisplayName += Config.bInvertThreshold ? TEXT(" <= ") : TEXT(" >= ");
+
+	if (Config.ThresholdValue.Input == EPCGExInputValueType::Constant)
+	{
+		DisplayName += FString::SanitizeFloat(Config.ThresholdValue.Constant);
+	}
+	else
+	{
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.ThresholdValue.Attribute);
+	}
+
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

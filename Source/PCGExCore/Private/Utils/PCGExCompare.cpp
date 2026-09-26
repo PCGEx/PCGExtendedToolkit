@@ -85,11 +85,11 @@ namespace PCGExCompare
 		case EPCGExStringMatchMode::Contains:
 			return " contains ";
 		case EPCGExStringMatchMode::StartsWith:
-			return " starts w ";
+			return " starts with ";
 		case EPCGExStringMatchMode::EndsWith:
-			return " ends w ";
+			return " ends with ";
 		case EPCGExStringMatchMode::Matches:
-			return " matches w ";
+			return " matches ";
 		default:
 			return " ?? ";
 		}

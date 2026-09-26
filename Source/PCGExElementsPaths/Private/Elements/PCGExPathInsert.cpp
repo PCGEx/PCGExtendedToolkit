@@ -783,7 +783,7 @@ namespace PCGExPathInsert
 		ForwardHandlers.Init(nullptr, NumTargets);
 		Context->TargetsHandler->ForEachTarget([&](const TSharedRef<PCGExData::FFacade>& InTarget, const int32 Index)
 		{
-			ForwardHandlers[Index] = Settings->TargetForwarding.TryGetHandler(InTarget, PointDataFacade, false);
+			ForwardHandlers[Index] = Settings->TargetForwarding.TryGetHandler(InTarget, PointDataFacade, PCGExData::EForwardDomain::Inherit);
 		});
 
 		// Tag output
