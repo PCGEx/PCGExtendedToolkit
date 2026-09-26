@@ -248,6 +248,13 @@ namespace PCGExDetails
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
 	};
 
+	/**
+	 * The only way to construct a TSettingValueNegated. The class is dllexport: instantiating it in any other
+	 * TU exports its TSettingValue<T> base there too, which needs Init's definition from the .cpp
+	 * (C4661 in non-unity builds).
+	 */
+	PCGEXCORE_API TSharedPtr<TSettingValue<FVector>> MakeSettingValueNegated(const TSharedPtr<TSettingValue<FVector>>& InInner);
+
 	template <typename T>
 	TSharedPtr<TSettingValue<T>> MakeSettingValue(const T InConstant);
 

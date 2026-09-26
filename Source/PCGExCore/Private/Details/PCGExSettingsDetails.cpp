@@ -314,4 +314,9 @@ template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const T
 	template class PCGEXCORE_API TSettingValueNegated<FVector>;
 
 #pragma endregion
+
+	TSharedPtr<TSettingValue<FVector>> MakeSettingValueNegated(const TSharedPtr<TSettingValue<FVector>>& InInner)
+	{
+		return MakeShared<TSettingValueNegated<FVector>>(InInner);
+	}
 }
