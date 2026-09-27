@@ -32,7 +32,7 @@ void UPCGExPathSolidifySettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode*
 	{
 		// Rewire Normal
 		PCGEX_SHORTHAND_RENAME_PIN(NormalAttribute, UNDEFINED, NormalValue)
-		InOutNode->RenameInputPin(FName(TEXT("InvertDirection")), FName(TEXT("NormalValue/Flip")));
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("bInvertDirection")), FName(TEXT("NormalValue")), FName(TEXT("bFlip")), FName(TEXT(" └─ Invert Direction")));
 
 		PCGEX_SHORTHAND_RENAME_PIN(SolidificationLerpAttribute, SolidificationLerpConstant, SolidificationLerp)
 	}

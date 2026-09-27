@@ -38,7 +38,7 @@ PCGEX_MATCH_RULE_BOILERPLATE(CopyTags)
 #if WITH_EDITOR
 FString UPCGExCreateMatchCopyTagsSettings::GetDisplayName() const
 {
-	return TEXT("Match Copy Tags");
+	return TEXT("Copy Tags");
 }
 #endif
 

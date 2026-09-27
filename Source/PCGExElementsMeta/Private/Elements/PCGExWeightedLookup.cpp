@@ -163,10 +163,11 @@ bool FPCGExWeightedLookupElement::Boot(FPCGExContext* InContext) const
 	}
 
 	const bool bRandom = Settings->PickMode == EPCGExWeightedLookupPickMode::WeightedRandom;
+	const double Contrast = FMath::Max(Settings->Contrast, 0.001);
 	Context->Exponent = FMath::Max(Settings->Exponent, 0.001);
-	Context->Contrast = FMath::Max(Settings->Contrast, 0.001);
+	Context->Contrast.Init(Contrast, static_cast<int32>(Settings->ContrastCurve));
 	Context->bApplyExponent = bRandom && !FMath::IsNearlyEqual(Context->Exponent, 1.0);
-	Context->bApplyContrast = bRandom && !FMath::IsNearlyEqual(Context->Contrast, 1.0);
+	Context->bApplyContrast = bRandom && !FMath::IsNearlyEqual(Contrast, 1.0);
 
 	return true;
 }
@@ -236,6 +237,16 @@ namespace PCGExWeightedLookup
 		}
 	}
 
+	template <typename T>
+	T* GetElementsData(const TSharedPtr<PCGExData::TBuffer<T>>& Writer)
+	{
+		if (!Writer || Writer->GetUnderlyingDomain() != PCGExData::EDomainType::Elements)
+		{
+			return nullptr;
+		}
+		return StaticCastSharedPtr<PCGExData::TArrayBuffer<T>>(Writer)->GetOutValues()->GetData();
+	}
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExWeightedLookup::Process);
@@ -250,7 +261,7 @@ namespace PCGExWeightedLookup
 		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
 		NumRows = Context->NumRows;
-		Component = Context->GetComponent();
+		SeedResolver.Init(Settings->SeedComponents, Settings->LocalSeed, Settings, Context->GetComponent());
 
 		if (Settings->WeightsSource == EPCGExWeightedLookupWeightsSource::External)
 		{
@@ -277,30 +288,41 @@ namespace PCGExWeightedLookup
 			WeightReaders = &SelfWeightReaders;
 		}
 
+		// Input arrays are allocated at full length on creation and only filled by Fetch, so the pointers are stable.
 		ActiveRows.Reserve(NumRows);
+		ActiveRowData.Reserve(NumRows);
 		for (int32 Row = 0; Row < NumRows; Row++)
 		{
-			if ((*WeightReaders)[Row])
+			const TSharedPtr<PCGExData::TBuffer<double>>& Reader = (*WeightReaders)[Row];
+			if (!Reader)
 			{
-				ActiveRows.Add(Row);
+				continue;
 			}
+			ActiveRows.Add(Row);
+			ActiveRowData.Add(Reader->GetUnderlyingDomain() == PCGExData::EDomainType::Elements ? StaticCastSharedPtr<PCGExData::TArrayBuffer<double>>(Reader)->GetInValues()->GetData() : nullptr);
 		}
 
-		Forward = Context->ForwardDetails.GetHandler(Context->MapFacade, PointDataFacade, false, &Context->IgnoredColumns);
+		Forward = Context->ForwardDetails.GetHandler(Context->MapFacade, PointDataFacade, PCGExData::EForwardDomain::Inherit, &Context->IgnoredColumns);
+
+		// Every point commits a row, so no fill is needed.
+		PickedRows.SetNumUninitialized(PointDataFacade->GetNum());
 
 		if (Settings->bOutputKey)
 		{
 			KeyWriter = PointDataFacade->GetWritable<FName>(Settings->KeyAttributeName, NAME_None, false, PCGExData::EBufferInit::New);
+			KeyOut = GetElementsData(KeyWriter);
 		}
 
 		if (Settings->bOutputRowIndex)
 		{
 			RowIndexWriter = PointDataFacade->GetWritable<int32>(Settings->RowIndexAttributeName, -1, false, PCGExData::EBufferInit::New);
+			RowIndexOut = GetElementsData(RowIndexWriter);
 		}
 
 		if (Settings->bOutputWeight)
 		{
 			WeightWriter = PointDataFacade->GetWritable<double>(Settings->WeightAttributeName, 0.0, true, PCGExData::EBufferInit::New);
+			WeightOut = GetElementsData(WeightWriter);
 		}
 
 		StartParallelLoopForPoints();
@@ -317,7 +339,9 @@ namespace PCGExWeightedLookup
 		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetOut()->GetConstSeedValueRange();
 
 		const bool bRandom = Settings->PickMode == EPCGExWeightedLookupPickMode::WeightedRandom;
-		const int32 ContrastCurve = static_cast<int32>(Settings->ContrastCurve);
+		const int32 NumActive = ActiveRows.Num();
+		const int32* Active = ActiveRows.GetData();
+		const double* const* ActiveData = ActiveRowData.GetData();
 
 		// Missing rows are never written and stay at 0 across the whole scope.
 		TArray<double, TInlineAllocator<32>> Weights;
@@ -346,10 +370,12 @@ namespace PCGExWeightedLookup
 			double MaxWeight = 0.0;
 			int32 Best = -1;
 
-			for (const int32 Row : ActiveRows)
+			for (int32 k = 0; k < NumActive; k++)
 			{
+				const int32 Row = Active[k];
+				const double* Data = ActiveData[k];
 				// Not FMath::Max: NaN must read as 0, not propagate into the total.
-				const double Raw = Readers[Row]->Read(WeightsIndex);
+				const double Raw = Data ? Data[WeightsIndex] : Readers[Row]->Read(WeightsIndex);
 				const double Weight = Raw > 0.0 ? Raw : 0.0;
 				Weights[Row] = Weight;
 				Total += Weight;
@@ -380,8 +406,9 @@ namespace PCGExWeightedLookup
 				// curve, so the shaped total stays strictly positive, and 0 stays 0 (knobs are > 0).
 				const double InvMax = 1.0 / MaxWeight;
 				double ShapedTotal = 0.0;
-				for (int32 Row = 0; Row < NumRows; Row++)
+				for (int32 k = 0; k < NumActive; k++)
 				{
+					const int32 Row = Active[k];
 					double Weight = Weights[Row] * InvMax;
 					if constexpr (bExponent)
 					{
@@ -389,22 +416,25 @@ namespace PCGExWeightedLookup
 					}
 					if constexpr (bContrast)
 					{
-						Weight = PCGExMath::Contrast::ApplyContrast(Weight, Context->Contrast, ContrastCurve);
+						Weight = Context->Contrast.Apply(Weight);
 					}
 					Shaped[Row] = Weight;
 					ShapedTotal += Weight;
 				}
 
-				Picked = PCGExRandomHelpers::RollWeightedStreaming(NumRows, [&](const int32 Row) { return Shaped[Row]; }, ShapedTotal, SeedFor(Seeds[Index]));
+				Picked = PCGExRandomHelpers::RollWeightedStreaming(NumActive, [&](const int32 k) { return Shaped[Active[k]]; }, ShapedTotal, SeedFor(Seeds[Index]));
 			}
 			else
 			{
-				Picked = PCGExRandomHelpers::RollWeightedStreaming(NumRows, [&](const int32 Row) { return Weights[Row]; }, Total, SeedFor(Seeds[Index]));
+				Picked = PCGExRandomHelpers::RollWeightedStreaming(NumActive, [&](const int32 k) { return Weights[Active[k]]; }, Total, SeedFor(Seeds[Index]));
 			}
 
-			// Total > 0 here, so the roll always lands on a row.
+			// Total > 0 here, so the roll always lands on an active row.
+			Picked = Active[Picked];
 			Commit(Index, Picked, Weights[Picked]);
 		}
+
+		Forward->ForwardScoped(Scope, PickedRows);
 	}
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
@@ -436,29 +466,33 @@ namespace PCGExWeightedLookup
 		}
 	}
 
-	int32 FProcessor::SeedFor(const int32 PointSeed) const
-	{
-		return PCGExRandomHelpers::GetSeed(PointSeed, Settings->SeedComponents, Settings->LocalSeed, Settings, Component);
-	}
-
 	void FProcessor::Commit(const int32 Index, const int32 Row, const double Weight)
 	{
-		if (Row >= 0)
-		{
-			Forward->Forward(Row, Index);
-		}
+		PickedRows[Index] = Row;
 
-		if (KeyWriter)
+		if (KeyOut)
+		{
+			KeyOut[Index] = Row >= 0 ? Context->MapKeys[Row] : NAME_None;
+		}
+		else if (KeyWriter)
 		{
 			KeyWriter->SetValue(Index, Row >= 0 ? Context->MapKeys[Row] : NAME_None);
 		}
 
-		if (RowIndexWriter)
+		if (RowIndexOut)
+		{
+			RowIndexOut[Index] = Row;
+		}
+		else if (RowIndexWriter)
 		{
 			RowIndexWriter->SetValue(Index, Row);
 		}
 
-		if (WeightWriter)
+		if (WeightOut)
+		{
+			WeightOut[Index] = Weight;
+		}
+		else if (WeightWriter)
 		{
 			WeightWriter->SetValue(Index, Weight);
 		}

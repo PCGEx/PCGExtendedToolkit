@@ -9,6 +9,7 @@
 #include "PCGExCommon.h"
 #include "PCGExH.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Helpers/PCGExRandomHelpers.h"
 #include "Helpers/PCGExSocketHelpers.h"
 
 namespace PCGExData
@@ -252,6 +253,9 @@ namespace PCGExCollections
 		// Tag-filter pools when no shared-data cache is wired. Owns what Slots point at.
 		TSharedPtr<Tags::FTagPoolStore> LocalTagPools;
 
+		// Built once at the end of Init from the synced Details and the facade's context; Details is not re-read per point.
+		PCGExRandomHelpers::FSeedResolver SeedResolver;
+
 		/**
 		 * Category routing over BASE slots. A blank key selects the uncategorized entries; a key naming
 		 * a category the collection lacks, or a blank key when there are no uncategorized entries, is a
@@ -305,6 +309,12 @@ namespace PCGExCollections
 		const UPCGExSelectorFactoryData* GetActiveFactory() const
 		{
 			return ActiveFactory;
+		}
+
+		/** Pick seed for a point: equals GetSeed(BaseSeed, Details.SeedComponents, Details.LocalSeed, Settings, Component) of the facade's context. */
+		FORCEINLINE int32 ResolveSeed(const int32 BaseSeed) const
+		{
+			return SeedResolver.Resolve(BaseSeed);
 		}
 
 		/**

@@ -615,6 +615,8 @@ namespace PCGExSelfPruning
 		{
 			if (const TSharedPtr<PCGExData::FPointIO> Discarded = Context->Discarded->Emplace_GetRef(PointDataFacade->GetIn(), PCGExData::EIOInit::New))
 			{
+				// CompleteWork runs in parallel across inputs: stage in input order.
+				Discarded->SetSortKey(PointDataFacade->Source->IOIndex, 0);
 				(void)Discarded->InheritPoints(Mask, true);
 			}
 		}

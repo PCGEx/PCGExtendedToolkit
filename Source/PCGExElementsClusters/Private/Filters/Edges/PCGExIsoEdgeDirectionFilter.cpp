@@ -3,6 +3,7 @@
 
 #include "Filters/Edges/PCGExIsoEdgeDirectionFilter.h"
 
+#include "PCGExVersion.h"
 #include "PCGPin.h"
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExData.h"
@@ -14,7 +15,23 @@
 #define LOCTEXT_NAMESPACE "PCGExIsoEdgeDirectionFilter"
 #define PCGEX_NAMESPACE IsoEdgeDirectionFilter
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExIsoEdgeDirectionFilterConfig, Direction, FVector, CompareAgainst, Direction, DirectionConstant)
+#if WITH_EDITOR
+void FPCGExIsoEdgeDirectionFilterConfig::ApplyDeprecation()
+{
+	DirectionValue.Update(CompareAgainst_DEPRECATED, Direction_DEPRECATED, DirectionConstant_DEPRECATED);
+	// The legacy invert only applies to attribute input.
+	DirectionValue.bFlip = bInvertDirection_DEPRECATED && CompareAgainst_DEPRECATED == EPCGExInputValueType::Attribute;
+	HashComparisonDetails.ApplyDeprecation();
+}
+
+void FPCGExIsoEdgeDirectionFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("Direction")), FName(TEXT("DirectionValue")), FName(TEXT("Attribute")), FName(TEXT("Direction (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("DirectionConstant")), FName(TEXT("DirectionValue")), FName(TEXT("Constant")), FName(TEXT("Direction")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("bInvertDirection")), FName(TEXT("DirectionValue")), FName(TEXT("bFlip")), FName(TEXT(" └─ Invert")));
+	HashComparisonDetails.RenamePins(InSettings, InOutNode);
+}
+#endif
 
 void UPCGExIsoEdgeDirectionFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
@@ -73,15 +90,11 @@ bool FIsoEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<PC
 		return false;
 	}
 
-	OperandDirection = TypedFilterFactory->Config.GetValueSettingDirection(PCGEX_QUIET_HANDLING);
+	OperandDirection = TypedFilterFactory->Config.DirectionValue.GetValueSetting(PCGEX_QUIET_HANDLING);
 	OperandDirection->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandDirection->Init(InEdgeDataFacade))
 	{
 		return false;
-	}
-	if (!OperandDirection->IsConstant())
-	{
-		DirectionMultiplier = TypedFilterFactory->Config.bInvertDirection ? -1 : 1;
 	}
 
 	if (TypedFilterFactory->Config.ComparisonQuality == EPCGExDirectionCheckMode::Dot)
@@ -117,13 +130,13 @@ bool FIsoEdgeDirectionFilter::Test(const PCGExGraphs::FEdge& Edge) const
 
 bool FIsoEdgeDirectionFilter::TestDot(const int32 PtIndex, const FVector& EdgeDir) const
 {
-	const FVector RefDir = OperandDirection->Read(PtIndex).GetSafeNormal() * DirectionMultiplier;
+	const FVector RefDir = OperandDirection->Read(PtIndex).GetSafeNormal();
 	return DotComparison.Test(FVector::DotProduct(TypedFilterFactory->Config.bTransformDirection ? InTransforms[PtIndex].TransformVectorNoScale(RefDir) : RefDir, EdgeDir), PtIndex);
 }
 
 bool FIsoEdgeDirectionFilter::TestHash(const int32 PtIndex, const FVector& EdgeDir) const
 {
-	FVector RefDir = OperandDirection->Read(PtIndex) * DirectionMultiplier;
+	FVector RefDir = OperandDirection->Read(PtIndex);
 	if (TypedFilterFactory->Config.bTransformDirection)
 	{
 		RefDir = InTransforms[PtIndex].TransformVectorNoScale(RefDir);
@@ -171,20 +184,41 @@ UPCGExFactoryData* UPCGExIsoEdgeDirectionFilterProviderSettings::CreateFactory(F
 }
 
 #if WITH_EDITOR
+void UPCGExIsoEdgeDirectionFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("HashToleranceInput")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExIsoEdgeDirectionFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExIsoEdgeDirectionFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Edge Direction ") + PCGExCompare::ToString(Config.DotComparisonDetails.Comparison);
 
 	UPCGExIsoEdgeDirectionFilterProviderSettings* MutableSelf = const_cast<UPCGExIsoEdgeDirectionFilterProviderSettings*>(this);
-	MutableSelf->Config.DirectionConstant = Config.DirectionConstant.GetSafeNormal();
+	MutableSelf->Config.DirectionValue.Constant = Config.DirectionValue.Constant.GetSafeNormal();
 
-	if (Config.CompareAgainst == EPCGExInputValueType::Constant)
+	if (Config.DirectionValue.Input == EPCGExInputValueType::Constant)
 	{
 		DisplayName += TEXT("Constant");
 	}
 	else
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.Direction);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.DirectionValue.Attribute);
 	}
 	return DisplayName;
 }

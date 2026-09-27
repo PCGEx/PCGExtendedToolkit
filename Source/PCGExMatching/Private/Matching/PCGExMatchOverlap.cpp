@@ -186,8 +186,8 @@ bool FPCGExMatchOverlap::Test(const PCGExData::FConstPoint& InTargetElement, con
 
 bool UPCGExMatchOverlapFactory::WantsPoints() const
 {
-	return !PCGExMetaHelpers::IsDataDomainAttribute(Config.Expansion.Attribute) ||
-		(Config.bUseMinOverlapRatio && !PCGExMetaHelpers::IsDataDomainAttribute(Config.MinOverlapRatio.Attribute));
+	return (Config.ExpansionMode != EPCGExMatchOverlapExpansionMode::None && !Config.Expansion.CanSupportDataOnly()) ||
+		(Config.bUseMinOverlapRatio && !Config.MinOverlapRatio.CanSupportDataOnly());
 }
 
 PCGEX_MATCH_RULE_BOILERPLATE(Overlap)
@@ -199,10 +199,22 @@ FString UPCGExCreateMatchOverlapSettings::GetDisplayName() const
 
 	if (Config.bUseMinOverlapRatio)
 	{
-		Result += FString::Printf(TEXT(" >= %.0f%%"), Config.MinOverlapRatio.Constant * 100.0);
+		if (Config.MinOverlapRatio.Input == EPCGExInputValueType::Constant)
+		{
+			Result += TEXT(" >= ") + FString::SanitizeFloat(Config.MinOverlapRatio.Constant * 100.0, 0) + TEXT("%");
+		}
+		else
+		{
+			Result += TEXT(" >= ") + Config.MinOverlapRatio.GetAttributeDisplayName();
+		}
 	}
 
-	return Result;
+	if (Config.bRecursive && Config.MaxRecursionDepth != 0)
+	{
+		Result += TEXT(" (Recursive)");
+	}
+
+	return PCGExCommon::FlagInvertLabel(Result, Config.bInvert);
 }
 #endif
 

@@ -6,6 +6,7 @@
 
 #include "PCGManagedResource.h"
 #include "PCGParamData.h"
+#include "PCGSettings.h"
 #include "Collections/PCGExMeshCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionTags.h"
@@ -500,6 +501,9 @@ namespace PCGExCollections
 		// read Helper->Details.SeedComponents / LocalSeed without knowing which mode is active.
 		Details.SeedComponents = BaseConfig.SeedComponents;
 		Details.LocalSeed = BaseConfig.LocalSeed;
+
+		// Parity: ResolveSeed must equal GetSeed(Seed, Details.SeedComponents, Details.LocalSeed, Ctx->GetInputSettings<UPCGSettings>(), Ctx->GetComponent()).
+		SeedResolver.Init(Details.SeedComponents, Details.LocalSeed, Ctx ? Ctx->GetInputSettings<UPCGSettings>() : nullptr, Ctx ? Ctx->GetComponent() : nullptr);
 
 		return true;
 	}

@@ -86,7 +86,6 @@ public:
 
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<FVector>> DirCache;
-	double DirectionMultiplier = 1;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")

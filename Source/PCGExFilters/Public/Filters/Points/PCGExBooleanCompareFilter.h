@@ -7,6 +7,7 @@
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "Core/PCGExPointFilter.h"
 
@@ -30,19 +31,27 @@ struct FPCGExBooleanCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExEquality Comparison = EPCGExEquality::Equal;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
 	/** Operand B for testing -- Will be translated to `bool` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector OperandB;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B"))
+	FPCGExInputShorthandSelectorBoolean OperandBValue = FPCGExInputShorthandSelectorBoolean(FPCGAttributePropertyInputSelector(), true);
 
-	/** Operand B for testing */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	bool OperandBConstant = true;
+#pragma region DEPRECATED
 
-	PCGEX_SETTING_VALUE_DECL(OperandB, bool)
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector OperandB_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	bool OperandBConstant_DEPRECATED = true;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -101,6 +110,8 @@ class UPCGExBooleanCompareFilterProviderSettings : public UPCGExFilterProviderSe
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(BoolCompareFilterFactory, "Filter : Bool Compare", "(bool) A == (bool) B", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

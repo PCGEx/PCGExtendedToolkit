@@ -152,8 +152,8 @@ namespace PCGExFilterGroup
 			return false;
 		}
 
-		// Sort mappings so higher priorities come last, as they have to potential to override values.
-		ManagedFilters.Sort([](const TSharedPtr<PCGExPointFilter::IFilter>& A, const TSharedPtr<PCGExPointFilter::IFilter>& B)
+		// Higher priorities sort last so they can override values; stable, so ties keep pin order.
+		ManagedFilters.StableSort([](const TSharedPtr<PCGExPointFilter::IFilter>& A, const TSharedPtr<PCGExPointFilter::IFilter>& B)
 		{
 			return A->Factory->Priority < B->Factory->Priority;
 		});

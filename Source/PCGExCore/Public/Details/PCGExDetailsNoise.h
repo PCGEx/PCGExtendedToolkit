@@ -123,10 +123,10 @@ struct PCGEXCORE_API FPCGExRandomRatioDetails
 
 #pragma endregion
 
-	int32 GetNumPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems) const;
-
-	void GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TSet<int32>& OutPicks) const;
-	void GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TArray<int32>& OutPicks) const;
+	// These return false if an attribute-driven input failed to read; outputs are still computed from the fallbacks.
+	bool GetNumPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, int32& OutNumPicks, const bool bQuiet = false) const;
+	bool GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TSet<int32>& OutPicks, const bool bQuiet = false) const;
+	bool GetPicks(FPCGExContext* InContext, const UPCGData* InData, const int32 NumMaxItems, TArray<int32>& OutPicks, const bool bQuiet = false) const;
 
 #if WITH_EDITOR
 	void ApplyDeprecation();

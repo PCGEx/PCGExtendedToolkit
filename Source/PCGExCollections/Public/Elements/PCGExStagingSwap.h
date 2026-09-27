@@ -11,6 +11,7 @@
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExStagingDetails.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExRandomHelpers.h"
 
 #include "PCGExStagingSwap.generated.h"
 
@@ -233,6 +234,8 @@ namespace PCGExStagingSwap
 
 		// Null when micro redistribution is off or no swapped-to entry here has a micro cache.
 		TSharedPtr<PCGExCollections::FMicroSelectorHelper> MicroHelper;
+		// Seed components of the micro re-pick; initialised with MicroHelper and read only when it is set.
+		PCGExRandomHelpers::FSeedResolver MicroSeedResolver;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

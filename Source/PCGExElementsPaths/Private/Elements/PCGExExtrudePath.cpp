@@ -269,10 +269,6 @@ namespace PCGExExtrudePath
 
 		// Raw extrusion direction in Custom mode, offset added to the path tangent in Path Direction mode
 		FVector Dir = DirectionGetter->Read(EndpointIdx);
-		if (Settings->Direction.bFlip)
-		{
-			Dir *= -1;
-		}
 		if (Settings->bTransformDirection)
 		{
 			Dir = InTransforms[EndpointIdx].GetRotation().RotateVector(Dir);

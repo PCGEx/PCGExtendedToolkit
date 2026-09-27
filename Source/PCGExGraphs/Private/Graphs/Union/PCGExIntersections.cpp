@@ -630,7 +630,7 @@ namespace PCGExGraphs
 				MutablePoints->SetNumPoints(NumPoints);
 
 				UPCGMetadata* Metadata = Allocations.PointIO->GetOut()->Metadata;
-				TPCGValueRange<int64> MetadataEntries = MutablePoints->GetMetadataEntryValueRange(false);
+				TPCGValueRange<int64> MetadataEntries = MutablePoints->GetMetadataEntryValueRange();
 
 				TArray<TTuple<int64, int64>> DelayedEntries;
 				DelayedEntries.SetNum(NewlyAllocated);

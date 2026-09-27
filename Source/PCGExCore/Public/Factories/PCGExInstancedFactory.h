@@ -45,6 +45,15 @@ public:
 
 #if WITH_EDITOR
 	virtual void UpdateUserFacingInfos();
+
+	/**
+	 * Load-time value migration, called by the owning UPCGExSettings::ApplyDeprecation with the owner's resolved
+	 * data version, so overrides gate with PCGEX_IF_VERSION_LOWER like settings do. Value-only: the engine never
+	 * makes override pins for subclass properties of an instanced object, so pin renames stay on the owner.
+	 */
+	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion)
+	{
+	}
 #endif
 
 	virtual void Cleanup() override;

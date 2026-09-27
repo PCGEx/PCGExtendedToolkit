@@ -360,6 +360,8 @@ struct FPCGExSampleNearestPointContext final : FPCGExPointsProcessorContext
 	int32 NumMaxTargets = 0;
 
 	TArray<TSharedPtr<PCGExData::TBuffer<double>>> TargetWeights;
+	// Aligned with TargetWeights: the reader's input array, or null for a single-value (@Data) reader.
+	TArray<const double*> TargetWeightData;
 	TArray<TSharedPtr<PCGExDetails::TSettingValue<FVector>>> TargetLookAtUpGetters;
 
 	TSharedPtr<PCGExSorting::FSorter> Sorter;

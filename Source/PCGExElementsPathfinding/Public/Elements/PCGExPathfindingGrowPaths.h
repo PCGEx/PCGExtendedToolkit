@@ -54,6 +54,7 @@ namespace PCGExPathfindingGrowPaths
 		TSharedPtr<PCGEx::FHashLookup> TravelStack;
 
 		int32 SeedPointIndex = -1;
+		int32 BranchIndex = 0; // Which of the seed's branches this is; a lane of the path sort key
 		int32 MaxIterations = 0;
 		int32 SoftMaxIterations = 0;
 		int32 Iteration = 0;

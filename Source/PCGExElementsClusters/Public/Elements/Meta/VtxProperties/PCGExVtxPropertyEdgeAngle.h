@@ -71,7 +71,6 @@ public:
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<FVector>> UpCache;
 	TSharedPtr<PCGExData::TBuffer<double>> AngleBuffer;
-	double UpMultiplier = 1;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")

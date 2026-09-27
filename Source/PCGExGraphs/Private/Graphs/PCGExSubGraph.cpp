@@ -195,10 +195,8 @@ namespace PCGExGraphs
 			AllocateProperties |= EPCGPointNativeProperties::BoundsMax;
 		}
 
-		if (ParentGraph->bRefreshEdgeSeed || InBuilder->OutputDetails->bRefreshEdgeSeed)
-		{
-			AllocateProperties |= EPCGPointNativeProperties::Seed;
-		}
+		// CompileRange writes seeds per edge, so Seed can't stay a single value even when the source edges' is uniform.
+		AllocateProperties |= EPCGPointNativeProperties::Seed;
 
 		UPCGBasePointData* OutEdgeData = EdgesDataFacade->GetOut();
 		(void)PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutEdgeData, NumEdges, AllocateProperties);
@@ -207,7 +205,7 @@ namespace PCGExGraphs
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(FSubGraph::Compile::BuildEdgesEntries);
 
-			const TPCGValueRange<int64> OutMetadataEntries = OutEdgeData->GetMetadataEntryValueRange(false);
+			const TPCGValueRange<int64> OutMetadataEntries = OutEdgeData->GetMetadataEntryValueRange();
 			UPCGMetadata* Metadata = OutEdgeData->MutableMetadata();
 
 			// Entry keys handed out by AddEntryPlaceholder are sequential from the current

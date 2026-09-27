@@ -379,7 +379,7 @@ namespace PCGExFilterVtx
 				PCGExClusters::Helpers::CleanupVtxData(OutIO);
 
 				(void)PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutIO->GetOut(), NumNodes, OutIO->GetAllocations());
-				OutIO->IOIndex = VtxDataFacade->Source->IOIndex * 100000 + BatchIndex;
+				OutIO->SetSortKey(VtxDataFacade->Source->IOIndex, BatchIndex);
 
 				ReadIndices.SetNumUninitialized(NumNodes);
 				for (int i = 0; i < NumNodes; i++)
@@ -404,8 +404,8 @@ namespace PCGExFilterVtx
 			PCGExClusters::Helpers::CleanupVtxData(Inside);
 			PCGExClusters::Helpers::CleanupVtxData(Outside);
 
-			Inside->IOIndex = VtxDataFacade->Source->IOIndex * 100000 + BatchIndex;
-			Outside->IOIndex = VtxDataFacade->Source->IOIndex * 100000 + BatchIndex;
+			Inside->SetSortKey(VtxDataFacade->Source->IOIndex, BatchIndex);
+			Outside->SetSortKey(VtxDataFacade->Source->IOIndex, BatchIndex);
 
 			auto GatherNodes = [&](const TSharedPtr<PCGExData::FPointIO>& IO, const bool bValid)
 			{

@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <initializer_list>
+#include <type_traits>
+
 #include "CoreMinimal.h"
 #include "PCGPoint.h"
 #include "UObject/Object.h"
@@ -28,6 +31,61 @@ namespace PCGExData
 
 namespace PCGExData
 {
+	/**
+	 * Staging order within an FPointIOCollection: a path of ordinals compared lexicographically, a key sorting
+	 * before every longer key it prefixes. An IO without an explicit key sorts as {IOIndex}; an output derived from
+	 * an IO appends its own ordinal to that IO's key (Derived), so edges follow their vtx, copies their source.
+	 */
+	struct FIOSortKey
+	{
+		// A structural limit on derivation depth, not a data range: raise it if Derived ever asserts.
+		static constexpr int32 MaxLanes = 6;
+
+		int64 Lanes[MaxLanes] = {};
+		int32 NumLanes = 0;
+
+		FIOSortKey() = default;
+
+		FIOSortKey(std::initializer_list<int64> InLanes)
+		{
+			checkf(static_cast<int32>(InLanes.size()) <= MaxLanes, TEXT("An FIOSortKey holds at most %d lanes."), MaxLanes);
+			for (const int64 Lane : InLanes)
+			{
+				if (NumLanes == MaxLanes) { break; }
+				Lanes[NumLanes++] = Lane;
+			}
+		}
+
+		/** This key with InOrdinal appended: the key of an output derived from the IO this key orders. */
+		FIOSortKey Derived(const int64 InOrdinal) const
+		{
+			checkf(NumLanes < MaxLanes, TEXT("An FIOSortKey holds at most %d lanes; raise MaxLanes to derive deeper."), MaxLanes);
+			FIOSortKey Key = *this;
+			if (Key.NumLanes < MaxLanes) { Key.Lanes[Key.NumLanes++] = InOrdinal; }
+			return Key;
+		}
+
+		bool operator<(const FIOSortKey& Other) const
+		{
+			const int32 Common = FMath::Min(NumLanes, Other.NumLanes);
+			for (int32 i = 0; i < Common; i++)
+			{
+				if (Lanes[i] != Other.Lanes[i]) { return Lanes[i] < Other.Lanes[i]; }
+			}
+			return NumLanes < Other.NumLanes;
+		}
+
+		bool operator==(const FIOSortKey& Other) const
+		{
+			if (NumLanes != Other.NumLanes) { return false; }
+			for (int32 i = 0; i < NumLanes; i++)
+			{
+				if (Lanes[i] != Other.Lanes[i]) { return false; }
+			}
+			return true;
+		}
+	};
+
 #pragma region FPointIO
 	/**
 	 * 
@@ -70,6 +128,8 @@ namespace PCGExData
 
 		TWeakPtr<FPCGContextHandle> ContextHandle;
 
+		TOptional<FIOSortKey> SortKey;
+
 	public:
 		TSharedPtr<FTags> Tags;
 		int32 IOIndex = 0;
@@ -77,6 +137,15 @@ namespace PCGExData
 		TObjectPtr<const UPCGData> InitializationData = nullptr;
 
 		bool bAllowEmptyOutput = false;
+
+		// Staging order only, never an identity: SetInfos, Add and PruneNullEntries leave it untouched.
+		void SetSortKey(const FIOSortKey& InKey) { SortKey = InKey; }
+
+		template <typename... TLanes, typename = std::enable_if_t<(sizeof...(TLanes) > 0) && std::conjunction_v<std::is_integral<TLanes>...>>>
+		void SetSortKey(const TLanes... InLanes) { SortKey = FIOSortKey{static_cast<int64>(InLanes)...}; }
+
+		bool HasSortKey() const { return SortKey.IsSet(); }
+		FIOSortKey GetSortKey() const { return SortKey.IsSet() ? SortKey.GetValue() : FIOSortKey{IOIndex}; }
 
 		FORCEINLINE bool IsForwarding() const
 		{

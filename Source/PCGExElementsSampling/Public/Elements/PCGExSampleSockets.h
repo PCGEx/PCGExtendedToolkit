@@ -8,6 +8,7 @@
 #include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExSocketOutputDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Factories/PCGExFactories.h"
 
 #include "PCGExSampleSockets.generated.h"
@@ -34,6 +35,8 @@ class UPCGExSampleSocketsSettings : public UPCGExPointsProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(SampleSockets, "Sample : Sockets", "Parse static mesh paths and output sockets as points.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -54,20 +57,25 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** How the asset gets selected */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType AssetType = EPCGExInputValueType::Attribute;
-
-	/** The name of the attribute to read asset path from.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Asset (Attr)", EditCondition="AssetType != EPCGExInputValueType::Constant", EditConditionHides))
-	FName AssetPathAttributeName = "AssetPath";
-
-	/** Constant static mesh .*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Asset", EditCondition="AssetType == EPCGExInputValueType::Constant", EditConditionHides))
-	TSoftObjectPtr<UStaticMesh> StaticMesh;
+	/** Static mesh to sample sockets from: a constant, or a soft path read from an attribute. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Asset", AllowedClasses="/Script/Engine.StaticMesh"))
+	FPCGExInputShorthandNameSoftObjectPath Asset = FPCGExInputShorthandNameSoftObjectPath(FName("AssetPath"), true);
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExSocketOutputDetails OutputSocketDetails;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType AssetType_DEPRECATED = EPCGExInputValueType::Attribute;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName AssetPathAttributeName_DEPRECATED = "AssetPath";
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	TSoftObjectPtr<UStaticMesh> StaticMesh_DEPRECATED;
+
+#pragma endregion
 
 protected:
 	virtual bool IsCacheable() const override

@@ -51,22 +51,6 @@ namespace PCGExMatching::Helpers
 		}
 	}
 
-	int32 GetMatchingSourcePartitions(const TSharedPtr<FDataMatcher>& Matcher, const TArray<TSharedPtr<PCGExData::FFacade>>& Facades, TArray<TArray<int32>>& OutPartitions, const bool bExclusive, const TSet<int32>* OnceIndices)
-	{
-		// NOTE : Uses Idx instead of IOIndex
-		// This is primarily aimed to help clipper2 module to create sub-groups of paths
-		// as well as MergeByTags to deprecate existing API and support non-exclusive groups.
-
-		TArray<FPCGExTaggedData> Sources;
-		Sources.Reserve(Facades.Num());
-		for (const TSharedPtr<PCGExData::FFacade>& Facade : Facades)
-		{
-			Sources.Add(Facade->Source->GetTaggedData());
-		}
-
-		return GetMatchingSourcePartitions(Matcher, Sources, OutPartitions, bExclusive, OnceIndices);
-	}
-
 	int32 GetMatchingSourcePartitions(const TSharedPtr<FDataMatcher>& Matcher, TArray<TArray<int32>>& OutPartitions, const bool bExclusive, const TSet<int32>* OnceIndices)
 	{
 		return GetMatchingSourcePartitions(Matcher, Matcher->GetSources(), OutPartitions, bExclusive, OnceIndices);

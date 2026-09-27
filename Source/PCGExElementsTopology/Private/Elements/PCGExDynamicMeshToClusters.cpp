@@ -260,15 +260,12 @@ namespace PCGExDynMeshToCluster
 				// Mark cluster identification
 				PCGExDataId OutId;
 				PCGExClusters::Helpers::SetClusterVtx(InBuilder->NodeDataFacade->Source, OutId);
-				const int32 EdgeIOIndexBase = TIndex * 100000;
-				for (int32 i = 0; i < InBuilder->EdgesIO->Pairs.Num(); i++)
+				for (const TSharedPtr<PCGExData::FPointIO>& SingleEdgeIO : InBuilder->EdgesIO->Pairs)
 				{
-					const TSharedPtr<PCGExData::FPointIO>& SingleEdgeIO = InBuilder->EdgesIO->Pairs[i];
-					SingleEdgeIO->IOIndex = EdgeIOIndexBase + i;
 					PCGExClusters::Helpers::MarkClusterEdges(SingleEdgeIO, OutId);
 				}
 
-				// Add edges to the edge collection for output staging
+				// The builder keyed each edge IO from the vtx key {TaskIndex} at compile; Add only re-slots IOIndex.
 				SharedContext.Get()->EdgeCollection->Add(InBuilder->EdgesIO->Pairs);
 			};
 

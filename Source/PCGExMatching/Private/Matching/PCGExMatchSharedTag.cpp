@@ -94,8 +94,9 @@ bool FPCGExMatchSharedTag::Test(const PCGExData::FConstPoint& InTargetElement, c
 		bool bDoValueMatch = Config.bDoValueMatch;
 
 		// If the raw string in the tag:value format, enforce value check
-		if (TSharedPtr<PCGExData::IDataValue> Value = PCGExData::TryGetValueFromTag(TestTagName, TestTagName))
+		if (FString TagKey; PCGExData::TryGetValueFromTag(TestTagName, TagKey))
 		{
+			TestTagName = MoveTemp(TagKey);
 			bDoValueMatch = true;
 		}
 
@@ -273,12 +274,19 @@ void UPCGExCreateMatchSharedTagSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 FString UPCGExCreateMatchSharedTagSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("");
+	bool bMatchValues = Config.Mode == EPCGExTagMatchMode::Specific ? Config.bDoValueMatch : Config.bMatchTagValues;
 	switch (Config.Mode)
 	{
 	case EPCGExTagMatchMode::Specific:
 	{
-		DisplayName = TEXT("Share ");
-		DisplayName += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : TEXT("Tag \"") + Config.TagNameValue.Attribute.ToString() + TEXT("\"");
+		// Mirrors Test(): a Name:Value constant matches on Name and forces the value check.
+		FPCGExInputShorthandNameString TagNameShorthand = Config.TagNameValue;
+		if (FString TagKey; TagNameShorthand.Input == EPCGExInputValueType::Constant && PCGExData::TryGetValueFromTag(TagNameShorthand.Constant, TagKey))
+		{
+			TagNameShorthand.Constant = MoveTemp(TagKey);
+			bMatchValues = true;
+		}
+		DisplayName = TEXT("Shared ") + TagNameShorthand.GetDisplayName();
 	}
 	break;
 	case EPCGExTagMatchMode::AnyShared:
@@ -290,6 +298,11 @@ FString UPCGExCreateMatchSharedTagSettings::GetDisplayName() const
 	default:
 		DisplayName = TEXT("Shared Tag");
 		break;
+	}
+
+	if (bMatchValues)
+	{
+		DisplayName += TEXT(", same value");
 	}
 
 	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);

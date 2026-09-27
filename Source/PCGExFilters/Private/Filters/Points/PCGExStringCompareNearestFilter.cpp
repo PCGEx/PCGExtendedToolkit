@@ -36,13 +36,18 @@ bool UPCGExStringCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* I
 	{
 		OperandAName = MakeShared<TArray<TSharedPtr<PCGExData::TBuffer<FName>>>>();
 		OperandAName->Reserve(TargetsHandler->Num());
+		OperandANameData = MakeShared<TArray<const FName*>>();
+		OperandANameData->Reserve(TargetsHandler->Num());
 	}
 	else
 	{
 		OperandAString = MakeShared<TArray<TSharedPtr<PCGExData::TBuffer<FString>>>>();
 		OperandAString->Reserve(TargetsHandler->Num());
+		OperandAStringData = MakeShared<TArray<const FString*>>();
+		OperandAStringData->Reserve(TargetsHandler->Num());
 	}
 
+	// Raw arrays only for fully read Elements buffers: a sparse one is fetched per scope of another data.
 	const bool bError = TargetsHandler->ForEachTarget([&](const TSharedRef<PCGExData::FFacade>& Target, const int32 TargetIndex, bool& bBreak)
 	{
 		// Always add (even on failure) to keep index alignment with TargetPt.IO.
@@ -50,6 +55,7 @@ bool UPCGExStringCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* I
 		{
 			TSharedPtr<PCGExData::TBuffer<FName>> LocalOperandA = Target->GetBroadcaster<FName>(Config.OperandA, true);
 			OperandAName->Add(LocalOperandA);
+			OperandANameData->Add(LocalOperandA && !LocalOperandA->IsSparse() && LocalOperandA->GetUnderlyingDomain() == PCGExData::EDomainType::Elements ? StaticCastSharedPtr<PCGExData::TArrayBuffer<FName>>(LocalOperandA)->GetInValues()->GetData() : nullptr);
 			if (!LocalOperandA)
 			{
 				bBreak = true;
@@ -63,6 +69,7 @@ bool UPCGExStringCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* I
 		{
 			TSharedPtr<PCGExData::TBuffer<FString>> LocalOperandA = Target->GetBroadcaster<FString>(Config.OperandA, true);
 			OperandAString->Add(LocalOperandA);
+			OperandAStringData->Add(LocalOperandA && !LocalOperandA->IsSparse() && LocalOperandA->GetUnderlyingDomain() == PCGExData::EDomainType::Elements ? StaticCastSharedPtr<PCGExData::TArrayBuffer<FString>>(LocalOperandA)->GetInValues()->GetData() : nullptr);
 			if (!LocalOperandA)
 			{
 				bBreak = true;
@@ -135,32 +142,48 @@ bool PCGExPointFilter::FStringCompareNearestFilter::Test(const int32 PointIndex)
 		return false;
 	}
 
-	// OperandA: closest target's cached buffer via TargetPt.IO; OperandB: the source point.
+	// OperandA: closest target's cached values via TargetPt.IO (only non-Elements readers go through the virtual Read); OperandB: the source point.
 	if (bUseNameComparison)
 	{
-		const PCGExData::TBuffer<FName>* Buffer = (OperandAName->GetData() + TargetPt.IO)->Get();
+		const FName* A = *(OperandANameData->GetData() + TargetPt.IO);
+		if (A)
+		{
+			A += TargetPt.Index;
+		}
+		else
+		{
+			const PCGExData::TBuffer<FName>* Buffer = (OperandAName->GetData() + TargetPt.IO)->Get();
+			if (!Buffer)
+			{
+				return bNoMatchResult;
+			}
+			A = &Buffer->Read(TargetPt.Index);
+		}
+
+		const FName B = OperandBName->Read(PointIndex);
+		// Equality is symmetric, so bSwapOperands is a no-op here.
+		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, *A, B);
+	}
+
+	const FString* A = *(OperandAStringData->GetData() + TargetPt.IO);
+	if (A)
+	{
+		A += TargetPt.Index;
+	}
+	else
+	{
+		const PCGExData::TBuffer<FString>* Buffer = (OperandAString->GetData() + TargetPt.IO)->Get();
 		if (!Buffer)
 		{
 			return bNoMatchResult;
 		}
-
-		const FName A = Buffer->Read(TargetPt.Index);
-		const FName B = OperandBName->Read(PointIndex);
-		// Equality is symmetric, so bSwapOperands is a no-op here.
-		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
+		A = &Buffer->Read(TargetPt.Index);
 	}
 
-	const PCGExData::TBuffer<FString>* Buffer = (OperandAString->GetData() + TargetPt.IO)->Get();
-	if (!Buffer)
-	{
-		return bNoMatchResult;
-	}
-
-	const FString A = Buffer->Read(TargetPt.Index);
 	const FString B = OperandBString->Read(PointIndex);
 	return TypedFilterFactory->Config.bSwapOperands
-		       ? PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, B, A)
-		       : PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
+		       ? PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, B, *A)
+		       : PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, *A, B);
 }
 
 TArray<FPCGPinProperties> UPCGExStringCompareNearestFilterProviderSettings::InputPinProperties() const

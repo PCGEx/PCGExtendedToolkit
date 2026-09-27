@@ -416,7 +416,8 @@ namespace PCGExFloodFill
 			EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 			const FPCGExAttributeToTagDetails& SeedTags,
 			const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
-			int32 InIOIndex);
+			int64 InSortPrimary,
+			int64 InSortSecondary);
 
 		void WritePartitionedPath(
 			const FDiffusion& Diffusion,
@@ -427,7 +428,8 @@ namespace PCGExFloodFill
 			EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 			const FPCGExAttributeToTagDetails& SeedTags,
 			const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
-			int32 InIOIndex,
+			int64 InSortPrimary,
+			int64 InSortSecondary,
 			const TMap<int32, double>* CascadeValues = nullptr);
 
 	protected:

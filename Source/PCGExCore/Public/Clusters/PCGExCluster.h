@@ -88,6 +88,9 @@ namespace PCGExClusters
 		double MaxEdgeLength = 0;
 		TConstPCGValueRange<FTransform> VtxTransforms;
 
+		/** Padding every Bounds computation adds around the node positions. */
+		static constexpr double BoundsPadding = 10;
+
 		FBox Bounds = FBox(NoInit);
 		FVector2D ProjectedCentroid = FVector2D::ZeroVector;
 
@@ -429,6 +432,9 @@ namespace PCGExClusters
 		int32 FindClosestNode(const FVector& Position, const int32 MinNeighbors = 0) const;
 		int32 FindClosestNodeFromEdge(const FVector& Position, const int32 MinNeighbors = 0) const;
 
+		/** Exact: whether any edge passes closer than Radius to Position. Builds the edge octree on first use. */
+		bool HasEdgeWithin(const FVector& Position, const double Radius);
+
 		int32 FindClosestEdge(const int32 InNodeIndex, const FVector& InPosition, const int32 MinNeighbors = 0) const;
 		int32 FindClosestNeighbor(const int32 NodeIndex, const FVector& Position, const int32 MinNeighborCount = 1) const;
 		int32 FindClosestNeighbor(const int32 NodeIndex, const FVector& Position, const TSet<int32>& Exclusion, const int32 MinNeighborCount = 1) const;
@@ -485,6 +491,9 @@ namespace PCGExClusters
 		 * every point index the edges reference; InNumNodesHint must be >= the number of
 		 * unique edge endpoints (it is used as allocation size by the parallel path). */
 		void BuildAdjacency_Unsafe(const int32 InNumNodesHint);
+
+		/** Rebuilds Bounds from this cluster's own node positions, as the build paths do. */
+		void ComputeBounds();
 
 		int32 GetOrCreateNode_Unsafe(const int32 PointIndex);
 	};

@@ -380,7 +380,7 @@ namespace PCGExExtrudeTensors
 			}
 		}
 
-		TSharedPtr<FExtrusion> NewExtrusion = CreateExtrusion(InSeedIndex, Iterations);
+		TSharedPtr<FExtrusion> NewExtrusion = CreateExtrusion(InSeedIndex, Iterations, 0);
 		if (!NewExtrusion)
 		{
 			return;
@@ -411,7 +411,7 @@ namespace PCGExExtrudeTensors
 			return nullptr;
 		}
 
-		TSharedPtr<FExtrusion> NewExtrusion = CreateExtrusion(InExtrusion->SeedIndex, InExtrusion->RemainingIterations);
+		TSharedPtr<FExtrusion> NewExtrusion = CreateExtrusion(InExtrusion->SeedIndex, InExtrusion->RemainingIterations, InExtrusion->Generation + 1);
 		if (!NewExtrusion)
 		{
 			return nullptr;
@@ -428,7 +428,7 @@ namespace PCGExExtrudeTensors
 		return NewExtrusion;
 	}
 
-	TSharedPtr<FExtrusion> FProcessor::CreateExtrusion(const int32 InSeedIndex, const int32 InMaxIterations)
+	TSharedPtr<FExtrusion> FProcessor::CreateExtrusion(const int32 InSeedIndex, const int32 InMaxIterations, const int32 InGeneration)
 	{
 		TSharedPtr<PCGExData::FPointIO> NewIO = Context->MainPoints->Emplace_GetRef(PointDataFacade->Source->GetIn(), PCGExData::EIOInit::NoInit);
 		if (!NewIO)
@@ -453,7 +453,9 @@ namespace PCGExExtrudeTensors
 			NewExtrusion->MaxPointCount = MaxPointsCount->Read(InSeedIndex);
 		}
 
-		NewExtrusion->PointDataFacade->Source->IOIndex = BatchIndex * 1000000 + InSeedIndex;
+		// A parent stops as it spawns its only child, so (seed, generation) is unique: stage by input, seed, then lineage.
+		NewExtrusion->Generation = InGeneration;
+		NewIO->SetSortKey(PointDataFacade->Source->IOIndex, InSeedIndex, InGeneration);
 		AttributesToPathTags.Tag(PointDataFacade->GetInPoint(InSeedIndex), Facade->Source);
 
 		// Set up shared resources
@@ -702,6 +704,9 @@ namespace PCGExExtrudeTensors
 
 		if (!NewExtrusions.IsEmpty())
 		{
+			// Children arrive in thread order; one per seed at most, so seed order makes every later queue walk deterministic.
+			NewExtrusions.Sort([](const TSharedPtr<FExtrusion>& A, const TSharedPtr<FExtrusion>& B) { return A->SeedIndex < B->SeedIndex; });
+
 			ExtrusionQueue.Reserve(ExtrusionQueue.Num() + NewExtrusions.Num());
 			ExtrusionQueue.Append(NewExtrusions);
 			NewExtrusions.Reset();

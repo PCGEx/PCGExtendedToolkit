@@ -206,6 +206,32 @@ namespace PCGExInputShorthandsCustomization
 
 		return FText::FromString(FName::NameToDisplayString(Property->GetName(), /*bIsBool=*/true));
 	}
+
+	/**
+	 * Copies ClampMin/ClampMax/UIMin/UIMax from the declaring UPROPERTY onto the Constant handle, so a member clamps its
+	 * constant without a dedicated variant. The engine numeric widget reads instance metadata before property metadata.
+	 */
+	void ForwardNumericMetaData(const TSharedRef<IPropertyHandle>& PropertyHandle, const TSharedPtr<IPropertyHandle>& ConstantHandle)
+	{
+		const FProperty* Property = PropertyHandle->GetProperty();
+		const FProperty* OwnerProperty = Property ? Property->GetOwnerProperty() : nullptr;
+		if (!OwnerProperty || !ConstantHandle.IsValid())
+		{
+			return;
+		}
+
+		auto Forward = [&](const TCHAR* ClampKey, const TCHAR* UIKey)
+		{
+			const FString* ClampValue = OwnerProperty->FindMetaData(ClampKey);
+			const FString* UIValue = OwnerProperty->FindMetaData(UIKey);
+			if (ClampValue) { ConstantHandle->SetInstanceMetaData(ClampKey, *ClampValue); }
+			// A clamp without its UI bound would leave the slider on the variant's own range.
+			if (UIValue || ClampValue) { ConstantHandle->SetInstanceMetaData(UIKey, UIValue ? *UIValue : *ClampValue); }
+		};
+
+		Forward(TEXT("ClampMin"), TEXT("UIMin"));
+		Forward(TEXT("ClampMax"), TEXT("UIMax"));
+	}
 }
 
 void FPCGExInputShorthandCustomization::CustomizeHeader(
@@ -217,6 +243,8 @@ void FPCGExInputShorthandCustomization::CustomizeHeader(
 	TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));
 	TSharedPtr<IPropertyHandle> AttributeHandle = PropertyHandle->GetChildHandle(FName("Attribute"));
 	TSharedPtr<IPropertyHandle> CleanupHandle = PropertyHandle->GetChildHandle(FName("bCleanupAttribute"));
+
+	PCGExInputShorthandsCustomization::ForwardNumericMetaData(PropertyHandle, ConstantHandle);
 
 	HeaderRow.NameContent()
 		[

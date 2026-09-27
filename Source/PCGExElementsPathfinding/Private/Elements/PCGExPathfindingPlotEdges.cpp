@@ -330,7 +330,7 @@ bool FPCGExPathfindingPlotEdgesElement::Boot(FPCGExContext* InContext) const
 
 	Context->PlotsHandler->ForEachTarget([&](const TSharedRef<PCGExData::FFacade>& Target, const int32)
 	{
-		Context->PlotsForwardHandlers.Add(Target->Idx, Settings->PlotForwarding.TryGetHandler(Target, false));
+		Context->PlotsForwardHandlers.Add(Target->Idx, Settings->PlotForwarding.TryGetHandler(Target, PCGExData::EForwardDomain::Inherit));
 	});
 
 	if (Settings->DataMatching.ClusterMatchMode == EPCGExClusterComponentTagMatchMode::Separated || Settings->DataMatching.ClusterMatchMode == EPCGExClusterComponentTagMatchMode::Any || Settings->DataMatching.ClusterMatchMode == EPCGExClusterComponentTagMatchMode::Both)
@@ -474,7 +474,7 @@ namespace PCGExPathfindingPlotEdges
 		// Path-data forwarding only applies when we actually output paths.
 		if (!bVisited)
 		{
-			ClusterDataForwardHandler = MakeShared<PCGExClusters::FClusterDataForwardHandler>(Cluster, StaticCastSharedPtr<FBatch>(ParentBatch.Pin())->VtxDataForwardHandler, Context->EdgesDataForwarding.TryGetHandler(EdgeDataFacade, false));
+			ClusterDataForwardHandler = MakeShared<PCGExClusters::FClusterDataForwardHandler>(Cluster, StaticCastSharedPtr<FBatch>(ParentBatch.Pin())->VtxDataForwardHandler, Context->EdgesDataForwarding.TryGetHandler(EdgeDataFacade, PCGExData::EForwardDomain::Inherit));
 		}
 
 		if (Settings->bUseOctreeSearch)
@@ -616,7 +616,7 @@ namespace PCGExPathfindingPlotEdges
 		else
 		{
 			Context->BuildPath(Plot, QueriesIO[Plot->QueryIndex]);
-			QueriesIO[Plot->QueryIndex]->IOIndex = EdgeDataFacade->Source->IOIndex * 100000 + Plot->QueryIndex;
+			QueriesIO[Plot->QueryIndex]->SetSortKey(EdgeDataFacade->Source->IOIndex, Plot->QueryIndex);
 		}
 		Plot->Cleanup();
 	}
@@ -641,7 +641,7 @@ namespace PCGExPathfindingPlotEdges
 	{
 		PCGEX_TYPED_CONTEXT_AND_SETTINGS(PathfindingPlotEdges)
 
-		VtxDataForwardHandler = Context->VtxDataForwarding.TryGetHandler(VtxDataFacade, false);
+		VtxDataForwardHandler = Context->VtxDataForwarding.TryGetHandler(VtxDataFacade, PCGExData::EForwardDomain::Inherit);
 
 		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
 			Context->bMatchForVtx && !Context->MainDataMatcher->PopulateIgnoreList(VtxDataFacade->Source->GetTaggedData(), MatchingScope, IgnoreList))

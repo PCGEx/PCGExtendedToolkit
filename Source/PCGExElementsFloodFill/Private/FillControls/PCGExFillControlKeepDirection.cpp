@@ -122,6 +122,12 @@ void UPCGExFillControlsKeepDirectionProviderSettings::PCGExApplyDeprecationBefor
 		Config.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.HashComparisonDetails.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("HashToleranceInput")));
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -130,6 +136,11 @@ void UPCGExFillControlsKeepDirectionProviderSettings::PCGExApplyDeprecation(UPCG
 	PCGEX_IF_VERSION_LOWER(1, 76, 10)
 	{
 		Config.ApplyDeprecation();
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.HashComparisonDetails.ApplyDeprecation();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);

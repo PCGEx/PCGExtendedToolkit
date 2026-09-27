@@ -54,6 +54,28 @@ namespace PCGExRandomHelpers
 
 	PCGEXCORE_API int32 GetSeed(const int32 BaseSeed, const int32 Local, const UPCGSettings* Settings = nullptr, const UPCGComponent* Component = nullptr);
 
+	/** Seed components resolved once; Resolve(BaseSeed) equals GetSeed(BaseSeed, Flags, Local, Settings, Component). */
+	struct PCGEXCORE_API FSeedResolver
+	{
+		void Init(const uint8 Flags, const int32 InLocal, const UPCGSettings* Settings, const UPCGComponent* Component);
+		int32 Resolve(const int32 BaseSeed) const;
+
+	private:
+		enum class EStage : uint8
+		{
+			None,
+			Settings,
+			Component,
+			Both,
+		};
+
+		bool bLocal = false;
+		EStage Stage = EStage::None;
+		int32 Local = 0;
+		int32 SettingsSeed = 0;
+		int32 ComponentSeed = 0;
+	};
+
 	PCGEXCORE_API FRandomStream GetRandomStreamFromPoint(const int32 BaseSeed, const int32 Offset, const UPCGSettings* Settings = nullptr, const UPCGComponent* Component = nullptr);
 
 	/**

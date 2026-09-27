@@ -243,6 +243,22 @@ namespace PCGExPointIOMerger
 						return;
 					}
 
+					// A @Data attribute gets a single-value buffer, never an FPropertyArrayBuffer: the first
+					// source carrying it provides the value.
+					if (RawBuffer->GetUnderlyingDomain() == PCGExData::EDomainType::Data)
+					{
+						for (const TSharedPtr<PCGExData::FPointIO>& DataSourceIO : Merger->IOSources)
+						{
+							const FPCGMetadataAttributeBase* DataAttribute = DataSourceIO->FindConstAttribute(Identifier);
+							if (DataAttribute && DataAttribute->GetAttributeDesc().IsSameType(Identity.Attribute->GetAttributeDesc()))
+							{
+								PCGExData::Helpers::PropertyBroadcastAttribute(DataAttribute, PCGExData::Helpers::GetDataValueKey(DataAttribute), RawBuffer);
+								break;
+							}
+						}
+						return;
+					}
+
 					const TSharedPtr<PCGExData::FPropertyArrayBuffer> PropBuffer = StaticCastSharedPtr<PCGExData::FPropertyArrayBuffer>(RawBuffer);
 					const TSharedRef<PCGExData::FPropertyArrayBuffer> PropBufferRef = PropBuffer.ToSharedRef();
 					for (int i = 0; i < Merger->IOSources.Num(); i++)

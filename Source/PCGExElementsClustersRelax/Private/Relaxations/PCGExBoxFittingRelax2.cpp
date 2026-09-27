@@ -3,12 +3,19 @@
 
 #include "Relaxations/PCGExBoxFittingRelax2.h"
 
+#include "PCGExVersion.h"
+
 #pragma region UPCGExBoxFittingRelax2
 
 #if WITH_EDITOR
-void UPCGExBoxFittingRelax2::ApplyShorthandDeprecation()
+void UPCGExBoxFittingRelax2::PCGExApplyDeprecation(const int64 PCGExDataVersion)
 {
-	ExtentsValue.Update(ExtentsInput_DEPRECATED, ExtentsAttribute_DEPRECATED, Extents_DEPRECATED);
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		ExtentsValue.Update(ExtentsInput_DEPRECATED, ExtentsAttribute_DEPRECATED, Extents_DEPRECATED);
+	}
+
+	Super::PCGExApplyDeprecation(PCGExDataVersion);
 }
 #endif
 

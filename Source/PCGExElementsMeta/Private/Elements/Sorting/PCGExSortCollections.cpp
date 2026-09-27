@@ -68,7 +68,9 @@ bool FPCGExSortCollectionsElement::AdvanceWork(FPCGExContext* InContext, const U
 	{
 		TArray<int32> Indices;
 		PCGExArrayHelpers::ArrayOfIndices(Indices, Context->Datas.Num());
-		Indices.Sort([&](const int32 A, const int32 B)
+
+		// Stable: ties keep arrival order.
+		Indices.StableSort([&](const int32 A, const int32 B)
 		{
 			return Context->Sorter->SortData(A, B);
 		});

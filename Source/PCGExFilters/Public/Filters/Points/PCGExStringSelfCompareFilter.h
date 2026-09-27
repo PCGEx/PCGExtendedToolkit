@@ -7,6 +7,7 @@
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "Math/PCGExMath.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExStringSelfCompareFilter.generated.h"
 
@@ -25,7 +26,7 @@ struct FPCGExStringSelfCompareFilterConfig
 
 	/** Operand A for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	FName OperandA = NAME_None;
+	FPCGAttributePropertyInputSelector OperandA;
 
 	/** Comparison */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -35,19 +36,9 @@ struct FPCGExStringSelfCompareFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExIndexMode IndexMode = EPCGExIndexMode::Offset;
 
-	/** Whether the compared index is a constant or read from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
 	/** Index to compare against -- Will be translated to `int32` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector IndexAttribute;
-
-	/** Index to compare against */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	int32 IndexConstant = -1;
-
-	PCGEX_SETTING_VALUE_DECL(Index, int32)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Index"))
+	FPCGExInputShorthandSelectorInteger32 Index = FPCGExInputShorthandSelectorInteger32(FPCGAttributePropertyInputSelector(), -1);
 
 	/** Index safety */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -60,6 +51,24 @@ struct FPCGExStringSelfCompareFilterConfig
 	/** Swap operands. Useful to invert "contains" checks */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bSwapOperands = false;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector IndexAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 IndexConstant_DEPRECATED = -1;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -117,6 +126,8 @@ class UPCGExStringSelfCompareFilterProviderSettings : public UPCGExFilterProvide
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(StringSelfCompareFilterFactory, "Filter : Self Compare (String)", "Creates a filter definition that compares an attribute value against itself at another index.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings

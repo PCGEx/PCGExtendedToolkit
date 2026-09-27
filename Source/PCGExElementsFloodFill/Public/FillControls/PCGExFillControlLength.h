@@ -30,7 +30,7 @@ struct FPCGExFillControlConfigLength : public FPCGExFillControlConfigBase
 	bool bUsePathLength = true;
 
 	/** Max Length. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Length"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Length", ClampMin=1))
 	FPCGExInputShorthandNameDoubleAbs MaxLengthValue = FPCGExInputShorthandNameDoubleAbs(FName("MaxLength"), 10, false);
 
 #pragma region DEPRECATED

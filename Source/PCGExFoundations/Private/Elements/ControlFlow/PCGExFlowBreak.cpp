@@ -19,6 +19,16 @@
 #pragma region UPCGSettings interface
 
 #if WITH_EDITOR
+void UPCGExRecursionTrackerSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 1)
+	{
+		bLegacyIgnoreDataTest = bDoAdditionalDataTesting;
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 bool UPCGExRecursionTrackerSettings::GetPinExtraIcon(const UPCGPin* InPin, FName& OutExtraIcon, FText& OutTooltip) const
 {
 	return PCGEX_CORE_SETTINGS.GetPinExtraIcon(InPin, OutExtraIcon, OutTooltip, InPin->IsOutputPin());
@@ -137,7 +147,7 @@ bool FPCGExFlowBreakElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 	PCGEX_CONTEXT()
 	PCGEX_SETTINGS(RecursionTracker)
 
-	const bool bDoAdditionalDataTesting = Settings->Type == EPCGExRecursionTrackerType::Simple ? Settings->bDoAdditionalDataTesting : false;
+	const bool bDoAdditionalDataTesting = Settings->Type == EPCGExRecursionTrackerType::Simple && Settings->bDoAdditionalDataTesting && !Settings->bLegacyIgnoreDataTest;
 
 	if (!PCGExMetaHelpers::IsWritableAttributeName(Settings->ContinueAttributeName))
 	{
@@ -352,7 +362,7 @@ Context->StageOutput(Extra, PCGExRecursionTracker::Output##_NAME##Label, PCGExDa
 					TSharedPtr<PCGExPointFilter::FManager> TestDataFilters = nullptr;
 					TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> TestFilterFactories;
 
-					if (!bShouldStop && PCGExFactories::GetInputFactories(Context, PCGExRecursionTracker::SourceTrackerFilters, TestFilterFactories, PCGExFactories::PointFilters(), false))
+					if (!bShouldStop && PCGExFactories::GetInputFactories(Context, PCGExFilters::Labels::SourceFiltersLabel, TestFilterFactories, PCGExFactories::PointFilters(), false))
 					{
 						PCGEX_MAKE_SHARED(DummyFacade, PCGExData::FFacade, TestDataCollection->Pairs[0].ToSharedRef())
 						TestDataFilters = MakeShared<PCGExPointFilter::FManager>(DummyFacade.ToSharedRef());
@@ -402,13 +412,13 @@ Context->StageOutput(Extra, PCGExRecursionTracker::Output##_NAME##Label, PCGExDa
 				const int32 Remainder = ClampedRemainder + Settings->CounterUpdate;
 				const float Progress = static_cast<float>(Remainder) / static_cast<float>(MaxCount);
 
-				const bool bContinue = Remainder >= 0;
+				const bool bContinue = !bShouldStop && Remainder >= 0;
 				if (bContinue)
 				{
 					bAnyContinue = true;
 				}
 
-				if (bShouldStop || !bContinue || Settings->bForceOutputContinue)
+				if (!bContinue || Settings->bForceOutputContinue)
 				{
 					OutputParamData = OriginalParamData->DuplicateData(Context);
 					UPCGMetadata* Metadata = OutputParamData->MutableMetadata();

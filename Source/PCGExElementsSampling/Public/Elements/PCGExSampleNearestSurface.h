@@ -260,6 +260,8 @@ namespace PCGExSampleNearestSurface
 		TArray<int8> SamplingMask;
 
 		TSharedPtr<PCGExData::FDataForwardHandler> SurfacesForward;
+		/** Per point, the surface row forwarded at scope end; -1 when nothing was hit. */
+		TArray<int32> ForwardRows;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> DistanceGetter;
 		TSharedPtr<PCGExMT::TScopedNumericValue<double>> MaxDistanceValue;

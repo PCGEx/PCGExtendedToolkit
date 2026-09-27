@@ -121,7 +121,7 @@ namespace PCGExPackClusters
 		VtxPoints->CopyPropertiesTo(PackedPoints, VtxPointSelection, WriteIndices, AllocateProperties & ~EPCGPointNativeProperties::MetadataEntry);
 
 		// The following may be redundant
-		TPCGValueRange<int64> MetadataEntries = PackedPoints->GetMetadataEntryValueRange(false);
+		TPCGValueRange<int64> MetadataEntries = PackedPoints->GetMetadataEntryValueRange();
 		for (int32 Index : WriteIndices)
 		{
 			MetadataEntries[Index] = PCGInvalidEntryKey;

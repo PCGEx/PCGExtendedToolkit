@@ -149,6 +149,18 @@ namespace PCGExCollections::Labels
 		return InLayer.IsNone() ? Tag_EntryIdx : FName(Tag_EntryIdx.ToString() + TEXT("/") + InLayer.ToString());
 	}
 
+	/** True for the staged entry-hash attribute of any staging layer (the inverse of EntryIdxName). */
+	inline bool IsEntryIdxName(const FName InName)
+	{
+		if (InName == Tag_EntryIdx)
+		{
+			return true;
+		}
+
+		// Case-insensitive, like FName equality
+		return InName.ToString().StartsWith(Tag_EntryIdx.ToString() + TEXT("/"), ESearchCase::IgnoreCase);
+	}
+
 	const FName CollectionMapPin = TEXT("CollectionMap");
 
 	const FName MeshesPin = TEXT("Meshes");

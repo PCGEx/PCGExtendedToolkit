@@ -180,30 +180,17 @@ void UPCGExCreateMatchTagToAttrSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 FString UPCGExCreateMatchTagToAttrSettings::GetDisplayName() const
 {
-	FString TagSourceStr = Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : TEXT("Tag \"") + Config.TagNameValue.Attribute.ToString() + TEXT("\"");
+	FString DisplayName = TEXT("Tag") + PCGExCompare::ToString(Config.NameMatch);
+	DisplayName += Config.TagNameValue.GetDisplayName();
 
 	if (Config.bDoValueMatch)
 	{
-		TagSourceStr += TEXT("::Value ") + PCGExCompare::ToString(Config.NameMatch);
-
-		if (Config.ValueType == EPCGExComparisonDataType::Numeric)
-		{
-			TagSourceStr += PCGExCompare::ToString(Config.NumericComparison);
-		}
-		else
-		{
-			TagSourceStr += PCGExCompare::ToString(Config.StringComparison);
-		}
-
-		TagSourceStr += TEXT("Target' @") + PCGExMetaHelpers::GetSelectorDisplayName(Config.ValueAttribute);
-	}
-	else
-	{
-		TagSourceStr += PCGExCompare::ToString(Config.NameMatch) + TEXT("Target' @");
-		TagSourceStr += Config.TagNameValue.Input == EPCGExInputValueType::Constant ? Config.TagNameValue.Constant : Config.TagNameValue.Attribute.ToString();
+		DisplayName += TEXT(", value");
+		DisplayName += Config.ValueType == EPCGExComparisonDataType::Numeric ? PCGExCompare::ToString(Config.NumericComparison) : PCGExCompare::ToString(Config.StringComparison);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.ValueAttribute);
 	}
 
-	return PCGExCommon::FlagInvertLabel(TagSourceStr, Config.bInvert);
+	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }
 #endif
 

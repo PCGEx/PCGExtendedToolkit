@@ -288,7 +288,8 @@ namespace PCGExBuildCustomGraph
 
 				PCGEX_SCOPE_LOOP(i)
 				{
-					FPCGPoint& Point = MutablePoints[i];
+					// MutablePoints holds this scope only, from 0; i is the absolute point index.
+					FPCGPoint& Point = MutablePoints[i - Scope.Start];
 					CustomGraphSettings->UpdateNodePoint(Point, CustomGraphSettings->Idx[i], i, Point);
 				}
 

@@ -235,8 +235,8 @@ namespace PCGExClusterDiffusion
 		TSharedPtr<PCGExFloodFill::FDiffusionPathWriter> PathWriter;
 		TSharedPtr<TArray<int32>> DiffusionDepths; // Vtx point index -> diffusion depth, for NormalizedPathDepth
 
-		// Per diffusion (indexed by FDiffusion::Index), the first path ordinal it owns -- prefix sums of
-		// endpoint counts, so concurrent path tasks assign deterministic, collision-free IOIndices.
+		// Per diffusion (indexed by FDiffusion::Index), the ordinal of its first path -- exclusive prefix sums of
+		// endpoint counts, so concurrent path tasks assign deterministic, collision-free sort keys.
 		TArray<int32> PathIOBases;
 
 		FPCGExFloodFillEdgeDirectionDetails EdgeDirectionDetails;

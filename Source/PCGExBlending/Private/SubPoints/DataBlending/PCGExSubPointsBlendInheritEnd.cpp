@@ -11,8 +11,6 @@
 
 void FPCGExSubPointsBlendInheritEnd::BlendSubPoints(const PCGExData::FConstPoint& From, const PCGExData::FConstPoint& To, PCGExData::FScope& Scope, const PCGExPaths::FPathMetrics& Metrics) const
 {
-	TPCGValueRange<FTransform> OutTransform = Scope.Data->GetTransformValueRange(false);
-
 	PCGEX_SCOPE_LOOP(Index)
 	{
 		MetadataBlender->Blend(From.Index, To.Index, Index, 1);

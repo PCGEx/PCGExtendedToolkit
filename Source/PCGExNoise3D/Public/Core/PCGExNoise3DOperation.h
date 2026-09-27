@@ -118,7 +118,7 @@ protected:
 	// Internal helpers
 	//
 
-	/** Per-noise precompute hook; base state (FractalBounding, bApplyContrast) is already computed when this runs */
+	/** Per-noise precompute hook; base state (FractalBounding, PreparedContrast) is already computed when this runs */
 	virtual void PostInitDerived()
 	{
 	}
@@ -152,10 +152,7 @@ protected:
 		{
 			Value = RemapLUT->Eval(Value);
 		}
-		if (bApplyContrast)
-		{
-			Value = PCGExMath::Contrast::ApplyContrast(Value, Contrast, static_cast<int32>(ContrastCurve));
-		}
+		Value = PreparedContrast.Apply(Value);
 		return Value * Scale;
 	}
 
@@ -166,5 +163,5 @@ protected:
 
 	/** Precomputed by PostInit */
 	double FractalBounding = 1.0;
-	bool bApplyContrast = false;
+	PCGExMath::Contrast::FPreparedContrast PreparedContrast;
 };

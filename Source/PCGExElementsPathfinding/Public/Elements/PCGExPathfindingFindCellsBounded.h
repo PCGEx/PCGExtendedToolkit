@@ -157,10 +157,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Forwarding")
 	FPCGExForwardDetails SeedForwarding;
 
-	/** Whether or not to search for closest node using an octree. Depending on your dataset, enabling this may be either much faster, or much slower. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable, AdvancedDisplay))
-	bool bUseOctreeSearch = false;
-
 private:
 	friend class FPCGExFindContoursBoundedElement;
 };

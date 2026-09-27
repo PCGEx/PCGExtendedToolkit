@@ -7,6 +7,7 @@
 #include "UObject/Object.h"
 
 #include "PCGExVtxPropertyFactoryProvider.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Factories/PCGExFactoryProvider.h"
 
 #include "PCGExVtxPropertyAmplitude.generated.h"
@@ -117,19 +118,29 @@ struct FPCGExAmplitudeConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Up Mode", EditCondition="bWriteAmplitudeSign", EditConditionHides, HideEditConditionToggle))
 	EPCGExVtxAmplitudeUpMode UpMode = EPCGExVtxAmplitudeUpMode::Average;
 
-	/** Up vector source.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" ├─ Up Input Type", EditCondition="bWriteAmplitudeSign && UpMode == EPCGExVtxAmplitudeUpMode::UpVector", EditConditionHides, HideEditConditionToggle))
-	EPCGExInputValueType UpSelection = EPCGExInputValueType::Constant;
-
 	/** Up vector to use for amplitude sign */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Up Vector (Attr)", EditCondition="bWriteAmplitudeSign && UpMode == EPCGExVtxAmplitudeUpMode::UpVector && UpSelection != EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
-	FPCGAttributePropertyInputSelector UpSource;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Up Vector", EditCondition="bWriteAmplitudeSign && UpMode == EPCGExVtxAmplitudeUpMode::UpVector", EditConditionHides, HideEditConditionToggle))
+	FPCGExInputShorthandSelectorVector UpVector;
 
-	/** Up vector to use for amplitude sign */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Up Vector", EditCondition="bWriteAmplitudeSign && UpMode == EPCGExVtxAmplitudeUpMode::UpVector && UpSelection == EPCGExInputValueType::Constant", EditConditionHides, HideEditConditionToggle))
-	FVector UpConstant = FVector::UpVector;
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType UpSelection_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector UpSource_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FVector UpConstant_DEPRECATED = FVector::UpVector;
+
+#pragma endregion
 
 	bool Validate(FPCGExContext* InContext) const;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -180,6 +191,8 @@ class UPCGExVtxPropertyAmplitudeSettings : public UPCGExVtxPropertyProviderSetti
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(VtxAmplitude, "Vtx : Amplitude", "Amplitude of a vtx, based on neighboring connections.", FName(GetDisplayName()))
 #endif
 

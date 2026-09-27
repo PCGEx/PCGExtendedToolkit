@@ -64,6 +64,8 @@ public:
 
 	// Per-target operand A buffers, indexed by FConstPoint::IO.
 	TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<double>>>> OperandA;
+	// Raw input arrays of OperandA (fully read before this is built); null where the reader is missing or not Elements-domain.
+	TSharedPtr<TArray<const double*>> OperandAData;
 
 	virtual bool Init(FPCGExContext* InContext) override;
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
@@ -84,11 +86,13 @@ namespace PCGExPointFilter
 			  , TypedFilterFactory(InDefinition)
 		{
 			OperandA = TypedFilterFactory->OperandA;
+			OperandAData = TypedFilterFactory->OperandAData;
 		}
 
 		const TObjectPtr<const UPCGExNumericCompareNearestFilterFactory> TypedFilterFactory;
 
 		TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<double>>>> OperandA;
+		TSharedPtr<TArray<const double*>> OperandAData;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> OperandB;
 
 		virtual bool Test(const int32 PointIndex) const override;

@@ -23,7 +23,7 @@ struct FPCGExFillControlConfigDepth : public FPCGExFillControlConfigBase
 	FPCGExFillControlConfigDepth() = default;
 
 	/** Max depth. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Depth"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Depth", ClampMin=1))
 	FPCGExInputShorthandNameInteger32Abs MaxDepthValue = FPCGExInputShorthandNameInteger32Abs(FName("MaxDepth"), 10, false);
 
 #pragma region DEPRECATED

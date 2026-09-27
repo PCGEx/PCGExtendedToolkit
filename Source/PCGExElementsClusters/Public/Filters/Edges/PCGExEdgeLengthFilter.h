@@ -24,7 +24,7 @@ struct FPCGExEdgeLengthFilterConfig
 	FPCGExEdgeLengthFilterConfig() = default;
 
 	/** Edge length threshold value. Edges are tested against this distance. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", ClampMin=1))
 	FPCGExInputShorthandSelectorDoubleAbs Threshold = FPCGExInputShorthandSelectorDoubleAbs(FString(TEXT("")), 100, false);
 
 #pragma region DEPRECATED

@@ -58,8 +58,17 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExTransformDetails TransformDetails = FPCGExTransformDetails(true, true);
 
+	/** One point data per input holding every copy, instead of one per matched target. Forwarded target
+	 *  attributes land per element, replacing same-named source ones. Value tags come from the last target. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	bool bMergeCopies = false;
+
+	/** If enabled, copy target attributes as tags onto the outputs. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding", meta = (PCG_Overridable, InlineEditConditionToggle))
+	bool bCopyTargetsAttributesToTags = false;
+
 	/** Target attributes to copy as tags onto output points. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding")
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding", meta = (EditCondition = "bCopyTargetsAttributesToTags"))
 	FPCGExAttributeToTagDetails TargetsAttributesToCopyTags;
 
 	/** Which target attributes to forward on copied points. */
@@ -103,6 +112,11 @@ namespace PCGExCopyToPoints
 		int32 NumCopies = 0;
 		PCGExMatching::FScope MatchScope;
 
+		// Merge mode: per-target match flags (written by index in ProcessRange), compacted in CompleteWork
+		TArray<int8> MatchedTargets;
+		TArray<int32> MatchedIndices;
+		TSharedPtr<PCGExData::FPointIO> MergedIO;
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
@@ -116,5 +130,10 @@ namespace PCGExCopyToPoints
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 		virtual void CompleteWork() override;
+
+	protected:
+		void StartMerge();
+		void ReplicateMerged();
+		void TagMergedOutput(const TSharedPtr<PCGExData::FPointIO>& InMergedIO) const;
 	};
 }

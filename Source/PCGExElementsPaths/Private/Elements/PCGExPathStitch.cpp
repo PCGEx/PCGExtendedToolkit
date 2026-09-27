@@ -331,7 +331,8 @@ namespace PCGExPathStitch
 
 			if (Sorter->Init(Context, Context->Datas))
 			{
-				SortedProcessors.Sort([&](const TSharedPtr<FProcessor>& A, const TSharedPtr<FProcessor>& B)
+				// Stable: ties keep arrival order.
+				SortedProcessors.StableSort([&](const TSharedPtr<FProcessor>& A, const TSharedPtr<FProcessor>& B)
 				{
 					return Sorter->SortData(A->BatchIndex, B->BatchIndex);
 				});
@@ -373,7 +374,7 @@ namespace PCGExPathStitch
 			if (Matcher->Init(Context, Facades, false, PCGExMatching::Labels::SourceMatchRulesLabel))
 			{
 				TArray<TArray<int32>> Partitions;
-				PCGExMatching::Helpers::GetMatchingSourcePartitions(Matcher, Facades, Partitions, true);
+				PCGExMatching::Helpers::GetMatchingSourcePartitions(Matcher, Partitions, true);
 
 				// Each sorted index gets a partition ID; unmatched get unique negative IDs
 				PartitionOf.SetNum(SortedProcessors.Num());

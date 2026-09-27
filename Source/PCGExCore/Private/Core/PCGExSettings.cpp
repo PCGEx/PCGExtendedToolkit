@@ -7,11 +7,17 @@
 #include "PCGExVersion.h"
 #include "PCGExCoreMacros.h"
 #include "PCGExCoreSettingsCache.h"
+#include "PCGExLog.h"
 #include "Core/PCGExContext.h"
 #include "PCGExSettingsCacheBody.h"
+#include "PCGCommon.h"
+#include "PCGGraph.h"
+#include "PCGNode.h"
 #include "PCGPin.h"
 #include "Core/PCGExContext.h"
+#include "Factories/PCGExInstancedFactory.h"
 #include "Styling/SlateStyle.h"
+#include "UObject/UnrealType.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
@@ -38,7 +44,8 @@ void UPCGExSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArra
 void UPCGExSettings::ApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGExApplyDeprecation(InOutNode);
-	
+	ApplyInstancedFactoriesDeprecation();
+
 	Super::ApplyDeprecation(InOutNode);
 	
 	PCGEX_UPDATE_DATA_VERSION_TO_LATEST
@@ -48,6 +55,38 @@ void UPCGExSettings::ApplyDeprecation(UPCGNode* InOutNode)
 
 void UPCGExSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
+}
+
+void UPCGExSettings::ApplyInstancedFactoriesDeprecation()
+{
+	// Instanced operations serialize in this package, so the resolved PCGExDataVersion is theirs too.
+	// Walks structs and containers, then each found operation for nested ones; only owned instances are touched.
+	TArray<UPCGExInstancedFactory*> Factories;
+	TSet<const UPCGExInstancedFactory*> Visited;
+
+	auto Gather = [&](const UStruct* InStruct, const void* InContainer)
+	{
+		for (TPropertyValueIterator<FObjectProperty> It(InStruct, InContainer, EPropertyValueIteratorFlags::FullRecursion, EFieldIteratorFlags::ExcludeDeprecated); It; ++It)
+		{
+			if (!It.Key()->HasAnyPropertyFlags(CPF_InstancedReference)) { continue; }
+
+			UPCGExInstancedFactory* Factory = Cast<UPCGExInstancedFactory>(It.Key()->GetObjectPropertyValue(It.Value()));
+			if (!Factory || !Factory->IsIn(this)) { continue; }
+
+			bool bAlreadyVisited = false;
+			Visited.Add(Factory, &bAlreadyVisited);
+			if (!bAlreadyVisited) { Factories.Add(Factory); }
+		}
+	};
+
+	Gather(GetClass(), this);
+
+	for (int32 i = 0; i < Factories.Num(); i++)
+	{
+		UPCGExInstancedFactory* Factory = Factories[i];
+		Gather(Factory->GetClass(), Factory);
+		Factory->PCGExApplyDeprecation(PCGExDataVersion);
+	}
 }
 
 void UPCGExSettings::ResolveDataVersion()
@@ -63,6 +102,20 @@ void UPCGExSettings::ResolveDataVersion()
 	// Genuinely-new nodes never reach this branch: any package a current build saves records the PCGEx
 	// custom version in its archive header, so they load with UserDataVersion >= 0 (the branch above).
 	// else: keep the captured legacy PCGExDataVersion as-is.
+}
+
+void UPCGExSettings::RetireInputPin(UPCGNode* InOutNode, const FName InLabel) const
+{
+	UPCGPin* Pin = InOutNode ? InOutNode->GetInputPin(InLabel) : nullptr;
+	if (!Pin || !Pin->IsConnected()) { return; }
+
+	// A label the settings still declare is live, not retired.
+	if (AllInputPinProperties().ContainsByPredicate([&InLabel](const FPCGPinProperties& Properties) { return Properties.Label == InLabel; })) { return; }
+
+	const int32 NumEdges = Pin->EdgeCount();
+	Pin->BreakAllEdges();
+
+	UE_LOG(LogPCGEx, Warning, TEXT("[%s] %s: removed %d connection(s) to the '%s' input pin, which this node no longer has. Re-save the graph to clear this warning."), *GetPathNameSafe(InOutNode->GetGraph()), *InOutNode->GetNodeTitle(EPCGNodeTitleType::ListView).ToString(), NumEdges, *FName::NameToDisplayString(InLabel.ToString(), false));
 }
 
 bool UPCGExSettings::GetPinExtraIcon(const UPCGPin* InPin, FName& OutExtraIcon, FText& OutTooltip) const

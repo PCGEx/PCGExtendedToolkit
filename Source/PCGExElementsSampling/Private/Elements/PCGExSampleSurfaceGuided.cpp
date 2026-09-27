@@ -215,7 +215,7 @@ namespace PCGExSampleSurfaceGuided
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSampleSurfaceGuided::Process);
 
-		SurfacesForward = Context->bUseInclude ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, false) : nullptr;
+		SurfacesForward = Context->bUseInclude ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, PCGExData::EForwardDomain::Inherit) : nullptr;
 
 		// Must be set before process for filters
 		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
@@ -243,6 +243,10 @@ namespace PCGExSampleSurfaceGuided
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
 		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
+		if (SurfacesForward)
+		{
+			ForwardRows.Init(-1, PointDataFacade->GetNum());
+		}
 
 		CrossAxis = Settings->CrossAxis.GetValueSetting();
 		if (!CrossAxis->Init(PointDataFacade))
@@ -346,7 +350,8 @@ namespace PCGExSampleSurfaceGuided
 
 		if (Context->ApplySampling.WantsApply())
 		{
-			const FVector Cross = CrossAxis->Read(Index) * (Settings->CrossAxis.bFlip ? 1 : -1);
+			// Negated by construction; the getter already applied bFlip.
+			const FVector Cross = -CrossAxis->Read(Index);
 			const FQuat Rot = PCGExMath::MakeRot(Settings->RotationConstruction, HitResult.ImpactNormal, Cross);
 			const FTransform OutTransform(Rot, Impact, FVector::OneVector);
 			Context->ApplySampling.Apply(MutablePoint, OutTransform, OutTransform);
@@ -406,7 +411,7 @@ namespace PCGExSampleSurfaceGuided
 
 		if (SurfacesForward && HitIndex)
 		{
-			SurfacesForward->Forward(*HitIndex, Index);
+			ForwardRows[Index] = *HitIndex;
 		}
 
 		FPlatformAtomics::InterlockedExchange(&bAnySuccess, 1);
@@ -726,6 +731,11 @@ namespace PCGExSampleSurfaceGuided
 			{
 				SamplingFailed();
 			}
+		}
+
+		if (SurfacesForward)
+		{
+			SurfacesForward->ForwardScoped(Scope, ForwardRows);
 		}
 	}
 

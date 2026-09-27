@@ -3,15 +3,30 @@
 
 #include "Filters/Points/PCGExStringSelfCompareFilter.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExStringSelfCompareFilterConfig, Index, int32, CompareAgainst, IndexAttribute, IndexConstant)
+#if WITH_EDITOR
+void FPCGExStringSelfCompareFilterConfig::ApplyDeprecation()
+{
+	// A legacy FName tag loads through SetAttributeName; re-parse it with Update, as FName-based reads do.
+	if (OperandA.GetSelection() == EPCGAttributePropertySelection::Attribute) { OperandA.Update(OperandA.GetAttributeName().ToString()); }
+	Index.Update(CompareAgainst_DEPRECATED, IndexAttribute_DEPRECATED, IndexConstant_DEPRECATED);
+}
+
+void FPCGExStringSelfCompareFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("IndexAttribute")), FName(TEXT("Index")), FName(TEXT("Attribute")), FName(TEXT("Index (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("IndexConstant")), FName(TEXT("Index")), FName(TEXT("Constant")), FName(TEXT("Index")));
+}
+#endif
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExStringSelfCompareFilterFactory::CreateFilter() const
 {
@@ -21,6 +36,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExStringSelfCompareFilterFactory::Crea
 void UPCGExStringSelfCompareFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
+	Config.Index.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 bool UPCGExStringSelfCompareFilterFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
@@ -30,7 +46,8 @@ bool UPCGExStringSelfCompareFilterFactory::RegisterConsumableAttributesWithData(
 		return false;
 	}
 
-	InContext->AddConsumableAttributeName(Config.OperandA);
+	FName Consumable = NAME_None;
+	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
 
 	return true;
 }
@@ -53,11 +70,11 @@ bool PCGExPointFilter::FStringSelfCompareFilter::Init(FPCGExContext* InContext, 
 	OperandA = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
 	if (!OperandA->Prepare(TypedFilterFactory->Config.OperandA, PointDataFacade->Source))
 	{
-		PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
+		PCGEX_LOG_INVALID_SELECTOR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
 		return false;
 	}
 
-	Index = TypedFilterFactory->Config.GetValueSettingIndex(PCGEX_QUIET_HANDLING);
+	Index = TypedFilterFactory->Config.Index.GetValueSetting(PCGEX_QUIET_HANDLING);
 	Index->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!Index->Init(PointDataFacade))
 	{
@@ -85,9 +102,30 @@ bool PCGExPointFilter::FStringSelfCompareFilter::Test(const int32 PointIndex) co
 PCGEX_CREATE_FILTER_FACTORY(StringSelfCompare)
 
 #if WITH_EDITOR
+void UPCGExStringSelfCompareFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExStringSelfCompareFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExStringSelfCompareFilterProviderSettings::GetDisplayName() const
 {
-	FString DisplayName = Config.OperandA.ToString() + PCGExCompare::ToString(Config.Comparison);
+	FString DisplayName = PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandA) + PCGExCompare::ToString(Config.Comparison);
 
 	if (Config.IndexMode == EPCGExIndexMode::Pick)
 	{
@@ -98,13 +136,13 @@ FString UPCGExStringSelfCompareFilterProviderSettings::GetDisplayName() const
 		DisplayName += TEXT(" i+ ");
 	}
 
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
+	if (Config.Index.Input == EPCGExInputValueType::Attribute)
 	{
-		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute);
+		DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.Index.Attribute);
 	}
 	else
 	{
-		DisplayName += FString::Printf(TEXT("%d"), Config.IndexConstant);
+		DisplayName += FString::Printf(TEXT("%d"), Config.Index.Constant);
 	}
 
 	return DisplayName;

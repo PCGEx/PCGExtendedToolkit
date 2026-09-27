@@ -50,7 +50,48 @@ namespace PCGExPCGDataAssetLoader
 		explicit FSpatialTransformResult(const TSharedPtr<PCGExMT::FTask>& InTask);
 	};
 
-	static FSpatialTransformResult PrepareTransformTask(UPCGSpatialData* InData, const FTransform& InTransform, bool bOmitIfEmpty = false);
+	static FSpatialTransformResult PrepareTransformTask(UPCGSpatialData* InData, const FTransform& InTransform);
+
+	/** Where an asset datum goes for one target */
+	enum class ERoute : uint8
+	{
+		Skip   = 0,
+		Unique = 1, // Asset-owned, output once: non-spatial data, or passthrough without forwarding
+		Merge  = 2, // bMergePointOutputs: replicated into the entry's merged output
+		Copy   = 3, // Duplicated per target (transformed unless passthrough); cluster pair tags are remapped
+	};
+
+	/** Total order of outputs within a pin: one datum per target per asset index, so no two outputs tie */
+	struct FOutputOrder
+	{
+		int32 Rank = 1; // 0 = non-spatial asset data, output ahead of everything else
+		int32 Input = 0;
+		int32 Point = 0;
+		int32 Datum = 0; // Index in the asset's data collection
+
+		bool operator<(const FOutputOrder& Other) const
+		{
+			if (Rank != Other.Rank) { return Rank < Other.Rank; }
+			if (Input != Other.Input) { return Input < Other.Input; }
+			if (Point != Other.Point) { return Point < Other.Point; }
+			return Datum < Other.Datum;
+		}
+	};
+
+	struct FOutputEntry
+	{
+		FPCGTaggedData TaggedData;
+		FOutputOrder Order;
+		bool bOwned = false; // Created by this node; asset-owned data is never staged mutable
+	};
+
+	/** Where a unique datum's entry lives, and the order of the registrant that placed it */
+	struct FUniqueSlot
+	{
+		FOutputOrder Order;
+		FName Pin = NAME_None;
+		int32 Index = INDEX_NONE;
+	};
 }
 
 /**
@@ -123,6 +164,11 @@ public:
 	/** If enabled, will not output empty data, even if they have possibly meaningful @Data attributes */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bOmitEmptyData = true;
+
+	/** Merge every target's copy of an asset's point data into one output per input; cluster data is never
+	 *  merged. Forwarded target attributes land per element, replacing same-named source attributes. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	bool bMergePointOutputs = false;
 
 	/** If enabled, only spawn data from the PCGDataAsset that matches these tags. Empty means all data. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Filtering", meta = (PCG_Overridable))
@@ -237,24 +283,30 @@ struct FPCGExPCGDataAssetLoaderContext final : FPCGExPointsProcessorContext
 	// Custom output pin names for routing
 	TSet<FName> CustomPinNames;
 
-	TMap<FName, TArray<FPCGTaggedData>> OutputByPin;
-	TMap<uint32, int32> OutputIndices;
+	TMap<FName, TArray<PCGExPCGDataAssetLoader::FOutputEntry>> OutputByPin;
 	mutable FRWLock OutputLock;
 
-	// Asset-owned data forwarded as-is (non-spatial, or everything in passthrough): once per unique data, never duplicated
-	TSet<uint32> UniqueDataUIDs;
+	// ERoute::Unique outputs by data UID: asset-owned data is output once, never duplicated
+	TMap<uint32, PCGExPCGDataAssetLoader::FUniqueSlot> UniqueData;
 	mutable FRWLock UniqueDataLock;
 
 	// Merged collection map from embedded CollectionMap entries (when bMergeEmbeddedCollectionMaps)
 	TSharedPtr<PCGExCollections::FPickPacker> MergedMapPacker;
 
-	/** Register output data to appropriate pin */
-	void RegisterOutput(const FPCGTaggedData& InTaggedData, bool bAddPinTag, const int32 InIndex);
+	/** Register data this node created */
+	void RegisterOutput(const FPCGTaggedData& InTaggedData, const PCGExPCGDataAssetLoader::FOutputOrder& InOrder);
 
-	/** Register asset-owned data as-is, once per unique data (dedupes on data UID). */
-	void RegisterUniqueData(const FPCGTaggedData& InTaggedData, const int32 InIndex);
+	/** Register asset-owned data as-is, once per unique data (dedupes on data UID).
+	 *  The registrant first in output order wins, tags included, whichever input completes first. */
+	void RegisterUniqueData(const FPCGTaggedData& InTaggedData, const PCGExPCGDataAssetLoader::FOutputOrder& InOrder);
+
+	/** Stage every registered output, sorted per pin; only data this node created is staged mutable */
+	void StageRegisteredOutputs();
 
 protected:
+	/** Output pin routing: custom pin on an exact name match, else the default pin with a Pin: tag */
+	FPCGTaggedData ResolveOutput(const FPCGTaggedData& InTaggedData) const;
+
 	PCGEX_ELEMENT_BATCH_POINT_DECL
 };
 
@@ -302,10 +354,29 @@ namespace PCGExPCGDataAssetLoader
 		}
 	};
 
+	/** bMergePointOutputs: every target of one input that resolves to the same asset datum, replicated into one output */
+	struct FMergeGroup
+	{
+		FPCGTaggedData Source;
+		TArray<int32> TargetIndices;
+
+		// First target's order: the merged output sits where that target's copy would
+		FOutputOrder Order;
+
+		// In = source datum, Out = merged output
+		TSharedPtr<PCGExData::FPointIO> MergedIO;
+	};
+
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExPCGDataAssetLoaderContext, UPCGExPCGDataAssetLoaderSettings>
 	{
+		friend class FBatch;
+
 	protected:
 		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashGetter;
+
+		// bMergePointOutputs: one group per asset datum entry, in first-target order
+		TArray<TSharedPtr<FMergeGroup>> MergeGroups;
+		TMap<const FPCGTaggedData*, int32> MergeGroupByEntry;
 
 		// Per-point entry hash (0 for invalid/filtered points)
 		TArray<uint64> PointEntryHashes;
@@ -313,8 +384,12 @@ namespace PCGExPCGDataAssetLoader
 		// Forward handler (created after facade is available)
 		TSharedPtr<PCGExData::FDataForwardHandler> ForwardHandler;
 
-		// Shared counter for generating unique cluster IDs across all points
+		// Cluster pair ID counter, shared across this input's targets. Starts at the input's reserved base
+		// (FBatch::ReserveClusterIds), so IDs are unique across inputs and never depend on completion order.
 		int32 ClusterIdCounter = 0;
+
+		// Input tags forwarded onto outputs, minus the cluster pairing tags: every copy keeps its own pair ID
+		TSet<FString> ForwardedInputTags;
 
 		// True when the input is a converted attribute set: loaded contents are output as-is
 		// (no duplicate, no transform), one instance per unique data. Forwarding still duplicates.
@@ -336,11 +411,29 @@ namespace PCGExPCGDataAssetLoader
 		/** Check if tagged data passes tag filters */
 		bool PassesTagFilter(const FPCGTaggedData& InTaggedData) const;
 
+		/** bMergePointOutputs: point data that is merged across targets instead of duplicated per target */
+		bool ShouldMerge(const FPCGTaggedData& InTaggedData) const;
+
+		/** Where an asset datum goes. The single decision behind both emission and the cluster ID reservation. */
+		ERoute RouteDatum(const FPCGTaggedData& InTaggedData) const;
+
+		/** Loaded asset a point spawns; null when the point is filtered out, unstaged, or its asset failed to load */
+		UPCGDataAsset* GetTargetAsset(int32 PointIndex) const;
+
+		/** Cluster pair IDs CompleteWork will consume: one per distinct pair ID among the copied data of each target */
+		int32 GetClusterIdDemand() const;
+
+		void QueueMerge(int32 PointIndex, const FOutputOrder& InOrder, const FPCGTaggedData& InTaggedData);
+
+		/** Creates and registers the group's output; false when there is nothing to replicate. */
+		bool StartMergeGroup(const TSharedPtr<FMergeGroup>& Group);
+		void ReplicateGroup(const FMergeGroup& Group) const;
+
 		/** Process a single tagged data item for a point */
-		FSpatialTransformResult ProcessTaggedData(int32 PointIndex, const FTransform& TargetTransform, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper);
+		FSpatialTransformResult ProcessTaggedData(int32 PointIndex, int32 DatumIndex, const FTransform& TargetTransform, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper);
 
 		/** Passthrough: output asset data as-is (deduped), or a non-transformed duplicate when attribute forwarding is enabled */
-		void ProcessPassthroughData(int32 PointIndex, int32 OutIdx, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper);
+		void ProcessPassthroughData(int32 PointIndex, const FOutputOrder& InOrder, ERoute Route, const FPCGTaggedData& InTaggedData, FClusterIdRemapper& ClusterRemapper);
 
 		/** Check if data has PCGEx cluster tags and remap them */
 		void RemapClusterTags(TSet<FString>& Tags, FClusterIdRemapper& ClusterRemapper) const;
@@ -358,5 +451,9 @@ namespace PCGExPCGDataAssetLoader
 
 		virtual void CompleteWork() override;
 		void OnLoadAssetsComplete(const bool bSuccess);
+
+	protected:
+		/** Gives each input a contiguous block of cluster pair IDs, in input order, before any processor completes */
+		void ReserveClusterIds();
 	};
 }

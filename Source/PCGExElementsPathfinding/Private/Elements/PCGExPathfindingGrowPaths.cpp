@@ -165,13 +165,19 @@ namespace PCGExPathfindingGrowPaths
 	void FGrowth::Write()
 	{
 		const TSharedPtr<PCGExData::FPointIO> VtxIO = Processor->Cluster->VtxIO.Pin();
-		const TSharedPtr<PCGExData::FPointIO> PathIO = Processor->GetContext()->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxIO->GetIn(), PCGExData::EIOInit::New);
-		if (!VtxIO || !PathIO)
+		if (!VtxIO)
 		{
 			return;
 		}
 
-		PathIO->IOIndex = VtxIO->IOIndex * 100000 + SeedPointIndex;
+		const TSharedPtr<PCGExData::FPointIO> PathIO = Processor->GetContext()->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxIO->GetIn(), PCGExData::EIOInit::New);
+		if (!PathIO)
+		{
+			return;
+		}
+
+		// Vtx dataset, then seed; the vtx's clusters and the seed's branches break the tie.
+		PathIO->SetSortKey(VtxIO->IOIndex, SeedPointIndex, Processor->BatchIndex, BranchIndex);
 
 		PCGEX_MAKE_SHARED(PathDataFacade, PCGExData::FFacade, PathIO.ToSharedRef())
 
@@ -452,6 +458,7 @@ namespace PCGExPathfindingGrowPaths
 				PCGEX_MAKE_SHARED(NewGrowth, FGrowth, ThisPtr, StartNumIterations, Node.Index, StartGrowthDirection)
 				NewGrowth->MaxDistance = StartGrowthMaxDistance;
 				NewGrowth->SeedPointIndex = i;
+				NewGrowth->BranchIndex = j;
 
 				if (!(NewGrowth->FindNextGrowthNodeIndex() != -1 && NewGrowth->Grow()))
 				{

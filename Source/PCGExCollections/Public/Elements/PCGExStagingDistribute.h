@@ -14,6 +14,7 @@
 #include "Details/PCGExStagingDetails.h"
 #include "Factories/PCGExFactories.h"
 #include "Fitting/PCGExFitting.h"
+#include "Helpers/PCGExRandomHelpers.h"
 
 #include "PCGExStagingDistribute.generated.h"
 
@@ -412,6 +413,8 @@ namespace PCGExAssetStaging
 		TArray<FMicroRefreshTarget> MicroTargets;
 		TArray<int32> MicroTargetIndex;
 		TSharedPtr<PCGExCollections::FMicroSelectorHelper> MicroRedistributeHelper;
+		// Seed components of the micro re-pick, resolved once in Process() alongside MicroRedistributeHelper.
+		PCGExRandomHelpers::FSeedResolver MicroSeedResolver;
 
 		TSharedPtr<PCGExData::TBuffer<int32>> WeightWriter;
 		TSharedPtr<PCGExData::TBuffer<double>> NormalizedWeightWriter;

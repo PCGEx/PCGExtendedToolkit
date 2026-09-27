@@ -19,19 +19,20 @@ namespace PCGExClusters
 	void FCellPathBuilder::ProcessCell(
 		const TSharedPtr<FCell>& InCell,
 		const TSharedPtr<PCGExData::FPointIO>& InPathIO,
-		const FString& InTriageTag) const
+		const FString& InTriageTag,
+		const int32 InCellOrdinal) const
 	{
 		if (!InCell || !InPathIO || !Cluster)
 		{
 			return;
 		}
 
-		// Edge-based IOIndex for non-seeded variants
-		const int32 IOIndex = EdgeDataFacade
-			? EdgeDataFacade->Source->IOIndex * 1000000 + Cluster->GetNodePointIndex(InCell->Nodes[0])
-			: Cluster->GetNodePointIndex(InCell->Nodes[0]);
+		PCGExData::FIOSortKey SortKey;
+		if (EdgeDataFacade) { SortKey = SortKey.Derived(EdgeDataFacade->Source->IOIndex); }
+		SortKey = SortKey.Derived(Cluster->GetNodePointIndex(InCell->Nodes[0]));
+		if (InCellOrdinal != INDEX_NONE) { SortKey = SortKey.Derived(InCellOrdinal); }
 
-		ProcessCellInternal(InCell, InPathIO, InTriageTag, IOIndex, INDEX_NONE);
+		ProcessCellInternal(InCell, InPathIO, InTriageTag, SortKey, INDEX_NONE);
 	}
 
 	void FCellPathBuilder::ProcessSeededCell(
@@ -45,16 +46,19 @@ namespace PCGExClusters
 		}
 
 		const int32 SeedIndex = InCell->CustomIndex;
-		const int32 IOIndex = BatchIndex * 1000000 + SeedIndex;
 
-		ProcessCellInternal(InCell, InPathIO, InTriageTag, IOIndex, SeedIndex);
+		// Batch, then seed; BatchIndex restarts per vtx input, so the vtx dataset breaks that tie.
+		const TSharedPtr<PCGExData::FPointIO> VtxIO = Cluster->VtxIO.Pin();
+		const PCGExData::FIOSortKey SortKey{BatchIndex, SeedIndex, VtxIO ? VtxIO->IOIndex : 0};
+
+		ProcessCellInternal(InCell, InPathIO, InTriageTag, SortKey, SeedIndex);
 	}
 
 	void FCellPathBuilder::ProcessCellInternal(
 		const TSharedPtr<FCell>& InCell,
 		const TSharedPtr<PCGExData::FPointIO>& InPathIO,
 		const FString& InTriageTag,
-		int32 InIOIndex,
+		const PCGExData::FIOSortKey& InSortKey,
 		int32 InSeedIndex) const
 	{
 		const int32 NumCellPoints = InCell->Nodes.Num();
@@ -67,8 +71,7 @@ namespace PCGExClusters
 			InPathIO->Tags->AddRaw(InTriageTag);
 		}
 
-		// Set IO index
-		InPathIO->IOIndex = InIOIndex;
+		InPathIO->SetSortKey(InSortKey);
 
 		Helpers::CleanupClusterData(InPathIO);
 

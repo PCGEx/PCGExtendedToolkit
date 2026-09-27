@@ -7,7 +7,6 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
-#include "Data/PCGExClusterData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataForward.h"
@@ -212,6 +211,8 @@ namespace PCGExCopyClustersToPoints
 				break;
 			}
 
+			// With cluster caching on, DuplicateData rebinds the input's bound cluster onto the dupe
+			// (UPCGExClusterEdgesData::InitializeSpatialDataInternal).
 			TSharedPtr<PCGExData::FPointIO> EdgeDupe = Context->MainEdges->Emplace_GetRef(EdgeDataFacade->Source, PCGExData::EIOInit::Duplicate);
 			if (!EdgeDupe)
 			{
@@ -222,7 +223,7 @@ namespace PCGExCopyClustersToPoints
 			EdgesDupes[i] = EdgeDupe;
 			PCGExClusters::Helpers::MarkClusterEdges(EdgeDupe, *(VtxTag->GetData() + i));
 
-			PCGEX_LAUNCH(PCGExFitting::Tasks::FTransformPointIO, i, Context->TargetsDataFacade->Source, EdgeDupe, &Context->TransformDetails)
+			PCGEX_LAUNCH(PCGExFitting::Tasks::FTransformPointIO, i, Context->TargetsDataFacade->Source, EdgeDupe, &Context->TransformDetails, VtxFitBounds)
 		}
 
 		if (Copies > 0)
@@ -249,9 +250,6 @@ namespace PCGExCopyClustersToPoints
 		const UPCGBasePointData* InTargetsData = Context->TargetsDataFacade->GetIn();
 		const int32 NumTargets = InTargetsData->GetNumPoints();
 
-		// Once work is complete, check if there are cached clusters we can forward
-		const TSharedPtr<PCGExClusters::FCluster> CachedCluster = PCGExClusters::Helpers::TryGetCachedCluster(VtxDataFacade->Source, EdgeDataFacade->Source);
-
 		for (int i = 0; i < NumTargets; i++)
 		{
 			TSharedPtr<PCGExData::FPointIO> EdgeDupe = EdgesDupes[i];
@@ -263,28 +261,6 @@ namespace PCGExCopyClustersToPoints
 
 			Context->TargetsAttributesToClusterTags.Tag(Context->TargetsDataFacade->GetInPoint(i), EdgeDupe);
 			Context->TargetsForwardHandler->Forward(i, EdgeDupe->GetOut()->Metadata);
-		}
-
-		if (!CachedCluster)
-		{
-			return;
-		}
-
-		for (int i = 0; i < NumTargets; i++)
-		{
-			TSharedPtr<PCGExData::FPointIO> VtxDupe = *(VtxDupes->GetData() + i);
-			TSharedPtr<PCGExData::FPointIO> EdgeDupe = EdgesDupes[i];
-
-			if (!EdgeDupe)
-			{
-				continue;
-			}
-
-			UPCGExClusterEdgesData* EdgeDupeTypedData = Cast<UPCGExClusterEdgesData>(EdgeDupe->GetOut());
-			if (CachedCluster && EdgeDupeTypedData)
-			{
-				EdgeDupeTypedData->SetBoundCluster(MakeShared<PCGExClusters::FCluster>(CachedCluster.ToSharedRef(), VtxDupe, EdgeDupe, CachedCluster->NodeIndexLookup, false, false, false));
-			}
 		}
 	}
 
@@ -300,6 +276,8 @@ namespace PCGExCopyClustersToPoints
 
 		PCGExArrayHelpers::InitArray(VtxDupes, NumTargets);
 		PCGExArrayHelpers::InitArray(VtxTag, NumTargets);
+
+		VtxFitBounds = PCGExFitting::Tasks::ComputeFitBounds(VtxDataFacade->GetIn(), Context->TransformDetails.bIgnoreBounds);
 
 		PCGExMatching::FScope MatchScope = PCGExMatching::FScope(Context->InitialMainPointsNum);
 
@@ -347,7 +325,7 @@ namespace PCGExCopyClustersToPoints
 			Context->TargetsAttributesToClusterTags.Tag(Context->TargetsDataFacade->GetInPoint(i), VtxDupe);
 			Context->TargetsForwardHandler->Forward(i, VtxDupe->GetOut()->Metadata);
 
-			PCGEX_LAUNCH(PCGExFitting::Tasks::FTransformPointIO, i, Context->TargetsDataFacade->Source, VtxDupe, &Context->TransformDetails)
+			PCGEX_LAUNCH(PCGExFitting::Tasks::FTransformPointIO, i, Context->TargetsDataFacade->Source, VtxDupe, &Context->TransformDetails, VtxFitBounds)
 		}
 
 		TBatch<FProcessor>::Process();
@@ -362,6 +340,7 @@ namespace PCGExCopyClustersToPoints
 		PCGEX_TYPED_PROCESSOR
 		TypedProcessor->VtxDupes = &VtxDupes;
 		TypedProcessor->VtxTag = &VtxTag;
+		TypedProcessor->VtxFitBounds = VtxFitBounds;
 		return true;
 	}
 

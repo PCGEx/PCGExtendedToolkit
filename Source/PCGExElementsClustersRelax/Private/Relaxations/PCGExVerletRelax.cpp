@@ -3,15 +3,22 @@
 
 #include "Relaxations/PCGExVerletRelax.h"
 
+#include "PCGExVersion.h"
+
 #pragma region UPCGExVerletRelax
 
 #if WITH_EDITOR
-void UPCGExVerletRelax::ApplyShorthandDeprecation()
+void UPCGExVerletRelax::PCGExApplyDeprecation(const int64 PCGExDataVersion)
 {
-	GravityValue.Update(GravityInput_DEPRECATED, GravityAttribute_DEPRECATED, Gravity_DEPRECATED);
-	FrictionValue.Update(FrictionInput_DEPRECATED, FrictionAttribute_DEPRECATED, Friction_DEPRECATED);
-	EdgeScalingValue.Update(EdgeScalingInput_DEPRECATED, EdgeScalingAttribute_DEPRECATED, EdgeScaling_DEPRECATED);
-	EdgeStiffnessValue.Update(EdgeStiffnessInput_DEPRECATED, EdgeStiffnessAttribute_DEPRECATED, EdgeStiffness_DEPRECATED);
+	PCGEX_IF_VERSION_LOWER(1, 76, 10)
+	{
+		GravityValue.Update(GravityInput_DEPRECATED, GravityAttribute_DEPRECATED, Gravity_DEPRECATED);
+		FrictionValue.Update(FrictionInput_DEPRECATED, FrictionAttribute_DEPRECATED, Friction_DEPRECATED);
+		EdgeScalingValue.Update(EdgeScalingInput_DEPRECATED, EdgeScalingAttribute_DEPRECATED, EdgeScaling_DEPRECATED);
+		EdgeStiffnessValue.Update(EdgeStiffnessInput_DEPRECATED, EdgeStiffnessAttribute_DEPRECATED, EdgeStiffness_DEPRECATED);
+	}
+
+	Super::PCGExApplyDeprecation(PCGExDataVersion);
 }
 #endif
 

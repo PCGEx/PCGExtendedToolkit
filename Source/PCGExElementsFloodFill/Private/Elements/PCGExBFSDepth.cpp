@@ -593,7 +593,7 @@ namespace PCGExBFSDepth
 
 		// Prepared forward handler: readers on the seeds facade, writers on this batch's vtx facade,
 		// all created here (single-threaded) so the per-processor BFS passes never create buffers.
-		SeedForwardHandler = Context->SeedForwardDetails.TryGetHandler(Context->SeedsDataFacade, VtxDataFacade, false);
+		SeedForwardHandler = Context->SeedForwardDetails.TryGetHandler(Context->SeedsDataFacade, VtxDataFacade, PCGExData::EForwardDomain::Inherit);
 
 		// Build the shared edge-direction sorter before the base triggers RegisterBuffersDependencies.
 		EdgeDirectionOutput = Context->EdgeDirectionOutput;

@@ -7,6 +7,7 @@
 #include "Core/PCGExClusterFilter.h"
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "Details/PCGExSettingsMacros.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Utils/PCGExCompare.h"
 
 #include "PCGExNodeNeighborsCountFilter.generated.h"
@@ -23,23 +24,31 @@ struct FPCGExNodeNeighborsCountFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	EPCGExComparison Comparison = EPCGExComparison::NearlyEqual;
 
-	/** Type of Count */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
-	/** Operand A for testing -- Will be translated to `double` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand A (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides, ShowOnlyInnerProperties))
-	FPCGAttributePropertyInputSelector LocalCount;
-
-	/** Constant Operand A for testing. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand A", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	int32 Count = 0;
+	/** Count the node's number of edges is compared against -- Will be translated to `double` under the hood. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Count"))
+	FPCGExInputShorthandSelectorDouble CountValue;
 
 	/** Rounding mode for near measures */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
 	double Tolerance = DBL_COMPARE_TOLERANCE;
 
-	PCGEX_SETTING_VALUE_DECL(LocalCount, double)
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector LocalCount_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 Count_DEPRECATED = 0;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**
@@ -91,6 +100,8 @@ class UPCGExNodeNeighborsCountFilterProviderSettings : public UPCGExVtxFilterPro
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NodeNeighborsCountFilterFactory, "Vtx Filter : Num Edges", "Check against the node' edges count.", PCGEX_FACTORY_NAME_PRIORITY)
 
 	virtual FLinearColor GetNodeTitleColor() const override

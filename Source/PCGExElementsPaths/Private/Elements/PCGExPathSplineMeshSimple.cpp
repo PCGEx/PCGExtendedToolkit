@@ -44,6 +44,13 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecationBeforeUpdatePins(U
 		Tangents.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("AssetPathAttributeName")), FName(TEXT("Asset")), FName(TEXT("Attribute")), FName(TEXT(" └─ Asset (Attr)")));
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, FName(TEXT("StaticMesh")), FName(TEXT("Asset")), FName(TEXT("Constant")), FName(TEXT(" └─ Asset")));
+		RetireInputPin(InOutNode, FName(TEXT("AssetType")));
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -69,6 +76,11 @@ void UPCGExPathSplineMeshSimpleSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 	PCGEX_IF_VERSION_LOWER(1, 76, 15)
 	{
 		Tangents.ApplyDeprecation();
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Asset.Update(AssetType_DEPRECATED, AssetPathAttributeName_DEPRECATED, StaticMesh_DEPRECATED.ToSoftObjectPath());
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -153,11 +165,12 @@ bool FPCGExPathSplineMeshSimpleElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	if (Settings->AssetType == EPCGExInputValueType::Attribute)
+	if (Settings->Asset.Input == EPCGExInputValueType::Attribute)
 	{
-		PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->AssetPathAttributeName)
+		PCGEX_VALIDATE_NAME_C(Context, Settings->Asset.Attribute)
+		if (Settings->Asset.bCleanupAttribute) { Context->AddConsumableAttributeName(Settings->Asset.Attribute); }
 
-		TArray<FName> Names = {Settings->AssetPathAttributeName};
+		TArray<FName> Names = {Settings->Asset.Attribute};
 		Context->StaticMeshLoader = MakeShared<PCGEx::TAssetLoader<UStaticMesh>>(Context, Context->MainPoints.ToSharedRef(), Names);
 		if (!Context->StaticMeshLoader->Discover())
 		{
@@ -166,8 +179,9 @@ bool FPCGExPathSplineMeshSimpleElement::Boot(FPCGExContext* InContext) const
 	}
 	else
 	{
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(Settings->StaticMesh, Context);
-		Context->StaticMesh = Settings->StaticMesh.Get();
+		const TSoftObjectPtr<UStaticMesh> StaticMeshPtr(Settings->Asset.Constant);
+		PCGExHelpers::LoadBlocking_AnyThreadTpl(StaticMeshPtr, Context);
+		Context->StaticMesh = StaticMeshPtr.Get();
 		if (!Context->StaticMesh)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Static mesh could not be loaded."));
@@ -303,12 +317,12 @@ namespace PCGExPathSplineMeshSimple
 			}
 		}
 
-		if (Settings->AssetType == EPCGExInputValueType::Attribute)
+		if (Settings->Asset.Input == EPCGExInputValueType::Attribute)
 		{
 			MeshKeys = Context->StaticMeshLoader->GetKeys(PointDataFacade->Source->IOIndex);
 			if (!MeshKeys)
 			{
-				PCGEX_LOG_INVALID_ATTR_C(Context, Asset Path, Settings->AssetPathAttributeName)
+				PCGEX_LOG_INVALID_ATTR_C(Context, Asset Path, Settings->Asset.Attribute)
 				return false;
 			}
 		}

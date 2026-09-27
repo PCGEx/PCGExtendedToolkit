@@ -196,7 +196,7 @@ namespace PCGExFindPointOnBounds
 			Context->BestIndices[TargetIndex] = BestIndex;
 
 			TPCGValueRange<FTransform> OutTransforms = Context->MergedOut->GetOut()->GetTransformValueRange(false);
-			TPCGValueRange<int64> OutMetadataEntry = Context->MergedOut->GetOut()->GetMetadataEntryValueRange(false);
+			TPCGValueRange<int64> OutMetadataEntry = Context->MergedOut->GetOut()->GetMetadataEntryValueRange();
 			const PCGMetadataEntryKey OriginalKey = OutMetadataEntry[TargetIndex];
 
 			PointDataFacade->Source->GetIn()->CopyPointsTo(Context->MergedOut->GetOut(), BestIndex, TargetIndex, 1);
@@ -210,7 +210,7 @@ namespace PCGExFindPointOnBounds
 			PCGExPointArrayDataHelpers::SetNumPointsAllocated(PointDataFacade->GetOut(), 1);
 
 			TPCGValueRange<FTransform> OutTransforms = PointDataFacade->GetOut()->GetTransformValueRange(false);
-			TPCGValueRange<int64> OutMetadataEntry = PointDataFacade->GetOut()->GetMetadataEntryValueRange(false);
+			TPCGValueRange<int64> OutMetadataEntry = PointDataFacade->GetOut()->GetMetadataEntryValueRange();
 
 			PointDataFacade->Source->GetOut()->Metadata->InitializeOnSet(OutMetadataEntry[0]);
 			OutTransforms[0].AddToTranslation(Offset);

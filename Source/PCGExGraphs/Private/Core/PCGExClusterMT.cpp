@@ -1033,9 +1033,10 @@ namespace PCGExClusterMT
 					return;
 				}
 
+				// Callbacks finish in any order: hand the keyed edges to the shared collection, staged once by its owner.
 				if (TSharedPtr<PCGExData::FPointIOCollection> OutCollection = This->GraphEdgeOutputCollection.Pin())
 				{
-					InBuilder->MoveEdgesOutputs(OutCollection, This->VtxDataFacade->Source->IOIndex * 100000);
+					InBuilder->MoveEdgesOutputs(OutCollection);
 				}
 				else
 				{
@@ -1086,7 +1087,8 @@ namespace PCGExClusterMT
 		{
 			return;
 		}
-		if (VtxDataFacade->GetOut() && VtxDataFacade->GetIn() != VtxDataFacade->GetOut())
+		// Forwarded data belongs upstream, unless stolen: then processors write it in place and need it allocated here.
+		if (VtxDataFacade->GetOut() && (VtxDataFacade->GetIn() != VtxDataFacade->GetOut() || ExecutionContext->bWantsDataStealing))
 		{
 			VtxDataFacade->GetOut()->AllocateProperties(AllocateVtxProperties);
 		}

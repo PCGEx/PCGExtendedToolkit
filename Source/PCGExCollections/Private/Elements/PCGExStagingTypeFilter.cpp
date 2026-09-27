@@ -539,6 +539,9 @@ namespace PCGExStagedTypeFilter
 			{
 				// Move entire dataset to filtered out
 				TSharedPtr<PCGExData::FPointIO> FilteredIO = Context->FilteredOutCollection->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::Forward);
+
+				// CompleteWork runs in parallel across inputs: stage in input order.
+				if (FilteredIO) { FilteredIO->SetSortKey(PointDataFacade->Source->IOIndex, 0); }
 			}
 
 			// Clear main output
@@ -560,6 +563,7 @@ namespace PCGExStagedTypeFilter
 			TSharedPtr<PCGExData::FPointIO> FilteredIO = Context->FilteredOutCollection->Emplace_GetRef(PointDataFacade->GetIn(), PCGExData::EIOInit::Duplicate);
 			if (FilteredIO)
 			{
+				FilteredIO->SetSortKey(PointDataFacade->Source->IOIndex, 0);
 				(void)FilteredIO->Gather(InvertedMask);
 			}
 		}

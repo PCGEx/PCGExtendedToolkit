@@ -300,14 +300,32 @@ bool FPCGExClustersProcessorContext::CompileGraphBuilders(const bool bOutputToCo
 	PCGEX_ON_STATE_INTERNAL(PCGExGraphs::States::State_ReadyToCompile)
 	{
 		SetState(PCGExGraphs::States::State_Compiling);
+
+		if (bOutputToContext)
+		{
+			CompiledEdges = MakeShared<PCGExData::FPointIOCollection>(this);
+			CompiledEdges->OutputPin = PCGExClusters::Labels::OutputEdgesLabel;
+		}
+
 		for (const TSharedPtr<PCGExClusterMT::IBatch>& Batch : Batches)
 		{
+			if (bOutputToContext)
+			{
+				Batch->GraphEdgeOutputCollection = CompiledEdges;
+			}
+
 			Batch->CompileGraphBuilder(bOutputToContext);
 		}
 	}
 
 	PCGEX_ON_ASYNC_STATE_READY_INTERNAL(PCGExGraphs::States::State_Compiling)
 	{
+		// Staged once, after every compile callback, so edge order follows the keys instead of callback timing.
+		if (bOutputToContext && CompiledEdges)
+		{
+			CompiledEdges->StageOutputs();
+		}
+
 		ClusterProcessing_GraphCompilationDone();
 		SetState(NextStateId);
 	}

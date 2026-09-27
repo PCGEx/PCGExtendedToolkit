@@ -317,7 +317,8 @@ namespace PCGExBreakClustersToPaths
 
 			PCGExPaths::Helpers::SetClosedLoop(PathIO->GetOut(), Chain->bIsClosedLoop);
 
-			PathIO->IOIndex = EdgeDataFacade->Source->IOIndex * 100000 + Cluster->GetNodePointIndex(FMath::Min(Chain->Links.Last().Node, Chain->Links[0].Node));
+			// Edges dataset, then the chain's lower end node; chains sharing that node fall back to chain order.
+			PathIO->SetSortKey(EdgeDataFacade->Source->IOIndex, Cluster->GetNodePointIndex(FMath::Min(Chain->Links.Last().Node, Chain->Links[0].Node)), Index);
 			PathIO->ConsumeIdxMapping(EPCGPointNativeProperties::All);
 
 #undef PCGX_IGNORE_CHAIN

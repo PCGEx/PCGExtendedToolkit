@@ -31,7 +31,7 @@ struct FPCGExEdgeNeighborsCountFilterConfig
 	FPCGExEdgeNeighborsCountFilterConfig() = default;
 
 	/** Neighbor-count threshold the edge endpoints are compared against. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Threshold", ClampMin=1))
 	FPCGExInputShorthandSelectorInteger32Abs Threshold = FPCGExInputShorthandSelectorInteger32Abs(FString(TEXT("")), 2, false);
 
 #pragma region DEPRECATED

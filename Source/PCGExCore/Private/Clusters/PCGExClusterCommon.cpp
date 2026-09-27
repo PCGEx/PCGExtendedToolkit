@@ -19,3 +19,8 @@ int32 FPCGExNodeSelectionDetails::PickClosestNode(const PCGExClusters::FCluster&
 
 	return WithinDistance(InCluster.GetPos(NodeIndex), TargetPosition) ? NodeIndex : -1;
 }
+
+bool FPCGExNodeSelectionDetails::WithinDistanceOfEdges(PCGExClusters::FCluster& InCluster, const FVector& TargetPosition) const
+{
+	return MaxDistance <= 0 || InCluster.HasEdgeWithin(TargetPosition, MaxDistance);
+}

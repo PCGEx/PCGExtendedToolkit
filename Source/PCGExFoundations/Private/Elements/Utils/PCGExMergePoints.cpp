@@ -117,6 +117,12 @@ bool FPCGExMergePointsElement::Boot(FPCGExContext* InContext) const
 		Facades.Add(MakeShared<PCGExData::FFacade>(PointIO.ToSharedRef()));
 	}
 
+	// Idx is the position in MainPoints: the sorter keys on it, and partition entries are remapped through it.
+	for (int i = 0; i < Facades.Num(); i++)
+	{
+		Facades[i]->Idx = i;
+	}
+
 	TArray<FPCGExSortRuleConfig> RuleConfigs = PCGExSorting::GetSortingRules(InContext, PCGExSorting::Labels::SourceSortingRules);
 
 	if (!RuleConfigs.IsEmpty())
@@ -130,11 +136,8 @@ bool FPCGExMergePointsElement::Boot(FPCGExContext* InContext) const
 			return false;
 		}
 
-		for (int i = 0; i < Facades.Num(); i++)
-		{
-			Facades[i]->Idx = i;
-		}
-		Facades.Sort([&](const TSharedPtr<PCGExData::FFacade>& A, const TSharedPtr<PCGExData::FFacade>& B)
+		// Stable: ties keep arrival order.
+		Facades.StableSort([&](const TSharedPtr<PCGExData::FFacade>& A, const TSharedPtr<PCGExData::FFacade>& B)
 		{
 			return Sorter->SortData(A->Idx, B->Idx);
 		});
@@ -167,9 +170,9 @@ bool FPCGExMergePointsElement::Boot(FPCGExContext* InContext) const
 	}
 	else
 	{
-		// Use the matching system to create partitions
+		// Matcher-registered candidates, so their Index is a Facades position like the targets'.
 		PCGExMatching::Helpers::GetMatchingSourcePartitions(
-			Context->DataMatcher, Facades, Context->Partitions,
+			Context->DataMatcher, Context->Partitions,
 			Settings->bExclusivePartitions, nullptr);
 
 		// When matching is enabled, single-element partitions are "unmatched" items
@@ -192,6 +195,20 @@ bool FPCGExMergePointsElement::Boot(FPCGExContext* InContext) const
 	{
 		return Partition.IsEmpty();
 	});
+
+	// Entries are Facades positions so far; AdvanceWork resolves them against MainPoints.
+	for (TArray<int32>& Partition : Context->Partitions)
+	{
+		for (int32& Idx : Partition)
+		{
+			Idx = Facades[Idx]->Idx;
+		}
+	}
+
+	for (int32& Idx : Context->UnmatchedIndices)
+	{
+		Idx = Facades[Idx]->Idx;
+	}
 
 	// Allow execution if we have partitions to merge OR unmatched items to forward
 	if (Context->Partitions.IsEmpty() && Context->UnmatchedIndices.IsEmpty())

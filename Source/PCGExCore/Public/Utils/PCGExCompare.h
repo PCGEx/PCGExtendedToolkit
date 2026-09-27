@@ -7,6 +7,7 @@
 #include "PCGExCommon.h"
 #include "Data/PCGExDataCommon.h"
 #include "Details/PCGExSettingsMacros.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 
 #include "PCGExCompare.generated.h"
@@ -431,28 +432,32 @@ struct PCGEXCORE_API FPCGExVectorHashComparisonDetails
 
 	explicit FPCGExVectorHashComparisonDetails(double InHashToleranceConstant)
 	{
-		HashToleranceConstant = InHashToleranceConstant;
+		HashTolerance.Constant = InHashToleranceConstant;
+		HashToleranceConstant_DEPRECATED = InHashToleranceConstant;
 	}
-
-	/** Whether tolerance comes from a constant or per-point attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType HashToleranceInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read tolerance from when using per-point values. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Hash Tolerance (Attr)", EditCondition="HashToleranceInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector HashToleranceAttribute;
 
 	/**
 	 * Quantization cell size used when hashing vectors: components are rounded to multiples of this before comparing.
 	 * Larger values are more lenient overall, but this is not a symmetric window -- values closer than the
 	 * tolerance can still differ when they straddle a cell boundary.
 	 */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Hash Tolerance", EditCondition="HashToleranceInput == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=0.00001))
-	double HashToleranceConstant = 0.001;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Hash Tolerance", ClampMin=0.00001))
+	FPCGExInputShorthandSelectorDoubleAbs HashTolerance = FPCGExInputShorthandSelectorDoubleAbs(FPCGAttributePropertyInputSelector(), 0.001);
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType HashToleranceInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector HashToleranceAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double HashToleranceConstant_DEPRECATED = 0.001;
+
+#pragma endregion
 
 	TSharedPtr<PCGExDetails::TSettingValue<double>> Tolerance;
-
-	PCGEX_SETTING_VALUE_DECL(Tolerance, double)
 
 	bool Init(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InPrimaryDataFacade, const bool bQuiet = false);
 	FVector GetCWTolerance(const int32 PointIndex) const;
@@ -461,6 +466,11 @@ struct PCGEXCORE_API FPCGExVectorHashComparisonDetails
 	bool GetOnlyUseDataDomain() const;
 
 	bool Test(const FVector& A, const FVector& B, const int32 PointIndex) const;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 /**

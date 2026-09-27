@@ -3,18 +3,35 @@
 
 #include "Filters/Points/PCGExStringCompareFilter.h"
 
+#include "PCGExVersion.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
+#include "Details/PCGExSettingsDetails.h"
 
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
 
+#if WITH_EDITOR
+void FPCGExStringCompareFilterConfig::ApplyDeprecation()
+{
+	// A legacy FName tag loads through SetAttributeName; re-parse it with Update, as FName-based reads do.
+	if (OperandA.GetSelection() == EPCGAttributePropertySelection::Attribute) { OperandA.Update(OperandA.GetAttributeName().ToString()); }
+	OperandBValue.Update(CompareAgainst_DEPRECATED, OperandB_DEPRECATED, OperandBConstant_DEPRECATED);
+}
+
+void FPCGExStringCompareFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandB")), FName(TEXT("OperandBValue")), FName(TEXT("Attribute")), FName(TEXT("Operand B (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandBConstant")), FName(TEXT("OperandBValue")), FName(TEXT("Constant")), FName(TEXT("Operand B")));
+}
+#endif
+
 bool UPCGExStringCompareFilterFactory::DomainCheck()
 {
-	return PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandA) && (Config.CompareAgainst == EPCGExInputValueType::Constant || PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandB));
+	return PCGExMetaHelpers::IsDataDomainAttribute(Config.OperandA) && Config.OperandBValue.CanSupportDataOnly();
 }
 
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExStringCompareFilterFactory::CreateFilter() const
@@ -29,11 +46,8 @@ bool UPCGExStringCompareFilterFactory::RegisterConsumableAttributesWithData(FPCG
 		return false;
 	}
 
-	InContext->AddConsumableAttributeName(Config.OperandA);
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		InContext->AddConsumableAttributeName(Config.OperandB);
-	}
+	FName Consumable = NAME_None;
+	PCGEX_CONSUMABLE_SELECTOR(Config.OperandA, Consumable)
 
 	return true;
 }
@@ -53,45 +67,28 @@ bool PCGExPointFilter::FStringCompareFilter::Init(FPCGExContext* InContext, cons
 		OperandAName = MakeShared<PCGExData::TAttributeBroadcaster<FName>>();
 		if (!OperandAName->Prepare(TypedFilterFactory->Config.OperandA, PointDataFacade->Source))
 		{
-			PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
+			PCGEX_LOG_INVALID_SELECTOR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
 			return false;
 		}
 
-		if (TypedFilterFactory->Config.CompareAgainst == EPCGExInputValueType::Attribute)
-		{
-			OperandBName = MakeShared<PCGExData::TAttributeBroadcaster<FName>>();
-			if (!OperandBName->Prepare(TypedFilterFactory->Config.OperandB, PointDataFacade->Source))
-			{
-				PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Operand B, TypedFilterFactory->Config.OperandB)
-				return false;
-			}
-		}
-		else
-		{
-			OperandBConstantName = FName(TypedFilterFactory->Config.OperandBConstant);
-		}
-
-		return true;
+		// Direct MakeSettingValue bypasses the shorthand getter: apply both the per-operand and factory gates.
+		const FPCGExInputShorthandSelectorString& OperandBValue = TypedFilterFactory->Config.OperandBValue;
+		OperandBName = PCGExDetails::MakeSettingValue<FName>(OperandBValue.Input, OperandBValue.Attribute, FName(OperandBValue.Constant));
+		OperandBName->bRegisterConsumable = OperandBValue.bCleanupAttribute && TypedFilterFactory->bCleanupConsumableAttributes;
+		OperandBName->bQuiet = PCGEX_QUIET_HANDLING;
+		return OperandBName->Init(PointDataFacade, false);
 	}
 
 	OperandA = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
 	if (!OperandA->Prepare(TypedFilterFactory->Config.OperandA, PointDataFacade->Source))
 	{
-		PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
+		PCGEX_LOG_INVALID_SELECTOR_HANDLED_C(InContext, Operand A, TypedFilterFactory->Config.OperandA)
 		return false;
 	}
 
-	if (TypedFilterFactory->Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		OperandB = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
-		if (!OperandB->Prepare(TypedFilterFactory->Config.OperandB, PointDataFacade->Source))
-		{
-			PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Operand B, TypedFilterFactory->Config.OperandB)
-			return false;
-		}
-	}
-
-	return true;
+	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
+	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
+	return OperandB->Init(PointDataFacade, false);
 }
 
 bool PCGExPointFilter::FStringCompareFilter::Test(const int32 PointIndex) const
@@ -101,13 +98,13 @@ bool PCGExPointFilter::FStringCompareFilter::Test(const int32 PointIndex) const
 	if (bUseNameComparison)
 	{
 		const FName A = OperandAName->FetchSingle(Point, NAME_None);
-		const FName B = TypedFilterFactory->Config.CompareAgainst == EPCGExInputValueType::Attribute ? OperandBName->FetchSingle(Point, NAME_None) : OperandBConstantName;
+		const FName B = OperandBName->Read(PointIndex);
 		// Equality is symmetric, so bSwapOperands is a no-op here.
 		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
 	}
 
 	const FString A = OperandA->FetchSingle(Point, TEXT(""));
-	const FString B = TypedFilterFactory->Config.CompareAgainst == EPCGExInputValueType::Attribute ? OperandB->FetchSingle(Point, TEXT("")) : TypedFilterFactory->Config.OperandBConstant;
+	const FString B = OperandB->Read(PointIndex);
 	return TypedFilterFactory->Config.bSwapOperands ? PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, B, A) : PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B);
 }
 
@@ -121,7 +118,7 @@ bool PCGExPointFilter::FStringCompareFilter::Test(const TSharedPtr<PCGExData::FP
 		PCGEX_QUIET_HANDLING_RET
 	}
 
-	if (!PCGExData::Helpers::TryGetSettingDataValue(IO, TypedFilterFactory->Config.CompareAgainst, TypedFilterFactory->Config.OperandB, TypedFilterFactory->Config.OperandBConstant, B, PCGEX_QUIET_HANDLING))
+	if (!TypedFilterFactory->Config.OperandBValue.TryReadDataValue(IO, B, PCGEX_QUIET_HANDLING))
 	{
 		PCGEX_QUIET_HANDLING_RET
 	}
@@ -145,11 +142,32 @@ TArray<FText> UPCGExStringCompareFilterProviderSettings::GetNodeTitleAliases() c
 PCGEX_CREATE_FILTER_FACTORY(StringCompare)
 
 #if WITH_EDITOR
+void UPCGExStringCompareFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExStringCompareFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExStringCompareFilterProviderSettings::GetDisplayName() const
 {
-	FString DisplayName = Config.OperandA.ToString();
+	FString DisplayName = PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandA);
 	DisplayName += PCGExCompare::ToString(Config.Comparison);
-	DisplayName += Config.CompareAgainst == EPCGExInputValueType::Constant ? Config.OperandBConstant : Config.OperandB.ToString();
+	DisplayName += Config.OperandBValue.Input == EPCGExInputValueType::Constant ? Config.OperandBValue.Constant : PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandBValue.Attribute);
 	return DisplayName;
 }
 #endif

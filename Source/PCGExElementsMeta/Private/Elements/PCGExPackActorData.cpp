@@ -415,6 +415,9 @@ namespace PCGExPackActorData
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
+		// Packers can rewrite any FPCGPoint field from worker scopes; SetPoints only writes allocated properties.
+		PointDataFacade->GetOut()->AllocateProperties(EPCGPointNativeProperties::All);
+
 		PointMask.Init(1, PointDataFacade->GetNum());
 
 		Packer = GetPrimaryInstancedFactory<UPCGExCustomActorDataPacker>();

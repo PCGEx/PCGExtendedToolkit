@@ -6,6 +6,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataPreloader.h"
+#include "Misc/ScopeLock.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -43,23 +44,23 @@ void UPCGExRandomRatioFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* In
 }
 #endif
 
-const TSet<int32>& PCGExPointFilter::FRandomRatioFilter::GetCollectionPicks(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection)
+void PCGExPointFilter::FRandomRatioFilter::BuildCollectionPicks(const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
 {
+	FScopeLock Lock(&CollectionPicksLock);
+	if (bCollectionPicksBuilt.load(std::memory_order_relaxed))
 	{
-		FReadScopeLock ReadScopeLock(CollectionLock);
-		if (bColPicksBuilt)
-		{
-			return CollectionPicks;
-		}
+		return;
 	}
 
-	{
-		FWriteScopeLock WriteScopeLock(CollectionLock);
-		bColPicksBuilt = true;
-		TypedFilterFactory->Config.Random.GetPicks(IO->GetContext(), IO->GetIn(), ParentCollection->Num(), CollectionPicks);
-	}
+	// One draw covers every dataset on the pin; attribute-driven inputs read the first dataset's @Data.
+	const TSharedPtr<PCGExData::FPointIO> DrawSource = (*ParentCollection)[0];
 
-	return CollectionPicks;
+	TSet<int32> Picks;
+	bCollectionPicksValid = TypedFilterFactory->Config.Random.GetPicks(DrawSource->GetContext(), DrawSource->GetIn(), ParentCollection->Num(), Picks, PCGEX_QUIET_HANDLING);
+	CollectionPicks = MoveTemp(Picks);
+	BuiltForCollection = ParentCollection.Get();
+
+	bCollectionPicksBuilt.store(true, std::memory_order_release);
 }
 
 bool PCGExPointFilter::FRandomRatioFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
@@ -82,8 +83,25 @@ bool PCGExPointFilter::FRandomRatioFilter::Test(const int32 PointIndex) const
 
 bool PCGExPointFilter::FRandomRatioFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
 {
-	const TSet<int32>& ColPicks = const_cast<FRandomRatioFilter*>(this)->GetCollectionPicks(IO, ParentCollection);
-	return TypedFilterFactory->Config.bInvertResult ? !ColPicks.Contains(IO->IOIndex) : ColPicks.Contains(IO->IOIndex);
+	if (!ParentCollection || ParentCollection->IsEmpty())
+	{
+		return false;
+	}
+
+	if (!bCollectionPicksBuilt.load(std::memory_order_acquire))
+	{
+		BuildCollectionPicks(ParentCollection);
+	}
+
+	ensureMsgf(BuiltForCollection == ParentCollection.Get(), TEXT("A Random Ratio filter instance must only test datasets from a single collection."));
+
+	if (!bCollectionPicksValid)
+	{
+		PCGEX_QUIET_HANDLING_RET
+	}
+
+	const bool bPicked = CollectionPicks.Contains(IO->IOIndex);
+	return TypedFilterFactory->Config.bInvertResult ? !bPicked : bPicked;
 }
 
 PCGEX_CREATE_FILTER_FACTORY(RandomRatio)

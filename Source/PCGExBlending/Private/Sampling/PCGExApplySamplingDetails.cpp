@@ -31,46 +31,91 @@ if ((_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Z)) != 0)
 	}
 
 #undef PCGEX_REGISTER_FLAG
+
+	bFullPosition = TrPosComponents.Num() == 3;
+	bFullRotation = TrRotComponents.Num() == 3;
+	bFullScale = TrScaComponents.Num() == 3;
+	bFullLookAt = LkRotComponents.Num() == 3;
 }
 
-void FPCGExApplySamplingDetails::Apply(PCGExData::FMutablePoint& InPoint, const FTransform& InTransform, const FTransform& InLookAt)
+void FPCGExApplySamplingDetails::Apply(FTransform& InOutTransform, const FTransform& InTransform, const FTransform& InLookAt) const
 {
-	FTransform& T = InPoint.GetMutableTransform();
-
-	FVector OutRotation = T.GetRotation().Euler();
-	FVector OutPosition = T.GetLocation();
-	FVector OutScale = T.GetScale3D();
-
 	if (bApplyTransform)
 	{
-		const FVector InTrRot = InTransform.GetRotation().Euler();
-		for (const int32 C : TrRotComponents)
+		if (bFullPosition)
 		{
-			OutRotation[C] = InTrRot[C];
+			InOutTransform.SetLocation(InTransform.GetLocation());
+		}
+		else if (!TrPosComponents.IsEmpty())
+		{
+			FVector OutPosition = InOutTransform.GetLocation();
+			const FVector InTrPos = InTransform.GetLocation();
+			for (const int32 C : TrPosComponents)
+			{
+				OutPosition[C] = InTrPos[C];
+			}
+			InOutTransform.SetLocation(OutPosition);
 		}
 
-		FVector InTrPos = InTransform.GetLocation();
-		for (const int32 C : TrPosComponents)
+		if (bFullScale)
 		{
-			OutPosition[C] = InTrPos[C];
+			InOutTransform.SetScale3D(InTransform.GetScale3D());
 		}
-
-		FVector InTrSca = InTransform.GetScale3D();
-		for (const int32 C : TrScaComponents)
+		else if (!TrScaComponents.IsEmpty())
 		{
-			OutScale[C] = InTrSca[C];
+			FVector OutScale = InOutTransform.GetScale3D();
+			const FVector InTrSca = InTransform.GetScale3D();
+			for (const int32 C : TrScaComponents)
+			{
+				OutScale[C] = InTrSca[C];
+			}
+			InOutTransform.SetScale3D(OutScale);
 		}
 	}
 
-	if (bApplyLookAt)
+	// Look-at components override transform components; a full look-at makes the transform rotation moot.
+	const bool bLookAtFull = bApplyLookAt && bFullLookAt;
+	const bool bLookAtPartial = bApplyLookAt && !bFullLookAt && !LkRotComponents.IsEmpty();
+	const bool bTrRotFull = bApplyTransform && bFullRotation;
+	const bool bTrRotPartial = bApplyTransform && !bFullRotation && !TrRotComponents.IsEmpty();
+
+	if (bLookAtFull)
 	{
-		const FVector InLkRot = InLookAt.GetRotation().Euler();
-		for (const int32 C : LkRotComponents)
+		InOutTransform.SetRotation(InLookAt.GetRotation());
+	}
+	else if (bLookAtPartial || bTrRotPartial)
+	{
+		FVector OutRotation = (bTrRotFull ? InTransform : InOutTransform).GetRotation().Euler();
+
+		if (bTrRotPartial)
 		{
-			OutRotation[C] = InLkRot[C];
+			const FVector InTrRot = InTransform.GetRotation().Euler();
+			for (const int32 C : TrRotComponents)
+			{
+				OutRotation[C] = InTrRot[C];
+			}
 		}
 
-	}
+		if (bLookAtPartial)
+		{
+			const FVector InLkRot = InLookAt.GetRotation().Euler();
+			for (const int32 C : LkRotComponents)
+			{
+				OutRotation[C] = InLkRot[C];
+			}
+		}
 
-	T = FTransform(FQuat::MakeFromEuler(OutRotation), OutPosition, OutScale);
+		InOutTransform.SetRotation(FQuat::MakeFromEuler(OutRotation));
+	}
+	else if (bTrRotFull)
+	{
+		InOutTransform.SetRotation(InTransform.GetRotation());
+	}
+}
+
+void FPCGExApplySamplingDetails::Apply(PCGExData::FMutablePoint& InPoint, const FTransform& InTransform, const FTransform& InLookAt) const
+{
+	FTransform OutTransform = InPoint.GetTransform();
+	Apply(OutTransform, InTransform, InLookAt);
+	InPoint.SetTransform(OutTransform);
 }

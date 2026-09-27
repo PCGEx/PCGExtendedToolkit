@@ -11,6 +11,7 @@
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExTaggedData.h"
 #include "Details/PCGExDistancesDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "PCGExMatching/Public/Core/PCGExMatchRuleFactoryProvider.h"
 #include "Utils/PCGExCompare.h"
 
@@ -39,17 +40,9 @@ struct FPCGExDistanceFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::NearlyEqual;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
-	/** Operand B for testing -- Will be translated to `double` under the hood. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Distance Threshold (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector DistanceThreshold;
-
-	/** Operand B for testing */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Distance Threshold", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	double DistanceThresholdConstant = 0;
+	/** Distance to compare against -- Will be translated to `double` under the hood. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Distance Threshold"))
+	FPCGExInputShorthandSelectorDouble DistanceThresholdValue;
 
 	/** Near-equality tolerance */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="Comparison == EPCGExComparison::NearlyEqual || Comparison == EPCGExComparison::NearlyNotEqual", EditConditionHides))
@@ -63,11 +56,27 @@ struct FPCGExDistanceFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExFilterMatchingDetails DataMatching;
 
-	PCGEX_SETTING_VALUE_DECL(DistanceThreshold, double)
-
 	/** If enabled, when used with a collection filter, will use collection bounds as a proxy point instead of per-point testing */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bCheckAgainstDataBounds = false;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector DistanceThreshold_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double DistanceThresholdConstant_DEPRECATED = 0;
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 

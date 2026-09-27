@@ -55,6 +55,9 @@ public:
 	// Per-target operand A buffers. Only one is populated, depending on bUseNameComparison.
 	TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<FString>>>> OperandAString;
 	TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<FName>>>> OperandAName;
+	// Raw input arrays of the populated table (fully read before built); null where the reader is missing or not Elements-domain.
+	TSharedPtr<TArray<const FString*>> OperandAStringData;
+	TSharedPtr<TArray<const FName*>> OperandANameData;
 
 	virtual bool Init(FPCGExContext* InContext) override;
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
@@ -77,15 +80,19 @@ namespace PCGExPointFilter
 			bUseNameComparison = TypedFilterFactory->bUseNameComparison;
 			OperandAString = TypedFilterFactory->OperandAString;
 			OperandAName = TypedFilterFactory->OperandAName;
+			OperandAStringData = TypedFilterFactory->OperandAStringData;
+			OperandANameData = TypedFilterFactory->OperandANameData;
 		}
 
 		const TObjectPtr<const UPCGExStringCompareNearestFilterFactory> TypedFilterFactory;
 
 		bool bUseNameComparison = false;
 
-		// Per-target operand A buffers (shared from factory). Only one is populated.
+		// Per-target operand A buffers and their raw input arrays (shared from factory). Only one pair is populated.
 		TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<FString>>>> OperandAString;
 		TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<FName>>>> OperandAName;
+		TSharedPtr<TArray<const FString*>> OperandAStringData;
+		TSharedPtr<TArray<const FName*>> OperandANameData;
 
 		// Operand B read from the source point. Only one is populated.
 		TSharedPtr<PCGExDetails::TSettingValue<FString>> OperandBString;

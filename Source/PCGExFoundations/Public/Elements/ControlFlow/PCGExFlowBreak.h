@@ -49,6 +49,8 @@ class UPCGExRecursionTrackerSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(Break, "Break", "A Simple Recursion tracker to make working with recursive subgraphs easier. Acts as a \"break\" by tracking a counter, and/or checking if data meet certain requirements.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -129,9 +131,13 @@ protected:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="Mode != EPCGExRecursionTrackerMode::Create", EditConditionHides), AdvancedDisplay)
 	bool bForceOutputContinue = false;
 
-	/** If enabled, does additional collection-level filtering on a separate set of datas. If no data passes those filters, the tracker will return a single false value. */
+	/** Tests the Test Data collections against the Filters pin; if none passes, trackers report false. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="Mode != EPCGExRecursionTrackerMode::Create && Type == EPCGExRecursionTrackerType::Simple", EditConditionHides))
 	bool bDoAdditionalDataTesting = false;
+
+	/** Keeps the legacy behavior where the data test result is ignored and only the counter drives Continue. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="Mode != EPCGExRecursionTrackerMode::Create && Type == EPCGExRecursionTrackerType::Simple && bDoAdditionalDataTesting", EditConditionHides), AdvancedDisplay)
+	bool bLegacyIgnoreDataTest = false;
 
 	/** Add metadata entry when creating a tracker from existing attribute set data. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="Mode != EPCGExRecursionTrackerMode::Create", EditConditionHides), AdvancedDisplay)

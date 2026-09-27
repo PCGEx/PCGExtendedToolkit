@@ -355,6 +355,8 @@ namespace PCGExSampleSurfaceGuided
 		TArray<int8> SamplingMask;
 
 		TSharedPtr<PCGExData::FDataForwardHandler> SurfacesForward;
+		/** Per point, the surface row forwarded at scope end; -1 when nothing was hit. */
+		TArray<int32> ForwardRows;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> DistanceGetter;
 		TSharedPtr<PCGExData::TBuffer<FVector>> DirectionGetter;

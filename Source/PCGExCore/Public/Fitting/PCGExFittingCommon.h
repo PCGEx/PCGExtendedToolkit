@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/IntegralConstant.h"
 #include "PCGExFittingCommon.generated.h"
 
 UENUM(BlueprintType)
@@ -60,3 +61,59 @@ enum class EPCGExVariationMode : uint8
 	Before   = 1 UMETA(DisplayName = "Before fitting", ToolTip="Pre-processing.\nVariation are applied to the asset before it will be fitted to the host point.", ActionIcon="BeforeStaging"),
 	After    = 2 UMETA(DisplayName = "After fitting", ToolTip="Post-processing.\nVariation are applied to the host point after the asset has been fitted inside.", ActionIcon="AfterStaging"),
 };
+
+namespace PCGExFitting
+{
+	/** Strategy index for ApplyInheritedTransform from the inherit flags. */
+	FORCEINLINE int32 GetInheritStrategy(const bool bInheritRotation, const bool bInheritScale)
+	{
+		return (bInheritRotation ? 2 : 0) + (bInheritScale ? 1 : 0);
+	}
+
+	/** Applies a target transform to one point transform; the one implementation of the inherit strategies. */
+	template <int32 Strategy>
+	FORCEINLINE void ApplyInheritedTransform(FTransform& InOutTransform, const FTransform& InTarget)
+	{
+		if constexpr (Strategy == 3)
+		{
+			InOutTransform *= InTarget;
+		}
+		else if constexpr (Strategy == 2)
+		{
+			const FVector OriginalScale = InOutTransform.GetScale3D();
+			InOutTransform *= InTarget;
+			InOutTransform.SetScale3D(OriginalScale);
+		}
+		else if constexpr (Strategy == 1)
+		{
+			const FQuat OriginalRotation = InOutTransform.GetRotation();
+			InOutTransform *= InTarget;
+			InOutTransform.SetRotation(OriginalRotation);
+		}
+		else
+		{
+			InOutTransform.SetLocation(InTarget.TransformPosition(InOutTransform.GetLocation()));
+		}
+	}
+
+	/** Calls InFunc with the strategy as a TIntegralConstant, so per-point loops branch once instead of per point. */
+	template <typename FuncType>
+	FORCEINLINE void DispatchInheritStrategy(const int32 InStrategy, FuncType&& InFunc)
+	{
+		switch (InStrategy)
+		{
+		case 3:
+			InFunc(TIntegralConstant<int32, 3>{});
+			break;
+		case 2:
+			InFunc(TIntegralConstant<int32, 2>{});
+			break;
+		case 1:
+			InFunc(TIntegralConstant<int32, 1>{});
+			break;
+		default:
+			InFunc(TIntegralConstant<int32, 0>{});
+			break;
+		}
+	}
+}

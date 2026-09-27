@@ -249,7 +249,7 @@ namespace PCGExPartitionByValuesBase
 		{
 			const PCGExPartition::FPartitionRange& Range = PartitionRanges[Index];
 
-			const TSharedRef<PCGExData::FPointIO> PartitionIO = Context->MainPoints->Pairs[Range.IOIndex].ToSharedRef();
+			const TSharedRef<PCGExData::FPointIO> PartitionIO = PartitionIOs[Index].ToSharedRef();
 
 			// Get point indices for this partition as array view
 			TArrayView<const int32> PointIndices = MakeArrayView(&SortedIndices[Range.Start], Range.Count);
@@ -345,11 +345,12 @@ namespace PCGExPartitionByValuesBase
 			BuildKeyToPartitionIndexMaps();
 
 			// Create output IOs for each partition
-			const int32 InsertOffset = Context->MainPoints->Pairs.Num();
-			for (int32 i = 0; i < PartitionRanges.Num(); i++)
+			PartitionIOs.SetNum(PartitionRanges.Num());
+			if (!Context->MainPoints->EmplaceBatch(PartitionIOs, PointDataFacade->Source, PCGExData::EIOInit::Duplicate))
 			{
-				PartitionRanges[i].IOIndex = InsertOffset + i;
-				Context->MainPoints->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::Duplicate);
+				// Only fails on cancellation
+				bIsProcessorValid = false;
+				return;
 			}
 
 			StartParallelLoopForRange(PartitionRanges.Num(), 64);

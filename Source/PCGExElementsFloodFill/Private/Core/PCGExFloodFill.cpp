@@ -546,7 +546,8 @@ namespace PCGExFloodFill
 		const EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 		const FPCGExAttributeToTagDetails& SeedTags,
 		const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
-		const int32 InIOIndex)
+		const int64 InSortPrimary,
+		const int64 InSortSecondary)
 	{
 		int32 PathNodeIndex = PCGEx::NH64A(Diffusion.TravelStack->Get(EndpointNodeIndex));
 		int32 PathEdgeIndex = -1;
@@ -591,7 +592,7 @@ namespace PCGExFloodFill
 		PathFacade->WriteFastest(TaskManager);
 		SeedTags.Tag(SeedsDataFacade->GetInPoint(Diffusion.SeedIndex), PathIO);
 
-		PathIO->IOIndex = InIOIndex;
+		PathIO->SetSortKey(InSortPrimary, InSortSecondary);
 	}
 
 	void FDiffusionPathWriter::WritePartitionedPath(
@@ -603,7 +604,8 @@ namespace PCGExFloodFill
 		const EPCGExFloodFillNormalizedPathDepthMode NormalizedPathDepthMode,
 		const FPCGExAttributeToTagDetails& SeedTags,
 		const TSharedRef<PCGExData::FFacade>& SeedsDataFacade,
-		const int32 InIOIndex,
+		const int64 InSortPrimary,
+		const int64 InSortSecondary,
 		const TMap<int32, double>* CascadeValues)
 	{
 		if (PathIndices.Num() < 2)
@@ -633,7 +635,7 @@ namespace PCGExFloodFill
 		PathFacade->WriteFastest(TaskManager);
 		SeedTags.Tag(SeedsDataFacade->GetInPoint(Diffusion.SeedIndex), PathIO);
 
-		PathIO->IOIndex = InIOIndex;
+		PathIO->SetSortKey(InSortPrimary, InSortSecondary);
 	}
 
 #pragma endregion

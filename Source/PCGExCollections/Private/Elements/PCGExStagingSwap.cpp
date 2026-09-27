@@ -573,6 +573,9 @@ namespace PCGExStagingSwap
 					PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Could not initialize the micro (entry) distribution."));
 					return false;
 				}
+
+				// Parity: Resolve must equal GetSeed(Seed, EntryDistributionSettings.SeedComponents, EntryDistributionSettings.LocalSeed, Settings, Context->GetComponent()); only read when MicroHelper is set.
+				MicroSeedResolver.Init(Settings->EntryDistributionSettings.SeedComponents, Settings->EntryDistributionSettings.LocalSeed, Settings, Context->GetComponent());
 			}
 		}
 
@@ -589,9 +592,6 @@ namespace PCGExStagingSwap
 
 		PCGExCollections::FMicroSelectorHelper* LocalMicroHelper = MicroHelper.Get();
 		const TConstPCGValueRange<int32> Seeds = LocalMicroHelper ? PointDataFacade->GetIn()->GetConstSeedValueRange() : TConstPCGValueRange<int32>();
-		const UPCGComponent* Component = LocalMicroHelper ? Context->GetComponent() : nullptr;
-		const uint8 SeedComponents = Settings->EntryDistributionSettings.SeedComponents;
-		const int32 LocalSeed = Settings->EntryDistributionSettings.LocalSeed;
 
 		// Remapped picks get a fresh secondary index when the variant entry has a micro cache;
 		// the node's Seed decorrelates the re-pick (same folding as Distribute's micro path).
@@ -601,7 +601,7 @@ namespace PCGExStagingSwap
 			{
 				if (const TSharedPtr<const PCGExAssetCollection::FMicroCache>* MicroCache = Context->MicroCacheByEntryKey.Find(PCGExCollections::PickHash::GetEntryKey(NewHash)))
 				{
-					const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], SeedComponents, LocalSeed, Settings, Component);
+					const int32 Seed = MicroSeedResolver.Resolve(Seeds[Index]);
 					const int32 Pick = LocalMicroHelper->GetPick(MicroCache->Get(), Index, PCGExRandomHelpers::GetSeed(Seed, Index, Settings));
 					if (Pick >= 0)
 					{

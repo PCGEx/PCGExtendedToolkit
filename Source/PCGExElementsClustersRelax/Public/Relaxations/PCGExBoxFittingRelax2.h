@@ -55,7 +55,7 @@ public:
 #pragma endregion
 
 #if WITH_EDITOR
-	virtual void ApplyShorthandDeprecation() override;
+	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion) override;
 #endif
 
 	/** How to determine separation direction when boxes overlap */

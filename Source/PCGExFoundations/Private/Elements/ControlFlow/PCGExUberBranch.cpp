@@ -148,7 +148,6 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 						{
 							continue;
 						}
-						Manager->bWillBeUsedWithCollections = true;
 						if (Manager->Test(Facade->Source, SharedContext.Get()->MainPoints))
 						{
 							Facade->Source->OutputPin = Settings->OutputLabels[i];

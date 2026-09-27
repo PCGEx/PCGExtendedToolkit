@@ -90,6 +90,9 @@ namespace PCGExBoundsAxisToPoints
 			for (int i = 0; i < NewOutputs.Num(); i++)
 			{
 				NewOutputs[i] = Context->MainPoints->Emplace_GetRef(PointDataFacade->Source, PCGExData::EIOInit::New);
+
+				// Inputs emplace concurrently: stage by input, then by point.
+				if (NewOutputs[i]) { NewOutputs[i]->SetSortKey(PointDataFacade->Source->IOIndex, i); }
 			}
 		}
 		else
@@ -266,6 +269,9 @@ namespace PCGExBoundsAxisToPoints
 
 				NewOutput->CopyToNewPoint(Index, A);
 				NewOutput->CopyToNewPoint(Index, B);
+
+				// A and B get distinct transforms even when the input's is uniform (unallocated).
+				NewOutput->GetOut()->AllocateProperties(EPCGPointNativeProperties::Transform);
 
 				TPCGValueRange<FTransform> Transforms = NewOutput->GetOut()->GetTransformValueRange(false);
 				TPCGValueRange<FVector> BoundsMin = NewOutput->GetOut()->GetBoundsMinValueRange(false);

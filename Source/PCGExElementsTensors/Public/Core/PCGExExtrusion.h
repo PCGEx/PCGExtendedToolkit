@@ -252,6 +252,7 @@ namespace PCGExExtrusion
 
 		//~ Seed and limits
 		int32 SeedIndex = -1;
+		int32 Generation = 0; // 0 for a seed's extrusion, parent + 1 for a child
 		int32 RemainingIterations = 0;
 		double MaxLength = TNumericLimits<double>::Max();
 		int32 MaxPointCount = MAX_int32;

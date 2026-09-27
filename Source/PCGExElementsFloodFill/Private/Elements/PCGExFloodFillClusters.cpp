@@ -270,10 +270,8 @@ namespace PCGExClusterDiffusion
 
 		PathWriter = MakeShared<PCGExFloodFill::FDiffusionPathWriter>(Cluster.ToSharedRef(), VtxDataFacade, Context->Paths.ToSharedRef(), TaskManager, DiffusionDepths);
 
-		// Deterministic path IOIndices: the edges dataset is the base, then each diffusion owns a
-		// contiguous ordinal range (prefix sums of endpoint counts, keyed by the seed-ordered diffusion
-		// Index), then the endpoint ordinal within the diffusion.
-		const int32 EdgeIOBase = EdgeDataFacade->Source->IOIndex * 1000000;
+		// Path sort key: the edges dataset, then the diffusion's seed-ordered ordinal range, then the endpoint.
+		const int32 EdgeIOIndex = EdgeDataFacade->Source->IOIndex;
 		PathIOBases.SetNumZeroed(Diffusions.Num());
 		for (const TSharedPtr<PCGExFloodFill::FDiffusion>& Diff : Diffusions)
 		{
@@ -298,11 +296,11 @@ namespace PCGExClusterDiffusion
 		{
 			// Output full path, rather straightforward
 			PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, PathsTaskGroup)
-			PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, NormPathDepthName, NormPathDepthMode, EdgeIOBase](const int32 Index, const PCGExMT::FScope& Scope)
+			PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, NormPathDepthName, NormPathDepthMode, EdgeIOIndex](const int32 Index, const PCGExMT::FScope& Scope)
 			{
 				PCGEX_ASYNC_THIS
 				TSharedPtr<PCGExFloodFill::FDiffusion> Diff = This->Diffusions[Index];
-				int32 PathIOIndex = EdgeIOBase + This->PathIOBases[Diff->Index];
+				int32 PathOrdinal = This->PathIOBases[Diff->Index];
 				for (const int32 EndpointIndex : Diff->Endpoints)
 				{
 					This->PathWriter->WriteFullPath(
@@ -314,7 +312,8 @@ namespace PCGExClusterDiffusion
 						NormPathDepthMode,
 						This->Context->SeedAttributesToPathTags,
 						This->Context->SeedsDataFacade.ToSharedRef(),
-						PathIOIndex++);
+						EdgeIOIndex,
+						PathOrdinal++);
 				}
 			};
 
@@ -323,7 +322,7 @@ namespace PCGExClusterDiffusion
 		}
 
 		PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, PathsTaskGroup)
-		PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, SortOver = Settings->PathPartitions, SortOrder = Settings->PartitionSorting, NormPathDepthName, NormPathDepthMode, EdgeIOBase](const int32 Index, const PCGExMT::FScope& Scope)
+		PathsTaskGroup->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, SortOver = Settings->PathPartitions, SortOrder = Settings->PartitionSorting, NormPathDepthName, NormPathDepthMode, EdgeIOIndex](const int32 Index, const PCGExMT::FScope& Scope)
 		{
 			PCGEX_ASYNC_THIS
 			TSharedPtr<PCGExFloodFill::FDiffusion> Diff = This->Diffusions[Index];
@@ -399,7 +398,7 @@ namespace PCGExClusterDiffusion
 				CascadeValues.Reserve(Captured.Num());
 			}
 
-			int32 PathIOIndex = EdgeIOBase + This->PathIOBases[Diff->Index];
+			int32 PathOrdinal = This->PathIOBases[Diff->Index];
 
 			for (const int32 EndpointIndex : Endpoints)
 			{
@@ -482,7 +481,8 @@ namespace PCGExClusterDiffusion
 					NormPathDepthMode,
 					This->Context->SeedAttributesToPathTags,
 					This->Context->SeedsDataFacade.ToSharedRef(),
-					PathIOIndex++,
+					EdgeIOIndex,
+					PathOrdinal++,
 					bCascade ? &CascadeValues : nullptr);
 			}
 		};
@@ -588,7 +588,7 @@ namespace PCGExClusterDiffusion
 
 		// Prepared forward handler: readers on the seeds facade, writers on this batch's vtx facade,
 		// all created here (single-threaded) so the parallel Diffuse pass never creates buffers.
-		SeedForwardHandler = Context->SeedForwardDetails.TryGetHandler(Context->SeedsDataFacade, VtxDataFacade, false);
+		SeedForwardHandler = Context->SeedForwardDetails.TryGetHandler(Context->SeedsDataFacade, VtxDataFacade, PCGExData::EForwardDomain::Inherit);
 
 		InfluencesCount = MakeShared<TArray<int8>>();
 		InfluencesCount->Init(0, VtxDataFacade->GetNum());

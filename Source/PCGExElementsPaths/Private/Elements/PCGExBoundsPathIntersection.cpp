@@ -436,11 +436,12 @@ namespace PCGExBoundsPathIntersection
 				Metrics.Add(Cut.Position);
 				OutSeeds[CutIndex] = PCGExRandomHelpers::ComputeSpatialSeed(Cut.Position);
 				OutTransforms[CutIndex].SetLocation(Cut.Position);
+			}
 
-				if (bWillWriteAny)
-				{
-					Details.SetIntersection(CutIndex, Cut);
-				}
+			// This segment owns [StartIndex + 1, StartIndex + 1 + CutsNum): disjoint from every other segment's run.
+			if (bWillWriteAny)
+			{
+				Details.SetIntersections(StartIndex + 1, LocalIntersection->Cuts);
 			}
 
 			Metrics.Add(OutTransforms[EndIndex].GetLocation());

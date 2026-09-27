@@ -107,6 +107,7 @@ namespace PCGExCopyClustersToPoints
 	public:
 		TArray<TSharedPtr<PCGExData::FPointIO>>* VtxDupes = nullptr;
 		TArray<PCGExDataId>* VtxTag = nullptr;
+		FBox VtxFitBounds = FBox(ForceInit);
 
 		TArray<TSharedPtr<PCGExData::FPointIO>> EdgesDupes;
 
@@ -133,6 +134,9 @@ namespace PCGExCopyClustersToPoints
 	public:
 		TArray<TSharedPtr<PCGExData::FPointIO>> VtxDupes;
 		TArray<PCGExDataId> VtxTag;
+
+		// Every copy fits Vtx and Edges against the Vtx bounds, so edge points stay aligned with their endpoints.
+		FBox VtxFitBounds = FBox(ForceInit);
 
 		FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, const TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges)
 			: TBatch(InContext, InVtx, InEdges)

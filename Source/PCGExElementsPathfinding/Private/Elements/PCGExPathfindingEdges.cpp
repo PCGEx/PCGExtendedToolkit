@@ -466,7 +466,7 @@ namespace PCGExPathfindingEdges
 			else
 			{
 				Context->BuildPath(Query, QueriesIO[Query->QueryIndex]);
-				QueriesIO[Query->QueryIndex]->IOIndex = EdgeDataFacade->Source->IOIndex * 100000 + Query->QueryIndex;
+				QueriesIO[Query->QueryIndex]->SetSortKey(EdgeDataFacade->Source->IOIndex, Query->QueryIndex);
 			}
 		}
 	}

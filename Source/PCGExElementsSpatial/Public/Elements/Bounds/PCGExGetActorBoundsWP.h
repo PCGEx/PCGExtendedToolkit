@@ -33,7 +33,7 @@ class UPCGExGetActorBoundsWPSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(GetActorBoundsWP, "Get Actor Bounds (WP)", "Editor-only, World Partition only. One point per matching actor from the partition's actor descriptors (unloaded actors included), transform + bounds, no metadata. Loaded actors are read live; unloaded ones use the bounds saved in their descriptor.");
+	PCGEX_NODE_INFOS(GetActorBoundsWP, "Get Actor Bounds (WP)", "Editor-only World Partition variant of Get Actor Bounds: one point per matching actor descriptor, unloaded actors included, transform and bounds only. Loaded actors are read live; unloaded ones use the bounds saved in their descriptor.");
 	virtual TArray<FText> GetNodeTitleAliases() const override;
 
 	virtual EPCGSettingsType GetType() const override

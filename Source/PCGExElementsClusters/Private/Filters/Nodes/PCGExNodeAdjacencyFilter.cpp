@@ -3,6 +3,7 @@
 
 #include "Filters/Nodes/PCGExNodeAdjacencyFilter.h"
 
+#include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/Utils/PCGExDataPreloader.h"
@@ -12,16 +13,25 @@
 #define LOCTEXT_NAMESPACE "PCGExNodeAdjacencyFilter"
 #define PCGEX_NAMESPACE NodeAdjacencyFilter
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExNodeAdjacencyFilterConfig, OperandA, double, CompareAgainst, OperandA, OperandAConstant)
 PCGEX_SETTING_VALUE_IMPL(FPCGExNodeAdjacencyFilterConfig, OperandB, double, EPCGExInputValueType::Attribute, OperandB, 0)
+
+#if WITH_EDITOR
+void FPCGExNodeAdjacencyFilterConfig::ApplyDeprecation()
+{
+	OperandAValue.Update(CompareAgainst_DEPRECATED, OperandA_DEPRECATED, OperandAConstant_DEPRECATED);
+}
+
+void FPCGExNodeAdjacencyFilterConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandA")), FName(TEXT("OperandAValue")), FName(TEXT("Attribute")), FName(TEXT("Operand A (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("OperandAConstant")), FName(TEXT("OperandAValue")), FName(TEXT("Constant")), FName(TEXT("Operand A")));
+}
+#endif
 
 void UPCGExNodeAdjacencyFilterFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.OperandA);
-	}
+	Config.OperandAValue.RegisterBufferDependencies(InContext, FacadePreloader);
 	if (Config.OperandBSource == EPCGExClusterElement::Vtx)
 	{
 		FacadePreloader.Register<double>(InContext, Config.OperandB);
@@ -42,7 +52,7 @@ bool FNodeAdjacencyFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 
 	bCaptureFromNodes = TypedFilterFactory->Config.OperandBSource != EPCGExClusterElement::Edge;
 
-	OperandA = TypedFilterFactory->Config.GetValueSettingOperandA(PCGEX_QUIET_HANDLING);
+	OperandA = TypedFilterFactory->Config.OperandAValue.GetValueSetting(PCGEX_QUIET_HANDLING);
 	OperandA->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!OperandA->Init(PointDataFacade, false))
 	{
@@ -289,9 +299,34 @@ FNodeAdjacencyFilter::~FNodeAdjacencyFilter()
 PCGEX_CREATE_FILTER_FACTORY(NodeAdjacency)
 
 #if WITH_EDITOR
+void UPCGExNodeAdjacencyFilterProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExNodeAdjacencyFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExNodeAdjacencyFilterProviderSettings::GetDisplayName() const
 {
-	FString DisplayName = PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandA) + PCGExCompare::ToString(Config.Comparison);
+	FString DisplayName = Config.OperandAValue.Input == EPCGExInputValueType::Attribute ?
+		                      PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandAValue.Attribute) :
+		                      FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.OperandAValue.Constant) / 1000.0));
+
+	DisplayName += PCGExCompare::ToString(Config.Comparison);
 
 	DisplayName += PCGExMetaHelpers::GetSelectorDisplayName(Config.OperandB);
 	DisplayName += TEXT(" (");

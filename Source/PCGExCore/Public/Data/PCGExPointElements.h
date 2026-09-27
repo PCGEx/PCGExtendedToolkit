@@ -143,8 +143,6 @@ virtual int32 GetSeed() const override;
 
 		PCGEX_POINT_PROXY_OVERRIDES
 
-		FTransform& GetMutableTransform();
-
 		virtual void SetDensity(const float InValue);
 		virtual void SetSteepness(const float InValue);
 		virtual void SetTransform(const FTransform& InValue);
@@ -241,9 +239,6 @@ virtual int32 GetSeed() const override;
 		{
 			return Index == Other.Index && IO == Other.IO;
 		}
-
-		void CopyTo(UPCGBasePointData* InData) const;
-		void CopyTo(FMutablePoint& InPoint) const;
 	};
 
 #undef PCGEX_POINT_PROXY_OVERRIDES

@@ -8,6 +8,7 @@
 #include "Core/PCGExPathProcessor.h"
 #include "Factories/PCGExFactories.h"
 #include "Core/PCGExFilterTypeSets.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGExPathShrink.generated.h"
 
@@ -47,23 +48,34 @@ struct FPCGExShrinkPathEndpointDistanceDetails
 {
 	GENERATED_BODY()
 
-	/** Whether the distance is a constant or read from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType AmountInput = EPCGExInputValueType::Constant;
-
-	/** Attribute to read the shrink distance from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Distance (Attr)", EditCondition="AmountInput != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector DistanceAttribute;
-
 	/** Distance to shrink the path endpoint by. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Distance", EditCondition="AmountInput == EPCGExInputValueType::Constant", EditConditionHides))
-	double Distance = 10;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Distance"))
+	FPCGExInputShorthandSelectorDouble DistanceValue = FPCGExInputShorthandSelectorDouble(FPCGAttributePropertyInputSelector(), 10);
 
 	/** How to handle the cut point when shrinking by distance. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExPathShrinkDistanceCutType CutType = EPCGExPathShrinkDistanceCutType::NewPoint;
 
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType AmountInput_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector DistanceAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	double Distance_DEPRECATED = 10;
+
+#pragma endregion
+
 	bool SanityCheck(const FPCGContext* Context) const;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** InMemberName is this struct's member on the settings: it is embedded twice, so its pins carry full paths. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode, const FName InMemberName) const;
+#endif
 };
 
 USTRUCT(BlueprintType)
@@ -71,19 +83,30 @@ struct FPCGExShrinkPathEndpointCountDetails
 {
 	GENERATED_BODY()
 
-	/** Whether the count is a constant or read from an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	EPCGExInputValueType ValueSource = EPCGExInputValueType::Constant;
-
-	/** Attribute to read the point count from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Count (Attr)", EditCondition="ValueSource != EPCGExInputValueType::Constant", EditConditionHides))
-	FPCGAttributePropertyInputSelector CountAttribute;
-
 	/** Number of points to remove from the path endpoint. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Count", EditCondition="ValueSource == EPCGExInputValueType::Constant", EditConditionHides, ClampMin=1))
-	int32 Count = 10;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Count", ClampMin=1))
+	FPCGExInputShorthandSelectorInteger32Abs CountValue = FPCGExInputShorthandSelectorInteger32Abs(FPCGAttributePropertyInputSelector(), 10);
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType ValueSource_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FPCGAttributePropertyInputSelector CountAttribute_DEPRECATED;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	int32 Count_DEPRECATED = 10;
+
+#pragma endregion
 
 	bool SanityCheck(const FPCGContext* Context) const;
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	/** InMemberName is this struct's member on the settings: it is embedded twice, so its pins carry full paths. */
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode, const FName InMemberName) const;
+#endif
 };
 
 /**
@@ -99,6 +122,8 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(PathShrink, "Path : Shrink", "Shrink path from its beginning and end.");
 #endif
 

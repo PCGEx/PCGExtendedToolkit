@@ -14,8 +14,6 @@
 #define LOCTEXT_NAMESPACE "PCGExSegmentLengthFilterDefinition"
 #define PCGEX_NAMESPACE PCGExSegmentLengthFilterDefinition
 
-PCGEX_SETTING_VALUE_IMPL(FPCGExSegmentLengthFilterConfig, Index, int32, CompareAgainst, IndexAttribute, IndexConstant)
-
 #if WITH_EDITOR
 void FPCGExSegmentLengthFilterConfig::ApplyDeprecation()
 {
@@ -26,6 +24,17 @@ void FPCGExSegmentLengthFilterConfig::RenamePins(const UPCGSettings* InSettings,
 {
 	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ThresholdConstant")), FName(TEXT("Threshold")), FName(TEXT("Constant")), FName(TEXT("Threshold")));
 	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("ThresholdAttribute")), FName(TEXT("Threshold")), FName(TEXT("Attribute")), FName(TEXT("Threshold (Attr)")));
+}
+
+void FPCGExSegmentLengthFilterConfig::ApplyIndexDeprecation()
+{
+	Index.Update(CompareAgainst_DEPRECATED, IndexAttribute_DEPRECATED, IndexConstant_DEPRECATED);
+}
+
+void FPCGExSegmentLengthFilterConfig::RenameIndexPins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("IndexAttribute")), FName(TEXT("Index")), FName(TEXT("Attribute")), FName(TEXT("Index (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("IndexConstant")), FName(TEXT("Index")), FName(TEXT("Constant")), FName(TEXT("Index")));
 }
 #endif
 
@@ -56,10 +65,7 @@ void UPCGExSegmentLengthFilterFactory::RegisterBuffersDependencies(FPCGExContext
 	{
 		FacadePreloader.Register<double>(InContext, Config.Threshold.Attribute);
 	}
-	if (Config.CompareAgainst == EPCGExInputValueType::Attribute)
-	{
-		FacadePreloader.Register<double>(InContext, Config.IndexAttribute);
-	}
+	Config.Index.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
 bool PCGExPointFilter::FSegmentLengthFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
@@ -90,7 +96,7 @@ bool PCGExPointFilter::FSegmentLengthFilter::Init(FPCGExContext* InContext, cons
 		return false;
 	}
 
-	Index = TypedFilterFactory->Config.GetValueSettingIndex(PCGEX_QUIET_HANDLING);
+	Index = TypedFilterFactory->Config.Index.GetValueSetting(PCGEX_QUIET_HANDLING);
 	Index->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
 	if (!Index->Init(PointDataFacade))
 	{
@@ -128,6 +134,12 @@ void UPCGExSegmentLengthFilterProviderSettings::PCGExApplyDeprecationBeforeUpdat
 		Config.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenameIndexPins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("CompareAgainst")));
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -138,12 +150,17 @@ void UPCGExSegmentLengthFilterProviderSettings::PCGExApplyDeprecation(UPCGNode* 
 		Config.ApplyDeprecation();
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyIndexDeprecation();
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 
 FString UPCGExSegmentLengthFilterProviderSettings::GetDisplayName() const
 {
-	FString TargetStr = Config.CompareAgainst == EPCGExInputValueType::Attribute ? PCGExMetaHelpers::GetSelectorDisplayName(Config.IndexAttribute) : FString::Printf(TEXT("%d"), Config.IndexConstant);
+	FString TargetStr = Config.Index.Input == EPCGExInputValueType::Attribute ? PCGExMetaHelpers::GetSelectorDisplayName(Config.Index.Attribute) : FString::Printf(TEXT("%d"), Config.Index.Constant);
 	FString OtherStr = Config.Threshold.Input == EPCGExInputValueType::Attribute ? PCGExMetaHelpers::GetSelectorDisplayName(Config.Threshold.Attribute) : FString::Printf(TEXT("%.1f"), Config.Threshold.Constant);
 	FString Str = TEXT("Dist to ") + TargetStr + PCGExCompare::ToString(Config.Comparison) + OtherStr;
 	return PCGExCommon::FlagInvertLabel(Str, Config.bInvert);

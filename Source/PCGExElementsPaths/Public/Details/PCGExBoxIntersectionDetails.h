@@ -92,13 +92,18 @@ struct PCGEXELEMENTSPATHS_API FPCGExBoxIntersectionDetails
 	PCGEX_FOREACH_FIELD_INTERSECTION(PCGEX_LOCAL_DETAIL_DECL)
 #undef PCGEX_LOCAL_DETAIL_DECL
 
+	// The facade's output must already be allocated to its final point count: forwarding is sized from it.
 	void Init(const TSharedPtr<PCGExData::FFacade>& PointDataFacade, const TSharedPtr<PCGExMatching::FTargetsHandler>& TargetsHandler);
 
 	bool WillWriteAny() const;
 
 	void Mark(const TSharedRef<PCGExData::FPointIO>& InPointIO) const;
-	void SetIntersection(const int32 PointIndex, const PCGExMath::OBB::FCut& InCut) const;
+
+	// Writes Cuts[j] onto output point StartIndex + j; the run must be contiguous and owned by the caller.
+	void SetIntersections(const int32 StartIndex, TConstArrayView<PCGExMath::OBB::FCut> Cuts);
 
 private:
 	TArray<TSharedPtr<PCGExData::FDataForwardHandler>> IntersectionForwardHandlers;
+	// Bounds row per output point, -1 where nothing is forwarded; empty when no target has a handler.
+	TArray<int32> ForwardSourceRows;
 };

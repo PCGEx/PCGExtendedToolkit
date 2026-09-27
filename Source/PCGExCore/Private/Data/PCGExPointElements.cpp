@@ -5,6 +5,17 @@
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExPointIO.h"
 
+namespace PCGExPointElements
+{
+	// Setters take non-allocating ranges: the property must be allocated on the owning thread beforehand,
+	// unless the data is a single unparented point, whose one value is the property.
+	bool IsWritable(const UPCGBasePointData* InData, const EPCGPointNativeProperties InProperties)
+	{
+		return EnumHasAllFlags(InData->GetAllocatedProperties(/*bWithInheritance=*/false), InProperties)
+			|| (InData->GetNumPoints() == 1 && !InData->HasSpatialDataParent());
+	}
+}
+
 namespace PCGExData
 {
 	const FPoint NONE_Point(1, -1);
@@ -123,58 +134,65 @@ namespace PCGExData
 	{
 	}
 
-	FTransform& FMutablePoint::GetMutableTransform()
-	{
-		return Data->GetTransformValueRange(false)[Index];
-	}
+#define PCGEX_ENSURE_WRITABLE(_PROPERTIES) ensureMsgf(PCGExPointElements::IsWritable(Data, _PROPERTIES), TEXT("FMutablePoint: allocate the property on the owning thread before per-point writes."))
 
 	void FMutablePoint::SetDensity(const float InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Density);
 		Data->GetDensityValueRange(false)[Index] = InValue;
 	}
 
 	void FMutablePoint::SetSteepness(const float InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Steepness);
 		Data->GetSteepnessValueRange(false)[Index] = InValue;
 	}
 
 	void FMutablePoint::SetTransform(const FTransform& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Transform);
 		Data->GetTransformValueRange(false)[Index] = InValue;
 	}
 
 	void FMutablePoint::SetLocation(const FVector& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Transform);
 		Data->GetTransformValueRange(false)[Index].SetLocation(InValue);
 	}
 
 	void FMutablePoint::SetScale3D(const FVector& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Transform);
 		Data->GetTransformValueRange(false)[Index].SetScale3D(InValue);
 	}
 
 	void FMutablePoint::SetRotation(const FQuat& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Transform);
 		Data->GetTransformValueRange(false)[Index].SetRotation(InValue);
 	}
 
 	void FMutablePoint::SetBoundsMin(const FVector& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::BoundsMin);
 		Data->GetBoundsMinValueRange(false)[Index] = InValue;
 	}
 
 	void FMutablePoint::SetBoundsMax(const FVector& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::BoundsMax);
 		Data->GetBoundsMaxValueRange(false)[Index] = InValue;
 	}
 
 	void FMutablePoint::SetLocalCenter(const FVector& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::BoundsMin | EPCGPointNativeProperties::BoundsMax);
 		PCGPointHelpers::SetLocalCenter(InValue, Data->GetBoundsMinValueRange(false)[Index], Data->GetBoundsMaxValueRange(false)[Index]);
 	}
 
 	void FMutablePoint::SetExtents(const FVector& InValue, const bool bKeepLocalCenter)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::BoundsMin | EPCGPointNativeProperties::BoundsMax);
 		const TPCGValueRange<FVector> BoundsMin = Data->GetBoundsMinValueRange(false);
 		const TPCGValueRange<FVector> BoundsMax = Data->GetBoundsMaxValueRange(false);
 
@@ -193,24 +211,32 @@ namespace PCGExData
 
 	void FMutablePoint::SetLocalBounds(const FBox& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::BoundsMin | EPCGPointNativeProperties::BoundsMax);
 		Data->GetBoundsMinValueRange(false)[Index] = InValue.Min;
 		Data->GetBoundsMaxValueRange(false)[Index] = InValue.Max;
 	}
 
 	void FMutablePoint::SetMetadataEntry(const int64 InValue)
 	{
-		Data->GetMetadataEntryValueRange(false)[Index] = InValue;
+		// Allocating, unlike the other setters: an unallocated range keeps only index 0's write.
+		// Allocate entries before calling this from parallel code; allocation itself isn't thread-safe.
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::MetadataEntry);
+		Data->GetMetadataEntryValueRange()[Index] = InValue;
 	}
 
 	void FMutablePoint::SetColor(const FVector4& InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Color);
 		Data->GetColorValueRange(false)[Index] = InValue;
 	}
 
 	void FMutablePoint::SetSeed(const int32 InValue)
 	{
+		PCGEX_ENSURE_WRITABLE(EPCGPointNativeProperties::Seed);
 		Data->GetSeedValueRange(false)[Index] = InValue;
 	}
+
+#undef PCGEX_ENSURE_WRITABLE
 
 	FConstPoint::FConstPoint(const FMutablePoint& InPoint)
 		: FConstPoint(InPoint.Data, InPoint.Index)
@@ -607,22 +633,6 @@ namespace PCGExData
 	{
 		BoundsMin = InValue.Min;
 		BoundsMax = InValue.Max;
-	}
-
-	void FProxyPoint::CopyTo(UPCGBasePointData* InData) const
-	{
-		InData->GetTransformValueRange(false)[Index] = Transform;
-		InData->GetBoundsMinValueRange(false)[Index] = BoundsMin;
-		InData->GetBoundsMaxValueRange(false)[Index] = BoundsMax;
-		InData->GetColorValueRange(false)[Index] = Color;
-	}
-
-	void FProxyPoint::CopyTo(FMutablePoint& InPoint) const
-	{
-		InPoint.SetTransform(Transform);
-		InPoint.SetBoundsMin(BoundsMin);
-		InPoint.SetBoundsMax(BoundsMax);
-		InPoint.SetColor(Color);
 	}
 
 #pragma endregion

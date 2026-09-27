@@ -222,7 +222,11 @@ namespace PCGExSampleNearestSurface
 
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
-		SurfacesForward = Context->ActorReferenceDataFacade ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, false) : nullptr;
+		SurfacesForward = Context->ActorReferenceDataFacade ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, PCGExData::EForwardDomain::Inherit) : nullptr;
+		if (SurfacesForward)
+		{
+			ForwardRows.Init(-1, PointDataFacade->GetNum());
+		}
 
 		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
 
@@ -336,7 +340,7 @@ namespace PCGExSampleNearestSurface
 
 					if (SurfacesForward && HitIndex)
 					{
-						SurfacesForward->Forward(*HitIndex, Index);
+						ForwardRows[Index] = *HitIndex;
 					}
 
 					if (HitComp)
@@ -481,6 +485,11 @@ namespace PCGExSampleNearestSurface
 					break;
 				}
 			}
+		}
+
+		if (SurfacesForward)
+		{
+			SurfacesForward->ForwardScoped(Scope, ForwardRows);
 		}
 	}
 

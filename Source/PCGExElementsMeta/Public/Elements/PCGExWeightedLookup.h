@@ -210,7 +210,7 @@ struct FPCGExWeightedLookupContext final : FPCGExPointsProcessorContext
 
 	/** Sanitized shaping knobs, kept strictly positive so a zero weight can never shape into a pickable one. */
 	double Exponent = 1.0;
-	double Contrast = 1.0;
+	PCGExMath::Contrast::FPreparedContrast Contrast;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
@@ -233,7 +233,7 @@ namespace PCGExWeightedLookup
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExWeightedLookupContext, UPCGExWeightedLookupSettings>
 	{
 		int32 NumRows = 0;
-		const UPCGComponent* Component = nullptr;
+		PCGExRandomHelpers::FSeedResolver SeedResolver;
 
 		/** Self weights only; External reads Context->ExternalWeightReaders. */
 		TArray<TSharedPtr<PCGExData::TBuffer<double>>> SelfWeightReaders;
@@ -242,14 +242,24 @@ namespace PCGExWeightedLookup
 		/** Rows whose weight reader exists; the hot loop only reads these, missing rows stay at weight 0. */
 		TArray<int32> ActiveRows;
 
+		/** Aligned with ActiveRows: the reader's input array, or null for a single-value (@Data) reader. */
+		TArray<const double*> ActiveRowData;
+
 		/** External weights only. */
 		TSharedPtr<PCGExData::IBuffer> PointKeyReader;
 
+		/** Per point, the Map row to forward at scope end; -1 when no row was picked. */
+		TArray<int32> PickedRows;
 		TSharedPtr<PCGExData::FDataForwardHandler> Forward;
 
 		TSharedPtr<PCGExData::TBuffer<FName>> KeyWriter;
 		TSharedPtr<PCGExData::TBuffer<int32>> RowIndexWriter;
 		TSharedPtr<PCGExData::TBuffer<double>> WeightWriter;
+
+		/** Output arrays written directly; null when the writer is not on the Elements domain. */
+		FName* KeyOut = nullptr;
+		int32* RowIndexOut = nullptr;
+		double* WeightOut = nullptr;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
@@ -270,7 +280,11 @@ namespace PCGExWeightedLookup
 		template <bool bExternal, bool bExponent, bool bContrast>
 		void ProcessScope(const PCGExMT::FScope& Scope);
 
-		int32 SeedFor(const int32 PointSeed) const;
+		FORCEINLINE int32 SeedFor(const int32 PointSeed) const
+		{
+			return SeedResolver.Resolve(PointSeed);
+		}
+
 		void Commit(const int32 Index, const int32 Row, const double Weight);
 		void CommitFallback(const int32 Index, const int32 PointSeed);
 	};

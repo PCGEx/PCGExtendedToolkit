@@ -77,7 +77,7 @@ public:
 	FPCGExInputShorthandSelectorDouble11 Influence = FPCGExInputShorthandSelectorDouble11(FName("@Last"), 1.0, false);
 
 	/** The amount of smoothing applied. Range of this value is highly dependant on the chosen smoothing method. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Smoothing"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Smoothing", ClampMin=1))
 	FPCGExInputShorthandSelectorDoubleAbs SmoothingAmount = FPCGExInputShorthandSelectorDoubleAbs(FName("@Last"), 5, false);
 
 #pragma region DEPRECATED

@@ -771,11 +771,7 @@ namespace PCGExClusterCentrality
 
 			if (RangeMax > RangeMin + SMALL_NUMBER)
 			{
-				const int32 CurveType = static_cast<int32>(Settings->ContrastCurve);
-				for (int i = 0; i < NumNodes; i++)
-				{
-					CentralityScores[i] = PCGExMath::Contrast::ApplyContrastInRange(CentralityScores[i], Settings->ContrastAmount, CurveType, RangeMin, RangeMax);
-				}
+				PCGExMath::Contrast::ApplyContrastBatchInRange(TArrayView<double>(CentralityScores), Settings->ContrastAmount, static_cast<int32>(Settings->ContrastCurve), RangeMin, RangeMax);
 			}
 		}
 

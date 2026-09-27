@@ -77,17 +77,9 @@ protected:
 public:
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourcePointFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
-	/** How the asset gets selected */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType AssetType = EPCGExInputValueType::Attribute;
-
-	/** The name of the attribute to write asset path to.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Asset (Attr)", EditCondition="AssetType != EPCGExInputValueType::Constant", EditConditionHides))
-	FName AssetPathAttributeName = "AssetPath";
-
-	/** Constant static mesh .*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Asset", EditCondition="AssetType == EPCGExInputValueType::Constant", EditConditionHides))
-	TSoftObjectPtr<UStaticMesh> StaticMesh;
+	/** Static mesh to use: a constant, or a soft path read from an attribute. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Asset", AllowedClasses="/Script/Engine.StaticMesh"))
+	FPCGExInputShorthandNameSoftObjectPath Asset = FPCGExInputShorthandNameSoftObjectPath(FName("AssetPath"), true);
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bReadMaterialFromAttribute = false;
@@ -113,6 +105,15 @@ public:
 
 	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
 	FName LeaveTangentAttribute_DEPRECATED = "LeaveTangent";
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType AssetType_DEPRECATED = EPCGExInputValueType::Attribute;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName AssetPathAttributeName_DEPRECATED = "AssetPath";
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	TSoftObjectPtr<UStaticMesh> StaticMesh_DEPRECATED;
 
 #pragma endregion
 

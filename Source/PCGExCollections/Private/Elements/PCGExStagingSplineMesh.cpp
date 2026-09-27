@@ -629,7 +629,6 @@ namespace PCGExPathSplineMesh
 		}
 
 		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetIn()->GetConstSeedValueRange();
-		const UPCGComponent* Component = Context->GetComponent();
 		const TSharedPtr<PCGExCollections::FSourceScratches> PickScratches = Source->CreateScratches(Scope.Count);
 
 		PCGEX_SCOPE_LOOP(Index)
@@ -648,7 +647,7 @@ namespace PCGExPathSplineMesh
 				continue;
 			}
 
-			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
+			const int32 Seed = Helper->ResolveSeed(Seeds[Index]);
 			const PCGExCollections::FSelectorScratches* Scratches = PickScratches ? PickScratches->GetFor(Helper) : nullptr;
 			if (bCommit)
 			{
@@ -704,7 +703,6 @@ namespace PCGExPathSplineMesh
 
 		bool bAnyValidSegment = false;
 
-		const UPCGComponent* Component = Context->GetComponent();
 		const bool bTangentsEnabled = TangentsHandler->IsEnabled();
 
 		// Per-scope pick scratches -- this scope runs on a single thread, so ops can mutate
@@ -741,7 +739,7 @@ namespace PCGExPathSplineMesh
 					continue;
 				}
 
-				Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
+				Seed = Helper->ResolveSeed(Seeds[Index]);
 
 				const PCGExCollections::FSelectorScratches* Scratches = PickScratches ? PickScratches->GetFor(Helper) : nullptr;
 				if (bUseTags)

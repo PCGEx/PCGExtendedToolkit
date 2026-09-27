@@ -3,6 +3,7 @@
 
 #include "Elements/Meta/VtxProperties/PCGExVtxPropertyAmplitude.h"
 
+#include "PCGExVersion.h"
 #include "PCGPin.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -17,8 +18,22 @@
 
 FPCGExAmplitudeConfig::FPCGExAmplitudeConfig()
 {
-	UpConstant = PCGEX_CORE_SETTINGS.WorldUp;
+	UpVector.Constant = PCGEX_CORE_SETTINGS.WorldUp;
+	UpConstant_DEPRECATED = PCGEX_CORE_SETTINGS.WorldUp;
 }
+
+#if WITH_EDITOR
+void FPCGExAmplitudeConfig::ApplyDeprecation()
+{
+	UpVector.Update(UpSelection_DEPRECATED, UpSource_DEPRECATED, UpConstant_DEPRECATED);
+}
+
+void FPCGExAmplitudeConfig::RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const
+{
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("UpSource")), FName(TEXT("UpVector")), FName(TEXT("Attribute")), FName(TEXT(" └─ Up Vector (Attr)")));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, FName(TEXT("UpConstant")), FName(TEXT("UpVector")), FName(TEXT("Constant")), FName(TEXT(" └─ Up Vector")));
+}
+#endif
 
 bool FPCGExAmplitudeConfig::Validate(FPCGExContext* InContext) const
 {
@@ -48,7 +63,7 @@ bool FPCGExVtxPropertyAmplitude::PrepareForCluster(FPCGExContext* InContext, TSh
 
 	if (Config.bWriteAmplitudeSign && Config.UpMode == EPCGExVtxAmplitudeUpMode::UpVector)
 	{
-		DirCache = PCGExDetails::MakeSettingValue(Config.UpSelection, Config.UpSource, Config.UpConstant);
+		DirCache = Config.UpVector.GetValueSetting();
 		if (!DirCache->Init(InVtxDataFacade, false))
 		{
 			bIsValidOperation = false;
@@ -188,6 +203,27 @@ void FPCGExVtxPropertyAmplitude::ProcessNode(PCGExClusters::FNode& Node, const T
 }
 
 #if WITH_EDITOR
+void UPCGExVtxPropertyAmplitudeSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.RenamePins(this, InOutNode);
+		RetireInputPin(InOutNode, FName(TEXT("UpSelection")));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExVtxPropertyAmplitudeSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 2)
+	{
+		Config.ApplyDeprecation();
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
+
 FString UPCGExVtxPropertyAmplitudeSettings::GetDisplayName() const
 {
 	return TEXT("");
@@ -204,9 +240,9 @@ TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyAmplitudeFactory::Create
 void UPCGExVtxPropertyAmplitudeFactory::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
-	if (Config.bWriteAmplitudeSign && Config.UpMode == EPCGExVtxAmplitudeUpMode::UpVector && Config.UpSelection == EPCGExInputValueType::Attribute)
+	if (Config.bWriteAmplitudeSign && Config.UpMode == EPCGExVtxAmplitudeUpMode::UpVector)
 	{
-		FacadePreloader.Register<FVector>(InContext, Config.UpSource);
+		Config.UpVector.RegisterBufferDependencies(InContext, FacadePreloader);
 	}
 }
 

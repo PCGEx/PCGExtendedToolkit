@@ -702,6 +702,14 @@ namespace PCGExAssetStaging
 				return false;
 			}
 
+			// Connected Selector seed config wins (same source the main loop syncs from); the inline
+			// micro details expose no seed knobs yet, so without a Selector the node Seed is the knob.
+			const uint8 MicroSeedComponents = Context->SelectorFactory ? Context->SelectorFactory->BaseConfig.SeedComponents : Settings->EntryDistributionSettings.SeedComponents;
+			const int32 MicroLocalSeed = Context->SelectorFactory ? Context->SelectorFactory->BaseConfig.LocalSeed : Settings->EntryDistributionSettings.LocalSeed;
+
+			// Parity: Resolve must equal GetSeed(Seed, MicroSeedComponents, MicroLocalSeed, Settings, Context->GetComponent()) in the micro loop.
+			MicroSeedResolver.Init(MicroSeedComponents, MicroLocalSeed, Settings, Context->GetComponent());
+
 			if (Context->bPickMaterials)
 			{
 				CachedPicks.Init(nullptr, NumPoints);
@@ -926,7 +934,6 @@ namespace PCGExAssetStaging
 		}
 
 		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetIn()->GetConstSeedValueRange();
-		const UPCGComponent* Component = Context->GetComponent();
 		const TSharedPtr<PCGExCollections::FSourceScratches> PickScratches = Source->CreateScratches(Scope.Count);
 
 		PCGEX_SCOPE_LOOP(Index)
@@ -941,7 +948,7 @@ namespace PCGExAssetStaging
 				continue;
 			}
 
-			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
+			const int32 Seed = Helper->ResolveSeed(Seeds[Index]);
 			const PCGExCollections::FSelectorScratches* Scratches = PickScratches ? PickScratches->GetFor(Helper) : nullptr;
 			if (bCommit)
 			{
@@ -1039,7 +1046,6 @@ namespace PCGExAssetStaging
 			}
 		};
 
-		const UPCGComponent* Component = Context->GetComponent();
 		int32 LocalHighestSlotIndex = 0;
 		FRandomStream RandomSource;
 
@@ -1061,7 +1067,7 @@ namespace PCGExAssetStaging
 				continue;
 			}
 
-			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], Helper->Details.SeedComponents, Helper->Details.LocalSeed, Settings, Component);
+			const int32 Seed = Helper->ResolveSeed(Seeds[Index]);
 
 			FPCGExEntryAccessResult Result = Helper->GetEntry(Index, Seed, bFlattenSubCollections, PickScratches ? PickScratches->GetFor(Helper) : nullptr);
 
@@ -1210,12 +1216,6 @@ namespace PCGExAssetStaging
 		FilterScope(Scope);
 
 		const TConstPCGValueRange<int32> Seeds = PointDataFacade->GetIn()->GetConstSeedValueRange();
-		const UPCGComponent* Component = Context->GetComponent();
-
-		// Connected Selector seed config wins (same source the main loop syncs from); the inline
-		// micro details expose no seed knobs yet, so without a Selector the node Seed is the knob.
-		const uint8 SeedComponents = Context->SelectorFactory ? Context->SelectorFactory->BaseConfig.SeedComponents : Settings->EntryDistributionSettings.SeedComponents;
-		const int32 LocalSeed = Context->SelectorFactory ? Context->SelectorFactory->BaseConfig.LocalSeed : Settings->EntryDistributionSettings.LocalSeed;
 
 		const bool bLocalPickMaterials = Context->bPickMaterials;
 		const FMicroRefreshTarget* Targets = MicroTargets.GetData();
@@ -1238,7 +1238,7 @@ namespace PCGExAssetStaging
 
 			// Folding the node's Seed in (Settings overload of GetSeed) decorrelates the re-pick
 			// from the upstream staging chain -- it's the refresh knob.
-			const int32 Seed = PCGExRandomHelpers::GetSeed(Seeds[Index], SeedComponents, LocalSeed, Settings, Component);
+			const int32 Seed = MicroSeedResolver.Resolve(Seeds[Index]);
 			const int32 NewPick = MicroHelper->GetPick(Target.MicroCache.Get(), Index, PCGExRandomHelpers::GetSeed(Seed, Index, Settings));
 			if (NewPick < 0)
 			{

@@ -53,9 +53,18 @@ struct PCGEXBLENDING_API FPCGExApplySamplingDetails
 	TArray<int32> TrScaComponents;
 	TArray<int32> LkRotComponents;
 
+	// Set by Init when a channel applies all three components: whole-value copy, no per-component mixing.
+	bool bFullPosition = false;
+	bool bFullRotation = false;
+	bool bFullScale = false;
+	bool bFullLookAt = false;
+
 	bool WantsApply() const;
 
 	void Init();
 
-	void Apply(PCGExData::FMutablePoint& InPoint, const FTransform& InTransform, const FTransform& InLookAt);
+	/** In-place variant on the point transform; rotation only goes through Euler when a mask is partial. */
+	void Apply(FTransform& InOutTransform, const FTransform& InTransform, const FTransform& InLookAt) const;
+
+	void Apply(PCGExData::FMutablePoint& InPoint, const FTransform& InTransform, const FTransform& InLookAt) const;
 };

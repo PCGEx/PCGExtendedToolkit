@@ -7,6 +7,7 @@
 #include "Core/PCGExFilterFactoryProvider.h"
 #include "UObject/Object.h"
 #include "Utils/PCGExCompare.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "Core/PCGExPointFilter.h"
 
@@ -30,27 +31,37 @@ struct FPCGExStringCompareFilterConfig
 
 	/** Operand A for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	FName OperandA = NAME_None;
+	FPCGAttributePropertyInputSelector OperandA;
 
 	/** Comparison */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExStringComparison Comparison = EPCGExStringComparison::StrictlyEqual;
 
-	/** Type of OperandB */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExInputValueType CompareAgainst = EPCGExInputValueType::Constant;
-
 	/** Operand B for testing -- Read as text (string comparison). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B (Attr)", EditCondition="CompareAgainst != EPCGExInputValueType::Constant", EditConditionHides))
-	FName OperandB = NAME_None;
-
-	/** Operand B for testing */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B", EditCondition="CompareAgainst == EPCGExInputValueType::Constant", EditConditionHides))
-	FString OperandBConstant = TEXT("MyString");
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Operand B"))
+	FPCGExInputShorthandSelectorString OperandBValue = FPCGExInputShorthandSelectorString(FPCGAttributePropertyInputSelector(), FString(TEXT("MyString")));
 
 	/** Swap operands. Useful to invert "contains" checks */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bSwapOperands = false;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	EPCGExInputValueType CompareAgainst_DEPRECATED = EPCGExInputValueType::Constant;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FName OperandB_DEPRECATED = NAME_None;
+
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FString OperandBConstant_DEPRECATED = TEXT("MyString");
+
+#pragma endregion
+
+#if WITH_EDITOR
+	void ApplyDeprecation();
+	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
+#endif
 };
 
 
@@ -92,11 +103,10 @@ namespace PCGExPointFilter
 		bool bUseNameComparison = false;
 
 		TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> OperandA;
-		TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> OperandB;
+		TSharedPtr<PCGExDetails::TSettingValue<FString>> OperandB;
 
 		TSharedPtr<PCGExData::TAttributeBroadcaster<FName>> OperandAName;
-		TSharedPtr<PCGExData::TAttributeBroadcaster<FName>> OperandBName;
-		FName OperandBConstantName = NAME_None;
+		TSharedPtr<PCGExDetails::TSettingValue<FName>> OperandBName;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 
@@ -119,6 +129,8 @@ class UPCGExStringCompareFilterProviderSettings : public UPCGExFilterProviderSet
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(StringCompareFilterFactory, "Filter : Compare (String)", "Creates a filter definition that compares two string attribute values.", PCGEX_FACTORY_NAME_PRIORITY)
 	
 	virtual TArray<FText> GetNodeTitleAliases() const override;

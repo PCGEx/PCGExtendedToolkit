@@ -393,7 +393,8 @@ namespace PCGExPathCrossings
 		UPCGMetadata* Metadata = PointIO->GetOut()->Metadata;
 
 		TConstPCGValueRange<int64> InMetadataEntries = InPoints->GetConstMetadataEntryValueRange();
-		TPCGValueRange<int64> OutMetadataEntries = OutPoints->GetMetadataEntryValueRange(false);
+		// Allocating: every output point gets its own entry, even when the input's points all share one.
+		TPCGValueRange<int64> OutMetadataEntries = OutPoints->GetMetadataEntryValueRange();
 
 		int32 Index = 0;
 		for (int i = 0; i < Path->NumEdges; i++)

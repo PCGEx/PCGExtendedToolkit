@@ -142,7 +142,7 @@ namespace PCGExResamplePath
 		else
 		{
 			PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
-			PointDataFacade->GetOut()->AllocateProperties(EPCGPointNativeProperties::Transform);
+			PointDataFacade->GetOut()->AllocateProperties(Settings->bEnsureUniqueSeeds ? EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::Seed : EPCGPointNativeProperties::Transform);
 			NumSamples = PointDataFacade->GetNum();
 		}
 

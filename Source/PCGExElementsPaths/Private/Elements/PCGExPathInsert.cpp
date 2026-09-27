@@ -5,9 +5,12 @@
 #include "PCGExVersion.h"
 
 #include "PCGParamData.h"
+#include "Algo/AnyOf.h"
 #include "Algo/RemoveIf.h"
 #include "Async/ParallelFor.h"
 #include "Async/TaskGraphInterfaces.h"
+#include "Containers/ArrayView.h"
+#include "Core/PCGExMTCommon.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
@@ -665,7 +668,8 @@ namespace PCGExPathInsert
 		UPCGBasePointData* OutPoints = PointIO->GetOut();
 		UPCGMetadata* Metadata = OutPoints->Metadata;
 
-		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutPoints, NumOutputPoints, InPoints->GetAllocatedProperties());
+		// Inserted points get their own location and seed even when the input's are uniform (unallocated).
+		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutPoints, NumOutputPoints, InPoints->GetAllocatedProperties() | EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::Seed);
 
 		TConstPCGValueRange<int64> InMetadataEntries = InPoints->GetConstMetadataEntryValueRange();
 		TPCGValueRange<int64> OutMetadataEntries = OutPoints->GetMetadataEntryValueRange();
@@ -768,8 +772,13 @@ namespace PCGExPathInsert
 		ForwardHandlers.Init(nullptr, NumTargets);
 		Context->TargetsHandler->ForEachTarget([&](const TSharedRef<PCGExData::FFacade>& InTarget, const int32 Index)
 		{
-			ForwardHandlers[Index] = Settings->TargetForwarding.TryGetHandler(InTarget, PointDataFacade, false);
+			ForwardHandlers[Index] = Settings->TargetForwarding.TryGetHandler(InTarget, PointDataFacade, PCGExData::EForwardDomain::Inherit);
 		});
+
+		if (Algo::AnyOf(ForwardHandlers))
+		{
+			ForwardSourceRows.Init(-1, NumOutputPoints);
+		}
 
 		// Tag output
 		if (Settings->bTagIfHasInserts)
@@ -826,16 +835,13 @@ namespace PCGExPathInsert
 					DirectionWriter->SetValue(i, Direction);
 				}
 
-				if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[Insert.TargetIOIndex])
-				{
-					Handler->Forward(Insert.TargetPointIndex, i);
-				}
-
 				if (i > 0)
 				{
 					PreMetrics.Add(Position);
 				}
 			}
+
+			ForwardInserts(PrePathInserts, 0);
 
 			PreMetrics.Add(FirstPointPos);
 
@@ -894,13 +900,10 @@ namespace PCGExPathInsert
 					DirectionWriter->SetValue(InsertIndex, Direction);
 				}
 
-				if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[Insert.TargetIOIndex])
-				{
-					Handler->Forward(Insert.TargetPointIndex, InsertIndex);
-				}
-
 				PostMetrics.Add(Position);
 			}
+
+			ForwardInserts(PostPathInserts, LastPointOutIdx + 1);
 
 			if (NumPostInserts > 1)
 			{
@@ -994,13 +997,11 @@ namespace PCGExPathInsert
 					DirectionWriter->SetValue(InsertIndex, Direction);
 				}
 
-				if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[Insert.TargetIOIndex])
-				{
-					Handler->Forward(Insert.TargetPointIndex, InsertIndex);
-				}
-
 				Metrics.Add(Position);
 			}
+
+			// This edge owns [OutStartIdx + 1, OutStartIdx + 1 + NumInserts): disjoint from every other edge's run.
+			ForwardInserts(EI.Inserts, OutStartIdx + 1);
 
 			Metrics.Add(EdgeEnd);
 
@@ -1011,6 +1012,40 @@ namespace PCGExPathInsert
 				PointDataFacade->GetOutPoint(EndPointIndex),
 				SubScope,
 				Metrics);
+		}
+	}
+
+	void FProcessor::ForwardInserts(const TConstArrayView<FInsertCandidate> Inserts, const int32 OutStart)
+	{
+		if (ForwardSourceRows.IsEmpty())
+		{
+			return;
+		}
+
+		const int32 NumInserts = Inserts.Num();
+		for (int32 i = 0; i < NumInserts; i++)
+		{
+			ForwardSourceRows[OutStart + i] = Inserts[i].TargetPointIndex;
+		}
+
+		// One scoped call per run of consecutive inserts sharing a target IO, in output order, so a single-slot
+		// (@Data) writer still ends up holding the last forwarded row.
+		int32 RunStart = 0;
+		while (RunStart < NumInserts)
+		{
+			const int32 TargetIOIndex = Inserts[RunStart].TargetIOIndex;
+			int32 RunEnd = RunStart + 1;
+			while (RunEnd < NumInserts && Inserts[RunEnd].TargetIOIndex == TargetIOIndex)
+			{
+				RunEnd++;
+			}
+
+			if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = ForwardHandlers[TargetIOIndex])
+			{
+				Handler->ForwardScoped(PCGExMT::FScope(OutStart + RunStart, RunEnd - RunStart), ForwardSourceRows);
+			}
+
+			RunStart = RunEnd;
 		}
 	}
 
