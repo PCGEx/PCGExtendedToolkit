@@ -149,7 +149,6 @@ namespace PCGExProjection
 		TSharedPtr<PCGExSampling::FNormalToDensity> NormalToDensity;
 
 		bool bPrune = false;
-		int8 PruneFiltered = 0;
 
 		bool InitForwarding();
 

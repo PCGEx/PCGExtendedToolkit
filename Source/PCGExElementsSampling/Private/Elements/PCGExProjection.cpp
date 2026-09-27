@@ -218,7 +218,6 @@ namespace PCGExProjection
 		if (bPrune)
 		{
 			ProjectionMask.SetNumUninitialized(PointDataFacade->GetNum());
-			PruneFiltered = Settings->bProcessFilteredOutAsFails ? 0 : 1;
 		}
 
 		if (Context->bWriteSuccess)
@@ -317,14 +316,32 @@ namespace PCGExProjection
 
 		const UPCGSpatialData* Target = Context->ProjectionTarget;
 		const FPCGProjectionParams& ProjectionParams = Context->ProjectionParams;
+		const bool bProcessFilteredOutAsFails = Settings->bProcessFilteredOutAsFails;
+
+		auto ProjectionFailed = [&](const int32 Index)
+		{
+			if (bPrune)
+			{
+				ProjectionMask[Index] = 0;
+			}
+
+			if (SuccessWriter)
+			{
+				SuccessWriter->SetValue(Index, false);
+			}
+		};
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			if (!PointFilterCache[Index])
 			{
-				if (bPrune)
+				if (bProcessFilteredOutAsFails)
 				{
-					ProjectionMask[Index] = PruneFiltered;
+					ProjectionFailed(Index);
+				}
+				else if (bPrune)
+				{
+					ProjectionMask[Index] = 1;
 				}
 				continue;
 			}
@@ -333,21 +350,20 @@ namespace PCGExProjection
 			const FBox LocalBounds = PCGPointHelpers::GetLocalBounds(InBoundsMin[Index], InBoundsMax[Index]);
 
 			FPCGPoint Projected;
-			const bool bSuccess = Target->ProjectPoint(InTransform, LocalBounds, ProjectionParams, Projected, SampledMetadata);
+			if (!Target->ProjectPoint(InTransform, LocalBounds, ProjectionParams, Projected, SampledMetadata))
+			{
+				ProjectionFailed(Index);
+				continue;
+			}
 
 			if (bPrune)
 			{
-				ProjectionMask[Index] = bSuccess ? 1 : 0;
+				ProjectionMask[Index] = 1;
 			}
 
 			if (SuccessWriter)
 			{
-				SuccessWriter->SetValue(Index, bSuccess);
-			}
-
-			if (!bSuccess)
-			{
-				continue;
+				SuccessWriter->SetValue(Index, true);
 			}
 
 			if (AttributesForward)

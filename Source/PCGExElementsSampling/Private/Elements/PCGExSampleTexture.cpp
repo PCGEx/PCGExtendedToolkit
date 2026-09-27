@@ -141,7 +141,8 @@ namespace PCGExSampleTexture
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		SamplingMask.Init(false, PointDataFacade->GetNum());
+		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
+		SamplingMask.Init(1, PointDataFacade->GetNum());
 
 		UVGetter = PointDataFacade->GetBroadcaster<FVector2D>(Settings->UVSource, true);
 

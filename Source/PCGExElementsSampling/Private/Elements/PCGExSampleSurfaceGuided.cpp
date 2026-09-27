@@ -242,7 +242,8 @@ namespace PCGExSampleSurfaceGuided
 
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
-		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
+		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
+		SamplingMask.Init(1, PointDataFacade->GetNum());
 		if (SurfacesForward)
 		{
 			ForwardRows.Init(-1, PointDataFacade->GetNum());
@@ -444,6 +445,7 @@ namespace PCGExSampleSurfaceGuided
 				PCGEX_OUTPUT_VALUE(Normal, Index, Direction*-1)
 				PCGEX_OUTPUT_VALUE(LookAt, Index, Direction)
 				PCGEX_OUTPUT_VALUE(Distance, Index, MaxDistance)
+				PCGEX_OUTPUT_VALUE(Success, Index, false)
 				if (TexParamLookup)
 				{
 					TexParamLookup->ExtractParams(Index, nullptr);
