@@ -228,7 +228,8 @@ namespace PCGExSampleNearestSurface
 			ForwardRows.Init(-1, PointDataFacade->GetNum());
 		}
 
-		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
+		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
+		SamplingMask.Init(1, PointDataFacade->GetNum());
 
 		{
 			const TSharedRef<PCGExData::FFacade>& OutputFacade = PointDataFacade;
@@ -273,7 +274,7 @@ namespace PCGExSampleNearestSurface
 			PCGEX_OUTPUT_VALUE(LookAt, Index, Direction)
 			PCGEX_OUTPUT_VALUE(Distance, Index, MaxDistance)
 			//PCGEX_OUTPUT_VALUE(IsInside, Index, false)
-			//PCGEX_OUTPUT_VALUE(Success, Index, false)
+			PCGEX_OUTPUT_VALUE(Success, Index, false)
 			//PCGEX_OUTPUT_VALUE(ActorReference, Index, TEXT(""))
 			//PCGEX_OUTPUT_VALUE(PhysMat, Index, TEXT(""))
 		};
