@@ -80,10 +80,11 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 	PCGEX_FWD(ApplySampling)
 	Context->ApplySampling.Init();
 
-	// Position is always projected (pruning and look-at need it). Rotation/scale only when a component is applied,
-	// so targets can skip that work (e.g. landscape normal reconstruction). Attribute/color params are unused by ProjectPoint.
+	// Position is always projected (pruning and look-at need it). Rotation only when a component is applied or
+	// normal-to-density reads it, scale only when applied, so targets can skip that work (e.g. landscape normals).
+	// Attribute/color params are unused by ProjectPoint.
 	Context->ProjectionParams.bProjectPositions = true;
-	Context->ProjectionParams.bProjectRotations = !Context->ApplySampling.TrRotComponents.IsEmpty();
+	Context->ProjectionParams.bProjectRotations = Settings->bNormalToDensity || !Context->ApplySampling.TrRotComponents.IsEmpty();
 	Context->ProjectionParams.bProjectScales = !Context->ApplySampling.TrScaComponents.IsEmpty();
 
 	// Invalid name : warn & disable the output, same as the other sampling nodes
@@ -123,7 +124,7 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 		(void)PointTarget->GetPointOctree();
 	}
 
-	if (!Context->ApplySampling.WantsApply() && !Settings->bPruneFailedProjections && !Context->bWriteSuccess && !Context->bForwardAttributes)
+	if (!Context->ApplySampling.WantsApply() && !Settings->bPruneFailedProjections && !Context->bWriteSuccess && !Context->bForwardAttributes && !Settings->bNormalToDensity)
 	{
 		PCGE_LOG(Warning, GraphAndLog, FTEXT("Nothing to apply, prune, forward or write : the node has no effect."));
 	}
@@ -189,16 +190,35 @@ namespace PCGExProjection
 		const bool bInputIsTarget = PointDataFacade->GetIn() == Context->ProjectionTarget;
 		PCGEX_INIT_IO(PointDataFacade->Source, bInputIsTarget ? PCGExData::EIOInit::Duplicate : Settings->GetMainDataInitializationPolicy())
 
-		// Only the transform is written, and only if something is applied
+		// Only what gets written is allocated
+		EPCGPointNativeProperties AllocateFor = EPCGPointNativeProperties::None;
+
 		if (Context->ApplySampling.WantsApply())
 		{
-			PointDataFacade->GetOut()->AllocateProperties(EPCGPointNativeProperties::Transform);
+			AllocateFor |= EPCGPointNativeProperties::Transform;
+		}
+
+		if (Settings->bNormalToDensity)
+		{
+			NormalToDensity = MakeShared<PCGExSampling::FNormalToDensity>();
+			if (!NormalToDensity->Init(Settings->NormalToDensity, PointDataFacade))
+			{
+				return false;
+			}
+
+			AllocateFor |= EPCGPointNativeProperties::Density;
+		}
+
+		if (AllocateFor != EPCGPointNativeProperties::None)
+		{
+			PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 		}
 
 		bPrune = Settings->bPruneFailedProjections;
 		if (bPrune)
 		{
 			ProjectionMask.SetNumUninitialized(PointDataFacade->GetNum());
+			PruneFiltered = Settings->bProcessFilteredOutAsFails ? 0 : 1;
 		}
 
 		if (Context->bWriteSuccess)
@@ -270,7 +290,9 @@ namespace PCGExProjection
 		const bool bApply = ApplySampling.WantsApply();
 		const bool bLookAt = ApplySampling.bApplyLookAt;
 
-		if (!bApply && !bPrune && !SuccessWriter && !AttributesForward)
+		const PCGExSampling::FNormalToDensity* Density = NormalToDensity.Get();
+
+		if (!bApply && !bPrune && !SuccessWriter && !AttributesForward && !Density)
 		{
 			// Nothing would consume the projection result
 			return;
@@ -282,6 +304,16 @@ namespace PCGExProjection
 		TConstPCGValueRange<FVector> InBoundsMin = InPointData->GetConstBoundsMinValueRange();
 		TConstPCGValueRange<FVector> InBoundsMax = InPointData->GetConstBoundsMaxValueRange();
 		TPCGValueRange<FTransform> OutTransforms = bApply ? OutPointData->GetTransformValueRange(false) : TPCGValueRange<FTransform>();
+		TPCGValueRange<float> OutDensities = Density ? OutPointData->GetDensityValueRange(false) : TPCGValueRange<float>();
+
+		PCGExSampling::FNormalToDensity::FScopeView DensityView;
+		if (Density)
+		{
+			Density->PrepareScope(Scope, DensityView);
+		}
+
+		// Rotation projected for the normal alone must not reach the look-at fallback.
+		const bool bRestoreRotation = Density && ApplySampling.TrRotComponents.IsEmpty();
 
 		const UPCGSpatialData* Target = Context->ProjectionTarget;
 		const FPCGProjectionParams& ProjectionParams = Context->ProjectionParams;
@@ -290,10 +322,9 @@ namespace PCGExProjection
 		{
 			if (!PointFilterCache[Index])
 			{
-				// Filtered out : left untouched, never pruned
 				if (bPrune)
 				{
-					ProjectionMask[Index] = 1;
+					ProjectionMask[Index] = PruneFiltered;
 				}
 				continue;
 			}
@@ -324,9 +355,19 @@ namespace PCGExProjection
 				SampledEntries[Index] = Projected.MetadataEntry;
 			}
 
+			if (Density)
+			{
+				Density->Apply(DensityView, Index - Scope.Start, Projected.Transform.GetUnitAxis(EAxis::Z), OutDensities[Index]);
+			}
+
 			if (!bApply)
 			{
 				continue;
+			}
+
+			if (bRestoreRotation)
+			{
+				Projected.Transform.SetRotation(InTransform.GetRotation());
 			}
 
 			// Look-at from the original point toward its projected location (X forward), same convention as

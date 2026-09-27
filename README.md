@@ -3,7 +3,7 @@
 <a href="https://github.com/PCGEx/PCGExtendedToolkit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
 <a href="https://github.com/PCGEx/PCGExtendedToolkit/stargazers"><img src="https://img.shields.io/github/stars/PCGEx/PCGExtendedToolkit?style=social" alt="Stars" /></a>
 <a href="https://github.com/PCGEx/PCGExtendedToolkit/network/members"><img src="https://img.shields.io/github/forks/PCGEx/PCGExtendedToolkit?style=social" alt="Forks" /></a>
-<a href="https://deepwiki.com/Nebukam/PCGExtendedToolkit"><img src="https://deepwiki.com/badge.svg" alt="Deep Wiki" /></a>
+<a href="https://deepwiki.com/PCGEx/PCGExtendedToolkit"><img src="https://deepwiki.com/badge.svg" alt="Deep Wiki" /></a>
 </p>
 
 <p align="center">

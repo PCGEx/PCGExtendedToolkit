@@ -11,6 +11,7 @@
 #include "Data/Utils/PCGExDataForwardDetails.h"
 #include "Elements/PCGProjectionParams.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
+#include "Sampling/PCGExNormalToDensityDetails.h"
 
 #include "PCGExProjection.generated.h"
 
@@ -70,10 +71,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	FPCGExApplySamplingDetails ApplySampling;
 
-	/** If enabled, points the target rejects (outside the target, no hit...) are removed from the output. Otherwise they are left untouched. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	bool bPruneFailedProjections = true;
-
 	/** Write whether the projection was successful or not to a boolean attribute. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteSuccess = false;
@@ -82,11 +79,27 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="Success", PCG_Overridable, EditCondition="bWriteSuccess"))
 	FName SuccessAttributeName = FName("bProjectionSuccess");
 
+	/** Write point density from how well the projected normal aligns with a direction. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bNormalToDensity = false;
+
+	/** Reads the projected normal whether or not rotation is applied. Failed and filtered out points keep their density. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, EditCondition="bNormalToDensity"))
+	FPCGExNormalToDensityDetails NormalToDensity;
+
 	/** Which of the attributes the target writes during projection (landscape layer weights, actor reference, point attributes...)
 	 * are forwarded onto the projected points. Filtered-out and failed points keep their existing values. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Forwarding", meta=(PCG_Overridable))
 	FPCGExForwardDetails AttributesForwarding;
 
+	/** If enabled, points the target rejects (outside the target, no hit...) are removed from the output. Otherwise they are left untouched. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
+	bool bPruneFailedProjections = true;
+	
+	/** If enabled, mark filtered out points as "failed". Otherwise, just skip the processing altogether. Only uncheck this if you want to ensure existing attribute values are preserved. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable), AdvancedDisplay)
+	bool bProcessFilteredOutAsFails = true;
+	
 private:
 	friend class FPCGExProjectionElement;
 };
@@ -133,8 +146,10 @@ namespace PCGExProjection
 		/** Entry each point got, PCGInvalidEntryKey when filtered out or rejected; forwarded per scope at the end of ProcessPoints. */
 		TArray<PCGMetadataEntryKey> SampledEntries;
 		TSharedPtr<PCGExData::FDataForwardHandler> AttributesForward;
+		TSharedPtr<PCGExSampling::FNormalToDensity> NormalToDensity;
 
 		bool bPrune = false;
+		int8 PruneFiltered = 0;
 
 		bool InitForwarding();
 

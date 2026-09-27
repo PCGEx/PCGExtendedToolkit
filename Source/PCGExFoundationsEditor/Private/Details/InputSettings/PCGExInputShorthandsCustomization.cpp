@@ -246,6 +246,46 @@ void FPCGExInputShorthandCustomization::CustomizeHeader(
 
 	PCGExInputShorthandsCustomization::ForwardNumericMetaData(PropertyHandle, ConstantHandle);
 
+	const TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+		[
+			SNew(SBox)
+			.Visibility(
+				MakeAttributeLambda(
+					[InputHandle]()
+					{
+						uint8 V = 0;
+						InputHandle->GetValue(V);
+						return V ? EVisibility::Collapsed : EVisibility::Visible;
+					}))
+			[
+				CreateValueWidget(ConstantHandle)
+			]
+		]
+		+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
+		[
+			SNew(SBox)
+			.Visibility(
+				MakeAttributeLambda(
+					[InputHandle]()
+					{
+						uint8 V = 0;
+						InputHandle->GetValue(V);
+						return V ? EVisibility::Visible : EVisibility::Collapsed;
+					}))
+			[
+				CreateAttributeWidget(AttributeHandle)
+			]
+		];
+
+	AddInlineControls(PropertyHandle, Row);
+
+	// Always last, so the options sit at the same spot on every shorthand row.
+	Row->AddSlot().Padding(1).AutoWidth().VAlign(VAlign_Center)
+	[
+		PCGExInputShorthandsCustomization::CreateOptionsPopover(InputHandle, CleanupHandle)
+	];
+
 	HeaderRow.NameContent()
 		[
 			PropertyHandle->CreatePropertyNameWidget(PCGExInputShorthandsCustomization::BoolAwareDisplayName(PropertyHandle))
@@ -253,41 +293,7 @@ void FPCGExInputShorthandCustomization::CustomizeHeader(
 		.ValueContent()
 		.MinDesiredWidth(400)
 		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-			[
-				SNew(SBox)
-				.Visibility(
-					MakeAttributeLambda(
-						[InputHandle]()
-						{
-							uint8 V = 0;
-							InputHandle->GetValue(V);
-							return V ? EVisibility::Collapsed : EVisibility::Visible;
-						}))
-				[
-					CreateValueWidget(ConstantHandle)
-				]
-			]
-			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-			[
-				SNew(SBox)
-				.Visibility(
-					MakeAttributeLambda(
-						[InputHandle]()
-						{
-							uint8 V = 0;
-							InputHandle->GetValue(V);
-							return V ? EVisibility::Visible : EVisibility::Collapsed;
-						}))
-				[
-					CreateAttributeWidget(AttributeHandle)
-				]
-			]
-			+ SHorizontalBox::Slot().Padding(1).AutoWidth().VAlign(VAlign_Center)
-			[
-				PCGExInputShorthandsCustomization::CreateOptionsPopover(InputHandle, CleanupHandle)
-			]
+			Row
 		];
 }
 
@@ -377,65 +383,14 @@ TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandDirectionCustomizatio
 	return MakeShareable(new FPCGExInputShorthandDirectionCustomization());
 }
 
-void FPCGExInputShorthandDirectionCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, class FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils)
+void FPCGExInputShorthandDirectionCustomization::AddInlineControls(const TSharedRef<IPropertyHandle>& PropertyHandle, const TSharedRef<SHorizontalBox>& Row)
 {
-	TSharedPtr<IPropertyHandle> InputHandle = PropertyHandle->GetChildHandle(FName("Input"));
-	TSharedPtr<IPropertyHandle> ConstantHandle = PropertyHandle->GetChildHandle(FName("Constant"));
-	TSharedPtr<IPropertyHandle> AttributeHandle = PropertyHandle->GetChildHandle(FName("Attribute"));
-	TSharedPtr<IPropertyHandle> FlipHandle = PropertyHandle->GetChildHandle(FName("bFlip"));
-	TSharedPtr<IPropertyHandle> CleanupHandle = PropertyHandle->GetChildHandle(FName("bCleanupAttribute"));
+	const TSharedPtr<IPropertyHandle> FlipHandle = PropertyHandle->GetChildHandle(FName("bFlip"));
 
-	HeaderRow.NameContent()
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().Padding(1).AutoWidth().VAlign(VAlign_Center)
-			[
-				PCGExInputShorthandsCustomization::CreateOptionsPopover(InputHandle, CleanupHandle)
-			]
-			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-			[
-				PropertyHandle->CreatePropertyNameWidget(PCGExInputShorthandsCustomization::BoolAwareDisplayName(PropertyHandle))
-			]
-		]
-		.ValueContent()
-		.MinDesiredWidth(400)
-		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-			[
-				SNew(SBox)
-				.Visibility(
-					MakeAttributeLambda(
-						[InputHandle]()
-						{
-							uint8 V = 0;
-							InputHandle->GetValue(V);
-							return V ? EVisibility::Collapsed : EVisibility::Visible;
-						}))
-				[
-					CreateValueWidget(ConstantHandle)
-				]
-			]
-			+ SHorizontalBox::Slot().Padding(1).FillWidth(1)
-			[
-				SNew(SBox)
-				.Visibility(
-					MakeAttributeLambda(
-						[InputHandle]()
-						{
-							uint8 V = 0;
-							InputHandle->GetValue(V);
-							return V ? EVisibility::Visible : EVisibility::Collapsed;
-						}))
-				[
-					CreateAttributeWidget(AttributeHandle)
-				]
-			]
-			+ SHorizontalBox::Slot().Padding(1).AutoWidth()
-			[
-				FlipHandle->CreatePropertyValueWidget()
-			]
-		];
+	Row->AddSlot().Padding(1).AutoWidth()
+	[
+		FlipHandle->CreatePropertyValueWidget()
+	];
 }
 
 TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandRotatorCustomization::MakeInstance()

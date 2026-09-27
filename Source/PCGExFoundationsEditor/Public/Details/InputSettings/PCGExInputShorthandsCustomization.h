@@ -8,6 +8,7 @@
 
 
 class SWidget;
+class SHorizontalBox;
 
 namespace PCGExInputShorthandsCustomization
 {
@@ -32,6 +33,11 @@ public:
 
 	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle);
 	virtual TSharedRef<SWidget> CreateAttributeWidget(TSharedPtr<IPropertyHandle> AttributeHandle);
+
+	/** Extra controls for the value row, placed after the value and before the options popover. */
+	virtual void AddInlineControls(const TSharedRef<IPropertyHandle>& PropertyHandle, const TSharedRef<SHorizontalBox>& Row)
+	{
+	}
 };
 
 class FPCGExInputShorthandVectorCustomization : public FPCGExInputShorthandCustomization
@@ -45,10 +51,7 @@ class FPCGExInputShorthandDirectionCustomization : public FPCGExInputShorthandVe
 {
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
-	virtual void CustomizeHeader(
-		TSharedRef<IPropertyHandle> PropertyHandle,
-		class FDetailWidgetRow& HeaderRow,
-		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+	virtual void AddInlineControls(const TSharedRef<IPropertyHandle>& PropertyHandle, const TSharedRef<SHorizontalBox>& Row) override;
 };
 
 class FPCGExInputShorthandRotatorCustomization : public FPCGExInputShorthandCustomization
