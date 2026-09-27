@@ -61,6 +61,61 @@ namespace PCGExRandomHelpers
 		return Seed;
 	}
 
+	void FSeedResolver::Init(const uint8 Flags, const int32 InLocal, const UPCGSettings* Settings, const UPCGComponent* Component)
+	{
+		bLocal = (Flags & static_cast<uint8>(EPCGExSeedComponents::Local)) != 0;
+		Local = InLocal;
+
+		Stage = EStage::None;
+		SettingsSeed = 0;
+		ComponentSeed = 0;
+
+		const uint8 StageFlags = static_cast<uint8>(EPCGExSeedComponents::Settings) | static_cast<uint8>(EPCGExSeedComponents::Component);
+		if ((Flags & StageFlags) == 0)
+		{
+			return;
+		}
+
+		if (Settings)
+		{
+			SettingsSeed = Settings->Seed;
+		}
+		if (Component)
+		{
+			ComponentSeed = Component->Seed;
+		}
+
+		if (Settings && Component)
+		{
+			Stage = EStage::Both;
+		}
+		else if (Settings)
+		{
+			Stage = EStage::Settings;
+		}
+		else if (Component)
+		{
+			Stage = EStage::Component;
+		}
+	}
+
+	int32 FSeedResolver::Resolve(const int32 BaseSeed) const
+	{
+		const int32 Seed = bLocal ? PCGHelpers::ComputeSeed(BaseSeed, Local) : BaseSeed;
+
+		switch (Stage)
+		{
+		case EStage::Both:
+			return PCGHelpers::ComputeSeed(Seed, SettingsSeed, ComponentSeed);
+		case EStage::Settings:
+			return PCGHelpers::ComputeSeed(Seed, SettingsSeed);
+		case EStage::Component:
+			return PCGHelpers::ComputeSeed(Seed, ComponentSeed);
+		default:
+			return Seed;
+		}
+	}
+
 	FRandomStream GetRandomStreamFromPoint(const int32 BaseSeed, const int32 Offset, const UPCGSettings* Settings, const UPCGComponent* Component)
 	{
 		return FRandomStream(GetSeed(BaseSeed, Offset, Settings, Component));

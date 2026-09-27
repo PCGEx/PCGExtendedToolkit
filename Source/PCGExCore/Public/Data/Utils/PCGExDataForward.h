@@ -10,6 +10,11 @@
 
 class UPCGBasePointData;
 
+namespace PCGExMT
+{
+	struct FScope;
+}
+
 namespace PCGExData
 {
 	struct FConstPoint;
@@ -51,6 +56,10 @@ namespace PCGExData
 		}
 
 		void Forward(const int32 SourceIndex, const int32 TargetIndex);
+
+		// Prepared-target variant: target i in Scope receives source row SourceIndexPerTarget[i]; a negative row leaves
+		// that target untouched. One type dispatch per attribute per scope, raw arrays on the Elements domain.
+		void ForwardScoped(const PCGExMT::FScope& Scope, TConstArrayView<int32> SourceIndexPerTarget);
 		void Forward(const int32 SourceIndex, const TSharedPtr<FFacade>& InTargetDataFacade);
 		void Forward(const int32 SourceIndex, const TSharedPtr<FFacade>& InTargetDataFacade, const TArray<int32>& Indices);
 		void Forward(const int32 SourceIndex, UPCGMetadata* InTargetMetadata);

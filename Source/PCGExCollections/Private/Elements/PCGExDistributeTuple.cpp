@@ -126,7 +126,7 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(DistributeTuple)
 
 namespace PCGExDistributeTuple
 {
-	bool FRowPicker::Init(const UPCGExDistributeTupleSettings* InSettings)
+	bool FRowPicker::Init(const UPCGExDistributeTupleSettings* InSettings, const UPCGComponent* InComponent)
 	{
 		Settings = InSettings;
 
@@ -139,6 +139,9 @@ namespace PCGExDistributeTuple
 		default:
 			return false;
 		}
+
+		// Parity: Resolve must equal GetSeed(BaseSeed, Settings->SeedComponents, Settings->LocalSeed, Settings, InComponent) for every Pick.
+		SeedResolver.Init(Settings->SeedComponents, Settings->LocalSeed, Settings, InComponent);
 
 		const int32 NumRows = Settings->Values.Num();
 		MaxRowIndex = NumRows - 1;
@@ -165,7 +168,7 @@ namespace PCGExDistributeTuple
 		return true;
 	}
 
-	int32 FRowPicker::Pick(const int32 Index, const int32 BaseSeed, const UPCGComponent* Component) const
+	int32 FRowPicker::Pick(const int32 Index, const int32 BaseSeed) const
 	{
 		switch (Settings->Distribution)
 		{
@@ -174,13 +177,13 @@ namespace PCGExDistributeTuple
 
 		case EPCGExDistribution::Random:
 			{
-				FRandomStream RandomStream(PCGExRandomHelpers::GetSeed(BaseSeed, Settings->SeedComponents, Settings->LocalSeed, Settings, Component));
+				FRandomStream RandomStream(SeedResolver.Resolve(BaseSeed));
 				return RandomStream.RandRange(0, MaxRowIndex);
 			}
 
 		case EPCGExDistribution::WeightedRandom:
 			{
-				FRandomStream RandomStream(PCGExRandomHelpers::GetSeed(BaseSeed, Settings->SeedComponents, Settings->LocalSeed, Settings, Component));
+				FRandomStream RandomStream(SeedResolver.Resolve(BaseSeed));
 				const int32 Roll = RandomStream.RandRange(1, TotalWeight);
 
 				// Binary search through cumulative weights
@@ -290,7 +293,6 @@ namespace PCGExDistributeTuple
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExDistributeTuple::WriteDataDomainOutputs);
 
-		const UPCGComponent* Component = Context->GetComponent();
 		const bool bSeedFromIndex = (Settings->SeedComponents & static_cast<uint8>(EPCGExSeedComponents::Local)) != 0;
 
 		bool bWriteRowIndex = Settings->bOutputRowIndex;
@@ -323,7 +325,7 @@ namespace PCGExDistributeTuple
 
 			// Local swaps the point seed for the input index; without it every input rolls the same row.
 			const int32 BaseSeed = bSeedFromIndex ? PCGExRandomHelpers::SeedFromIndex(IO->IOIndex) : 0;
-			const int32 PickedRow = Context->RowPicker.Pick(IO->IOIndex, BaseSeed, Component);
+			const int32 PickedRow = Context->RowPicker.Pick(IO->IOIndex, BaseSeed);
 			const bool bPicked = PickedRow != INDEX_NONE;
 
 			WriteOptional(OutData, bPicked, bWriteRowIndex, Settings->RowIndexAttributeName, PickedRow);
@@ -406,7 +408,7 @@ bool FPCGExDistributeTupleElement::Boot(FPCGExContext* InContext) const
 		PCGEX_VALIDATE_NAME(Settings->WeightAttributeName)
 	}
 
-	if (!Context->RowPicker.Init(Settings))
+	if (!Context->RowPicker.Init(Settings, Context->GetComponent()))
 	{
 		PCGE_LOG(Error, GraphAndLog, FText::Format(FTEXT("Unresolvable Distribution ({0})."), FText::AsNumber(static_cast<int32>(Settings->Distribution))));
 		return false;
@@ -552,12 +554,11 @@ namespace PCGExDistributeTuple
 
 		const UPCGBasePointData* OutPointData = PointDataFacade->GetOut();
 		const TConstPCGValueRange<int32> Seeds = OutPointData->GetConstSeedValueRange();
-		const UPCGComponent* Component = Context->GetComponent();
 		const FRowPicker& RowPicker = Context->RowPicker;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			const int32 PickedRow = RowPicker.Pick(Index, Seeds[Index], Component);
+			const int32 PickedRow = RowPicker.Pick(Index, Seeds[Index]);
 			if (PickedRow == INDEX_NONE)
 			{
 				continue;

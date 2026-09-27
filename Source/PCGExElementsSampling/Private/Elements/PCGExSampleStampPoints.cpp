@@ -216,6 +216,8 @@ bool FPCGExSampleStampPointsElement::AdvanceWork(FPCGExContext* InContext, const
 					}
 
 					Context->TargetWeights.Add(Weight);
+					// Raw array only for a fully read Elements buffer: a sparse one is fetched per scope of another data.
+					Context->TargetWeightData.Add(!Weight->IsSparse() && Weight->GetUnderlyingDomain() == PCGExData::EDomainType::Elements ? StaticCastSharedPtr<PCGExData::TArrayBuffer<double>>(Weight)->GetInValues()->GetData() : nullptr);
 				}
 
 				// Prep look up getters
@@ -485,6 +487,14 @@ namespace PCGExSampleStampPoints
 		const bool bProcessFilteredOutAsFails = Settings->bProcessFilteredOutAsFails;
 		const double DefaultDet = bSampleClosest ? TNumericLimits<double>::Max() : TNumericLimits<double>::Min();
 
+		// Raw input array for Elements-domain readers; single-value readers fall back to the virtual read.
+		const double* const* TargetWeightData = Context->TargetWeightData.GetData();
+		auto ReadTargetWeight = [&](const int32 IO, const int32 PointIndex) -> double
+		{
+			const double* Data = TargetWeightData[IO];
+			return Data ? Data[PointIndex] : Context->TargetWeights[IO]->Read(PointIndex);
+		};
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			if (!PointFilterCache[Index])
@@ -518,7 +528,7 @@ namespace PCGExSampleStampPoints
 			{
 				const double Width = Max - Min;
 				const double T = Width > 0 ? FMath::Clamp((Entry.Dist - Min) / Width, 0.0, 1.0) : 0.0;
-				const double Attr = bReadsAttr ? Context->TargetWeights[Entry.Target.IO]->Read(Entry.Target.Index) : 1.0;
+				const double Attr = bReadsAttr ? ReadTargetWeight(Entry.Target.IO, Entry.Target.Index) : 1.0;
 				Entry.Weight = bWeightUseAttr ? Attr : (1.0 - T) * Attr;
 			};
 
@@ -608,7 +618,7 @@ namespace PCGExSampleStampPoints
 				for (PCGExSampling::FSampleEntry& Entry : Acc.Entries)
 				{
 					const double T = Width > 0 ? FMath::Clamp((Entry.Dist - SampledMin) / Width, 0.0, 1.0) : 0.0;
-					const double Attr = bReadsAttr ? Context->TargetWeights[Entry.Target.IO]->Read(Entry.Target.Index) : 1.0;
+					const double Attr = bReadsAttr ? ReadTargetWeight(Entry.Target.IO, Entry.Target.Index) : 1.0;
 					Entry.Weight = bWeightUseAttr ? Attr : (1.0 - T) * Attr;
 				}
 			}

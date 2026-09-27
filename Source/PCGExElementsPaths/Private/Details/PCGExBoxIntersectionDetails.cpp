@@ -3,8 +3,11 @@
 
 #include "Details/PCGExBoxIntersectionDetails.h"
 
+#include "Algo/AnyOf.h"
 #include "Async/ParallelFor.h"
 #include "Blenders/PCGExMetadataBlender.h"
+#include "Containers/ArrayView.h"
+#include "Core/PCGExMTCommon.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataForward.h"
@@ -43,6 +46,11 @@ void FPCGExBoxIntersectionDetails::Init(const TSharedPtr<PCGExData::FFacade>& Po
 		IntersectionForwardHandlers[Index] = IntersectionForwarding.TryGetHandler(InTarget, PointDataFacade, PCGExData::EForwardDomain::Inherit);
 	});
 
+	if (Algo::AnyOf(IntersectionForwardHandlers))
+	{
+		ForwardSourceRows.Init(-1, PointDataFacade->GetOut()->GetNumPoints());
+	}
+
 #define PCGEX_LOCAL_DETAIL_WRITER(_NAME, _TYPE, _DEFAULT) if (bWrite##_NAME){ _NAME##Writer = PointDataFacade->GetWritable( _NAME##AttributeName, _DEFAULT, true, PCGExData::EBufferInit::Inherit); }
 	PCGEX_FOREACH_FIELD_INTERSECTION(PCGEX_LOCAL_DETAIL_WRITER)
 #undef PCGEX_LOCAL_DETAIL_WRITER
@@ -64,28 +72,60 @@ void FPCGExBoxIntersectionDetails::Mark(const TSharedRef<PCGExData::FPointIO>& I
 #undef PCGEX_LOCAL_DETAIL_MARK
 }
 
-void FPCGExBoxIntersectionDetails::SetIntersection(const int32 PointIndex, const PCGExMath::OBB::FCut& InCut) const
+void FPCGExBoxIntersectionDetails::SetIntersections(const int32 StartIndex, const TConstArrayView<PCGExMath::OBB::FCut> Cuts)
 {
-	check(InCut.Idx != -1)
-	if (const TSharedPtr<PCGExData::FDataForwardHandler>& IntersectionForwardHandler = IntersectionForwardHandlers[InCut.Idx])
+	const int32 NumCuts = Cuts.Num();
+
+	// Forwarding precedes the writers below so a same-named writer keeps the last word on each point.
+	if (!ForwardSourceRows.IsEmpty())
 	{
-		IntersectionForwardHandler->Forward(InCut.BoxIndex, PointIndex);
+		for (int32 j = 0; j < NumCuts; j++)
+		{
+			ForwardSourceRows[StartIndex + j] = Cuts[j].BoxIndex;
+		}
+
+		// One scoped call per run of consecutive cuts sharing a target IO, in output order, so a single-slot
+		// (@Data) writer still ends up holding the last forwarded row.
+		int32 RunStart = 0;
+		while (RunStart < NumCuts)
+		{
+			const int32 TargetIOIndex = Cuts[RunStart].Idx;
+			check(TargetIOIndex != -1)
+			int32 RunEnd = RunStart + 1;
+			while (RunEnd < NumCuts && Cuts[RunEnd].Idx == TargetIOIndex)
+			{
+				RunEnd++;
+			}
+
+			if (const TSharedPtr<PCGExData::FDataForwardHandler>& Handler = IntersectionForwardHandlers[TargetIOIndex])
+			{
+				Handler->ForwardScoped(PCGExMT::FScope(StartIndex + RunStart, RunEnd - RunStart), ForwardSourceRows);
+			}
+
+			RunStart = RunEnd;
+		}
 	}
 
-	if (IsIntersectionWriter)
+	for (int32 j = 0; j < NumCuts; j++)
 	{
-		IsIntersectionWriter->SetValue(PointIndex, true);
-	}
-	if (CutTypeWriter)
-	{
-		CutTypeWriter->SetValue(PointIndex, CutTypeValueMapping[InCut.Type]);
-	}
-	if (NormalWriter)
-	{
-		NormalWriter->SetValue(PointIndex, InCut.Normal);
-	}
-	if (BoundIndexWriter)
-	{
-		BoundIndexWriter->SetValue(PointIndex, InCut.BoxIndex);
+		const PCGExMath::OBB::FCut& Cut = Cuts[j];
+		const int32 PointIndex = StartIndex + j;
+
+		if (IsIntersectionWriter)
+		{
+			IsIntersectionWriter->SetValue(PointIndex, true);
+		}
+		if (CutTypeWriter)
+		{
+			CutTypeWriter->SetValue(PointIndex, CutTypeValueMapping[Cut.Type]);
+		}
+		if (NormalWriter)
+		{
+			NormalWriter->SetValue(PointIndex, Cut.Normal);
+		}
+		if (BoundIndexWriter)
+		{
+			BoundIndexWriter->SetValue(PointIndex, Cut.BoxIndex);
+		}
 	}
 }

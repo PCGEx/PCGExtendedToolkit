@@ -127,14 +127,16 @@ namespace PCGExDistributeTuple
 	class FRowPicker
 	{
 	public:
-		/** False when Distribution holds no known enumerator. */
-		bool Init(const UPCGExDistributeTupleSettings* InSettings);
+		/** False when Distribution holds no known enumerator. InComponent is the executing component (may be null). */
+		bool Init(const UPCGExDistributeTupleSettings* InSettings, const UPCGComponent* InComponent);
 
 		/** Index drives Index distribution, BaseSeed the random ones. INDEX_NONE when IndexSafety drops Index. */
-		int32 Pick(int32 Index, int32 BaseSeed, const UPCGComponent* Component) const;
+		int32 Pick(int32 Index, int32 BaseSeed) const;
 
 	protected:
 		const UPCGExDistributeTupleSettings* Settings = nullptr;
+		// Node seed components over Settings and the component handed to Init, resolved once for every Pick.
+		PCGExRandomHelpers::FSeedResolver SeedResolver;
 		TArray<int32> CumulativeWeights;
 		int32 TotalWeight = 0;
 		int32 MaxRowIndex = INDEX_NONE;

@@ -243,6 +243,10 @@ namespace PCGExSampleSurfaceGuided
 		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
 
 		SamplingMask.SetNumUninitialized(PointDataFacade->GetNum());
+		if (SurfacesForward)
+		{
+			ForwardRows.Init(-1, PointDataFacade->GetNum());
+		}
 
 		CrossAxis = Settings->CrossAxis.GetValueSetting();
 		if (!CrossAxis->Init(PointDataFacade))
@@ -407,7 +411,7 @@ namespace PCGExSampleSurfaceGuided
 
 		if (SurfacesForward && HitIndex)
 		{
-			SurfacesForward->Forward(*HitIndex, Index);
+			ForwardRows[Index] = *HitIndex;
 		}
 
 		FPlatformAtomics::InterlockedExchange(&bAnySuccess, 1);
@@ -734,6 +738,11 @@ namespace PCGExSampleSurfaceGuided
 			{
 				SamplingFailed();
 			}
+		}
+
+		if (SurfacesForward)
+		{
+			SurfacesForward->ForwardScoped(Scope, ForwardRows);
 		}
 	}
 

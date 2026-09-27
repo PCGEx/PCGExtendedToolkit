@@ -7,7 +7,7 @@
 void FPCGExNoise3DOperation::PostInit()
 {
 	FractalBounding = PCGExNoise3D::Math::CalcFractalBounding(Octaves, Persistence);
-	bApplyContrast = !FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER);
+	PreparedContrast.Init(Contrast, static_cast<int32>(ContrastCurve));
 	PostInitDerived();
 }
 

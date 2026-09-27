@@ -28,12 +28,16 @@ bool UPCGExNumericCompareNearestFilterFactory::BuildTargetCaches(FPCGExContext* 
 {
 	OperandA = MakeShared<TArray<TSharedPtr<PCGExData::TBuffer<double>>>>();
 	OperandA->Reserve(TargetsHandler->Num());
+	OperandAData = MakeShared<TArray<const double*>>();
+	OperandAData->Reserve(TargetsHandler->Num());
 
 	const bool bError = TargetsHandler->ForEachTarget([&](const TSharedRef<PCGExData::FFacade>& Target, const int32 TargetIndex, bool& bBreak)
 	{
 		// Always add (even on failure) to keep index alignment with TargetPt.IO.
 		TSharedPtr<PCGExData::TBuffer<double>> LocalOperandA = Target->GetBroadcaster<double>(Config.OperandA, true);
 		OperandA->Add(LocalOperandA);
+		// Raw array only for a fully read Elements buffer: a sparse one is fetched per scope of another data.
+		OperandAData->Add(LocalOperandA && !LocalOperandA->IsSparse() && LocalOperandA->GetUnderlyingDomain() == PCGExData::EDomainType::Elements ? StaticCastSharedPtr<PCGExData::TArrayBuffer<double>>(LocalOperandA)->GetInValues()->GetData() : nullptr);
 		if (!LocalOperandA)
 		{
 			bBreak = true;
@@ -123,14 +127,23 @@ bool PCGExPointFilter::FNumericCompareNearestFilter::Test(const int32 PointIndex
 		return false;
 	}
 
-	// OperandA: closest target's cached buffer via TargetPt.IO.
-	const PCGExData::TBuffer<double>* Buffer = (OperandA->GetData() + TargetPt.IO)->Get();
-	if (!Buffer)
+	// OperandA: closest target's cached values via TargetPt.IO; only non-Elements readers go through the virtual Read.
+	double A = 0;
+	if (const double* Data = *(OperandAData->GetData() + TargetPt.IO))
 	{
-		return bNoMatchResult;
+		A = Data[TargetPt.Index];
+	}
+	else
+	{
+		const PCGExData::TBuffer<double>* Buffer = (OperandA->GetData() + TargetPt.IO)->Get();
+		if (!Buffer)
+		{
+			return bNoMatchResult;
+		}
+		A = Buffer->Read(TargetPt.Index);
 	}
 
-	return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Buffer->Read(TargetPt.Index), B, TypedFilterFactory->Config.Tolerance);
+	return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
 }
 
 TArray<FPCGPinProperties> UPCGExNumericCompareNearestFilterProviderSettings::InputPinProperties() const

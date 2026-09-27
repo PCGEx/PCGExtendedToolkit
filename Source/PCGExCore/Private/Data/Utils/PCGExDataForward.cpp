@@ -153,6 +153,71 @@ namespace PCGExData
 		}
 	}
 
+	void FDataForwardHandler::ForwardScoped(const PCGExMT::FScope& Scope, const TConstArrayView<int32> SourceIndexPerTarget)
+	{
+		check(SourceIndexPerTarget.Num() >= Scope.End)
+
+		const int32 NumAttributes = Identities.Num();
+
+		for (int i = 0; i < NumAttributes; i++)
+		{
+			const FAttributeIdentity& Identity = Identities[i];
+			if (!Readers.IsValidIndex(i) || !Readers[i] || !Writers[i])
+			{
+				continue;
+			}
+
+			PCGExMetaHelpers::ExecuteWithRightType(Identity.UnderlyingType, [&](auto DummyValue)
+			{
+				using T = decltype(DummyValue);
+				TBuffer<T>* Reader = static_cast<TBuffer<T>*>(Readers[i].Get());
+				TBuffer<T>* Writer = static_cast<TBuffer<T>*>(Writers[i].Get());
+
+				if (Writer->GetUnderlyingDomain() != EDomainType::Elements)
+				{
+					// Single slot: the scope's last forwarded row wins, as it does when forwarding point by point.
+					for (int32 t = Scope.End - 1; t >= Scope.Start; t--)
+					{
+						const int32 Row = SourceIndexPerTarget[t];
+						if (Row >= 0)
+						{
+							Writer->SetValue(0, Reader->Read(Row));
+							break;
+						}
+					}
+					return;
+				}
+
+				T* Out = static_cast<TArrayBuffer<T>*>(Writer)->GetOutValues()->GetData();
+
+				// Raw array only for a fully read Elements reader; a sparse one is fetched per scope of another data.
+				if (Reader->GetUnderlyingDomain() == EDomainType::Elements && !Reader->IsSparse())
+				{
+					const T* In = static_cast<TArrayBuffer<T>*>(Reader)->GetInValues()->GetData();
+					for (int32 t = Scope.Start; t < Scope.End; t++)
+					{
+						const int32 Row = SourceIndexPerTarget[t];
+						if (Row >= 0)
+						{
+							Out[t] = In[Row];
+						}
+					}
+				}
+				else
+				{
+					for (int32 t = Scope.Start; t < Scope.End; t++)
+					{
+						const int32 Row = SourceIndexPerTarget[t];
+						if (Row >= 0)
+						{
+							Out[t] = Reader->Read(Row);
+						}
+					}
+				}
+			});
+		}
+	}
+
 	void FDataForwardHandler::Forward(const int32 SourceIndex, const TSharedPtr<FFacade>& InTargetDataFacade)
 	{
 		if (Identities.IsEmpty())

@@ -371,6 +371,8 @@ namespace PCGExPathInsert
 
 		// Target attribute forwarding
 		TArray<TSharedPtr<PCGExData::FDataForwardHandler>> ForwardHandlers;
+		// Source row per output point, -1 where nothing is forwarded; empty when no target has a handler.
+		TArray<int32> ForwardSourceRows;
 
 		// Output writers
 		TSharedPtr<PCGExData::TBuffer<bool>> FlagWriter;
@@ -380,6 +382,9 @@ namespace PCGExPathInsert
 		TSharedPtr<PCGExData::TBuffer<FVector>> DirectionWriter;
 
 		void GatherCandidates();
+
+		// Forwards Inserts[i]'s target row onto output point OutStart + i; the run must be contiguous and owned by the caller.
+		void ForwardInserts(TConstArrayView<FInsertCandidate> Inserts, int32 OutStart);
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

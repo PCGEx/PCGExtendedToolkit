@@ -545,7 +545,11 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 
 		if (Init == EBufferInit::Inherit)
 		{
-			GrabExistingValues();
+			// A just-created, unparented attribute holds only the default that OutValues was already filled with.
+			if (!this->bIsNewOutput || TypedOutAttribute->GetParent())
+			{
+				GrabExistingValues();
+			}
 		}
 		else if (!bHasIn && ExistingEntryCount != 0)
 		{
