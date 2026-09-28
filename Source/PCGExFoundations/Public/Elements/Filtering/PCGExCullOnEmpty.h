@@ -78,6 +78,13 @@ protected:
 
 class FPCGExCullOnEmptyElement final : public IPCGElement
 {
+public:
+	// IPCGElement defaults to false, and PrepareData then converts point inputs to legacy UPCGPointData.
+	virtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override
+	{
+		return true;
+	}
+
 protected:
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;
 };
