@@ -3,6 +3,8 @@
 
 #include "Data/PCGExDataHelpers.h"
 
+#include "PCGElement.h"
+#include "PCGExCoreMacros.h"
 #include "PCGExLog.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGExData.h"
@@ -17,6 +19,24 @@
 
 namespace PCGExData::Helpers
 {
+	void LogFailedRead(const TWeakPtr<FPCGContextHandle>& InContextHandle, const FName InDataClass, const FString& InSource, const EPCGMetadataTypes InReadAs)
+	{
+		const FText Message = FText::Format(
+			FTEXT("Failed to read \"{0}\" as {1} from {2}; default values are used instead."),
+			FText::FromString(InSource),
+			StaticEnum<EPCGMetadataTypes>()->GetDisplayNameTextByValue(static_cast<int64>(InReadAs)),
+			FText::FromName(InDataClass));
+
+		const FPCGContext::FSharedContext<FPCGExContext> SharedContext(InContextHandle);
+		if (FPCGExContext* Context = SharedContext.Get())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, Message);
+			return;
+		}
+
+		UE_LOG(LogPCGEx, Warning, TEXT("%s"), *Message.ToString());
+	}
+
 	void CopyBuffersValues(
 		const TSharedPtr<FFacade>& SourceFacade,
 		const TSharedPtr<FFacade>& TargetFacade,

@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 
 #include "Data/PCGBasePointData.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
@@ -19,9 +20,9 @@ namespace PCGExData::Helpers
 	inline TSharedPtr<IPCGAttributeAccessorKeys> GetKeys(const UPCGData* InData)
 	{
 		if (!InData) { return nullptr; }
-		if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(InData))
+		if (InData->IsA<UPCGBasePointData>())
 		{
-			return MakeShared<FPCGAttributeAccessorKeysPointIndices>(PointData);
+			return PCGExMetaHelpers::MakeConstKeys(InData);
 		}
 		if (InData->ConstMetadata())
 		{

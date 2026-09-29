@@ -15,18 +15,21 @@ namespace PCGExMetaHelpers
 {
 	namespace Internal
 	{
-		// Points and attribute sets keep their fast paths; everything else goes through the engine's per-class
-		// key factory, whose row count is the element count even before metadata entries are allocated.
+		// The engine registers accessors and keys per data class, and an accessor only reads through keys of its own
+		// family: asking its factory is what keeps the two paired. Attribute sets are the exception, their entries
+		// constructor and the factory's disagree on whether an empty set yields a default row.
 		bool UsesEngineKeyFactory(const UPCGData* InData)
 		{
-			return InData && !InData->IsA<UPCGBasePointData>() && !InData->IsA<UPCGParamData>();
+			return InData && !InData->IsA<UPCGParamData>();
 		}
 
-		// Attribute selection on the default (element) domain. Key creation ignores the attribute name;
-		// only the selection kind + domain drive which key class the factory returns.
-		FPCGAttributePropertySelector MakeElementKeySelector()
+		// Key creation ignores the name: selection kind + domain pick the key class. On point data the engine also
+		// allocates metadata entries for mutable keys built from an attribute selection, and only for those.
+		FPCGAttributePropertySelector MakeElementKeySelector(const bool bAllocateEntries = true)
 		{
-			return FPCGAttributePropertySelector::CreateAttributeSelector(FName(TEXT("Rows")));
+			return bAllocateEntries
+				       ? FPCGAttributePropertySelector::CreateAttributeSelector(FName(TEXT("Rows")))
+				       : FPCGAttributePropertySelector::CreatePointPropertySelector(EPCGPointProperties::Position);
 		}
 	}
 
@@ -46,17 +49,13 @@ namespace PCGExMetaHelpers
 		return 0;
 	}
 
-	TSharedPtr<IPCGAttributeAccessorKeys> MakeMutableKeys(UPCGData* InData)
+	TSharedPtr<IPCGAttributeAccessorKeys> MakeMutableKeys(UPCGData* InData, const bool bAllocateEntries)
 	{
-		if (UPCGBasePointData* PointData = Cast<UPCGBasePointData>(InData))
-		{
-			return MakeShared<FPCGAttributeAccessorKeysPointIndices>(PointData, true);
-		}
 		if (Internal::UsesEngineKeyFactory(InData))
 		{
-			// Mutable factory keys allocate element entries on the data (e.g. UPCGSplineData::AllocateMetadataEntries)
+			// Allocating keys create element entries on the data (e.g. UPCGSplineData::AllocateMetadataEntries)
 			// so subsequent per-row writes land on real entries instead of the invalid key.
-			if (TUniquePtr<IPCGAttributeAccessorKeys> Keys = PCGAttributeAccessorHelpers::CreateKeys(InData, Internal::MakeElementKeySelector()))
+			if (TUniquePtr<IPCGAttributeAccessorKeys> Keys = PCGAttributeAccessorHelpers::CreateKeys(InData, Internal::MakeElementKeySelector(bAllocateEntries)))
 			{
 				return MakeShareable(Keys.Release());
 			}
@@ -70,10 +69,6 @@ namespace PCGExMetaHelpers
 
 	TSharedPtr<IPCGAttributeAccessorKeys> MakeConstKeys(const UPCGData* InData)
 	{
-		if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(InData))
-		{
-			return MakeShared<FPCGAttributeAccessorKeysPointIndices>(PointData);
-		}
 		if (Internal::UsesEngineKeyFactory(InData))
 		{
 			// Same non-const return type as the entries path below, which is likewise a read-only key set

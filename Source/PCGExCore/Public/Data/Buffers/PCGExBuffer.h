@@ -32,6 +32,11 @@ namespace PCGExData
 		TSharedPtr<TArray<T>> OutValues;
 		TArray<PCGExValueHash> InHashes;
 
+		std::atomic<bool> bReadFailureReported{false};
+
+		// Warns once per buffer that a raw attribute read on InData returned false. Callable from any thread.
+		void ReportReadFailure(const UPCGData* InData);
+
 	public:
 		TArrayBuffer(const TSharedRef<FPointIO>& InSource, const FPCGAttributeIdentifier& InIdentifier);
 

@@ -176,6 +176,126 @@ def check_entry_range_noalloc(tree):
     return out
 
 
+POINT_KEYS = r"FPCGAttributeAccessorKeys(?:PointIndices|PointsSubset|Points)"
+POINT_KEYS_RES = (
+    re.compile(r"\bMake(?:Shared|Unique)\s*<\s*(?:const\s+)?(" + POINT_KEYS + r")\s*>\s*\("),
+    re.compile(r"\bnew\s+(?:const\s+)?(" + POINT_KEYS + r")\b"),
+    # A named local, or a temporary. The lookbehind drops qualified names and template arguments.
+    re.compile(r"(?<![\w:<])(" + POINT_KEYS + r")(?:\s+\w+)?\s*[({]"),
+)
+# Words that make the class name a base, a declaration or an operand already matched above.
+POINT_KEYS_NOT_AFTER = ("public", "protected", "private", "virtual", "class", "struct", "friend", "new")
+LAST_WORD_RE = re.compile(r"(\w+)\s*$")
+
+
+@check("point-keys-construction", "error",
+       "Point accessor keys built by hand instead of through PCGExMetaHelpers::MakeConstKeys / MakeMutableKeys. "
+       "The engine registers accessors and keys per data class, and an accessor only reads through keys of its "
+       "own family: legacy UPCGPointData accessors need point or generic-object keys, which "
+       "FPCGAttributeAccessorKeysPointIndices does not implement, so every $Property read returns false while "
+       "attribute reads keep working. The helpers ask the engine's key factory, which returns the class that "
+       "matches the data. Entry keys over an attribute set or an explicit entry list are not covered.")
+def check_point_keys_construction(tree):
+    out = []
+    for path in tree.files:
+        code = tree.code(path)
+        seen = set()
+        for rx in POINT_KEYS_RES:
+            for m in rx.finditer(code):
+                at = m.start(1)
+                if at in seen:
+                    continue
+                last = LAST_WORD_RE.search(code[max(0, at - 24):at])
+                if rx is POINT_KEYS_RES[2] and last and last.group(1) in POINT_KEYS_NOT_AFTER:
+                    continue
+                seen.add(at)
+                out.append(Finding("point-keys-construction", "error", path, code.count("\n", 0, at) + 1,
+                                   f"{m.group(1)} built by hand",
+                                   "build element keys with PCGExMetaHelpers::MakeConstKeys / MakeMutableKeys"))
+    return out
+
+
+# Engine element bases that leave SupportsBasePointDataInputs at its default, false.
+ELEMENT_ROOTS = ("IPCGElement", "IPCGElementWithCustomContext", "TPCGTimeSlicedElementBase",
+                 "FPCGPointOperationElementBase", "FPCGPointProcessingElementBase")
+CLASS_DECL_RE = re.compile(r"\b(?:class|struct)\s+(?:[A-Z][A-Z0-9_]*_API\s+)?(\w+)\s*(?:final\s*)?:(?!:)\s*([^{;]+?)\s*\{")
+BASE_NAME_RE = re.compile(r"(?:(?:public|protected|private|virtual)\s+)*([\w:]+)")
+TEMPLATE_ARGS_RE = re.compile(r"<[^<>]*>")
+SUPPORT_RE = re.compile(r"\b(?:SupportsBasePointDataInputs|PCGEX_SUPPORT_BASE_POINT_DATA)\b")
+
+
+def balanced_brace_close(text, open_pos):
+    """Index of the '}' closing the '{' at text[open_pos], or the end of text."""
+    depth = 0
+    for i in range(open_pos, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return len(text)
+
+
+def element_classes(tree):
+    """name -> (bases, declares support, path, line) for every class with a base list."""
+    classes = {}
+    for path in tree.files:
+        code = tree.code(path)
+        for m in CLASS_DECL_RE.finditer(code):
+            if code[max(0, m.start() - 8):m.start()].rstrip().endswith("enum"):
+                continue
+            bases_text = m.group(2)
+            while TEMPLATE_ARGS_RE.search(bases_text):
+                bases_text = TEMPLATE_ARGS_RE.sub("", bases_text)
+            bases = []
+            for part in bases_text.split(","):
+                b = BASE_NAME_RE.match(part.strip())
+                if b:
+                    bases.append(b.group(1).split("::")[-1])
+            body = code[m.end() - 1:balanced_brace_close(code, m.end() - 1)]
+            entry = (bases, bool(SUPPORT_RE.search(body)), path, code.count("\n", 0, m.start()) + 1)
+            # Keep the declaration that does declare support when a name is seen twice (#if branches).
+            if m.group(1) not in classes or entry[1]:
+                classes[m.group(1)] = entry
+    return classes
+
+
+def unsupported_root(name, classes, seen=()):
+    """The engine root this class reaches without any override on the way, or None."""
+    if name in seen or name not in classes:
+        return None
+    bases, supported = classes[name][0], classes[name][1]
+    if supported:
+        return None
+    for base in bases:
+        if base in ELEMENT_ROOTS:
+            return base
+        root = unsupported_root(base, classes, seen + (name,))
+        if root:
+            return root
+    return None
+
+
+@check("element-base-point-support", "error",
+       "An element that never overrides SupportsBasePointDataInputs. IPCGElement defaults it to false, and "
+       "PrepareData then converts every point input to legacy UPCGPointData before ExecuteInternal runs. The node "
+       "pays a full point copy per input, and a node that forwards its inputs hands legacy data to everything "
+       "downstream. Nothing in the element's own code shows it. Bases outside the scanned tree are trusted, so "
+       "scan a plugin together with the one that defines its element base.")
+def check_element_base_point_support(tree):
+    out = []
+    classes = element_classes(tree)
+    for name in sorted(classes):
+        root = unsupported_root(name, classes)
+        if not root:
+            continue
+        out.append(Finding("element-base-point-support", "error", classes[name][2], classes[name][3],
+                           f"{name} reaches {root} without overriding SupportsBasePointDataInputs",
+                           "override it to return true"))
+    return out
+
+
 # ----------------------------------------------------------------------- selftest
 
 # check -> {fixture path -> content}. A line carrying "// expect" must be reported, on that line, and
@@ -228,6 +348,126 @@ SELFTEST = {
             "\tMyGetMetadataEntryValueRange(false);\n"
             "\tData->GetMetadataEntryValueRangeCached(false);\n"
             "}\n"),
+    },
+    "point-keys-construction": {
+        "Plugin/Source/Mod/Private/PointKeysDefects.cpp": (
+            "void Defects(const UPCGBasePointData* Data, UPCGBasePointData* Mutable, TArrayView<FPCGPoint> View, TArrayView<const int32> Indices)\n"
+            "{\n"
+            "\tTSharedPtr<IPCGAttributeAccessorKeys> A = MakeShared<FPCGAttributeAccessorKeysPointIndices>(Data); // expect: FPCGAttributeAccessorKeysPointIndices built by hand\n"
+            "\tTUniquePtr<const IPCGAttributeAccessorKeys> B = MakeUnique<const FPCGAttributeAccessorKeysPointIndices>(Data); // expect\n"
+            "\tTSharedPtr<IPCGAttributeAccessorKeys> C = MakeShared< FPCGAttributeAccessorKeysPoints >(View); // expect: FPCGAttributeAccessorKeysPoints built by hand\n"
+            "\tTSharedPtr<IPCGAttributeAccessorKeys> D = MakeShared<FPCGAttributeAccessorKeysPointIndices>( // expect\n"
+            "\t\tMutable, false);\n"
+            "\tIPCGAttributeAccessorKeys* E = new FPCGAttributeAccessorKeysPointsSubset(Data, Indices); // expect: FPCGAttributeAccessorKeysPointsSubset built by hand\n"
+            "\tFPCGAttributeAccessorKeysPointIndices F(Data); // expect\n"
+            "\tconst FPCGAttributeAccessorKeysPoints G{View}; // expect\n"
+            "\tRead(FPCGAttributeAccessorKeysPointIndices(Data)); // expect\n"
+            "\tTSharedPtr<IPCGAttributeAccessorKeys> H = MakeShareable(new FPCGAttributeAccessorKeysPointIndices(Mutable, true)); // expect\n"
+            "\treturn FPCGAttributeAccessorKeysPoints(View); // expect\n"
+            "}\n"
+            "#define PCGEX_BAD_KEYS(_DATA) MakeShared<FPCGAttributeAccessorKeysPointIndices>(_DATA) // expect\n"),
+        "Plugin/Source/Mod/Private/PointKeysNegative.cpp": (
+            "class FPCGAttributeAccessorKeysPointIndices;\n"
+            "class FDerivedKeys : public FPCGAttributeAccessorKeysPointIndices\n"
+            "{\n"
+            "};\n"
+            "void Correct(const UPCGBasePointData* Data, UPCGBasePointData* Mutable, TArrayView<PCGMetadataEntryKey> Entries)\n"
+            "{\n"
+            "\tTSharedPtr<IPCGAttributeAccessorKeys> A = PCGExMetaHelpers::MakeConstKeys(Data);\n"
+            "\tTSharedPtr<IPCGAttributeAccessorKeys> B = PCGExMetaHelpers::MakeMutableKeys(Mutable, false);\n"
+            "\tTSharedPtr<FPCGAttributeAccessorKeysPointIndices> Typed;\n"
+            "\tconst FPCGAttributeAccessorKeysPointIndices* Ptr = nullptr;\n"
+            "\tconst FPCGAttributeAccessorKeysPointIndices& Ref = *Ptr;\n"
+            "\tFPCGAttributeAccessorKeysEntries C(Entries);\n"
+            "\tTUniquePtr<FPCGAttributeAccessorKeysEntries> D = MakeUnique<FPCGAttributeAccessorKeysEntries>(Data->Metadata);\n"
+            "\tconst int32 Size = sizeof(FPCGAttributeAccessorKeysPointIndices);\n"
+            "\t// MakeShared<FPCGAttributeAccessorKeysPointIndices>(Data);\n"
+            "\t/* FPCGAttributeAccessorKeysPoints Keys(View); */\n"
+            "\tconst TCHAR* Doc = TEXT(\"new FPCGAttributeAccessorKeysPointIndices(Data)\");\n"
+            "\tMakeShared<FPCGAttributeAccessorKeysPointIndicesLike>(Data);\n"
+            "\tFPCGAttributeAccessorKeysPointsLike Other(Data);\n"
+            "}\n"),
+    },
+    "element-base-point-support": {
+        "Plugin/Source/Mod/Public/ElementDefects.h": (
+            "class FDirectElement : public IPCGElement // expect: FDirectElement reaches IPCGElement\n"
+            "{\n"
+            "protected:\n"
+            "\tvirtual bool ExecuteInternal(FPCGContext* Context) const override;\n"
+            "};\n"
+            "class MOD_API FExportedElement final : public IPCGElement // expect\n"
+            "{\n"
+            "};\n"
+            "class FContextElement : public IPCGElementWithCustomContext<FMyContext> // expect: reaches IPCGElementWithCustomContext\n"
+            "{\n"
+            "};\n"
+            "class FSlicedElement : public TPCGTimeSlicedElementBase<FExecState, FIterState> // expect: reaches TPCGTimeSlicedElementBase\n"
+            "{\n"
+            "};\n"
+            "class FPointOpElement : public FPCGPointOperationElementBase // expect\n"
+            "{\n"
+            "};\n"
+            "class FIntermediateElement : public IPCGElement // expect\n"
+            "{\n"
+            "};\n"
+            "class FLeafElement : public FIntermediateElement // expect: FLeafElement reaches IPCGElement\n"
+            "{\n"
+            "};\n"
+            "struct FStructElement : IPCGElement // expect\n"
+            "{\n"
+            "};\n"
+            "class FMultiLineElement // expect\n"
+            "\t: public FSomeMixin\n"
+            "\t, public IPCGElement\n"
+            "{\n"
+            "\tvoid Nested() { if (true) { } }\n"
+            "};\n"),
+        "Plugin/Source/Mod/Private/ElementDefectsCrossFile.cpp": (
+            "class FCrossFileElement : public FIntermediateElement // expect: FCrossFileElement reaches IPCGElement\n"
+            "{\n"
+            "};\n"),
+        "Plugin/Source/Mod/Public/ElementNegative.h": (
+            "class IPCGElement;\n"
+            "enum class EElementKind : uint8\n"
+            "{\n"
+            "\tA,\n"
+            "};\n"
+            "class UMySettings : public UPCGSettings\n"
+            "{\n"
+            "};\n"
+            "class FSupportedElement : public IPCGElement\n"
+            "{\n"
+            "public:\n"
+            "\tvirtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override { return true; }\n"
+            "};\n"
+            "class FMacroElement : public IPCGElement\n"
+            "{\n"
+            "\tPCGEX_SUPPORT_BASE_POINT_DATA(true)\n"
+            "};\n"
+            "class FDeclaredElement : public IPCGElementWithCustomContext<FMyContext>\n"
+            "{\n"
+            "\tvirtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override;\n"
+            "};\n"
+            "class IMyElementBase : public IPCGElement\n"
+            "{\n"
+            "\tvoid Nested() { if (true) { } }\n"
+            "\tvirtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override;\n"
+            "};\n"
+            "class FInheritsSupport : public IMyElementBase\n"
+            "{\n"
+            "};\n"
+            "class FGrandChild final : public FInheritsSupport\n"
+            "{\n"
+            "};\n"
+            "class FOutsideBase : public IPCGExElement\n"
+            "{\n"
+            "};\n"
+            "class FNotAnElement : public FSomethingElse\n"
+            "{\n"
+            "};\n"
+            "// class FCommented : public IPCGElement {};\n"
+            "/* class FBlock : public IPCGElement {}; */\n"
+            "const TCHAR* Doc = TEXT(\"class FQuoted : public IPCGElement {};\");\n"),
     },
 }
 

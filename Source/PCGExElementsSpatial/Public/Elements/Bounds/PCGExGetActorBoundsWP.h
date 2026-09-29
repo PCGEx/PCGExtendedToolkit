@@ -4,19 +4,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PCGExCoreSettingsCache.h"
-#include "Core/PCGExContext.h"
-#include "Core/PCGExElement.h"
-#include "Core/PCGExSettings.h"
-#include "Data/PCGExPointIO.h"
-#include "Elements/Bounds/PCGExActorBounds.h"
+#include "Elements/Bounds/PCGExGetActorBounds.h"
 
 #include "PCGExGetActorBoundsWP.generated.h"
-
-namespace PCGExGetActorBoundsWP
-{
-	inline const FName BoundsPinLabel = TEXT("Bounds");
-}
 
 /**
  * World Partition, editor-only variant of Get Actor Bounds: reads actor descriptors, so unloaded actors
@@ -24,80 +14,25 @@ namespace PCGExGetActorBoundsWP
  * outside the editor or on a non-partitioned world.
  */
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/generate/get-actor-bounds-wp"))
-class UPCGExGetActorBoundsWPSettings : public UPCGExSettings
+class UPCGExGetActorBoundsWPSettings : public UPCGExGetActorBoundsBaseSettings
 {
 	GENERATED_BODY()
-
-	friend class FPCGExGetActorBoundsWPElement;
 
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(GetActorBoundsWP, "Get Actor Bounds (WP)", "Editor-only World Partition variant of Get Actor Bounds: one point per matching actor descriptor, unloaded actors included, transform and bounds only. Loaded actors are read live; unloaded ones use the bounds saved in their descriptor.");
+	PCGEX_NODE_INFOS(GetActorBoundsWP, "Get Actor Bounds (WP)", "Editor-only World Partition variant of Get Actor Bounds: one point per matching actor descriptor (or per primitive of loaded actors), unloaded actors included, transform and bounds only, with an optional skip-tag pass and Discarded pin. Loaded actors are read live; unloaded ones use the tags and bounds saved in their descriptor, so every actor-framed mode derives one actor-space box from it. A Bounds input culls through the partition's editor spatial hash. A Blueprint class filter loads each descriptor's base class on the game thread; native classes compare without loading.");
 	virtual TArray<FText> GetNodeTitleAliases() const override;
-
-	virtual EPCGSettingsType GetType() const override
-	{
-		return EPCGSettingsType::Spatial;
-	}
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscAdd);
-	}
-
-	virtual void GetStaticTrackedKeys(FPCGSelectionKeyToSettingsMap& OutKeysToSettings, TArray<TObjectPtr<const UPCGGraph>>& OutVisitedGraphs) const override;
-
-	virtual bool CanDynamicallyTrackKeys() const override
-	{
-		return true;
-	}
 #endif
-	virtual FString GetAdditionalTitleInformation() const override;
 
 protected:
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
-	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
-
-public:
-	/** Which actors to gather. A Blueprint class filter loads each descriptor's base class on the game thread;
-	 *  native classes compare without loading. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ShowOnlyInnerProperties))
-	FPCGExActorSelectionDetails Selection;
-
-	/** How each actor becomes a point. Unloaded actors only have a world box, so Actor Space is derived from it. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = "Output"))
-	FPCGExActorBoundsOutputDetails Output;
-
-	/** Gather every matching actor in the partition. When off, a required Bounds input appears and only actors
-	 *  overlapping it are kept, through the partition's editor spatial hash (wire the Input node for the
-	 *  component's own bounds). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	bool bUnbounded = true;
-
-	/** Additionally require actors to overlap the executing component bounds. Independent of the Bounds input.
-	 *  Adds the component bounds to the cache key, so each partitioned cell executes on its own. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bMustOverlapSelf = false;
 };
 
-struct FPCGExGetActorBoundsWPContext final : FPCGExContext
+class FPCGExGetActorBoundsWPElement final : public FPCGExGetActorBoundsBaseElement
 {
-	TArray<PCGExActorBounds::FSnapshot> Snapshots;
-	TSharedPtr<PCGExData::FPointIO> Output;
-};
-
-class FPCGExGetActorBoundsWPElement final : public IPCGExElement
-{
-public:
-	virtual void GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const override;
-
 protected:
-	PCGEX_ELEMENT_CREATE_CONTEXT(GetActorBoundsWP)
-	PCGEX_ELEMENT_MAIN_THREAD_ONLY_IN_PREPARE()
-
-	virtual bool Boot(FPCGExContext* InContext) const override;
-	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
+	virtual bool CanSweep(FPCGExContext* InContext, UWorld* InWorld) const override;
+	virtual void Sweep(UWorld* InWorld, PCGExActorBounds::FSweep& InSweep) const override;
 };

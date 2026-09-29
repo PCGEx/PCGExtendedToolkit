@@ -61,13 +61,15 @@ void UPCGExSetCachedDataSettings::ApplyPreconfiguredSettings(const FPCGPreConfig
 
 FString UPCGExSetCachedDataSettings::GetAdditionalTitleInformation() const
 {
+	const FString Id = PCGExDataCache::MakeTitleCacheID(CacheID, IsPartitionPrefixed());
+
 	switch (Mode)
 	{
 	case EPCGExDataCacheWriteMode::Replace:
 	case EPCGExDataCacheWriteMode::Append:
-		return CacheID.IsNone() ? FString() : CacheID.ToString();
+		return Id;
 	case EPCGExDataCacheWriteMode::Clear:
-		return CacheID.IsNone() ? TEXT("Clear") : FString::Printf(TEXT("Clear %s"), *CacheID.ToString());
+		return Id.IsEmpty() ? TEXT("Clear") : FString::Printf(TEXT("Clear %s"), *Id);
 	case EPCGExDataCacheWriteMode::ClearAll:
 		return TEXT("Clear All");
 	default:
@@ -75,6 +77,12 @@ FString UPCGExSetCachedDataSettings::GetAdditionalTitleInformation() const
 		ensureMsgf(false, TEXT("Unresolvable EPCGExDataCacheWriteMode (%d)"), static_cast<int32>(Mode));
 		return TEXT("Invalid Mode");
 	}
+}
+
+bool UPCGExSetCachedDataSettings::IsPartitionEditable() const
+{
+	if (Mode == EPCGExDataCacheWriteMode::ClearAll) { return false; }
+	return bPrefixWithPartitionId || IsPropertyOverriddenByPin(GET_MEMBER_NAME_CHECKED(UPCGExSetCachedDataSettings, bPrefixWithPartitionId));
 }
 
 TArray<FPCGPinProperties> UPCGExSetCachedDataSettings::GetSanitizedCustomInputPins() const
@@ -149,6 +157,21 @@ bool FPCGExSetCachedDataElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	Context->CacheID = Settings->CacheID;
+
+	if (Settings->IsPartitionPrefixed())
+	{
+		TArray<FName> Keys;
+		if (!PCGExDataCache::ResolvePartitionedCacheIDs(Context->ExecutionSource.Get(), Settings->CacheID, MakeArrayView(&Settings->Partition, 1), Keys))
+		{
+			// Never the bare Cache ID instead: that would write to, or clear, an entry the user did not name.
+			PCGE_LOG(Warning, GraphAndLog, LOCTEXT("UnresolvedPartition", "The partition prefix could not be resolved (no execution source, or no valid bounds); the cache was left untouched."));
+			return true;
+		}
+
+		Context->CacheID = Keys[0];
+	}
+
 	// Clear modes have no Target Actor pin, so this resolves through the Target setting alone.
 	TArray<AActor*> Actors;
 	Settings->ResolveTargets(Context, /*bCreateWorldActor=*/!Settings->IsClearMode(), Actors);
@@ -183,7 +206,7 @@ bool FPCGExSetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 		{
 			UPCGExDataCacheComponent* Cache = UPCGExDataCacheComponent::Find(WeakActor.Get());
 			if (!Cache) { continue; }
-			if (Settings->Mode == EPCGExDataCacheWriteMode::Clear) { Cache->Clear(Settings->CacheID, Writer, bPreview, Settings->bNotifyChange); }
+			if (Settings->Mode == EPCGExDataCacheWriteMode::Clear) { Cache->Clear(Context->CacheID, Writer, bPreview, Settings->bNotifyChange); }
 			else { Cache->ClearAll(Writer, bPreview, Settings->bNotifyChange); }
 		}
 		Context->Done();
@@ -230,7 +253,7 @@ bool FPCGExSetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 			Copy.Pin = Input->Pin;
 		}
 
-		Cache->Write(Settings->CacheID, bAppend, MoveTemp(Duplicates), Writer, bPreview, Settings->bNotifyChange);
+		Cache->Write(Context->CacheID, bAppend, MoveTemp(Duplicates), Writer, bPreview, Settings->bNotifyChange);
 	}
 
 	// Pass-through, so the node can sit inline.

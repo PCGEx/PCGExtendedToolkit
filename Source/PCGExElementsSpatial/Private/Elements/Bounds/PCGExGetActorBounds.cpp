@@ -11,21 +11,50 @@
 #define LOCTEXT_NAMESPACE "PCGExGetActorBoundsElement"
 #define PCGEX_NAMESPACE GetActorBounds
 
-#pragma region UPCGSettings interface
+namespace PCGExGetActorBounds
+{
+	/** Creates the point data the snapshots will be written to. Null when there is nothing to output. */
+	TSharedPtr<PCGExData::FPointIO> PrepareOutput(FPCGExContext* InContext, const TArray<PCGExActorBounds::FSnapshot>& InSnapshots, const FName InPin)
+	{
+		if (InSnapshots.IsEmpty())
+		{
+			return nullptr;
+		}
+
+		TSharedPtr<PCGExData::FPointIO> Output = PCGExData::NewPointIO(InContext, InPin, 0);
+		Output->InitializeOutput(PCGExData::EIOInit::New);
+		return Output;
+	}
+
+	/** Orders and writes the points, off the game thread, then stages the data. */
+	void WriteOutput(FPCGExContext* InContext, TSharedPtr<PCGExData::FPointIO>& InOutOutput, TArray<PCGExActorBounds::FSnapshot>& InOutSnapshots)
+	{
+		if (InOutOutput)
+		{
+			PCGExActorBounds::WritePoints(InOutOutput->GetOut(), InOutSnapshots);
+			(void)InOutOutput->StageOutput(InContext);
+		}
+
+		InOutSnapshots.Empty();
+		InOutOutput.Reset();
+	}
+}
+
+#pragma region UPCGExGetActorBoundsBaseSettings
 
 #if WITH_EDITOR
-void UPCGExGetActorBoundsSettings::GetStaticTrackedKeys(FPCGSelectionKeyToSettingsMap& OutKeysToSettings, TArray<TObjectPtr<const UPCGGraph>>& OutVisitedGraphs) const
+void UPCGExGetActorBoundsBaseSettings::GetStaticTrackedKeys(FPCGSelectionKeyToSettingsMap& OutKeysToSettings, TArray<TObjectPtr<const UPCGGraph>>& OutVisitedGraphs) const
 {
 	PCGExActorBounds::AddStaticTrackedKeys(this, Selection, PCGExGetActorBounds::BoundsPinLabel, bMustOverlapSelf, OutKeysToSettings);
 }
 #endif
 
-FString UPCGExGetActorBoundsSettings::GetAdditionalTitleInformation() const
+FString UPCGExGetActorBoundsBaseSettings::GetAdditionalTitleInformation() const
 {
 	return Selection.GetTitleInformation();
 }
 
-TArray<FPCGPinProperties> UPCGExGetActorBoundsSettings::InputPinProperties() const
+TArray<FPCGPinProperties> UPCGExGetActorBoundsBaseSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
 	if (!bUnbounded)
@@ -35,40 +64,48 @@ TArray<FPCGPinProperties> UPCGExGetActorBoundsSettings::InputPinProperties() con
 	return PinProperties;
 }
 
-TArray<FPCGPinProperties> UPCGExGetActorBoundsSettings::OutputPinProperties() const
+TArray<FPCGPinProperties> UPCGExGetActorBoundsBaseSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_POINT(PCGPinConstants::DefaultOutputLabel, "One point per matching actor.", Normal)
+	PCGEX_PIN_POINT(PCGPinConstants::DefaultOutputLabel, "One point per matching actor, or per primitive in Per Primitive mode.", Normal)
+	if (bOutputDiscarded)
+	{
+		PCGEX_PIN_POINT(PCGExCommon::Labels::OutputDiscardedLabel, "Actors that matched the selection but carry a skip tag.", Normal)
+	}
 	return PinProperties;
 }
 
-PCGEX_INITIALIZE_ELEMENT(GetActorBounds)
-
 #pragma endregion
 
-#pragma region FPCGExGetActorBoundsElement
+#pragma region FPCGExGetActorBoundsBaseElement
 
-void FPCGExGetActorBoundsElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
+void FPCGExGetActorBoundsBaseElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
 {
 	FPCGCrc Crc;
 	IPCGElement::GetDependenciesCrc(InParams, Crc);
 
-	const UPCGExGetActorBoundsSettings* Settings = Cast<const UPCGExGetActorBoundsSettings>(InParams.Settings);
+	const UPCGExGetActorBoundsBaseSettings* Settings = Cast<const UPCGExGetActorBoundsBaseSettings>(InParams.Settings);
 	PCGExActorBounds::CombineSelfBoundsCrc(InParams, Settings && Settings->bMustOverlapSelf, Crc);
 
 	OutCrc = Crc;
 }
 
-bool FPCGExGetActorBoundsElement::Boot(FPCGExContext* InContext) const
+bool FPCGExGetActorBoundsBaseElement::CanSweep(FPCGExContext* InContext, UWorld* InWorld) const
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsElement::Boot);
+	return true;
+}
+
+bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsBaseElement::Boot);
 
 	if (!IPCGExElement::Boot(InContext))
 	{
 		return false;
 	}
 
-	PCGEX_CONTEXT_AND_SETTINGS(GetActorBounds)
+	PCGEX_CONTEXT(GetActorBounds)
+	PCGEX_SETTINGS(GetActorBoundsBase)
 	check(IsInGameThread());
 
 	const IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
@@ -76,6 +113,11 @@ bool FPCGExGetActorBoundsElement::Boot(FPCGExContext* InContext) const
 	if (!World)
 	{
 		return Context->CancelExecution(TEXT("No world to gather actors from."));
+	}
+
+	if (!CanSweep(Context, World))
+	{
+		return true;
 	}
 
 	FPCGExActorSelectionDetails Selection = Settings->Selection;
@@ -86,70 +128,70 @@ bool FPCGExGetActorBoundsElement::Boot(FPCGExContext* InContext) const
 		return true;
 	}
 
+	if (!Settings->Output.IsUsable())
+	{
+		PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Bounds Source holds a value this node does not know; pick it again. No output."));
+		return true;
+	}
+
 	PCGExActorBounds::FCull Cull;
 	if (!PCGExActorBounds::ResolveCull(Context, PCGExGetActorBounds::BoundsPinLabel, Settings->bUnbounded, Settings->bMustOverlapSelf, Cull))
 	{
 		return true;
 	}
 
-	const AActor* Self = Selection.bIgnoreSelf ? Source->GetExecutionState().GetTypedTarget<AActor>() : nullptr;
-
 	if (!Cull.bDisjoint)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsElement::Boot::Sweep);
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsBaseElement::Boot::Sweep);
 
-		const FBox* CullBox = Cull.Get();
-		for (TActorIterator<AActor> It(World, Selection.GetIterationClass()); It; ++It)
-		{
-			const AActor* Actor = *It;
-			if (Actor == Self || !Selection.MatchesClass(Actor) || !Selection.MatchesTags(Actor->Tags))
-			{
-				continue;
-			}
+		PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
+		ActorSweep.Discarded = Settings->bOutputDiscarded ? &Context->Discarded : nullptr;
+		ActorSweep.CullBox = Cull.Get();
+		ActorSweep.Self = Selection.bIgnoreSelf ? Source->GetExecutionState().GetTypedTarget<AActor>() : nullptr;
 
-			PCGExActorBounds::FSnapshot Snapshot;
-			if (PCGExActorBounds::SnapshotActor(Actor, Settings->Output, CullBox, Snapshot))
-			{
-				Context->Snapshots.Add(MoveTemp(Snapshot));
-			}
-		}
+		Sweep(World, ActorSweep);
 	}
 
 #if WITH_EDITOR
-	PCGExActorBounds::RegisterDynamicTracking(Context, Selection, Cull, Settings->bMustOverlapSelf, GET_MEMBER_NAME_CHECKED(UPCGExGetActorBoundsSettings, Selection));
+	PCGExActorBounds::RegisterDynamicTracking(Context, Selection, Cull, Settings->bMustOverlapSelf, GET_MEMBER_NAME_CHECKED(UPCGExGetActorBoundsBaseSettings, Selection));
 #endif
 
-	if (Context->Snapshots.IsEmpty())
+	Context->Output = PCGExGetActorBounds::PrepareOutput(Context, Context->Snapshots, PCGPinConstants::DefaultOutputLabel);
+	Context->DiscardedOutput = PCGExGetActorBounds::PrepareOutput(Context, Context->Discarded, PCGExCommon::Labels::OutputDiscardedLabel);
+
+	if (!Context->Output && !Context->DiscardedOutput)
 	{
 		PCGE_LOG_C(Verbose, LogOnly, InContext, FTEXT("No matching actor was found."));
-		return true;
 	}
-
-	PCGExActorBounds::Sort(Context->Snapshots);
-
-	Context->Output = PCGExData::NewPointIO(Context, PCGPinConstants::DefaultOutputLabel, 0);
-	Context->Output->InitializeOutput(PCGExData::EIOInit::New);
 
 	return true;
 }
 
-bool FPCGExGetActorBoundsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+bool FPCGExGetActorBoundsBaseElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsElement::AdvanceWork);
+	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsBaseElement::AdvanceWork);
 
-	PCGEX_CONTEXT_AND_SETTINGS(GetActorBounds)
+	PCGEX_CONTEXT(GetActorBounds)
 
-	if (Context->Output)
-	{
-		PCGExActorBounds::WritePoints(Context->Output->GetOut(), Context->Snapshots);
-		(void)Context->Output->StageOutput(Context);
-	}
-
-	Context->Snapshots.Empty();
-	Context->Output.Reset();
+	PCGExGetActorBounds::WriteOutput(Context, Context->Output, Context->Snapshots);
+	PCGExGetActorBounds::WriteOutput(Context, Context->DiscardedOutput, Context->Discarded);
 
 	Context->Done();
 	return Context->TryComplete();
+}
+
+#pragma endregion
+
+#pragma region FPCGExGetActorBoundsElement
+
+PCGEX_INITIALIZE_ELEMENT(GetActorBounds)
+
+void FPCGExGetActorBoundsElement::Sweep(UWorld* InWorld, PCGExActorBounds::FSweep& InSweep) const
+{
+	for (TActorIterator<AActor> It(InWorld, InSweep.Selection.GetIterationClass()); It; ++It)
+	{
+		InSweep.AddActor(*It);
+	}
 }
 
 #pragma endregion

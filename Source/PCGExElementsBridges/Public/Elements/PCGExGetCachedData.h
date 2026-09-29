@@ -10,6 +10,7 @@
 #include "PCGExCoreMacros.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
+#include "Details/PCGExPartitionDetails.h"
 #include "Helpers/PCGExDataCacheHelpers.h"
 
 #include "PCGExGetCachedData.generated.h"
@@ -58,6 +59,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bReadAllEntries = false;
 
+	/** Read '<PartitionId>_<CacheID>' for every entry of Partitions instead of the bare ID. Only the keys change;
+	 *  the host is still the Target, and data still routes by the pin label it was stored with. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "!bReadAllEntries"))
+	bool bPrefixWithPartitionId = false;
+
+	/** Partitions to read, relative to the executing component's own cell; one key each, all read at once. 2D and 3D
+	 *  ids differ ('size_x_y' vs 'size_x_y_z'): force one here when the Set ran with another 2D setting. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (EditCondition = "IsPartitionEditable()", EditConditionHides))
+	TArray<FPCGExPartitionQuery> Partitions = {FPCGExPartitionQuery{}};
+
 	/** Extra output pins: cached data whose stored pin label matches one exactly is routed there, the rest goes to
 	 *  Out. Copy-paste the Set node's Custom Input Pins here. Out and Status are reserved. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Pins", meta = (TitleProperty = "{Label}"))
@@ -67,9 +78,21 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output")
 	bool bTagWithCacheID = false;
 
-	/** Emit a Status attribute set: one row per target actor with Found, DataCount, ActorReference and CacheID. */
+	/** Emit a Status attribute set with Found, DataCount, ActorReference and CacheID: one row per target actor, and
+	 *  per partition key when Prefix With Partition Id is on. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output")
 	bool bOutputStatus = true;
+
+	/** Suppress the warning when a target holds some of the partition keys but not all of them. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
+	bool bQuietMissingPartitionWarning = false;
+
+	/** Read All Entries reads every key, so the prefix has nothing to apply to. */
+	bool IsPartitionPrefixed() const { return bPrefixWithPartitionId && !bReadAllEntries; }
+
+	/** Partitions stays editable while the prefix is driven through its override pin, whatever the checkbox says. */
+	UFUNCTION()
+	bool IsPartitionEditable() const;
 
 	/** Custom output pins minus None labels, reserved labels and duplicates; the pins actually declared. */
 	TArray<FPCGPinProperties> GetSanitizedCustomOutputPins() const;
@@ -80,6 +103,8 @@ struct FPCGExGetCachedDataContext final : FPCGExContext
 	struct FStatusRow
 	{
 		FSoftObjectPath Actor;
+		/** The key that was looked up, partition prefix included. None under Read All Entries. */
+		FName CacheID = NAME_None;
 		bool bFound = false;
 		int32 DataCount = 0;
 	};
@@ -88,7 +113,7 @@ struct FPCGExGetCachedDataContext final : FPCGExContext
 	 *  StageOutput(None) does not root, and the cache may drop its own reference before we flush. */
 	FPCGDataCollection Reads;
 
-	/** One per target actor; a single not-found row when no actor resolved, so Status always has something to branch on. */
+	/** One per target actor and key; never empty, so Status always has something to branch on. */
 	TArray<FStatusRow> StatusRows;
 
 protected:

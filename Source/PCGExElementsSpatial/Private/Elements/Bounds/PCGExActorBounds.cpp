@@ -7,7 +7,6 @@
 #include "PCGGraphExecutionStateInterface.h"
 #include "PCGNode.h"
 #include "Algo/Sort.h"
-#include "Components/BillboardComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExMTCommon.h"
@@ -20,19 +19,48 @@
 #include "Helpers/PCGHelpers.h"
 #include "Misc/WildcardString.h"
 
-#pragma region FPCGExActorSelectionDetails
-
-FPCGExActorSelectionDetails::FPCGExActorSelectionDetails()
-	: ActorClass(AActor::StaticClass())
+namespace PCGExActorBounds
 {
+	namespace Internal
+	{
+		// Stock Get Actor Data matches wildcards case-insensitively; FName equality already is.
+		bool AnyActorTagMatchesPattern(const TArray<FName>& InActorTags, const FString& InPattern)
+		{
+			for (const FName& ActorTag : InActorTags)
+			{
+				TStringBuilder<NAME_SIZE> Builder;
+				ActorTag.AppendString(Builder);
+				if (FWildcardString::IsMatchSubstring(*InPattern, Builder.GetData(), Builder.GetData() + Builder.Len(), ESearchCase::IgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		FString JoinTags(const TArray<FName>& InTags)
+		{
+			TArray<FString> TagStrings;
+			for (const FName& Tag : InTags)
+			{
+				if (!Tag.IsNone())
+				{
+					TagStrings.Add(Tag.ToString());
+				}
+			}
+			return FString::Join(TagStrings, TEXT(", "));
+		}
+	}
 }
 
-void FPCGExActorSelectionDetails::Init()
-{
-	ExactTags.Reset();
-	WildcardTags.Reset();
+#pragma region FPCGExActorTagSet
 
-	for (const FName& Tag : Tags)
+void FPCGExActorTagSet::Init(const TArray<FName>& InTags, const bool bAllowWildcards)
+{
+	Exact.Reset();
+	Wildcards.Reset();
+
+	for (const FName& Tag : InTags)
 	{
 		if (Tag.IsNone())
 		{
@@ -44,13 +72,66 @@ void FPCGExActorSelectionDetails::Init()
 			FString TagString = Tag.ToString();
 			if (FWildcardString::ContainsWildcards(*TagString))
 			{
-				WildcardTags.Add(MoveTemp(TagString));
+				Wildcards.Add(MoveTemp(TagString));
 				continue;
 			}
 		}
 
-		ExactTags.AddUnique(Tag);
+		Exact.AddUnique(Tag);
 	}
+}
+
+bool FPCGExActorTagSet::MatchesAny(const TArray<FName>& InActorTags) const
+{
+	for (const FName& Tag : Exact)
+	{
+		if (InActorTags.Contains(Tag))
+		{
+			return true;
+		}
+	}
+	for (const FString& Pattern : Wildcards)
+	{
+		if (PCGExActorBounds::Internal::AnyActorTagMatchesPattern(InActorTags, Pattern))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FPCGExActorTagSet::MatchesAll(const TArray<FName>& InActorTags) const
+{
+	for (const FName& Tag : Exact)
+	{
+		if (!InActorTags.Contains(Tag))
+		{
+			return false;
+		}
+	}
+	for (const FString& Pattern : Wildcards)
+	{
+		if (!PCGExActorBounds::Internal::AnyActorTagMatchesPattern(InActorTags, Pattern))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+#pragma endregion
+
+#pragma region FPCGExActorSelectionDetails
+
+FPCGExActorSelectionDetails::FPCGExActorSelectionDetails()
+	: ActorClass(AActor::StaticClass())
+{
+}
+
+void FPCGExActorSelectionDetails::Init()
+{
+	Select.Init(Tags, bAllowWildcards);
+	Skip.Init(SkipTags, bAllowWildcards);
 }
 
 bool FPCGExActorSelectionDetails::IsUsable() const
@@ -60,7 +141,7 @@ bool FPCGExActorSelectionDetails::IsUsable() const
 	case EPCGExActorSelection::ByClass:
 		return ActorClass != nullptr;
 	case EPCGExActorSelection::ByTag:
-		return !ExactTags.IsEmpty() || !WildcardTags.IsEmpty();
+		return !Select.IsEmpty();
 	default:
 		checkNoEntry();
 		return false;
@@ -89,55 +170,7 @@ bool FPCGExActorSelectionDetails::MatchesTags(const TArray<FName>& InActorTags) 
 		return true;
 	}
 
-	// Stock Get Actor Data matches wildcards case-insensitively; FName equality already is.
-	auto AnyActorTagMatches = [&InActorTags](const FString& Pattern)
-	{
-		for (const FName& ActorTag : InActorTags)
-		{
-			TStringBuilder<NAME_SIZE> Builder;
-			ActorTag.AppendString(Builder);
-			if (FWildcardString::IsMatchSubstring(*Pattern, Builder.GetData(), Builder.GetData() + Builder.Len(), ESearchCase::IgnoreCase))
-			{
-				return true;
-			}
-		}
-		return false;
-	};
-
-	if (TagMatch == EPCGExActorTagMatch::Any)
-	{
-		for (const FName& Tag : ExactTags)
-		{
-			if (InActorTags.Contains(Tag))
-			{
-				return true;
-			}
-		}
-		for (const FString& Pattern : WildcardTags)
-		{
-			if (AnyActorTagMatches(Pattern))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	for (const FName& Tag : ExactTags)
-	{
-		if (!InActorTags.Contains(Tag))
-		{
-			return false;
-		}
-	}
-	for (const FString& Pattern : WildcardTags)
-	{
-		if (!AnyActorTagMatches(Pattern))
-		{
-			return false;
-		}
-	}
-	return true;
+	return TagMatch == EPCGExActorTagMatch::Any ? Select.MatchesAny(InActorTags) : Select.MatchesAll(InActorTags);
 }
 
 void FPCGExActorSelectionDetails::MakeTrackingKeys(TArray<FPCGSelectionKey>& OutKeys) const
@@ -148,35 +181,49 @@ void FPCGExActorSelectionDetails::MakeTrackingKeys(TArray<FPCGSelectionKey>& Out
 		{
 			OutKeys.Emplace(TSubclassOf<UObject>(ActorClass));
 		}
-		return;
 	}
-
-	// The tracking key handles wildcard tags on its own; tags this node matches literally are simply over-tracked.
-	for (const FName& Tag : Tags)
+	else
 	{
-		if (!Tag.IsNone())
+		// The tracking key handles wildcard tags on its own; tags this node matches literally are simply over-tracked.
+		for (const FName& Tag : Tags)
 		{
-			OutKeys.Emplace(Tag);
+			if (!Tag.IsNone())
+			{
+				OutKeys.Emplace(Tag);
+			}
 		}
 	}
 }
 
 FString FPCGExActorSelectionDetails::GetTitleInformation() const
 {
-	if (Selection == EPCGExActorSelection::ByClass)
+	FString Title = Selection == EPCGExActorSelection::ByClass ? (ActorClass ? ActorClass->GetName() : FString()) : PCGExActorBounds::Internal::JoinTags(Tags);
+
+	const FString SkipTitle = PCGExActorBounds::Internal::JoinTags(SkipTags);
+	if (!SkipTitle.IsEmpty())
 	{
-		return ActorClass ? ActorClass->GetName() : FString();
+		Title += TEXT(" | skip ") + SkipTitle;
 	}
 
-	TArray<FString> TagStrings;
-	for (const FName& Tag : Tags)
+	return Title;
+}
+
+#pragma endregion
+
+#pragma region FPCGExActorBoundsOutputDetails
+
+bool FPCGExActorBoundsOutputDetails::IsUsable() const
+{
+	switch (BoundsSource)
 	{
-		if (!Tag.IsNone())
-		{
-			TagStrings.Add(Tag.ToString());
-		}
+	case EPCGExActorBoundsSource::ActorSpace:
+	case EPCGExActorBoundsSource::WorldAABB:
+	case EPCGExActorBoundsSource::ActorSpaceLocal:
+	case EPCGExActorBoundsSource::PerPrimitive:
+		return true;
+	default:
+		return false;
 	}
-	return FString::Join(TagStrings, TEXT(", "));
 }
 
 #pragma endregion
@@ -185,51 +232,162 @@ namespace PCGExActorBounds
 {
 	namespace Internal
 	{
+		/** True for every mode whose point carries the actor (or component) transform. Callers reject unknown values up front. */
+		bool IsActorFramed(const EPCGExActorBoundsSource InSource)
+		{
+			switch (InSource)
+			{
+			case EPCGExActorBoundsSource::ActorSpace:
+			case EPCGExActorBoundsSource::ActorSpaceLocal:
+			case EPCGExActorBoundsSource::PerPrimitive:
+				return true;
+			case EPCGExActorBoundsSource::WorldAABB:
+				return false;
+			default:
+				checkNoEntry();
+				return false;
+			}
+		}
+
+		/** True for primitives the settings exclude, and for those that take no space of their own: neither colliding nor visible in game. */
 		bool ShouldSkipPrimitive(const UPrimitiveComponent* InComponent, const FPCGExActorBoundsOutputDetails& InDetails)
 		{
-			// Editor sprites are not geometry, and PCG output must not feed back into its own inputs.
-			if (InComponent->IsA<UBillboardComponent>())
+			// An unregistered primitive has no render or physics state, and its Bounds may never have been computed.
+			if (!InComponent->IsRegistered())
 			{
 				return true;
 			}
-			return InDetails.bIgnorePCGGeneratedComponents && InComponent->ComponentTags.Contains(PCGHelpers::DefaultPCGTag);
-		}
 
-		bool FinalizeSnapshot(const FTransform& InActorTransform, const FBox& InWorldBounds, const FBox& InLocalBounds, const FName InSortKey, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, FSnapshot& OutSnapshot)
-		{
-			if (!InWorldBounds.IsValid)
+			// PCG output must not feed back into its own inputs.
+			if (InDetails.bIgnorePCGGeneratedComponents && InComponent->ComponentTags.Contains(PCGHelpers::DefaultPCGTag))
 			{
-				if (InDetails.bOmitActorsWithoutBounds)
-				{
-					return false;
-				}
-
-				OutSnapshot.Transform = InDetails.BoundsSource == EPCGExActorBoundsSource::WorldAABB ? FTransform(InActorTransform.GetLocation()) : InActorTransform;
-				OutSnapshot.LocalBounds = FBox(FVector::ZeroVector, FVector::ZeroVector);
-				OutSnapshot.SortKey = InSortKey;
-				return InCullBox == nullptr || InCullBox->IsInside(InActorTransform.GetLocation());
+				return true;
 			}
 
-			if (InCullBox && !InCullBox->Intersect(InWorldBounds))
+			const AActor* Owner = InComponent->GetOwner();
+			if (InDetails.bIgnoreEditorOnly && (InComponent->IsEditorOnly() || (Owner && Owner->IsEditorOnly())))
+			{
+				return true;
+			}
+
+			if (InComponent->IsCollisionEnabled())
 			{
 				return false;
 			}
 
-			OutSnapshot.SortKey = InSortKey;
+			// Game visibility, not editor visibility: editor helpers (sprites, arrows, frustums) are hidden in game.
+			return !InComponent->IsVisible() || (Owner && Owner->IsHidden());
+		}
 
-			if (InDetails.BoundsSource == EPCGExActorBoundsSource::WorldAABB)
+		/** Relative to the largest world coordinate involved, so the test holds far from the origin. */
+		constexpr double BoundsAgreementTolerance = 1e-5;
+
+		/**
+		 * Component-space box of a primitive. USceneComponent::CalcBounds is free to ignore the frame it is given, so the
+		 * component's own local box is kept only when the cached world Bounds agree with it.
+		 * Returns false when OutBox is the cached world box brought back into component space instead.
+		 */
+		bool ComponentSpaceBox(const UPrimitiveComponent* InComponent, const FBox& InWorldBox, FBox& OutBox)
+		{
+			const FTransform& ComponentTransform = InComponent->GetComponentTransform();
+			const double MinScale = ComponentTransform.GetScale3D().GetAbsMin();
+			const bool bCanInvert = MinScale > UE_KINDA_SMALL_NUMBER;
+			OutBox = bCanInvert ? InWorldBox.InverseTransformBy(ComponentTransform) : FBox(FVector::ZeroVector, FVector::ZeroVector);
+
+			const FBox Own = InComponent->CalcLocalBounds().GetBox();
+			const double Tolerance = BoundsAgreementTolerance * FMath::Max3(1.0, InWorldBox.Min.GetAbsMax(), InWorldBox.Max.GetAbsMax());
+
+			// The same answer in both frames means the frame was ignored; the brought-back box is exact either way.
+			if (Own.Min.Equals(InWorldBox.Min, Tolerance) && Own.Max.Equals(InWorldBox.Max, Tolerance))
 			{
-				OutSnapshot.Transform = FTransform(InWorldBounds.GetCenter());
+				return false;
+			}
+
+			// Carried to world it must cover the cached box, and it must be no looser than that box brought back.
+			if (!Own.TransformBy(ComponentTransform).ExpandBy(Tolerance).IsInsideOrOn(InWorldBox))
+			{
+				return false;
+			}
+			if (bCanInvert && !OutBox.ExpandBy(Tolerance / MinScale).IsInsideOrOn(Own))
+			{
+				return false;
+			}
+
+			OutBox = Own;
+			return true;
+		}
+
+		/** Appends the single actor-level snapshot. Every mode but World AABB carries the actor transform. Returns the count appended (0 or 1). */
+		int32 FinalizeSnapshot(const FTransform& InActorTransform, const FBox& InWorldBounds, const FBox& InLocalBounds, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, TArray<FSnapshot>& OutSnapshots)
+		{
+			const bool bWorldAABB = !IsActorFramed(InDetails.BoundsSource);
+
+			if (!InWorldBounds.IsValid)
+			{
+				if (InDetails.bOmitActorsWithoutBounds || (InCullBox && !InCullBox->IsInside(InActorTransform.GetLocation())))
+				{
+					return 0;
+				}
+
+				FSnapshot& Snapshot = OutSnapshots.AddDefaulted_GetRef();
+				Snapshot.Transform = bWorldAABB ? FTransform(InActorTransform.GetLocation()) : InActorTransform;
+				Snapshot.LocalBounds = FBox(FVector::ZeroVector, FVector::ZeroVector);
+				return 1;
+			}
+
+			if (InCullBox && !InCullBox->Intersect(InWorldBounds))
+			{
+				return 0;
+			}
+
+			FSnapshot& Snapshot = OutSnapshots.AddDefaulted_GetRef();
+			if (bWorldAABB)
+			{
+				Snapshot.Transform = FTransform(InWorldBounds.GetCenter());
 				const FVector Extent = InWorldBounds.GetExtent();
-				OutSnapshot.LocalBounds = FBox(-Extent, Extent);
+				Snapshot.LocalBounds = FBox(-Extent, Extent);
 			}
 			else
 			{
-				OutSnapshot.Transform = InActorTransform;
-				OutSnapshot.LocalBounds = InLocalBounds;
+				Snapshot.Transform = InActorTransform;
+				Snapshot.LocalBounds = InLocalBounds;
 			}
 
-			return true;
+			return 1;
+		}
+
+		/** One point per primitive: component transform, own local bounds, culled individually. Returns the count appended. */
+		int32 SnapshotPrimitives(const AActor* InActor, const FTransform& InActorTransform, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, TArray<FSnapshot>& OutSnapshots)
+		{
+			const int32 StartNum = OutSnapshots.Num();
+			bool bHasPrimitive = false;
+
+			InActor->ForEachComponent<UPrimitiveComponent>(InDetails.bIncludeChildActors, [&](const UPrimitiveComponent* InPrimitive)
+			{
+				if (ShouldSkipPrimitive(InPrimitive, InDetails))
+				{
+					return;
+				}
+
+				bHasPrimitive = true;
+				const FBox WorldBox = InPrimitive->Bounds.GetBox();
+				if (InCullBox && !InCullBox->Intersect(WorldBox))
+				{
+					return;
+				}
+
+				FSnapshot& Snapshot = OutSnapshots.AddDefaulted_GetRef();
+				Snapshot.Transform = InPrimitive->GetComponentTransform();
+				ComponentSpaceBox(InPrimitive, WorldBox, Snapshot.LocalBounds);
+			});
+
+			if (!bHasPrimitive)
+			{
+				// Nothing to split: same zero-extent point (or omission) as the other modes.
+				return FinalizeSnapshot(InActorTransform, FBox(ForceInit), FBox(ForceInit), InDetails, InCullBox, OutSnapshots);
+			}
+
+			return OutSnapshots.Num() - StartNum;
 		}
 	}
 
@@ -325,14 +483,37 @@ namespace PCGExActorBounds
 	}
 #endif
 
-	bool SnapshotActor(const AActor* InActor, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, FSnapshot& OutSnapshot)
+	int32 SnapshotActor(const AActor* InActor, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, TArray<FSnapshot>& OutSnapshots)
 	{
 		check(InActor);
 
 		const FTransform ActorTransform = InActor->GetActorTransform();
-		const bool bActorSpace = InDetails.BoundsSource == EPCGExActorBoundsSource::ActorSpace;
+
+		bool bActorSpace = false;
+		bool bLocalBounds = false;
+		switch (InDetails.BoundsSource)
+		{
+		case EPCGExActorBoundsSource::PerPrimitive:
+			return Internal::SnapshotPrimitives(InActor, ActorTransform, InDetails, InCullBox, OutSnapshots);
+		case EPCGExActorBoundsSource::ActorSpace:
+			bActorSpace = true;
+			break;
+		case EPCGExActorBoundsSource::ActorSpaceLocal:
+			bLocalBounds = true;
+			break;
+		case EPCGExActorBoundsSource::WorldAABB:
+			break;
+		default:
+			checkNoEntry();
+			return 0;
+		}
+
 		// A zero scale has no inverse; such an actor has no extent either, so an empty local box is exact.
 		const bool bCanInvert = ActorTransform.GetScale3D().GetAbsMin() > UE_KINDA_SMALL_NUMBER;
+		// A full matrix inverse, once per actor and only in Local Bounds mode. FTransform composition (what
+		// AActor::CalculateComponentsBoundingBoxInLocalSpace uses) cannot carry the shear a non-uniform actor scale
+		// puts on rotated children and under-sizes their box; a matrix can.
+		const FMatrix WorldToActor = (bLocalBounds && bCanInvert) ? ActorTransform.ToMatrixWithScale().Inverse() : FMatrix::Identity;
 
 		FBox WorldBounds(ForceInit);
 		FBox LocalBounds(ForceInit);
@@ -347,39 +528,161 @@ namespace PCGExActorBounds
 			const FBox ComponentBox = InPrimitive->Bounds.GetBox();
 			WorldBounds += ComponentBox;
 
-			// Per-component inverse is tighter than inverting the world union once.
-			if (bActorSpace)
+			if (!bActorSpace && !bLocalBounds)
 			{
-				LocalBounds += bCanInvert ? ComponentBox.InverseTransformBy(ActorTransform) : FBox(FVector::ZeroVector, FVector::ZeroVector);
+				return;
+			}
+
+			if (!bCanInvert)
+			{
+				LocalBounds += FBox(FVector::ZeroVector, FVector::ZeroVector);
+				return;
+			}
+
+			FBox ComponentLocalBox;
+			if (bActorSpace || !Internal::ComponentSpaceBox(InPrimitive, ComponentBox, ComponentLocalBox))
+			{
+				// Per-component inverse of the cached world box is tighter than inverting the world union once.
+				LocalBounds += ComponentBox.InverseTransformBy(ActorTransform);
+			}
+			else
+			{
+				// The component's own local box carried into actor space in one step: exact for unrotated components, one inflation otherwise.
+				LocalBounds += ComponentLocalBox.TransformBy(InPrimitive->GetComponentTransform().ToMatrixWithScale() * WorldToActor);
 			}
 		});
 
-		return Internal::FinalizeSnapshot(ActorTransform, WorldBounds, LocalBounds, InActor->GetFName(), InDetails, InCullBox, OutSnapshot);
+		return Internal::FinalizeSnapshot(ActorTransform, WorldBounds, LocalBounds, InDetails, InCullBox, OutSnapshots);
 	}
 
-	bool SnapshotBox(const FTransform& InActorTransform, const FBox& InWorldBounds, const FName InSortKey, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, FSnapshot& OutSnapshot)
+	int32 SnapshotBox(const FTransform& InActorTransform, const FBox& InWorldBounds, const FPCGExActorBoundsOutputDetails& InDetails, const FBox* InCullBox, TArray<FSnapshot>& OutSnapshots)
 	{
+		// A single world box is all a descriptor offers: every actor-framed mode derives its local box the same way.
 		FBox LocalBounds(ForceInit);
-		if (InWorldBounds.IsValid && InDetails.BoundsSource == EPCGExActorBoundsSource::ActorSpace)
+		if (InWorldBounds.IsValid && Internal::IsActorFramed(InDetails.BoundsSource))
 		{
 			const bool bCanInvert = InActorTransform.GetScale3D().GetAbsMin() > UE_KINDA_SMALL_NUMBER;
 			LocalBounds = bCanInvert ? InWorldBounds.InverseTransformBy(InActorTransform) : FBox(FVector::ZeroVector, FVector::ZeroVector);
 		}
 
-		return Internal::FinalizeSnapshot(InActorTransform, InWorldBounds, LocalBounds, InSortKey, InDetails, InCullBox, OutSnapshot);
+		return Internal::FinalizeSnapshot(InActorTransform, InWorldBounds, LocalBounds, InDetails, InCullBox, OutSnapshots);
 	}
 
-	void Sort(TArray<FSnapshot>& InOutSnapshots)
+#pragma region FSweep
+
+	FSweep::FSweep(const FPCGExActorSelectionDetails& InSelection, const FPCGExActorBoundsOutputDetails& InOutput, TArray<FSnapshot>& InKept)
+		: Selection(InSelection), Output(InOutput), Kept(InKept)
 	{
-		Algo::Sort(InOutSnapshots, [](const FSnapshot& A, const FSnapshot& B)
+	}
+
+	TArray<FSnapshot>* FSweep::Route(const TArray<FName>& InActorTags)
+	{
+		if (!Selection.MatchesTags(InActorTags))
 		{
-			return A.SortKey.Compare(B.SortKey) < 0;
-		});
+			return nullptr;
+		}
+		if (Selection.HasSkipTags() && Selection.ShouldSkip(InActorTags))
+		{
+			return Discarded;
+		}
+		return &Kept;
+	}
+
+	void FSweep::AddActor(const AActor* InActor)
+	{
+		if (InActor == Self || !Selection.MatchesClass(InActor))
+		{
+			return;
+		}
+
+		// Routed before the bounds read: a skipped actor only costs a snapshot when it has a pin to go to.
+		if (TArray<FSnapshot>* Target = Route(InActor->Tags))
+		{
+			SnapshotActor(InActor, Output, CullBox, *Target);
+		}
+	}
+
+	void FSweep::AddBox(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds)
+	{
+		if (TArray<FSnapshot>* Target = Route(InActorTags))
+		{
+			SnapshotBox(InActorTransform, InWorldBounds, Output, CullBox, *Target);
+		}
+	}
+
+#pragma endregion
+
+#pragma region Write
+
+	namespace Internal
+	{
+		/** Location sits inline so most comparisons never touch a snapshot; Index resolves ties and drives the write. */
+		struct FOrderEntry
+		{
+			FVector Location = FVector::ZeroVector;
+			int32 Index = INDEX_NONE;
+		};
+
+		/** Orders snapshots that share a location on the rest of what gets written: equal means the same point. */
+		bool IsLessAtSharedLocation(const FSnapshot& A, const FSnapshot& B)
+		{
+			const FQuat RA = A.Transform.GetRotation();
+			const FQuat RB = B.Transform.GetRotation();
+			const FVector SA = A.Transform.GetScale3D();
+			const FVector SB = B.Transform.GetScale3D();
+
+			const double VA[] = {RA.X, RA.Y, RA.Z, RA.W, SA.X, SA.Y, SA.Z, A.LocalBounds.Min.X, A.LocalBounds.Min.Y, A.LocalBounds.Min.Z, A.LocalBounds.Max.X, A.LocalBounds.Max.Y, A.LocalBounds.Max.Z};
+			const double VB[] = {RB.X, RB.Y, RB.Z, RB.W, SB.X, SB.Y, SB.Z, B.LocalBounds.Min.X, B.LocalBounds.Min.Y, B.LocalBounds.Min.Z, B.LocalBounds.Max.X, B.LocalBounds.Max.Y, B.LocalBounds.Max.Z};
+
+			for (int32 i = 0; i < static_cast<int32>(UE_ARRAY_COUNT(VA)); i++)
+			{
+				if (VA[i] != VB[i])
+				{
+					return VA[i] < VB[i];
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * The write order, a function of the written values alone: whatever order the world was walked in, the same
+		 * set of points comes out in the same order. Names play no part: they are not written, and need not be unique.
+		 */
+		void MakeWriteOrder(const TArray<FSnapshot>& InSnapshots, TArray<FOrderEntry>& OutOrder)
+		{
+			const int32 NumSnapshots = InSnapshots.Num();
+			OutOrder.SetNum(NumSnapshots);
+			for (int32 i = 0; i < NumSnapshots; i++)
+			{
+				OutOrder[i].Location = InSnapshots[i].Transform.GetLocation();
+				OutOrder[i].Index = i;
+			}
+
+			Algo::Sort(OutOrder, [&InSnapshots](const FOrderEntry& A, const FOrderEntry& B)
+			{
+				if (A.Location.X != B.Location.X)
+				{
+					return A.Location.X < B.Location.X;
+				}
+				if (A.Location.Y != B.Location.Y)
+				{
+					return A.Location.Y < B.Location.Y;
+				}
+				if (A.Location.Z != B.Location.Z)
+				{
+					return A.Location.Z < B.Location.Z;
+				}
+				return IsLessAtSharedLocation(InSnapshots[A.Index], InSnapshots[B.Index]);
+			});
+		}
 	}
 
 	void WritePoints(UPCGBasePointData* InData, const TArray<FSnapshot>& InSnapshots)
 	{
 		check(InData);
+
+		TArray<Internal::FOrderEntry> Order;
+		Internal::MakeWriteOrder(InSnapshots, Order);
 
 		const int32 NumPoints = InSnapshots.Num();
 		PCGExPointArrayDataHelpers::SetNumPointsAllocated(
@@ -394,13 +697,15 @@ namespace PCGExActorBounds
 		// Each index is written once, by one task; nothing shared is mutated.
 		PCGExMT::ParallelOrSequential(NumPoints, [&](const int32 i)
 		{
-			const FSnapshot& Snapshot = InSnapshots[i];
-			const FVector Location = Snapshot.Transform.GetLocation();
+			const Internal::FOrderEntry& Entry = Order[i];
+			const FSnapshot& Snapshot = InSnapshots[Entry.Index];
 
 			Transforms[i] = Snapshot.Transform;
 			BoundsMin[i] = Snapshot.LocalBounds.Min;
 			BoundsMax[i] = Snapshot.LocalBounds.Max;
-			Seeds[i] = PCGHelpers::ComputeSeed(static_cast<int>(Location.X), static_cast<int>(Location.Y), static_cast<int>(Location.Z));
+			Seeds[i] = PCGHelpers::ComputeSeed(static_cast<int>(Entry.Location.X), static_cast<int>(Entry.Location.Y), static_cast<int>(Entry.Location.Z));
 		});
 	}
+
+#pragma endregion
 }

@@ -11,7 +11,6 @@
 #include "PCGGraphExecutionStateInterface.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
-#include "Helpers/PCGActorHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/PCGMetadataAttribute.h"
@@ -27,111 +26,14 @@
 // build cannot collide them with same-named helpers from other translation units.
 namespace PCGExPartitionIdentifier
 {
-	// A resolved partition: grid size, integer cell coordinate, and 2D flag. World-space
-	// derivations are anchored at the world origin (0,0,0) -- exactly why they line up with
-	// real PCG partition actors -- and mirror UPCGActorHelpers::GetCellCoord/GetCellCenter:
-	// the cell spans [Coord, Coord+1] * GridSize on every axis. b2D only drives the id token
-	// count (Coord.Z is already 0 in 2D).
-	struct FInfo
-	{
-		uint32 GridSize;
-		FIntVector Coord;
-		bool b2D;
-
-		FInfo(const uint32 InGridSize, const FIntVector& InCoord, const bool bIn2D)
-			: GridSize(InGridSize), Coord(InCoord), b2D(bIn2D)
-		{
-		}
-
-		FVector CellMinCorner() const
-		{
-			return FVector(static_cast<double>(Coord.X), static_cast<double>(Coord.Y), static_cast<double>(Coord.Z)) * static_cast<double>(GridSize);
-		}
-
-		FVector CellCenter() const
-		{
-			return FVector(Coord.X + 0.5, Coord.Y + 0.5, Coord.Z + 0.5) * static_cast<double>(GridSize);
-		}
-
-		FVector CellMaxCorner() const
-		{
-			return FVector(Coord.X + 1.0, Coord.Y + 1.0, Coord.Z + 1.0) * static_cast<double>(GridSize);
-		}
-	};
-
-	FVector CoordVector(const FIntVector& Coord)
-	{
-		return FVector(static_cast<double>(Coord.X), static_cast<double>(Coord.Y), static_cast<double>(Coord.Z));
-	}
-
-	FString FormatId(const FInfo& Info, const FString& Prefix)
-	{
-		return Info.b2D
-			       ? FString::Printf(TEXT("%s%u_%d_%d"), *Prefix, Info.GridSize, Info.Coord.X, Info.Coord.Y)
-			       : FString::Printf(TEXT("%s%u_%d_%d_%d"), *Prefix, Info.GridSize, Info.Coord.X, Info.Coord.Y, Info.Coord.Z);
-	}
-
-	FString MakeId(const FInfo& Info, const UPCGExPartitionIdentifierSettings* Settings, const bool bRuntime)
+	FString MakeId(const PCGExPartitionGrid::FCell& Info, const UPCGExPartitionIdentifierSettings* Settings, const bool bRuntime)
 	{
 		// When matching the engine actor name, swap in the engine prefix. The editor-only
 		// DataLayer/HLOD hash suffix is intentionally not reproduced.
 		const FString Prefix = Settings->bMatchEnginePartitionActorName
 			                       ? FString(bRuntime ? TEXT("PCGRuntimePartitionGridActor_") : TEXT("PCGPartitionGridActor_"))
 			                       : Settings->IdPrefix;
-		return FormatId(Info, Prefix);
-	}
-
-	// Steps a resolved grid size along the power-of-two grid ladder by the given number of
-	// levels (+ coarser / - finer), clamped to the editor-exposed range Grid4 (400cm) ..
-	// Grid2048 (204800cm). Offset 0 returns the input untouched, so the default never reshapes
-	// a base the resolver produced (including hidden/unbounded grids).
-	uint32 OffsetGridSize(const uint32 InGridSize, const int32 Offset)
-	{
-		if (Offset == 0) { return InGridSize; }
-
-		// EPCGHiGenGrid values are the grid size in METERS (a power of two); the cm size is
-		// meters * 100. Grid2048 is the largest grid the editor dropdown exposes.
-		const int32 MinLog = static_cast<int32>(FMath::FloorLog2(static_cast<uint32>(EPCGHiGenGrid::Grid4)));    // 2
-		const int32 MaxLog = static_cast<int32>(FMath::FloorLog2(static_cast<uint32>(EPCGHiGenGrid::Grid2048))); // 11
-
-		const uint32 BaseMeters = InGridSize / 100;
-		const int32 BaseLog = BaseMeters > 0 ? static_cast<int32>(FMath::FloorLog2(BaseMeters)) : MinLog;
-
-		const int32 SteppedLog = FMath::Clamp(BaseLog + Offset, MinLog, MaxLog);
-		return (1u << SteppedLog) * 100u;
-	}
-
-	// Resolves an entry's grid size (cm) and 2D flag against the executing component.
-	void ResolveGrid(const FPCGExPartitionGrid& Cfg, const UPCGComponent* Component, uint32& OutGridSize, bool& Outb2D)
-	{
-		uint32 GridSize = PCGHiGenGrid::GridToGridSize(Cfg.ExplicitGrid);
-		if (Cfg.GridSizeResolution == EPCGExPartitionResolution::FromComponent && Component)
-		{
-			const uint32 ComponentGrid = Component->GetGenerationGridSize();
-			if (ComponentGrid > 0 && ComponentGrid != PCGHiGenGrid::UnboundedGridSize() && ComponentGrid != PCGHiGenGrid::UninitializedGridSize())
-			{
-				GridSize = ComponentGrid;
-			}
-		}
-		GridSize = OffsetGridSize(GridSize, Cfg.GridSizeOffset);
-		OutGridSize = FMath::Max<uint32>(1u, GridSize);
-
-		switch (Cfg.Grid2D)
-		{
-		case EPCGExGrid2DMode::Force2D: Outb2D = true; break;
-		case EPCGExGrid2DMode::Force3D: Outb2D = false; break;
-		default: Outb2D = Component ? Component->Use2DGrid() : false; break;
-		}
-	}
-
-	FInfo MakeInfo(const FPCGExPartitionGrid& Cfg, const FVector& Anchor, const UPCGComponent* Component)
-	{
-		uint32 GridSize;
-		bool b2D;
-		ResolveGrid(Cfg, Component, GridSize, b2D);
-		const FIntVector Base = UPCGActorHelpers::GetCellCoord(Anchor, GridSize, b2D);
-		const FIntVector Coord = Base + (b2D ? FIntVector(Cfg.Offset.X, Cfg.Offset.Y, 0) : Cfg.Offset);
-		return FInfo(GridSize, Coord, b2D);
+		return PCGExPartitionGrid::FormatId(Info, Prefix);
 	}
 
 	FName SuffixedName(const FName Base, const FName Suffix)
@@ -179,13 +81,12 @@ namespace PCGExPartitionIdentifier
 			return;
 		}
 
-		const FBox Bounds = Source->GetExecutionState().GetBounds();
-		if (!Bounds.IsValid)
+		FVector Anchor = FVector::ZeroVector;
+		if (!PCGExPartitionGrid::TryGetAnchor(Source, Anchor))
 		{
 			PCGLog::LogWarningOnGraph(FTEXT("Partition Identifier (Executing Component): the execution source has no valid bounds; cannot determine the current partition."), Context);
 			return;
 		}
-		const FVector Anchor = Bounds.GetCenter();
 
 		TSet<FName> Used;
 
@@ -200,10 +101,10 @@ namespace PCGExPartitionIdentifier
 
 			for (const FPCGExPartitionGrid& Cfg : Settings->Grids)
 			{
-				const FInfo Info = MakeInfo(Cfg, Anchor, Component);
+				const PCGExPartitionGrid::FCell Info = PCGExPartitionGrid::MakeCell(Cfg, Anchor, Component);
 				if (Settings->bOutputPartitionId) { Emit(Settings->PartitionIdAttributeName, Cfg.Suffix, MakeId(Info, Settings, bRuntime)); }
 				if (Settings->bOutputGridSize) { Emit(Settings->GridSizeAttributeName, Cfg.Suffix, static_cast<int32>(Info.GridSize)); }
-				if (Settings->Outputs.bGridCoord) { Emit(Settings->Outputs.GridCoordAttributeName, Cfg.Suffix, CoordVector(Info.Coord)); }
+				if (Settings->Outputs.bGridCoord) { Emit(Settings->Outputs.GridCoordAttributeName, Cfg.Suffix, Info.CoordAsVector()); }
 				if (Settings->Outputs.bCellCenter) { Emit(Settings->Outputs.CellCenterAttributeName, Cfg.Suffix, Info.CellCenter()); }
 				if (Settings->Outputs.bCellBounds)
 				{
@@ -240,11 +141,11 @@ namespace PCGExPartitionIdentifier
 
 		for (const FPCGExPartitionGrid& Cfg : Settings->Grids)
 		{
-			const FInfo Info = MakeInfo(Cfg, Anchor, Component);
+			const PCGExPartitionGrid::FCell Info = PCGExPartitionGrid::MakeCell(Cfg, Anchor, Component);
 			const PCGMetadataEntryKey Key = Metadata->AddEntry();
 			if (IdAttr) { IdAttr->SetValue(Key, MakeId(Info, Settings, bRuntime)); }
 			if (GridSizeAttr) { GridSizeAttr->SetValue(Key, static_cast<int32>(Info.GridSize)); }
-			if (CoordAttr) { CoordAttr->SetValue(Key, CoordVector(Info.Coord)); }
+			if (CoordAttr) { CoordAttr->SetValue(Key, Info.CoordAsVector()); }
 			if (CenterAttr) { CenterAttr->SetValue(Key, Info.CellCenter()); }
 			if (MinAttr) { MinAttr->SetValue(Key, Info.CellMinCorner()); }
 			if (MaxAttr) { MaxAttr->SetValue(Key, Info.CellMaxCorner()); }
@@ -321,7 +222,7 @@ namespace PCGExPartitionIdentifier
 			{
 				uint32 GridSize;
 				bool b2D;
-				ResolveGrid(Cfg, Component, GridSize, b2D);
+				PCGExPartitionGrid::ResolveGrid(Cfg, Component, GridSize, b2D);
 
 				if (Settings->bOutputGridSize)
 				{
@@ -358,9 +259,7 @@ namespace PCGExPartitionIdentifier
 				Domain->InitializeOnSet(MetadataEntries[i]);
 				for (const FColumn& Column : Columns)
 				{
-					const FIntVector Base = UPCGActorHelpers::GetCellCoord(Positions[i], Column.GridSize, Column.b2D);
-					const FIntVector Coord = Base + (Column.b2D ? FIntVector(Column.Offset.X, Column.Offset.Y, 0) : Column.Offset);
-					Column.IdAttr->SetValue(MetadataEntries[i], MakeId(FInfo(Column.GridSize, Coord, Column.b2D), Settings, bRuntime));
+					Column.IdAttr->SetValue(MetadataEntries[i], MakeId(PCGExPartitionGrid::MakeCell(Column.GridSize, Column.b2D, Column.Offset, Positions[i]), Settings, bRuntime));
 				}
 			}
 

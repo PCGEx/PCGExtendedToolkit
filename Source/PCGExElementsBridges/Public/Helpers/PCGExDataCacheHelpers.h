@@ -13,8 +13,10 @@
 
 class AActor;
 class IPCGGraphExecutionSource;
+class UPCGComponent;
 class UPCGData;
 struct FPCGExContext;
+struct FPCGExPartitionQuery;
 
 UENUM()
 enum class EPCGExDataCacheTarget : uint8
@@ -38,6 +40,18 @@ namespace PCGExDataCache
 	{
 		return CacheIDAttributeName.ToString() + PCGExData::TagSeparator + InId.ToString();
 	}
+
+	/** '<PartitionId>_<CacheID>'. Keys are saved inside the host actor, so this format is a wire format. */
+	PCGEXELEMENTSBRIDGES_API FName MakePartitionedCacheID(const FString& InPartitionId, const FName InCacheID);
+
+	/** One key per query for the cell InAnchor falls in; duplicates are dropped, first occurrence wins. InComponent may be null. */
+	PCGEXELEMENTSBRIDGES_API void ResolvePartitionedCacheIDs(const FVector& InAnchor, const UPCGComponent* InComponent, const FName InCacheID, const TConstArrayView<FPCGExPartitionQuery> InQueries, TArray<FName>& OutCacheIDs);
+
+	/** Same, anchored on the executing source's own cell. False when it has no usable bounds; never yields the bare cache ID. */
+	PCGEXELEMENTSBRIDGES_API bool ResolvePartitionedCacheIDs(const IPCGGraphExecutionSource* InSource, const FName InCacheID, const TConstArrayView<FPCGExPartitionQuery> InQueries, TArray<FName>& OutCacheIDs);
+
+	/** Cache ID as a node title shows it: the partition prefix is only known at execution, so it is a placeholder. */
+	PCGEXELEMENTSBRIDGES_API FString MakeTitleCacheID(const FName InCacheID, const bool bPartitioned);
 
 	/**
 	 * True when InData references no UPCGData outside its own outer chain. Property-based (FReferenceFinder), not the

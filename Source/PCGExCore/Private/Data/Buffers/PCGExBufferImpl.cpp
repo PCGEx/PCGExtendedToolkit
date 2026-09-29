@@ -12,6 +12,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
@@ -145,6 +146,17 @@ namespace PCGExData
 		bCacheValueHashes = false;
 		InHashes.Empty();
 		InValues = OutValues;
+	}
+
+	template <typename T>
+	void TArrayBuffer<T>::ReportReadFailure(const UPCGData* InData)
+	{
+		if (bReadFailureReported.exchange(true))
+		{
+			return;
+		}
+
+		Helpers::LogFailedRead(Source->GetContextHandle(), InData ? InData->GetClass()->GetFName() : NAME_None, Identifier.Name.ToString(), PCGExTypes::TTraits<T>::Type);
 	}
 
 	template <typename T>
@@ -285,7 +297,12 @@ namespace PCGExData
 		if (!bSparseBuffer && !bReadComplete)
 		{
 			TArrayView<T> InRange = MakeArrayView(InValues->GetData(), InValues->Num());
-			InAccessor->GetRange<T>(InRange, 0, *Source->GetInKeys());
+			if (!InAccessor->GetRange<T>(InRange, 0, *Source->GetInKeys()))
+			{
+				// InValues may be uninitialized memory: a read that wrote nothing must still define every value.
+				for (T& Value : InRange) { Value = T{}; }
+				ReportReadFailure(Source->GetIn());
+			}
 			bReadComplete = true;
 			ComputeAllValueHashes();
 		}
@@ -418,11 +435,12 @@ namespace PCGExData
 		auto GrabExistingValues = [&]()
 		{
 			// Read-only keys: mutable ones flatten a parented Out, and a facade's writable buffers init concurrently.
-			TUniquePtr<FPCGAttributeAccessorKeysPointIndices> TempOutKeys = MakeUnique<FPCGAttributeAccessorKeysPointIndices>(static_cast<const UPCGBasePointData*>(Source->GetOut()));
+			const TSharedPtr<IPCGAttributeAccessorKeys> TempOutKeys = PCGExMetaHelpers::MakeConstKeys(Source->GetOut());
 			TArrayView<T> OutRange = MakeArrayView(OutValues->GetData(), OutValues->Num());
-			if (!OutAccessor->GetRange<T>(OutRange, 0, *TempOutKeys.Get()))
+			if (!TempOutKeys || !OutAccessor->GetRange<T>(OutRange, 0, *TempOutKeys.Get()))
 			{
-				// TODO : Log
+				// No fill: OutValues already holds the default it was initialized with.
+				ReportReadFailure(Source->GetOut());
 			}
 		};
 
@@ -524,11 +542,13 @@ namespace PCGExData
 			return;
 		}
 
-		if (TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InAttribute, InAttribute->GetMetadataDomain());
-			InAccessor.IsValid())
+		TArrayView<T> ReadRange = MakeArrayView(InValues->GetData() + Scope.Start, Scope.Count);
+		const TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InAttribute, InAttribute->GetMetadataDomain());
+
+		if (!InAccessor.IsValid() || !InAccessor->GetRange<T>(ReadRange, Scope.Start, *Source->GetInKeys()))
 		{
-			TArrayView<T> ReadRange = MakeArrayView(InValues->GetData() + Scope.Start, Scope.Count);
-			InAccessor->GetRange<T>(ReadRange, Scope.Start, *Source->GetInKeys());
+			for (T& Value : ReadRange) { Value = T{}; }
+			ReportReadFailure(Source->GetIn());
 		}
 
 		if (bCacheValueHashes)

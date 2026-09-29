@@ -9,6 +9,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExTaggedData.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/Accessors/IPCGAttributeAccessor.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
@@ -86,6 +87,16 @@ namespace PCGExData
 		return NAME_None;
 	}
 
+	void IAttributeBroadcaster::ReportReadFailure() const
+	{
+		if (FPlatformAtomics::InterlockedCompareExchange(&ReadFailureReported, 1, 0) != 0)
+		{
+			return;
+		}
+
+		Helpers::LogFailedRead(ContextHandle, SourceClassName, PCGExMetaHelpers::GetSelectorDisplayName(ProcessingInfos.Selector), GetMetadataType());
+	}
+
 	template <typename T>
 	bool TAttributeBroadcaster<T>::ApplySelector(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData)
 	{
@@ -100,6 +111,9 @@ namespace PCGExData
 		{
 			return false;
 		}
+
+		SourceClassName = InData ? InData->GetClass()->GetFName() : NAME_None;
+		bReadable = true;
 
 		if (ProcessingInfos.bIsDataDomain)
 		{
@@ -130,6 +144,22 @@ namespace PCGExData
 	}
 
 	template <typename T>
+	void TAttributeBroadcaster<T>::ProbeRead()
+	{
+		if (DataValue || !InternalAccessor || !Keys || Keys->GetNum() <= 0)
+		{
+			return;
+		}
+
+		T Probe = T{};
+		if (!InternalAccessor->Get<T>(Probe, 0, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
+		{
+			bReadable = false;
+			ReportReadFailure();
+		}
+	}
+
+	template <typename T>
 	FName TAttributeBroadcaster<T>::GetName() const
 	{
 		return ProcessingInfos.Selector.GetName();
@@ -145,9 +175,17 @@ namespace PCGExData
 	bool TAttributeBroadcaster<T>::Prepare(const FPCGAttributePropertyInputSelector& InSelector, const TSharedRef<FPointIO>& InPointIO)
 	{
 		Keys = InPointIO->GetInKeys();
+		ContextHandle = InPointIO->GetContextHandle();
 		Min = Traits::Min();
 		Max = Traits::Max();
-		return ApplySelector(InSelector, InPointIO->GetIn());
+
+		if (!ApplySelector(InSelector, InPointIO->GetIn()))
+		{
+			return false;
+		}
+
+		ProbeRead();
+		return true;
 	}
 
 	template <typename T>
@@ -187,14 +225,10 @@ namespace PCGExData
 		{
 			Keys = InKeys;
 		}
-		else if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(InData))
-		{
-			Keys = MakeShared<FPCGAttributeAccessorKeysPointIndices>(PointData);
-		}
 		else
 		{
-			// Non-point data (e.g. attribute sets): let the engine build keys that match the accessor for any
-			// selector (attribute / property / $Index).
+			// Same data and selector as the accessor, so the engine returns keys of the accessor's own family,
+			// for any data class and any selector (attribute / property / $Index).
 			const FPCGAttributePropertyInputSelector Resolved = InSelector.CopyAndFixLast(InData);
 			if (TUniquePtr<const IPCGAttributeAccessorKeys> EngineKeys = PCGAttributeAccessorHelpers::CreateConstKeys(InData, Resolved))
 			{
@@ -202,7 +236,13 @@ namespace PCGExData
 			}
 		}
 
-		return Keys.IsValid();
+		if (!Keys.IsValid())
+		{
+			return false;
+		}
+
+		ProbeRead();
+		return true;
 	}
 
 	template <typename T>
@@ -262,11 +302,11 @@ namespace PCGExData
 		else
 		{
 			TArrayView<T> DumpView = MakeArrayView(Dump.GetData() + Scope.Start, Scope.Count);
-			const bool bSuccess = InternalAccessor->GetRange<T>(DumpView, Scope.Start, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
-
-			if (!bSuccess)
+			if (!bReadable || !InternalAccessor->GetRange<T>(DumpView, Scope.Start, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
 			{
-				// TODO : Log error
+				// Dump may be uninitialized memory: a read that wrote nothing must still define every value.
+				for (T& Value : DumpView) { Value = T{}; }
+				ReportReadFailure();
 			}
 		}
 	}
@@ -289,10 +329,10 @@ namespace PCGExData
 			return;
 		}
 
-		const bool bSuccess = InternalAccessor->GetRange<T>(Dest, Scope.Start, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
-		if (!bSuccess)
+		if (!bReadable || !InternalAccessor->GetRange<T>(Dest, Scope.Start, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
 		{
-			// TODO : Log error
+			for (T& Value : Dest) { Value = T{}; }
+			ReportReadFailure();
 		}
 	}
 
@@ -329,10 +369,16 @@ namespace PCGExData
 		}
 		else
 		{
-			const bool bSuccess = InternalAccessor->GetRange<T>(Dump, 0, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
-			if (!bSuccess)
+			if (!bReadable || !InternalAccessor->GetRange<T>(Dump, 0, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
 			{
-				// TODO : Log error
+				for (T& Value : Dump) { Value = T{}; }
+				ReportReadFailure();
+
+				if (bCaptureMinMax)
+				{
+					OutMin = T{};
+					OutMax = T{};
+				}
 			}
 			else if (bCaptureMinMax)
 			{
@@ -401,10 +447,16 @@ namespace PCGExData
 			return TypedDataValue;
 		}
 
+		if (!bReadable)
+		{
+			return Fallback;
+		}
+
 		T OutValue = Fallback;
 		if (!InternalAccessor->Get<T>(OutValue, Element.Index, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
 		{
 			OutValue = Fallback;
+			ReportReadFailure();
 		}
 		return OutValue;
 	}
@@ -422,7 +474,18 @@ namespace PCGExData
 			return true;
 		}
 
-		return InternalAccessor->Get<T>(OutValue, Element.Index, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
+		if (!bReadable)
+		{
+			return false;
+		}
+
+		if (!InternalAccessor->Get<T>(OutValue, Element.Index, *Keys.Get(), EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
+		{
+			ReportReadFailure();
+			return false;
+		}
+
+		return true;
 	}
 
 	template <typename T>

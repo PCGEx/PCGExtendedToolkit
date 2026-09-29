@@ -13,6 +13,7 @@
 #include "Data/PCGPointArrayData.h"
 #include "Data/PCGPointData.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
 
 namespace PCGExData
@@ -267,7 +268,7 @@ namespace PCGExData
 			}
 			else
 			{
-				InKeys = MakeShared<FPCGAttributeAccessorKeysPointIndices>(In);
+				InKeys = PCGExMetaHelpers::MakeConstKeys(In);
 			}
 		}
 
@@ -299,7 +300,7 @@ namespace PCGExData
 			{
 				InitializeMetadataEntries_Unsafe(true);
 			}
-			OutKeys = MakeShared<FPCGAttributeAccessorKeysPointIndices>(Out, false);
+			OutKeys = PCGExMetaHelpers::MakeMutableKeys(Out, /*bAllocateEntries=*/false);
 		}
 
 		return OutKeys;

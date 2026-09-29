@@ -10,6 +10,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
 #include "Components/PCGExDataCacheComponent.h"
+#include "Details/PCGExPartitionDetails.h"
 #include "Helpers/PCGExDataCacheHelpers.h"
 
 #include "PCGExSetCachedData.generated.h"
@@ -61,6 +62,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "Mode != EPCGExDataCacheWriteMode::ClearAll"))
 	FName CacheID = FName("Default");
 
+	/** Store under '<PartitionId>_<CacheID>' instead of the bare ID, so each partition keeps its own entry on a
+	 *  shared host. Only the key changes; the host is still the Target. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "Mode != EPCGExDataCacheWriteMode::ClearAll"))
+	bool bPrefixWithPartitionId = false;
+
+	/** Partition the prefix is resolved from, relative to the executing component's own cell. 2D and 3D ids differ
+	 *  ('size_x_y' vs 'size_x_y_z'): force one here when the matching Get runs with another 2D setting. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (EditCondition = "IsPartitionEditable()", EditConditionHides))
+	FPCGExPartitionQuery Partition;
+
 	/** What to do with the target entry. Drives the pin layout, so not overridable. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExDataCacheWriteMode Mode = EPCGExDataCacheWriteMode::Replace;
@@ -79,13 +90,25 @@ public:
 	UFUNCTION()
 	bool IsClearMode() const { return Mode == EPCGExDataCacheWriteMode::Clear || Mode == EPCGExDataCacheWriteMode::ClearAll; }
 
+	/** Clear All drops every entry whatever its key, so the prefix has nothing to apply to. */
+	bool IsPartitionPrefixed() const { return bPrefixWithPartitionId && Mode != EPCGExDataCacheWriteMode::ClearAll; }
+
+	/** Partition stays editable while the prefix is driven through its override pin, whatever the checkbox says. */
+	UFUNCTION()
+	bool IsPartitionEditable() const;
+
 	/** Custom input pins minus None labels, reserved labels and duplicates; the pins actually declared. */
 	TArray<FPCGPinProperties> GetSanitizedCustomInputPins() const;
 };
 
 struct FPCGExSetCachedDataContext final : FPCGExContext
 {
+	/** Hosts to write to or clear. Left empty when the partition prefix cannot be resolved, so the cache is untouched
+	 *  while inputs still pass through. */
 	TArray<TWeakObjectPtr<AActor>> TargetActors;
+
+	/** The key actually written or cleared: the Cache ID, partition prefix included. */
+	FName CacheID = NAME_None;
 };
 
 class FPCGExSetCachedDataElement final : public IPCGExElement

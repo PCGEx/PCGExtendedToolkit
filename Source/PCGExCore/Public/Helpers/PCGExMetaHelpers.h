@@ -37,10 +37,12 @@ namespace PCGExMetaHelpers
 {
 	const FName InvalidName = "INVALID_DATA";
 
-	/** Element-domain row keys for any data: point indices for point data, metadata entries for attribute sets,
-	 *  the engine key factory's keys for anything else (e.g. spline control points -- the mutable variant
-	 *  allocates their metadata entries). Row count matches GetElementsCount. */
-	PCGEXCORE_API TSharedPtr<IPCGAttributeAccessorKeys> MakeMutableKeys(UPCGData* InData);
+	/** Element-domain row keys for any data, and the only place they are built: metadata entries for attribute sets,
+	 *  the engine key factory's keys for everything else, so they match the accessors the engine makes for that class.
+	 *  Row count matches GetElementsCount.
+	 *  bAllocateEntries: whether mutable keys allocate metadata entries on the data. Pass false when the caller
+	 *  initializes entries itself, or must not allocate from the current thread. */
+	PCGEXCORE_API TSharedPtr<IPCGAttributeAccessorKeys> MakeMutableKeys(UPCGData* InData, const bool bAllocateEntries = true);
 	PCGEXCORE_API TSharedPtr<IPCGAttributeAccessorKeys> MakeConstKeys(const UPCGData* InData);
 	
 	PCGEXCORE_API void InitializeMetadataEntries(UPCGMetadata* Metadata, const TPCGValueRange<int64>& MetadataEntries, const bool bConservative);
