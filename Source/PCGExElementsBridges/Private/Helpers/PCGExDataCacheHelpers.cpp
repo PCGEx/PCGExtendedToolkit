@@ -17,12 +17,50 @@
 
 #include "PCGExVersion.h"
 #include "Core/PCGExContext.h"
+#include "Details/PCGExPartitionDetails.h"
 #include "Helpers/PCGExBulkAttributeHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExDataCacheHelpers"
 
+namespace PCGExDataCacheHelpers
+{
+	FString ComposePartitionedCacheID(const FString& InPartitionId, const FName InCacheID)
+	{
+		return InPartitionId + TEXT("_") + InCacheID.ToString();
+	}
+}
+
 namespace PCGExDataCache
 {
+	FName MakePartitionedCacheID(const FString& InPartitionId, const FName InCacheID)
+	{
+		return FName(PCGExDataCacheHelpers::ComposePartitionedCacheID(InPartitionId, InCacheID));
+	}
+
+	void ResolvePartitionedCacheIDs(const FVector& InAnchor, const UPCGComponent* InComponent, const FName InCacheID, const TConstArrayView<FPCGExPartitionQuery> InQueries, TArray<FName>& OutCacheIDs)
+	{
+		OutCacheIDs.Reserve(OutCacheIDs.Num() + InQueries.Num());
+		for (const FPCGExPartitionQuery& Query : InQueries)
+		{
+			OutCacheIDs.AddUnique(MakePartitionedCacheID(PCGExPartitionGrid::FormatId(PCGExPartitionGrid::MakeCell(Query, InAnchor, InComponent)), InCacheID));
+		}
+	}
+
+	bool ResolvePartitionedCacheIDs(const IPCGGraphExecutionSource* InSource, const FName InCacheID, const TConstArrayView<FPCGExPartitionQuery> InQueries, TArray<FName>& OutCacheIDs)
+	{
+		FVector Anchor = FVector::ZeroVector;
+		if (!PCGExPartitionGrid::TryGetAnchor(InSource, Anchor)) { return false; }
+
+		ResolvePartitionedCacheIDs(Anchor, Cast<UPCGComponent>(InSource), InCacheID, InQueries, OutCacheIDs);
+		return true;
+	}
+
+	FString MakeTitleCacheID(const FName InCacheID, const bool bPartitioned)
+	{
+		if (InCacheID.IsNone()) { return FString(); }
+		return bPartitioned ? PCGExDataCacheHelpers::ComposePartitionedCacheID(TEXT("{Partition}"), InCacheID) : InCacheID.ToString();
+	}
+
 	AActor* GetSourceActor(const IPCGGraphExecutionSource* InSource)
 	{
 		if (!InSource) { return nullptr; }

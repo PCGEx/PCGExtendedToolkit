@@ -8,6 +8,7 @@
 #include "PCGExCoreSettingsCache.h"
 #include "PCGPin.h"
 #include "Core/PCGExSettings.h"
+#include "Details/PCGExPartitionDetails.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "PCGCommon.h"
 
@@ -21,56 +22,21 @@ enum class EPCGExPartitionSource : uint8
 };
 
 UENUM()
-enum class EPCGExPartitionResolution : uint8
-{
-	FromComponent = 0 UMETA(DisplayName = "From Executing Component", ToolTip = "Use the executing component's grid size when it is partitioned; fall back to the explicit grid otherwise.", ActionIcon="Default"),
-	Explicit      = 1 UMETA(DisplayName = "Explicit", ToolTip = "Always use the explicit grid set on this entry, ignoring the executing component.", ActionIcon="Constant"),
-};
-
-UENUM()
-enum class EPCGExGrid2DMode : uint8
-{
-	Auto    = 0 UMETA(DisplayName = "Auto", ToolTip = "Follow the executing component (falls back to 3D when there is no component)."),
-	Force2D = 1 UMETA(DisplayName = "2D", ToolTip = "Force a 2D grid: the Z coordinate is always 0 and dropped from the id."),
-	Force3D = 2 UMETA(DisplayName = "3D", ToolTip = "Force a 3D grid."),
-};
-
-UENUM()
 enum class EPCGExPartitionLayout : uint8
 {
 	Columns = 0 UMETA(DisplayName = "Columns", ToolTip = "Each grid entry becomes a suffixed attribute on the data (@Data) domain -- one set of values. The default."),
 	Rows    = 1 UMETA(DisplayName = "Rows", ToolTip = "Each grid entry becomes its own row in the output attribute set, with the structured outputs per row."),
 };
 
-/** One partition query relative to the anchor (the executing cell, or each input point). Defaults describe the cell itself at the component's grid. */
+/** A partition query plus the name its outputs are written under. */
 USTRUCT(BlueprintType)
-struct FPCGExPartitionGrid
+struct FPCGExPartitionGrid : public FPCGExPartitionQuery
 {
 	GENERATED_BODY()
 
 	/** Appended to the partition id attribute name in Columns layout (e.g. "_North"); output as the per-row label in Rows layout. Leave as None for the primary 'self' entry. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	FName Suffix = NAME_None;
-
-	/** Integer cell offset from the resolved cell. (0,0,0) is the cell itself, (1,0,0) the next cell along X, etc. In 2D the Z offset is ignored. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	FIntVector Offset = FIntVector::ZeroValue;
-
-	/** How this entry's grid size is resolved. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	EPCGExPartitionResolution GridSizeResolution = EPCGExPartitionResolution::FromComponent;
-
-	/** Grid size for this entry. Used when resolution is Explicit, and as the fallback when From Component has no partitioned component. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName = "Explicit Grid"))
-	EPCGHiGenGrid ExplicitGrid = EPCGHiGenGrid::Grid256;
-
-	/** Steps the resolved grid size along the power-of-two grid ladder: positive = coarser, negative = finer (e.g. -1 turns 800 into 400). Clamped to the exposed range (400 .. 204800). 0 leaves the resolved size untouched. Applies in both resolution modes. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	int32 GridSizeOffset = 0;
-
-	/** 2D/3D handling. Auto follows the executing component. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	EPCGExGrid2DMode Grid2D = EPCGExGrid2DMode::Auto;
 };
 
 /** Structured per-cell outputs. Executing Component only (suffixed on @Data in Columns, per-row in Rows). */

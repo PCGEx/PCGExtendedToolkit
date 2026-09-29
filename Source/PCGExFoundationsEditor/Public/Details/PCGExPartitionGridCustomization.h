@@ -3,31 +3,19 @@
 
 #pragma once
 
-#include "IPropertyTypeCustomization.h"
+#include "Details/PCGExPartitionQueryCustomization.h"
 
 class SWidget;
 
-/** Inline editor for FPCGExPartitionGrid: Suffix + cell Offset on the header, the grid-size
- *  resolution / 2D mode / explicit grid / size offset folded into a single child row. */
-class FPCGExPartitionGridCustomization : public IPropertyTypeCustomization
+/** Inline editor for FPCGExPartitionGrid: the query editor, with the editable Suffix as the header name column. */
+class FPCGExPartitionGridCustomization : public FPCGExPartitionQueryCustomization
 {
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
 
-	virtual void CustomizeHeader(
-		TSharedRef<IPropertyHandle> PropertyHandle,
-		class FDetailWidgetRow& HeaderRow,
-		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
-
-	virtual void CustomizeChildren(
-		TSharedRef<IPropertyHandle> PropertyHandle,
-		class IDetailChildrenBuilder& ChildBuilder,
-		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
-
 protected:
+	virtual TSharedRef<SWidget> MakeNameWidget(const TSharedRef<IPropertyHandle>& PropertyHandle) override;
+
 	/** FName editor that shows an italic, dimmed "Self" placeholder while the suffix is None. */
 	static TSharedRef<SWidget> MakeSuffixWidget(const TSharedPtr<IPropertyHandle>& SuffixHandle);
-
-	/** Inline X/Y/Z editor for the FIntVector cell offset (FIntVector exposes no default inline value widget). */
-	static TSharedRef<SWidget> MakeOffsetWidget(const TSharedPtr<IPropertyHandle>& OffsetHandle);
 };

@@ -33,7 +33,13 @@ FLinearColor UPCGExGetCachedDataSettings::GetNodeTitleColor() const
 FString UPCGExGetCachedDataSettings::GetAdditionalTitleInformation() const
 {
 	if (bReadAllEntries) { return TEXT("All"); }
-	return CacheID.IsNone() ? FString() : CacheID.ToString();
+	return PCGExDataCache::MakeTitleCacheID(CacheID, IsPartitionPrefixed());
+}
+
+bool UPCGExGetCachedDataSettings::IsPartitionEditable() const
+{
+	if (bReadAllEntries) { return false; }
+	return bPrefixWithPartitionId || IsPropertyOverriddenByPin(GET_MEMBER_NAME_CHECKED(UPCGExGetCachedDataSettings, bPrefixWithPartitionId));
 }
 
 TArray<FPCGPinProperties> UPCGExGetCachedDataSettings::GetSanitizedCustomOutputPins() const
@@ -57,7 +63,7 @@ TArray<FPCGPinProperties> UPCGExGetCachedDataSettings::OutputPinProperties() con
 	PCGEX_PIN_ANY(PCGPinConstants::DefaultOutputLabel, "Cached data whose stored pin label matches no custom output pin.", Normal)
 	if (bOutputStatus)
 	{
-		PCGEX_PIN_PARAM(PCGExDataCache::StatusPinLabel, "One row per target actor: Found, DataCount, ActorReference, CacheID.", Normal)
+		PCGEX_PIN_PARAM(PCGExDataCache::StatusPinLabel, "One row per target actor and cache ID: Found, DataCount, ActorReference, CacheID.", Normal)
 	}
 	return PinProperties;
 }
@@ -94,13 +100,51 @@ bool FPCGExGetCachedDataElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	// Keys to read, in order. Empty under Read All Entries, and when the partition prefix could not be resolved.
+	TArray<FName> Keys;
+	if (Settings->IsPartitionPrefixed())
+	{
+		if (Settings->Partitions.IsEmpty())
+		{
+			PCGE_LOG(Error, GraphAndLog, LOCTEXT("NoPartitions", "Prefix With Partition Id is enabled but Partitions is empty."));
+			return false;
+		}
+
+		if (!PCGExDataCache::ResolvePartitionedCacheIDs(Context->ExecutionSource.Get(), Settings->CacheID, Settings->Partitions, Keys))
+		{
+			// Never the bare Cache ID instead: that would read an entry the user did not name.
+			PCGE_LOG(Warning, GraphAndLog, LOCTEXT("UnresolvedPartition", "The partition prefix could not be resolved (no execution source, or no valid bounds); nothing was read."));
+		}
+	}
+	else if (!Settings->bReadAllEntries)
+	{
+		Keys.Add(Settings->CacheID);
+	}
+
+	// One not-found row per key, or a single keyless one: Status always has something to branch on.
+	auto AddMissRows = [Context, &Keys](const FSoftObjectPath& InActor)
+	{
+		if (Keys.IsEmpty())
+		{
+			Context->StatusRows.Emplace_GetRef().Actor = InActor;
+			return;
+		}
+
+		for (const FName Key : Keys)
+		{
+			FPCGExGetCachedDataContext::FStatusRow& Row = Context->StatusRows.Emplace_GetRef();
+			Row.Actor = InActor;
+			Row.CacheID = Key;
+		}
+	};
+
 	// A read never spawns the PCG World Actor.
 	TArray<AActor*> Actors;
 	Settings->ResolveTargets(Context, /*bCreateWorldActor=*/false, Actors);
 
 	if (Actors.IsEmpty())
 	{
-		Context->StatusRows.Emplace();
+		AddMissRows(FSoftObjectPath());
 		return true;
 	}
 
@@ -114,47 +158,27 @@ bool FPCGExGetCachedDataElement::Boot(FPCGExContext* InContext) const
 
 	for (AActor* Actor : Actors)
 	{
-		FPCGExGetCachedDataContext::FStatusRow& Row = Context->StatusRows.Emplace_GetRef();
-		Row.Actor = FSoftObjectPath(Actor);
-
 		const UPCGExDataCacheComponent* Cache = UPCGExDataCacheComponent::Find(Actor);
 		if (!Cache)
 		{
 			// Normal on the first generation.
 			PCGE_LOG(Verbose, LogOnly, FText::Format(LOCTEXT("NoCacheComponent", "Actor '{0}' has no PCGEx Data Cache component."), FText::FromString(Actor->GetName())));
+			AddMissRows(FSoftObjectPath(Actor));
 			continue;
 		}
-
-		TArray<TPair<FName, TArray<FPCGTaggedData>>> Entries;
-		if (Settings->bReadAllEntries)
-		{
-			Cache->ReadAll(Entries);
-		}
-		else
-		{
-			TArray<FPCGTaggedData> Data;
-			if (Cache->Read(Settings->CacheID, Data)) { Entries.Emplace(Settings->CacheID, MoveTemp(Data)); }
-		}
-
-		if (Entries.IsEmpty())
-		{
-			const FText What = Settings->bReadAllEntries ? LOCTEXT("AnyEntry", "any entry") : FText::Format(LOCTEXT("NamedEntry", "an entry for '{0}'"), FText::FromName(Settings->CacheID));
-			PCGE_LOG(Verbose, LogOnly, FText::Format(LOCTEXT("CacheMiss", "Actor '{0}' has no cached {1}."), FText::FromString(Actor->GetName()), What));
-			continue;
-		}
-
-		Row.bFound = true;
 
 		bool bMustDuplicate = false;
 #if WITH_EDITOR
 		bMustDuplicate = !PersistentLevel || Actor->GetLevel() != PersistentLevel;
 #endif
 
-		for (TPair<FName, TArray<FPCGTaggedData>>& Entry : Entries)
+		// Moves one entry's data into Reads; returns how many data objects it held.
+		auto Ingest = [Context, Settings, bMustDuplicate](const FName InKey, TArray<FPCGTaggedData>& InData)
 		{
-			const FString CacheTag = Settings->bTagWithCacheID ? PCGExDataCache::MakeCacheIDTag(Entry.Key) : FString();
+			const FString CacheTag = Settings->bTagWithCacheID ? PCGExDataCache::MakeCacheIDTag(InKey) : FString();
 
-			for (FPCGTaggedData& Stored : Entry.Value)
+			int32 DataCount = 0;
+			for (FPCGTaggedData& Stored : InData)
 			{
 				if (!Stored.Data) { continue; }
 
@@ -162,8 +186,65 @@ bool FPCGExGetCachedDataElement::Boot(FPCGExContext* InContext) const
 				if (bMustDuplicate) { Read.Data = Cast<UPCGData>(StaticDuplicateObject(Read.Data.Get(), GetTransientPackage())); }
 				if (Settings->bTagWithCacheID) { Read.Tags.Add(CacheTag); }
 
-				Row.DataCount++;
+				DataCount++;
 			}
+			return DataCount;
+		};
+
+		if (Settings->bReadAllEntries)
+		{
+			FPCGExGetCachedDataContext::FStatusRow& Row = Context->StatusRows.Emplace_GetRef();
+			Row.Actor = FSoftObjectPath(Actor);
+
+			TArray<TPair<FName, TArray<FPCGTaggedData>>> Entries;
+			Cache->ReadAll(Entries);
+
+			if (Entries.IsEmpty())
+			{
+				PCGE_LOG(Verbose, LogOnly, FText::Format(LOCTEXT("CacheMissAny", "Actor '{0}' has no cached entry."), FText::FromString(Actor->GetName())));
+				continue;
+			}
+
+			Row.bFound = true;
+			for (TPair<FName, TArray<FPCGTaggedData>>& Entry : Entries) { Row.DataCount += Ingest(Entry.Key, Entry.Value); }
+			continue;
+		}
+
+		if (Keys.IsEmpty())
+		{
+			AddMissRows(FSoftObjectPath(Actor));
+			continue;
+		}
+
+		TArray<FString> Missing;
+		for (const FName Key : Keys)
+		{
+			FPCGExGetCachedDataContext::FStatusRow& Row = Context->StatusRows.Emplace_GetRef();
+			Row.Actor = FSoftObjectPath(Actor);
+			Row.CacheID = Key;
+
+			TArray<FPCGTaggedData> Data;
+			if (!Cache->Read(Key, Data))
+			{
+				Missing.Add(FString::Printf(TEXT("'%s'"), *Key.ToString()));
+				continue;
+			}
+
+			Row.bFound = true;
+			Row.DataCount = Ingest(Key, Data);
+		}
+
+		if (Missing.IsEmpty()) { continue; }
+
+		const FText Miss = FText::Format(LOCTEXT("CacheMiss", "Actor '{0}' has no cached entry for {1}."), FText::FromString(Actor->GetName()), FText::FromString(FString::Join(Missing, TEXT(", "))));
+		if (Missing.Num() == Keys.Num())
+		{
+			// Every key missing is what a first generation looks like: Status is the branch point, not a warning.
+			PCGE_LOG(Verbose, LogOnly, Miss);
+		}
+		else if (!Settings->bQuietMissingPartitionWarning)
+		{
+			PCGE_LOG(Warning, GraphAndLog, Miss);
 		}
 	}
 
@@ -204,14 +285,13 @@ bool FPCGExGetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 		FPCGMetadataAttribute<FSoftObjectPath>* ActorAttr = Metadata->CreateAttribute<FSoftObjectPath>(PCGPointDataConstants::ActorReferenceAttribute, FSoftObjectPath(), false, true);
 		FPCGMetadataAttribute<FName>* IdAttr = Metadata->CreateAttribute<FName>(PCGExDataCache::CacheIDAttributeName, NAME_None, false, true);
 
-		const FName RowId = Settings->bReadAllEntries ? NAME_None : Settings->CacheID;
 		for (const FPCGExGetCachedDataContext::FStatusRow& Row : Context->StatusRows)
 		{
 			const PCGMetadataEntryKey Key = Metadata->AddEntry();
 			FoundAttr->SetValue(Key, Row.bFound);
 			CountAttr->SetValue(Key, Row.DataCount);
 			ActorAttr->SetValue(Key, Row.Actor);
-			IdAttr->SetValue(Key, RowId);
+			IdAttr->SetValue(Key, Row.CacheID);
 		}
 
 		Context->StageOutput(Status, PCGExDataCache::StatusPinLabel, PCGExData::EStaging::Mutable);
