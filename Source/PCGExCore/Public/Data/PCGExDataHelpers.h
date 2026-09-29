@@ -10,6 +10,7 @@
 
 enum class EPCGExInputValueType : uint8;
 struct FPCGExContext;
+struct FPCGContextHandle;
 
 namespace PCGExData
 {
@@ -19,6 +20,13 @@ namespace PCGExData
 
 namespace PCGExData::Helpers
 {
+	/**
+	 * Warns that an engine accessor read returned false, on the graph when the context is still alive and
+	 * in the log otherwise. Never quiet: the caller is about to serve default values in place of real ones.
+	 * Thread-safe. Callers own the once-per-source throttling.
+	 */
+	PCGEXCORE_API void LogFailedRead(const TWeakPtr<FPCGContextHandle>& InContextHandle, FName InDataClass, const FString& InSource, EPCGMetadataTypes InReadAs);
+
 	template <typename T>
 	T ReadDataValue(const FPCGMetadataAttribute<T>* Attribute);
 

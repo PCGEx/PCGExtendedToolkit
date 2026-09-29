@@ -15,6 +15,7 @@
 
 class UPCGMetadata;
 struct FPCGContext;
+struct FPCGContextHandle;
 class FPCGMetadataAttributeBase;
 struct FPCGExContext;
 
@@ -96,6 +97,17 @@ namespace PCGExData
 		const FPCGMetadataAttributeBase* GetAttribute() const;
 		virtual EPCGMetadataTypes GetMetadataType() const;
 		virtual FName GetName() const;
+
+	protected:
+		// Unset when prepared from raw data: failed reads are then logged without a graph.
+		TWeakPtr<FPCGContextHandle> ContextHandle;
+		FName SourceClassName = NAME_None;
+
+		// Plain int32 driven by FPlatformAtomics, so the class stays movable.
+		mutable int32 ReadFailureReported = 0;
+
+		// Warns once per broadcaster. Callable from any thread.
+		void ReportReadFailure() const;
 	};
 
 	template <typename T>
@@ -110,7 +122,14 @@ namespace PCGExData
 		TSharedPtr<IDataValue> DataValue;
 		T TypedDataValue = T{};
 
+		// False once a read through InternalAccessor has failed: every read then serves T{} without touching it.
+		bool bReadable = true;
+
 		bool ApplySelector(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData);
+
+		// One-element read, run once keys and accessor are both set. GetRange fails the same way for one element
+		// as for a scope (keys the accessor can't use, or no conversion to T), so this settles bReadable up front.
+		void ProbeRead();
 
 	public:
 		FORCEINLINE TAttributeBroadcaster() = default;

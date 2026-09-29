@@ -15,6 +15,7 @@
 #include "Data/PCGExProxyData.h"
 #include "Data/PCGPointData.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
 #include "Types/PCGExAttributeIdentity.h"
@@ -268,6 +269,17 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 	}
 
 	template <typename T>
+	void TArrayBuffer<T>::ReportReadFailure(const UPCGData* InData)
+	{
+		if (bReadFailureReported.exchange(true))
+		{
+			return;
+		}
+
+		Helpers::LogFailedRead(Source->GetContextHandle(), InData ? InData->GetClass()->GetFName() : NAME_None, Identifier.Name.ToString(), PCGExTypes::TTraits<T>::Type);
+	}
+
+	template <typename T>
 	void TArrayBuffer<T>::InitForReadInternal(const bool bScoped, const FPCGMetadataAttributeBase* Attribute)
 	{
 		if (InValues)
@@ -405,7 +417,12 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		if (!bSparseBuffer && !bReadComplete)
 		{
 			TArrayView<T> InRange = MakeArrayView(InValues->GetData(), InValues->Num());
-			InAccessor->GetRange<T>(InRange, 0, *Source->GetInKeys());
+			if (!InAccessor->GetRange<T>(InRange, 0, *Source->GetInKeys()))
+			{
+				// InValues may be uninitialized memory: a read that wrote nothing must still define every value.
+				for (T& Value : InRange) { Value = T{}; }
+				ReportReadFailure(Source->GetIn());
+			}
 			bReadComplete = true;
 		}
 
@@ -535,11 +552,12 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		auto GrabExistingValues = [&]()
 		{
 			// Read-only keys: mutable ones flatten a parented Out, and a facade's writable buffers init concurrently.
-			TUniquePtr<FPCGAttributeAccessorKeysPointIndices> TempOutKeys = MakeUnique<FPCGAttributeAccessorKeysPointIndices>(static_cast<const UPCGBasePointData*>(Source->GetOut()));
+			const TSharedPtr<IPCGAttributeAccessorKeys> TempOutKeys = PCGExMetaHelpers::MakeConstKeys(Source->GetOut());
 			TArrayView<T> OutRange = MakeArrayView(OutValues->GetData(), OutValues->Num());
-			if (!OutAccessor->GetRange<T>(OutRange, 0, *TempOutKeys.Get()))
+			if (!TempOutKeys || !OutAccessor->GetRange<T>(OutRange, 0, *TempOutKeys.Get()))
 			{
-				// TODO : Log
+				// No fill: OutValues already holds the default it was initialized with.
+				ReportReadFailure(Source->GetOut());
 			}
 		};
 
@@ -634,13 +652,20 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		if (InternalBroadcaster)
 		{
 			InternalBroadcaster->Fetch(*InValues, Scope);
+			if (bCacheValueHashes)
+			{
+				ComputeValueHashes(Scope);
+			}
+			return;
 		}
 
-		if (TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, Source->GetIn()->Metadata);
-			InAccessor.IsValid())
+		TArrayView<T> ReadRange = MakeArrayView(InValues->GetData() + Scope.Start, Scope.Count);
+		const TUniquePtr<const IPCGAttributeAccessor> InAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(TypedInAttribute, Source->GetIn()->Metadata);
+
+		if (!InAccessor.IsValid() || !InAccessor->GetRange<T>(ReadRange, Scope.Start, *Source->GetInKeys()))
 		{
-			TArrayView<T> ReadRange = MakeArrayView(InValues->GetData() + Scope.Start, Scope.Count);
-			InAccessor->GetRange<T>(ReadRange, Scope.Start, *Source->GetInKeys());
+			for (T& Value : ReadRange) { Value = T{}; }
+			ReportReadFailure(Source->GetIn());
 		}
 
 		if (bCacheValueHashes)
