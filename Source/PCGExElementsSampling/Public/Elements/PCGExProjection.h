@@ -80,7 +80,7 @@ public:
 	FName SuccessAttributeName = FName("bProjectionSuccess");
 
 	/** Write point density from how well the projected normal aligns with a direction. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle, ScriptName="normal_to_density_enabled"))
 	bool bNormalToDensity = false;
 
 	/** Reads the projected normal whether or not rotation is applied. Failed and filtered out points keep their density. */
