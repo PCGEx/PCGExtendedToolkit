@@ -3,11 +3,21 @@
 
 #include "Elements/PCGExProjection.h"
 
+#include "Core/PCGExFilterTypeSets.h"
+#include "Core/PCGExPointFilter.h"
+#include "Data/PCGCollisionShapeData.h"
+#include "Data/PCGCollisionWrapperData.h"
+#include "Data/PCGDynamicMeshData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataMacros.h"
 #include "Data/PCGExPointElements.h"
 #include "Data/PCGExPointIO.h"
+#include "Data/PCGLandscapeSplineData.h"
+#include "Data/PCGPrimitiveData.h"
 #include "Data/PCGSpatialData.h"
+#include "Data/PCGSplineData.h"
+#include "Data/PCGTexture2DBaseData.h"
+#include "Data/PCGVolumeData.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Data/Utils/PCGExDataForward.h"
 #include "Elements/PCGProjectionElement.h"
@@ -40,6 +50,18 @@ void UPCGExProjectionSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinPro
 	}
 }
 
+TArray<FPCGPinProperties> UPCGExProjectionSettings::InputPinProperties() const
+{
+	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
+
+	if (bFootprint)
+	{
+		PCGEX_PIN_FILTERS(PCGExProjection::Labels::SourceFootprintFiltersLabel, "Points that pass are footprint-checked; the others get the plain projection.", Normal)
+	}
+
+	return PinProperties;
+}
+
 PCGEX_INITIALIZE_ELEMENT(Projection)
 
 PCGExData::EIOInit UPCGExProjectionSettings::GetMainDataInitializationPolicy() const
@@ -48,6 +70,22 @@ PCGExData::EIOInit UPCGExProjectionSettings::GetMainDataInitializationPolicy() c
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(Projection)
+
+namespace PCGExProjection
+{
+	/** Targets whose projection is a containment test : the projected position is always the input position. */
+	bool IsStaticTarget(const UPCGSpatialData* Target)
+	{
+		return Target->IsA<UPCGVolumeData>()
+			|| Target->IsA<UPCGPrimitiveData>()
+			|| Target->IsA<UPCGDynamicMeshData>()
+			|| Target->IsA<UPCGTexture2DBaseData>()
+			|| Target->IsA<UPCGCollisionShapeData>()
+			|| Target->IsA<UPCGCollisionWrapperData>()
+			|| Target->IsA<UPCGSplineData>()
+			|| Target->IsA<UPCGLandscapeSplineData>();
+	}
+}
 
 #pragma region FPCGExProjectionElement
 
@@ -80,11 +118,50 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 	PCGEX_FWD(ApplySampling)
 	Context->ApplySampling.Init();
 
+	Context->bFootprint = Settings->bFootprint;
+	if (Context->bFootprint)
+	{
+		const FPCGExProjectionFootprintDetails& Footprint = Settings->Footprint;
+
+		PCGEX_OUTPUT_VALIDATE_NAME(Overhang, double, 0)
+		PCGEX_OUTPUT_VALIDATE_NAME(Penetration, double, 0)
+
+		const bool bPositionApplied = !Context->ApplySampling.TrPosComponents.IsEmpty();
+		const bool bPush = Footprint.Push != EPCGExFootprintPush::None;
+		if (bPush && !bPositionApplied)
+		{
+			PCGE_LOG(Warning, GraphAndLog, FTEXT("Footprint push needs an applied position component; the push is ignored."));
+		}
+
+		if (!Context->bWriteOverhang && !Context->bWritePenetration && Footprint.FailMetric == EPCGExFootprintFailMetric::None && !(bPush && bPositionApplied))
+		{
+			PCGE_LOG(Warning, GraphAndLog, FTEXT("Footprint has nothing to write, fail or push : it is disabled."));
+			Context->bFootprint = false;
+		}
+		else
+		{
+			if (PCGExProjection::IsStaticTarget(Context->ProjectionTarget))
+			{
+				PCGE_LOG(Warning, GraphAndLog, FTEXT("This target never moves projected points; footprint offsets will read 0."));
+			}
+
+			PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExProjection::Labels::SourceFootprintFiltersLabel, Context->FootprintFilterFactories, PCGExFactories::PointFilters(), false);
+
+			Context->FootprintProjectionParams.bProjectPositions = true;
+			Context->FootprintProjectionParams.bProjectRotations = false;
+			Context->FootprintProjectionParams.bProjectScales = false;
+		}
+	}
+	else if (Settings->bWriteOverhang || Settings->bWritePenetration)
+	{
+		PCGE_LOG(Warning, GraphAndLog, FTEXT("The Overhang and Penetration outputs require Footprint to be enabled."));
+	}
+
 	// Position is always projected (pruning and look-at need it). Rotation only when a component is applied or
-	// normal-to-density reads it, scale only when applied, so targets can skip that work (e.g. landscape normals).
-	// Attribute/color params are unused by ProjectPoint.
+	// normal-to-density / a projected footprint reference reads it, scale only when applied, so targets can skip
+	// that work (e.g. landscape normals). Attribute/color params are unused by ProjectPoint.
 	Context->ProjectionParams.bProjectPositions = true;
-	Context->ProjectionParams.bProjectRotations = Settings->bNormalToDensity || !Context->ApplySampling.TrRotComponents.IsEmpty();
+	Context->ProjectionParams.bProjectRotations = Settings->bNormalToDensity || (Context->bFootprint && Settings->Footprint.Reference == EPCGExFootprintReference::Projected) || !Context->ApplySampling.TrRotComponents.IsEmpty();
 	Context->ProjectionParams.bProjectScales = !Context->ApplySampling.TrScaComponents.IsEmpty();
 
 	// Invalid name : warn & disable the output, same as the other sampling nodes
@@ -124,7 +201,7 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 		(void)PointTarget->GetPointOctree();
 	}
 
-	if (!Context->ApplySampling.WantsApply() && !Settings->bPruneFailedProjections && !Context->bWriteSuccess && !Context->bForwardAttributes && !Settings->bNormalToDensity)
+	if (!Context->ApplySampling.WantsApply() && !Settings->bPruneFailedProjections && !Context->bWriteSuccess && !Context->bForwardAttributes && !Settings->bNormalToDensity && !Context->bFootprint)
 	{
 		PCGE_LOG(Warning, GraphAndLog, FTEXT("Nothing to apply, prune, forward or write : the node has no effect."));
 	}
@@ -148,7 +225,7 @@ bool FPCGExProjectionElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
 				// CompleteWork only flushes attribute writers; the Write step (Gather) runs regardless of bSkipCompletion.
-				NewBatch->bSkipCompletion = !Context->bWriteSuccess && !Context->bForwardAttributes;
+				NewBatch->bSkipCompletion = !Context->bWriteSuccess && !Context->bForwardAttributes && !Context->bWriteOverhang && !Context->bWritePenetration;
 				NewBatch->bRequiresWriteStep = Settings->bPruneFailedProjections;
 			}))
 		{
@@ -237,6 +314,44 @@ namespace PCGExProjection
 			}
 		}
 
+		if (Context->bFootprint)
+		{
+			Footprint = MakeShared<PCGExSampling::FProjectionFootprint>();
+			if (!Footprint->Init(Settings->Footprint, PointDataFacade))
+			{
+				return false;
+			}
+
+			if (!Context->FootprintFilterFactories.IsEmpty())
+			{
+				FootprintFilterManager = MakeShared<PCGExPointFilter::FManager>(PointDataFacade);
+				if (!FootprintFilterManager->Init(Context, Context->FootprintFilterFactories))
+				{
+					return false;
+				}
+
+				FootprintMask.Init(1, PointDataFacade->GetNum());
+			}
+
+			if (Context->bWriteOverhang)
+			{
+				OverhangWriter = PointDataFacade->GetWritable<double>(Settings->OverhangAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
+				if (!OverhangWriter)
+				{
+					return false;
+				}
+			}
+
+			if (Context->bWritePenetration)
+			{
+				PenetrationWriter = PointDataFacade->GetWritable<double>(Settings->PenetrationAttributeName, 0, true, PCGExData::EBufferInit::Inherit);
+				if (!PenetrationWriter)
+				{
+					return false;
+				}
+			}
+		}
+
 		StartParallelLoopForPoints();
 
 		return true;
@@ -290,8 +405,9 @@ namespace PCGExProjection
 		const bool bLookAt = ApplySampling.bApplyLookAt;
 
 		const PCGExSampling::FNormalToDensity* Density = NormalToDensity.Get();
+		const PCGExSampling::FProjectionFootprint* FootprintProbe = Footprint.Get();
 
-		if (!bApply && !bPrune && !SuccessWriter && !AttributesForward && !Density)
+		if (!bApply && !bPrune && !SuccessWriter && !AttributesForward && !Density && !FootprintProbe)
 		{
 			// Nothing would consume the projection result
 			return;
@@ -311,8 +427,24 @@ namespace PCGExProjection
 			Density->PrepareScope(Scope, DensityView);
 		}
 
-		// Rotation projected for the normal alone must not reach the look-at fallback.
-		const bool bRestoreRotation = Density && ApplySampling.TrRotComponents.IsEmpty();
+		PCGExSampling::FProjectionFootprint::FScopeView FootprintView;
+		if (FootprintProbe)
+		{
+			FootprintProbe->PrepareScope(Scope, FootprintView);
+
+			if (FootprintFilterManager)
+			{
+				FootprintFilterManager->Test(Scope, FootprintMask);
+			}
+		}
+
+		const bool bFootprintProjected = FootprintProbe && FootprintProbe->WantsProjectedRotation();
+		const bool bPush = FootprintProbe && bApply && FootprintProbe->WantsPush();
+		const int8* FootprintMaskPtr = FootprintMask.IsEmpty() ? nullptr : FootprintMask.GetData();
+		const FPCGProjectionParams& FootprintParams = Context->FootprintProjectionParams;
+
+		// Rotation projected for the normal or the footprint alone must not reach the look-at fallback.
+		const bool bRestoreRotation = (Density || bFootprintProjected) && ApplySampling.TrRotComponents.IsEmpty();
 
 		const UPCGSpatialData* Target = Context->ProjectionTarget;
 		const FPCGProjectionParams& ProjectionParams = Context->ProjectionParams;
@@ -354,6 +486,35 @@ namespace PCGExProjection
 			{
 				ProjectionFailed(Index);
 				continue;
+			}
+
+			FVector PushVector = FVector::ZeroVector;
+			if (FootprintProbe && (!FootprintMaskPtr || FootprintMaskPtr[Index]))
+			{
+				// Offsets are written before the fail decision so a kept-but-failed point carries what failed it.
+				PCGExSampling::FProjectionFootprint::FResult FootprintResult;
+				FootprintProbe->Probe(Target, FootprintParams, PCGExData::FConstPoint(InPointData, Index), Projected.Transform.GetLocation(), bFootprintProjected ? Projected.Transform.GetRotation() : InTransform.GetRotation(), FootprintView, Index - Scope.Start, FootprintResult);
+
+				if (OverhangWriter)
+				{
+					OverhangWriter->SetValue(Index, FootprintResult.Overhang);
+				}
+
+				if (PenetrationWriter)
+				{
+					PenetrationWriter->SetValue(Index, FootprintResult.Penetration);
+				}
+
+				if (FootprintProbe->ShouldFail(FootprintResult, FootprintView, Index - Scope.Start))
+				{
+					ProjectionFailed(Index);
+					continue;
+				}
+
+				if (bPush)
+				{
+					PushVector = FootprintProbe->GetPush(FootprintResult);
+				}
 			}
 
 			if (bPrune)
@@ -399,6 +560,11 @@ namespace PCGExProjection
 			}
 
 			ApplySampling.Apply(OutTransforms[Index], Projected.Transform, LookAt);
+
+			if (bPush)
+			{
+				OutTransforms[Index].AddToTranslation(PushVector);
+			}
 		}
 
 		if (AttributesForward)

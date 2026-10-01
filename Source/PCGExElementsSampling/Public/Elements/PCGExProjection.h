@@ -12,11 +12,26 @@
 #include "Elements/PCGProjectionParams.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
 #include "Sampling/PCGExNormalToDensityDetails.h"
+#include "Sampling/PCGExProjectionFootprintDetails.h"
 
 #include "PCGExProjection.generated.h"
 
 class UPCGMetadata;
 class UPCGSpatialData;
+class UPCGExPointFilterFactoryData;
+
+namespace PCGExPointFilter
+{
+	class FManager;
+}
+
+namespace PCGExProjection
+{
+	namespace Labels
+	{
+		const FName SourceFootprintFiltersLabel = FName("Footprint Filters");
+	}
+}
 
 /**
  * Lightweight, parallel alternative to the stock Projection node.
@@ -50,6 +65,7 @@ public:
 	PCGEX_NODE_POINT_FILTER(PCGExFilters::Labels::SourceFiltersLabel, "Filters", PCGExFactories::PointFilters(), false)
 
 protected:
+	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual void InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const override;
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
@@ -80,16 +96,40 @@ public:
 	FName SuccessAttributeName = FName("bProjectionSuccess");
 
 	/** Write point density from how well the projected normal aligns with a direction. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle, ScriptName="normal_to_density_enabled"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle, ScriptName="normal_to_density_enabled"))
 	bool bNormalToDensity = false;
 
 	/** Reads the projected normal whether or not rotation is applied. Failed and filtered out points keep their density. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, EditCondition="bNormalToDensity"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bNormalToDensity"))
 	FPCGExNormalToDensityDetails NormalToDensity;
+
+	/** Probe the four bottom corners of the point bounds at the projected location to measure and correct overhang or penetration. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle, ScriptName="footprint_enabled"))
+	bool bFootprint = false;
+
+	/** Corner offsets are written before the fail decision. Points not passing 'Footprint Filters' get the plain projection. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bFootprint"))
+	FPCGExProjectionFootprintDetails Footprint;
+
+	/** Write the footprint's maximum overhang. Requires Footprint. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bWriteOverhang = false;
+
+	/** Name of the 'double' attribute to write the maximum overhang to : largest gap under a bottom corner, 0 when none hangs. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="Overhang", PCG_Overridable, EditCondition="bWriteOverhang"))
+	FName OverhangAttributeName = FName("FootprintOverhang");
+
+	/** Write the footprint's maximum penetration. Requires Footprint. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bWritePenetration = false;
+
+	/** Name of the 'double' attribute to write the maximum penetration to : deepest bottom corner under the surface, 0 when none sinks. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta=(DisplayName="Penetration", PCG_Overridable, EditCondition="bWritePenetration"))
+	FName PenetrationAttributeName = FName("FootprintPenetration");
 
 	/** Which of the attributes the target writes during projection (landscape layer weights, actor reference, point attributes...)
 	 * are forwarded onto the projected points. Filtered-out and failed points keep their existing values. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Forwarding", meta=(PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExForwardDetails AttributesForwarding;
 
 	/** If enabled, points the target rejects (outside the target, no hit...) are removed from the output. Otherwise they are left untouched. */
@@ -116,6 +156,16 @@ struct FPCGExProjectionContext final : FPCGExPointsProcessorContext
 
 	bool bWriteSuccess = false;
 	bool bForwardAttributes = false;
+
+	bool bFootprint = false;
+	bool bWriteOverhang = false;
+	bool bWritePenetration = false;
+
+	/** Filters from the 'Footprint Filters' pin; empty when nothing is connected. */
+	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> FootprintFilterFactories;
+
+	/** Positions only : corner probes never need the target's rotation or scale work. */
+	FPCGProjectionParams FootprintProjectionParams;
 
 	/** Target Elements attributes known upfront that pass the name filter; include-filter for the per-processor sampled metadata. */
 	TSet<FName> ForwardedTargetAttributes;
@@ -147,6 +197,13 @@ namespace PCGExProjection
 		TArray<PCGMetadataEntryKey> SampledEntries;
 		TSharedPtr<PCGExData::FDataForwardHandler> AttributesForward;
 		TSharedPtr<PCGExSampling::FNormalToDensity> NormalToDensity;
+
+		TSharedPtr<PCGExSampling::FProjectionFootprint> Footprint;
+		/** 1 = footprint-checked. Only allocated when the pin carries filters. */
+		TArray<int8> FootprintMask;
+		TSharedPtr<PCGExPointFilter::FManager> FootprintFilterManager;
+		TSharedPtr<PCGExData::TBuffer<double>> OverhangWriter;
+		TSharedPtr<PCGExData::TBuffer<double>> PenetrationWriter;
 
 		bool bPrune = false;
 

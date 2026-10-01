@@ -24,8 +24,18 @@
 #include "UObject/Package.h"
 
 #include "Helpers/PCGSettingsHelpers.h"
+#include "HAL/IConsoleManager.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSettings"
+
+namespace PCGExSettingsCVars
+{
+	bool bForceOffThread = false;
+	FAutoConsoleVariableRef CVarForceOffThread(
+		TEXT("pcgex.ForceOffThread"),
+		bForceOffThread,
+		TEXT("Force every PCGEx node's prepare and execute phases off the game thread, ignoring per-node Force Off Thread and the Runtime Always Off Thread plugin setting."));
+}
 
 #if WITH_EDITOR
 void UPCGExSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
@@ -179,12 +189,12 @@ PCGExData::EIOInit UPCGExSettings::GetMainDataInitializationPolicy() const
 
 bool UPCGExSettings::GetForceOffThreadPrepare(const FPCGExContext* InContext) const
 {
-	return bForceOffThreadPrepare || (PCGEX_CORE_SETTINGS.bRuntimeAlwaysOffThread && InContext->IsRuntimeGen());
+	return PCGExSettingsCVars::bForceOffThread || bForceOffThreadPrepare || (PCGEX_CORE_SETTINGS.bRuntimeAlwaysOffThread && InContext->IsRuntimeGen());
 }
 
 bool UPCGExSettings::GetForceOffThreadExecute(const FPCGExContext* InContext) const
 {
-	return bForceOffThreadExecute || (PCGEX_CORE_SETTINGS.bRuntimeAlwaysOffThread && InContext->IsRuntimeGen());
+	return PCGExSettingsCVars::bForceOffThread || bForceOffThreadExecute || (PCGEX_CORE_SETTINGS.bRuntimeAlwaysOffThread && InContext->IsRuntimeGen());
 }
 
 bool UPCGExSettings::WantsResourcesCached() const

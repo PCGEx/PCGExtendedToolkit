@@ -718,7 +718,6 @@ namespace PCGExPackActorData
 		TArray<int8> PointMask;
 
 		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
-		TSharedPtr<FStreamableHandle> LoadHandle;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

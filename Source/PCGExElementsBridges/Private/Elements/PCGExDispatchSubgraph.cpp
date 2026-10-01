@@ -542,7 +542,7 @@ void FPCGExDispatchSubgraphElement::PostLoadAssetsDependencies(FPCGExContext* In
 
 	if (!ObjectPaths->IsEmpty())
 	{
-		PCGExHelpers::LoadBlocking_AnyThread(ObjectPaths, Context);
+		PCGExHelpers::LoadBlockingTracked_AnyThread(ObjectPaths, Context);
 	}
 }
 
