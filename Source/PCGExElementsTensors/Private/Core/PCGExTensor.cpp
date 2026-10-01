@@ -100,7 +100,7 @@ void FPCGExTensorConfigBase::Init(FPCGExContext* InContext)
 
 	if (!CurvePaths->IsEmpty())
 	{
-		PCGExHelpers::LoadBlocking_AnyThread(CurvePaths, InContext);
+		PCGExHelpers::LoadBlockingTracked_AnyThread(CurvePaths, InContext);
 	}
 
 	WeightFalloffLUT = WeightFalloffCurveLookup.MakeLookup(bUseLocalWeightFalloffCurve, LocalWeightFalloffCurve, WeightFalloffCurve);

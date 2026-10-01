@@ -220,14 +220,11 @@ protected:
 	// Entry pointer -> Loaded asset (populated after load)
 	TMap<const FPCGExPCGDataAssetCollectionEntry*, TObjectPtr<UPCGDataAsset>> LoadedAssets;
 
-	// Streamable handle
-	TSharedPtr<FStreamableHandle> LoadHandle;
-
 public:
 	using FOnLoadEnd = std::function<void(const bool bSuccess)>;
 
 	FPCGExSharedAssetPool() = default;
-	~FPCGExSharedAssetPool();
+	~FPCGExSharedAssetPool() = default;
 
 	/**
 	 * Thread-safe: Register an entry by its hash.
@@ -237,6 +234,8 @@ public:
 
 	/**
 	 * Load all registered unique assets. Call once after all processors complete initial processing.
+	 * Cache-aware: a warm resource cache completes synchronously, so OnLoadEnd may run before this returns.
+	 * Keep-alive is owned by the context (LoadTracked), not by the pool.
 	 */
 	void LoadAllAssets(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, FOnLoadEnd&& OnLoadEnd);
 

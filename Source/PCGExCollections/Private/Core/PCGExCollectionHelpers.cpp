@@ -188,7 +188,15 @@ namespace PCGExCollectionHelpers
 		{
 			// No registry row (class paths, unscanned assets): resolve through the loaded object. A class
 			// must yield its own row, not its Blueprint's (AllowBlueprintClass).
-			Handles.Add(PCGExHelpers::LoadBlocking_AnyThread(InPath, InContext));
+			// Context-owned keep-alive when tracked; the resolver only holds handles it loaded itself.
+			if (InContext)
+			{
+				PCGExHelpers::LoadBlockingTracked_AnyThread(InPath, InContext);
+			}
+			else
+			{
+				Handles.Add(PCGExHelpers::LoadBlocking_AnyThread(InPath));
+			}
 			const UObject* Object = InPath.ResolveObject();
 			if (!Object)
 			{

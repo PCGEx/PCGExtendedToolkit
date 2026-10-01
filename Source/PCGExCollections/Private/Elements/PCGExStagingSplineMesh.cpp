@@ -245,7 +245,7 @@ bool FPCGExPathSplineMeshElement::Boot(FPCGExContext* InContext) const
 	{
 		if (Settings->CollectionSource == EPCGExCollectionSource::Asset)
 		{
-			PCGExHelpers::LoadBlocking_AnyThreadTpl(Settings->AssetCollection, Context);
+			PCGExHelpers::LoadBlockingTracked_AnyThreadTpl(Settings->AssetCollection, Context);
 			Context->MainCollection = Settings->AssetCollection.Get();
 			if (!Context->MainCollection)
 			{

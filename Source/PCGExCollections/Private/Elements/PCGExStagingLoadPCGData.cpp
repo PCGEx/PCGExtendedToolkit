@@ -30,11 +30,6 @@
 
 #pragma region FPCGExSharedAssetPool
 
-FPCGExSharedAssetPool::~FPCGExSharedAssetPool()
-{
-	PCGExHelpers::SafeReleaseHandle(LoadHandle);
-}
-
 void FPCGExSharedAssetPool::RegisterEntry(uint64 EntryHash, const FPCGExPCGDataAssetCollectionEntry* Entry)
 {
 	if (!Entry || Entry->bIsSubCollection || EntryHash == 0)
@@ -73,16 +68,16 @@ void FPCGExSharedAssetPool::LoadAllAssets(const TSharedPtr<PCGExMT::FTaskManager
 		return;
 	}
 
-	PCGExHelpers::Load(
+	// Warm cache: completes synchronously on this thread with no game-thread roundtrip (see LoadTracked).
+	PCGExHelpers::LoadTracked(
 		TaskManager,
 		[PathsToLoad]()
 		{
 			return PathsToLoad->Array();
 		},
-		[PCGEX_ASYNC_THIS_CAPTURE, OnLoadEnd](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+		[PCGEX_ASYNC_THIS_CAPTURE, OnLoadEnd](const bool bSuccess)
 		{
 			PCGEX_ASYNC_THIS
-			This->LoadHandle = StreamableHandle;
 
 			if (bSuccess)
 			{

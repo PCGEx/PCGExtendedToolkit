@@ -140,7 +140,15 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
 	T* LoadSync(FPCGExContext* InContext = nullptr) const
 	{
 		TSoftObjectPtr<T> SoftObjectPtr = TSoftObjectPtr<T>(Path);
-		PCGExHelpers::LoadBlocking_AnyThreadTpl<T>(SoftObjectPtr, InContext);
+		// Tracked needs a context to own the keep-alive; context-less callers fall back to the plain load.
+		if (InContext)
+		{
+			PCGExHelpers::LoadBlockingTracked_AnyThreadTpl<T>(SoftObjectPtr, InContext);
+		}
+		else
+		{
+			PCGExHelpers::LoadBlocking_AnyThreadTpl<T>(SoftObjectPtr);
+		}
 		return SoftObjectPtr.Get();
 	}
 

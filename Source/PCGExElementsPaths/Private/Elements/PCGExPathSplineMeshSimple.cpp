@@ -182,7 +182,7 @@ bool FPCGExPathSplineMeshSimpleElement::Boot(FPCGExContext* InContext) const
 	else
 	{
 		const TSoftObjectPtr<UStaticMesh> StaticMeshPtr(Settings->Asset.Constant);
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(StaticMeshPtr, Context);
+		PCGExHelpers::LoadBlockingTracked_AnyThreadTpl(StaticMeshPtr, Context);
 		Context->StaticMesh = StaticMeshPtr.Get();
 		if (!Context->StaticMesh)
 		{
