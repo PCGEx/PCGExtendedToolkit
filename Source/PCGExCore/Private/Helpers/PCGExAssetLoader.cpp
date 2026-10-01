@@ -160,11 +160,17 @@ namespace PCGEx
 			return false;
 		}
 
-		// LoadBlocking_AnyThread marshals to the game thread internally and registers the handle
-		// against the context's TrackedAssets. We also hold our own ref so the assets stay
-		// resident for the lifetime of the loader, independent of the context's cleanup order.
+		// With a context, keep-alive is context-owned and warm assets skip the game-thread marshal.
+		// A context-less loader (default-constructed) must hold its own handle instead.
 		TSharedPtr<TSet<FSoftObjectPath>> PathsHandle = MakeShared<TSet<FSoftObjectPath>>(UniquePaths);
-		LoadHandle = PCGExHelpers::LoadBlocking_AnyThread(PathsHandle, Context);
+		if (Context)
+		{
+			PCGExHelpers::LoadBlockingTracked_AnyThread(PathsHandle, Context);
+		}
+		else
+		{
+			LoadHandle = PCGExHelpers::LoadBlocking_AnyThread(PathsHandle);
+		}
 
 		Finalize();
 		return !IsEmpty();
@@ -177,17 +183,17 @@ namespace PCGEx
 			return false;
 		}
 
-		PCGExHelpers::Load(
+		// Warm cache: completes synchronously on this thread (see LoadTracked). Keep-alive is context-owned.
+		PCGExHelpers::LoadTracked(
 			TaskManager,
 			[PCGEX_ASYNC_THIS_CAPTURE]() -> TArray<FSoftObjectPath>
 			{
 				PCGEX_ASYNC_THIS_RET({})
 				return This->UniquePaths.Array();
 			},
-			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess)
 			{
 				PCGEX_ASYNC_THIS
-				This->LoadHandle = StreamableHandle;
 				if (bSuccess)
 				{
 					This->Finalize();

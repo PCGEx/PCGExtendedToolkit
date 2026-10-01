@@ -298,20 +298,19 @@ namespace PCGExStagingSpawnActors
 
 		TArray<FSoftObjectPath> PathsToLoad = UniquePaths.Array();
 
-		PCGExHelpers::Load(
+		// Warm cache: completes synchronously on this thread (see LoadTracked). Keep-alive is context-owned.
+		PCGExHelpers::LoadTracked(
 			TaskManager,
 			[PCGEX_ASYNC_THIS_CAPTURE, PathsToLoad = MoveTemp(PathsToLoad)]() -> TArray<FSoftObjectPath>
 			{
 				PCGEX_ASYNC_THIS_RET({})
 				return PathsToLoad;
 			},
-			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess)
 			{
 				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::OnLoadComplete);
 
 				PCGEX_ASYNC_THIS
-
-				This->LoadHandle = StreamableHandle;
 
 				This->MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(This->NumPoints);
 				This->MainThreadLoop->OnIterationCallback = [This](const int32 Index, const PCGExMT::FScope& Scope)

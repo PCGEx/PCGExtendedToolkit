@@ -55,7 +55,7 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 	Settings->TemplateDescriptor.GetAssetPaths(*TemplateResources.Get());
 	if (!TemplateResources->IsEmpty())
 	{
-		PCGExHelpers::LoadBlocking_AnyThread(TemplateResources, Context);
+		PCGExHelpers::LoadBlockingTracked_AnyThread(TemplateResources, Context);
 	}
 
 	// Output creates UObjects (NewObject) and attaches components -- illegal during a package save / GC. Defer (re-tick) until clear.

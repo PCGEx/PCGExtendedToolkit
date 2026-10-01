@@ -487,16 +487,16 @@ namespace PCGExPackActorData
 		}
 		else
 		{
-			PCGExHelpers::Load(
+			// Warm cache: completes synchronously on this thread (see LoadTracked). Keep-alive is context-owned.
+			PCGExHelpers::LoadTracked(
 				TaskManager,
 				[PCGEX_ASYNC_THIS_CAPTURE]() -> TArray<FSoftObjectPath>
 				{
 					PCGEX_ASYNC_THIS_RET({})
 					return This->Packer->RequiredAssetsPaths.Array();
-				}, [PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+				}, [PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess)
 				{
 					PCGEX_ASYNC_THIS
-					This->LoadHandle = StreamableHandle;
 					This->StartProcessing();
 				});
 		}

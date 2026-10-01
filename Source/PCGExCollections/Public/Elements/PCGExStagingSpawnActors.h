@@ -206,9 +206,6 @@ namespace PCGExStagingSpawnActors
 		/** Main thread loop for spawning */
 		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
 
-		/** Keeps loaded actor classes alive */
-		TSharedPtr<FStreamableHandle> LoadHandle;
-
 		/** Managed resource for actor cleanup via PCG's native resource tracking */
 		UPCGManagedActors* ManagedActors = nullptr;
 

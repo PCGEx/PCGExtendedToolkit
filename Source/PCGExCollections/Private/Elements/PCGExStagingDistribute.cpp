@@ -420,7 +420,7 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 		// Constant mode: a single collection ref -- also resolves a Build Asset Collection node's transient
 		// collection wired into the Constant override.
 		const TSoftObjectPtr<UPCGExAssetCollection> CollectionRef(Settings->SourceCollection.Constant);
-		PCGExHelpers::LoadBlocking_AnyThreadTpl(CollectionRef, Context);
+		PCGExHelpers::LoadBlockingTracked_AnyThreadTpl(CollectionRef, Context);
 		Context->MainCollection = CollectionRef.Get();
 		if (!Context->MainCollection)
 		{
