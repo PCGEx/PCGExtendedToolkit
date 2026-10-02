@@ -10,6 +10,9 @@
 #include "Types/PCGExTypes.h"
 #include "UObject/SoftObjectPath.h"
 
+class FPCGMetadataAttributeBase;
+class UPCGMetadata;
+
 namespace PCGExPropertyHelpers
 {
 #define PCGEX_FOREACH_SUPPORTEDFPROPERTY(MACRO)\
@@ -115,6 +118,12 @@ MACRO(FStructProperty, FTransform)
 
 		return TrySetFPropertyValue<T>(InContainer, const_cast<FProperty*>(InProperty), InValue);
 	}
+
+	/** Writes an attribute's first entry into a property through the engine's generic accessor, with broadcast: covers
+	 *  what the typed setter cannot (whole structs, enums, containers). Hard object/class targets are refused: off the game
+	 *  thread PCG's soft-path-to-object broadcast only resolves resident objects (never loads), so they belong to the typed
+	 *  setter, whose TrySetObjectPropertyFromPath loads worker-safely. */
+	PCGEXCORE_API bool TrySetFPropertyFromAttribute(void* InContainer, const FProperty* InProperty, const FPCGMetadataAttributeBase* InAttribute, const UPCGMetadata* InMetadata);
 
 	PCGEXCORE_API void CopyStructProperties(const void* SourceStruct, void* TargetStruct, const UStruct* SourceStructType, const UStruct* TargetStructType);
 
