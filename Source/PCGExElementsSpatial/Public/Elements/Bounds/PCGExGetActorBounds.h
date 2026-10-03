@@ -45,6 +45,9 @@ public:
 	{
 		return true;
 	}
+
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 #endif
 	virtual FString GetAdditionalTitleInformation() const override;
 
@@ -72,15 +75,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bMustOverlapSelf = false;
 
-	/** Output the actors excluded by Skip Tags to a Discarded pin, shaped like the main output. They are a subset of what
-	 *  the node would output without skip tags, so the bounds cull still applies. Each discarded actor then costs a bounds read. */
+	/** Output the actors excluded by Exclude tags to a Discarded pin, shaped like the main output. They are a subset of what
+	 *  the node would output without Exclude, so the bounds cull still applies. Each discarded actor then costs a bounds read. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bOutputDiscarded = false;
 };
 
 /**
  * One point per matching loaded actor (or per primitive, in Per Primitive mode), transform + bounds only, merged into
- * a single point data. Actors carrying a skip tag are dropped, or routed to an optional Discarded pin.
+ * a single point data. Actors carrying an Exclude tag are dropped, or routed to an optional Discarded pin.
  * The world sweep runs on the game thread during preparation and reads cached component bounds;
  * the point write runs off-thread. No metadata is produced.
  */
@@ -92,7 +95,7 @@ class UPCGExGetActorBoundsSettings : public UPCGExGetActorBoundsBaseSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(GetActorBounds, "Get Actor Bounds", "One point per matching loaded actor, or per primitive (transform + bounds, no metadata), merged into a single point data, with an optional skip-tag pass and Discarded pin. A fast alternative to Get Actor Data in Get Single Point mode for exclusion volumes.");
+	PCGEX_NODE_INFOS(GetActorBounds, "Get Actor Bounds", "One point per matching loaded actor, or per primitive (transform + bounds, no metadata), merged into a single point data. Actors are selected by an optional class filter and Require All / Require Any / Exclude tag lists, with an optional Discarded pin for excluded actors. A fast alternative to Get Actor Data in Get Single Point mode for exclusion volumes.");
 #endif
 
 protected:
