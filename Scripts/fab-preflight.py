@@ -62,10 +62,17 @@ def read(path):
         return ""
 
 
+# A literal or a comment, whichever starts first: '//' and '/*' inside a string are text. The character
+# alternative is kept short so that an apostrophe which is not a literal (1'000) cannot open one.
+COMMENT_RE = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n]){1,8}\'|/\*.*?\*/|//[^\n]*', re.S)
+
+
 def strip_comments(text):
     """Blank out comments but keep line numbering intact."""
-    text = re.sub(r'/\*.*?\*/', lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
-    return re.sub(r'//[^\n]*', '', text)
+    def blank(m):
+        s = m.group(0)
+        return s if s[0] in "\"'" else "\n" * s.count("\n") if s.startswith("/*") else ""
+    return COMMENT_RE.sub(blank, text)
 
 
 class Finding:
@@ -303,16 +310,52 @@ def ends_in_name(text):
 def opens_brace_init(code):
     """True when the '{' following code -- an initializer list so far, every bracket closed -- is 'Member{...}'.
 
-    Not when only macro names follow an initializer's ')' or '}': that '{' is the body. code is code_only() text.
+    Not when only macro names follow an initializer's ')' or '}': that '{' is the body. code has no comments,
+    '#' lines or literal contents.
     """
     close = max(code.rfind(")"), code.rfind("}"))
     return ends_in_name(code) and (close < 0 or re.fullmatch(r'[\w\s]*', code[close + 1:]) is None)
+
+
+# What may follow a signature's ')' before its body or its initializer list: qualifiers and macro names.
+TAIL_TOKEN = r'(?:const|override|final|noexcept|volatile|[A-Z][A-Z0-9_]+)\b'
+TAIL_TOKEN_RE = re.compile(TAIL_TOKEN)
+PP_START_RE = re.compile(r'[ \t]*#[ \t]*(\w*)')
+
+
+def line_end(text, i):
+    """Offset just past the line holding text[i], its '\\'-continued lines included."""
+    j = text.find("\n", i)
+    while j > 0 and text[j - 1] == "\\":
+        j = text.find("\n", j + 1)
+    return len(text) if j < 0 else j + 1
+
+
+def past_directives(text, i):
+    """Offset past every preprocessor directive starting at the line start text[i]; i when there is none.
+
+    An #else / #elif goes with its whole branch, through the matching #endif: a conditional reads as its first
+    branch, so two branches that name the same members are never taken for one list.
+    """
+    n = len(text)
+    while i < n:
+        m = PP_START_RE.match(text, i)
+        if not m:
+            break
+        depth, i = int(m.group(1).startswith("el")), line_end(text, i)
+        while depth and i < n:
+            m = PP_START_RE.match(text, i)
+            if m:
+                depth += 1 if m.group(1).startswith("if") else -1 if m.group(1) == "endif" else 0
+            i = line_end(text, i)
+    return i
 
 
 def ctor_init_list(text, pos):
     """From a constructor's name at text[pos], return its member-initializer names in order.
 
     None when the constructor is only declared (';' before any body) or has no initializer list.
+    text has no comments and blanked literals. '#' lines are skipped, a conditional read as its first branch.
     Angle brackets are tracked so 'TMap<FName, int32>(...)' in the list does not split on its comma.
     'Member{...}' is an item like 'Member(...)'; the body is the first top-level '{' that is not an item's own.
     """
@@ -329,16 +372,29 @@ def ctor_init_list(text, pos):
                 break
         i += 1
     i += 1
-    m = re.match(r'\s*(?:const\s*|noexcept\s*|override\s*|final\s*)*', text[i:])
-    i += m.end()
+    while i < n:                              # to the ':', past qualifiers, macro names and '#' lines
+        if text[i] == "\n":
+            i = past_directives(text, i + 1)
+        elif text[i].isspace():
+            i += 1
+        else:
+            m = TAIL_TOKEN_RE.match(text, i)
+            if not m:
+                break
+            i = m.end()
     if i >= n or text[i] != ":" or text[i + 1:i + 2] == ":":
         return None
     i += 1
-    start, pd, bd, ad = i, 0, 0, 0
+    start, kept, pd, bd, ad = i, "", 0, 0, 0    # kept: the item's text before the '#' lines skipped inside it
     items = []
     while i < n:
         ch = text[i]
-        if ch in "([":
+        if ch == "\n":
+            j = past_directives(text, i + 1)
+            if j > i + 1:
+                kept, start, i = kept + text[start:i + 1], j, j
+                continue
+        elif ch in "([":
             pd += 1
         elif ch in ")]":
             pd -= 1
@@ -347,15 +403,15 @@ def ctor_init_list(text, pos):
         elif ch == ">" and ad > 0 and text[i - 1] != "-":
             ad -= 1
         elif ch == "{":
-            if pd == 0 and ad == 0 and bd == 0 and not opens_brace_init(code_only(text[start:i])):
-                items.append(text[start:i])
+            if pd == 0 and ad == 0 and bd == 0 and not opens_brace_init(kept + text[start:i]):
+                items.append(kept + text[start:i])
                 break
             bd += 1
         elif ch == "}":
             bd -= 1
         elif ch == "," and pd == 0 and bd == 0 and ad == 0:
-            items.append(text[start:i])
-            start = i + 1
+            items.append(kept + text[start:i])
+            kept, start = "", i + 1
         elif ch == ";" and pd == 0 and bd == 0:
             return None
         i += 1
@@ -367,11 +423,19 @@ def ctor_init_list(text, pos):
     return names
 
 
+# A template argument list the plain type characters cannot read: it holds an expression or a function type
+# ('TFunction<void()>'), its parentheses balanced, one level nested ('TFunction<void(TFunctionRef<void()>)>').
+TPL_ARG = r'[^;{}=()]'
+TPL_PARENS = r'\((?:' + TPL_ARG + r'|\(' + TPL_ARG + r'*\))*\)'
+TPL_ARGS = r'<[\w:<>,\s\*&]*(?:[^\w:<>,\s\*&;{}=()]|' + TPL_PARENS + r')(?:' + TPL_ARG + r'|' + TPL_PARENS + r')*>'
+# A data member's declaration. 'operator' is never a member's name: 'X& operator=(const X&) = default;'.
+# Parentheses belong to the type only inside TPL_ARGS: 'bool IsValid() const {' has no member named 'const'.
 MEMBER_RE = re.compile(
     r'^\s*(?!(?:return|using|typedef|friend|static|virtual|template|public|private|protected|enum|class|'
     r'struct|namespace|case|else|if|for|while|delete|new|goto|UPROPERTY|UFUNCTION|GENERATED_BODY|'
     r'GENERATED_USTRUCT_BODY|GENERATED_UCLASS_BODY)\b)'
-    r'(?:mutable\s+)?[A-Za-z_][\w:<>,\s\*&]*?\s+\*?&?\s*([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*(?::\s*\d+\s*)?(?:;|=[^=]|\{)')
+    r'(?:mutable\s+)?[A-Za-z_](?:[\w:<>,\s\*&]|' + TPL_ARGS + r')*?\s+\*?&?\s*(?!operator\b)([A-Za-z_]\w*)'
+    r'\s*(?:\[[^\]]*\]\s*)*(?::\s*\d+\s*)?(?:;|=[^=]|\{)')
 
 
 def type_definers(tree):
@@ -1015,14 +1079,17 @@ def class_members(tree):
         return tree._members
     seen = {}
     for h in tree.headers:
-        lines = tree.stripped(h).split("\n")
-        per = {}
+        t = tree.stripped(h)
+        lines, code = t.split("\n"), blank_literals(t).split("\n")
+        per, depth = {}, 0                    # depth: '(' still open where the line starts
         for i, ln, scope, _nested, rel in class_scopes(lines):
-            if rel != 1:
-                continue
-            m = MEMBER_RE.match(ln)
-            if m:
-                per.setdefault(scope[0], []).append(m.group(1))
+            if rel == 1 and not depth:        # inside an open '(' it is a parameter of a multi-line declaration
+                m = MEMBER_RE.match(ln)
+                if m:
+                    per.setdefault(scope[0], []).append(m.group(1))
+            depth = max(0, depth + code[i].count("(") - code[i].count(")"))
+            if rel == 1 and code[i].rstrip().endswith(";"):
+                depth = 0                     # a declaration ended; an #if / #else pair can leave a '(' unmatched
         for name, members in per.items():
             if name in seen and seen[name] != members:
                 seen[name] = None
@@ -1034,7 +1101,8 @@ def class_members(tree):
 
 def reorder_finding(members, inits, path, line):
     idx = {m: k for k, m in enumerate(members)}
-    order = [(idx[n], n) for n in inits if n in idx]
+    twice = {m for k, m in enumerate(members) if idx[m] != k}      # no single position: left out of the order
+    order = [(idx[n], n) for n in inits if n in idx and n not in twice]
     for k in range(1, len(order)):
         prev = max(order[:k])
         if order[k][0] < prev[0]:
@@ -1053,6 +1121,7 @@ def check_ctor_reorder(tree):
     out = []
     for h in tree.headers:
         t = tree.stripped(h)
+        code = blank_literals(t)
         lines = t.split("\n")
         offsets, acc = [], 0
         for ln in lines:
@@ -1062,16 +1131,17 @@ def check_ctor_reorder(tree):
             m = CTOR_HDR_RE.match(ln)
             if rel != 1 or not m or m.group(1) != scope[0] or not members.get(scope[0]):
                 continue
-            inits = ctor_init_list(t, offsets[i] + m.start(1))
+            inits = ctor_init_list(code, offsets[i] + m.start(1))
             f = reorder_finding(members[scope[0]], inits or [], h, i + 1)
             if f:
                 out.append(f)
     for c in tree.sources:
         t = tree.stripped(c)
+        code = blank_literals(t)
         for m in CTOR_CPP_RE.finditer(t):
             if not members.get(m.group(1)):
                 continue
-            inits = ctor_init_list(t, m.start(1))
+            inits = ctor_init_list(code, m.start(1))
             f = reorder_finding(members[m.group(1)], inits or [], c, t[:m.start()].count("\n") + 1)
             if f:
                 out.append(f)
@@ -1311,7 +1381,9 @@ CALL_CHAIN_RE = re.compile(r'(?:(.*)(\.|->|::)\s*)?([A-Za-z_]\w*)\s*(?:<[^;]*>)?
 CLASS_BODY_RE = re.compile(r'^[ \t]*(?:template\s*<[^;{}]*?>\s*)?(?:class|struct)\s+(?:[A-Z_0-9]+_API\s+)?'
                            r'([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^;{}]*)?\{', re.M)
 SCOPE_HEAD_RE = re.compile(r'\b(?:namespace|enum|extern)\b')
-FN_BODY_HEAD_RE = re.compile(r'\)\s*(?:(?:const|override|final|noexcept|volatile)\b\s*|&{1,2}\s*)*$')
+FN_BODY_HEAD_RE = re.compile(r'\)\s*(?:' + TAIL_TOKEN + r'\s*|&{1,2}\s*)*$')
+# What follows an initializer list's ':': a member or base name and its bracket, after macro names if any.
+MEM_INIT_RE = re.compile(r'\s*(?:[A-Z][A-Z0-9_]+\s+)*(?:::)?[A-Za-z_][\w:]*\s*(?:[<({]|$)')
 STMT_RE = re.compile(r'[;{]')
 SKELETON_RE = re.compile(r'[;{}]')
 LITERAL_RE = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'')
@@ -1327,6 +1399,11 @@ DECLARED_RE = re.compile(
 SLATE_ARG_RE = re.compile(r'\bSLATE_ARGUMENT(?:_DEFAULT)?\s*\(\s*([^,;{}]+?)\s*,\s*([A-Za-z_]\w*)\s*\)')
 
 
+def blank_literals(text):
+    """text with the contents of string and character literals blanked; offsets and lines kept."""
+    return LITERAL_RE.sub(lambda m: m.group(0)[0] + " " * (len(m.group(0)) - 2) + m.group(0)[0], text)
+
+
 def code_only(text):
     """Comment-stripped text with preprocessor lines and literal contents blanked; offsets and lines kept."""
     out, cont = [], False
@@ -1334,7 +1411,7 @@ def code_only(text):
         pp = cont or ln.lstrip().startswith("#")
         cont = pp and ln.rstrip().endswith("\\")
         out.append(" " * len(ln) if pp else ln)
-    return LITERAL_RE.sub(lambda m: m.group(0)[0] + " " * (len(m.group(0)) - 2) + m.group(0)[0], "\n".join(out))
+    return blank_literals("\n".join(out))
 
 
 def closing(text, i):
@@ -1376,13 +1453,17 @@ def expr_end(text, i):
 
 
 def init_colon(head):
-    """Offset of a constructor's initializer-list ':' in head (a single ':' right after the ')'), or None."""
+    """Offset of a constructor's initializer-list ':' in head, or None.
+
+    A single ':' where a signature ends -- its ')', then at most qualifiers and macro names -- that a member
+    initializer follows: the second half is what tells it from a bitfield, a base list or a ternary.
+    """
     depth = 0
     for k, ch in enumerate(head):
         if ch in "()":
             depth += 1 if ch == "(" else -1
         elif (ch == ":" and depth == 0 and head[k + 1:k + 2] != ":" and head[k - 1:k] != ":"
-              and head[:k].rstrip().endswith(")")):
+              and FN_BODY_HEAD_RE.search(head, 0, k) and MEM_INIT_RE.match(head, k + 1)):
             return k
     return None
 
@@ -1393,9 +1474,10 @@ def opens_body(head):
     if k is None:
         return FN_BODY_HEAD_RE.search(head) is not None
     inits = head[k + 1:]
-    if balanced(inits):
-        return not opens_brace_init(inits)
-    return not ends_in_name(inits)              # inside an initializer's brackets 'Type{...}' is a temporary
+    if sum((c in "([") - (c in ")]") for c in inits) > 0:
+        return False                            # inside an initializer's '(': a lambda or a braced argument
+    # Unbalanced text is not one list (a nested type's body precedes 'Name{'): only the name test holds there.
+    return not (opens_brace_init(inits) if balanced(inits) else ends_in_name(inits))
 
 
 def class_items(code, start, end, opens):
@@ -1991,6 +2073,139 @@ SELFTEST = {
         "#endif\n"
         "{\n"
         "}\n"),
+    # ctor-reorder past what can sit before the ':' and inside the list. In order: a macro line before the ':',
+    # an '#if' line before it, items that start on a '#' line, literals holding '//', a quote and a bracket,
+    # and a digit separator ahead of a comment with an apostrophe.
+    "ModB/Public/PCGExWallHeads.h": (
+        "#pragma once\n"
+        "struct FPCGExWallHeads\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFString C;\n"
+        "\tFPCGExWallHeads();\n"
+        "\texplicit FPCGExWallHeads(int32 In);\n"
+        "\tFPCGExWallHeads(int32 InA, int32 InB);\n"
+        "\texplicit FPCGExWallHeads(const FString& In);\n"
+        "\tFPCGExWallHeads(int32 InA, const FString& In);\n"
+        "};\n"),
+    "ModB/Private/PCGExWallHeads.cpp": (
+        "#include \"PCGExWallHeads.h\"\n"
+        "FPCGExWallHeads::FPCGExWallHeads()\n"
+        "PRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t: B(1)\n"
+        "\t, A(2)\n"
+        "PRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(int32 In)\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\t: B(In)\n"
+        "\t, A(In)\n"
+        "#endif\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(int32 InA, int32 InB)\n"
+        "\t: B(InB),\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\tA(InA),\n"
+        "#endif\n"
+        "\tC()\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(const FString& In)\n"
+        "\t: C(In + TEXT('\"') + TEXT(\"ws://host\") + TEXT(\"(\")), B(1), A(2)\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(int32 InA, const FString& In)\n"
+        "\t: C(In), B(1'000), A(InA) // it's out of order\n"
+        "{\n"
+        "}\n"),
+    # ctor-reorder with lines that are no members: a defaulted parameter named like a member, after an inline body
+    # whose literal holds a '('. Then declarations an #if / #else pair leaves one '(', and one ')', out of balance.
+    "ModB/Public/PCGExWallParams.h": (
+        "#pragma once\n"
+        "struct FPCGExWallParams\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tvoid Log() const { Print(TEXT(\"(\")); }\n"
+        "\tint32 Seed = 0;\n"
+        "\tvoid Configure(int32 InA,\n"
+        "\t               int32 Seed = 7);\n"
+        "\tFPCGExWallParams() : Seed(1), A(2) {}\n"
+        "};\n"
+        "struct FPCGExWallDrift\n"
+        "{\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\tvoid Trace(int32 Level,\n"
+        "#else\n"
+        "\tvoid Trace(\n"
+        "#endif\n"
+        "\t           int32 Depth = 0);\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExWallDrift() : B(1), A(2) {}\n"
+        "\tvoid Flush(int32 Level\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\t) const\n"
+        "#else\n"
+        "\t)\n"
+        "#endif\n"
+        "\t{\n"
+        "\t}\n"
+        "\tint32 C = 0;\n"
+        "\tint32 D = 0;\n"
+        "\texplicit FPCGExWallDrift(int32 In) : D(In), C(In) {}\n"
+        "};\n"),
+    # ctor-reorder across two same-named definitions that differ only by an 'operator=': they still agree on
+    # their members, so the out-of-order constructor of one is reported.
+    "ModA/Public/PCGExTwin.h": (
+        "#pragma once\n"
+        "struct FPCGExTwin\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExTwin& operator=(const FPCGExTwin&) = default;\n"
+        "};\n"),
+    "ModB/Public/PCGExTwinToo.h": (
+        "#pragma once\n"
+        "struct FPCGExTwin\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExTwin() : B(1), A(2) {}\n"
+        "};\n"),
+    # ctor-reorder with members whose template arguments hold more than plain type characters: a function type,
+    # one nested in another, an array type. Last, a function whose defaulted parameter is named like a member:
+    # its '(' is no template argument, so 'Count' is declared once and keeps its place.
+    "ModB/Public/PCGExWallCallback.h": (
+        "#pragma once\n"
+        "struct FPCGExWallCallback\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTFunction<void()> OnDone;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExWallCallback() : OnDone(nullptr), A(1), B(2) {}\n"
+        "};\n"
+        "struct FPCGExWallChain\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTFunction<void(TFunctionRef<void()>)> RunGuarded;\n"
+        "\tFPCGExWallChain() : RunGuarded(nullptr), A(1) {}\n"
+        "};\n"
+        "struct FPCGExWallSlots\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTUniquePtr<int32[]> Slots;\n"
+        "\tFPCGExWallSlots() : Slots(nullptr), A(1) {}\n"
+        "};\n"
+        "struct FPCGExWallShadow\n"
+        "{\n"
+        "\tTArray<int32> Collect(const TArray<int32>& In, int32 Count = 0) const;\n"
+        "\tint32 A = 0;\n"
+        "\tint32 Count = 0;\n"
+        "\tFPCGExWallShadow() : Count(1), A(2) {}\n"
+        "};\n"),
     # iwyu-symbol.
     "ModB/Private/PCGExIwyu.cpp": (
         "#include \"PCGExWall.h\"\n"
@@ -2092,8 +2307,9 @@ SELFTEST = {
         "private:\n"
         "\tTWeakObjectPtr<UPCGExSettings> Owner;\n"
         "};\n"),
-    # weakobjectptr-incomplete in a constructor body that follows a macro line, and in one whose initializer holds
-    # a 'mutable' lambda: in both, the '{' after the list is the body and the parameters are in scope.
+    # weakobjectptr-incomplete where a body is easy to lose. A constructor's: after a macro line; after initializers
+    # holding lambdas and a braced argument; with a macro, or noexcept, between ')' and ':'. A function's after a
+    # trailing macro. And a lambda picked by a ternary, whose ':' is no initializer list.
     "ModB/Public/PCGExWeakCtorBody.h": (
         "#pragma once\n"
         "#include \"UObject/WeakObjectPtr.h\"\n"
@@ -2115,12 +2331,49 @@ SELFTEST = {
         "struct FPCGExWeakLambdaInit\n"
         "{\n"
         "\texplicit FPCGExWeakLambdaInit(UPCGExSettings* InSettings)\n"
-        "\t\t: OnDone([this]() mutable { Reset(); })\n"
+        "\t\t: OnDone([this]() { Reset(); }), OnRetry([this]() mutable { Reset(); }), Ids({1, 2})\n"
         "\t{\n"
         "\t\tSettings = InSettings;\n"
         "\t}\n"
         "\tvoid Reset();\n"
         "\tTFunction<void()> OnDone;\n"
+        "\tTFunction<void()> OnRetry;\n"
+        "\tTArray<int32> Ids;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakMacroHead\n"
+        "{\n"
+        "\texplicit FPCGExWeakMacroHead(UPCGExSettings* InSettings)\n"
+        "\tPRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t\t: Settings(InSettings)\n"
+        "\tPRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "\t{\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakNoexcept\n"
+        "{\n"
+        "\tFPCGExWeakNoexcept(FPCGExWeakNoexcept&& Other, UPCGExSettings* InSettings) noexcept\n"
+        "\t\t: Settings(InSettings), Id{0}\n"
+        "\t{\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "\tint32 Id;\n"
+        "};\n"
+        "struct FPCGExWeakTrailingMacro\n"
+        "{\n"
+        "\tvoid SetSettings(UPCGExSettings* InSettings) UE_LIFETIMEBOUND\n"
+        "\t{\n"
+        "\t\tSettings = InSettings;\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakTernary\n"
+        "{\n"
+        "\tstatic bool IsLive();\n"
+        "\tstatic TFunction<void(UPCGExSettings*)> MakeApply();\n"
+        "\tTFunction<void(UPCGExSettings*)> Apply = IsLive() ? MakeApply()"
+        " : [this](UPCGExSettings* In) { Settings = In; };\n"
         "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
         "};\n"),
     # instanced-in-instancedstruct + deprecated-unconsumed.
@@ -2326,6 +2579,62 @@ SELFTEST = {
         "\tint32 C = 0;\n"
         "\tFPCGExNegativeBraced() : A{0}, B(1), C{2} {}\n"
         "};\n"),
+    # ctor-reorder must stay silent when #if / #else branches each list, or each declare, the same members: a
+    # list reads as its first branch, and a member declared in both has no single position to compare.
+    "ModB/Public/PCGExNegativeBranches.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeBranches\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tint32 C = 0;\n"
+        "\tFPCGExNegativeBranches(int32 InA, int32 InB)\n"
+        "\t\t: A(InA)\n"
+        "#if PLATFORM_LITTLE_ENDIAN\n"
+        "\t\t, B(InB)\n"
+        "\t\t, C(0)\n"
+        "#else\n"
+        "\t\t, B(InA)\n"
+        "\t\t, C(1)\n"
+        "#endif\n"
+        "\t{\n"
+        "\t}\n"
+        "};\n"
+        "struct FPCGExNegativeTwice\n"
+        "{\n"
+        "#if PLATFORM_LITTLE_ENDIAN\n"
+        "\tint32 Tag = 0;\n"
+        "\tint32 Low = 0;\n"
+        "\tFPCGExNegativeTwice() : Tag(1), Low(2) {}\n"
+        "#else\n"
+        "\tint32 Tag = 0;\n"
+        "\tFPCGExNegativeTwice() : Tag(1) {}\n"
+        "#endif\n"
+        "};\n"),
+    # ctor-reorder must stay silent: a defaulted parameter named like a member is no second declaration of it.
+    "ModB/Public/PCGExNegativeParams.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeParams\n"
+        "{\n"
+        "\tint32 Seed = 0;\n"
+        "\tint32 A = 0;\n"
+        "\tvoid Configure(int32 InA,\n"
+        "\t               int32 Seed = 7);\n"
+        "\tFPCGExNegativeParams() : Seed(1), A(2) {}\n"
+        "};\n"),
+    # ctor-reorder must stay silent: a function-type member initialized in declaration order, beside functions
+    # that are no members -- an inline body, and a declaration that returns a function type.
+    "ModB/Public/PCGExNegativeCallback.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeCallback\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTFunction<void()> OnDone;\n"
+        "\tbool bValid = false;\n"
+        "\tbool IsValid() const { return bValid; }\n"
+        "\tTFunction<void()> MakeCallback() const;\n"
+        "\tFPCGExNegativeCallback() : A(1), OnDone(nullptr), bValid(true) {}\n"
+        "};\n"),
     # weakobjectptr-incomplete must stay silent. Out of line: only Get() is inline, the raw assignment and
     # constructor live in the .cpp.
     "ModB/Public/PCGExNegativeWeakOutOfLine.h": (
@@ -2386,6 +2695,19 @@ SELFTEST = {
         "\t}\n"
         "\tint32 Id;\n"
         "\tint32 Legacy;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"),
+    # Incomplete type, and 'public:' right after a macro call: that ':' starts no initializer list, so the
+    # constructor after it keeps its own parameters in scope and its weak-to-weak copy stays fine.
+    "ModB/Public/PCGExNegativeWeakSpecifier.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "class UPCGExNegativeWeakSpecifier : public UObject\n"
+        "{\n"
+        "\tGENERATED_BODY()\n"
+        "public:\n"
+        "\tUPCGExNegativeWeakSpecifier(const TWeakObjectPtr<UPCGExSettings>& In) { Settings = In; }\n"
         "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
         "};\n"),
     # Incomplete type, but only reads, nulls and weak-to-weak copies: from a member (also through another object of
@@ -2515,15 +2837,15 @@ SELFTEST = {
 SELFTEST_EXPECT = {
     "missing-include": 1, "editor-guard": 1, "nsdmi-default-arg": 1, "extern-template-api": 1,
     "unity-collision": 2, "msvc-only": 1, "include-case": 1, "generated-last": 1, "fwd-decl-deref": 1,
-    "subclassof-incomplete": 1, "editor-guard-free": 2, "clang-wall": 6, "ctor-reorder": 5,
+    "subclassof-incomplete": 1, "editor-guard-free": 2, "clang-wall": 6, "ctor-reorder": 18,
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
-    "upackage-as-outer": 1, "editor-only-call": 5, "weakobjectptr-incomplete": 12,
+    "upackage-as-outer": 1, "editor-only-call": 5, "weakobjectptr-incomplete": 16,
 }
 # check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
 # pre-flight from failing on a real defect.
-SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 11}
+SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 15}
 
 
 def run_selftest():

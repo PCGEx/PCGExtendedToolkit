@@ -75,8 +75,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bMustOverlapSelf = false;
 
-	/** Output the actors excluded by Exclude tags to a Discarded pin, shaped like the main output. They are a subset of what
-	 *  the node would output without Exclude, so the bounds cull still applies. Each discarded actor then costs a bounds read. */
+	/** Output the actors excluded by Exclude tags to a Discarded pin, shaped like the main output. They are a subset
+	 *  of what the node would output without Exclude, so the bounds cull still applies. Each discarded actor then
+	 *  costs a bounds read. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bOutputDiscarded = false;
 };

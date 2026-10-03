@@ -183,6 +183,12 @@ TSubclassOf<AActor> FPCGExActorSelectionDetails::GetIterationClass() const
 
 void FPCGExActorSelectionDetails::MakeTrackingKeys(TArray<FPCGSelectionKey>& OutKeys) const
 {
+	// Nothing is gathered, so no actor edit can change the output.
+	if (!IsUsable())
+	{
+		return;
+	}
+
 	// Every match carries each Require All tag, so one is enough; a literal tracks fewer actors than a pattern would.
 	if (!RequireAllTags.IsEmpty())
 	{
@@ -276,37 +282,15 @@ namespace PCGExActorBounds
 		{
 			const bool bPattern = IsPattern(Tag);
 			const int32 Index = FindOrAddEntry(Tag, bPattern);
-			FContribution& Entry = bPattern ? PatternContributions[Index] : ExactContributions[Index];
-			Entry.Flags |= FlagExclude;
-			if (Entry.BitsNum > 0 && Contradiction.IsNone())
-			{
-				Contradiction = Tag;
-			}
-		}
-
-		// An exact Require All tag caught by an Exclude pattern excludes every match too, without sharing an entry.
-		for (int32 i = 0; i < ExactTags.Num() && Contradiction.IsNone(); i++)
-		{
-			if (ExactContributions[i].BitsNum == 0)
-			{
-				continue;
-			}
-
-			const FString Required = ExactTags[i].ToString();
-			for (int32 p = 0; p < Patterns.Num(); p++)
-			{
-				if ((PatternContributions[p].Flags & FlagExclude) && Internal::MatchesPattern(Patterns[p], Required))
-				{
-					Contradiction = ExactTags[i];
-					break;
-				}
-			}
+			(bPattern ? PatternContributions[Index] : ExactContributions[Index]).Flags |= FlagExclude;
 		}
 
 		if (InSelection.bIgnorePCGSpawnedActors)
 		{
 			ExactContributions[FindOrAddEntry(PCGHelpers::DefaultPCGActorTag, false)].Flags |= FlagDrop;
 		}
+
+		Contradiction = FindContradiction(InSelection.GetRequireAnyTags());
 
 		if (ExactTags.Num() > Internal::ExactLinearScanMax)
 		{
@@ -328,6 +312,68 @@ namespace PCGExActorBounds
 		// An actor tag equals at most one exact entry, so each exact Require All tag needs its own actor tag.
 		MinActorTags = FMath::Max(NumExactRequired, (bHasRequiredPattern || bHasAny) ? 1 : 0);
 		bEmpty = ExactTags.IsEmpty() && Patterns.IsEmpty();
+	}
+
+	FName FTagMatcher::FindContradiction(const TArray<FName>& InRequireAnyTags) const
+	{
+		// Excluded by its own entry (Exclude, or the PCG-spawned tag), or caught by an Exclude pattern.
+		auto IsExactExcluded = [this](const int32 Index)
+		{
+			if (ExactContributions[Index].Flags & (FlagExclude | FlagDrop))
+			{
+				return true;
+			}
+
+			const FString Tag = ExactTags[Index].ToString();
+			for (int32 p = 0; p < Patterns.Num(); p++)
+			{
+				if ((PatternContributions[p].Flags & FlagExclude) && Internal::MatchesPattern(Patterns[p], Tag))
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+
+		bool bEveryAnyExcluded = bHasAny;
+
+		for (int32 i = 0; i < ExactTags.Num(); i++)
+		{
+			const FContribution& Entry = ExactContributions[i];
+			const bool bRequired = Entry.BitsNum > 0;
+			const bool bAny = (Entry.Flags & FlagAny) != 0;
+			if (!bRequired && !bAny)
+			{
+				continue;
+			}
+
+			const bool bExcluded = IsExactExcluded(i);
+			if (bRequired && bExcluded)
+			{
+				return ExactTags[i];
+			}
+			if (bAny && !bExcluded)
+			{
+				bEveryAnyExcluded = false;
+			}
+		}
+
+		// A pattern is only known to be excluded when Exclude holds the very same pattern.
+		for (int32 p = 0; p < Patterns.Num(); p++)
+		{
+			const FContribution& Entry = PatternContributions[p];
+			const bool bExcluded = (Entry.Flags & FlagExclude) != 0;
+			if (Entry.BitsNum > 0 && bExcluded)
+			{
+				return FName(*Patterns[p]);
+			}
+			if ((Entry.Flags & FlagAny) && !bExcluded)
+			{
+				bEveryAnyExcluded = false;
+			}
+		}
+
+		return bEveryAnyExcluded ? InRequireAnyTags[0] : FName(NAME_None);
 	}
 
 	int32 FTagMatcher::FindOrAddEntry(const FName InTag, const bool bPattern)
@@ -878,8 +924,7 @@ namespace PCGExActorBounds
 		}
 	}
 
-	template <typename ClassTestFn>
-	void FSweep::AddActorImpl(const AActor* InActor, ClassTestFn&& InClassTest)
+	void FSweep::AddActor(const AActor* InActor)
 	{
 		if (InActor == Self)
 		{
@@ -887,41 +932,18 @@ namespace PCGExActorBounds
 		}
 
 		// Routed before the bounds read: an excluded actor only costs a snapshot when it has a pin to go to.
-		TArray<FSnapshot>* Target = Route(InActor->Tags);
-		if (Target && InClassTest())
+		if (TArray<FSnapshot>* Target = Route(InActor->Tags))
 		{
 			SnapshotActor(InActor, Output, CullBox, *Target);
 		}
 	}
 
-	template <typename ClassTestFn>
-	void FSweep::AddBoxImpl(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds, ClassTestFn&& InClassTest)
+	void FSweep::AddBox(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds)
 	{
-		TArray<FSnapshot>* Target = Route(InActorTags);
-		if (Target && InClassTest())
+		if (TArray<FSnapshot>* Target = Route(InActorTags))
 		{
 			SnapshotBox(InActorTransform, InWorldBounds, Output, CullBox, *Target);
 		}
-	}
-
-	void FSweep::AddActor(const AActor* InActor)
-	{
-		AddActorImpl(InActor, [] { return true; });
-	}
-
-	void FSweep::AddActor(const AActor* InActor, const TFunctionRef<bool()> InClassTest)
-	{
-		AddActorImpl(InActor, InClassTest);
-	}
-
-	void FSweep::AddBox(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds)
-	{
-		AddBoxImpl(InActorTags, InActorTransform, InWorldBounds, [] { return true; });
-	}
-
-	void FSweep::AddBox(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds, const TFunctionRef<bool()> InClassTest)
-	{
-		AddBoxImpl(InActorTags, InActorTransform, InWorldBounds, InClassTest);
 	}
 
 #pragma endregion

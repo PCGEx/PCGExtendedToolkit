@@ -108,7 +108,7 @@ struct PCGEXELEMENTSSPATIAL_API FPCGExActorSelectionDetails
 	void ApplyDeprecation(const UObject* InLogContext);
 #endif
 
-	/** Parses the clause lists. Call before anything below. */
+	/** Parses the clause lists; IsUsable, MakeTrackingKeys and the tag matcher read the result. */
 	void Init();
 
 	/** False when nothing can be gathered: an entry too long to be a tag, the class filter on without a class, or off
@@ -257,8 +257,8 @@ namespace PCGExActorBounds
 			return bEmpty;
 		}
 
-		/** A Require All tag that is also excluded, by name or by an Exclude pattern, so every actor passing Require All is
-		 *  excluded; None when there is none. */
+		/** A required tag that is also excluded (by Exclude, by an Exclude pattern, or as the PCG-spawned tag), so no actor
+		 *  can be kept: any Require All entry, or the first Require Any entry when all of them are. None otherwise. */
 		FName GetContradiction() const
 		{
 			return Contradiction;
@@ -287,6 +287,7 @@ namespace PCGExActorBounds
 		int32 FindOrAddEntry(FName InTag, bool bPattern);
 		const FContribution* FindExact(FName InTag) const;
 		const FContribution* Classify(FName InTag);
+		FName FindContradiction(const TArray<FName>& InRequireAnyTags) const;
 
 		TArray<FName> ExactTags;
 		TArray<FContribution> ExactContributions;
@@ -311,8 +312,8 @@ namespace PCGExActorBounds
 
 	/**
 	 * One game-thread sweep: the resolved selection and cull, its tag matcher, and the snapshot lists actors are routed to.
-	 * InSelection must have been Init()'d and must outlive the sweep.
-	 * Tags are tested before the class whenever the caller has not applied the class filter itself, as it may be the costlier test.
+	 * InSelection must have been Init()'d and must outlive the sweep. The class filter is the caller's to apply:
+	 * the sweep only tests tags.
 	 */
 	struct FSweep
 	{
@@ -329,26 +330,14 @@ namespace PCGExActorBounds
 
 		FTagMatcher Tags;
 
-		/** Snapshots a live actor the caller already restricted to the filter class, if its tags pass. */
+		/** Snapshots a live actor if its tags pass. */
 		PCGEXELEMENTSSPATIAL_API void AddActor(const AActor* InActor);
-
-		/** Same, with the class filter still to apply: InClassTest only runs once the tags pass. */
-		PCGEXELEMENTSSPATIAL_API void AddActor(const AActor* InActor, TFunctionRef<bool()> InClassTest);
 
 		/** Same for an actor only known by its tags, transform and world box, e.g. an unloaded World Partition actor. */
 		PCGEXELEMENTSSPATIAL_API void AddBox(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds);
 
-		/** Same, with the class filter still to apply: InClassTest only runs once the tags pass. */
-		PCGEXELEMENTSSPATIAL_API void AddBox(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds, TFunctionRef<bool()> InClassTest);
-
 	private:
 		TArray<FSnapshot>* Route(const TArray<FName>& InActorTags);
-
-		template <typename ClassTestFn>
-		void AddActorImpl(const AActor* InActor, ClassTestFn&& InClassTest);
-
-		template <typename ClassTestFn>
-		void AddBoxImpl(const TArray<FName>& InActorTags, const FTransform& InActorTransform, const FBox& InWorldBounds, ClassTestFn&& InClassTest);
 	};
 
 	/**

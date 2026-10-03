@@ -114,8 +114,8 @@ void FPCGExGetActorBoundsWPElement::Sweep(UWorld* InWorld, PCGExActorBounds::FSw
 	// AActor when the selection has no class filter.
 	UClass* SelectionClass = InSweep.Selection.GetIterationClass();
 
-	// The helper tests a Blueprint class by loading the base class of every descriptor, tags unseen. It is given AActor
-	// instead and the Blueprint test runs after the tags. No narrower native class is safe to pass: a descriptor keeps
+	// The helper tests a Blueprint class by loading the base class of every descriptor. It is given AActor instead and the
+	// same test runs below with each base class loaded once. No narrower native class is safe to pass: a descriptor keeps
 	// the native class it was saved with, which goes stale when a Blueprint is reparented.
 	const bool bBlueprintFilter = !SelectionClass->IsNative();
 	UClass* IterationClass = bBlueprintFilter ? AActor::StaticClass() : SelectionClass;
@@ -124,26 +124,25 @@ void FPCGExGetActorBoundsWPElement::Sweep(UWorld* InWorld, PCGExActorBounds::FSw
 
 	auto Visit = [&InSweep, &BlueprintTest, SelectionClass, bBlueprintFilter](const FWorldPartitionActorDescInstance* Desc) -> bool
 	{
+		// Before IsLoaded, which resolves the actor path of every unloaded descriptor it is asked about.
+		if (bBlueprintFilter && !BlueprintTest.Passes(Desc))
+		{
+			return true;
+		}
+
 		// Descriptors refresh on save only, so a loaded actor is read live (tags, class and bounds) to pick up unsaved edits.
 		if (const AActor* LiveActor = Desc->IsLoaded() ? Desc->GetActor(/*bEvenIfPendingKill=*/false) : nullptr)
 		{
-			InSweep.AddActor(LiveActor, [LiveActor, SelectionClass] { return LiveActor->IsA(SelectionClass); });
+			if (LiveActor->IsA(SelectionClass))
+			{
+				InSweep.AddActor(LiveActor);
+			}
 			return true;
 		}
 
 		// Same outcome as a loaded editor-only actor, whose primitives are all skipped: no bounds.
 		const bool bNoBounds = InSweep.Output.bIgnoreEditorOnly && Desc->GetActorIsEditorOnly();
-		const FBox WorldBounds = bNoBounds ? FBox(ForceInit) : Desc->GetEditorBounds();
-		if (bBlueprintFilter)
-		{
-			// Copied: the class test may load, and a reference into the descriptor must not be held across that.
-			const FTransform ActorTransform = Desc->GetActorTransform();
-			InSweep.AddBox(Desc->GetTags(), ActorTransform, WorldBounds, [&BlueprintTest, Desc] { return BlueprintTest.Passes(Desc); });
-		}
-		else
-		{
-			InSweep.AddBox(Desc->GetTags(), Desc->GetActorTransform(), WorldBounds);
-		}
+		InSweep.AddBox(Desc->GetTags(), Desc->GetActorTransform(), bNoBounds ? FBox(ForceInit) : Desc->GetEditorBounds());
 		return true;
 	};
 

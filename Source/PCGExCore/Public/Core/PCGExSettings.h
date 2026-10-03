@@ -26,6 +26,7 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins);
 	virtual void ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void ApplyDeprecation(UPCGNode* InOutNode) override;
+	/** Property migration. InOutNode is null for settings no node owns (inline instance, settings asset): those migrate from PostLoad. */
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode);
 	virtual bool GetPinExtraIcon(const UPCGPin* InPin, FName& OutExtraIcon, FText& OutTooltip) const override;
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -154,7 +155,13 @@ protected:
 	UPROPERTY()
 	int64 PCGExDataVersion = INDEX_NONE;
 
+	/** Set once ApplyPropertyDeprecation has run. Not a property: never saved, never copied to a duplicate. */
+	bool bPropertyDeprecationApplied = false;
+
 #if WITH_EDITOR
+	/** Runs PCGExApplyDeprecation and the owned instanced factories' deprecation, once per loaded object. */
+	void ApplyPropertyDeprecation(UPCGNode* InOutNode);
+
 	/** Resolve PCGExDataVersion from the package custom version (UserDataVersion), bridging legacy assets. Called from Serialize on load. */
 	void ResolveDataVersion();
 

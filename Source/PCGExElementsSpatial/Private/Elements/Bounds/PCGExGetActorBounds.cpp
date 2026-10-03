@@ -165,15 +165,16 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 		return true;
 	}
 
+	// Built ahead of the cull test: a contradictory selection is reported even when nothing is swept.
+	PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
+	if (const FName Contradiction = ActorSweep.Tags.GetContradiction(); !Contradiction.IsNone())
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Tag '{0}' is required but also excluded, by Exclude or by Ignore PCG Spawned Actors: no actor can be kept."), FText::FromName(Contradiction)));
+	}
+
 	if (!Cull.bDisjoint)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsBaseElement::Boot::Sweep);
-
-		PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
-		if (const FName Contradiction = ActorSweep.Tags.GetContradiction(); !Contradiction.IsNone())
-		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Tag '{0}' is both required and excluded: every actor that passes Require All is excluded."), FText::FromName(Contradiction)));
-		}
 
 		ActorSweep.Discarded = Settings->bOutputDiscarded ? &Context->Discarded : nullptr;
 		ActorSweep.CullBox = Cull.Get();

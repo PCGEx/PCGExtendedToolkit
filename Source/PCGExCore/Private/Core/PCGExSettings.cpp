@@ -265,14 +265,22 @@ void UPCGExSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArra
 
 void UPCGExSettings::ApplyDeprecation(UPCGNode* InOutNode)
 {
-	PCGExApplyDeprecation(InOutNode);
-	ApplyInstancedFactoriesDeprecation();
+	ApplyPropertyDeprecation(InOutNode);
 
 	Super::ApplyDeprecation(InOutNode);
 	
 	PCGEX_UPDATE_DATA_VERSION_TO_LATEST
 	
 	ensure(PCGExDataVersion == PCGExVersion::Latest);
+}
+
+void UPCGExSettings::ApplyPropertyDeprecation(UPCGNode* InOutNode)
+{
+	if (bPropertyDeprecationApplied) { return; }
+	bPropertyDeprecationApplied = true;
+
+	PCGExApplyDeprecation(InOutNode);
+	ApplyInstancedFactoriesDeprecation();
 }
 
 void UPCGExSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
@@ -370,6 +378,13 @@ void UPCGExSettings::PostEditChangeProperty(struct FPropertyChangedEvent& Proper
 
 void UPCGExSettings::PostLoad()
 {
+#if WITH_EDITOR
+	// Node-owned settings are migrated by their graph, in order with its pin updates; nothing else reaches the rest.
+	// Before Super, so the CRC it caches sees the migrated values.
+	// TODO: pin blocks gate on these settings' version, so an asset instanced by several graphs only migrates the first graph's pins.
+	if (PCGExDataVersion < PCGExVersion::Latest && !GetOuter()->IsA<UPCGNode>()) { ApplyPropertyDeprecation(nullptr); }
+#endif
+
 	Super::PostLoad();
 }
 
