@@ -26,7 +26,18 @@ void FPCGExPrimitiveComponentDescriptor::InitFrom(const UPrimitiveComponent* Com
 
 	if (bInitBodyInstance)
 	{
-		BodyInstance.CopyBodyInstancePropertiesFrom(PrimitiveComponent->GetBodyInstance());
+		// A registered component's body carries runtime state (owner, body setup) that CopyBodyInstancePropertiesFrom
+		// asserts against. Mirror FISMComponentDescriptorBase::InitFrom: only lift the collision settings from a live body.
+		// The component's own body, not GetBodyInstance() -- that resolves to the weld parent's.
+		const FBodyInstance& SourceBody = PrimitiveComponent->BodyInstance;
+		if (!SourceBody.BodySetup.IsValid() && !SourceBody.OwnerComponent.IsValid())
+		{
+			BodyInstance.CopyBodyInstancePropertiesFrom(&SourceBody);
+		}
+		else
+		{
+			BodyInstance.CopyRuntimeBodyInstancePropertiesFrom(&SourceBody);
+		}
 	}
 	else
 	{

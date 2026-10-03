@@ -24,6 +24,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bForceDisableCollisions = false;
 
+	/** Spawn every instance with the entry's Reverse Culling as-is, instead of flipping it for points whose transform
+	 *  is mirrored (negative scale). */
+	UPROPERTY(EditAnywhere, Category = MeshSelector)
+	bool bForceEntryReverseCulling = false;
+
 	UPROPERTY(EditAnywhere, Category = MeshSelector, meta=(InlineEditConditionToggle))
 	bool bUseTemplateDescriptor = true;
 

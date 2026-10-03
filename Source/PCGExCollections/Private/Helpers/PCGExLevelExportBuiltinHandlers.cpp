@@ -32,8 +32,8 @@
 
 namespace PCGExMeshExportHandler
 {
-	// Components share an entry only when they agree on mesh, source kind, AND the descriptor
-	// fingerprint (every UPROPERTY except OverrideMaterials -- those become per-entry variants).
+	// Components share an entry only when they agree on mesh, source kind, AND the fingerprint of both
+	// descriptors (every UPROPERTY except OverrideMaterials -- those become per-entry variants).
 	// PropertyComponentHash is folded in so two mesh actors that author distinct property-component
 	// values land in distinct entries.
 	struct FMeshEntryKey
@@ -381,19 +381,19 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 		Key.bIsISMSource = bIsISM;
 		Key.PropertyComponentHash = Schema.Hash;
 
+		// Both descriptors are captured whatever the source kind: consumers pick one by spawn path (ISM
+		// spawners read ISMDescriptor, spline meshes SMDescriptor), not by where the entry came from.
+		// Body instances included, so the source's collision carries over.
 		FSoftISMComponentDescriptor TentativeISM;
 		FPCGExStaticMeshComponentDescriptor TentativeSM;
+		TentativeISM.InitFrom(SMC, /*bInitBodyInstance=*/true);
+		TentativeSM.InitFrom(SMC, /*bInitBodyInstance=*/true);
 
-		if (bIsISM)
-		{
-			TentativeISM.InitFrom(SMC, /*bInitBodyInstance=*/false);
-			Key.DescriptorFingerprint = FingerprintDescriptor(TentativeISM);
-		}
-		else
-		{
-			TentativeSM.InitFrom(SMC, /*bInitBodyInstance=*/false);
-			Key.DescriptorFingerprint = FingerprintDescriptor(TentativeSM);
-		}
+		// InitFrom folds the component's mirror sign into bReverseCulling. Mirroring is per-point placement,
+		// not entry identity: keep the authored flag only, so mirrored copies share an entry.
+		TentativeISM.bReverseCulling = SMC->bReverseCulling;
+
+		Key.DescriptorFingerprint = HashCombine(FingerprintDescriptor(TentativeISM), FingerprintDescriptor(TentativeSM));
 
 		// When capturing, variants are the sole material carrier: sec=-1 must mean mesh defaults, so the
 		// stored descriptor must not bake one contributor's overrides.
@@ -411,16 +411,15 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 				FPCGExMeshCollectionEntry& Entry = static_cast<FPCGExMeshCollectionEntry&>(Base);
 				Entry.StaticMesh = TSoftObjectPtr<UStaticMesh>(Key.MeshPath);
 				Entry.PropertyComponentHash = Key.PropertyComponentHash;
-				// First contribution stores the descriptor; later contributors share the fingerprint by
-				// construction, so the stored value is canonical.
-				if (bIsISM)
-				{
-					Entry.ISMDescriptor = MoveTemp(TentativeISM);
-				}
-				else
-				{
-					Entry.SMDescriptor = MoveTemp(TentativeSM);
-				}
+				// First contribution stores the descriptors; later contributors share the fingerprint by
+				// construction, so the stored values are canonical.
+				Entry.ISMDescriptor = MoveTemp(TentativeISM);
+				Entry.SMDescriptor = MoveTemp(TentativeSM);
+
+				// Descriptors are authored from the source, not defaults: flag the entry as staged so the first-staging
+				// bDisableCollisionByDefault pass (FPCGExMeshCollectionEntry::UpdateStaging) keeps the captured
+				// collision. Compaction copies the entry wholesale; RebuildStagingData restamps the real index.
+				Entry.Staging.InternalIndex = Scratch.Keys.Num();
 
 				// All contributors to this bucket share the property hash, so the first actor's resolved
 				// values are canonical. Outer identity seeded so the entry ships in SyncToSchema shape.

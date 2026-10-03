@@ -62,10 +62,17 @@ def read(path):
         return ""
 
 
+# A literal or a comment, whichever starts first: '//' and '/*' inside a string are text. The character
+# alternative is kept short so that an apostrophe which is not a literal (1'000) cannot open one.
+COMMENT_RE = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n]){1,8}\'|/\*.*?\*/|//[^\n]*', re.S)
+
+
 def strip_comments(text):
     """Blank out comments but keep line numbering intact."""
-    text = re.sub(r'/\*.*?\*/', lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
-    return re.sub(r'//[^\n]*', '', text)
+    def blank(m):
+        s = m.group(0)
+        return s if s[0] in "\"'" else "\n" * s.count("\n") if s.startswith("/*") else ""
+    return COMMENT_RE.sub(blank, text)
 
 
 class Finding:
@@ -294,11 +301,63 @@ def join_parens(lines, i, limit=30):
     return buf, j
 
 
+def ends_in_name(text):
+    """True when text ends in an identifier or a template-id's '>': a '{' after it reads as 'Name{...}'."""
+    prev = text.rstrip()[-1:]
+    return prev.isalnum() or prev in ("_", ">")
+
+
+def opens_brace_init(code):
+    """True when the '{' following code -- an initializer list so far, every bracket closed -- is 'Member{...}'.
+
+    Not when only macro names follow an initializer's ')' or '}': that '{' is the body. code has no comments,
+    '#' lines or literal contents.
+    """
+    close = max(code.rfind(")"), code.rfind("}"))
+    return ends_in_name(code) and (close < 0 or re.fullmatch(r'[\w\s]*', code[close + 1:]) is None)
+
+
+# What may follow a signature's ')' before its body or its initializer list: qualifiers and macro names.
+TAIL_TOKEN = r'(?:const|override|final|noexcept|volatile|[A-Z][A-Z0-9_]+)\b'
+TAIL_TOKEN_RE = re.compile(TAIL_TOKEN)
+PP_START_RE = re.compile(r'[ \t]*#[ \t]*(\w*)')
+
+
+def line_end(text, i):
+    """Offset just past the line holding text[i], its '\\'-continued lines included."""
+    j = text.find("\n", i)
+    while j > 0 and text[j - 1] == "\\":
+        j = text.find("\n", j + 1)
+    return len(text) if j < 0 else j + 1
+
+
+def past_directives(text, i):
+    """Offset past every preprocessor directive starting at the line start text[i]; i when there is none.
+
+    An #else / #elif goes with its whole branch, through the matching #endif: a conditional reads as its first
+    branch, so two branches that name the same members are never taken for one list.
+    """
+    n = len(text)
+    while i < n:
+        m = PP_START_RE.match(text, i)
+        if not m:
+            break
+        depth, i = int(m.group(1).startswith("el")), line_end(text, i)
+        while depth and i < n:
+            m = PP_START_RE.match(text, i)
+            if m:
+                depth += 1 if m.group(1).startswith("if") else -1 if m.group(1) == "endif" else 0
+            i = line_end(text, i)
+    return i
+
+
 def ctor_init_list(text, pos):
     """From a constructor's name at text[pos], return its member-initializer names in order.
 
     None when the constructor is only declared (';' before any body) or has no initializer list.
+    text has no comments and blanked literals. '#' lines are skipped, a conditional read as its first branch.
     Angle brackets are tracked so 'TMap<FName, int32>(...)' in the list does not split on its comma.
+    'Member{...}' is an item like 'Member(...)'; the body is the first top-level '{' that is not an item's own.
     """
     n, depth, i = len(text), 0, text.find("(", pos)
     if i < 0:
@@ -313,16 +372,29 @@ def ctor_init_list(text, pos):
                 break
         i += 1
     i += 1
-    m = re.match(r'\s*(?:const\s*|noexcept\s*|override\s*|final\s*)*', text[i:])
-    i += m.end()
+    while i < n:                              # to the ':', past qualifiers, macro names and '#' lines
+        if text[i] == "\n":
+            i = past_directives(text, i + 1)
+        elif text[i].isspace():
+            i += 1
+        else:
+            m = TAIL_TOKEN_RE.match(text, i)
+            if not m:
+                break
+            i = m.end()
     if i >= n or text[i] != ":" or text[i + 1:i + 2] == ":":
         return None
     i += 1
-    start, pd, bd, ad = i, 0, 0, 0
+    start, kept, pd, bd, ad = i, "", 0, 0, 0    # kept: the item's text before the '#' lines skipped inside it
     items = []
     while i < n:
         ch = text[i]
-        if ch in "([":
+        if ch == "\n":
+            j = past_directives(text, i + 1)
+            if j > i + 1:
+                kept, start, i = kept + text[start:i + 1], j, j
+                continue
+        elif ch in "([":
             pd += 1
         elif ch in ")]":
             pd -= 1
@@ -331,15 +403,15 @@ def ctor_init_list(text, pos):
         elif ch == ">" and ad > 0 and text[i - 1] != "-":
             ad -= 1
         elif ch == "{":
-            if pd == 0 and ad == 0 and bd == 0:
-                items.append(text[start:i])
+            if pd == 0 and ad == 0 and bd == 0 and not opens_brace_init(kept + text[start:i]):
+                items.append(kept + text[start:i])
                 break
             bd += 1
         elif ch == "}":
             bd -= 1
         elif ch == "," and pd == 0 and bd == 0 and ad == 0:
-            items.append(text[start:i])
-            start = i + 1
+            items.append(kept + text[start:i])
+            kept, start = "", i + 1
         elif ch == ";" and pd == 0 and bd == 0:
             return None
         i += 1
@@ -351,11 +423,19 @@ def ctor_init_list(text, pos):
     return names
 
 
+# A template argument list the plain type characters cannot read: it holds an expression or a function type
+# ('TFunction<void()>'), its parentheses balanced, one level nested ('TFunction<void(TFunctionRef<void()>)>').
+TPL_ARG = r'[^;{}=()]'
+TPL_PARENS = r'\((?:' + TPL_ARG + r'|\(' + TPL_ARG + r'*\))*\)'
+TPL_ARGS = r'<[\w:<>,\s\*&]*(?:[^\w:<>,\s\*&;{}=()]|' + TPL_PARENS + r')(?:' + TPL_ARG + r'|' + TPL_PARENS + r')*>'
+# A data member's declaration. 'operator' is never a member's name: 'X& operator=(const X&) = default;'.
+# Parentheses belong to the type only inside TPL_ARGS: 'bool IsValid() const {' has no member named 'const'.
 MEMBER_RE = re.compile(
     r'^\s*(?!(?:return|using|typedef|friend|static|virtual|template|public|private|protected|enum|class|'
     r'struct|namespace|case|else|if|for|while|delete|new|goto|UPROPERTY|UFUNCTION|GENERATED_BODY|'
     r'GENERATED_USTRUCT_BODY|GENERATED_UCLASS_BODY)\b)'
-    r'(?:mutable\s+)?[A-Za-z_][\w:<>,\s\*&]*?\s+\*?&?\s*([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*(?::\s*\d+\s*)?(?:;|=[^=]|\{)')
+    r'(?:mutable\s+)?[A-Za-z_](?:[\w:<>,\s\*&]|' + TPL_ARGS + r')*?\s+\*?&?\s*(?!operator\b)([A-Za-z_]\w*)'
+    r'\s*(?:\[[^\]]*\]\s*)*(?::\s*\d+\s*)?(?:;|=[^=]|\{)')
 
 
 def type_definers(tree):
@@ -999,14 +1079,17 @@ def class_members(tree):
         return tree._members
     seen = {}
     for h in tree.headers:
-        lines = tree.stripped(h).split("\n")
-        per = {}
+        t = tree.stripped(h)
+        lines, code = t.split("\n"), blank_literals(t).split("\n")
+        per, depth = {}, 0                    # depth: '(' still open where the line starts
         for i, ln, scope, _nested, rel in class_scopes(lines):
-            if rel != 1:
-                continue
-            m = MEMBER_RE.match(ln)
-            if m:
-                per.setdefault(scope[0], []).append(m.group(1))
+            if rel == 1 and not depth:        # inside an open '(' it is a parameter of a multi-line declaration
+                m = MEMBER_RE.match(ln)
+                if m:
+                    per.setdefault(scope[0], []).append(m.group(1))
+            depth = max(0, depth + code[i].count("(") - code[i].count(")"))
+            if rel == 1 and code[i].rstrip().endswith(";"):
+                depth = 0                     # a declaration ended; an #if / #else pair can leave a '(' unmatched
         for name, members in per.items():
             if name in seen and seen[name] != members:
                 seen[name] = None
@@ -1018,7 +1101,8 @@ def class_members(tree):
 
 def reorder_finding(members, inits, path, line):
     idx = {m: k for k, m in enumerate(members)}
-    order = [(idx[n], n) for n in inits if n in idx]
+    twice = {m for k, m in enumerate(members) if idx[m] != k}      # no single position: left out of the order
+    order = [(idx[n], n) for n in inits if n in idx and n not in twice]
     for k in range(1, len(order)):
         prev = max(order[:k])
         if order[k][0] < prev[0]:
@@ -1037,6 +1121,7 @@ def check_ctor_reorder(tree):
     out = []
     for h in tree.headers:
         t = tree.stripped(h)
+        code = blank_literals(t)
         lines = t.split("\n")
         offsets, acc = [], 0
         for ln in lines:
@@ -1046,16 +1131,17 @@ def check_ctor_reorder(tree):
             m = CTOR_HDR_RE.match(ln)
             if rel != 1 or not m or m.group(1) != scope[0] or not members.get(scope[0]):
                 continue
-            inits = ctor_init_list(t, offsets[i] + m.start(1))
+            inits = ctor_init_list(code, offsets[i] + m.start(1))
             f = reorder_finding(members[scope[0]], inits or [], h, i + 1)
             if f:
                 out.append(f)
     for c in tree.sources:
         t = tree.stripped(c)
+        code = blank_literals(t)
         for m in CTOR_CPP_RE.finditer(t):
             if not members.get(m.group(1)):
                 continue
-            inits = ctor_init_list(t, m.start(1))
+            inits = ctor_init_list(code, m.start(1))
             f = reorder_finding(members[m.group(1)], inits or [], c, t[:m.start()].count("\n") + 1)
             if f:
                 out.append(f)
@@ -1277,6 +1363,414 @@ def check_weakobjectptr_fwd_only(tree):
         out.append(Finding("weakobjectptr-fwd-only", "error", p, t[:m.start()].count("\n") + 1,
                            "TWeakObjectPtr used with only UObject/WeakObjectPtrTemplates.h in reach",
                            'replace it with #include "UObject/WeakObjectPtr.h"'))
+    return out
+
+
+# TWeakObjectPtr<T>'s operator=(U*) and raw-pointer constructor (5.8 UObject/WeakObjectPtrTemplates.h) convert T* to
+# UObject*, which needs the complete T. Get() is a C-style cast and weak-to-weak copies never convert.
+WEAK_TPL = r'\bTWeakObjectPtr\s*<\s*(?:const\s+)?(?:class\s+)?(?:::)?([A-Za-z_]\w*)\s*>'
+# 'TWeakObjectPtr<T> Name' then: ';' ',' '[' declare, '=' '{' initialize, '(' is a function at class scope and a
+# direct-initialized local in a body.
+WEAK_DECL_RE = re.compile(WEAK_TPL + r'\s*&?\s*([A-Za-z_]\w*)\s*([;,\[={(])')
+WEAK_CAST_RE = re.compile(WEAK_TPL + r'\s*([({])')
+WEAK_SOURCE_RE = re.compile(r'TWeakObjectPtr\s*<[^;]*?>\s*[({]|MakeWeakObjectPtr\s*\(')
+# Callees returning a raw pointer (5.8 Templates/Casts.h, UObject/UObjectGlobals.h).
+RAW_SOURCE_RE = re.compile(r'(?:Cast|CastChecked|ExactCast|NewObject)\s*<')
+NAME_CHAIN_RE = re.compile(r'(?:this\s*->\s*)?[A-Za-z_]\w*(?:\s*(?:\.|->|::)\s*[A-Za-z_]\w*)*')
+CALL_CHAIN_RE = re.compile(r'(?:(.*)(\.|->|::)\s*)?([A-Za-z_]\w*)\s*(?:<[^;]*>)?\s*\((.*)\)', re.S)
+CLASS_BODY_RE = re.compile(r'^[ \t]*(?:template\s*<[^;{}]*?>\s*)?(?:class|struct)\s+(?:[A-Z_0-9]+_API\s+)?'
+                           r'([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^;{}]*)?\{', re.M)
+SCOPE_HEAD_RE = re.compile(r'\b(?:namespace|enum|extern)\b')
+FN_BODY_HEAD_RE = re.compile(r'\)\s*(?:' + TAIL_TOKEN + r'\s*|&{1,2}\s*)*$')
+# What follows an initializer list's ':': a member or base name and its bracket, after macro names if any.
+MEM_INIT_RE = re.compile(r'\s*(?:[A-Z][A-Z0-9_]+\s+)*(?:::)?[A-Za-z_][\w:]*\s*(?:[<({]|$)')
+STMT_RE = re.compile(r'[;{]')
+SKELETON_RE = re.compile(r'[;{}]')
+LITERAL_RE = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'')
+BRACKET_RES = {"(": re.compile(r'[()]'), "[": re.compile(r'[\[\]]'), "{": re.compile(r'[{}]')}
+# A declaration's type, pointer marks and name, where a statement, member or parameter starts. Type and name
+# are split by whitespace or '*' / '&', never inside one identifier.
+DECLARED_RE = re.compile(
+    r'(?:^|[;{}(),:])\s*(?!(?:return|delete|throw|case|goto|else|do|new|using|typedef|co_return|co_yield)\b)'
+    r'(?:(?:const|static|mutable|inline|constexpr|virtual|explicit|FORCEINLINE|class|struct)\s+)*'
+    r'(?:[A-Z][A-Z_0-9]*_API\s+)?([A-Za-z_][\w:]*(?:\s*<[^;{}()]*?>)?)(?:\s+const\b)?(?:\s*([*&]+)\s*|\s+)'
+    r'(?:const\s+)?([A-Za-z_]\w*)\s*(?=[=;,(){}\[:])', re.M)
+# SLATE_ARGUMENT(Type, Name) declares FArguments::_Name (5.8 Widgets/DeclarativeSyntaxSupport.h).
+SLATE_ARG_RE = re.compile(r'\bSLATE_ARGUMENT(?:_DEFAULT)?\s*\(\s*([^,;{}]+?)\s*,\s*([A-Za-z_]\w*)\s*\)')
+
+
+def blank_literals(text):
+    """text with the contents of string and character literals blanked; offsets and lines kept."""
+    return LITERAL_RE.sub(lambda m: m.group(0)[0] + " " * (len(m.group(0)) - 2) + m.group(0)[0], text)
+
+
+def code_only(text):
+    """Comment-stripped text with preprocessor lines and literal contents blanked; offsets and lines kept."""
+    out, cont = [], False
+    for ln in text.split("\n"):
+        pp = cont or ln.lstrip().startswith("#")
+        cont = pp and ln.rstrip().endswith("\\")
+        out.append(" " * len(ln) if pp else ln)
+    return blank_literals("\n".join(out))
+
+
+def closing(text, i):
+    """Index of the bracket closing text[i], counting only that bracket kind."""
+    depth = 0
+    for m in BRACKET_RES[text[i]].finditer(text, i):
+        depth += 1 if m.group(0) == text[i] else -1
+        if depth == 0:
+            return m.start()
+    return len(text) - 1
+
+
+def balanced(text):
+    depth = 0
+    for ch in text:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+
+def expr_end(text, i):
+    """End of the expression starting at text[i]: a top-level ';' or ',', or an unmatched closing bracket."""
+    depth = 0
+    for k in range(i, len(text)):
+        ch = text[k]
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            if depth == 0:
+                return k
+            depth -= 1
+        elif ch in ";," and depth == 0:
+            return k
+    return len(text)
+
+
+def init_colon(head):
+    """Offset of a constructor's initializer-list ':' in head, or None.
+
+    A single ':' where a signature ends -- its ')', then at most qualifiers and macro names -- that a member
+    initializer follows: the second half is what tells it from a bitfield, a base list or a ternary.
+    """
+    depth = 0
+    for k, ch in enumerate(head):
+        if ch in "()":
+            depth += 1 if ch == "(" else -1
+        elif (ch == ":" and depth == 0 and head[k + 1:k + 2] != ":" and head[k - 1:k] != ":"
+              and FN_BODY_HEAD_RE.search(head, 0, k) and MEM_INIT_RE.match(head, k + 1)):
+            return k
+    return None
+
+
+def opens_body(head):
+    """True when the '{' following head opens a function body, not a brace initializer or a type."""
+    k = init_colon(head)
+    if k is None:
+        return FN_BODY_HEAD_RE.search(head) is not None
+    inits = head[k + 1:]
+    if sum((c in "([") - (c in ")]") for c in inits) > 0:
+        return False                            # inside an initializer's '(': a lambda or a braced argument
+    # Unbalanced text is not one list (a nested type's body precedes 'Name{'): only the name test holds there.
+    return not (opens_brace_init(inits) if balanced(inits) else ends_in_name(inits))
+
+
+def class_items(code, start, end, opens):
+    """Split the class body code[start:end] into (start, end, body_open, nested) per member.
+
+    body_open is the '{' of an inline function body, whose '}' is end; for a declaration it is None and
+    end is its ';'. nested marks a nested type, whose body is scanned as a class of its own.
+    """
+    items, item, nested, pos = [], start, False, start
+    while True:
+        m = STMT_RE.search(code, pos, end)
+        if not m:
+            return items
+        i = m.start()
+        if code[i] == ";":
+            items.append((item, i, None, nested))
+            item, nested, pos = i + 1, False, i + 1
+            continue
+        close = closing(code, i)
+        if i in opens:
+            nested = True
+        elif opens_body(code[item:i]):
+            items.append((item, close, i, False))
+            item = close + 1
+        pos = close + 1
+
+
+def last_group(text):
+    """(open, close) offsets of the last top-level '(...)' in text, or None."""
+    depth, close = 0, None
+    for k in range(len(text) - 1, -1, -1):
+        if text[k] == ")":
+            close = k if depth == 0 else close
+            depth += 1
+        elif text[k] == "(" and depth:
+            depth -= 1
+            if depth == 0:
+                return k, close
+    return None
+
+
+def blank_groups(text):
+    """text with everything inside parentheses blanked, so only its outermost declarations remain."""
+    out, depth = [], 0
+    for ch in text:
+        if ch == ")" and depth:
+            depth -= 1
+        out.append(ch if depth == 0 or ch == "\n" else " ")
+        if ch == "(":
+            depth += 1
+    return "".join(out)
+
+
+def init_items(text):
+    """(member, argument, offset) per 'Member(args)' / 'Member{args}' of a constructor initializer list."""
+    out, depth, start = [], 0, 0
+    for k, ch in enumerate(text + ","):
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            m = re.match(r'\s*([A-Za-z_][\w:]*)\s*(?:<[^({]*>)?\s*([({])', text[start:k])
+            close = text.rfind(")" if m and m.group(2) == "(" else "}", start, k)
+            if m and close > start + m.end() - 1:
+                out.append((m.group(1).split("::")[-1], text[start + m.end():close], start + m.start(1)))
+            start = k + 1
+    return out
+
+
+def pointer_kind(ty, ptr):
+    if "*" in ptr or ty.startswith("TObjectPtr"):
+        return "raw"
+    return "weak" if ty.startswith("TWeakObjectPtr") else "other"
+
+
+def declarations(text):
+    """name -> {(pointer kind, type name)} for every variable, parameter, member or function result text declares."""
+    out = {}
+    for ty, ptr, name in DECLARED_RE.findall(text):
+        out.setdefault(name, set()).add((pointer_kind(ty, ptr), re.split(r'[\s<]', ty)[0].split("::")[-1]))
+    return out
+
+
+def merge_declarations(into, more):
+    for name, decls in more.items():
+        into.setdefault(name, set()).update(decls)
+    return into
+
+
+def member_declarations(code, items):
+    """declarations of a class's members and its member functions' results, from its class_items."""
+    return declarations(blank_groups("\n".join(code[s:e + 1] if b is None else code[s:b]
+                                               for s, e, b, nested in items if not nested)))
+
+
+def skeleton(code, opens):
+    """code with function bodies and parenthesized text blanked: members and namespace-scope declarations remain."""
+    out, item, pos = list(code), 0, 0
+    while True:
+        m = SKELETON_RE.search(code, pos)
+        if not m:
+            return blank_groups("".join(out))
+        i = m.start()
+        if code[i] == "{" and not (i in opens or SCOPE_HEAD_RE.search(code, item, i)):
+            close = closing(code, i)
+            if opens_body(code[item:i]):
+                out[i + 1:close] = [c if c == "\n" else " " for c in code[i + 1:close]]
+                item = close + 1
+            pos = close + 1                 # a brace initializer stays inside its declaration
+            continue
+        item = pos = i + 1
+
+
+def header_index(tree, path):
+    """(names, classes) of path. names: declarations of its members, namespace-scope names and Slate arguments --
+    never parameters or locals. classes: class name -> member_declarations."""
+    if not hasattr(tree, "_header_index"):
+        tree._header_index = {}
+    if path not in tree._header_index:
+        code = code_only(tree.stripped(path))
+        opens = {m.end() - 1: m.group(1) for m in CLASS_BODY_RE.finditer(code)}
+        names, classes = declarations(skeleton(code, opens)), {}
+        for ty, arg in SLATE_ARG_RE.findall(code):
+            names.setdefault("_" + arg, set()).add((pointer_kind(ty, "*" if ty.endswith("*") else ""), ""))
+        for o, cls in opens.items():
+            items = class_items(code, o + 1, closing(code, o), opens)
+            merge_declarations(classes.setdefault(cls, {}), member_declarations(code, items))
+        tree._header_index[path] = names, classes
+    return tree._header_index[path]
+
+
+def closure_index(tree, path):
+    """header_index merged over path's include closure."""
+    names, classes = {}, {}
+    for f in tree.closure(path):
+        more_names, more_classes = header_index(tree, f)
+        merge_declarations(names, more_names)
+        for cls, members in more_classes.items():
+            merge_declarations(classes.setdefault(cls, {}), members)
+    return names, classes
+
+
+def resolve_path(parts, scopes, names, classes):
+    """'weak', 'raw' or 'unknown' for the last of parts, a name chain ('A.B->C').
+
+    The root resolves through scopes, then names; each member through the class its owner's declared type names,
+    else by name alone (an inherited member, or an owner of unknown type). A None root is an owner expression
+    that is not a name.
+    """
+    root = parts[0]
+    decls = next((s[root] for s in scopes + (names,) if root in s), None) if root else None
+    if decls is None and root in classes:
+        decls = {("other", root)}                       # 'FClass::Member'
+    for part in parts[1:]:
+        types = {t for _, t in decls or ()}
+        owner = classes.get(next(iter(types))) if len(types) == 1 else None
+        decls = (owner or {}).get(part) or names.get(part)
+    kinds = {k for k, _ in decls or ()}
+    return next(iter(kinds)) if len(kinds) == 1 and kinds != {"other"} else "unknown"
+
+
+def name_parts(chain):
+    return re.findall(r'[A-Za-z_]\w*', re.sub(r'^\s*this\s*->', '', chain))
+
+
+def weak_source_kind(expr, resolve):
+    """'null', 'weak', 'raw' or 'unknown': what expr is when it initializes or is assigned to a TWeakObjectPtr.
+
+    resolve(parts) is resolve_path bound to the site's scopes. A weak or object pointer's .Get() is raw.
+    """
+    e = expr.strip()
+    m = re.fullmatch(r'(?:MoveTemp(?:IfPossible)?\s*)?\((.*)\)', e, re.S)
+    while m and balanced(m.group(1)):
+        e = m.group(1).strip()
+        m = re.fullmatch(r'(?:MoveTemp(?:IfPossible)?\s*)?\((.*)\)', e, re.S)
+    if e in ("", "nullptr", "NULL", "0") or re.fullmatch(r'\{\s*\}', e):
+        return "null"
+    if e == "this" or e.startswith("&"):
+        return "raw"
+    if WEAK_SOURCE_RE.match(e):
+        return "weak"
+    if RAW_SOURCE_RE.match(e):
+        return "raw"
+    if NAME_CHAIN_RE.fullmatch(e):
+        return resolve(name_parts(e))
+    m = CALL_CHAIN_RE.fullmatch(e)
+    if not m or not balanced(m.group(4)):
+        return "unknown"
+    obj, sep, fn = (m.group(1) or "").strip(), m.group(2), m.group(3)
+    owner = [] if obj in ("", "this") else name_parts(obj) if NAME_CHAIN_RE.fullmatch(obj) else [None]
+    if fn == "Get" and sep == ".":
+        return "raw" if owner[0] and resolve(owner) != "unknown" else "unknown"
+    return resolve(owner + [fn])
+
+
+def weak_inits(code, lo, hi, incomplete, in_body):
+    """(pos, T, target, initializer) per TWeakObjectPtr<T> declared with an initializer or built as a temporary."""
+    for m in WEAK_DECL_RE.finditer(code, lo, hi):
+        ty, name, tail = m.groups()
+        if ty in incomplete and (tail in "={" or (tail == "(" and in_body)):
+            i = m.end() - 1
+            init = code[m.end():expr_end(code, m.end())] if tail == "=" else code[i + 1:closing(code, i)]
+            yield m.start(), ty, f"'{name}'", init
+    for m in WEAK_CAST_RE.finditer(code, lo, hi):
+        if m.group(1) in incomplete:
+            i = m.end() - 1
+            yield m.start(), m.group(1), "temporary", code[i + 1:closing(code, i)]
+
+
+def weak_assignments(body, name):
+    """(offset, source) per assignment to the member 'name', bare or through this->, in a function body."""
+    rx = re.compile(r'(?<![\w.>:])(?:this\s*->\s*)?' + re.escape(name) + r'\s*=(?!=)')
+    for m in rx.finditer(body):
+        head = body[max(body.rfind(c, 0, m.start()) for c in ";{}") + 1:m.start()].rstrip()
+        if head and head[-1] not in "(),?:" and not re.search(r'\b(?:return|else|do)$', head):
+            continue                    # declares a local, or assigns another object's member
+        yield m.start(), body[m.end():expr_end(body, m.end())]
+
+
+def weak_class_sites(code, o, opens, incomplete):
+    """(pos, T, target, source, verb, scopes) per TWeakObjectPtr<T>, T in incomplete, that the class whose body
+    opens at code[o] assigns or constructs. scopes resolve names before the header does."""
+    items = class_items(code, o + 1, closing(code, o), opens)
+    decls = [(s, e + 1) for s, e, body, nested in items if body is None and not nested]
+    weak = {}
+    for s, e in decls:
+        for m in WEAK_DECL_RE.finditer(code, s, e):
+            if m.group(3) != "(" and code.count("(", s, m.start()) == code.count(")", s, m.start()):
+                weak[m.group(2)] = m.group(1)
+    members = member_declarations(code, items)
+    for s, e in decls:
+        for site in weak_inits(code, s, e, incomplete, False):
+            yield site + ("constructed from", (members,))
+    for s, e, b, _nested in items:
+        if b is None:
+            continue
+        k = init_colon(code[s:b])
+        sig = b if k is None else s + k
+        grp = last_group(code[s:sig])
+        scopes = (declarations((code[s + grp[0]:s + grp[1] + 1] if grp else "") + "\n" + code[b:e]), members)
+        regions = [(s, sig, False), (b + 1, e, True)] + ([(sig + 1, b, False)] if k is not None else [])
+        for lo, hi, in_body in regions:
+            for site in weak_inits(code, lo, hi, incomplete, in_body):
+                yield site + ("constructed from", scopes)
+        if k is not None:
+            for name, arg, off in init_items(code[sig + 1:b]):
+                if weak.get(name) in incomplete:
+                    yield sig + 1 + off, weak[name], f"'{name}'", arg, "constructed from", scopes
+        for name, ty in weak.items():
+            if ty in incomplete:
+                for off, src in weak_assignments(code[b + 1:e], name):
+                    yield b + 1 + off, ty, f"'{name}'", src, "assigned", scopes
+
+
+@check("weakobjectptr-incomplete", "error",
+       "A TWeakObjectPtr<T> is assigned or constructed from a raw or TObjectPtr pointer in a header -- inline "
+       "member body, constructor initializer list, in-class or local initializer, functional cast -- while T is "
+       "only forward-declared. operator=(U*) and the raw-pointer constructor convert T* to UObject*, which needs "
+       "the complete type (C2679 / static_assert in WeakObjectPtrTemplates.h). Unity Build hides it when a "
+       "neighbouring .cpp completes T; a non-unity build does not. Get(), nullptr and weak-to-weak copies are "
+       "fine. Error when the source is provably a raw pointer, warning when it is not provably a weak one. Only "
+       "project types are checked -- an engine T can be completed by a transitive engine include.")
+def check_weakobjectptr_incomplete(tree):
+    definers = type_definers(tree)
+    out = []
+    for h in tree.headers:
+        t = tree.stripped(h)
+        project = {ty for ty in re.findall(WEAK_TPL, t) if ty in definers}
+        if not project:
+            continue
+        cl = tree.closure(h)
+        incomplete = {ty for ty in project if not (definers[ty] & cl)}
+        if not incomplete:
+            continue
+        code = code_only(t)
+        opens = {m.end() - 1 for m in CLASS_BODY_RE.finditer(code)}
+        index = None
+        for o in sorted(opens):
+            for pos, ty, target, src, verb, scopes in weak_class_sites(code, o, opens, incomplete):
+                index = index or closure_index(tree, h)
+                kind = weak_source_kind(src, lambda parts: resolve_path(parts, scopes, *index))
+                if kind in ("null", "weak"):
+                    continue
+                shown = " ".join(src.split())
+                shown = shown if len(shown) <= 60 else shown[:57] + "..."
+                what = f"the raw pointer '{shown}'" if kind == "raw" else f"'{shown}' (not provably a weak pointer)"
+                inc = rel_include(tree, sorted(definers[ty])[0])
+                out.append(Finding("weakobjectptr-incomplete", "error" if kind == "raw" else "warn", h,
+                                   code[:pos].count("\n") + 1,
+                                   f"TWeakObjectPtr<{ty}> {target} is {verb} {what} while '{ty}' is only "
+                                   "forward-declared here",
+                                   f'move it to the .cpp, or add #include "{inc}"'))
     return out
 
 
@@ -1544,6 +2038,174 @@ SELFTEST = {
         "\tif (!NewObject<UObject>()) { }\n"
         "\tcheck(CastChecked<UObject>(nullptr));\n"
         "}\n"),
+    # ctor-reorder with brace initializers: a list must continue past 'C{0}', and the first out-of-line one needs
+    # 'C{In}' named. A '{' after a macro line or an '#endif' is the body: those two lists have no brace initializer.
+    "ModB/Public/PCGExWallBraced.h": (
+        "#pragma once\n"
+        "struct FPCGExWallBraced\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tint32 C = 0;\n"
+        "\tFPCGExWallBraced() : C{0}, B(1), A(2) {}\n"
+        "\texplicit FPCGExWallBraced(int32 In);\n"
+        "\tFPCGExWallBraced(int32 InA, int32 InB)\n"
+        "\t\t: B(InB)\n"
+        "PRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t\t, A(InA)\n"
+        "PRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "\t{\n"
+        "\t}\n"
+        "\tFPCGExWallBraced(int32 InA, int32 InB, int32 InC);\n"
+        "};\n"),
+    "ModB/Private/PCGExWallBraced.cpp": (
+        "#include \"PCGExWallBraced.h\"\n"
+        "FPCGExWallBraced::FPCGExWallBraced(int32 In)\n"
+        "\t: A(In)\n"
+        "\t, C{In}\n"
+        "\t, B(In)\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallBraced::FPCGExWallBraced(int32 InA, int32 InB, int32 InC)\n"
+        "\t: C(InC)\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\t, B(InB)\n"
+        "#endif\n"
+        "{\n"
+        "}\n"),
+    # ctor-reorder past what can sit before the ':' and inside the list. In order: a macro line before the ':',
+    # an '#if' line before it, items that start on a '#' line, literals holding '//', a quote and a bracket,
+    # and a digit separator ahead of a comment with an apostrophe.
+    "ModB/Public/PCGExWallHeads.h": (
+        "#pragma once\n"
+        "struct FPCGExWallHeads\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFString C;\n"
+        "\tFPCGExWallHeads();\n"
+        "\texplicit FPCGExWallHeads(int32 In);\n"
+        "\tFPCGExWallHeads(int32 InA, int32 InB);\n"
+        "\texplicit FPCGExWallHeads(const FString& In);\n"
+        "\tFPCGExWallHeads(int32 InA, const FString& In);\n"
+        "};\n"),
+    "ModB/Private/PCGExWallHeads.cpp": (
+        "#include \"PCGExWallHeads.h\"\n"
+        "FPCGExWallHeads::FPCGExWallHeads()\n"
+        "PRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t: B(1)\n"
+        "\t, A(2)\n"
+        "PRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(int32 In)\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\t: B(In)\n"
+        "\t, A(In)\n"
+        "#endif\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(int32 InA, int32 InB)\n"
+        "\t: B(InB),\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\tA(InA),\n"
+        "#endif\n"
+        "\tC()\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(const FString& In)\n"
+        "\t: C(In + TEXT('\"') + TEXT(\"ws://host\") + TEXT(\"(\")), B(1), A(2)\n"
+        "{\n"
+        "}\n"
+        "FPCGExWallHeads::FPCGExWallHeads(int32 InA, const FString& In)\n"
+        "\t: C(In), B(1'000), A(InA) // it's out of order\n"
+        "{\n"
+        "}\n"),
+    # ctor-reorder with lines that are no members: a defaulted parameter named like a member, after an inline body
+    # whose literal holds a '('. Then declarations an #if / #else pair leaves one '(', and one ')', out of balance.
+    "ModB/Public/PCGExWallParams.h": (
+        "#pragma once\n"
+        "struct FPCGExWallParams\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tvoid Log() const { Print(TEXT(\"(\")); }\n"
+        "\tint32 Seed = 0;\n"
+        "\tvoid Configure(int32 InA,\n"
+        "\t               int32 Seed = 7);\n"
+        "\tFPCGExWallParams() : Seed(1), A(2) {}\n"
+        "};\n"
+        "struct FPCGExWallDrift\n"
+        "{\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\tvoid Trace(int32 Level,\n"
+        "#else\n"
+        "\tvoid Trace(\n"
+        "#endif\n"
+        "\t           int32 Depth = 0);\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExWallDrift() : B(1), A(2) {}\n"
+        "\tvoid Flush(int32 Level\n"
+        "#if !UE_BUILD_SHIPPING\n"
+        "\t) const\n"
+        "#else\n"
+        "\t)\n"
+        "#endif\n"
+        "\t{\n"
+        "\t}\n"
+        "\tint32 C = 0;\n"
+        "\tint32 D = 0;\n"
+        "\texplicit FPCGExWallDrift(int32 In) : D(In), C(In) {}\n"
+        "};\n"),
+    # ctor-reorder across two same-named definitions that differ only by an 'operator=': they still agree on
+    # their members, so the out-of-order constructor of one is reported.
+    "ModA/Public/PCGExTwin.h": (
+        "#pragma once\n"
+        "struct FPCGExTwin\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExTwin& operator=(const FPCGExTwin&) = default;\n"
+        "};\n"),
+    "ModB/Public/PCGExTwinToo.h": (
+        "#pragma once\n"
+        "struct FPCGExTwin\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExTwin() : B(1), A(2) {}\n"
+        "};\n"),
+    # ctor-reorder with members whose template arguments hold more than plain type characters: a function type,
+    # one nested in another, an array type. Last, a function whose defaulted parameter is named like a member:
+    # its '(' is no template argument, so 'Count' is declared once and keeps its place.
+    "ModB/Public/PCGExWallCallback.h": (
+        "#pragma once\n"
+        "struct FPCGExWallCallback\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTFunction<void()> OnDone;\n"
+        "\tint32 B = 0;\n"
+        "\tFPCGExWallCallback() : OnDone(nullptr), A(1), B(2) {}\n"
+        "};\n"
+        "struct FPCGExWallChain\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTFunction<void(TFunctionRef<void()>)> RunGuarded;\n"
+        "\tFPCGExWallChain() : RunGuarded(nullptr), A(1) {}\n"
+        "};\n"
+        "struct FPCGExWallSlots\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTUniquePtr<int32[]> Slots;\n"
+        "\tFPCGExWallSlots() : Slots(nullptr), A(1) {}\n"
+        "};\n"
+        "struct FPCGExWallShadow\n"
+        "{\n"
+        "\tTArray<int32> Collect(const TArray<int32>& In, int32 Count = 0) const;\n"
+        "\tint32 A = 0;\n"
+        "\tint32 Count = 0;\n"
+        "\tFPCGExWallShadow() : Count(1), A(2) {}\n"
+        "};\n"),
     # iwyu-symbol.
     "ModB/Private/PCGExIwyu.cpp": (
         "#include \"PCGExWall.h\"\n"
@@ -1604,6 +2266,115 @@ SELFTEST = {
         "struct FPCGExWeakHolder\n"
         "{\n"
         "\tTWeakObjectPtr<UObject> Target;\n"
+        "};\n"),
+    # weakobjectptr-incomplete: UPCGExSettings only forward-declared. Raw sources (errors): '()' and '{}'
+    # constructor initializers, plain assignment, this-> from Cast<>, local from .Get(), functional cast, '=' and
+    # '{}' in-class initializers, a Slate argument. Unresolved source (warning): Source.Resolve().
+    "ModB/Public/PCGExWeakAssign.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "UPCGExSettings* PCGExDefaultSettings();\n"
+        "struct FPCGExWeakAssign\n"
+        "{\n"
+        "\tFPCGExWeakAssign(const TMap<FName, int32>& Ids, UPCGExSettings* InSettings, const TArray<int32>& Order)\n"
+        "\t\t: Settings(InSettings), Pending{InSettings}\n"
+        "\t{\n"
+        "\t}\n"
+        "\tvoid SetSettings(UPCGExSettings* InSettings)\n"
+        "\t{\n"
+        "\t\tSettings = InSettings;\n"
+        "\t}\n"
+        "\tvoid Adopt(UObject* Any, const FPCGExWeakSource& Source)\n"
+        "\t{\n"
+        "\t\tthis->Settings = Cast<UPCGExSettings>(Any);\n"
+        "\t\tTWeakObjectPtr<UPCGExSettings> Local(Settings.Get());\n"
+        "\t\tPending = TWeakObjectPtr<UPCGExSettings>(PCGExDefaultSettings());\n"
+        "\t\tPending = Source.Resolve();\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Pending;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Fallback = PCGExDefaultSettings();\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Braced{PCGExDefaultSettings()};\n"
+        "};\n"
+        "class SPCGExWeakPanel : public SCompoundWidget\n"
+        "{\n"
+        "public:\n"
+        "\tSLATE_BEGIN_ARGS(SPCGExWeakPanel) {}\n"
+        "\t\tSLATE_ARGUMENT(UPCGExSettings*, Owner)\n"
+        "\tSLATE_END_ARGS()\n"
+        "\tvoid Construct(const FArguments& InArgs) { Owner = InArgs._Owner; }\n"
+        "private:\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Owner;\n"
+        "};\n"),
+    # weakobjectptr-incomplete where a body is easy to lose. A constructor's: after a macro line; after initializers
+    # holding lambdas and a braced argument; with a macro, or noexcept, between ')' and ':'. A function's after a
+    # trailing macro. And a lambda picked by a ternary, whose ':' is no initializer list.
+    "ModB/Public/PCGExWeakCtorBody.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "struct FPCGExWeakMacroBody\n"
+        "{\n"
+        "\texplicit FPCGExWeakMacroBody(UPCGExSettings* InSettings)\n"
+        "\t\t: Id(0)\n"
+        "\t\tPRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t\t, Legacy(0)\n"
+        "\t\tPRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "\t{\n"
+        "\t\tSettings = InSettings;\n"
+        "\t}\n"
+        "\tint32 Id;\n"
+        "\tint32 Legacy;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakLambdaInit\n"
+        "{\n"
+        "\texplicit FPCGExWeakLambdaInit(UPCGExSettings* InSettings)\n"
+        "\t\t: OnDone([this]() { Reset(); }), OnRetry([this]() mutable { Reset(); }), Ids({1, 2})\n"
+        "\t{\n"
+        "\t\tSettings = InSettings;\n"
+        "\t}\n"
+        "\tvoid Reset();\n"
+        "\tTFunction<void()> OnDone;\n"
+        "\tTFunction<void()> OnRetry;\n"
+        "\tTArray<int32> Ids;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakMacroHead\n"
+        "{\n"
+        "\texplicit FPCGExWeakMacroHead(UPCGExSettings* InSettings)\n"
+        "\tPRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t\t: Settings(InSettings)\n"
+        "\tPRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "\t{\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakNoexcept\n"
+        "{\n"
+        "\tFPCGExWeakNoexcept(FPCGExWeakNoexcept&& Other, UPCGExSettings* InSettings) noexcept\n"
+        "\t\t: Settings(InSettings), Id{0}\n"
+        "\t{\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "\tint32 Id;\n"
+        "};\n"
+        "struct FPCGExWeakTrailingMacro\n"
+        "{\n"
+        "\tvoid SetSettings(UPCGExSettings* InSettings) UE_LIFETIMEBOUND\n"
+        "\t{\n"
+        "\t\tSettings = InSettings;\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"
+        "struct FPCGExWeakTernary\n"
+        "{\n"
+        "\tstatic bool IsLive();\n"
+        "\tstatic TFunction<void(UPCGExSettings*)> MakeApply();\n"
+        "\tTFunction<void(UPCGExSettings*)> Apply = IsLive() ? MakeApply()"
+        " : [this](UPCGExSettings* In) { Settings = In; };\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
         "};\n"),
     # instanced-in-instancedstruct + deprecated-unconsumed.
     "ModB/Public/PCGExPayload.h": (
@@ -1798,6 +2569,221 @@ SELFTEST = {
         "\tTSubclassOf<UPCGExSettings> SettingsClass;\n"
         "\tvoid Set(TSubclassOf<UPCGExSettings> InClass) { SettingsClass = InClass; }\n"
         "};\n"),
+    # ctor-reorder must stay silent on brace initializers listed in declaration order.
+    "ModB/Public/PCGExNegativeBraced.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeBraced\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tint32 C = 0;\n"
+        "\tFPCGExNegativeBraced() : A{0}, B(1), C{2} {}\n"
+        "};\n"),
+    # ctor-reorder must stay silent when #if / #else branches each list, or each declare, the same members: a
+    # list reads as its first branch, and a member declared in both has no single position to compare.
+    "ModB/Public/PCGExNegativeBranches.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeBranches\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tint32 B = 0;\n"
+        "\tint32 C = 0;\n"
+        "\tFPCGExNegativeBranches(int32 InA, int32 InB)\n"
+        "\t\t: A(InA)\n"
+        "#if PLATFORM_LITTLE_ENDIAN\n"
+        "\t\t, B(InB)\n"
+        "\t\t, C(0)\n"
+        "#else\n"
+        "\t\t, B(InA)\n"
+        "\t\t, C(1)\n"
+        "#endif\n"
+        "\t{\n"
+        "\t}\n"
+        "};\n"
+        "struct FPCGExNegativeTwice\n"
+        "{\n"
+        "#if PLATFORM_LITTLE_ENDIAN\n"
+        "\tint32 Tag = 0;\n"
+        "\tint32 Low = 0;\n"
+        "\tFPCGExNegativeTwice() : Tag(1), Low(2) {}\n"
+        "#else\n"
+        "\tint32 Tag = 0;\n"
+        "\tFPCGExNegativeTwice() : Tag(1) {}\n"
+        "#endif\n"
+        "};\n"),
+    # ctor-reorder must stay silent: a defaulted parameter named like a member is no second declaration of it.
+    "ModB/Public/PCGExNegativeParams.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeParams\n"
+        "{\n"
+        "\tint32 Seed = 0;\n"
+        "\tint32 A = 0;\n"
+        "\tvoid Configure(int32 InA,\n"
+        "\t               int32 Seed = 7);\n"
+        "\tFPCGExNegativeParams() : Seed(1), A(2) {}\n"
+        "};\n"),
+    # ctor-reorder must stay silent: a function-type member initialized in declaration order, beside functions
+    # that are no members -- an inline body, and a declaration that returns a function type.
+    "ModB/Public/PCGExNegativeCallback.h": (
+        "#pragma once\n"
+        "struct FPCGExNegativeCallback\n"
+        "{\n"
+        "\tint32 A = 0;\n"
+        "\tTFunction<void()> OnDone;\n"
+        "\tbool bValid = false;\n"
+        "\tbool IsValid() const { return bValid; }\n"
+        "\tTFunction<void()> MakeCallback() const;\n"
+        "\tFPCGExNegativeCallback() : A(1), OnDone(nullptr), bValid(true) {}\n"
+        "};\n"),
+    # weakobjectptr-incomplete must stay silent. Out of line: only Get() is inline, the raw assignment and
+    # constructor live in the .cpp.
+    "ModB/Public/PCGExNegativeWeakOutOfLine.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "class FPCGExNegativeWeakOutOfLine\n"
+        "{\n"
+        "public:\n"
+        "\texplicit FPCGExNegativeWeakOutOfLine(UPCGExSettings* InSettings);\n"
+        "\tUPCGExSettings* GetSettings() const\n"
+        "\t{\n"
+        "\t\treturn Settings.Get();\n"
+        "\t}\n"
+        "\tvoid SetSettings(UPCGExSettings* InSettings);\n"
+        "private:\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"),
+    "ModB/Private/PCGExNegativeWeakOutOfLine.cpp": (
+        "#include \"PCGExNegativeWeakOutOfLine.h\"\n"
+        "#include \"PCGExBase.h\"\n"
+        "FPCGExNegativeWeakOutOfLine::FPCGExNegativeWeakOutOfLine(UPCGExSettings* InSettings)\n"
+        "\t: Settings(InSettings)\n"
+        "{\n"
+        "}\n"
+        "void FPCGExNegativeWeakOutOfLine::SetSettings(UPCGExSettings* InSettings)\n"
+        "{\n"
+        "\tSettings = InSettings;\n"
+        "}\n"),
+    # Complete type: the same raw sources are fine once the defining header is included.
+    "ModB/Public/PCGExNegativeWeakComplete.h": (
+        "#pragma once\n"
+        "#include \"PCGExBase.h\"\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "struct FPCGExNegativeWeakComplete\n"
+        "{\n"
+        "\texplicit FPCGExNegativeWeakComplete(UPCGExSettings* InSettings)\n"
+        "\t\t: Settings(InSettings)\n"
+        "\t{\n"
+        "\t}\n"
+        "\tvoid SetSettings(UPCGExSettings* InSettings) { Settings = InSettings; }\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings = Cast<UPCGExSettings>(GetTransientOuter());\n"
+        "};\n"),
+    # Incomplete type, and the constructor body follows a macro line: it is scanned, and a weak-to-weak copy is fine.
+    "ModB/Public/PCGExNegativeWeakMacroBody.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "struct FPCGExNegativeWeakMacroBody\n"
+        "{\n"
+        "\texplicit FPCGExNegativeWeakMacroBody(const TWeakObjectPtr<UPCGExSettings>& InSettings)\n"
+        "\t\t: Id(0)\n"
+        "\t\tPRAGMA_DISABLE_DEPRECATION_WARNINGS\n"
+        "\t\t, Legacy(0)\n"
+        "\t\tPRAGMA_ENABLE_DEPRECATION_WARNINGS\n"
+        "\t{\n"
+        "\t\tSettings = InSettings;\n"
+        "\t}\n"
+        "\tint32 Id;\n"
+        "\tint32 Legacy;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"),
+    # Incomplete type, and 'public:' right after a macro call: that ':' starts no initializer list, so the
+    # constructor after it keeps its own parameters in scope and its weak-to-weak copy stays fine.
+    "ModB/Public/PCGExNegativeWeakSpecifier.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "class UPCGExNegativeWeakSpecifier : public UObject\n"
+        "{\n"
+        "\tGENERATED_BODY()\n"
+        "public:\n"
+        "\tUPCGExNegativeWeakSpecifier(const TWeakObjectPtr<UPCGExSettings>& In) { Settings = In; }\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"),
+    # Incomplete type, but only reads, nulls and weak-to-weak copies: from a member (also through another object of
+    # this class, whose name another class holds as a TObjectPtr), a parameter (whose name another function takes
+    # raw), an inherited member (whose name another function takes raw), a closure header's member and getter,
+    # MoveTemp, a functional cast, a Slate argument. Another class's TObjectPtr and an engine T may take raw pointers.
+    "ModB/Public/PCGExNegativeWeakSource.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "class UPCGExSettings;\n"
+        "struct FPCGExNegativeWeakSource\n"
+        "{\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Shared;\n"
+        "\tconst TWeakObjectPtr<UPCGExSettings>& GetShared() const { return Shared; }\n"
+        "};\n"
+        "struct FPCGExNegativeWeakBase\n"
+        "{\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Inherited;\n"
+        "};\n"),
+    "ModB/Public/PCGExNegativeWeakCopies.h": (
+        "#pragma once\n"
+        "#include \"UObject/WeakObjectPtr.h\"\n"
+        "#include \"PCGExNegativeWeakSource.h\"\n"
+        "class UPCGExSettings;\n"
+        "struct FPCGExNegativeWeakCopies : public FPCGExNegativeWeakBase\n"
+        "{\n"
+        "\tFPCGExNegativeWeakCopies(const TWeakObjectPtr<UPCGExSettings>& InSettings, UPCGExSettings* InRaw)\n"
+        "\t\t: Settings(InSettings), Other{InSettings}\n"
+        "\t{\n"
+        "\t}\n"
+        "\tUPCGExSettings* GetSettings() const { return Settings.Get(); }\n"
+        "\tbool IsSame() const { return Settings.IsValid() && Settings == Other; }\n"
+        "\tvoid Clear()\n"
+        "\t{\n"
+        "\t\tSettings = nullptr;\n"
+        "\t\tOther = NULL;\n"
+        "\t\tSettings = {};\n"
+        "\t\tOther.Reset();\n"
+        "\t}\n"
+        "\tvoid CopyFrom(FPCGExNegativeWeakCopies& Rhs, const FPCGExNegativeWeakSource& Source)\n"
+        "\t{\n"
+        "\t\tSettings = Rhs.Settings;\n"
+        "\t\tOther = MoveTemp(Rhs.Other);\n"
+        "\t\tSettings = Source.Shared;\n"
+        "\t\tOther = Source.GetShared();\n"
+        "\t\tOther = TWeakObjectPtr<UPCGExSettings>(Settings);\n"
+        "\t\tSettings = Inherited;\n"
+        "\t\tOther = Rhs.Inherited;\n"
+        "\t\tTWeakObjectPtr<UPCGExSettings> Copy = Settings;\n"
+        "\t\tTWeakObjectPtr<UPCGExSettings> Moved(MoveTemp(Copy));\n"
+        "\t}\n"
+        "\tTWeakObjectPtr<UPCGExSettings> MakeWeak(UPCGExSettings* In) const;\n"
+        "\tvoid Seed(UPCGExSettings* InTarget);\n"
+        "\tvoid Reseat(TWeakObjectPtr<UPCGExSettings> InTarget = nullptr) { Settings = InTarget; }\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Other = nullptr;\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Empty{};\n"
+        "};\n"
+        "struct FPCGExNegativeStrongHolder\n"
+        "{\n"
+        "\tvoid SetSettings(UPCGExSettings* InSettings) { Settings = InSettings; }\n"
+        "\tvoid SetAnything(UObject* In) { Anything = In; }\n"
+        "\tvoid Adopt(UPCGExSettings* Inherited);\n"
+        "\tTObjectPtr<UPCGExSettings> Settings;\n"
+        "\tTWeakObjectPtr<UObject> Anything;\n"
+        "};\n"
+        "class SPCGExNegativeWeakPanel : public SCompoundWidget\n"
+        "{\n"
+        "public:\n"
+        "\tSLATE_BEGIN_ARGS(SPCGExNegativeWeakPanel) {}\n"
+        "\t\tSLATE_ARGUMENT(TWeakObjectPtr<UPCGExSettings>, Settings)\n"
+        "\tSLATE_END_ARGS()\n"
+        "\tvoid Construct(const FArguments& InArgs) { Settings = InArgs._Settings; }\n"
+        "private:\n"
+        "\tTWeakObjectPtr<UPCGExSettings> Settings;\n"
+        "};\n"),
     "ModB/Private/PCGExNegative.cpp": (
         "#include \"PCGExNegative.h\"\n"
         "#include \"PCGModule.h\"\n"
@@ -1851,12 +2837,15 @@ SELFTEST = {
 SELFTEST_EXPECT = {
     "missing-include": 1, "editor-guard": 1, "nsdmi-default-arg": 1, "extern-template-api": 1,
     "unity-collision": 2, "msvc-only": 1, "include-case": 1, "generated-last": 1, "fwd-decl-deref": 1,
-    "subclassof-incomplete": 1, "editor-guard-free": 2, "clang-wall": 6, "ctor-reorder": 1,
+    "subclassof-incomplete": 1, "editor-guard-free": 2, "clang-wall": 6, "ctor-reorder": 18,
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
-    "upackage-as-outer": 1, "editor-only-call": 5,
+    "upackage-as-outer": 1, "editor-only-call": 5, "weakobjectptr-incomplete": 16,
 }
+# check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
+# pre-flight from failing on a real defect.
+SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 15}
 
 
 def run_selftest():
@@ -1874,9 +2863,11 @@ def run_selftest():
 
         missed = []
         for name, want in sorted(SELFTEST_EXPECT.items()):
-            got = sum(1 for f in found.get(name, ()) if "Negative" not in f.path)
-            ok = got >= want
-            print(f"  {'ok  ' if ok else 'MISS'}  {name} ({got}/{want})")
+            fs = [f for f in found.get(name, ()) if "Negative" not in f.path]
+            errs, want_errs = sum(1 for f in fs if f.severity == "error"), SELFTEST_EXPECT_ERRORS.get(name, 0)
+            ok = len(fs) >= want and errs >= want_errs
+            print(f"  {'ok  ' if ok else 'MISS'}  {name} ({len(fs)}/{want}"
+                  + (f", {errs}/{want_errs} errors" if want_errs else "") + ")")
             if not ok:
                 missed.append(name)
         if missed:
