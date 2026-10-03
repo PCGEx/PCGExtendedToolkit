@@ -188,6 +188,16 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_VALIDATE)
 #undef PCGEX_GCD_VALIDATE
 
+	if (Settings->bUseTagFilter)
+	{
+		// Clause values are constants here: there is no per-row data to read an attribute from.
+		const FPCGExBaseTagFilterDetails& TF = Settings->TagFilter;
+		if (TF.RequireAll.Input == EPCGExInputValueType::Attribute || TF.RequireAny.Input == EPCGExInputValueType::Attribute || TF.Exclude.Input == EPCGExInputValueType::Attribute)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Tag filter clauses set to Attribute are ignored on this node; only constant values are read."));
+		}
+	}
+
 	if (Settings->SourceMode == EPCGExGetCollectionDataSourceMode::Collection)
 	{
 		// Hard-ref TObjectPtr: asset is already loaded. One slot, one path.
@@ -1337,6 +1347,14 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	FPCGExNameFiltersDetails CategoryFilters = Settings->CategoryFilters;
 	CategoryFilters.Init();
 
+	PCGExCollections::Tags::FTagLists TagLists;
+	if (Settings->bUseTagFilter)
+	{
+		const FPCGExBaseTagFilterDetails& TF = Settings->TagFilter;
+		auto ConstantOf = [](const FPCGExInputShorthandNameName& Clause) { return Clause.Input == EPCGExInputValueType::Constant ? Clause.Constant : NAME_None; };
+		TagLists.Parse(ConstantOf(TF.RequireAll), ConstantOf(TF.RequireAny), ConstantOf(TF.Exclude), TF.bParseCommaSeparatedLists);
+	}
+
 	// Shared host -> CollectionIndex map + counter, and (Root, Coll, Depth) -> CollectionHash map
 	// + counter. Lifetime tied to this AdvanceWork call. Both are populated during the
 	// (single-threaded) flatten phase so the index space is deterministic regardless of how the
@@ -1349,6 +1367,9 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	PCGExGetCollectionData::FProcessEntryContext Ctx;
 	Ctx.Context = InContext;
 	Ctx.CategoryFilters = &CategoryFilters;
+	Ctx.TagFilter = (Settings->bUseTagFilter && !TagLists.IsEmpty()) ? &TagLists : nullptr;
+	Ctx.TagSources = Settings->TagFilter.TagSources;
+	Ctx.bTagFilterRecursive = Settings->TagFilterScope == EPCGExTagFilterScope::Recursive;
 	Ctx.SubHandling = Settings->SubCollectionHandling;
 	Ctx.CategoryInheritance = CategoryInheritance;
 	Ctx.bOmitInvalidAndEmpty = Settings->bOmitInvalidAndEmpty;

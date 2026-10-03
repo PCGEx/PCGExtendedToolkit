@@ -11,6 +11,7 @@
 #include "Elements/PCGExAssetCollectionToSet.h"
 #include "Elements/Grammar/PCGSubdivisionBase.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Selectors/PCGExSelectorTagFilter.h"
 #include "PCGExGetCollectionData.generated.h"
 
 class UPCGExAssetCollection;
@@ -164,6 +165,18 @@ public:
 	 *  sub-collection containers; excluding a sub-collection skips its descendants entirely. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Recursion", meta=(PCG_Overridable))
 	FPCGExNameFiltersDetails CategoryFilters;
+
+	/** Keep only entries whose tags satisfy the filter. Tested after the category filter; a sub-collection that fails drops its subtree. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Recursion", meta=(PCG_NotOverridable, InlineEditConditionToggle))
+	bool bUseTagFilter = false;
+
+	/** Clause values are read as constants (graph overrides apply); a clause set to Attribute is ignored with a warning. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Recursion", meta=(PCG_Overridable, EditCondition="bUseTagFilter"))
+	FPCGExBaseTagFilterDetails TagFilter;
+
+	/** Which entries the tag filter is tested against. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Recursion", meta=(PCG_NotOverridable, DisplayName = " └─ Scope", EditCondition="bUseTagFilter", HideEditConditionToggle))
+	EPCGExTagFilterScope TagFilterScope = EPCGExTagFilterScope::TopLevel;
 
 
 	// Asset outputs

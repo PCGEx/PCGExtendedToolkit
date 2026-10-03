@@ -30,9 +30,6 @@ namespace PCGExCollections::Tags
 		Stride = 0;
 		NumRaw = 0;
 
-		const bool bAsset = (InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Asset)) != 0;
-		const bool bCollection = (InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Collection)) != 0;
-
 		const int32 Num = InPool.Entries.Num();
 		for (int32 i = 0; i < Num; ++i)
 		{
@@ -40,32 +37,15 @@ namespace PCGExCollections::Tags
 		}
 
 		// Two passes: ids first (deterministic, entry order), then masks once Stride is known.
-		auto ForEachTag = [&](const FPCGExAssetCollectionEntry* Entry, auto&& Fn)
-		{
-			if (bAsset)
-			{
-				for (const FName& Tag : Entry->Tags)
-				{
-					Fn(Tag);
-				}
-			}
-			if (bCollection && Entry->HasValidSubCollection())
-			{
-				for (const FName& Tag : Entry->GetSubCollectionPtr()->CollectionTags)
-				{
-					Fn(Tag);
-				}
-			}
-		};
-
 		for (int32 i = 0; i < Num; ++i)
 		{
-			ForEachTag(InPool.Entries[i], [&](const FName Tag)
+			ForEachEntryTag(*InPool.Entries[i], InTagSources, [&](const FName Tag)
 			{
 				if (!Tag.IsNone() && !TagToId.Contains(Tag))
 				{
 					TagToId.Add(Tag, NumTags++);
 				}
+				return true;
 			});
 		}
 
@@ -81,12 +61,13 @@ namespace PCGExCollections::Tags
 		{
 			const int32 Raw = InPool.Indices[i];
 			TArrayView<int64> Mask(Words.GetData() + Raw * Stride, Stride);
-			ForEachTag(InPool.Entries[i], [&](const FName Tag)
+			ForEachEntryTag(*InPool.Entries[i], InTagSources, [&](const FName Tag)
 			{
 				if (const int32* Id = TagToId.Find(Tag))
 				{
 					Mask[*Id >> 6] |= (static_cast<int64>(1) << (*Id & 63));
 				}
+				return true;
 			});
 		}
 	}
@@ -183,6 +164,69 @@ namespace PCGExCollections::Tags
 			OutTags.Emplace(*Part);
 		}
 	}
+
+#pragma region FTagLists
+
+	void FTagLists::Parse(const FName InRequireAll, const FName InRequireAny, const FName InExclude, const bool bCommaSeparated)
+	{
+		RequireAll.Reset();
+		RequireAny.Reset();
+		Exclude.Reset();
+		ParseOperand(InRequireAll, bCommaSeparated, RequireAll);
+		ParseOperand(InRequireAny, bCommaSeparated, RequireAny);
+		ParseOperand(InExclude, bCommaSeparated, Exclude);
+	}
+
+	bool Matches(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const FTagLists& InLists)
+	{
+		auto Has = [&](const FName InTag)
+		{
+			bool bFound = false;
+			ForEachEntryTag(InEntry, InTagSources, [&](const FName Tag)
+			{
+				bFound = (Tag == InTag);
+				return !bFound;
+			});
+			return bFound;
+		};
+
+		for (const FName& Tag : InLists.RequireAll)
+		{
+			if (!Has(Tag))
+			{
+				return false;
+			}
+		}
+
+		if (!InLists.RequireAny.IsEmpty())
+		{
+			bool bAny = false;
+			for (const FName& Tag : InLists.RequireAny)
+			{
+				if (Has(Tag))
+				{
+					bAny = true;
+					break;
+				}
+			}
+			if (!bAny)
+			{
+				return false;
+			}
+		}
+
+		for (const FName& Tag : InLists.Exclude)
+		{
+			if (Has(Tag))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+#pragma endregion
 
 	void Compile(
 		const FTagIndex& InIndex,

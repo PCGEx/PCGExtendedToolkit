@@ -70,6 +70,14 @@ enum class EPCGExMissingTagBehavior : uint8
 	IgnoreFilter = 2 UMETA(DisplayName = "Ignore Filter", ToolTip="Fall back to the routed pool without the tag filter."),
 };
 
+/** Which entries an entry-tag filter is tested against when a node flattens a collection. */
+UENUM()
+enum class EPCGExTagFilterScope : uint8
+{
+	TopLevel  = 0 UMETA(DisplayName = "Top Level", ToolTip="Test only the collection's own entries. Entries reached through sub-collections are not tested."),
+	Recursive = 1 UMETA(DisplayName = "Recursive", ToolTip="Test every entry at every depth, sub-collection containers included. A container that fails drops its whole subtree."),
+};
+
 UENUM()
 enum class EPCGExWeightOutputMode : uint8
 {

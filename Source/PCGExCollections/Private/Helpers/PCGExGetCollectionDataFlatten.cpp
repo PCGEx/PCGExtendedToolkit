@@ -67,6 +67,11 @@ namespace PCGExGetCollectionData
 			return;
 		}
 
+		if (Ctx.TagFilter && (Depth == 0 || Ctx.bTagFilterRecursive) && !PCGExCollections::Tags::Matches(*InEntry, Ctx.TagSources, *Ctx.TagFilter))
+		{
+			return;
+		}
+
 		auto ResolveCategory = [&](const FName Authored) -> FName
 		{
 			switch (Ctx.CategoryInheritance)
