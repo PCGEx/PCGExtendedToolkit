@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Elements/PCGExAssetCollectionToSet.h"
 
 struct FPCGExContext;
@@ -50,6 +51,10 @@ namespace PCGExGetCollectionData
 	{
 		FPCGExContext* Context = nullptr;
 		const FPCGExNameFiltersDetails* CategoryFilters = nullptr;
+		/** Parsed tag clauses, null when the tag filter is off. Tested at depth 0, or at every depth when bTagFilterRecursive. */
+		const PCGExCollections::Tags::FTagLists* TagFilter = nullptr;
+		uint8 TagSources = 0;
+		bool bTagFilterRecursive = false;
 		EPCGExSubCollectionToSet SubHandling = EPCGExSubCollectionToSet::Ignore;
 		EPCGExCategoryInheritance CategoryInheritance = EPCGExCategoryInheritance::None;
 		bool bOmitInvalidAndEmpty = true;

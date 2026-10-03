@@ -25,6 +25,7 @@ TSet<FName> UPCGExActorContentFilter::KnownSystemActorClasses =
 	TEXT("GameplayDebuggerPlayerManager"),
 	TEXT("BuoyancyManager"),
 	TEXT("ValencyEditorCache"),
+	TEXT("SmartObjectSubsystemRendering"),
 	TEXT("PCGExValencyModuleCage"),
 };
 

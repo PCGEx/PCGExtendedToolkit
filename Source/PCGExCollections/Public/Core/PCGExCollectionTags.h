@@ -15,9 +15,35 @@
  *                dedupe key, so equivalent authored lists ("A,B" / "B, A" / "A,B,B") share one pool.
  * FTagPoolStore -- lock-guarded cache of indices and derived pools, keyed by base pool pointer, so
  *                every facade of an execution shares the same pool objects (Quota keys on them).
+ * FTagLists   -- the same three clauses tested directly on one entry, for one-shot walks (no index).
  */
 namespace PCGExCollections::Tags
 {
+	/**
+	 * Visit the tags an entry is matched on. InTagSources is EPCGExAssetTagInheritance bits: Asset reads
+	 * Entry.Tags, Collection adds the sub-collection's CollectionTags for sub-collection entries (a hard
+	 * reference, so no load is involved). Other bits are ignored. Fn returns false to stop early.
+	 */
+	template <typename Fn>
+	void ForEachEntryTag(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, Fn&& InFn)
+	{
+		if (InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
+		{
+			for (const FName& Tag : InEntry.Tags)
+			{
+				if (!InFn(Tag)) { return; }
+			}
+		}
+
+		if ((InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Collection)) && InEntry.HasValidSubCollection())
+		{
+			for (const FName& Tag : InEntry.GetSubCollectionPtr()->CollectionTags)
+			{
+				if (!InFn(Tag)) { return; }
+			}
+		}
+	}
+
 	class PCGEXCOLLECTIONS_API FTagIndex
 	{
 	public:
@@ -98,6 +124,29 @@ namespace PCGExCollections::Tags
 	 * bCommaSeparated the value is split on commas, trimmed, empties dropped; otherwise it is one tag.
 	 */
 	PCGEXCOLLECTIONS_API void ParseOperand(FName InValue, bool bCommaSeparated, TArray<FName>& OutTags);
+
+	/**
+	 * Parsed clause lists, the direct-test form of the predicate. Same rules as Compile + Test, without an
+	 * index: RequireAll must all be present (a tag no entry carries fails every entry), RequireAny needs
+	 * one present, Exclude drops on any hit. Blank lists are unconstrained.
+	 */
+	struct PCGEXCOLLECTIONS_API FTagLists
+	{
+		TArray<FName> RequireAll;
+		TArray<FName> RequireAny;
+		TArray<FName> Exclude;
+
+		/** ParseOperand on each clause value, replacing the current lists. */
+		void Parse(FName InRequireAll, FName InRequireAny, FName InExclude, bool bCommaSeparated);
+
+		FORCEINLINE bool IsEmpty() const
+		{
+			return RequireAll.IsEmpty() && RequireAny.IsEmpty() && Exclude.IsEmpty();
+		}
+	};
+
+	/** Direct test of one entry; agrees with Compile + Test over an index built with the same tag sources. */
+	PCGEXCOLLECTIONS_API bool Matches(const FPCGExAssetCollectionEntry& InEntry, uint8 InTagSources, const FTagLists& InLists);
 
 	/**
 	 * Compile three operand lists against an index. Unknown tags (no entry in the index carries them):

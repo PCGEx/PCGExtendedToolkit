@@ -92,6 +92,13 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, EditCondition="bWriteAssetPath"))
 	FName AssetPathAttributeName = FName("AssetPath");
 
+	/** Write a stable int32 ID of the entry's asset path (hash of the canonical path; 0 for a null path). Same ID as the Kweave Mesh List's mesh ID. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bWriteAssetId = false;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, EditCondition="bWriteAssetId"))
+	FName AssetIdAttributeName = FName("AssetId");
+
 	/** Write the entry's authored weight. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Entry Data", meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteWeight = false;
@@ -298,6 +305,7 @@ namespace PCGExStagingLoadProperties
 
 #define PCGEX_FOREACH_ENTRY_DATA_FIELD(MACRO)\
 MACRO(AssetPath, FSoftObjectPath, FSoftObjectPath(), Entry->Staging.Path)\
+MACRO(AssetId, int32, PCGExCollections::NullAssetId, PCGExCollections::ComputeAssetId(Entry->Staging.Path))\
 MACRO(Weight, int32, 0, Entry->Weight)\
 MACRO(Category, FName, NAME_None, Entry->Category)\
 MACRO(Extents, FVector, FVector::ZeroVector, Entry->Staging.Bounds.GetExtent())\
