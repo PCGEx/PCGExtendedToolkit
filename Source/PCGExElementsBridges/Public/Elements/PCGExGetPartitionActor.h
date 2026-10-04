@@ -99,15 +99,14 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExPartitionActorOutput OutputType = EPCGExPartitionActorOutput::AttributeSet;
 
-	/** Pause until every reference is loaded and every partition actor is registered, or until the timeout. In 5.8+ a
-	 *  serialized one is given up on as soon as World Partition has streamed its cell in without it. */
+	/** Wait for what is missing. InlineEditConditionToggle shows no tooltip of its own: Wait Timeout carries it. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWaitForMissingActors = false;
 
-	/** Pause until every reference is loaded and every partition actor is registered, or until the timeout. In 5.8+ a
-	 *  serialized one is given up on as soon as World Partition has streamed its cell in without it.
-	 *  Seconds of real time after which the wait gives up and whatever is loaded is output. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bWaitForMissingActors", EditConditionHides, ClampMin = 0.001, UIMax = 30))
+	/** When enabled, pause until every reference is loaded and every partition actor is registered, or until this many
+	 *  seconds of real time have passed; whatever is loaded is then output. In 5.8+ a serialized partition actor is
+	 *  given up on as soon as World Partition has streamed its cell in without it. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bWaitForMissingActors", ClampMin = 0.001, UIMax = 30))
 	double WaitTimeout = 1;
 
 	/** Suppress the warning when some of the requested partition actors are loaded but not all of them. */
@@ -118,7 +117,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietInvalidReferenceWarning = false;
 
-	/** Suppress the warning when Wait For Missing Actors times out. */
+	/** Suppress the warning raised when Wait Timeout elapses. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietTimeoutWarning = false;
 };

@@ -112,12 +112,12 @@ public:
 	EPCGExDataCacheTarget Target = EPCGExDataCacheTarget::ExecutingActor;
 
 	/** 'FSoftObjectPath' attribute read on the Target Actor pin. A component reference resolves to its owner. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName=" ├─ Actor Reference", PCG_Overridable, EditCondition = "Target == EPCGExDataCacheTarget::Input", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "Target == EPCGExDataCacheTarget::Input", EditConditionHides))
 	FName ActorReferenceAttribute = FName("ActorReference");
 
 	/** 'FString' attribute read next to each reference, as written by Get Partition Actor. A referenced partition actor
 	 *  must still stand for that partition: runtime generated ones are pooled and reused. None skips the check. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName=" └─ Partition Id", PCG_Overridable, EditCondition = "Target == EPCGExDataCacheTarget::Input", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "Target == EPCGExDataCacheTarget::Input", EditConditionHides))
 	FName PartitionIdAttribute = PCGExPartitionActors::PartitionIdAttributeName;
 
 	/** Suppress the warnings about target actors that cannot be resolved: none at all, or some of the references. */

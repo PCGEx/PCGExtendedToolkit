@@ -26,8 +26,8 @@ namespace PCGExMT
  * the first generation, so branch on the Status pin. Data pins with nothing to output are deactivated.
  * Cached data is handed out by pointer, so the cache is a hidden second consumer: a downstream node with
  * Steal Data enabled would mutate the persisted objects in place. The target is resolved and read on the
- * game thread, staging happens off-thread. With Wait For Cache the node pauses until the entries are readable
- * or the timeout elapses, so the graph that writes them can run in between.
+ * game thread, staging happens off-thread. With Wait Timeout enabled the node pauses until the entries are
+ * readable or the timeout elapses, so the graph that writes them can run in between.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta = (Keywords = "pcgex cache read restore previous generation data", PCGExNodeLibraryDoc = "utilities/data-cache/get-cached-data"))
 class UPCGExGetCachedDataSettings : public UPCGExDataCacheSettingsBase
@@ -65,32 +65,31 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Read every entry on the cache instead of a single ID. Enable Tag With Cache ID to tell them apart. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bReadAllEntries = false;
-	
 	/** ID to read. Must match the ID used on Set Cached Data. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "!bReadAllEntries"))
 	FName CacheID = FName("Default");
 
+	/** Read every entry on the cache instead of a single ID. Enable Tag With Cache ID to tell them apart. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	bool bReadAllEntries = false;
+
 	/** Read '<PartitionId>_<CacheID>' for every entry of Partitions instead of the bare ID. Only the keys change;
 	 *  the host is still the Target, and data still routes by the pin label it was stored with. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName=" ├─ Prefix with Partition Id", PCG_Overridable, EditCondition = "!bReadAllEntries"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "!bReadAllEntries"))
 	bool bPrefixWithPartitionId = false;
 
 	/** Partitions to read, relative to the executing component's own cell; one key each, all read at once. 2D and 3D
 	 *  ids differ ('size_x_y' vs 'size_x_y_z'): force one here when the Set ran with another 2D setting. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName=" └─ Partitions", EditCondition = "IsPartitionEditable()", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (EditCondition = "IsPartitionEditable()", EditConditionHides))
 	TArray<FPCGExPartitionQuery> Partitions = {FPCGExPartitionQuery{}};
-	
-	/** Pause until every requested entry is readable on every target (any entry, under Read All Entries), or until
-	 *  the timeout. In a game world, a reference that does not resolve yet is waited for too. */
+
+	/** Wait for the cache. InlineEditConditionToggle shows no tooltip of its own: Wait Timeout carries it. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWaitForCache = false;
 
-	/** Pause until every requested entry is readable on every target (any entry, under Read All Entries), or until
-	 *  the timeout. In a game world, a reference that does not resolve yet is waited for too.
-	 *  Seconds of real time after which the wait gives up and whatever is readable is output. */
+	/** When enabled, pause until every requested entry is readable on every target (any entry, under Read All
+	 *  Entries), or until this many seconds of real time have passed; whatever is readable is then output. In a game
+	 *  world, a reference that does not resolve yet is waited for too. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bWaitForCache", ClampMin = 0.001, UIMax = 30))
 	double WaitTimeout = 1;
 
@@ -112,7 +111,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietMissingPartitionWarning = false;
 
-	/** Suppress the warning when Wait For Cache times out. */
+	/** Suppress the warning raised when Wait Timeout elapses. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietTimeoutWarning = false;
 
@@ -155,7 +154,7 @@ struct FPCGExGetCachedDataContext final : FPCGExContext
 	 *  Status always has something to branch on. */
 	TArray<FStatusRow> StatusRows;
 
-	/** Wait For Cache found something missing in Boot: the read runs once, when the wait ends. */
+	/** The wait is enabled and Boot found something missing: the read runs once, when the wait ends. */
 	bool bDeferredRead = false;
 
 	TSharedPtr<PCGExMT::FMainThreadPoll> Wait;
