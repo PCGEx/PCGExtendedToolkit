@@ -398,6 +398,16 @@ void FPCGExContext::Done()
 	SetState(PCGExCommon::States::State_Done);
 }
 
+bool FPCGExContext::DeferToScheduler()
+{
+	// Work still in flight resumes through OnAsyncWorkEnd; unpausing then would only make the scheduler spin.
+	if (!IsWaitingForTasks())
+	{
+		UnpauseContext();
+	}
+	return false;
+}
+
 bool FPCGExContext::DriveAdvanceWork(const UPCGExSettings* InSettings)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExContext::DriveAdvanceWork)

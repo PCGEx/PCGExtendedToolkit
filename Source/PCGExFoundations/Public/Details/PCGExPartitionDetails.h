@@ -21,7 +21,7 @@ enum class EPCGExPartitionResolution : uint8
 UENUM()
 enum class EPCGExGrid2DMode : uint8
 {
-	Auto    = 0 UMETA(DisplayName = "Auto", ToolTip = "Follow the executing component (falls back to 3D when there is no component)."),
+	Auto    = 0 UMETA(DisplayName = "Auto", ToolTip = "Follow the component the grid is resolved from (3D when there is none)."),
 	Force2D = 1 UMETA(DisplayName = "2D", ToolTip = "Force a 2D grid: the Z coordinate is always 0 and dropped from the id."),
 	Force3D = 2 UMETA(DisplayName = "3D", ToolTip = "Force a 3D grid."),
 };
@@ -48,7 +48,7 @@ struct FPCGExPartitionQuery
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	int32 GridSizeOffset = 0;
 
-	/** 2D/3D handling. Auto follows the executing component. */
+	/** 2D/3D handling. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	EPCGExGrid2DMode Grid2D = EPCGExGrid2DMode::Auto;
 };
@@ -72,6 +72,11 @@ namespace PCGExPartitionGrid
 		FCell(const uint32 InGridSize, const FIntVector& InCoord, const bool bIn2D)
 			: GridSize(InGridSize), Coord(InCoord), b2D(bIn2D)
 		{
+		}
+
+		bool operator==(const FCell& Other) const
+		{
+			return GridSize == Other.GridSize && b2D == Other.b2D && Coord == Other.Coord;
 		}
 
 		FVector CoordAsVector() const
@@ -100,6 +105,12 @@ namespace PCGExPartitionGrid
 	 * range Grid4 (400) .. Grid2048 (204800). Offset 0 returns the input untouched, hidden and unbounded grids included.
 	 */
 	PCGEXFOUNDATIONS_API uint32 OffsetGridSize(const uint32 InGridSize, const int32 InOffset);
+
+	/** Resolves a query's grid size (cm, never 0) against the executing component, which may be null. */
+	PCGEXFOUNDATIONS_API uint32 ResolveGridSize(const FPCGExPartitionQuery& InQuery, const UPCGComponent* InComponent);
+
+	/** Resolves a query's 2D flag; Auto yields bInAuto2D. */
+	PCGEXFOUNDATIONS_API bool ResolveGrid2D(const FPCGExPartitionQuery& InQuery, const bool bInAuto2D);
 
 	/** Resolves a query's grid size (cm, never 0) and 2D flag against the executing component, which may be null. */
 	PCGEXFOUNDATIONS_API void ResolveGrid(const FPCGExPartitionQuery& InQuery, const UPCGComponent* InComponent, uint32& OutGridSize, bool& bOut2D);
