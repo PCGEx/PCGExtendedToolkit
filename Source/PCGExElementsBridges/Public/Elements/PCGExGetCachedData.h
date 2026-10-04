@@ -65,24 +65,24 @@ protected:
 	//~End UPCGSettings
 
 public:
+	/** Read every entry on the cache instead of a single ID. Enable Tag With Cache ID to tell them apart. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	bool bReadAllEntries = false;
+	
 	/** ID to read. Must match the ID used on Set Cached Data. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "!bReadAllEntries"))
 	FName CacheID = FName("Default");
 
-	/** Read every entry on the cache instead of a single ID. Enable Tag With Cache ID to tell them apart. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bReadAllEntries = false;
-
 	/** Read '<PartitionId>_<CacheID>' for every entry of Partitions instead of the bare ID. Only the keys change;
 	 *  the host is still the Target, and data still routes by the pin label it was stored with. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "!bReadAllEntries"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName=" ├─ Prefix with Partition Id", PCG_Overridable, EditCondition = "!bReadAllEntries"))
 	bool bPrefixWithPartitionId = false;
 
 	/** Partitions to read, relative to the executing component's own cell; one key each, all read at once. 2D and 3D
 	 *  ids differ ('size_x_y' vs 'size_x_y_z'): force one here when the Set ran with another 2D setting. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (EditCondition = "IsPartitionEditable()", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayName=" └─ Partitions", EditCondition = "IsPartitionEditable()", EditConditionHides))
 	TArray<FPCGExPartitionQuery> Partitions = {FPCGExPartitionQuery{}};
-
+	
 	/** Pause until every requested entry is readable on every target (any entry, under Read All Entries), or until
 	 *  the timeout. In a game world, a reference that does not resolve yet is waited for too. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))
