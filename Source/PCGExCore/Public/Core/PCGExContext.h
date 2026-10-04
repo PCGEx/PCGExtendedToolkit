@@ -171,6 +171,11 @@ public:
 		return IsState(PCGExCommon::States::State_InitialExecution);
 	}
 
+	bool IsPreparationCompleted() const
+	{
+		return bPreparationCompleted.load(std::memory_order_acquire);
+	}
+
 	bool IsDone() const
 	{
 		return IsState(PCGExCommon::States::State_Done);
@@ -220,6 +225,7 @@ protected:
 	std::atomic<bool> bWorkCompleted{false};         // Set once in TryComplete; triggers OnComplete
 	std::atomic<bool> bWorkCancelled{false};         // Cancellation flag; checked throughout execution
 	std::atomic<bool> bAdvanceWorkInProgress{false}; // DriveAdvanceWork is active; prevents concurrent driving
+	std::atomic<bool> bPreparationCompleted{false};  // Set once in ReadyForExecution; preparation never re-runs
 
 	TSharedPtr<PCGExMT::FTaskManager> TaskManager;
 

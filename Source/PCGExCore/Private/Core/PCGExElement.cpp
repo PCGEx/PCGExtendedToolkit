@@ -63,6 +63,12 @@ bool IPCGExElement::AdvancePreparation(FPCGExContext* Context, const UPCGExSetti
 
 	PCGEX_EXECUTION_CHECK_C(Context)
 
+	// Already completed off-thread or by an async completion: this re-entry only reports it.
+	if (Context->IsPreparationCompleted())
+	{
+		return true;
+	}
+
 	// Preparation is a multi-phase state machine:
 	// 1. Boot: validate inputs, configure context
 	// 2. Register & load asset dependencies (may pause for async loading)
