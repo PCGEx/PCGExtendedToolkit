@@ -96,16 +96,18 @@ public:
 	EPCGExPartitionActorKind Kind = EPCGExPartitionActorKind::Serialized;
 
 	/** Shape of the output. Drives the output pin type, so not overridable. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta = (PCG_NotOverridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExPartitionActorOutput OutputType = EPCGExPartitionActorOutput::AttributeSet;
 
 	/** Pause until every reference is loaded and every partition actor is registered, or until the timeout. In 5.8+ a
 	 *  serialized one is given up on as soon as World Partition has streamed its cell in without it. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Wait", meta = (PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWaitForMissingActors = false;
 
-	/** Seconds of real time after which the wait gives up and whatever is loaded is output. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Wait", meta = (PCG_Overridable, DisplayName = " └─ Timeout", EditCondition = "bWaitForMissingActors", EditConditionHides, ClampMin = 0.001, UIMax = 30))
+	/** Pause until every reference is loaded and every partition actor is registered, or until the timeout. In 5.8+ a
+	 *  serialized one is given up on as soon as World Partition has streamed its cell in without it.
+	 *  Seconds of real time after which the wait gives up and whatever is loaded is output. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bWaitForMissingActors", EditConditionHides, ClampMin = 0.001, UIMax = 30))
 	double WaitTimeout = 1;
 
 	/** Suppress the warning when some of the requested partition actors are loaded but not all of them. */

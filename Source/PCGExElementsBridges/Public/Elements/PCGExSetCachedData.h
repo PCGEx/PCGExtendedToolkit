@@ -70,7 +70,7 @@ public:
 
 	/** Store under '<PartitionId>_<CacheID>' instead of the bare ID, so each partition keeps its own entry on a
 	 *  shared host. Only the key changes; the host is still the Target. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "Mode != EPCGExDataCacheWriteMode::ClearAll"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName=" └─ Prefix with Partition Id", EditCondition = "Mode != EPCGExDataCacheWriteMode::ClearAll"))
 	bool bPrefixWithPartitionId = false;
 
 	/** Partition the prefix is resolved from, relative to the executing component's own cell. 2D and 3D ids differ
@@ -84,12 +84,12 @@ public:
 
 	/** Extra input pins, stored with their label so a Get with the same pins routes by name; copy-paste the array
 	 *  onto the Get node. In, Out and Target Actor are reserved, whatever Target is. Declaring any makes In optional. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Pins", meta = (TitleProperty = "{Label}", EditCondition = "!IsClearMode()", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (TitleProperty = "{Label}", EditCondition = "!IsClearMode()", EditConditionHides))
 	TArray<FPCGPinProperties> CustomInputPins;
 
 	/** Editor only. Notify PCG components tracking the target actor so they refresh from the new contents; the writer
 	 *  never refreshes itself. No effect on the PCG World Actor. Off by default: a cache is passive. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable), AdvancedDisplay)
 	bool bNotifyChange = false;
 
 	/** Clear and Clear All: no data pins. */
