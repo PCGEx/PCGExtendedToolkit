@@ -384,11 +384,10 @@ namespace PCGExMT
 	PCGEXCORE_API
 	bool IsObjectWorkBlocked();
 
-// Defer the current bool-returning AdvanceWork (return false = "not complete, re-tick") when UObject work is illegal
-// -- a package save / GC is in progress. USE ONLY in a main-thread-only element (PCGEX_CAN_ONLY_EXECUTE_ON_MAIN_THREAD):
-// on an off-thread/paused context this return-false is never re-driven and would hang. The game-thread UObject work
-// itself (spawn / marshal / FindFunction) must still carry its own PCGExMT::IsObjectWorkBlocked() backstop.
-#define PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED if (PCGExMT::IsObjectWorkBlocked()) { return false; }
+// Defers the current bool-returning AdvanceWork while UObject work is illegal (package save / GC): the scheduler
+// re-ticks it, see FPCGExContext::DeferToScheduler. Expects `Context` in scope. Off the game thread only a GC is
+// detected, so the game-thread UObject work itself must still carry its own PCGExMT::IsObjectWorkBlocked() backstop.
+#define PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED if (PCGExMT::IsObjectWorkBlocked()) { return Context->DeferToScheduler(); }
 
 	// Base task class
 	class PCGEXCORE_API FTask : public IAsyncHandle

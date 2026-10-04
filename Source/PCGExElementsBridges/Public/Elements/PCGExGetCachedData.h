@@ -15,13 +15,19 @@
 
 #include "PCGExGetCachedData.generated.h"
 
+namespace PCGExMT
+{
+	class FMainThreadPoll;
+}
+
 /**
  * Get Cached Data.
  * Reads data stored on the target actor's PCGEx Data Cache component by Set Cached Data. The cache is empty on
  * the first generation, so branch on the Status pin. Data pins with nothing to output are deactivated.
  * Cached data is handed out by pointer, so the cache is a hidden second consumer: a downstream node with
  * Steal Data enabled would mutate the persisted objects in place. The target is resolved and read on the
- * game thread during preparation, staging happens off-thread.
+ * game thread, staging happens off-thread. With Wait For Cache the node pauses until the entries are readable
+ * or the timeout elapses, so the graph that writes them can run in between.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta = (Keywords = "pcgex cache read restore previous generation data", PCGExNodeLibraryDoc = "utilities/data-cache/get-cached-data"))
 class UPCGExGetCachedDataSettings : public UPCGExDataCacheSettingsBase
@@ -31,6 +37,9 @@ class UPCGExGetCachedDataSettings : public UPCGExDataCacheSettingsBase
 	friend class FPCGExGetCachedDataElement;
 
 public:
+	/** A reader defaults to Input: it names its hosts through the Target Actor pin. */
+	UPCGExGetCachedDataSettings();
+
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(GetCachedData, "Get Cached Data", "Reads data stored on the target actor's PCGEx Data Cache component by Set Cached Data. Empty on the first generation; branch on the Status pin.");
@@ -45,6 +54,11 @@ public:
 	virtual bool OutputPinsCanBeDeactivated() const override { return true; }
 
 protected:
+#if WITH_EDITOR
+	/** Custom Output Pins shifts the pin indices that data pin culling is compiled against. */
+	virtual EPCGChangeType GetChangeTypeForProperty(FPropertyChangedEvent& PropertyChangedEvent) const override;
+#endif
+
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual FPCGElementPtr CreateElement() const override;
@@ -69,9 +83,20 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (EditCondition = "IsPartitionEditable()", EditConditionHides))
 	TArray<FPCGExPartitionQuery> Partitions = {FPCGExPartitionQuery{}};
 
+	/** Pause until every requested entry is readable on every target (any entry, under Read All Entries), or until
+	 *  the timeout. In a game world, a reference that does not resolve yet is waited for too. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))
+	bool bWaitForCache = false;
+
+	/** Pause until every requested entry is readable on every target (any entry, under Read All Entries), or until
+	 *  the timeout. In a game world, a reference that does not resolve yet is waited for too.
+	 *  Seconds of real time after which the wait gives up and whatever is readable is output. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bWaitForCache", ClampMin = 0.001, UIMax = 30))
+	double WaitTimeout = 1;
+
 	/** Extra output pins: cached data whose stored pin label matches one exactly is routed there, the rest goes to
 	 *  Out. Copy-paste the Set node's Custom Input Pins here. Out and Status are reserved. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Pins", meta = (TitleProperty = "{Label}"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (TitleProperty = "{Label}"))
 	TArray<FPCGPinProperties> CustomOutputPins;
 
 	/** Tag every output with 'CacheID:<id>' so entries can be told apart, mostly useful with Read All Entries. */
@@ -79,13 +104,17 @@ public:
 	bool bTagWithCacheID = false;
 
 	/** Emit a Status attribute set with Found, DataCount, ActorReference and CacheID: one row per target actor, and
-	 *  per partition key when Prefix With Partition Id is on. */
+	 *  per partition key when Prefix With Partition Id is on. A reference that does not resolve reads as not found. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output")
 	bool bOutputStatus = true;
 
 	/** Suppress the warning when a target holds some of the partition keys but not all of them. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietMissingPartitionWarning = false;
+
+	/** Suppress the warning when Wait For Cache times out. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
+	bool bQuietTimeoutWarning = false;
 
 	/** Read All Entries reads every key, so the prefix has nothing to apply to. */
 	bool IsPartitionPrefixed() const { return bPrefixWithPartitionId && !bReadAllEntries; }
@@ -109,12 +138,27 @@ struct FPCGExGetCachedDataContext final : FPCGExContext
 		int32 DataCount = 0;
 	};
 
-	/** Cached data copied out during Boot (game thread), pin = the label it was stored with. Doubles as the GC root:
+	/** Keys to read, in order. Empty under Read All Entries, and when the partition prefix could not be resolved. */
+	TArray<FName> Keys;
+
+	/** Under Input, what the Target Actor pin references; read once, resolved on every availability check. */
+	TArray<PCGExDataCache::FTargetReference> TargetReferences;
+
+	/** Game world: a reference that does not resolve yet may still do so, and the wait holds for it. */
+	bool bReferencesMayLoad = false;
+
+	/** Cached data copied out on the game thread, pin = the label it was stored with. Doubles as the GC root:
 	 *  StageOutput(None) does not root, and the cache may drop its own reference before we flush. */
 	FPCGDataCollection Reads;
 
-	/** One per target actor and key; never empty, so Status always has something to branch on. */
+	/** One per target actor and key, then one per key for each reference that did not resolve; never empty, so
+	 *  Status always has something to branch on. */
 	TArray<FStatusRow> StatusRows;
+
+	/** Wait For Cache found something missing in Boot: the read runs once, when the wait ends. */
+	bool bDeferredRead = false;
+
+	TSharedPtr<PCGExMT::FMainThreadPoll> Wait;
 
 protected:
 	virtual void AddExtraStructReferencedObjects(FReferenceCollector& Collector) override;
@@ -124,7 +168,7 @@ class FPCGExGetCachedDataElement final : public IPCGExElement
 {
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(GetCachedData)
-	// Target resolution touches actors; the read itself is a pointer copy.
+	// Target resolution touches actors; the read itself is a pointer copy. A deferred read runs from the poll's tick.
 	PCGEX_ELEMENT_MAIN_THREAD_ONLY_IN_PREPARE()
 
 	/** The cache changes with no dependency-CRC change; a cached result would be stale. */

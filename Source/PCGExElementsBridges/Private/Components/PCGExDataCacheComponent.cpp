@@ -6,9 +6,11 @@
 #include "PCGComponent.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGSpatialData.h"
+#include "Grid/PCGPartitionActor.h"
 #include "Metadata/PCGMetadata.h"
 
 #include "CoreGlobals.h" // GAllowActorScriptExecutionInEditor
+#include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
 #include "Misc/ScopeRWLock.h"
 #include "Templates/UnrealTemplate.h" // TGuardValue
@@ -18,6 +20,7 @@
 #include "PCGExSubSystem.h"
 #include "PCGExVersion.h"
 #include "Helpers/PCGExDataCacheHelpers.h"
+#include "Helpers/PCGExPartitionActorHelpers.h"
 
 #if WITH_EDITOR
 #include "PCGWorldActor.h"
@@ -84,13 +87,22 @@ UPCGExDataCacheComponent* UPCGExDataCacheComponent::Find(const AActor* InActor)
 	return nullptr;
 }
 
+UPCGExDataCacheComponent* UPCGExDataCacheComponent::FindCurrent(const AActor* InActor)
+{
+	check(IsInGameThread());
+
+	UPCGExDataCacheComponent* Component = Find(InActor);
+	if (Component) { Component->PurgeIfRecycled(); }
+	return Component;
+}
+
 UPCGExDataCacheComponent* UPCGExDataCacheComponent::FindOrCreate(AActor* InActor, const bool bTransient)
 {
 	check(IsInGameThread());
 
 	if (!IsValid(InActor)) { return nullptr; }
 
-	if (UPCGExDataCacheComponent* Existing = Find(InActor))
+	if (UPCGExDataCacheComponent* Existing = FindCurrent(InActor))
 	{
 		// Born in preview, promoted by the first persistent write. Never demoted.
 		if (!bTransient && Existing->HasAnyFlags(RF_Transient))
@@ -199,6 +211,8 @@ void UPCGExDataCacheComponent::Write(const FName InId, const bool bAppend, TArra
 {
 	check(IsInGameThread());
 
+	PurgeIfRecycled();
+
 	// Rename/Flatten happen outside the lock; the lock only brackets the map swap.
 	TArray<FPCGTaggedData> Adopted = AdoptData(MoveTemp(InData), bPreview);
 	if (Adopted.IsEmpty())
@@ -222,6 +236,7 @@ void UPCGExDataCacheComponent::Write(const FName InId, const bool bAppend, TArra
 	}
 
 	ReleaseData(Released);
+	TrackPooledOwner();
 
 	if (!bPreview) { MarkPackageDirty(); }
 	if (bNotify) { NotifyChanged(InWriter); }
@@ -231,6 +246,8 @@ void UPCGExDataCacheComponent::Write(const FName InId, const bool bAppend, TArra
 void UPCGExDataCacheComponent::Clear(const FName InId, UObject* InWriter, const bool bPreview, const bool bNotify)
 {
 	check(IsInGameThread());
+
+	PurgeIfRecycled();
 
 	TArray<FPCGExDataCacheEntry> Released;
 	bool bChanged = false;
@@ -266,6 +283,8 @@ void UPCGExDataCacheComponent::Clear(const FName InId, UObject* InWriter, const 
 void UPCGExDataCacheComponent::ClearAll(UObject* InWriter, const bool bPreview, const bool bNotify)
 {
 	check(IsInGameThread());
+
+	PurgeIfRecycled();
 
 	TArray<FPCGExDataCacheEntry> Released;
 	bool bChanged = false;
@@ -385,6 +404,105 @@ void UPCGExDataCacheComponent::NotifyChanged(UObject* InWriter) const
 #else
 	(void)InWriter;
 #endif
+}
+
+void UPCGExDataCacheComponent::PurgeIfRecycled()
+{
+	check(IsInGameThread());
+
+	if (bTracksOwnerCell && !(GetOwnerCell() == OwnerCell)) { DropAllEntries(); }
+}
+
+const APCGPartitionActor* UPCGExDataCacheComponent::GetPooledOwner() const
+{
+	const APCGPartitionActor* PartitionActor = Cast<APCGPartitionActor>(GetOwner());
+	return (PartitionActor && PartitionActor->IsRuntimeGenerated()) ? PartitionActor : nullptr;
+}
+
+TOptional<PCGExPartitionGrid::FCell> UPCGExDataCacheComponent::GetOwnerCell() const
+{
+	TOptional<PCGExPartitionGrid::FCell> Result;
+
+	PCGExPartitionGrid::FCell Cell;
+	if (PCGExPartitionActors::TryGetAssignedCell(GetPooledOwner(), Cell)) { Result = Cell; }
+
+	return Result;
+}
+
+void UPCGExDataCacheComponent::TrackPooledOwner()
+{
+	const APCGPartitionActor* PartitionActor = GetPooledOwner();
+	if (!PartitionActor) { return; }
+
+	if (!bTracksOwnerCell)
+	{
+		OwnerCell = GetOwnerCell();
+		bTracksOwnerCell = true;
+	}
+
+	// Assigned to a cell: FPCGRuntimeGenScheduler::GetPartitionActorFromPool teleports the pooled actor there.
+	if (!OwnerMovedHandle.IsValid())
+	{
+		if (USceneComponent* Root = PartitionActor->GetRootComponent())
+		{
+			OwnerMovedHandle = Root->TransformUpdated.AddUObject(this, &UPCGExDataCacheComponent::OnPooledOwnerMoved);
+		}
+	}
+
+	WatchLocalComponents(PartitionActor);
+}
+
+void UPCGExDataCacheComponent::WatchLocalComponents(const APCGPartitionActor* InPartitionActor)
+{
+	// Returned to the pool: APCGPartitionActor::RemoveGraphInstance cleans each local component right after unmapping it.
+	for (UPCGComponent* LocalComponent : InPartitionActor->GetAllLocalPCGComponents())
+	{
+		if (LocalComponent && !LocalComponent->OnPCGGraphCleanedDelegate.IsBoundToObject(this))
+		{
+			LocalComponent->OnPCGGraphCleanedDelegate.AddUObject(this, &UPCGExDataCacheComponent::OnLocalComponentCleaned);
+		}
+	}
+}
+
+void UPCGExDataCacheComponent::DropAllEntries()
+{
+	TArray<FPCGExDataCacheEntry> Released;
+	bool bChanged = false;
+	{
+		UE::TWriteScopeLock ScopedWriteLock(Lock);
+
+		bChanged = !Entries.IsEmpty();
+		for (const TPair<FName, FPCGExDataCacheEntry>& Pair : PreviewEntries) { bChanged |= !Pair.Value.bTombstone; }
+
+		PCGExDataCacheComponent::TakeAll(Entries, Released);
+		PCGExDataCacheComponent::TakeAll(PreviewEntries, Released);
+	}
+
+	bTracksOwnerCell = false;
+	OwnerCell.Reset();
+	ReleaseData(Released);
+
+	// Never dirties: only a transient, pooled owner gets here.
+	if (bChanged) { BroadcastChanged(FPCGExDataCacheChange(NAME_None, nullptr, EPCGExDataCacheChangeType::ClearedAll, /*bInPreviewOnly=*/true)); }
+}
+
+void UPCGExDataCacheComponent::OnPooledOwnerMoved(USceneComponent* InRoot, EUpdateTransformFlags InFlags, ETeleportType InTeleport)
+{
+	// APCGPartitionActor::Teleport only moves an actor with no graph instance, on its way to a cell: nothing it holds
+	// belongs there. Its grid size is still the previous one at this point, so cells cannot be compared yet.
+	const APCGPartitionActor* PartitionActor = GetPooledOwner();
+	if (!PartitionActor || !PartitionActor->HasLocalPCGComponents()) { DropAllEntries(); }
+	else { PurgeIfRecycled(); }
+}
+
+void UPCGExDataCacheComponent::OnLocalComponentCleaned(UPCGComponent* InComponent)
+{
+	const APCGPartitionActor* PartitionActor = GetPooledOwner();
+	if (!PartitionActor) { return; }
+
+	// Also fires on a plain cleanup; only the one that leaves the actor without a graph instance sends it to the pool.
+	if (!PartitionActor->HasLocalPCGComponents()) { DropAllEntries(); }
+	else { WatchLocalComponents(PartitionActor); }
 }
 
 #if WITH_EDITOR

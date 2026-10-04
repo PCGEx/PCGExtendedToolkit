@@ -21,8 +21,8 @@ class AActor;
  * Set Cached Data.
  * Stores the input data on the target actor's PCGEx Data Cache component under a cache ID, so a later
  * generation can read it back with Get Cached Data. Inputs pass through to same-labelled outputs.
- * In Clear / Clear All modes the node has no data pins: it is ordered purely through its (required)
- * execution dependency and exposes a dependency-only output.
+ * In Clear / Clear All modes the node has no data pins and exposes a dependency-only output: it is ordered
+ * through its (required) execution dependency, or through the Target Actor pin when Target is Input.
  * Game-thread only: adopting data into the component re-outers and flattens it.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta = (Keywords = "pcgex cache store persist memory data clear", PCGExNodeLibraryDoc = "utilities/data-cache/set-cached-data"))
@@ -35,6 +35,7 @@ class UPCGExSetCachedDataSettings : public UPCGExDataCacheSettingsBase
 public:
 	//~Begin UObject interface
 #if WITH_EDITOR
+	virtual void PreEditChange(FProperty* PropertyAboutToChange) override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 	//~End UObject interface
@@ -52,6 +53,11 @@ public:
 	virtual FString GetAdditionalTitleInformation() const override;
 
 protected:
+#if WITH_EDITOR
+	/** Mode and Custom Input Pins decide which pins exist and which are required, like Target. */
+	virtual EPCGChangeType GetChangeTypeForProperty(FPropertyChangedEvent& PropertyChangedEvent) const override;
+#endif
+
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual FPCGElementPtr CreateElement() const override;
@@ -77,7 +83,7 @@ public:
 	EPCGExDataCacheWriteMode Mode = EPCGExDataCacheWriteMode::Replace;
 
 	/** Extra input pins, stored with their label so a Get with the same pins routes by name; copy-paste the array
-	 *  onto the Get node. In, Out and Target Actor are reserved. Declaring any makes In optional. */
+	 *  onto the Get node. In, Out and Target Actor are reserved, whatever Target is. Declaring any makes In optional. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Pins", meta = (TitleProperty = "{Label}", EditCondition = "!IsClearMode()", EditConditionHides))
 	TArray<FPCGPinProperties> CustomInputPins;
 
@@ -86,9 +92,12 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bNotifyChange = false;
 
-	/** Clear and Clear All: no data pins, execution dependency required. */
+	/** Clear and Clear All: no data pins. */
 	UFUNCTION()
 	bool IsClearMode() const { return Mode == EPCGExDataCacheWriteMode::Clear || Mode == EPCGExDataCacheWriteMode::ClearAll; }
+
+	/** A clear has no data pin to order it; under Input its required Target Actor pin does, so the dependency is optional. */
+	bool NeedsExecutionDependency() const { return IsClearMode() && !UsesTargetPin(); }
 
 	/** Clear All drops every entry whatever its key, so the prefix has nothing to apply to. */
 	bool IsPartitionPrefixed() const { return bPrefixWithPartitionId && Mode != EPCGExDataCacheWriteMode::ClearAll; }
@@ -99,13 +108,23 @@ public:
 
 	/** Custom input pins minus None labels, reserved labels and duplicates; the pins actually declared. */
 	TArray<FPCGPinProperties> GetSanitizedCustomInputPins() const;
+
+#if WITH_EDITOR
+
+private:
+	/** NeedsExecutionDependency() as captured before an edit, so only an edit that moves it rewrites the flag. */
+	bool bNeededDependencyBeforeEdit = false;
+#endif
 };
 
 struct FPCGExSetCachedDataContext final : FPCGExContext
 {
-	/** Hosts to write to or clear. Left empty when the partition prefix cannot be resolved, so the cache is untouched
+	/** Under Input, what the Target Actor pin references. Hosts are resolved in the step that writes or clears. */
+	TArray<PCGExDataCache::FTargetReference> TargetReferences;
+
+	/** False when there is nothing to write or the partition prefix cannot be resolved: the cache is left untouched
 	 *  while inputs still pass through. */
-	TArray<TWeakObjectPtr<AActor>> TargetActors;
+	bool bTouchesCache = false;
 
 	/** The key actually written or cleared: the Cache ID, partition prefix included. */
 	FName CacheID = NAME_None;

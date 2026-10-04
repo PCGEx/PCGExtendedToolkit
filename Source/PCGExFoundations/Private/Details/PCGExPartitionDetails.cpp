@@ -24,7 +24,7 @@ namespace PCGExPartitionGrid
 		return (1u << SteppedLog) * 100u;
 	}
 
-	void ResolveGrid(const FPCGExPartitionQuery& InQuery, const UPCGComponent* InComponent, uint32& OutGridSize, bool& bOut2D)
+	uint32 ResolveGridSize(const FPCGExPartitionQuery& InQuery, const UPCGComponent* InComponent)
 	{
 		uint32 GridSize = PCGHiGenGrid::GridToGridSize(InQuery.ExplicitGrid);
 		if (InQuery.GridSizeResolution == EPCGExPartitionResolution::FromComponent && InComponent)
@@ -36,24 +36,29 @@ namespace PCGExPartitionGrid
 			}
 		}
 		GridSize = OffsetGridSize(GridSize, InQuery.GridSizeOffset);
-		OutGridSize = FMath::Max<uint32>(1u, GridSize);
+		return FMath::Max<uint32>(1u, GridSize);
+	}
 
+	bool ResolveGrid2D(const FPCGExPartitionQuery& InQuery, const bool bInAuto2D)
+	{
 		switch (InQuery.Grid2D)
 		{
 		case EPCGExGrid2DMode::Force2D:
-			bOut2D = true;
-			break;
+			return true;
 		case EPCGExGrid2DMode::Force3D:
-			bOut2D = false;
-			break;
+			return false;
 		case EPCGExGrid2DMode::Auto:
-			bOut2D = InComponent ? InComponent->Use2DGrid() : false;
-			break;
+			return bInAuto2D;
 		default:
 			ensureMsgf(false, TEXT("Unresolvable EPCGExGrid2DMode (%d)"), static_cast<int32>(InQuery.Grid2D));
-			bOut2D = InComponent ? InComponent->Use2DGrid() : false;
-			break;
+			return bInAuto2D;
 		}
+	}
+
+	void ResolveGrid(const FPCGExPartitionQuery& InQuery, const UPCGComponent* InComponent, uint32& OutGridSize, bool& bOut2D)
+	{
+		OutGridSize = ResolveGridSize(InQuery, InComponent);
+		bOut2D = ResolveGrid2D(InQuery, InComponent ? InComponent->Use2DGrid() : false);
 	}
 
 	FCell MakeCell(const uint32 InGridSize, const bool bIn2D, const FIntVector& InOffset, const FVector& InAnchor)
