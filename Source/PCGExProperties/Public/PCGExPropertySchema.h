@@ -138,7 +138,7 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrideEntry
 #endif
 	}
 
-	// The four accessors below are implemented in .cpp: reaching through Value needs FPCGExProperty
+	// The members below are implemented in .cpp: reaching through Value needs FPCGExProperty
 	// complete, and this header stays free of it.
 
 #if WITH_EDITORONLY_DATA
@@ -153,6 +153,14 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrideEntry
 	const FPCGExProperty* GetProperty() const;
 
 	FPCGExProperty* GetPropertyMutable();
+
+	/**
+	 * Re-mirror Value's schema-owned fields from SchemaValue (FPCGExProperty::SyncStructuralFromSchema).
+	 * The checked way into that hook: nothing happens unless both hold the same property type.
+	 *
+	 * @return True if any field changed.
+	 */
+	bool SyncStructuralFields(const FInstancedStruct& SchemaValue);
 
 	bool IsValid() const
 	{
@@ -220,13 +228,14 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrides
 	bool SyncToSchema(const TArray<FInstancedStruct>& Schema);
 
 	/**
-	 * Refresh each row's schema-owned fields (FPCGExProperty::SyncStructuralFromSchema) from the resolved
-	 * property of the same name and type. Rows are never added, removed or reordered, so unlike SyncToSchema
-	 * this is safe against an incomplete schema, e.g. at load with an import missing.
+	 * In-place counterpart of SyncToSchema. Each row is matched to a resolved property (HeaderId, then name),
+	 * takes that property's name and re-mirrors its schema-owned fields. Rows are never added, removed,
+	 * reordered or retyped, so unlike SyncToSchema this is safe against an incomplete schema, e.g. at load
+	 * with an import missing. A row whose type differs from its property's is left untouched.
 	 *
 	 * @return True if any row changed.
 	 */
-	bool SyncStructuralFields(TConstArrayView<FPCGExPropertyResolved> Resolved);
+	bool SyncInPlace(TConstArrayView<FPCGExPropertyResolved> Resolved);
 
 	/**
 	 * Apply HeaderId remaps from a schema dedup pass. Matches entries by (OldId, Name) --

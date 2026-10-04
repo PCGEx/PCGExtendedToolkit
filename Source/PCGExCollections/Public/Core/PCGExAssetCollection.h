@@ -1215,6 +1215,13 @@ public:
 	void SyncPropertyOverridesToEntries();
 
 	/**
+	 * FPCGExPropertyOverrides::SyncInPlace on every entry and category row: rows follow a renamed property
+	 * and re-mirror its schema-owned fields, none is added, dropped or reset. What a load can afford, where
+	 * an import may be missing. Returns true if any row changed.
+	 */
+	bool SyncPropertyOverridesInPlace();
+
+	/**
 	 * Row for InCategory, minting a schema-synced one when absent. Null for NAME_None.
 	 * Callers own the transaction and Modify(); a freshly minted row must be synced (this does it)
 	 * or its details panel renders empty until the schema is next edited.

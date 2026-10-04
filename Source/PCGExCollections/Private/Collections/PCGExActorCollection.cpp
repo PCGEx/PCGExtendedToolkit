@@ -487,10 +487,7 @@ void UPCGExActorCollection::RebuildActorPropertiesFromComponents(
 					OverrideProp->HeaderId = SchemaProp->HeaderId;
 #endif
 					// The donor's schema-owned fields give way to the canonical ones here, not on a later sync.
-					if (Slot.Value.GetScriptStruct() == CanonicalSchema[MergedIdx].GetScriptStruct())
-					{
-						OverrideProp->SyncStructuralFromSchema(*SchemaProp);
-					}
+					Slot.SyncStructuralFields(CanonicalSchema[MergedIdx]);
 				}
 			}
 		}

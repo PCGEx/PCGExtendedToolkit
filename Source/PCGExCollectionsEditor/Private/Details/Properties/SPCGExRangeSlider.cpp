@@ -24,12 +24,11 @@ namespace PCGExRangeSlider
 		return bHot ? &Hot : &Normal;
 	}
 
-	/** InValue rounded to the coarsest power of ten that is still finer than one pixel of travel. */
+	/** InValue rounded to the coarsest power of ten that is still finer than one pixel of a TrackWidth-pixel travel. */
 	double SnapToPixelStep(const double InValue, const float TrackWidth)
 	{
-		// One pixel is 1 / TrackWidth of the range, so the step is never coarser than a whole unit.
-		const double PerPixel = 1.0 / FMath::Max(TrackWidth, 1.0f);
-		const int32 Decimals = FMath::CeilToInt32(FMath::Clamp(-FMath::LogX(10.0, PerPixel), 0.0, 12.0));
+		// One pixel is 1 / TrackWidth of the range. Capped: an unbounded width must not become a loop count.
+		const int32 Decimals = FMath::CeilToInt32(FMath::Min(FMath::LogX(10.0, static_cast<double>(TrackWidth)), 12.0));
 
 		// An exact integer power, applied as such and never as its inexact reciprocal: the result is the double
 		// nearest the decimal, identically on every platform.
@@ -97,29 +96,29 @@ SPCGExRangeSlider::EPart SPCGExRangeSlider::HitTest(const float LocalX, const FL
 	return LocalX > Layout.EndX ? EPart::End : EPart::Body;
 }
 
-FVector2D SPCGExRangeSlider::ComputeDraggedRange(const float Travel, const FLayout& Layout) const
+FVector2D SPCGExRangeSlider::ComputeDraggedRange(const float Travel, const float TrackWidth) const
 {
 	using namespace PCGExRangeSlider;
 
-	const double Delta = static_cast<double>(Travel) / Layout.TrackWidth;
+	const double Delta = static_cast<double>(Travel) / TrackWidth;
 
 	FVector2D Result = PressValue;
 	switch (PressedPart)
 	{
 	case EPart::Start:
-		Result.X = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, Layout.TrackWidth), 0.0, PressValue.Y);
+		Result.X = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, TrackWidth), 0.0, PressValue.Y);
 		break;
 	case EPart::End:
-		Result.Y = FMath::Clamp(SnapToPixelStep(PressValue.Y + Delta, Layout.TrackWidth), PressValue.X, 1.0);
+		Result.Y = FMath::Clamp(SnapToPixelStep(PressValue.Y + Delta, TrackWidth), PressValue.X, 1.0);
 		break;
 	case EPart::Body:
 		{
 			// The length is kept as-is, never snapped. 1 - Length and X + Length can land a rounding error off the
 			// step grid; folding those back keeps both ends short decimals.
 			const double Length = PressValue.Y - PressValue.X;
-			const double ClampedStart = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, Layout.TrackWidth), 0.0, 1.0 - Length);
-			Result.X = FMath::Max(FoldToPixelStep(ClampedStart, Layout.TrackWidth), 0.0);
-			Result.Y = FMath::Min(FoldToPixelStep(Result.X + Length, Layout.TrackWidth), 1.0);
+			const double ClampedStart = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, TrackWidth), 0.0, 1.0 - Length);
+			Result.X = FoldToPixelStep(ClampedStart, TrackWidth);
+			Result.Y = FMath::Min(FoldToPixelStep(Result.X + Length, TrackWidth), 1.0);
 		}
 		break;
 	default:
@@ -160,7 +159,7 @@ int32 SPCGExRangeSlider::OnPaint(
 	const float BarTop = FMath::RoundToFloat((Size.Y - BarHeight) * 0.5f);
 	const float MidY = FMath::RoundToFloat(Size.Y * 0.5f);
 
-	// Track: a hairline between two end ticks, the ticks standing for the bounds.
+	// Track: a hairline between two end ticks, the ticks standing for positions 0 and 1.
 	const FLinearColor TrackColor = FStyleColors::Foreground.GetSpecifiedColor().CopyWithNewOpacity(0.5f);
 	DrawBox(LayerId, 0.0f, MidY, Size.X, 1.0f, WhiteBrush, TrackColor);
 	DrawBox(LayerId, 0.0f, BarTop, TickWidth, BarHeight, WhiteBrush, TrackColor);
@@ -250,7 +249,7 @@ FReply SPCGExRangeSlider::OnMouseMove(const FGeometry& MyGeometry, const FPointe
 		return FReply::Handled();
 	}
 
-	const FVector2D NewValue = ComputeDraggedRange(Travel, Layout);
+	const FVector2D NewValue = ComputeDraggedRange(Travel, Layout.TrackWidth);
 	if (NewValue != DragValue)
 	{
 		// Opened on the first actual change, so a press that goes nowhere never reaches the owner.

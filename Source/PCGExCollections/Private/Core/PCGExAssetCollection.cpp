@@ -1392,35 +1392,16 @@ void UPCGExAssetCollection::PostLoad()
 		(void)MarkPackageDirty();
 	}
 
-	// Rows output through the schema-owned fields they mirror, and an import can change while this asset
-	// is unloaded. Fields only: a full sync here would drop the rows of an import that failed to load.
+	// Rows are read by name and output through the schema-owned fields they mirror, and an import can
+	// change both while this asset is unloaded. In place: a full sync here would drop the rows of an
+	// import that failed to load.
+	if (SyncPropertyOverridesInPlace())
 	{
-		TArray<FPCGExPropertyResolved> Resolved;
-		CollectionProperties.Resolve(Resolved);
-
-		bool bRowsChanged = false;
-		ForEachEntry([&Resolved, &bRowsChanged](FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
-		{
-			if (Entry && Entry->PropertyOverrides.SyncStructuralFields(Resolved))
-			{
-				bRowsChanged = true;
-			}
-		});
-		for (FPCGExCategoryOverrides& Row : CategoryOverrides)
-		{
-			if (Row.PropertyOverrides.SyncStructuralFields(Resolved))
-			{
-				bRowsChanged = true;
-			}
-		}
-		if (bRowsChanged)
-		{
-			(void)MarkPackageDirty();
-		}
+		(void)MarkPackageDirty();
 	}
 
-	// Load-time staleness refresh lives in FPCGExCollectionsEditorModule::OnAssetLoaded, with its
-	// sibling triggers -- PostLoad stays pure data migration.
+	// Re-staging stale entries is not done here: it lives in FPCGExCollectionsEditorModule::OnAssetLoaded,
+	// with its sibling triggers.
 #endif
 }
 
@@ -2009,9 +1990,8 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	}
 	else if (bIsSchemaValueLeafEdit)
 	{
-		// Schema-authored structural meta (AllowedClass, Range) lives on FPCGExProperty leaf fields
-		// and reaches entry/category mirrors only through SyncToSchema's SyncStructuralFromSchema
-		// pass. Value-leaf edits take the fast path: no reallocation, override values preserved.
+		// A schema leaf can be a structural field (AllowedClass, Range, bounds) that entry and category rows
+		// mirror, so they re-sync. SyncToSchema takes its fast path: no reallocation, override values kept.
 		// Registry prototypes heal separately via the cache invalidation below.
 		SyncPropertyOverridesToEntries();
 	}
@@ -2059,6 +2039,27 @@ void UPCGExAssetCollection::SyncPropertyOverridesToEntries()
 		InEntry->PropertyOverrides.SyncToSchema(Schema);
 	});
 	SyncCategoryOverridesToSchema(Schema);
+}
+
+bool UPCGExAssetCollection::SyncPropertyOverridesInPlace()
+{
+	TArray<FPCGExPropertyResolved> Resolved;
+	CollectionProperties.Resolve(Resolved);
+	if (Resolved.IsEmpty())
+	{
+		return false;
+	}
+
+	bool bChanged = false;
+	ForEachEntry([&Resolved, &bChanged](FPCGExAssetCollectionEntry* InEntry, int32 /*i*/)
+	{
+		bChanged |= InEntry->PropertyOverrides.SyncInPlace(Resolved);
+	});
+	for (FPCGExCategoryOverrides& Row : CategoryOverrides)
+	{
+		bChanged |= Row.PropertyOverrides.SyncInPlace(Resolved);
+	}
+	return bChanged;
 }
 
 void UPCGExAssetCollection::EDITOR_CollectUsedCategories(TSet<FName>& OutCategories) const

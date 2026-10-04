@@ -88,8 +88,8 @@ private:
 	FLayout ComputeLayout(float Width) const;
 	EPart HitTest(float LocalX, const FLayout& Layout) const;
 
-	/** PressValue moved by Travel pixels along the pressed part, snapped and kept inside 0..1. */
-	FVector2D ComputeDraggedRange(float Travel, const FLayout& Layout) const;
+	/** PressValue moved by Travel pixels along the pressed part, snapped and kept inside 0..1. TrackWidth is a layout's. */
+	FVector2D ComputeDraggedRange(float Travel, float TrackWidth) const;
 
 	/** Ends the press; fires OnEndDrag when the press had changed the value. */
 	void EndPress();

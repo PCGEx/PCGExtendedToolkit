@@ -22,23 +22,12 @@ namespace PCGExPropertyInlineWidgets
 {
 	/**
 	 * Base address of the struct instance that declares ValueProperty, from the address of that field's value.
-	 * The one place this arithmetic lives, for the built-in widgets and for foreign property types alike.
+	 * RawValue must be the field itself, as a direct member of that struct: never a container element, a map
+	 * value or a static-array slot. The one place this arithmetic lives, for built-in and foreign types alike.
 	 */
 	inline uint8* AccessOwnerRaw(const FProperty* ValueProperty, void* RawValue)
 	{
 		return static_cast<uint8*>(RawValue) - ValueProperty->GetOffset_ForInternal();
-	}
-
-	/** AccessOwnerRaw as T. Null unless ValueProperty is declared by T or by a struct derived from it. */
-	template <typename T>
-	T* AccessOwner(const FProperty* ValueProperty, void* RawValue)
-	{
-		const UStruct* OwnerStruct = ValueProperty ? ValueProperty->GetOwnerStruct() : nullptr;
-		if (!RawValue || !OwnerStruct || !OwnerStruct->IsChildOf(T::StaticStruct()))
-		{
-			return nullptr;
-		}
-		return reinterpret_cast<T*>(AccessOwnerRaw(ValueProperty, RawValue));
 	}
 
 	/** Soft object path picker filtered by the sibling AllowedClass field. */
