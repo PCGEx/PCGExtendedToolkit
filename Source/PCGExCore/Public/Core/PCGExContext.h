@@ -210,6 +210,10 @@ public:
 
 	bool TryComplete(const bool bForce = false);
 
+	// For an AdvanceWork that must wait with no async work to resume it: clears the pause so the
+	// scheduler re-ticks, and returns false.
+	bool DeferToScheduler();
+
 protected:
 	//~ Execution Flow Atomics
 	//~
