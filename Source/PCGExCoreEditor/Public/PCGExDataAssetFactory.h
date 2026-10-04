@@ -40,4 +40,10 @@ public:
 	{
 		return NewObject<UDataAsset>(InParent, SupportedClass, Name, Flags);
 	}
+
+	virtual bool ShouldShowInNewMenu() const override;
+
+protected:
+	/** Set in the constructor to keep the factory out of the New Asset menu unless pcgex.Collections.ShowAllFactories is on. */
+	bool bHiddenFromNewMenu = false;
 };

@@ -32,6 +32,7 @@ public:
 	UPCGExSkinnedMeshCollectionFactory()
 	{
 		SupportedClass = UPCGExSkinnedMeshCollection::StaticClass();
+		bHiddenFromNewMenu = true;
 	}
 };
 

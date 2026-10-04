@@ -100,6 +100,7 @@ class Tree:
 
         self._index_modules()
         self._closures = {}
+        self._requires_editor = {}
 
     def _skip(self, path):
         low = path.lower()
@@ -144,12 +145,26 @@ class Tree:
 
         Per Engine/Source/Runtime/Projects/Private/ModuleDescriptor.cpp only Editor /
         EditorNoCommandlet gate on TargetType == Editor. UncookedOnly gates on
-        !bBuildRequiresCookedData, so it still reaches non-editor targets and stays checked.
-
-        Do not try to infer this from a "UnrealEd" dependency: Runtime modules routinely add
-        it under `if (Target.bBuildEditor)`, which does not make them editor-only.
+        !bBuildRequiresCookedData, which a non-editor target can satisfy, so it counts only
+        when its own rules prove it (requires_editor). No other host type gets that reading:
+        a Runtime module adds UnrealEd under `if (Target.bBuildEditor)`, which proves nothing.
         """
-        return self.module_type.get(self.module_of(path)) in ("Editor", "EditorNoCommandlet")
+        module = self.module_of(path)
+        kind = self.module_type.get(module)
+        if kind in ("Editor", "EditorNoCommandlet"):
+            return True
+        return kind == "UncookedOnly" and self.requires_editor(module)
+
+    def requires_editor(self, module):
+        """True if the module's rules always depend on UnrealEd, so no non-editor target can build it.
+
+        Engine/Source/Editor/UnrealEd/UnrealEd.Build.cs throws unless Target.bCompileAgainstEditor
+        (5.7 and 5.8), the flag UEBuildTarget.cs derives WITH_EDITOR=1 from.
+        """
+        if module not in self._requires_editor:
+            rules = f"{self.module_dir[module]}/{module}.Build.cs"
+            self._requires_editor[module] = unconditional_dependency(self.stripped(rules), module, "UnrealEd")
+        return self._requires_editor[module]
 
     # -- include graph -----------------------------------------------------
 
@@ -215,6 +230,55 @@ def editor_guard_map(lines):
                 stack.pop()
         out.append(any(g for g, _ in stack))
     return out
+
+
+RULES_TOKEN_RE = re.compile(r'[{};]|\breturn\b')
+RULES_PP_RE = re.compile(r'^[ \t]*#[ \t]*(if|endif)\b', re.M)
+# From the start of a statement to a string literal that is a direct argument of Add, or a direct
+# element of the array handed to AddRange. Literal contents are blanked in the text this reads.
+DEPENDENCY_ADD_RE = re.compile(
+    r'\s*(?:Public|Private)DependencyModuleNames\s*\.\s*Add(?:Range)?\s*\(\s*'
+    r'(?:new\s*(?:string\s*)?\[\s*\]\s*\{\s*)?(?:"[^"\n]*"\s*,\s*)*$')
+
+
+def unconditional_dependency(text, module, dependency):
+    """True when the rules constructor of `module` adds `dependency` on every path through it.
+
+    text is a comment-stripped Build.cs. Proven for one shape only: the literal is listed in an Add /
+    AddRange on Public / PrivateDependencyModuleNames that is a statement of the constructor body itself,
+    with no `return` before it and no `#if` around it. Any other shape (an `if`, a helper method, a
+    conditional operator, a list built elsewhere) reads as not proven, which keeps the module checked.
+    """
+    code = code_only(text)
+    wanted = f'"{dependency}"'
+    literals = [m.start() for m in LITERAL_RE.finditer(text) if m.group(0) == wanted]
+    ctor_re = re.compile(r'\s*(?:public\s+)?' + re.escape(module) + r'\s*\(')
+    blocks, stmt, returned = [], 0, False        # blocks: "ctor", "init" (array initializer) or "other"
+
+    def proven(at):
+        scope = next((b for b in reversed(blocks) if b != "init"), None)
+        directives = [m.group(1) for m in RULES_PP_RE.finditer(text, 0, at)]
+        return (scope == "ctor" and not returned and DEPENDENCY_ADD_RE.match(code, stmt, at) is not None
+                and directives.count("if") == directives.count("endif"))
+
+    for m in RULES_TOKEN_RE.finditer(code):
+        k, tok = m.start(), m.group(0)
+        while literals and literals[0] < k:
+            if proven(literals.pop(0)):
+                return True
+        if tok == "{" and code[stmt:k].rstrip().endswith("]"):
+            blocks.append("init")                # continues the statement it sits in
+        elif tok == "{":
+            blocks.append("ctor" if ctor_re.match(code, stmt, k) else "other")
+            stmt = k + 1
+        elif tok == "}":
+            if blocks and blocks.pop() != "init":
+                stmt = k + 1
+        elif tok == ";":
+            stmt = k + 1
+        elif "ctor" in blocks:
+            returned = True
+    return False
 
 
 def logical_lines(lines):
@@ -2832,6 +2896,69 @@ SELFTEST = {
         "#endif\n"),
 }
 
+# always_editor: (module, host type, rules constructor body). Each module is one way a Build.cs can name
+# UnrealEd and holds the same unguarded editor-only call, which only the Negative modules may keep silent.
+RULES_ADD = '\t\tPrivateDependencyModuleNames.Add("UnrealEd");\n'
+RULES_FIXTURES = [
+    ("ModRuntime", "Runtime", RULES_ADD),
+    ("ModUncNone", "UncookedOnly", '\t\tPrivateDependencyModuleNames.Add("Slate");\n'),
+    ("ModUncLongerName", "UncookedOnly", '\t\tPrivateDependencyModuleNames.Add("UnrealEdMessages");\n'),
+    ("ModUncOtherList", "UncookedOnly", '\t\tPrivateIncludePaths.Add("UnrealEd");\n'),
+    ("ModUncComment", "UncookedOnly", "\t\t/* Editor only;\n" + RULES_ADD + "\t\t*/\n"),
+    ("ModUncIf", "UncookedOnly", "\t\tif (Target.bBuildEditor)\n\t\t{\n\t" + RULES_ADD + "\t\t}\n"),
+    ("ModUncBareIf", "UncookedOnly", "\t\tif (Target.bBuildEditor)\n\t" + RULES_ADD),
+    ("ModUncTernary", "UncookedOnly",
+     '\t\tPrivateDependencyModuleNames.Add(Target.bBuildEditor ? "UnrealEd" : "Slate");\n'),
+    ("ModUncReturn", "UncookedOnly", "\t\tif (!Target.bBuildEditor)\n\t\t{\n\t\t\treturn;\n\t\t}\n" + RULES_ADD),
+    ("ModUncPreprocessor", "UncookedOnly", "#if UE_5_8_OR_LATER\n" + RULES_ADD + "#endif\n"),
+    ("ModUncNegativeAdd", "UncookedOnly",
+     "\t\tif (Target.bBuildEditor)\n"
+     "\t\t{\n"
+     "\t\t\tbUseUnity = false;\n"
+     "\t\t}\n"
+     '\t\tPublicDependencyModuleNames.Add("UnrealEd");\n'),
+    ("ModUncNegativeRange", "UncookedOnly",
+     '\t\tbool bNoPCH = File.Exists(Path.Combine(ModuleDirectory, "..", "Config", ".noPCH"));\n'
+     "\t\tPCHUsage = bNoPCH ? PCHUsageMode.NoPCHs : PCHUsageMode.UseExplicitOrSharedPCHs;\n"
+     "#if UE_5_8_OR_LATER\n"
+     "\t\tbUseUnity = !bNoPCH;\n"
+     "#endif\n"
+     "\t\tPrivateDependencyModuleNames.AddRange(\n"
+     "\t\t\tnew string[]\n"
+     "\t\t\t{\n"
+     '\t\t\t\t"Slate", // FScopedTransaction lives in "UnrealEd"\n'
+     '\t\t\t\t"UnrealEd",\n'
+     "\t\t\t}\n"
+     "\t\t);\n"),
+]
+
+
+def rules_fixtures():
+    """The always_editor fixtures as a plugin of their own: a .uplugin, and per module its rules and one source."""
+    out = {"Rules/Rules.uplugin": '{"Modules":[\n' + ",\n".join(
+        f'{{"Name":"{module}","Type":"{kind}"}}' for module, kind, _ in RULES_FIXTURES) + "\n]}\n"}
+    for module, _, ctor in RULES_FIXTURES:
+        out[f"Rules/{module}/{module}.Build.cs"] = (
+            "using System.IO;\n"
+            "using UnrealBuildTool;\n"
+            f"public class {module} : ModuleRules\n"
+            "{\n"
+            "\tstatic bool IsSet(string Name) { return Name.Length > 0; }\n"
+            f"\tpublic {module}(ReadOnlyTargetRules Target) : base(Target)\n"
+            "\t{\n"
+            f"{ctor}"
+            "\t}\n"
+            "}\n")
+        out[f"Rules/{module}/Private/{module}.cpp"] = (
+            f"FText {module}Title(UPCGSettings* S)\n"
+            "{\n"
+            "\treturn S->GetDefaultNodeTitle();\n"
+            "}\n")
+    return out
+
+
+SELFTEST.update(rules_fixtures())
+
 # check -> minimum findings on the defect fixtures. A multi-pattern detector must fire once per
 # pattern; "fires at all" would let a single dead pattern hide behind its siblings.
 SELFTEST_EXPECT = {
@@ -2841,7 +2968,7 @@ SELFTEST_EXPECT = {
     "iwyu-symbol": 1, "instanced-in-instancedstruct": 1, "deprecated-unconsumed": 1,
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
-    "upackage-as-outer": 1, "editor-only-call": 5, "weakobjectptr-incomplete": 16,
+    "upackage-as-outer": 1, "editor-only-call": 15, "weakobjectptr-incomplete": 16,
 }
 # check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
 # pre-flight from failing on a real defect.
