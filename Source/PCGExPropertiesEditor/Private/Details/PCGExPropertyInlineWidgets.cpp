@@ -57,8 +57,7 @@ namespace PCGExPropertyInlineWidgets
 				return nullptr;
 			}
 
-			uint8* OwnerBase = static_cast<uint8*>(RawData[0]) - ValueProp->GetOffset_ForInternal();
-			return OutSiblingProp->ContainerPtrToValuePtr<void>(OwnerBase);
+			return OutSiblingProp->ContainerPtrToValuePtr<void>(AccessOwnerRaw(ValueProp, RawData[0]));
 		}
 
 		template <typename T>

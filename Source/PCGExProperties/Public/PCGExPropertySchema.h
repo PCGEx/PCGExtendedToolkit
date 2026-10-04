@@ -16,6 +16,8 @@ class UPCGExPropertySchemaAsset;
 // value, so pulling the property base in here re-couples every such translation unit to it.
 struct FPCGExProperty;
 
+struct FPCGExPropertyResolved;
+
 /**
  * Entry in the property registry.
  * Built at compile time to provide a read-only view of available properties.
@@ -216,6 +218,15 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrides
 	 *               structural field actually differed. Drives conditional MarkPackageDirty.
 	 */
 	bool SyncToSchema(const TArray<FInstancedStruct>& Schema);
+
+	/**
+	 * Refresh each row's schema-owned fields (FPCGExProperty::SyncStructuralFromSchema) from the resolved
+	 * property of the same name and type. Rows are never added, removed or reordered, so unlike SyncToSchema
+	 * this is safe against an incomplete schema, e.g. at load with an import missing.
+	 *
+	 * @return True if any row changed.
+	 */
+	bool SyncStructuralFields(TConstArrayView<FPCGExPropertyResolved> Resolved);
 
 	/**
 	 * Apply HeaderId remaps from a schema dedup pass. Matches entries by (OldId, Name) --

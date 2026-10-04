@@ -25,41 +25,34 @@ namespace PCGExRangeSlider
 	}
 
 	/** InValue rounded to the coarsest power of ten that is still finer than one pixel of travel. */
-	double SnapToPixelStep(const double InValue, const double Span, const float TrackWidth)
+	double SnapToPixelStep(const double InValue, const float TrackWidth)
 	{
-		const double PerPixel = Span / FMath::Max(TrackWidth, 1.0f);
-		if (!FMath::IsFinite(PerPixel) || PerPixel <= 0.0)
-		{
-			return InValue;
-		}
-
-		const int32 Exponent = FMath::Clamp(FMath::FloorToInt32(FMath::LogX(10.0, PerPixel)), -12, 12);
+		// One pixel is 1 / TrackWidth of the range, so the step is never coarser than a whole unit.
+		const double PerPixel = 1.0 / FMath::Max(TrackWidth, 1.0f);
+		const int32 Decimals = FMath::CeilToInt32(FMath::Clamp(-FMath::LogX(10.0, PerPixel), 0.0, 12.0));
 
 		// An exact integer power, applied as such and never as its inexact reciprocal: the result is the double
 		// nearest the decimal, identically on every platform.
 		double Scale = 1.0;
-		for (int32 i = FMath::Abs(Exponent); i > 0; --i)
+		for (int32 i = Decimals; i > 0; --i)
 		{
 			Scale *= 10.0;
 		}
 
-		return Exponent < 0
-			? FMath::RoundToDouble(InValue * Scale) / Scale
-			: FMath::RoundToDouble(InValue / Scale) * Scale;
+		return FMath::RoundToDouble(InValue * Scale) / Scale;
 	}
 
 	/** InValue moved onto the step grid when it already sits there up to rounding error, else unchanged. */
-	double FoldToPixelStep(const double InValue, const double Span, const float TrackWidth)
+	double FoldToPixelStep(const double InValue, const float TrackWidth)
 	{
-		const double Snapped = SnapToPixelStep(InValue, Span, TrackWidth);
-		return FMath::IsNearlyEqual(Snapped, InValue, Span * 1.e-9) ? Snapped : InValue;
+		const double Snapped = SnapToPixelStep(InValue, TrackWidth);
+		return FMath::IsNearlyEqual(Snapped, InValue, 1.e-9) ? Snapped : InValue;
 	}
 }
 
 void SPCGExRangeSlider::Construct(const FArguments& InArgs)
 {
 	Value = InArgs._Value;
-	Bounds = InArgs._Bounds;
 	OnBeginDrag = InArgs._OnBeginDrag;
 	OnValueChanged = InArgs._OnValueChanged;
 	OnEndDrag = InArgs._OnEndDrag;
@@ -79,30 +72,15 @@ SPCGExRangeSlider::FLayout SPCGExRangeSlider::ComputeLayout(const float Width) c
 	Layout.TrackWidth = FMath::Max(Width - CapWidth * 2.0f, 1.0f);
 
 	const TOptional<FVector2D> RawValue = Value.Get(TOptional<FVector2D>());
-	const FVector2D RawBounds = Bounds.Get(FVector2D(0.0, 1.0));
-	if (!RawValue.IsSet() || RawValue->ContainsNaN() || RawBounds.ContainsNaN())
+	if (!RawValue.IsSet() || RawValue->ContainsNaN())
 	{
 		return Layout;
 	}
 
-	const FVector2D Ordered = PCGExRangeSlider::OrderBounds(RawBounds);
-	const double Span = Ordered.Y - Ordered.X;
-	if (!FMath::IsFinite(Span))
-	{
-		return Layout;
-	}
-
-	Layout.Bounds = Ordered;
-	Layout.Range = PCGExRangeSlider::ConformRange(*RawValue, Ordered);
+	Layout.Range = PCGExRangeSlider::ConformRange(*RawValue);
 	Layout.bHasValue = true;
-
-	const auto ToLocalX = [&Layout, Span](const double InValue)
-	{
-		const float Alpha = Span > 0.0 ? static_cast<float>((InValue - Layout.Bounds.X) / Span) : 0.0f;
-		return CapWidth + Alpha * Layout.TrackWidth;
-	};
-	Layout.StartX = ToLocalX(Layout.Range.X);
-	Layout.EndX = ToLocalX(Layout.Range.Y);
+	Layout.StartX = CapWidth + static_cast<float>(Layout.Range.X) * Layout.TrackWidth;
+	Layout.EndX = CapWidth + static_cast<float>(Layout.Range.Y) * Layout.TrackWidth;
 	return Layout;
 }
 
@@ -123,28 +101,25 @@ FVector2D SPCGExRangeSlider::ComputeDraggedRange(const float Travel, const FLayo
 {
 	using namespace PCGExRangeSlider;
 
-	const double Lo = Layout.Bounds.X;
-	const double Hi = Layout.Bounds.Y;
-	const double Span = Hi - Lo;
-	const double Delta = static_cast<double>(Travel) / Layout.TrackWidth * Span;
+	const double Delta = static_cast<double>(Travel) / Layout.TrackWidth;
 
 	FVector2D Result = PressValue;
 	switch (PressedPart)
 	{
 	case EPart::Start:
-		Result.X = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, Span, Layout.TrackWidth), Lo, PressValue.Y);
+		Result.X = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, Layout.TrackWidth), 0.0, PressValue.Y);
 		break;
 	case EPart::End:
-		Result.Y = FMath::Clamp(SnapToPixelStep(PressValue.Y + Delta, Span, Layout.TrackWidth), PressValue.X, Hi);
+		Result.Y = FMath::Clamp(SnapToPixelStep(PressValue.Y + Delta, Layout.TrackWidth), PressValue.X, 1.0);
 		break;
 	case EPart::Body:
 		{
-			// The length is kept as-is, never snapped. Hi - Length and X + Length can land a rounding error off the
+			// The length is kept as-is, never snapped. 1 - Length and X + Length can land a rounding error off the
 			// step grid; folding those back keeps both ends short decimals.
 			const double Length = PressValue.Y - PressValue.X;
-			const double ClampedStart = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, Span, Layout.TrackWidth), Lo, Hi - Length);
-			Result.X = FMath::Max(FoldToPixelStep(ClampedStart, Span, Layout.TrackWidth), Lo);
-			Result.Y = FMath::Min(FoldToPixelStep(Result.X + Length, Span, Layout.TrackWidth), Hi);
+			const double ClampedStart = FMath::Clamp(SnapToPixelStep(PressValue.X + Delta, Layout.TrackWidth), 0.0, 1.0 - Length);
+			Result.X = FMath::Max(FoldToPixelStep(ClampedStart, Layout.TrackWidth), 0.0);
+			Result.Y = FMath::Min(FoldToPixelStep(Result.X + Length, Layout.TrackWidth), 1.0);
 		}
 		break;
 	default:

@@ -32,6 +32,7 @@ public:
 	UPCGExMeshCollectionFactory()
 	{
 		SupportedClass = UPCGExMeshCollection::StaticClass();
+		bHiddenFromNewMenu = true;
 	}
 };
 

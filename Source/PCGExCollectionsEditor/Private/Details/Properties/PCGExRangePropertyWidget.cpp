@@ -3,15 +3,16 @@
 
 #include "Details/Properties/PCGExRangePropertyWidget.h"
 
-#include "Editor.h"
 #include "PropertyHandle.h"
-#include "ScopedTransaction.h"
 #include "Details/PCGExInlineNumericWidgets.h"
+#include "Details/PCGExPropertyInlineWidgets.h"
+#include "Details/PCGExRawPropertyEdit.h"
 #include "Details/Properties/SPCGExRangeSlider.h"
 #include "Properties/PCGExProperty_Range.h"
 #include "Styling/AppStyle.h"
 #include "Templates/Function.h"
 #include "Widgets/SNullWidget.h"
+#include "Widgets/Input/NumericTypeInterface.h"
 #include "Widgets/Input/SMenuAnchor.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
@@ -22,45 +23,25 @@
 
 namespace PCGExRangePropertyWidget
 {
-	/** Positions with start <= end, both inside 0..1: what the slider draws and what an edit writes back. */
-	FVector2D ConformPositions(const FVector2D& Positions)
-	{
-		return PCGExRangeSlider::ConformRange(Positions, FVector2D(0.0, 1.0));
-	}
-
 	/**
-	 * Typed access to the FPCGExProperty_Range instances behind a Value handle, plus the notify protocol their
-	 * edits follow so undo, owner dirtying and PCG regeneration behave on every host:
+	 * Typed front for FPCGExRawPropertyEdit on an FPCGExProperty_Range::Value handle. A mutator rewrites one
+	 * instance's positions (its Value) and gets the instance itself for its Min / Max conversions.
 	 *
-	 *   interactive: BeginInteractive, any number of ApplyInteractive, EndInteractive. One transaction; the closing
-	 *                ValueSet + finished notifies are sent even on an unchanged value, because hosts that edit a
-	 *                scratch struct only commit on the finished notify.
-	 *   discrete:    Commit. Its own transaction, skipped when nothing would change.
-	 *
-	 * A mutator runs once per edited instance: it rewrites that instance's positions (its Value) and gets the
-	 * instance itself for its Min / Max conversions.
+	 * Apply and Commit route by whether a gesture is open, so one SSpinBox can feed it whatever it sends: a
+	 * change inside a gesture joins it, a commit inside a gesture closes it, and either one outside a gesture
+	 * is a discrete edit, skipped when nothing would change.
 	 */
 	class FRangeBinding
 	{
 	public:
-		UE_NONCOPYABLE(FRangeBinding)
-
 		explicit FRangeBinding(const TSharedRef<IPropertyHandle>& InValueHandle)
-			: ValueHandle(InValueHandle)
+			: Edit(InValueHandle)
 		{
-			const FProperty* ValueProperty = ValueHandle->GetProperty();
-			if (ValueProperty && ValueProperty->GetOwnerStruct() == FPCGExProperty_Range::StaticStruct())
+			// Only a handle on FPCGExProperty_Range::Value can be resolved back to its owning property.
+			const FProperty* Property = InValueHandle->GetProperty();
+			if (Property && Property->GetOwnerStruct() == FPCGExProperty_Range::StaticStruct())
 			{
-				ValueOffset = ValueProperty->GetOffset_ForInternal();
-			}
-		}
-
-		~FRangeBinding()
-		{
-			// A panel rebuild can drop the widgets mid-gesture; the transaction they opened must not outlive them.
-			if (bInteractive && GEditor)
-			{
-				GEditor->EndTransaction();
+				ValueProperty = Property;
 			}
 		}
 
@@ -68,113 +49,95 @@ namespace PCGExRangePropertyWidget
 		const FPCGExProperty_Range* Peek() const
 		{
 			void* Raw = nullptr;
-			if (!IsBound() || ValueHandle->GetValueData(Raw) != FPropertyAccess::Success || !Raw)
+			if (!IsBound() || Edit.GetHandle()->GetValueData(Raw) != FPropertyAccess::Success)
 			{
 				return nullptr;
 			}
-			return &OwnerOf(Raw);
+			return OwnerOf(Raw);
 		}
 
 		void BeginInteractive()
 		{
-			if (bInteractive || !IsBound())
+			if (IsBound())
 			{
-				return;
-			}
-			bInteractive = true;
-			if (GEditor)
-			{
-				GEditor->BeginTransaction(LOCTEXT("SetRange", "Set Range"));
+				Edit.BeginInteractive(LOCTEXT("SetRange", "Set Range"));
 			}
 		}
 
-		void ApplyInteractive(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator)
+		void Apply(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator)
 		{
-			if (bInteractive)
+			if (Edit.IsInteractive())
 			{
-				Write(Mutator, EPropertyChangeType::Interactive);
+				Edit.ApplyInteractive([this, &Mutator](void* Raw) { Mutate(*static_cast<FVector2D*>(Raw), Raw, Mutator); });
 			}
-		}
-
-		void EndInteractive(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator)
-		{
-			if (!bInteractive)
+			else
 			{
-				return;
-			}
-			bInteractive = false;
-			Write(Mutator, EPropertyChangeType::ValueSet);
-			ValueHandle->NotifyFinishedChangingProperties();
-			if (GEditor)
-			{
-				GEditor->EndTransaction();
+				CommitDiscrete(Mutator);
 			}
 		}
 
 		void Commit(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator)
 		{
-			if (bInteractive || !IsBound() || !WouldChange(Mutator))
+			if (Edit.IsInteractive())
 			{
-				return;
+				EndInteractive(Mutator);
 			}
-			const FScopedTransaction Transaction(LOCTEXT("SetRange", "Set Range"));
-			Write(Mutator, EPropertyChangeType::ValueSet);
-			ValueHandle->NotifyFinishedChangingProperties();
+			else
+			{
+				CommitDiscrete(Mutator);
+			}
+		}
+
+		void EndInteractive(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator)
+		{
+			Edit.EndInteractive([this, &Mutator](void* Raw) { Mutate(*static_cast<FVector2D*>(Raw), Raw, Mutator); });
 		}
 
 	private:
 		bool IsBound() const
 		{
-			return ValueOffset != INDEX_NONE && ValueHandle->IsValidHandle();
+			return ValueProperty && Edit.GetHandle()->IsValidHandle();
 		}
 
-		/** The property owning RawValue. Reached by offset from the value: parent-handle navigation is unreliable on
-		 *  rows built by AddExternalStructureProperty. */
-		const FPCGExProperty_Range& OwnerOf(const void* RawValue) const
+		const FPCGExProperty_Range* OwnerOf(void* RawValue) const
 		{
-			return *reinterpret_cast<const FPCGExProperty_Range*>(static_cast<const uint8*>(RawValue) - ValueOffset);
+			return PCGExPropertyInlineWidgets::AccessOwner<const FPCGExProperty_Range>(ValueProperty, RawValue);
 		}
 
-		/** Visits each edited instance as (its positions, itself). */
-		void ForEachInstance(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Visitor) const
+		/** Runs Mutator on Positions as an edit of the instance whose raw value is RawValue. */
+		void Mutate(FVector2D& Positions, void* RawValue, const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)>& Mutator) const
 		{
-			TArray<void*> RawData;
-			ValueHandle->AccessRawData(RawData);
-			for (void* Raw : RawData)
+			if (const FPCGExProperty_Range* Owner = OwnerOf(RawValue))
 			{
-				if (Raw)
-				{
-					Visitor(*static_cast<FVector2D*>(Raw), OwnerOf(Raw));
-				}
+				Mutator(Positions, *Owner);
 			}
 		}
 
-		bool WouldChange(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator) const
-		{
-			bool bChanges = false;
-			ForEachInstance([&Mutator, &bChanges](FVector2D& Positions, const FPCGExProperty_Range& Owner)
-			{
-				FVector2D Candidate = Positions;
-				Mutator(Candidate, Owner);
-				bChanges |= Candidate != Positions;
-			});
-			return bChanges;
-		}
-
-		void Write(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)> Mutator, const EPropertyChangeType::Type ChangeType)
+		void CommitDiscrete(const TFunctionRef<void(FVector2D&, const FPCGExProperty_Range&)>& Mutator)
 		{
 			if (!IsBound())
 			{
 				return;
 			}
-			ValueHandle->NotifyPreChange();
-			ForEachInstance(Mutator);
-			ValueHandle->NotifyPostChange(ChangeType);
+
+			// Dry run on copies first: an edit that changes nothing gets no transaction and no notifies.
+			bool bChanges = false;
+			Edit.ForEachRawValue([this, &Mutator, &bChanges](void* Raw)
+			{
+				const FVector2D& Current = *static_cast<const FVector2D*>(Raw);
+				FVector2D Candidate = Current;
+				Mutate(Candidate, Raw, Mutator);
+				bChanges |= Candidate != Current;
+			});
+
+			if (bChanges)
+			{
+				Edit.Commit(LOCTEXT("SetRange", "Set Range"), [this, &Mutator](void* Raw) { Mutate(*static_cast<FVector2D*>(Raw), Raw, Mutator); });
+			}
 		}
 
-		TSharedRef<IPropertyHandle> ValueHandle;
-		int32 ValueOffset = INDEX_NONE;
-		bool bInteractive = false;
+		FPCGExRawPropertyEdit Edit;
+		const FProperty* ValueProperty = nullptr;
 	};
 
 	FText FormatNumber(const double InValue)
@@ -220,17 +183,36 @@ namespace PCGExRangePropertyWidget
 			return true;
 		};
 
-		// The edited end stays between its own bound and the other end: the ends can meet, never cross.
-		const auto SetEnd = [bStart, ToPosition](const double NewNumber)
+		// Shared with the box, so IsOwnText formats and parses exactly as the field does.
+		const TSharedRef<INumericTypeInterface<double>> NumberInterface = MakeShared<TDefaultNumericTypeInterface<double>>();
+
+		// SSpinBox re-commits its text on focus loss, typed in or not. A number that is only the shown value's
+		// text read back is not an edit: writing it would round the stored position to that text.
+		const auto IsOwnText = [Binding, bStart, ToNumber, NumberInterface](const double InNumber)
 		{
-			return [bStart, ToPosition, NewNumber](FVector2D& Positions, const FPCGExProperty_Range& Owner)
+			const FPCGExProperty_Range* Property = Binding->Peek();
+			if (!Property)
+			{
+				return false;
+			}
+			const double ShownNumber = ToNumber(*Property, bStart ? Property->Value.X : Property->Value.Y);
+			const TOptional<double> ReadBack = NumberInterface->FromString(NumberInterface->ToString(ShownNumber), ShownNumber);
+			return ReadBack.IsSet() && ReadBack.GetValue() == InNumber;
+		};
+
+		// The edited end stays between its own bound and the other end: the ends can meet, never cross.
+		const auto SetEnd = [bStart, ToPosition, IsOwnText](const double NewNumber)
+		{
+			// Decided once per edit, not per instance: instances that disagree must all take the typed number.
+			const bool bOwnText = IsOwnText(NewNumber);
+			return [bStart, ToPosition, NewNumber, bOwnText](FVector2D& Positions, const FPCGExProperty_Range& Owner)
 			{
 				double NewPosition = 0.0;
-				if (!ToPosition(Owner, NewNumber, NewPosition))
+				if (bOwnText || !ToPosition(Owner, NewNumber, NewPosition))
 				{
 					return;
 				}
-				Positions = ConformPositions(Positions);
+				Positions = PCGExRangeSlider::ConformRange(Positions);
 				if (bStart)
 				{
 					Positions.X = FMath::Clamp(NewPosition, 0.0, Positions.Y);
@@ -250,18 +232,19 @@ namespace PCGExRangePropertyWidget
 			{
 				return TOptional<double>();
 			}
-			const FVector2D Positions = ConformPositions(Property->Value);
+			const FVector2D Positions = PCGExRangeSlider::ConformRange(Property->Value);
 			const double From = ToNumber(*Property, bStart ? 0.0 : Positions.X);
 			const double To = ToNumber(*Property, bStart ? Positions.Y : 1.0);
 			return bLower ? FMath::Min(From, To) : FMath::Max(From, To);
 		};
 
-		// SSpinBox ordering this relies on: a typed commit fires OnValueCommitted then OnValueChanged; a spin fires
-		// OnValueChanged per move and ends with OnValueCommitted then OnEndSliderMovement. The binding ignores
-		// whichever call falls outside its current mode.
+		// What SSpinBox sends: a typed or arrow-key edit is OnValueCommitted then OnValueChanged, a wheel tick is
+		// OnValueChanged alone, a spin is OnValueChanged per move closed by OnValueCommitted then
+		// OnEndSliderMovement. Slider limits only: SetEnd clamps, and needs typed text to reach it unclamped.
 		return SNew(SNumericEntryBox<double>)
 			.AllowSpin(true)
 			.Font(FAppStyle::GetFontStyle(TEXT("PropertyWindow.NormalFont")))
+			.TypeInterface(NumberInterface)
 			.ToolTipText(bStart ? LOCTEXT("StartTooltip", "Range start (X)") : LOCTEXT("EndTooltip", "Range end (Y)"))
 			.IsEnabled_Lambda([Binding, bOutputSpace]()
 			{
@@ -269,8 +252,6 @@ namespace PCGExRangePropertyWidget
 				const FPCGExProperty_Range* Property = Binding->Peek();
 				return !bOutputSpace || !Property || Property->Min != Property->Max;
 			})
-			.MinValue_Lambda([Limit]() { return Limit(true); })
-			.MaxValue_Lambda([Limit]() { return Limit(false); })
 			.MinSliderValue_Lambda([Limit]() { return Limit(true); })
 			.MaxSliderValue_Lambda([Limit]() { return Limit(false); })
 			.MinDesiredValueWidth(60.0f)
@@ -284,7 +265,7 @@ namespace PCGExRangePropertyWidget
 				return ToNumber(*Property, bStart ? Property->Value.X : Property->Value.Y);
 			})
 			.OnBeginSliderMovement_Lambda([Binding]() { Binding->BeginInteractive(); })
-			.OnValueChanged_Lambda([Binding, SetEnd](const double NewNumber) { Binding->ApplyInteractive(SetEnd(NewNumber)); })
+			.OnValueChanged_Lambda([Binding, SetEnd](const double NewNumber) { Binding->Apply(SetEnd(NewNumber)); })
 			.OnValueCommitted_Lambda([Binding, SetEnd](const double NewNumber, ETextCommit::Type) { Binding->Commit(SetEnd(NewNumber)); })
 			.OnEndSliderMovement_Lambda([Binding, SetEnd](const double NewNumber) { Binding->EndInteractive(SetEnd(NewNumber)); })
 			.Label()
@@ -357,7 +338,6 @@ namespace PCGExRangePropertyWidget
 		// Weak: the anchor owns the slider.
 		const TWeakPtr<SMenuAnchor> WeakAnchor = Anchor;
 
-		// The slider edits the stored positions, so it keeps its default 0..1 bounds whatever Min / Max are.
 		Anchor->SetContent(
 			SNew(SPCGExRangeSlider)
 			.ToolTipText_Lambda([Binding]() { return FormatTooltip(*Binding); })
@@ -369,7 +349,7 @@ namespace PCGExRangePropertyWidget
 			.OnBeginDrag_Lambda([Binding]() { Binding->BeginInteractive(); })
 			.OnValueChanged_Lambda([Binding](const FVector2D& NewPositions)
 			{
-				Binding->ApplyInteractive([&NewPositions](FVector2D& Positions, const FPCGExProperty_Range&) { Positions = NewPositions; });
+				Binding->Apply([&NewPositions](FVector2D& Positions, const FPCGExProperty_Range&) { Positions = NewPositions; });
 			})
 			.OnEndDrag_Lambda([Binding](const FVector2D& NewPositions)
 			{

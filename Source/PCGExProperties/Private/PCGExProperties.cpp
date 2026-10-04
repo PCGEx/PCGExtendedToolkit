@@ -1018,6 +1018,42 @@ bool FPCGExPropertyOverrides::SyncToSchema(const TArray<FInstancedStruct>& Schem
 	return true;
 }
 
+bool FPCGExPropertyOverrides::SyncStructuralFields(TConstArrayView<FPCGExPropertyResolved> Resolved)
+{
+	bool bChanged = false;
+	for (int32 i = 0; i < Overrides.Num(); ++i)
+	{
+		FPCGExPropertyOverrideEntry& Entry = Overrides[i];
+		FPCGExProperty* Row = Entry.GetPropertyMutable();
+		const FName RowName = Entry.GetPropertyName();
+		if (!Row || RowName.IsNone())
+		{
+			continue;
+		}
+
+		// Matched on the schema's outer Name: an import that has not run PostLoad can carry a stale
+		// inner PropertyName. Rows sit parallel to the resolved list unless the schema drifted, so
+		// the row's own index is tried first.
+		const FPCGExPropertyResolved* Match = Resolved.IsValidIndex(i) && Resolved[i].Source->Name == RowName ? &Resolved[i] : nullptr;
+		if (!Match)
+		{
+			Match = Resolved.FindByPredicate([RowName](const FPCGExPropertyResolved& Candidate) { return Candidate.Source->Name == RowName; });
+		}
+		if (!Match)
+		{
+			continue;
+		}
+
+		const FInstancedStruct& SchemaValue = Match->GetEffectiveProperty();
+		const FPCGExProperty* SchemaProperty = SchemaValue.GetPtr<FPCGExProperty>();
+		if (SchemaProperty && SchemaValue.GetScriptStruct() == Entry.Value.GetScriptStruct() && Row->SyncStructuralFromSchema(*SchemaProperty))
+		{
+			bChanged = true;
+		}
+	}
+	return bChanged;
+}
+
 void FPCGExPropertyOverrides::ApplyHeaderIdRemap(TConstArrayView<FPCGExHeaderIdRemap> Remaps)
 {
 #if WITH_EDITOR

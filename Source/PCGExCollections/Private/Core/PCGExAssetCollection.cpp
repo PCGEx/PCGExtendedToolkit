@@ -1392,6 +1392,33 @@ void UPCGExAssetCollection::PostLoad()
 		(void)MarkPackageDirty();
 	}
 
+	// Rows output through the schema-owned fields they mirror, and an import can change while this asset
+	// is unloaded. Fields only: a full sync here would drop the rows of an import that failed to load.
+	{
+		TArray<FPCGExPropertyResolved> Resolved;
+		CollectionProperties.Resolve(Resolved);
+
+		bool bRowsChanged = false;
+		ForEachEntry([&Resolved, &bRowsChanged](FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
+		{
+			if (Entry && Entry->PropertyOverrides.SyncStructuralFields(Resolved))
+			{
+				bRowsChanged = true;
+			}
+		});
+		for (FPCGExCategoryOverrides& Row : CategoryOverrides)
+		{
+			if (Row.PropertyOverrides.SyncStructuralFields(Resolved))
+			{
+				bRowsChanged = true;
+			}
+		}
+		if (bRowsChanged)
+		{
+			(void)MarkPackageDirty();
+		}
+	}
+
 	// Load-time staleness refresh lives in FPCGExCollectionsEditorModule::OnAssetLoaded, with its
 	// sibling triggers -- PostLoad stays pure data migration.
 #endif

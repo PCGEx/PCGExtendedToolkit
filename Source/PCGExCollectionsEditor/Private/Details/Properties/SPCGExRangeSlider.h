@@ -11,31 +11,24 @@ DECLARE_DELEGATE_OneParam(FPCGExOnRangeChanged, const FVector2D& /*NewRange*/);
 
 namespace PCGExRangeSlider
 {
-	/** Bounds with X <= Y. */
-	inline FVector2D OrderBounds(const FVector2D& Bounds)
-	{
-		return FVector2D(FMath::Min(Bounds.X, Bounds.Y), FMath::Max(Bounds.X, Bounds.Y));
-	}
-
-	/** Range with start <= end, both inside OrderedBounds. */
-	inline FVector2D ConformRange(const FVector2D& Range, const FVector2D& OrderedBounds)
+	/** Range with start <= end, both inside 0..1. */
+	inline FVector2D ConformRange(const FVector2D& Range)
 	{
 		return FVector2D(
-			FMath::Clamp(FMath::Min(Range.X, Range.Y), OrderedBounds.X, OrderedBounds.Y),
-			FMath::Clamp(FMath::Max(Range.X, Range.Y), OrderedBounds.X, OrderedBounds.Y));
+			FMath::Clamp(FMath::Min(Range.X, Range.Y), 0.0, 1.0),
+			FMath::Clamp(FMath::Max(Range.X, Range.Y), 0.0, 1.0));
 	}
 }
 
 /**
- * Two-handle range slider over fixed bounds: the cap on each end moves that end, the bar between them moves
- * both and keeps their distance. Knows nothing about properties -- the owner supplies value and bounds and
- * receives the edits.
+ * Two-handle range slider over 0..1: the cap on each end moves that end, the bar between them moves both and
+ * keeps their distance. Knows nothing about properties -- the owner supplies the range and receives the edits.
  *
  * A drag is one gesture: OnBeginDrag, one or more OnValueChanged, then exactly one OnEndDrag -- also on
  * capture loss, so the owner can always close what OnBeginDrag opened. A press that never changes the value
  * fires nothing, which is what keeps a double-click from nudging it.
  *
- * The value is drawn conformed to the bounds; the first edit is what writes the conformed range back.
+ * The value is drawn conformed to 0..1; the first edit is what writes the conformed range back.
  */
 class SPCGExRangeSlider : public SLeafWidget
 {
@@ -44,11 +37,8 @@ public:
 		{
 		}
 
-		/** X = start, Y = end. Unset draws the bare track and disables dragging. */
+		/** X = start, Y = end, as 0..1 positions. Unset draws the bare track and disables dragging. */
 		SLATE_ATTRIBUTE(TOptional<FVector2D>, Value)
-
-		/** X = min, Y = max; 0..1 when left unset. */
-		SLATE_ATTRIBUTE(FVector2D, Bounds)
 
 		SLATE_EVENT(FSimpleDelegate, OnBeginDrag)
 		SLATE_EVENT(FPCGExOnRangeChanged, OnValueChanged)
@@ -82,15 +72,14 @@ private:
 	/** Where the current value sits along a widget of a given width. */
 	struct FLayout
 	{
-		/** Ordered bounds, and the range conformed to them. */
-		FVector2D Bounds = FVector2D(0.0, 1.0);
+		/** The value conformed to 0..1. */
 		FVector2D Range = FVector2D(0.0, 1.0);
 
 		/** Local X of the range's start and end; the caps sit outside this span. */
 		float StartX = 0.0f;
 		float EndX = 0.0f;
 
-		/** Pixels the bounds map onto. */
+		/** Pixels that 0..1 maps onto. */
 		float TrackWidth = 1.0f;
 
 		bool bHasValue = false;
@@ -99,7 +88,7 @@ private:
 	FLayout ComputeLayout(float Width) const;
 	EPart HitTest(float LocalX, const FLayout& Layout) const;
 
-	/** PressValue moved by Travel pixels along the pressed part, snapped and kept inside the bounds. */
+	/** PressValue moved by Travel pixels along the pressed part, snapped and kept inside 0..1. */
 	FVector2D ComputeDraggedRange(float Travel, const FLayout& Layout) const;
 
 	/** Ends the press; fires OnEndDrag when the press had changed the value. */
@@ -108,7 +97,6 @@ private:
 	void SetHoveredPart(EPart InPart);
 
 	TAttribute<TOptional<FVector2D>> Value;
-	TAttribute<FVector2D> Bounds;
 
 	FSimpleDelegate OnBeginDrag;
 	FPCGExOnRangeChanged OnValueChanged;
