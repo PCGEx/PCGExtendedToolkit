@@ -383,8 +383,10 @@ bool FPCGExContext::IsWaitingForTasks()
 
 void FPCGExContext::ReadyForExecution()
 {
-	UnpauseContext();
+	// Unpause last: the scheduler can re-enter PrepareData as soon as the pause clears.
 	SetState(PCGExCommon::States::State_InitialExecution);
+	bPreparationCompleted.store(true, std::memory_order_release);
+	UnpauseContext();
 }
 
 void FPCGExContext::SetState(const PCGExCommon::ContextState StateId)
