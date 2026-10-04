@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/UnrealType.h"
 
 class IPropertyHandle;
 class SWidget;
@@ -19,6 +20,16 @@ class SWidget;
  */
 namespace PCGExPropertyInlineWidgets
 {
+	/**
+	 * Base address of the struct instance that declares ValueProperty, from the address of that field's value.
+	 * RawValue must be the field itself, as a direct member of that struct: never a container element, a map
+	 * value or a static-array slot. The one place this arithmetic lives, for built-in and foreign types alike.
+	 */
+	inline uint8* AccessOwnerRaw(const FProperty* ValueProperty, void* RawValue)
+	{
+		return static_cast<uint8*>(RawValue) - ValueProperty->GetOffset_ForInternal();
+	}
+
 	/** Soft object path picker filtered by the sibling AllowedClass field. */
 	PCGEXPROPERTIESEDITOR_API TSharedRef<SWidget> MakeSoftObjectPathWidget(const TSharedRef<IPropertyHandle>& ValueHandle);
 

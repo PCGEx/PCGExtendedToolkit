@@ -7,8 +7,8 @@
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "PropertyHandle.h"
-#include "ScopedTransaction.h"
 #include "Details/PCGExAttributesDetails.h"
+#include "Details/PCGExRawPropertyEdit.h"
 #include "Styling/SlateColor.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Input/SEditableTextBox.h"
@@ -79,20 +79,12 @@ void FPCGExAttributeSourceToTargetCustomization::CustomizeHeader(
 		const bool bHasTarget = !Trimmed.IsEmpty();
 		const FName NewTarget = bHasTarget ? FName(*Trimmed) : NAME_None;
 
-		const FScopedTransaction Transaction(LOCTEXT("SetAttributeRemap", "Set Attribute Remap"));
-		PropertyHandle->NotifyPreChange();
-		PropertyHandle->EnumerateRawData(
-			[bHasTarget, NewTarget](void* RawData, const int32, const int32)
-			{
-				if (FPCGExAttributeSourceToTargetDetails* Details = static_cast<FPCGExAttributeSourceToTargetDetails*>(RawData))
-				{
-					Details->bOutputToDifferentName = bHasTarget;
-					Details->Target = NewTarget;
-				}
-				return true;
-			});
-		PropertyHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
-		PropertyHandle->NotifyFinishedChangingProperties();
+		FPCGExRawPropertyEdit(PropertyHandle).Commit(LOCTEXT("SetAttributeRemap", "Set Attribute Remap"), [bHasTarget, NewTarget](void* RawData)
+		{
+			FPCGExAttributeSourceToTargetDetails* Details = static_cast<FPCGExAttributeSourceToTargetDetails*>(RawData);
+			Details->bOutputToDifferentName = bHasTarget;
+			Details->Target = NewTarget;
+		});
 	};
 
 	HeaderRow.ValueContent()

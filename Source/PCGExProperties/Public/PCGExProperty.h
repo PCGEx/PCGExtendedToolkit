@@ -311,9 +311,9 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	 * Copy "structural" sub-fields from a sibling schema entry.
 	 *
 	 * For property types whose Value contains both schema-owned (structural) and
-	 * user-overridable parts, this hook is invoked from FPCGExPropertyOverrides::SyncToSchema
-	 * on every preserved override, so the structural parts continue to mirror the schema
-	 * while the user-overridable parts stay intact.
+	 * user-overridable parts. Runs whenever an override is brought in line with its schema --
+	 * a schema edit, a load, a value adopted from another host -- so the structural parts
+	 * continue to mirror the schema while the user-overridable parts stay intact.
 	 *
 	 * Default implementation is a no-op -- types whose Value is entirely user-overridable
 	 * (the common case) need not override this.
@@ -321,10 +321,12 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	 * Example: FPCGExProperty_Enum's Value.Class is structural (the schema decides the
 	 * enum type), but Value.Value (the int64 selection) is user-overridable.
 	 *
-	 * @param Schema The matching schema-side property to copy structural fields from.
-	 *               Same script struct as `this` is guaranteed by the caller.
-	 * @return       True if any field was changed. Lets SyncToSchema report whether the
-	 *               reconcile actually touched override state (drives PostLoad's dirty gate).
+	 * @param Schema The matching schema-side property to copy structural fields from. Overrides
+	 *               cast it to their own type unchecked: callers go through
+	 *               FPCGExPropertyOverrideEntry::SyncStructuralFields, which only calls this
+	 *               when both sides are the same script struct.
+	 * @return       True if any field was changed. Lets a sync report whether it actually
+	 *               touched override state (drives the dirty gates).
 	 */
 	virtual bool SyncStructuralFromSchema(const FPCGExProperty& Schema)
 	{

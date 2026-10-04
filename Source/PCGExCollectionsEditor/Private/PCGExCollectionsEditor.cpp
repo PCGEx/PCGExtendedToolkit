@@ -30,10 +30,12 @@
 #include "Details/Collections/PCGExSelectorClosestMatchAxisCustomization.h"
 #include "Details/Collections/PCGExSelectorRangeAxisCustomization.h"
 #include "Details/Properties/PCGExCollectionEntryPickerWidget.h"
+#include "Details/Properties/PCGExRangePropertyWidget.h"
 #include "Helpers/PCGExExternalPackageProducer.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
 #include "Properties/PCGExProperty_CollectionEntry.h"
+#include "Properties/PCGExProperty_Range.h"
 #include "Misc/CoreDelegates.h"
 #include "PCGExLog.h"
 #include "PCGExPropertySchemaAsset.h"
@@ -79,6 +81,7 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// registered PER TYPE NAME -- foreign-module types must self-register or the schema UI falls back
 	// to raw struct fields.
 	PCGEX_REGISTER_CUSTO("PCGExProperty_CollectionEntry", FPCGExPropertyCompiledCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExProperty_Range", FPCGExPropertyCompiledCustomization)
 
 	// Inline value editor for the Collection Entry property type. Edit mode = schema authoring
 	// (collection box + lock + default pick); Compact mode = override rows (entry pick; collection
@@ -89,6 +92,10 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	FPCGExInlineWidgetRegistry::Register(
 		FPCGExProperty_CollectionEntry::StaticStruct()->GetFName(), EPCGExInlineWidgetMode::Compact,
 		[](const TSharedRef<IPropertyHandle>& ValueHandle) { return PCGExCollectionEntryPickerWidget::Make(ValueHandle, false); });
+
+	// Inline value editor for the Range property type. Same slider in both modes: the bounds are edited on
+	// their own schema rows, never by the value widget.
+	FPCGExInlineWidgetRegistry::RegisterAllModes(FPCGExProperty_Range::StaticStruct()->GetFName(), &PCGExRangePropertyWidget::Make);
 
 	// Mosaic thumbnail renderer for all collection types. GEngine != null means engine init is
 	// done and UThumbnailManager is safe to touch; otherwise defer to PostEngineInit.
@@ -150,6 +157,7 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 	}
 
 	FPCGExInlineWidgetRegistry::UnregisterAllModes(FPCGExProperty_CollectionEntry::StaticStruct()->GetFName());
+	FPCGExInlineWidgetRegistry::UnregisterAllModes(FPCGExProperty_Range::StaticStruct()->GetFName());
 
 	if (FAssetRegistryModule* AssetRegistryModule = FModuleManager::GetModulePtr<FAssetRegistryModule>("AssetRegistry"))
 	{

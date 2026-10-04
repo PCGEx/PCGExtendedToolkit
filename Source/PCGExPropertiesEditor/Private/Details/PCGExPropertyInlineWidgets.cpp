@@ -16,16 +16,9 @@ namespace PCGExPropertyInlineWidgets
 {
 	namespace Private
 	{
-		// Resolve a sibling field's storage address by offset arithmetic against the Value
-		// handle's raw memory. Bypasses IPropertyHandle navigation entirely -- that path is
-		// unreliable when the Value handle was obtained via AddExternalStructureProperty
-		// (component instances, read-only schemas, override-row compact path), where
-		// GetParentHandle()->GetChildHandle() can return null even though the field
-		// exists in the underlying struct memory.
-		//
-		// Returns the sibling FProperty + owner-struct base via out-params; nullptr return
-		// means "unreachable" (no FProperty, no raw data, mixed multi-edit, cooked-stripped
-		// field, etc) and the caller should treat the constraint as absent.
+		// Address of a sibling field's value, reached through AccessOwnerRaw rather than handle navigation (see
+		// the header). Null, with OutSiblingProp cleared, when unreachable: no such field, no raw data, or a
+		// multi-object edit. Callers treat that as "no constraint".
 		void* AccessSiblingRaw(
 			const TSharedRef<IPropertyHandle>& ValueHandle,
 			FName SiblingName,
@@ -57,8 +50,7 @@ namespace PCGExPropertyInlineWidgets
 				return nullptr;
 			}
 
-			uint8* OwnerBase = static_cast<uint8*>(RawData[0]) - ValueProp->GetOffset_ForInternal();
-			return OutSiblingProp->ContainerPtrToValuePtr<void>(OwnerBase);
+			return OutSiblingProp->ContainerPtrToValuePtr<void>(AccessOwnerRaw(ValueProp, RawData[0]));
 		}
 
 		template <typename T>

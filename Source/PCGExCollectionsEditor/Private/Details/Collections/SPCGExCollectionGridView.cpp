@@ -1126,6 +1126,9 @@ void SPCGExCollectionGridView::HandleCrossCollectionDrop(
 				}
 			}
 
+			// The copied rows are still shaped by the source collection's schema.
+			TargetColl->SyncPropertyOverridesToEntries();
+
 			TargetColl->PostEditChange();
 
 			SelectedIndices.Reset();
