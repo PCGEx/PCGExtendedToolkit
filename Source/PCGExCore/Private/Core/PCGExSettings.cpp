@@ -25,6 +25,10 @@
 
 #include "Helpers/PCGSettingsHelpers.h"
 #include "HAL/IConsoleManager.h"
+#include "Algo/Transform.h"
+#include "Metadata/PCGMetadataCommon.h"
+#include "Helpers/PCGHelpers.h"
+#include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSettings"
 
@@ -38,6 +42,214 @@ namespace PCGExSettingsCVars
 }
 
 #if WITH_EDITOR
+namespace PCGExSettings
+{
+	// Must match PCGSettings::PropertyPathSeparator (private to PCGSettings.cpp; GetPropertyPath() is not exported).
+	const TCHAR* PropertyPathSeparator = TEXT("/");
+
+	// Property meta: a nested struct member opts into a whole-struct param when the node expands nested structs.
+	const TCHAR* NestedStructOverridableMeta = TEXT("PCGExNestedStructOverridable");
+
+	FString JoinPath(const TArrayView<const FName> InNames)
+	{
+		return FString::JoinBy(InNames, PropertyPathSeparator, [](const FName InName) { return InName.ToString(); });
+	}
+
+	// Mirrors the keep predicate of UPCGSettings::GatherOverridableParams.
+	bool ShouldKeepProperty(const FProperty* InProperty, const int32 InDepth)
+	{
+		if (InProperty->HasMetaData(PCGObjectMetadata::Overridable)
+			|| InProperty->HasMetaData(PCGObjectMetadata::OverridableCPUAndGPU)
+			|| InProperty->HasMetaData(PCGObjectMetadata::OverridableCPUAndGPUWithReadback))
+		{
+			return true;
+		}
+
+		if (InProperty->HasMetaData(PCGObjectMetadata::NotOverridable) || !InProperty->HasAnyPropertyFlags(CPF_Edit))
+		{
+			return false;
+		}
+
+		return InDepth > 0;
+	}
+
+	bool PathStartsWith(const TArray<FName>& InPath, const TArray<FName>& InPrefix)
+	{
+		if (InPath.Num() < InPrefix.Num()) { return false; }
+		for (int32 i = 0; i < InPrefix.Num(); i++)
+		{
+			if (InPath[i] != InPrefix[i]) { return false; }
+		}
+		return true;
+	}
+
+	struct FWholeStructGatherer
+	{
+		const UClass* SettingsClass = nullptr;
+		bool bExpandNested = false;
+		TSet<FName> UsedLabels;
+
+		// Whole-struct params in walk order: every parent precedes its descendants.
+		TArray<FPCGSettingsOverridableParam> StructParams;
+
+		// A PCG_OverridableChildProperties list, applied to the path relative to the property that carries it.
+		struct FChildFilter
+		{
+			int32 Root = 0;
+			TArray<FString> Paths;
+		};
+
+		TArray<FName> Names;
+		TArray<const FProperty*> Chain;
+		TArray<FChildFilter> Filters;
+		TArray<const FProperty*> VisitedObjectProperties;
+
+		void Walk(const UStruct* InStruct, const int32 InDepth)
+		{
+			for (TFieldIterator<FProperty> It(InStruct, EFieldIteratorFlags::IncludeSuper, EFieldIteratorFlags::ExcludeDeprecated); It; ++It)
+			{
+				const FProperty* Property = *It;
+				if (!ShouldKeepProperty(Property, InDepth)) { continue; }
+
+				Names.Add(*Property->GetAuthoredName());
+				Chain.Add(Property);
+
+				if (const FStructProperty* StructProperty = CastField<FStructProperty>(Property))
+				{
+					VisitStruct(StructProperty, InDepth);
+				}
+				else if (const FObjectProperty* ObjectProperty = CastField<FObjectProperty>(Property);
+					ObjectProperty && ObjectProperty->HasAllPropertyFlags(CPF_InstancedReference) && !VisitedObjectProperties.Contains(Property))
+				{
+					// Instanced sub-objects are walked through their declared class, as Super does.
+					VisitedObjectProperties.Add(Property);
+					Walk(ObjectProperty->PropertyClass, InDepth + 1);
+					VisitedObjectProperties.Pop(EAllowShrinking::No);
+				}
+
+				Names.Pop(EAllowShrinking::No);
+				Chain.Pop(EAllowShrinking::No);
+			}
+		}
+
+		void VisitStruct(const FStructProperty* InStructProperty, const int32 InDepth)
+		{
+			// Super's own gate: a struct its old accessors support is a leaf param there and is never recursed.
+			if (PCGAttributeAccessorHelpers::IsPropertyAccessorSupported(InStructProperty)) { return; }
+
+			const FPCGMetadataAttributeDesc Desc = FPCGMetadataAttributeDesc::CreateFromProperty(InStructProperty);
+			if (!Desc.IsValid() || Desc.ValueType != EPCGMetadataTypes::Struct) { return; }
+
+			// Root = owned by a class (the settings or an instanced sub-object); a struct owned by a struct is nested and must opt in.
+			const bool bRoot = Cast<UClass>(InStructProperty->GetOwnerStruct()) != nullptr;
+			const bool bExposed = bRoot || (bExpandNested && InStructProperty->HasMetaData(NestedStructOverridableMeta));
+
+			if (bExposed && !IsFilteredOut()) { Emit(); }
+
+			const bool bHasOwnFilter = InStructProperty->HasMetaData(PCGObjectMetadata::OverridableChildProperties);
+			if (bHasOwnFilter)
+			{
+				FChildFilter& Filter = Filters.Emplace_GetRef();
+				Filter.Root = Names.Num();
+				Filter.Paths = PCGHelpers::GetStringArrayFromCommaSeparatedList(InStructProperty->GetMetaData(PCGObjectMetadata::OverridableChildProperties));
+			}
+
+			Walk(InStructProperty->Struct, InDepth + 1);
+
+			if (bHasOwnFilter) { Filters.Pop(EAllowShrinking::No); }
+		}
+
+		bool IsFilteredOut() const
+		{
+			for (const FChildFilter& Filter : Filters)
+			{
+				if (!Filter.Paths.Contains(JoinPath(TArrayView<const FName>(Names).RightChop(Filter.Root)))) { return true; }
+			}
+			return false;
+		}
+
+		void Emit()
+		{
+			FPCGSettingsOverridableParam& Param = StructParams.Emplace_GetRef();
+			Param.PropertiesNames = Names;
+			Param.Properties = Chain;
+			Param.PropertyClass = SettingsClass;
+			Param.NumContainers = 0;
+#if WITH_EDITORONLY_DATA
+			Param.UnderlyingType = EPCGMetadataTypes::Struct;
+#endif
+
+			for (int32 i = 0; i < Chain.Num(); i++)
+			{
+				if (!Chain[i]->HasMetaData(PCGObjectMetadata::OverrideAliases)) { continue; }
+				FPCGPropertyAliases& Entry = Param.MapOfAliases.FindOrAdd(i);
+				Algo::Transform(PCGHelpers::GetStringArrayFromCommaSeparatedList(Chain[i]->GetMetaData(PCGObjectMetadata::OverrideAliases)), Entry.Aliases, [](const FString& In) { return FName(In); });
+			}
+
+			FName Label = Names.Last();
+			if (UsedLabels.Contains(Label))
+			{
+				Param.bHasNameClash = true;
+				Label = FName(JoinPath(Names));
+
+				// A top-level path is its own name, so the path alone cannot disambiguate.
+				if (UsedLabels.Contains(Label)) { Label = FName(JoinPath(Names) + TEXT(" (Struct)")); }
+			}
+
+			UsedLabels.Add(Label);
+			Param.Label = Label;
+		}
+
+		// Each struct param goes right before the first Super param under its path: the engine applies in list order, so members win.
+		TArray<FPCGSettingsOverridableParam> Merge(TArray<FPCGSettingsOverridableParam>&& InSuperParams)
+		{
+			TArray<FPCGSettingsOverridableParam> Result;
+			Result.Reserve(InSuperParams.Num() + StructParams.Num());
+
+			TBitArray<> Placed(false, StructParams.Num());
+			for (FPCGSettingsOverridableParam& SuperParam : InSuperParams)
+			{
+				for (int32 i = 0; i < StructParams.Num(); i++)
+				{
+					if (Placed[i]) { continue; }
+					const TArray<FName>& StructPath = StructParams[i].PropertiesNames;
+					if (SuperParam.PropertiesNames.Num() > StructPath.Num() && PathStartsWith(SuperParam.PropertiesNames, StructPath))
+					{
+						Result.Add(MoveTemp(StructParams[i]));
+						Placed[i] = true;
+					}
+				}
+				Result.Add(MoveTemp(SuperParam));
+			}
+
+			for (int32 i = 0; i < StructParams.Num(); i++)
+			{
+				if (!Placed[i]) { Result.Add(MoveTemp(StructParams[i])); }
+			}
+
+			return Result;
+		}
+	};
+}
+
+TArray<FPCGSettingsOverridableParam> UPCGExSettings::GatherOverridableParams() const
+{
+	TArray<FPCGSettingsOverridableParam> Params = Super::GatherOverridableParams();
+	if (!bStructOverrides)
+	{
+		return Params;
+	}
+
+	PCGExSettings::FWholeStructGatherer Gatherer;
+	Gatherer.SettingsClass = GetClass();
+	Gatherer.bExpandNested = bExpandNestedStructs;
+	Gatherer.UsedLabels.Add(PCGPinConstants::DefaultParamsLabel);
+	for (const FPCGSettingsOverridableParam& Param : Params) { Gatherer.UsedLabels.Add(Param.Label); }
+
+	Gatherer.Walk(GetClass(), 0);
+	return Gatherer.Merge(MoveTemp(Params));
+}
+
 void UPCGExSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
 }
@@ -53,14 +265,22 @@ void UPCGExSettings::ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArra
 
 void UPCGExSettings::ApplyDeprecation(UPCGNode* InOutNode)
 {
-	PCGExApplyDeprecation(InOutNode);
-	ApplyInstancedFactoriesDeprecation();
+	ApplyPropertyDeprecation(InOutNode);
 
 	Super::ApplyDeprecation(InOutNode);
 	
 	PCGEX_UPDATE_DATA_VERSION_TO_LATEST
 	
 	ensure(PCGExDataVersion == PCGExVersion::Latest);
+}
+
+void UPCGExSettings::ApplyPropertyDeprecation(UPCGNode* InOutNode)
+{
+	if (bPropertyDeprecationApplied) { return; }
+	bPropertyDeprecationApplied = true;
+
+	PCGExApplyDeprecation(InOutNode);
+	ApplyInstancedFactoriesDeprecation();
 }
 
 void UPCGExSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
@@ -144,12 +364,27 @@ void UPCGExSettings::PostEditChangeProperty(struct FPropertyChangedEvent& Proper
 		}
 	}
 
+	// A plain edit never re-gathers; Super's change broadcast then runs UpdatePins against the fresh list.
+	const FName ChangedName = PropertyChangedEvent.GetPropertyName();
+	if (ChangedName == GET_MEMBER_NAME_CHECKED(UPCGExSettings, bStructOverrides)
+		|| ChangedName == GET_MEMBER_NAME_CHECKED(UPCGExSettings, bExpandNestedStructs))
+	{
+		InitializeCachedOverridableParams(/*bReset=*/true);
+	}
+
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
 #endif
 
 void UPCGExSettings::PostLoad()
 {
+#if WITH_EDITOR
+	// Node-owned settings are migrated by their graph, in order with its pin updates; nothing else reaches the rest.
+	// Before Super, so the CRC it caches sees the migrated values.
+	// TODO: pin blocks gate on these settings' version, so an asset instanced by several graphs only migrates the first graph's pins.
+	if (PCGExDataVersion < PCGExVersion::Latest && !GetOuter()->IsA<UPCGNode>()) { ApplyPropertyDeprecation(nullptr); }
+#endif
+
 	Super::PostLoad();
 }
 

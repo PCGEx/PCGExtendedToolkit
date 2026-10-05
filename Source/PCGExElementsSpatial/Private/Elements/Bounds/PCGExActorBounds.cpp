@@ -12,9 +12,12 @@
 #include "Core/PCGExMTCommon.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGSpatialData.h"
+#include "PCGExLog.h"
 #include "Elements/PCGActorSelector.h"
+#include "Engine/StaticMeshActor.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGDynamicTrackingHelpers.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Misc/WildcardString.h"
@@ -23,19 +26,33 @@ namespace PCGExActorBounds
 {
 	namespace Internal
 	{
-		// Stock Get Actor Data matches wildcards case-insensitively; FName equality already is.
-		bool AnyActorTagMatchesPattern(const TArray<FName>& InActorTags, const FString& InPattern)
+		/** Past this many exact tags a hash lookup beats a linear FName scan. */
+		constexpr int32 ExactLinearScanMax = 8;
+
+		/**
+		 * Trimmed tags of one comma-separated clause; blanks, None and duplicates (case-insensitive) dropped.
+		 * Returns false when an entry was too long to be a tag; FName asserts on those, so they are left out.
+		 */
+		bool ParseClause(const FString& InList, TArray<FName>& OutTags)
 		{
-			for (const FName& ActorTag : InActorTags)
+			OutTags.Reset();
+
+			bool bAllEntriesFit = true;
+			for (const FString& Entry : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(InList))
 			{
-				TStringBuilder<NAME_SIZE> Builder;
-				ActorTag.AppendString(Builder);
-				if (FWildcardString::IsMatchSubstring(*InPattern, Builder.GetData(), Builder.GetData() + Builder.Len(), ESearchCase::IgnoreCase))
+				if (Entry.Len() >= NAME_SIZE)
 				{
-					return true;
+					bAllEntriesFit = false;
+					continue;
+				}
+
+				const FName Tag(*Entry);
+				if (!Tag.IsNone())
+				{
+					OutTags.AddUnique(Tag);
 				}
 			}
-			return false;
+			return bAllEntriesFit;
 		}
 
 		FString JoinTags(const TArray<FName>& InTags)
@@ -50,162 +67,470 @@ namespace PCGExActorBounds
 			}
 			return FString::Join(TagStrings, TEXT(", "));
 		}
+
+		bool HasWildcards(const FName InTag)
+		{
+			return FWildcardString::ContainsWildcards(*InTag.ToString());
+		}
+
+		// Stock Get Actor Data matches wildcards case-insensitively; FName equality already is.
+		bool MatchesPattern(const FString& InPattern, const FStringView InTag)
+		{
+			return FWildcardString::IsMatchSubstring(*InPattern, InTag.GetData(), InTag.GetData() + InTag.Len(), ESearchCase::IgnoreCase);
+		}
 	}
 }
-
-#pragma region FPCGExActorTagSet
-
-void FPCGExActorTagSet::Init(const TArray<FName>& InTags, const bool bAllowWildcards)
-{
-	Exact.Reset();
-	Wildcards.Reset();
-
-	for (const FName& Tag : InTags)
-	{
-		if (Tag.IsNone())
-		{
-			continue;
-		}
-
-		if (bAllowWildcards)
-		{
-			FString TagString = Tag.ToString();
-			if (FWildcardString::ContainsWildcards(*TagString))
-			{
-				Wildcards.Add(MoveTemp(TagString));
-				continue;
-			}
-		}
-
-		Exact.AddUnique(Tag);
-	}
-}
-
-bool FPCGExActorTagSet::MatchesAny(const TArray<FName>& InActorTags) const
-{
-	for (const FName& Tag : Exact)
-	{
-		if (InActorTags.Contains(Tag))
-		{
-			return true;
-		}
-	}
-	for (const FString& Pattern : Wildcards)
-	{
-		if (PCGExActorBounds::Internal::AnyActorTagMatchesPattern(InActorTags, Pattern))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-bool FPCGExActorTagSet::MatchesAll(const TArray<FName>& InActorTags) const
-{
-	for (const FName& Tag : Exact)
-	{
-		if (!InActorTags.Contains(Tag))
-		{
-			return false;
-		}
-	}
-	for (const FString& Pattern : Wildcards)
-	{
-		if (!PCGExActorBounds::Internal::AnyActorTagMatchesPattern(InActorTags, Pattern))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-#pragma endregion
 
 #pragma region FPCGExActorSelectionDetails
 
 FPCGExActorSelectionDetails::FPCGExActorSelectionDetails()
-	: ActorClass(AActor::StaticClass())
+	: ActorClass(AStaticMeshActor::StaticClass())
 {
 }
+
+#if WITH_EDITOR
+void FPCGExActorSelectionDetails::ApplyDeprecation(const UObject* InLogContext)
+{
+	// Clauses are trimmed comma lists now: a legacy tag holding a comma or edge whitespace no longer reads as itself.
+	auto JoinLegacyTags = [InLogContext](const TArray<FName>& InTags)
+	{
+		for (const FName& Tag : InTags)
+		{
+			const FString TagString = Tag.ToString();
+			if (TagString.Contains(TEXT(",")))
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("%s: tag '%s' contains a comma and now reads as several tags."), *GetPathNameSafe(InLogContext), *TagString);
+			}
+			else if (TagString.TrimStartAndEnd().Len() != TagString.Len())
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("%s: tag '%s' starts or ends with whitespace, which is now trimmed; it no longer matches the same actors."), *GetPathNameSafe(InLogContext), *TagString);
+			}
+		}
+		return PCGExActorBounds::Internal::JoinTags(InTags);
+	};
+
+	switch (Selection_DEPRECATED)
+	{
+	case EPCGExActorSelection::ByClass:
+		bFilterByClass = true;
+		break;
+	case EPCGExActorSelection::ByTag:
+		bFilterByClass = false;
+		switch (TagMatch_DEPRECATED)
+		{
+		case EPCGExActorTagMatch::Any:
+			RequireAny = JoinLegacyTags(Tags_DEPRECATED);
+			break;
+		case EPCGExActorTagMatch::All:
+			RequireAll = JoinLegacyTags(Tags_DEPRECATED);
+			break;
+		default:
+			UE_LOG(LogPCGEx, Error, TEXT("%s: unknown legacy tag match mode %d; the selection tags were not migrated."), *GetPathNameSafe(InLogContext), static_cast<int32>(TagMatch_DEPRECATED));
+			break;
+		}
+		break;
+	default:
+		UE_LOG(LogPCGEx, Error, TEXT("%s: unknown legacy selection mode %d; only the skip tags were migrated."), *GetPathNameSafe(InLogContext), static_cast<int32>(Selection_DEPRECATED));
+		break;
+	}
+
+	Exclude = JoinLegacyTags(SkipTags_DEPRECATED);
+}
+#endif
 
 void FPCGExActorSelectionDetails::Init()
 {
-	Select.Init(Tags, bAllowWildcards);
-	Skip.Init(SkipTags, bAllowWildcards);
+	const bool bRequireAllFits = PCGExActorBounds::Internal::ParseClause(RequireAll, RequireAllTags);
+	const bool bRequireAnyFits = PCGExActorBounds::Internal::ParseClause(RequireAny, RequireAnyTags);
+	const bool bExcludeFits = PCGExActorBounds::Internal::ParseClause(Exclude, ExcludeTags);
+	bHasOverlongEntry = !bRequireAllFits || !bRequireAnyFits || !bExcludeFits;
 }
 
-bool FPCGExActorSelectionDetails::IsUsable() const
+bool FPCGExActorSelectionDetails::IsUsable(FText* OutWhyNot) const
 {
-	switch (Selection)
+	auto Fail = [OutWhyNot](const TCHAR* InWhyNot)
 	{
-	case EPCGExActorSelection::ByClass:
-		return ActorClass != nullptr;
-	case EPCGExActorSelection::ByTag:
-		return !Select.IsEmpty();
-	default:
-		checkNoEntry();
+		if (OutWhyNot)
+		{
+			*OutWhyNot = FTEXT(InWhyNot);
+		}
 		return false;
+	};
+
+	// Not dropped and carried on with: leaving an entry out of Require All would gather more than was asked for.
+	if (bHasOverlongEntry)
+	{
+		return Fail(TEXT("A tag list holds an entry longer than any actor tag can be; check that its tags are separated by commas. Nothing gathered."));
 	}
+
+	if (bFilterByClass)
+	{
+		return ActorClass ? true : Fail(TEXT("Filter By Class is on but no actor class is set; nothing gathered."));
+	}
+
+	if (RequireAllTags.IsEmpty() && RequireAnyTags.IsEmpty())
+	{
+		return Fail(TEXT("Nothing selects actors: turn on the class filter, or set Require All or Require Any tags. Exclude alone only narrows."));
+	}
+
+	return true;
 }
 
 TSubclassOf<AActor> FPCGExActorSelectionDetails::GetIterationClass() const
 {
-	return (Selection == EPCGExActorSelection::ByClass && ActorClass) ? ActorClass : TSubclassOf<AActor>(AActor::StaticClass());
-}
-
-bool FPCGExActorSelectionDetails::MatchesClass(const AActor* InActor) const
-{
-	return Selection != EPCGExActorSelection::ByClass || InActor->IsA(ActorClass);
-}
-
-bool FPCGExActorSelectionDetails::MatchesTags(const TArray<FName>& InActorTags) const
-{
-	if (bIgnorePCGSpawnedActors && InActorTags.Contains(PCGHelpers::DefaultPCGActorTag))
-	{
-		return false;
-	}
-
-	if (Selection != EPCGExActorSelection::ByTag)
-	{
-		return true;
-	}
-
-	return TagMatch == EPCGExActorTagMatch::Any ? Select.MatchesAny(InActorTags) : Select.MatchesAll(InActorTags);
+	return (bFilterByClass && ActorClass) ? ActorClass : TSubclassOf<AActor>(AActor::StaticClass());
 }
 
 void FPCGExActorSelectionDetails::MakeTrackingKeys(TArray<FPCGSelectionKey>& OutKeys) const
 {
-	if (Selection == EPCGExActorSelection::ByClass)
+	// Nothing is gathered, so no actor edit can change the output.
+	if (!IsUsable())
 	{
-		if (ActorClass)
-		{
-			OutKeys.Emplace(TSubclassOf<UObject>(ActorClass));
-		}
+		return;
 	}
-	else
+
+	// Every match carries each Require All tag, so one is enough; a literal tracks fewer actors than a pattern would.
+	if (!RequireAllTags.IsEmpty())
 	{
-		// The tracking key handles wildcard tags on its own; tags this node matches literally are simply over-tracked.
-		for (const FName& Tag : Tags)
+		const FName* Literal = RequireAllTags.FindByPredicate([](const FName& Tag) { return !PCGExActorBounds::Internal::HasWildcards(Tag); });
+		OutKeys.Emplace(Literal ? *Literal : RequireAllTags[0]);
+		return;
+	}
+
+	// Tag keys match wildcards and removed tags on their own (FPCGSelectionKey::IsMatching).
+	if (!RequireAnyTags.IsEmpty())
+	{
+		for (const FName& Tag : RequireAnyTags)
 		{
-			if (!Tag.IsNone())
-			{
-				OutKeys.Emplace(Tag);
-			}
+			OutKeys.Emplace(Tag);
 		}
+		return;
+	}
+
+	if (bFilterByClass && ActorClass)
+	{
+		OutKeys.Emplace(TSubclassOf<UObject>(ActorClass));
 	}
 }
 
 FString FPCGExActorSelectionDetails::GetTitleInformation() const
 {
-	FString Title = Selection == EPCGExActorSelection::ByClass ? (ActorClass ? ActorClass->GetName() : FString()) : PCGExActorBounds::Internal::JoinTags(Tags);
-
-	const FString SkipTitle = PCGExActorBounds::Internal::JoinTags(SkipTags);
-	if (!SkipTitle.IsEmpty())
+	TArray<FString> Parts;
+	if (bFilterByClass && ActorClass)
 	{
-		Title += TEXT(" | skip ") + SkipTitle;
+		Parts.Add(ActorClass->GetName());
 	}
 
-	return Title;
+	TArray<FName> ClauseTags;
+	auto AddClause = [&](const TCHAR* InLabel, const FString& InList)
+	{
+		PCGExActorBounds::Internal::ParseClause(InList, ClauseTags);
+		if (!ClauseTags.IsEmpty())
+		{
+			Parts.Add(FString::Printf(TEXT("%s %s"), InLabel, *PCGExActorBounds::Internal::JoinTags(ClauseTags)));
+		}
+	};
+
+	AddClause(TEXT("all:"), RequireAll);
+	AddClause(TEXT("any:"), RequireAny);
+	AddClause(TEXT("not:"), Exclude);
+
+	return FString::Join(Parts, TEXT(" | "));
+}
+
+#pragma endregion
+
+#pragma region FTagMatcher
+
+namespace PCGExActorBounds
+{
+	FTagMatcher::FTagMatcher(const FPCGExActorSelectionDetails& InSelection)
+	{
+		const bool bAllowWildcards = InSelection.bAllowWildcards;
+		auto IsPattern = [bAllowWildcards](const FName InTag) { return bAllowWildcards && Internal::HasWildcards(InTag); };
+
+		// Require All first: it is the only clause that allocates bits, one per distinct tag or pattern.
+		int32 NumExactRequired = 0;
+		bool bHasRequiredPattern = false;
+		for (const FName& Tag : InSelection.GetRequireAllTags())
+		{
+			const bool bPattern = IsPattern(Tag);
+			const int32 Index = FindOrAddEntry(Tag, bPattern);
+			FContribution& Entry = bPattern ? PatternContributions[Index] : ExactContributions[Index];
+			if (Entry.BitsNum > 0)
+			{
+				continue;
+			}
+
+			Entry.BitsStart = Bits.Num();
+			Entry.BitsNum = 1;
+			Bits.Add(NumRequiredBits++);
+
+			if (bPattern) { bHasRequiredPattern = true; }
+			else { NumExactRequired++; }
+		}
+
+		for (const FName& Tag : InSelection.GetRequireAnyTags())
+		{
+			const bool bPattern = IsPattern(Tag);
+			const int32 Index = FindOrAddEntry(Tag, bPattern);
+			(bPattern ? PatternContributions[Index] : ExactContributions[Index]).Flags |= FlagAny;
+			bHasAny = true;
+		}
+
+		for (const FName& Tag : InSelection.GetExcludeTags())
+		{
+			const bool bPattern = IsPattern(Tag);
+			const int32 Index = FindOrAddEntry(Tag, bPattern);
+			(bPattern ? PatternContributions[Index] : ExactContributions[Index]).Flags |= FlagExclude;
+		}
+
+		if (InSelection.bIgnorePCGSpawnedActors)
+		{
+			ExactContributions[FindOrAddEntry(PCGHelpers::DefaultPCGActorTag, false)].Flags |= FlagDrop;
+		}
+
+		Contradiction = FindContradiction(InSelection.GetRequireAnyTags());
+
+		if (ExactTags.Num() > Internal::ExactLinearScanMax)
+		{
+			ExactIndex.Reserve(ExactTags.Num());
+			for (int32 i = 0; i < ExactTags.Num(); i++)
+			{
+				ExactIndex.Add(ExactTags[i], i);
+			}
+		}
+
+		const int32 NumWords = (NumRequiredBits + 63) / 64;
+		RequiredWords.SetNumZeroed(NumWords);
+		SeenWords.SetNumZeroed(NumWords);
+		for (int32 Bit = 0; Bit < NumRequiredBits; Bit++)
+		{
+			RequiredWords[Bit >> 6] |= uint64(1) << (Bit & 63);
+		}
+
+		// An actor tag equals at most one exact entry, so each exact Require All tag needs its own actor tag.
+		MinActorTags = FMath::Max(NumExactRequired, (bHasRequiredPattern || bHasAny) ? 1 : 0);
+		bEmpty = ExactTags.IsEmpty() && Patterns.IsEmpty();
+	}
+
+	FName FTagMatcher::FindContradiction(const TArray<FName>& InRequireAnyTags) const
+	{
+		// Excluded by its own entry (Exclude, or the PCG-spawned tag), or caught by an Exclude pattern.
+		auto IsExactExcluded = [this](const int32 Index)
+		{
+			if (ExactContributions[Index].Flags & (FlagExclude | FlagDrop))
+			{
+				return true;
+			}
+
+			const FString Tag = ExactTags[Index].ToString();
+			for (int32 p = 0; p < Patterns.Num(); p++)
+			{
+				if ((PatternContributions[p].Flags & FlagExclude) && Internal::MatchesPattern(Patterns[p], Tag))
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+
+		bool bEveryAnyExcluded = bHasAny;
+
+		for (int32 i = 0; i < ExactTags.Num(); i++)
+		{
+			const FContribution& Entry = ExactContributions[i];
+			const bool bRequired = Entry.BitsNum > 0;
+			const bool bAny = (Entry.Flags & FlagAny) != 0;
+			if (!bRequired && !bAny)
+			{
+				continue;
+			}
+
+			const bool bExcluded = IsExactExcluded(i);
+			if (bRequired && bExcluded)
+			{
+				return ExactTags[i];
+			}
+			if (bAny && !bExcluded)
+			{
+				bEveryAnyExcluded = false;
+			}
+		}
+
+		// A pattern is only known to be excluded when Exclude holds the very same pattern.
+		for (int32 p = 0; p < Patterns.Num(); p++)
+		{
+			const FContribution& Entry = PatternContributions[p];
+			const bool bExcluded = (Entry.Flags & FlagExclude) != 0;
+			if (Entry.BitsNum > 0 && bExcluded)
+			{
+				return FName(*Patterns[p]);
+			}
+			if ((Entry.Flags & FlagAny) && !bExcluded)
+			{
+				bEveryAnyExcluded = false;
+			}
+		}
+
+		return bEveryAnyExcluded ? InRequireAnyTags[0] : FName(NAME_None);
+	}
+
+	int32 FTagMatcher::FindOrAddEntry(const FName InTag, const bool bPattern)
+	{
+		if (bPattern)
+		{
+			// FString equality ignores case, like the pattern match itself.
+			const FString Pattern = InTag.ToString();
+			int32 Index = Patterns.IndexOfByKey(Pattern);
+			if (Index == INDEX_NONE)
+			{
+				Index = Patterns.Add(Pattern);
+				PatternContributions.AddDefaulted();
+			}
+			return Index;
+		}
+
+		int32 Index = ExactTags.IndexOfByKey(InTag);
+		if (Index == INDEX_NONE)
+		{
+			Index = ExactTags.Add(InTag);
+			ExactContributions.AddDefaulted();
+		}
+		return Index;
+	}
+
+	const FTagMatcher::FContribution* FTagMatcher::FindExact(const FName InTag) const
+	{
+		if (!ExactIndex.IsEmpty())
+		{
+			const int32* Index = ExactIndex.Find(InTag);
+			return Index ? &ExactContributions[*Index] : nullptr;
+		}
+
+		const int32 NumExact = ExactTags.Num();
+		for (int32 i = 0; i < NumExact; i++)
+		{
+			if (ExactTags[i] == InTag)
+			{
+				return &ExactContributions[i];
+			}
+		}
+		return nullptr;
+	}
+
+	const FTagMatcher::FContribution* FTagMatcher::Classify(const FName InTag)
+	{
+		if (Patterns.IsEmpty())
+		{
+			return FindExact(InTag);
+		}
+
+		// The returned pointer lives in Memo: valid until the next Classify adds an entry.
+		if (const FContribution* Known = Memo.Find(InTag))
+		{
+			return (Known->Flags || Known->BitsNum) ? Known : nullptr;
+		}
+
+		FContribution Merged;
+		Merged.BitsStart = Bits.Num();
+
+		auto Merge = [this, &Merged](const FContribution& InContribution)
+		{
+			Merged.Flags |= InContribution.Flags;
+			for (int32 i = 0; i < InContribution.BitsNum; i++)
+			{
+				// Copied out first: TArray::Add rejects a reference into its own storage.
+				const int32 Bit = Bits[InContribution.BitsStart + i];
+				Bits.Add(Bit);
+			}
+		};
+
+		if (const FContribution* Exact = FindExact(InTag))
+		{
+			Merge(*Exact);
+		}
+
+		TStringBuilder<NAME_SIZE> Builder;
+		InTag.AppendString(Builder);
+		for (int32 i = 0; i < Patterns.Num(); i++)
+		{
+			if (Internal::MatchesPattern(Patterns[i], Builder.ToView()))
+			{
+				Merge(PatternContributions[i]);
+			}
+		}
+
+		Merged.BitsNum = Bits.Num() - Merged.BitsStart;
+		const FContribution& Stored = Memo.Add(InTag, Merged);
+		return (Stored.Flags || Stored.BitsNum) ? &Stored : nullptr;
+	}
+
+	ETagVerdict FTagMatcher::Test(const TArray<FName>& InActorTags, const bool bResolveExcluded)
+	{
+		if (InActorTags.Num() < MinActorTags)
+		{
+			return ETagVerdict::Drop;
+		}
+
+		const int32 NumWords = SeenWords.Num();
+		if (NumWords > 0)
+		{
+			FMemory::Memzero(SeenWords.GetData(), NumWords * sizeof(uint64));
+		}
+
+		bool bAnyHit = !bHasAny;
+		bool bExcluded = false;
+
+		for (const FName& Tag : InActorTags)
+		{
+			const FContribution* Contribution = Classify(Tag);
+			if (!Contribution)
+			{
+				continue;
+			}
+
+			const uint8 Flags = Contribution->Flags;
+			if (Flags & FlagDrop)
+			{
+				return ETagVerdict::Drop;
+			}
+			if (Flags & FlagExclude)
+			{
+				if (!bResolveExcluded)
+				{
+					return ETagVerdict::Drop;
+				}
+				bExcluded = true;
+			}
+			if (Flags & FlagAny)
+			{
+				bAnyHit = true;
+			}
+
+			const int32 BitsEnd = Contribution->BitsStart + Contribution->BitsNum;
+			for (int32 i = Contribution->BitsStart; i < BitsEnd; i++)
+			{
+				const int32 Bit = Bits[i];
+				SeenWords[Bit >> 6] |= uint64(1) << (Bit & 63);
+			}
+		}
+
+		if (!bAnyHit)
+		{
+			return ETagVerdict::Drop;
+		}
+
+		for (int32 i = 0; i < NumWords; i++)
+		{
+			if (SeenWords[i] != RequiredWords[i])
+			{
+				return ETagVerdict::Drop;
+			}
+		}
+
+		return bExcluded ? ETagVerdict::Excluded : ETagVerdict::Keep;
+	}
 }
 
 #pragma endregion
@@ -454,8 +779,11 @@ namespace PCGExActorBounds
 			return;
 		}
 
+		FPCGExActorSelectionDetails Selection = InSelection;
+		Selection.Init();
+
 		TArray<FPCGSelectionKey> Keys;
-		InSelection.MakeTrackingKeys(Keys);
+		Selection.MakeTrackingKeys(Keys);
 		for (FPCGSelectionKey& Key : Keys)
 		{
 			OutKeysToSettings.FindOrAdd(MoveTemp(Key)).Emplace(InOwner, bMustOverlapSelf);
@@ -571,31 +899,39 @@ namespace PCGExActorBounds
 #pragma region FSweep
 
 	FSweep::FSweep(const FPCGExActorSelectionDetails& InSelection, const FPCGExActorBoundsOutputDetails& InOutput, TArray<FSnapshot>& InKept)
-		: Selection(InSelection), Output(InOutput), Kept(InKept)
+		: Selection(InSelection), Output(InOutput), Kept(InKept), Tags(InSelection)
 	{
 	}
 
 	TArray<FSnapshot>* FSweep::Route(const TArray<FName>& InActorTags)
 	{
-		if (!Selection.MatchesTags(InActorTags))
+		if (Tags.IsEmpty())
 		{
+			return &Kept;
+		}
+
+		switch (Tags.Test(InActorTags, Discarded != nullptr))
+		{
+		case ETagVerdict::Keep:
+			return &Kept;
+		case ETagVerdict::Excluded:
+			return Discarded;
+		case ETagVerdict::Drop:
+			return nullptr;
+		default:
+			checkNoEntry();
 			return nullptr;
 		}
-		if (Selection.HasSkipTags() && Selection.ShouldSkip(InActorTags))
-		{
-			return Discarded;
-		}
-		return &Kept;
 	}
 
 	void FSweep::AddActor(const AActor* InActor)
 	{
-		if (InActor == Self || !Selection.MatchesClass(InActor))
+		if (InActor == Self)
 		{
 			return;
 		}
 
-		// Routed before the bounds read: a skipped actor only costs a snapshot when it has a pin to go to.
+		// Routed before the bounds read: an excluded actor only costs a snapshot when it has a pin to go to.
 		if (TArray<FSnapshot>* Target = Route(InActor->Tags))
 		{
 			SnapshotActor(InActor, Output, CullBox, *Target);

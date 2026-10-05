@@ -5,6 +5,9 @@
 
 #include "CoreMinimal.h"
 #include "PCGExCommon.h"
+#include "Hash/CityHash.h"
+#include "Misc/PackageName.h"
+#include "UObject/SoftObjectPath.h"
 
 #include "PCGExCollectionsCommon.generated.h"
 
@@ -68,6 +71,14 @@ enum class EPCGExMissingTagBehavior : uint8
 	Skip         = 0 UMETA(DisplayName = "Skip", ToolTip="Skip the point -- no entry is picked."),
 	UseMain      = 1 UMETA(DisplayName = "Use Main", ToolTip="Fall back to the tag-filtered main pool, categorized entries included. Skips the point when that is empty too."),
 	IgnoreFilter = 2 UMETA(DisplayName = "Ignore Filter", ToolTip="Fall back to the routed pool without the tag filter."),
+};
+
+/** Which entries an entry-tag filter is tested against when a node flattens a collection. */
+UENUM()
+enum class EPCGExTagFilterScope : uint8
+{
+	TopLevel  = 0 UMETA(DisplayName = "Top Level", ToolTip="Test only the collection's own entries. Entries reached through sub-collections are not tested."),
+	Recursive = 1 UMETA(DisplayName = "Recursive", ToolTip="Test every entry at every depth, sub-collection containers included. A container that fails drops its whole subtree."),
 };
 
 UENUM()
@@ -168,4 +179,61 @@ namespace PCGExCollections::Labels
 	const FName LevelsPin = TEXT("Levels");
 	
 	const FName StaticIgnore = TEXT("StaticIgnore");
+}
+
+namespace PCGExCollections
+{
+	/** Asset ID of a null path. Never produced for a real path. */
+	constexpr int32 NullAssetId = 0;
+
+	/** A package-only path ("/Game/SM_Rock") resolved to its default asset ("/Game/SM_Rock.SM_Rock"); others unchanged. */
+	inline FSoftObjectPath CanonicalAssetPath(const FSoftObjectPath& InPath)
+	{
+		const FTopLevelAssetPath AssetPath = InPath.GetAssetPath();
+		if (InPath.IsNull() || !AssetPath.GetAssetName().IsNone())
+		{
+			return InPath;
+		}
+
+		const FName PackageName = AssetPath.GetPackageName();
+		return FSoftObjectPath(FTopLevelAssetPath(PackageName, FName(*FPackageName::GetShortName(PackageName))), InPath.GetSubPathUtf8String());
+	}
+
+	/** Stable path identity (redirectors not followed): CityHash32 of the ASCII-lowercased UTF-8 CanonicalAssetPath.
+	 *  Same definition as the Kweave Mesh List's mesh ID, so the two interoperate. Not GetTypeHash: it hashes per-process FName indices. */
+	inline int32 ComputeAssetId(const FSoftObjectPath& InPath)
+	{
+		if (InPath.IsNull())
+		{
+			return NullAssetId;
+		}
+
+		const FSoftObjectPath Path = CanonicalAssetPath(InPath);
+		const FTopLevelAssetPath AssetPath = Path.GetAssetPath();
+
+		TUtf8StringBuilder<512> Canonical;
+		AssetPath.GetPackageName().AppendString(Canonical);
+		Canonical.AppendChar(UTF8CHAR('.'));
+		AssetPath.GetAssetName().AppendString(Canonical);
+		if (!Path.GetSubPathUtf8String().IsEmpty())
+		{
+			Canonical.AppendChar(UTF8CHAR(':'));
+			Canonical << Path.GetSubPathUtf8String();
+		}
+
+		// ASCII-only lowercasing: locale-independent, so the ID cannot vary between platforms.
+		UTF8CHAR* Chars = Canonical.GetData();
+		for (int32 Index = 0; Index < Canonical.Len(); ++Index)
+		{
+			if (Chars[Index] >= UTF8CHAR('A') && Chars[Index] <= UTF8CHAR('Z'))
+			{
+				Chars[Index] = static_cast<UTF8CHAR>(Chars[Index] + (UTF8CHAR('a') - UTF8CHAR('A')));
+			}
+		}
+
+		const uint32 Hash = CityHash32(reinterpret_cast<const char*>(Canonical.GetData()), static_cast<uint32>(Canonical.Len()));
+
+		// 0 is reserved for null paths.
+		return Hash == 0 ? 1 : static_cast<int32>(Hash);
+	}
 }

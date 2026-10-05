@@ -90,6 +90,7 @@ bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 	}
 
 	PCGEX_LOAD_PROP_FIELD_BOOT(AssetPath)
+	PCGEX_LOAD_PROP_FIELD_BOOT(AssetId)
 	PCGEX_LOAD_PROP_FIELD_BOOT(Weight)
 	PCGEX_LOAD_PROP_FIELD_BOOT(Category)
 	PCGEX_LOAD_PROP_FIELD_BOOT(Extents)

@@ -8,11 +8,11 @@
 #include "PCGExCollectionsEditorSettings.h"
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
-#include "ScopedTransaction.h"
 #include "AssetRegistry/AssetData.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/PCGExRawPropertyEdit.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Properties/PCGExProperty_CollectionEntry.h"
 #include "Styling/AppStyle.h"
@@ -118,20 +118,10 @@ namespace PCGExCollectionEntryPickerWidget
 		const FText& TransactionDescription,
 		TFunctionRef<void(FPCGExCollectionEntryRef&)> Mutator)
 	{
-		const TArray<FPCGExCollectionEntryRef*> Refs = AccessRefs(ValueHandle);
-		if (Refs.IsEmpty())
+		FPCGExRawPropertyEdit(ValueHandle).Commit(TransactionDescription, [&Mutator](void* Raw)
 		{
-			return;
-		}
-
-		FScopedTransaction Transaction(TransactionDescription);
-		ValueHandle->NotifyPreChange();
-		for (FPCGExCollectionEntryRef* Ref : Refs)
-		{
-			Mutator(*Ref);
-		}
-		ValueHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
-		ValueHandle->NotifyFinishedChangingProperties();
+			Mutator(*static_cast<FPCGExCollectionEntryRef*>(Raw));
+		});
 	}
 
 	/** Editor-side resolve: loads the collection if needed (game thread) and mints missing EntryIds. */

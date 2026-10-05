@@ -4,6 +4,7 @@
 #include "Elements/Bounds/PCGExGetActorBounds.h"
 
 #include "EngineUtils.h"
+#include "PCGExVersion.h"
 #include "PCGGraphExecutionStateInterface.h"
 #include "Data/PCGExPointIO.h"
 #include "GameFramework/Actor.h"
@@ -47,6 +48,30 @@ void UPCGExGetActorBoundsBaseSettings::GetStaticTrackedKeys(FPCGSelectionKeyToSe
 {
 	PCGExActorBounds::AddStaticTrackedKeys(this, Selection, PCGExGetActorBounds::BoundsPinLabel, bMustOverlapSelf, OutKeysToSettings);
 }
+
+void UPCGExGetActorBoundsBaseSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 3)
+	{
+		// Not renamed onto the clauses: an array override takes one tag per row, a clause override a single value.
+		for (const FName Label : {FName(TEXT("Selection")), FName(TEXT("Tags")), FName(TEXT("TagMatch")), FName(TEXT("SkipTags"))})
+		{
+			RetireInputPin(InOutNode, Label);
+		}
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExGetActorBoundsBaseSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 3)
+	{
+		Selection.ApplyDeprecation(this);
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
+}
 #endif
 
 FString UPCGExGetActorBoundsBaseSettings::GetAdditionalTitleInformation() const
@@ -70,7 +95,7 @@ TArray<FPCGPinProperties> UPCGExGetActorBoundsBaseSettings::OutputPinProperties(
 	PCGEX_PIN_POINT(PCGPinConstants::DefaultOutputLabel, "One point per matching actor, or per primitive in Per Primitive mode.", Normal)
 	if (bOutputDiscarded)
 	{
-		PCGEX_PIN_POINT(PCGExCommon::Labels::OutputDiscardedLabel, "Actors that matched the selection but carry a skip tag.", Normal)
+		PCGEX_PIN_POINT(PCGExCommon::Labels::OutputDiscardedLabel, "Actors that pass the class filter and Require clauses but carry an Exclude tag.", Normal)
 	}
 	return PinProperties;
 }
@@ -122,9 +147,9 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 
 	FPCGExActorSelectionDetails Selection = Settings->Selection;
 	Selection.Init();
-	if (!Selection.IsUsable())
+	if (FText WhyNot; !Selection.IsUsable(&WhyNot))
 	{
-		PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Actor selection is empty: set a class or at least one tag."));
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, WhyNot);
 		return true;
 	}
 
@@ -140,11 +165,17 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 		return true;
 	}
 
+	// Built ahead of the cull test: a contradictory selection is reported even when nothing is swept.
+	PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
+	if (const FName Contradiction = ActorSweep.Tags.GetContradiction(); !Contradiction.IsNone())
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Tag '{0}' is required but also excluded, by Exclude or by Ignore PCG Spawned Actors: no actor can be kept."), FText::FromName(Contradiction)));
+	}
+
 	if (!Cull.bDisjoint)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsBaseElement::Boot::Sweep);
 
-		PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
 		ActorSweep.Discarded = Settings->bOutputDiscarded ? &Context->Discarded : nullptr;
 		ActorSweep.CullBox = Cull.Get();
 		ActorSweep.Self = Selection.bIgnoreSelf ? Source->GetExecutionState().GetTypedTarget<AActor>() : nullptr;

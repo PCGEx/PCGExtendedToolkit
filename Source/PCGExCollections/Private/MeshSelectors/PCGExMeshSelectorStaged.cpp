@@ -22,25 +22,49 @@
 
 namespace PCGExMeshSelectorStaged
 {
-	// Returns variation based on mesh, material overrides and reverse culling
-	FPCGMeshInstanceList& GetInstanceList(TArray<FPCGMeshInstanceList>& InstanceLists, const FPCGSoftISMComponentDescriptor& TemplateDescriptor, TSoftObjectPtr<UStaticMesh> Mesh, const TArray<TSoftObjectPtr<UMaterialInterface>>& MaterialOverrides, bool bReverseCulling, const UPCGBasePointData* InPointData, const int AttributePartitionIndex = INDEX_NONE)
+	// An ISM renders all its instances with one cull mode, so mirrored points move to a twin list with Reverse Culling
+	// flipped. Nanite flips mirrored instances on its own and ignores the flag (SUPPORT_REVERSE_CULLING_IN_NANITE is 0).
+	void SplitMirroredInstances(FPCGMeshInstanceList& InstanceList, const TConstPCGValueRange<FTransform>& InTransforms, TArray<FPCGMeshInstanceList>& OutMirroredLists)
 	{
-		for (FPCGMeshInstanceList& InstanceList : InstanceLists)
+		TArray<int32>& Indices = InstanceList.InstancesIndices;
+		TArray<int32> MirroredIndices;
+
+		int32 WriteIndex = 0;
+		for (int32 ReadIndex = 0; ReadIndex < Indices.Num(); ReadIndex++)
 		{
-			if (InstanceList.Descriptor.StaticMesh == Mesh && InstanceList.Descriptor.bReverseCulling == bReverseCulling && InstanceList.Descriptor.OverrideMaterials == MaterialOverrides && InstanceList.AttributePartitionIndex == AttributePartitionIndex)
+			const int32 PointIndex = Indices[ReadIndex];
+			if (InTransforms[PointIndex].GetDeterminant() < 0)
 			{
-				return InstanceList;
+				MirroredIndices.Add(PointIndex);
+			}
+			else
+			{
+				Indices[WriteIndex++] = PointIndex;
 			}
 		}
 
-		FPCGMeshInstanceList& NewInstanceList = InstanceLists.Emplace_GetRef(TemplateDescriptor);
-		NewInstanceList.Descriptor.StaticMesh = Mesh;
-		NewInstanceList.Descriptor.OverrideMaterials = MaterialOverrides;
-		NewInstanceList.Descriptor.bReverseCulling = bReverseCulling;
-		NewInstanceList.AttributePartitionIndex = AttributePartitionIndex;
-		NewInstanceList.PointData = InPointData;
+		if (MirroredIndices.IsEmpty())
+		{
+			return;
+		}
 
-		return NewInstanceList;
+		if (WriteIndex == 0)
+		{
+			// Every point is mirrored, and none was compacted away: flip this list instead of leaving an empty one.
+			InstanceList.Descriptor.bReverseCulling = !InstanceList.Descriptor.bReverseCulling;
+			return;
+		}
+
+		Indices.SetNum(WriteIndex, EAllowShrinking::No);
+
+		FPCGMeshInstanceList& Mirrored = OutMirroredLists.Add_GetRef(InstanceList);
+		Mirrored.Descriptor.bReverseCulling = !InstanceList.Descriptor.bReverseCulling;
+		Mirrored.InstancesIndices = MoveTemp(MirroredIndices);
+		Mirrored.Instances.Reserve(Mirrored.InstancesIndices.Num());
+		for (const int32 PointIndex : Mirrored.InstancesIndices)
+		{
+			Mirrored.Instances.Emplace(InTransforms[PointIndex]);
+		}
 	}
 
 #if WITH_EDITOR
@@ -191,6 +215,9 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 #endif
 		}
 
+		// Appended only after the loop: Partition.Value indexes OutMeshInstances, which must not grow mid-iteration.
+		TArray<FPCGMeshInstanceList> MirroredLists;
+
 		for (const TPair<int64, int32>& Partition : CollectionMap->IndexedPartitions)
 		{
 			const FPCGExMeshCollectionEntry* Entry = nullptr;
@@ -245,6 +272,11 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 #endif
 			}
 
+			if (!bForceEntryReverseCulling)
+			{
+				PCGExMeshSelectorStaged::SplitMirroredInstances(InstanceList, InTransforms, MirroredLists);
+			}
+
 			const TArray<int32>& InstanceIndices = InstanceList.InstancesIndices;
 			InstanceList.Instances.Reserve(InstanceIndices.Num());
 			for (const int32 i : InstanceIndices)
@@ -252,6 +284,8 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 				InstanceList.Instances.Emplace(InTransforms[i]);
 			}
 		}
+
+		OutMeshInstances.Append(MoveTemp(MirroredLists));
 	}
 
 	return true;

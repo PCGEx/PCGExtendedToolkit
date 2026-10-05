@@ -5,9 +5,36 @@
 
 #include "CoreMinimal.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Metadata/PCGMetadataAttribute.h"
+#include "Metadata/PCGMetadataCommon.h"
 
 namespace PCGExPropertyHelpers
 {
+	bool TrySetFPropertyFromAttribute(void* InContainer, const FProperty* InProperty, const FPCGMetadataAttributeBase* InAttribute, const UPCGMetadata* InMetadata)
+	{
+		if (!InContainer || !InProperty || !InAttribute || !InMetadata || InProperty->IsA<FObjectProperty>())
+		{
+			return false;
+		}
+
+		const TUniquePtr<IPCGAttributeAccessor> PropertyAccessor = PCGAttributeAccessorHelpers::CreatePropertyAccessor(InProperty, /*bUseGenericAccessor=*/true);
+		if (!PropertyAccessor)
+		{
+			return false;
+		}
+
+		const TUniquePtr<const IPCGAttributeAccessor> AttributeAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InAttribute, InMetadata, /*bQuiet=*/true);
+		if (!AttributeAccessor)
+		{
+			return false;
+		}
+
+		void* Containers[1] = {InContainer};
+		FPCGAttributeAccessorKeysGenericPtrs PropertyKeys(Containers);
+		FPCGAttributeAccessorKeysEntries FirstEntry(PCGFirstEntryKey);
+		return AttributeAccessor->CopyTo(FirstEntry, *PropertyAccessor, PropertyKeys, /*Index=*/0, /*Count=*/1, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
+	}
+
 	bool TrySetObjectPropertyFromPath(void* InContainer, FObjectPropertyBase* InProperty, const FSoftObjectPath& InPath)
 	{
 		if (InPath.IsNull())

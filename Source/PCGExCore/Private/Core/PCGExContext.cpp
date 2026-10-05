@@ -382,8 +382,10 @@ bool FPCGExContext::IsWaitingForTasks()
 
 void FPCGExContext::ReadyForExecution()
 {
-	UnpauseContext();
+	// Unpause last: the scheduler can re-enter PrepareData as soon as the pause clears.
 	SetState(PCGExCommon::States::State_InitialExecution);
+	bPreparationCompleted.store(true, std::memory_order_release);
+	UnpauseContext();
 }
 
 void FPCGExContext::SetState(const PCGExCommon::ContextState StateId)
@@ -394,6 +396,16 @@ void FPCGExContext::SetState(const PCGExCommon::ContextState StateId)
 void FPCGExContext::Done()
 {
 	SetState(PCGExCommon::States::State_Done);
+}
+
+bool FPCGExContext::DeferToScheduler()
+{
+	// Work still in flight resumes through OnAsyncWorkEnd; unpausing then would only make the scheduler spin.
+	if (!IsWaitingForTasks())
+	{
+		UnpauseContext();
+	}
+	return false;
 }
 
 bool FPCGExContext::DriveAdvanceWork(const UPCGExSettings* InSettings)

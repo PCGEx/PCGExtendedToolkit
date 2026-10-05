@@ -20,20 +20,56 @@ namespace PCGExSetCachedData
 	{
 		return InputLabel == PCGPinConstants::DefaultInputLabel ? PCGPinConstants::DefaultOutputLabel : InputLabel;
 	}
+
+	// Data on In and on the custom input pins, in input order. Gathered in one pass: GetInputsByPin filters the whole
+	// collection and copies tag sets on every call.
+	void GatherInputs(const FPCGExContext* InContext, const UPCGExSetCachedDataSettings* InSettings, TArray<const FPCGTaggedData*>& OutInputs)
+	{
+		TSet<FName> InputLabels = {PCGPinConstants::DefaultInputLabel};
+		for (const FPCGPinProperties& Pin : InSettings->GetSanitizedCustomInputPins()) { InputLabels.Add(Pin.Label); }
+
+		OutInputs.Reserve(InContext->InputData.TaggedData.Num());
+		for (const FPCGTaggedData& Input : InContext->InputData.TaggedData)
+		{
+			if (Input.Data && InputLabels.Contains(Input.Pin)) { OutInputs.Add(&Input); }
+		}
+	}
 }
 
 #pragma region UPCGExSetCachedDataSettings
 
 #if WITH_EDITOR
+void UPCGExSetCachedDataSettings::PreEditChange(FProperty* PropertyAboutToChange)
+{
+	bNeededDependencyBeforeEdit = NeedsExecutionDependency();
+	Super::PreEditChange(PropertyAboutToChange);
+}
+
 void UPCGExSetCachedDataSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	// Clear modes have no data pins, so the execution dependency is the only thing that can order the node.
-	if (PropertyChangedEvent.GetMemberPropertyName() == GET_MEMBER_NAME_CHECKED(UPCGExSetCachedDataSettings, Mode))
+	// Only an edit that moves the need rewrites the flag: set by hand, it survives every other edit.
+	const bool bNeedsDependency = NeedsExecutionDependency();
+	if (bNeedsDependency != bNeededDependencyBeforeEdit)
 	{
-		bExecutionDependencyRequired = IsClearMode();
+		bExecutionDependencyRequired = bNeedsDependency;
+		bNeededDependencyBeforeEdit = bNeedsDependency;
 	}
 
 	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+
+EPCGChangeType UPCGExSetCachedDataSettings::GetChangeTypeForProperty(FPropertyChangedEvent& PropertyChangedEvent) const
+{
+	EPCGChangeType ChangeType = Super::GetChangeTypeForProperty(PropertyChangedEvent);
+
+	const FName MemberName = PropertyChangedEvent.GetMemberPropertyName();
+	if (MemberName == GET_MEMBER_NAME_CHECKED(UPCGExSetCachedDataSettings, Mode)
+		|| MemberName == GET_MEMBER_NAME_CHECKED(UPCGExSetCachedDataSettings, CustomInputPins))
+	{
+		ChangeType |= EPCGChangeType::Structural;
+	}
+
+	return ChangeType;
 }
 
 FLinearColor UPCGExSetCachedDataSettings::GetNodeTitleColor() const
@@ -54,7 +90,7 @@ void UPCGExSetCachedDataSettings::ApplyPreconfiguredSettings(const FPCGPreConfig
 		if (EnumPtr->IsValidEnumValue(PreconfigureInfo.PreconfiguredIndex))
 		{
 			Mode = static_cast<EPCGExDataCacheWriteMode>(PreconfigureInfo.PreconfiguredIndex);
-			bExecutionDependencyRequired = IsClearMode();
+			bExecutionDependencyRequired = NeedsExecutionDependency();
 		}
 	}
 }
@@ -96,8 +132,15 @@ TArray<FPCGPinProperties> UPCGExSetCachedDataSettings::InputPinProperties() cons
 {
 	TArray<FPCGPinProperties> PinProperties;
 
-	// Clear modes: no data pins at all; the required execution dependency orders the node.
-	if (IsClearMode()) { return PinProperties; }
+	// Clear modes: no data pins at all. See NeedsExecutionDependency for what orders the node.
+	if (IsClearMode())
+	{
+		if (UsesTargetPin())
+		{
+			PCGEX_PIN_ANY(PCGExDataCache::TargetActorPinLabel, "Actor references naming the actor(s) whose cache to clear.", Required)
+		}
+		return PinProperties;
+	}
 
 	// Required only while it is the sole data pin: an unwired Set is culled instead of running for nothing. With
 	// custom pins the user may wire any subset, and the component skips writes that have nothing cacheable.
@@ -111,7 +154,12 @@ TArray<FPCGPinProperties> UPCGExSetCachedDataSettings::InputPinProperties() cons
 		PCGEX_PIN_ANY(PCGPinConstants::DefaultInputLabel, "Data to cache. Stored under the In label; read it back from Get Cached Data's Out pin.", Normal)
 	}
 	PinProperties.Append(CustomPins);
-	PCGEX_PIN_ANY(PCGExDataCache::TargetActorPinLabel, "Actor references naming the actor(s) that host the cache. When connected, overrides the Target setting.", Advanced)
+
+	// Optional even under Input, so the node keeps forwarding its inputs when no host is named.
+	if (UsesTargetPin())
+	{
+		PCGEX_PIN_ANY(PCGExDataCache::TargetActorPinLabel, "Actor references naming the actor(s) that host the cache.", Normal)
+	}
 	return PinProperties;
 }
 
@@ -159,6 +207,14 @@ bool FPCGExSetCachedDataElement::Boot(FPCGExContext* InContext) const
 
 	Context->CacheID = Settings->CacheID;
 
+	if (!Settings->IsClearMode())
+	{
+		// Nothing to write: no host is resolved, so the run creates neither a cache component nor the PCG World Actor.
+		TArray<const FPCGTaggedData*> Inputs;
+		PCGExSetCachedData::GatherInputs(Context, Settings, Inputs);
+		if (Inputs.IsEmpty()) { return true; }
+	}
+
 	if (Settings->IsPartitionPrefixed())
 	{
 		TArray<FName> Keys;
@@ -172,12 +228,8 @@ bool FPCGExSetCachedDataElement::Boot(FPCGExContext* InContext) const
 		Context->CacheID = Keys[0];
 	}
 
-	// Clear modes have no Target Actor pin, so this resolves through the Target setting alone.
-	TArray<AActor*> Actors;
-	Settings->ResolveTargets(Context, /*bCreateWorldActor=*/!Settings->IsClearMode(), Actors);
-
-	Context->TargetActors.Reserve(Actors.Num());
-	for (AActor* Actor : Actors) { Context->TargetActors.Add(Actor); }
+	Settings->GatherTargetReferences(Context, Context->TargetReferences);
+	Context->bTouchesCache = true;
 
 	return true;
 }
@@ -191,6 +243,13 @@ bool FPCGExSetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	const bool bPreview = PCGExDataCache::IsSourceInPreviewMode(Source);
 	UObject* Writer = Cast<UObject>(Source);
 
+	// Resolved in the step that writes or clears: a pooled partition actor can be handed to another cell in between.
+	TArray<AActor*> Hosts;
+	if (Context->bTouchesCache)
+	{
+		Settings->ResolveTargets(Context, Context->TargetReferences, /*bCreateWorldActor=*/!Settings->IsClearMode(), Hosts);
+	}
+
 	bool bAppend = false;
 	switch (Settings->Mode)
 	{
@@ -202,9 +261,9 @@ bool FPCGExSetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	case EPCGExDataCacheWriteMode::Clear:
 	case EPCGExDataCacheWriteMode::ClearAll:
 		// Never create a component just to find nothing in it.
-		for (const TWeakObjectPtr<AActor>& WeakActor : Context->TargetActors)
+		for (const AActor* Host : Hosts)
 		{
-			UPCGExDataCacheComponent* Cache = UPCGExDataCacheComponent::Find(WeakActor.Get());
+			UPCGExDataCacheComponent* Cache = UPCGExDataCacheComponent::Find(Host);
 			if (!Cache) { continue; }
 			if (Settings->Mode == EPCGExDataCacheWriteMode::Clear) { Cache->Clear(Context->CacheID, Writer, bPreview, Settings->bNotifyChange); }
 			else { Cache->ClearAll(Writer, bPreview, Settings->bNotifyChange); }
@@ -216,23 +275,12 @@ bool FPCGExSetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 		return Context->CancelExecution(TEXT("Unresolvable write mode."));
 	}
 
-	TSet<FName> InputLabels = {PCGPinConstants::DefaultInputLabel};
-	for (const FPCGPinProperties& Pin : Settings->GetSanitizedCustomInputPins()) { InputLabels.Add(Pin.Label); }
-
-	// Inputs gathered once: GetInputsByPin filters the whole collection and copies tag sets on every call.
 	TArray<const FPCGTaggedData*> Inputs;
-	Inputs.Reserve(Context->InputData.TaggedData.Num());
-	for (const FPCGTaggedData& Input : Context->InputData.TaggedData)
-	{
-		if (Input.Data && InputLabels.Contains(Input.Pin)) { Inputs.Add(&Input); }
-	}
+	PCGExSetCachedData::GatherInputs(Context, Settings, Inputs);
 
-	for (const TWeakObjectPtr<AActor>& WeakActor : Context->TargetActors)
+	for (AActor* Host : Hosts)
 	{
-		AActor* Actor = WeakActor.Get();
-		if (!IsValid(Actor)) { continue; }
-
-		UPCGExDataCacheComponent* Cache = UPCGExDataCacheComponent::FindOrCreate(Actor, bPreview);
+		UPCGExDataCacheComponent* Cache = UPCGExDataCacheComponent::FindOrCreate(Host, bPreview);
 		if (!Cache) { continue; }
 
 		// Each target adopts its own private copies: a data object has exactly one outer.

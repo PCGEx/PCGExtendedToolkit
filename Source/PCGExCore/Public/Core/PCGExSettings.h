@@ -26,10 +26,26 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins);
 	virtual void ApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void ApplyDeprecation(UPCGNode* InOutNode) override;
+	/** Property migration. InOutNode is null for settings no node owns (inline instance, settings asset): those migrate from PostLoad. */
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode);
 	virtual bool GetPinExtraIcon(const UPCGPin* InPin, FName& OutExtraIcon, FText& OutTooltip) const override;
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
+
+	/** With bStructOverrides, adds a whole-struct param (generic Struct attribute) per overridable root struct (owned by the settings
+	 * or an instanced sub-object); with bExpandNestedStructs also per nested struct member tagged PCGExNestedStructOverridable. Each is
+	 * placed before its members so a member attribute wins. Super's labels are never altered: a clashing struct label falls back to
+	 * its full path, then "<path> (Struct)". See .claude/Plan_Struct_Overrides.md. */
+	virtual TArray<FPCGSettingsOverridableParam> GatherOverridableParams() const override;
 #endif
+
+	/** Exposes an override param (and pin) for every overridable struct, so a struct-typed attribute can replace one whole. Off by default:
+	 * each param adds a pin and a per-execution lookup. Turning it off removes those pins and their connections. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable), AdvancedDisplay)
+	bool bStructOverrides = false;
+
+	/** Also exposes nested struct members that opt in with the PCGExNestedStructOverridable meta. Untagged nested structs never get a pin. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="bStructOverrides"), AdvancedDisplay)
+	bool bExpandNestedStructs = false;
 
 	virtual void PostLoad() override;
 	virtual void Serialize(FArchive& Ar) override;
@@ -139,7 +155,13 @@ protected:
 	UPROPERTY()
 	int64 PCGExDataVersion = INDEX_NONE;
 
+	/** Set once ApplyPropertyDeprecation has run. Not a property: never saved, never copied to a duplicate. */
+	bool bPropertyDeprecationApplied = false;
+
 #if WITH_EDITOR
+	/** Runs PCGExApplyDeprecation and the owned instanced factories' deprecation, once per loaded object. */
+	void ApplyPropertyDeprecation(UPCGNode* InOutNode);
+
 	/** Resolve PCGExDataVersion from the package custom version (UserDataVersion), bridging legacy assets. Called from Serialize on load. */
 	void ResolveDataVersion();
 

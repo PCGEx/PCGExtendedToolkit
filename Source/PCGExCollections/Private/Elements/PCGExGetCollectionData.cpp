@@ -34,6 +34,7 @@
 //
 // Attributes that don't fit the uniform shape are kept bespoke:
 //   - AssetPath/AssetClass: one toggle declares two attributes (FSoftObjectPath/FSoftClassPath)
+//   - AssetId:              written for sub-collection rows too, like AssetPath
 //   - Weight:               int32 vs float depending on normalization mode
 //   - Category:             written always, not gated on bIsSubCollection
 //   - Entry:                always created, value derived from Packer
@@ -178,6 +179,7 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	// Validate attribute names up-front -- abort early on bad config.
 	PCGEX_VALIDATE_NAME_C(InContext, Settings->GetEntryIdxAttributeName())
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteAssetPath, AssetPathAttributeName)
+	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteAssetId, AssetIdAttributeName)
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteWeight, WeightAttributeName)
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteCategory, CategoryAttributeName)
 #define PCGEX_GCD_VALIDATE(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
@@ -187,6 +189,16 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	PCGEX_GCD_GRAMMAR_PERAXIS_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_VALIDATE)
 #undef PCGEX_GCD_VALIDATE
+
+	if (Settings->bUseTagFilter)
+	{
+		// Clause values are constants here: there is no per-row data to read an attribute from.
+		const FPCGExBaseTagFilterDetails& TF = Settings->TagFilter;
+		if (TF.RequireAll.Input == EPCGExInputValueType::Attribute || TF.RequireAny.Input == EPCGExInputValueType::Attribute || TF.Exclude.Input == EPCGExInputValueType::Attribute)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Tag filter clauses set to Attribute are ignored on this node; only constant values are read."));
+		}
+	}
 
 	if (Settings->SourceMode == EPCGExGetCollectionDataSourceMode::Collection)
 	{
@@ -255,6 +267,7 @@ namespace PCGExGetCollectionData
 		// Per-output attribute pointers (set only when corresponding bWriteX is on).
 		FPCGMetadataAttribute<FSoftObjectPath>* AssetPathAttr = nullptr;
 		FPCGMetadataAttribute<FSoftClassPath>* AssetClassAttr = nullptr;
+		FPCGMetadataAttribute<int32>* AssetIdAttr = nullptr;
 		FPCGMetadataAttribute<int32>* WeightAttrInt = nullptr;
 		FPCGMetadataAttribute<float>* WeightAttrFloat = nullptr;
 		FPCGMetadataAttribute<FName>* CategoryAttr = nullptr;
@@ -500,6 +513,10 @@ namespace PCGExGetCollectionData
 			{
 				U.AssetClassAttr = Metadata->CreateAttribute<FSoftClassPath>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->AssetPathAttributeName, U.OutputSet), FSoftClassPath(), false, true);
 			}
+			if (Settings->bWriteAssetId)
+			{
+				U.AssetIdAttr = Metadata->CreateAttribute<int32>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->AssetIdAttributeName, U.OutputSet), PCGExCollections::NullAssetId, false, true);
+			}
 			if (P.bOutputWeight)
 			{
 				const FPCGAttributeIdentifier WeightId = PCGExMetaHelpers::GetAttributeIdentifier(Settings->WeightAttributeName, U.OutputSet);
@@ -634,6 +651,10 @@ namespace PCGExGetCollectionData
 			// AssetClass and the other leaf-only fields (weights, bounds, nesting depth) stay
 			// gated -- sub-collections aren't UClass references and don't have meaningful bounds.
 			SetIf(U.AssetPathAttr, Key, E->Staging.Path);
+			if (U.AssetIdAttr)
+			{
+				U.AssetIdAttr->SetValue(Key, PCGExCollections::ComputeAssetId(E->Staging.Path));
+			}
 
 			if (!E->bIsSubCollection)
 			{
@@ -1337,6 +1358,14 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	FPCGExNameFiltersDetails CategoryFilters = Settings->CategoryFilters;
 	CategoryFilters.Init();
 
+	PCGExCollections::Tags::FTagLists TagLists;
+	if (Settings->bUseTagFilter)
+	{
+		const FPCGExBaseTagFilterDetails& TF = Settings->TagFilter;
+		auto ConstantOf = [](const FPCGExInputShorthandNameName& Clause) { return Clause.Input == EPCGExInputValueType::Constant ? Clause.Constant : NAME_None; };
+		TagLists.Parse(ConstantOf(TF.RequireAll), ConstantOf(TF.RequireAny), ConstantOf(TF.Exclude), TF.bParseCommaSeparatedLists);
+	}
+
 	// Shared host -> CollectionIndex map + counter, and (Root, Coll, Depth) -> CollectionHash map
 	// + counter. Lifetime tied to this AdvanceWork call. Both are populated during the
 	// (single-threaded) flatten phase so the index space is deterministic regardless of how the
@@ -1349,6 +1378,9 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	PCGExGetCollectionData::FProcessEntryContext Ctx;
 	Ctx.Context = InContext;
 	Ctx.CategoryFilters = &CategoryFilters;
+	Ctx.TagFilter = (Settings->bUseTagFilter && !TagLists.IsEmpty()) ? &TagLists : nullptr;
+	Ctx.TagSources = Settings->TagFilter.TagSources;
+	Ctx.bTagFilterRecursive = Settings->TagFilterScope == EPCGExTagFilterScope::Recursive;
 	Ctx.SubHandling = Settings->SubCollectionHandling;
 	Ctx.CategoryInheritance = CategoryInheritance;
 	Ctx.bOmitInvalidAndEmpty = Settings->bOmitInvalidAndEmpty;

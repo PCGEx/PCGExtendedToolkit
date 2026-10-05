@@ -10,17 +10,16 @@
 #include "PCGExSelectorTagFilter.generated.h"
 
 /**
- * Entry-tag predicate applied by a selector after category routing. Each clause is blank
- * (unconstrained) or a tag list; picks are restricted to the entries that satisfy every clause.
- * A constant or @Data value is resolved once per input; a per-point attribute builds one pool per
- * distinct value, which is the expensive path.
+ * Entry-tag predicate. Each clause is blank (unconstrained) or a tag list; an entry passes when it
+ * satisfies every clause. Hosts decide how clause values are resolved (per point, per input, or as
+ * constants) and what an empty result means.
  */
 USTRUCT(BlueprintType)
-struct PCGEXCOLLECTIONS_API FPCGExSelectorTagFilterDetails
+struct PCGEXCOLLECTIONS_API FPCGExBaseTagFilterDetails
 {
 	GENERATED_BODY()
 
-	FPCGExSelectorTagFilterDetails() = default;
+	FPCGExBaseTagFilterDetails() = default;
 
 	/** Entries must carry every one of these tags. Blank = unconstrained. A tag no entry carries makes the filter match nothing. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -41,6 +40,19 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorTagFilterDetails
 	/** Which tags an entry is matched on: its own tags, and/or its sub-collection's tags when the entry is a sub-collection. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExCollections.EPCGExAssetTagInheritance"))
 	uint8 TagSources = static_cast<uint8>(EPCGExAssetTagInheritance::Asset);
+};
+
+/**
+ * Tag predicate applied by a selector after category routing; picks are restricted to the entries that
+ * satisfy it. A constant or @Data value is resolved once per input; a per-point attribute builds one
+ * pool per distinct value, which is the expensive path.
+ */
+USTRUCT(BlueprintType)
+struct PCGEXCOLLECTIONS_API FPCGExSelectorTagFilterDetails : public FPCGExBaseTagFilterDetails
+{
+	GENERATED_BODY()
+
+	FPCGExSelectorTagFilterDetails() = default;
 
 	/** What to do when the filter leaves the routed pool with nothing to pick. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))

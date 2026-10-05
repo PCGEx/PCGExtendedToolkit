@@ -6,8 +6,12 @@
 #include "CoreMinimal.h"
 #include "PCGData.h"
 #include "Components/ActorComponent.h"
+#include "Engine/EngineTypes.h" // ETeleportType
+#include "Misc/Optional.h"
 #include "Misc/TransactionallySafeRWLock.h"
 #include "UObject/SoftObjectPath.h"
+
+#include "Details/PCGExPartitionDetails.h"
 
 #include "PCGExDataCacheComponent.generated.h"
 
@@ -20,8 +24,10 @@ enum class EPCGExDataCacheWriteMode : uint8
 	ClearAll = 3 UMETA(DisplayName = "Clear All", Tooltip = "Remove every entry on the target cache. Cache ID is ignored."),
 };
 
+class APCGPartitionActor;
 class UPCGComponent;
 class UPCGExDataCacheComponent;
+class USceneComponent;
 
 UENUM(BlueprintType)
 enum class EPCGExDataCacheChangeType : uint8
@@ -95,6 +101,10 @@ struct PCGEXELEMENTSBRIDGES_API FPCGExDataCacheEntry
  *
  * Reads are safe from any thread. Writes are game-thread only: adopting data re-outers it (Rename) and
  * flattens it (Modify), neither of which is thread-safe.
+ *
+ * On a runtime generated partition actor the entries belong to the cell they were written in: those actors are
+ * pooled and recycled with their components intact, so the cache empties itself when its owner leaves that cell
+ * (see PurgeIfRecycled).
  */
 UCLASS(ClassGroup = (Procedural), meta = (DisplayName = "PCGEx Data Cache"))
 class PCGEXELEMENTSBRIDGES_API UPCGExDataCacheComponent : public UActorComponent
@@ -118,6 +128,9 @@ public:
 
 	/** The actor's cache component, or null. Also finds instance components a level copy-paste left unregistered. */
 	static UPCGExDataCacheComponent* Find(const AActor* InActor);
+
+	/** Game thread. Find, after dropping whatever a recycled owner left behind (see PurgeIfRecycled). */
+	static UPCGExDataCacheComponent* FindCurrent(const AActor* InActor);
 
 	/**
 	 * The actor's cache component, created as an instance component if missing. Game thread only.
@@ -181,6 +194,15 @@ public:
 	 */
 	void NotifyChanged(UObject* InWriter) const;
 
+	/**
+	 * Game thread. Drops every entry when the owner is a runtime generated partition actor that no longer stands for
+	 * the cell they were written in. Every mutator calls it; a game-thread reader goes through FindCurrent, since the
+	 * any-thread getters cannot. Two events keep the cache from holding stale data in between: the owner losing its
+	 * last graph instance (returned to the pool), and the owner being moved (assigned to a cell). The component
+	 * itself always stays on the actor.
+	 */
+	void PurgeIfRecycled();
+
 #if WITH_EDITOR
 	UFUNCTION(CallInEditor, Category = "Data Cache", meta = (DisplayName = "Clear Cache", ShortToolTip = "Remove every cached entry from this component. Not undoable."))
 	void EDITOR_ClearCache();
@@ -212,4 +234,30 @@ private:
 	 * the world has no subsystem, which is teardown.
 	 */
 	void BroadcastChanged(const FPCGExDataCacheChange& InChange);
+
+	/** Entries were written on a runtime generated partition actor: OwnerCell is what they belong to. */
+	bool bTracksOwnerCell = false;
+
+	/** Cell the owner stood for at the first write; unset when it had none. Not a property: those actors are transient. */
+	TOptional<PCGExPartitionGrid::FCell> OwnerCell;
+
+	FDelegateHandle OwnerMovedHandle;
+
+	/** The owner, when it is a runtime generated partition actor. */
+	const APCGPartitionActor* GetPooledOwner() const;
+
+	/** The cell such an owner stands for right now; unset while it holds no graph instance, which is what pooled means. */
+	TOptional<PCGExPartitionGrid::FCell> GetOwnerCell() const;
+
+	/** After a write: stamps the owner's cell and binds the recycling events. No-op on any other owner. */
+	void TrackPooledOwner();
+
+	/** Any local component may be the last to leave the owner, so each one's cleanup is watched. */
+	void WatchLocalComponents(const APCGPartitionActor* InPartitionActor);
+
+	/** Releases every entry without dirtying the package, and forgets the stamp. */
+	void DropAllEntries();
+
+	void OnPooledOwnerMoved(USceneComponent* InRoot, EUpdateTransformFlags InFlags, ETeleportType InTeleport);
+	void OnLocalComponentCleaned(UPCGComponent* InComponent);
 };

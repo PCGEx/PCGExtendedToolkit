@@ -31,6 +31,7 @@ public:
 	UPCGExActorCollectionFactory()
 	{
 		SupportedClass = UPCGExActorCollection::StaticClass();
+		bHiddenFromNewMenu = true;
 	}
 };
 

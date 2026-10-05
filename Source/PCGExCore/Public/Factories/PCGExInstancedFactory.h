@@ -30,6 +30,7 @@ namespace PCGExMT
 #define PCGEX_FACTORY_NEW_OPERATION(_TYPE) TSharedPtr<FPCGEx##_TYPE> NewOperation = MakeShared<FPCGEx##_TYPE>();
 
 class FPCGMetadataAttributeBase;
+class UPCGMetadata;
 /**
  * 
  */
@@ -83,7 +84,15 @@ public:
 
 protected:
 	FPCGExContext* Context = nullptr;
-	TMap<FName, FPCGMetadataAttributeBase*> PossibleOverrides;
+
+	struct FOverrideSource
+	{
+		const FPCGMetadataAttributeBase* Attribute = nullptr;
+		const UPCGMetadata* Metadata = nullptr;
+	};
+
+	// Keyed by attribute name, which may be a "/"-separated property path.
+	TMap<FName, FOverrideSource> PossibleOverrides;
 
 	void ApplyOverrides();
 

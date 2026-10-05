@@ -229,6 +229,15 @@ FPCGExProperty* FPCGExPropertyOverrideEntry::GetPropertyMutable()
 	return Value.GetMutablePtr<FPCGExProperty>();
 }
 
+bool FPCGExPropertyOverrideEntry::SyncStructuralFields(const FInstancedStruct& SchemaValue)
+{
+	// The hook casts its argument to its own type unchecked: same script struct, or nothing.
+	FPCGExProperty* Mine = GetPropertyMutable();
+	return Mine
+		&& Value.GetScriptStruct() == SchemaValue.GetScriptStruct()
+		&& Mine->SyncStructuralFromSchema(SchemaValue.Get<FPCGExProperty>());
+}
+
 #pragma endregion
 
 #pragma region FPCGExPropertySchema
@@ -873,10 +882,10 @@ bool FPCGExPropertyOverrides::SyncToSchema(const TArray<FInstancedStruct>& Schem
 						MyProp->PropertyName = SchemaProp->PropertyName;
 						bChanged = true;
 					}
-					if (MyProp->SyncStructuralFromSchema(*SchemaProp))
-					{
-						bChanged = true;
-					}
+				}
+				if (Overrides[i].SyncStructuralFields(Schema[i]))
+				{
+					bChanged = true;
 				}
 			}
 			return bChanged;
@@ -996,8 +1005,8 @@ bool FPCGExPropertyOverrides::SyncToSchema(const TArray<FInstancedStruct>& Schem
 				if (FPCGExProperty* Prop = NewEntry.GetPropertyMutable())
 				{
 					Prop->PropertyName = SchemaData->PropertyName;
-					Prop->SyncStructuralFromSchema(*SchemaData);
 				}
+				NewEntry.SyncStructuralFields(SchemaProp);
 			}
 			else
 			{
@@ -1016,6 +1025,132 @@ bool FPCGExPropertyOverrides::SyncToSchema(const TArray<FInstancedStruct>& Schem
 	// Slow path always rebuilds storage -- the relocated backing memory is itself an
 	// observable change regardless of bitwise content equality.
 	return true;
+}
+
+namespace PCGExPropertyOverridesSync
+{
+	/** A schema's HeaderId; 0 where that editor-only identity is compiled out. */
+	int32 HeaderIdOf(const FPCGExPropertySchema& Schema)
+	{
+#if WITH_EDITORONLY_DATA
+		return Schema.HeaderId;
+#else
+		return 0;
+#endif
+	}
+
+	/** A row's HeaderId, outer identity first like GetPropertyName; 0 when it has none or it is compiled out. */
+	int32 HeaderIdOf(const FPCGExPropertyOverrideEntry& Row)
+	{
+#if WITH_EDITORONLY_DATA
+		if (Row.HeaderId != 0)
+		{
+			return Row.HeaderId;
+		}
+		if (const FPCGExProperty* Property = Row.GetProperty())
+		{
+			return Property->HeaderId;
+		}
+#endif
+		return 0;
+	}
+
+	/** The resolved property row RowIndex stands for, matched on the schema's outer identity; null when there is none. */
+	const FPCGExPropertyResolved* FindProperty(const TConstArrayView<FPCGExPropertyOverrideEntry> Rows, const int32 RowIndex, const TConstArrayView<FPCGExPropertyResolved> Resolved)
+	{
+		const FPCGExPropertyOverrideEntry& Row = Rows[RowIndex];
+		const FName RowName = Row.GetPropertyName();
+		const int32 RowId = HeaderIdOf(Row);
+
+		// Rows sit parallel to the resolved list unless the schema drifted, so the row's own index is tried first.
+		if (Resolved.IsValidIndex(RowIndex))
+		{
+			const FPCGExPropertySchema& Parallel = *Resolved[RowIndex].Source;
+			if (Parallel.Name == RowName && (RowId == 0 || RowId == HeaderIdOf(Parallel)))
+			{
+				return &Resolved[RowIndex];
+			}
+		}
+
+		const FPCGExPropertyResolved* ByName = nullptr;
+		const FPCGExPropertyResolved* ById = nullptr;
+		int32 NumById = 0;
+		for (const FPCGExPropertyResolved& Candidate : Resolved)
+		{
+			const bool bSharesName = Candidate.Source->Name == RowName;
+			if (RowId != 0 && RowId == HeaderIdOf(*Candidate.Source))
+			{
+				if (bSharesName)
+				{
+					return &Candidate;
+				}
+				ById = &Candidate;
+				++NumById;
+			}
+			else if (bSharesName)
+			{
+				ByName = &Candidate;
+			}
+		}
+
+		// A HeaderId under another name is a rename, and outranks the name, only while it links one row to one
+		// property. Duplicated schema rows and duplicated import assets both leave several carrying one id,
+		// which then identifies nothing: the name decides.
+		if (NumById == 1)
+		{
+			int32 NumRowsWithId = 0;
+			for (const FPCGExPropertyOverrideEntry& Other : Rows)
+			{
+				NumRowsWithId += HeaderIdOf(Other) == RowId ? 1 : 0;
+			}
+			if (NumRowsWithId == 1)
+			{
+				return ById;
+			}
+		}
+		return ByName;
+	}
+}
+
+bool FPCGExPropertyOverrides::SyncInPlace(TConstArrayView<FPCGExPropertyResolved> Resolved)
+{
+	bool bChanged = false;
+	for (int32 i = 0; i < Overrides.Num(); ++i)
+	{
+		FPCGExPropertyOverrideEntry& Entry = Overrides[i];
+		const FPCGExPropertyResolved* Match = PCGExPropertyOverridesSync::FindProperty(Overrides, i, Resolved);
+		if (!Match)
+		{
+			continue;
+		}
+
+		// A row of another type than its property is not touched: only SyncToSchema may replace a value.
+		const FInstancedStruct& SchemaValue = Match->GetEffectiveProperty();
+		FPCGExProperty* Row = Entry.GetPropertyMutable();
+		if (!Row || Entry.Value.GetScriptStruct() != SchemaValue.GetScriptStruct())
+		{
+			continue;
+		}
+
+		// Names are only written for a rename: a row matched by name already has it, and back-filling its
+		// identity caches is SyncToSchema's migration. The schema's outer Name is the truth, because an
+		// import that has not run PostLoad can carry a stale inner PropertyName.
+		const FName SchemaName = Match->Source->Name;
+		if (Entry.GetPropertyName() != SchemaName)
+		{
+			Row->PropertyName = SchemaName;
+#if WITH_EDITORONLY_DATA
+			Entry.PropertyName = SchemaName;
+#endif
+			bChanged = true;
+		}
+
+		if (Entry.SyncStructuralFields(SchemaValue))
+		{
+			bChanged = true;
+		}
+	}
+	return bChanged;
 }
 
 void FPCGExPropertyOverrides::ApplyHeaderIdRemap(TConstArrayView<FPCGExHeaderIdRemap> Remaps)

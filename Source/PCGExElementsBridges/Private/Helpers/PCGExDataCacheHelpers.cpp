@@ -9,10 +9,12 @@
 #include "PCGGraphExecutionStateInterface.h"
 #include "PCGNode.h"
 #include "PCGWorldActor.h"
+#include "Grid/PCGPartitionActor.h"
 #include "Helpers/PCGHelpers.h"
 
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
+#include "UObject/UnrealType.h" // FPropertyChangedEvent
 #include "UObject/UObjectGlobals.h" // FReferenceFinder
 
 #include "PCGExVersion.h"
@@ -27,6 +29,28 @@ namespace PCGExDataCacheHelpers
 	FString ComposePartitionedCacheID(const FString& InPartitionId, const FName InCacheID)
 	{
 		return InPartitionId + TEXT("_") + InCacheID.ToString();
+	}
+
+	// The loaded actor a reference names (a component reference resolves to its owner), or null when a row that names a
+	// partition points at a partition actor that no longer stands for it.
+	AActor* ResolveReference(const PCGExDataCache::FTargetReference& InReference)
+	{
+		UObject* Object = InReference.Actor.ResolveObject();
+		AActor* Actor = Cast<AActor>(Object);
+		if (!Actor)
+		{
+			if (const UActorComponent* Component = Cast<UActorComponent>(Object)) { Actor = Component->GetOwner(); }
+		}
+
+		if (!IsValid(Actor)) { return nullptr; }
+
+		if (!InReference.PartitionId.IsEmpty())
+		{
+			const APCGPartitionActor* PartitionActor = Cast<APCGPartitionActor>(Actor);
+			if (PartitionActor && !PCGExPartitionActors::StandsFor(PartitionActor, InReference.PartitionId)) { return nullptr; }
+		}
+
+		return Actor;
 	}
 }
 
@@ -115,91 +139,132 @@ namespace PCGExDataCache
 
 		return Pins;
 	}
-
-	bool IsTargetPinConnected(const UPCGSettings* InSettings)
-	{
-		const UPCGNode* Node = InSettings ? Cast<UPCGNode>(InSettings->GetOuter()) : nullptr;
-		return Node && Node->IsInputPinConnected(TargetActorPinLabel);
-	}
 }
 
 #pragma region UPCGExDataCacheSettingsBase
 
-void UPCGExDataCacheSettingsBase::ResolveTargets(FPCGExContext* InContext, const bool bCreateWorldActor, TArray<AActor*>& OutActors) const
+#if WITH_EDITOR
+void UPCGExDataCacheSettingsBase::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 4)
+	{
+		// A wired Target Actor pin means Input. Set before the pin update, which only keeps the pin under Input.
+		for (const TObjectPtr<UPCGPin>& Pin : InputPins)
+		{
+			if (Pin && Pin->Properties.Label == PCGExDataCache::TargetActorPinLabel && Pin->IsConnected())
+			{
+				Target = EPCGExDataCacheTarget::Input;
+				break;
+			}
+		}
+
+		// Target lost its override pin. UPCGNode::UpdatePins renames a lone stale pin onto a lone new one, edges included.
+		RetireInputPin(InOutNode, GET_MEMBER_NAME_CHECKED(UPCGExDataCacheSettingsBase, Target));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+EPCGChangeType UPCGExDataCacheSettingsBase::GetChangeTypeForProperty(FPropertyChangedEvent& PropertyChangedEvent) const
+{
+	EPCGChangeType ChangeType = Super::GetChangeTypeForProperty(PropertyChangedEvent);
+
+	if (PropertyChangedEvent.GetMemberPropertyName() == GET_MEMBER_NAME_CHECKED(UPCGExDataCacheSettingsBase, Target))
+	{
+		ChangeType |= EPCGChangeType::Structural;
+	}
+
+	return ChangeType;
+}
+#endif
+
+bool UPCGExDataCacheSettingsBase::DoesPinSupportPassThrough(UPCGPin* InPin) const
+{
+	return Super::DoesPinSupportPassThrough(InPin) && InPin->Properties.Label != PCGExDataCache::TargetActorPinLabel;
+}
+
+void UPCGExDataCacheSettingsBase::GatherTargetReferences(FPCGExContext* InContext, TArray<PCGExDataCache::FTargetReference>& OutReferences) const
+{
+	check(InContext);
+
+	OutReferences.Reset();
+	if (!UsesTargetPin()) { return; }
+
+	TArray<FSoftObjectPath> Paths;
+	TArray<FString> PartitionIds;
+
+	// Rows without a readable attribute is a user error worth surfacing; an empty input is not.
+	if (!PCGExData::Helpers::BulkReadUniqueSoftPaths(InContext->InputData, PCGExDataCache::TargetActorPinLabel, ActorReferenceAttribute, Paths, PartitionIdAttribute, &PartitionIds))
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(LOCTEXT("MissingActorReferenceAttribute", "Target actor data has no readable '{0}' attribute."), FText::FromName(ActorReferenceAttribute)));
+	}
+
+	OutReferences.Reserve(Paths.Num());
+	for (int32 i = 0; i < Paths.Num(); i++)
+	{
+		PCGExDataCache::FTargetReference& Reference = OutReferences.Emplace_GetRef();
+		Reference.Actor = Paths[i];
+		Reference.PartitionId = MoveTemp(PartitionIds[i]);
+	}
+}
+
+void UPCGExDataCacheSettingsBase::ResolveTargets(FPCGExContext* InContext, const TConstArrayView<PCGExDataCache::FTargetReference> InReferences, const bool bCreateWorldActor, TArray<AActor*>& OutActors, TArray<PCGExDataCache::FTargetReference>* OutUnresolved, const bool bQuiet) const
 {
 	check(IsInGameThread());
 	check(InContext);
 
-	// Pin data wins over the enum, like the engine's Add Component target pin.
-	bool bPinHasData = false;
-	TSet<AActor*> Unique;
-	TArray<FSoftObjectPath> Paths;
+	IPCGGraphExecutionSource* Source = InContext->ExecutionSource.Get();
+	AActor* Actor = nullptr;
+	TArray<PCGExDataCache::FTargetReference> Unresolved;
 
-	for (const FPCGTaggedData& TaggedData : InContext->InputData.TaggedData)
+	switch (Target)
 	{
-		if (TaggedData.Pin != PCGExDataCache::TargetActorPinLabel || !TaggedData.Data) { continue; }
-		bPinHasData = true;
-
-		PCGExData::Helpers::BulkReadSoftPaths(TaggedData.Data, ActorReferenceAttribute, Paths);
-		if (Paths.IsEmpty())
+	case EPCGExDataCacheTarget::ExecutingActor:
+		Actor = Source ? InContext->GetTargetActor(nullptr) : nullptr;
+		break;
+	case EPCGExDataCacheTarget::OriginalActor:
+		if (Source)
 		{
-			// Rows without a readable attribute is a user error worth surfacing; an empty input is not.
-			const TSharedPtr<IPCGAttributeAccessorKeys> Keys = PCGExData::Helpers::GetKeys(TaggedData.Data);
-			if (Keys && Keys->GetNum() > 0)
-			{
-				PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(LOCTEXT("MissingActorReferenceAttribute", "Target actor data has no readable '{0}' attribute."), FText::FromName(ActorReferenceAttribute)));
-			}
-			continue;
-		}
-
-		for (const FSoftObjectPath& Path : Paths)
-		{
-			UObject* Object = Path.ResolveObject();
-			AActor* Actor = Cast<AActor>(Object);
-			if (!Actor)
-			{
-				if (const UActorComponent* Component = Cast<UActorComponent>(Object)) { Actor = Component->GetOwner(); }
-			}
-
-			if (IsValid(Actor)) { Unique.Add(Actor); }
-		}
-	}
-
-	if (bPinHasData)
-	{
-		OutActors.Reserve(OutActors.Num() + Unique.Num());
-		for (AActor* Actor : Unique) { OutActors.Add(Actor); }
-	}
-	else if (IPCGGraphExecutionSource* Source = InContext->ExecutionSource.Get())
-	{
-		const IPCGGraphExecutionState& State = Source->GetExecutionState();
-		AActor* Actor = nullptr;
-
-		switch (Target)
-		{
-		case EPCGExDataCacheTarget::ExecutingActor:
-			Actor = InContext->GetTargetActor(nullptr);
-			break;
-		case EPCGExDataCacheTarget::OriginalActor:
-			Actor = PCGExDataCache::GetSourceActor(State.GetOriginalSource());
+			Actor = PCGExDataCache::GetSourceActor(Source->GetExecutionState().GetOriginalSource());
 			// A source with no original (non-component execution) is its own original.
 			if (!Actor) { Actor = InContext->GetTargetActor(nullptr); }
-			break;
-		case EPCGExDataCacheTarget::WorldActor:
-			Actor = bCreateWorldActor ? PCGHelpers::GetPCGWorldActor(State.GetWorld()) : PCGHelpers::FindPCGWorldActor(State.GetWorld());
-			break;
-		default:
-			ensureMsgf(false, TEXT("Unresolvable EPCGExDataCacheTarget (%d)"), static_cast<int32>(Target));
-			break;
 		}
-
-		if (IsValid(Actor)) { OutActors.Add(Actor); }
+		break;
+	case EPCGExDataCacheTarget::WorldActor:
+		if (Source)
+		{
+			UWorld* World = Source->GetExecutionState().GetWorld();
+			Actor = bCreateWorldActor ? PCGHelpers::GetPCGWorldActor(World) : PCGHelpers::FindPCGWorldActor(World);
+		}
+		break;
+	case EPCGExDataCacheTarget::Input:
+		// Never falls back to another target: an empty pin names no host.
+		for (const PCGExDataCache::FTargetReference& Reference : InReferences)
+		{
+			if (AActor* Referenced = PCGExDataCacheHelpers::ResolveReference(Reference)) { OutActors.AddUnique(Referenced); }
+			else { Unresolved.Add(Reference); }
+		}
+		break;
+	default:
+		ensureMsgf(false, TEXT("Unresolvable EPCGExDataCacheTarget (%d)"), static_cast<int32>(Target));
+		break;
 	}
 
-	if (OutActors.IsEmpty() && !bQuietMissingTargetWarning)
+	if (IsValid(Actor)) { OutActors.Add(Actor); }
+
+	if (!bQuiet && !bQuietMissingTargetWarning)
 	{
-		PCGE_LOG_C(Warning, GraphAndLog, InContext, LOCTEXT("NoTargetActor", "No target actor could be resolved."));
+		if (OutActors.IsEmpty())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, LOCTEXT("NoTargetActor", "No target actor could be resolved."));
+		}
+		else if (!Unresolved.IsEmpty())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(LOCTEXT("UnresolvedTargets", "{0} target reference(s) could not be resolved: not loaded, or no longer standing for their partition."), FText::AsNumber(Unresolved.Num())));
+		}
 	}
+
+	if (OutUnresolved) { *OutUnresolved = MoveTemp(Unresolved); }
 }
 
 #pragma endregion
