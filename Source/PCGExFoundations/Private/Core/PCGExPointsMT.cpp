@@ -13,30 +13,6 @@
 
 namespace PCGExPointsMT
 {
-#pragma region Tasks
-
-	template <typename T>
-	class FStartBatchProcessing final : public PCGExMT::FTask
-	{
-	public:
-		PCGEX_ASYNC_TASK_NAME(FStartBatchProcessing)
-
-		FStartBatchProcessing(TSharedPtr<T> InTarget)
-			: FTask()
-			  , Target(InTarget)
-		{
-		}
-
-		TSharedPtr<T> Target;
-
-		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override
-		{
-			Target->Process(TaskManager);
-		}
-	};
-
-#pragma endregion
-
 	IProcessor::IProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 		: PointDataFacade(InPointDataFacade)
 	{
@@ -553,10 +529,5 @@ namespace PCGExPointsMT
 		}
 
 		OnInitialPostProcess();
-	}
-
-	void ScheduleBatch(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, const TSharedPtr<IBatch>& Batch)
-	{
-		PCGEX_LAUNCH(FStartBatchProcessing<IBatch>, Batch)
 	}
 }

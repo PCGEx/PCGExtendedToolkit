@@ -8,6 +8,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Sampling/PCGExSamplingHelpers.h"
 
 
 #define LOCTEXT_NAMESPACE "PCGExSampleOverlapStatsElement"
@@ -411,14 +412,7 @@ namespace PCGExSampleOverlapStats
 		{
 			PCGEX_ASYNC_THIS
 			This->PointDataFacade->WriteFastest(This->TaskManager);
-			if (This->Settings->bTagIfHasAnyOverlap && This->bAnyOverlap)
-			{
-				This->PointDataFacade->Source->Tags->AddRaw(This->Settings->HasAnyOverlapTag);
-			}
-			if (This->Settings->bTagIfHasNoOverlap && !This->bAnyOverlap)
-			{
-				This->PointDataFacade->Source->Tags->AddRaw(This->Settings->HasNoOverlapTag);
-			}
+			PCGExSampling::Helpers::ApplySuccessTags(This->PointDataFacade, This->bAnyOverlap != 0, This->Settings->bTagIfHasAnyOverlap, This->Settings->HasAnyOverlapTag, This->Settings->bTagIfHasNoOverlap, This->Settings->HasNoOverlapTag);
 		};
 
 		SearchTask->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)

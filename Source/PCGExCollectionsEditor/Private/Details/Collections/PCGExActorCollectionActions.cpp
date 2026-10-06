@@ -47,24 +47,3 @@ namespace PCGExActorCollectionActions
 		}
 	} GCustomizeActorEditorTypeInfo;
 }
-
-namespace PCGExActorCollectionActions
-{
-	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
-	{
-		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExActorCollection::StaticClass(), TEXT("SMC_NewActorCollection"));
-	}
-
-	void UpdateCollectionsFrom(
-		const TArray<TObjectPtr<UPCGExActorCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets)
-	{
-		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
-		AsBase.Reserve(SelectedCollections.Num());
-		for (const TObjectPtr<UPCGExActorCollection>& C : SelectedCollections)
-		{
-			AsBase.Add(C);
-		}
-		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
-	}
-}

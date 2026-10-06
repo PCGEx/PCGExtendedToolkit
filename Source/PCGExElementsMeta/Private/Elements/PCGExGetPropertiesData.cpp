@@ -320,33 +320,6 @@ namespace PCGExGetPropertiesData
 		return PCGExData::Helpers::GetKeys(InData);
 	}
 
-	/** Write keys for the duplicated output. Attribute sets keep the entries path; other non-point data
-	 *  lets the engine allocate element entries so per-row writes land on real entries. Points use FPointIO::GetOutKeys. */
-	TSharedPtr<IPCGAttributeAccessorKeys> MakeElementWriteKeys(UPCGData* InData)
-	{
-		if (!InData)
-		{
-			return nullptr;
-		}
-		if (Cast<UPCGParamData>(InData))
-		{
-			UPCGMetadata* Metadata = InData->MutableMetadata();
-			if (!Metadata)
-			{
-				return nullptr;
-			}
-			return MakeShared<FPCGAttributeAccessorKeysEntries>(Metadata);
-		}
-
-		const FPCGAttributePropertySelector Selector = FPCGAttributePropertySelector::CreateAttributeSelector(FName(TEXT("Rows")));
-		TUniquePtr<IPCGAttributeAccessorKeys> EngineKeys = PCGAttributeAccessorHelpers::CreateKeys(InData, Selector);
-		if (EngineKeys)
-		{
-			return MakeShareable(EngineKeys.Release());
-		}
-		return PCGExMetaHelpers::MakeMutableKeys(InData);
-	}
-
 	/** Phase 1: read source paths from every input and append one slot per row. Single-threaded
 	 *  outer loop with parallel bulk-reads inside (mirrors GetCollectionData's ParseSourceInputsIntoSlots
 	 *  shape, scaled down for our single fanout mode). */
@@ -744,7 +717,7 @@ namespace PCGExGetPropertiesData
 		}
 		else
 		{
-			const TSharedPtr<IPCGAttributeAccessorKeys> RowKeys = MakeElementWriteKeys(DupData);
+			const TSharedPtr<IPCGAttributeAccessorKeys> RowKeys = PCGExMetaHelpers::MakeMutableKeys(DupData);
 			if (!RowKeys || RowKeys->GetNum() != NumRows)
 			{
 				// Row count drifted since the Boot-time read; forward untouched rather than misalign attributes.

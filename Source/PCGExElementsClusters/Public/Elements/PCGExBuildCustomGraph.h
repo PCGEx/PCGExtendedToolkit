@@ -11,8 +11,6 @@
 #include "Helpers/PCGExBufferHelper.h"
 #include "PCGExBuildCustomGraph.generated.h"
 
-#define PCGEX_CUSTOM_GRAPH_EDGE_SUPPORT false
-
 namespace PCGExGraphs
 {
 	class FGraphBuilder;

@@ -629,9 +629,7 @@ namespace PCGExClusterDiffusion
 
 		TypedProcessor->FillRate = FillRate;
 
-#define PCGEX_OUTPUT_FWD_TO(_NAME, _TYPE, _DEFAULT_VALUE) if(_NAME##Writer){ TypedProcessor->_NAME##Writer = _NAME##Writer; }
 		PCGEX_FOREACH_FIELD_CLUSTER_DIFF(PCGEX_OUTPUT_FWD_TO)
-#undef PCGEX_OUTPUT_FWD_TO
 
 		return true;
 	}

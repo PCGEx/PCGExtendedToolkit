@@ -27,8 +27,6 @@ PCGExTensor::FTensorSample FPCGExTensorNoiseBounded::Sample(const int32 InSeedIn
 	const FVector& InPosition = InProbe.GetLocation();
 	const FBoxCenterAndExtent BCAE = FBoxCenterAndExtent(InPosition, FVector::One());
 
-	const bool bNrmNoise = Config.bNormalizeNoiseSampling;
-
 	FVector Noise = NoiseGenerator->GetVector(InPosition);
 	if (Config.bNormalizeNoiseSampling)
 	{

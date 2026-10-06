@@ -8,9 +8,6 @@
 
 #define PCGEX_EXECUTION_CHECK_C(_CONTEXT) if(!_CONTEXT->CanExecute()){ return true; }
 #define PCGEX_EXECUTION_CHECK PCGEX_EXECUTION_CHECK_C(Context)
-#define PCGEX_ASYNC_WAIT_C(_CONTEXT) if (_CONTEXT->bWaitingForAsyncCompletion) { return false; }
-#define PCGEX_ASYNC_WAIT PCGEX_ASYNC_WAIT_C(Context)
-#define PCGEX_ASYNC_WAIT_INTERNAL if (bWaitingForAsyncCompletion) { return false; }
 #define PCGEX_ON_STATE(_STATE) if(Context->IsState(_STATE))
 #define PCGEX_ON_STATE_INTERNAL(_STATE) if(IsState(_STATE))
 #define PCGEX_ON_ASYNC_STATE_READY(_STATE) if(Context->IsState(_STATE) && Context->IsWaitingForTasks()){ return false; }else if(Context->IsState(_STATE) && !Context->IsWaitingForTasks())

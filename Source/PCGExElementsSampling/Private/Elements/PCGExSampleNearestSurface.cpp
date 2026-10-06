@@ -14,6 +14,7 @@
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Sampling/PCGExSamplingHelpers.h"
 
@@ -100,7 +101,7 @@ bool FPCGExSampleNearestSurfaceElement::Boot(FPCGExContext* InContext) const
 			return false;
 		}
 
-		if (!PCGExSampling::Helpers::GetIncludedActors(Context, Context->ActorReferenceDataFacade.ToSharedRef(), Settings->ActorReference, Context->IncludedActors))
+		if (!PCGExHelpers::GetIncludedActors(Context, Context->ActorReferenceDataFacade.ToSharedRef(), Settings->ActorReference, Context->IncludedActors))
 		{
 			return false;
 		}

@@ -74,61 +74,8 @@ void FPCGExPointsToBoundsDataDetails::Output(const UPCGBasePointData* InBoundsDa
 
 void FPCGExPointsToBoundsDataDetails::OutputInverse(const UPCGBasePointData* InPoints, UPCGBasePointData* OutData, const TArray<FPCGAttributeIdentifier>& AttributeIdentifiers, PCGExMath::FBestFitPlane& Plane) const
 {
-	if (!AttributeIdentifiers.IsEmpty())
-	{
-		for (const FPCGAttributeIdentifier& AttributeIdentifier : AttributeIdentifiers)
-		{
-			// Only carry over non-data attributes
-			if (AttributeIdentifier.MetadataDomain.Flag != EPCGMetadataDomainFlag::Elements)
-			{
-				continue;
-			}
-
-			const FPCGMetadataAttributeBase* Source = OutData->Metadata->GetConstAttribute(AttributeIdentifier);
-
-			const FPCGAttributeIdentifier DataIdentifier = FPCGAttributeIdentifier(AttributeIdentifier.Name, PCGMetadataDomainID::Data);
-
-			PCGExMetaHelpers::ExecuteWithRightType(
-				Source,
-				[&](auto DummyValue)
-				{
-					using T = decltype(DummyValue);
-					const T Value = Source->GetValueFromItemKey<T>(PCGFirstEntryKey);
-					FPCGMetadataAttributeBase* Target = OutData->Metadata->FindOrCreateAttribute(DataIdentifier, Value);
-					Target->SetDefaultValue(Value);
-				},
-				[&]()
-				{
-					if (!Source)
-					{
-						return;
-					}
-					FPCGMetadataAttributeBase* Target = OutData->Metadata->CreateAttribute(
-						DataIdentifier, Source->GetAttributeDesc(), Source->AllowsInterpolation(), /*bOverrideParent=*/true);
-					if (!Target)
-					{
-						return;
-					}
-					PCGExData::Helpers::PropertyCopyAttribute(Source, PCGFirstEntryKey, Target, PCGDefaultValueKey);
-				});
-		}
-	}
-
-#define PCGEX_WRITE_REDUCED_PROPERTY(_NAME)	if (bWrite##_NAME){ PCGExData::WriteMark(OutData, PCGExMetaHelpers::GetAttributeIdentifier(_NAME##AttributeName), OutData->GetConst##_NAME##ValueRange()[0]); }
-
-	PCGEX_WRITE_REDUCED_PROPERTY(Transform)
-	PCGEX_WRITE_REDUCED_PROPERTY(Density)
-	PCGEX_WRITE_REDUCED_PROPERTY(BoundsMin)
-	PCGEX_WRITE_REDUCED_PROPERTY(BoundsMax)
-	PCGEX_WRITE_REDUCED_PROPERTY(Color)
-	PCGEX_WRITE_REDUCED_PROPERTY(Steepness)
-
-#undef PCGEX_WRITE_REDUCED_PROPERTY
-
-	if (bWriteBestFitPlane)
-	{
-		PCGExData::WriteMark(OutData, PCGExMetaHelpers::GetAttributeIdentifier(BestFitPlaneAttributeName), Plane.GetTransform(AxisOrder));
-	}
+	// Collapse mode: the collapsed output is its own bounds source.
+	Output(OutData, OutData, AttributeIdentifiers, Plane);
 }
 
 PCGEX_INITIALIZE_ELEMENT(PointsToBounds)

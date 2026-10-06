@@ -133,8 +133,6 @@ void FPCGExGeo2DProjectionDetails::InitInternal(const FVector& InNormal)
 	ProjectionQuatInv = ProjectionQuat.Inverse();
 }
 
-#define PCGEX_READ_QUAT(_INDEX) FRotationMatrix::MakeFromZX(NormalGetter->Read(_INDEX).GetSafeNormal(1E-08, FVector::UpVector), WorldFwd).ToQuat()
-
 template <typename T>
 void FPCGExGeo2DProjectionDetails::ProjectFlat(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<T>& OutPositions) const
 {

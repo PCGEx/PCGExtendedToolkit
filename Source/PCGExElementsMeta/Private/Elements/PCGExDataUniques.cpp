@@ -11,6 +11,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExHashHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
@@ -239,15 +240,9 @@ bool FPCGExDataUniquesElement::Boot(FPCGExContext* InContext) const
 	// Keys: list + comma-separated overrides, user order preserved (it feeds the hash), duplicates dropped.
 	TArray<FName> KeyNames = Settings->KeyAttributes;
 
-	TArray<FString> Tokens;
-	Settings->CommaSeparatedKeyAttributes.ParseIntoArray(Tokens, TEXT(","), true);
-	for (FString& Token : Tokens)
+	for (const FString& Token : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(Settings->CommaSeparatedKeyAttributes))
 	{
-		Token.TrimStartAndEndInline();
-		if (!Token.IsEmpty())
-		{
-			KeyNames.Add(FName(*Token));
-		}
+		KeyNames.Add(FName(*Token));
 	}
 
 	TSet<FName> SeenKeys;

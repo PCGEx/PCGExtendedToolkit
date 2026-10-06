@@ -30,11 +30,6 @@ namespace PCGExData
 
 struct FPCGExNodeSelectionDetails;
 
-namespace PCGExMath
-{
-	struct FTriangle;
-}
-
 namespace PCGExClusters
 {
 	class FCluster;

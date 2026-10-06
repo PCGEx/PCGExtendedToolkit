@@ -10,7 +10,7 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Elements/Debug/PCGExDrawAttributes.h"
 #include "Engine/HitResult.h"
-#include "Sampling/PCGExSamplingHelpers.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExRaycastFilterDefinition"
 #define PCGEX_NAMESPACE PCGExRaycastFilterDefinition
@@ -64,7 +64,7 @@ PCGExFactories::EPreparationResult UPCGExRaycastFilterFactory::Prepare(FPCGExCon
 			return PCGExFactories::EPreparationResult::MissingData;
 		}
 
-		if (!PCGExSampling::Helpers::GetIncludedActors(InContext, ActorReferenceDataFacade.ToSharedRef(), Config.ActorReference, IncludedActors))
+		if (!PCGExHelpers::GetIncludedActors(InContext, ActorReferenceDataFacade.ToSharedRef(), Config.ActorReference, IncludedActors))
 		{
 			return PCGExFactories::EPreparationResult::MissingData;
 		}

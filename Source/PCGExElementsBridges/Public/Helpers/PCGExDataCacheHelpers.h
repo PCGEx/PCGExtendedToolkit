@@ -74,12 +74,6 @@ namespace PCGExDataCache
 
 	/** User-declared pins minus None labels, reserved labels and duplicates. Set and Get must agree on this. */
 	PCGEXELEMENTSBRIDGES_API TArray<FPCGPinProperties> SanitizePins(const TArray<FPCGPinProperties>& InPins, const TArrayView<const FName> InReservedLabels);
-
-	/** The actor a source executes on (its owner). 5.7's execution-state interface has no target query, hence the seam. */
-	PCGEXELEMENTSBRIDGES_API AActor* GetSourceActor(const IPCGGraphExecutionSource* InSource);
-
-	/** Whether a source generates in preview editing mode. Same 5.7 seam as GetSourceActor. */
-	PCGEXELEMENTSBRIDGES_API bool IsSourceInPreviewMode(const IPCGGraphExecutionSource* InSource);
 }
 
 /** Shared target-actor surface of Set Cached Data and Get Cached Data. */

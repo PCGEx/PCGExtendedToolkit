@@ -80,6 +80,3 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExSortRuleConfig Config;
 };
-
-#undef PCGEX_UNSUPPORTED_STRING_TYPES
-#undef PCGEX_UNSUPPORTED_PATH_TYPES

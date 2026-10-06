@@ -583,7 +583,7 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			// New identity: fresh EntryId on the next SyncEntryIds pass.
 			Payload->EntryId = 0;
 
-			// Bake source CollectionTags into the copy (FlattenCollection semantics).
+			// Bake source CollectionTags into the copy: a flattened entry keeps its former host's tags.
 			Payload->Tags.Append(Source->CollectionTags);
 
 			if (!Payload->Category.IsNone())

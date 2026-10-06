@@ -11,12 +11,6 @@
 #define PCGEX_TYPED_PROCESSOR_REF PCGEX_TYPED_PROCESSOR_NREF(TypedProcessor)
 #define PCGEX_TYPED_PROCESSOR const TSharedPtr<FProcessor> TypedProcessor = StaticCastSharedPtr<FProcessor>(InProcessor);
 
-#define PCGEX_ZERO_PROCESSOR_ELEMENT(_NUM, _NAME) \
-const UPCGSettings* DiagSettings = ExecutionContext ? ExecutionContext->GetInputSettings<UPCGSettings>() : nullptr; \
-if (!ensureMsgf(_NUM > 0, \
-	TEXT(#_NAME " invoked with " #_NUM "=0 (Settings: %s). Completion chain will NOT fire -- guard empty inputs at the call site."), \
-	*GetNameSafe(DiagSettings ? DiagSettings->GetClass() : nullptr))){ return; }
-
 struct FPCGExContext;
 
 namespace PCGExMT
@@ -75,7 +69,6 @@ namespace PCGExPointsMT
 	protected:
 		TSharedPtr<PCGExMT::FTaskManager> TaskManager;
 		FPCGExContext* ExecutionContext = nullptr;
-		UPCGSettings* ExecutionSettings = nullptr;
 
 		TWeakPtr<PCGEx::FWorkHandle> WorkHandle;
 
@@ -222,7 +215,6 @@ namespace PCGExPointsMT
 		mutable FRWLock BatchLock;
 
 		FPCGExContext* ExecutionContext = nullptr;
-		UPCGSettings* ExecutionSettings = nullptr;
 
 		TWeakPtr<PCGEx::FWorkHandle> WorkHandle;
 
@@ -302,6 +294,4 @@ namespace PCGExPointsMT
 		{
 		}
 	};
-
-	PCGEXFOUNDATIONS_API void ScheduleBatch(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, const TSharedPtr<IBatch>& Batch);
 }

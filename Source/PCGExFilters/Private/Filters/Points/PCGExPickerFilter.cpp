@@ -33,11 +33,7 @@ bool PCGExPointFilter::FPickerFilter::Init(FPCGExContext* InContext, const TShar
 		return false;
 	}
 
-	for (const TObjectPtr<const UPCGExPickerFactoryData>& FactoryData : TypedFilterFactory->PickerFactories)
-	{
-		FactoryData->AddPicks(InPointDataFacade->GetNum(), Picks);
-	}
-
+	PCGExPickers::GetPicks(TypedFilterFactory->PickerFactories, InPointDataFacade, Picks);
 	return true;
 }
 

@@ -91,12 +91,7 @@ bool FPCGExReduceDataAttributeElement::Boot(FPCGExContext* InContext) const
 		{
 			continue;
 		}
-		const FPCGMetadataAttributeBase* Attribute = nullptr;
-
-		if (PCGExMetaHelpers::HasAttribute(TaggedData.Data, ReadIdentifier))
-		{
-			Attribute = TaggedData.Data->Metadata->GetConstAttribute(ReadIdentifier);
-		}
+		const FPCGMetadataAttributeBase* Attribute = PCGExMetaHelpers::TryGetConstAttribute(TaggedData.Data, ReadIdentifier);
 
 		if (!Attribute)
 		{

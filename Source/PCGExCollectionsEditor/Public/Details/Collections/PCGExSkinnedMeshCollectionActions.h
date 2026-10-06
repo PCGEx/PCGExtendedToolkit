@@ -15,14 +15,6 @@
 
 class UPackage;
 
-namespace PCGExSkinnedMeshCollectionActions
-{
-	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets);
-	void UpdateCollectionsFrom(
-		const TArray<TObjectPtr<UPCGExSkinnedMeshCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets);
-};
-
 UCLASS()
 class UPCGExSkinnedMeshCollectionFactory : public UPCGExDataAssetFactoryBase
 {

@@ -9,6 +9,7 @@
 #include "GameFramework/Actor.h"
 
 #include "PCGExCoreSettingsCache.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSetCachedData"
 #define PCGEX_NAMESPACE SetCachedData
@@ -240,7 +241,7 @@ bool FPCGExSetCachedDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	check(IsInGameThread());
 
 	IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
-	const bool bPreview = PCGExDataCache::IsSourceInPreviewMode(Source);
+	const bool bPreview = PCGExHelpers::IsSourceInPreviewMode(Source);
 	UObject* Writer = Cast<UObject>(Source);
 
 	// Resolved in the step that writes or clears: a pooled partition actor can be handed to another cell in between.

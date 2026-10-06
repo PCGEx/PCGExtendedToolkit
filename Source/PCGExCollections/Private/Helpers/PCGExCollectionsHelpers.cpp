@@ -1027,8 +1027,6 @@ namespace PCGExCollections
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPickUnpacker::BuildPartitions);
 
-		using FTraits = TInstanceListTraits<T>;
-
 		FPCGAttributePropertyInputSelector HashSelector;
 		HashSelector.Update(EntryIdxAttributeName.ToString());
 
@@ -1049,28 +1047,11 @@ namespace PCGExCollections
 		}
 
 		const int32 NumPoints = InPointData->GetNumPoints();
-		const int32 SafeReserve = NumPoints / (NumUniqueEntries * 2);
 
 		// Build partitions
 		for (int32 i = 0; i < NumPoints; i++)
 		{
-			const uint64 EntryHash = Hashes[i];
-			if (const int32* Index = IndexedPartitions.Find(EntryHash);
-				!Index)
-			{
-				T& NewInstanceList = InstanceLists.Emplace_GetRef();
-				NewInstanceList.AttributePartitionIndex = EntryHash;
-				FTraits::SetPointData(NewInstanceList, InPointData);
-				TArray<int32>& Indices = FTraits::GetIndices(NewInstanceList);
-				Indices.Reserve(SafeReserve);
-				Indices.Emplace(i);
-
-				IndexedPartitions.Add(EntryHash, InstanceLists.Num() - 1);
-			}
-			else
-			{
-				FTraits::GetIndices(InstanceLists[*Index]).Emplace(i);
-			}
+			InsertEntry(InPointData, Hashes[i], i, InstanceLists);
 		}
 
 		return !IndexedPartitions.IsEmpty();
@@ -1434,7 +1415,7 @@ namespace PCGExCollections
 				continue;
 			}
 
-			// GUID-keyed, matches both AssetStaging's Add() hash and LoadSockets' GetSimplifiedEntryHash.
+			// GUID-keyed, matches both AssetStaging's Add() hash and LoadSockets' PickHash::GetEntryKey.
 			const uint32 HostGUID = Host->GetCollectionGUID();
 
 			Host->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)

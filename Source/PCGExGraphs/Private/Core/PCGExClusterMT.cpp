@@ -1098,13 +1098,4 @@ namespace PCGExClusterMT
 	{
 		PCGEX_LAUNCH(FStartClusterBatchProcessing, Batch, bScopedIndexLookupBuild)
 	}
-
-	void CompleteBatches(const TArrayView<TSharedPtr<IBatch>> Batches)
-	{
-		for (const TSharedPtr<IBatch>& Batch : Batches)
-		{
-			Batch->CompleteWork();
-		}
-	}
-
 }

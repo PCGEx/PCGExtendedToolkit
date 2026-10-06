@@ -13,6 +13,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExMT.h"
 #include "CoreGlobals.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
@@ -83,9 +84,8 @@ namespace PCGExAssetSave
 		if (State.IsLocalSource() || State.IsPartitioned()) { return false; }
 		if (State.IsManagedByRuntimeGenSystem()) { return false; }
 
-		// Preview persists nothing. Off the component, not the execution state: 5.7's has no IsInPreviewMode.
-		const UPCGComponent* Component = InContext->GetComponent();
-		if (Component && Component->IsInPreviewMode()) { return false; }
+		// Preview persists nothing.
+		if (PCGExHelpers::IsSourceInPreviewMode(Source)) { return false; }
 
 		return true;
 #else

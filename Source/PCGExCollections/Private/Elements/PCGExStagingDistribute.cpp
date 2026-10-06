@@ -1192,7 +1192,7 @@ namespace PCGExAssetStaging
 
 			if (SocketHelper)
 			{
-				// Hash scheme must match FSocketHelper::RegisterCollection (and LoadSockets' GetSimplifiedEntryHash).
+				// Hash scheme must match FSocketHelper::RegisterCollection (and LoadSockets' PickHash::GetEntryKey).
 				const uint64 EntryHash = PCGEx::H64(EntryHost->GetCollectionGUID(), Staging.InternalIndex);
 				SocketHelper->Add(Index, EntryHash, Entry);
 			}

@@ -120,12 +120,7 @@ bool FPCGExBranchOnDataAttributeElement::AdvanceWork(FPCGExContext* InContext, c
 			{
 				continue;
 			}
-			const FPCGMetadataAttributeBase* Attr = nullptr;
-
-			if (PCGExMetaHelpers::HasAttribute(TaggedData.Data, ReadIdentifier))
-			{
-				Attr = TaggedData.Data->Metadata->GetConstAttribute(ReadIdentifier);
-			}
+			const FPCGMetadataAttributeBase* Attr = PCGExMetaHelpers::TryGetConstAttribute(TaggedData.Data, ReadIdentifier);
 
 			FName OutputPin = Settings->GetMainOutputPin();
 			bool bDistributed = false;

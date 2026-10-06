@@ -18,6 +18,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "TopologyProcessor"
 #define PCGEX_NAMESPACE TopologyProcessor
@@ -129,7 +130,7 @@ namespace PCGExTopologyEdges
 		UVDetails = Settings->Topology.UVChannels;
 		UVDetails.Prepare(VtxDataFacade);
 
-		bIsPreviewMode = ExecutionContext->GetComponent()->IsInPreviewMode();
+		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());

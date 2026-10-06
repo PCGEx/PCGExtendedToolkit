@@ -16,6 +16,7 @@
 #include "Graphs/PCGExGraph.h"
 #include "Math/PCGExMathDistances.h"
 #include "Sampling/PCGExSamplingCommon.h"
+#include "Sampling/PCGExSamplingHelpers.h"
 #include "Sampling/PCGExSamplingUnionData.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSampleVtxByIDElement"
@@ -350,14 +351,7 @@ namespace PCGExSampleVtxByID
 		}
 		PointDataFacade->WriteFastest(TaskManager);
 
-		if (Settings->bTagIfHasSuccesses && bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasSuccessesTag);
-		}
-		if (Settings->bTagIfHasNoSuccesses && !bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasNoSuccessesTag);
-		}
+		PCGExSampling::Helpers::ApplySuccessTags(PointDataFacade, bAnySuccess != 0, Settings->bTagIfHasSuccesses, Settings->HasSuccessesTag, Settings->bTagIfHasNoSuccesses, Settings->HasNoSuccessesTag);
 	}
 
 	void FProcessor::Write()

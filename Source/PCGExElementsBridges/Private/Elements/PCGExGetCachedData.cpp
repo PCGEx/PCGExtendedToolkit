@@ -19,6 +19,7 @@
 #include "PCGExCoreSettingsCache.h"
 #include "Components/PCGExDataCacheComponent.h"
 #include "Core/PCGExMainThreadPoll.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExGetCachedData"
 #define PCGEX_NAMESPACE GetCachedData
@@ -100,7 +101,7 @@ namespace PCGExGetCachedData
 		// Engine mirror (FPCGDataFromActorElement::ProcessActor): data owned by an actor outside the source's persistent
 		// level is duplicated to the transient package, so the graph cache never pins that level's objects.
 		const IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
-		const AActor* SourceOwner = PCGExDataCache::GetSourceActor(Source ? Source->GetExecutionState().GetOriginalSource() : nullptr);
+		const AActor* SourceOwner = PCGExHelpers::GetSourceActor(Source ? Source->GetExecutionState().GetOriginalSource() : nullptr);
 		const ULevel* PersistentLevel = (SourceOwner && SourceOwner->GetWorld()) ? SourceOwner->GetWorld()->PersistentLevel : nullptr;
 #endif
 

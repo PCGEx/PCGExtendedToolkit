@@ -6,6 +6,7 @@
 #include "PCGParamData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
 
 
 #define LOCTEXT_NAMESPACE "PCGExSocketStagingElement"
@@ -142,7 +143,7 @@ namespace PCGExSocketStaging
 			if (FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, MaterialPick);
 				Result.IsValid())
 			{
-				SocketHelper->Add(Index, PCGExStaging::GetSimplifiedEntryHash(Hash), Result.Entry);
+				SocketHelper->Add(Index, PCGExCollections::PickHash::GetEntryKey(Hash), Result.Entry);
 			}
 		}
 	}

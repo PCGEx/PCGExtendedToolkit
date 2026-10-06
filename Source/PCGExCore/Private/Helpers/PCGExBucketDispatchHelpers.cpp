@@ -12,6 +12,23 @@
 
 namespace PCGExBucketDispatchHelpers
 {
+	TSharedPtr<PCGExData::FPointIO> CreateBatchIO(
+		const TSharedRef<PCGExData::FPointIO>& InSource,
+		const TSharedRef<PCGExData::FPointIOCollection>& InCollection,
+		int32 InBatchIndex,
+		PCGExData::EIOInit InitMode)
+	{
+		TSharedPtr<PCGExData::FPointIO> NewPointIO = PCGExData::NewPointIO(InSource, InCollection->OutputPin);
+
+		if (!NewPointIO->InitializeOutput(InitMode))
+		{
+			return nullptr;
+		}
+
+		InCollection->Pairs[InBatchIndex] = NewPointIO;
+		return NewPointIO;
+	}
+
 	void DispatchBuckets(
 		TConstArrayView<TSharedPtr<PCGExData::FPointIOCollection>> Buckets,
 		const TSharedPtr<PCGExData::FPointIOCollection>& UnmatchedBucket,

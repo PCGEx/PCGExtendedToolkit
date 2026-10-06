@@ -54,20 +54,4 @@ namespace PCGExLayout
 
 		return AmplitudeMin + AmplitudeMax;
 	}
-
-	void ExpandByClamped(const FBox& InSpace, FBox& InBox, const FVector& Expansion)
-	{
-		InBox = InBox.ExpandBy(Expansion);
-		for (int C = 0; C < 3; C++)
-		{
-			if (InBox.Min[C] < InSpace.Min[C])
-			{
-				InBox.Min[C] = InSpace.Min[C];
-			}
-			if (InBox.Max[C] > InSpace.Max[C])
-			{
-				InBox.Max[C] = InSpace.Max[C];
-			}
-		}
-	}
 }

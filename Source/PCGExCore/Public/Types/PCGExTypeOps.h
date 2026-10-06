@@ -235,14 +235,4 @@ namespace PCGExTypeOps
 		FConversionTable::Convert(PCGExTypes::TTraits<TFrom>::Type, &Value, PCGExTypes::TTraits<TTo>::Type, &Result);
 		return Result;
 	}
-
-	/**
-	 * Type-safe hash wrapper.
-	 */
-	template <typename T>
-	FORCEINLINE PCGExValueHash ComputeHash(const T& Value)
-	{
-		const ITypeOpsBase* Ops = FTypeOpsRegistry::Get<T>();
-		return Ops->ComputeHash(&Value);
-	}
 }

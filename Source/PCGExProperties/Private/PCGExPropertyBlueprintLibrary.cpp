@@ -202,16 +202,8 @@ UObject* UPCGExPropertyBlueprintLibrary::TryGetPCGExPropertyObject(
 		return nullptr;
 	}
 
-	UObject* Resolved = SoftPath.ResolveObject();
+	UObject* Resolved = PCGExPropertyPinMarshal::ResolveObjectFromPath(SoftPath, ExpectedClass);
 	if (!Resolved)
-	{
-		Resolved = SoftPath.TryLoad();
-	}
-	if (!Resolved)
-	{
-		return nullptr;
-	}
-	if (*ExpectedClass && !Resolved->IsA(ExpectedClass))
 	{
 		return nullptr;
 	}
@@ -245,16 +237,8 @@ TSubclassOf<UObject> UPCGExPropertyBlueprintLibrary::TryGetPCGExPropertyClass(
 		return nullptr;
 	}
 
-	UClass* Resolved = Cast<UClass>(SoftPath.ResolveObject());
+	UClass* Resolved = PCGExPropertyPinMarshal::ResolveClassFromPath(SoftPath, ExpectedClass);
 	if (!Resolved)
-	{
-		Resolved = SoftPath.TryLoadClass<UObject>();
-	}
-	if (!Resolved)
-	{
-		return nullptr;
-	}
-	if (*ExpectedClass && !Resolved->IsChildOf(ExpectedClass))
 	{
 		return nullptr;
 	}

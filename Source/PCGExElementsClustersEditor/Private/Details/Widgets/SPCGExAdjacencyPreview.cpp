@@ -3,6 +3,7 @@
 
 #include "Details/Widgets/SPCGExAdjacencyPreview.h"
 
+#include "Details/Widgets/PCGExEdgeFilterPreviewHelpers.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
@@ -72,77 +73,6 @@ int32 SPCGExAdjacencyPreview::ComputeThreshold(const int32 TotalNeighbors) const
 	}
 }
 
-void SPCGExAdjacencyPreview::DrawFilledCircle(
-	FSlateWindowElementList& OutDrawElements,
-	const int32 LayerId,
-	const FGeometry& AllottedGeometry,
-	const FVector2D& Center,
-	const double Radius,
-	const FLinearColor& Color,
-	const int32 NumSegments) const
-{
-	const FSlateRenderTransform& RenderTransform = AllottedGeometry.GetAccumulatedRenderTransform();
-	const FColor VertColor = Color.ToFColor(true);
-	constexpr FColor NoColor(0, 0, 0, 0);
-
-	TArray<FSlateVertex> Vertices;
-	TArray<SlateIndex> Indices;
-	Vertices.Reserve(NumSegments + 2);
-	Indices.Reserve(NumSegments * 3);
-
-	Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(Center), FVector2f::ZeroVector, VertColor, NoColor));
-
-	const double AngleStep = UE_TWO_PI / NumSegments;
-	for (int32 i = 0; i <= NumSegments; ++i)
-	{
-		const double Angle = AngleStep * i;
-		const FVector2D Pos = Center + FVector2D(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius);
-		Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(Pos), FVector2f::ZeroVector, VertColor, NoColor));
-	}
-
-	for (int32 i = 0; i < NumSegments; ++i)
-	{
-		Indices.Add(0);
-		Indices.Add(i + 1);
-		Indices.Add(i + 2);
-	}
-
-	const FSlateResourceHandle ResourceHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(
-		*FCoreStyle::Get().GetDefaultBrush());
-
-	FSlateDrawElement::MakeCustomVerts(OutDrawElements, LayerId, ResourceHandle, Vertices, Indices, nullptr, 0, 0);
-}
-
-void SPCGExAdjacencyPreview::DrawFilledRect(
-	FSlateWindowElementList& OutDrawElements,
-	const int32 LayerId,
-	const FGeometry& AllottedGeometry,
-	const FVector2D& TopLeft,
-	const FVector2D& Size,
-	const FLinearColor& Color) const
-{
-	const FSlateRenderTransform& RenderTransform = AllottedGeometry.GetAccumulatedRenderTransform();
-	const FColor VertColor = Color.ToFColor(true);
-	constexpr FColor NoColor(0, 0, 0, 0);
-
-	const FVector2D TR = TopLeft + FVector2D(Size.X, 0);
-	const FVector2D BL = TopLeft + FVector2D(0, Size.Y);
-	const FVector2D BR = TopLeft + Size;
-
-	TArray<FSlateVertex> Vertices;
-	Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(TopLeft), FVector2f::ZeroVector, VertColor, NoColor));
-	Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(TR), FVector2f::ZeroVector, VertColor, NoColor));
-	Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(BR), FVector2f::ZeroVector, VertColor, NoColor));
-	Vertices.Add(FSlateVertex::Make(RenderTransform, FVector2f(BL), FVector2f::ZeroVector, VertColor, NoColor));
-
-	TArray<SlateIndex> Indices = {0, 1, 2, 0, 2, 3};
-
-	const FSlateResourceHandle ResourceHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(
-		*FCoreStyle::Get().GetDefaultBrush());
-
-	FSlateDrawElement::MakeCustomVerts(OutDrawElements, LayerId, ResourceHandle, Vertices, Indices, nullptr, 0, 0);
-}
-
 void SPCGExAdjacencyPreview::DrawStarPanel(
 	FSlateWindowElementList& OutDrawElements,
 	const FGeometry& AllottedGeometry,
@@ -184,13 +114,13 @@ void SPCGExAdjacencyPreview::DrawStarPanel(
 			PCGExAdjacencyPreviewConstants::BranchThickness);
 
 		// Draw neighbor dot
-		DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, EndPoint,
-		                 PCGExAdjacencyPreviewConstants::NeighborDotRadius, BranchColor);
+		PCGExEdgeFilterPreview::DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, EndPoint,
+		                                         PCGExAdjacencyPreviewConstants::NeighborDotRadius, BranchColor);
 	}
 
 	// Draw central node
-	DrawFilledCircle(OutDrawElements, LayerId + 3, AllottedGeometry, Center,
-	                 PCGExAdjacencyPreviewConstants::CentralDotRadius, PCGExAdjacencyPreviewConstants::CentralNodeColor);
+	PCGExEdgeFilterPreview::DrawFilledCircle(OutDrawElements, LayerId + 3, AllottedGeometry, Center,
+	                                         PCGExAdjacencyPreviewConstants::CentralDotRadius, PCGExAdjacencyPreviewConstants::CentralNodeColor);
 }
 
 void SPCGExAdjacencyPreview::DrawAggregatedPanel(
@@ -236,13 +166,13 @@ void SPCGExAdjacencyPreview::DrawAggregatedPanel(
 			PCGExAdjacencyPreviewConstants::BranchThickness);
 
 		// Draw endpoint dot
-		DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, EndPoint,
-		                 PCGExAdjacencyPreviewConstants::NeighborDotRadius, BranchColor);
+		PCGExEdgeFilterPreview::DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, EndPoint,
+		                                         PCGExAdjacencyPreviewConstants::NeighborDotRadius, BranchColor);
 	}
 
 	// Draw central node
-	DrawFilledCircle(OutDrawElements, LayerId + 3, AllottedGeometry, Center,
-	                 PCGExAdjacencyPreviewConstants::CentralDotRadius, PCGExAdjacencyPreviewConstants::CentralNodeColor);
+	PCGExEdgeFilterPreview::DrawFilledCircle(OutDrawElements, LayerId + 3, AllottedGeometry, Center,
+	                                         PCGExAdjacencyPreviewConstants::CentralDotRadius, PCGExAdjacencyPreviewConstants::CentralNodeColor);
 }
 
 int32 SPCGExAdjacencyPreview::PaintSomeMode(
@@ -296,8 +226,8 @@ int32 SPCGExAdjacencyPreview::PaintSomeMode(
 		const FLinearColor& BgColor = bPass
 			? PCGExAdjacencyPreviewConstants::PanelPassBg
 			: PCGExAdjacencyPreviewConstants::PanelFailBg;
-		DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
-		               FVector2D(PanelX, 0), FVector2D(PanelWidth, LocalSize.Y), BgColor);
+		PCGExEdgeFilterPreview::DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
+		                                       FVector2D(PanelX, 0), FVector2D(PanelWidth, LocalSize.Y), BgColor);
 
 		DrawStarPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
 		              TotalNeighbors, GreenCount, bPass);
@@ -363,8 +293,8 @@ int32 SPCGExAdjacencyPreview::PaintAllIndividualMode(
 		const FLinearColor& BgColor = bPass
 			? PCGExAdjacencyPreviewConstants::PanelPassBg
 			: PCGExAdjacencyPreviewConstants::PanelFailBg;
-		DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
-		               FVector2D(PanelX, 0), FVector2D(PanelWidth, LocalSize.Y), BgColor);
+		PCGExEdgeFilterPreview::DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
+		                                       FVector2D(PanelX, 0), FVector2D(PanelWidth, LocalSize.Y), BgColor);
 
 		// Star
 		DrawStarPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
@@ -580,14 +510,14 @@ int32 SPCGExAdjacencyPreview::PaintAttributeMode(
 				PCGExAdjacencyPreviewConstants::AttributeModeColor, true,
 				PCGExAdjacencyPreviewConstants::BranchThickness);
 
-			DrawFilledCircle(OutDrawElements, LayerId + 1, AllottedGeometry, EndPoint,
-			                 PCGExAdjacencyPreviewConstants::NeighborDotRadius,
-			                 PCGExAdjacencyPreviewConstants::AttributeModeColor);
+			PCGExEdgeFilterPreview::DrawFilledCircle(OutDrawElements, LayerId + 1, AllottedGeometry, EndPoint,
+			                                         PCGExAdjacencyPreviewConstants::NeighborDotRadius,
+			                                         PCGExAdjacencyPreviewConstants::AttributeModeColor);
 		}
 
-		DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, PanelCenter,
-		                 PCGExAdjacencyPreviewConstants::CentralDotRadius,
-		                 PCGExAdjacencyPreviewConstants::AttributeModeColor);
+		PCGExEdgeFilterPreview::DrawFilledCircle(OutDrawElements, LayerId + 2, AllottedGeometry, PanelCenter,
+		                                         PCGExAdjacencyPreviewConstants::CentralDotRadius,
+		                                         PCGExAdjacencyPreviewConstants::AttributeModeColor);
 	}
 
 	// "Per-Point" label at center

@@ -11,6 +11,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Paths/PCGExPathsHelpers.h"
 
@@ -305,7 +306,7 @@ namespace PCGExCreateSpline
 		// Output spline component
 		if (Settings->Mode != EPCGCreateSplineMode::CreateDataOnly)
 		{
-			const bool bIsPreviewMode = ExecutionContext->GetComponent()->IsInPreviewMode();
+			const bool bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 			const FString ComponentName = TEXT("PCGSplineComponent");
 			const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);

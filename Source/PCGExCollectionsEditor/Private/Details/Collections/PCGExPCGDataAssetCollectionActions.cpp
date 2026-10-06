@@ -43,24 +43,3 @@ namespace PCGExPCGDataAssetCollectionActions
 		}
 	} GCustomizePCGDataAssetEditorTypeInfo;
 }
-
-namespace PCGExPCGDataAssetCollectionActions
-{
-	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
-	{
-		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExPCGDataAssetCollection::StaticClass(), TEXT("SMC_NewPCGDataAssetCollection"));
-	}
-
-	void UpdateCollectionsFrom(
-		const TArray<TObjectPtr<UPCGExPCGDataAssetCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets)
-	{
-		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
-		AsBase.Reserve(SelectedCollections.Num());
-		for (const TObjectPtr<UPCGExPCGDataAssetCollection>& C : SelectedCollections)
-		{
-			AsBase.Add(C);
-		}
-		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
-	}
-}

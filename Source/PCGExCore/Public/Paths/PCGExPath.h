@@ -231,11 +231,6 @@ namespace PCGExPaths
 			return SafePointIndex(Index - 1);
 		}
 
-		FVector GetEdgePositionAtAlpha(const FPathEdge& Edge, const double Alpha) const
-		{
-			return FMath::Lerp(Positions[Edge.End].GetLocation(), Positions[Edge.Start].GetLocation(), Alpha);
-		}
-
 		FVector GetEdgePositionAtAlpha(const int32 Index, const double Alpha) const
 		{
 			const FPathEdge& Edge = Edges[Index];
@@ -257,7 +252,6 @@ namespace PCGExPaths
 		PCGExMath::FClosestPosition FindClosestIntersection(const FPCGExPathIntersectionDetails& InDetails, const PCGExMath::FSegment& Segment, PCGExMath::FClosestPosition& OutClosestPosition) const;
 
 		void BuildEdgeOctree();
-		void BuildPartialEdgeOctree(const TArray<int8>& Filter);
 		void BuildPartialEdgeOctree(const TBitArray<>& Filter);
 
 		const FPathEdgeOctree* GetEdgeOctree() const
@@ -355,25 +349,6 @@ namespace PCGExPaths
 	};
 
 #pragma region Edge Extras
-
-	template <typename T>
-	class FPathEdgeCustomData : public TPathEdgeExtra<T>
-	{
-	public:
-		using ProcessEdgeFunc = std::function<T(const FPath*, const FPathEdge&)>;
-		ProcessEdgeFunc ProcessEdgeCallback;
-
-		explicit FPathEdgeCustomData(const int32 InNumSegments, const bool InClosedLoop, ProcessEdgeFunc&& Func)
-			: TPathEdgeExtra<T>(InNumSegments, InClosedLoop)
-			  , ProcessEdgeCallback(Func)
-		{
-		}
-
-		virtual void ProcessEdge(const FPath* Path, const FPathEdge& Edge) override
-		{
-			this->SetValue(Edge.Start, ProcessEdgeCallback(Path, Edge));
-		}
-	};
 
 	class PCGEXCORE_API FPathEdgeLength : public TPathEdgeExtra<double>
 	{

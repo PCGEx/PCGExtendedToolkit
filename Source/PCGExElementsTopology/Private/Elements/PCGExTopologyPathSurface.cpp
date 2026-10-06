@@ -9,6 +9,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "TopologyProcessor"
 #define PCGEX_NAMESPACE TopologyProcessor
@@ -92,7 +93,7 @@ namespace PCGExTopologyPathSurface
 			return false;
 		}
 
-		bIsPreviewMode = ExecutionContext->GetComponent()->IsInPreviewMode();
+		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		InternalMeshData = Context->ManagedObjects->New<UPCGDynamicMeshData>();
 		if (!InternalMeshData)

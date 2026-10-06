@@ -11,6 +11,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Elements/PCGExecuteBlueprint.h"
 #include "Engine/AssetManager.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Utils/PCGExUniqueNameGenerator.h"
 
@@ -425,7 +426,7 @@ namespace PCGExPackActorData
 		Packer->WriteBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>>(PointDataFacade);
 		Packer->ReadBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Read>>(PointDataFacade);
 
-		Packer->bIsPreviewMode = ExecutionContext->GetComponent()->IsInPreviewMode();
+		Packer->bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		PointDataFacade->Source->bAllowEmptyOutput = !Settings->bOmitEmptyOutputs;
 

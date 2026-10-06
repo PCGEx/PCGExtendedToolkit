@@ -8,6 +8,34 @@
 
 namespace PCGExPropertyPinMarshal
 {
+	UObject* ResolveObjectFromPath(const FSoftObjectPath& SoftPath, const UClass* ExpectedClass)
+	{
+		UObject* Resolved = SoftPath.ResolveObject();
+		if (!Resolved)
+		{
+			Resolved = SoftPath.TryLoad();
+		}
+		if (!Resolved || (ExpectedClass && !Resolved->IsA(ExpectedClass)))
+		{
+			return nullptr;
+		}
+		return Resolved;
+	}
+
+	UClass* ResolveClassFromPath(const FSoftClassPath& SoftPath, const UClass* ExpectedClass)
+	{
+		UClass* Resolved = Cast<UClass>(SoftPath.ResolveObject());
+		if (!Resolved)
+		{
+			Resolved = SoftPath.TryLoadClass<UObject>();
+		}
+		if (!Resolved || (ExpectedClass && !Resolved->IsChildOf(ExpectedClass)))
+		{
+			return nullptr;
+		}
+		return Resolved;
+	}
+
 	bool TryWriteToPin(const FPCGExProperty* Prop, const FProperty* OutProp, void* OutMem)
 	{
 		if (!Prop || !OutProp || !OutMem)
@@ -46,12 +74,8 @@ namespace PCGExPropertyPinMarshal
 			{
 				return false;
 			}
-			UObject* Resolved = SoftPath.ResolveObject();
+			UObject* Resolved = ResolveObjectFromPath(SoftPath, ObjProp->PropertyClass);
 			if (!Resolved)
-			{
-				Resolved = SoftPath.TryLoad();
-			}
-			if (!Resolved || !Resolved->IsA(ObjProp->PropertyClass))
 			{
 				return false;
 			}
@@ -66,12 +90,8 @@ namespace PCGExPropertyPinMarshal
 			{
 				return false;
 			}
-			UClass* Resolved = Cast<UClass>(SoftPath.ResolveObject());
+			UClass* Resolved = ResolveClassFromPath(SoftPath, ClassProp->MetaClass);
 			if (!Resolved)
-			{
-				Resolved = SoftPath.TryLoadClass<UObject>();
-			}
-			if (!Resolved || !Resolved->IsChildOf(ClassProp->MetaClass))
 			{
 				return false;
 			}
