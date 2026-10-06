@@ -7,17 +7,21 @@
 
 #if WITH_EDITOR
 
+#include "PCGComponent.h"
 #include "PCGExLog.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Data/PCGExDataValue.h"
 #include "Data/PCGPointArrayData.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
+#include "Helpers/PCGHelpers.h"
 #include "Metadata/PCGMetadata.h"
+#include "UObject/UObjectIterator.h"
 
 /**
- * Point-data and actor-tag helpers shared by the default exporter and the built-in export handlers.
+ * Point-data and tag helpers shared by the default exporter and the built-in export handlers.
  * Module-private; inline in a named namespace so Unity builds never see two definitions.
  */
 namespace PCGExLevelExportShared
@@ -92,15 +96,31 @@ namespace PCGExLevelExportShared
 	{
 		TMap<FName, EPCGMetadataTypes> TypeMap;
 
-		bool Register(const FName& Name, const EPCGMetadataTypes NewType, const FString& SourceActorName)
+		/** Attributes the export writes itself on this pin. A tag of the same name is skipped, warned once per name. */
+		TSet<FName> Reserved;
+
+		bool Register(const FName& Name, const EPCGMetadataTypes NewType, const FString& SourceName)
 		{
+			if (Reserved.Contains(Name))
+			{
+				bool bAlreadyReported = false;
+				ReportedReserved.Add(Name, &bAlreadyReported);
+				if (!bAlreadyReported)
+				{
+					UE_LOG(LogPCGEx, Warning,
+					       TEXT("Value tag '%s' on '%s' is skipped: the export writes its own attribute of that name. Rename the tag to export it as an attribute."),
+					       *Name.ToString(), *SourceName);
+				}
+				return false;
+			}
+
 			if (const EPCGMetadataTypes* Existing = TypeMap.Find(Name))
 			{
 				if (*Existing != NewType)
 				{
 					UE_LOG(LogPCGEx, Warning,
-					       TEXT("Value tag type conflict: '%s' on actor '%s'. Attribute was already registered with a different type; this actor's value will be discarded."),
-					       *Name.ToString(), *SourceActorName);
+					       TEXT("Value tag type conflict: '%s' on '%s'. Attribute was already registered with a different type; this value will be discarded."),
+					       *Name.ToString(), *SourceName);
 					return false;
 				}
 				return true;
@@ -108,40 +128,147 @@ namespace PCGExLevelExportShared
 			TypeMap.Add(Name, NewType);
 			return true;
 		}
+
+	private:
+		TSet<FName> ReportedReserved;
 	};
 
 	/** PlainTags become bool=true attributes; ValueTags (Name:Value) become typed attributes. */
-	struct FParsedActorTags
+	struct FParsedTags
 	{
 		TArray<FName> PlainTags;
 		TArray<TPair<FName, TSharedPtr<PCGExData::IDataValue>>> ValueTags;
 	};
 
-	/** Null registry parses silently (no type bookkeeping) -- for tag SETS, never for attribute writes. */
-	inline FParsedActorTags ParseActorTags(const AActor* Actor, FValueTagRegistry* Registry)
+	/**
+	 * The one plain-vs-value classification. None is an empty array slot, never a tag nor a value-tag name.
+	 * Null registry parses silently (no type bookkeeping) -- for tag SETS, never for attribute writes.
+	 */
+	inline FParsedTags ParseTags(const TConstArrayView<FName> RawTags, FValueTagRegistry* Registry, const FString& SourceName)
 	{
-		FParsedActorTags Result;
-		const FString ActorName = Actor->GetActorNameOrLabel();
+		FParsedTags Result;
 
-		for (const FName& Tag : Actor->Tags)
+		for (const FName& Tag : RawTags)
 		{
+			if (Tag.IsNone())
+			{
+				continue;
+			}
+
 			FString Key;
 			const TSharedPtr<PCGExData::IDataValue> DataValue = PCGExData::TryGetValueFromTag(Tag.ToString(), Key);
 
 			if (DataValue.IsValid())
 			{
 				const FName AttrName(Key);
-				if (!Registry || Registry->Register(AttrName, DataValue->GetTypeId(), ActorName))
+				if (!AttrName.IsNone() && (!Registry || Registry->Register(AttrName, DataValue->GetTypeId(), SourceName)))
 				{
 					Result.ValueTags.Add(TPair<FName, TSharedPtr<PCGExData::IDataValue>>(AttrName, DataValue));
 				}
 			}
-			else if (!Registry || Registry->Register(Tag, EPCGMetadataTypes::Boolean, ActorName))
+			else if (!Registry || Registry->Register(Tag, EPCGMetadataTypes::Boolean, SourceName))
 			{
 				Result.PlainTags.Add(Tag);
 			}
 		}
 		return Result;
+	}
+
+	/**
+	 * Tags a user put on an export source. PCG stamps bookkeeping on what it generates -- its markers and
+	 * the generating component's name -- which is neither entry identity nor an attribute.
+	 */
+	struct FAuthoredTags
+	{
+		static bool IsPCGMarker(const FName& Tag)
+		{
+			return Tag == PCGHelpers::DefaultPCGTag
+				|| Tag == PCGHelpers::DefaultPCGDebugTag
+				|| Tag == PCGHelpers::DefaultPCGActorTag
+				|| Tag == PCGHelpers::MarkedForCleanupPCGTag;
+		}
+
+		static TArray<FName> OfActor(const AActor* Actor)
+		{
+			TArray<FName> Tags;
+			Tags.Reserve(Actor->Tags.Num());
+			for (const FName& Tag : Actor->Tags)
+			{
+				if (!Tag.IsNone() && !IsPCGMarker(Tag))
+				{
+					Tags.Add(Tag);
+				}
+			}
+			return Tags;
+		}
+
+		TArray<FName> OfComponent(const UActorComponent* Component)
+		{
+			const TArray<FName>& RawTags = Component->ComponentTags;
+			const int32 MarkerIndex = RawTags.IndexOfByKey(PCGHelpers::DefaultPCGTag);
+			const bool bGenerated = MarkerIndex != INDEX_NONE;
+			if (bGenerated && !PCGSourceNames.IsSet())
+			{
+				GatherPCGSourceNames(Component->GetWorld());
+			}
+
+			TArray<FName> Tags;
+			Tags.Reserve(RawTags.Num());
+			bool bSourceNamed = false;
+			for (const FName& Tag : RawTags)
+			{
+				if (Tag.IsNone() || IsPCGMarker(Tag))
+				{
+					continue;
+				}
+
+				if (bGenerated && PCGSourceNames->Contains(Tag))
+				{
+					bSourceNamed = true;
+					continue;
+				}
+
+				Tags.Add(Tag);
+			}
+
+			// UPCGActorHelpers::GetOrCreateManagedISMC writes its source's name right after the marker (5.5+): the
+			// only handle left once that source is deleted, unloaded, or not a component.
+			if (bGenerated && !bSourceNamed && RawTags.IsValidIndex(MarkerIndex + 1) && Component->IsA<UInstancedStaticMeshComponent>())
+			{
+				Tags.Remove(RawTags[MarkerIndex + 1]);
+			}
+
+			return Tags;
+		}
+
+	private:
+		// PCG tags a generated component with its source PCG component's FName and keeps no back-pointer,
+		// so every PCG component of the world is a candidate. Gathered on the first generated component.
+		TOptional<TSet<FName>> PCGSourceNames;
+
+		void GatherPCGSourceNames(const UWorld* World)
+		{
+			TSet<FName>& Names = PCGSourceNames.Emplace();
+			if (!World)
+			{
+				// Every world-less template component would compare equal.
+				return;
+			}
+
+			for (TObjectIterator<UPCGComponent> It; It; ++It)
+			{
+				if (It->GetWorld() == World)
+				{
+					Names.Add(It->GetFName());
+				}
+			}
+		}
+	};
+
+	inline FParsedTags ParseActorTags(const AActor* Actor, FValueTagRegistry* Registry)
+	{
+		const TArray<FName> Tags = FAuthoredTags::OfActor(Actor);
+		return ParseTags(Tags, Registry, Actor->GetActorNameOrLabel());
 	}
 
 	inline TMap<FName, FPCGMetadataAttributeBase*> CreateValueTagAttributes(UPCGMetadata* Meta, const FValueTagRegistry& Registry)
@@ -164,7 +291,7 @@ namespace PCGExLevelExportShared
 		return AttrMap;
 	}
 
-	inline void SetValueTagAttributes(const TMap<FName, FPCGMetadataAttributeBase*>& AttrMap, const int64 Entry, const FParsedActorTags& Parsed)
+	inline void SetValueTagAttributes(const TMap<FName, FPCGMetadataAttributeBase*>& AttrMap, const int64 Entry, const FParsedTags& Parsed)
 	{
 		for (const FName& Tag : Parsed.PlainTags)
 		{
@@ -191,31 +318,42 @@ namespace PCGExLevelExportShared
 		}
 	}
 
-	/** The tag set an actor contributes under the parse mode: raw tags, plain tags, or plain + value-tag names. */
-	inline TSet<FName> BuildEffectiveTags(const AActor* Actor, const EPCGExValueTagMode Mode)
+	/** Adds the effective form of tags (actor or component) under the parse mode: every tag, plain tags, or plain +
+	 *  value-tag names. */
+	inline void AppendEffectiveTags(const TConstArrayView<FName> RawTags, const EPCGExValueTagMode Mode, TSet<FName>& OutTags)
 	{
-		TSet<FName> Tags;
 		if (Mode == EPCGExValueTagMode::NoParsing)
 		{
-			for (const FName& Tag : Actor->Tags)
+			for (const FName& Tag : RawTags)
 			{
-				Tags.Add(Tag);
+				if (!Tag.IsNone())
+				{
+					OutTags.Add(Tag);
+				}
 			}
-			return Tags;
+			return;
 		}
 
-		const FParsedActorTags Parsed = ParseActorTags(Actor, nullptr);
+		const FParsedTags Parsed = ParseTags(RawTags, nullptr, FString());
 		for (const FName& Tag : Parsed.PlainTags)
 		{
-			Tags.Add(Tag);
+			OutTags.Add(Tag);
 		}
 		if (Mode == EPCGExValueTagMode::ParseAndKeep)
 		{
 			for (const TPair<FName, TSharedPtr<PCGExData::IDataValue>>& VT : Parsed.ValueTags)
 			{
-				Tags.Add(VT.Key);
+				OutTags.Add(VT.Key);
 			}
 		}
+	}
+
+	/** The tag set an actor's authored tags contribute under the parse mode. */
+	inline TSet<FName> BuildEffectiveTags(const AActor* Actor, const EPCGExValueTagMode Mode)
+	{
+		const TArray<FName> ActorTags = FAuthoredTags::OfActor(Actor);
+		TSet<FName> Tags;
+		AppendEffectiveTags(ActorTags, Mode, Tags);
 		return Tags;
 	}
 
@@ -234,14 +372,14 @@ namespace PCGExLevelExportShared
 
 		if (Mode == EPCGExValueTagMode::NoParsing)
 		{
-			for (const FName& Tag : Actor->Tags)
+			for (const FName& Tag : FAuthoredTags::OfActor(Actor))
 			{
 				Append(Tag);
 			}
 		}
 		else if (Mode == EPCGExValueTagMode::ParseAndKeep)
 		{
-			const FParsedActorTags Parsed = ParseActorTags(Actor, nullptr);
+			const FParsedTags Parsed = ParseActorTags(Actor, nullptr);
 			for (const FName& Tag : Parsed.PlainTags)
 			{
 				Append(Tag);

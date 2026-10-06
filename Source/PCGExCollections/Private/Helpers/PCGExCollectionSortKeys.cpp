@@ -46,6 +46,20 @@ namespace PCGExSharedCompact
 				Builder.Append(O.Material.ToSoftObjectPath().ToString());
 			}
 		}
+
+		// Tags discriminate groups (level-export identity). Lexical order keeps the key process-stable, the length
+		// prefix keeps a tag's own text from reading as a second tag; an untagged entry adds no segment.
+		if (!E.Tags.IsEmpty())
+		{
+			TArray<FName> SortedTags = E.Tags.Array();
+			SortedTags.Sort(FNameLexicalLess());
+			for (const FName& Tag : SortedTags)
+			{
+				const FString TagString = Tag.ToString();
+				Builder.Appendf(TEXT("|TAG=%d:"), TagString.Len());
+				Builder.Append(TagString);
+			}
+		}
 		return FString(Builder.ToString());
 	}
 

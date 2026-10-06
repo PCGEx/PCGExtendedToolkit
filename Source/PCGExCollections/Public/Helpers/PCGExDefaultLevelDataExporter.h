@@ -29,26 +29,22 @@ namespace PCGExLevelExport
 UENUM()
 enum class EPCGExValueTagMode : uint8
 {
-	NoParsing UMETA(DisplayName = "No Parsing"),
-	// Tags are written as-is to the instance tag string; no attribute parsing.
-	Parse UMETA(DisplayName = "Parse"),
-	// Plain tags become bool=true attributes; Name:Value tags become typed attributes.
-	// The instance tag string is never written in this mode.
-	ParseAndKeep UMETA(DisplayName = "Parse and Keep"),
-	// Same as Parse, but the name-part of each value tag is also written to the instance tag string.
+	NoParsing    UMETA(DisplayName = "No Parsing", ToolTip="Tags are written as-is to the instance tag string; no attribute parsing."),
+	Parse        UMETA(DisplayName = "Parse", ToolTip="Plain tags become bool=true attributes; Name:Value tags become typed attributes. The instance tag string is never written in this mode."),
+	ParseAndKeep UMETA(DisplayName = "Parse and Keep", ToolTip="Same as Parse, but the name-part of each value tag is also written to the instance tag string."),
 };
 
 UENUM()
 enum class EPCGExActorExportType : uint8
 {
-	Mesh = 0,
 	// Has UStaticMeshComponent with valid mesh
-	Actor = 1,
+	Mesh = 0,
 	// No static mesh → export as actor class reference
-	Level = 2,
+	Actor = 1,
 	// ALevelInstance → export the referenced UWorld asset to an embedded level collection
-	Skip = 3,
+	Level = 2,
 	// Exclude entirely
+	Skip = 3,
 };
 
 /**
@@ -118,10 +114,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = Settings)
 	bool bUseRegisteredHandlers = true;
 
-	/** Controls how actor tags in the form Name:Value are handled.
-	 *  Parse: plain tags → bool=true attributes; Name:Value tags → typed attributes; tag string not written.
-	 *  ParseAndKeep: same as Parse, but the name-part of each value tag is also included in the tag string.
-	 *  NoParsing: all tags are treated as plain strings (original behavior). */
+	/** Controls how Name:Value tags are handled -- on actors, and on each mesh component of a mesh actor. */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	EPCGExValueTagMode ValueTagMode = EPCGExValueTagMode::Parse;
 
