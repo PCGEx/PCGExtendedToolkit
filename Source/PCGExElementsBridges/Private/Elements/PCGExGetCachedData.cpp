@@ -326,8 +326,7 @@ bool FPCGExGetCachedDataElement::Boot(FPCGExContext* InContext) const
 	Settings->GatherTargetReferences(Context, Context->TargetReferences);
 
 	// Nothing loads on its own outside a game world: a reference that does not resolve there never will.
-	const IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
-	const UWorld* World = Source ? Source->GetExecutionState().GetWorld() : nullptr;
+	const UWorld* World = Context->GetWorld();
 	Context->bReferencesMayLoad = World && World->IsGameWorld();
 
 	// Deferred rather than read twice: a host outside the persistent level is duplicated on every read.

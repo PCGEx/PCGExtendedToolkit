@@ -655,7 +655,7 @@ namespace PCGExSampleNearestPath
 					const FTransform SampleTransform = Path->GetTransformAtInputKey(EdgeIndex + Lerp);
 
 					SampleTarget(EdgeIndex, Lerp, Path, SampleTransform);
-				});
+				}, &IgnoreList);
 			}
 
 			if (SampleEntries.IsEmpty())

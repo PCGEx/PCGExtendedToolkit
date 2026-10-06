@@ -79,7 +79,7 @@ bool FPCGExLloydRelax2DElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 			{
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any points to relax."));
+			return Context->CancelExecution(TEXT("Could not find any points to relax."));
 		}
 	}
 

@@ -528,7 +528,7 @@ namespace PCGExCopyToPaths
 
 			if (TangentsHandler)
 			{
-				TangentsHandler->GetSegmentTangents(i, OutArrive, OutLeave);
+				TangentsHandler->GetPointTangents(i, OutArrive, OutLeave);
 			}
 
 			const FTransform& TR = InTransforms[i];

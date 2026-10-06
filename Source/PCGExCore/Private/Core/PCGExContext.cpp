@@ -8,6 +8,7 @@
 #include "PCGComponent.h"
 #include "PCGExCoreMacros.h"
 #include "PCGExSubSystem.h"
+#include "PCGGraphExecutionStateInterface.h"
 #include "PCGManagedResource.h"
 #include "Async/Async.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -224,7 +225,9 @@ void FPCGExContext::FinalizeMutableOutputs()
 
 UWorld* FPCGExContext::GetWorld() const
 {
-	return GetComponent()->GetWorld();
+	// Through the execution state, not GetComponent(): the source is not always a component.
+	const IPCGGraphExecutionSource* Source = ExecutionSource.Get();
+	return Source ? Source->GetExecutionState().GetWorld() : nullptr;
 }
 
 const UPCGComponent* FPCGExContext::GetComponent() const

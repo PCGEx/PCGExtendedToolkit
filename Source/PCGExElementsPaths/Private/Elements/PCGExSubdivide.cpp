@@ -122,6 +122,13 @@ bool FPCGExSubdivideElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExSubdivide
 {
+	// Clamped BEFORE truncating: attribute-driven amounts can be anything, and an out-of-range double -> int32 cast is undefined.
+	FORCEINLINE int32 TruncateCount(const double InRawCount, const EPCGExTruncateMode InMode)
+	{
+		if (!FMath::IsFinite(InRawCount)) { return 0; }
+		return static_cast<int32>(PCGExMath::TruncateDbl(FMath::Clamp(InRawCount, 0.0, static_cast<double>(MAX_int32)), InMode));
+	}
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSubdivide::Process);
@@ -217,9 +224,15 @@ namespace PCGExSubdivide
 			double Amount = AmountGetter->Read(Index);
 			bool bRedistribute = bUseCount;
 
+			// Attribute-driven amounts bypass the property clamps: no subdivision for a non-finite amount or a non-positive step.
+			if (!FMath::IsFinite(Amount) || (!bRedistribute && Amount <= 0))
+			{
+				continue;
+			}
+
 			if (!bRedistribute)
 			{
-				Sub.NumSubdivisions = PCGExMath::TruncateDbl(Sub.Dist / Amount, TruncateMode);
+				Sub.NumSubdivisions = TruncateCount(Sub.Dist / Amount, TruncateMode);
 				Sub.StepSize = Amount;
 
 				if (Settings->bRedistributeEvenly)
@@ -236,7 +249,7 @@ namespace PCGExSubdivide
 
 			if (bRedistribute)
 			{
-				Sub.NumSubdivisions = PCGExMath::TruncateDbl(Amount, TruncateMode);
+				Sub.NumSubdivisions = TruncateCount(Amount, TruncateMode);
 				Sub.StepSize = Sub.Dist / static_cast<double>(Sub.NumSubdivisions + 1);
 				Sub.StartOffset = Sub.StepSize;
 			}

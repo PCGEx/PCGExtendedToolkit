@@ -240,7 +240,7 @@ namespace PCGExDiscardByOverlap
 		FORCEINLINE void UpdateRelative(const int32 MaxCount, const double MaxVolume)
 		{
 			OverlapVolumeAvg = OverlapVolume / OverlapCount;
-			RelativeOverlapCount = OverlapCount / MaxCount;
+			RelativeOverlapCount = static_cast<double>(OverlapCount) / MaxCount;
 			RelativeOverlapVolume = OverlapVolume / MaxVolume;
 		}
 	};

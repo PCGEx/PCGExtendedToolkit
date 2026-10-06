@@ -183,6 +183,10 @@ bool FPCGExSampleVtxByIDElement::AdvanceWork(FPCGExContext* InContext, const UPC
 		};
 
 		Context->TargetsPreloader->StartLoading(Context->GetTaskManager());
+		if (Context->IsWaitingForTasks())
+		{
+			return false;
+		}
 	}
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
@@ -279,13 +283,8 @@ namespace PCGExSampleVtxByID
 		UPCGBasePointData* OutPointData = PointDataFacade->GetOut();
 		TConstPCGValueRange<FTransform> Transforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
 
-		const TSharedPtr<PCGExSampling::FSampingUnionData> Union = MakeShared<PCGExSampling::FSampingUnionData>();
-		Union->Reserve(0, Context->TargetFacades.Num());
-
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			Union->Reset();
-
 			if (!PointFilterCache[Index])
 			{
 				if (Settings->bProcessFilteredOutAsFails)
@@ -302,13 +301,13 @@ namespace PCGExSampleVtxByID
 				continue;
 			}
 
+			// Element.IO is the target's position in TargetFacades, which is how the blender indexes its sources.
 			PCGExData::FElement Element(PCGEx::H64A(*Hash), PCGEx::H64B(*Hash));
-			Union->AddWeighted_Unsafe(Element, 1);
+			OutWeightedPoints.Reset(1);
+			OutWeightedPoints.Emplace(Element.Index, 1.0, Element.IO);
 
 			const FVector Origin = Transforms[Index].GetLocation();
 			const FVector LookAtUp = LookAtUpGetter->Read(Index).GetSafeNormal();
-
-			DataBlender->ComputeWeights(Index, Union, OutWeightedPoints);
 
 			FTransform VtxTransform = Context->TargetFacades[Element.IO]->GetIn()->GetTransform(Element.Index);
 			double Distance = FVector::Dist(Origin, VtxTransform.GetLocation());
@@ -326,7 +325,7 @@ namespace PCGExSampleVtxByID
 				Context->ApplySampling.Apply(MutablePoint, VtxTransform, LookAtTransform);
 			}
 
-			SamplingMask[Index] = !Union->IsEmpty();
+			SamplingMask[Index] = !OutWeightedPoints.IsEmpty();
 			bLocalAnySuccess = true;
 		}
 

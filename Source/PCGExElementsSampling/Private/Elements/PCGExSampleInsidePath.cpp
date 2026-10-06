@@ -356,11 +356,6 @@ namespace PCGExSampleInsidePath
 		TArray<PCGEx::FOpStats> Trackers;
 		DataBlender->InitTrackers(Trackers);
 
-		const TSharedPtr<PCGExSampling::FSampingUnionData> Union = MakeShared<PCGExSampling::FSampingUnionData>();
-		Union->Reserve(Context->TargetsHandler->Num(), RangeMax ? 8 : Context->NumMaxTargets);
-		Union->Reset();
-		Union->WeightRange = -2; // Weights are resolved below; the union passes them through verbatim
-
 		// Samples are collected first so weights can be resolved against the sampled range.
 		struct FSampleEntry
 		{
@@ -476,16 +471,29 @@ namespace PCGExSampleInsidePath
 		}
 
 		// Blend ops carry their own weight curve, so they get the raw inside-aware weight.
+		// Element.IO is the target's position in the handler's facade list, which is how the blender indexes its sources.
+		OutWeightedPoints.Reset(Samples.Num());
+		double TotalWeight = 0;
 		for (const FSampleEntry& Entry : Samples)
 		{
 			const double W = Settings->InsideWeighting.GetWeight(Entry.Dist, Entry.bInside, SampledRangeMin, SampledRangeMax);
-			Union->AddWeighted_Unsafe(Entry.Element, W * Settings->InsideWeighting.GetScale(Entry.bInside));
+			const double ScaledW = W * Settings->InsideWeighting.GetScale(Entry.bInside);
+			OutWeightedPoints.Emplace(Entry.Element.Index, ScaledW, Entry.Element.IO);
+			TotalWeight += ScaledW;
+		}
+
+		if (TotalWeight == 0)
+		{
+			const double FixedWeight = 1 / static_cast<double>(OutWeightedPoints.Num());
+			for (PCGExData::FWeightedPoint& P : OutWeightedPoints)
+			{
+				P.Weight = FixedWeight;
+			}
 		}
 
 		NumSampled = Samples.Num();
 		WeightedDistance /= NumSampled;
 
-		DataBlender->ComputeWeights(Index, Union, OutWeightedPoints);
 		DataBlender->Blend(Index, OutWeightedPoints, Trackers);
 
 		PCGEX_OUTPUT_VALUE(Distance, Index, WeightedDistance)

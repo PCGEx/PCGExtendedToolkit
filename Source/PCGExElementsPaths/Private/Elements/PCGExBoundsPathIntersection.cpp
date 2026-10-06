@@ -199,6 +199,10 @@ bool FPCGExBoundsPathIntersectionElement::AdvanceWork(FPCGExContext* InContext, 
 		};
 
 		Context->TargetsHandler->StartLoading(Context->GetTaskManager());
+		if (Context->IsWaitingForTasks())
+		{
+			return false;
+		}
 	}
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)

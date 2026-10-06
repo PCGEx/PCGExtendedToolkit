@@ -81,7 +81,7 @@ bool FPCGExSortPointsBaseElement::AdvanceWork(FPCGExContext* InContext, const UP
 				NewBatch->bPrefetchData = true;
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any points to sort."));
+			return Context->CancelExecution(TEXT("Could not find any points to sort."));
 		}
 	}
 
@@ -127,11 +127,6 @@ namespace PCGExSortPoints
 		PCGExArrayHelpers::ArrayOfIndices(Order, NumPoints);
 
 		Sorter->SortIndices(Order, NumPoints);
-
-		Order.Sort([&](const int32 A, const int32 B)
-		{
-			return Sorter->Sort(A, B);
-		});
 
 		PointDataFacade->Source->InheritPoints(Order, 0);
 

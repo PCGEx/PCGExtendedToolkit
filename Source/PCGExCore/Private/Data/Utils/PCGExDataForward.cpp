@@ -708,7 +708,7 @@ namespace PCGExData
 							return;
 						}
 
-						const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? PCGDefaultValueKey : InSourceData->GetMetadataEntry(SourceIndex);
+						const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
 						const void* SrcAddr = SourceAtt->GetReadAddressFromEntryKey_Unsafe(SourceKey);
 						if (!SrcAddr)
 						{
@@ -769,7 +769,7 @@ namespace PCGExData
 						return;
 					}
 
-					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? PCGDefaultValueKey : InSourceData->GetMetadataEntry(SourceIndex);
+					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
 					const void* SrcAddr = SourceAtt->GetReadAddressFromEntryKey_Unsafe(SourceKey);
 					if (!SrcAddr)
 					{
@@ -841,7 +841,7 @@ namespace PCGExData
 						return;
 					}
 
-					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? PCGDefaultValueKey : InSourceData->GetMetadataEntry(SourceIndex);
+					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
 					const void* SrcAddr = SourceAtt->GetReadAddressFromEntryKey_Unsafe(SourceKey);
 					if (!SrcAddr)
 					{
@@ -914,7 +914,7 @@ namespace PCGExData
 						return;
 					}
 
-					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? PCGDefaultValueKey : InSourceData->GetMetadataEntry(SourceIndex);
+					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
 					Helpers::PropertyCopyAttribute(SourceAtt, SourceKey, TargetAtt, PCGDefaultValueKey);
 				});
 		}
@@ -974,7 +974,7 @@ namespace PCGExData
 						return;
 					}
 
-					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? PCGDefaultValueKey : InSourceData->GetMetadataEntry(SourceIndex);
+					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
 					Helpers::PropertyCopyAttribute(SourceAtt, SourceKey, TargetAtt, TargetKey);
 				});
 		}

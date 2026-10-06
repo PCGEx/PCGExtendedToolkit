@@ -486,7 +486,7 @@ namespace PCGExSampleNearestSpline
 				{
 					Stats.Update(Infos, IsNewClosest, IsNewFarthest);
 
-					if ((bClosestSample && !IsNewClosest) || !IsNewFarthest)
+					if (bClosestSample ? !IsNewClosest : !IsNewFarthest)
 					{
 						return;
 					}

@@ -279,7 +279,7 @@ namespace PCGExBinPacking
 
 	void FBin::UpdatePoint(PCGExData::FMutablePoint& InPoint, const FItem& InItem) const
 	{
-		const FTransform T = FTransform(FQuat::Identity, InItem.Box.GetCenter() - InPoint.GetLocalBounds().GetCenter(), InPoint.GetScale3D());
+		const FTransform T = FTransform(FQuat::Identity, InItem.Box.GetCenter() - InPoint.GetLocalBounds().GetCenter() * InPoint.GetScale3D(), InPoint.GetScale3D());
 		InPoint.SetTransform(T * Transform);
 	}
 

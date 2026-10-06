@@ -138,6 +138,8 @@ namespace PCGExTensor
 		TArray<FVector> TempExtents;
 		TempExtents.SetNumUninitialized(NumEffectors);
 
+		const double PotencyScale = InFactory->BaseConfig.PotencyScale;
+
 		// Pack per-point data
 		PCGExMT::ParallelOrSequential(
 			NumEffectors,
@@ -148,7 +150,7 @@ namespace PCGExTensor
 
 				FPackedEffector& PackedEffector = PackedEffectors[i];
 				PackedEffector.Location = Transform.GetLocation();
-				PackedEffector.Potency = PotencyValue->Read(i);
+				PackedEffector.Potency = PotencyValue->Read(i) * PotencyScale;
 				PackedEffector.Weight = WeightValue->Read(i);
 
 				PCGExData::FConstPoint Point(InPoints, i);

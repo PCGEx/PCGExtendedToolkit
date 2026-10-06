@@ -93,7 +93,7 @@ bool FPCGExOrientElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSett
 			{
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any paths to orient."));
+			return Context->CancelExecution(TEXT("Could not find any paths to orient."));
 		}
 	}
 
