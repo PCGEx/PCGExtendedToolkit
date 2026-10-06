@@ -1180,7 +1180,56 @@ namespace PCGExActorDelta
 		return Result;
 	}
 
-	void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes)
+	FScopedActorWrite::FScopedActorWrite(AActor* InActor)
+		: Actor(InActor)
+	{
+		check(Actor && IsInGameThread());
+	}
+
+	FScopedActorWrite::~FScopedActorWrite()
+	{
+		// In touch order, as FMultiComponentReregisterContext does.
+		for (TUniquePtr<FComponentReregisterContext>& Context : Contexts)
+		{
+			Context.Reset();
+		}
+
+		for (UActorComponent* Component : NewComponents)
+		{
+			Component->RegisterComponent();
+		}
+
+		if (bRefreshActor)
+		{
+			// What AActor's setters do past the member they set: components read visibility and collision back from it.
+			Actor->MarkComponentsRenderStateDirty();
+
+			TInlineComponentArray<UActorComponent*> Components;
+			Actor->GetComponents(Components);
+			for (UActorComponent* Component : Components)
+			{
+				Component->OnActorEnableCollisionChanged();
+			}
+
+			Actor->UpdateOverlaps();
+		}
+
+		if (bRunFixups)
+		{
+			FixupRegistry::RunAll(Actor);
+		}
+	}
+
+	void FScopedActorWrite::Touch(UActorComponent* InComponent)
+	{
+		if (InComponent && InComponent->IsRegistered())
+		{
+			Contexts.Add(MakeUnique<FComponentReregisterContext>(InComponent));
+		}
+	}
+
+	// Standalone when InScope is null: each written component re-registers as it goes, then the fixups run.
+	void ApplyDeltaBytes(AActor* Actor, const TArray<uint8>& DeltaBytes, FScopedActorWrite* InScope)
 	{
 		if (!Actor || DeltaBytes.IsEmpty())
 		{
@@ -1341,7 +1390,19 @@ namespace PCGExActorDelta
 				// Brand-new component is unregistered. Apply the delta first so
 				// RegisterComponent sees the populated state on its first init pass.
 				Internal::DeserializeObjectDelta(Component, CompBytes);
-				Component->RegisterComponent();
+				if (InScope)
+				{
+					InScope->RegisterOnClose(Component);
+				}
+				else
+				{
+					Component->RegisterComponent();
+				}
+			}
+			else if (InScope)
+			{
+				InScope->Touch(Component);
+				Internal::DeserializeObjectDelta(Component, CompBytes);
 			}
 			else
 			{
@@ -1356,7 +1417,24 @@ namespace PCGExActorDelta
 
 		// Repair engine-managed invariants that the per-property delta cannot express
 		// (e.g. USplineComponent's Spline/SplineCurves aliasing in UE 5.7+).
-		FixupRegistry::RunAll(Actor);
+		if (InScope)
+		{
+			InScope->RequestFixups();
+		}
+		else
+		{
+			FixupRegistry::RunAll(Actor);
+		}
+	}
+
+	void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes)
+	{
+		ApplyDeltaBytes(Actor, DeltaBytes, nullptr);
+	}
+
+	void ApplyPropertyDelta(FScopedActorWrite& InScope, const TArray<uint8>& DeltaBytes)
+	{
+		ApplyDeltaBytes(InScope.GetActor(), DeltaBytes, &InScope);
 	}
 
 	uint32 HashDelta(const TArray<uint8>& DeltaBytes)

@@ -11,7 +11,6 @@
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Engine/LevelStreamingDynamic.h"
-#include "Engine/StreamableManager.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "LevelInstance/LevelInstanceActor.h"
 #include "LevelInstance/LevelInstanceLevelStreaming.h"
@@ -267,11 +266,6 @@ namespace PCGExStagingLoadLevel
 		/** Generation counter for unique level instance names */
 		uint32 Generation = 0;
 
-#if WITH_EDITOR
-		/** Keeps source UWorld assets alive for the duration of the loose-actor spawn loop */
-		TSharedPtr<FStreamableHandle> LevelLoadHandle;
-#endif
-
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
@@ -285,6 +279,7 @@ namespace PCGExStagingLoadLevel
 		virtual void OnPointsProcessingComplete() override;
 
 	private:
+		void StartSpawnLoop();
 		void SpawnLevelInstance(int32 RequestIndex);
 
 		/** Resolve the per-request target actor: soft path -> ResolveObject -> fall back to component target */
