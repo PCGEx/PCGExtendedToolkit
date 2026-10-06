@@ -14,6 +14,7 @@
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Elements/Grammar/PCGSubdivisionBase.h"
+#include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 #include "Helpers/PCGExGetCollectionDataFlatten.h"
 #include "Helpers/PCGExMetaHelpers.h"
@@ -990,14 +991,7 @@ namespace PCGExGetCollectionData
 					{
 						return;
 					}
-					FPCGAttributePropertyInputSelector Selector;
-					Selector.Update(AttrName.ToString());
-					Selector = Selector.CopyAndFixLast(DupData);
-					TUniquePtr<IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateAccessor(DupData, Selector);
-					if (Accessor)
-					{
-						Accessor->SetRange<int32>(Values, 0, *Keys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
-					}
+					PCGExData::Helpers::BulkWriteRows<int32>(DupData, AttrName, Values, *Keys);
 				};
 
 				WriteAttr(bWantRoot, Settings->RootCollectionIndexAttributeName, RootValues);

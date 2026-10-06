@@ -8,6 +8,7 @@
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Factories/PCGExFactories.h"
 #include "UObject/ObjectMacros.h"
 
 #if WITH_EDITOR
@@ -131,10 +132,7 @@ void UPCGExFillControlsFactoryHxThreshold::RegisterBuffersDependencies(FPCGExCon
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 
-	for (const TObjectPtr<const UPCGExHeuristicsFactoryData>& HFactory : HeuristicsFactories)
-	{
-		HFactory->RegisterBuffersDependencies(InContext, FacadePreloader);
-	}
+	PCGExFactories::RegisterBuffersDependencies(HeuristicsFactories, InContext, FacadePreloader);
 }
 
 TArray<FPCGPinProperties> UPCGExFillControlsHeuristicsThresholdProviderSettings::InputPinProperties() const

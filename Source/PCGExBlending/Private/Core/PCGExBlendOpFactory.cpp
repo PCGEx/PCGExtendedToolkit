@@ -22,11 +22,7 @@ void FPCGExAttributeBlendWeight::Init()
 {
 	ScoreLUT = WeightCurveLookup.MakeLookup(
 		bUseLocalCurve, LocalWeightCurve, WeightCurve,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 }
 
 #if WITH_EDITOR

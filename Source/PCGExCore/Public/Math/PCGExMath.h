@@ -248,6 +248,20 @@ namespace PCGExMath
 		Value = !FMath::IsNearlyZero(Step) ? FMath::RoundToDouble(Value / Step) * Step : Value;
 	}
 
+	FORCEINLINE static void Snap(FVector& Value, const FVector& Step)
+	{
+		Snap(Value.X, Step.X);
+		Snap(Value.Y, Step.Y);
+		Snap(Value.Z, Step.Z);
+	}
+
+	FORCEINLINE static void Snap(FRotator& Value, const FRotator& Step)
+	{
+		Snap(Value.Roll, Step.Roll);
+		Snap(Value.Pitch, Step.Pitch);
+		Snap(Value.Yaw, Step.Yaw);
+	}
+
 	FORCEINLINE static double Round10(const float A)
 	{
 		return FMath::RoundToFloat(A * 10.0f) / 10.0f;

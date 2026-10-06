@@ -21,15 +21,7 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 {
 	check(InQuery->PickResolution == PCGExPathfinding::EQueryPickResolution::Success)
 
-	TSharedPtr<PCGExPathfinding::FSearchAllocations> LocalAllocations = Allocations;
-	if (!LocalAllocations)
-	{
-		LocalAllocations = NewAllocations();
-	}
-	else
-	{
-		LocalAllocations->Reset();
-	}
+	TSharedPtr<PCGExPathfinding::FSearchAllocations> LocalAllocations = PrepareAllocations(Allocations);
 
 	const TArray<PCGExClusters::FNode>& NodesRef = *Cluster->Nodes;
 	const TArray<PCGExGraphs::FEdge>& EdgesRef = *Cluster->Edges;

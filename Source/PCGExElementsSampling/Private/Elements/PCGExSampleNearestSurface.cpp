@@ -212,16 +212,7 @@ namespace PCGExSampleNearestSurface
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		// Allocate edge native properties
-
-		EPCGPointNativeProperties AllocateFor = EPCGPointNativeProperties::None;
-
-		if (Context->ApplySampling.WantsApply())
-		{
-			AllocateFor |= EPCGPointNativeProperties::Transform;
-		}
-
-		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
+		PointDataFacade->GetOut()->AllocateProperties(Context->ApplySampling.GetAllocations());
 
 		SurfacesForward = Context->ActorReferenceDataFacade ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, PCGExData::EForwardDomain::Inherit) : nullptr;
 		if (SurfacesForward)

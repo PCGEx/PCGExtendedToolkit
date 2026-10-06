@@ -17,13 +17,8 @@ void UPCGExEdgeEndpointsCheckFilterFactory::RegisterBuffersDependencies(FPCGExCo
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 
-	for (const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* FactorySet : {&FilterFactories, &FilterFactoriesB})
-	{
-		for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : *FactorySet)
-		{
-			Factory->RegisterBuffersDependencies(InContext, FacadePreloader);
-		}
-	}
+	PCGExPointFilter::RegisterBuffersDependencies(InContext, FilterFactories, FacadePreloader);
+	PCGExPointFilter::RegisterBuffersDependencies(InContext, FilterFactoriesB, FacadePreloader);
 }
 
 bool UPCGExEdgeEndpointsCheckFilterFactory::RegisterConsumableAttributes(FPCGExContext* InContext) const

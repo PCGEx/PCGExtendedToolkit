@@ -168,11 +168,7 @@ bool FPCGExSampleStampPointsElement::Boot(FPCGExContext* InContext) const
 
 	Context->WeightCurve = Settings->WeightCurveLookup.MakeLookup(
 		Settings->bUseLocalCurve, Settings->LocalWeightOverDistance, Settings->WeightOverDistance,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 
 	return true;
 }
@@ -342,15 +338,8 @@ namespace PCGExSampleStampPoints
 			return false;
 		}
 
-		if (Settings->bIgnoreSelf)
+		if (!Context->TargetsHandler->BuildIgnoreList(PointDataFacade, Context->InitialMainPointsNum, Settings->bIgnoreSelf, IgnoreList))
 		{
-			IgnoreList.Add(PointDataFacade->GetIn());
-		}
-
-		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-			!Context->TargetsHandler->PopulateIgnoreList(PointDataFacade->Source, MatchingScope, IgnoreList))
-		{
-			(void)Context->TargetsHandler->HandleUnmatchedOutput(PointDataFacade, true);
 			return false;
 		}
 

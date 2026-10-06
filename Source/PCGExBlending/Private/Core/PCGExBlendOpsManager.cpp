@@ -8,6 +8,7 @@
 #include "Core/PCGExBlendOpsSchema.h"
 #include "Core/PCGExOpStats.h"
 #include "Data/PCGExData.h"
+#include "Factories/PCGExFactories.h"
 #include "Elements/Metadata/PCGMetadataElementCommon.h"
 
 
@@ -18,10 +19,7 @@ namespace PCGExBlending
 {
 	void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& Factories)
 	{
-		for (const TObjectPtr<const UPCGExBlendOpFactory>& Factory : Factories)
-		{
-			Factory->RegisterBuffersDependencies(InContext, FacadePreloader);
-		}
+		PCGExFactories::RegisterBuffersDependencies(Factories, InContext, FacadePreloader);
 	}
 
 	void RegisterBuffersDependencies_SourceA(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& Factories)

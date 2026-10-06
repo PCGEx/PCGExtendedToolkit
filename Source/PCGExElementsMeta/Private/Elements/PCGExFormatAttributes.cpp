@@ -7,6 +7,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExMTCommon.h"
 #include "Data/PCGBasePointData.h"
+#include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
@@ -448,12 +449,7 @@ namespace PCGExFormatAttributes
 			else { Metadata->FindOrCreateAttribute<FString>(OutId, FString(), false, true); }
 		}
 
-		FPCGAttributePropertyInputSelector WriteSelector;
-		WriteSelector.Update(OutputName.ToString());
-		WriteSelector = WriteSelector.CopyAndFixLast(DupData);
-		TUniquePtr<IPCGAttributeAccessor> WriteAccessor = PCGAttributeAccessorHelpers::CreateAccessor(DupData, WriteSelector);
-		if (!WriteAccessor) { return; }
-		WriteAccessor->SetRange<FString>(Values, 0, *State.WriteKeys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
+		PCGExData::Helpers::BulkWriteRows<FString>(DupData, OutputName, Values, *State.WriteKeys);
 	}
 }
 

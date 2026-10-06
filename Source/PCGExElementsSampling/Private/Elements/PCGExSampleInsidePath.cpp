@@ -271,14 +271,8 @@ namespace PCGExSampleInsidePath
 			return false;
 		}
 
-		if (Settings->bIgnoreSelf)
+		if (!Context->TargetsHandler->BuildIgnoreList(PointDataFacade, Context->InitialMainPointsNum, Settings->bIgnoreSelf, IgnoreList))
 		{
-			IgnoreList.Add(PointDataFacade->GetIn());
-		}
-		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-			!Context->TargetsHandler->PopulateIgnoreList(PointDataFacade->Source, MatchingScope, IgnoreList))
-		{
-			(void)Context->TargetsHandler->HandleUnmatchedOutput(PointDataFacade, true);
 			return false;
 		}
 

@@ -54,10 +54,7 @@ void UPCGExFillControlsFactoryVtxFilters::RegisterBuffersDependencies(FPCGExCont
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 
-	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
-	{
-		Factory->RegisterBuffersDependencies(InContext, FacadePreloader);
-	}
+	PCGExPointFilter::RegisterBuffersDependencies(InContext, FilterFactories, FacadePreloader);
 }
 
 bool UPCGExFillControlsFactoryVtxFilters::RegisterConsumableAttributes(FPCGExContext* InContext) const

@@ -87,6 +87,9 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
+	/** World the PCGEx world subsystems resolve against: the PIE world, else the editor world; the play world at runtime. */
+	static UWorld* GetCurrentWorld();
+
 	/** To be used when a PCG component can not have a world anymore, to unregister itself. */
 	static UPCGExSubSystem* GetSubsystemForCurrentWorld();
 
