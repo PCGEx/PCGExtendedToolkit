@@ -4,13 +4,53 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/UniquePtr.h"
 #include "UObject/SoftObjectPath.h"
 
 class AActor;
+class FComponentReregisterContext;
 class UActorComponent;
 
 namespace PCGExActorDelta
 {
+	/**
+	 * Brackets raw property writes on a live actor, so that several writers share one refresh.
+	 * A component reported through Touch stays unregistered until the scope closes. Closing re-registers those,
+	 * registers the components created meanwhile, then runs whichever of the actor refresh and the post-apply
+	 * fixups a writer asked for. Game thread only.
+	 */
+	class PCGEXCOLLECTIONS_API FScopedActorWrite
+	{
+	public:
+		explicit FScopedActorWrite(AActor* InActor);
+		~FScopedActorWrite();
+
+		FScopedActorWrite(const FScopedActorWrite&) = delete;
+		FScopedActorWrite& operator=(const FScopedActorWrite&) = delete;
+
+		AActor* GetActor() const { return Actor; }
+
+		/** Call before writing into InComponent. Does nothing when it is not registered, which covers a second call. */
+		void Touch(UActorComponent* InComponent);
+
+		/** Registers a component created inside the scope when it closes, after the touched ones are back. */
+		void RegisterOnClose(UActorComponent* InComponent) { NewComponents.Add(InComponent); }
+
+		/** For a write into AActor's own members: when the scope closes, the components get told what the actor's
+		 *  setters would have told them (render state, collision). */
+		void RequestActorRefresh() { bRefreshActor = true; }
+
+		/** Runs the post-apply fixups on the actor when the scope closes. */
+		void RequestFixups() { bRunFixups = true; }
+
+	private:
+		AActor* Actor = nullptr;
+		TArray<TUniquePtr<FComponentReregisterContext>> Contexts;
+		TArray<UActorComponent*> NewComponents;
+		bool bRefreshActor = false;
+		bool bRunFixups = false;
+	};
+
 	/**
 	 * Serialize properties that differ from defaults for an actor AND its components.
 	 * Actor-level properties are diffed against the actor CDO.
@@ -35,6 +75,12 @@ namespace PCGExActorDelta
 	 * RegisterPostApplyFixup() are invoked on matching components.
 	 */
 	PCGEXCOLLECTIONS_API void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes);
+
+	/**
+	 * Same, as one writer among others on InScope's actor: the components it writes into re-register, and the
+	 * fixups run, when the scope closes rather than as it goes.
+	 */
+	PCGEXCOLLECTIONS_API void ApplyPropertyDelta(FScopedActorWrite& InScope, const TArray<uint8>& DeltaBytes);
 
 	/** Compute CRC32 hash of delta bytes. Returns 0 for empty input. */
 	PCGEXCOLLECTIONS_API uint32 HashDelta(const TArray<uint8>& DeltaBytes);

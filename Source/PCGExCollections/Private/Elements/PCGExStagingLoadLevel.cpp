@@ -439,29 +439,32 @@ namespace PCGExStagingLoadLevel
 					PCGEX_ASYNC_THIS_RET({})
 					return PathsToLoad;
 				},
-				[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+				[PCGEX_ASYNC_THIS_CAPTURE, CtxHandle = Context->GetWeakSelfHandle()](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
 				{
 					PCGEX_ASYNC_THIS
+					PCGEX_SHARED_CONTEXT_VOID(CtxHandle)
 
-					This->LevelLoadHandle = StreamableHandle;
-
-					This->MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(This->SpawnRequests.Num());
-					This->MainThreadLoop->OnIterationCallback = [This](const int32 Index, const PCGExMT::FScope& Scope)
-					{
-						This->SpawnLevelInstance(Index);
-					};
-
-					PCGEX_ASYNC_HANDLE_CHKD_VOID(This->TaskManager, This->MainThreadLoop)
+					// Keeps the source worlds resident for the spawn loop; released at context teardown.
+					SharedContext.Get()->TrackAssetsHandle(StreamableHandle);
+					This->StartSpawnLoop();
 				});
 
 			return;
 		}
 #endif
 
+		StartSpawnLoop();
+	}
+
+	void FProcessor::StartSpawnLoop()
+	{
 		MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(SpawnRequests.Num());
-		MainThreadLoop->OnIterationCallback = [&](const int32 Index, const PCGExMT::FScope& Scope)
+
+		// Weak capture: the loop is owned by this processor, a strong one would keep both alive forever.
+		MainThreadLoop->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)
 		{
-			SpawnLevelInstance(Index);
+			PCGEX_ASYNC_THIS
+			This->SpawnLevelInstance(Index);
 		};
 
 		PCGEX_ASYNC_HANDLE_CHKD_VOID(TaskManager, MainThreadLoop)
@@ -574,6 +577,9 @@ namespace PCGExStagingLoadLevel
 	{
 		// This runs on the game thread via FTimeSlicedMainThreadLoop.
 		// Managed resources are created in AdvanceWork before any async/parallel work dispatches.
+
+		// FTimeSlicedMainThreadLoop tests cancellation once per time slice, not per iteration.
+		PCGEX_CHECK_WORK_HANDLE_VOID
 
 		FLevelSpawnRequest& Request = SpawnRequests[RequestIndex];
 

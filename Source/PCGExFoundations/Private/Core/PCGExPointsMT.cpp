@@ -420,10 +420,14 @@ namespace PCGExPointsMT
 				This->OnProcessingPreparationComplete();
 			};
 
-			ParallelAttributeRead->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, ParallelAttributeRead](const int32 Index, const PCGExMT::FScope& Scope)
+			// Weak capture: OnIterationCallback is never cleared, so a group capturing itself strongly is never freed.
+			ParallelAttributeRead->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, WeakGroup = TWeakPtr<PCGExMT::FTaskGroup>(ParallelAttributeRead)](const int32 Index, const PCGExMT::FScope& Scope)
 			{
 				PCGEX_ASYNC_THIS
-				This->Processors[Index]->PrefetchData(This->TaskManager, ParallelAttributeRead);
+				if (const TSharedPtr<PCGExMT::FTaskGroup> PinnedGroup = WeakGroup.Pin())
+				{
+					This->Processors[Index]->PrefetchData(This->TaskManager, PinnedGroup);
+				}
 			};
 
 			ParallelAttributeRead->StartIterations(Processors.Num(), 1);
