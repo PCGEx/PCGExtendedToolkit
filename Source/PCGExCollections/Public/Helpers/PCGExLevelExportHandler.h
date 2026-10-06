@@ -75,6 +75,16 @@ public:
 	virtual bool Equals(const FPCGExAssetCollectionEntry& A, const FPCGExAssetCollectionEntry& B) const = 0;
 	virtual FString SortKey(const FPCGExAssetCollectionEntry& Entry) const = 0;
 	virtual FSoftObjectPath PrimaryPath(const FPCGExAssetCollectionEntry& Entry) const = 0;
+
+	/**
+	 * Whether Merged, which no previous shared entry Equals, succeeds Previous: it takes Previous' user-set
+	 * Category and, claim-once, its EntryId. Override when identity includes source-derived fields a
+	 * re-export can change (mesh tags).
+	 */
+	virtual bool IsSuccessor(const FPCGExAssetCollectionEntry& Previous, const FPCGExAssetCollectionEntry& Merged) const
+	{
+		return false;
+	}
 };
 
 /** One exported point. Transform is already in the export frame; bounds are point-local. */
@@ -86,6 +96,9 @@ struct PCGEXCOLLECTIONS_API FPCGExExportItem
 
 	/** Actor the point was harvested from -- generic per-point attributes (ActorName, value tags) read it. */
 	AActor* SourceActor = nullptr;
+
+	/** Index into the writer's TagSources; -1 = the point carries its actor's tags only. */
+	int32 TagSource = INDEX_NONE;
 
 	/** Index into the writer's entries; -1 = point without a pick. */
 	int32 LocalEntryIndex = -1;
@@ -135,6 +148,20 @@ public:
 
 	/** Optional per-property inherited-defaults view (see FPCGExExportSlotCapture::InheritedDefaults). */
 	TArray<FInstancedStruct> InheritedDefaults;
+
+	/**
+	 * Tags items carry on top of their actor's (FPCGExExportItem::TagSource) -- a mesh component's, say. The
+	 * handler supplies authored tags only. Parsed as value tags ahead of every actor's and written after
+	 * them, so a source wins over an actor on a shared name whatever the two types are.
+	 */
+	struct FTagSource
+	{
+		/** Named in type-conflict warnings. */
+		FString Name;
+		TArray<FName> Tags;
+	};
+
+	TArray<FTagSource> TagSources;
 
 	/**
 	 * Local index of the entry matching IdentityHash + Equals, adding one (Init runs on a fresh
@@ -248,6 +275,14 @@ public:
 
 	/** No picks are written when collections are not generated; write whatever has a raw form (asset paths). */
 	virtual void WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
+	{
+	}
+
+	/**
+	 * Names of the attributes WriteItemAttributes writes, plus WriteRawAttributes' when bRaw. A source tag of the
+	 * same name is skipped with a warning; unlisted, it would take the name first and that write would fail.
+	 */
+	virtual void GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, bool bRaw, TArray<FName>& OutNames) const
 	{
 	}
 

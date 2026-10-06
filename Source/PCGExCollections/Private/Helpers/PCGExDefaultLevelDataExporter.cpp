@@ -113,6 +113,9 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 
 namespace PCGExDefaultLevelDataExporter
 {
+	// Written on every pin, whatever its handler.
+	const FName ActorNameAttribute = TEXT("ActorName");
+
 	FName SlotForClassification(const EPCGExActorExportType Type)
 	{
 		switch (Type)
@@ -341,7 +344,7 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 		MetaEntries[i] = MetaEntryRange[i];
 	}
 
-	if (FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(TEXT("ActorName"), FString(), false, true))
+	if (FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(PCGExDefaultLevelDataExporter::ActorNameAttribute, FString(), false, true))
 	{
 		for (int32 i = 0; i < NumPoints; i++)
 		{
@@ -352,12 +355,32 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 		}
 	}
 
-	// Value tags, parsed once per unique source actor (ISM actors contribute many points).
+	// Value tags, parsed once per unique source (ISM actors contribute many points). The writer's tag sources
+	// register before any actor and are written after it: they win on a shared name, type conflict included.
 	if (ValueTagMode != EPCGExValueTagMode::NoParsing)
 	{
 		FValueTagRegistry Registry;
+
+		// What the export writes itself on this pin. PCG fails to create an attribute over one of another type,
+		// so a tag that took one of these names first would cost every point that attribute.
+		Registry.Reserved.Add(PCGExDefaultLevelDataExporter::ActorNameAttribute);
+		if (bGenerateCollections)
+		{
+			Registry.Reserved.Add(PCGExCollections::Labels::Tag_EntryIdx);
+		}
+		TArray<FName> HandlerAttributes;
+		Handler->GetWrittenAttributeNames(this, !bGenerateCollections, HandlerAttributes);
+		Registry.Reserved.Append(HandlerAttributes);
+
+		TArray<FParsedTags> ParsedSources;
+		ParsedSources.Reserve(Writer.TagSources.Num());
+		for (const FPCGExExportSlotWriter::FTagSource& TagSource : Writer.TagSources)
+		{
+			ParsedSources.Add(ParseTags(TagSource.Tags, &Registry, TagSource.Name));
+		}
+
 		TMap<const AActor*, int32> ParsedIndex;
-		TArray<FParsedActorTags> ParsedList;
+		TArray<FParsedTags> ParsedList;
 
 		for (const FPCGExExportItem& Item : Writer.Items)
 		{
@@ -368,16 +391,21 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 			}
 		}
 
-		if (!ParsedList.IsEmpty() && !Registry.TypeMap.IsEmpty())
+		if (!Registry.TypeMap.IsEmpty())
 		{
 			const TMap<FName, FPCGMetadataAttributeBase*> AttrMap = CreateValueTagAttributes(Meta, Registry);
 			if (!AttrMap.IsEmpty())
 			{
 				for (int32 i = 0; i < NumPoints; i++)
 				{
-					if (const int32* Index = ParsedIndex.Find(Writer.Items[i].SourceActor))
+					const FPCGExExportItem& Item = Writer.Items[i];
+					if (const int32* Index = ParsedIndex.Find(Item.SourceActor))
 					{
 						SetValueTagAttributes(AttrMap, MetaEntries[i], ParsedList[*Index]);
+					}
+					if (Item.TagSource != INDEX_NONE)
+					{
+						SetValueTagAttributes(AttrMap, MetaEntries[i], ParsedSources[Item.TagSource]);
 					}
 				}
 			}

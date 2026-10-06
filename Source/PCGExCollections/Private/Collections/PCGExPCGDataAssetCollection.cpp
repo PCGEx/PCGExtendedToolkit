@@ -635,8 +635,9 @@ namespace PCGExSharedCompact
 	// Merge every entry's captured contributions for one slot into its deduplicated shared collection
 	// (identity via the policy's Hash + Equals), then rewrite Tag_EntryIdx on the slot's pin against the
 	// resulting shared indices. Tags/Category on existing shared entries are preserved across rebuilds
-	// when identity survives. Deterministic ordering: by content-derived SortKey ascending -- stable
-	// across cold cooks and editor restarts (does NOT depend on the per-process FName hash).
+	// when identity survives; Category and EntryId also follow the policy's IsSuccessor. Deterministic
+	// ordering: by content-derived SortKey ascending -- stable across cold cooks and editor restarts
+	// (does NOT depend on the per-process FName hash).
 	void CompactSharedSlot(
 		UObject* Outer,
 		const TArray<FPCGExPCGDataAssetCollectionEntry*>& Entries,
@@ -667,7 +668,7 @@ namespace PCGExSharedCompact
 
 		// External mode: if the in-memory ref was nulled by a prior externalization, pull the
 		// asset back into the collection package as the working buffer so the preserved-fields
-		// pass below sees the previous entries' user edits (Tags/Category). The next
+		// pass below sees the previous entries' user-authored fields. The next
 		// ExternalizeSlotCollectionsFor will overwrite the same external uasset.
 		if (!Slot.Collection && bExternalActive && !Slot.External.IsNull())
 		{
@@ -701,10 +702,12 @@ namespace PCGExSharedCompact
 			TSet<FName> Tags;
 			FName Category = NAME_None;
 			int32 EntryId = 0;
-			bool bEntryIdConsumed = false; // exact-matched by a merged group; keeps its id out of the loose-fallback bank
+			int32 Index = INDEX_NONE; // previous row: the process-stable order donors are ranked and ids deposited in
+			bool bExactMatched = false; // a merged group Equals it
+			bool bEntryIdClaimed = false; // by that exact match, else by its first successor: out of the loose-fallback bank
 		};
 		TMap<uint32, TArray<FPreserved>> PreservedByHash;
-		SharedCollection->ForEachEntry([&](const FPCGExAssetCollectionEntry* E, int32)
+		SharedCollection->ForEachEntry([&](const FPCGExAssetCollectionEntry* E, const int32 PreviousIndex)
 		{
 			if (!E)
 			{
@@ -716,6 +719,7 @@ namespace PCGExSharedCompact
 			P.Tags = E->Tags;
 			P.Category = E->Category;
 			P.EntryId = E->EntryId;
+			P.Index = PreviousIndex;
 		});
 
 		struct FGroup
@@ -798,6 +802,8 @@ namespace PCGExSharedCompact
 			LocalToSharedByEntry[i].Init(-1, Capture ? Capture->Entries.Num() : 0);
 		}
 
+		TBitArray<> HasExactMatch(false, AllGroups.Num());
+
 		for (int32 SharedIdx = 0; SharedIdx < AllGroups.Num(); SharedIdx++)
 		{
 			const FGroup& G = AllGroups[SharedIdx];
@@ -818,13 +824,15 @@ namespace PCGExSharedCompact
 					{
 						Merged.Tags = P.Tags;
 						Merged.Category = P.Category;
-						// PropertyOverrides is intentionally NOT preserved: it's derived from
-						// per-export contributions, not user-authored on the shared collection.
-						// Tags/Category ARE user-authored and have no per-export contributor.
+						// PropertyOverrides is NOT preserved: it is derived from per-export contributions.
+						// Category is user-authored; so are Tags unless the policy makes them identity
+						// (meshes), where an exact match already implies equal tags.
 
 						// EntryId IS preserved: external references bind by id.
 						Merged.EntryId = P.EntryId;
-						P.bEntryIdConsumed = true;
+						P.bExactMatched = true;
+						P.bEntryIdClaimed = true;
+						HasExactMatch[SharedIdx] = true;
 						break;
 					}
 				}
@@ -836,19 +844,80 @@ namespace PCGExSharedCompact
 			}
 		}
 
+		// The previous entries in row order, which both fallbacks below walk: PreservedByHash iterates by
+		// hash bucket instead, and which entries share a bucket can change with the process.
+		TArray<FPreserved*> PreviousRows;
+		for (TPair<uint32, TArray<FPreserved>>& Pair : PreservedByHash)
+		{
+			for (FPreserved& P : Pair.Value)
+			{
+				PreviousRows.Add(&P);
+			}
+		}
+		PreviousRows.Sort([](const FPreserved& A, const FPreserved& B) { return A.Index < B.Index; });
+
+		// Successor tier for merged entries nothing matched exactly: Category and, claim-once, EntryId both
+		// come from the best previous entry the policy's IsSuccessor accepts -- most shared tags, then one
+		// whose id is still unclaimed, then previous order.
+		for (int32 SharedIdx = 0; SharedIdx < MergedEntries.Num(); SharedIdx++)
+		{
+			if (HasExactMatch[SharedIdx])
+			{
+				continue;
+			}
+
+			FPCGExAssetCollectionEntry& Merged = *MergedEntries[SharedIdx].GetMutablePtr<FPCGExAssetCollectionEntry>();
+			FPreserved* Best = nullptr;
+			int32 BestSharedTags = 0;
+			for (FPreserved* Donor : PreviousRows)
+			{
+				if (!Policy.IsSuccessor(*Donor->Identity.GetPtr<FPCGExAssetCollectionEntry>(), Merged))
+				{
+					continue;
+				}
+
+				int32 SharedTags = 0;
+				for (const FName& Tag : Merged.Tags)
+				{
+					SharedTags += Donor->Tags.Contains(Tag) ? 1 : 0;
+				}
+
+				// No tag in common with a tagged entry whose own sources are still there: a sibling, not a predecessor.
+				if (SharedTags == 0 && Donor->bExactMatched && !Donor->Tags.IsEmpty())
+				{
+					continue;
+				}
+
+				if (!Best
+					|| SharedTags > BestSharedTags
+					|| (SharedTags == BestSharedTags && Best->bEntryIdClaimed && !Donor->bEntryIdClaimed))
+				{
+					Best = Donor;
+					BestSharedTags = SharedTags;
+				}
+			}
+
+			if (Best)
+			{
+				Merged.Category = Best->Category;
+				if (!Best->bEntryIdClaimed)
+				{
+					Merged.EntryId = Best->EntryId;
+					Best->bEntryIdClaimed = true;
+				}
+			}
+		}
+
 		// Loose EntryId fallback: content-changed entries re-claim the previous id bound to
-		// the same primary asset. Claim-once in SortKey order (deterministic); anything still
-		// 0 gets a fresh id from the SyncEntryIds pass below.
+		// the same primary asset. Deposited in row order, claimed once in SortKey order (both
+		// deterministic); anything still 0 gets a fresh id from the SyncEntryIds pass below.
 		{
 			PCGExAssetCollection::FEntryIdBank FallbackIds;
-			for (TPair<uint32, TArray<FPreserved>>& Pair : PreservedByHash)
+			for (const FPreserved* P : PreviousRows)
 			{
-				for (const FPreserved& P : Pair.Value)
+				if (!P->bEntryIdClaimed)
 				{
-					if (!P.bEntryIdConsumed)
-					{
-						FallbackIds.Deposit(0, GetTypeHash(Policy.PrimaryPath(*P.Identity.GetPtr<FPCGExAssetCollectionEntry>())), P.EntryId);
-					}
+					FallbackIds.Deposit(0, GetTypeHash(Policy.PrimaryPath(*P->Identity.GetPtr<FPCGExAssetCollectionEntry>())), P->EntryId);
 				}
 			}
 

@@ -32,32 +32,57 @@
 
 namespace PCGExMeshExportHandler
 {
+	const FName RawMeshAttribute = TEXT("Mesh");
+
+	// Order-independent, in-process only -- bucket keys never outlive the export.
+	uint32 HashTagSet(const TSet<FName>& Tags)
+	{
+		uint32 H = 0;
+		for (const FName& Tag : Tags)
+		{
+			H += GetTypeHash(Tag);
+		}
+		return H;
+	}
+
+	bool TagSetsEqual(const TSet<FName>& A, const TSet<FName>& B)
+	{
+		return A.Num() == B.Num() && A.Includes(B);
+	}
+
 	// Components share an entry only when they agree on mesh, source kind, AND the fingerprint of both
 	// descriptors (every UPROPERTY except OverrideMaterials -- those become per-entry variants).
 	// PropertyComponentHash is folded in so two mesh actors that author distinct property-component
-	// values land in distinct entries.
+	// values land in distinct entries. Authored tags (actor + component, effective under the value-tag
+	// mode) are identity too: each unique combination is its own entry and is stamped on it.
 	struct FMeshEntryKey
 	{
 		FSoftObjectPath MeshPath;
 		uint32 DescriptorFingerprint = 0;
 		bool bIsISMSource = false;
 		uint32 PropertyComponentHash = 0;
+		TSet<FName> Tags;
+		uint32 TagsHash = 0;
 
 		bool operator==(const FMeshEntryKey& Other) const
 		{
 			return MeshPath == Other.MeshPath
 				&& DescriptorFingerprint == Other.DescriptorFingerprint
 				&& bIsISMSource == Other.bIsISMSource
-				&& PropertyComponentHash == Other.PropertyComponentHash;
+				&& PropertyComponentHash == Other.PropertyComponentHash
+				&& TagsHash == Other.TagsHash
+				&& TagSetsEqual(Tags, Other.Tags);
 		}
 
 		friend uint32 GetTypeHash(const FMeshEntryKey& Key)
 		{
 			return HashCombine(
 				HashCombine(
-					HashCombine(GetTypeHash(Key.MeshPath), Key.DescriptorFingerprint),
-					Key.bIsISMSource ? 1u : 0u),
-				Key.PropertyComponentHash);
+					HashCombine(
+						HashCombine(GetTypeHash(Key.MeshPath), Key.DescriptorFingerprint),
+						Key.bIsISMSource ? 1u : 0u),
+					Key.PropertyComponentHash),
+				Key.TagsHash);
 		}
 	};
 
@@ -72,6 +97,7 @@ namespace PCGExMeshExportHandler
 	struct FScratch final : FPCGExExportScratch
 	{
 		TMap<AActor*, FActorPropertySchemaCache> PropertySchemaCache;
+		PCGExLevelExportShared::FAuthoredTags AuthoredTags;
 
 		// Parallel to the writer's entries.
 		TArray<FMeshEntryKey> Keys;
@@ -182,9 +208,9 @@ namespace PCGExMeshExportHandler
 		return Crc;
 	}
 
-	// Identity hash deliberately omits Weight/Tags/Category/PropertyOverrides -- Weight accumulates from
-	// contributors, the rest are user-owned on the shared entry. Descriptors are not hashed (large
-	// structs); Equals resolves collisions.
+	// Identity hash deliberately omits Weight/Category/PropertyOverrides -- Weight accumulates from
+	// contributors, the rest are user-owned on the shared entry. Tags are source-derived identity (see
+	// FMeshEntryKey). Descriptors are not hashed (large structs); Equals resolves collisions.
 	uint32 ContentHash(const FPCGExMeshCollectionEntry& E)
 	{
 		uint32 H = GetTypeHash(E.StaticMesh.ToSoftObjectPath());
@@ -212,6 +238,7 @@ namespace PCGExMeshExportHandler
 		}
 
 		H = HashCombine(H, E.PropertyComponentHash);
+		H = HashCombine(H, HashTagSet(E.Tags));
 		return H;
 	}
 
@@ -241,7 +268,7 @@ namespace PCGExMeshExportHandler
 		return true;
 	}
 
-	bool ContentEquals(const FPCGExMeshCollectionEntry& A, const FPCGExMeshCollectionEntry& B)
+	bool ContentEqualsIgnoringTags(const FPCGExMeshCollectionEntry& A, const FPCGExMeshCollectionEntry& B)
 	{
 		if (A.StaticMesh.ToSoftObjectPath() != B.StaticMesh.ToSoftObjectPath()
 			|| A.MaterialVariants != B.MaterialVariants
@@ -287,6 +314,11 @@ namespace PCGExMeshExportHandler
 		return true;
 	}
 
+	bool ContentEquals(const FPCGExMeshCollectionEntry& A, const FPCGExMeshCollectionEntry& B)
+	{
+		return TagSetsEqual(A.Tags, B.Tags) && ContentEqualsIgnoringTags(A, B);
+	}
+
 	class FPolicy final : public IPCGExExportSlotPolicy
 	{
 	public:
@@ -309,6 +341,12 @@ namespace PCGExMeshExportHandler
 		virtual FSoftObjectPath PrimaryPath(const FPCGExAssetCollectionEntry& Entry) const override
 		{
 			return static_cast<const FPCGExMeshCollectionEntry&>(Entry).StaticMesh.ToSoftObjectPath();
+		}
+
+		// Tags are re-derived from the sources on every export: retagging them must not cost the Category or the id.
+		virtual bool IsSuccessor(const FPCGExAssetCollectionEntry& Previous, const FPCGExAssetCollectionEntry& Merged) const override
+		{
+			return ContentEqualsIgnoringTags(static_cast<const FPCGExMeshCollectionEntry&>(Previous), static_cast<const FPCGExMeshCollectionEntry&>(Merged));
 		}
 	};
 }
@@ -344,6 +382,7 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 
 	const UPCGExDefaultLevelDataExporter* Default = Cast<UPCGExDefaultLevelDataExporter>(Exporter);
 	const bool bCaptureMaterialOverrides = Default ? Default->bCaptureMaterialOverrides : true;
+	const EPCGExValueTagMode ValueTagMode = Default ? Default->ValueTagMode : EPCGExValueTagMode::NoParsing;
 
 	AActor* Actor = Candidate.Actor;
 	FScratch& Scratch = Writer.GetOrCreateScratch<FScratch>();
@@ -351,6 +390,9 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 	// Property-component identity is computed once per actor and folded into every mesh entry this actor
 	// contributes to, so actors authoring distinct property values land in distinct buckets.
 	const FActorPropertySchemaCache& Schema = GetOrComputeActorPropertySchema(Actor, Scratch.PropertySchemaCache);
+
+	// Actor half of every component's tag identity; each component adds its own. Authored tags only.
+	const TSet<FName> ActorTags = PCGExLevelExportShared::BuildEffectiveTags(Actor, ValueTagMode);
 
 	TInlineComponentArray<UStaticMeshComponent*> SMCs;
 	Actor->GetComponents<UStaticMeshComponent>(SMCs);
@@ -380,6 +422,17 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 		Key.MeshPath = FSoftObjectPath(Mesh);
 		Key.bIsISMSource = bIsISM;
 		Key.PropertyComponentHash = Schema.Hash;
+		Key.Tags = ActorTags;
+		const TArray<FName> AuthoredComponentTags = Scratch.AuthoredTags.OfComponent(SMC);
+		PCGExLevelExportShared::AppendEffectiveTags(AuthoredComponentTags, ValueTagMode, Key.Tags);
+		Key.TagsHash = HashTagSet(Key.Tags);
+
+		// The component's own tags also reach its points, as value tags.
+		int32 TagSource = INDEX_NONE;
+		if (!AuthoredComponentTags.IsEmpty())
+		{
+			TagSource = Writer.TagSources.Add(FPCGExExportSlotWriter::FTagSource{SMC->GetReadableName(), AuthoredComponentTags});
+		}
 
 		// Both descriptors are captured whatever the source kind: consumers pick one by spawn path (ISM
 		// spawners read ISMDescriptor, spline meshes SMDescriptor), not by where the entry came from.
@@ -411,6 +464,9 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 				FPCGExMeshCollectionEntry& Entry = static_cast<FPCGExMeshCollectionEntry&>(Base);
 				Entry.StaticMesh = TSoftObjectPtr<UStaticMesh>(Key.MeshPath);
 				Entry.PropertyComponentHash = Key.PropertyComponentHash;
+				// Lexical order, so the stored set does not follow which source was harvested first.
+				Entry.Tags = Key.Tags;
+				Entry.Tags.Sort(FNameLexicalLess());
 				// First contribution stores the descriptors; later contributors share the fingerprint by
 				// construction, so the stored values are canonical.
 				Entry.ISMDescriptor = MoveTemp(TentativeISM);
@@ -456,12 +512,12 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 			{
 				FTransform InstanceWorld;
 				ISMC->GetInstanceTransform(Idx, InstanceWorld, /*bWorldSpace=*/true);
-				Writer.AddItem(Source.ToFrame(InstanceWorld), MeshBounds.Min, MeshBounds.Max, Actor, LocalIdx, VariantIdx);
+				Writer.AddItem(Source.ToFrame(InstanceWorld), MeshBounds.Min, MeshBounds.Max, Actor, LocalIdx, VariantIdx).TagSource = TagSource;
 			}
 		}
 		else
 		{
-			Writer.AddItem(Source.ToFrame(SMC->GetComponentTransform()), MeshBounds.Min, MeshBounds.Max, Actor, LocalIdx, VariantIdx);
+			Writer.AddItem(Source.ToFrame(SMC->GetComponentTransform()), MeshBounds.Min, MeshBounds.Max, Actor, LocalIdx, VariantIdx).TagSource = TagSource;
 		}
 	}
 }
@@ -513,9 +569,17 @@ void UPCGExMeshExportHandler::FinalizeSlot(FPCGExExportSlotWriter& Writer, UObje
 	Writer.InheritedDefaults = PCGExProperties::AggregateAgreedValuesByName(InheritedViews, AssetDefaultViews);
 }
 
+void UPCGExMeshExportHandler::GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, const bool bRaw, TArray<FName>& OutNames) const
+{
+	if (bRaw)
+	{
+		OutNames.Add(PCGExMeshExportHandler::RawMeshAttribute);
+	}
+}
+
 void UPCGExMeshExportHandler::WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 {
-	FPCGMetadataAttribute<FSoftObjectPath>* MeshAttr = Meta->CreateAttribute<FSoftObjectPath>(TEXT("Mesh"), FSoftObjectPath(), false, true);
+	FPCGMetadataAttribute<FSoftObjectPath>* MeshAttr = Meta->CreateAttribute<FSoftObjectPath>(PCGExMeshExportHandler::RawMeshAttribute, FSoftObjectPath(), false, true);
 	if (!MeshAttr)
 	{
 		return;
@@ -536,6 +600,16 @@ void UPCGExMeshExportHandler::WriteRawAttributes(UPCGMetadata* Meta, TConstArray
 
 namespace PCGExActorExportHandler
 {
+	const FName RawActorClassAttribute = TEXT("ActorClass");
+
+	// The exporter whose settings ask for the InstanceTags attribute; null when it is not written.
+	const UPCGExDefaultLevelDataExporter* GetInstanceTagsExporter(const UPCGExLevelDataExporter* Exporter)
+	{
+		const UPCGExDefaultLevelDataExporter* Default = Cast<UPCGExDefaultLevelDataExporter>(Exporter);
+		const bool bWritten = Default && Default->bWriteInstanceTags && Default->InstanceTagsAttributeName != NAME_None && Default->ValueTagMode != EPCGExValueTagMode::Parse;
+		return bWritten ? Default : nullptr;
+	}
+
 	struct FActorInstanceKey
 	{
 		FSoftClassPath ClassPath;
@@ -642,7 +716,7 @@ void UPCGExActorExportHandler::Collect(const FPCGExExportCandidate& Candidate, c
 	Key.DeltaHash = DeltaHash;
 
 	// Raw Actor->Tags feed the property delta; the entry's Tags are the parse-mode effective set,
-	// intersected across the bucket.
+	// intersected across the bucket and stored in lexical order, whichever actor is harvested first.
 	const TSet<FName> EffectiveTags = PCGExLevelExportShared::BuildEffectiveTags(Actor, ValueTagMode);
 
 	bool bAdded = false;
@@ -654,6 +728,7 @@ void UPCGExActorExportHandler::Collect(const FPCGExExportCandidate& Candidate, c
 			FPCGExActorCollectionEntry& Entry = static_cast<FPCGExActorCollectionEntry&>(Base);
 			Entry.Actor = TSoftClassPtr<AActor>(Key.ClassPath);
 			Entry.Tags = EffectiveTags;
+			Entry.Tags.Sort(FNameLexicalLess());
 			if (!DeltaBytes.IsEmpty())
 			{
 				Entry.SerializedPropertyDelta = MoveTemp(DeltaBytes);
@@ -668,6 +743,7 @@ void UPCGExActorExportHandler::Collect(const FPCGExExportCandidate& Candidate, c
 	{
 		FPCGExActorCollectionEntry& Entry = Writer.GetEntry<FPCGExActorCollectionEntry>(LocalIdx);
 		Entry.Tags = Entry.Tags.Intersect(EffectiveTags);
+		Entry.Tags.Sort(FNameLexicalLess());
 	}
 
 	FTransform Transform;
@@ -680,8 +756,8 @@ void UPCGExActorExportHandler::Collect(const FPCGExExportCandidate& Candidate, c
 // Parse every tag is already a typed attribute.
 void UPCGExActorExportHandler::WriteItemAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 {
-	const UPCGExDefaultLevelDataExporter* Default = Cast<UPCGExDefaultLevelDataExporter>(Exporter);
-	if (!Default || !Default->bWriteInstanceTags || Default->InstanceTagsAttributeName == NAME_None || Default->ValueTagMode == EPCGExValueTagMode::Parse)
+	const UPCGExDefaultLevelDataExporter* Default = PCGExActorExportHandler::GetInstanceTagsExporter(Exporter);
+	if (!Default)
 	{
 		return;
 	}
@@ -702,9 +778,21 @@ void UPCGExActorExportHandler::WriteItemAttributes(UPCGMetadata* Meta, TConstArr
 	}
 }
 
+void UPCGExActorExportHandler::GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, const bool bRaw, TArray<FName>& OutNames) const
+{
+	if (const UPCGExDefaultLevelDataExporter* Default = PCGExActorExportHandler::GetInstanceTagsExporter(Exporter))
+	{
+		OutNames.Add(Default->InstanceTagsAttributeName);
+	}
+	if (bRaw)
+	{
+		OutNames.Add(PCGExActorExportHandler::RawActorClassAttribute);
+	}
+}
+
 void UPCGExActorExportHandler::WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 {
-	FPCGMetadataAttribute<FSoftClassPath>* ActorClassAttr = Meta->CreateAttribute<FSoftClassPath>(TEXT("ActorClass"), FSoftClassPath(), false, true);
+	FPCGMetadataAttribute<FSoftClassPath>* ActorClassAttr = Meta->CreateAttribute<FSoftClassPath>(PCGExActorExportHandler::RawActorClassAttribute, FSoftClassPath(), false, true);
 	if (!ActorClassAttr)
 	{
 		return;
@@ -742,6 +830,8 @@ void UPCGExActorExportHandler::FinalizeEmbeddedCollection(UPCGExAssetCollection*
 
 namespace PCGExLevelInstanceExportHandler
 {
+	const FName RawLevelAssetAttribute = TEXT("LevelAsset");
+
 	class FPolicy final : public IPCGExExportSlotPolicy
 	{
 	public:
@@ -815,9 +905,17 @@ void UPCGExLevelInstanceExportHandler::Collect(const FPCGExExportCandidate& Cand
 	Writer.AddItem(Transform, BoundsMin, BoundsMax, Candidate.Actor, LocalIdx);
 }
 
+void UPCGExLevelInstanceExportHandler::GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, const bool bRaw, TArray<FName>& OutNames) const
+{
+	if (bRaw)
+	{
+		OutNames.Add(PCGExLevelInstanceExportHandler::RawLevelAssetAttribute);
+	}
+}
+
 void UPCGExLevelInstanceExportHandler::WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 {
-	FPCGMetadataAttribute<FSoftObjectPath>* LevelAssetAttr = Meta->CreateAttribute<FSoftObjectPath>(TEXT("LevelAsset"), FSoftObjectPath(), false, true);
+	FPCGMetadataAttribute<FSoftObjectPath>* LevelAssetAttr = Meta->CreateAttribute<FSoftObjectPath>(PCGExLevelInstanceExportHandler::RawLevelAssetAttribute, FSoftObjectPath(), false, true);
 	if (!LevelAssetAttr)
 	{
 		return;
