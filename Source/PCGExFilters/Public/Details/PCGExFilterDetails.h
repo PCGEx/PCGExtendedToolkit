@@ -133,6 +133,10 @@ struct PCGEXFILTERS_API FPCGExFilterResultDetails
 #endif
 
 protected:
+	// Shared body of the two scope Write overloads; defined in the .cpp, where both instantiations live.
+	template <typename ResultsT>
+	void WriteScope(const PCGExMT::FScope& Scope, const ResultsT& Results) const;
+
 	TSharedPtr<PCGExData::TBuffer<bool>> BoolBuffer;
 	TSharedPtr<PCGExData::TBuffer<double>> IncrementBuffer;
 	TSharedPtr<PCGExData::TBuffer<int64>> BitmaskBuffer;

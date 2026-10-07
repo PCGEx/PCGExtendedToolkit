@@ -1186,20 +1186,7 @@ namespace PCGExBinPacking3D
 		}
 		else if (Sorter && Sorter->Init(Context))
 		{
-			if (TSharedPtr<PCGExSorting::FSortCache> Cache = Sorter->BuildCache(NumPoints))
-			{
-				ProcessingOrder.Sort([&](const int32 A, const int32 B)
-				{
-					return Cache->Compare(A, B);
-				});
-			}
-			else
-			{
-				ProcessingOrder.Sort([&](const int32 A, const int32 B)
-				{
-					return Sorter->Sort(A, B);
-				});
-			}
+			Sorter->SortIndices(ProcessingOrder, NumPoints);
 		}
 
 		// Create bins

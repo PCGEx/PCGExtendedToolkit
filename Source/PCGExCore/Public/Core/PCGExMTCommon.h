@@ -49,6 +49,21 @@ namespace PCGExMT
 	 */
 	PCGEXCORE_API void Sequential(int32 Num, const FLoopBody& Body);
 
+	/** Lowers Target to Value when Value is smaller. Lock-free: the outcome is the smallest value any caller passed, whatever their order. */
+	FORCEINLINE void AtomicMin(int32& Target, const int32 Value)
+	{
+		int32 Current = Target;
+		while (Value < Current)
+		{
+			const int32 Previous = FPlatformAtomics::InterlockedCompareExchange(&Target, Value, Current);
+			if (Previous == Current)
+			{
+				break;
+			}
+			Current = Previous;
+		}
+	}
+
 	using FExecuteCallback = std::function<void()>;
 	using FCompletionCallback = std::function<void()>;
 	using FEndCallback = std::function<void(const bool)>;

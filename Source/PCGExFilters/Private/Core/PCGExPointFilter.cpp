@@ -8,6 +8,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Factories/PCGExFactories.h"
 
 PCG_DEFINE_TYPE_INFO(FPCGExDataTypeInfoFilter, UPCGExFilterFactoryData)
 PCG_DEFINE_TYPE_INFO(FPCGExDataTypeInfoFilterPoint, UPCGExPointFilterFactoryData)
@@ -501,10 +502,7 @@ namespace PCGExPointFilter
 
 	void RegisterBuffersDependencies(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>& InFactories, PCGExData::FFacadePreloader& FacadePreloader)
 	{
-		for (const UPCGExPointFilterFactoryData* Factory : InFactories)
-		{
-			Factory->RegisterBuffersDependencies(InContext, FacadePreloader);
-		}
+		PCGExFactories::RegisterBuffersDependencies(InFactories, InContext, FacadePreloader);
 	}
 
 	// Removes filters that don't support proxy evaluation (context-free Test(FProxyPoint)).

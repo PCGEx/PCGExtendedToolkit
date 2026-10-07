@@ -321,7 +321,7 @@ namespace PCGExBreakClustersToPaths
 			PathIO->SetSortKey(EdgeDataFacade->Source->IOIndex, Cluster->GetNodePointIndex(FMath::Min(Chain->Links.Last().Node, Chain->Links[0].Node)), Index);
 			PathIO->ConsumeIdxMapping(EPCGPointNativeProperties::All);
 
-#undef PCGX_IGNORE_CHAIN
+#undef PCGEX_IGNORE_CHAIN
 		}
 	}
 

@@ -69,9 +69,10 @@ bool FPCGExReduceDataAttributeElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(ReduceDataAttribute)
 
-	FPCGAttributeIdentifier ReadIdentifier = Settings->Attributes.GetSourceSelector().GetAttributeName();
+	// A property selector leaves the name unset, which the validation below refuses.
+	FPCGAttributeIdentifier ReadIdentifier;
+	PCGExData::Helpers::TryGetDataValueIdentifier(Settings->Attributes.GetSourceSelector(), ReadIdentifier);
 	PCGEX_VALIDATE_NAME(ReadIdentifier.Name)
-	ReadIdentifier.MetadataDomain = PCGMetadataDomainID::Data;
 
 	Context->WriteIdentifier = Settings->Attributes.GetTargetSelector().GetAttributeName();
 	PCGEX_VALIDATE_NAME(Context->WriteIdentifier.Name)
@@ -91,12 +92,7 @@ bool FPCGExReduceDataAttributeElement::Boot(FPCGExContext* InContext) const
 		{
 			continue;
 		}
-		const FPCGMetadataAttributeBase* Attribute = nullptr;
-
-		if (PCGExMetaHelpers::HasAttribute(TaggedData.Data, ReadIdentifier))
-		{
-			Attribute = TaggedData.Data->Metadata->GetConstAttribute(ReadIdentifier);
-		}
+		const FPCGMetadataAttributeBase* Attribute = PCGExMetaHelpers::TryGetConstAttribute(TaggedData.Data, ReadIdentifier);
 
 		if (!Attribute)
 		{

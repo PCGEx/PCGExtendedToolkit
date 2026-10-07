@@ -279,7 +279,7 @@ namespace PCGExBinPacking
 
 	void FBin::UpdatePoint(PCGExData::FMutablePoint& InPoint, const FItem& InItem) const
 	{
-		const FTransform T = FTransform(FQuat::Identity, InItem.Box.GetCenter() - InPoint.GetLocalBounds().GetCenter(), InPoint.GetScale3D());
+		const FTransform T = FTransform(FQuat::Identity, InItem.Box.GetCenter() - InPoint.GetLocalBounds().GetCenter() * InPoint.GetScale3D(), InPoint.GetScale3D());
 		InPoint.SetTransform(T * Transform);
 	}
 
@@ -371,20 +371,7 @@ namespace PCGExBinPacking
 
 		if (Sorter && Sorter->Init(Context))
 		{
-			if (TSharedPtr<PCGExSorting::FSortCache> Cache = Sorter->BuildCache(NumPoints))
-			{
-				ProcessingOrder.Sort([&](const int32 A, const int32 B)
-				{
-					return Cache->Compare(A, B);
-				});
-			}
-			else
-			{
-				ProcessingOrder.Sort([&](const int32 A, const int32 B)
-				{
-					return Sorter->Sort(A, B);
-				});
-			}
+			Sorter->SortIndices(ProcessingOrder, NumPoints);
 		}
 
 		if (Settings->bAvoidWastedSpace)

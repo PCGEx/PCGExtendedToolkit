@@ -491,17 +491,13 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 
 		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, ManagedActors, bTransientSpawn);
 
-		// One spatial data per spawned actor, emitted on the default output pin.
-		FPCGTaggedData& OutTagged = OutputData.TaggedData.Emplace_GetRef();
-		OutTagged.Pin = PCGPinConstants::DefaultOutputLabel;
-		OutTagged.Data = OutData;
-
 		// Carry the source path's tags + @Data attributes onto the output so downstream graphs can address/filter
 		// the spawned actors the same way they would the originating paths.
+		TSet<FString> OutTags;
 		const int32 SrcIdx = Spec->SourceFacadeIndex;
 		if (AllOpData && AllOpData->Facades.IsValidIndex(SrcIdx))
 		{
-			AllOpData->Facades[SrcIdx]->Source->Tags->DumpTo(OutTagged.Tags);
+			AllOpData->Facades[SrcIdx]->Source->Tags->DumpTo(OutTags);
 
 			if (!HandlersBySource.Contains(SrcIdx))
 			{
@@ -523,8 +519,11 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 
 		// Written last so the node's own actor reference wins any @Data name collision with a forwarded attribute.
 		PCGExData::Helpers::SetDataValue<FSoftObjectPath>(OutData, AttrName, FSoftObjectPath(SpawnedActor));
+
+		// One spatial data per spawned actor, emitted on the default output pin.
+		StageOutput(OutData, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::Managed, OutTags);
 	}
-	
+
 	ExecuteOnNotifyActors(Settings->PostProcessFunctionNames);
 }
 

@@ -176,6 +176,23 @@ namespace PCGExMatching
 		return false;
 	}
 
+	bool FTargetsHandler::BuildIgnoreList(const TSharedPtr<PCGExData::FFacade>& InFacade, const int32 InNumCandidates, const bool bIgnoreSelf, TSet<const UPCGData*>& OutIgnoreList) const
+	{
+		if (bIgnoreSelf)
+		{
+			OutIgnoreList.Add(InFacade->GetIn());
+		}
+
+		if (FScope MatchingScope(InNumCandidates, true);
+			!PopulateIgnoreList(InFacade->Source, MatchingScope, OutIgnoreList))
+		{
+			(void)HandleUnmatchedOutput(InFacade, true);
+			return false;
+		}
+
+		return true;
+	}
+
 
 	void FTargetsHandler::ForEachPreloader(PCGExData::FMultiFacadePreloader::FPreloaderItCallback&& It) const
 	{

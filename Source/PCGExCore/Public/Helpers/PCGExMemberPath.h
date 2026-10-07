@@ -37,7 +37,4 @@ namespace PCGExMemberPath
 	/** Resolve a member path against (Root layout, Container memory). Invalid result on
 	 *  empty path, unknown segment, or non-struct intermediate. */
 	PCGEXCORE_API FResolvedMember Resolve(const UStruct* Root, void* Container, FName MemberPath);
-
-	/** Layout-only resolve (no instance) -- for edit-time validation and pin typing. */
-	PCGEXCORE_API const FProperty* ResolveProperty(const UStruct* Root, FName MemberPath);
 }

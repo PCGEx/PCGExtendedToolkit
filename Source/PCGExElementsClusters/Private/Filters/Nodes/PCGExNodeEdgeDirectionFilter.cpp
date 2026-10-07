@@ -65,9 +65,7 @@ bool FNodeEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<P
 
 	bFromNode = TypedFilterFactory->Config.DirectionOrder == EPCGExAdjacencyDirectionOrigin::FromNode;
 
-	OperandDirection = TypedFilterFactory->Config.DirectionValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandDirection->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandDirection->Init(PointDataFacade, false))
+	if (!InitSettingValue(OperandDirection, TypedFilterFactory->Config.DirectionValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false))
 	{
 		return false;
 	}

@@ -25,8 +25,7 @@ void FPCGExEntryInterleavedPickerOp::OnSharedDataMissing(FPCGExContext* InContex
 
 bool FPCGExEntryInterleavedPickerOp::OnInitForData(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade)
 {
-	OrdinalGetter = OrdinalSource.GetValueSetting();
-	if (!OrdinalGetter->Init(InDataFacade))
+	if (!InitSettingValue(OrdinalGetter, OrdinalSource.GetValueSetting(), InDataFacade))
 	{
 		return false;
 	}

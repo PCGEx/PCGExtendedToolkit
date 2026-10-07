@@ -1218,10 +1218,7 @@ namespace PCGExPCGDataAssetLoader
 					TempUnpacker.RegisterCollectionsTo(*Context->MergedMapPacker);
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
 
-					FPCGTaggedData MapOutput;
-					MapOutput.Data = MergedMapData;
-					MapOutput.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
-					Context->OutputData.TaggedData.Add(MapOutput);
+					Context->StageOutput(MergedMapData, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 				}
 			}
 

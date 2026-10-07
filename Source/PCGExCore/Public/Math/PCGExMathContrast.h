@@ -218,25 +218,6 @@ namespace PCGExMath::Contrast
 	}
 
 	//
-	// Arbitrary range -- remaps [Min,Max] → [0,1] internally
-	//
-
-	FORCEINLINE double ApplyContrastInRange(const double Value, const double Contrast, const int32 CurveType, const double Min, const double Max)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return Value;
-		}
-		const double Range = Max - Min;
-		if (Range <= SMALL_NUMBER)
-		{
-			return Value;
-		}
-		const double Normalized = (Value - Min) / Range;
-		return ApplyContrast(Normalized, Contrast, CurveType) * Range + Min;
-	}
-
-	//
 	// [0,1] batch operations (switch outside loop for branch prediction)
 	//
 

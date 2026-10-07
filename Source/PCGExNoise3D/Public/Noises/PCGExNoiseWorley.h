@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Core/PCGExNoise3DFactoryProvider.h"
 #include "Core/PCGExNoise3DOperation.h"
+#include "Math/PCGExMath.h"
 #include "UObject/Object.h"
 
 #include "PCGExNoiseWorley.generated.h"
@@ -80,15 +81,15 @@ private:
 		switch (DistanceFunction)
 		{
 		case EPCGExWorleyDistanceFunc::Euclidean:
-			return PCGExNoise3D::Math::DistanceEuclidean(A, B);
+			return FVector::Dist(A, B);
 		case EPCGExWorleyDistanceFunc::EuclideanSq:
-			return PCGExNoise3D::Math::DistanceEuclideanSq(A, B);
+			return FVector::DistSquared(A, B);
 		case EPCGExWorleyDistanceFunc::Manhattan:
-			return PCGExNoise3D::Math::DistanceManhattan(A, B);
+			return PCGExMath::DistanceManhattan(A, B);
 		case EPCGExWorleyDistanceFunc::Chebyshev:
-			return PCGExNoise3D::Math::DistanceChebyshev(A, B);
+			return PCGExMath::DistanceChebyshev(A, B);
 		default:
-			return PCGExNoise3D::Math::DistanceEuclidean(A, B);
+			return FVector::Dist(A, B);
 		}
 	}
 };

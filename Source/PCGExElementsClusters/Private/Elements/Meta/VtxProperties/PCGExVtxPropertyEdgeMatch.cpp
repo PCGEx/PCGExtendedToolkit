@@ -47,8 +47,7 @@ bool FPCGExVtxPropertyEdgeMatch::PrepareForCluster(FPCGExContext* InContext, TSh
 		return false;
 	}
 
-	DirCache = Config.DirectionValue.GetValueSetting();
-	if (!DirCache->Init(PrimaryDataFacade, false))
+	if (!InitSettingValue(DirCache, Config.DirectionValue.GetValueSetting(), PrimaryDataFacade, false))
 	{
 		bIsValidOperation = false;
 		return false;

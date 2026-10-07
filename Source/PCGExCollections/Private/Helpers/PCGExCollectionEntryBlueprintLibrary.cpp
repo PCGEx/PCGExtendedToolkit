@@ -174,36 +174,6 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 			[PathType, InPath](FPCGExProperty* Prop) { return Prop->TryReadValue(PathType, InPath); });
 	}
 
-	// Soft-path resolution shared by the Object/Class accessors of every tier: resolve, load on a
-	// miss, and reject anything outside ExpectedClass (None accepts everything).
-	UObject* ResolveObjectFromPath(const FSoftObjectPath& SoftPath, const TSubclassOf<UObject>& ExpectedClass)
-	{
-		UObject* Resolved = SoftPath.ResolveObject();
-		if (!Resolved)
-		{
-			Resolved = SoftPath.TryLoad();
-		}
-		if (!Resolved || (*ExpectedClass && !Resolved->IsA(ExpectedClass)))
-		{
-			return nullptr;
-		}
-		return Resolved;
-	}
-
-	UClass* ResolveClassFromPath(const FSoftClassPath& SoftPath, const TSubclassOf<UObject>& ExpectedClass)
-	{
-		UClass* Resolved = Cast<UClass>(SoftPath.ResolveObject());
-		if (!Resolved)
-		{
-			Resolved = SoftPath.TryLoadClass<UObject>();
-		}
-		if (!Resolved || (*ExpectedClass && !Resolved->IsChildOf(ExpectedClass)))
-		{
-			return nullptr;
-		}
-		return Resolved;
-	}
-
 	// --- Category tier ---
 
 	const FPCGExProperty* ResolveCategoryProperty(const UPCGExAssetCollection* Collection, FName Category, FName PropertyName)
@@ -858,7 +828,7 @@ UObject* UPCGExCollectionEntryBlueprintLibrary::TryGetEntryPropertyObject(
 		return nullptr;
 	}
 
-	UObject* Resolved = PCGExCollectionEntryBlueprintLibrary_Private::ResolveObjectFromPath(SoftPath, ExpectedClass);
+	UObject* Resolved = PCGExPropertyPinMarshal::ResolveObjectFromPath(SoftPath, ExpectedClass);
 	bSuccess = Resolved != nullptr;
 	return Resolved;
 }
@@ -890,7 +860,7 @@ TSubclassOf<UObject> UPCGExCollectionEntryBlueprintLibrary::TryGetEntryPropertyC
 		return nullptr;
 	}
 
-	UClass* Resolved = PCGExCollectionEntryBlueprintLibrary_Private::ResolveClassFromPath(SoftPath, ExpectedClass);
+	UClass* Resolved = PCGExPropertyPinMarshal::ResolveClassFromPath(SoftPath, ExpectedClass);
 	bSuccess = Resolved != nullptr;
 	return Resolved;
 }
@@ -984,7 +954,7 @@ UObject* UPCGExCollectionEntryBlueprintLibrary::TryGetCategoryPropertyObject(
 		return nullptr;
 	}
 
-	UObject* Resolved = PCGExCollectionEntryBlueprintLibrary_Private::ResolveObjectFromPath(SoftPath, ExpectedClass);
+	UObject* Resolved = PCGExPropertyPinMarshal::ResolveObjectFromPath(SoftPath, ExpectedClass);
 	bSuccess = Resolved != nullptr;
 	return Resolved;
 }
@@ -1016,7 +986,7 @@ TSubclassOf<UObject> UPCGExCollectionEntryBlueprintLibrary::TryGetCategoryProper
 		return nullptr;
 	}
 
-	UClass* Resolved = PCGExCollectionEntryBlueprintLibrary_Private::ResolveClassFromPath(SoftPath, ExpectedClass);
+	UClass* Resolved = PCGExPropertyPinMarshal::ResolveClassFromPath(SoftPath, ExpectedClass);
 	bSuccess = Resolved != nullptr;
 	return Resolved;
 }
@@ -1107,7 +1077,7 @@ UObject* UPCGExCollectionEntryBlueprintLibrary::TryGetCollectionPropertyObject(
 		return nullptr;
 	}
 
-	UObject* Resolved = PCGExCollectionEntryBlueprintLibrary_Private::ResolveObjectFromPath(SoftPath, ExpectedClass);
+	UObject* Resolved = PCGExPropertyPinMarshal::ResolveObjectFromPath(SoftPath, ExpectedClass);
 	bSuccess = Resolved != nullptr;
 	return Resolved;
 }
@@ -1137,7 +1107,7 @@ TSubclassOf<UObject> UPCGExCollectionEntryBlueprintLibrary::TryGetCollectionProp
 		return nullptr;
 	}
 
-	UClass* Resolved = PCGExCollectionEntryBlueprintLibrary_Private::ResolveClassFromPath(SoftPath, ExpectedClass);
+	UClass* Resolved = PCGExPropertyPinMarshal::ResolveClassFromPath(SoftPath, ExpectedClass);
 	bSuccess = Resolved != nullptr;
 	return Resolved;
 }
@@ -1806,16 +1776,8 @@ UObject* UPCGExCollectionEntryBlueprintLibrary::LoadEntryAsset(
 		return nullptr;
 	}
 
-	UObject* Resolved = Entry->Staging.Path.ResolveObject();
+	UObject* Resolved = PCGExPropertyPinMarshal::ResolveObjectFromPath(Entry->Staging.Path, ExpectedClass);
 	if (!Resolved)
-	{
-		Resolved = Entry->Staging.Path.TryLoad();
-	}
-	if (!Resolved)
-	{
-		return nullptr;
-	}
-	if (*ExpectedClass && !Resolved->IsA(ExpectedClass))
 	{
 		return nullptr;
 	}

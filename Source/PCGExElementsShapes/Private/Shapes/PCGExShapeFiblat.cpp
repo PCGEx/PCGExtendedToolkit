@@ -19,8 +19,7 @@ bool FPCGExShapeFiblatBuilder::PrepareForSeeds(FPCGExContext* InContext, const T
 		return false;
 	}
 
-	Phi = Config.Phi.GetValueSetting();
-	if (!Phi->Init(InSeedDataFacade))
+	if (!InitSettingValue(Phi, Config.Phi.GetValueSetting(), InSeedDataFacade))
 	{
 		return false;
 	}

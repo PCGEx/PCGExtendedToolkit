@@ -105,9 +105,7 @@ namespace PCGExPointFilter
 			}
 		}
 
-		OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting();
-		OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!OperandB->Init(PointDataFacade))
+		if (!InitSettingValue(OperandB, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 		{
 			return false;
 		}
@@ -116,9 +114,14 @@ namespace PCGExPointFilter
 		return true;
 	}
 
+	bool FTimeFilter::Test(const PCGExData::FProxyPoint& Point) const
+	{
+		return TestProxy(Point, nullptr);
+	}
+
 	// Collection mode keeps filters that failed Init (see FManager::Init), so this per-data entry point
 	// re-checks what Init already rejected. The per-point Test(int32) relies on the Init guard instead.
-	bool FTimeFilter::Test(const PCGExData::FProxyPoint& Point) const
+	bool FTimeFilter::TestProxy(const PCGExData::FProxyPoint& Point, const UPCGData* InParentData) const
 	{
 		// Matching failed for the whole collection (no candidate matched) -> fallback result.
 		if (bCheckAgainstDataBounds)
@@ -140,6 +143,7 @@ namespace PCGExPointFilter
 		}
 
 		const TSet<const UPCGData*>& MatchIgnore = Handler->MatchIgnoreList;
+		const UPCGData* SelfData = TypedFilterFactory->Config.bIgnoreSelf ? InParentData : nullptr;
 
 		if (TypedFilterFactory->Config.Pick == EPCGExSplineFilterPick::Closest)
 		{
@@ -147,7 +151,8 @@ namespace PCGExPointFilter
 
 			TypedFilterFactory->Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), [&](const PCGExOctree::FItem& Item)
 			{
-				if (!MatchIgnore.IsEmpty() && MatchIgnore.Contains((*TypedFilterFactory->Datas)[Item.Index].Data))
+				const UPCGData* TargetData = (*TypedFilterFactory->Datas)[Item.Index].Data;
+				if ((SelfData && TargetData == SelfData) || (!MatchIgnore.IsEmpty() && MatchIgnore.Contains(TargetData)))
 				{
 					return;
 				}
@@ -170,7 +175,8 @@ namespace PCGExPointFilter
 			int32 MatchCount = 0;
 			for (int32 i = 0; i < TypedFilterFactory->PolyPaths.Num(); i++)
 			{
-				if (!MatchIgnore.IsEmpty() && MatchIgnore.Contains((*TypedFilterFactory->Datas)[i].Data))
+				const UPCGData* TargetData = (*TypedFilterFactory->Datas)[i].Data;
+				if ((SelfData && TargetData == SelfData) || (!MatchIgnore.IsEmpty() && MatchIgnore.Contains(TargetData)))
 				{
 					continue;
 				}
@@ -223,6 +229,7 @@ namespace PCGExPointFilter
 		}
 
 		const TSet<const UPCGData*>* MatchExclude = &Handler->MatchIgnoreList;
+		const UPCGData* SelfData = TypedFilterFactory->Config.bIgnoreSelf ? PointDataFacade->Source->GetIn() : nullptr;
 
 		if (TypedFilterFactory->Config.Pick == EPCGExSplineFilterPick::Closest)
 		{
@@ -230,7 +237,8 @@ namespace PCGExPointFilter
 
 			TypedFilterFactory->Octree->FindElementsWithBoundsTest(FBoxCenterAndExtent(WorldPosition, FVector::OneVector), [&](const PCGExOctree::FItem& Item)
 			{
-				if (!MatchExclude->IsEmpty() && MatchExclude->Contains((*TypedFilterFactory->Datas)[Item.Index].Data))
+				const UPCGData* TargetData = (*TypedFilterFactory->Datas)[Item.Index].Data;
+				if ((SelfData && TargetData == SelfData) || (!MatchExclude->IsEmpty() && MatchExclude->Contains(TargetData)))
 				{
 					return;
 				}
@@ -253,7 +261,8 @@ namespace PCGExPointFilter
 			int32 MatchCount = 0;
 			for (int32 i = 0; i < TypedFilterFactory->PolyPaths.Num(); i++)
 			{
-				if (!MatchExclude->IsEmpty() && MatchExclude->Contains((*TypedFilterFactory->Datas)[i].Data))
+				const UPCGData* TargetData = (*TypedFilterFactory->Datas)[i].Data;
+				if ((SelfData && TargetData == SelfData) || (!MatchExclude->IsEmpty() && MatchExclude->Contains(TargetData)))
 				{
 					continue;
 				}
@@ -289,7 +298,7 @@ namespace PCGExPointFilter
 	{
 		PCGExData::FProxyPoint ProxyPoint;
 		IO->GetDataAsProxyPoint(ProxyPoint);
-		return Test(ProxyPoint);
+		return TestProxy(ProxyPoint, IO->GetInOut());
 	}
 }
 

@@ -17,16 +17,14 @@
 
 namespace PCGExClusters
 {
-	class FProjectedPointSet;
 	class FCellConstraints;
 	class FCellPathBuilder;
 	class FCell;
 }
 
-namespace PCGExMT
+namespace PCGExCells
 {
-	template <typename T>
-	class TScopedArray;
+	class FSeededCellResolver;
 }
 
 namespace PCGExFindContours
@@ -169,34 +167,13 @@ namespace PCGExFindContours
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExFindContoursContext, UPCGExFindContoursSettings>
 	{
 	protected:
-		TSharedPtr<PCGExClusters::FProjectedPointSet> Seeds;
+		/** Seed-to-cell resolution; released once the claims are final. */
+		TSharedPtr<PCGExCells::FSeededCellResolver> Resolver;
 		TSharedPtr<PCGExClusters::FCellPathBuilder> CellProcessor;
-		TArray<TSharedPtr<PCGExClusters::FCell>> EnumeratedCells;
-		TArray<TSharedPtr<PCGExClusters::FCell>> AllCellsIncludingFailed; // For checking seed consumption
 		TSharedPtr<PCGExClusters::FCell> WrapperCell;
 
-		/** Per-seed result of Seed Picking's cluster-bounds gate, precomputed once (all-true when the gate is off). */
-		TBitArray<> SeedInBounds;
-
-		/** LocalTangent only: per-seed FaceIndex of its nearest-plane containing cell (INDEX_NONE = none).
-		 *  STACKED parallel cells both contain a sandwiched seed's projection; this arbitrates the claim.
-		 *  Empty on planar builds, where faces are disjoint in the shared 2D space. */
-		TArray<int32> SeedBestFace;
-
-		/** Inverse of SeedBestFace, built once after arbitration: FaceIndex -> its claiming seeds.
-		 *  Turns ProcessRange's per-cell seed scan into a single lookup. */
-		TMap<int32, TArray<int32>> SeedFaceClaims;
-
-		/** LocalTangent only: the failed cells alone -- arbitration already proves membership in VALID
-		 *  cells, so the wrapper consumption sweep only needs to test these. */
-		TArray<TSharedPtr<PCGExClusters::FCell>> FailedCellsOnly;
-
-		TSharedPtr<PCGExMT::TScopedArray<TSharedPtr<PCGExClusters::FCell>>> ScopedValidCells;
 		TArray<TSharedPtr<PCGExClusters::FCell>> ValidCells;
 		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOIndices;
-
-		/** Owned by the enumerator, outlives processing. */
-		const TMap<int32, TSet<int32>>* CellAdjacencyMap = nullptr;
 
 	public:
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;
@@ -213,8 +190,6 @@ namespace PCGExFindContours
 		virtual void PrepareLoopScopesForRanges(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 		virtual void OnRangeProcessingComplete() override;
-
-		void HandleWrapperOnlyCase(const int32 NumSeeds);
 
 		virtual void Cleanup() override;
 	};

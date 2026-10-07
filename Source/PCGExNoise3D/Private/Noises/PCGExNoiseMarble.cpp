@@ -12,14 +12,7 @@ void FPCGExNoiseMarble::PostInitDerived()
 	// Property clamps don't apply to override-pin values; <= 0 octaves would divide by zero below
 	TurbulenceOctaves = FMath::Clamp(TurbulenceOctaves, 1, 16);
 
-	double Amp = 1.0;
-	double MaxVal = 0.0;
-	for (int32 i = 0; i < TurbulenceOctaves; ++i)
-	{
-		MaxVal += Amp;
-		Amp *= 0.5;
-	}
-	InvTurbulenceNorm = 1.0 / MaxVal;
+	InvTurbulenceNorm = CalcFractalBounding(TurbulenceOctaves, 0.5);
 }
 
 double FPCGExNoiseMarble::GenerateTurbulence(const FVector& Position) const

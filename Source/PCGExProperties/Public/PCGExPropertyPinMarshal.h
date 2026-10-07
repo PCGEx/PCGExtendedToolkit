@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/SoftObjectPath.h"
 
 struct FPCGExProperty;
 class FProperty;
@@ -43,4 +44,10 @@ namespace PCGExPropertyPinMarshal
 	 * soft path and forwarded to the property's TryReadValue.
 	 */
 	PCGEXPROPERTIES_API bool TryReadFromObjectPin(FPCGExProperty* Prop, const FProperty* InProp, const void* InMem);
+
+	/** Resolves SoftPath, loading it on a miss (game thread only); null when it is not an ExpectedClass. A null ExpectedClass accepts everything. */
+	PCGEXPROPERTIES_API UObject* ResolveObjectFromPath(const FSoftObjectPath& SoftPath, const UClass* ExpectedClass);
+
+	/** Class flavour of ResolveObjectFromPath: null unless the class derives from ExpectedClass. */
+	PCGEXPROPERTIES_API UClass* ResolveClassFromPath(const FSoftClassPath& SoftPath, const UClass* ExpectedClass);
 }

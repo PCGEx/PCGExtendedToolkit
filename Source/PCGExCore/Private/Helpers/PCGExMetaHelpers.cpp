@@ -304,20 +304,6 @@ namespace PCGExMetaHelpers
 		return true;
 	}
 
-	FName GetCompoundName(const FName A, const FName B)
-	{
-		// PCGEx/A/B
-		const FString Separator = TEXT("/");
-		return *(TEXT("PCGEx") + Separator + A.ToString() + Separator + B.ToString());
-	}
-
-	FName GetCompoundName(const FName A, const FName B, const FName C)
-	{
-		// PCGEx/A/B/C
-		const FString Separator = TEXT("/");
-		return *(TEXT("PCGEx") + Separator + A.ToString() + Separator + B.ToString() + Separator + C.ToString());
-	}
-
 	bool TryGetAttributeName(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, FName& OutName)
 	{
 		FPCGAttributePropertyInputSelector FixedSelector = InSelector.CopyAndFixLast(InData);

@@ -307,7 +307,6 @@ namespace PCGExTensor
 		FTensorSample operator/(const double Factor) const;
 		FTensorSample& operator/=(const double Factor);
 
-		void Transform(FTransform& InTransform, double InWeight = 1) const;
 		FTransform GetTransformed(const FTransform& InTransform, double InWeight = 1) const;
 	};
 

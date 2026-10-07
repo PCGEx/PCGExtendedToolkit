@@ -13,6 +13,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/StaticMesh.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Materials/MaterialInterface.h"
@@ -245,13 +246,7 @@ bool FPCGExPathSplineMeshSimpleElement::AdvanceWork(FPCGExContext* InContext, co
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Entry->GetNum() < 2)
-				{
-					bHasInvalidInputs = true;
-					Entry->InitializeOutput(PCGExData::EIOInit::Forward);
-					return false;
-				}
-
+				PCGEX_SKIP_INVALID_PATH_ENTRY
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
@@ -286,7 +281,7 @@ namespace PCGExPathSplineMeshSimple
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		bIsPreviewMode = ExecutionContext->GetComponent()->IsInPreviewMode();
+		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		MutationDetails = Settings->MutationDetails;
 		if (!MutationDetails.Init(PointDataFacade))

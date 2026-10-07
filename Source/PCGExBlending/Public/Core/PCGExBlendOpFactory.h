@@ -183,10 +183,6 @@ public:
 
 	bool bUsedForMultiBlendOnly = false;
 
-	// Mirrored from the owning factory at CreateOperation time; gates the Weight setting-value's
-	// consumable auto-registration (ops carry no factory backref).
-	bool bCleanupConsumableAttributes = false;
-
 	int32 OpIdx = -1;
 	TSharedPtr<TArray<TSharedPtr<FPCGExBlendOperation>>> SiblingOperations;
 

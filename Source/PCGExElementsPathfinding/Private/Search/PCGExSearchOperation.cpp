@@ -26,6 +26,17 @@ TSharedPtr<PCGExPathfinding::FSearchAllocations> FPCGExSearchOperation::NewAlloc
 	return Allocations;
 }
 
+TSharedPtr<PCGExPathfinding::FSearchAllocations> FPCGExSearchOperation::PrepareAllocations(const TSharedPtr<PCGExPathfinding::FSearchAllocations>& InAllocations) const
+{
+	if (!InAllocations)
+	{
+		return NewAllocations();
+	}
+
+	InAllocations->Reset();
+	return InAllocations;
+}
+
 TSharedPtr<PCGExPathfinding::FSearchAllocations> FPCGExSearchOperation::AcquireAllocations()
 {
 	{

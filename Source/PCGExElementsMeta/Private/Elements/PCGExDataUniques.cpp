@@ -11,6 +11,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExHashHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
@@ -239,15 +240,9 @@ bool FPCGExDataUniquesElement::Boot(FPCGExContext* InContext) const
 	// Keys: list + comma-separated overrides, user order preserved (it feeds the hash), duplicates dropped.
 	TArray<FName> KeyNames = Settings->KeyAttributes;
 
-	TArray<FString> Tokens;
-	Settings->CommaSeparatedKeyAttributes.ParseIntoArray(Tokens, TEXT(","), true);
-	for (FString& Token : Tokens)
+	for (const FString& Token : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(Settings->CommaSeparatedKeyAttributes))
 	{
-		Token.TrimStartAndEndInline();
-		if (!Token.IsEmpty())
-		{
-			KeyNames.Add(FName(*Token));
-		}
+		KeyNames.Add(FName(*Token));
 	}
 
 	TSet<FName> SeenKeys;
@@ -264,15 +259,14 @@ bool FPCGExDataUniquesElement::Boot(FPCGExContext* InContext) const
 		FPCGAttributePropertyInputSelector Selector;
 		Selector.Update(KeyName.ToString());
 
-		if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute
+		FPCGAttributeIdentifier Identifier;
+		if (!PCGExData::Helpers::TryGetDataValueIdentifier(Selector, Identifier)
 			|| !Selector.GetExtraNames().IsEmpty()
-			|| !PCGExMetaHelpers::IsWritableAttributeName(Selector.GetAttributeName()))
+			|| !PCGExMetaHelpers::IsWritableAttributeName(Identifier.Name))
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("\"{0}\" is not a valid key attribute name (plain @Data attribute names only, no sub-selection)."), FText::FromName(KeyName)));
 			return false;
 		}
-
-		const FPCGAttributeIdentifier Identifier(Selector.GetAttributeName(), PCGMetadataDomainID::Data);
 
 		bool bAlreadySeen = false;
 		SeenKeys.Add(Identifier.Name, &bAlreadySeen);

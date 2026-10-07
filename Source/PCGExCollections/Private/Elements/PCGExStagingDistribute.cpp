@@ -582,9 +582,7 @@ bool FPCGExAssetStagingElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 		UPCGParamData* OutputSet = Context->ManagedObjects->New<UPCGParamData>();
 		Context->CollectionPickDatasetPacker->PackToDataset(OutputSet);
 
-		FPCGTaggedData& OutData = Context->OutputData.TaggedData.Emplace_GetRef();
-		OutData.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
-		OutData.Data = OutputSet;
+		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}
 
 	if (Context->SocketsCollection)
@@ -1192,7 +1190,7 @@ namespace PCGExAssetStaging
 
 			if (SocketHelper)
 			{
-				// Hash scheme must match FSocketHelper::RegisterCollection (and LoadSockets' GetSimplifiedEntryHash).
+				// Hash scheme must match FSocketHelper::RegisterCollection (and LoadSockets' PickHash::GetEntryKey).
 				const uint64 EntryHash = PCGEx::H64(EntryHost->GetCollectionGUID(), Staging.InternalIndex);
 				SocketHelper->Add(Index, EntryHash, Entry);
 			}

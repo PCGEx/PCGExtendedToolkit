@@ -28,14 +28,12 @@ bool FPCGExShapePolygonBuilder::PrepareForSeeds(FPCGExContext* InContext, const 
 	{
 		return false;
 	}
-	NumVertices = Config.NumVertices.GetValueSetting();
-	if (!NumVertices->Init(InSeedDataFacade))
+	if (!InitSettingValue(NumVertices, Config.NumVertices.GetValueSetting(), InSeedDataFacade))
 	{
 		return false;
 	}
 
-	HasSkeleton = Config.AddSkeleton.GetValueSetting();
-	if (!HasSkeleton->Init(InSeedDataFacade))
+	if (!InitSettingValue(HasSkeleton, Config.AddSkeleton.GetValueSetting(), InSeedDataFacade))
 	{
 		return false;
 	}

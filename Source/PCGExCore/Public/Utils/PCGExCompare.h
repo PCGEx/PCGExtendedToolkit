@@ -12,16 +12,6 @@
 
 #include "PCGExCompare.generated.h"
 
-#define PCGEX_UNSUPPORTED_STRING_TYPES(MACRO)\
-MACRO(FString)\
-MACRO(FName)\
-MACRO(FSoftObjectPath)\
-MACRO(FSoftClassPath)
-
-#define PCGEX_UNSUPPORTED_PATH_TYPES(MACRO)\
-MACRO(FSoftObjectPath)\
-MACRO(FSoftClassPath)
-
 struct FPCGExContext;
 
 namespace PCGExData
@@ -620,6 +610,3 @@ struct PCGEXCORE_API FPCGExDotComparisonDetails
 	FString GetDisplayComparison() const;
 #endif
 };
-
-#undef PCGEX_UNSUPPORTED_STRING_TYPES
-#undef PCGEX_UNSUPPORTED_PATH_TYPES

@@ -11,6 +11,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Math/PCGExBestFitPlane.h"
 #include "Math/PCGExProjectionDetails.h"
 
@@ -107,7 +108,7 @@ namespace PCGExTopologyPointSurface
 
 		// Prep data
 
-		bIsPreviewMode = ExecutionContext->GetComponent()->IsInPreviewMode();
+		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		InternalMeshData = Context->ManagedObjects->New<UPCGDynamicMeshData>();
 		if (!InternalMeshData)

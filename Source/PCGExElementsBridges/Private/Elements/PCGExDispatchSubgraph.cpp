@@ -169,11 +169,7 @@ namespace PCGExDispatchSubgraph
 	// const accessor for it.
 	TSharedPtr<IOverrideReader> MakeGenericOverrideReader(const UPCGData* InData, const FName InSourceAttr, const FPCGMetadataAttributeBase* InAttr, const int32 InDriverIndex, const TSharedPtr<IPCGAttributeAccessorKeys>& InKeys)
 	{
-		FPCGAttributePropertyInputSelector Selector;
-		Selector.Update(InSourceAttr.ToString());
-		Selector = Selector.CopyAndFixLast(InData);
-
-		TUniquePtr<const IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateConstAccessor(InData, Selector);
+		TUniquePtr<const IPCGAttributeAccessor> Accessor = PCGExData::Helpers::MakeConstAccessor(InData, InSourceAttr);
 		if (!Accessor || !InKeys)
 		{
 			return nullptr;

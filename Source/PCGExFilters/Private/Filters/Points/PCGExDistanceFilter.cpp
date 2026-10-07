@@ -123,9 +123,7 @@ bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSh
 
 	bInflateQueryBounds = TypedFilterFactory->Config.DistanceDetails.Source != EPCGExDistance::Center;
 
-	DistanceThresholdGetter = TypedFilterFactory->Config.DistanceThresholdValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	DistanceThresholdGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!DistanceThresholdGetter->Init(InPointDataFacade))
+	if (!InitSettingValue(DistanceThresholdGetter, TypedFilterFactory->Config.DistanceThresholdValue.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 	{
 		return false;
 	}

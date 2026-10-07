@@ -9,6 +9,7 @@
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Sampling/PCGExSamplingHelpers.h"
 
 
 #define LOCTEXT_NAMESPACE "PCGExSampleTextureElement"
@@ -239,14 +240,7 @@ namespace PCGExSampleTexture
 	{
 		PointDataFacade->WriteFastest(TaskManager);
 
-		if (Settings->bTagIfHasSuccesses && bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasSuccessesTag);
-		}
-		if (Settings->bTagIfHasNoSuccesses && !bAnySuccess)
-		{
-			PointDataFacade->Source->Tags->AddRaw(Settings->HasNoSuccessesTag);
-		}
+		PCGExSampling::Helpers::ApplySuccessTags(PointDataFacade, bAnySuccess != 0, Settings->bTagIfHasSuccesses, Settings->HasSuccessesTag, Settings->bTagIfHasNoSuccesses, Settings->HasNoSuccessesTag);
 	}
 
 	void FProcessor::Write()

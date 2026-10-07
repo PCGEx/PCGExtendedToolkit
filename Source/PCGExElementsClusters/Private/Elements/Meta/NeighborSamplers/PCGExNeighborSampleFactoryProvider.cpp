@@ -214,21 +214,8 @@ TSharedPtr<FPCGExNeighborSampleOperation> UPCGExNeighborSamplerFactoryData::Crea
 
 void UPCGExNeighborSamplerFactoryData::RegisterVtxBuffersDependencies(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, PCGExData::FFacadePreloader& FacadePreloader) const
 {
-	if (!VtxFilterFactories.IsEmpty())
-	{
-		for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Filter : VtxFilterFactories)
-		{
-			Filter->RegisterBuffersDependencies(InContext, FacadePreloader);
-		}
-	}
-
-	if (!ValueFilterFactories.IsEmpty())
-	{
-		for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Filter : ValueFilterFactories)
-		{
-			Filter->RegisterBuffersDependencies(InContext, FacadePreloader);
-		}
-	}
+	PCGExPointFilter::RegisterBuffersDependencies(InContext, VtxFilterFactories, FacadePreloader);
+	PCGExPointFilter::RegisterBuffersDependencies(InContext, ValueFilterFactories, FacadePreloader);
 }
 
 void UPCGExNeighborSamplerFactoryData::RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const

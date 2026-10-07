@@ -46,9 +46,7 @@ namespace PCGExNodeNeighborsCount
 			return false;
 		}
 
-		LocalCount = TypedFilterFactory->Config.CountValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-		LocalCount->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!LocalCount->Init(PointDataFacade, false))
+		if (!InitSettingValue(LocalCount, TypedFilterFactory->Config.CountValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false))
 		{
 			return false;
 		}

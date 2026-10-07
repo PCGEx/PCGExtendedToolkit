@@ -112,19 +112,7 @@ double FPCGExNoiseFBM::GenerateWarped(const FVector& Position) const
 
 	const FVector FinalPos = WarpedPos + Warp2 * WarpStrength;
 
-	// Standard fBm on warped position
-	double Sum = 0.0;
-	double Amp = 1.0;
-	double Freq = Frequency;
-
-	for (int32 i = 0; i < Octaves; ++i)
-	{
-		Sum += Perlin3D(FinalPos * Freq, Seed) * Amp;
-		Amp *= Persistence;
-		Freq *= Lacunarity;
-	}
-
-	return Sum * FractalBounding;
+	return GenerateStandard(FinalPos);
 }
 
 double FPCGExNoiseFBM::GetDouble(const FVector& Position) const

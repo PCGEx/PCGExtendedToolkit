@@ -118,6 +118,7 @@ namespace PCGExCreateShapes
 		for (const TObjectPtr<const UPCGExShapeBuilderFactoryData>& Factory : Context->BuilderFactories)
 		{
 			TSharedPtr<FPCGExShapeBuilderOperation> Op = Factory->CreateOperation(Context);
+			Op->bCleanupConsumableAttributes = Factory->bCleanupConsumableAttributes;
 			if (!Op->PrepareForSeeds(Context, PointDataFacade))
 			{
 				return false;

@@ -68,11 +68,7 @@ bool FPCGExResamplePathElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Entry->GetNum() < 2)
-				{
-					bHasInvalidInputs = true;
-					return false;
-				}
+				PCGEX_SKIP_INVALID_PATH_ENTRY
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{

@@ -14,6 +14,7 @@
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Elements/Grammar/PCGSubdivisionBase.h"
+#include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 #include "Helpers/PCGExGetCollectionDataFlatten.h"
 #include "Helpers/PCGExMetaHelpers.h"
@@ -791,17 +792,14 @@ namespace PCGExGetCollectionData
 		// or point data, plus whatever tags were already on it.
 		if (!bWantRoot && !bWantColl && !bWantHash && !bWantSchema)
 		{
-			Context->OutputData.TaggedData.Reserve(Context->OutputData.TaggedData.Num() + Inputs.Num());
+			Context->IncreaseStagedOutputReserve(Inputs.Num());
 			for (const FPCGTaggedData& InputTagged : Inputs)
 			{
 				if (!InputTagged.Data)
 				{
 					continue;
 				}
-				FPCGTaggedData& OutTagged = Context->OutputData.TaggedData.Emplace_GetRef();
-				OutTagged.Pin = AnnotatedSourcesPin;
-				OutTagged.Data = InputTagged.Data;
-				OutTagged.Tags = InputTagged.Tags;
+				Context->StageOutput(const_cast<UPCGData*>(InputTagged.Data.Get()), AnnotatedSourcesPin, PCGExData::EStaging::None, InputTagged.Tags);
 			}
 			return;
 		}
@@ -990,14 +988,7 @@ namespace PCGExGetCollectionData
 					{
 						return;
 					}
-					FPCGAttributePropertyInputSelector Selector;
-					Selector.Update(AttrName.ToString());
-					Selector = Selector.CopyAndFixLast(DupData);
-					TUniquePtr<IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateAccessor(DupData, Selector);
-					if (Accessor)
-					{
-						Accessor->SetRange<int32>(Values, 0, *Keys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
-					}
+					PCGExData::Helpers::BulkWriteRows<int32>(DupData, AttrName, Values, *Keys);
 				};
 
 				WriteAttr(bWantRoot, Settings->RootCollectionIndexAttributeName, RootValues);
@@ -1056,7 +1047,7 @@ namespace PCGExGetCollectionData
 		FPCGExContext* InContext = P.InContext;
 		const UPCGExGetCollectionDataSettings* Settings = P.Settings;
 		UPCGExAssetCollection* MainCollection = Settings->AssetCollection;
-		InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + 2);
+		InContext->IncreaseStagedOutputReserve(2);
 
 		FUniqueOutput U;
 		U.Collection = MainCollection;
@@ -1101,13 +1092,12 @@ namespace PCGExGetCollectionData
 			}
 		}
 
-		FPCGTaggedData& OutData = InContext->OutputData.TaggedData.Emplace_GetRef();
-		OutData.Pin = OutputCollectionDataPin;
-		OutData.Data = U.OutputSet;
+		TSet<FString> OutTags;
 		if (U.Entries->IsEmpty())
 		{
-			OutData.Tags.Add(EmptyTag.ToString());
+			OutTags.Add(EmptyTag.ToString());
 		}
+		InContext->StageOutput(U.OutputSet, OutputCollectionDataPin, PCGExData::EStaging::Managed, OutTags);
 	}
 
 	/** FromInputs - Merged fanout. One shared FUniqueOutput receives entries from every unique
@@ -1177,14 +1167,12 @@ namespace PCGExGetCollectionData
 
 		// Emit one FPCGTaggedData. Tag forwarding (if on) unions tags from every contributing
 		// source input -- per-slot identity is lost in Merged mode by design.
-		InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + 2);
+		InContext->IncreaseStagedOutputReserve(2);
 
-		FPCGTaggedData& OutData = InContext->OutputData.TaggedData.Emplace_GetRef();
-		OutData.Pin = OutputCollectionDataPin;
-		OutData.Data = Merged.OutputSet;
+		TSet<FString> OutTags;
 		if (Merged.Entries->IsEmpty())
 		{
-			OutData.Tags.Add(EmptyTag.ToString());
+			OutTags.Add(EmptyTag.ToString());
 		}
 		if (Settings->bForwardInputTags)
 		{
@@ -1197,8 +1185,9 @@ namespace PCGExGetCollectionData
 					TagUnion.Append(Inputs[Slot.SourceInputIndex].Tags);
 				}
 			}
-			OutData.Tags.Append(TagUnion);
+			OutTags.Append(TagUnion);
 		}
+		InContext->StageOutput(Merged.OutputSet, OutputCollectionDataPin, PCGExData::EStaging::Managed, OutTags);
 
 		if (Settings->bAnnotateSources)
 		{
@@ -1248,9 +1237,9 @@ namespace PCGExGetCollectionData
 			Collection->EDITOR_RegisterTrackingKeys(InContext);
 		}
 
-		// Reserve TaggedData up-front (one entry per slot + one for the map) so the slot emission
+		// Reserve staged outputs up-front (one entry per slot + one for the map) so the slot emission
 		// loop doesn't pay for TArray growth reallocations.
-		InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + Context->Slots.Num() + 1);
+		InContext->IncreaseStagedOutputReserve(Context->Slots.Num() + 1);
 
 		// Phase 2 (single-threaded): packer registration.
 		for (FUniqueOutput& U : UniqueOutputs)
@@ -1302,13 +1291,13 @@ namespace PCGExGetCollectionData
 			const FPCGExGetCollectionDataContext::FSlot& Slot = Context->Slots[SlotIdx];
 			UPCGExAssetCollection* Collection = SlotCollections[SlotIdx];
 
-			FPCGTaggedData& OutData = InContext->OutputData.TaggedData.Emplace_GetRef();
-			OutData.Pin = OutputCollectionDataPin;
+			UPCGParamData* OutSet = nullptr;
+			TSet<FString> OutTags;
 
 			if (!Collection)
 			{
-				OutData.Data = GetOrCreateEmpty();
-				OutData.Tags.Add(EmptyTag.ToString());
+				OutSet = GetOrCreateEmpty();
+				OutTags.Add(EmptyTag.ToString());
 			}
 			else
 			{
@@ -1316,19 +1305,21 @@ namespace PCGExGetCollectionData
 				const FUniqueOutput& U = UniqueOutputs[Idx];
 				if (U.Entries->IsEmpty())
 				{
-					OutData.Data = GetOrCreateEmpty();
-					OutData.Tags.Add(EmptyTag.ToString());
+					OutSet = GetOrCreateEmpty();
+					OutTags.Add(EmptyTag.ToString());
 				}
 				else
 				{
-					OutData.Data = U.OutputSet;
+					OutSet = U.OutputSet;
 				}
 			}
 
 			if (bWillForwardTags && InputsForTags.IsValidIndex(Slot.SourceInputIndex))
 			{
-				OutData.Tags.Append(InputsForTags[Slot.SourceInputIndex].Tags);
+				OutTags.Append(InputsForTags[Slot.SourceInputIndex].Tags);
 			}
+
+			InContext->StageOutput(OutSet, OutputCollectionDataPin, PCGExData::EStaging::Managed, OutTags);
 		}
 
 		// Phase 5: optional annotated-source forwarding. Uses CollectionToIndex directly (it already
@@ -1429,9 +1420,7 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_EmitMap);
 		UPCGParamData* OutputMap = InContext->ManagedObjects->New<UPCGParamData>();
 		Packer->PackToDataset(OutputMap);
-		FPCGTaggedData& MapData = InContext->OutputData.TaggedData.Emplace_GetRef();
-		MapData.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
-		MapData.Data = OutputMap;
+		InContext->StageOutput(OutputMap, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 
 		// Property sidecars: the "Map" pin merges into the packed map (AppendMapRows dedupes).
 		TArray<const FPCGExProperty*> Contributors = Sidecars.Sources;

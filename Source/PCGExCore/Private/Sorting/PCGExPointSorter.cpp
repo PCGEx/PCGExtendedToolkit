@@ -398,6 +398,24 @@ namespace PCGExSorting
 		return FSortCache::Build(*this, NumElements);
 	}
 
+	void FSorter::SortIndices(TArray<int32>& InOutIndices, const int32 NumElements)
+	{
+		if (const TSharedPtr<FSortCache> Cache = BuildCache(NumElements))
+		{
+			InOutIndices.Sort([&](const int32 A, const int32 B)
+			{
+				return Cache->Compare(A, B);
+			});
+		}
+		else
+		{
+			InOutIndices.Sort([&](const int32 A, const int32 B)
+			{
+				return Sort(A, B);
+			});
+		}
+	}
+
 #pragma region FSortCache
 
 	TSharedPtr<FSortCache> FSortCache::Build(const FSorter& Sorter, int32 InNumElements)

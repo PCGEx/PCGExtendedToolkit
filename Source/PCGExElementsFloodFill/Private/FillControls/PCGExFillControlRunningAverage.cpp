@@ -39,16 +39,12 @@ bool FPCGExFillControlRunningAverage::PrepareForDiffusions(FPCGExContext* InCont
 
 	const UPCGExFillControlsFactoryRunningAverage* TypedFactory = Cast<UPCGExFillControlsFactoryRunningAverage>(Factory);
 
-	WindowSize = TypedFactory->Config.WindowSizeValue.GetValueSetting();
-	WindowSize->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!WindowSize->Init(GetSourceFacade()))
+	if (!InitSettingValue(WindowSize, TypedFactory->Config.WindowSizeValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}
 
-	Tolerance = TypedFactory->Config.ToleranceValue.GetValueSetting();
-	Tolerance->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!Tolerance->Init(GetSourceFacade()))
+	if (!InitSettingValue(Tolerance, TypedFactory->Config.ToleranceValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

@@ -33,9 +33,7 @@ bool FPCGExFillControlCount::PrepareForDiffusions(FPCGExContext* InContext, cons
 
 	const UPCGExFillControlsFactoryCount* TypedFactory = Cast<UPCGExFillControlsFactoryCount>(Factory);
 
-	CountLimit = TypedFactory->Config.MaxCountValue.GetValueSetting();
-	CountLimit->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!CountLimit->Init(GetSourceFacade()))
+	if (!InitSettingValue(CountLimit, TypedFactory->Config.MaxCountValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

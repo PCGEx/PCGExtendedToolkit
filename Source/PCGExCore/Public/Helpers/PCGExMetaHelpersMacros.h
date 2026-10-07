@@ -62,29 +62,4 @@ MACRO(Steepness, float, __VA_ARGS__) \
 MACRO(Seed, int32, __VA_ARGS__) \
 MACRO(MetadataEntry, int64, __VA_ARGS__)
 
-#define PCGEX_NATIVE_PROPERTY_GET(_NAME, _TYPE, _SOURCE) TPCGValueRange<_TYPE> _NAME##ValueRange = _SOURCE->Get##_NAME##ValueRange();
-#define PCGEX_FOREACH_POINT_NATIVE_PROPERTY_GET(_SOURCE) PCGEX_FOREACH_POINT_NATIVE_PROPERTY(PCGEX_NATIVE_PROPERTY_GET, _SOURCE)
-
-#define PCGEX_NATIVE_PROPERTY_CONSTGET(_NAME, _TYPE, _SOURCE) TConstPCGValueRange<_TYPE> _NAME##ValueRange = _SOURCE->GetValue##_NAME##ValueRange();
-#define PCGEX_FOREACH_POINT_NATIVE_PROPERTY_CONSTGET(_SOURCE) PCGEX_FOREACH_POINT_NATIVE_PROPERTY(PCGEX_NATIVE_PROPERTY_CONSTGET, _SOURCE)
-
-#define PCGEX_FOREACH_POINTPROPERTY(MACRO)\
-MACRO(EPCGPointProperties::Density, GetDensity(), float, float) \
-MACRO(EPCGPointProperties::BoundsMin, GetBoundsMin(), FVector, FVector) \
-MACRO(EPCGPointProperties::BoundsMax, GetBoundsMax(), FVector, FVector) \
-MACRO(EPCGPointProperties::Extents, GetExtents(), FVector, FVector) \
-MACRO(EPCGPointProperties::Color, GetColor(), FVector4, FVector4) \
-MACRO(EPCGPointProperties::Position, GetLocation(), FVector, FTransform) \
-MACRO(EPCGPointProperties::Rotation, GetRotation(), FQuat, FTransform) \
-MACRO(EPCGPointProperties::Scale, GetScale3D(), FVector, FTransform) \
-MACRO(EPCGPointProperties::Transform, GetTransform(), FTransform, FTransform) \
-MACRO(EPCGPointProperties::Steepness, GetSteepness(), float, float) \
-MACRO(EPCGPointProperties::LocalCenter, GetLocalCenter(), FVector, FVector) \
-MACRO(EPCGPointProperties::Seed, GetSeed(), int32, int32)\
-MACRO(EPCGPointProperties::LocalSize, GetLocalSize(), FVector, FVector)\
-MACRO(EPCGPointProperties::ScaledLocalSize, GetScaledLocalSize(), FVector, FVector)
-
-#define PCGEX_FOREACH_EXTRAPROPERTY(MACRO)\
-MACRO(EPCGExtraProperties::Index, int32, int32)
-
 #pragma endregion

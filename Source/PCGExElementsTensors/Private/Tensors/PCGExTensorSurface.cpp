@@ -12,7 +12,7 @@
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
-#include "Sampling/PCGExSamplingHelpers.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCreateTensorSurface"
 #define PCGEX_NAMESPACE CreateTensorSurface
@@ -445,7 +445,7 @@ bool UPCGExTensorSurfaceFactory::InitActorReferences(FPCGExContext* InContext)
 	}
 
 	TMap<AActor*, int32> IncludedActors;
-	if (!PCGExSampling::Helpers::GetIncludedActors(InContext, ActorRefFacade.ToSharedRef(), Config.ActorReferenceAttribute, IncludedActors))
+	if (!PCGExHelpers::GetIncludedActors(InContext, ActorRefFacade.ToSharedRef(), Config.ActorReferenceAttribute, IncludedActors))
 	{
 		return false;
 	}

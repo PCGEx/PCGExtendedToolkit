@@ -15,18 +15,14 @@ void FPCGExFittingVariations::ApplyOffset(const FRandomStream& RandomStream, FTr
 
 	if (SnapPosition == EPCGExVariationSnapping::SnapOffset)
 	{
-		PCGExMath::Snap(RandomOffset.X, OffsetSnap.X);
-		PCGExMath::Snap(RandomOffset.Y, OffsetSnap.Y);
-		PCGExMath::Snap(RandomOffset.Z, OffsetSnap.Z);
+		PCGExMath::Snap(RandomOffset, OffsetSnap);
 	}
 
 	FVector OutLocation = bAbsoluteOffset ? BaseLocation + RandomOffset : BaseLocation + BaseRotation.RotateVector(RandomOffset);
 
 	if (SnapPosition == EPCGExVariationSnapping::SnapResult)
 	{
-		PCGExMath::Snap(OutLocation.X, OffsetSnap.X);
-		PCGExMath::Snap(OutLocation.Y, OffsetSnap.Y);
-		PCGExMath::Snap(OutLocation.Z, OffsetSnap.Z);
+		PCGExMath::Snap(OutLocation, OffsetSnap);
 	}
 
 	OutTransform.SetLocation(OutLocation);
@@ -40,9 +36,7 @@ void FPCGExFittingVariations::ApplyRotation(const FRandomStream& RandomStream, F
 
 	if (SnapRotation == EPCGExVariationSnapping::SnapOffset)
 	{
-		PCGExMath::Snap(RandRot.Roll, RotationSnap.Roll);
-		PCGExMath::Snap(RandRot.Pitch, RotationSnap.Pitch);
-		PCGExMath::Snap(RandRot.Yaw, RotationSnap.Yaw);
+		PCGExMath::Snap(RandRot, RotationSnap);
 	}
 
 	FRotator OutRotation = BaseRotation.Rotator();
@@ -76,9 +70,7 @@ void FPCGExFittingVariations::ApplyRotation(const FRandomStream& RandomStream, F
 
 	if (SnapRotation == EPCGExVariationSnapping::SnapResult)
 	{
-		PCGExMath::Snap(OutRotation.Roll, RotationSnap.Roll);
-		PCGExMath::Snap(OutRotation.Pitch, RotationSnap.Pitch);
-		PCGExMath::Snap(OutRotation.Yaw, RotationSnap.Yaw);
+		PCGExMath::Snap(OutRotation, RotationSnap);
 	}
 
 	OutTransform.SetRotation(OutRotation.Quaternion());
@@ -100,18 +92,14 @@ void FPCGExFittingVariations::ApplyScale(const FRandomStream& RandomStream, FTra
 
 	if (SnapScale == EPCGExVariationSnapping::SnapOffset)
 	{
-		PCGExMath::Snap(RandomScale.X, ScaleSnap.X);
-		PCGExMath::Snap(RandomScale.Y, ScaleSnap.Y);
-		PCGExMath::Snap(RandomScale.Z, ScaleSnap.Z);
+		PCGExMath::Snap(RandomScale, ScaleSnap);
 	}
 
 	OutScale *= RandomScale;
 
 	if (SnapScale == EPCGExVariationSnapping::SnapResult)
 	{
-		PCGExMath::Snap(OutScale.X, ScaleSnap.X);
-		PCGExMath::Snap(OutScale.Y, ScaleSnap.Y);
-		PCGExMath::Snap(OutScale.Z, ScaleSnap.Z);
+		PCGExMath::Snap(OutScale, ScaleSnap);
 	}
 
 	OutTransform.SetScale3D(OutScale);

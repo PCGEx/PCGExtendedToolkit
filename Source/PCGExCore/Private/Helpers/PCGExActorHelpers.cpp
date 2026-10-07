@@ -3,7 +3,17 @@
 
 #include "Helpers/PCGExActorHelpers.h"
 
+#include "PCGComponent.h"
+#include "PCGContext.h"
+#include "PCGElement.h"
+#include "PCGExCoreMacros.h"
+#include "PCGExVersion.h"
+#include "PCGGraphExecutionStateInterface.h"
+#include "PCGModule.h"
 #include "Components/SceneComponent.h"
+#include "Data/PCGExAttributeBroadcaster.h"
+#include "Data/PCGExData.h"
+#include "Data/PCGExPointIO.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -11,6 +21,63 @@
 
 namespace PCGExHelpers
 {
+	bool GetIncludedActors(const FPCGContext* InContext, const TSharedRef<PCGExData::FFacade>& InFacade, const FName ActorReferenceName, TMap<AActor*, int32>& OutActorSet)
+	{
+		FPCGAttributePropertyInputSelector Selector = FPCGAttributePropertyInputSelector();
+		Selector.SetAttributeName(ActorReferenceName);
+
+		const TUniquePtr<PCGExData::TAttributeBroadcaster<FSoftObjectPath>> ActorReferences = MakeUnique<PCGExData::TAttributeBroadcaster<FSoftObjectPath>>();
+		if (!ActorReferences->Prepare(Selector, InFacade->Source))
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Actor reference attribute does not exist."));
+			return false;
+		}
+
+		ActorReferences->Grab();
+
+		for (int i = 0; i < ActorReferences->Values.Num(); i++)
+		{
+			const FSoftObjectPath& Path = ActorReferences->Values[i];
+			if (!Path.IsValid())
+			{
+				continue;
+			}
+			if (AActor* TargetActor = Cast<AActor>(Path.ResolveObject()))
+			{
+				OutActorSet.FindOrAdd(TargetActor, i);
+			}
+		}
+
+		return true;
+	}
+
+	AActor* GetSourceActor(const IPCGGraphExecutionSource* InSource)
+	{
+		if (!InSource) { return nullptr; }
+#if PCGEX_ENGINE_VERSION >= 508
+		return InSource->GetExecutionState().GetTypedTarget<AActor>();
+#else
+		const UPCGComponent* Component = Cast<UPCGComponent>(InSource);
+		return Component ? Component->GetOwner() : nullptr;
+#endif
+	}
+
+	bool IsSourceInPreviewMode(const IPCGGraphExecutionSource* InSource)
+	{
+		if (!InSource) { return false; }
+#if PCGEX_ENGINE_VERSION >= 508
+		return InSource->GetExecutionState().IsInPreviewMode();
+#else
+		const UPCGComponent* Component = Cast<UPCGComponent>(InSource);
+		return Component && Component->IsInPreviewMode();
+#endif
+	}
+
+	bool IsSourceInPreviewMode(const FPCGContext* InContext)
+	{
+		return InContext && IsSourceInPreviewMode(InContext->ExecutionSource.Get());
+	}
+
 	bool IsSpawnSafe(const UWorld* InWorld)
 	{
 		// Spawning runs construction scripts, and ProcessEvent hard-asserts while the loader is

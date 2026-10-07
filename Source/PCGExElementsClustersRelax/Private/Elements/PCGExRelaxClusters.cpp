@@ -354,9 +354,7 @@ namespace PCGExRelaxClusters
 
 		PCGEX_TYPED_PROCESSOR
 
-#define PCGEX_OUTPUT_FWD_TO(_NAME, _TYPE, _DEFAULT_VALUE) if(_NAME##Writer){ TypedProcessor->_NAME##Writer = _NAME##Writer; }
 		PCGEX_FOREACH_FIELD_RELAX_CLUSTER(PCGEX_OUTPUT_FWD_TO)
-#undef PCGEX_OUTPUT_FWD_TO
 
 		return true;
 	}

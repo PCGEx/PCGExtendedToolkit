@@ -87,18 +87,13 @@ bool FPCGExOrientElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSett
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Entry->GetNum() < 2)
-				{
-					bHasInvalidInputs = true;
-					Entry->InitializeOutput(PCGExData::EIOInit::Forward);
-					return false;
-				}
+				PCGEX_SKIP_INVALID_PATH_ENTRY
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any paths to orient."));
+			return Context->CancelExecution(TEXT("Could not find any paths to orient."));
 		}
 	}
 

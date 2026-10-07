@@ -111,6 +111,9 @@ namespace PCGExMatching
 		 *  PCGExPointFilter::RejectPerPointMatchRule); collection/proxy callers can still use the list. */
 		bool PopulateIgnoreListInverse(const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InMatchRuleFactories, const TSharedPtr<PCGExData::FFacade>& InSourceFacade, const FPCGExMatchingDetails* InDetails, FScope& InMatchingScope, TSet<const UPCGData*>& OutIgnoreList, bool& bOutWantsPoints) const;
 		bool HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward = true) const;
+		/** Fills OutIgnoreList for one input: itself when bIgnoreSelf, then every target its matching rules exclude.
+		 *  False when no target matches; the input has then been routed through HandleUnmatchedOutput. */
+		bool BuildIgnoreList(const TSharedPtr<PCGExData::FFacade>& InFacade, const int32 InNumCandidates, const bool bIgnoreSelf, TSet<const UPCGData*>& OutIgnoreList) const;
 
 		void ForEachPreloader(PCGExData::FMultiFacadePreloader::FPreloaderItCallback&& It) const;
 

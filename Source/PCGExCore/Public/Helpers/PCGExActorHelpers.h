@@ -8,10 +8,33 @@
 #include "UObject/SoftObjectPtr.h"
 
 class AActor;
+class IPCGGraphExecutionSource;
 class UWorld;
+
+struct FPCGContext;
+
+namespace PCGExData
+{
+	class FFacade;
+}
 
 namespace PCGExHelpers
 {
+	/**
+	 * Resolves the soft actor references held by ActorReferenceName on InFacade's input, mapping each
+	 * resolved actor to the first row referencing it. False (and logs) only when the attribute is missing.
+	 */
+	PCGEXCORE_API bool GetIncludedActors(const FPCGContext* InContext, const TSharedRef<PCGExData::FFacade>& InFacade, const FName ActorReferenceName, TMap<AActor*, int32>& OutActorSet);
+
+	/** The actor a source executes on (its owner). 5.7's execution-state interface has no target query, hence the seam. */
+	PCGEXCORE_API AActor* GetSourceActor(const IPCGGraphExecutionSource* InSource);
+
+	/** Whether a source generates in preview editing mode; false on a null source. Same 5.7 seam as GetSourceActor. */
+	PCGEXCORE_API bool IsSourceInPreviewMode(const IPCGGraphExecutionSource* InSource);
+
+	/** Same, for the source executing InContext; false on a null context. */
+	PCGEXCORE_API bool IsSourceInPreviewMode(const FPCGContext* InContext);
+
 	/**
 	 * Whether UWorld::SpawnActor is safe to call on InWorld right now.
 	 *

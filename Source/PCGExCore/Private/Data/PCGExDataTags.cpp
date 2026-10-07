@@ -242,17 +242,4 @@ namespace PCGExData
 
 		RawTags.Add(InTag);
 	}
-
-	bool FTags::GetTagFromString(const FString& Input, FString& OutKey, FString& OutValue)
-	{
-		int32 SepIndex = INDEX_NONE;
-		if (!Input.FindChar(TagSeparator[0], SepIndex))
-		{
-			return false;
-		}
-
-		OutKey = Input.Left(SepIndex);
-		OutValue = Input.Mid(SepIndex + 1);
-		return !OutKey.IsEmpty();
-	}
 }

@@ -69,7 +69,6 @@ namespace PCGExClusterMT
 
 	protected:
 		FPCGExContext* ExecutionContext = nullptr;
-		UPCGSettings* ExecutionSettings = nullptr;
 
 		TWeakPtr<PCGEx::FWorkHandle> WorkHandle;
 		TSharedPtr<PCGExMT::FTaskManager> TaskManager;
@@ -263,7 +262,6 @@ namespace PCGExClusterMT
 
 		bool bIsBatchValid = true;
 		FPCGExContext* ExecutionContext = nullptr;
-		UPCGSettings* ExecutionSettings = nullptr;
 
 		TWeakPtr<PCGEx::FWorkHandle> WorkHandle;
 		const TArray<TObjectPtr<const UPCGExHeuristicsFactoryData>>* HeuristicsFactories = nullptr;

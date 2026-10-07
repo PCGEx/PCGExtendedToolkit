@@ -103,9 +103,7 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 		const int64 EntryKey = OutData->Metadata->AddEntry();
 		if (PathAttr) { PathAttr->SetValue(EntryKey, InPath); }
 
-		FPCGTaggedData& Tagged = Context->OutputData.TaggedData.Emplace_GetRef();
-		Tagged.Pin = PCGPinConstants::DefaultOutputLabel;
-		Tagged.Data = OutData;
+		Context->StageOutput(OutData, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::Managed);
 	};
 
 	auto CompleteWith = [&](const FSoftObjectPath& InPath) -> bool

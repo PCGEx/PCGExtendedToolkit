@@ -80,7 +80,7 @@ bool PCGExPointFilter::FDotFilter::Init(FPCGExContext* InContext, const TSharedP
 	}
 
 	DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
-	if (!DotComparison.Init(InContext, InPointDataFacade.ToSharedRef()))
+	if (!DotComparison.Init(InContext, InPointDataFacade.ToSharedRef(), PCGEX_QUIET_HANDLING))
 	{
 		return false;
 	}
@@ -93,9 +93,7 @@ bool PCGExPointFilter::FDotFilter::Init(FPCGExContext* InContext, const TSharedP
 		return false;
 	}
 
-	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandB->Init(PointDataFacade))
+	if (!InitSettingValue(OperandB, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}

@@ -47,11 +47,7 @@ PCGExFloatLUT FPCGExCurveLookupDetails::MakeFloatLookup() const
 	static_assert("NOT IMPLEMENTED YET");
 	return MakeLookup(
 		bUseLocalCurve, LocalCurve, ExternalCurve,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 }
 
 #pragma region FPCGExCurveFloatLookup

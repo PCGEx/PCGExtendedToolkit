@@ -38,7 +38,7 @@ public:
 			LookAtGetter = InDataFacade->GetBroadcaster<FVector>(LookAtAttribute, true);
 			if (!LookAtGetter)
 			{
-				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("LookAt Attribute ({0}) is not valid."), FText::FromString(PCGExMetaHelpers::GetSelectorDisplayName(LookAtAttribute))));
+				PCGEX_LOG_INVALID_SELECTOR_C(Context, Look At, LookAtAttribute)
 				return false;
 			}
 		}
