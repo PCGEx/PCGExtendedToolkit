@@ -47,6 +47,15 @@ namespace PCGExData::Helpers
 	template <typename T>
 	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute, T Fallback);
 
+	/**
+	 * @Data identifier for a user-typed name: only the parsed attribute name is kept, any domain or sub-selection is
+	 * dropped. False, leaving OutIdentifier untouched, for a property selector.
+	 */
+	PCGEXCORE_API bool TryGetDataValueIdentifier(FName Name, FPCGAttributeIdentifier& OutIdentifier);
+
+	/** Selector overload, for a name the caller already parsed or resolved (@Last). */
+	PCGEXCORE_API bool TryGetDataValueIdentifier(const FPCGAttributePropertySelector& Selector, FPCGAttributeIdentifier& OutIdentifier);
+
 	/** Writes the attribute's @Data value (slot model: see ReadDataValue). False when Attribute is null. */
 	template <typename T>
 	bool SetDataValue(FPCGMetadataAttributeBase* Attribute, const T Value);

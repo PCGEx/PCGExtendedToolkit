@@ -259,15 +259,14 @@ bool FPCGExDataUniquesElement::Boot(FPCGExContext* InContext) const
 		FPCGAttributePropertyInputSelector Selector;
 		Selector.Update(KeyName.ToString());
 
-		if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute
+		FPCGAttributeIdentifier Identifier;
+		if (!PCGExData::Helpers::TryGetDataValueIdentifier(Selector, Identifier)
 			|| !Selector.GetExtraNames().IsEmpty()
-			|| !PCGExMetaHelpers::IsWritableAttributeName(Selector.GetAttributeName()))
+			|| !PCGExMetaHelpers::IsWritableAttributeName(Identifier.Name))
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("\"{0}\" is not a valid key attribute name (plain @Data attribute names only, no sub-selection)."), FText::FromName(KeyName)));
 			return false;
 		}
-
-		const FPCGAttributeIdentifier Identifier(Selector.GetAttributeName(), PCGMetadataDomainID::Data);
 
 		bool bAlreadySeen = false;
 		SeenKeys.Add(Identifier.Name, &bAlreadySeen);

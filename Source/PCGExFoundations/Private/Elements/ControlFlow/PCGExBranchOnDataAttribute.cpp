@@ -105,12 +105,9 @@ bool FPCGExBranchOnDataAttributeElement::AdvanceWork(FPCGExContext* InContext, c
 
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		FPCGAttributePropertyInputSelector DummySelector;
-		DummySelector.Update(Settings->BranchSource.ToString());
-
+		// Boot validated the name, so this cannot refuse.
 		FPCGAttributeIdentifier ReadIdentifier;
-		ReadIdentifier.Name = DummySelector.GetAttributeName();
-		ReadIdentifier.MetadataDomain = PCGMetadataDomainID::Data;
+		PCGExData::Helpers::TryGetDataValueIdentifier(Settings->BranchSource, ReadIdentifier);
 
 		TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(Settings->GetMainInputPin());
 

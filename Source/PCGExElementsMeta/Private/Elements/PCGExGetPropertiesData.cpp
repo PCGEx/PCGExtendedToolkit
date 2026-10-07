@@ -901,14 +901,14 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 
 	// Pre-size for worst case (one tagged data per input) so the per-input emission below doesn't
 	// pay for TArray growth reallocations.
-	InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + Inputs.Num());
+	InContext->IncreaseStagedOutputReserve(Inputs.Num());
 
 	// Phase 5: per-input write -- parallel across inputs. Each task touches only its own duplicated
 	// data + its own slot range; the per-task result lands in ParallelResults and we compact + stage
-	// in a single-threaded post-pass (OutputData.TaggedData isn't safe to grow in parallel).
+	// in a single-threaded post-pass, so outputs keep the input order.
 	//
 	// Point inputs hold a TSharedPtr<FPointIO> in the result so the post-pass can stage via the
-	// canonical FPointIO::StageOutput path; param inputs go through a direct TaggedData emplace.
+	// canonical FPointIO::StageOutput path; other inputs are staged on the context directly.
 	struct FInputResult
 	{
 		// Data: the UPCGData* to stage. For points this is also PointIO->GetOut(); for param data
@@ -978,11 +978,9 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 			continue;
 		}
 
-		// Param data and any other non-point data (splines, ...): direct TaggedData append.
-		FPCGTaggedData& OutTagged = InContext->OutputData.TaggedData.Emplace_GetRef();
-		OutTagged.Pin = PCGExGetPropertiesData::SourcesPin;
-		OutTagged.Data = Result.Data;
-		OutTagged.Tags = MoveTemp(Result.Tags);
+		// Param data and any other non-point data (splines, ...): Managed only, so unlike the point outputs
+		// it is neither flattened nor cleaned of consumable attributes.
+		InContext->StageOutput(Result.Data, PCGExGetPropertiesData::SourcesPin, PCGExData::EStaging::Managed, Result.Tags);
 	}
 
 	// Single-threaded so the graph log isn't touched from the parallel write tasks.
