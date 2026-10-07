@@ -37,9 +37,7 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 	Mode = TypedFactory->Config.Mode;
 	bWriteToAccumulatedValue = TypedFactory->Config.bWriteToAccumulatedValue;
 
-	MaxAccumulation = TypedFactory->Config.MaxAccumulationValue.GetValueSetting();
-	MaxAccumulation->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!MaxAccumulation->Init(GetSourceFacade()))
+	if (!InitSettingValue(MaxAccumulation, TypedFactory->Config.MaxAccumulationValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

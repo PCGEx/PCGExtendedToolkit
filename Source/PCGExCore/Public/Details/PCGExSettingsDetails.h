@@ -43,7 +43,7 @@ namespace PCGExDetails
 		 * attribute (if any) with the facade's context -- one registration site for the whole
 		 * hierarchy, subclasses only declare what they consume via GetConsumableName.
 		 */
-		bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false);
+		[[nodiscard]] bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false);
 
 		FORCEINLINE virtual void SetConstant(T InConstant)
 		{
@@ -54,8 +54,8 @@ namespace PCGExDetails
 		/**
 		 * Whether Init auto-registers the consumed attribute with the context. A veto chain:
 		 * shorthand getters seed this from their per-operand bCleanupAttribute toggle, factory-driven
-		 * consumers (filters, fill controls, blend ops...) AND-in their factory's own toggle
-		 * (bRegisterConsumable &= Factory->bCleanupConsumableAttributes), and Init checks the node's
+		 * consumers (filters, factory-made operations) AND-in their factory's own toggle through
+		 * InitSettingValueGated (see IFilter / FPCGExOperation::InitSettingValue), and Init checks the node's
 		 * context toggle last. Factory Register* overrides remain only for operands read through raw
 		 * FNames/broadcasters that never flow through a TSettingValue.
 		 */
@@ -275,6 +275,15 @@ namespace PCGExDetails
 
 	template <typename T>
 	TSharedPtr<TSettingValue<T>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const T InConstant);
+
+	/** Assigns InValue to OutValue, ANDs bAllowConsumable into its bRegisterConsumable (factory stage of the veto chain), then inits it. OutValue is assigned even when Init fails. */
+	template <typename T>
+	[[nodiscard]] bool InitSettingValueGated(TSharedPtr<TSettingValue<T>>& OutValue, TSharedPtr<TSettingValue<T>> InValue, const bool bAllowConsumable, const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false)
+	{
+		OutValue = MoveTemp(InValue);
+		OutValue->bRegisterConsumable &= bAllowConsumable;
+		return OutValue->Init(InDataFacade, bSupportScoped, bCaptureMinMax);
+	}
 
 #pragma region externalization
 

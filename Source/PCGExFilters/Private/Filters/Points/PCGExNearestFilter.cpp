@@ -94,9 +94,7 @@ bool PCGExPointFilter::FNearestFilter::Init(FPCGExContext* InContext, const TSha
 
 	const FPCGExNearestFilterConfigBase& Cfg = NearestFactory->GetNearestConfig();
 
-	MaxDistance = Cfg.MaxDistance.GetValueSetting(PCGEX_QUIET_HANDLING);
-	MaxDistance->bRegisterConsumable &= NearestFactory->bCleanupConsumableAttributes;
-	if (!MaxDistance->Init(PointDataFacade, false))
+	if (!InitSettingValue(MaxDistance, Cfg.MaxDistance.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false))
 	{
 		return false;
 	}

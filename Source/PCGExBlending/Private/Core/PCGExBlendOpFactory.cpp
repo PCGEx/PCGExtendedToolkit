@@ -51,9 +51,7 @@ void FPCGExAttributeBlendConfig::Init()
 
 bool FPCGExBlendOperation::PrepareForData(FPCGExContext* InContext)
 {
-	Weight = Config.Weighting.WeightValue.GetValueSetting();
-	Weight->bRegisterConsumable &= bCleanupConsumableAttributes;
-	if (!Weight->Init(WeightFacade))
+	if (!InitSettingValue(Weight, Config.Weighting.WeightValue.GetValueSetting(), WeightFacade))
 	{
 		return false;
 	}

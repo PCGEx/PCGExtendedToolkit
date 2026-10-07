@@ -136,18 +136,14 @@ bool PCGExPointFilter::FVolumeFilter::Init(FPCGExContext* InContext, const TShar
 	bUsePenetrationThreshold = Cfg.bUsePenetrationThreshold;
 	PenetrationMode = Cfg.PenetrationMode;
 
-	ExtraRadius = Cfg.ExtraRadius.GetValueSetting();
-	ExtraRadius->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!ExtraRadius->Init(InPointDataFacade))
+	if (!InitSettingValue(ExtraRadius, Cfg.ExtraRadius.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 	{
 		return false;
 	}
 
 	if (bUsePenetrationThreshold)
 	{
-		PenetrationThresholdValue = Cfg.PenetrationThreshold.GetValueSetting();
-		PenetrationThresholdValue->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!PenetrationThresholdValue->Init(InPointDataFacade))
+		if (!InitSettingValue(PenetrationThresholdValue, Cfg.PenetrationThreshold.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 		{
 			return false;
 		}

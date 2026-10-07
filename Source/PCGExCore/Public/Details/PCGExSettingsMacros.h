@@ -29,8 +29,8 @@ V->bQuiet = bQuiet;\
 return V; }
 
 // Shorthand variant: seeds the value's consumable auto-registration from the shorthand's own
-// per-operand bCleanupAttribute toggle (see FPCGExInputShorthandBase). Call sites may still veto
-// further via &= (factory gate); the node toggle is checked at Init time.
+// per-operand bCleanupAttribute toggle (see FPCGExInputShorthandBase). Factory-driven consumers veto
+// further through InitSettingValueGated; the node toggle is checked at Init time.
 #define PCGEX_SETTING_VALUE_IMPL_SHORTHAND(_CLASS, _NAME, _TYPE, _INPUT, _SOURCE, _CONSTANT)\
 TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> _CLASS::GetValueSetting##_NAME(const bool bQuiet) const{ \
 TSharedPtr<PCGExDetails::TSettingValue<_TYPE>> V = PCGExDetails::MakeSettingValue<_TYPE>(_INPUT, _SOURCE, _CONSTANT);\

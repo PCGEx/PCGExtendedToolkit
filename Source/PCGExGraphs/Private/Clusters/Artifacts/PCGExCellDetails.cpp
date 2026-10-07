@@ -5,6 +5,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClusterCommon.h"
+#include "Clusters/PCGExClustersHelpers.h"
 #include "Clusters/Artifacts/PCGExCell.h"
 #include "Core/PCGExContext.h"
 #include "Data/PCGExData.h"
@@ -434,6 +435,42 @@ namespace PCGExClusters
 
 		// Commit facade
 		OutFacade->WriteFastest(TaskManager);
+	}
+
+	bool ProcessCellsAsOBBPoints(
+		const TSharedPtr<FCluster>& InCluster,
+		const TArray<TSharedPtr<FCell>>& InCells,
+		const TSharedPtr<PCGExData::FPointIOCollection>& InCollection,
+		const TSharedRef<PCGExData::FPointIO>& InVtxIO,
+		const PCGExData::FIOSortKey& InSortKey,
+		const FPCGExCellArtifactsDetails& ArtifactSettings,
+		const TSharedPtr<PCGExMT::FTaskManager>& TaskManager,
+		const FString& InTag)
+	{
+		if (!InCollection || InCells.IsEmpty())
+		{
+			return true;
+		}
+
+		// Typed: bounds points are not cluster vtx, whatever class the vtx data is.
+		const TSharedPtr<PCGExData::FPointIO> OBBPointIO = InCollection->Emplace_GetRef<UPCGPointArrayData>(InVtxIO, PCGExData::EIOInit::New);
+		if (!OBBPointIO)
+		{
+			return false;
+		}
+
+		if (!InTag.IsEmpty())
+		{
+			OBBPointIO->Tags->AddRaw(InTag);
+		}
+
+		OBBPointIO->SetSortKey(InSortKey);
+		Helpers::CleanupClusterData(OBBPointIO);
+
+		PCGEX_MAKE_SHARED(OBBFacade, PCGExData::FFacade, OBBPointIO.ToSharedRef())
+		ProcessCellsAsOBBPoints(InCluster, InCells, OBBFacade, ArtifactSettings, TaskManager);
+
+		return true;
 	}
 }
 

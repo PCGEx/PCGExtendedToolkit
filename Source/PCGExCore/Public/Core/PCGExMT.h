@@ -34,6 +34,11 @@ namespace PCGExMT
 	PCGEXCORE_API
 	int32 SubLoopScopes(TArray<FScope>& OutSubRanges, const int32 NumIterations, const int32 RangeSize);
 
+	// Calls Body once per scope and returns when all have run: in order on the calling thread for a single scope
+	// or when bForceSingleThreaded, fanned out otherwise. Scopes are skipped once WorkHandle is dead.
+	PCGEXCORE_API
+	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, const FScopedLoopBody& Body);
+
 	enum class EAsyncHandleState : uint8
 	{
 		Idle    = 0,

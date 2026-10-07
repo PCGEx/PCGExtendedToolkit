@@ -44,6 +44,9 @@ namespace PCGExCollections
 	{
 		UPCGExSelectorClassicFactoryData* Factory = InContext->ManagedObjects->New<UPCGExSelectorClassicFactoryData>();
 
+		// Node-owned: no provider node can veto consumables, so the consuming node's own toggle decides alone.
+		Factory->bCleanupConsumableAttributes = true;
+
 		Factory->Config.Mode = InDetails.Distribution;
 		Factory->Config.IndexConfig = InDetails.IndexSettings;
 		Factory->BaseConfig.SubDistribution = InEntryDetails;
@@ -161,6 +164,7 @@ namespace PCGExCollections
 
 		const FPCGExSelectorFactoryBaseConfig& BaseConfig = ActiveFactory->BaseConfig;
 		const FPCGExSelectorTagFilterDetails& TagFilter = BaseConfig.TagFilter;
+		const bool bFactoryCleanup = ActiveFactory->bCleanupConsumableAttributes;
 
 		// Tag-filter getters come first: whether any of them reads per point decides how the category
 		// getter is initialized. Non-scoped on purpose -- constants cost nothing, attributes are read in
@@ -169,24 +173,22 @@ namespace PCGExCollections
 		bool bDynamicTags = false;
 		if (BaseConfig.bUseTagFilter)
 		{
-			TagGetters[0] = TagFilter.RequireAll.GetValueSetting();
-			TagGetters[1] = TagFilter.RequireAny.GetValueSetting();
-			TagGetters[2] = TagFilter.Exclude.GetValueSetting();
+			if (!PCGExDetails::InitSettingValueGated(TagGetters[0], TagFilter.RequireAll.GetValueSetting(), bFactoryCleanup, InDataFacade, false)
+				|| !PCGExDetails::InitSettingValueGated(TagGetters[1], TagFilter.RequireAny.GetValueSetting(), bFactoryCleanup, InDataFacade, false)
+				|| !PCGExDetails::InitSettingValueGated(TagGetters[2], TagFilter.Exclude.GetValueSetting(), bFactoryCleanup, InDataFacade, false))
+			{
+				return false;
+			}
 			for (const TSharedPtr<PCGExDetails::TSettingValue<FName>>& Getter : TagGetters)
 			{
-				if (!Getter->Init(InDataFacade, false))
-				{
-					return false;
-				}
 				bDynamicTags |= !Getter->IsConstant();
 			}
 		}
 
 		if (BaseConfig.bUseCategories)
 		{
-			CategoryGetter = BaseConfig.Category.GetValueSetting();
 			// The dynamic tag path reads every point's category at Init, which a scoped getter cannot serve.
-			if (!CategoryGetter->Init(InDataFacade, !bDynamicTags))
+			if (!PCGExDetails::InitSettingValueGated(CategoryGetter, BaseConfig.Category.GetValueSetting(), bFactoryCleanup, InDataFacade, !bDynamicTags))
 			{
 				return false;
 			}
@@ -232,6 +234,7 @@ namespace PCGExCollections
 				bFactoryFailed = true;
 				return nullptr;
 			}
+			Op->bCleanupConsumableAttributes = bFactoryCleanup;
 			Op->SharedData = ObtainSharedData(Pool);
 			return Op->PrepareForData(Ctx, InDataFacade, Pool, Collection) ? Op : nullptr;
 		};
@@ -710,6 +713,7 @@ namespace PCGExCollections
 		if (!Factory)
 		{
 			UPCGExSelectorClassicFactoryData* Transient = Ctx->ManagedObjects->New<UPCGExSelectorClassicFactoryData>();
+			Transient->bCleanupConsumableAttributes = true; // node-owned, same rule as BuildLegacyFactory
 			Transient->BaseConfig.SubDistribution = Details;
 			Factory = Transient;
 		}
@@ -719,6 +723,7 @@ namespace PCGExCollections
 		{
 			return false;
 		}
+		PickerOp->bCleanupConsumableAttributes = Factory->bCleanupConsumableAttributes;
 		return PickerOp->PrepareForData(Ctx, InDataFacade);
 	}
 

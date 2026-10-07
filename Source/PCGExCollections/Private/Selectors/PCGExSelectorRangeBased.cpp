@@ -99,8 +99,7 @@ bool FPCGExEntryRangeBasedPickerOpBase::OnInitForData(FPCGExContext* InContext, 
 	ValueGetters.SetNum(AxisCount);
 	for (int32 A = 0; A < AxisCount; ++A)
 	{
-		ValueGetters[A] = Axes[A].ValueSource.GetValueSetting();
-		if (!ValueGetters[A]->Init(InDataFacade))
+		if (!InitSettingValue(ValueGetters[A], Axes[A].ValueSource.GetValueSetting(), InDataFacade))
 		{
 			return false;
 		}

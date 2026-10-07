@@ -97,9 +97,7 @@ void UPCGExNumericCompareNearestFilterProviderSettings::PCGExApplyDeprecation(UP
 
 bool PCGExPointFilter::FNumericCompareNearestFilter::InitNearest(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 {
-	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandB->Init(PointDataFacade, false))
+	if (!InitSettingValue(OperandB, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false))
 	{
 		return false;
 	}

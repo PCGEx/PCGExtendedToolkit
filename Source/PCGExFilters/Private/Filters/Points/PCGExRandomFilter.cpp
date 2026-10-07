@@ -81,57 +81,38 @@ bool PCGExPointFilter::FRandomFilter::Init(FPCGExContext* InContext, const TShar
 
 	// When remapping internally, track min/max to normalize weight values to [0..WeightRange].
 	// If min is negative, WeightOffset shifts values so the effective range starts at zero.
-	WeightBuffer = TypedFilterFactory->Config.GetValueSettingWeight(PCGEX_QUIET_HANDLING);
-	WeightBuffer->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!WeightBuffer->IsConstant())
+	// Init always runs: an @Data value reports IsConstant() and only gets its value there.
+	const bool bRemapWeight = TypedFilterFactory->Config.bRemapWeightInternally;
+	if (!InitSettingValue(WeightBuffer, TypedFilterFactory->Config.GetValueSettingWeight(PCGEX_QUIET_HANDLING), PointDataFacade, !bRemapWeight, bRemapWeight))
 	{
-		if (TypedFilterFactory->Config.bRemapWeightInternally)
-		{
-			if (!WeightBuffer->Init(PointDataFacade, false, true))
-			{
-				return false;
-			}
-			WeightRange = WeightBuffer->Max();
+		return false;
+	}
 
-			if (WeightBuffer->Min() < 0)
-			{
-				WeightOffset = WeightBuffer->Min();
-				WeightRange += WeightOffset;
-			}
-		}
-		else
+	if (bRemapWeight && !WeightBuffer->IsConstant())
+	{
+		WeightRange = WeightBuffer->Max();
+
+		if (WeightBuffer->Min() < 0)
 		{
-			if (!WeightBuffer->Init(PointDataFacade))
-			{
-				return false;
-			}
+			WeightOffset = WeightBuffer->Min();
+			WeightRange += WeightOffset;
 		}
 	}
 
-	ThresholdBuffer = TypedFilterFactory->Config.ThresholdValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	ThresholdBuffer->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!ThresholdBuffer->IsConstant())
+	const bool bRemapThreshold = TypedFilterFactory->Config.bRemapThresholdInternally;
+	if (!InitSettingValue(ThresholdBuffer, TypedFilterFactory->Config.ThresholdValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, !bRemapThreshold, bRemapThreshold))
 	{
-		if (TypedFilterFactory->Config.bRemapThresholdInternally)
-		{
-			if (!ThresholdBuffer->Init(PointDataFacade, false, true))
-			{
-				return false;
-			}
-			ThresholdRange = ThresholdBuffer->Max();
+		return false;
+	}
 
-			if (ThresholdBuffer->Min() < 0)
-			{
-				ThresholdOffset = ThresholdBuffer->Min();
-				ThresholdRange += ThresholdOffset;
-			}
-		}
-		else
+	if (bRemapThreshold && !ThresholdBuffer->IsConstant())
+	{
+		ThresholdRange = ThresholdBuffer->Max();
+
+		if (ThresholdBuffer->Min() < 0)
 		{
-			if (!ThresholdBuffer->Init(PointDataFacade))
-			{
-				return false;
-			}
+			ThresholdOffset = ThresholdBuffer->Min();
+			ThresholdRange += ThresholdOffset;
 		}
 	}
 

@@ -37,9 +37,7 @@ bool FPCGExFillControlHeuristicsThreshold::PrepareForDiffusions(FPCGExContext* I
 	Comparison = TypedFactory->Config.Comparison;
 	Tolerance = TypedFactory->Config.Tolerance;
 
-	Threshold = TypedFactory->Config.ThresholdValue.GetValueSetting();
-	Threshold->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!Threshold->Init(GetSourceFacade()))
+	if (!InitSettingValue(Threshold, TypedFactory->Config.ThresholdValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

@@ -25,6 +25,9 @@ class UPCGBasePointData;
 
 namespace PCGExData
 {
+	class FPointIO;
+	class FPointIOCollection;
+	struct FIOSortKey;
 	struct FMutablePoint;
 }
 
@@ -93,7 +96,10 @@ namespace PCGExCellTriage
 			return TagInside;
 		case EPCGExCellTriageResult::Touching:
 			return TagTouching;
+		case EPCGExCellTriageResult::Outside:
+			return TagOutside;
 		default:
+			ensureMsgf(false, TEXT("Unresolvable EPCGExCellTriageResult (%d)"), static_cast<int32>(InResult));
 			return TagOutside;
 		}
 	}
@@ -110,6 +116,7 @@ namespace PCGExCellTriage
 		case EPCGExCellTriageResult::Outside:
 			return !!(InFlags & static_cast<uint8>(EPCGExCellTriageFlags::Outside));
 		default:
+			ensureMsgf(false, TEXT("Unresolvable EPCGExCellTriageResult (%d)"), static_cast<int32>(InResult));
 			return false;
 		}
 	}
@@ -585,4 +592,18 @@ namespace PCGExClusters
 		const TSharedPtr<PCGExData::FFacade>& OutFacade,
 		const FPCGExCellArtifactsDetails& ArtifactSettings,
 		const TSharedPtr<PCGExMT::FTaskManager>& TaskManager);
+
+	/**
+	 * Emits InCells as one OBB point data on InCollection, one point per cell in array order, staged at InSortKey.
+	 * Nothing is emitted for a null collection or no cells. Returns false only when the output could not be created.
+	 */
+	PCGEXGRAPHS_API bool ProcessCellsAsOBBPoints(
+		const TSharedPtr<FCluster>& InCluster,
+		const TArray<TSharedPtr<FCell>>& InCells,
+		const TSharedPtr<PCGExData::FPointIOCollection>& InCollection,
+		const TSharedRef<PCGExData::FPointIO>& InVtxIO,
+		const PCGExData::FIOSortKey& InSortKey,
+		const FPCGExCellArtifactsDetails& ArtifactSettings,
+		const TSharedPtr<PCGExMT::FTaskManager>& TaskManager,
+		const FString& InTag = FString());
 }

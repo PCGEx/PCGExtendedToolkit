@@ -124,36 +124,12 @@ namespace PCGExPointsMT
 		const int32 PLI = PCGEX_CORE_SETTINGS.GetPointsBatchChunkSize(PerLoopIterations);
 
 		TArray<PCGExMT::FScope> Loops;
-		const int32 NumScopes = PCGExMT::SubLoopScopes(
+		PCGExMT::SubLoopScopes(
 			Loops, NumPoints, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumPoints, PLI)));
 
 		PrepareLoopScopesForPoints(Loops);
 
-		if (NumScopes == 1 || bForceSingleThreadedProcessPoints)
-		{
-			for (const PCGExMT::FScope& S : Loops)
-			{
-				if (!WorkHandle.IsValid())
-				{
-					break;
-				}
-				ProcessPoints(S);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				NumScopes,
-				[this, &Loops](const int32 i)
-				{
-					if (!WorkHandle.IsValid())
-					{
-						return;
-					}
-					ProcessPoints(Loops[i]);
-				},
-				/*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessPoints, [this](const PCGExMT::FScope& Scope) { ProcessPoints(Scope); });
 
 		OnPointsProcessingComplete();
 	}
@@ -191,36 +167,12 @@ namespace PCGExPointsMT
 		const int32 PLI = PCGEX_CORE_SETTINGS.GetPointsBatchChunkSize(PerLoopIterations);
 
 		TArray<PCGExMT::FScope> Loops;
-		const int32 NumScopes = PCGExMT::SubLoopScopes(
+		PCGExMT::SubLoopScopes(
 			Loops, NumIterations, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumIterations, PLI)));
 
 		PrepareLoopScopesForRanges(Loops);
 
-		if (NumScopes == 1 || bForceSingleThreadedProcessRange)
-		{
-			for (const PCGExMT::FScope& S : Loops)
-			{
-				if (!WorkHandle.IsValid())
-				{
-					break;
-				}
-				ProcessRange(S);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				NumScopes,
-				[this, &Loops](const int32 i)
-				{
-					if (!WorkHandle.IsValid())
-					{
-						return;
-					}
-					ProcessRange(Loops[i]);
-				},
-				/*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessRange, [this](const PCGExMT::FScope& Scope) { ProcessRange(Scope); });
 
 		OnRangeProcessingComplete();
 	}
@@ -430,57 +382,35 @@ namespace PCGExPointsMT
 			return;
 		}
 		PCGEX_CHECK_WORK_HANDLE_VOID
-		if (bForceSingleThreadedCompletion)
-		{
-			for (TSharedRef<IProcessor>& Processor : Processors)
+
+		// Forced = in index order on this thread (the threshold is never reached).
+		PCGExMT::ParallelOrSequential(
+			Processors.Num(),
+			[&](const int32 i)
 			{
+				const TSharedRef<IProcessor>& Processor = Processors[i];
 				if (Processor->bIsProcessorValid)
 				{
 					Processor->CompleteWork();
 				}
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				Processors.Num(),
-				[&](const int32 i)
-				{
-					const TSharedRef<IProcessor>& Processor = Processors[i];
-					if (Processor->bIsProcessorValid)
-					{
-						Processor->CompleteWork();
-					}
-				}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+			}, /*Threshold=*/bForceSingleThreadedCompletion ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
 	}
 
 	void IBatch::Write()
 	{
 		PCGEX_CHECK_WORK_HANDLE_VOID
-		if (bForceSingleThreadedWrite)
-		{
-			for (TSharedRef<IProcessor>& Processor : Processors)
+
+		// Forced = in index order on this thread (the threshold is never reached).
+		PCGExMT::ParallelOrSequential(
+			Processors.Num(),
+			[&](const int32 i)
 			{
+				const TSharedRef<IProcessor>& Processor = Processors[i];
 				if (Processor->bIsProcessorValid)
 				{
 					Processor->Write();
 				}
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				Processors.Num(),
-				[&](const int32 i)
-				{
-					const TSharedRef<IProcessor>& Processor = Processors[i];
-					if (Processor->bIsProcessorValid)
-					{
-						Processor->Write();
-					}
-				}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+			}, /*Threshold=*/bForceSingleThreadedWrite ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
 	}
 
 	void IBatch::Output()
@@ -510,23 +440,14 @@ namespace PCGExPointsMT
 	{
 		PCGEX_CHECK_WORK_HANDLE_VOID
 
-		if (bForceSingleThreadedProcessing)
-		{
-			for (TSharedRef<IProcessor>& Processor : Processors)
+		// Forced = in index order on this thread (the threshold is never reached).
+		PCGExMT::ParallelOrSequential(
+			Processors.Num(),
+			[&](const int32 i)
 			{
+				const TSharedRef<IProcessor>& Processor = Processors[i];
 				Processor->bIsProcessorValid = Processor->Process(TaskManager);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				Processors.Num(),
-				[&](const int32 i)
-				{
-					const TSharedRef<IProcessor>& Processor = Processors[i];
-					Processor->bIsProcessorValid = Processor->Process(TaskManager);
-				}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+			}, /*Threshold=*/bForceSingleThreadedProcessing ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
 
 		OnInitialPostProcess();
 	}

@@ -69,12 +69,14 @@ namespace PCGExClusters
 
 		/**
 		 * Process a seeded cell as a path output.
-		 * Uses cell's CustomIndex as seed index, applies seed forwarding/tagging. Paths stage by batch, then seed.
+		 * Uses cell's CustomIndex as seed index, applies seed forwarding/tagging. Paths stage by batch, then seed;
+		 * InCellOrdinal breaks the tie between cells of one seed, so pass the cell's index whenever a seed can own several.
 		 */
 		void ProcessSeededCell(
 			const TSharedPtr<FCell>& InCell,
 			const TSharedPtr<PCGExData::FPointIO>& InPathIO,
-			const FString& InTriageTag = TEXT("")) const;
+			const FString& InTriageTag = TEXT(""),
+			int32 InCellOrdinal = INDEX_NONE) const;
 
 		/** Flags the owner and merged contributors of every cell as good seeds, whatever artifact is output. Not thread-safe. */
 		void MarkSeedsGood(const TArray<TSharedPtr<FCell>>& InCells) const;

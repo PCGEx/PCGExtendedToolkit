@@ -37,9 +37,7 @@ bool FPCGExFillControlAttributeThreshold::PrepareForDiffusions(FPCGExContext* In
 	AttributeSource = TypedFactory->Config.AttributeSource;
 	Comparison = TypedFactory->Config.Comparison;
 
-	Threshold = TypedFactory->Config.ThresholdValue.GetValueSetting();
-	Threshold->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!Threshold->Init(GetSourceFacade()))
+	if (!InitSettingValue(Threshold, TypedFactory->Config.ThresholdValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

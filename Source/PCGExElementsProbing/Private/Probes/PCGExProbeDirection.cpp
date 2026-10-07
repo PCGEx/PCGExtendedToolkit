@@ -43,8 +43,7 @@ bool FPCGExProbeDirection::Prepare(FPCGExContext* InContext)
 	MinDot = PCGExMath::DegreesToDot(Config.MaxAngle);
 	DirectionMultiplier = Config.bInvertDirection ? -1 : 1;
 
-	Direction = Config.Direction.GetValueSetting();
-	if (!Direction->Init(PrimaryDataFacade))
+	if (!InitSettingValue(Direction, Config.Direction.GetValueSetting(), PrimaryDataFacade))
 	{
 		return false;
 	}

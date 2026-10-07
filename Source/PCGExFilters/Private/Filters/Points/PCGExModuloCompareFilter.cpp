@@ -75,16 +75,12 @@ bool PCGExPointFilter::FModuloComparisonFilter::Init(FPCGExContext* InContext, c
 		return false;
 	}
 
-	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandB->Init(PointDataFacade))
+	if (!InitSettingValue(OperandB, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}
 
-	OperandC = TypedFilterFactory->Config.OperandCValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandC->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandC->Init(PointDataFacade))
+	if (!InitSettingValue(OperandC, TypedFilterFactory->Config.OperandCValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}

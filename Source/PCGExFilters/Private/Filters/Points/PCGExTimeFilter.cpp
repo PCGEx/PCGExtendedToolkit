@@ -105,9 +105,7 @@ namespace PCGExPointFilter
 			}
 		}
 
-		OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting();
-		OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!OperandB->Init(PointDataFacade))
+		if (!InitSettingValue(OperandB, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 		{
 			return false;
 		}

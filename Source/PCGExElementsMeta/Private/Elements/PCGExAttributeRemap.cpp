@@ -259,6 +259,21 @@ namespace PCGExAttributeRemap
 			{
 				Rule.RemapDetails.InMax = TNumericLimits<double>::Lowest();
 			}
+
+			// Snap is only consumed when snapping is on: a disabled Snap must not fail the processor over its attribute.
+			if (Rule.RemapDetails.Snapping == EPCGExVariationSnapping::None)
+			{
+				Rule.SnapCache = PCGExDetails::MakeSettingValue(Rule.RemapDetails.Snap.Constant);
+			}
+			else
+			{
+				// Not scoped: the remap pass reads every point at once, after the scoped loop.
+				Rule.SnapCache = Rule.RemapDetails.Snap.GetValueSetting();
+				if (!Rule.SnapCache->Init(PointDataFacade, false))
+				{
+					return false;
+				}
+			}
 		}
 
 		StartParallelLoopForPoints();
@@ -272,7 +287,6 @@ namespace PCGExAttributeRemap
 		{
 			Rule.MinCache = MakeShared<PCGExMT::TScopedNumericValue<double>>(Loops, TNumericLimits<double>::Max());
 			Rule.MaxCache = MakeShared<PCGExMT::TScopedNumericValue<double>>(Loops, TNumericLimits<double>::Lowest());
-			Rule.SnapCache = Rule.RemapDetails.Snap.GetValueSetting();
 		}
 	}
 
