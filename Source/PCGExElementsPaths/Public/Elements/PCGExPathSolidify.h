@@ -9,6 +9,7 @@
 #include "Details/PCGExSettingsMacros.h"
 #include "Math/PCGExMath.h"
 #include "Math/PCGExMathAxis.h"
+#include "Paths/PCGExChordBoxes.h"
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
 
@@ -212,6 +213,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExInputShorthandSelectorDouble SolidificationLerp = FPCGExInputShorthandSelectorDouble(FName("@Last"), 0, false);
 
+	/** Miter the joints between consecutive boxes. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bMiterJoints = false;
+
+	/** When enabled, both boxes of a joint extend along the path until their outer sides meet. The value caps that
+	 *  extension as a multiple of the outer extent: 1 closes turns up to 90 degrees. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bMiterJoints", DisplayName="Miter Joints", ClampMin=1, ClampMax=100))
+	double MiterLimit = 1;
+
 #pragma region DEPRECATED
 
 	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
@@ -314,6 +324,10 @@ namespace PCGExPathSolidify
 		TSharedPtr<PCGExPaths::TPathEdgeExtra<FVector>> PathNormal;
 		TSharedPtr<PCGExDetails::TSettingValue<FVector>> NormalGetter;
 
+		// Miter Joints: each box's axes, recorded in ProcessPoints for the miter pass.
+		TArray<PCGExPaths::ChordBoxes::FBoxAxes> BoxAxes;
+		double MiterLimit = 1;
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
@@ -331,5 +345,7 @@ namespace PCGExPathSolidify
 		int32 FindReferenceEdge(const int32 Index) const;
 
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
+		virtual void OnPointsProcessingComplete() override;
+		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 	};
 }

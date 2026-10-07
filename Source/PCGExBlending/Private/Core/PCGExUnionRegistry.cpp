@@ -36,7 +36,7 @@ namespace PCGExData
 		return Closest.bValid ? Closest.Index : INDEX_NONE;
 	}
 
-	int32 FUnionRegistry::Insert(const FConstPoint& Point)
+	int32 FUnionRegistry::Insert(const FConstPoint& Point, const FPCGExFuseDetails& FuseDetails)
 	{
 		const int32 NewIndex = Reps.Num();
 		const FVector Origin = Point.GetLocation();
@@ -47,8 +47,11 @@ namespace PCGExData
 		Rep.FuseCount = 1;
 		Rep.RepIndex = NewIndex;
 
-		const FBoxSphereBounds Bounds(Point.Data->GetLocalBounds(Point.Index).TransformBy(Point.Data->GetTransform(Point.Index)));
-		Octree->AddElement(PCGExOctree::FItem(NewIndex, Bounds));
+		// Grown by the rep's own tolerance: Find's query box only carries the incoming point's.
+		FBox Box = Point.Data->GetLocalBounds(Point.Index).TransformBy(Point.Data->GetTransform(Point.Index));
+		Box += Origin;
+		Box = Box.ExpandBy(FuseDetails.GetToleranceExtent(Point.Index));
+		Octree->AddElement(PCGExOctree::FItem(NewIndex, FBoxSphereBounds(Box)));
 
 		return NewIndex;
 	}
@@ -61,6 +64,6 @@ namespace PCGExData
 			Reps[Existing].Accumulate(Point.GetLocation());
 			return Existing;
 		}
-		return Insert(Point);
+		return Insert(Point, FuseDetails);
 	}
 }

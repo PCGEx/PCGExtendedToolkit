@@ -21,7 +21,8 @@ namespace PCGExFusePoints
 {
 	// Reorder FUnionTable entries so they appear in ascending order of each group's lowest contributing
 	// input-index. Octree mode emits with dense Keys (0..N-1) in creation order, so the table is already
-	// in input-traversal order after stable radix sort -- this collapses to an identity check + early-out.
+	// in input-traversal order after stable radix sort -- this collapses to an identity check + early-out
+	// (unless per-point tolerances reordered insertion; groups then follow their founder's input index).
 	// Voxel mode emits with uint64 spatial-hash Keys, which scrambles entries vs input order; this pass
 	// restores the legacy single-threaded UnionGraph "first-creator-wins" entry ordering.
 	void ReorderUnionTableByPrimary(PCGExData::FUnionTable& Table)
@@ -92,6 +93,24 @@ namespace PCGExFusePoints
 			Sum += InTransforms[E.Index].GetLocation();
 		}
 		return Sum / static_cast<double>(Span.Num());
+	}
+
+	// Ties keep the earliest member in span order.
+	int32 GetMostCentralIndex(const TConstArrayView<PCGExData::FElement>& Span, const FVector& Center, const TConstPCGValueRange<FTransform>& InTransforms)
+	{
+		int32 BestIndex = Span[0].Index;
+		double BestDist = FVector::DistSquared(Center, InTransforms[BestIndex].GetLocation());
+		for (int32 e = 1; e < Span.Num(); ++e)
+		{
+			const int32 Index = Span[e].Index;
+			const double Dist = FVector::DistSquared(Center, InTransforms[Index].GetLocation());
+			if (Dist < BestDist)
+			{
+				BestDist = Dist;
+				BestIndex = Index;
+			}
+		}
+		return BestIndex;
 	}
 
 	void EnforceMinExtent(FBox& Bounds, const double MinExtent)
@@ -193,7 +212,10 @@ namespace PCGExFusePoints
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFusePoints::Process);
 
-		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
+		// Per-point tolerances drive the insertion order, so they are read in full up front: no scoped get.
+		const bool bPerPointTolerance = Settings->PointPointIntersectionDetails.FuseDetails.HasPerPointTolerance();
+
+		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet && !bPerPointTolerance;
 
 		if (!IProcessor::Process(InTaskManager))
 		{
@@ -237,6 +259,24 @@ namespace PCGExFusePoints
 			// Single scope, sized for the whole input.
 			UnionTableBuilder = MakeShared<PCGExData::FUnionTableBuilder>(1);
 			UnionTableBuilder->Reserve(0, NumIn);
+
+			if (bPerPointTolerance)
+			{
+				// The registry founds unions first-come: largest tolerances go first. Ties keep input order.
+				TArray<double> Reach;
+				Reach.SetNumUninitialized(NumIn);
+				InsertionOrder.SetNumUninitialized(NumIn);
+				for (int32 i = 0; i < NumIn; ++i)
+				{
+					Reach[i] = FuseDetailsCopy.GetToleranceExtent(i).GetMax();
+					InsertionOrder[i] = i;
+				}
+
+				InsertionOrder.Sort([&Reach](const int32 A, const int32 B)
+				{
+					return Reach[A] > Reach[B] || (Reach[A] == Reach[B] && A < B);
+				});
+			}
 		}
 		else
 		{
@@ -285,8 +325,9 @@ namespace PCGExFusePoints
 		else
 		{
 			// Octree: single scope, single-threaded by force flag. Sequential dedup against Registry.
-			PCGEX_SCOPE_LOOP(Index)
+			PCGEX_SCOPE_LOOP(i)
 			{
+				const int32 Index = InsertionOrder.IsEmpty() ? i : InsertionOrder[i];
 				const PCGExData::FConstPoint P = PointDataFacade->GetInPoint(Index);
 				const int32 RepIdx = Registry->FindOrInsert(P, FuseDetailsCopy);
 				UnionTableBuilder->Emit(0, static_cast<uint64>(RepIdx), IOIndex, Index);
@@ -425,6 +466,7 @@ namespace PCGExFusePoints
 		UnionTableBuilder->Compile(*UnionTable);
 		UnionTableBuilder.Reset();
 		Registry.Reset();
+		InsertionOrder.Empty();
 
 		if (Settings->bPreserveOrder)
 		{
@@ -444,7 +486,6 @@ namespace PCGExFusePoints
 		if (Settings->Mode == EPCGExFusedPointOutput::MostCentral)
 		{
 			TArray<int32>& IdxMapping = PointDataFacade->Source->GetIdxMapping(NumUnionEntries);
-			const PCGPointOctree::FPointOctree& Octree = PointDataFacade->GetIn()->GetPointOctree();
 			const TConstPCGValueRange<FTransform> InTransforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
 
 			// Local non-null reference for the parallel-for body to capture cleanly.
@@ -459,26 +500,8 @@ namespace PCGExFusePoints
 				{
 
 					const TConstArrayView<PCGExData::FElement> Span = Table->Get(i);
-					const FVector Center = ComputeSpanCentroid(Span, InTransforms);
 
-					double BestDist = TNumericLimits<double>::Max();
-					int32 BestIndex = -1;
-
-					Octree.FindNearbyElements(Center, [&](const PCGPointOctree::FPointRef& PointRef)
-					{
-						const double Dist = FVector::DistSquared(Center, InTransforms[PointRef.Index].GetLocation());
-						if (Dist < BestDist)
-						{
-							BestDist = Dist;
-							BestIndex = PointRef.Index;
-						}
-					});
-
-					if (BestIndex == -1)
-					{
-						BestIndex = Span[0].Index;
-					}
-					IdxMapping[i] = BestIndex;
+					IdxMapping[i] = GetMostCentralIndex(Span, ComputeSpanCentroid(Span, InTransforms), InTransforms);
 
 					if (IsUnionWriter)
 					{
