@@ -83,9 +83,7 @@ bool PCGExPointFilter::FBitmaskFilter::Init(FPCGExContext* InContext, const TSha
 		return false;
 	}
 
-	MaskReader = TypedFilterFactory->Config.BitmaskValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	MaskReader->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!MaskReader->Init(PointDataFacade))
+	if (!InitSettingValue(MaskReader, TypedFilterFactory->Config.BitmaskValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}

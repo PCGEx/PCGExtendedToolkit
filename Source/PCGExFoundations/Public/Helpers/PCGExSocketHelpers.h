@@ -56,8 +56,6 @@ MACRO(SocketTag, FName, NAME_None) \
 MACRO(Category, FName, NAME_None) \
 MACRO(AssetPath, FSoftObjectPath, FSoftObjectPath{})
 
-	PCGEXFOUNDATIONS_API uint64 GetSimplifiedEntryHash(uint64 InEntryHash);
-
 	class PCGEXFOUNDATIONS_API FSocketHelper : public TSharedFromThis<FSocketHelper>
 	{
 	protected:

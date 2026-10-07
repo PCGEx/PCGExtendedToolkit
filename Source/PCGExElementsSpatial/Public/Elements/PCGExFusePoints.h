@@ -136,6 +136,9 @@ namespace PCGExFusePoints
 		TSharedPtr<PCGExData::FUnionTableBuilder> UnionTableBuilder;
 		TSharedPtr<PCGExData::FUnionRegistry> Registry; // Octree mode only
 
+		// Octree mode with per-point tolerance: input indices by descending tolerance. Empty = input order.
+		TArray<int32> InsertionOrder;
+
 		// Compiled, immutable result of the build phase. Read by ProcessRange / bounds passes.
 		TSharedPtr<PCGExData::FUnionTable> UnionTable;
 

@@ -4,7 +4,6 @@
 #include "Clusters/Artifacts/PCGExCell.h"
 #include "Algo/Reverse.h"
 #include "Algo/Unique.h"
-#include "Containers/Queue.h"
 #include "Misc/ScopeExit.h"
 
 #include "Clusters/Artifacts/PCGExCachedFaceEnumerator.h"
@@ -836,7 +835,8 @@ namespace PCGExClusters
 
 		// FaceIndex -> seeds whose growth reached it. Seeded faces already have an owner and are never re-claimed.
 		TMap<int32, TSet<int32>> Reached;
-		TSet<int32> Visited;
+		FFaceWalkScratch Scratch;
+		TArray<int32> Faces;
 
 		for (const TSharedPtr<FCell>& Cell : InOutCells)
 		{
@@ -846,54 +846,16 @@ namespace PCGExClusters
 			}
 
 			const int32 SeedIndex = Cell->CustomIndex;
-			const int32 MaxDepth = InGrowth.GetGrowth(SeedIndex);
-			if (MaxDepth <= 0)
+
+			Faces.Reset();
+			CollectFacesWithinDepth(InAdjacency, Cell->FaceIndex, InGrowth.GetGrowth(SeedIndex), Scratch, Faces);
+
+			// Reached keeps visit order: it becomes the order grown cells are appended in.
+			for (const int32 FaceIndex : Faces)
 			{
-				continue;
-			}
-
-			Visited.Reset();
-			Visited.Add(Cell->FaceIndex);
-
-			TQueue<TPair<int32, int32>> Queue; // FaceIndex, depth
-			if (const TSet<int32>* Adjacent = InAdjacency.Find(Cell->FaceIndex))
-			{
-				for (const int32 AdjFace : *Adjacent)
-				{
-					if (AdjFace >= 0 && !Visited.Contains(AdjFace))
-					{
-						Queue.Enqueue({AdjFace, 1});
-						Visited.Add(AdjFace);
-					}
-				}
-			}
-
-			TPair<int32, int32> Current;
-			while (Queue.Dequeue(Current))
-			{
-				const int32 FaceIndex = Current.Key;
-				const int32 Depth = Current.Value;
-
 				if (!Seeded.Contains(FaceIndex))
 				{
 					Reached.FindOrAdd(FaceIndex).Add(SeedIndex);
-				}
-
-				if (Depth >= MaxDepth)
-				{
-					continue;
-				}
-
-				if (const TSet<int32>* Adjacent = InAdjacency.Find(FaceIndex))
-				{
-					for (const int32 AdjFace : *Adjacent)
-					{
-						if (AdjFace >= 0 && !Visited.Contains(AdjFace))
-						{
-							Queue.Enqueue({AdjFace, Depth + 1});
-							Visited.Add(AdjFace);
-						}
-					}
 				}
 			}
 		}
@@ -916,6 +878,113 @@ namespace PCGExClusters
 			(*CellPtr)->CustomIndex = PickOwner(Candidates, (*CellPtr)->Data.Centroid);
 			InOutCells.Add(*CellPtr);
 		}
+	}
+
+	void CollectFacesWithinDepth(
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		const int32 InStartFace,
+		const int32 InMaxDepth,
+		FFaceWalkScratch& Scratch,
+		TArray<int32>& OutFaces)
+	{
+		if (InMaxDepth <= 0 || InAdjacency.IsEmpty())
+		{
+			return;
+		}
+
+		TSet<int32>& Visited = Scratch.Visited;
+		TArray<TPair<int32, int32>>& Queue = Scratch.Queue;
+
+		Visited.Reset();
+		Queue.Reset();
+		Visited.Add(InStartFace);
+
+		auto EnqueueNeighbors = [&](const int32 FromFace, const int32 Depth)
+		{
+			if (const TSet<int32>* Adjacent = InAdjacency.Find(FromFace))
+			{
+				for (const int32 AdjFace : *Adjacent)
+				{
+					if (AdjFace >= 0 && !Visited.Contains(AdjFace))
+					{
+						Queue.Emplace(AdjFace, Depth);
+						Visited.Add(AdjFace);
+					}
+				}
+			}
+		};
+
+		EnqueueNeighbors(InStartFace, 1);
+
+		for (int32 Head = 0; Head < Queue.Num(); ++Head)
+		{
+			// By value: enqueueing may reallocate the queue.
+			const TPair<int32, int32> Current = Queue[Head];
+			OutFaces.Add(Current.Key);
+
+			if (Current.Value < InMaxDepth)
+			{
+				EnqueueNeighbors(Current.Key, Current.Value + 1);
+			}
+		}
+	}
+
+	int32 ExcludeHoleCells(
+		TArray<TSharedPtr<FCell>>& InOutCells,
+		const TArray<TSharedPtr<FCell>>& InFailedCells,
+		const FProjectedPointSet& InHoles,
+		const TSharedRef<PCGExData::FFacade>& InHolesFacade,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		const FPCGExCellGrowthDetails& InGrowth)
+	{
+		const int32 NumHoles = InHolesFacade->GetNum();
+		const TConstPCGValueRange<FTransform> HoleTransforms = InHolesFacade->GetIn()->GetConstTransformValueRange();
+
+		TSet<int32> ExcludedFaces;
+		FFaceWalkScratch Scratch;
+		TArray<int32> Faces;
+
+		for (const TSharedPtr<FCell>& FailedCell : InFailedCells)
+		{
+			if (!FailedCell || FailedCell->Polygon.IsEmpty() || FailedCell->FaceIndex < 0)
+			{
+				continue;
+			}
+
+			// Per-face frame in LocalTangent -- see FCell::ContainsPoint
+			int32 HoleIndex = INDEX_NONE;
+			for (int32 i = 0; i < NumHoles; ++i)
+			{
+				if (FailedCell->ContainsPoint(InHoles.GetProjected(i), HoleTransforms[i].GetLocation()))
+				{
+					HoleIndex = i;
+					break;
+				}
+			}
+
+			if (HoleIndex == INDEX_NONE)
+			{
+				continue;
+			}
+
+			ExcludedFaces.Add(FailedCell->FaceIndex);
+
+			Faces.Reset();
+			CollectFacesWithinDepth(InAdjacency, FailedCell->FaceIndex, InGrowth.GetGrowth(HoleIndex), Scratch, Faces);
+			ExcludedFaces.Append(Faces);
+		}
+
+		if (ExcludedFaces.IsEmpty())
+		{
+			return 0;
+		}
+
+		InOutCells.RemoveAll([&ExcludedFaces](const TSharedPtr<FCell>& Cell)
+		{
+			return Cell && Cell->FaceIndex >= 0 && ExcludedFaces.Contains(Cell->FaceIndex);
+		});
+
+		return ExcludedFaces.Num();
 	}
 
 	void FCellConstraints::Cleanup()

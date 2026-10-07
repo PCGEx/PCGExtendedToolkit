@@ -80,10 +80,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Sites", meta = (PCG_Overridable, EditCondition="bMarkSiteHull"))
 	FName SiteHullAttributeName = "bIsOnHull";
 
-	/** Merge adjacent sites into a single point */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Sites", meta = (PCG_Overridable, EditCondition="bUrquhart && bOutputSites", EditConditionHides))
-	bool bMergeUrquhartSites = false;
-
 	/** Mark points that lie on the hull. Edges are never marked. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bMarkHull = false;
@@ -124,13 +120,11 @@ namespace PCGExBuildDelaunayGraph
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExBuildDelaunayGraphContext, UPCGExBuildDelaunayGraphSettings>
 	{
 		friend class FOutputDelaunaySites;
-		friend class FOutputDelaunayUrquhartSites;
 
 	protected:
 		TSharedPtr<TArray<int32>> OutputIndices;
 		TSharedPtr<PCGExMath::Geo::TDelaunay3> Delaunay;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
-		TSet<uint64> UrquhartEdges;
 
 		TSharedPtr<PCGExData::TBuffer<bool>> HullMarkPointWriter;
 

@@ -54,43 +54,4 @@ namespace PCGExMemberPath
 
 		return Result;
 	}
-
-	const FProperty* ResolveProperty(const UStruct* Root, FName MemberPath)
-	{
-		if (!Root || MemberPath.IsNone())
-		{
-			return nullptr;
-		}
-
-		TArray<FString> Segments;
-		MemberPath.ToString().ParseIntoArray(Segments, TEXT("."), true);
-		if (Segments.IsEmpty())
-		{
-			return nullptr;
-		}
-
-		const UStruct* CurrentStruct = Root;
-		const FProperty* Property = nullptr;
-
-		for (int32 i = 0; i < Segments.Num(); i++)
-		{
-			Property = FindFProperty<FProperty>(CurrentStruct, FName(*Segments[i]));
-			if (!Property)
-			{
-				return nullptr;
-			}
-
-			if (i < Segments.Num() - 1)
-			{
-				const FStructProperty* StructProperty = CastField<FStructProperty>(Property);
-				if (!StructProperty)
-				{
-					return nullptr;
-				}
-				CurrentStruct = StructProperty->Struct;
-			}
-		}
-
-		return Property;
-	}
 }

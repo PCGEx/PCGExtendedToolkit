@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "Details/PCGExSettingsDetails.h"
 #include "Factories/PCGExFactoryData.h"
 #include "Factories/PCGExFactoryProvider.h"
 #include "UObject/Object.h"
@@ -187,6 +188,14 @@ namespace PCGExPointFilter
 		}
 
 		virtual ~IFilter() = default;
+
+	protected:
+		/** Inits an operand read through a setting value, with the factory's cleanup toggle as its consumable gate. */
+		template <typename T>
+		[[nodiscard]] bool InitSettingValue(TSharedPtr<PCGExDetails::TSettingValue<T>>& OutValue, TSharedPtr<PCGExDetails::TSettingValue<T>> InValue, const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) const
+		{
+			return PCGExDetails::InitSettingValueGated(OutValue, MoveTemp(InValue), Factory->bCleanupConsumableAttributes, InDataFacade, bSupportScoped, bCaptureMinMax);
+		}
 	};
 
 	/**

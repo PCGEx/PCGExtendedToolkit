@@ -1105,15 +1105,6 @@ template PCGEXCORE_API bool TryReadMark<_TYPE>(const TSharedRef<FPointIO>& Point
 
 #undef PCGEX_TPL
 
-	void WriteId(const TSharedRef<FPointIO>& PointIO, const FName IdName, const int64 Id)
-	{
-		PointIO->Tags->Set<int64>(IdName.ToString(), Id);
-		if (PointIO->GetOut())
-		{
-			WriteMark(PointIO, IdName, Id);
-		}
-	}
-
 	UPCGBasePointData* GetMutablePointData(FPCGContext* Context, const FPCGTaggedData& Source)
 	{
 		const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Source.Data);

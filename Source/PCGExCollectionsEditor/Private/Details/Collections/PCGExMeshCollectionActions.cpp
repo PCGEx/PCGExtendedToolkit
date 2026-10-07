@@ -37,22 +37,4 @@ namespace PCGExMeshCollectionActions
 			});
 		}
 	} GRegisterMeshTilePicker;
-
-	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
-	{
-		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExMeshCollection::StaticClass(), TEXT("SMC_NewMeshCollection"));
-	}
-
-	void UpdateCollectionsFrom(
-		const TArray<TObjectPtr<UPCGExMeshCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets)
-	{
-		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
-		AsBase.Reserve(SelectedCollections.Num());
-		for (const TObjectPtr<UPCGExMeshCollection>& C : SelectedCollections)
-		{
-			AsBase.Add(C);
-		}
-		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
-	}
 }

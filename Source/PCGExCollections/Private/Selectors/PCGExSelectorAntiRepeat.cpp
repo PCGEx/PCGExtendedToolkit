@@ -25,6 +25,8 @@ bool FPCGExEntryAntiRepeatPickerOp::PrepareForData(FPCGExContext* InContext, con
 		ChildOp = ChildFactory->CreateEntryOperation(InContext);
 		if (ChildOp)
 		{
+			ChildOp->bCleanupConsumableAttributes = ChildFactory->bCleanupConsumableAttributes;
+
 			// Composite shared data mirrors Cascade (single slot).
 			if (const TSharedPtr<FPCGExCascadeSharedData> Composite = StaticCastSharedPtr<FPCGExCascadeSharedData>(SharedData);
 				Composite && Composite->PerChild.Num() == 1)

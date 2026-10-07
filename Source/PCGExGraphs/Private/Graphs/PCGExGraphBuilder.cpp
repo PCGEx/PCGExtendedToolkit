@@ -384,7 +384,8 @@ namespace PCGExGraphs
 			This->OnCompilationEnd();
 		};
 
-		BatchCompileSubGraphs->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, WeakGroup = BatchCompileSubGraphs](const int32 Index, const PCGExMT::FScope& Scope)
+		// Weak capture: OnIterationCallback is never cleared, so a group capturing itself strongly is never freed.
+		BatchCompileSubGraphs->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE, WeakGroup = TWeakPtr<PCGExMT::IAsyncHandleGroup>(BatchCompileSubGraphs)](const int32 Index, const PCGExMT::FScope& Scope)
 		{
 			PCGEX_ASYNC_THIS
 			const TSharedPtr<FSubGraph> SubGraph = This->Graph->SubGraphs[Index];

@@ -361,7 +361,7 @@ namespace PCGExMath
 	{
 		// Clamp the dot: FP rounding on (near-)unit inputs can push it just outside [-1, 1], which makes Acos return NaN 
 		const double Radians = FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1.0, 1.0));
-		return FVector::CrossProduct(A, B).Z < 0 ? TWO_PI - Radians : Radians;
+		return FVector::DotProduct(FVector::CrossProduct(A, B), UpVector) < 0 ? TWO_PI - Radians : Radians;
 	}
 
 	double GetRadiansBetweenVectors(const FVector2D& A, const FVector2D& B)
@@ -376,7 +376,7 @@ namespace PCGExMath
 
 	double GetDegreesBetweenVectors(const FVector& A, const FVector& B, const FVector& UpVector)
 	{
-		const double D = FMath::RadiansToDegrees(FMath::Acos(FVector::DotProduct(A, B)));
+		const double D = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1.0, 1.0)));
 		return FVector::DotProduct(FVector::CrossProduct(A, B), UpVector) < 0 ? 360 - D : D;
 	}
 }

@@ -138,6 +138,8 @@ namespace PCGExTensor
 		TArray<FVector> TempExtents;
 		TempExtents.SetNumUninitialized(NumEffectors);
 
+		const double PotencyScale = InFactory->BaseConfig.PotencyScale;
+
 		// Pack per-point data
 		PCGExMT::ParallelOrSequential(
 			NumEffectors,
@@ -148,7 +150,7 @@ namespace PCGExTensor
 
 				FPackedEffector& PackedEffector = PackedEffectors[i];
 				PackedEffector.Location = Transform.GetLocation();
-				PackedEffector.Potency = PotencyValue->Read(i);
+				PackedEffector.Potency = PotencyValue->Read(i) * PotencyScale;
 				PackedEffector.Weight = WeightValue->Read(i);
 
 				PCGExData::FConstPoint Point(InPoints, i);
@@ -224,13 +226,6 @@ namespace PCGExTensor
 		Rotation *= Divisor;
 		Weight *= Divisor;
 		return *this;
-	}
-
-	void FTensorSample::Transform(FTransform& InTransform, const double InWeight) const
-	{
-		const FVector Location = InTransform.GetLocation() + DirectionAndSize * InWeight;
-		InTransform.SetRotation((InTransform.GetRotation() * (Rotation * InWeight)).GetNormalized());
-		InTransform.SetLocation(Location);
 	}
 
 	FTransform FTensorSample::GetTransformed(const FTransform& InTransform, const double InWeight) const

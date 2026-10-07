@@ -10,6 +10,7 @@
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGPolyLineData.h"
 #include "Data/PCGSpatialData.h"
+#include "Helpers/PCGExHashHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Metadata/PCGMetadata.h"
@@ -51,18 +52,7 @@ namespace PCGExDataHash
 		}
 	}
 
-	// Deliberately not GetTypeHash / HashCombine: TypeHash.h states its results are "not expected
-	// to leave the running process", so the seed would be hostage to engine internals. Everything
-	// below is integer-only and self-contained, so the same input shape yields the same seed on
-	// every session, platform, build and engine version.
-	constexpr uint64 FnvOffsetBasis = 14695981039346656037ULL;
-	constexpr uint64 FnvPrime = 1099511628211ULL;
-
-	// Word-wise rather than byte-wise so byte order never enters the result.
-	FORCEINLINE uint64 Mix(const uint64 InHash, const uint64 InValue)
-	{
-		return (InHash ^ InValue) * FnvPrime;
-	}
+	// Seeds are built with PCGExHashHelpers only (never GetTypeHash / HashCombine): they must survive sessions and builds.
 
 	// Hashed instead of the concrete class name: pcg.EnablePointArrayData swaps UPCGPointData for
 	// UPCGPointArrayData, which would otherwise silently re-roll every value.
@@ -114,13 +104,13 @@ namespace PCGExDataHash
 	uint64 HashBox(uint64 InHash, const FBox& InBox)
 	{
 		// Distinguishes "no bounds" from "a degenerate box at the origin".
-		InHash = Mix(InHash, InBox.IsValid ? 1ULL : 0ULL);
-		InHash = Mix(InHash, QuantizeCoord(InBox.Min.X));
-		InHash = Mix(InHash, QuantizeCoord(InBox.Min.Y));
-		InHash = Mix(InHash, QuantizeCoord(InBox.Min.Z));
-		InHash = Mix(InHash, QuantizeCoord(InBox.Max.X));
-		InHash = Mix(InHash, QuantizeCoord(InBox.Max.Y));
-		InHash = Mix(InHash, QuantizeCoord(InBox.Max.Z));
+		InHash = PCGExHashHelpers::MixWord(InHash, InBox.IsValid ? 1ULL : 0ULL);
+		InHash = PCGExHashHelpers::MixWord(InHash, QuantizeCoord(InBox.Min.X));
+		InHash = PCGExHashHelpers::MixWord(InHash, QuantizeCoord(InBox.Min.Y));
+		InHash = PCGExHashHelpers::MixWord(InHash, QuantizeCoord(InBox.Min.Z));
+		InHash = PCGExHashHelpers::MixWord(InHash, QuantizeCoord(InBox.Max.X));
+		InHash = PCGExHashHelpers::MixWord(InHash, QuantizeCoord(InBox.Max.Y));
+		InHash = PCGExHashHelpers::MixWord(InHash, QuantizeCoord(InBox.Max.Z));
 		return InHash;
 	}
 
@@ -128,41 +118,41 @@ namespace PCGExDataHash
 	{
 		if (!Data)
 		{
-			return Mix(InHash, CategoryNull);
+			return PCGExHashHelpers::MixWord(InHash, CategoryNull);
 		}
 
 		if (const UPCGBasePointData* PointData = Cast<UPCGBasePointData>(Data))
 		{
-			InHash = Mix(InHash, CategoryPoint);
-			InHash = Mix(InHash, static_cast<uint64>(PointData->GetNumPoints()));
+			InHash = PCGExHashHelpers::MixWord(InHash, CategoryPoint);
+			InHash = PCGExHashHelpers::MixWord(InHash, static_cast<uint64>(PointData->GetNumPoints()));
 			return HashBox(InHash, PointData->GetBounds());
 		}
 
 		if (const UPCGPolyLineData* PolyLineData = Cast<UPCGPolyLineData>(Data))
 		{
-			InHash = Mix(InHash, CategoryPolyLine);
-			InHash = Mix(InHash, static_cast<uint64>(PolyLineData->GetNumSegments()));
+			InHash = PCGExHashHelpers::MixWord(InHash, CategoryPolyLine);
+			InHash = PCGExHashHelpers::MixWord(InHash, static_cast<uint64>(PolyLineData->GetNumSegments()));
 			return HashBox(InHash, PolyLineData->GetBounds());
 		}
 
 		if (const UPCGParamData* ParamData = Cast<UPCGParamData>(Data))
 		{
 			const UPCGMetadata* Metadata = ParamData->ConstMetadata();
-			InHash = Mix(InHash, CategoryParam);
-			return Mix(InHash, static_cast<uint64>(Metadata ? Metadata->GetLocalItemCount() : 0));
+			InHash = PCGExHashHelpers::MixWord(InHash, CategoryParam);
+			return PCGExHashHelpers::MixWord(InHash, static_cast<uint64>(Metadata ? Metadata->GetLocalItemCount() : 0));
 		}
 
 		if (const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data))
 		{
-			InHash = Mix(InHash, CategorySpatial);
+			InHash = PCGExHashHelpers::MixWord(InHash, CategorySpatial);
 			return HashBox(InHash, SpatialData->GetBounds());
 		}
 
 		// Nothing shape-like to read, so fall back to the class name. FCrc::StrCrc32 is a table CRC
 		// over code points and treats every char width as 32-bit, so unlike GetTypeHash(FName) it
 		// depends on neither pool insertion order nor platform.
-		InHash = Mix(InHash, CategoryOther);
-		return Mix(InHash, static_cast<uint64>(FCrc::StrCrc32(*Data->GetClass()->GetName())));
+		InHash = PCGExHashHelpers::MixWord(InHash, CategoryOther);
+		return PCGExHashHelpers::MixWord(InHash, static_cast<uint64>(FCrc::StrCrc32(*Data->GetClass()->GetName())));
 	}
 
 	// Computes [Min,Max] given the user's range settings and the value type.
@@ -319,13 +309,13 @@ bool FPCGExDataHashElement::ExecuteInternal(FPCGContext* Context) const
 
 	// Hash all inputs on the default pin. Order matters: changing connection order
 	// changes the value, consistent with how PCG iterates pin inputs.
-	uint64 Hash = PCGExDataHash::FnvOffsetBasis;
+	uint64 Hash = PCGExHashHelpers::StableSeed;
 
 	// Via uint32 so a negative salt doesn't sign-extend into the high word.
-	Hash = PCGExDataHash::Mix(Hash, static_cast<uint64>(static_cast<uint32>(Settings->Salt)));
+	Hash = PCGExHashHelpers::MixWord(Hash, static_cast<uint64>(static_cast<uint32>(Settings->Salt)));
 
 	const TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
-	Hash = PCGExDataHash::Mix(Hash, static_cast<uint64>(Inputs.Num()));
+	Hash = PCGExHashHelpers::MixWord(Hash, static_cast<uint64>(Inputs.Num()));
 
 	for (const FPCGTaggedData& Tagged : Inputs)
 	{

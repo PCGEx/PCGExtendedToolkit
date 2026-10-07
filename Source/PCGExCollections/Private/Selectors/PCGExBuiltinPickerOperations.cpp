@@ -73,8 +73,7 @@ bool FPCGExEntryIndexPickerOp::PrepareForData(FPCGExContext* InContext, const TS
 	}
 
 	const bool bWantsMinMax = IndexConfig.bRemapIndexToCollectionSize;
-	IndexGetter = IndexConfig.GetValueSettingIndex();
-	if (!IndexGetter->Init(InDataFacade, !bWantsMinMax, bWantsMinMax))
+	if (!InitSettingValue(IndexGetter, IndexConfig.GetValueSettingIndex(), InDataFacade, !bWantsMinMax, bWantsMinMax))
 	{
 		return false;
 	}
@@ -143,8 +142,7 @@ bool FPCGExMicroIndexPickerOp::PrepareForData(FPCGExContext* InContext, const TS
 	// Mirror the entry picker: min/max capture is only needed by the remap path, and scoped
 	// reads must be disabled when capturing (full scan required).
 	const bool bWantsMinMax = IndexConfig.bRemapIndexToCollectionSize;
-	IndexGetter = IndexConfig.GetValueSettingIndex();
-	if (!IndexGetter->Init(InDataFacade, !bWantsMinMax, bWantsMinMax))
+	if (!InitSettingValue(IndexGetter, IndexConfig.GetValueSettingIndex(), InDataFacade, !bWantsMinMax, bWantsMinMax))
 	{
 		return false;
 	}

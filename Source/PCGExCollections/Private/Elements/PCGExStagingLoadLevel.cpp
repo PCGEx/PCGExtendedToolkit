@@ -17,6 +17,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGHelpers.h"
@@ -439,29 +440,32 @@ namespace PCGExStagingLoadLevel
 					PCGEX_ASYNC_THIS_RET({})
 					return PathsToLoad;
 				},
-				[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+				[PCGEX_ASYNC_THIS_CAPTURE, CtxHandle = Context->GetWeakSelfHandle()](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
 				{
 					PCGEX_ASYNC_THIS
+					PCGEX_SHARED_CONTEXT_VOID(CtxHandle)
 
-					This->LevelLoadHandle = StreamableHandle;
-
-					This->MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(This->SpawnRequests.Num());
-					This->MainThreadLoop->OnIterationCallback = [This](const int32 Index, const PCGExMT::FScope& Scope)
-					{
-						This->SpawnLevelInstance(Index);
-					};
-
-					PCGEX_ASYNC_HANDLE_CHKD_VOID(This->TaskManager, This->MainThreadLoop)
+					// Keeps the source worlds resident for the spawn loop; released at context teardown.
+					SharedContext.Get()->TrackAssetsHandle(StreamableHandle);
+					This->StartSpawnLoop();
 				});
 
 			return;
 		}
 #endif
 
+		StartSpawnLoop();
+	}
+
+	void FProcessor::StartSpawnLoop()
+	{
 		MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(SpawnRequests.Num());
-		MainThreadLoop->OnIterationCallback = [&](const int32 Index, const PCGExMT::FScope& Scope)
+
+		// Weak capture: the loop is owned by this processor, a strong one would keep both alive forever.
+		MainThreadLoop->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)
 		{
-			SpawnLevelInstance(Index);
+			PCGEX_ASYNC_THIS
+			This->SpawnLevelInstance(Index);
 		};
 
 		PCGEX_ASYNC_HANDLE_CHKD_VOID(TaskManager, MainThreadLoop)
@@ -575,6 +579,9 @@ namespace PCGExStagingLoadLevel
 		// This runs on the game thread via FTimeSlicedMainThreadLoop.
 		// Managed resources are created in AdvanceWork before any async/parallel work dispatches.
 
+		// FTimeSlicedMainThreadLoop tests cancellation once per time slice, not per iteration.
+		PCGEX_CHECK_WORK_HANDLE_VOID
+
 		FLevelSpawnRequest& Request = SpawnRequests[RequestIndex];
 
 #if WITH_EDITOR
@@ -658,7 +665,7 @@ namespace PCGExStagingLoadLevel
 
 		ULevel* SourceLevel = LevelWorld->PersistentLevel;
 		const FTransform& LevelTransform = Request.Params.LevelTransform;
-		const bool bIsPreview = ExecutionContext->GetComponent() && ExecutionContext->GetComponent()->IsInPreviewMode();
+		const bool bIsPreview = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		// Build the spawnable set. Applies the same actor filters as OnLevelLoadedChanged:
 		// skip null, AWorldSettings, bIsMainWorldOnly, and socket-provider export markers.
@@ -783,6 +790,8 @@ namespace PCGExStagingLoadLevel
 
 			if (bIsRootActor[i])
 			{
+				// TODO: composes actor roots only -- an attachment to a non-root component or a socket is lost, here and in
+				// pass 2. PCGExHelpers::EnsureWorldTransformsCurrent (parent-first, socket-aware) should replace both walks.
 				FTransform SourceWorldTransform = FTransform::Identity;
 				if (const USceneComponent* SrcRoot = SourceActor->GetRootComponent())
 				{

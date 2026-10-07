@@ -3,15 +3,19 @@
 
 #include "PCGExElementsPaths.h"
 
+#include "Helpers/PCGExSplineSampleBuiltinHandlers.h"
+
 #define LOCTEXT_NAMESPACE "FPCGExElementsPathsModule"
 
 void FPCGExElementsPathsModule::StartupModule()
 {
 	IPCGExLegacyModuleInterface::StartupModule();
+	PCGExSplineSampling::RegisterBuiltinHandlers();
 }
 
 void FPCGExElementsPathsModule::ShutdownModule()
 {
+	PCGExSplineSampling::UnregisterBuiltinHandlers();
 	IPCGExLegacyModuleInterface::ShutdownModule();
 }
 

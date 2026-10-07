@@ -60,9 +60,4 @@ namespace PCGExMath
 	protected:
 		void ProcessBox(const UE::Geometry::FOrientedBox3d& Box);
 	};
-
-	struct PCGEXCORE_API FSwizzler
-	{
-		FSwizzler() = default;
-	};
 }

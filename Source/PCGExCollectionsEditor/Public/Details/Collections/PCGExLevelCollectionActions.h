@@ -14,14 +14,6 @@
 
 class UPackage;
 
-namespace PCGExLevelCollectionActions
-{
-	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets);
-	void UpdateCollectionsFrom(
-		const TArray<TObjectPtr<UPCGExLevelCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets);
-};
-
 UCLASS()
 class UPCGExLevelCollectionFactory : public UPCGExDataAssetFactoryBase
 {

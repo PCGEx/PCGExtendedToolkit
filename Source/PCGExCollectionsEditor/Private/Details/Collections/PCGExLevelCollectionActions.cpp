@@ -36,22 +36,4 @@ namespace PCGExLevelCollectionActions
 			});
 		}
 	} GRegisterLevelTilePicker;
-
-	void CreateCollectionFrom(const TArray<FAssetData>& SelectedAssets)
-	{
-		PCGExCollectionEditorHelpers::CreateCollectionFromTyped(SelectedAssets, UPCGExLevelCollection::StaticClass(), TEXT("SMC_NewLevelCollection"));
-	}
-
-	void UpdateCollectionsFrom(
-		const TArray<TObjectPtr<UPCGExLevelCollection>>& SelectedCollections,
-		const TArray<FAssetData>& SelectedAssets)
-	{
-		TArray<TObjectPtr<UPCGExAssetCollection>> AsBase;
-		AsBase.Reserve(SelectedCollections.Num());
-		for (const TObjectPtr<UPCGExLevelCollection>& C : SelectedCollections)
-		{
-			AsBase.Add(C);
-		}
-		PCGExCollectionEditorHelpers::UpdateCollectionsFromTyped(AsBase, SelectedAssets);
-	}
 }

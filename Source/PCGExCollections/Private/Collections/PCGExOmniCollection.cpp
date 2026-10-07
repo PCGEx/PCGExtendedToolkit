@@ -583,7 +583,7 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			// New identity: fresh EntryId on the next SyncEntryIds pass.
 			Payload->EntryId = 0;
 
-			// Bake source CollectionTags into the copy (FlattenCollection semantics).
+			// Bake source CollectionTags into the copy: a flattened entry keeps its former host's tags.
 			Payload->Tags.Append(Source->CollectionTags);
 
 			if (!Payload->Category.IsNone())
@@ -622,7 +622,7 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			}
 			if (const FPCGExPropertyOverrides* Existing = FindCategoryOverrides(SourceRow.Category))
 			{
-				UE_LOG(LogTemp, Warning,
+				UE_LOG(LogPCGEx, Warning,
 				       TEXT("Merging \"%s\" into \"%s\": category \"%s\" already has overrides here, so the source's were dropped. Re-author them if needed."),
 				       *GetNameSafe(Source), *GetNameSafe(this), *SourceRow.Category.ToString());
 				continue;

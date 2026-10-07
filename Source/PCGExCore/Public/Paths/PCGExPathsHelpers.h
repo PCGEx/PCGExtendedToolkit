@@ -62,11 +62,7 @@ namespace PCGExPaths
 
 		PCGEXCORE_API bool GetIsHole(const TSharedPtr<PCGExData::FPointIO>& InData);
 
-		PCGEXCORE_API void FetchPrevNext(const TSharedPtr<PCGExData::FFacade>& InFacade, const TArray<PCGExMT::FScope>& Loops);
-
 		PCGEXCORE_API TSharedPtr<FPath> MakePath(const UPCGBasePointData* InPointData, const double Expansion);
-
-		PCGEXCORE_API double GetPathLength(const TSharedPtr<FPath>& InPath);
 
 		PCGEXCORE_API FTransform GetClosestTransform(const FPCGSplineStruct& InSpline, const FVector& InLocation, const bool bUseScale = true);
 

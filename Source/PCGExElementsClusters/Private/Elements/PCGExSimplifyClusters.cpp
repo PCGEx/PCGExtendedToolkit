@@ -75,7 +75,7 @@ bool FPCGExSimplifyClustersElement::AdvanceWork(FPCGExContext* InContext, const 
 		                                      {
 		                                      }))
 		{
-			Context->CancelExecution(TEXT("Could not build any clusters."));
+			return Context->CancelExecution(TEXT("Could not build any clusters."));
 		}
 	}
 

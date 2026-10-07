@@ -17,6 +17,7 @@
 #include "Data/Utils/PCGExDataForward.h"
 #include "Details/PCGExBlendingDetails.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Factories/PCGExFactories.h"
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
 
@@ -551,11 +552,8 @@ namespace PCGExClusterDiffusion
 
 		PCGExBlending::RegisterBuffersDependencies(Context, FacadePreloader, Context->BlendingFactories);
 
-		for (const TObjectPtr<const UPCGExFillControlsFactoryData>& Factory : Context->FillControlFactories)
-		{
-			Factory->RegisterBuffersDependencies(Context, FacadePreloader);
-			// TODO : Might need to fill-in facade here as well
-		}
+		// TODO : Might need to fill-in facade here as well
+		PCGExFactories::RegisterBuffersDependencies(Context->FillControlFactories, Context, FacadePreloader);
 
 		EdgeDirectionOutput.RegisterBuffersDependencies(Context, FacadePreloader);
 	}
@@ -629,9 +627,7 @@ namespace PCGExClusterDiffusion
 
 		TypedProcessor->FillRate = FillRate;
 
-#define PCGEX_OUTPUT_FWD_TO(_NAME, _TYPE, _DEFAULT_VALUE) if(_NAME##Writer){ TypedProcessor->_NAME##Writer = _NAME##Writer; }
 		PCGEX_FOREACH_FIELD_CLUSTER_DIFF(PCGEX_OUTPUT_FWD_TO)
-#undef PCGEX_OUTPUT_FWD_TO
 
 		return true;
 	}

@@ -184,9 +184,7 @@ bool PCGExPointFilter::FDynamicMeshFilter::Init(FPCGExContext* InContext, const 
 
 	if (bNeedsBox)
 	{
-		Expansion = Cfg.Expansion.GetValueSetting();
-		Expansion->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!Expansion->Init(InPointDataFacade))
+		if (!InitSettingValue(Expansion, Cfg.Expansion.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 		{
 			return false;
 		}

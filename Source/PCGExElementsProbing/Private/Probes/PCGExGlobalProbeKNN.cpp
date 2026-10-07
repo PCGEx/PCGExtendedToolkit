@@ -43,8 +43,7 @@ bool FPCGExProbeKNN::Prepare(FPCGExContext* InContext)
 		return false;
 	}
 
-	K = Config.K.GetValueSetting();
-	if (!K->Init(PrimaryDataFacade))
+	if (!InitSettingValue(K, Config.K.GetValueSetting(), PrimaryDataFacade))
 	{
 		return false;
 	}

@@ -3,6 +3,7 @@
 
 #include "FillControls/PCGExFillControlAttributeAccumulation.h"
 
+#include "PCGExCoreMacros.h"
 #include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -36,9 +37,7 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 	Mode = TypedFactory->Config.Mode;
 	bWriteToAccumulatedValue = TypedFactory->Config.bWriteToAccumulatedValue;
 
-	MaxAccumulation = TypedFactory->Config.MaxAccumulationValue.GetValueSetting();
-	MaxAccumulation->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!MaxAccumulation->Init(GetSourceFacade()))
+	if (!InitSettingValue(MaxAccumulation, TypedFactory->Config.MaxAccumulationValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}
@@ -50,7 +49,7 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 	AttributeBuffer = SourceFacade->GetReadable<double>(TypedFactory->Config.Attribute.GetName());
 	if (!AttributeBuffer)
 	{
-		PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("Attribute '{0}' not found for Attribute Accumulation fill control."), FText::FromName(TypedFactory->Config.Attribute.GetName())));
+		PCGEX_LOG_INVALID_ATTR_C(InContext, Attribute Accumulation, TypedFactory->Config.Attribute.GetName())
 		return false;
 	}
 

@@ -228,7 +228,7 @@ bool FPCGExGetPartitionActorElement::Boot(FPCGExContext* InContext) const
 	}
 
 	const IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
-	UWorld* World = Source ? Source->GetExecutionState().GetWorld() : nullptr;
+	UWorld* World = Context->GetWorld();
 	if (!World)
 	{
 		return Context->CancelExecution(TEXT("No world to look partition actors up in."));

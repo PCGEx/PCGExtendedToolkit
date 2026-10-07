@@ -39,16 +39,7 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 {
 	check(InQuery->PickResolution == PCGExPathfinding::EQueryPickResolution::Success)
 
-	TSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations> LocalAllocations;
-	if (Allocations)
-	{
-		LocalAllocations = StaticCastSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations>(Allocations);
-		LocalAllocations->Reset();
-	}
-	else
-	{
-		LocalAllocations = StaticCastSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations>(NewAllocations());
-	}
+	TSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations> LocalAllocations = StaticCastSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations>(PrepareAllocations(Allocations));
 
 	const TArray<PCGExClusters::FNode>& NodesRef = *Cluster->Nodes;
 	const TArray<PCGExGraphs::FEdge>& EdgesRef = *Cluster->Edges;

@@ -47,6 +47,3 @@ namespace PCGExSorting
 
 	PCGEXCORE_API TArray<FPCGExSortRuleConfig> GetSortingRules(FPCGExContext* InContext, const FName InLabel);
 }
-
-#undef PCGEX_UNSUPPORTED_STRING_TYPES
-#undef PCGEX_UNSUPPORTED_PATH_TYPES

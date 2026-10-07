@@ -74,9 +74,7 @@ bool PCGExPointFilter::FStringSelfCompareFilter::Init(FPCGExContext* InContext, 
 		return false;
 	}
 
-	Index = TypedFilterFactory->Config.Index.GetValueSetting(PCGEX_QUIET_HANDLING);
-	Index->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!Index->Init(PointDataFacade))
+	if (!InitSettingValue(Index, TypedFilterFactory->Config.Index.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}

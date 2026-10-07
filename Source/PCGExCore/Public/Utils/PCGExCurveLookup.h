@@ -29,6 +29,13 @@ namespace PCGExCurves
 {
 	using FInitCurveDataDefaults = std::function<void(FRichCurve& CurveData)>;
 
+	/** FInitCurveDataDefaults seeding the 0..1 identity ramp. */
+	inline void InitLinearRamp(FRichCurve& CurveData)
+	{
+		CurveData.AddKey(0, 0);
+		CurveData.AddKey(1, 1);
+	}
+
 	const FSoftObjectPath DefaultDotOverDistanceCurve = FSoftObjectPath(TEXT("/PCGExtendedToolkit/Curves/FC_PCGExGraphBalance_DistanceOnly.FC_PCGExGraphBalance_DistanceOnly"));
 	const FSoftObjectPath WeightDistributionLinearInv = FSoftObjectPath(TEXT("/PCGExtendedToolkit/Curves/FC_PCGExWeightDistribution_Linear_Inv.FC_PCGExWeightDistribution_Linear_Inv"));
 	const FSoftObjectPath WeightDistributionLinear = FSoftObjectPath(TEXT("/PCGExtendedToolkit/Curves/FC_PCGExWeightDistribution_Linear.FC_PCGExWeightDistribution_Linear"));

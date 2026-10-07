@@ -17,15 +17,11 @@ struct FPCGExCellConstraintsDetails;
 
 namespace PCGExData
 {
+	class FFacade;
 	struct FMutablePoint;
 }
 
 struct FPCGExNodeSelectionDetails;
-
-namespace PCGExMath
-{
-	struct FTriangle;
-}
 
 namespace PCGExClusters
 {
@@ -48,6 +44,7 @@ namespace PCGExClusters
 	class FCluster;
 	class FCell;
 	class FCellConstraints;
+	class FProjectedPointSet;
 
 	/**
 	 * Merges a set of cells by cancelling shared interior edges via undirected hash deduplication, then walking
@@ -93,6 +90,37 @@ namespace PCGExClusters
 		const TMap<int32, TSet<int32>>& InAdjacency,
 		const FPCGExCellGrowthDetails& InGrowth,
 		TFunctionRef<int32(const TArray<int32>&, const FVector&)> PickOwner);
+
+	/** Working storage for CollectFacesWithinDepth, owned by the caller so a loop over many start faces allocates once. */
+	struct FFaceWalkScratch
+	{
+		TSet<int32> Visited;
+		TArray<TPair<int32, int32>> Queue; // FaceIndex, depth
+	};
+
+	/**
+	 * Breadth-first walk of the face adjacency map: appends to OutFaces every face within InMaxDepth steps of
+	 * InStartFace, start excluded, nearest first. Appends nothing when InMaxDepth <= 0.
+	 */
+	PCGEXGRAPHS_API void CollectFacesWithinDepth(
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		int32 InStartFace,
+		int32 InMaxDepth,
+		FFaceWalkScratch& Scratch,
+		TArray<int32>& OutFaces);
+
+	/**
+	 * Removes from InOutCells every cell whose face holds a hole point or lies within that hole's growth depth of one.
+	 * The faces holding a hole are found among InFailedCells: the constraints already rejected them.
+	 * InHoles must be projected. Returns the number of faces excluded.
+	 */
+	PCGEXGRAPHS_API int32 ExcludeHoleCells(
+		TArray<TSharedPtr<FCell>>& InOutCells,
+		const TArray<TSharedPtr<FCell>>& InFailedCells,
+		const FProjectedPointSet& InHoles,
+		const TSharedRef<PCGExData::FFacade>& InHolesFacade,
+		const TMap<int32, TSet<int32>>& InAdjacency,
+		const FPCGExCellGrowthDetails& InGrowth);
 
 #pragma endregion
 

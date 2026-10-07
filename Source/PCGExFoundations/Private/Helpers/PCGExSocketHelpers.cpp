@@ -170,11 +170,6 @@ namespace PCGExStaging
 		return SocketInfosList.Emplace_GetRef();
 	}
 
-	uint64 GetSimplifiedEntryHash(uint64 InEntryHash)
-	{
-		return (InEntryHash & 0xFFFFFFFF00000000ull) | ((InEntryHash >> 16) & 0xFFFF);
-	}
-
 	void FSocketHelper::FilterSocketInfos(const int32 Index)
 	{
 		FSocketInfos& SocketInfos = SocketInfosList[Index];

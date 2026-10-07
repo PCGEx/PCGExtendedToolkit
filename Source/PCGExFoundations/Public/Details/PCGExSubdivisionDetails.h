@@ -35,6 +35,35 @@ enum class EPCGExSubdivideMode : uint8
 	Manhattan = 2 UMETA(DisplayName = "Manhattan", ToolTip="Manhattan subdivision, number of subdivisions depends on spatial relationship between the points; will be in the [0..2] range."),
 };
 
+namespace PCGExPaths
+{
+	// How many subdivision points fit in Dist for a count or distance Factor, and how far apart they sit.
+	// Factors can be attribute-driven and bypass property clamps: counts are clamped into int32 range before
+	// the cast (out-of-range double->int32 is UB), distance steps are floored at 1 so the count cannot explode.
+	FORCEINLINE int32 ResolveSubdivisions(const double Dist, const double Factor, const bool bIsCount, double& OutStepSize)
+	{
+		int32 SubdivCount = 0;
+
+		if (bIsCount)
+		{
+			SubdivCount = static_cast<int32>(FMath::Clamp(Factor, 0.0, static_cast<double>(MAX_int32)));
+			OutStepSize = Dist / (static_cast<double>(SubdivCount) + 1.0);
+		}
+		else if (Factor > KINDA_SMALL_NUMBER)
+		{
+			const double StepDist = FMath::Max(Factor, 1.0);
+			SubdivCount = static_cast<int32>(FMath::Clamp(FMath::Floor(Dist / StepDist), 0.0, static_cast<double>(MAX_int32)));
+			OutStepSize = FMath::Min(Dist, StepDist);
+		}
+		else
+		{
+			OutStepSize = Dist;
+		}
+
+		return SubdivCount;
+	}
+}
+
 UENUM()
 enum class EPCGExManhattanMethod : uint8
 {

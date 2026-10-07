@@ -26,12 +26,13 @@ enum class EPCGExBlendingTypeDefault : uint8
 	Subtract         = 9 UMETA(DisplayName = "Subtract", ToolTip="Subtract."),
 	UnsignedMin      = 10 UMETA(DisplayName = "Unsigned Min", ToolTip="Component-wise MIN on unsigned value, but keeps the sign on written data."),
 	UnsignedMax      = 11 UMETA(DisplayName = "Unsigned Max", ToolTip="Component-wise MAX on unsigned value, but keeps the sign on written data."),
-	AbsoluteMin      = 12 UMETA(DisplayName = "Unsigned Min", ToolTip="Component-wise MIN on unsigned value, but keeps the sign on written data."),
-	AbsoluteMax      = 13 UMETA(DisplayName = "Unsigned Max", ToolTip="Component-wise MAX on unsigned value, but keeps the sign on written data."),
+	AbsoluteMin      = 12 UMETA(DisplayName = "Absolute Min", ToolTip="Component-wise MIN of absolute value."),
+	AbsoluteMax      = 13 UMETA(DisplayName = "Absolute Max", ToolTip="Component-wise MAX of absolute value."),
 	WeightedSubtract = 14 UMETA(DisplayName = "Weighted Subtract", ToolTip="Substraction of all the data, weighted"),
 	CopyOther        = 15 UMETA(DisplayName = "Copy (Source)", ToolTip="Copy source data (first value)"),
 	Hash             = 16 UMETA(DisplayName = "Hash", ToolTip="Combine the values into a hash"),
 	UnsignedHash     = 17 UMETA(DisplayName = "Hash (Sorted)", ToolTip="Combine the values into a hash but sort the values first to create an order-independent hash."),
+	WeightNormalize  = 18 UMETA(DisplayName = "Weight (Normalize)", ToolTip="Weights based on distance to blend targets and force normalized."),
 };
 
 #define PCGEX_BLENDING_SETTINGS PCGEX_SETTINGS_INST(Blending)

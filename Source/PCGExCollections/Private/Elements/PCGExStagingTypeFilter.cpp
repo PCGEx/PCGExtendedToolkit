@@ -483,15 +483,7 @@ namespace PCGExStagedTypeFilter
 
 	TSharedPtr<PCGExData::FPointIO> FProcessor::CreateIO(const TSharedRef<PCGExData::FPointIOCollection>& InCollection, const PCGExData::EIOInit InitMode) const
 	{
-		TSharedPtr<PCGExData::FPointIO> NewPointIO = PCGExData::NewPointIO(PointDataFacade->Source, InCollection->OutputPin);
-
-		if (!NewPointIO->InitializeOutput(InitMode))
-		{
-			return nullptr;
-		}
-
-		InCollection->Pairs[BatchIndex] = NewPointIO;
-		return NewPointIO;
+		return PCGExBucketDispatchHelpers::CreateBatchIO(PointDataFacade->Source, InCollection, BatchIndex, InitMode);
 	}
 
 	void FProcessor::OnPointsProcessingComplete()

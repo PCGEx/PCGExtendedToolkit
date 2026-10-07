@@ -3,6 +3,7 @@
 
 #include "PCGExFiltersSubSystem.h"
 
+#include "PCGExSubSystem.h"
 #include "Filters/Points/PCGExConstantFilter.h"
 
 #if WITH_EDITOR
@@ -36,28 +37,7 @@ void UPCGExFiltersSubSystem::Deinitialize()
 
 UPCGExFiltersSubSystem* UPCGExFiltersSubSystem::GetSubsystemForCurrentWorld()
 {
-	UWorld* World = nullptr;
-
-#if WITH_EDITOR
-	if (GEditor)
-	{
-		if (GEditor->PlayWorld)
-		{
-			World = GEditor->PlayWorld;
-		}
-		else
-		{
-			World = GEditor->GetEditorWorldContext().World();
-		}
-	}
-	else
-#endif
-		if (GEngine)
-		{
-			World = GEngine->GetCurrentPlayWorld();
-		}
-
-	return GetInstance(World);
+	return GetInstance(UPCGExSubSystem::GetCurrentWorld());
 }
 
 UPCGExFiltersSubSystem* UPCGExFiltersSubSystem::GetInstance(UWorld* World)

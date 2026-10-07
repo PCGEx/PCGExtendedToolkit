@@ -6,9 +6,8 @@
 
 FName FPCGExUniqueNameGenerator::Get(const FString& BaseName)
 {
-	FName OutName = FName(BaseName + "_" + FString::Printf(TEXT("%d"), Idx));
-	FPlatformAtomics::InterlockedIncrement(&Idx);
-	return OutName;
+	const int32 UniqueIdx = FPlatformAtomics::InterlockedIncrement(&Idx) - 1;
+	return FName(BaseName + "_" + FString::Printf(TEXT("%d"), UniqueIdx));
 }
 
 FName FPCGExUniqueNameGenerator::Get(const FName& BaseName)

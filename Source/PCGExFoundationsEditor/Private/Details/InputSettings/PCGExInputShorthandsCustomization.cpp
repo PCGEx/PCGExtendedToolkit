@@ -11,6 +11,7 @@
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExCustomizationMacros.h"
+#include "Details/PCGExRawPropertyEdit.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Styling/AppStyle.h"
 #include "UObject/TextProperty.h"
@@ -345,24 +346,24 @@ TSharedRef<SWidget> FPCGExInputShorthandCustomization::CreateAttributeWidget(TSh
 					// Only handle commits from Enter or losing focus
 					if (CommitType == ETextCommit::OnEnter || CommitType == ETextCommit::OnUserMovedFocus)
 					{
-						TArray<void*> RawData;
-						AttributeHandle->AccessRawData(RawData);
+						const FString NewValue = NewText.ToString();
+						FPCGExRawPropertyEdit Edit(AttributeHandle.ToSharedRef());
 
-						bool bUpdated = false;
-						for (void* Ptr : RawData)
+						// A focus loss commits too: an unchanged value must not record an undo step.
+						bool bChanged = false;
+						Edit.ForEachRawValue([&](void* Raw)
 						{
-							FPCGAttributePropertyInputSelector* Selector = static_cast<FPCGAttributePropertyInputSelector*>(Ptr);
-							if (Selector)
-							{
-								Selector->Update(NewText.ToString());
-								bUpdated = true;
-							}
+							bChanged |= !static_cast<FPCGAttributePropertyInputSelector*>(Raw)->ToString().Equals(NewValue, ESearchCase::CaseSensitive);
+						});
+						if (!bChanged)
+						{
+							return;
 						}
 
-						if (bUpdated)
+						Edit.Commit(INVTEXT("Set Attribute"), [&NewValue](void* Raw)
 						{
-							AttributeHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
-						}
+							static_cast<FPCGAttributePropertyInputSelector*>(Raw)->Update(NewValue);
+						});
 					}
 				})
 		];
@@ -485,26 +486,24 @@ TSharedRef<SWidget> FPCGExInputShorthandSoftObjectPathCustomization::CreateValue
 						return;
 					}
 
-					ValueHandle->NotifyPreChange();
-
-					TArray<void*> RawData;
-					ValueHandle->AccessRawData(RawData);
-
 					const FString NewPath = NewText.ToString();
-					bool bUpdated = false;
-					for (void* Ptr : RawData)
+					FPCGExRawPropertyEdit Edit(ValueHandle.ToSharedRef());
+
+					// A focus loss commits too: an unchanged value must not record an undo step.
+					bool bChanged = false;
+					Edit.ForEachRawValue([&](void* Raw)
 					{
-						if (FSoftObjectPath* Path = static_cast<FSoftObjectPath*>(Ptr))
-						{
-							Path->SetPath(NewPath);
-							bUpdated = true;
-						}
+						bChanged |= !static_cast<FSoftObjectPath*>(Raw)->ToString().Equals(NewPath, ESearchCase::CaseSensitive);
+					});
+					if (!bChanged)
+					{
+						return;
 					}
 
-					if (bUpdated)
+					Edit.Commit(INVTEXT("Set Path"), [&NewPath](void* Raw)
 					{
-						ValueHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
-					}
+						static_cast<FSoftObjectPath*>(Raw)->SetPath(NewPath);
+					});
 				})
 		];
 }

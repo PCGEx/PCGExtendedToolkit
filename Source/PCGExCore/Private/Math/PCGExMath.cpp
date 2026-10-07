@@ -109,37 +109,7 @@ namespace PCGExMath
 
 	bool FSegment::FindIntersection(const FSegment& S, const double SquaredTolerance, FVector& OutSelf, FVector& OutOther, const uint8 Strictness) const
 	{
-		FMath::SegmentDistToSegment(A, B, S.A, S.B, OutSelf, OutOther);
-
-		if ((Strictness & static_cast<uint8>(EPCGExIntersectionStrictness::MainA)) && A == OutSelf)
-		{
-			return false;
-		}
-		if ((Strictness & static_cast<uint8>(EPCGExIntersectionStrictness::MainB)) && B == OutSelf)
-		{
-			return false;
-		}
-		if ((Strictness & static_cast<uint8>(EPCGExIntersectionStrictness::OtherA)) && S.A == OutOther)
-		{
-			return false;
-		}
-		if ((Strictness & static_cast<uint8>(EPCGExIntersectionStrictness::OtherB)) && S.B == OutOther)
-		{
-			return false;
-		}
-
-		if (FVector::DistSquared(OutSelf, OutOther) >= SquaredTolerance)
-		{
-			return false;
-		}
-		return true;
-	}
-
-	double ConvertStringToDouble(const FString& StringToConvert)
-	{
-		const TCHAR* CharArray = *StringToConvert;
-		const double Result = FCString::Atod(CharArray);
-		return FMath::IsNaN(Result) ? 0 : Result;
+		return FindIntersection(S.A, S.B, SquaredTolerance, OutSelf, OutOther, Strictness);
 	}
 
 	FVector SafeLinePlaneIntersection(const FVector& Pt1, const FVector& Pt2, const FVector& PlaneOrigin, const FVector& PlaneNormal, bool& bIntersect)
@@ -198,23 +168,12 @@ namespace PCGExMath
 		}
 	}
 
-	FBox ScaledBox(const FBox& InBox, const FVector& InScale)
-	{
-		const FVector Extents = InBox.GetExtent() * InScale;
-		return FBox(-Extents, Extents);
-	}
-
 	bool IsDirectionWithinTolerance(const FVector& A, const FVector& B, const FRotator& Limits)
 	{
 		const FRotator RA = A.Rotation();
 		const FRotator RB = B.Rotation();
 
 		return FMath::Abs(FRotator::NormalizeAxis(RA.Yaw - RB.Yaw)) <= Limits.Yaw && FMath::Abs(FRotator::NormalizeAxis(RA.Pitch - RB.Pitch)) <= Limits.Pitch && FMath::Abs(FRotator::NormalizeAxis(RA.Roll - RB.Roll)) <= Limits.Roll;
-	}
-
-	double GetArcLength(const double R, const double StartAngleRadians, const double EndAngleRadians)
-	{
-		return R * FMath::Abs(FMath::Fmod(EndAngleRadians, TWO_PI) - FMath::Fmod(StartAngleRadians, TWO_PI));
 	}
 
 	double GetPerpendicularDistance(const FVector& A, const FVector& B, const FVector& C)

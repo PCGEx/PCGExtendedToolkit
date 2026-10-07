@@ -43,6 +43,13 @@ namespace PCGExMath
 		}
 	}
 
+	FBox GetPointBounds(const PCGExData::FConstPoint& Point, const EPCGExPointBoundsSource Source, const FTransform& InFrameInverse)
+	{
+		FTransform ToFrame;
+		Point.GetTransformNoScale(ToFrame);
+		return GetLocalBounds(Point, Source).TransformBy(ToFrame * InFrameInverse);
+	}
+
 	FBox GetBounds(const TArrayView<FVector> InPositions)
 	{
 		FBox Bounds = FBox(ForceInit);

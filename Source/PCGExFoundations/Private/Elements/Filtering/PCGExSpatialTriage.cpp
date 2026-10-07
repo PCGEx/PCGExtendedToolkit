@@ -80,13 +80,9 @@ bool FPCGExSpatialTriageElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 		TaggedDatas = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
 
-		Context->OutputData.TaggedData.Reserve(TaggedDatas.Num());
-		const int32 StartIndex = Context->OutputData.TaggedData.Num();
-		Context->OutputData.TaggedData.Append(TaggedDatas);
-
 		ParallelFor(TaggedDatas.Num(), [&](int32 i)
 		{
-			FPCGTaggedData& TaggedData = Context->OutputData.TaggedData[StartIndex + i];
+			FPCGTaggedData& TaggedData = TaggedDatas[i];
 			const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(TaggedData.Data);
 			FName OutputTo = PCGExSpatialTriage::OutputLabelOutside;
 			if (SpatialData)
@@ -120,6 +116,12 @@ bool FPCGExSpatialTriageElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 			TaggedData.Pin = OutputTo;
 		});
+
+		Context->IncreaseStagedOutputReserve(TaggedDatas.Num());
+		for (const FPCGTaggedData& TaggedData : TaggedDatas)
+		{
+			Context->StageOutput(const_cast<UPCGData*>(TaggedData.Data.Get()), TaggedData.Pin, PCGExData::EStaging::None, TaggedData.Tags);
+		}
 	}
 
 	uint64& Mask = Context->OutputData.InactiveOutputPinBitmask;

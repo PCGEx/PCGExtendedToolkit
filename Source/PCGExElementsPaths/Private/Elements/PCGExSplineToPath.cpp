@@ -220,7 +220,7 @@ namespace PCGExSplineToPath
 
 							if (Identity.InDataDomain())
 							{
-								PCGExData::Helpers::PropertyBroadcastAttribute(SourceAttr, PCGDefaultValueKey, OutBuffer);
+								PCGExData::Helpers::PropertyBroadcastAttribute(SourceAttr, PCGExData::Helpers::GetDataValueKey(SourceAttr), OutBuffer);
 								return;
 							}
 

@@ -6,6 +6,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Factories/PCGExFactories.h"
 
 bool FPCGExFillControlHeuristicsScoring::PrepareForDiffusions(FPCGExContext* InContext, const TSharedPtr<PCGExFloodFill::FFillControlsHandler>& InHandler)
 {
@@ -95,10 +96,7 @@ void UPCGExFillControlsFactoryHxScoring::RegisterBuffersDependencies(FPCGExConte
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 
-	for (const TObjectPtr<const UPCGExHeuristicsFactoryData>& HFactory : HeuristicsFactories)
-	{
-		HFactory->RegisterBuffersDependencies(InContext, FacadePreloader);
-	}
+	PCGExFactories::RegisterBuffersDependencies(HeuristicsFactories, InContext, FacadePreloader);
 }
 
 TArray<FPCGPinProperties> UPCGExFillControlsHeuristicsScoringProviderSettings::InputPinProperties() const

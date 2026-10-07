@@ -27,16 +27,6 @@ namespace PCGExData
 
 struct FPCGExNodeSelectionDetails;
 
-namespace PCGExMath
-{
-	namespace Geo
-	{
-		struct FTriangle;
-	}
-
-	struct FTriangle;
-}
-
 namespace PCGExClusters
 {
 	class FCluster;
@@ -170,6 +160,4 @@ namespace PCGExTopology
 
 	/** Gets the transform to apply to mesh vertices based on coordinate space settings */
 	PCGEXELEMENTSTOPOLOGY_API FTransform GetCoordinateSpaceTransform(EPCGCoordinateSpace CoordinateSpace, FPCGExContext* Context);
-
-	PCGEXELEMENTSTOPOLOGY_API void MarkTriangle(const TSharedPtr<PCGExClusters::FCluster>& InCluster, const PCGExMath::Geo::FTriangle& InTriangle);
 }

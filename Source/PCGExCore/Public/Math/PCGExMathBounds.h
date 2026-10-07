@@ -52,7 +52,9 @@ namespace PCGExMath
 		}
 		else if constexpr (S == EPCGExPointBoundsSource::DensityBounds)
 		{
-			return Point.GetLocalDensityBounds();
+			const FVector Scale = Point.GetTransform().GetScale3D();
+			const FBox Density = Point.GetLocalDensityBounds();
+			return FBox(Density.Min * Scale, Density.Max * Scale);
 		}
 		else if constexpr (S == EPCGExPointBoundsSource::Center)
 		{
@@ -66,6 +68,9 @@ namespace PCGExMath
 
 	PCGEXCORE_API FBox GetLocalBounds(const PCGExData::FConstPoint& Point, const EPCGExPointBoundsSource Source);
 	PCGEXCORE_API FBox GetLocalBounds(const PCGExData::FProxyPoint& Point, const EPCGExPointBoundsSource Source);
+
+	/** One point's box as an AABB in the frame InFrameInverse maps world space into; rotation and bounds offset included. */
+	PCGEXCORE_API FBox GetPointBounds(const PCGExData::FConstPoint& Point, const EPCGExPointBoundsSource Source, const FTransform& InFrameInverse = FTransform::Identity);
 
 	static void SanitizeBounds(FBox& InBox)
 	{

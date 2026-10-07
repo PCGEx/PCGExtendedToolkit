@@ -29,6 +29,7 @@ public:
 	virtual void Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const override;
 	virtual void FinalizeSlot(FPCGExExportSlotWriter& Writer, UObject* Outer, const UPCGExLevelDataExporter* Exporter) const override;
 	virtual void WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
+	virtual void GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, bool bRaw, TArray<FName>& OutNames) const override;
 #endif
 };
 
@@ -46,6 +47,7 @@ public:
 	virtual void Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const override;
 	virtual void WriteItemAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
 	virtual void WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
+	virtual void GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, bool bRaw, TArray<FName>& OutNames) const override;
 	virtual void FinalizeEmbeddedCollection(UPCGExAssetCollection* Collection, FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
 #endif
 };
@@ -63,6 +65,7 @@ public:
 	virtual int32 GetPriority() const override { return 30; }
 	virtual void Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const override;
 	virtual void WriteRawAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
+	virtual void GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, bool bRaw, TArray<FName>& OutNames) const override;
 #endif
 };
 

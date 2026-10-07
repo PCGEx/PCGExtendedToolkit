@@ -96,7 +96,7 @@ bool FPCGExCollectionToModuleInfosElement::AdvanceWork(FPCGExContext* InContext,
 
 	MainCollection->EDITOR_RegisterTrackingKeys(InContext);
 
-	UPCGParamData* OutputModules = NewObject<UPCGParamData>();
+	UPCGParamData* OutputModules = FPCGContext::NewObject_AnyThread<UPCGParamData>(InContext);
 	UPCGMetadata* Metadata = OutputModules->Metadata;
 
 #define PCGEX_DECLARE_ATT(_NAME, _TYPE, _GETTER, _DEFAULT) \
@@ -162,7 +162,7 @@ bool FPCGExCollectionToModuleInfosElement::AdvanceWork(FPCGExContext* InContext,
 	ModulesData.Pin = FName("ModuleInfos");
 	ModulesData.Data = OutputModules;
 
-	UPCGParamData* OutputMap = NewObject<UPCGParamData>();
+	UPCGParamData* OutputMap = FPCGContext::NewObject_AnyThread<UPCGParamData>(InContext);
 	Packer->PackToDataset(OutputMap);
 
 	FPCGTaggedData& CollectionMapData = InContext->OutputData.TaggedData.Emplace_GetRef();

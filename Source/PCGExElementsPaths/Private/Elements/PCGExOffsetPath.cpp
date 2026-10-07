@@ -82,7 +82,7 @@ bool FPCGExOffsetPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			{
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any paths to offset."));
+			return Context->CancelExecution(TEXT("Could not find any paths to offset."));
 		}
 	}
 

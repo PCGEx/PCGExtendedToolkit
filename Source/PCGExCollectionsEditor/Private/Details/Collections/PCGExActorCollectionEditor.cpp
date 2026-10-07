@@ -4,6 +4,7 @@
 #include "Details/Collections/PCGExActorCollectionEditor.h"
 
 #include "Editor.h"
+#include "ScopedTransaction.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"
@@ -71,6 +72,7 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 							}
 
 							const FName CurrentWorldPackage = World->GetPackage()->GetFName();
+							FScopedTransaction Transaction(INVTEXT("Remove Missing Actor Entries"));
 							Collection->Modify();
 
 							// The current level is loaded, so a path that no longer resolves is a missing actor.
@@ -87,8 +89,11 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 
 							if (Removed > 0)
 							{
-								Collection->MarkPackageDirty();
-								FCoreUObjectDelegates::BroadcastOnObjectModified(Collection);
+								Collection->PostEditChange();
+							}
+							else
+							{
+								Transaction.Cancel();
 							}
 						}
 					})
@@ -106,6 +111,7 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 					{
 						PCGEX_CURRENT_COLLECTION
 						{
+							FScopedTransaction Transaction(INVTEXT("Remove Invalid Actor Entries"));
 							Collection->Modify();
 
 							const int32 Removed = Collection->Entries.RemoveAll(
@@ -130,8 +136,11 @@ void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 
 							if (Removed > 0)
 							{
-								Collection->MarkPackageDirty();
-								FCoreUObjectDelegates::BroadcastOnObjectModified(Collection);
+								Collection->PostEditChange();
+							}
+							else
+							{
+								Transaction.Cancel();
 							}
 						}
 					})
@@ -172,6 +181,7 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 						return FReply::Handled();
 					}
 
+					FScopedTransaction Transaction(INVTEXT("Add Selected Actors to Collection"));
 					Collection->Modify();
 
 					for (int32 i = 0; i < Selection->Num(); ++i)
@@ -182,8 +192,7 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 						}
 					}
 
-					Collection->MarkPackageDirty();
-					FCoreUObjectDelegates::BroadcastOnObjectModified(Collection);
+					Collection->PostEditChange();
 				}
 				return FReply::Handled();
 			})
@@ -228,6 +237,7 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 							return FReply::Handled();
 						}
 
+						FScopedTransaction Transaction(INVTEXT("Add Actors by Name to Collection"));
 						Collection->Modify();
 						int32 Added = 0;
 
@@ -246,8 +256,11 @@ void FPCGExActorCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 
 						if (Added > 0)
 						{
-							Collection->MarkPackageDirty();
-							FCoreUObjectDelegates::BroadcastOnObjectModified(Collection);
+							Collection->PostEditChange();
+						}
+						else
+						{
+							Transaction.Cancel();
 						}
 					}
 					return FReply::Handled();

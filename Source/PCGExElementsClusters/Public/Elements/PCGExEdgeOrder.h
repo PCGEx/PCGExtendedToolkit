@@ -114,9 +114,9 @@ namespace PCGExEdgeOrder
 		TSharedPtr<PCGExData::TBuffer<int64>> EndpointsBuffer;
 
 		// DFS traversal state
-		TArray<int8> Seeded;
+		TArray<int32> Seeded;          // Lowest seed index that picked each node (MAX_int32 = none)
+		TArray<int32> SeedClosestNode; // Node each seed picked (-1 = none)
 		TArray<int32> Depths;
-		TSharedPtr<PCGExMT::TScopedArray<int32>> SeedNodeIndices;
 		TArray<int32> CollectedSeeds;
 
 	public:

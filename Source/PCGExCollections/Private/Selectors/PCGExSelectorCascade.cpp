@@ -44,6 +44,7 @@ bool FPCGExEntryCascadePickerOp::PrepareForData(FPCGExContext* InContext, const 
 			continue;
 		}
 
+		ChildOp->bCleanupConsumableAttributes = ChildFactory->bCleanupConsumableAttributes;
 		ChildOp->SharedData = Composite->PerChild[i];
 		if (!ChildOp->PrepareForData(InContext, InDataFacade, InTarget, InOwningCollection))
 		{

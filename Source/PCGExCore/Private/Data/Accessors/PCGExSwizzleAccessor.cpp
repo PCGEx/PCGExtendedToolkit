@@ -120,13 +120,6 @@ namespace PCGExData
 			}
 		}
 
-		// Scalar sources: every index reads the same value.
-		template <typename T>
-		FORCEINLINE double GetScalarComponent(const T& Value, uint8 /*Index*/)
-		{
-			return static_cast<double>(Value);
-		}
-
 		void WriteVector2(void* OutValue, double X, double Y)
 		{
 			*static_cast<FVector2D*>(OutValue) = FVector2D(X, Y);

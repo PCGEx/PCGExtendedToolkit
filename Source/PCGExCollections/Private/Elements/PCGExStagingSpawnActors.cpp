@@ -11,12 +11,14 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataMacros.h"
 #include "Data/PCGExPointIO.h"
-#include "Data/Utils/PCGExDataForward.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Helpers/PCGActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
+#include "Helpers/PCGExActorPropertyOverrides.h"
+#include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExFunctionPrototypes.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Helpers/PCGHelpers.h"
@@ -29,6 +31,21 @@ PCGEX_INITIALIZE_ELEMENT(StagingSpawnActors)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(StagingSpawnActors)
 
 #pragma region UPCGExStagingSpawnActorsSettings
+
+#if WITH_EDITOR
+
+void UPCGExStagingSpawnActorsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	// The override pins of the removed TargetsForwarding setting: its members, and the whole struct.
+	RetireInputPin(InOutNode, FName("bEnabled"));
+	RetireInputPin(InOutNode, FName("bPreserveAttributesDefaultValue"));
+	RetireInputPin(InOutNode, FName("CommaSeparatedNames"));
+	RetireInputPin(InOutNode, FName("TargetsForwarding"));
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+#endif
 
 void UPCGExStagingSpawnActorsSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinProperties>& PinProperties) const
 {
@@ -70,6 +87,11 @@ bool FPCGExStagingSpawnActorsElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	if (!Settings->PropertyOverrideDescriptions.IsEmpty())
+	{
+		Context->OverrideTargets = MakeShared<PCGExActorOverrides::FOverrideTargets>(
+			Context, Settings->PropertyOverrideDescriptions, Settings->bQuietMissingMemberWarnings);
+	}
 
 	return true;
 }
@@ -82,14 +104,8 @@ bool FPCGExStagingSpawnActorsElement::AdvanceWork(FPCGExContext* InContext, cons
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		// Compute CRC for managed resource reuse detection
+		// Compute CRC for managed resource reuse detection; each processor derives its own from it.
 		GetDependenciesCrc(FPCGGetDependenciesCrcParams(&Context->InputData, Settings, nullptr), Context->DependenciesCrc);
-
-		if (Context->DependenciesCrc.IsValid())
-		{
-			Context->ReusedManagedActors = PCGExManagedHelpers::TryReuseManagedResource<UPCGManagedActors>(
-				Context->GetMutableComponent(), Context->DependenciesCrc);
-		}
 
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
@@ -146,9 +162,6 @@ namespace PCGExStagingSpawnActors
 
 		ActorRefWriter = PointDataFacade->GetWritable<FSoftObjectPath>(Settings->ActorReferenceAttribute, FSoftObjectPath(), false, PCGExData::EBufferInit::New);
 
-		// Init forwarding
-		ForwardHandler = Settings->TargetsForwarding.TryGetHandler(PointDataFacade);
-
 		// Init root-actor source. Constant-mode short-circuits per-point materialization.
 		RootActorSV = Settings->RootActor.GetValueSetting();
 		if (!RootActorSV->Init(PointDataFacade))
@@ -179,6 +192,17 @@ namespace PCGExStagingSpawnActors
 
 		// Hoist out of the parallel hot path; checked per-point inside ProcessPoints.
 		bApplyDeltas = Settings->bApplyPropertyDeltas;
+
+		if (Context->OverrideTargets)
+		{
+			ActorOverrides = MakeShared<PCGExActorOverrides::FActorPropertyOverrides>(Context->OverrideTargets.ToSharedRef(), PointDataFacade->Source->GetIn());
+		}
+
+		InputCrc = Context->DependenciesCrc;
+		if (InputCrc.IsValid())
+		{
+			InputCrc.Combine(static_cast<uint32>(BatchIndex));
+		}
 
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
@@ -277,19 +301,8 @@ namespace PCGExStagingSpawnActors
 			return;
 		}
 
-		// CRC reuse: if managed actors from a previous execution match, skip spawning entirely
-		if (Context->ReusedManagedActors)
+		if (TryReuseSpawnedActors())
 		{
-			const TArray<TSoftObjectPtr<AActor>>& Actors = Context->ReusedManagedActors->GetConstGeneratedActors();
-			int32 ActorIdx = 0;
-			for (int32 i = 0; i < NumPoints; ++i)
-			{
-				if (ResolvedEntries[i].Entry && ActorIdx < Actors.Num())
-				{
-					ActorRefWriter->SetValue(i, Actors[ActorIdx].ToSoftObjectPath());
-					++ActorIdx;
-				}
-			}
 			return;
 		}
 
@@ -311,15 +324,198 @@ namespace PCGExStagingSpawnActors
 				TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::OnLoadComplete);
 
 				PCGEX_ASYNC_THIS
-
-				This->MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(This->NumPoints);
-				This->MainThreadLoop->OnIterationCallback = [This](const int32 Index, const PCGExMT::FScope& Scope)
-				{
-					This->SpawnAtPoint(Index);
-				};
-
-				PCGEX_ASYNC_HANDLE_CHKD_VOID(This->TaskManager, This->MainThreadLoop)
+				This->OnSpawnAssetsLoaded();
 			});
+	}
+
+	bool FProcessor::TryReuseSpawnedActors()
+	{
+		if (!InputCrc.IsValid())
+		{
+			return false;
+		}
+
+		int32 NumResolved = 0;
+		for (const FResolvedEntry& Resolved : ResolvedEntries)
+		{
+			NumResolved += Resolved.Entry ? 1 : 0;
+		}
+
+#if WITH_EDITOR
+		const UPCGComponent* SourceComponent = ExecutionContext->GetComponent();
+		const bool bIsPreview = SourceComponent && SourceComponent->IsInPreviewMode();
+#endif
+
+		// Same guards as the engine's spawner. A resource short of one actor per point (a spawn failed) can't be
+		// mapped back onto the points; one left by an interrupted run never got its CRC.
+		const UPCGManagedActors* Reused = PCGExManagedHelpers::TryReuseManagedResource<UPCGManagedActors>(
+			ExecutionContext->GetMutableComponent(), InputCrc,
+			[&](const UPCGManagedActors* Resource)
+			{
+#if WITH_EDITOR
+				if (Resource->IsPreview() != bIsPreview)
+				{
+					return false;
+				}
+#endif
+				return Resource->GetConstGeneratedActors().Num() == NumResolved;
+			});
+
+		if (!Reused)
+		{
+			return false;
+		}
+
+		const TArray<TSoftObjectPtr<AActor>>& Actors = Reused->GetConstGeneratedActors();
+		int32 ActorIndex = 0;
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			if (ResolvedEntries[i].Entry)
+			{
+				ActorRefWriter->SetValue(i, Actors[ActorIndex++].ToSoftObjectPath());
+			}
+		}
+
+		return true;
+	}
+
+	void FProcessor::OnSpawnAssetsLoaded()
+	{
+		// Nothing to preload: the spawn loop binds the overrides to each class as it meets it.
+		if (!ActorOverrides || !ActorOverrides->HasPreloadableSources())
+		{
+			StartSpawnLoop();
+			return;
+		}
+
+		// What to preload depends on each entry's class, and resolving a soft class is game thread object work:
+		// done here when this callback is already in a position to, on the next tick otherwise.
+		if (IsInGameThread() && !PCGExMT::IsObjectWorkBlocked())
+		{
+			PrepareOverridePreload();
+			return;
+		}
+
+		PrepareOverridesStep = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(1);
+		PrepareOverridesStep->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)
+		{
+			PCGEX_ASYNC_THIS
+			This->PrepareOverridePreload();
+		};
+
+		PCGEX_ASYNC_HANDLE_CHKD_VOID(TaskManager, PrepareOverridesStep)
+	}
+
+	void FProcessor::PrepareOverridePreload()
+	{
+		TArray<int32> Sources;
+		for (const FResolvedEntry& Resolved : ResolvedEntries)
+		{
+			if (!Resolved.Entry || EntryPreloadSources.Contains(Resolved.Entry))
+			{
+				continue;
+			}
+
+			Sources.Reset();
+			if (const UClass* ActorClass = Resolved.Entry->Actor.Get())
+			{
+				ActorOverrides->PrepareClass(ActorClass, Sources);
+			}
+
+			for (const int32 Source : Sources)
+			{
+				OverridePreloadSources.AddUnique(Source);
+			}
+
+			EntryPreloadSources.Add(Resolved.Entry, Sources);
+		}
+
+		if (OverridePreloadSources.IsEmpty())
+		{
+			StartSpawnLoop();
+			return;
+		}
+
+		StartParallelLoopForRange(NumPoints);
+	}
+
+	void FProcessor::PrepareLoopScopesForRanges(const TArray<PCGExMT::FScope>& Loops)
+	{
+		ScopedOverridePaths = MakeShared<PCGExMT::TScopedSet<FSoftObjectPath>>(Loops, 0);
+	}
+
+	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::DiscoverOverrideAssets);
+
+		TSet<FSoftObjectPath>& LocalPaths = ScopedOverridePaths->Get_Ref(Scope);
+
+		for (const int32 Source : OverridePreloadSources)
+		{
+			ActorOverrides->GatherPreloadPaths(
+				Source, Scope.Start, Scope.Count,
+				[&](const int32 PointIndex)
+				{
+					const TArray<int32>* EntrySources = EntryPreloadSources.Find(ResolvedEntries[PointIndex].Entry);
+					return EntrySources && EntrySources->Contains(Source);
+				},
+				LocalPaths);
+		}
+	}
+
+	void FProcessor::OnRangeProcessingComplete()
+	{
+		TSet<FSoftObjectPath> UniquePaths;
+		ScopedOverridePaths->Collapse(UniquePaths);
+		ScopedOverridePaths.Reset();
+
+		TArray<FSoftObjectPath> PathsToLoad = UniquePaths.Array();
+
+		// Success is not required: whatever is still unloaded gets loaded by the engine accessor as it writes.
+		// An empty set completes right away.
+		PCGExHelpers::LoadTracked(
+			TaskManager,
+			[PathsToLoad = MoveTemp(PathsToLoad)]() -> TArray<FSoftObjectPath>
+			{
+				return PathsToLoad;
+			},
+			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess)
+			{
+				PCGEX_ASYNC_THIS
+				This->StartSpawnLoop();
+			});
+	}
+
+	void FProcessor::StartSpawnLoop()
+	{
+		MainThreadLoop = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(NumPoints);
+
+		// Weak capture: the loop is owned by this processor, a strong one would keep both alive forever.
+		MainThreadLoop->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)
+		{
+			PCGEX_ASYNC_THIS
+			This->SpawnAtPoint(Index);
+			if (Index == This->NumPoints - 1)
+			{
+				This->OnAllPointsVisited();
+			}
+		};
+
+		PCGEX_ASYNC_HANDLE_CHKD_VOID(TaskManager, MainThreadLoop)
+	}
+
+	void FProcessor::OnAllPointsVisited()
+	{
+		// Only now: a resource whose run got interrupted keeps no CRC, so it can never be taken for a complete one.
+		if (ManagedActors && InputCrc.IsValid())
+		{
+			ManagedActors->SetCrc(InputCrc);
+		}
+	}
+
+	void FProcessor::CompleteWork()
+	{
+		PointDataFacade->WriteFastest(TaskManager);
 	}
 
 	AActor* FProcessor::ResolveTargetActor(const int32 PointIndex)
@@ -407,25 +603,31 @@ namespace PCGExStagingSpawnActors
 			return;
 		}
 
-		// Apply delta AFTER SpawnActor has fully constructed the actor. Pre-construction apply
-		// doesn't work: SCS components (anything added in the BP Components panel) don't exist
-		// until ExecuteConstruction runs inside SpawnActor, and even if they did, SCS execution
-		// re-duplicates templates over any prior edits. The only time all components are present
-		// and stable is after SpawnActor returns.
-		//
-		// Known trade-off: the User Construction Script ran with template values, so logic that
-		// consumes component state (e.g. "for each spline point, spawn a mesh") used defaults
-		// rather than the delta-edited values. Preserving UCS visibility would require the
-		// RerunConstructionScripts machinery -- out of scope here. The delta-edited state is
-		// correct in the final actor; only the UCS pass is uninformed by it.
-		if (bHasDelta)
+		// Written after SpawnActor, not before: SCS components only exist once construction ran, and it re-duplicates
+		// templates over earlier edits. Construction scripts, and BeginPlay when the world has begun play, have
+		// therefore already run on template values.
+		bool bWroteProperties = bHasDelta;
+		if (ActorOverrides)
+		{
+			// One scope for both writers: a component both touch re-registers once, and the fixups run once, last.
+			PCGExActorDelta::FScopedActorWrite WriteScope(SpawnedActor);
+			if (bHasDelta)
+			{
+				PCGExActorDelta::ApplyPropertyDelta(WriteScope, ActorEntry->SerializedPropertyDelta);
+			}
+
+			// After the delta, so a per-point value wins over the one baked in the collection.
+			bWroteProperties |= ActorOverrides->Apply(WriteScope, PointIndex);
+		}
+		else if (bHasDelta)
 		{
 			PCGExActorDelta::ApplyPropertyDelta(SpawnedActor, ActorEntry->SerializedPropertyDelta);
+		}
 
-			// Defensive re-apply of the spawn transform. The writer filters the root
-			// component's relative-transform fields, so the delta itself shouldn't move the
-			// actor -- but BP construction scripts or post-apply fixups occasionally touch
-			// the root, and we want the PCG point to be the source of truth either way.
+		// The PCG point stays the source of truth for the transform, whatever construction scripts or fixups did to
+		// the root. Compared first: SetActorTransform warns about a non-movable root even with nothing to move.
+		if (bWroteProperties && !SpawnedActor->GetActorTransform().Equals(SpawnTransform))
+		{
 			SpawnedActor->SetActorTransform(SpawnTransform);
 		}
 
@@ -452,15 +654,9 @@ namespace PCGExStagingSpawnActors
 			const FString TagStr = InstanceTagsGetter->Read(PointIndex);
 			if (!TagStr.IsEmpty())
 			{
-				TArray<FString> TagParts;
-				TagStr.ParseIntoArray(TagParts, TEXT(","));
-				for (const FString& Part : TagParts)
+				for (const FString& Part : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(TagStr))
 				{
-					const FString Trimmed = Part.TrimStartAndEnd();
-					if (!Trimmed.IsEmpty())
-					{
-						SpawnedActor->Tags.AddUnique(FName(*Trimmed));
-					}
+					SpawnedActor->Tags.AddUnique(FName(*Part));
 				}
 			}
 		}
@@ -473,7 +669,6 @@ namespace PCGExStagingSpawnActors
 		{
 			UPCGComponent* MutableSourceComponent = ExecutionContext->GetMutableComponent();
 			ManagedActors = NewObject<UPCGManagedActors>(MutableSourceComponent);
-			ManagedActors->SetCrc(Context->DependenciesCrc);
 
 #if WITH_EDITOR
 			// Explicitly reflect the component's editing mode on the resource. Without this,
@@ -486,6 +681,16 @@ namespace PCGExStagingSpawnActors
 		}
 
 		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, ManagedActors, bTransientSpawn);
+
+		// Last, once the actor is tracked: these run user code against its final state.
+		if (!Settings->PostProcessFunctionNames.IsEmpty())
+		{
+			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::PostProcessFunctions);
+			for (UFunction* Function : GetPostProcessFunctions(ActorClass))
+			{
+				SpawnedActor->ProcessEvent(Function, nullptr);
+			}
+		}
 
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WriteActorRef);
@@ -502,6 +707,23 @@ namespace PCGExStagingSpawnActors
 				GenerationWatcher->Watch(PCGComp);
 			}
 		}
+	}
+
+	const TArray<UFunction*>& FProcessor::GetPostProcessFunctions(UClass* ActorClass)
+	{
+		FPostProcessFunctions& Cached = PostProcessFunctions.FindOrAdd(TWeakObjectPtr<const UClass>(ActorClass));
+		if (Cached.bResolved && Cached.Layout.IsCurrent())
+		{
+			return Cached.Functions;
+		}
+
+		// Resolved once per class layout, so FindUserFunctions reports a missing or mismatched function once, not per actor.
+		Cached.bResolved = true;
+		Cached.Layout = PCGExHelpers::FStructLayoutStamp();
+		Cached.Layout.Add(ActorClass);
+		Cached.Functions = PCGExHelpers::FindUserFunctions(ActorClass, Settings->PostProcessFunctionNames, {UPCGExFunctionPrototypes::GetPrototypeWithNoParams()}, ExecutionContext);
+
+		return Cached.Functions;
 	}
 }
 

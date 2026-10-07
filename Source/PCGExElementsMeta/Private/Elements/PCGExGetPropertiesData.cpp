@@ -21,6 +21,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Helpers/PCGExBucketDispatchHelpers.h"
 #include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
@@ -191,9 +192,8 @@ namespace PCGExGetPropertiesData
 		return true;
 	}
 
-	/** Bulk-copy every non-property attribute from Src to Dst for the rows whose KeepMask is 1.
-	 *  Used during the param-data filter step to rebuild a UPCGParamData with only the kept rows.
-	 *  Preserves attribute defaults + interpolation flags + per-attribute types. */
+	/** Rebuilds Src with only the rows whose KeepMask is 1 (UPCGMetadata has no entry removal). Every attribute is
+	 *  carried, whatever its type. */
 	UPCGParamData* GatherParamData(
 		FPCGExContext* InContext,
 		const UPCGParamData* Src,
@@ -207,14 +207,8 @@ namespace PCGExGetPropertiesData
 			return nullptr;
 		}
 
-		UPCGParamData* Dst = InContext->ManagedObjects->New<UPCGParamData>();
-		UPCGMetadata* DstM = Dst->MutableMetadata();
-
-		// Enumerate source rows via the entry-keys accessor -- works for any UPCGParamData regardless
-		// of how its keys are spaced internally. The caller (WriteInput) always sizes KeepMask to
-		// NumRows == NumSrcRows; mismatches would indicate a slot-bucketing bug upstream.
-		TSharedRef<FPCGAttributeAccessorKeysEntries> SrcKeys = MakeShared<FPCGAttributeAccessorKeysEntries>(SrcM);
-		const int32 NumSrcRows = SrcKeys->GetNum();
+		// Rows are counted through the entry-keys accessor; the caller (WriteInput) sizes KeepMask to that count.
+		const int32 NumSrcRows = FPCGAttributeAccessorKeysEntries(SrcM).GetNum();
 		check(KeepMask.Num() == NumSrcRows);
 
 		TArray<int32> KeptSrcRowIndices;
@@ -227,74 +221,7 @@ namespace PCGExGetPropertiesData
 			}
 		}
 
-		if (KeptSrcRowIndices.IsEmpty())
-		{
-			return Dst; // empty result, still a valid UPCGParamData
-		}
-
-		// Allocate destination entries up front so every attribute writes against the same key set.
-		TArray<int64> DstEntryKeys;
-		DstEntryKeys.SetNumUninitialized(KeptSrcRowIndices.Num());
-		for (int32 i = 0; i < KeptSrcRowIndices.Num(); i++)
-		{
-			DstEntryKeys[i] = DstM->AddEntry();
-		}
-
-		// Walk every source attribute and copy values for kept rows. ExecuteWithRightType handles
-		// type dispatch -- the per-T branch reads + writes via the typed FPCGMetadataAttribute<T>.
-		TArray<FPCGAttributeIdentifier> AttrIds;
-		TArray<EPCGMetadataTypes> AttrTypes;
-		SrcM->GetAllAttributes(AttrIds, AttrTypes);
-
-		for (int32 a = 0; a < AttrIds.Num(); a++)
-		{
-			const FPCGAttributeIdentifier& Id = AttrIds[a];
-			const FPCGMetadataAttributeBase* SrcAttrBase = SrcM->GetConstAttribute(Id);
-			if (!SrcAttrBase)
-			{
-				continue;
-			}
-
-			PCGExMetaHelpers::ExecuteWithRightType(SrcAttrBase->GetTypeId(), [&](auto Dummy)
-			{
-				using T = decltype(Dummy);
-				const FPCGMetadataAttribute<T>* TypedSrc = static_cast<const FPCGMetadataAttribute<T>*>(SrcAttrBase);
-				const T DefaultValue = TypedSrc->GetValueFromItemKey(PCGDefaultValueKey);
-				FPCGMetadataAttribute<T>* TypedDst = DstM->CreateAttribute<T>(
-					Id, DefaultValue, TypedSrc->AllowsInterpolation(), /*bOverrideParent=*/true);
-				if (!TypedDst)
-				{
-					return;
-				}
-
-				// Bulk-read every source row once, then index by KeptSrcRowIndices. GetRange is the
-				// one accessor API we know is supported here (used everywhere in PCGEx); sparse
-				// per-index reads via the IPCGAttributeAccessor::Get template aren't part of the
-				// pattern we have working examples of.
-				FPCGAttributePropertyInputSelector Selector;
-				Selector.Update(Id.Name.ToString());
-				Selector = Selector.CopyAndFixLast(Src);
-				TUniquePtr<const IPCGAttributeAccessor> ReadAccessor = PCGAttributeAccessorHelpers::CreateConstAccessor(Src, Selector);
-				if (!ReadAccessor)
-				{
-					return;
-				}
-
-				TArray<T> AllSrcValues;
-				AllSrcValues.SetNum(NumSrcRows);
-				if (!ReadAccessor->GetRange<T>(AllSrcValues, 0, *SrcKeys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible))
-				{
-					return;
-				}
-
-				for (int32 i = 0; i < DstEntryKeys.Num(); i++)
-				{
-					TypedDst->SetValue(DstEntryKeys[i], AllSrcValues[KeptSrcRowIndices[i]]);
-				}
-			});
-		}
-
-		return Dst;
+		return PCGExBucketDispatchHelpers::ExtractParamRows(InContext, Src, KeptSrcRowIndices);
 	}
 
 	/** Read keys for any input. Points / attribute sets keep GetKeys; anything else uses the engine's
@@ -318,33 +245,6 @@ namespace PCGExGetPropertiesData
 			return MakeShareable(EngineKeys.Release());
 		}
 		return PCGExData::Helpers::GetKeys(InData);
-	}
-
-	/** Write keys for the duplicated output. Attribute sets keep the entries path; other non-point data
-	 *  lets the engine allocate element entries so per-row writes land on real entries. Points use FPointIO::GetOutKeys. */
-	TSharedPtr<IPCGAttributeAccessorKeys> MakeElementWriteKeys(UPCGData* InData)
-	{
-		if (!InData)
-		{
-			return nullptr;
-		}
-		if (Cast<UPCGParamData>(InData))
-		{
-			UPCGMetadata* Metadata = InData->MutableMetadata();
-			if (!Metadata)
-			{
-				return nullptr;
-			}
-			return MakeShared<FPCGAttributeAccessorKeysEntries>(Metadata);
-		}
-
-		const FPCGAttributePropertySelector Selector = FPCGAttributePropertySelector::CreateAttributeSelector(FName(TEXT("Rows")));
-		TUniquePtr<IPCGAttributeAccessorKeys> EngineKeys = PCGAttributeAccessorHelpers::CreateKeys(InData, Selector);
-		if (EngineKeys)
-		{
-			return MakeShareable(EngineKeys.Release());
-		}
-		return PCGExMetaHelpers::MakeMutableKeys(InData);
 	}
 
 	/** Phase 1: read source paths from every input and append one slot per row. Single-threaded
@@ -744,7 +644,7 @@ namespace PCGExGetPropertiesData
 		}
 		else
 		{
-			const TSharedPtr<IPCGAttributeAccessorKeys> RowKeys = MakeElementWriteKeys(DupData);
+			const TSharedPtr<IPCGAttributeAccessorKeys> RowKeys = PCGExMetaHelpers::MakeMutableKeys(DupData);
 			if (!RowKeys || RowKeys->GetNum() != NumRows)
 			{
 				// Row count drifted since the Boot-time read; forward untouched rather than misalign attributes.
@@ -1001,14 +901,14 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 
 	// Pre-size for worst case (one tagged data per input) so the per-input emission below doesn't
 	// pay for TArray growth reallocations.
-	InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + Inputs.Num());
+	InContext->IncreaseStagedOutputReserve(Inputs.Num());
 
 	// Phase 5: per-input write -- parallel across inputs. Each task touches only its own duplicated
 	// data + its own slot range; the per-task result lands in ParallelResults and we compact + stage
-	// in a single-threaded post-pass (OutputData.TaggedData isn't safe to grow in parallel).
+	// in a single-threaded post-pass, so outputs keep the input order.
 	//
 	// Point inputs hold a TSharedPtr<FPointIO> in the result so the post-pass can stage via the
-	// canonical FPointIO::StageOutput path; param inputs go through a direct TaggedData emplace.
+	// canonical FPointIO::StageOutput path; other inputs are staged on the context directly.
 	struct FInputResult
 	{
 		// Data: the UPCGData* to stage. For points this is also PointIO->GetOut(); for param data
@@ -1078,11 +978,9 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 			continue;
 		}
 
-		// Param data and any other non-point data (splines, ...): direct TaggedData append.
-		FPCGTaggedData& OutTagged = InContext->OutputData.TaggedData.Emplace_GetRef();
-		OutTagged.Pin = PCGExGetPropertiesData::SourcesPin;
-		OutTagged.Data = Result.Data;
-		OutTagged.Tags = MoveTemp(Result.Tags);
+		// Param data and any other non-point data (splines, ...): Managed only, so unlike the point outputs
+		// it is neither flattened nor cleaned of consumable attributes.
+		InContext->StageOutput(Result.Data, PCGExGetPropertiesData::SourcesPin, PCGExData::EStaging::Managed, Result.Tags);
 	}
 
 	// Single-threaded so the graph log isn't touched from the parallel write tasks.

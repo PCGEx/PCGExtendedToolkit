@@ -192,17 +192,9 @@ template class PCGEXCORE_API TDataValue<_TYPE>;
 
 		FPCGAttributePropertyInputSelector Selector = InSelector.CopyAndFixLast(InData);
 
-		// Attribute unsupported
-		if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute)
-		{
-			return nullptr;
-		}
-
-		FPCGAttributeIdentifier SanitizedIdentifier = PCGExMetaHelpers::GetAttributeIdentifier(Selector, InData);
-		SanitizedIdentifier.MetadataDomain = PCGMetadataDomainID::Data; // Force data domain
-
-		// Non-data domain unsupported
-		if (SanitizedIdentifier.MetadataDomain.Flag != EPCGMetadataDomainFlag::Data)
+		// Property selectors unsupported
+		FPCGAttributeIdentifier SanitizedIdentifier;
+		if (!Helpers::TryGetDataValueIdentifier(Selector, SanitizedIdentifier))
 		{
 			return nullptr;
 		}

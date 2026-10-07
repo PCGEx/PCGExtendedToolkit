@@ -147,6 +147,9 @@ namespace PCGExPointFilter
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 
+		// Proxy test with the data the point stands for, so Ignore Self can skip it; null when there is none.
+		bool TestProxy(const PCGExData::FProxyPoint& Point, const UPCGData* InParentData) const;
+
 		virtual ~FTimeFilter() override
 		{
 		}

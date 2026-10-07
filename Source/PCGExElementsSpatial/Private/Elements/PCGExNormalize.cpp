@@ -198,7 +198,7 @@ namespace PCGExNormalize
 			case EPCGExIndexSafety::Tile:
 				Wrap = [](const double Value)-> double
 				{
-					constexpr double OnePlus = 1 + UE_SMALL_NUMBER;
+					constexpr double OnePlus = 1.0 + UE_DOUBLE_SMALL_NUMBER;
 					const double W = FMath::Fmod(Value, OnePlus);
 					return W < 0 ? W + OnePlus : W;
 				};

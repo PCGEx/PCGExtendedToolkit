@@ -60,6 +60,7 @@ namespace PCGExProbing
 		{
 			TSharedPtr<FPCGExProbeOperation> NewOperation = Factory->CreateOperation(InContext);
 			NewOperation->BindContext(InContext);
+			NewOperation->bCleanupConsumableAttributes = Factory->bCleanupConsumableAttributes;
 			NewOperation->PrimaryDataFacade = DataFacade;
 
 			NewOperation->WorkingTransforms = &WorkingTransforms;

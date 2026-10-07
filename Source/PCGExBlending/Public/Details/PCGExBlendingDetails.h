@@ -194,13 +194,7 @@ struct PCGEXBLENDING_API FPCGExBlendingDetails
 
 namespace PCGExBlending
 {
-	PCGEXBLENDING_API void AssembleBlendingDetails(const FPCGExPropertiesBlendingDetails& PropertiesBlending, const TMap<FName, EPCGExBlendingType>& PerAttributeBlending, const TSharedRef<PCGExData::FPointIO>& SourceIO, FPCGExBlendingDetails& OutDetails, TSet<FName>& OutMissingAttributes);
-
 	PCGEXBLENDING_API void AssembleBlendingDetails(const FPCGExPropertiesBlendingDetails& PropertiesBlending, const TMap<FName, EPCGExBlendingType>& PerAttributeBlending, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, FPCGExBlendingDetails& OutDetails, TSet<FName>& OutMissingAttributes);
-
-	PCGEXBLENDING_API void AssembleBlendingDetails(const EPCGExBlendingType& DefaultBlending, const TArray<FName>& Attributes, const TSharedRef<PCGExData::FPointIO>& SourceIO, FPCGExBlendingDetails& OutDetails, TSet<FName>& OutMissingAttributes);
-
-	PCGEXBLENDING_API void AssembleBlendingDetails(const EPCGExBlendingType& DefaultBlending, const TArray<FName>& Attributes, const TArray<TSharedRef<PCGExData::FFacade>>& InSources, FPCGExBlendingDetails& OutDetails, TSet<FName>& OutMissingAttributes);
 
 	PCGEXBLENDING_API void GetFilteredIdentities(const UPCGMetadata* InMetadata, TArray<PCGExData::FAttributeIdentity>& OutIdentities, const FPCGExBlendingDetails* InBlendingDetails = nullptr, const FPCGExCarryOverDetails* InCarryOverDetails = nullptr, const TSet<FName>* IgnoreAttributeSet = nullptr);
 }

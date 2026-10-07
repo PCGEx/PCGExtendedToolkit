@@ -100,22 +100,21 @@ bool PCGExPointFilter::FStringCompareNearestFilter::InitNearest(FPCGExContext* I
 {
 	if (bUseNameComparison)
 	{
-		OperandBName = PCGExDetails::MakeSettingValue<FName>(
+		// Direct MakeSettingValue bypasses the shorthand getter: seed the per-operand toggle and quiet by hand.
+		const TSharedPtr<PCGExDetails::TSettingValue<FName>> NameValue = PCGExDetails::MakeSettingValue<FName>(
 			TypedFilterFactory->Config.OperandBValue.Input,
 			TypedFilterFactory->Config.OperandBValue.Attribute,
 			FName(TypedFilterFactory->Config.OperandBValue.Constant));
-		OperandBName->bRegisterConsumable = TypedFilterFactory->Config.OperandBValue.bCleanupAttribute && TypedFilterFactory->bCleanupConsumableAttributes; // direct MakeSettingValue bypasses the shorthand getter: apply both the per-operand and factory gates
-		OperandBName->bQuiet = PCGEX_QUIET_HANDLING;
-		if (!OperandBName->Init(PointDataFacade, false))
+		NameValue->bRegisterConsumable = TypedFilterFactory->Config.OperandBValue.bCleanupAttribute;
+		NameValue->bQuiet = PCGEX_QUIET_HANDLING;
+		if (!InitSettingValue(OperandBName, NameValue, PointDataFacade, false))
 		{
 			return false;
 		}
 	}
 	else
 	{
-		OperandBString = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-		OperandBString->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!OperandBString->Init(PointDataFacade, false))
+		if (!InitSettingValue(OperandBString, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false))
 		{
 			return false;
 		}

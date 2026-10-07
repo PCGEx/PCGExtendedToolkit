@@ -527,9 +527,6 @@ extern template bool TryReadMark<_TYPE>(const TSharedRef<FPointIO>& PointIO, con
 #undef PCGEX_TPL
 
 	PCGEXCORE_API
-	void WriteId(const TSharedRef<FPointIO>& PointIO, const FName IdName, const int64 Id);
-
-	PCGEXCORE_API
 	UPCGBasePointData* GetMutablePointData(FPCGContext* Context, const FPCGTaggedData& Source);
 
 #pragma endregion

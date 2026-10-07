@@ -130,10 +130,16 @@ namespace PCGExMovePivot
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			FVector Offset;
-			OutTransforms[Index].SetLocation(UVW.GetPosition(Index, Offset));
-			OutBoundsMin[Index] += Offset;
-			OutBoundsMax[Index] += Offset;
+			FTransform& Transform = OutTransforms[Index];
+			const FVector NewLocation = UVW.GetPosition(Index);
+
+			// Bounds are local and scaled by the point: shift them opposite to the pivot so the box stays in place.
+			const FVector LocalMove = Transform.InverseTransformVectorNoScale(NewLocation - Transform.GetLocation());
+			const FVector Shift = LocalMove * FTransform::GetSafeScaleReciprocal(Transform.GetScale3D());
+
+			Transform.SetLocation(NewLocation);
+			OutBoundsMin[Index] -= Shift;
+			OutBoundsMax[Index] -= Shift;
 		}
 	}
 }

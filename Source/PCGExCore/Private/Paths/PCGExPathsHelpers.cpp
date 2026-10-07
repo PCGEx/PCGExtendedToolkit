@@ -97,37 +97,9 @@ namespace PCGExPaths
 			return GetIsHole(InData->GetIn());
 		}
 
-		void FetchPrevNext(const TSharedPtr<PCGExData::FFacade>& InFacade, const TArray<PCGExMT::FScope>& Loops)
-		{
-			if (Loops.Num() <= 1)
-			{
-				return;
-			}
-			// Fetch necessary bits for prev/next data to be valid during parallel processing
-			InFacade->Fetch(PCGExMT::FScope(0, 1));
-			for (int i = 1; i < Loops.Num(); ++i)
-			{
-				InFacade->Fetch(PCGExMT::FScope(Loops[i - 1].End - 1, 2));
-			}
-		}
-
 		TSharedPtr<FPath> MakePath(const UPCGBasePointData* InPointData, const double Expansion)
 		{
 			return MakeShared<FPath>(InPointData->GetConstTransformValueRange(), GetClosedLoop(InPointData), Expansion);
-		}
-
-		double GetPathLength(const TSharedPtr<FPath>& InPath)
-		{
-			FPathMetrics Metrics(InPath->GetPos(0));
-			for (int i = 0; i < InPath->NumPoints; i++)
-			{
-				Metrics.Add(InPath->GetPos(i));
-			}
-			if (InPath->IsClosedLoop())
-			{
-				Metrics.Add(InPath->GetPos(0));
-			}
-			return Metrics.Length;
 		}
 
 		FTransform GetClosestTransform(const FPCGSplineStruct& InSpline, const FVector& InLocation, const bool bUseScale)

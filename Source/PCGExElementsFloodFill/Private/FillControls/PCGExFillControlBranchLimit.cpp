@@ -22,9 +22,7 @@ bool FPCGExFillControlBranchLimit::PrepareForDiffusions(FPCGExContext* InContext
 	// Mode & bSourceIsVtx were cached on the operation in CreateOperation.
 	const UPCGExFillControlsFactoryBranchLimit* TypedFactory = Cast<UPCGExFillControlsFactoryBranchLimit>(Factory);
 
-	MaxBranchesValue = TypedFactory->Config.MaxBranches.GetValueSetting();
-	MaxBranchesValue->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!MaxBranchesValue->Init(GetSourceFacade()))
+	if (!InitSettingValue(MaxBranchesValue, TypedFactory->Config.MaxBranches.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

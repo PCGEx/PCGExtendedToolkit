@@ -34,7 +34,10 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 
 	// --- Resolve axis bias ---
 	TSharedPtr<PCGExDetails::TSettingValue<FVector>> BiasSetting = AxisBias.GetValueSetting();
-	BiasSetting->Init(PrimaryDataFacade);
+	if (!BiasSetting->Init(PrimaryDataFacade))
+	{
+		return false;
+	}
 
 	FVector ConstantBias = FVector(1.0);
 	TArray<FVector> BiasPrefixSums;
@@ -70,7 +73,7 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 
 	// --- Resolve weight ---
 	TSharedPtr<PCGExDetails::TSettingValue<double>> WeightSetting = Weight.GetValueSetting();
-	WeightSetting->Init(PrimaryDataFacade);
+	const bool bWeightReadable = WeightSetting->Init(PrimaryDataFacade);
 
 	TArray<double> WeightPrefixSums;
 	bool bUseWeights = false;
@@ -82,6 +85,12 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 	}
 	else if (WeightInfluence > KINDA_SMALL_NUMBER)
 	{
+		// The only branch that reads the weight: an unreadable attribute fails here, not where it goes unused.
+		if (!bWeightReadable)
+		{
+			return false;
+		}
+
 		bUseWeights = true;
 		TArray<double> VoxelWeights;
 		VoxelWeights.SetNumUninitialized(Grid.TotalVoxels);

@@ -91,17 +91,6 @@ namespace PCGExPointArrayDataHelpers
 		return InNumPoints;
 	}
 
-	bool EnsureMinNumPoints(UPCGBasePointData* InData, const int32 InNumPoints)
-	{
-		if (InData->GetNumPoints() < InNumPoints)
-		{
-			InData->SetNumPoints(InNumPoints);
-			return true;
-		}
-
-		return false;
-	}
-
 	template <typename T>
 	void ReorderValueRange(TPCGValueRange<T>& InRange, const TArray<int32>& InOrder)
 	{
