@@ -21,6 +21,8 @@ namespace PCGExData
 	//   - tolerance check uses each rep's *original* Point (stable)
 	//   - closest-rep tie-break uses each rep's *running* Center (drifts as points accumulate)
 	//   - on match, the matching rep's running mean is updated
+	//
+	// Tolerance is symmetric (larger of the point's and the rep's). Founding is first-come: insert largest first.
 	class PCGEXBLENDING_API FUnionRegistry
 	{
 	public:
@@ -52,7 +54,7 @@ namespace PCGExData
 
 		// Inserts a new rep with auto-assigned RepIndex (== Num() before the call).
 		// Caller is responsible for not double-inserting; use FindOrInsert when in doubt.
-		int32 Insert(const FConstPoint& Point);
+		int32 Insert(const FConstPoint& Point, const FPCGExFuseDetails& FuseDetails);
 
 		// Combined find-then-insert. On match, accumulates Point's location into the matching rep's
 		// running Center and returns its RepIndex. On miss, inserts a new rep and returns its index.

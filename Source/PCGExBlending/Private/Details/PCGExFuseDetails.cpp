@@ -74,6 +74,12 @@ bool FPCGExFuseDetailsBase::IsWithinToleranceComponentWise(const FVector& Source
 	return FMath::IsWithin<double, double>(abs(Source.X - Target.X), 0, CWTolerance.X) && FMath::IsWithin<double, double>(abs(Source.Y - Target.Y), 0, CWTolerance.Y) && FMath::IsWithin<double, double>(abs(Source.Z - Target.Z), 0, CWTolerance.Z);
 }
 
+FVector FPCGExFuseDetailsBase::GetToleranceExtent(const int32 PointIndex) const
+{
+	const FVector Tol = ToleranceGetter->Read(PointIndex);
+	return bComponentWiseTolerance ? Tol : FVector(Tol.X);
+}
+
 FPCGExSourceFuseDetails::FPCGExSourceFuseDetails()
 	: FPCGExFuseDetailsBase(false)
 {
@@ -138,11 +144,7 @@ bool FPCGExFuseDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCGExDat
 
 EPCGExFuseMethod FPCGExFuseDetails::GetEffectiveMethod() const
 {
-	if (bSupportLocalTolerance && ToleranceInput != EPCGExInputValueType::Constant)
-	{
-		return EPCGExFuseMethod::Octree;
-	}
-	return FuseMethod;
+	return HasPerPointTolerance() ? EPCGExFuseMethod::Octree : FuseMethod;
 }
 
 uint64 FPCGExFuseDetails::GetGridKey(const FVector& Location, const int32 PointIndex) const
@@ -152,7 +154,7 @@ uint64 FPCGExFuseDetails::GetGridKey(const FVector& Location, const int32 PointI
 
 FBox FPCGExFuseDetails::GetOctreeBox(const FVector& Location, const int32 PointIndex) const
 {
-	const FVector Extent = ToleranceGetter->Read(PointIndex);
+	const FVector Extent = GetToleranceExtent(PointIndex);
 	return FBox(Location - Extent, Location + Extent);
 }
 
@@ -168,7 +170,8 @@ bool FPCGExFuseDetails::IsWithinTolerance(const PCGExData::FConstPoint& SourcePo
 	FVector A;
 	FVector B;
 	GetCenters(SourcePoint, TargetPoint, A, B);
-	return FPCGExFuseDetailsBase::IsWithinTolerance(A, B, SourcePoint.Index);
+	const double Tol = FMath::Max(ToleranceGetter->Read(SourcePoint.Index).X, ToleranceGetter->Read(TargetPoint.Index).X);
+	return FMath::IsWithin<double, double>(FVector::DistSquared(A, B), 0, FMath::Square(Tol));
 }
 
 bool FPCGExFuseDetails::IsWithinToleranceComponentWise(const PCGExData::FConstPoint& SourcePoint, const PCGExData::FConstPoint& TargetPoint) const
@@ -176,7 +179,8 @@ bool FPCGExFuseDetails::IsWithinToleranceComponentWise(const PCGExData::FConstPo
 	FVector A;
 	FVector B;
 	GetCenters(SourcePoint, TargetPoint, A, B);
-	return FPCGExFuseDetailsBase::IsWithinToleranceComponentWise(A, B, SourcePoint.Index);
+	const FVector CWTolerance = FVector::Max(ToleranceGetter->Read(SourcePoint.Index), ToleranceGetter->Read(TargetPoint.Index));
+	return FMath::IsWithin<double, double>(abs(A.X - B.X), 0, CWTolerance.X) && FMath::IsWithin<double, double>(abs(A.Y - B.Y), 0, CWTolerance.Y) && FMath::IsWithin<double, double>(abs(A.Z - B.Z), 0, CWTolerance.Z);
 }
 
 const PCGExMath::IDistances* FPCGExFuseDetails::GetDistances() const

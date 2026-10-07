@@ -1468,6 +1468,7 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	{
 		CurrentDetailIndex = INDEX_NONE;
 		CurrentStructScope.Reset();
+		CurrentStructBaseline.Reset();
 		if (StructDetailView.IsValid())
 		{
 			TSharedPtr<FStructOnScope> NullStruct;
@@ -1496,6 +1497,7 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	{
 		// Unresolvable row (e.g. unset payload): clear the panel.
 		CurrentStructScope.Reset();
+		CurrentStructBaseline.Reset();
 		CurrentDetailIndex = INDEX_NONE;
 		if (StructDetailView.IsValid())
 		{
@@ -1509,6 +1511,9 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	EntryStruct->CopyScriptStruct(CurrentStructScope->GetStructMemory(), EntryPtr);
 	CurrentDetailIndex = Index;
 
+	// The previous entry's baseline must not pair with this scope if a sync fires while rows build.
+	CurrentStructBaseline.Reset();
+
 	// The copy has no outer; the package lets customizations reach the host (IPropertyHandle::GetOuterPackages).
 	if (const UPCGExAssetCollection* Coll = Collection.Get())
 	{
@@ -1519,6 +1524,10 @@ void SPCGExCollectionGridView::UpdateDetailForSelection()
 	{
 		StructDetailView->SetStructureData(CurrentStructScope);
 	}
+
+	// After binding: what the customizations normalize while building rows belongs to the baseline.
+	CurrentStructBaseline = MakeShared<FStructOnScope>(EntryStruct);
+	EntryStruct->CopyScriptStruct(CurrentStructBaseline->GetStructMemory(), CurrentStructScope->GetStructMemory());
 }
 
 void SPCGExCollectionGridView::OnSplitterFinishedResizing()
@@ -1550,6 +1559,7 @@ bool SPCGExCollectionGridView::UpdateDetailForCategoryOverrides()
 
 	// Keeps every entry-index consumer -- sync-back, push -- inert while this mode is up.
 	CurrentDetailIndex = INDEX_NONE;
+	CurrentStructBaseline.Reset();
 
 	if (StructDetailView.IsValid())
 	{
@@ -1643,113 +1653,94 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 	}
 
 	const uint8* SrcData = CurrentStructScope->GetStructMemory();
+	const bool bMultiEdit = SelectedIndices.Num() > 1;
 
 	Coll->Modify();
 
-	// ── Step 1: Resolve which top-level member property changed ──────────
-	// ChangedMemberProperty may be null or point to a property inside an external struct
-	// (e.g. when PropertyOverrides values are edited through AddExternalStructureProperty),
-	// so we verify it's a direct member of the entry struct first.
-	const FProperty* PropToPropagate = nullptr;
-
-	if (ChangedMemberProperty)
+	// ── Step 1: Resolve the "before" side of this commit's delta ─────────
+	// The panel's baseline, not the live entry, which restaging changes between commits (see CurrentStructBaseline).
+	TSharedPtr<FStructOnScope> Before = CurrentStructBaseline;
+	if (bMultiEdit && (!Before.IsValid() || Before->GetStruct() != EntryStruct))
 	{
-		for (TFieldIterator<FProperty> It(EntryStruct); It; ++It)
-		{
-			if (*It == ChangedMemberProperty)
-			{
-				PropToPropagate = ChangedMemberProperty;
-				break;
-			}
-		}
+		// No usable baseline: fall back to the live entry, snapshotted before Step 3 overwrites it.
+		Before = MakeShared<FStructOnScope>(EntryStruct);
+		EntryStruct->CopyScriptStruct(Before->GetStructMemory(), PrimaryPtr);
 	}
 
-	// If not a direct member (or null), diff the pre-copy primary data against the
-	// edited source to find which top-level member actually changed.
-	if (!PropToPropagate && SelectedIndices.Num() > 1)
+	// ── Step 2: Collect every top-level member this commit changed ───────
+	// All of them: TFieldIterator walks derived members first, so a single pick pre-empts PropertyOverrides.
+	// A direct ChangedMemberProperty counts even unchanged (re-commit = stamp); external rows only show in the diff.
+	TArray<const FProperty*, TInlineAllocator<4>> ChangedMembers;
+	if (bMultiEdit)
 	{
+		const uint8* OldData = Before->GetStructMemory();
 		for (TFieldIterator<FProperty> It(EntryStruct); It; ++It)
 		{
 			const FProperty* Prop = *It;
-			const int32 Off = Prop->GetOffset_ForInternal();
-			if (!Prop->Identical(PrimaryPtr + Off, SrcData + Off))
+			const int32 Offset = Prop->GetOffset_ForInternal();
+			if (Prop == ChangedMemberProperty || !Prop->Identical(OldData + Offset, SrcData + Offset))
 			{
-				PropToPropagate = Prop;
-				break;
+				ChangedMembers.Add(Prop);
 			}
 		}
-	}
-
-	// ── Step 2: Snapshot struct members before overwrite ──────────────────
-	// When the changed member is a struct (e.g. Variations, PropertyOverrides),
-	// snapshot its data from PrimaryPtr so we can diff after overwrite to
-	// propagate only changed sub-properties / array elements.
-	TArray<uint8> MemberSnapshot;
-	const FStructProperty* StructMember = PropToPropagate
-		? CastField<FStructProperty>(PropToPropagate)
-		: nullptr;
-
-	if (StructMember && SelectedIndices.Num() > 1)
-	{
-		const int32 MemberSize = StructMember->Struct->GetStructureSize();
-		const int32 MemberOffset = PropToPropagate->GetOffset_ForInternal();
-		MemberSnapshot.SetNumUninitialized(MemberSize);
-		StructMember->Struct->InitializeStruct(MemberSnapshot.GetData());
-		StructMember->Struct->CopyScriptStruct(MemberSnapshot.GetData(), PrimaryPtr + MemberOffset);
 	}
 
 	// ── Step 3: Copy entire struct back to the primary entry ─────────────
 	EntryStruct->CopyScriptStruct(PrimaryPtr, SrcData);
 
 	// ── Step 4: Propagate to other selected entries ──────────────────────
-	// Mixed-type selections: targets resolve the member by name + type; incompatible skip.
-	if (PropToPropagate && SelectedIndices.Num() > 1)
+	// Mixed-type selections: targets resolve each member by name + type; incompatible skip.
+	if (!ChangedMembers.IsEmpty())
 	{
-		const int32 MemberOffset = PropToPropagate->GetOffset_ForInternal();
+		const uint8* OldData = Before->GetStructMemory();
 
-		if (StructMember && MemberSnapshot.Num() > 0)
+		TArray<int32> Selected = GetSelectedIndices();
+		for (int32 OtherIndex : Selected)
 		{
-			// Granular: snapshot-diff propagation for struct members
-			TArray<int32> Selected = GetSelectedIndices();
-			for (int32 OtherIndex : Selected)
+			if (OtherIndex == CurrentDetailIndex)
 			{
-				if (OtherIndex == CurrentDetailIndex)
-				{
-					continue;
-				}
-				uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
-				const FProperty* DstProp = ResolveMatchingProperty(PropToPropagate, EntryStruct, GetEntryScriptStruct(OtherIndex));
-				if (OtherPtr && DstProp)
-				{
-					PropagateChangedProperties(
-						MemberSnapshot.GetData(),
-						SrcData + MemberOffset,
-						OtherPtr + DstProp->GetOffset_ForInternal(),
-						StructMember->Struct);
-				}
+				continue;
 			}
 
-			StructMember->Struct->DestroyStruct(MemberSnapshot.GetData());
-		}
-		else
-		{
-			// Coarse: copy the entire top-level member
-			TArray<int32> Selected = GetSelectedIndices();
-			for (int32 OtherIndex : Selected)
+			uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
+			if (!OtherPtr)
 			{
-				if (OtherIndex == CurrentDetailIndex)
+				continue;
+			}
+
+			const UScriptStruct* OtherStruct = GetEntryScriptStruct(OtherIndex);
+
+			for (const FProperty* Prop : ChangedMembers)
+			{
+				const FProperty* DstProp = ResolveMatchingProperty(Prop, EntryStruct, OtherStruct);
+				if (!DstProp)
 				{
 					continue;
 				}
-				uint8* OtherPtr = GetEntryRawPtr(OtherIndex);
-				const FProperty* DstProp = ResolveMatchingProperty(PropToPropagate, EntryStruct, GetEntryScriptStruct(OtherIndex));
-				if (OtherPtr && DstProp)
+
+				const int32 Offset = Prop->GetOffset_ForInternal();
+				uint8* DstData = OtherPtr + DstProp->GetOffset_ForInternal();
+
+				// Reflected structs: changed sub-properties only. FInstancedStruct: copied whole (see PushStructGated).
+				const FStructProperty* StructProp = CastField<FStructProperty>(Prop);
+				if (StructProp && StructProp->Struct != TBaseStructure<FInstancedStruct>::Get())
 				{
-					PropToPropagate->CopyCompleteValue(OtherPtr + DstProp->GetOffset_ForInternal(), SrcData + MemberOffset);
+					PropagateChangedProperties(OldData + Offset, SrcData + Offset, DstData, StructProp->Struct);
+				}
+				else
+				{
+					Prop->CopyCompleteValue(DstData, SrcData + Offset);
 				}
 			}
 		}
 	}
+
+	// ── Step 5: The panel copy is the next commit's baseline ─────────────
+	if (!CurrentStructBaseline.IsValid() || CurrentStructBaseline->GetStruct() != EntryStruct)
+	{
+		CurrentStructBaseline = MakeShared<FStructOnScope>(EntryStruct);
+	}
+	EntryStruct->CopyScriptStruct(CurrentStructBaseline->GetStructMemory(), SrcData);
 
 	Coll->PostEditChange();
 }

@@ -65,9 +65,14 @@ struct PCGEXBLENDING_API FPCGExFuseDetailsBase
 
 	virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade);
 
+	bool HasPerPointTolerance() const { return bSupportLocalTolerance && ToleranceInput != EPCGExInputValueType::Constant; }
+
 	bool IsWithinTolerance(const double DistSquared, const int32 PointIndex) const;
 	bool IsWithinTolerance(const FVector& Source, const FVector& Target, const int32 PointIndex) const;
 	bool IsWithinToleranceComponentWise(const FVector& Source, const FVector& Target, const int32 PointIndex) const;
+
+	// Per-axis reach: the component-wise tolerances, or the radial one on every axis.
+	FVector GetToleranceExtent(const int32 PointIndex) const;
 
 protected:
 	TSharedPtr<PCGExDetails::TSettingValue<FVector>> ToleranceGetter;
@@ -120,6 +125,7 @@ struct PCGEXBLENDING_API FPCGExFuseDetails : public FPCGExSourceFuseDetails
 
 	void GetCenters(const PCGExData::FConstPoint& SourcePoint, const PCGExData::FConstPoint& TargetPoint, FVector& OutSource, FVector& OutTarget) const;
 
+	// Symmetric: uses the larger of the two points' tolerances.
 	bool IsWithinTolerance(const PCGExData::FConstPoint& SourcePoint, const PCGExData::FConstPoint& TargetPoint) const;
 	bool IsWithinToleranceComponentWise(const PCGExData::FConstPoint& SourcePoint, const PCGExData::FConstPoint& TargetPoint) const;
 
