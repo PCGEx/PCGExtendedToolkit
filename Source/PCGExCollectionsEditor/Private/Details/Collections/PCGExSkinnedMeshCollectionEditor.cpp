@@ -21,25 +21,6 @@ FPCGExSkinnedMeshCollectionEditor::FPCGExSkinnedMeshCollectionEditor()
 {
 }
 
-void FPCGExSkinnedMeshCollectionEditor::RegisterPropertyNameMapping(TMap<FName, FName>& Mapping)
-{
-	FPCGExAssetCollectionEditor::RegisterPropertyNameMapping(Mapping);
-
-#define PCGEX_DECL_ASSET_FILTER(_NAME, _ID, _LABEL, _TOOLTIP)PCGExAssetCollectionEditor::FilterInfos& _NAME = FilterInfos.Emplace(FName(_ID), PCGExAssetCollectionEditor::FilterInfos(FName(_ID),FTEXT(_LABEL), FTEXT(_TOOLTIP)));
-
-	PCGEX_DECL_ASSET_FILTER(Materials, "AssetEditor.Materials", "Materials", "Show/hide Materials")
-	Mapping.Add(FName("MaterialVariants"), Materials.Id);
-	Mapping.Add(FName("SlotIndex"), Materials.Id);
-	Mapping.Add(FName("MaterialOverrideVariants"), Materials.Id);
-	Mapping.Add(FName("MaterialOverrideVariantsList"), Materials.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Descriptors, "AssetEditor.Descriptors", "Descriptors", "Show/hide Descriptors")
-	Mapping.Add(FName("DescriptorSource"), Descriptors.Id);
-	Mapping.Add(FName("Descriptor"), Descriptors.Id);
-
-#undef PCGEX_DECL_ASSET_FILTER
-}
-
 void FPCGExSkinnedMeshCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)
 {
 	FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(ToolbarBuilder);

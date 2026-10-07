@@ -63,6 +63,9 @@ namespace PCGExAssetCollection
 		inline const FTypeId Generic = FName(TEXT("Generic"));
 	}
 
+	/** Name of the per-class entries array every concrete collection declares (see PCGEX_ASSET_COLLECTION_BODY). */
+	inline const FName EntriesPropertyName = FName(TEXT("Entries"));
+
 	/**
 	 * Information about a registered collection type
 	 */
