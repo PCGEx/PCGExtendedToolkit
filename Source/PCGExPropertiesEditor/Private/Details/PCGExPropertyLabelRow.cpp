@@ -9,7 +9,7 @@
 
 namespace PCGExPropertyLabelRow
 {
-	TSharedRef<SWidget> Build(TAttribute<FText> NameAttr, TAttribute<FText> TypeAttr, bool bShowSeparator)
+	TSharedRef<SWidget> Build(TAttribute<FText> NameAttr, TAttribute<FText> TypeAttr)
 	{
 		TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
@@ -21,24 +21,10 @@ namespace PCGExPropertyLabelRow
 				.Font(IDetailLayoutBuilder::GetDetailFont())
 			];
 
-		if (bShowSeparator)
-		{
-			Row->AddSlot()
-			   .AutoWidth()
-			   .VAlign(VAlign_Center)
-			   .Padding(6, 0, 6, 0)
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("|")))
-				.Font(IDetailLayoutBuilder::GetDetailFont())
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-			];
-		}
-
 		Row->AddSlot()
 		   .AutoWidth()
 		   .VAlign(VAlign_Center)
-		   .Padding(bShowSeparator ? 0 : 6, 0, 0, 0)
+		   .Padding(6, 0, 0, 0)
 		[
 			SNew(STextBlock)
 			.Text(MoveTemp(TypeAttr))
