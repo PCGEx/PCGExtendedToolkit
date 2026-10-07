@@ -206,6 +206,17 @@ namespace PCGExPathSolidify
 			PointDataFacade->GetOut()->SetNumPoints(Path->LastIndex);
 		}
 
+		if (Settings->bMiterJoints)
+		{
+			// Every output point starts as "not a box"; ProcessPoints records the ones it solidifies.
+			PCGExPaths::ChordBoxes::FBoxAxes NotABox;
+			NotABox.Primary = -1;
+			BoxAxes.Init(NotABox, PointDataFacade->GetOut()->GetNumPoints());
+
+			// Overrides bypass ClampMin.
+			MiterLimit = FMath::IsFinite(Settings->MiterLimit) ? FMath::Clamp(Settings->MiterLimit, 1.0, 100.0) : 1.0;
+		}
+
 		// Axis order overrides
 
 		if (Settings->bReadOrderFromAttribute)
@@ -428,6 +439,15 @@ namespace PCGExPathSolidify
 			const bool bForwardFlipped = FVector::DotProduct(QuatAxes[A], RealXAxis) < 0;
 			double EdgeLerp = FMath::Clamp(SolidificationLerp->Read(Index), 0.0, 1.0);
 
+			if (!BoxAxes.IsEmpty())
+			{
+				PCGExPaths::ChordBoxes::FBoxAxes& Axes = BoxAxes[Index];
+				Axes.Primary = static_cast<int8>(A);
+				Axes.Lateral = static_cast<int8>(B);
+				Axes.Normal = static_cast<int8>(C);
+				Axes.bReversed = bForwardFlipped;
+			}
+
 			// update transform
 			const FVector Position = Path->GetEdgePositionAtAlpha(Index, bForwardFlipped ? 1.0 - EdgeLerp : EdgeLerp);
 			Transforms[Index] = FTransform(Quat, Position, Scale);
@@ -456,6 +476,18 @@ namespace PCGExPathSolidify
 				OutBoundsMax[C] = 2.0 * Slide * Rad * InvScale[C];
 			}
 		}
+	}
+
+	void FProcessor::OnPointsProcessingComplete()
+	{
+		// Miter once every box exists: a joint reads both of its boxes, which can sit in different scopes.
+		if (!BoxAxes.IsEmpty() && Path->NumEdges > 1) { StartParallelLoopForRange(Path->NumEdges); }
+	}
+
+	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
+	{
+		// One box per edge: an open path's last point, when kept, isn't one.
+		PCGExPaths::ChordBoxes::Miter(PointDataFacade->GetOut(), Path->NumEdges, bClosedLoop, MiterLimit, Scope, BoxAxes);
 	}
 }
 

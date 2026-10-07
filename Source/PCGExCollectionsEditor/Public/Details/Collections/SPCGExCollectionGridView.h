@@ -116,6 +116,11 @@ private:
 	// Detail panel -- IStructureDetailsView for editing a single entry struct
 	TSharedPtr<IStructureDetailsView> StructDetailView;
 	TSharedPtr<FStructOnScope> CurrentStructScope;
+
+	/** Snapshot of CurrentStructScope at bind and after every sync-back: the "before" side of an edit delta.
+	 *  Not the live entry, which restaging and lazily cached hashes change between commits. */
+	TSharedPtr<FStructOnScope> CurrentStructBaseline;
+
 	int32 CurrentDetailIndex = INDEX_NONE;
 
 	/**
