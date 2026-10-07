@@ -1657,7 +1657,7 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 
 	Coll->Modify();
 
-	// ── Step 1: Resolve the "before" side of this commit's delta ─────────
+	// Step 1: Resolve the "before" side of this commit's delta
 	// The panel's baseline, not the live entry, which restaging changes between commits (see CurrentStructBaseline).
 	TSharedPtr<FStructOnScope> Before = CurrentStructBaseline;
 	if (bMultiEdit && (!Before.IsValid() || Before->GetStruct() != EntryStruct))
@@ -1667,7 +1667,7 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 		EntryStruct->CopyScriptStruct(Before->GetStructMemory(), PrimaryPtr);
 	}
 
-	// ── Step 2: Collect every top-level member this commit changed ───────
+	// Step 2: Collect every top-level member this commit changed
 	// All of them: TFieldIterator walks derived members first, so a single pick pre-empts PropertyOverrides.
 	// A direct ChangedMemberProperty counts even unchanged (re-commit = stamp); external rows only show in the diff.
 	TArray<const FProperty*, TInlineAllocator<4>> ChangedMembers;
@@ -1685,10 +1685,10 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 		}
 	}
 
-	// ── Step 3: Copy entire struct back to the primary entry ─────────────
+	// Step 3: Copy entire struct back to the primary entry
 	EntryStruct->CopyScriptStruct(PrimaryPtr, SrcData);
 
-	// ── Step 4: Propagate to other selected entries ──────────────────────
+	// Step 4: Propagate to other selected entries
 	// Mixed-type selections: targets resolve each member by name + type; incompatible skip.
 	if (!ChangedMembers.IsEmpty())
 	{
@@ -1735,7 +1735,7 @@ void SPCGExCollectionGridView::SyncStructToCollection(const FProperty* ChangedMe
 		}
 	}
 
-	// ── Step 5: The panel copy is the next commit's baseline ─────────────
+	// Step 5: The panel copy is the next commit's baseline
 	if (!CurrentStructBaseline.IsValid() || CurrentStructBaseline->GetStruct() != EntryStruct)
 	{
 		CurrentStructBaseline = MakeShared<FStructOnScope>(EntryStruct);
