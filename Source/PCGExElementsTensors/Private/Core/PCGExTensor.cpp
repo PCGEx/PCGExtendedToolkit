@@ -228,13 +228,6 @@ namespace PCGExTensor
 		return *this;
 	}
 
-	void FTensorSample::Transform(FTransform& InTransform, const double InWeight) const
-	{
-		const FVector Location = InTransform.GetLocation() + DirectionAndSize * InWeight;
-		InTransform.SetRotation((InTransform.GetRotation() * (Rotation * InWeight)).GetNormalized());
-		InTransform.SetLocation(Location);
-	}
-
 	FTransform FTensorSample::GetTransformed(const FTransform& InTransform, const double InWeight) const
 	{
 		return FTransform((InTransform.GetRotation() * (Rotation * InWeight)).GetNormalized(), InTransform.GetLocation() + DirectionAndSize * InWeight, InTransform.GetScale3D());

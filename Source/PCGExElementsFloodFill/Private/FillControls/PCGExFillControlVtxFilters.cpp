@@ -66,10 +66,8 @@ bool UPCGExFillControlsFactoryVtxFilters::RegisterConsumableAttributes(FPCGExCon
 
 	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
 	{
-		if (!Factory->RegisterConsumableAttributes(InContext))
-		{
-			return false;
-		}
+		// The return is that filter's own cleanup opt-out, not a failure: every nested filter registers.
+		Factory->RegisterConsumableAttributes(InContext);
 	}
 
 	return true;
@@ -84,10 +82,8 @@ bool UPCGExFillControlsFactoryVtxFilters::RegisterConsumableAttributesWithData(F
 
 	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
 	{
-		if (!Factory->RegisterConsumableAttributesWithData(InContext, InData))
-		{
-			return false;
-		}
+		// The return is that filter's own cleanup opt-out, not a failure: every nested filter registers.
+		Factory->RegisterConsumableAttributesWithData(InContext, InData);
 	}
 
 	return true;

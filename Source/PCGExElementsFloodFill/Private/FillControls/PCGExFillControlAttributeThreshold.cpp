@@ -3,6 +3,7 @@
 
 #include "FillControls/PCGExFillControlAttributeThreshold.h"
 
+#include "PCGExCoreMacros.h"
 #include "PCGExVersion.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -50,7 +51,7 @@ bool FPCGExFillControlAttributeThreshold::PrepareForDiffusions(FPCGExContext* In
 	AttributeBuffer = SourceFacade->GetReadable<double>(TypedFactory->Config.Attribute.GetName());
 	if (!AttributeBuffer)
 	{
-		PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("Attribute '{0}' not found for Attribute Threshold fill control."), FText::FromName(TypedFactory->Config.Attribute.GetName())));
+		PCGEX_LOG_INVALID_ATTR_C(InContext, Attribute Threshold, TypedFactory->Config.Attribute.GetName())
 		return false;
 	}
 

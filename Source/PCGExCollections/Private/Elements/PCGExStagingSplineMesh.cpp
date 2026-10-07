@@ -790,7 +790,7 @@ namespace PCGExPathSplineMesh
 				if (bLocalFitting)
 				{
 					const PCGExMeshCollection::FMicroCache* EntryMicroCache = static_cast<const PCGExMeshCollection::FMicroCache*>(MicroCache);
-					Segment.MaterialPick = MicroHelper->GetPick(EntryMicroCache, Index, Seed);
+					Segment.MaterialPick = MicroHelper->GetPick(EntryMicroCache, Index, PCGExRandomHelpers::GetSeed(Seed, Index));
 				}
 
 				if (Segment.MaterialPick != -1)

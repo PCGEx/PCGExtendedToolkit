@@ -250,7 +250,7 @@ namespace PCGExSubdivide
 			if (bRedistribute)
 			{
 				Sub.NumSubdivisions = TruncateCount(Amount, TruncateMode);
-				Sub.StepSize = Sub.Dist / static_cast<double>(Sub.NumSubdivisions + 1);
+				Sub.StepSize = Sub.Dist / (static_cast<double>(Sub.NumSubdivisions) + 1.0);
 				Sub.StartOffset = Sub.StepSize;
 			}
 		}
@@ -260,13 +260,26 @@ namespace PCGExSubdivide
 	{
 		const TSharedRef<PCGExData::FPointIO>& PointIO = PointDataFacade->Source;
 
-		int32 NumPoints = 0;
-
 		if (!bClosedLoop)
 		{
 			Subdivisions[Subdivisions.Num() - 1].NumSubdivisions = 0;
 		}
 
+		// Summed in 64 bits first: an attribute-driven amount can ask for more points than a point data can hold.
+		int64 NumPoints64 = Subdivisions.Num();
+		for (const FSubdivision& Sub : Subdivisions)
+		{
+			NumPoints64 += Sub.NumSubdivisions;
+		}
+
+		if (NumPoints64 > MAX_int32)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, Context, FText::Format(FTEXT("Subdivide aborted on a path: {0} points exceed the point count limit. Check the subdivision amount."), FText::AsNumber(NumPoints64)));
+			bIsProcessorValid = false;
+			return;
+		}
+
+		int32 NumPoints = 0;
 		for (FSubdivision& Sub : Subdivisions)
 		{
 			Sub.OutStart = NumPoints++;

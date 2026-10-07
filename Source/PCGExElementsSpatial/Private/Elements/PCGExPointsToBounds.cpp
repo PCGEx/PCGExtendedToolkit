@@ -8,6 +8,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
+#include "Math/PCGExMathBounds.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPointsToBoundsElement"
 #define PCGEX_NAMESPACE PointsToBounds
@@ -198,14 +199,14 @@ namespace PCGExPointsToBounds
 			{
 				for (int i = 0; i < NumPoints; i++)
 				{
-					Bounds += FBoxCenterAndExtent(InvTransform.TransformPosition(InTransforms[i].GetLocation()), InPointData->GetScaledExtents(i)).GetBox();
+					Bounds += PCGExMath::GetPointBounds(PCGExData::FConstPoint(InPointData, i), EPCGExPointBoundsSource::ScaledBounds, InvTransform);
 				}
 			}
 			else
 			{
 				for (int i = 0; i < NumPoints; i++)
 				{
-					Bounds += FBoxCenterAndExtent(InTransforms[i].GetLocation(), InPointData->GetScaledExtents(i)).GetBox();
+					Bounds += PCGExMath::GetPointBounds(PCGExData::FConstPoint(InPointData, i), EPCGExPointBoundsSource::ScaledBounds);
 				}
 			}
 			break;
@@ -214,14 +215,14 @@ namespace PCGExPointsToBounds
 			{
 				for (int i = 0; i < NumPoints; i++)
 				{
-					Bounds += FBoxCenterAndExtent(InvTransform.TransformPosition(InTransforms[i].GetLocation()), InPointData->GetExtents(i)).GetBox();
+					Bounds += PCGExMath::GetPointBounds(PCGExData::FConstPoint(InPointData, i), EPCGExPointBoundsSource::Bounds, InvTransform);
 				}
 			}
 			else
 			{
 				for (int i = 0; i < NumPoints; i++)
 				{
-					Bounds += FBoxCenterAndExtent(InTransforms[i].GetLocation(), InPointData->GetExtents(i)).GetBox();
+					Bounds += PCGExMath::GetPointBounds(PCGExData::FConstPoint(InPointData, i), EPCGExPointBoundsSource::Bounds);
 				}
 			}
 			break;

@@ -622,7 +622,7 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			}
 			if (const FPCGExPropertyOverrides* Existing = FindCategoryOverrides(SourceRow.Category))
 			{
-				UE_LOG(LogTemp, Warning,
+				UE_LOG(LogPCGEx, Warning,
 				       TEXT("Merging \"%s\" into \"%s\": category \"%s\" already has overrides here, so the source's were dropped. Re-author them if needed."),
 				       *GetNameSafe(Source), *GetNameSafe(this), *SourceRow.Category.ToString());
 				continue;

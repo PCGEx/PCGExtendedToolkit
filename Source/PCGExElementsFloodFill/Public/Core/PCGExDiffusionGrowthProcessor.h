@@ -139,18 +139,8 @@ namespace PCGExFloodFill
 
 					This->SeedClosestNode[Index] = ClosestIndex;
 
-					// Contested nodes go to the LOWEST seed index -- atomic min keeps the outcome
-					// deterministic regardless of thread scheduling.
-					int32 Current = This->Seeded[ClosestIndex];
-					while (Index < Current)
-					{
-						const int32 Prev = FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], Index, Current);
-						if (Prev == Current)
-						{
-							break;
-						}
-						Current = Prev;
-					}
+					// Contested nodes go to the lowest seed index, whatever the thread scheduling.
+					PCGExMT::AtomicMin(This->Seeded[ClosestIndex], Index);
 				}
 			};
 

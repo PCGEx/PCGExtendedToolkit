@@ -3,6 +3,7 @@
 
 #include "Elements/PCGExDiscardByOverlap.h"
 
+#include "PCGExLog.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataTags.h"
@@ -548,7 +549,7 @@ namespace PCGExDiscardByOverlap
 #if WITH_EDITOR
 	void FProcessor::PrintWeights() const
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Set #%d | W = %f | SW = %f | DW = %f | NumPoints = %f, Volume = %f, VolumeDensity = %f, OverlapCount = %f, OverlapSubCount = %f, OverlapVolume = %f, OverlapVolumeDensity = %f"), BatchIndex, Weight, StaticWeight, DynamicWeight, RawScores.NumPoints, RawScores.Volume, RawScores.VolumeDensity, RawScores.OverlapCount, RawScores.OverlapSubCount, RawScores.OverlapVolume, RawScores.OverlapVolumeDensity)
+		UE_LOG(LogPCGEx, Warning, TEXT("Set #%d | W = %f | SW = %f | DW = %f | NumPoints = %f, Volume = %f, VolumeDensity = %f, OverlapCount = %f, OverlapSubCount = %f, OverlapVolume = %f, OverlapVolumeDensity = %f"), BatchIndex, Weight, StaticWeight, DynamicWeight, RawScores.NumPoints, RawScores.Volume, RawScores.VolumeDensity, RawScores.OverlapCount, RawScores.OverlapSubCount, RawScores.OverlapVolume, RawScores.OverlapVolumeDensity)
 	}
 #endif
 }

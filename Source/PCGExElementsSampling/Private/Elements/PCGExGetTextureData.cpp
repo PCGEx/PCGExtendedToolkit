@@ -214,6 +214,7 @@ void FPCGExGetTextureDataContext::AdvanceProcessing(const int32 Index)
 
 	if (!Texture.Get())
 	{
+		MoveToNextTask();
 		return;
 	}
 

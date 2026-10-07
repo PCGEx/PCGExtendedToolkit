@@ -790,6 +790,8 @@ namespace PCGExStagingLoadLevel
 
 			if (bIsRootActor[i])
 			{
+				// TODO: composes actor roots only -- an attachment to a non-root component or a socket is lost, here and in
+				// pass 2. PCGExHelpers::EnsureWorldTransformsCurrent (parent-first, socket-aware) should replace both walks.
 				FTransform SourceWorldTransform = FTransform::Identity;
 				if (const USceneComponent* SrcRoot = SourceActor->GetRootComponent())
 				{

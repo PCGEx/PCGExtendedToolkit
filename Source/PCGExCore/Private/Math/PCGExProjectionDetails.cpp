@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExCoreSettingsCache.h"
+#include "PCGExLog.h"
 
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
@@ -43,7 +44,7 @@ bool FPCGExGeo2DProjectionDetails::Init(const TSharedPtr<PCGExData::FFacade>& Po
 
 	if (ProjectionVector.Input == EPCGExInputValueType::Attribute && !PCGExMetaHelpers::IsDataDomainAttribute(ProjectionVector.Attribute))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
+		UE_LOG(LogPCGEx, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
 		ProjectionVector.Input = EPCGExInputValueType::Constant;
 	}
 
@@ -76,7 +77,7 @@ bool FPCGExGeo2DProjectionDetails::Init(const TSharedPtr<PCGExData::FPointIO>& P
 
 	if (ProjectionVector.Input == EPCGExInputValueType::Attribute && !PCGExMetaHelpers::IsDataDomainAttribute(ProjectionVector.Attribute))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
+		UE_LOG(LogPCGEx, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
 		ProjectionVector.Input = EPCGExInputValueType::Constant;
 	}
 
@@ -96,7 +97,7 @@ bool FPCGExGeo2DProjectionDetails::Init(const UPCGData* InData)
 
 	if (ProjectionVector.Input == EPCGExInputValueType::Attribute && !PCGExMetaHelpers::IsDataDomainAttribute(ProjectionVector.Attribute))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
+		UE_LOG(LogPCGEx, Warning, TEXT("Only @Data domain attributes are supported for local projection."));
 		ProjectionVector.Input = EPCGExInputValueType::Constant;
 	}
 

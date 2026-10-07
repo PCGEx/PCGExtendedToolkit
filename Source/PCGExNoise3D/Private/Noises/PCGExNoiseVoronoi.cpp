@@ -16,9 +16,9 @@ double FPCGExNoiseVoronoi::GenerateRaw(const FVector& Position) const
 	double VF1 = TNumericLimits<double>::Max();
 	double VF2 = TNumericLimits<double>::Max();
 
-	if (Smoothness > 0.0)
+	if (Smoothness > 0.0 && OutputMode == EPCGExVoronoiOutput::Distance)
 	{
-		// Smooth blend only tracks VF1; VF2 keeps its default (matches historical behavior)
+		// The smooth blend only yields the nearest distance, which is all Distance reads.
 		for (int32 DZ = -1; DZ <= 1; ++DZ)
 		{
 			for (int32 DY = -1; DY <= 1; ++DY)
@@ -94,7 +94,6 @@ double FPCGExNoiseVoronoi::GenerateRaw(const FVector& Position) const
 		Result = VF2 - VF1;
 		break;
 	default:
-		// CellValue in smooth mode has no winner to hash (historical behavior)
 		Result = 0.0;
 	}
 

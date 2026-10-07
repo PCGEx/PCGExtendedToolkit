@@ -156,11 +156,10 @@ namespace PCGExCollectionEditorUtils
 		return AssetData;
 	}
 
-	// Notify listeners that the collection was modified (for grid view refresh, etc.)
-	static void NotifyModified(UPCGExAssetCollection* InCollection)
+	// Same completion as a details-panel edit: pick cache, staging and PCG trackers all refresh.
+	void NotifyModified(UPCGExAssetCollection* InCollection)
 	{
-		(void)InCollection->MarkPackageDirty();
-		FCoreUObjectDelegates::BroadcastOnObjectModified(InCollection);
+		InCollection->PostEditChange();
 	}
 
 	bool EnsureEntryIds(UPCGExAssetCollection* InCollection, const bool bNotify)

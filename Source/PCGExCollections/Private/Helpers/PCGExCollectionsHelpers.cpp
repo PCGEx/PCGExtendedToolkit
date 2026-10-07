@@ -656,7 +656,7 @@ namespace PCGExCollections
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
 			// The nested pick reports its own pool -- the root's slot didn't produce this entry.
-			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed);
+			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed));
 		}
 		Result.Pool = Slots[Slot].Pool;
 		return Result;
@@ -680,7 +680,7 @@ namespace PCGExCollections
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
 			// The nested pick reports its own pool -- the root's slot didn't produce this entry.
-			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed, TagInheritance, OutTags);
+			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 		}
 		Result.Pool = Slots[Slot].Pool;
 		return Result;

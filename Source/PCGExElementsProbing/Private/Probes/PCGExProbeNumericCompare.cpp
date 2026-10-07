@@ -76,6 +76,12 @@ void FPCGExProbeNumericCompare::ProcessCandidates(const int32 Index, TArray<PCGE
 			return;
 		} // Candidates are sorted, stop there.
 
+		// Tested before any coincidence claim: a rejected candidate must not block its direction.
+		if (!PCGExCompare::Compare(Config.Comparison, ValuesBuffer->Read(Index), ValuesBuffer->Read(C.PointIndex), Config.Tolerance))
+		{
+			continue;
+		}
+
 		if (Coincidence)
 		{
 			Coincidence->Add(C.GH, &bIsAlreadyConnected);
@@ -94,15 +100,12 @@ void FPCGExProbeNumericCompare::ProcessCandidates(const int32 Index, TArray<PCGE
 			}
 		}
 
-		if (PCGExCompare::Compare(Config.Comparison, ValuesBuffer->Read(Index), ValuesBuffer->Read(C.PointIndex), Config.Tolerance))
-		{
-			OutEdges->Add(PCGEx::H64U(Index, C.PointIndex));
+		OutEdges->Add(PCGEx::H64U(Index, C.PointIndex));
 
-			Additions++;
-			if (Additions >= MaxIterations)
-			{
-				return;
-			}
+		Additions++;
+		if (Additions >= MaxIterations)
+		{
+			return;
 		}
 	}
 }

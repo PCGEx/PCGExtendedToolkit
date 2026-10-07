@@ -296,12 +296,12 @@ bool FPCGExCopyTagsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSe
 		},
 		/*Threshold=*/8, EParallelForFlags::Unbalanced);
 
-	InContext->OutputData.TaggedData.Reserve(InContext->OutputData.TaggedData.Num() + Results.Num());
-	for (FPCGTaggedData& R : Results)
+	InContext->IncreaseStagedOutputReserve(Results.Num());
+	for (const FPCGTaggedData& R : Results)
 	{
 		if (R.Data)
 		{
-			InContext->OutputData.TaggedData.Emplace(MoveTemp(R));
+			InContext->StageOutput(const_cast<UPCGData*>(R.Data.Get()), R.Pin, PCGExData::EStaging::None, R.Tags);
 		}
 	}
 
