@@ -28,6 +28,13 @@ namespace PCGExBucketDispatchHelpers
 			const TSharedRef<PCGExData::FPointIOCollection>& InCollection,
 			PCGExData::EIOInit InitMode)>;
 
+	/** Per-batch IO factory: new IO from InSource stored at InCollection->Pairs[InBatchIndex]; null if init fails. */
+	PCGEXCORE_API TSharedPtr<PCGExData::FPointIO> CreateBatchIO(
+		const TSharedRef<PCGExData::FPointIO>& InSource,
+		const TSharedRef<PCGExData::FPointIOCollection>& InCollection,
+		int32 InBatchIndex,
+		PCGExData::EIOInit InitMode);
+
 	/**
 	 * Dispatch pre-bucketed point indices to their output collections, choosing the optimal IO
 	 * init mode:

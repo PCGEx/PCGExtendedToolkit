@@ -171,8 +171,6 @@ namespace PCGExSampleOverlapStats
 		int32 OverlapCount = 0;
 		double OverlapVolume = 0;
 		double OverlapVolumeAvg = 0;
-		double RelativeOverlapCount = 0;
-		double RelativeOverlapVolume = 0;
 
 		FORCEINLINE void Add(const FOverlapStats& Other)
 		{
@@ -201,8 +199,6 @@ namespace PCGExSampleOverlapStats
 		FORCEINLINE void UpdateRelative(const int32 MaxCount, const double MaxVolume)
 		{
 			OverlapVolumeAvg = OverlapVolume / OverlapCount;
-			RelativeOverlapCount = OverlapCount / MaxCount;
-			RelativeOverlapVolume = OverlapVolume / MaxVolume;
 		}
 	};
 

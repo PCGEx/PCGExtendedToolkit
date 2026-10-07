@@ -77,7 +77,8 @@ bool FPCGExSortCollectionsElement::AdvanceWork(FPCGExContext* InContext, const U
 
 		for (const int32 i : Indices)
 		{
-			Context->OutputData.TaggedData.Add(Context->Datas[i]);
+			const FPCGTaggedData& TaggedData = Context->Datas[i];
+			Context->StageOutput(const_cast<UPCGData*>(TaggedData.Data.Get()), Settings->GetMainOutputPin(), PCGExData::EStaging::None, TaggedData.Tags);
 		}
 
 		Context->Done();

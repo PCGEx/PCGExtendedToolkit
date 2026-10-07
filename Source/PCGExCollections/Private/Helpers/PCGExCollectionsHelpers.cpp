@@ -42,6 +42,9 @@ namespace PCGExCollections
 	{
 		UPCGExSelectorClassicFactoryData* Factory = InContext->ManagedObjects->New<UPCGExSelectorClassicFactoryData>();
 
+		// Node-owned: no provider node can veto consumables, so the consuming node's own toggle decides alone.
+		Factory->bCleanupConsumableAttributes = true;
+
 		Factory->Config.Mode = InDetails.Distribution;
 		Factory->Config.IndexConfig = InDetails.IndexSettings;
 		Factory->BaseConfig.SubDistribution = InEntryDetails;
@@ -159,6 +162,7 @@ namespace PCGExCollections
 
 		const FPCGExSelectorFactoryBaseConfig& BaseConfig = ActiveFactory->BaseConfig;
 		const FPCGExSelectorTagFilterDetails& TagFilter = BaseConfig.TagFilter;
+		const bool bFactoryCleanup = ActiveFactory->bCleanupConsumableAttributes;
 
 		// Tag-filter getters come first: whether any of them reads per point decides how the category
 		// getter is initialized. Non-scoped on purpose -- constants cost nothing, attributes are read in
@@ -167,24 +171,22 @@ namespace PCGExCollections
 		bool bDynamicTags = false;
 		if (BaseConfig.bUseTagFilter)
 		{
-			TagGetters[0] = TagFilter.RequireAll.GetValueSetting();
-			TagGetters[1] = TagFilter.RequireAny.GetValueSetting();
-			TagGetters[2] = TagFilter.Exclude.GetValueSetting();
+			if (!PCGExDetails::InitSettingValueGated(TagGetters[0], TagFilter.RequireAll.GetValueSetting(), bFactoryCleanup, InDataFacade, false)
+				|| !PCGExDetails::InitSettingValueGated(TagGetters[1], TagFilter.RequireAny.GetValueSetting(), bFactoryCleanup, InDataFacade, false)
+				|| !PCGExDetails::InitSettingValueGated(TagGetters[2], TagFilter.Exclude.GetValueSetting(), bFactoryCleanup, InDataFacade, false))
+			{
+				return false;
+			}
 			for (const TSharedPtr<PCGExDetails::TSettingValue<FName>>& Getter : TagGetters)
 			{
-				if (!Getter->Init(InDataFacade, false))
-				{
-					return false;
-				}
 				bDynamicTags |= !Getter->IsConstant();
 			}
 		}
 
 		if (BaseConfig.bUseCategories)
 		{
-			CategoryGetter = BaseConfig.Category.GetValueSetting();
 			// The dynamic tag path reads every point's category at Init, which a scoped getter cannot serve.
-			if (!CategoryGetter->Init(InDataFacade, !bDynamicTags))
+			if (!PCGExDetails::InitSettingValueGated(CategoryGetter, BaseConfig.Category.GetValueSetting(), bFactoryCleanup, InDataFacade, !bDynamicTags))
 			{
 				return false;
 			}
@@ -230,6 +232,7 @@ namespace PCGExCollections
 				bFactoryFailed = true;
 				return nullptr;
 			}
+			Op->bCleanupConsumableAttributes = bFactoryCleanup;
 			Op->SharedData = ObtainSharedData(Pool);
 			return Op->PrepareForData(Ctx, InDataFacade, Pool, Collection) ? Op : nullptr;
 		};
@@ -654,7 +657,7 @@ namespace PCGExCollections
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
 			// The nested pick reports its own pool -- the root's slot didn't produce this entry.
-			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed);
+			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed));
 		}
 		Result.Pool = Slots[Slot].Pool;
 		return Result;
@@ -678,7 +681,7 @@ namespace PCGExCollections
 		if (Result && (!bFlattenSubCollections && Result.Entry->HasValidSubCollection()))
 		{
 			// The nested pick reports its own pool -- the root's slot didn't produce this entry.
-			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed, TagInheritance, OutTags);
+			return Result.Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 		}
 		Result.Pool = Slots[Slot].Pool;
 		return Result;
@@ -708,6 +711,7 @@ namespace PCGExCollections
 		if (!Factory)
 		{
 			UPCGExSelectorClassicFactoryData* Transient = Ctx->ManagedObjects->New<UPCGExSelectorClassicFactoryData>();
+			Transient->bCleanupConsumableAttributes = true; // node-owned, same rule as BuildLegacyFactory
 			Transient->BaseConfig.SubDistribution = Details;
 			Factory = Transient;
 		}
@@ -717,6 +721,7 @@ namespace PCGExCollections
 		{
 			return false;
 		}
+		PickerOp->bCleanupConsumableAttributes = Factory->bCleanupConsumableAttributes;
 		return PickerOp->PrepareForData(Ctx, InDataFacade);
 	}
 
@@ -1005,27 +1010,11 @@ namespace PCGExCollections
 		}
 
 		const int32 NumPoints = InPointData->GetNumPoints();
-		const int32 SafeReserve = NumPoints / (NumUniqueEntries * 2);
 
 		// Build partitions
 		for (int32 i = 0; i < NumPoints; i++)
 		{
-			const uint64 EntryHash = Hashes[i];
-			if (const int32* Index = IndexedPartitions.Find(EntryHash);
-				!Index)
-			{
-				FPCGMeshInstanceList& NewInstanceList = InstanceLists.Emplace_GetRef();
-				NewInstanceList.AttributePartitionIndex = EntryHash;
-				NewInstanceList.PointData = InPointData;
-				NewInstanceList.InstancesIndices.Reserve(SafeReserve);
-				NewInstanceList.InstancesIndices.Emplace(i);
-
-				IndexedPartitions.Add(EntryHash, InstanceLists.Num() - 1);
-			}
-			else
-			{
-				InstanceLists[*Index].InstancesIndices.Emplace(i);
-			}
+			InsertEntry(InPointData, Hashes[i], i, InstanceLists);
 		}
 
 		return !IndexedPartitions.IsEmpty();
@@ -1358,7 +1347,7 @@ namespace PCGExCollections
 				continue;
 			}
 
-			// GUID-keyed, matches both AssetStaging's Add() hash and LoadSockets' GetSimplifiedEntryHash.
+			// GUID-keyed, matches both AssetStaging's Add() hash and LoadSockets' PickHash::GetEntryKey.
 			const uint32 HostGUID = Host->GetCollectionGUID();
 
 			Host->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)

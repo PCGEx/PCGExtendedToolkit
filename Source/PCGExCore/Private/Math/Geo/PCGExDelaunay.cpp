@@ -11,7 +11,6 @@
 #include "Core/PCGExMTCommon.h"
 #include "Math/PCGExProjectionDetails.h"
 #include "Math/Geo/PCGExGeo.h"
-#include "Math/Geo/PCGExPrimtives.h"
 #include "CompGeom/ExactPredicates.h"
 #include "ThirdParty/Delaunator/include/delaunator.hpp"
 

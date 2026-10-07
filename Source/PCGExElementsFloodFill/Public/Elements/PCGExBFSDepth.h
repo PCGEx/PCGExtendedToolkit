@@ -153,7 +153,8 @@ namespace PCGExBFSDepth
 		friend class FBatch;
 
 	protected:
-		TArray<int8> Seeded;
+		TArray<int32> Seeded;          // Lowest seed index that picked each node (MAX_int32 = none)
+		TArray<int32> SeedClosestNode; // Node each seed picked (-1 = none)
 		TArray<int32> Depths;
 		TArray<double> Distances;
 		TArray<int32> SeedOwners;
@@ -161,7 +162,6 @@ namespace PCGExBFSDepth
 		TArray<int32> ChildCount; // Number of BFS children per node
 		int32 MaxBFSDepth = 0;
 
-		TSharedPtr<PCGExMT::TScopedArray<FIntPoint>> SeedNodeIndices;
 		TArray<FIntPoint> CollectedSeeds;
 
 		FPCGExFloodFillEdgeDirectionDetails EdgeDirectionDetails;

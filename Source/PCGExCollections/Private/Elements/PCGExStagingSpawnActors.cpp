@@ -17,6 +17,7 @@
 #include "Helpers/PCGActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
 #include "Helpers/PCGExActorPropertyOverrides.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExFunctionPrototypes.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
@@ -655,15 +656,9 @@ namespace PCGExStagingSpawnActors
 			const FString TagStr = InstanceTagsGetter->Read(PointIndex);
 			if (!TagStr.IsEmpty())
 			{
-				TArray<FString> TagParts;
-				TagStr.ParseIntoArray(TagParts, TEXT(","));
-				for (const FString& Part : TagParts)
+				for (const FString& Part : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(TagStr))
 				{
-					const FString Trimmed = Part.TrimStartAndEnd();
-					if (!Trimmed.IsEmpty())
-					{
-						SpawnedActor->Tags.AddUnique(FName(*Trimmed));
-					}
+					SpawnedActor->Tags.AddUnique(FName(*Part));
 				}
 			}
 		}

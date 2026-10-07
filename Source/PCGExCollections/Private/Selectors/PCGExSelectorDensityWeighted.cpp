@@ -17,8 +17,7 @@ void FPCGExEntryDensityWeightedPickerOp::OnSharedDataMissing(FPCGExContext* InCo
 
 bool FPCGExEntryDensityWeightedPickerOp::OnInitForData(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade)
 {
-	DensityGetter = DensitySource.GetValueSetting();
-	if (!DensityGetter->Init(InDataFacade))
+	if (!InitSettingValue(DensityGetter, DensitySource.GetValueSetting(), InDataFacade))
 	{
 		return false;
 	}

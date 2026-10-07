@@ -6,6 +6,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Clusters/Artifacts/PCGExCell.h"
+#include "Clusters/Artifacts/PCGExCellPathBuilder.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
@@ -144,61 +145,33 @@ namespace PCGExFindClusterHull
 		// Output to CellBounds if enabled
 		if (Settings->Artifacts.bOutputCellBounds)
 		{
-			TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
-			if (!OBBPointIO)
+			if (!PCGExClusters::ProcessCellsAsOBBPoints(
+				Cluster, HullArray, Context->OutputCellBounds, VtxDataFacade->Source,
+				PCGExData::FIOSortKey{EdgeDataFacade->Source->IOIndex}, Context->Artifacts, TaskManager))
 			{
 				return false;
 			}
-
-			OBBPointIO->IOIndex = EdgeDataFacade->Source->IOIndex;
-			PCGExClusters::Helpers::CleanupClusterData(OBBPointIO);
-
-			PCGEX_MAKE_SHARED(OBBFacade, PCGExData::FFacade, OBBPointIO.ToSharedRef())
-			PCGExClusters::ProcessCellsAsOBBPoints(Cluster, HullArray, OBBFacade,
-			                                       Context->Artifacts, TaskManager);
 		}
 
 		// Output to Paths if enabled
 		if (Settings->Artifacts.bOutputPaths)
 		{
-			ProcessCell(CellsConstraints->WrapperCell);
+			if (const TSharedPtr<PCGExData::FPointIO> PathIO = Context->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxDataFacade->Source, PCGExData::EIOInit::New))
+			{
+				// Stages by edges dataset, like every other non-seeded cell path.
+				PCGExClusters::FCellPathBuilder PathBuilder;
+				PathBuilder.Cluster = Cluster;
+				PathBuilder.TaskManager = TaskManager;
+				PathBuilder.Artifacts = &Context->Artifacts;
+				PathBuilder.EdgeDataFacade = EdgeDataFacade;
+				PathBuilder.ProcessCell(CellsConstraints->WrapperCell, PathIO);
+			}
 		}
 
 		CellsConstraints->Cleanup();
 		CellsConstraints.Reset();
 
 		return true;
-	}
-
-	void FProcessor::ProcessCell(const TSharedPtr<PCGExClusters::FCell>& InCell)
-	{
-		const TSharedPtr<PCGExData::FPointIO> PathIO = Context->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxDataFacade->Source, PCGExData::EIOInit::New);
-		if (!PathIO)
-		{
-			return;
-		}
-
-		PathIO->Tags->Reset();                                          // Tag forwarding handled by artifacts
-		PathIO->IOIndex = Cluster->GetEdge(InCell->Seed.Edge)->IOIndex; // Enforce seed order for collection output-ish
-
-		PCGExClusters::Helpers::CleanupClusterData(PathIO);
-
-		PCGEX_MAKE_SHARED(PathDataFacade, PCGExData::FFacade, PathIO.ToSharedRef())
-
-		TArray<int32> ReadIndices;
-		ReadIndices.SetNumUninitialized(InCell->Nodes.Num());
-
-		for (int i = 0; i < InCell->Nodes.Num(); i++)
-		{
-			ReadIndices[i] = Cluster->GetNodePointIndex(InCell->Nodes[i]);
-		}
-		PathIO->InheritPoints(ReadIndices, 0);
-		InCell->PostProcessPoints(PathIO->GetOut());
-
-		PCGExPaths::Helpers::SetClosedLoop(PathDataFacade->GetOut(), true);
-
-		Context->Artifacts.Process(Cluster, PathDataFacade, InCell);
-		PathDataFacade->WriteFastest(TaskManager);
 	}
 }
 

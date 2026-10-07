@@ -38,8 +38,7 @@ bool FPCGExVtxPropertyEdgeAngle::PrepareForCluster(FPCGExContext* InContext, TSh
 		return false;
 	}
 
-	UpCache = Config.UpVector.GetValueSetting();
-	if (!UpCache->Init(InVtxDataFacade, false))
+	if (!InitSettingValue(UpCache, Config.UpVector.GetValueSetting(), InVtxDataFacade, false))
 	{
 		bIsValidOperation = false;
 		return false;

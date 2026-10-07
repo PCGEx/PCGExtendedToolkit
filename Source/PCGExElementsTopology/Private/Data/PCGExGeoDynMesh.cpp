@@ -33,7 +33,7 @@ namespace PCGExMesh
 				const bool bInPrecise)
 				: Vertices(InVertices)
 				  , RawIndices(InRawIndices)
-				  , HashTolerance(InTolerance)
+				  , HashTolerance(PCGEx::SafeTolerance(InTolerance))
 				  , bPrecise(bInPrecise)
 			{
 				Data.Reserve(EstimatedSize);

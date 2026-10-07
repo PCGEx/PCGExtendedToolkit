@@ -16,34 +16,6 @@
 
 namespace PCGExPaths::Profile
 {
-	// Resolves how many subdivision points fit in Dist, and how far apart they sit.
-	// Attribute-driven factors bypass property clamps, so both modes are hardened here:
-	// counts are clamped into int32 range before the cast (out-of-range double->int32 is UB),
-	// and distance factors get a min segment length of 1 so degenerate spacing can't explode
-	// the count on huge spans (e.g. wide reflex arcs).
-	int32 ResolveSubdivisions(const double Dist, const double Factor, const bool bIsCount, double& OutStepSize)
-	{
-		int32 SubdivCount = 0;
-
-		if (bIsCount)
-		{
-			SubdivCount = static_cast<int32>(FMath::Clamp(Factor, 0.0, static_cast<double>(MAX_int32)));
-			OutStepSize = Dist / (static_cast<double>(SubdivCount) + 1.0);
-		}
-		else if (Factor > KINDA_SMALL_NUMBER)
-		{
-			const double StepDist = FMath::Max(Factor, 1.0);
-			SubdivCount = static_cast<int32>(FMath::Clamp(FMath::Floor(Dist / StepDist), 0.0, static_cast<double>(MAX_int32)));
-			OutStepSize = FMath::Min(Dist, StepDist);
-		}
-		else
-		{
-			OutStepSize = Dist;
-		}
-
-		return SubdivCount;
-	}
-
 	void SubdivideLine(TArray<FVector>& Out, const FVector& A, const FVector& B, const double Factor, const bool bIsCount)
 	{
 		double StepSize = 0;

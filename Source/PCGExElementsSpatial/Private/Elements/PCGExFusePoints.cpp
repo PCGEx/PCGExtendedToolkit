@@ -12,6 +12,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Math/PCGExBestFitPlane.h"
+#include "Math/PCGExMathBounds.h"
 
 #define LOCTEXT_NAMESPACE "PCGExFusePointsElement"
 #define PCGEX_NAMESPACE FusePoints
@@ -115,13 +116,13 @@ namespace PCGExFusePoints
 		{
 		default:
 		case EPCGExPointBoundsSource::ScaledBounds:
-			Bounds += FBoxCenterAndExtent(InvTransform.TransformPosition(PointPos), InData->GetScaledExtents(Element.Index)).GetBox();
+			Bounds += PCGExMath::GetPointBounds(PCGExData::FConstPoint(InData, Element.Index), EPCGExPointBoundsSource::ScaledBounds, InvTransform);
 			break;
 		case EPCGExPointBoundsSource::DensityBounds:
 			Bounds += InData->GetDensityBounds(Element.Index).GetBox().TransformBy(InvTransform);
 			break;
 		case EPCGExPointBoundsSource::Bounds:
-			Bounds += FBoxCenterAndExtent(InvTransform.TransformPosition(PointPos), InData->GetExtents(Element.Index)).GetBox();
+			Bounds += PCGExMath::GetPointBounds(PCGExData::FConstPoint(InData, Element.Index), EPCGExPointBoundsSource::Bounds, InvTransform);
 			break;
 		case EPCGExPointBoundsSource::Center:
 			Bounds += InvTransform.TransformPosition(PointPos);

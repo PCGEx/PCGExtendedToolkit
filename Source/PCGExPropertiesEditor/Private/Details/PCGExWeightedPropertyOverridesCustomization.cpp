@@ -88,12 +88,12 @@ void FPCGExWeightedPropertyOverridesCustomization::CustomizeChildren(
 		return;
 	}
 
-	// Structural changes (add/remove/reorder) need immediate refresh.
+	// Structural changes (add/remove/reorder) need a refresh, deferred -- see FPCGExPropertyOverridesCustomization for why.
 	auto RefreshDelegate = FSimpleDelegate::CreateLambda([this]()
 	{
 		if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
 		{
-			PropertyUtilities->ForceRefresh();
+			PropertyUtilities->RequestRefresh();
 		}
 	});
 

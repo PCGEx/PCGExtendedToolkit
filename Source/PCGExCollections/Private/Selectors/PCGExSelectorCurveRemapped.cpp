@@ -21,8 +21,7 @@ void FPCGExEntryCurveRemappedPickerOp::OnSharedDataMissing(FPCGExContext* InCont
 
 bool FPCGExEntryCurveRemappedPickerOp::OnInitForData(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InDataFacade)
 {
-	TimeGetter = TimeSource.GetValueSetting();
-	if (!TimeGetter->Init(InDataFacade))
+	if (!InitSettingValue(TimeGetter, TimeSource.GetValueSetting(), InDataFacade))
 	{
 		return false;
 	}

@@ -170,34 +170,4 @@ namespace PCGExSampling::Helpers
 
 		return OutAngle;
 	}
-
-	bool GetIncludedActors(const FPCGContext* InContext, const TSharedRef<PCGExData::FFacade>& InFacade, const FName ActorReferenceName, TMap<AActor*, int32>& OutActorSet)
-	{
-		FPCGAttributePropertyInputSelector Selector = FPCGAttributePropertyInputSelector();
-		Selector.SetAttributeName(ActorReferenceName);
-
-		const TUniquePtr<PCGExData::TAttributeBroadcaster<FSoftObjectPath>> ActorReferences = MakeUnique<PCGExData::TAttributeBroadcaster<FSoftObjectPath>>();
-		if (!ActorReferences->Prepare(Selector, InFacade->Source))
-		{
-			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Actor reference attribute does not exist."));
-			return false;
-		}
-
-		ActorReferences->Grab();
-
-		for (int i = 0; i < ActorReferences->Values.Num(); i++)
-		{
-			const FSoftObjectPath& Path = ActorReferences->Values[i];
-			if (!Path.IsValid())
-			{
-				continue;
-			}
-			if (AActor* TargetActor = Cast<AActor>(Path.ResolveObject()))
-			{
-				OutActorSet.FindOrAdd(TargetActor, i);
-			}
-		}
-
-		return true;
-	}
 }

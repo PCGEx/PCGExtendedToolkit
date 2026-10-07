@@ -219,7 +219,7 @@ namespace PCGExTensorsTransform
 				}
 				else if (Settings->Rotation == EPCGExTensorTransformMode::Relative)
 				{
-					OutTransforms[Index].SetRotation(Sample.Rotation * OutTransforms[Index].GetRotation());
+					OutTransforms[Index].SetRotation(OutTransforms[Index].GetRotation() * Sample.Rotation);
 				}
 				else if (Settings->Rotation == EPCGExTensorTransformMode::Align)
 				{

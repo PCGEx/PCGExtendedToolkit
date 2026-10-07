@@ -108,49 +108,6 @@ namespace PCGExCollectionHelpers
 		TSet<FName>& OutTags);
 
 	/**
-	 * Get all asset paths from a collection recursively
-	 * @param Collection Source collection
-	 * @param OutPaths Set to append paths to
-	 * @param bRecursive Whether to include subcollection assets
-	 */
-	PCGEXCOLLECTIONS_API
-	void GetAllAssetPaths(
-		const UPCGExAssetCollection* Collection,
-		TSet<FSoftObjectPath>& OutPaths,
-		bool bRecursive = true);
-
-	/**
-	 * Check if a collection or any of its subcollections contain an asset
-	 * @param Collection Collection to search
-	 * @param AssetPath Path to look for
-	 * @return true if found
-	 */
-	PCGEXCOLLECTIONS_API
-	bool ContainsAsset(
-		const UPCGExAssetCollection* Collection,
-		const FSoftObjectPath& AssetPath);
-
-	/**
-	 * Count total entries including subcollections
-	 * @param Collection Collection to count
-	 * @return Total entry count
-	 */
-	PCGEXCOLLECTIONS_API
-	int32 CountTotalEntries(const UPCGExAssetCollection* Collection);
-
-	/**
-	 * Flatten a hierarchical collection into a single level
-	 * Creates copies of entries from subcollections with inherited properties
-	 * @param Source Source collection
-	 * @param Target Target collection (must be same type as source)
-	 * @return true if successful
-	 */
-	PCGEXCOLLECTIONS_API
-	bool FlattenCollection(
-		const UPCGExAssetCollection* Source,
-		UPCGExAssetCollection* Target);
-
-	/**
 	 * Classify a collection's LEAF entries for actor-vs-asset output declaration (actor =
 	 * asset CLASS, everything else = asset PATH); heterogeneous hosts may hold both.
 	 * Subcollection entries are skipped. A typed Actor collection reports bOutAnyActor even

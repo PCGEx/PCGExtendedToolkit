@@ -220,24 +220,6 @@ namespace PCGExPaths
 		}
 	}
 
-	void FPath::BuildPartialEdgeOctree(const TArray<int8>& Filter)
-	{
-		if (EdgeOctree)
-		{
-			return;
-		}
-		EdgeOctree = MakeUnique<FPathEdgeOctree>(Bounds.GetCenter(), Bounds.GetExtent().Length() + 10);
-		for (int i = 0; i < Edges.Num(); i++)
-		{
-			FPathEdge& Edge = Edges[i];
-			if (!Filter[i] || !IsEdgeValid(Edge))
-			{
-				continue;
-			}                              // Skip filtered out & zero-length edges
-			EdgeOctree->AddElement(&Edge); // Might be a problem if edges gets reallocated
-		}
-	}
-
 	void FPath::BuildPartialEdgeOctree(const TBitArray<>& Filter)
 	{
 		if (EdgeOctree)

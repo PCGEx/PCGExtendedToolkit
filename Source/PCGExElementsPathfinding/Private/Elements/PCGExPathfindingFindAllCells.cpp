@@ -3,7 +3,6 @@
 
 #include "Elements/PCGExPathfindingFindAllCells.h"
 
-#include "Containers/Queue.h"
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Clusters/Artifacts/PCGExCell.h"
@@ -188,57 +187,12 @@ namespace PCGExFindAllCells
 		const bool bNeedFailedCells = Context->HoleGrowth.HasPotentialGrowth() && Holes;
 		Enumerator->EnumerateAllFaces(ValidCells, CellsConstraints.ToSharedRef(), bNeedFailedCells ? &FailedCells : nullptr, Settings->Constraints.bOmitWrappingBounds);
 
-		// Process hole growth expansion if enabled
+		// Hole growth: a cell holding a hole already failed; this drops the cells around it too.
 		if (bNeedFailedCells && !FailedCells.IsEmpty())
 		{
-			// Build adjacency map
-			int32 WrapperFaceIndex = Enumerator->GetWrapperFaceIndex();
-			CellAdjacencyMap = Enumerator->GetOrBuildAdjacencyMap(WrapperFaceIndex);
-
-			// Find cells that failed due to holes and expand exclusion
-			const int32 NumHoles = Context->HolesFacade->GetNum();
-			const TConstPCGValueRange<FTransform> HoleTransforms = Context->HolesFacade->GetIn()->GetConstTransformValueRange();
-			for (const TSharedPtr<PCGExClusters::FCell>& FailedCell : FailedCells)
-			{
-				if (!FailedCell || FailedCell->Polygon.IsEmpty() || FailedCell->FaceIndex < 0)
-				{
-					continue;
-				}
-
-				// Check if this cell contains a hole (per-face frame in LocalTangent -- see FCell::ContainsPoint)
-				bool bContainsHole = false;
-				int32 HoleIndex = -1;
-				for (int32 i = 0; i < NumHoles && !bContainsHole; ++i)
-				{
-					if (FailedCell->ContainsPoint(Holes->GetProjected(i), HoleTransforms[i].GetLocation()))
-					{
-						bContainsHole = true;
-						HoleIndex = i;
-					}
-				}
-
-				if (bContainsHole && HoleIndex >= 0)
-				{
-					// Mark this cell for exclusion
-					ExcludedFaceIndices.Add(FailedCell->FaceIndex);
-
-					// Expand to adjacent cells
-					const int32 Growth = Context->HoleGrowth.GetGrowth(HoleIndex);
-					if (Growth > 0)
-					{
-						ExpandHoleExclusion(HoleIndex, FailedCell->FaceIndex, Growth);
-					}
-				}
-			}
-
-			// Remove excluded cells from ValidCells
-			if (!ExcludedFaceIndices.IsEmpty())
-			{
-				ValidCells.RemoveAll([this](const TSharedPtr<PCGExClusters::FCell>& Cell)
-				{
-					return Cell && Cell->FaceIndex >= 0 && ExcludedFaceIndices.Contains(Cell->FaceIndex);
-				});
-			}
+			PCGExClusters::ExcludeHoleCells(
+				ValidCells, FailedCells, *Holes, Context->HolesFacade.ToSharedRef(),
+				Enumerator->GetOrBuildAdjacencyMap(Enumerator->GetWrapperFaceIndex()), Context->HoleGrowth);
 		}
 
 		// Merge adjacent valid cells into connected components when enabled
@@ -255,59 +209,32 @@ namespace PCGExFindAllCells
 			}
 		}
 
-		// Initialize cell processor
+		// The wrapper is only kept as the sole cell, and never goes through the merge.
+		if (ValidCells.IsEmpty() && CellsConstraints->WrapperCell && Settings->Constraints.bKeepWrapperIfSolePath)
+		{
+			ValidCells.Add(CellsConstraints->WrapperCell);
+		}
+
+		const int32 NumCells = ValidCells.Num();
+		if (NumCells == 0)
+		{
+			return true;
+		}
+
 		CellProcessor = MakeShared<PCGExClusters::FCellPathBuilder>();
 		CellProcessor->Cluster = Cluster;
 		CellProcessor->TaskManager = TaskManager;
 		CellProcessor->Artifacts = &Context->Artifacts;
 		CellProcessor->EdgeDataFacade = EdgeDataFacade;
 
-		const int32 NumCells = ValidCells.Num();
-
-		if (NumCells == 0)
-		{
-			// Check if we should output the wrapper cell as the sole cell
-			if (CellsConstraints->WrapperCell && Settings->Constraints.bKeepWrapperIfSolePath)
-			{
-				TArray<TSharedPtr<PCGExClusters::FCell>> WrapperArray;
-				WrapperArray.Add(CellsConstraints->WrapperCell);
-
-				if (Settings->Artifacts.bOutputCellBounds)
-				{
-					TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
-					if (!OBBPointIO)
-					{
-						return false;
-					}
-
-					OBBPointIO->IOIndex = EdgeDataFacade->Source->IOIndex;
-					PCGExClusters::Helpers::CleanupClusterData(OBBPointIO);
-
-					PCGEX_MAKE_SHARED(OBBFacade, PCGExData::FFacade, OBBPointIO.ToSharedRef())
-					PCGExClusters::ProcessCellsAsOBBPoints(Cluster, WrapperArray, OBBFacade, Context->Artifacts, TaskManager);
-				}
-
-				if (Settings->Artifacts.bOutputPaths)
-				{
-					CellProcessor->ProcessCell(CellsConstraints->WrapperCell, Context->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxDataFacade->Source, PCGExData::EIOInit::New));
-				}
-			}
-			return true;
-		}
-
 		if (Settings->Artifacts.bOutputCellBounds)
 		{
-			TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
-			if (!OBBPointIO)
+			if (!PCGExClusters::ProcessCellsAsOBBPoints(
+				Cluster, ValidCells, Context->OutputCellBounds, VtxDataFacade->Source,
+				PCGExData::FIOSortKey{EdgeDataFacade->Source->IOIndex}, Context->Artifacts, TaskManager))
 			{
 				return false;
 			}
-
-			OBBPointIO->IOIndex = EdgeDataFacade->Source->IOIndex;
-			PCGExClusters::Helpers::CleanupClusterData(OBBPointIO);
-
-			PCGEX_MAKE_SHARED(OBBFacade, PCGExData::FFacade, OBBPointIO.ToSharedRef())
-			PCGExClusters::ProcessCellsAsOBBPoints(Cluster, ValidCells, OBBFacade, Context->Artifacts, TaskManager);
 		}
 
 		if (Settings->Artifacts.bOutputPaths)
@@ -333,63 +260,6 @@ namespace PCGExFindAllCells
 				CellProcessor->ProcessCell(ValidCells[Index], IO, TEXT(""), Index);
 			}
 			ValidCells[Index] = nullptr;
-		}
-	}
-
-	void FProcessor::ExpandHoleExclusion(int32 HoleIndex, int32 InitialFaceIndex, int32 MaxGrowth)
-	{
-		if (MaxGrowth <= 0)
-		{
-			return;
-		}
-		if (CellAdjacencyMap.IsEmpty())
-		{
-			return;
-		}
-
-		TSet<int32> Visited;
-		Visited.Add(InitialFaceIndex); // Don't re-visit the initial cell
-
-		TQueue<TPair<int32, int32>> Queue; // FaceIndex, CurrentDepth
-
-		// Start with immediate neighbors (depth 1)
-		if (const TSet<int32>* Adjacent = CellAdjacencyMap.Find(InitialFaceIndex))
-		{
-			for (int32 AdjFace : *Adjacent)
-			{
-				if (AdjFace >= 0 && !Visited.Contains(AdjFace))
-				{
-					Queue.Enqueue({AdjFace, 1});
-					Visited.Add(AdjFace);
-				}
-			}
-		}
-
-		while (!Queue.IsEmpty())
-		{
-			TPair<int32, int32> Current;
-			Queue.Dequeue(Current);
-			const int32 FaceIndex = Current.Key;
-			const int32 Depth = Current.Value;
-
-			// Mark this face for exclusion
-			ExcludedFaceIndices.Add(FaceIndex);
-
-			// Continue BFS if not at max depth
-			if (Depth < MaxGrowth)
-			{
-				if (const TSet<int32>* Adjacent = CellAdjacencyMap.Find(FaceIndex))
-				{
-					for (int32 AdjFace : *Adjacent)
-					{
-						if (AdjFace >= 0 && !Visited.Contains(AdjFace))
-						{
-							Queue.Enqueue({AdjFace, Depth + 1});
-							Visited.Add(AdjFace);
-						}
-					}
-				}
-			}
 		}
 	}
 

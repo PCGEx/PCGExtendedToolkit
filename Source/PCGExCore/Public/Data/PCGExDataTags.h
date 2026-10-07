@@ -11,14 +11,6 @@
 
 #include "PCGExDataTags.generated.h"
 
-#define PCGEX_FOREACH_SUPPORTEDTAGTYPE(MACRO) \
-MACRO(Integer, int64) \
-MACRO(FloatingPoint, double) \
-MACRO(String, FString) \
-MACRO(Vector2, FVector2D) \
-MACRO(Vector, FVector) \
-MACRO(Vector4, FVector4)
-
 UENUM()
 enum class EPCGExSupportedTagValue : uint8
 {
@@ -145,8 +137,5 @@ namespace PCGExData
 
 	protected:
 		void ParseAndAdd(const FString& InTag);
-
-		// NAME:VALUE
-		static bool GetTagFromString(const FString& Input, FString& OutKey, FString& OutValue);
 	};
 }

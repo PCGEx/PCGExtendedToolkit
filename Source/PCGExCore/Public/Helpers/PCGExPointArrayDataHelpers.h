@@ -73,8 +73,6 @@ namespace PCGExPointArrayDataHelpers
 
 	PCGEXCORE_API int32 SetNumPointsAllocated(UPCGBasePointData* InData, const int32 InNumPoints, EPCGPointNativeProperties Properties = EPCGPointNativeProperties::All);
 
-	PCGEXCORE_API bool EnsureMinNumPoints(UPCGBasePointData* InData, const int32 InNumPoints);
-
 	PCGEXCORE_API void InitEmptyNativeProperties(const UPCGData* From, UPCGData* To, EPCGPointNativeProperties Properties = EPCGPointNativeProperties::All);
 
 	PCGEXCORE_API EPCGPointNativeProperties GetPointNativeProperties(uint8 Flags);

@@ -202,30 +202,6 @@ namespace PCGExNoise3D
 		}
 
 		//
-		// Distance Functions
-		//
-
-		FORCEINLINE double DistanceEuclidean(const FVector& A, const FVector& B)
-		{
-			return FVector::Dist(A, B);
-		}
-
-		FORCEINLINE double DistanceEuclideanSq(const FVector& A, const FVector& B)
-		{
-			return FVector::DistSquared(A, B);
-		}
-
-		FORCEINLINE double DistanceManhattan(const FVector& A, const FVector& B)
-		{
-			return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y) + FMath::Abs(A.Z - B.Z);
-		}
-
-		FORCEINLINE double DistanceChebyshev(const FVector& A, const FVector& B)
-		{
-			return FMath::Max3(FMath::Abs(A.X - B.X), FMath::Abs(A.Y - B.Y), FMath::Abs(A.Z - B.Z));
-		}
-
-		//
 		// Remapping
 		//
 

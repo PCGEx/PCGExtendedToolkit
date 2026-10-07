@@ -7,7 +7,6 @@
 #include "RHITransientResourceAllocator.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExSettings.h"
-#include "Details/PCGExWaitMacros.h"
 #include "Factories/PCGExInstancedFactory.h"
 #include "Helpers/PCGAsync.h"
 #include "Helpers/PCGExArrayHelpers.h"

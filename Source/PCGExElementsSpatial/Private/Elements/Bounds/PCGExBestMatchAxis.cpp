@@ -140,12 +140,8 @@ namespace PCGExBestMatchAxis
 
 		if (Context->TargetsHandler)
 		{
-			IgnoreList.Add(PointDataFacade->GetIn());
-
-			if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-				!Context->TargetsHandler->PopulateIgnoreList(PointDataFacade->Source, MatchingScope, IgnoreList))
+			if (!Context->TargetsHandler->BuildIgnoreList(PointDataFacade, Context->InitialMainPointsNum, true, IgnoreList))
 			{
-				(void)Context->TargetsHandler->HandleUnmatchedOutput(PointDataFacade, true);
 				return false;
 			}
 		}

@@ -255,6 +255,8 @@ bool FPCGExEntryQuotaPickerOp::OnInitForData(FPCGExContext* InContext, const TSh
 		ChildOp = ChildFactory->CreateEntryOperation(InContext);
 		if (ChildOp)
 		{
+			ChildOp->bCleanupConsumableAttributes = ChildFactory->bCleanupConsumableAttributes;
+
 			if (const TSharedPtr<FPCGExCascadeSharedData> Composite = StaticCastSharedPtr<FPCGExCascadeSharedData>(Shared->ChildSharedData);
 				Composite && Composite->PerChild.Num() == 1)
 			{

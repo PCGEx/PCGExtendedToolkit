@@ -51,6 +51,35 @@ namespace PCGExMT
 		return OutSubRanges.Num();
 	}
 
+	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, const FScopedLoopBody& Body)
+	{
+		if (Scopes.Num() == 1 || bForceSingleThreaded)
+		{
+			for (const FScope& S : Scopes)
+			{
+				if (!WorkHandle.IsValid())
+				{
+					break;
+				}
+				Body(S);
+			}
+		}
+		else
+		{
+			PCGExMT::ParallelOrSequential(
+				Scopes.Num(),
+				[&Scopes, &WorkHandle, &Body](const int32 i)
+				{
+					if (!WorkHandle.IsValid())
+					{
+						return;
+					}
+					Body(Scopes[i]);
+				},
+				/*Threshold=*/2, EParallelForFlags::Unbalanced);
+		}
+	}
+
 	// IAsyncHandle
 	IAsyncHandle::~IAsyncHandle()
 	{

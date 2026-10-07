@@ -5,6 +5,8 @@
 
 #include "PCGExApplySamplingDetails.generated.h"
 
+enum class EPCGPointNativeProperties : uint32;
+
 namespace PCGExData
 {
 	struct FMutablePoint;
@@ -56,6 +58,9 @@ struct PCGEXBLENDING_API FPCGExApplySamplingDetails
 	//TArray<int32> LkScaComponents;
 
 	bool WantsApply() const;
+
+	/** Native properties Apply writes to; allocate them on the output first. */
+	EPCGPointNativeProperties GetAllocations() const;
 
 	void Init();
 

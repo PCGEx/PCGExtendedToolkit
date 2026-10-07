@@ -103,6 +103,7 @@ double FPCGExNoiseSwiss::GenerateRaw(const FVector& Position) const
 
 double FPCGExNoiseSwiss::GetDouble(const FVector& Position) const
 {
+	const FVector P = TransformPosition(Position);
 	double Sum = 0.0;
 	double Amp = 1.0;
 	double Freq = Frequency;
@@ -111,7 +112,7 @@ double FPCGExNoiseSwiss::GetDouble(const FVector& Position) const
 	for (int32 i = 0; i < Octaves; ++i)
 	{
 		// Warp position based on accumulated derivatives
-		const FVector WarpedPos = Position * Freq + DerivSum * WarpFactor;
+		const FVector WarpedPos = P * Freq + DerivSum * WarpFactor;
 
 		double Value;
 		FVector Deriv;

@@ -383,12 +383,6 @@ namespace PCGExData
 			Out->Metadata->InitializeOnSet(MetadataEntries[Index], ParentKey, In->Metadata);
 		}
 
-		void InitPoint(int32 Index) const
-		{
-			TPCGValueRange<int64> MetadataEntries = Out->GetMetadataEntryValueRange();
-			Out->Metadata->InitializeOnSet(MetadataEntries[Index]);
-		}
-
 		// There's a recurring need for this to deal with ::New
 		TArray<int32>& GetIdxMapping(const int32 NumElements = -1);
 		void ClearIdxMapping();

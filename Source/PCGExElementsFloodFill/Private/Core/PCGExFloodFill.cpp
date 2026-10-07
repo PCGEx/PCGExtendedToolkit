@@ -263,6 +263,7 @@ namespace PCGExFloodFill
 					return false;
 				}
 
+				Op->bCleanupConsumableAttributes = Factory->bCleanupConsumableAttributes;
 				Operations.Add(Op);
 				if (Op->DoesScoring())
 				{

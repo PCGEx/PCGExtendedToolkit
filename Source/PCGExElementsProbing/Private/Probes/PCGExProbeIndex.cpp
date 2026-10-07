@@ -68,8 +68,7 @@ bool FPCGExProbeIndex::Prepare(FPCGExContext* InContext)
 	case EPCGExProbeTargetMode::OneWayOffset: PCGEX_FOREACH_SANITIZEINDEX(PCGEX_TARGET_CONNECT_ONEWAY, _VALUE) break;\
 	case EPCGExProbeTargetMode::TwoWayOffset: PCGEX_FOREACH_SANITIZEINDEX(PCGEX_TARGET_CONNECT_TWOWAY, _VALUE) break; }
 
-	TargetCache = Config.Index.GetValueSetting();
-	if (!TargetCache->Init(PrimaryDataFacade))
+	if (!InitSettingValue(TargetCache, Config.Index.GetValueSetting(), PrimaryDataFacade))
 	{
 		return false;
 	}

@@ -20,6 +20,7 @@
 #include "Data/PCGExPointElements.h"
 #include "Data/PCGExSubSelection.h"
 #include "Factories/PCGExFactories.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Types/PCGExTypeOpsImpl.h"
@@ -255,12 +256,8 @@ bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
 	for (const FPCGExAttributeSourceToTargetDetails& Mapping : Settings->AttributeMappings) { RouteMapping(Mapping); }
 
 	// Comma tokens and schema names are never remapped: the typed string is the source, output keeps that name.
-	TArray<FString> ExtraTokens;
-	Settings->CommaSeparatedAttributeSelectors.ParseIntoArray(ExtraTokens, TEXT(","), true);
-	for (FString& Token : ExtraTokens)
+	for (const FString& Token : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(Settings->CommaSeparatedAttributeSelectors))
 	{
-		Token.TrimStartAndEndInline();
-		if (Token.IsEmpty()) { continue; }
 		RouteMapping(FPCGExAttributeSourceToTargetDetails(FName(*Token)));
 	}
 

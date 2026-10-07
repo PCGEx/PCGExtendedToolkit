@@ -61,9 +61,6 @@ namespace PCGExMatching
 		MatchMode = Details->Mode;
 	}
 
-
-#define PCGEX_MATCH_SOURCE_LABEL InSourceLabel.IsNone() ? Labels::SourceMatchRulesLabel : InSourceLabel
-
 	bool FDataMatcher::Init(
 		FPCGExContext* InContext,
 		const TArray<const UPCGData*>& InMatchableSources,

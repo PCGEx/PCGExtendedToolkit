@@ -63,8 +63,7 @@ bool FPCGExVtxPropertyAmplitude::PrepareForCluster(FPCGExContext* InContext, TSh
 
 	if (Config.bWriteAmplitudeSign && Config.UpMode == EPCGExVtxAmplitudeUpMode::UpVector)
 	{
-		DirCache = Config.UpVector.GetValueSetting();
-		if (!DirCache->Init(InVtxDataFacade, false))
+		if (!InitSettingValue(DirCache, Config.UpVector.GetValueSetting(), InVtxDataFacade, false))
 		{
 			bIsValidOperation = false;
 			return false;

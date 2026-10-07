@@ -199,6 +199,10 @@ bool FPCGExBoundsPathIntersectionElement::AdvanceWork(FPCGExContext* InContext, 
 		};
 
 		Context->TargetsHandler->StartLoading(Context->GetTaskManager());
+		if (Context->IsWaitingForTasks())
+		{
+			return false;
+		}
 	}
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
@@ -230,11 +234,8 @@ namespace PCGExBoundsPathIntersection
 		SubBlending = Context->Blending->CreateOperation();
 		SubBlending->bClosedLoop = bClosedLoop;
 
-		IgnoreList.Add(PointDataFacade->GetIn());
-		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-			!Context->TargetsHandler->PopulateIgnoreList(PointDataFacade->Source, MatchingScope, IgnoreList))
+		if (!Context->TargetsHandler->BuildIgnoreList(PointDataFacade, Context->InitialMainPointsNum, true, IgnoreList))
 		{
-			(void)Context->TargetsHandler->HandleUnmatchedOutput(PointDataFacade, true);
 			return false;
 		}
 

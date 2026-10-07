@@ -113,7 +113,7 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 		}
 
 		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules());
-		InContext->OutputData.TaggedData.Emplace(Input);
+		Context->StageOutput(const_cast<UPCGData*>(Input.Data.Get()), PCGExTopology::Labels::SourceMeshLabel, PCGExData::EStaging::None, Input.Tags);
 		Context->AddNotifyActor(TargetActor);
 	}
 

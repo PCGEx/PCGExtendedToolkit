@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Details/PCGExSettingsDetails.h"
 #include "UObject/Object.h"
 
 namespace PCGExData
@@ -42,6 +43,8 @@ public:
 	TSharedPtr<PCGExData::FFacade> PrimaryDataFacade;
 	TSharedPtr<PCGExData::FFacade> SecondaryDataFacade;
 
+	/** Factory stage of the consumable veto chain: whoever creates this operation from a pin factory copies the factory's toggle here. Node-owned operations keep the default. */
+	bool bCleanupConsumableAttributes = true;
 
 	virtual void RegisterConsumableAttributesWithFacade(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InFacade) const;
 	virtual void RegisterPrimaryBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) const;
@@ -51,6 +54,13 @@ public:
 
 protected:
 	FPCGExContext* Context = nullptr;
+
+	/** Inits an operand read through a setting value, with bCleanupConsumableAttributes as its factory gate. */
+	template <typename T>
+	[[nodiscard]] bool InitSettingValue(TSharedPtr<PCGExDetails::TSettingValue<T>>& OutValue, TSharedPtr<PCGExDetails::TSettingValue<T>> InValue, const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false) const
+	{
+		return PCGExDetails::InitSettingValueGated(OutValue, MoveTemp(InValue), bCleanupConsumableAttributes, InDataFacade, bSupportScoped, bCaptureMinMax);
+	}
 
 	//~End UPCGExOperation interface
 };

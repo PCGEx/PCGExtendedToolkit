@@ -205,20 +205,7 @@ namespace PCGExSelfPruning
 			const bool bHasRuleOrder = Sorter->Init(Context);
 			if (bHasRuleOrder)
 			{
-				if (TSharedPtr<PCGExSorting::FSortCache> Cache = Sorter->BuildCache(NumPoints))
-				{
-					Order.Sort([&](const int32 A, const int32 B)
-					{
-						return Cache->Compare(A, B);
-					});
-				}
-				else
-				{
-					Order.Sort([&](const int32 A, const int32 B)
-					{
-						return Sorter->Sort(A, B);
-					});
-				}
+				Sorter->SortIndices(Order, NumPoints);
 			}
 
 			if (Settings->bRandomize)

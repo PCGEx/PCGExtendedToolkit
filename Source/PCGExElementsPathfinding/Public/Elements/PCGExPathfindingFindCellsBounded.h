@@ -5,9 +5,9 @@
 
 #include "CoreMinimal.h"
 #include "Clusters/Artifacts/PCGExCellDetails.h"
+#include "Clusters/Artifacts/PCGExCellTriage.h"
 #include "Containers/PCGExScopedContainers.h"
 
-#include "PCGExPathfindingFindAllCellsBounded.h"
 #include "Clusters/Artifacts/PCGExCell.h"
 #include "Core/PCGExClustersProcessor.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
@@ -18,34 +18,22 @@
 
 namespace PCGExClusters
 {
-	class FProjectedPointSet;
 	class FCellConstraints;
 	class FCellPathBuilder;
 	class FCell;
 }
 
-namespace PCGExMT
+namespace PCGExCells
 {
-	template <typename T>
-	class TScopedArray;
+	class FSeededCellResolver;
 }
-
 
 namespace PCGExFindContoursBounded
 {
 	class FProcessor;
 
-	const FName SourceBoundsLabel = FName("Bounds");
 	const FName OutputGoodSeedsLabel = TEXT("SeedGenSuccess");
 	const FName OutputBadSeedsLabel = TEXT("SeedGenFailed");
-
-	const FName OutputPathsInsideLabel = FName("Paths : Inside");
-	const FName OutputPathsTouchingLabel = FName("Paths : Touching");
-	const FName OutputPathsOutsideLabel = FName("Paths : Outside");
-
-	const FName OutputBoundsInsideLabel = FName("Bounds : Inside");
-	const FName OutputBoundsTouchingLabel = FName("Bounds : Touching");
-	const FName OutputBoundsOutsideLabel = FName("Bounds : Outside");
 }
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cells/find-cells-bounded"))
@@ -173,16 +161,7 @@ struct FPCGExFindContoursBoundedContext final : FPCGExClustersProcessorContext
 	TSharedPtr<PCGExData::FFacade> SeedsDataFacade;
 	TSharedPtr<PCGExCells::FSeedOwnershipHandler> SeedOwnership;
 
-	FBox BoundsFilter = FBox(ForceInit);
-
-	// Separate output collections for each triage category
-	TSharedPtr<PCGExData::FPointIOCollection> OutputPathsInside;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputPathsTouching;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputPathsOutside;
-
-	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBoundsInside;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBoundsTouching;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBoundsOutside;
+	PCGExCellTriage::FOutputs Triage;
 
 	TSharedPtr<PCGExData::FPointIO> GoodSeeds;
 	TSharedPtr<PCGExData::FPointIO> BadSeeds;
@@ -207,51 +186,15 @@ protected:
 
 namespace PCGExFindContoursBounded
 {
-	// Use shared triage result enum from PCGExCellDetails.h
-	using ECellTriageResult = EPCGExCellTriageResult;
-
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExFindContoursBoundedContext, UPCGExFindContoursBoundedSettings>
 	{
 	protected:
-		TSharedPtr<PCGExClusters::FProjectedPointSet> Seeds;
+		/** Seed-to-cell resolution; released once the claims are final. */
+		TSharedPtr<PCGExCells::FSeededCellResolver> Resolver;
 		TSharedPtr<PCGExClusters::FCellPathBuilder> CellProcessor;
-		TArray<TSharedPtr<PCGExClusters::FCell>> EnumeratedCells;
-		TArray<TSharedPtr<PCGExClusters::FCell>> AllCellsIncludingFailed;
 		TSharedPtr<PCGExClusters::FCell> WrapperCell;
 
-		/** Per-seed result of Seed Picking's cluster-bounds gate, precomputed once (all-true when the gate is off). */
-		TBitArray<> SeedInBounds;
-
-		/** LocalTangent only: per-seed FaceIndex of its nearest-plane containing cell (INDEX_NONE = none).
-		 *  STACKED parallel cells both contain a sandwiched seed's projection; this arbitrates the claim.
-		 *  Empty on planar builds, where faces are disjoint in the shared 2D space. */
-		TArray<int32> SeedBestFace;
-
-		/** Inverse of SeedBestFace, built once after arbitration: FaceIndex -> its claiming seeds.
-		 *  Turns ProcessRange's per-cell seed scan into a single lookup. */
-		TMap<int32, TArray<int32>> SeedFaceClaims;
-
-		/** LocalTangent only: the failed cells alone -- arbitration already proves membership in VALID
-		 *  cells, so the wrapper consumption sweep only needs to test these. */
-		TArray<TSharedPtr<PCGExClusters::FCell>> FailedCellsOnly;
-
-		TSharedPtr<PCGExMT::TScopedArray<TSharedPtr<PCGExClusters::FCell>>> ScopedValidCells;
-
-		TArray<TSharedPtr<PCGExClusters::FCell>> CellsInside;
-		TArray<TSharedPtr<PCGExClusters::FCell>> CellsTouching;
-		TArray<TSharedPtr<PCGExClusters::FCell>> CellsOutside;
-
-		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOInside;
-		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOTouching;
-		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOOutside;
-
-		// For Combined mode tagging
-		TArray<FString> CellTagsInside;
-		TArray<FString> CellTagsTouching;
-		TArray<FString> CellTagsOutside;
-
-		/** Owned by the enumerator, outlives processing. */
-		const TMap<int32, TSet<int32>>* CellAdjacencyMap = nullptr;
+		PCGExCellTriage::FBuckets Buckets;
 
 	public:
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;
@@ -269,11 +212,6 @@ namespace PCGExFindContoursBounded
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 		virtual void OnRangeProcessingComplete() override;
 
-		void HandleWrapperOnlyCase(const int32 NumSeeds);
-
 		virtual void Cleanup() override;
-
-	protected:
-		ECellTriageResult ClassifyCell(const TSharedPtr<PCGExClusters::FCell>& InCell) const;
 	};
 }

@@ -6,6 +6,7 @@
 
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExScopedContainers.h"
+#include "Core/PCGExMTCommon.h"
 #include "Data/PCGExData.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 
@@ -137,7 +138,8 @@ namespace PCGExEdgeOrder
 		}
 
 		Depths.Init(-1, NumNodes);
-		Seeded.Init(0, NumNodes);
+		Seeded.Init(MAX_int32, NumNodes);
+		SeedClosestNode.Init(-1, Context->SeedsDataFacade->GetNum());
 
 		if (Settings->bUseOctreeSearch)
 		{
@@ -150,12 +152,6 @@ namespace PCGExEdgeOrder
 		{
 			PCGEX_ASYNC_THIS
 			This->RunDFS();
-		};
-
-		SeedPickingGroup->OnPrepareSubLoopsCallback = [PCGEX_ASYNC_THIS_CAPTURE](const TArray<PCGExMT::FScope>& Loops)
-		{
-			PCGEX_ASYNC_THIS
-			This->SeedNodeIndices = MakeShared<PCGExMT::TScopedArray<int32>>(Loops);
 		};
 
 		SeedPickingGroup->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
@@ -174,12 +170,10 @@ namespace PCGExEdgeOrder
 					continue;
 				}
 
-				if (FPlatformAtomics::InterlockedCompareExchange(&This->Seeded[ClosestIndex], 1, 0) == 1)
-				{
-					continue;
-				}
+				This->SeedClosestNode[Index] = ClosestIndex;
 
-				This->SeedNodeIndices->Get(Scope)->Add(ClosestIndex);
+				// Contested nodes go to the lowest seed index, whatever the thread scheduling.
+				PCGExMT::AtomicMin(This->Seeded[ClosestIndex], Index);
 			}
 		};
 
@@ -190,8 +184,20 @@ namespace PCGExEdgeOrder
 
 	void FProcessor::RunDFS()
 	{
-		SeedNodeIndices->Collapse(CollectedSeeds);
-		SeedNodeIndices.Reset();
+		// Winning seeds only, in ascending seed order.
+		const int32 NumSeeds = SeedClosestNode.Num();
+		CollectedSeeds.Reserve(NumSeeds);
+		for (int32 SeedIdx = 0; SeedIdx < NumSeeds; SeedIdx++)
+		{
+			const int32 NodeIdx = SeedClosestNode[SeedIdx];
+			if (NodeIdx >= 0 && Seeded[NodeIdx] == SeedIdx)
+			{
+				CollectedSeeds.Add(NodeIdx);
+			}
+		}
+
+		Seeded.Empty();
+		SeedClosestNode.Empty();
 
 		if (CollectedSeeds.IsEmpty())
 		{

@@ -19,7 +19,7 @@ TSharedPtr<FPCGExFillControlOperation> UPCGExFillControlsFactoryData::CreateOper
 
 UPCGExFactoryData* UPCGExFillControlsFactoryProviderSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const
 {
-	return InFactory;
+	return Super::CreateFactory(InContext, InFactory);
 }
 
 #undef LOCTEXT_NAMESPACE

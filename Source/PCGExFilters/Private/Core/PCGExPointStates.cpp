@@ -202,9 +202,7 @@ void UPCGExStateFactoryProviderSettings::OutputBitmasks(FPCGExContext* InContext
 	}
 
 	PassBitmask->Metadata->AddEntry();
-	FPCGTaggedData& OutPassData = InContext->OutputData.TaggedData.Emplace_GetRef();
-	OutPassData.Pin = PCGExPointStates::Labels::OutputOnPassBitmaskLabel;
-	OutPassData.Data = PassBitmask;
+	InContext->StageOutput(PassBitmask, PCGExPointStates::Labels::OutputOnPassBitmaskLabel, PCGExData::EStaging::Managed);
 
 	UPCGParamData* FailBitmask = InContext->ManagedObjects->New<UPCGParamData>();
 	if (InConfig.bOnTestFail)
@@ -217,7 +215,5 @@ void UPCGExStateFactoryProviderSettings::OutputBitmasks(FPCGExContext* InContext
 	}
 
 	FailBitmask->Metadata->AddEntry();
-	FPCGTaggedData& OutFailData = InContext->OutputData.TaggedData.Emplace_GetRef();
-	OutFailData.Pin = PCGExPointStates::Labels::OutputOnFailBitmaskLabel;
-	OutFailData.Data = FailBitmask;
+	InContext->StageOutput(FailBitmask, PCGExPointStates::Labels::OutputOnFailBitmaskLabel, PCGExData::EStaging::Managed);
 }

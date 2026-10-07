@@ -99,15 +99,11 @@ struct PCGEXCORE_API FPCGExUVW
 
 	FVector GetPosition(const int32 PointIndex) const;
 
-	FVector GetPosition(const int32 PointIndex, FVector& OutOffset) const;
-
 	// With axis
 
 	FVector GetUVW(const int32 PointIndex, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
 
 	FVector GetPosition(const int32 PointIndex, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
-
-	FVector GetPosition(const int32 PointIndex, FVector& OutOffset, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
 
 #if WITH_EDITOR
 	void ApplyDeprecation();
@@ -143,14 +139,10 @@ namespace PCGExMath
 
 		FVector GetPosition(const PCGExData::FConstPoint& Point) const;
 
-		FVector GetPosition(const PCGExData::FConstPoint& Point, FVector& OutOffset) const;
-
 		// With axis
 
 		FVector GetUVW(const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
 
 		FVector GetPosition(const PCGExData::FConstPoint& Point, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
-
-		FVector GetPosition(const PCGExData::FConstPoint& Point, FVector& OutOffset, const EPCGExMinimalAxis Axis, const bool bMirrorAxis = false) const;
 	};
 }

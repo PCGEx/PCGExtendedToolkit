@@ -20,6 +20,7 @@
 #include "PCGExVersion.h"
 #include "Core/PCGExContext.h"
 #include "Details/PCGExPartitionDetails.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExBulkAttributeHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExDataCacheHelpers"
@@ -83,28 +84,6 @@ namespace PCGExDataCache
 	{
 		if (InCacheID.IsNone()) { return FString(); }
 		return bPartitioned ? PCGExDataCacheHelpers::ComposePartitionedCacheID(TEXT("{Partition}"), InCacheID) : InCacheID.ToString();
-	}
-
-	AActor* GetSourceActor(const IPCGGraphExecutionSource* InSource)
-	{
-		if (!InSource) { return nullptr; }
-#if PCGEX_ENGINE_VERSION >= 508
-		return InSource->GetExecutionState().GetTypedTarget<AActor>();
-#else
-		const UPCGComponent* Component = Cast<UPCGComponent>(InSource);
-		return Component ? Component->GetOwner() : nullptr;
-#endif
-	}
-
-	bool IsSourceInPreviewMode(const IPCGGraphExecutionSource* InSource)
-	{
-		if (!InSource) { return false; }
-#if PCGEX_ENGINE_VERSION >= 508
-		return InSource->GetExecutionState().IsInPreviewMode();
-#else
-		const UPCGComponent* Component = Cast<UPCGComponent>(InSource);
-		return Component && Component->IsInPreviewMode();
-#endif
 	}
 
 	bool IsSelfContained(const UPCGData* InData)
@@ -225,7 +204,7 @@ void UPCGExDataCacheSettingsBase::ResolveTargets(FPCGExContext* InContext, const
 	case EPCGExDataCacheTarget::OriginalActor:
 		if (Source)
 		{
-			Actor = PCGExDataCache::GetSourceActor(Source->GetExecutionState().GetOriginalSource());
+			Actor = PCGExHelpers::GetSourceActor(Source->GetExecutionState().GetOriginalSource());
 			// A source with no original (non-component execution) is its own original.
 			if (!Actor) { Actor = InContext->GetTargetActor(nullptr); }
 		}

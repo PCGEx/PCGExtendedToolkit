@@ -14,6 +14,7 @@
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Sampling/PCGExSamplingHelpers.h"
 
@@ -100,7 +101,7 @@ bool FPCGExSampleNearestSurfaceElement::Boot(FPCGExContext* InContext) const
 			return false;
 		}
 
-		if (!PCGExSampling::Helpers::GetIncludedActors(Context, Context->ActorReferenceDataFacade.ToSharedRef(), Settings->ActorReference, Context->IncludedActors))
+		if (!PCGExHelpers::GetIncludedActors(Context, Context->ActorReferenceDataFacade.ToSharedRef(), Settings->ActorReference, Context->IncludedActors))
 		{
 			return false;
 		}
@@ -211,16 +212,7 @@ namespace PCGExSampleNearestSurface
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		// Allocate edge native properties
-
-		EPCGPointNativeProperties AllocateFor = EPCGPointNativeProperties::None;
-
-		if (Context->ApplySampling.WantsApply())
-		{
-			AllocateFor |= EPCGPointNativeProperties::Transform;
-		}
-
-		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
+		PointDataFacade->GetOut()->AllocateProperties(Context->ApplySampling.GetAllocations());
 
 		SurfacesForward = Context->ActorReferenceDataFacade ? Settings->AttributesForwarding.TryGetHandler(Context->ActorReferenceDataFacade, PointDataFacade, PCGExData::EForwardDomain::Inherit) : nullptr;
 		if (SurfacesForward)

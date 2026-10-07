@@ -731,6 +731,12 @@ namespace PCGExAssetCollection
 		void Compile();
 		void RegisterEntry(int32 Index, const FPCGExAssetCollectionEntry* InEntry);
 	};
+
+	/**
+	 * Seed for the pick one sub-collection level down. Never the parent's own seed: FRandomStream's first draw is
+	 * a pure function of the seed, so a reused seed lands both picks on the same slice of their weight tables.
+	 */
+	PCGEXCOLLECTIONS_API int32 GetNestedPickSeed(int32 InSeed);
 }
 
 /**

@@ -52,9 +52,7 @@ bool FNodeAdjacencyFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 
 	bCaptureFromNodes = TypedFilterFactory->Config.OperandBSource != EPCGExClusterElement::Edge;
 
-	OperandA = TypedFilterFactory->Config.OperandAValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandA->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandA->Init(PointDataFacade, false))
+	if (!InitSettingValue(OperandA, TypedFilterFactory->Config.OperandAValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false))
 	{
 		return false;
 	}
@@ -64,9 +62,7 @@ bool FNodeAdjacencyFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 		return false;
 	}
 
-	OperandB = TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING);
-	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandB->Init(bCaptureFromNodes ? PointDataFacade : EdgeDataFacade, false))
+	if (!InitSettingValue(OperandB, TypedFilterFactory->Config.GetValueSettingOperandB(PCGEX_QUIET_HANDLING), bCaptureFromNodes ? PointDataFacade : EdgeDataFacade, false))
 	{
 		return false;
 	}

@@ -8,6 +8,7 @@
 #include "PCGParamData.h"
 #include "Async/ParallelFor.h"
 #include "Core/PCGExClusterFilter.h"
+#include "Core/PCGExMTCommon.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Graphs/PCGExGraph.h"
@@ -550,9 +551,8 @@ namespace PCGExRefineEdges
 
 			if (ResultOutputVtx.bEnabled)
 			{
-				if (Nodes.Num() > 1024)
-				{
-					ParallelFor(Nodes.Num(), [&](const int32 i)
+				PCGExMT::ParallelOrSequential(
+					Nodes.Num(), [&](const int32 i)
 					{
 						PCGExClusters::FNode& Node = Nodes[i];
 						if (Node.bValid)
@@ -569,28 +569,7 @@ namespace PCGExRefineEdges
 							ResultOutputVtx.Write(Node.PointIndex, static_cast<bool>(Node.bValid));
 							Node.bValid = true;
 						}
-					});
-				}
-				else
-				{
-					for (PCGExClusters::FNode& Node : Nodes)
-					{
-						if (Node.bValid)
-						{
-							int32 ValidCount = 0;
-							for (const PCGExGraphs::FLink& Lk : Node.Links)
-							{
-								ValidCount += Edges[Lk.Edge].bValid;
-							}
-							ResultOutputVtx.Write(Node.PointIndex, static_cast<bool>(ValidCount));
-						}
-						else
-						{
-							ResultOutputVtx.Write(Node.PointIndex, static_cast<bool>(Node.bValid));
-							Node.bValid = true;
-						}
-					}
-				}
+					}, /*Threshold=*/1025);
 			}
 
 			if (ResultOutputEdges.bEnabled)

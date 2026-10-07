@@ -92,9 +92,8 @@ double FPCGExNoiseCurl::ComputeCurlY(const FVector& Position) const
 template <typename ValueType, typename ComputeFn>
 ValueType FPCGExNoiseCurl::AccumulateOctaves(const FVector& Position, ComputeFn&& Compute) const
 {
-	// Load-bearing asymmetry shared by all output arities: octave 0 samples the
-	// transformed position, higher octaves the raw one (kept for compatibility)
-	ValueType Acc = Compute(TransformPosition(Position));
+	const FVector P = TransformPosition(Position);
+	ValueType Acc = Compute(P);
 
 	if (Octaves > 1)
 	{
@@ -105,7 +104,7 @@ ValueType FPCGExNoiseCurl::AccumulateOctaves(const FVector& Position, ComputeFn&
 		{
 			Amp *= Persistence;
 			Freq *= Lacunarity;
-			Acc += Compute(Position * Freq) * Amp;
+			Acc += Compute(P * Freq) * Amp;
 		}
 
 		Acc *= FractalBounding;

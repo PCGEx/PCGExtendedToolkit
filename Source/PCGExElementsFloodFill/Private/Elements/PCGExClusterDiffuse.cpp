@@ -17,6 +17,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExBlendingDetails.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Factories/PCGExFactories.h"
 #include "Types/PCGExAttributeIdentity.h"
 
 #define LOCTEXT_NAMESPACE "PCGExClusterDiffuse"
@@ -116,11 +117,7 @@ bool FPCGExClusterDiffuseElement::Boot(FPCGExContext* InContext) const
 	// Build the Falloff shaping curve once. Linear (default) = identity; applied to the [0,1] intensity in Falloff space only.
 	Context->FalloffLUT = Settings->FalloffCurveLookup.MakeLookup(
 		Settings->bUseLocalFalloffCurve, Settings->LocalFalloffCurve, Settings->FalloffCurve,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 
 	return true;
 }
@@ -445,10 +442,7 @@ namespace PCGExClusterDiffuse
 		// Vtx-participation toggle may read from a vtx attribute -- preload it.
 		Settings->VtxParticipates.RegisterBufferDependencies(Context, FacadePreloader);
 
-		for (const TObjectPtr<const UPCGExFillControlsFactoryData>& Factory : Context->FillControlFactories)
-		{
-			Factory->RegisterBuffersDependencies(Context, FacadePreloader);
-		}
+		PCGExFactories::RegisterBuffersDependencies(Context->FillControlFactories, Context, FacadePreloader);
 	}
 
 	void FBatch::Process()

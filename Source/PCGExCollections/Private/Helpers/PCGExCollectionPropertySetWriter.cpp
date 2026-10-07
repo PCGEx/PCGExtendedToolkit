@@ -8,6 +8,7 @@
 #include "Core/PCGExContext.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
@@ -297,14 +298,7 @@ namespace PCGExCollections
 				const FPCGAttributeIdentifier Id = PCGExMetaHelpers::GetAttributeIdentifier(ResolvedName, InData);
 				M->FindOrCreateAttribute<T_VALUE>(Id, DefaultValue, false, true);
 
-				FPCGAttributePropertyInputSelector Selector;
-				Selector.Update(ResolvedName.ToString());
-				Selector = Selector.CopyAndFixLast(InData);
-				TUniquePtr<IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateAccessor(InData, Selector);
-				if (Accessor)
-				{
-					Accessor->SetRange<T_VALUE>(Values, 0, *Keys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
-				}
+				PCGExData::Helpers::BulkWriteRows<T_VALUE>(InData, ResolvedName, Values, *Keys);
 			});
 		}
 	}

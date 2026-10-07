@@ -71,12 +71,12 @@ bool PCGExPointFilter::FStringCompareFilter::Init(FPCGExContext* InContext, cons
 			return false;
 		}
 
-		// Direct MakeSettingValue bypasses the shorthand getter: apply both the per-operand and factory gates.
+		// Direct MakeSettingValue bypasses the shorthand getter: seed the per-operand toggle and quiet by hand.
 		const FPCGExInputShorthandSelectorString& OperandBValue = TypedFilterFactory->Config.OperandBValue;
-		OperandBName = PCGExDetails::MakeSettingValue<FName>(OperandBValue.Input, OperandBValue.Attribute, FName(OperandBValue.Constant));
-		OperandBName->bRegisterConsumable = OperandBValue.bCleanupAttribute && TypedFilterFactory->bCleanupConsumableAttributes;
-		OperandBName->bQuiet = PCGEX_QUIET_HANDLING;
-		return OperandBName->Init(PointDataFacade, false);
+		const TSharedPtr<PCGExDetails::TSettingValue<FName>> NameValue = PCGExDetails::MakeSettingValue<FName>(OperandBValue.Input, OperandBValue.Attribute, FName(OperandBValue.Constant));
+		NameValue->bRegisterConsumable = OperandBValue.bCleanupAttribute;
+		NameValue->bQuiet = PCGEX_QUIET_HANDLING;
+		return InitSettingValue(OperandBName, NameValue, PointDataFacade, false);
 	}
 
 	OperandA = MakeShared<PCGExData::TAttributeBroadcaster<FString>>();
@@ -86,9 +86,7 @@ bool PCGExPointFilter::FStringCompareFilter::Init(FPCGExContext* InContext, cons
 		return false;
 	}
 
-	OperandB = TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	return OperandB->Init(PointDataFacade, false);
+	return InitSettingValue(OperandB, TypedFilterFactory->Config.OperandBValue.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade, false);
 }
 
 bool PCGExPointFilter::FStringCompareFilter::Test(const int32 PointIndex) const

@@ -6,7 +6,9 @@
 #include <atomic>
 #include "PCGComponent.h"
 #include "PCGExCoreMacros.h"
+#include "PCGExLog.h"
 #include "PCGExSubSystem.h"
+#include "PCGGraphExecutionStateInterface.h"
 #include "PCGManagedResource.h"
 #include "Async/Async.h"
 #include "Containers/PCGExManagedObjects.h"
@@ -236,7 +238,9 @@ void FPCGExContext::FinalizeMutableOutputs()
 
 UWorld* FPCGExContext::GetWorld() const
 {
-	return GetComponent()->GetWorld();
+	// Through the execution state, not GetComponent(): the source is not always a component.
+	const IPCGGraphExecutionSource* Source = ExecutionSource.Get();
+	return Source ? Source->GetExecutionState().GetWorld() : nullptr;
 }
 
 const UPCGComponent* FPCGExContext::GetComponent() const
@@ -272,7 +276,7 @@ TSharedPtr<PCGExMT::FTaskManager> FPCGExContext::GetTaskManager()
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("OnEnd but no context or element handle!"))
+				UE_LOG(LogPCGEx, Error, TEXT("OnEnd but no context or element handle!"))
 			}
 		};
 	}
@@ -459,7 +463,7 @@ bool FPCGExContext::DriveAdvanceWork(const UPCGExSettings* InSettings)
 	if (bResult && !IsWorkCompleted() && !IsWorkCancelled())
 	{
 		const FString NodeName = InSettings ? InSettings->GetName() : TEXT("Unknown");
-		UE_LOG(LogTemp, Error, TEXT("[%s] AdvanceWork returned true without completing or cancelling. Forcing cancellation to prevent hang. Please report this at https://github.com/Nebukam/PCGExtendedToolkit/issues"), *NodeName);
+		UE_LOG(LogPCGEx, Error, TEXT("[%s] AdvanceWork returned true without completing or cancelling. Forcing cancellation to prevent hang. Please report this at https://github.com/Nebukam/PCGExtendedToolkit/issues"), *NodeName);
 		CancelExecution(FString::Printf(TEXT("[%s] AdvanceWork returned true without proper finalization. Please report this issue."), *NodeName));
 	}
 

@@ -53,10 +53,7 @@ void UPCGExFillControlsFactoryVtxFilters::RegisterBuffersDependencies(FPCGExCont
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 
-	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
-	{
-		Factory->RegisterBuffersDependencies(InContext, FacadePreloader);
-	}
+	PCGExPointFilter::RegisterBuffersDependencies(InContext, FilterFactories, FacadePreloader);
 }
 
 bool UPCGExFillControlsFactoryVtxFilters::RegisterConsumableAttributes(FPCGExContext* InContext) const
@@ -68,10 +65,8 @@ bool UPCGExFillControlsFactoryVtxFilters::RegisterConsumableAttributes(FPCGExCon
 
 	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
 	{
-		if (!Factory->RegisterConsumableAttributes(InContext))
-		{
-			return false;
-		}
+		// The return is that filter's own cleanup opt-out, not a failure: every nested filter registers.
+		Factory->RegisterConsumableAttributes(InContext);
 	}
 
 	return true;
@@ -86,10 +81,8 @@ bool UPCGExFillControlsFactoryVtxFilters::RegisterConsumableAttributesWithData(F
 
 	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
 	{
-		if (!Factory->RegisterConsumableAttributesWithData(InContext, InData))
-		{
-			return false;
-		}
+		// The return is that filter's own cleanup opt-out, not a failure: every nested filter registers.
+		Factory->RegisterConsumableAttributesWithData(InContext, InData);
 	}
 
 	return true;

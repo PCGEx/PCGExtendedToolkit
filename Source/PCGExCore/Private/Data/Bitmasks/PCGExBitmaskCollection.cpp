@@ -7,6 +7,7 @@
 #include "AssetRegistry/AssetData.h"
 #endif
 
+#include "PCGExLog.h"
 #include "Core/PCGExContext.h"
 
 void FPCGExBitmaskCollectionEntry::EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const
@@ -28,7 +29,7 @@ bool PCGExBitmaskCollection::FCache::TryGetBitmask(const FName Identifier, int64
 	{
 		if (!Identifier.IsNone())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Bitmask \"%s\" doesn't exists."), *Identifier.ToString())
+			UE_LOG(LogPCGEx, Warning, TEXT("Bitmask \"%s\" doesn't exists."), *Identifier.ToString())
 		}
 		return false;
 	}
@@ -43,7 +44,7 @@ bool PCGExBitmaskCollection::FCache::TryGetBitmask(const FName Identifier, PCGEx
 	{
 		if (!Identifier.IsNone())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Bitmask \"%s\" doesn't exists."), *Identifier.ToString())
+			UE_LOG(LogPCGEx, Warning, TEXT("Bitmask \"%s\" doesn't exists."), *Identifier.ToString())
 		}
 		return false;
 	}
@@ -208,7 +209,7 @@ void UPCGExBitmaskCollection::PostEditChangeProperty(FPropertyChangedEvent& Prop
 		{
 			if (Ref.Source && HasCircularDependency(Ref.Source))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Prevented circular dependency trying to nest \"%s\" inside \"%s\""), *GetNameSafe(Ref.Source), *GetNameSafe(this))
+				UE_LOG(LogPCGEx, Error, TEXT("Prevented circular dependency trying to nest \"%s\" inside \"%s\""), *GetNameSafe(Ref.Source), *GetNameSafe(this))
 				Ref.Source = nullptr;
 			}
 		}

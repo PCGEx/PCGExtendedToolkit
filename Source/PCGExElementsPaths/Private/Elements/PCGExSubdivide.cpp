@@ -102,12 +102,7 @@ bool FPCGExSubdivideElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Entry->GetNum() < 2)
-				{
-					bHasInvalidInputs = true;
-					Entry->InitializeOutput(PCGExData::EIOInit::Forward);
-					return false;
-				}
+				PCGEX_SKIP_INVALID_PATH_ENTRY
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
@@ -127,6 +122,13 @@ bool FPCGExSubdivideElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExSubdivide
 {
+	// Clamped BEFORE truncating: attribute-driven amounts can be anything, and an out-of-range double -> int32 cast is undefined.
+	FORCEINLINE int32 TruncateCount(const double InRawCount, const EPCGExTruncateMode InMode)
+	{
+		if (!FMath::IsFinite(InRawCount)) { return 0; }
+		return static_cast<int32>(PCGExMath::TruncateDbl(FMath::Clamp(InRawCount, 0.0, static_cast<double>(MAX_int32)), InMode));
+	}
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSubdivide::Process);
@@ -222,9 +224,15 @@ namespace PCGExSubdivide
 			double Amount = AmountGetter->Read(Index);
 			bool bRedistribute = bUseCount;
 
+			// Attribute-driven amounts bypass the property clamps: no subdivision for a non-finite amount or a non-positive step.
+			if (!FMath::IsFinite(Amount) || (!bRedistribute && Amount <= 0))
+			{
+				continue;
+			}
+
 			if (!bRedistribute)
 			{
-				Sub.NumSubdivisions = PCGExMath::TruncateDbl(Sub.Dist / Amount, TruncateMode);
+				Sub.NumSubdivisions = TruncateCount(Sub.Dist / Amount, TruncateMode);
 				Sub.StepSize = Amount;
 
 				if (Settings->bRedistributeEvenly)
@@ -241,8 +249,8 @@ namespace PCGExSubdivide
 
 			if (bRedistribute)
 			{
-				Sub.NumSubdivisions = PCGExMath::TruncateDbl(Amount, TruncateMode);
-				Sub.StepSize = Sub.Dist / static_cast<double>(Sub.NumSubdivisions + 1);
+				Sub.NumSubdivisions = TruncateCount(Amount, TruncateMode);
+				Sub.StepSize = Sub.Dist / (static_cast<double>(Sub.NumSubdivisions) + 1.0);
 				Sub.StartOffset = Sub.StepSize;
 			}
 		}
@@ -252,13 +260,26 @@ namespace PCGExSubdivide
 	{
 		const TSharedRef<PCGExData::FPointIO>& PointIO = PointDataFacade->Source;
 
-		int32 NumPoints = 0;
-
 		if (!bClosedLoop)
 		{
 			Subdivisions[Subdivisions.Num() - 1].NumSubdivisions = 0;
 		}
 
+		// Summed in 64 bits first: an attribute-driven amount can ask for more points than a point data can hold.
+		int64 NumPoints64 = Subdivisions.Num();
+		for (const FSubdivision& Sub : Subdivisions)
+		{
+			NumPoints64 += Sub.NumSubdivisions;
+		}
+
+		if (NumPoints64 > MAX_int32)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, Context, FText::Format(FTEXT("Subdivide aborted on a path: {0} points exceed the point count limit. Check the subdivision amount."), FText::AsNumber(NumPoints64)));
+			bIsProcessorValid = false;
+			return;
+		}
+
+		int32 NumPoints = 0;
 		for (FSubdivision& Sub : Subdivisions)
 		{
 			Sub.OutStart = NumPoints++;

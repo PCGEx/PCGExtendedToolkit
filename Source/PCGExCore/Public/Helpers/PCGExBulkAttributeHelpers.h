@@ -45,6 +45,18 @@ namespace PCGExData::Helpers
 		return PCGAttributeAccessorHelpers::CreateConstAccessor(InData, Selector);
 	}
 
+	/** Mutable twin of MakeConstAccessor. */
+	inline TUniquePtr<IPCGAttributeAccessor> MakeAccessor(UPCGData* InData, const FName AttributeName)
+	{
+		if (!InData) { return nullptr; }
+
+		FPCGAttributePropertyInputSelector Selector;
+		Selector.Update(AttributeName.ToString());
+		Selector = Selector.CopyAndFixLast(InData);
+
+		return PCGAttributeAccessorHelpers::CreateAccessor(InData, Selector);
+	}
+
 	/** The path a string names; null at NAME_SIZE characters or more, where FSoftObjectPath's package FName would assert. */
 	template <typename T = FSoftObjectPath>
 	T MakePathChecked(const FString& InString)
@@ -97,6 +109,14 @@ namespace PCGExData::Helpers
 		{
 			OutValues.Reset();
 		}
+	}
+
+	/** Writes one value per key to an existing attribute. False when the name resolves to nothing or the write is refused. */
+	template <typename T>
+	bool BulkWriteRows(UPCGData* InData, const FName AttributeName, const TArray<T>& InValues, IPCGAttributeAccessorKeys& InKeys)
+	{
+		const TUniquePtr<IPCGAttributeAccessor> Accessor = MakeAccessor(InData, AttributeName);
+		return Accessor && Accessor->SetRange<T>(InValues, 0, InKeys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
 	}
 
 	inline void BulkReadSoftPaths(const UPCGData* InData, const FName AttributeName, TArray<FSoftObjectPath>& OutPaths,

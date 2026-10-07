@@ -36,8 +36,7 @@ bool FPCGExProbeOperation::Prepare(FPCGExContext* InContext)
 {
 	PointIO = PrimaryDataFacade->Source;
 
-	SearchRadius = BaseConfig->SearchRadius.GetValueSetting();
-	if (!SearchRadius->Init(PrimaryDataFacade))
+	if (!InitSettingValue(SearchRadius, BaseConfig->SearchRadius.GetValueSetting(), PrimaryDataFacade))
 	{
 		return false;
 	}

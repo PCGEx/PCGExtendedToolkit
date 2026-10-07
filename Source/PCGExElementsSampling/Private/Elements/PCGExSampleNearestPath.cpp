@@ -231,11 +231,7 @@ bool FPCGExSampleNearestPathElement::Boot(FPCGExContext* InContext) const
 
 	Context->WeightCurve = Settings->WeightCurveLookup.MakeLookup(
 		Settings->bUseLocalCurve, Settings->LocalWeightOverDistance, Settings->WeightOverDistance,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 
 	return true;
 }
@@ -331,14 +327,8 @@ namespace PCGExSampleNearestPath
 		}
 
 
-		if (Settings->bIgnoreSelf)
+		if (!Context->TargetsHandler->BuildIgnoreList(PointDataFacade, Context->InitialMainPointsNum, Settings->bIgnoreSelf, IgnoreList))
 		{
-			IgnoreList.Add(PointDataFacade->GetIn());
-		}
-		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-			!Context->TargetsHandler->PopulateIgnoreList(PointDataFacade->Source, MatchingScope, IgnoreList))
-		{
-			(void)Context->TargetsHandler->HandleUnmatchedOutput(PointDataFacade, true);
 			return false;
 		}
 
@@ -347,16 +337,7 @@ namespace PCGExSampleNearestPath
 			PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 		}
 
-		// Allocate edge native properties
-
-		EPCGPointNativeProperties AllocateFor = EPCGPointNativeProperties::None;
-
-		if (Context->ApplySampling.WantsApply())
-		{
-			AllocateFor |= EPCGPointNativeProperties::Transform;
-		}
-
-		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
+		PointDataFacade->GetOut()->AllocateProperties(Context->ApplySampling.GetAllocations());
 
 		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
 		SamplingMask.Init(1, PointDataFacade->GetNum());
@@ -675,7 +656,7 @@ namespace PCGExSampleNearestPath
 					const FTransform SampleTransform = Path->GetTransformAtInputKey(EdgeIndex + Lerp);
 
 					SampleTarget(EdgeIndex, Lerp, Path, SampleTransform);
-				});
+				}, &IgnoreList);
 			}
 
 			if (SampleEntries.IsEmpty())

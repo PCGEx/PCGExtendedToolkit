@@ -79,7 +79,7 @@ bool FPCGExAssetCollectionToSetElement::AdvanceWork(FPCGExContext* InContext, co
 {
 	PCGEX_SETTINGS_C(InContext, AssetCollectionToSet)
 
-	UPCGParamData* OutputSet = NewObject<UPCGParamData>();
+	UPCGParamData* OutputSet = FPCGContext::NewObject_AnyThread<UPCGParamData>(InContext);
 
 	auto OutputToPin = [InContext, OutputSet]()
 	{

@@ -13,6 +13,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGPointArrayData.h"
 #include "Data/Utils/PCGExDataForward.h"
+#include "Helpers/PCGExSeededCellResolver.h"
 #include "Math/Geo/PCGExGeo.h"
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsCommon.h"
@@ -217,9 +218,6 @@ namespace PCGExFindContours
 			return false;
 		}
 
-		const int32 NumSeeds = Context->SeedsDataFacade->Source->GetNum();
-
-		// Initialize cell processor
 		CellProcessor = MakeShared<PCGExClusters::FCellPathBuilder>();
 		CellProcessor->Cluster = Cluster;
 		CellProcessor->TaskManager = TaskManager;
@@ -253,369 +251,63 @@ namespace PCGExFindContours
 		Enumerator->EnumerateAllFaces(AllCells, CellsConstraints.ToSharedRef(), &FailedCells, true);
 		WrapperCell = CellsConstraints->WrapperCell;
 
-		// Growth expands through adjacency; merging splits groups by it.
-		if (Context->SeedGrowth.HasPotentialGrowth() || Context->SeedMerge.IsEnabled())
+		PCGExCells::FSeededCellResolver::FConfig ResolverConfig;
+		ResolverConfig.Context = Context;
+		ResolverConfig.Cluster = Cluster;
+		ResolverConfig.SeedsDataFacade = Context->SeedsDataFacade;
+		ResolverConfig.Projection = &ProjectionDetails;
+		ResolverConfig.SeedPicking = &Settings->SeedPicking;
+		ResolverConfig.SeedOwnership = Context->SeedOwnership.Get();
+		ResolverConfig.SeedGrowth = &Context->SeedGrowth;
+		ResolverConfig.SeedMerge = &Context->SeedMerge;
+		ResolverConfig.bSoloClusterWorkload = bSoloClusterWorkload;
+
+		Resolver = MakeShared<PCGExCells::FSeededCellResolver>(ResolverConfig);
+		Resolver->SetCells(MoveTemp(AllCells), MoveTemp(FailedCells), CellsConstraints.ToSharedRef(), Enumerator.ToSharedRef());
+
+		// Process cells in parallel to find which seeds they contain.
+		// Without a cell there is no range to loop over: only the wrapper is left to claim.
+		if (Resolver->NumCells() > 0)
 		{
-			CellAdjacencyMap = &Enumerator->GetOrBuildAdjacencyMap(Enumerator->GetWrapperFaceIndex());
+			StartParallelLoopForRange(Resolver->NumCells(), 64);
 		}
-
-		// Create projected seed set (lazy projection with AABB)
-		Seeds = MakeShared<PCGExClusters::FProjectedPointSet>(Context, Context->SeedsDataFacade.ToSharedRef(), ProjectionDetails);
-		Seeds->EnsureProjected(); // Project once upfront before any loops
-
-		SeedInBounds.Init(true, NumSeeds);
-		if (Settings->SeedPicking.bWithinClusterBounds)
+		else
 		{
-			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
-			for (int32 i = 0; i < NumSeeds; i++)
-			{
-				SeedInBounds[i] = Settings->SeedPicking.WithinBounds(Cluster->Bounds, SeedTransforms[i].GetLocation());
-			}
+			OnRangeProcessingComplete();
 		}
-
-		// Combine valid and failed internal cells for consumption tracking
-		// (seeds inside ANY internal cell polygon are "consumed" - can't claim wrapper)
-		AllCellsIncludingFailed = AllCells;
-		AllCellsIncludingFailed.Append(FailedCells);
-
-		if (AllCells.IsEmpty() && WrapperCell)
-		{
-			// No valid internal cells - check if any seed can claim wrapper
-			HandleWrapperOnlyCase(NumSeeds);
-			return true;
-		}
-
-		// Store valid cells for parallel processing
-		EnumeratedCells = MoveTemp(AllCells);
-
-		// LocalTangent: arbitrate seed claims up front -- a seed sandwiched between STACKED parallel
-		// cells projects inside both, and only the nearest plane may own it.
-		if (Enumerator->IsLocalTangent())
-		{
-			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
-			const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
-
-			SeedBestFace.Init(INDEX_NONE, NumSeeds);
-			FailedCellsOnly = FailedCells;
-
-			// Parallel when the pair count is heavy, or earlier when this is the only cluster in flight
-			// (nested parallelism then competes with nothing -- bSoloClusterWorkload).
-			const int64 PairOps = static_cast<int64>(NumSeeds) * EnumeratedCells.Num();
-			const int32 NestedParallelThreshold = (bSoloClusterWorkload && PairOps > 4096) || PairOps > 65536 ? 32 : MAX_int32;
-
-			PCGExMT::ParallelOrSequential(
-				NumSeeds, [&](const int32 SeedIdx)
-				{
-					if (!SeedInBounds[SeedIdx])
-					{
-						return;
-					}
-
-					const FVector SeedPos = SeedTransforms[SeedIdx].GetLocation();
-					const FVector2D SeedProjected = Seeds->GetProjected(SeedIdx);
-					double BestDistSq = TNumericLimits<double>::Max();
-					for (const TSharedPtr<PCGExClusters::FCell>& Cell : EnumeratedCells)
-					{
-						double DistSq = 0;
-						if (!Cell || !Cell->ContainsPoint(SeedProjected, SeedPos, MaxPlaneDistSq, &DistSq))
-						{
-							continue;
-						}
-						if (DistSq < BestDistSq)
-						{
-							BestDistSq = DistSq;
-							SeedBestFace[SeedIdx] = Cell->FaceIndex;
-						}
-					}
-				}, NestedParallelThreshold);
-
-			// Inverse map, so ProcessRange resolves each cell's claimants with one lookup.
-			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
-			{
-				if (SeedBestFace[SeedIdx] != INDEX_NONE)
-				{
-					SeedFaceClaims.FindOrAdd(SeedBestFace[SeedIdx]).Add(SeedIdx);
-				}
-			}
-		}
-
-		// Process cells in parallel to find which seeds they contain
-		StartParallelLoopForRange(EnumeratedCells.Num(), 64);
 
 		return true;
 	}
 
 	void FProcessor::PrepareLoopScopesForRanges(const TArray<PCGExMT::FScope>& Loops)
 	{
-		ScopedValidCells = MakeShared<PCGExMT::TScopedArray<TSharedPtr<PCGExClusters::FCell>>>(Loops);
+		Resolver->PrepareScopes(Loops);
 	}
 
 	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
 	{
-		const int32 NumSeeds = Seeds->Num();
-		const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
-		const bool bNeedsAllCandidates = SeedOwnership->NeedsAllCandidates();
-
-		// LocalTangent cells re-project each seed into their own face frame, optionally gated on distance
-		// to the face plane (Seed Picking's MaxDistance); planar cells test in the shared projection.
-		TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
-		const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
-
-		TArray<TSharedPtr<PCGExClusters::FCell>>& CellsContainer = ScopedValidCells->Get_Ref(Scope);
-		CellsContainer.Reserve(Scope.Count);
-
-		TArray<int32> CandidateSeeds; // Reused per cell
-		CandidateSeeds.Reserve(8);
-
-		PCGEX_SCOPE_LOOP(CellIndex)
-		{
-			const TSharedPtr<PCGExClusters::FCell>& Cell = EnumeratedCells[CellIndex];
-			if (!Cell || Cell->Polygon.IsEmpty())
-			{
-				continue;
-			}
-
-			CandidateSeeds.Reset();
-
-			if (!SeedBestFace.IsEmpty())
-			{
-				// Arbitrated (LocalTangent): the inverse map already holds this cell's claimants.
-				if (const TArray<int32>* Claims = SeedFaceClaims.Find(Cell->FaceIndex))
-				{
-					CandidateSeeds = *Claims;
-				}
-			}
-			else
-			{
-				// Find all seeds inside this cell
-				for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
-				{
-					if (!SeedInBounds[SeedIdx])
-					{
-						continue;
-					}
-
-					if (Cell->ContainsPoint(Seeds->GetProjected(SeedIdx), SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
-					{
-						CandidateSeeds.Add(SeedIdx);
-
-						// For SeedOrder mode, first match wins - break early
-						if (!bNeedsAllCandidates)
-						{
-							break;
-						}
-					}
-				}
-			}
-
-			// Only output cells that contain at least one seed
-			if (!CandidateSeeds.IsEmpty())
-			{
-				const int32 WinnerSeedIndex = SeedOwnership->PickWinner(CandidateSeeds, Cell->Data.Centroid);
-				Cell->CustomIndex = WinnerSeedIndex;
-				CellsContainer.Add(Cell);
-			}
-		}
-	}
-
-	void FProcessor::HandleWrapperOnlyCase(const int32 NumSeeds)
-	{
-		// No valid internal cells exist - check if exterior seeds can claim wrapper
-		if (!WrapperCell)
-		{
-			return;
-		}
-
-		const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
-
-		TArray<int32> CandidateSeeds;
-		CandidateSeeds.Reserve(NumSeeds);
-
-		TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
-		const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
-
-		for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
-		{
-			if (!SeedInBounds[SeedIdx])
-			{
-				continue;
-			}
-
-			// Check if seed is inside any internal cell (consumed)
-			bool bConsumed = false;
-			const FVector2D& SeedPoint = Seeds->GetProjected(SeedIdx);
-
-			for (const TSharedPtr<PCGExClusters::FCell>& Cell : AllCellsIncludingFailed)
-			{
-				if (Cell && Cell->ContainsPoint(SeedPoint, SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
-				{
-					bConsumed = true;
-					break;
-				}
-			}
-
-			if (bConsumed)
-			{
-				continue;
-			}
-
-			if (Settings->SeedPicking.WithinDistanceOfEdges(*Cluster, SeedTransforms[SeedIdx].GetLocation()))
-			{
-				CandidateSeeds.Add(SeedIdx);
-			}
-		}
-
-		// Pick winner using seed ownership handler
-		const int32 BestSeedIdx = SeedOwnership->PickWinner(CandidateSeeds, WrapperCell->Data.Centroid);
-
-		if (BestSeedIdx != INDEX_NONE)
-		{
-			WrapperCell->CustomIndex = BestSeedIdx;
-
-			TArray<TSharedPtr<PCGExClusters::FCell>> WrapperArray;
-			WrapperArray.Add(WrapperCell);
-			CellProcessor->MarkSeedsGood(WrapperArray);
-
-			// Output to CellBounds if enabled
-			if (Settings->Artifacts.bOutputCellBounds)
-			{
-				TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
-				if (!OBBPointIO)
-				{
-					return;
-				}
-
-				OBBPointIO->IOIndex = BatchIndex;
-				PCGExClusters::Helpers::CleanupClusterData(OBBPointIO);
-
-				PCGEX_MAKE_SHARED(OBBFacade, PCGExData::FFacade, OBBPointIO.ToSharedRef())
-				PCGExClusters::ProcessCellsAsOBBPoints(Cluster, WrapperArray, OBBFacade,
-				                                       Context->Artifacts, TaskManager);
-			}
-
-			// Output to Paths if enabled
-			if (Settings->Artifacts.bOutputPaths)
-			{
-				CellProcessor->ProcessSeededCell(WrapperCell, Context->OutputPaths->Emplace_GetRef<UPCGPointArrayData>(VtxDataFacade->Source, PCGExData::EIOInit::New));
-			}
-		}
+		Resolver->ProcessRange(Scope);
 	}
 
 	void FProcessor::OnRangeProcessingComplete()
 	{
-		ScopedValidCells->Collapse(ValidCells);
-
-		// Grow seed claims through adjacency; only constraint-passing cells (EnumeratedCells) can be claimed.
-		if (CellAdjacencyMap)
-		{
-			const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
-			PCGExClusters::GrowSeedClaims(
-				ValidCells, EnumeratedCells, *CellAdjacencyMap, Context->SeedGrowth,
-				[&](const TArray<int32>& SeedIndices, const FVector& Centroid)
-				{
-					return SeedOwnership->PickWinner(SeedIndices, Centroid);
-				});
-		}
-
-		// Merge adjacent cells, grouped by seed key value or by owning seed (the latter only differs with growth).
-		const bool bMergeBySeedValue = Context->SeedMerge.IsEnabled();
-		if (CellAdjacencyMap && (bMergeBySeedValue || (Context->SeedGrowth.bMergeAdjacentCells && Context->SeedGrowth.HasPotentialGrowth())))
-		{
-			const FPCGExCellSeedMergeDetails& SeedMerge = Context->SeedMerge;
-			const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
-
-			PCGExClusters::MergeCellGroups(
-				ValidCells, CellsConstraints.ToSharedRef(), Cluster.Get(), *CellAdjacencyMap,
-				[&](const PCGExClusters::FCell& Cell)
-				{
-					return SeedMerge.GetKey(Cell.CustomIndex);
-				},
-				[&](const TArray<int32>& SeedIndices, const FVector& Centroid)
-				{
-					return SeedOwnership->PickWinner(SeedIndices, Centroid);
-				});
-		}
-
-		int32 NumCells = ValidCells.Num();
+		Resolver->Finalize(ValidCells);
 
 		// Check if any exterior seeds can claim the wrapper
 		// Include wrapper if: not omitting wrapping bounds, OR (omitting but keep-if-sole is on AND no other valid cells)
-		if (WrapperCell && (!Settings->Constraints.bOmitWrappingBounds || (Settings->Constraints.bKeepWrapperIfSolePath && NumCells == 0)))
+		if (WrapperCell && (!Settings->Constraints.bOmitWrappingBounds || (Settings->Constraints.bKeepWrapperIfSolePath && ValidCells.IsEmpty())))
 		{
-			// Collect consumed seed indices (seeds that matched a valid internal cell)
-			TSet<int32> ConsumedSeeds;
-			for (const TSharedPtr<PCGExClusters::FCell>& Cell : ValidCells)
+			const int32 WrapperSeedIdx = Resolver->PickWrapperSeed(ValidCells, WrapperCell->Data.Centroid);
+			if (WrapperSeedIdx != INDEX_NONE)
 			{
-				if (Cell)
-				{
-					ConsumedSeeds.Add(Cell->CustomIndex);
-					ConsumedSeeds.Append(Cell->ContributorIndices);
-				}
-			}
-
-			// Also mark seeds inside failed cells as consumed. Arbitration (when it ran) already proves
-			// membership in a VALID cell, so only the failed cells still need testing.
-			const int32 NumSeeds = Seeds->Num();
-			TConstPCGValueRange<FTransform> SeedTransforms = Context->SeedsDataFacade->GetIn()->GetConstTransformValueRange();
-			const double MaxPlaneDistSq = Settings->SeedPicking.MaxDistance > 0 ? FMath::Square(Settings->SeedPicking.MaxDistance) : -1.0;
-
-			const bool bArbitrated = !SeedBestFace.IsEmpty();
-			const TArray<TSharedPtr<PCGExClusters::FCell>>& ConsumptionCells = bArbitrated ? FailedCellsOnly : AllCellsIncludingFailed;
-
-			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
-			{
-				if (!SeedInBounds[SeedIdx] || ConsumedSeeds.Contains(SeedIdx))
-				{
-					continue;
-				}
-
-				if (bArbitrated && SeedBestFace[SeedIdx] != INDEX_NONE)
-				{
-					ConsumedSeeds.Add(SeedIdx);
-					continue;
-				}
-
-				const FVector2D& SeedPoint = Seeds->GetProjected(SeedIdx);
-
-				for (const TSharedPtr<PCGExClusters::FCell>& Cell : ConsumptionCells)
-				{
-					if (Cell && Cell->ContainsPoint(SeedPoint, SeedTransforms[SeedIdx].GetLocation(), MaxPlaneDistSq))
-					{
-						ConsumedSeeds.Add(SeedIdx);
-						break;
-					}
-				}
-			}
-
-			// Find best exterior seed within picking distance
-			const TSharedPtr<PCGExCells::FSeedOwnershipHandler>& SeedOwnership = Context->SeedOwnership;
-			TArray<int32> CandidateSeeds;
-			CandidateSeeds.Reserve(NumSeeds);
-
-			for (int32 SeedIdx = 0; SeedIdx < NumSeeds; ++SeedIdx)
-			{
-				if (!SeedInBounds[SeedIdx] || ConsumedSeeds.Contains(SeedIdx))
-				{
-					continue;
-				}
-
-				if (Settings->SeedPicking.WithinDistanceOfEdges(*Cluster, SeedTransforms[SeedIdx].GetLocation()))
-				{
-					CandidateSeeds.Add(SeedIdx);
-				}
-			}
-
-			// Pick winner using seed ownership handler
-			const int32 BestSeedIdx = SeedOwnership->PickWinner(CandidateSeeds, WrapperCell->Data.Centroid);
-
-			if (BestSeedIdx != INDEX_NONE)
-			{
-				WrapperCell->CustomIndex = BestSeedIdx;
+				WrapperCell->CustomIndex = WrapperSeedIdx;
 				ValidCells.Add(WrapperCell);
-				NumCells++;
 			}
 		}
 
+		Resolver.Reset();
+
+		const int32 NumCells = ValidCells.Num();
 		if (NumCells == 0)
 		{
 			bIsProcessorValid = false;
@@ -627,18 +319,13 @@ namespace PCGExFindContours
 		// Output to CellBounds if enabled
 		if (Settings->Artifacts.bOutputCellBounds)
 		{
-			TSharedPtr<PCGExData::FPointIO> OBBPointIO = Context->OutputCellBounds->Emplace_GetRef(VtxDataFacade->Source, PCGExData::EIOInit::New);
-			if (!OBBPointIO)
+			// Batch, then vtx dataset: BatchIndex restarts per vtx input.
+			if (!PCGExClusters::ProcessCellsAsOBBPoints(
+				Cluster, ValidCells, Context->OutputCellBounds, VtxDataFacade->Source,
+				PCGExData::FIOSortKey{BatchIndex, VtxDataFacade->Source->IOIndex}, Context->Artifacts, TaskManager))
 			{
 				return;
 			}
-
-			OBBPointIO->IOIndex = BatchIndex;
-			PCGExClusters::Helpers::CleanupClusterData(OBBPointIO);
-
-			PCGEX_MAKE_SHARED(OBBFacade, PCGExData::FFacade, OBBPointIO.ToSharedRef())
-			PCGExClusters::ProcessCellsAsOBBPoints(Cluster, ValidCells, OBBFacade,
-			                                       Context->Artifacts, TaskManager);
 		}
 
 		// Output to Paths if enabled
@@ -648,11 +335,6 @@ namespace PCGExFindContours
 			if (!Context->OutputPaths->EmplaceBatch<UPCGPointArrayData>(CellsIOIndices, VtxDataFacade->Source, PCGExData::EIOInit::New))
 			{
 				return;
-			}
-			
-			for (const TSharedPtr<PCGExData::FPointIO>& IO : CellsIOIndices)
-			{
-				PCGExClusters::Helpers::CleanupClusterData(IO);
 			}
 
 			PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, ProcessCellsTask)
@@ -668,7 +350,7 @@ namespace PCGExFindContours
 				{
 					if (const TSharedPtr<PCGExData::FPointIO> IO = CellsIOIndices_Ref[Index])
 					{
-						Processor->ProcessSeededCell(ValidCells_Ref[Index], IO);
+						Processor->ProcessSeededCell(ValidCells_Ref[Index], IO, TEXT(""), Index);
 					}
 					ValidCells_Ref[Index] = nullptr;
 				}

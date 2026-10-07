@@ -42,27 +42,6 @@ MACRO(Scale, FTransform, FVector) \
 MACRO(Steepness,float, float) \
 MACRO(Seed,int32, int32)
 
-#define PCGEX_FOREACH_DATABLENDMODE(MACRO)\
-MACRO(None) \
-MACRO(Average) \
-MACRO(Weight) \
-MACRO(Min) \
-MACRO(Max) \
-MACRO(Copy) \
-MACRO(Sum) \
-MACRO(WeightedSum) \
-MACRO(Lerp) \
-MACRO(Subtract) \
-MACRO(UnsignedMin) \
-MACRO(UnsignedMax) \
-MACRO(AbsoluteMin) \
-MACRO(AbsoluteMax) \
-MACRO(WeightedSubtract) \
-MACRO(CopyOther) \
-MACRO(Hash) \
-MACRO(UnsignedHash) \
-MACRO(WeightNormalize)
-
 // This is a different blending list that makes more sense for AxB blending
 // and also includes extra modes that don't make sense in regular multi-source data blending
 UENUM(BlueprintType)
@@ -96,35 +75,6 @@ enum class EPCGExABBlendingType : uint8
 	RMS              = 25 UMETA(Hidden, DisplayName = "RMS (Signal Magnitude)", ToolTip="Acc + Src² .. Sqrt(Acc/Count)", ActionIcon="PCGEx.Pin.OUT_BlendOp", SearchHints = "RMS Signal Magnitude"),
 	Step             = 26 UMETA(Hidden, DisplayName = "Step", ToolTip="Step", ActionIcon="PCGEx.Pin.OUT_BlendOp", SearchHints = "Step"),
 };
-
-#define PCGEX_FOREACH_AB_BLENDMODE(MACRO)\
-MACRO(None) \
-MACRO(Average) \
-MACRO(Weight) \
-MACRO(Multiply) \
-MACRO(Divide) \
-MACRO(Min) \
-MACRO(Max) \
-MACRO(CopyTarget) \
-MACRO(CopySource) \
-MACRO(Add) \
-MACRO(Subtract) \
-MACRO(WeightedAdd) \
-MACRO(WeightedSubtract) \
-MACRO(Lerp) \
-MACRO(UnsignedMin) \
-MACRO(UnsignedMax) \
-MACRO(AbsoluteMin) \
-MACRO(AbsoluteMax) \
-MACRO(Hash) \
-MACRO(UnsignedHash) \
-MACRO(Mod) \
-MACRO(ModCW) \
-MACRO(WeightNormalize) \
-MACRO(GeometricMean) \
-MACRO(HarmonicMean) \
-MACRO(RMS) \
-MACRO(Step)
 
 UENUM()
 enum class EPCGExBlendOver : uint8

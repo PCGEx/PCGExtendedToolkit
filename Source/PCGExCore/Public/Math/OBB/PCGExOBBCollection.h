@@ -135,26 +135,12 @@ namespace PCGExMath::OBB
 		template <typename Policy>
 		bool IsPointInside(const FVector& Point, Policy TestPolicy = Policy{}) const
 		{
-			if (!Octree)
-			{
-				return false;
-			}
-
 			const float Exp = TestPolicy.Expansion;
 			const FBoxCenterAndExtent QueryBounds(Point, FVector4(Exp, Exp, Exp, Exp));
-
-			bool bFound = false;
-			Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+			return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 			{
-				if (TestPolicy.TestPoint(GetOBB(Item.Index), Point))
-				{
-					bFound = true;
-					return false;
-				}
-				return true;
+				return TestPolicy.TestPoint(GetOBB(Item.Index), Point);
 			});
-
-			return bFound;
 		}
 
 		/** Find all OBBs containing a point */
@@ -175,26 +161,12 @@ namespace PCGExMath::OBB
 		template <typename Policy>
 		bool Overlaps(const FOBB& Query, Policy TestPolicy = Policy{}) const
 		{
-			if (!Octree)
-			{
-				return false;
-			}
-
 			const float R = Query.Bounds.Radius + TestPolicy.Expansion;
 			const FBoxCenterAndExtent QueryBounds(Query.Bounds.Origin, FVector4(R, R, R, R));
-
-			bool bFound = false;
-			Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+			return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 			{
-				if (TestPolicy.TestOverlap(GetOBB(Item.Index), Query))
-				{
-					bFound = true;
-					return false;
-				}
-				return true;
+				return TestPolicy.TestOverlap(GetOBB(Item.Index), Query);
 			});
-
-			return bFound;
 		}
 
 		/** Find first overlapping OBB */

@@ -37,8 +37,8 @@ struct FPCGExNoiseConfigVoronoi : public FPCGExNoise3DConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "0.0", ClampMax = "1.0"))
 	double Jitter = 1.0;
 
-	/** Smoothness for smooth distance mode */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "0.0", ClampMax = "1.0"))
+	/** Smooth blend between cells. Only used by the Distance output. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "0.0", ClampMax = "1.0", EditCondition = "OutputType == EPCGExVoronoiOutput::Distance"))
 	double Smoothness = 0.0;
 };
 

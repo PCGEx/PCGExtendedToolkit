@@ -14,6 +14,8 @@
 #include "Engine/World.h"
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExObjectNotifyHelpers.h"
+#include "Helpers/PCGExRandomHelpers.h"
+#include "Selectors/PCGExSelectorHelpers.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -607,6 +609,12 @@ bool FPCGExAssetCollectionEntry::Validate(const UPCGExAssetCollection* ParentCol
 
 namespace PCGExAssetCollection
 {
+	int32 GetNestedPickSeed(const int32 InSeed)
+	{
+		// Negative salt: the micro pick salts with the point index, which never is.
+		return PCGExRandomHelpers::GetSeed(InSeed, -1);
+	}
+
 	// Aggregate child entry extents per the collection's SubcollectionBoundsMode.
 	// Children must have their Staging.Bounds already filled (caller ensures this via the
 	// recursive pass before this runs). Invalid or zero-volume children are skipped.
@@ -624,7 +632,7 @@ namespace PCGExAssetCollection
 		FVector SumExt = FVector::ZeroVector;
 		int32 Count = 0;
 		FVector WeightedSumExt = FVector::ZeroVector;
-		int64 TotalWeight = 0;
+		double TotalWeight = 0;
 
 		Child->ForEachEntry([&](const FPCGExAssetCollectionEntry* Entry, int32 /*Idx*/)
 		{
@@ -650,8 +658,8 @@ namespace PCGExAssetCollection
 			SumExt += ChildExt;
 			Count++;
 
-			const int64 W = FMath::Max(1, Entry->Weight);
-			WeightedSumExt += ChildExt * static_cast<double>(W);
+			const double W = PCGExCollections::Selectors::EntryEffectiveWeight(Entry);
+			WeightedSumExt += ChildExt * W;
 			TotalWeight += W;
 		});
 
@@ -672,7 +680,7 @@ namespace PCGExAssetCollection
 			Extents = SumExt / static_cast<double>(Count);
 			break;
 		case EPCGExSubcollectionBoundsMode::WeightedMean:
-			Extents = (TotalWeight > 0) ? WeightedSumExt / static_cast<double>(TotalWeight) : (SumExt / static_cast<double>(Count));
+			Extents = (TotalWeight > 0) ? WeightedSumExt / TotalWeight : (SumExt / static_cast<double>(Count));
 			break;
 		case EPCGExSubcollectionBoundsMode::MaxExtents:
 			Extents = MaxExt;
@@ -844,7 +852,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 
 	if (Entry->HasValidSubCollection())
 	{
-		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed);
+		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed));
 	}
 
 	Result.Entry = Entry;
@@ -868,7 +876,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed) const
 
 	if (Entry->HasValidSubCollection())
 	{
-		return Entry->GetSubCollectionPtr()->GetEntryRandom(Seed * 2);
+		return Entry->GetSubCollectionPtr()->GetEntryRandom(PCGExAssetCollection::GetNestedPickSeed(Seed));
 	}
 
 	Result.Entry = Entry;
@@ -892,7 +900,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 
 	if (Entry->HasValidSubCollection())
 	{
-		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed * 2);
+		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed));
 	}
 
 	Result.Entry = Entry;
@@ -985,7 +993,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 		{
 			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
 		}
-		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed, TagInheritance, OutTags);
+		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 	}
 
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
@@ -1022,7 +1030,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed, uint8 
 		{
 			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
 		}
-		return Entry->GetSubCollectionPtr()->GetEntryRandom(Seed * 2, TagInheritance, OutTags);
+		return Entry->GetSubCollectionPtr()->GetEntryRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 	}
 
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
@@ -1059,7 +1067,7 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 		{
 			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
 		}
-		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(Seed * 2, TagInheritance, OutTags);
+		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 	}
 
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
@@ -1345,13 +1353,13 @@ void UPCGExAssetCollection::PostLoad()
 
 		if (DowngradedEntries > 0)
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogPCGEx, Warning,
 			       TEXT("[PCGEx] Grammar migration: %d entr%s in '%s' had legacy Min/Max/Average size mode -- downgraded to X-bounds. Review and reconfigure axes if needed."),
 			       DowngradedEntries, DowngradedEntries == 1 ? TEXT("y") : TEXT("ies"), *GetName());
 		}
 		if (DisabledEntries > 0)
 		{
-			UE_LOG(LogTemp, Log,
+			UE_LOG(LogPCGEx, Log,
 			       TEXT("[PCGEx] Grammar migration: %d entr%s in '%s' had empty Symbol -- grammar disabled (Axes=None)."),
 			       DisabledEntries, DisabledEntries == 1 ? TEXT("y") : TEXT("ies"), *GetName());
 		}
@@ -2023,7 +2031,7 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 			const UPCGExAssetCollection* Other = InEntry->GetSubCollectionPtr();
 			if (Other && HasCircularDependency(Other))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Prevented circular dependency trying to nest \"%s\" inside \"%s\""), *GetNameSafe(Other), *GetNameSafe(this));
+				UE_LOG(LogPCGEx, Error, TEXT("Prevented circular dependency trying to nest \"%s\" inside \"%s\""), *GetNameSafe(Other), *GetNameSafe(this));
 				InEntry->ClearSubCollection();
 			}
 		});
@@ -2170,7 +2178,7 @@ bool UPCGExAssetCollection::EDITOR_RenameCategoryOverrides(const FName OldCatego
 		{
 			Names.Add(DroppedName.ToString());
 		}
-		UE_LOG(LogTemp, Warning,
+		UE_LOG(LogPCGEx, Warning,
 		       TEXT("Merged category \"%s\" into existing \"%s\" in \"%s\": the destination's values win, so these overrides were dropped: %s"),
 		       *OldCategory.ToString(), *NewCategory.ToString(), *GetNameSafe(this), *FString::Join(Names, TEXT(", ")));
 	}

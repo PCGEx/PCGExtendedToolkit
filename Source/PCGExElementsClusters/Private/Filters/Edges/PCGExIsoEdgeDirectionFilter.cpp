@@ -91,16 +91,14 @@ bool FIsoEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<PC
 		return false;
 	}
 
-	OperandDirection = TypedFilterFactory->Config.DirectionValue.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandDirection->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandDirection->Init(InEdgeDataFacade))
+	if (!InitSettingValue(OperandDirection, TypedFilterFactory->Config.DirectionValue.GetValueSetting(PCGEX_QUIET_HANDLING), InEdgeDataFacade))
 	{
 		return false;
 	}
 
 	if (TypedFilterFactory->Config.ComparisonQuality == EPCGExDirectionCheckMode::Dot)
 	{
-		if (!DotComparison.Init(InContext, InEdgeDataFacade))
+		if (!DotComparison.Init(InContext, InEdgeDataFacade, PCGEX_QUIET_HANDLING))
 		{
 			return false;
 		}
@@ -108,7 +106,7 @@ bool FIsoEdgeDirectionFilter::Init(FPCGExContext* InContext, const TSharedRef<PC
 	else
 	{
 		bUseDot = false;
-		if (!HashComparison.Init(InContext, InEdgeDataFacade))
+		if (!HashComparison.Init(InContext, InEdgeDataFacade, PCGEX_QUIET_HANDLING))
 		{
 			return false;
 		}

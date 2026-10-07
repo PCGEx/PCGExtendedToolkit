@@ -38,7 +38,8 @@ namespace PCGExClusters
 	void FCellPathBuilder::ProcessSeededCell(
 		const TSharedPtr<FCell>& InCell,
 		const TSharedPtr<PCGExData::FPointIO>& InPathIO,
-		const FString& InTriageTag) const
+		const FString& InTriageTag,
+		const int32 InCellOrdinal) const
 	{
 		if (!InCell || !InPathIO || !Cluster)
 		{
@@ -49,7 +50,8 @@ namespace PCGExClusters
 
 		// Batch, then seed; BatchIndex restarts per vtx input, so the vtx dataset breaks that tie.
 		const TSharedPtr<PCGExData::FPointIO> VtxIO = Cluster->VtxIO.Pin();
-		const PCGExData::FIOSortKey SortKey{BatchIndex, SeedIndex, VtxIO ? VtxIO->IOIndex : 0};
+		PCGExData::FIOSortKey SortKey{BatchIndex, SeedIndex, VtxIO ? VtxIO->IOIndex : 0};
+		if (InCellOrdinal != INDEX_NONE) { SortKey = SortKey.Derived(InCellOrdinal); }
 
 		ProcessCellInternal(InCell, InPathIO, InTriageTag, SortKey, SeedIndex);
 	}
@@ -66,7 +68,9 @@ namespace PCGExClusters
 		// Allocate points
 		PCGExPointArrayDataHelpers::SetNumPointsAllocated(InPathIO->GetOut(), NumCellPoints);
 
-		// Setup tags
+		// A path starts untagged: cluster tags only come back through Artifacts, where TagForwarding filters them.
+		InPathIO->Tags->Reset();
+
 		if (!InTriageTag.IsEmpty())
 		{
 			InPathIO->Tags->AddRaw(InTriageTag);

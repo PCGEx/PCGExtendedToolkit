@@ -3,12 +3,18 @@
 
 #include "Sampling/PCGExApplySamplingDetails.h"
 
+#include "PCGPointPropertiesTraits.h"
 #include "Data/PCGExPointElements.h"
 #include "Sampling/PCGExSamplingCommon.h"
 
 bool FPCGExApplySamplingDetails::WantsApply() const
 {
 	return AppliedComponents > 0;
+}
+
+EPCGPointNativeProperties FPCGExApplySamplingDetails::GetAllocations() const
+{
+	return WantsApply() ? EPCGPointNativeProperties::Transform : EPCGPointNativeProperties::None;
 }
 
 void FPCGExApplySamplingDetails::Init()

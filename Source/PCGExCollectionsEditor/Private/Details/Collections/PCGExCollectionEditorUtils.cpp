@@ -15,9 +15,6 @@
 
 namespace PCGExCollectionEditorUtils
 {
-#define PCGEX_IF_TYPE(_NAME, _BODY) { if (UPCGEx##_NAME##Collection* Collection = Cast<UPCGEx##_NAME##Collection>(InCollection)) { _BODY; return; }}
-#define PCGEX_PER_COLLECTION(_BODY)	PCGEX_FOREACH_COLLECTION_TYPE(PCGEX_IF_TYPE, _BODY)
-
 	FText GetEntryTypeLabel(const UScriptStruct* EntryStruct)
 	{
 		static const FName ShortNameMeta = FName("ShortName");
@@ -123,11 +120,10 @@ namespace PCGExCollectionEditorUtils
 		return AssetData;
 	}
 
-	// Notify listeners that the collection was modified (for grid view refresh, etc.)
-	static void NotifyModified(UPCGExAssetCollection* InCollection)
+	// Same completion as a details-panel edit: pick cache, staging and PCG trackers all refresh.
+	void NotifyModified(UPCGExAssetCollection* InCollection)
 	{
-		(void)InCollection->MarkPackageDirty();
-		FCoreUObjectDelegates::BroadcastOnObjectModified(InCollection);
+		InCollection->PostEditChange();
 	}
 
 	bool EnsureEntryIds(UPCGExAssetCollection* InCollection, const bool bNotify)

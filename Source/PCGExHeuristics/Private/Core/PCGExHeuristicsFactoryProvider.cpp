@@ -37,7 +37,7 @@ TSharedPtr<FPCGExHeuristicOperation> UPCGExHeuristicsFactoryData::CreateOperatio
 
 UPCGExFactoryData* UPCGExHeuristicsFactoryProviderSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const
 {
-	return InFactory;
+	return Super::CreateFactory(InContext, InFactory);
 }
 
 #undef LOCTEXT_NAMESPACE

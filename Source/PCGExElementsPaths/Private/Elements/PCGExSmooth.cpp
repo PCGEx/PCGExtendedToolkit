@@ -114,11 +114,7 @@ bool FPCGExSmoothElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSett
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
-				if (Entry->GetNum() < 2)
-				{
-					bHasInvalidInputs = true;
-					return false;
-				}
+				PCGEX_SKIP_INVALID_PATH_ENTRY
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{

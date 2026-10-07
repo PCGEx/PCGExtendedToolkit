@@ -371,36 +371,12 @@ namespace PCGExClusterMT
 		const int32 PLI = PCGEX_CORE_SETTINGS.GetClusterBatchChunkSize(PerLoopIterations);
 
 		TArray<PCGExMT::FScope> Loops;
-		const int32 NumScopes = PCGExMT::SubLoopScopes(
+		PCGExMT::SubLoopScopes(
 			Loops, NumNodes, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumNodes, PLI)));
 
 		PrepareLoopScopesForNodes(Loops);
 
-		if (NumScopes == 1 || bForceSingleThreadedProcessNodes)
-		{
-			for (const PCGExMT::FScope& S : Loops)
-			{
-				if (!WorkHandle.IsValid())
-				{
-					break;
-				}
-				ProcessNodes(S);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				NumScopes,
-				[this, &Loops](const int32 i)
-				{
-					if (!WorkHandle.IsValid())
-					{
-						return;
-					}
-					ProcessNodes(Loops[i]);
-				},
-				2, EParallelForFlags::Unbalanced);
-		}
+		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessNodes, [this](const PCGExMT::FScope& Scope) { ProcessNodes(Scope); });
 
 		OnNodesProcessingComplete();
 	}
@@ -438,36 +414,12 @@ namespace PCGExClusterMT
 		const int32 PLI = PCGEX_CORE_SETTINGS.GetClusterBatchChunkSize(PerLoopIterations);
 
 		TArray<PCGExMT::FScope> Loops;
-		const int32 NumScopes = PCGExMT::SubLoopScopes(
+		PCGExMT::SubLoopScopes(
 			Loops, NumEdges, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumEdges, PLI)));
 
 		PrepareLoopScopesForEdges(Loops);
 
-		if (NumScopes == 1 || bForceSingleThreadedProcessEdges)
-		{
-			for (const PCGExMT::FScope& S : Loops)
-			{
-				if (!WorkHandle.IsValid())
-				{
-					break;
-				}
-				ProcessEdges(S);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				NumScopes,
-				[this, &Loops](const int32 i)
-				{
-					if (!WorkHandle.IsValid())
-					{
-						return;
-					}
-					ProcessEdges(Loops[i]);
-				},
-				2, EParallelForFlags::Unbalanced);
-		}
+		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessEdges, [this](const PCGExMT::FScope& Scope) { ProcessEdges(Scope); });
 
 		OnEdgesProcessingComplete();
 	}
@@ -505,36 +457,12 @@ namespace PCGExClusterMT
 		const int32 PLI = PCGEX_CORE_SETTINGS.GetClusterBatchChunkSize(PerLoopIterations);
 
 		TArray<PCGExMT::FScope> Loops;
-		const int32 NumScopes = PCGExMT::SubLoopScopes(
+		PCGExMT::SubLoopScopes(
 			Loops, NumIterations, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumIterations, PLI)));
 
 		PrepareLoopScopesForRanges(Loops);
 
-		if (NumScopes == 1 || bForceSingleThreadedProcessRange)
-		{
-			for (const PCGExMT::FScope& S : Loops)
-			{
-				if (!WorkHandle.IsValid())
-				{
-					break;
-				}
-				ProcessRange(S);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				NumScopes,
-				[this, &Loops](const int32 i)
-				{
-					if (!WorkHandle.IsValid())
-					{
-						return;
-					}
-					ProcessRange(Loops[i]);
-				},
-				2, EParallelForFlags::Unbalanced);
-		}
+		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessRange, [this](const PCGExMT::FScope& Scope) { ProcessRange(Scope); });
 
 		OnRangeProcessingComplete();
 	}
@@ -893,23 +821,14 @@ namespace PCGExClusterMT
 
 		PCGEX_CHECK_WORK_HANDLE_VOID
 
-		if (bForceSingleThreadedProcessing)
-		{
-			for (TSharedRef<IProcessor>& Processor : Processors)
+		// Forced = in index order on this thread (the threshold is never reached).
+		PCGExMT::ParallelOrSequential(
+			Processors.Num(),
+			[&](const int32 i)
 			{
+				const TSharedRef<IProcessor>& Processor = Processors[i];
 				Processor->bIsProcessorValid = Processor->Process(TaskManager);
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				Processors.Num(),
-				[&](const int32 i)
-				{
-					const TSharedRef<IProcessor>& Processor = Processors[i];
-					Processor->bIsProcessorValid = Processor->Process(TaskManager);
-				}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+			}, /*Threshold=*/bForceSingleThreadedProcessing ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
 
 		OnInitialPostProcess();
 	}
@@ -946,29 +865,17 @@ namespace PCGExClusterMT
 
 		PCGEX_CHECK_WORK_HANDLE_VOID
 
-		if (bForceSingleThreadedCompletion)
-		{
-			for (TSharedRef<IProcessor>& Processor : Processors)
+		// Forced = in index order on this thread (the threshold is never reached).
+		PCGExMT::ParallelOrSequential(
+			Processors.Num(),
+			[&](const int32 i)
 			{
+				const TSharedRef<IProcessor>& Processor = Processors[i];
 				if (Processor->bIsProcessorValid)
 				{
 					Processor->CompleteWork();
 				}
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				Processors.Num(),
-				[&](const int32 i)
-				{
-					const TSharedRef<IProcessor>& Processor = Processors[i];
-					if (Processor->bIsProcessorValid)
-					{
-						Processor->CompleteWork();
-					}
-				}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+			}, /*Threshold=*/bForceSingleThreadedCompletion ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
 	}
 
 	void IBatch::Write()
@@ -980,29 +887,17 @@ namespace PCGExClusterMT
 			return;
 		}
 
-		if (bForceSingleThreadedWrite)
-		{
-			for (TSharedRef<IProcessor>& Processor : Processors)
+		// Forced = in index order on this thread (the threshold is never reached).
+		PCGExMT::ParallelOrSequential(
+			Processors.Num(),
+			[&](const int32 i)
 			{
+				const TSharedRef<IProcessor>& Processor = Processors[i];
 				if (Processor->bIsProcessorValid)
 				{
 					Processor->Write();
 				}
-			}
-		}
-		else
-		{
-			PCGExMT::ParallelOrSequential(
-				Processors.Num(),
-				[&](const int32 i)
-				{
-					const TSharedRef<IProcessor>& Processor = Processors[i];
-					if (Processor->bIsProcessorValid)
-					{
-						Processor->Write();
-					}
-				}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
-		}
+			}, /*Threshold=*/bForceSingleThreadedWrite ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
 
 		if (bWriteVtxDataFacade && bIsBatchValid)
 		{
@@ -1096,13 +991,4 @@ namespace PCGExClusterMT
 	{
 		PCGEX_LAUNCH(FStartClusterBatchProcessing, Batch, bScopedIndexLookupBuild)
 	}
-
-	void CompleteBatches(const TArrayView<TSharedPtr<IBatch>> Batches)
-	{
-		for (const TSharedPtr<IBatch>& Batch : Batches)
-		{
-			Batch->CompleteWork();
-		}
-	}
-
 }

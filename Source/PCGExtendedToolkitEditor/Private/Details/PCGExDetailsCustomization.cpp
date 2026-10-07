@@ -179,7 +179,6 @@ namespace PCGExDetailsCustomization
 		AppStyle.Set("PCGEx.Checkbox", SmallCheckStyle);
 
 #undef PCGEX_ADD_ACTION_ICON
-#undef PCGEX_ADD_ACTION_ICON_WIDE
 
 #pragma endregion
 

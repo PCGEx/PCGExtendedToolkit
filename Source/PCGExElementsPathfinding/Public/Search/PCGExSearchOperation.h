@@ -55,6 +55,9 @@ public:
 	void ReleaseAllocations(const TSharedPtr<PCGExPathfinding::FSearchAllocations>& InAllocations);
 
 protected:
+	/** Allocations a query runs on: the provided ones, reset; fresh ones when none were provided. */
+	TSharedPtr<PCGExPathfinding::FSearchAllocations> PrepareAllocations(const TSharedPtr<PCGExPathfinding::FSearchAllocations>& InAllocations) const;
+
 	/** Pool of reusable per-query search allocations */
 	TArray<TSharedPtr<PCGExPathfinding::FSearchAllocations>> AllocationsPool;
 	FCriticalSection AllocationsPoolLock;

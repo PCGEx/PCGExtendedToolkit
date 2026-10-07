@@ -383,7 +383,7 @@ namespace PCGExClusters
 
 		double GetDistSquared(const int32 InEdgeIndex) const
 		{
-			return GetDist(*(EdgesDataPtr + InEdgeIndex));
+			return GetDistSquared(*(EdgesDataPtr + InEdgeIndex));
 		}
 
 		double GetDistSquared(const int32 NodeA, const int32 NodeB) const

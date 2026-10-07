@@ -127,4 +127,14 @@ namespace PCGExFactories
 		}
 		RegisterConsumableAttributesWithFacade_Internal(BaseFactories, InFacade);
 	}
+
+	/** Has every factory declare the buffers it reads on the preloader. */
+	template <typename T_DEF>
+	static void RegisterBuffersDependencies(const TArray<TObjectPtr<const T_DEF>>& InFactories, FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader)
+	{
+		for (const TObjectPtr<const T_DEF>& Factory : InFactories)
+		{
+			Factory->RegisterBuffersDependencies(InContext, FacadePreloader);
+		}
+	}
 }

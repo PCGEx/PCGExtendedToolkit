@@ -69,13 +69,14 @@ double FPCGExNoiseTiling::GetDouble(const FVector& Position) const
 
 	// For tiling with octaves, we scale frequency instead of changing period
 	// This maintains proper tiling while adding detail
+	const FVector P = TransformPosition(Position);
 	double Sum = 0.0;
 	double Amp = 1.0;
 	double Freq = Frequency;
 
 	for (int32 i = 0; i < Octaves; ++i)
 	{
-		Sum += GenerateRaw(Position * Freq) * Amp;
+		Sum += GenerateRaw(P * Freq) * Amp;
 		Amp *= Persistence;
 		Freq *= Lacunarity;
 	}

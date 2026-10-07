@@ -101,11 +101,6 @@ namespace PCGExPolyPath
 
 		void Update(const FSample& Infos, bool& IsNewClosest, bool& IsNewFarthest);
 
-		FORCEINLINE double GetRangeRatio(const double Distance) const
-		{
-			return FMath::Clamp(Distance - SampledRangeMin, 0, SampledRangeWidth) / SampledRangeWidth;
-		}
-
 		FORCEINLINE bool IsValid() const
 		{
 			return UpdateCount > 0;

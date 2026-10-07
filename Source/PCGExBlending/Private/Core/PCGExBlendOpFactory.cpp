@@ -22,11 +22,7 @@ void FPCGExAttributeBlendWeight::Init()
 {
 	ScoreLUT = WeightCurveLookup.MakeLookup(
 		bUseLocalCurve, LocalWeightCurve, WeightCurve,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 }
 
 #if WITH_EDITOR
@@ -55,9 +51,7 @@ void FPCGExAttributeBlendConfig::Init()
 
 bool FPCGExBlendOperation::PrepareForData(FPCGExContext* InContext)
 {
-	Weight = Config.Weighting.WeightValue.GetValueSetting();
-	Weight->bRegisterConsumable &= bCleanupConsumableAttributes;
-	if (!Weight->Init(WeightFacade))
+	if (!InitSettingValue(Weight, Config.Weighting.WeightValue.GetValueSetting(), WeightFacade))
 	{
 		return false;
 	}

@@ -35,8 +35,7 @@ bool FPCGExProbeClosest::Prepare(FPCGExContext* InContext)
 		return false;
 	}
 
-	MaxConnections = Config.MaxConnections.GetValueSetting();
-	if (!MaxConnections->Init(PrimaryDataFacade))
+	if (!InitSettingValue(MaxConnections, Config.MaxConnections.GetValueSetting(), PrimaryDataFacade))
 	{
 		return false;
 	}

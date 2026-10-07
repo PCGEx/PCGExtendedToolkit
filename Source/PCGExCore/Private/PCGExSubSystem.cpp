@@ -54,7 +54,7 @@ void UPCGExSubSystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-UPCGExSubSystem* UPCGExSubSystem::GetSubsystemForCurrentWorld()
+UWorld* UPCGExSubSystem::GetCurrentWorld()
 {
 	UWorld* World = nullptr;
 
@@ -77,7 +77,12 @@ UPCGExSubSystem* UPCGExSubSystem::GetSubsystemForCurrentWorld()
 			World = GEngine->GetCurrentPlayWorld();
 		}
 
-	return GetInstance(World);
+	return World;
+}
+
+UPCGExSubSystem* UPCGExSubSystem::GetSubsystemForCurrentWorld()
+{
+	return GetInstance(GetCurrentWorld());
 }
 
 void UPCGExSubSystem::Tick(float DeltaSeconds)

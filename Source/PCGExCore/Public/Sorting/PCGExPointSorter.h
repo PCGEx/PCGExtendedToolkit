@@ -83,6 +83,9 @@ namespace PCGExSorting
 
 		/** Build a pre-cached sorter for fast bulk sorting. Use when sorting large arrays. */
 		TSharedPtr<FSortCache> BuildCache(int32 NumElements) const;
+
+		/** Sorts element indices in place: through a cache over NumElements when one can be built, per pair otherwise. */
+		void SortIndices(TArray<int32>& InOutIndices, int32 NumElements);
 	};
 
 	/**

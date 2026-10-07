@@ -66,7 +66,7 @@ bool FPCGExFuseCollinearElement::AdvanceWork(FPCGExContext* InContext, const UPC
 			{
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any paths to fuse."));
+			return Context->CancelExecution(TEXT("Could not find any paths to fuse."));
 		}
 	}
 

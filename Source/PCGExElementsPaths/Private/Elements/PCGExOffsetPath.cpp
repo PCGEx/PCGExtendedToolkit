@@ -83,7 +83,7 @@ bool FPCGExOffsetPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 				//NewBatch->SetPointsFilterData(&Context->FilterFactories);
 			}))
 		{
-			Context->CancelExecution(TEXT("Could not find any paths to offset."));
+			return Context->CancelExecution(TEXT("Could not find any paths to offset."));
 		}
 	}
 

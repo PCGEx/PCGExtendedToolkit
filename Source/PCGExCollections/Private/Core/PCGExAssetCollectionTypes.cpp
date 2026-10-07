@@ -17,7 +17,7 @@ namespace PCGExAssetCollection
 	{
 		if (Info.Id == NAME_None)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PCGExAssetCollection: Cannot register type with NAME_None"));
+			UE_LOG(LogPCGEx, Warning, TEXT("PCGExAssetCollection: Cannot register type with NAME_None"));
 			return NAME_None;
 		}
 
@@ -25,7 +25,7 @@ namespace PCGExAssetCollection
 
 		if (Types.Contains(Info.Id))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PCGExAssetCollection: Type '%s' already registered"), *Info.Id.ToString());
+			UE_LOG(LogPCGEx, Warning, TEXT("PCGExAssetCollection: Type '%s' already registered"), *Info.Id.ToString());
 			return Info.Id; // Return existing - idempotent
 		}
 
@@ -41,7 +41,7 @@ namespace PCGExAssetCollection
 			StructToType.Add(Info.EntryStruct, Info.Id);
 		}
 
-		UE_LOG(LogTemp, Verbose, TEXT("PCGExAssetCollection: Registered type '%s'"), *Info.Id.ToString());
+		UE_LOG(LogPCGEx, Verbose, TEXT("PCGExAssetCollection: Registered type '%s'"), *Info.Id.ToString());
 		return Info.Id;
 	}
 

@@ -10,7 +10,7 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Elements/Debug/PCGExDrawAttributes.h"
 #include "Engine/HitResult.h"
-#include "Sampling/PCGExSamplingHelpers.h"
+#include "Helpers/PCGExActorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExRaycastFilterDefinition"
 #define PCGEX_NAMESPACE PCGExRaycastFilterDefinition
@@ -64,7 +64,7 @@ PCGExFactories::EPreparationResult UPCGExRaycastFilterFactory::Prepare(FPCGExCon
 			return PCGExFactories::EPreparationResult::MissingData;
 		}
 
-		if (!PCGExSampling::Helpers::GetIncludedActors(InContext, ActorReferenceDataFacade.ToSharedRef(), Config.ActorReference, IncludedActors))
+		if (!PCGExHelpers::GetIncludedActors(InContext, ActorReferenceDataFacade.ToSharedRef(), Config.ActorReference, IncludedActors))
 		{
 			return PCGExFactories::EPreparationResult::MissingData;
 		}
@@ -161,42 +161,32 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 
 	if (Config.OriginMode != EPCGExRaycastOriginMode::PointPosition)
 	{
-		OriginGetter = Config.Origin.GetValueSetting();
-		OriginGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!OriginGetter->Init(InPointDataFacade))
+		if (!InitSettingValue(OriginGetter, Config.Origin.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 		{
 			return false;
 		}
 	}
 
-	DirectionGetter = Config.Direction.GetValueSetting();
-	DirectionGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!DirectionGetter->Init(InPointDataFacade))
+	if (!InitSettingValue(DirectionGetter, Config.Direction.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 	{
 		return false;
 	}
 
-	MaxDistanceGetter = Config.MaxDistance.GetValueSetting();
-	MaxDistanceGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!MaxDistanceGetter->Init(InPointDataFacade))
+	if (!InitSettingValue(MaxDistanceGetter, Config.MaxDistance.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 	{
 		return false;
 	}
 
 	if (CollisionSettings.TraceMode == EPCGExTraceMode::Sphere)
 	{
-		SphereRadiusGetter = CollisionSettings.SphereRadius.GetValueSetting();
-		SphereRadiusGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!SphereRadiusGetter->Init(InPointDataFacade))
+		if (!InitSettingValue(SphereRadiusGetter, CollisionSettings.SphereRadius.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 		{
 			return false;
 		}
 	}
 	else if (CollisionSettings.TraceMode == EPCGExTraceMode::Box)
 	{
-		BoxHalfExtentsGetter = CollisionSettings.BoxHalfExtents.GetValueSetting();
-		BoxHalfExtentsGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!BoxHalfExtentsGetter->Init(InPointDataFacade))
+		if (!InitSettingValue(BoxHalfExtentsGetter, CollisionSettings.BoxHalfExtents.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 		{
 			return false;
 		}
@@ -204,9 +194,7 @@ bool PCGExPointFilter::FRaycastFilter::Init(FPCGExContext* InContext, const TSha
 
 	if (Config.TestMode == EPCGExRaycastTestMode::CompareDistance)
 	{
-		DistanceThresholdGetter = Config.DistanceThreshold.GetValueSetting();
-		DistanceThresholdGetter->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-		if (!DistanceThresholdGetter->Init(InPointDataFacade))
+		if (!InitSettingValue(DistanceThresholdGetter, Config.DistanceThreshold.GetValueSetting(PCGEX_QUIET_HANDLING), InPointDataFacade))
 		{
 			return false;
 		}

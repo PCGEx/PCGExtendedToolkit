@@ -4,6 +4,7 @@
 #include "Elements/PCGExPathfindingGrowPaths.h"
 
 
+#include "PCGExCoreMacros.h"
 #include "PCGExHeuristicsHandler.h"
 #include "Algo/Reverse.h"
 #include "Clusters/PCGExCluster.h"
@@ -14,13 +15,14 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/Utils/PCGExDataForward.h"
 #include "Graphs/PCGExGraph.h"
+#include "Helpers/PCGExMetaHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPathfindingGrowPathsElement"
 #define PCGEX_NAMESPACE PathfindingGrowPaths
 
 #define PCGEX_GROWTH_GRAB(_CONTEXT, _TARGET, _SOURCE, _TYPE, _ATTRIBUTE) \
 _TARGET = _SOURCE->GetBroadcaster<_TYPE>(_ATTRIBUTE); \
-if (!_TARGET){	PCGE_LOG_C(Error, GraphAndLog, _CONTEXT, FTEXT("Missing specified " #_ATTRIBUTE " attribute."));	return false; }
+if (!_TARGET){ PCGEX_LOG_INVALID_SELECTOR_C(_CONTEXT, _ATTRIBUTE, _ATTRIBUTE) return false; }
 
 #if WITH_EDITOR
 void UPCGExPathfindingGrowPathsSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)

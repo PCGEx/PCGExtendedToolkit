@@ -5,6 +5,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Helpers/PCGExRandomHelpers.h"
 #include "UObject/Object.h"
 #include "PCGExMath.generated.h"
 
@@ -132,19 +133,13 @@ namespace PCGExMath
 
 #pragma region basics
 
-	FORCEINLINE static double FastRand01(uint32& Seed)
-	{
-		Seed = Seed * 1664525u + 1013904223u;
-		return (Seed & 0x00FFFFFF) / static_cast<double>(0x01000000);
-	}
-
 	FORCEINLINE static FVector RandomPointInSphere(const FVector& Center, const double Radius, uint32& Seed)
 	{
 		for (int i = 0; i < 10; ++i)
 		{
-			const float x = (FastRand01(Seed) * 2.0f - 1.0f);
-			const float y = (FastRand01(Seed) * 2.0f - 1.0f);
-			const float z = (FastRand01(Seed) * 2.0f - 1.0f);
+			const float x = (PCGExRandomHelpers::FastRand01(Seed) * 2.0f - 1.0f);
+			const float y = (PCGExRandomHelpers::FastRand01(Seed) * 2.0f - 1.0f);
+			const float z = (PCGExRandomHelpers::FastRand01(Seed) * 2.0f - 1.0f);
 
 			FVector V(x, y, z);
 
@@ -161,8 +156,6 @@ namespace PCGExMath
 	{
 		return FMath::Cos(FMath::DegreesToRadians(AngleInDegrees));
 	}
-
-	PCGEXCORE_API double ConvertStringToDouble(const FString& StringToConvert);
 
 	// Remap function
 	FORCEINLINE static double Remap(const double InBase, const double InMin, const double InMax, const double OutMin = 0, const double OutMax = 1)
@@ -222,22 +215,6 @@ namespace PCGExMath
 		return Sign == 0 ? -1 : Sign;
 	}
 
-	FORCEINLINE static FBox ConeBox(const FVector& Center, const FVector& ConeDirection, const double Size)
-	{
-		const FVector Dir = ConeDirection.GetSafeNormal();
-		const FVector U = FVector::CrossProduct(Dir, Dir + FVector(0.1)).GetSafeNormal();
-		const FVector V = FVector::CrossProduct(Dir, Dir + FVector(-0.1)).GetSafeNormal();
-
-		FBox Box = FBox(Center - FVector(0.0001), Center + FVector(0.0001));
-		Box += Center + Dir * Size;
-		Box += Center + U * Size;
-		Box += Center + V * Size;
-
-		//UE_LOG(LogPCGEx, Warning, TEXT("Box Min X:%f, Y:%f, Z:%f | Max X:%f, Y:%f, Z:%f"), Box.Min.X, Box.Min.Y, Box.Min.Z, Box.Max.X, Box.Max.Y, Box.Max.Z);
-
-		return Box;
-	}
-
 	template <typename T>
 	FORCEINLINE static void GetMinMax(const TArray<T>& Values, T& OutMin, T& OutMax)
 	{
@@ -247,50 +224,6 @@ namespace PCGExMath
 		{
 			OutMin = FMath::Min(OutMin, Value);
 			OutMax = FMath::Max(OutMax, Value);
-		}
-	}
-
-	template <typename T>
-	FORCEINLINE static void SignedNormalize(TArray<T> Values)
-	{
-		T Min;
-		T Max;
-		GetMinMax(Values, Min, Max);
-		T Range = FMath::Max(FMath::Abs(Max), FMath::Abs(Min));
-		for (int i = 0; i < Values.Num(); i++)
-		{
-			Values[i] = Values[i] / Range;
-		}
-	}
-
-	template <typename T>
-	FORCEINLINE static void Remap(TArray<T> Values, const bool bZeroMin = false, T Range = 1)
-	{
-		T Min;
-		T Max;
-		GetMinMax(Values, Min, Max);
-		if (bZeroMin)
-		{
-			for (int i = 0; i < Values.Num(); i++)
-			{
-				Values[i] = Remap(Values[i], 0, Max, 0, 1) * Range;
-			}
-		}
-		else
-		{
-			for (int i = 0; i < Values.Num(); i++)
-			{
-				Values[i] = Remap(Values[i], Min, Max, 0, 1) * Range;
-			}
-		}
-	}
-
-	template <typename T>
-	FORCEINLINE static void Remap(TArray<T> Values, T Min, T Max, T Range = 1)
-	{
-		for (int i = 0; i < Values.Num(); i++)
-		{
-			Values[i] = Remap(Values[i], Min, Max, 0, 1) * Range;
 		}
 	}
 
@@ -308,6 +241,20 @@ namespace PCGExMath
 	FORCEINLINE static void Snap(double& Value, const double Step)
 	{
 		Value = !FMath::IsNearlyZero(Step) ? FMath::RoundToDouble(Value / Step) * Step : Value;
+	}
+
+	FORCEINLINE static void Snap(FVector& Value, const FVector& Step)
+	{
+		Snap(Value.X, Step.X);
+		Snap(Value.Y, Step.Y);
+		Snap(Value.Z, Step.Z);
+	}
+
+	FORCEINLINE static void Snap(FRotator& Value, const FRotator& Step)
+	{
+		Snap(Value.Roll, Step.Roll);
+		Snap(Value.Pitch, Step.Pitch);
+		Snap(Value.Yaw, Step.Yaw);
 	}
 
 	FORCEINLINE static double Round10(const float A)
@@ -402,10 +349,7 @@ namespace PCGExMath
 	}
 
 	PCGEXCORE_API void CheckConvex(const FVector& A, const FVector& B, const FVector& C, bool& bIsConvex, int32& OutSign, const FVector& UpVector = FVector::UpVector);
-	PCGEXCORE_API FBox ScaledBox(const FBox& InBox, const FVector& InScale);
 	PCGEXCORE_API bool IsDirectionWithinTolerance(const FVector& A, const FVector& B, const FRotator& Limits);
-
-	PCGEXCORE_API double GetArcLength(const double R, const double StartAngleRadians, const double EndAngleRadians);
 
 	/** Distance from C to AB */
 	PCGEXCORE_API double GetPerpendicularDistance(const FVector& A, const FVector& B, const FVector& C);

@@ -34,8 +34,7 @@ bool FPCGExEntryBestFitPickerOpBase::OnInitForData(FPCGExContext* InContext, con
 		TransformRange = PointData->GetConstTransformValueRange();
 	}
 
-	PoolSizeGetter = PoolSize.GetValueSetting();
-	if (!PoolSizeGetter->Init(InDataFacade))
+	if (!InitSettingValue(PoolSizeGetter, PoolSize.GetValueSetting(), InDataFacade))
 	{
 		return false;
 	}

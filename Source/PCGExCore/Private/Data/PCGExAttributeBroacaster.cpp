@@ -3,6 +3,7 @@
 
 #include "Data/PCGExAttributeBroadcaster.h"
 
+#include "PCGExLog.h"
 #include "PCGParamData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataValue.h"
@@ -396,7 +397,7 @@ namespace PCGExData
 
 		if constexpr (std::is_same_v<T, FRotator> || std::is_same_v<T, FTransform>)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Unique value type is unsupported at the moment."))
+			UE_LOG(LogPCGEx, Error, TEXT("Unique value type is unsupported at the moment."))
 		}
 		else
 		{

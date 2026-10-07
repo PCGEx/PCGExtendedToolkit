@@ -60,44 +60,4 @@ namespace PCGExManagedHelpers
 			return true;
 		});
 	}
-
-	/** Find ALL managed resources of type T matching CRC. Mark all as reused if count == ExpectedCount. */
-	template <typename T>
-	bool TryReuseAllManagedResources(UPCGComponent* Component, const FPCGCrc& Crc, int32 ExpectedCount)
-	{
-		if (!Component || !Crc.IsValid() || ExpectedCount <= 0)
-		{
-			return false;
-		}
-
-		TArray<T*> Matched;
-		Component->ForEachManagedResource(
-			[&](UPCGManagedResource* InResource)
-			{
-				T* Typed = Cast<T>(InResource);
-				if (!Typed)
-				{
-					return;
-				}
-
-				if (!Typed->GetCrc().IsValid() || !(Typed->GetCrc() == Crc))
-				{
-					return;
-				}
-
-				Matched.Add(Typed);
-			});
-
-		if (Matched.Num() != ExpectedCount)
-		{
-			return false;
-		}
-
-		for (T* Resource : Matched)
-		{
-			Resource->MarkAsReused();
-		}
-
-		return true;
-	}
 }

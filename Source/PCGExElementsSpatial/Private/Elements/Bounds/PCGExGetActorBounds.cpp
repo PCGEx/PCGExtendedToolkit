@@ -110,7 +110,7 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 	check(IsInGameThread());
 
 	const IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
-	UWorld* World = Source ? Source->GetExecutionState().GetWorld() : nullptr;
+	UWorld* World = Context->GetWorld();
 	if (!World)
 	{
 		return Context->CancelExecution(TEXT("No world to gather actors from."));

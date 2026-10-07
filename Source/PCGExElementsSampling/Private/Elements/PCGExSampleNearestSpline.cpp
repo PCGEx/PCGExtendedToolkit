@@ -219,11 +219,7 @@ bool FPCGExSampleNearestSplineElement::Boot(FPCGExContext* InContext) const
 
 	Context->WeightCurve = Settings->WeightCurveLookup.MakeLookup(
 		Settings->bUseLocalCurve, Settings->LocalWeightOverDistance, WeightCurveAsset,
-		[](FRichCurve& CurveData)
-		{
-			CurveData.AddKey(0, 0);
-			CurveData.AddKey(1, 1);
-		});
+		PCGExCurves::InitLinearRamp);
 
 	return true;
 }
@@ -275,16 +271,7 @@ namespace PCGExSampleNearestSpline
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		// Allocate edge native properties
-
-		EPCGPointNativeProperties AllocateFor = EPCGPointNativeProperties::None;
-
-		if (Context->ApplySampling.WantsApply())
-		{
-			AllocateFor |= EPCGPointNativeProperties::Transform;
-		}
-
-		PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
+		PointDataFacade->GetOut()->AllocateProperties(Context->ApplySampling.GetAllocations());
 
 		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
 		SamplingMask.Init(1, PointDataFacade->GetNum());
@@ -501,7 +488,7 @@ namespace PCGExSampleNearestSpline
 				{
 					Stats.Update(Infos, IsNewClosest, IsNewFarthest);
 
-					if ((bClosestSample && !IsNewClosest) || !IsNewFarthest)
+					if (bClosestSample ? !IsNewClosest : !IsNewFarthest)
 					{
 						return;
 					}

@@ -8,6 +8,7 @@
 #include "Containers/PCGExHashLookup.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Factories/PCGExFactories.h"
 
 #if WITH_EDITOR
 void FPCGExFillControlConfigHeuristicsBudget::ApplyDeprecation()
@@ -33,10 +34,7 @@ bool FPCGExFillControlHeuristicsBudget::PrepareForDiffusions(FPCGExContext* InCo
 
 	BudgetSource = TypedFactory->Config.BudgetSource;
 
-	// Initialize budget setting value
-	MaxBudget = TypedFactory->Config.MaxBudgetValue.GetValueSetting();
-	MaxBudget->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!MaxBudget->Init(GetSourceFacade()))
+	if (!InitSettingValue(MaxBudget, TypedFactory->Config.MaxBudgetValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}
@@ -123,10 +121,7 @@ void UPCGExFillControlsFactoryHxBudget::RegisterBuffersDependencies(FPCGExContex
 {
 	Super::RegisterBuffersDependencies(InContext, FacadePreloader);
 
-	for (const TObjectPtr<const UPCGExHeuristicsFactoryData>& HFactory : HeuristicsFactories)
-	{
-		HFactory->RegisterBuffersDependencies(InContext, FacadePreloader);
-	}
+	PCGExFactories::RegisterBuffersDependencies(HeuristicsFactories, InContext, FacadePreloader);
 }
 
 TArray<FPCGPinProperties> UPCGExFillControlsHeuristicsBudgetProviderSettings::InputPinProperties() const

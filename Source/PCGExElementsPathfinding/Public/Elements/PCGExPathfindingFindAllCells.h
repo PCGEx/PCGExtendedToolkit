@@ -125,10 +125,6 @@ namespace PCGExFindAllCells
 		TArray<TSharedPtr<PCGExClusters::FCell>> ValidCells;
 		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIO;
 
-		// Hole expansion tracking
-		TMap<int32, TSet<int32>> CellAdjacencyMap;
-		TSet<int32> ExcludedFaceIndices; // Face indices to exclude due to holes or growth
-
 	public:
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;
 
@@ -142,9 +138,6 @@ namespace PCGExFindAllCells
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
-
-		/** Expand hole exclusion from initial cell to adjacent cells up to growth depth */
-		void ExpandHoleExclusion(int32 HoleIndex, int32 InitialFaceIndex, int32 MaxGrowth);
 
 		virtual void Cleanup() override;
 	};

@@ -103,6 +103,7 @@ namespace PCGExWriteVtxProperties
 		for (const UPCGExVtxPropertyFactoryData* Factory : Context->ExtraFactories)
 		{
 			TSharedPtr<FPCGExVtxPropertyOperation> NewOperation = Factory->CreateOperation(Context);
+			NewOperation->bCleanupConsumableAttributes = Factory->bCleanupConsumableAttributes;
 
 			if (!NewOperation->PrepareForCluster(Context, Cluster, VtxDataFacade, EdgeDataFacade))
 			{

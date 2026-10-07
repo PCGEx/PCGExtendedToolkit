@@ -186,23 +186,27 @@ namespace PCGExData::Helpers
 		return Value;
 	}
 
-	namespace Internal
+	bool TryGetDataValueIdentifier(const FName Name, FPCGAttributeIdentifier& OutIdentifier)
 	{
-		// Only the parsed attribute name is kept (domain and sub-selection are dropped); attribute creation validates it.
-		bool TryGetDataValueIdentifier(const FName Name, FPCGAttributeIdentifier& OutIdentifier)
+		FPCGAttributePropertyInputSelector Selector;
+		Selector.Update(Name.ToString());
+		return TryGetDataValueIdentifier(Selector, OutIdentifier);
+	}
+
+	bool TryGetDataValueIdentifier(const FPCGAttributePropertySelector& Selector, FPCGAttributeIdentifier& OutIdentifier)
+	{
+		if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute)
 		{
-			FPCGAttributePropertyInputSelector Selector;
-			Selector.Update(Name.ToString());
-
-			if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute)
-			{
-				return false;
-			}
-
-			OutIdentifier = FPCGAttributeIdentifier(Selector.GetAttributeName(), EPCGMetadataDomainFlag::Data);
-			return true;
+			return false;
 		}
 
+		// The name is not validated here: attribute creation and lookups do it.
+		OutIdentifier = FPCGAttributeIdentifier(Selector.GetAttributeName(), PCGMetadataDomainID::Data);
+		return true;
+	}
+
+	namespace Internal
+	{
 		// Name and target gates shared by the SetDataValue name overloads; null (logged) when either refuses.
 		UPCGMetadata* GetDataValueTarget(UPCGData* InData, const FName Name, FPCGAttributeIdentifier& OutIdentifier)
 		{

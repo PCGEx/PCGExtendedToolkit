@@ -197,28 +197,14 @@ namespace PCGExMath::OBB
 
 	bool FCollection::SegmentIntersectsAny(const FVector& Start, const FVector& End) const
 	{
-		if (!Octree)
-		{
-			return false;
-		}
-
 		FBox SegBox(ForceInit);
 		SegBox += Start;
 		SegBox += End;
 		const FBoxCenterAndExtent QueryBounds(SegBox);
-
-		bool bFound = false;
-		Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+		return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 		{
-			if (SegmentIntersects(GetOBB(Item.Index), Start, End))
-			{
-				bFound = true;
-				return false;
-			}
-			return true;
+			return SegmentIntersects(GetOBB(Item.Index), Start, End);
 		});
-
-		return bFound;
 	}
 
 	void FCollection::ClassifyPoints(TArrayView<const FVector> Points, TBitArray<>& OutInside, EPCGExBoxCheckMode Mode, float Expansion) const
@@ -248,122 +234,78 @@ namespace PCGExMath::OBB
 
 	bool FCollection::OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex) const
 	{
-		if (!Octree)
-		{
-			return false;
-		}
 		const float R = Candidate.Bounds.Radius;
 		const FBoxCenterAndExtent QueryBounds(Candidate.Bounds.Origin, FVector4(R, R, R, R));
-		bool bFound = false;
-		Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+		return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 		{
 			const int32 i = Item.Index;
 			if (i == SkipIndex)
 			{
-				return true;
-			}
-			if (SphereOverlap(GetBounds(i), Candidate.Bounds) && SATOverlap(GetOBB(i), Candidate))
-			{
-				bFound = true;
 				return false;
 			}
-			return true;
+			return SphereOverlap(GetBounds(i), Candidate.Bounds) && SATOverlap(GetOBB(i), Candidate);
 		});
-		return bFound;
 	}
 
 	bool FCollection::OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkip) const
 	{
-		if (!Octree)
-		{
-			return false;
-		}
 		const float R = Candidate.Bounds.Radius;
 		const FBoxCenterAndExtent QueryBounds(Candidate.Bounds.Origin, FVector4(R, R, R, R));
-		bool bFound = false;
-		Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+		return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 		{
 			const int32 i = Item.Index;
 			if (i == SkipIndex)
 			{
-				return true;
+				return false;
 			}
 			if (ShouldSkip(GetBounds(i).Index))
 			{
-				return true;
-			}
-			if (SphereOverlap(GetBounds(i), Candidate.Bounds) && SATOverlap(GetOBB(i), Candidate))
-			{
-				bFound = true;
 				return false;
 			}
-			return true;
+			return SphereOverlap(GetBounds(i), Candidate.Bounds) && SATOverlap(GetOBB(i), Candidate);
 		});
-		return bFound;
 	}
 
 	bool FCollection::OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex) const
 	{
-		if (!Octree)
-		{
-			return false;
-		}
 		const float R = Candidate.Bounds.Radius;
 		const FBoxCenterAndExtent QueryBounds(Candidate.Bounds.Origin, FVector4(R, R, R, R));
-		bool bFound = false;
-		Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+		return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 		{
 			const int32 i = Item.Index;
 			if (i == SkipIndex)
 			{
-				return true;
+				return false;
 			}
 			if (SpherePenetrationDepth(GetBounds(i), Candidate.Bounds) <= 0.0f)
 			{
-				return true;
-			}
-			if (SATPenetrationDepth(GetOBB(i), Candidate) > MaxPenetration)
-			{
-				bFound = true;
 				return false;
 			}
-			return true;
+			return SATPenetrationDepth(GetOBB(i), Candidate) > MaxPenetration;
 		});
-		return bFound;
 	}
 
 	bool FCollection::OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkip) const
 	{
-		if (!Octree)
-		{
-			return false;
-		}
 		const float R = Candidate.Bounds.Radius;
 		const FBoxCenterAndExtent QueryBounds(Candidate.Bounds.Origin, FVector4(R, R, R, R));
-		bool bFound = false;
-		Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+		return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 		{
 			const int32 i = Item.Index;
 			if (i == SkipIndex)
 			{
-				return true;
+				return false;
 			}
 			if (ShouldSkip(GetBounds(i).Index))
 			{
-				return true;
+				return false;
 			}
 			if (SpherePenetrationDepth(GetBounds(i), Candidate.Bounds) <= 0.0f)
 			{
-				return true;
-			}
-			if (SATPenetrationDepth(GetOBB(i), Candidate) > MaxPenetration)
-			{
-				bFound = true;
 				return false;
 			}
-			return true;
+			return SATPenetrationDepth(GetOBB(i), Candidate) > MaxPenetration;
 		});
-		return bFound;
 	}
 
 	bool FCollection::ForEachOverlapping(
@@ -372,41 +314,30 @@ namespace PCGExMath::OBB
 		TFunctionRef<bool(int32)> ShouldSkipOwner,
 		TFunctionRef<bool(const FOBB&, int32 OwnerIndex)> ConfirmOverlap) const
 	{
-		if (!Octree)
-		{
-			return false;
-		}
 		const float R = Candidate.Bounds.Radius;
 		const FBoxCenterAndExtent QueryBounds(Candidate.Bounds.Origin, FVector4(R, R, R, R));
-		bool bFound = false;
-		Octree->FindFirstElementWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item) -> bool
+		return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
 		{
 			const int32 i = Item.Index;
 			if (i == SkipIndex)
 			{
-				return true;
+				return false;
 			}
 			if (ShouldSkipOwner(GetBounds(i).Index))
 			{
-				return true;
+				return false;
 			}
 			if (!SphereOverlap(GetBounds(i), Candidate.Bounds))
 			{
-				return true;
+				return false;
 			}
 			const FOBB StoredOBB = GetOBB(i);
 			if (!SATOverlap(StoredOBB, Candidate))
 			{
-				return true;
-			}
-			if (ConfirmOverlap(StoredOBB, GetBounds(i).Index))
-			{
-				bFound = true;
 				return false;
 			}
-			return true;
+			return ConfirmOverlap(StoredOBB, GetBounds(i).Index);
 		});
-		return bFound;
 	}
 
 	// ========== FDynamicCollection ==========

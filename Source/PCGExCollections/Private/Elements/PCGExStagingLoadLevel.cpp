@@ -17,6 +17,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGHelpers.h"
@@ -665,7 +666,7 @@ namespace PCGExStagingLoadLevel
 
 		ULevel* SourceLevel = LevelWorld->PersistentLevel;
 		const FTransform& LevelTransform = Request.Params.LevelTransform;
-		const bool bIsPreview = ExecutionContext->GetComponent() && ExecutionContext->GetComponent()->IsInPreviewMode();
+		const bool bIsPreview = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		// Build the spawnable set. Applies the same actor filters as OnLevelLoadedChanged:
 		// skip null, AWorldSettings, bIsMainWorldOnly, and socket-provider export markers.
@@ -790,6 +791,8 @@ namespace PCGExStagingLoadLevel
 
 			if (bIsRootActor[i])
 			{
+				// TODO: composes actor roots only -- an attachment to a non-root component or a socket is lost, here and in
+				// pass 2. PCGExHelpers::EnsureWorldTransformsCurrent (parent-first, socket-aware) should replace both walks.
 				FTransform SourceWorldTransform = FTransform::Identity;
 				if (const USceneComponent* SrcRoot = SourceActor->GetRootComponent())
 				{

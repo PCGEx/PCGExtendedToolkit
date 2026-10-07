@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Clusters/Artifacts/PCGExCellDetails.h"
+#include "Clusters/Artifacts/PCGExCellTriage.h"
 #include "Core/PCGExClustersProcessor.h"
 
 #include "PCGExPathfindingFindAllCellsBounded.generated.h"
@@ -19,16 +20,6 @@ namespace PCGExClusters
 namespace PCGExFindAllCellsBounded
 {
 	class FProcessor;
-
-	const FName SourceBoundsLabel = FName("Bounds");
-
-	const FName OutputPathsInsideLabel = FName("Paths : Inside");
-	const FName OutputPathsTouchingLabel = FName("Paths : Touching");
-	const FName OutputPathsOutsideLabel = FName("Paths : Outside");
-
-	const FName OutputBoundsInsideLabel = FName("Bounds : Inside");
-	const FName OutputBoundsTouchingLabel = FName("Bounds : Touching");
-	const FName OutputBoundsOutsideLabel = FName("Bounds : Outside");
 }
 
 namespace PCGExMT
@@ -131,16 +122,7 @@ struct FPCGExFindAllCellsBoundedContext final : FPCGExClustersProcessorContext
 	TSharedPtr<PCGExClusters::FProjectedPointSet> Holes;
 	TSharedPtr<PCGExData::FFacade> HolesFacade;
 
-	FBox BoundsFilter = FBox(ForceInit);
-
-	// Separate output collections for each triage category
-	TSharedPtr<PCGExData::FPointIOCollection> OutputPathsInside;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputPathsTouching;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputPathsOutside;
-
-	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBoundsInside;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBoundsTouching;
-	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBoundsOutside;
+	PCGExCellTriage::FOutputs Triage;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL
@@ -157,31 +139,13 @@ protected:
 
 namespace PCGExFindAllCellsBounded
 {
-	// Use shared triage result enum from PCGExCellDetails.h
-	using ECellTriageResult = EPCGExCellTriageResult;
-
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExFindAllCellsBoundedContext, UPCGExFindAllCellsBoundedSettings>
 	{
 	protected:
 		TSharedPtr<PCGExClusters::FProjectedPointSet> Holes;
 		TSharedPtr<PCGExClusters::FCellPathBuilder> CellProcessor;
 
-		TArray<TSharedPtr<PCGExClusters::FCell>> CellsInside;
-		TArray<TSharedPtr<PCGExClusters::FCell>> CellsTouching;
-		TArray<TSharedPtr<PCGExClusters::FCell>> CellsOutside;
-
-		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOInside;
-		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOTouching;
-		TArray<TSharedPtr<PCGExData::FPointIO>> CellsIOOutside;
-
-		// For Combined mode tagging
-		TArray<FString> CellTagsInside;
-		TArray<FString> CellTagsTouching;
-		TArray<FString> CellTagsOutside;
-
-		// Hole expansion tracking
-		TSet<int32> ExcludedFaceIndices;           // Faces excluded due to hole expansion
-		TMap<int32, TSet<int32>> CellAdjacencyMap; // Cached adjacency
+		PCGExCellTriage::FBuckets Buckets;
 
 	public:
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;
@@ -198,11 +162,5 @@ namespace PCGExFindAllCellsBounded
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 
 		virtual void Cleanup() override;
-
-		/** Expand hole exclusion to adjacent cells */
-		void ExpandHoleExclusion(int32 HoleIndex, int32 InitialFaceIndex, int32 MaxGrowth);
-
-	protected:
-		ECellTriageResult ClassifyCell(const TSharedPtr<PCGExClusters::FCell>& InCell) const;
 	};
 }

@@ -119,25 +119,6 @@ private:
 		int32 HighlightIndex,
 		EPCGExAdjacencyGatherMode GatherMode) const;
 
-	/** Draw a filled circle using custom vertices. */
-	void DrawFilledCircle(
-		FSlateWindowElementList& OutDrawElements,
-		int32 LayerId,
-		const FGeometry& AllottedGeometry,
-		const FVector2D& Center,
-		double Radius,
-		const FLinearColor& Color,
-		int32 NumSegments = 16) const;
-
-	/** Draw a filled rectangle for panel background. */
-	void DrawFilledRect(
-		FSlateWindowElementList& OutDrawElements,
-		int32 LayerId,
-		const FGeometry& AllottedGeometry,
-		const FVector2D& TopLeft,
-		const FVector2D& Size,
-		const FLinearColor& Color) const;
-
 	/** Compute the effective threshold from current settings. */
 	int32 ComputeThreshold(int32 TotalNeighbors) const;
 

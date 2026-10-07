@@ -90,16 +90,12 @@ bool PCGExPointFilter::FSegmentLengthFilter::Init(FPCGExContext* InContext, cons
 		IndexSafety = TypedFilterFactory->Config.IndexSafety;
 	}
 
-	Threshold = TypedFilterFactory->Config.Threshold.GetValueSetting(PCGEX_QUIET_HANDLING);
-	Threshold->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!Threshold->Init(PointDataFacade))
+	if (!InitSettingValue(Threshold, TypedFilterFactory->Config.Threshold.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}
 
-	Index = TypedFilterFactory->Config.Index.GetValueSetting(PCGEX_QUIET_HANDLING);
-	Index->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!Index->Init(PointDataFacade))
+	if (!InitSettingValue(Index, TypedFilterFactory->Config.Index.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}

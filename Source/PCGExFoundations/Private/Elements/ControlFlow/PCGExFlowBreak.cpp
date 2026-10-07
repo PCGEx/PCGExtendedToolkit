@@ -258,7 +258,10 @@ bool FPCGExFlowBreakElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 			Context->OutputData.InactiveOutputPinBitmask |= 1ULL << 0;
 		}
 
-		Context->OutputData.TaggedData.Append(InOutData);
+		for (const FPCGTaggedData& Data : InOutData)
+		{
+			Context->StageOutput(const_cast<UPCGData*>(Data.Data.Get()), Data.Pin, PCGExData::EStaging::None, Data.Tags);
+		}
 	};
 
 	auto StageResult = [&](bool bResult)

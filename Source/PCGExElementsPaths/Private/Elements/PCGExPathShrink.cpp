@@ -276,11 +276,7 @@ bool FPCGExShrinkPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 					return false;
 				}
 
-				if (Entry->GetNum() < 2)
-				{
-					bHasInvalidInputs = true;
-					return false;
-				}
+				PCGEX_SKIP_INVALID_PATH_ENTRY
 				return true;
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{

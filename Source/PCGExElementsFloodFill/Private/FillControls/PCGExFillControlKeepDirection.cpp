@@ -35,9 +35,7 @@ bool FPCGExFillControlKeepDirection::PrepareForDiffusions(FPCGExContext* InConte
 
 	const UPCGExFillControlsFactoryKeepDirection* TypedFactory = Cast<UPCGExFillControlsFactoryKeepDirection>(Factory);
 
-	WindowSize = TypedFactory->Config.WindowSizeValue.GetValueSetting();
-	WindowSize->bRegisterConsumable &= TypedFactory->bCleanupConsumableAttributes;
-	if (!WindowSize->Init(GetSourceFacade()))
+	if (!InitSettingValue(WindowSize, TypedFactory->Config.WindowSizeValue.GetValueSetting(), GetSourceFacade()))
 	{
 		return false;
 	}

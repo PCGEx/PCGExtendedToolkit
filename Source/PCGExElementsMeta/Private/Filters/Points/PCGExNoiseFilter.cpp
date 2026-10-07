@@ -60,9 +60,7 @@ bool PCGExPointFilter::FNoiseFilter::Init(FPCGExContext* InContext, const TShare
 
 	NoiseGenerator = TypedFilterFactory->NoiseGenerator;
 
-	OperandB = TypedFilterFactory->Config.Comparison.GetValueSetting(PCGEX_QUIET_HANDLING);
-	OperandB->bRegisterConsumable &= TypedFilterFactory->bCleanupConsumableAttributes;
-	if (!OperandB->Init(PointDataFacade))
+	if (!InitSettingValue(OperandB, TypedFilterFactory->Config.Comparison.GetValueSetting(PCGEX_QUIET_HANDLING), PointDataFacade))
 	{
 		return false;
 	}
