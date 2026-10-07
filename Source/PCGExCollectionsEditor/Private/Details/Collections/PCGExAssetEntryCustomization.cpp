@@ -10,7 +10,6 @@
 #include "Editor.h"
 #include "FileHelpers.h"
 #include "IDetailChildrenBuilder.h"
-#include "PCGExCollectionsEditorSettings.h"
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyHandle.h"
 #include "Details/Collections/PCGExGenericAssetPickerCustomization.h"
@@ -132,23 +131,11 @@ void FPCGExAssetEntryCustomization::CustomizeChildren(
 	uint32 NumElements = 0;
 	PropertyHandle->GetNumChildren(NumElements);
 
-	const UPCGExCollectionsEditorSettings* EditorSettings = GetDefault<UPCGExCollectionsEditorSettings>();
-
 	for (uint32 i = 0; i < NumElements; ++i)
 	{
 		TSharedPtr<IPropertyHandle> ElementHandle = PropertyHandle->GetChildHandle(i);
-		FName ElementName = ElementHandle ? ElementHandle->GetProperty()->GetFName() : NAME_None;
+		const FName ElementName = ElementHandle ? ElementHandle->GetProperty()->GetFName() : NAME_None;
 		if (!ElementHandle.IsValid() || CustomizedTopLevelProperties.Contains(ElementName))
-		{
-			continue;
-		}
-
-		// Build-time filter instead of a per-row dynamic Visibility attribute: that attribute
-		// breaks change-notification/write-back for default-expanded nested structs in the grid's
-		// FStructOnScope panel (Scale to Fit / Justification never reached OnFinishedChangingProperties).
-		// ForceRefreshTabs re-runs this customization whenever the filter toggles
-		// (OnHiddenAssetPropertyNamesChanged), so show/hide stays live without it.
-		if (EditorSettings->GetPropertyVisibility(ElementName) != EVisibility::Visible)
 		{
 			continue;
 		}
@@ -156,28 +143,17 @@ void FPCGExAssetEntryCustomization::CustomizeChildren(
 		ChildBuilder.AddProperty(ElementHandle.ToSharedRef());
 	}
 
-	// Add PropertyOverrides WITHOUT any visibility filter or customization
-	// The visibility lambda interferes with nested customizations - prevents value widgets from rendering
-	// PCGExPropertiesEditor module handles all PropertyOverrides UI via registered customizations
+	// Kept after the plain members. The footer's category-group filter applies through the details view.
 	TSharedPtr<IPropertyHandle> PropertyOverridesHandle = PropertyHandle->GetChildHandle(TEXT("PropertyOverrides"));
 	if (PropertyOverridesHandle.IsValid())
 	{
 		ChildBuilder.AddProperty(PropertyOverridesHandle.ToSharedRef());
 	}
 
-	// Same reason as above: the grammar struct customizations host an async color picker
-	// (FColorPicker modal) whose OnColorCommitted write-back fails when the row is wrapped
-	// in a dynamic-visibility lambda. EditCondition meta on these properties still hides
-	// them appropriately based on bIsSubCollection / SubGrammarMode.
 	TSharedPtr<IPropertyHandle> AssetGrammarHandle = PropertyHandle->GetChildHandle(TEXT("AssetGrammar"));
 	if (AssetGrammarHandle.IsValid())
 	{
 		ChildBuilder.AddProperty(AssetGrammarHandle.ToSharedRef());
-	}
-	TSharedPtr<IPropertyHandle> CollectionGrammarHandle = PropertyHandle->GetChildHandle(TEXT("CollectionGrammar"));
-	if (CollectionGrammarHandle.IsValid())
-	{
-		ChildBuilder.AddProperty(CollectionGrammarHandle.ToSharedRef());
 	}
 }
 
@@ -187,9 +163,8 @@ void FPCGExAssetEntryCustomization::FillCustomizedTopLevelPropertiesNames()
 	CustomizedTopLevelProperties.Add(FName("Category"));
 	CustomizedTopLevelProperties.Add(FName("bIsSubCollection"));
 	CustomizedTopLevelProperties.Add(FName("SubCollection"));
-	CustomizedTopLevelProperties.Add(FName("PropertyOverrides")); // Handled separately - no visibility filter
-	CustomizedTopLevelProperties.Add(FName("AssetGrammar"));      // Handled separately - no visibility filter
-	CustomizedTopLevelProperties.Add(FName("CollectionGrammar")); // Handled separately - no visibility filter
+	CustomizedTopLevelProperties.Add(FName("PropertyOverrides")); // Appended last by CustomizeChildren
+	CustomizedTopLevelProperties.Add(FName("AssetGrammar"));      // Appended last by CustomizeChildren
 }
 
 #define PCGEX_SUBCOLLECTION_VISIBLE \

@@ -6,7 +6,8 @@
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
-#include "PCGExCollectionsEditorSettings.h"
+#include "Details/PCGExCategoryGroups.h"
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/PCGExInlineNumericWidgets.h"
@@ -133,9 +134,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 	IDetailChildrenBuilder& ChildBuilder,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	const bool bIsGlobal = PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"));
-
-#define PCGEX_GLOBAL_VISIBILITY(_ID) .Visibility(MakeAttributeLambda([bIsGlobal]() { return !bIsGlobal ? GetDefault<UPCGExCollectionsEditorSettings>()->GetPropertyVisibility(FName(_ID)) : EVisibility::Visible; }))
+	// Rows join footer sub-groups by tag; views without the filter (collection-level globals) ignore it.
 
 #pragma region Offset Min/Max
 
@@ -148,7 +147,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Offset"))
-		PCGEX_GLOBAL_VISIBILITY("VariationOffset")
+		.RowTag(PCGExCategoryGroups::MakeRowTag(PCGExCollectionCategoryGroups::Ids::VariationsOffset))
 		.NameContent()
 		[
 			SNew(SVerticalBox)
@@ -244,7 +243,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Rotation"))
-		PCGEX_GLOBAL_VISIBILITY("VariationRotation")
+		.RowTag(PCGExCategoryGroups::MakeRowTag(PCGExCollectionCategoryGroups::Ids::VariationsRotation))
 		.NameContent()
 		[
 			SNew(SVerticalBox)
@@ -337,7 +336,7 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Scale"))
-		PCGEX_GLOBAL_VISIBILITY("VariationScale")
+		.RowTag(PCGExCategoryGroups::MakeRowTag(PCGExCollectionCategoryGroups::Ids::VariationsScale))
 		.NameContent()
 		[
 			SNew(SVerticalBox)
@@ -428,8 +427,6 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 				PCGEX_STEP_SLOT(ScaleStepsHandle, "Z", ScaleSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorZ, nullptr)
 			]
 		];
-
-#undef PCGEX_GLOBAL_VISIBILITY
 
 #pragma endregion
 }

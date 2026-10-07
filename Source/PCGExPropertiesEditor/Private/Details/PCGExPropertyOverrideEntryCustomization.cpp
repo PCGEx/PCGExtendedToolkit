@@ -558,8 +558,7 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 			[
 				PCGExPropertyLabelRow::Build(
 					TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryNameText)),
-					TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryTypeText)),
-					/*bShowSeparator=*/false)
+					TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryTypeText)))
 			];
 
 		IDetailPropertyRow* InnerRow = FPCGExInlineWidgetRegistry::AddCompactValueRow(

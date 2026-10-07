@@ -24,6 +24,7 @@ class SPCGExCollectionCategoryGroup;
 class FPCGExCollectionTileDragDropOp;
 class FScriptArrayHelper;
 struct FPropertyChangedEvent;
+struct FPropertyAndParent;
 
 /** Flags describing what kind of structural change happened, so StructuralRefresh() can do the minimum work. */
 enum class EPCGExStructuralRefreshFlags : uint8
@@ -123,6 +124,11 @@ private:
 	TSharedPtr<FStructOnScope> CurrentStructBaseline;
 
 	int32 CurrentDetailIndex = INDEX_NONE;
+
+	/** Footer category-group filter on the struct panel. Category-overrides mode is exempt: its only
+	 *  content is the overrides block. */
+	bool IsStructPanelPropertyVisible(const FPropertyAndParent& PropertyAndParent) const;
+	bool IsStructPanelCustomRowVisible(FName RowName, FName ParentName) const;
 
 	/**
 	 * Non-None => the panel shows this category's overrides row instead of an entry. Layered OVER the
@@ -239,7 +245,7 @@ private:
 	// Encapsulates reflection boilerplate for Entries array access
 	struct FEntriesArrayAccess
 	{
-		FArrayProperty* ArrayProp = nullptr;
+		const FArrayProperty* ArrayProp = nullptr;
 		FStructProperty* InnerProp = nullptr;
 		void* ArrayData = nullptr;
 

@@ -17,6 +17,7 @@
 #include "Widgets/Notifications/SNotificationList.h"
 
 #include "PCGExProperty.h"
+#include "PCGExPropertySchema.h"
 #include "PropertyCustomizationHelpers.h"
 #include "PropertyEditorModule.h"
 #include "ScopedTransaction.h"
@@ -24,6 +25,8 @@
 #include "Core/PCGExAssetCollectionTypes.h"
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
+#include "Details/Collections/SPCGExCollectionFilterBar.h"
 #include "Details/Collections/SPCGExCollectionGridView.h"
 #include "Grammit/PCGExGrammitExport.h"
 #include "Modules/ModuleManager.h"
@@ -38,87 +41,59 @@
 
 FPCGExAssetCollectionEditor::FPCGExAssetCollectionEditor()
 {
-	OnHiddenAssetPropertyNamesChanged = UPCGExCollectionsEditorSettings::OnHiddenAssetPropertyNamesChanged.AddRaw(this, &FPCGExAssetCollectionEditor::ForceRefreshTabs);
+	OnHiddenCategoryGroupsChangedHandle = UPCGExCollectionsEditorSettings::OnHiddenCategoryGroupsChanged.AddRaw(this, &FPCGExAssetCollectionEditor::ForceRefreshTabs);
 	OnObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &FPCGExAssetCollectionEditor::OnObjectPropertyChanged);
 }
 
 FPCGExAssetCollectionEditor::~FPCGExAssetCollectionEditor()
 {
-	UPCGExCollectionsEditorSettings::OnHiddenAssetPropertyNamesChanged.Remove(OnHiddenAssetPropertyNamesChanged);
+	UPCGExCollectionsEditorSettings::OnHiddenCategoryGroupsChanged.Remove(OnHiddenCategoryGroupsChangedHandle);
 	FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(OnObjectPropertyChangedHandle);
 }
 
-bool FPCGExAssetCollectionEditor::IsPropertyUnderEntries(const FPropertyAndParent& PropertyAndParent)
+bool FPCGExAssetCollectionEditor::IsPropertyUnderEntries(const FPropertyAndParent& PropertyAndParent, const FArrayProperty* EntriesProperty)
 {
-	// Category rows are collection-level, but their innards look exactly like an entry's to both
-	// tests below: they hold a member named PropertyOverrides (hence "Overrides") whose leaves are
-	// owned by FPCGExProperty subtypes. Reject the whole subtree first or it leaks into this tab.
+	// Category rows hold the same overrides types as an entry but are collection-level: reject the whole
+	// subtree first or it leaks into this tab.
+	static const FProperty* CategoryOverridesProperty = UPCGExAssetCollection::StaticClass()->FindPropertyByName(GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CategoryOverrides));
+	if (&PropertyAndParent.Property == CategoryOverridesProperty || PropertyAndParent.ParentProperties.Contains(CategoryOverridesProperty))
 	{
-		const FName CategoryOverridesName = GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CategoryOverrides);
-		if (PropertyAndParent.Property.GetFName() == CategoryOverridesName)
-		{
-			return false;
-		}
-		for (const FProperty* Parent : PropertyAndParent.ParentProperties)
-		{
-			if (Parent && Parent->GetFName() == CategoryOverridesName)
-			{
-				return false;
-			}
-		}
+		return false;
 	}
 
-	// Check if property IS "Entries"
-	if (PropertyAndParent.Property.GetFName() == PCGExAssetCollectionEditor::EntriesName)
+	if (EntriesProperty && (&PropertyAndParent.Property == EntriesProperty || PropertyAndParent.ParentProperties.Contains(EntriesProperty)))
 	{
 		return true;
 	}
 
-	// Check all parents for "Entries" OR "PropertyOverrides"
-	// PropertyOverrides and its children must always be visible (PCGExPropertiesEditor controls them)
-	for (const FProperty* Parent : PropertyAndParent.ParentProperties)
+	// Overrides rows: the PropertyOverrides block, its Overrides elements, and the FPCGExProperty leaves
+	// PCGExPropertiesEditor hosts as external structures (their chain never reaches Entries).
+	const auto IsOverridesScoped = [](const FProperty& Property)
 	{
-		if (Parent)
+		if (const UScriptStruct* OwnerStruct = Cast<UScriptStruct>(Property.GetOwnerStruct()))
 		{
-			const FName ParentName = Parent->GetFName();
-			if (ParentName == PCGExAssetCollectionEditor::EntriesName || ParentName == FName("PropertyOverrides") || ParentName == FName("Overrides"))
+			if (OwnerStruct->IsChildOf(FPCGExPropertyOverrides::StaticStruct())
+				|| OwnerStruct->IsChildOf(FPCGExPropertyOverrideEntry::StaticStruct())
+				|| OwnerStruct->IsChildOf(FPCGExProperty::StaticStruct()))
 			{
 				return true;
 			}
 		}
-	}
 
-	// CRITICAL: Properties created via AddExternalStructureProperty (used in PropertyOverrides value widgets)
-	// may have incomplete parent chains. Check if ANY parent property's OWNER STRUCT derives from FPCGExPropertyCompiled.
-	// This supports full extensibility - custom property types automatically work.
+		const FStructProperty* AsStruct = CastField<FStructProperty>(&Property);
+		return AsStruct && AsStruct->Struct && AsStruct->Struct->IsChildOf(FPCGExPropertyOverrides::StaticStruct());
+	};
 
-	static UScriptStruct* PropertyCompiledStruct = FPCGExProperty::StaticStruct();
-
-	// Check the property itself's owner struct
-	if (UStruct* OwnerStruct = PropertyAndParent.Property.GetOwnerStruct())
+	if (IsOverridesScoped(PropertyAndParent.Property))
 	{
-		if (UScriptStruct* OwnerScriptStruct = Cast<UScriptStruct>(OwnerStruct))
-		{
-			if (OwnerScriptStruct->IsChildOf(PropertyCompiledStruct))
-			{
-				return true;
-			}
-		}
+		return true;
 	}
 
-	// Check all parent properties' owner structs
-	// Example: X property's parent is Value property, Value's owner is FPCGExPropertyCompiled_Vector
 	for (const FProperty* Parent : PropertyAndParent.ParentProperties)
 	{
-		if (UStruct* ParentOwnerStruct = Parent->GetOwnerStruct())
+		if (Parent && IsOverridesScoped(*Parent))
 		{
-			if (UScriptStruct* ParentOwnerScriptStruct = Cast<UScriptStruct>(ParentOwnerStruct))
-			{
-				if (ParentOwnerScriptStruct->IsChildOf(PropertyCompiledStruct))
-				{
-					return true;
-				}
-			}
+			return true;
 		}
 	}
 
@@ -127,8 +102,6 @@ bool FPCGExAssetCollectionEditor::IsPropertyUnderEntries(const FPropertyAndParen
 
 void FPCGExAssetCollectionEditor::InitEditor(UPCGExAssetCollection* InCollection, const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost)
 {
-	RegisterPropertyNameMapping(GetMutableDefault<UPCGExCollectionsEditorSettings>()->PropertyNamesMap);
-
 	EditedCollection = InCollection;
 
 	// Ensure PropertyOverrides are synced to schema before the grid view copies entry data.
@@ -226,45 +199,6 @@ UPCGExAssetCollection* FPCGExAssetCollectionEditor::GetEditedCollection() const
 	return EditedCollection.Get();
 }
 
-void FPCGExAssetCollectionEditor::RegisterPropertyNameMapping(TMap<FName, FName>& Mapping)
-{
-#define PCGEX_DECL_ASSET_FILTER(_NAME, _ID, _LABEL, _TOOLTIP)PCGExAssetCollectionEditor::FilterInfos& _NAME = FilterInfos.Emplace(FName(_ID), PCGExAssetCollectionEditor::FilterInfos(FName(_ID),FTEXT(_LABEL), FTEXT(_TOOLTIP)));
-
-	PCGEX_DECL_ASSET_FILTER(Variations, "AssetEditor.Variations", "Variations", "Show/hide Variations")
-	Mapping.Add(FName("VariationMode"), Variations.Id);
-	Mapping.Add(FName("Variations"), Variations.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Variations_Offset, "AssetEditor.Variations.Offset", "Var : Offset", "Show/hide Variations : Offset")
-	Mapping.Add(FName("VariationOffset"), Variations_Offset.Id);
-	PCGEX_DECL_ASSET_FILTER(Variations_Rotation, "AssetEditor.Variations.Rotation", "Var : Rot", "Show/hide Variations : Rotation")
-	Mapping.Add(FName("VariationRotation"), Variations_Rotation.Id);
-	PCGEX_DECL_ASSET_FILTER(Variations_Scale, "AssetEditor.Variations.Scale", "Var : Scale", "Show/hide Variations : Scale")
-	Mapping.Add(FName("VariationScale"), Variations_Scale.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Fitting, "AssetEditor.Fitting", "Fitting", "Show/hide Fitting overrides")
-	Mapping.Add(FName("ScaleToFitSource"), Fitting.Id);
-	Mapping.Add(FName("ScaleToFit"), Fitting.Id);
-	Mapping.Add(FName("JustificationSource"), Fitting.Id);
-	Mapping.Add(FName("Justification"), Fitting.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Tags, "AssetEditor.Tags", "Tags", "Show/hide Tags")
-	Mapping.Add(FName("Tags"), Tags.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Staging, "AssetEditor.Staging", "Staging", "Show/hide Staging")
-	Mapping.Add(FName("Staging"), Staging.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Grammar, "AssetEditor.Grammar", "Grammar", "Show/hide Grammar")
-	Mapping.Add(FName("GrammarSource"), Grammar.Id);
-	Mapping.Add(FName("AssetGrammar"), Grammar.Id);
-	Mapping.Add(FName("SubGrammarMode"), Grammar.Id);
-	Mapping.Add(FName("SubCollectionGrammar"), Grammar.Id);
-
-	PCGEX_DECL_ASSET_FILTER(Properties, "AssetEditor.Properties", "Properties", "Show/hide Property Overrides")
-	Mapping.Add(FName("PropertyOverrides"), Properties.Id);
-
-#undef PCGEX_DECL_ASSET_FILTER
-}
-
 void FPCGExAssetCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollectionEditor::FPushOption>& OutOptions)
 {
 #define PCGEX_DECL_PUSH_OPTION(_ID, _LABEL, _TOOLTIP, _GATE, ...) \
@@ -315,29 +249,38 @@ void FPCGExAssetCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollectio
 #undef PCGEX_DECL_PUSH_OPTION
 }
 
-FReply FPCGExAssetCollectionEditor::FilterShowAll() const
+void FPCGExAssetCollectionEditor::GetFilterableEntryStructs(TArray<const UScriptStruct*>& OutStructs) const
 {
-	TArray<FName> Keys;
-	FilterInfos.GetKeys(Keys);
-	UPCGExCollectionsEditorSettings* MutableSettings = GetMutableDefault<UPCGExCollectionsEditorSettings>();
-	MutableSettings->ToggleHiddenAssetPropertyName(Keys, false);
-	return FReply::Handled();
+	const UPCGExAssetCollection* Collection = EditedCollection.Get();
+	const UScriptStruct* EntryStruct = Collection ? PCGExAssetCollection::FTypeRegistry::Get().GetEntryStruct(Collection->GetTypeId()) : nullptr;
+	if (EntryStruct)
+	{
+		OutStructs.Add(EntryStruct);
+		return;
+	}
+
+	PCGExCollectionCategoryGroups::GetAllRegisteredEntryStructs(OutStructs);
 }
 
-FReply FPCGExAssetCollectionEditor::FilterHideAll() const
+TSharedRef<SWidget> FPCGExAssetCollectionEditor::MakeFilterBar()
 {
-	TArray<FName> Keys;
-	FilterInfos.GetKeys(Keys);
-	UPCGExCollectionsEditorSettings* MutableSettings = GetMutableDefault<UPCGExCollectionsEditorSettings>();
-	MutableSettings->ToggleHiddenAssetPropertyName(Keys, true);
-	return FReply::Handled();
+	if (!bFilterGroupsDiscovered)
+	{
+		TArray<const UScriptStruct*> EntryStructs;
+		GetFilterableEntryStructs(EntryStructs);
+		PCGExCollectionCategoryGroups::DiscoverGroups(EntryStructs, FilterGroups);
+		bFilterGroupsDiscovered = true;
+	}
+
+	return SNew(SPCGExCollectionFilterBar).Groups(FilterGroups);
 }
 
-FReply FPCGExAssetCollectionEditor::ToggleFilter(const PCGExAssetCollectionEditor::FilterInfos Filter) const
+void FPCGExAssetCollectionEditor::RefreshFilteredPanels()
 {
-	UPCGExCollectionsEditorSettings* MutableSettings = GetMutableDefault<UPCGExCollectionsEditorSettings>();
-	MutableSettings->ToggleHiddenAssetPropertyName(Filter.Id, MutableSettings->GetIsPropertyVisible(Filter.Id));
-	return FReply::Handled();
+	if (GridView.IsValid())
+	{
+		GridView->RefreshDetailPanel();
+	}
 }
 
 void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
@@ -356,11 +299,12 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 
 	// Create the details view
 	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
+	const FArrayProperty* EntriesProperty = UPCGExAssetCollection::FindEntriesProperty(EditedCollection->GetClass());
 	DetailsView->SetIsPropertyVisibleDelegate(
 		FIsPropertyVisible::CreateLambda(
-			[](const FPropertyAndParent& PropertyAndParent)
+			[EntriesProperty](const FPropertyAndParent& PropertyAndParent)
 			{
-				return PropertyAndParent.Property.GetFName() != TEXT("Entries");
+				return &PropertyAndParent.Property != EntriesProperty;
 			}));
 
 	// Set the asset to display
@@ -392,8 +336,16 @@ void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEd
 
 	// Create the details view
 	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
+
+	// Tab scope first (which rows belong here at all), then the footer's category-group filter.
+	const FArrayProperty* EntriesProperty = UPCGExAssetCollection::FindEntriesProperty(EditedCollection->GetClass());
 	DetailsView->SetIsPropertyVisibleDelegate(
-		FIsPropertyVisible::CreateStatic(&FPCGExAssetCollectionEditor::IsPropertyUnderEntries));
+		FIsPropertyVisible::CreateLambda(
+			[EntriesProperty](const FPropertyAndParent& PropertyAndParent)
+			{
+				return IsPropertyUnderEntries(PropertyAndParent, EntriesProperty) && PCGExCollectionCategoryGroups::IsPropertyVisible(PropertyAndParent);
+			}));
+	DetailsView->SetIsCustomRowVisibleDelegate(FIsCustomRowVisible::CreateStatic(&PCGExCollectionCategoryGroups::IsCustomRowVisible));
 
 	// Set the asset to display
 	DetailsView->SetObject(EditedCollection.Get());
@@ -1122,71 +1074,12 @@ void FPCGExAssetCollectionEditor::BuildAddMenuContent(const TSharedRef<SVertical
 
 void FPCGExAssetCollectionEditor::BuildAssetFooterToolbar(FToolBarBuilder& ToolbarBuilder)
 {
-#pragma region Filters
-
 	ToolbarBuilder.BeginSection("FilterSection");
 	{
 		PCGEX_SECTION_HEADER("Filters")
-
-		TSharedRef<SUniformGridPanel> Grid =
-			SNew(SUniformGridPanel)
-			.SlotPadding(FMargin(2, 2));
-
-		// Show all
-		Grid->AddSlot(0, 0)
-		[
-			SNew(SButton)
-			.Text(FText::FromString(TEXT("Show all")))
-			.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-			.OnClicked_Raw(this, &FPCGExAssetCollectionEditor::FilterShowAll)
-			.ToolTipText(FText::FromString(TEXT("Turns all filter off and show all properties.")))
-		];
-
-		// Hide all
-		Grid->AddSlot(0, 1)
-		[
-			SNew(SButton)
-			.Text(FText::FromString(TEXT("Hide all")))
-			.ButtonStyle(FAppStyle::Get(), "PCGEx.ActionIcon")
-			.OnClicked_Raw(this, &FPCGExAssetCollectionEditor::FilterHideAll)
-			.ToolTipText(FText::FromString(TEXT("Turns all filter on and hide all properties.")))
-		];
-
-		int32 Index = 2;
-		for (const TPair<FName, PCGExAssetCollectionEditor::FilterInfos>& Infos : FilterInfos)
-		{
-			const PCGExAssetCollectionEditor::FilterInfos& Filter = Infos.Value;
-
-			Grid->AddSlot(Index / 2, Index % 2)
-			[
-				SNew(SButton)
-				.OnClicked_Raw(this, &FPCGExAssetCollectionEditor::ToggleFilter, Filter)
-				.ButtonColorAndOpacity_Lambda(
-					[Filter]
-					{
-						return GetMutableDefault<UPCGExCollectionsEditorSettings>()->GetIsPropertyVisible(Filter.Id) ? FLinearColor(0.005f, 0.005f, 0.005f, 0.5f) : FLinearColor::Transparent;
-					})
-				.ToolTipText(Filter.ToolTip)
-				[
-					SNew(STextBlock)
-					.Text(Filter.Label)
-					.StrikeBrush_Lambda(
-						[Filter]()
-						{
-							const bool bVisible = GetMutableDefault<UPCGExCollectionsEditorSettings>()->GetIsPropertyVisible(Filter.Id);
-							return bVisible ? nullptr : FAppStyle::GetBrush("Common.StrikeThrough");
-						})
-				]
-			];
-
-			Index++;
-		}
-
-		ToolbarBuilder.AddWidget(Grid);
+		ToolbarBuilder.AddWidget(MakeFilterBar());
 	}
 	ToolbarBuilder.EndSection();
-
-#pragma endregion
 }
 
 #undef PCGEX_SLATE_ICON
@@ -1274,11 +1167,7 @@ void FPCGExAssetCollectionEditor::ForceRefreshTabs()
 		}
 	}
 
-	// Refresh grid view detail panel (responds to filter changes)
-	if (GridView.IsValid())
-	{
-		GridView->RefreshDetailPanel();
-	}
+	RefreshFilteredPanels();
 }
 
 void FPCGExAssetCollectionEditor::RefreshPickerWidgets()

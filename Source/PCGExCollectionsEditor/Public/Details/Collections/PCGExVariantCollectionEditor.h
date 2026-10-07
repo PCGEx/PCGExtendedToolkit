@@ -62,6 +62,10 @@ protected:
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs) override;
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder) override;
 
+	/** Swap payloads come from source collections of any type: scan every registered entry struct. */
+	virtual void GetFilterableEntryStructs(TArray<const UScriptStruct*>& OutStructs) const override;
+	virtual void RefreshFilteredPanels() override;
+
 private:
 	TSharedPtr<SPCGExVariantGridView> VariantGrid;
 

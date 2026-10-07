@@ -5,9 +5,8 @@
 
 #include "CoreMinimal.h"
 #include "PCGExVersion.h"
-#include "Components/SlateWrapperTypes.h"
 
-FSimpleMulticastDelegate UPCGExCollectionsEditorSettings::OnHiddenAssetPropertyNamesChanged;
+FSimpleMulticastDelegate UPCGExCollectionsEditorSettings::OnHiddenCategoryGroupsChanged;
 
 void UPCGExCollectionsEditorSettings::PostLoad()
 {
@@ -26,72 +25,39 @@ void UPCGExCollectionsEditorSettings::PostLoad()
 	*/
 }
 
-void UPCGExCollectionsEditorSettings::ToggleHiddenAssetPropertyName(const FName PropertyName, const bool bHide)
+bool UPCGExCollectionsEditorSettings::SetCategoryGroupHidden(const FName Group, const bool bHidden)
 {
-	if (bHide)
+	return SetCategoryGroupsHidden(MakeArrayView(&Group, 1), bHidden);
+}
+
+bool UPCGExCollectionsEditorSettings::SetCategoryGroupsHidden(const TConstArrayView<FName> Groups, const bool bHidden)
+{
+	bool bChanged = false;
+	for (const FName Group : Groups)
 	{
-		bool bIsAlreadyInSet = false;
-		HiddenPropertyNames.Add(PropertyName, &bIsAlreadyInSet);
-		if (bIsAlreadyInSet)
+		if (Group.IsNone())
 		{
-			return;
+			continue;
+		}
+
+		if (bHidden)
+		{
+			bool bAlreadyIn = false;
+			HiddenCategoryGroups.Add(Group, &bAlreadyIn);
+			bChanged |= !bAlreadyIn;
+		}
+		else
+		{
+			bChanged |= HiddenCategoryGroups.Remove(Group) > 0;
 		}
 	}
-	else if (!HiddenPropertyNames.Remove(PropertyName))
+
+	if (!bChanged)
 	{
-		return;
+		return false;
 	}
 
 	SaveConfig();
-	OnHiddenAssetPropertyNamesChanged.Broadcast();
-}
-
-void UPCGExCollectionsEditorSettings::ToggleHiddenAssetPropertyName(const TArray<FName> Properties, const bool bHide)
-{
-	if (Properties.IsEmpty())
-	{
-		return;
-	}
-	bool bAnyChanges = false;
-	if (bHide)
-	{
-		for (FName PropertyName : Properties)
-		{
-			bool bIsAlreadyInSet = false;
-			HiddenPropertyNames.Add(PropertyName, &bIsAlreadyInSet);
-			if (!bIsAlreadyInSet)
-			{
-				bAnyChanges = true;
-			}
-		}
-	}
-	else
-	{
-		for (FName PropertyName : Properties)
-		{
-			if (HiddenPropertyNames.Remove(PropertyName))
-			{
-				bAnyChanges = true;
-			}
-		}
-	}
-
-	if (!bAnyChanges)
-	{
-		return;
-	}
-
-	SaveConfig();
-	OnHiddenAssetPropertyNamesChanged.Broadcast();
-}
-
-EVisibility UPCGExCollectionsEditorSettings::GetPropertyVisibility(const FName PropertyName) const
-{
-	const FName* Id = PropertyNamesMap.Find(PropertyName);
-	return Id ? HiddenPropertyNames.Contains(*Id) ? EVisibility::Collapsed : EVisibility::Visible : EVisibility::Visible;
-}
-
-bool UPCGExCollectionsEditorSettings::GetIsPropertyVisible(const FName PropertyName) const
-{
-	return !HiddenPropertyNames.Contains(PropertyName);
+	OnHiddenCategoryGroupsChanged.Broadcast();
+	return true;
 }

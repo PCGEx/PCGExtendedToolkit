@@ -9,6 +9,7 @@
 #include "PropertyEditorModule.h"
 
 #include "PCGExCollectionsEditorSettings.h"
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Core/PCGExCategoryOverrides.h"
 
 #include "InputCoreTypes.h"
@@ -96,6 +97,10 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 			{
 				return PropertyAndParent.Property.HasAnyPropertyFlags(CPF_EditConst);
 			}));
+		InnerDetailsView->SetIsPropertyVisibleDelegate(
+			FIsPropertyVisible::CreateSP(this, &SPCGExCollectionGridView::IsStructPanelPropertyVisible));
+		InnerDetailsView->SetIsCustomRowVisibleDelegate(
+			FIsCustomRowVisible::CreateSP(this, &SPCGExCollectionGridView::IsStructPanelCustomRowVisible));
 
 		// A structure view never runs the root entry's customization; property-level pickers go here.
 		PCGExGenericAssetPicker::RegisterOnDetailsView(*InnerDetailsView);
@@ -656,12 +661,10 @@ void SPCGExCollectionGridView::RefreshGrid()
 
 void SPCGExCollectionGridView::RefreshDetailPanel()
 {
+	// Footer toggles. Re-binding first commits any focused edit before the tree is torn down; the rebuild
+	// itself is required because plain rows cache their visibility at build time.
 	UpdateDetailForSelection();
 
-	// Only reached on filter toggles (ForceRefreshTabs). UpdateDetailForSelection's same-type
-	// SetStructureData may rebind values onto the cached layout without re-running the entry
-	// customization, leaving the build-time property filter stale -- ForceRefresh guarantees the
-	// rebuild, matching the explicit ForceRefresh the tab detail views already get.
 	if (StructDetailView.IsValid())
 	{
 		if (IDetailsView* Inner = StructDetailView->GetDetailsView())
@@ -669,6 +672,16 @@ void SPCGExCollectionGridView::RefreshDetailPanel()
 			Inner->ForceRefresh();
 		}
 	}
+}
+
+bool SPCGExCollectionGridView::IsStructPanelPropertyVisible(const FPropertyAndParent& PropertyAndParent) const
+{
+	return !ActiveOverridesCategory.IsNone() || PCGExCollectionCategoryGroups::IsPropertyVisible(PropertyAndParent);
+}
+
+bool SPCGExCollectionGridView::IsStructPanelCustomRowVisible(const FName RowName, const FName ParentName) const
+{
+	return !ActiveOverridesCategory.IsNone() || PCGExCollectionCategoryGroups::IsCustomRowVisible(RowName, ParentName);
 }
 
 TArray<int32> SPCGExCollectionGridView::GetSelectedIndices() const
@@ -2219,8 +2232,7 @@ SPCGExCollectionGridView::FEntriesArrayAccess SPCGExCollectionGridView::GetEntri
 		return Result;
 	}
 
-	Result.ArrayProp = CastField<FArrayProperty>(
-		Coll->GetClass()->FindPropertyByName(PCGExAssetCollectionEditor::EntriesName));
+	Result.ArrayProp = UPCGExAssetCollection::FindEntriesProperty(Coll->GetClass());
 	if (!Result.ArrayProp)
 	{
 		return Result;
