@@ -22,6 +22,7 @@
 #include "Details/Collections/PCGExAssetGrammarCustomization.h"
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Details/Collections/PCGExFittingVariationsCustomization.h"
 #include "Details/Collections/PCGExLevelCollectionActions.h"
 #include "Details/Collections/PCGExMaterialPicksCustomization.h"
@@ -61,6 +62,9 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// Flush queued PCGEX_REGISTER_COLLECTION_EDITOR_TYPE registrations and any
 	// per-type Customize() callbacks from each PCGEx*CollectionActions.cpp.
 	FCollectionEditorTypeRegistry::ProcessPendingRegistrations();
+
+	// Footer filter groups: display info for the PCGExCategoryGroup ids the entry structs carry.
+	PCGExCollectionCategoryGroups::RegisterBuiltInGroups();
 
 	PCGEX_REGISTER_CUSTO_START
 

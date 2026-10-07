@@ -2830,7 +2830,7 @@ void UPCGExAssetCollection::EDITOR_AddSubCollectionEntries(const TArray<UPCGExAs
 
 	// Reflection only grows the per-class Entries array; bIsSubCollection/SubCollection live on the
 	// base struct, so the new element is written through a base pointer. Any collection type is accepted.
-	FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FArrayProperty* ArrayProp = FindEntriesProperty(GetClass());
 	if (!ArrayProp)
 	{
 		return;
@@ -2888,7 +2888,7 @@ void UPCGExAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAss
 
 const UScriptStruct* UPCGExAssetCollection::EDITOR_GetEntryScriptStruct(int32 RawIndex) const
 {
-	const FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FArrayProperty* ArrayProp = FindEntriesProperty(GetClass());
 	const FStructProperty* InnerProp = ArrayProp ? CastField<FStructProperty>(ArrayProp->Inner) : nullptr;
 
 	if (InnerProp && InnerProp->Struct && InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
@@ -2905,9 +2905,14 @@ FPCGExAssetCollectionEntry* UPCGExAssetCollection::EDITOR_AddEntry(const UScript
 }
 #endif
 
+const FArrayProperty* UPCGExAssetCollection::FindEntriesProperty(const UClass* InClass)
+{
+	return InClass ? CastField<FArrayProperty>(InClass->FindPropertyByName(PCGExAssetCollection::EntriesPropertyName)) : nullptr;
+}
+
 FPCGExAssetCollectionEntry* UPCGExAssetCollection::AddEntryOfType(const UScriptStruct* EntryStruct)
 {
-	FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FArrayProperty* ArrayProp = FindEntriesProperty(GetClass());
 	const FStructProperty* InnerProp = ArrayProp ? CastField<FStructProperty>(ArrayProp->Inner) : nullptr;
 
 	if (!InnerProp || !InnerProp->Struct || !InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))

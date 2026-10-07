@@ -11,17 +11,19 @@ class SWidget;
 
 #include "Widgets/Docking/SDockTab.h"
 
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Details/Collections/SPCGExCollectionGridTile.h"
 
+class FArrayProperty;
 class UPCGExAssetCollection;
+class UScriptStruct;
 class SVerticalBox;
 class FAssetThumbnailPool;
 class SPCGExCollectionGridView;
+struct FPropertyAndParent;
 
 namespace PCGExAssetCollectionEditor
 {
-	const FName EntriesName = FName("Entries");
-
 	struct PCGEXCOLLECTIONSEDITOR_API TabInfos
 	{
 		TabInfos() = default;
@@ -43,22 +45,6 @@ namespace PCGExAssetCollectionEditor
 		ETabRole Role = PanelTab;
 		FString Icon = TEXT("");
 		bool bIsDetailsView = true;
-	};
-
-	struct PCGEXCOLLECTIONSEDITOR_API FilterInfos
-	{
-		FilterInfos() = default;
-
-		FilterInfos(const FName InId, const FText& InLabel, const FText& InToolTip)
-			: Id(InId)
-			  , Label(InLabel)
-			  , ToolTip(InToolTip)
-		{
-		}
-
-		FName Id = NAME_None;
-		FText Label = FText::GetEmpty();
-		FText ToolTip = FText::GetEmpty();
 	};
 
 	/**
@@ -98,6 +84,9 @@ namespace PCGExAssetCollectionEditor
  * 2. Override CreateTabs() / BuildEditorToolbar() / BuildAssetHeaderToolbar() for custom tabs and toolbar buttons.
  * 3. Register via FAssetTypeActions_Base::OpenAssetEditor -- create a TSharedRef<YourEditor>, call InitEditor().
  *
+ * Footer filter groups need no editor code: tag entry UPROPERTYs with meta=(PCGExCategoryGroup="<id>")
+ * and register the id's display info with PCGExCollectionCategoryGroups::FRegistry.
+ *
  * See FPCGExMeshCollectionEditor, FPCGExActorCollectionEditor, etc. for reference implementations.
  */
 struct FPropertyChangedEvent;
@@ -131,24 +120,16 @@ public:
 		return FLinearColor::White;
 	}
 
-	TMap<FName, PCGExAssetCollectionEditor::FilterInfos> FilterInfos;
-
 	/**
-	 * Visibility check for properties under "Entries" array.
-	 * Checks if property IS "Entries" or has "Entries" as an ancestor.
-	 * Also allows properties from PropertyOverrides system (detects via struct inheritance from FPCGExPropertyCompiled).
-	 *
-	 * This supports full extensibility - custom property types just need to derive from FPCGExPropertyCompiled.
-	 *
-	 * Performance note: Parent chain depth is constant regardless of entry count.
-	 * With 100s of entries, parent chain is still ~4-6 properties deep (e.g., Entries > Entry[0] > PropertyOverrides > Overrides > Value).
-	 * Iterator is cheap - O(depth) where depth is constant, not O(entries).
+	 * Entries-tab scope: the Entries array and everything beneath it, plus the overrides rows -- owned by
+	 * FPCGExPropertyOverrides, FPCGExPropertyOverrideEntry or an FPCGExProperty type, which covers the external
+	 * structures PCGExPropertiesEditor hosts (their parent chain never reaches Entries). The CategoryOverrides
+	 * subtree is rejected first: same overrides types, but collection-level.
 	 */
-	static bool IsPropertyUnderEntries(const FPropertyAndParent& PropertyAndParent);
+	static bool IsPropertyUnderEntries(const FPropertyAndParent& PropertyAndParent, const FArrayProperty* EntriesProperty);
 
 protected:
 	TWeakObjectPtr<UPCGExAssetCollection> EditedCollection;
-	virtual void RegisterPropertyNameMapping(TMap<FName, FName>& Mapping);
 
 	/**
 	 * Register push options exposed by the grid view side panel.
@@ -157,9 +138,18 @@ protected:
 	 */
 	virtual void RegisterPushOptions(TArray<PCGExAssetCollectionEditor::FPushOption>& OutOptions);
 
-	FReply FilterShowAll() const;
-	FReply FilterHideAll() const;
-	FReply ToggleFilter(const PCGExAssetCollectionEditor::FilterInfos Filter) const;
+	/**
+	 * Entry structs the footer filter groups are discovered from. Base: the collection type's registered
+	 * entry struct, or every registered entry struct when the type has none (Omni). Override for hosts whose
+	 * payloads come from elsewhere (Variant).
+	 */
+	virtual void GetFilterableEntryStructs(TArray<const UScriptStruct*>& OutStructs) const;
+
+	/** Footer "Filters" strip over the discovered groups (discovery runs once per editor). */
+	TSharedRef<SWidget> MakeFilterBar();
+
+	/** Rebuild every non-tab details panel that installs the category-group filter (grid panels). */
+	virtual void RefreshFilteredPanels();
 
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	void CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
@@ -226,7 +216,9 @@ protected:
 	virtual const UClass* GetTilePickerAllowedClass() const;
 
 	TArray<PCGExAssetCollectionEditor::TabInfos> Tabs;
-	FDelegateHandle OnHiddenAssetPropertyNamesChanged;
+	TArray<PCGExCollectionCategoryGroups::FGroup> FilterGroups;
+	bool bFilterGroupsDiscovered = false;
+	FDelegateHandle OnHiddenCategoryGroupsChangedHandle;
 	FDelegateHandle OnObjectPropertyChangedHandle;
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 	TSharedPtr<SPCGExCollectionGridView> GridView;

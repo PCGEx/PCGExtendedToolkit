@@ -25,6 +25,7 @@
 #include "Core/PCGExCollectionHelpers.h"
 #include "Details/Collections/PCGExCollectionEditorSlateUtils.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Details/Collections/SPCGExCollectionCategoryGroup.h"
 
 #include "Widgets/Images/SImage.h"
@@ -480,6 +481,8 @@ void SPCGExVariantGridView::Construct(const FArguments& InArgs)
 	if (IDetailsView* InnerDetailsView = StructDetailView->GetDetailsView())
 	{
 		PCGExGenericAssetPicker::RegisterOnDetailsView(*InnerDetailsView);
+		InnerDetailsView->SetIsPropertyVisibleDelegate(FIsPropertyVisible::CreateStatic(&PCGExCollectionCategoryGroups::IsPropertyVisible));
+		InnerDetailsView->SetIsCustomRowVisibleDelegate(FIsCustomRowVisible::CreateStatic(&PCGExCollectionCategoryGroups::IsCustomRowVisible));
 	}
 
 	ChildSlot
@@ -1283,6 +1286,25 @@ void SPCGExVariantGridView::ApplySelectionVisuals()
 		if (Pair.Value.IsValid())
 		{
 			Pair.Value->SetSelected(Pair.Key == SelectedItem);
+		}
+	}
+}
+
+void SPCGExVariantGridView::RefreshDetailPanel()
+{
+	// Re-focus the grid first so a focused field commits through OnFocusLost before its widget is torn down.
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetKeyboardFocus(SharedThis(this), EFocusCause::Cleared);
+	}
+
+	UpdateDetailForSelection();
+
+	if (StructDetailView.IsValid())
+	{
+		if (IDetailsView* Inner = StructDetailView->GetDetailsView())
+		{
+			Inner->ForceRefresh();
 		}
 	}
 }

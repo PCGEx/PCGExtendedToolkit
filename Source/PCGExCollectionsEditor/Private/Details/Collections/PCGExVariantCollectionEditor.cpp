@@ -7,9 +7,11 @@
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "ScopedTransaction.h"
+#include "Styling/AppStyle.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
@@ -17,6 +19,7 @@
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
+#include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Details/Collections/SPCGExVariantGridView.h"
 #include "Helpers/PCGExObjectNotifyHelpers.h"
 
@@ -88,6 +91,24 @@ void FPCGExVariantCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor
 	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
 	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
 	GridInfos.Header = HeaderToolbarBuilder.MakeWidget();
+
+	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetFooterToolbar(FooterToolbarBuilder);
+	GridInfos.Footer = FooterToolbarBuilder.MakeWidget();
+}
+
+void FPCGExVariantCollectionEditor::GetFilterableEntryStructs(TArray<const UScriptStruct*>& OutStructs) const
+{
+	PCGExCollectionCategoryGroups::GetAllRegisteredEntryStructs(OutStructs);
+}
+
+void FPCGExVariantCollectionEditor::RefreshFilteredPanels()
+{
+	if (VariantGrid.IsValid())
+	{
+		VariantGrid->RefreshDetailPanel();
+	}
 }
 
 void FPCGExVariantCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)

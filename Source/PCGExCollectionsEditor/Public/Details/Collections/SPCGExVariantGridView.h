@@ -167,6 +167,9 @@ public:
 	 */
 	void RefreshGrid(bool bRefreshDetailPanel = true);
 
+	/** Rebuild the details pane so its category-group filter re-evaluates (footer toggles). */
+	void RefreshDetailPanel();
+
 	/**
 	 * Declare the collection assets among InAssets as new sources. The variant itself and
 	 * already-declared sources are skipped (with a toast); other asset types are ignored.

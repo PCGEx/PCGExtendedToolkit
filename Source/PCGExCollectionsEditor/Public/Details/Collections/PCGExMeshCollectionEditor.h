@@ -35,7 +35,6 @@ public:
 	}
 
 protected:
-	virtual void RegisterPropertyNameMapping(TMap<FName, FName>& Mapping) override;
 	virtual void RegisterPushOptions(TArray<PCGExAssetCollectionEditor::FPushOption>& OutOptions) override;
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder) override;
 
