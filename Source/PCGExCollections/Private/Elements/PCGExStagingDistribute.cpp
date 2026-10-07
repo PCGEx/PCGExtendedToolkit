@@ -582,9 +582,7 @@ bool FPCGExAssetStagingElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 		UPCGParamData* OutputSet = Context->ManagedObjects->New<UPCGParamData>();
 		Context->CollectionPickDatasetPacker->PackToDataset(OutputSet);
 
-		FPCGTaggedData& OutData = Context->OutputData.TaggedData.Emplace_GetRef();
-		OutData.Pin = PCGExCollections::Labels::OutputCollectionMapLabel;
-		OutData.Data = OutputSet;
+		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}
 
 	if (Context->SocketsCollection)
