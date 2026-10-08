@@ -131,6 +131,10 @@ protected:
 
 class FPCGExRefineEdgesElement final : public FPCGExClustersProcessorElement
 {
+public:
+	/** The refinement may depend on more than its properties (e.g. the component bounds of a line trace ignore list). */
+	virtual void GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const override;
+
 	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* InContext) const override
 	{
 		if (!InContext)

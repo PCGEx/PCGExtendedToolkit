@@ -43,6 +43,7 @@ void IPCGExModuleInterface::ShutdownModule()
 void IPCGExModuleInterface::RegisterRedirectors() const
 {
 	TArray<FCoreRedirect> Redirects;
+	int32 NumSkipped = 0;
 
 	const FString ThisModuleName = GetModuleName();
 
@@ -60,17 +61,24 @@ void IPCGExModuleInterface::RegisterRedirectors() const
 
 		for (const FString& OldModuleName : OldBaseModules)
 		{
-			Redirects.Emplace(
-				ECoreRedirectFlags::Type_Class,
-				*FString::Printf(TEXT("/Script/%s.%s"), *OldModuleName, *ClassName),
-				*FString::Printf(TEXT("/Script/%s.%s"), *ThisModuleName, *ClassName));
+			const FString OldPath = FString::Printf(TEXT("/Script/%s.%s"), *OldModuleName, *ClassName);
+
+			// An ini redirect for this old name wins: adding a second one with another target is an Error and is dropped.
+			TArray<const FCoreRedirect*> Existing;
+			if (FCoreRedirects::GetMatchingRedirects(ECoreRedirectFlags::Type_Class, FCoreRedirectObjectName(OldPath), Existing))
+			{
+				NumSkipped++;
+				continue;
+			}
+
+			Redirects.Emplace(ECoreRedirectFlags::Type_Class, *OldPath, *FString::Printf(TEXT("/Script/%s.%s"), *ThisModuleName, *ClassName));
 		}
 	}
 
 	if (Redirects.Num() > 0)
 	{
 		FCoreRedirects::AddRedirectList(Redirects, *ThisModuleName);
-		UE_LOG(LogPCGEx, Log, TEXT("%s: Registered %d class redirects"), *ThisModuleName, Redirects.Num());
+		UE_LOG(LogPCGEx, Log, TEXT("%s: Registered %d class redirects (%d left to explicit redirects)"), *ThisModuleName, Redirects.Num(), NumSkipped);
 	}
 }
 

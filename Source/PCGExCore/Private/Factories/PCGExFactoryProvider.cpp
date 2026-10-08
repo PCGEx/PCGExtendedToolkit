@@ -50,6 +50,19 @@ UPCGExFactoryData* UPCGExFactoryProviderSettings::CreateFactory(FPCGExContext* I
 	return InFactory;
 }
 
+void FPCGExFactoryProviderElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
+{
+	FPCGCrc Crc;
+	IPCGExElement::GetDependenciesCrc(InParams, Crc);
+
+	if (const UPCGExFactoryProviderSettings* Settings = Cast<const UPCGExFactoryProviderSettings>(InParams.Settings))
+	{
+		Settings->CombineDependenciesCrc(InParams, Crc);
+	}
+
+	OutCrc = Crc;
+}
+
 bool FPCGExFactoryProviderElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExFactoryProviderElement::Execute);

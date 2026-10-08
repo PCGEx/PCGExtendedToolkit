@@ -9,7 +9,59 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "PCGComponent.h"
+#include "PCGExLog.h"
+#include "PCGNode.h"
 #include "Core/PCGExContext.h"
+#include "Details/PCGExInputShorthandsDetails.h"
+
+FPCGExCollisionDetails::FPCGExCollisionDetails()
+{
+	// An ignore list: self and PCG-spawned actors are as ignorable as any other, and self has its own switch.
+	IgnoredActors.bIgnoreSelf = false;
+	IgnoredActors.bIgnorePCGSpawnedActors = false;
+}
+
+#if WITH_EDITOR
+void FPCGExCollisionDetails::ApplyDeprecation(const UObject* InLogContext)
+{
+	IgnoredActors.ApplyDeprecation(IgnoredActorSelector_DEPRECATED, InLogContext);
+
+	if (bIgnoreActors && IgnoredActors.bMustOverlapSelf)
+	{
+		UE_LOG(LogPCGEx, Warning, TEXT("%s: Must Overlap Self on the ignored actors had no effect before and now limits the ignore list to actors overlapping the component bounds."), *GetPathNameSafe(InLogContext));
+	}
+}
+
+void FPCGExCollisionDetails::MigrateLegacyPins(const UPCGSettings* InSettings, UPCGNode* InOutNode, TArray<FName>& OutRetiredLabels)
+{
+	if (!InSettings || !InOutNode) { return; }
+
+	// A wired tag could carry a pattern, which stock matched: the clause must keep matching it.
+	if (!PCGExDeprecation::ResolveLegacyOverridePinLabel(InOutNode, TEXT("ActorSelectionTag")).IsNone())
+	{
+		IgnoredActors.bAllowWildcards = true;
+	}
+
+	// Same type on both sides, or a PCG broadcast (FName tag -> FString clause): the wire keeps working.
+	const FName Member = TEXT("IgnoredActors");
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, TEXT("ActorFilter"), Member, TEXT("Scope"));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, TEXT("bIncludeChildren"), Member, TEXT("bIncludeChildren"));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, TEXT("ActorSelectionTag"), Member, TEXT("RequireAny"));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, TEXT("ActorSelectionClass"), Member, TEXT("ActorClass"));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, TEXT("bIgnoreSelfAndChildren"), Member, TEXT("bIgnoreSelf"));
+	PCGExDeprecation::RenameShorthandOverridePin(InSettings, InOutNode, TEXT("bMustOverlapSelf"), Member, TEXT("bMustOverlapSelf"));
+
+	// Nothing can receive these: the ByTag/ByClass mode is fixed by the property migration, the rest were dropped.
+	for (const TCHAR* Leaf : {TEXT("ActorSelection"), TEXT("bDisableFilter"), TEXT("bSelectMultiple"), TEXT("IncludeIsolatedActors"), TEXT("ActorReferenceSelector")})
+	{
+		const FName Label = PCGExDeprecation::ResolveLegacyOverridePinLabel(InOutNode, FName(Leaf));
+		if (!Label.IsNone())
+		{
+			OutRetiredLabels.AddUnique(Label);
+		}
+	}
+}
+#endif
 
 void FPCGExCollisionDetails::Init(FPCGExContext* InContext)
 {
@@ -22,21 +74,18 @@ void FPCGExCollisionDetails::Init(FPCGExContext* InContext)
 
 		if (bIgnoreActors)
 		{
-			const TFunction<bool(const AActor*)> BoundsCheck = [](const AActor*) -> bool
-			{
-				return true;
-			};
-			const TFunction<bool(const AActor*)> SelfIgnoreCheck = [](const AActor*) -> bool
-			{
-				return true;
-			};
+			IgnoredActors.Init();
 
-			IgnoredActors = PCGActorSelector::FindActors(IgnoredActorSelector, Comp, BoundsCheck, SelfIgnoreCheck);
+			PCGExActorSelection::FQuery Query;
+			if (PCGExActorSelection::FQuery::Make(IgnoredActors, SharedContext.Get(), Query))
+			{
+				Query.Run([this](AActor* InActor) { IgnoredActorList.Add(InActor); });
+			}
 		}
 
 		if (bIgnoreSelf)
 		{
-			IgnoredActors.Add(Comp->GetOwner());
+			IgnoredActorList.Add(Comp->GetOwner());
 		}
 	});
 }
@@ -44,7 +93,7 @@ void FPCGExCollisionDetails::Init(FPCGExContext* InContext)
 void FPCGExCollisionDetails::Update(FCollisionQueryParams& InCollisionParams) const
 {
 	InCollisionParams.bTraceComplex = bTraceComplex;
-	InCollisionParams.AddIgnoredActors(IgnoredActors);
+	InCollisionParams.AddIgnoredActors(IgnoredActorList);
 }
 
 bool FPCGExCollisionDetails::Linecast(const FVector& From, const FVector& To, FHitResult& HitResult) const

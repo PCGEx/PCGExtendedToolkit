@@ -20,7 +20,7 @@ namespace PCGExGetActorBounds
 	inline const FName BoundsPinLabel = TEXT("Bounds");
 }
 
-/** Everything the actor bounds nodes share; a node only decides how the world is walked. */
+/** Everything the actor bounds nodes share; a node only decides how the world is walked in World scope. */
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc")
 class UPCGExGetActorBoundsBaseSettings : public UPCGExSettings
 {
@@ -57,8 +57,8 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Which actors to gather. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ShowOnlyInnerProperties))
+	/** Which actors to gather. Must Overlap Self adds the component bounds to the cache key, so each partitioned cell executes on its own. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExActorSelectionDetails Selection;
 
 	/** How each actor becomes a point. */
@@ -70,10 +70,13 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bUnbounded = true;
 
-	/** Additionally require actors to overlap the executing component bounds. Independent of the Bounds input.
-	 *  Adds the component bounds to the cache key, so each partitioned cell executes on its own. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bMustOverlapSelf = false;
+#pragma region DEPRECATED
+
+	/** Lives on Selection now. */
+	UPROPERTY(meta = (DeprecatedProperty, ScriptNoExport))
+	bool bMustOverlapSelf_DEPRECATED = false;
+
+#pragma endregion
 
 	/** Output the actors excluded by Exclude tags to a Discarded pin, shaped like the main output. They are a subset
 	 *  of what the node would output without Exclude, so the bounds cull still applies. Each discarded actor then
@@ -128,7 +131,7 @@ protected:
 	/** False, after logging why, when this node cannot gather from InWorld; the node then outputs nothing. */
 	virtual bool CanSweep(FPCGExContext* InContext, UWorld* InWorld) const;
 
-	/** Feeds every candidate actor of InWorld to InSweep, which filters and snapshots them. Game thread only. */
+	/** Feeds every candidate actor of InWorld to InSweep, which filters and snapshots them. World scope only; game thread only. */
 	virtual void Sweep(UWorld* InWorld, PCGExActorBounds::FSweep& InSweep) const = 0;
 };
 

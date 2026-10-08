@@ -2,6 +2,8 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Tensors/PCGExTensorSurface.h"
+
+#include "PCGElement.h"
 #include "PCGExVersion.h"
 
 #include "Components/PrimitiveComponent.h"
@@ -383,6 +385,13 @@ void UPCGExCreateTensorSurfaceSettings::PCGExApplyDeprecationBeforeUpdatePins(UP
 		Config.RenamePins(this, InOutNode);
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		TArray<FName> Retired;
+		Config.CollisionSettings.MigrateLegacyPins(this, InOutNode, Retired);
+		for (const FName Label : Retired) { RetireInputPin(InOutNode, Label); }
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -393,9 +402,19 @@ void UPCGExCreateTensorSurfaceSettings::PCGExApplyDeprecation(UPCGNode* InOutNod
 		Config.ApplyDeprecation();
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		Config.CollisionSettings.ApplyDeprecation(this);
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
+
+void UPCGExCreateTensorSurfaceSettings::CombineDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& InOutCrc) const
+{
+	PCGExActorSelection::CombineSelfBoundsCrc(InParams, Config.CollisionSettings.DependsOnSelfBounds(), InOutCrc);
+}
 
 PCGExFactories::EPreparationResult UPCGExTensorSurfaceFactory::InitInternalData(FPCGExContext* InContext)
 {
