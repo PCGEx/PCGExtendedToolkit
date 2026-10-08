@@ -331,10 +331,12 @@ void FPCGExActorSelectionDetails::ApplyDeprecation(const FPCGActorSelectorSettin
 		UE_LOG(LogPCGEx, Warning, TEXT("%s: the legacy selector stopped at the first matching actor; every matching actor is now selected."), *Owner);
 	}
 
+#if PCGEX_ENGINE_VERSION >= 508
 	if (InLegacy.IncludeIsolatedActors != EPCGIsolatedActorIncludeFlag::Ignore)
 	{
 		UE_LOG(LogPCGEx, Warning, TEXT("%s: isolated actors are no longer included in or substituted for the selection."), *Owner);
 	}
+#endif
 }
 #endif
 
