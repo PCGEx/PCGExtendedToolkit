@@ -245,6 +245,10 @@ protected:
 
 class FPCGExSampleNearestSurfaceElement final : public FPCGExPointsProcessorElement
 {
+public:
+	/** The ignore list can depend on the component bounds, which the cache key must then carry. */
+	virtual void GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const override;
+
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(SampleNearestSurface)
 

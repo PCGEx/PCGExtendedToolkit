@@ -7,6 +7,7 @@
 #include "PCGComponent.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Details/PCGExActorSelectionDetails.h"
 #include "Helpers/PCGExPCGGenerationWatcher.h"
 
 
@@ -30,17 +31,24 @@ class UPCGExWaitForPCGDataSettings;
 
 namespace PCGExWaitForPCGData
 {
+	/** False, with the reason, when the component tag clauses hold an entry too long to be a tag. */
+	bool IsComponentTagFilterUsable(const UPCGExWaitForPCGDataSettings* Settings, FText& OutWhyNot);
+
 	/** Filter configuration for component discovery */
 	struct FFilterConfig
 	{
 		bool bMustMatchTemplate = true;
-		FName MustHaveTag = NAME_None;
+		/** The component tag clauses, parsed. Blank clauses keep every component. */
+		FPCGExTagFilterDetails ComponentTags;
 		bool bDoMatchGenerationTrigger = false;
 		EPCGComponentGenerationTrigger MatchGenerationTrigger = EPCGComponentGenerationTrigger::GenerateOnLoad;
 		bool bInvertGenerationTrigger = false;
 
 		void InitFrom(const UPCGExWaitForPCGDataSettings* Settings);
-		bool PassesFilter(const UPCGComponent* Candidate, const UPCGGraph* TemplateGraph, const UPCGComponent* Self) const;
+		/** A matcher is stateful: build one per inspection task, never share one across threads. */
+		PCGExActorSelection::FTagMatcher MakeComponentMatcher() const;
+
+		bool PassesFilter(const UPCGComponent* Candidate, const UPCGGraph* TemplateGraph, const UPCGComponent* Self, PCGExActorSelection::FTagMatcher& InComponentTags) const;
 	};
 
 	/** Timeout configuration for async waiting */
@@ -102,6 +110,9 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
 	PCGEX_NODE_INFOS(WaitForPCGData, "Wait for PCG Data", "Wait for PCG Components Generated output.");
 
 	virtual EPCGSettingsType GetType() const override
@@ -155,9 +166,16 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Filtering", meta = (PCG_Overridable))
 	bool bMustMatchTemplate = true;
 
-	/** If not None, will only consider components with the specified tag. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Filtering", meta = (PCG_Overridable))
-	FName MustHaveTag = NAME_None;
+	/** Only consider components whose tags pass these clauses. Blank clauses keep every component. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Filtering", meta = (PCG_Overridable, DisplayName = "Component Tags"))
+	FPCGExTagFilterDetails ComponentTags;
+
+#pragma region DEPRECATED
+
+	UPROPERTY(meta = (DeprecatedProperty, ScriptNoExport))
+	FName MustHaveTag_DEPRECATED = NAME_None;
+
+#pragma endregion
 
 	/** Filter components by their generation trigger type. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Filtering", meta = (PCG_Overridable, InlineEditConditionToggle))
@@ -327,7 +345,7 @@ namespace PCGExWaitForPCGData
 		void Inspect(int32 Index);
 		void OnInspectionCompleteInternal();
 
-		bool IsValidCandidate(const UPCGComponent* Candidate) const;
+		bool IsValidCandidate(const UPCGComponent* Candidate, PCGExActorSelection::FTagMatcher& InComponentTags) const;
 		bool HasRequiredPins(const UPCGGraph* CandidateGraph) const;
 
 		FPCGExWaitForPCGDataContext* Context = nullptr;

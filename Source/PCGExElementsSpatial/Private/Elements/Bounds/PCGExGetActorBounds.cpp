@@ -4,7 +4,7 @@
 #include "Elements/Bounds/PCGExGetActorBounds.h"
 
 #include "EngineUtils.h"
-#include "PCGComponent.h"
+#include "PCGExVersion.h"
 #include "PCGGraphExecutionStateInterface.h"
 #include "Data/PCGExPointIO.h"
 #include "GameFramework/Actor.h"
@@ -46,7 +46,38 @@ namespace PCGExGetActorBounds
 #if WITH_EDITOR
 void UPCGExGetActorBoundsBaseSettings::GetStaticTrackedKeys(FPCGSelectionKeyToSettingsMap& OutKeysToSettings, TArray<TObjectPtr<const UPCGGraph>>& OutVisitedGraphs) const
 {
-	PCGExActorBounds::AddStaticTrackedKeys(this, Selection, PCGExGetActorBounds::BoundsPinLabel, bMustOverlapSelf, OutKeysToSettings);
+	PCGExActorBounds::AddStaticTrackedKeys(this, Selection, PCGExGetActorBounds::BoundsPinLabel, OutKeysToSettings);
+}
+
+void UPCGExGetActorBoundsBaseSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 3)
+	{
+		// Not renamed onto the clauses: an array override takes one tag per row, a clause override a single value.
+		for (const FName Label : {FName(TEXT("Selection")), FName(TEXT("Tags")), FName(TEXT("TagMatch")), FName(TEXT("SkipTags"))})
+		{
+			RetireInputPin(InOutNode, Label);
+		}
+	}
+
+	// 1.78.5 moved bMustOverlapSelf into Selection: the inner pin keeps the bare leaf label, so the serialized pin still matches.
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExGetActorBoundsBaseSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 3)
+	{
+		Selection.ApplyDeprecation(this);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		Selection.bMustOverlapSelf = bMustOverlapSelf_DEPRECATED;
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
 
@@ -71,7 +102,7 @@ TArray<FPCGPinProperties> UPCGExGetActorBoundsBaseSettings::OutputPinProperties(
 	PCGEX_PIN_POINT(PCGPinConstants::DefaultOutputLabel, "One point per matching actor, or per primitive in Per Primitive mode.", Normal)
 	if (bOutputDiscarded)
 	{
-		PCGEX_PIN_POINT(PCGExCommon::Labels::OutputDiscardedLabel, "Actors that matched the selection but carry a skip tag.", Normal)
+		PCGEX_PIN_POINT(PCGExCommon::Labels::OutputDiscardedLabel, "Actors that pass the class filter and Require clauses but carry an Exclude tag.", Normal)
 	}
 	return PinProperties;
 }
@@ -86,7 +117,7 @@ void FPCGExGetActorBoundsBaseElement::GetDependenciesCrc(const FPCGGetDependenci
 	IPCGElement::GetDependenciesCrc(InParams, Crc);
 
 	const UPCGExGetActorBoundsBaseSettings* Settings = Cast<const UPCGExGetActorBoundsBaseSettings>(InParams.Settings);
-	PCGExActorBounds::CombineSelfBoundsCrc(InParams, Settings && Settings->bMustOverlapSelf, Crc);
+	PCGExActorSelection::CombineSelfBoundsCrc(InParams, Settings && Settings->Selection.bMustOverlapSelf, Crc);
 
 	OutCrc = Crc;
 }
@@ -109,7 +140,6 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 	PCGEX_SETTINGS(GetActorBoundsBase)
 	check(IsInGameThread());
 
-	const IPCGGraphExecutionSource* Source = Context->ExecutionSource.Get();
 	UWorld* World = Context->GetWorld();
 	if (!World)
 	{
@@ -123,11 +153,9 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 
 	FPCGExActorSelectionDetails Selection = Settings->Selection;
 	Selection.Init();
-	if (!Selection.IsUsable())
-	{
-		PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Actor selection is empty: set a class or at least one tag."));
-		return true;
-	}
+
+	// A self-relative scope reads live actors whatever the node: only a World sweep is the node's own.
+	const bool bWorldScope = Selection.Scope == EPCGExActorScope::World;
 
 	if (!Settings->Output.IsUsable())
 	{
@@ -135,27 +163,46 @@ bool FPCGExGetActorBoundsBaseElement::Boot(FPCGExContext* InContext) const
 		return true;
 	}
 
-	PCGExActorBounds::FCull Cull;
-	if (!PCGExActorBounds::ResolveCull(Context, PCGExGetActorBounds::BoundsPinLabel, Settings->bUnbounded, Settings->bMustOverlapSelf, Cull))
+	// The query validates the selection and resolves self; the cull owns the overlap test (tighter: per primitive, and merged with the Bounds input).
+	PCGExActorSelection::FQuery Query;
+	if (!PCGExActorSelection::FQuery::Make(Selection, Context, Query, /*bApplyOverlap=*/false))
 	{
 		return true;
+	}
+
+	PCGExActorBounds::FCull Cull;
+	if (!PCGExActorBounds::ResolveCull(Context, PCGExGetActorBounds::BoundsPinLabel, Settings->bUnbounded, Selection.bMustOverlapSelf, Cull))
+	{
+		return true;
+	}
+
+	// Built ahead of the cull test: a contradictory selection is reported even when nothing is swept.
+	PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
+	if (const FName Contradiction = ActorSweep.Tags.GetContradiction(); Selection.AppliesCriteria() && !Contradiction.IsNone())
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Tag '{0}' is required but also excluded, by Exclude or by Ignore PCG Spawned Actors: no actor can be kept."), FText::FromName(Contradiction)));
 	}
 
 	if (!Cull.bDisjoint)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExGetActorBoundsBaseElement::Boot::Sweep);
 
-		PCGExActorBounds::FSweep ActorSweep(Selection, Settings->Output, Context->Snapshots);
 		ActorSweep.Discarded = Settings->bOutputDiscarded ? &Context->Discarded : nullptr;
 		ActorSweep.CullBox = Cull.Get();
-		const UPCGComponent* Component = Context->GetComponent();
-		ActorSweep.Self = (Selection.bIgnoreSelf && Component) ? Component->GetOwner() : nullptr;
+		ActorSweep.Self = Query.Self;
 
-		Sweep(World, ActorSweep);
+		if (bWorldScope)
+		{
+			Sweep(World, ActorSweep);
+		}
+		else
+		{
+			Query.ForEachCandidate([&ActorSweep](AActor* InActor) { ActorSweep.AddActor(InActor); });
+		}
 	}
 
 #if WITH_EDITOR
-	PCGExActorBounds::RegisterDynamicTracking(Context, Selection, Cull, Settings->bMustOverlapSelf, GET_MEMBER_NAME_CHECKED(UPCGExGetActorBoundsBaseSettings, Selection));
+	PCGExActorBounds::RegisterDynamicTracking(Context, Selection, Cull, GET_MEMBER_NAME_CHECKED(UPCGExGetActorBoundsBaseSettings, Selection));
 #endif
 
 	Context->Output = PCGExGetActorBounds::PrepareOutput(Context, Context->Snapshots, PCGPinConstants::DefaultOutputLabel);

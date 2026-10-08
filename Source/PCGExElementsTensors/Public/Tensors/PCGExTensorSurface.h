@@ -204,4 +204,5 @@ public:
 	FPCGExTensorSurfaceConfig Config;
 
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
+	virtual void CombineDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& InOutCrc) const override;
 };

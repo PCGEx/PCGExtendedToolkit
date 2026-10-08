@@ -30,6 +30,8 @@ namespace PCGExMT
 #define PCGEX_FACTORY_NEW_OPERATION(_TYPE) TSharedPtr<FPCGEx##_TYPE> NewOperation = MakeShared<FPCGEx##_TYPE>();
 
 class FPCGMetadataAttributeBase;
+struct FPCGGetDependenciesCrcParams;
+struct FPCGCrc;
 /**
  * 
  */
@@ -58,6 +60,11 @@ public:
 
 	virtual void Cleanup() override;
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other);
+
+	/** Folds whatever this operation depends on beyond its properties into the hosting node's cache key. Nothing by default. */
+	virtual void CombineDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& InOutCrc) const
+	{
+	}
 
 	virtual bool WantsPerDataInstance()
 	{

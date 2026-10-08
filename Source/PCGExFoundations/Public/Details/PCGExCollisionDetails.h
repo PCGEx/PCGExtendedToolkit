@@ -6,7 +6,8 @@
 #include "CoreMinimal.h"
 #include "CollisionQueryParams.h"
 #include "Details/PCGExInputShorthandsDetails.h"
-#include "Elements/PCGActorSelector.h"
+#include "Details/PCGExActorSelectionDetails.h"
+#include "Elements/PCGActorSelector.h" // legacy field
 
 #include "PCGExCollisionDetails.generated.h"
 
@@ -14,6 +15,8 @@ struct FPCGExContext;
 struct FHitResult;
 class UWorld;
 class AActor;
+class UPCGNode;
+class UPCGSettings;
 
 UENUM()
 enum class EPCGExCollisionFilterType : uint8
@@ -36,9 +39,7 @@ struct PCGEXFOUNDATIONS_API FPCGExCollisionDetails
 {
 	GENERATED_BODY()
 
-	FPCGExCollisionDetails()
-	{
-	}
+	FPCGExCollisionDetails();
 
 	/** Trace mode - line, sphere sweep, or box sweep */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
@@ -80,14 +81,39 @@ struct PCGEXFOUNDATIONS_API FPCGExCollisionDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bIgnoreActors = false;
 
-	/** Actor selection criteria for actors to ignore in collision checks. */
+	/** Which actors to ignore in collision checks. Must Overlap Self limits the list to actors near the component. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bIgnoreActors"))
-	FPCGActorSelectorSettings IgnoredActorSelector;
+	FPCGExActorSelectionDetails IgnoredActors;
 
-	TArray<AActor*> IgnoredActors;
+#pragma region DEPRECATED
+
+	UPROPERTY(meta = (DeprecatedProperty, ScriptNoExport))
+	FPCGActorSelectorSettings IgnoredActorSelector_DEPRECATED;
+
+#pragma endregion
+
+	TArray<AActor*> IgnoredActorList;
 	UWorld* World = nullptr;
 
 	void Init(FPCGExContext* InContext);
+
+#if WITH_EDITOR
+	/** Maps the legacy stock ignore selector onto IgnoredActors. Call under the host's version gate. */
+	void ApplyDeprecation(const UObject* InLogContext);
+
+	/**
+	 * Renames the legacy selector's override pins onto their IgnoredActors counterparts and resolves the labels of the
+	 * pins nothing can receive, for the host to retire. A wired tag pin turns wildcards on, as stock matched them.
+	 * Call from the host's PCGExApplyDeprecationBeforeUpdatePins, before ApplyDeprecation runs.
+	 */
+	void MigrateLegacyPins(const UPCGSettings* InSettings, UPCGNode* InOutNode, TArray<FName>& OutRetiredLabels);
+#endif
+
+	/** True when the ignore list depends on the component bounds, which the host's cache key must then carry. */
+	bool DependsOnSelfBounds() const
+	{
+		return bIgnoreActors && IgnoredActors.bMustOverlapSelf;
+	}
 	void Update(FCollisionQueryParams& InCollisionParams) const;
 
 	// Line traces

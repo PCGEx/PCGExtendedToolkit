@@ -21,7 +21,7 @@ class UPCGExGetActorBoundsWPSettings : public UPCGExGetActorBoundsBaseSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(GetActorBoundsWP, "Get Actor Bounds (WP)", "Editor-only World Partition variant of Get Actor Bounds: one point per matching actor descriptor (or per primitive of loaded actors), unloaded actors included, transform and bounds only, with an optional skip-tag pass and Discarded pin. Loaded actors are read live; unloaded ones use the tags and bounds saved in their descriptor, so every actor-framed mode derives one actor-space box from it. A Bounds input culls through the partition's editor spatial hash. A Blueprint class filter loads each descriptor's base class on the game thread; native classes compare without loading.");
+	PCGEX_NODE_INFOS(GetActorBoundsWP, "Get Actor Bounds (WP)", "Editor-only World Partition variant of Get Actor Bounds: one point per matching actor descriptor (or per primitive of loaded actors), unloaded actors included, transform and bounds only, selected by an optional class filter and Require All / Require Any / Exclude tag lists, with an optional Discarded pin. Loaded actors are read live; unloaded ones use the tags and bounds saved in their descriptor, so every actor-framed mode derives one actor-space box from it. A Bounds input culls through the partition's editor spatial hash. A native class filter compares without loading; a Blueprint class filter loads each distinct descriptor base class once, on the game thread.");
 	virtual TArray<FText> GetNodeTitleAliases() const override;
 #endif
 

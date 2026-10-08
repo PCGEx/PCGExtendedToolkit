@@ -34,6 +34,8 @@ namespace PCGExData
 }
 
 struct FPCGExFactoryProviderContext;
+struct FPCGGetDependenciesCrcParams;
+struct FPCGCrc;
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter")
 class PCGEXCORE_API UPCGExFactoryProviderSettings : public UPCGExSettings
@@ -84,6 +86,11 @@ public:
 
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory = nullptr) const;
 
+	/** Folds whatever the factory output depends on beyond its settings and inputs into the cache key. Nothing by default. */
+	virtual void CombineDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& InOutCrc) const
+	{
+	}
+
 	virtual bool ShouldCancel(FPCGExFactoryProviderContext* InContext, PCGExFactories::EPreparationResult InResult) const
 	{
 		return true;
@@ -104,6 +111,8 @@ struct PCGEXCORE_API FPCGExFactoryProviderContext : FPCGExContext
 class PCGEXCORE_API FPCGExFactoryProviderElement final : public IPCGExElement
 {
 public:
+	virtual void GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const override;
+
 #if WITH_EDITOR
 	virtual bool ShouldLog() const override
 	{

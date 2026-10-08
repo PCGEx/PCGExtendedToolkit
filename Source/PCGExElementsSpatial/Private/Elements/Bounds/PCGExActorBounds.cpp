@@ -3,11 +3,12 @@
 
 #include "Elements/Bounds/PCGExActorBounds.h"
 
-#include "Algo/Sort.h"
-#include "Components/PrimitiveComponent.h"
 #include "PCGElement.h"
+#include "PCGExVersion.h"
 #include "PCGGraphExecutionStateInterface.h"
 #include "PCGNode.h"
+#include "Algo/Sort.h"
+#include "Components/PrimitiveComponent.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExMTCommon.h"
 #include "Data/PCGBasePointData.h"
@@ -17,198 +18,6 @@
 #include "Helpers/PCGDynamicTrackingHelpers.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 #include "Helpers/PCGHelpers.h"
-#include "Misc/WildcardString.h"
-
-namespace PCGExActorBounds
-{
-	namespace Internal
-	{
-		// Stock Get Actor Data matches wildcards case-insensitively; FName equality already is.
-		bool AnyActorTagMatchesPattern(const TArray<FName>& InActorTags, const FString& InPattern)
-		{
-			for (const FName& ActorTag : InActorTags)
-			{
-				TStringBuilder<NAME_SIZE> Builder;
-				ActorTag.AppendString(Builder);
-				if (FWildcardString::IsMatchSubstring(*InPattern, Builder.GetData(), Builder.GetData() + Builder.Len(), ESearchCase::IgnoreCase))
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-
-		FString JoinTags(const TArray<FName>& InTags)
-		{
-			TArray<FString> TagStrings;
-			for (const FName& Tag : InTags)
-			{
-				if (!Tag.IsNone())
-				{
-					TagStrings.Add(Tag.ToString());
-				}
-			}
-			return FString::Join(TagStrings, TEXT(", "));
-		}
-	}
-}
-
-#pragma region FPCGExActorTagSet
-
-void FPCGExActorTagSet::Init(const TArray<FName>& InTags, const bool bAllowWildcards)
-{
-	Exact.Reset();
-	Wildcards.Reset();
-
-	for (const FName& Tag : InTags)
-	{
-		if (Tag.IsNone())
-		{
-			continue;
-		}
-
-		if (bAllowWildcards)
-		{
-			FString TagString = Tag.ToString();
-			if (FWildcardString::ContainsWildcards(*TagString))
-			{
-				Wildcards.Add(MoveTemp(TagString));
-				continue;
-			}
-		}
-
-		Exact.AddUnique(Tag);
-	}
-}
-
-bool FPCGExActorTagSet::MatchesAny(const TArray<FName>& InActorTags) const
-{
-	for (const FName& Tag : Exact)
-	{
-		if (InActorTags.Contains(Tag))
-		{
-			return true;
-		}
-	}
-	for (const FString& Pattern : Wildcards)
-	{
-		if (PCGExActorBounds::Internal::AnyActorTagMatchesPattern(InActorTags, Pattern))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-bool FPCGExActorTagSet::MatchesAll(const TArray<FName>& InActorTags) const
-{
-	for (const FName& Tag : Exact)
-	{
-		if (!InActorTags.Contains(Tag))
-		{
-			return false;
-		}
-	}
-	for (const FString& Pattern : Wildcards)
-	{
-		if (!PCGExActorBounds::Internal::AnyActorTagMatchesPattern(InActorTags, Pattern))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-#pragma endregion
-
-#pragma region FPCGExActorSelectionDetails
-
-FPCGExActorSelectionDetails::FPCGExActorSelectionDetails()
-	: ActorClass(AActor::StaticClass())
-{
-}
-
-void FPCGExActorSelectionDetails::Init()
-{
-	Select.Init(Tags, bAllowWildcards);
-	Skip.Init(SkipTags, bAllowWildcards);
-}
-
-bool FPCGExActorSelectionDetails::IsUsable() const
-{
-	switch (Selection)
-	{
-	case EPCGExActorSelection::ByClass:
-		return ActorClass != nullptr;
-	case EPCGExActorSelection::ByTag:
-		return !Select.IsEmpty();
-	default:
-		checkNoEntry();
-		return false;
-	}
-}
-
-TSubclassOf<AActor> FPCGExActorSelectionDetails::GetIterationClass() const
-{
-	return (Selection == EPCGExActorSelection::ByClass && ActorClass) ? ActorClass : TSubclassOf<AActor>(AActor::StaticClass());
-}
-
-bool FPCGExActorSelectionDetails::MatchesClass(const AActor* InActor) const
-{
-	return Selection != EPCGExActorSelection::ByClass || InActor->IsA(ActorClass);
-}
-
-bool FPCGExActorSelectionDetails::MatchesTags(const TArray<FName>& InActorTags) const
-{
-	if (bIgnorePCGSpawnedActors && InActorTags.Contains(PCGHelpers::DefaultPCGActorTag))
-	{
-		return false;
-	}
-
-	if (Selection != EPCGExActorSelection::ByTag)
-	{
-		return true;
-	}
-
-	return TagMatch == EPCGExActorTagMatch::Any ? Select.MatchesAny(InActorTags) : Select.MatchesAll(InActorTags);
-}
-
-void FPCGExActorSelectionDetails::MakeTrackingKeys(TArray<FPCGSelectionKey>& OutKeys) const
-{
-	if (Selection == EPCGExActorSelection::ByClass)
-	{
-		if (ActorClass)
-		{
-			OutKeys.Emplace(TSubclassOf<UObject>(ActorClass));
-		}
-	}
-	else
-	{
-		// The tracking key handles wildcard tags on its own; tags this node matches literally are simply over-tracked.
-		for (const FName& Tag : Tags)
-		{
-			if (!Tag.IsNone())
-			{
-				OutKeys.Emplace(Tag);
-			}
-		}
-	}
-}
-
-FString FPCGExActorSelectionDetails::GetTitleInformation() const
-{
-	FString Title = Selection == EPCGExActorSelection::ByClass ? (ActorClass ? ActorClass->GetName() : FString()) : PCGExActorBounds::Internal::JoinTags(Tags);
-
-	const FString SkipTitle = PCGExActorBounds::Internal::JoinTags(SkipTags);
-	if (!SkipTitle.IsEmpty())
-	{
-		Title += TEXT(" | skip ") + SkipTitle;
-	}
-
-	return Title;
-}
-
-#pragma endregion
 
 #pragma region FPCGExActorBoundsOutputDetails
 
@@ -432,21 +241,8 @@ namespace PCGExActorBounds
 		return true;
 	}
 
-	void CombineSelfBoundsCrc(const FPCGGetDependenciesCrcParams& InParams, const bool bMustOverlapSelf, FPCGCrc& InOutCrc)
-	{
-		if (!bMustOverlapSelf || !InParams.ExecutionSource)
-		{
-			return;
-		}
-
-		if (const UPCGData* SelfData = InParams.ExecutionSource->GetExecutionState().GetSelfData())
-		{
-			InOutCrc.Combine(SelfData->GetOrComputeCrc(/*bFullDataCrc=*/false));
-		}
-	}
-
 #if WITH_EDITOR
-	void AddStaticTrackedKeys(const UPCGSettings* InOwner, const FPCGExActorSelectionDetails& InSelection, const FName InBoundsPin, const bool bMustOverlapSelf, FPCGSelectionKeyToSettingsMap& OutKeysToSettings)
+	void AddStaticTrackedKeys(const UPCGSettings* InOwner, const FPCGExActorSelectionDetails& InSelection, const FName InBoundsPin, FPCGSelectionKeyToSettingsMap& OutKeysToSettings)
 	{
 		const UPCGNode* Node = Cast<const UPCGNode>(InOwner->GetOuter());
 		if (Node && Node->IsInputPinConnected(InBoundsPin))
@@ -454,27 +250,36 @@ namespace PCGExActorBounds
 			return;
 		}
 
+		FPCGExActorSelectionDetails Selection = InSelection;
+		Selection.Init();
+
 		TArray<FPCGSelectionKey> Keys;
-		InSelection.MakeTrackingKeys(Keys);
+		Selection.MakeTrackingKeys(Keys);
 		for (FPCGSelectionKey& Key : Keys)
 		{
-			OutKeysToSettings.FindOrAdd(MoveTemp(Key)).Emplace(InOwner, bMustOverlapSelf);
+			OutKeysToSettings.FindOrAdd(MoveTemp(Key)).Emplace(InOwner, InSelection.bMustOverlapSelf);
 		}
 	}
 
-	void RegisterDynamicTracking(FPCGExContext* InContext, const FPCGExActorSelectionDetails& InSelection, const FCull& InCull, const bool bMustOverlapSelf, const FName InSelectionProperty)
+	void RegisterDynamicTracking(FPCGExContext* InContext, const FPCGExActorSelectionDetails& InSelection, const FCull& InCull, const FName InSelectionProperty)
 	{
 		if (!InCull.InputBox.IsValid && !InContext->IsValueOverriden(InSelectionProperty))
 		{
 			return;
 		}
 
-		const bool bIsCulled = !InCull.InputBox.IsValid && bMustOverlapSelf;
+		const bool bIsCulled = !InCull.InputBox.IsValid && InSelection.bMustOverlapSelf;
 		TArray<FPCGSelectionKey> Keys;
 		InSelection.MakeTrackingKeys(Keys);
-		// 5.7 keys carry no bounds: an input-bounded selection is tracked unculled.
 		for (FPCGSelectionKey& Key : Keys)
 		{
+#if PCGEX_ENGINE_VERSION >= 508
+			// 5.7 keys carry no bounds: the input box only narrows what is tracked, so tracking more there is correct.
+			if (InCull.InputBox.IsValid)
+			{
+				Key.OptionalBounds.Add(InCull.InputBox);
+			}
+#endif
 			FPCGDynamicTrackingHelper::AddSingleDynamicTrackingKey(InContext, MoveTemp(Key), bIsCulled);
 		}
 	}
@@ -568,31 +373,40 @@ namespace PCGExActorBounds
 #pragma region FSweep
 
 	FSweep::FSweep(const FPCGExActorSelectionDetails& InSelection, const FPCGExActorBoundsOutputDetails& InOutput, TArray<FSnapshot>& InKept)
-		: Selection(InSelection), Output(InOutput), Kept(InKept)
+		: Selection(InSelection), Output(InOutput), Kept(InKept), Tags(InSelection)
 	{
 	}
 
 	TArray<FSnapshot>* FSweep::Route(const TArray<FName>& InActorTags)
 	{
-		if (!Selection.MatchesTags(InActorTags))
+		// A self-relative scope without children takes its actor as-is (stock semantics).
+		if (!Selection.AppliesCriteria() || Tags.IsEmpty())
 		{
+			return &Kept;
+		}
+
+		switch (Tags.Test(InActorTags, Discarded != nullptr))
+		{
+		case PCGExActorSelection::ETagVerdict::Keep:
+			return &Kept;
+		case PCGExActorSelection::ETagVerdict::Excluded:
+			return Discarded;
+		case PCGExActorSelection::ETagVerdict::Drop:
+			return nullptr;
+		default:
+			checkNoEntry();
 			return nullptr;
 		}
-		if (Selection.HasSkipTags() && Selection.ShouldSkip(InActorTags))
-		{
-			return Discarded;
-		}
-		return &Kept;
 	}
 
 	void FSweep::AddActor(const AActor* InActor)
 	{
-		if (InActor == Self || !Selection.MatchesClass(InActor))
+		if (PCGExActorSelection::IsSelfOrChildOfSelf(InActor, Self))
 		{
 			return;
 		}
 
-		// Routed before the bounds read: a skipped actor only costs a snapshot when it has a pin to go to.
+		// Routed before the bounds read: an excluded actor only costs a snapshot when it has a pin to go to.
 		if (TArray<FSnapshot>* Target = Route(InActor->Tags))
 		{
 			SnapshotActor(InActor, Output, CullBox, *Target);

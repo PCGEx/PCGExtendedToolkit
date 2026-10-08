@@ -18,22 +18,37 @@
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Tasks/Task.h"
 #include "Utils/PCGExIntTracker.h"
+#include "PCGExVersion.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #define LOCTEXT_NAMESPACE "PCGExWaitForPCGDataElement"
 #define PCGEX_NAMESPACE WaitForPCGData
 
 #pragma region Config Struct Implementations
 
+bool PCGExWaitForPCGData::IsComponentTagFilterUsable(const UPCGExWaitForPCGDataSettings* Settings, FText& OutWhyNot)
+{
+	FPCGExTagFilterDetails Filter = Settings->ComponentTags;
+	Filter.Init();
+	return Filter.IsUsable(&OutWhyNot);
+}
+
 void PCGExWaitForPCGData::FFilterConfig::InitFrom(const UPCGExWaitForPCGDataSettings* Settings)
 {
 	bMustMatchTemplate = Settings->bMustMatchTemplate;
-	MustHaveTag = Settings->MustHaveTag;
+	ComponentTags = Settings->ComponentTags;
+	ComponentTags.Init();
 	bDoMatchGenerationTrigger = Settings->bDoMatchGenerationTrigger;
 	MatchGenerationTrigger = Settings->MatchGenerationTrigger;
 	bInvertGenerationTrigger = Settings->bInvertGenerationTrigger;
 }
 
-bool PCGExWaitForPCGData::FFilterConfig::PassesFilter(const UPCGComponent* Candidate, const UPCGGraph* TemplateGraph, const UPCGComponent* Self) const
+PCGExActorSelection::FTagMatcher PCGExWaitForPCGData::FFilterConfig::MakeComponentMatcher() const
+{
+	return PCGExActorSelection::FTagMatcher(ComponentTags);
+}
+
+bool PCGExWaitForPCGData::FFilterConfig::PassesFilter(const UPCGComponent* Candidate, const UPCGGraph* TemplateGraph, const UPCGComponent* Self, PCGExActorSelection::FTagMatcher& InComponentTags) const
 {
 	const UPCGGraph* CandidateGraph = Candidate->GetGraph();
 
@@ -54,7 +69,7 @@ bool PCGExWaitForPCGData::FFilterConfig::PassesFilter(const UPCGComponent* Candi
 	}
 
 	// Tag matching
-	if (!MustHaveTag.IsNone() && !Candidate->ComponentHasTag(MustHaveTag))
+	if (!InComponentTags.IsEmpty() && InComponentTags.Test(Candidate->ComponentTags, false) != PCGExActorSelection::ETagVerdict::Keep)
 	{
 		return false;
 	}
@@ -124,6 +139,33 @@ void UPCGExWaitForPCGDataSettings::PostEditChangeProperty(FPropertyChangedEvent&
 	{
 		EDITOR_RefreshPins();
 	}
+}
+#endif
+
+#if WITH_EDITOR
+void UPCGExWaitForPCGDataSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		// FName -> FString is a PCG broadcast: the wire keeps working.
+		PCGExDeprecation::RenameShorthandOverridePin(this, InOutNode, TEXT("MustHaveTag"), TEXT("ComponentTags"), TEXT("RequireAny"));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
+void UPCGExWaitForPCGDataSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		// The stock test was an exact ComponentHasTag: no wildcards.
+		if (!MustHaveTag_DEPRECATED.IsNone())
+		{
+			ComponentTags.RequireAny = MustHaveTag_DEPRECATED.ToString();
+		}
+	}
+
+	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
 
@@ -247,6 +289,12 @@ bool FPCGExWaitForPCGDataElement::Boot(FPCGExContext* InContext) const
 	}
 
 	// Initialize config structs from settings
+	if (FText WhyNot; !PCGExWaitForPCGData::IsComponentTagFilterUsable(Settings, WhyNot))
+	{
+		PCGE_LOG(Warning, GraphAndLog, WhyNot);
+		return false;
+	}
+
 	Context->FilterConfig.InitFrom(Settings);
 	Context->TimeoutConfig.InitFrom(Settings);
 	Context->GenerationConfig.InitFrom(Settings);
@@ -584,10 +632,13 @@ namespace PCGExWaitForPCGData
 		// Move the array since we don't need the original after inspection
 		TArray<UPCGComponent*> FoundComponents = MoveTemp(PerActorGatheredComponents[Index]);
 
-		FoundComponents.RemoveAll([this, Self](const UPCGComponent* Candidate) -> bool
+		// Per task: the matcher keeps scratch state, and inspections run in parallel.
+		PCGExActorSelection::FTagMatcher ComponentTags = FilterConfig.MakeComponentMatcher();
+
+		FoundComponents.RemoveAll([this, Self, &ComponentTags](const UPCGComponent* Candidate) -> bool
 		{
 			// Remove if doesn't pass filter
-			if (!IsValidCandidate(Candidate))
+			if (!IsValidCandidate(Candidate, ComponentTags))
 			{
 				return true;
 			}
@@ -678,9 +729,9 @@ namespace PCGExWaitForPCGData
 		}
 	}
 
-	bool FComponentDiscovery::IsValidCandidate(const UPCGComponent* Candidate) const
+	bool FComponentDiscovery::IsValidCandidate(const UPCGComponent* Candidate, PCGExActorSelection::FTagMatcher& InComponentTags) const
 	{
-		return FilterConfig.PassesFilter(Candidate, TemplateGraph.Get(), Context->GetMutableComponent());
+		return FilterConfig.PassesFilter(Candidate, TemplateGraph.Get(), Context->GetMutableComponent(), InComponentTags);
 	}
 
 	bool FComponentDiscovery::HasRequiredPins(const UPCGGraph* CandidateGraph) const

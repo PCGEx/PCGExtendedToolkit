@@ -32,6 +32,13 @@ void UPCGExSampleNearestSurfaceSettings::PCGExApplyDeprecationBeforeUpdatePins(U
 		PCGEX_SHORTHAND_RENAME_PIN(LocalMaxDistance, MaxDistance, Distance)
 	}
 
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		TArray<FName> Retired;
+		CollisionSettings.MigrateLegacyPins(this, InOutNode, Retired);
+		for (const FName Label : Retired) { RetireInputPin(InOutNode, Label); }
+	}
+
 	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
 }
 
@@ -41,6 +48,11 @@ void UPCGExSampleNearestSurfaceSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 	{
 		// Rewire Distance
 		Distance.Update(bUseLocalMaxDistance_DEPRECATED ? EPCGExInputValueType::Attribute : EPCGExInputValueType::Constant, LocalMaxDistance_DEPRECATED, MaxDistance_DEPRECATED);
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		CollisionSettings.ApplyDeprecation(this);
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -75,6 +87,17 @@ PCGExData::EIOInit UPCGExSampleNearestSurfaceSettings::GetMainDataInitialization
 }
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(SampleNearestSurface)
+
+void FPCGExSampleNearestSurfaceElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
+{
+	FPCGCrc Crc;
+	FPCGExPointsProcessorElement::GetDependenciesCrc(InParams, Crc);
+
+	const UPCGExSampleNearestSurfaceSettings* Settings = Cast<const UPCGExSampleNearestSurfaceSettings>(InParams.Settings);
+	PCGExActorSelection::CombineSelfBoundsCrc(InParams, Settings && Settings->CollisionSettings.DependsOnSelfBounds(), Crc);
+
+	OutCrc = Crc;
+}
 
 bool FPCGExSampleNearestSurfaceElement::Boot(FPCGExContext* InContext) const
 {

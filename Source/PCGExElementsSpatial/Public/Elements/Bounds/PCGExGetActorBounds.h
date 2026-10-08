@@ -20,7 +20,7 @@ namespace PCGExGetActorBounds
 	inline const FName BoundsPinLabel = TEXT("Bounds");
 }
 
-/** Everything the actor bounds nodes share; a node only decides how the world is walked. */
+/** Everything the actor bounds nodes share; a node only decides how the world is walked in World scope. */
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc")
 class UPCGExGetActorBoundsBaseSettings : public UPCGExSettings
 {
@@ -29,10 +29,25 @@ class UPCGExGetActorBoundsBaseSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual EPCGSettingsType GetType() const override { return EPCGSettingsType::Spatial; }
-	virtual FLinearColor GetNodeTitleColor() const override { return PCGEX_NODE_COLOR_OPTIN_NAME(MiscAdd); }
+	virtual EPCGSettingsType GetType() const override
+	{
+		return EPCGSettingsType::Spatial;
+	}
+
+	virtual FLinearColor GetNodeTitleColor() const override
+	{
+		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscAdd);
+	}
+
 	virtual void GetStaticTrackedKeys(FPCGSelectionKeyToSettingsMap& OutKeysToSettings, TArray<TObjectPtr<const UPCGGraph>>& OutVisitedGraphs) const override;
-	virtual bool CanDynamicallyTrackKeys() const override { return true; }
+
+	virtual bool CanDynamicallyTrackKeys() const override
+	{
+		return true;
+	}
+
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 #endif
 	virtual FString GetAdditionalTitleInformation() const override;
 
@@ -42,8 +57,8 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Which actors to gather. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ShowOnlyInnerProperties))
+	/** Which actors to gather. Must Overlap Self adds the component bounds to the cache key, so each partitioned cell executes on its own. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExActorSelectionDetails Selection;
 
 	/** How each actor becomes a point. */
@@ -55,20 +70,24 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bUnbounded = true;
 
-	/** Additionally require actors to overlap the executing component bounds. Independent of the Bounds input.
-	 *  Adds the component bounds to the cache key, so each partitioned cell executes on its own. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	bool bMustOverlapSelf = false;
+#pragma region DEPRECATED
 
-	/** Output the actors excluded by Skip Tags to a Discarded pin, shaped like the main output. They are a subset of what
-	 *  the node would output without skip tags, so the bounds cull still applies. Each discarded actor then costs a bounds read. */
+	/** Lives on Selection now. */
+	UPROPERTY(meta = (DeprecatedProperty, ScriptNoExport))
+	bool bMustOverlapSelf_DEPRECATED = false;
+
+#pragma endregion
+
+	/** Output the actors excluded by Exclude tags to a Discarded pin, shaped like the main output. They are a subset
+	 *  of what the node would output without Exclude, so the bounds cull still applies. Each discarded actor then
+	 *  costs a bounds read. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bOutputDiscarded = false;
 };
 
 /**
  * One point per matching loaded actor (or per primitive, in Per Primitive mode), transform + bounds only, merged into
- * a single point data. Actors carrying a skip tag are dropped, or routed to an optional Discarded pin.
+ * a single point data. Actors carrying an Exclude tag are dropped, or routed to an optional Discarded pin.
  * The world sweep runs on the game thread during preparation and reads cached component bounds;
  * the point write runs off-thread. No metadata is produced.
  */
@@ -80,7 +99,7 @@ class UPCGExGetActorBoundsSettings : public UPCGExGetActorBoundsBaseSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(GetActorBounds, "Get Actor Bounds", "One point per matching loaded actor, or per primitive (transform + bounds, no metadata), merged into a single point data, with an optional skip-tag pass and Discarded pin. A fast alternative to Get Actor Data in Get Single Point mode for exclusion volumes.");
+	PCGEX_NODE_INFOS(GetActorBounds, "Get Actor Bounds", "One point per matching loaded actor, or per primitive (transform + bounds, no metadata), merged into a single point data. Actors are selected by an optional class filter and Require All / Require Any / Exclude tag lists, with an optional Discarded pin for excluded actors. A fast alternative to Get Actor Data in Get Single Point mode for exclusion volumes.");
 #endif
 
 protected:
@@ -112,7 +131,7 @@ protected:
 	/** False, after logging why, when this node cannot gather from InWorld; the node then outputs nothing. */
 	virtual bool CanSweep(FPCGExContext* InContext, UWorld* InWorld) const;
 
-	/** Feeds every candidate actor of InWorld to InSweep, which filters and snapshots them. Game thread only. */
+	/** Feeds every candidate actor of InWorld to InSweep, which filters and snapshots them. World scope only; game thread only. */
 	virtual void Sweep(UWorld* InWorld, PCGExActorBounds::FSweep& InSweep) const = 0;
 };
 

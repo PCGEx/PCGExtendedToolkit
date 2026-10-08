@@ -118,6 +118,20 @@ PCGExData::EIOInit UPCGExRefineEdgesSettings::GetEdgeOutputInitMode() const
 PCGEX_INITIALIZE_ELEMENT(RefineEdges)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(RefineEdges)
 
+void FPCGExRefineEdgesElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
+{
+	FPCGCrc Crc;
+	FPCGExClustersProcessorElement::GetDependenciesCrc(InParams, Crc);
+
+	const UPCGExRefineEdgesSettings* Settings = Cast<const UPCGExRefineEdgesSettings>(InParams.Settings);
+	if (Settings && Settings->Refinement)
+	{
+		Settings->Refinement->CombineDependenciesCrc(InParams, Crc);
+	}
+
+	OutCrc = Crc;
+}
+
 bool FPCGExRefineEdgesElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExClustersProcessorElement::Boot(InContext))

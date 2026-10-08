@@ -151,6 +151,49 @@ FString FPCGExInputShorthandNameString::GetDisplayName() const
 
 namespace PCGExDeprecation
 {
+	FName ResolveLegacyOverridePinLabel(const UPCGNode* InNode, const FName InOldName, const FName InOldDisplayName)
+	{
+		if (!InNode || InOldName.IsNone()) { return NAME_None; }
+
+		FName OldLabel = NAME_None;
+		if (InNode->GetInputPin(InOldName)) { OldLabel = InOldName; }
+		else
+		{
+			const FString OldNameSuffix = FString::Printf(TEXT("/%s"), *InOldName.ToString());
+			for (const UPCGPin* Pin : InNode->GetInputPins())
+			{
+				if (!Pin || !Pin->Properties.Label.ToString().EndsWith(OldNameSuffix)) { continue; }
+
+				if (!OldLabel.IsNone())
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("[%s] Ambiguous old override pin '%s' during deprecation — pins '%s' and '%s' both match."),
+					       *GetNameSafe(InNode), *InOldName.ToString(), *OldLabel.ToString(), *Pin->Properties.Label.ToString());
+					return NAME_None;
+				}
+
+				OldLabel = Pin->Properties.Label;
+			}
+		}
+
+		// Display-name safety net: very old assets carry pins labeled from GetDisplayNameText (pre-authored-name
+		// engine labeling). Only consulted when no authored-name pin matched; one-time deprecation cost, and
+		// preserving user connections outweighs the (label-unique-per-node) collision risk.
+		if (OldLabel.IsNone() && !InOldDisplayName.IsNone() && InNode->GetInputPin(InOldDisplayName))
+		{
+			OldLabel = InOldDisplayName;
+		}
+
+		if (OldLabel.IsNone())
+		{
+			const FString OldNameStr = InOldName.ToString();
+			const bool bLooksLikeBool = OldNameStr.Len() > 1 && OldNameStr[0] == TEXT('b') && FChar::IsUpper(OldNameStr[1]);
+			const FName DefaultDisplayLabel = FName(FName::NameToDisplayString(OldNameStr, bLooksLikeBool));
+			if (InNode->GetInputPin(DefaultDisplayLabel)) { OldLabel = DefaultDisplayLabel; }
+		}
+
+		return OldLabel;
+	}
+
 	void RenameShorthandOverridePin(const UPCGSettings* InSettings, UPCGNode* InOutNode, const FName InOldName, const FName InMemberName, const FName InLeafName, const FName InOldDisplayName)
 	{
 		const FName PathSuffix[] = {InMemberName, InLeafName};
@@ -197,42 +240,7 @@ namespace PCGExDeprecation
 
 		// Resolve the old serialized pin: exact label first, else the unique segment-qualified
 		// ".../OldName" (the old property itself may have been clash-disambiguated).
-		FName OldLabel = NAME_None;
-		if (InOutNode->GetInputPin(InOldName)) { OldLabel = InOldName; }
-		else
-		{
-			const FString OldNameSuffix = FString::Printf(TEXT("/%s"), *InOldName.ToString());
-			for (const UPCGPin* Pin : InOutNode->GetInputPins())
-			{
-				if (!Pin || !Pin->Properties.Label.ToString().EndsWith(OldNameSuffix)) { continue; }
-
-				if (!OldLabel.IsNone())
-				{
-					UE_LOG(LogPCGEx, Warning, TEXT("[%s] Ambiguous old override pin '%s' during deprecation — pins '%s' and '%s' both match."),
-					       *InSettings->GetName(), *InOldName.ToString(), *OldLabel.ToString(), *Pin->Properties.Label.ToString());
-					return;
-				}
-
-				OldLabel = Pin->Properties.Label;
-			}
-		}
-
-		// Display-name safety net: very old assets carry pins labeled from GetDisplayNameText (pre-authored-name
-		// engine labeling). Only consulted when no authored-name pin matched; one-time deprecation cost, and
-		// preserving user connections outweighs the (label-unique-per-node) collision risk.
-		if (OldLabel.IsNone() && !InOldDisplayName.IsNone() && InOutNode->GetInputPin(InOldDisplayName))
-		{
-			OldLabel = InOldDisplayName;
-		}
-
-		if (OldLabel.IsNone())
-		{
-			const FString OldNameStr = InOldName.ToString();
-			const bool bLooksLikeBool = OldNameStr.Len() > 1 && OldNameStr[0] == TEXT('b') && FChar::IsUpper(OldNameStr[1]);
-			const FName DefaultDisplayLabel = FName(FName::NameToDisplayString(OldNameStr, bLooksLikeBool));
-			if (InOutNode->GetInputPin(DefaultDisplayLabel)) { OldLabel = DefaultDisplayLabel; }
-		}
-
+		const FName OldLabel = ResolveLegacyOverridePinLabel(InOutNode, InOldName, InOldDisplayName);
 		if (OldLabel.IsNone()) { return; }
 
 		InOutNode->RenameInputPin(OldLabel, NewParam->Label);

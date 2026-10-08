@@ -3,6 +3,9 @@
 
 #include "Refinements/PCGExEdgeRefineLineTrace.h"
 
+#include "PCGElement.h"
+#include "PCGExVersion.h"
+
 #pragma region FPCGExEdgeRefineLineTrace
 
 void FPCGExEdgeRefineLineTrace::PrepareForCluster(const TSharedPtr<PCGExClusters::FCluster>& InCluster, const TSharedPtr<PCGExHeuristics::FHandler>& InHeuristics)
@@ -68,5 +71,22 @@ void UPCGExEdgeRefineLineTrace::CopySettingsFrom(const UPCGExInstancedFactory* O
 		InitializedCollisionSettings = TypedOther->InitializedCollisionSettings;
 	}
 }
+
+void UPCGExEdgeRefineLineTrace::CombineDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& InOutCrc) const
+{
+	PCGExActorSelection::CombineSelfBoundsCrc(InParams, CollisionSettings.DependsOnSelfBounds(), InOutCrc);
+}
+
+#if WITH_EDITOR
+void UPCGExEdgeRefineLineTrace::PCGExApplyDeprecation(const int64 PCGExDataVersion)
+{
+	Super::PCGExApplyDeprecation(PCGExDataVersion);
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 5)
+	{
+		CollisionSettings.ApplyDeprecation(this);
+	}
+}
+#endif
 
 #pragma endregion
