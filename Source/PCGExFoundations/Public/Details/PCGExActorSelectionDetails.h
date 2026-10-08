@@ -67,7 +67,7 @@ namespace PCGExActorSelection
  * Three comma-separated tag clauses matched as exact names (case-insensitive) unless wildcards are opted in. A blank
  * clause constrains nothing, so an empty filter keeps everything.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/tag-filter-details"))
 struct PCGEXFOUNDATIONS_API FPCGExTagFilterDetails
 {
 	GENERATED_BODY()
@@ -127,7 +127,7 @@ private:
  * and three comma-separated tag clauses matched as exact names (case-insensitive) unless wildcards are opted in.
  * Selects nothing in World scope without the class filter or a Require clause.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(PCGExNodeLibraryDoc="common-settings/actor-selection-details"))
 struct PCGEXFOUNDATIONS_API FPCGExActorSelectionDetails
 {
 	GENERATED_BODY()
