@@ -6,7 +6,6 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "Engine/EngineTypes.h"
-#include "Layout/Visibility.h"
 
 
 #include "PCGExCollectionsEditorSettings.generated.h"
@@ -34,13 +33,12 @@ public:
 		return "PCGEx | Collections";
 	}
 
-	static FSimpleMulticastDelegate OnHiddenAssetPropertyNamesChanged;
+	/** Fired after HiddenCategoryGroups changes; open collection editors rebuild their detail trees on it. */
+	static FSimpleMulticastDelegate OnHiddenCategoryGroupsChanged;
 
-	/** Map a property internal name to a property name, so multiple property visibility can be toggled by a single flag */
-	TMap<FName, FName> PropertyNamesMap;
-
+	/** PCGExCategoryGroup ids hidden in entry detail panels. Editor-wide on purpose: the footer toggles carry over between collections. */
 	UPROPERTY(Config)
-	TSet<FName> HiddenPropertyNames;
+	TSet<FName> HiddenCategoryGroups;
 
 	/** Grid tab splitter fractions, written on drag end. Config-only, not a Project Settings knob. */
 	UPROPERTY(Config)
@@ -67,11 +65,9 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = Settings)
 	bool bRebuildStaleEntriesOnOpen = true;
 
-	void ToggleHiddenAssetPropertyName(const FName PropertyName, const bool bHide);
-	void ToggleHiddenAssetPropertyName(const TArray<FName> Properties, const bool bHide);
-	EVisibility GetPropertyVisibility(const FName PropertyName) const;
-
-	bool GetIsPropertyVisible(const FName PropertyName) const;
+	/** Return true when the hidden set changed; a change saves the config and broadcasts. */
+	bool SetCategoryGroupHidden(FName Group, bool bHidden);
+	bool SetCategoryGroupsHidden(TConstArrayView<FName> Groups, bool bHidden);
 
 protected:
 	/** Internal version tracking. */

@@ -145,6 +145,12 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 				PCGE_LOG(Warning, GraphAndLog, FTEXT("This target never moves projected points; footprint offsets will read 0."));
 			}
 
+			const bool bFixedBox = Footprint.AdjustMode == EPCGExFootprintAdjust::FixedCenter || Footprint.AdjustMode == EPCGExFootprintAdjust::FixedPivot;
+			if (bFixedBox && Footprint.Adjust.Input == EPCGExInputValueType::Constant && Footprint.Adjust.Constant.X <= 0 && Footprint.Adjust.Constant.Y <= 0)
+			{
+				PCGE_LOG(Warning, GraphAndLog, FTEXT("Footprint is in a Fixed adjust mode with no Adjust on X and Y : the box has no size and every corner probes the projected center."));
+			}
+
 			PCGExFactories::GetInputFactories<UPCGExPointFilterFactoryData>(Context, PCGExProjection::Labels::SourceFootprintFiltersLabel, Context->FootprintFilterFactories, PCGExFactories::PointFilters(), false);
 
 			Context->FootprintProjectionParams.bProjectPositions = true;

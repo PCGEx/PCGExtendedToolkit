@@ -27,6 +27,7 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
+#include "Engine/Level.h"
 #include "HAL/IConsoleManager.h"
 #include "Hash/Blake3.h"
 #include "Helpers/PCGExCollectionStagingPipeline.h"
@@ -2504,67 +2505,202 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingData_Recursive()
 
 #pragma region Staleness
 
-uint64 UPCGExAssetCollection::EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry)
+namespace PCGExAssetCollectionFingerprint
 {
-	IAssetRegistry* AssetRegistry = IAssetRegistry::Get();
-	if (!InEntry || InEntry->bIsSubCollection || !AssetRegistry)
+	/** Adds an OFPA level's on-disk external actor packages: what ULevel::GetOnDiskExternalActorPackages lists,
+	 *  minus its disk scan. False = the set can't be told right now, so neither can a digest over it. */
+	bool AppendExternalActorPackages(const IAssetRegistry& AssetRegistry, const FName LevelPackage, const bool bActorSource, TSet<FName>& OutPackageNames)
 	{
-		return 0;
+		TArray<FAssetData> PackageAssets;
+		AssetRegistry.GetAssetsByPackageName(LevelPackage, PackageAssets, /*bIncludeOnlyOnDiskAssets=*/ true);
+
+		const FTopLevelAssetPath WorldClassPath = UWorld::StaticClass()->GetClassPathName();
+		const FAssetData* WorldAsset = PackageAssets.FindByPredicate([&WorldClassPath](const FAssetData& Asset)
+		{
+			return Asset.AssetClassPath == WorldClassPath;
+		});
+
+		if (!WorldAsset || !ULevel::GetIsLevelUsingExternalActorsFromAsset(*WorldAsset))
+		{
+			return true;
+		}
+
+		// World Partition: refused as a level source, so the map alone stands for it. An actor source is read
+		// live from the open level, which no registry digest covers.
+		if (ULevel::GetIsLevelPartitionedFromAsset(*WorldAsset))
+		{
+			return !bActorSource;
+		}
+
+		// A gathering registry can know the map and only part of its actor folder.
+		if (AssetRegistry.IsGathering())
+		{
+			return false;
+		}
+
+		FARFilter Filter;
+		Filter.bIncludeOnlyOnDiskAssets = true;
+		Filter.bRecursivePaths = true;
+		for (const FString& ExternalActorsPath : ULevel::GetExternalActorsPaths(LevelPackage.ToString()))
+		{
+			if (!ExternalActorsPath.IsEmpty())
+			{
+				Filter.PackagePaths.Add(FName(ExternalActorsPath));
+			}
+		}
+
+		// Packages, not assets: a child actor shares its parent's package.
+		AssetRegistry.EnumerateAssets(Filter, [&OutPackageNames](const FAssetData& ActorAsset)
+		{
+			OutPackageNames.Add(ActorAsset.PackageName);
+			return true;
+		});
+
+		return true;
 	}
 
-	// Not Staging.Path -- for entries that bake in-place it points at the collection's own package.
-	TSet<FSoftObjectPath> SourcePaths;
-	InEntry->EDITOR_GetSourceAssetPaths(SourcePaths);
-
-	// Package granularity: paths can share a package (Blueprint "_C") and the hash covers the file.
-	TArray<FName> PackageNames;
-	PackageNames.Reserve(SourcePaths.Num());
-	for (const FSoftObjectPath& Path : SourcePaths)
+	/** Folds the packages, plus the actor packages of the levels among them, into a digest. 0 = cannot determine. */
+	uint64 Digest(const IAssetRegistry& AssetRegistry, TArray<FName>& PackageNames, const FName WholeLevel, const TArray<FName>& ActorLevels, const bool bLoadedMustMatch)
 	{
-		const FName PackageName = Path.GetLongPackageFName();
-		if (!PackageName.IsNone())
+		// An OFPA level saves each actor into its own package, so the map's hash alone misses actor-only edits.
+		TSet<FName> ExternalPackageNames;
+		if (PackageNames.Contains(WholeLevel) && !AppendExternalActorPackages(AssetRegistry, WholeLevel, /*bActorSource=*/ false, ExternalPackageNames))
 		{
+			return 0;
+		}
+
+		for (const FName& ActorLevel : ActorLevels)
+		{
+			if (!AppendExternalActorPackages(AssetRegistry, ActorLevel, /*bActorSource=*/ true, ExternalPackageNames))
+			{
+				return 0;
+			}
+		}
+
+		PackageNames.Append(ExternalPackageNames.Array());
+
+		// TSet order isn't stable between runs.
+		PackageNames.Sort(FNameLexicalLess());
+
+		FBlake3 Hasher;
+		int32 NumResolved = 0;
+
+		// Registry-cached from the package headers, so this loads nothing. One call, one registry lock for the set.
+		const TArray<TOptional<FAssetPackageData>> PackageDatas = AssetRegistry.GetAssetPackageDatasCopy(PackageNames);
+
+		for (int32 i = 0; i < PackageNames.Num(); i++)
+		{
+			// Zero = can't answer yet.
+			const TOptional<FAssetPackageData>& PackageData = PackageDatas[i];
+			if (!PackageData.IsSet() || PackageData->GetPackageSavedHash().IsZero())
+			{
+				continue;
+			}
+
+			if (bLoadedMustMatch)
+			{
+				// A loaded copy read from other bytes than the registry's (disk changed under it) is what got staged.
+				const UPackage* Loaded = FindObjectFast<UPackage>(nullptr, PackageNames[i]);
+				const FIoHash LoadedHash = Loaded ? Loaded->GetSavedHash() : FIoHash();
+				if (!LoadedHash.IsZero() && LoadedHash != PackageData->GetPackageSavedHash())
+				{
+					return 0;
+				}
+			}
+
+			// Name in the digest so dropping a source reads as a change, not "the rest still match".
+			// UTF8, not TCHAR: sizeof(TCHAR) varies by platform and would churn the digest cross-OS.
+			const FTCHARToUTF8 PackageNameUtf8(*PackageNames[i].ToString());
+			Hasher.Update(MakeMemoryView(PackageNameUtf8.Get(), PackageNameUtf8.Length()));
+			Hasher.Update(MakeMemoryView(PackageData->GetPackageSavedHash().GetBytes(), sizeof(FIoHash::ByteArray)));
+			NumResolved++;
+		}
+
+		// All-or-nothing: a digest over a partially resolved set is indistinguishable from a real
+		// change once the registry catches up. 0 = "cannot determine", never "unchanged".
+		if (NumResolved != PackageNames.Num())
+		{
+			return 0;
+		}
+
+		uint64 Fingerprint = 0;
+		const FBlake3Hash Result = Hasher.Finalize();
+		static_assert(sizeof(Fingerprint) <= sizeof(FBlake3Hash::ByteArray), "Digest too small to fold into a fingerprint.");
+		FMemory::Memcpy(&Fingerprint, Result.GetBytes(), sizeof(Fingerprint));
+
+		// 0 is reserved for "no baseline".
+		return Fingerprint != 0 ? Fingerprint : 1;
+	}
+
+	/** bLoadedMustMatch also answers 0 when a loaded source package no longer matches the registry: the caller
+	 *  just staged from that copy and has no on-disk digest to claim. */
+	uint64 Compute(const FPCGExAssetCollectionEntry* InEntry, UPCGExAssetCollection::FSourceFingerprintCache* Cache, const bool bLoadedMustMatch)
+	{
+		IAssetRegistry* AssetRegistry = IAssetRegistry::Get();
+		if (!InEntry || InEntry->bIsSubCollection || !AssetRegistry)
+		{
+			return 0;
+		}
+
+		// Not Staging.Path -- for entries that bake in-place it points at the collection's own package.
+		TSet<FSoftObjectPath> SourcePaths;
+		InEntry->EDITOR_GetSourceAssetPaths(SourcePaths);
+
+		// Levels the entry reads actors from: the one it sources whole, or the one an actor source lives in.
+		const FName WholeLevel = InEntry->GetSourceLevelPath().GetLongPackageFName();
+		TArray<FName> ActorLevels;
+
+		// Package granularity: paths can share a package (Blueprint "_C") and the hash covers the file.
+		TArray<FName> PackageNames;
+		PackageNames.Reserve(SourcePaths.Num());
+		for (const FSoftObjectPath& Path : SourcePaths)
+		{
+			const FName PackageName = Path.GetLongPackageFName();
+			if (PackageName.IsNone())
+			{
+				continue;
+			}
+
 			PackageNames.AddUnique(PackageName);
+			if (Path.IsSubobject() && PackageName != WholeLevel)
+			{
+				ActorLevels.AddUnique(PackageName);
+			}
 		}
-	}
 
-	// TSet order isn't stable between runs.
-	PackageNames.Sort(FNameLexicalLess());
-
-	FBlake3 Digest;
-	int32 NumResolved = 0;
-
-	for (const FName& PackageName : PackageNames)
-	{
-		// Registry-cached from the package header, so this loads nothing. Zero = can't answer yet.
-		const TOptional<FAssetPackageData> PackageData = AssetRegistry->GetAssetPackageDataCopy(PackageName);
-		if (!PackageData.IsSet() || PackageData->GetPackageSavedHash().IsZero())
+		if (!Cache)
 		{
-			continue;
+			return Digest(*AssetRegistry, PackageNames, WholeLevel, ActorLevels, bLoadedMustMatch);
 		}
 
-		// Name in the digest so dropping a source reads as a change, not "the rest still match".
-		// UTF8, not TCHAR: sizeof(TCHAR) varies by platform and would churn the digest cross-OS.
-		const FTCHARToUTF8 PackageNameUtf8(*PackageName.ToString());
-		Digest.Update(MakeMemoryView(PackageNameUtf8.Get(), PackageNameUtf8.Length()));
-		Digest.Update(MakeMemoryView(PackageData->GetPackageSavedHash().GetBytes(), sizeof(FIoHash::ByteArray)));
-		NumResolved++;
+		// The digest is a function of these inputs and of registry state, which a cache's scope holds still.
+		// ':' and '|' can't appear in a package name.
+		PackageNames.Sort(FNameLexicalLess());
+		FString Key;
+		for (const FName& PackageName : PackageNames)
+		{
+			PackageName.AppendString(Key);
+			Key += PackageName == WholeLevel ? TEXT(":L|") : ActorLevels.Contains(PackageName) ? TEXT(":A|") : TEXT(":|");
+		}
+		if (bLoadedMustMatch)
+		{
+			Key += TEXT("M");
+		}
+
+		if (const uint64* Cached = Cache->ByInputs.Find(Key))
+		{
+			return *Cached;
+		}
+
+		const uint64 Fingerprint = Digest(*AssetRegistry, PackageNames, WholeLevel, ActorLevels, bLoadedMustMatch);
+		Cache->ByInputs.Add(MoveTemp(Key), Fingerprint);
+		return Fingerprint;
 	}
+}
 
-	// All-or-nothing: a digest over a partially resolved set is indistinguishable from a real
-	// change once the registry catches up. 0 = "cannot determine", never "unchanged".
-	if (NumResolved != PackageNames.Num())
-	{
-		return 0;
-	}
-
-	uint64 Fingerprint = 0;
-	const FBlake3Hash Result = Digest.Finalize();
-	static_assert(sizeof(Fingerprint) <= sizeof(FBlake3Hash::ByteArray), "Digest too small to fold into a fingerprint.");
-	FMemory::Memcpy(&Fingerprint, Result.GetBytes(), sizeof(Fingerprint));
-
-	// 0 is reserved for "no baseline".
-	return Fingerprint != 0 ? Fingerprint : 1;
+uint64 UPCGExAssetCollection::EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry, FSourceFingerprintCache* Cache)
+{
+	return PCGExAssetCollectionFingerprint::Compute(InEntry, Cache, /*bLoadedMustMatch=*/ false);
 }
 
 int32 UPCGExAssetCollection::EDITOR_RebuildStaleEntries()
@@ -2576,7 +2712,8 @@ int32 UPCGExAssetCollection::EDITOR_RebuildStaleEntries()
 
 	// Stale identity by EntryId, not raw index: OnPreRebuild may add or remove entries before the batch.
 	TSet<int32> StaleIds;
-	ForEachEntry([&StaleIds](const FPCGExAssetCollectionEntry* InEntry, int32 /*i*/)
+	FSourceFingerprintCache FingerprintCache;
+	ForEachEntry([&StaleIds, &FingerprintCache](const FPCGExAssetCollectionEntry* InEntry, int32 /*i*/)
 	{
 		if (InEntry->bIsSubCollection)
 		{
@@ -2589,7 +2726,7 @@ int32 UPCGExAssetCollection::EDITOR_RebuildStaleEntries()
 			return;
 		}
 
-		const uint64 Current = EDITOR_ComputeEntrySourceFingerprint(InEntry);
+		const uint64 Current = EDITOR_ComputeEntrySourceFingerprint(InEntry, &FingerprintCache);
 
 		// Not knowing isn't knowing it changed.
 		if (Current == 0)
@@ -2608,14 +2745,40 @@ int32 UPCGExAssetCollection::EDITOR_RebuildStaleEntries()
 		return 0;
 	}
 
+	return EDITOR_RebuildEntriesStaging([&StaleIds](const FPCGExAssetCollectionEntry* InEntry)
+	{
+		return StaleIds.Contains(InEntry->EntryId);
+	});
+}
+
+int32 UPCGExAssetCollection::EDITOR_RebuildEntriesStaging(TFunctionRef<bool(const FPCGExAssetCollectionEntry*)> Filter)
+{
+	if (bSuppressStagingRebuild)
+	{
+		return 0;
+	}
+
+	// No match, no session -- the pre-rebuild hooks would run for nothing.
+	bool bAnyMatch = false;
+	ForEachEntry([&Filter, &bAnyMatch](const FPCGExAssetCollectionEntry* InEntry, int32 /*i*/)
+	{
+		bAnyMatch = bAnyMatch || Filter(InEntry);
+	});
+
+	if (!bAnyMatch)
+	{
+		return 0;
+	}
+
 	EDITOR_DispatchPipelinePreRebuild();
 
-	TArray<int32> StaleIndices;
-	ForEachEntry([&StaleIds, &StaleIndices](const FPCGExAssetCollectionEntry* InEntry, int32 i)
+	// Matched again after the hooks: OnPreRebuild may add or remove entries before the batch.
+	TArray<int32> Indices;
+	ForEachEntry([&Filter, &Indices](const FPCGExAssetCollectionEntry* InEntry, int32 i)
 	{
-		if (StaleIds.Contains(InEntry->EntryId))
+		if (Filter(InEntry))
 		{
-			StaleIndices.Add(i);
+			Indices.Add(i);
 		}
 	});
 
@@ -2623,7 +2786,7 @@ int32 UPCGExAssetCollection::EDITOR_RebuildStaleEntries()
 	{
 		// Suppress per-entry post-rebuild hook firings; emit one tail call after the batch.
 		TGuardValue<int32> SuppressGuard(EDITOR_PostStagingRebuildSuppressDepth, EDITOR_PostStagingRebuildSuppressDepth + 1);
-		for (int32 Index : StaleIndices)
+		for (int32 Index : Indices)
 		{
 			if (EDITOR_RebuildEntryStaging(Index))
 			{
@@ -2666,7 +2829,7 @@ bool UPCGExAssetCollection::EDITOR_RestageEntryIfChanged(FPCGExAssetCollectionEn
 	// Refresh even when staging is identical, or the entry re-reports stale on every load -- but
 	// never clobber a good baseline with 0. The registry answers differently at different moments,
 	// so 0 now and a real digest next pass makes the entry oscillate and dirty every rebuild.
-	if (const uint64 Fingerprint = EDITOR_ComputeEntrySourceFingerprint(InEntry); Fingerprint != 0)
+	if (const uint64 Fingerprint = PCGExAssetCollectionFingerprint::Compute(InEntry, nullptr, /*bLoadedMustMatch=*/ true); Fingerprint != 0)
 	{
 		InEntry->StagingSourceFingerprint = Fingerprint;
 	}
@@ -2830,7 +2993,7 @@ void UPCGExAssetCollection::EDITOR_AddSubCollectionEntries(const TArray<UPCGExAs
 
 	// Reflection only grows the per-class Entries array; bIsSubCollection/SubCollection live on the
 	// base struct, so the new element is written through a base pointer. Any collection type is accepted.
-	FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FArrayProperty* ArrayProp = FindEntriesProperty(GetClass());
 	if (!ArrayProp)
 	{
 		return;
@@ -2888,7 +3051,7 @@ void UPCGExAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAss
 
 const UScriptStruct* UPCGExAssetCollection::EDITOR_GetEntryScriptStruct(int32 RawIndex) const
 {
-	const FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FArrayProperty* ArrayProp = FindEntriesProperty(GetClass());
 	const FStructProperty* InnerProp = ArrayProp ? CastField<FStructProperty>(ArrayProp->Inner) : nullptr;
 
 	if (InnerProp && InnerProp->Struct && InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
@@ -2905,9 +3068,14 @@ FPCGExAssetCollectionEntry* UPCGExAssetCollection::EDITOR_AddEntry(const UScript
 }
 #endif
 
+const FArrayProperty* UPCGExAssetCollection::FindEntriesProperty(const UClass* InClass)
+{
+	return InClass ? CastField<FArrayProperty>(InClass->FindPropertyByName(PCGExAssetCollection::EntriesPropertyName)) : nullptr;
+}
+
 FPCGExAssetCollectionEntry* UPCGExAssetCollection::AddEntryOfType(const UScriptStruct* EntryStruct)
 {
-	FArrayProperty* ArrayProp = CastField<FArrayProperty>(GetClass()->FindPropertyByName(FName("Entries")));
+	const FArrayProperty* ArrayProp = FindEntriesProperty(GetClass());
 	const FStructProperty* InnerProp = ArrayProp ? CastField<FStructProperty>(ArrayProp->Inner) : nullptr;
 
 	if (!InnerProp || !InnerProp->Struct || !InnerProp->Struct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))

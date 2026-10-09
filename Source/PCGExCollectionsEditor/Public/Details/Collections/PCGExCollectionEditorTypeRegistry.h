@@ -51,6 +51,9 @@ struct PCGEXCOLLECTIONSEDITOR_API FCollectionEditorTypeInfo
 	/** Optional per-host refinement of TilePickerAllowedClass (e.g. a collection-level allowed class). A null result keeps the static class. */
 	TFunction<const UClass*(const UPCGExAssetCollection*)> ResolveTilePickerAllowedClass;
 
+	/** Optional: true hides an asset from the tile picker, e.g. a level that can't be a level source. */
+	TFunction<bool(const FAssetData&)> TilePickerShouldFilterAsset;
+
 	TFunction<bool(const FAssetData&)> DetectSourceAsset;
 	TFunction<bool(const FAssetData&)> DetectCollectionAsset;
 

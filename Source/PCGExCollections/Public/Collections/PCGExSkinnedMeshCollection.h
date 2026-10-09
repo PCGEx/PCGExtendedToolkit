@@ -85,22 +85,22 @@ struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAsse
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<USkinnedAsset> SkinnedAsset = nullptr;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, PCGExCategoryGroup="Materials"))
 	EPCGExMaterialVariantsMode MaterialVariants = EPCGExMaterialVariantsMode::None;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" ├─ Slot Index", EditCondition="!bIsSubCollection && MaterialVariants == EPCGExMaterialVariantsMode::Single", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" ├─ Slot Index", EditCondition="!bIsSubCollection && MaterialVariants == EPCGExMaterialVariantsMode::Single", EditConditionHides, PCGExCategoryGroup="Materials"))
 	int32 SlotIndex = 0;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variants", EditCondition="!bIsSubCollection && MaterialVariants == EPCGExMaterialVariantsMode::Single", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variants", EditCondition="!bIsSubCollection && MaterialVariants == EPCGExMaterialVariantsMode::Single", EditConditionHides, PCGExCategoryGroup="Materials"))
 	TArray<FPCGExMaterialOverrideSingleEntry> MaterialOverrideVariants;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variants", EditCondition="!bIsSubCollection && MaterialVariants == EPCGExMaterialVariantsMode::Multi", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variants", EditCondition="!bIsSubCollection && MaterialVariants == EPCGExMaterialVariantsMode::Multi", EditConditionHides, PCGExCategoryGroup="Materials"))
 	TArray<FPCGExMaterialOverrideCollection> MaterialOverrideVariantsList;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, DisplayAfter="Variations"))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, DisplayAfter="Variations", PCGExCategoryGroup="Descriptors"))
 	EPCGExEntryVariationMode DescriptorSource = EPCGExEntryVariationMode::Local;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Skinned Mesh Settings", EditCondition="!bIsSubCollection && DescriptorSource == EPCGExEntryVariationMode::Local", EditConditionHides, DisplayAfter="DescriptorSource"))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Skinned Mesh Settings", EditCondition="!bIsSubCollection && DescriptorSource == EPCGExEntryVariationMode::Local", EditConditionHides, DisplayAfter="DescriptorSource", PCGExCategoryGroup="Descriptors"))
 	FPCGSoftSkinnedMeshComponentDescriptor Descriptor;
 
 	// Asset & Material Handling

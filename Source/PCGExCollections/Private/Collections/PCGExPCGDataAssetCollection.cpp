@@ -445,6 +445,19 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 		}
 
 		ClearManagedSockets();
+
+#if WITH_EDITOR
+		// A plain load brings none of a World Partition level's actors, so it can't be a level source.
+		if (ULevel::GetIsLevelPartitionedFromPackage(SourcePath.GetLongPackageFName()))
+		{
+			UE_LOG(LogPCGEx, Warning,
+			       TEXT("Level-sourced PCGDataAsset entry: '%s' is a World Partition level, which cannot be a level source -- entry stages nothing."),
+			       *SourcePath.GetLongPackageName());
+			ResetExport(OwningCollection);
+			break;
+		}
+#endif
+
 		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(SourcePath);
 		UWorld* LoadedWorld = Level.Get();
 		if (!LoadedWorld)
@@ -1555,6 +1568,12 @@ void UPCGExPCGDataAssetCollection::EDITOR_AddBrowserSelectionInternal(const TArr
 		// Try as UWorld (Level source)
 		if (SelectedAsset.AssetClassPath == UWorld::StaticClass()->GetClassPathName())
 		{
+			if (ULevel::GetIsLevelPartitionedFromAsset(SelectedAsset))
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("'%s' is a World Partition level, which cannot be a level source -- skipped."), *SelectedAsset.PackageName.ToString());
+				continue;
+			}
+
 			TSoftObjectPtr<UWorld> WorldAsset(SelectedAsset.GetSoftObjectPath());
 
 			bool bAlreadyExists = false;

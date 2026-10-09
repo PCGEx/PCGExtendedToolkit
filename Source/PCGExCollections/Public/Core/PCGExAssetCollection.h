@@ -36,6 +36,7 @@ class UPCGExCollectionTypeState;
 // Only reached from template bodies here; TUs that instantiate them include PCGExProperty.h
 // themselves. Keeping the base out is what decouples this header from property edits.
 struct FPCGExProperty;
+class FArrayProperty;
 
 namespace PCGExAssetCollection
 {
@@ -167,6 +168,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
  *
  * Creating a custom collection type:
  * 1. Subclass this struct -- add your asset-specific UPROPERTY (e.g. TSoftObjectPtr<UMyAsset>)
+ *    Tag members a footer filter should toggle with meta=(PCGExCategoryGroup="<id>") (see PCGExCollectionCategoryGroups)
  * 2. Override GetTypeId() to return your registered FTypeId
  * 3. Override Validate() to reject invalid entries (call Super)
  * 4. Override UpdateStaging() to populate Staging.Bounds and Staging.Path from your asset
@@ -247,13 +249,13 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 * Values here take precedence over collection-level defaults.
 	 * Only include properties you want to override.
 	 */
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(NoResetToDefault))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(NoResetToDefault, PCGExCategoryGroup="Properties"))
 	FPCGExPropertyOverrides PropertyOverrides;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, InvalidEnumValues="None"))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, InvalidEnumValues="None", PCGExCategoryGroup="Grammar"))
 	EPCGExEntryVariationMode GrammarSource = EPCGExEntryVariationMode::Local;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName="Grammar Mode", EditCondition="bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName="Grammar Mode", EditCondition="bIsSubCollection", EditConditionHides, PCGExCategoryGroup="Grammar"))
 	EPCGExGrammarSubCollectionMode SubGrammarMode = EPCGExGrammarSubCollectionMode::Inherit;
 
 	/**
@@ -262,7 +264,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	 * replaces the subcollection's own SubCollectionGrammar wholesale). Customization
 	 * gates EPCGExGrammarAxisSize values based on bIsSubCollection.
 	 */
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName="Grammar", EditCondition="!bIsSubCollection || SubGrammarMode == EPCGExGrammarSubCollectionMode::Override", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName="Grammar", EditCondition="!bIsSubCollection || SubGrammarMode == EPCGExGrammarSubCollectionMode::Override", EditConditionHides, PCGExCategoryGroup="Grammar"))
 	FPCGExAssetGrammarDetails AssetGrammar;
 
 #pragma region DEPRECATED
@@ -277,35 +279,35 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 
 #pragma region Fitting
 	
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, PCGExCategoryGroup="Variations"))
 	EPCGExEntryVariationMode VariationMode = EPCGExEntryVariationMode::None;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variations", EditCondition="!bIsSubCollection && VariationMode == EPCGExEntryVariationMode::Local", EditConditionHides, ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Variations", EditCondition="!bIsSubCollection && VariationMode == EPCGExEntryVariationMode::Local", EditConditionHides, ShowOnlyInnerProperties, PCGExCategoryGroup="Variations"))
 	FPCGExFittingVariations Variations;
 
 	/**
 	 * Where this entry's Scale to Fit comes from when a staging node considers entry overrides.
 	 */
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, PCGExCategoryGroup="Fitting"))
 	EPCGExEntryVariationMode ScaleToFitSource = EPCGExEntryVariationMode::None;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Scale to Fit", EditCondition="!bIsSubCollection && ScaleToFitSource == EPCGExEntryVariationMode::Local", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Scale to Fit", EditCondition="!bIsSubCollection && ScaleToFitSource == EPCGExEntryVariationMode::Local", EditConditionHides, PCGExCategoryGroup="Fitting"))
 	FPCGExLeanScaleToFitDetails ScaleToFit;
 
 	/**
 	 * Where this entry's Justification comes from when a staging node considers entry overrides.
 	 */
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, PCGExCategoryGroup="Fitting"))
 	EPCGExEntryVariationMode JustificationSource = EPCGExEntryVariationMode::None;
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Justification", EditCondition="!bIsSubCollection && JustificationSource == EPCGExEntryVariationMode::Local", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayName=" └─ Justification", EditCondition="!bIsSubCollection && JustificationSource == EPCGExEntryVariationMode::Local", EditConditionHides, PCGExCategoryGroup="Fitting"))
 	FPCGExLeanJustificationDetails Justification;
 
-	UPROPERTY(EditAnywhere, Category = Settings)
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(PCGExCategoryGroup="Tags"))
 	TSet<FName> Tags;
 
 
-	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
+	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides, PCGExCategoryGroup="Staging"))
 	FPCGExAssetStagingData Staging;
 
 #if WITH_EDITORONLY_DATA
@@ -907,6 +909,9 @@ public:
 	/** Get entry at cache-adjusted index (0 = first valid entry, 1 = second, etc.) */
 	FPCGExEntryAccessResult GetEntryAt(int32 Index) const;
 
+	/** The per-class Entries array property of InClass, or null. The one lookup every reflective accessor shares. */
+	static const FArrayProperty* FindEntriesProperty(const UClass* InClass);
+
 	/** Get entry by raw Entries array index (bypasses cache). Use for indices from FCategory, packed hashes, etc. */
 	FPCGExEntryAccessResult GetEntryRaw(int32 RawIndex) const;
 
@@ -1185,8 +1190,8 @@ public:
 	 * entry's freshly-staged state -- typically post-processing that's too expensive to fold
 	 * into per-entry UpdateStaging without N² blowup. Default implementation is a no-op.
 	 *
-	 * The hook is automatically suppressed inside batch loops (e.g. EDITOR_RebuildStaleEntries
-	 * calling EDITOR_RebuildEntryStaging per stale index) and fires once at the batch end.
+	 * The hook is automatically suppressed inside batch loops (EDITOR_RebuildEntriesStaging
+	 * calling EDITOR_RebuildEntryStaging per matched index) and fires once at the batch end.
 	 */
 	virtual void EDITOR_OnPostStagingRebuild()
 	{
@@ -1212,10 +1217,22 @@ public:
 	 *  with no baseline are skipped. Returns the number that actually changed. */
 	int32 EDITOR_RebuildStaleEntries();
 
-	/** Content digest of an entry's source packages, folded from the registry's cached
-	 *  PackageSavedHash -- loads nothing. 0 = "cannot determine" (no sources, subcollection, scan
-	 *  in flight); never read it as "changed". */
-	static uint64 EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry);
+	/** Re-stages every entry Filter accepts as ONE session: one pre-rebuild dispatch, one finalize tail.
+	 *  Filter runs again after the pre hooks, which may add or remove entries -- never key it on index.
+	 *  Returns the number that changed. */
+	int32 EDITOR_RebuildEntriesStaging(TFunctionRef<bool(const FPCGExAssetCollectionEntry*)> Filter);
+
+	/** Source fingerprints by their inputs, shared by back-to-back calls. Scope one to a pass that loads and
+	 *  saves nothing: it never sees the registry change. */
+	struct FSourceFingerprintCache
+	{
+		TMap<FString, uint64> ByInputs;
+	};
+
+	/** Content digest of an entry's source packages, folded from the registry's cached PackageSavedHash -- loads
+	 *  nothing. A level the entry reads actors from also folds in its external actor packages. 0 = "cannot
+	 *  determine" (subcollection, registry still gathering, actor in a World Partition level); never "changed". */
+	static uint64 EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry, FSourceFingerprintCache* Cache = nullptr);
 
 	/** Sync PropertyOverrides in all entries to match CollectionProperties schema */
 	void SyncPropertyOverridesToEntries();

@@ -54,6 +54,11 @@ public:
 
 	virtual void InitializeInContext(FPCGExContext* InContext, FName InOverridesPinLabel) override;
 	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
+	virtual void CombineDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& InOutCrc) const override;
+
+#if WITH_EDITOR
+	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion) override;
+#endif
 
 	virtual bool WantsIndividualEdgeProcessing() const override
 	{

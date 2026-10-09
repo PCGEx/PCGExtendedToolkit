@@ -46,8 +46,10 @@ enum class EPCGExFootprintAxis : uint8
 UENUM()
 enum class EPCGExFootprintAdjust : uint8
 {
-	Add      = 0 UMETA(DisplayName = "Add", ToolTip="Extents + Adjust"),
-	Multiply = 1 UMETA(DisplayName = "Multiply", ToolTip="Extents * Adjust"),
+	Add         = 0 UMETA(DisplayName = "Add", ToolTip="Extents + Adjust"),
+	Multiply    = 1 UMETA(DisplayName = "Multiply", ToolTip="Extents * Adjust"),
+	FixedCenter = 2 UMETA(DisplayName = "Fixed (Center)", ToolTip="Adjust is the box extents, centered on the point pivot. Point bounds are ignored."),
+	FixedPivot  = 3 UMETA(DisplayName = "Fixed (Pivot)", ToolTip="Adjust is the box extents, bottom face on the point pivot. Point bounds are ignored."),
 };
 
 UENUM()
@@ -75,7 +77,7 @@ enum class EPCGExFootprintPush : uint8
 	Balance = 3 UMETA(DisplayName = "Balance", ToolTip="Push so the most overhanging and the deepest corner sit at equal distance from the surface."),
 };
 
-/** Probes the four bottom corners of the point bounds at the projected location to measure how unevenly the surface sits under them. */
+/** Probes the four bottom corners of the footprint box at the projected location to measure how unevenly the surface sits under them. */
 USTRUCT(BlueprintType)
 struct PCGEXBLENDING_API FPCGExProjectionFootprintDetails
 {
@@ -91,15 +93,16 @@ struct PCGEXBLENDING_API FPCGExProjectionFootprintDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExFootprintAxis Axis = EPCGExFootprintAxis::Projection;
 
-	/** Point bounds the footprint box is built from. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExPointBoundsSource BoundsSource = EPCGExPointBoundsSource::ScaledBounds;
-
-	/** How Adjust combines with the box extents (half sizes). */
+	/** How Adjust combines with the box extents (half sizes), or replaces them in Fixed modes. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExFootprintAdjust AdjustMode = EPCGExFootprintAdjust::Add;
 
-	/** Per-axis change applied to the box extents before probing; a negative result clamps to zero. */
+	/** Point bounds the footprint box is built from. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="AdjustMode != EPCGExFootprintAdjust::FixedCenter && AdjustMode != EPCGExFootprintAdjust::FixedPivot", EditConditionHides))
+	EPCGExPointBoundsSource BoundsSource = EPCGExPointBoundsSource::ScaledBounds;
+
+	/** Per-axis change applied to the box extents before probing, or the extents themselves in Fixed modes;
+	 *  a negative result clamps to zero. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExInputShorthandSelectorVector Adjust = FPCGExInputShorthandSelectorVector(FName("FootprintAdjust"), FVector::ZeroVector);
 

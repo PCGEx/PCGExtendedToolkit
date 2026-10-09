@@ -36,6 +36,13 @@ namespace PCGExDeprecation
 	 * very old assets carry pins labeled by GetDisplayNameText from before PCG switched to authored names.
 	 * Call from PCGExApplyDeprecationBeforeUpdatePins; safely no-ops when either side is absent.
 	 */
+	/**
+	 * The serialized label of a removed property's override pin: exact InOldName, else the unique segment-qualified
+	 * ".../InOldName", else a legacy display-name label (InOldDisplayName, then the engine-default prettified name).
+	 * None when no pin matches, or when several do (warned).
+	 */
+	PCGEXCORE_API FName ResolveLegacyOverridePinLabel(const UPCGNode* InNode, FName InOldName, FName InOldDisplayName = NAME_None);
+
 	PCGEXCORE_API void RenameShorthandOverridePin(const UPCGSettings* InSettings, UPCGNode* InOutNode, FName InOldName, FName InMemberName, FName InLeafName, FName InOldDisplayName = NAME_None);
 
 	/** Suffix-explicit variant for ambiguous embeddings (same member/leaf tail reachable through two paths). */

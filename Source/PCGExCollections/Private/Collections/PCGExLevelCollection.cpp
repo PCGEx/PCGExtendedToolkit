@@ -75,6 +75,19 @@ void FPCGExLevelCollectionEntry::UpdateStaging(const UPCGExAssetCollection* Owni
 	}
 
 	Staging.Path = Level.ToSoftObjectPath();
+
+#if WITH_EDITOR
+	// A plain load brings none of a World Partition level's actors, so it can't be a level source.
+	if (ULevel::GetIsLevelPartitionedFromPackage(Staging.Path.GetLongPackageFName()))
+	{
+		UE_LOG(LogPCGEx, Warning, TEXT("Level entry: '%s' is a World Partition level, which cannot be a level source -- entry stages nothing."), *Staging.Path.GetLongPackageName());
+		Staging.Path = FSoftObjectPath();
+		Staging.Bounds = FBox(ForceInit);
+		FPCGExAssetCollectionEntry::UpdateStaging(OwningCollection, InInternalIndex, bRecursive);
+		return;
+	}
+#endif
+
 	TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(Level.ToSoftObjectPath());
 
 #if WITH_EDITOR
@@ -193,6 +206,12 @@ void UPCGExLevelCollection::EDITOR_AddBrowserSelectionInternal(const TArray<FAss
 		// Accept UWorld assets (.umap files)
 		if (SelectedAsset.AssetClassPath != UWorld::StaticClass()->GetClassPathName())
 		{
+			continue;
+		}
+
+		if (ULevel::GetIsLevelPartitionedFromAsset(SelectedAsset))
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("'%s' is a World Partition level, which cannot be a level source -- skipped."), *SelectedAsset.PackageName.ToString());
 			continue;
 		}
 
