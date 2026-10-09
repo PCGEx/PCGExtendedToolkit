@@ -59,7 +59,9 @@ public class PCGExCoreEditor : ModuleRules
 				"InputCore",
 				"ToolMenus",
 				// FPCGExModeToolkitBase re-registers the mode's primary tab through FAssetEditorModeUILayer.
-				"EditorFramework"
+				"EditorFramework",
+				// FPCGExLevelViewportOverlayHost parents mode overlays onto SLevelViewport.
+				"LevelEditor"
 			}
 		);
 
