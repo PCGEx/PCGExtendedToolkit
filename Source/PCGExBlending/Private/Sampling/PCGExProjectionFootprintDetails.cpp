@@ -67,6 +67,8 @@ namespace PCGExSampling
 		{
 		case EPCGExFootprintAdjust::Add:
 		case EPCGExFootprintAdjust::Multiply:
+		case EPCGExFootprintAdjust::FixedCenter:
+		case EPCGExFootprintAdjust::FixedPivot:
 			break;
 		default:
 			bKnown = false;
@@ -162,14 +164,26 @@ namespace PCGExSampling
 	{
 		OutResult = FResult();
 
-		const FBox Box = PCGExMath::GetLocalBounds(Point, BoundsSource);
 		const FVector& Adj = bConstantAdjust ? ConstantAdjust : View.Adjusts[ScopeIndex];
-		const FVector Extents = (AdjustMode == EPCGExFootprintAdjust::Add ? Box.GetExtent() + Adj : Box.GetExtent() * Adj).ComponentMax(FVector::ZeroVector);
+
+		// Fixed modes read Adjust as the extents and never touch the point bounds.
+		FVector LocalCenter = FVector::ZeroVector;
+		FVector Extents = Adj;
+
+		if (AdjustMode == EPCGExFootprintAdjust::Add || AdjustMode == EPCGExFootprintAdjust::Multiply)
+		{
+			const FBox Box = PCGExMath::GetLocalBounds(Point, BoundsSource);
+			LocalCenter = Box.GetCenter();
+			Extents = AdjustMode == EPCGExFootprintAdjust::Add ? Box.GetExtent() + Adj : Box.GetExtent() * Adj;
+		}
+
+		Extents = Extents.ComponentMax(FVector::ZeroVector);
 
 		OutResult.Height = Extents.Z * 2.0;
 
 		const FVector Up = Rotation.GetAxisZ();
-		const FVector BottomCenter = Box.GetCenter() - FVector(0, 0, Extents.Z);
+		// Fixed (Pivot) stands the box on the point origin
+		const FVector BottomCenter = AdjustMode == EPCGExFootprintAdjust::FixedPivot ? FVector::ZeroVector : LocalCenter - FVector(0, 0, Extents.Z);
 		const bool bProjectionAxis = Axis == EPCGExFootprintAxis::Projection;
 		const FBox ProbeBox(FVector::ZeroVector, FVector::ZeroVector);
 

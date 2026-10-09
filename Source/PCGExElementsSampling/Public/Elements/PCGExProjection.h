@@ -103,7 +103,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bNormalToDensity"))
 	FPCGExNormalToDensityDetails NormalToDensity;
 
-	/** Probe the four bottom corners of the point bounds at the projected location to measure and correct overhang or penetration. */
+	/** Probe the four bottom corners of the footprint box at the projected location to measure and correct overhang or penetration. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle, ScriptName="footprint_enabled"))
 	bool bFootprint = false;
 

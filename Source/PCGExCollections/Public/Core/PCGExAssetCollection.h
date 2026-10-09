@@ -1190,8 +1190,8 @@ public:
 	 * entry's freshly-staged state -- typically post-processing that's too expensive to fold
 	 * into per-entry UpdateStaging without N² blowup. Default implementation is a no-op.
 	 *
-	 * The hook is automatically suppressed inside batch loops (e.g. EDITOR_RebuildStaleEntries
-	 * calling EDITOR_RebuildEntryStaging per stale index) and fires once at the batch end.
+	 * The hook is automatically suppressed inside batch loops (EDITOR_RebuildEntriesStaging
+	 * calling EDITOR_RebuildEntryStaging per matched index) and fires once at the batch end.
 	 */
 	virtual void EDITOR_OnPostStagingRebuild()
 	{
@@ -1217,10 +1217,22 @@ public:
 	 *  with no baseline are skipped. Returns the number that actually changed. */
 	int32 EDITOR_RebuildStaleEntries();
 
-	/** Content digest of an entry's source packages, folded from the registry's cached
-	 *  PackageSavedHash -- loads nothing. 0 = "cannot determine" (no sources, subcollection, scan
-	 *  in flight); never read it as "changed". */
-	static uint64 EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry);
+	/** Re-stages every entry Filter accepts as ONE session: one pre-rebuild dispatch, one finalize tail.
+	 *  Filter runs again after the pre hooks, which may add or remove entries -- never key it on index.
+	 *  Returns the number that changed. */
+	int32 EDITOR_RebuildEntriesStaging(TFunctionRef<bool(const FPCGExAssetCollectionEntry*)> Filter);
+
+	/** Source fingerprints by their inputs, shared by back-to-back calls. Scope one to a pass that loads and
+	 *  saves nothing: it never sees the registry change. */
+	struct FSourceFingerprintCache
+	{
+		TMap<FString, uint64> ByInputs;
+	};
+
+	/** Content digest of an entry's source packages, folded from the registry's cached PackageSavedHash -- loads
+	 *  nothing. A level the entry reads actors from also folds in its external actor packages. 0 = "cannot
+	 *  determine" (subcollection, registry still gathering, actor in a World Partition level); never "changed". */
+	static uint64 EDITOR_ComputeEntrySourceFingerprint(const FPCGExAssetCollectionEntry* InEntry, FSourceFingerprintCache* Cache = nullptr);
 
 	/** Sync PropertyOverrides in all entries to match CollectionProperties schema */
 	void SyncPropertyOverridesToEntries();

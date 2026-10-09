@@ -450,7 +450,7 @@ const UClass* FPCGExAssetCollectionEditor::GetTilePickerAllowedClass() const
 	return Info ? Info->TilePickerAllowedClass.Get() : nullptr;
 }
 
-void FPCGExAssetCollectionEditor::ResolveTilePickerForRow(int32 EntryIndex, FName& OutPropertyName, const UClass*& OutAllowedClass) const
+void FPCGExAssetCollectionEditor::ResolveTilePickerForRow(int32 EntryIndex, FName& OutPropertyName, const UClass*& OutAllowedClass, TFunction<bool(const FAssetData&)>* OutShouldFilterAsset) const
 {
 	// Editor-wide values first (virtuals win for typed editors)...
 	OutPropertyName = GetTilePickerPropertyName();
@@ -472,6 +472,10 @@ void FPCGExAssetCollectionEditor::ResolveTilePickerForRow(int32 EntryIndex, FNam
 	{
 		OutPropertyName = EditorInfo->TilePickerPropertyName;
 		OutAllowedClass = EditorInfo->TilePickerAllowedClass.Get();
+		if (OutShouldFilterAsset)
+		{
+			*OutShouldFilterAsset = EditorInfo->TilePickerShouldFilterAsset;
+		}
 
 		if (EditorInfo->ResolveTilePickerAllowedClass)
 		{
@@ -493,7 +497,8 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 
 	FName PickerPropName = NAME_None;
 	const UClass* AllowedClass = nullptr;
-	ResolveTilePickerForRow(Idx, PickerPropName, AllowedClass);
+	TFunction<bool(const FAssetData&)> ShouldFilterAsset;
+	ResolveTilePickerForRow(Idx, PickerPropName, AllowedClass, &ShouldFilterAsset);
 
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);
 
@@ -606,6 +611,10 @@ TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildTilePickerWidget(
 				[
 					SNew(SObjectPropertyEntryBox)
 					.AllowedClass(AllowedClass)
+					.OnShouldFilterAsset(FOnShouldFilterAsset::CreateLambda([ShouldFilterAsset](const FAssetData& AssetData)
+					{
+						return ShouldFilterAsset && ShouldFilterAsset(AssetData);
+					}))
 					.ObjectPath_Lambda([WeakColl, Idx, PickerPropName]() -> FString
 					{
 						const UPCGExAssetCollection* Coll = WeakColl.Get();

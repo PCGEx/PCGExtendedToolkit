@@ -55,6 +55,15 @@
 
 #undef LOCTEXT_NAMESPACE
 
+namespace PCGExCollectionsEditorRestage
+{
+	/** Wall-clock half of the burst's quiet window; the frame half is in FlushPendingSourceRestages. */
+	constexpr double QuietSeconds = 0.5;
+
+	/** Longest a queued save waits for quiet, so a steady stream of saves can't starve the restage. */
+	constexpr double MaxWaitSeconds = 5.0;
+}
+
 void FPCGExCollectionsEditorModule::StartupModule()
 {
 	IPCGExEditorModuleInterface::StartupModule();
@@ -120,8 +129,7 @@ void FPCGExCollectionsEditorModule::StartupModule()
 
 	// Covers what the other two triggers miss: source changed while the editor was closed.
 	// Subscribed here, not in OnFilesLoaded: unlike OnAssetUpdatedOnDisk this doesn't fire
-	// spuriously during the initial scan, and a pre-scan load is already inert (no package data
-	// -> zero fingerprint -> "cannot determine").
+	// spuriously during the initial scan, and its stale check waits for the registry to stop gathering.
 	OnAssetLoadedHandle = FCoreUObjectDelegates::OnAssetLoaded.AddRaw(this, &FPCGExCollectionsEditorModule::OnAssetLoaded);
 
 	// Schema-asset edits must reach importing collections even when no details panel is open on
@@ -201,7 +209,13 @@ void FPCGExCollectionsEditorModule::RegisterThumbnailRenderer()
 
 void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& AssetData)
 {
-	if (!GEditor)
+	QueueSourceRestage(AssetData, /*bReinstanced=*/ false);
+}
+
+void FPCGExCollectionsEditorModule::QueueSourceRestage(const FAssetData& AssetData, bool bReinstanced)
+{
+	// Never during a cook: it must stay read-only w.r.t. source content.
+	if (!GEditor || !GEditor->IsTimerManagerValid() || IsRunningCookCommandlet())
 	{
 		return;
 	}
@@ -236,6 +250,7 @@ void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& Asset
 	}
 
 	const UClass* CollectionClass = UPCGExAssetCollection::StaticClass();
+	bool bQueued = false;
 
 	for (const FName& ReferencerPackage : Referencers)
 	{
@@ -259,31 +274,140 @@ void FPCGExCollectionsEditorModule::OnAssetUpdatedOnDisk(const FAssetData& Asset
 				continue;
 			}
 
-			// Per-entry rebuild: match against the entry's advertised source paths.
-			// EDITOR_GetSourceAssetPaths() returns the *external* refs that should trigger
-			// a rebuild when updated on disk -- which for some entry types (e.g. PCGDataAsset
-			// entries in Level mode) is NOT Staging.Path. Matching by package name also
-			// handles BP class paths where the path ends in "_C".
-			Collection->ForEachEntry([Collection, ReferencedPackage](const FPCGExAssetCollectionEntry* InEntry, int32 i)
-			{
-				if (InEntry->bIsSubCollection)
-				{
-					return;
-				}
-
-				TSet<FSoftObjectPath> SourcePaths;
-				InEntry->EDITOR_GetSourceAssetPaths(SourcePaths);
-
-				for (const FSoftObjectPath& SourcePath : SourcePaths)
-				{
-					if (SourcePath.GetLongPackageFName() == ReferencedPackage)
-					{
-						Collection->EDITOR_RebuildEntryStaging(i);
-						return;
-					}
-				}
-			});
+			FPendingSourceRestage& Pending = PendingSourceRestages.FindOrAdd(Collection);
+			(bReinstanced ? Pending.Reinstanced : Pending.Saved).Add(ReferencedPackage);
+			bQueued = true;
 		}
+	}
+
+	if (!bQueued)
+	{
+		return;
+	}
+
+	// Nothing ticks editor timers in a commandlet, so a queue would never flush.
+	if (IsRunningCommandlet())
+	{
+		RestagePendingSources();
+		return;
+	}
+
+	if (!bReinstanced)
+	{
+		// Queue, don't restage: one save reaches here many times over several ticks -- SaveWorld rescans the map
+		// synchronously, then the directory watcher reports every package the save wrote, one per OFPA actor.
+		LastSourceRestageQueueTime = FPlatformTime::Seconds();
+		LastSourceRestageQueueFrame = GFrameCounter;
+		if (!bSavedSourcePending)
+		{
+			bSavedSourcePending = true;
+			FirstSourceRestageQueueTime = LastSourceRestageQueueTime;
+		}
+	}
+
+	if (!bSourceRestageFlushScheduled)
+	{
+		bSourceRestageFlushScheduled = true;
+		GEditor->GetTimerManager()->SetTimerForNextTick(
+			[this]()
+			{
+				FlushPendingSourceRestages();
+			});
+	}
+}
+
+void FPCGExCollectionsEditorModule::FlushPendingSourceRestages()
+{
+	if (!GEditor || !GEditor->IsTimerManagerValid())
+	{
+		bSourceRestageFlushScheduled = false;
+		return;
+	}
+
+	// Only saves wait: a recompile has no directory-watcher tail, so it restages on this tick.
+	if (bSavedSourcePending)
+	{
+		// Quiet = a whole tick since the last event AND a short wall-clock window (a large commit can spill over
+		// more than one watcher poll). Not a plain SetTimer: UEditorEngine::Tick runs timers BEFORE the directory
+		// watcher, and a long blocking save hands the next tick a delta big enough to fire it ahead of the events.
+		const double Now = FPlatformTime::Seconds();
+		const bool bQuietFrame = GFrameCounter > LastSourceRestageQueueFrame + 1;
+		const bool bQuietTime = Now - LastSourceRestageQueueTime >= PCGExCollectionsEditorRestage::QuietSeconds;
+		const bool bWaitedLongEnough = Now - FirstSourceRestageQueueTime >= PCGExCollectionsEditorRestage::MaxWaitSeconds;
+		if (!(bQuietFrame && bQuietTime) && !bWaitedLongEnough)
+		{
+			GEditor->GetTimerManager()->SetTimerForNextTick(
+				[this]()
+				{
+					FlushPendingSourceRestages();
+				});
+			return;
+		}
+	}
+
+	bSourceRestageFlushScheduled = false;
+	RestagePendingSources();
+}
+
+void FPCGExCollectionsEditorModule::RestagePendingSources()
+{
+	// Taken before restaging: an event raised meanwhile opens the next burst instead of this one.
+	bSavedSourcePending = false;
+	TMap<TWeakObjectPtr<UPCGExAssetCollection>, FPendingSourceRestage> Pending = MoveTemp(PendingSourceRestages);
+	PendingSourceRestages.Reset();
+
+	// The preference may have been turned off while the burst settled.
+	if (!GetDefault<UPCGExCollectionsEditorSettings>()->bAutoRebuildOnStale)
+	{
+		return;
+	}
+
+	for (const TPair<TWeakObjectPtr<UPCGExAssetCollection>, FPendingSourceRestage>& PendingPair : Pending)
+	{
+		UPCGExAssetCollection* Collection = PendingPair.Key.Get();
+		if (!Collection)
+		{
+			continue;
+		}
+
+		const FPendingSourceRestage& Sources = PendingPair.Value;
+
+		// Per collection: the restages below move the registry, and a cache must never see that.
+		UPCGExAssetCollection::FSourceFingerprintCache FingerprintCache;
+
+		// One session per collection. Entries match on their advertised source packages, not Staging.Path (an
+		// export-backed entry stages into the collection's own package); package names also cover BP "_C" paths.
+		Collection->EDITOR_RebuildEntriesStaging([&Sources, &FingerprintCache](const FPCGExAssetCollectionEntry* InEntry)
+		{
+			if (InEntry->bIsSubCollection)
+			{
+				return false;
+			}
+
+			TSet<FSoftObjectPath> SourcePaths;
+			InEntry->EDITOR_GetSourceAssetPaths(SourcePaths);
+
+			bool bSaved = false;
+			for (const FSoftObjectPath& SourcePath : SourcePaths)
+			{
+				const FName SourcePackage = SourcePath.GetLongPackageFName();
+				if (Sources.Reinstanced.Contains(SourcePackage))
+				{
+					return true;
+				}
+				bSaved = bSaved || Sources.Saved.Contains(SourcePackage);
+			}
+
+			if (!bSaved)
+			{
+				return false;
+			}
+
+			// A digest still on its baseline means this content is already staged (straggler event, or another
+			// tool restaged first). Unknown (0) re-stages.
+			const uint64 Current = UPCGExAssetCollection::EDITOR_ComputeEntrySourceFingerprint(InEntry, &FingerprintCache);
+			return Current == 0 || Current != InEntry->StagingSourceFingerprint;
+		});
 	}
 }
 
@@ -307,19 +431,59 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 	// pre-rebuild state for its current run; later runs see fresh data.
 	TWeakObjectPtr<UPCGExAssetCollection> WeakCollection(Collection);
 	GEditor->GetTimerManager()->SetTimerForNextTick(
-		[WeakCollection]()
+		[this, WeakCollection]()
 		{
 			if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
 			{
-				if (GetDefault<UPCGExCollectionsEditorSettings>()->bRebuildStaleEntriesOnOpen)
-				{
-					Loaded->EDITOR_RebuildStaleEntries();
-				}
+				PendingStaleChecks.Add(WeakCollection);
+				FlushPendingStaleChecks();
+
 				// Not gated on the staleness preference: entry references (Collection Entry
 				// properties, variants) need ids to bind to, so never-rebuilt collections heal here.
 				PCGExCollectionEditorUtils::EnsureEntryIds(Loaded, /*bNotify=*/false);
 			}
 		});
+}
+
+void FPCGExCollectionsEditorModule::FlushPendingStaleChecks()
+{
+	if (!GEditor || !GEditor->IsTimerManagerValid())
+	{
+		return;
+	}
+
+	if (!GetDefault<UPCGExCollectionsEditorSettings>()->bRebuildStaleEntriesOnOpen)
+	{
+		PendingStaleChecks.Reset();
+		return;
+	}
+
+	// A gathering registry answers "cannot determine" for what it hasn't seen yet: ask once it is done.
+	if (IAssetRegistry::GetChecked().IsGathering())
+	{
+		if (!bStaleCheckFlushScheduled)
+		{
+			bStaleCheckFlushScheduled = true;
+			GEditor->GetTimerManager()->SetTimerForNextTick(
+				[this]()
+				{
+					bStaleCheckFlushScheduled = false;
+					FlushPendingStaleChecks();
+				});
+		}
+		return;
+	}
+
+	const TArray<TWeakObjectPtr<UPCGExAssetCollection>> Pending = MoveTemp(PendingStaleChecks);
+	PendingStaleChecks.Reset();
+
+	for (const TWeakObjectPtr<UPCGExAssetCollection>& WeakCollection : Pending)
+	{
+		if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
+		{
+			Loaded->EDITOR_RebuildStaleEntries();
+		}
+	}
 }
 
 void FPCGExCollectionsEditorModule::OnAnySchemaAssetChanged(UPCGExPropertySchemaAsset* Asset)
@@ -499,7 +663,7 @@ void FPCGExCollectionsEditorModule::OnObjectsReinstanced(const TMap<UObject*, UO
 				AssetRegistry.GetAssetsByPackageName(PackageName, Assets, /*bIncludeOnlyOnDiskAssets=*/ false);
 				for (const FAssetData& AssetData : Assets)
 				{
-					OnAssetUpdatedOnDisk(AssetData);
+					QueueSourceRestage(AssetData, /*bReinstanced=*/ true);
 				}
 			}
 		});
