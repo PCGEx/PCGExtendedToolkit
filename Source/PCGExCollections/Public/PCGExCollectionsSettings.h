@@ -57,6 +57,6 @@ public:
 
 private:
 	/** Roots the classes the cache points at: unreferenced Blueprint classes are collectable outside the editor. */
-	UPROPERTY(Transient, Category = "Settings")
+	UPROPERTY(Transient)
 	TArray<TObjectPtr<UClass>> ResolvedDefaultClasses;
 };
