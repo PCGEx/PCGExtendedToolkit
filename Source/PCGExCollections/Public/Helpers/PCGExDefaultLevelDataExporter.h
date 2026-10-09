@@ -146,6 +146,13 @@ public:
 	/** Called after all points are created, before collection generation. */
 	virtual void OnExportComplete(UPCGDataAsset* OutAsset);
 
+	/**
+	 * Swaps ContentFilter, MeshClassificator and BoundsEvaluator for the project defaults (PCGEx | Collections settings)
+	 * where they differ. A native instance resolves them in its constructor already; this covers an exporter whose
+	 * subobjects were instanced from a class default built before the cache was filled. Never call it on an authored one.
+	 */
+	void ApplyProjectDefaults();
+
 #if WITH_EDITOR
 
 private:

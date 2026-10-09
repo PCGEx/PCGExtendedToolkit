@@ -21,7 +21,13 @@
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #if WITH_EDITOR
+#include "Containers/Ticker.h"
+#include "Editor.h"
 #include "Helpers/PCGDynamicTrackingHelpers.h"
+#include "PackageTools.h"
+#include "UObject/Package.h"
+#include "UObject/ReferencerFinder.h"
+#include "UObject/UObjectHash.h"
 #endif
 #include "Helpers/PCGHelpers.h"
 #include "MeshSelectors/PCGMeshSelectorBase.h"
@@ -1485,6 +1491,8 @@ namespace PCGExCollections
 			}
 #endif
 
+			// The cold level this load brings in would otherwise stay resident as a rendered world (see TrackLevelRead).
+			TrackLevelRead(ActorPath.GetLongPackageFName());
 			OutHandle = PCGExHelpers::LoadBlocking_AnyThread(ActorPath);
 			Actor = Cast<AActor>(ActorPath.ResolveObject());
 			if (!Actor)
@@ -1497,6 +1505,203 @@ namespace PCGExCollections
 		// No-op on a live world; a cold one reads identity transforms until this runs.
 		PCGExHelpers::EnsureWorldTransformsCurrent(Actor->GetWorld());
 		return Actor;
+	}
+}
+
+#pragma endregion
+
+#pragma region Level read release
+
+namespace PCGExCollections
+{
+#if WITH_EDITOR
+	namespace LevelReadRelease
+	{
+		// Game thread only: TrackLevelRead ignores other threads.
+		TSet<FName> PendingPackages;
+		TMap<FName, int32> HeldPackages; // Still referenced at release time -> retries left
+		FTSTicker::FDelegateHandle ReleaseTickerHandle;
+		FTSTicker::FDelegateHandle RetryTickerHandle;
+
+		// A holder is normally transient (a streamable handle, the warm resource cache at its 45 s TTL); a level still
+		// held after the last retry stays resident, as it did before tracking.
+		constexpr int32 MaxHeldRetries = 12;
+		constexpr float HeldRetryDelay = 10.f;
+
+		bool RetryTick(float DeltaTime);
+
+		void Release(const TSet<FName>& Batch)
+		{
+			if (!GEditor)
+			{
+				HeldPackages.Reset();
+				return;
+			}
+
+			struct FCandidate
+			{
+				FName Name;
+				UPackage* Package = nullptr;
+				TArray<UObject*> Objects;
+			};
+			TArray<FCandidate> Candidates;
+
+			for (const FName& PackageName : Batch)
+			{
+				UPackage* Package = FindPackage(nullptr, *PackageName.ToString());
+				UWorld* World = Package ? UWorld::FindWorldInPackage(Package) : nullptr;
+				if (!World || Package->IsDirty())
+				{
+					HeldPackages.Remove(PackageName);
+					continue;
+				}
+
+				// Only the hidden inactive world the editor set up for the read. Never the edited or a PIE world, nor a
+				// level streamed into another world since (a Level Instance edited in place loads the real package).
+				const ULevel* PersistentLevel = World->PersistentLevel;
+				if (World->WorldType != EWorldType::Inactive || (PersistentLevel && PersistentLevel->OwningWorld && PersistentLevel->OwningWorld != World))
+				{
+					HeldPackages.Remove(PackageName);
+					continue;
+				}
+
+				FCandidate& Candidate = Candidates.Emplace_GetRef();
+				Candidate.Name = PackageName;
+				Candidate.Package = Package;
+				GetObjectsWithPackage(Package, Candidate.Objects);
+			}
+
+			if (Candidates.IsEmpty())
+			{
+				return;
+			}
+
+			// UnloadPackages cleans a world up even when something still holds it (a streamable handle, the undo buffer,
+			// a hard property), since GC only decides afterwards. Find such holders first: the same scan the asset
+			// delete flow runs, which sees FGCObject holders through the GC referencer object.
+			TSet<UObject*> Referencees;
+			for (const FCandidate& Candidate : Candidates)
+			{
+				for (UObject* Object : Candidate.Objects)
+				{
+					Referencees.Add(Object);
+				}
+			}
+			TSet<UObject*> Ignored = Referencees;
+			for (const FCandidate& Candidate : Candidates)
+			{
+				Ignored.Add(Candidate.Package);
+			}
+
+			TSet<UPackage*> HeldByOutside;
+			for (UObject* Referencer : FReferencerFinder::GetAllReferencers(Referencees, &Ignored, EReferencerFinderFlags::SkipWeakReferences))
+			{
+				if (!IsValid(Referencer))
+				{
+					continue;
+				}
+
+				TArray<UObject*> Referenced;
+				FReferenceFinder Finder(Referenced);
+				Finder.FindReferences(Referencer);
+				for (UObject* Object : Referenced)
+				{
+					if (Referencees.Contains(Object))
+					{
+						HeldByOutside.Add(Object->GetPackage());
+					}
+				}
+			}
+
+			TArray<UPackage*> PackagesToUnload;
+			for (const FCandidate& Candidate : Candidates)
+			{
+				if (HeldByOutside.Contains(Candidate.Package))
+				{
+					int32& RetriesLeft = HeldPackages.FindOrAdd(Candidate.Name, MaxHeldRetries);
+					if (RetriesLeft-- > 0)
+					{
+						continue;
+					}
+					HeldPackages.Remove(Candidate.Name);
+					UE_LOG(LogPCGEx, Verbose, TEXT("[PCGEx] Level '%s' is still referenced after staging; left resident."), *Candidate.Name.ToString());
+					continue;
+				}
+
+				HeldPackages.Remove(Candidate.Name);
+				PackagesToUnload.Add(Candidate.Package);
+			}
+
+			if (!HeldPackages.IsEmpty() && !RetryTickerHandle.IsValid())
+			{
+				RetryTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&RetryTick), HeldRetryDelay);
+			}
+
+			if (PackagesToUnload.IsEmpty())
+			{
+				return;
+			}
+
+			UPackageTools::FUnloadPackageParams Params(PackagesToUnload);
+			Params.bResetTransBuffer = false; // Keep the undo history: collections only hold soft references to these levels.
+			UPackageTools::UnloadPackages(Params);
+			UE_LOG(LogPCGEx, Log, TEXT("[PCGEx] Released %d level(s) loaded for staging."), PackagesToUnload.Num());
+		}
+
+		bool ReleaseTick(float DeltaTime)
+		{
+			ReleaseTickerHandle.Reset();
+			const TSet<FName> Batch = MoveTemp(PendingPackages);
+			PendingPackages.Reset();
+			Release(Batch);
+			return false;
+		}
+
+		bool RetryTick(float DeltaTime)
+		{
+			RetryTickerHandle.Reset();
+			TSet<FName> Batch;
+			HeldPackages.GetKeys(Batch);
+			Release(Batch);
+			return false;
+		}
+	}
+#endif
+
+	void TrackLevelRead(const FName LevelPackageName)
+	{
+#if WITH_EDITOR
+		// Off-thread reads are skipped on purpose: their world may still be read while the game thread ticks on.
+		if (LevelPackageName.IsNone() || !GIsEditor || IsRunningCommandlet() || !IsInGameThread())
+		{
+			return;
+		}
+
+		// Only packages this read is about to load: anything already resident belongs to someone else.
+		if (FindPackage(nullptr, *LevelPackageName.ToString()))
+		{
+			return;
+		}
+
+		LevelReadRelease::PendingPackages.Add(LevelPackageName);
+		if (!LevelReadRelease::ReleaseTickerHandle.IsValid())
+		{
+			// Next tick: a batch (rebuild, restage flush) releases once, never from inside a load or a property edit.
+			LevelReadRelease::ReleaseTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&LevelReadRelease::ReleaseTick));
+		}
+#endif
+	}
+
+	void CancelPendingLevelReleases()
+	{
+#if WITH_EDITOR
+		FTSTicker::RemoveTicker(LevelReadRelease::ReleaseTickerHandle);
+		FTSTicker::RemoveTicker(LevelReadRelease::RetryTickerHandle);
+		LevelReadRelease::ReleaseTickerHandle.Reset();
+		LevelReadRelease::RetryTickerHandle.Reset();
+		LevelReadRelease::PendingPackages.Reset();
+		LevelReadRelease::HeldPackages.Reset();
+#endif
 	}
 }
 
