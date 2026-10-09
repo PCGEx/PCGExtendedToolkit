@@ -284,6 +284,12 @@ bool FPCGExPCGDataAssetCollectionEntry::ExportFromSource(const UPCGExAssetCollec
 		FallbackExporter = NewObject<UPCGExLevelDataExporter>(GetTransientPackageAsObject(), ExporterClass);
 #endif
 
+		// Transient fallback only: an exporter authored on the collection keeps its classes exactly as set.
+		if (UPCGExDefaultLevelDataExporter* DefaultExporter = Cast<UPCGExDefaultLevelDataExporter>(FallbackExporter))
+		{
+			DefaultExporter->ApplyProjectDefaults();
+		}
+
 		Exporter = FallbackExporter;
 	}
 
@@ -460,6 +466,8 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 		}
 #endif
 
+		// The cold level this load brings in would otherwise stay resident as a rendered world.
+		PCGExCollections::TrackLevelRead(SourcePath.GetLongPackageFName());
 		TSharedPtr<FStreamableHandle> Handle = PCGExHelpers::LoadBlocking_AnyThread(SourcePath);
 		UWorld* LoadedWorld = Level.Get();
 		if (!LoadedWorld)

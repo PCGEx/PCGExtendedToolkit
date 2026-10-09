@@ -3,11 +3,16 @@
 
 #include "PCGExCollections.h"
 
+#include "PCGExCollectionsSettings.h"
 #include "Core/PCGExAssetCollectionTypes.h"
+#include "Engine/Engine.h"
+#include "Misc/CoreDelegates.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExComponentFixups.h"
 #include "Helpers/PCGExLevelExportBuiltinHandlers.h"
 
 #if WITH_EDITOR
+#include "Editor.h"
 #include "Styling/AppStyle.h"
 
 #if PCGEX_ENGINE_VERSION > 506
@@ -19,8 +24,43 @@
 
 #define LOCTEXT_NAMESPACE "FPCGExCollectionsModule"
 
+namespace PCGExCollectionsModule
+{
+	FDelegateHandle PostEngineInitHandle;
+#if WITH_EDITOR
+	FDelegateHandle BlueprintCompiledHandle;
+
+	void OnBlueprintCompiled()
+	{
+		GetMutableDefault<UPCGExCollectionsSettings>()->UpdateSettingsCaches(/*bLoadClasses=*/false);
+	}
+#endif
+
+	// A config-loaded class default gets no PostLoad, so the settings cache is pushed here; after engine init, when
+	// content (Blueprint) classes resolve. A recompile supersedes a Blueprint default class in place: re-resolve then.
+	void OnEngineInitialized()
+	{
+		GetMutableDefault<UPCGExCollectionsSettings>()->UpdateSettingsCaches();
+#if WITH_EDITOR
+		if (GEditor && !BlueprintCompiledHandle.IsValid())
+		{
+			BlueprintCompiledHandle = GEditor->OnBlueprintCompiled().AddStatic(&OnBlueprintCompiled);
+		}
+#endif
+	}
+}
+
 void FPCGExCollectionsModule::StartupModule()
 {
+	if (GEngine && GEngine->IsInitialized())
+	{
+		PCGExCollectionsModule::OnEngineInitialized();
+	}
+	else
+	{
+		PCGExCollectionsModule::PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddStatic(&PCGExCollectionsModule::OnEngineInitialized);
+	}
+
 	// We need this because the registry holds a reference to the collection ::StaticClass
 	// and it cannot be access during initialization so we defer it here.
 	PCGExAssetCollection::FTypeRegistry::ProcessPendingRegistrations();
@@ -35,6 +75,15 @@ void FPCGExCollectionsModule::StartupModule()
 
 void FPCGExCollectionsModule::ShutdownModule()
 {
+	FCoreDelegates::OnPostEngineInit.Remove(PCGExCollectionsModule::PostEngineInitHandle);
+#if WITH_EDITOR
+	if (GEditor)
+	{
+		GEditor->OnBlueprintCompiled().Remove(PCGExCollectionsModule::BlueprintCompiledHandle);
+	}
+#endif
+	PCGExCollections::CancelPendingLevelReleases();
+
 	// Release built-in fixup handles before the delta registry goes out of scope.
 	PCGExComponentFixups::UnregisterBuiltins();
 #if WITH_EDITOR

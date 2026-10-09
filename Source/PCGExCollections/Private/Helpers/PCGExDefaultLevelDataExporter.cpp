@@ -56,6 +56,33 @@ UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter(const FObjectInit
 		                                         UPCGExBoundsEvaluator::StaticClass(), EvalClass, false, false));
 }
 
+namespace PCGExDefaultLevelDataExporterInternal
+{
+	template <typename T>
+	void ApplyProjectClass(UObject* Outer, TObjectPtr<T>& Slot, UClass* ProjectClass)
+	{
+		if (!ProjectClass || !ProjectClass->IsChildOf(T::StaticClass()) || ProjectClass->HasAnyClassFlags(CLASS_Abstract))
+		{
+			return;
+		}
+
+		if (Slot && Slot->GetClass() == ProjectClass)
+		{
+			return;
+		}
+
+		Slot = NewObject<T>(Outer, ProjectClass);
+	}
+}
+
+void UPCGExDefaultLevelDataExporter::ApplyProjectDefaults()
+{
+	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
+	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, ContentFilter, Settings.DefaultContentFilterClass.Get());
+	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, MeshClassificator, Settings.DefaultMeshClassificatorClass.Get());
+	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, BoundsEvaluator, Settings.DefaultBoundsEvaluatorClass.Get());
+}
+
 EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor) const
 {
 	// Level instances precede the mesh check: an ALevelInstance can incidentally have

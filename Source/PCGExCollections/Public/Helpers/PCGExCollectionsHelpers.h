@@ -59,6 +59,19 @@ namespace PCGExCollections
 		const FSoftObjectPath& ActorPath,
 		TSharedPtr<FStreamableHandle>& OutHandle,
 		FString* OutFailure = nullptr);
+
+	/**
+	 * Call right before loading a level package for reading. In the editor, a level asset loaded outside a Level Instance
+	 * becomes a resident, rendered inactive world (UEditorEngine::OnAssetLoaded); a package this read brings in is unloaded
+	 * on a following game-thread tick unless it is in use by then (dirty, edited, PIE, or streamed into another world).
+	 * A world something else still references (a streamable handle, the undo buffer) is left alone and retried for a
+	 * while. Editor and game thread only: an off-thread read's world may still be in use after this frame, so it is
+	 * not tracked.
+	 */
+	PCGEXCOLLECTIONS_API void TrackLevelRead(FName LevelPackageName);
+
+	/** Drops pending and retried level releases without unloading anything (module shutdown). */
+	PCGEXCOLLECTIONS_API void CancelPendingLevelReleases();
 }
 
 namespace PCGExMeshCollection

@@ -25,7 +25,7 @@ void UPCGExCollectionsSettings::PostEditChangeProperty(struct FPropertyChangedEv
 }
 #endif
 
-void UPCGExCollectionsSettings::UpdateSettingsCaches() const
+void UPCGExCollectionsSettings::UpdateSettingsCaches(const bool bLoadClasses)
 {
 #define PCGEX_PUSH_SETTING(_MODULE, _SETTING) PCGEX_SETTINGS_INST(_MODULE)._SETTING = _SETTING;
 
@@ -33,12 +33,25 @@ void UPCGExCollectionsSettings::UpdateSettingsCaches() const
 
 #undef PCGEX_PUSH_SETTING
 
-	// Resolve soft class paths to UClass* in the cache (runs on game thread in PostLoad/PostEditChangeProperty)
+	// Game thread only. A recompiled Blueprint is superseded in place (the old class is renamed REINST_), so the
+	// compile hook re-resolves without loading: the new class is already in memory under the configured path.
+	auto Resolve = [bLoadClasses](const FSoftClassPath& Path, const UClass* Base) -> UClass*
+	{
+		UClass* Class = bLoadClasses ? Path.TryLoadClass<UObject>() : Path.ResolveClass();
+		return Class && Class->IsChildOf(Base) ? Class : nullptr;
+	};
+
 	auto& Cache = PCGEX_SETTINGS_INST(Collections);
-	Cache.DefaultLevelExporterClass = DefaultLevelExporterClass.TryLoadClass<UPCGExLevelDataExporter>();
-	Cache.DefaultContentFilterClass = DefaultContentFilterClass.TryLoadClass<UPCGExActorContentFilter>();
-	Cache.DefaultBoundsEvaluatorClass = DefaultBoundsEvaluatorClass.TryLoadClass<UPCGExBoundsEvaluator>();
-	Cache.DefaultMeshClassificatorClass = DefaultMeshClassificatorClass.TryLoadClass<UPCGExActorMeshClassificator>();
+	Cache.DefaultLevelExporterClass = Resolve(DefaultLevelExporterClass, UPCGExLevelDataExporter::StaticClass());
+	Cache.DefaultContentFilterClass = Resolve(DefaultContentFilterClass, UPCGExActorContentFilter::StaticClass());
+	Cache.DefaultBoundsEvaluatorClass = Resolve(DefaultBoundsEvaluatorClass, UPCGExBoundsEvaluator::StaticClass());
+	Cache.DefaultMeshClassificatorClass = Resolve(DefaultMeshClassificatorClass, UPCGExActorMeshClassificator::StaticClass());
+
+	ResolvedDefaultClasses.Reset(4);
+	ResolvedDefaultClasses.Add(Cache.DefaultLevelExporterClass.Get());
+	ResolvedDefaultClasses.Add(Cache.DefaultContentFilterClass.Get());
+	ResolvedDefaultClasses.Add(Cache.DefaultBoundsEvaluatorClass.Get());
+	ResolvedDefaultClasses.Add(Cache.DefaultMeshClassificatorClass.Get());
 
 	Cache.SystemActorClasses = UPCGExActorContentFilter::KnownSystemActorClasses;
 	Cache.SystemActorClasses.Append(AdditionalSystemActorClasses);
