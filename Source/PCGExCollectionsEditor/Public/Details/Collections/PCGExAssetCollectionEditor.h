@@ -194,7 +194,7 @@ protected:
 
 	/** Per-row picker resolution: the row's entry type decides; falls back to the
 	 *  editor-wide virtuals when the type has no registered picker info. */
-	void ResolveTilePickerForRow(int32 EntryIndex, FName& OutPropertyName, const UClass*& OutAllowedClass) const;
+	void ResolveTilePickerForRow(int32 EntryIndex, FName& OutPropertyName, const UClass*& OutAllowedClass, TFunction<bool(const FAssetData&)>* OutShouldFilterAsset = nullptr) const;
 
 	/** Build the picker widget for a single tile entry. Override for custom picker logic.
 	 *  Invoke OnPropertyEdited with the FName of the entry-struct property that was written. */

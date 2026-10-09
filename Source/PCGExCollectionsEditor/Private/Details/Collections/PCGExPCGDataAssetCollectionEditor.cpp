@@ -8,6 +8,7 @@
 #include "ScopedTransaction.h"
 #include "Collections/PCGExPCGDataAssetCollection.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "UObject/UnrealType.h"
@@ -220,6 +221,11 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
 		[
 			SNew(SObjectPropertyEntryBox)
 			.AllowedClass(UWorld::StaticClass())
+			// World Partition levels can't be level sources: a plain load brings none of their actors.
+			.OnShouldFilterAsset(FOnShouldFilterAsset::CreateLambda([](const FAssetData& AssetData)
+			{
+				return ULevel::GetIsLevelPartitionedFromAsset(AssetData);
+			}))
 			.ObjectPath_Lambda([GetTypedEntry]() -> FString
 			{
 				const FPCGExPCGDataAssetCollectionEntry* Entry = GetTypedEntry();

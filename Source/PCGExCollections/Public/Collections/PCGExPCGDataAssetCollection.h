@@ -84,7 +84,8 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source == EPCGExDataAssetEntrySource::DataAsset && !bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UPCGDataAsset> DataAsset = nullptr;
 
-	/** Level reference (used when Source == Level) */
+	/** Level reference (used when Source == Level). World Partition levels are refused: a plain load brings
+	 *  none of their actors. */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="Source == EPCGExDataAssetEntrySource::Level && !bIsSubCollection", EditConditionHides))
 	TSoftObjectPtr<UWorld> Level;
 

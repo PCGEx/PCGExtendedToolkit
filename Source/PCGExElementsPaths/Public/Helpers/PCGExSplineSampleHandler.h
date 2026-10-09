@@ -85,7 +85,7 @@ namespace PCGExSplineSampling
 	public:
 		static FHandlerRegistry& Get();
 
-		/** False when HandlerClass is abstract, names no component class path, or is already registered. */
+		/** False when HandlerClass is abstract, not native, names no component class path, or is already registered. */
 		bool Register(TSubclassOf<UPCGExSplineSampleHandler> HandlerClass);
 
 		/** Only compares the pointer, so it is safe during shutdown. */
@@ -97,7 +97,8 @@ namespace PCGExSplineSampling
 	private:
 		FHandlerRegistry() = default;
 
-		using FHandlerStack = TArray<TSubclassOf<UPCGExSplineSampleHandler>, TInlineAllocator<1>>;
+		// Raw pointers: any TSubclassOf read calls IsChildOf, and the classes are already purged when ShutdownModule unregisters.
+		using FHandlerStack = TArray<const UClass*, TInlineAllocator<1>>;
 
 		mutable FRWLock Lock;
 		TMap<FTopLevelAssetPath, FHandlerStack> Registrations;

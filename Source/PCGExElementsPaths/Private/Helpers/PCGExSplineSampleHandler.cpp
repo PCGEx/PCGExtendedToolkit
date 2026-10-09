@@ -25,6 +25,13 @@ namespace PCGExSplineSampling
 			return false;
 		}
 
+		// The registry holds raw class pointers: only a native class keeps one valid.
+		if (!HandlerClass->HasAnyClassFlags(CLASS_Native))
+		{
+			UE_LOG(LogPCGEx, Error, TEXT("Spline sample handler '%s' refused: not a native class."), *HandlerClass->GetName());
+			return false;
+		}
+
 		const FTopLevelAssetPath ComponentClassPath = HandlerClass->GetDefaultObject<UPCGExSplineSampleHandler>()->GetComponentClassPath();
 		if (ComponentClassPath.IsNull())
 		{
@@ -35,7 +42,7 @@ namespace PCGExSplineSampling
 		FWriteScopeLock WriteLock(Lock);
 		for (const TPair<FTopLevelAssetPath, FHandlerStack>& Registration : Registrations)
 		{
-			if (Registration.Value.Contains(HandlerClass))
+			if (Registration.Value.Contains(HandlerClass.Get()))
 			{
 				UE_LOG(LogPCGEx, Error, TEXT("Spline sample handler '%s' is already registered."), *HandlerClass->GetName());
 				return false;
@@ -43,7 +50,7 @@ namespace PCGExSplineSampling
 		}
 
 		// Latest wins, until unregistered.
-		Registrations.FindOrAdd(ComponentClassPath).Add(HandlerClass);
+		Registrations.FindOrAdd(ComponentClassPath).Add(HandlerClass.Get());
 		return true;
 	}
 
@@ -52,7 +59,7 @@ namespace PCGExSplineSampling
 		FWriteScopeLock WriteLock(Lock);
 		for (auto It = Registrations.CreateIterator(); It; ++It)
 		{
-			It.Value().RemoveAll([HandlerClass](const TSubclassOf<UPCGExSplineSampleHandler>& Registered) { return Registered.Get() == HandlerClass; });
+			It.Value().Remove(HandlerClass);
 			if (It.Value().IsEmpty()) { It.RemoveCurrent(); }
 		}
 	}

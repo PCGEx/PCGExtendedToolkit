@@ -7,6 +7,7 @@
 #include "Details/Collections/PCGExCollectionEditorHelpers.h"
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExLevelCollectionEditor.h"
+#include "Engine/Level.h"
 #include "Engine/World.h"
 
 PCGEX_REGISTER_COLLECTION_EDITOR_TYPE(
@@ -32,6 +33,11 @@ namespace PCGExLevelCollectionActions
 				{
 					Info.TilePickerPropertyName = FName("Level");
 					Info.TilePickerAllowedClass = UWorld::StaticClass();
+					// World Partition levels can't be level sources: a plain load brings none of their actors.
+					Info.TilePickerShouldFilterAsset = [](const FAssetData& Asset)
+					{
+						return ULevel::GetIsLevelPartitionedFromAsset(Asset);
+					};
 				});
 			});
 		}
