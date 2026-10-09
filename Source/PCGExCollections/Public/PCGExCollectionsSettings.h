@@ -52,5 +52,11 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Defaults")
 	TArray<FName> AdditionalSystemActorClasses;
 
-	void UpdateSettingsCaches() const;
+	/** Pushes the settings into the module cache. bLoadClasses false only re-resolves classes already in memory. */
+	void UpdateSettingsCaches(bool bLoadClasses = true);
+
+private:
+	/** Roots the classes the cache points at: unreferenced Blueprint classes are collectable outside the editor. */
+	UPROPERTY(Transient, Category = "Settings")
+	TArray<TObjectPtr<UClass>> ResolvedDefaultClasses;
 };
