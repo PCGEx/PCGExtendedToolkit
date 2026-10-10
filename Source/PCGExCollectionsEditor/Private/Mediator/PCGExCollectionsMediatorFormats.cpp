@@ -4,6 +4,7 @@
 #include "Mediator/PCGExCollectionsMediatorFormats.h"
 
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorLookup.h"
 #include "PCGExMediatorReflection.h"
 #include "PCGExMediatorRegistry.h"
 #include "PCGExMediatorSchema.h"
@@ -54,10 +55,10 @@ namespace PCGExCollectionsMediatorFormats
 		{
 			PCGExAssetCollection::FTypeInfo Info;
 			const bool bKnown = PCGExAssetCollection::FTypeRegistry::Get().GetInfoByEntryStruct(Struct, Info);
-			const FName Given(*TypeText);
+			const FName Given = SafeName(TypeText);
 			if (bKnown && Given != Info.Id && Given != PCGExAssetCollection::TypeIds::Base && !PCGExAssetCollection::FTypeRegistry::Get().IsA(Given, Info.Id))
 			{
-				Report(EPCGExMediatorSeverity::Error, Keys::Type, FString::Printf(TEXT("'%s' is not the entry type of this collection (%s)"), *TypeText, *Info.Id.ToString()));
+				Report(EPCGExMediatorSeverity::Error, Keys::Type, FString::Printf(TEXT("'%s' is not the entry type of this collection (%s)"), *TypeText.Left(128), *Info.Id.ToString()));
 				return false;
 			}
 		}
@@ -212,9 +213,9 @@ bool FPCGExOmniCollectionEntryJsonConverter::Decode(const FJsonObject& In, FPCGE
 	{
 		FPathScope P(Keys::Type);
 		PCGExAssetCollection::FTypeInfo Info;
-		if (!PCGExAssetCollection::FTypeRegistry::Get().GetInfo(FName(*TypeText), Info) || !Info.EntryStruct)
+		if (!PCGExAssetCollection::FTypeRegistry::Get().GetInfo(SafeName(TypeText), Info) || !Info.EntryStruct)
 		{
-			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not a collection type with an entry struct"), *TypeText));
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not a collection type with an entry struct"), *TypeText.Left(128)));
 			return false;
 		}
 		if (Temp.Entry.GetScriptStruct() != Info.EntryStruct) { Temp.Entry.InitializeAs(Info.EntryStruct); }

@@ -7,9 +7,16 @@
 #include "Misc/PackageName.h"
 #include "UObject/UObjectGlobals.h"
 
+FName PCGExMediator::SafeName(const FString& Text)
+{
+	return (Text.IsEmpty() || Text.Len() >= NAME_SIZE) ? NAME_None : FName(*Text);
+}
+
 UObject* PCGExMediator::ResolveObject(const FString& Path)
 {
-	const FSoftObjectPath SoftPath(FPackageName::ExportTextPathToObjectPath(Path.TrimStartAndEnd()));
+	const FString Trimmed = Path.TrimStartAndEnd();
+	if (Trimmed.IsEmpty() || Trimmed.Len() >= NAME_SIZE) { return nullptr; }
+	const FSoftObjectPath SoftPath(FPackageName::ExportTextPathToObjectPath(Trimmed));
 	if (SoftPath.IsNull()) { return nullptr; }
 	if (UObject* Found = SoftPath.ResolveObject()) { return Found; }
 	PCGExHelpers::LoadBlocking_AnyThread(SoftPath);
@@ -19,7 +26,7 @@ UObject* PCGExMediator::ResolveObject(const FString& Path)
 UField* PCGExMediator::FindTypeByName(UClass* TypeClass, const FString& NameOrPath)
 {
 	const FString Trimmed = NameOrPath.TrimStartAndEnd();
-	if (Trimmed.IsEmpty()) { return nullptr; }
+	if (Trimmed.IsEmpty() || Trimmed.Len() >= NAME_SIZE) { return nullptr; }
 	if (UField* ByPath = Cast<UField>(StaticFindObject(TypeClass, nullptr, *Trimmed))) { return ByPath; }
 	if (UField* ByName = Cast<UField>(StaticFindFirstObject(TypeClass, Trimmed, EFindFirstObjectOptions::NativeFirst))) { return ByName; }
 

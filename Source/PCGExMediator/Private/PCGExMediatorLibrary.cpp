@@ -12,8 +12,10 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Editor/Transactor.h"
+#include "Engine/DataAsset.h"
 #include "Factories/Factory.h"
 #include "IAssetTools.h"
+#include "Interfaces/IPluginManager.h"
 #include "Misc/PackageName.h"
 #include "UObject/Class.h"
 #include "UObject/Package.h"
@@ -100,8 +102,17 @@ FString UPCGExMediatorLibrary::CreateAsset(const FString& ClassNameOrPath, const
 
 	const FString Folder = PackagePath.TrimStartAndEnd();
 	const FString Name = AssetName.TrimStartAndEnd();
-	if (!FPackageName::IsValidLongPackageName(Folder)) { return Failure(FString::Printf(TEXT("'%s' is not a long package path such as /Game/Folder"), *Folder)); }
-	if (Name.IsEmpty() || !FName::IsValidXName(Name, INVALID_OBJECTNAME_CHARACTERS)) { return Failure(FString::Printf(TEXT("'%s' is not a valid asset name"), *Name)); }
+	// Project content only: /Game and project plugins. The engine's read-only roots stop at /Script, /Memory, /Temp and
+	// /Config, so /Engine and engine plugins are refused here by mount point.
+	if (!FPackageName::IsValidLongPackageName(Folder, false)) { return Failure(FString::Printf(TEXT("'%s' is not a long package path such as /Game/Folder"), *Folder.Left(128))); }
+	const FName MountPoint = FPackageName::GetPackageMountPoint(Folder);
+	const TSharedPtr<IPlugin> MountPlugin = IPluginManager::Get().FindPlugin(MountPoint.ToString());
+	if (MountPoint == FName(TEXT("Engine")) || (MountPlugin.IsValid() && MountPlugin->GetLoadedFrom() == EPluginLoadedFrom::Engine))
+	{
+		return Failure(FString::Printf(TEXT("'%s' is engine content; assets are created under /Game or a project plugin"), *Folder.Left(128)));
+	}
+	if (Name.IsEmpty() || !FName::IsValidXName(Name, INVALID_OBJECTNAME_CHARACTERS)) { return Failure(FString::Printf(TEXT("'%s' is not a valid asset name"), *Name.Left(128))); }
+	if (Folder.Len() + Name.Len() + 1 >= NAME_SIZE) { return Failure(TEXT("the package path is longer than a name can be")); }
 
 	// Every refusal the asset tools would raise as a modal dialog is checked here first.
 	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
@@ -131,6 +142,11 @@ FString UPCGExMediatorLibrary::CreateAsset(const FString& ClassNameOrPath, const
 			break;
 		}
 		if (!FactoryTemplate) { FactoryTemplate = Candidate; }
+	}
+	// Only asset kinds: a class with a New-asset factory, or a DataAsset (every mediator-bound asset is one).
+	if (!FactoryTemplate && !Class->IsChildOf(UDataAsset::StaticClass()))
+	{
+		return Failure(FString::Printf(TEXT("'%s' is not an asset class: no factory creates it and it is not a DataAsset"), *Class->GetName()));
 	}
 	UFactory* Factory = FactoryTemplate ? NewObject<UFactory>(GetTransientPackage(), FactoryTemplate->GetClass()) : nullptr;
 

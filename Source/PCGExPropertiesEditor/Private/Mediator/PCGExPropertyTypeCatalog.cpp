@@ -4,6 +4,7 @@
 #include "Mediator/PCGExPropertyTypeCatalog.h"
 
 #include "PCGExLog.h"
+#include "PCGExMediatorLookup.h"
 #include "PCGExProperty.h"
 #include "Modules/ModuleManager.h"
 #include "StructUtils/InstancedStruct.h"
@@ -89,7 +90,7 @@ const FPCGExPropertyTypeInfo* PCGExPropertyCatalog::Find(const FString& TypeName
 	if (TypeNameOrStructPath.IsEmpty()) { return nullptr; }
 
 	const TArray<FPCGExPropertyTypeInfo>& Types = Get();
-	const FName AsName(*TypeNameOrStructPath);
+	const FName AsName = PCGExMediator::SafeName(TypeNameOrStructPath);
 	for (const FPCGExPropertyTypeInfo& Info : Types)
 	{
 		if (!Info.Entry.TypeName.IsNone() && Info.Entry.TypeName == AsName) { return &Info; }

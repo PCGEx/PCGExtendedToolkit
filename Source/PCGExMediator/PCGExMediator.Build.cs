@@ -47,7 +47,8 @@ public class PCGExMediator : ModuleRules
 			new string[]
 			{
 				"UnrealEd",
-				"AssetTools" // CreateAsset through the class's factory
+				"AssetTools", // CreateAsset through the class's factory
+				"Projects" // CreateAsset refuses engine plugin content by mount point
 			}
 		);
 

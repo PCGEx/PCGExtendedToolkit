@@ -48,6 +48,11 @@ namespace PCGExPropertyMediatorFormats
 			return false;
 		}
 		OutName = FName(*Text);
+		if (OutName.IsNone())
+		{
+			Report(EPCGExMediatorSeverity::Error, Key, TEXT("'None' is the empty name"));
+			return false;
+		}
 		return true;
 	}
 

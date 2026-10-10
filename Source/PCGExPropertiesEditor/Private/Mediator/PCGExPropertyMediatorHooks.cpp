@@ -72,6 +72,17 @@ namespace PCGExPropertyMediatorHooks
 		return Prototype ? Values::DescribeShape(Prototype->GetOutputType()) : nullptr;
 	}
 
+	// A structural key is optional (OutValue null when absent); present, a wrong shape is an error at the key.
+	bool ReadStructural(const FJsonObject& Entry, const TCHAR* Key, const EJson Shape, TSharedPtr<FJsonValue>& OutValue)
+	{
+		OutValue = Entry.TryGetField(Key);
+		if (!OutValue.IsValid()) { return true; }
+		if (OutValue->Type == Shape) { return true; }
+		Report(EPCGExMediatorSeverity::Error, Key, Shape == EJson::String ? TEXT("expected a string") : TEXT("expected an object"));
+		OutValue = nullptr;
+		return false;
+	}
+
 	// --- Enum ---
 
 	FPCGExPropertyMediatorHooks MakeEnumHooks()
@@ -97,10 +108,11 @@ namespace PCGExPropertyMediatorHooks
 		};
 		H.DecodeStructural = [](FPCGExProperty& P, const FJsonObject& Entry)
 		{
-			FString Path;
-			if (!Entry.TryGetStringField(TEXT("enum"), Path)) { return true; }
+			TSharedPtr<FJsonValue> Path;
+			if (!ReadStructural(Entry, TEXT("enum"), EJson::String, Path)) { return false; }
+			if (!Path.IsValid()) { return true; }
 			FPathScope Scope(TEXT("enum"));
-			UEnum* Enum = PCGExPropertyMediator::ResolveEnum(Path);
+			UEnum* Enum = PCGExPropertyMediator::ResolveEnum(Path->AsString());
 			if (!Enum) { return false; }
 			static_cast<FPCGExProperty_Enum&>(P).Value.Class = Enum;
 			return true;
@@ -129,11 +141,12 @@ namespace PCGExPropertyMediatorHooks
 		};
 		H.DecodeStructural = [](FPCGExProperty& P, const FJsonObject& Entry)
 		{
-			FString Path;
-			if (!Entry.TryGetStringField(TEXT("allowedClass"), Path)) { return true; }
+			TSharedPtr<FJsonValue> Path;
+			if (!ReadStructural(Entry, TEXT("allowedClass"), EJson::String, Path)) { return false; }
+			if (!Path.IsValid()) { return true; }
 			FPathScope Scope(TEXT("allowedClass"));
-			UClass* Class = PCGExPropertyMediator::ResolveClass(Path);
-			if (!Class && !Path.IsEmpty()) { return false; }
+			UClass* Class = PCGExPropertyMediator::ResolveClass(Path->AsString());
+			if (!Class && !Path->AsString().IsEmpty()) { return false; }
 			static_cast<T&>(P).AllowedClass = Class;
 			return true;
 		};
@@ -159,10 +172,11 @@ namespace PCGExPropertyMediatorHooks
 		};
 		H.DecodeStructural = [](FPCGExProperty& P, const FJsonObject& Entry)
 		{
-			const TSharedPtr<FJsonObject>* Range = nullptr;
-			if (!Entry.TryGetObjectField(TEXT("range"), Range)) { return true; }
+			TSharedPtr<FJsonValue> Range;
+			if (!ReadStructural(Entry, TEXT("range"), EJson::Object, Range)) { return false; }
+			if (!Range.IsValid()) { return true; }
 			FPathScope Scope(TEXT("range"));
-			return PCGExPropertyMediator::DecodeRange(**Range, static_cast<T&>(P).Range);
+			return PCGExPropertyMediator::DecodeRange(*Range->AsObject(), static_cast<T&>(P).Range);
 		};
 		H.DescribeStructural = [](FJsonObject& Props)
 		{

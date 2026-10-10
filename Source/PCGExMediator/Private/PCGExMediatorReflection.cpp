@@ -75,6 +75,27 @@ namespace PCGExMediatorReflection
 		return true;
 	}
 
+	// A numeric value a details panel would clamp is refused instead: an agent gets the bound, not a silent rewrite.
+	bool WithinClamps(const FProperty* Property, const void* ValuePtr)
+	{
+#if WITH_EDITORONLY_DATA
+		const FNumericProperty* Numeric = CastField<FNumericProperty>(Property);
+		if (!Numeric || Numeric->GetIntPropertyEnum()) { return true; }
+		const double Value = Numeric->IsFloatingPoint() ? Numeric->GetFloatingPointPropertyValue(ValuePtr) : static_cast<double>(Numeric->GetSignedIntPropertyValue(ValuePtr));
+		if (Property->HasMetaData(TEXT("ClampMin")) && Value < Property->GetFloatMetaData(TEXT("ClampMin")))
+		{
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("%g is below the minimum %s"), Value, *Property->GetMetaData(TEXT("ClampMin"))));
+			return false;
+		}
+		if (Property->HasMetaData(TEXT("ClampMax")) && Value > Property->GetFloatMetaData(TEXT("ClampMax")))
+		{
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("%g is above the maximum %s"), Value, *Property->GetMetaData(TEXT("ClampMax"))));
+			return false;
+		}
+#endif
+		return true;
+	}
+
 	// Editor metadata onto a property's fragment: the tooltip as description (ahead of the shape hint), clamps as bounds.
 	void AddPropertyMetadata(const FProperty* Property, FJsonObject& Fragment)
 	{
@@ -279,6 +300,11 @@ bool PCGExMediator::Reflect::DecodeProperty(const FProperty* Property, void* Val
 		}
 		int64 Value = 0;
 		if (!Values::Decode<int64>(Json, Value)) { return false; }
+		if (!Numeric->CanHoldValue(Value))
+		{
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("%lld does not fit a %s"), Value, *Numeric->GetCPPType()));
+			return false;
+		}
 		Numeric->SetIntPropertyValue(ValuePtr, Value);
 		return true;
 	}
@@ -409,6 +435,8 @@ void PCGExMediator::Reflect::EncodeStruct(const UStruct* Struct, const void* Mem
 
 bool PCGExMediator::Reflect::DecodeStruct(const UStruct* Struct, void* Memory, const FJsonObject& In, FPropertyFilter Filter, TConstArrayView<FString> IgnoredKeys)
 {
+	using namespace PCGExMediatorReflection;
+
 	bool bOk = true;
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : In.Values)
 	{
@@ -420,7 +448,8 @@ bool PCGExMediator::Reflect::DecodeStruct(const UStruct* Struct, void* Memory, c
 			Report(EPCGExMediatorSeverity::Warning, TEXT("not an authored field; ignored"));
 			continue;
 		}
-		if (!DecodeProperty(Property, Property->ContainerPtrToValuePtr<void>(Memory), Pair.Value)) { bOk = false; }
+		void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Memory);
+		if (!DecodeProperty(Property, ValuePtr, Pair.Value) || !WithinClamps(Property, ValuePtr)) { bOk = false; }
 	}
 	return bOk;
 }

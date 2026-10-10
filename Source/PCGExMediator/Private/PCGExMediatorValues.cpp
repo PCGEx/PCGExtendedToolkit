@@ -128,12 +128,17 @@ namespace PCGExMediatorValues
 		return MakeShared<FJsonValueObject>(Obj);
 	}
 
+	// Reports every refusal: shape, a string that is not an integer, a double outside int64 (the cast would be UB).
 	bool ReadInteger(const TSharedPtr<FJsonValue>& Json, int64& Out)
 	{
-		if (!Json.IsValid()) { return false; }
-		if (Json->Type == EJson::Number)
+		if (Json.IsValid() && Json->Type == EJson::Number)
 		{
 			const double D = Json->AsNumber();
+			if (!FMath::IsFinite(D) || D < -9223372036854775808.0 || D >= 9223372036854775808.0)
+			{
+				Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("%g does not fit a 64-bit integer"), D));
+				return false;
+			}
 			if (FMath::Frac(D) != 0.0)
 			{
 				Report(EPCGExMediatorSeverity::Warning, FString::Printf(TEXT("%g truncated to an integer"), D));
@@ -141,11 +146,13 @@ namespace PCGExMediatorValues
 			Out = static_cast<int64>(D);
 			return true;
 		}
-		if (Json->Type == EJson::String)
+		if (Json.IsValid() && Json->Type == EJson::String)
 		{
-			return LexTryParseString(Out, *Json->AsString());
+			if (LexTryParseString(Out, *Json->AsString())) { return true; }
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not an integer"), *Json->AsString()));
+			return false;
 		}
-		return false;
+		return Fail(TEXT("an integer (number or numeric string)"), Json);
 	}
 
 	TSharedRef<FJsonValue> WriteInteger(const int64 V)
@@ -265,7 +272,7 @@ bool PCGExMediator::Values::Decode(const TSharedPtr<FJsonValue>& Json, const EPC
 	case EPCGMetadataTypes::Integer64:
 		{
 			int64 I = 0;
-			if (!ReadInteger(Json, I)) { return Fail(TEXT("an integer (number or numeric string)"), Json); }
+			if (!ReadInteger(Json, I)) { return false; }
 			if (Type == EPCGMetadataTypes::Integer32)
 			{
 				if (I > MAX_int32 || I < MIN_int32)
@@ -445,6 +452,11 @@ bool PCGExMediator::Values::DecodeEnum(const UEnum* Enum, const TSharedPtr<FJson
 	}
 	if (Json->Type == EJson::Array)
 	{
+		if (!IsBitflags(Enum))
+		{
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("%s is not a flags enum; expected one enumerator name"), Enum ? *Enum->GetName() : TEXT("the enum")));
+			return false;
+		}
 		int64 Combined = 0;
 		const TArray<TSharedPtr<FJsonValue>>& Array = Json->AsArray();
 		for (int32 i = 0; i < Array.Num(); ++i)
@@ -459,11 +471,13 @@ bool PCGExMediator::Values::DecodeEnum(const UEnum* Enum, const TSharedPtr<FJson
 		return true;
 	}
 
+	if (Json->Type != EJson::Number) { return Fail(TEXT("an enumerator name, an array of names or a number"), Json); }
 	int64 I = 0;
-	if (!ReadInteger(Json, I)) { return Fail(TEXT("an enumerator name, an array of names or a number"), Json); }
+	if (!ReadInteger(Json, I)) { return false; }
 	if (Enum && !Enum->IsValidEnumValueOrBitfield(I))
 	{
-		Report(EPCGExMediatorSeverity::Warning, FString::Printf(TEXT("%lld is not a value of %s; stored as-is"), I, *Enum->GetName()));
+		Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("%lld is not a value of %s"), I, *Enum->GetName()));
+		return false;
 	}
 	OutValue = I;
 	return true;

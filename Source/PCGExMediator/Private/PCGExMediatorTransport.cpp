@@ -108,20 +108,30 @@ bool PCGExMediator::ReadEnvelope(const FJsonObject& Doc, const FName ExpectedFor
 		Report(EPCGExMediatorSeverity::Error, Keys::Format, TEXT("missing"));
 		return false;
 	}
-	if (FName(*Format) != ExpectedFormat)
+	if (SafeName(Format) != ExpectedFormat)
 	{
-		Report(EPCGExMediatorSeverity::Error, Keys::Format, FString::Printf(TEXT("'%s' is not '%s'"), *Format, *ExpectedFormat.ToString()));
+		Report(EPCGExMediatorSeverity::Error, Keys::Format, FString::Printf(TEXT("'%s' is not '%s'"), *Format.Left(128), *ExpectedFormat.ToString()));
 		return false;
 	}
 
-	double Version = 1;
-	if (!Doc.TryGetNumberField(Keys::Version, Version))
+	int32 Version = 1;
+	if (const TSharedPtr<FJsonValue> VersionValue = Doc.TryGetField(Keys::Version))
+	{
+		const double D = VersionValue->Type == EJson::Number ? VersionValue->AsNumber() : -1.0;
+		if (VersionValue->Type != EJson::Number || !FMath::IsFinite(D) || D < 0 || D > static_cast<double>(MAX_int32) || FMath::Frac(D) != 0.0)
+		{
+			Report(EPCGExMediatorSeverity::Error, Keys::Version, TEXT("expected a non-negative integer"));
+			return false;
+		}
+		Version = static_cast<int32>(D);
+	}
+	else
 	{
 		Report(EPCGExMediatorSeverity::Warning, Keys::Version, TEXT("missing; reading as version 1"));
 	}
-	if (static_cast<int32>(Version) > SupportedVersion)
+	if (Version > SupportedVersion)
 	{
-		Report(EPCGExMediatorSeverity::Error, Keys::Version, FString::Printf(TEXT("%d is newer than the supported %d"), static_cast<int32>(Version), SupportedVersion));
+		Report(EPCGExMediatorSeverity::Error, Keys::Version, FString::Printf(TEXT("%d is newer than the supported %d"), Version, SupportedVersion));
 		return false;
 	}
 
@@ -312,9 +322,9 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 	FPathScope MembersPath(Keys::Members);
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Members)->Values)
 	{
-		if (!Binding->Members.Contains(FName(*Pair.Key)))
+		if (!Binding->Members.Contains(SafeName(Pair.Key)))
 		{
-			Report(EPCGExMediatorSeverity::Warning, Pair.Key, TEXT("not a bound member; ignored"));
+			Report(EPCGExMediatorSeverity::Warning, Pair.Key.Left(128), TEXT("not a bound member; ignored"));
 		}
 	}
 
@@ -435,7 +445,7 @@ TSharedPtr<FJsonObject> PCGExMediator::DescribeReflectedStruct(const FString& St
 TSharedPtr<FJsonObject> PCGExMediator::DescribeAny(const FString& FormatIdOrClassOrStruct)
 {
 	const FString Trimmed = FormatIdOrClassOrStruct.TrimStartAndEnd();
-	if (TSharedPtr<FJsonObject> S = DescribeFormat(FName(*Trimmed))) { return S; }
+	if (TSharedPtr<FJsonObject> S = DescribeFormat(SafeName(Trimmed))) { return S; }
 	if (const UClass* Class = FindType<UClass>(Trimmed))
 	{
 		if (TSharedPtr<FJsonObject> S = DescribeObject(Class)) { return S; }
