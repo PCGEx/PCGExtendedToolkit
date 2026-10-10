@@ -519,7 +519,17 @@ UObject* PCGExMediator::ResolveTarget(const FString& Target)
 		return Path.ResolveObject();
 	};
 
-	if (UObject* Direct = LoadPath(Target)) { return Direct; }
+	if (UObject* Direct = LoadPath(Target))
+	{
+		// "<graph path>:<node object name>" is itself a valid subobject path; the host is always the settings.
+		if (const UPCGNode* Node = Cast<UPCGNode>(Direct))
+		{
+			if (UPCGSettings* Settings = Node->GetSettings()) { return Settings; }
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("node '%s' has no settings"), *Node->GetName()));
+			return nullptr;
+		}
+		return Direct;
+	}
 
 	int32 Split = INDEX_NONE;
 	if (Target.FindLastChar(TEXT(':'), Split) && Split > 0)
@@ -542,6 +552,18 @@ UObject* PCGExMediator::ResolveTarget(const FString& Target)
 	}
 
 	Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' resolves to nothing (expected an object path, or <graph path>:<node>)"), *Target));
+	return nullptr;
+}
+
+const UClass* PCGExMediator::FindClass(const FString& NameOrPath)
+{
+	if (const UClass* ByPath = FindObject<UClass>(nullptr, *NameOrPath)) { return ByPath; }
+	if (const UClass* ByName = FindFirstObject<UClass>(*NameOrPath, EFindFirstObjectOptions::ExactClass)) { return ByName; }
+	// UClass names carry no U / A prefix; accept the C++ spelling too.
+	if (NameOrPath.Len() > 1 && (NameOrPath[0] == TEXT('U') || NameOrPath[0] == TEXT('A')) && FChar::IsUpper(NameOrPath[1]))
+	{
+		return FindFirstObject<UClass>(*NameOrPath.Mid(1), EFindFirstObjectOptions::ExactClass);
+	}
 	return nullptr;
 }
 

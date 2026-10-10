@@ -76,4 +76,7 @@ namespace PCGExMediator
 	 * needs; null (with diagnostics) when nothing resolves.
 	 */
 	PCGEXMEDIATOR_API UObject* ResolveTarget(const FString& Target);
+
+	/** A class by path, short name, or prefixed C++ name (UFoo / AFoo); null when nothing matches. */
+	PCGEXMEDIATOR_API const UClass* FindClass(const FString& NameOrPath);
 }

@@ -62,14 +62,7 @@ namespace PCGExMediatorCommands
 		TSharedPtr<FJsonObject> Schema = DescribeFormat(FName(*Args[0]));
 		if (!Schema.IsValid())
 		{
-			if (const UClass* Class = FindObject<UClass>(nullptr, *Args[0]))
-			{
-				Schema = DescribeObject(Class);
-			}
-			else if (const UClass* ShortClass = FindFirstObject<UClass>(*Args[0], EFindFirstObjectOptions::ExactClass))
-			{
-				Schema = DescribeObject(ShortClass);
-			}
+			if (const UClass* Class = FindClass(Args[0])) { Schema = DescribeObject(Class); }
 		}
 		if (!Schema.IsValid())
 		{

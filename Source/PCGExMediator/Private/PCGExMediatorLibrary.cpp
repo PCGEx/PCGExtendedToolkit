@@ -69,9 +69,7 @@ FString UPCGExMediatorLibrary::DescribeFormat(const FString& FormatIdOrClass)
 	TSharedPtr<FJsonObject> Schema = PCGExMediator::DescribeFormat(FName(*Trimmed));
 	if (!Schema.IsValid())
 	{
-		const UClass* Class = FindObject<UClass>(nullptr, *Trimmed);
-		if (!Class) { Class = FindFirstObject<UClass>(*Trimmed, EFindFirstObjectOptions::ExactClass); }
-		if (Class) { Schema = PCGExMediator::DescribeObject(Class); }
+		if (const UClass* Class = PCGExMediator::FindClass(Trimmed)) { Schema = PCGExMediator::DescribeObject(Class); }
 	}
 	if (!Schema.IsValid())
 	{
