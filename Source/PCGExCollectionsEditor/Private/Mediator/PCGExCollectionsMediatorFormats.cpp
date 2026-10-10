@@ -4,6 +4,7 @@
 #include "Mediator/PCGExCollectionsMediatorFormats.h"
 
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorReflection.h"
 #include "PCGExMediatorRegistry.h"
 #include "PCGExMediatorValues.h"
 #include "Collections/PCGExOmniCollection.h"
@@ -11,9 +12,6 @@
 #include "Core/PCGExAssetCollectionTypes.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "JsonObjectConverter.h"
-#include "Mediator/PCGExPropertyMediatorHooks.h"
-#include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
 #include "StructUtils/InstancedStruct.h"
 #include "UObject/UnrealType.h"
@@ -32,6 +30,8 @@ namespace PCGExCollectionsMediatorFormats
 		const TCHAR* Bounds = TEXT("bounds");
 	}
 
+	const FString EntryOwnKeys[] = {TEXT("type"), TEXT("entryId")};
+
 	EJsonObjectConvertResult Guarded(TFunctionRef<bool()> Body)
 	{
 		FPCGExMediatorDiagnostics Local;
@@ -49,97 +49,19 @@ namespace PCGExCollectionsMediatorFormats
 		return Property->HasAnyPropertyFlags(CPF_Edit) && !Property->HasAnyPropertyFlags(CPF_EditConst | CPF_Deprecated | CPF_Transient);
 	}
 
-	// Hard references that are not instanced subobjects travel as path strings.
-	const FObjectProperty* AsPlainObjectRef(const FProperty* Property)
-	{
-		const FObjectProperty* ObjectProperty = CastField<FObjectProperty>(Property);
-		if (!ObjectProperty || Property->HasAnyPropertyFlags(CPF_InstancedReference | CPF_PersistentInstance)) { return nullptr; }
-		return ObjectProperty;
-	}
-
-	TSharedPtr<FJsonValue> EncodeProperty(FProperty* Property, const void* ValuePtr)
-	{
-		if (const FObjectProperty* ObjectProperty = AsPlainObjectRef(Property))
-		{
-			const UObject* Object = ObjectProperty->GetObjectPropertyValue(ValuePtr);
-			return MakeShared<FJsonValueString>(Object ? Object->GetPathName() : FString());
-		}
-		if (const FSoftObjectProperty* SoftProperty = CastField<FSoftObjectProperty>(Property))
-		{
-			return MakeShared<FJsonValueString>(SoftProperty->GetPropertyValue(ValuePtr).ToSoftObjectPath().ToString());
-		}
-		return FJsonObjectConverter::UPropertyToJsonValue(Property, ValuePtr);
-	}
-
-	bool DecodeProperty(FProperty* Property, void* ValuePtr, const TSharedPtr<FJsonValue>& Json)
-	{
-		if (const FObjectProperty* ObjectProperty = AsPlainObjectRef(Property))
-		{
-			if (!Json.IsValid() || Json->Type != EJson::String)
-			{
-				Report(EPCGExMediatorSeverity::Error, TEXT("expected an object path string"));
-				return false;
-			}
-			const FString Text = Json->AsString();
-			UObject* Object = nullptr;
-			if (!Text.IsEmpty())
-			{
-				Object = PCGExPropertyMediator::ResolveObject(FPackageName::ExportTextPathToObjectPath(Text));
-				if (!Object)
-				{
-					Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' not found"), *Text));
-					return false;
-				}
-				if (!Object->IsA(ObjectProperty->PropertyClass))
-				{
-					Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not a %s"), *Text, *ObjectProperty->PropertyClass->GetName()));
-					return false;
-				}
-			}
-			ObjectProperty->SetObjectPropertyValue(ValuePtr, Object);
-			return true;
-		}
-		if (const FSoftObjectProperty* SoftProperty = CastField<FSoftObjectProperty>(Property))
-		{
-			FSoftObjectPath Path;
-			if (!Values::Decode<FSoftObjectPath>(Json, Path)) { return false; }
-			SoftProperty->SetPropertyValue(ValuePtr, FSoftObjectPtr(Path));
-			return true;
-		}
-
-		FText FailReason;
-		if (!FJsonObjectConverter::JsonValueToUProperty(Json, Property, ValuePtr, 0, 0, false, &FailReason))
-		{
-			Report(EPCGExMediatorSeverity::Error, FailReason.IsEmpty() ? TEXT("value rejected") : FailReason.ToString());
-			return false;
-		}
-		return true;
-	}
-
+	// Sparse: a field at its struct default is omitted, which keeps descriptor trees out unless authored.
 	void EncodeEntry(const UScriptStruct* Struct, const FPCGExAssetCollectionEntry& Entry, FJsonObject& Out)
 	{
 		Out.SetStringField(Keys::Type, Entry.GetTypeId().ToString());
 		if (Entry.EntryId != 0) { Out.SetNumberField(Keys::EntryId, Entry.EntryId); }
 
-		for (TFieldIterator<FProperty> It(Struct); It; ++It)
-		{
-			FProperty* Property = *It;
-			if (!IsAuthoredProperty(Property)) { continue; }
-			FPathScope P(Property->GetName());
-			const TSharedPtr<FJsonValue> Value = EncodeProperty(Property, Property->ContainerPtrToValuePtr<void>(&Entry));
-			if (!Value.IsValid())
-			{
-				Report(EPCGExMediatorSeverity::Warning, TEXT("no JSON representation; omitted"));
-				continue;
-			}
-			Out.SetField(Property->GetName(), Value);
-		}
+		FInstancedStruct Defaults;
+		Defaults.InitializeAs(Struct);
+		Reflect::EncodeStruct(Struct, &Entry, Defaults.GetMemory(), Out, &IsAuthoredProperty);
 	}
 
 	bool DecodeEntry(const UScriptStruct* Struct, FPCGExAssetCollectionEntry& Entry, const FJsonObject& In)
 	{
-		bool bOk = true;
-
 		FString TypeText;
 		if (In.TryGetStringField(Keys::Type, TypeText))
 		{
@@ -161,70 +83,81 @@ namespace PCGExCollectionsMediatorFormats
 			Entry.EntryId = EntryId;
 		}
 
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : In.Values)
-		{
-			if (Pair.Key == Keys::Type || Pair.Key == Keys::EntryId) { continue; }
-			FPathScope P(Pair.Key);
-			FProperty* Property = FindFProperty<FProperty>(Struct, *Pair.Key);
-			if (!Property || !IsAuthoredProperty(Property))
-			{
-				Report(EPCGExMediatorSeverity::Warning, TEXT("not an authored entry field; ignored"));
-				continue;
-			}
-			if (!DecodeProperty(Property, Property->ContainerPtrToValuePtr<void>(&Entry), Pair.Value)) { bOk = false; }
-		}
-		return bOk;
+		return Reflect::DecodeStruct(Struct, &Entry, In, &IsAuthoredProperty, EntryOwnKeys);
+	}
+
+	void AddEntryOwnSchemas(FJsonObject& Props, const TSharedPtr<FJsonObject>& TypeSchema)
+	{
+		Props.SetObjectField(Keys::Type, TypeSchema.ToSharedRef());
+		TSharedRef<FJsonObject> IdSchema = MakeShared<FJsonObject>();
+		IdSchema->SetStringField(TEXT("type"), TEXT("integer"));
+		IdSchema->SetStringField(TEXT("description"), TEXT("stable entry identity; omit for a new entry, the collection mints it on its next staging rebuild"));
+		Props.SetObjectField(Keys::EntryId, IdSchema);
 	}
 
 	TSharedPtr<FJsonObject> DescribeEntry(const UScriptStruct* Struct)
 	{
-		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-		{
-			TSharedRef<FJsonObject> TypeSchema = MakeShared<FJsonObject>();
-			TypeSchema->SetStringField(TEXT("type"), TEXT("string"));
-			PCGExAssetCollection::FTypeInfo Info;
-			if (PCGExAssetCollection::FTypeRegistry::Get().GetInfoByEntryStruct(Struct, Info)) { TypeSchema->SetStringField(TEXT("const"), Info.Id.ToString()); }
-			TypeSchema->SetStringField(TEXT("description"), TEXT("registered collection type id"));
-			Props->SetObjectField(Keys::Type, TypeSchema);
+		TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(Struct, &IsAuthoredProperty);
+		const TSharedPtr<FJsonObject>* Props = nullptr;
+		if (!S.IsValid() || !S->TryGetObjectField(TEXT("properties"), Props)) { return S; }
 
-			TSharedRef<FJsonObject> IdSchema = MakeShared<FJsonObject>();
-			IdSchema->SetStringField(TEXT("type"), TEXT("integer"));
-			IdSchema->SetStringField(TEXT("description"), TEXT("stable entry identity; omit for a new entry, the collection mints it"));
-			Props->SetObjectField(Keys::EntryId, IdSchema);
-		}
-		for (TFieldIterator<FProperty> It(Struct); It; ++It)
+		TSharedRef<FJsonObject> TypeSchema = MakeShared<FJsonObject>();
+		TypeSchema->SetStringField(TEXT("type"), TEXT("string"));
+		PCGExAssetCollection::FTypeInfo Info;
+		if (PCGExAssetCollection::FTypeRegistry::Get().GetInfoByEntryStruct(Struct, Info)) { TypeSchema->SetStringField(TEXT("const"), Info.Id.ToString()); }
+		TypeSchema->SetStringField(TEXT("description"), TEXT("registered collection type id"));
+		AddEntryOwnSchemas(**Props, TypeSchema);
+
+		S->SetStringField(TEXT("description"), FString::Printf(TEXT("%s: authored fields by name. Export is sparse (fields at their default are omitted); import merges (an absent key leaves the field unchanged on an existing row, at its default on a new one)."), *Struct->GetName()));
+		return S;
+	}
+
+	TSharedPtr<FJsonObject> DescribeOmniRow()
+	{
+		TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(FPCGExAssetCollectionEntry::StaticStruct(), &IsAuthoredProperty);
+		const TSharedPtr<FJsonObject>* Props = nullptr;
+		if (!S.IsValid() || !S->TryGetObjectField(TEXT("properties"), Props)) { return S; }
+
+		TArray<TSharedPtr<FJsonValue>> TypeIds;
+		PCGExAssetCollection::FTypeRegistry::Get().ForEach([&TypeIds](const PCGExAssetCollection::FTypeInfo& Info)
 		{
-			const FProperty* Property = *It;
-			if (!IsAuthoredProperty(Property)) { continue; }
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			FString Description = Property->GetCPPType();
-			if (AsPlainObjectRef(Property) || Property->IsA<FSoftObjectProperty>()) { Description += TEXT(" as an object path string"); }
-			S->SetStringField(TEXT("description"), Description);
-			Props->SetObjectField(Property->GetName(), S);
-		}
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("object"));
-		S->SetObjectField(TEXT("properties"), Props);
-		S->SetStringField(TEXT("description"), FString::Printf(TEXT("%s: authored fields by name; an absent key leaves the field unchanged"), *Struct->GetName()));
+			if (Info.EntryStruct) { TypeIds.Add(MakeShared<FJsonValueString>(Info.Id.ToString())); }
+		});
+		TSharedRef<FJsonObject> TypeSchema = MakeShared<FJsonObject>();
+		TypeSchema->SetStringField(TEXT("type"), TEXT("string"));
+		TypeSchema->SetArrayField(TEXT("enum"), TypeIds);
+		TypeSchema->SetStringField(TEXT("description"), TEXT("the row's entry type; required for a new row, switches the payload struct on an existing one"));
+		AddEntryOwnSchemas(**Props, TypeSchema);
+
+		S->SetStringField(TEXT("description"), TEXT("Omni row: the base entry fields listed here plus the type's own fields, described by pcgex.collection-entry/<type>. Sparse export, merging import."));
 		return S;
 	}
 
 	TSharedPtr<FJsonObject> DescribeStaging()
 	{
+		const UScriptStruct* Struct = FPCGExAssetStagingData::StaticStruct();
 		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-		auto Add = [&Props](const TCHAR* Key, const TCHAR* Description)
+		if (const FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets)))
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("description"), Description);
-			Props->SetObjectField(Key, S);
-		};
-		Add(Keys::Sockets, TEXT("authored sockets (array)"));
-		Add(Keys::BoundsModifier, TEXT("authored bounds modifier (instanced struct with _structType)"));
-		Add(Keys::Path, TEXT("read-only: staged asset path"));
-		Add(Keys::Bounds, TEXT("read-only: staged bounds { min, max }"));
+			if (const TSharedPtr<FJsonObject> S = Reflect::DescribeProperty(P)) { Props->SetObjectField(Keys::Sockets, S.ToSharedRef()); }
+		}
+		if (const FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier)))
+		{
+			if (const TSharedPtr<FJsonObject> S = Reflect::DescribeProperty(P)) { Props->SetObjectField(Keys::BoundsModifier, S.ToSharedRef()); }
+		}
+		TSharedRef<FJsonObject> PathSchema = MakeShared<FJsonObject>();
+		PathSchema->SetStringField(TEXT("type"), TEXT("string"));
+		PathSchema->SetStringField(TEXT("description"), TEXT("read-only: staged asset path"));
+		Props->SetObjectField(Keys::Path, PathSchema);
+		TSharedRef<FJsonObject> BoundsSchema = MakeShared<FJsonObject>();
+		BoundsSchema->SetStringField(TEXT("type"), TEXT("object"));
+		BoundsSchema->SetStringField(TEXT("description"), TEXT("read-only: staged bounds { min: [x, y, z], max: [x, y, z] }"));
+		Props->SetObjectField(Keys::Bounds, BoundsSchema);
+
 		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
 		S->SetStringField(TEXT("type"), TEXT("object"));
 		S->SetObjectField(TEXT("properties"), Props);
+		S->SetStringField(TEXT("description"), TEXT("authored staging data; path and bounds are recomputed by the staging rebuild and ignored on import"));
 		return S;
 	}
 
@@ -374,16 +307,18 @@ EJsonObjectConvertResult FPCGExAssetStagingDataJsonConverter::ConvertToJson(cons
 
 	if (!Staging.Sockets.IsEmpty())
 	{
-		if (FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets)))
+		if (const FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets)))
 		{
-			OutJsonObject->SetField(Keys::Sockets, FJsonObjectConverter::UPropertyToJsonValue(P, &Staging.Sockets));
+			FPathScope S(Keys::Sockets);
+			OutJsonObject->SetField(Keys::Sockets, Reflect::EncodeProperty(P, &Staging.Sockets));
 		}
 	}
 	if (Staging.BoundsStagingModifier.IsValid())
 	{
-		if (FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier)))
+		if (const FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier)))
 		{
-			OutJsonObject->SetField(Keys::BoundsModifier, FJsonObjectConverter::UPropertyToJsonValue(P, &Staging.BoundsStagingModifier));
+			FPathScope S(Keys::BoundsModifier);
+			OutJsonObject->SetField(Keys::BoundsModifier, Reflect::EncodeProperty(P, &Staging.BoundsStagingModifier));
 		}
 	}
 	if (!Staging.Path.IsNull()) { OutJsonObject->SetStringField(Keys::Path, Staging.Path.ToString()); }
@@ -412,8 +347,8 @@ EJsonObjectConvertResult FPCGExAssetStagingDataJsonConverter::ConvertFromJson(vo
 			const TSharedPtr<FJsonValue> Json = InJsonObject->TryGetField(Key);
 			if (!Json.IsValid()) { return true; }
 			FPathScope P(Key);
-			FProperty* Property = FindFProperty<FProperty>(Struct, Member);
-			return Property && DecodeProperty(Property, Property->ContainerPtrToValuePtr<void>(&Temp), Json);
+			const FProperty* Property = FindFProperty<FProperty>(Struct, Member);
+			return Property && Reflect::DecodeProperty(Property, Property->ContainerPtrToValuePtr<void>(&Temp), Json);
 		};
 		if (!Apply(Keys::Sockets, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets))) { return false; }
 		if (!Apply(Keys::BoundsModifier, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier))) { return false; }
@@ -439,7 +374,7 @@ void PCGExCollectionsMediatorFormats::Register()
 		F.Version = 1;
 		F.Struct = FPCGExOmniCollectionEntry::StaticStruct();
 		F.Converter = &OmniConverter;
-		F.Describe = []() { return DescribeEntry(FPCGExAssetCollectionEntry::StaticStruct()); };
+		F.Describe = &DescribeOmniRow;
 		F.Summary = TEXT("Omni collection row: any registered entry type, chosen by \"type\".");
 		FPCGExMediatorRegistry::RegisterFormat(F);
 	}

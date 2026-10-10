@@ -46,7 +46,8 @@ public class PCGExMediator : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"UnrealEd"
+				"UnrealEd",
+				"AssetTools" // CreateAsset through the class's factory
 			}
 		);
 

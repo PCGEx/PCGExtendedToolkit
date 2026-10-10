@@ -34,4 +34,19 @@ public:
 	/** Imports a document into a bound target, undoable. Always { ok, diagnostics }. */
 	UFUNCTION(BlueprintCallable, Category = "PCGEx|Mediator")
 	static FString ImportJson(const FString& Target, const FString& Json);
+
+	/**
+	 * Creates an asset of a class (path, short or C++ name) in a long package path, through the class's factory when
+	 * one exists. Unsaved and marked dirty; { ok, path, class } or a failure object (existing asset, bad class or path).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Mediator")
+	static FString CreateAsset(const FString& ClassNameOrPath, const FString& PackagePath, const FString& AssetName);
+
+	/** Saves the package of an asset given by object path. { ok, path } or a failure object. */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Mediator")
+	static FString SaveAsset(const FString& ObjectPath);
+
+	/** Undoes the editor's last transaction (an import is one). { ok, title } with what was undone, or a failure object. */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Mediator")
+	static FString Undo();
 };

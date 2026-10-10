@@ -5,6 +5,7 @@
 
 #include "PCGExMediatorDiagnostics.h"
 #include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorReflection.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Helpers/PCGExStreamingHelpers.h"
@@ -98,12 +99,8 @@ namespace PCGExMediatorTransport
 		bool bOk = false;
 		auto Import = [&]()
 		{
-			FText FailReason;
-			bOk = FJsonObjectConverter::JsonValueToUProperty(Json, Property, Scratch.Memory, 0, 0, false, &FailReason);
-			if (!bOk && !FailReason.IsEmpty())
-			{
-				Report(EPCGExMediatorSeverity::Error, FailReason.ToString());
-			}
+			// The dialect codec: array rows get their index in the path, nested structs their registered shape.
+			bOk = Reflect::DecodeProperty(Property, Scratch.Memory, Json);
 		};
 
 		if (Binding.WrapImport)
@@ -272,7 +269,7 @@ TSharedPtr<FJsonObject> PCGExMediator::ExportObject(const UObject* Host)
 			return nullptr;
 		}
 		FPathScope P(Member.ToString());
-		const TSharedPtr<FJsonValue> Value = FJsonObjectConverter::UPropertyToJsonValue(Property, Property->ContainerPtrToValuePtr<void>(Host));
+		const TSharedPtr<FJsonValue> Value = Reflect::EncodeProperty(Property, Property->ContainerPtrToValuePtr<void>(Host));
 		if (!Value.IsValid())
 		{
 			Report(EPCGExMediatorSeverity::Error, TEXT("export failed"));
