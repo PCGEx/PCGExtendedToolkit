@@ -51,6 +51,9 @@ public:
 
 	virtual FName GetDisplayTypeName() const override;
 
+	/** A choice must hold the schema's inner struct type. */
+	virtual bool IsChoiceCompatible(const FPCGExProperty& Carrier) const override;
+
 	virtual FPCGMetadataAttributeBase* CreateMetadataAttribute(UPCGMetadata* Metadata, FName AttributeName) const override;
 	virtual void WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, int64 EntryKey) const override;
 

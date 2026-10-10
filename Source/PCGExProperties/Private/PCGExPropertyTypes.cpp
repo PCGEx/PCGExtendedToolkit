@@ -384,6 +384,21 @@ bool FPCGExProperty_Enum::SyncStructuralFromSchema(const FPCGExProperty& Schema)
 	return true;
 }
 
+bool FPCGExProperty_Enum::IsChoiceCompatible(const FPCGExProperty& Carrier) const
+{
+	return static_cast<const FPCGExProperty_Enum&>(Carrier).Value.Class == Value.Class;
+}
+
+bool FPCGExProperty_Enum::GetValuePreviewText(FText& OutText) const
+{
+	if (!Value.IsValid())
+	{
+		return false;
+	}
+	OutText = Value.GetDisplayName();
+	return true;
+}
+
 FPCGMetadataAttributeBase* FPCGExProperty_Enum::CreateMetadataAttribute(UPCGMetadata* Metadata, FName AttributeName) const
 {
 	return Metadata->CreateAttribute<int64>(AttributeName, Value.Value, true, true);

@@ -858,6 +858,11 @@ public:
 		return FName("Enum");
 	}
 
+	/** A choice must target the schema's enum class. */
+	virtual bool IsChoiceCompatible(const FPCGExProperty& Carrier) const override;
+	/** The enumerator's display name, not the raw integer. */
+	virtual bool GetValuePreviewText(FText& OutText) const override;
+
 	virtual FPCGMetadataAttributeBase* CreateMetadataAttribute(UPCGMetadata* Metadata, FName AttributeName) const override;
 	virtual void WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, int64 EntryKey) const override;
 	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;

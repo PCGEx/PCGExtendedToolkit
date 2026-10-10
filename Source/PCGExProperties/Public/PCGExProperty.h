@@ -122,6 +122,20 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	 */
 	UPROPERTY()
 	int32 HeaderId = 0;
+
+	/**
+	 * Favourite values offered by this property's editors. Schema-authored; override rows carry a read-only
+	 * mirror of the effective list (imports may patch it). See PCGExProperties::FindMatchingChoice.
+	 */
+	UPROPERTY(EditAnywhere, Category = "Property")
+	FPCGExPropertyChoices Choices;
+
+	/**
+	 * The choice Value was picked from; invalid when the value was authored freely. Syncs re-apply that choice's
+	 * current value (PCGExProperties::ReapplyChosenChoice), so a row follows edits to the choice it picked.
+	 */
+	UPROPERTY()
+	FGuid ChosenChoiceId;
 #endif
 
 	// HeaderId is left at 0 by the ctor; assigning it here would defeat UE's CDO->instance
@@ -337,6 +351,27 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	 *               touched override state (drives the dirty gates).
 	 */
 	virtual bool SyncStructuralFromSchema(const FPCGExProperty& Schema)
+	{
+		return false;
+	}
+
+	// --- Choices Interface ---
+
+	/**
+	 * Whether Carrier (already of this property's script struct) can serve as one of this property's choices.
+	 * Types with a structural sub-type (Enum's class, Struct's inner type) refuse a carrier of another one;
+	 * everything else accepts by default.
+	 */
+	virtual bool IsChoiceCompatible(const FPCGExProperty& Carrier) const
+	{
+		return true;
+	}
+
+	/**
+	 * Type-specific one-line preview of Value for choice lists. False leaves the generic export-text preview
+	 * (PCGExProperties::GetValuePreviewText) in charge.
+	 */
+	virtual bool GetValuePreviewText(FText& OutText) const
 	{
 		return false;
 	}
@@ -638,4 +673,43 @@ namespace PCGExProperties
 	 */
 	PCGEXPROPERTIES_API const FInstancedStruct* ResolveEffective(
 		const FPCGExPropertySchemaCollection& InSchema, const FPCGExPropertyOverrides* InOverrides, FName InName);
+
+#if WITH_EDITORONLY_DATA
+	// --- Choices ---
+	// Model-side primitives shared by the details panel and the align tooling. Every one keys off the host
+	// type's "Value" FProperty, so they work for any property type that declares one.
+
+	/** The "Value" FProperty of a property type; null when it declares none. */
+	PCGEXPROPERTIES_API const FProperty* FindValueProperty(const UScriptStruct* InStruct);
+
+	/** Whether Choice can stand for Host: same script struct, and the type's own IsChoiceCompatible agrees. */
+	PCGEXPROPERTIES_API bool IsChoiceCompatible(const FInstancedStruct& Host, const FPCGExPropertyChoice& Choice);
+
+	/** Index of the choice with Id, INDEX_NONE when none has it (or Id is unset). */
+	PCGEXPROPERTIES_API int32 FindChoiceById(const FPCGExPropertyChoices& Choices, const FGuid& Id);
+
+	/** Index of the first compatible choice whose Value is identical to Host's, INDEX_NONE when none is. */
+	PCGEXPROPERTIES_API int32 FindMatchingChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices);
+
+	/** The choice Host stands on: the one it picked (ChosenChoiceId) when still listed and compatible, else a value match. */
+	PCGEXPROPERTIES_API int32 ResolveSelectedChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices);
+
+	/** Copy Choice's Value into Host's and record its Id as chosen. False, and Host untouched, when incompatible. */
+	PCGEXPROPERTIES_API bool ApplyChoice(FInstancedStruct& Host, const FPCGExPropertyChoice& Choice);
+
+	/** Re-copy the chosen choice's current Value into Host when it is listed, compatible and differs. True if Host changed. */
+	PCGEXPROPERTIES_API bool ReapplyChosenChoice(FInstancedStruct& Host);
+
+	/** Forget the chosen choice when Host's Value no longer equals it (or it is gone): a free edit. True if cleared. */
+	PCGEXPROPERTIES_API bool UnbindDivergedChoice(FInstancedStruct& Host);
+
+	/** A fresh-Id choice carrying Host's current Value under Label; the carrier's identity, choices and pick are cleared. */
+	PCGEXPROPERTIES_API FPCGExPropertyChoice MakeChoiceFromValue(const FInstancedStruct& Host, FName Label);
+
+	/** Clear every carrier's identity, Choices and pick so mirrored lists never nest. */
+	PCGEXPROPERTIES_API void SanitizeChoices(FPCGExPropertyChoices& InOut);
+
+	/** One-line preview of Host's Value: the type's own GetValuePreviewText, else the Value FProperty's export text. */
+	PCGEXPROPERTIES_API FText GetValuePreviewText(const FInstancedStruct& Host);
+#endif
 }

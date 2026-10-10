@@ -95,6 +95,11 @@ bool FPCGExProperty_Struct::SyncStructuralFromSchema(const FPCGExProperty& Schem
 	return true;
 }
 
+bool FPCGExProperty_Struct::IsChoiceCompatible(const FPCGExProperty& Carrier) const
+{
+	return static_cast<const FPCGExProperty_Struct&>(Carrier).Value.GetScriptStruct() == Value.GetScriptStruct();
+}
+
 FName FPCGExProperty_Struct::GetDisplayTypeName() const
 {
 	if (const UScriptStruct* ScriptStruct = Value.GetScriptStruct())

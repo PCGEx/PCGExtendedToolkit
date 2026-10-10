@@ -229,14 +229,299 @@ FPCGExProperty* FPCGExPropertyOverrideEntry::GetPropertyMutable()
 	return Value.GetMutablePtr<FPCGExProperty>();
 }
 
-bool FPCGExPropertyOverrideEntry::SyncStructuralFields(const FInstancedStruct& SchemaValue)
+bool FPCGExPropertyOverrideEntry::SyncStructuralFields(const FInstancedStruct& SchemaValue, const FPCGExPropertyChoices* EffectiveChoices)
 {
 	// The hook casts its argument to its own type unchecked: same script struct, or nothing.
 	FPCGExProperty* Mine = GetPropertyMutable();
-	return Mine
-		&& Value.GetScriptStruct() == SchemaValue.GetScriptStruct()
-		&& Mine->SyncStructuralFromSchema(SchemaValue.Get<FPCGExProperty>());
+	if (!Mine || Value.GetScriptStruct() != SchemaValue.GetScriptStruct())
+	{
+		return false;
+	}
+
+	const FPCGExProperty& Schema = SchemaValue.Get<FPCGExProperty>();
+	bool bChanged = false;
+
+#if WITH_EDITORONLY_DATA
+	const FPCGExPropertyChoices& Choices = EffectiveChoices ? *EffectiveChoices : Schema.Choices;
+	if (Mine->Choices != Choices)
+	{
+		Mine->Choices = Choices;
+		bChanged = true;
+	}
+	bChanged |= PCGExProperties::ReapplyChosenChoice(Value);
+#endif
+
+	// Not short-circuited: the type's own sync must run even when the base already changed.
+	bChanged |= Mine->SyncStructuralFromSchema(Schema);
+	return bChanged;
 }
+
+#pragma endregion
+
+#pragma region Choices
+
+namespace PCGExPropertyChoicesSync
+{
+	bool NormalizeIds(TArray<FPCGExPropertyChoice>& Items)
+	{
+		TSet<FGuid> Seen;
+		Seen.Reserve(Items.Num());
+		bool bChanged = false;
+		for (FPCGExPropertyChoice& Choice : Items)
+		{
+			bool bDuplicate = false;
+			if (Choice.Id.IsValid())
+			{
+				Seen.Add(Choice.Id, &bDuplicate);
+			}
+			if (!Choice.Id.IsValid() || bDuplicate)
+			{
+				Choice.Id = FGuid::NewGuid();
+				Seen.Add(Choice.Id);
+				bChanged = true;
+			}
+		}
+		return bChanged;
+	}
+}
+
+bool FPCGExPropertyChoices::NormalizeIds()
+{
+	return PCGExPropertyChoicesSync::NormalizeIds(Items);
+}
+
+bool FPCGExPropertyChoicesPatch::NormalizeIds()
+{
+	return PCGExPropertyChoicesSync::NormalizeIds(Items);
+}
+
+void FPCGExPropertyChoicesPatch::Apply(FPCGExPropertyChoices& InOut) const
+{
+	switch (Mode)
+	{
+	case EPCGExChoicesPatchMode::Inherit:
+		break;
+	case EPCGExChoicesPatchMode::Modify:
+		if (!RemovedIds.IsEmpty())
+		{
+			InOut.Items.RemoveAll([this](const FPCGExPropertyChoice& Item)
+			{
+				return Item.Id.IsValid() && RemovedIds.Contains(Item.Id);
+			});
+		}
+		for (const FPCGExPropertyChoice& Added : Items)
+		{
+			FPCGExPropertyChoice* Existing = Added.Id.IsValid()
+				? InOut.Items.FindByPredicate([&Added](const FPCGExPropertyChoice& Item) { return Item.Id == Added.Id; })
+				: nullptr;
+			if (Existing)
+			{
+				*Existing = Added;
+			}
+			else
+			{
+				InOut.Items.Add(Added);
+			}
+		}
+		break;
+	case EPCGExChoicesPatchMode::Replace:
+		InOut.Items = Items;
+		break;
+	default:
+		checkNoEntry();
+		break;
+	}
+
+	switch (Lock)
+	{
+	case EPCGExChoicesLock::Inherit:
+		break;
+	case EPCGExChoicesLock::Locked:
+		InOut.bLocked = true;
+		break;
+	case EPCGExChoicesLock::Unlocked:
+		InOut.bLocked = false;
+		break;
+	default:
+		checkNoEntry();
+		break;
+	}
+}
+
+#if WITH_EDITORONLY_DATA
+void FPCGExPropertyResolved::GetEffectiveChoices(FPCGExPropertyChoices& Out) const
+{
+	const FPCGExProperty* Declared = Source ? Source->GetProperty() : nullptr;
+	Out = Declared ? Declared->Choices : FPCGExPropertyChoices();
+	for (int32 i = ChoicePatches.Num() - 1; i >= 0; --i)
+	{
+		ChoicePatches[i]->Apply(Out);
+	}
+	PCGExProperties::SanitizeChoices(Out);
+}
+
+namespace PCGExProperties
+{
+	const FProperty* FindValueProperty(const UScriptStruct* InStruct)
+	{
+		return InStruct ? InStruct->FindPropertyByName(TEXT("Value")) : nullptr;
+	}
+
+	bool IsChoiceCompatible(const FInstancedStruct& Host, const FPCGExPropertyChoice& Choice)
+	{
+		const FPCGExProperty* HostProperty = Host.GetPtr<FPCGExProperty>();
+		const FPCGExProperty* Carrier = Choice.Value.GetPtr<FPCGExProperty>();
+		return HostProperty && Carrier
+			&& Host.GetScriptStruct() == Choice.Value.GetScriptStruct()
+			&& HostProperty->IsChoiceCompatible(*Carrier);
+	}
+
+	int32 FindChoiceById(const FPCGExPropertyChoices& Choices, const FGuid& Id)
+	{
+		if (!Id.IsValid())
+		{
+			return INDEX_NONE;
+		}
+		return Choices.Items.IndexOfByPredicate([&Id](const FPCGExPropertyChoice& Choice) { return Choice.Id == Id; });
+	}
+
+	int32 ResolveSelectedChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices)
+	{
+		const FPCGExProperty* HostProperty = Host.GetPtr<FPCGExProperty>();
+		const int32 Chosen = HostProperty ? FindChoiceById(Choices, HostProperty->ChosenChoiceId) : INDEX_NONE;
+		if (Chosen != INDEX_NONE && IsChoiceCompatible(Host, Choices.Items[Chosen]))
+		{
+			return Chosen;
+		}
+		return FindMatchingChoice(Host, Choices);
+	}
+
+	bool ReapplyChosenChoice(FInstancedStruct& Host)
+	{
+		FPCGExProperty* HostProperty = Host.GetMutablePtr<FPCGExProperty>();
+		const FProperty* ValueProperty = HostProperty ? FindValueProperty(Host.GetScriptStruct()) : nullptr;
+		if (!ValueProperty)
+		{
+			return false;
+		}
+		const int32 Chosen = FindChoiceById(HostProperty->Choices, HostProperty->ChosenChoiceId);
+		if (Chosen == INDEX_NONE)
+		{
+			return false;
+		}
+		// Reference into Host's own Choices: copying into the sibling Value field leaves it put.
+		const FPCGExPropertyChoice& Choice = HostProperty->Choices.Items[Chosen];
+		if (!IsChoiceCompatible(Host, Choice)
+			|| ValueProperty->Identical_InContainer(static_cast<const void*>(Host.GetMemory()), Choice.Value.GetMemory()))
+		{
+			return false;
+		}
+		ValueProperty->CopyCompleteValue_InContainer(Host.GetMutableMemory(), Choice.Value.GetMemory());
+		return true;
+	}
+
+	bool UnbindDivergedChoice(FInstancedStruct& Host)
+	{
+		FPCGExProperty* HostProperty = Host.GetMutablePtr<FPCGExProperty>();
+		if (!HostProperty || !HostProperty->ChosenChoiceId.IsValid())
+		{
+			return false;
+		}
+		const FProperty* ValueProperty = FindValueProperty(Host.GetScriptStruct());
+		const int32 Chosen = FindChoiceById(HostProperty->Choices, HostProperty->ChosenChoiceId);
+		const bool bStillBound = ValueProperty && Chosen != INDEX_NONE
+			&& IsChoiceCompatible(Host, HostProperty->Choices.Items[Chosen])
+			&& ValueProperty->Identical_InContainer(static_cast<const void*>(Host.GetMemory()), HostProperty->Choices.Items[Chosen].Value.GetMemory());
+		if (bStillBound)
+		{
+			return false;
+		}
+		HostProperty->ChosenChoiceId.Invalidate();
+		return true;
+	}
+
+	int32 FindMatchingChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices)
+	{
+		const FProperty* ValueProperty = Host.IsValid() ? FindValueProperty(Host.GetScriptStruct()) : nullptr;
+		if (!ValueProperty)
+		{
+			return INDEX_NONE;
+		}
+		for (int32 i = 0; i < Choices.Items.Num(); ++i)
+		{
+			const FPCGExPropertyChoice& Choice = Choices.Items[i];
+			if (IsChoiceCompatible(Host, Choice)
+				&& ValueProperty->Identical_InContainer(static_cast<const void*>(Host.GetMemory()), Choice.Value.GetMemory()))
+			{
+				return i;
+			}
+		}
+		return INDEX_NONE;
+	}
+
+	bool ApplyChoice(FInstancedStruct& Host, const FPCGExPropertyChoice& Choice)
+	{
+		const FProperty* ValueProperty = Host.IsValid() ? FindValueProperty(Host.GetScriptStruct()) : nullptr;
+		if (!ValueProperty || !IsChoiceCompatible(Host, Choice))
+		{
+			return false;
+		}
+		ValueProperty->CopyCompleteValue_InContainer(Host.GetMutableMemory(), Choice.Value.GetMemory());
+		Host.GetMutable<FPCGExProperty>().ChosenChoiceId = Choice.Id;
+		return true;
+	}
+
+	void SanitizeChoices(FPCGExPropertyChoices& InOut)
+	{
+		for (FPCGExPropertyChoice& Choice : InOut.Items)
+		{
+			if (FPCGExProperty* Carrier = Choice.Value.GetMutablePtr<FPCGExProperty>())
+			{
+				Carrier->PropertyName = NAME_None;
+				Carrier->HeaderId = 0;
+				Carrier->Choices = FPCGExPropertyChoices();
+				Carrier->ChosenChoiceId.Invalidate();
+			}
+		}
+	}
+
+	FPCGExPropertyChoice MakeChoiceFromValue(const FInstancedStruct& Host, const FName Label)
+	{
+		FPCGExPropertyChoices Single;
+		FPCGExPropertyChoice& Choice = Single.Items.AddDefaulted_GetRef();
+		Choice.Id = FGuid::NewGuid();
+		Choice.Label = Label;
+		Choice.Value = Host;
+		SanitizeChoices(Single);
+		return MoveTemp(Single.Items[0]);
+	}
+
+	FText GetValuePreviewText(const FInstancedStruct& Host)
+	{
+		const FPCGExProperty* Property = Host.GetPtr<FPCGExProperty>();
+		if (!Property)
+		{
+			return FText::GetEmpty();
+		}
+
+		FText Typed;
+		if (Property->GetValuePreviewText(Typed))
+		{
+			return Typed;
+		}
+
+		const FProperty* ValueProperty = FindValueProperty(Host.GetScriptStruct());
+		if (!ValueProperty)
+		{
+			return FText::GetEmpty();
+		}
+
+		FString Exported;
+		ValueProperty->ExportTextItem_Direct(Exported, ValueProperty->ContainerPtrToValuePtr<void>(Host.GetMemory()), nullptr, nullptr, PPF_None);
+		return FText::FromString(Exported);
+	}
+}
+#endif
 
 #pragma endregion
 
@@ -326,7 +611,22 @@ namespace PCGExPropertySchemaResolve
 				}
 			}
 
-			Out.Emplace(&Schema, OwningAsset, i, Override);
+			FPCGExPropertyResolved& Resolved = Out.Emplace_GetRef(&Schema, OwningAsset, i, Override);
+
+#if WITH_EDITORONLY_DATA
+			// Patches ride the same layers as values but apply whether or not the entry's value override is on.
+			if (OwningAsset)
+			{
+				for (const FPCGExPropertyOverrides* Layer : OverrideChain)
+				{
+					const FPCGExPropertyOverrideEntry* LayerEntry = Layer ? Layer->FindEntryByName(Schema.Name) : nullptr;
+					if (LayerEntry && !LayerEntry->ChoicesPatch.IsIdentity())
+					{
+						Resolved.ChoicePatches.Add(&LayerEntry->ChoicesPatch);
+					}
+				}
+			}
+#endif
 		}
 
 		for (const TObjectPtr<UPCGExPropertySchemaAsset>& AssetPtr : Collection.ImportedSchemas)
@@ -585,7 +885,14 @@ TArray<FInstancedStruct> FPCGExPropertySchemaCollection::BuildSchema(TConstArray
 	Result.Reserve(Resolved.Num());
 	for (const FPCGExPropertyResolved& Entry : Resolved)
 	{
-		Result.Add(Entry.GetEffectiveProperty());
+		FInstancedStruct& Copy = Result.Add_GetRef(Entry.GetEffectiveProperty());
+#if WITH_EDITORONLY_DATA
+		// The copy's own Choices are a stale mirror when it came from an override row; bake the effective list.
+		if (FPCGExProperty* Property = Copy.GetMutablePtr<FPCGExProperty>())
+		{
+			Entry.GetEffectiveChoices(Property->Choices);
+		}
+#endif
 	}
 	return Result;
 }
@@ -660,6 +967,13 @@ void FPCGExPropertySchemaCollection::SyncAllSchemas(TArray<FPCGExHeaderIdRemap>&
 			}
 		}
 		Schema.SyncPropertyName();
+
+		// Choice identities follow the same rule as HeaderId: minted here, never by a constructor.
+		if (FPCGExProperty* Declared = Schema.GetPropertyMutable())
+		{
+			Declared->Choices.NormalizeIds();
+			PCGExProperties::ReapplyChosenChoice(Schema.Property);
+		}
 	}
 #else
 	for (FPCGExPropertySchema& Schema : Schemas)
@@ -705,6 +1019,15 @@ bool FPCGExPropertySchemaCollection::ReconcileImportOverrides(const TArray<FPCGE
 {
 	check(IsInGameThread());
 
+	bool bChanged = false;
+#if WITH_EDITORONLY_DATA
+	// In place, before the bake below reads the patches: Resolved points at these entries, which stay put.
+	for (FPCGExPropertyOverrideEntry& Entry : ImportOverrides.Overrides)
+	{
+		bChanged |= Entry.ChoicesPatch.NormalizeIds();
+	}
+#endif
+
 	TArray<FInstancedStruct> ImportedOnlySchema;
 	ImportedOnlySchema.Reserve(Resolved.Num());
 	for (const FPCGExPropertyResolved& Entry : Resolved)
@@ -727,11 +1050,16 @@ bool FPCGExPropertySchemaCollection::ReconcileImportOverrides(const TArray<FPCGE
 #if WITH_EDITOR
 			Prop->HeaderId = Entry.Source->HeaderId;
 #endif
+#if WITH_EDITORONLY_DATA
+			// Import rows show what this collection's consumers get: the declaration's list, every patch applied.
+			Entry.GetEffectiveChoices(Prop->Choices);
+#endif
 		}
 		ImportedOnlySchema.Add(MoveTemp(Patched));
 	}
 
-	return ImportOverrides.SyncToSchema(ImportedOnlySchema);
+	bChanged |= ImportOverrides.SyncToSchema(ImportedOnlySchema);
+	return bChanged;
 }
 
 #if WITH_EDITOR
@@ -1057,6 +1385,9 @@ bool FPCGExPropertyOverrides::SyncToSchema(const TArray<FInstancedStruct>& Schem
 			{
 				// Same type - preserve value, refresh inner PropertyName / structural fields from schema
 				NewEntry.Value = MoveTemp(Existing->Value);
+#if WITH_EDITORONLY_DATA
+				NewEntry.ChoicesPatch = MoveTemp(Existing->ChoicesPatch);
+#endif
 				if (FPCGExProperty* Prop = NewEntry.GetPropertyMutable())
 				{
 					Prop->PropertyName = SchemaData->PropertyName;
@@ -1067,6 +1398,7 @@ bool FPCGExPropertyOverrides::SyncToSchema(const TArray<FInstancedStruct>& Schem
 			{
 				// Type changed, or inner Value lost to broken FInstancedStruct propagation.
 				// Take schema default; bEnabled (preserved above) carries the user's authoring intent.
+				// The choices patch is dropped with the value: its carriers are of the old type.
 				NewEntry.Value = SchemaProp;
 			}
 		}
@@ -1200,7 +1532,14 @@ bool FPCGExPropertyOverrides::SyncInPlace(TConstArrayView<FPCGExPropertyResolved
 			bChanged = true;
 		}
 
+#if WITH_EDITORONLY_DATA
+		// Resolved hands out pointers, not baked copies: the effective list has to be computed here.
+		FPCGExPropertyChoices EffectiveChoices;
+		Match->GetEffectiveChoices(EffectiveChoices);
+		if (Entry.SyncStructuralFields(SchemaValue, &EffectiveChoices))
+#else
 		if (Entry.SyncStructuralFields(SchemaValue))
+#endif
 		{
 			bChanged = true;
 		}
