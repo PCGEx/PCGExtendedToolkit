@@ -97,7 +97,9 @@ namespace PCGExCollectionsMediatorFormats
 
 	TSharedPtr<FJsonObject> DescribeEntry(const UScriptStruct* Struct)
 	{
-		TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(Struct, &IsAuthoredProperty);
+		// Depth 0: every nested plain struct (descriptors, variations) collapses to its DescribeFormat path; a Mesh entry
+		// schema otherwise carries two 20 KB descriptor trees.
+		TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(Struct, &IsAuthoredProperty, 0);
 		const TSharedPtr<FJsonObject>* Props = nullptr;
 		if (!S.IsValid() || !S->TryGetObjectField(TEXT("properties"), Props)) { return S; }
 
@@ -114,7 +116,7 @@ namespace PCGExCollectionsMediatorFormats
 
 	TSharedPtr<FJsonObject> DescribeOmniRow()
 	{
-		TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(FPCGExAssetCollectionEntry::StaticStruct(), &IsAuthoredProperty);
+		TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(FPCGExAssetCollectionEntry::StaticStruct(), &IsAuthoredProperty, 0);
 		const TSharedPtr<FJsonObject>* Props = nullptr;
 		if (!S.IsValid() || !S->TryGetObjectField(TEXT("properties"), Props)) { return S; }
 

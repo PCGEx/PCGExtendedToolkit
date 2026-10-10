@@ -64,6 +64,9 @@ namespace PCGExMediator
 	/** JSON Schema of an object document for HostClass: its bound members, each with its format's body schema. */
 	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeObject(const UClass* HostClass);
 
+	/** Reflected JSON Schema of any struct by path (the drill-down a collapsed fragment names); null when not a struct. */
+	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeReflectedStruct(const FString& StructPath);
+
 	// --- Text and files ---
 
 	PCGEXMEDIATOR_API FString ToString(const TSharedRef<FJsonObject>& Doc, bool bPretty = true);

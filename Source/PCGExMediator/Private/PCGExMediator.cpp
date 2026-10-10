@@ -64,9 +64,10 @@ namespace PCGExMediatorCommands
 		{
 			if (const UClass* Class = FindClass(Args[0])) { Schema = DescribeObject(Class); }
 		}
+		if (!Schema.IsValid()) { Schema = DescribeReflectedStruct(Args[0]); }
 		if (!Schema.IsValid())
 		{
-			UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] '%s' is neither a registered format nor a bound class."), *Args[0]);
+			UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] '%s' is neither a registered format, a bound class nor a struct."), *Args[0]);
 			return;
 		}
 		UE_LOG(LogPCGEx, Log, TEXT("%s"), *ToString(Schema.ToSharedRef()));

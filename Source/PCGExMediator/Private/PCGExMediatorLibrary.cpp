@@ -80,9 +80,10 @@ FString UPCGExMediatorLibrary::DescribeFormat(const FString& FormatIdOrClass)
 	{
 		if (const UClass* Class = PCGExMediator::FindClass(Trimmed)) { Schema = PCGExMediator::DescribeObject(Class); }
 	}
+	if (!Schema.IsValid()) { Schema = PCGExMediator::DescribeReflectedStruct(Trimmed); }
 	if (!Schema.IsValid())
 	{
-		return PCGExMediatorLibrary::Failure(FString::Printf(TEXT("'%s' is neither a registered format nor a bound class; see ListFormats."), *Trimmed));
+		return PCGExMediatorLibrary::Failure(FString::Printf(TEXT("'%s' is neither a registered format, a bound class nor a struct; see ListFormats."), *Trimmed));
 	}
 	return PCGExMediator::ToString(Schema.ToSharedRef(), false);
 }
@@ -206,8 +207,10 @@ FString UPCGExMediatorLibrary::Undo()
 	using namespace PCGExMediatorLibrary;
 
 	if (!GEditor || !GEditor->Trans) { return Failure(TEXT("no editor transaction buffer")); }
-	FText Title;
-	if (!GEditor->Trans->CanUndo(&Title)) { return Failure(TEXT("nothing to undo")); }
+	// CanUndo fills its text only with the refusal reason; the title lives in the undo context.
+	FText Reason;
+	if (!GEditor->Trans->CanUndo(&Reason)) { return Failure(FString::Printf(TEXT("nothing to undo %s"), *Reason.ToString())); }
+	const FText Title = GEditor->Trans->GetUndoContext(false).Title;
 	if (!GEditor->UndoTransaction()) { return Failure(FString::Printf(TEXT("undo of '%s' was refused"), *Title.ToString())); }
 
 	TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();

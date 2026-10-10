@@ -456,6 +456,25 @@ TSharedPtr<FJsonObject> PCGExMediator::DescribeObject(const UClass* HostClass)
 	return EnvelopeSchema(ObjectFormatId, ObjectFormatVersion, DataSchema);
 }
 
+TSharedPtr<FJsonObject> PCGExMediator::DescribeReflectedStruct(const FString& StructPath)
+{
+	const UScriptStruct* Struct = FindObject<UScriptStruct>(nullptr, *StructPath);
+	if (!Struct) { Struct = FindFirstObject<UScriptStruct>(*StructPath, EFindFirstObjectOptions::ExactClass); }
+	if (!Struct && StructPath.Len() > 1 && StructPath[0] == TEXT('F') && FChar::IsUpper(StructPath[1]))
+	{
+		Struct = FindFirstObject<UScriptStruct>(*StructPath.Mid(1), EFindFirstObjectOptions::ExactClass);
+	}
+	if (!Struct) { return nullptr; }
+
+	TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(Struct, &Reflect::IncludeAll, 1);
+	if (S.IsValid())
+	{
+		S->SetStringField(TEXT("$schema"), TEXT("https://json-schema.org/draft/2020-12/schema"));
+		S->SetStringField(TEXT("description"), FString::Printf(TEXT("%s, reflected: every UPROPERTY by name in the dialect; nested structs one level deep, deeper ones collapsed with their own DescribeFormat path"), *Struct->GetPathName()));
+	}
+	return S;
+}
+
 FString PCGExMediator::ToString(const TSharedRef<FJsonObject>& Doc, const bool bPretty)
 {
 	FString Out;

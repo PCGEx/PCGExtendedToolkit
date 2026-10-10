@@ -475,7 +475,13 @@ TSharedPtr<FJsonObject> PCGExMediator::Reflect::DescribeProperty(const FProperty
 		{
 			return Schema(TEXT("object"), TEXT("instanced struct: \"_structType\" (struct path) plus its fields in the engine's reflected shape"));
 		}
-		if (Depth <= 0) { return Schema(TEXT("object"), Struct->GetName()); }
+		if (Depth <= 0)
+		{
+			// Collapsed: a descriptor tree is tens of KB; the fragment names where the full shape is.
+			TSharedRef<FJsonObject> S = Schema(TEXT("object"), FString::Printf(TEXT("%s: fields by UPROPERTY name, collapsed for size"), *Struct->GetName()));
+			S->SetStringField(TEXT("$comment"), FString::Printf(TEXT("DescribeFormat(\"%s\") lists them"), *Struct->GetPathName()));
+			return S;
+		}
 		TSharedPtr<FJsonObject> S = DescribeStruct(Struct, &IncludeAll, Depth - 1);
 		if (S.IsValid()) { S->SetStringField(TEXT("description"), Struct->GetName()); }
 		return S;
