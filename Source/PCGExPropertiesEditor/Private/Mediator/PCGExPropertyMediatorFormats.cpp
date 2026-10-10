@@ -3,13 +3,13 @@
 
 #include "Mediator/PCGExPropertyMediatorFormats.h"
 
-#include "PCGExEnumSelector.h"
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorLookup.h"
 #include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorSchema.h"
 #include "PCGExMediatorValues.h"
 #include "PCGExProperty.h"
 #include "PCGExPropertySchemaAsset.h"
-#include "PCGExPropertyTypes.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Mediator/PCGExPropertyMediatorHooks.h"
@@ -22,27 +22,16 @@ namespace PCGExPropertyMediatorFormats
 
 	namespace Keys
 	{
-		const TCHAR* Properties = TEXT("properties");
-		const TCHAR* Name = TEXT("name");
-		const TCHAR* Type = TEXT("type");
-		const TCHAR* Default = TEXT("default");
-		const TCHAR* Imports = TEXT("imports");
-		const TCHAR* ImportOverrides = TEXT("importOverrides");
-		const TCHAR* Value = TEXT("value");
-		const TCHAR* Enum = TEXT("enum");
-	}
-
-	// Runs Body under a private sink; every report is forwarded, and any error turns into FailAndAbort.
-	EJsonObjectConvertResult Guarded(TFunctionRef<bool()> Body)
-	{
-		FPCGExMediatorDiagnostics Local;
-		bool bOk = false;
-		{
-			FScope Scope(Local);
-			bOk = Body();
-		}
-		Forward(Local);
-		return (bOk && !Local.HasErrors()) ? EJsonObjectConvertResult::Converted : EJsonObjectConvertResult::FailAndAbort;
+		constexpr const TCHAR* const Properties = TEXT("properties");
+		constexpr const TCHAR* const Name = TEXT("name");
+		constexpr const TCHAR* const Type = TEXT("type");
+		constexpr const TCHAR* const Default = TEXT("default");
+		constexpr const TCHAR* const Imports = TEXT("imports");
+		constexpr const TCHAR* const ImportOverrides = TEXT("importOverrides");
+		constexpr const TCHAR* const Value = TEXT("value");
+		constexpr const TCHAR* const Enum = TEXT("enum");
+		constexpr const TCHAR* const Weight = TEXT("weight");
+		constexpr const TCHAR* const Values = TEXT("values");
 	}
 
 	bool ReadPropertyName(const FJsonObject& Obj, const TCHAR* Key, FName& OutName)
@@ -90,11 +79,10 @@ namespace PCGExPropertyMediatorFormats
 		}
 	}
 
-	// Target must be schema-parallel, or an FOverridesSchemaScope must be active; with neither, only the
-	// { "type", "value" } form can create entries (the host's next schema sync matches them by name).
-	bool DecodeOverridesBody(const FJsonObject& In, FPCGExPropertyOverrides& Target)
+	// Temp is the caller's scratch copy. It must be schema-parallel, or an FOverridesSchemaScope must be active; with
+	// neither, only the { "type", "value" } form can create entries (the host's next schema sync matches them by name).
+	bool DecodeOverridesBody(const FJsonObject& In, FPCGExPropertyOverrides& Temp)
 	{
-		FPCGExPropertyOverrides Temp = Target;
 		if (const TArray<FInstancedStruct>* Scope = PCGExPropertyMediator::FOverridesSchemaScope::Current())
 		{
 			Temp.SyncToSchema(*Scope);
@@ -181,19 +169,16 @@ namespace PCGExPropertyMediatorFormats
 		{
 			if (!Named.Contains(Entry.GetPropertyName())) { Entry.bEnabled = false; }
 		}
-		Target = MoveTemp(Temp);
 		return true;
 	}
 
 	TSharedPtr<FJsonObject> DescribeOverridesBody()
 	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("object"));
+		TSharedRef<FJsonObject> S = Schema::Typed(TEXT("object"),
+		                                          TEXT("Enabled overrides by property name; every name absent from the document is disabled. A value takes the shape of the "
+			                                          "property's type (see the property-schema format's $defs/values). Without a schema to resolve names against, an entry "
+			                                          "can be created as { \"type\": <type name>, \"value\": <value> }."));
 		S->SetBoolField(TEXT("additionalProperties"), true);
-		S->SetStringField(TEXT("description"),
-		                  TEXT("Enabled overrides by property name; every name absent from the document is disabled. A value takes the shape of the "
-			                  "property's type (see the property-schema format's $defs/values). Without a schema to resolve names against, an entry "
-			                  "can be created as { \"type\": <type name>, \"value\": <value> }."));
 		return S;
 	}
 
@@ -223,7 +208,7 @@ namespace PCGExPropertyMediatorFormats
 
 			TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
 			Entry->SetStringField(Keys::Name, Schema.Name.ToString());
-			Entry->SetStringField(Keys::Type, (Info && !Info->TypeName.IsNone()) ? Info->TypeName.ToString() : Struct->GetPathName());
+			Entry->SetStringField(Keys::Type, (Info && !Info->Entry.TypeName.IsNone()) ? Info->Entry.TypeName.ToString() : Struct->GetPathName());
 
 			if (const FPCGExPropertyMediatorHooks* Hooks = PCGExPropertyMediator::FindHooks(Struct))
 			{
@@ -259,10 +244,11 @@ namespace PCGExPropertyMediatorFormats
 		}
 	}
 
-	bool DecodeSchemaBody(const FJsonObject& In, const FPCGExPropertySchemaCollection& Live, FPCGExPropertySchemaCollection& OutTemp)
+	// Temp is rebuilt from the document; Live only lends HeaderIds, by name, so existing overrides survive a re-import.
+	bool DecodeSchemaBody(const FJsonObject& In, const FPCGExPropertySchemaCollection& Live, FPCGExPropertySchemaCollection& Temp)
 	{
 		bool bOk = true;
-		FPCGExPropertySchemaCollection Temp;
+		Temp = FPCGExPropertySchemaCollection();
 
 		const TArray<TSharedPtr<FJsonValue>>* Entries = nullptr;
 		if (!In.TryGetArrayField(Keys::Properties, Entries))
@@ -315,7 +301,6 @@ namespace PCGExPropertyMediatorFormats
 				PCGExPropertyCatalog::MakeProperty(*Info, Name, Row.Property);
 				FPCGExProperty* Property = Row.GetPropertyMutable();
 
-				// Same name on the live target = same column: keep its identity so existing overrides survive.
 				for (const FPCGExPropertySchema& Existing : Live.Schemas)
 				{
 					if (Existing.Name == Name)
@@ -336,7 +321,7 @@ namespace PCGExPropertyMediatorFormats
 					FPathScope D(Keys::Default);
 					if (!Hooks || !Hooks->HasValue())
 					{
-						Report(EPCGExMediatorSeverity::Warning, FString::Printf(TEXT("type %s accepts no JSON value; default kept"), *Info->TypeName.ToString()));
+						Report(EPCGExMediatorSeverity::Warning, FString::Printf(TEXT("type %s accepts no JSON value; default kept"), *Info->Entry.TypeName.ToString()));
 					}
 					else if (!Hooks->DecodeValue(*Property, Default))
 					{
@@ -360,7 +345,7 @@ namespace PCGExPropertyMediatorFormats
 					bOk = false;
 					continue;
 				}
-				UPCGExPropertySchemaAsset* Asset = Cast<UPCGExPropertySchemaAsset>(PCGExPropertyMediator::ResolveObject(ImportValue->AsString()));
+				UPCGExPropertySchemaAsset* Asset = Cast<UPCGExPropertySchemaAsset>(ResolveObject(ImportValue->AsString()));
 				if (!Asset)
 				{
 					Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not a Property Schema asset"), *ImportValue->AsString()));
@@ -374,53 +359,28 @@ namespace PCGExPropertyMediatorFormats
 		if (!bOk) { return false; }
 
 		Temp.SyncAllSchemas();
+		Temp.ReconcileImportOverrides();
 
 		if (const TSharedPtr<FJsonObject>* Overrides = nullptr; In.TryGetObjectField(Keys::ImportOverrides, Overrides))
 		{
 			FPathScope OverridesPath(Keys::ImportOverrides);
-			if (!IsInGameThread())
-			{
-				Report(EPCGExMediatorSeverity::Warning, TEXT("import overrides reconcile on the game thread only; ignored"));
-			}
-			else
-			{
-				Temp.ReconcileImportOverrides();
-				if (!DecodeOverridesBody(**Overrides, Temp.ImportOverrides)) { return false; }
-			}
+			if (!DecodeOverridesBody(**Overrides, Temp.ImportOverrides)) { return false; }
 		}
-		else if (IsInGameThread())
-		{
-			Temp.ReconcileImportOverrides();
-		}
-
-		OutTemp = MoveTemp(Temp);
 		return true;
 	}
 
 	TSharedPtr<FJsonObject> DescribeSchemaBody()
 	{
-		TSharedRef<FJsonObject> EntryProps = MakeShared<FJsonObject>();
+		TArray<FString> TypeNames;
+		for (const FPCGExPropertyTypeInfo& Info : PCGExPropertyCatalog::Get())
 		{
-			TSharedRef<FJsonObject> NameSchema = MakeShared<FJsonObject>();
-			NameSchema->SetStringField(TEXT("type"), TEXT("string"));
-			NameSchema->SetStringField(TEXT("description"), TEXT("unique within the schema; the output attribute name"));
-			EntryProps->SetObjectField(Keys::Name, NameSchema);
-
-			TArray<TSharedPtr<FJsonValue>> TypeNames;
-			for (const FPCGExPropertyTypeInfo& Info : PCGExPropertyCatalog::Get())
-			{
-				if (!Info.TypeName.IsNone()) { TypeNames.Add(MakeShared<FJsonValueString>(Info.TypeName.ToString())); }
-			}
-			TSharedRef<FJsonObject> TypeSchema = MakeShared<FJsonObject>();
-			TypeSchema->SetStringField(TEXT("type"), TEXT("string"));
-			TypeSchema->SetArrayField(TEXT("enum"), TypeNames);
-			TypeSchema->SetStringField(TEXT("description"), TEXT("property type name (a struct path is also accepted)"));
-			EntryProps->SetObjectField(Keys::Type, TypeSchema);
-
-			TSharedRef<FJsonObject> DefaultSchema = MakeShared<FJsonObject>();
-			DefaultSchema->SetStringField(TEXT("description"), TEXT("the entry's default value, in the shape of its type: see $defs/values/<type>"));
-			EntryProps->SetObjectField(Keys::Default, DefaultSchema);
+			if (!Info.Entry.TypeName.IsNone()) { TypeNames.Add(Info.Entry.TypeName.ToString()); }
 		}
+
+		TSharedRef<FJsonObject> EntryProps = MakeShared<FJsonObject>();
+		EntryProps->SetObjectField(Keys::Name, Schema::String(TEXT("unique within the schema; the output attribute name")));
+		EntryProps->SetObjectField(Keys::Type, Schema::Enum(TypeNames, TEXT("property type name (a struct path is also accepted)")));
+		EntryProps->SetObjectField(Keys::Default, Schema::Typed(nullptr, TEXT("the entry's default value, in the shape of its type: see $defs/values/<type>")));
 
 		TSharedRef<FJsonObject> Defs = MakeShared<FJsonObject>();
 		for (const FPCGExPropertyTypeInfo& Info : PCGExPropertyCatalog::Get())
@@ -428,51 +388,28 @@ namespace PCGExPropertyMediatorFormats
 			const FPCGExPropertyMediatorHooks* Hooks = PCGExPropertyMediator::FindHooks(Info.Struct);
 			if (!Hooks) { continue; }
 			if (Hooks->DescribeStructural) { Hooks->DescribeStructural(*EntryProps); }
-			if (Hooks->DescribeValue && !Info.TypeName.IsNone())
+			if (Hooks->DescribeValue && !Info.Entry.TypeName.IsNone())
 			{
 				FInstancedStruct Prototype;
 				PCGExPropertyCatalog::MakeProperty(Info, NAME_None, Prototype);
 				if (const TSharedPtr<FJsonObject> Shape = Hooks->DescribeValue(Prototype.GetPtr<FPCGExProperty>()))
 				{
-					Defs->SetObjectField(Info.TypeName.ToString(), Shape.ToSharedRef());
+					Defs->SetObjectField(Info.Entry.TypeName.ToString(), Shape.ToSharedRef());
 				}
 			}
 		}
 
-		TSharedRef<FJsonObject> EntrySchema = MakeShared<FJsonObject>();
-		EntrySchema->SetStringField(TEXT("type"), TEXT("object"));
-		EntrySchema->SetObjectField(TEXT("properties"), EntryProps);
-		TArray<TSharedPtr<FJsonValue>> Required;
-		Required.Add(MakeShared<FJsonValueString>(Keys::Name));
-		Required.Add(MakeShared<FJsonValueString>(Keys::Type));
-		EntrySchema->SetArrayField(TEXT("required"), Required);
-
-		TSharedRef<FJsonObject> PropertiesSchema = MakeShared<FJsonObject>();
-		PropertiesSchema->SetStringField(TEXT("type"), TEXT("array"));
-		PropertiesSchema->SetObjectField(TEXT("items"), EntrySchema);
-
-		TSharedRef<FJsonObject> ImportItem = MakeShared<FJsonObject>();
-		ImportItem->SetStringField(TEXT("type"), TEXT("string"));
-		ImportItem->SetStringField(TEXT("description"), TEXT("Property Schema asset path"));
-		TSharedRef<FJsonObject> ImportsSchema = MakeShared<FJsonObject>();
-		ImportsSchema->SetStringField(TEXT("type"), TEXT("array"));
-		ImportsSchema->SetObjectField(TEXT("items"), ImportItem);
-
+		const FString EntryRequired[] = {Keys::Name, Keys::Type};
 		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-		Props->SetObjectField(Keys::Properties, PropertiesSchema);
-		Props->SetObjectField(Keys::Imports, ImportsSchema);
+		Props->SetObjectField(Keys::Properties, Schema::Array(Schema::Object(EntryProps, FString(), EntryRequired)));
+		Props->SetObjectField(Keys::Imports, Schema::Array(Schema::String(TEXT("Property Schema asset path"))));
 		Props->SetObjectField(Keys::ImportOverrides, DescribeOverridesBody().ToSharedRef());
 
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("object"));
-		S->SetObjectField(TEXT("properties"), Props);
-		TArray<TSharedPtr<FJsonValue>> RequiredTop;
-		RequiredTop.Add(MakeShared<FJsonValueString>(Keys::Properties));
-		S->SetArrayField(TEXT("required"), RequiredTop);
+		const FString Required[] = {Keys::Properties};
+		TSharedRef<FJsonObject> S = Schema::Object(Props, TEXT("A property schema: local entries, imported Property Schema assets, and enabled value overrides on imported entries."), Required);
 		TSharedRef<FJsonObject> ValuesDefs = MakeShared<FJsonObject>();
 		ValuesDefs->SetObjectField(TEXT("values"), Defs);
 		S->SetObjectField(TEXT("$defs"), ValuesDefs);
-		S->SetStringField(TEXT("description"), TEXT("A property schema: local entries, imported Property Schema assets, and enabled value overrides on imported entries."));
 		return S;
 	}
 
@@ -480,270 +417,160 @@ namespace PCGExPropertyMediatorFormats
 
 	TSharedPtr<FJsonObject> DescribeWeightedOverridesBody()
 	{
-		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-		TSharedRef<FJsonObject> WeightSchema = MakeShared<FJsonObject>();
-		WeightSchema->SetStringField(TEXT("type"), TEXT("integer"));
+		TSharedRef<FJsonObject> WeightSchema = Schema::Integer(TEXT("distribution weight; 0 never picks the row"));
 		WeightSchema->SetNumberField(TEXT("minimum"), 0);
-		WeightSchema->SetStringField(TEXT("description"), TEXT("distribution weight; 0 never picks the row"));
-		Props->SetObjectField(TEXT("weight"), WeightSchema);
-		Props->SetObjectField(TEXT("values"), DescribeOverridesBody().ToSharedRef());
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("object"));
-		S->SetObjectField(TEXT("properties"), Props);
-		return S;
+
+		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
+		Props->SetObjectField(Keys::Weight, WeightSchema);
+		Props->SetObjectField(Keys::Values, DescribeOverridesBody().ToSharedRef());
+		return Schema::Object(Props);
 	}
 
 	TSharedPtr<FJsonObject> DescribeEnumSelector()
 	{
 		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-		TSharedRef<FJsonObject> EnumSchema = MakeShared<FJsonObject>();
-		EnumSchema->SetStringField(TEXT("type"), TEXT("string"));
-		EnumSchema->SetStringField(TEXT("description"), TEXT("enum class path"));
-		Props->SetObjectField(Keys::Enum, EnumSchema);
+		Props->SetObjectField(Keys::Enum, Schema::String(TEXT("enum class path")));
 		Props->SetObjectField(Keys::Value, Values::DescribeEnumShape(nullptr).ToSharedRef());
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("object"));
-		S->SetObjectField(TEXT("properties"), Props);
-		return S;
+		return Schema::Object(Props);
 	}
 }
 
 #pragma region FPCGExPropertySchemaCollectionJsonConverter
 
-EJsonObjectConvertResult FPCGExPropertySchemaCollectionJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExPropertySchemaCollectionJsonConverter::Encode(const FPCGExPropertySchemaCollection& Value, FJsonObject& Out) const
 {
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	return PCGExPropertyMediatorFormats::Guarded([&]()
-	{
-		PCGExPropertyMediatorFormats::EncodeSchemaBody(*static_cast<const FPCGExPropertySchemaCollection*>(StructMemory), *OutJsonObject);
-		return true;
-	});
+	PCGExPropertyMediatorFormats::EncodeSchemaBody(Value, Out);
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExPropertySchemaCollectionJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExPropertySchemaCollectionJsonConverter::Decode(const FJsonObject& In, FPCGExPropertySchemaCollection& Temp, const FPCGExPropertySchemaCollection& Live) const
 {
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	FPCGExPropertySchemaCollection& Live = *static_cast<FPCGExPropertySchemaCollection*>(StructMemory);
-	return PCGExPropertyMediatorFormats::Guarded([&]()
-	{
-		FPCGExPropertySchemaCollection Temp;
-		if (!PCGExPropertyMediatorFormats::DecodeSchemaBody(*InJsonObject, Live, Temp)) { return false; }
-		Live = MoveTemp(Temp);
-		return true;
-	});
+	return PCGExPropertyMediatorFormats::DecodeSchemaBody(In, Live, Temp);
 }
 
 #pragma endregion
 
 #pragma region FPCGExPropertyOverridesJsonConverter
 
-EJsonObjectConvertResult FPCGExPropertyOverridesJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExPropertyOverridesJsonConverter::Encode(const FPCGExPropertyOverrides& Value, FJsonObject& Out) const
 {
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	return PCGExPropertyMediatorFormats::Guarded([&]()
-	{
-		PCGExPropertyMediatorFormats::EncodeOverridesBody(*static_cast<const FPCGExPropertyOverrides*>(StructMemory), *OutJsonObject);
-		return true;
-	});
+	PCGExPropertyMediatorFormats::EncodeOverridesBody(Value, Out);
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExPropertyOverridesJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExPropertyOverridesJsonConverter::Decode(const FJsonObject& In, FPCGExPropertyOverrides& Temp, const FPCGExPropertyOverrides&) const
 {
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	return PCGExPropertyMediatorFormats::Guarded([&]()
-	{
-		return PCGExPropertyMediatorFormats::DecodeOverridesBody(*InJsonObject, *static_cast<FPCGExPropertyOverrides*>(StructMemory));
-	});
+	return PCGExPropertyMediatorFormats::DecodeOverridesBody(In, Temp);
 }
 
 #pragma endregion
 
 #pragma region FPCGExWeightedPropertyOverridesJsonConverter
 
-EJsonObjectConvertResult FPCGExWeightedPropertyOverridesJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExWeightedPropertyOverridesJsonConverter::Encode(const FPCGExWeightedPropertyOverrides& Value, FJsonObject& Out) const
 {
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	const FPCGExWeightedPropertyOverrides& Row = *static_cast<const FPCGExWeightedPropertyOverrides*>(StructMemory);
-	return PCGExPropertyMediatorFormats::Guarded([&]()
+	using namespace PCGExPropertyMediatorFormats;
+
+	Out.SetNumberField(Keys::Weight, Value.Weight);
+	TSharedRef<FJsonObject> Values = MakeShared<FJsonObject>();
 	{
-		OutJsonObject->SetNumberField(TEXT("weight"), Row.Weight);
-		TSharedRef<FJsonObject> Values = MakeShared<FJsonObject>();
-		{
-			PCGExMediator::FPathScope P(TEXT("values"));
-			PCGExPropertyMediatorFormats::EncodeOverridesBody(Row, *Values);
-		}
-		OutJsonObject->SetObjectField(TEXT("values"), Values);
-		return true;
-	});
+		FPathScope P(Keys::Values);
+		EncodeOverridesBody(Value, *Values);
+	}
+	Out.SetObjectField(Keys::Values, Values);
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExWeightedPropertyOverridesJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExWeightedPropertyOverridesJsonConverter::Decode(const FJsonObject& In, FPCGExWeightedPropertyOverrides& Temp, const FPCGExWeightedPropertyOverrides&) const
 {
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	FPCGExWeightedPropertyOverrides& Live = *static_cast<FPCGExWeightedPropertyOverrides*>(StructMemory);
-	return PCGExPropertyMediatorFormats::Guarded([&]()
+	using namespace PCGExPropertyMediatorFormats;
+
+	if (const TSharedPtr<FJsonValue> Weight = In.TryGetField(Keys::Weight))
 	{
-		FPCGExWeightedPropertyOverrides Temp = Live;
-		if (const TSharedPtr<FJsonValue> Weight = InJsonObject->TryGetField(TEXT("weight")))
+		FPathScope P(Keys::Weight);
+		int32 W = 0;
+		if (!Values::Decode<int32>(Weight, W)) { return false; }
+		if (W < 0)
 		{
-			PCGExMediator::FPathScope P(TEXT("weight"));
-			int32 W = 0;
-			if (!PCGExMediator::Values::Decode<int32>(Weight, W)) { return false; }
-			if (W < 0)
-			{
-				PCGExMediator::Report(EPCGExMediatorSeverity::Error, TEXT("weight must be >= 0"));
-				return false;
-			}
-			Temp.Weight = W;
+			Report(EPCGExMediatorSeverity::Error, TEXT("weight must be >= 0"));
+			return false;
 		}
-		if (const TSharedPtr<FJsonObject>* Values = nullptr; InJsonObject->TryGetObjectField(TEXT("values"), Values))
-		{
-			PCGExMediator::FPathScope P(TEXT("values"));
-			// The base-typed reference assigns the override set only; Weight stays as decoded above.
-			FPCGExPropertyOverrides& Base = Temp;
-			if (!PCGExPropertyMediatorFormats::DecodeOverridesBody(**Values, Base)) { return false; }
-		}
-		Live = MoveTemp(Temp);
-		return true;
-	});
+		Temp.Weight = W;
+	}
+	if (const TSharedPtr<FJsonObject>* Values = nullptr; In.TryGetObjectField(Keys::Values, Values))
+	{
+		FPathScope P(Keys::Values);
+		if (!DecodeOverridesBody(**Values, Temp)) { return false; }
+	}
+	return true;
 }
 
 #pragma endregion
 
 #pragma region FPCGExEnumSelectorJsonConverter
 
-EJsonObjectConvertResult FPCGExEnumSelectorJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExEnumSelectorJsonConverter::Encode(const FPCGExEnumSelector& Value, FJsonObject& Out) const
 {
 	using namespace PCGExPropertyMediatorFormats;
 
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	const FPCGExEnumSelector& Selector = *static_cast<const FPCGExEnumSelector*>(StructMemory);
-	if (Selector.Class) { OutJsonObject->SetStringField(Keys::Enum, Selector.Class->GetPathName()); }
-	OutJsonObject->SetField(Keys::Value, Values::EncodeEnum(Selector.Class, Selector.Value));
-	return EJsonObjectConvertResult::Converted;
+	if (Value.Class) { Out.SetStringField(Keys::Enum, Value.Class->GetPathName()); }
+	Out.SetField(Keys::Value, Values::EncodeEnum(Value.Class, Value.Value));
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExEnumSelectorJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExEnumSelectorJsonConverter::Decode(const FJsonObject& In, FPCGExEnumSelector& Temp, const FPCGExEnumSelector&) const
 {
 	using namespace PCGExPropertyMediatorFormats;
 
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	FPCGExEnumSelector& Live = *static_cast<FPCGExEnumSelector*>(StructMemory);
-	return Guarded([&]()
+	FString EnumPath;
+	if (In.TryGetStringField(Keys::Enum, EnumPath))
 	{
-		FPCGExEnumSelector Temp = Live;
-		FString EnumPath;
-		if (InJsonObject->TryGetStringField(Keys::Enum, EnumPath))
-		{
-			FPathScope P(Keys::Enum);
-			UEnum* Enum = PCGExPropertyMediator::ResolveEnum(EnumPath);
-			if (!Enum) { return false; }
-			Temp.Class = Enum;
-		}
-		if (const TSharedPtr<FJsonValue> Value = InJsonObject->TryGetField(Keys::Value))
-		{
-			FPathScope P(Keys::Value);
-			int64 V = 0;
-			if (!Values::DecodeEnum(Temp.Class, Value, V)) { return false; }
-			Temp.Value = V;
-		}
-		Live = Temp;
-		return true;
-	});
+		FPathScope P(Keys::Enum);
+		UEnum* Enum = PCGExPropertyMediator::ResolveEnum(EnumPath);
+		if (!Enum) { return false; }
+		Temp.Class = Enum;
+	}
+	if (const TSharedPtr<FJsonValue> Value = In.TryGetField(Keys::Value))
+	{
+		FPathScope P(Keys::Value);
+		int64 V = 0;
+		if (!Values::DecodeEnum(Temp.Class, Value, V)) { return false; }
+		Temp.Value = V;
+	}
+	return true;
 }
 
 #pragma endregion
 
 #pragma region FPCGExNumericRangeJsonConverter
 
-EJsonObjectConvertResult FPCGExNumericRangeJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExNumericRangeJsonConverter::Encode(const FPCGExNumericRange& Value, FJsonObject& Out) const
 {
-	const FPCGExNumericRange& Range = *static_cast<const FPCGExNumericRange*>(StructMemory);
 	// Always the full object here: the generic walk has no "omitted" notion.
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	OutJsonObject->SetNumberField(TEXT("min"), Range.Min);
-	OutJsonObject->SetNumberField(TEXT("max"), Range.Max);
-	OutJsonObject->SetBoolField(TEXT("clampMin"), Range.bClampMin);
-	OutJsonObject->SetBoolField(TEXT("clampMax"), Range.bClampMax);
-	return EJsonObjectConvertResult::Converted;
+	Out.SetNumberField(TEXT("min"), Value.Min);
+	Out.SetNumberField(TEXT("max"), Value.Max);
+	Out.SetBoolField(TEXT("clampMin"), Value.bClampMin);
+	Out.SetBoolField(TEXT("clampMax"), Value.bClampMax);
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExNumericRangeJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExNumericRangeJsonConverter::Decode(const FJsonObject& In, FPCGExNumericRange& Temp, const FPCGExNumericRange&) const
 {
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	return PCGExPropertyMediatorFormats::Guarded([&]()
-	{
-		return PCGExPropertyMediator::DecodeRange(*InJsonObject, *static_cast<FPCGExNumericRange*>(StructMemory));
-	});
+	return PCGExPropertyMediator::DecodeRange(In, Temp);
 }
 
 #pragma endregion
 
-void PCGExPropertyMediatorFormats::Register()
+void PCGExPropertyMediatorFormats::Register(FPCGExMediatorDomain& Domain)
 {
-	static FPCGExPropertySchemaCollectionJsonConverter SchemaConverter;
-	static FPCGExPropertyOverridesJsonConverter OverridesConverter;
-	static FPCGExWeightedPropertyOverridesJsonConverter WeightedOverridesConverter;
-	static FPCGExEnumSelectorJsonConverter EnumSelectorConverter;
-	static FPCGExNumericRangeJsonConverter NumericRangeConverter;
-
-	{
-		FPCGExMediatorFormat F;
-		F.Id = SchemaFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExPropertySchemaCollection::StaticStruct();
-		F.Converter = &SchemaConverter;
-		F.Describe = &DescribeSchemaBody;
-		F.Summary = TEXT("Property schema: typed entries with defaults, imported schema assets, import overrides.");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
-	{
-		FPCGExMediatorFormat F;
-		F.Id = OverridesFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExPropertyOverrides::StaticStruct();
-		F.Converter = &OverridesConverter;
-		F.Describe = &DescribeOverridesBody;
-		F.Summary = TEXT("Enabled property overrides by name against a schema.");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
-	{
-		FPCGExMediatorFormat F;
-		F.Id = WeightedOverridesFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExWeightedPropertyOverrides::StaticStruct();
-		F.Converter = &WeightedOverridesConverter;
-		F.Describe = &DescribeWeightedOverridesBody;
-		F.Summary = TEXT("Weighted override row: distribution weight plus enabled overrides.");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
-	{
-		FPCGExMediatorFormat F;
-		F.Id = EnumSelectorFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExEnumSelector::StaticStruct();
-		F.Converter = &EnumSelectorConverter;
-		F.Describe = &DescribeEnumSelector;
-		F.Summary = TEXT("Enum class path plus enumerator name.");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
-	{
-		FPCGExMediatorFormat F;
-		F.Id = NumericRangeFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExNumericRange::StaticStruct();
-		F.Converter = &NumericRangeConverter;
-		F.Describe = &PCGExPropertyMediator::DescribeRange;
-		F.Summary = TEXT("Editor numeric range hints.");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
-}
-
-void PCGExPropertyMediatorFormats::Unregister()
-{
-	FPCGExMediatorRegistry::UnregisterFormat(SchemaFormatId);
-	FPCGExMediatorRegistry::UnregisterFormat(OverridesFormatId);
-	FPCGExMediatorRegistry::UnregisterFormat(WeightedOverridesFormatId);
-	FPCGExMediatorRegistry::UnregisterFormat(EnumSelectorFormatId);
-	FPCGExMediatorRegistry::UnregisterFormat(NumericRangeFormatId);
+	Domain.AddFormat<FPCGExPropertySchemaCollectionJsonConverter>(SchemaFormatId, 1, FPCGExPropertySchemaCollection::StaticStruct(), &DescribeSchemaBody,
+	                                                               TEXT("Property schema: typed entries with defaults, imported schema assets, import overrides."));
+	Domain.AddFormat<FPCGExPropertyOverridesJsonConverter>(OverridesFormatId, 1, FPCGExPropertyOverrides::StaticStruct(), &DescribeOverridesBody,
+	                                                        TEXT("Enabled property overrides by name against a schema."));
+	Domain.AddFormat<FPCGExWeightedPropertyOverridesJsonConverter>(WeightedOverridesFormatId, 1, FPCGExWeightedPropertyOverrides::StaticStruct(), &DescribeWeightedOverridesBody,
+	                                                                TEXT("Weighted override row: distribution weight plus enabled overrides."));
+	Domain.AddFormat<FPCGExEnumSelectorJsonConverter>(EnumSelectorFormatId, 1, FPCGExEnumSelector::StaticStruct(), &DescribeEnumSelector,
+	                                                   TEXT("Enum class path plus enumerator name."));
+	Domain.AddFormat<FPCGExNumericRangeJsonConverter>(NumericRangeFormatId, 1, FPCGExNumericRange::StaticStruct(), &PCGExPropertyMediator::DescribeRange,
+	                                                   TEXT("Editor numeric range hints."));
 }

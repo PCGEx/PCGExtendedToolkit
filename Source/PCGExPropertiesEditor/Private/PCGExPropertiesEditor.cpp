@@ -177,8 +177,8 @@ void FPCGExPropertiesEditorModule::StartupModule()
 	// JSON authoring surface (PCGExMediator): type catalog, per-type value hooks, struct formats, host bindings.
 	PCGExPropertyCatalog::Startup();
 	PCGExPropertyMediator::RegisterBuiltInHooks();
-	PCGExPropertyMediatorFormats::Register();
-	PCGExPropertyMediatorBindings::Register();
+	PCGExPropertyMediatorFormats::Register(MediatorDomain);
+	PCGExPropertyMediatorBindings::Register(MediatorDomain);
 
 	// Property collection component: duplicate-component warning on the component's own panel,
 	// and its values hoisted into the owning actor's details when the actor is selected.
@@ -202,8 +202,7 @@ void FPCGExPropertiesEditorModule::ShutdownModule()
 		}
 	}
 
-	PCGExPropertyMediatorBindings::Unregister();
-	PCGExPropertyMediatorFormats::Unregister();
+	MediatorDomain.Reset();
 	PCGExPropertyMediator::UnregisterBuiltInHooks();
 	PCGExPropertyCatalog::Shutdown();
 

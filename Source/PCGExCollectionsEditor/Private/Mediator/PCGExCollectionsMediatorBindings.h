@@ -5,12 +5,13 @@
 
 #include "CoreMinimal.h"
 
+class FPCGExMediatorDomain;
+
 /**
  * Mediator bindings for the hosts this module owns: every asset collection (bound on the base class, so typed,
  * Variant and Omni hosts all resolve) and the Distribute Tuple node.
  */
 namespace PCGExCollectionsMediatorBindings
 {
-	void Register();
-	void Unregister();
+	void Register(FPCGExMediatorDomain& Domain);
 }

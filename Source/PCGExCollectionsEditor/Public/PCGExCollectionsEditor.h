@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "AssemblyRoot/PCGExAssemblyRootEditorHost.h" // complete type: TUniquePtr member needs it wherever the module is destroyed
 #include "PCGExEditorModuleInterface.h"
+#include "PCGExMediatorRegistry.h"
 #include "UObject/ObjectSaveContext.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/WeakObjectPtrTemplates.h"
@@ -32,6 +33,9 @@ private:
 	FDelegateHandle OnPackageSavedHandle;
 	FDelegateHandle OnAnySchemaAssetChangedHandle;
 	bool bThumbnailRendererRegistered = false;
+
+	/** JSON authoring surface (PCGExMediator): the formats and bindings this module registers. */
+	FPCGExMediatorDomain MediatorDomain;
 
 	/** Select-as-unit latch tracker + viewport action bar for the stock assembly root. */
 	TUniquePtr<FPCGExAssemblyRootEditorHost> AssemblyRootHost;

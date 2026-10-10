@@ -4,6 +4,7 @@
 #include "Mediator/PCGExCollectionsMediatorHooks.h"
 
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorSchema.h"
 #include "PCGExMediatorValues.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -71,21 +72,12 @@ namespace PCGExCollectionsMediatorHooks
 		{
 			TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
 			Props->SetObjectField(TEXT("collection"), Values::DescribeShape(EPCGMetadataTypes::SoftObjectPath).ToSharedRef());
-			TSharedRef<FJsonObject> IdSchema = MakeShared<FJsonObject>();
-			IdSchema->SetStringField(TEXT("type"), TEXT("integer"));
-			IdSchema->SetStringField(TEXT("description"), TEXT("the picked entry's EntryId; 0 = none"));
-			Props->SetObjectField(TEXT("entryId"), IdSchema);
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("object"));
-			S->SetObjectField(TEXT("properties"), Props);
-			return TSharedPtr<FJsonObject>(S);
+			Props->SetObjectField(TEXT("entryId"), Schema::Integer(TEXT("the picked entry's EntryId; 0 = none")));
+			return TSharedPtr<FJsonObject>(Schema::Object(Props));
 		};
 		H.DescribeStructural = [](FJsonObject& Props)
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("boolean"));
-			S->SetStringField(TEXT("description"), TEXT("overrides may only pick entries within the schema's collection"));
-			Props.SetObjectField(TEXT("lockCollection"), S);
+			Props.SetObjectField(TEXT("lockCollection"), Schema::Boolean(TEXT("overrides may only pick entries within the schema's collection")));
 		};
 		return H;
 	}
@@ -120,15 +112,8 @@ namespace PCGExCollectionsMediatorHooks
 		};
 		H.DescribeStructural = [](FJsonObject& Props)
 		{
-			auto Add = [&Props](const TCHAR* Key, const TCHAR* Description)
-			{
-				TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-				S->SetStringField(TEXT("type"), TEXT("number"));
-				S->SetStringField(TEXT("description"), Description);
-				Props.SetObjectField(Key, S);
-			};
-			Add(TEXT("min"), TEXT("output value at the range's left end"));
-			Add(TEXT("max"), TEXT("output value at the range's right end"));
+			Props.SetObjectField(TEXT("min"), Schema::Number(TEXT("output value at the range's left end")));
+			Props.SetObjectField(TEXT("max"), Schema::Number(TEXT("output value at the range's right end")));
 		};
 		return H;
 	}

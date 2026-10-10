@@ -4,7 +4,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "JsonObjectStructInterface.h"
+#include "PCGExMediatorConverter.h"
+#include "Collections/PCGExOmniCollection.h"
+#include "Core/PCGExAssetCollection.h"
+
+class FPCGExMediatorDomain;
 
 /**
  * JSON shapes of the collection structs. An entry is its authored fields by UPROPERTY name (CPF_Edit, not
@@ -13,32 +17,30 @@
  * registry, so sibling plugins' types are covered without registration here. Decoding merges into the live
  * entry: an absent key leaves its field unchanged.
  */
-class FPCGExCollectionEntryJsonConverter final : public IJsonObjectStructConverter
+class FPCGExCollectionEntryJsonConverter final : public FPCGExMediatorScriptStructConverter
 {
 public:
 	explicit FPCGExCollectionEntryJsonConverter(const UScriptStruct* InStruct);
 
-	virtual EJsonObjectConvertResult ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const override;
-	virtual EJsonObjectConvertResult ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const override;
-
-private:
-	const UScriptStruct* Struct = nullptr;
+protected:
+	virtual bool Encode(const void* Value, FJsonObject& Out) const override;
+	virtual bool Decode(const FJsonObject& In, void* Temp, const void* Live) const override;
 };
 
 /** An Omni row: the payload's entry shape; "type" picks (or switches) the payload struct on decode. */
-class FPCGExOmniCollectionEntryJsonConverter final : public IJsonObjectStructConverter
+class FPCGExOmniCollectionEntryJsonConverter final : public TPCGExMediatorStructConverter<FPCGExOmniCollectionEntry>
 {
-public:
-	virtual EJsonObjectConvertResult ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const override;
-	virtual EJsonObjectConvertResult ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const override;
+protected:
+	virtual bool Encode(const FPCGExOmniCollectionEntry& Value, FJsonObject& Out) const override;
+	virtual bool Decode(const FJsonObject& In, FPCGExOmniCollectionEntry& Temp, const FPCGExOmniCollectionEntry& Live) const override;
 };
 
 /** Staging data: authored "sockets" and "boundsModifier" both ways; "path" and "bounds" written for information only. */
-class FPCGExAssetStagingDataJsonConverter final : public IJsonObjectStructConverter
+class FPCGExAssetStagingDataJsonConverter final : public TPCGExMediatorStructConverter<FPCGExAssetStagingData>
 {
-public:
-	virtual EJsonObjectConvertResult ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const override;
-	virtual EJsonObjectConvertResult ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const override;
+protected:
+	virtual bool Encode(const FPCGExAssetStagingData& Value, FJsonObject& Out) const override;
+	virtual bool Decode(const FJsonObject& In, FPCGExAssetStagingData& Temp, const FPCGExAssetStagingData& Live) const override;
 };
 
 namespace PCGExCollectionsMediatorFormats
@@ -49,7 +51,9 @@ namespace PCGExCollectionsMediatorFormats
 	/** "pcgex.collection-entry/<TypeId>" */
 	FName EntryFormatId(FName TypeId);
 
-	/** Registers the fixed formats and one entry format per registered type; rescans when modules load. */
-	void Register();
+	/** Registers the fixed formats and one entry format per registered type on Domain; rescans when modules load. */
+	void Register(FPCGExMediatorDomain& Domain);
+
+	/** Stops the rescan; the domain's own Reset releases the formats. */
 	void Unregister();
 }

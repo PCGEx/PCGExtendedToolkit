@@ -4,13 +4,14 @@
 #include "Mediator/PCGExPropertyMediatorHooks.h"
 
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorLookup.h"
+#include "PCGExMediatorSchema.h"
 #include "PCGExMediatorValues.h"
 #include "PCGExProperty.h"
 #include "PCGExPropertyTypes.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
-#include "Helpers/PCGExStreamingHelpers.h"
 #include "Mediator/PCGExPropertyTypeCatalog.h"
 #include "UObject/Class.h"
 
@@ -27,14 +28,9 @@ namespace PCGExPropertyMediatorHooks
 
 	FState& State()
 	{
+		check(IsInGameThread());
 		static FState Instance;
 		return Instance;
-	}
-
-	TArray<const TArray<FInstancedStruct>*>& SchemaScopes()
-	{
-		static thread_local TArray<const TArray<FInstancedStruct>*> Scopes;
-		return Scopes;
 	}
 
 	TSharedPtr<FJsonValue> EncodeAtOutputType(const FPCGExProperty& Property)
@@ -115,10 +111,7 @@ namespace PCGExPropertyMediatorHooks
 		};
 		H.DescribeStructural = [](FJsonObject& Props)
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("string"));
-			S->SetStringField(TEXT("description"), TEXT("enum class path, e.g. /Script/Engine.ECollisionChannel or /Game/Enums/E_Kind.E_Kind"));
-			Props.SetObjectField(TEXT("enum"), S);
+			Props.SetObjectField(TEXT("enum"), Schema::String(TEXT("enum class path, e.g. /Script/Engine.ECollisionChannel or /Game/Enums/E_Kind.E_Kind")));
 		};
 		return H;
 	}
@@ -146,10 +139,7 @@ namespace PCGExPropertyMediatorHooks
 		};
 		H.DescribeStructural = [](FJsonObject& Props)
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("string"));
-			S->SetStringField(TEXT("description"), TEXT("class path narrowing the editor picker; \"\" for any"));
-			Props.SetObjectField(TEXT("allowedClass"), S);
+			Props.SetObjectField(TEXT("allowedClass"), Schema::String(TEXT("class path narrowing the editor picker; \"\" for any")));
 		};
 		return H;
 	}
@@ -180,15 +170,12 @@ namespace PCGExPropertyMediatorHooks
 		};
 		return H;
 	}
+}
 
-	UObject* ResolveByPath(const FString& Path)
-	{
-		const FSoftObjectPath SoftPath(Path);
-		if (SoftPath.IsNull()) { return nullptr; }
-		if (UObject* Found = SoftPath.ResolveObject()) { return Found; }
-		PCGExHelpers::LoadBlocking_AnyThread(SoftPath);
-		return SoftPath.ResolveObject();
-	}
+TArray<const TArray<FInstancedStruct>*>& FPCGExOverridesSchemaStack::Get()
+{
+	static thread_local TArray<const TArray<FInstancedStruct>*> Stack;
+	return Stack;
 }
 
 void PCGExPropertyMediator::RegisterHooks(const UScriptStruct* Struct, const FPCGExPropertyMediatorHooks& Hooks)
@@ -208,7 +195,7 @@ const FPCGExPropertyMediatorHooks* PCGExPropertyMediator::FindHooks(const UScrip
 	if (const FPCGExPropertyMediatorHooks* Found = S.Hooks.Find(Struct)) { return Found; }
 
 	const FPCGExPropertyTypeInfo* Info = PCGExPropertyCatalog::FindByStruct(Struct);
-	if (!Info || !PCGExMediator::Values::IsSupported(Info->OutputType)) { return nullptr; }
+	if (!Info || !PCGExMediator::Values::IsSupported(Info->Entry.OutputType)) { return nullptr; }
 
 	if (!S.bDefaultBuilt)
 	{
@@ -230,7 +217,7 @@ void PCGExPropertyMediator::GetTypesWithoutValueSupport(TArray<FName>& OutTypeNa
 	{
 		if (!HasValueSupport(Info.Struct))
 		{
-			OutTypeNames.Add(Info.TypeName.IsNone() ? Info.Struct->GetFName() : Info.TypeName);
+			OutTypeNames.Add(Info.Entry.TypeName.IsNone() ? Info.Struct->GetFName() : Info.Entry.TypeName);
 		}
 	}
 }
@@ -243,28 +230,6 @@ FPCGExPropertyMediatorHooks PCGExPropertyMediator::MakeOutputTypeHooks()
 	H.DescribeValue = &PCGExPropertyMediatorHooks::DescribeAtOutputType;
 	return H;
 }
-
-#pragma region FOverridesSchemaScope
-
-PCGExPropertyMediator::FOverridesSchemaScope::FOverridesSchemaScope(TArray<FInstancedStruct> InSchema)
-	: Schema(MoveTemp(InSchema))
-{
-	PCGExPropertyMediatorHooks::SchemaScopes().Add(&Schema);
-}
-
-PCGExPropertyMediator::FOverridesSchemaScope::~FOverridesSchemaScope()
-{
-	TArray<const TArray<FInstancedStruct>*>& Scopes = PCGExPropertyMediatorHooks::SchemaScopes();
-	Scopes.RemoveAt(Scopes.Num() - 1, EAllowShrinking::No);
-}
-
-const TArray<FInstancedStruct>* PCGExPropertyMediator::FOverridesSchemaScope::Current()
-{
-	const TArray<const TArray<FInstancedStruct>*>& Scopes = PCGExPropertyMediatorHooks::SchemaScopes();
-	return Scopes.IsEmpty() ? nullptr : Scopes.Last();
-}
-
-#pragma endregion
 
 #pragma region Range
 
@@ -322,23 +287,14 @@ bool PCGExPropertyMediator::DecodeRange(const FJsonObject& Json, FPCGExNumericRa
 
 TSharedPtr<FJsonObject> PCGExPropertyMediator::DescribeRange()
 {
-	TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-	S->SetStringField(TEXT("type"), TEXT("object"));
+	using namespace PCGExMediator;
+
 	TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-	auto Add = [&Props](const TCHAR* Key, const TCHAR* Type, const TCHAR* Description)
-	{
-		TSharedRef<FJsonObject> P = MakeShared<FJsonObject>();
-		P->SetStringField(TEXT("type"), Type);
-		P->SetStringField(TEXT("description"), Description);
-		Props->SetObjectField(Key, P);
-	};
-	Add(TEXT("min"), TEXT("number"), TEXT("lower picker bound"));
-	Add(TEXT("max"), TEXT("number"), TEXT("upper picker bound"));
-	Add(TEXT("clampMin"), TEXT("boolean"), TEXT("enforce min in the editor picker"));
-	Add(TEXT("clampMax"), TEXT("boolean"), TEXT("enforce max in the editor picker"));
-	S->SetObjectField(TEXT("properties"), Props);
-	S->SetStringField(TEXT("description"), TEXT("editor picker hints only; values written programmatically are not clamped"));
-	return S;
+	Props->SetObjectField(TEXT("min"), Schema::Number(TEXT("lower picker bound")));
+	Props->SetObjectField(TEXT("max"), Schema::Number(TEXT("upper picker bound")));
+	Props->SetObjectField(TEXT("clampMin"), Schema::Boolean(TEXT("enforce min in the editor picker")));
+	Props->SetObjectField(TEXT("clampMax"), Schema::Boolean(TEXT("enforce max in the editor picker")));
+	return Schema::Object(Props, TEXT("editor picker hints only; values written programmatically are not clamped"));
 }
 
 #pragma endregion
@@ -352,9 +308,7 @@ UEnum* PCGExPropertyMediator::ResolveEnum(const FString& Path)
 		Report(EPCGExMediatorSeverity::Error, TEXT("empty enum path"));
 		return nullptr;
 	}
-	if (UEnum* Enum = FindObject<UEnum>(nullptr, *Path)) { return Enum; }
-	if (UEnum* Enum = FindFirstObject<UEnum>(*Path, EFindFirstObjectOptions::NativeFirst)) { return Enum; }
-	if (UEnum* Enum = Cast<UEnum>(PCGExPropertyMediatorHooks::ResolveByPath(Path))) { return Enum; }
+	if (UEnum* Enum = LoadType<UEnum>(Path)) { return Enum; }
 	Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("enum '%s' not found"), *Path));
 	return nullptr;
 }
@@ -364,16 +318,9 @@ UClass* PCGExPropertyMediator::ResolveClass(const FString& Path)
 	using namespace PCGExMediator;
 
 	if (Path.IsEmpty()) { return nullptr; }
-	if (UClass* Class = FindObject<UClass>(nullptr, *Path)) { return Class; }
-	if (UClass* Class = FindFirstObject<UClass>(*Path, EFindFirstObjectOptions::NativeFirst)) { return Class; }
-	if (UClass* Class = Cast<UClass>(PCGExPropertyMediatorHooks::ResolveByPath(Path))) { return Class; }
+	if (UClass* Class = LoadType<UClass>(Path)) { return Class; }
 	Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("class '%s' not found"), *Path));
 	return nullptr;
-}
-
-UObject* PCGExPropertyMediator::ResolveObject(const FString& Path)
-{
-	return PCGExPropertyMediatorHooks::ResolveByPath(Path);
 }
 
 void PCGExPropertyMediator::RegisterBuiltInHooks()

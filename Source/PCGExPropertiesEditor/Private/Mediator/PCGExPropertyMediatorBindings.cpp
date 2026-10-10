@@ -9,38 +9,33 @@
 #include "Mediator/PCGExPropertyMediatorHooks.h"
 #include "UObject/UnrealType.h"
 
-void PCGExPropertyMediatorBindings::Register()
+void PCGExPropertyMediatorBindings::Register(FPCGExMediatorDomain& Domain)
 {
 	{
 		FPCGExMediatorBinding Binding;
 		Binding.HostClass = UPCGExPropertySchemaAsset::StaticClass();
 		Binding.Members = {GET_MEMBER_NAME_CHECKED(UPCGExPropertySchemaAsset, Collection)};
 		Binding.Summary = TEXT("Property Schema asset.");
-		FPCGExMediatorRegistry::RegisterBinding(Binding);
+		Domain.AddBinding(Binding);
 	}
 	{
 		FPCGExMediatorBinding Binding;
 		Binding.HostClass = UPCGExTupleSettings::StaticClass();
 		Binding.Members = {GET_MEMBER_NAME_CHECKED(UPCGExTupleSettings, Composition), GET_MEMBER_NAME_CHECKED(UPCGExTupleSettings, Values)};
-		// Rows decode against the composition applied just before them, so fresh rows resolve names and types.
-		Binding.WrapImport = [](UObject* Host, const FName Member, TFunctionRef<void()> Import)
+		// Rows resolve names and types against the composition the document carries, else the live one.
+		Binding.WrapImport = [](UObject* Host, const FName Member, FPCGExMediatorDecodedMember Decoded, TFunctionRef<void()> Import)
 		{
 			const UPCGExTupleSettings* Tuple = Cast<UPCGExTupleSettings>(Host);
 			if (Tuple && Member == GET_MEMBER_NAME_CHECKED(UPCGExTupleSettings, Values))
 			{
-				PCGExPropertyMediator::FOverridesSchemaScope Scope(Tuple->Composition.BuildSchema());
+				const FPCGExPropertySchemaCollection* Composition = static_cast<const FPCGExPropertySchemaCollection*>(Decoded(GET_MEMBER_NAME_CHECKED(UPCGExTupleSettings, Composition)));
+				PCGExPropertyMediator::FOverridesSchemaScope Scope((Composition ? Composition : &Tuple->Composition)->BuildSchema());
 				Import();
 				return;
 			}
 			Import();
 		};
 		Binding.Summary = TEXT("Tuple node: composition schema and value rows.");
-		FPCGExMediatorRegistry::RegisterBinding(Binding);
+		Domain.AddBinding(Binding);
 	}
-}
-
-void PCGExPropertyMediatorBindings::Unregister()
-{
-	FPCGExMediatorRegistry::UnregisterBinding(UPCGExPropertySchemaAsset::StaticClass());
-	FPCGExMediatorRegistry::UnregisterBinding(UPCGExTupleSettings::StaticClass());
 }

@@ -122,8 +122,8 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// JSON authoring surface (PCGExMediator): value hooks for this module's property types, entry formats
 	// (one per registered collection type, siblings included), and the collection / Distribute Tuple bindings.
 	PCGExCollectionsMediator::RegisterHooks();
-	PCGExCollectionsMediatorFormats::Register();
-	PCGExCollectionsMediatorBindings::Register();
+	PCGExCollectionsMediatorFormats::Register(MediatorDomain);
+	PCGExCollectionsMediatorBindings::Register(MediatorDomain);
 
 	// Mosaic thumbnail renderer for all collection types. GEngine != null means engine init is
 	// done and UThumbnailManager is safe to touch; otherwise defer to PostEngineInit.
@@ -184,8 +184,8 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 		AssemblyRootHost.Reset();
 	}
 
-	PCGExCollectionsMediatorBindings::Unregister();
 	PCGExCollectionsMediatorFormats::Unregister();
+	MediatorDomain.Reset();
 	PCGExCollectionsMediator::UnregisterHooks();
 
 	FPCGExInlineWidgetRegistry::UnregisterAllModes(FPCGExProperty_CollectionEntry::StaticStruct()->GetFName());

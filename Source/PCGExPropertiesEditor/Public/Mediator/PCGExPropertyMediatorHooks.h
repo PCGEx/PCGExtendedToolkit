@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExMediatorScope.h"
 #include "StructUtils/InstancedStruct.h"
 
 class FJsonObject;
@@ -40,6 +41,13 @@ struct PCGEXPROPERTIESEDITOR_API FPCGExPropertyMediatorHooks
 	}
 };
 
+/** Per-thread stack behind FOverridesSchemaScope; exported so the modules that push one (Collections) share it. */
+struct PCGEXPROPERTIESEDITOR_API FPCGExOverridesSchemaStack
+{
+	using FValue = const TArray<FInstancedStruct>*;
+	static TArray<FValue>& Get();
+};
+
 namespace PCGExPropertyMediator
 {
 	PCGEXPROPERTIESEDITOR_API void RegisterHooks(const UScriptStruct* Struct, const FPCGExPropertyMediatorHooks& Hooks);
@@ -60,19 +68,27 @@ namespace PCGExPropertyMediator
 	 * Schema a decoding override set syncs to when its target is not schema-parallel yet (fresh rows). Pushed by
 	 * the binding that knows the host; nested scopes stack, the innermost wins.
 	 */
-	class PCGEXPROPERTIESEDITOR_API FOverridesSchemaScope
+	class FOverridesSchemaScope
 	{
 	public:
-		explicit FOverridesSchemaScope(TArray<FInstancedStruct> InSchema);
-		~FOverridesSchemaScope();
+		explicit FOverridesSchemaScope(TArray<FInstancedStruct> InSchema)
+			: Schema(MoveTemp(InSchema))
+			  , Scope(&Schema)
+		{
+		}
 
 		FOverridesSchemaScope(const FOverridesSchemaScope&) = delete;
 		FOverridesSchemaScope& operator=(const FOverridesSchemaScope&) = delete;
 
-		static const TArray<FInstancedStruct>* Current();
+		static const TArray<FInstancedStruct>* Current()
+		{
+			const FPCGExOverridesSchemaStack::FValue* Top = TPCGExMediatorScope<FPCGExOverridesSchemaStack>::Current();
+			return Top ? *Top : nullptr;
+		}
 
 	private:
 		TArray<FInstancedStruct> Schema;
+		TPCGExMediatorScope<FPCGExOverridesSchemaStack> Scope;
 	};
 
 	/** Numeric range as { "min", "max", "clampMin", "clampMax" }; null when nothing is clamped. */
@@ -80,14 +96,11 @@ namespace PCGExPropertyMediator
 	PCGEXPROPERTIESEDITOR_API bool DecodeRange(const FJsonObject& Json, FPCGExNumericRange& OutRange);
 	PCGEXPROPERTIESEDITOR_API TSharedPtr<FJsonObject> DescribeRange();
 
-	/** Enum class by path: native enums resolve directly, user-defined enum assets load. Null (with a diagnostic) when missing. */
+	/** Enum class by path, short or prefixed name; user-defined enum assets load. Null (with a diagnostic) when missing. */
 	PCGEXPROPERTIESEDITOR_API UEnum* ResolveEnum(const FString& Path);
 
-	/** Class by path, loading a Blueprint class when needed. Null (with a diagnostic) when missing; "" resolves to null silently. */
+	/** Class by path, short or prefixed name; Blueprint classes load. Null (with a diagnostic) when missing; "" resolves to null silently. */
 	PCGEXPROPERTIESEDITOR_API UClass* ResolveClass(const FString& Path);
-
-	/** Any object by path, loading when needed. Null when missing (no diagnostic: callers name what they expected). */
-	PCGEXPROPERTIESEDITOR_API UObject* ResolveObject(const FString& Path);
 
 	/** Hooks for the toolkit's own property types. Called by the Properties editor module. */
 	PCGEXPROPERTIESEDITOR_API void RegisterBuiltInHooks();

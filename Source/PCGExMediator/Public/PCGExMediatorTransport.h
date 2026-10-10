@@ -11,19 +11,19 @@ class FJsonValue;
 /**
  * Documents in and out. Every document is an envelope { "format", "version", "data" }; a struct document's
  * data is its format's body, an object document's data is { "class", "members": { <member>: <body> } }.
- * All calls are game-thread, editor-side, and report through the caller's PCGExMediator::FScope (or the log).
- * Imports never partially mutate: every member decodes into a temporary first, then all are applied inside
+ * All calls are game-thread (asserted), editor-side, and report through the caller's PCGExMediator::FScope (or
+ * the log). Imports never partially mutate: every member decodes into scratch first, then all are applied inside
  * one transaction, each followed by the host's own PostEditChangeProperty.
  */
 namespace PCGExMediator
 {
 	namespace Keys
 	{
-		inline const TCHAR* Format = TEXT("format");
-		inline const TCHAR* Version = TEXT("version");
-		inline const TCHAR* Data = TEXT("data");
-		inline const TCHAR* Class = TEXT("class");
-		inline const TCHAR* Members = TEXT("members");
+		inline constexpr const TCHAR* const Format = TEXT("format");
+		inline constexpr const TCHAR* const Version = TEXT("version");
+		inline constexpr const TCHAR* const Data = TEXT("data");
+		inline constexpr const TCHAR* const Class = TEXT("class");
+		inline constexpr const TCHAR* const Members = TEXT("members");
 	}
 
 	inline const FName ObjectFormatId = FName(TEXT("pcgex.object"));
@@ -61,11 +61,17 @@ namespace PCGExMediator
 	/** JSON Schema of a whole struct document (envelope included); null for an unknown format. */
 	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeFormat(FName FormatId);
 
-	/** JSON Schema of an object document for HostClass: its bound members, each with its format's body schema. */
+	/** JSON Schema of an object document for HostClass: its bound members, each reflected in the dialect. */
 	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeObject(const UClass* HostClass);
 
-	/** Reflected JSON Schema of any struct by path (the drill-down a collapsed fragment names); null when not a struct. */
-	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeReflectedStruct(const FString& StructPath);
+	/** Reflected JSON Schema of any struct by path or name (the drill-down a collapsed fragment names); null when not a struct. */
+	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeReflectedStruct(const FString& StructNameOrPath);
+
+	/** A format id, else a bound class, else a struct; null when nothing matches. The one chain every describe surface uses. */
+	PCGEXMEDIATOR_API TSharedPtr<FJsonObject> DescribeAny(const FString& FormatIdOrClassOrStruct);
+
+	/** { formats: [{ id, version, struct, summary }], bindings: [{ class, members, summary }] } */
+	PCGEXMEDIATOR_API TSharedRef<FJsonObject> ListAsJson();
 
 	// --- Text and files ---
 
@@ -79,7 +85,4 @@ namespace PCGExMediator
 	 * needs; null (with diagnostics) when nothing resolves.
 	 */
 	PCGEXMEDIATOR_API UObject* ResolveTarget(const FString& Target);
-
-	/** A class by path, short name, or prefixed C++ name (UFoo / AFoo); null when nothing matches. */
-	PCGEXMEDIATOR_API const UClass* FindClass(const FString& NameOrPath);
 }

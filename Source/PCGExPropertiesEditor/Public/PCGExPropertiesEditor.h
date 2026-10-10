@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExEditorModuleInterface.h"
+#include "PCGExMediatorRegistry.h"
 
 class FPCGExPropertiesEditorStyle;
 
@@ -22,4 +23,7 @@ private:
 
 	/** OnExtendActorDetails binding that hoists property-collection values into the actor's details. */
 	FDelegateHandle ActorDetailsExtensionHandle;
+
+	/** JSON authoring surface (PCGExMediator): the formats and bindings this module registers. */
+	FPCGExMediatorDomain MediatorDomain;
 };

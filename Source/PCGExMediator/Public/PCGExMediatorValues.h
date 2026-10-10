@@ -48,12 +48,13 @@ namespace PCGExMediator::Values
 	}
 
 	/**
-	 * Enumerator short name; for a Bitflags enum whose value is not a single enumerator, an array of the set
-	 * enumerators' names. A value no enumerator describes (or a null enum) is written as a number.
+	 * Enumerator AUTHORED short name (a user-defined enum's label, as Epic's JSON tools write it); for a Bitflags
+	 * enum whose value is not a single enumerator, an array of the set enumerators' names. A value no enumerator
+	 * describes (or a null enum) is written as a number.
 	 */
 	PCGEXMEDIATOR_API TSharedPtr<FJsonValue> EncodeEnum(const UEnum* Enum, int64 Value);
 
-	/** Reads a name (short or Enum::Name), an array of names (OR-ed), or a number. Unknown name = error. */
+	/** Reads a name (authored or internal, short or Enum::Name), an array of names (OR-ed), or a number. Unknown name = error. */
 	PCGEXMEDIATOR_API bool DecodeEnum(const UEnum* Enum, const TSharedPtr<FJsonValue>& Json, int64& OutValue);
 
 	/** JSON Schema fragment describing the dialect shape of Type; null for an unsupported type. */

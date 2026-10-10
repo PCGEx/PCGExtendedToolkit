@@ -4,7 +4,7 @@
 #include "PCGExMediatorLibrary.h"
 
 #include "PCGExMediatorDiagnostics.h"
-#include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorLookup.h"
 #include "PCGExMediatorTransport.h"
 #include "AssetToolsModule.h"
 #include "Editor.h"
@@ -17,7 +17,6 @@
 #include "Misc/PackageName.h"
 #include "UObject/Class.h"
 #include "UObject/Package.h"
-#include "UObject/UObjectIterator.h"
 
 namespace PCGExMediatorLibrary
 {
@@ -39,51 +38,15 @@ namespace PCGExMediatorLibrary
 
 FString UPCGExMediatorLibrary::ListFormats()
 {
-	TArray<TSharedPtr<FJsonValue>> Formats;
-	TArray<TSharedPtr<const FPCGExMediatorFormat>> RegisteredFormats;
-	FPCGExMediatorRegistry::GetFormats(RegisteredFormats);
-	for (const TSharedPtr<const FPCGExMediatorFormat>& Format : RegisteredFormats)
-	{
-		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
-		Entry->SetStringField(TEXT("id"), Format->Id.ToString());
-		Entry->SetNumberField(TEXT("version"), Format->Version);
-		Entry->SetStringField(TEXT("struct"), Format->Struct ? Format->Struct->GetPathName() : FString());
-		Entry->SetStringField(TEXT("summary"), Format->Summary);
-		Formats.Add(MakeShared<FJsonValueObject>(Entry));
-	}
-
-	TArray<TSharedPtr<FJsonValue>> Bindings;
-	TArray<TSharedPtr<const FPCGExMediatorBinding>> RegisteredBindings;
-	FPCGExMediatorRegistry::GetBindings(RegisteredBindings);
-	for (const TSharedPtr<const FPCGExMediatorBinding>& Binding : RegisteredBindings)
-	{
-		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
-		Entry->SetStringField(TEXT("class"), Binding->HostClass->GetPathName());
-		TArray<TSharedPtr<FJsonValue>> Members;
-		for (const FName& Member : Binding->Members) { Members.Add(MakeShared<FJsonValueString>(Member.ToString())); }
-		Entry->SetArrayField(TEXT("members"), Members);
-		Entry->SetStringField(TEXT("summary"), Binding->Summary);
-		Bindings.Add(MakeShared<FJsonValueObject>(Entry));
-	}
-
-	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-	Root->SetArrayField(TEXT("formats"), Formats);
-	Root->SetArrayField(TEXT("bindings"), Bindings);
-	return PCGExMediator::ToString(Root, false);
+	return PCGExMediator::ToString(PCGExMediator::ListAsJson(), false);
 }
 
 FString UPCGExMediatorLibrary::DescribeFormat(const FString& FormatIdOrClass)
 {
-	const FString Trimmed = FormatIdOrClass.TrimStartAndEnd();
-	TSharedPtr<FJsonObject> Schema = PCGExMediator::DescribeFormat(FName(*Trimmed));
+	const TSharedPtr<FJsonObject> Schema = PCGExMediator::DescribeAny(FormatIdOrClass);
 	if (!Schema.IsValid())
 	{
-		if (const UClass* Class = PCGExMediator::FindClass(Trimmed)) { Schema = PCGExMediator::DescribeObject(Class); }
-	}
-	if (!Schema.IsValid()) { Schema = PCGExMediator::DescribeReflectedStruct(Trimmed); }
-	if (!Schema.IsValid())
-	{
-		return PCGExMediatorLibrary::Failure(FString::Printf(TEXT("'%s' is neither a registered format, a bound class nor a struct; see ListFormats."), *Trimmed));
+		return PCGExMediatorLibrary::Failure(FString::Printf(TEXT("'%s' is neither a registered format, a bound class nor a struct; see ListFormats."), *FormatIdOrClass.TrimStartAndEnd()));
 	}
 	return PCGExMediator::ToString(Schema.ToSharedRef(), false);
 }
@@ -128,7 +91,7 @@ FString UPCGExMediatorLibrary::CreateAsset(const FString& ClassNameOrPath, const
 {
 	using namespace PCGExMediatorLibrary;
 
-	const UClass* Class = PCGExMediator::FindClass(ClassNameOrPath.TrimStartAndEnd());
+	UClass* Class = PCGExMediator::FindType<UClass>(ClassNameOrPath);
 	if (!Class) { return Failure(FString::Printf(TEXT("class '%s' not found"), *ClassNameOrPath)); }
 	if (Class->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
 	{
@@ -140,37 +103,38 @@ FString UPCGExMediatorLibrary::CreateAsset(const FString& ClassNameOrPath, const
 	if (!FPackageName::IsValidLongPackageName(Folder)) { return Failure(FString::Printf(TEXT("'%s' is not a long package path such as /Game/Folder"), *Folder)); }
 	if (Name.IsEmpty() || !FName::IsValidXName(Name, INVALID_OBJECTNAME_CHARACTERS)) { return Failure(FString::Printf(TEXT("'%s' is not a valid asset name"), *Name)); }
 
-	// Checked here: the asset tools prompt (modal) on a conflict instead of failing.
+	// Every refusal the asset tools would raise as a modal dialog is checked here first.
+	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
 	const FString PackageName = Folder / Name;
 	if (FindPackage(nullptr, *PackageName) || FPackageName::DoesPackageExist(PackageName))
 	{
 		return Failure(FString::Printf(TEXT("'%s' already exists"), *PackageName));
 	}
+	if (FEditorFileUtils::IsMapPackageAsset(PackageName))
+	{
+		return Failure(FString::Printf(TEXT("a map named '%s' already exists in that folder"), *Name));
+	}
+	FText Reason;
+	if (!AssetTools.IsObjectPathAllowed(PackageName, &Reason))
+	{
+		return Failure(FString::Printf(TEXT("'%s' is not allowed: %s"), *PackageName, *Reason.ToString()));
+	}
 
 	// The class's own factory when one exists (type-specific setup), the plain NewObject path otherwise.
-	UFactory* Factory = nullptr;
-	UClass* ExactFactoryClass = nullptr;
-	UClass* AnyFactoryClass = nullptr;
-	for (TObjectIterator<UClass> It; It; ++It)
+	UFactory* FactoryTemplate = nullptr;
+	for (UFactory* Candidate : AssetTools.GetNewAssetFactories())
 	{
-		UClass* Candidate = *It;
-		if (!Candidate->IsChildOf(UFactory::StaticClass()) || Candidate->HasAnyClassFlags(CLASS_Abstract)) { continue; }
-		// Non-const only because DoesSupportClass is declared so; the default object is read, never written.
-		UFactory* Default = Candidate->GetDefaultObject<UFactory>();
-		if (!Default->CanCreateNew() || !Default->DoesSupportClass(const_cast<UClass*>(Class))) { continue; }
-		if (Default->GetSupportedClass() == Class)
+		if (!Candidate || !Candidate->DoesSupportClass(Class)) { continue; }
+		if (Candidate->GetSupportedClass() == Class)
 		{
-			ExactFactoryClass = Candidate;
+			FactoryTemplate = Candidate;
 			break;
 		}
-		if (!AnyFactoryClass) { AnyFactoryClass = Candidate; }
+		if (!FactoryTemplate) { FactoryTemplate = Candidate; }
 	}
-	if (UClass* FactoryClass = ExactFactoryClass ? ExactFactoryClass : AnyFactoryClass)
-	{
-		Factory = NewObject<UFactory>(GetTransientPackage(), FactoryClass);
-	}
+	UFactory* Factory = FactoryTemplate ? NewObject<UFactory>(GetTransientPackage(), FactoryTemplate->GetClass()) : nullptr;
 
-	UObject* Asset = FAssetToolsModule::GetModule().Get().CreateAsset(Name, Folder, const_cast<UClass*>(Class), Factory, FName(TEXT("PCGExMediator")));
+	UObject* Asset = AssetTools.CreateAsset(Name, Folder, Class, Factory, FName(TEXT("PCGExMediator")));
 	if (!Asset) { return Failure(FString::Printf(TEXT("the asset tools refused to create %s '%s'"), *Class->GetName(), *PackageName)); }
 
 	TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();

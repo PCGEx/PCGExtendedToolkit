@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExMediatorScope.h"
 
 class FJsonValue;
 
@@ -44,6 +45,20 @@ struct PCGEXMEDIATOR_API FPCGExMediatorDiagnostics
 	TSharedRef<FJsonValue> ToJson() const;
 };
 
+/** Per-thread sink stack; exported so every module reports into the same scope. */
+struct PCGEXMEDIATOR_API FPCGExMediatorSinkStack
+{
+	using FValue = FPCGExMediatorDiagnostics*;
+	static TArray<FValue>& Get();
+};
+
+/** Per-thread path-segment stack behind FPathScope. */
+struct PCGEXMEDIATOR_API FPCGExMediatorPathStack
+{
+	using FValue = FString;
+	static TArray<FValue>& Get();
+};
+
 namespace PCGExMediator
 {
 	/**
@@ -51,26 +66,32 @@ namespace PCGExMediator
 	 * converter interface carries no diagnostics channel, so converters report through the current scope.
 	 * Outside any scope, reports go to LogPCGEx instead -- never asserted, never dropped.
 	 */
-	class PCGEXMEDIATOR_API FScope
+	class FScope : public TPCGExMediatorScope<FPCGExMediatorSinkStack>
 	{
-	public:
-		explicit FScope(FPCGExMediatorDiagnostics& InSink);
-		~FScope();
+		using Super = TPCGExMediatorScope<FPCGExMediatorSinkStack>;
 
-		FScope(const FScope&) = delete;
-		FScope& operator=(const FScope&) = delete;
+	public:
+		explicit FScope(FPCGExMediatorDiagnostics& InSink)
+			: Super(&InSink)
+		{
+		}
 	};
 
 	/** Pushes one path segment for the lifetime of the object; Report() prefixes the joined segments. */
-	class PCGEXMEDIATOR_API FPathScope
+	class FPathScope : public TPCGExMediatorScope<FPCGExMediatorPathStack>
 	{
-	public:
-		explicit FPathScope(const FString& InSegment);
-		explicit FPathScope(int32 InIndex);
-		~FPathScope();
+		using Super = TPCGExMediatorScope<FPCGExMediatorPathStack>;
 
-		FPathScope(const FPathScope&) = delete;
-		FPathScope& operator=(const FPathScope&) = delete;
+	public:
+		explicit FPathScope(const FString& InSegment)
+			: Super(InSegment)
+		{
+		}
+
+		explicit FPathScope(const int32 InIndex)
+			: Super(FString::FromInt(InIndex))
+		{
+		}
 	};
 
 	PCGEXMEDIATOR_API bool HasScope();
@@ -84,6 +105,9 @@ namespace PCGExMediator
 
 	/** Re-emits collected diagnostics with their paths as recorded (no prefixing), to the current sink or the log. */
 	PCGEXMEDIATOR_API void Forward(const FPCGExMediatorDiagnostics& Collected);
+
+	/** Writes every item to LogPCGEx at its severity. */
+	PCGEXMEDIATOR_API void LogDiagnostics(const FPCGExMediatorDiagnostics& Diagnostics);
 
 	PCGEXMEDIATOR_API const TCHAR* SeverityToString(EPCGExMediatorSeverity Severity);
 }

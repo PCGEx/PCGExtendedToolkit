@@ -3,15 +3,15 @@
 
 #include "PCGExMediatorReflection.h"
 
+#include "PCGExMediatorConverter.h"
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorLookup.h"
 #include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorSchema.h"
 #include "PCGExMediatorValues.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Helpers/PCGExStreamingHelpers.h"
 #include "JsonObjectConverter.h"
-#include "JsonObjectStructInterface.h"
-#include "Misc/PackageName.h"
 #include "StructUtils/InstancedStruct.h"
 #include "UObject/Class.h"
 #include "UObject/TextProperty.h"
@@ -75,29 +75,23 @@ namespace PCGExMediatorReflection
 		return true;
 	}
 
-	UObject* ResolveObjectPath(const FString& Text)
+	// Editor metadata onto a property's fragment: the tooltip as description (ahead of the shape hint), clamps as bounds.
+	void AddPropertyMetadata(const FProperty* Property, FJsonObject& Fragment)
 	{
-		const FString Path = FPackageName::ExportTextPathToObjectPath(Text);
-		const FSoftObjectPath SoftPath(Path);
-		if (SoftPath.IsNull()) { return nullptr; }
-		if (UObject* Found = SoftPath.ResolveObject()) { return Found; }
-		PCGExHelpers::LoadBlocking_AnyThread(SoftPath);
-		return SoftPath.ResolveObject();
-	}
-
-	TSharedRef<FJsonObject> Schema(const TCHAR* Type, const FString& Description = FString())
-	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		if (Type) { S->SetStringField(TEXT("type"), Type); }
-		if (!Description.IsEmpty()) { S->SetStringField(TEXT("description"), Description); }
-		return S;
-	}
-
-	TSharedRef<FJsonObject> ArrayOf(const TSharedPtr<FJsonObject>& Items, const FString& Description = FString())
-	{
-		TSharedRef<FJsonObject> S = Schema(TEXT("array"), Description);
-		if (Items.IsValid()) { S->SetObjectField(TEXT("items"), Items.ToSharedRef()); }
-		return S;
+#if WITH_EDITORONLY_DATA
+		const FString Tooltip = Property->GetToolTipText().ToString();
+		if (!Tooltip.IsEmpty())
+		{
+			FString Shape;
+			Fragment.TryGetStringField(TEXT("description"), Shape);
+			Fragment.SetStringField(TEXT("description"), Shape.IsEmpty() ? Tooltip : FString::Printf(TEXT("%s; %s"), *Tooltip, *Shape));
+		}
+		if (Property->IsA<FNumericProperty>())
+		{
+			if (Property->HasMetaData(TEXT("ClampMin"))) { Fragment.SetNumberField(TEXT("minimum"), Property->GetFloatMetaData(TEXT("ClampMin"))); }
+			if (Property->HasMetaData(TEXT("ClampMax"))) { Fragment.SetNumberField(TEXT("maximum"), Property->GetFloatMetaData(TEXT("ClampMax"))); }
+		}
+#endif
 	}
 }
 
@@ -172,13 +166,12 @@ TSharedPtr<FJsonValue> PCGExMediator::Reflect::EncodeProperty(const FProperty* P
 		}
 		if (const TSharedPtr<const FPCGExMediatorFormat> Format = FPCGExMediatorRegistry::FindFormatForStruct(Struct))
 		{
-			TSharedPtr<FJsonObject> Body = MakeShared<FJsonObject>();
-			switch (Format->Converter->ConvertToJson(ValuePtr, Body))
+			TSharedPtr<FJsonObject> Body;
+			switch (ConverterToJson(*Format->Converter, ValuePtr, Body))
 			{
-			case EJsonObjectConvertResult::Converted: return MakeShared<FJsonValueObject>(Body);
-			case EJsonObjectConvertResult::IgnoreAndContinue: return MakeShared<FJsonValueObject>(MakeShared<FJsonObject>());
-			case EJsonObjectConvertResult::UseDefaultConverter: break;
-			default: return nullptr;
+			case EConverterOutcome::Done: return MakeShared<FJsonValueObject>(Body);
+			case EConverterOutcome::Failed: return nullptr;
+			default: break;
 			}
 		}
 		if (Struct == FInstancedStruct::StaticStruct()) { return EngineEncode(Property, ValuePtr); }
@@ -237,7 +230,7 @@ bool PCGExMediator::Reflect::DecodeProperty(const FProperty* Property, void* Val
 		UObject* Object = nullptr;
 		if (!Text.IsEmpty())
 		{
-			Object = ResolveObjectPath(Text);
+			Object = ResolveObject(Text);
 			if (!Object)
 			{
 				Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' not found"), *Text));
@@ -325,12 +318,11 @@ bool PCGExMediator::Reflect::DecodeProperty(const FProperty* Property, void* Val
 				Report(EPCGExMediatorSeverity::Error, TEXT("expected an object"));
 				return false;
 			}
-			switch (Format->Converter->ConvertFromJson(ValuePtr, Json->AsObject()))
+			switch (ConverterFromJson(*Format->Converter, ValuePtr, Json->AsObject()))
 			{
-			case EJsonObjectConvertResult::Converted:
-			case EJsonObjectConvertResult::IgnoreAndContinue: return true;
-			case EJsonObjectConvertResult::UseDefaultConverter: break;
-			default: return false;
+			case EConverterOutcome::Done: return true;
+			case EConverterOutcome::Failed: return false;
+			default: break;
 			}
 		}
 		if (Struct == FInstancedStruct::StaticStruct()) { return EngineDecode(Property, ValuePtr, Json); }
@@ -440,25 +432,25 @@ TSharedPtr<FJsonObject> PCGExMediator::Reflect::DescribeProperty(const FProperty
 	if (AsPlainObjectRef(Property))
 	{
 		const FObjectProperty* ObjectProperty = CastField<FObjectProperty>(Property);
-		return Schema(TEXT("string"), FString::Printf(TEXT("object path of a %s; \"\" for none"), *ObjectProperty->PropertyClass->GetName()));
+		return Schema::String(FString::Printf(TEXT("object path of a %s; \"\" for none"), *ObjectProperty->PropertyClass->GetName()));
 	}
 	if (const FSoftClassProperty* SoftClass = CastField<FSoftClassProperty>(Property))
 	{
-		return Schema(TEXT("string"), FString::Printf(TEXT("class path of a %s subclass; \"\" for none"), *GetNameSafe(SoftClass->MetaClass)));
+		return Schema::String(FString::Printf(TEXT("class path of a %s subclass; \"\" for none"), *GetNameSafe(SoftClass->MetaClass)));
 	}
 	if (const FSoftObjectProperty* SoftProperty = CastField<FSoftObjectProperty>(Property))
 	{
-		return Schema(TEXT("string"), FString::Printf(TEXT("object path of a %s; \"\" for none"), *GetNameSafe(SoftProperty->PropertyClass)));
+		return Schema::String(FString::Printf(TEXT("object path of a %s; \"\" for none"), *GetNameSafe(SoftProperty->PropertyClass)));
 	}
 
 	const FNumericProperty* Underlying = nullptr;
 	if (const UEnum* Enum = EnumOf(Property, Underlying)) { return Values::DescribeEnumShape(Enum); }
-	if (Property->IsA<FBoolProperty>()) { return Schema(TEXT("boolean")); }
+	if (Property->IsA<FBoolProperty>()) { return Schema::Boolean(); }
 	if (const FNumericProperty* Numeric = CastField<FNumericProperty>(Property))
 	{
-		return Schema(Numeric->IsFloatingPoint() ? TEXT("number") : TEXT("integer"));
+		return Numeric->IsFloatingPoint() ? Schema::Number() : Schema::Integer();
 	}
-	if (Property->IsA<FStrProperty>() || Property->IsA<FTextProperty>()) { return Schema(TEXT("string")); }
+	if (Property->IsA<FStrProperty>() || Property->IsA<FTextProperty>()) { return Schema::String(); }
 	if (Property->IsA<FNameProperty>()) { return Values::DescribeShape(EPCGMetadataTypes::Name); }
 
 	if (const FStructProperty* StructProperty = CastField<FStructProperty>(Property))
@@ -468,35 +460,35 @@ TSharedPtr<FJsonObject> PCGExMediator::Reflect::DescribeProperty(const FProperty
 		if (const TSharedPtr<const FPCGExMediatorFormat> Format = FPCGExMediatorRegistry::FindFormatForStruct(Struct); Format.IsValid() && Format->Describe)
 		{
 			TSharedPtr<FJsonObject> S = Format->Describe();
-			if (S.IsValid()) { S->SetStringField(TEXT("$comment"), FString::Printf(TEXT("format %s"), *Format->Id.ToString())); }
+			if (S.IsValid()) { Schema::Comment(S.ToSharedRef(), FString::Printf(TEXT("format %s v%d"), *Format->Id.ToString(), Format->Version)); }
 			return S;
 		}
 		if (Struct == FInstancedStruct::StaticStruct())
 		{
-			return Schema(TEXT("object"), TEXT("instanced struct: \"_structType\" (struct path) plus its fields in the engine's reflected shape"));
+			return Schema::Typed(TEXT("object"), TEXT("instanced struct: \"_structType\" (struct path) plus its fields in the engine's reflected shape"));
 		}
 		if (Depth <= 0)
 		{
 			// Collapsed: a descriptor tree is tens of KB; the fragment names where the full shape is.
-			TSharedRef<FJsonObject> S = Schema(TEXT("object"), FString::Printf(TEXT("%s: fields by UPROPERTY name, collapsed for size"), *Struct->GetName()));
-			S->SetStringField(TEXT("$comment"), FString::Printf(TEXT("DescribeFormat(\"%s\") lists them"), *Struct->GetPathName()));
-			return S;
+			return Schema::Comment(
+				Schema::Typed(TEXT("object"), FString::Printf(TEXT("%s: fields by UPROPERTY name, collapsed for size"), *Struct->GetName())),
+				FString::Printf(TEXT("DescribeFormat(\"%s\") lists them"), *Struct->GetPathName()));
 		}
 		TSharedPtr<FJsonObject> S = DescribeStruct(Struct, &IncludeAll, Depth - 1);
-		if (S.IsValid()) { S->SetStringField(TEXT("description"), Struct->GetName()); }
+		if (S.IsValid()) { Schema::Describe(S.ToSharedRef(), Struct->GetName()); }
 		return S;
 	}
 	if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Property))
 	{
-		return ArrayOf(DescribeProperty(ArrayProperty->Inner, Depth), TEXT("rows merge by position: row i of the document into row i of the host, extra rows are created, missing rows removed"));
+		return Schema::Array(DescribeProperty(ArrayProperty->Inner, Depth), TEXT("rows merge by position: row i of the document into row i of the host, extra rows are created, missing rows removed"));
 	}
 	if (const FSetProperty* SetProperty = CastField<FSetProperty>(Property))
 	{
-		return ArrayOf(DescribeProperty(SetProperty->ElementProp, Depth), TEXT("set; the document replaces the whole set"));
+		return Schema::Array(DescribeProperty(SetProperty->ElementProp, Depth), TEXT("set; the document replaces the whole set"));
 	}
-	if (Property->IsA<FMapProperty>()) { return Schema(TEXT("object"), TEXT("map in the engine's reflected shape")); }
-	if (Property->IsA<FObjectProperty>()) { return Schema(TEXT("object"), TEXT("instanced object in the engine's reflected shape")); }
-	return Schema(nullptr, FString::Printf(TEXT("%s: not representable"), *Property->GetClass()->GetName()));
+	if (Property->IsA<FMapProperty>()) { return Schema::Typed(TEXT("object"), TEXT("map in the engine's reflected shape")); }
+	if (Property->IsA<FObjectProperty>()) { return Schema::Typed(TEXT("object"), TEXT("instanced object in the engine's reflected shape")); }
+	return Schema::Typed(nullptr, FString::Printf(TEXT("%s: not representable"), *Property->GetClass()->GetName()));
 }
 
 TSharedPtr<FJsonObject> PCGExMediator::Reflect::DescribeStruct(const UStruct* Struct, FPropertyFilter Filter, const int32 Depth)
@@ -508,9 +500,11 @@ TSharedPtr<FJsonObject> PCGExMediator::Reflect::DescribeStruct(const UStruct* St
 	{
 		const FProperty* Property = *It;
 		if (!Filter(Property)) { continue; }
-		if (const TSharedPtr<FJsonObject> S = DescribeProperty(Property, Depth)) { Props->SetObjectField(Property->GetName(), S.ToSharedRef()); }
+		if (const TSharedPtr<FJsonObject> S = DescribeProperty(Property, Depth))
+		{
+			AddPropertyMetadata(Property, *S);
+			Props->SetObjectField(Property->GetName(), S.ToSharedRef());
+		}
 	}
-	TSharedRef<FJsonObject> S = Schema(TEXT("object"));
-	S->SetObjectField(TEXT("properties"), Props);
-	return S;
+	return Schema::Object(Props);
 }

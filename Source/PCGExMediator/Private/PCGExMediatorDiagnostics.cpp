@@ -9,33 +9,8 @@
 
 namespace PCGExMediatorDiagnostics
 {
-	struct FThreadState
+	void LogLine(const EPCGExMediatorSeverity Severity, const FString& Line)
 	{
-		TArray<FPCGExMediatorDiagnostics*> Sinks;
-		TArray<FString> Path;
-	};
-
-	FThreadState& State()
-	{
-		static thread_local FThreadState ThreadState;
-		return ThreadState;
-	}
-
-	FString JoinPath(const TArray<FString>& Segments)
-	{
-		return FString::Join(Segments, TEXT("/"));
-	}
-
-	void Emit(const EPCGExMediatorSeverity Severity, const FString& Path, const FString& Message)
-	{
-		FThreadState& S = State();
-		if (!S.Sinks.IsEmpty())
-		{
-			S.Sinks.Last()->Add(Severity, Path, Message);
-			return;
-		}
-
-		const FString Line = Path.IsEmpty() ? Message : FString::Printf(TEXT("%s: %s"), *Path, *Message);
 		switch (Severity)
 		{
 		case EPCGExMediatorSeverity::Error:
@@ -48,6 +23,16 @@ namespace PCGExMediatorDiagnostics
 			UE_LOG(LogPCGEx, Log, TEXT("[Mediator] %s"), *Line);
 			break;
 		}
+	}
+
+	void Emit(const EPCGExMediatorSeverity Severity, const FString& Path, const FString& Message)
+	{
+		if (FPCGExMediatorDiagnostics* const* Sink = PCGExMediator::FScope::Current())
+		{
+			(*Sink)->Add(Severity, Path, Message);
+			return;
+		}
+		LogLine(Severity, Path.IsEmpty() ? Message : FString::Printf(TEXT("%s: %s"), *Path, *Message));
 	}
 }
 
@@ -127,41 +112,26 @@ TSharedRef<FJsonValue> FPCGExMediatorDiagnostics::ToJson() const
 
 #pragma region Scopes
 
-PCGExMediator::FScope::FScope(FPCGExMediatorDiagnostics& InSink)
+TArray<FPCGExMediatorDiagnostics*>& FPCGExMediatorSinkStack::Get()
 {
-	PCGExMediatorDiagnostics::State().Sinks.Add(&InSink);
+	static thread_local TArray<FPCGExMediatorDiagnostics*> Stack;
+	return Stack;
 }
 
-PCGExMediator::FScope::~FScope()
+TArray<FString>& FPCGExMediatorPathStack::Get()
 {
-	TArray<FPCGExMediatorDiagnostics*>& Sinks = PCGExMediatorDiagnostics::State().Sinks;
-	Sinks.RemoveAt(Sinks.Num() - 1, EAllowShrinking::No);
-}
-
-PCGExMediator::FPathScope::FPathScope(const FString& InSegment)
-{
-	PCGExMediatorDiagnostics::State().Path.Add(InSegment);
-}
-
-PCGExMediator::FPathScope::FPathScope(const int32 InIndex)
-{
-	PCGExMediatorDiagnostics::State().Path.Add(FString::FromInt(InIndex));
-}
-
-PCGExMediator::FPathScope::~FPathScope()
-{
-	TArray<FString>& Path = PCGExMediatorDiagnostics::State().Path;
-	Path.RemoveAt(Path.Num() - 1, EAllowShrinking::No);
+	static thread_local TArray<FString> Stack;
+	return Stack;
 }
 
 bool PCGExMediator::HasScope()
 {
-	return !PCGExMediatorDiagnostics::State().Sinks.IsEmpty();
+	return FScope::IsActive();
 }
 
 FString PCGExMediator::CurrentPath()
 {
-	return PCGExMediatorDiagnostics::JoinPath(PCGExMediatorDiagnostics::State().Path);
+	return FString::Join(FPCGExMediatorPathStack::Get(), TEXT("/"));
 }
 
 void PCGExMediator::Report(const EPCGExMediatorSeverity Severity, const FString& Message)
@@ -180,6 +150,14 @@ void PCGExMediator::Forward(const FPCGExMediatorDiagnostics& Collected)
 	for (const FPCGExMediatorDiagnostic& Item : Collected.Items)
 	{
 		PCGExMediatorDiagnostics::Emit(Item.Severity, Item.Path, Item.Message);
+	}
+}
+
+void PCGExMediator::LogDiagnostics(const FPCGExMediatorDiagnostics& Diagnostics)
+{
+	for (const FPCGExMediatorDiagnostic& Item : Diagnostics.Items)
+	{
+		PCGExMediatorDiagnostics::LogLine(Item.Severity, Item.Path.IsEmpty() ? Item.Message : FString::Printf(TEXT("%s: %s"), *Item.Path, *Item.Message));
 	}
 }
 

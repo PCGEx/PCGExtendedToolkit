@@ -4,21 +4,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Metadata/PCGMetadataCommon.h"
+#include "PCGExPropertySchema.h"
 
 struct FInstancedStruct;
 
 /** One concrete FPCGExProperty type, as the JSON side names and instantiates it. */
 struct PCGEXPROPERTIESEDITOR_API FPCGExPropertyTypeInfo
 {
-	/** FPCGExProperty::GetTypeName(), the "type" a document uses. */
-	FName TypeName = NAME_None;
+	/** The type's registry entry (TypeName is the "type" a document uses; PropertyName unused). */
+	FPCGExPropertyRegistryEntry Entry;
 
 	const UScriptStruct* Struct = nullptr;
-
-	EPCGMetadataTypes OutputType = EPCGMetadataTypes::Unknown;
-	bool bSupportsOutput = false;
-	bool bSupportsSampling = false;
 
 	/** USTRUCT DisplayName, for listings. */
 	FString DisplayName;

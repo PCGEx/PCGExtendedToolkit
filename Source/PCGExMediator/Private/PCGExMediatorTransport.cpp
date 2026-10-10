@@ -3,16 +3,16 @@
 
 #include "PCGExMediatorTransport.h"
 
+#include "PCGExMediatorConverter.h"
 #include "PCGExMediatorDiagnostics.h"
-#include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorLookup.h"
 #include "PCGExMediatorReflection.h"
+#include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorSchema.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Helpers/PCGExStreamingHelpers.h"
 #include "JsonObjectConverter.h"
-#include "JsonObjectStructInterface.h"
 #include "Misc/FileHelper.h"
-#include "PCGCommon.h"
 #include "PCGGraph.h"
 #include "PCGNode.h"
 #include "PCGSettings.h"
@@ -54,58 +54,34 @@ namespace PCGExMediatorTransport
 		FPropertyScratch& operator=(const FPropertyScratch&) = delete;
 	};
 
-	TSharedRef<FJsonObject> ConstSchema(const FString& Value)
-	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("const"), Value);
-		return S;
-	}
-
-	TSharedRef<FJsonObject> ConstSchema(const int32 Value)
-	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetNumberField(TEXT("const"), Value);
-		return S;
-	}
-
 	TSharedRef<FJsonObject> EnvelopeSchema(const FName FormatId, const int32 Version, const TSharedPtr<FJsonObject>& DataSchema)
 	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("$schema"), TEXT("https://json-schema.org/draft/2020-12/schema"));
-		S->SetStringField(TEXT("type"), TEXT("object"));
-
 		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-		Props->SetObjectField(Keys::Format, ConstSchema(FormatId.ToString()));
-		Props->SetObjectField(Keys::Version, ConstSchema(Version));
+		Props->SetObjectField(Keys::Format, Schema::Const(FormatId.ToString()));
+		Props->SetObjectField(Keys::Version, Schema::Const(Version));
 		Props->SetObjectField(Keys::Data, DataSchema.IsValid() ? DataSchema.ToSharedRef() : MakeShared<FJsonObject>());
-		S->SetObjectField(TEXT("properties"), Props);
 
-		TArray<TSharedPtr<FJsonValue>> Required;
-		Required.Add(MakeShared<FJsonValueString>(Keys::Format));
-		Required.Add(MakeShared<FJsonValueString>(Keys::Version));
-		Required.Add(MakeShared<FJsonValueString>(Keys::Data));
-		S->SetArrayField(TEXT("required"), Required);
+		const FString Required[] = {Keys::Format, Keys::Version, Keys::Data};
+		TSharedRef<FJsonObject> S = Schema::Object(Props, FString(), Required);
+		S->SetStringField(TEXT("$schema"), TEXT("https://json-schema.org/draft/2020-12/schema"));
 		return S;
 	}
 
-	// Decodes one bound member into Scratch. Null Json = member absent from the document (not an error).
-	bool DecodeMember(const FPCGExMediatorBinding& Binding, UObject* Host, FProperty* Property, const TSharedPtr<FJsonValue>& Json, FPropertyScratch& Scratch)
+	// Decodes one bound member into Scratch, starting from the live value so a merging codec sees current state.
+	bool DecodeMember(const FPCGExMediatorBinding& Binding, UObject* Host, FProperty* Property, const TSharedPtr<FJsonValue>& Json, FPropertyScratch& Scratch, FPCGExMediatorDecodedMember Decoded)
 	{
 		FPathScope P(Property->GetName());
-
-		// Start from the live value so a converter that merges (or a plain reflected member) sees current state.
 		Property->CopyCompleteValue(Scratch.Memory, Property->ContainerPtrToValuePtr<void>(Host));
 
 		bool bOk = false;
 		auto Import = [&]()
 		{
-			// The dialect codec: array rows get their index in the path, nested structs their registered shape.
 			bOk = Reflect::DecodeProperty(Property, Scratch.Memory, Json);
 		};
 
 		if (Binding.WrapImport)
 		{
-			Binding.WrapImport(Host, Property->GetFName(), Import);
+			Binding.WrapImport(Host, Property->GetFName(), Decoded, Import);
 		}
 		else
 		{
@@ -161,6 +137,8 @@ bool PCGExMediator::ReadEnvelope(const FJsonObject& Doc, const FName ExpectedFor
 
 TSharedPtr<FJsonObject> PCGExMediator::ExportStruct(const UScriptStruct* Struct, const void* Memory)
 {
+	check(IsInGameThread());
+
 	const TSharedPtr<const FPCGExMediatorFormat> Format = FPCGExMediatorRegistry::FindFormatForStruct(Struct);
 	if (!Format.IsValid())
 	{
@@ -168,23 +146,20 @@ TSharedPtr<FJsonObject> PCGExMediator::ExportStruct(const UScriptStruct* Struct,
 		return nullptr;
 	}
 
-	TSharedPtr<FJsonObject> Body = MakeShared<FJsonObject>();
-	switch (Format->Converter->ConvertToJson(Memory, Body))
+	TSharedPtr<FJsonObject> Body;
+	switch (ConverterToJson(*Format->Converter, Memory, Body))
 	{
-	case EJsonObjectConvertResult::Converted:
+	case EConverterOutcome::Done:
 		break;
-	case EJsonObjectConvertResult::UseDefaultConverter:
+	case EConverterOutcome::UseDefault:
+		Body = MakeShared<FJsonObject>();
 		if (!FJsonObjectConverter::UStructToJsonObject(Struct, Memory, Body.ToSharedRef()))
 		{
 			Report(EPCGExMediatorSeverity::Error, TEXT("reflection export failed"));
 			return nullptr;
 		}
 		break;
-	case EJsonObjectConvertResult::IgnoreAndContinue:
-		Body = MakeShared<FJsonObject>();
-		break;
 	default:
-		Report(EPCGExMediatorSeverity::Error, TEXT("export failed"));
 		return nullptr;
 	}
 
@@ -193,6 +168,8 @@ TSharedPtr<FJsonObject> PCGExMediator::ExportStruct(const UScriptStruct* Struct,
 
 bool PCGExMediator::ImportStruct(const FJsonObject& Doc, const UScriptStruct* Struct, void* Memory)
 {
+	check(IsInGameThread());
+
 	const TSharedPtr<const FPCGExMediatorFormat> Format = FPCGExMediatorRegistry::FindFormatForStruct(Struct);
 	if (!Format.IsValid())
 	{
@@ -217,13 +194,12 @@ bool PCGExMediator::ImportStruct(const FJsonObject& Doc, const UScriptStruct* St
 	{
 		FScope Scope(Local);
 		FPathScope P(Keys::Data);
-		switch (Format->Converter->ConvertFromJson(Temp.GetMutableMemory(), Data->AsObject()))
+		switch (ConverterFromJson(*Format->Converter, Temp.GetMutableMemory(), Data->AsObject()))
 		{
-		case EJsonObjectConvertResult::Converted:
-		case EJsonObjectConvertResult::IgnoreAndContinue:
+		case EConverterOutcome::Done:
 			bOk = true;
 			break;
-		case EJsonObjectConvertResult::UseDefaultConverter:
+		case EConverterOutcome::UseDefault:
 			{
 				FText FailReason;
 				bOk = FJsonObjectConverter::JsonObjectToUStruct(Data->AsObject().ToSharedRef(), Struct, Temp.GetMutableMemory(), 0, 0, false, &FailReason);
@@ -231,7 +207,6 @@ bool PCGExMediator::ImportStruct(const FJsonObject& Doc, const UScriptStruct* St
 			}
 			break;
 		default:
-			bOk = false;
 			break;
 		}
 	}
@@ -246,6 +221,8 @@ bool PCGExMediator::ImportStruct(const FJsonObject& Doc, const UScriptStruct* St
 
 TSharedPtr<FJsonObject> PCGExMediator::ExportObject(const UObject* Host)
 {
+	check(IsInGameThread());
+
 	if (!Host)
 	{
 		Report(EPCGExMediatorSeverity::Error, TEXT("no object"));
@@ -288,6 +265,8 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 {
 	using namespace PCGExMediatorTransport;
 
+	check(IsInGameThread());
+
 	if (!Host)
 	{
 		Report(EPCGExMediatorSeverity::Error, TEXT("no object"));
@@ -315,7 +294,7 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 	FString ClassPath;
 	if (Data->TryGetStringField(Keys::Class, ClassPath))
 	{
-		const UClass* DocClass = FindObject<UClass>(nullptr, *ClassPath);
+		const UClass* DocClass = FindType<UClass>(ClassPath);
 		if (!DocClass || !Host->GetClass()->IsChildOf(DocClass))
 		{
 			Report(EPCGExMediatorSeverity::Error, Keys::Class, FString::Printf(TEXT("'%s' does not match the target (%s)"), *ClassPath, *Host->GetClass()->GetPathName()));
@@ -339,20 +318,27 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 		}
 	}
 
-	// Members apply in binding order, each decoded into scratch and then pushed through the host's own edit
-	// hooks before the next one decodes -- a later member may depend on an earlier one (rows on a schema). The
-	// transaction is cancelled on the first failure, which restores everything Modify() recorded.
-	FScopedTransaction Transaction(LOCTEXT("ImportObject", "PCGEx Mediator Import"));
-	Host->Modify();
+	// Every member decodes into scratch before anything is applied: a later member reads earlier ones through
+	// Decoded, and a failure anywhere leaves the host untouched.
+	TArray<TUniquePtr<FPropertyScratch>> Decoded;
+	Decoded.Reserve(Binding->Members.Num());
+	auto DecodedMember = [&Binding, &Decoded](const FName Name) -> const void*
+	{
+		const int32 Index = Binding->Members.IndexOfByKey(Name);
+		return (Decoded.IsValidIndex(Index) && Decoded[Index].IsValid()) ? Decoded[Index]->Memory : nullptr;
+	};
 
-	int32 Applied = 0;
 	FPCGExMediatorDiagnostics Local;
 	{
 		FScope Scope(Local);
 		for (const FName& Member : Binding->Members)
 		{
 			const TSharedPtr<FJsonValue> Json = (*Members)->TryGetField(Member.ToString());
-			if (!Json.IsValid()) { continue; }
+			if (!Json.IsValid())
+			{
+				Decoded.Add(nullptr);
+				continue;
+			}
 
 			FProperty* Property = FindFProperty<FProperty>(Host->GetClass(), Member);
 			if (!Property)
@@ -361,30 +347,35 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 				break;
 			}
 
-			FPropertyScratch Scratch(Property);
-			if (!DecodeMember(*Binding, Host, Property, Json, Scratch)) { break; }
-
-			Host->PreEditChange(Property);
-			Property->CopyCompleteValue(Property->ContainerPtrToValuePtr<void>(Host), Scratch.Memory);
-			FPropertyChangedEvent Event(Property, EPropertyChangeType::ValueSet);
-			Host->PostEditChangeProperty(Event);
-			++Applied;
+			TUniquePtr<FPropertyScratch> Scratch = MakeUnique<FPropertyScratch>(Property);
+			const bool bOk = DecodeMember(*Binding, Host, Property, Json, *Scratch, DecodedMember);
+			Decoded.Add(MoveTemp(Scratch));
+			if (!bOk) { break; }
 		}
 	}
 	Forward(Local);
+	if (Local.HasErrors()) { return false; }
 
-	if (Local.HasErrors())
+	int32 Present = 0;
+	for (const TUniquePtr<FPropertyScratch>& Scratch : Decoded) { if (Scratch.IsValid()) { ++Present; } }
+	if (Present == 0)
 	{
-		Transaction.Cancel();
-		return false;
-	}
-	if (Applied == 0)
-	{
-		Transaction.Cancel();
 		Report(EPCGExMediatorSeverity::Warning, TEXT("no bound member present; nothing imported"));
 		return true;
 	}
 
+	// Apply in binding order, each through the host's own edit hooks, inside one transaction.
+	FScopedTransaction Transaction(LOCTEXT("ImportObject", "PCGEx Mediator Import"));
+	Host->Modify();
+	for (const TUniquePtr<FPropertyScratch>& Scratch : Decoded)
+	{
+		if (!Scratch.IsValid()) { continue; }
+		FProperty* Property = Scratch->Property;
+		Host->PreEditChange(Property);
+		Property->CopyCompleteValue(Property->ContainerPtrToValuePtr<void>(Host), Scratch->Memory);
+		FPropertyChangedEvent Event(Property, EPropertyChangeType::ValueSet);
+		Host->PostEditChangeProperty(Event);
+	}
 	if (Binding->PostImport) { Binding->PostImport(Host); }
 	(void)Host->MarkPackageDirty();
 	return true;
@@ -393,6 +384,8 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 TSharedPtr<FJsonObject> PCGExMediator::DescribeFormat(const FName FormatId)
 {
 	using namespace PCGExMediatorTransport;
+
+	check(IsInGameThread());
 
 	const TSharedPtr<const FPCGExMediatorFormat> Format = FPCGExMediatorRegistry::FindFormat(FormatId);
 	if (!Format.IsValid()) { return nullptr; }
@@ -403,6 +396,8 @@ TSharedPtr<FJsonObject> PCGExMediator::DescribeObject(const UClass* HostClass)
 {
 	using namespace PCGExMediatorTransport;
 
+	check(IsInGameThread());
+
 	const TSharedPtr<const FPCGExMediatorBinding> Binding = FPCGExMediatorRegistry::FindBinding(HostClass);
 	if (!Binding.IsValid()) { return nullptr; }
 
@@ -410,69 +405,77 @@ TSharedPtr<FJsonObject> PCGExMediator::DescribeObject(const UClass* HostClass)
 	for (const FName& Member : Binding->Members)
 	{
 		TSharedPtr<FJsonObject> MemberSchema;
-		if (const FProperty* Property = FindFProperty<FProperty>(HostClass, Member))
-		{
-			const FProperty* Inner = Property;
-			const bool bArray = Property->IsA<FArrayProperty>();
-			if (bArray) { Inner = CastField<FArrayProperty>(Property)->Inner; }
-
-			if (const FStructProperty* StructProperty = CastField<FStructProperty>(Inner))
-			{
-				if (const TSharedPtr<const FPCGExMediatorFormat> Format = FPCGExMediatorRegistry::FindFormatForStruct(StructProperty->Struct); Format.IsValid() && Format->Describe)
-				{
-					MemberSchema = Format->Describe();
-					if (MemberSchema.IsValid()) { MemberSchema->SetStringField(TEXT("$comment"), FString::Printf(TEXT("format %s v%d"), *Format->Id.ToString(), Format->Version)); }
-				}
-			}
-			if (bArray)
-			{
-				TSharedRef<FJsonObject> ArraySchema = MakeShared<FJsonObject>();
-				ArraySchema->SetStringField(TEXT("type"), TEXT("array"));
-				if (MemberSchema.IsValid()) { ArraySchema->SetObjectField(TEXT("items"), MemberSchema.ToSharedRef()); }
-				MemberSchema = ArraySchema;
-			}
-		}
-		if (!MemberSchema.IsValid())
-		{
-			MemberSchema = MakeShared<FJsonObject>();
-			MemberSchema->SetStringField(TEXT("description"), TEXT("reflected as-is (no registered format)"));
-		}
+		if (const FProperty* Property = FindFProperty<FProperty>(HostClass, Member)) { MemberSchema = Reflect::DescribeProperty(Property); }
+		if (!MemberSchema.IsValid()) { MemberSchema = Schema::Typed(nullptr, TEXT("not a property of the host class")); }
 		MemberProps->SetObjectField(Member.ToString(), MemberSchema.ToSharedRef());
 	}
 
-	TSharedRef<FJsonObject> MembersSchema = MakeShared<FJsonObject>();
-	MembersSchema->SetStringField(TEXT("type"), TEXT("object"));
-	MembersSchema->SetObjectField(TEXT("properties"), MemberProps);
-
 	TSharedRef<FJsonObject> DataProps = MakeShared<FJsonObject>();
-	DataProps->SetObjectField(Keys::Class, ConstSchema(HostClass->GetPathName()));
-	DataProps->SetObjectField(Keys::Members, MembersSchema);
-
-	TSharedRef<FJsonObject> DataSchema = MakeShared<FJsonObject>();
-	DataSchema->SetStringField(TEXT("type"), TEXT("object"));
-	DataSchema->SetObjectField(TEXT("properties"), DataProps);
-	if (!Binding->Summary.IsEmpty()) { DataSchema->SetStringField(TEXT("description"), Binding->Summary); }
-
-	return EnvelopeSchema(ObjectFormatId, ObjectFormatVersion, DataSchema);
+	DataProps->SetObjectField(Keys::Class, Schema::Const(HostClass->GetPathName()));
+	DataProps->SetObjectField(Keys::Members, Schema::Object(MemberProps));
+	return EnvelopeSchema(ObjectFormatId, ObjectFormatVersion, Schema::Object(DataProps, Binding->Summary));
 }
 
-TSharedPtr<FJsonObject> PCGExMediator::DescribeReflectedStruct(const FString& StructPath)
+TSharedPtr<FJsonObject> PCGExMediator::DescribeReflectedStruct(const FString& StructNameOrPath)
 {
-	const UScriptStruct* Struct = FindObject<UScriptStruct>(nullptr, *StructPath);
-	if (!Struct) { Struct = FindFirstObject<UScriptStruct>(*StructPath, EFindFirstObjectOptions::ExactClass); }
-	if (!Struct && StructPath.Len() > 1 && StructPath[0] == TEXT('F') && FChar::IsUpper(StructPath[1]))
-	{
-		Struct = FindFirstObject<UScriptStruct>(*StructPath.Mid(1), EFindFirstObjectOptions::ExactClass);
-	}
+	check(IsInGameThread());
+
+	const UScriptStruct* Struct = FindType<UScriptStruct>(StructNameOrPath);
 	if (!Struct) { return nullptr; }
 
 	TSharedPtr<FJsonObject> S = Reflect::DescribeStruct(Struct, &Reflect::IncludeAll, 1);
 	if (S.IsValid())
 	{
 		S->SetStringField(TEXT("$schema"), TEXT("https://json-schema.org/draft/2020-12/schema"));
-		S->SetStringField(TEXT("description"), FString::Printf(TEXT("%s, reflected: every UPROPERTY by name in the dialect; nested structs one level deep, deeper ones collapsed with their own DescribeFormat path"), *Struct->GetPathName()));
+		Schema::Describe(S.ToSharedRef(), FString::Printf(TEXT("%s, reflected: every UPROPERTY by name in the dialect; nested structs one level deep, deeper ones collapsed with their own DescribeFormat path"), *Struct->GetPathName()));
 	}
 	return S;
+}
+
+TSharedPtr<FJsonObject> PCGExMediator::DescribeAny(const FString& FormatIdOrClassOrStruct)
+{
+	const FString Trimmed = FormatIdOrClassOrStruct.TrimStartAndEnd();
+	if (TSharedPtr<FJsonObject> S = DescribeFormat(FName(*Trimmed))) { return S; }
+	if (const UClass* Class = FindType<UClass>(Trimmed))
+	{
+		if (TSharedPtr<FJsonObject> S = DescribeObject(Class)) { return S; }
+	}
+	return DescribeReflectedStruct(Trimmed);
+}
+
+TSharedRef<FJsonObject> PCGExMediator::ListAsJson()
+{
+	TArray<TSharedPtr<FJsonValue>> Formats;
+	TArray<TSharedPtr<const FPCGExMediatorFormat>> RegisteredFormats;
+	FPCGExMediatorRegistry::GetFormats(RegisteredFormats);
+	for (const TSharedPtr<const FPCGExMediatorFormat>& Format : RegisteredFormats)
+	{
+		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetStringField(TEXT("id"), Format->Id.ToString());
+		Entry->SetNumberField(TEXT("version"), Format->Version);
+		Entry->SetStringField(TEXT("struct"), Format->Struct ? Format->Struct->GetPathName() : FString());
+		Entry->SetStringField(TEXT("summary"), Format->Summary);
+		Formats.Add(MakeShared<FJsonValueObject>(Entry));
+	}
+
+	TArray<TSharedPtr<FJsonValue>> Bindings;
+	TArray<TSharedPtr<const FPCGExMediatorBinding>> RegisteredBindings;
+	FPCGExMediatorRegistry::GetBindings(RegisteredBindings);
+	for (const TSharedPtr<const FPCGExMediatorBinding>& Binding : RegisteredBindings)
+	{
+		TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+		Entry->SetStringField(TEXT("class"), Binding->HostClass->GetPathName());
+		TArray<FString> Members;
+		for (const FName& Member : Binding->Members) { Members.Add(Member.ToString()); }
+		Entry->SetArrayField(TEXT("members"), Schema::Strings(Members));
+		Entry->SetStringField(TEXT("summary"), Binding->Summary);
+		Bindings.Add(MakeShared<FJsonValueObject>(Entry));
+	}
+
+	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetArrayField(TEXT("formats"), Formats);
+	Root->SetArrayField(TEXT("bindings"), Bindings);
+	return Root;
 }
 
 FString PCGExMediator::ToString(const TSharedRef<FJsonObject>& Doc, const bool bPretty)
@@ -526,16 +529,9 @@ TSharedPtr<FJsonObject> PCGExMediator::ReadFile(const FString& FilePath)
 
 UObject* PCGExMediator::ResolveTarget(const FString& Target)
 {
-	auto LoadPath = [](const FString& PathString) -> UObject*
-	{
-		const FSoftObjectPath Path(PathString);
-		if (Path.IsNull()) { return nullptr; }
-		if (UObject* Found = Path.ResolveObject()) { return Found; }
-		PCGExHelpers::LoadBlocking_AnyThread(Path);
-		return Path.ResolveObject();
-	};
+	check(IsInGameThread());
 
-	if (UObject* Direct = LoadPath(Target))
+	if (UObject* Direct = ResolveObject(Target))
 	{
 		// "<graph path>:<node object name>" is itself a valid subobject path; the host is always the settings.
 		if (const UPCGNode* Node = Cast<UPCGNode>(Direct))
@@ -552,7 +548,7 @@ UObject* PCGExMediator::ResolveTarget(const FString& Target)
 	{
 		const FString GraphPath = Target.Left(Split);
 		const FString NodeName = Target.Mid(Split + 1);
-		if (const UPCGGraph* Graph = Cast<UPCGGraph>(LoadPath(GraphPath)))
+		if (const UPCGGraph* Graph = Cast<UPCGGraph>(ResolveObject(GraphPath)))
 		{
 			for (UPCGNode* Node : Graph->GetNodes())
 			{
@@ -568,18 +564,6 @@ UObject* PCGExMediator::ResolveTarget(const FString& Target)
 	}
 
 	Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' resolves to nothing (expected an object path, or <graph path>:<node>)"), *Target));
-	return nullptr;
-}
-
-const UClass* PCGExMediator::FindClass(const FString& NameOrPath)
-{
-	if (const UClass* ByPath = FindObject<UClass>(nullptr, *NameOrPath)) { return ByPath; }
-	if (const UClass* ByName = FindFirstObject<UClass>(*NameOrPath, EFindFirstObjectOptions::ExactClass)) { return ByName; }
-	// UClass names carry no U / A prefix; accept the C++ spelling too.
-	if (NameOrPath.Len() > 1 && (NameOrPath[0] == TEXT('U') || NameOrPath[0] == TEXT('A')) && FChar::IsUpper(NameOrPath[1]))
-	{
-		return FindFirstObject<UClass>(*NameOrPath.Mid(1), EFindFirstObjectOptions::ExactClass);
-	}
 	return nullptr;
 }
 

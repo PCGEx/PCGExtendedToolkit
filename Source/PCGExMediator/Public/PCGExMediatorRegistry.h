@@ -23,7 +23,7 @@ struct PCGEXMEDIATOR_API FPCGExMediatorFormat
 
 	const UScriptStruct* Struct = nullptr;
 
-	/** Owned by the registering module for the lifetime of the registration (a function-local static is fine). */
+	/** Alive for the lifetime of the registration (FPCGExMediatorDomain::AddFormat owns it for you). */
 	const IJsonObjectStructConverter* Converter = nullptr;
 
 	/** JSON Schema of the document body (the envelope's "data"). */
@@ -38,10 +38,13 @@ struct PCGEXMEDIATOR_API FPCGExMediatorFormat
 	}
 };
 
+/** Decoded value of a member earlier in binding order, not yet applied; null when the document did not carry it. */
+using FPCGExMediatorDecodedMember = TFunctionRef<const void*(FName Member)>;
+
 /**
  * How an object is authored through the mediator: which of its members travel, in what order, and how to
- * wrap a member's import when the domain needs context around it (e.g. a schema scope while rows decode).
- * After an import the transport drives the host's own PostEditChangeProperty for each written member.
+ * wrap a member's decode when the domain needs context around it (e.g. a schema scope while rows decode).
+ * Every member decodes into scratch first; then all are applied in order through the host's own edit hooks.
  */
 struct PCGEXMEDIATOR_API FPCGExMediatorBinding
 {
@@ -50,8 +53,8 @@ struct PCGEXMEDIATOR_API FPCGExMediatorBinding
 	/** Export and import order. Each must be a UPROPERTY of HostClass (or a parent). */
 	TArray<FName> Members;
 
-	/** Optional. Must invoke Import exactly once; whatever it sets up stays alive across that call. */
-	TFunction<void(UObject* Host, FName Member, TFunctionRef<void()> Import)> WrapImport;
+	/** Optional. Must invoke Import exactly once; Decoded gives the scratch value of an earlier member (null = the live one stands). */
+	TFunction<void(UObject* Host, FName Member, FPCGExMediatorDecodedMember Decoded, TFunctionRef<void()> Import)> WrapImport;
 
 	/** Optional. Runs after every member applied, inside the import transaction, for host work no edit hook covers. */
 	TFunction<void(UObject* Host)> PostImport;
@@ -64,7 +67,7 @@ struct PCGEXMEDIATOR_API FPCGExMediatorBinding
 	}
 };
 
-/** Game-thread only; registrations happen in StartupModule and are removed in ShutdownModule. */
+/** Game-thread only (asserted); registrations happen in StartupModule and are removed in ShutdownModule. */
 class PCGEXMEDIATOR_API FPCGExMediatorRegistry
 {
 public:
@@ -81,4 +84,49 @@ public:
 	/** Walks up the class chain, so a binding on a base class serves its subclasses. */
 	static TSharedPtr<const FPCGExMediatorBinding> FindBinding(const UClass* InHostClass);
 	static void GetBindings(TArray<TSharedPtr<const FPCGExMediatorBinding>>& OutBindings);
+};
+
+/**
+ * A domain's registrations, released together: AddFormat / AddBinding from StartupModule, Reset from
+ * ShutdownModule (by key only, so it is safe after the UObjects are gone). Owns the converters it creates.
+ */
+class PCGEXMEDIATOR_API FPCGExMediatorDomain
+{
+public:
+	FPCGExMediatorDomain() = default;
+	~FPCGExMediatorDomain();
+
+	FPCGExMediatorDomain(const FPCGExMediatorDomain&) = delete;
+	FPCGExMediatorDomain& operator=(const FPCGExMediatorDomain&) = delete;
+
+	/** Constructs the converter in place and registers the format; the domain keeps the converter alive. */
+	template <typename TConverter, typename... TArgs>
+	TConverter& AddFormat(const FName Id, const int32 Version, const UScriptStruct* Struct, TFunction<TSharedPtr<FJsonObject>()> Describe, FString Summary, TArgs&&... Args)
+	{
+		TSharedRef<TConverter> Converter = MakeShared<TConverter>(Forward<TArgs>(Args)...);
+		FPCGExMediatorFormat Format;
+		Format.Id = Id;
+		Format.Version = Version;
+		Format.Struct = Struct;
+		Format.Converter = &Converter.Get();
+		Format.Describe = MoveTemp(Describe);
+		Format.Summary = MoveTemp(Summary);
+		AddFormat(Format, Converter);
+		return Converter.Get();
+	}
+
+	/** Registers a format whose converter Owner keeps alive (or the caller does, when Owner is null). */
+	void AddFormat(const FPCGExMediatorFormat& Format, const TSharedPtr<const IJsonObjectStructConverter>& Owner = nullptr);
+	void AddBinding(const FPCGExMediatorBinding& Binding);
+
+	bool HasFormatForStruct(const UScriptStruct* Struct) const;
+
+	/** Unregisters everything in reverse order of registration. */
+	void Reset();
+
+private:
+	TArray<FName> FormatIds;
+	TArray<const UScriptStruct*> FormatStructs;
+	TArray<const UClass*> BindingClasses;
+	TArray<TSharedPtr<const IJsonObjectStructConverter>> OwnedConverters;
 };

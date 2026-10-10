@@ -6,9 +6,8 @@
 #include "PCGExMediatorDiagnostics.h"
 #include "PCGExMediatorReflection.h"
 #include "PCGExMediatorRegistry.h"
+#include "PCGExMediatorSchema.h"
 #include "PCGExMediatorValues.h"
-#include "Collections/PCGExOmniCollection.h"
-#include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExAssetCollectionTypes.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -22,27 +21,15 @@ namespace PCGExCollectionsMediatorFormats
 
 	namespace Keys
 	{
-		const TCHAR* Type = TEXT("type");
-		const TCHAR* EntryId = TEXT("entryId");
-		const TCHAR* Sockets = TEXT("sockets");
-		const TCHAR* BoundsModifier = TEXT("boundsModifier");
-		const TCHAR* Path = TEXT("path");
-		const TCHAR* Bounds = TEXT("bounds");
+		constexpr const TCHAR* const Type = TEXT("type");
+		constexpr const TCHAR* const EntryId = TEXT("entryId");
+		constexpr const TCHAR* const Sockets = TEXT("sockets");
+		constexpr const TCHAR* const BoundsModifier = TEXT("boundsModifier");
+		constexpr const TCHAR* const Path = TEXT("path");
+		constexpr const TCHAR* const Bounds = TEXT("bounds");
 	}
 
 	const FString EntryOwnKeys[] = {TEXT("type"), TEXT("entryId")};
-
-	EJsonObjectConvertResult Guarded(TFunctionRef<bool()> Body)
-	{
-		FPCGExMediatorDiagnostics Local;
-		bool bOk = false;
-		{
-			FScope Scope(Local);
-			bOk = Body();
-		}
-		Forward(Local);
-		return (bOk && !Local.HasErrors()) ? EJsonObjectConvertResult::Converted : EJsonObjectConvertResult::FailAndAbort;
-	}
 
 	bool IsAuthoredProperty(const FProperty* Property)
 	{
@@ -86,13 +73,10 @@ namespace PCGExCollectionsMediatorFormats
 		return Reflect::DecodeStruct(Struct, &Entry, In, &IsAuthoredProperty, EntryOwnKeys);
 	}
 
-	void AddEntryOwnSchemas(FJsonObject& Props, const TSharedPtr<FJsonObject>& TypeSchema)
+	void AddEntryOwnSchemas(FJsonObject& Props, const TSharedRef<FJsonObject>& TypeSchema)
 	{
-		Props.SetObjectField(Keys::Type, TypeSchema.ToSharedRef());
-		TSharedRef<FJsonObject> IdSchema = MakeShared<FJsonObject>();
-		IdSchema->SetStringField(TEXT("type"), TEXT("integer"));
-		IdSchema->SetStringField(TEXT("description"), TEXT("stable entry identity; omit for a new entry, the collection mints it on its next staging rebuild"));
-		Props.SetObjectField(Keys::EntryId, IdSchema);
+		Props.SetObjectField(Keys::Type, TypeSchema);
+		Props.SetObjectField(Keys::EntryId, Schema::Integer(TEXT("stable entry identity; omit for a new entry, the collection mints it on its next staging rebuild")));
 	}
 
 	TSharedPtr<FJsonObject> DescribeEntry(const UScriptStruct* Struct)
@@ -103,14 +87,12 @@ namespace PCGExCollectionsMediatorFormats
 		const TSharedPtr<FJsonObject>* Props = nullptr;
 		if (!S.IsValid() || !S->TryGetObjectField(TEXT("properties"), Props)) { return S; }
 
-		TSharedRef<FJsonObject> TypeSchema = MakeShared<FJsonObject>();
-		TypeSchema->SetStringField(TEXT("type"), TEXT("string"));
+		TSharedRef<FJsonObject> TypeSchema = Schema::String(TEXT("registered collection type id"));
 		PCGExAssetCollection::FTypeInfo Info;
 		if (PCGExAssetCollection::FTypeRegistry::Get().GetInfoByEntryStruct(Struct, Info)) { TypeSchema->SetStringField(TEXT("const"), Info.Id.ToString()); }
-		TypeSchema->SetStringField(TEXT("description"), TEXT("registered collection type id"));
 		AddEntryOwnSchemas(**Props, TypeSchema);
 
-		S->SetStringField(TEXT("description"), FString::Printf(TEXT("%s: authored fields by name. Export is sparse (fields at their default are omitted); import merges (an absent key leaves the field unchanged on an existing row, at its default on a new one)."), *Struct->GetName()));
+		Schema::Describe(S.ToSharedRef(), FString::Printf(TEXT("%s: authored fields by name. Export is sparse (fields at their default are omitted); import merges (an absent key leaves the field unchanged on an existing row, at its default on a new one)."), *Struct->GetName()));
 		return S;
 	}
 
@@ -120,18 +102,14 @@ namespace PCGExCollectionsMediatorFormats
 		const TSharedPtr<FJsonObject>* Props = nullptr;
 		if (!S.IsValid() || !S->TryGetObjectField(TEXT("properties"), Props)) { return S; }
 
-		TArray<TSharedPtr<FJsonValue>> TypeIds;
+		TArray<FString> TypeIds;
 		PCGExAssetCollection::FTypeRegistry::Get().ForEach([&TypeIds](const PCGExAssetCollection::FTypeInfo& Info)
 		{
-			if (Info.EntryStruct) { TypeIds.Add(MakeShared<FJsonValueString>(Info.Id.ToString())); }
+			if (Info.EntryStruct) { TypeIds.Add(Info.Id.ToString()); }
 		});
-		TSharedRef<FJsonObject> TypeSchema = MakeShared<FJsonObject>();
-		TypeSchema->SetStringField(TEXT("type"), TEXT("string"));
-		TypeSchema->SetArrayField(TEXT("enum"), TypeIds);
-		TypeSchema->SetStringField(TEXT("description"), TEXT("the row's entry type; required for a new row, switches the payload struct on an existing one"));
-		AddEntryOwnSchemas(**Props, TypeSchema);
+		AddEntryOwnSchemas(**Props, Schema::Enum(TypeIds, TEXT("the row's entry type; required for a new row, switches the payload struct on an existing one")));
 
-		S->SetStringField(TEXT("description"), TEXT("Omni row: the base entry fields listed here plus the type's own fields, described by pcgex.collection-entry/<type>. Sparse export, merging import."));
+		Schema::Describe(S.ToSharedRef(), TEXT("Omni row: the base entry fields listed here plus the type's own fields, described by pcgex.collection-entry/<type>. Sparse export, merging import."));
 		return S;
 	}
 
@@ -147,28 +125,15 @@ namespace PCGExCollectionsMediatorFormats
 		{
 			if (const TSharedPtr<FJsonObject> S = Reflect::DescribeProperty(P)) { Props->SetObjectField(Keys::BoundsModifier, S.ToSharedRef()); }
 		}
-		TSharedRef<FJsonObject> PathSchema = MakeShared<FJsonObject>();
-		PathSchema->SetStringField(TEXT("type"), TEXT("string"));
-		PathSchema->SetStringField(TEXT("description"), TEXT("read-only: staged asset path"));
-		Props->SetObjectField(Keys::Path, PathSchema);
-		TSharedRef<FJsonObject> BoundsSchema = MakeShared<FJsonObject>();
-		BoundsSchema->SetStringField(TEXT("type"), TEXT("object"));
-		BoundsSchema->SetStringField(TEXT("description"), TEXT("read-only: staged bounds { min: [x, y, z], max: [x, y, z] }"));
-		Props->SetObjectField(Keys::Bounds, BoundsSchema);
-
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("object"));
-		S->SetObjectField(TEXT("properties"), Props);
-		S->SetStringField(TEXT("description"), TEXT("authored staging data; path and bounds are recomputed by the staging rebuild and ignored on import"));
-		return S;
+		Props->SetObjectField(Keys::Path, Schema::String(TEXT("read-only: staged asset path")));
+		Props->SetObjectField(Keys::Bounds, Schema::Typed(TEXT("object"), TEXT("read-only: staged bounds { min: [x, y, z], max: [x, y, z] }")));
+		return Schema::Object(Props, TEXT("authored staging data; path and bounds are recomputed by the staging rebuild and ignored on import"));
 	}
 
 	struct FState
 	{
-		TMap<const UScriptStruct*, TUniquePtr<FPCGExCollectionEntryJsonConverter>> EntryConverters;
-		TArray<FName> EntryFormatIds;
+		FPCGExMediatorDomain* Domain = nullptr;
 		FDelegateHandle ModulesChangedHandle;
-		bool bRegistered = false;
 	};
 
 	FState& State()
@@ -179,35 +144,28 @@ namespace PCGExCollectionsMediatorFormats
 
 	void RegisterEntryFormats()
 	{
-		FState& S = State();
+		FPCGExMediatorDomain* Domain = State().Domain;
+		if (!Domain) { return; }
 
-		// Collect under the registry lock, register outside it: RegisterFormat must not re-enter.
+		// Collect under the registry lock, register outside it: the registry must not re-enter.
 		TArray<TPair<FName, UScriptStruct*>> Pending;
 		PCGExAssetCollection::FTypeRegistry::Get().ForEach([&](const PCGExAssetCollection::FTypeInfo& Info)
 		{
-			if (Info.EntryStruct && !S.EntryConverters.Contains(Info.EntryStruct)) { Pending.Emplace(Info.Id, Info.EntryStruct); }
+			if (Info.EntryStruct && !Domain->HasFormatForStruct(Info.EntryStruct)) { Pending.Emplace(Info.Id, Info.EntryStruct); }
 		});
 
 		for (const TPair<FName, UScriptStruct*>& Item : Pending)
 		{
 			const UScriptStruct* Struct = Item.Value;
-			TUniquePtr<FPCGExCollectionEntryJsonConverter>& Converter = S.EntryConverters.Add(Struct, MakeUnique<FPCGExCollectionEntryJsonConverter>(Struct));
-
-			FPCGExMediatorFormat F;
-			F.Id = EntryFormatId(Item.Key);
-			F.Version = 1;
-			F.Struct = Struct;
-			F.Converter = Converter.Get();
-			F.Describe = [Struct]() { return DescribeEntry(Struct); };
-			F.Summary = FString::Printf(TEXT("%s collection entry."), *Item.Key.ToString());
-			FPCGExMediatorRegistry::RegisterFormat(F);
-			S.EntryFormatIds.Add(F.Id);
+			Domain->AddFormat<FPCGExCollectionEntryJsonConverter>(
+				EntryFormatId(Item.Key), 1, Struct, [Struct]() { return DescribeEntry(Struct); },
+				FString::Printf(TEXT("%s collection entry."), *Item.Key.ToString()), Struct);
 		}
 	}
 
 	void OnModulesChanged(FName, const EModuleChangeReason Reason)
 	{
-		if (Reason == EModuleChangeReason::ModuleLoaded && State().bRegistered) { RegisterEntryFormats(); }
+		if (Reason == EModuleChangeReason::ModuleLoaded) { RegisterEntryFormats(); }
 	}
 }
 
@@ -219,177 +177,115 @@ FName PCGExCollectionsMediatorFormats::EntryFormatId(const FName TypeId)
 #pragma region FPCGExCollectionEntryJsonConverter
 
 FPCGExCollectionEntryJsonConverter::FPCGExCollectionEntryJsonConverter(const UScriptStruct* InStruct)
-	: Struct(InStruct)
+	: FPCGExMediatorScriptStructConverter(InStruct)
 {
 }
 
-EJsonObjectConvertResult FPCGExCollectionEntryJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExCollectionEntryJsonConverter::Encode(const void* Value, FJsonObject& Out) const
 {
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	return PCGExCollectionsMediatorFormats::Guarded([&]()
-	{
-		PCGExCollectionsMediatorFormats::EncodeEntry(Struct, *static_cast<const FPCGExAssetCollectionEntry*>(StructMemory), *OutJsonObject);
-		return true;
-	});
+	PCGExCollectionsMediatorFormats::EncodeEntry(GetStruct(), *static_cast<const FPCGExAssetCollectionEntry*>(Value), Out);
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExCollectionEntryJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExCollectionEntryJsonConverter::Decode(const FJsonObject& In, void* Temp, const void*) const
 {
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	return PCGExCollectionsMediatorFormats::Guarded([&]()
-	{
-		FInstancedStruct Temp;
-		Temp.InitializeAs(Struct, static_cast<const uint8*>(StructMemory));
-		if (!PCGExCollectionsMediatorFormats::DecodeEntry(Struct, *Temp.GetMutablePtr<FPCGExAssetCollectionEntry>(), *InJsonObject)) { return false; }
-		Struct->CopyScriptStruct(StructMemory, Temp.GetMemory());
-		return true;
-	});
+	return PCGExCollectionsMediatorFormats::DecodeEntry(GetStruct(), *static_cast<FPCGExAssetCollectionEntry*>(Temp), In);
 }
 
 #pragma endregion
 
 #pragma region FPCGExOmniCollectionEntryJsonConverter
 
-EJsonObjectConvertResult FPCGExOmniCollectionEntryJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExOmniCollectionEntryJsonConverter::Encode(const FPCGExOmniCollectionEntry& Value, FJsonObject& Out) const
 {
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	const FPCGExOmniCollectionEntry& Row = *static_cast<const FPCGExOmniCollectionEntry*>(StructMemory);
-	if (!Row.Entry.IsValid()) { return EJsonObjectConvertResult::Converted; }
-	return PCGExCollectionsMediatorFormats::Guarded([&]()
-	{
-		PCGExCollectionsMediatorFormats::EncodeEntry(Row.Entry.GetScriptStruct(), *Row.GetPayload(), *OutJsonObject);
-		return true;
-	});
+	if (!Value.Entry.IsValid()) { return true; }
+	PCGExCollectionsMediatorFormats::EncodeEntry(Value.Entry.GetScriptStruct(), *Value.GetPayload(), Out);
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExOmniCollectionEntryJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExOmniCollectionEntryJsonConverter::Decode(const FJsonObject& In, FPCGExOmniCollectionEntry& Temp, const FPCGExOmniCollectionEntry&) const
 {
 	using namespace PCGExCollectionsMediatorFormats;
 
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	FPCGExOmniCollectionEntry& Live = *static_cast<FPCGExOmniCollectionEntry*>(StructMemory);
-	return Guarded([&]()
+	FString TypeText;
+	if (In.TryGetStringField(Keys::Type, TypeText))
 	{
-		FPCGExOmniCollectionEntry Temp = Live;
-
-		FString TypeText;
-		if (InJsonObject->TryGetStringField(Keys::Type, TypeText))
+		FPathScope P(Keys::Type);
+		PCGExAssetCollection::FTypeInfo Info;
+		if (!PCGExAssetCollection::FTypeRegistry::Get().GetInfo(FName(*TypeText), Info) || !Info.EntryStruct)
 		{
-			FPathScope P(Keys::Type);
-			PCGExAssetCollection::FTypeInfo Info;
-			if (!PCGExAssetCollection::FTypeRegistry::Get().GetInfo(FName(*TypeText), Info) || !Info.EntryStruct)
-			{
-				Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not a collection type with an entry struct"), *TypeText));
-				return false;
-			}
-			if (Temp.Entry.GetScriptStruct() != Info.EntryStruct) { Temp.Entry.InitializeAs(Info.EntryStruct); }
-		}
-		if (!Temp.Entry.IsValid())
-		{
-			Report(EPCGExMediatorSeverity::Error, Keys::Type, TEXT("required for a new Omni row"));
+			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not a collection type with an entry struct"), *TypeText));
 			return false;
 		}
-		if (!DecodeEntry(Temp.Entry.GetScriptStruct(), *Temp.GetPayload(), *InJsonObject)) { return false; }
-		Live = MoveTemp(Temp);
-		return true;
-	});
+		if (Temp.Entry.GetScriptStruct() != Info.EntryStruct) { Temp.Entry.InitializeAs(Info.EntryStruct); }
+	}
+	if (!Temp.Entry.IsValid())
+	{
+		Report(EPCGExMediatorSeverity::Error, Keys::Type, TEXT("required for a new Omni row"));
+		return false;
+	}
+	return DecodeEntry(Temp.Entry.GetScriptStruct(), *Temp.GetPayload(), In);
 }
 
 #pragma endregion
 
 #pragma region FPCGExAssetStagingDataJsonConverter
 
-EJsonObjectConvertResult FPCGExAssetStagingDataJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+bool FPCGExAssetStagingDataJsonConverter::Encode(const FPCGExAssetStagingData& Value, FJsonObject& Out) const
 {
 	using namespace PCGExCollectionsMediatorFormats;
 
-	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
-	const FPCGExAssetStagingData& Staging = *static_cast<const FPCGExAssetStagingData*>(StructMemory);
 	const UScriptStruct* Struct = FPCGExAssetStagingData::StaticStruct();
-
-	if (!Staging.Sockets.IsEmpty())
+	auto Write = [&](const TCHAR* Key, const FName Member, const void* Field)
 	{
-		if (const FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets)))
-		{
-			FPathScope S(Keys::Sockets);
-			OutJsonObject->SetField(Keys::Sockets, Reflect::EncodeProperty(P, &Staging.Sockets));
-		}
-	}
-	if (Staging.BoundsStagingModifier.IsValid())
-	{
-		if (const FProperty* P = FindFProperty<FProperty>(Struct, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier)))
-		{
-			FPathScope S(Keys::BoundsModifier);
-			OutJsonObject->SetField(Keys::BoundsModifier, Reflect::EncodeProperty(P, &Staging.BoundsStagingModifier));
-		}
-	}
-	if (!Staging.Path.IsNull()) { OutJsonObject->SetStringField(Keys::Path, Staging.Path.ToString()); }
-	if (Staging.Bounds.IsValid)
+		const FProperty* Property = FindFProperty<FProperty>(Struct, Member);
+		if (!Property) { return; }
+		FPathScope S(Key);
+		if (const TSharedPtr<FJsonValue> Json = Reflect::EncodeProperty(Property, Field)) { Out.SetField(Key, Json); }
+	};
+	if (!Value.Sockets.IsEmpty()) { Write(Keys::Sockets, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets), &Value.Sockets); }
+	if (Value.BoundsStagingModifier.IsValid()) { Write(Keys::BoundsModifier, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier), &Value.BoundsStagingModifier); }
+	if (!Value.Path.IsNull()) { Out.SetStringField(Keys::Path, Value.Path.ToString()); }
+	if (Value.Bounds.IsValid)
 	{
 		TSharedRef<FJsonObject> Bounds = MakeShared<FJsonObject>();
-		Bounds->SetField(TEXT("min"), Values::Encode<FVector>(Staging.Bounds.Min));
-		Bounds->SetField(TEXT("max"), Values::Encode<FVector>(Staging.Bounds.Max));
-		OutJsonObject->SetObjectField(Keys::Bounds, Bounds);
+		Bounds->SetField(TEXT("min"), Values::Encode<FVector>(Value.Bounds.Min));
+		Bounds->SetField(TEXT("max"), Values::Encode<FVector>(Value.Bounds.Max));
+		Out.SetObjectField(Keys::Bounds, Bounds);
 	}
-	return EJsonObjectConvertResult::Converted;
+	return true;
 }
 
-EJsonObjectConvertResult FPCGExAssetStagingDataJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+bool FPCGExAssetStagingDataJsonConverter::Decode(const FJsonObject& In, FPCGExAssetStagingData& Temp, const FPCGExAssetStagingData&) const
 {
 	using namespace PCGExCollectionsMediatorFormats;
 
-	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
-	FPCGExAssetStagingData& Live = *static_cast<FPCGExAssetStagingData*>(StructMemory);
-	return Guarded([&]()
+	const UScriptStruct* Struct = FPCGExAssetStagingData::StaticStruct();
+	auto Apply = [&](const TCHAR* Key, const FName Member) -> bool
 	{
-		FPCGExAssetStagingData Temp = Live;
-		const UScriptStruct* Struct = FPCGExAssetStagingData::StaticStruct();
-		auto Apply = [&](const TCHAR* Key, const FName Member) -> bool
-		{
-			const TSharedPtr<FJsonValue> Json = InJsonObject->TryGetField(Key);
-			if (!Json.IsValid()) { return true; }
-			FPathScope P(Key);
-			const FProperty* Property = FindFProperty<FProperty>(Struct, Member);
-			return Property && Reflect::DecodeProperty(Property, Property->ContainerPtrToValuePtr<void>(&Temp), Json);
-		};
-		if (!Apply(Keys::Sockets, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets))) { return false; }
-		if (!Apply(Keys::BoundsModifier, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier))) { return false; }
-		// "path" and "bounds" are staging output; the rebuild after import recomputes them.
-		Live = MoveTemp(Temp);
-		return true;
-	});
+		const TSharedPtr<FJsonValue> Json = In.TryGetField(Key);
+		if (!Json.IsValid()) { return true; }
+		FPathScope P(Key);
+		const FProperty* Property = FindFProperty<FProperty>(Struct, Member);
+		return Property && Reflect::DecodeProperty(Property, Property->ContainerPtrToValuePtr<void>(&Temp), Json);
+	};
+	if (!Apply(Keys::Sockets, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, Sockets))) { return false; }
+	if (!Apply(Keys::BoundsModifier, GET_MEMBER_NAME_CHECKED(FPCGExAssetStagingData, BoundsStagingModifier))) { return false; }
+	// "path" and "bounds" are staging output; the rebuild after import recomputes them.
+	return true;
 }
 
 #pragma endregion
 
-void PCGExCollectionsMediatorFormats::Register()
+void PCGExCollectionsMediatorFormats::Register(FPCGExMediatorDomain& Domain)
 {
-	static FPCGExOmniCollectionEntryJsonConverter OmniConverter;
-	static FPCGExAssetStagingDataJsonConverter StagingConverter;
-
 	FState& S = State();
-	S.bRegistered = true;
+	S.Domain = &Domain;
 
-	{
-		FPCGExMediatorFormat F;
-		F.Id = OmniEntryFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExOmniCollectionEntry::StaticStruct();
-		F.Converter = &OmniConverter;
-		F.Describe = &DescribeOmniRow;
-		F.Summary = TEXT("Omni collection row: any registered entry type, chosen by \"type\".");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
-	{
-		FPCGExMediatorFormat F;
-		F.Id = StagingFormatId;
-		F.Version = 1;
-		F.Struct = FPCGExAssetStagingData::StaticStruct();
-		F.Converter = &StagingConverter;
-		F.Describe = &DescribeStaging;
-		F.Summary = TEXT("Entry staging data: authored sockets and bounds modifier.");
-		FPCGExMediatorRegistry::RegisterFormat(F);
-	}
+	Domain.AddFormat<FPCGExOmniCollectionEntryJsonConverter>(OmniEntryFormatId, 1, FPCGExOmniCollectionEntry::StaticStruct(), &DescribeOmniRow,
+	                                                          TEXT("Omni collection row: any registered entry type, chosen by \"type\"."));
+	Domain.AddFormat<FPCGExAssetStagingDataJsonConverter>(StagingFormatId, 1, FPCGExAssetStagingData::StaticStruct(), &DescribeStaging,
+	                                                       TEXT("Entry staging data: authored sockets and bounds modifier."));
 
 	RegisterEntryFormats();
 	if (!S.ModulesChangedHandle.IsValid())
@@ -401,15 +297,10 @@ void PCGExCollectionsMediatorFormats::Register()
 void PCGExCollectionsMediatorFormats::Unregister()
 {
 	FState& S = State();
-	S.bRegistered = false;
 	if (S.ModulesChangedHandle.IsValid())
 	{
 		FModuleManager::Get().OnModulesChanged().Remove(S.ModulesChangedHandle);
 		S.ModulesChangedHandle.Reset();
 	}
-	for (const FName& Id : S.EntryFormatIds) { FPCGExMediatorRegistry::UnregisterFormat(Id); }
-	S.EntryFormatIds.Reset();
-	S.EntryConverters.Reset();
-	FPCGExMediatorRegistry::UnregisterFormat(OmniEntryFormatId);
-	FPCGExMediatorRegistry::UnregisterFormat(StagingFormatId);
+	S.Domain = nullptr;
 }

@@ -11,7 +11,7 @@
 #include "Mediator/PCGExPropertyMediatorHooks.h"
 #include "UObject/UnrealType.h"
 
-void PCGExCollectionsMediatorBindings::Register()
+void PCGExCollectionsMediatorBindings::Register(FPCGExMediatorDomain& Domain)
 {
 	{
 		FPCGExMediatorBinding Binding;
@@ -21,13 +21,14 @@ void PCGExCollectionsMediatorBindings::Register()
 			GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CategoryOverrides),
 			PCGExAssetCollection::EntriesPropertyName
 		};
-		// Category rows and entry overrides decode against the schema applied just before them.
-		Binding.WrapImport = [](UObject* Host, const FName Member, TFunctionRef<void()> Import)
+		// Category rows and entry overrides resolve against the schema the document carries, else the live one.
+		Binding.WrapImport = [](UObject* Host, const FName Member, FPCGExMediatorDecodedMember Decoded, TFunctionRef<void()> Import)
 		{
 			const UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(Host);
 			if (Collection && Member != GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CollectionProperties))
 			{
-				PCGExPropertyMediator::FOverridesSchemaScope Scope(Collection->CollectionProperties.BuildSchema());
+				const FPCGExPropertySchemaCollection* Schema = static_cast<const FPCGExPropertySchemaCollection*>(Decoded(GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CollectionProperties)));
+				PCGExPropertyMediator::FOverridesSchemaScope Scope((Schema ? Schema : &Collection->CollectionProperties)->BuildSchema());
 				Import();
 				return;
 			}
@@ -39,30 +40,25 @@ void PCGExCollectionsMediatorBindings::Register()
 			if (UPCGExOmniCollection* Omni = Cast<UPCGExOmniCollection>(Host)) { Omni->EDITOR_EnsureTypeSetup(); }
 		};
 		Binding.Summary = TEXT("Asset collection: property schema, category overrides and entries (typed, Variant or Omni host).");
-		FPCGExMediatorRegistry::RegisterBinding(Binding);
+		Domain.AddBinding(Binding);
 	}
 	{
 		FPCGExMediatorBinding Binding;
 		Binding.HostClass = UPCGExDistributeTupleSettings::StaticClass();
 		Binding.Members = {GET_MEMBER_NAME_CHECKED(UPCGExDistributeTupleSettings, Composition), GET_MEMBER_NAME_CHECKED(UPCGExDistributeTupleSettings, Values)};
-		Binding.WrapImport = [](UObject* Host, const FName Member, TFunctionRef<void()> Import)
+		Binding.WrapImport = [](UObject* Host, const FName Member, FPCGExMediatorDecodedMember Decoded, TFunctionRef<void()> Import)
 		{
 			const UPCGExDistributeTupleSettings* Tuple = Cast<UPCGExDistributeTupleSettings>(Host);
 			if (Tuple && Member == GET_MEMBER_NAME_CHECKED(UPCGExDistributeTupleSettings, Values))
 			{
-				PCGExPropertyMediator::FOverridesSchemaScope Scope(Tuple->Composition.BuildSchema());
+				const FPCGExPropertySchemaCollection* Composition = static_cast<const FPCGExPropertySchemaCollection*>(Decoded(GET_MEMBER_NAME_CHECKED(UPCGExDistributeTupleSettings, Composition)));
+				PCGExPropertyMediator::FOverridesSchemaScope Scope((Composition ? Composition : &Tuple->Composition)->BuildSchema());
 				Import();
 				return;
 			}
 			Import();
 		};
 		Binding.Summary = TEXT("Distribute Tuple node: composition schema and weighted value rows.");
-		FPCGExMediatorRegistry::RegisterBinding(Binding);
+		Domain.AddBinding(Binding);
 	}
-}
-
-void PCGExCollectionsMediatorBindings::Unregister()
-{
-	FPCGExMediatorRegistry::UnregisterBinding(UPCGExAssetCollection::StaticClass());
-	FPCGExMediatorRegistry::UnregisterBinding(UPCGExDistributeTupleSettings::StaticClass());
 }

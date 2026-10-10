@@ -4,6 +4,7 @@
 #include "PCGExMediatorValues.h"
 
 #include "PCGExMediatorDiagnostics.h"
+#include "PCGExMediatorSchema.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Misc/PackageName.h"
@@ -15,6 +16,11 @@ namespace PCGExMediatorValues
 
 	// Largest integer a JSON number carries exactly.
 	constexpr int64 ExactIntegerLimit = 9007199254740992LL;
+
+	TSharedRef<FJsonObject> Components(const int32 Count, const TCHAR* Description)
+	{
+		return Schema::Array(Schema::Number(), Description, Count, Count);
+	}
 
 	FString ShapeName(const TSharedPtr<FJsonValue>& Json)
 	{
@@ -45,7 +51,7 @@ namespace PCGExMediatorValues
 	TSharedRef<FJsonValue> NumArray(std::initializer_list<double> Values)
 	{
 		TArray<TSharedPtr<FJsonValue>> Array;
-		Array.Reserve(Values.size());
+		Array.Reserve(static_cast<int32>(Values.size()));
 		for (const double V : Values)
 		{
 			Array.Add(Num(V));
@@ -151,47 +157,18 @@ namespace PCGExMediatorValues
 		return Num(static_cast<double>(V));
 	}
 
-	TSharedRef<FJsonObject> NumberSchema(const TCHAR* Description)
-	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("number"));
-		S->SetStringField(TEXT("description"), Description);
-		return S;
-	}
-
-	TSharedRef<FJsonObject> ArraySchema(const int32 Count, const TCHAR* Description)
-	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("array"));
-		TSharedRef<FJsonObject> Items = MakeShared<FJsonObject>();
-		Items->SetStringField(TEXT("type"), TEXT("number"));
-		S->SetObjectField(TEXT("items"), Items);
-		S->SetNumberField(TEXT("minItems"), Count);
-		S->SetNumberField(TEXT("maxItems"), Count);
-		S->SetStringField(TEXT("description"), Description);
-		return S;
-	}
-
-	TSharedRef<FJsonObject> StringSchema(const TCHAR* Description)
-	{
-		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-		S->SetStringField(TEXT("type"), TEXT("string"));
-		S->SetStringField(TEXT("description"), Description);
-		return S;
-	}
-
 	bool IsBitflags(const UEnum* Enum)
 	{
 		return Enum && Enum->HasMetaData(TEXT("Bitflags"));
 	}
 
-	// Enumerators worth naming: every entry but the generated _MAX.
+	// Enumerators worth naming: every entry but the generated _MAX. Authored names: a user-defined enum's labels.
 	void ForEachEnumerator(const UEnum* Enum, TFunctionRef<void(int32 Index, int64 Value, const FString& Name)> Fn)
 	{
 		const int32 Count = Enum->ContainsExistingMax() ? Enum->NumEnums() - 1 : Enum->NumEnums();
 		for (int32 i = 0; i < Count; ++i)
 		{
-			Fn(i, Enum->GetValueByIndex(i), Enum->GetNameStringByIndex(i));
+			Fn(i, Enum->GetValueByIndex(i), Enum->GetAuthoredNameStringByIndex(i));
 		}
 	}
 }
@@ -418,7 +395,7 @@ TSharedPtr<FJsonValue> PCGExMediator::Values::EncodeEnum(const UEnum* Enum, cons
 
 	if (!Enum) { return WriteInteger(Value); }
 
-	const FString Exact = Enum->GetNameStringByValue(Value);
+	const FString Exact = Enum->GetAuthoredNameStringByValue(Value);
 	if (!Exact.IsEmpty()) { return MakeShared<FJsonValueString>(Exact); }
 
 	if (IsBitflags(Enum))
@@ -452,7 +429,7 @@ bool PCGExMediator::Values::DecodeEnum(const UEnum* Enum, const TSharedPtr<FJson
 			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' cannot be resolved: no enum class"), *Name));
 			return false;
 		}
-		const int64 V = Enum->GetValueByNameString(Name);
+		const int64 V = Enum->GetValueByNameString(Name, EGetByNameFlags::CheckAuthoredName);
 		if (V == INDEX_NONE)
 		{
 			Report(EPCGExMediatorSeverity::Error, FString::Printf(TEXT("'%s' is not an enumerator of %s"), *Name, *Enum->GetName()));
@@ -498,62 +475,40 @@ TSharedPtr<FJsonObject> PCGExMediator::Values::DescribeShape(const EPCGMetadataT
 
 	switch (Type)
 	{
-	case EPCGMetadataTypes::Float: return NumberSchema(TEXT("32-bit float"));
-	case EPCGMetadataTypes::Double: return NumberSchema(TEXT("64-bit float"));
-	case EPCGMetadataTypes::Integer32:
-		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("integer"));
-			S->SetStringField(TEXT("description"), TEXT("32-bit integer"));
-			return S;
-		}
+	case EPCGMetadataTypes::Float: return Schema::Number(TEXT("32-bit float"));
+	case EPCGMetadataTypes::Double: return Schema::Number(TEXT("64-bit float"));
+	case EPCGMetadataTypes::Integer32: return Schema::Integer(TEXT("32-bit integer"));
 	case EPCGMetadataTypes::Integer64:
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			TArray<TSharedPtr<FJsonValue>> Types;
-			Types.Add(MakeShared<FJsonValueString>(TEXT("integer")));
-			Types.Add(MakeShared<FJsonValueString>(TEXT("string")));
-			S->SetArrayField(TEXT("type"), Types);
-			S->SetStringField(TEXT("description"), TEXT("64-bit integer; a decimal string beyond 2^53"));
+			TSharedRef<FJsonObject> S = Schema::Typed(nullptr, TEXT("64-bit integer; a decimal string beyond 2^53"));
+			S->SetArrayField(TEXT("type"), Schema::Strings({TEXT("integer"), TEXT("string")}));
 			return S;
 		}
-	case EPCGMetadataTypes::Boolean:
-		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("boolean"));
-			return S;
-		}
-	case EPCGMetadataTypes::Vector2: return ArraySchema(2, TEXT("[x, y]"));
-	case EPCGMetadataTypes::Vector: return ArraySchema(3, TEXT("[x, y, z]"));
-	case EPCGMetadataTypes::Vector4: return ArraySchema(4, TEXT("[x, y, z, w]"));
-	case EPCGMetadataTypes::Quaternion: return ArraySchema(4, TEXT("quat [x, y, z, w]; a rotator {pitch, yaw, roll} is also accepted"));
+	case EPCGMetadataTypes::Boolean: return Schema::Boolean();
+	case EPCGMetadataTypes::Vector2: return Components(2, TEXT("[x, y]"));
+	case EPCGMetadataTypes::Vector: return Components(3, TEXT("[x, y, z]"));
+	case EPCGMetadataTypes::Vector4: return Components(4, TEXT("[x, y, z, w]"));
+	case EPCGMetadataTypes::Quaternion: return Components(4, TEXT("quat [x, y, z, w]; a rotator {pitch, yaw, roll} is also accepted"));
 	case EPCGMetadataTypes::Rotator:
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("object"));
 			TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-			Props->SetObjectField(TEXT("pitch"), NumberSchema(TEXT("degrees")));
-			Props->SetObjectField(TEXT("yaw"), NumberSchema(TEXT("degrees")));
-			Props->SetObjectField(TEXT("roll"), NumberSchema(TEXT("degrees")));
-			S->SetObjectField(TEXT("properties"), Props);
-			S->SetStringField(TEXT("description"), TEXT("rotator in degrees; a quat [x, y, z, w] is also accepted"));
-			return S;
+			Props->SetObjectField(TEXT("pitch"), Schema::Number(TEXT("degrees")));
+			Props->SetObjectField(TEXT("yaw"), Schema::Number(TEXT("degrees")));
+			Props->SetObjectField(TEXT("roll"), Schema::Number(TEXT("degrees")));
+			return Schema::Object(Props, TEXT("rotator in degrees; a quat [x, y, z, w] is also accepted"));
 		}
 	case EPCGMetadataTypes::Transform:
 		{
-			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-			S->SetStringField(TEXT("type"), TEXT("object"));
 			TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
-			Props->SetObjectField(TEXT("location"), ArraySchema(3, TEXT("[x, y, z], default zero")));
-			Props->SetObjectField(TEXT("rotation"), ArraySchema(4, TEXT("quat [x, y, z, w] or rotator {pitch, yaw, roll}, default identity")));
-			Props->SetObjectField(TEXT("scale"), ArraySchema(3, TEXT("[x, y, z], default one")));
-			S->SetObjectField(TEXT("properties"), Props);
-			return S;
+			Props->SetObjectField(TEXT("location"), Components(3, TEXT("[x, y, z], default zero")));
+			Props->SetObjectField(TEXT("rotation"), Components(4, TEXT("quat [x, y, z, w] or rotator {pitch, yaw, roll}, default identity")));
+			Props->SetObjectField(TEXT("scale"), Components(3, TEXT("[x, y, z], default one")));
+			return Schema::Object(Props);
 		}
-	case EPCGMetadataTypes::String: return StringSchema(TEXT("string"));
-	case EPCGMetadataTypes::Name: return StringSchema(TEXT("name; \"None\" is the empty name"));
-	case EPCGMetadataTypes::SoftObjectPath: return StringSchema(TEXT("object path, e.g. /Game/Folder/Asset.Asset; \"\" is null"));
-	case EPCGMetadataTypes::SoftClassPath: return StringSchema(TEXT("class path, e.g. /Script/Engine.StaticMesh or /Game/BP.BP_C; \"\" is null"));
+	case EPCGMetadataTypes::String: return Schema::String(TEXT("string"));
+	case EPCGMetadataTypes::Name: return Schema::String(TEXT("name; \"None\" is the empty name"));
+	case EPCGMetadataTypes::SoftObjectPath: return Schema::String(TEXT("object path, e.g. /Game/Folder/Asset.Asset; \"\" is null"));
+	case EPCGMetadataTypes::SoftClassPath: return Schema::String(TEXT("class path, e.g. /Script/Engine.StaticMesh or /Game/BP.BP_C; \"\" is null"));
 	default:
 		return nullptr;
 	}
@@ -563,42 +518,16 @@ TSharedPtr<FJsonObject> PCGExMediator::Values::DescribeEnumShape(const UEnum* En
 {
 	using namespace PCGExMediatorValues;
 
-	TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
-	if (!Enum)
-	{
-		S->SetStringField(TEXT("type"), TEXT("string"));
-		S->SetStringField(TEXT("description"), TEXT("enumerator name"));
-		return S;
-	}
+	if (!Enum) { return Schema::String(TEXT("enumerator name")); }
 
-	TArray<TSharedPtr<FJsonValue>> Names;
-	ForEachEnumerator(Enum, [&](int32, int64, const FString& Name)
-	{
-		Names.Add(MakeShared<FJsonValueString>(Name));
-	});
-
-	TSharedRef<FJsonObject> NameSchema = MakeShared<FJsonObject>();
-	NameSchema->SetStringField(TEXT("type"), TEXT("string"));
-	NameSchema->SetArrayField(TEXT("enum"), Names);
+	TArray<FString> Names;
+	ForEachEnumerator(Enum, [&](int32, int64, const FString& Name) { Names.Add(Name); });
 
 	if (!IsBitflags(Enum))
 	{
-		S->SetStringField(TEXT("type"), TEXT("string"));
-		S->SetArrayField(TEXT("enum"), Names);
-		S->SetStringField(TEXT("description"), FString::Printf(TEXT("enumerator of %s"), *Enum->GetName()));
-		return S;
+		return Schema::Enum(Names, FString::Printf(TEXT("enumerator of %s"), *Enum->GetName()));
 	}
-
-	TSharedRef<FJsonObject> ArrayForm = MakeShared<FJsonObject>();
-	ArrayForm->SetStringField(TEXT("type"), TEXT("array"));
-	ArrayForm->SetObjectField(TEXT("items"), NameSchema);
-
-	TArray<TSharedPtr<FJsonValue>> OneOf;
-	OneOf.Add(MakeShared<FJsonValueObject>(NameSchema));
-	OneOf.Add(MakeShared<FJsonValueObject>(ArrayForm));
-	S->SetArrayField(TEXT("oneOf"), OneOf);
-	S->SetStringField(TEXT("description"), FString::Printf(TEXT("flag of %s, or an array of flags"), *Enum->GetName()));
-	return S;
+	return Schema::OneOf({Schema::Enum(Names), Schema::Array(Schema::Enum(Names))}, FString::Printf(TEXT("flag of %s, or an array of flags"), *Enum->GetName()));
 }
 
 FString PCGExMediator::Values::TypeToString(const EPCGMetadataTypes Type)

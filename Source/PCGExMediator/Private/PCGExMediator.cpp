@@ -5,11 +5,9 @@
 
 #include "PCGExLog.h"
 #include "PCGExMediatorDiagnostics.h"
-#include "PCGExMediatorRegistry.h"
 #include "PCGExMediatorTransport.h"
 #include "Dom/JsonObject.h"
 #include "HAL/IConsoleManager.h"
-#include "UObject/Class.h"
 
 #define LOCTEXT_NAMESPACE "FPCGExMediatorModule"
 
@@ -17,54 +15,20 @@ namespace PCGExMediatorCommands
 {
 	using namespace PCGExMediator;
 
-	void LogDiagnostics(const FPCGExMediatorDiagnostics& Diagnostics)
-	{
-		for (const FPCGExMediatorDiagnostic& D : Diagnostics.Items)
-		{
-			switch (D.Severity)
-			{
-			case EPCGExMediatorSeverity::Error: UE_LOG(LogPCGEx, Error, TEXT("[Mediator] %s"), *D.ToString()); break;
-			case EPCGExMediatorSeverity::Warning: UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] %s"), *D.ToString()); break;
-			default: UE_LOG(LogPCGEx, Log, TEXT("[Mediator] %s"), *D.ToString()); break;
-			}
-		}
-	}
-
 	void List(const TArray<FString>& Args)
 	{
-		TArray<TSharedPtr<const FPCGExMediatorFormat>> Formats;
-		FPCGExMediatorRegistry::GetFormats(Formats);
-		UE_LOG(LogPCGEx, Log, TEXT("[Mediator] %d format(s):"), Formats.Num());
-		for (const TSharedPtr<const FPCGExMediatorFormat>& F : Formats)
-		{
-			UE_LOG(LogPCGEx, Log, TEXT("  %s v%d  (%s)  %s"), *F->Id.ToString(), F->Version, *GetNameSafe(F->Struct), *F->Summary);
-		}
-
-		TArray<TSharedPtr<const FPCGExMediatorBinding>> Bindings;
-		FPCGExMediatorRegistry::GetBindings(Bindings);
-		UE_LOG(LogPCGEx, Log, TEXT("[Mediator] %d binding(s):"), Bindings.Num());
-		for (const TSharedPtr<const FPCGExMediatorBinding>& B : Bindings)
-		{
-			TArray<FString> Members;
-			for (const FName& M : B->Members) { Members.Add(M.ToString()); }
-			UE_LOG(LogPCGEx, Log, TEXT("  %s  [%s]  %s"), *B->HostClass->GetPathName(), *FString::Join(Members, TEXT(", ")), *B->Summary);
-		}
+		UE_LOG(LogPCGEx, Log, TEXT("%s"), *ToString(ListAsJson()));
 	}
 
 	void Describe(const TArray<FString>& Args)
 	{
 		if (Args.IsEmpty())
 		{
-			UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] usage: pcgex.mediator.describe <format id | class path>"));
+			UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] usage: pcgex.mediator.describe <format id | class | struct>"));
 			return;
 		}
 
-		TSharedPtr<FJsonObject> Schema = DescribeFormat(FName(*Args[0]));
-		if (!Schema.IsValid())
-		{
-			if (const UClass* Class = FindClass(Args[0])) { Schema = DescribeObject(Class); }
-		}
-		if (!Schema.IsValid()) { Schema = DescribeReflectedStruct(Args[0]); }
+		const TSharedPtr<FJsonObject> Schema = DescribeAny(Args[0]);
 		if (!Schema.IsValid())
 		{
 			UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] '%s' is neither a registered format, a bound class nor a struct."), *Args[0]);
@@ -132,7 +96,7 @@ void FPCGExMediatorModule::StartupModule()
 		TEXT("pcgex.mediator.list"), TEXT("List the registered JSON formats and object bindings."),
 		FConsoleCommandWithArgsDelegate::CreateStatic(&PCGExMediatorCommands::List), ECVF_Default));
 	ConsoleCommands.Add(Console.RegisterConsoleCommand(
-		TEXT("pcgex.mediator.describe"), TEXT("Print the JSON Schema of a format id or of a bound class. Usage: pcgex.mediator.describe <format id | class>"),
+		TEXT("pcgex.mediator.describe"), TEXT("Print the JSON Schema of a format id, a bound class or a struct. Usage: pcgex.mediator.describe <format id | class | struct>"),
 		FConsoleCommandWithArgsDelegate::CreateStatic(&PCGExMediatorCommands::Describe), ECVF_Default));
 	ConsoleCommands.Add(Console.RegisterConsoleCommand(
 		TEXT("pcgex.mediator.export"), TEXT("Export a bound object as JSON, to the log or a file. Usage: pcgex.mediator.export <asset path | graph path:node> [file]"),

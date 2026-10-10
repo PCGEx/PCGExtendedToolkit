@@ -17,10 +17,13 @@ namespace PCGExMediatorRegistry
 
 	FStorage& Storage()
 	{
+		check(IsInGameThread());
 		static FStorage Instance;
 		return Instance;
 	}
 }
+
+#pragma region FPCGExMediatorRegistry
 
 void FPCGExMediatorRegistry::RegisterFormat(const FPCGExMediatorFormat& InFormat)
 {
@@ -130,3 +133,45 @@ void FPCGExMediatorRegistry::GetBindings(TArray<TSharedPtr<const FPCGExMediatorB
 		return A->HostClass->GetName() < B->HostClass->GetName();
 	});
 }
+
+#pragma endregion
+
+#pragma region FPCGExMediatorDomain
+
+FPCGExMediatorDomain::~FPCGExMediatorDomain()
+{
+	Reset();
+}
+
+void FPCGExMediatorDomain::AddFormat(const FPCGExMediatorFormat& Format, const TSharedPtr<const IJsonObjectStructConverter>& Owner)
+{
+	if (!Format.IsValid()) { return; }
+	FPCGExMediatorRegistry::RegisterFormat(Format);
+	FormatIds.Add(Format.Id);
+	FormatStructs.Add(Format.Struct);
+	if (Owner.IsValid()) { OwnedConverters.Add(Owner); }
+}
+
+void FPCGExMediatorDomain::AddBinding(const FPCGExMediatorBinding& Binding)
+{
+	if (!Binding.IsValid()) { return; }
+	FPCGExMediatorRegistry::RegisterBinding(Binding);
+	BindingClasses.Add(Binding.HostClass);
+}
+
+bool FPCGExMediatorDomain::HasFormatForStruct(const UScriptStruct* Struct) const
+{
+	return FormatStructs.Contains(Struct);
+}
+
+void FPCGExMediatorDomain::Reset()
+{
+	for (int32 i = BindingClasses.Num() - 1; i >= 0; --i) { FPCGExMediatorRegistry::UnregisterBinding(BindingClasses[i]); }
+	for (int32 i = FormatIds.Num() - 1; i >= 0; --i) { FPCGExMediatorRegistry::UnregisterFormat(FormatIds[i]); }
+	BindingClasses.Reset();
+	FormatIds.Reset();
+	FormatStructs.Reset();
+	OwnedConverters.Reset();
+}
+
+#pragma endregion

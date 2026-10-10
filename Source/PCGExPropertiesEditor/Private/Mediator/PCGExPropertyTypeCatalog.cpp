@@ -40,22 +40,20 @@ namespace PCGExPropertyTypeCatalog
 			if (!Prototype) { continue; }
 
 			FPCGExPropertyTypeInfo Info;
-			Info.TypeName = Prototype->GetTypeName();
+			Info.Entry = Prototype->ToRegistryEntry();
 			Info.Struct = Struct;
-			Info.OutputType = Prototype->GetOutputType();
-			Info.bSupportsOutput = Prototype->SupportsOutput();
-			Info.bSupportsSampling = Prototype->SupportsSampling();
 			Info.DisplayName = Struct->GetDisplayNameText().ToString();
 
-			if (Info.TypeName.IsNone() || Info.TypeName == FName("Unknown"))
+			FName& TypeName = Info.Entry.TypeName;
+			if (TypeName.IsNone() || TypeName == FName("Unknown"))
 			{
 				UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] Property type %s reports no type name; addressable by struct path only."), *Struct->GetPathName());
 			}
-			else if (const FPCGExPropertyTypeInfo* Clash = OutTypes.FindByPredicate([&Info](const FPCGExPropertyTypeInfo& T) { return T.TypeName == Info.TypeName; }))
+			else if (const FPCGExPropertyTypeInfo* Clash = OutTypes.FindByPredicate([&TypeName](const FPCGExPropertyTypeInfo& T) { return T.Entry.TypeName == TypeName; }))
 			{
 				UE_LOG(LogPCGEx, Warning, TEXT("[Mediator] Property types %s and %s share the type name '%s'; the second is addressable by struct path only."),
-				       *Clash->Struct->GetPathName(), *Struct->GetPathName(), *Info.TypeName.ToString());
-				Info.TypeName = NAME_None;
+				       *Clash->Struct->GetPathName(), *Struct->GetPathName(), *TypeName.ToString());
+				TypeName = NAME_None;
 			}
 
 			OutTypes.Add(MoveTemp(Info));
@@ -63,7 +61,7 @@ namespace PCGExPropertyTypeCatalog
 
 		OutTypes.Sort([](const FPCGExPropertyTypeInfo& A, const FPCGExPropertyTypeInfo& B)
 		{
-			return A.TypeName.LexicalLess(B.TypeName);
+			return A.Entry.TypeName.LexicalLess(B.Entry.TypeName);
 		});
 	}
 
@@ -94,7 +92,7 @@ const FPCGExPropertyTypeInfo* PCGExPropertyCatalog::Find(const FString& TypeName
 	const FName AsName(*TypeNameOrStructPath);
 	for (const FPCGExPropertyTypeInfo& Info : Types)
 	{
-		if (!Info.TypeName.IsNone() && Info.TypeName == AsName) { return &Info; }
+		if (!Info.Entry.TypeName.IsNone() && Info.Entry.TypeName == AsName) { return &Info; }
 	}
 	for (const FPCGExPropertyTypeInfo& Info : Types)
 	{
@@ -128,7 +126,7 @@ FString PCGExPropertyCatalog::ListTypeNames()
 	TArray<FString> Names;
 	for (const FPCGExPropertyTypeInfo& Info : Get())
 	{
-		if (!Info.TypeName.IsNone()) { Names.Add(Info.TypeName.ToString()); }
+		if (!Info.Entry.TypeName.IsNone()) { Names.Add(Info.Entry.TypeName.ToString()); }
 	}
 	return FString::Join(Names, TEXT(", "));
 }
