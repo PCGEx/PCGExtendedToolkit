@@ -388,6 +388,7 @@ bool PCGExMediator::ImportObject(const FJsonObject& Doc, UObject* Host)
 		return true;
 	}
 
+	if (Binding->PostImport) { Binding->PostImport(Host); }
 	(void)Host->MarkPackageDirty();
 	return true;
 }

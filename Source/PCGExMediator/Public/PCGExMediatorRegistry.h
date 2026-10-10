@@ -53,6 +53,9 @@ struct PCGEXMEDIATOR_API FPCGExMediatorBinding
 	/** Optional. Must invoke Import exactly once; whatever it sets up stays alive across that call. */
 	TFunction<void(UObject* Host, FName Member, TFunctionRef<void()> Import)> WrapImport;
 
+	/** Optional. Runs after every member applied, inside the import transaction, for host work no edit hook covers. */
+	TFunction<void(UObject* Host)> PostImport;
+
 	FString Summary;
 
 	bool IsValid() const

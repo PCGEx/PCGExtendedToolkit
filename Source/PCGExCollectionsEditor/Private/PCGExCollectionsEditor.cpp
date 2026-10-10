@@ -35,6 +35,9 @@
 #include "Details/Properties/PCGExCollectionEntryRefCustomization.h"
 #include "Details/Properties/PCGExRangePropertyWidget.h"
 #include "Helpers/PCGExExternalPackageProducer.h"
+#include "Mediator/PCGExCollectionsMediatorBindings.h"
+#include "Mediator/PCGExCollectionsMediatorFormats.h"
+#include "Mediator/PCGExCollectionsMediatorHooks.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
 #include "Properties/PCGExProperty_CollectionEntry.h"
@@ -116,6 +119,12 @@ void FPCGExCollectionsEditorModule::StartupModule()
 	// their own schema rows, never by the value widget.
 	FPCGExInlineWidgetRegistry::RegisterAllModes(FPCGExProperty_Range::StaticStruct()->GetFName(), &PCGExRangePropertyWidget::Make);
 
+	// JSON authoring surface (PCGExMediator): value hooks for this module's property types, entry formats
+	// (one per registered collection type, siblings included), and the collection / Distribute Tuple bindings.
+	PCGExCollectionsMediator::RegisterHooks();
+	PCGExCollectionsMediatorFormats::Register();
+	PCGExCollectionsMediatorBindings::Register();
+
 	// Mosaic thumbnail renderer for all collection types. GEngine != null means engine init is
 	// done and UThumbnailManager is safe to touch; otherwise defer to PostEngineInit.
 	if (GEngine)
@@ -174,6 +183,10 @@ void FPCGExCollectionsEditorModule::ShutdownModule()
 		AssemblyRootHost->Shutdown();
 		AssemblyRootHost.Reset();
 	}
+
+	PCGExCollectionsMediatorBindings::Unregister();
+	PCGExCollectionsMediatorFormats::Unregister();
+	PCGExCollectionsMediator::UnregisterHooks();
 
 	FPCGExInlineWidgetRegistry::UnregisterAllModes(FPCGExProperty_CollectionEntry::StaticStruct()->GetFName());
 	FPCGExInlineWidgetRegistry::UnregisterAllModes(FPCGExProperty_Range::StaticStruct()->GetFName());

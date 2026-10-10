@@ -28,6 +28,14 @@ public:
 	virtual EJsonObjectConvertResult ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const override;
 };
 
+/** { "weight": N, "values": { name: value } }: an override set with a distribution weight (Distribute Tuple rows). */
+class FPCGExWeightedPropertyOverridesJsonConverter final : public IJsonObjectStructConverter
+{
+public:
+	virtual EJsonObjectConvertResult ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const override;
+	virtual EJsonObjectConvertResult ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const override;
+};
+
 /** { "enum"?: class path, "value": enumerator } */
 class FPCGExEnumSelectorJsonConverter final : public IJsonObjectStructConverter
 {
@@ -48,6 +56,7 @@ namespace PCGExPropertyMediatorFormats
 {
 	inline const FName SchemaFormatId = FName(TEXT("pcgex.property-schema"));
 	inline const FName OverridesFormatId = FName(TEXT("pcgex.property-overrides"));
+	inline const FName WeightedOverridesFormatId = FName(TEXT("pcgex.weighted-property-overrides"));
 	inline const FName EnumSelectorFormatId = FName(TEXT("pcgex.enum-selector"));
 	inline const FName NumericRangeFormatId = FName(TEXT("pcgex.numeric-range"));
 

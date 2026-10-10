@@ -478,6 +478,21 @@ namespace PCGExPropertyMediatorFormats
 
 #pragma endregion
 
+	TSharedPtr<FJsonObject> DescribeWeightedOverridesBody()
+	{
+		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
+		TSharedRef<FJsonObject> WeightSchema = MakeShared<FJsonObject>();
+		WeightSchema->SetStringField(TEXT("type"), TEXT("integer"));
+		WeightSchema->SetNumberField(TEXT("minimum"), 0);
+		WeightSchema->SetStringField(TEXT("description"), TEXT("distribution weight; 0 never picks the row"));
+		Props->SetObjectField(TEXT("weight"), WeightSchema);
+		Props->SetObjectField(TEXT("values"), DescribeOverridesBody().ToSharedRef());
+		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
+		S->SetStringField(TEXT("type"), TEXT("object"));
+		S->SetObjectField(TEXT("properties"), Props);
+		return S;
+	}
+
 	TSharedPtr<FJsonObject> DescribeEnumSelector()
 	{
 		TSharedRef<FJsonObject> Props = MakeShared<FJsonObject>();
@@ -538,6 +553,58 @@ EJsonObjectConvertResult FPCGExPropertyOverridesJsonConverter::ConvertFromJson(v
 	return PCGExPropertyMediatorFormats::Guarded([&]()
 	{
 		return PCGExPropertyMediatorFormats::DecodeOverridesBody(*InJsonObject, *static_cast<FPCGExPropertyOverrides*>(StructMemory));
+	});
+}
+
+#pragma endregion
+
+#pragma region FPCGExWeightedPropertyOverridesJsonConverter
+
+EJsonObjectConvertResult FPCGExWeightedPropertyOverridesJsonConverter::ConvertToJson(const void* StructMemory, TSharedPtr<FJsonObject>& OutJsonObject) const
+{
+	if (!OutJsonObject.IsValid()) { OutJsonObject = MakeShared<FJsonObject>(); }
+	const FPCGExWeightedPropertyOverrides& Row = *static_cast<const FPCGExWeightedPropertyOverrides*>(StructMemory);
+	return PCGExPropertyMediatorFormats::Guarded([&]()
+	{
+		OutJsonObject->SetNumberField(TEXT("weight"), Row.Weight);
+		TSharedRef<FJsonObject> Values = MakeShared<FJsonObject>();
+		{
+			PCGExMediator::FPathScope P(TEXT("values"));
+			PCGExPropertyMediatorFormats::EncodeOverridesBody(Row, *Values);
+		}
+		OutJsonObject->SetObjectField(TEXT("values"), Values);
+		return true;
+	});
+}
+
+EJsonObjectConvertResult FPCGExWeightedPropertyOverridesJsonConverter::ConvertFromJson(void* StructMemory, const TSharedPtr<FJsonObject>& InJsonObject) const
+{
+	if (!InJsonObject.IsValid()) { return EJsonObjectConvertResult::FailAndAbort; }
+	FPCGExWeightedPropertyOverrides& Live = *static_cast<FPCGExWeightedPropertyOverrides*>(StructMemory);
+	return PCGExPropertyMediatorFormats::Guarded([&]()
+	{
+		FPCGExWeightedPropertyOverrides Temp = Live;
+		if (const TSharedPtr<FJsonValue> Weight = InJsonObject->TryGetField(TEXT("weight")))
+		{
+			PCGExMediator::FPathScope P(TEXT("weight"));
+			int32 W = 0;
+			if (!PCGExMediator::Values::Decode<int32>(Weight, W)) { return false; }
+			if (W < 0)
+			{
+				PCGExMediator::Report(EPCGExMediatorSeverity::Error, TEXT("weight must be >= 0"));
+				return false;
+			}
+			Temp.Weight = W;
+		}
+		if (const TSharedPtr<FJsonObject>* Values = nullptr; InJsonObject->TryGetObjectField(TEXT("values"), Values))
+		{
+			PCGExMediator::FPathScope P(TEXT("values"));
+			// The base-typed reference assigns the override set only; Weight stays as decoded above.
+			FPCGExPropertyOverrides& Base = Temp;
+			if (!PCGExPropertyMediatorFormats::DecodeOverridesBody(**Values, Base)) { return false; }
+		}
+		Live = MoveTemp(Temp);
+		return true;
 	});
 }
 
@@ -616,6 +683,7 @@ void PCGExPropertyMediatorFormats::Register()
 {
 	static FPCGExPropertySchemaCollectionJsonConverter SchemaConverter;
 	static FPCGExPropertyOverridesJsonConverter OverridesConverter;
+	static FPCGExWeightedPropertyOverridesJsonConverter WeightedOverridesConverter;
 	static FPCGExEnumSelectorJsonConverter EnumSelectorConverter;
 	static FPCGExNumericRangeJsonConverter NumericRangeConverter;
 
@@ -637,6 +705,16 @@ void PCGExPropertyMediatorFormats::Register()
 		F.Converter = &OverridesConverter;
 		F.Describe = &DescribeOverridesBody;
 		F.Summary = TEXT("Enabled property overrides by name against a schema.");
+		FPCGExMediatorRegistry::RegisterFormat(F);
+	}
+	{
+		FPCGExMediatorFormat F;
+		F.Id = WeightedOverridesFormatId;
+		F.Version = 1;
+		F.Struct = FPCGExWeightedPropertyOverrides::StaticStruct();
+		F.Converter = &WeightedOverridesConverter;
+		F.Describe = &DescribeWeightedOverridesBody;
+		F.Summary = TEXT("Weighted override row: distribution weight plus enabled overrides.");
 		FPCGExMediatorRegistry::RegisterFormat(F);
 	}
 	{
@@ -665,6 +743,7 @@ void PCGExPropertyMediatorFormats::Unregister()
 {
 	FPCGExMediatorRegistry::UnregisterFormat(SchemaFormatId);
 	FPCGExMediatorRegistry::UnregisterFormat(OverridesFormatId);
+	FPCGExMediatorRegistry::UnregisterFormat(WeightedOverridesFormatId);
 	FPCGExMediatorRegistry::UnregisterFormat(EnumSelectorFormatId);
 	FPCGExMediatorRegistry::UnregisterFormat(NumericRangeFormatId);
 }

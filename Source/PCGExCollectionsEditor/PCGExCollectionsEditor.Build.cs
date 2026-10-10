@@ -46,6 +46,9 @@ public class PCGExCollectionsEditor : ModuleRules
 				"PCGExFoundations",
 				"PCGExProperties",
 				"PCGExPropertiesEditor", // For FPCGExPropertyOverrides customization
+				"PCGExMediator",         // JSON formats, hooks and bindings for collections
+				"Json",
+				"JsonUtilities",
 				"AssetDefinition"
 			}
 		);
