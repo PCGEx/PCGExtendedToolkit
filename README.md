@@ -69,6 +69,10 @@ Compiles against latest launcher engine binaries
 Compiles against that version of the engine
 (these are stable branches)
 
++ 5.8-MCP
+Include a PCGExMediator module and per-module MCP tools
+(Agentic PCGEx with the PCGEx Assistant plugin)
+
 ! `FAB-5.x`
 Served to FAB and have some features disabled
 (no PCHs, no tooling/cherry-picking scripts);
