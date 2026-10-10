@@ -141,9 +141,15 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 			continue;
 		}
 
+		// AddExternalStructureProperty returns null for a non-editable field (identity caches, the recorded pick).
+		if (!Property->HasAnyPropertyFlags(CPF_Edit))
+		{
+			continue;
+		}
+
 		// Choices is a read-only mirror on these rows; the schema-edit path owns its editor.
 		const FName PropName = Property->GetFName();
-		if (PropName == TEXT("PropertyName") || PropName == TEXT("HeaderId") || PropName == TEXT("OutputBuffer") || PropName == TEXT("Choices"))
+		if (PropName == TEXT("OutputBuffer") || PropName == TEXT("Choices"))
 		{
 			continue;
 		}

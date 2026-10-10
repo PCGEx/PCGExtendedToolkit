@@ -59,11 +59,13 @@ void FPCGExPropertyCompiledCustomization::CustomizeChildren(
 			continue;
 		}
 
-		const FName ChildName = ChildHandle->GetProperty() ? ChildHandle->GetProperty()->GetFName() : NAME_None;
-		if (ChildName == TEXT("PropertyName") || ChildName == TEXT("HeaderId"))
+		// Identity caches and the recorded pick are not editable; nothing to render for them.
+		const FProperty* ChildProperty = ChildHandle->GetProperty();
+		if (!ChildProperty || !ChildProperty->HasAnyPropertyFlags(CPF_Edit))
 		{
 			continue;
 		}
+		const FName ChildName = ChildProperty->GetFName();
 
 		if (ChildName == TEXT("Value"))
 		{
