@@ -451,6 +451,16 @@
       ]
     },
     {
+      "Name": "PCGExMediator",
+      "Type": "UncookedOnly",
+      "LoadingPhase": "Default",
+      "PlatformAllowList": [
+        "Win64",
+        "Mac",
+        "Linux"
+      ]
+    },
+    {
       "Name": "PCGExNoise3D",
       "Type": "Runtime",
       "LoadingPhase": "Default",

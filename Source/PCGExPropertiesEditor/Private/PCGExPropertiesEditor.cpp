@@ -28,6 +28,10 @@
 #include "Details/PCGExPropertySchemaCustomization.h"
 #include "Details/PCGExWeightCurveCustomization.h"
 #include "Details/PCGExWeightedPropertyOverridesCustomization.h"
+#include "Mediator/PCGExPropertyMediatorFormats.h"
+#include "Mediator/PCGExPropertyMediatorHooks.h"
+#include "Mediator/PCGExPropertyMediatorBindings.h"
+#include "Mediator/PCGExPropertyTypeCatalog.h"
 #include "Metadata/PCGObjectPropertyOverride.h"
 #include "Utils/PCGExWeightCurve.h"
 
@@ -170,6 +174,12 @@ void FPCGExPropertiesEditorModule::StartupModule()
 	// Register built-in compact inline widgets for Vector / Vector2D / Rotator property types
 	PCGExBuiltInInlineWidgets::RegisterAll();
 
+	// JSON authoring surface (PCGExMediator): type catalog, per-type value hooks, struct formats, host bindings.
+	PCGExPropertyCatalog::Startup();
+	PCGExPropertyMediator::RegisterBuiltInHooks();
+	PCGExPropertyMediatorFormats::Register();
+	PCGExPropertyMediatorBindings::Register();
+
 	// Property collection component: duplicate-component warning on the component's own panel,
 	// and its values hoisted into the owning actor's details when the actor is selected.
 	PropertyModule.RegisterCustomClassLayout(
@@ -191,6 +201,11 @@ void FPCGExPropertiesEditorModule::ShutdownModule()
 			PropertyModule->UnregisterCustomClassLayout(UPCGExPropertyCollectionComponent::StaticClass()->GetFName());
 		}
 	}
+
+	PCGExPropertyMediatorBindings::Unregister();
+	PCGExPropertyMediatorFormats::Unregister();
+	PCGExPropertyMediator::UnregisterBuiltInHooks();
+	PCGExPropertyCatalog::Shutdown();
 
 	FPCGExInlineWidgetRegistry::Clear();
 

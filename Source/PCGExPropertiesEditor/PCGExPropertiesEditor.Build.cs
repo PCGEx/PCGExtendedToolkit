@@ -38,6 +38,9 @@ public class PCGExPropertiesEditor : ModuleRules
 				"PCGExCore",
 				"PCGExCoreEditor",
 				"PCGExProperties",
+				"PCGExMediator",  // JSON formats, hooks and bindings for the property structs
+				"Json",
+				"JsonUtilities",
 				"AssetDefinition"
 				//"StructUtils"
 			}
