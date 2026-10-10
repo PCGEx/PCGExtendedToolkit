@@ -3,14 +3,21 @@
 
 #include "PCGExInlineWidgetRegistry.h"
 
+#include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "IDetailPropertyRow.h"
+#include "PCGExProperty.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExEditorCustomizationUtils.h"
 #include "UObject/StructOnScope.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/SNullWidget.h"
+#include "Widgets/SPCGExPropertyChoicePicker.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Text/STextBlock.h"
+
+#define LOCTEXT_NAMESPACE "FPCGExInlineWidgetRegistry"
 
 namespace PCGExInlineWidgetRegistry_Private
 {
@@ -95,20 +102,27 @@ IDetailPropertyRow* FPCGExInlineWidgetRegistry::AddCompactValueRow(
 	const FPCGExMakeInlineWidgetFn* Factory = Find(InnerStruct->GetFName(), EPCGExInlineWidgetMode::Compact);
 	TSharedPtr<IPropertyHandle> ValuePropertyHandle = Row.GetPropertyHandle();
 	TSharedRef<SWidget> ValueWidget = SNullWidget::NullWidget;
+	bool bLocked = false;
 	if (ValuePropertyHandle.IsValid())
 	{
 		ValueWidget = Factory
 			? (*Factory)(ValuePropertyHandle.ToSharedRef())
 			: ValuePropertyHandle->CreatePropertyValueWidget();
+
+		const FStructView Host(InnerStruct, Scope->GetStructMemory());
+		if (HasChoices(Host, &bLocked))
+		{
+			ValueWidget = WrapValueWidgetWithChoices(ValueWidget, Host, ValuePropertyHandle.ToSharedRef());
+		}
 	}
 
-	const bool bHasCustomFactory = (Factory != nullptr);
+	const bool bWide = (Factory != nullptr) || bLocked;
 	Row.CustomWidget()
 	   .NameContent()
 		[NameContent]
 		.ValueContent()
-		.MinDesiredWidth(bHasCustomFactory ? 250.0f : 125.0f)
-		.MaxDesiredWidth(bHasCustomFactory ? 3000.0f : 600.0f)
+		.MinDesiredWidth(bWide ? 250.0f : 125.0f)
+		.MaxDesiredWidth(bWide ? 3000.0f : 600.0f)
 		[
 			SNew(SBox)
 			.IsEnabled(IsEnabled)
@@ -132,6 +146,10 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 	// whose width must be pinned by the panel rather than track the widget's desired size).
 	// Types with the inline meta never reach this path, so existing rows are unaffected.
 	const FPCGExMakeInlineWidgetFn* ValueFactory = Find(InnerStruct->GetFName(), EPCGExInlineWidgetMode::Compact);
+
+	const FStructView Host(InnerStruct, Scope->GetStructMemory());
+	bool bLocked = false;
+	const bool bHasChoices = HasChoices(Host, &bLocked);
 
 	for (TFieldIterator<FProperty> It(InnerStruct); It; ++It)
 	{
@@ -162,21 +180,155 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 			PCGExEditorCustomizationUtils::HookOwnerChangeOnHandleChanged(PropRow.GetPropertyHandle(), WeakOwner);
 		}
 
-		if (ValueFactory && PropName == TEXT("Value"))
+		if (PropName != TEXT("Value"))
 		{
-			if (TSharedPtr<IPropertyHandle> ValueHandle = PropRow.GetPropertyHandle();
-				ValueHandle.IsValid())
+			continue;
+		}
+		TSharedPtr<IPropertyHandle> ValueHandle = PropRow.GetPropertyHandle();
+		if (!ValueHandle.IsValid())
+		{
+			continue;
+		}
+
+		if (bHasChoices)
+		{
+			HookUnbindOnFreeEdit(ValueHandle.ToSharedRef(), Host);
+			if (bLocked)
 			{
+				// Locked: the picker stands in for the value editor, whatever its usual shape.
 				PropRow.CustomWidget(/*bShowChildren=*/false)
-				       .WholeRowContent()
-				[
-					SNew(SBox)
-					.IsEnabled(IsEnabled)
+				       .NameContent()
 					[
-						(*ValueFactory)(ValueHandle.ToSharedRef())
+						ValueHandle->CreatePropertyNameWidget()
 					]
-				];
+					.ValueContent()
+					.MinDesiredWidth(250.0f)
+					.MaxDesiredWidth(3000.0f)
+					[
+						SNew(SBox)
+						.IsEnabled(IsEnabled)
+						[
+							SNew(SPCGExPropertyChoicePicker, Host, ValueHandle.ToSharedRef()).Locked(true)
+						]
+					];
+				continue;
 			}
+		}
+
+		if (ValueFactory)
+		{
+			PropRow.CustomWidget(/*bShowChildren=*/false)
+			       .WholeRowContent()
+			[
+				SNew(SBox)
+				.IsEnabled(IsEnabled)
+				[
+					(*ValueFactory)(ValueHandle.ToSharedRef())
+				]
+			];
+		}
+
+		// Unlocked: the value keeps its editor; a quick pick sits right under it.
+		if (bHasChoices)
+		{
+			AddChoicesRow(ChildBuilder, Host, ValueHandle.ToSharedRef(), IsEnabled);
 		}
 	}
 }
+
+bool FPCGExInlineWidgetRegistry::HasChoices(const FConstStructView Host, bool* bOutLocked)
+{
+	const UScriptStruct* Struct = Host.GetScriptStruct();
+	const FPCGExProperty* Property = Struct && Struct->IsChildOf(FPCGExProperty::StaticStruct()) ? Host.GetPtr<FPCGExProperty>() : nullptr;
+	const bool bHasChoices = Property && !Property->Choices.Items.IsEmpty();
+	if (bOutLocked)
+	{
+		*bOutLocked = bHasChoices && Property->Choices.bLocked;
+	}
+	return bHasChoices;
+}
+
+TSharedRef<SWidget> FPCGExInlineWidgetRegistry::WrapValueWidgetWithChoices(
+	TSharedRef<SWidget> ValueWidget,
+	const FStructView Host,
+	const TSharedRef<IPropertyHandle>& NotifyHandle)
+{
+	bool bLocked = false;
+	if (!HasChoices(Host, &bLocked))
+	{
+		return ValueWidget;
+	}
+
+	HookUnbindOnFreeEdit(NotifyHandle, Host);
+	if (bLocked)
+	{
+		return SNew(SPCGExPropertyChoicePicker, Host, NotifyHandle).Locked(true);
+	}
+
+	return SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.FillWidth(1.0f)
+		.VAlign(VAlign_Center)
+		[
+			ValueWidget
+		]
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(4, 0, 0, 0)
+		[
+			SNew(SPCGExPropertyChoicePicker, Host, NotifyHandle).Locked(false)
+		];
+}
+
+void FPCGExInlineWidgetRegistry::AddChoicesRow(
+	IDetailChildrenBuilder& ChildBuilder,
+	const FStructView Host,
+	const TSharedRef<IPropertyHandle>& NotifyHandle,
+	TAttribute<bool> IsEnabled)
+{
+	bool bLocked = false;
+	if (!HasChoices(Host, &bLocked))
+	{
+		return;
+	}
+
+	ChildBuilder.AddCustomRow(LOCTEXT("ChoicesRowFilter", "Choices"))
+	            .NameContent()
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("ChoicesRowLabel", "Choices"))
+			.Font(IDetailLayoutBuilder::GetDetailFont())
+		]
+		.ValueContent()
+		.MinDesiredWidth(250.0f)
+		.MaxDesiredWidth(3000.0f)
+		[
+			SNew(SBox)
+			.IsEnabled(IsEnabled)
+			[
+				SNew(SPCGExPropertyChoicePicker, Host, NotifyHandle).Locked(bLocked)
+			]
+		];
+}
+
+void FPCGExInlineWidgetRegistry::HookUnbindOnFreeEdit(const TSharedRef<IPropertyHandle>& Handle, const FStructView Host)
+{
+	// Multicast on the node, so it coexists with HookOwnerChangeOnHandleChanged. A pick re-applies an identical
+	// value and keeps its binding; anything else that commits through this handle is a free edit.
+	const TDelegate<void(const FPropertyChangedEvent&)> OnChanged =
+		TDelegate<void(const FPropertyChangedEvent&)>::CreateLambda(
+			[Host](const FPropertyChangedEvent& InEvent)
+			{
+				if (InEvent.ChangeType == EPropertyChangeType::Interactive)
+				{
+					return;
+				}
+				PCGExProperties::UnbindDivergedChoice(Host);
+			});
+
+	Handle->SetOnPropertyValueChangedWithData(OnChanged);
+	Handle->SetOnChildPropertyValueChangedWithData(OnChanged);
+}
+
+#undef LOCTEXT_NAMESPACE

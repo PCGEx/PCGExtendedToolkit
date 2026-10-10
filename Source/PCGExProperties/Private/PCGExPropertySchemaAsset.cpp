@@ -25,6 +25,13 @@ void UPCGExPropertySchemaAsset::PostEditChangeProperty(FPropertyChangedEvent& Pr
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
+	// A drag commits once; every importer re-syncing and rebuilding its panel per tick is wasted and tears down
+	// the dragged widget. Super still forwards the Interactive event for live preview.
+	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
+	{
+		return;
+	}
+
 	// Keep HeaderId / PropertyName in sync for any newly added or edited local schemas.
 	// Imported assets sync themselves through their own PostEditChangeProperty.
 	Collection.SyncAllSchemas();

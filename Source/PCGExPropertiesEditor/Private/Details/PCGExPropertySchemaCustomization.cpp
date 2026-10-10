@@ -189,33 +189,14 @@ void FPCGExPropertySchemaCustomization::CustomizeChildren(
 
 		if (bShouldInline)
 		{
-			// For simple types, just add the Value property directly
+			// Same funnel as override rows: Compact factory, choices picker, default widget.
 			if (const FProperty* ValueProperty = InnerStruct->FindPropertyByName(TEXT("Value")))
 			{
-				IDetailPropertyRow& Row = *ChildBuilder.AddExternalStructureProperty(StructOnScope, ValueProperty->GetFName());
-
-				// If a compact inline widget is registered for this outer struct type, use it
-				// instead of the default value widget (which would expand for complex types).
-				// Compact-mode lookup: schema is read-only so the type definition is fixed;
-				// only value-editing affordances make sense here.
-				if (const FPCGExMakeInlineWidgetFn* Factory = FPCGExInlineWidgetRegistry::Find(InnerStruct->GetFName(), EPCGExInlineWidgetMode::Compact))
-				{
-					TSharedPtr<IPropertyHandle> ValuePropertyHandle = Row.GetPropertyHandle();
-					if (ValuePropertyHandle.IsValid())
-					{
-						Row.CustomWidget()
-						   .NameContent()
-							[
-								ValuePropertyHandle->CreatePropertyNameWidget()
-							]
-							.ValueContent()
-							.MinDesiredWidth(250.0f)
-							.MaxDesiredWidth(3000.0f)
-							[
-								(*Factory)(ValuePropertyHandle.ToSharedRef())
-							];
-					}
-				}
+				FPCGExInlineWidgetRegistry::AddCompactValueRow(
+					ChildBuilder, StructOnScope, InnerStruct,
+					SNew(STextBlock)
+					.Text(ValueProperty->GetDisplayNameText())
+					.Font(IDetailLayoutBuilder::GetDetailFont()));
 			}
 		}
 		else

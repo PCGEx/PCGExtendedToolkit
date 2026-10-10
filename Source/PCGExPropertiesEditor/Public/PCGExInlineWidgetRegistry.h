@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Misc/Attribute.h"
+#include "StructUtils/StructView.h"
 #include "Templates/Function.h"
 #include "Templates/SharedPointer.h"
 #include "UObject/WeakObjectPtr.h"
@@ -108,4 +109,33 @@ public:
 		UScriptStruct* InnerStruct,
 		TAttribute<bool> IsEnabled = TAttribute<bool>(true),
 		const TWeakObjectPtr<UObject>& WeakOwner = nullptr);
+
+	// --- Choices ---
+	// Host views alias the property struct instance a row edits (its struct-on-scope memory, or the raw data behind
+	// a real handle). Every affordance re-reads it per paint; none caches a pointer into Choices.Items.
+
+	/** True when Host carries choices; bOutLocked tells whether its editors are restricted to them. */
+	static bool HasChoices(FConstStructView Host, bool* bOutLocked = nullptr);
+
+	/**
+	 * Give an inline value widget its choices: locked, the picker stands in for it; unlocked, a quick-pick arrow is
+	 * appended; no choices, ValueWidget comes back untouched. Also hooks NotifyHandle so a free edit forgets the pick.
+	 */
+	static TSharedRef<SWidget> WrapValueWidgetWithChoices(
+		TSharedRef<SWidget> ValueWidget,
+		FStructView Host,
+		const TSharedRef<IPropertyHandle>& NotifyHandle);
+
+	/**
+	 * A standalone "Choices" row (locked: the current choice; unlocked: a quick pick) for layouts whose value spans
+	 * several rows. No-op without choices. Does not hook the free-edit unbind: the caller hooks its own value rows.
+	 */
+	static void AddChoicesRow(
+		IDetailChildrenBuilder& ChildBuilder,
+		FStructView Host,
+		const TSharedRef<IPropertyHandle>& NotifyHandle,
+		TAttribute<bool> IsEnabled = TAttribute<bool>(true));
+
+	/** After a committed edit through Handle (own or a child), forget Host's pick unless the value still equals it. */
+	static void HookUnbindOnFreeEdit(const TSharedRef<IPropertyHandle>& Handle, FStructView Host);
 };

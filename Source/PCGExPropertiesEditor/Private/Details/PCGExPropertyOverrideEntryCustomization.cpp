@@ -641,10 +641,23 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 	{
 		// Bypass the FInstancedStruct wrapper row: walk Value's inner struct as siblings of the
 		// override header. Type is schema-pinned in override context so no combo is needed.
+		const FStructView Host(InnerStruct, StructMemory);
+		bool bLocked = false;
+		const bool bHasChoices = FPCGExInlineWidgetRegistry::HasChoices(Host, &bLocked);
+		if (bHasChoices)
+		{
+			// Picks notify through the entry's own Value handle: the nested field rows are external nodes.
+			FPCGExInlineWidgetRegistry::AddChoicesRow(ChildBuilder, Host, ValueHandlePtr.ToSharedRef(), IsEnabledAttr);
+		}
+
 		FPCGExProperty_Struct* StructProp = reinterpret_cast<FPCGExProperty_Struct*>(StructMemory);
 		const UScriptStruct* InnerInnerStruct = StructProp->Value.GetScriptStruct();
 		uint8* InnerInnerMemory = StructProp->Value.GetMutableMemory();
-		if (InnerInnerStruct && InnerInnerMemory)
+		if (bHasChoices && bLocked)
+		{
+			// Locked: the Choices row stands in for the fields.
+		}
+		else if (InnerInnerStruct && InnerInnerMemory)
 		{
 			NestedScope = MakeShared<FStructOnScope>(InnerInnerStruct, InnerInnerMemory);
 			for (TFieldIterator<FProperty> It(InnerInnerStruct); It; ++It)
@@ -659,6 +672,10 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 				if (IDetailPropertyRow* RowPtr = ChildBuilder.AddExternalStructureProperty(NestedScope.ToSharedRef(), It->GetFName()))
 				{
 					RowPtr->IsEnabled(IsEnabledAttr);
+					if (bHasChoices && RowPtr->GetPropertyHandle().IsValid())
+					{
+						FPCGExInlineWidgetRegistry::HookUnbindOnFreeEdit(RowPtr->GetPropertyHandle().ToSharedRef(), Host);
+					}
 				}
 			}
 		}

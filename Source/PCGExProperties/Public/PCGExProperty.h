@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Data/PCGExData.h"
 #include "StructUtils/InstancedStruct.h"
+#include "StructUtils/StructView.h"
 #include "Types/PCGExTypeTraits.h"
 
 #include "PCGExPropertySchema.h"
@@ -677,39 +678,40 @@ namespace PCGExProperties
 #if WITH_EDITORONLY_DATA
 	// --- Choices ---
 	// Model-side primitives shared by the details panel and the align tooling. Every one keys off the host
-	// type's "Value" FProperty, so they work for any property type that declares one.
+	// type's "Value" FProperty, so they work for any property type that declares one. Host is a view of a
+	// property struct instance: an FInstancedStruct converts implicitly, a detail row passes its struct-on-scope.
 
 	/** The "Value" FProperty of a property type; null when it declares none. */
 	PCGEXPROPERTIES_API const FProperty* FindValueProperty(const UScriptStruct* InStruct);
 
 	/** Whether Choice can stand for Host: same script struct, and the type's own IsChoiceCompatible agrees. */
-	PCGEXPROPERTIES_API bool IsChoiceCompatible(const FInstancedStruct& Host, const FPCGExPropertyChoice& Choice);
+	PCGEXPROPERTIES_API bool IsChoiceCompatible(FConstStructView Host, const FPCGExPropertyChoice& Choice);
 
 	/** Index of the choice with Id, INDEX_NONE when none has it (or Id is unset). */
 	PCGEXPROPERTIES_API int32 FindChoiceById(const FPCGExPropertyChoices& Choices, const FGuid& Id);
 
 	/** Index of the first compatible choice whose Value is identical to Host's, INDEX_NONE when none is. */
-	PCGEXPROPERTIES_API int32 FindMatchingChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices);
+	PCGEXPROPERTIES_API int32 FindMatchingChoice(FConstStructView Host, const FPCGExPropertyChoices& Choices);
 
 	/** The choice Host stands on: the one it picked (ChosenChoiceId) when still listed and compatible, else a value match. */
-	PCGEXPROPERTIES_API int32 ResolveSelectedChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices);
+	PCGEXPROPERTIES_API int32 ResolveSelectedChoice(FConstStructView Host, const FPCGExPropertyChoices& Choices);
 
 	/** Copy Choice's Value into Host's and record its Id as chosen. False, and Host untouched, when incompatible. */
-	PCGEXPROPERTIES_API bool ApplyChoice(FInstancedStruct& Host, const FPCGExPropertyChoice& Choice);
+	PCGEXPROPERTIES_API bool ApplyChoice(FStructView Host, const FPCGExPropertyChoice& Choice);
 
 	/** Re-copy the chosen choice's current Value into Host when it is listed, compatible and differs. True if Host changed. */
-	PCGEXPROPERTIES_API bool ReapplyChosenChoice(FInstancedStruct& Host);
+	PCGEXPROPERTIES_API bool ReapplyChosenChoice(FStructView Host);
 
 	/** Forget the chosen choice when Host's Value no longer equals it (or it is gone): a free edit. True if cleared. */
-	PCGEXPROPERTIES_API bool UnbindDivergedChoice(FInstancedStruct& Host);
+	PCGEXPROPERTIES_API bool UnbindDivergedChoice(FStructView Host);
 
 	/** A fresh-Id choice carrying Host's current Value under Label; the carrier's identity, choices and pick are cleared. */
-	PCGEXPROPERTIES_API FPCGExPropertyChoice MakeChoiceFromValue(const FInstancedStruct& Host, FName Label);
+	PCGEXPROPERTIES_API FPCGExPropertyChoice MakeChoiceFromValue(FConstStructView Host, FName Label);
 
 	/** Clear every carrier's identity, Choices and pick so mirrored lists never nest. */
 	PCGEXPROPERTIES_API void SanitizeChoices(FPCGExPropertyChoices& InOut);
 
 	/** One-line preview of Host's Value: the type's own GetValuePreviewText, else the Value FProperty's export text. */
-	PCGEXPROPERTIES_API FText GetValuePreviewText(const FInstancedStruct& Host);
+	PCGEXPROPERTIES_API FText GetValuePreviewText(FConstStructView Host);
 #endif
 }

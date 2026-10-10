@@ -367,7 +367,7 @@ namespace PCGExProperties
 		return InStruct ? InStruct->FindPropertyByName(TEXT("Value")) : nullptr;
 	}
 
-	bool IsChoiceCompatible(const FInstancedStruct& Host, const FPCGExPropertyChoice& Choice)
+	bool IsChoiceCompatible(const FConstStructView Host, const FPCGExPropertyChoice& Choice)
 	{
 		const FPCGExProperty* HostProperty = Host.GetPtr<FPCGExProperty>();
 		const FPCGExProperty* Carrier = Choice.Value.GetPtr<FPCGExProperty>();
@@ -385,7 +385,7 @@ namespace PCGExProperties
 		return Choices.Items.IndexOfByPredicate([&Id](const FPCGExPropertyChoice& Choice) { return Choice.Id == Id; });
 	}
 
-	int32 ResolveSelectedChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices)
+	int32 ResolveSelectedChoice(const FConstStructView Host, const FPCGExPropertyChoices& Choices)
 	{
 		const FPCGExProperty* HostProperty = Host.GetPtr<FPCGExProperty>();
 		const int32 Chosen = HostProperty ? FindChoiceById(Choices, HostProperty->ChosenChoiceId) : INDEX_NONE;
@@ -396,9 +396,9 @@ namespace PCGExProperties
 		return FindMatchingChoice(Host, Choices);
 	}
 
-	bool ReapplyChosenChoice(FInstancedStruct& Host)
+	bool ReapplyChosenChoice(const FStructView Host)
 	{
-		FPCGExProperty* HostProperty = Host.GetMutablePtr<FPCGExProperty>();
+		FPCGExProperty* HostProperty = Host.GetPtr<FPCGExProperty>();
 		const FProperty* ValueProperty = HostProperty ? FindValueProperty(Host.GetScriptStruct()) : nullptr;
 		if (!ValueProperty)
 		{
@@ -416,13 +416,13 @@ namespace PCGExProperties
 		{
 			return false;
 		}
-		ValueProperty->CopyCompleteValue_InContainer(Host.GetMutableMemory(), Choice.Value.GetMemory());
+		ValueProperty->CopyCompleteValue_InContainer(Host.GetMemory(), Choice.Value.GetMemory());
 		return true;
 	}
 
-	bool UnbindDivergedChoice(FInstancedStruct& Host)
+	bool UnbindDivergedChoice(const FStructView Host)
 	{
-		FPCGExProperty* HostProperty = Host.GetMutablePtr<FPCGExProperty>();
+		FPCGExProperty* HostProperty = Host.GetPtr<FPCGExProperty>();
 		if (!HostProperty || !HostProperty->ChosenChoiceId.IsValid())
 		{
 			return false;
@@ -440,7 +440,7 @@ namespace PCGExProperties
 		return true;
 	}
 
-	int32 FindMatchingChoice(const FInstancedStruct& Host, const FPCGExPropertyChoices& Choices)
+	int32 FindMatchingChoice(const FConstStructView Host, const FPCGExPropertyChoices& Choices)
 	{
 		const FProperty* ValueProperty = Host.IsValid() ? FindValueProperty(Host.GetScriptStruct()) : nullptr;
 		if (!ValueProperty)
@@ -459,15 +459,15 @@ namespace PCGExProperties
 		return INDEX_NONE;
 	}
 
-	bool ApplyChoice(FInstancedStruct& Host, const FPCGExPropertyChoice& Choice)
+	bool ApplyChoice(const FStructView Host, const FPCGExPropertyChoice& Choice)
 	{
 		const FProperty* ValueProperty = Host.IsValid() ? FindValueProperty(Host.GetScriptStruct()) : nullptr;
 		if (!ValueProperty || !IsChoiceCompatible(Host, Choice))
 		{
 			return false;
 		}
-		ValueProperty->CopyCompleteValue_InContainer(Host.GetMutableMemory(), Choice.Value.GetMemory());
-		Host.GetMutable<FPCGExProperty>().ChosenChoiceId = Choice.Id;
+		ValueProperty->CopyCompleteValue_InContainer(Host.GetMemory(), Choice.Value.GetMemory());
+		Host.GetPtr<FPCGExProperty>()->ChosenChoiceId = Choice.Id;
 		return true;
 	}
 
@@ -485,18 +485,18 @@ namespace PCGExProperties
 		}
 	}
 
-	FPCGExPropertyChoice MakeChoiceFromValue(const FInstancedStruct& Host, const FName Label)
+	FPCGExPropertyChoice MakeChoiceFromValue(const FConstStructView Host, const FName Label)
 	{
 		FPCGExPropertyChoices Single;
 		FPCGExPropertyChoice& Choice = Single.Items.AddDefaulted_GetRef();
 		Choice.Id = FGuid::NewGuid();
 		Choice.Label = Label;
-		Choice.Value = Host;
+		Choice.Value = FInstancedStruct(Host);
 		SanitizeChoices(Single);
 		return MoveTemp(Single.Items[0]);
 	}
 
-	FText GetValuePreviewText(const FInstancedStruct& Host)
+	FText GetValuePreviewText(const FConstStructView Host)
 	{
 		const FPCGExProperty* Property = Host.GetPtr<FPCGExProperty>();
 		if (!Property)

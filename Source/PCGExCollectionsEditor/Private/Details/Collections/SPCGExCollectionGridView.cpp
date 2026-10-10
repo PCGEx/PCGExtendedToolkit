@@ -621,8 +621,26 @@ void SPCGExCollectionGridView::StructuralRefresh(EPCGExStructuralRefreshFlags Fl
 		SelectedIndices.Reset();
 		LastClickedIndex = INDEX_NONE;
 	}
+	else
+	{
+		// Entries may have gone; a surviving index keeps its selection and its panel.
+		const int32 Num = Collection.IsValid() ? Collection->NumEntries() : 0;
+		for (auto It = SelectedIndices.CreateIterator(); It; ++It)
+		{
+			if (*It < 0 || *It >= Num)
+			{
+				It.RemoveCurrent();
+			}
+		}
+		if (LastClickedIndex < 0 || LastClickedIndex >= Num)
+		{
+			LastClickedIndex = INDEX_NONE;
+		}
+	}
 
 	IncrementalCategoryRefresh();
+	// Reused tiles cache their highlight; without this a cleared or pruned selection leaves ghosts.
+	ApplySelectionVisuals();
 	UpdateDetailForSelection();
 
 	if (EnumHasAnyFlags(Flags, EPCGExStructuralRefreshFlags::ScrollToEnd))
@@ -2522,7 +2540,8 @@ void SPCGExCollectionGridView::OnObjectTransacted(UObject* Object, const FTransa
 {
 	if (Object == Collection.Get() && Event.GetEventType() == ETransactionObjectEventType::UndoRedo)
 	{
-		StructuralRefresh(EPCGExStructuralRefreshFlags::ClearSelection);
+		// Selection survives an undo: the panel re-reads the restored entry instead of going blank.
+		StructuralRefresh();
 	}
 }
 

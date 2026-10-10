@@ -27,7 +27,9 @@ void UPCGExTupleSettings::PostEditChangeProperty(struct FPropertyChangedEvent& P
 	bool bNeedsSync = false;
 	bool bNeedsUIRefresh = false;
 
-	if (PropertyChangedEvent.MemberProperty)
+	// A drag commits once; the per-row sync and the panel rebuild below would run every tick and tear down the
+	// dragged widget. Super still forwards the Interactive event for live preview.
+	if (PropertyChangedEvent.MemberProperty && PropertyChangedEvent.ChangeType != EPropertyChangeType::Interactive)
 	{
 		FName PropName = PropertyChangedEvent.MemberProperty->GetFName();
 		EPropertyChangeType::Type ChangeType = PropertyChangedEvent.ChangeType;
