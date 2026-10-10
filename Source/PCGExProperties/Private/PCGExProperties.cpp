@@ -283,6 +283,8 @@ namespace PCGExPropertySchemaResolve
 	// Path is the active recursion stack: a revisit on Path is a cycle (warned; IsDataValid flags it too),
 	// a revisit off Path is a diamond, which is supported authoring and skipped at Verbose.
 	// Override layers apply only to imported entries -- locals are edited in-place and never read overrides.
+	// Each asset's own ImportOverrides joins the chain for its subtree, after every importer's layer: the
+	// outermost consumer wins, then each level down.
 	static void Walk(
 		const FPCGExPropertySchemaCollection& Collection,
 		UPCGExPropertySchemaAsset* OwningAsset,
@@ -354,10 +356,72 @@ namespace PCGExPropertySchemaResolve
 				continue;
 			}
 
+			TArray<const FPCGExPropertyOverrides*, TInlineAllocator<8>> SubtreeChain;
+			SubtreeChain.Reserve(OverrideChain.Num() + 1);
+			SubtreeChain.Append(OverrideChain.GetData(), OverrideChain.Num());
+			SubtreeChain.Add(&Asset->Collection.ImportOverrides);
+
 			Path.Push(Asset);
-			Walk(Asset->Collection, Asset, OverrideChain, Out, Seen, Visited, Path);
+			Walk(Asset->Collection, Asset, MakeArrayView(SubtreeChain), Out, Seen, Visited, Path);
 			Path.Pop(EAllowShrinking::No);
 		}
+	}
+
+	// GetPropertyByName's imports leg: the first imported declaration of PropertyName in Walk order, read
+	// through the same override chain Walk would hand it. Visited prevents infinite recursion through cycles.
+	static const FInstancedStruct* FindEffective(
+		const FPCGExPropertySchemaCollection& Collection,
+		FName PropertyName,
+		TConstArrayView<const FPCGExPropertyOverrides*> OverrideChain,
+		TSet<const UPCGExPropertySchemaAsset*>& Visited)
+	{
+		for (const TObjectPtr<UPCGExPropertySchemaAsset>& AssetPtr : Collection.ImportedSchemas)
+		{
+			UPCGExPropertySchemaAsset* Asset = AssetPtr.Get();
+			if (!Asset)
+			{
+				continue;
+			}
+
+			bool bAlreadyVisited = false;
+			Visited.Add(Asset, &bAlreadyVisited);
+			if (bAlreadyVisited)
+			{
+				continue;
+			}
+
+			for (const FPCGExPropertySchema& Schema : Asset->Collection.Schemas)
+			{
+				if (Schema.Name != PropertyName)
+				{
+					continue;
+				}
+				for (const FPCGExPropertyOverrides* Layer : OverrideChain)
+				{
+					if (!Layer)
+					{
+						continue;
+					}
+					if (const FInstancedStruct* Found = Layer->GetOverride(PropertyName))
+					{
+						return Found;
+					}
+				}
+				return &Schema.Property;
+			}
+
+			TArray<const FPCGExPropertyOverrides*, TInlineAllocator<8>> SubtreeChain;
+			SubtreeChain.Reserve(OverrideChain.Num() + 1);
+			SubtreeChain.Append(OverrideChain.GetData(), OverrideChain.Num());
+			SubtreeChain.Add(&Asset->Collection.ImportOverrides);
+
+			if (const FInstancedStruct* Found = FindEffective(Asset->Collection, PropertyName, MakeArrayView(SubtreeChain), Visited))
+			{
+				return Found;
+			}
+		}
+
+		return nullptr;
 	}
 
 	// FindByName equivalent of Walk -- early-exits on the first matching name without allocating
@@ -485,24 +549,15 @@ const FInstancedStruct* FPCGExPropertySchemaCollection::GetPropertyByName(FName 
 		}
 	}
 
-	if (const FInstancedStruct* Override = ImportOverrides.GetOverride(PropertyName))
+	if (ImportedSchemas.IsEmpty())
 	{
-		return Override;
+		return nullptr;
 	}
 
-	// Imports-only walk -- locals already checked. Each asset's FindByName handles its
-	// own subtree cycles; sibling-cycle duplication is harmless (bounded by Visited).
-	for (const TObjectPtr<UPCGExPropertySchemaAsset>& AssetPtr : ImportedSchemas)
-	{
-		if (const UPCGExPropertySchemaAsset* Asset = AssetPtr.Get())
-		{
-			if (const FPCGExPropertySchema* Schema = Asset->Collection.FindByName(PropertyName))
-			{
-				return &Schema->Property;
-			}
-		}
-	}
-	return nullptr;
+	// Same chain as Resolve: an override only surfaces for a name the import tree still declares.
+	const FPCGExPropertyOverrides* Chain[] = {&ImportOverrides};
+	TSet<const UPCGExPropertySchemaAsset*> Visited;
+	return PCGExPropertySchemaResolve::FindEffective(*this, PropertyName, MakeArrayView(Chain), Visited);
 }
 
 FPCGExPropertySchema* FPCGExPropertySchemaCollection::FindByNameMutable(FName PropertyName)

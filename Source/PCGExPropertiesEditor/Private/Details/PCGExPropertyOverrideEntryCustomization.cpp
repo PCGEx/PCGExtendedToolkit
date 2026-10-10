@@ -328,10 +328,10 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeHeader(
 
 namespace PCGExPropertyOverrideEntryCustomization
 {
-	// Resolve the imported asset's authored (Value) for the entry at OverrideIndex within the
-	// component's ImportOverrides.Overrides. Walks the imports tree and grabs the same-index
-	// imported entry's Source->Property. Returns false when the resolve doesn't reach that
-	// index (e.g. asset removed since last reconcile).
+	// Resolve what the entry at OverrideIndex within the component's ImportOverrides.Overrides would
+	// surface with no override of its own: the imports tree's effective value, which includes any
+	// override an asset in the chain applies to what it imports. Returns false when the resolve
+	// doesn't reach that index (e.g. asset removed since last reconcile).
 	bool TryResolveAssetDefault(
 		const UPCGExPropertyCollectionComponent& Comp,
 		int32 OverrideIndex,
@@ -339,7 +339,7 @@ namespace PCGExPropertyOverrideEntryCustomization
 		FInstancedStruct& OutValue)
 	{
 		TArray<FPCGExPropertyResolved> Resolved;
-		Comp.Properties.Resolve(Resolved);
+		Comp.Properties.Resolve(Resolved, {}, /*bIncludeOwnOverrides=*/false);
 
 		int32 ImportSeen = 0;
 		for (const FPCGExPropertyResolved& Entry : Resolved)
@@ -351,7 +351,7 @@ namespace PCGExPropertyOverrideEntryCustomization
 			if (ImportSeen == OverrideIndex)
 			{
 				OutEnabled = false; // Asset-default means "no override active"
-				OutValue = Entry.Source->Property;
+				OutValue = Entry.GetEffectiveProperty();
 				return true;
 			}
 			++ImportSeen;

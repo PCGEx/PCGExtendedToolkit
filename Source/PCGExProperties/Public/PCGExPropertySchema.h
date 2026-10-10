@@ -407,9 +407,10 @@ struct PCGEXPROPERTIES_API FPCGExPropertyResolved
 	int32 SourceIndex = INDEX_NONE;
 
 	/**
-	 * Non-null when the root collection's ImportOverrides supplies an enabled override for this entry's Name.
-	 * Points into ImportOverrides storage on the root collection; valid for the same lifetime as Source.
-	 * Only ever set for imported entries (OwningAsset != null) -- locals are edited in-place.
+	 * Non-null when some layer of the override chain supplies an enabled override for this entry's Name: the
+	 * root collection's ImportOverrides, a fallback layer, or the ImportOverrides of an asset between the root
+	 * and OwningAsset (nearest the root wins). Points into that layer's storage; valid for the same lifetime
+	 * as Source. Only ever set for imported entries (OwningAsset != null) -- locals are edited in-place.
 	 */
 	const FInstancedStruct* OverrideValue = nullptr;
 
@@ -525,10 +526,17 @@ struct PCGEXPROPERTIES_API FPCGExPropertySchemaCollection
 	 * bIncludeOwnOverrides controls whether this collection's own ImportOverrides leads the
 	 * chain (default true). Set false to walk the chain WITHOUT the instance's own authoring --
 	 * used to extract "what value would surface if nothing was overridden?" (the CDO/asset view).
+	 *
+	 * Imported assets' own ImportOverrides are layered too: inside asset B, the chain is
+	 * [this collection, fallbacks..., B.ImportOverrides], so B's override of an entry it imports from A
+	 * is what an importer of B sees unless the importer overrides it itself.
 	 */
 	void Resolve(TArray<FPCGExPropertyResolved>& Out, TConstArrayView<const FPCGExPropertyOverrides*> FallbackChain = {}, bool bIncludeOwnOverrides = true) const;
 
-	/** Find schema by property name (walks locals first, then imported assets) */
+	/**
+	 * Find the DECLARATION of PropertyName (locals first, then imported assets). Ignores every override layer:
+	 * use GetPropertyByName for the effective value.
+	 */
 	const FPCGExPropertySchema* FindByName(FName PropertyName) const;
 
 	/**
@@ -551,8 +559,10 @@ struct PCGEXPROPERTIES_API FPCGExPropertySchemaCollection
 	}
 
 	/**
-	 * Get the effective property by name, honoring the three-layer composition:
-	 *   local schemas -> ImportOverrides (if enabled) -> imported asset's default.
+	 * Get the effective property by name, honoring the same composition as Resolve:
+	 *   local schemas -> ImportOverrides (if enabled) -> each imported asset's own ImportOverrides, root-most
+	 *   first -> the declaring asset's default.
+	 * An override surfaces only for a name the import tree still declares.
 	 *
 	 * Read-only -- safe to call from any thread (see ReconcileImportOverrides contract).
 	 */
@@ -567,7 +577,7 @@ struct PCGEXPROPERTIES_API FPCGExPropertySchemaCollection
 	 *  (see Resolve); a duplicate among locals is an authoring error. */
 	bool ValidateUniqueNames(TArray<FName>& OutDuplicates) const;
 
-	/** Get typed property by name */
+	/** Typed DECLARATION lookup (FindByName): ignores override layers. */
 	template <typename T>
 	const T* GetProperty(FName PropertyName) const
 	{

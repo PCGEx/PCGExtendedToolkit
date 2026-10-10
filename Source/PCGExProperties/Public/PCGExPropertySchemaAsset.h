@@ -34,6 +34,8 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnPCGExSchemaAssetChanged, UPCGExPropertySc
  * - Walk order is depth-first: importing collection's locals first, then each
  *   ImportedSchemas entry expanded in array order (locals of the imported
  *   collection, then its own imports, etc.).
+ * - This asset's own ImportOverrides apply to what it imports, below the importer's own
+ *   overrides: an importer sees this asset's override unless it overrides the entry itself.
  * - Cycles are detected during resolution and skipped with a LogPCGEx warning.
  *   IsDataValid surfaces them in the editor as a Warning result.
  */
