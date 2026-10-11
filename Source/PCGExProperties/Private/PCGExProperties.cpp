@@ -8,6 +8,7 @@
 #include "PCGExPropertyTypes.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Types/PCGExTypes.h"
 
 #if WITH_EDITOR
 void FPCGExPropertiesModule::RegisterToEditor(const TSharedPtr<FSlateStyleSet>& InStyle)
@@ -358,6 +359,11 @@ void FPCGExPropertyResolved::GetEffectiveChoices(FPCGExPropertyChoices& Out) con
 		ChoicePatches[i]->Apply(Out);
 	}
 	PCGExProperties::SanitizeChoices(Out);
+	if (Source)
+	{
+		// Patch-added carriers were authored against an importer's copy: every carrier follows the declaration.
+		PCGExProperties::SyncChoiceCarriers(Out, FConstStructView(Source->Property));
+	}
 }
 
 namespace PCGExProperties
@@ -483,6 +489,100 @@ namespace PCGExProperties
 				Carrier->ChosenChoiceId.Invalidate();
 			}
 		}
+	}
+
+	bool SyncChoiceCarriers(FPCGExPropertyChoices& InOut, const FConstStructView Host)
+	{
+		return SyncChoiceCarriers(InOut.Items, Host);
+	}
+
+	bool SyncChoiceCarriers(TArray<FPCGExPropertyChoice>& Items, const FConstStructView Host)
+	{
+		const FPCGExProperty* HostProperty = Host.IsValid() ? Host.GetPtr<FPCGExProperty>() : nullptr;
+		if (!HostProperty)
+		{
+			return false;
+		}
+		bool bChanged = false;
+		for (FPCGExPropertyChoice& Choice : Items)
+		{
+			FPCGExProperty* Carrier = Choice.Value.GetScriptStruct() == Host.GetScriptStruct() ? Choice.Value.GetMutablePtr<FPCGExProperty>() : nullptr;
+			if (Carrier)
+			{
+				bChanged |= Carrier->SyncStructuralFromSchema(*HostProperty);
+			}
+		}
+		return bChanged;
+	}
+
+	bool CarryChoicesAcrossRetype(const FConstStructView Old, const FStructView New)
+	{
+		const FPCGExProperty* OldProperty = Old.IsValid() ? Old.GetPtr<FPCGExProperty>() : nullptr;
+		FPCGExProperty* NewProperty = New.IsValid() ? New.GetPtr<FPCGExProperty>() : nullptr;
+		if (!OldProperty || !NewProperty || Old.GetScriptStruct() == New.GetScriptStruct())
+		{
+			return false;
+		}
+
+		// A value crosses types through its attribute projection: TryWriteValue on an unsupported type reports
+		// success and writes nothing, so the pivot is gated on the legacy set both sides must land in.
+		auto IsLegacyType = [](const EPCGMetadataTypes Type)
+		{
+			switch (Type)
+			{
+			case EPCGMetadataTypes::Float:
+			case EPCGMetadataTypes::Double:
+			case EPCGMetadataTypes::Integer32:
+			case EPCGMetadataTypes::Integer64:
+			case EPCGMetadataTypes::Vector2:
+			case EPCGMetadataTypes::Vector:
+			case EPCGMetadataTypes::Vector4:
+			case EPCGMetadataTypes::Quaternion:
+			case EPCGMetadataTypes::Transform:
+			case EPCGMetadataTypes::String:
+			case EPCGMetadataTypes::Boolean:
+			case EPCGMetadataTypes::Rotator:
+			case EPCGMetadataTypes::Name:
+			case EPCGMetadataTypes::SoftObjectPath:
+			case EPCGMetadataTypes::SoftClassPath:
+				return true;
+			default:
+				return false;
+			}
+		};
+
+		FPCGExPropertyChoices Carried;
+		Carried.bLocked = OldProperty->Choices.bLocked;
+		for (const FPCGExPropertyChoice& OldChoice : OldProperty->Choices.Items)
+		{
+			const FPCGExProperty* OldCarrier = OldChoice.Value.GetPtr<FPCGExProperty>();
+			if (!OldCarrier)
+			{
+				continue;
+			}
+
+			FPCGExPropertyChoice& NewChoice = Carried.Items.AddDefaulted_GetRef();
+			NewChoice.Id = OldChoice.Id;
+			NewChoice.Label = OldChoice.Label;
+			NewChoice.Value.InitializeAs(New.GetScriptStruct());
+			FPCGExProperty* NewCarrier = NewChoice.Value.GetMutablePtr<FPCGExProperty>();
+			NewCarrier->SyncStructuralFromSchema(*NewProperty);
+
+			const EPCGMetadataTypes Pivot = OldCarrier->GetOutputType();
+			if (IsLegacyType(Pivot) && IsLegacyType(NewCarrier->GetOutputType()))
+			{
+				PCGExTypes::FScopedTypedValue PivotValue(Pivot);
+				if (OldCarrier->TryWriteValue(Pivot, PivotValue.GetRaw()))
+				{
+					NewCarrier->TryReadValue(Pivot, PivotValue.GetRaw());
+				}
+			}
+		}
+
+		NewProperty->Choices = MoveTemp(Carried);
+		NewProperty->ChosenChoiceId = OldProperty->ChosenChoiceId;
+		SanitizeChoices(NewProperty->Choices);
+		return !NewProperty->Choices.Items.IsEmpty();
 	}
 
 	FPCGExPropertyChoice MakeChoiceFromValue(const FConstStructView Host, const FName Label)
@@ -968,10 +1068,12 @@ void FPCGExPropertySchemaCollection::SyncAllSchemas(TArray<FPCGExHeaderIdRemap>&
 		}
 		Schema.SyncPropertyName();
 
-		// Choice identities follow the same rule as HeaderId: minted here, never by a constructor.
+		// Choice identities follow the same rule as HeaderId: minted here, never by a constructor. Carriers then
+		// take the declaration's structural fields, and the default follows the choice it picked.
 		if (FPCGExProperty* Declared = Schema.GetPropertyMutable())
 		{
 			Declared->Choices.NormalizeIds();
+			PCGExProperties::SyncChoiceCarriers(Declared->Choices, FConstStructView(Schema.Property));
 			PCGExProperties::ReapplyChosenChoice(Schema.Property);
 		}
 	}
@@ -1059,6 +1161,14 @@ bool FPCGExPropertySchemaCollection::ReconcileImportOverrides(const TArray<FPCGE
 	}
 
 	bChanged |= ImportOverrides.SyncToSchema(ImportedOnlySchema);
+
+#if WITH_EDITORONLY_DATA
+	// Rows are parallel to the imports-only schema now: authored patch carriers follow their declaration too.
+	for (int32 i = 0; i < ImportOverrides.Overrides.Num() && i < ImportedOnlySchema.Num(); ++i)
+	{
+		bChanged |= PCGExProperties::SyncChoiceCarriers(ImportOverrides.Overrides[i].ChoicesPatch.Items, FConstStructView(ImportedOnlySchema[i]));
+	}
+#endif
 	return bChanged;
 }
 

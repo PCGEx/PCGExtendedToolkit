@@ -40,6 +40,10 @@ void SPCGExPropertyChoicePicker::Construct(const FArguments& InArgs, const FStru
 	TSharedRef<SWidget> ButtonContent = SNullWidget::NullWidget;
 	if (bLocked)
 	{
+		// Explicit dim, not UseSubduedForeground: the button's foreground carries the arrow's accent.
+		FLinearColor Subdued = FStyleColors::Foreground.GetSpecifiedColor();
+		Subdued.A *= 0.6f;
+
 		ButtonContent = SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -58,7 +62,7 @@ void SPCGExPropertyChoicePicker::Construct(const FArguments& InArgs, const FStru
 				SNew(STextBlock)
 				.Font(IDetailLayoutBuilder::GetDetailFontItalic())
 				.Text(this, &SPCGExPropertyChoicePicker::GetSelectionPreview)
-				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+				.ColorAndOpacity(FSlateColor(Subdued))
 			];
 	}
 
@@ -66,6 +70,7 @@ void SPCGExPropertyChoicePicker::Construct(const FArguments& InArgs, const FStru
 	[
 		SAssignNew(ComboButton, SComboButton)
 		.ComboButtonStyle(FAppStyle::Get(), bLocked ? "ComboButton" : "SimpleComboButton")
+		.ForegroundColor(this, &SPCGExPropertyChoicePicker::GetArrowColor)
 		.HasDownArrow(true)
 		.ToolTipText(this, &SPCGExPropertyChoicePicker::GetSelectionToolTip)
 		.OnGetMenuContent(this, &SPCGExPropertyChoicePicker::BuildMenu)
@@ -103,16 +108,36 @@ FText SPCGExPropertyChoicePicker::GetSelectionPreview() const
 	return Host.IsValid() ? PCGExProperties::GetValuePreviewText(FConstStructView(Host)) : FText::GetEmpty();
 }
 
+int32 SPCGExPropertyChoicePicker::GetBoundIndex() const
+{
+	const FPCGExProperty* Property = GetHost();
+	const int32 Chosen = Property ? PCGExProperties::FindChoiceById(Property->Choices, Property->ChosenChoiceId) : INDEX_NONE;
+	return Chosen != INDEX_NONE && PCGExProperties::IsChoiceCompatible(FConstStructView(Host), Property->Choices.Items[Chosen]) ? Chosen : INDEX_NONE;
+}
+
 FSlateColor SPCGExPropertyChoicePicker::GetSelectionColor() const
 {
-	return GetSelectedIndex() == INDEX_NONE ? FStyleColors::Warning : FSlateColor::UseForeground();
+	// Explicit, not UseForeground: the button's foreground carries the arrow's accent and must not bleed into the label.
+	return GetSelectedIndex() == INDEX_NONE ? FStyleColors::Warning : FStyleColors::Foreground;
+}
+
+FSlateColor SPCGExPropertyChoicePicker::GetArrowColor() const
+{
+	return GetBoundIndex() != INDEX_NONE ? FStyleColors::Primary : FSlateColor::UseStyle();
 }
 
 FText SPCGExPropertyChoicePicker::GetSelectionToolTip() const
 {
 	if (!bLocked)
 	{
-		return LOCTEXT("QuickPickToolTip", "Pick one of this property's choices.");
+		const int32 Bound = GetBoundIndex();
+		if (Bound != INDEX_NONE)
+		{
+			return FText::Format(
+				LOCTEXT("BoundToolTip", "Bound to '{0}': the value follows this choice and detaches when edited."),
+				PCGExPropertyChoicePicker::LabelOf(GetHost()->Choices.Items[Bound]));
+		}
+		return LOCTEXT("CustomToolTipUnlocked", "Custom value. Pick a choice to bind the value to it.");
 	}
 	return GetSelectedIndex() == INDEX_NONE
 		? LOCTEXT("CustomToolTip", "This value is not one of the choices. Pick one to align it; the value is kept as is until then.")

@@ -35,9 +35,13 @@ public:
 private:
 	const FPCGExProperty* GetHost() const;
 	int32 GetSelectedIndex() const;
+	/** Index of the choice the host is bound to (its live pick), INDEX_NONE for a custom value. */
+	int32 GetBoundIndex() const;
 	FText GetSelectionLabel() const;
 	FText GetSelectionPreview() const;
 	FSlateColor GetSelectionColor() const;
+	/** The arrow: accent blue while bound, the style's foreground otherwise. */
+	FSlateColor GetArrowColor() const;
 	FText GetSelectionToolTip() const;
 	TSharedRef<SWidget> BuildMenu();
 	void PickChoice(FGuid ChoiceId);

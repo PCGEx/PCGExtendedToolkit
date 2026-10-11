@@ -711,6 +711,22 @@ namespace PCGExProperties
 	/** Clear every carrier's identity, Choices and pick so mirrored lists never nest. */
 	PCGEXPROPERTIES_API void SanitizeChoices(FPCGExPropertyChoices& InOut);
 
+	/**
+	 * Re-mirror every same-type carrier's schema-owned fields (Range, AllowedClass, enum class, ...) from Host through
+	 * FPCGExProperty::SyncStructuralFromSchema, exactly as override rows are. A choice is a value under the host's
+	 * rules, never a schema of its own. True if any carrier changed.
+	 */
+	PCGEXPROPERTIES_API bool SyncChoiceCarriers(FPCGExPropertyChoices& InOut, FConstStructView Host);
+	/** Same, over a bare item list (a patch's). */
+	PCGEXPROPERTIES_API bool SyncChoiceCarriers(TArray<FPCGExPropertyChoice>& Items, FConstStructView Host);
+
+	/**
+	 * Rebuild New's Choices from Old's after a retype: labels, ids, lock and the host's pick always carry; a value
+	 * carries when both types project to a legacy attribute type and New accepts the converted read, else the new
+	 * carrier keeps its default. New's own list is replaced. True if New received any choice.
+	 */
+	PCGEXPROPERTIES_API bool CarryChoicesAcrossRetype(FConstStructView Old, FStructView New);
+
 	/** One-line preview of Host's Value: the type's own GetValuePreviewText, else the Value FProperty's export text. */
 	PCGEXPROPERTIES_API FText GetValuePreviewText(FConstStructView Host);
 #endif

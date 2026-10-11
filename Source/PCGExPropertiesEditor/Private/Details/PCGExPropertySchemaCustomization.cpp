@@ -7,6 +7,7 @@
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "IDetailPropertyRow.h"
+#include "IPropertyUtilities.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExProperty.h"
 #include "PropertyHandle.h"
@@ -66,12 +67,50 @@ void FPCGExPropertySchemaCustomization::OnSchemaChanged()
 	}
 
 	FPCGExPropertySchema* Schema = static_cast<FPCGExPropertySchema*>(RawData[0]);
-	if (Schema)
+	if (!Schema)
 	{
-		Schema->SyncPropertyName();
+		return;
 	}
+	Schema->SyncPropertyName();
+
+	// A retype rebuilt Property from scratch. The choices come back from the pre-change snapshot inside the
+	// picker's own transaction (the owner was Modify'd for it); hosts synced their rows before this delegate ran,
+	// so their post-edit path is re-run once the stack unwinds.
+	const bool bRetyped = PreChangeSnapshot.IsValid() && Schema->Property.IsValid()
+		&& PreChangeSnapshot.GetScriptStruct() != Schema->Property.GetScriptStruct();
+	if (bRetyped && PCGExProperties::CarryChoicesAcrossRetype(FConstStructView(PreChangeSnapshot), FStructView(Schema->Property)))
+	{
+		if (const TSharedPtr<IPropertyUtilities> Utils = WeakPropertyUtilities.Pin())
+		{
+			const TWeakPtr<IPropertyHandle> WeakInner = PropertyInnerHandlePtr;
+			Utils->EnqueueDeferredAction(FSimpleDelegate::CreateLambda([WeakInner]()
+			{
+				if (const TSharedPtr<IPropertyHandle> Inner = WeakInner.Pin())
+				{
+					Inner->NotifyPostChange(EPropertyChangeType::ValueSet);
+				}
+			}));
+		}
+	}
+	PreChangeSnapshot.Reset();
 
 	// Note: Parent collection will handle ForceRefresh via its own listener
+}
+
+void FPCGExPropertySchemaCustomization::OnPropertyPreChange()
+{
+	PreChangeSnapshot.Reset();
+	const TSharedPtr<IPropertyHandle> Inner = PropertyInnerHandlePtr.Pin();
+	if (!Inner.IsValid())
+	{
+		return;
+	}
+	TArray<void*> RawData;
+	Inner->AccessRawData(RawData);
+	if (RawData.Num() == 1 && RawData[0])
+	{
+		PreChangeSnapshot = *static_cast<const FInstancedStruct*>(RawData[0]);
+	}
 }
 
 bool FPCGExPropertySchemaCustomization::IsReadOnlySchema(TSharedRef<IPropertyHandle> PropertyHandle) const
@@ -98,6 +137,7 @@ void FPCGExPropertySchemaCustomization::CustomizeHeader(
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
 	PropertyHandlePtr = PropertyHandle;
+	WeakPropertyUtilities = CustomizationUtils.GetPropertyUtilities();
 	bIsReadOnly = IsReadOnlySchema(PropertyHandle);
 
 	HeaderRow
@@ -217,6 +257,8 @@ void FPCGExPropertySchemaCustomization::CustomizeChildren(
 
 		if (PropertyInnerHandle.IsValid())
 		{
+			PropertyInnerHandlePtr = PropertyInnerHandle;
+			PropertyInnerHandle->SetOnPropertyValuePreChange(FSimpleDelegate::CreateSP(this, &FPCGExPropertySchemaCustomization::OnPropertyPreChange));
 			PropertyInnerHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPCGExPropertySchemaCustomization::OnSchemaChanged));
 			PropertyInnerHandle->SetOnChildPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPCGExPropertySchemaCustomization::OnSchemaChanged));
 			ChildBuilder.AddProperty(PropertyInnerHandle.ToSharedRef()).ShouldAutoExpand(true);

@@ -10,8 +10,10 @@
 #include "PCGExProperty.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExEditorCustomizationUtils.h"
+#include "Styling/AppStyle.h"
 #include "UObject/StructOnScope.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/SNullWidget.h"
 #include "Widgets/SPCGExPropertyChoicePicker.h"
 #include "Widgets/Layout/SBox.h"
@@ -236,6 +238,18 @@ void FPCGExInlineWidgetRegistry::AddComplexValueRows(
 	}
 }
 
+bool FPCGExInlineWidgetRegistry::IsBoundToChoice(const FConstStructView Host)
+{
+	const FPCGExProperty* Property = Host.IsValid() ? Host.GetPtr<FPCGExProperty>() : nullptr;
+	if (!Property)
+	{
+		return false;
+	}
+	// The pick, not a value match: only a picked row follows its choice.
+	const int32 Chosen = PCGExProperties::FindChoiceById(Property->Choices, Property->ChosenChoiceId);
+	return Chosen != INDEX_NONE && PCGExProperties::IsChoiceCompatible(Host, Property->Choices.Items[Chosen]);
+}
+
 bool FPCGExInlineWidgetRegistry::HasChoices(const FConstStructView Host, bool* bOutLocked)
 {
 	const UScriptStruct* Struct = Host.GetScriptStruct();
@@ -265,12 +279,26 @@ TSharedRef<SWidget> FPCGExInlineWidgetRegistry::WrapValueWidgetWithChoices(
 		return SNew(SPCGExPropertyChoicePicker, Host, NotifyHandle).Locked(true);
 	}
 
+	// A bound value follows its choice and detaches on edit: dimmed, still editable. Custom stays full.
+	// SBorder's tint multiplies through its children; RenderOpacity is a fixed float, not an attribute.
+	const TAttribute<FLinearColor> BoundTint = TAttribute<FLinearColor>::Create([Host]() -> FLinearColor
+	{
+		// Above the disabled-row look, so a bound row still reads as live.
+		return FLinearColor(1.0f, 1.0f, 1.0f, IsBoundToChoice(Host) ? 0.7f : 1.0f);
+	});
+
 	return SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot()
 		.FillWidth(1.0f)
 		.VAlign(VAlign_Center)
 		[
-			ValueWidget
+			SNew(SBorder)
+			.BorderImage(FAppStyle::GetBrush("NoBorder"))
+			.Padding(0)
+			.ColorAndOpacity(BoundTint)
+			[
+				ValueWidget
+			]
 		]
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
