@@ -18,6 +18,7 @@
 #include "Details/PCGExNumericRangeCustomization.h"
 #include "Details/PCGExObjectPropertyOverrideDescriptionCustomization.h"
 #include "Details/PCGExPackedFloatSlotCustomization.h"
+#include "Details/PCGExPropertyChoicesCustomization.h"
 #include "Details/PCGExPropertyCollectionActorDetails.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
 #include "Details/PCGExPropertyFloatCurveCustomization.h"
@@ -54,6 +55,16 @@ void FPCGExPropertiesEditorModule::StartupModule()
 	PropertyModule.RegisterCustomPropertyTypeLayout(
 		FPCGExNumericRange::StaticStruct()->GetFName(),
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExNumericRangeCustomization::MakeInstance)
+		);
+
+	// Choices: the authoring strip on schema-edit rows, and one row per choice.
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FPCGExPropertyChoices::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyChoicesCustomization::MakeInstance)
+		);
+	PropertyModule.RegisterCustomPropertyTypeLayout(
+		FPCGExPropertyChoice::StaticStruct()->GetFName(),
+		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExPropertyChoiceCustomization::MakeInstance)
 		);
 
 	// Register FPCGExPropertySchemaCollection customization - handles schema array changes
