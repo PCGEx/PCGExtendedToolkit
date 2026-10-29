@@ -3,51 +3,83 @@
 
 #include "Utils/PCGExCurveLookup.h"
 
+#include <atomic>
+
 #include "PCGExLog.h"
 #include "UObject/UObjectGlobals.h"
 
+#if WITH_EDITOR
+#include "UObject/PackageReload.h"
+#endif
+
 #pragma region PCGExCurves
+
+namespace PCGExCurveLookup
+{
+	struct FDefaultCurve
+	{
+		explicit FDefaultCurve(const FSoftObjectPath& InAssetPath)
+			: AssetPath(InAssetPath)
+		{
+			checkf(IsInGameThread(), TEXT("PCGExCurves::GetDefaultCurve must first run on the game thread: it loads the shipped curves."));
+
+			UCurveFloat* LoadedCurve = LoadObject<UCurveFloat>(nullptr, *AssetPath.ToString());
+			if (LoadedCurve)
+			{
+				// Rooted like the engine's default materials: GC never traces the cooked CDOs that point at it.
+				LoadedCurve->AddToRoot();
+			}
+			else
+			{
+				UE_LOG(LogPCGEx, Error, TEXT("Missing shipped default curve '%s'."), *AssetPath.ToString());
+			}
+			Curve.store(LoadedCurve, std::memory_order_relaxed);
+		}
+
+		const FSoftObjectPath AssetPath;
+
+		// Swapped on the game thread by an editor package reload while any thread may read it.
+		std::atomic<UCurveFloat*> Curve;
+	};
+
+	/** The shipped default curves, loaded on the game thread at the first call. */
+	TArrayView<FDefaultCurve> GetDefaultCurves()
+	{
+		static FDefaultCurve DefaultCurves[] = {FDefaultCurve(PCGExCurves::WeightDistributionLinear), FDefaultCurve(PCGExCurves::WeightDistributionLinearInv)};
+		return MakeArrayView(DefaultCurves);
+	}
+}
 
 namespace PCGExCurves
 {
 	UCurveFloat* GetDefaultCurve(const FSoftObjectPath& Path)
 	{
-		struct FDefaultCurve
+		for (const PCGExCurveLookup::FDefaultCurve& Entry : PCGExCurveLookup::GetDefaultCurves())
 		{
-			FSoftObjectPath AssetPath;
-			UCurveFloat* Curve = nullptr;
-		};
-
-		static const TArray<FDefaultCurve> DefaultCurves = []()
-		{
-			checkf(IsInGameThread(), TEXT("PCGExCurves::GetDefaultCurve must first run on the game thread: it loads the shipped curves."));
-
-			TArray<FDefaultCurve> Entries;
-			for (const FSoftObjectPath& DefaultPath : {WeightDistributionLinear, WeightDistributionLinearInv})
-			{
-				UCurveFloat* LoadedCurve = LoadObject<UCurveFloat>(nullptr, *DefaultPath.ToString());
-				if (LoadedCurve)
-				{
-					// Rooted like the engine's default materials: GC never traces the cooked CDOs that point at it.
-					LoadedCurve->AddToRoot();
-				}
-				else
-				{
-					UE_LOG(LogPCGEx, Error, TEXT("Missing shipped default curve '%s'."), *DefaultPath.ToString());
-				}
-				Entries.Add({DefaultPath, LoadedCurve});
-			}
-			return Entries;
-		}();
-
-		for (const FDefaultCurve& Entry : DefaultCurves)
-		{
-			if (Entry.AssetPath == Path) { return Entry.Curve; }
+			if (Entry.AssetPath == Path) { return Entry.Curve.load(std::memory_order_acquire); }
 		}
 
 		ensureMsgf(false, TEXT("'%s' is not a shipped default curve."), *Path.ToString());
 		return nullptr;
 	}
+
+#if WITH_EDITOR
+	void EDITOR_RepointDefaultCurves(const EPackageReloadPhase InPhase, FPackageReloadedEvent* InEvent)
+	{
+		// Batch phases carry no event.
+		if (InPhase != EPackageReloadPhase::OnPackageFixup || !InEvent) { return; }
+
+		for (PCGExCurveLookup::FDefaultCurve& Entry : PCGExCurveLookup::GetDefaultCurves())
+		{
+			// The engine roots the replacement of a rooted object (GeneratePackageReloadEvent).
+			UObject* Replacement = nullptr;
+			if (InEvent->GetRepointedObject(Entry.Curve.load(std::memory_order_relaxed), Replacement))
+			{
+				Entry.Curve.store(Cast<UCurveFloat>(Replacement), std::memory_order_release);
+			}
+		}
+	}
+#endif
 }
 
 #pragma endregion

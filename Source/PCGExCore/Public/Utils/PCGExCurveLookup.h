@@ -14,6 +14,8 @@
 #include "PCGExCurveLookup.generated.h"
 
 class FPCGExCurveFloatLookup;
+class FPackageReloadedEvent;
+enum class EPackageReloadPhase : uint8;
 
 using PCGExFloatLUT = TSharedPtr<FPCGExCurveFloatLookup, ESPMode::ThreadSafe>;
 
@@ -45,6 +47,11 @@ namespace PCGExCurves
 	/** Shipped curve behind WeightDistributionLinear or WeightDistributionLinearInv. Both are loaded and rooted on the game
 	 *  thread at the first call, so later calls from any thread only read a pointer. */
 	PCGEXCORE_API UCurveFloat* GetDefaultCurve(const FSoftObjectPath& Path);
+
+#if WITH_EDITOR
+	/** OnPackageReloaded handler: repoints the cached default curves at their reloaded copies before the old ones are purged. */
+	PCGEXCORE_API void EDITOR_RepointDefaultCurves(EPackageReloadPhase InPhase, FPackageReloadedEvent* InEvent);
+#endif
 }
 
 USTRUCT(BlueprintType)
