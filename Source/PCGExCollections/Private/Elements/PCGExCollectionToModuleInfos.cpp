@@ -83,7 +83,7 @@ bool FPCGExCollectionToModuleInfosElement::AdvanceWork(FPCGExContext* InContext,
 	PCGEX_SETTINGS_C(InContext, CollectionToModuleInfos)
 
 	PCGExHelpers::LoadBlockingTracked_AnyThreadTpl(Settings->AssetCollection, InContext);
-	UPCGExAssetCollection* MainCollection = Settings->AssetCollection.Get();
+	UPCGExAssetCollection* MainCollection = InContext->ResolveObject_AnyThreadTpl(Settings->AssetCollection);
 
 	if (!MainCollection)
 	{

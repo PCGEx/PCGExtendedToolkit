@@ -20,8 +20,10 @@
 #include "Data/PCGVolumeData.h"
 #include "Data/Utils/PCGExDataForward.h"
 #include "Elements/PCGExStagingLoadProperties.h"
+#include "Core/PCGExContext.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Data/PCGPointArrayData.h"
 #include "Data/Utils/PCGExPointReplicate.h"
 
@@ -68,6 +70,9 @@ void FPCGExSharedAssetPool::LoadAllAssets(const TSharedPtr<PCGExMT::FTaskManager
 		return;
 	}
 
+	// Weak: the context can be gone by the time a cold load completes.
+	const TWeakPtr<FPCGContextHandle> CtxHandle = TaskManager->GetContext()->GetWeakSelfHandle();
+
 	// Warm cache: completes synchronously on this thread with no game-thread roundtrip (see LoadTracked).
 	PCGExHelpers::LoadTracked(
 		TaskManager,
@@ -75,22 +80,35 @@ void FPCGExSharedAssetPool::LoadAllAssets(const TSharedPtr<PCGExMT::FTaskManager
 		{
 			return PathsToLoad->Array();
 		},
-		[PCGEX_ASYNC_THIS_CAPTURE, OnLoadEnd](const bool bSuccess)
+		[PCGEX_ASYNC_THIS_CAPTURE, OnLoadEnd, CtxHandle](const bool bSuccess)
 		{
 			PCGEX_ASYNC_THIS
 
 			if (bSuccess)
 			{
-				// Map loaded assets back to entries
+				// Warm completion runs on this thread, possibly a worker: map entries to the assets the context's
+				// tracked load recorded, no lookup.
+				TArray<const FPCGExPCGDataAssetCollectionEntry*> Entries;
+				TArray<FSoftObjectPath> EntryPaths;
 				for (const auto& Pair : This->EntryMap)
 				{
 					if (Pair.Value && Pair.Value->Staging.Path.IsValid())
 					{
-						TSoftObjectPtr<UPCGDataAsset> SoftPtr(Pair.Value->Staging.Path);
-						if (UPCGDataAsset* LoadedAsset = SoftPtr.Get())
-						{
-							This->LoadedAssets.Add(Pair.Value, LoadedAsset);
-						}
+						Entries.Add(Pair.Value);
+						EntryPaths.Add(Pair.Value->Staging.Path);
+					}
+				}
+
+				TArray<UObject*> Loaded;
+				FPCGContext::FSharedContext<FPCGExContext> SharedContext(CtxHandle);
+				if (const FPCGExContext* Ctx = SharedContext.Get()) { Ctx->ResolveObjects_AnyThread(EntryPaths, Loaded); }
+				else { PCGExHelpers::ResolveObjects_AnyThread(EntryPaths, Loaded); }
+
+				for (int32 i = 0; i < Entries.Num(); i++)
+				{
+					if (UPCGDataAsset* LoadedAsset = Cast<UPCGDataAsset>(Loaded[i]))
+					{
+						This->LoadedAssets.Add(Entries[i], LoadedAsset);
 					}
 				}
 			}

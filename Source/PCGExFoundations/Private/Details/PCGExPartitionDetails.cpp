@@ -6,6 +6,7 @@
 #include "PCGComponent.h"
 #include "PCGGraphExecutionStateInterface.h"
 #include "Helpers/PCGActorHelpers.h"
+#include "UObject/GarbageCollection.h"
 
 namespace PCGExPartitionGrid
 {
@@ -86,7 +87,12 @@ namespace PCGExPartitionGrid
 	{
 		if (!InSource) { return false; }
 
-		const FBox Bounds = InSource->GetExecutionState().GetBounds();
+		// A partitioned component's bounds reach its original through a soft pointer; Partition Identifier runs on workers.
+		FBox Bounds(ForceInit);
+		{
+			FGCScopeGuard GCGuard;
+			Bounds = InSource->GetExecutionState().GetBounds();
+		}
 		if (!Bounds.IsValid) { return false; }
 
 		OutAnchor = Bounds.GetCenter();

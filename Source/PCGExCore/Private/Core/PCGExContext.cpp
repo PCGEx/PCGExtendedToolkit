@@ -643,7 +643,37 @@ void FPCGExContext::TrackCachedAsset(const TSharedPtr<PCGExHelpers::FPCGExShared
 	{
 		FWriteScopeLock WriteScopeLock(AssetsLock);
 		TrackedCachedAssets.Add(InHandle);
+		TrackedLoadedObjects.Append(InHandle->GetLoadedObjects());
 	}
+}
+
+UObject* FPCGExContext::ResolveObject_AnyThread(const FSoftObjectPath& Path) const
+{
+	if (Path.IsNull()) { return nullptr; }
+
+	{
+		FReadScopeLock ReadScopeLock(AssetsLock);
+		if (const TWeakObjectPtr<UObject>* Found = TrackedLoadedObjects.Find(Path))
+		{
+			if (UObject* Object = Found->Get()) { return Object; }
+		}
+	}
+
+	return PCGExHelpers::ResolveObject_AnyThread(Path);
+}
+
+void FPCGExContext::ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects) const
+{
+	OutObjects.Init(nullptr, Paths.Num());
+	{
+		FReadScopeLock ReadScopeLock(AssetsLock);
+		for (int32 i = 0; i < Paths.Num(); i++)
+		{
+			if (const TWeakObjectPtr<UObject>* Found = TrackedLoadedObjects.Find(Paths[i])) { OutObjects[i] = Found->Get(); }
+		}
+	}
+
+	PCGExHelpers::ResolveMissingObjects_AnyThread(Paths, OutObjects);
 }
 
 UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules) const

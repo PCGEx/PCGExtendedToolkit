@@ -471,7 +471,9 @@ namespace PCGExPathSplineMeshSimple
 			return;
 		}
 
-		TargetActor = Settings->TargetActor.Get() ? Settings->TargetActor.Get() : ExecutionContext->GetTargetActor(nullptr);
+		// Processors run on workers with 2+ inputs: resolve a path copy, GC-guarded, never the shared settings pointer.
+		AActor* SettingsTargetActor = PCGExHelpers::ResolveObject_AnyThreadTpl(Settings->TargetActor);
+		TargetActor = SettingsTargetActor ? SettingsTargetActor : ExecutionContext->GetTargetActor(nullptr);
 		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
 		DataTags = PointDataFacade->Source->Tags->FlattenToArrayOfNames();
 

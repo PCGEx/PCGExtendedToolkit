@@ -305,6 +305,12 @@ namespace PCGExStagingLoadProperties
 				}
 			}
 
+			{
+				TArray<const FPCGExProperty*> Sources;
+				Cache.SourceByHash.GenerateValueArray(Sources);
+				Cache.WriterPtr->BindWriteSources(Sources);
+			}
+
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping), so sidecar rows come from
 			// the unique sources resolved above.
 			if (Context->bOutputMap && !Cache.WriterPtr->GetOutputSidecarPin().IsNone())

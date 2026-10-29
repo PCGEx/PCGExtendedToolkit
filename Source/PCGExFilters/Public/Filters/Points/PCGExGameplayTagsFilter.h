@@ -16,6 +16,8 @@
 
 #include "PCGExGameplayTagsFilter.generated.h"
 
+class AActor;
+
 namespace PCGExData
 {
 	template <typename T>
@@ -92,7 +94,9 @@ namespace PCGExPointFilter
 		FCachedPropertyPath PropertyPath;
 		TArray<FString> PathSegments;
 
-		TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>> ActorReferences;
+		// Per point, an index into Actors (INDEX_NONE for an empty path); one entry per unique path.
+		TArray<int32> ActorIndices;
+		TArray<TWeakObjectPtr<AActor>> Actors;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;

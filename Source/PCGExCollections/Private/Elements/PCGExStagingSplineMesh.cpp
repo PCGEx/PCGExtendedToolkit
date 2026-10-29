@@ -18,6 +18,7 @@
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Metadata/PCGObjectPropertyOverride.h"
 #include "Paths/PCGExPath.h"
 #include "Paths/PCGExPathsHelpers.h"
@@ -904,7 +905,9 @@ namespace PCGExPathSplineMesh
 			PCGExHelpers::LoadBlockingTracked_AnyThread(MaterialPaths, Context);
 		} // TODO : Refactor this atrocity
 
-		TargetActor = Settings->TargetActor.Get() ? Settings->TargetActor.Get() : ExecutionContext->GetTargetActor(nullptr);
+		// Processors run on workers with 2+ inputs: resolve a path copy, GC-guarded, never the shared settings pointer.
+		AActor* SettingsTargetActor = PCGExHelpers::ResolveObject_AnyThreadTpl(Settings->TargetActor);
+		TargetActor = SettingsTargetActor ? SettingsTargetActor : ExecutionContext->GetTargetActor(nullptr);
 		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
 
 		if (!TargetActor)

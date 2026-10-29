@@ -127,6 +127,8 @@ struct FPCGExClipper2TriangulateContext final : FPCGExClipper2ProcessorContext
 	TArray<FPCGExStagedMeshOutput> StagedOutputs;
 	mutable FCriticalSection StagedOutputsLock;
 
+	virtual void RegisterAssetDependencies() override;
+
 	virtual void Process(const TSharedPtr<PCGExClipper2::FProcessingGroup>& Group) override;
 
 	// Add a mesh to staged outputs (thread-safe)

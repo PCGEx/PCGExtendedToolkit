@@ -40,10 +40,8 @@ namespace PCGExHelpers
 		// Eviction timestamp (FPlatformTime seconds). Atomic so a cache hit can refresh it without the lock.
 		std::atomic<double> LastAccess;
 
-		FPCGExSharedAssetHandle(TSharedPtr<FStreamableHandle> InHandle, const double InLastAccess)
-			: LastAccess(InLastAccess), Handle(MoveTemp(InHandle))
-		{
-		}
+		// Game thread only: records the loaded objects, since the handle's own accessors are game-thread-only.
+		FPCGExSharedAssetHandle(TSharedPtr<FStreamableHandle> InHandle, const double InLastAccess);
 
 		~FPCGExSharedAssetHandle();
 
@@ -52,11 +50,54 @@ namespace PCGExHelpers
 		// Paths this (batched) handle keeps resident; the cache uses them for its per-path index and eviction.
 		void GetCoveredPaths(TArray<FSoftObjectPath>& OutPaths) const;
 
+		// Any thread, no engine lookup. Null when Path is not covered or did not load.
+		UObject* FindLoadedObject(const FSoftObjectPath& Path) const;
+
+		// Any thread. Immutable after construction; failed loads are not recorded.
+		const TMap<FSoftObjectPath, TWeakObjectPtr<UObject>>& GetLoadedObjects() const { return LoadedObjects; }
+
 	private:
 		TSharedPtr<FStreamableHandle> Handle;
+		TMap<FSoftObjectPath, TWeakObjectPtr<UObject>> LoadedObjects;
 	};
 
 	using FPCGExSharedAssetHandlePtr = TSharedPtr<FPCGExSharedAssetHandle>;
+
+	// Soft-path lookup that is legal on any thread: off the game thread it holds FGCScopeGuard for the lookup only,
+	// because StaticFindObjectFast is Fatal while GC holds the hash tables. Each call takes the guard and the global
+	// UObject hash lock -- resolve each unique path once, never per point.
+	PCGEXCORE_API
+	UObject* ResolveObject_AnyThread(const FSoftObjectPath& Path);
+
+	// Same, for a class that must derive from MetaClass.
+	PCGEXCORE_API
+	UClass* ResolveClass_AnyThread(const FSoftObjectPath& Path, const UClass* MetaClass);
+
+	// Batched: duplicates resolve once and the guard is held per chunk. OutObjects is index-aligned with Paths, so
+	// per-row arrays can be passed as-is.
+	PCGEXCORE_API
+	void ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects);
+
+	// Objects the given handles recorded (no engine lookup), else the batched guarded resolve: for code that holds
+	// its own handles instead of a context. Live-world and transient objects are never loaded, so they fall back.
+	PCGEXCORE_API
+	void ResolveObjects_AnyThread(TConstArrayView<FPCGExSharedAssetHandlePtr> Handles, TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects);
+
+	// Fills the null entries of InOutObjects (index-aligned with Paths) with the batched guarded resolve.
+	PCGEXCORE_API
+	void ResolveMissingObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& InOutObjects);
+
+	template <typename T>
+	static T* ResolveObject_AnyThreadTpl(const TSoftObjectPtr<T>& SoftObjectPtr)
+	{
+		return Cast<T>(ResolveObject_AnyThread(SoftObjectPtr.ToSoftObjectPath()));
+	}
+
+	template <typename T>
+	static UClass* ResolveClass_AnyThreadTpl(const TSoftClassPtr<T>& SoftClassPtr)
+	{
+		return ResolveClass_AnyThread(SoftClassPtr.ToSoftObjectPath(), T::StaticClass());
+	}
 
 	// Every loader below skips paths already resolving to an object of a live (initialized) world: no package
 	// load can produce those, and a streamable handle on one would pin that world. Such paths count as

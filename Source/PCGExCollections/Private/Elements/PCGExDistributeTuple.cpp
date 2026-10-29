@@ -518,6 +518,7 @@ namespace PCGExDistributeTuple
 			}
 
 			Col.WriterPtr = OutputProperty;
+			OutputProperty->BindWriteSources(Column.RowSources);
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping): sidecar rows come from
 			// the per-row sources, plus the column's own value wherever a point can be left holding it.

@@ -9,6 +9,7 @@
 #include "PCGExCommon.h"
 #include "PCGExMT.h"
 #include "Metadata/PCGMetadataCommon.h"
+#include "UObject/SoftObjectPtr.h"
 
 #include "Data/PCGExDataCommon.h"
 
@@ -269,10 +270,29 @@ public:
 		return bWantsResourcesCached;
 	}
 
+	/**
+	 * Any thread. The object a tracked load of this context recorded for Path (no engine lookup), else a guarded resolve
+	 * (PCGExHelpers::ResolveObject_AnyThread): live-world objects are never loaded, so they always take that path.
+	 * Takes AssetsLock -- resolve each unique path once, never per point.
+	 */
+	UObject* ResolveObject_AnyThread(const FSoftObjectPath& Path) const;
+
+	/** Batched ResolveObject_AnyThread. OutObjects is index-aligned with Paths. */
+	void ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects) const;
+
+	template <typename T>
+	T* ResolveObject_AnyThreadTpl(const TSoftObjectPtr<T>& SoftObjectPtr) const
+	{
+		return Cast<T>(ResolveObject_AnyThread(SoftObjectPtr.ToSoftObjectPath()));
+	}
+
 protected:
 	TSharedPtr<TSet<FSoftObjectPath>> RequiredAssets;
 	TArray<TSharedPtr<FStreamableHandle>> TrackedAssets;
 	TArray<TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>> TrackedCachedAssets;
+
+	// Union of the TrackedCachedAssets' recorded objects, under AssetsLock.
+	TMap<FSoftObjectPath, TWeakObjectPtr<UObject>> TrackedLoadedObjects;
 
 #pragma endregion
 

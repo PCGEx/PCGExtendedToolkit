@@ -4,14 +4,17 @@
 #include "PCGExPropertyPinMarshal.h"
 
 #include "PCGExProperty.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Helpers/PCGPropertyHelpers.h"
 
 namespace PCGExPropertyPinMarshal
 {
+	// Blueprints can call these from a worker (off-thread PCGEx Blueprint hosts): lookups are GC-guarded and only the
+	// game thread falls back to a load, matching FPCGExProperty_FloatCurve::TryReadValue.
 	UObject* ResolveObjectFromPath(const FSoftObjectPath& SoftPath, const UClass* ExpectedClass)
 	{
-		UObject* Resolved = SoftPath.ResolveObject();
-		if (!Resolved)
+		UObject* Resolved = PCGExHelpers::ResolveObject_AnyThread(SoftPath);
+		if (!Resolved && IsInGameThread())
 		{
 			Resolved = SoftPath.TryLoad();
 		}
@@ -24,8 +27,8 @@ namespace PCGExPropertyPinMarshal
 
 	UClass* ResolveClassFromPath(const FSoftClassPath& SoftPath, const UClass* ExpectedClass)
 	{
-		UClass* Resolved = Cast<UClass>(SoftPath.ResolveObject());
-		if (!Resolved)
+		UClass* Resolved = PCGExHelpers::ResolveClass_AnyThread(SoftPath, nullptr);
+		if (!Resolved && IsInGameThread())
 		{
 			Resolved = SoftPath.TryLoadClass<UObject>();
 		}

@@ -328,15 +328,19 @@ bool FPCGExWaitForPCGDataElement::PostBoot(FPCGExContext* InContext) const
 	}
 
 	FPCGExWaitForPCGDataContext* Context = static_cast<FPCGExWaitForPCGDataContext*>(InContext);
-	for (const FSoftObjectPath& Path : Context->GraphInstancePaths)
+
+	// PostBoot runs on a worker when the graph load was a warm cache hit.
+	TArray<UObject*> Graphs;
+	Context->ResolveObjects_AnyThread(Context->GraphInstancePaths, Graphs);
+	for (UObject* Object : Graphs)
 	{
-		TSoftObjectPtr<UPCGGraph> Graph = TSoftObjectPtr<UPCGGraph>(Path);
-		if (!Graph.Get())
+		UPCGGraph* Graph = Cast<UPCGGraph>(Object);
+		if (!Graph)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Some graph could not be loaded."));
 			return false;
 		}
-		Context->GraphInstances.Add(Graph.Get());
+		Context->GraphInstances.Add(Graph);
 	}
 
 	return true;
@@ -430,7 +434,7 @@ namespace PCGExWaitForPCGData
 
 			for (const FSoftObjectPath& ActorRef : UniqueActorReferences)
 			{
-				if (AActor* Actor = Cast<AActor>(ActorRef.ResolveObject()))
+				if (AActor* Actor = Cast<AActor>(PCGExHelpers::ResolveObject_AnyThread(ActorRef)))
 				{
 					QueuedActors.Add(Actor);
 				}
@@ -494,10 +498,11 @@ namespace PCGExWaitForPCGData
 
 		bool bHasUnresolvedReferences = false;
 
+		// The first pass runs on the processor's thread (a worker); retries run on the game-thread tick.
 		QueuedActors.Reset(UniqueActorReferences.Num());
 		for (const FSoftObjectPath& ActorRef : UniqueActorReferences)
 		{
-			if (AActor* Actor = Cast<AActor>(ActorRef.ResolveObject()))
+			if (AActor* Actor = Cast<AActor>(PCGExHelpers::ResolveObject_AnyThread(ActorRef)))
 			{
 				QueuedActors.Add(Actor);
 			}
@@ -526,7 +531,7 @@ namespace PCGExWaitForPCGData
 			{
 				for (const FSoftObjectPath& ActorRef : UniqueActorReferences)
 				{
-					if (Cast<AActor>(ActorRef.ResolveObject()))
+					if (Cast<AActor>(PCGExHelpers::ResolveObject_AnyThread(ActorRef)))
 					{
 						continue;
 					}

@@ -43,7 +43,7 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionEntryRef
  * "Loaded or null": the property never loads its collection. Hosting nodes preload it through
  * RegisterAssetDependencies (GatherSoftObjectPaths surfaces the path); an unloaded collection or an unknown
  * EntryId resolves to hash 0 (unresolvable downstream) with one warning per (collection, property) per session;
- * an unset pick (EntryId 0) resolves to 0 silently.
+ * an unset pick (EntryId 0) resolves to 0 silently. Parallel writers bind their sources first (BindWriteSources).
  *
  * Collection is structural: the schema pins it, overrides pick the entry (SyncStructuralFromSchema).
  */
@@ -63,13 +63,18 @@ protected:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UPCGExAssetCollection>> TouchedCollections;
 
-	/** Hash for InRef, 0 when its collection isn't loaded or the id is unknown. OutCollection set only on success. */
-	static uint64 ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection*& OutCollection);
+	/** Writer-side collections by path: filled by BindWriteSources and by CopyValueFrom (both single-threaded on a
+	 *  writer instance), only read by writes. Empty on shared source instances. */
+	TMap<FSoftObjectPath, TWeakObjectPtr<UPCGExAssetCollection>> ResolvedCollections;
 
-	/** ResolveHash plus a once-per-(collection, property)-per-session warning on failure. Stateless
-	 *  w.r.t. the property instance -- safe on SHARED source instances (Tuple rows, Distribute) and
-	 *  from parallel writers. */
-	static uint64 ResolveHashWarned(const FPCGExCollectionEntryRef& InRef, FName InPropertyName, UPCGExAssetCollection*& OutCollection);
+	/** InRef's collection from ResolvedCollections, else a GC-guarded resolve (writes run on workers). */
+	UPCGExAssetCollection* FindCollection(const FPCGExCollectionEntryRef& InRef) const;
+
+	/** Hash for InRef in InCollection, 0 when the collection is null or the id is unknown. OutCollection set only on success. */
+	static uint64 ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, UPCGExAssetCollection*& OutCollection);
+
+	/** ResolveHash plus a once-per-(collection, property)-per-session warning on failure. Touches no instance state. */
+	static uint64 ResolveHashWarned(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, FName InPropertyName, UPCGExAssetCollection*& OutCollection);
 
 	/** ResolveHashWarned on Value. */
 	uint64 ResolveOwnHash() const;
@@ -78,6 +83,7 @@ public:
 	virtual bool InitializeOutput(const TSharedRef<PCGExData::FFacade>& OutputFacade, FName OutputName) override;
 	virtual void WriteOutput(int32 PointIndex) const override;
 	virtual void WriteOutputFrom(int32 PointIndex, const FPCGExProperty* Source) const override;
+	virtual void BindWriteSources(TConstArrayView<const FPCGExProperty*> InSources) override;
 	virtual void CopyValueFrom(const FPCGExProperty* Source) override;
 	virtual bool SyncStructuralFromSchema(const FPCGExProperty& Schema) override;
 

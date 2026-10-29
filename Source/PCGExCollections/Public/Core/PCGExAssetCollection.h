@@ -142,23 +142,23 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
 	template <typename T>
 	T* LoadSync(FPCGExContext* InContext = nullptr) const
 	{
-		TSoftObjectPtr<T> SoftObjectPtr = TSoftObjectPtr<T>(Path);
-		// Tracked needs a context to own the keep-alive; context-less callers fall back to the plain load.
+		// Either way the object comes from the load, not a lookup. Tracked needs a context to own the keep-alive;
+		// context-less callers hold a wrapper until return, which releases on the game thread whoever drops it.
 		if (InContext)
 		{
-			PCGExHelpers::LoadBlockingTracked_AnyThreadTpl<T>(SoftObjectPtr, InContext);
+			PCGExHelpers::LoadBlockingTracked_AnyThread(Path, InContext);
+			return Cast<T>(InContext->ResolveObject_AnyThread(Path));
 		}
-		else
-		{
-			PCGExHelpers::LoadBlocking_AnyThreadTpl<T>(SoftObjectPtr);
-		}
-		return SoftObjectPtr.Get();
+
+		const PCGExHelpers::FPCGExSharedAssetHandlePtr Handle = PCGExHelpers::LoadAndCacheBlocking_AnyThread(Path, nullptr, /*bCacheMisses=*/false);
+		UObject* Loaded = Handle ? Handle->FindLoadedObject(Path) : nullptr;
+		return Cast<T>(Loaded ? Loaded : PCGExHelpers::ResolveObject_AnyThread(Path));
 	}
 
 	template <typename T>
 	T* TryGet() const
 	{
-		return TSoftObjectPtr<T>(Path).Get();
+		return Cast<T>(PCGExHelpers::ResolveObject_AnyThread(Path));
 	}
 
 	bool FindSocket(FName InName, const FPCGExSocket*& OutSocket) const;

@@ -43,6 +43,17 @@ void FPCGExClipper2TriangulateContext::AddStagedOutput(UPCGDynamicMeshData* Mesh
 	StagedOutputs.Emplace(MeshData, Tags, OrderIndex);
 }
 
+void FPCGExClipper2TriangulateContext::RegisterAssetDependencies()
+{
+	FPCGExClipper2ProcessorContext::RegisterAssetDependencies();
+
+	PCGEX_SETTINGS_LOCAL(Clipper2Triangulate)
+	if (Settings->Topology.Material.ToSoftObjectPath().IsValid())
+	{
+		AddAssetDependency(Settings->Topology.Material.ToSoftObjectPath());
+	}
+}
+
 void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::FProcessingGroup>& Group)
 {
 	const UPCGExClipper2TriangulateSettings* Settings = GetInputSettings<UPCGExClipper2TriangulateSettings>();
@@ -330,7 +341,8 @@ void FPCGExClipper2TriangulateContext::Process(const TSharedPtr<PCGExClipper2::F
 	MeshData->Initialize(Mesh, true);
 	Mesh = MeshData->GetMutableDynamicMesh();
 
-	if (UMaterialInterface* Material = Settings->Topology.Material.Get())
+	// Groups run on workers: the context hands over the material its load recorded, no lookup.
+	if (UMaterialInterface* Material = ResolveObject_AnyThreadTpl(Settings->Topology.Material))
 	{
 		MeshData->SetMaterials({Material});
 	}

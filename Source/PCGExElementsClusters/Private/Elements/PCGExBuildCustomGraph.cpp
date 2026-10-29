@@ -15,6 +15,7 @@
 #include "Elements/PCGExecuteBlueprint.h"
 #include "Graphs/PCGExGraph.h"
 #include "Graphs/PCGExGraphBuilder.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExBuildCustomGraphElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
@@ -368,11 +369,15 @@ bool FPCGExBuildCustomGraphElement::AdvanceWork(FPCGExContext* InContext, const 
 				}
 
 				ActorReferences->Grab();
-				TSet<AActor*> UniqueActors;
 
-				for (FSoftObjectPath Path : ActorReferences->Values)
+				// One GC-guarded batch (this runs on a worker); rows repeat actors, each unique path resolves once.
+				TArray<UObject*> Resolved;
+				PCGExHelpers::ResolveObjects_AnyThread(ActorReferences->Values, Resolved);
+
+				TSet<AActor*> UniqueActors;
+				for (UObject* Object : Resolved)
 				{
-					if (AActor* SourceActor = Cast<AActor>(Path.ResolveObject()))
+					if (AActor* SourceActor = Cast<AActor>(Object))
 					{
 						UniqueActors.Add(SourceActor);
 					}

@@ -74,6 +74,10 @@ namespace PCGEx
 		void FinalizeTracking() const;
 		virtual void PrepareFinalize() {}
 		virtual void BuildAssetsMap() {}
+
+		// Any thread: objects from the context's tracked loads (see FPCGExContext::ResolveObjects_AnyThread).
+		// OutObjects is index-aligned with OutPaths.
+		void ResolveUniquePaths(TArray<FSoftObjectPath>& OutPaths, TArray<UObject*>& OutObjects) const;
 	};
 
 	template <typename T>
@@ -99,12 +103,15 @@ namespace PCGEx
 
 		virtual void BuildAssetsMap() override
 		{
-			for (const FSoftObjectPath& Path : UniquePaths)
+			TArray<FSoftObjectPath> Paths;
+			TArray<UObject*> Objects;
+			ResolveUniquePaths(Paths, Objects);
+
+			for (int32 i = 0; i < Paths.Num(); i++)
 			{
-				TSoftObjectPtr<T> SoftPtr(Path);
-				if (T* Resolved = SoftPtr.Get())
+				if (T* Resolved = Cast<T>(Objects[i]))
 				{
-					AssetsMap.Add(PCGExTypes::ComputeHash(Path), Resolved);
+					AssetsMap.Add(PCGExTypes::ComputeHash(Paths[i]), Resolved);
 				}
 			}
 		}

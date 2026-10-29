@@ -14,6 +14,7 @@
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
 #include "Paths/PCGExPath.h"
+#include "UObject/GarbageCollection.h"
 
 void FPCGExTopologyDetails::PostProcessMesh(const TObjectPtr<UDynamicMesh>& InDynamicMesh) const
 {
@@ -272,8 +273,14 @@ FTransform PCGExTopology::GetCoordinateSpaceTransform(EPCGCoordinateSpace Coordi
 	{
 		if (UPCGComponent* SourceComponent = Cast<UPCGComponent>(Context->ExecutionSource.Get()))
 		{
-			check(SourceComponent->GetOriginalComponent() && SourceComponent->GetOriginalComponent()->GetOwner());
-			LocalTransform = SourceComponent->GetOriginalComponent()->GetOwner()->GetActorTransform();
+			// A partitioned component's original is a soft pointer on its partition actor, and callers run on workers.
+			UPCGComponent* OriginalComponent = nullptr;
+			{
+				FGCScopeGuard GCGuard;
+				OriginalComponent = SourceComponent->GetOriginalComponent();
+			}
+			check(OriginalComponent && OriginalComponent->GetOwner());
+			LocalTransform = OriginalComponent->GetOwner()->GetActorTransform();
 		}
 	}
 
