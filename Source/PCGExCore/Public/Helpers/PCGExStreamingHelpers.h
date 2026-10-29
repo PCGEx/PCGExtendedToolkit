@@ -50,11 +50,9 @@ namespace PCGExHelpers
 		// Paths this (batched) handle keeps resident; the cache uses them for its per-path index and eviction.
 		void GetCoveredPaths(TArray<FSoftObjectPath>& OutPaths) const;
 
-		// Any thread, no engine lookup. Null when Path is not covered or did not load.
+		// Any thread, no engine lookup: the record is immutable after construction. Null when Path is not covered or
+		// did not load.
 		UObject* FindLoadedObject(const FSoftObjectPath& Path) const;
-
-		// Any thread. Immutable after construction; failed loads are not recorded.
-		const TMap<FSoftObjectPath, TWeakObjectPtr<UObject>>& GetLoadedObjects() const { return LoadedObjects; }
 
 	private:
 		TSharedPtr<FStreamableHandle> Handle;
@@ -65,13 +63,10 @@ namespace PCGExHelpers
 
 	// Soft-path lookup that is legal on any thread: off the game thread it holds FGCScopeGuard for the lookup only,
 	// because StaticFindObjectFast is Fatal while GC holds the hash tables. Each call takes the guard and the global
-	// UObject hash lock -- resolve each unique path once, never per point.
+	// UObject hash lock -- resolve each unique path once, never per point. Objects pending destruction resolve to null,
+	// as with TSoftObjectPtr::Get().
 	PCGEXCORE_API
 	UObject* ResolveObject_AnyThread(const FSoftObjectPath& Path);
-
-	// Same, for a class that must derive from MetaClass.
-	PCGEXCORE_API
-	UClass* ResolveClass_AnyThread(const FSoftObjectPath& Path, const UClass* MetaClass);
 
 	// Batched: duplicates resolve once and the guard is held per chunk. OutObjects is index-aligned with Paths, so
 	// per-row arrays can be passed as-is.
@@ -91,12 +86,6 @@ namespace PCGExHelpers
 	static T* ResolveObject_AnyThreadTpl(const TSoftObjectPtr<T>& SoftObjectPtr)
 	{
 		return Cast<T>(ResolveObject_AnyThread(SoftObjectPtr.ToSoftObjectPath()));
-	}
-
-	template <typename T>
-	static UClass* ResolveClass_AnyThreadTpl(const TSoftClassPtr<T>& SoftClassPtr)
-	{
-		return ResolveClass_AnyThread(SoftClassPtr.ToSoftObjectPath(), T::StaticClass());
 	}
 
 	// Every loader below skips paths already resolving to an object of a live (initialized) world: no package
@@ -123,6 +112,11 @@ namespace PCGExHelpers
 
 	PCGEXCORE_API
 	FPCGExSharedAssetHandlePtr LoadAndCacheBlocking_AnyThread(const FSoftObjectPath& Path, FPCGExContext* InContext = nullptr, bool bCacheMisses = true);
+
+	// Context-less single-path load (a miss is not cached) returning Path's object: the one the load recorded, else the
+	// guarded resolve. OutHandle is the caller's keep-alive; a null path yields null. Same game-thread caveat as above.
+	PCGEXCORE_API
+	UObject* LoadAndResolveBlocking_AnyThread(const FSoftObjectPath& Path, FPCGExSharedAssetHandlePtr& OutHandle);
 
 	// Context-required, fire-and-forget load: the caller gets no handle (keep-alive is via the context, so
 	// it can't release one out from under the cache). Caches misses iff InContext->WantsResourcesCached().

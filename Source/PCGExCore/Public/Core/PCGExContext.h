@@ -260,8 +260,8 @@ public:
 
 	void TrackAssetsHandle(const TSharedPtr<FStreamableHandle>& InHandle);
 
-	// Keep-alive registration for cached resource wrappers (LoadAndCacheBlocking_AnyThread). Held for the
-	// context's lifetime and dropped on destruction; the underlying handle is released only once the last
+	// Keep-alive registration for cached resource wrappers (LoadAndCacheBlocking_AnyThread), each held once for
+	// the context's lifetime and dropped on destruction; the underlying handle is released only once the last
 	// owner (here or the subsystem cache) lets go.
 	void TrackCachedAsset(const TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>& InHandle);
 
@@ -271,9 +271,9 @@ public:
 	}
 
 	/**
-	 * Any thread. The object a tracked load of this context recorded for Path (no engine lookup), else a guarded resolve
+	 * Any thread. The object a tracked wrapper of this context recorded for Path (no engine lookup), else a guarded resolve
 	 * (PCGExHelpers::ResolveObject_AnyThread): live-world objects are never loaded, so they always take that path.
-	 * Takes AssetsLock -- resolve each unique path once, never per point.
+	 * Takes AssetsLock and scans the tracked wrappers -- resolve each unique path once, never per point.
 	 */
 	UObject* ResolveObject_AnyThread(const FSoftObjectPath& Path) const;
 
@@ -290,9 +290,6 @@ protected:
 	TSharedPtr<TSet<FSoftObjectPath>> RequiredAssets;
 	TArray<TSharedPtr<FStreamableHandle>> TrackedAssets;
 	TArray<TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>> TrackedCachedAssets;
-
-	// Union of the TrackedCachedAssets' recorded objects, under AssetsLock.
-	TMap<FSoftObjectPath, TWeakObjectPtr<UObject>> TrackedLoadedObjects;
 
 #pragma endregion
 

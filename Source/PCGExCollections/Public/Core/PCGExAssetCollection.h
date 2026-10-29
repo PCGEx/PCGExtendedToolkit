@@ -143,16 +143,15 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetStagingData
 	T* LoadSync(FPCGExContext* InContext = nullptr) const
 	{
 		// Either way the object comes from the load, not a lookup. Tracked needs a context to own the keep-alive;
-		// context-less callers hold a wrapper until return, which releases on the game thread whoever drops it.
+		// without one the wrapper is dropped at return, so nothing keeps the result alive past it.
 		if (InContext)
 		{
 			PCGExHelpers::LoadBlockingTracked_AnyThread(Path, InContext);
 			return Cast<T>(InContext->ResolveObject_AnyThread(Path));
 		}
 
-		const PCGExHelpers::FPCGExSharedAssetHandlePtr Handle = PCGExHelpers::LoadAndCacheBlocking_AnyThread(Path, nullptr, /*bCacheMisses=*/false);
-		UObject* Loaded = Handle ? Handle->FindLoadedObject(Path) : nullptr;
-		return Cast<T>(Loaded ? Loaded : PCGExHelpers::ResolveObject_AnyThread(Path));
+		PCGExHelpers::FPCGExSharedAssetHandlePtr Handle;
+		return Cast<T>(PCGExHelpers::LoadAndResolveBlocking_AnyThread(Path, Handle));
 	}
 
 	template <typename T>

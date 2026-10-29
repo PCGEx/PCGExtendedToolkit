@@ -27,7 +27,7 @@ namespace PCGExPropertyPinMarshal
 
 	UClass* ResolveClassFromPath(const FSoftClassPath& SoftPath, const UClass* ExpectedClass)
 	{
-		UClass* Resolved = PCGExHelpers::ResolveClass_AnyThread(SoftPath, nullptr);
+		UClass* Resolved = Cast<UClass>(PCGExHelpers::ResolveObject_AnyThread(SoftPath));
 		if (!Resolved && IsInGameThread())
 		{
 			Resolved = SoftPath.TryLoadClass<UObject>();

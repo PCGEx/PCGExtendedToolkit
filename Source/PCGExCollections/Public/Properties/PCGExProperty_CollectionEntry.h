@@ -70,13 +70,11 @@ protected:
 	/** InRef's collection from ResolvedCollections, else a GC-guarded resolve (writes run on workers). */
 	UPCGExAssetCollection* FindCollection(const FPCGExCollectionEntryRef& InRef) const;
 
-	/** Hash for InRef in InCollection, 0 when the collection is null or the id is unknown. OutCollection set only on success. */
-	static uint64 ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, UPCGExAssetCollection*& OutCollection);
+	/** Hash for InRef in InCollection; 0 when the collection is null or the id is unknown, with a once-per-(collection,
+	 *  property)-per-session warning for a stale pick. Touches no instance state. */
+	static uint64 ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, FName InPropertyName);
 
-	/** ResolveHash plus a once-per-(collection, property)-per-session warning on failure. Touches no instance state. */
-	static uint64 ResolveHashWarned(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, FName InPropertyName, UPCGExAssetCollection*& OutCollection);
-
-	/** ResolveHashWarned on Value. */
+	/** ResolveHash on Value. */
 	uint64 ResolveOwnHash() const;
 
 public:

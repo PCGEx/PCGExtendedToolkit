@@ -179,13 +179,7 @@ namespace PCGExHelpers
 
 		// No-op on the game thread; elsewhere it waits out a running GC and blocks the next one until it drops.
 		FGCScopeGuard GCGuard;
-		return Path.ResolveObject();
-	}
-
-	UClass* ResolveClass_AnyThread(const FSoftObjectPath& Path, const UClass* MetaClass)
-	{
-		UClass* Class = Cast<UClass>(ResolveObject_AnyThread(Path));
-		return Class && (!MetaClass || Class->IsChildOf(MetaClass)) ? Class : nullptr;
+		return GetValid(Path.ResolveObject());
 	}
 
 	void ResolveMissingObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& InOutObjects)
@@ -218,7 +212,7 @@ namespace PCGExHelpers
 			const int32 ChunkEnd = FMath::Min(ChunkStart + ChunkSize, UniquePaths.Num());
 
 			FGCScopeGuard GCGuard;
-			for (int32 i = ChunkStart; i < ChunkEnd; i++) { UniqueObjects[i] = UniquePaths[i]->ResolveObject(); }
+			for (int32 i = ChunkStart; i < ChunkEnd; i++) { UniqueObjects[i] = GetValid(UniquePaths[i]->ResolveObject()); }
 		}
 
 		for (int32 i = 0; i < Paths.Num(); i++)
@@ -317,6 +311,16 @@ namespace PCGExHelpers
 
 		const TArray<FPCGExSharedAssetHandlePtr> Handles = PCGExStreamingHelpers::LoadAndCacheBlockingSet(Paths, InContext, bCacheMisses);
 		return Handles.IsEmpty() ? nullptr : Handles[0];
+	}
+
+	UObject* LoadAndResolveBlocking_AnyThread(const FSoftObjectPath& Path, FPCGExSharedAssetHandlePtr& OutHandle)
+	{
+		OutHandle.Reset();
+		if (Path.IsNull()) { return nullptr; }
+
+		OutHandle = LoadAndCacheBlocking_AnyThread(Path, nullptr, /*bCacheMisses=*/false);
+		UObject* Loaded = OutHandle ? OutHandle->FindLoadedObject(Path) : nullptr;
+		return Loaded ? Loaded : ResolveObject_AnyThread(Path);
 	}
 
 	void LoadBlockingTracked_AnyThread(const TSharedPtr<TSet<FSoftObjectPath>>& Paths, FPCGExContext* InContext)

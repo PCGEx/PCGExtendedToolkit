@@ -257,6 +257,10 @@ namespace PCGExCollections
 				TArray<T_VALUE> Values;
 				Values.Init(DefaultValue, PerRowHosts.Num());
 
+				// Rows repeat their host: each host's value is read once.
+				TMap<const UPCGExAssetCollection*, T_VALUE> HostValues;
+				HostValues.Reserve(UniqueHosts.Num());
+
 				for (int32 r = 0; r < PerRowHosts.Num(); r++)
 				{
 					const UPCGExAssetCollection* RowHost = PerRowHosts[r];
@@ -264,21 +268,22 @@ namespace PCGExCollections
 					{
 						continue;
 					} // keep DefaultValue
+
+					if (const T_VALUE* Known = HostValues.Find(RowHost))
+					{
+						Values[r] = *Known;
+						continue;
+					}
+
+					T_VALUE& HostValue = HostValues.Add(RowHost, DefaultValue);
 					const FInstancedStruct* Source = RowHost->CollectionProperties.GetPropertyByName(Config.PropertyName);
-					if (!Source || !Source->IsValid())
-					{
-						continue;
-					}
-					const FPCGExProperty* SrcProp = Source->GetPtr<FPCGExProperty>();
-					if (!SrcProp)
-					{
-						continue;
-					}
+					const FPCGExProperty* SrcProp = Source && Source->IsValid() ? Source->GetPtr<FPCGExProperty>() : nullptr;
 					T_VALUE V = T_VALUE{};
-					if (SrcProp->TryGetValue<T_VALUE>(V))
+					if (SrcProp && SrcProp->TryGetValue<T_VALUE>(V))
 					{
-						Values[r] = V;
+						HostValue = V;
 					}
+					Values[r] = HostValue;
 				}
 
 				UPCGMetadata* M = InData->MutableMetadata();

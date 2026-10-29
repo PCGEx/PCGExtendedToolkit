@@ -31,30 +31,17 @@ UPCGExAssetCollection* FPCGExProperty_CollectionEntry::FindCollection(const FPCG
 	return PCGExHelpers::ResolveObject_AnyThreadTpl(InRef.Collection);
 }
 
-uint64 FPCGExProperty_CollectionEntry::ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, UPCGExAssetCollection*& OutCollection)
+uint64 FPCGExProperty_CollectionEntry::ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, const FName InPropertyName)
 {
-	if (!InCollection)
+	const int32 RawIndex = InCollection ? InCollection->FindRawIndexByEntryId(InRef.EntryId) : INDEX_NONE;
+	if (RawIndex != INDEX_NONE && RawIndex <= MAX_uint16)
 	{
-		return 0;
+		return PCGExCollections::PickHash::Pack(InCollection->GetCollectionGUID(), static_cast<uint16>(RawIndex), -1);
 	}
-
-	const int32 RawIndex = InCollection->FindRawIndexByEntryId(InRef.EntryId);
-	if (RawIndex == INDEX_NONE || RawIndex > MAX_uint16)
-	{
-		return 0;
-	}
-
-	OutCollection = InCollection;
-	return PCGExCollections::PickHash::Pack(InCollection->GetCollectionGUID(), static_cast<uint16>(RawIndex), -1);
-}
-
-uint64 FPCGExProperty_CollectionEntry::ResolveHashWarned(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, const FName InPropertyName, UPCGExAssetCollection*& OutCollection)
-{
-	const uint64 Hash = ResolveHash(InRef, InCollection, OutCollection);
 
 	// EntryId 0 is the documented "no pick" state (the picker shows "None") -- only a STALE
 	// pick (a stored id that no longer resolves) is worth a warning.
-	if (!OutCollection && !InRef.Collection.IsNull() && InRef.EntryId != 0)
+	if (!InRef.Collection.IsNull() && InRef.EntryId != 0)
 	{
 		// Global dedup: shared source instances must stay stateless and clones are per-execution,
 		// so per-instance bookkeeping either races or re-warns every run.
@@ -76,13 +63,12 @@ uint64 FPCGExProperty_CollectionEntry::ResolveHashWarned(const FPCGExCollectionE
 		}
 	}
 
-	return Hash;
+	return 0;
 }
 
 uint64 FPCGExProperty_CollectionEntry::ResolveOwnHash() const
 {
-	UPCGExAssetCollection* Collection = nullptr;
-	return ResolveHashWarned(Value, FindCollection(Value), PropertyName, Collection);
+	return ResolveHash(Value, FindCollection(Value), PropertyName);
 }
 
 bool FPCGExProperty_CollectionEntry::InitializeOutput(const TSharedRef<PCGExData::FFacade>& OutputFacade, const FName OutputName)
@@ -102,9 +88,8 @@ void FPCGExProperty_CollectionEntry::WriteOutput(const int32 PointIndex) const
 void FPCGExProperty_CollectionEntry::WriteOutputFrom(const int32 PointIndex, const FPCGExProperty* Source) const
 {
 	check(OutputBuffer);
-	UPCGExAssetCollection* Collection = nullptr;
 	const FPCGExProperty_CollectionEntry* Typed = static_cast<const FPCGExProperty_CollectionEntry*>(Source);
-	OutputBuffer->SetValue(PointIndex, static_cast<int64>(ResolveHashWarned(Typed->Value, FindCollection(Typed->Value), Typed->PropertyName, Collection)));
+	OutputBuffer->SetValue(PointIndex, static_cast<int64>(ResolveHash(Typed->Value, FindCollection(Typed->Value), Typed->PropertyName)));
 }
 
 void FPCGExProperty_CollectionEntry::BindWriteSources(TConstArrayView<const FPCGExProperty*> InSources)
@@ -233,13 +218,13 @@ FPCGMetadataAttributeBase* FPCGExProperty_CollectionEntry::CreateMetadataAttribu
 
 void FPCGExProperty_CollectionEntry::WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, const int64 EntryKey) const
 {
-	// Callable on SHARED source instances (Tuple) -- reads no mutable instance state.
+	// Callable on SHARED source instances (Tuple): only reads, and their ResolvedCollections is never written.
 	static_cast<FPCGMetadataAttribute<int64>*>(Attribute)->SetValue(EntryKey, static_cast<int64>(ResolveOwnHash()));
 }
 
 bool FPCGExProperty_CollectionEntry::TryWriteValue(const EPCGMetadataTypes TargetType, void* OutBuffer) const
 {
-	// Source-instance path (@Data writes) -- reads no mutable instance state.
+	// Source-instance path (@Data writes): only reads, as in WriteMetadataValue.
 	const int64 Projected = static_cast<int64>(ResolveOwnHash());
 	PCGExTypeOps::FConversionTable::Convert(EPCGMetadataTypes::Integer64, &Projected, TargetType, OutBuffer);
 	return true;

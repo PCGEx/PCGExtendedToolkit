@@ -48,8 +48,7 @@ namespace PCGExPropertyHelpers
 		UObject* ResolvedObject = PCGExHelpers::ResolveObject_AnyThread(InPath);
 		if (!ResolvedObject)
 		{
-			LoadedHandle = PCGExHelpers::LoadAndCacheBlocking_AnyThread(InPath, nullptr, /*bCacheMisses=*/false);
-			ResolvedObject = LoadedHandle ? LoadedHandle->FindLoadedObject(InPath) : nullptr;
+			ResolvedObject = PCGExHelpers::LoadAndResolveBlocking_AnyThread(InPath, LoadedHandle);
 		}
 
 		if (!ResolvedObject || (InProperty->PropertyClass && !ResolvedObject->IsA(InProperty->PropertyClass)))
