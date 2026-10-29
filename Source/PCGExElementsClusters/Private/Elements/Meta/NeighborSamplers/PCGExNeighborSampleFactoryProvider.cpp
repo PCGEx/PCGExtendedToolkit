@@ -218,12 +218,6 @@ void UPCGExNeighborSamplerFactoryData::RegisterVtxBuffersDependencies(FPCGExCont
 	PCGExPointFilter::RegisterBuffersDependencies(InContext, ValueFilterFactories, FacadePreloader);
 }
 
-void UPCGExNeighborSamplerFactoryData::RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const
-{
-	Super::RegisterAssetDependencies(InDependencies);
-	InDependencies.Add(SamplingConfig.WeightCurve.ToSoftObjectPath());
-}
-
 TArray<FPCGPinProperties> UPCGExNeighborSampleProviderSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();

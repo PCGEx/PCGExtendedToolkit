@@ -4,6 +4,7 @@
 #include "PCGExCore.h"
 
 #include "Data/PCGExSubAccessor.h"
+#include "Utils/PCGExCurveLookup.h"
 
 #if WITH_EDITOR
 #include "AssetTypeActions_Base.h"
@@ -19,6 +20,9 @@ void FPCGExCoreModule::StartupModule()
 {
 	IPCGExLegacyModuleInterface::StartupModule();
 	PCGExData::FSubAccessorRegistry::Initialize();
+
+	// Loads the shipped default curves on the game thread, before any worker can ask for one.
+	PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 }
 
 #if WITH_EDITOR

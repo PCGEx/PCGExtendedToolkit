@@ -49,15 +49,6 @@ void UPCGExAttributeRemapSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 }
 #endif
 
-void FPCGExAttributeRemapContext::RegisterAssetDependencies()
-{
-	FPCGExPointsProcessorContext::RegisterAssetDependencies();
-	for (const FPCGExComponentRemapRule& Rule : RemapSettings)
-	{
-		AddAssetDependency(Rule.RemapDetails.RemapCurve.ToSoftObjectPath());
-	}
-}
-
 #if WITH_EDITOR
 TArray<FText> UPCGExAttributeRemapSettings::GetNodeTitleAliases() const
 {

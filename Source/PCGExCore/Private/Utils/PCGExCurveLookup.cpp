@@ -3,7 +3,54 @@
 
 #include "Utils/PCGExCurveLookup.h"
 
-#include "Helpers/PCGExStreamingHelpers.h"
+#include "PCGExLog.h"
+#include "UObject/UObjectGlobals.h"
+
+#pragma region PCGExCurves
+
+namespace PCGExCurves
+{
+	UCurveFloat* GetDefaultCurve(const FSoftObjectPath& Path)
+	{
+		struct FDefaultCurve
+		{
+			FSoftObjectPath AssetPath;
+			UCurveFloat* Curve = nullptr;
+		};
+
+		static const TArray<FDefaultCurve> DefaultCurves = []()
+		{
+			checkf(IsInGameThread(), TEXT("PCGExCurves::GetDefaultCurve must first run on the game thread: it loads the shipped curves."));
+
+			TArray<FDefaultCurve> Entries;
+			for (const FSoftObjectPath& DefaultPath : {WeightDistributionLinear, WeightDistributionLinearInv})
+			{
+				UCurveFloat* LoadedCurve = LoadObject<UCurveFloat>(nullptr, *DefaultPath.ToString());
+				if (LoadedCurve)
+				{
+					// Rooted like the engine's default materials: GC never traces the cooked CDOs that point at it.
+					LoadedCurve->AddToRoot();
+				}
+				else
+				{
+					UE_LOG(LogPCGEx, Error, TEXT("Missing shipped default curve '%s'."), *DefaultPath.ToString());
+				}
+				Entries.Add({DefaultPath, LoadedCurve});
+			}
+			return Entries;
+		}();
+
+		for (const FDefaultCurve& Entry : DefaultCurves)
+		{
+			if (Entry.AssetPath == Path) { return Entry.Curve; }
+		}
+
+		ensureMsgf(false, TEXT("'%s' is not a shipped default curve."), *Path.ToString());
+		return nullptr;
+	}
+}
+
+#pragma endregion
 
 PCGExFloatLUT FPCGExCurveLookupDetails::MakeFloatLookup(const FRuntimeFloatCurve& InCurve) const
 {
@@ -12,22 +59,30 @@ PCGExFloatLUT FPCGExCurveLookupDetails::MakeFloatLookup(const FRuntimeFloatCurve
 
 PCGExFloatLUT FPCGExCurveLookupDetails::MakeLookup(
 	const bool InUseLocalCurve, FRuntimeFloatCurve RuntimeCurve,
-	const TSoftObjectPtr<UCurveFloat> InExternalCurve, const PCGExCurves::FInitCurveDataDefaults& InitFn) const
+	const UCurveFloat* InExternalCurve, const PCGExCurves::FInitCurveDataDefaults& InitFn) const
 {
-	PCGExFloatLUT NewLUT = MakeShared<FPCGExCurveFloatLookup>();
 	if (!InUseLocalCurve)
 	{
-		InitFn(RuntimeCurve.EditorCurveData);
-		NewLUT->ExternalCurveHandle = PCGExHelpers::LoadAndCacheBlocking_AnyThread(InExternalCurve.ToSoftObjectPath());
-		RuntimeCurve.ExternalCurve = InExternalCurve.Get();
+		// The external curve wins; without one, the local curve seeded by InitFn stands in.
+		if (InExternalCurve)
+		{
+			RuntimeCurve.EditorCurveData = InExternalCurve->FloatCurve;
+		}
+		else
+		{
+			InitFn(RuntimeCurve.EditorCurveData);
+		}
+		RuntimeCurve.ExternalCurve = nullptr;
 	}
+
+	PCGExFloatLUT NewLUT = MakeShared<FPCGExCurveFloatLookup>();
 	NewLUT->Init(RuntimeCurve, Mode, Samples);
 	return NewLUT;
 }
 
 PCGExFloatLUT FPCGExCurveLookupDetails::MakeLookup(
 	const bool InUseLocalCurve, const FRuntimeFloatCurve& RuntimeCurve,
-	const TSoftObjectPtr<UCurveFloat> InExternalCurve) const
+	const UCurveFloat* InExternalCurve) const
 {
 	return MakeLookup(
 		InUseLocalCurve, RuntimeCurve, InExternalCurve,
@@ -57,10 +112,17 @@ FPCGExCurveFloatLookup::~FPCGExCurveFloatLookup()
 	
 }
 
+void FPCGExCurveFloatLookup::SnapshotCurve(const FRuntimeFloatCurve& InCurve)
+{
+	// GetRichCurveConst never returns null: without an external curve it returns the editor data.
+	Curve.EditorCurveData = *InCurve.GetRichCurveConst();
+	Curve.ExternalCurve = nullptr;
+	CurvePtr = &Curve.EditorCurveData;
+}
+
 void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGExCurveLUTMode InMode, const int32 InNumSamples)
 {
-	Curve = InCurve;
-	CurvePtr = Curve.GetRichCurveConst();
+	SnapshotCurve(InCurve);
 	Mode = InMode;
 	LUT.Reset();
 	bFastLinear = false;
@@ -125,8 +187,7 @@ void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGE
 
 void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const TFunctionRef<float(float)> InSampleTransform, const int32 InNumSamples)
 {
-	Curve = InCurve;
-	CurvePtr = Curve.GetRichCurveConst();
+	SnapshotCurve(InCurve);
 	Mode = EPCGExCurveLUTMode::Lookup;
 	bFastLinear = false;
 	LUT.Reset();

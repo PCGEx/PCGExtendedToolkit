@@ -38,7 +38,7 @@ UPCGExSampleNearestPointSettings::UPCGExSampleNearestPointSettings(const FObject
 	}
 	if (!WeightOverDistance)
 	{
-		WeightOverDistance = PCGExCurves::WeightDistributionLinear;
+		WeightOverDistance = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 	}
 }
 

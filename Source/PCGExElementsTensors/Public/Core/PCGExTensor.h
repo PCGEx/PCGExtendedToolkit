@@ -137,7 +137,7 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 
 	/** Per-point Weight falloff curve sampled using distance to effector origin. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Guide", meta=(PCG_Overridable, DisplayName="Guide Curve", EditCondition="!bUseLocalGuideCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveVector> GuideCurve;
+	TObjectPtr<UCurveVector> GuideCurve;
 
 	// Potency Falloff
 
@@ -169,7 +169,7 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 
 	/** Per-point Potency falloff curve sampled using distance to effector origin. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta=(PCG_Overridable, DisplayName="Potency Falloff Curve", EditCondition="!bUseLocalPotencyFalloffCurve", EditConditionHides, DisplayPriority=-1))
-	TSoftObjectPtr<UCurveFloat> PotencyFalloffCurve;
+	TObjectPtr<UCurveFloat> PotencyFalloffCurve;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Potency", meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails PotencyFalloffCurveLookup;
@@ -210,7 +210,7 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 
 	/** Per-point Weight falloff curve sampled using distance to effector origin. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, DisplayName="Weight Falloff Curve", EditCondition="!bUseLocalWeightFalloffCurve", EditConditionHides, DisplayPriority=-1))
-	TSoftObjectPtr<UCurveFloat> WeightFalloffCurve;
+	TObjectPtr<UCurveFloat> WeightFalloffCurve;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails WeightFalloffCurveLookup;

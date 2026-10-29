@@ -13,7 +13,6 @@
 
 #include "PCGExCurveLookup.generated.h"
 
-struct FStreamableHandle;
 class FPCGExCurveFloatLookup;
 
 using PCGExFloatLUT = TSharedPtr<FPCGExCurveFloatLookup, ESPMode::ThreadSafe>;
@@ -42,9 +41,11 @@ namespace PCGExCurves
 	const FSoftObjectPath WeightDistributionExpoInv = FSoftObjectPath(TEXT("/PCGExtendedToolkit/Curves/FC_PCGExWeightDistribution_Expo_Inv.FC_PCGExWeightDistribution_Expo_Inv"));
 	const FSoftObjectPath WeightDistributionExpo = FSoftObjectPath(TEXT("/PCGExtendedToolkit/Curves/FC_PCGExWeightDistribution_Expo.FC_PCGExWeightDistribution_Expo"));
 	const FSoftObjectPath SteepnessWeightCurve = FSoftObjectPath(TEXT("/PCGExtendedToolkit/Curves/FC_PCGExSteepness_Default.FC_PCGExSteepness_Default"));
-}
 
-struct FPCGExCurveLookupDetails; // Force-forward so it doesn't get captured as part of namespace when declared as friend later on
+	/** Shipped curve behind WeightDistributionLinear or WeightDistributionLinearInv. Both are loaded and rooted on the game
+	 *  thread at the first call, so later calls from any thread only read a pointer. */
+	PCGEXCORE_API UCurveFloat* GetDefaultCurve(const FSoftObjectPath& Path);
+}
 
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExCurveLookupDetails
@@ -77,7 +78,7 @@ struct PCGEXCORE_API FPCGExCurveLookupDetails
 
 	/** Curve the weight value will be remapped over. */
 	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Curve", EditCondition="!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> ExternalCurve = TSoftObjectPtr<UCurveFloat>(PCGExCurves::WeightDistributionLinear);
+	TObjectPtr<UCurveFloat> ExternalCurve = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 
 #pragma endregion
 
@@ -90,8 +91,8 @@ struct PCGEXCORE_API FPCGExCurveLookupDetails
 	int32 Samples = 512;
 
 	PCGExFloatLUT MakeFloatLookup(const FRuntimeFloatCurve& InCurve) const;
-	PCGExFloatLUT MakeLookup(const bool InUseLocalCurve, FRuntimeFloatCurve RuntimeCurve, TSoftObjectPtr<UCurveFloat> InExternalCurve, const PCGExCurves::FInitCurveDataDefaults& InitFn) const;
-	PCGExFloatLUT MakeLookup(const bool InUseLocalCurve, const FRuntimeFloatCurve& RuntimeCurve, TSoftObjectPtr<UCurveFloat> InExternalCurve) const;
+	PCGExFloatLUT MakeLookup(const bool InUseLocalCurve, FRuntimeFloatCurve RuntimeCurve, const UCurveFloat* InExternalCurve, const PCGExCurves::FInitCurveDataDefaults& InitFn) const;
+	PCGExFloatLUT MakeLookup(const bool InUseLocalCurve, const FRuntimeFloatCurve& RuntimeCurve, const UCurveFloat* InExternalCurve) const;
 	PCGExFloatLUT MakeFloatLookup(const PCGExCurves::FInitCurveDataDefaults& InitFn) const;
 	PCGExFloatLUT MakeFloatLookup() const;
 };
@@ -104,8 +105,6 @@ struct PCGEXCORE_API FPCGExCurveLookupDetails
  */
 class PCGEXCORE_API FPCGExCurveFloatLookup : public TSharedFromThis<FPCGExCurveFloatLookup>
 {
-	friend struct FPCGExCurveLookupDetails;
-
 public:
 	FPCGExCurveFloatLookup() = default;
 	~FPCGExCurveFloatLookup();
@@ -216,7 +215,8 @@ public:
 	}
 
 protected:
-	PCGExHelpers::FPCGExSharedAssetHandlePtr ExternalCurveHandle;
+	/** Copies InCurve's active keys into Curve, so evaluation never reads a curve asset. */
+	void SnapshotCurve(const FRuntimeFloatCurve& InCurve);
 
 	/** Clamped lerp equivalent of a 2-key linear curve with constant extrapolation -- what the
 	 * default weight-distribution ramps are. Set up by Init, bypasses FRichCurve::Eval entirely. */
