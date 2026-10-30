@@ -182,7 +182,7 @@ void UPCGExCustomActorDataPacker::ResolveObjectPath(const FName& InAttributeName
 	FSoftObjectPath InSoftObjectPath;
 	if (ReadSoftObjectPath(InAttributeName, InPointIndex, InSoftObjectPath))
 	{
-		UObject* ResolvedObject = InSoftObjectPath.ResolveObject();
+		UObject* ResolvedObject = PCGExHelpers::ResolveObject_AnyThread(InSoftObjectPath);
 		if (ResolvedObject && ResolvedObject->IsA(OutObjectClass))
 		{
 			OutObject = ResolvedObject;
@@ -441,9 +441,13 @@ namespace PCGExPackActorData
 		ActorReferences->Grab();
 		Packer->InputActors.Init(nullptr, PointDataFacade->GetNum());
 
-		for (int i = 0; i < ActorReferences->Values.Num(); i++)
+		// One GC-guarded batch (processors run on workers with 2+ inputs); each unique path resolves once.
+		TArray<UObject*> Resolved;
+		PCGExHelpers::ResolveObjects_AnyThread(ActorReferences->Values, Resolved);
+
+		for (int i = 0; i < Resolved.Num(); i++)
 		{
-			AActor* ActorRef = Cast<AActor>(ActorReferences->Values[i].ResolveObject());
+			AActor* ActorRef = Cast<AActor>(Resolved[i]);
 			Packer->InputActors[i] = ActorRef;
 			if (ActorRef)
 			{

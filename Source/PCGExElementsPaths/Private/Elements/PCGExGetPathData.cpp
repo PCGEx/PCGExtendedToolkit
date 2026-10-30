@@ -438,7 +438,7 @@ namespace PCGExGetPathData
 		if (!bWriteAttributes) { return; }
 
 		// Fresh entries for every sample (the keys start invalid, so they get no parent).
-		PCGExMetaHelpers::InitializeMetadataEntries(PathData->Metadata, PathData->GetMetadataEntryValueRange(false), false);
+		PCGExMetaHelpers::InitializeMetadataEntries(PathData->Metadata, PathData->GetMetadataEntryValueRange(), false);
 
 		const TConstPCGValueRange<int64> EntryKeys = PathData->GetConstMetadataEntryValueRange();
 		TArray<double> Values;

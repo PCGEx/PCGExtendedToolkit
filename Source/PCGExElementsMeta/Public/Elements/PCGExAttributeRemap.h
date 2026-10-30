@@ -153,8 +153,6 @@ struct FPCGExAttributeRemapContext final : FPCGExPointsProcessorContext
 	FPCGExComponentRemapRule RemapSettings[4];
 	int32 RemapIndices[4];
 
-	virtual void RegisterAssetDependencies() override;
-
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
 };

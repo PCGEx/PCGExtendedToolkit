@@ -611,15 +611,6 @@ PCGExFactories::EPreparationResult UPCGExBlendOpFactory::Prepare(FPCGExContext* 
 	return Result;
 }
 
-void UPCGExBlendOpFactory::RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const
-{
-	Super::RegisterAssetDependencies(InDependencies);
-	if (!Config.Weighting.bUseLocalCurve)
-	{
-		InDependencies.Add(Config.Weighting.WeightCurve.ToSoftObjectPath());
-	}
-}
-
 bool UPCGExBlendOpFactory::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
 {
 	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))

@@ -222,6 +222,13 @@ namespace PCGEx
 		return Keys[IOIndex];
 	}
 
+	void IAssetLoader::ResolveUniquePaths(TArray<FSoftObjectPath>& OutPaths, TArray<UObject*>& OutObjects) const
+	{
+		OutPaths = UniquePaths.Array();
+		if (Context) { Context->ResolveObjects_AnyThread(OutPaths, OutObjects); }
+		else { PCGExHelpers::ResolveObjects_AnyThread(OutPaths, OutObjects); }
+	}
+
 	void IAssetLoader::FinalizeTracking() const
 	{
 #if WITH_EDITOR

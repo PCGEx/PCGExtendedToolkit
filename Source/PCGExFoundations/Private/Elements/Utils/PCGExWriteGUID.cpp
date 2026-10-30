@@ -10,6 +10,7 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGHelpers.h"
 #include "Misc/Guid.h"
+#include "UObject/GarbageCollection.h"
 
 #define LOCTEXT_NAMESPACE "PCGExWriteGUIDElement"
 #define PCGEX_NAMESPACE WriteGUID
@@ -89,7 +90,12 @@ bool FPCGExGUIDDetails::Init(FPCGExContext* InContext, TSharedRef<PCGExData::FFa
 	const uint32 BaseUniqueKey = UniqueKeyReader->IsConstant() ? static_cast<uint32>(UniqueKeyReader->Read(0)) : 0;
 	if ((Uniqueness & static_cast<uint8>(EPCGExGUIDUniquenessFlags::Grid)) != 0)
 	{
-		const FBox RefBounds = PCGHelpers::GetGridBounds(InContext->GetTargetActor(InFacade->Source->GetIn()), InContext->GetComponent());
+		// Grid bounds of a partitioned component reach its original through a soft pointer; this runs on workers.
+		FBox RefBounds(ForceInit);
+		{
+			FGCScopeGuard GCGuard;
+			RefBounds = PCGHelpers::GetGridBounds(InContext->GetTargetActor(InFacade->Source->GetIn()), InContext->GetComponent());
+		}
 		GridHash = HashCombine(BaseUniqueKey, PCGEx::GH3(RefBounds.Min, AdjustedGridHashCollision));
 		GridHash = HashCombine(GridHash, PCGEx::GH3(RefBounds.Max, AdjustedGridHashCollision));
 	}

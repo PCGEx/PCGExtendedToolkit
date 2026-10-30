@@ -4,6 +4,7 @@
 #include "PCGExCore.h"
 
 #include "Data/PCGExSubAccessor.h"
+#include "Utils/PCGExCurveLookup.h"
 
 #if WITH_EDITOR
 #include "AssetTypeActions_Base.h"
@@ -11,6 +12,7 @@
 #include "Data/Registry/PCGDataTypeRegistry.h"
 #include "PCGExCoreEditor/Public/PCGExAssetTypesMacros.h"
 #include "Sorting/PCGExSortingRuleProvider.h"
+#include "UObject/UObjectGlobals.h"
 #endif
 
 PCGEX_IMPLEMENT_MODULE(FPCGExCoreModule, PCGExCore)
@@ -19,6 +21,20 @@ void FPCGExCoreModule::StartupModule()
 {
 	IPCGExLegacyModuleInterface::StartupModule();
 	PCGExData::FSubAccessorRegistry::Initialize();
+
+	// Loads the shipped default curves on the game thread, before any worker can ask for one.
+	PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
+#if WITH_EDITOR
+	PackageReloadedHandle = FCoreUObjectDelegates::OnPackageReloaded.AddStatic(&PCGExCurves::EDITOR_RepointDefaultCurves);
+#endif
+}
+
+void FPCGExCoreModule::ShutdownModule()
+{
+#if WITH_EDITOR
+	FCoreUObjectDelegates::OnPackageReloaded.Remove(PackageReloadedHandle);
+#endif
+	IPCGExLegacyModuleInterface::ShutdownModule();
 }
 
 #if WITH_EDITOR

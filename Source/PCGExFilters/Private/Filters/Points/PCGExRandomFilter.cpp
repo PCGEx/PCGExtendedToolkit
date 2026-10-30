@@ -57,12 +57,6 @@ void UPCGExRandomFilterFactory::RegisterBuffersDependencies(FPCGExContext* InCon
 	}
 }
 
-void UPCGExRandomFilterFactory::RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const
-{
-	Super::RegisterAssetDependencies(InDependencies);
-	InDependencies.Add(Config.WeightCurve.ToSoftObjectPath());
-}
-
 TSharedPtr<PCGExPointFilter::IFilter> UPCGExRandomFilterFactory::CreateFilter() const
 {
 	PCGEX_MAKE_SHARED(Filter, PCGExPointFilter::FRandomFilter, this)

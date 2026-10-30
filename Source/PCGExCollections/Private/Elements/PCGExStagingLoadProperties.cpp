@@ -259,9 +259,10 @@ namespace PCGExStagingLoadProperties
 			Cache.Writer = *Prototype;
 			Cache.SourceByHash.Reserve(UniqueEntryHashes.Num());
 
-			if (FPCGExProperty* Prop = Cache.Writer.GetMutablePtr<FPCGExProperty>())
+			FPCGExProperty* WriterProp = Cache.Writer.GetMutablePtr<FPCGExProperty>();
+			if (WriterProp)
 			{
-				if (!Prop->InitializeOutput(PointDataFacade, Prop->ResolveOutputAttributeName(OutputName)))
+				if (!WriterProp->InitializeOutput(PointDataFacade, WriterProp->ResolveOutputAttributeName(OutputName)))
 				{
 					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
 						           FTEXT("Failed to initialize output buffer for property '{0}', skipping."),
@@ -269,7 +270,7 @@ namespace PCGExStagingLoadProperties
 					PropertyCaches.Remove(PropName);
 					continue;
 				}
-				Cache.WriterPtr = Prop;
+				Cache.WriterPtr = WriterProp;
 			}
 			else
 			{
@@ -303,6 +304,12 @@ namespace PCGExStagingLoadProperties
 						Cache.SourceByHash.Add(Hash, SourceProp);
 					}
 				}
+			}
+
+			{
+				TArray<const FPCGExProperty*> Sources;
+				Cache.SourceByHash.GenerateValueArray(Sources);
+				WriterProp->BindWriteSources(Sources);
 			}
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping), so sidecar rows come from

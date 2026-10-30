@@ -918,12 +918,23 @@ namespace PCGExCollections
 			CollectionsHandles.Append(PCGExHelpers::LoadAndCacheBlocking_AnyThread(CollectionPaths));
 		}
 
+		// Load PCG Data's merge runs this on a worker: collections come from the handles that loaded them. Transient
+		// collections (Build Asset Collection) are never loaded, so they take the guarded resolve.
+		TArray<FSoftObjectPath> RowPaths;
+		RowPaths.SetNum(NumEntries);
+		for (int32 i = 0; i < NumEntries; i++)
+		{
+			RowPaths[i] = CollectionPath->GetValueFromItemKey(i);
+		}
+
+		TArray<UObject*> RowCollections;
+		PCGExHelpers::ResolveObjects_AnyThread(CollectionsHandles, RowPaths, RowCollections);
+
 		for (int32 i = 0; i < NumEntries; i++)
 		{
 			int32 Idx = CollectionIdx->GetValueFromItemKey(i);
 
-			TSoftObjectPtr<UPCGExAssetCollection> CollectionSoftPtr(CollectionPath->GetValueFromItemKey(i));
-			UPCGExAssetCollection* Collection = CollectionSoftPtr.Get();
+			UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(RowCollections[i]);
 
 			if (!Collection)
 			{

@@ -32,9 +32,9 @@ MACRO(FStructProperty, FQuat) \
 MACRO(FStructProperty, FRotator) \
 MACRO(FStructProperty, FTransform)
 
-	/** Resolves InPath (worker-safe: off the game thread the load marshals to it and blocks, via
-	 *  PCGExHelpers::LoadBlocking_AnyThread) and writes the loaded object to the property if
-	 *  class-compatible. Never call raw FSoftObjectPath::TryLoad() here -- it is game-thread-only. */
+	/** Resolves InPath (worker-safe: GC-guarded lookup; a miss loads through LoadAndCacheBlocking_AnyThread, which
+	 *  marshals to the game thread and blocks) and writes the loaded object to the property if class-compatible.
+	 *  Never call raw FSoftObjectPath::TryLoad() here -- it is game-thread-only. */
 	PCGEXCORE_API bool TrySetObjectPropertyFromPath(void* InContainer, FObjectPropertyBase* InProperty, const FSoftObjectPath& InPath);
 
 	template <typename T>

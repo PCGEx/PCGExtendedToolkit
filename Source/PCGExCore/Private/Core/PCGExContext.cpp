@@ -549,6 +549,19 @@ void FPCGExContext::OnComplete()
 
 #pragma region Async resource management
 
+namespace PCGExContextAssets
+{
+	// The object one of the tracked wrappers recorded for Path. The caller holds AssetsLock.
+	UObject* FindTrackedObject(TConstArrayView<TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>> Handles, const FSoftObjectPath& Path)
+	{
+		for (const TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>& Handle : Handles)
+		{
+			if (UObject* Object = Handle->FindLoadedObject(Path)) { return Object; }
+		}
+		return nullptr;
+	}
+}
+
 TSet<FSoftObjectPath>& FPCGExContext::GetRequiredAssets()
 {
 	FWriteScopeLock WriteScopeLock(AssetsLock);
@@ -642,8 +655,34 @@ void FPCGExContext::TrackCachedAsset(const TSharedPtr<PCGExHelpers::FPCGExShared
 	}
 	{
 		FWriteScopeLock WriteScopeLock(AssetsLock);
-		TrackedCachedAssets.Add(InHandle);
+		TrackedCachedAssets.AddUnique(InHandle);
 	}
+}
+
+UObject* FPCGExContext::ResolveObject_AnyThread(const FSoftObjectPath& Path) const
+{
+	if (Path.IsNull()) { return nullptr; }
+
+	{
+		FReadScopeLock ReadScopeLock(AssetsLock);
+		if (UObject* Object = PCGExContextAssets::FindTrackedObject(TrackedCachedAssets, Path)) { return Object; }
+	}
+
+	return PCGExHelpers::ResolveObject_AnyThread(Path);
+}
+
+void FPCGExContext::ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects) const
+{
+	OutObjects.Init(nullptr, Paths.Num());
+	{
+		FReadScopeLock ReadScopeLock(AssetsLock);
+		for (int32 i = 0; i < Paths.Num(); i++)
+		{
+			OutObjects[i] = PCGExContextAssets::FindTrackedObject(TrackedCachedAssets, Paths[i]);
+		}
+	}
+
+	PCGExHelpers::ResolveMissingObjects_AnyThread(Paths, OutObjects);
 }
 
 UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules) const

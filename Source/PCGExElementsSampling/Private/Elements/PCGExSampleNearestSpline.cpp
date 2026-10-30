@@ -209,10 +209,10 @@ bool FPCGExSampleNearestSplineElement::Boot(FPCGExContext* InContext) const
 	Context->bComputeTangents = Settings->bWriteArriveTangent || Settings->bWriteLeaveTangent;
 
 	// Empty resolves to the default falloff for the curve input in use: legacy nodes fed a distance ratio and shipped the inverse ramp.
-	TSoftObjectPtr<UCurveFloat> WeightCurveAsset = Settings->WeightOverDistance;
-	if (WeightCurveAsset.IsNull())
+	const UCurveFloat* WeightCurveAsset = Settings->WeightOverDistance;
+	if (!WeightCurveAsset)
 	{
-		WeightCurveAsset = Settings->bLegacyCurveInput ? PCGExCurves::WeightDistributionLinearInv : PCGExCurves::WeightDistributionLinear;
+		WeightCurveAsset = PCGExCurves::GetDefaultCurve(Settings->bLegacyCurveInput ? PCGExCurves::WeightDistributionLinearInv : PCGExCurves::WeightDistributionLinear);
 	}
 
 	Context->WeightCurve = Settings->WeightCurveLookup.MakeLookup(

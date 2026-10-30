@@ -77,7 +77,7 @@ struct PCGEXBLENDING_API FPCGExAttributeBlendWeight
 
 	/** Curve the weight value will be remapped over. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Weight Curve", EditCondition="!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightCurve = TSoftObjectPtr<UCurveFloat>(PCGExCurves::WeightDistributionLinear);
+	TObjectPtr<UCurveFloat> WeightCurve = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 
 	PCGExFloatLUT ScoreLUT = nullptr;
 
@@ -264,7 +264,6 @@ public:
 
 	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 
-	virtual void RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const override;
 	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
 
