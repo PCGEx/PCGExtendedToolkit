@@ -7,7 +7,6 @@
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExArrayHelpers.h"
-#include "Helpers/PCGExStreamingHelpers.h"
 #include "Math/PCGExMathAxis.h"
 #include "Math/PCGExMathBounds.h"
 
@@ -83,29 +82,18 @@ void FPCGExTensorConfigBase::RenamePins(const UPCGSettings* InSettings, UPCGNode
 
 void FPCGExTensorConfigBase::Init(FPCGExContext* InContext)
 {
-	PCGEX_MAKE_SHARED(CurvePaths, TSet<FSoftObjectPath>)
-
-	if (!bUseLocalWeightFalloffCurve)
-	{
-		CurvePaths->Add(WeightFalloffCurve.ToSoftObjectPath());
-	}
-	if (!bUseLocalPotencyFalloffCurve)
-	{
-		CurvePaths->Add(PotencyFalloffCurve.ToSoftObjectPath());
-	}
-	if (!bUseLocalGuideCurve)
-	{
-		CurvePaths->Add(GuideCurve.ToSoftObjectPath());
-	}
-
-	if (!CurvePaths->IsEmpty())
-	{
-		PCGExHelpers::LoadBlockingTracked_AnyThread(CurvePaths, InContext);
-	}
-
 	WeightFalloffLUT = WeightFalloffCurveLookup.MakeLookup(bUseLocalWeightFalloffCurve, LocalWeightFalloffCurve, WeightFalloffCurve);
 	PotencyFalloffLUT = PotencyFalloffCurveLookup.MakeLookup(bUseLocalPotencyFalloffCurve, LocalPotencyFalloffCurve, PotencyFalloffCurve);
-	LocalGuideCurve.ExternalCurve = GuideCurve.Get();
+
+	// Copy the external guide curve's keys so sampling never reads the asset.
+	if (!bUseLocalGuideCurve && GuideCurve)
+	{
+		for (int32 i = 0; i < 3; i++)
+		{
+			LocalGuideCurve.VectorCurves[i] = GuideCurve->FloatCurves[i];
+		}
+	}
+	LocalGuideCurve.ExternalCurve = nullptr;
 }
 
 namespace PCGExTensor

@@ -4,6 +4,7 @@
 #include "PCGExPropertyTypes.h"
 
 #include "Metadata/PCGMetadata.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Misc/PackageName.h"
 #include "Types/PCGExTypeOps.h"
 #include "Types/PCGExTypeOpsString.h"
@@ -347,7 +348,7 @@ bool FPCGExProperty_FloatCurve::TryReadValue(EPCGMetadataTypes SourceType, const
 		return true;
 	}
 
-	UObject* Resolved = Path.ResolveObject();
+	UObject* Resolved = PCGExHelpers::ResolveObject_AnyThread(Path);
 	if (!Resolved && IsInGameThread())
 	{
 		Resolved = Path.TryLoad();

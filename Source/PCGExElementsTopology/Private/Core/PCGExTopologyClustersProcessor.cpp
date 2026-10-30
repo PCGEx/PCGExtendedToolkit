@@ -162,7 +162,8 @@ namespace PCGExTopologyEdges
 
 		InternalMeshData->Initialize(InternalMesh, true);
 		InternalMesh = InternalMeshData->GetMutableDynamicMesh();
-		if (UMaterialInterface* Material = Settings->Topology.Material.Get())
+		// Processors run on workers: the context hands over the material its load recorded, no lookup.
+		if (UMaterialInterface* Material = Context->ResolveObject_AnyThreadTpl(Settings->Topology.Material))
 		{
 			InternalMeshData->SetMaterials({Material});
 		}

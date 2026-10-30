@@ -69,7 +69,7 @@ struct PCGEXFOUNDATIONS_API FPCGExRemapDetails
 	FRuntimeFloatCurve LocalScoreCurve;
 
 	UPROPERTY(EditAnywhere, Category = Settings, BlueprintReadWrite, meta =(PCG_Overridable, DisplayName="Remap Curve", EditCondition = "!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> RemapCurve = TSoftObjectPtr<UCurveFloat>(PCGExCurves::WeightDistributionLinear);
+	TObjectPtr<UCurveFloat> RemapCurve = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 
 	PCGExFloatLUT RemapLUT = nullptr;
 

@@ -176,21 +176,7 @@ namespace PCGExCreateSpline
 		EPCGCreateSplineMode Mode = EPCGCreateSplineMode::CreateDataOnly;
 
 	public:
-		explicit FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection)
-			: TBatch(InContext, InPointsCollection)
-		{
-			PCGEX_TYPED_CONTEXT_AND_SETTINGS(CreateSpline)
-
-			Mode = Settings->Mode;
-			TargetActor = Settings->TargetActor.Get() ? Settings->TargetActor.Get() : Context->GetTargetActor(nullptr);
-			if (!TargetActor)
-			{
-				PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Invalid target actor. Ensure TargetActor member is initialized when creating SpatialData."));
-				return;
-			}
-
-			InContext->AddNotifyActor(TargetActor);
-		}
+		explicit FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection);
 
 		virtual bool PrepareSingle(const TSharedRef<PCGExPointsMT::IProcessor>& InProcessor) override;
 	};

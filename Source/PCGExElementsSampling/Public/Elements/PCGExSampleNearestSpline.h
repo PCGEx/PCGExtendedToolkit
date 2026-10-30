@@ -244,7 +244,7 @@ public:
 
 	/** Curve that remaps the weight (1 at the closest point, 0 at range) for the weighted outputs. Empty uses the default linear falloff. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, EditCondition="!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightOverDistance;
+	TObjectPtr<UCurveFloat> WeightOverDistance;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails WeightCurveLookup;

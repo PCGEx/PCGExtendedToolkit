@@ -42,15 +42,13 @@ namespace PCGExPropertyHelpers
 			return false;
 		}
 
-		// Resolve-then-load, like TryLoad, so already-resident assets never pay the off-thread
-		// game-thread marshal LoadBlocking_AnyThread does. Handle is the keep-alive until the
-		// hard reference below is written.
-		TSharedPtr<FStreamableHandle> Handle;
-		UObject* ResolvedObject = InPath.ResolveObject();
+		// Resolve-then-load so resident assets skip the load. The wrapper keeps a loaded asset alive until the hard
+		// reference below is written, and releases on the game thread whichever thread drops it.
+		PCGExHelpers::FPCGExSharedAssetHandlePtr LoadedHandle;
+		UObject* ResolvedObject = PCGExHelpers::ResolveObject_AnyThread(InPath);
 		if (!ResolvedObject)
 		{
-			Handle = PCGExHelpers::LoadBlocking_AnyThread(InPath);
-			ResolvedObject = InPath.ResolveObject();
+			ResolvedObject = PCGExHelpers::LoadAndResolveBlocking_AnyThread(InPath, LoadedHandle);
 		}
 
 		if (!ResolvedObject || (InProperty->PropertyClass && !ResolvedObject->IsA(InProperty->PropertyClass)))

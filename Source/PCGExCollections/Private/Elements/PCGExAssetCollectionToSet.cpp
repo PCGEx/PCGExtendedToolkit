@@ -102,7 +102,7 @@ bool FPCGExAssetCollectionToSetElement::AdvanceWork(FPCGExContext* InContext, co
 	};
 
 	PCGExHelpers::LoadBlockingTracked_AnyThread(Settings->AssetCollection.ToSoftObjectPath(), InContext);
-	UPCGExAssetCollection* MainCollection = Settings->AssetCollection.Get();
+	UPCGExAssetCollection* MainCollection = InContext->ResolveObject_AnyThreadTpl(Settings->AssetCollection);
 
 	if (!MainCollection)
 	{

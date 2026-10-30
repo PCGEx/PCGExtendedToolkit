@@ -24,6 +24,7 @@
 #include "Helpers/PCGExBucketDispatchHelpers.h"
 #include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
@@ -307,33 +308,56 @@ namespace PCGExGetPropertiesData
 		}
 	}
 
-	/** Phase 2: tentative resolve. ResolveObject is thread-safe on already-loaded assets and never
-	 *  triggers a load -- rows whose target isn't in memory simply stay Component=nullptr. */
+	/** Phase 2: tentative resolve, once per unique path and GC-guarded (Boot runs on a worker). Never triggers a
+	 *  load -- rows whose target isn't in memory simply stay Component=nullptr. */
 	void ResolveSlots(FPCGExGetPropertiesDataContext* Context)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::ResolveSlots);
 
-		PCGExMT::ParallelOrSequential(Context->Slots.Num(), [&](const int32 i)
+		TMap<FSoftObjectPath, int32> UniqueIndex;
+		TArray<FSoftObjectPath> UniquePaths;
+		TArray<int32> SlotToUnique;
+		SlotToUnique.Init(INDEX_NONE, Context->Slots.Num());
+
+		for (int32 i = 0; i < Context->Slots.Num(); i++)
 		{
-			FSlot& Slot = Context->Slots[i];
-			if (!Slot.Path.IsValid())
+			const FSoftObjectPath& Path = Context->Slots[i].Path;
+			if (!Path.IsValid())
 			{
-				return;
+				continue;
 			}
-			UObject* Resolved = Slot.Path.ResolveObject();
-			if (!Resolved)
+			int32& Index = UniqueIndex.FindOrAdd(Path, INDEX_NONE);
+			if (Index == INDEX_NONE)
 			{
-				return;
+				Index = UniquePaths.Add(Path);
 			}
-			if (AActor* Actor = Cast<AActor>(Resolved))
+			SlotToUnique[i] = Index;
+		}
+
+		TArray<UObject*> Resolved;
+		PCGExHelpers::ResolveObjects_AnyThread(UniquePaths, Resolved);
+
+		TArray<UPCGExPropertyCollectionComponent*> Components;
+		Components.SetNumZeroed(UniquePaths.Num());
+		PCGExMT::ParallelOrSequential(UniquePaths.Num(), [&](const int32 i)
+		{
+			if (AActor* Actor = Cast<AActor>(Resolved[i]))
 			{
-				Slot.Component = UPCGExPropertyCollectionComponent::FindOnActor(Actor);
+				Components[i] = UPCGExPropertyCollectionComponent::FindOnActor(Actor);
 			}
 			else
 			{
-				Slot.Component = Cast<UPCGExPropertyCollectionComponent>(Resolved);
+				Components[i] = Cast<UPCGExPropertyCollectionComponent>(Resolved[i]);
 			}
 		}, /*Threshold=*/64, EParallelForFlags::None);
+
+		for (int32 i = 0; i < Context->Slots.Num(); i++)
+		{
+			if (SlotToUnique[i] != INDEX_NONE)
+			{
+				Context->Slots[i].Component = Components[SlotToUnique[i]];
+			}
+		}
 	}
 
 	/** Phase 3: collect unique components + parallel BuildResolvedSchema. Off-thread safe per

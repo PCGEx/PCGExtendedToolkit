@@ -8,38 +8,40 @@
 #include "Core/PCGExAssetCollection.h"
 #include "HAL/CriticalSection.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Misc/ScopeLock.h"
 #include "Types/PCGExTypeOps.h"
 
 #pragma region FPCGExProperty_CollectionEntry
 
-uint64 FPCGExProperty_CollectionEntry::ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection*& OutCollection)
+UPCGExAssetCollection* FPCGExProperty_CollectionEntry::FindCollection(const FPCGExCollectionEntryRef& InRef) const
 {
-	// Get() only dereferences an already-resident object (same contract as FPickUnpacker::UnpackDataset).
-	UPCGExAssetCollection* Collection = InRef.Collection.Get();
-	if (!Collection)
+	if (InRef.Collection.IsNull())
 	{
-		return 0;
+		return nullptr;
 	}
 
-	const int32 RawIndex = Collection->FindRawIndexByEntryId(InRef.EntryId);
-	if (RawIndex == INDEX_NONE || RawIndex > MAX_uint16)
+	if (const TWeakObjectPtr<UPCGExAssetCollection>* Found = ResolvedCollections.Find(InRef.Collection.ToSoftObjectPath()))
 	{
-		return 0;
+		return Found->Get();
 	}
 
-	OutCollection = Collection;
-	return PCGExCollections::PickHash::Pack(Collection->GetCollectionGUID(), static_cast<uint16>(RawIndex), -1);
+	// Only resolves what is already resident (same contract as FPickUnpacker::UnpackDataset).
+	return PCGExHelpers::ResolveObject_AnyThreadTpl(InRef.Collection);
 }
 
-uint64 FPCGExProperty_CollectionEntry::ResolveHashWarned(const FPCGExCollectionEntryRef& InRef, const FName InPropertyName, UPCGExAssetCollection*& OutCollection)
+uint64 FPCGExProperty_CollectionEntry::ResolveHash(const FPCGExCollectionEntryRef& InRef, UPCGExAssetCollection* InCollection, const FName InPropertyName)
 {
-	const uint64 Hash = ResolveHash(InRef, OutCollection);
+	const int32 RawIndex = InCollection ? InCollection->FindRawIndexByEntryId(InRef.EntryId) : INDEX_NONE;
+	if (RawIndex != INDEX_NONE && RawIndex <= MAX_uint16)
+	{
+		return PCGExCollections::PickHash::Pack(InCollection->GetCollectionGUID(), static_cast<uint16>(RawIndex), -1);
+	}
 
 	// EntryId 0 is the documented "no pick" state (the picker shows "None") -- only a STALE
 	// pick (a stored id that no longer resolves) is worth a warning.
-	if (!OutCollection && !InRef.Collection.IsNull() && InRef.EntryId != 0)
+	if (!InRef.Collection.IsNull() && InRef.EntryId != 0)
 	{
 		// Global dedup: shared source instances must stay stateless and clones are per-execution,
 		// so per-instance bookkeeping either races or re-warns every run.
@@ -56,18 +58,17 @@ uint64 FPCGExProperty_CollectionEntry::ResolveHashWarned(const FPCGExCollectionE
 		{
 			UE_LOG(LogPCGEx, Warning, TEXT("Collection Entry property '%s': %s '%s' -- writing 0."),
 			       *InPropertyName.ToString(),
-			       InRef.Collection.Get() ? TEXT("no entry with the stored EntryId in") : TEXT("collection not loaded:"),
+			       InCollection ? TEXT("no entry with the stored EntryId in") : TEXT("collection not loaded:"),
 			       *InRef.Collection.ToString());
 		}
 	}
 
-	return Hash;
+	return 0;
 }
 
 uint64 FPCGExProperty_CollectionEntry::ResolveOwnHash() const
 {
-	UPCGExAssetCollection* Collection = nullptr;
-	return ResolveHashWarned(Value, PropertyName, Collection);
+	return ResolveHash(Value, FindCollection(Value), PropertyName);
 }
 
 bool FPCGExProperty_CollectionEntry::InitializeOutput(const TSharedRef<PCGExData::FFacade>& OutputFacade, const FName OutputName)
@@ -87,17 +88,58 @@ void FPCGExProperty_CollectionEntry::WriteOutput(const int32 PointIndex) const
 void FPCGExProperty_CollectionEntry::WriteOutputFrom(const int32 PointIndex, const FPCGExProperty* Source) const
 {
 	check(OutputBuffer);
-	UPCGExAssetCollection* Collection = nullptr;
 	const FPCGExProperty_CollectionEntry* Typed = static_cast<const FPCGExProperty_CollectionEntry*>(Source);
-	OutputBuffer->SetValue(PointIndex, static_cast<int64>(ResolveHashWarned(Typed->Value, Typed->PropertyName, Collection)));
+	OutputBuffer->SetValue(PointIndex, static_cast<int64>(ResolveHash(Typed->Value, FindCollection(Typed->Value), Typed->PropertyName)));
+}
+
+void FPCGExProperty_CollectionEntry::BindWriteSources(TConstArrayView<const FPCGExProperty*> InSources)
+{
+	TArray<FSoftObjectPath> Paths;
+	Paths.Reserve(InSources.Num() + 1);
+	Paths.Add(Value.Collection.ToSoftObjectPath());
+	for (const FPCGExProperty* Source : InSources)
+	{
+		if (Source && Source->GetTypeName() == GetTypeName())
+		{
+			Paths.Add(static_cast<const FPCGExProperty_CollectionEntry*>(Source)->Value.Collection.ToSoftObjectPath());
+		}
+	}
+
+	TArray<UObject*> Collections;
+	PCGExHelpers::ResolveObjects_AnyThread(Paths, Collections);
+	for (int32 i = 0; i < Paths.Num(); i++)
+	{
+		if (!Paths[i].IsNull())
+		{
+			ResolvedCollections.Add(Paths[i], Cast<UPCGExAssetCollection>(Collections[i]));
+		}
+	}
 }
 
 void FPCGExProperty_CollectionEntry::CopyValueFrom(const FPCGExProperty* Source)
 {
 	Value = static_cast<const FPCGExProperty_CollectionEntry*>(Source)->Value;
 
-	// Clone-only path by contract -- the natural place to accumulate Map contributions.
-	if (UPCGExAssetCollection* Collection = Value.Collection.Get())
+	// Clone-only and single-threaded by contract: each new path resolves once, later writes read ResolvedCollections.
+	const FSoftObjectPath& Path = Value.Collection.ToSoftObjectPath();
+	if (Path.IsNull())
+	{
+		return;
+	}
+
+	UPCGExAssetCollection* Collection = nullptr;
+	if (const TWeakObjectPtr<UPCGExAssetCollection>* Found = ResolvedCollections.Find(Path))
+	{
+		Collection = Found->Get();
+	}
+	else
+	{
+		Collection = PCGExHelpers::ResolveObject_AnyThreadTpl(Value.Collection);
+		ResolvedCollections.Add(Path, Collection);
+	}
+
+	// The natural place to accumulate Map contributions.
+	if (Collection)
 	{
 		TouchedCollections.AddUnique(Collection);
 	}
@@ -163,7 +205,7 @@ void FPCGExProperty_CollectionEntry::WriteOutputSidecar(UPCGMetadata* InSidecar)
 	{
 		Expand(Touched.Get());
 	}
-	Expand(Value.Collection.Get());
+	Expand(FindCollection(Value));
 
 	PCGExCollections::FPickPacker::AppendMapRows(InSidecar, Collections);
 }
@@ -171,22 +213,19 @@ void FPCGExProperty_CollectionEntry::WriteOutputSidecar(UPCGMetadata* InSidecar)
 FPCGMetadataAttributeBase* FPCGExProperty_CollectionEntry::CreateMetadataAttribute(UPCGMetadata* Metadata, const FName AttributeName) const
 {
 	// Default seeds from the authored pick, like every PCGEX_PROPERTY_IMPL type seeds from Value.
-	UPCGExAssetCollection* Collection = nullptr;
-	return Metadata->CreateAttribute<int64>(AttributeName, static_cast<int64>(ResolveHashWarned(Value, PropertyName, Collection)), true, true);
+	return Metadata->CreateAttribute<int64>(AttributeName, static_cast<int64>(ResolveOwnHash()), true, true);
 }
 
 void FPCGExProperty_CollectionEntry::WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, const int64 EntryKey) const
 {
-	// Callable on SHARED source instances (Tuple) -- ResolveHashWarned touches no instance state.
-	UPCGExAssetCollection* Collection = nullptr;
-	static_cast<FPCGMetadataAttribute<int64>*>(Attribute)->SetValue(EntryKey, static_cast<int64>(ResolveHashWarned(Value, PropertyName, Collection)));
+	// Callable on SHARED source instances (Tuple): only reads, and their ResolvedCollections is never written.
+	static_cast<FPCGMetadataAttribute<int64>*>(Attribute)->SetValue(EntryKey, static_cast<int64>(ResolveOwnHash()));
 }
 
 bool FPCGExProperty_CollectionEntry::TryWriteValue(const EPCGMetadataTypes TargetType, void* OutBuffer) const
 {
-	// Source-instance path (@Data writes) -- ResolveHashWarned touches no instance state.
-	UPCGExAssetCollection* Collection = nullptr;
-	const int64 Projected = static_cast<int64>(ResolveHashWarned(Value, PropertyName, Collection));
+	// Source-instance path (@Data writes): only reads, as in WriteMetadataValue.
+	const int64 Projected = static_cast<int64>(ResolveOwnHash());
 	PCGExTypeOps::FConversionTable::Convert(EPCGMetadataTypes::Integer64, &Projected, TargetType, OutBuffer);
 	return true;
 }

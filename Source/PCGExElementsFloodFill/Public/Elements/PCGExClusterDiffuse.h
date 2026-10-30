@@ -106,7 +106,7 @@ public:
 
 	/** Curve that shapes the Falloff intensity (input: 1 at the seed, fading to 0 at the diffusion's furthest reach). Linear = no shaping. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Blending", meta = (PCG_Overridable, DisplayName="Falloff Curve", EditCondition="WeightSpace == EPCGExClusterDiffuseWeightSpace::Falloff && !bUseLocalFalloffCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> FalloffCurve;
+	TObjectPtr<UCurveFloat> FalloffCurve;
 
 	/** Falloff curve lookup mode / resolution. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Blending", meta = (PCG_NotOverridable, EditCondition="WeightSpace == EPCGExClusterDiffuseWeightSpace::Falloff", EditConditionHides))

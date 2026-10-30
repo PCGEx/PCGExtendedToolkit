@@ -9,6 +9,7 @@
 #include "PCGExCommon.h"
 #include "PCGExMT.h"
 #include "Metadata/PCGMetadataCommon.h"
+#include "UObject/SoftObjectPtr.h"
 
 #include "Data/PCGExDataCommon.h"
 
@@ -259,14 +260,30 @@ public:
 
 	void TrackAssetsHandle(const TSharedPtr<FStreamableHandle>& InHandle);
 
-	// Keep-alive registration for cached resource wrappers (LoadAndCacheBlocking_AnyThread). Held for the
-	// context's lifetime and dropped on destruction; the underlying handle is released only once the last
+	// Keep-alive registration for cached resource wrappers (LoadAndCacheBlocking_AnyThread), each held once for
+	// the context's lifetime and dropped on destruction; the underlying handle is released only once the last
 	// owner (here or the subsystem cache) lets go.
 	void TrackCachedAsset(const TSharedPtr<PCGExHelpers::FPCGExSharedAssetHandle>& InHandle);
 
 	FORCEINLINE bool WantsResourcesCached() const
 	{
 		return bWantsResourcesCached;
+	}
+
+	/**
+	 * Any thread. The object a tracked wrapper of this context recorded for Path (no engine lookup), else a guarded resolve
+	 * (PCGExHelpers::ResolveObject_AnyThread): live-world objects are never loaded, so they always take that path.
+	 * Takes AssetsLock and scans the tracked wrappers -- resolve each unique path once, never per point.
+	 */
+	UObject* ResolveObject_AnyThread(const FSoftObjectPath& Path) const;
+
+	/** Batched ResolveObject_AnyThread. OutObjects is index-aligned with Paths. */
+	void ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects) const;
+
+	template <typename T>
+	T* ResolveObject_AnyThreadTpl(const TSoftObjectPtr<T>& SoftObjectPtr) const
+	{
+		return Cast<T>(ResolveObject_AnyThread(SoftObjectPtr.ToSoftObjectPath()));
 	}
 
 protected:

@@ -80,7 +80,7 @@ struct FPCGExRandomFilterConfig
 
 	/** Curve the value will be remapped over. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Weight Curve", EditCondition="!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightCurve = TSoftObjectPtr<UCurveFloat>(PCGExCurves::WeightDistributionLinear);
+	TObjectPtr<UCurveFloat> WeightCurve = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails WeightCurveLookup;
@@ -115,7 +115,6 @@ public:
 	virtual bool SupportsProxyEvaluation() const override;
 
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
-	virtual void RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const override;
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };

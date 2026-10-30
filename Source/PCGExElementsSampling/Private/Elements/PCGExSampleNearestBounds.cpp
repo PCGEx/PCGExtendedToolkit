@@ -43,7 +43,7 @@ UPCGExSampleNearestBoundsSettings::UPCGExSampleNearestBoundsSettings(const FObje
 	}
 	if (!WeightRemap)
 	{
-		WeightRemap = PCGExCurves::WeightDistributionLinear;
+		WeightRemap = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 	}
 }
 

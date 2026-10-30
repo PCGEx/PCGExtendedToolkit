@@ -9,6 +9,7 @@
 #include "Data/PCGExData.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCompareFilterDefinition"
 #define PCGEX_NAMESPACE CompareFilterDefinition
@@ -50,11 +51,41 @@ bool PCGExPointFilter::FGameplayTagsFilter::Init(FPCGExContext* InContext, const
 		PathSegments.Add(PropertyPath.GetSegment(i).Name.ToString());
 	}
 
-	ActorReferences = PointDataFacade->GetBroadcaster<FSoftObjectPath>(TypedFilterFactory->Config.ActorReference, true);
+	// Full read, so each unique path is resolved once here (GC-guarded: filters init on workers) instead of per Test.
+	const TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>> ActorReferences = PointDataFacade->GetBroadcaster<FSoftObjectPath>(TypedFilterFactory->Config.ActorReference, false);
 	if (!ActorReferences)
 	{
 		PCGEX_LOG_INVALID_ATTR_HANDLED_C(InContext, Actor Reference, TypedFilterFactory->Config.ActorReference)
 		return false;
+	}
+
+	const int32 NumPoints = PointDataFacade->GetNum();
+	TMap<FSoftObjectPath, int32> UniqueIndex;
+	TArray<FSoftObjectPath> UniquePaths;
+	ActorIndices.Init(INDEX_NONE, NumPoints);
+
+	for (int32 i = 0; i < NumPoints; i++)
+	{
+		const FSoftObjectPath& Path = ActorReferences->Read(i);
+		if (Path.IsNull())
+		{
+			continue;
+		}
+		int32& Index = UniqueIndex.FindOrAdd(Path, INDEX_NONE);
+		if (Index == INDEX_NONE)
+		{
+			Index = UniquePaths.Add(Path);
+		}
+		ActorIndices[i] = Index;
+	}
+
+	TArray<UObject*> Resolved;
+	PCGExHelpers::ResolveObjects_AnyThread(UniquePaths, Resolved);
+
+	Actors.Reserve(Resolved.Num());
+	for (UObject* Object : Resolved)
+	{
+		Actors.Add(Cast<AActor>(Object));
 	}
 
 	return true;
@@ -62,7 +93,8 @@ bool PCGExPointFilter::FGameplayTagsFilter::Init(FPCGExContext* InContext, const
 
 bool PCGExPointFilter::FGameplayTagsFilter::Test(const int32 PointIndex) const
 {
-	AActor* TargetActor = TSoftObjectPtr<AActor>(ActorReferences->Read(PointIndex)).Get();
+	const int32 ActorIndex = ActorIndices[PointIndex];
+	AActor* TargetActor = ActorIndex != INDEX_NONE ? Actors[ActorIndex].Get() : nullptr;
 	if (!TargetActor)
 	{
 		return TypedFilterFactory->Config.bFallbackMissingActor;

@@ -91,7 +91,7 @@ struct PCGEXELEMENTSCLUSTERS_API FPCGExSamplingConfig
 
 	/** Curve over which the sampling will be remapped. Used differently depending on sampler.  */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Weight Curve", EditCondition="!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightCurve = TSoftObjectPtr<UCurveFloat>(PCGExCurves::WeightDistributionLinear);
+	TObjectPtr<UCurveFloat> WeightCurve = PCGExCurves::GetDefaultCurve(PCGExCurves::WeightDistributionLinear);
 
 	PCGExFloatLUT WeightLUT = nullptr;
 
@@ -171,8 +171,6 @@ public:
 	virtual TSharedPtr<FPCGExNeighborSampleOperation> CreateOperation(FPCGExContext* InContext) const;
 
 	virtual void RegisterVtxBuffersDependencies(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, PCGExData::FFacadePreloader& FacadePreloader) const;
-
-	virtual void RegisterAssetDependencies(TSet<FSoftObjectPath>& InDependencies) const override;
 };
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|NeighborSample", meta=(PCGExNodeLibraryDoc="sampling/cluster-sample-neighbors/neighbor-sampler", PCGExProxyInterface))

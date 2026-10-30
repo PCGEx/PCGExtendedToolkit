@@ -172,7 +172,7 @@ public:
 
 	/** Curve that balances weight over distance */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, EditCondition="WeightMode != EPCGExSampleWeightMode::Attribute && !bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightOverDistance;
+	TObjectPtr<UCurveFloat> WeightOverDistance;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails WeightCurveLookup;

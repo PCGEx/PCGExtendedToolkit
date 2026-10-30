@@ -13,6 +13,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "Paths/PCGExPathsHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCreateSplineElement"
@@ -324,6 +325,24 @@ namespace PCGExCreateSpline
 	void FProcessor::Cleanup()
 	{
 		TProcessor<FPCGExCreateSplineContext, UPCGExCreateSplineSettings>::Cleanup();
+	}
+
+	FBatch::FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection)
+		: TBatch(InContext, InPointsCollection)
+	{
+		PCGEX_TYPED_CONTEXT_AND_SETTINGS(CreateSpline)
+
+		Mode = Settings->Mode;
+		// CreateDataOnly builds this batch on a worker: resolve a path copy, GC-guarded.
+		AActor* SettingsTargetActor = PCGExHelpers::ResolveObject_AnyThreadTpl(Settings->TargetActor);
+		TargetActor = SettingsTargetActor ? SettingsTargetActor : Context->GetTargetActor(nullptr);
+		if (!TargetActor)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Invalid target actor. Ensure TargetActor member is initialized when creating SpatialData."));
+			return;
+		}
+
+		InContext->AddNotifyActor(TargetActor);
 	}
 
 	bool FBatch::PrepareSingle(const TSharedRef<PCGExPointsMT::IProcessor>& InProcessor)

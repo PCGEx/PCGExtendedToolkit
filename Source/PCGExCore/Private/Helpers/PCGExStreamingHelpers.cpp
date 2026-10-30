@@ -12,6 +12,7 @@
 #include "Engine/Level.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/World.h"
+#include "UObject/GarbageCollection.h"
 #include "UObject/SoftObjectPath.h"
 
 namespace PCGExStreamingHelpers
@@ -172,6 +173,97 @@ namespace PCGExHelpers
 		return Handle;
 	}
 
+	UObject* ResolveObject_AnyThread(const FSoftObjectPath& Path)
+	{
+		if (Path.IsNull()) { return nullptr; }
+
+		// No-op on the game thread; elsewhere it waits out a running GC and blocks the next one until it drops.
+		FGCScopeGuard GCGuard;
+		return GetValid(Path.ResolveObject());
+	}
+
+	void ResolveMissingObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& InOutObjects)
+	{
+		check(InOutObjects.Num() == Paths.Num());
+
+		// The guard does not yield to a GC waiting to start, so a long batch re-acquires it per chunk.
+		constexpr int32 ChunkSize = 256;
+
+		TMap<FSoftObjectPath, int32> UniqueIndex;
+		TArray<int32> PathToUnique;
+		TArray<const FSoftObjectPath*> UniquePaths;
+		PathToUnique.Init(INDEX_NONE, Paths.Num());
+
+		for (int32 i = 0; i < Paths.Num(); i++)
+		{
+			if (InOutObjects[i] || Paths[i].IsNull()) { continue; }
+
+			int32& Index = UniqueIndex.FindOrAdd(Paths[i], INDEX_NONE);
+			if (Index == INDEX_NONE) { Index = UniquePaths.Add(&Paths[i]); }
+			PathToUnique[i] = Index;
+		}
+
+		if (UniquePaths.IsEmpty()) { return; }
+
+		TArray<UObject*> UniqueObjects;
+		UniqueObjects.SetNumZeroed(UniquePaths.Num());
+		for (int32 ChunkStart = 0; ChunkStart < UniquePaths.Num(); ChunkStart += ChunkSize)
+		{
+			const int32 ChunkEnd = FMath::Min(ChunkStart + ChunkSize, UniquePaths.Num());
+
+			FGCScopeGuard GCGuard;
+			for (int32 i = ChunkStart; i < ChunkEnd; i++) { UniqueObjects[i] = GetValid(UniquePaths[i]->ResolveObject()); }
+		}
+
+		for (int32 i = 0; i < Paths.Num(); i++)
+		{
+			if (PathToUnique[i] != INDEX_NONE) { InOutObjects[i] = UniqueObjects[PathToUnique[i]]; }
+		}
+	}
+
+	void ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects)
+	{
+		OutObjects.Init(nullptr, Paths.Num());
+		ResolveMissingObjects_AnyThread(Paths, OutObjects);
+	}
+
+	void ResolveObjects_AnyThread(TConstArrayView<FPCGExSharedAssetHandlePtr> Handles, TConstArrayView<FSoftObjectPath> Paths, TArray<UObject*>& OutObjects)
+	{
+		OutObjects.Init(nullptr, Paths.Num());
+		for (int32 i = 0; i < Paths.Num(); i++)
+		{
+			for (const FPCGExSharedAssetHandlePtr& Handle : Handles)
+			{
+				if (UObject* Object = Handle ? Handle->FindLoadedObject(Paths[i]) : nullptr)
+				{
+					OutObjects[i] = Object;
+					break;
+				}
+			}
+		}
+		ResolveMissingObjects_AnyThread(Paths, OutObjects);
+	}
+
+	FPCGExSharedAssetHandle::FPCGExSharedAssetHandle(TSharedPtr<FStreamableHandle> InHandle, const double InLastAccess)
+		: LastAccess(InLastAccess), Handle(MoveTemp(InHandle))
+	{
+		check(IsInGameThread());
+
+		if (!Handle.IsValid()) { return; }
+
+		// ForEachLoadedAsset walks RequestedAssets in order (our handles have no children), so it pairs by index.
+		TArray<FSoftObjectPath> Paths;
+		Handle->GetRequestedAssets(Paths, /*bIncludeChildren=*/false);
+		LoadedObjects.Reserve(Paths.Num());
+
+		int32 Index = 0;
+		Handle->ForEachLoadedAsset([&](UObject* LoadedObject)
+		{
+			if (LoadedObject && Paths.IsValidIndex(Index)) { LoadedObjects.Add(Paths[Index], LoadedObject); }
+			Index++;
+		});
+	}
+
 	FPCGExSharedAssetHandle::~FPCGExSharedAssetHandle()
 	{
 		// SafeReleaseHandle marshals to the game thread if the last owner drops us off-thread.
@@ -181,6 +273,12 @@ namespace PCGExHelpers
 	bool FPCGExSharedAssetHandle::IsValid() const
 	{
 		return Handle.IsValid() && Handle->IsActive();
+	}
+
+	UObject* FPCGExSharedAssetHandle::FindLoadedObject(const FSoftObjectPath& Path) const
+	{
+		const TWeakObjectPtr<UObject>* Found = LoadedObjects.Find(Path);
+		return Found ? Found->Get() : nullptr;
 	}
 
 	void FPCGExSharedAssetHandle::GetCoveredPaths(TArray<FSoftObjectPath>& OutPaths) const
@@ -213,6 +311,16 @@ namespace PCGExHelpers
 
 		const TArray<FPCGExSharedAssetHandlePtr> Handles = PCGExStreamingHelpers::LoadAndCacheBlockingSet(Paths, InContext, bCacheMisses);
 		return Handles.IsEmpty() ? nullptr : Handles[0];
+	}
+
+	UObject* LoadAndResolveBlocking_AnyThread(const FSoftObjectPath& Path, FPCGExSharedAssetHandlePtr& OutHandle)
+	{
+		OutHandle.Reset();
+		if (Path.IsNull()) { return nullptr; }
+
+		OutHandle = LoadAndCacheBlocking_AnyThread(Path, nullptr, /*bCacheMisses=*/false);
+		UObject* Loaded = OutHandle ? OutHandle->FindLoadedObject(Path) : nullptr;
+		return Loaded ? Loaded : ResolveObject_AnyThread(Path);
 	}
 
 	void LoadBlockingTracked_AnyThread(const TSharedPtr<TSet<FSoftObjectPath>>& Paths, FPCGExContext* InContext)

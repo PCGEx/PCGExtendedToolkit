@@ -57,7 +57,14 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(SampleSockets)
 void FPCGExSampleSocketsContext::RegisterAssetDependencies()
 {
 	FPCGExPointsProcessorContext::RegisterAssetDependencies();
-	if (StaticMeshLoader) { StaticMeshLoader->AddAssetDependencies(); }
+	if (StaticMeshLoader)
+	{
+		StaticMeshLoader->AddAssetDependencies();
+		return;
+	}
+
+	PCGEX_SETTINGS_LOCAL(SampleSockets)
+	if (!Settings->Asset.Constant.IsNull()) { AddAssetDependency(Settings->Asset.Constant); }
 }
 
 bool FPCGExSampleSocketsElement::Boot(FPCGExContext* InContext) const
@@ -87,17 +94,6 @@ bool FPCGExSampleSocketsElement::Boot(FPCGExContext* InContext) const
 			return Context->CancelExecution(TEXT("Failed to find any asset to load."));
 		}
 	}
-	else
-	{
-		const TSoftObjectPtr<UStaticMesh> StaticMeshPtr(Settings->Asset.Constant);
-		PCGExHelpers::LoadBlockingTracked_AnyThreadTpl(StaticMeshPtr, Context);
-		Context->StaticMesh = StaticMeshPtr.Get();
-		if (!Context->StaticMesh)
-		{
-			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Static mesh could not be loaded."));
-			return false;
-		}
-	}
 
 	Context->SocketsCollection = MakeShared<PCGExData::FPointIOCollection>(Context);
 	Context->SocketsCollection->OutputPin = PCGExStaging::Labels::OutputSocketLabel;
@@ -114,6 +110,11 @@ void FPCGExSampleSocketsElement::PostLoadAssetsDependencies(FPCGExContext* InCon
 	{
 		Context->StaticMeshLoader->Finalize();
 	}
+	else
+	{
+		// A worker when the load was a warm cache hit: the context hands over the loaded mesh, no lookup.
+		Context->StaticMesh = Cast<UStaticMesh>(Context->ResolveObject_AnyThread(Settings->Asset.Constant));
+	}
 }
 
 bool FPCGExSampleSocketsElement::PostBoot(FPCGExContext* InContext) const
@@ -121,9 +122,17 @@ bool FPCGExSampleSocketsElement::PostBoot(FPCGExContext* InContext) const
 	if (!FPCGExPointsProcessorElement::PostBoot(InContext)) { return false; }
 
 	PCGEX_CONTEXT_AND_SETTINGS(SampleSockets)
-	if (Context->StaticMeshLoader && Context->StaticMeshLoader->IsEmpty())
+	if (Context->StaticMeshLoader)
 	{
-		return InContext->CancelExecution(TEXT("Failed to load any assets."));
+		if (Context->StaticMeshLoader->IsEmpty())
+		{
+			return InContext->CancelExecution(TEXT("Failed to load any assets."));
+		}
+	}
+	else if (!Context->StaticMesh)
+	{
+		PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Static mesh could not be loaded."));
+		return false;
 	}
 	return true;
 }

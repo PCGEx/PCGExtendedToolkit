@@ -17,6 +17,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Helpers/PCGExStreamingHelpers.h"
 #include "UObject/UObjectThreadContext.h"
 
 namespace PCGExHelpers
@@ -35,14 +36,13 @@ namespace PCGExHelpers
 
 		ActorReferences->Grab();
 
-		for (int i = 0; i < ActorReferences->Values.Num(); i++)
+		// One GC-guarded batch (callers boot on workers); rows repeat actors, each unique path resolves once.
+		TArray<UObject*> Resolved;
+		ResolveObjects_AnyThread(ActorReferences->Values, Resolved);
+
+		for (int i = 0; i < Resolved.Num(); i++)
 		{
-			const FSoftObjectPath& Path = ActorReferences->Values[i];
-			if (!Path.IsValid())
-			{
-				continue;
-			}
-			if (AActor* TargetActor = Cast<AActor>(Path.ResolveObject()))
+			if (AActor* TargetActor = Cast<AActor>(Resolved[i]))
 			{
 				OutActorSet.FindOrAdd(TargetActor, i);
 			}

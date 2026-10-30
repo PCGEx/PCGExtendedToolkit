@@ -148,7 +148,7 @@ public:
 
 	/** Curve that balances weight over distance */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable, DisplayName="Weight Remap", EditCondition = "!bUseLocalCurve", EditConditionHides))
-	TSoftObjectPtr<UCurveFloat> WeightRemap;
+	TObjectPtr<UCurveFloat> WeightRemap;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_NotOverridable))
 	FPCGExCurveLookupDetails WeightCurveLookup;

@@ -78,14 +78,14 @@ namespace PCGExDispatchSubgraph
 			}
 
 			// Object-typed targets: only assign already-resident assets. Candidate paths are preloaded in
-			// PostLoadAssetsDependencies (game thread); a preload miss below would fall through to
-			// LoadBlocking_AnyThread and stall dispatch on a per-value game-thread marshal.
+			// PostLoadAssetsDependencies (game thread); a preload miss below would fall through to a blocking
+			// load and stall dispatch on a per-value game-thread marshal.
 			if (Property->IsA<FObjectPropertyBase>())
 			{
 				T Value = Values[EntryIndex];
 				FSoftObjectPath Path;
 				PCGExTypeOps::FTypeOpsRegistry::Get<T>()->ConvertTo(&Value, PCGExTypes::TTraits<FSoftObjectPath>::Type, &Path);
-				if (Path.IsNull() || !Path.ResolveObject())
+				if (!PCGExHelpers::ResolveObject_AnyThread(Path))
 				{
 					return false;
 				}

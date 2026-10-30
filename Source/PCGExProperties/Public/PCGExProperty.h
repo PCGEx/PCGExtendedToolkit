@@ -182,6 +182,15 @@ struct PCGEXPROPERTIES_API FPCGExProperty
 	}
 
 	/**
+	 * Single-threaded, on a writer-owned instance before its parallel WriteOutputFrom calls: InSources are the
+	 * instances it will write from (this concrete type). Types whose writes need objects resolve them here, since
+	 * writes run on workers and must not look up soft paths. Never called on shared source instances.
+	 */
+	virtual void BindWriteSources(TConstArrayView<const FPCGExProperty*> InSources)
+	{
+	}
+
+	/**
 	 * Copy value from another property of the same type.
 	 * WARNING: Not thread-safe. Mutates this property's Value field.
 	 * For parallel processing, use WriteOutputFrom() instead.
