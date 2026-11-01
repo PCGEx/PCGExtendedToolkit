@@ -462,6 +462,7 @@ namespace PCGExCollections
 	 * The attribute set contains two attributes per collection:
 	 *   - Tag_CollectionIdx (int32): packed collection identifier
 	 *   - Tag_CollectionPath (FSoftObjectPath): collection asset path for loading
+	 * Rows without a path are not Map rows: the material swap table's rows share the same attribute set.
 	 *
 	 * GetPickIdx() is a pure hash computation -- it does not register the collection.
 	 * Callers MUST call RegisterCollection() at init (single-threaded) for every collection
@@ -647,10 +648,11 @@ namespace PCGExCollections
 		 *  UnpackDataset (editor tooling, thumbnails); hashes then resolve exactly as after an unpack. */
 		void AddCollection(UPCGExAssetCollection* InCollection);
 
-		/** True when InParamData carries Collection Map rows. Map pins also carry other param data (material swap tables). */
+		/** True when InParamData has the Collection Map columns. The same param data may hold material swap rows too. */
 		static bool IsCollectionMap(const UPCGParamData* InParamData);
 
-		/** Unpack collection mappings from an attribute set */
+		/** Unpacks InAttributeSet's Map rows; rows without a path are skipped. A path that resolves to no collection is
+		 *  reported and skipped, keeping the other rows. False when anything was reported. */
 		bool UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet);
 
 		/** Unpack from a specific input pin */

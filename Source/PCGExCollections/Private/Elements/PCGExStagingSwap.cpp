@@ -29,7 +29,7 @@ void UPCGExStagingSwapSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinPr
 TArray<FPCGPinProperties> UPCGExStagingSwapSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Updated collection map including the variant collections, followed by the material swap table when swaps apply.", Normal)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Updated collection map including the variant collections, with the material swap rows when swaps apply.", Normal)
 	return PinProperties;
 }
 
@@ -611,11 +611,10 @@ bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 	{
 		UPCGParamData* OutputSet = Context->ManagedObjects->New<UPCGParamData>();
 		Context->CollectionPickDatasetPacker->PackToDataset(OutputSet);
+		Context->OutputMaterialSwaps.PackToDataset(OutputSet);
 
 		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}
-
-	Context->OutputMaterialSwaps.StageOutput(Context, PCGExCollections::Labels::OutputCollectionMapLabel);
 
 	return Context->TryComplete();
 }

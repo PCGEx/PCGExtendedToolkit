@@ -117,7 +117,7 @@ TArray<FPCGPinProperties> UPCGExGetCollectionDataSettings::OutputPinProperties()
 		PCGEX_PIN_ANY(PCGExGetCollectionData::AnnotatedSourcesPin, TEXT("One forwarded copy of each Sources input, augmented with identity attributes (RootCollectionIndex / CollectionIndex / CollectionHash where their respective output toggles are on)."), Required)
 	}
 	PCGEX_PIN_PARAMS(PCGExGetCollectionData::OutputCollectionDataPin, TEXT("One attribute set per resolved source (see Fanout)."), Required)
-	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, TEXT("Collection map covering every host referenced by the emitted attribute sets, followed by any material swap table the input Map pin carried."), Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, TEXT("Collection map covering every host referenced by the emitted attribute sets, with any material swap rows the input Map pin carried."), Required)
 	return PinProperties;
 }
 
@@ -1436,7 +1436,7 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 			return Pin == PCGExCollections::Labels::OutputCollectionMapLabel ? OutputMap->Metadata.Get() : nullptr;
 		});
 
-		PCGExCollections::FMaterialSwapTable::Forward(InContext);
+		PCGExCollections::FMaterialSwapTable::ForwardInto(InContext, OutputMap);
 	}
 
 	InContext->Done();

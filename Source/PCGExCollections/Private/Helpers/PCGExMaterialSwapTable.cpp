@@ -7,8 +7,6 @@
 #include "PCGElement.h"
 #include "PCGExCoreMacros.h"
 #include "PCGParamData.h"
-#include "Containers/PCGExManagedObjects.h"
-#include "Core/PCGExContext.h"
 #include "ISMPartition/ISMComponentDescriptor.h"
 #include "Materials/MaterialInterface.h"
 #include "Metadata/PCGMetadata.h"
@@ -214,7 +212,9 @@ namespace PCGExCollections
 
 			for (int32 i = 0; i < Layer.Value.Num(); i++)
 			{
-				MergeStage(Target[i], Layer.Value[i], OutConflicts);
+				FStage Merged = Layer.Value[i];
+				MergeStage(Merged, Target[i], OutConflicts);
+				Target[i] = MoveTemp(Merged);
 			}
 
 			Target.RemoveAll([](const FStage& Stage) { return Stage.IsEmpty(); });
@@ -335,7 +335,7 @@ namespace PCGExCollections
 
 		if (!Conflicts.IsEmpty())
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Material swap rules on '{0}' disagree on {1} material(s): later tables win, and within a table the first row."), FText::FromName(InPinLabel), FText::AsNumber(Conflicts.Num())));
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Material swap rules on '{0}' disagree on {1} material(s): earlier tables win, and within a table the first row."), FText::FromName(InPinLabel), FText::AsNumber(Conflicts.Num())));
 		}
 	}
 
@@ -384,8 +384,15 @@ namespace PCGExCollections
 		const int64 NumRows = Metadata->GetItemCountForChild();
 		for (int64 i = 0; i < NumRows; i++)
 		{
+			// No rule without both (AddRule would ignore it): Collection Map rows carry neither.
+			const FSoftObjectPath Match = MatchAttribute->GetValueFromItemKey(i);
 			FMaterialSwapRule Rule;
 			Rule.Replacement = ReplaceAttribute->GetValueFromItemKey(i);
+			if (Match.IsNull() || Rule.Replacement.IsNull())
+			{
+				continue;
+			}
+
 			Rule.Gate = FMaterialSwapGate::Make(
 				AllAttribute ? AllAttribute->GetValueFromItemKey(i) : FName(NAME_None),
 				AnyAttribute ? AnyAttribute->GetValueFromItemKey(i) : FName(NAME_None),
@@ -395,9 +402,8 @@ namespace PCGExCollections
 
 			const FName Layer = LayerAttribute ? LayerAttribute->GetValueFromItemKey(i) : FName(NAME_None);
 			const int32 StageValue = StageAttribute ? StageAttribute->GetValueFromItemKey(i) : 0;
-			const FSoftObjectPath Match = MatchAttribute->GetValueFromItemKey(i);
 
-			// Rows arrive in priority order: one an earlier row shadows is a conflict, like one a later table overrules.
+			// Rows arrive in priority order: one an earlier row shadows is a conflict, like one an earlier table overrules.
 			if (AddRule(StagesByLayer.FindOrAdd(Layer).FindOrAdd(StageValue), Match, Rule) == EAddResult::Shadowed && OutConflicts)
 			{
 				OutConflicts->Add(Match);
@@ -483,23 +489,11 @@ namespace PCGExCollections
 		}
 	}
 
-	void FMaterialSwapTable::StageOutput(FPCGExContext* InContext, const FName InPinLabel) const
-	{
-		if (IsEmpty())
-		{
-			return;
-		}
-
-		UPCGParamData* SwapSet = InContext->ManagedObjects->New<UPCGParamData>();
-		PackToDataset(SwapSet);
-		InContext->StageOutput(SwapSet, InPinLabel, PCGExData::EStaging::Managed);
-	}
-
-	void FMaterialSwapTable::Forward(FPCGExContext* InContext)
+	void FMaterialSwapTable::ForwardInto(FPCGContext* InContext, UPCGParamData* InOutMap)
 	{
 		FMaterialSwapTable Incoming;
 		Incoming.UnpackPin(InContext, Labels::SourceCollectionMapLabel);
-		Incoming.StageOutput(InContext, Labels::OutputCollectionMapLabel);
+		Incoming.PackToDataset(InOutMap);
 	}
 
 	FSoftObjectPath FMaterialSwapTable::Resolve(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const FSoftObjectPath& InMaterial)

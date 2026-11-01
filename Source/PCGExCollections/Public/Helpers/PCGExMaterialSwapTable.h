@@ -13,7 +13,6 @@
 class UMaterialInterface;
 class UPCGParamData;
 struct FPCGContext;
-struct FPCGExContext;
 struct FSoftISMComponentDescriptor;
 struct FPCGExAssetCollectionEntry;
 struct FPCGExBaseTagFilterDetails;
@@ -68,9 +67,10 @@ namespace PCGExCollections
 	};
 
 	/**
-	 * Material swaps per staging layer, carried as their own param data on Map pins, after the Collection Map. A layer is a
-	 * list of stages applied in sequence (chained Staging : Swap nodes); within a stage a slot is looked up once (A->B with
-	 * B->A exchanges them) and a material's rules are tried in order: the first whose gate passes applies, A->A keeps A.
+	 * Material swaps per staging layer, written as rows of the Map pin's param data beside the Collection Map rows. A layer
+	 * is a list of stages applied in sequence (chained Staging : Swap nodes); within a stage a slot is looked up once (A->B
+	 * with B->A exchanges them) and a material's rules are tried in order: the first whose gate passes applies, A->A keeps A.
+	 * Earlier rules win everywhere (earlier rows, earlier tables), so merging tables into one param data changes nothing.
 	 */
 	class PCGEXCOLLECTIONS_API FMaterialSwapTable
 	{
@@ -106,8 +106,8 @@ namespace PCGExCollections
 
 		const FStages* Find(const FName InLayer) const { return Layers.Find(InLayer); }
 
-		/** Stage-wise merge, InOther's rules first: stage i merges with stage i, which is exact when one table's stages
-		 *  extend the other's. Materials MergeStage reports as overruled go to OutConflicts. */
+		/** Stage-wise merge behind this table's rules: stage i merges with stage i, which is exact when one table's stages
+		 *  extend the other's. Materials whose InOther rules lose to one already held go to OutConflicts. */
 		void Append(const FMaterialSwapTable& InOther, TSet<FSoftObjectPath>* OutConflicts = nullptr);
 
 		/** OutLayer becomes InLayer's stages followed by InStage (when it holds a rule). OutLayer's previous stages are
@@ -123,27 +123,24 @@ namespace PCGExCollections
 
 		static bool IsTableData(const UPCGParamData* InParamData);
 
-		/** Merges every table on the pin, later tables first. Warns once when rules overrule each other, and once when
+		/** Merges every table on the pin, earlier tables first. Warns once when rules overrule each other, and once when
 		 *  tables are rejected for a mistyped column. */
 		void UnpackPin(FPCGContext* InContext, FName InPinLabel);
 
 		/**
-		 * Merges one table, its rules first; materials whose rules got overruled (by this table, or within it) go to
-		 * OutConflicts. Columns beyond Match and Replace are optional. A column of another type than PackToDataset writes
-		 * rejects the whole table (OutMistypedColumn names it) rather than dropping rows or ungating a rule.
+		 * Merges one table behind the rules already held; materials whose rules lose (to an earlier table or row) go to
+		 * OutConflicts. Rows without a Match or Replace are skipped: Collection Map rows share the param data. Columns
+		 * beyond Match and Replace are optional. A column of another type than PackToDataset writes rejects the whole table
+		 * (OutMistypedColumn names it) rather than dropping rows or ungating a rule.
 		 */
 		EUnpackResult UnpackDataset(const UPCGParamData* InParamData, TSet<FSoftObjectPath>* OutConflicts = nullptr, FName* OutMistypedColumn = nullptr);
 
-		/** Writes every rule, sorted by layer, stage and match path, rules in priority order: identical tables write
-		 *  identical data. */
+		/** Appends every rule as rows of OutParamData, sorted by layer, stage and match path, rules in priority order:
+		 *  identical tables write identical rows. Other rows already there (the Collection Map's) are kept. */
 		void PackToDataset(UPCGParamData* OutParamData) const;
 
-		/** Stages the table as one param data on InPinLabel; nothing when empty. Stage it after the Collection Map: a
-		 *  single-data consumer keeps only the first item on a pin. */
-		void StageOutput(FPCGExContext* InContext, FName InPinLabel) const;
-
-		/** Merges the tables on the input Map pin and stages them on the output Map pin. Call after staging the Map. */
-		static void Forward(FPCGExContext* InContext);
+		/** Merges the tables on the input Map pin and appends their rows to InOutMap, the node's output Map. */
+		static void ForwardInto(FPCGContext* InContext, UPCGParamData* InOutMap);
 
 		/** InMaterial after every stage, for InEntry held by InHost (see FMaterialSwapGate::Passes). InMaterial itself when no
 		 *  rule applies. */

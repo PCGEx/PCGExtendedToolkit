@@ -817,7 +817,10 @@ namespace PCGExCollections
 		Seen.Reserve(NumExisting + InCollections.Num());
 		for (int64 i = 0; i < NumExisting; i++)
 		{
-			Seen.Add(static_cast<uint32>(CollectionIdx->GetValueFromItemKey(i)), CollectionPath->GetValueFromItemKey(i));
+			// Material swap rows share the set without a path; their default Idx must not claim a GUID.
+			FSoftObjectPath ExistingPath = CollectionPath->GetValueFromItemKey(i);
+			if (ExistingPath.IsNull()) { continue; }
+			Seen.Add(static_cast<uint32>(CollectionIdx->GetValueFromItemKey(i)), MoveTemp(ExistingPath));
 		}
 
 		for (const UPCGExAssetCollection* Collection : InCollections)
@@ -873,19 +876,11 @@ namespace PCGExCollections
 	bool FPickUnpacker::UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet)
 	{
 		const UPCGMetadata* Metadata = InAttributeSet->Metadata;
-		TUniquePtr<FPCGAttributeAccessorKeysEntries> Keys = MakeUnique<FPCGAttributeAccessorKeysEntries>(Metadata);
+		const FPCGAttributeAccessorKeysEntries Keys(Metadata);
+		const int32 NumEntries = Keys.GetNum();
 
-		const int32 NumEntries = Keys->GetNum();
-		if (NumEntries == 0)
-		{
-			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection map is empty."));
-			return false;
-		}
-
-		CollectionMap.Reserve(CollectionMap.Num() + NumEntries);
-
-		const FPCGMetadataAttribute<int32>* CollectionIdx = InAttributeSet->Metadata->GetConstTypedAttribute<int32>(Labels::Tag_CollectionIdx);
-		const FPCGMetadataAttribute<FSoftObjectPath>* CollectionPath = InAttributeSet->Metadata->GetConstTypedAttribute<FSoftObjectPath>(Labels::Tag_CollectionPath);
+		const FPCGMetadataAttribute<int32>* CollectionIdx = Metadata->GetConstTypedAttribute<int32>(Labels::Tag_CollectionIdx);
+		const FPCGMetadataAttribute<FSoftObjectPath>* CollectionPath = Metadata->GetConstTypedAttribute<FSoftObjectPath>(Labels::Tag_CollectionPath);
 
 		if (!CollectionIdx || !CollectionPath)
 		{
@@ -893,12 +888,33 @@ namespace PCGExCollections
 			return false;
 		}
 
+		// Not keyed on Idx 0: GUIDs are hashes, so 0 is legal. Material swap rows sharing the set have no path.
+		TArray<int32> RowKeys;
+		TArray<FSoftObjectPath> RowPaths;
+		RowKeys.Reserve(NumEntries);
+		RowPaths.Reserve(NumEntries);
+		for (int32 i = 0; i < NumEntries; i++)
+		{
+			FSoftObjectPath Path = CollectionPath->GetValueFromItemKey(i);
+			if (Path.IsNull()) { continue; }
+			RowKeys.Add(i);
+			RowPaths.Add(MoveTemp(Path));
+		}
+
+		if (RowPaths.IsEmpty())
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection map is empty."));
+			return false;
+		}
+
+		CollectionMap.Reserve(CollectionMap.Num() + RowPaths.Num());
+
 		{
 			TSharedPtr<TSet<FSoftObjectPath>> CollectionPaths = MakeShared<TSet<FSoftObjectPath>>();
-
-			for (int32 i = 0; i < NumEntries; i++)
+			CollectionPaths->Reserve(RowPaths.Num());
+			for (const FSoftObjectPath& Path : RowPaths)
 			{
-				CollectionPaths->Add(CollectionPath->GetValueFromItemKey(i));
+				CollectionPaths->Add(Path);
 			}
 
 #if WITH_EDITOR
@@ -920,31 +936,25 @@ namespace PCGExCollections
 
 		// Load PCG Data's merge runs this on a worker: collections come from the handles that loaded them. Transient
 		// collections (Build Asset Collection) are never loaded, so they take the guarded resolve.
-		TArray<FSoftObjectPath> RowPaths;
-		RowPaths.SetNum(NumEntries);
-		for (int32 i = 0; i < NumEntries; i++)
-		{
-			RowPaths[i] = CollectionPath->GetValueFromItemKey(i);
-		}
-
 		TArray<UObject*> RowCollections;
 		PCGExHelpers::ResolveObjects_AnyThread(CollectionsHandles, RowPaths, RowCollections);
 
-		for (int32 i = 0; i < NumEntries; i++)
+		// An unresolvable row is reported, never allowed to drop the rows after it.
+		int32 NumUnresolved = 0;
+		FSoftObjectPath FirstUnresolved;
+		for (int32 r = 0; r < RowPaths.Num(); r++)
 		{
-			int32 Idx = CollectionIdx->GetValueFromItemKey(i);
-
-			UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(RowCollections[i]);
-
+			UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(RowCollections[r]);
 			if (!Collection)
 			{
-				PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Some collections could not be loaded."));
-				return false;
+				if (NumUnresolved++ == 0) { FirstUnresolved = RowPaths[r]; }
+				continue;
 			}
 
-			if (CollectionMap.Contains(Idx))
+			const uint32 Idx = static_cast<uint32>(CollectionIdx->GetValueFromItemKey(RowKeys[r]));
+			if (UPCGExAssetCollection* const* Existing = CollectionMap.Find(Idx))
 			{
-				if (CollectionMap[Idx] == Collection)
+				if (*Existing == Collection)
 				{
 					continue;
 				}
@@ -955,6 +965,12 @@ namespace PCGExCollections
 
 			CollectionMap.Add(Idx, Collection);
 			NumUniqueEntries += Collection->GetValidEntryNum();
+		}
+
+		if (NumUnresolved > 0)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("{0} collection(s) on the Map could not be loaded (first: '{1}'); their picks won't resolve."), FText::AsNumber(NumUnresolved), FText::FromString(FirstUnresolved.ToString())));
+			return false;
 		}
 
 		return true;

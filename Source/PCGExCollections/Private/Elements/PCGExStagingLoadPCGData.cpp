@@ -497,7 +497,7 @@ TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties(
 
 	if (bMergeEmbeddedCollectionMaps)
 	{
-		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets, followed by any material swap table the input Map pin carried.", Normal)
+		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets, with any material swap rows the input Map pin carried.", Normal)
 	}
 
 	return PinProperties;
@@ -1236,9 +1236,9 @@ namespace PCGExPCGDataAssetLoader
 
 					TempUnpacker.RegisterCollectionsTo(*Context->MergedMapPacker);
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
+					PCGExCollections::FMaterialSwapTable::ForwardInto(Context, MergedMapData);
 
 					Context->StageOutput(MergedMapData, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
-					PCGExCollections::FMaterialSwapTable::Forward(Context);
 				}
 			}
 

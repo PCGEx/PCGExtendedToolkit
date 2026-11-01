@@ -174,7 +174,7 @@ struct FPCGExStagingSwapContext final : FPCGExPointsProcessorContext
 	/** Material swap tables arriving on the input Map pin. */
 	PCGExCollections::FMaterialSwapTable IncomingMaterialSwaps;
 
-	/** Incoming tables with this node's swaps chained onto the output layer; staged after the Map. */
+	/** Incoming tables with this node's swaps chained onto the output layer; written into the output Map's rows. */
 	PCGExCollections::FMaterialSwapTable OutputMaterialSwaps;
 
 	/** OutputMaterialSwaps' identity for the output layer (0 = no swaps), stamped on every output point data. */
