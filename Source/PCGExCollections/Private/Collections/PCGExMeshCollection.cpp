@@ -389,7 +389,7 @@ void FPCGExMeshCollectionEntry::SetAssetPath(const FSoftObjectPath& InPath)
 	FPCGExAssetCollectionEntry::SetAssetPath(InPath);
 	StaticMesh = TSoftObjectPtr<UStaticMesh>(InPath);
 	ISMDescriptor.StaticMesh = StaticMesh;
-	StagedMaterials.Reset(); // the previous mesh's slots
+	StagedMaterials.Reset();
 	StagedMaterialsSource.Reset();
 }
 

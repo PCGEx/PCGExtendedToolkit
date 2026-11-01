@@ -50,8 +50,8 @@ struct FPCGExStagingSwapVariantLayer
  * Swap staged entry picks to variant collection entries. Rewrites per-point pick hashes
  * (Tag_EntryIdx) from (SourceCollectionGUID, RawIndex) to the variant's (GUID, RawIndex)
  * using the variant's baked mapping, and emits an updated Collection Map that includes the
- * variant collections. Points whose entry has no override pass through untouched. The variants' material swaps follow
- * the Map on the same pin as a material swap table, applied by the staged mesh selector.
+ * variant collections. Points whose entry has no override pass through untouched. The variants'
+ * material swaps follow the Map on its pin as a material swap table, applied by the staged mesh selector.
  * Can read one staging layer and write another (Output Staging Layer), deriving a complete
  * new layer -- unswapped points then copy their source pick instead of passing through.
  *
@@ -137,8 +137,7 @@ public:
 	FName GetOutputStagingLayer() const { return bOutputToDifferentLayer ? OutputStagingLayer : StagingLayer; }
 	FName GetOutputEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(GetOutputStagingLayer()); }
 
-	/** The slots this node processes: Variant Collections, then Additional Variant as a constant slot when set. Either
-	 *  may be empty on its own. */
+	/** The slots this node processes: Variant Collections, then Additional Variant (when set) as a constant slot. */
 	void GetVariantSlots(TArray<FPCGExInputShorthandNameSoftObjectPath>& OutSlots) const;
 
 	/** Re-pick the micro cache selection of swapped points. */

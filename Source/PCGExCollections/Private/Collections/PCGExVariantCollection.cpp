@@ -9,6 +9,21 @@
 
 PCGEX_REGISTER_COLLECTION_TYPE(Variant, UPCGExVariantCollection, FPCGExAssetCollectionEntry, "Variant Collection", Base)
 
+#pragma region FPCGExMaterialSwap
+
+void FPCGExMaterialSwap::ToRow(PCGExCollections::FMaterialSwapRow& OutRow, int32& InOutNumAttributeClauses) const
+{
+	OutRow.Match = MatchMaterial.ToSoftObjectPath();
+	OutRow.Rule.Replacement = Replacement.ToSoftObjectPath();
+	OutRow.Rule.Gate = bUseTagFilter
+		                   ? PCGExCollections::FMaterialSwapGate::FromConstants(TagFilter, InOutNumAttributeClauses)
+		                   : PCGExCollections::FMaterialSwapGate();
+}
+
+#pragma endregion
+
+#pragma region UPCGExVariantCollection
+
 bool UPCGExVariantCollection::IsValidIndex(const int32 InIndex) const
 {
 	return InIndex >= 0 && InIndex < NumEntries();
@@ -256,12 +271,7 @@ void UPCGExVariantCollection::GetMaterialSwaps(TArray<PCGExCollections::FMateria
 	for (const FPCGExMaterialSwap& Swap : MaterialSwaps)
 	{
 		PCGExCollections::FMaterialSwapRow Row;
-		Row.Match = Swap.MatchMaterial.ToSoftObjectPath();
-		Row.Rule.Replacement = Swap.Replacement.ToSoftObjectPath();
-		if (Swap.bUseTagFilter)
-		{
-			Row.Rule.Gate = PCGExCollections::FMaterialSwapGate::FromConstants(Swap.TagFilter, OutNumAttributeClauses);
-		}
+		Swap.ToRow(Row, OutNumAttributeClauses);
 
 		const FTable::EAddResult Result = FTable::AddRule(Reachable, Row.Match, Row.Rule);
 		const bool bUnreachable = Result == FTable::EAddResult::Redundant || Result == FTable::EAddResult::Shadowed;
@@ -419,3 +429,5 @@ const UScriptStruct* UPCGExVariantCollection::EDITOR_GetEntryScriptStruct(const 
 	return Payload ? Payload->GetScriptStruct() : nullptr;
 }
 #endif
+
+#pragma endregion

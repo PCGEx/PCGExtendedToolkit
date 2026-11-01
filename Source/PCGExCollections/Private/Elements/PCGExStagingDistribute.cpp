@@ -22,6 +22,7 @@
 #include "Factories/PCGExFactories.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Helpers/PCGExSocketHelpers.h"
 #include "Selectors/PCGExSelectorClassic.h"
@@ -273,9 +274,6 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 			PCGE_LOG(Error, GraphAndLog, FTEXT("Could not rebuild a valid asset mapping from the provided map."));
 			return false;
 		}
-
-		// Distribute swaps no material: incoming tables pass through untouched.
-		Context->IncomingMaterialSwaps.UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
 
 		if (Settings->RedistributionMode == EPCGExRedistributionMode::MicroCache)
 		{
@@ -587,14 +585,8 @@ bool FPCGExAssetStagingElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 
 		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 
-		// After the Map: a single-data consumer keeps only the first item on the pin.
-		if (!Context->IncomingMaterialSwaps.IsEmpty())
-		{
-			UPCGParamData* SwapSet = Context->ManagedObjects->New<UPCGParamData>();
-			Context->IncomingMaterialSwaps.PackToDataset(SwapSet);
-
-			Context->StageOutput(SwapSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
-		}
+		// Distribute swaps no material: incoming tables travel on, after the Map.
+		PCGExCollections::FMaterialSwapTable::Forward(Context);
 	}
 
 	if (Context->SocketsCollection)

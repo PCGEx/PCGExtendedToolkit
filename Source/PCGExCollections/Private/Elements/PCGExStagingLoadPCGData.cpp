@@ -1238,17 +1238,7 @@ namespace PCGExPCGDataAssetLoader
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
 
 					Context->StageOutput(MergedMapData, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
-
-					// Upstream material swaps keep travelling with the map, after it: a single-data consumer keeps the first item.
-					PCGExCollections::FMaterialSwapTable IncomingSwaps;
-					IncomingSwaps.UnpackPin(Context, PCGExCollections::Labels::SourceCollectionMapLabel);
-					if (!IncomingSwaps.IsEmpty())
-					{
-						UPCGParamData* SwapSet = Context->ManagedObjects->New<UPCGParamData>();
-						IncomingSwaps.PackToDataset(SwapSet);
-
-						Context->StageOutput(SwapSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
-					}
+					PCGExCollections::FMaterialSwapTable::Forward(Context);
 				}
 			}
 

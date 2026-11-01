@@ -101,10 +101,13 @@ struct PCGEXCOLLECTIONS_API FPCGExMaterialSwap
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(InlineEditConditionToggle))
 	bool bUseTagFilter = false;
 
-	/** When enabled, the swap only applies to entries whose tags pass; a material's rows are tried in order, the first passing
-	 *  wins. Clauses are constants (Attribute reads nothing); the Collection tag source reads the entry's collection. */
+	/** When enabled, the swap only applies to entries whose tags pass; a material's rows are tried in order, the first
+	 *  passing wins. Clauses are constants: one set to Attribute reads nothing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(EditCondition="bUseTagFilter"))
 	FPCGExBaseTagFilterDetails TagFilter;
+
+	/** This swap as a table row; tag filter clauses set to Attribute are counted in InOutNumAttributeClauses. */
+	void ToRow(PCGExCollections::FMaterialSwapRow& OutRow, int32& InOutNumAttributeClauses) const;
 };
 
 /**
@@ -146,18 +149,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = Settings)
 	TArray<FPCGExVariantPathOverride> PathOverrides;
 
-	/** Material swaps the staged mesh selector applies to everything spawned past the Staging : Swap node using this
-	 *  variant, whatever its source. A material's rows are tried in order; the first whose tag filter passes applies
-	 *  (a row replacing a material with itself keeps it). */
+	/** Material swaps the staged mesh selector applies to everything spawned past a Staging : Swap using this variant,
+	 *  whatever its source. A material's rows are tried in order, the first passing applies; A->A keeps A. */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	TArray<FPCGExMaterialSwap> MaterialSwaps;
 
-	/**
-	 * MaterialSwaps as table rows, in declaration order. Rows that can never apply (after an unfiltered row for the same
-	 * material, or one with the same filter) are skipped and counted in OutNumUnreachable; tag filter clauses set to
-	 * Attribute read nothing and are counted in OutNumAttributeClauses. OutUnreachable, when given, flags each
-	 * MaterialSwaps row that way.
-	 */
+	/** MaterialSwaps as table rows, in order, minus the rows that can never apply (counted, and flagged per row in
+	 *  OutUnreachable when given). Clauses set to Attribute are counted in OutNumAttributeClauses. */
 	void GetMaterialSwaps(TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable = nullptr) const;
 
 	//~ UPCGExAssetCollection interface -- flattened view over Sources[*].Overrides[*].Entry.

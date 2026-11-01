@@ -68,11 +68,17 @@ namespace PCGExCollectionEditorUtils
 			       : FText::FromString(ShortName);
 	}
 
-	TSharedRef<SWidget> MakeAssetPickerMenu(FAssetPickerConfig&& PickerConfig)
+	TSharedRef<SWidget> MakeAssetPickerMenu(FAssetPickerConfig&& PickerConfig, const UClass* InAllowedClass)
 	{
 		PickerConfig.SelectionMode = ESelectionMode::Single;
 		PickerConfig.InitialAssetViewType = EAssetViewType::List;
 		PickerConfig.bAllowNullSelection = false;
+
+		if (InAllowedClass)
+		{
+			PickerConfig.Filter.bRecursiveClasses = true;
+			PickerConfig.Filter.ClassPaths.Add(InAllowedClass->GetClassPathName());
+		}
 
 		FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
 

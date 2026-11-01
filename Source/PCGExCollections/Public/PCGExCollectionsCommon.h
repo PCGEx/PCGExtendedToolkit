@@ -154,10 +154,16 @@ namespace PCGExCollections::Labels
 	const FName Tag_CollectionIdx = FName(PCGExCommon::PCGExPrefix + TEXT("Collection/Idx"));
 	const FName Tag_EntryIdx = FName(PCGExCommon::PCGExPrefix + TEXT("CollectionEntry"));
 
+	/** A per-staging-layer attribute name: InBase for the default (None) layer, InBase/<layer> otherwise. */
+	inline FName LayeredName(const FName InBase, const FName InLayer)
+	{
+		return InLayer.IsNone() ? InBase : FName(InBase.ToString() + TEXT("/") + InLayer.ToString());
+	}
+
 	/** Staged entry-hash attribute name for a staging layer. None = bare Tag_EntryIdx (legacy name). */
 	inline FName EntryIdxName(const FName InLayer)
 	{
-		return InLayer.IsNone() ? Tag_EntryIdx : FName(Tag_EntryIdx.ToString() + TEXT("/") + InLayer.ToString());
+		return LayeredName(Tag_EntryIdx, InLayer);
 	}
 
 	/** True for the staged entry-hash attribute of any staging layer (the inverse of EntryIdxName). */
@@ -187,7 +193,7 @@ namespace PCGExCollections::Labels
 	/** @Data attribute stamping a staging layer's swap table identity on points. None = bare Tag_MaterialSwapId. */
 	inline FName MaterialSwapIdName(const FName InLayer)
 	{
-		return InLayer.IsNone() ? Tag_MaterialSwapId : FName(Tag_MaterialSwapId.ToString() + TEXT("/") + InLayer.ToString());
+		return LayeredName(Tag_MaterialSwapId, InLayer);
 	}
 
 	const FName CollectionMapPin = TEXT("CollectionMap");

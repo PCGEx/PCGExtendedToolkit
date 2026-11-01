@@ -42,6 +42,62 @@ bool UPCGExManagedAssetCollection::Release(bool bHardRelease, TSet<TSoftObjectPt
 
 #pragma endregion
 
+#pragma region PCGExBuildAssetCollection
+
+namespace PCGExBuildAssetCollection
+{
+	bool TryGetPathPinTypesID(const UPCGPin* InPin, FPCGDataTypeIdentifier& OutId)
+	{
+		// UPCGSettings::GetCurrentPinTypesID dereferences InPin unconditionally (PCGSettings.cpp, its tail).
+		if (!InPin)
+		{
+			OutId = FPCGDataTypeInfoParam::AsId();
+			return true;
+		}
+
+		if (!InPin->IsOutputPin())
+		{
+			return false;
+		}
+
+		OutId = FPCGDataTypeInfoParam::AsId();
+		OutId.CustomSubtype = static_cast<int32>(EPCGMetadataTypes::SoftObjectPath);
+		return true;
+	}
+
+	bool CompleteWithPath(FPCGExContext* InContext, const FName InAttributeName, const FSoftObjectPath& InPath)
+	{
+		UPCGParamData* OutData = InContext->ManagedObjects->New<UPCGParamData>();
+		check(OutData && OutData->Metadata);
+
+		FPCGMetadataAttribute<FSoftObjectPath>* PathAttr = OutData->Metadata->CreateAttribute<FSoftObjectPath>(
+			InAttributeName, FSoftObjectPath(), /*bAllowsInterpolation=*/false, /*bOverrideParent=*/false);
+
+		const int64 EntryKey = OutData->Metadata->AddEntry();
+		if (PathAttr) { PathAttr->SetValue(EntryKey, InPath); }
+
+		InContext->StageOutput(OutData, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::Managed);
+		InContext->Done();
+		return InContext->TryComplete();
+	}
+
+	FPCGCrc ComputeReuseCrc(const FString& InConfigId, const TConstArrayView<const UPCGParamData*> InInputs)
+	{
+		// A 32-bit collision only risks reusing a stale collection until the next input change, never a crash.
+		uint32 Hash = GetTypeHash(InConfigId);
+		for (const UPCGParamData* Input : InInputs)
+		{
+			if (const FPCGCrc DataCrc = Input->GetOrComputeCrc(/*bFullDataCrc=*/true); DataCrc.IsValid())
+			{
+				Hash = HashCombine(Hash, DataCrc.GetValue());
+			}
+		}
+		return FPCGCrc(Hash);
+	}
+}
+
+#pragma endregion
+
 #pragma region UPCGExBuildAssetCollectionSettings
 
 TArray<FPCGPinProperties> UPCGExBuildAssetCollectionSettings::InputPinProperties() const
@@ -60,20 +116,8 @@ TArray<FPCGPinProperties> UPCGExBuildAssetCollectionSettings::OutputPinPropertie
 
 FPCGDataTypeIdentifier UPCGExBuildAssetCollectionSettings::GetCurrentPinTypesID(const UPCGPin* InPin) const
 {
-	// Super dereferences InPin unconditionally (PCGSettings.cpp, GetCurrentPinTypesID tail).
-	if (!InPin) { return FPCGDataTypeInfoParam::AsId(); }
-
-	if (InPin->IsOutputPin())
-	{
-		// Tag the subtype so the output type-matches soft-path override pins (Distribute's SourceCollection/Constant).
-		FPCGDataTypeIdentifier Id = FPCGDataTypeInfoParam::AsId();
-		Id.CustomSubtype = static_cast<int32>(EPCGMetadataTypes::SoftObjectPath);
-		return Id;
-	}
-
-	// Super, not a bare Param id: each override pin carries its type in AllowedTypes.CustomSubtype
-	// (PCGSettings.cpp, FillOverridableParamsPins), which an untyped Param answer would erase.
-	return Super::GetCurrentPinTypesID(InPin);
+	FPCGDataTypeIdentifier Id;
+	return PCGExBuildAssetCollection::TryGetPathPinTypesID(InPin, Id) ? Id : Super::GetCurrentPinTypesID(InPin);
 }
 
 PCGEX_INITIALIZE_ELEMENT(BuildAssetCollection)
@@ -92,25 +136,9 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 	check(IsInGameThread()); // guaranteed by CanExecuteOnlyOnMainThread
 
 	// Emit the resolved path (empty when the build can't happen).
-	auto OutputPath = [&](const FSoftObjectPath& InPath)
-	{
-		UPCGParamData* OutData = Context->ManagedObjects->New<UPCGParamData>();
-		check(OutData && OutData->Metadata);
-
-		FPCGMetadataAttribute<FSoftObjectPath>* PathAttr = OutData->Metadata->CreateAttribute<FSoftObjectPath>(
-			Settings->OutputAttributeName, FSoftObjectPath(), /*bAllowsInterpolation=*/false, /*bOverrideParent=*/false);
-
-		const int64 EntryKey = OutData->Metadata->AddEntry();
-		if (PathAttr) { PathAttr->SetValue(EntryKey, InPath); }
-
-		Context->StageOutput(OutData, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::Managed);
-	};
-
 	auto CompleteWith = [&](const FSoftObjectPath& InPath) -> bool
 	{
-		OutputPath(InPath);
-		Context->Done();
-		return Context->TryComplete();
+		return PCGExBuildAssetCollection::CompleteWithPath(Context, Settings->OutputAttributeName, InPath);
 	};
 
 	// No asset path attribute -> nothing to build.
@@ -140,15 +168,8 @@ bool FPCGExBuildAssetCollectionElement::AdvanceWork(FPCGExContext* InContext, co
 		return CompleteWith(FSoftObjectPath());
 	}
 
-	// Reuse key = config string + the input's full data CRC. A 32-bit collision only risks reusing a stale
-	// collection until the next input change, never a crash.
 	const FString ConfigId = Settings->AttributeSetDetails.GetConfigId();
-	uint32 Hash = GetTypeHash(ConfigId);
-	if (const FPCGCrc DataCrc = InParam->GetOrComputeCrc(/*bFullDataCrc=*/true); DataCrc.IsValid())
-	{
-		Hash = HashCombine(Hash, DataCrc.GetValue());
-	}
-	const FPCGCrc Crc(Hash);
+	const FPCGCrc Crc = PCGExBuildAssetCollection::ComputeReuseCrc(ConfigId, MakeConstArrayView(&InParam, 1));
 
 	// A rebuild always writes; a reuse hit writes only when the target is missing, so identical input never
 	// re-writes and deleting the saved asset re-creates it. No editor guard: the helpers no-op there.

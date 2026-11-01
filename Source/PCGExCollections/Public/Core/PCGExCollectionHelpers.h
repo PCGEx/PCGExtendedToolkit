@@ -98,11 +98,9 @@ namespace PCGExCollectionHelpers
 		bool bBuildStaging);
 
 	/**
-	 * Append one MaterialSwaps row per attribute-set row (path columns: Soft Object Path or String). With InTagFilter, each
-	 * row is gated: a clause is its constant, or an attribute read per row (Name or String). Skipped: rows with an empty
-	 * path, rows an earlier one (on the variant or above in the set) makes unreachable, and replacements the asset registry
-	 * knows are not materials (unknown paths and redirectors are kept). Returns the number appended, or -1 when a column is
-	 * missing or mistyped (logged).
+	 * Appends one MaterialSwaps row per reachable attribute-set row (paths: Soft Object Path or String; with InTagFilter,
+	 * each clause is its constant or a per-row Name / String). OutSkipped counts empty paths, unreadable tags, unreachable
+	 * rows and replacements the registry knows are not materials. Returns the number appended, -1 on a bad column (logged).
 	 */
 	PCGEXCOLLECTIONS_API
 	int32 AppendMaterialSwapsFromAttributeSet(

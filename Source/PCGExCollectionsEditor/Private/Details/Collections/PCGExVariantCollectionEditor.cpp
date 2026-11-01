@@ -4,7 +4,6 @@
 #include "Details/Collections/PCGExVariantCollectionEditor.h"
 
 #include "AssetThumbnail.h"
-#include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
@@ -15,7 +14,6 @@
 #include "Framework/Notifications/NotificationManager.h"
 #include "Materials/MaterialInterface.h"
 #include "Styling/SlateIconFinder.h"
-#include "Widgets/Layout/SBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 #include "Collections/PCGExVariantCollection.h"
@@ -113,14 +111,12 @@ void FPCGExVariantCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Too
 		FOnGetContent::CreateSP(this, &FPCGExVariantCollectionEditor::MakeAddMaterialSwapMenu),
 		LOCTEXT("AddMaterialSwap", "Add Material Swap"),
 		LOCTEXT("AddMaterialSwapTooltip", "Add a material swap: every spawned mesh slot rendering the picked material renders the row's replacement instead (staged mesh selector). A material's rows are tried in order."),
-		FSlateIconFinder::FindIconForClass(UMaterialInterface::StaticClass()));
+		FSlateIconFinder::FindIcon("ClassIcon.Material")); // No ClassIcon.MaterialInterface is registered.
 }
 
 TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddSourceMenu()
 {
 	FAssetPickerConfig PickerConfig;
-	PickerConfig.Filter.bRecursiveClasses = true;
-	PickerConfig.Filter.ClassPaths.Add(UPCGExAssetCollection::StaticClass()->GetClassPathName());
 	PickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &FPCGExVariantCollectionEditor::OnSourceAssetPicked);
 	PickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda(
 		[WeakEdited = EditedCollection](const FAssetData& Asset)
@@ -137,7 +133,7 @@ TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddSourceMenu()
 			return false;
 		});
 
-	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig));
+	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig), UPCGExAssetCollection::StaticClass());
 }
 
 void FPCGExVariantCollectionEditor::OnSourceAssetPicked(const FAssetData& AssetData)
@@ -163,11 +159,9 @@ TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddAssetSwapMenu()
 TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddMaterialSwapMenu()
 {
 	FAssetPickerConfig PickerConfig;
-	PickerConfig.Filter.bRecursiveClasses = true;
-	PickerConfig.Filter.ClassPaths.Add(UMaterialInterface::StaticClass()->GetClassPathName());
 	PickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &FPCGExVariantCollectionEditor::OnMaterialSwapPicked);
 
-	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig));
+	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig), UMaterialInterface::StaticClass());
 }
 
 void FPCGExVariantCollectionEditor::OnMaterialSwapPicked(const FAssetData& AssetData)

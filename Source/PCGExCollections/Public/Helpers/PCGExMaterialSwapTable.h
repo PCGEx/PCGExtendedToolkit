@@ -13,6 +13,7 @@
 class UMaterialInterface;
 class UPCGParamData;
 struct FPCGContext;
+struct FPCGExContext;
 struct FSoftISMComponentDescriptor;
 struct FPCGExAssetCollectionEntry;
 struct FPCGExBaseTagFilterDetails;
@@ -20,9 +21,9 @@ struct FPCGExBaseTagFilterDetails;
 namespace PCGExCollections
 {
 	/**
-	 * Entry-tag gate of one swap rule, from constant FPCGExBaseTagFilterDetails clause values. The authored values travel
-	 * in the table; Lists, their canonical parse (sorted, deduplicated), is what Passes, SameAs and the layer id read.
-	 * Build gates through Make / FromConstants, which keep the two in sync. An empty gate lets every entry through.
+	 * Entry-tag gate of one swap rule. The authored clause values travel in the table; Lists, their canonical parse
+	 * (sorted, deduplicated), is what Passes, SameAs and the layer id read, so build gates through Make / FromConstants.
+	 * An empty gate passes every entry.
 	 */
 	struct PCGEXCOLLECTIONS_API FMaterialSwapGate
 	{
@@ -67,10 +68,9 @@ namespace PCGExCollections
 	};
 
 	/**
-	 * Material swaps per staging layer, carried as their own param data on Map pins next to the Collection Map
-	 * (Labels::Tag_MaterialSwap...). A layer is a list of stages applied one after the other (chained Staging : Swap nodes);
-	 * within a stage a slot is looked up once, so A->B with B->A exchanges the two, and a material's rules are tried in
-	 * priority order: the first whose gate passes for the entry applies. An identity rule (A->A) keeps the material.
+	 * Material swaps per staging layer, carried as their own param data on Map pins, after the Collection Map. A layer is a
+	 * list of stages applied in sequence (chained Staging : Swap nodes); within a stage a slot is looked up once (A->B with
+	 * B->A exchanges them) and a material's rules are tried in order: the first whose gate passes applies, A->A keeps A.
 	 */
 	class PCGEXCOLLECTIONS_API FMaterialSwapTable
 	{
@@ -114,6 +114,9 @@ namespace PCGExCollections
 		 *  discarded, other layers kept. */
 		void ChainLayer(FName InLayer, FName OutLayer, const FStage& InStage);
 
+		/** The table's canonical path order: lowercased, so neither a path's casing nor the build's moves it. */
+		static void SortCanonical(TArray<FSoftObjectPath>& InOutPaths);
+
 		/** Content identity of a layer, stable across sessions and platforms, blind to letter case; 0 when the layer has no
 		 *  rule. */
 		uint32 GetLayerId(FName InLayer) const;
@@ -125,10 +128,9 @@ namespace PCGExCollections
 		void UnpackPin(FPCGContext* InContext, FName InPinLabel);
 
 		/**
-		 * Merges one table, its rules first. Materials whose rules got overruled, by this table or within it (an earlier row
-		 * wins), go to OutConflicts. Columns other than Match and Replace are optional (default layer, stage 0, no gate);
-		 * stage values only order the stages. A column with another type than PackToDataset writes rejects the whole
-		 * table (OutMistypedColumn names it): reading it as absent would drop rows, or turn a gate into no gate.
+		 * Merges one table, its rules first; materials whose rules got overruled (by this table, or within it) go to
+		 * OutConflicts. Columns beyond Match and Replace are optional. A column of another type than PackToDataset writes
+		 * rejects the whole table (OutMistypedColumn names it) rather than dropping rows or ungating a rule.
 		 */
 		EUnpackResult UnpackDataset(const UPCGParamData* InParamData, TSet<FSoftObjectPath>* OutConflicts = nullptr, FName* OutMistypedColumn = nullptr);
 
@@ -136,14 +138,19 @@ namespace PCGExCollections
 		 *  identical data. */
 		void PackToDataset(UPCGParamData* OutParamData) const;
 
+		/** Stages the table as one param data on InPinLabel; nothing when empty. Stage it after the Collection Map: a
+		 *  single-data consumer keeps only the first item on a pin. */
+		void StageOutput(FPCGExContext* InContext, FName InPinLabel) const;
+
+		/** Merges the tables on the input Map pin and stages them on the output Map pin. Call after staging the Map. */
+		static void Forward(FPCGExContext* InContext);
+
 		/** InMaterial after every stage, for InEntry held by InHost (see FMaterialSwapGate::Passes). InMaterial itself when no
 		 *  rule applies. */
 		static FSoftObjectPath Resolve(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const FSoftObjectPath& InMaterial);
 
-		/**
-		 * Swaps the descriptor's slots and overlay for InEntry held by InHost. A slot's current material is its override, else
-		 * InMeshMaterials' entry; OverrideMaterials grows only to write a swap. Returns true when anything changed.
-		 */
+		/** Swaps the descriptor's slots and overlay for InEntry held by InHost. A slot's current material is its override,
+		 *  else InMeshMaterials'; OverrideMaterials only grows. True when anything changed. */
 		static bool Apply(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TConstArrayView<TSoftObjectPtr<UMaterialInterface>> InMeshMaterials, FSoftISMComponentDescriptor& InOutDescriptor);
 
 	private:

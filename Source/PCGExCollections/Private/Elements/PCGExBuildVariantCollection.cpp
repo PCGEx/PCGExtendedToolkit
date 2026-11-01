@@ -8,13 +8,10 @@
 #include "PCGPin.h"
 
 #include "Collections/PCGExVariantCollection.h"
-#include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExCollectionHelpers.h"
 #include "Elements/PCGExBuildAssetCollection.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Metadata/PCGMetadata.h"
-#include "Metadata/PCGMetadataAttribute.h"
-#include "Metadata/PCGMetadataAttributeTpl.h"
 
 #include "PCGExCollectionsCommon.h"
 
@@ -39,18 +36,8 @@ TArray<FPCGPinProperties> UPCGExBuildVariantCollectionSettings::OutputPinPropert
 
 FPCGDataTypeIdentifier UPCGExBuildVariantCollectionSettings::GetCurrentPinTypesID(const UPCGPin* InPin) const
 {
-	// Super dereferences InPin unconditionally (PCGSettings.cpp, GetCurrentPinTypesID tail).
-	if (!InPin) { return FPCGDataTypeInfoParam::AsId(); }
-
-	if (InPin->IsOutputPin())
-	{
-		FPCGDataTypeIdentifier Id = FPCGDataTypeInfoParam::AsId();
-		Id.CustomSubtype = static_cast<int32>(EPCGMetadataTypes::SoftObjectPath);
-		return Id;
-	}
-
-	// Super, not a bare Param id: each override pin carries its type in AllowedTypes.CustomSubtype.
-	return Super::GetCurrentPinTypesID(InPin);
+	FPCGDataTypeIdentifier Id;
+	return PCGExBuildAssetCollection::TryGetPathPinTypesID(InPin, Id) ? Id : Super::GetCurrentPinTypesID(InPin);
 }
 
 PCGEX_INITIALIZE_ELEMENT(BuildVariantCollection)
@@ -71,18 +58,7 @@ bool FPCGExBuildVariantCollectionElement::AdvanceWork(FPCGExContext* InContext, 
 	// Emit the resolved path (empty when the build can't happen).
 	auto CompleteWith = [&](const FSoftObjectPath& InPath) -> bool
 	{
-		UPCGParamData* OutData = Context->ManagedObjects->New<UPCGParamData>();
-		check(OutData && OutData->Metadata);
-
-		FPCGMetadataAttribute<FSoftObjectPath>* PathAttr = OutData->Metadata->CreateAttribute<FSoftObjectPath>(
-			Settings->OutputAttributeName, FSoftObjectPath(), /*bAllowsInterpolation=*/false, /*bOverrideParent=*/false);
-
-		const int64 EntryKey = OutData->Metadata->AddEntry();
-		if (PathAttr) { PathAttr->SetValue(EntryKey, InPath); }
-
-		Context->StageOutput(OutData, PCGPinConstants::DefaultOutputLabel, PCGExData::EStaging::Managed);
-		Context->Done();
-		return Context->TryComplete();
+		return PCGExBuildAssetCollection::CompleteWithPath(Context, Settings->OutputAttributeName, InPath);
 	};
 
 	TArray<const UPCGParamData*> Inputs;
@@ -109,9 +85,8 @@ bool FPCGExBuildVariantCollectionElement::AdvanceWork(FPCGExContext* InContext, 
 		return CompleteWith(FSoftObjectPath());
 	}
 
-	// Reuse key = settings + every input's full data CRC, in pin order. The prefix keeps it apart from Build Asset
-	// Collection's resources, which share the managed resource class.
-	// Names are length-prefixed: tag constants are free text, so a delimiter inside one must not move a field boundary.
+	// The prefix keeps the key apart from Build Asset Collection's resources (same resource class). Names are
+	// length-prefixed: tag constants are free text, so a delimiter inside one must not move a field boundary.
 	TStringBuilder<512> ConfigBuilder;
 	auto AppendName = [&ConfigBuilder](const FName InName)
 	{
@@ -135,15 +110,7 @@ bool FPCGExBuildVariantCollectionElement::AdvanceWork(FPCGExContext* InContext, 
 		ConfigBuilder.Appendf(TEXT("|%d|%d"), Filter.bParseCommaSeparatedLists ? 1 : 0, static_cast<int32>(Filter.TagSources));
 	}
 	const FString ConfigId = ConfigBuilder.ToString();
-	uint32 Hash = GetTypeHash(ConfigId);
-	for (const UPCGParamData* Input : Inputs)
-	{
-		if (const FPCGCrc DataCrc = Input->GetOrComputeCrc(/*bFullDataCrc=*/true); DataCrc.IsValid())
-		{
-			Hash = HashCombine(Hash, DataCrc.GetValue());
-		}
-	}
-	const FPCGCrc Crc(Hash);
+	const FPCGCrc Crc = PCGExBuildAssetCollection::ComputeReuseCrc(ConfigId, Inputs);
 
 	if (const UPCGExManagedAssetCollection* Existing = PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedAssetCollection>(
 		Component, Crc,

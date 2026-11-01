@@ -1471,10 +1471,10 @@ def check_transitive_link_dep(tree):
             continue
         for h in sorted(tree.closure(tu)):
             for cls in sorted(uses.get(h, ())):
-                mods = owners.get(cls, set())
-                if not mods or module in mods or any(depends(module, m) for m in mods if m):
+                mods = {m for m in owners.get(cls, ()) if m}   # a header outside every module has no owner
+                if not mods or module in mods or any(depends(module, m) for m in mods):
                     continue
-                other = sorted(m for m in mods if m)[0]
+                other = sorted(mods)[0]
                 if (module, other) in seen:
                     continue
                 seen.add((module, other))

@@ -7,6 +7,8 @@
 #include "PCGElement.h"
 #include "PCGExCoreMacros.h"
 #include "PCGParamData.h"
+#include "Containers/PCGExManagedObjects.h"
+#include "Core/PCGExContext.h"
 #include "ISMPartition/ISMComponentDescriptor.h"
 #include "Materials/MaterialInterface.h"
 #include "Metadata/PCGMetadata.h"
@@ -14,49 +16,24 @@
 #include "Misc/StringBuilder.h"
 #include "Selectors/PCGExSelectorTagFilter.h"
 
+// Canonical keys are lowercased with FString::ToLower (TChar::ToLower is ASCII-only, so locale-free): names and paths
+// compare case-insensitively, and runtime builds don't keep FName casing, so ToString's casing must never count.
 namespace PCGExMaterialSwapTable
 {
-	// ASCII-only lowercasing: locale-independent, so sort orders and ids cannot vary between platforms. Names and paths
-	// compare case-insensitively, and FName keeps a different casing in cooked builds, so ToString's casing never counts.
-	FString CanonicalString(FString InString)
-	{
-		for (int32 Index = 0; Index < InString.Len(); ++Index)
-		{
-			TCHAR& Char = InString[Index];
-			if (Char >= TEXT('A') && Char <= TEXT('Z'))
-			{
-				Char = static_cast<TCHAR>(Char + (TEXT('a') - TEXT('A')));
-			}
-		}
-		return InString;
-	}
-
 	void GetSortedMatches(const PCGExCollections::FMaterialSwapTable::FStage& InStage, TArray<FSoftObjectPath>& OutMatches)
 	{
-		TArray<TPair<FString, FSoftObjectPath>> Keyed;
-		Keyed.Reserve(InStage.Num());
+		OutMatches.Reset(InStage.Num());
 		for (const TPair<FSoftObjectPath, TArray<PCGExCollections::FMaterialSwapRule>>& Pair : InStage)
 		{
-			Keyed.Emplace(CanonicalString(Pair.Key.ToString()), Pair.Key);
+			OutMatches.Add(Pair.Key);
 		}
-
-		// Stage keys are unique ignoring case (FSoftObjectPath equality), so this is a total order.
-		Keyed.Sort([](const TPair<FString, FSoftObjectPath>& A, const TPair<FString, FSoftObjectPath>& B)
-		{
-			return A.Key.Compare(B.Key, ESearchCase::CaseSensitive) < 0;
-		});
-
-		OutMatches.Reset(Keyed.Num());
-		for (const TPair<FString, FSoftObjectPath>& Entry : Keyed)
-		{
-			OutMatches.Add(Entry.Value);
-		}
+		PCGExCollections::FMaterialSwapTable::SortCanonical(OutMatches);
 	}
 
 	// Length-prefixed, so field boundaries reach the hash: "AB" + "C" never reads as "A" + "BC".
 	void AppendField(FStringBuilderBase& OutKey, const FString& InField)
 	{
-		const FString Canonical = CanonicalString(InField);
+		const FString Canonical = InField.ToLower();
 		OutKey.Appendf(TEXT("%d:"), Canonical.Len());
 		OutKey << Canonical;
 	}
@@ -131,19 +108,10 @@ namespace PCGExCollections
 
 	FMaterialSwapGate FMaterialSwapGate::FromConstants(const FPCGExBaseTagFilterDetails& InFilter, int32& InOutNumAttributeClauses)
 	{
-		auto ConstantOf = [&](const FPCGExInputShorthandNameName& InClause)
-		{
-			if (InClause.Input == EPCGExInputValueType::Constant)
-			{
-				return InClause.Constant;
-			}
-			InOutNumAttributeClauses++;
-			return FName(NAME_None);
-		};
-
-		const FName All = ConstantOf(InFilter.RequireAll);
-		const FName Any = ConstantOf(InFilter.RequireAny);
-		const FName Excluded = ConstantOf(InFilter.Exclude);
+		FName All;
+		FName Any;
+		FName Excluded;
+		InOutNumAttributeClauses += InFilter.GetConstantClauses(All, Any, Excluded);
 		return Make(All, Any, Excluded, InFilter.bParseCommaSeparatedLists, InFilter.TagSources);
 	}
 
@@ -279,6 +247,27 @@ namespace PCGExCollections
 		else
 		{
 			Layers.Add(OutLayer, MoveTemp(Chained));
+		}
+	}
+
+	void FMaterialSwapTable::SortCanonical(TArray<FSoftObjectPath>& InOutPaths)
+	{
+		TArray<TPair<FString, FSoftObjectPath>> Keyed;
+		Keyed.Reserve(InOutPaths.Num());
+		for (FSoftObjectPath& Path : InOutPaths)
+		{
+			Keyed.Emplace(Path.ToString().ToLower(), MoveTemp(Path));
+		}
+
+		// Distinct paths differ ignoring case too (FSoftObjectPath equality), so this is a total order over them.
+		Keyed.Sort([](const TPair<FString, FSoftObjectPath>& A, const TPair<FString, FSoftObjectPath>& B)
+		{
+			return A.Key.Compare(B.Key, ESearchCase::CaseSensitive) < 0;
+		});
+
+		for (int32 i = 0; i < Keyed.Num(); i++)
+		{
+			InOutPaths[i] = MoveTemp(Keyed[i].Value);
 		}
 	}
 
@@ -492,6 +481,25 @@ namespace PCGExCollections
 				}
 			}
 		}
+	}
+
+	void FMaterialSwapTable::StageOutput(FPCGExContext* InContext, const FName InPinLabel) const
+	{
+		if (IsEmpty())
+		{
+			return;
+		}
+
+		UPCGParamData* SwapSet = InContext->ManagedObjects->New<UPCGParamData>();
+		PackToDataset(SwapSet);
+		InContext->StageOutput(SwapSet, InPinLabel, PCGExData::EStaging::Managed);
+	}
+
+	void FMaterialSwapTable::Forward(FPCGExContext* InContext)
+	{
+		FMaterialSwapTable Incoming;
+		Incoming.UnpackPin(InContext, Labels::SourceCollectionMapLabel);
+		Incoming.StageOutput(InContext, Labels::OutputCollectionMapLabel);
 	}
 
 	FSoftObjectPath FMaterialSwapTable::Resolve(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const FSoftObjectPath& InMaterial)

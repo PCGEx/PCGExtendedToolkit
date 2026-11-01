@@ -17,6 +17,9 @@
 #include "PCGExBuildAssetCollection.generated.h"
 
 class UPCGExAssetCollection;
+class UPCGParamData;
+class UPCGPin;
+struct FPCGDataTypeIdentifier;
 
 /**
  * Managed resource owning the transient collection. PCG marks all resources unused each (re)generation; the
@@ -41,6 +44,20 @@ public:
 	UPROPERTY(Transient)
 	FString Config;
 };
+
+/** Shared by the nodes that build a transient collection and output its soft path. */
+namespace PCGExBuildAssetCollection
+{
+	/** Output pins: a param typed Soft Object Path, so it connects to soft-path override pins; a null pin: a plain param.
+	 *  False for input pins, which Super must answer: their override pins carry their type in AllowedTypes.CustomSubtype. */
+	PCGEXCOLLECTIONS_API bool TryGetPathPinTypesID(const UPCGPin* InPin, FPCGDataTypeIdentifier& OutId);
+
+	/** Stages one attribute set holding InPath under InAttributeName on the default output pin, then completes. */
+	PCGEXCOLLECTIONS_API bool CompleteWithPath(FPCGExContext* InContext, FName InAttributeName, const FSoftObjectPath& InPath);
+
+	/** Managed-resource reuse key: InConfigId's hash combined with every input's full data CRC, in order. */
+	PCGEXCOLLECTIONS_API FPCGCrc ComputeReuseCrc(const FString& InConfigId, TConstArrayView<const UPCGParamData*> InInputs);
+}
 
 /**
  * Builds a transient Omni collection (with baked staging) from an input attribute set and outputs its soft

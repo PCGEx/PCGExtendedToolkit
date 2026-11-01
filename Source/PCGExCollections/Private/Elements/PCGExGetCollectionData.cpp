@@ -1353,9 +1353,11 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	PCGExCollections::Tags::FTagLists TagLists;
 	if (Settings->bUseTagFilter)
 	{
-		const FPCGExBaseTagFilterDetails& TF = Settings->TagFilter;
-		auto ConstantOf = [](const FPCGExInputShorthandNameName& Clause) { return Clause.Input == EPCGExInputValueType::Constant ? Clause.Constant : NAME_None; };
-		TagLists.Parse(ConstantOf(TF.RequireAll), ConstantOf(TF.RequireAny), ConstantOf(TF.Exclude), TF.bParseCommaSeparatedLists);
+		FName AllTags;
+		FName AnyTags;
+		FName ExcludedTags;
+		Settings->TagFilter.GetConstantClauses(AllTags, AnyTags, ExcludedTags);
+		TagLists.Parse(AllTags, AnyTags, ExcludedTags, Settings->TagFilter.bParseCommaSeparatedLists);
 	}
 
 	// Shared host -> CollectionIndex map + counter, and (Root, Coll, Depth) -> CollectionHash map
@@ -1434,16 +1436,7 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 			return Pin == PCGExCollections::Labels::OutputCollectionMapLabel ? OutputMap->Metadata.Get() : nullptr;
 		});
 
-		// Upstream material swaps keep travelling with the map, after it: a single-data consumer keeps the first item.
-		PCGExCollections::FMaterialSwapTable IncomingSwaps;
-		IncomingSwaps.UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
-		if (!IncomingSwaps.IsEmpty())
-		{
-			UPCGParamData* SwapSet = InContext->ManagedObjects->New<UPCGParamData>();
-			IncomingSwaps.PackToDataset(SwapSet);
-
-			InContext->StageOutput(SwapSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
-		}
+		PCGExCollections::FMaterialSwapTable::Forward(InContext);
 	}
 
 	InContext->Done();

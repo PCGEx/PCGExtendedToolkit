@@ -98,18 +98,15 @@ namespace PCGExStagingSwap
 		TArray<FSoftObjectPath> Paths;
 		for (const TSet<FSoftObjectPath>& SlotPaths : Context->SlotVariantPaths)
 		{
-			// One slot's per-input and per-point variants merge into a spawner-wide table: the path sorting last gets
-			// priority, never input or point order.
+			// One slot's per-input and per-point variants merge into a spawner-wide table: the path sorting last in the
+			// table's canonical order gets priority, never input or point order.
 			Paths = SlotPaths.Array();
-			Paths.Sort([](const FSoftObjectPath& A, const FSoftObjectPath& B)
-			{
-				return A.ToString().Compare(B.ToString(), ESearchCase::CaseSensitive) > 0;
-			});
+			FTable::SortCanonical(Paths);
 
 			FTable::FStage SlotStage;
-			for (const FSoftObjectPath& Path : Paths)
+			for (int32 PathIndex = Paths.Num() - 1; PathIndex >= 0; PathIndex--)
 			{
-				const TArray<PCGExCollections::FMaterialSwapRow>* Rows = RowsByPath.Find(Path);
+				const TArray<PCGExCollections::FMaterialSwapRow>* Rows = RowsByPath.Find(Paths[PathIndex]);
 				if (!Rows)
 				{
 					continue;
@@ -618,14 +615,7 @@ bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}
 
-	// After the Map: a single-data consumer keeps only the first item on the pin.
-	if (!Context->OutputMaterialSwaps.IsEmpty())
-	{
-		UPCGParamData* SwapSet = Context->ManagedObjects->New<UPCGParamData>();
-		Context->OutputMaterialSwaps.PackToDataset(SwapSet);
-
-		Context->StageOutput(SwapSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
-	}
+	Context->OutputMaterialSwaps.StageOutput(Context, PCGExCollections::Labels::OutputCollectionMapLabel);
 
 	return Context->TryComplete();
 }

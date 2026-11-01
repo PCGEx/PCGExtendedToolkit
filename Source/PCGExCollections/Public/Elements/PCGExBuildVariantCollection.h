@@ -16,8 +16,7 @@
 
 /**
  * Builds a transient Variant collection holding one material swap per input row, and outputs its soft path for
- * Staging : Swap's Additional Variant override pin. Lifetime and reuse follow Build Asset Collection: anchored by a
- * managed resource on the component, reused while the inputs and settings are unchanged. Main-thread-only + non-cacheable.
+ * Staging : Swap's Additional Variant override pin. Lifetime and reuse follow Build Asset Collection.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Collections", meta = (PCGExNodeLibraryDoc = "staging/utilities/build-variant-collection"))
 class UPCGExBuildVariantCollectionSettings : public UPCGExSettings
@@ -59,8 +58,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, InlineEditConditionToggle))
 	bool bUseTagFilter = false;
 
-	/** When enabled, a built swap only applies to entries whose tags pass. Each clause is a constant or a per-row Name / String
-	 *  attribute; a material's rows are tried in order, the first passing wins. Collection reads the entry's collection. */
+	/** When enabled, a built swap only applies to entries whose tags pass. Each clause is a constant or a per-row Name /
+	 *  String attribute; a material's rows are tried in order, the first passing wins. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bUseTagFilter"))
 	FPCGExBaseTagFilterDetails TagFilter;
 
@@ -68,7 +67,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName OutputAttributeName = FName("Variant");
 
-	/** Suppress the warning about skipped rows (an empty path, or a replacement that is not a material). */
+	/** Suppress the warning about skipped rows. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta = (PCG_NotOverridable))
 	bool bQuietSkippedRowsWarning = false;
 };
