@@ -4,7 +4,6 @@
 #include "Details/Collections/PCGExVariantCollectionEditor.h"
 
 #include "AssetThumbnail.h"
-#include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
@@ -13,7 +12,8 @@
 #include "ScopedTransaction.h"
 #include "Styling/AppStyle.h"
 #include "Framework/Notifications/NotificationManager.h"
-#include "Widgets/Layout/SBox.h"
+#include "Materials/MaterialInterface.h"
+#include "Styling/SlateIconFinder.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 #include "Collections/PCGExVariantCollection.h"
@@ -24,27 +24,6 @@
 #include "Helpers/PCGExObjectNotifyHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExVariantCollectionEditor"
-
-namespace PCGExVariantCollectionEditor
-{
-	// Shared shell for the toolbar asset-picker dropdowns — one place owns the sizing and
-	// selection behavior contract; callers only provide filters and the selected-callback.
-	TSharedRef<SWidget> MakeAssetPickerMenu(FAssetPickerConfig&& PickerConfig)
-	{
-		PickerConfig.SelectionMode = ESelectionMode::Single;
-		PickerConfig.InitialAssetViewType = EAssetViewType::List;
-		PickerConfig.bAllowNullSelection = false;
-
-		FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
-
-		return SNew(SBox)
-			.WidthOverride(380.f)
-			.HeightOverride(420.f)
-			[
-				ContentBrowserModule.Get().CreateAssetPicker(PickerConfig)
-			];
-	}
-}
 
 FPCGExVariantCollectionEditor::FPCGExVariantCollectionEditor()
 	: FPCGExAssetCollectionEditor()
@@ -127,13 +106,17 @@ void FPCGExVariantCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Too
 		LOCTEXT("AddAssetSwapTooltip", "Add an asset-path swap rule: every source entry staging the picked asset swaps to the rule's payload (unless an explicit per-entry swap overrides it)."),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Link"));
 
+	ToolbarBuilder.AddComboButton(
+		FUIAction(),
+		FOnGetContent::CreateSP(this, &FPCGExVariantCollectionEditor::MakeAddMaterialSwapMenu),
+		LOCTEXT("AddMaterialSwap", "Add Material Swap"),
+		LOCTEXT("AddMaterialSwapTooltip", "Add a material swap: every spawned mesh slot rendering the picked material renders the row's replacement instead (staged mesh selector). A material's rows are tried in order."),
+		FSlateIconFinder::FindIcon("ClassIcon.Material")); // No ClassIcon.MaterialInterface is registered.
 }
 
 TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddSourceMenu()
 {
 	FAssetPickerConfig PickerConfig;
-	PickerConfig.Filter.bRecursiveClasses = true;
-	PickerConfig.Filter.ClassPaths.Add(UPCGExAssetCollection::StaticClass()->GetClassPathName());
 	PickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &FPCGExVariantCollectionEditor::OnSourceAssetPicked);
 	PickerConfig.OnShouldFilterAsset = FOnShouldFilterAsset::CreateLambda(
 		[WeakEdited = EditedCollection](const FAssetData& Asset)
@@ -150,7 +133,7 @@ TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddSourceMenu()
 			return false;
 		});
 
-	return PCGExVariantCollectionEditor::MakeAssetPickerMenu(MoveTemp(PickerConfig));
+	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig), UPCGExAssetCollection::StaticClass());
 }
 
 void FPCGExVariantCollectionEditor::OnSourceAssetPicked(const FAssetData& AssetData)
@@ -170,7 +153,26 @@ TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddAssetSwapMenu()
 	FAssetPickerConfig PickerConfig;
 	PickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &FPCGExVariantCollectionEditor::OnSwapAssetPicked);
 
-	return PCGExVariantCollectionEditor::MakeAssetPickerMenu(MoveTemp(PickerConfig));
+	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig));
+}
+
+TSharedRef<SWidget> FPCGExVariantCollectionEditor::MakeAddMaterialSwapMenu()
+{
+	FAssetPickerConfig PickerConfig;
+	PickerConfig.OnAssetSelected = FOnAssetSelected::CreateSP(this, &FPCGExVariantCollectionEditor::OnMaterialSwapPicked);
+
+	return PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig), UMaterialInterface::StaticClass());
+}
+
+void FPCGExVariantCollectionEditor::OnMaterialSwapPicked(const FAssetData& AssetData)
+{
+	FSlateApplication::Get().DismissAllMenus();
+
+	// The grid owns the add path (transaction, refresh, selecting the new row for editing).
+	if (VariantGrid.IsValid())
+	{
+		VariantGrid->AddMaterialSwap(AssetData);
+	}
 }
 
 void FPCGExVariantCollectionEditor::OnSwapAssetPicked(const FAssetData& AssetData)

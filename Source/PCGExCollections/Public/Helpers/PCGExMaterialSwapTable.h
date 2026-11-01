@@ -1,0 +1,247 @@
+// Copyright 2026 Timothé Lapetite and contributors
+// Released under the MIT license https://opensource.org/license/MIT/
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/SoftObjectPath.h"
+#include "UObject/SoftObjectPtr.h"
+
+#include "PCGExCollectionsCommon.h"
+#include "Core/PCGExCollectionTags.h"
+
+class UMaterialInterface;
+class UPCGParamData;
+struct FPCGContext;
+struct FSoftISMComponentDescriptor;
+struct FPCGExAssetCollectionEntry;
+struct FPCGExBaseTagFilterDetails;
+
+namespace PCGExCollections
+{
+	/**
+	 * Entry-tag gate of one swap rule. The authored clause values travel in the table; Lists, their canonical parse
+	 * (sorted, deduplicated), is what Passes, SameAs and the table id read, so build gates through Make / FromConstants.
+	 * An empty gate passes every entry.
+	 */
+	struct PCGEXCOLLECTIONS_API FMaterialSwapGate
+	{
+		FName RequireAll = NAME_None;
+		FName RequireAny = NAME_None;
+		FName Exclude = NAME_None;
+		bool bCommaSeparated = false;
+		uint8 TagSources = static_cast<uint8>(EPCGExAssetTagInheritance::Asset);
+
+		Tags::FTagLists Lists;
+
+		static FMaterialSwapGate Make(FName InRequireAll, FName InRequireAny, FName InExclude, bool bInCommaSeparated, uint8 InTagSources);
+
+		/** Constant clause values of InFilter. Clauses set to Attribute read nothing here and are counted. */
+		static FMaterialSwapGate FromConstants(const FPCGExBaseTagFilterDetails& InFilter, int32& InOutNumAttributeClauses);
+
+		bool IsEmpty() const { return Lists.IsEmpty(); }
+
+		/** InHost is the collection holding InEntry (null when unknown): the Collection tag source reads its tags. */
+		bool Passes(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost) const;
+
+		/** Tag sources the tag walk reads (Asset, Collection); other bits change nothing. */
+		uint8 GetEffectiveTagSources() const;
+
+		/** Same canonical lists and effective tag sources, so gates that test alike compare equal; every empty gate equals
+		 *  every other. */
+		bool SameAs(const FMaterialSwapGate& InOther) const;
+	};
+
+	/** One candidate replacement for a matched material. */
+	struct FMaterialSwapRule
+	{
+		FSoftObjectPath Replacement;
+		FMaterialSwapGate Gate;
+	};
+
+	/** One swap as authored: the material it matches and the rule applied to it. */
+	struct FMaterialSwapRow
+	{
+		FSoftObjectPath Match;
+		FMaterialSwapRule Rule;
+	};
+
+	/**
+	 * Material swap rules. A stage maps each matched material to its rules in priority order; a table is a list of stages
+	 * applied in sequence, one per Staging : Swap a point passed. Within a stage a slot is looked up once (A->B with B->A
+	 * exchanges them) and the first rule whose gate passes applies; A->A keeps A. FMaterialSwapLibrary carries tables.
+	 */
+	class PCGEXCOLLECTIONS_API FMaterialSwapTable
+	{
+	public:
+		FMaterialSwapTable() = delete;
+
+		/** Rules per matched material, in priority order. Never holds an empty rule list. */
+		using FStage = TMap<FSoftObjectPath, TArray<FMaterialSwapRule>>;
+		using FStages = TArray<FStage>;
+
+		enum class EAddResult : uint8
+		{
+			Added,     // Reachable: appended at the lowest priority.
+			Ignored,   // Null match or replacement.
+			Redundant, // An earlier rule that always wins over this one gives the same replacement.
+			Shadowed,  // Same, with a different replacement: this rule could never apply.
+		};
+
+		/** Appends InRule at the lowest priority of InMatch, unless an earlier rule makes it unreachable (an ungated rule, or
+		 *  one with the same gate). */
+		static EAddResult AddRule(FStage& InOutStage, const FSoftObjectPath& InMatch, const FMaterialSwapRule& InRule);
+
+		/** Puts InHigher's rules ahead of InOutStage's, material by material. Returns how many of InOutStage's materials lost
+		 *  a rule to a higher one naming another replacement (ungated, or with the same gate); OutConflicts collects them. */
+		static int32 MergeStage(FStage& InOutStage, const FStage& InHigher, TSet<FSoftObjectPath>* OutConflicts = nullptr);
+
+		/** InUpstream followed by InStage (when it holds a rule): what a point that passed both swaps follows. */
+		static FStages Chain(const FStages& InUpstream, const FStage& InStage);
+
+		/** The table's canonical path order: lowercased, so neither a path's casing nor the build's moves it. */
+		static void SortCanonical(TArray<FSoftObjectPath>& InOutPaths);
+
+		/** Content identity of a stage list, stable across sessions and platforms, blind to letter case; empty stages
+		 *  don't count, and 0 means no rule at all. A point's stamp holds the id of the table it follows. */
+		static uint32 GetStagesId(const FStages& InStages);
+
+		/** Same content identity (what GetStagesId hashes), compared in full rather than by hash. */
+		static bool SameStages(const FStages& InA, const FStages& InB);
+
+		/** InMaterial after every stage, for InEntry held by InHost (see FMaterialSwapGate::Passes). InMaterial itself when no
+		 *  rule applies. */
+		static FSoftObjectPath Resolve(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const FSoftObjectPath& InMaterial);
+
+		/** Swaps the descriptor's slots and overlay for InEntry held by InHost. A slot's current material is its override,
+		 *  else InMeshMaterials'; OverrideMaterials only grows. True when anything changed. */
+		static bool Apply(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TConstArrayView<TSoftObjectPtr<UMaterialInterface>> InMeshMaterials, FSoftISMComponentDescriptor& InOutDescriptor);
+	};
+
+	/**
+	 * Every material swap table a Map pin carries, kept apart by staging layer and content id: a point's stamp names the one
+	 * it follows (each Staging : Swap it passed chained its own stage onto the table the point followed before). Rows carry
+	 * their table's id and share the Collection Map's param data.
+	 */
+	class PCGEXCOLLECTIONS_API FMaterialSwapLibrary
+	{
+	public:
+		using FStages = FMaterialSwapTable::FStages;
+
+		enum class EUnpackResult : uint8
+		{
+			Unpacked,  // Table rows, unpacked (possibly without a single reachable row).
+			NotATable, // No Match + Replace columns: some other param data.
+			Mistyped,  // A column with another type than PackToDataset writes: nothing unpacked.
+		};
+
+		bool IsEmpty() const { return Layers.IsEmpty(); }
+
+		/** InLayer's table InId, null when none is held (0 never names one). */
+		const FStages* Find(FName InLayer, uint32 InId) const;
+
+		/** Adds InStages as a table of InLayer, keyed by its content id, and returns the id; a table already held under that
+		 *  id is kept (a different one there is a collision, see GetNumCollisions). 0, and nothing added, when InStages
+		 *  holds no rule. */
+		uint32 Add(FName InLayer, const FStages& InStages);
+
+		/** Drops every table of InLayer. */
+		void RemoveLayer(FName InLayer);
+
+		/** Calls InFn(Id, Stages) for each table of InLayer, in arrival order. */
+		template <typename FnT>
+		void ForEachTable(const FName InLayer, FnT&& InFn) const
+		{
+			if (const TArray<FEntry>* Entries = Layers.Find(InLayer))
+			{
+				for (const FEntry& Entry : *Entries)
+				{
+					InFn(Entry.Id, Entry.Stages);
+				}
+			}
+		}
+
+		/** Tables that arrived under an id already held by a different table: they were dropped, so their points follow
+		 *  the table held first. */
+		int32 GetNumCollisions() const { return NumCollisions; }
+
+		static bool IsTableData(const UPCGParamData* InParamData);
+
+		/** Unpacks every table on the pin. Warns once when rows shadow each other within a table, once when sets are
+		 *  rejected for a mistyped column, and once when different tables share an id. */
+		void UnpackPin(FPCGContext* InContext, FName InPinLabel);
+
+		/**
+		 * Unpacks InParamData's tables, grouped by layer and table id; rows without an id make one table per layer, keyed by
+		 * its content. Rows without a Match or Replace are skipped: Collection Map rows share the param data. Rows shadowed
+		 * within their table go to OutConflicts. A column of another type than PackToDataset writes rejects the whole set
+		 * (OutMistypedColumn names it) rather than dropping rows or ungating a rule.
+		 */
+		EUnpackResult UnpackDataset(const UPCGParamData* InParamData, TSet<FSoftObjectPath>* OutConflicts = nullptr, FName* OutMistypedColumn = nullptr);
+
+		/** Appends every table as rows of OutParamData tagged with its id: layers sorted, tables in arrival order, rows by
+		 *  stage and match path, rules in priority order. Rows already there (the Collection Map's) are kept. */
+		void PackToDataset(UPCGParamData* OutParamData) const;
+
+		/** Unpacks the tables on the input Map pin and appends their rows, ids kept, to InOutMap, the node's output Map. */
+		static void ForwardInto(FPCGContext* InContext, UPCGParamData* InOutMap);
+
+	private:
+		struct FEntry
+		{
+			uint32 Id = 0;
+			FStages Stages;
+		};
+
+		// Per layer, tables in arrival order under unique ids. Never holds an empty layer.
+		TMap<FName, TArray<FEntry>> Layers;
+
+		int32 NumCollisions = 0;
+
+		void AddUnique(FName InLayer, uint32 InId, FStages&& InStages);
+	};
+
+	/**
+	 * One Staging : Swap's stage chained per lineage: onto each incoming input-layer table (a point that followed it follows
+	 * the chained copy) and onto none (points that followed no table, or one the pin doesn't carry). Chained tables sit on
+	 * the output layer and are addressed by slot, so parallel writers can flag the ones they stamp without a lock.
+	 */
+	class PCGEXCOLLECTIONS_API FMaterialSwapChain
+	{
+	public:
+		/** True when a Swap restamps its points: it has a stage of its own, or writes another layer. */
+		static bool Restamps(const FMaterialSwapTable::FStage& InStage, FName InLayer, FName OutLayer);
+
+		/** Chains InStage onto each of InIncoming's InLayer tables, and onto none, as tables of OutLayer. */
+		void Build(const FMaterialSwapLibrary& InIncoming, FName InLayer, FName OutLayer, const FMaterialSwapTable::FStage& InStage);
+
+		int32 Num() const { return Ids.Num(); }
+
+		/** The output-layer table id of InSlot. */
+		uint32 GetId(const int32 InSlot) const { return Ids[InSlot]; }
+
+		/** The output-layer table of InSlot. */
+		const FMaterialSwapTable::FStages* GetStages(int32 InSlot) const;
+
+		/** True when the chained stage holds a rule, so points that follow no known table get it alone. */
+		bool HasStage() const { return UnstampedSlot != INDEX_NONE; }
+
+		/** The slot a point stamped InStamp on the input layer moves to; INDEX_NONE when it then follows no table.
+		 *  bOutUnknown when InStamp is not 0 and names no incoming table: the point gets the stage alone. */
+		int32 Remap(uint32 InStamp, bool& bOutUnknown) const;
+
+		/** The tables a Swap's Map carries: InIncoming's other layers, InIncoming's output layer too when bKeepIncoming (some
+		 *  point kept its stamp there), and the tables of the slots InUsed flags (one flag per slot). */
+		FMaterialSwapLibrary Assemble(const FMaterialSwapLibrary& InIncoming, bool bKeepIncoming, TConstArrayView<bool> InUsed) const;
+
+		/** Different chained tables that landed on one id: the later lineages follow the earlier table. */
+		int32 GetNumCollisions() const { return Tables.GetNumCollisions(); }
+
+	private:
+		FName OutputLayer = NAME_None;
+		TArray<uint32> Ids;
+		FMaterialSwapLibrary Tables;
+		TMap<uint32, int32> SlotByIncomingId;
+		int32 UnstampedSlot = INDEX_NONE;
+	};
+}

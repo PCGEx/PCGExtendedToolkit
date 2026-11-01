@@ -5,6 +5,7 @@
 
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
+#include "Modules/ModuleManager.h"
 #include "PropertyHandle.h"
 #include "ScopedTransaction.h"
 #include "Framework/Notifications/NotificationManager.h"
@@ -15,6 +16,7 @@
 #include "Core/PCGExAssetCollection.h"
 #include "UObject/Package.h"
 #include "UObject/UnrealType.h"
+#include "Widgets/Layout/SBox.h"
 
 namespace PCGExCollectionEditorUtils
 {
@@ -64,6 +66,28 @@ namespace PCGExCollectionEditorUtils
 		return ShortName.IsEmpty()
 			       ? (EntryStruct ? EntryStruct->GetDisplayNameText() : FText::GetEmpty())
 			       : FText::FromString(ShortName);
+	}
+
+	TSharedRef<SWidget> MakeAssetPickerMenu(FAssetPickerConfig&& PickerConfig, const UClass* InAllowedClass)
+	{
+		PickerConfig.SelectionMode = ESelectionMode::Single;
+		PickerConfig.InitialAssetViewType = EAssetViewType::List;
+		PickerConfig.bAllowNullSelection = false;
+
+		if (InAllowedClass)
+		{
+			PickerConfig.Filter.bRecursiveClasses = true;
+			PickerConfig.Filter.ClassPaths.Add(InAllowedClass->GetClassPathName());
+		}
+
+		FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+
+		return SNew(SBox)
+			.WidthOverride(380.f)
+			.HeightOverride(420.f)
+			[
+				ContentBrowserModule.Get().CreateAssetPicker(PickerConfig)
+			];
 	}
 
 	void GetAllConcreteEntryTypes(TArray<const UScriptStruct*>& OutTypes)

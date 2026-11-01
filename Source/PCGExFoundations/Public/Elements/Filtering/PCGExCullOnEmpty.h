@@ -11,9 +11,14 @@
 
 #include "PCGExCullOnEmpty.generated.h"
 
+class UPCGData;
+
 namespace PCGExCullOnEmpty
 {
 	const FName IsEmptyName("IsEmpty");
+
+	/** True when the data holds points, segments or attribute-set entries; any other non-null data counts as non-empty. */
+	PCGEXFOUNDATIONS_API bool IsDataNonEmpty(const UPCGData* Data);
 }
 
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category = "Misc", meta=(PCGExNodeLibraryDoc="utilities/cull-on-empty"))

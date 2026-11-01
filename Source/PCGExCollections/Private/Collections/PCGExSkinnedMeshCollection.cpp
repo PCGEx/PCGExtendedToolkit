@@ -129,8 +129,7 @@ void FPCGExSkinnedMeshCollectionEntry::ApplyMaterials(int32 PickIndex, UMeshComp
 		{
 			return;
 		}
-		const int32 WriteSlotIndex = SlotIndex == -1 ? 0 : SlotIndex;
-		TargetComponent->SetMaterial(WriteSlotIndex, MaterialOverrideVariants[PickIndex].Material.Get());
+		TargetComponent->SetMaterial(PCGExMeshCollection::ResolveSingleSlot(SlotIndex), MaterialOverrideVariants[PickIndex].Material.Get());
 	}
 	else if (MaterialVariants == EPCGExMaterialVariantsMode::Multi)
 	{
@@ -138,10 +137,10 @@ void FPCGExSkinnedMeshCollectionEntry::ApplyMaterials(int32 PickIndex, UMeshComp
 		{
 			return;
 		}
-		for (const FPCGExMaterialOverrideEntry& SEntry : MaterialOverrideVariantsList[PickIndex].Overrides)
+		const TArray<FPCGExMaterialOverrideEntry>& SlotEntries = MaterialOverrideVariantsList[PickIndex].Overrides;
+		for (int32 i = 0; i < SlotEntries.Num(); i++)
 		{
-			const int32 WriteSlotIndex = SEntry.SlotIndex == -1 ? 0 : SEntry.SlotIndex;
-			TargetComponent->SetMaterial(WriteSlotIndex, SEntry.Material.Get());
+			TargetComponent->SetMaterial(SlotEntries[i].ResolveSlot(i), SlotEntries[i].Material.Get());
 		}
 	}
 }
@@ -282,7 +281,7 @@ void FPCGExSkinnedMeshCollectionEntry::BuildMicroCache()
 	case EPCGExMaterialVariantsMode::None:
 		break;
 	case EPCGExMaterialVariantsMode::Single:
-		NewCache->ProcessMaterialOverrides(MaterialOverrideVariants, SlotIndex);
+		NewCache->ProcessMaterialOverrides(MaterialOverrideVariants, PCGExMeshCollection::ResolveSingleSlot(SlotIndex));
 		break;
 	case EPCGExMaterialVariantsMode::Multi:
 		NewCache->ProcessMaterialOverrides(MaterialOverrideVariantsList);

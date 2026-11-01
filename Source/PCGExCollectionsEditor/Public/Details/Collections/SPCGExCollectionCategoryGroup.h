@@ -49,6 +49,7 @@ public:
 		SLATE_EVENT(FOnCategoryRenamed, OnCategoryRenamed)
 		SLATE_EVENT(FOnTileDropOnCategory, OnTileDropOnCategory)
 		SLATE_EVENT(FOnAssetDropOnCategory, OnAssetDropOnCategory)
+		/** Unbound hides the add button. */
 		SLATE_EVENT(FOnAddToCategory, OnAddToCategory)
 		/** Unbound hides the overrides button -- grids whose groups aren't real categories
 		 *  (e.g. the variant grid's source collections) leave it that way. */
