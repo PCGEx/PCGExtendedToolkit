@@ -116,8 +116,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExVariantCollection"))
 	TArray<FPCGExInputShorthandNameSoftObjectPath> VariantCollections;
 
-	/** One more variant, applied after Variant Collections (so it wins their conflicts).
-	 *  Wire a Build Variant Collection output into its override pin. */
+	/** One more variant (e.g. from Build Variant Collection), applied last so it wins conflicts. Its own override
+	 *  pin reads any attribute name; the Overrides pin needs one named AdditionalVariant. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	TSoftObjectPtr<UPCGExVariantCollection> AdditionalVariant;
 

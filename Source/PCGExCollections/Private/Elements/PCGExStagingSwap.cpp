@@ -149,7 +149,7 @@ namespace PCGExStagingSwap
 
 			if (ResolvedVariants.IsEmpty())
 			{
-				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("No variant collection to apply: Variant Collections and Additional Variant resolved nothing -- points and map are forwarded unchanged."));
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("No variant collection to apply: Variant Collections and Additional Variant resolved nothing (on the Overrides pin, Additional Variant reads an attribute named AdditionalVariant) -- points and map are forwarded unchanged."));
 			}
 			else
 			{

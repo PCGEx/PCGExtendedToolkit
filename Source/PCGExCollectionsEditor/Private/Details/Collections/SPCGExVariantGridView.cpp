@@ -357,7 +357,7 @@ void SPCGExVariantGridTile::RebuildContent()
 		];
 	}
 
-	// Label (bottom, full width)
+	// Label (bottom, full width), with the full text as tooltip since it ellipsizes.
 	Overlay->AddSlot()
 	.HAlign(HAlign_Fill)
 	.VAlign(VAlign_Bottom)
@@ -366,6 +366,7 @@ void SPCGExVariantGridTile::RebuildContent()
 		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
 		.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.6f))
 		.Padding(FMargin(4.f, 2.f))
+		.ToolTipText(Item.Label)
 		[
 			SNew(STextBlock)
 			.Text(Item.Label)
@@ -454,7 +455,15 @@ void SPCGExVariantGridTile::RebuildContent()
 		];
 	}
 
-	RootBorder->SetContent(Overlay);
+	// Fixed size: overlay content (the label above all) ellipsizes or clips, it never widens the tile.
+	RootBorder->SetContent(
+		SNew(SBox)
+		.WidthOverride(TileSize)
+		.HeightOverride(TileSize)
+		.Clipping(EWidgetClipping::ClipToBounds)
+		[
+			Overlay
+		]);
 }
 
 FReply SPCGExVariantGridTile::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
@@ -960,6 +969,7 @@ TSharedRef<SPCGExCollectionCategoryGroup> SPCGExVariantGridView::MakeGroupWidget
 		.EntryCount(EntryCount)
 		.bIsCollapsed(CollapsedGroups.Contains(GroupName))
 		.bAllowRename(false) // group names mirror source asset names — never editable here
+		// No OnAddToCategory, so groups show no [+]: sources and swaps are added from the toolbar.
 		// Group widgets swallow asset drops (Handled); route them to the shared add-source path.
 		.OnAssetDropOnCategory_Lambda([this](const FName, const TArray<FAssetData>& InAssets)
 		{

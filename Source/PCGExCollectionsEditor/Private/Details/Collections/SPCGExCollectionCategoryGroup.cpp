@@ -166,7 +166,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 						]
 					]
 
-					// Add button
+					// Add button. Hidden on grids that leave the delegate unbound.
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
 					.VAlign(VAlign_Center)
@@ -175,6 +175,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 						SNew(SButton)
 						.ButtonStyle(FAppStyle::Get(), "SimpleButton")
 						.ContentPadding(FMargin(1, 1))
+						.Visibility(InArgs._OnAddToCategory.IsBound() ? EVisibility::Visible : EVisibility::Collapsed)
 						.OnClicked_Lambda([this]() -> FReply
 						{
 							OnAddToCategory.ExecuteIfBound(CategoryName);
