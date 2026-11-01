@@ -11,6 +11,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExRandomHelpers.h"
+#include "Misc/ScopeExit.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSwapElement"
 #define PCGEX_NAMESPACE StagingSwap
@@ -26,13 +27,24 @@ void UPCGExStagingSwapSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinPr
 TArray<FPCGPinProperties> UPCGExStagingSwapSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::OutputCollectionMapLabel, "Updated collection map including the variant collections.", Normal)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Updated collection map including the variant collections, with the material swap rows its points follow.", Normal)
 	return PinProperties;
 }
 
 PCGExData::EIOInit UPCGExStagingSwapSettings::GetMainDataInitializationPolicy() const
 {
 	return WantsDataStealing() ? PCGExData::EIOInit::Forward : PCGExData::EIOInit::Duplicate;
+}
+
+void UPCGExStagingSwapSettings::GetVariantSlots(TArray<FPCGExInputShorthandNameSoftObjectPath>& OutSlots) const
+{
+	OutSlots = VariantCollections;
+	if (!AdditionalVariant.IsNull())
+	{
+		FPCGExInputShorthandNameSoftObjectPath& AdditionalSlot = OutSlots.Emplace_GetRef();
+		AdditionalSlot.Input = EPCGExInputValueType::Constant;
+		AdditionalSlot.Constant = AdditionalVariant.ToSoftObjectPath();
+	}
 }
 
 #pragma endregion
@@ -69,6 +81,87 @@ void FPCGExStagingSwapContext::RegisterAssetDependencies()
 
 #pragma endregion
 
+#pragma region PCGExStagingSwap::FinalizeSwaps
+
+namespace PCGExStagingSwap
+{
+	// This node's material swaps as one stage, chained after the incoming tables; then the nothing-to-do warning.
+	void FinalizeSwaps(FPCGExStagingSwapContext* Context, const UPCGExStagingSwapSettings* Settings, const TMap<FSoftObjectPath, TArray<PCGExCollections::FMaterialSwapRow>>& RowsByPath, const bool bAnyPickSwaps)
+	{
+		using FTable = PCGExCollections::FMaterialSwapTable;
+
+		FTable::FStage OwnStage;
+		TSet<FSoftObjectPath> SlotConflicts;
+
+		TArray<FSoftObjectPath> Paths;
+		for (const TSet<FSoftObjectPath>& SlotPaths : Context->SlotVariantPaths)
+		{
+			// One slot's per-input and per-point variants merge into the node's one stage: the path sorting last in the
+			// table's canonical order gets priority, never input or point order.
+			Paths = SlotPaths.Array();
+			FTable::SortCanonical(Paths);
+
+			FTable::FStage SlotStage;
+			for (int32 PathIndex = Paths.Num() - 1; PathIndex >= 0; PathIndex--)
+			{
+				const TArray<PCGExCollections::FMaterialSwapRow>* Rows = RowsByPath.Find(Paths[PathIndex]);
+				if (!Rows)
+				{
+					continue;
+				}
+
+				for (const PCGExCollections::FMaterialSwapRow& Row : *Rows)
+				{
+					if (FTable::AddRule(SlotStage, Row.Match, Row.Rule) == FTable::EAddResult::Shadowed)
+					{
+						SlotConflicts.Add(Row.Match);
+					}
+				}
+			}
+
+			// Later slots win, silently, like pick swaps.
+			FTable::MergeStage(OwnStage, SlotStage);
+		}
+
+		if (!SlotConflicts.IsEmpty())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Variants sharing a slot disagree on {0} material(s). The node's material swaps apply to all its points: the variant whose path sorts last wins."), FText::AsNumber(SlotConflicts.Num())));
+		}
+
+		const FName OutputLayer = Settings->GetOutputStagingLayer();
+
+		// Without a stage of its own or another output layer, the node leaves every point on its table (stamps untouched).
+		Context->bRestampPoints = PCGExCollections::FMaterialSwapChain::Restamps(OwnStage, Settings->StagingLayer, OutputLayer);
+		if (Context->bRestampPoints)
+		{
+			// Each lineage gets this node's stage chained onto its own table; points never pick up another branch's rules.
+			Context->MaterialSwapChain.Build(Context->IncomingMaterialSwaps, Settings->StagingLayer, OutputLayer, OwnStage);
+			Context->StampedSlots = MakeUnique<std::atomic<bool>[]>(Context->MaterialSwapChain.Num());
+		}
+
+		if (!bAnyPickSwaps && OwnStage.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
+		{
+			// Tells "no variant reached the node" apart from "the variants hold nothing applicable".
+			TSet<FSoftObjectPath> ResolvedVariants;
+			for (const TSet<FSoftObjectPath>& SlotPaths : Context->SlotVariantPaths)
+			{
+				ResolvedVariants.Append(SlotPaths);
+			}
+
+			if (ResolvedVariants.IsEmpty())
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("No variant collection to apply: Variant Collections and Additional Variant resolved nothing (on the Overrides pin, Additional Variant reads an attribute named AdditionalVariant) -- points and map are forwarded unchanged."));
+			}
+			else
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} variant collection(s) resolved, with no applicable variant mapping or material swap -- points and map are forwarded unchanged."), FText::AsNumber(ResolvedVariants.Num())));
+			}
+		}
+	}
+}
+
+#pragma endregion
+
 #pragma region FPCGExStagingSwapElement
 
 PCGEX_INITIALIZE_ELEMENT(StagingSwap)
@@ -93,6 +186,9 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 	PCGEX_VALIDATE_NAME(Settings->GetEntryIdxAttributeName())
 	PCGEX_VALIDATE_NAME(Settings->GetOutputEntryIdxAttributeName())
 
+	// One merged slot list, first: everything below reads it, never the settings array.
+	Settings->GetVariantSlots(Context->VariantSlots);
+
 	Context->CollectionPickUnpacker = MakeShared<PCGExCollections::FPickUnpacker>();
 	Context->CollectionPickUnpacker->UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
 
@@ -107,21 +203,24 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 	Context->CollectionPickDatasetPacker = MakeShared<PCGExCollections::FPickPacker>(Context);
 	Context->CollectionPickUnpacker->RegisterCollectionsTo(*Context->CollectionPickDatasetPacker);
 
+	Context->IncomingMaterialSwaps.UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
+
 	// Classify slots: constant/@Data (CanSupportDataOnly) resolve one path per IO; a per-point,
 	// non-@Data attribute gets its own loader (one per slot keeps per-point keys isolated).
-	const int32 NumSlots = Settings->VariantCollections.Num();
+	const int32 NumSlots = Context->VariantSlots.Num();
 	Context->SlotLoaders.Init(nullptr, NumSlots);
+	Context->SlotVariantPaths.SetNum(NumSlots);
 
 	for (int32 i = 0; i < NumSlots; i++)
 	{
-		if (Settings->VariantCollections[i].CanSupportDataOnly())
+		if (Context->VariantSlots[i].CanSupportDataOnly())
 		{
 			continue;
 		}
 
 		Context->bHasPerPointSlots = true;
 
-		TArray<FName> Names = {Settings->VariantCollections[i].Attribute};
+		TArray<FName> Names = {Context->VariantSlots[i].Attribute};
 		TSharedPtr<PCGEx::TAssetLoader<UPCGExVariantCollection>> Loader = MakeShared<PCGEx::TAssetLoader<UPCGExVariantCollection>>(Context, Context->MainPoints.ToSharedRef(), Names);
 
 		// Paths only -- assets load through the dependency pipeline, like the uniform slots.
@@ -136,13 +235,14 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 		{
 			TArray<FSoftObjectPath> Paths;
 
-			for (const FPCGExInputShorthandNameSoftObjectPath& VariantInput : Settings->VariantCollections)
+			for (int32 i = 0; i < NumSlots; i++)
 			{
 				FSoftObjectPath VariantPath;
-				if (!VariantInput.TryReadDataValue(IO, VariantPath) || VariantPath.IsNull())
+				if (!Context->VariantSlots[i].TryReadDataValue(IO, VariantPath) || VariantPath.IsNull())
 				{
 					continue;
 				}
+				Context->SlotVariantPaths[i].Add(VariantPath);
 				Paths.Add(MoveTemp(VariantPath));
 			}
 
@@ -171,8 +271,9 @@ bool FPCGExStagingSwapElement::Boot(FPCGExContext* InContext) const
 				}
 
 				FSoftObjectPath VariantPath;
-				if (Settings->VariantCollections[i].TryReadDataValue(IO, VariantPath) && !VariantPath.IsNull())
+				if (Context->VariantSlots[i].TryReadDataValue(IO, VariantPath) && !VariantPath.IsNull())
 				{
+					Context->SlotVariantPaths[i].Add(VariantPath);
 					Paths[i] = MoveTemp(VariantPath);
 				}
 			}
@@ -195,6 +296,9 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 	// Variants can be @Data-driven per input, so contribution maps are built per distinct
 	// variant path (once), then assigned/merged per input IO.
 	TMap<FSoftObjectPath, TSharedPtr<TMap<uint64, uint64>>> ContributionByPath;
+
+	// Each loadable variant's material swap rows, filled alongside its contribution.
+	TMap<FSoftObjectPath, TArray<PCGExCollections::FMaterialSwapRow>> MaterialRowsByPath;
 
 	auto GetContribution = [&](const FSoftObjectPath& VariantPath) -> TSharedPtr<TMap<uint64, uint64>>
 	{
@@ -221,6 +325,18 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 		// Track every resolved variant (not just contributing ones): an edit may make a
 		// currently-inert variant contribute, and that edit must retrigger generation.
 		Variant->EDITOR_RegisterTrackingKeys(Context);
+
+		int32 NumUnreachable = 0;
+		int32 NumAttributeClauses = 0;
+		Variant->GetMaterialSwaps(MaterialRowsByPath.Add(VariantPath), NumUnreachable, NumAttributeClauses);
+		if (NumUnreachable > 0)
+		{
+			PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("Variant '{0}': {1} material swap row(s) can never apply (an earlier row for the same material has no tag filter, or the same one)."), FText::FromString(Variant->GetName()), FText::AsNumber(NumUnreachable)));
+		}
+		if (NumAttributeClauses > 0)
+		{
+			PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("Variant '{0}': {1} material swap tag filter clause(s) are set to Attribute and read nothing; only constant values apply."), FText::FromString(Variant->GetName()), FText::AsNumber(NumAttributeClauses)));
+		}
 
 		// Entry micro caches only exist once the collection cache is built, and nothing upstream
 		// guarantees that for variants (map-pin collections get theirs from UnpackPin).
@@ -335,11 +451,7 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 			}
 		}
 
-		if (Context->SwapMapsPerIO.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
-		{
-			PCGE_LOG(Warning, GraphAndLog, FTEXT("No applicable variant mappings -- points and map are forwarded unchanged."));
-		}
-
+		PCGExStagingSwap::FinalizeSwaps(Context, Settings, MaterialRowsByPath, !Context->SwapMapsPerIO.IsEmpty());
 		return;
 	}
 
@@ -364,8 +476,11 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 				continue;
 			}
 
+			const FSoftObjectPath VariantPath(Pair.Value.Get());
+			Context->SlotVariantPaths[i].Add(VariantPath);
+
 			// GetContribution caches by path, so a variant shared across slots resolves/registers once.
-			const TSharedPtr<TMap<uint64, uint64>> Contribution = GetContribution(FSoftObjectPath(Pair.Value.Get()));
+			const TSharedPtr<TMap<uint64, uint64>> Contribution = GetContribution(VariantPath);
 			if (Contribution && !Contribution->IsEmpty())
 			{
 				ByHash->Add(Pair.Key, Contribution);
@@ -376,7 +491,7 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 	}
 
 	// Assemble ordered layers per IO -- uniform slots as fixed maps, per-point slots as (keys + ByHash).
-	const int32 NumSlots = Settings->VariantCollections.Num();
+	const int32 NumSlots = Context->VariantSlots.Num();
 	for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
 	{
 		const int32 IOIndex = IO->IOIndex;
@@ -429,10 +544,7 @@ void FPCGExStagingSwapElement::PostLoadAssetsDependencies(FPCGExContext* InConte
 		}
 	}
 
-	if (Context->LayersPerIO.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
-	{
-		PCGE_LOG(Warning, GraphAndLog, FTEXT("No applicable variant mappings -- points and map are forwarded unchanged."));
-	}
+	PCGExStagingSwap::FinalizeSwaps(Context, Settings, MaterialRowsByPath, !Context->LayersPerIO.IsEmpty());
 }
 
 bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
@@ -465,11 +577,48 @@ bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
+	if (const int32 NumUnknownStamps = Context->NumUnknownStamps.load(std::memory_order_relaxed); NumUnknownStamps > 0)
+	{
+		if (Context->MaterialSwapChain.HasStage())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} point(s) carry a material swap stamp the Map pin has no table for: only this node's material swaps apply to them."), FText::AsNumber(NumUnknownStamps)));
+		}
+		else
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} point(s) carry a material swap stamp the Map pin has no table for: their materials are no longer swapped on the output layer."), FText::AsNumber(NumUnknownStamps)));
+		}
+	}
+
 	Context->MainPoints->StageOutputs();
 
 	{
 		UPCGParamData* OutputSet = Context->ManagedObjects->New<UPCGParamData>();
 		Context->CollectionPickDatasetPacker->PackToDataset(OutputSet);
+
+		if (Context->bRestampPoints)
+		{
+			// Only the tables an output point follows: the chained ones some point got, and the layers left alone.
+			const PCGExCollections::FMaterialSwapChain& Chain = Context->MaterialSwapChain;
+			TArray<bool> Stamped;
+			Stamped.SetNumUninitialized(Chain.Num());
+			for (int32 Slot = 0; Slot < Chain.Num(); Slot++)
+			{
+				Stamped[Slot] = Context->StampedSlots[Slot].load(std::memory_order_relaxed);
+			}
+
+			const PCGExCollections::FMaterialSwapLibrary OutputSwaps = Chain.Assemble(Context->IncomingMaterialSwaps, Context->bKeepIncomingTables.load(std::memory_order_relaxed), Stamped);
+			OutputSwaps.PackToDataset(OutputSet);
+
+			// Collisions among the incoming tables were reported by UnpackPin; these are the ones this node created.
+			if (const int32 NumCollisions = Chain.GetNumCollisions() + OutputSwaps.GetNumCollisions() - Context->IncomingMaterialSwaps.GetNumCollisions(); NumCollisions > 0)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} chained material swap table(s) share an id with a different table: their points follow the other table's swaps."), FText::AsNumber(NumCollisions)));
+			}
+		}
+		else
+		{
+			Context->IncomingMaterialSwaps.PackToDataset(OutputSet);
+		}
 
 		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}
@@ -485,6 +634,13 @@ namespace PCGExStagingSwap
 {
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
+		// An input that leaves without its stamp loop keeps its incoming stamps, so the output Map must keep their tables.
+		bool bStampLoopStarted = false;
+		ON_SCOPE_EXIT
+		{
+			if (Context->bRestampPoints && !bStampLoopStarted) { Context->bKeepIncomingTables.store(true, std::memory_order_relaxed); }
+		};
+
 		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
 
 		if (!IProcessor::Process(InTaskManager))
@@ -500,7 +656,7 @@ namespace PCGExStagingSwap
 		const FName TargetAttributeName = Settings->GetOutputEntryIdxAttributeName();
 		bCrossLayer = SourceAttributeName != TargetAttributeName;
 
-		// No mapping for this input -> pass through untouched (the init policy already forwarded/duplicated it).
+		// No mapping for this input -> its picks pass through untouched (the init policy already forwarded/duplicated it).
 		// Cross-layer must still run so the output layer exists on every output (pure copy of source picks).
 		bool bHasMapping = false;
 		if (Context->bHasPerPointSlots)
@@ -526,8 +682,31 @@ namespace PCGExStagingSwap
 			}
 		}
 
+		// Every output point names the table its materials follow: the spawner's per-input ISM reuse compares the points'
+		// content, never the Overrides pin, and points merged from other branches keep their own stamp.
+		if (Context->bRestampPoints)
+		{
+			const FName InStampName = PCGExCollections::Labels::MaterialSwapIdName(Settings->StagingLayer);
+			if (PointDataFacade->GetIn()->ConstMetadata()->HasAttribute(InStampName))
+			{
+				StampReader = PointDataFacade->GetReadable<int32>(InStampName, PCGExData::EIOSide::In, true);
+			}
+
+			// Inherit, like the pick hash pair: reader and writer can name the same attribute.
+			StampWriter = PointDataFacade->GetWritable<int32>(PCGExCollections::Labels::MaterialSwapIdName(Settings->GetOutputStagingLayer()), 0, false, PCGExData::EBufferInit::Inherit);
+			if (!StampWriter)
+			{
+				return false;
+			}
+		}
+
 		if (!bHasMapping && !bCrossLayer)
 		{
+			if (StampWriter)
+			{
+				bStampLoopStarted = true;
+				StartParallelLoopForPoints(PCGExData::EIOSide::In);
+			}
 			return true;
 		}
 
@@ -577,6 +756,7 @@ namespace PCGExStagingSwap
 			}
 		}
 
+		bStampLoopStarted = true;
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 		return true;
 	}
@@ -587,6 +767,52 @@ namespace PCGExStagingSwap
 
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
+
+		// Every point, filtered or not: a point's table follows its lineage, not this node's filters.
+		if (StampWriter)
+		{
+			const PCGExCollections::FMaterialSwapChain& Chain = Context->MaterialSwapChain;
+
+			// Points of one input mostly share a stamp: remap a run once.
+			uint32 LastIn = 0;
+			bool bLastUnknown = false;
+			int32 LastSlot = Chain.Remap(0, bLastUnknown);
+			uint32 LastOut = LastSlot != INDEX_NONE ? Chain.GetId(LastSlot) : 0u;
+			int32 FlaggedSlot = INDEX_NONE;
+			int32 NumUnknown = 0;
+
+			PCGEX_SCOPE_LOOP(Index)
+			{
+				const uint32 InStamp = StampReader ? static_cast<uint32>(StampReader->Read(Index)) : 0u;
+				if (InStamp != LastIn)
+				{
+					LastIn = InStamp;
+					LastSlot = Chain.Remap(InStamp, bLastUnknown);
+					LastOut = LastSlot != INDEX_NONE ? Chain.GetId(LastSlot) : 0u;
+				}
+
+				// The output Map carries only the tables some point was stamped with.
+				if (LastSlot != FlaggedSlot && LastSlot != INDEX_NONE)
+				{
+					Context->StampedSlots[LastSlot].store(true, std::memory_order_relaxed);
+					FlaggedSlot = LastSlot;
+				}
+
+				if (bLastUnknown) { NumUnknown++; }
+				StampWriter->SetValue(Index, static_cast<int32>(LastOut));
+			}
+
+			if (NumUnknown > 0)
+			{
+				Context->NumUnknownStamps.fetch_add(NumUnknown, std::memory_order_relaxed);
+			}
+		}
+
+		// Stamp-only input: no pick to read or write.
+		if (!HashReader)
+		{
+			return;
+		}
 
 		PCGExCollections::FMicroSelectorHelper* LocalMicroHelper = MicroHelper.Get();
 		const TConstPCGValueRange<int32> Seeds = LocalMicroHelper ? PointDataFacade->GetIn()->GetConstSeedValueRange() : TConstPCGValueRange<int32>();

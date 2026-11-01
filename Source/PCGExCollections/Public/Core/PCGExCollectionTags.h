@@ -22,10 +22,11 @@ namespace PCGExCollections::Tags
 	/**
 	 * Visit the tags an entry is matched on. InTagSources is EPCGExAssetTagInheritance bits: Asset reads
 	 * Entry.Tags, Collection adds the sub-collection's CollectionTags for sub-collection entries (a hard
-	 * reference, so no load is involved). Other bits are ignored. Fn returns false to stop early.
+	 * reference, so no load is involved) and, when given, InHost's: the collection holding a resolved entry.
+	 * Other bits are ignored. Fn returns false to stop early.
 	 */
 	template <typename Fn>
-	void ForEachEntryTag(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, Fn&& InFn)
+	void ForEachEntryTag(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, Fn&& InFn, const UPCGExAssetCollection* InHost = nullptr)
 	{
 		if (InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 		{
@@ -35,9 +36,22 @@ namespace PCGExCollections::Tags
 			}
 		}
 
-		if ((InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Collection)) && InEntry.HasValidSubCollection())
+		if (!(InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Collection)))
+		{
+			return;
+		}
+
+		if (InEntry.HasValidSubCollection())
 		{
 			for (const FName& Tag : InEntry.GetSubCollectionPtr()->CollectionTags)
+			{
+				if (!InFn(Tag)) { return; }
+			}
+		}
+
+		if (InHost)
+		{
+			for (const FName& Tag : InHost->CollectionTags)
 			{
 				if (!InFn(Tag)) { return; }
 			}
@@ -145,8 +159,9 @@ namespace PCGExCollections::Tags
 		}
 	};
 
-	/** Direct test of one entry; agrees with Compile + Test over an index built with the same tag sources. */
-	PCGEXCOLLECTIONS_API bool Matches(const FPCGExAssetCollectionEntry& InEntry, uint8 InTagSources, const FTagLists& InLists);
+	/** Direct test of one entry; without InHost it agrees with Compile + Test over an index built with the same tag
+	 *  sources. InHost adds its CollectionTags under the Collection source (see ForEachEntryTag). */
+	PCGEXCOLLECTIONS_API bool Matches(const FPCGExAssetCollectionEntry& InEntry, uint8 InTagSources, const FTagLists& InLists, const UPCGExAssetCollection* InHost = nullptr);
 
 	/**
 	 * Compile three operand lists against an index. Unknown tags (no entry in the index carries them):

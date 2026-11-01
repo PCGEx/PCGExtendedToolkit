@@ -47,7 +47,8 @@ namespace PCGExMetaHelpers
 				if (Num > 0) { return Num; }
 			}
 		}
-		if (const UPCGMetadata* Metadata = InData->ConstMetadata()) { return static_cast<int32>(Metadata->GetLocalItemCount()); }
+		// Inherited entries included: the range the entry keys enumerate.
+		if (const UPCGMetadata* Metadata = InData->ConstMetadata()) { return static_cast<int32>(Metadata->GetItemCountForChild()); }
 		return 0;
 	}
 

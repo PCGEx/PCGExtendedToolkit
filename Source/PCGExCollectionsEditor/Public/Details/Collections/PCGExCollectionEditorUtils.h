@@ -8,11 +8,14 @@
 
 class FProperty;
 class IPropertyHandle;
+class SWidget;
 class UPCGExAssetCollection;
 class UPCGExVariantCollection;
 class UPackage;
 
+class UClass;
 class UScriptStruct;
+struct FAssetPickerConfig;
 struct FPCGExAssetCollectionEntry;
 
 /** Utility functions for collection editing. Operate on any UPCGExAssetCollection. */
@@ -36,6 +39,10 @@ namespace PCGExCollectionEditorUtils
 
 	/** UI label for an entry struct: the ShortName meta ("Actor") with display-name fallback. */
 	PCGEXCOLLECTIONSEDITOR_API FText GetEntryTypeLabel(const UScriptStruct* EntryStruct);
+
+	/** Content browser asset picker sized for a dropdown or context menu: single selection, list view, no null selection.
+	 *  Callers provide the selected-callback and any filter; InAllowedClass, when given, keeps that class and its children. */
+	PCGEXCOLLECTIONSEDITOR_API TSharedRef<SWidget> MakeAssetPickerMenu(FAssetPickerConfig&& PickerConfig, const UClass* InAllowedClass = nullptr);
 
 	/**
 	 * Every registered concrete entry type (base entry struct excluded), sorted by label.

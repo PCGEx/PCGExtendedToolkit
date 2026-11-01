@@ -17,6 +17,7 @@
 #include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 #include "Helpers/PCGExGetCollectionDataFlatten.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
@@ -116,7 +117,7 @@ TArray<FPCGPinProperties> UPCGExGetCollectionDataSettings::OutputPinProperties()
 		PCGEX_PIN_ANY(PCGExGetCollectionData::AnnotatedSourcesPin, TEXT("One forwarded copy of each Sources input, augmented with identity attributes (RootCollectionIndex / CollectionIndex / CollectionHash where their respective output toggles are on)."), Required)
 	}
 	PCGEX_PIN_PARAMS(PCGExGetCollectionData::OutputCollectionDataPin, TEXT("One attribute set per resolved source (see Fanout)."), Required)
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::OutputCollectionMapLabel, TEXT("Collection map covering every host referenced by the emitted attribute sets."), Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, TEXT("Collection map covering every host referenced by the emitted attribute sets, with any material swap rows the input Map pin carried."), Required)
 	return PinProperties;
 }
 
@@ -1352,9 +1353,11 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	PCGExCollections::Tags::FTagLists TagLists;
 	if (Settings->bUseTagFilter)
 	{
-		const FPCGExBaseTagFilterDetails& TF = Settings->TagFilter;
-		auto ConstantOf = [](const FPCGExInputShorthandNameName& Clause) { return Clause.Input == EPCGExInputValueType::Constant ? Clause.Constant : NAME_None; };
-		TagLists.Parse(ConstantOf(TF.RequireAll), ConstantOf(TF.RequireAny), ConstantOf(TF.Exclude), TF.bParseCommaSeparatedLists);
+		FName AllTags;
+		FName AnyTags;
+		FName ExcludedTags;
+		Settings->TagFilter.GetConstantClauses(AllTags, AnyTags, ExcludedTags);
+		TagLists.Parse(AllTags, AnyTags, ExcludedTags, Settings->TagFilter.bParseCommaSeparatedLists);
 	}
 
 	// Shared host -> CollectionIndex map + counter, and (Root, Coll, Depth) -> CollectionHash map
@@ -1432,6 +1435,8 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 		{
 			return Pin == PCGExCollections::Labels::OutputCollectionMapLabel ? OutputMap->Metadata.Get() : nullptr;
 		});
+
+		PCGExCollections::FMaterialSwapLibrary::ForwardInto(InContext, OutputMap);
 	}
 
 	InContext->Done();

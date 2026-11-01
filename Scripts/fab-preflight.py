@@ -1436,6 +1436,55 @@ def check_weakobjectptr_fwd_only(tree):
     return out
 
 
+STATIC_CLASS_RE = re.compile(r'\b(U[A-Za-z_]\w*)\s*::\s*StaticClass\s*\(\s*\)')
+EXPORTED_UCLASS_RE = re.compile(r'^\s*class\s+[A-Z_0-9]+_API\s+(U[A-Za-z_]\w*)\b', re.M)
+
+
+@check("transitive-link-dep", "error",
+       "A .cpp's include closure reaches inline code calling UX::StaticClass() -- typically a struct default "
+       "'TSubclassOf<UX> T = UX::StaticClass();' held by value in another module's type -- while UX's module is "
+       "not a dependency of the .cpp's own module (it only arrived through someone else's public dependency). "
+       "MSVC calls the inline members of dllimport'ed types through the owning DLL's exports, so Windows links; "
+       "Mac clang inlines the chain into the .o and needs UX's module directly: 'Undefined symbols: "
+       "Z_Construct_UClass_UX' (FAB Mac, PCGExToolsetValency -> PCGExElementsTensors, 2026-10-31). The local "
+       "gate cannot see it: MSVC links via the exports and its Clang pass does not link.")
+def check_transitive_link_dep(tree):
+    owners = {}                                   # exported class -> modules defining it
+    for h in tree.headers:
+        for cls in EXPORTED_UCLASS_RE.findall(tree.stripped(h)):
+            owners.setdefault(cls, set()).add(tree.module_of(h))
+    uses = {h: set(STATIC_CLASS_RE.findall(tree.stripped(h))) for h in tree.headers}
+    declared = {}
+
+    def depends(module, other):
+        # Any literal naming the module counts, in any statement shape: missing a real dependency is the
+        # defect, so a conditional or helper-built list must not read as absent.
+        if module not in declared:
+            rules = f"{tree.module_dir[module]}/{module}.Build.cs"
+            declared[module] = set(LITERAL_RE.findall(tree.stripped(rules)))
+        return f'"{other}"' in declared[module]
+
+    out, seen = [], set()
+    for tu in tree.sources:
+        module = tree.module_of(tu)
+        if not module:
+            continue
+        for h in sorted(tree.closure(tu)):
+            for cls in sorted(uses.get(h, ())):
+                mods = {m for m in owners.get(cls, ()) if m}   # a header outside every module has no owner
+                if not mods or module in mods or any(depends(module, m) for m in mods):
+                    continue
+                other = sorted(mods)[0]
+                if (module, other) in seen:
+                    continue
+                seen.add((module, other))
+                out.append(Finding("transitive-link-dep", "error", tu, 1,
+                                   f"{module} inlines {cls}::StaticClass() (via {os.path.basename(h)}) but does not "
+                                   f"depend on {other}",
+                                   f'add "{other}" to PrivateDependencyModuleNames in {module}.Build.cs'))
+    return out
+
+
 # TWeakObjectPtr<T>'s operator=(U*) and raw-pointer constructor (5.8 UObject/WeakObjectPtrTemplates.h) convert T* to
 # UObject*, which needs the complete T. Get() is a C-style cast and weak-to-weak copies never convert.
 WEAK_TPL = r'\bTWeakObjectPtr\s*<\s*(?:const\s+)?(?:class\s+)?(?:::)?([A-Za-z_]\w*)\s*>'
@@ -2966,6 +3015,66 @@ def rules_fixtures():
 
 SELFTEST.update(rules_fixtures())
 
+# transitive-link-dep: LinkUser reaches ULinkSampler::StaticClass() through LinkMid's public dependency on
+# LinkOwner. Must stay silent for a module that lists LinkOwner and for LinkOwner's own .cpp.
+SELFTEST.update({
+    "Link/LinkOwner/LinkOwner.Build.cs": "// module marker\n",
+    "Link/LinkOwner/Public/LinkSampler.h": (
+        "#pragma once\n"
+        "class LINKOWNER_API ULinkSampler : public UObject\n"
+        "{\n"
+        "};\n"),
+    "Link/LinkOwner/Public/LinkDetails.h": (
+        "#pragma once\n"
+        '#include "LinkSampler.h"\n'
+        "struct LINKOWNER_API FLinkDetails\n"
+        "{\n"
+        "\tTSubclassOf<ULinkSampler> Sampler = ULinkSampler::StaticClass();\n"
+        "};\n"),
+    "Link/LinkOwner/Private/LinkOwnerNegativeSelf.cpp": (
+        '#include "LinkDetails.h"\n'
+        "static FLinkDetails OwnDetails;\n"),
+    "Link/LinkMid/LinkMid.Build.cs": (
+        "public class LinkMid : ModuleRules\n"
+        "{\n"
+        "\tpublic LinkMid(ReadOnlyTargetRules Target) : base(Target)\n"
+        "\t{\n"
+        '\t\tPublicDependencyModuleNames.AddRange(new string[] { "Core", "LinkOwner" });\n'
+        "\t}\n"
+        "}\n"),
+    "Link/LinkMid/Public/LinkGuidance.h": (
+        "#pragma once\n"
+        '#include "LinkDetails.h"\n'
+        "struct LINKMID_API FLinkGuidance\n"
+        "{\n"
+        "\tFLinkDetails Details;\n"
+        "};\n"),
+    "Link/LinkUser/LinkUser.Build.cs": (
+        "public class LinkUser : ModuleRules\n"
+        "{\n"
+        "\tpublic LinkUser(ReadOnlyTargetRules Target) : base(Target)\n"
+        "\t{\n"
+        "\t\t// \"LinkOwner\" in a comment is not a dependency\n"
+        '\t\tPublicDependencyModuleNames.AddRange(new string[] { "Core", "LinkMid" });\n'
+        "\t}\n"
+        "}\n"),
+    "Link/LinkUser/Private/LinkDryRun.cpp": (
+        '#include "LinkGuidance.h"\n'
+        "void LinkDryRun() { FLinkGuidance Guidance; (void)Guidance; }\n"),
+    "Link/LinkNegativeUser/LinkNegativeUser.Build.cs": (
+        "public class LinkNegativeUser : ModuleRules\n"
+        "{\n"
+        "\tpublic LinkNegativeUser(ReadOnlyTargetRules Target) : base(Target)\n"
+        "\t{\n"
+        '\t\tPublicDependencyModuleNames.AddRange(new string[] { "Core", "LinkMid" });\n'
+        "\t\tif (Target.bBuildEditor) { PrivateDependencyModuleNames.Add(\"LinkOwner\"); }\n"
+        "\t}\n"
+        "}\n"),
+    "Link/LinkNegativeUser/Private/LinkNegativeUse.cpp": (
+        '#include "LinkGuidance.h"\n'
+        "void LinkNegativeUse() { FLinkGuidance Guidance; (void)Guidance; }\n"),
+})
+
 # check -> minimum findings on the defect fixtures. A multi-pattern detector must fire once per
 # pattern; "fires at all" would let a single dead pattern hide behind its siblings.
 SELFTEST_EXPECT = {
@@ -2976,6 +3085,7 @@ SELFTEST_EXPECT = {
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
     "upackage-as-outer": 1, "editor-only-call": 15, "weakobjectptr-incomplete": 16,
+    "transitive-link-dep": 1,
 }
 # check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
 # pre-flight from failing on a real defect.

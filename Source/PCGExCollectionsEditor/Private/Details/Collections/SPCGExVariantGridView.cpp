@@ -9,8 +9,10 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "IContentBrowserSingleton.h"
 #include "IDetailsView.h"
 #include "IStructureDetailsView.h"
+#include "Materials/MaterialInterface.h"
 #include "Misc/ITransaction.h"
 #include "Details/Collections/PCGExGenericAssetPickerCustomization.h"
 #include "Modules/ModuleManager.h"
@@ -28,6 +30,7 @@
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Details/Collections/SPCGExCollectionCategoryGroup.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
@@ -55,6 +58,9 @@ namespace PCGExVariantGrid
 	// Synthetic group hosting the asset-path swap rules.
 	inline const FName AssetSwapsGroupName = FName(TEXT("Asset Swaps"));
 
+	// Synthetic group hosting the material swap rows, in priority order.
+	inline const FName MaterialSwapsGroupName = FName(TEXT("Material Swaps"));
+
 	// Any collection subtype except the variant itself (other variants ARE legal --
 	// daisy-chained swap nodes). Registry-only class check, no asset load.
 	inline bool CanBeSource(const FAssetData& InAsset, const UPCGExVariantCollection* InVariant)
@@ -68,6 +74,7 @@ namespace PCGExVariantGrid
 	inline bool SameIdentity(const FPCGExVariantGridItem& A, const FPCGExVariantGridItem& B)
 	{
 		return A.bIsRuleDefinition == B.bIsRuleDefinition
+			&& A.MaterialSwapIdx == B.MaterialSwapIdx
 			&& A.GroupIdx == B.GroupIdx
 			&& A.SourceRawIndex == B.SourceRawIndex
 			&& A.SourceEntryId == B.SourceEntryId
@@ -117,7 +124,10 @@ void SPCGExVariantGridTile::UpdateItem(const int32 InItemIndex, const FPCGExVari
 		|| Item.SourceSymbol != InItem.SourceSymbol
 		|| Item.OverrideSymbol != InItem.OverrideSymbol
 		|| Item.SourceSymbolColor != InItem.SourceSymbolColor
-		|| Item.OverrideSymbolColor != InItem.OverrideSymbolColor;
+		|| Item.OverrideSymbolColor != InItem.OverrideSymbolColor
+		|| Item.bMaterialSwapGated != InItem.bMaterialSwapGated
+		|| Item.bMaterialSwapUnreachable != InItem.bMaterialSwapUnreachable
+		|| Item.bMaterialSwapMatchUnset != InItem.bMaterialSwapMatchUnset;
 
 	Item = InItem;
 
@@ -136,24 +146,64 @@ void SPCGExVariantGridTile::RebuildContent()
 	const bool bShowsReplacement =
 		State == EPCGExVariantTileState::Swapped ||
 		State == EPCGExVariantTileState::SwappedByRule ||
-		State == EPCGExVariantTileState::RuleDefinition;
+		State == EPCGExVariantTileState::RuleDefinition ||
+		State == EPCGExVariantTileState::MaterialSwap;
 	const FSoftObjectPath& MainPath = bShowsReplacement ? Item.OverrideThumbPath : Item.SourceThumbPath;
 
 	TSharedRef<SOverlay> Overlay = SNew(SOverlay);
 
+	// Red tint with a centred caption: a tile that can't apply as authored.
+	auto AddAlert = [&Overlay](const FText& InCaption, const FText& InTooltip)
+	{
+		const TSharedRef<SBorder> Alert = SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FLinearColor(0.5f, 0.05f, 0.05f, 0.5f))
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text(InCaption)
+				.Justification(ETextJustify::Center)
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
+			];
+
+		if (!InTooltip.IsEmpty())
+		{
+			Alert->SetToolTipText(InTooltip);
+		}
+
+		Overlay->AddSlot()
+		[
+			Alert
+		];
+	};
+
+	// Indicator icon in the top-left corner.
+	auto AddCornerIcon = [&Overlay](const FName InBrush, const FText& InTooltip)
+	{
+		Overlay->AddSlot()
+		.HAlign(HAlign_Left)
+		.VAlign(VAlign_Top)
+		.Padding(3.f)
+		[
+			SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.7f))
+			.Padding(2.f)
+			.ToolTipText(InTooltip)
+			[
+				SNew(SImage).Image(FAppStyle::Get().GetBrush(InBrush))
+			]
+		];
+	};
+
 	Overlay->AddSlot()
 	[
-		SNew(SBox)
-		.WidthOverride(TileSize)
-		.HeightOverride(TileSize)
-		.Clipping(EWidgetClipping::ClipToBounds)
-		[
-			MakeThumbnail(MainPath, TileSize)
-		]
+		MakeThumbnail(MainPath)
 	];
 
-	// Pass-through/unset-rule dim + orphan tint
-	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::RuleUnset)
+	// Pass-through/unset dim + orphan tint
+	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::RuleUnset || State == EPCGExVariantTileState::MaterialSwapUnset)
 	{
 		Overlay->AddSlot()
 		[
@@ -164,20 +214,18 @@ void SPCGExVariantGridTile::RebuildContent()
 	}
 	else if (State == EPCGExVariantTileState::Orphaned)
 	{
-		Overlay->AddSlot()
-		[
-			SNew(SBorder)
-			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FLinearColor(0.5f, 0.05f, 0.05f, 0.5f))
-			.HAlign(HAlign_Center)
-			.VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("OrphanedTile", "Missing\nsource entry"))
-				.Justification(ETextJustify::Center)
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 9))
-			]
-		];
+		AddAlert(LOCTEXT("OrphanedTile", "Missing\nsource entry"), FText::GetEmpty());
+	}
+
+	// The table ignores a row without a match, and drops the rows the Swap node warns about as unreachable.
+	const FText NeverApplies = LOCTEXT("UnreachableMaterialSwapTile", "Never\napplies");
+	if (Item.bMaterialSwapMatchUnset)
+	{
+		AddAlert(NeverApplies, LOCTEXT("UnmatchedMaterialSwapTooltip", "No material to match: set Match Material in the details panel."));
+	}
+	else if (Item.bMaterialSwapUnreachable)
+	{
+		AddAlert(NeverApplies, LOCTEXT("UnreachableMaterialSwapTooltip", "An earlier row for the same material always wins over this one (it has no tag filter, or the same one), so this row never applies."));
 	}
 
 	// Source badge (bottom-left) when a replacement shows — the "before" in before→after.
@@ -199,24 +247,27 @@ void SPCGExVariantGridTile::RebuildContent()
 				.HeightOverride(BadgeSize)
 				.Clipping(EWidgetClipping::ClipToBounds)
 				[
-					MakeThumbnail(Item.SourceThumbPath, BadgeSize)
+					MakeThumbnail(Item.SourceThumbPath)
 				]
 			]
 		];
 	}
 
-	// Actions (top-right): declare/specialize ("+") or revoke ("×"), by state. Rule tiles
-	// prepend a delete button — revoke only clears the payload, delete removes the whole rule.
+	// Actions (top-right): declare/specialize ("+") or revoke ("x"), by state. Rule and material swap tiles
+	// prepend a delete button -- revoke only clears the payload / replacement, delete removes the whole row.
 	const TSharedRef<SHorizontalBox> ActionsBox = SNew(SHorizontalBox);
+	const bool bIsMaterialSwap = Item.MaterialSwapIdx != INDEX_NONE;
 
-	if (Item.bIsRuleDefinition)
+	if (Item.bIsRuleDefinition || bIsMaterialSwap)
 	{
 		ActionsBox->AddSlot()
 		.AutoWidth()
 		[
 			SNew(SButton)
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-			.ToolTipText(LOCTEXT("DeleteRuleTooltip", "Delete this asset swap rule -- the asset reference and its payload are removed from the collection"))
+			.ToolTipText(bIsMaterialSwap
+				             ? LOCTEXT("DeleteMaterialSwapTooltip", "Delete this material swap row")
+				             : LOCTEXT("DeleteRuleTooltip", "Delete this asset swap rule -- the asset reference and its payload are removed from the collection"))
 			.OnClicked_Lambda([this]() { OnDeleteRule.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
 			[
 				SNew(SImage).Image(FAppStyle::Get().GetBrush("Icons.Delete"))
@@ -224,18 +275,29 @@ void SPCGExVariantGridTile::RebuildContent()
 		];
 	}
 
-	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::SwappedByRule || State == EPCGExVariantTileState::RuleUnset)
+	if (State == EPCGExVariantTileState::PassThrough || State == EPCGExVariantTileState::SwappedByRule
+		|| State == EPCGExVariantTileState::RuleUnset || State == EPCGExVariantTileState::MaterialSwapUnset)
 	{
+		FText DeclareTooltip = LOCTEXT("DeclareSwapTooltip", "Declare a swap for this entry -- choose the replacement's entry type, or start from a copy of the source entry");
+		if (State == EPCGExVariantTileState::SwappedByRule)
+		{
+			DeclareTooltip = LOCTEXT("SpecializeSwapTooltip", "Specialize: declare an explicit swap for this entry, overriding the asset rule");
+		}
+		else if (State == EPCGExVariantTileState::RuleUnset)
+		{
+			DeclareTooltip = LOCTEXT("DeclareRuleSwapTooltip", "Declare what this asset swaps to -- choose the replacement's entry type, or start from a copy of a source entry staging the asset");
+		}
+		else if (State == EPCGExVariantTileState::MaterialSwapUnset)
+		{
+			DeclareTooltip = LOCTEXT("PickMaterialReplacementTooltip", "Pick the material rendered instead");
+		}
+
 		ActionsBox->AddSlot()
 		.AutoWidth()
 		[
 			SNew(SButton)
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-			.ToolTipText(State == EPCGExVariantTileState::SwappedByRule
-				             ? LOCTEXT("SpecializeSwapTooltip", "Specialize: declare an explicit swap for this entry, overriding the asset rule")
-				             : State == EPCGExVariantTileState::RuleUnset
-				             ? LOCTEXT("DeclareRuleSwapTooltip", "Declare what this asset swaps to -- choose the replacement's entry type, or start from a copy of a source entry staging the asset")
-				             : LOCTEXT("DeclareSwapTooltip", "Declare a swap for this entry -- choose the replacement's entry type, or start from a copy of the source entry"))
+			.ToolTipText(DeclareTooltip)
 			.OnClicked_Lambda([this]() { OnDeclareSwap.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
 			[
 				SNew(SImage).Image(FAppStyle::Get().GetBrush("Icons.Plus"))
@@ -244,14 +306,22 @@ void SPCGExVariantGridTile::RebuildContent()
 	}
 	else
 	{
+		FText RevokeTooltip = LOCTEXT("RevokeSwapTooltip", "Remove this swap (the source entry passes through unchanged)");
+		if (State == EPCGExVariantTileState::RuleDefinition)
+		{
+			RevokeTooltip = LOCTEXT("RevokeRuleSwapTooltip", "Remove this rule's swap payload -- the asset reference stays as an unswapped rule; covered entries revert to pass-through");
+		}
+		else if (State == EPCGExVariantTileState::MaterialSwap)
+		{
+			RevokeTooltip = LOCTEXT("ClearMaterialReplacementTooltip", "Clear this row's replacement -- the row stays, unset, and swaps nothing");
+		}
+
 		ActionsBox->AddSlot()
 		.AutoWidth()
 		[
 			SNew(SButton)
 			.ButtonStyle(FAppStyle::Get(), "SimpleButton")
-			.ToolTipText(State == EPCGExVariantTileState::RuleDefinition
-				             ? LOCTEXT("RevokeRuleSwapTooltip", "Remove this rule's swap payload -- the asset reference stays as an unswapped rule; covered entries revert to pass-through")
-				             : LOCTEXT("RevokeSwapTooltip", "Remove this swap (the source entry passes through unchanged)"))
+			.ToolTipText(RevokeTooltip)
 			.OnClicked_Lambda([this]() { OnRevokeSwap.ExecuteIfBound(ItemIndex); return FReply::Handled(); })
 			[
 				SNew(SImage).Image(FAppStyle::Get().GetBrush("Icons.X"))
@@ -267,26 +337,17 @@ void SPCGExVariantGridTile::RebuildContent()
 		ActionsBox
 	];
 
-	// Rule-coverage indicator (top-left) on tiles swapped via an asset rule.
+	// Rule coverage on tiles swapped via an asset rule; tag filter on gated material swap rows.
 	if (State == EPCGExVariantTileState::SwappedByRule)
 	{
-		Overlay->AddSlot()
-		.HAlign(HAlign_Left)
-		.VAlign(VAlign_Top)
-		.Padding(3.f)
-		[
-			SNew(SBorder)
-			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.7f))
-			.Padding(2.f)
-			.ToolTipText(LOCTEXT("RuleCoveredTooltip", "Swapped by an asset rule (see the Asset Swaps group). Edits to the payload affect every entry the rule covers."))
-			[
-				SNew(SImage).Image(FAppStyle::Get().GetBrush("Icons.Link"))
-			]
-		];
+		AddCornerIcon(FName("Icons.Link"), LOCTEXT("RuleCoveredTooltip", "Swapped by an asset rule (see the Asset Swaps group). Edits to the payload affect every entry the rule covers."));
+	}
+	else if (Item.bMaterialSwapGated)
+	{
+		AddCornerIcon(FName("Icons.Filter"), LOCTEXT("GatedMaterialSwapTooltip", "Applies only to entries whose tags pass this row's tag filter (edit it in the details panel)."));
 	}
 
-	// Label (bottom, full width)
+	// Label (bottom, full width), with the full text as tooltip since it ellipsizes.
 	Overlay->AddSlot()
 	.HAlign(HAlign_Fill)
 	.VAlign(VAlign_Bottom)
@@ -295,6 +356,7 @@ void SPCGExVariantGridTile::RebuildContent()
 		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
 		.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.6f))
 		.Padding(FMargin(4.f, 2.f))
+		.ToolTipText(Item.Label)
 		[
 			SNew(STextBlock)
 			.Text(Item.Label)
@@ -383,7 +445,15 @@ void SPCGExVariantGridTile::RebuildContent()
 		];
 	}
 
-	RootBorder->SetContent(Overlay);
+	// Fixed size: overlay content (the label above all) ellipsizes or clips, it never widens the tile.
+	RootBorder->SetContent(
+		SNew(SBox)
+		.WidthOverride(TileSize)
+		.HeightOverride(TileSize)
+		.Clipping(EWidgetClipping::ClipToBounds)
+		[
+			Overlay
+		]);
 }
 
 FReply SPCGExVariantGridTile::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
@@ -396,7 +466,7 @@ FReply SPCGExVariantGridTile::OnMouseButtonDown(const FGeometry& MyGeometry, con
 	return FReply::Unhandled();
 }
 
-TSharedRef<SWidget> SPCGExVariantGridTile::MakeThumbnail(const FSoftObjectPath& AssetPath, const float InSize) const
+TSharedRef<SWidget> SPCGExVariantGridTile::MakeThumbnail(const FSoftObjectPath& AssetPath) const
 {
 	if (AssetPath.IsNull() || !ThumbnailPool.IsValid())
 	{
@@ -422,8 +492,9 @@ TSharedRef<SWidget> SPCGExVariantGridTile::MakeThumbnail(const FSoftObjectPath& 
 
 	if (!Thumbnail.IsValid())
 	{
+		// Tile size whatever the slot: the cache is keyed by path, so a badge-sized render would be reused upscaled.
 		const FAssetData AssetData = PCGExCollectionEditorUtils::ResolveEntryAssetData(AssetPath);
-		Thumbnail = MakeShared<FAssetThumbnail>(AssetData, FMath::RoundToInt32(InSize), FMath::RoundToInt32(InSize), ThumbnailPool);
+		Thumbnail = MakeShared<FAssetThumbnail>(AssetData, FMath::RoundToInt32(TileSize), FMath::RoundToInt32(TileSize), ThumbnailPool);
 		if (ThumbnailCachePtr)
 		{
 			ThumbnailCachePtr->Add(AssetPath, Thumbnail);
@@ -524,12 +595,14 @@ void SPCGExVariantGridView::RefreshGrid(const bool bRefreshDetailPanel)
 	int32 PrevGroup = INDEX_NONE;
 	int32 PrevEntryId = 0;
 	int32 PrevRuleIdx = INDEX_NONE;
+	int32 PrevMaterialSwapIdx = INDEX_NONE;
 	bool bPrevWasRule = false;
 	if (Items.IsValidIndex(SelectedItem))
 	{
 		PrevGroup = Items[SelectedItem].GroupIdx;
 		PrevEntryId = Items[SelectedItem].SourceEntryId;
 		PrevRuleIdx = Items[SelectedItem].PathRuleIdx;
+		PrevMaterialSwapIdx = Items[SelectedItem].MaterialSwapIdx;
 		bPrevWasRule = Items[SelectedItem].bIsRuleDefinition;
 	}
 
@@ -542,7 +615,11 @@ void SPCGExVariantGridView::RefreshGrid(const bool bRefreshDetailPanel)
 	RebuildItems();
 
 	SelectedItem = INDEX_NONE;
-	if (bPrevWasRule)
+	if (PrevMaterialSwapIdx != INDEX_NONE)
+	{
+		SelectedItem = FindMaterialSwapItem(PrevMaterialSwapIdx);
+	}
+	else if (bPrevWasRule)
 	{
 		for (int32 i = 0; i < Items.Num(); i++)
 		{
@@ -728,6 +805,39 @@ void SPCGExVariantGridView::RebuildItems()
 			RuleItems.Add(Items.Num() - 1);
 		}
 	}
+
+	// Synthetic group: one tile per material swap row, in priority order. Rows that can never apply stay visible,
+	// flagged with the Swap node's own reachability rule.
+	if (!Variant->MaterialSwaps.IsEmpty())
+	{
+		SortedGroupNames.Add(PCGExVariantGrid::MaterialSwapsGroupName);
+		TArray<int32>& SwapItems = GroupToItems.FindOrAdd(PCGExVariantGrid::MaterialSwapsGroupName);
+
+		TArray<PCGExCollections::FMaterialSwapRow> ApplicableRows;
+		TArray<bool> Unreachable;
+		int32 NumUnreachable = 0;
+		int32 NumAttributeClauses = 0;
+		Variant->GetMaterialSwaps(ApplicableRows, NumUnreachable, NumAttributeClauses, &Unreachable);
+
+		for (int32 r = 0; r < Variant->MaterialSwaps.Num(); r++)
+		{
+			const FPCGExMaterialSwap& Swap = Variant->MaterialSwaps[r];
+
+			FPCGExVariantGridItem& SwapItem = Items.Emplace_GetRef();
+			SwapItem.MaterialSwapIdx = r;
+			SwapItem.SourceThumbPath = Swap.MatchMaterial.ToSoftObjectPath();
+			SwapItem.OverrideThumbPath = Swap.Replacement.ToSoftObjectPath();
+			SwapItem.bMaterialSwapGated = Swap.bUseTagFilter;
+			SwapItem.bMaterialSwapUnreachable = Unreachable.IsValidIndex(r) && Unreachable[r];
+			SwapItem.bMaterialSwapMatchUnset = Swap.MatchMaterial.IsNull();
+
+			const FText MatchName = Swap.MatchMaterial.IsNull() ? LOCTEXT("UnsetMaterialName", "Unset") : FText::FromString(Swap.MatchMaterial.GetAssetName());
+			const FText ReplacementName = Swap.Replacement.IsNull() ? INVTEXT("?") : FText::FromString(Swap.Replacement.GetAssetName());
+			SwapItem.Label = FText::Format(LOCTEXT("MaterialSwapLabelFmt", "{0} -> {1}"), MatchName, ReplacementName);
+
+			SwapItems.Add(Items.Num() - 1);
+		}
+	}
 }
 
 void SPCGExVariantGridView::ReconcileLayout(const TArray<FPCGExVariantGridItem>& OldItems, const TArray<FName>& OldGroupNames, const TMap<FName, TArray<int32>>& OldGroupToItems)
@@ -844,6 +954,7 @@ TSharedRef<SPCGExCollectionCategoryGroup> SPCGExVariantGridView::MakeGroupWidget
 		.EntryCount(EntryCount)
 		.bIsCollapsed(CollapsedGroups.Contains(GroupName))
 		.bAllowRename(false) // group names mirror source asset names — never editable here
+		// No OnAddToCategory, so groups show no [+]: sources and swaps are added from the toolbar.
 		// Group widgets swallow asset drops (Handled); route them to the shared add-source path.
 		.OnAssetDropOnCategory_Lambda([this](const FName, const TArray<FAssetData>& InAssets)
 		{
@@ -912,6 +1023,28 @@ void SPCGExVariantGridView::DeclareSwap(const int32 ItemIndex)
 
 	const FPCGExVariantGridItem& Item = Items[ItemIndex];
 	const EPCGExVariantTileState State = Item.GetState();
+
+	// Unset material swap rows: the "+" picks the replacement material.
+	if (State == EPCGExVariantTileState::MaterialSwapUnset)
+	{
+		const int32 RowIndex = Item.MaterialSwapIdx;
+		const FSoftObjectPath ExpectedMatch = Item.SourceThumbPath;
+
+		FAssetPickerConfig PickerConfig;
+		PickerConfig.OnAssetSelected = FOnAssetSelected::CreateSPLambda(this, [this, RowIndex, ExpectedMatch](const FAssetData& InMaterial)
+		{
+			FSlateApplication::Get().DismissAllMenus();
+			SetMaterialSwapReplacement(RowIndex, ExpectedMatch, InMaterial);
+		});
+
+		FSlateApplication::Get().PushMenu(
+			AsShared(),
+			FWidgetPath(),
+			PCGExCollectionEditorUtils::MakeAssetPickerMenu(MoveTemp(PickerConfig), UMaterialInterface::StaticClass()),
+			FSlateApplication::Get().GetCursorPos(),
+			FPopupTransitionEffect(FPopupTransitionEffect::ContextMenu));
+		return;
+	}
 
 	// Unset rule tiles get the same chooser, targeting the rule's payload; the copy option
 	// only shows when a loaded source actually stages the matched asset (the seed entry).
@@ -1075,11 +1208,8 @@ void SPCGExVariantGridView::DeclareSwapAs(const int32 ItemIndex, const UScriptSt
 		return;
 	}
 
+	EditVariant(LOCTEXT("DeclareSwap", "Declare Entry Swap"), [&](UPCGExVariantCollection& InVariant)
 	{
-		FScopedTransaction Transaction(LOCTEXT("DeclareSwap", "Declare Entry Swap"));
-		bIsSyncing = true;
-		Variant->Modify();
-
 		FPCGExVariantEntryOverride& NewRow = Group.Overrides.AddDefaulted_GetRef();
 		NewRow.SourceEntryId = Item.SourceEntryId;
 
@@ -1103,7 +1233,7 @@ void SPCGExVariantGridView::DeclareSwapAs(const int32 ItemIndex, const UScriptSt
 		// Cross-ASSET copy: the payload's Instanced subobjects and per-entry export state (e.g. a
 		// PCGData entry's ExportedDataAsset and slot collections) are still the source's -- detach
 		// them, per the standing rule for every entry copy. A fresh payload only carried base fields.
-		PCGExCollectionHelpers::DetachCopiedEntry(EntryStruct, NewRow.Entry.GetMutableMemory(), bCopySource ? SourceEntry.Entry : nullptr, Variant);
+		PCGExCollectionHelpers::DetachCopiedEntry(EntryStruct, NewRow.Entry.GetMutableMemory(), bCopySource ? SourceEntry.Entry : nullptr, &InVariant);
 
 		// The copy carried the SOURCE entry's identity; zero it so the variant's own
 		// SyncEntryIds assigns a fresh one on the next staging rebuild. Also bake the
@@ -1116,10 +1246,7 @@ void SPCGExVariantGridView::DeclareSwapAs(const int32 ItemIndex, const UScriptSt
 			Payload->EntryId = 0;
 			Payload->ResolveGlobalsToLocal(Src);
 		}
-
-		Variant->PostEditChange();
-		bIsSyncing = false;
-	}
+	});
 
 	SelectedItem = ItemIndex;
 	RefreshGrid();
@@ -1162,11 +1289,8 @@ void SPCGExVariantGridView::DeclareRuleSwapAs(const int32 ItemIndex, const UScri
 		return;
 	}
 
+	EditVariant(LOCTEXT("DeclareRuleSwap", "Declare Asset Swap"), [&](UPCGExVariantCollection& InVariant)
 	{
-		FScopedTransaction Transaction(LOCTEXT("DeclareRuleSwap", "Declare Asset Swap"));
-		bIsSyncing = true;
-		Variant->Modify();
-
 		if (bCopySeed)
 		{
 			// Full copy — swap-the-asset becomes a one-field edit and everything carries over.
@@ -1185,7 +1309,7 @@ void SPCGExVariantGridView::DeclareRuleSwapAs(const int32 ItemIndex, const UScri
 
 		// Cross-ASSET copy: detach the Instanced subobjects and per-entry export state the payload
 		// still shares with its seed, per the standing rule for every entry copy.
-		PCGExCollectionHelpers::DetachCopiedEntry(EntryStruct, Rule.Entry.GetMutableMemory(), bCopySeed ? Seed : nullptr, Variant);
+		PCGExCollectionHelpers::DetachCopiedEntry(EntryStruct, Rule.Entry.GetMutableMemory(), bCopySeed ? Seed : nullptr, &InVariant);
 
 		if (FPCGExAssetCollectionEntry* Payload = Rule.Entry.GetMutablePtr<FPCGExAssetCollectionEntry>())
 		{
@@ -1197,10 +1321,7 @@ void SPCGExVariantGridView::DeclareRuleSwapAs(const int32 ItemIndex, const UScri
 				Payload->ResolveGlobalsToLocal(SeedHost);
 			}
 		}
-
-		Variant->PostEditChange();
-		bIsSyncing = false;
-	}
+	});
 
 	SelectedItem = ItemIndex;
 	RefreshGrid();
@@ -1216,6 +1337,24 @@ void SPCGExVariantGridView::RevokeSwap(const int32 ItemIndex)
 
 	const FPCGExVariantGridItem& Item = Items[ItemIndex];
 
+	if (Item.MaterialSwapIdx != INDEX_NONE)
+	{
+		const int32 RowIndex = Item.MaterialSwapIdx;
+		if (!Variant->MaterialSwaps.IsValidIndex(RowIndex) || Variant->MaterialSwaps[RowIndex].Replacement.IsNull())
+		{
+			return;
+		}
+
+		// Replacement only -- the row and its matched material survive as an unset row (DeleteRule removes the row).
+		EditVariant(LOCTEXT("ClearMaterialReplacement", "Clear Material Swap Replacement"), [RowIndex](UPCGExVariantCollection& InVariant)
+		{
+			InVariant.MaterialSwaps[RowIndex].Replacement.Reset();
+		});
+
+		RefreshGrid();
+		return;
+	}
+
 	if (Item.bIsRuleDefinition)
 	{
 		if (!Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx) || !Variant->PathOverrides[Item.PathRuleIdx].Entry.IsValid())
@@ -1225,12 +1364,10 @@ void SPCGExVariantGridView::RevokeSwap(const int32 ItemIndex)
 
 		// Payload only — the rule and its asset reference survive as an unset rule
 		// (DeleteRule is the whole-rule removal).
-		FScopedTransaction Transaction(LOCTEXT("RevokeRuleSwap", "Remove Asset Swap Payload"));
-		bIsSyncing = true;
-		Variant->Modify();
-		Variant->PathOverrides[Item.PathRuleIdx].Entry.Reset();
-		Variant->PostEditChange();
-		bIsSyncing = false;
+		EditVariant(LOCTEXT("RevokeRuleSwap", "Remove Asset Swap Payload"), [RuleIdx = Item.PathRuleIdx](UPCGExVariantCollection& InVariant)
+		{
+			InVariant.PathOverrides[RuleIdx].Entry.Reset();
+		});
 
 		RefreshGrid();
 		return;
@@ -1241,14 +1378,10 @@ void SPCGExVariantGridView::RevokeSwap(const int32 ItemIndex)
 		return;
 	}
 
+	EditVariant(LOCTEXT("RevokeSwap", "Remove Entry Swap"), [GroupIdx = Item.GroupIdx, RowIdx = Item.OverrideRowIdx](UPCGExVariantCollection& InVariant)
 	{
-		FScopedTransaction Transaction(LOCTEXT("RevokeSwap", "Remove Entry Swap"));
-		bIsSyncing = true;
-		Variant->Modify();
-		Variant->Sources[Item.GroupIdx].Overrides.RemoveAt(Item.OverrideRowIdx);
-		Variant->PostEditChange();
-		bIsSyncing = false;
-	}
+		InVariant.Sources[GroupIdx].Overrides.RemoveAt(RowIdx);
+	});
 
 	RefreshGrid();
 }
@@ -1262,19 +1395,43 @@ void SPCGExVariantGridView::DeleteRule(const int32 ItemIndex)
 	}
 
 	const FPCGExVariantGridItem& Item = Items[ItemIndex];
+
+	if (Item.MaterialSwapIdx != INDEX_NONE)
+	{
+		const int32 RowIndex = Item.MaterialSwapIdx;
+		if (!Variant->MaterialSwaps.IsValidIndex(RowIndex))
+		{
+			return;
+		}
+
+		const int32 SelectedRow = Items.IsValidIndex(SelectedItem) ? Items[SelectedItem].MaterialSwapIdx : INDEX_NONE;
+
+		EditVariant(LOCTEXT("DeleteMaterialSwap", "Delete Material Swap"), [RowIndex](UPCGExVariantCollection& InVariant)
+		{
+			InVariant.MaterialSwaps.RemoveAt(RowIndex);
+		});
+
+		if (SelectedRow == INDEX_NONE)
+		{
+			RefreshGrid();
+			return;
+		}
+
+		// The selection follows its row: the rows after the deleted one move up, the deleted row's selection clears.
+		RefreshGrid(/*bRefreshDetailPanel=*/ false);
+		SelectMaterialSwap(SelectedRow == RowIndex ? INDEX_NONE : (SelectedRow > RowIndex ? SelectedRow - 1 : SelectedRow));
+		return;
+	}
+
 	if (!Item.bIsRuleDefinition || !Variant->PathOverrides.IsValidIndex(Item.PathRuleIdx))
 	{
 		return;
 	}
 
+	EditVariant(LOCTEXT("DeleteRule", "Delete Asset Swap Rule"), [RuleIdx = Item.PathRuleIdx](UPCGExVariantCollection& InVariant)
 	{
-		FScopedTransaction Transaction(LOCTEXT("DeleteRule", "Delete Asset Swap Rule"));
-		bIsSyncing = true;
-		Variant->Modify();
-		Variant->PathOverrides.RemoveAt(Item.PathRuleIdx);
-		Variant->PostEditChange();
-		bIsSyncing = false;
-	}
+		InVariant.PathOverrides.RemoveAt(RuleIdx);
+	});
 
 	RefreshGrid();
 }
@@ -1388,14 +1545,15 @@ void SPCGExVariantGridView::OnDetailPropertyChanged(const FPropertyChangedEvent&
 		return;
 	}
 
-	{
-		FScopedTransaction Transaction(LOCTEXT("EditSwapEntry", "Edit Swap Entry"));
-		bIsSyncing = true;
-		Variant->Modify();
+	const FText TransactionText = Items[SelectedItem].MaterialSwapIdx != INDEX_NONE
+		                              ? LOCTEXT("EditMaterialSwap", "Edit Material Swap")
+		                              : LOCTEXT("EditSwapEntry", "Edit Swap Entry");
+	const uint8* PanelMemory = CurrentStructScope->GetStructMemory();
 
+	EditVariant(TransactionText, [PayloadStruct, PayloadMemory, PanelMemory](UPCGExVariantCollection&)
+	{
 		// Panel-owned members only: the rest may have been replaced by a restage since the panel copy was taken
 		// (an export's instanced subobjects), and copying it back reinstates what that restage retired.
-		const uint8* PanelMemory = CurrentStructScope->GetStructMemory();
 		for (TFieldIterator<FProperty> It(PayloadStruct); It; ++It)
 		{
 			if (PCGExCollectionEditorUtils::IsPanelOwnedMember(*It))
@@ -1404,10 +1562,7 @@ void SPCGExVariantGridView::OnDetailPropertyChanged(const FPropertyChangedEvent&
 				It->CopyCompleteValue(PayloadMemory + Offset, PanelMemory + Offset);
 			}
 		}
-
-		Variant->PostEditChange();
-		bIsSyncing = false;
-	}
+	});
 
 	// Thumbnail may have changed with the asset — refresh tiles in place; the details pane
 	// already holds exactly what was typed, don't rebuild it under the user's cursor.
@@ -1423,6 +1578,19 @@ bool SPCGExVariantGridView::ResolveOverridePayload(const FPCGExVariantGridItem& 
 	if (!Variant)
 	{
 		return false;
+	}
+
+	// Material swap rows: the row struct itself is the payload (no FInstancedStruct).
+	if (InItem.MaterialSwapIdx != INDEX_NONE)
+	{
+		if (!Variant->MaterialSwaps.IsValidIndex(InItem.MaterialSwapIdx))
+		{
+			return false;
+		}
+
+		OutStruct = FPCGExMaterialSwap::StaticStruct();
+		OutMemory = reinterpret_cast<uint8*>(&Variant->MaterialSwaps[InItem.MaterialSwapIdx]);
+		return true;
 	}
 
 	FInstancedStruct* PayloadPtr = nullptr;
@@ -1463,6 +1631,84 @@ void SPCGExVariantGridView::OnObjectTransacted(UObject* Object, const FTransacti
 	RefreshGrid();
 }
 
+void SPCGExVariantGridView::AddMaterialSwap(const FAssetData& InMaterial)
+{
+	UPCGExVariantCollection* Variant = Collection.Get();
+	if (!Variant || !InMaterial.IsValid())
+	{
+		return;
+	}
+
+	EditVariant(LOCTEXT("AddMaterialSwap", "Add Material Swap"), [&InMaterial](UPCGExVariantCollection& InVariant)
+	{
+		InVariant.MaterialSwaps.AddDefaulted_GetRef().MatchMaterial = TSoftObjectPtr<UMaterialInterface>(InMaterial.GetSoftObjectPath());
+	});
+
+	RefreshGrid(/*bRefreshDetailPanel=*/ false);
+	SelectMaterialSwap(Variant->MaterialSwaps.Num() - 1);
+}
+
+void SPCGExVariantGridView::SetMaterialSwapReplacement(const int32 RowIndex, const FSoftObjectPath& InExpectedMatch, const FAssetData& InMaterial)
+{
+	UPCGExVariantCollection* Variant = Collection.Get();
+	if (!Variant || !InMaterial.IsValid() || !Variant->MaterialSwaps.IsValidIndex(RowIndex))
+	{
+		return;
+	}
+
+	const FPCGExMaterialSwap& Row = Variant->MaterialSwaps[RowIndex];
+	if (!Row.Replacement.IsNull() || Row.MatchMaterial.ToSoftObjectPath() != InExpectedMatch)
+	{
+		return;
+	}
+
+	EditVariant(LOCTEXT("SetMaterialReplacement", "Set Material Swap Replacement"), [RowIndex, &InMaterial](UPCGExVariantCollection& InVariant)
+	{
+		InVariant.MaterialSwaps[RowIndex].Replacement = TSoftObjectPtr<UMaterialInterface>(InMaterial.GetSoftObjectPath());
+	});
+
+	RefreshGrid(/*bRefreshDetailPanel=*/ false);
+	SelectMaterialSwap(RowIndex);
+}
+
+void SPCGExVariantGridView::SelectMaterialSwap(const int32 RowIndex)
+{
+	SelectedItem = FindMaterialSwapItem(RowIndex);
+	ApplySelectionVisuals();
+	UpdateDetailForSelection();
+
+	// No tile while its group is collapsed; the details pane still shows the row.
+	if (const TSharedPtr<SPCGExVariantGridTile>* Tile = ActiveTiles.Find(SelectedItem); Tile && Tile->IsValid())
+	{
+		GroupScrollBox->ScrollDescendantIntoView(*Tile, /*InAnimateScroll=*/ true, EDescendantScrollDestination::IntoView);
+	}
+}
+
+int32 SPCGExVariantGridView::FindMaterialSwapItem(const int32 RowIndex) const
+{
+	if (RowIndex == INDEX_NONE)
+	{
+		return INDEX_NONE;
+	}
+	return Items.IndexOfByPredicate([RowIndex](const FPCGExVariantGridItem& InItem) { return InItem.MaterialSwapIdx == RowIndex; });
+}
+
+void SPCGExVariantGridView::EditVariant(const FText& InTransactionText, const TFunctionRef<void(UPCGExVariantCollection&)> InEdit)
+{
+	UPCGExVariantCollection* Variant = Collection.Get();
+	if (!Variant)
+	{
+		return;
+	}
+
+	// Declared before the transaction so it outlives it: ending the transaction raises OnObjectTransacted.
+	TGuardValue<bool> SyncGuard(bIsSyncing, true);
+	FScopedTransaction Transaction(InTransactionText);
+	Variant->Modify();
+	InEdit(*Variant);
+	Variant->PostEditChange();
+}
+
 int32 SPCGExVariantGridView::AddSourcesFromAssets(const TArray<FAssetData>& InAssets)
 {
 	UPCGExVariantCollection* Variant = Collection.Get();
@@ -1498,17 +1744,13 @@ int32 SPCGExVariantGridView::AddSourcesFromAssets(const TArray<FAssetData>& InAs
 
 	if (!ToAdd.IsEmpty())
 	{
+		EditVariant(LOCTEXT("AddSources", "Add Variant Sources"), [&ToAdd](UPCGExVariantCollection& InVariant)
 		{
-			FScopedTransaction Transaction(LOCTEXT("AddSources", "Add Variant Sources"));
-			bIsSyncing = true;
-			Variant->Modify();
 			for (UPCGExAssetCollection* Source : ToAdd)
 			{
-				Variant->Sources.AddDefaulted_GetRef().SourceCollection = Source;
+				InVariant.Sources.AddDefaulted_GetRef().SourceCollection = Source;
 			}
-			Variant->PostEditChange();
-			bIsSyncing = false;
-		}
+		});
 
 		RefreshGrid();
 	}

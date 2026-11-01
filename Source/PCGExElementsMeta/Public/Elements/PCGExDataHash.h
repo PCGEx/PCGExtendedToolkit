@@ -29,9 +29,14 @@ enum class EPCGExDataHashType : uint8
 	Transform  = 10 UMETA(DisplayName = "Transform"),
 };
 
+class UPCGData;
+
 namespace PCGExDataHash
 {
 	const FName OutputValueLabel = FName("Value");
+
+	/** Mixes one input's kind, element count and bounds into InHash; stable across sessions and builds. */
+	PCGEXELEMENTSMETA_API uint64 HashInput(uint64 InHash, const UPCGData* Data);
 }
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), meta=(PCGExNodeLibraryDoc="metadata/analyze/data-hash"))
