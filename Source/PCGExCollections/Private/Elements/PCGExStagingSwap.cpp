@@ -8,12 +8,9 @@
 #include "Collections/PCGExMeshCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExData.h"
-#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExAssetLoader.h"
-#include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
-#include "Metadata/PCGMetadata.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSwapElement"
 #define PCGEX_NAMESPACE StagingSwap
@@ -98,7 +95,7 @@ namespace PCGExStagingSwap
 		TArray<FSoftObjectPath> Paths;
 		for (const TSet<FSoftObjectPath>& SlotPaths : Context->SlotVariantPaths)
 		{
-			// One slot's per-input and per-point variants merge into a spawner-wide table: the path sorting last in the
+			// One slot's per-input and per-point variants merge into the node's one stage: the path sorting last in the
 			// table's canonical order gets priority, never input or point order.
 			Paths = SlotPaths.Array();
 			FTable::SortCanonical(Paths);
@@ -127,13 +124,24 @@ namespace PCGExStagingSwap
 
 		if (!SlotConflicts.IsEmpty())
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Variants sharing a slot disagree on {0} material(s). The swap table is spawner-wide: the variant whose path sorts last wins."), FText::AsNumber(SlotConflicts.Num())));
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("Variants sharing a slot disagree on {0} material(s). The node's material swaps apply to all its points: the variant whose path sorts last wins."), FText::AsNumber(SlotConflicts.Num())));
 		}
 
 		const FName OutputLayer = Settings->GetOutputStagingLayer();
+
 		Context->OutputMaterialSwaps = Context->IncomingMaterialSwaps;
-		Context->OutputMaterialSwaps.ChainLayer(Settings->StagingLayer, OutputLayer, OwnStage);
-		Context->OutputMaterialSwapId = Context->OutputMaterialSwaps.GetLayerId(OutputLayer);
+
+		// Without a stage of its own, the node leaves every point on its table (stamps untouched).
+		Context->bRestampPoints = !OwnStage.IsEmpty() || Settings->StagingLayer != OutputLayer;
+		if (Context->bRestampPoints)
+		{
+			// Each lineage gets this node's stage chained onto its own table; points never pick up another branch's rules.
+			Context->IncomingMaterialSwaps.ForEachTable(Settings->StagingLayer, [&](const uint32 InId, const FTable::FStages& InStages)
+			{
+				Context->StampRemap.Add(InId, Context->OutputMaterialSwaps.Add(OutputLayer, FTable::Chain(InStages, OwnStage)));
+			});
+			Context->UnstampedTable = Context->OutputMaterialSwaps.Add(OutputLayer, FTable::Chain(FTable::FStages(), OwnStage));
+		}
 
 		if (!bAnyPickSwaps && OwnStage.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
 		{
@@ -573,37 +581,9 @@ bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
 
+	if (const int32 NumUnknownStamps = Context->NumUnknownStamps.load(std::memory_order_relaxed); NumUnknownStamps > 0)
 	{
-		// The spawner's per-input ISM reuse ignores the Overrides pin. Under data stealing the points' content CRC is all
-		// it compares, so the table's identity has to live on the points.
-		const FPCGAttributeIdentifier StampIdentifier(PCGExCollections::Labels::MaterialSwapIdName(Settings->GetOutputStagingLayer()), PCGMetadataDomainID::Data);
-		const int64 StampValue = Context->OutputMaterialSwapId;
-
-		for (const TSharedPtr<PCGExData::FPointIO>& IO : Context->MainPoints->Pairs)
-		{
-			UPCGBasePointData* Out = IO->GetOut();
-			if (!Out || !Out->Metadata)
-			{
-				continue;
-			}
-
-			if (StampValue == 0)
-			{
-				if (PCGExMetaHelpers::HasAttribute(Out->Metadata, StampIdentifier))
-				{
-					IO->DeleteAttribute(StampIdentifier);
-				}
-				continue;
-			}
-
-			// Never write into a forwarded input this node doesn't own.
-			if (Out == IO->GetIn() && !Context->bWantsDataStealing)
-			{
-				continue;
-			}
-
-			PCGExData::Helpers::SetDataValue<int64>(Out->Metadata->FindOrCreateAttribute<int64>(StampIdentifier, StampValue, false, true, true), StampValue);
-		}
+		PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} point(s) carry a material swap stamp the Map pin has no table for: only this node's material swaps apply to them."), FText::AsNumber(NumUnknownStamps)));
 	}
 
 	Context->MainPoints->StageOutputs();
@@ -642,7 +622,7 @@ namespace PCGExStagingSwap
 		const FName TargetAttributeName = Settings->GetOutputEntryIdxAttributeName();
 		bCrossLayer = SourceAttributeName != TargetAttributeName;
 
-		// No mapping for this input -> pass through untouched (the init policy already forwarded/duplicated it).
+		// No mapping for this input -> its picks pass through untouched (the init policy already forwarded/duplicated it).
 		// Cross-layer must still run so the output layer exists on every output (pure copy of source picks).
 		bool bHasMapping = false;
 		if (Context->bHasPerPointSlots)
@@ -668,8 +648,30 @@ namespace PCGExStagingSwap
 			}
 		}
 
+		// Every output point names the table its materials follow: the spawner's per-input ISM reuse compares the points'
+		// content, never the Overrides pin, and points merged from other branches keep their own stamp.
+		if (Context->bRestampPoints)
+		{
+			const FName InStampName = PCGExCollections::Labels::MaterialSwapIdName(Settings->StagingLayer);
+			if (PointDataFacade->GetIn()->ConstMetadata()->HasAttribute(InStampName))
+			{
+				StampReader = PointDataFacade->GetReadable<int32>(InStampName, PCGExData::EIOSide::In, true);
+			}
+
+			// Inherit, like the pick hash pair: reader and writer can name the same attribute.
+			StampWriter = PointDataFacade->GetWritable<int32>(PCGExCollections::Labels::MaterialSwapIdName(Settings->GetOutputStagingLayer()), 0, false, PCGExData::EBufferInit::Inherit);
+			if (!StampWriter)
+			{
+				return false;
+			}
+		}
+
 		if (!bHasMapping && !bCrossLayer)
 		{
+			if (StampWriter)
+			{
+				StartParallelLoopForPoints(PCGExData::EIOSide::In);
+			}
 			return true;
 		}
 
@@ -729,6 +731,45 @@ namespace PCGExStagingSwap
 
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
+
+		// Every point, filtered or not: a point's table follows its lineage, not this node's filters.
+		if (StampWriter)
+		{
+			const TMap<uint32, uint32>& Remap = Context->StampRemap;
+			const uint32 Unstamped = Context->UnstampedTable;
+
+			// Points of one input mostly share a stamp: remap a run once.
+			uint32 LastIn = 0;
+			uint32 LastOut = Unstamped;
+			bool bLastUnknown = false;
+			int32 NumUnknown = 0;
+
+			PCGEX_SCOPE_LOOP(Index)
+			{
+				const uint32 InStamp = StampReader ? static_cast<uint32>(StampReader->Read(Index)) : 0u;
+				if (InStamp != LastIn)
+				{
+					const uint32* Found = InStamp ? Remap.Find(InStamp) : nullptr;
+					LastIn = InStamp;
+					LastOut = Found ? *Found : Unstamped;
+					bLastUnknown = InStamp && !Found;
+				}
+
+				if (bLastUnknown) { NumUnknown++; }
+				StampWriter->SetValue(Index, static_cast<int32>(LastOut));
+			}
+
+			if (NumUnknown > 0)
+			{
+				Context->NumUnknownStamps.fetch_add(NumUnknown, std::memory_order_relaxed);
+			}
+		}
+
+		// Stamp-only input: no pick to read or write.
+		if (!HashReader)
+		{
+			return;
+		}
 
 		PCGExCollections::FMicroSelectorHelper* LocalMicroHelper = MicroHelper.Get();
 		const TConstPCGValueRange<int32> Seeds = LocalMicroHelper ? PointDataFacade->GetIn()->GetConstSeedValueRange() : TConstPCGValueRange<int32>();

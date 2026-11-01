@@ -1236,7 +1236,7 @@ namespace PCGExPCGDataAssetLoader
 
 					TempUnpacker.RegisterCollectionsTo(*Context->MergedMapPacker);
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
-					PCGExCollections::FMaterialSwapTable::ForwardInto(Context, MergedMapData);
+					PCGExCollections::FMaterialSwapLibrary::ForwardInto(Context, MergedMapData);
 
 					Context->StageOutput(MergedMapData, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 				}

@@ -14,6 +14,8 @@
 #include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 
+#include <atomic>
+
 #include "PCGExStagingSwap.generated.h"
 
 namespace PCGEx
@@ -172,13 +174,22 @@ struct FPCGExStagingSwapContext final : FPCGExPointsProcessorContext
 	TArray<TSet<FSoftObjectPath>> SlotVariantPaths;
 
 	/** Material swap tables arriving on the input Map pin. */
-	PCGExCollections::FMaterialSwapTable IncomingMaterialSwaps;
+	PCGExCollections::FMaterialSwapLibrary IncomingMaterialSwaps;
 
-	/** Incoming tables with this node's swaps chained onto the output layer; written into the output Map's rows. */
-	PCGExCollections::FMaterialSwapTable OutputMaterialSwaps;
+	/** The incoming tables, plus this node's: each incoming input-layer table chained with its own stage. */
+	PCGExCollections::FMaterialSwapLibrary OutputMaterialSwaps;
 
-	/** OutputMaterialSwaps' identity for the output layer (0 = no swaps), stamped on every output point data. */
-	uint32 OutputMaterialSwapId = 0;
+	/** True when output points need a new stamp: the node has a material stage of its own, or writes another layer. */
+	bool bRestampPoints = false;
+
+	/** Incoming table id on the input layer -> the id of this node's table chained onto it. */
+	TMap<uint32, uint32> StampRemap;
+
+	/** Table of points that carry no incoming stamp, or one with no table on the Map pin: this node's stage alone. */
+	uint32 UnstampedTable = 0;
+
+	/** Points whose stamp names no incoming table; summed across processors. */
+	std::atomic<int32> NumUnknownStamps{0};
 
 	/**
 	 * Per-input-IO variant paths (keyed by IOIndex) resolved during Boot, in slot order
@@ -248,6 +259,11 @@ namespace PCGExStagingSwap
 	protected:
 		TSharedPtr<PCGExData::TBuffer<int64>> HashReader;
 		TSharedPtr<PCGExData::TBuffer<int64>> HashWriter;
+
+		// Null when this node leaves stamps as they are (no material stage of its own, same layer).
+		TSharedPtr<PCGExData::TBuffer<int32>> StampWriter;
+		// Incoming stamps on the input layer; null when the input carries none (every point unstamped).
+		TSharedPtr<PCGExData::TBuffer<int32>> StampReader;
 
 		// All-uniform fast path: one merged map for the whole IO.
 		TSharedPtr<TMap<uint64, uint64>> SwapMap;

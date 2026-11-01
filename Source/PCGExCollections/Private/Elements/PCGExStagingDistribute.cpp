@@ -584,7 +584,7 @@ bool FPCGExAssetStagingElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 		Context->CollectionPickDatasetPacker->PackToDataset(OutputSet);
 
 		// Distribute swaps no material: incoming swap rows travel on in its Map.
-		PCGExCollections::FMaterialSwapTable::ForwardInto(Context, OutputSet);
+		PCGExCollections::FMaterialSwapLibrary::ForwardInto(Context, OutputSet);
 
 		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}

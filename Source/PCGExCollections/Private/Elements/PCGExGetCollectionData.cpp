@@ -1436,7 +1436,7 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 			return Pin == PCGExCollections::Labels::OutputCollectionMapLabel ? OutputMap->Metadata.Get() : nullptr;
 		});
 
-		PCGExCollections::FMaterialSwapTable::ForwardInto(InContext, OutputMap);
+		PCGExCollections::FMaterialSwapLibrary::ForwardInto(InContext, OutputMap);
 	}
 
 	InContext->Done();

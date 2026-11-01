@@ -14,6 +14,8 @@
 #include "Helpers/PCGExCollectionPropertyFloatPacker.h"
 #include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExMetaHelpers.h"
+#include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataAttributeTpl.h"
 #include "SceneTypes.h"
 #include "Tasks/Task.h"
 
@@ -66,6 +68,62 @@ namespace PCGExMeshSelectorStaged
 		{
 			Mirrored.Instances.Emplace(InTransforms[PointIndex]);
 		}
+	}
+
+	// Each point's material swap table on InLayer (0 = none); left empty when the points carry no stamp.
+	void ReadSwapStamps(const UPCGBasePointData* InPointData, const FName InLayer, TArray<uint32>& OutTables)
+	{
+		const UPCGMetadata* Metadata = InPointData->ConstMetadata();
+		const FPCGMetadataAttribute<int32>* Stamp = Metadata ? Metadata->GetConstTypedAttribute<int32>(PCGExCollections::Labels::MaterialSwapIdName(InLayer)) : nullptr;
+		if (!Stamp)
+		{
+			return;
+		}
+
+		const TConstPCGValueRange<int64> MetadataEntries = InPointData->GetConstMetadataEntryValueRange();
+		OutTables.SetNumUninitialized(MetadataEntries.Num());
+		for (int32 PointIndex = 0; PointIndex < MetadataEntries.Num(); PointIndex++)
+		{
+			OutTables[PointIndex] = static_cast<uint32>(Stamp->GetValueFromItemKey(MetadataEntries[PointIndex]));
+		}
+	}
+
+	// Moves InstanceList's points that follow another table than its first point into OutSplits, one list per table, each a
+	// copy of InstanceList as it stands. Returns the first point's table.
+	uint32 SplitByTable(FPCGMeshInstanceList& InstanceList, const TArray<uint32>& PointTables, TArray<TPair<uint32, FPCGMeshInstanceList>>& OutSplits)
+	{
+		TArray<int32>& Indices = InstanceList.InstancesIndices;
+		if (Indices.IsEmpty())
+		{
+			return 0;
+		}
+
+		const uint32 KeptTable = PointTables[Indices[0]];
+
+		int32 WriteIndex = 0;
+		for (int32 ReadIndex = 0; ReadIndex < Indices.Num(); ReadIndex++)
+		{
+			const int32 PointIndex = Indices[ReadIndex];
+			const uint32 Table = PointTables[PointIndex];
+			if (Table == KeptTable)
+			{
+				Indices[WriteIndex++] = PointIndex;
+				continue;
+			}
+
+			TPair<uint32, FPCGMeshInstanceList>* Split = OutSplits.FindByPredicate([Table](const TPair<uint32, FPCGMeshInstanceList>& Candidate) { return Candidate.Key == Table; });
+			if (!Split)
+			{
+				FPCGMeshInstanceList Copy = InstanceList;
+				Copy.InstancesIndices.Reset();
+				Copy.Instances.Reset();
+				Split = &OutSplits.Emplace_GetRef(Table, MoveTemp(Copy));
+			}
+			Split->Value.InstancesIndices.Add(PointIndex);
+		}
+
+		Indices.SetNum(WriteIndex, EAllowShrinking::No);
+		return KeptTable;
 	}
 }
 
@@ -134,10 +192,10 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 
 			OutPointData->Metadata->DeleteAttribute(EntryIdxAttributeName);
 
-			const FPCGAttributeIdentifier SwapStampIdentifier(PCGExCollections::Labels::MaterialSwapIdName(StagingLayer), PCGMetadataDomainID::Data);
-			if (PCGExMetaHelpers::HasAttribute(OutPointData->Metadata, SwapStampIdentifier))
+			const FName SwapStampName = PCGExCollections::Labels::MaterialSwapIdName(StagingLayer);
+			if (OutPointData->Metadata->HasAttribute(SwapStampName))
 			{
-				OutPointData->Metadata->DeleteAttribute(SwapStampIdentifier);
+				OutPointData->Metadata->DeleteAttribute(SwapStampName);
 			}
 		}
 	}
@@ -215,20 +273,25 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 #endif
 		}
 
-		// Read once, in the final pass: time-sliced calls return before reaching here.
-		PCGExCollections::FMaterialSwapTable MaterialSwaps;
-		const PCGExCollections::FMaterialSwapTable::FStages* LayerSwaps = nullptr;
+		// Read once, in the final pass: time-sliced calls return before reaching here. A point follows the table its stamp
+		// names (the last Staging : Swap it passed); a point without one keeps its materials.
+		PCGExCollections::FMaterialSwapLibrary MaterialSwaps;
+		TArray<uint32> PointTables;
 		if (bApplyMaterialSwaps)
 		{
 			MaterialSwaps.UnpackPin(&Context, PCGPinConstants::DefaultParamsLabel);
-			LayerSwaps = MaterialSwaps.Find(StagingLayer);
+			PCGExMeshSelectorStaged::ReadSwapStamps(InPointData, StagingLayer, PointTables);
 		}
+
+		// Points whose stamp names a table the Overrides pin doesn't carry.
+		int32 NumUnknownTables = 0;
 
 		// Hosts of entries the table could only partly reach (no slot snapshot yet).
 		TSet<const UPCGExAssetCollection*> UnstagedHosts;
 
 		// Appended only after the loop: Partition.Value indexes OutMeshInstances, which must not grow mid-iteration.
 		TArray<FPCGMeshInstanceList> MirroredLists;
+		TArray<FPCGMeshInstanceList> TableLists;
 
 		for (const TPair<int64, int32>& Partition : CollectionMap->IndexedPartitions)
 		{
@@ -269,51 +332,82 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 				Entry->ApplyMaterials(MaterialPick, OutDescriptor);
 			}
 
-			// Before the mirrored split below, so mirrored twins inherit the swapped materials.
-			if (LayerSwaps)
+			// Swaps go before the mirrored split, so mirrored twins inherit them.
+			auto FinishList = [&](FPCGMeshInstanceList& List, const uint32 InTable)
 			{
-				// The snapshot only describes the mesh it was staged from; one changed without a restage is unstaged.
-				const bool bSnapshotValid = !Entry->StaticMesh.IsNull() && Entry->StagedMaterialsSource == Entry->StaticMesh.ToSoftObjectPath();
-				if (!bSnapshotValid && !Entry->StaticMesh.IsNull())
+				const PCGExCollections::FMaterialSwapLibrary::FStages* Swaps = InTable ? MaterialSwaps.Find(StagingLayer, InTable) : nullptr;
+				if (InTable && !Swaps)
 				{
-					UnstagedHosts.Add(Result.Host);
+					NumUnknownTables += List.InstancesIndices.Num();
 				}
 
-				PCGExCollections::FMaterialSwapTable::Apply(
-					*LayerSwaps, *Entry, Result.Host,
-					bSnapshotValid ? TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(Entry->StagedMaterials) : TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(),
-					OutDescriptor);
-			}
+				if (Swaps)
+				{
+					// The snapshot only describes the mesh it was staged from; one changed without a restage is unstaged.
+					const bool bSnapshotValid = !Entry->StaticMesh.IsNull() && Entry->StagedMaterialsSource == Entry->StaticMesh.ToSoftObjectPath();
+					if (!bSnapshotValid && !Entry->StaticMesh.IsNull())
+					{
+						UnstagedHosts.Add(Result.Host);
+					}
 
-			if (bPackCustomData)
-			{
-				CustomDataPacker.PackEntry(Entry, Result.Host, InstanceList.CustomPrimitiveData);
+					PCGExCollections::FMaterialSwapTable::Apply(
+						*Swaps, *Entry, Result.Host,
+						bSnapshotValid ? TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(Entry->StagedMaterials) : TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(),
+						List.Descriptor);
+				}
+
+				if (bPackCustomData)
+				{
+					CustomDataPacker.PackEntry(Entry, Result.Host, List.CustomPrimitiveData);
 
 #if WITH_EDITOR
-				if (bDebugCustomPrimitiveData)
-				{
-					PCGE_LOG_C(Log, LogOnly, &Context, FText::Format(
-						           FTEXT("Custom Primitive Data for entry '{0}': {1}"),
-						           FText::FromString(Entry->Staging.Path.ToString()),
-						           FText::FromString(PCGExCollections::DescribeFloats(InstanceList.CustomPrimitiveData))));
-				}
+					if (bDebugCustomPrimitiveData)
+					{
+						PCGE_LOG_C(Log, LogOnly, &Context, FText::Format(
+							           FTEXT("Custom Primitive Data for entry '{0}': {1}"),
+							           FText::FromString(Entry->Staging.Path.ToString()),
+							           FText::FromString(PCGExCollections::DescribeFloats(List.CustomPrimitiveData))));
+					}
 #endif
+				}
+
+				if (!bForceEntryReverseCulling)
+				{
+					PCGExMeshSelectorStaged::SplitMirroredInstances(List, InTransforms, MirroredLists);
+				}
+
+				List.Instances.Reserve(List.InstancesIndices.Num());
+				for (const int32 i : List.InstancesIndices)
+				{
+					List.Instances.Emplace(InTransforms[i]);
+				}
+			};
+
+			if (PointTables.IsEmpty())
+			{
+				FinishList(InstanceList, 0);
+				continue;
 			}
 
-			if (!bForceEntryReverseCulling)
+			// Points of one pick may follow different tables (branches merged upstream): one list per table.
+			TArray<TPair<uint32, FPCGMeshInstanceList>> Splits;
+			FinishList(InstanceList, PCGExMeshSelectorStaged::SplitByTable(InstanceList, PointTables, Splits));
+			for (TPair<uint32, FPCGMeshInstanceList>& Split : Splits)
 			{
-				PCGExMeshSelectorStaged::SplitMirroredInstances(InstanceList, InTransforms, MirroredLists);
-			}
-
-			const TArray<int32>& InstanceIndices = InstanceList.InstancesIndices;
-			InstanceList.Instances.Reserve(InstanceIndices.Num());
-			for (const int32 i : InstanceIndices)
-			{
-				InstanceList.Instances.Emplace(InTransforms[i]);
+				FinishList(Split.Value, Split.Key);
+				TableLists.Add(MoveTemp(Split.Value));
 			}
 		}
 
+		OutMeshInstances.Append(MoveTemp(TableLists));
 		OutMeshInstances.Append(MoveTemp(MirroredLists));
+
+		if (NumUnknownTables > 0)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, &Context, FText::Format(
+				           FTEXT("{0} point(s) follow a material swap table the Overrides pin doesn't carry, and keep their materials: wire the Map of the Staging : Swap that stamped them."),
+				           FText::AsNumber(NumUnknownTables)));
+		}
 
 		if (!UnstagedHosts.IsEmpty())
 		{

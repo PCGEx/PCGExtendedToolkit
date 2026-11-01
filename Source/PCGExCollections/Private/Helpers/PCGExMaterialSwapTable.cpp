@@ -225,13 +225,9 @@ namespace PCGExCollections
 		}
 	}
 
-	void FMaterialSwapTable::ChainLayer(const FName InLayer, const FName OutLayer, const FStage& InStage)
+	FMaterialSwapTable::FStages FMaterialSwapTable::Chain(const FStages& InUpstream, const FStage& InStage)
 	{
-		FStages Chained;
-		if (const FStages* Upstream = Layers.Find(InLayer))
-		{
-			Chained = *Upstream;
-		}
+		FStages Chained = InUpstream;
 
 		FStage Sanitized;
 		MergeStage(Sanitized, InStage);
@@ -239,6 +235,13 @@ namespace PCGExCollections
 		{
 			Chained.Add(MoveTemp(Sanitized));
 		}
+		return Chained;
+	}
+
+	void FMaterialSwapTable::ChainLayer(const FName InLayer, const FName OutLayer, const FStage& InStage)
+	{
+		const FStages* Upstream = Layers.Find(InLayer);
+		FStages Chained = Chain(Upstream ? *Upstream : FStages(), InStage);
 
 		if (Chained.IsEmpty())
 		{
@@ -274,7 +277,12 @@ namespace PCGExCollections
 	uint32 FMaterialSwapTable::GetLayerId(const FName InLayer) const
 	{
 		const FStages* Stages = Layers.Find(InLayer);
-		if (!Stages || Stages->IsEmpty())
+		return Stages ? GetStagesId(*Stages) : 0;
+	}
+
+	uint32 FMaterialSwapTable::GetStagesId(const FStages& InStages)
+	{
+		if (InStages.IsEmpty())
 		{
 			return 0;
 		}
@@ -283,7 +291,7 @@ namespace PCGExCollections
 		// between sessions, and spawned ISMs persist this value.
 		TStringBuilder<1024> Key;
 		TArray<FSoftObjectPath> Matches;
-		for (const FStage& Stage : *Stages)
+		for (const FStage& Stage : InStages)
 		{
 			Key.Appendf(TEXT("#%d;"), Stage.Num());
 
@@ -304,196 +312,6 @@ namespace PCGExCollections
 
 		const uint32 Crc = FCrc::StrCrc32(Key.ToString());
 		return Crc ? Crc : 1;
-	}
-
-	bool FMaterialSwapTable::IsTableData(const UPCGParamData* InParamData)
-	{
-		return InParamData && InParamData->Metadata
-			&& InParamData->Metadata->HasAttribute(Labels::Tag_MaterialSwapMatch)
-			&& InParamData->Metadata->HasAttribute(Labels::Tag_MaterialSwapReplace);
-	}
-
-	void FMaterialSwapTable::UnpackPin(FPCGContext* InContext, const FName InPinLabel)
-	{
-		TSet<FSoftObjectPath> Conflicts;
-		int32 NumRejected = 0;
-		FName FirstMistyped = NAME_None;
-
-		for (const FPCGTaggedData& TaggedData : InContext->InputData.GetParamsByPin(InPinLabel))
-		{
-			FName Mistyped = NAME_None;
-			if (UnpackDataset(Cast<UPCGParamData>(TaggedData.Data), &Conflicts, &Mistyped) == EUnpackResult::Mistyped && NumRejected++ == 0)
-			{
-				FirstMistyped = Mistyped;
-			}
-		}
-
-		if (NumRejected > 0)
-		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("{0} material swap table(s) on '{1}' ignored: column '{2}' does not have the type Staging : Swap writes."), FText::AsNumber(NumRejected), FText::FromName(InPinLabel), FText::FromName(FirstMistyped)));
-		}
-
-		if (!Conflicts.IsEmpty())
-		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Material swap rules on '{0}' disagree on {1} material(s): earlier tables win, and within a table the first row."), FText::FromName(InPinLabel), FText::AsNumber(Conflicts.Num())));
-		}
-	}
-
-	FMaterialSwapTable::EUnpackResult FMaterialSwapTable::UnpackDataset(const UPCGParamData* InParamData, TSet<FSoftObjectPath>* OutConflicts, FName* OutMistypedColumn)
-	{
-		if (!IsTableData(InParamData))
-		{
-			return EUnpackResult::NotATable;
-		}
-
-		const UPCGMetadata* Metadata = InParamData->Metadata;
-
-		const FPCGMetadataAttribute<FSoftObjectPath>* MatchAttribute = nullptr;
-		const FPCGMetadataAttribute<FSoftObjectPath>* ReplaceAttribute = nullptr;
-		const FPCGMetadataAttribute<FName>* LayerAttribute = nullptr;
-		const FPCGMetadataAttribute<int32>* StageAttribute = nullptr;
-		const FPCGMetadataAttribute<FName>* AllAttribute = nullptr;
-		const FPCGMetadataAttribute<FName>* AnyAttribute = nullptr;
-		const FPCGMetadataAttribute<FName>* ExcludeAttribute = nullptr;
-		const FPCGMetadataAttribute<bool>* CommaAttribute = nullptr;
-		const FPCGMetadataAttribute<int32>* SourcesAttribute = nullptr;
-
-		FName Mistyped = NAME_None;
-		const bool bReadable =
-			PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapMatch, MatchAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapReplace, ReplaceAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapLayer, LayerAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapStage, StageAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsAll, AllAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsAny, AnyAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsExclude, ExcludeAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsCommaSeparated, CommaAttribute, Mistyped)
-			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagSources, SourcesAttribute, Mistyped);
-
-		if (!bReadable)
-		{
-			if (OutMistypedColumn) { *OutMistypedColumn = Mistyped; }
-			return EUnpackResult::Mistyped;
-		}
-
-		// Present (IsTableData) and typed (ReadColumn).
-		check(MatchAttribute && ReplaceAttribute);
-
-		// Stage values only order the stages: they never size anything, and distinct values never merge.
-		TMap<FName, TMap<int32, FStage>> StagesByLayer;
-		const int64 NumRows = Metadata->GetItemCountForChild();
-		for (int64 i = 0; i < NumRows; i++)
-		{
-			// No rule without both (AddRule would ignore it): Collection Map rows carry neither.
-			const FSoftObjectPath Match = MatchAttribute->GetValueFromItemKey(i);
-			FMaterialSwapRule Rule;
-			Rule.Replacement = ReplaceAttribute->GetValueFromItemKey(i);
-			if (Match.IsNull() || Rule.Replacement.IsNull())
-			{
-				continue;
-			}
-
-			Rule.Gate = FMaterialSwapGate::Make(
-				AllAttribute ? AllAttribute->GetValueFromItemKey(i) : FName(NAME_None),
-				AnyAttribute ? AnyAttribute->GetValueFromItemKey(i) : FName(NAME_None),
-				ExcludeAttribute ? ExcludeAttribute->GetValueFromItemKey(i) : FName(NAME_None),
-				CommaAttribute ? CommaAttribute->GetValueFromItemKey(i) : false,
-				SourcesAttribute ? static_cast<uint8>(SourcesAttribute->GetValueFromItemKey(i)) : static_cast<uint8>(EPCGExAssetTagInheritance::Asset));
-
-			const FName Layer = LayerAttribute ? LayerAttribute->GetValueFromItemKey(i) : FName(NAME_None);
-			const int32 StageValue = StageAttribute ? StageAttribute->GetValueFromItemKey(i) : 0;
-
-			// Rows arrive in priority order: one an earlier row shadows is a conflict, like one an earlier table overrules.
-			if (AddRule(StagesByLayer.FindOrAdd(Layer).FindOrAdd(StageValue), Match, Rule) == EAddResult::Shadowed && OutConflicts)
-			{
-				OutConflicts->Add(Match);
-			}
-		}
-
-		FMaterialSwapTable Unpacked;
-		for (TPair<FName, TMap<int32, FStage>>& Layer : StagesByLayer)
-		{
-			Layer.Value.KeySort(TLess<int32>());
-
-			FStages Stages;
-			for (TPair<int32, FStage>& Stage : Layer.Value)
-			{
-				if (!Stage.Value.IsEmpty())
-				{
-					Stages.Add(MoveTemp(Stage.Value));
-				}
-			}
-
-			if (!Stages.IsEmpty())
-			{
-				Unpacked.Layers.Add(Layer.Key, MoveTemp(Stages));
-			}
-		}
-
-		Append(Unpacked, OutConflicts);
-		return EUnpackResult::Merged;
-	}
-
-	void FMaterialSwapTable::PackToDataset(UPCGParamData* OutParamData) const
-	{
-		if (!OutParamData || !OutParamData->Metadata || Layers.IsEmpty())
-		{
-			return;
-		}
-
-		UPCGMetadata* Metadata = OutParamData->Metadata;
-		FPCGMetadataAttribute<FSoftObjectPath>* MatchAttribute = Metadata->FindOrCreateAttribute<FSoftObjectPath>(Labels::Tag_MaterialSwapMatch, FSoftObjectPath(), false, true, true);
-		FPCGMetadataAttribute<FSoftObjectPath>* ReplaceAttribute = Metadata->FindOrCreateAttribute<FSoftObjectPath>(Labels::Tag_MaterialSwapReplace, FSoftObjectPath(), false, true, true);
-		FPCGMetadataAttribute<FName>* LayerAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapLayer, NAME_None, false, true, true);
-		FPCGMetadataAttribute<int32>* StageAttribute = Metadata->FindOrCreateAttribute<int32>(Labels::Tag_MaterialSwapStage, 0, false, true, true);
-		FPCGMetadataAttribute<FName>* AllAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapTagsAll, NAME_None, false, true, true);
-		FPCGMetadataAttribute<FName>* AnyAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapTagsAny, NAME_None, false, true, true);
-		FPCGMetadataAttribute<FName>* ExcludeAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapTagsExclude, NAME_None, false, true, true);
-		FPCGMetadataAttribute<bool>* CommaAttribute = Metadata->FindOrCreateAttribute<bool>(Labels::Tag_MaterialSwapTagsCommaSeparated, false, false, true, true);
-		FPCGMetadataAttribute<int32>* SourcesAttribute = Metadata->FindOrCreateAttribute<int32>(Labels::Tag_MaterialSwapTagSources, static_cast<int32>(EPCGExAssetTagInheritance::Asset), false, true, true);
-		if (!MatchAttribute || !ReplaceAttribute || !LayerAttribute || !StageAttribute || !AllAttribute || !AnyAttribute || !ExcludeAttribute || !CommaAttribute || !SourcesAttribute)
-		{
-			return;
-		}
-
-		// FName equality ignores case, so layer keys are unique under this case-insensitive, session-stable order.
-		TArray<FName> LayerNames;
-		Layers.GetKeys(LayerNames);
-		LayerNames.Sort(FNameLexicalLess());
-
-		TArray<FSoftObjectPath> Matches;
-		for (const FName Layer : LayerNames)
-		{
-			const FStages& Stages = Layers.FindChecked(Layer);
-			for (int32 StageIndex = 0; StageIndex < Stages.Num(); StageIndex++)
-			{
-				const FStage& Stage = Stages[StageIndex];
-				PCGExMaterialSwapTable::GetSortedMatches(Stage, Matches);
-				for (const FSoftObjectPath& Match : Matches)
-				{
-					for (const FMaterialSwapRule& Rule : Stage.FindChecked(Match))
-					{
-						const int64 Key = Metadata->AddEntry();
-						MatchAttribute->SetValue(Key, Match);
-						ReplaceAttribute->SetValue(Key, Rule.Replacement);
-						LayerAttribute->SetValue(Key, Layer);
-						StageAttribute->SetValue(Key, StageIndex);
-						AllAttribute->SetValue(Key, Rule.Gate.RequireAll);
-						AnyAttribute->SetValue(Key, Rule.Gate.RequireAny);
-						ExcludeAttribute->SetValue(Key, Rule.Gate.Exclude);
-						CommaAttribute->SetValue(Key, Rule.Gate.bCommaSeparated);
-						SourcesAttribute->SetValue(Key, static_cast<int32>(Rule.Gate.TagSources));
-					}
-				}
-			}
-		}
-	}
-
-	void FMaterialSwapTable::ForwardInto(FPCGContext* InContext, UPCGParamData* InOutMap)
-	{
-		FMaterialSwapTable Incoming;
-		Incoming.UnpackPin(InContext, Labels::SourceCollectionMapLabel);
-		Incoming.PackToDataset(InOutMap);
 	}
 
 	FSoftObjectPath FMaterialSwapTable::Resolve(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const FSoftObjectPath& InMaterial)
@@ -569,6 +387,289 @@ namespace PCGExCollections
 		}
 
 		return bChanged;
+	}
+
+#pragma endregion
+
+#pragma region FMaterialSwapLibrary
+
+	const FMaterialSwapLibrary::FStages* FMaterialSwapLibrary::Find(const FName InLayer, const uint32 InId) const
+	{
+		const TArray<FEntry>* Entries = InId ? Layers.Find(InLayer) : nullptr;
+		if (!Entries)
+		{
+			return nullptr;
+		}
+
+		const FEntry* Entry = Entries->FindByPredicate([InId](const FEntry& Candidate) { return Candidate.Id == InId; });
+		return Entry ? &Entry->Stages : nullptr;
+	}
+
+	uint32 FMaterialSwapLibrary::Add(const FName InLayer, const FStages& InStages)
+	{
+		// Re-added through MergeStage so a hand-built list can't smuggle unreachable rules or empty stages in.
+		FStages Sanitized;
+		for (const FMaterialSwapTable::FStage& Stage : InStages)
+		{
+			FMaterialSwapTable::FStage Clean;
+			FMaterialSwapTable::MergeStage(Clean, Stage);
+			if (!Clean.IsEmpty())
+			{
+				Sanitized.Add(MoveTemp(Clean));
+			}
+		}
+
+		const uint32 Id = FMaterialSwapTable::GetStagesId(Sanitized);
+		if (Id)
+		{
+			AddUnique(InLayer, Id, MoveTemp(Sanitized));
+		}
+		return Id;
+	}
+
+	void FMaterialSwapLibrary::Add(const FMaterialSwapTable& InTable)
+	{
+		for (const TPair<FName, FStages>& Layer : InTable.Layers)
+		{
+			Add(Layer.Key, Layer.Value);
+		}
+	}
+
+	FMaterialSwapTable FMaterialSwapLibrary::Merge(TSet<FSoftObjectPath>* OutConflicts) const
+	{
+		FMaterialSwapTable Merged;
+		for (const TPair<FName, TArray<FEntry>>& Layer : Layers)
+		{
+			for (const FEntry& Entry : Layer.Value)
+			{
+				FMaterialSwapTable Single;
+				Single.Layers.Add(Layer.Key, Entry.Stages);
+				Merged.Append(Single, OutConflicts);
+			}
+		}
+		return Merged;
+	}
+
+	bool FMaterialSwapLibrary::IsTableData(const UPCGParamData* InParamData)
+	{
+		return InParamData && InParamData->Metadata
+			&& InParamData->Metadata->HasAttribute(Labels::Tag_MaterialSwapMatch)
+			&& InParamData->Metadata->HasAttribute(Labels::Tag_MaterialSwapReplace);
+	}
+
+	void FMaterialSwapLibrary::UnpackPin(FPCGContext* InContext, const FName InPinLabel)
+	{
+		TSet<FSoftObjectPath> Conflicts;
+		int32 NumRejected = 0;
+		FName FirstMistyped = NAME_None;
+
+		for (const FPCGTaggedData& TaggedData : InContext->InputData.GetParamsByPin(InPinLabel))
+		{
+			FName Mistyped = NAME_None;
+			if (UnpackDataset(Cast<UPCGParamData>(TaggedData.Data), &Conflicts, &Mistyped) == EUnpackResult::Mistyped && NumRejected++ == 0)
+			{
+				FirstMistyped = Mistyped;
+			}
+		}
+
+		if (NumRejected > 0)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("{0} material swap table(s) on '{1}' ignored: column '{2}' does not have the type Staging : Swap writes."), FText::AsNumber(NumRejected), FText::FromName(InPinLabel), FText::FromName(FirstMistyped)));
+		}
+
+		if (!Conflicts.IsEmpty())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Material swap rules on '{0}' disagree on {1} material(s) within their table: the first row wins."), FText::FromName(InPinLabel), FText::AsNumber(Conflicts.Num())));
+		}
+	}
+
+	FMaterialSwapLibrary::EUnpackResult FMaterialSwapLibrary::UnpackDataset(const UPCGParamData* InParamData, TSet<FSoftObjectPath>* OutConflicts, FName* OutMistypedColumn)
+	{
+		if (!IsTableData(InParamData))
+		{
+			return EUnpackResult::NotATable;
+		}
+
+		const UPCGMetadata* Metadata = InParamData->Metadata;
+
+		const FPCGMetadataAttribute<FSoftObjectPath>* MatchAttribute = nullptr;
+		const FPCGMetadataAttribute<FSoftObjectPath>* ReplaceAttribute = nullptr;
+		const FPCGMetadataAttribute<FName>* LayerAttribute = nullptr;
+		const FPCGMetadataAttribute<int32>* StageAttribute = nullptr;
+		const FPCGMetadataAttribute<FName>* AllAttribute = nullptr;
+		const FPCGMetadataAttribute<FName>* AnyAttribute = nullptr;
+		const FPCGMetadataAttribute<FName>* ExcludeAttribute = nullptr;
+		const FPCGMetadataAttribute<bool>* CommaAttribute = nullptr;
+		const FPCGMetadataAttribute<int32>* SourcesAttribute = nullptr;
+		const FPCGMetadataAttribute<int32>* TableAttribute = nullptr;
+
+		FName Mistyped = NAME_None;
+		const bool bReadable =
+			PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapMatch, MatchAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapReplace, ReplaceAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapLayer, LayerAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapStage, StageAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsAll, AllAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsAny, AnyAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsExclude, ExcludeAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagsCommaSeparated, CommaAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTagSources, SourcesAttribute, Mistyped)
+			&& PCGExMaterialSwapTable::ReadColumn(Metadata, Labels::Tag_MaterialSwapTable, TableAttribute, Mistyped);
+
+		if (!bReadable)
+		{
+			if (OutMistypedColumn) { *OutMistypedColumn = Mistyped; }
+			return EUnpackResult::Mistyped;
+		}
+
+		// Present (IsTableData) and typed (ReadColumn).
+		check(MatchAttribute && ReplaceAttribute);
+
+		// Per table (layer, id), stage buckets in arrival order. Stage values only order the stages: they never size
+		// anything, and distinct values never merge.
+		using FTableKey = TPair<FName, uint32>;
+		TMap<FTableKey, TMap<int32, FMaterialSwapTable::FStage>> Buckets;
+		TArray<FTableKey> Arrival;
+
+		const int64 NumRows = Metadata->GetItemCountForChild();
+		for (int64 i = 0; i < NumRows; i++)
+		{
+			// No rule without both (AddRule would ignore it): Collection Map rows carry neither.
+			const FSoftObjectPath Match = MatchAttribute->GetValueFromItemKey(i);
+			FMaterialSwapRule Rule;
+			Rule.Replacement = ReplaceAttribute->GetValueFromItemKey(i);
+			if (Match.IsNull() || Rule.Replacement.IsNull())
+			{
+				continue;
+			}
+
+			Rule.Gate = FMaterialSwapGate::Make(
+				AllAttribute ? AllAttribute->GetValueFromItemKey(i) : FName(NAME_None),
+				AnyAttribute ? AnyAttribute->GetValueFromItemKey(i) : FName(NAME_None),
+				ExcludeAttribute ? ExcludeAttribute->GetValueFromItemKey(i) : FName(NAME_None),
+				CommaAttribute ? CommaAttribute->GetValueFromItemKey(i) : false,
+				SourcesAttribute ? static_cast<uint8>(SourcesAttribute->GetValueFromItemKey(i)) : static_cast<uint8>(EPCGExAssetTagInheritance::Asset));
+
+			const FTableKey TableKey(
+				LayerAttribute ? LayerAttribute->GetValueFromItemKey(i) : FName(NAME_None),
+				TableAttribute ? static_cast<uint32>(TableAttribute->GetValueFromItemKey(i)) : 0u);
+
+			TMap<int32, FMaterialSwapTable::FStage>* StagesByValue = Buckets.Find(TableKey);
+			if (!StagesByValue)
+			{
+				Arrival.Add(TableKey);
+				StagesByValue = &Buckets.Add(TableKey);
+			}
+
+			const int32 StageValue = StageAttribute ? StageAttribute->GetValueFromItemKey(i) : 0;
+
+			// Rows arrive in priority order: one an earlier row of its table shadows is a conflict.
+			if (FMaterialSwapTable::AddRule(StagesByValue->FindOrAdd(StageValue), Match, Rule) == FMaterialSwapTable::EAddResult::Shadowed && OutConflicts)
+			{
+				OutConflicts->Add(Match);
+			}
+		}
+
+		for (const FTableKey& TableKey : Arrival)
+		{
+			TMap<int32, FMaterialSwapTable::FStage>& StagesByValue = Buckets.FindChecked(TableKey);
+			StagesByValue.KeySort(TLess<int32>());
+
+			FStages Stages;
+			for (TPair<int32, FMaterialSwapTable::FStage>& Stage : StagesByValue)
+			{
+				if (!Stage.Value.IsEmpty())
+				{
+					Stages.Add(MoveTemp(Stage.Value));
+				}
+			}
+
+			// Rows without a table id (hand-made data) make one table per layer, keyed by its content.
+			const uint32 Id = TableKey.Value ? TableKey.Value : FMaterialSwapTable::GetStagesId(Stages);
+			if (Id && !Stages.IsEmpty())
+			{
+				AddUnique(TableKey.Key, Id, MoveTemp(Stages));
+			}
+		}
+
+		return EUnpackResult::Merged;
+	}
+
+	void FMaterialSwapLibrary::PackToDataset(UPCGParamData* OutParamData) const
+	{
+		if (!OutParamData || !OutParamData->Metadata || Layers.IsEmpty())
+		{
+			return;
+		}
+
+		UPCGMetadata* Metadata = OutParamData->Metadata;
+		FPCGMetadataAttribute<FSoftObjectPath>* MatchAttribute = Metadata->FindOrCreateAttribute<FSoftObjectPath>(Labels::Tag_MaterialSwapMatch, FSoftObjectPath(), false, true, true);
+		FPCGMetadataAttribute<FSoftObjectPath>* ReplaceAttribute = Metadata->FindOrCreateAttribute<FSoftObjectPath>(Labels::Tag_MaterialSwapReplace, FSoftObjectPath(), false, true, true);
+		FPCGMetadataAttribute<FName>* LayerAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapLayer, NAME_None, false, true, true);
+		FPCGMetadataAttribute<int32>* StageAttribute = Metadata->FindOrCreateAttribute<int32>(Labels::Tag_MaterialSwapStage, 0, false, true, true);
+		FPCGMetadataAttribute<FName>* AllAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapTagsAll, NAME_None, false, true, true);
+		FPCGMetadataAttribute<FName>* AnyAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapTagsAny, NAME_None, false, true, true);
+		FPCGMetadataAttribute<FName>* ExcludeAttribute = Metadata->FindOrCreateAttribute<FName>(Labels::Tag_MaterialSwapTagsExclude, NAME_None, false, true, true);
+		FPCGMetadataAttribute<bool>* CommaAttribute = Metadata->FindOrCreateAttribute<bool>(Labels::Tag_MaterialSwapTagsCommaSeparated, false, false, true, true);
+		FPCGMetadataAttribute<int32>* SourcesAttribute = Metadata->FindOrCreateAttribute<int32>(Labels::Tag_MaterialSwapTagSources, static_cast<int32>(EPCGExAssetTagInheritance::Asset), false, true, true);
+		FPCGMetadataAttribute<int32>* TableAttribute = Metadata->FindOrCreateAttribute<int32>(Labels::Tag_MaterialSwapTable, 0, false, true, true);
+		if (!MatchAttribute || !ReplaceAttribute || !LayerAttribute || !StageAttribute || !AllAttribute || !AnyAttribute || !ExcludeAttribute || !CommaAttribute || !SourcesAttribute || !TableAttribute)
+		{
+			return;
+		}
+
+		// FName equality ignores case, so layer keys are unique under this case-insensitive, session-stable order.
+		TArray<FName> LayerNames;
+		Layers.GetKeys(LayerNames);
+		LayerNames.Sort(FNameLexicalLess());
+
+		TArray<FSoftObjectPath> Matches;
+		for (const FName Layer : LayerNames)
+		{
+			for (const FEntry& Entry : Layers.FindChecked(Layer))
+			{
+				for (int32 StageIndex = 0; StageIndex < Entry.Stages.Num(); StageIndex++)
+				{
+					const FMaterialSwapTable::FStage& Stage = Entry.Stages[StageIndex];
+					PCGExMaterialSwapTable::GetSortedMatches(Stage, Matches);
+					for (const FSoftObjectPath& Match : Matches)
+					{
+						for (const FMaterialSwapRule& Rule : Stage.FindChecked(Match))
+						{
+							const int64 Key = Metadata->AddEntry();
+							MatchAttribute->SetValue(Key, Match);
+							ReplaceAttribute->SetValue(Key, Rule.Replacement);
+							LayerAttribute->SetValue(Key, Layer);
+							StageAttribute->SetValue(Key, StageIndex);
+							AllAttribute->SetValue(Key, Rule.Gate.RequireAll);
+							AnyAttribute->SetValue(Key, Rule.Gate.RequireAny);
+							ExcludeAttribute->SetValue(Key, Rule.Gate.Exclude);
+							CommaAttribute->SetValue(Key, Rule.Gate.bCommaSeparated);
+							SourcesAttribute->SetValue(Key, static_cast<int32>(Rule.Gate.TagSources));
+							TableAttribute->SetValue(Key, static_cast<int32>(Entry.Id));
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void FMaterialSwapLibrary::ForwardInto(FPCGContext* InContext, UPCGParamData* InOutMap)
+	{
+		FMaterialSwapLibrary Incoming;
+		Incoming.UnpackPin(InContext, Labels::SourceCollectionMapLabel);
+		Incoming.PackToDataset(InOutMap);
+	}
+
+	void FMaterialSwapLibrary::AddUnique(const FName InLayer, const uint32 InId, FStages&& InStages)
+	{
+		TArray<FEntry>& Entries = Layers.FindOrAdd(InLayer);
+		if (!Entries.ContainsByPredicate([InId](const FEntry& Candidate) { return Candidate.Id == InId; }))
+		{
+			FEntry& Added = Entries.AddDefaulted_GetRef();
+			Added.Id = InId;
+			Added.Stages = MoveTemp(InStages);
+		}
 	}
 
 #pragma endregion

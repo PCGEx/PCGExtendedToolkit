@@ -22,8 +22,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bApplyMaterialOverrides = true;
 
-	/** Apply the material swap table a Staging : Swap node sends next to its Collection Map (Overrides pin), to override
-	 *  slots and to the mesh's own materials. Independent of Apply Material Overrides. */
+	/** Apply to each point the material swap table of the last Staging : Swap it passed (that Map on the Overrides pin), to
+	 *  override slots and to the mesh's own materials. Independent of Apply Material Overrides. */
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bApplyMaterialSwaps = true;
 
