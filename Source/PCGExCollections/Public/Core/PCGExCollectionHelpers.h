@@ -98,6 +98,20 @@ namespace PCGExCollectionHelpers
 		bool bBuildStaging);
 
 	/**
+	 * Whether a path names an asset the registry knows from disk is not a material, without loading it. Unknown paths,
+	 * redirectors (renamed materials) and classes the registry can't place count as materials. Caches per class: keep one
+	 * per batch of checks.
+	 */
+	class PCGEXCOLLECTIONS_API FNonMaterialCheck
+	{
+	public:
+		bool IsKnownNonMaterial(const FSoftObjectPath& InPath);
+
+	private:
+		TMap<FTopLevelAssetPath, bool> NonMaterialByClass;
+	};
+
+	/**
 	 * Appends one MaterialSwaps row per reachable attribute-set row (paths: Soft Object Path or String; with InTagFilter,
 	 * each clause is its constant or a per-row Name / String). OutSkipped counts empty paths, unreadable tags, unreachable
 	 * rows and replacements the registry knows are not materials. Returns the number appended, -1 on a bad column (logged).

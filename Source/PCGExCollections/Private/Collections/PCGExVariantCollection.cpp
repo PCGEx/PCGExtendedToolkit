@@ -256,19 +256,24 @@ void UPCGExVariantCollection::LogFlatViewDiagnostics() const
 
 void UPCGExVariantCollection::GetMaterialSwaps(TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable) const
 {
+	GetMaterialSwaps(MaterialSwaps, OutRows, OutNumUnreachable, OutNumAttributeClauses, OutUnreachable);
+}
+
+void UPCGExVariantCollection::GetMaterialSwaps(const TConstArrayView<FPCGExMaterialSwap> InSwaps, TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable)
+{
 	using FTable = PCGExCollections::FMaterialSwapTable;
 
-	OutRows.Reset(MaterialSwaps.Num());
+	OutRows.Reset(InSwaps.Num());
 	OutNumUnreachable = 0;
 	OutNumAttributeClauses = 0;
 	if (OutUnreachable)
 	{
-		OutUnreachable->Reset(MaterialSwaps.Num());
+		OutUnreachable->Reset(InSwaps.Num());
 	}
 
 	// Reachability is the table's own rule, so a row kept here is a row that can apply there.
 	FTable::FStage Reachable;
-	for (const FPCGExMaterialSwap& Swap : MaterialSwaps)
+	for (const FPCGExMaterialSwap& Swap : InSwaps)
 	{
 		PCGExCollections::FMaterialSwapRow Row;
 		Swap.ToRow(Row, OutNumAttributeClauses);

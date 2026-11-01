@@ -158,6 +158,9 @@ public:
 	 *  OutUnreachable when given). Clauses set to Attribute are counted in OutNumAttributeClauses. */
 	void GetMaterialSwaps(TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable = nullptr) const;
 
+	/** Same, over any swap rows (e.g. ones not yet applied to a variant). */
+	static void GetMaterialSwaps(TConstArrayView<FPCGExMaterialSwap> InSwaps, TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable = nullptr);
+
 	//~ UPCGExAssetCollection interface -- flattened view over Sources[*].Overrides[*].Entry.
 	// InitNumEntries / Sort intentionally keep their base behavior (not-implemented / no-op):
 	// entry layout is authored per-source and must not be flattened or reordered externally.

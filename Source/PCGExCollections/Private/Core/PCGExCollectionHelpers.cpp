@@ -248,6 +248,33 @@ namespace PCGExCollectionHelpers
 
 #pragma endregion
 
+#pragma region FNonMaterialCheck
+
+	bool FNonMaterialCheck::IsKnownNonMaterial(const FSoftObjectPath& InPath)
+	{
+		const IAssetRegistry* Registry = IAssetRegistry::Get();
+		FAssetData Asset;
+		if (!Registry || Registry->TryGetAssetByObjectPath(InPath, Asset) != UE::AssetRegistry::EExists::Exists || Asset.IsRedirector())
+		{
+			return false;
+		}
+
+		if (const bool* bKnown = NonMaterialByClass.Find(Asset.AssetClassPath))
+		{
+			return *bKnown;
+		}
+
+		const FTopLevelAssetPath MaterialClass = UMaterialInterface::StaticClass()->GetClassPathName();
+		TArray<FTopLevelAssetPath> Ancestors;
+		const bool bNonMaterial = Asset.AssetClassPath != MaterialClass
+			&& Registry->GetAncestorClassNames(Asset.AssetClassPath, Ancestors)
+			&& !Ancestors.Contains(MaterialClass);
+		NonMaterialByClass.Add(Asset.AssetClassPath, bNonMaterial);
+		return bNonMaterial;
+	}
+
+#pragma endregion
+
 	bool BuildFromAttributeSet(
 		UPCGExAssetCollection* InCollection,
 		FPCGExContext* InContext,
@@ -535,32 +562,8 @@ namespace PCGExCollectionHelpers
 			return -1;
 		}
 
-		const IAssetRegistry* Registry = IAssetRegistry::Get();
-		const FTopLevelAssetPath MaterialClass = UMaterialInterface::StaticClass()->GetClassPathName();
-		TMap<FTopLevelAssetPath, bool> NonMaterialByClass;
-
-		// A non-material replacement would render the mesh's own material. Only what the registry knows from disk counts,
-		// without loading: unknown paths, redirectors (renamed materials) and classes it can't place are kept.
-		auto IsKnownNonMaterial = [&](const FSoftObjectPath& InPath) -> bool
-		{
-			FAssetData Asset;
-			if (!Registry || Registry->TryGetAssetByObjectPath(InPath, Asset) != UE::AssetRegistry::EExists::Exists || Asset.IsRedirector())
-			{
-				return false;
-			}
-
-			if (const bool* bKnown = NonMaterialByClass.Find(Asset.AssetClassPath))
-			{
-				return *bKnown;
-			}
-
-			TArray<FTopLevelAssetPath> Ancestors;
-			const bool bNonMaterial = Asset.AssetClassPath != MaterialClass
-				&& Registry->GetAncestorClassNames(Asset.AssetClassPath, Ancestors)
-				&& !Ancestors.Contains(MaterialClass);
-			NonMaterialByClass.Add(Asset.AssetClassPath, bNonMaterial);
-			return bNonMaterial;
-		};
+		// A non-material replacement would render the mesh's own material.
+		FNonMaterialCheck NonMaterialCheck;
 
 		// Reachability is the table's own rule, seeded with the variant's rows so earlier inputs count: a row an earlier
 		// one shadows is dropped here, not reported downstream.
@@ -588,7 +591,7 @@ namespace PCGExCollectionHelpers
 				continue;
 			}
 
-			if (IsKnownNonMaterial(Replacement))
+			if (NonMaterialCheck.IsKnownNonMaterial(Replacement))
 			{
 				OutSkipped++;
 				continue;
