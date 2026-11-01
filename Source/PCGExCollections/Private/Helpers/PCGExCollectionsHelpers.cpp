@@ -939,9 +939,11 @@ namespace PCGExCollections
 		TArray<UObject*> RowCollections;
 		PCGExHelpers::ResolveObjects_AnyThread(CollectionsHandles, RowPaths, RowCollections);
 
-		// An unresolvable row is reported, never allowed to drop the rows after it.
+		// An unresolvable or colliding row is reported, never allowed to drop the rows after it.
 		int32 NumUnresolved = 0;
 		FSoftObjectPath FirstUnresolved;
+		int32 NumCollisions = 0;
+		FSoftObjectPath FirstCollision;
 		for (int32 r = 0; r < RowPaths.Num(); r++)
 		{
 			UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(RowCollections[r]);
@@ -954,26 +956,26 @@ namespace PCGExCollections
 			const uint32 Idx = static_cast<uint32>(CollectionIdx->GetValueFromItemKey(RowKeys[r]));
 			if (UPCGExAssetCollection* const* Existing = CollectionMap.Find(Idx))
 			{
-				if (*Existing == Collection)
-				{
-					continue;
-				}
-
-				PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection Idx collision."));
-				return false;
+				// The first mapping stays: picks hashed against this row's collection would resolve into it.
+				if (*Existing != Collection && NumCollisions++ == 0) { FirstCollision = RowPaths[r]; }
+				continue;
 			}
 
 			CollectionMap.Add(Idx, Collection);
 			NumUniqueEntries += Collection->GetValidEntryNum();
 		}
 
+		if (NumCollisions > 0)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("{0} collection(s) on the Map share an id with another collection (first: '{1}'); their picks resolve against the other one. Re-save a duplicate of one to re-mint its id."), FText::AsNumber(NumCollisions), FText::FromString(FirstCollision.ToString())));
+		}
+
 		if (NumUnresolved > 0)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("{0} collection(s) on the Map could not be loaded (first: '{1}'); their picks won't resolve."), FText::AsNumber(NumUnresolved), FText::FromString(FirstUnresolved.ToString())));
-			return false;
 		}
 
-		return true;
+		return NumUnresolved == 0 && NumCollisions == 0;
 	}
 
 	void FPickUnpacker::AddCollection(UPCGExAssetCollection* InCollection)

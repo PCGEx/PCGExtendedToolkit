@@ -56,6 +56,38 @@ namespace PCGExMaterialSwapTable
 		OutKey.Appendf(TEXT("|%d;"), static_cast<int32>(InGate.GetEffectiveTagSources()));
 	}
 
+	// The key GetStagesId hashes, counted and length-prefixed; empty stages add nothing. False when no stage holds a rule.
+	bool BuildStagesKey(const PCGExCollections::FMaterialSwapTable::FStages& InStages, FStringBuilderBase& OutKey)
+	{
+		bool bAnyRule = false;
+		TArray<FSoftObjectPath> Matches;
+		for (const PCGExCollections::FMaterialSwapTable::FStage& Stage : InStages)
+		{
+			if (Stage.IsEmpty())
+			{
+				continue;
+			}
+
+			bAnyRule = true;
+			OutKey.Appendf(TEXT("#%d;"), Stage.Num());
+
+			GetSortedMatches(Stage, Matches);
+			for (const FSoftObjectPath& Match : Matches)
+			{
+				const TArray<PCGExCollections::FMaterialSwapRule>& Rules = Stage.FindChecked(Match);
+				AppendField(OutKey, Match.ToString());
+				OutKey.Appendf(TEXT("(%d;"), Rules.Num());
+
+				for (const PCGExCollections::FMaterialSwapRule& Rule : Rules)
+				{
+					AppendField(OutKey, Rule.Replacement.ToString());
+					AppendGate(OutKey, Rule.Gate);
+				}
+			}
+		}
+		return bAnyRule;
+	}
+
 	// FName equality ignores case and LexicalLess sorts the same way, so equal tags end up next to each other.
 	void CanonicalizeList(TArray<FName>& InOutTags)
 	{
@@ -198,33 +230,6 @@ namespace PCGExCollections
 		return NumConflicts;
 	}
 
-	void FMaterialSwapTable::Append(const FMaterialSwapTable& InOther, TSet<FSoftObjectPath>* OutConflicts)
-	{
-		check(&InOther != this);
-
-		for (const TPair<FName, FStages>& Layer : InOther.Layers)
-		{
-			FStages& Target = Layers.FindOrAdd(Layer.Key);
-			if (Target.Num() < Layer.Value.Num())
-			{
-				Target.SetNum(Layer.Value.Num());
-			}
-
-			for (int32 i = 0; i < Layer.Value.Num(); i++)
-			{
-				FStage Merged = Layer.Value[i];
-				MergeStage(Merged, Target[i], OutConflicts);
-				Target[i] = MoveTemp(Merged);
-			}
-
-			Target.RemoveAll([](const FStage& Stage) { return Stage.IsEmpty(); });
-			if (Target.IsEmpty())
-			{
-				Layers.Remove(Layer.Key);
-			}
-		}
-	}
-
 	FMaterialSwapTable::FStages FMaterialSwapTable::Chain(const FStages& InUpstream, const FStage& InStage)
 	{
 		FStages Chained = InUpstream;
@@ -236,21 +241,6 @@ namespace PCGExCollections
 			Chained.Add(MoveTemp(Sanitized));
 		}
 		return Chained;
-	}
-
-	void FMaterialSwapTable::ChainLayer(const FName InLayer, const FName OutLayer, const FStage& InStage)
-	{
-		const FStages* Upstream = Layers.Find(InLayer);
-		FStages Chained = Chain(Upstream ? *Upstream : FStages(), InStage);
-
-		if (Chained.IsEmpty())
-		{
-			Layers.Remove(OutLayer);
-		}
-		else
-		{
-			Layers.Add(OutLayer, MoveTemp(Chained));
-		}
 	}
 
 	void FMaterialSwapTable::SortCanonical(TArray<FSoftObjectPath>& InOutPaths)
@@ -274,44 +264,26 @@ namespace PCGExCollections
 		}
 	}
 
-	uint32 FMaterialSwapTable::GetLayerId(const FName InLayer) const
-	{
-		const FStages* Stages = Layers.Find(InLayer);
-		return Stages ? GetStagesId(*Stages) : 0;
-	}
-
 	uint32 FMaterialSwapTable::GetStagesId(const FStages& InStages)
 	{
-		if (InStages.IsEmpty())
+		// StrCrc32, not GetTypeHash: FName hashes differ between sessions, and spawned ISMs persist this value.
+		TStringBuilder<1024> Key;
+		if (!PCGExMaterialSwapTable::BuildStagesKey(InStages, Key))
 		{
 			return 0;
 		}
 
-		// One canonical key, counted and length-prefixed, hashed once. StrCrc32, not GetTypeHash: FName hashes differ
-		// between sessions, and spawned ISMs persist this value.
-		TStringBuilder<1024> Key;
-		TArray<FSoftObjectPath> Matches;
-		for (const FStage& Stage : InStages)
-		{
-			Key.Appendf(TEXT("#%d;"), Stage.Num());
-
-			PCGExMaterialSwapTable::GetSortedMatches(Stage, Matches);
-			for (const FSoftObjectPath& Match : Matches)
-			{
-				const TArray<FMaterialSwapRule>& Rules = Stage.FindChecked(Match);
-				PCGExMaterialSwapTable::AppendField(Key, Match.ToString());
-				Key.Appendf(TEXT("(%d;"), Rules.Num());
-
-				for (const FMaterialSwapRule& Rule : Rules)
-				{
-					PCGExMaterialSwapTable::AppendField(Key, Rule.Replacement.ToString());
-					PCGExMaterialSwapTable::AppendGate(Key, Rule.Gate);
-				}
-			}
-		}
-
 		const uint32 Crc = FCrc::StrCrc32(Key.ToString());
 		return Crc ? Crc : 1;
+	}
+
+	bool FMaterialSwapTable::SameStages(const FStages& InA, const FStages& InB)
+	{
+		TStringBuilder<1024> KeyA;
+		TStringBuilder<1024> KeyB;
+		PCGExMaterialSwapTable::BuildStagesKey(InA, KeyA);
+		PCGExMaterialSwapTable::BuildStagesKey(InB, KeyB);
+		return KeyA.ToView().Equals(KeyB.ToView(), ESearchCase::CaseSensitive);
 	}
 
 	FSoftObjectPath FMaterialSwapTable::Resolve(const FStages& InStages, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const FSoftObjectPath& InMaterial)
@@ -427,27 +399,9 @@ namespace PCGExCollections
 		return Id;
 	}
 
-	void FMaterialSwapLibrary::Add(const FMaterialSwapTable& InTable)
+	void FMaterialSwapLibrary::RemoveLayer(const FName InLayer)
 	{
-		for (const TPair<FName, FStages>& Layer : InTable.Layers)
-		{
-			Add(Layer.Key, Layer.Value);
-		}
-	}
-
-	FMaterialSwapTable FMaterialSwapLibrary::Merge(TSet<FSoftObjectPath>* OutConflicts) const
-	{
-		FMaterialSwapTable Merged;
-		for (const TPair<FName, TArray<FEntry>>& Layer : Layers)
-		{
-			for (const FEntry& Entry : Layer.Value)
-			{
-				FMaterialSwapTable Single;
-				Single.Layers.Add(Layer.Key, Entry.Stages);
-				Merged.Append(Single, OutConflicts);
-			}
-		}
-		return Merged;
+		Layers.Remove(InLayer);
 	}
 
 	bool FMaterialSwapLibrary::IsTableData(const UPCGParamData* InParamData)
@@ -462,6 +416,7 @@ namespace PCGExCollections
 		TSet<FSoftObjectPath> Conflicts;
 		int32 NumRejected = 0;
 		FName FirstMistyped = NAME_None;
+		const int32 NumCollisionsBefore = NumCollisions;
 
 		for (const FPCGTaggedData& TaggedData : InContext->InputData.GetParamsByPin(InPinLabel))
 		{
@@ -480,6 +435,11 @@ namespace PCGExCollections
 		if (!Conflicts.IsEmpty())
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("Material swap rules on '{0}' disagree on {1} material(s) within their table: the first row wins."), FText::FromName(InPinLabel), FText::AsNumber(Conflicts.Num())));
+		}
+
+		if (NumCollisions > NumCollisionsBefore)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("{0} material swap table(s) on '{1}' share an id with a different table and were dropped: their points follow the other table's swaps."), FText::AsNumber(NumCollisions - NumCollisionsBefore), FText::FromName(InPinLabel)));
 		}
 	}
 
@@ -592,7 +552,7 @@ namespace PCGExCollections
 			}
 		}
 
-		return EUnpackResult::Merged;
+		return EUnpackResult::Unpacked;
 	}
 
 	void FMaterialSwapLibrary::PackToDataset(UPCGParamData* OutParamData) const
@@ -664,12 +624,101 @@ namespace PCGExCollections
 	void FMaterialSwapLibrary::AddUnique(const FName InLayer, const uint32 InId, FStages&& InStages)
 	{
 		TArray<FEntry>& Entries = Layers.FindOrAdd(InLayer);
-		if (!Entries.ContainsByPredicate([InId](const FEntry& Candidate) { return Candidate.Id == InId; }))
+		if (const FEntry* Held = Entries.FindByPredicate([InId](const FEntry& Candidate) { return Candidate.Id == InId; }))
 		{
-			FEntry& Added = Entries.AddDefaulted_GetRef();
-			Added.Id = InId;
-			Added.Stages = MoveTemp(InStages);
+			if (!FMaterialSwapTable::SameStages(Held->Stages, InStages))
+			{
+				NumCollisions++;
+			}
+			return;
 		}
+
+		FEntry& Added = Entries.AddDefaulted_GetRef();
+		Added.Id = InId;
+		Added.Stages = MoveTemp(InStages);
+	}
+
+#pragma endregion
+
+#pragma region FMaterialSwapChain
+
+	bool FMaterialSwapChain::Restamps(const FMaterialSwapTable::FStage& InStage, const FName InLayer, const FName OutLayer)
+	{
+		return !InStage.IsEmpty() || InLayer != OutLayer;
+	}
+
+	void FMaterialSwapChain::Build(const FMaterialSwapLibrary& InIncoming, const FName InLayer, const FName OutLayer, const FMaterialSwapTable::FStage& InStage)
+	{
+		OutputLayer = OutLayer;
+		Ids.Reset();
+		Tables = FMaterialSwapLibrary();
+		SlotByIncomingId.Reset();
+		UnstampedSlot = INDEX_NONE;
+
+		auto AddSlot = [&](const FMaterialSwapTable::FStages& InChained) -> int32
+		{
+			const uint32 Id = Tables.Add(OutputLayer, InChained);
+			if (!Id)
+			{
+				return INDEX_NONE;
+			}
+
+			const int32 Existing = Ids.Find(Id);
+			return Existing != INDEX_NONE ? Existing : Ids.Add(Id);
+		};
+
+		InIncoming.ForEachTable(InLayer, [&](const uint32 InId, const FMaterialSwapTable::FStages& InStages)
+		{
+			SlotByIncomingId.Add(InId, AddSlot(FMaterialSwapTable::Chain(InStages, InStage)));
+		});
+
+		UnstampedSlot = AddSlot(FMaterialSwapTable::Chain(FMaterialSwapTable::FStages(), InStage));
+	}
+
+	const FMaterialSwapTable::FStages* FMaterialSwapChain::GetStages(const int32 InSlot) const
+	{
+		return Ids.IsValidIndex(InSlot) ? Tables.Find(OutputLayer, Ids[InSlot]) : nullptr;
+	}
+
+	int32 FMaterialSwapChain::Remap(const uint32 InStamp, bool& bOutUnknown) const
+	{
+		bOutUnknown = false;
+		if (!InStamp)
+		{
+			return UnstampedSlot;
+		}
+
+		if (const int32* Slot = SlotByIncomingId.Find(InStamp))
+		{
+			return *Slot;
+		}
+
+		bOutUnknown = true;
+		return UnstampedSlot;
+	}
+
+	FMaterialSwapLibrary FMaterialSwapChain::Assemble(const FMaterialSwapLibrary& InIncoming, const bool bKeepIncoming, const TConstArrayView<bool> InUsed) const
+	{
+		FMaterialSwapLibrary Assembled = InIncoming;
+		if (!bKeepIncoming)
+		{
+			Assembled.RemoveLayer(OutputLayer);
+		}
+
+		for (int32 Slot = 0; Slot < Ids.Num(); Slot++)
+		{
+			if (!InUsed.IsValidIndex(Slot) || !InUsed[Slot])
+			{
+				continue;
+			}
+
+			if (const FMaterialSwapTable::FStages* Stages = GetStages(Slot))
+			{
+				Assembled.Add(OutputLayer, *Stages);
+			}
+		}
+
+		return Assembled;
 	}
 
 #pragma endregion

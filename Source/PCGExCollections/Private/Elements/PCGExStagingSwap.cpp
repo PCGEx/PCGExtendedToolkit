@@ -11,6 +11,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExRandomHelpers.h"
+#include "Misc/ScopeExit.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSwapElement"
 #define PCGEX_NAMESPACE StagingSwap
@@ -26,7 +27,7 @@ void UPCGExStagingSwapSettings::InputPinPropertiesBeforeFilters(TArray<FPCGPinPr
 TArray<FPCGPinProperties> UPCGExStagingSwapSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Updated collection map including the variant collections, with the material swap rows when swaps apply.", Normal)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Updated collection map including the variant collections, with the material swap rows its points follow.", Normal)
 	return PinProperties;
 }
 
@@ -129,18 +130,13 @@ namespace PCGExStagingSwap
 
 		const FName OutputLayer = Settings->GetOutputStagingLayer();
 
-		Context->OutputMaterialSwaps = Context->IncomingMaterialSwaps;
-
-		// Without a stage of its own, the node leaves every point on its table (stamps untouched).
-		Context->bRestampPoints = !OwnStage.IsEmpty() || Settings->StagingLayer != OutputLayer;
+		// Without a stage of its own or another output layer, the node leaves every point on its table (stamps untouched).
+		Context->bRestampPoints = PCGExCollections::FMaterialSwapChain::Restamps(OwnStage, Settings->StagingLayer, OutputLayer);
 		if (Context->bRestampPoints)
 		{
 			// Each lineage gets this node's stage chained onto its own table; points never pick up another branch's rules.
-			Context->IncomingMaterialSwaps.ForEachTable(Settings->StagingLayer, [&](const uint32 InId, const FTable::FStages& InStages)
-			{
-				Context->StampRemap.Add(InId, Context->OutputMaterialSwaps.Add(OutputLayer, FTable::Chain(InStages, OwnStage)));
-			});
-			Context->UnstampedTable = Context->OutputMaterialSwaps.Add(OutputLayer, FTable::Chain(FTable::FStages(), OwnStage));
+			Context->MaterialSwapChain.Build(Context->IncomingMaterialSwaps, Settings->StagingLayer, OutputLayer, OwnStage);
+			Context->StampedSlots = MakeUnique<std::atomic<bool>[]>(Context->MaterialSwapChain.Num());
 		}
 
 		if (!bAnyPickSwaps && OwnStage.IsEmpty() && !Settings->bQuietNoApplicableVariantsWarning)
@@ -583,7 +579,14 @@ bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 
 	if (const int32 NumUnknownStamps = Context->NumUnknownStamps.load(std::memory_order_relaxed); NumUnknownStamps > 0)
 	{
-		PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} point(s) carry a material swap stamp the Map pin has no table for: only this node's material swaps apply to them."), FText::AsNumber(NumUnknownStamps)));
+		if (Context->MaterialSwapChain.HasStage())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} point(s) carry a material swap stamp the Map pin has no table for: only this node's material swaps apply to them."), FText::AsNumber(NumUnknownStamps)));
+		}
+		else
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} point(s) carry a material swap stamp the Map pin has no table for: their materials are no longer swapped on the output layer."), FText::AsNumber(NumUnknownStamps)));
+		}
 	}
 
 	Context->MainPoints->StageOutputs();
@@ -591,7 +594,31 @@ bool FPCGExStagingSwapElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 	{
 		UPCGParamData* OutputSet = Context->ManagedObjects->New<UPCGParamData>();
 		Context->CollectionPickDatasetPacker->PackToDataset(OutputSet);
-		Context->OutputMaterialSwaps.PackToDataset(OutputSet);
+
+		if (Context->bRestampPoints)
+		{
+			// Only the tables an output point follows: the chained ones some point got, and the layers left alone.
+			const PCGExCollections::FMaterialSwapChain& Chain = Context->MaterialSwapChain;
+			TArray<bool> Stamped;
+			Stamped.SetNumUninitialized(Chain.Num());
+			for (int32 Slot = 0; Slot < Chain.Num(); Slot++)
+			{
+				Stamped[Slot] = Context->StampedSlots[Slot].load(std::memory_order_relaxed);
+			}
+
+			const PCGExCollections::FMaterialSwapLibrary OutputSwaps = Chain.Assemble(Context->IncomingMaterialSwaps, Context->bKeepIncomingTables.load(std::memory_order_relaxed), Stamped);
+			OutputSwaps.PackToDataset(OutputSet);
+
+			// Collisions among the incoming tables were reported by UnpackPin; these are the ones this node created.
+			if (const int32 NumCollisions = Chain.GetNumCollisions() + OutputSwaps.GetNumCollisions() - Context->IncomingMaterialSwaps.GetNumCollisions(); NumCollisions > 0)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(FTEXT("{0} chained material swap table(s) share an id with a different table: their points follow the other table's swaps."), FText::AsNumber(NumCollisions)));
+			}
+		}
+		else
+		{
+			Context->IncomingMaterialSwaps.PackToDataset(OutputSet);
+		}
 
 		Context->StageOutput(OutputSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 	}
@@ -607,6 +634,13 @@ namespace PCGExStagingSwap
 {
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
+		// An input that leaves without its stamp loop keeps its incoming stamps, so the output Map must keep their tables.
+		bool bStampLoopStarted = false;
+		ON_SCOPE_EXIT
+		{
+			if (Context->bRestampPoints && !bStampLoopStarted) { Context->bKeepIncomingTables.store(true, std::memory_order_relaxed); }
+		};
+
 		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;
 
 		if (!IProcessor::Process(InTaskManager))
@@ -670,6 +704,7 @@ namespace PCGExStagingSwap
 		{
 			if (StampWriter)
 			{
+				bStampLoopStarted = true;
 				StartParallelLoopForPoints(PCGExData::EIOSide::In);
 			}
 			return true;
@@ -721,6 +756,7 @@ namespace PCGExStagingSwap
 			}
 		}
 
+		bStampLoopStarted = true;
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 		return true;
 	}
@@ -735,13 +771,14 @@ namespace PCGExStagingSwap
 		// Every point, filtered or not: a point's table follows its lineage, not this node's filters.
 		if (StampWriter)
 		{
-			const TMap<uint32, uint32>& Remap = Context->StampRemap;
-			const uint32 Unstamped = Context->UnstampedTable;
+			const PCGExCollections::FMaterialSwapChain& Chain = Context->MaterialSwapChain;
 
 			// Points of one input mostly share a stamp: remap a run once.
 			uint32 LastIn = 0;
-			uint32 LastOut = Unstamped;
 			bool bLastUnknown = false;
+			int32 LastSlot = Chain.Remap(0, bLastUnknown);
+			uint32 LastOut = LastSlot != INDEX_NONE ? Chain.GetId(LastSlot) : 0u;
+			int32 FlaggedSlot = INDEX_NONE;
 			int32 NumUnknown = 0;
 
 			PCGEX_SCOPE_LOOP(Index)
@@ -749,10 +786,16 @@ namespace PCGExStagingSwap
 				const uint32 InStamp = StampReader ? static_cast<uint32>(StampReader->Read(Index)) : 0u;
 				if (InStamp != LastIn)
 				{
-					const uint32* Found = InStamp ? Remap.Find(InStamp) : nullptr;
 					LastIn = InStamp;
-					LastOut = Found ? *Found : Unstamped;
-					bLastUnknown = InStamp && !Found;
+					LastSlot = Chain.Remap(InStamp, bLastUnknown);
+					LastOut = LastSlot != INDEX_NONE ? Chain.GetId(LastSlot) : 0u;
+				}
+
+				// The output Map carries only the tables some point was stamped with.
+				if (LastSlot != FlaggedSlot && LastSlot != INDEX_NONE)
+				{
+					Context->StampedSlots[LastSlot].store(true, std::memory_order_relaxed);
+					FlaggedSlot = LastSlot;
 				}
 
 				if (bLastUnknown) { NumUnknown++; }

@@ -651,8 +651,9 @@ namespace PCGExCollections
 		/** True when InParamData has the Collection Map columns. The same param data may hold material swap rows too. */
 		static bool IsCollectionMap(const UPCGParamData* InParamData);
 
-		/** Unpacks InAttributeSet's Map rows; rows without a path are skipped. A path that resolves to no collection is
-		 *  reported and skipped, keeping the other rows. False when anything was reported. */
+		/** Unpacks InAttributeSet's Map rows; rows without a path are skipped. A path that resolves to no collection, or a
+		 *  collection on an id another one holds (the first stays), is reported once per set and skipped, keeping the other
+		 *  rows. False when anything was reported. */
 		bool UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet);
 
 		/** Unpack from a specific input pin */

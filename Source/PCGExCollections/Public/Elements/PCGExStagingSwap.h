@@ -53,7 +53,7 @@ struct FPCGExStagingSwapVariantLayer
  * (Tag_EntryIdx) from (SourceCollectionGUID, RawIndex) to the variant's (GUID, RawIndex)
  * using the variant's baked mapping, and emits an updated Collection Map that includes the
  * variant collections. Points whose entry has no override pass through untouched. The variants'
- * material swaps follow the Map on its pin as a material swap table, applied by the staged mesh selector.
+ * material swaps ride in its Map rows, and each output point is stamped with the table it follows.
  * Can read one staging layer and write another (Output Staging Layer), deriving a complete
  * new layer -- unswapped points then copy their source pick instead of passing through.
  *
@@ -176,17 +176,17 @@ struct FPCGExStagingSwapContext final : FPCGExPointsProcessorContext
 	/** Material swap tables arriving on the input Map pin. */
 	PCGExCollections::FMaterialSwapLibrary IncomingMaterialSwaps;
 
-	/** The incoming tables, plus this node's: each incoming input-layer table chained with its own stage. */
-	PCGExCollections::FMaterialSwapLibrary OutputMaterialSwaps;
-
 	/** True when output points need a new stamp: the node has a material stage of its own, or writes another layer. */
 	bool bRestampPoints = false;
 
-	/** Incoming table id on the input layer -> the id of this node's table chained onto it. */
-	TMap<uint32, uint32> StampRemap;
+	/** This node's stage chained onto each incoming lineage: the stamp remap. Built when bRestampPoints. */
+	PCGExCollections::FMaterialSwapChain MaterialSwapChain;
 
-	/** Table of points that carry no incoming stamp, or one with no table on the Map pin: this node's stage alone. */
-	uint32 UnstampedTable = 0;
+	/** Per chain slot: some output point was stamped with it, so the output Map carries its table. */
+	TUniquePtr<std::atomic<bool>[]> StampedSlots;
+
+	/** An input skipped its stamp loop and kept its incoming stamps, so the output Map keeps every incoming table. */
+	std::atomic<bool> bKeepIncomingTables{false};
 
 	/** Points whose stamp names no incoming table; summed across processors. */
 	std::atomic<int32> NumUnknownStamps{0};

@@ -29,48 +29,28 @@ namespace PCGExMeshSelectorStaged
 	// flipped. Nanite flips mirrored instances on its own and ignores the flag (SUPPORT_REVERSE_CULLING_IN_NANITE is 0).
 	void SplitMirroredInstances(FPCGMeshInstanceList& InstanceList, const TConstPCGValueRange<FTransform>& InTransforms, TArray<FPCGMeshInstanceList>& OutMirroredLists)
 	{
-		TArray<int32>& Indices = InstanceList.InstancesIndices;
-		TArray<int32> MirroredIndices;
+		TArray<TPair<int32, FPCGMeshInstanceList>> Splits;
+		const int32 Kept = SplitByKey(InstanceList, [&InTransforms](const int32 PointIndex) { return InTransforms[PointIndex].GetDeterminant() < 0 ? 1 : 0; }, 0, Splits);
 
-		int32 WriteIndex = 0;
-		for (int32 ReadIndex = 0; ReadIndex < Indices.Num(); ReadIndex++)
+		if (Kept == 1)
 		{
-			const int32 PointIndex = Indices[ReadIndex];
-			if (InTransforms[PointIndex].GetDeterminant() < 0)
-			{
-				MirroredIndices.Add(PointIndex);
-			}
-			else
-			{
-				Indices[WriteIndex++] = PointIndex;
-			}
-		}
-
-		if (MirroredIndices.IsEmpty())
-		{
-			return;
-		}
-
-		if (WriteIndex == 0)
-		{
-			// Every point is mirrored, and none was compacted away: flip this list instead of leaving an empty one.
+			// Every point is mirrored: flip this list instead of leaving an empty one.
 			InstanceList.Descriptor.bReverseCulling = !InstanceList.Descriptor.bReverseCulling;
 			return;
 		}
 
-		Indices.SetNum(WriteIndex, EAllowShrinking::No);
-
-		FPCGMeshInstanceList& Mirrored = OutMirroredLists.Add_GetRef(InstanceList);
-		Mirrored.Descriptor.bReverseCulling = !InstanceList.Descriptor.bReverseCulling;
-		Mirrored.InstancesIndices = MoveTemp(MirroredIndices);
-		Mirrored.Instances.Reserve(Mirrored.InstancesIndices.Num());
-		for (const int32 PointIndex : Mirrored.InstancesIndices)
+		for (TPair<int32, FPCGMeshInstanceList>& Split : Splits)
 		{
-			Mirrored.Instances.Emplace(InTransforms[PointIndex]);
+			FPCGMeshInstanceList& Mirrored = OutMirroredLists.Add_GetRef(MoveTemp(Split.Value));
+			Mirrored.Descriptor.bReverseCulling = !Mirrored.Descriptor.bReverseCulling;
+			Mirrored.Instances.Reserve(Mirrored.InstancesIndices.Num());
+			for (const int32 PointIndex : Mirrored.InstancesIndices)
+			{
+				Mirrored.Instances.Emplace(InTransforms[PointIndex]);
+			}
 		}
 	}
 
-	// Each point's material swap table on InLayer (0 = none); left empty when the points carry no stamp.
 	void ReadSwapStamps(const UPCGBasePointData* InPointData, const FName InLayer, TArray<uint32>& OutTables)
 	{
 		const UPCGMetadata* Metadata = InPointData->ConstMetadata();
@@ -88,42 +68,84 @@ namespace PCGExMeshSelectorStaged
 		}
 	}
 
-	// Moves InstanceList's points that follow another table than its first point into OutSplits, one list per table, each a
-	// copy of InstanceList as it stands. Returns the first point's table.
-	uint32 SplitByTable(FPCGMeshInstanceList& InstanceList, const TArray<uint32>& PointTables, TArray<TPair<uint32, FPCGMeshInstanceList>>& OutSplits)
+	FOutcomeSplit SplitByOutcome(FPCGMeshInstanceList& InOutList, const TConstArrayView<uint32> InPointTables, const PCGExCollections::FMaterialSwapLibrary& InLibrary, const FName InLayer, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, const TConstArrayView<TSoftObjectPtr<UMaterialInterface>> InMeshMaterials, TArray<FPCGMeshInstanceList>& OutLists)
 	{
-		TArray<int32>& Indices = InstanceList.InstancesIndices;
-		if (Indices.IsEmpty())
+		FOutcomeSplit Result;
+		if (InPointTables.IsEmpty() || InOutList.InstancesIndices.IsEmpty())
 		{
-			return 0;
+			return Result;
 		}
 
-		const uint32 KeptTable = PointTables[Indices[0]];
+		const FPCGSoftISMComponentDescriptor Base = InOutList.Descriptor;
 
-		int32 WriteIndex = 0;
-		for (int32 ReadIndex = 0; ReadIndex < Indices.Num(); ReadIndex++)
+		// Each distinct table resolves once, to the index of the descriptor it makes.
+		TArray<uint32, TInlineAllocator<4>> Tables;
+		TArray<int32, TInlineAllocator<4>> OutcomeOfTable;
+		TArray<bool, TInlineAllocator<4>> UnknownOfTable;
+		TArray<FPCGSoftISMComponentDescriptor> Outcomes;
+
+		auto ResolveOutcome = [&](const uint32 InTable, bool& bOutUnknown) -> int32
 		{
-			const int32 PointIndex = Indices[ReadIndex];
-			const uint32 Table = PointTables[PointIndex];
-			if (Table == KeptTable)
+			if (const int32 Seen = Tables.IndexOfByKey(InTable); Seen != INDEX_NONE)
 			{
-				Indices[WriteIndex++] = PointIndex;
-				continue;
+				bOutUnknown = UnknownOfTable[Seen];
+				return OutcomeOfTable[Seen];
 			}
 
-			TPair<uint32, FPCGMeshInstanceList>* Split = OutSplits.FindByPredicate([Table](const TPair<uint32, FPCGMeshInstanceList>& Candidate) { return Candidate.Key == Table; });
-			if (!Split)
+			const PCGExCollections::FMaterialSwapLibrary::FStages* Stages = InTable ? InLibrary.Find(InLayer, InTable) : nullptr;
+			bOutUnknown = InTable && !Stages;
+
+			FPCGSoftISMComponentDescriptor Descriptor = Base;
+			if (Stages)
 			{
-				FPCGMeshInstanceList Copy = InstanceList;
-				Copy.InstancesIndices.Reset();
-				Copy.Instances.Reset();
-				Split = &OutSplits.Emplace_GetRef(Table, MoveTemp(Copy));
+				Result.bAnyTable = true;
+				PCGExCollections::FMaterialSwapTable::Apply(*Stages, InEntry, InHost, InMeshMaterials, Descriptor);
 			}
-			Split->Value.InstancesIndices.Add(PointIndex);
+
+			// Apply only writes the material fields, so they alone tell two outcomes of one base apart.
+			int32 Outcome = Outcomes.IndexOfByPredicate([&Descriptor](const FPCGSoftISMComponentDescriptor& Candidate)
+			{
+				return Candidate.OverrideMaterials == Descriptor.OverrideMaterials && Candidate.OverlayMaterial == Descriptor.OverlayMaterial;
+			});
+
+			if (Outcome == INDEX_NONE)
+			{
+				Outcome = Outcomes.Add(MoveTemp(Descriptor));
+			}
+
+			Tables.Add(InTable);
+			OutcomeOfTable.Add(Outcome);
+			UnknownOfTable.Add(bOutUnknown);
+			return Outcome;
+		};
+
+		// Points of one input mostly share a table: resolve a run once.
+		uint32 LastTable = 0;
+		int32 LastOutcome = INDEX_NONE;
+		bool bLastUnknown = false;
+
+		TArray<TPair<int32, FPCGMeshInstanceList>> Splits;
+		const int32 Kept = SplitByKey(InOutList, [&](const int32 PointIndex)
+		{
+			const uint32 Table = InPointTables[PointIndex];
+			if (LastOutcome == INDEX_NONE || Table != LastTable)
+			{
+				LastTable = Table;
+				LastOutcome = ResolveOutcome(Table, bLastUnknown);
+			}
+
+			if (bLastUnknown) { Result.NumUnknown++; }
+			return LastOutcome;
+		}, 0, Splits);
+
+		InOutList.Descriptor = Outcomes[Kept];
+		for (TPair<int32, FPCGMeshInstanceList>& Split : Splits)
+		{
+			FPCGMeshInstanceList& List = OutLists.Add_GetRef(MoveTemp(Split.Value));
+			List.Descriptor = Outcomes[Split.Key];
 		}
 
-		Indices.SetNum(WriteIndex, EAllowShrinking::No);
-		return KeptTable;
+		return Result;
 	}
 }
 
@@ -291,7 +313,7 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 
 		// Appended only after the loop: Partition.Value indexes OutMeshInstances, which must not grow mid-iteration.
 		TArray<FPCGMeshInstanceList> MirroredLists;
-		TArray<FPCGMeshInstanceList> TableLists;
+		TArray<FPCGMeshInstanceList> OutcomeLists;
 
 		for (const TPair<int64, int32>& Partition : CollectionMap->IndexedPartitions)
 		{
@@ -332,30 +354,28 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 				Entry->ApplyMaterials(MaterialPick, OutDescriptor);
 			}
 
-			// Swaps go before the mirrored split, so mirrored twins inherit them.
-			auto FinishList = [&](FPCGMeshInstanceList& List, const uint32 InTable)
+			// Swaps go before the mirrored split, so mirrored twins inherit them. Points of one pick may follow different
+			// tables (branches merged upstream): one list per descriptor those tables make.
+			TArray<FPCGMeshInstanceList> SplitLists;
+			if (!PointTables.IsEmpty())
 			{
-				const PCGExCollections::FMaterialSwapLibrary::FStages* Swaps = InTable ? MaterialSwaps.Find(StagingLayer, InTable) : nullptr;
-				if (InTable && !Swaps)
+				// The snapshot only describes the mesh it was staged from; one changed without a restage is unstaged.
+				const bool bSnapshotValid = !Entry->StaticMesh.IsNull() && Entry->StagedMaterialsSource == Entry->StaticMesh.ToSoftObjectPath();
+
+				const PCGExMeshSelectorStaged::FOutcomeSplit Split = PCGExMeshSelectorStaged::SplitByOutcome(
+					InstanceList, PointTables, MaterialSwaps, StagingLayer, *Entry, Result.Host,
+					bSnapshotValid ? TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(Entry->StagedMaterials) : TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(),
+					SplitLists);
+
+				NumUnknownTables += Split.NumUnknown;
+				if (Split.bAnyTable && !bSnapshotValid && !Entry->StaticMesh.IsNull())
 				{
-					NumUnknownTables += List.InstancesIndices.Num();
+					UnstagedHosts.Add(Result.Host);
 				}
+			}
 
-				if (Swaps)
-				{
-					// The snapshot only describes the mesh it was staged from; one changed without a restage is unstaged.
-					const bool bSnapshotValid = !Entry->StaticMesh.IsNull() && Entry->StagedMaterialsSource == Entry->StaticMesh.ToSoftObjectPath();
-					if (!bSnapshotValid && !Entry->StaticMesh.IsNull())
-					{
-						UnstagedHosts.Add(Result.Host);
-					}
-
-					PCGExCollections::FMaterialSwapTable::Apply(
-						*Swaps, *Entry, Result.Host,
-						bSnapshotValid ? TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(Entry->StagedMaterials) : TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(),
-						List.Descriptor);
-				}
-
+			auto FinishList = [&](FPCGMeshInstanceList& List)
+			{
 				if (bPackCustomData)
 				{
 					CustomDataPacker.PackEntry(Entry, Result.Host, List.CustomPrimitiveData);
@@ -383,23 +403,15 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 				}
 			};
 
-			if (PointTables.IsEmpty())
+			FinishList(InstanceList);
+			for (FPCGMeshInstanceList& List : SplitLists)
 			{
-				FinishList(InstanceList, 0);
-				continue;
-			}
-
-			// Points of one pick may follow different tables (branches merged upstream): one list per table.
-			TArray<TPair<uint32, FPCGMeshInstanceList>> Splits;
-			FinishList(InstanceList, PCGExMeshSelectorStaged::SplitByTable(InstanceList, PointTables, Splits));
-			for (TPair<uint32, FPCGMeshInstanceList>& Split : Splits)
-			{
-				FinishList(Split.Value, Split.Key);
-				TableLists.Add(MoveTemp(Split.Value));
+				FinishList(List);
+				OutcomeLists.Add(MoveTemp(List));
 			}
 		}
 
-		OutMeshInstances.Append(MoveTemp(TableLists));
+		OutMeshInstances.Append(MoveTemp(OutcomeLists));
 		OutMeshInstances.Append(MoveTemp(MirroredLists));
 
 		if (NumUnknownTables > 0)
