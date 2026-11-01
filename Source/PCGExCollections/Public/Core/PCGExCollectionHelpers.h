@@ -14,6 +14,8 @@ class FObjectPropertyBase;
 
 struct FAssetData;
 struct FStreamableHandle;
+class UPCGExVariantCollection;
+struct FPCGExBaseTagFilterDetails;
 
 /**
  * Collection Helper Functions
@@ -96,6 +98,21 @@ namespace PCGExCollectionHelpers
 		FName InputPin,
 		const FPCGExRoamingAssetCollectionDetails& Details,
 		bool bBuildStaging);
+
+	/**
+	 * Appends one MaterialSwaps row per reachable attribute-set row (paths: Soft Object Path or String; with InTagFilter,
+	 * each clause is its constant or a per-row Name / String). OutSkipped counts empty paths, unreadable tags, unreachable
+	 * rows and replacements the registry knows are not materials. Returns the number appended, -1 on a bad column (logged).
+	 */
+	PCGEXCOLLECTIONS_API
+	int32 AppendMaterialSwapsFromAttributeSet(
+		UPCGExVariantCollection* InVariant,
+		FPCGExContext* InContext,
+		const UPCGParamData* InAttributeSet,
+		FName InMatchAttribute,
+		FName InReplacementAttribute,
+		const FPCGExBaseTagFilterDetails* InTagFilter,
+		int32& OutSkipped);
 
 	/**
 	 * Accumulate tags from entry and potentially its subcollection hierarchy

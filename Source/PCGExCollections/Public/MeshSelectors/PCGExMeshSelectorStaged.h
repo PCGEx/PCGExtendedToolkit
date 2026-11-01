@@ -21,6 +21,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bApplyMaterialOverrides = true;
 
+	/** Apply to each point the material swap table of the last Staging : Swap it passed (that Map on the Overrides pin), to
+	 *  override slots and to the mesh's own materials. Independent of Apply Material Overrides. */
+	UPROPERTY(EditAnywhere, Category = MeshSelector)
+	bool bApplyMaterialSwaps = true;
+
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bForceDisableCollisions = false;
 
@@ -48,3 +53,81 @@ public:
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bQuietMissingStagingDataWarning = false;
 };
+
+namespace PCGExCollections
+{
+	class FMaterialSwapLibrary;
+}
+
+struct FPCGExAssetCollectionEntry;
+class UPCGExAssetCollection;
+class UMaterialInterface;
+
+namespace PCGExMeshSelectorStaged
+{
+	/** Each point's material swap table on InLayer (0 = none); left empty when the points carry no stamp. */
+	PCGEXCOLLECTIONS_API void ReadSwapStamps(const UPCGBasePointData* InPointData, FName InLayer, TArray<uint32>& OutTables);
+
+	/**
+	 * Moves the points of InOutList whose key differs from the kept one into copies of the list, one per key in first-seen
+	 * order. The kept key is InPreferred when a point has it, else the first point's. Returns the kept key.
+	 */
+	template <typename KeyOfT>
+	int32 SplitByKey(FPCGMeshInstanceList& InOutList, KeyOfT&& InKeyOf, const int32 InPreferred, TArray<TPair<int32, FPCGMeshInstanceList>>& OutSplits)
+	{
+		TArray<int32>& Indices = InOutList.InstancesIndices;
+		if (Indices.IsEmpty())
+		{
+			return InPreferred;
+		}
+
+		TArray<int32> Keys;
+		Keys.SetNumUninitialized(Indices.Num());
+		bool bHasPreferred = false;
+		for (int32 i = 0; i < Indices.Num(); i++)
+		{
+			Keys[i] = InKeyOf(Indices[i]);
+			bHasPreferred |= Keys[i] == InPreferred;
+		}
+
+		const int32 Kept = bHasPreferred ? InPreferred : Keys[0];
+
+		int32 WriteIndex = 0;
+		for (int32 i = 0; i < Indices.Num(); i++)
+		{
+			const int32 PointIndex = Indices[i];
+			const int32 Key = Keys[i];
+			if (Key == Kept)
+			{
+				Indices[WriteIndex++] = PointIndex;
+				continue;
+			}
+
+			TPair<int32, FPCGMeshInstanceList>* Split = OutSplits.FindByPredicate([Key](const TPair<int32, FPCGMeshInstanceList>& Candidate) { return Candidate.Key == Key; });
+			if (!Split)
+			{
+				FPCGMeshInstanceList Copy = InOutList;
+				Copy.InstancesIndices.Reset();
+				Copy.Instances.Reset();
+				Split = &OutSplits.Emplace_GetRef(Key, MoveTemp(Copy));
+			}
+			Split->Value.InstancesIndices.Add(PointIndex);
+		}
+
+		Indices.SetNum(WriteIndex, EAllowShrinking::No);
+		return Kept;
+	}
+
+	struct FOutcomeSplit
+	{
+		int32 NumUnknown = 0;   // Points whose table the library doesn't hold: they keep the materials they had.
+		bool bAnyTable = false; // Some point follows a table the library holds.
+	};
+
+	/**
+	 * Gives the points of InOutList the descriptor their table (InPointTables, by point index; one the library doesn't hold
+	 * counts as none) makes of InEntry. Points whose tables give the same descriptor share a list, since two equal
+	 * descriptors from one input would share a component: InOutList keeps the first point's, the others go to OutLists.
+	 */
+	PCGEXCOLLECTIONS_API FOutcomeSplit SplitByOutcome(FPCGMeshInstanceList& InOutList, TConstArrayView<uint32> InPointTables, const PCGExCollections::FMaterialSwapLibrary& InLibrary, FName InLayer, const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TConstArrayView<TSoftObjectPtr<UMaterialInterface>> InMeshMaterials, TArray<FPCGMeshInstanceList>& OutLists);
+}

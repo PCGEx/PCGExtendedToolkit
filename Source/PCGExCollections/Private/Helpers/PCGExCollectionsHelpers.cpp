@@ -815,7 +815,10 @@ namespace PCGExCollections
 		Seen.Reserve(NumExisting + InCollections.Num());
 		for (int64 i = 0; i < NumExisting; i++)
 		{
-			Seen.Add(static_cast<uint32>(CollectionIdx->GetValueFromItemKey(i)), CollectionPath->GetValueFromItemKey(i));
+			// Material swap rows share the set without a path; their default Idx must not claim a GUID.
+			FSoftObjectPath ExistingPath = CollectionPath->GetValueFromItemKey(i);
+			if (ExistingPath.IsNull()) { continue; }
+			Seen.Add(static_cast<uint32>(CollectionIdx->GetValueFromItemKey(i)), MoveTemp(ExistingPath));
 		}
 
 		for (const UPCGExAssetCollection* Collection : InCollections)
@@ -871,19 +874,11 @@ namespace PCGExCollections
 	bool FPickUnpacker::UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet)
 	{
 		const UPCGMetadata* Metadata = InAttributeSet->Metadata;
-		TUniquePtr<FPCGAttributeAccessorKeysEntries> Keys = MakeUnique<FPCGAttributeAccessorKeysEntries>(Metadata);
+		const FPCGAttributeAccessorKeysEntries Keys(Metadata);
+		const int32 NumEntries = Keys.GetNum();
 
-		const int32 NumEntries = Keys->GetNum();
-		if (NumEntries == 0)
-		{
-			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection map is empty."));
-			return false;
-		}
-
-		CollectionMap.Reserve(CollectionMap.Num() + NumEntries);
-
-		const FPCGMetadataAttribute<int32>* CollectionIdx = InAttributeSet->Metadata->GetConstTypedAttribute<int32>(Labels::Tag_CollectionIdx);
-		const FPCGMetadataAttribute<FSoftObjectPath>* CollectionPath = InAttributeSet->Metadata->GetConstTypedAttribute<FSoftObjectPath>(Labels::Tag_CollectionPath);
+		const FPCGMetadataAttribute<int32>* CollectionIdx = Metadata->GetConstTypedAttribute<int32>(Labels::Tag_CollectionIdx);
+		const FPCGMetadataAttribute<FSoftObjectPath>* CollectionPath = Metadata->GetConstTypedAttribute<FSoftObjectPath>(Labels::Tag_CollectionPath);
 
 		if (!CollectionIdx || !CollectionPath)
 		{
@@ -891,12 +886,33 @@ namespace PCGExCollections
 			return false;
 		}
 
+		// Not keyed on Idx 0: GUIDs are hashes, so 0 is legal. Material swap rows sharing the set have no path.
+		TArray<int32> RowKeys;
+		TArray<FSoftObjectPath> RowPaths;
+		RowKeys.Reserve(NumEntries);
+		RowPaths.Reserve(NumEntries);
+		for (int32 i = 0; i < NumEntries; i++)
+		{
+			FSoftObjectPath Path = CollectionPath->GetValueFromItemKey(i);
+			if (Path.IsNull()) { continue; }
+			RowKeys.Add(i);
+			RowPaths.Add(MoveTemp(Path));
+		}
+
+		if (RowPaths.IsEmpty())
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection map is empty."));
+			return false;
+		}
+
+		CollectionMap.Reserve(CollectionMap.Num() + RowPaths.Num());
+
 		{
 			TSharedPtr<TSet<FSoftObjectPath>> CollectionPaths = MakeShared<TSet<FSoftObjectPath>>();
-
-			for (int32 i = 0; i < NumEntries; i++)
+			CollectionPaths->Reserve(RowPaths.Num());
+			for (const FSoftObjectPath& Path : RowPaths)
 			{
-				CollectionPaths->Add(CollectionPath->GetValueFromItemKey(i));
+				CollectionPaths->Add(Path);
 			}
 
 #if WITH_EDITOR
@@ -916,35 +932,44 @@ namespace PCGExCollections
 			CollectionsHandles.Append(PCGExHelpers::LoadAndCacheBlocking_AnyThread(CollectionPaths));
 		}
 
-		for (int32 i = 0; i < NumEntries; i++)
+		// An unresolvable or colliding row is reported, never allowed to drop the rows after it.
+		int32 NumUnresolved = 0;
+		FSoftObjectPath FirstUnresolved;
+		int32 NumCollisions = 0;
+		FSoftObjectPath FirstCollision;
+		for (int32 r = 0; r < RowPaths.Num(); r++)
 		{
-			int32 Idx = CollectionIdx->GetValueFromItemKey(i);
-
-			TSoftObjectPtr<UPCGExAssetCollection> CollectionSoftPtr(CollectionPath->GetValueFromItemKey(i));
+			TSoftObjectPtr<UPCGExAssetCollection> CollectionSoftPtr(RowPaths[r]);
 			UPCGExAssetCollection* Collection = CollectionSoftPtr.Get();
-
 			if (!Collection)
 			{
-				PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Some collections could not be loaded."));
-				return false;
+				if (NumUnresolved++ == 0) { FirstUnresolved = RowPaths[r]; }
+				continue;
 			}
 
-			if (CollectionMap.Contains(Idx))
+			const uint32 Idx = static_cast<uint32>(CollectionIdx->GetValueFromItemKey(RowKeys[r]));
+			if (UPCGExAssetCollection* const* Existing = CollectionMap.Find(Idx))
 			{
-				if (CollectionMap[Idx] == Collection)
-				{
-					continue;
-				}
-
-				PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Collection Idx collision."));
-				return false;
+				// The first mapping stays: picks hashed against this row's collection would resolve into it.
+				if (*Existing != Collection && NumCollisions++ == 0) { FirstCollision = RowPaths[r]; }
+				continue;
 			}
 
 			CollectionMap.Add(Idx, Collection);
 			NumUniqueEntries += Collection->GetValidEntryNum();
 		}
 
-		return true;
+		if (NumCollisions > 0)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("{0} collection(s) on the Map share an id with another collection (first: '{1}'); their picks resolve against the other one. Re-save a duplicate of one to re-mint its id."), FText::AsNumber(NumCollisions), FText::FromString(FirstCollision.ToString())));
+		}
+
+		if (NumUnresolved > 0)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("{0} collection(s) on the Map could not be loaded (first: '{1}'); their picks won't resolve."), FText::AsNumber(NumUnresolved), FText::FromString(FirstUnresolved.ToString())));
+		}
+
+		return NumUnresolved == 0 && NumCollisions == 0;
 	}
 
 	void FPickUnpacker::AddCollection(UPCGExAssetCollection* InCollection)
@@ -973,19 +998,20 @@ namespace PCGExCollections
 		}
 	}
 
+	bool FPickUnpacker::IsCollectionMap(const UPCGParamData* InParamData)
+	{
+		return InParamData && InParamData->Metadata
+			&& InParamData->Metadata->HasAttribute(Labels::Tag_CollectionIdx)
+			&& InParamData->Metadata->HasAttribute(Labels::Tag_CollectionPath);
+	}
+
 	void FPickUnpacker::UnpackPin(FPCGContext* InContext, const FName InPinLabel)
 	{
 		for (TArray<FPCGTaggedData> Params = InContext->InputData.GetParamsByPin(InPinLabel.IsNone() ? Labels::SourceCollectionMapLabel : InPinLabel);
 		     const FPCGTaggedData& InTaggedData : Params)
 		{
 			const UPCGParamData* ParamData = Cast<UPCGParamData>(InTaggedData.Data);
-
-			if (!ParamData)
-			{
-				continue;
-			}
-
-			if (!ParamData->Metadata->HasAttribute(Labels::Tag_CollectionIdx) || !ParamData->Metadata->HasAttribute(Labels::Tag_CollectionPath))
+			if (!IsCollectionMap(ParamData))
 			{
 				continue;
 			}

@@ -139,7 +139,7 @@ namespace PCGExDataHash
 		{
 			const UPCGMetadata* Metadata = ParamData->ConstMetadata();
 			InHash = PCGExHashHelpers::MixWord(InHash, CategoryParam);
-			return PCGExHashHelpers::MixWord(InHash, static_cast<uint64>(Metadata ? Metadata->GetLocalItemCount() : 0));
+			return PCGExHashHelpers::MixWord(InHash, static_cast<uint64>(Metadata ? Metadata->GetItemCountForChild() : 0));
 		}
 
 		if (const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Data))

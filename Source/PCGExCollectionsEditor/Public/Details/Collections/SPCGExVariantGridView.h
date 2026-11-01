@@ -34,22 +34,30 @@ enum class EPCGExVariantTileState : uint8
 	RuleDefinition, // A path rule with a declared payload ("Asset Swaps" group) — offers revoke + delete
 	RuleUnset,      // A path rule with no payload yet — dimmed like PassThrough, offers declare + delete
 	Orphaned,       // Override row whose SourceEntryId no longer exists on the source
+	MaterialSwap,      // A material swap row with a replacement ("Material Swaps" group) -- offers clear + delete
+	MaterialSwapUnset, // A material swap row with no replacement yet -- dimmed, offers pick + delete
 };
 
 /**
- * One tile of the variant grid. The unit is a SOURCE collection entry (auto-populated),
- * not an authored row: undeclared entries render dimmed pass-through tiles, declared
- * swaps render the replacement thumbnail with the source as a corner badge.
+ * One tile of the variant grid. In source groups the unit is a SOURCE collection entry (auto-populated):
+ * undeclared entries render dimmed pass-through tiles, declared swaps render the replacement thumbnail
+ * with the source as a corner badge. The synthetic Asset Swaps / Material Swaps groups show authored rows.
  */
 struct FPCGExVariantGridItem
 {
-	int32 GroupIdx = INDEX_NONE;       // index into Variant->Sources (INDEX_NONE for rule-definition tiles)
+	int32 GroupIdx = INDEX_NONE;       // index into Variant->Sources (INDEX_NONE for rule and material swap tiles)
 	int32 SourceRawIndex = INDEX_NONE; // raw entry index on the source collection (INDEX_NONE for orphans/rules)
 	int32 SourceEntryId = 0;           // stable id binding tile to source entry
 	int32 OverrideRowIdx = INDEX_NONE; // index into the group's Overrides (INDEX_NONE = no explicit row)
 	int32 PathRuleIdx = INDEX_NONE;    // index into Variant->PathOverrides when rule-covered / rule tile
 	bool bIsRuleDefinition = false;    // tile in the synthetic "Asset Swaps" group
 	bool bRulePayloadSet = false;      // rule tiles only: the rule's Entry payload is a valid struct
+
+	// Material swap tiles ("Material Swaps" group): SourceThumbPath is the matched material, OverrideThumbPath the replacement.
+	int32 MaterialSwapIdx = INDEX_NONE;    // index into Variant->MaterialSwaps
+	bool bMaterialSwapGated = false;       // the row's tag filter is on
+	bool bMaterialSwapUnreachable = false; // an earlier row for the same material always wins over this one
+	bool bMaterialSwapMatchUnset = false;  // the row names no material to match, so it never applies
 
 	FSoftObjectPath SourceThumbPath;
 	FSoftObjectPath OverrideThumbPath;
@@ -65,6 +73,7 @@ struct FPCGExVariantGridItem
 
 	EPCGExVariantTileState GetState() const
 	{
+		if (MaterialSwapIdx != INDEX_NONE) { return OverrideThumbPath.IsNull() ? EPCGExVariantTileState::MaterialSwapUnset : EPCGExVariantTileState::MaterialSwap; }
 		if (bIsRuleDefinition) { return bRulePayloadSet ? EPCGExVariantTileState::RuleDefinition : EPCGExVariantTileState::RuleUnset; }
 		if (SourceRawIndex == INDEX_NONE) { return EPCGExVariantTileState::Orphaned; }
 		if (OverrideRowIdx != INDEX_NONE) { return EPCGExVariantTileState::Swapped; }
@@ -129,7 +138,7 @@ private:
 	FOnVariantTileAction OnDeleteRule;
 
 	/** Pooled, cache-backed thumbnail widget for an arbitrary asset path (0-size path → placeholder text). */
-	TSharedRef<SWidget> MakeThumbnail(const FSoftObjectPath& AssetPath, float InSize) const;
+	TSharedRef<SWidget> MakeThumbnail(const FSoftObjectPath& AssetPath) const;
 
 	/** Grammar symbol badge, styled like the regular collection editor's (DebugColor background). */
 	TSharedRef<SWidget> MakeSymbolBadge(FName Symbol, const FLinearColor& Color, const FText& Tooltip) const;
@@ -138,8 +147,9 @@ private:
 /**
  * Grid view for UPCGExVariantCollection: one collapsible group per source collection,
  * one tile per SOURCE entry (auto-populated from the live source), opt-in swap declaration
- * per tile, and a right-pane structure details view editing the replacement entry payload.
- * EntryIds never surface — binding is handled on declare.
+ * per tile, the synthetic Asset Swaps / Material Swaps groups, and a right-pane structure
+ * details view editing the selected payload or row. EntryIds never surface -- binding is
+ * handled on declare.
  */
 class PCGEXCOLLECTIONSEDITOR_API SPCGExVariantGridView : public SCompoundWidget
 {
@@ -177,6 +187,9 @@ public:
 	 * @return The number of candidate collections handled (declared + skipped duplicates).
 	 */
 	int32 AddSourcesFromAssets(const TArray<FAssetData>& InAssets);
+
+	/** Appends a material swap row matching InMaterial (replacement unset) and selects it for editing. */
+	void AddMaterialSwap(const FAssetData& InMaterial);
 
 	//~ Drop target: collection assets dropped anywhere on the grid become sources.
 	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
@@ -225,7 +238,8 @@ private:
 
 	/** Opens the swap-declaration type menu at the cursor: copy the source entry, or start
 	 *  the replacement as a fresh payload of any registered entry type. Also serves unset
-	 *  rule tiles (copy option offered when a loaded source stages the matched asset). */
+	 *  rule tiles (copy option offered when a loaded source stages the matched asset), and
+	 *  opens a material picker for the replacement of unset material swap tiles. */
 	void DeclareSwap(int32 ItemIndex);
 
 	/** Creates the override row. Null EntryStruct = full copy of the source entry (legacy
@@ -239,17 +253,35 @@ private:
 	void DeclareRuleSwapAs(int32 ItemIndex, const UScriptStruct* EntryStruct);
 
 	/** Swapped/orphan tiles: removes the override row. Rule tiles: resets the payload only —
-	 *  the rule (and its asset reference) survives as an unset rule. */
+	 *  the rule (and its asset reference) survives as an unset rule. Material swap tiles: clears
+	 *  the replacement only. */
 	void RevokeSwap(int32 ItemIndex);
 
-	/** Deletes a rule outright — asset reference and payload both leave PathOverrides. */
+	/** Deletes a rule outright -- asset reference and payload both leave PathOverrides. Material swap tiles: deletes
+	 *  the row; the selection follows its row. */
 	void DeleteRule(int32 ItemIndex);
+
+	/** Material swap tiles: sets the row's replacement. A row that is gone, already set or no longer matching
+	 *  InExpectedMatch (stale menu) is left alone. */
+	void SetMaterialSwapReplacement(int32 RowIndex, const FSoftObjectPath& InExpectedMatch, const FAssetData& InMaterial);
+
+	/** Selects a material swap row (INDEX_NONE clears the selection), refreshes the details pane and scrolls its tile
+	 *  into view. */
+	void SelectMaterialSwap(int32 RowIndex);
+
+	/** The item showing material swap row RowIndex; INDEX_NONE when there is none. */
+	int32 FindMaterialSwapItem(int32 RowIndex) const;
+
+	/** Runs InEdit on the variant inside an undo transaction, between Modify and PostEditChange. The transaction
+	 *  doesn't refresh the grid through OnObjectTransacted: the caller refreshes. */
+	void EditVariant(const FText& InTransactionText, TFunctionRef<void(UPCGExVariantCollection&)> InEdit);
 
 	void ApplySelectionVisuals();
 	void UpdateDetailForSelection();
 	void OnDetailPropertyChanged(const FPropertyChangedEvent& Event);
 
-	/** Resolve an item's override row payload memory + struct, or false when not declared/invalid. */
+	/** Resolve an item's editable payload (override row or rule entry, or the material swap row itself) memory + struct,
+	 *  or false when not declared/invalid. */
 	bool ResolveOverridePayload(const FPCGExVariantGridItem& InItem, UScriptStruct*& OutStruct, uint8*& OutMemory) const;
 
 	/** Undo/redo — refresh when our collection is transacted. */

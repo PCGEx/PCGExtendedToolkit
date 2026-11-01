@@ -21,6 +21,7 @@
 #include "Data/Utils/PCGExDataForward.h"
 #include "Elements/PCGExStagingLoadProperties.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Data/PCGPointArrayData.h"
 #include "Data/Utils/PCGExPointReplicate.h"
@@ -478,7 +479,7 @@ TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties(
 
 	if (bMergeEmbeddedCollectionMaps)
 	{
-		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets.", Normal)
+		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets, with any material swap rows the input Map pin carried.", Normal)
 	}
 
 	return PinProperties;
@@ -1210,7 +1211,7 @@ namespace PCGExPCGDataAssetLoader
 						}
 
 						const UPCGParamData* ParamData = Cast<UPCGParamData>(TD.Data);
-						if (!ParamData)
+						if (!PCGExCollections::FPickUnpacker::IsCollectionMap(ParamData))
 						{
 							continue;
 						}
@@ -1227,6 +1228,7 @@ namespace PCGExPCGDataAssetLoader
 
 					TempUnpacker.RegisterCollectionsTo(*Context->MergedMapPacker);
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
+					PCGExCollections::FMaterialSwapLibrary::ForwardInto(Context, MergedMapData);
 
 					Context->StageOutput(MergedMapData, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
 				}

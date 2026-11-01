@@ -37,9 +37,27 @@ struct PCGEXCOLLECTIONS_API FPCGExBaseTagFilterDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	bool bParseCommaSeparatedLists = false;
 
-	/** Which tags an entry is matched on: its own tags, and/or its sub-collection's tags when the entry is a sub-collection. */
+	/** Which tags an entry is matched on: its own tags, and/or its sub-collection's tags when the entry is a sub-collection
+	 *  (material swaps also read the tags of the collection holding the entry). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExCollections.EPCGExAssetTagInheritance"))
 	uint8 TagSources = static_cast<uint8>(EPCGExAssetTagInheritance::Asset);
+
+	/** The clause values as constants; a clause set to Attribute reads None. Returns how many clauses are set to Attribute. */
+	int32 GetConstantClauses(FName& OutRequireAll, FName& OutRequireAny, FName& OutExclude) const
+	{
+		int32 NumAttributeClauses = 0;
+		auto ConstantOf = [&NumAttributeClauses](const FPCGExInputShorthandNameName& InClause)
+		{
+			if (InClause.Input == EPCGExInputValueType::Constant) { return InClause.Constant; }
+			NumAttributeClauses++;
+			return FName(NAME_None);
+		};
+
+		OutRequireAll = ConstantOf(RequireAll);
+		OutRequireAny = ConstantOf(RequireAny);
+		OutExclude = ConstantOf(Exclude);
+		return NumAttributeClauses;
+	}
 };
 
 /**

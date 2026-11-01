@@ -417,7 +417,7 @@ namespace PCGExAssetStaging
 		TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>> PathWriter;
 
 		// Material handling 
-		TSharedPtr<PCGExMT::TScopedNumericValue<int8>> HighestSlotIndex;
+		TSharedPtr<PCGExMT::TScopedNumericValue<int32>> HighestSlotIndex;
 		TArray<TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>>> MaterialWriters; // Per valid slot writers
 
 		TArray<const FPCGExAssetCollectionEntry*> CachedPicks;

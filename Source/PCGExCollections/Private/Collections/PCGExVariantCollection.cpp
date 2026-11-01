@@ -5,8 +5,24 @@
 
 #include "PCGExLog.h"
 #include "Algo/BinarySearch.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 
 PCGEX_REGISTER_COLLECTION_TYPE(Variant, UPCGExVariantCollection, FPCGExAssetCollectionEntry, "Variant Collection", Base)
+
+#pragma region FPCGExMaterialSwap
+
+void FPCGExMaterialSwap::ToRow(PCGExCollections::FMaterialSwapRow& OutRow, int32& InOutNumAttributeClauses) const
+{
+	OutRow.Match = MatchMaterial.ToSoftObjectPath();
+	OutRow.Rule.Replacement = Replacement.ToSoftObjectPath();
+	OutRow.Rule.Gate = bUseTagFilter
+		                   ? PCGExCollections::FMaterialSwapGate::FromConstants(TagFilter, InOutNumAttributeClauses)
+		                   : PCGExCollections::FMaterialSwapGate();
+}
+
+#pragma endregion
+
+#pragma region UPCGExVariantCollection
 
 bool UPCGExVariantCollection::IsValidIndex(const int32 InIndex) const
 {
@@ -238,6 +254,43 @@ void UPCGExVariantCollection::LogFlatViewDiagnostics() const
 	}
 }
 
+void UPCGExVariantCollection::GetMaterialSwaps(TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable) const
+{
+	using FTable = PCGExCollections::FMaterialSwapTable;
+
+	OutRows.Reset(MaterialSwaps.Num());
+	OutNumUnreachable = 0;
+	OutNumAttributeClauses = 0;
+	if (OutUnreachable)
+	{
+		OutUnreachable->Reset(MaterialSwaps.Num());
+	}
+
+	// Reachability is the table's own rule, so a row kept here is a row that can apply there.
+	FTable::FStage Reachable;
+	for (const FPCGExMaterialSwap& Swap : MaterialSwaps)
+	{
+		PCGExCollections::FMaterialSwapRow Row;
+		Swap.ToRow(Row, OutNumAttributeClauses);
+
+		const FTable::EAddResult Result = FTable::AddRule(Reachable, Row.Match, Row.Rule);
+		const bool bUnreachable = Result == FTable::EAddResult::Redundant || Result == FTable::EAddResult::Shadowed;
+		if (Result == FTable::EAddResult::Added)
+		{
+			OutRows.Add(MoveTemp(Row));
+		}
+		else if (bUnreachable)
+		{
+			OutNumUnreachable++;
+		}
+
+		if (OutUnreachable)
+		{
+			OutUnreachable->Add(bUnreachable);
+		}
+	}
+}
+
 const FPCGExVariantSource* UPCGExVariantCollection::FindSourceGroup(const FSoftObjectPath& InSourcePath) const
 {
 	for (const FPCGExVariantSource& Group : Sources)
@@ -376,3 +429,5 @@ const UScriptStruct* UPCGExVariantCollection::EDITOR_GetEntryScriptStruct(const 
 	return Payload ? Payload->GetScriptStruct() : nullptr;
 }
 #endif
+
+#pragma endregion

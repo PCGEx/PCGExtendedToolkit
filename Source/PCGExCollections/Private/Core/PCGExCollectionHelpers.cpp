@@ -7,12 +7,16 @@
 #include "PCGExProperty.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
+#include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Details/PCGExStagingDetails.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Materials/MaterialInterface.h"
 #include "Metadata/PCGMetadataAttributeTpl.h"
+#include "Selectors/PCGExSelectorTagFilter.h"
 #include "Types/PCGExTypeOpsString.h"
 #include "UObject/Package.h"
 #include "UObject/UnrealType.h"
@@ -109,6 +113,39 @@ namespace PCGExAttributeSetBuild
 			return false;
 		}
 	}
+
+	/** Asset paths per row, from a Soft Object Path attribute or a String one. */
+	struct FPathColumn
+	{
+		const FPCGMetadataAttribute<FSoftObjectPath>* SoftPath = nullptr;
+		const FPCGMetadataAttribute<FString>* String = nullptr;
+
+		/** False when InAttribute is null or of another type. */
+		bool Bind(const FPCGMetadataAttributeBase* InAttribute)
+		{
+			SoftPath = nullptr;
+			String = nullptr;
+			if (!InAttribute)
+			{
+				return false;
+			}
+
+			if (InAttribute->GetTypeId() == PCG::Private::MetadataTypes<FSoftObjectPath>::Id)
+			{
+				SoftPath = static_cast<const FPCGMetadataAttribute<FSoftObjectPath>*>(InAttribute);
+			}
+			else if (InAttribute->GetTypeId() == PCG::Private::MetadataTypes<FString>::Id)
+			{
+				String = static_cast<const FPCGMetadataAttribute<FString>*>(InAttribute);
+			}
+			return SoftPath || String;
+		}
+
+		FSoftObjectPath Read(const int64 InItemKey) const
+		{
+			return SoftPath ? SoftPath->GetValueFromItemKey(InItemKey) : PCGExTypeOps::MakePathChecked(String->GetValueFromItemKey(InItemKey));
+		}
+	};
 }
 
 namespace PCGExCollectionHelpers
@@ -236,11 +273,8 @@ namespace PCGExCollectionHelpers
 			return false;
 		}
 
-		const FPCGMetadataAttribute<FSoftObjectPath>* SoftPathAttribute = PathAttribute->GetTypeId() == PCG::Private::MetadataTypes<FSoftObjectPath>::Id
-			? static_cast<const FPCGMetadataAttribute<FSoftObjectPath>*>(PathAttribute) : nullptr;
-		const FPCGMetadataAttribute<FString>* StringPathAttribute = PathAttribute->GetTypeId() == PCG::Private::MetadataTypes<FString>::Id
-			? static_cast<const FPCGMetadataAttribute<FString>*>(PathAttribute) : nullptr;
-		if (!SoftPathAttribute && !StringPathAttribute)
+		PCGExAttributeSetBuild::FPathColumn PathColumn;
+		if (!PathColumn.Bind(PathAttribute))
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("Asset path attribute '{0}' must be a Soft Object Path or a String."), FText::FromName(Details.AssetPathSourceAttribute)));
 			return false;
@@ -258,7 +292,8 @@ namespace PCGExCollectionHelpers
 			CategoryAttribute = Metadata->GetConstTypedAttribute<FName>(Details.CategorySourceAttribute);
 		}
 
-		const int32 NumRows = Metadata->GetLocalItemCount();
+		// Every entry key, as PCG's own accessors enumerate them: a parented set's local keys start past its parent's.
+		const int64 NumRows = Metadata->GetItemCountForChild();
 		if (NumRows == 0)
 		{
 			return false;
@@ -281,9 +316,7 @@ namespace PCGExCollectionHelpers
 
 		for (int64 ItemKey = 0; ItemKey < NumRows; ItemKey++)
 		{
-			const FSoftObjectPath Path = SoftPathAttribute
-				? SoftPathAttribute->GetValueFromItemKey(ItemKey)
-				: PCGExTypeOps::MakePathChecked(StringPathAttribute->GetValueFromItemKey(ItemKey));
+			const FSoftObjectPath Path = PathColumn.Read(ItemKey);
 			if (!Path.IsValid())
 			{
 				continue;
@@ -396,6 +429,211 @@ namespace PCGExCollectionHelpers
 
 		PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("No attribute set found on pin: {0}"), FText::FromName(InputPin)));
 		return false;
+	}
+
+	int32 AppendMaterialSwapsFromAttributeSet(
+		UPCGExVariantCollection* InVariant,
+		FPCGExContext* InContext,
+		const UPCGParamData* InAttributeSet,
+		const FName InMatchAttribute,
+		const FName InReplacementAttribute,
+		const FPCGExBaseTagFilterDetails* InTagFilter,
+		int32& OutSkipped)
+	{
+		using FTable = PCGExCollections::FMaterialSwapTable;
+
+		OutSkipped = 0;
+
+		if (!InVariant || !InAttributeSet || !InAttributeSet->Metadata)
+		{
+			return -1;
+		}
+
+		const UPCGMetadata* Metadata = InAttributeSet->Metadata;
+
+		auto LogBadColumn = [&](const FName InName, const TCHAR* InTypes)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("Attribute '{0}' is missing, or is not a {1}."), FText::FromName(InName), FText::FromString(InTypes)));
+		};
+
+		auto InitPathColumn = [&](const FName InName, PCGExAttributeSetBuild::FPathColumn& OutColumn) -> bool
+		{
+			if (OutColumn.Bind(InName.IsNone() ? nullptr : Metadata->GetConstAttribute(InName)))
+			{
+				return true;
+			}
+
+			LogBadColumn(InName, TEXT("Soft Object Path or a String"));
+			return false;
+		};
+
+		// A tag clause: its constant, or a Name / String attribute read per row.
+		struct FClauseColumn
+		{
+			const FPCGMetadataAttribute<FName>* Name = nullptr;
+			const FPCGMetadataAttribute<FString>* String = nullptr;
+			FName Constant = NAME_None;
+
+			// False when a String value is too long to be a name (FName would assert): no entry can carry that tag.
+			bool Read(const int64 ItemKey, FName& OutValue) const
+			{
+				if (Name)
+				{
+					OutValue = Name->GetValueFromItemKey(ItemKey);
+					return true;
+				}
+				if (String)
+				{
+					const FString Value = String->GetValueFromItemKey(ItemKey);
+					OutValue = PCGExTypeOps::MakeNameChecked(Value);
+					return Value.Len() < NAME_SIZE;
+				}
+				OutValue = Constant;
+				return true;
+			}
+		};
+
+		auto InitClauseColumn = [&](const FPCGExInputShorthandNameName& InClause, FClauseColumn& OutColumn) -> bool
+		{
+			if (InClause.Input != EPCGExInputValueType::Attribute)
+			{
+				OutColumn.Constant = InClause.Constant;
+				return true;
+			}
+
+			const FPCGMetadataAttributeBase* Attribute = InClause.Attribute.IsNone() ? nullptr : Metadata->GetConstAttribute(InClause.Attribute);
+			if (Attribute && Attribute->GetTypeId() == PCG::Private::MetadataTypes<FName>::Id)
+			{
+				OutColumn.Name = static_cast<const FPCGMetadataAttribute<FName>*>(Attribute);
+				return true;
+			}
+			if (Attribute && Attribute->GetTypeId() == PCG::Private::MetadataTypes<FString>::Id)
+			{
+				OutColumn.String = static_cast<const FPCGMetadataAttribute<FString>*>(Attribute);
+				return true;
+			}
+
+			LogBadColumn(InClause.Attribute, TEXT("Name or a String"));
+			return false;
+		};
+
+		PCGExAttributeSetBuild::FPathColumn MatchColumn;
+		PCGExAttributeSetBuild::FPathColumn ReplacementColumn;
+		if (!InitPathColumn(InMatchAttribute, MatchColumn) || !InitPathColumn(InReplacementAttribute, ReplacementColumn))
+		{
+			return -1;
+		}
+
+		FClauseColumn AllColumn;
+		FClauseColumn AnyColumn;
+		FClauseColumn ExcludeColumn;
+		if (InTagFilter
+			&& (!InitClauseColumn(InTagFilter->RequireAll, AllColumn)
+				|| !InitClauseColumn(InTagFilter->RequireAny, AnyColumn)
+				|| !InitClauseColumn(InTagFilter->Exclude, ExcludeColumn)))
+		{
+			return -1;
+		}
+
+		const IAssetRegistry* Registry = IAssetRegistry::Get();
+		const FTopLevelAssetPath MaterialClass = UMaterialInterface::StaticClass()->GetClassPathName();
+		TMap<FTopLevelAssetPath, bool> NonMaterialByClass;
+
+		// A non-material replacement would render the mesh's own material. Only what the registry knows from disk counts,
+		// without loading: unknown paths, redirectors (renamed materials) and classes it can't place are kept.
+		auto IsKnownNonMaterial = [&](const FSoftObjectPath& InPath) -> bool
+		{
+			FAssetData Asset;
+			if (!Registry || Registry->TryGetAssetByObjectPath(InPath, Asset) != UE::AssetRegistry::EExists::Exists || Asset.IsRedirector())
+			{
+				return false;
+			}
+
+			if (const bool* bKnown = NonMaterialByClass.Find(Asset.AssetClassPath))
+			{
+				return *bKnown;
+			}
+
+			TArray<FTopLevelAssetPath> Ancestors;
+			const bool bNonMaterial = Asset.AssetClassPath != MaterialClass
+				&& Registry->GetAncestorClassNames(Asset.AssetClassPath, Ancestors)
+				&& !Ancestors.Contains(MaterialClass);
+			NonMaterialByClass.Add(Asset.AssetClassPath, bNonMaterial);
+			return bNonMaterial;
+		};
+
+		// Reachability is the table's own rule, seeded with the variant's rows so earlier inputs count: a row an earlier
+		// one shadows is dropped here, not reported downstream.
+		FTable::FStage Reachable;
+		int32 NumAttributeClauses = 0; // Built rows hold constants, and earlier inputs already reported theirs.
+		{
+			TArray<PCGExCollections::FMaterialSwapRow> ExistingRows;
+			int32 NumUnreachable = 0;
+			InVariant->GetMaterialSwaps(ExistingRows, NumUnreachable, NumAttributeClauses);
+			for (const PCGExCollections::FMaterialSwapRow& Row : ExistingRows)
+			{
+				FTable::AddRule(Reachable, Row.Match, Row.Rule);
+			}
+		}
+
+		int32 NumAppended = 0;
+		const int64 NumRows = Metadata->GetItemCountForChild();
+		for (int64 ItemKey = 0; ItemKey < NumRows; ItemKey++)
+		{
+			const FSoftObjectPath Match = MatchColumn.Read(ItemKey);
+			const FSoftObjectPath Replacement = ReplacementColumn.Read(ItemKey);
+			if (!Match.IsValid() || !Replacement.IsValid())
+			{
+				OutSkipped++;
+				continue;
+			}
+
+			if (IsKnownNonMaterial(Replacement))
+			{
+				OutSkipped++;
+				continue;
+			}
+
+			FPCGExMaterialSwap Swap;
+			Swap.MatchMaterial = TSoftObjectPtr<UMaterialInterface>(Match);
+			Swap.Replacement = TSoftObjectPtr<UMaterialInterface>(Replacement);
+
+			if (InTagFilter)
+			{
+				// The built row holds constants: the variant never reads attributes back.
+				Swap.bUseTagFilter = true;
+				Swap.TagFilter = *InTagFilter;
+
+				FName All;
+				FName Any;
+				FName Excluded;
+				if (!AllColumn.Read(ItemKey, All) || !AnyColumn.Read(ItemKey, Any) || !ExcludeColumn.Read(ItemKey, Excluded))
+				{
+					OutSkipped++;
+					continue;
+				}
+
+				Swap.TagFilter.RequireAll.Input = EPCGExInputValueType::Constant;
+				Swap.TagFilter.RequireAll.Constant = All;
+				Swap.TagFilter.RequireAny.Input = EPCGExInputValueType::Constant;
+				Swap.TagFilter.RequireAny.Constant = Any;
+				Swap.TagFilter.Exclude.Input = EPCGExInputValueType::Constant;
+				Swap.TagFilter.Exclude.Constant = Excluded;
+			}
+
+			PCGExCollections::FMaterialSwapRow Row;
+			Swap.ToRow(Row, NumAttributeClauses);
+			if (FTable::AddRule(Reachable, Row.Match, Row.Rule) != FTable::EAddResult::Added)
+			{
+				OutSkipped++;
+				continue;
+			}
+
+			InVariant->MaterialSwaps.Add(MoveTemp(Swap));
+			NumAppended++;
+		}
+
+		return NumAppended;
 	}
 
 	void AccumulateTags(

@@ -151,10 +151,16 @@ namespace PCGExCollections::Labels
 	const FName Tag_CollectionIdx = FName(PCGExCommon::PCGExPrefix + TEXT("Collection/Idx"));
 	const FName Tag_EntryIdx = FName(PCGExCommon::PCGExPrefix + TEXT("CollectionEntry"));
 
+	/** A per-staging-layer attribute name: InBase for the default (None) layer, InBase/<layer> otherwise. */
+	inline FName LayeredName(const FName InBase, const FName InLayer)
+	{
+		return InLayer.IsNone() ? InBase : FName(InBase.ToString() + TEXT("/") + InLayer.ToString());
+	}
+
 	/** Staged entry-hash attribute name for a staging layer. None = bare Tag_EntryIdx (legacy name). */
 	inline FName EntryIdxName(const FName InLayer)
 	{
-		return InLayer.IsNone() ? Tag_EntryIdx : FName(Tag_EntryIdx.ToString() + TEXT("/") + InLayer.ToString());
+		return LayeredName(Tag_EntryIdx, InLayer);
 	}
 
 	/** True for the staged entry-hash attribute of any staging layer (the inverse of EntryIdxName). */
@@ -167,6 +173,25 @@ namespace PCGExCollections::Labels
 
 		// Case-insensitive, like FName equality
 		return InName.ToString().StartsWith(Tag_EntryIdx.ToString() + TEXT("/"), ESearchCase::IgnoreCase);
+	}
+
+	// Material swap tables: rows in the Collection Map's param data (see FMaterialSwapLibrary).
+	const FName Tag_MaterialSwapMatch = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Match"));
+	const FName Tag_MaterialSwapReplace = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Replace"));
+	const FName Tag_MaterialSwapLayer = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Layer"));
+	const FName Tag_MaterialSwapStage = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Stage"));
+	const FName Tag_MaterialSwapTagsAll = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsAll"));
+	const FName Tag_MaterialSwapTagsAny = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsAny"));
+	const FName Tag_MaterialSwapTagsExclude = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsExclude"));
+	const FName Tag_MaterialSwapTagsCommaSeparated = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsCommaSeparated"));
+	const FName Tag_MaterialSwapTagSources = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagSources"));
+	const FName Tag_MaterialSwapTable = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Table"));
+	const FName Tag_MaterialSwapId = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Id"));
+
+	/** Per-point attribute naming the swap table a point follows on a staging layer. None = bare Tag_MaterialSwapId. */
+	inline FName MaterialSwapIdName(const FName InLayer)
+	{
+		return LayeredName(Tag_MaterialSwapId, InLayer);
 	}
 
 	const FName CollectionMapPin = TEXT("CollectionMap");

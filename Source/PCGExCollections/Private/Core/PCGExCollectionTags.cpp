@@ -177,7 +177,7 @@ namespace PCGExCollections::Tags
 		ParseOperand(InExclude, bCommaSeparated, Exclude);
 	}
 
-	bool Matches(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const FTagLists& InLists)
+	bool Matches(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const FTagLists& InLists, const UPCGExAssetCollection* InHost)
 	{
 		auto Has = [&](const FName InTag)
 		{
@@ -186,7 +186,7 @@ namespace PCGExCollections::Tags
 			{
 				bFound = (Tag == InTag);
 				return !bFound;
-			});
+			}, InHost);
 			return bFound;
 		};
 
