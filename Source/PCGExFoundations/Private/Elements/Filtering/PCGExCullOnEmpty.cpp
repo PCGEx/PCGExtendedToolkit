@@ -90,7 +90,7 @@ FPCGElementPtr UPCGExCullOnEmptySettings::CreateElement() const
 
 namespace PCGExCullOnEmpty
 {
-	static bool IsDataNonEmpty(const UPCGData* Data)
+	bool IsDataNonEmpty(const UPCGData* Data)
 	{
 		if (!Data)
 		{
@@ -113,7 +113,7 @@ namespace PCGExCullOnEmpty
 		if (const UPCGParamData* ParamData = Cast<UPCGParamData>(Data))
 		{
 			const UPCGMetadata* Metadata = ParamData->ConstMetadata();
-			return Metadata && Metadata->GetLocalItemCount() > 0;
+			return Metadata && Metadata->GetItemCountForChild() > 0;
 		}
 
 		// Other data types: valid if they exist

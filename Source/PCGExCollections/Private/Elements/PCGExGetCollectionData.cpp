@@ -17,6 +17,7 @@
 #include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
 #include "Helpers/PCGExGetCollectionDataFlatten.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
@@ -116,7 +117,7 @@ TArray<FPCGPinProperties> UPCGExGetCollectionDataSettings::OutputPinProperties()
 		PCGEX_PIN_ANY(PCGExGetCollectionData::AnnotatedSourcesPin, TEXT("One forwarded copy of each Sources input, augmented with identity attributes (RootCollectionIndex / CollectionIndex / CollectionHash where their respective output toggles are on)."), Required)
 	}
 	PCGEX_PIN_PARAMS(PCGExGetCollectionData::OutputCollectionDataPin, TEXT("One attribute set per resolved source (see Fanout)."), Required)
-	PCGEX_PIN_PARAM(PCGExCollections::Labels::OutputCollectionMapLabel, TEXT("Collection map covering every host referenced by the emitted attribute sets."), Required)
+	PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, TEXT("Collection map covering every host referenced by the emitted attribute sets, followed by any material swap table the input Map pin carried."), Required)
 	return PinProperties;
 }
 
@@ -1432,6 +1433,17 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 		{
 			return Pin == PCGExCollections::Labels::OutputCollectionMapLabel ? OutputMap->Metadata.Get() : nullptr;
 		});
+
+		// Upstream material swaps keep travelling with the map, after it: a single-data consumer keeps the first item.
+		PCGExCollections::FMaterialSwapTable IncomingSwaps;
+		IncomingSwaps.UnpackPin(InContext, PCGExCollections::Labels::SourceCollectionMapLabel);
+		if (!IncomingSwaps.IsEmpty())
+		{
+			UPCGParamData* SwapSet = InContext->ManagedObjects->New<UPCGParamData>();
+			IncomingSwaps.PackToDataset(SwapSet);
+
+			InContext->StageOutput(SwapSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
+		}
 	}
 
 	InContext->Done();

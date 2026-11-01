@@ -5,6 +5,7 @@
 
 #include "PCGExLog.h"
 #include "Algo/BinarySearch.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 
 PCGEX_REGISTER_COLLECTION_TYPE(Variant, UPCGExVariantCollection, FPCGExAssetCollectionEntry, "Variant Collection", Base)
 
@@ -234,6 +235,48 @@ void UPCGExVariantCollection::LogFlatViewDiagnostics() const
 		{
 			UE_LOG(LogPCGEx, Warning, TEXT("[%s] Duplicate asset swap rule for '%s' -- first rule wins."),
 			       *GetName(), *Rule.MatchAsset.ToString());
+		}
+	}
+}
+
+void UPCGExVariantCollection::GetMaterialSwaps(TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable) const
+{
+	using FTable = PCGExCollections::FMaterialSwapTable;
+
+	OutRows.Reset(MaterialSwaps.Num());
+	OutNumUnreachable = 0;
+	OutNumAttributeClauses = 0;
+	if (OutUnreachable)
+	{
+		OutUnreachable->Reset(MaterialSwaps.Num());
+	}
+
+	// Reachability is the table's own rule, so a row kept here is a row that can apply there.
+	FTable::FStage Reachable;
+	for (const FPCGExMaterialSwap& Swap : MaterialSwaps)
+	{
+		PCGExCollections::FMaterialSwapRow Row;
+		Row.Match = Swap.MatchMaterial.ToSoftObjectPath();
+		Row.Rule.Replacement = Swap.Replacement.ToSoftObjectPath();
+		if (Swap.bUseTagFilter)
+		{
+			Row.Rule.Gate = PCGExCollections::FMaterialSwapGate::FromConstants(Swap.TagFilter, OutNumAttributeClauses);
+		}
+
+		const FTable::EAddResult Result = FTable::AddRule(Reachable, Row.Match, Row.Rule);
+		const bool bUnreachable = Result == FTable::EAddResult::Redundant || Result == FTable::EAddResult::Shadowed;
+		if (Result == FTable::EAddResult::Added)
+		{
+			OutRows.Add(MoveTemp(Row));
+		}
+		else if (bUnreachable)
+		{
+			OutNumUnreachable++;
+		}
+
+		if (OutUnreachable)
+		{
+			OutUnreachable->Add(bUnreachable);
 		}
 	}
 }

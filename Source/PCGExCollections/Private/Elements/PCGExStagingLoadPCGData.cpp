@@ -22,6 +22,7 @@
 #include "Elements/PCGExStagingLoadProperties.h"
 #include "Core/PCGExContext.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Data/PCGPointArrayData.h"
@@ -496,7 +497,7 @@ TArray<FPCGPinProperties> UPCGExPCGDataAssetLoaderSettings::OutputPinProperties(
 
 	if (bMergeEmbeddedCollectionMaps)
 	{
-		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets.", Normal)
+		PCGEX_PIN_PARAMS(PCGExCollections::Labels::OutputCollectionMapLabel, "Merged collection map from embedded data assets, followed by any material swap table the input Map pin carried.", Normal)
 	}
 
 	return PinProperties;
@@ -1219,7 +1220,7 @@ namespace PCGExPCGDataAssetLoader
 						}
 
 						const UPCGParamData* ParamData = Cast<UPCGParamData>(TD.Data);
-						if (!ParamData)
+						if (!PCGExCollections::FPickUnpacker::IsCollectionMap(ParamData))
 						{
 							continue;
 						}
@@ -1237,6 +1238,17 @@ namespace PCGExPCGDataAssetLoader
 					Context->MergedMapPacker->PackToDataset(MergedMapData);
 
 					Context->StageOutput(MergedMapData, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
+
+					// Upstream material swaps keep travelling with the map, after it: a single-data consumer keeps the first item.
+					PCGExCollections::FMaterialSwapTable IncomingSwaps;
+					IncomingSwaps.UnpackPin(Context, PCGExCollections::Labels::SourceCollectionMapLabel);
+					if (!IncomingSwaps.IsEmpty())
+					{
+						UPCGParamData* SwapSet = Context->ManagedObjects->New<UPCGParamData>();
+						IncomingSwaps.PackToDataset(SwapSet);
+
+						Context->StageOutput(SwapSet, PCGExCollections::Labels::OutputCollectionMapLabel, PCGExData::EStaging::Managed);
+					}
 				}
 			}
 

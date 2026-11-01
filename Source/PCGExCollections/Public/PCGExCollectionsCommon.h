@@ -172,6 +172,24 @@ namespace PCGExCollections::Labels
 		return InName.ToString().StartsWith(Tag_EntryIdx.ToString() + TEXT("/"), ESearchCase::IgnoreCase);
 	}
 
+	// Material swap table: a param data riding Map pins next to the Collection Map (see FMaterialSwapTable).
+	const FName Tag_MaterialSwapMatch = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Match"));
+	const FName Tag_MaterialSwapReplace = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Replace"));
+	const FName Tag_MaterialSwapLayer = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Layer"));
+	const FName Tag_MaterialSwapStage = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Stage"));
+	const FName Tag_MaterialSwapTagsAll = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsAll"));
+	const FName Tag_MaterialSwapTagsAny = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsAny"));
+	const FName Tag_MaterialSwapTagsExclude = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsExclude"));
+	const FName Tag_MaterialSwapTagsCommaSeparated = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagsCommaSeparated"));
+	const FName Tag_MaterialSwapTagSources = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/TagSources"));
+	const FName Tag_MaterialSwapId = FName(PCGExCommon::PCGExPrefix + TEXT("MaterialSwap/Id"));
+
+	/** @Data attribute stamping a staging layer's swap table identity on points. None = bare Tag_MaterialSwapId. */
+	inline FName MaterialSwapIdName(const FName InLayer)
+	{
+		return InLayer.IsNone() ? Tag_MaterialSwapId : FName(Tag_MaterialSwapId.ToString() + TEXT("/") + InLayer.ToString());
+	}
+
 	const FName CollectionMapPin = TEXT("CollectionMap");
 
 	const FName MeshesPin = TEXT("Meshes");

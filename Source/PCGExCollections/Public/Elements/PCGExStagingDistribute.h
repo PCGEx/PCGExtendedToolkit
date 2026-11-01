@@ -14,6 +14,7 @@
 #include "Details/PCGExStagingDetails.h"
 #include "Factories/PCGExFactories.h"
 #include "Fitting/PCGExFitting.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 
 #include "PCGExStagingDistribute.generated.h"
@@ -321,6 +322,9 @@ struct FPCGExAssetStagingContext final : FPCGExPointsProcessorContext
 	/** CollectionMap source mode: rebuilt from the upstream Collection Map pin. Kept alive by its own asset handles. */
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 
+	/** CollectionMap source mode: material swap tables on the input Map pin, re-emitted after the output Map. */
+	PCGExCollections::FMaterialSwapTable IncomingMaterialSwaps;
+
 	/** CollectionMap source mode: unique sub-collections reachable from unpacked entries, keyed by CollectionGUID.
 	 * Feeds the mapped FCollectionSource; the referenced assets are hard refs of the unpacked collections. */
 	TMap<PCGExValueHash, TObjectPtr<UPCGExAssetCollection>> SubCollectionSources;
@@ -424,7 +428,7 @@ namespace PCGExAssetStaging
 		TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>> PathWriter;
 
 		// Material handling 
-		TSharedPtr<PCGExMT::TScopedNumericValue<int8>> HighestSlotIndex;
+		TSharedPtr<PCGExMT::TScopedNumericValue<int32>> HighestSlotIndex;
 		TArray<TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>>> MaterialWriters; // Per valid slot writers
 
 		TArray<const FPCGExAssetCollectionEntry*> CachedPicks;

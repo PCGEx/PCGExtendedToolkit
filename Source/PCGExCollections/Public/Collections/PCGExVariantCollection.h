@@ -6,8 +6,16 @@
 #include "CoreMinimal.h"
 
 #include "Core/PCGExAssetCollection.h"
+#include "Selectors/PCGExSelectorTagFilter.h"
 
 #include "PCGExVariantCollection.generated.h"
+
+class UMaterialInterface;
+
+namespace PCGExCollections
+{
+	struct FMaterialSwapRow;
+}
 
 /**
  * One override row inside a variant source group: replaces the source entry identified by
@@ -72,6 +80,34 @@ struct PCGEXCOLLECTIONS_API FPCGExVariantPathOverride
 };
 
 /**
+ * Every slot rendering MatchMaterial, as an override or as the mesh's own material, renders Replacement instead,
+ * optionally only for entries whose tags pass the tag filter. Also authorable on its own, e.g. a graph parameter array
+ * read by Build Variant Collection (its tag filter does not survive that route: use Build Variant's own).
+ */
+USTRUCT(BlueprintType, DisplayName="[PCGEx] Material Swap")
+struct PCGEXCOLLECTIONS_API FPCGExMaterialSwap
+{
+	GENERATED_BODY()
+
+	/** Material to replace. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
+	TSoftObjectPtr<UMaterialInterface> MatchMaterial;
+
+	/** Material rendered instead. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings)
+	TSoftObjectPtr<UMaterialInterface> Replacement;
+
+	/** If enabled, the swap only applies to entries whose tags satisfy the tag filter. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(InlineEditConditionToggle))
+	bool bUseTagFilter = false;
+
+	/** When enabled, the swap only applies to entries whose tags pass; a material's rows are tried in order, the first passing
+	 *  wins. Clauses are constants (Attribute reads nothing); the Collection tag source reads the entry's collection. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(EditCondition="bUseTagFilter"))
+	FPCGExBaseTagFilterDetails TagFilter;
+};
+
+/**
  * A collection that themes other collections: per source collection, a set of override rows
  * keyed by stable EntryId, each carrying a full replacement entry of any concrete type
  * (heterogeneous by design -- mesh and actor entries can coexist).
@@ -109,6 +145,20 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	TArray<FPCGExVariantPathOverride> PathOverrides;
+
+	/** Material swaps the staged mesh selector applies to everything spawned past the Staging : Swap node using this
+	 *  variant, whatever its source. A material's rows are tried in order; the first whose tag filter passes applies
+	 *  (a row replacing a material with itself keeps it). */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	TArray<FPCGExMaterialSwap> MaterialSwaps;
+
+	/**
+	 * MaterialSwaps as table rows, in declaration order. Rows that can never apply (after an unfiltered row for the same
+	 * material, or one with the same filter) are skipped and counted in OutNumUnreachable; tag filter clauses set to
+	 * Attribute read nothing and are counted in OutNumAttributeClauses. OutUnreachable, when given, flags each
+	 * MaterialSwaps row that way.
+	 */
+	void GetMaterialSwaps(TArray<PCGExCollections::FMaterialSwapRow>& OutRows, int32& OutNumUnreachable, int32& OutNumAttributeClauses, TArray<bool>* OutUnreachable = nullptr) const;
 
 	//~ UPCGExAssetCollection interface -- flattened view over Sources[*].Overrides[*].Entry.
 	// InitNumEntries / Sort intentionally keep their base behavior (not-implemented / no-op):

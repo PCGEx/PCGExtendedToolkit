@@ -12,6 +12,7 @@
 #include "Collections/PCGExMeshCollection.h"
 #include "Engine/StaticMesh.h"
 #include "Helpers/PCGExCollectionPropertyFloatPacker.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "SceneTypes.h"
 #include "Tasks/Task.h"
@@ -132,6 +133,12 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			InPointData->CopyPointsTo(OutPointData, 0, 0, InPointData->GetNumPoints());
 
 			OutPointData->Metadata->DeleteAttribute(EntryIdxAttributeName);
+
+			const FPCGAttributeIdentifier SwapStampIdentifier(PCGExCollections::Labels::MaterialSwapIdName(StagingLayer), PCGMetadataDomainID::Data);
+			if (PCGExMetaHelpers::HasAttribute(OutPointData->Metadata, SwapStampIdentifier))
+			{
+				OutPointData->Metadata->DeleteAttribute(SwapStampIdentifier);
+			}
 		}
 	}
 
@@ -208,6 +215,18 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 #endif
 		}
 
+		// Read once, in the final pass: time-sliced calls return before reaching here.
+		PCGExCollections::FMaterialSwapTable MaterialSwaps;
+		const PCGExCollections::FMaterialSwapTable::FStages* LayerSwaps = nullptr;
+		if (bApplyMaterialSwaps)
+		{
+			MaterialSwaps.UnpackPin(&Context, PCGPinConstants::DefaultParamsLabel);
+			LayerSwaps = MaterialSwaps.Find(StagingLayer);
+		}
+
+		// Hosts of entries the table could only partly reach (no slot snapshot yet).
+		TSet<const UPCGExAssetCollection*> UnstagedHosts;
+
 		// Appended only after the loop: Partition.Value indexes OutMeshInstances, which must not grow mid-iteration.
 		TArray<FPCGMeshInstanceList> MirroredLists;
 
@@ -250,6 +269,22 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 				Entry->ApplyMaterials(MaterialPick, OutDescriptor);
 			}
 
+			// Before the mirrored split below, so mirrored twins inherit the swapped materials.
+			if (LayerSwaps)
+			{
+				// The snapshot only describes the mesh it was staged from; one changed without a restage is unstaged.
+				const bool bSnapshotValid = !Entry->StaticMesh.IsNull() && Entry->StagedMaterialsSource == Entry->StaticMesh.ToSoftObjectPath();
+				if (!bSnapshotValid && !Entry->StaticMesh.IsNull())
+				{
+					UnstagedHosts.Add(Result.Host);
+				}
+
+				PCGExCollections::FMaterialSwapTable::Apply(
+					*LayerSwaps, *Entry, Result.Host,
+					bSnapshotValid ? TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(Entry->StagedMaterials) : TConstArrayView<TSoftObjectPtr<UMaterialInterface>>(),
+					OutDescriptor);
+			}
+
 			if (bPackCustomData)
 			{
 				CustomDataPacker.PackEntry(Entry, Result.Host, InstanceList.CustomPrimitiveData);
@@ -279,6 +314,20 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 		}
 
 		OutMeshInstances.Append(MoveTemp(MirroredLists));
+
+		if (!UnstagedHosts.IsEmpty())
+		{
+			TArray<FString> HostNames;
+			for (const UPCGExAssetCollection* Host : UnstagedHosts)
+			{
+				HostNames.Add(GetNameSafe(Host));
+			}
+			HostNames.Sort();
+
+			PCGE_LOG_C(Warning, GraphAndLog, &Context, FText::Format(
+				           FTEXT("Material swaps reached override slots only for entries of {0}: their meshes' own materials are not staged yet. Rebuild their staging (the collection editor toolbar can rebuild the whole project)."),
+				           FText::FromString(FString::Join(HostNames, TEXT(", ")))));
+		}
 	}
 
 	return true;

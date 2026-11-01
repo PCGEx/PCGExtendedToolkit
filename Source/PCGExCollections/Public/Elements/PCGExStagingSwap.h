@@ -11,6 +11,7 @@
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExStagingDetails.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 
 #include "PCGExStagingSwap.generated.h"
@@ -49,7 +50,8 @@ struct FPCGExStagingSwapVariantLayer
  * Swap staged entry picks to variant collection entries. Rewrites per-point pick hashes
  * (Tag_EntryIdx) from (SourceCollectionGUID, RawIndex) to the variant's (GUID, RawIndex)
  * using the variant's baked mapping, and emits an updated Collection Map that includes the
- * variant collections. Points whose entry has no override pass through untouched.
+ * variant collections. Points whose entry has no override pass through untouched. The variants' material swaps follow
+ * the Map on the same pin as a material swap table, applied by the staged mesh selector.
  * Can read one staging layer and write another (Output Staging Layer), deriving a complete
  * new layer -- unswapped points then copy their source pick instead of passing through.
  *
@@ -114,6 +116,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, AllowedClasses="/Script/PCGExCollections.PCGExVariantCollection"))
 	TArray<FPCGExInputShorthandNameSoftObjectPath> VariantCollections;
 
+	/** One more variant, applied after Variant Collections (so it wins their conflicts).
+	 *  Wire a Build Variant Collection output into its override pin. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	TSoftObjectPtr<UPCGExVariantCollection> AdditionalVariant;
+
 	/** Staging layer whose picks are swapped. None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
 	FName StagingLayer = NAME_None;
@@ -127,7 +134,12 @@ public:
 	FName OutputStagingLayer = NAME_None;
 
 	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
-	FName GetOutputEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(bOutputToDifferentLayer ? OutputStagingLayer : StagingLayer); }
+	FName GetOutputStagingLayer() const { return bOutputToDifferentLayer ? OutputStagingLayer : StagingLayer; }
+	FName GetOutputEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(GetOutputStagingLayer()); }
+
+	/** The slots this node processes: Variant Collections, then Additional Variant as a constant slot when set. Either
+	 *  may be empty on its own. */
+	void GetVariantSlots(TArray<FPCGExInputShorthandNameSoftObjectPath>& OutSlots) const;
 
 	/** Re-pick the micro cache selection of swapped points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
@@ -153,6 +165,21 @@ struct FPCGExStagingSwapContext final : FPCGExPointsProcessorContext
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 	TSharedPtr<PCGExCollections::FPickPacker> CollectionPickDatasetPacker;
+
+	/** VariantCollections, then AdditionalVariant when set. Every slot loop reads this, never the settings array. */
+	TArray<FPCGExInputShorthandNameSoftObjectPath> VariantSlots;
+
+	/** Per slot, every variant path it resolved to across inputs and points; feeds the material swap table. */
+	TArray<TSet<FSoftObjectPath>> SlotVariantPaths;
+
+	/** Material swap tables arriving on the input Map pin. */
+	PCGExCollections::FMaterialSwapTable IncomingMaterialSwaps;
+
+	/** Incoming tables with this node's swaps chained onto the output layer; staged after the Map. */
+	PCGExCollections::FMaterialSwapTable OutputMaterialSwaps;
+
+	/** OutputMaterialSwaps' identity for the output layer (0 = no swaps), stamped on every output point data. */
+	uint32 OutputMaterialSwapId = 0;
 
 	/**
 	 * Per-input-IO variant paths (keyed by IOIndex) resolved during Boot, in slot order

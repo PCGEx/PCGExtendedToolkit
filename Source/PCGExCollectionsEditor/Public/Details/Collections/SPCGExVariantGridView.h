@@ -34,6 +34,8 @@ enum class EPCGExVariantTileState : uint8
 	RuleDefinition, // A path rule with a declared payload ("Asset Swaps" group) — offers revoke + delete
 	RuleUnset,      // A path rule with no payload yet — dimmed like PassThrough, offers declare + delete
 	Orphaned,       // Override row whose SourceEntryId no longer exists on the source
+	MaterialSwap,      // A material swap row with a replacement ("Material Swaps" group) -- offers clear + delete
+	MaterialSwapUnset, // A material swap row with no replacement yet -- dimmed, offers pick + delete
 };
 
 /**
@@ -51,6 +53,11 @@ struct FPCGExVariantGridItem
 	bool bIsRuleDefinition = false;    // tile in the synthetic "Asset Swaps" group
 	bool bRulePayloadSet = false;      // rule tiles only: the rule's Entry payload is a valid struct
 
+	// Material swap tiles ("Material Swaps" group): SourceThumbPath is the matched material, OverrideThumbPath the replacement.
+	int32 MaterialSwapIdx = INDEX_NONE;    // index into Variant->MaterialSwaps
+	bool bMaterialSwapGated = false;       // the row's tag filter is on
+	bool bMaterialSwapUnreachable = false; // an earlier row for the same material always wins over this one
+
 	FSoftObjectPath SourceThumbPath;
 	FSoftObjectPath OverrideThumbPath;
 	FText Label;
@@ -65,6 +72,7 @@ struct FPCGExVariantGridItem
 
 	EPCGExVariantTileState GetState() const
 	{
+		if (MaterialSwapIdx != INDEX_NONE) { return OverrideThumbPath.IsNull() ? EPCGExVariantTileState::MaterialSwapUnset : EPCGExVariantTileState::MaterialSwap; }
 		if (bIsRuleDefinition) { return bRulePayloadSet ? EPCGExVariantTileState::RuleDefinition : EPCGExVariantTileState::RuleUnset; }
 		if (SourceRawIndex == INDEX_NONE) { return EPCGExVariantTileState::Orphaned; }
 		if (OverrideRowIdx != INDEX_NONE) { return EPCGExVariantTileState::Swapped; }
@@ -178,6 +186,9 @@ public:
 	 */
 	int32 AddSourcesFromAssets(const TArray<FAssetData>& InAssets);
 
+	/** Appends a material swap row matching InMaterial (replacement unset) and selects its tile for editing. */
+	void AddMaterialSwap(const FAssetData& InMaterial);
+
 	//~ Drop target: collection assets dropped anywhere on the grid become sources.
 	virtual FReply OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
 	virtual FReply OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent) override;
@@ -242,8 +253,15 @@ private:
 	 *  the rule (and its asset reference) survives as an unset rule. */
 	void RevokeSwap(int32 ItemIndex);
 
-	/** Deletes a rule outright — asset reference and payload both leave PathOverrides. */
+	/** Deletes a rule outright -- asset reference and payload both leave PathOverrides. Material swap tiles: deletes
+	 *  the row. */
 	void DeleteRule(int32 ItemIndex);
+
+	/** Material swap tiles: sets the row's replacement. A row that is gone or no longer unset (stale menu) is left alone. */
+	void SetMaterialSwapReplacement(int32 RowIndex, const FAssetData& InMaterial);
+
+	/** Selects the tile of a material swap row, refreshes the details pane and scrolls the tile into view. */
+	void SelectMaterialSwap(int32 RowIndex);
 
 	void ApplySelectionVisuals();
 	void UpdateDetailForSelection();

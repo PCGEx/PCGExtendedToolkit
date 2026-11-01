@@ -647,6 +647,9 @@ namespace PCGExCollections
 		 *  UnpackDataset (editor tooling, thumbnails); hashes then resolve exactly as after an unpack. */
 		void AddCollection(UPCGExAssetCollection* InCollection);
 
+		/** True when InParamData carries Collection Map rows. Map pins also carry other param data (material swap tables). */
+		static bool IsCollectionMap(const UPCGParamData* InParamData);
+
 		/** Unpack collection mappings from an attribute set */
 		bool UnpackDataset(FPCGContext* InContext, const UPCGParamData* InAttributeSet);
 

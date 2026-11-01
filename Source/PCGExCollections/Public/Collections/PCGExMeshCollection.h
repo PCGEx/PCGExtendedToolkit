@@ -41,6 +41,9 @@ struct PCGEXCOLLECTIONS_API FPCGExMaterialOverrideEntry
 
 	UPROPERTY(EditAnywhere, Category = Settings)
 	TSoftObjectPtr<UMaterialInterface> Material = nullptr;
+
+	/** Slot this override writes; a negative SlotIndex resolves to the entry's own index in its container. */
+	int32 ResolveSlot(const int32 InIndexInContainer) const { return SlotIndex >= 0 ? SlotIndex : InIndexInContainer; }
 };
 
 USTRUCT(BlueprintType, DisplayName="[PCGEx] Material Override Collection")
@@ -58,6 +61,8 @@ struct PCGEXCOLLECTIONS_API FPCGExMaterialOverrideCollection
 	TArray<FPCGExMaterialOverrideEntry> Overrides;
 
 	virtual void GetAssetPaths(TSet<FSoftObjectPath>& OutPaths) const;
+
+	/** Highest resolved slot (see FPCGExMaterialOverrideEntry::ResolveSlot); -1 when empty. */
 	int32 GetHighestIndex() const;
 };
 
@@ -77,6 +82,9 @@ struct PCGEXCOLLECTIONS_API FPCGExMaterialOverrideSingleEntry
 
 namespace PCGExMeshCollection
 {
+	/** Slot a Single-mode variant writes: negative slot indices fall back to slot 0. */
+	FORCEINLINE int32 ResolveSingleSlot(const int32 InSlotIndex) { return FMath::Max(0, InSlotIndex); }
+
 	/** MicroCache for mesh entries. Builds weighted pick arrays from material override entries.
 	 *  Tracks HighestMaterialIndex for pre-sizing material override arrays on descriptors. */
 	class PCGEXCOLLECTIONS_API FMicroCache : public PCGExAssetCollection::FMicroCache
@@ -199,6 +207,15 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
 	 *  hash to the new scheme. */
 	UPROPERTY()
 	uint32 PropertyComponentHash = 0;
+
+	/** The mesh's own material per slot, captured by UpdateStaging so material swaps reach slots no override covers.
+	 *  Valid only while StagedMaterialsSource is StaticMesh. Untracked: a cache of the mesh, never a cook dependency. */
+	UPROPERTY(meta=(Untracked))
+	TArray<TSoftObjectPtr<UMaterialInterface>> StagedMaterials;
+
+	/** The mesh StagedMaterials was read from; empty until a staging loaded it. */
+	UPROPERTY(meta=(Untracked))
+	FSoftObjectPath StagedMaterialsSource;
 
 	// Asset & Material Handling
 

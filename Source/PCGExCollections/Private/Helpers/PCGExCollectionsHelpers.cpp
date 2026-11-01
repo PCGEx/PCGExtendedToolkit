@@ -986,19 +986,20 @@ namespace PCGExCollections
 		}
 	}
 
+	bool FPickUnpacker::IsCollectionMap(const UPCGParamData* InParamData)
+	{
+		return InParamData && InParamData->Metadata
+			&& InParamData->Metadata->HasAttribute(Labels::Tag_CollectionIdx)
+			&& InParamData->Metadata->HasAttribute(Labels::Tag_CollectionPath);
+	}
+
 	void FPickUnpacker::UnpackPin(FPCGContext* InContext, const FName InPinLabel)
 	{
 		for (TArray<FPCGTaggedData> Params = InContext->InputData.GetParamsByPin(InPinLabel.IsNone() ? Labels::SourceCollectionMapLabel : InPinLabel);
 		     const FPCGTaggedData& InTaggedData : Params)
 		{
 			const UPCGParamData* ParamData = Cast<UPCGParamData>(InTaggedData.Data);
-
-			if (!ParamData)
-			{
-				continue;
-			}
-
-			if (!ParamData->Metadata->HasAttribute(Labels::Tag_CollectionIdx) || !ParamData->Metadata->HasAttribute(Labels::Tag_CollectionPath))
+			if (!IsCollectionMap(ParamData))
 			{
 				continue;
 			}

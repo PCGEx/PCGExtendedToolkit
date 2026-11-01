@@ -1431,7 +1431,8 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 		if (const UPCGParamData* ParamData = Cast<UPCGParamData>(Source.Data))
 		{
 			const UPCGMetadata* ParamMetadata = ParamData->Metadata;
-			const int64 ParamItemCount = ParamMetadata->GetLocalItemCount();
+			// Not GetLocalItemCount: the points key the param 0..N-1, so N must count inherited entries too.
+			const int64 ParamItemCount = ParamMetadata->GetItemCountForChild();
 
 			if (ParamItemCount != 0)
 			{
