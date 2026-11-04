@@ -57,6 +57,7 @@ public class PCGExElementsSampling : ModuleRules
 				"GeometryFramework",
 				"GeometryAlgorithms",
 				"PhysicsCore",
+				"Landscape",
 			}
 		);
 
