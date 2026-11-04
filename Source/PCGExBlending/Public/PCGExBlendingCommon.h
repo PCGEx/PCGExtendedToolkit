@@ -131,6 +131,9 @@ namespace PCGExBlending
 
 	PCGEXBLENDING_API void ConvertBlending(const EPCGExBlendingType From, EPCGExABBlendingType& OutTo);
 
+	/** True when an A/B blend in this mode reads its weight. Mirrors BlendFunctions::GetBlendFunction. */
+	PCGEXBLENDING_API bool RequiresWeight(const EPCGExABBlendingType Mode);
+
 	struct FBlendingParam
 	{
 		FBlendingParam() = default;

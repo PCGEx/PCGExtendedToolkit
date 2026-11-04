@@ -40,11 +40,7 @@ void FPCGExAttributeBlendWeight::RenamePins(const UPCGSettings* InSettings, UPCG
 
 void FPCGExAttributeBlendConfig::Init()
 {
-	bRequiresWeight =
-		BlendMode == EPCGExABBlendingType::Lerp
-		|| BlendMode == EPCGExABBlendingType::Weight
-		|| BlendMode == EPCGExABBlendingType::WeightedSubtract
-		|| BlendMode == EPCGExABBlendingType::WeightedAdd;
+	bRequiresWeight = PCGExBlending::RequiresWeight(BlendMode);
 
 	Weighting.Init();
 }

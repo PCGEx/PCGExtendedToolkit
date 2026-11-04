@@ -75,6 +75,45 @@ namespace PCGExBlending
 		}
 	}
 
+	bool RequiresWeight(const EPCGExABBlendingType Mode)
+	{
+		switch (Mode)
+		{
+		case EPCGExABBlendingType::Weight:
+		case EPCGExABBlendingType::WeightNormalize:
+		case EPCGExABBlendingType::WeightedAdd:
+		case EPCGExABBlendingType::WeightedSubtract:
+		case EPCGExABBlendingType::Lerp:
+		case EPCGExABBlendingType::GeometricMean:
+		case EPCGExABBlendingType::HarmonicMean:
+		case EPCGExABBlendingType::RMS:
+		case EPCGExABBlendingType::Step:
+			return true;
+		case EPCGExABBlendingType::None:
+		case EPCGExABBlendingType::Average:
+		case EPCGExABBlendingType::Multiply:
+		case EPCGExABBlendingType::Divide:
+		case EPCGExABBlendingType::Min:
+		case EPCGExABBlendingType::Max:
+		case EPCGExABBlendingType::CopyTarget:
+		case EPCGExABBlendingType::CopySource:
+		case EPCGExABBlendingType::Add:
+		case EPCGExABBlendingType::Subtract:
+		case EPCGExABBlendingType::UnsignedMin:
+		case EPCGExABBlendingType::UnsignedMax:
+		case EPCGExABBlendingType::AbsoluteMin:
+		case EPCGExABBlendingType::AbsoluteMax:
+		case EPCGExABBlendingType::Hash:
+		case EPCGExABBlendingType::UnsignedHash:
+		case EPCGExABBlendingType::Mod:
+		case EPCGExABBlendingType::ModCW:
+			return false;
+		default:
+			checkNoEntry();
+			return false;
+		}
+	}
+
 	void FBlendingParam::SelectFromString(const FString& Selection)
 	{
 		Identifier = FName(*Selection);

@@ -36,7 +36,7 @@ void UPCGExBlendOpFactoryProviderSettings::PCGExApplyDeprecation(UPCGNode* InOut
 
 void UPCGExBlendOpFactoryProviderSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	Config.bRequiresWeight = Config.BlendMode == EPCGExABBlendingType::Lerp || Config.BlendMode == EPCGExABBlendingType::Weight || Config.BlendMode == EPCGExABBlendingType::WeightedSubtract || Config.BlendMode == EPCGExABBlendingType::WeightedAdd;
+	Config.bRequiresWeight = PCGExBlending::RequiresWeight(Config.BlendMode);
 
 	FName Prop = PropertyChangedEvent.GetMemberPropertyName();
 	if (Prop == GET_MEMBER_NAME_CHECKED(FPCGExAttributeBlendConfig, OperandASource) && Config.OperandASource == EPCGExOperandSource::Constant)
