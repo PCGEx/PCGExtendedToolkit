@@ -78,7 +78,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName = " ├─ Thinning", EditCondition = "Distribution == EPCGExDensityDistribution::JitteredGrid", EditConditionHides))
 	EPCGExDensityGridThinning GridThinning = EPCGExDensityGridThinning::BlueNoise;
 
-	/** Where points sit in their cell: 0 at the center, 1 anywhere the point extents allow. */
+	/** How far points move from their cell's center: 0 is a regular grid, 1 anywhere in the cell. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "0", ClampMax = "1", PCG_Overridable, DisplayName = " └─ Looseness", EditCondition = "Distribution == EPCGExDensityDistribution::JitteredGrid", EditConditionHides))
 	float Looseness = 1.0f;
 

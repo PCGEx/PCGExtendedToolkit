@@ -13,7 +13,7 @@ class FPCGExPropertyCurveEditController;
 
 /**
  * Ramp graph: paints the evaluated curve and one draggable point per key. The X/Y axes auto-frame to
- * the controller's time/value frames (X always spans at least [0,1]); this widget only maps geometry.
+ * the controller's time/value frames (each always spans at least [0,1]); this widget only maps geometry.
  * The gesture grammar (select/drag/add/delete, Ctrl axis-lock, capture-loss handling) lives in the
  * shared SPCGExPropertyCurveWidgetBase; this class supplies painting, the 2D hit-test, and the 2D drag/add.
  */

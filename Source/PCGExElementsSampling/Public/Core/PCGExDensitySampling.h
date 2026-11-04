@@ -27,7 +27,7 @@ UENUM()
 enum class EPCGExDensityDistribution : uint8
 {
 	BlueNoise    = 0 UMETA(DisplayName = "Blue Noise", ToolTip="Evenly spread at every density, no grid look. Seam-free across partitions."),
-	JitteredGrid = 1 UMETA(DisplayName = "Jittered Grid", ToolTip="The Surface Sampler's grid, thinned by density. Seam-free across partitions."),
+	JitteredGrid = 1 UMETA(DisplayName = "Jittered Grid", ToolTip="One point per cell of a grid at the Max Density spacing, thinned by density. Seam-free across partitions."),
 	PoissonDisk  = 2 UMETA(DisplayName = "Poisson Disk", ToolTip="Maximal packing with a density-driven radius. Runs on one thread and is not seam-free across partitions."),
 };
 
@@ -377,8 +377,8 @@ namespace PCGExDensitySampling
 		FDitherMask Dither;
 		double GlobalUpperBound = 1;
 
-		/** Spacing at max density for the blue-noise layouts, in cm. */
-		double GetBlueNoiseSpacing() const { return 100.0 / FMath::Sqrt(MaxDensity); }
+		/** Spacing at max density, in cm: the blue-noise spacing and the jittered grid's cell size. */
+		double GetSpacingAtMaxDensity() const { return 100.0 / FMath::Sqrt(MaxDensity); }
 
 		/** Halo around the domain that strict spacing reads, in cm (for a candidate spacing at max density). */
 		double GetHalo(double InSpacing) const;
@@ -426,13 +426,12 @@ namespace PCGExDensitySampling
 		FBox2D Generation = FBox2D(EForceInit::ForceInit);
 		FPreProjection PreProjection;
 
-		/** Spacing between candidates at max density, in cm. */
+		/** Spacing between candidates at max density, in cm; also the jittered grid's cell size. */
 		double CandidateSpacing = 0;
 
-		/** Jittered grid only, from the engine's grid math. */
-		FVector2D GridCellSize = FVector2D::ZeroVector;
-		FVector2D GridInnerCellSize = FVector2D::ZeroVector;
-		FVector2D GridInnerCellOffset = FVector2D::ZeroVector;
+		/** Jittered grid only: on each axis, a point lands in [Offset, Offset + Range) of its cell. */
+		double GridJitterOffset = 0;
+		double GridJitterRange = 0;
 
 		/** Density map only: the lattice frame, set once so the priming margin and the map agree on the steps. */
 		FVector2D MapOrigin = FVector2D::ZeroVector;

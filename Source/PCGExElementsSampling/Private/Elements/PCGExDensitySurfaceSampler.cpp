@@ -52,8 +52,7 @@ namespace PCGExDensitySurfaceSampler
 			return InSettings->bUseDriverCurve ? InSettings->DriverCurve.MakeLookup(EPCGExCurveLUTMode::Lookup, 256) : nullptr;
 		}
 
-		// Jittered grid cells have this spacing too, unless Point Extents force them larger.
-		const double SpacingAtMaxDensity = InConfig.GetBlueNoiseSpacing();
+		const double SpacingAtMaxDensity = InConfig.GetSpacingAtMaxDensity();
 		if (InSettings->MaxSpacing <= SpacingAtMaxDensity)
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(

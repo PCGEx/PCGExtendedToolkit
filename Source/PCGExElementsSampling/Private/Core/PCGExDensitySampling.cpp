@@ -17,7 +17,6 @@
 #include "Data/PCGLandscapeData.h"
 #include "Data/PCGSpatialData.h"
 #include "Data/PCGSurfaceData.h"
-#include "Elements/PCGSurfaceSampler.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Math/RandomStream.h"
@@ -928,31 +927,19 @@ namespace PCGExDensitySampling
 
 		PreProjection.Init(Domain, Surface->GetTransform());
 
+		CandidateSpacing = Config->GetSpacingAtMaxDensity();
+
 		switch (Config->Distribution)
 		{
 		case EPCGExDensityDistribution::BlueNoise:
 		case EPCGExDensityDistribution::PoissonDisk:
-			CandidateSpacing = Config->GetBlueNoiseSpacing();
 			break;
 		case EPCGExDensityDistribution::JitteredGrid:
 			{
-				// The engine's own grid math, so positions match the Surface Sampler. Also applies its cell-count and memory guards.
-				PCGSurfaceSampler::FSurfaceSamplerData SamplerData;
-				SamplerData.Params.bUseLegacyGridCreationMethod = false;
-				SamplerData.Params.PointsPerSquaredMeter = static_cast<float>(Config->MaxDensity);
-				SamplerData.Params.PointExtents = Config->PointExtents;
-				SamplerData.Params.Looseness = Config->Looseness;
-				SamplerData.Params.bApplyDensityToPoints = false;
-				SamplerData.Params.PointSteepness = Config->PointSteepness;
-				if (!SamplerData.Initialize(InContext, Domain, Surface->GetTransform()))
-				{
-					return false;
-				}
-
-				GridCellSize = FVector2D(SamplerData.CellSize.X, SamplerData.CellSize.Y);
-				GridInnerCellSize = FVector2D(SamplerData.InnerCellSize.X, SamplerData.InnerCellSize.Y);
-				GridInnerCellOffset = FVector2D(SamplerData.InnerCellOffset.X, SamplerData.InnerCellOffset.Y);
-				CandidateSpacing = FMath::Sqrt(GridCellSize.X * GridCellSize.Y);
+				// Looseness is the centered share of the cell a point may land in; Point Extents never shape the grid.
+				const double ClampedLooseness = FMath::Clamp(static_cast<double>(Config->Looseness), 0.0, 1.0);
+				GridJitterRange = CandidateSpacing * ClampedLooseness;
+				GridJitterOffset = (CandidateSpacing - GridJitterRange) * 0.5;
 			}
 			break;
 		default:
@@ -1317,23 +1304,30 @@ namespace PCGExDensitySampling
 			return false;
 		}
 
-		// Every cell whose jitter can land in the generation area: straddling cells are generated on both sides of a border.
-		const int64 X0 = FMath::FloorToInt64(Generation.Min.X / GridCellSize.X);
-		const int64 X1 = FMath::FloorToInt64(Generation.Max.X / GridCellSize.X);
-		const int64 Y0 = FMath::FloorToInt64(Generation.Min.Y / GridCellSize.Y);
-		const int64 Y1 = FMath::FloorToInt64(Generation.Max.Y / GridCellSize.Y);
+		// Every cell overlapping the generation area: a point never leaves its cell, so straddling cells are generated on both sides of a border.
+		const double MinCellX = FMath::FloorToDouble(Generation.Min.X / CandidateSpacing);
+		const double MaxCellX = FMath::FloorToDouble(Generation.Max.X / CandidateSpacing);
+		const double MinCellY = FMath::FloorToDouble(Generation.Min.Y / CandidateSpacing);
+		const double MaxCellY = FMath::FloorToDouble(Generation.Max.Y / CandidateSpacing);
+
+		// Checked as doubles before any integer conversion, and written so NaN fails it too.
+		if (!(MinCellX >= MIN_int32 && MaxCellX <= MAX_int32 && MinCellY >= MIN_int32 && MaxCellY <= MAX_int32 &&
+			(MaxCellX - MinCellX + 1) * (MaxCellY - MinCellY + 1) < MAX_int32))
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("TooManyCells", "Too many cells for this area: lower Max Density or sample a smaller area."));
+			return false;
+		}
+
+		const int64 X0 = static_cast<int64>(MinCellX);
+		const int64 X1 = static_cast<int64>(MaxCellX);
+		const int64 Y0 = static_cast<int64>(MinCellY);
+		const int64 Y1 = static_cast<int64>(MaxCellY);
 		const int64 NumCellsX = X1 - X0 + 1;
 		const int64 NumCellsY = Y1 - Y0 + 1;
 
 		if (NumCellsX <= 0 || NumCellsY <= 0)
 		{
 			return true;
-		}
-
-		if (NumCellsX * NumCellsY >= MAX_int32 || X0 < MIN_int32 || X1 > MAX_int32 || Y0 < MIN_int32 || Y1 > MAX_int32)
-		{
-			PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("TooManyCells", "Too many cells for this area: lower Max Density or sample a smaller area."));
-			return false;
 		}
 
 		const int64 NumBlocksX = (NumCellsX + Local::GridBlockSize - 1) / Local::GridBlockSize;
@@ -1386,8 +1380,8 @@ namespace PCGExDensitySampling
 					}
 
 					const FVector2D Position(
-						X * GridCellSize.X + GridInnerCellOffset.X + RandX * GridInnerCellSize.X,
-						Y * GridCellSize.Y + GridInnerCellOffset.Y + RandY * GridInnerCellSize.Y);
+						X * CandidateSpacing + GridJitterOffset + RandX * GridJitterRange,
+						Y * CandidateSpacing + GridJitterOffset + RandY * GridJitterRange);
 
 					if (!IsGenerated(Position))
 					{
