@@ -6,6 +6,7 @@
 #include "PCGGraphExecutionStateInterface.h"
 #include "PCGPin.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGPointArrayData.h"
 #include "Data/PCGSurfaceData.h"
@@ -324,7 +325,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 			return false;
 		}
 
-		Job->Output->GetOut()->InitializeFromData(Surface);
+		Job->InitializeOutputData();
 		Job->Output->bAllowEmptyOutput = true;
 		Job->Output->Tags->Append(TaggedData.Tags);
 

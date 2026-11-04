@@ -10,6 +10,7 @@
 #include "Core/PCGExBlueNoiseTables.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExMTCommon.h"
+#include "Curves/RichCurve.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -73,6 +74,26 @@ namespace PCGExDensitySampling
 		{
 			return InPosition.X >= InBox.Min.X && InPosition.X < InBox.Max.X && InPosition.Y >= InBox.Min.Y && InPosition.Y < InBox.Max.Y;
 		}
+
+		/** Constant or a ramp, so the samples bracketing a range bound it. FRichCurve::Eval returns a lone key's value at every
+		 *  time; a pair ramps only when joined linearly or by a step and held flat past both ends (RCIM_None evaluates as cubic). */
+		bool IsMonotone(const FRichCurve* InCurve)
+		{
+			if (!InCurve || InCurve->GetNumKeys() < 2)
+			{
+				return true;
+			}
+
+			if (InCurve->GetNumKeys() > 2)
+			{
+				return false;
+			}
+
+			const ERichCurveInterpMode Interp = InCurve->Keys[0].InterpMode;
+			return (Interp == RCIM_Linear || Interp == RCIM_Constant)
+				&& InCurve->PreInfinityExtrap == RCCE_Constant
+				&& InCurve->PostInfinityExtrap == RCCE_Constant;
+		}
 	}
 
 #pragma region FRangeMax
@@ -80,19 +101,49 @@ namespace PCGExDensitySampling
 	void FRangeMax::Init(const PCGExFloatLUT& InCurve)
 	{
 		Levels.Reset();
+		Global = 1;
 
-		TArray<float>& Base = Levels.Emplace_GetRef();
-		Base.SetNumUninitialized(NumSteps + 1);
-		for (int32 i = 0; i <= NumSteps; i++)
+		TArray<float> Base;
+		if (InCurve->UsesLUT() && InCurve->GetLUTSize() >= 2)
 		{
-			Base[i] = static_cast<float>(InCurve->Eval(static_cast<double>(i) / NumSteps));
+			// Lookup mode is linear between its knots, so the knots a range touches bound it exactly.
+			// FPCGExCurveFloatLookup::EvalLUT maps normalized time onto knots [0, GetLUTSize() - 2].
+			MaxIndex = InCurve->GetLUTSize() - 2;
+			TimeMin = InCurve->GetMinTime();
+			const double TimeDelta = static_cast<double>(InCurve->GetMaxTime()) - TimeMin;
+			TimeScale = FMath::IsNearlyZero(TimeDelta) ? 1.0 : 1.0 / TimeDelta;
+
+			const float* Knots = InCurve->GetRawLUT();
+			Base.SetNumUninitialized(MaxIndex + 1);
+			for (int32 i = 0; i <= MaxIndex; i++)
+			{
+				Base[i] = FMath::Clamp(Knots[i], 0.0f, 1.0f);
+			}
+		}
+		else if (Local::IsMonotone(InCurve->GetCurve()))
+		{
+			MaxIndex = NumSteps;
+			TimeMin = 0;
+			TimeScale = 1;
+			Base.SetNumUninitialized(NumSteps + 1);
+			for (int32 i = 0; i <= NumSteps; i++)
+			{
+				Base[i] = static_cast<float>(FMath::Clamp(InCurve->Eval(static_cast<double>(i) / NumSteps), 0.0, 1.0));
+			}
+		}
+		else
+		{
+			// Any other direct curve can peak between samples: no table, so every bound is 1.
+			return;
 		}
 
+		Levels.Add(MoveTemp(Base));
+
 		// Sparse table: level k holds the max over [i, i + 2^k).
-		for (int32 Width = 2; Width <= NumSteps + 1; Width *= 2)
+		for (int32 Width = 2; Width <= MaxIndex + 1; Width *= 2)
 		{
 			const int32 Half = Width / 2;
-			const int32 Count = NumSteps + 2 - Width;
+			const int32 Count = MaxIndex + 2 - Width;
 
 			TArray<float> Next;
 			Next.SetNumUninitialized(Count);
@@ -115,15 +166,16 @@ namespace PCGExDensitySampling
 			return 1;
 		}
 
-		A = FMath::Clamp(A, 0.0, 1.0);
-		B = FMath::Clamp(B, 0.0, 1.0);
-		if (A > B)
+		double KnotA = FMath::Clamp((FMath::Clamp(A, 0.0, 1.0) - TimeMin) * TimeScale, 0.0, 1.0) * MaxIndex;
+		double KnotB = FMath::Clamp((FMath::Clamp(B, 0.0, 1.0) - TimeMin) * TimeScale, 0.0, 1.0) * MaxIndex;
+		if (KnotA > KnotB)
 		{
-			Swap(A, B);
+			Swap(KnotA, KnotB);
 		}
 
-		const int32 Lo = FMath::Clamp(FMath::FloorToInt32(A * NumSteps) - 1, 0, NumSteps);
-		const int32 Hi = FMath::Clamp(FMath::CeilToInt32(B * NumSteps) + 1, 0, NumSteps);
+		// The extra knot on each side absorbs the float rounding of the lookup's own index math.
+		const int32 Lo = FMath::Clamp(FMath::FloorToInt32(KnotA) - 1, 0, MaxIndex);
+		const int32 Hi = FMath::Clamp(FMath::CeilToInt32(KnotB) + 1, 0, MaxIndex);
 		const int32 Level = FMath::FloorLog2(static_cast<uint32>(Hi - Lo + 1));
 		const TArray<float>& Table = Levels[Level];
 
@@ -225,7 +277,7 @@ namespace PCGExDensitySampling
 				{
 					const double A = FMath::Clamp(Lo, 0.0, 1.0);
 					const double B = FMath::Clamp(Hi, 0.0, 1.0);
-					Bound *= Factor.Curve ? FMath::Clamp(Factor.CurveRangeMax.Get(A, B), 0.0, 1.0) : B;
+					Bound *= Factor.Curve ? Factor.CurveRangeMax.Get(A, B) : B;
 				}
 				break;
 			case EFactorOp::KeepAbove:
@@ -250,7 +302,7 @@ namespace PCGExDensitySampling
 		{
 			if (Factor.Op == EFactorOp::Multiply && Factor.Curve)
 			{
-				Bound *= FMath::Clamp(Factor.CurveRangeMax.GetGlobal(), 0.0, 1.0);
+				Bound *= Factor.CurveRangeMax.GetGlobal();
 			}
 		}
 		return Bound;
@@ -836,6 +888,15 @@ namespace PCGExDensitySampling
 		return Local::IsInsideHalfOpen(Generation, InPosition);
 	}
 
+	void FSurfaceJob::InitializeOutputData() const
+	{
+		check(Config && Surface && Output);
+
+		FPCGInitializeFromDataParams Params(Surface);
+		Params.bInheritMetadata = Config->bOutputSurfaceAttributes;
+		Output->GetOut()->InitializeFromDataWithParams(Params);
+	}
+
 	bool FSurfaceJob::Prepare(FPCGExContext* InContext, const FBox& InDomain)
 	{
 		bPrepared = false;
@@ -884,6 +945,11 @@ namespace PCGExDensitySampling
 		DomainXY = FBox2D(FVector2D(Domain.Min), FVector2D(Domain.Max));
 		Generation = DomainXY.ExpandBy(Halo);
 
+		if (Config->Evaluation == EPCGExDensityEvaluation::DensityMap)
+		{
+			InitMapFrame(InContext);
+		}
+
 		bPrepared = true;
 		return true;
 	}
@@ -893,8 +959,8 @@ namespace PCGExDensitySampling
 		double Margin = 0;
 		if (Config && Config->Evaluation == EPCGExDensityEvaluation::DensityMap)
 		{
-			// The lattice reaches one node past the generation area; landscape-aligned steps are rounded to whole quads.
-			Margin = Config->DensityMapSpacing * 2;
+			// Interpolation reads nodes up to one step along each lattice axis past the generation area.
+			Margin = MapStep.X + MapStep.Y;
 		}
 
 		const FBox Bounds(
@@ -924,6 +990,15 @@ namespace PCGExDensitySampling
 		{
 			FScopeLock Lock(&MissingLock);
 			InReader.GetMissingAttributes(MissingAttributes);
+		}
+
+		// Destroy only un-roots: deleting the attributes frees the projected values now instead of at the next GC.
+		TArray<FPCGAttributeIdentifier> Identifiers;
+		TArray<EPCGMetadataTypes> Types;
+		InMetadata->GetAllAttributes(Identifiers, Types);
+		for (const FPCGAttributeIdentifier& Identifier : Identifiers)
+		{
+			InMetadata->DeleteAttribute(Identifier);
 		}
 
 		InContext->ManagedObjects->Destroy(InMetadata);
@@ -979,31 +1054,49 @@ namespace PCGExDensitySampling
 		Write(Scopes);
 	}
 
+	void FSurfaceJob::InitMapFrame(FPCGExContext* InContext)
+	{
+		MapOrigin = FVector2D::ZeroVector;
+		MapAxisU = FVector2D(1, 0);
+		MapAxisV = FVector2D(0, 1);
+		MapStep = FVector2D(Config->DensityMapSpacing, Config->DensityMapSpacing);
+
+		if (!Config->bAlignToLandscapeVertices)
+		{
+			return;
+		}
+
+		const UPCGLandscapeData* LandscapeData = Cast<UPCGLandscapeData>(Surface);
+		const ALandscapeProxy* Proxy = LandscapeData && !LandscapeData->Landscapes.IsEmpty() ? InContext->ResolveObject_AnyThreadTpl(LandscapeData->Landscapes[0]) : nullptr;
+		if (!Proxy)
+		{
+			return;
+		}
+
+		// Vertex (I, J) of the landscape sits at LandscapeActorToWorld applied to (I, J, 0): scale is the quad size.
+		const FTransform LandscapeTransform = Proxy->LandscapeActorToWorld();
+		const FVector Scale = LandscapeTransform.GetScale3D();
+		if (Scale.X <= UE_KINDA_SMALL_NUMBER || Scale.Y <= UE_KINDA_SMALL_NUMBER)
+		{
+			return;
+		}
+
+		MapOrigin = FVector2D(LandscapeTransform.GetLocation());
+		MapAxisU = FVector2D(LandscapeTransform.GetUnitAxis(EAxis::X)).GetSafeNormal();
+		MapAxisV = FVector2D(LandscapeTransform.GetUnitAxis(EAxis::Y)).GetSafeNormal();
+		MapStep = FVector2D(
+			Scale.X * FMath::Max(1.0, FMath::RoundToDouble(Config->DensityMapSpacing / Scale.X)),
+			Scale.Y * FMath::Max(1.0, FMath::RoundToDouble(Config->DensityMapSpacing / Scale.Y)));
+	}
+
 	TSharedPtr<FDensityMap> FSurfaceJob::BuildDensityMap(FPCGExContext* InContext)
 	{
 		PCGEX_MAKE_SHARED(Map, FDensityMap)
-		Map->StepU = Config->DensityMapSpacing;
-		Map->StepV = Config->DensityMapSpacing;
-
-		if (Config->bAlignToLandscapeVertices)
-		{
-			const UPCGLandscapeData* LandscapeData = Cast<UPCGLandscapeData>(Surface);
-			const ALandscapeProxy* Proxy = LandscapeData && !LandscapeData->Landscapes.IsEmpty() ? InContext->ResolveObject_AnyThreadTpl(LandscapeData->Landscapes[0]) : nullptr;
-			if (Proxy)
-			{
-				// Vertex (I, J) of the landscape sits at LandscapeActorToWorld applied to (I, J, 0): scale is the quad size.
-				const FTransform LandscapeTransform = Proxy->LandscapeActorToWorld();
-				const FVector Scale = LandscapeTransform.GetScale3D();
-				if (Scale.X > UE_KINDA_SMALL_NUMBER && Scale.Y > UE_KINDA_SMALL_NUMBER)
-				{
-					Map->Origin = FVector2D(LandscapeTransform.GetLocation());
-					Map->AxisU = FVector2D(LandscapeTransform.GetUnitAxis(EAxis::X)).GetSafeNormal();
-					Map->AxisV = FVector2D(LandscapeTransform.GetUnitAxis(EAxis::Y)).GetSafeNormal();
-					Map->StepU = Scale.X * FMath::Max(1.0, FMath::RoundToDouble(Config->DensityMapSpacing / Scale.X));
-					Map->StepV = Scale.Y * FMath::Max(1.0, FMath::RoundToDouble(Config->DensityMapSpacing / Scale.Y));
-				}
-			}
-		}
+		Map->Origin = MapOrigin;
+		Map->AxisU = MapAxisU;
+		Map->AxisV = MapAxisV;
+		Map->StepU = MapStep.X;
+		Map->StepV = MapStep.Y;
 
 		if (!Map->Init(Config->Model, Generation, Local::MaxDensityMapNodes))
 		{

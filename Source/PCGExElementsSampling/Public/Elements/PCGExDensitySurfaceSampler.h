@@ -73,7 +73,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "0", ClampMax = "1", PCG_Overridable, DisplayName = " └─ Looseness", EditCondition = "Distribution == EPCGExDensityDistribution::JitteredGrid", EditConditionHides))
 	float Looseness = 1.0f;
 
-	/** Point radius relative to the spacing at max density. Near 0.83 the kept density stays close to Max Density x density. */
+	/** Point radius relative to the spacing at max density. Kept density only approximates Max Density x density, and
+	 *  falls about 30% short of it where the density nears 1. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "0.01", PCG_Overridable, DisplayName = " └─ Radius Factor", EditCondition = "Distribution == EPCGExDensityDistribution::PoissonDisk", EditConditionHides))
 	double PoissonRadiusFactor = 0.83;
 
@@ -102,7 +103,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bUseDriverCurve = false;
 
-	/** When enabled, remaps the driver (clamped to 0-1) to the density; otherwise the driver is the density. Ignored with a Constant driver. */
+	/** When enabled, remaps the driver (clamped to 0-1) to the density; otherwise the driver is the density. Ignored
+	 *  with a Constant driver. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_NotOverridable, EditCondition = "bUseDriverCurve"))
 	FPCGExWeightCurve DriverCurve = FPCGExWeightCurve(0, 1);
 

@@ -115,13 +115,13 @@ namespace PCGExDensitySampling
 		FName Attribute = NAME_None;
 	};
 
-	/** Max of a curve over a sub-range of [0, 1], from a sparse table of samples. */
+	/** Max of a curve lookup over a sub-range of [0, 1], with values clamped to [0, 1] as FDensityModel::Evaluate reads them. */
 	class PCGEXELEMENTSSAMPLING_API FRangeMax
 	{
 	public:
 		void Init(const PCGExFloatLUT& InCurve);
 
-		/** Max over [A, B], clamped to [0, 1]. Includes the neighbouring samples, so it is conservative within one step. */
+		/** Upper bound over [A, B]. Never below: it spans one knot past each end, and is 1 for a curve no table bounds. */
 		double Get(double A, double B) const;
 
 		double GetGlobal() const { return Global; }
@@ -129,6 +129,12 @@ namespace PCGExDensitySampling
 	private:
 		static constexpr int32 NumSteps = 256;
 
+		/** Knot of time T: Clamp((T - TimeMin) * TimeScale, 0, 1) * MaxIndex. */
+		double TimeMin = 0;
+		double TimeScale = 1;
+		int32 MaxIndex = 0;
+
+		/** Sparse table over the knots; empty for a curve that may peak between samples. */
 		TArray<TArray<float>> Levels;
 		double Global = 1;
 	};
@@ -392,6 +398,9 @@ namespace PCGExDensitySampling
 		/** Sampling area in grid space; a candidate belongs to this job when its XY lies in [Min, Max). */
 		FBox Domain = FBox(EForceInit::ForceInit);
 
+		/** Initializes the output from the surface; with surface attributes off, none of its metadata is inherited. */
+		void InitializeOutputData() const;
+
 		/** Sets up the generation area and the pre-projection. False leaves the output empty. */
 		bool Prepare(FPCGExContext* InContext, const FBox& InDomain);
 
@@ -421,6 +430,12 @@ namespace PCGExDensitySampling
 		FVector2D GridInnerCellSize = FVector2D::ZeroVector;
 		FVector2D GridInnerCellOffset = FVector2D::ZeroVector;
 
+		/** Density map only: the lattice frame, set once so the priming margin and the map agree on the steps. */
+		FVector2D MapOrigin = FVector2D::ZeroVector;
+		FVector2D MapAxisU = FVector2D(1, 0);
+		FVector2D MapAxisV = FVector2D(0, 1);
+		FVector2D MapStep = FVector2D::ZeroVector;
+
 		bool bPrepared = false;
 
 		mutable FCriticalSection MissingLock;
@@ -428,6 +443,7 @@ namespace PCGExDensitySampling
 		bool IsOwned(const FVector2D& InPosition) const;
 		bool IsGenerated(const FVector2D& InPosition) const;
 
+		void InitMapFrame(FPCGExContext* InContext);
 		TSharedPtr<FDensityMap> BuildDensityMap(FPCGExContext* InContext);
 		bool GenerateBlueNoise(FPCGExContext* InContext, const FDensityMap* InMap, TArray<FScopeResult>& OutScopes);
 		bool GenerateGrid(FPCGExContext* InContext, const FDensityMap* InMap, TArray<FScopeResult>& OutScopes);
@@ -436,6 +452,8 @@ namespace PCGExDensitySampling
 		void Write(TArray<FScopeResult>& InScopes) const;
 
 		UPCGMetadata* CreateScratchMetadata(FPCGExContext* InContext) const;
+
+		/** Gathers missing attributes, then frees the scratch's attributes: InReader must not read it afterwards. */
 		void ReleaseScratchMetadata(FPCGExContext* InContext, UPCGMetadata* InMetadata, const FChannelReader& InReader);
 	};
 
