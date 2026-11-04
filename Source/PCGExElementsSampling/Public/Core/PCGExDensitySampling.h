@@ -173,6 +173,10 @@ namespace PCGExDensitySampling
 		double GlobalUpperBound() const;
 	};
 
+	/** Driver lookup for Max Spacing, as a density: the curve's output (clamped to 0-1) blends the spacing linearly from
+	 *  InSpacingRatio x the spacing at max density at 0, down to that spacing at 1. Ratios below 1 act as 1. */
+	PCGEXELEMENTSSAMPLING_API PCGExFloatLUT MakeSpacingLookup(const FPCGExWeightCurve& InCurve, double InSpacingRatio);
+
 	/** Reads the model's channels off projected points. Not thread-safe: one per scope, it caches attribute lookups. */
 	class PCGEXELEMENTSSAMPLING_API FChannelReader
 	{

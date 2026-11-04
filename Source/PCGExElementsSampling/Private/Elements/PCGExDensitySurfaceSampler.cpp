@@ -44,11 +44,32 @@ namespace PCGExDensitySurfaceSampler
 		return InBoundingShapeBounds.IsValid ? PCGHelpers::OverlapBounds(Domain, InBoundingShapeBounds) : Domain;
 	}
 
-	bool BuildModel(FPCGExContext* InContext, const UPCGExDensitySurfaceSamplerSettings* InSettings, PCGExDensitySampling::FDensityModel& OutModel)
+	/** The driver's lookup. With Max Spacing on, it also turns the spacing blend into a density. */
+	PCGExFloatLUT MakeDriverCurve(FPCGExContext* InContext, const UPCGExDensitySurfaceSamplerSettings* InSettings, const PCGExDensitySampling::FConfig& InConfig)
+	{
+		if (!InSettings->bUseMaxSpacing)
+		{
+			return InSettings->bUseDriverCurve ? InSettings->DriverCurve.MakeLookup(EPCGExCurveLUTMode::Lookup, 256) : nullptr;
+		}
+
+		// Jittered grid cells have this spacing too, unless Point Extents force them larger.
+		const double SpacingAtMaxDensity = InConfig.GetBlueNoiseSpacing();
+		if (InSettings->MaxSpacing <= SpacingAtMaxDensity)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
+				LOCTEXT("MaxSpacingTooSmall", "Max Spacing is not above the spacing at Max Density ({0} cm), so the driver has no effect."),
+				FText::AsNumber(FMath::RoundToInt32(SpacingAtMaxDensity))));
+		}
+
+		const FPCGExWeightCurve Identity(0, 1);
+		return PCGExDensitySampling::MakeSpacingLookup(InSettings->bUseDriverCurve ? InSettings->DriverCurve : Identity, InSettings->MaxSpacing / SpacingAtMaxDensity);
+	}
+
+	bool BuildModel(FPCGExContext* InContext, const UPCGExDensitySurfaceSamplerSettings* InSettings, PCGExDensitySampling::FConfig& InOutConfig)
 	{
 		using namespace PCGExDensitySampling;
 
-		const PCGExFloatLUT DriverCurve = InSettings->bUseDriverCurve ? InSettings->DriverCurve.MakeLookup(EPCGExCurveLUTMode::Lookup, 256) : nullptr;
+		FDensityModel& OutModel = InOutConfig.Model;
 
 		switch (InSettings->DriverSource)
 		{
@@ -60,10 +81,10 @@ namespace PCGExDensitySurfaceSampler
 				PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("MissingDriverAttribute", "Driver Attribute is empty."));
 				return false;
 			}
-			OutModel.AddFactor(EFactorOp::Multiply, OutModel.AddChannel(EChannelSource::Attribute, InSettings->DriverAttribute), 0, DriverCurve);
+			OutModel.AddFactor(EFactorOp::Multiply, OutModel.AddChannel(EChannelSource::Attribute, InSettings->DriverAttribute), 0, MakeDriverCurve(InContext, InSettings, InOutConfig));
 			break;
 		case EPCGExDensityDriverSource::PointDensity:
-			OutModel.AddFactor(EFactorOp::Multiply, OutModel.AddChannel(EChannelSource::PointDensity, NAME_None), 0, DriverCurve);
+			OutModel.AddFactor(EFactorOp::Multiply, OutModel.AddChannel(EChannelSource::PointDensity, NAME_None), 0, MakeDriverCurve(InContext, InSettings, InOutConfig));
 			break;
 		default:
 			PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("UnknownDriverSource", "Driver Source holds a value this node does not know; pick it again."));
@@ -187,6 +208,13 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	// Also refuses NaN and infinity, which an override can bring in.
+	if (Settings->bUseMaxSpacing && Settings->DriverSource != EPCGExDensityDriverSource::Constant && !(Settings->MaxSpacing > 0 && FMath::IsFinite(Settings->MaxSpacing)))
+	{
+		PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidMaxSpacing", "Max Spacing must be greater than 0."));
+		return false;
+	}
+
 	if (Settings->PointExtents.X <= 0 || Settings->PointExtents.Y <= 0)
 	{
 		PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidExtents", "Point Extents must be greater than 0 on X and Y."));
@@ -268,7 +296,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 	Config->RankAttributeName = Settings->RankAttributeName;
 	Config->Seed = Context->GetSeed();
 
-	if (!PCGExDensitySurfaceSampler::BuildModel(Context, Settings, Config->Model))
+	if (!PCGExDensitySurfaceSampler::BuildModel(Context, Settings, *Config))
 	{
 		return false;
 	}

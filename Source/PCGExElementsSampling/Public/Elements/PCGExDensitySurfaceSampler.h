@@ -61,6 +61,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "0", PCG_Overridable))
 	float MaxDensity = 0.1f;
 
+	/** Toggles Max Spacing. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))
+	bool bUseMaxSpacing = false;
+
+	/** When enabled, the driver sets the spacing instead of the density: this spacing (cm) at 0, the spacing at Max
+	 *  Density (100 / sqrt(Max Density) cm) at 1, linear in between. A zero driver still gets points. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "1", PCG_Overridable, EditCondition = "bUseMaxSpacing"))
+	double MaxSpacing = 1000;
+
 	/** How candidates are laid out before the density thins them. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExDensityDistribution Distribution = EPCGExDensityDistribution::BlueNoise;
@@ -103,8 +112,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bUseDriverCurve = false;
 
-	/** When enabled, remaps the driver (clamped to 0-1) to the density; otherwise the driver is the density. Ignored
-	 *  with a Constant driver. */
+	/** When enabled, remaps the driver (clamped to 0-1) before it sets the density, or the spacing with Max Spacing on.
+	 *  Ignored with a Constant driver. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_NotOverridable, EditCondition = "bUseDriverCurve"))
 	FPCGExWeightCurve DriverCurve = FPCGExWeightCurve(0, 1);
 

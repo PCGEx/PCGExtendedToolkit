@@ -40,6 +40,9 @@ namespace PCGExDensitySampling
 		constexpr int32 DensityMapBlockSize = 4096;
 		constexpr int32 GridBlockSize = 64;
 
+		/** The spacing-to-density map is steep near 1: 1024 samples keep it within 0.01% of spacing at a 16:1 range. */
+		constexpr int32 SpacingLookupSamples = 1024;
+
 		bool ReadAsFloat(const FPCGMetadataAttributeBase* InAttribute, const PCGMetadataEntryKey InKey, float& OutValue)
 		{
 			switch (static_cast<EPCGMetadataTypes>(InAttribute->GetTypeId()))
@@ -306,6 +309,22 @@ namespace PCGExDensitySampling
 			}
 		}
 		return Bound;
+	}
+
+#pragma endregion
+
+#pragma region MakeSpacingLookup
+
+	PCGExFloatLUT MakeSpacingLookup(const FPCGExWeightCurve& InCurve, const double InSpacingRatio)
+	{
+		const double Ratio = FMath::Max(InSpacingRatio, 1.0);
+		return InCurve.MakeLookup([Ratio](const float InBlend)
+		{
+			// Density is the inverse square of the spacing, both relative to max density.
+			const double Blend = FMath::Clamp(static_cast<double>(InBlend), 0.0, 1.0);
+			const double RelativeSpacing = Ratio * (1.0 - Blend) + Blend;
+			return static_cast<float>(1.0 / (RelativeSpacing * RelativeSpacing));
+		}, Local::SpacingLookupSamples);
 	}
 
 #pragma endregion
