@@ -7,8 +7,10 @@
 #include "PCGExFilterCommon.h"
 #include "Factories/PCGExFactories.h"
 
+#include "PCGExBlendingCommon.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 #include "Elements/PCGProjectionParams.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
 #include "Sampling/PCGExNormalToDensityDetails.h"
@@ -25,6 +27,17 @@ namespace PCGExPointFilter
 	class FManager;
 }
 
+namespace PCGExBlending
+{
+	class IBlendOperation;
+}
+
+namespace PCGExDetails
+{
+	template <typename T>
+	class TSettingValue;
+}
+
 namespace PCGExProjection
 {
 	namespace Labels
@@ -37,7 +50,7 @@ namespace PCGExProjection
  * Lightweight, parallel alternative to the stock Projection node.
  * Projects every point onto a single spatial target (landscape, surface, points, volume...) and applies the
  * projected transform / look-at per-component through FPCGExApplySamplingDetails.
- * Target attributes are forwarded on demand through a name filter; no color blend; supports data stealing.
+ * Target attributes are forwarded on demand through a name filter, target color is blended on demand; supports data stealing.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="sampling/projection"))
 class UPCGExProjectionSettings : public UPCGExPointsProcessorSettings
@@ -49,7 +62,7 @@ public:
 
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(Projection, "Projection", "Projects points onto a spatial target and applies the projected transform per-component. Lightweight, parallel alternative to the stock Projection node : opt-in attribute forwarding, no color blend, supports data stealing.");
+	PCGEX_NODE_INFOS(Projection, "Projection", "Projects points onto a spatial target and applies the projected transform per-component. Lightweight, parallel alternative to the stock Projection node : opt-in attribute forwarding and color blend, supports data stealing.");
 
 	virtual EPCGSettingsType GetType() const override
 	{
@@ -132,6 +145,18 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExForwardDetails AttributesForwarding;
 
+	/** Enables 'Project Color'. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
+	bool bProjectColor = false;
+
+	/** When enabled, blends the target color (B) into the point color (A); Copy (Target) is a plain write. Filtered-out and failed points keep their color. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(DisplayName="Project Color", PCG_Overridable, EditCondition="bProjectColor"))
+	EPCGExABBlendingType ColorBlending = EPCGExABBlendingType::CopySource;
+
+	/** Color blend weight, only read by Lerp, Weight and the weighted modes. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Weight", EditCondition="bProjectColor", EditConditionHides, HideEditConditionToggle))
+	FPCGExInputShorthandSelectorDouble ColorBlendWeight = FPCGExInputShorthandSelectorDouble(FName("ColorBlendWeight"), 1.0);
+
 	/** If enabled, points the target rejects (outside the target, no hit...) are removed from the output. Otherwise they are left untouched. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable), AdvancedDisplay)
 	bool bPruneFailedProjections = true;
@@ -156,6 +181,11 @@ struct FPCGExProjectionContext final : FPCGExPointsProcessorContext
 
 	bool bWriteSuccess = false;
 	bool bForwardAttributes = false;
+
+	bool bProjectColor = false;
+	bool bColorBlendWeighted = false;
+	/** Shared by every processor; null when the target color is copied as-is. */
+	TSharedPtr<PCGExBlending::IBlendOperation> ColorBlend;
 
 	bool bFootprint = false;
 	bool bWriteOverhang = false;
@@ -197,6 +227,10 @@ namespace PCGExProjection
 		TArray<PCGMetadataEntryKey> SampledEntries;
 		TSharedPtr<PCGExData::FDataForwardHandler> AttributesForward;
 		TSharedPtr<PCGExSampling::FNormalToDensity> NormalToDensity;
+
+		/** Only set when the weight is read per point; constant weights resolve into ConstantColorBlendWeight. */
+		TSharedPtr<PCGExDetails::TSettingValue<double>> ColorBlendWeight;
+		double ConstantColorBlendWeight = 1;
 
 		TSharedPtr<PCGExSampling::FProjectionFootprint> Footprint;
 		/** 1 = footprint-checked. Only allocated when the pin carries filters. */
