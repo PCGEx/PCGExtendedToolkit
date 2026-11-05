@@ -784,7 +784,7 @@ namespace PCGExClipper2Lib
 		}
 		error_code |= precision_error_i; // non-fatal error
 		DoError(precision_error_i);      // does nothing when exceptions are disabled
-		//precision = precision > 0 ? CLIPPER2_MAX_DEC_PRECISION : -CLIPPER2_MAX_DEC_PRECISION;
+		precision = precision > 0 ? CLIPPER2_MAX_DEC_PRECISION : -CLIPPER2_MAX_DEC_PRECISION;
 	}
 
 	inline void CheckPrecisionRange(int& precision)

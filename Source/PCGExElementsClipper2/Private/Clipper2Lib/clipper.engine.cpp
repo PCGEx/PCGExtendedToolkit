@@ -765,7 +765,7 @@ namespace PCGExClipper2Lib
 			return;
 		}
 
-		Vertex *vertices = new Vertex[total_vertex_count], *v = vertices;
+		Vertex *allVertices = new Vertex[total_vertex_count], *v = allVertices;
 		for (const Path64& path : paths)
 		{
 			//for each path create a circular double linked list of vertices
@@ -888,7 +888,7 @@ namespace PCGExClipper2Lib
 			}
 		} // end processing current path
 
-		vertexLists.emplace_back(vertices);
+		vertexLists.emplace_back(allVertices);
 	}
 
 	//------------------------------------------------------------------------------
@@ -2046,32 +2046,21 @@ namespace PCGExClipper2Lib
 			if (SegmentsIntersect(op2->prev->pt,
 			                      op2->pt, op2->next->pt, op2->next->next->pt))
 			{
-				if (SegmentsIntersect(op2->prev->pt,
-				                      op2->pt, op2->next->next->pt, op2->next->next->next->pt))
+				if (op2 == outrec->pts || op2->next == outrec->pts)
 				{
-					// adjacent intersections (ie a micro self-intersections)
-					op2 = DuplicateOp(op2, false);
-					op2->pt = op2->next->next->next->pt;
-					op2 = op2->next;
+					outrec->pts = outrec->pts->prev;
 				}
-				else
+				DoSplitOp(outrec, op2);
+				if (!outrec->pts)
 				{
-					if (op2 == outrec->pts || op2->next == outrec->pts)
-					{
-						outrec->pts = outrec->pts->prev;
-					}
-					DoSplitOp(outrec, op2);
-					if (!outrec->pts)
-					{
-						break;
-					}
-					op2 = outrec->pts;
-					if (op2->prev == op2->next->next)
-					{
-						break; // again, because triangles can't self-intersect
-					}
-					continue;
+					break;
 				}
+				op2 = outrec->pts;
+				if (op2->prev == op2->next->next)
+				{
+					break; // again, because triangles can't self-intersect
+				}
+				continue;
 			}
 			else
 			{
@@ -3654,11 +3643,20 @@ namespace PCGExClipper2Lib
 		for (size_t idx = 0; idx < splits->size(); ++idx)
 		{
 			OutRec* split = (*splits)[idx];
-			if (!split->pts && split->splits &&
-				CheckSplitOwner(outrec, split->splits))
+			if (!split->pts && split->splits)
 			{
-				return true; //#942
+				if (split->recursive_split == outrec)
+				{
+					continue;
+				}
+				split->recursive_split = outrec; // emptied OutRecs can reference each other
+
+				if (CheckSplitOwner(outrec, split->splits))
+				{
+					return true; //#942
+				}
 			}
+
 			split = GetRealOutRec(split);
 			if (!split || split == outrec || split->recursive_split == outrec)
 			{
