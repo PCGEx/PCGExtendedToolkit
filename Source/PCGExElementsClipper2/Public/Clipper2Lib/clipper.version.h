@@ -12,6 +12,13 @@
 #ifndef PCGEX_CLIPPER_H_VERSION
 #define PCGEX_CLIPPER_H_VERSION
 
-constexpr auto CLIPPER2_VERSION = "2.0.1";
+namespace PCGExClipper2Lib
+{
+	// Upstream release this copy is based on (exact base commit in CLIPPER2_VENDOR.md).
+	constexpr auto CLIPPER2_VERSION = "2.0.1";
+
+	// PCGEx patch level over that base; bump on every change to the vendored library and log it in CLIPPER2_VENDOR.md.
+	constexpr int PCGEX_CLIPPER2_PATCH = 1;
+}
 
 #endif

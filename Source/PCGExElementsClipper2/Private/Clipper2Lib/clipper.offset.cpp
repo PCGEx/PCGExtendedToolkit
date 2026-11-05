@@ -535,6 +535,13 @@ namespace PCGExClipper2Lib
 		{
 			Path64::size_type pathLen = path_in_it->size();
 			path_out.clear();
+			if (pathLen == 0)
+			{
+				continue;
+			}
+
+			// Reset per path: a 2-point Joined path below switches end_type_ to an open type.
+			end_type_ = group.end_type;
 
 			if (pathLen == 1) // single point
 			{
