@@ -13,6 +13,7 @@
 #define PCGEX_CLIPPER_H_OFFSET
 
 #include <optional>
+#include "HAL/Platform.h" // DLLEXPORT / DLLIMPORT
 #include "clipper.core.h"
 #include "clipper.engine.h"
 

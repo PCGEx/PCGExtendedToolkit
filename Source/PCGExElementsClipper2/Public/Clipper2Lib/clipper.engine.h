@@ -15,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <queue>
+#include "HAL/Platform.h" // DLLEXPORT / DLLIMPORT
 #include "Clipper2Lib/clipper.core.h"
 
 namespace PCGExClipper2Lib
