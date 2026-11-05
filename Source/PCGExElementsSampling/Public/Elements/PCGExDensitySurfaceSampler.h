@@ -9,6 +9,7 @@
 #include "Core/PCGExDensitySampling.h"
 #include "Core/PCGExElement.h"
 #include "Core/PCGExSettings.h"
+#include "Metadata/PCGAttributePropertySelector.h"
 
 #include "PCGExDensitySurfaceSampler.generated.h"
 
@@ -104,9 +105,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_Overridable))
 	EPCGExDensityDriverSource DriverSource = EPCGExDensityDriverSource::Attribute;
 
-	/** Attribute the surface projection writes, such as a landscape layer name. */
+	/** Attribute or point property of the projected point, such as a landscape layer or $Color.R. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_Overridable, DisplayName = " └─ Attribute", EditCondition = "DriverSource == EPCGExDensityDriverSource::Attribute", EditConditionHides))
-	FName DriverAttribute = NAME_None;
+	FPCGAttributePropertyInputSelector DriverAttribute = FPCGAttributePropertySelector::CreateAttributeSelector<FPCGAttributePropertyInputSelector>(NAME_None);
 
 	/** Toggles Driver Curve. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Density", meta = (PCG_NotOverridable, InlineEditConditionToggle))

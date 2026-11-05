@@ -14,14 +14,19 @@
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Data/PCGExSubSelection.h"
 #include "Data/PCGLandscapeData.h"
 #include "Data/PCGSpatialData.h"
 #include "Data/PCGSurfaceData.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Math/RandomStream.h"
 #include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataAttribute.h"
 #include "Metadata/PCGMetadataAttributeTpl.h"
+
+#include <type_traits>
 
 #define LOCTEXT_NAMESPACE "PCGExDensitySampling"
 
@@ -65,6 +70,83 @@ namespace PCGExDensitySampling
 				// Non-numeric: reported as missing by the reader.
 				return false;
 			}
+		}
+
+		/** Selector names that stand for another attribute (@Last, @Source...), which a projected point never carries. */
+		bool IsReservedAttributeName(const FName InName)
+		{
+			return InName == PCGMetadataAttributeConstants::LastAttributeName || InName == PCGMetadataAttributeConstants::LastCreatedAttributeName ||
+				InName == PCGMetadataAttributeConstants::SourceAttributeName || InName == PCGMetadataAttributeConstants::SourceNameAttributeName;
+		}
+
+		/** Calls InFunc with a null T* for each attribute type extractors read as a number; false for strings, names, paths
+		 *  and struct-backed types. */
+		template <typename FuncT>
+		bool DispatchExtractable(const EPCGMetadataTypes InType, FuncT&& InFunc)
+		{
+			switch (InType)
+			{
+			case EPCGMetadataTypes::Float:
+				InFunc(static_cast<float*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Double:
+				InFunc(static_cast<double*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Integer32:
+				InFunc(static_cast<int32*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Integer64:
+				InFunc(static_cast<int64*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Boolean:
+				InFunc(static_cast<bool*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Vector2:
+				InFunc(static_cast<FVector2D*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Vector:
+				InFunc(static_cast<FVector*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Vector4:
+				InFunc(static_cast<FVector4*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Quaternion:
+				InFunc(static_cast<FQuat*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Rotator:
+				InFunc(static_cast<FRotator*>(nullptr));
+				return true;
+			case EPCGMetadataTypes::Transform:
+				InFunc(static_cast<FTransform*>(nullptr));
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool IsExtractable(const EPCGMetadataTypes InType)
+		{
+			return DispatchExtractable(InType, [](auto*)
+			{
+			});
+		}
+
+		/** The attribute's value at InKey through the extractors, which Initialize compiled for the attribute's type. */
+		double ReadExtracted(const FPCGMetadataAttributeBase* InAttribute, const PCGMetadataEntryKey InKey, const PCGExData::FCachedSubSelection& InExtractor)
+		{
+			double Value = 0;
+			if (!DispatchExtractable(static_cast<EPCGMetadataTypes>(InAttribute->GetTypeId()), [&](auto* InTypeTag)
+			{
+				using T = std::remove_pointer_t<decltype(InTypeTag)>;
+				const T Raw = static_cast<const FPCGMetadataAttribute<T>*>(InAttribute)->GetValueFromItemKey(InKey);
+				InExtractor.ApplyGet(&Raw, &Value);
+			}))
+			{
+				// The reader only gets here for types IsExtractable accepted.
+				checkNoEntry();
+			}
+
+			return Value;
 		}
 
 		double GetRadius(const double InFactor, const double InSpacing, const double InDensity)
@@ -190,19 +272,74 @@ namespace PCGExDensitySampling
 
 	int32 FDensityModel::AddChannel(const EChannelSource InSource, const FName InAttribute)
 	{
-		const FName Attribute = InSource == EChannelSource::Attribute ? InAttribute : NAME_None;
+		check(InSource != EChannelSource::PointProperty);
+
+		FChannel Channel;
+		Channel.Source = InSource;
+		Channel.Attribute = InSource == EChannelSource::Attribute ? InAttribute : NAME_None;
+		return AddChannel(Channel);
+	}
+
+	int32 FDensityModel::AddChannel(const FPCGAttributePropertyInputSelector& InSelector)
+	{
+		if (!InSelector.GetDomainName().IsNone())
+		{
+			return INDEX_NONE;
+		}
+
+		FChannel Channel;
+		Channel.ExtraNames = InSelector.GetExtraNames();
+
+		switch (InSelector.GetSelection())
+		{
+		case EPCGAttributePropertySelection::Attribute:
+			if (Local::IsReservedAttributeName(InSelector.GetAttributeName()))
+			{
+				return INDEX_NONE;
+			}
+
+			Channel.Source = EChannelSource::Attribute;
+			Channel.Attribute = InSelector.GetAttributeName();
+			break;
+		case EPCGAttributePropertySelection::Property:
+			Channel.Property = InSelector.GetPointProperty();
+			if (PCGExMetaHelpers::GetPropertyType(Channel.Property) == EPCGMetadataTypes::Unknown)
+			{
+				return INDEX_NONE;
+			}
+
+			if (Channel.Property == EPCGPointProperties::Density && Channel.ExtraNames.IsEmpty())
+			{
+				// The point density channel, read without the extractor path.
+				Channel.Source = EChannelSource::PointDensity;
+				Channel.Property = EPCGPointProperties::Invalid;
+			}
+			else
+			{
+				Channel.Source = EChannelSource::PointProperty;
+			}
+			break;
+		default:
+			// Extra properties such as $Index have no value on a projected point.
+			return INDEX_NONE;
+		}
+
+		return AddChannel(Channel);
+	}
+
+	int32 FDensityModel::AddChannel(const FChannel& InChannel)
+	{
 		for (int32 i = 0; i < Channels.Num(); i++)
 		{
-			if (Channels[i].Source == InSource && Channels[i].Attribute == Attribute)
+			const FChannel& Channel = Channels[i];
+			if (Channel.Source == InChannel.Source && Channel.Attribute == InChannel.Attribute && Channel.Property == InChannel.Property &&
+				Channel.ExtraNames == InChannel.ExtraNames)
 			{
 				return i;
 			}
 		}
 
-		FChannel& Channel = Channels.Emplace_GetRef();
-		Channel.Source = InSource;
-		Channel.Attribute = Attribute;
-		return Channels.Num() - 1;
+		return Channels.Add(InChannel);
 	}
 
 	void FDensityModel::AddFactor(const EFactorOp InOp, const int32 InChannel, const double InThreshold, const PCGExFloatLUT& InCurve)
@@ -333,8 +470,21 @@ namespace PCGExDensitySampling
 	FChannelReader::FChannelReader(const FDensityModel& InModel)
 		: Model(InModel)
 	{
-		Attributes.Init(nullptr, Model.NumChannels());
-		bUnsupported.Init(false, Model.NumChannels());
+		const int32 ChannelCount = Model.NumChannels();
+		Attributes.Init(nullptr, ChannelCount);
+		bUnsupported.Init(false, ChannelCount);
+		PropertyReaders.SetNum(ChannelCount);
+		AttributeExtractors.SetNum(ChannelCount);
+
+		for (int32 i = 0; i < ChannelCount; i++)
+		{
+			const FChannel& Channel = Model.Channels[i];
+			if (Channel.Source == EChannelSource::PointProperty)
+			{
+				// AddChannel only creates point property channels for properties the reader knows.
+				verify(PropertyReaders[i].Init(Channel.Property, Channel.ExtraNames, EPCGMetadataTypes::Double));
+			}
+		}
 	}
 
 	void FChannelReader::Read(const UPCGMetadata* Metadata, const FPCGPoint& Point, float* OutValues)
@@ -347,33 +497,69 @@ namespace PCGExDensitySampling
 
 		for (int32 i = 0; i < Model.Channels.Num(); i++)
 		{
-			const FChannel& Channel = Model.Channels[i];
-
-			if (Channel.Source == EChannelSource::PointDensity)
+			switch (Model.Channels[i].Source)
 			{
+			case EChannelSource::PointDensity:
 				OutValues[i] = Point.Density;
-				continue;
-			}
-
-			OutValues[i] = 0;
-			if (!Metadata || bUnsupported[i])
-			{
-				continue;
-			}
-
-			// Resolved lazily: some surfaces only create their attributes on the first projection.
-			const FPCGMetadataAttributeBase*& Attribute = Attributes[i];
-			if (!Attribute)
-			{
-				Attribute = Metadata->GetConstAttribute(FPCGAttributeIdentifier(Channel.Attribute));
-				if (!Attribute) { continue; }
-			}
-
-			if (!Local::ReadAsFloat(Attribute, Point.MetadataEntry, OutValues[i]))
-			{
-				bUnsupported[i] = true;
+				break;
+			case EChannelSource::PointProperty:
+				OutValues[i] = static_cast<float>(PropertyReaders[i].Read<double>(Point));
+				break;
+			case EChannelSource::Attribute:
+				OutValues[i] = ReadAttribute(i, Metadata, Point);
+				break;
+			default:
+				checkNoEntry();
+				OutValues[i] = 0;
+				break;
 			}
 		}
+	}
+
+	float FChannelReader::ReadAttribute(const int32 InChannel, const UPCGMetadata* InMetadata, const FPCGPoint& InPoint)
+	{
+		if (!InMetadata || bUnsupported[InChannel])
+		{
+			return 0;
+		}
+
+		const FChannel& Channel = Model.Channels[InChannel];
+
+		// Resolved lazily: some surfaces only create their attributes on the first projection.
+		const FPCGMetadataAttributeBase*& Attribute = Attributes[InChannel];
+		if (!Attribute)
+		{
+			Attribute = InMetadata->GetConstAttribute(FPCGAttributeIdentifier(Channel.Attribute));
+			if (!Attribute)
+			{
+				return 0;
+			}
+
+			if (!Channel.ExtraNames.IsEmpty())
+			{
+				const EPCGMetadataTypes Type = static_cast<EPCGMetadataTypes>(Attribute->GetTypeId());
+				if (!Local::IsExtractable(Type))
+				{
+					bUnsupported[InChannel] = true;
+					return 0;
+				}
+
+				AttributeExtractors[InChannel].Initialize(PCGExData::FSubSelection(Channel.ExtraNames), Type, EPCGMetadataTypes::Double);
+			}
+		}
+
+		if (!Channel.ExtraNames.IsEmpty())
+		{
+			return static_cast<float>(Local::ReadExtracted(Attribute, InPoint.MetadataEntry, AttributeExtractors[InChannel]));
+		}
+
+		float Value = 0;
+		if (!Local::ReadAsFloat(Attribute, InPoint.MetadataEntry, Value))
+		{
+			bUnsupported[InChannel] = true;
+		}
+
+		return Value;
 	}
 
 	void FChannelReader::GetMissingAttributes(TSet<FName>& OutMissing) const

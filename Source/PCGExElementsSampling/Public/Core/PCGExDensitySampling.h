@@ -4,7 +4,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/PCGExSampledPropertyReader.h"
+#include "Data/PCGExCachedSubSelection.h"
 #include "Elements/PCGProjectionParams.h"
+#include "Metadata/PCGAttributePropertySelector.h"
 #include "Utils/PCGExCurveLookup.h"
 #include "Utils/PCGExWeightCurve.h"
 
@@ -49,7 +52,7 @@ UENUM()
 enum class EPCGExDensityDriverSource : uint8
 {
 	Constant     = 0 UMETA(DisplayName = "Constant", ToolTip="Density 1 everywhere; modifiers still apply."),
-	Attribute    = 1 UMETA(DisplayName = "Attribute", ToolTip="A numeric attribute written by the surface projection, such as a landscape layer."),
+	Attribute    = 1 UMETA(DisplayName = "Attribute", ToolTip="An attribute or point property of the projected point, such as a landscape layer or $Color.R."),
 	PointDensity = 2 UMETA(DisplayName = "Point Density", ToolTip="The density of the projected point."),
 };
 
@@ -70,9 +73,9 @@ struct PCGEXELEMENTSSAMPLING_API FPCGExDensityModifier
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	bool bEnabled = true;
 
-	/** Attribute read from the surface projection, such as a landscape layer name. */
+	/** Attribute or point property of the projected point, such as a landscape layer or $Color.R. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	FName Attribute = NAME_None;
+	FPCGAttributePropertyInputSelector Attribute = FPCGAttributePropertySelector::CreateAttributeSelector<FPCGAttributePropertyInputSelector>(NAME_None);
 
 	/** How the attribute changes the density. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
@@ -99,6 +102,7 @@ namespace PCGExDensitySampling
 	{
 		Attribute,
 		PointDensity,
+		PointProperty,
 	};
 
 	enum class EFactorOp : uint8
@@ -112,7 +116,15 @@ namespace PCGExDensitySampling
 	struct PCGEXELEMENTSSAMPLING_API FChannel
 	{
 		EChannelSource Source = EChannelSource::Attribute;
+
+		/** Attribute channels only. */
 		FName Attribute = NAME_None;
+
+		/** Point property channels only. */
+		EPCGPointProperties Property = EPCGPointProperties::Invalid;
+
+		/** Extractors applied to the value, such as R or Z. */
+		TArray<FString> ExtraNames;
 	};
 
 	/** Max of a curve lookup over a sub-range of [0, 1], with values clamped to [0, 1] as FDensityModel::Evaluate reads them. */
@@ -157,8 +169,15 @@ namespace PCGExDensitySampling
 		TArray<FChannel> Channels;
 		TArray<FFactor> Factors;
 
-		/** Returns the index of the channel, adding it on first use. */
+		/** Returns the index of the channel, adding it on first use. Attribute or point density only. */
 		int32 AddChannel(EChannelSource InSource, FName InAttribute);
+
+		/** Same, for what a selector reads off a projected point: an attribute or a point property, with extractors such as
+		 *  $Color.R. INDEX_NONE for anything a projected point cannot answer: @Data, $Index, reserved names like @Last. */
+		int32 AddChannel(const FPCGAttributePropertyInputSelector& InSelector);
+
+		int32 AddChannel(const FChannel& InChannel);
+
 		void AddFactor(EFactorOp InOp, int32 InChannel, double InThreshold, const PCGExFloatLUT& InCurve);
 
 		int32 NumChannels() const { return Channels.Num(); }
@@ -183,10 +202,14 @@ namespace PCGExDensitySampling
 	public:
 		explicit FChannelReader(const FDensityModel& InModel);
 
-		/** Missing or non-numeric attributes read 0. */
+		// Not copyable: an exported class would otherwise instantiate the copy of its non-copyable members.
+		FChannelReader(const FChannelReader&) = delete;
+		FChannelReader& operator=(const FChannelReader&) = delete;
+
+		/** Missing attributes, and values that do not read as a number, read 0. */
 		void Read(const UPCGMetadata* Metadata, const FPCGPoint& Point, float* OutValues);
 
-		/** Names of the attributes that were never found. */
+		/** Names of the attributes that were never found or never read as a number. */
 		void GetMissingAttributes(TSet<FName>& OutMissing) const;
 
 	private:
@@ -194,6 +217,12 @@ namespace PCGExDensitySampling
 		const UPCGMetadata* CachedMetadata = nullptr;
 		TArray<const FPCGMetadataAttributeBase*> Attributes;
 		TArray<bool> bUnsupported;
+
+		/** Per channel: point properties, and attributes read through extractors. */
+		TArray<PCGExSampling::FSampledPropertyReader> PropertyReaders;
+		TArray<PCGExData::FCachedSubSelection> AttributeExtractors;
+
+		float ReadAttribute(int32 InChannel, const UPCGMetadata* InMetadata, const FPCGPoint& InPoint);
 	};
 
 #pragma endregion

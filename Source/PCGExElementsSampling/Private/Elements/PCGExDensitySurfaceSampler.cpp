@@ -44,6 +44,12 @@ namespace PCGExDensitySurfaceSampler
 		return InBoundingShapeBounds.IsValid ? PCGHelpers::OverlapBounds(Domain, InBoundingShapeBounds) : Domain;
 	}
 
+	/** An attribute selector left at None. */
+	bool IsEmptySelector(const FPCGAttributePropertyInputSelector& InSelector)
+	{
+		return InSelector.GetSelection() == EPCGAttributePropertySelection::Attribute && InSelector.GetAttributeName().IsNone();
+	}
+
 	/** The driver's lookup. With Max Spacing on, it also turns the spacing blend into a density. */
 	PCGExFloatLUT MakeDriverCurve(FPCGExContext* InContext, const UPCGExDensitySurfaceSamplerSettings* InSettings, const PCGExDensitySampling::FConfig& InConfig)
 	{
@@ -75,12 +81,24 @@ namespace PCGExDensitySurfaceSampler
 		case EPCGExDensityDriverSource::Constant:
 			break;
 		case EPCGExDensityDriverSource::Attribute:
-			if (InSettings->DriverAttribute.IsNone())
 			{
-				PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("MissingDriverAttribute", "Driver Attribute is empty."));
-				return false;
+				if (IsEmptySelector(InSettings->DriverAttribute))
+				{
+					PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("MissingDriverAttribute", "Driver Attribute is empty."));
+					return false;
+				}
+
+				const int32 Channel = OutModel.AddChannel(InSettings->DriverAttribute);
+				if (Channel == INDEX_NONE)
+				{
+					PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(
+						LOCTEXT("InvalidDriverAttribute", "Driver Attribute '{0}' is not an attribute or a point property of the projected point."),
+						InSettings->DriverAttribute.GetDisplayText()));
+					return false;
+				}
+
+				OutModel.AddFactor(EFactorOp::Multiply, Channel, 0, MakeDriverCurve(InContext, InSettings, InOutConfig));
 			}
-			OutModel.AddFactor(EFactorOp::Multiply, OutModel.AddChannel(EChannelSource::Attribute, InSettings->DriverAttribute), 0, MakeDriverCurve(InContext, InSettings, InOutConfig));
 			break;
 		case EPCGExDensityDriverSource::PointDensity:
 			OutModel.AddFactor(EFactorOp::Multiply, OutModel.AddChannel(EChannelSource::PointDensity, NAME_None), 0, MakeDriverCurve(InContext, InSettings, InOutConfig));
@@ -102,13 +120,20 @@ namespace PCGExDensitySurfaceSampler
 				continue;
 			}
 
-			if (Modifier.Attribute.IsNone())
+			if (IsEmptySelector(Modifier.Attribute))
 			{
 				PCGE_LOG_C(Error, GraphAndLog, InContext, LOCTEXT("MissingModifierAttribute", "An enabled modifier has no attribute."));
 				return false;
 			}
 
-			const int32 Channel = OutModel.AddChannel(EChannelSource::Attribute, Modifier.Attribute);
+			const int32 Channel = OutModel.AddChannel(Modifier.Attribute);
+			if (Channel == INDEX_NONE)
+			{
+				PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(
+					LOCTEXT("InvalidModifierAttribute", "Modifier attribute '{0}' is not an attribute or a point property of the projected point."),
+					Modifier.Attribute.GetDisplayText()));
+				return false;
+			}
 
 			switch (Modifier.Operation)
 			{
