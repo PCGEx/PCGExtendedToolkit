@@ -52,7 +52,7 @@ namespace PCGExClipper2Lib
 			: pt(p64)
 		{
 			edges.reserve(2);
-		};
+		}
 	};
 
 	class Edge
@@ -96,9 +96,11 @@ namespace PCGExClipper2Lib
 		std::stack<Edge*> horzEdgeStack;
 		std::stack<Vertex2*> locMinStack;
 		bool useDelaunay = true;
+		// Set on any internal inconsistency; Execute then reports TriangulateResult::fail.
+		bool failed = false;
 		Vertex2* lowermostVertex = nullptr;
 		Edge* firstActive = nullptr;
-		void AddPath(const Path64& path);
+		bool AddPath(const Path64& path);
 		bool AddPaths(const Paths64& paths);
 		void CleanUp();
 		bool FixupEdgeIntersects();
@@ -119,12 +121,12 @@ namespace PCGExClipper2Lib
 		explicit Delaunay(bool delaunay = true)
 			: useDelaunay(delaunay)
 		{
-		};
+		}
 
 		~Delaunay()
 		{
 			CleanUp();
-		};
+		}
 		Paths64 Execute(const Paths64& paths, TriangulateResult& triResult);
 	};
 
@@ -237,11 +239,15 @@ namespace PCGExClipper2Lib
 		return GetAngle(v->edges[des]->vT->pt, v->pt, v->edges[asc]->vT->pt);
 	}
 
-	static void RemoveEdgeFromVertex(Vertex2* vert, Edge* edge)
+	static bool RemoveEdgeFromVertex(Vertex2* vert, Edge* edge)
 	{
 		auto it = std::find(vert->edges.begin(), vert->edges.end(), edge);
-		checkf(it != vert->edges.end(), TEXT("Clipper2: Edge not found in vertex edge list"));
+		if (it == vert->edges.end())
+		{
+			return false;
+		}
 		vert->edges.erase(it);
+		return true;
 	}
 
 	static bool FindLocMinIdx(const Path64& path, size_t len, size_t& idx)
@@ -514,6 +520,12 @@ namespace PCGExClipper2Lib
 			}
 		}
 
+		if (!vertA || !vertB)
+		{
+			failed = true;
+			return;
+		}
+
 		// InCircleTest reqires edge.triangleA to be a valid triangle
 		// if IsEmptyTriangle(edge.triangleA) then Exit; // slower
 		if (CrossProductSign(vertA->pt, edge->vL->pt, edge->vR->pt) == 0)
@@ -531,6 +543,19 @@ namespace PCGExClipper2Lib
 
 		// TRIANGLES HERE ARE **NOT** DELAUNAY COMPLIANT, SO MAKE THEM SO.
 
+		// Validate everything the flip below relies on before mutating anything.
+		const auto TouchesPair = [edge](const Edge* e)
+		{
+			return e && (e->triA == edge->triA || e->triB == edge->triA ||
+				e->triA == edge->triB || e->triB == edge->triB);
+		};
+		if (!TouchesPair(edgesA[1]) || !TouchesPair(edgesA[2]) ||
+			!TouchesPair(edgesB[1]) || !TouchesPair(edgesB[2]))
+		{
+			failed = true;
+			return;
+		}
+
 		// NOTE: ONCE WE BEGIN DELAUNAY COMPLIANCE, vL & vR WILL
 		// NO LONGER REPRESENT LEFT AND RIGHT VERTEX ORIENTATION.
 		// THIS IS MINOR PERFORMANCE EFFICIENCY IS SAFE AS LONG AS
@@ -544,7 +569,6 @@ namespace PCGExClipper2Lib
 		for (int i = 1; i < 3; ++i)
 		{
 			edge->triA->edges[i] = edgesA[i];
-			checkf(edgesA[i], TEXT("Clipper2: edgesA[i] is null in ForceLegal"));
 			if (IsLooseEdge(*edgesA[i]))
 			{
 				pendingDelaunayStack.push(edgesA[i]);
@@ -564,14 +588,12 @@ namespace PCGExClipper2Lib
 			{
 				edgesA[i]->triB = edge->triA;
 			}
-			else checkf(false, TEXT("Clipper2: Invalid triangle reference in ForceLegal (edgesA)"));
 		}
 
 		edge->triB->edges[0] = edge;
 		for (int i = 1; i < 3; ++i)
 		{
 			edge->triB->edges[i] = edgesB[i];
-			checkf(edgesB[i], TEXT("Clipper2: edgesB[i] is null in ForceLegal"));
 			if (IsLooseEdge(*edgesB[i]))
 			{
 				pendingDelaunayStack.push(edgesB[i]);
@@ -591,7 +613,6 @@ namespace PCGExClipper2Lib
 			{
 				edgesB[i]->triB = edge->triB;
 			}
-			else checkf(false, TEXT("Clipper2: Invalid triangle reference in ForceLegal (edgesB)"));
 		}
 	}
 
@@ -697,7 +718,11 @@ namespace PCGExClipper2Lib
 
 		// split 'tmpE' into 2 edges at 'v'
 		Vertex2* v2 = tmpE->vT;
-		RemoveEdgeFromVertex(v2, tmpE);
+		if (!RemoveEdgeFromVertex(v2, tmpE))
+		{
+			failed = true;
+			return false;
+		}
 		// replace v2 in tmpE with v
 		if (tmpE->vL == v2)
 		{
@@ -757,7 +782,11 @@ namespace PCGExClipper2Lib
 	{
 		auto oldT = longE->vT, newT = shortE->vT;
 		// remove longEdge from longEdge.vT.edges
-		RemoveEdgeFromVertex(oldT, longE);
+		if (!RemoveEdgeFromVertex(oldT, longE))
+		{
+			failed = true;
+			return;
+		}
 		// shorten longEdge
 		longE->vT = newT;
 		if (longE->vL == oldT)
@@ -962,6 +991,10 @@ namespace PCGExClipper2Lib
 	{
 		// precondition - pivot must be one end of edge (Usually .vB)
 		//Assert(!EdgeCompleted(edge));
+		if (failed)
+		{
+			return;
+		}
 		Vertex2* vAlt = nullptr;
 		Edge* eAlt = nullptr;
 		Vertex2* v = (edge->vB == pivot) ? edge->vT : edge->vB;
@@ -1041,6 +1074,10 @@ namespace PCGExClipper2Lib
 	{
 		// precondition - pivot must be one end of edge (Usually .vB)
 		//Assert(!EdgeCompleted(edge));
+		if (failed)
+		{
+			return;
+		}
 		Vertex2* vAlt = nullptr;
 		Edge* eAlt = nullptr;
 		Vertex2* v = (edge->vB == pivot) ? edge->vT : edge->vB;
@@ -1141,8 +1178,12 @@ namespace PCGExClipper2Lib
 	void Delaunay::RemoveEdgeFromActives(Edge* edge)
 	{
 		// first, remove the edge from its vertices
-		RemoveEdgeFromVertex(edge->vB, edge);
-		RemoveEdgeFromVertex(edge->vT, edge);
+		const bool removedB = RemoveEdgeFromVertex(edge->vB, edge);
+		const bool removedT = RemoveEdgeFromVertex(edge->vT, edge);
+		if (!removedB || !removedT)
+		{
+			failed = true;
+		}
 
 		// now remove the edge from double linked list (AEL)
 		Edge* prev = edge->prevE;
@@ -1166,7 +1207,8 @@ namespace PCGExClipper2Lib
 	{
 		if (!AddPaths(paths))
 		{
-			triResult = TriangulateResult::no_polygons;
+			CleanUp();
+			triResult = failed ? TriangulateResult::fail : TriangulateResult::no_polygons;
 			return Paths64(); // oops!
 		}
 
@@ -1209,15 +1251,21 @@ namespace PCGExClipper2Lib
 		if (!FixupEdgeIntersects())
 		{
 			CleanUp();
-			triResult = TriangulateResult::paths_intersect;
+			triResult = failed ? TriangulateResult::fail : TriangulateResult::paths_intersect;
 			return Paths64(); // oops!
 		}
 
 		std::sort(allVertices.begin(), allVertices.end(), VertexListSort);
 		MergeDupOrCollinearVertices();
+		if (failed)
+		{
+			CleanUp();
+			triResult = TriangulateResult::fail;
+			return Paths64();
+		}
 
 		int64_t currY = allVertices[0]->pt.y;
-		for (auto vIt = allVertices.begin(); vIt != allVertices.end(); ++vIt)
+		for (auto vIt = allVertices.begin(); vIt != allVertices.end() && !failed; ++vIt)
 		{
 			Vertex2* v = *vIt;
 			if (v->edges.empty())
@@ -1227,7 +1275,7 @@ namespace PCGExClipper2Lib
 			if (v->pt.y != currY)
 			{
 				// JOIN AN INNER LOCMIN WITH A SUITABLE EDGE BELOW
-				while (!locMinStack.empty())
+				while (!failed && !locMinStack.empty())
 				{
 					Vertex2* lm = locMinStack.top();
 					locMinStack.pop();
@@ -1264,7 +1312,7 @@ namespace PCGExClipper2Lib
 					AddEdgeToActives(lm->edges[1]);
 				}
 
-				while (!horzEdgeStack.empty())
+				while (!failed && !horzEdgeStack.empty())
 				{
 					Edge* e = horzEdgeStack.top();
 					horzEdgeStack.pop();
@@ -1341,7 +1389,7 @@ namespace PCGExClipper2Lib
 		} // for allVertices loop
 
 
-		while (!horzEdgeStack.empty())
+		while (!failed && !horzEdgeStack.empty())
 		{
 			Edge* e = horzEdgeStack.top();
 			horzEdgeStack.pop();
@@ -1354,12 +1402,19 @@ namespace PCGExClipper2Lib
 		if (useDelaunay)
 		{
 			// Convert triangles to Delaunay conforming
-			while (!pendingDelaunayStack.empty())
+			while (!failed && !pendingDelaunayStack.empty())
 			{
 				Edge* e = pendingDelaunayStack.top();
 				pendingDelaunayStack.pop();
 				ForceLegal(e);
 			}
+		}
+
+		if (failed)
+		{
+			CleanUp();
+			triResult = TriangulateResult::fail;
+			return Paths64();
 		}
 
 		Paths64 res;
@@ -1389,13 +1444,13 @@ namespace PCGExClipper2Lib
 		return Sqr(pt1.x - pt2.x) + Sqr(pt1.y - pt2.y);
 	}
 
-	void Delaunay::AddPath(const Path64& path)
+	bool Delaunay::AddPath(const Path64& path)
 	{
 		size_t len = path.size(), i0 = 0, iPrev, iNext;
 		// find the first locMin for the current path
 		if (!FindLocMinIdx(path, len, i0))
 		{
-			return;
+			return true;
 		}
 		iPrev = Prev(i0, len);
 		while (path[iPrev] == path[i0])
@@ -1404,15 +1459,23 @@ namespace PCGExClipper2Lib
 		}
 		iNext = Next(i0, len);
 
+		// Every walk below advances one index per step and must close within a lap; the collinear skips
+		// can step over i0, so the step budget is what guarantees termination.
+		size_t steps = 0;
+
 		// it is possible for a locMin here to simply be a
 		// collinear spike that should be ignored, so ...
 		size_t i = i0;
 		while (CrossProductSign(path[iPrev], path[i], path[iNext]) == 0)
 		{
+			if (++steps > len)
+			{
+				return false;
+			}
 			FindLocMinIdx(path, len, i);
 			if (i == i0)
 			{
-				return; // this is an entirely collinear path
+				return true; // this is an entirely collinear path
 			}
 			iPrev = Prev(i, len);
 			while (path[iPrev] == path[i])
@@ -1433,6 +1496,7 @@ namespace PCGExClipper2Lib
 		}
 		Vertex2* vPrev = v0;
 		i = iNext;
+		steps = 0;
 
 		for (;;)
 		{
@@ -1451,6 +1515,10 @@ namespace PCGExClipper2Lib
 			if (CrossProductSign(vPrev->pt, path[i], path[iNext]) == 0)
 			{
 				i = iNext;
+				if (++steps > len)
+				{
+					return false;
+				}
 				continue;
 			}
 
@@ -1462,11 +1530,19 @@ namespace PCGExClipper2Lib
 				vPrev = v;
 				i = iNext;
 				iNext = Next(i, len);
+				if (++steps > len)
+				{
+					return false;
+				}
 
 				while (CrossProductSign(vPrev->pt, path[i], path[iNext]) == 0)
 				{
 					i = iNext;
 					iNext = Next(i, len);
+					if (++steps > len)
+					{
+						return false;
+					}
 				}
 			}
 
@@ -1480,11 +1556,19 @@ namespace PCGExClipper2Lib
 				vPrev = v;
 				i = iNext;
 				iNext = Next(i, len);
+				if (++steps > len)
+				{
+					return false;
+				}
 
 				while (CrossProductSign(vPrev->pt, path[i], path[iNext]) == 0)
 				{
 					i = iNext;
 					iNext = Next(i, len);
+					if (++steps > len)
+					{
+						return false;
+					}
 				}
 			}
 
@@ -1513,6 +1597,7 @@ namespace PCGExClipper2Lib
 				allVertices[j]->edges.clear(); // flag to ignore
 			}
 		}
+		return true;
 	}
 
 	bool Delaunay::AddPaths(const Paths64& paths)
@@ -1532,7 +1617,11 @@ namespace PCGExClipper2Lib
 
 		for (const Path64& path : paths)
 		{
-			AddPath(path);
+			if (!AddPath(path))
+			{
+				failed = true;
+				return false;
+			}
 		}
 		return (allVertices.size() > 2);
 	}

@@ -46,7 +46,7 @@ namespace PCGExClipper2Lib
 
 	using DeltaCallback64 = std::function<double(const Path64& path, const PathD& path_normals, size_t curr_idx, size_t prev_idx)>;
 
-	class ClipperOffset
+	class PCGEXELEMENTSCLIPPER2_API ClipperOffset
 	{
 		class Group
 		{
@@ -107,17 +107,17 @@ namespace PCGExClipper2Lib
 			  , preserve_collinear_(preserve_collinear)
 			  , reverse_solution_(reverse_solution)
 		{
-		};
+		}
 
 		~ClipperOffset()
 		{
 			Clear();
-		};
+		}
 
 		int ErrorCode() const
 		{
 			return error_code_;
-		};
+		}
 		void AddPath(const Path64& path, JoinType jt_, EndType et_);
 		void AddPaths(const Paths64& paths, JoinType jt_, EndType et_);
 
@@ -125,7 +125,7 @@ namespace PCGExClipper2Lib
 		{
 			groups_.clear();
 			norms.clear();
-		};
+		}
 
 		void Execute(double delta, Paths64& sols_64);
 		void Execute(double delta, PolyTree64& polytree);

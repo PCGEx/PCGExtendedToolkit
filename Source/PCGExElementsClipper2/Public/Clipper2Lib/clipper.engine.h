@@ -127,7 +127,7 @@ namespace PCGExClipper2Lib
 			}
 			// nb: don't delete the split pointers
 			// as these are owned by ClipperBase's outrec_list_
-		};
+		}
 	};
 
 	///////////////////////////////////////////////////////////////////
@@ -222,7 +222,7 @@ namespace PCGExClipper2Lib
 
 		HorzJoin()
 		{
-		};
+		}
 
 		explicit HorzJoin(OutPt* ltr, OutPt* rtl)
 			: op1(ltr)
@@ -231,6 +231,8 @@ namespace PCGExClipper2Lib
 		}
 	};
 
+	// Z callbacks must not change the floating point rounding mode: edge positions rounded before a
+	// callback can be reused after it.
 	using ZCallback64 = std::function<void(const Point64& e1bot, const Point64& e1top,
 	                                       const Point64& e2bot, const Point64& e2top, Point64& pt)>;
 
@@ -244,7 +246,7 @@ namespace PCGExClipper2Lib
 
 	// ReuseableDataContainer64 ------------------------------------------------
 
-	class ReuseableDataContainer64
+	class PCGEXELEMENTSCLIPPER2_API ReuseableDataContainer64
 	{
 		friend class ClipperBase;
 		LocalMinimaList minima_list_;
@@ -252,6 +254,10 @@ namespace PCGExClipper2Lib
 		void AddLocMin(Vertex& vert, PathType polytype, bool is_open);
 
 	public:
+		ReuseableDataContainer64() = default;
+		// Owns raw vertex arrays. Deleted explicitly: MSVC emits every non-deleted special member of an exported class.
+		ReuseableDataContainer64(const ReuseableDataContainer64&) = delete;
+		ReuseableDataContainer64& operator=(const ReuseableDataContainer64&) = delete;
 		virtual ~ReuseableDataContainer64();
 		void Clear();
 		void AddPaths(const Paths64& paths, PathType polytype, bool is_open);
@@ -259,12 +265,15 @@ namespace PCGExClipper2Lib
 
 	// ClipperBase -------------------------------------------------------------
 
-	class ClipperBase
+	class PCGEXELEMENTSCLIPPER2_API ClipperBase
 	{
 		ClipType cliptype_ = ClipType::NoClip;
 		FillRule fillrule_ = FillRule::EvenOdd;
 		FillRule fillpos = FillRule::Positive;
 		int64_t bot_y_ = 0;
+		// Every active edge's curr_x is already TopX(top_y). Set by DoIntersections
+		// and only valid for the DoTopOfScanbeam call that immediately follows it.
+		bool curr_x_at_top_ = false;
 		bool minima_list_sorted_ = false;
 		bool using_polytree_ = false;
 		Active* actives_ = nullptr;
@@ -278,6 +287,9 @@ namespace PCGExClipper2Lib
 		std::vector<HorzJoin> horz_join_list_;
 		void Reset();
 		inline void InsertScanline(int64_t y);
+		inline bool PeekLocMinY(int64_t& y) const;
+		// A y that comes from a local minima isn't consumed here. It stays pending
+		// until PopLocalMinima, so InsertLocalMinimaIntoAEL must run before the next pop.
 		inline bool PopScanline(int64_t& y);
 		inline bool PopLocalMinima(int64_t y, LocalMinima*& local_minima);
 		void DisposeAllOutRecs();
@@ -296,7 +308,7 @@ namespace PCGExClipper2Lib
 		inline void UpdateEdgeIntoAEL(Active* e);
 		void IntersectEdges(Active& e1, Active& e2, const Point64& pt);
 		inline void DeleteFromAEL(Active& e);
-		inline void AdjustCurrXAndCopyToSEL(const int64_t top_y);
+		inline bool AdjustCurrXAndCopyToSEL(const int64_t top_y);
 		void DoIntersections(const int64_t top_y);
 		void AddNewIntersectNode(Active& e1, Active& e2, const int64_t top_y);
 		bool BuildIntersectList(const int64_t top_y);
@@ -345,32 +357,37 @@ namespace PCGExClipper2Lib
 		void AddPaths(const Paths64& paths, PathType polytype, bool is_open);
 
 	public:
+		ClipperBase() = default;
+		// Owns raw edge/vertex/OutRec graphs. Deleted explicitly: MSVC emits every non-deleted special member of an
+		// exported class, and the implicit copy would not compile.
+		ClipperBase(const ClipperBase&) = delete;
+		ClipperBase& operator=(const ClipperBase&) = delete;
 		virtual ~ClipperBase();
 
 		int ErrorCode() const
 		{
 			return error_code_;
-		};
+		}
 
 		void PreserveCollinear(bool val)
 		{
 			preserve_collinear_ = val;
-		};
+		}
 
 		bool PreserveCollinear() const
 		{
 			return preserve_collinear_;
-		};
+		}
 
 		void ReverseSolution(bool val)
 		{
 			reverse_solution_ = val;
-		};
+		}
 
 		bool ReverseSolution() const
 		{
 			return reverse_solution_;
-		};
+		}
 		void Clear();
 		void AddReuseableData(const ReuseableDataContainer64& reuseable_data);
 		int64_t DefaultZ = 0;
@@ -396,7 +413,7 @@ namespace PCGExClipper2Lib
 
 		virtual ~PolyPath()
 		{
-		};
+		}
 		//https://en.cppreference.com/w/cpp/language/rule_of_three
 		PolyPath(const PolyPath&) = delete;
 		PolyPath& operator=(const PolyPath&) = delete;
@@ -498,7 +515,7 @@ namespace PCGExClipper2Lib
 		const Path64& Polygon() const
 		{
 			return polygon_;
-		};
+		}
 
 		double Area() const
 		{
@@ -597,7 +614,7 @@ namespace PCGExClipper2Lib
 		const PathD& Polygon() const
 		{
 			return polygon_;
-		};
+		}
 
 		double Area() const
 		{
@@ -610,7 +627,7 @@ namespace PCGExClipper2Lib
 		}
 	};
 
-	class Clipper64 : public ClipperBase
+	class PCGEXELEMENTSCLIPPER2_API Clipper64 : public ClipperBase
 	{
 		void BuildPaths64(Paths64& solutionClosed, Paths64* solutionOpen);
 		void BuildTree64(PolyPath64& polytree, Paths64& open_paths);
@@ -676,7 +693,7 @@ namespace PCGExClipper2Lib
 		}
 	};
 
-	class ClipperD : public ClipperBase
+	class PCGEXELEMENTSCLIPPER2_API ClipperD : public ClipperBase
 	{
 		double scale_ = 1.0, invScale_ = 1.0;
 		ZCallbackD zCallbackD_ = nullptr;
@@ -698,7 +715,7 @@ namespace PCGExClipper2Lib
 		void SetZCallback(ZCallbackD cb)
 		{
 			zCallbackD_ = cb;
-		};
+		}
 
 		void ZCB(const Point64& e1bot, const Point64& e1top,
 		         const Point64& e2bot, const Point64& e2top, Point64& pt)
@@ -714,7 +731,7 @@ namespace PCGExClipper2Lib
 			PointD e2t = PointD(e2top) * invScale_;
 			zCallbackD_(e1b, e1t, e2b, e2t, tmp);
 			pt.z = tmp.z; // only update 'z'
-		};
+		}
 
 		void CheckCallback()
 		{

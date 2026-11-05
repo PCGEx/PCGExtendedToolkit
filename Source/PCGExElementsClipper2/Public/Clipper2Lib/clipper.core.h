@@ -25,37 +25,6 @@
 
 namespace PCGExClipper2Lib
 {
-#if (defined(__cpp_exceptions) && __cpp_exceptions) || (defined(__EXCEPTIONS) && __EXCEPTIONS)
-
-	class Clipper2Exception : public std::exception
-	{
-	public:
-		explicit Clipper2Exception(const char* description)
-			: m_descr(description)
-		{
-		}
-
-		virtual const char* what() const noexcept override
-		{
-			return m_descr.c_str();
-		}
-
-	private:
-		std::string m_descr;
-	};
-
-	static const char* precision_error =
-		"Precision exceeds the permitted range";
-	static const char* range_error =
-		"Values exceed permitted range";
-	static const char* scale_error =
-		"Invalid scale (either 0 or too large)";
-	static const char* non_pair_error =
-		"There must be 2 values for each coordinate";
-	static const char* undefined_error =
-		"There is an undefined error in Clipper2";
-#endif
-
 	// error codes (2^n)
 	constexpr int precision_error_i = 1;  // non-fatal
 	constexpr int scale_error_i = 2;      // non-fatal
@@ -63,11 +32,8 @@ namespace PCGExClipper2Lib
 	constexpr int undefined_error_i = 32; // fatal
 	constexpr int range_error_i = 64;
 
-#ifdef CLIPPER2_MAX_DECIMAL_PRECISION
-	const int CLIPPER2_MAX_DEC_PRECISION = CLIPPER2_MAX_DECIMAL_PRECISION;
-#else
+	// Fixed, not consumer-overridable: these headers must compile identically in every including module.
 	constexpr int CLIPPER2_MAX_DEC_PRECISION = 8; // see Discussions #564
-#endif
 
 	static constexpr int64_t MAX_COORD = INT64_MAX >> 2;
 	static constexpr int64_t MIN_COORD = -MAX_COORD;
@@ -77,28 +43,9 @@ namespace PCGExClipper2Lib
 
 	static constexpr double MAX_DBL = (std::numeric_limits<double>::max)();
 
-	static void DoError([[maybe_unused]] int error_code)
+	// Never throws, whatever the including module's exception settings: errors surface through error codes only.
+	inline void DoError([[maybe_unused]] int error_code)
 	{
-#if (defined(__cpp_exceptions) && __cpp_exceptions) || (defined(__EXCEPTIONS) && __EXCEPTIONS)
-		switch (error_code)
-		{
-		case precision_error_i:
-			throw Clipper2Exception(precision_error);
-		case scale_error_i:
-			throw Clipper2Exception(scale_error);
-		case non_pair_error_i:
-			throw Clipper2Exception(non_pair_error);
-		case undefined_error_i:
-			throw Clipper2Exception(undefined_error);
-		case range_error_i:
-			throw Clipper2Exception(range_error);
-		// Should never happen, but adding this to stop a compiler warning
-		default:
-			throw Clipper2Exception("Unknown error");
-		}
-#else
-		++error_code; // only to stop compiler warning
-#endif
 	}
 
 	// can we call std::round on T? (default false) (#824)
@@ -158,7 +105,7 @@ namespace PCGExClipper2Lib
 			  , y(0)
 			  , z(0)
 		{
-		};
+		}
 
 		template <typename T2>
 		Point(const T2 x_, const T2 y_, const z_type z_ = 0)
@@ -381,13 +328,13 @@ namespace PCGExClipper2Lib
 		bool IsEmpty() const
 		{
 			return bottom <= top || right <= left;
-		};
+		}
 
 		bool Intersects(const Rect<T>& rec) const
 		{
 			return ((std::max)(left, rec.left) <= (std::min)(right, rec.right)) &&
 				((std::max)(top, rec.top) <= (std::min)(bottom, rec.bottom));
-		};
+		}
 
 		bool operator==(const Rect<T>& other) const
 		{
@@ -783,8 +730,8 @@ namespace PCGExClipper2Lib
 			return;
 		}
 		error_code |= precision_error_i; // non-fatal error
-		DoError(precision_error_i);      // does nothing when exceptions are disabled
-		//precision = precision > 0 ? CLIPPER2_MAX_DEC_PRECISION : -CLIPPER2_MAX_DEC_PRECISION;
+		DoError(precision_error_i);
+		precision = precision > 0 ? CLIPPER2_MAX_DEC_PRECISION : -CLIPPER2_MAX_DEC_PRECISION;
 	}
 
 	inline void CheckPrecisionRange(int& precision)
@@ -806,7 +753,7 @@ namespace PCGExClipper2Lib
 		bool operator==(const UInt128Struct& other) const
 		{
 			return lo == other.lo && hi == other.hi;
-		};
+		}
 	};
 
 	inline UInt128Struct MultiplyUInt64(uint64_t a, uint64_t b) // #834, #835
@@ -1018,8 +965,8 @@ namespace PCGExClipper2Lib
 	// caution: this will compromise performance
 	// https://github.com/AngusJohnson/Clipper2/issues/317#issuecomment-1314023253
 	// See also CPP/BenchMark/GetIntersectPtBenchmark.cpp
-#define CC_MIN(x,y) ((x)>(y)?(y):(x))
-#define CC_MAX(x,y) ((x)<(y)?(y):(x))
+#define PCGEX_CLIPPER2_MIN(x,y) ((x)>(y)?(y):(x))
+#define PCGEX_CLIPPER2_MAX(x,y) ((x)<(y)?(y):(x))
 	template <typename T>
 	inline bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b,
 	                               const Point<T>& ln2a, const Point<T>& ln2b, Point<T>& ip)
@@ -1031,19 +978,19 @@ namespace PCGExClipper2Lib
 		double det = (ln2dy * ln1dx) - (ln1dy * ln2dx);
 		if (det == 0.0)
 			return false;
-		T bb0minx = CC_MIN(ln1a.x, ln1b.x);
-		T bb0miny = CC_MIN(ln1a.y, ln1b.y);
-		T bb0maxx = CC_MAX(ln1a.x, ln1b.x);
-		T bb0maxy = CC_MAX(ln1a.y, ln1b.y);
-		T bb1minx = CC_MIN(ln2a.x, ln2b.x);
-		T bb1miny = CC_MIN(ln2a.y, ln2b.y);
-		T bb1maxx = CC_MAX(ln2a.x, ln2b.x);
-		T bb1maxy = CC_MAX(ln2a.y, ln2b.y);
+		T bb0minx = PCGEX_CLIPPER2_MIN(ln1a.x, ln1b.x);
+		T bb0miny = PCGEX_CLIPPER2_MIN(ln1a.y, ln1b.y);
+		T bb0maxx = PCGEX_CLIPPER2_MAX(ln1a.x, ln1b.x);
+		T bb0maxy = PCGEX_CLIPPER2_MAX(ln1a.y, ln1b.y);
+		T bb1minx = PCGEX_CLIPPER2_MIN(ln2a.x, ln2b.x);
+		T bb1miny = PCGEX_CLIPPER2_MIN(ln2a.y, ln2b.y);
+		T bb1maxx = PCGEX_CLIPPER2_MAX(ln2a.x, ln2b.x);
+		T bb1maxy = PCGEX_CLIPPER2_MAX(ln2a.y, ln2b.y);
 
 		if constexpr (std::is_integral_v<T>)
 		{
-			int64_t originx = (CC_MIN(bb0maxx, bb1maxx) + CC_MAX(bb0minx, bb1minx)) >> 1;
-			int64_t originy = (CC_MIN(bb0maxy, bb1maxy) + CC_MAX(bb0miny, bb1miny)) >> 1;
+			int64_t originx = (PCGEX_CLIPPER2_MIN(bb0maxx, bb1maxx) + PCGEX_CLIPPER2_MAX(bb0minx, bb1minx)) >> 1;
+			int64_t originy = (PCGEX_CLIPPER2_MIN(bb0maxy, bb1maxy) + PCGEX_CLIPPER2_MAX(bb0miny, bb1miny)) >> 1;
 			double ln0c = (ln1dy * static_cast<double>(ln1a.x - originx)) +
 				(ln1dx * static_cast<double>(ln1a.y - originy));
 			double ln1c = (ln2dy * static_cast<double>(ln2a.x - originx)) +
@@ -1056,8 +1003,8 @@ namespace PCGExClipper2Lib
 		}
 		else
 		{
-			double originx = (CC_MIN(bb0maxx, bb1maxx) + CC_MAX(bb0minx, bb1minx)) / 2.0;
-			double originy = (CC_MIN(bb0maxy, bb1maxy) + CC_MAX(bb0miny, bb1miny)) / 2.0;
+			double originx = (PCGEX_CLIPPER2_MIN(bb0maxx, bb1maxx) + PCGEX_CLIPPER2_MAX(bb0minx, bb1minx)) / 2.0;
+			double originy = (PCGEX_CLIPPER2_MIN(bb0maxy, bb1maxy) + PCGEX_CLIPPER2_MAX(bb0miny, bb1miny)) / 2.0;
 			double ln0c = (ln1dy * static_cast<double>(ln1a.x - originx)) +
 				(ln1dx * static_cast<double>(ln1a.y - originy));
 			double ln1c = (ln2dy * static_cast<double>(ln2a.x - originx)) +
@@ -1089,6 +1036,8 @@ namespace PCGExClipper2Lib
 
 		return true;
 	}
+#undef PCGEX_CLIPPER2_MIN
+#undef PCGEX_CLIPPER2_MAX
 #else
 	template <typename T>
 	bool GetLineIntersectPt(const Point<T>& ln1a, const Point<T>& ln1b,

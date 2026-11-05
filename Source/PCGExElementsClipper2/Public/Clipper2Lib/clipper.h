@@ -146,7 +146,7 @@ namespace PCGExClipper2Lib
 	                            JoinType jt, EndType et, double miter_limit = 2.0,
 	                            double arc_tolerance = 0.0)
 	{
-		if (!delta)
+		if (delta == 0.0)
 		{
 			return paths;
 		}
@@ -163,7 +163,7 @@ namespace PCGExClipper2Lib
 	{
 		int error_code = 0;
 		CheckPrecisionRange(precision, error_code);
-		if (!delta)
+		if (delta == 0.0)
 		{
 			return paths;
 		}
