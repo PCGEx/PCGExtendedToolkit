@@ -13,6 +13,7 @@
 #define PCGEX_CLIPPER_H_RECTCLIP
 
 #include <queue>
+#include "HAL/Platform.h" // DLLEXPORT / DLLIMPORT
 #include "Clipper2Lib/clipper.core.h"
 
 namespace PCGExClipper2Lib
