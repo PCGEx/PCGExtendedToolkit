@@ -3,6 +3,8 @@
 
 #include "PCGExElementsSampling.h"
 
+#include "Core/PCGExBlueNoiseTables.h"
+
 #if WITH_EDITOR
 #include "Core/PCGExTexParamFactoryProvider.h"
 #include "Data/Registry/PCGDataTypeRegistry.h"
@@ -14,10 +16,12 @@
 void FPCGExElementsSamplingModule::StartupModule()
 {
 	IPCGExLegacyModuleInterface::StartupModule();
+	PCGExBlueNoise::PrebuildTables();
 }
 
 void FPCGExElementsSamplingModule::ShutdownModule()
 {
+	PCGExBlueNoise::WaitForPrebuild();
 	IPCGExLegacyModuleInterface::ShutdownModule();
 }
 

@@ -3,8 +3,10 @@
 
 #include "Elements/PCGExProjection.h"
 
+#include "Core/PCGExBlendOperations.h"
 #include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
+#include "Core/PCGExSampledPropertyReader.h"
 #include "Data/PCGCollisionShapeData.h"
 #include "Data/PCGCollisionWrapperData.h"
 #include "Data/PCGDynamicMeshData.h"
@@ -20,6 +22,7 @@
 #include "Data/PCGVolumeData.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Data/Utils/PCGExDataForward.h"
+#include "Details/PCGExSettingsDetails.h"
 #include "Elements/PCGProjectionElement.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGPointHelpers.h"
@@ -27,6 +30,8 @@
 #include "Metadata/PCGMetadataDomain.h"
 #include "PCGPoint.h"
 #include "Sampling/PCGExSamplingCommon.h"
+
+#include <type_traits>
 
 #define LOCTEXT_NAMESPACE "PCGExProjectionElement"
 #define PCGEX_NAMESPACE Projection
@@ -84,6 +89,59 @@ namespace PCGExProjection
 			|| Target->IsA<UPCGCollisionWrapperData>()
 			|| Target->IsA<UPCGSplineData>()
 			|| Target->IsA<UPCGLandscapeSplineData>();
+	}
+
+	/** Writes one target property of a projected point to its attribute. */
+	class ITargetPropertyWriter
+	{
+	public:
+		virtual ~ITargetPropertyWriter() = default;
+		virtual void Write(int32 Index, const FPCGPoint& InProjected) const = 0;
+	};
+
+	template <typename T>
+	class TTargetPropertyWriter final : public ITargetPropertyWriter
+	{
+	public:
+		TSharedPtr<PCGExData::TBuffer<T>> Buffer;
+		PCGExSampling::FSampledPropertyReader Reader;
+
+		virtual void Write(const int32 Index, const FPCGPoint& InProjected) const override
+		{
+			Buffer->SetValue(Index, Reader.Read<T>(InProjected));
+		}
+	};
+
+	/** Calls InFunc with the default value of each type a target property can produce; false for any other type. */
+	template <typename FuncT>
+	bool DispatchTargetPropertyType(const EPCGMetadataTypes InType, FuncT&& InFunc)
+	{
+		switch (InType)
+		{
+		case EPCGMetadataTypes::Float:
+			InFunc(0.0f);
+			return true;
+		case EPCGMetadataTypes::Double:
+			InFunc(0.0);
+			return true;
+		case EPCGMetadataTypes::Integer32:
+			InFunc(int32{0});
+			return true;
+		case EPCGMetadataTypes::Vector:
+			InFunc(FVector::ZeroVector);
+			return true;
+		case EPCGMetadataTypes::Vector4:
+			InFunc(FVector4::Zero());
+			return true;
+		case EPCGMetadataTypes::Quaternion:
+			InFunc(FQuat::Identity);
+			return true;
+		case EPCGMetadataTypes::Transform:
+			InFunc(FTransform::Identity);
+			return true;
+		default:
+			return false;
+		}
 	}
 }
 
@@ -170,6 +228,57 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 	Context->ProjectionParams.bProjectRotations = Settings->bNormalToDensity || (Context->bFootprint && Settings->Footprint.Reference == EPCGExFootprintReference::Projected) || !Context->ApplySampling.TrRotComponents.IsEmpty();
 	Context->ProjectionParams.bProjectScales = !Context->ApplySampling.TrScaComponents.IsEmpty();
 
+	if (Settings->bWriteTargetProperties)
+	{
+		bool bTargetReadsScale = false;
+		TSet<FName> TargetOutputNames;
+
+		for (const FPCGExProjectionTargetProperty& Entry : Settings->TargetProperties)
+		{
+			PCGExSampling::FSampledPropertyReader Reader;
+			if (!Reader.Init(Entry.Source))
+			{
+				PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("Target property '{0}' is skipped: only point properties such as $Color.R are read here; target attributes go through Attributes Forwarding."), Entry.Source.GetDisplayText()));
+				continue;
+			}
+
+			if (!PCGExMetaHelpers::IsWritableAttributeName(Entry.OutputName))
+			{
+				PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("Target property '{0}' is skipped: its output name is not a valid attribute name."), Entry.Source.GetDisplayText()));
+				continue;
+			}
+
+			if (!PCGExProjection::DispatchTargetPropertyType(Reader.GetOutputType(), [](const auto&)
+			{
+			}))
+			{
+				PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("Target property '{0}' is skipped: its value type cannot be written."), Entry.Source.GetDisplayText()));
+				continue;
+			}
+
+			bool bAlreadyWritten = false;
+			TargetOutputNames.Add(Entry.OutputName, &bAlreadyWritten);
+			if (bAlreadyWritten)
+			{
+				PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("Several target properties write '{0}'; only the first one does."), FText::FromName(Entry.OutputName)));
+				continue;
+			}
+
+			PCGExProjection::FTargetPropertyOutput& TargetOutput = Context->TargetProperties.Emplace_GetRef();
+			TargetOutput.Source = Entry.Source;
+			TargetOutput.OutputName = Entry.OutputName;
+			TargetOutput.Type = Reader.GetOutputType();
+
+			const EPCGPointProperties Property = Reader.GetProperty();
+			Context->bTargetReadsRotation |= Property == EPCGPointProperties::Rotation || Property == EPCGPointProperties::Transform;
+			bTargetReadsScale |= Property == EPCGPointProperties::Scale || Property == EPCGPointProperties::Transform || Property == EPCGPointProperties::ScaledLocalSize;
+		}
+
+		// Read off the projected point, so they are projected even when no component applies them.
+		Context->ProjectionParams.bProjectRotations |= Context->bTargetReadsRotation;
+		Context->ProjectionParams.bProjectScales |= bTargetReadsScale;
+	}
+
 	// Invalid name : warn & disable the output, same as the other sampling nodes
 	PCGEX_OUTPUT_VALIDATE_NAME(Success, bool, false)
 
@@ -201,13 +310,31 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
+	Context->bProjectColor = Settings->bProjectColor;
+	if (Context->bProjectColor)
+	{
+		const EPCGExABBlendingType ColorBlending = Settings->ColorBlending;
+		if (ColorBlending == EPCGExABBlendingType::CopyTarget || ColorBlending == EPCGExABBlendingType::None)
+		{
+			PCGE_LOG(Warning, GraphAndLog, FTEXT("Color blending keeps the point color : color projection is disabled."));
+			Context->bProjectColor = false;
+		}
+		else if (ColorBlending != EPCGExABBlendingType::CopySource)
+		{
+			Context->ColorBlend = PCGExBlending::FBlendOperationFactory::Create(EPCGMetadataTypes::Vector4, ColorBlending);
+			check(Context->ColorBlend);
+
+			Context->bColorBlendWeighted = PCGExBlending::RequiresWeight(ColorBlending);
+		}
+	}
+
 	if (const UPCGBasePointData* PointTarget = Cast<UPCGBasePointData>(Context->ProjectionTarget))
 	{
 		// Build the octree here rather than under the cached-data lock from the first worker threads.
 		(void)PointTarget->GetPointOctree();
 	}
 
-	if (!Context->ApplySampling.WantsApply() && !Settings->bPruneFailedProjections && !Context->bWriteSuccess && !Context->bForwardAttributes && !Settings->bNormalToDensity && !Context->bFootprint)
+	if (!Context->ApplySampling.WantsApply() && !Settings->bPruneFailedProjections && !Context->bWriteSuccess && !Context->bForwardAttributes && !Context->bProjectColor && !Settings->bNormalToDensity && !Context->bFootprint && Context->TargetProperties.IsEmpty())
 	{
 		PCGE_LOG(Warning, GraphAndLog, FTEXT("Nothing to apply, prune, forward or write : the node has no effect."));
 	}
@@ -231,7 +358,7 @@ bool FPCGExProjectionElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			[&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
 				// CompleteWork only flushes attribute writers; the Write step (Gather) runs regardless of bSkipCompletion.
-				NewBatch->bSkipCompletion = !Context->bWriteSuccess && !Context->bForwardAttributes && !Context->bWriteOverhang && !Context->bWritePenetration;
+				NewBatch->bSkipCompletion = !Context->bWriteSuccess && !Context->bForwardAttributes && !Context->bWriteOverhang && !Context->bWritePenetration && Context->TargetProperties.IsEmpty();
 				NewBatch->bRequiresWriteStep = Settings->bPruneFailedProjections;
 			}))
 		{
@@ -292,6 +419,26 @@ namespace PCGExProjection
 			AllocateFor |= EPCGPointNativeProperties::Density;
 		}
 
+		if (Context->bProjectColor)
+		{
+			if (Context->bColorBlendWeighted)
+			{
+				ColorBlendWeight = Settings->ColorBlendWeight.GetValueSetting();
+				if (!ColorBlendWeight->Init(PointDataFacade))
+				{
+					return false;
+				}
+
+				if (ColorBlendWeight->IsConstant())
+				{
+					ConstantColorBlendWeight = ColorBlendWeight->Read(0);
+					ColorBlendWeight.Reset();
+				}
+			}
+
+			AllocateFor |= EPCGPointNativeProperties::Color;
+		}
+
 		if (AllocateFor != EPCGPointNativeProperties::None)
 		{
 			PointDataFacade->GetOut()->AllocateProperties(AllocateFor);
@@ -310,6 +457,28 @@ namespace PCGExProjection
 			{
 				return false;
 			}
+		}
+
+		for (const FTargetPropertyOutput& TargetOutput : Context->TargetProperties)
+		{
+			TSharedPtr<ITargetPropertyWriter> Writer;
+			DispatchTargetPropertyType(TargetOutput.Type, [&](const auto& InDefault)
+			{
+				using T = std::decay_t<decltype(InDefault)>;
+				const TSharedPtr<TTargetPropertyWriter<T>> TypedWriter = MakeShared<TTargetPropertyWriter<T>>();
+				TypedWriter->Buffer = PointDataFacade->GetWritable<T>(TargetOutput.OutputName, InDefault, true, PCGExData::EBufferInit::Inherit);
+				if (TypedWriter->Buffer && TypedWriter->Reader.Init(TargetOutput.Source, TargetOutput.Type))
+				{
+					Writer = TypedWriter;
+				}
+			});
+
+			if (!Writer)
+			{
+				return false;
+			}
+
+			TargetPropertyWriters.Add(Writer);
 		}
 
 		if (Context->bForwardAttributes)
@@ -413,7 +582,9 @@ namespace PCGExProjection
 		const PCGExSampling::FNormalToDensity* Density = NormalToDensity.Get();
 		const PCGExSampling::FProjectionFootprint* FootprintProbe = Footprint.Get();
 
-		if (!bApply && !bPrune && !SuccessWriter && !AttributesForward && !Density && !FootprintProbe)
+		const bool bProjectColor = Context->bProjectColor;
+
+		if (!bApply && !bPrune && !SuccessWriter && !AttributesForward && !bProjectColor && !Density && !FootprintProbe && TargetPropertyWriters.IsEmpty())
 		{
 			// Nothing would consume the projection result
 			return;
@@ -426,6 +597,12 @@ namespace PCGExProjection
 		TConstPCGValueRange<FVector> InBoundsMax = InPointData->GetConstBoundsMaxValueRange();
 		TPCGValueRange<FTransform> OutTransforms = bApply ? OutPointData->GetTransformValueRange(false) : TPCGValueRange<FTransform>();
 		TPCGValueRange<float> OutDensities = Density ? OutPointData->GetDensityValueRange(false) : TPCGValueRange<float>();
+
+		// Null blend = Copy (Target) : the point color is never read.
+		const PCGExBlending::IBlendOperation* ColorBlend = Context->ColorBlend.Get();
+		PCGExDetails::TSettingValue<double>* ColorWeight = ColorBlendWeight.Get();
+		TConstPCGValueRange<FVector4> InColors = ColorBlend ? InPointData->GetConstColorValueRange() : TConstPCGValueRange<FVector4>();
+		TPCGValueRange<FVector4> OutColors = bProjectColor ? OutPointData->GetColorValueRange(false) : TPCGValueRange<FVector4>();
 
 		PCGExSampling::FNormalToDensity::FScopeView DensityView;
 		if (Density)
@@ -449,8 +626,8 @@ namespace PCGExProjection
 		const int8* FootprintMaskPtr = FootprintMask.IsEmpty() ? nullptr : FootprintMask.GetData();
 		const FPCGProjectionParams& FootprintParams = Context->FootprintProjectionParams;
 
-		// Rotation projected for the normal or the footprint alone must not reach the look-at fallback.
-		const bool bRestoreRotation = (Density || bFootprintProjected) && ApplySampling.TrRotComponents.IsEmpty();
+		// Rotation projected for the normal, the footprint or a target property alone must not reach the look-at fallback.
+		const bool bRestoreRotation = (Density || bFootprintProjected || Context->bTargetReadsRotation) && ApplySampling.TrRotComponents.IsEmpty();
 
 		const UPCGSpatialData* Target = Context->ProjectionTarget;
 		const FPCGProjectionParams& ProjectionParams = Context->ProjectionParams;
@@ -538,9 +715,29 @@ namespace PCGExProjection
 				SampledEntries[Index] = Projected.MetadataEntry;
 			}
 
+			for (const TSharedPtr<ITargetPropertyWriter>& Writer : TargetPropertyWriters)
+			{
+				Writer->Write(Index, Projected);
+			}
+
 			if (Density)
 			{
 				Density->Apply(DensityView, Index - Scope.Start, Projected.Transform.GetUnitAxis(EAxis::Z), OutDensities[Index]);
+			}
+
+			if (bProjectColor)
+			{
+				if (ColorBlend)
+				{
+					// In and Out alias under data stealing; blend from a copy.
+					const FVector4 InColor = InColors[Index];
+					const double Weight = ColorWeight ? ColorWeight->Read(Index) : ConstantColorBlendWeight;
+					ColorBlend->Blend(&InColor, &Projected.Color, Weight, &OutColors[Index]);
+				}
+				else
+				{
+					OutColors[Index] = Projected.Color;
+				}
 			}
 
 			if (!bApply)

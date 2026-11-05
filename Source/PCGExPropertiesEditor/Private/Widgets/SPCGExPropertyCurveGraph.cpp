@@ -153,8 +153,7 @@ int32 SPCGExPropertyCurveGraph::OnPaint(
 		FSlateDrawElement::MakeLines(OutDrawElements, GridLayer, AllottedGeometry.ToPaintGeometry(), Box, DrawEffects, PCGExPropertyCurveGraphColors::Border, true, 1.0f);
 	}
 
-	// Zero baseline in local space, clamped to the plot so the fill still has a valid edge when value=0
-	// falls outside the framed range.
+	// Zero baseline in local space. The value frame always contains 0; the clamp is only a guard.
 	const float ZeroY = FMath::Clamp(ValueToLocalY(0.0f, Size), Top, Bottom);
 
 	// Evaluated curve, sampled across the whole visible frame (which may be wider than [0,1]) so the

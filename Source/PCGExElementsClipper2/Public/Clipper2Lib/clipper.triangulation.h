@@ -21,7 +21,7 @@
 
 namespace PCGExClipper2Lib
 {
-	enum class PCGEXELEMENTSCLIPPER2_API TriangulateResult
+	enum class TriangulateResult
 	{
 		success,
 		fail,

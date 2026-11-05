@@ -8,7 +8,7 @@
 #include "Curves/KeyHandle.h"
 #include "Curves/RichCurve.h"
 
-/** Broadcast after the working curve mutates. bInteractive = mid-drag (coalesce undo, only grow the value frame). */
+/** Broadcast after the working curve mutates. bInteractive = mid-drag (coalesce undo, frames stay frozen). */
 DECLARE_MULTICAST_DELEGATE_OneParam(FPCGExOnPropertyCurveChanged, bool /*bInteractive*/);
 
 /** Broadcast when the selected key changes (or selection is cleared). */
@@ -66,10 +66,10 @@ struct FPCGExPropertyCurveClamps
  *     other by dragging (SetKeyTime re-sorts; the FKeyHandle survives the reorder)
  *
  * Both axes are free by default (no value/position clamp, negative positions allowed) unless the
- * owner installs FPCGExPropertyCurveClamps, and auto-frame to
- * the key range: the value frame fits keys plus padding; the time frame fits keys but always spans at
- * least [0,1] (edge-to-edge, no padding). Both frames freeze during an interactive drag so the view's
- * screen<->data mapping stays a stable reference (no feedback loop), then refit on commit.
+ * owner installs FPCGExPropertyCurveClamps, and auto-frame to the key range: both frames fit the keys but
+ * always span at least [0,1] (the value frame adds padding; the time frame is edge-to-edge). Both frames
+ * freeze during an interactive drag so the view's screen<->data mapping stays a stable reference (no
+ * feedback loop), then refit on commit.
  *
  * The views drive edits by key *handle* (stable across reorders) and read for paint by *index*;
  * index<->handle bridging stays here (only the curve's public API is used).
@@ -148,7 +148,7 @@ public:
 	void SetSelectedKeyByIndex(int32 Index);
 	void ClearSelection();
 
-	// --- Edits (all notify OnChanged; bInteractive coalesces undo and only grows the value frame) ---
+	// --- Edits (all notify OnChanged; bInteractive coalesces undo and keeps both frames frozen) ---
 	void AddKeyAtTime(float Time);
 	/** Add a key at an explicit time AND value (Shift+click on the graph places one at the cursor). */
 	void AddKeyAtTimeValue(float Time, float Value);
@@ -164,7 +164,7 @@ public:
 	/** Mirror key values across the keys' own [min,max]. Same involution guarantee as FlipTime. */
 	void FlipValues();
 
-	/** Close an interactive gesture: refit both frames tightly and emit a final (undoable) change. */
+	/** Close an interactive gesture: refit both frames and emit a final (undoable) change. */
 	void CommitInteractive();
 
 	// --- Value-axis framing (Y) ---
@@ -211,9 +211,9 @@ private:
 
 	void SetSelectedKey(FKeyHandle Handle);
 
-	/** Recompute the value frame to tightly fit the current keys (+ padding). Called on non-interactive
-	 *  edits only; the frame stays frozen during a drag so the Y mapping has a stable reference (no
-	 *  feedback loop). */
+	/** Recompute the value frame: fits the current keys but always spans at least [0,1] (+ padding). Called
+	 *  on non-interactive edits only; the frame stays frozen during a drag so the Y mapping has a stable
+	 *  reference (no feedback loop). */
 	void RefitValueFrame();
 
 	/** Recompute the time frame: fits the current keys but always spans at least [0,1] (no padding).

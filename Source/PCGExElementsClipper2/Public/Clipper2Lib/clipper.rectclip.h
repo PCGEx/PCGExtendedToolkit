@@ -44,7 +44,7 @@ namespace PCGExClipper2Lib
 	// RectClip64
 	//------------------------------------------------------------------------------
 
-	class RectClip64
+	class PCGEXELEMENTSCLIPPER2_API RectClip64
 	{
 		void ExecuteInternal(const Path64& path);
 		Path64 GetPath(OutPt2*& op);
@@ -81,7 +81,7 @@ namespace PCGExClipper2Lib
 	// RectClipLines64
 	//------------------------------------------------------------------------------
 
-	class RectClipLines64 : public RectClip64
+	class PCGEXELEMENTSCLIPPER2_API RectClipLines64 : public RectClip64
 	{
 		void ExecuteInternal(const Path64& path);
 		Path64 GetPath(OutPt2*& op);
@@ -90,7 +90,7 @@ namespace PCGExClipper2Lib
 		explicit RectClipLines64(const Rect64& rect)
 			: RectClip64(rect)
 		{
-		};
+		}
 		Paths64 Execute(const Paths64& paths);
 	};
 } // Clipper2Lib namespace
