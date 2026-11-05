@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGExFilterCommon.h"
+#include "PCGPoint.h"
 #include "Factories/PCGExFactories.h"
 
 #include "PCGExBlendingCommon.h"
@@ -12,6 +13,8 @@
 #include "Data/Utils/PCGExDataForwardDetails.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Elements/PCGProjectionParams.h"
+#include "Metadata/PCGAttributePropertySelector.h"
+#include "Metadata/PCGMetadataAttributeTraits.h"
 #include "Sampling/PCGExApplySamplingDetails.h"
 #include "Sampling/PCGExNormalToDensityDetails.h"
 #include "Sampling/PCGExProjectionFootprintDetails.h"
@@ -44,7 +47,31 @@ namespace PCGExProjection
 	{
 		const FName SourceFootprintFiltersLabel = FName("Footprint Filters");
 	}
+
+	/** A validated target property: what to read off the projected point, where to write it, and as which type. */
+	struct FTargetPropertyOutput
+	{
+		FPCGAttributePropertyInputSelector Source;
+		FName OutputName = NAME_None;
+		EPCGMetadataTypes Type = EPCGMetadataTypes::Unknown;
+	};
+
+	class ITargetPropertyWriter;
 }
+
+USTRUCT(BlueprintType)
+struct PCGEXELEMENTSSAMPLING_API FPCGExProjectionTargetProperty
+{
+	GENERATED_BODY()
+
+	/** Property of the projected target point, with optional extractors: $Color, $Color.R, $Density, $Position.Z... */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
+	FPCGAttributePropertyInputSelector Source = FPCGAttributePropertySelector::CreatePointPropertySelector<FPCGAttributePropertyInputSelector>(EPCGPointProperties::Color);
+
+	/** Attribute written on the projected points. Its type follows the source: a double for $Color.R, a vector 4 for $Color. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
+	FName OutputName = FName("TargetColor");
+};
 
 /**
  * Lightweight, parallel alternative to the stock Projection node.
@@ -145,6 +172,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExForwardDetails AttributesForwarding;
 
+	/** Enables 'Target Properties'. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle))
+	bool bWriteTargetProperties = false;
+
+	/** When enabled, writes properties of the projected target point to attributes, such as a texture's $Color.R. Target
+	 *  attributes go through Attributes Forwarding. Filtered-out and failed points keep their existing values. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, EditCondition="bWriteTargetProperties"))
+	TArray<FPCGExProjectionTargetProperty> TargetProperties;
+
 	/** Enables 'Project Color'. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bProjectColor = false;
@@ -200,6 +236,12 @@ struct FPCGExProjectionContext final : FPCGExPointsProcessorContext
 	/** Target Elements attributes known upfront that pass the name filter; include-filter for the per-processor sampled metadata. */
 	TSet<FName> ForwardedTargetAttributes;
 
+	/** Valid target properties only; empty when the option is off. */
+	TArray<PCGExProjection::FTargetPropertyOutput> TargetProperties;
+
+	/** A target property reads the projected rotation, so it is projected even when no component applies it. */
+	bool bTargetReadsRotation = false;
+
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
 };
@@ -226,6 +268,7 @@ namespace PCGExProjection
 		/** Entry each point got, PCGInvalidEntryKey when filtered out or rejected; forwarded per scope at the end of ProcessPoints. */
 		TArray<PCGMetadataEntryKey> SampledEntries;
 		TSharedPtr<PCGExData::FDataForwardHandler> AttributesForward;
+		TArray<TSharedPtr<ITargetPropertyWriter>> TargetPropertyWriters;
 		TSharedPtr<PCGExSampling::FNormalToDensity> NormalToDensity;
 
 		/** Only set when the weight is read per point; constant weights resolve into ConstantColorBlendWeight. */

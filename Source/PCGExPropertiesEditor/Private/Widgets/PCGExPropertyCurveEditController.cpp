@@ -420,17 +420,12 @@ void FPCGExPropertyCurveEditController::RefitValueFrame()
 		}
 	}
 
-	float Span = MaxV - MinV;
-	if (Span < KINDA_SMALL_NUMBER)
-	{
-		// Flat ramp: nothing to fit. Centre a unit window on the value.
-		const float Center = (Curve->Keys.Num() > 0) ? Curve->Keys[0].Value : 0.5f;
-		MinV = Center - 0.5f;
-		MaxV = Center + 0.5f;
-		Span = 1.0f;
-	}
+	// Always keep [0,1] in view, like the time frame, so a curve inside it shows where it sits, and expand
+	// to include any key outside it. The span is thus at least 1: there is no flat-curve case.
+	MinV = FMath::Min(MinV, 0.0f);
+	MaxV = FMath::Max(MaxV, 1.0f);
 
-	const float Pad = Span * FramePadding;
+	const float Pad = (MaxV - MinV) * FramePadding;
 	FrameMin = MinV - Pad;
 	FrameMax = MaxV + Pad;
 }
