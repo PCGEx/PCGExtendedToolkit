@@ -8,11 +8,15 @@
 #include "Components/ActorComponent.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 #include "Serialization/ObjectReader.h"
 #include "Serialization/ObjectWriter.h"
+#include "Serialization/SerializedPropertyScope.h"
 #include "Serialization/StructuredArchiveAdapters.h"
+#include "Types/PCGExTypeOpsString.h"
+#include "UObject/Package.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/UnrealType.h"
 
@@ -40,11 +44,318 @@ namespace PCGExActorDelta
 	//     delta so apply can NewObject + AddInstanceComponent + SetupAttachment if
 	//     the spawned target doesn't have a subobject by that name.
 	//   - Dynamic components (archetype == class CDO) are captured/applied instead of being skipped.
-	//   - operator<<(UObject*&) also intercepts Instanced refs nested in struct/TArray/TMap
-	//     (gated to struct-inner positions only).
+	//   - operator<<(UObject*&) also intercepts Instanced refs nested in structs and containers
+	//     (gated to non-class-member positions only).
 	//   - Cycle guard via TSet<const UObject*> threaded through the recursion.
+	//   - Optional trailing sections, written only when non-empty: tagged sections at the end of each object
+	//     delta (instanced containers, created subobjects), delta-extension payloads after the last component
+	//     record. A reader stops where it knows no more, so these needed no version bump.
 	static constexpr uint32 DeltaWireMagic = 0x50434745u; // 'PCGE'
 	static constexpr uint32 DeltaWireVersion = 6u;
+
+	static constexpr uint32 ExtensionSectionMagic = 0x4558544Eu; // 'EXTN'
+	static constexpr uint32 ExtensionSectionVersion = 1u;
+
+	// Past this, a created subobject's record is reported once: a large capture is usually derived data.
+	static constexpr int32 CreatedSubobjectReportSize = 64 * 1024;
+
+	// Tags of the optional sections closing an object delta.
+	static constexpr uint32 InstancedContainersTag = 0x494E5354u; // 'INST'
+	static constexpr uint32 CreatedSubobjectsTag = 0x43525444u;   // 'CRTD'
+
+#pragma region ExtensionRegistry
+
+	namespace ExtensionRegistry
+	{
+		/** Either Class (direct registration) or PendingPath (soft registration resolving lazily) names the target. */
+		struct FEntry
+		{
+			FSoftClassPath PendingPath;
+			TWeakObjectPtr<UClass> Class;
+			FDeltaExtension Extension;
+		};
+
+		// Game thread only: registration from module startup, lookups from capture and apply. No locking.
+		// Entries are keyed by a monotonic id so removals don't invalidate the buckets, which are keyed by the resolved
+		// class: a lookup walks the target's class hierarchy with one bucket probe per super.
+		TMap<uint64, FEntry>& GetEntries()
+		{
+			static TMap<uint64, FEntry> Instance;
+			return Instance;
+		}
+
+		TMap<UClass*, TArray<uint64>>& GetBuckets()
+		{
+			static TMap<UClass*, TArray<uint64>> Instance;
+			return Instance;
+		}
+
+		/** Registrations whose soft path has not resolved yet. */
+		TArray<uint64>& GetPendingIds()
+		{
+			static TArray<uint64> Instance;
+			return Instance;
+		}
+
+		/** Payload Id -> registration, for the extensions that Capture or Apply. */
+		TMap<FName, uint64>& GetIdIndex()
+		{
+			static TMap<FName, uint64> Instance;
+			return Instance;
+		}
+
+		uint64 AllocId()
+		{
+			static uint64 Counter = 0;
+			return ++Counter;
+		}
+
+		/** Resolves the entry's class and files it in its bucket. False while the soft path does not resolve. */
+		bool TryBucket(const uint64 Id)
+		{
+			FEntry* E = GetEntries().Find(Id);
+			if (!E)
+			{
+				return false;
+			}
+
+			UClass* Target = E->Class.Get();
+			if (!Target && !E->PendingPath.IsNull())
+			{
+				Target = E->PendingPath.ResolveClass();
+				E->Class = Target;
+			}
+
+			if (!Target)
+			{
+				return false;
+			}
+
+			if (E->Extension.PostApply && !Target->IsChildOf<UActorComponent>())
+			{
+				UE_LOG(LogPCGEx, Warning,
+				       TEXT("[PCGExActorDelta] Extension '%s' on %s: PostApply runs on components only, it is dropped."),
+				       *E->Extension.Id.ToString(), *Target->GetName());
+				E->Extension.PostApply = nullptr;
+			}
+
+			GetBuckets().FindOrAdd(Target).AddUnique(Id);
+			return true;
+		}
+
+		/** Cheap when nothing is pending (a hash lookup per entry otherwise), so it runs on every capture and apply
+		 *  instead of listening for module loads. */
+		void TryResolvePending()
+		{
+			TArray<uint64>& Pending = GetPendingIds();
+			for (int32 i = Pending.Num() - 1; i >= 0; --i)
+			{
+				if (!GetEntries().Contains(Pending[i]) || TryBucket(Pending[i]))
+				{
+					Pending.RemoveAtSwap(i, EAllowShrinking::No);
+				}
+			}
+		}
+
+		void Unregister(const uint64 Id)
+		{
+			if (Id == 0)
+			{
+				return;
+			}
+
+			FEntry Removed;
+			if (!GetEntries().RemoveAndCopyValue(Id, Removed))
+			{
+				return;
+			}
+
+			if (const uint64* Indexed = GetIdIndex().Find(Removed.Extension.Id); Indexed && *Indexed == Id)
+			{
+				GetIdIndex().Remove(Removed.Extension.Id);
+			}
+
+			if (UClass* C = Removed.Class.Get())
+			{
+				if (TArray<uint64>* Bucket = GetBuckets().Find(C))
+				{
+					Bucket->Remove(Id);
+					if (Bucket->IsEmpty())
+					{
+						GetBuckets().Remove(C);
+					}
+				}
+			}
+			else
+			{
+				// The class was collected: its bucket key is a dangling address, so sweep every bucket for the id.
+				for (auto It = GetBuckets().CreateIterator(); It; ++It)
+				{
+					It.Value().Remove(Id);
+					if (It.Value().IsEmpty())
+					{
+						It.RemoveCurrent();
+					}
+				}
+			}
+
+			GetPendingIds().Remove(Id);
+		}
+
+		uint64 Register(UClass* Class, const FSoftClassPath& Path, FDeltaExtension&& Extension)
+		{
+			if (!Class && Path.IsNull())
+			{
+				return 0;
+			}
+
+			const bool bHasPayload = Extension.Capture || Extension.Apply;
+			if (!bHasPayload && !Extension.PostApply && Extension.ClaimedProperties.IsEmpty())
+			{
+				return 0;
+			}
+
+			if (bHasPayload)
+			{
+				if (Extension.Id.IsNone())
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("[PCGExActorDelta] Rejected a delta extension that Captures or Applies without an Id."));
+					return 0;
+				}
+				if (GetIdIndex().Contains(Extension.Id))
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("[PCGExActorDelta] Rejected delta extension '%s': that Id is already registered."), *Extension.Id.ToString());
+					return 0;
+				}
+			}
+
+			const uint64 Id = AllocId();
+			if (bHasPayload)
+			{
+				GetIdIndex().Add(Extension.Id, Id);
+			}
+
+			FEntry Entry;
+			Entry.PendingPath = Path;
+			Entry.Class = Class;
+			Entry.Extension = MoveTemp(Extension);
+			GetEntries().Add(Id, MoveTemp(Entry));
+
+			if (!TryBucket(Id))
+			{
+				GetPendingIds().AddUnique(Id);
+			}
+			return Id;
+		}
+
+		/** Live registrations matching Class or one of its supers, most-derived first. */
+		void GatherMatching(UClass* Class, TArray<uint64, TInlineAllocator<8>>& OutIds)
+		{
+			TMap<UClass*, TArray<uint64>>& Buckets = GetBuckets();
+			if (Buckets.IsEmpty())
+			{
+				return;
+			}
+
+			const TMap<uint64, FEntry>& Entries = GetEntries();
+			for (UClass* Cls = Class; Cls; Cls = Cls->GetSuperClass())
+			{
+				const TArray<uint64>* Bucket = Buckets.Find(Cls);
+				if (!Bucket)
+				{
+					continue;
+				}
+
+				for (const uint64 Id : *Bucket)
+				{
+					const FEntry* E = Entries.Find(Id);
+					if (!E)
+					{
+						continue;
+					}
+
+					// A bucket key is a raw UClass*: a collected class's address can be reused by a new one. The entry's
+					// weak pointer is the liveness check.
+					if (E->Class.Get() != Cls)
+					{
+						UE_LOG(LogPCGEx, Warning,
+						       TEXT("[PCGExActorDelta] Skipping a delta extension whose target class was garbage-collected; the registration is now stale."));
+						continue;
+					}
+
+					OutIds.Add(Id);
+				}
+			}
+		}
+
+		const FDeltaExtension* Find(const uint64 Id)
+		{
+			const FEntry* E = GetEntries().Find(Id);
+			return E ? &E->Extension : nullptr;
+		}
+
+		/** The live, resolved registration of a payload Id, and its class. */
+		const FDeltaExtension* FindById(const FName PayloadId, UClass*& OutClass)
+		{
+			const uint64* Id = GetIdIndex().Find(PayloadId);
+			const FEntry* E = Id ? GetEntries().Find(*Id) : nullptr;
+			OutClass = E ? E->Class.Get() : nullptr;
+			return OutClass ? &E->Extension : nullptr;
+		}
+
+		/** Properties the extensions matching Class keep out of the generic delta. */
+		void GatherClaims(UClass* Class, TArray<FName, TInlineAllocator<4>>& OutClaims)
+		{
+			TArray<uint64, TInlineAllocator<8>> Ids;
+			GatherMatching(Class, Ids);
+			for (const uint64 Id : Ids)
+			{
+				OutClaims.Append(Find(Id)->ClaimedProperties);
+			}
+		}
+
+		void RunPostApply(AActor* Actor)
+		{
+			TryResolvePending();
+			if (GetBuckets().IsEmpty())
+			{
+				return;
+			}
+
+			TInlineComponentArray<UActorComponent*> Components;
+			Actor->GetComponents(Components);
+
+			TArray<uint64, TInlineAllocator<8>> Ids;
+			for (UActorComponent* Component : Components)
+			{
+				if (!Component)
+				{
+					continue;
+				}
+
+				Ids.Reset();
+				GatherMatching(Component->GetClass(), Ids);
+				if (Ids.IsEmpty())
+				{
+					continue;
+				}
+
+				UObject* Archetype = Component->GetArchetype();
+				for (const uint64 Id : Ids)
+				{
+					// Looked up again: an earlier fixup may have unregistered this one.
+					if (const FDeltaExtension* Extension = Find(Id); Extension && Extension->PostApply)
+					{
+						Extension->PostApply(Component, Archetype);
+					}
+				}
+			}
+		}
+	}
+
+#pragma endregion
+
+#pragma region Internal
 
 	namespace Internal
 	{
@@ -112,17 +423,98 @@ namespace PCGExActorDelta
 
 		static void DeserializeObjectDelta(UObject* Object, const TArray<uint8>& InBytes);
 
+		void ApplyCreatedRecord(UObject* Object, const FString& PropName, const FString& ClassPathStr, const TArray<uint8>& SubBytes);
+
 		/** A nested-Instanced ref position: an Instanced FObjectProperty owned by a
 		 *  struct (or container element), reached via SerializeItem recursing past the
 		 *  top-level property layer. The operator<<(UObject*&) override inlines a
 		 *  recursive object-delta in this case; everything else falls through to the
-		 *  soft-path write/read. */
-		static bool IsInstancedNestedRef(const FProperty* CurProp)
+		 *  soft-path write/read. Returns that property, or null. */
+		const FObjectPropertyBase* AsNestedInstancedRef(const FProperty* CurProp)
 		{
+			// FSetProperty::SerializeItem loads into an empty set without making its element current (its save and
+			// slow load paths do), so the set itself is current then.
+			if (const FSetProperty* SetProp = CastField<FSetProperty>(CurProp))
+			{
+				CurProp = SetProp->GetElementProperty();
+			}
+
 			const FObjectPropertyBase* P = CastField<FObjectPropertyBase>(CurProp);
 			return P
 				&& P->HasAnyPropertyFlags(CPF_InstancedReference)
-				&& P->GetOwner<UClass>() == nullptr;
+				&& P->GetOwner<UClass>() == nullptr
+					? P
+					: nullptr;
+		}
+
+		/** A top-level container of instanced objects. Its records go to the 'INST' section, written and read with the
+		 *  container current on the archive: a container only makes its elements current when it is current itself
+		 *  (FSerializedPropertyScope's OnlyIfOldProperty), and the nested records key off the element. Struct members need
+		 *  no section, tagged serialization makes each of them current. */
+		bool IsInstancedContainer(const FProperty* Property)
+		{
+			return Property->HasAnyPropertyFlags(CPF_ContainsInstancedReference) && !Property->IsA<FStructProperty>();
+		}
+
+		/** One log line per distinct message per session, for what every spawn of an entry would repeat. Game thread only. */
+		void ReportOnce(const FString& Message)
+		{
+			static TSet<FString> Reported;
+			bool bAlreadyReported = false;
+			Reported.Add(Message, &bAlreadyReported);
+			if (!bAlreadyReported)
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("[PCGExActorDelta] %s"), *Message);
+			}
+		}
+
+		/** What a delta may record and recreate as an instance-owned subobject. Actors and components have paths of their
+		 *  own; body setups are collision their component rebuilds, and can be large. */
+		bool IsRecreatableSubobjectClass(const UClass* Class)
+		{
+			return Class
+				&& !Class->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists)
+				&& !Class->IsChildOf<AActor>()
+				&& !Class->IsChildOf<UActorComponent>()
+				&& !Class->IsChildOf<UBodySetup>();
+		}
+
+		/** A recreated object of a non-native class needs its class loaded first: list it with the delta's collaterals. */
+		void AddClassCollateral(const UClass* Class, TSet<FSoftObjectPath>* CollateralSink)
+		{
+			if (!CollateralSink || Class->HasAnyClassFlags(CLASS_Native))
+			{
+				return;
+			}
+
+			FSoftObjectPath ClassPath(Class);
+			if (ClassPath.IsAsset())
+			{
+				CollateralSink->Add(MoveTemp(ClassPath));
+			}
+		}
+
+		/** Moves an object out of Owner once Owner stops referencing it, so it is not saved as an orphan. */
+		void RetireOwnedObject(const UObject* Owner, UObject* Object)
+		{
+			if (Object && Object->GetOuter() == Owner)
+			{
+				Object->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_NonTransactional | REN_DoNotDirty);
+			}
+		}
+
+		/** Current when Owner owns it as exactly Class; otherwise a new Class object under Owner, Current retired. Flags
+		 *  follow the owner, as the editor's actor factories do. */
+		UObject* ProvideOwnedObject(UObject* Owner, UObject* Current, UClass* Class)
+		{
+			if (Current && Current->GetOuter() == Owner && Current->GetClass() == Class)
+			{
+				return Current;
+			}
+
+			RetireOwnedObject(Owner, Current);
+			const EObjectFlags Flags = Owner->GetFlags() & (RF_Transactional | RF_Transient | RF_NonPIEDuplicateTransient);
+			return NewObject<UObject>(Owner, Class, NAME_None, Flags);
 		}
 
 		/**
@@ -137,7 +529,7 @@ namespace PCGExActorDelta
 		 *   The base FObjectWriter writes UObject*& as the raw 8-byte pointer value --
 		 *   meaningless once persisted. We override to handle two cases:
 		 *
-		 *   1. Nested-Instanced refs (see IsInstancedNestedRef). Inlines a recursive
+		 *   1. Nested-Instanced refs (see AsNestedInstancedRef). Inlines a recursive
 		 *      object-delta so the nested subobject's contents round-trip. Top-level
 		 *      Instanced refs are routed through the trailing subobject section in
 		 *      SerializeObjectDelta instead, so they never reach this override.
@@ -197,27 +589,34 @@ namespace PCGExActorDelta
 		public:
 			using FObjectReader::FObjectReader;
 
+			/** The object being read into: nested-Instanced objects are applied onto, or created under, it. */
+			UObject* Owner = nullptr;
+
+			/** Reading an instanced container record from the property section, where only writers predating the 'INST'
+			 *  section put one: its elements are paths to the source actor's own subobjects. */
+			bool bLegacyInstancedContainer = false;
+
 			virtual FArchive& operator<<(FName& Name) override
 			{
 				FString AsString;
 				*this << AsString;
-				Name = FName(*AsString);
+				Name = PCGExTypeOps::MakeNameChecked(AsString);
 				return *this;
 			}
 
 			virtual FArchive& operator<<(UObject*& Res) override;
 
 			/** TObjectPtr<T>-backed properties serialize through this virtual in UE 5.6/5.7,
-			 *  bypassing operator<<(UObject*&). Start Raw as nullptr (do NOT call
-			 *  Value.Get()): on a freshly archetype-cloned target, calling Get() on every
-			 *  TObjectPtr triggers lazy resolution / sync-loads and turns each spawn into
-			 *  a multi-second pause. We accept the trade-off that source-was-null intent
-			 *  isn't preserved (target stays at archetype baseline instead of being
-			 *  nulled out) -- archetype baseline is almost always safer than nulling a
+			 *  bypassing operator<<(UObject*&). Only a nested-Instanced position reads the current
+			 *  value, an owned subobject to apply onto. Anywhere else Raw starts null: on a freshly
+			 *  archetype-cloned target, calling Get() on every TObjectPtr triggers lazy resolution /
+			 *  sync-loads and turns each spawn into a multi-second pause. We accept the trade-off that
+			 *  source-was-null intent isn't preserved (target stays at archetype baseline instead of
+			 *  being nulled out) -- archetype baseline is almost always safer than nulling a
 			 *  slot the component may require non-null. */
 			virtual FArchive& operator<<(FObjectPtr& Value) override
 			{
-				UObject* Raw = nullptr;
+				UObject* Raw = AsNestedInstancedRef(GetSerializedProperty()) ? Value.Get() : nullptr;
 				*this << Raw;
 				if (Raw)
 				{
@@ -234,7 +633,8 @@ namespace PCGExActorDelta
 		{
 			FString PropName;
 			UObject* Instance;
-			UObject* Defaults;
+			UObject* Defaults; // The parallel default subobject, or the class CDO of a created one.
+			bool bCreated;     // Defaults hold no same-class subobject: recorded with its class, recreated on apply.
 		};
 
 		/**
@@ -248,16 +648,17 @@ namespace PCGExActorDelta
 		 * UPROPERTY(Instanced) / DefaultToInstanced, which many plugins don't bother with
 		 * even when their subobjects are genuinely per-instance-owned.
 		 *
-		 * We require Defaults to hold a parallel subobject of the same class so the
-		 * recursive diff has a stable baseline. One-sided null and class mismatches are
-		 * silently skipped -- there'd be no safe way to apply the delta.
+		 * When Defaults hold a parallel subobject of the same class, the recursive diff runs
+		 * against it. Otherwise (the instance created it, or changed its class) the subobject
+		 * is diffed against its class CDO and recorded with its class, so apply can recreate
+		 * it. Transient instances and classes IsRecreatableSubobjectClass refuses are skipped.
 		 *
 		 * UActorComponent instances are explicitly skipped at the actor level: they're
 		 * outered to the actor (both CDSO and SCS-created), so without this guard
 		 * SerializeActorDelta would double-serialize each component -- once via its outer
 		 * component loop, once by recursing into it as a subobject here.
 		 */
-		static void CollectSubobjects(UObject* Object, UObject* Defaults, TArray<FSubobjectBinding>& Out)
+		static void CollectSubobjects(UObject* Object, UObject* Defaults, TConstArrayView<FName> Claims, TArray<FSubobjectBinding>& Out)
 		{
 			UClass* Class = Object->GetClass();
 			for (FProperty* Property = Class->PropertyLink; Property; Property = Property->PropertyLinkNext)
@@ -271,18 +672,13 @@ namespace PCGExActorDelta
 				{
 					continue;
 				}
+				if (Claims.Contains(ObjProp->GetFName()))
+				{
+					continue;
+				}
 
 				UObject* Inst = ObjProp->GetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(Object));
-				UObject* Def = ObjProp->GetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(Defaults));
-				if (!Inst || !Def)
-				{
-					continue;
-				}
-				if (Inst->GetOuter() != Object)
-				{
-					continue;
-				}
-				if (Inst->GetClass() != Def->GetClass())
+				if (!Inst || Inst->GetOuter() != Object)
 				{
 					continue;
 				}
@@ -294,8 +690,71 @@ namespace PCGExActorDelta
 					continue;
 				}
 
-				Out.Add({ObjProp->GetName(), Inst, Def});
+				UObject* Def = ObjProp->GetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(Defaults));
+				if (Def && Def->GetClass() == Inst->GetClass())
+				{
+					Out.Add({ObjProp->GetName(), Inst, Def, false});
+					continue;
+				}
+
+				if (Inst->HasAnyFlags(RF_Transient) || !IsRecreatableSubobjectClass(Inst->GetClass()))
+				{
+					continue;
+				}
+
+				Out.Add({ObjProp->GetName(), Inst, Inst->GetClass()->GetDefaultObject(), true});
 			}
+		}
+
+		/** [uint32 Count], then [FString PropName][uint32 ValueSize][ValueSize bytes] per property. bScoped serializes each
+		 *  value with its property current on the archive (see IsInstancedContainer). */
+		void WritePropertyRecords(
+			FArchive& Writer, UObject* Object, UObject* Defaults, TConstArrayView<FProperty*> Properties, const bool bScoped,
+			TSet<const UObject*>& VisitedSources, TSet<FSoftObjectPath>* CollateralSink)
+		{
+			uint32 Count = Properties.Num();
+			Writer << Count;
+
+			for (FProperty* Property : Properties)
+			{
+				FString PropName = Property->GetName();
+				Writer << PropName;
+
+				// Write the value into its own buffer first so we can length-prefix it.
+				TArray<uint8> ValueBytes;
+				{
+					FDeltaWriter ValueWriter(ValueBytes);
+					// Inherit the outer writer's archive state so custom-versioned structs
+					// (FSpline uses FFortniteMainBranchObjectVersion etc.) round-trip with
+					// consistent versions, share the visited set so nested
+					// operator<<(UObject*&) recursion can be cycle-safe, and share the
+					// collateral sink so soft paths emitted by per-property writes land
+					// in the same outer collection.
+					ValueWriter.SetCustomVersions(Writer.GetCustomVersions());
+					ValueWriter.VisitedSources = &VisitedSources;
+					ValueWriter.CollateralSink = CollateralSink;
+					FSerializedPropertyScope SerializedProperty(ValueWriter, bScoped ? Property : nullptr);
+					Property->SerializeItem(
+						FStructuredArchiveFromArchive(ValueWriter).GetSlot(),
+						Property->ContainerPtrToValuePtr<void>(Object),
+						Property->ContainerPtrToValuePtr<void>(Defaults));
+				}
+
+				uint32 ValueSize = ValueBytes.Num();
+				Writer << ValueSize;
+				if (ValueSize > 0)
+				{
+					Writer.Serialize(ValueBytes.GetData(), ValueSize);
+				}
+			}
+		}
+
+		void WriteSection(FArchive& Writer, uint32 Tag, TArray<uint8>& SectionBytes)
+		{
+			uint32 SectionSize = SectionBytes.Num();
+			Writer << Tag;
+			Writer << SectionSize;
+			Writer.Serialize(SectionBytes.GetData(), SectionSize);
 		}
 
 		/** Per-object inner format, wrapped by SerializeActorDelta's outer container:
@@ -312,9 +771,16 @@ namespace PCGExActorDelta
 		 *      [FString PropName]      // name of the FObjectProperty holding the subobject
 		 *      [uint32 SubSize]
 		 *      [SubSize bytes]         // recursive SerializeObjectDelta output
+		 *    then optional sections, each [uint32 Tag][uint32 Size][Size bytes], written only when non-empty:
+		 *      'INST': [uint32 PropCount] + property records as above, for IsInstancedContainer properties
+		 *      'CRTD': [uint32 CreatedCount], repeated CreatedCount times:
+		 *        [FString PropName]
+		 *        [FString ClassPath]   // FSoftClassPath of the instance-owned subobject
+		 *        [uint32 SubSize]      // may be 0: the record's existence recreates the object
+		 *        [SubSize bytes]       // recursive SerializeObjectDelta output vs. the class CDO
 		 *
-		 *  Each segment is length-prefixed so unknown/renamed props or subobjects on apply
-		 *  seek past their payload without corrupting subsequent reads. */
+		 *  Each segment is length-prefixed so unknown/renamed props, subobjects or sections on
+		 *  apply seek past their payload without corrupting subsequent reads. */
 		static void SerializeObjectDelta(
 			UObject* Object,
 			UObject* Defaults,
@@ -341,10 +807,19 @@ namespace PCGExActorDelta
 
 			UClass* Class = Object->GetClass();
 
+			TArray<FName, TInlineAllocator<4>> Claims;
+			ExtensionRegistry::GatherClaims(Class, Claims);
+
 			TArray<FProperty*> PropsToWrite;
+			TArray<FProperty*> ContainersToWrite;
 			for (FProperty* Property = Class->PropertyLink; Property; Property = Property->PropertyLinkNext)
 			{
 				if (!ShouldIncludeProperty(Property, bIsSubobject, bSkipTransformProps))
+				{
+					continue;
+				}
+
+				if (Claims.Contains(Property->GetFName()))
 				{
 					continue;
 				}
@@ -367,32 +842,57 @@ namespace PCGExActorDelta
 				{
 					continue;
 				}
-				PropsToWrite.Add(Property);
+				(IsInstancedContainer(Property) ? ContainersToWrite : PropsToWrite).Add(Property);
 			}
 
 			TArray<FSubobjectBinding> Subobjects;
-			CollectSubobjects(Object, Defaults, Subobjects);
+			CollectSubobjects(Object, Defaults, Claims, Subobjects);
 
 			struct FSubDelta
 			{
 				FString PropName;
+				FString ClassPath;
 				TArray<uint8> Bytes;
 			};
 			TArray<FSubDelta> SubDeltas;
+			TArray<FSubDelta> CreatedDeltas;
 			for (const FSubobjectBinding& Sub : Subobjects)
 			{
+				// One record per subobject, even when two properties hold it.
+				if (VisitedSources.Contains(Sub.Instance))
+				{
+					continue;
+				}
+
 				TArray<uint8> SubBytes;
 				// Subobjects are by definition not the root component, so transform filtering
 				// never applies in this branch. Forward the collateral sink so soft-path
 				// references inside nested subobject state still get collected.
 				SerializeObjectDelta(Sub.Instance, Sub.Defaults, SubBytes, VisitedSources, /*bIsSubobject=*/true, /*bSkipTransformProps=*/false, CollateralSink);
-				if (!SubBytes.IsEmpty())
+
+				if (!Sub.bCreated)
 				{
-					SubDeltas.Add({Sub.PropName, MoveTemp(SubBytes)});
+					if (!SubBytes.IsEmpty())
+					{
+						SubDeltas.Add({Sub.PropName, FString(), MoveTemp(SubBytes)});
+					}
+					continue;
 				}
+
+				UClass* SubClass = Sub.Instance->GetClass();
+				AddClassCollateral(SubClass, CollateralSink);
+				if (SubBytes.Num() > CreatedSubobjectReportSize)
+				{
+					ReportOnce(FString::Printf(
+						TEXT("%s::%s records an instance-owned %s over %d KB; check it is not derived data."),
+						*Class->GetName(), *Sub.PropName, *SubClass->GetName(), CreatedSubobjectReportSize / 1024));
+				}
+
+				// Recorded even when empty: the record's existence is what recreates the object.
+				CreatedDeltas.Add({Sub.PropName, FSoftClassPath(SubClass).ToString(), MoveTemp(SubBytes)});
 			}
 
-			if (PropsToWrite.IsEmpty() && SubDeltas.IsEmpty())
+			if (PropsToWrite.IsEmpty() && ContainersToWrite.IsEmpty() && SubDeltas.IsEmpty() && CreatedDeltas.IsEmpty())
 			{
 				return;
 			}
@@ -401,40 +901,7 @@ namespace PCGExActorDelta
 			Writer.VisitedSources = &VisitedSources;
 			Writer.CollateralSink = CollateralSink;
 
-			uint32 Count = PropsToWrite.Num();
-			Writer << Count;
-
-			for (FProperty* Property : PropsToWrite)
-			{
-				FString PropName = Property->GetName();
-				Writer << PropName;
-
-				// Write the value into its own buffer first so we can length-prefix it.
-				TArray<uint8> ValueBytes;
-				{
-					FDeltaWriter ValueWriter(ValueBytes);
-					// Inherit the outer writer's archive state so custom-versioned structs
-					// (FSpline uses FFortniteMainBranchObjectVersion etc.) round-trip with
-					// consistent versions, share the visited set so nested
-					// operator<<(UObject*&) recursion can be cycle-safe, and share the
-					// collateral sink so soft paths emitted by per-property writes land
-					// in the same outer collection.
-					ValueWriter.SetCustomVersions(Writer.GetCustomVersions());
-					ValueWriter.VisitedSources = &VisitedSources;
-					ValueWriter.CollateralSink = CollateralSink;
-					Property->SerializeItem(
-						FStructuredArchiveFromArchive(ValueWriter).GetSlot(),
-						Property->ContainerPtrToValuePtr<void>(Object),
-						Property->ContainerPtrToValuePtr<void>(Defaults));
-				}
-
-				uint32 ValueSize = ValueBytes.Num();
-				Writer << ValueSize;
-				if (ValueSize > 0)
-				{
-					Writer.Serialize(ValueBytes.GetData(), ValueSize);
-				}
-			}
+			WritePropertyRecords(Writer, Object, Defaults, PropsToWrite, /*bScoped=*/false, VisitedSources, CollateralSink);
 
 			uint32 SubCount = SubDeltas.Num();
 			Writer << SubCount;
@@ -448,6 +915,37 @@ namespace PCGExActorDelta
 					Writer.Serialize(SD.Bytes.GetData(), SubSize);
 				}
 			}
+
+			// The sections are omitted when empty, so other objects keep their bytes and hash.
+			if (!ContainersToWrite.IsEmpty())
+			{
+				TArray<uint8> SectionBytes;
+				FMemoryWriter SectionWriter(SectionBytes);
+				WritePropertyRecords(SectionWriter, Object, Defaults, ContainersToWrite, /*bScoped=*/true, VisitedSources, CollateralSink);
+				WriteSection(Writer, InstancedContainersTag, SectionBytes);
+			}
+
+			if (!CreatedDeltas.IsEmpty())
+			{
+				TArray<uint8> SectionBytes;
+				FMemoryWriter SectionWriter(SectionBytes);
+
+				uint32 CreatedCount = CreatedDeltas.Num();
+				SectionWriter << CreatedCount;
+				for (FSubDelta& CD : CreatedDeltas)
+				{
+					SectionWriter << CD.PropName;
+					SectionWriter << CD.ClassPath;
+					uint32 SubSize = CD.Bytes.Num();
+					SectionWriter << SubSize;
+					if (SubSize > 0)
+					{
+						SectionWriter.Serialize(CD.Bytes.GetData(), SubSize);
+					}
+				}
+
+				WriteSection(Writer, CreatedSubobjectsTag, SectionBytes);
+			}
 		}
 
 		/** Public wrapper: allocate a fresh visited set and defer to the recursive impl. */
@@ -457,21 +955,12 @@ namespace PCGExActorDelta
 			SerializeObjectDelta(Object, Defaults, OutBytes, Visited, bIsSubobject, bSkipTransformProps, CollateralSink);
 		}
 
-		/** Read per-property segments, then descend into the subobject section. Missing /
-		 *  renamed properties and mismatched subobjects seek past their payload instead of
-		 *  corrupting the outer stream. */
-		static void DeserializeObjectDelta(
-			UObject* Object,
-			const TArray<uint8>& InBytes)
+		/** Reads records written by WritePropertyRecords onto Object. Missing / renamed properties seek past their value
+		 *  instead of corrupting the stream, as does a scoped record whose property is no longer an instanced container:
+		 *  its nested payloads would read as soft paths. */
+		void ReadPropertyRecords(UObject* Object, FArchive& Reader, const int64 TotalSize, const bool bScoped)
 		{
-			if (!Object || InBytes.IsEmpty())
-			{
-				return;
-			}
-
 			UClass* Class = Object->GetClass();
-			FDeltaReader Reader(InBytes);
-			const int64 TotalSize = InBytes.Num();
 
 			uint32 Count = 0;
 			Reader << Count;
@@ -501,9 +990,10 @@ namespace PCGExActorDelta
 				// trust that contract instead of mirroring the filter here. Filtering on read
 				// would silently drop legitimate non-root transform overrides that the writer
 				// intentionally emitted.
-				FProperty* Property = Class->FindPropertyByName(FName(*PropName));
+				FProperty* Property = Class->FindPropertyByName(PCGExTypeOps::MakeNameChecked(PropName));
 				if (!Property
-					|| Property->HasAnyPropertyFlags(CPF_Transient | CPF_DuplicateTransient | CPF_Deprecated))
+					|| Property->HasAnyPropertyFlags(CPF_Transient | CPF_DuplicateTransient | CPF_Deprecated)
+					|| (bScoped && !IsInstancedContainer(Property)))
 				{
 					Reader.Seek(ValueStart + ValueSize);
 					continue;
@@ -525,11 +1015,77 @@ namespace PCGExActorDelta
 
 				FDeltaReader ValueReader(ValueBytes);
 				ValueReader.SetCustomVersions(Reader.GetCustomVersions());
+				ValueReader.Owner = Object;
+				ValueReader.bLegacyInstancedContainer = !bScoped && IsInstancedContainer(Property);
+				// Keeps a container's archetype-cloned instanced elements for the nested records to apply onto, instead of
+				// emptying it first. Side effect, kept to these properties: a preserved struct element keeps its
+				// archetype value for a field the writer omitted as default.
+				ValueReader.ArPreserveArrayElements = Property->HasAnyPropertyFlags(CPF_ContainsInstancedReference);
+				FSerializedPropertyScope SerializedProperty(ValueReader, bScoped ? Property : nullptr);
 				Property->SerializeItem(
 					FStructuredArchiveFromArchive(ValueReader).GetSlot(),
 					Property->ContainerPtrToValuePtr<void>(Object),
 					Property->ContainerPtrToValuePtr<void>(Class->GetDefaultObject()));
 			}
+		}
+
+		/** Reads the 'CRTD' section's records onto Object. */
+		void ReadCreatedRecords(UObject* Object, FArchive& Reader, const int64 TotalSize)
+		{
+			uint32 CreatedCount = 0;
+			Reader << CreatedCount;
+
+			for (uint32 i = 0; i < CreatedCount; ++i)
+			{
+				if (Reader.IsError() || Reader.Tell() >= TotalSize)
+				{
+					break;
+				}
+
+				FString PropName;
+				Reader << PropName;
+
+				FString ClassPathStr;
+				Reader << ClassPathStr;
+
+				uint32 SubSize = 0;
+				Reader << SubSize;
+
+				if (Reader.IsError() || Reader.Tell() + static_cast<int64>(SubSize) > TotalSize)
+				{
+					Reader.SetError();
+					break;
+				}
+
+				TArray<uint8> SubBytes;
+				SubBytes.SetNumUninitialized(SubSize);
+				if (SubSize > 0)
+				{
+					Reader.Serialize(SubBytes.GetData(), SubSize);
+				}
+
+				ApplyCreatedRecord(Object, PropName, ClassPathStr, SubBytes);
+			}
+		}
+
+		/** Read per-property segments, then descend into the subobject section, then read the
+		 *  optional sections. Missing / renamed properties, mismatched subobjects and unknown
+		 *  sections seek past their payload instead of corrupting the outer stream. */
+		static void DeserializeObjectDelta(
+			UObject* Object,
+			const TArray<uint8>& InBytes)
+		{
+			if (!Object || InBytes.IsEmpty())
+			{
+				return;
+			}
+
+			UClass* Class = Object->GetClass();
+			FDeltaReader Reader(InBytes);
+			Reader.Owner = Object;
+			const int64 TotalSize = InBytes.Num();
+
+			ReadPropertyRecords(Object, Reader, TotalSize, /*bScoped=*/false);
 
 			// Trailing subobject section. Truncated or absent is treated as empty -- the
 			// outer wire-version gate has already rejected incompatible formats, so here a
@@ -570,7 +1126,7 @@ namespace PCGExActorDelta
 				SubBytes.SetNumUninitialized(SubSize);
 				Reader.Serialize(SubBytes.GetData(), SubSize);
 
-				FProperty* Property = Class->FindPropertyByName(FName(*PropName));
+				FProperty* Property = Class->FindPropertyByName(PCGExTypeOps::MakeNameChecked(PropName));
 				FObjectProperty* ObjProp = CastField<FObjectProperty>(Property);
 				if (!ObjProp
 					|| ObjProp->HasAnyPropertyFlags(CPF_Transient | CPF_DuplicateTransient | CPF_Deprecated))
@@ -593,13 +1149,82 @@ namespace PCGExActorDelta
 
 				DeserializeObjectDelta(Subobj, SubBytes);
 			}
+
+			// Optional sections, absent from older payloads. A tag this reader does not know is skipped.
+			while (!Reader.IsError() && Reader.Tell() + static_cast<int64>(sizeof(uint32) * 2) <= TotalSize)
+			{
+				uint32 Tag = 0;
+				uint32 SectionSize = 0;
+				Reader << Tag;
+				Reader << SectionSize;
+				if (Reader.Tell() + static_cast<int64>(SectionSize) > TotalSize)
+				{
+					return;
+				}
+
+				TArray<uint8> SectionBytes;
+				SectionBytes.SetNumUninitialized(SectionSize);
+				Reader.Serialize(SectionBytes.GetData(), SectionSize);
+
+				FMemoryReader SectionReader(SectionBytes);
+				SectionReader.SetCustomVersions(Reader.GetCustomVersions());
+				switch (Tag)
+				{
+				case InstancedContainersTag:
+					ReadPropertyRecords(Object, SectionReader, SectionSize, /*bScoped=*/true);
+					break;
+				case CreatedSubobjectsTag:
+					ReadCreatedRecords(Object, SectionReader, SectionSize);
+					break;
+				default:
+					break;
+				}
+			}
+		}
+
+		/** Recreates, or reuses when its class matches, the instance-owned subobject one created record describes. */
+		void ApplyCreatedRecord(UObject* Object, const FString& PropName, const FString& ClassPathStr, const TArray<uint8>& SubBytes)
+		{
+			// Property first: an editor-only slot is absent on cooked targets, whose class may not exist either.
+			FObjectProperty* ObjProp = CastField<FObjectProperty>(Object->GetClass()->FindPropertyByName(PCGExTypeOps::MakeNameChecked(PropName)));
+			if (!ObjProp
+				|| ObjProp->HasAnyPropertyFlags(CPF_Transient | CPF_DuplicateTransient | CPF_Deprecated))
+			{
+				return;
+			}
+
+			// Resolve only, never load: a load here can re-enter through PostLoad. Non-native classes are collaterals,
+			// which the spawn element loads ahead of the apply.
+			UClass* SubClass = PCGExTypeOps::MakePathChecked<FSoftClassPath>(ClassPathStr).ResolveClass();
+			if (!SubClass)
+			{
+				ReportOnce(FString::Printf(
+					TEXT("Class '%s' is not loaded: %s::%s keeps its default instead of the recorded subobject."),
+					*ClassPathStr, *Object->GetClass()->GetName(), *PropName));
+				return;
+			}
+
+			if (!IsRecreatableSubobjectClass(SubClass) || !SubClass->IsChildOf(ObjProp->PropertyClass))
+			{
+				return;
+			}
+
+			void* ValuePtr = ObjProp->ContainerPtrToValuePtr<void>(Object);
+			UObject* Current = ObjProp->GetObjectPropertyValue(ValuePtr);
+			UObject* Subobject = ProvideOwnedObject(Object, Current, SubClass);
+			if (Subobject != Current)
+			{
+				ObjProp->SetObjectPropertyValue(ValuePtr, Subobject);
+			}
+
+			DeserializeObjectDelta(Subobject, SubBytes);
 		}
 
 		// ---- Out-of-line archive operator<< definitions ----
 
 		FArchive& FDeltaWriter::operator<<(UObject*& Res)
 		{
-			if (IsInstancedNestedRef(GetSerializedProperty()))
+			if (AsNestedInstancedRef(GetSerializedProperty()))
 			{
 				uint8 Present = (Res != nullptr) ? 1u : 0u;
 				*this << Present;
@@ -612,6 +1237,7 @@ namespace PCGExActorDelta
 
 				FString ClassPath = Res->GetClass()->GetPathName();
 				*this << ClassPath;
+				AddClassCollateral(Res->GetClass(), CollateralSink);
 
 				// VisitedSources is always set by callers (top-level Writer + every
 				// nested ValueWriter / SubWriter wires it through). Cycle guard would be
@@ -667,7 +1293,7 @@ namespace PCGExActorDelta
 		{
 			const FProperty* CurProp = GetSerializedProperty();
 
-			if (IsInstancedNestedRef(CurProp))
+			if (const FObjectPropertyBase* NestedProp = AsNestedInstancedRef(CurProp))
 			{
 				uint8 Present = 0;
 				*this << Present;
@@ -689,11 +1315,31 @@ namespace PCGExActorDelta
 					Serialize(SubBytes.GetData(), SubSize);
 				}
 
-				// Apply ONTO the target's existing subobject (seeded by archetype-
-				// cloning at NewObject time). Do NOT overwrite Res with the stale
-				// source-time pointer from the stream -- that pointer is meaningless in
-				// the target's context.
-				if (Res && SubSize > 0)
+				// Resolve only, never load (see ApplyCreatedRecord).
+				UClass* SubClass = PCGExTypeOps::MakePathChecked<FSoftClassPath>(ClassPath).ResolveClass();
+				if (!SubClass || !Owner)
+				{
+					if (!SubClass)
+					{
+						ReportOnce(FString::Printf(TEXT("Class '%s' is not loaded: an instanced object nested in %s keeps its default."),
+						                           *ClassPath, *NestedProp->GetFullName()));
+					}
+					return *this;
+				}
+
+				// Apply onto the target's own subobject of that class, seeded by archetype cloning. Anything else -- null,
+				// another class, or a pointer a defaults copy left to the CDO's subobject -- is replaced by a new object
+				// under Owner, never written through.
+				if (!Res || Res->GetOuter() != Owner || Res->GetClass() != SubClass)
+				{
+					if (!IsRecreatableSubobjectClass(SubClass) || (NestedProp->PropertyClass && !SubClass->IsChildOf(NestedProp->PropertyClass)))
+					{
+						return *this;
+					}
+					Res = ProvideOwnedObject(Owner, Res, SubClass);
+				}
+
+				if (SubSize > 0)
 				{
 					DeserializeObjectDelta(Res, SubBytes);
 				}
@@ -711,12 +1357,21 @@ namespace PCGExActorDelta
 				return *this;
 			}
 
+			const FSoftObjectPath Path = PCGExTypeOps::MakePathChecked(PathStr);
+
+			// A legacy container element names the source actor's own subobject. Never point the target at it: the slot
+			// keeps what it holds, as when the source is not loaded, so the result does not depend on what is.
+			if (bLegacyInstancedContainer && Path.IsSubobject())
+			{
+				return *this;
+			}
+
 			// ResolveObject only finds already-loaded objects -- no sync load. Apply
 			// runs inside SerializeItem callbacks; a TryLoad here could re-enter PCG
 			// or other systems via PostLoad on the loaded asset. The expected case is
 			// that the source actor was loaded, which already pulled its references
 			// into memory.
-			UObject* Loaded = FSoftObjectPath(PathStr).ResolveObject();
+			UObject* Loaded = Path.ResolveObject();
 			if (!Loaded)
 			{
 				// Path didn't resolve (transient runtime object on the source side, or
@@ -742,299 +1397,150 @@ namespace PCGExActorDelta
 		}
 	}
 
-	namespace FixupRegistry
+#pragma endregion
+
+#pragma region FDeltaExtensionHandle
+
+	FDeltaExtensionHandle::~FDeltaExtensionHandle()
 	{
-		/** Single registration record. Either Class (direct UClass* registration) or
-		 *  PendingPath (soft-path registration resolving lazily) identifies the target. */
-		struct FEntry
-		{
-			FSoftClassPath PendingPath;   // populated for unresolved path registrations
-			TWeakObjectPtr<UClass> Class; // resolved target (may be invalid for pending)
-			FPostApplyFixup Fixup;
-		};
-
-		// Registry state. Access is main-thread only in practice (registration from module
-		// startup, RunAll from spawn paths). No locking.
-		//
-		// Entries are keyed by a monotonic uint64 ID so removals don't invalidate bucket
-		// indices. Buckets are TMap<UClass*, TArray<ID>> keyed by the *resolved* target
-		// class -- RunAll walks the component class hierarchy and does O(1) bucket lookups per super.
-		static TMap<uint64, FEntry>& GetEntries()
-		{
-			static TMap<uint64, FEntry> Instance;
-			return Instance;
-		}
-
-		static TMap<UClass*, TArray<uint64>>& GetBuckets()
-		{
-			static TMap<UClass*, TArray<uint64>> Instance;
-			return Instance;
-		}
-
-		// IDs whose PendingPath hasn't resolved yet. Retried on each RunAll so registrations
-		// made before their target module loaded pick up activation at the next apply.
-		static TArray<uint64>& GetPendingIds()
-		{
-			static TArray<uint64> Instance;
-			return Instance;
-		}
-
-		static uint64 AllocId()
-		{
-			static uint64 Counter = 0;
-			return ++Counter;
-		}
-
-		/** Resolve the target class (if necessary) and attach the entry to its bucket. If
-		 *  the path can't resolve yet, the entry is parked on GetPendingIds() and retried
-		 *  at the next RunAll. */
-		static void Bucket(uint64 Id)
-		{
-			FEntry* E = GetEntries().Find(Id);
-			if (!E)
-			{
-				return;
-			}
-
-			UClass* Target = E->Class.Get();
-			if (!Target && !E->PendingPath.IsNull())
-			{
-				Target = E->PendingPath.ResolveClass();
-				if (Target)
-				{
-					E->Class = Target;
-				}
-			}
-
-			if (Target)
-			{
-				GetBuckets().FindOrAdd(Target).AddUnique(Id);
-			}
-			else
-			{
-				GetPendingIds().AddUnique(Id);
-			}
-		}
-
-		static void Unregister(uint64 Id)
-		{
-			if (Id == 0)
-			{
-				return;
-			}
-			FEntry Removed;
-			if (GetEntries().RemoveAndCopyValue(Id, Removed))
-			{
-				if (UClass* C = Removed.Class.Get())
-				{
-					if (TArray<uint64>* Bucket = GetBuckets().Find(C))
-					{
-						Bucket->Remove(Id);
-						if (Bucket->IsEmpty())
-						{
-							GetBuckets().Remove(C);
-						}
-					}
-				}
-				else
-				{
-					// Class was GC'd between registration and unregister -- the bucket
-					// key is now a dangling raw pointer we can't recover. Sweep all
-					// buckets for the stale Id so it doesn't leak.
-					for (auto It = GetBuckets().CreateIterator(); It; ++It)
-					{
-						It.Value().Remove(Id);
-						if (It.Value().IsEmpty())
-						{
-							It.RemoveCurrent();
-						}
-					}
-				}
-				GetPendingIds().Remove(Id);
-			}
-		}
-
-		static uint64 Register(UClass* Class, const FSoftClassPath& Path, FPostApplyFixup Fixup)
-		{
-			if (!Fixup)
-			{
-				return 0;
-			}
-			if (!Class && Path.IsNull())
-			{
-				return 0;
-			}
-
-			const uint64 Id = AllocId();
-			FEntry Entry;
-			Entry.PendingPath = Path;
-			Entry.Class = Class;
-			Entry.Fixup = MoveTemp(Fixup);
-			GetEntries().Add(Id, MoveTemp(Entry));
-			Bucket(Id);
-			return Id;
-		}
-
-		/** Best-effort retry of pending path resolutions. Cheap (FSoftClassPath::ResolveClass
-		 *  is a hash lookup when the class is loaded) so we just run it every RunAll instead
-		 *  of subscribing to module-load events. */
-		static void TryResolvePending()
-		{
-			TArray<uint64>& Pending = GetPendingIds();
-			if (Pending.IsEmpty())
-			{
-				return;
-			}
-
-			TMap<uint64, FEntry>& Entries = GetEntries();
-			for (int32 i = Pending.Num() - 1; i >= 0; --i)
-			{
-				const uint64 Id = Pending[i];
-				FEntry* E = Entries.Find(Id);
-				if (!E)
-				{
-					// Entry was unregistered while pending.
-					Pending.RemoveAtSwap(i, EAllowShrinking::No);
-					continue;
-				}
-
-				UClass* Target = E->Class.Get();
-				if (!Target && !E->PendingPath.IsNull())
-				{
-					Target = E->PendingPath.ResolveClass();
-					if (Target)
-					{
-						E->Class = Target;
-					}
-				}
-
-				if (Target)
-				{
-					GetBuckets().FindOrAdd(Target).AddUnique(Id);
-					Pending.RemoveAtSwap(i, EAllowShrinking::No);
-				}
-			}
-		}
-
-		static void RunAll(AActor* Actor)
-		{
-			if (!Actor)
-			{
-				return;
-			}
-			TryResolvePending();
-
-			TMap<UClass*, TArray<uint64>>& Buckets = GetBuckets();
-			if (Buckets.IsEmpty())
-			{
-				return;
-			}
-
-			TMap<uint64, FEntry>& Entries = GetEntries();
-
-			TInlineComponentArray<UActorComponent*> Components;
-			Actor->GetComponents(Components);
-
-			for (UActorComponent* Component : Components)
-			{
-				if (!Component)
-				{
-					continue;
-				}
-				UObject* Archetype = Component->GetArchetype();
-
-				// Walk the class hierarchy: a fixup registered against UFoo fires for
-				// UFoo and anything that derives from it. Bucket lookup per super class
-				// is O(1), so total cost per component is O(class-hierarchy depth) --
-				// independent of registration count.
-				for (UClass* Cls = Component->GetClass(); Cls; Cls = Cls->GetSuperClass())
-				{
-					if (TArray<uint64>* Bucket = Buckets.Find(Cls))
-					{
-						for (uint64 Id : *Bucket)
-						{
-							if (FEntry* E = Entries.Find(Id))
-							{
-								// Bucket key is a raw UClass*; if the class was GC'd
-								// the key dangles and could match a new class at the
-								// same address. The entry's weak pointer is the
-								// authoritative liveness check.
-								if (E->Class.Get() != Cls)
-								{
-									UE_LOG(LogPCGEx, Warning,
-									       TEXT("[PCGExActorDelta] Skipping fixup whose target class was garbage-collected; the registration is now stale."));
-									continue;
-								}
-								E->Fixup(Component, Archetype);
-							}
-						}
-					}
-				}
-			}
-		}
+		ExtensionRegistry::Unregister(Id);
 	}
 
-	// ---- FPostApplyFixupHandle ----
-
-	FPostApplyFixupHandle::~FPostApplyFixupHandle()
-	{
-		if (Id != 0)
-		{
-			FixupRegistry::Unregister(Id);
-		}
-	}
-
-	FPostApplyFixupHandle::FPostApplyFixupHandle(FPostApplyFixupHandle&& Other) noexcept
+	FDeltaExtensionHandle::FDeltaExtensionHandle(FDeltaExtensionHandle&& Other) noexcept
 		: Id(Other.Id)
 	{
 		Other.Id = 0;
 	}
 
-	FPostApplyFixupHandle& FPostApplyFixupHandle::operator=(FPostApplyFixupHandle&& Other) noexcept
+	FDeltaExtensionHandle& FDeltaExtensionHandle::operator=(FDeltaExtensionHandle&& Other) noexcept
 	{
 		if (this != &Other)
 		{
-			if (Id != 0)
-			{
-				FixupRegistry::Unregister(Id);
-			}
+			ExtensionRegistry::Unregister(Id);
 			Id = Other.Id;
 			Other.Id = 0;
 		}
 		return *this;
 	}
 
-	void FPostApplyFixupHandle::Reset()
+	void FDeltaExtensionHandle::Reset()
 	{
-		if (Id != 0)
-		{
-			FixupRegistry::Unregister(Id);
-			Id = 0;
-		}
+		ExtensionRegistry::Unregister(Id);
+		Id = 0;
 	}
 
 	/** Handle factory. Defined in the cpp (not exported) and befriended by the handle. */
-	class FPostApplyFixupHandleFactory
+	class FDeltaExtensionHandleFactory
 	{
 	public:
-		static FPostApplyFixupHandle Make(uint64 Id)
+		static FDeltaExtensionHandle Make(const uint64 Id)
 		{
-			FPostApplyFixupHandle Handle;
+			FDeltaExtensionHandle Handle;
 			Handle.Id = Id;
 			return Handle;
 		}
 	};
 
+	FDeltaExtensionHandle RegisterDeltaExtension(UClass* Class, FDeltaExtension Extension)
+	{
+		return FDeltaExtensionHandleFactory::Make(ExtensionRegistry::Register(Class, FSoftClassPath(), MoveTemp(Extension)));
+	}
+
+	FDeltaExtensionHandle RegisterDeltaExtension(const FSoftClassPath& ClassPath, FDeltaExtension Extension)
+	{
+		return FDeltaExtensionHandleFactory::Make(ExtensionRegistry::Register(nullptr, ClassPath, MoveTemp(Extension)));
+	}
+
 	FPostApplyFixupHandle RegisterPostApplyFixup(UClass* ComponentClass, FPostApplyFixup Fixup)
 	{
-		const uint64 Id = FixupRegistry::Register(ComponentClass, FSoftClassPath(), MoveTemp(Fixup));
-		return FPostApplyFixupHandleFactory::Make(Id);
+		FDeltaExtension Extension;
+		Extension.PostApply = MoveTemp(Fixup);
+		return RegisterDeltaExtension(ComponentClass, MoveTemp(Extension));
 	}
 
 	FPostApplyFixupHandle RegisterPostApplyFixup(const FSoftClassPath& ClassPath, FPostApplyFixup Fixup)
 	{
-		const uint64 Id = FixupRegistry::Register(nullptr, ClassPath, MoveTemp(Fixup));
-		return FPostApplyFixupHandleFactory::Make(Id);
+		FDeltaExtension Extension;
+		Extension.PostApply = MoveTemp(Fixup);
+		return RegisterDeltaExtension(ClassPath, MoveTemp(Extension));
+	}
+
+#pragma endregion
+
+#pragma region SerializeActorDelta
+
+	namespace Internal
+	{
+		struct FExtensionPayload
+		{
+			FString Id;
+			uint32 Version = 0;
+			FString Target; // Empty for the actor, else the component's name.
+			TArray<uint8> Bytes;
+		};
+
+		/** Runs the Capture of every extension matching Source's class, keeping the payloads it accepted. */
+		void CaptureExtensions(const UObject& Source, const FString& Target, TSet<FSoftObjectPath>* CollateralSink, TArray<FExtensionPayload>& OutPayloads)
+		{
+			TArray<uint64, TInlineAllocator<8>> Ids;
+			ExtensionRegistry::GatherMatching(Source.GetClass(), Ids);
+
+			for (const uint64 Id : Ids)
+			{
+				const FDeltaExtension* Extension = ExtensionRegistry::Find(Id);
+				if (!Extension || !Extension->Capture)
+				{
+					continue;
+				}
+
+				FExtensionPayload Payload;
+				TSet<const UObject*> Visited;
+				FDeltaWriter Writer(Payload.Bytes);
+				Writer.VisitedSources = &Visited;
+				Writer.CollateralSink = CollateralSink;
+				if (!Extension->Capture(Source, Writer) || Writer.IsError())
+				{
+					continue;
+				}
+
+				Payload.Id = Extension->Id.ToString();
+				Payload.Version = Extension->Version;
+				Payload.Target = Target;
+				OutPayloads.Add(MoveTemp(Payload));
+			}
+		}
+
+		/** [uint32 Magic][uint32 SectionVersion][uint32 SectionSize], then SectionSize bytes:
+		 *  [uint32 Count], repeated Count times [FString Id][uint32 Version][FString Target][uint32 Size][Size bytes].
+		 *  SectionSize lets a reader skip a section version it does not know. */
+		void WriteExtensionSection(FArchive& Writer, TArray<FExtensionPayload>& Payloads)
+		{
+			TArray<uint8> Body;
+			FMemoryWriter BodyWriter(Body);
+
+			uint32 Count = Payloads.Num();
+			BodyWriter << Count;
+			for (FExtensionPayload& Payload : Payloads)
+			{
+				BodyWriter << Payload.Id;
+				BodyWriter << Payload.Version;
+				BodyWriter << Payload.Target;
+				uint32 Size = Payload.Bytes.Num();
+				BodyWriter << Size;
+				if (Size > 0)
+				{
+					BodyWriter.Serialize(Payload.Bytes.GetData(), Size);
+				}
+			}
+
+			uint32 Magic = ExtensionSectionMagic;
+			uint32 SectionVersion = ExtensionSectionVersion;
+			uint32 SectionSize = Body.Num();
+			Writer << Magic;
+			Writer << SectionVersion;
+			Writer << SectionSize;
+			Writer.Serialize(Body.GetData(), SectionSize);
+		}
 	}
 
 	TArray<uint8> SerializeActorDelta(AActor* Actor, TArray<FSoftObjectPath>* OutCollaterals)
@@ -1043,6 +1549,8 @@ namespace PCGExActorDelta
 		{
 			return {};
 		}
+
+		ExtensionRegistry::TryResolvePending();
 
 		// nullptr sink short-circuits the emit site, keeping the no-collateral path cost-free.
 		TSet<FSoftObjectPath> CollateralSet;
@@ -1103,7 +1611,14 @@ namespace PCGExActorDelta
 			}
 		}
 
-		if (ActorBytes.IsEmpty() && ComponentDeltas.IsEmpty())
+		TArray<Internal::FExtensionPayload> ExtensionPayloads;
+		Internal::CaptureExtensions(*Actor, FString(), CollateralSinkPtr, ExtensionPayloads);
+		for (UActorComponent* Component : Components)
+		{
+			Internal::CaptureExtensions(*Component, Component->GetName(), CollateralSinkPtr, ExtensionPayloads);
+		}
+
+		if (ActorBytes.IsEmpty() && ComponentDeltas.IsEmpty() && ExtensionPayloads.IsEmpty())
 		{
 			return {};
 		}
@@ -1120,6 +1635,7 @@ namespace PCGExActorDelta
 		//   [uint32 ActorDeltaSize][ActorDelta...]
 		//   [uint32 ComponentCount]
 		//   For each: [FString Name][FString ClassPath][uint32 CompDeltaSize][CompDelta...]
+		//   Optional extension section (Internal::WriteExtensionSection), only when a payload was captured.
 		TArray<uint8> Result;
 		FMemoryWriter Writer(Result);
 
@@ -1150,8 +1666,17 @@ namespace PCGExActorDelta
 			Writer.Serialize(CD.Bytes.GetData(), CompSize);
 		}
 
+		if (!ExtensionPayloads.IsEmpty())
+		{
+			Internal::WriteExtensionSection(Writer, ExtensionPayloads);
+		}
+
 		return Result;
 	}
+
+#pragma endregion
+
+#pragma region FScopedActorWrite
 
 	FScopedActorWrite::FScopedActorWrite(AActor* InActor)
 		: Actor(InActor)
@@ -1189,7 +1714,7 @@ namespace PCGExActorDelta
 
 		if (bRunFixups)
 		{
-			FixupRegistry::RunAll(Actor);
+			ExtensionRegistry::RunPostApply(Actor);
 		}
 	}
 
@@ -1201,13 +1726,127 @@ namespace PCGExActorDelta
 		}
 	}
 
-	// Standalone when InScope is null: each written component re-registers as it goes, then the fixups run.
-	void ApplyDeltaBytes(AActor* Actor, const TArray<uint8>& DeltaBytes, FScopedActorWrite* InScope)
+#pragma endregion
+
+#pragma region ApplyPropertyDelta
+
+	namespace Internal
 	{
-		if (!Actor || DeltaBytes.IsEmpty())
+		/** Dispatches one extension payload to its registration. Unknown, newer and orphaned payloads are skipped. */
+		void ApplyExtensionPayload(FScopedActorWrite& InScope, const FString& IdStr, const uint32 PayloadVersion, const FString& TargetName, const TArray<uint8>& Bytes)
+		{
+			AActor* Actor = InScope.GetActor();
+
+			UClass* RegisteredClass = nullptr;
+			const FDeltaExtension* Extension = ExtensionRegistry::FindById(PCGExTypeOps::MakeNameChecked(IdStr), RegisteredClass);
+			if (!Extension || !Extension->Apply)
+			{
+				ReportOnce(FString::Printf(TEXT("No delta extension '%s' is registered here; its payload is skipped."), *IdStr));
+				return;
+			}
+
+			if (PayloadVersion > Extension->Version)
+			{
+				ReportOnce(FString::Printf(TEXT("Delta extension '%s' payload version %u is newer than the registered %u; it is skipped."),
+				                           *IdStr, PayloadVersion, Extension->Version));
+				return;
+			}
+
+			UObject* Target = TargetName.IsEmpty()
+				                  ? static_cast<UObject*>(Actor)
+				                  : FindObjectFast<UActorComponent>(Actor, PCGExTypeOps::MakeNameChecked(TargetName));
+			if (!Target || !Target->IsA(RegisteredClass))
+			{
+				ReportOnce(FString::Printf(TEXT("Delta extension '%s': %s has no matching '%s'; its payload is skipped."),
+				                           *IdStr, *Actor->GetClass()->GetName(), TargetName.IsEmpty() ? TEXT("actor") : *TargetName));
+				return;
+			}
+
+			if (UActorComponent* Component = Cast<UActorComponent>(Target))
+			{
+				InScope.Touch(Component);
+			}
+
+			FDeltaReader PayloadReader(Bytes);
+			PayloadReader.Owner = Target;
+			Extension->Apply(*Target, PayloadReader, PayloadVersion, InScope);
+		}
+
+		/** Reads the extension section, when the stream has one, and applies its payloads in order. */
+		void ApplyExtensionSection(FScopedActorWrite& InScope, FMemoryReader& Reader, const int64 TotalSize)
+		{
+			if (Reader.Tell() + static_cast<int64>(sizeof(uint32) * 3) > TotalSize)
+			{
+				return;
+			}
+
+			uint32 Magic = 0;
+			uint32 SectionVersion = 0;
+			uint32 SectionSize = 0;
+			Reader << Magic;
+			Reader << SectionVersion;
+			Reader << SectionSize;
+			if (Reader.IsError() || Magic != ExtensionSectionMagic || Reader.Tell() + static_cast<int64>(SectionSize) > TotalSize)
+			{
+				return;
+			}
+
+			if (SectionVersion != ExtensionSectionVersion)
+			{
+				ReportOnce(FString::Printf(TEXT("Skipping a delta extension section of unknown version %u (expected %u)."), SectionVersion, ExtensionSectionVersion));
+				return;
+			}
+
+			TArray<uint8> Body;
+			Body.SetNumUninitialized(SectionSize);
+			Reader.Serialize(Body.GetData(), SectionSize);
+
+			FMemoryReader BodyReader(Body);
+			uint32 Count = 0;
+			BodyReader << Count;
+
+			for (uint32 i = 0; i < Count; ++i)
+			{
+				if (BodyReader.IsError() || BodyReader.Tell() >= static_cast<int64>(SectionSize))
+				{
+					return;
+				}
+
+				FString IdStr;
+				uint32 PayloadVersion = 0;
+				FString TargetName;
+				uint32 Size = 0;
+				BodyReader << IdStr;
+				BodyReader << PayloadVersion;
+				BodyReader << TargetName;
+				BodyReader << Size;
+				if (BodyReader.IsError() || BodyReader.Tell() + static_cast<int64>(Size) > static_cast<int64>(SectionSize))
+				{
+					return;
+				}
+
+				TArray<uint8> Bytes;
+				Bytes.SetNumUninitialized(Size);
+				if (Size > 0)
+				{
+					BodyReader.Serialize(Bytes.GetData(), Size);
+				}
+
+				ApplyExtensionPayload(InScope, IdStr, PayloadVersion, TargetName, Bytes);
+			}
+		}
+	}
+
+	/** Applies onto InScope's actor; written components re-register, and the fixups run, when the scope closes. */
+	void ApplyDeltaBytes(FScopedActorWrite& InScope, const TArray<uint8>& DeltaBytes)
+	{
+		AActor* Actor = InScope.GetActor();
+		if (DeltaBytes.IsEmpty())
 		{
 			return;
 		}
+
+		ExtensionRegistry::TryResolvePending();
 
 		FMemoryReader Reader(DeltaBytes);
 		const int64 TotalSize = DeltaBytes.Num();
@@ -1275,7 +1914,7 @@ namespace PCGExActorDelta
 
 			FString CompNameStr;
 			Reader << CompNameStr;
-			const FName CompName(*CompNameStr);
+			const FName CompName = PCGExTypeOps::MakeNameChecked(CompNameStr);
 
 			FString CompClassPathStr;
 			Reader << CompClassPathStr;
@@ -1311,7 +1950,7 @@ namespace PCGExActorDelta
 			// accidentally persist a subobject.
 			if (!Component && !CompClassPathStr.IsEmpty())
 			{
-				const FSoftClassPath CompClassPath(CompClassPathStr);
+				const FSoftClassPath CompClassPath = PCGExTypeOps::MakePathChecked<FSoftClassPath>(CompClassPathStr);
 				if (UClass* CompClass = CompClassPath.ResolveClass())
 				{
 					if (CompClass->IsChildOf(UActorComponent::StaticClass()))
@@ -1344,7 +1983,7 @@ namespace PCGExActorDelta
 			// re-checking here defends against later writer drift.
 			if (Component && !bWasJustCreated && !CompClassPathStr.IsEmpty())
 			{
-				if (UClass* SrcClass = FSoftClassPath(CompClassPathStr).ResolveClass())
+				if (UClass* SrcClass = PCGExTypeOps::MakePathChecked<FSoftClassPath>(CompClassPathStr).ResolveClass())
 				{
 					if (Component->GetClass() != SrcClass)
 					{
@@ -1363,51 +2002,38 @@ namespace PCGExActorDelta
 				// Brand-new component is unregistered. Apply the delta first so
 				// RegisterComponent sees the populated state on its first init pass.
 				Internal::DeserializeObjectDelta(Component, CompBytes);
-				if (InScope)
-				{
-					InScope->RegisterOnClose(Component);
-				}
-				else
-				{
-					Component->RegisterComponent();
-				}
-			}
-			else if (InScope)
-			{
-				InScope->Touch(Component);
-				Internal::DeserializeObjectDelta(Component, CompBytes);
+				InScope.RegisterOnClose(Component);
 			}
 			else
 			{
-				// Writing directly to a registered component leaves the render proxy
-				// pointing at stale data (observed: splines rendering with no points
-				// after apply). FComponentReregisterContext unregisters on construct,
-				// re-registers on scope exit -- rebuilds the proxy from updated state.
-				FComponentReregisterContext ReregContext(Component);
+				// Writing to a registered component leaves its render proxy on stale data until it re-registers.
+				InScope.Touch(Component);
 				Internal::DeserializeObjectDelta(Component, CompBytes);
 			}
 		}
 
+		// After the property deltas, so a dynamic component an extension targets exists by now.
+		Internal::ApplyExtensionSection(InScope, Reader, TotalSize);
+
 		// Repair engine-managed invariants that the per-property delta cannot express
 		// (e.g. USplineComponent's Spline/SplineCurves aliasing in UE 5.7+).
-		if (InScope)
-		{
-			InScope->RequestFixups();
-		}
-		else
-		{
-			FixupRegistry::RunAll(Actor);
-		}
+		InScope.RequestFixups();
 	}
 
 	void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes)
 	{
-		ApplyDeltaBytes(Actor, DeltaBytes, nullptr);
+		if (!Actor || DeltaBytes.IsEmpty())
+		{
+			return;
+		}
+
+		FScopedActorWrite Scope(Actor);
+		ApplyDeltaBytes(Scope, DeltaBytes);
 	}
 
 	void ApplyPropertyDelta(FScopedActorWrite& InScope, const TArray<uint8>& DeltaBytes)
 	{
-		ApplyDeltaBytes(InScope.GetActor(), DeltaBytes, &InScope);
+		ApplyDeltaBytes(InScope, DeltaBytes);
 	}
 
 	uint32 HashDelta(const TArray<uint8>& DeltaBytes)
@@ -1418,4 +2044,6 @@ namespace PCGExActorDelta
 		}
 		return FCrc::MemCrc32(DeltaBytes.GetData(), DeltaBytes.Num());
 	}
+
+#pragma endregion
 }

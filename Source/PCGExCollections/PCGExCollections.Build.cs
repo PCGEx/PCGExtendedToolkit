@@ -73,6 +73,8 @@ public class PCGExCollections : ModuleRules
 					"UnrealEd",
 					"Slate",
 					"SlateCore",
+					// FBSPOps, for the brush delta extension.
+					"BSPUtils",
 				});
 		}
 	}
