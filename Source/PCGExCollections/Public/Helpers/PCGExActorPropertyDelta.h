@@ -55,7 +55,9 @@ namespace PCGExActorDelta
 	 * Serialize properties that differ from defaults for an actor AND its components.
 	 * Actor-level properties are diffed against the actor CDO.
 	 * Each instanced component is diffed against its archetype.
-	 * Returns empty array if actor and all components match defaults exactly.
+	 * Subobjects the instance owns but its defaults lack are recorded with their class and name, to be recreated on apply.
+	 * Matching delta extensions append their payloads (see FDeltaExtension).
+	 * Returns empty array if actor and all components match defaults exactly. Game thread only.
 	 *
 	 * Format is opaque -- use ApplyPropertyDelta to deserialize.
 	 *
@@ -70,9 +72,8 @@ namespace PCGExActorDelta
 	/**
 	 * Apply a previously serialized property delta to an actor and its components.
 	 * Components are matched by name. Missing/renamed components are safely skipped.
-	 *
-	 * After delta bytes are applied, any post-apply fixups registered via
-	 * RegisterPostApplyFixup() are invoked on matching components.
+	 * Runs inside its own FScopedActorWrite: written components re-register, then the post-apply fixups run,
+	 * once the whole delta is in. Game thread only.
 	 */
 	PCGEXCOLLECTIONS_API void ApplyPropertyDelta(AActor* Actor, const TArray<uint8>& DeltaBytes);
 
@@ -86,93 +87,100 @@ namespace PCGExActorDelta
 	PCGEXCOLLECTIONS_API uint32 HashDelta(const TArray<uint8>& DeltaBytes);
 
 	/**
-	 * Callback invoked on each component of the target actor after deltas are applied.
-	 *
-	 * Fixups exist to repair engine-managed invariants that a property delta cannot
-	 * express: aliased EditAnywhere fields the engine expects to stay consistent
-	 * (e.g. USplineComponent's SplineCurves and Spline in UE 5.7+), transient caches
-	 * that must be rebuilt (reparam tables, bounds), component-type-specific regen
-	 * triggers after state is restored, etc.
-	 *
-	 * A fixup fires for every component whose class IS or DERIVES FROM the registered
-	 * class. Fixups run regardless of whether the component had delta bytes applied --
-	 * the same inconsistencies can arise from archetype cloning alone.
-	 *
-	 * Archetype may be null when a component has no per-actor archetype (engine-managed
-	 * components). Fixups must tolerate that case.
-	 *
-	 * Typical registration from an IModuleInterface subclass; the handle's RAII
-	 * unregister fires when the owning module shuts down:
-	 *
-	 *    FPostApplyFixupHandle MyFixupHandle;
-	 *
-	 *    virtual void StartupModule() override
-	 *    {
-	 *        MyFixupHandle = PCGExActorDelta::RegisterPostApplyFixup(
-	 *            UMyComponent::StaticClass(),
-	 *            [](UActorComponent* C, UObject*) { ... });
-	 *    }
-	 *
-	 * Use the FSoftClassPath overload when you don't want a hard link to the target
-	 * component's module -- resolution is retried lazily, so the fixup stays dormant
-	 * in projects where the target class never loads:
-	 *
-	 *    MyFixupHandle = PCGExActorDelta::RegisterPostApplyFixup(
-	 *        FSoftClassPath(TEXT("/Script/OtherPlugin.UFooComponent")),
-	 *        [](UActorComponent* C, UObject*) { ... });
+	 * Runs on each component whose class is or derives from the registered one, once the whole delta is applied,
+	 * whether or not that component had bytes of its own. Repairs engine invariants a property delta cannot express
+	 * (aliased fields, transient caches). Archetype is null for components without a per-actor archetype.
 	 */
 	using FPostApplyFixup = TFunction<void(UActorComponent* Component, UObject* Archetype)>;
 
 	/**
-	 * RAII handle returned by RegisterPostApplyFixup. Destruction unregisters the fixup;
-	 * reassignment unregisters the previous registration first. Move-only.
-	 *
-	 * Hold as a member of a long-lived object (typically an IModuleInterface subclass)
-	 * so the registration's lifetime tracks the module's. A handle destroyed early
-	 * silently unregisters the fixup; a handle that outlives the registry (i.e. the
-	 * core module) is a contract violation the consumer is responsible for avoiding.
+	 * Writes the extension's payload for Source. Return false to write none. Ar is the delta writer: FNames and object
+	 * references serialize session-portable, as they do in the property delta.
 	 */
-	class PCGEXCOLLECTIONS_API FPostApplyFixupHandle
+	using FDeltaCapture = TFunction<bool(const UObject& Source, FArchive& Ar)>;
+
+	/**
+	 * Reads a payload Capture wrote at PayloadVersion. Ar holds that payload only, so an over-read sets Ar.IsError()
+	 * without reaching the rest of the delta: parse it whole before mutating Target. A component Target has already
+	 * been touched on InScope.
+	 */
+	using FDeltaApply = TFunction<void(UObject& Target, FArchive& Ar, uint32 PayloadVersion, FScopedActorWrite& InScope)>;
+
+	/**
+	 * Class-specific state the generic property delta cannot carry: data that lives in a custom Serialize, or
+	 * derived state that must be rebuilt. Registered against an actor or component class, it matches that class and
+	 * every class deriving from it. Every member is optional.
+	 *
+	 * Capture runs at SerializeActorDelta and Apply at ApplyPropertyDelta, after the property deltas and before the
+	 * scope closes. PostApply runs on components only, when the scope closes. ClaimedProperties are left out of the
+	 * generic delta of the matching classes, with any subobject they hold, because the extension owns them.
+	 * A callback cannot register an extension; one it unregisters goes once the callback returns.
+	 */
+	struct FDeltaExtension
+	{
+		/** Wire identity of the payload, unique among extensions that Capture or Apply. Convention: "Plugin.Name". */
+		FName Id;
+
+		/** Written with each payload; a payload newer than the registered Version is skipped. */
+		uint32 Version = 1;
+
+		FDeltaCapture Capture;
+		FDeltaApply Apply;
+		FPostApplyFixup PostApply;
+		TArray<FName> ClaimedProperties;
+	};
+
+	/**
+	 * RAII handle of a registration. Destruction unregisters it; reassignment unregisters the previous one first.
+	 * Move-only. Hold it on a long-lived object (typically the registering module); a handle that outlives this
+	 * module is a contract violation.
+	 */
+	class PCGEXCOLLECTIONS_API FDeltaExtensionHandle
 	{
 	public:
-		FPostApplyFixupHandle() = default;
-		~FPostApplyFixupHandle();
+		FDeltaExtensionHandle() = default;
+		~FDeltaExtensionHandle();
 
-		FPostApplyFixupHandle(FPostApplyFixupHandle&& Other) noexcept;
-		FPostApplyFixupHandle& operator=(FPostApplyFixupHandle&& Other) noexcept;
+		FDeltaExtensionHandle(FDeltaExtensionHandle&& Other) noexcept;
+		FDeltaExtensionHandle& operator=(FDeltaExtensionHandle&& Other) noexcept;
 
-		FPostApplyFixupHandle(const FPostApplyFixupHandle&) = delete;
-		FPostApplyFixupHandle& operator=(const FPostApplyFixupHandle&) = delete;
+		FDeltaExtensionHandle(const FDeltaExtensionHandle&) = delete;
+		FDeltaExtensionHandle& operator=(const FDeltaExtensionHandle&) = delete;
 
 		bool IsValid() const
 		{
 			return Id != 0;
 		}
 
-		/** Unregister early (before destruction). Safe to call multiple times. */
+		/** Unregister early. Safe to call multiple times. */
 		void Reset();
 
 	private:
 		uint64 Id = 0;
 
-		friend class FPostApplyFixupHandleFactory;
+		friend class FDeltaExtensionHandleFactory;
 	};
 
+	using FPostApplyFixupHandle = FDeltaExtensionHandle;
+
 	/**
-	 * Register a fixup for components whose class is or derives from ComponentClass.
-	 * Returns a handle; hold it for the duration the fixup should remain active.
-	 * Dropping the handle unregisters the fixup.
+	 * Register an extension for Class and its subclasses. Returns an invalid handle when the extension is empty, has
+	 * Capture or Apply without an Id, or reuses the Id of a live registration. Game thread only.
 	 */
+	[[nodiscard]] PCGEXCOLLECTIONS_API FDeltaExtensionHandle RegisterDeltaExtension(UClass* Class, FDeltaExtension Extension);
+
+	/**
+	 * Same, against a soft class path resolved lazily on each capture and apply, so the registering module needs no link
+	 * to the target's: the extension stays dormant in projects where that class never loads, and resolves again after
+	 * its class is reloaded.
+	 */
+	[[nodiscard]] PCGEXCOLLECTIONS_API FDeltaExtensionHandle RegisterDeltaExtension(const FSoftClassPath& ClassPath, FDeltaExtension Extension);
+
+	/** A PostApply-only extension on ComponentClass. */
 	[[nodiscard]] PCGEXCOLLECTIONS_API FPostApplyFixupHandle RegisterPostApplyFixup(
 		UClass* ComponentClass, FPostApplyFixup Fixup);
 
-	/**
-	 * Register a fixup against a soft class path. Resolution is lazy: if the target
-	 * class isn't loaded at registration time, resolution is retried on each apply
-	 * invocation until successful. Use this form when the consuming module must not
-	 * hard-link against the target module -- the fixup simply never fires in projects
-	 * where the target class never loads.
-	 */
+	/** A PostApply-only extension on a soft component class path. */
 	[[nodiscard]] PCGEXCOLLECTIONS_API FPostApplyFixupHandle RegisterPostApplyFixup(
 		const FSoftClassPath& ClassPath, FPostApplyFixup Fixup);
 }
