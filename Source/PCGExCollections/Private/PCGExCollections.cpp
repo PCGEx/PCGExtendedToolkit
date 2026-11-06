@@ -13,6 +13,7 @@
 
 #if WITH_EDITOR
 #include "Editor.h"
+#include "Helpers/PCGExBrushDeltaExtension.h"
 #include "Styling/AppStyle.h"
 #include "UObject/PackageReload.h"
 
@@ -82,6 +83,8 @@ void FPCGExCollectionsModule::StartupModule()
 	IPCGExLegacyModuleInterface::StartupModule();
 	PCGExComponentFixups::RegisterBuiltins();
 #if WITH_EDITOR
+	PCGExBrushDeltaExtension::Register();
+
 	// Level export handlers read their class default objects at registration, so this cannot ride a
 	// static initializer either. Out-of-module handlers register from their own StartupModule.
 	PCGExLevelExport::RegisterBuiltinHandlers();
@@ -103,6 +106,7 @@ void FPCGExCollectionsModule::ShutdownModule()
 	// Release built-in fixup handles before the delta registry goes out of scope.
 	PCGExComponentFixups::UnregisterBuiltins();
 #if WITH_EDITOR
+	PCGExBrushDeltaExtension::Unregister();
 	PCGExLevelExport::UnregisterBuiltinHandlers();
 #endif
 	IPCGExLegacyModuleInterface::ShutdownModule();

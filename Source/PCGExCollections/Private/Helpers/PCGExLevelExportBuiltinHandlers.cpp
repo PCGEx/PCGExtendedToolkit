@@ -761,6 +761,7 @@ void UPCGExActorExportHandler::Collect(const FPCGExExportCandidate& Candidate, c
 		{
 			FPCGExActorCollectionEntry& Entry = static_cast<FPCGExActorCollectionEntry&>(Base);
 			Entry.Actor = TSoftClassPtr<AActor>(Key.ClassPath);
+			Entry.bPointIsActorTransform = true;
 			Entry.Tags = EffectiveTags;
 			Entry.Tags.Sort(FNameLexicalLess());
 			if (!DeltaBytes.IsEmpty())

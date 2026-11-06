@@ -62,6 +62,10 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	UPROPERTY()
 	bool bEditorOnly = false;
 
+	/** Set by level export: points hold the captured actor's own transform, put on the root as is when spawned. */
+	UPROPERTY()
+	bool bPointIsActorTransform = false;
+
 	/** Cached: whether the actor CDO has any UPCGComponent. */
 	UPROPERTY()
 	bool bHasPCGComponent = false;

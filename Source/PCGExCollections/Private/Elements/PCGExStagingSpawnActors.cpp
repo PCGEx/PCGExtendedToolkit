@@ -579,6 +579,11 @@ namespace PCGExStagingSpawnActors
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.Template = Cast<AActor>(ActorClass->GetDefaultObject());
 			SpawnParams.SpawnCollisionHandlingOverride = Settings->CollisionHandling;
+			if (ActorEntry->bPointIsActorTransform)
+			{
+				// The engine default multiplies the native root's default relative transform in; a captured one already has it.
+				SpawnParams.TransformScaleMethod = ESpawnActorScaleMethod::OverrideRootScale;
+			}
 			// Spawn into the target actor's level so the spawned actor is serialized with the
 			// same .umap as its parent (mirrors UPCGActorHelpers::SpawnDefaultActor and lets
 			// per-point root actors in sublevels keep their spawned children in those sublevels).
@@ -626,8 +631,9 @@ namespace PCGExStagingSpawnActors
 		}
 
 		// The PCG point stays the source of truth for the transform, whatever construction scripts or fixups did to
-		// the root. Compared first: SetActorTransform warns about a non-movable root even with nothing to move.
-		if (bWroteProperties && !SpawnedActor->GetActorTransform().Equals(SpawnTransform))
+		// the root; a captured actor's always. Compared first: SetActorTransform warns about a non-movable root even
+		// with nothing to move.
+		if ((bWroteProperties || ActorEntry->bPointIsActorTransform) && !SpawnedActor->GetActorTransform().Equals(SpawnTransform))
 		{
 			SpawnedActor->SetActorTransform(SpawnTransform);
 		}
