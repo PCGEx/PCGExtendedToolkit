@@ -55,9 +55,9 @@ namespace PCGExActorDelta
 	 * Serialize properties that differ from defaults for an actor AND its components.
 	 * Actor-level properties are diffed against the actor CDO.
 	 * Each instanced component is diffed against its archetype.
-	 * Subobjects the instance owns but its defaults lack are recorded with their class, to be recreated on apply.
+	 * Subobjects the instance owns but its defaults lack are recorded with their class and name, to be recreated on apply.
 	 * Matching delta extensions append their payloads (see FDeltaExtension).
-	 * Returns empty array if actor and all components match defaults exactly.
+	 * Returns empty array if actor and all components match defaults exactly. Game thread only.
 	 *
 	 * Format is opaque -- use ApplyPropertyDelta to deserialize.
 	 *
@@ -113,8 +113,8 @@ namespace PCGExActorDelta
 	 *
 	 * Capture runs at SerializeActorDelta and Apply at ApplyPropertyDelta, after the property deltas and before the
 	 * scope closes. PostApply runs on components only, when the scope closes. ClaimedProperties are left out of the
-	 * generic delta of the matching classes (and of their subobjects' records), because the extension owns them.
-	 * Callbacks must not register or unregister extensions.
+	 * generic delta of the matching classes, with any subobject they hold, because the extension owns them.
+	 * A callback cannot register an extension; one it unregisters goes once the callback returns.
 	 */
 	struct FDeltaExtension
 	{
@@ -171,7 +171,8 @@ namespace PCGExActorDelta
 
 	/**
 	 * Same, against a soft class path resolved lazily on each capture and apply, so the registering module needs no link
-	 * to the target's: the extension stays dormant in projects where that class never loads.
+	 * to the target's: the extension stays dormant in projects where that class never loads, and resolves again after
+	 * its class is reloaded.
 	 */
 	[[nodiscard]] PCGEXCOLLECTIONS_API FDeltaExtensionHandle RegisterDeltaExtension(const FSoftClassPath& ClassPath, FDeltaExtension Extension);
 

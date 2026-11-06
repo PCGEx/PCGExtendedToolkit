@@ -62,8 +62,7 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 	UPROPERTY()
 	bool bEditorOnly = false;
 
-	/** Set by level export: a point holds the captured actor's own transform, so Spawn Actors puts it on the root as is
-	 *  instead of composing it with the class's default root transform. */
+	/** Set by level export: points hold the captured actor's own transform, put on the root as is when spawned. */
 	UPROPERTY()
 	bool bPointIsActorTransform = false;
 

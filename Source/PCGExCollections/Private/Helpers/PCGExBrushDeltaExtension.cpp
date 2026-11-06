@@ -23,7 +23,7 @@ namespace PCGExBrushDeltaExtension
 	// Materials are left out: the editor nulls them on volumes. FPoly's constructor defaults every other field.
 	constexpr uint32 PayloadVersion = 1;
 
-	// Smallest poly record: flags, four vectors, a vertex count and an empty name.
+	// Smallest poly record: flags, four vectors, a vertex count and a string length (names travel as strings).
 	constexpr int64 MinPolyBytes = sizeof(uint32) + 4 * sizeof(FVector3f) + sizeof(uint32) + sizeof(int32);
 
 	TArray<PCGExActorDelta::FDeltaExtensionHandle>& GetHandles()
