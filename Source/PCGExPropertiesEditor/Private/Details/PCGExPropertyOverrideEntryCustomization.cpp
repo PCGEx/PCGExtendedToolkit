@@ -7,12 +7,15 @@
 #include "IDetailChildrenBuilder.h"
 #include "IDetailPropertyRow.h"
 #include "IPropertyUtilities.h"
+#include "IStructureDataProvider.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExProperty.h"
 #include "PCGExPropertyCollectionComponent.h"
 #include "PCGExPropertySchema.h"
 #include "PCGExPropertyType_Struct.h"
+#include "PropertyEditorModule.h"
 #include "PropertyHandle.h"
+#include "Modules/ModuleManager.h"
 #include "ScopedTransaction.h"
 #include "StructUtilsDelegates.h"
 #include "Details/PCGExEditorCustomizationUtils.h"
@@ -593,19 +596,35 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 			FPCGExInlineWidgetRegistry::AddChoicesRow(ChildBuilder, State, ValueHandlePtr.ToSharedRef(), IsEnabledAttr, Choices.EditChoices);
 
 			NestedScope = MakeShared<FStructOnScope>(InnerInnerStruct, InnerInnerMemory);
-			for (TFieldIterator<FProperty> It(InnerInnerStruct); It; ++It)
+			const TSharedRef<FStructOnScopeStructureDataProvider> NestedProvider = MakeShared<FStructOnScopeStructureDataProvider>(NestedScope);
+
+			// The struct's nodes hang under the entry's Value node, so edits reach the owner's own Pre/PostEditChange.
+			ValueHandlePtr->RemoveChildren();
+
+			// A customized struct (FGameplayTag...) edits only through its type customization, which runs on a row whose
+			// property IS the struct: flattened, its members can be edit-const. Same split as FInstancedStructDataDetails.
+			const FPropertyEditorModule& PropertyEditor = FModuleManager::GetModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
+			if (PropertyEditor.IsCustomizedStruct(InnerInnerStruct, FCustomPropertyTypeLayoutMap()))
 			{
-				// CPF_Edit filter: AddExternalStructureProperty returns null on non-editable
-				// fields and the dereference would crash. Arbitrary user structs may include
-				// VisibleAnywhere/no-spec fields, unlike the FPCGExProperty_* set.
-				if (!It->HasAnyPropertyFlags(CPF_Edit))
-				{
-					continue;
-				}
-				if (IDetailPropertyRow* RowPtr = ChildBuilder.AddExternalStructureProperty(NestedScope.ToSharedRef(), It->GetFName()))
+				if (IDetailPropertyRow* RowPtr = ChildBuilder.AddChildStructure(
+					ValueHandlePtr.ToSharedRef(), NestedProvider, InnerInnerStruct->GetFName(), InnerInnerStruct->GetDisplayNameText()))
 				{
 					RowPtr->IsEnabled(IsEnabledAttr);
 					RowPtr->Visibility(FPCGExInlineWidgetRegistry::VisibleUnlessLocked(State));
+				}
+			}
+			else
+			{
+				// Field handles come back already filtered to what the panel shows (CPF_Edit, instance-editable).
+				for (const TSharedPtr<IPropertyHandle>& FieldHandle : ValueHandlePtr->AddChildStructure(NestedProvider))
+				{
+					if (!FieldHandle.IsValid())
+					{
+						continue;
+					}
+					IDetailPropertyRow& FieldRow = ChildBuilder.AddProperty(FieldHandle.ToSharedRef());
+					FieldRow.IsEnabled(IsEnabledAttr);
+					FieldRow.Visibility(FPCGExInlineWidgetRegistry::VisibleUnlessLocked(State));
 				}
 			}
 		}
