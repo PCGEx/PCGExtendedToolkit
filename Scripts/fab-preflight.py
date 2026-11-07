@@ -1303,6 +1303,45 @@ def check_log_category_include(tree):
     return out
 
 
+API_MACRO_RE = re.compile(r'\b([A-Z][A-Z0-9_]*_API)\b')
+QUOTED_INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.M)
+
+
+def includes_outside_tree(tree, path):
+    """True if path quotes an #include that no project header provides (an engine or other-plugin header).
+
+    Matched on the full include spelling, not Tree.resolve's basename fallback: a project Platform.h must not
+    stand in for "HAL/Platform.h".
+    """
+    for inc in QUOTED_INCLUDE_RE.findall(tree.stripped(path)):
+        spelled = "/" + inc.replace("\\", "/").lower().lstrip("./")
+        if not any(c.lower().endswith(spelled) for c in tree.by_name.get(os.path.basename(inc).lower(), [])):
+            return True
+    return False
+
+
+@check("api-macro-include", "error",
+       "A *_API macro is used while no engine header is in the file's include closure. UBT defines MODULE_API as "
+       "DLLEXPORT / DLLIMPORT, which only HAL/Platform.h defines, so a header that includes nothing but std and "
+       "project headers parses 'class MODULE_API FFoo' as an unknown class DLLEXPORT (C2079). The shared PCH and "
+       "Unity Build hide it; non-unity, no-PCH and static-analysis builds compile the header cold.")
+def check_api_macro_include(tree):
+    out = []
+    for p in tree.headers + tree.sources:
+        lines = tree.stripped(p).split("\n")
+        hit = next(((i, m.group(1)) for i, l in enumerate(lines) if not l.lstrip().startswith("#")
+                    for m in [API_MACRO_RE.search(l)] if m), None)
+        if not hit:
+            continue
+        if any(includes_outside_tree(tree, f) for f in tree.closure(p)):
+            continue
+        out.append(Finding("api-macro-include", "error", p, hit[0] + 1,
+                           f"'{hit[1]}' expands to DLLEXPORT / DLLIMPORT, but no engine header is in the "
+                           "include closure",
+                           'add #include "HAL/Platform.h" (or CoreMinimal.h)'))
+    return out
+
+
 # Global identifiers <MacTypes.h> (CoreServices, reached through any CoreFoundation / Cocoa include
 # on Mac) already defines as typedefs or structs. A global-scope namespace, type, alias, function or
 # macro with one of these names is "redefinition as a different kind of symbol" on Mac alone
@@ -3075,6 +3114,42 @@ SELFTEST.update({
         "void LinkNegativeUse() { FLinkGuidance Guidance; (void)Guidance; }\n"),
 })
 
+# api-macro-include: ApiCold.h reaches only std and project headers (the vendored-library shape that broke a
+# non-unity static-analysis build, 2026-11-05). The project Platform.h must not satisfy "HAL/Platform.h".
+SELFTEST.update({
+    "ApiInc/ModApi/ModApi.Build.cs": "// module marker\n",
+    "ApiInc/ModApi/Public/ApiLocal.h": "#pragma once\n#include <vector>\n",
+    "ApiInc/ModApi/Public/Platform.h": "#pragma once\n",
+    "ApiInc/ModApi/Public/ApiCold.h": (
+        "#pragma once\n"
+        "#include <queue>\n"
+        '#include "ApiLocal.h"\n'
+        '#include "Platform.h"\n'
+        "namespace ApiLib\n"
+        "{\n"
+        "\tclass MODAPI_API FCold\n"
+        "\t{\n"
+        "\t};\n"
+        "}\n"),
+    "ApiInc/ModApi/Public/ApiNegativeDirect.h": (
+        "#pragma once\n"
+        '#include "HAL/Platform.h"\n'
+        "class MODAPI_API FDirect\n"
+        "{\n"
+        "};\n"),
+    "ApiInc/ModApi/Public/ApiNegativeBridge.h": '#pragma once\n#include "CoreMinimal.h"\n',
+    "ApiInc/ModApi/Public/ApiNegativeTransitive.h": (
+        "#pragma once\n"
+        '#include "ApiNegativeBridge.h"\n'
+        "MODAPI_API void Transitive();\n"),
+    "ApiInc/ModApi/Public/ApiNegativeMacroOnly.h": (
+        "#pragma once\n"
+        "#define UE_API MODAPI_API\n"
+        "// MODAPI_API in a comment\n"
+        '#include "ApiLocal.h"\n'
+        "#undef UE_API\n"),
+})
+
 # check -> minimum findings on the defect fixtures. A multi-pattern detector must fire once per
 # pattern; "fires at all" would let a single dead pattern hide behind its siblings.
 SELFTEST_EXPECT = {
@@ -3085,7 +3160,7 @@ SELFTEST_EXPECT = {
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
     "upackage-as-outer": 1, "editor-only-call": 15, "weakobjectptr-incomplete": 16,
-    "transitive-link-dep": 1,
+    "transitive-link-dep": 1, "api-macro-include": 6,
 }
 # check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
 # pre-flight from failing on a real defect.

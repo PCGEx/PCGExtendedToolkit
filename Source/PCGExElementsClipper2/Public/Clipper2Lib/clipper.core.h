@@ -25,37 +25,6 @@
 
 namespace PCGExClipper2Lib
 {
-#if (defined(__cpp_exceptions) && __cpp_exceptions) || (defined(__EXCEPTIONS) && __EXCEPTIONS)
-
-	class Clipper2Exception : public std::exception
-	{
-	public:
-		explicit Clipper2Exception(const char* description)
-			: m_descr(description)
-		{
-		}
-
-		virtual const char* what() const noexcept override
-		{
-			return m_descr.c_str();
-		}
-
-	private:
-		std::string m_descr;
-	};
-
-	static const char* precision_error =
-		"Precision exceeds the permitted range";
-	static const char* range_error =
-		"Values exceed permitted range";
-	static const char* scale_error =
-		"Invalid scale (either 0 or too large)";
-	static const char* non_pair_error =
-		"There must be 2 values for each coordinate";
-	static const char* undefined_error =
-		"There is an undefined error in Clipper2";
-#endif
-
 	// error codes (2^n)
 	constexpr int precision_error_i = 1;  // non-fatal
 	constexpr int scale_error_i = 2;      // non-fatal
@@ -77,28 +46,9 @@ namespace PCGExClipper2Lib
 
 	static constexpr double MAX_DBL = (std::numeric_limits<double>::max)();
 
-	static void DoError([[maybe_unused]] int error_code)
+	// Never throws, whatever the including module's exception settings: errors surface through error codes only.
+	inline void DoError([[maybe_unused]] int error_code)
 	{
-#if (defined(__cpp_exceptions) && __cpp_exceptions) || (defined(__EXCEPTIONS) && __EXCEPTIONS)
-		switch (error_code)
-		{
-		case precision_error_i:
-			throw Clipper2Exception(precision_error);
-		case scale_error_i:
-			throw Clipper2Exception(scale_error);
-		case non_pair_error_i:
-			throw Clipper2Exception(non_pair_error);
-		case undefined_error_i:
-			throw Clipper2Exception(undefined_error);
-		case range_error_i:
-			throw Clipper2Exception(range_error);
-		// Should never happen, but adding this to stop a compiler warning
-		default:
-			throw Clipper2Exception("Unknown error");
-		}
-#else
-		++error_code; // only to stop compiler warning
-#endif
 	}
 
 	// can we call std::round on T? (default false) (#824)
@@ -783,7 +733,7 @@ namespace PCGExClipper2Lib
 			return;
 		}
 		error_code |= precision_error_i; // non-fatal error
-		DoError(precision_error_i);      // does nothing when exceptions are disabled
+		DoError(precision_error_i);
 		precision = precision > 0 ? CLIPPER2_MAX_DEC_PRECISION : -CLIPPER2_MAX_DEC_PRECISION;
 	}
 
