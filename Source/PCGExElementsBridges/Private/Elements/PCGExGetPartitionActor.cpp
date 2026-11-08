@@ -242,6 +242,12 @@ bool FPCGExGetPartitionActorElement::Boot(FPCGExContext* InContext) const
 		return true;
 	}
 
+	// In Input mode, Auto 2D follows each referenced partition's grid, not the executing component.
+	const bool bAuto2DFromComponent = Settings->DescriptorSource == EPCGExPartitionDescriptorSource::ExecutingComponent;
+	PCGExPartitionGrid::FComponentReads Reads;
+	for (const FPCGExPartitionQuery& Query : Settings->Partitions) { Reads.Add(Query, bAuto2DFromComponent); }
+	PCGExPartitionGrid::WarnIfComponentless(Reads, Source, Context);
+
 	switch (Settings->DescriptorSource)
 	{
 	case EPCGExPartitionDescriptorSource::ExecutingComponent:
