@@ -26,39 +26,14 @@
 // build cannot collide them with same-named helpers from other translation units.
 namespace PCGExPartitionIdentifier
 {
-	FString MakeId(const PCGExPartitionGrid::FCell& Info, const UPCGExPartitionIdentifierSettings* Settings, const bool bRuntime)
+	FString MakeIdPrefix(const UPCGExPartitionIdentifierSettings* Settings, const bool bRuntime)
 	{
-		// When matching the engine actor name, swap in the engine prefix. The editor-only
-		// DataLayer/HLOD hash suffix is intentionally not reproduced.
-		const FString Prefix = Settings->bMatchEnginePartitionActorName
-			                       ? FString(bRuntime ? TEXT("PCGRuntimePartitionGridActor_") : TEXT("PCGPartitionGridActor_"))
-			                       : Settings->IdPrefix;
-		return PCGExPartitionGrid::FormatId(Info, Prefix);
+		return PCGExPartitionGrid::ResolveIdPrefix(Settings->bMatchEnginePartitionActorName, bRuntime, Settings->IdPrefix);
 	}
 
 	FName SuffixedName(const FName Base, const FName Suffix)
 	{
 		return Suffix.IsNone() ? Base : FName(Base.ToString() + Suffix.ToString());
-	}
-
-	// Validates an attribute name and guards against duplicates within one output set (domain).
-	// A duplicate would, via FindOrCreateAttribute's type-mismatch overwrite, dangle an earlier
-	// attribute pointer -- so we skip-and-warn instead.
-	bool AcceptName(const FName Name, TSet<FName>& Used, FPCGContext* Context)
-	{
-		if (Name.IsNone() || !FPCGMetadataAttributeBase::IsValidName(Name))
-		{
-			PCGLog::LogWarningOnGraph(FText::FromString(FString::Printf(TEXT("Partition Identifier: output attribute name '%s' is invalid; that output is skipped."), *Name.ToString())), Context);
-			return false;
-		}
-		bool bDuplicate = false;
-		Used.Add(Name, &bDuplicate);
-		if (bDuplicate)
-		{
-			PCGLog::LogWarningOnGraph(FText::FromString(FString::Printf(TEXT("Partition Identifier: output attribute name '%s' is used by more than one output; the duplicate is skipped."), *Name.ToString())), Context);
-			return false;
-		}
-		return true;
 	}
 
 	// Executing Component mode: introspect the current cell (+ relatives) and emit an attribute set.
@@ -89,6 +64,7 @@ namespace PCGExPartitionIdentifier
 		}
 
 		TSet<FName> Used;
+		const FString IdPrefix = MakeIdPrefix(Settings, bRuntime);
 
 		if (Settings->Layout == EPCGExPartitionLayout::Columns)
 		{
@@ -96,13 +72,13 @@ namespace PCGExPartitionIdentifier
 			auto Emit = [&]<typename T>(const FName Base, const FName Suffix, const T& Value)
 			{
 				const FName Name = SuffixedName(Base, Suffix);
-				if (AcceptName(Name, Used, Context)) { PCGExData::Helpers::SetDataValue<T>(ParamData, Name, Value); }
+				if (PCGExPartitionGrid::AcceptOutputName(Name, Used, Context)) { PCGExData::Helpers::SetDataValue<T>(ParamData, Name, Value); }
 			};
 
 			for (const FPCGExPartitionGrid& Cfg : Settings->Grids)
 			{
 				const PCGExPartitionGrid::FCell Info = PCGExPartitionGrid::MakeCell(Cfg, Anchor, Component);
-				if (Settings->bOutputPartitionId) { Emit(Settings->PartitionIdAttributeName, Cfg.Suffix, MakeId(Info, Settings, bRuntime)); }
+				if (Settings->bOutputPartitionId) { Emit(Settings->PartitionIdAttributeName, Cfg.Suffix, PCGExPartitionGrid::FormatId(Info, IdPrefix)); }
 				if (Settings->bOutputGridSize) { Emit(Settings->GridSizeAttributeName, Cfg.Suffix, static_cast<int32>(Info.GridSize)); }
 				if (Settings->Outputs.bGridCoord) { Emit(Settings->Outputs.GridCoordAttributeName, Cfg.Suffix, Info.CoordAsVector()); }
 				if (Settings->Outputs.bCellCenter) { Emit(Settings->Outputs.CellCenterAttributeName, Cfg.Suffix, Info.CellCenter()); }
@@ -120,35 +96,21 @@ namespace PCGExPartitionIdentifier
 		FPCGMetadataDomain* Domain = Metadata->GetMetadataDomain(PCGMetadataDomainID::Elements);
 		check(Domain);
 
-		FPCGMetadataAttribute<FString>* IdAttr = nullptr;
-		FPCGMetadataAttribute<int32>* GridSizeAttr = nullptr;
-		FPCGMetadataAttribute<FVector>* CoordAttr = nullptr;
-		FPCGMetadataAttribute<FVector>* CenterAttr = nullptr;
-		FPCGMetadataAttribute<FVector>* MinAttr = nullptr;
-		FPCGMetadataAttribute<FVector>* MaxAttr = nullptr;
-		FPCGMetadataAttribute<FString>* LabelAttr = nullptr;
+		PCGExPartitionGrid::FCellColumns Columns;
+		Columns.IdPrefix = IdPrefix;
+		if (Settings->bOutputPartitionId && PCGExPartitionGrid::AcceptOutputName(Settings->PartitionIdAttributeName, Used, Context)) { Columns.PartitionId = Settings->PartitionIdAttributeName; }
+		if (Settings->bOutputGridSize && PCGExPartitionGrid::AcceptOutputName(Settings->GridSizeAttributeName, Used, Context)) { Columns.GridSize = Settings->GridSizeAttributeName; }
+		PCGExPartitionGrid::AddCellColumns(Settings->Outputs, Columns, Used, Context);
+		const bool bLabel = Settings->Outputs.bRowLabel && PCGExPartitionGrid::AcceptOutputName(Settings->Outputs.RowLabelAttributeName, Used, Context);
 
-		if (Settings->bOutputPartitionId && AcceptName(Settings->PartitionIdAttributeName, Used, Context)) { IdAttr = Domain->FindOrCreateAttribute<FString>(Settings->PartitionIdAttributeName, FString(), false, true); }
-		if (Settings->bOutputGridSize && AcceptName(Settings->GridSizeAttributeName, Used, Context)) { GridSizeAttr = Domain->FindOrCreateAttribute<int32>(Settings->GridSizeAttributeName, 0, false, true); }
-		if (Settings->Outputs.bGridCoord && AcceptName(Settings->Outputs.GridCoordAttributeName, Used, Context)) { CoordAttr = Domain->FindOrCreateAttribute<FVector>(Settings->Outputs.GridCoordAttributeName, FVector::ZeroVector, false, true); }
-		if (Settings->Outputs.bCellCenter && AcceptName(Settings->Outputs.CellCenterAttributeName, Used, Context)) { CenterAttr = Domain->FindOrCreateAttribute<FVector>(Settings->Outputs.CellCenterAttributeName, FVector::ZeroVector, false, true); }
-		if (Settings->Outputs.bCellBounds)
-		{
-			if (AcceptName(Settings->Outputs.CellMinAttributeName, Used, Context)) { MinAttr = Domain->FindOrCreateAttribute<FVector>(Settings->Outputs.CellMinAttributeName, FVector::ZeroVector, false, true); }
-			if (AcceptName(Settings->Outputs.CellMaxAttributeName, Used, Context)) { MaxAttr = Domain->FindOrCreateAttribute<FVector>(Settings->Outputs.CellMaxAttributeName, FVector::ZeroVector, false, true); }
-		}
-		if (Settings->Outputs.bRowLabel && AcceptName(Settings->Outputs.RowLabelAttributeName, Used, Context)) { LabelAttr = Domain->FindOrCreateAttribute<FString>(Settings->Outputs.RowLabelAttributeName, FString(), false, true); }
+		const PCGExPartitionGrid::FCellRowWriter Rows(Domain, Columns);
+		FPCGMetadataAttribute<FString>* LabelAttr = bLabel ? Domain->FindOrCreateAttribute<FString>(Settings->Outputs.RowLabelAttributeName, FString(), false, true) : nullptr;
 
 		for (const FPCGExPartitionGrid& Cfg : Settings->Grids)
 		{
 			const PCGExPartitionGrid::FCell Info = PCGExPartitionGrid::MakeCell(Cfg, Anchor, Component);
 			const PCGMetadataEntryKey Key = Metadata->AddEntry();
-			if (IdAttr) { IdAttr->SetValue(Key, MakeId(Info, Settings, bRuntime)); }
-			if (GridSizeAttr) { GridSizeAttr->SetValue(Key, static_cast<int32>(Info.GridSize)); }
-			if (CoordAttr) { CoordAttr->SetValue(Key, Info.CoordAsVector()); }
-			if (CenterAttr) { CenterAttr->SetValue(Key, Info.CellCenter()); }
-			if (MinAttr) { MinAttr->SetValue(Key, Info.CellMinCorner()); }
-			if (MaxAttr) { MaxAttr->SetValue(Key, Info.CellMaxCorner()); }
+			Rows.Write(Key, Info);
 			if (LabelAttr) { LabelAttr->SetValue(Key, Cfg.Suffix.IsNone() ? FString() : Cfg.Suffix.ToString()); }
 		}
 	}
@@ -227,13 +189,13 @@ namespace PCGExPartitionIdentifier
 				if (Settings->bOutputGridSize)
 				{
 					const FName Name = SuffixedName(Settings->GridSizeAttributeName, Cfg.Suffix);
-					if (AcceptName(Name, UsedData, Context)) { PCGExData::Helpers::SetDataValue<int32>(OutPointData, Name, static_cast<int32>(GridSize)); }
+					if (PCGExPartitionGrid::AcceptOutputName(Name, UsedData, Context)) { PCGExData::Helpers::SetDataValue<int32>(OutPointData, Name, static_cast<int32>(GridSize)); }
 				}
 
 				if (Settings->bOutputPartitionId)
 				{
 					const FName Name = SuffixedName(Settings->PartitionIdAttributeName, Cfg.Suffix);
-					if (AcceptName(Name, UsedElements, Context))
+					if (PCGExPartitionGrid::AcceptOutputName(Name, UsedElements, Context))
 					{
 						FPCGMetadataAttribute<FString>* IdAttr = Domain->FindOrCreateAttribute<FString>(Name, FString(), false, true);
 						if (IdAttr) { Columns.Emplace(GridSize, b2D, Cfg.Offset, IdAttr); }
@@ -250,6 +212,7 @@ namespace PCGExPartitionIdentifier
 			}
 
 			TPCGValueRange<PCGMetadataEntryKey> MetadataEntries = OutPointData->GetMetadataEntryValueRange(/*bAllocate=*/true);
+			const FString IdPrefix = MakeIdPrefix(Settings, bRuntime);
 
 			// Sequential: InitializeOnSet and SetValue both mutate shared metadata structures,
 			// so this loop must not be parallelized over points.
@@ -259,7 +222,7 @@ namespace PCGExPartitionIdentifier
 				Domain->InitializeOnSet(MetadataEntries[i]);
 				for (const FColumn& Column : Columns)
 				{
-					Column.IdAttr->SetValue(MetadataEntries[i], MakeId(PCGExPartitionGrid::MakeCell(Column.GridSize, Column.b2D, Column.Offset, Positions[i]), Settings, bRuntime));
+					Column.IdAttr->SetValue(MetadataEntries[i], PCGExPartitionGrid::FormatId(PCGExPartitionGrid::MakeCell(Column.GridSize, Column.b2D, Column.Offset, Positions[i]), IdPrefix));
 				}
 			}
 

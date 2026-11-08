@@ -12,7 +12,8 @@ struct FSlateFontInfo;
 struct FSlateColor;
 
 /** Inline editor for FPCGExPartitionQuery: a read-only summary + cell Offset on the header, the grid-size
- *  resolution / 2D mode / explicit grid / size offset folded into a single child row. */
+ *  resolution / 2D mode / explicit grid / size offset folded into a single child row.
+ *  meta = (HideCellOffset) drops the Offset: the header shows the property name and the grid summary. */
 class FPCGExPartitionQueryCustomization : public IPropertyTypeCustomization
 {
 public:
