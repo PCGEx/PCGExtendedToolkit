@@ -11,6 +11,7 @@
 #include "PCGGraphExecutionStateInterface.h"
 #include "Data/PCGBasePointData.h"
 #include "Data/PCGExDataHelpers.h"
+#include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/PCGMetadataAttribute.h"
@@ -34,6 +35,13 @@ namespace PCGExPartitionIdentifier
 	FName SuffixedName(const FName Base, const FName Suffix)
 	{
 		return Suffix.IsNone() ? Base : FName(Base.ToString() + Suffix.ToString());
+	}
+
+	void WarnIfComponentless(FPCGContext* Context, const UPCGExPartitionIdentifierSettings* Settings, const IPCGGraphExecutionSource* Source)
+	{
+		PCGExPartitionGrid::FComponentReads Reads;
+		for (const FPCGExPartitionGrid& Cfg : Settings->Grids) { Reads.Add(Cfg); }
+		PCGExPartitionGrid::WarnIfComponentless(Reads, Source, Context);
 	}
 
 	// Executing Component mode: introspect the current cell (+ relatives) and emit an attribute set.
@@ -62,6 +70,8 @@ namespace PCGExPartitionIdentifier
 			PCGLog::LogWarningOnGraph(FTEXT("Partition Identifier (Executing Component): the execution source has no valid bounds; cannot determine the current partition."), Context);
 			return;
 		}
+
+		WarnIfComponentless(Context, Settings, Source);
 
 		TSet<FName> Used;
 		const FString IdPrefix = MakeIdPrefix(Settings, bRuntime);
@@ -118,9 +128,11 @@ namespace PCGExPartitionIdentifier
 	// Input Positions mode: classify each input point into one id column per grid entry
 	// (per-point, Elements domain); grid sizes are data-level and go on the @Data domain.
 	void ExecutePositions(
-		FPCGContext* Context, const UPCGExPartitionIdentifierSettings* Settings,
+		FPCGContext* Context, const UPCGExPartitionIdentifierSettings* Settings, const IPCGGraphExecutionSource* Source,
 		const UPCGComponent* Component, const bool bRuntime)
 	{
+		WarnIfComponentless(Context, Settings, Source);
+
 		const TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
 
 		for (const FPCGTaggedData& Input : Inputs)
@@ -211,18 +223,22 @@ namespace PCGExPartitionIdentifier
 				continue;
 			}
 
+			// One batch for every entry InitializeOnSet would create, rather than a lock per point.
 			TPCGValueRange<PCGMetadataEntryKey> MetadataEntries = OutPointData->GetMetadataEntryValueRange(/*bAllocate=*/true);
-			const FString IdPrefix = MakeIdPrefix(Settings, bRuntime);
+			PCGExMetaHelpers::InitializeMetadataEntries(OutPointData->MutableMetadata(), MetadataEntries, /*bConservative=*/true);
 
-			// Sequential: InitializeOnSet and SetValue both mutate shared metadata structures,
-			// so this loop must not be parallelized over points.
 			const int32 NumPoints = FMath::Min(OutPointData->GetNumPoints(), Positions.Num());
-			for (int32 i = 0; i < NumPoints; ++i)
+			TArray<PCGMetadataEntryKey> EntryKeys;
+			EntryKeys.SetNumUninitialized(NumPoints);
+			for (int32 i = 0; i < NumPoints; ++i) { EntryKeys[i] = MetadataEntries[i]; }
+
+			const FString IdPrefix = MakeIdPrefix(Settings, bRuntime);
+			const TConstArrayView<FVector> PointPositions = TConstArrayView<FVector>(Positions).Left(NumPoints);
+			for (const FColumn& Column : Columns)
 			{
-				Domain->InitializeOnSet(MetadataEntries[i]);
-				for (const FColumn& Column : Columns)
+				if (!PCGExPartitionGrid::WriteCellIds(Column.IdAttr, Domain, EntryKeys, PointPositions, Column.GridSize, Column.b2D, Column.Offset, IdPrefix))
 				{
-					Column.IdAttr->SetValue(MetadataEntries[i], PCGExPartitionGrid::FormatId(PCGExPartitionGrid::MakeCell(Column.GridSize, Column.b2D, Column.Offset, Positions[i]), IdPrefix));
+					PCGLog::LogWarningOnGraph(FText::FromString(FString::Printf(TEXT("Partition Identifier: could not write '%s'; it is left unset."), *Column.IdAttr->Name.ToString())), Context);
 				}
 			}
 
@@ -289,7 +305,7 @@ bool FPCGExPartitionIdentifierElement::ExecuteInternal(FPCGContext* Context) con
 
 	if (Settings->Source == EPCGExPartitionSource::InputPositions)
 	{
-		PCGExPartitionIdentifier::ExecutePositions(Context, Settings, Component, bRuntime);
+		PCGExPartitionIdentifier::ExecutePositions(Context, Settings, Source, Component, bRuntime);
 	}
 	else
 	{

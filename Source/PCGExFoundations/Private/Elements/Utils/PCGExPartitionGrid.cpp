@@ -1,7 +1,7 @@
 // Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
-#include "Elements/Utils/PCGExPartitionCells.h"
+#include "Elements/Utils/PCGExPartitionGrid.h"
 
 #include "PCGComponent.h"
 #include "PCGContext.h"
@@ -18,38 +18,38 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 
-#define LOCTEXT_NAMESPACE "PCGExPartitionCells"
-#define PCGEX_NAMESPACE PartitionCells
+#define LOCTEXT_NAMESPACE "PCGExPartitionGrid"
+#define PCGEX_NAMESPACE PartitionGrid
 
-#pragma region UPCGExPartitionCellsSettings
+#pragma region UPCGExPartitionGridSettings
 
-TArray<FPCGPinProperties> UPCGExPartitionCellsSettings::InputPinProperties() const
+TArray<FPCGPinProperties> UPCGExPartitionGridSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_SPATIALS(PCGExPartitionCells::SourceBoundsLabel, "Reference bounds, like a partitioned PCG volume's. Several inputs are merged into one box.", Required)
+	PCGEX_PIN_SPATIALS(PCGExPartitionGrid::SourceBoundsLabel, "Reference bounds, like a partitioned PCG volume's. Several inputs are merged into one box.", Required)
 	return PinProperties;
 }
 
-TArray<FPCGPinProperties> UPCGExPartitionCellsSettings::OutputPinProperties() const
+TArray<FPCGPinProperties> UPCGExPartitionGridSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_POINTS(PCGExPartitionCells::OutputPartitionsLabel, "One single-point data per cell, at the cell center.", Normal)
-	PCGEX_PIN_PARAMS(PCGExPartitionCells::OutputMetadataLabel, "One single-row attribute set per cell, in the same order as Partitions.", Normal)
+	PCGEX_PIN_POINTS(PCGExPartitionGrid::OutputPartitionsLabel, "One single-point data per cell, at the cell center.", Normal)
+	PCGEX_PIN_PARAMS(PCGExPartitionGrid::OutputMetadataLabel, "One single-row attribute set per cell, in the same order as Partitions.", Normal)
 	return PinProperties;
 }
 
-PCGEX_INITIALIZE_ELEMENT(PartitionCells)
+PCGEX_INITIALIZE_ELEMENT(PartitionGrid)
 
 #pragma endregion
 
-#pragma region FPCGExPartitionCellsElement
+#pragma region FPCGExPartitionGridElement
 
-void FPCGExPartitionCellsElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
+void FPCGExPartitionGridElement::GetDependenciesCrc(const FPCGGetDependenciesCrcParams& InParams, FPCGCrc& OutCrc) const
 {
 	FPCGCrc Crc;
 	IPCGExElement::GetDependenciesCrc(InParams, Crc);
 
-	if (const UPCGExPartitionCellsSettings* Settings = Cast<UPCGExPartitionCellsSettings>(InParams.Settings))
+	if (const UPCGExPartitionGridSettings* Settings = Cast<UPCGExPartitionGridSettings>(InParams.Settings))
 	{
 		uint32 GridSize = 0;
 		bool b2D = false;
@@ -67,12 +67,16 @@ void FPCGExPartitionCellsElement::GetDependenciesCrc(const FPCGGetDependenciesCr
 	OutCrc = Crc;
 }
 
-bool FPCGExPartitionCellsElement::Boot(FPCGExContext* InContext) const
+bool FPCGExPartitionGridElement::Boot(FPCGExContext* InContext) const
 {
 	if (!IPCGExElement::Boot(InContext)) { return false; }
 
 	PCGEX_CONTEXT()
-	PCGEX_SETTINGS(PartitionCells)
+	PCGEX_SETTINGS(PartitionGrid)
+
+	PCGExPartitionGrid::FComponentReads Reads;
+	Reads.Add(Settings->Grid);
+	PCGExPartitionGrid::WarnIfComponentless(Reads, Context->ExecutionSource.Get(), Context);
 
 	if (!PCGExPartitionGrid::HasBoundedGrid(Settings->Grid, Cast<UPCGComponent>(Context->ExecutionSource.Get())))
 	{
@@ -82,10 +86,10 @@ bool FPCGExPartitionCellsElement::Boot(FPCGExContext* InContext) const
 	return true;
 }
 
-bool FPCGExPartitionCellsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+bool FPCGExPartitionGridElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	PCGEX_CONTEXT()
-	PCGEX_SETTINGS(PartitionCells)
+	PCGEX_SETTINGS(PartitionGrid)
 
 	bool bClipped = false;
 	switch (Settings->PointBounds)
@@ -102,7 +106,7 @@ bool FPCGExPartitionCellsElement::AdvanceWork(FPCGExContext* InContext, const UP
 	}
 
 	FBox Reference(ForceInit);
-	for (const FPCGTaggedData& Input : Context->InputData.GetInputsByPin(PCGExPartitionCells::SourceBoundsLabel))
+	for (const FPCGTaggedData& Input : Context->InputData.GetInputsByPin(PCGExPartitionGrid::SourceBoundsLabel))
 	{
 		const UPCGSpatialData* Spatial = Cast<UPCGSpatialData>(Input.Data);
 		if (!Spatial) { continue; }
@@ -124,26 +128,28 @@ bool FPCGExPartitionCellsElement::AdvanceWork(FPCGExContext* InContext, const UP
 	bool b2D = false;
 	PCGExPartitionGrid::ResolveGrid(Settings->Grid, Component, GridSize, b2D);
 
-	const int64 NumCellRange = PCGExPartitionGrid::CountCellRange(Reference, GridSize, b2D);
-	if (NumCellRange < 0)
+	const PCGExPartitionGrid::FOverlappingCells Overlapping(Reference, GridSize, b2D, Settings->bIncludeTouchingCells);
+	const int64 NumCells = Overlapping.Num();
+	if (NumCells < 0)
 	{
-		return Context->CancelExecution(FString::Printf(TEXT("The reference bounds cannot be split into %u cells: they are malformed or too far from the origin."), GridSize));
+		return Context->CancelExecution(FString::Printf(TEXT("The reference bounds cannot be split on grid size %u: they are malformed or too far from the origin."), GridSize));
+	}
+
+	if (NumCells > Settings->MaxCells)
+	{
+		return Context->CancelExecution(FString::Printf(TEXT("The reference bounds cover %lld cells at grid size %u, more than Max Cells (%d). Use a coarser grid or raise Max Cells."), NumCells, GridSize, Settings->MaxCells));
 	}
 
 	// Each cell costs four UObjects (two data and their metadata); running out of object slots is fatal.
-	const int64 MaxCells = FMath::Max(0, GUObjectArray.GetObjectArrayEstimatedAvailable()) / 4;
-	if (NumCellRange > MaxCells)
+	const int64 MaxCellsInBudget = FMath::Max(0, GUObjectArray.GetObjectArrayEstimatedAvailable()) / 4;
+	if (NumCells > MaxCellsInBudget)
 	{
-		return Context->CancelExecution(FString::Printf(TEXT("The reference bounds span up to %lld cells of %u, past the %lld the engine has object slots left for. Use a coarser grid or smaller bounds."), NumCellRange, GridSize, MaxCells));
+		return Context->CancelExecution(FString::Printf(TEXT("The reference bounds cover %lld cells at grid size %u, past the %lld the engine has object slots left for. Use a coarser grid or smaller bounds."), NumCells, GridSize, MaxCellsInBudget));
 	}
 
+	// Cannot fail: NumCells is within Max Cells, an int32.
 	TArray<PCGExPartitionGrid::FCell> Cells;
-	PCGExPartitionGrid::GetOverlappingCells(Reference, GridSize, b2D, Cells, MaxCells);
-
-	if (!Settings->bIncludeTouchingCells)
-	{
-		Cells.RemoveAll([&Reference](const PCGExPartitionGrid::FCell& Cell) { return !PCGExPartitionGrid::IsCellGenerated(Cell, Reference); });
-	}
+	Overlapping.GetCells(Cells);
 
 	TSet<FName> UsedNames;
 	PCGExPartitionGrid::FCellColumns Columns;
@@ -205,8 +211,8 @@ bool FPCGExPartitionCellsElement::AdvanceWork(FPCGExContext* InContext, const UP
 		Rows.Write(Key, Cell);
 		if (TextureAttr) { TextureAttr->SetValue(Key, PCGExPartitionGrid::GetTextureTransform(Cell)); }
 
-		Context->StageOutput(PointData, PCGExPartitionCells::OutputPartitionsLabel, PCGExData::EStaging::Mutable);
-		Context->StageOutput(ParamData, PCGExPartitionCells::OutputMetadataLabel, PCGExData::EStaging::Mutable);
+		Context->StageOutput(PointData, PCGExPartitionGrid::OutputPartitionsLabel, PCGExData::EStaging::Mutable);
+		Context->StageOutput(ParamData, PCGExPartitionGrid::OutputMetadataLabel, PCGExData::EStaging::Mutable);
 	}
 
 	Context->Done();

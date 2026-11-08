@@ -13,9 +13,9 @@
 #include "Core/PCGExSettings.h"
 #include "Details/PCGExPartitionDetails.h"
 
-#include "PCGExPartitionCells.generated.h"
+#include "PCGExPartitionGrid.generated.h"
 
-namespace PCGExPartitionCells
+namespace PCGExPartitionGrid
 {
 	inline const FName SourceBoundsLabel = TEXT("Bounds");
 	inline const FName OutputPartitionsLabel = TEXT("Partitions");
@@ -30,22 +30,22 @@ enum class EPCGExPartitionCellBounds : uint8
 };
 
 /**
- * Partition Cells.
+ * Partition Grid.
  * Outputs the partitions a partitioned PCG volume with the reference bounds would get on one grid, without creating
  * partition actors: one single-point data per cell, plus one attribute set per cell in the same order. Feed both to a
  * loop to process each cell as if it were its own partition.
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta = (Keywords = "pcgex partition cell grid higen proxy loop", PCGExNodeLibraryDoc = "utilities/partition-cells"))
-class UPCGExPartitionCellsSettings : public UPCGExSettings
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category = "PCGEx|Misc", meta = (Keywords = "pcgex partition cell grid higen proxy loop", PCGExNodeLibraryDoc = "utilities/partition-grid"))
+class UPCGExPartitionGridSettings : public UPCGExSettings
 {
 	GENERATED_BODY()
 
-	friend class FPCGExPartitionCellsElement;
+	friend class FPCGExPartitionGridElement;
 
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(PartitionCells, "Partition Cells", "Outputs one point per partition cell the reference bounds would be split into on a grid, with a matching attribute set per cell. Feed both to a loop to process each cell as if it were its own partition.");
+	PCGEX_NODE_INFOS(PartitionGrid, "Partition Grid", "Outputs one point per partition cell the reference bounds would be split into on a grid, with a matching attribute set per cell. Feed both to a loop to process each cell as if it were its own partition.");
 
 	virtual EPCGSettingsType GetType() const override { return EPCGSettingsType::Spatial; }
 	virtual FLinearColor GetNodeTitleColor() const override { return PCGEX_NODE_COLOR_NAME(Constant); }
@@ -70,6 +70,10 @@ public:
 	 *  in those but never generates there, so they are skipped by default. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bIncludeTouchingCells = false;
+
+	/** Fail rather than output more cells than this: a guard against a grid too fine for the reference bounds. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = 1))
+	int32 MaxCells = 65536;
 
 	/** Write the partition id. InlineEditConditionToggle shows no tooltip of its own: Partition Id Attribute Name
 	 *  carries it. */
@@ -112,7 +116,7 @@ public:
 	FName TextureTransformAttributeName = "TextureTransform";
 };
 
-class FPCGExPartitionCellsElement final : public IPCGExElement
+class FPCGExPartitionGridElement final : public IPCGExElement
 {
 public:
 	/** Folds in what the executing component decides (resolved grid, 2D, runtime naming): the default CRC ignores it. */

@@ -161,6 +161,28 @@ namespace PCGExPartitionGrid
 	/** Resolves a query's grid size (cm, never 0) and 2D flag against the executing component, which may be null. */
 	PCGEXFOUNDATIONS_API void ResolveGrid(const FPCGExPartitionQuery& InQuery, const UPCGComponent* InComponent, uint32& OutGridSize, bool& bOut2D);
 
+	/** What a node's queries read from the executing component: Add each query, then hand it to WarnIfComponentless. */
+	struct FComponentReads
+	{
+		/** A From Executing Component grid size. */
+		bool bGridSize = false;
+		/** An Auto 2D mode that follows the executing component. */
+		bool b2D = false;
+
+		/** bInAuto2DFromComponent is false where Auto 2D follows another source than the executing component. */
+		void Add(const FPCGExPartitionQuery& InQuery, const bool bInAuto2DFromComponent = true)
+		{
+			if (InQuery.GridSizeResolution == EPCGExPartitionResolution::FromComponent) { bGridSize = true; }
+			if (bInAuto2DFromComponent && InQuery.Grid2D == EPCGExGrid2DMode::Auto) { b2D = true; }
+		}
+	};
+
+	/**
+	 * Graph warning when the reads need the executing component but no PCG component runs the node (componentless runtime
+	 * generation, another execution source, or none): the grid size falls back to the Explicit Grid, Auto 2D to 3D.
+	 */
+	PCGEXFOUNDATIONS_API void WarnIfComponentless(const FComponentReads& InReads, const IPCGGraphExecutionSource* InSource, FPCGContext* InContext);
+
 	/** The cell InAnchor falls in on an already resolved grid, moved by InOffset cells. */
 	PCGEXFOUNDATIONS_API FCell MakeCell(const uint32 InGridSize, const bool bIn2D, const FIntVector& InOffset, const FVector& InAnchor);
 
@@ -183,17 +205,30 @@ namespace PCGExPartitionGrid
 	PCGEXFOUNDATIONS_API FTransform GetTextureTransform(const FCell& InCell);
 
 	/**
-	 * Cells in the bounds' cell coordinate range: an upper bound of what GetOverlappingCells returns, saturated at MAX_int64.
-	 * -1 when the bounds are invalid, inverted or not finite, or their cell coordinates do not fit an int32. Allocates nothing.
+	 * The cells a partitioned component with these grid bounds gets, in the order UPCGSubsystem::ForAllOverlappingCells
+	 * visits them (Z, then Y, then X). The count is exact and allocates nothing, so a caller can refuse it first.
 	 */
-	PCGEXFOUNDATIONS_API int64 CountCellRange(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D);
+	class PCGEXFOUNDATIONS_API FOverlappingCells
+	{
+	public:
+		/** bInIncludeTouching keeps the cells the bounds only touch, which get a partition actor but never generate (IsCellGenerated). */
+		FOverlappingCells(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D, const bool bInIncludeTouching);
 
-	/**
-	 * The cells the editor creates partition actors in for a partitioned component with these grid bounds, in the order
-	 * UPCGSubsystem::ForAllOverlappingCells visits them (Z, then Y, then X): every overlapped cell, touching faces included.
-	 * False, with no cells, when CountCellRange is negative or above InMaxCells (MAX_int32 at most).
-	 */
-	PCGEXFOUNDATIONS_API bool GetOverlappingCells(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D, TArray<FCell>& OutCells, const int64 InMaxCells = MAX_int32);
+		/** Saturated at MAX_int64. -1 when the bounds are invalid, inverted or not finite, the grid size is 0, or their cell coordinates do not fit an int32. */
+		int64 Num() const { return NumCells; }
+
+		/** Replaces OutCells with the cells. False, with no cells, when Num() is negative or past MAX_int32. */
+		bool GetCells(TArray<FCell>& OutCells) const;
+
+	private:
+		uint32 GridSize = 0;
+		bool b2D = false;
+		FIntVector MinCoord = FIntVector::ZeroValue;
+		FIntVector MaxCoord = FIntVector::ZeroValue;
+		int64 NumCells = -1;
+		/** Whether each run combination's cells are kept, as [Z][Y][X]. Per axis, run 0 is the first coordinate, 1 the interior, 2 the last. */
+		bool bKeep[3][3][3] = {};
+	};
 
 	/**
 	 * Whether a partitioned component with these grid bounds generates in the cell (its partition actor gets a local
@@ -238,4 +273,11 @@ namespace PCGExPartitionGrid
 		FPCGMetadataAttribute<FVector>* MinAttr = nullptr;
 		FPCGMetadataAttribute<FVector>* MaxAttr = nullptr;
 	};
+
+	/**
+	 * Writes on each entry the id of the cell its position falls in (MakeCell, then FormatId), in one batch: entries sharing
+	 * a cell share one value, formatted once. InEntryKeys must already be entries of InDomain, one per position.
+	 * False, writing nothing, when the attribute cannot be written.
+	 */
+	PCGEXFOUNDATIONS_API bool WriteCellIds(FPCGMetadataAttribute<FString>* InAttribute, FPCGMetadataDomain* InDomain, const TConstArrayView<PCGMetadataEntryKey> InEntryKeys, const TConstArrayView<FVector> InPositions, const uint32 InGridSize, const bool bIn2D, const FIntVector& InOffset, const FString& InPrefix);
 }

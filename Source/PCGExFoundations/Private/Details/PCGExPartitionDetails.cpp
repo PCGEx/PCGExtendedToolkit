@@ -11,8 +11,13 @@
 #include "Metadata/PCGMetadataAttribute.h"
 #include "Metadata/PCGMetadataAttributeTpl.h"
 #include "Metadata/PCGMetadataDomain.h"
+#include "Metadata/Accessors/IPCGAttributeAccessor.h"
+#include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
+#include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
 #include "UObject/GarbageCollection.h"
 #include "Utils/PCGLogErrors.h"
+
+#define LOCTEXT_NAMESPACE "PCGExPartitionDetails"
 
 namespace PCGExPartitionDetails
 {
@@ -28,33 +33,57 @@ namespace PCGExPartitionDetails
 		return true;
 	}
 
-	// Cell coordinate range of the bounds and its cell count (saturated), or -1 when the bounds cannot be split.
-	int64 ComputeCellRange(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D, FIntVector& OutMinCoord, FIntVector& OutMaxCoord)
+	// Cell coordinate range of the bounds; false when the bounds cannot be split.
+	bool ComputeCellRange(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D, FIntVector& OutMinCoord, FIntVector& OutMaxCoord)
 	{
-		if (!InBounds.IsValid || InGridSize == 0 || InBounds.ContainsNaN()) { return -1; }
+		if (!InBounds.IsValid || InGridSize == 0 || InBounds.ContainsNaN()) { return false; }
 
 		// FBox(Min, Max) flags a box valid without ordering its corners.
-		if (InBounds.Min.X > InBounds.Max.X || InBounds.Min.Y > InBounds.Max.Y || InBounds.Min.Z > InBounds.Max.Z) { return -1; }
+		if (InBounds.Min.X > InBounds.Max.X || InBounds.Min.Y > InBounds.Max.Y || InBounds.Min.Z > InBounds.Max.Z) { return false; }
 
 		// UPCGActorHelpers::GetCellCoord floors into int32: refuse coordinates it cannot hold. Z is not floored in 2D.
 		const double GridSize = static_cast<double>(InGridSize);
 		const int32 NumAxes = bIn2D ? 2 : 3;
 		for (int32 Axis = 0; Axis < NumAxes; ++Axis)
 		{
-			if (FMath::Abs(InBounds.Min[Axis] / GridSize) >= MAX_int32 || FMath::Abs(InBounds.Max[Axis] / GridSize) >= MAX_int32) { return -1; }
+			if (FMath::Abs(InBounds.Min[Axis] / GridSize) >= MAX_int32 || FMath::Abs(InBounds.Max[Axis] / GridSize) >= MAX_int32) { return false; }
 		}
 
+		// Ordered corners floor to ordered coordinates: every axis spans at least one cell.
 		OutMinCoord = UPCGActorHelpers::GetCellCoord(InBounds.Min, InGridSize, bIn2D);
 		OutMaxCoord = UPCGActorHelpers::GetCellCoord(InBounds.Max, InGridSize, bIn2D);
+		return true;
+	}
 
-		// Ordered corners floor to ordered coordinates, so every span is at least 1.
-		const int64 SpanX = static_cast<int64>(OutMaxCoord.X) - OutMinCoord.X + 1;
-		const int64 SpanY = static_cast<int64>(OutMaxCoord.Y) - OutMinCoord.Y + 1;
-		const int64 SpanZ = static_cast<int64>(OutMaxCoord.Z) - OutMinCoord.Z + 1;
-		if (SpanX > MAX_int64 / SpanY) { return MAX_int64; }
+	// Along one axis of a cell range, run 0 is the first coordinate, run 1 the interior ones, run 2 the last.
+	int32 RunOf(const int32 InCoord, const int32 InMin, const int32 InMax)
+	{
+		return InCoord == InMin ? 0 : InCoord == InMax ? 2 : 1;
+	}
 
-		const int64 NumXY = SpanX * SpanY;
-		return NumXY > MAX_int64 / SpanZ ? MAX_int64 : NumXY * SpanZ;
+	int64 RunLength(const int32 InRun, const int32 InMin, const int32 InMax)
+	{
+		const int64 Span = static_cast<int64>(InMax) - InMin + 1;
+		if (InRun == 0) { return 1; }
+		if (InRun == 2) { return Span > 1 ? 1 : 0; }
+		return FMath::Max<int64>(Span - 2, 0);
+	}
+
+	// Any coordinate of the run; only valid when RunLength is not 0.
+	int32 RunCoord(const int32 InRun, const int32 InMin, const int32 InMax)
+	{
+		return InRun == 0 ? InMin : InRun == 2 ? InMax : InMin + 1;
+	}
+
+	// Non-negative operands only.
+	int64 MulSaturated(const int64 A, const int64 B)
+	{
+		return A != 0 && B > MAX_int64 / A ? MAX_int64 : A * B;
+	}
+
+	int64 AddSaturated(const int64 A, const int64 B)
+	{
+		return A > MAX_int64 - B ? MAX_int64 : A + B;
 	}
 }
 
@@ -116,6 +145,18 @@ namespace PCGExPartitionGrid
 		bOut2D = ResolveGrid2D(InQuery, InComponent ? InComponent->Use2DGrid() : false);
 	}
 
+	void WarnIfComponentless(const FComponentReads& InReads, const IPCGGraphExecutionSource* InSource, FPCGContext* InContext)
+	{
+		if ((!InReads.bGridSize && !InReads.b2D) || Cast<UPCGComponent>(InSource)) { return; }
+
+		const FText Warning =
+			!InReads.b2D ? LOCTEXT("ComponentlessGridSize", "No PCG component executes this node: grid sizes set to From Executing Component use the Explicit Grid instead.")
+			: !InReads.bGridSize ? LOCTEXT("Componentless2D", "No PCG component executes this node: Grid 2D set to Auto uses 3D.")
+			: LOCTEXT("ComponentlessBoth", "No PCG component executes this node: grid sizes set to From Executing Component use the Explicit Grid instead, and Grid 2D set to Auto uses 3D.");
+
+		PCGLog::LogWarningOnGraph(Warning, InContext);
+	}
+
 	FCell MakeCell(const uint32 InGridSize, const bool bIn2D, const FIntVector& InOffset, const FVector& InAnchor)
 	{
 		const FIntVector Base = UPCGActorHelpers::GetCellCoord(InAnchor, InGridSize, bIn2D);
@@ -175,21 +216,21 @@ namespace PCGExPartitionGrid
 		return FTransform(FQuat::Identity, InCell.CellCenter(), GetFixedBounds(InCell).GetExtent());
 	}
 
-	int64 CountCellRange(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D)
+	bool IsCellGenerated(const FCell& InCell, const FBox& InBounds)
 	{
-		FIntVector MinCoord;
-		FIntVector MaxCoord;
-		return PCGExPartitionDetails::ComputeCellRange(InBounds, InGridSize, bIn2D, MinCoord, MaxCoord);
+		// FPCGTrackingManager::ForAllIntersectingPartitionActors: bounds with no volume overlap nothing, so any contact counts.
+		const FBox FixedBounds = GetFixedBounds(InCell);
+		return FMath::IsNearlyZero(InBounds.GetVolume())
+			       ? FixedBounds.Intersect(InBounds)
+			       : !FMath::IsNearlyZero(FixedBounds.Overlap(InBounds).GetVolume());
 	}
 
-	bool GetOverlappingCells(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D, TArray<FCell>& OutCells, const int64 InMaxCells)
-	{
-		OutCells.Reset();
+#pragma region FOverlappingCells
 
-		FIntVector MinCoord;
-		FIntVector MaxCoord;
-		const int64 NumCells = PCGExPartitionDetails::ComputeCellRange(InBounds, InGridSize, bIn2D, MinCoord, MaxCoord);
-		if (NumCells < 0 || NumCells > FMath::Min<int64>(InMaxCells, MAX_int32)) { return false; }
+	FOverlappingCells::FOverlappingCells(const FBox& InBounds, const uint32 InGridSize, const bool bIn2D, const bool bInIncludeTouching)
+		: GridSize(InGridSize), b2D(bIn2D)
+	{
+		if (!PCGExPartitionDetails::ComputeCellRange(InBounds, InGridSize, bIn2D, MinCoord, MaxCoord)) { return; }
 
 		// The subsystem clamps Z to the single 2D layer before testing overlaps.
 		FBox TestedBounds = InBounds;
@@ -199,15 +240,54 @@ namespace PCGExPartitionGrid
 			TestedBounds.Max.Z = static_cast<double>(InGridSize);
 		}
 
+		// The bounds cover every interior cell of an axis across its full width, so all cells of a run combination share
+		// one verdict: test one of each.
+		NumCells = 0;
+		for (int32 RunZ = 0; RunZ < 3; ++RunZ)
+		{
+			const int64 NumZ = PCGExPartitionDetails::RunLength(RunZ, MinCoord.Z, MaxCoord.Z);
+			for (int32 RunY = 0; RunY < 3; ++RunY)
+			{
+				const int64 NumY = PCGExPartitionDetails::RunLength(RunY, MinCoord.Y, MaxCoord.Y);
+				for (int32 RunX = 0; RunX < 3; ++RunX)
+				{
+					const int64 NumX = PCGExPartitionDetails::RunLength(RunX, MinCoord.X, MaxCoord.X);
+					if (NumX == 0 || NumY == 0 || NumZ == 0) { continue; }
+
+					const FIntVector Coord(
+						PCGExPartitionDetails::RunCoord(RunX, MinCoord.X, MaxCoord.X),
+						PCGExPartitionDetails::RunCoord(RunY, MinCoord.Y, MaxCoord.Y),
+						PCGExPartitionDetails::RunCoord(RunZ, MinCoord.Z, MaxCoord.Z));
+					const FCell Cell(InGridSize, Coord, bIn2D);
+
+					if (!TestedBounds.Overlap(Cell.CellBounds()).IsValid) { continue; }
+					if (!bInIncludeTouching && !IsCellGenerated(Cell, InBounds)) { continue; }
+
+					bKeep[RunZ][RunY][RunX] = true;
+					NumCells = PCGExPartitionDetails::AddSaturated(NumCells, PCGExPartitionDetails::MulSaturated(PCGExPartitionDetails::MulSaturated(NumX, NumY), NumZ));
+				}
+			}
+		}
+	}
+
+	bool FOverlappingCells::GetCells(TArray<FCell>& OutCells) const
+	{
+		OutCells.Reset();
+		if (NumCells < 0 || NumCells > MAX_int32) { return false; }
+
+		// Nothing kept: the range may still be huge, so skip the walk.
+		if (NumCells == 0) { return true; }
+
 		OutCells.Reserve(static_cast<int32>(NumCells));
 		for (int32 Z = MinCoord.Z; Z <= MaxCoord.Z; ++Z)
 		{
+			const int32 RunZ = PCGExPartitionDetails::RunOf(Z, MinCoord.Z, MaxCoord.Z);
 			for (int32 Y = MinCoord.Y; Y <= MaxCoord.Y; ++Y)
 			{
+				const int32 RunY = PCGExPartitionDetails::RunOf(Y, MinCoord.Y, MaxCoord.Y);
 				for (int32 X = MinCoord.X; X <= MaxCoord.X; ++X)
 				{
-					const FCell Cell(InGridSize, FIntVector(X, Y, Z), bIn2D);
-					if (TestedBounds.Overlap(Cell.CellBounds()).IsValid) { OutCells.Add(Cell); }
+					if (bKeep[RunZ][RunY][PCGExPartitionDetails::RunOf(X, MinCoord.X, MaxCoord.X)]) { OutCells.Emplace(GridSize, FIntVector(X, Y, Z), b2D); }
 				}
 			}
 		}
@@ -215,14 +295,7 @@ namespace PCGExPartitionGrid
 		return true;
 	}
 
-	bool IsCellGenerated(const FCell& InCell, const FBox& InBounds)
-	{
-		// FPCGTrackingManager::ForAllIntersectingPartitionActors: bounds with no volume overlap nothing, so any contact counts.
-		const FBox FixedBounds = GetFixedBounds(InCell);
-		return FMath::IsNearlyZero(InBounds.GetVolume())
-			       ? FixedBounds.Intersect(InBounds)
-			       : !FMath::IsNearlyZero(FixedBounds.Overlap(InBounds).GetVolume());
-	}
+#pragma endregion
 
 	bool AcceptOutputName(const FName InName, TSet<FName>& InOutUsed, FPCGContext* InContext)
 	{
@@ -281,4 +354,49 @@ namespace PCGExPartitionGrid
 	}
 
 #pragma endregion
+
+	bool WriteCellIds(FPCGMetadataAttribute<FString>* InAttribute, FPCGMetadataDomain* InDomain, const TConstArrayView<PCGMetadataEntryKey> InEntryKeys, const TConstArrayView<FVector> InPositions, const uint32 InGridSize, const bool bIn2D, const FIntVector& InOffset, const FString& InPrefix)
+	{
+		check(InAttribute && InDomain);
+		check(InEntryKeys.Num() == InPositions.Num());
+
+		const int32 NumEntries = InEntryKeys.Num();
+		if (NumEntries == 0) { return true; }
+
+		// One id per cell, written on the first entry that falls in it.
+		TMap<FIntVector, int32> CellIndices;
+		TArray<FString> CellIds;
+		TArray<PCGMetadataEntryKey> CellEntries;
+		TArray<int32> EntryCells;
+		EntryCells.SetNumUninitialized(NumEntries);
+
+		for (int32 i = 0; i < NumEntries; ++i)
+		{
+			const FCell Cell = MakeCell(InGridSize, bIn2D, InOffset, InPositions[i]);
+			const int32 CellIndex = CellIndices.FindOrAdd(Cell.Coord, CellIds.Num());
+			if (CellIndex == CellIds.Num())
+			{
+				CellIds.Add(FormatId(Cell, InPrefix));
+				CellEntries.Add(InEntryKeys[i]);
+			}
+			EntryCells[i] = CellIndex;
+		}
+
+		// An accessor dedups compressed values through a hash, where SetValues would AddUnique each value against the others.
+		const TUniquePtr<IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateAccessor(InAttribute, InDomain);
+		FPCGAttributeAccessorKeysEntries CellKeys(MakeArrayView(CellEntries));
+		if (!Accessor || !Accessor->SetRange<FString>(TArrayView<const FString>(CellIds), 0, CellKeys)) { return false; }
+
+		TArray<PCGMetadataValueKey> CellValueKeys;
+		InAttribute->GetValueKeys(TArrayView<const PCGMetadataEntryKey>(CellEntries), CellValueKeys);
+
+		TArray<PCGMetadataValueKey> EntryValueKeys;
+		EntryValueKeys.SetNumUninitialized(NumEntries);
+		for (int32 i = 0; i < NumEntries; ++i) { EntryValueKeys[i] = CellValueKeys[EntryCells[i]]; }
+
+		InAttribute->SetValuesFromValueKeys(InEntryKeys, TArrayView<const PCGMetadataValueKey>(EntryValueKeys));
+		return true;
+	}
 }
+
+#undef LOCTEXT_NAMESPACE
