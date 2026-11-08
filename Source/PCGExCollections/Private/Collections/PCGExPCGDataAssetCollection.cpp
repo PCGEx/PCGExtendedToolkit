@@ -1733,7 +1733,11 @@ void UPCGExPCGDataAssetCollection::SaveExternalPackagesFor(FPCGExPCGDataAssetMac
 		FSavePackageArgs SaveArgs;
 		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
 		SaveArgs.SaveFlags = SAVE_NoError;
-		UPackage::SavePackage(Pkg, nullptr, *FileName, SaveArgs);
+		if (!UPackage::SavePackage(Pkg, nullptr, *FileName, SaveArgs))
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("'%s': external package '%s' could not be saved."),
+			       *State.Host->GetPathName(), *FileName);
+		}
 	}
 #endif
 }

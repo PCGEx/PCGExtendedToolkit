@@ -142,7 +142,6 @@ enum class EPCGExApplySampledComponentFlags : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExApplySampledComponentFlags)
-using EPCGExApplySampledComponentFlagsBitmask = TEnumAsByte<EPCGExApplySampledComponentFlags>;
 
 namespace PCGExSampling::Labels
 {

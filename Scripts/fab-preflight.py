@@ -33,6 +33,7 @@ Deliberately absent (verified against UE 5.8 UnrealBuildTool, Configuration/Rule
 """
 
 import argparse
+import bisect
 import difflib
 import os
 import re
@@ -90,8 +91,10 @@ class Tree:
         self.exclude = tuple(e.lower() for e in exclude)
         self.headers = sorted(p for p in walk(root, HDR_EXT) if not self._skip(p))
         self.sources = sorted(p for p in walk(root, (".cpp",)) if not self._skip(p))
+        self.plugins = sorted(p for p in walk(root, (".uplugin",)) if not self._skip(p))
         self.text = {}
         self.clean = {}
+        self.notes = []                         # what a check could not judge; printed, never counted
 
         # basename -> [real paths], for resolving #include "..." the way UBT does
         self.by_name = {}
@@ -101,6 +104,7 @@ class Tree:
         self._index_modules()
         self._closures = {}
         self._requires_editor = {}
+        self._engines = {}                      # directory -> workspace_engine() result
 
     def _skip(self, path):
         low = path.lower()
@@ -2061,6 +2065,369 @@ def check_deprecated_unconsumed(tree):
     return out
 
 
+UPROJECT_ENGINE_RE = re.compile(r'"EngineAssociation"\s*:\s*"([^"]*)"')
+
+
+def workspace_engine(tree, path):
+    """((major, minor) or None, .uproject or None, EngineAssociation) of the workspace holding path.
+
+    The workspace is the nearest directory above path holding a .uproject. A launcher association reads "5.9"; a
+    source build registers a GUID and a project inside the engine tree leaves it empty, so neither gives a version.
+    """
+    d, walked, found = os.path.dirname(os.path.abspath(path)).replace("\\", "/"), [], None
+    while found is None:
+        if d in tree._engines:
+            found = tree._engines[d]
+            break
+        walked.append(d)
+        try:
+            projects = sorted(f for f in os.listdir(d) if f.endswith(".uproject"))
+        except OSError:
+            projects = []
+        if projects:
+            uproject = f"{d}/{projects[0]}"
+            m = UPROJECT_ENGINE_RE.search(read(uproject))
+            assoc = m.group(1) if m else ""
+            v = re.match(r'\s*(\d+)\.(\d+)\b', assoc)
+            found = ((int(v.group(1)), int(v.group(2))) if v else None, uproject, assoc)
+        elif os.path.dirname(d) == d:
+            found = (None, None, "")
+        else:
+            d = os.path.dirname(d)
+    for w in walked:
+        tree._engines[w] = found
+    return found
+
+
+def engine_gated(tree, path, since):
+    """(severity, engine label) for a defect that every engine from `since` on rejects.
+
+    A warning only where the workspace provably builds against an older engine, which leaves it latent until the next
+    port. An unknown engine is held to the newer rules.
+    """
+    version = workspace_engine(tree, path)[0]
+    if version is None:
+        return "error", "workspace engine unknown"
+    return ("error" if version >= since else "warn"), f"workspace engine {version[0]}.{version[1]}"
+
+
+# An enum declaration, scoped when the 'class' / 'struct' group matches. An export macro or attribute may precede
+# the name.
+ENUM_DECL_RE = re.compile(r'\benum\s+(class\s+|struct\s+)?(?:\[\[[^\]]*\]\]\s*)?(?:[A-Z_][A-Z0-9_]*\s+)?'
+                          r'([A-Za-z_]\w*)\s*(?=[:{;])')
+ENUM_AS_BYTE_RE = re.compile(r'\bTEnumAsByte\s*<\s*(?:(?:typename|enum|class|struct|const|volatile)\s+)*'
+                             r'((?:::\s*)?[A-Za-z_]\w*(?:\s*::\s*[A-Za-z_]\w*)*)\s*>')
+# The name a '{' opens, read from the text since the previous ';', '{' or '}'.
+SCOPE_NAME_RE = re.compile(r'(?:\bnamespace\s+([A-Za-z_][\w:]*)|\b(?:class|struct|union)\s+(?:[A-Z_0-9]+_API\s+)?'
+                           r'([A-Za-z_]\w*)(?:\s+final)?\s*(?::[^;{}]*)?)\s*$')
+
+
+def scope_index(code):
+    """(offsets, paths) for code_only text: from offsets[k] on, paths[k] names the enclosing namespaces and classes.
+
+    Function bodies, initializers and anonymous namespaces add no name.
+    """
+    offsets, paths, stack, head = [0], [()], [], 0
+    for m in re.finditer(r'[;{}]', code):
+        i = m.start()
+        if code[i] == "{":
+            n = SCOPE_NAME_RE.search(code, head, i)
+            stack.append(tuple((n.group(1) or n.group(2)).split("::")) if n else ())
+        elif code[i] == "}" and stack:
+            stack.pop()
+        head = i + 1
+        if code[i] != ";":
+            offsets.append(i + 1)
+            paths.append(tuple(name for names in stack for name in names))
+    return offsets, paths
+
+
+def scope_at(index, pos):
+    offsets, paths = index
+    return paths[bisect.bisect_right(offsets, pos) - 1]
+
+
+def enum_candidates(found, quals, rooted, here):
+    """The declarations among found that 'quals::Name' names when written inside the scope path `here`.
+
+    Qualified, the declaring scope ends with quals (is quals, when rooted at '::'). Unqualified, the innermost enclosing
+    scope that declares the name wins; with none, every declaration stays, since a using-directive can reach any.
+    """
+    if rooted:
+        return [d for d in found if d[1] == quals]
+    if quals:
+        return [d for d in found if len(d[1]) >= len(quals) and d[1][len(d[1]) - len(quals):] == quals]
+    visible = [d for d in found if here[:len(d[1])] == d[1]]
+    deepest = max((len(d[1]) for d in visible), default=-1)
+    return [d for d in visible if len(d[1]) == deepest] or found
+
+
+@check("enumasbyte-enum-class", "error",
+       "TEnumAsByte<T> where T is an enum class (or enum struct) declared in the swept tree and reachable through the "
+       "file's includes. 5.9 declares TEnumAsByte as template <UE::CUnscopedEnum> (Containers/EnumAsByte.h), so "
+       "naming it with an enum class is ill-formed even in an unused alias; 5.8 and earlier only static_assert once it "
+       "is instantiated. Error when the workspace engine (EngineAssociation of the nearest .uproject above the file) "
+       "is 5.9 or later or unknown, warning below. Enum classes the engine declares are not scanned, so TEnumAsByte "
+       "over one of those is not caught here.")
+def check_enumasbyte_enum_class(tree):
+    decls = {}                                    # name -> [(scoped, scope path, file, line)]
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        if "enum" not in t:
+            continue
+        code = code_only(t)
+        index = scope_index(code)
+        for m in ENUM_DECL_RE.finditer(code):
+            decls.setdefault(m.group(2), []).append(
+                (bool(m.group(1)), scope_at(index, m.start()), p, code.count("\n", 0, m.start()) + 1))
+    out = []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        if "TEnumAsByte" not in t:
+            continue
+        text, index, reach = blank_literals(t), None, None
+        for m in ENUM_AS_BYTE_RE.finditer(text):      # #define bodies included: a macro breaks wherever it expands
+            spelled = re.sub(r'\s+', '', m.group(1))
+            rooted, parts = spelled.startswith("::"), [x for x in spelled.split("::") if x]
+            if parts[-1] not in decls:
+                continue
+            if index is None:
+                index, reach = scope_index(code_only(t)), tree.closure(p)
+            found = [d for d in decls[parts[-1]] if d[2] in reach]
+            named = enum_candidates(found, tuple(parts[:-1]), rooted, scope_at(index, m.start()))
+            if not named or not all(d[0] for d in named):
+                continue
+            sev, engine = engine_gated(tree, p, (5, 9))
+            out.append(Finding("enumasbyte-enum-class", sev, p, text.count("\n", 0, m.start()) + 1,
+                               f"TEnumAsByte<{spelled}> names enum class '{parts[-1]}' "
+                               f"({os.path.basename(named[0][2])}:{named[0][3]}), which 5.9 rejects wherever it is "
+                               f"written ({engine})",
+                               "store the enum class itself, or a uint8 with meta=(Bitmask, BitmaskEnum=...); "
+                               "TEnumAsByte takes only unscoped enums"))
+    return out
+
+
+ENGINE_VERSION_FIELD_RE = re.compile(r'"EngineVersion"\s*:\s*"([^"]*)"')
+# What FEngineVersion::Parse (5.9 Misc/EngineVersion.cpp) reads: Major.Minor.Patch, then an optional -Changelist.
+ENGINE_VERSION_RE = re.compile(r'\s*(\d+)\.(\d+)\.(\d+)(?:-(\d+))?')
+
+
+@check("uplugin-engine-version", "error",
+       "A .uplugin whose EngineVersion is not <major>.<minor>.0 of the workspace engine (EngineAssociation of the "
+       "nearest .uproject above it). PluginManager compares it with FEngineVersion::CompatibleWith(), which is "
+       "<major>.<minor>.0 on Epic builds: on any difference the editor asks before loading the plugin, and -unattended "
+       "runs answer No and skip it. BuildPlugin rewrites the field when packaging, so this bites source and workbench "
+       "use, not FAB. A changelist suffix, or a value that is not Major.Minor.Patch, is a warning. Skipped with a note "
+       "when no .uproject is found or its association is no version (a source build registers a GUID).")
+def check_uplugin_engine_version(tree):
+    out = []
+    for up in tree.plugins:
+        text = read(up)
+        m = ENGINE_VERSION_FIELD_RE.search(text)
+        if not m or not m.group(1):
+            continue                              # PluginManager compares nothing without one
+        version, uproject, assoc = workspace_engine(tree, up)
+        if version is None:
+            why = f'{uproject} has EngineAssociation "{assoc}", no version' if uproject else "no .uproject above it"
+            tree.notes.append(f"uplugin-engine-version: {up} not checked: {why}")
+            continue
+        value, want, line = m.group(1), f"{version[0]}.{version[1]}.0", text.count("\n", 0, m.start()) + 1
+        v = ENGINE_VERSION_RE.match(value)
+        if not v:
+            out.append(Finding("uplugin-engine-version", "warn", up, line,
+                               f'EngineVersion "{value}" is not Major.Minor.Patch: the engine logs that it cannot '
+                               "parse it and loads the plugin unchecked",
+                               f'set "{want}"'))
+        elif (int(v.group(1)), int(v.group(2)), int(v.group(3))) != (version[0], version[1], 0):
+            out.append(Finding("uplugin-engine-version", "error", up, line,
+                               f'EngineVersion "{value}" in a {version[0]}.{version[1]} workspace '
+                               f"({os.path.basename(uproject)}): the editor asks before loading the plugin, and "
+                               "-unattended runs skip it",
+                               f'set "{want}"'))
+        elif v.group(4):
+            out.append(Finding("uplugin-engine-version", "warn", up, line,
+                               f'EngineVersion "{value}" carries a changelist: a build with a different '
+                               "CompatibleChangelist asks before loading the plugin",
+                               f'set "{want}"'))
+    return out
+
+
+# A function pointer declarator up to its parameter list: '(*)(', or '(Class::*)(' for a member function. A calling
+# convention may precede the '*'.
+FN_PTR_DECL = r'\(\s*(?:(?:__\w+|[A-Z][A-Z0-9_]*)\s*)?(?:[A-Za-z_][\w:]*::\s*)?\*\s*(?:const\s*)?'
+FN_PTR_DECL_RE = re.compile(FN_PTR_DECL + r'\)\s*\(')
+FN_PTR_TYPEDEF_RE = re.compile(r'\btypedef\s+[^;{}]*?' + FN_PTR_DECL + r'([A-Za-z_]\w*)\s*\)\s*\(')
+USING_ALIAS_RE = re.compile(r'\busing\s+([A-Za-z_]\w*)\s*=\s*([^;{}]*);')
+TYPEDEF_ALIAS_RE = re.compile(r'\btypedef\s+([^;{}()]*?)\s+([A-Za-z_]\w*)\s*;')
+TYPE_NAME_RE = re.compile(r'\s*(?:(?:const|volatile|typename)\s+)*(?:::\s*)?((?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*)'
+                          r'\s*(?:const\s*)?')
+FN_DECL_TAIL_RE = re.compile(r'\s*(?:(?:const|volatile|noexcept)\b\s*|&{1,2}\s*)*')
+SPACE_RE = re.compile(r'\s*')
+IDENT_RE = re.compile(r'[A-Za-z_]\w*')
+# The only names after which a '(' can open a cast.
+CAST_LEAD_WORDS = ("return", "co_return", "co_yield", "throw", "case", "else", "do")
+# A source with no function type to mismatch: a null or integer literal, a cast to void* or an integer, or a call that
+# returns void* (FPlatformProcess::GetDllExport, dlsym).
+DATA_SOURCE_RE = re.compile(
+    r'\s*(?:(?:nullptr|NULL|\d[\w\']*)\s*$|\(\s*(?:const\s+)?(?:void\s*\*|u?intptr_t|UPTRINT|PTRINT)\s*\)'
+    r'|(?:reinterpret|static)_cast\s*<\s*(?:const\s+)?(?:void\s*\*|u?intptr_t|UPTRINT|PTRINT)\s*>'
+    r'|(?:::\s*)?(?:[A-Za-z_]\w*\s*::\s*)*(?:GetDllExport|dlsym)\s*\()')
+CAST_PRAGMA_RE = re.compile(r'\bPRAGMA_(DISABLE|ENABLE)_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS\b')
+
+
+def outer_declarator(type_text):
+    """True when type_text spells a function pointer: an FN_PTR_DECL outside every '<...>' and '(...)' of it."""
+    return any(sum((c in "<(") - (c in ">)") for c in type_text[:m.start()]) == 0
+               for m in FN_PTR_DECL_RE.finditer(type_text))
+
+
+def function_pointer_aliases(tree):
+    """alias -> files declaring it, for every using / typedef that names a function pointer type, or such an alias."""
+    declared, pending = {}, []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        if "using" not in t and "typedef" not in t:
+            continue
+        code = code_only(t)
+        for name in FN_PTR_TYPEDEF_RE.findall(code):
+            declared.setdefault(name, set()).add(p)
+        for name, rhs in USING_ALIAS_RE.findall(code):
+            if outer_declarator(rhs):
+                declared.setdefault(name, set()).add(p)
+            else:
+                pending.append((name, rhs, p))
+        pending.extend((name, rhs, p) for rhs, name in TYPEDEF_ALIAS_RE.findall(code))
+    grew = True
+    while grew:
+        grew = False
+        for name, rhs, p in pending:
+            m = TYPE_NAME_RE.fullmatch(rhs)
+            if m and re.split(r'\s*::\s*', m.group(1))[-1] in declared and p not in declared.get(name, ()):
+                declared.setdefault(name, set()).add(p)
+                grew = True
+    return declared
+
+
+def close_angle(text, i):
+    """Index of the '>' closing the '<' at text[i], or -1 when a statement boundary comes first."""
+    depth = 0
+    for k in range(i, len(text)):
+        if text[k] in ";{}":
+            return -1
+        depth += (text[k] == "<") - (text[k] == ">")
+        if depth == 0:
+            return k
+    return -1
+
+
+def open_angle(text, i):
+    """Index of the '<' opening the '>' at text[i], or -1 when a statement boundary comes first."""
+    depth = 0
+    for k in range(i, -1, -1):
+        if text[k] in ";{}":
+            return -1
+        depth += (text[k] == ">") - (text[k] == "<")
+        if depth == 0:
+            return k
+    return -1
+
+
+def cast_operand(text, start, end):
+    """Offset of the operand when the parenthesized type text[start:end] is a C-style cast, else None.
+
+    No cast when a name other than a keyword like 'return' precedes it (a parameter list, sizeof, a function type), or
+    a ')' or ']' does (operator(), a lambda), nor when what follows starts no operand (';', ',', '{', a lambda's '[').
+    """
+    j = start - 1
+    while j >= 0 and text[j].isspace():
+        j -= 1
+    if j >= 0 and (text[j].isalnum() or text[j] == "_"):
+        w = j
+        while w >= 0 and (text[w].isalnum() or text[w] == "_"):
+            w -= 1
+        if text[w + 1:j + 1] not in CAST_LEAD_WORDS:
+            return None
+    elif j >= 0 and text[j] in ")]":
+        return None
+    k = SPACE_RE.match(text, end).end()
+    return k if IDENT_RE.match(text, k) or text[k:k + 1] in ("(", "&", "*") or text.startswith("::", k) else None
+
+
+def suppressed_spans(text):
+    """(start, end) of every span between PRAGMA_DISABLE_ and PRAGMA_ENABLE_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS."""
+    spans, depth, start = [], 0, 0
+    for m in CAST_PRAGMA_RE.finditer(text):
+        if m.group(1) == "DISABLE":
+            start = m.end() if depth == 0 else start
+            depth += 1
+        elif depth:
+            depth -= 1
+            if depth == 0:
+                spans.append((start, m.start()))
+    return spans + ([(start, len(text))] if depth else [])
+
+
+@check("function-type-cast", "error",
+       "A reinterpret_cast or C-style cast to a function pointer type, spelled inline ('R (*)(...)', 'R (C::*)(...)') "
+       "or through a using / typedef alias the swept tree declares. 5.9 UBT raises CastFunctionTypeMismatch to an "
+       "error from build settings V7 on (MSVC /we4191, Clang -Wcast-function-type-mismatch under -Werror); 5.8 leaves "
+       "it off. Error when the workspace engine is 5.9 or later or unknown, warning below. The source type is not "
+       "resolved: a source that is visibly no function (nullptr, an integer, a void* or uintptr_t cast, GetDllExport, "
+       "dlsym) is skipped, as is a cast between PRAGMA_DISABLE/ENABLE_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS, which is "
+       "how a cast that must stay is kept.")
+def check_function_type_cast(tree):
+    aliases = function_pointer_aliases(tree)
+    names = "|".join(re.escape(a) for a in sorted(aliases))
+    hint = re.compile(r'\breinterpret_cast\b|\*\s*(?:const\s*)?\)\s*\(' + (r'|\b(?:' + names + r')\b' if names else ""))
+    alias_cast = re.compile(r'\(\s*(?:const\s+)?((?:::\s*)?(?:[A-Za-z_]\w*\s*::\s*)*(' + names + r'))\s*(?:const\s*)?\)'
+                            ) if names else None
+    out = []
+    for p in tree.headers + tree.sources:
+        t = tree.stripped(p)
+        if not hint.search(t):
+            continue
+        text, sites = blank_literals(t), []           # (offset, form, target, operand, alias)
+        for m in re.finditer(r'\breinterpret_cast\s*<', text):
+            gt = close_angle(text, m.end() - 1)
+            k = SPACE_RE.match(text, gt + 1).end() if gt > 0 else -1
+            if k < 0 or text[k:k + 1] != "(":
+                continue
+            target = text[m.end():gt]
+            named = TYPE_NAME_RE.fullmatch(target)
+            alias = re.split(r'\s*::\s*', named.group(1))[-1] if named else None
+            if outer_declarator(target) or alias in aliases:
+                sites.append((m.start(), "reinterpret_cast", target, text[k + 1:closing(text, k)], alias))
+        for m in FN_PTR_DECL_RE.finditer(text):
+            k = m.start() - 1                         # back over the return type, to the '(' that opens a cast
+            while k >= 0 and (text[k].isalnum() or text[k] in "_:*& \t\n>"):
+                k = open_angle(text, k) - 1 if text[k] == ">" else k - 1
+            if k < 0 or text[k] != "(":
+                continue
+            q = FN_DECL_TAIL_RE.match(text, closing(text, m.end() - 1) + 1).end()
+            j = cast_operand(text, k, q + 1) if text[q:q + 1] == ")" else None
+            if j is not None:
+                sites.append((k, "C-style cast", text[k + 1:q], text[j:expr_end(text, j)], None))
+        for m in (alias_cast.finditer(text) if alias_cast else ()):
+            j = cast_operand(text, m.start(), m.end())
+            if j is not None:
+                sites.append((m.start(), "C-style cast", m.group(1), text[j:expr_end(text, j)], m.group(2)))
+        spans, reach = suppressed_spans(text) if sites else [], None
+        for pos, form, target, operand, alias in sites:
+            if DATA_SOURCE_RE.match(operand) or any(a <= pos < b for a, b in spans):
+                continue
+            if alias in aliases and not outer_declarator(target):
+                reach = reach or tree.closure(p)
+                if not aliases[alias] & reach:
+                    continue                          # the alias is out of reach: that name is some other type here
+            sev, engine = engine_gated(tree, p, (5, 9))
+            out.append(Finding("function-type-cast", sev, p, text.count("\n", 0, pos) + 1,
+                               f"{form} to function pointer type '{' '.join(target.split())}'; 5.9 builds reject it "
+                               f"when the source's function type differs ({engine})",
+                               "call through the type the function has; wrap a cast that must stay in "
+                               "PRAGMA_DISABLE/ENABLE_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS"))
+    return out
+
+
 # ----------------------------------------------------------------------- selftest
 
 SELFTEST = {
@@ -3150,6 +3517,248 @@ SELFTEST.update({
         "#undef UE_API\n"),
 })
 
+# The engine-gated checks judge a file by the workspace holding it: Ws59 and Ws58 name an engine, WsGuid names a source
+# build's GUID, and the temp root holds no .uproject at all.
+SELFTEST.update({
+    "Ws59/Ws59.uproject": '{\n\t"FileVersion": 3,\n\t"EngineAssociation": "5.9"\n}\n',
+    "Ws58/Ws58.uproject": '{\n\t"FileVersion": 3,\n\t"EngineAssociation": "5.8"\n}\n',
+    "WsGuid/WsGuid.uproject":
+        '{\n\t"FileVersion": 3,\n\t"EngineAssociation": "{6B29A93F-4A1B-4C2D-9E8F-0123456789AB}"\n}\n',
+})
+
+# uplugin-engine-version: errors for a stale version, a patch Epic builds never match, and a 5.8 workspace holding a 5.9
+# plugin; warnings for a value that does not parse and for a changelist suffix.
+SELFTEST.update({
+    "Ws59/Plugins/Stale/Stale.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.8.0"\n}\n',
+    "Ws59/Plugins/StalePatch/StalePatch.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.9.1"\n}\n',
+    "Ws58/Plugins/Ahead/Ahead.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.9.0"\n}\n',
+    "Ws59/Plugins/Unparsed/Unparsed.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.9"\n}\n',
+    "Ws59/Plugins/Changelist/Changelist.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.9.0-12345"\n}\n',
+    # Must stay silent: the workspace's own version, none at all, an empty one, and plugins whose workspace names no
+    # engine version (a GUID association, or no .uproject above them).
+    "Ws59/Plugins/UpluginNegativeCurrent/UpluginNegativeCurrent.uplugin":
+        '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.9.0",\n\t"Modules": []\n}\n',
+    "Ws58/Plugins/UpluginNegativeCurrent/UpluginNegativeCurrent.uplugin":
+        '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.8.0"\n}\n',
+    "Ws59/Plugins/UpluginNegativeUnversioned/UpluginNegativeUnversioned.uplugin": '{\n\t"FileVersion": 3\n}\n',
+    "Ws59/Plugins/UpluginNegativeEmpty/UpluginNegativeEmpty.uplugin":
+        '{\n\t"FileVersion": 3,\n\t"EngineVersion": ""\n}\n',
+    "WsGuid/Plugins/UpluginNegativeGuid/UpluginNegativeGuid.uplugin":
+        '{\n\t"FileVersion": 3,\n\t"EngineVersion": "4.27.0"\n}\n',
+    "UpluginNegativeLoose/UpluginNegativeLoose.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "4.27.0"\n}\n',
+})
+
+# enumasbyte-enum-class: EnumKinds.h declares every enum shape. EnumUse.h names an enum class in each spelling (plain,
+# spaced, enum struct, opaque, exported, multi-line, qualified, rooted, nested in a struct, a nested 'Type', a macro
+# body, an unqualified name its namespace resolves, a nested namespace, a name a using-directive reaches): errors in a
+# 5.9 workspace. The same use is a warning in a 5.8 workspace and an error where no engine is known.
+SELFTEST.update({
+    "EnumDecl/Public/EnumKinds.h": (
+        "#pragma once\n"
+        '#include "CoreMinimal.h"\n'
+        "UENUM()\n"
+        "enum class EEnumScoped : uint8\n"
+        "{\n"
+        "\tA,\n"
+        "\tB\n"
+        "};\n"
+        "enum struct EEnumStruct : uint8 { A };\n"
+        "enum class EEnumOpaque : uint8;\n"
+        "enum class ENUMDECL_API EEnumExported : uint8 { A };\n"
+        "enum EEnumPlain { EEP_A };\n"
+        "enum EEnumRootedPick { ERP_A };\n"
+        "namespace EEnumLegacy\n"
+        "{\n"
+        "\tenum Type { A };\n"
+        "}\n"
+        "namespace EnumNs\n"
+        "{\n"
+        "\tenum class EInner : uint8 { A };\n"
+        "\tenum EShared { ES_A };\n"
+        "\tenum class EEnumRootedPick : uint8 { A };\n"
+        "}\n"
+        "namespace EnumOther\n"
+        "{\n"
+        "\tenum class EShared : uint8 { A };\n"
+        "}\n"
+        "namespace EnumDeep::Inner\n"
+        "{\n"
+        "\tenum class EDeep : uint8 { A };\n"
+        "}\n"
+        "struct FEnumHolder\n"
+        "{\n"
+        "\tenum class ENested : uint8 { A };\n"
+        "\tenum class Type : uint8 { A };\n"
+        "};\n"),
+    "Ws59/Plugins/EnumUse/Source/EnumUse/Public/EnumUse.h": (
+        "#pragma once\n"
+        '#include "EnumKinds.h"\n'
+        "using EEnumScopedBitmask = TEnumAsByte<EEnumScoped>;\n"
+        "using EEnumStructBitmask = TEnumAsByte< EEnumStruct >;\n"
+        "using EEnumOpaqueBitmask = TEnumAsByte<EEnumOpaque>;\n"
+        "using EEnumExportedBitmask = TEnumAsByte<\n"
+        "\tEEnumExported>;\n"
+        "using EInnerBitmask = TEnumAsByte<EnumNs::EInner>;\n"
+        "using EInnerRootedBitmask = TEnumAsByte< ::EnumNs :: EInner >;\n"
+        "using ENestedBitmask = TEnumAsByte<FEnumHolder::ENested>;\n"
+        "using ENestedTypeBitmask = TEnumAsByte<FEnumHolder::Type>;\n"
+        "#define ENUM_USE_BYTES(_Name) TEnumAsByte<EEnumScoped> _Name\n"
+        "namespace EnumOther\n"
+        "{\n"
+        "\tusing ESharedBitmask = TEnumAsByte<EShared>;\n"
+        "}\n"
+        "using EDeepBitmask = TEnumAsByte<Inner::EDeep>;\n"
+        "using namespace EnumNs;\n"
+        "using EInnerReachedBitmask = TEnumAsByte<EInner>;\n"),
+    "Ws58/Plugins/EnumUse58/EnumUse58.h": (
+        "#pragma once\n"
+        '#include "EnumKinds.h"\n'
+        "using EEnumScopedBitmask58 = TEnumAsByte<EEnumScoped>;\n"),
+    "EnumLoose/EnumLoose.h": (
+        "#pragma once\n"
+        '#include "EnumKinds.h"\n'
+        "using EEnumScopedLoose = TEnumAsByte<EEnumScoped>;\n"),
+    # Must stay silent: unscoped and namespaced enums, engine enums, a nested 'Type' qualified by another scope, a
+    # template parameter, a comment, a literal, a name its namespace resolves to an unscoped enum, a rooted name that
+    # picks the global unscoped enum over its namespace's enum class, a name at global scope with one declaration of
+    # each kind, and a name whose only enum class sits in a header out of reach.
+    "Ws59/Plugins/EnumNegative/EnumNegativeUses.h": (
+        "#pragma once\n"
+        '#include "EnumKinds.h"\n'
+        "// TEnumAsByte<EEnumScoped> in a comment\n"
+        "struct FEnumNegativeUses\n"
+        "{\n"
+        "\tTEnumAsByte<EEnumPlain> Plain;\n"
+        "\tTEnumAsByte<EEnumLegacy::Type> Legacy;\n"
+        "\tTEnumAsByte<ECollisionChannel> Engine;\n"
+        "\tTEnumAsByte<ETextureThing::Type> EngineNested;\n"
+        '\tconst TCHAR* Doc = TEXT("TEnumAsByte<EEnumScoped>");\n'
+        "};\n"
+        "template <typename EnumType>\n"
+        "bool EnumNegativeIsValid(TEnumAsByte<EnumType> Value);\n"
+        "namespace EnumNs\n"
+        "{\n"
+        "\tusing ESharedBytes = TEnumAsByte<EShared>;\n"
+        "\tusing ERootedPickBytes = TEnumAsByte<::EEnumRootedPick>;\n"
+        "}\n"
+        "using ESharedAnyBytes = TEnumAsByte<EShared>;\n"),
+    "Ws59/Plugins/EnumNegative/EnumNegativeElsewhere.h": (
+        "#pragma once\n"
+        "enum class EEnumElsewhere : uint8 { A };\n"),
+    "Ws59/Plugins/EnumNegative/EnumNegativeUnreached.h": (
+        "#pragma once\n"
+        "using EUnreachedBytes = TEnumAsByte<EEnumElsewhere>;\n"),
+})
+
+# function-type-cast: FnCast.cpp casts to function pointer types inline (plain, calling convention, member, const
+# member, templated return type, multi-line) and through aliases (using, qualified, alias of an alias, typedef, typedef
+# of a typedef, member), as reinterpret_cast and C-style casts (after '=', 'return' and '('): errors in a 5.9
+# workspace, a warning in a 5.8 one.
+SELFTEST.update({
+    "Ws59/Plugins/FnCast/Source/FnCast/Public/FnCastTypes.h": (
+        "#pragma once\n"
+        "struct FFnCastHost\n"
+        "{\n"
+        "\tint Get(float In) const;\n"
+        "};\n"
+        "using FFnCastFn = void (*)(float);\n"
+        "using FFnCastAlias = FFnCastFn;\n"
+        "typedef void (*FFnCastTypedef)(double);\n"
+        "typedef FFnCastTypedef FFnCastTypedefAlias;\n"
+        "using FFnCastMemberFn = int (FFnCastHost::*)(double) const;\n"
+        "namespace PCGExFnCast\n"
+        "{\n"
+        "\tusing FFnCastScopedFn = void (*)(int, int);\n"
+        "}\n"
+        "void FnCastTarget(int In);\n"
+        "void FnCastUse(FFnCastFn In);\n"),
+    "Ws59/Plugins/FnCast/Source/FnCast/Private/FnCast.cpp": (
+        '#include "FnCastTypes.h"\n'
+        "void FnCastScan(void (*Callback)(int), int (FFnCastHost::*Method)(float) const)\n"
+        "{\n"
+        "\tauto A = reinterpret_cast<void (*)(float)>(Callback);\n"
+        "\tauto B = reinterpret_cast<void(__cdecl*)()>(Callback);\n"
+        "\tauto C = reinterpret_cast<int (FFnCastHost::*)(double) const>(Method);\n"
+        "\tauto D = reinterpret_cast<FFnCastFn>(Callback);\n"
+        "\tauto E = reinterpret_cast<PCGExFnCast::FFnCastScopedFn>(Callback);\n"
+        "\tauto F = reinterpret_cast<FFnCastAlias>(Callback);\n"
+        "\tauto G = reinterpret_cast<FFnCastTypedef>(Callback);\n"
+        "\tauto H = reinterpret_cast<FFnCastTypedefAlias>(Callback);\n"
+        "\tauto I = reinterpret_cast<FFnCastMemberFn>(Method);\n"
+        "\tauto J = (void (*)(float))Callback;\n"
+        "\tauto K = (FFnCastFn)&FnCastTarget;\n"
+        "\tauto L = (FFnCastFn)(Callback);\n"
+        "\tFnCastUse(\n"
+        "\t\t(FFnCastFn) Callback);\n"
+        "\tauto M = reinterpret_cast<\n"
+        "\t\tvoid (*)(float)>(Callback);\n"
+        "\tauto N = (int (FFnCastHost::*)(double) const)Method;\n"
+        "\tauto O = (TArray<int> (*)(float))Callback;\n"
+        "}\n"
+        "FFnCastFn FnCastBack(void (*Callback)(int))\n"
+        "{\n"
+        "\treturn (FFnCastFn)Callback;\n"
+        "}\n"),
+    "Ws58/Plugins/FnCast58/FnCast58.cpp": (
+        '#include "FnCastTypes.h"\n'
+        "void FnCast58Scan(void (*Callback)(int))\n"
+        "{\n"
+        "\tauto A = reinterpret_cast<FFnCastFn>(Callback);\n"
+        "}\n"),
+    # Must stay silent: casts to void* and uintptr_t, a pointer to a function pointer, a function pointer inside a
+    # template argument, sources that are no function (GetDllExport, an explicit void* or uintptr_t, nullptr), a
+    # static_cast, the suppression pragmas, a literal, a comment, a lambda, sizeof, and the declarations that look like
+    # casts: an unnamed parameter, inline or through an alias, a function type taking a function pointer, a lambda's
+    # parameter (also before 'mutable'), a template argument, operator()'s parameter.
+    "Ws59/Plugins/FnCastNegative/FnCastNegative.cpp": (
+        '#include "FnCastTypes.h"\n'
+        "void FnCastNegativeTarget(float In);\n"
+        "void FnCastNegativeScan(void (*Callback)(int), void* Handle, void* Raw)\n"
+        "{\n"
+        "\tvoid* AsVoid = reinterpret_cast<void*>(Callback);\n"
+        "\tconst uintptr_t AsInt = reinterpret_cast<uintptr_t>(Callback);\n"
+        "\tvoid* AsVoidC = (void*)Callback;\n"
+        "\tauto Slot = reinterpret_cast<FFnCastFn*>(Raw);\n"
+        "\tauto Slots = reinterpret_cast<void (**)(float)>(Raw);\n"
+        "\tauto Table = reinterpret_cast<TArray<void (*)(float)>*>(Raw);\n"
+        '\tauto Loaded = (FFnCastFn)FPlatformProcess::GetDllExport(Handle, TEXT("Entry"));\n'
+        '\tauto LoadedR = reinterpret_cast<FFnCastFn>(FPlatformProcess::GetDllExport(Handle, TEXT("Entry")));\n'
+        "\tauto Through = reinterpret_cast<FFnCastFn>(reinterpret_cast<void*>(Callback));\n"
+        "\tauto ThroughInt = (FFnCastFn)(uintptr_t)Callback;\n"
+        "\tFFnCastFn Null = (FFnCastFn)nullptr;\n"
+        "\tFFnCastFn Exact = &FnCastNegativeTarget;\n"
+        "\tauto Fixed = static_cast<FFnCastFn>(&FnCastNegativeTarget);\n"
+        "PRAGMA_DISABLE_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS\n"
+        "\tauto Allowed = reinterpret_cast<void (*)(float)>(Callback);\n"
+        "\tauto AllowedC = (FFnCastFn)Callback;\n"
+        "PRAGMA_ENABLE_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS\n"
+        '\tconst TCHAR* Doc = TEXT("reinterpret_cast<void (*)(float)>(Callback)");\n'
+        "\t// reinterpret_cast<void (*)(float)>(Callback) in a comment\n"
+        "\tauto Lambda = (void (*)(int))[](int) {};\n"
+        "\tauto Size = sizeof(void (*)(float)) * 2;\n"
+        "}\n"
+        "void FnCastNegativeRegister(void (*)(float));\n"
+        "void FnCastNegativeTake(FFnCastFn);\n"
+        "using FFnCastNegativeSig = void(void (*)(float));\n"
+        "auto FnCastNegativeLambda = [](FFnCastFn) {};\n"
+        "auto FnCastNegativeMutable = [](FFnCastFn) mutable {};\n"
+        "TFunction<void(FFnCastFn)> FnCastNegativeWrapped;\n"
+        "struct FFnCastNegativeVisitor\n"
+        "{\n"
+        "\tvoid operator()(FFnCastFn) const;\n"
+        "};\n"),
+    # Must stay silent: the alias is out of this file's reach, so the name is the file's own struct.
+    "Ws59/Plugins/FnCastNegative/FnCastNegativeOther.cpp": (
+        "struct FFnCastFn\n"
+        "{\n"
+        "\texplicit FFnCastFn(int In);\n"
+        "};\n"
+        "void FnCastNegativeOther(int Value)\n"
+        "{\n"
+        "\tauto Wrapped = (FFnCastFn)Value;\n"
+        "}\n"),
+})
+
 # check -> minimum findings on the defect fixtures. A multi-pattern detector must fire once per
 # pattern; "fires at all" would let a single dead pattern hide behind its siblings.
 SELFTEST_EXPECT = {
@@ -3160,11 +3769,16 @@ SELFTEST_EXPECT = {
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
     "upackage-as-outer": 1, "editor-only-call": 15, "weakobjectptr-incomplete": 16,
-    "transitive-link-dep": 1, "api-macro-include": 6,
+    "transitive-link-dep": 1, "api-macro-include": 6, "enumasbyte-enum-class": 14, "uplugin-engine-version": 5,
+    "function-type-cast": 18,
 }
 # check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
 # pre-flight from failing on a real defect.
-SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 15}
+SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 15, "enumasbyte-enum-class": 13, "uplugin-engine-version": 3,
+                          "function-type-cast": 17}
+# check -> minimum warn-severity findings among those, where promoting a case to an error would fail the pre-flight
+# in a workspace the defect cannot break.
+SELFTEST_EXPECT_WARNINGS = {"enumasbyte-enum-class": 1, "uplugin-engine-version": 2, "function-type-cast": 1}
 
 
 def run_selftest():
@@ -3176,6 +3790,8 @@ def run_selftest():
             with open(dst, "w", encoding="utf-8") as fh:
                 fh.write(content)
         tree = Tree(tmp.replace("\\", "/"))
+        # The walk up for a .uproject stops at the temp root, so the machine's own directories cannot leak in.
+        tree._engines[os.path.dirname(os.path.abspath(tmp)).replace("\\", "/")] = (None, None, "")
         found = {name: CHECKS[name](tree) for name in sorted(CHECKS)}
         over = [f for fs in found.values() for f in fs if "Negative" in f.path]
         unlisted = sorted(set(CHECKS) - set(SELFTEST_EXPECT))
@@ -3184,9 +3800,11 @@ def run_selftest():
         for name, want in sorted(SELFTEST_EXPECT.items()):
             fs = [f for f in found.get(name, ()) if "Negative" not in f.path]
             errs, want_errs = sum(1 for f in fs if f.severity == "error"), SELFTEST_EXPECT_ERRORS.get(name, 0)
-            ok = len(fs) >= want and errs >= want_errs
+            warns, want_warns = len(fs) - errs, SELFTEST_EXPECT_WARNINGS.get(name, 0)
+            ok = len(fs) >= want and errs >= want_errs and warns >= want_warns
             print(f"  {'ok  ' if ok else 'MISS'}  {name} ({len(fs)}/{want}"
-                  + (f", {errs}/{want_errs} errors" if want_errs else "") + ")")
+                  + (f", {errs}/{want_errs} errors" if want_errs else "")
+                  + (f", {warns}/{want_warns} warnings" if want_warns else "") + ")")
             if not ok:
                 missed.append(name)
         if missed:
@@ -3360,6 +3978,8 @@ def main():
               + (f"\n    -> {f.detail}" if f.detail else ""))
 
     if not args.quiet:
+        for note in tree.notes:
+            print(f"[note] {note}")
         warns = len(findings) - errors
         print(f"\n{errors} error(s), {warns} warning(s) across {len(selected)} check(s)")
     return 1 if errors else 0

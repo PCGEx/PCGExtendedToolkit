@@ -2002,7 +2002,7 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 	// Index + 1 is the copy. Paste imports with PPF_InstanceSubobjects: fresh subobjects, soft refs as they were.
 	if (const FArrayProperty* EntriesProperty = FindEntriesProperty(GetClass()); EntriesProperty && PropertyChangedEvent.Property)
 	{
-		const int32 Index = PropertyChangedEvent.GetArrayIndex(EntriesProperty->GetName());
+		const int32 Index = PropertyChangedEvent.GetArrayIndex(EntriesProperty);
 		if (ChangeType == EPropertyChangeType::Duplicate && PropertyChangedEvent.Property == EntriesProperty)
 		{
 			const FPCGExAssetCollectionEntry* Original = GetMutableEntryRaw(Index);

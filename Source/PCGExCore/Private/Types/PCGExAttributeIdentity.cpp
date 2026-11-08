@@ -34,7 +34,7 @@ namespace PCGExData
 
 	FString FAttributeIdentity::GetDisplayName() const
 	{
-		return FString(Name.ToString() + FString::Printf(TEXT("( %d )"), ValueType));
+		return FString(Name.ToString() + FString::Printf(TEXT("( %d )"), static_cast<int32>(ValueType)));
 	}
 
 	void FAttributeIdentity::Get(const UPCGMetadata* InMetadata, TArray<FAttributeIdentity>& OutIdentities, const TSet<FName>* OptionalIgnoreList)

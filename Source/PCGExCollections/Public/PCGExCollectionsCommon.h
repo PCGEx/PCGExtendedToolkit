@@ -104,7 +104,6 @@ enum class EPCGExAssetTagInheritance : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExAssetTagInheritance)
-using EPCGExAssetTagInheritanceBitmask = TEnumAsByte<EPCGExAssetTagInheritance>;
 
 // None is declared first (with an explicit value) so it leads the details dropdown as the default.
 /** Whether an entry uses its own settings (Local), the collection's global settings (Global), or none at all (None). */

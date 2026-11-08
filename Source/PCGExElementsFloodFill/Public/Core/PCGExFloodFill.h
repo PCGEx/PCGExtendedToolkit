@@ -94,7 +94,6 @@ enum class EPCGExFloodFillControlStepsFlags : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExFloodFillControlStepsFlags)
-using EPCGExFloodFillControlStepsFlagsBitmask = TEnumAsByte<EPCGExFloodFillControlStepsFlags>;
 
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true", DisplayName="[PCGEx] Diffusion FillControl Flags"))
 enum class EPCGExFloodFillHeuristicFlags : uint8
@@ -106,7 +105,6 @@ enum class EPCGExFloodFillHeuristicFlags : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExFloodFillHeuristicFlags)
-using EPCGExFloodFillHeuristicFlagsBitmask = TEnumAsByte<EPCGExFloodFillHeuristicFlags>;
 
 USTRUCT(BlueprintType)
 struct PCGEXELEMENTSFLOODFILL_API FPCGExFloodFillFlowDetails

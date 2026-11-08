@@ -99,6 +99,9 @@ public:
 	virtual bool IsPinStaticallyActive(const FName& PinLabel) const override;
 	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 
+	// Every output is created here, never forwarded from an external source, so it can be stolen.
+	virtual bool CanStealOutputData() const override { return true; }
+
 protected:
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 	virtual FPCGElementPtr CreateElement() const override;

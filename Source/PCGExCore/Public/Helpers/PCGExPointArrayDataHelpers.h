@@ -31,7 +31,6 @@ enum class EPCGExPointNativeProperties : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExPointNativeProperties)
-using EPCGExNativePointPropertiesBitmask = TEnumAsByte<EPCGExPointNativeProperties>;
 
 namespace PCGExPointArrayDataHelpers
 {

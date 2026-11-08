@@ -7,21 +7,32 @@
 #include "Collections/PCGExMeshCollection.h"
 #include "Hash/Blake3.h"
 #include "Helpers/PCGExArchiveBlake3.h"
+#include "UObject/PropertyPortFlags.h"
 
 namespace PCGExSharedCompact
 {
 	FString MeshSortKey(const FPCGExMeshCollectionEntry& E)
 	{
-		// Descriptors digested with Blake3 (256-bit) rather than CRC32. CRC32's 32-bit footprint
-		// could collide between distinct descriptors and leave the sort tie-break undefined for
-		// those pairs; Blake3 pushes collision probability to ~2^-128 so ordering is fully
-		// determined in practice.
-		FArchiveBlake3 DescHasher;
+		// Descriptors key on their text delta from default instances, so a member the engine adds at its default never
+		// moves an entry. The binary digest behind it only splits equal delta texts (floats export as %f).
+		FSoftISMComponentDescriptor ISMDefaults;
+		ISMDefaults.Hash = E.ISMDescriptor.Hash; // Cached CRC of every member: engine-dependent, kept out of the delta.
+		const FPCGExStaticMeshDescriptorExtras ExtrasDefaults;
+
+		FString DeltaText;
+		FSoftISMComponentDescriptor::StaticStruct()->ExportText(DeltaText, &E.ISMDescriptor, &ISMDefaults, nullptr, PPF_None, nullptr);
+		FPCGExStaticMeshDescriptorExtras::StaticStruct()->ExportText(DeltaText, &E.SMExtras, &ExtrasDefaults, nullptr, PPF_None, nullptr);
+
+		// UTF-8, not TCHAR: sizeof(TCHAR) varies by platform.
+		const FTCHARToUTF8 DeltaUtf8(*DeltaText);
+		FBlake3 DeltaHasher;
+		DeltaHasher.Update(DeltaUtf8.Get(), static_cast<uint64>(DeltaUtf8.Length()));
+
+		FArchiveBlake3 BinaryHasher;
 		FSoftISMComponentDescriptor::StaticStruct()->SerializeBin(
-			DescHasher, const_cast<FSoftISMComponentDescriptor*>(&E.ISMDescriptor));
+			BinaryHasher, const_cast<FSoftISMComponentDescriptor*>(&E.ISMDescriptor));
 		FPCGExStaticMeshDescriptorExtras::StaticStruct()->SerializeBin(
-			DescHasher, const_cast<FPCGExStaticMeshDescriptorExtras*>(&E.SMExtras));
-		const FBlake3Hash DescHash = DescHasher.Finalize();
+			BinaryHasher, const_cast<FPCGExStaticMeshDescriptorExtras*>(&E.SMExtras));
 
 		TStringBuilder<512> Builder;
 		Builder.Append(E.StaticMesh.ToSoftObjectPath().ToString());
@@ -30,7 +41,9 @@ namespace PCGExSharedCompact
 		                E.SlotIndex,
 		                static_cast<int32>(E.DescriptorSource),
 		                E.PropertyComponentHash);
-		Builder.Append(LexToString(DescHash));
+		Builder.Append(LexToString(DeltaHasher.Finalize()));
+		Builder.Append(TEXT("|BIN="));
+		Builder.Append(LexToString(BinaryHasher.Finalize()));
 
 		for (const FPCGExMaterialOverrideSingleEntry& S : E.MaterialOverrideVariants)
 		{

@@ -48,7 +48,6 @@ enum class EPCGExTexChannelsFlags : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExTexChannelsFlags)
-using EPCGExTexChannelsFlagsBitmask = TEnumAsByte<EPCGExTexChannelsFlags>;
 
 namespace PCGExTexture
 {
