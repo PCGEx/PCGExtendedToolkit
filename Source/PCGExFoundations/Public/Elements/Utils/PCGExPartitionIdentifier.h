@@ -41,39 +41,15 @@ struct FPCGExPartitionGrid : public FPCGExPartitionQuery
 
 /** Structured per-cell outputs. Executing Component only (suffixed on @Data in Columns, per-row in Rows). */
 USTRUCT(BlueprintType)
-struct FPCGExPartitionOutputs
+struct FPCGExPartitionOutputs : public FPCGExPartitionCellOutputs
 {
 	GENERATED_BODY()
 
-	/** Write the integer grid coordinate as a vector attribute (X, Y, Z). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	bool bGridCoord = false;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bGridCoord", EditConditionHides))
-	FName GridCoordAttributeName = "GridCoord";
-
-	/** Write the cell center (world space) as a vector attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	bool bCellCenter = false;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bCellCenter", EditConditionHides))
-	FName CellCenterAttributeName = "CellCenter";
-
-	/** Write the cell min/max corners (world space) as vector attributes. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
-	bool bCellBounds = false;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bCellBounds", EditConditionHides))
-	FName CellMinAttributeName = "CellMin";
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bCellBounds", EditConditionHides))
-	FName CellMaxAttributeName = "CellMax";
-
 	/** Rows layout only: write each entry's Suffix as a label attribute (replaces the old Self/Neighbor/Parent relation). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (DisplayAfter = "CellMaxAttributeName"))
 	bool bRowLabel = false;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bRowLabel", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "bRowLabel", EditConditionHides, DisplayAfter = "bRowLabel"))
 	FName RowLabelAttributeName = "Partition";
 };
 

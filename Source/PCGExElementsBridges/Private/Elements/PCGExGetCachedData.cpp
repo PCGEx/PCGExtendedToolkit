@@ -317,6 +317,12 @@ bool FPCGExGetCachedDataElement::Boot(FPCGExContext* InContext) const
 			// Never the bare Cache ID instead: that would read an entry the user did not name.
 			PCGE_LOG(Warning, GraphAndLog, LOCTEXT("UnresolvedPartition", "The partition prefix could not be resolved (no execution source, or no valid bounds); nothing was read."));
 		}
+		else
+		{
+			PCGExPartitionGrid::FComponentReads Reads;
+			for (const FPCGExPartitionQuery& Query : Settings->Partitions) { Reads.Add(Query); }
+			PCGExPartitionGrid::WarnIfComponentless(Reads, Context->ExecutionSource.Get(), Context);
+		}
 	}
 	else if (!Settings->bReadAllEntries)
 	{

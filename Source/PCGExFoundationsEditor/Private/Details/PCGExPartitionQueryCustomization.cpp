@@ -22,6 +22,26 @@
 
 namespace PCGExPartitionQueryCustomization
 {
+	const FName HideCellOffsetMeta = TEXT("HideCellOffset");
+
+	FText MakeExplicitGridText(const FPCGExPartitionQuery& InQuery)
+	{
+		// Unbounded and Uninitialized have no size: name them, unless a size step puts them back on the grid ladder.
+		const bool bValidGrid = PCGHiGenGrid::IsValidGrid(InQuery.ExplicitGrid);
+		if (!bValidGrid && InQuery.GridSizeOffset == 0)
+		{
+			return StaticEnum<EPCGHiGenGrid>()->GetDisplayNameTextByValue(static_cast<int64>(InQuery.ExplicitGrid));
+		}
+
+		const uint32 GridSize = PCGExPartitionGrid::OffsetGridSize(bValidGrid ? PCGHiGenGrid::GridToGridSize(InQuery.ExplicitGrid) : 0u, InQuery.GridSizeOffset);
+		return FText::AsNumber(GridSize, &FNumberFormattingOptions::DefaultNoGrouping());
+	}
+
+	FText MakeStepText(const FPCGExPartitionQuery& InQuery)
+	{
+		return FText::FromString(FString::Printf(TEXT("%+d"), InQuery.GridSizeOffset));
+	}
+
 	FText MakeSummary(const FPCGExPartitionQuery& InQuery)
 	{
 		// A forced 2D grid ignores the Z offset; Auto is only known at execution, so Z counts there.
@@ -30,31 +50,35 @@ namespace PCGExPartitionQueryCustomization
 
 		if (InQuery.GridSizeResolution == EPCGExPartitionResolution::Explicit)
 		{
-			// Unbounded and Uninitialized have no size: name them instead. GridToGridSize also ensures on them.
-			if (!PCGHiGenGrid::IsValidGrid(InQuery.ExplicitGrid))
-			{
-				return FText::Format(LOCTEXT("SummaryExplicit", "{0} @ {1}"), Subject, StaticEnum<EPCGHiGenGrid>()->GetDisplayNameTextByValue(static_cast<int64>(InQuery.ExplicitGrid)));
-			}
-
-			const uint32 GridSize = PCGExPartitionGrid::OffsetGridSize(PCGHiGenGrid::GridToGridSize(InQuery.ExplicitGrid), InQuery.GridSizeOffset);
-			return FText::Format(LOCTEXT("SummaryExplicit", "{0} @ {1}"), Subject, FText::AsNumber(GridSize, &FNumberFormattingOptions::DefaultNoGrouping()));
+			return FText::Format(LOCTEXT("SummaryExplicit", "{0} @ {1}"), Subject, MakeExplicitGridText(InQuery));
 		}
 
 		if (InQuery.GridSizeOffset == 0) { return Subject; }
 
-		return FText::Format(LOCTEXT("SummaryStepped", "{0} {1}"), Subject, FText::FromString(FString::Printf(TEXT("%+d"), InQuery.GridSizeOffset)));
+		return FText::Format(LOCTEXT("SummaryStepped", "{0} {1}"), Subject, MakeStepText(InQuery));
 	}
 
-	FText GetSummary(const TSharedPtr<IPropertyHandle>& InHandle)
+	// Without a cell offset there is no Self/Neighbor subject: only the grid it resolves to.
+	FText MakeGridSummary(const FPCGExPartitionQuery& InQuery)
+	{
+		if (InQuery.GridSizeResolution == EPCGExPartitionResolution::Explicit) { return MakeExplicitGridText(InQuery); }
+
+		if (InQuery.GridSizeOffset == 0) { return LOCTEXT("SummaryFromComponent", "From Component"); }
+
+		return FText::Format(LOCTEXT("SummaryFromComponentStepped", "From Component {0}"), MakeStepText(InQuery));
+	}
+
+	FText GetSummary(const TSharedPtr<IPropertyHandle>& InHandle, const bool bGridOnly)
 	{
 		TOptional<FText> Summary;
 		bool bMultiple = false;
 
-		InHandle->EnumerateConstRawData([&Summary, &bMultiple](const void* RawData, const int32 /*DataIndex*/, const int32 /*NumDatas*/)
+		InHandle->EnumerateConstRawData([&Summary, &bMultiple, bGridOnly](const void* RawData, const int32 /*DataIndex*/, const int32 /*NumDatas*/)
 		{
 			if (!RawData) { return true; }
 
-			const FText Current = MakeSummary(*static_cast<const FPCGExPartitionQuery*>(RawData));
+			const FPCGExPartitionQuery& Query = *static_cast<const FPCGExPartitionQuery*>(RawData);
+			const FText Current = bGridOnly ? MakeGridSummary(Query) : MakeSummary(Query);
 			if (!Summary.IsSet()) { Summary = Current; }
 			else if (!Summary->EqualTo(Current)) { bMultiple = true; }
 
@@ -88,7 +112,7 @@ TSharedRef<SWidget> FPCGExPartitionQueryCustomization::MakeNameWidget(const TSha
 	const TSharedPtr<IPropertyHandle> Handle = PropertyHandle;
 
 	return SNew(STextBlock)
-		.Text_Lambda([Handle]() { return PCGExPartitionQueryCustomization::GetSummary(Handle); })
+		.Text_Lambda([Handle]() { return PCGExPartitionQueryCustomization::GetSummary(Handle, false); })
 		.ToolTipText(PropertyHandle->GetToolTipText())
 		.Font(GetHintFont())
 		.ColorAndOpacity(GetHintColor());
@@ -127,6 +151,26 @@ void FPCGExPartitionQueryCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
+	if (PropertyHandle->HasMetaData(PCGExPartitionQueryCustomization::HideCellOffsetMeta))
+	{
+		const TSharedPtr<IPropertyHandle> Handle = PropertyHandle;
+
+		HeaderRow
+			.NameContent()
+			[
+				PropertyHandle->CreatePropertyNameWidget()
+			]
+			.ValueContent()
+			.MinDesiredWidth(150)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([Handle]() { return PCGExPartitionQueryCustomization::GetSummary(Handle, true); })
+				.Font(GetHintFont())
+				.ColorAndOpacity(GetHintColor())
+			];
+		return;
+	}
+
 	const TSharedPtr<IPropertyHandle> OffsetHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExPartitionQuery, Offset));
 
 	HeaderRow

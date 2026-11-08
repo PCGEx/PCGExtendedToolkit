@@ -225,6 +225,10 @@ bool FPCGExSetCachedDataElement::Boot(FPCGExContext* InContext) const
 			return true;
 		}
 
+		PCGExPartitionGrid::FComponentReads Reads;
+		Reads.Add(Settings->Partition);
+		PCGExPartitionGrid::WarnIfComponentless(Reads, Context->ExecutionSource.Get(), Context);
+
 		Context->CacheID = Keys[0];
 	}
 
