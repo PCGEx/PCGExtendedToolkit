@@ -49,7 +49,6 @@ enum class EPCGExIntersectionStrictness : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExIntersectionStrictness)
-using EPCGExIntersectionStrictnessBitmask = TEnumAsByte<EPCGExIntersectionStrictness>;
 
 namespace PCGExMath
 {

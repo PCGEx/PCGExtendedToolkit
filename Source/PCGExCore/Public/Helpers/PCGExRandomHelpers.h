@@ -22,7 +22,6 @@ enum class EPCGExSeedComponents : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExSeedComponents)
-using EPCGExSeedComponentsBitmask = TEnumAsByte<EPCGExSeedComponents>;
 
 namespace PCGExRandomHelpers
 {

@@ -105,6 +105,7 @@ class Tree:
         self._closures = {}
         self._requires_editor = {}
         self._engines = {}                      # directory -> workspace_engine() result
+        self._plugin_engines = {}               # directory -> plugin_engine() result
 
     def _skip(self, path):
         low = path.lower()
@@ -2099,16 +2100,49 @@ def workspace_engine(tree, path):
     return found
 
 
+def plugin_engine(tree, path):
+    """((major, minor) or None, .uplugin or None): the EngineVersion of the nearest .uplugin above path.
+
+    A plugin packaged outside any workspace carries no .uproject, but its descriptor still names the engine it targets.
+    """
+    d, walked, found = os.path.dirname(os.path.abspath(path)).replace("\\", "/"), [], None
+    while found is None:
+        if d in tree._plugin_engines:
+            found = tree._plugin_engines[d]
+            break
+        walked.append(d)
+        try:
+            plugins = sorted(f for f in os.listdir(d) if f.endswith(".uplugin"))
+        except OSError:
+            plugins = []
+        if plugins:
+            uplugin = f"{d}/{plugins[0]}"
+            m = ENGINE_VERSION_FIELD_RE.search(read(uplugin))
+            v = re.match(r'\s*(\d+)\.(\d+)\b', m.group(1)) if m else None
+            found = ((int(v.group(1)), int(v.group(2))) if v else None, uplugin)
+        elif os.path.dirname(d) == d:
+            found = (None, None)
+        else:
+            d = os.path.dirname(d)
+    for w in walked:
+        tree._plugin_engines[w] = found
+    return found
+
+
 def engine_gated(tree, path, since):
     """(severity, engine label) for a defect that every engine from `since` on rejects.
 
-    A warning only where the workspace provably builds against an older engine, which leaves it latent until the next
-    port. An unknown engine is held to the newer rules.
+    The engine is the workspace's (workspace_engine); where that names no version, the plugin's own EngineVersion
+    (plugin_engine), which is all a packaged copy outside any workspace carries. A warning only where that engine is
+    provably older, which leaves the defect latent until the next port. An unknown engine is held to the newer rules.
     """
-    version = workspace_engine(tree, path)[0]
+    version, label = workspace_engine(tree, path)[0], "workspace engine"
     if version is None:
-        return "error", "workspace engine unknown"
-    return ("error" if version >= since else "warn"), f"workspace engine {version[0]}.{version[1]}"
+        version, uplugin = plugin_engine(tree, path)
+        label = f"{os.path.basename(uplugin)} EngineVersion" if uplugin else label
+    if version is None:
+        return "error", "engine unknown"
+    return ("error" if version >= since else "warn"), f"{label} {version[0]}.{version[1]}"
 
 
 # An enum declaration, scoped when the 'class' / 'struct' group matches. An export macro or attribute may precede
@@ -2166,9 +2200,10 @@ def enum_candidates(found, quals, rooted, here):
        "TEnumAsByte<T> where T is an enum class (or enum struct) declared in the swept tree and reachable through the "
        "file's includes. 5.9 declares TEnumAsByte as template <UE::CUnscopedEnum> (Containers/EnumAsByte.h), so "
        "naming it with an enum class is ill-formed even in an unused alias; 5.8 and earlier only static_assert once it "
-       "is instantiated. Error when the workspace engine (EngineAssociation of the nearest .uproject above the file) "
-       "is 5.9 or later or unknown, warning below. Enum classes the engine declares are not scanned, so TEnumAsByte "
-       "over one of those is not caught here.")
+       "is instantiated. Error when the engine is 5.9 or later or unknown, warning below: the EngineAssociation of the "
+       "nearest .uproject above the file, else the EngineVersion of the nearest .uplugin (a plugin packaged outside a "
+       "workspace). Enum classes the engine declares are not scanned, so TEnumAsByte over one of those is not caught "
+       "here.")
 def check_enumasbyte_enum_class(tree):
     decls = {}                                    # name -> [(scoped, scope path, file, line)]
     for p in tree.headers + tree.sources:
@@ -2371,7 +2406,8 @@ def suppressed_spans(text):
        "A reinterpret_cast or C-style cast to a function pointer type, spelled inline ('R (*)(...)', 'R (C::*)(...)') "
        "or through a using / typedef alias the swept tree declares. 5.9 UBT raises CastFunctionTypeMismatch to an "
        "error from build settings V7 on (MSVC /we4191, Clang -Wcast-function-type-mismatch under -Werror); 5.8 leaves "
-       "it off. Error when the workspace engine is 5.9 or later or unknown, warning below. The source type is not "
+       "it off. Error when the engine (resolved as for enumasbyte-enum-class) is 5.9 or later or unknown, warning "
+       "below. The source type is not "
        "resolved: a source that is visibly no function (nullptr, an integer, a void* or uintptr_t cast, GetDllExport, "
        "dlsym) is skipped, as is a cast between PRAGMA_DISABLE/ENABLE_CAST_FUNCTION_TYPE_MISMATCH_WARNINGS, which is "
        "how a cast that must stay is kept.")
@@ -3518,7 +3554,8 @@ SELFTEST.update({
 })
 
 # The engine-gated checks judge a file by the workspace holding it: Ws59 and Ws58 name an engine, WsGuid names a source
-# build's GUID, and the temp root holds no .uproject at all.
+# build's GUID, and the temp root holds no .uproject at all. Outside a workspace, Dist58 and Dist59 are packaged plugins
+# whose .uplugin names the engine.
 SELFTEST.update({
     "Ws59/Ws59.uproject": '{\n\t"FileVersion": 3,\n\t"EngineAssociation": "5.9"\n}\n',
     "Ws58/Ws58.uproject": '{\n\t"FileVersion": 3,\n\t"EngineAssociation": "5.8"\n}\n',
@@ -3551,7 +3588,8 @@ SELFTEST.update({
 # enumasbyte-enum-class: EnumKinds.h declares every enum shape. EnumUse.h names an enum class in each spelling (plain,
 # spaced, enum struct, opaque, exported, multi-line, qualified, rooted, nested in a struct, a nested 'Type', a macro
 # body, an unqualified name its namespace resolves, a nested namespace, a name a using-directive reaches): errors in a
-# 5.9 workspace. The same use is a warning in a 5.8 workspace and an error where no engine is known.
+# 5.9 workspace. The same use is a warning in a 5.8 workspace and an error where no engine is known; outside a
+# workspace it follows the plugin's EngineVersion (a warning in Dist58, an error in Dist59).
 SELFTEST.update({
     "EnumDecl/Public/EnumKinds.h": (
         "#pragma once\n"
@@ -3618,6 +3656,16 @@ SELFTEST.update({
         "#pragma once\n"
         '#include "EnumKinds.h"\n'
         "using EEnumScopedLoose = TEnumAsByte<EEnumScoped>;\n"),
+    "Dist58/Dist58.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.8.0"\n}\n',
+    "Dist58/Source/Dist58/Public/EnumDist58.h": (
+        "#pragma once\n"
+        '#include "EnumKinds.h"\n'
+        "using EEnumScopedDist58 = TEnumAsByte<EEnumScoped>;\n"),
+    "Dist59/Dist59.uplugin": '{\n\t"FileVersion": 3,\n\t"EngineVersion": "5.9.0"\n}\n',
+    "Dist59/Source/Dist59/Public/EnumDist59.h": (
+        "#pragma once\n"
+        '#include "EnumKinds.h"\n'
+        "using EEnumScopedDist59 = TEnumAsByte<EEnumScoped>;\n"),
     # Must stay silent: unscoped and namespaced enums, engine enums, a nested 'Type' qualified by another scope, a
     # template parameter, a comment, a literal, a name its namespace resolves to an unscoped enum, a rooted name that
     # picks the global unscoped enum over its namespace's enum class, a name at global scope with one declaration of
@@ -3653,7 +3701,7 @@ SELFTEST.update({
 # function-type-cast: FnCast.cpp casts to function pointer types inline (plain, calling convention, member, const
 # member, templated return type, multi-line) and through aliases (using, qualified, alias of an alias, typedef, typedef
 # of a typedef, member), as reinterpret_cast and C-style casts (after '=', 'return' and '('): errors in a 5.9
-# workspace, a warning in a 5.8 one.
+# workspace, a warning in a 5.8 one and in a 5.8 packaged plugin.
 SELFTEST.update({
     "Ws59/Plugins/FnCast/Source/FnCast/Public/FnCastTypes.h": (
         "#pragma once\n"
@@ -3702,6 +3750,12 @@ SELFTEST.update({
     "Ws58/Plugins/FnCast58/FnCast58.cpp": (
         '#include "FnCastTypes.h"\n'
         "void FnCast58Scan(void (*Callback)(int))\n"
+        "{\n"
+        "\tauto A = reinterpret_cast<FFnCastFn>(Callback);\n"
+        "}\n"),
+    "Dist58/Source/Dist58/Private/FnCastDist58.cpp": (
+        '#include "FnCastTypes.h"\n'
+        "void FnCastDist58Scan(void (*Callback)(int))\n"
         "{\n"
         "\tauto A = reinterpret_cast<FFnCastFn>(Callback);\n"
         "}\n"),
@@ -3769,16 +3823,16 @@ SELFTEST_EXPECT = {
     "value-member-include": 1, "log-category-include": 1, "mac-reserved-global": 3,
     "functionref-dangling": 2, "weakobjectptr-fwd-only": 1, "clang-loop-once": 1,
     "upackage-as-outer": 1, "editor-only-call": 15, "weakobjectptr-incomplete": 16,
-    "transitive-link-dep": 1, "api-macro-include": 6, "enumasbyte-enum-class": 14, "uplugin-engine-version": 5,
-    "function-type-cast": 18,
+    "transitive-link-dep": 1, "api-macro-include": 6, "enumasbyte-enum-class": 16, "uplugin-engine-version": 5,
+    "function-type-cast": 19,
 }
 # check -> minimum error-severity findings among those, where demoting a case to a warning would stop the
 # pre-flight from failing on a real defect.
-SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 15, "enumasbyte-enum-class": 13, "uplugin-engine-version": 3,
+SELFTEST_EXPECT_ERRORS = {"weakobjectptr-incomplete": 15, "enumasbyte-enum-class": 14, "uplugin-engine-version": 3,
                           "function-type-cast": 17}
 # check -> minimum warn-severity findings among those, where promoting a case to an error would fail the pre-flight
 # in a workspace the defect cannot break.
-SELFTEST_EXPECT_WARNINGS = {"enumasbyte-enum-class": 1, "uplugin-engine-version": 2, "function-type-cast": 1}
+SELFTEST_EXPECT_WARNINGS = {"enumasbyte-enum-class": 2, "uplugin-engine-version": 2, "function-type-cast": 2}
 
 
 def run_selftest():
@@ -3790,8 +3844,10 @@ def run_selftest():
             with open(dst, "w", encoding="utf-8") as fh:
                 fh.write(content)
         tree = Tree(tmp.replace("\\", "/"))
-        # The walk up for a .uproject stops at the temp root, so the machine's own directories cannot leak in.
-        tree._engines[os.path.dirname(os.path.abspath(tmp)).replace("\\", "/")] = (None, None, "")
+        # The walks up for a .uproject and a .uplugin stop at the temp root, so the machine's own folders cannot leak in.
+        above = os.path.dirname(os.path.abspath(tmp)).replace("\\", "/")
+        tree._engines[above] = (None, None, "")
+        tree._plugin_engines[above] = (None, None)
         found = {name: CHECKS[name](tree) for name in sorted(CHECKS)}
         over = [f for fs in found.values() for f in fs if "Negative" in f.path]
         unlisted = sorted(set(CHECKS) - set(SELFTEST_EXPECT))
