@@ -32,7 +32,7 @@
 //
 // FieldName drives the FUniqueOutput member name via FieldName##Attr.
 // PerEntryValueExpr is evaluated inside the write loop where `E` (entry) / `Module` (subdivision
-// submodule) are in scope -- LEAF rows reference E, GRAMMAR rows reference Module.
+// submodule) are in scope -- ENTRY rows reference E, GRAMMAR rows reference Module.
 //
 // Attributes that don't fit the uniform shape are kept bespoke:
 //   - AssetPath/AssetClass: one toggle declares two attributes (FSoftObjectPath/FSoftClassPath)
@@ -40,16 +40,17 @@
 //   - Weight:               int32 vs float depending on normalization mode
 //   - Category:             written always, not gated on bIsSubCollection
 //   - Entry:                always created, value derived from Packer
-#define PCGEX_GCD_LEAF_ATTRS(_) \
+// ENTRY attributes are written on leaf and grammar sub-collection rows alike; empty rows skip them.
+#define PCGEX_GCD_ENTRY_ATTRS(_) \
 	_(FVector, Extents,      ExtentsAttributeName,      bWriteExtents,      FVector::OneVector, E->Staging.Bounds.GetExtent()) \
 	_(FVector, BoundsMin,    BoundsMinAttributeName,    bWriteBoundsMin,    FVector::OneVector, E->Staging.Bounds.Min) \
 	_(FVector, BoundsMax,    BoundsMaxAttributeName,    bWriteBoundsMax,    FVector::OneVector, E->Staging.Bounds.Max) \
 	_(int32,   NestingDepth, NestingDepthAttributeName, bWriteNestingDepth, -1,                 EH.NestingDepth)
 
-// Per-row attributes (written for EVERY row, including sub-collection placeholders and empty rows).
+// Per-row attributes (written for EVERY row, empty rows included).
 //   _(Type, FieldName, AttrNameMember, ToggleMember, Default, PerEntryValueExpr)
 // PerEntryValueExpr references `EH` (the FFlattenedEntry), which always exists even when EH.Entry
-// is null -- that's why these live outside the leaf-only write block.
+// is null -- that's why they are written before the null-entry early-out.
 #define PCGEX_GCD_ROW_ATTRS(_) \
 	_(int32, RootCollectionIndex, RootCollectionIndexAttributeName, bWriteRootCollectionIndex, -1, EH.RootCollectionIndex) \
 	_(int32, CollectionIndex,     CollectionIndexAttributeName,     bWriteCollectionIndex,     -1, EH.CollectionIndex) \
@@ -186,7 +187,7 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteCategory, CategoryAttributeName)
 #define PCGEX_GCD_VALIDATE(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, Toggle, AttrName)
-	PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_VALIDATE)
+	PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_ROW_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_GRAMMAR_PERAXIS_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_VALIDATE)
@@ -276,7 +277,7 @@ namespace PCGExGetCollectionData
 		FPCGMetadataAttribute<int64>* EntryAttr = nullptr;
 #define PCGEX_GCD_DECL_FIELD(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
 		FPCGMetadataAttribute<Type>* FieldName##Attr = nullptr;
-		PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_DECL_FIELD)
+		PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_DECL_FIELD)
 		PCGEX_GCD_ROW_ATTRS(PCGEX_GCD_DECL_FIELD)
 		PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_DECL_FIELD)
 #undef PCGEX_GCD_DECL_FIELD
@@ -425,7 +426,7 @@ namespace PCGExGetCollectionData
 		for (const FFlattenedEntry& EH : Entries)
 		{
 			const FPCGExAssetCollectionEntry* E = EH.Entry;
-			if (!E || E->bIsSubCollection)
+			if (!E || EH.bIsEmpty)
 			{
 				continue;
 			}
@@ -540,7 +541,7 @@ namespace PCGExGetCollectionData
 			{ \
 				U.FieldName##Attr = Metadata->CreateAttribute<Type>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->AttrName, U.OutputSet), Default, false, true); \
 			}
-			PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_DECLARE)
+			PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_DECLARE)
 			PCGEX_GCD_ROW_ATTRS(PCGEX_GCD_DECLARE)
 			PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_DECLARE)
 #undef PCGEX_GCD_DECLARE
@@ -647,20 +648,22 @@ namespace PCGExGetCollectionData
 				continue;
 			}
 
-			// AssetPath is written for both leaf and sub-collection entries. UpdateStaging
-			// populates Staging.Path with the sub-collection's own asset path when bIsSubCollection,
-			// so downstream consumers can resolve either kind through the same attribute.
-			// AssetClass and the other leaf-only fields (weights, bounds, nesting depth) stay
-			// gated -- sub-collections aren't UClass references and don't have meaningful bounds.
+			// UpdateStaging stores a sub-collection entry's own path, so both kinds resolve through AssetPath.
 			SetIf(U.AssetPathAttr, Key, E->Staging.Path);
 			if (U.AssetIdAttr)
 			{
 				U.AssetIdAttr->SetValue(Key, PCGExCollections::ComputeAssetId(E->Staging.Path));
 			}
 
+			// A sub-collection path names a collection asset, never a class.
 			if (!E->bIsSubCollection)
 			{
 				SetIf(U.AssetClassAttr, Key, FSoftClassPath(E->Staging.Path.ToString()));
+			}
+
+			// Leaves and grammar sub-collection rows are both pickable entries; empty rows keep the defaults.
+			if (!EH.bIsEmpty)
+			{
 				if (U.WeightAttrInt)
 				{
 					U.WeightAttrInt->SetValue(Key, E->Weight);
@@ -683,10 +686,10 @@ namespace PCGExGetCollectionData
 					}
 					U.WeightAttrFloat->SetValue(Key, Denom > 0.0 ? static_cast<float>(static_cast<double>(E->Weight) / Denom) : 0.0f);
 				}
-#define PCGEX_GCD_WRITE_LEAF(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
+#define PCGEX_GCD_WRITE_ENTRY(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
 				SetIf(U.FieldName##Attr, Key, ValueExpr);
-				PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_WRITE_LEAF)
-#undef PCGEX_GCD_WRITE_LEAF
+				PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_WRITE_ENTRY)
+#undef PCGEX_GCD_WRITE_ENTRY
 			}
 
 			SetIf(U.CategoryAttr, Key, EH.Category);
@@ -1443,7 +1446,7 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	return InContext->TryComplete();
 }
 
-#undef PCGEX_GCD_LEAF_ATTRS
+#undef PCGEX_GCD_ENTRY_ATTRS
 #undef PCGEX_GCD_ROW_ATTRS
 #undef PCGEX_GCD_GRAMMAR_PERAXIS_ATTRS
 #undef PCGEX_GCD_GRAMMAR_SHARED_ATTRS

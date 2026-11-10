@@ -40,6 +40,8 @@ namespace PCGExGetCollectionData
 		int32 CollectionIndex = -1;
 		int32 NestingDepth = -1;
 		int32 CollectionHash = -1;
+		/** Stand-in row kept for an entry that resolved to nothing (bOmitInvalidAndEmpty off). */
+		bool bIsEmpty = false;
 	};
 
 	/** Invariants shared across the flatten recursion. CollectionIndexMap + NextCollectionIndex and
