@@ -140,70 +140,6 @@ namespace PCGExEnumSelectorWidget
 
 	// ---------- Enum metadata helpers ----------------------------------------------------------
 
-	static bool IsBitflagsEnum(const UEnum* Enum)
-	{
-		return Enum && Enum->HasMetaData(TEXT("Bitflags"));
-	}
-
-	/**
-	 * Resolves the bitmask stored for entry Index of a Bitflags enum.
-	 *
-	 * UENUM(meta=(Bitflags)) declarations store **bit positions** in their values by default
-	 * -- FlagA=0 means "bit 0", which the editor packs as the mask 1<<0=1. Authors who want
-	 * the declared values to be the masks themselves opt in with the
-	 * UseEnumValuesAsMaskValuesInEditor meta. Both forms appear in the wild, so the picker
-	 * has to ask the enum which mode it is in rather than guess.
-	 *
-	 * Without this normalisation, ticking a checkbox would write the bit *position* to the
-	 * value (e.g. FlagB writing 1 instead of 2), causing different entries to collide on the
-	 * same physical bits and the checkbox state to read back wrong.
-	 */
-	static int64 GetBitflagMaskAtIndex(const UEnum* Enum, int32 Index)
-	{
-		const int64 Raw = Enum->GetValueByIndex(Index);
-		if (Enum->HasMetaData(TEXT("UseEnumValuesAsMaskValuesInEditor")))
-		{
-			return Raw;
-		}
-		// Defensive: a malformed enum with a negative or out-of-range bit position would
-		// shift by an undefined amount. Clamp to the int64 range.
-		if (Raw < 0 || Raw >= 64)
-		{
-			return 0;
-		}
-		return static_cast<int64>(1ULL << static_cast<uint64>(Raw));
-	}
-
-	/**
-	 * Mirrors the engine's own SEnumComboBox visibility filter so behavior matches what users
-	 * see in stock detail panels for enum-typed UPROPERTYs.
-	 *
-	 * Filters: Hidden / Spacer / BlueprintInternalUseOnly / HiddenByDefault metadata, plus the
-	 * synthetic <EnumName>_MAX sentinel UHT auto-appends to most native UENUMs. The MAX filter
-	 * is by name suffix because (a) it's not always present, (b) real values never end in _MAX,
-	 * and (c) it can sit anywhere in the array -- blindly stripping the last index is unsafe.
-	 *
-	 * Callers iterate the full Enum->NumEnums() range and skip indices where this returns true.
-	 */
-	static bool ShouldHideEnumValue(const UEnum* Enum, int32 Index)
-	{
-		if (Enum->HasMetaData(TEXT("Hidden"), Index)
-			|| Enum->HasMetaData(TEXT("Spacer"), Index)
-			|| Enum->HasMetaData(TEXT("BlueprintInternalUseOnly"), Index)
-			|| Enum->HasMetaData(TEXT("HiddenByDefault"), Index))
-		{
-			return true;
-		}
-
-		const FString EntryName = Enum->GetNameStringByIndex(Index);
-		if (EntryName.EndsWith(TEXT("_MAX"), ESearchCase::CaseSensitive))
-		{
-			return true;
-		}
-
-		return false;
-	}
-
 	/**
 	 * UEnums we never want to surface in the picker. These are engine internals (the macro
 	 * scaffolding under /Script/CoreUObject) plus any enum explicitly tagged Hidden or
@@ -243,7 +179,7 @@ namespace PCGExEnumSelectorWidget
 		return FText::FromString(Enum->GetName());
 	}
 
-	static FText FormatValueButtonLabel(const TSharedRef<IPropertyHandle>& ValueHandle)
+	static FText FormatValueButtonLabel(const TSharedRef<IPropertyHandle>& ValueHandle, const bool bFlagMasks)
 	{
 		bool bMultiClass = false;
 		UEnum* Enum = ReadUnanimousClass(ValueHandle, bMultiClass);
@@ -259,27 +195,9 @@ namespace PCGExEnumSelectorWidget
 			return LOCTEXT("MultipleValues", "Multiple Values");
 		}
 
-		if (IsBitflagsEnum(Enum))
+		if (bFlagMasks && PCGExEnumSelector::IsFlagsEnum(Enum))
 		{
-			if (Value == 0)
-			{
-				return LOCTEXT("BitflagsNone", "(None)");
-			}
-
-			TArray<FString> Parts;
-			for (int32 i = 0, Num = Enum->NumEnums(); i < Num; ++i)
-			{
-				if (ShouldHideEnumValue(Enum, i))
-				{
-					continue;
-				}
-				const int64 Bit = GetBitflagMaskAtIndex(Enum, i);
-				if (Bit != 0 && (Value & Bit) == Bit)
-				{
-					Parts.Add(Enum->GetDisplayNameTextByIndex(i).ToString());
-				}
-			}
-			return FText::FromString(FString::Join(Parts, TEXT(" | ")));
+			return PCGExEnumSelector::GetFlagsDisplayText(Enum, Value);
 		}
 
 		const int32 Index = Enum->GetIndexByValue(Value);
@@ -586,7 +504,7 @@ namespace PCGExEnumSelectorWidget
 			}
 			for (int32 i = 0, Num = Enum->NumEnums(); i < Num; ++i)
 			{
-				if (ShouldHideEnumValue(Enum, i))
+				if (PCGExEnumSelector::IsHiddenEntry(Enum, i))
 				{
 					continue;
 				}
@@ -677,11 +595,11 @@ namespace PCGExEnumSelectorWidget
 			{
 				for (int32 i = 0, Num = Enum->NumEnums(); i < Num; ++i)
 				{
-					if (ShouldHideEnumValue(Enum, i))
+					if (PCGExEnumSelector::IsHiddenEntry(Enum, i))
 					{
 						continue;
 					}
-					const int64 Bit = GetBitflagMaskAtIndex(Enum, i);
+					const int64 Bit = PCGExEnumSelector::GetFlagMask(Enum, i);
 					// Skip the "None" entry (only possible under UseEnumValuesAsMaskValuesInEditor,
 					// where authors can declare a literal 0 mask). Bit-position mode can't produce
 					// a zero mask -- 1<<0 = 1 -- so this check is conditionally relevant.
@@ -825,11 +743,10 @@ namespace PCGExEnumSelectorWidget
 			}));
 		}
 
-		// Value picker -- content lambda inspects the current Class each time the menu opens
-		// and switches between the single-select and bitflags variants accordingly.
-		// Memoize the formatted label by (Class, Value, bMulti) tuple: for bitflags enums,
-		// FormatValueButtonLabel iterates the entire enum range every paint, which compounds
-		// across many visible selectors in a details panel.
+		// The bitflags menu is only for a field tagged PCGExEnumFlags holding a Bitflags enum.
+		const bool bFlagMasks = ValueHandle->HasMetaData(PCGExEnumSelector::FlagsMeta);
+
+		// Memoized by (Class, Value, bMulti): a flag label walks the whole enum on every paint.
 		struct FValueLabelCache
 		{
 			UEnum* Class = nullptr;
@@ -853,7 +770,7 @@ namespace PCGExEnumSelectorWidget
 			.ButtonContent()
 			[
 				SNew(STextBlock)
-				.Text_Lambda([ValueHandle, LabelCache]()
+				.Text_Lambda([ValueHandle, LabelCache, bFlagMasks]()
 				{
 					bool bMultiClass = false;
 					UEnum* Enum = ReadUnanimousClass(ValueHandle, bMultiClass);
@@ -868,7 +785,7 @@ namespace PCGExEnumSelectorWidget
 					LabelCache->Class = Enum;
 					LabelCache->Value = Value;
 					LabelCache->bMulti = bMulti;
-					LabelCache->Text = FormatValueButtonLabel(ValueHandle);
+					LabelCache->Text = FormatValueButtonLabel(ValueHandle, bFlagMasks);
 					LabelCache->bValid = true;
 					return LabelCache->Text;
 				})
@@ -877,7 +794,7 @@ namespace PCGExEnumSelectorWidget
 		];
 
 		TWeakPtr<SComboButton> WeakValueCombo = ValueCombo;
-		ValueCombo->SetOnGetMenuContent(FOnGetContent::CreateLambda([ValueHandle, WeakValueCombo]() -> TSharedRef<SWidget>
+		ValueCombo->SetOnGetMenuContent(FOnGetContent::CreateLambda([ValueHandle, WeakValueCombo, bFlagMasks]() -> TSharedRef<SWidget>
 		{
 			bool bMulti = false;
 			UEnum* Enum = ReadUnanimousClass(ValueHandle, bMulti);
@@ -886,7 +803,7 @@ namespace PCGExEnumSelectorWidget
 				return SNullWidget::NullWidget;
 			}
 
-			if (IsBitflagsEnum(Enum))
+			if (bFlagMasks && PCGExEnumSelector::IsFlagsEnum(Enum))
 			{
 				return SNew(SEnumBitflagsMenu)
 					.ValueHandle(ValueHandle)
