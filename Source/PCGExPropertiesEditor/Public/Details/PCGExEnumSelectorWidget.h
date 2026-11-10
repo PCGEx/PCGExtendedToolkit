@@ -20,7 +20,7 @@ class SWidget;
  *  - true  (schema-edit): exposes both an enum-class picker AND a value picker.
  *  - false (override / readonly schema): exposes only a value picker; class is fixed.
  *
- * Bitflags enums (UEnum with the "Bitflags" meta) get a multi-select checkbox menu
+ * A field tagged meta=(PCGExEnumFlags) holding a Bitflags enum gets a multi-select checkbox menu
  * instead of the single-select combo.
  */
 namespace PCGExEnumSelectorWidget
