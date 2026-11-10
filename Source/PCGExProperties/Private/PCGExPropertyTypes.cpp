@@ -392,12 +392,52 @@ bool FPCGExProperty_Enum::IsChoiceCompatible(const FPCGExProperty& Carrier) cons
 	return static_cast<const FPCGExProperty_Enum&>(Carrier).Value.Class == Value.Class;
 }
 
+#if WITH_EDITOR
+bool FPCGExProperty_Enum::IsFlagMask() const
+{
+	// Read from the field's own meta, so the picker, the preview and the codecs follow one declaration.
+	static const bool bFlagsField = []()
+	{
+		const FProperty* Field = FPCGExProperty_Enum::StaticStruct()->FindPropertyByName(GET_MEMBER_NAME_CHECKED(FPCGExProperty_Enum, Value));
+		return Field && Field->HasMetaData(PCGExEnumSelector::FlagsMeta);
+	}();
+	return bFlagsField && PCGExEnumSelector::IsFlagsEnum(Value.Class);
+}
+#endif
+
+void FPCGExProperty_Enum::PostSerialize(const FArchive& Ar)
+{
+#if WITH_EDITOR
+	if (!Ar.IsLoading() || !Value.bLoadedFromEngineLayout)
+	{
+		return;
+	}
+
+	// Cleared first: the flag is not serialized, so a later load into this instance (undo) must not convert again.
+	Value.bLoadedFromEngineLayout = false;
+	if (IsFlagMask())
+	{
+		if (const int64 Mask = PCGExEnumSelector::GetFlagMaskOfValue(Value.Class, Value.Value))
+		{
+			Value.Value = Mask;
+		}
+	}
+#endif
+}
+
 bool FPCGExProperty_Enum::GetValuePreviewText(FText& OutText) const
 {
 	if (!Value.IsValid())
 	{
 		return false;
 	}
+#if WITH_EDITOR
+	if (IsFlagMask())
+	{
+		OutText = PCGExEnumSelector::GetFlagsDisplayText(Value.Class, Value.Value);
+		return true;
+	}
+#endif
 	OutText = Value.GetDisplayName();
 	return true;
 }
