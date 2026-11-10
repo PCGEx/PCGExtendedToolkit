@@ -32,6 +32,23 @@ FString UPCGExConstantEnumSettings::GetDisplayName() const
 // Adapted from similar handling in PCGSwitch.cpp
 void UPCGExConstantEnumSettings::PostLoad()
 {
+#if WITH_EDITOR
+	// Before Super and the graph's UpdatePins, so the cached CRC and the pins built from the enum class see the migrated selection.
+	if (Source_DEPRECATED == EPCGExEnumConstantSourceType::Picker && SelectedEnum.Class != PickerEnum_DEPRECATED)
+	{
+		// The picker source held no value; a stored one belongs to the selector's enum.
+		SelectedEnum.Class = PickerEnum_DEPRECATED;
+		SelectedEnum.Value = 0;
+	}
+	Source_DEPRECATED = EPCGExEnumConstantSourceType::Selector;
+	PickerEnum_DEPRECATED = nullptr;
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 6)
+	{
+		SelectedEnum.EDITOR_RestoreValueFromFlagMask();
+	}
+#endif
+
 	Super::PostLoad();
 
 	CachePinLabels();
@@ -60,24 +77,6 @@ void UPCGExConstantEnumSettings::PostLoad()
 }
 
 #if WITH_EDITOR
-void UPCGExConstantEnumSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 75, 15)
-	{
-		// Legacy nodes had two sources: a free-form UEnum picker (Picker mode) and an
-		// FPCGExEnumSelector (Selector mode). FPCGExEnumSelector now handles both native
-		// and Blueprint enums, so we collapse to a single field. Picker mode never stored
-		// a value, so the migrated SelectedEnum.Value stays at its default of 0.
-		if (Source_DEPRECATED == EPCGExEnumConstantSourceType::Picker && PickerEnum_DEPRECATED && !SelectedEnum.Class)
-		{
-			SelectedEnum.Class = PickerEnum_DEPRECATED;
-		}
-		Source_DEPRECATED = EPCGExEnumConstantSourceType::Selector;
-		PickerEnum_DEPRECATED = nullptr;
-	}
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-
 // Adapted from similar handling in PCGSwitch.cpp
 void UPCGExConstantEnumSettings::PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent)
 {
