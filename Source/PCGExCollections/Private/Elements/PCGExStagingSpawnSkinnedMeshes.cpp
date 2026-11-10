@@ -8,6 +8,7 @@
 #include "PCGManagedResource.h"
 #include "PCGParamData.h"
 #include "Components/InstancedSkinnedMeshComponent.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataMacros.h"
@@ -437,7 +438,7 @@ namespace PCGExStagingSpawnSkinnedMeshes
 			{
 				Descriptor = Settings->TemplateDescriptor;
 				Descriptor.SkinnedAsset = Partition.Entry->SkinnedAsset;
-				Descriptor.ComponentTags.Append(Partition.Entry->Tags.Array());
+				PCGExCollections::Tags::AppendOutputTags(*Partition.Entry, Partition.Host, Descriptor.ComponentTags);
 			}
 			else
 			{

@@ -67,7 +67,7 @@ namespace PCGExGetCollectionData
 			return;
 		}
 
-		if (Ctx.TagFilter && (Depth == 0 || Ctx.bTagFilterRecursive) && !PCGExCollections::Tags::Matches(*InEntry, Ctx.TagSources, *Ctx.TagFilter))
+		if (Ctx.TagFilter && (Depth == 0 || Ctx.bTagFilterRecursive) && !PCGExCollections::Tags::Matches(*InEntry, Ctx.TagSources, *Ctx.TagFilter, InHost, false))
 		{
 			return;
 		}

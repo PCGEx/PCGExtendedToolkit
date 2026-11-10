@@ -20,19 +20,28 @@
 namespace PCGExCollections::Tags
 {
 	/**
-	 * Visit the tags an entry is matched on. InTagSources is EPCGExAssetTagInheritance bits: Asset reads
-	 * Entry.Tags, Collection adds the sub-collection's CollectionTags for sub-collection entries (a hard
-	 * reference, so no load is involved) and, when given, InHost's: the collection holding a resolved entry.
-	 * Other bits are ignored. Fn returns false to stop early.
+	 * Visit the tags an entry is matched on. InHost is the collection holding the entry. InTagSources is
+	 * EPCGExAssetTagInheritance bits: Asset reads the entry's own tags, then its category's (InHost's row);
+	 * Collection reads the sub-collection's CollectionTags for sub-collection entries (a hard reference, so no
+	 * load is involved) and, with bInHostTags, InHost's own. Other bits are ignored; None is never visited.
+	 * Fn returns false to stop early.
 	 */
 	template <typename Fn>
-	void ForEachEntryTag(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, Fn&& InFn, const UPCGExAssetCollection* InHost = nullptr)
+	void ForEachEntryTag(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const UPCGExAssetCollection* InHost, const bool bInHostTags, Fn&& InFn)
 	{
 		if (InTagSources & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 		{
 			for (const FName& Tag : InEntry.Tags)
 			{
-				if (!InFn(Tag)) { return; }
+				if (!Tag.IsNone() && !InFn(Tag)) { return; }
+			}
+
+			if (const FPCGExCategoryOverrides* Row = InHost ? InHost->FindCategoryOverridesRow(InEntry.Category) : nullptr)
+			{
+				for (const FName& Tag : Row->Tags)
+				{
+					if (!Tag.IsNone() && !InFn(Tag)) { return; }
+				}
 			}
 		}
 
@@ -45,18 +54,28 @@ namespace PCGExCollections::Tags
 		{
 			for (const FName& Tag : InEntry.GetSubCollectionPtr()->CollectionTags)
 			{
-				if (!InFn(Tag)) { return; }
+				if (!Tag.IsNone() && !InFn(Tag)) { return; }
 			}
 		}
 
-		if (InHost)
+		if (InHost && bInHostTags)
 		{
 			for (const FName& Tag : InHost->CollectionTags)
 			{
-				if (!InFn(Tag)) { return; }
+				if (!Tag.IsNone() && !InFn(Tag)) { return; }
 			}
 		}
 	}
+
+	/** Adds what ForEachEntryTag visits for InTagSources to OutTags, never InHost's own tags. */
+	PCGEXCOLLECTIONS_API void AppendTags(const FPCGExAssetCollectionEntry& InEntry, uint8 InTagSources, const UPCGExAssetCollection* InHost, TSet<FName>& OutTags);
+
+	/** The entry's own tags, then its category's in InHost (the collection holding it): what the Asset source reads. */
+	PCGEXCOLLECTIONS_API void AppendEntryTags(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TSet<FName>& OutTags);
+
+	/** Tags written onto what an entry produces (components, actors, attributes): the entry's, its category's, then
+	 *  InHost's CollectionTags. Appended unique, after what OutTags already holds; None is skipped. */
+	PCGEXCOLLECTIONS_API void AppendOutputTags(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TArray<FName>& OutTags);
 
 	class PCGEXCOLLECTIONS_API FTagIndex
 	{
@@ -74,11 +93,10 @@ namespace PCGExCollections::Tags
 		TArray<int64> Words;
 
 		/**
-		 * Build over a pool's entries. InTagSources is EPCGExAssetTagInheritance bits: Asset reads
-		 * Entry->Tags, Collection adds the sub-collection's CollectionTags for sub-collection entries.
-		 * Other bits are ignored. Ids are assigned in entry order, so the index is deterministic.
+		 * Build over the entries of a pool of InHost, read like ForEachEntryTag without InHost's own tags (they
+		 * would be the same on every entry). Ids are assigned in entry order, so the index is deterministic.
 		 */
-		void Build(const PCGExAssetCollection::FCategory& InPool, uint8 InTagSources);
+		void Build(const PCGExAssetCollection::FCategory& InPool, uint8 InTagSources, const UPCGExAssetCollection* InHost);
 
 		FORCEINLINE int32 FindId(const FName InTag) const
 		{
@@ -159,9 +177,9 @@ namespace PCGExCollections::Tags
 		}
 	};
 
-	/** Direct test of one entry; without InHost it agrees with Compile + Test over an index built with the same tag
-	 *  sources. InHost adds its CollectionTags under the Collection source (see ForEachEntryTag). */
-	PCGEXCOLLECTIONS_API bool Matches(const FPCGExAssetCollectionEntry& InEntry, uint8 InTagSources, const FTagLists& InLists, const UPCGExAssetCollection* InHost = nullptr);
+	/** Direct test of one entry held by InHost, reading tags like ForEachEntryTag. Without bInHostTags it agrees with
+	 *  Compile + Test over an index of InHost's pool built with the same tag sources. */
+	PCGEXCOLLECTIONS_API bool Matches(const FPCGExAssetCollectionEntry& InEntry, uint8 InTagSources, const FTagLists& InLists, const UPCGExAssetCollection* InHost, bool bInHostTags);
 
 	/**
 	 * Compile three operand lists against an index. Unknown tags (no entry in the index carries them):
@@ -189,8 +207,9 @@ namespace PCGExCollections::Tags
 	class PCGEXCOLLECTIONS_API FTagPoolStore
 	{
 	public:
-		/** Index over InPool's entries for the given tag sources, built once per (pool, sources). */
-		TSharedPtr<const FTagIndex> GetOrBuildIndex(const TSharedPtr<PCGExAssetCollection::FCategory>& InPool, uint8 InTagSources);
+		/** Index over InPool's entries for the given tag sources, built once per (pool, sources). InHost is the
+		 *  collection whose cache owns InPool, so a pool always pairs with the same host. */
+		TSharedPtr<const FTagIndex> GetOrBuildIndex(const TSharedPtr<PCGExAssetCollection::FCategory>& InPool, uint8 InTagSources, const UPCGExAssetCollection* InHost);
 
 		/**
 		 * Derived pool for (base, index, predicate), built once. An empty predicate returns InBase

@@ -30,6 +30,9 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionsCustomVersion
 		 */
 		MeshEntryStaticMeshExtras,
 
+		/** Staging Data mesh selectors forward input data tags. Selectors from older packages load with it off. */
+		StagedSelectorForwardsInputDataTags,
+
 		// -- add new versions above this line --
 		VersionPlusOne,
 		LatestVersion = VersionPlusOne - 1

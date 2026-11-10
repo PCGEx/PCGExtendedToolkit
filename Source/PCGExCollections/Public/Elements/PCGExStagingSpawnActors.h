@@ -112,7 +112,7 @@ public:
 
 	// --- Tagging ---
 
-	/** If enabled, apply collection entry tags to spawned actors. */
+	/** If enabled, spawned actors get their entry's tags: its own, its category's and its collection's. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging", meta=(PCG_Overridable))
 	bool bApplyEntryTags = true;
 
@@ -196,6 +196,7 @@ namespace PCGExStagingSpawnActors
 	struct FResolvedEntry
 	{
 		const FPCGExActorCollectionEntry* Entry = nullptr;
+		const UPCGExAssetCollection* Host = nullptr;
 	};
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExStagingSpawnActorsContext, UPCGExStagingSpawnActorsSettings>
