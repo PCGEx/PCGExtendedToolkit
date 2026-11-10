@@ -3,6 +3,7 @@
 
 #include "Filters/Points/PCGExEnumFilter.h"
 
+#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
@@ -177,6 +178,14 @@ bool PCGExPointFilter::FEnumFilter::Test(const TSharedPtr<PCGExData::FPointIO>& 
 
 void UPCGExEnumFilterProviderSettings::PostLoad()
 {
+#if WITH_EDITOR
+	// Before Super, so the cached CRC sees the restored value.
+	PCGEX_IF_VERSION_LOWER(1, 78, 6)
+	{
+		Config.Enum.EDITOR_RestoreValueFromFlagMask();
+	}
+#endif
+
 	Super::PostLoad();
 #if WITH_EDITOR
 	Config.SyncValues();

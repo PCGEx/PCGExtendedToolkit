@@ -74,7 +74,6 @@ public:
 	virtual void PostLoad() override;
 
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	virtual void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 

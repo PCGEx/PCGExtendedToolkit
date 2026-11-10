@@ -824,6 +824,7 @@ public:
  * - Value is FPCGExEnumSelector (gives the user a type-safe enum picker)
  * - OutputBuffer is TBuffer<int64> (enum values stored as integer)
  * - Output methods extract Value.Value (the int64) before writing
+ * - For a Bitflags enum, Value holds the OR of the checked flags (PCGExEnumFlags)
  */
 // PCGExStructuralValue: the value editor also sets the type's structure (here the enum class), so the row that
 // declares the property keeps that editor when its choices are locked.
@@ -832,8 +833,16 @@ struct PCGEXPROPERTIES_API FPCGExProperty_Enum : public FPCGExProperty
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Property", meta=(NoResetToDefault))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Property", meta=(NoResetToDefault, PCGExEnumFlags))
 	FPCGExEnumSelector Value;
+
+#if WITH_EDITOR
+	/** True when Value holds a flag mask: the field opts in with PCGExEnumFlags and Class is a Bitflags enum. */
+	bool IsFlagMask() const;
+#endif
+
+	/** Turns a flag value read from the engine FEnumSelector layout, which held one enumerator, into its mask. */
+	void PostSerialize(const FArchive& Ar);
 
 protected:
 	TSharedPtr<PCGExData::TBuffer<int64>> OutputBuffer;
@@ -862,13 +871,22 @@ public:
 
 	/** A choice must target the schema's enum class. */
 	virtual bool IsChoiceCompatible(const FPCGExProperty& Carrier) const override;
-	/** The enumerator's display name, not the raw integer. */
+	/** The enumerator's display name (the checked flags' names for a flag mask), not the raw integer. */
 	virtual bool GetValuePreviewText(FText& OutText) const override;
 
 	virtual FPCGMetadataAttributeBase* CreateMetadataAttribute(UPCGMetadata* Metadata, FName AttributeName) const override;
 	virtual void WriteMetadataValue(FPCGMetadataAttributeBase* Attribute, int64 EntryKey) const override;
 	virtual bool TryWriteValue(EPCGMetadataTypes TargetType, void* OutBuffer) const override;
 	virtual bool TryReadValue(EPCGMetadataTypes SourceType, const void* InBuffer) override;
+};
+
+template <>
+struct TStructOpsTypeTraits<FPCGExProperty_Enum> : public TStructOpsTypeTraitsBase2<FPCGExProperty_Enum>
+{
+	enum
+	{
+		WithPostSerialize = true,
+	};
 };
 
 /**
