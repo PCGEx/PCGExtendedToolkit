@@ -234,6 +234,7 @@ struct PCGEXCOLLECTIONS_API FPCGExMeshCollectionEntry : public FPCGExAssetCollec
 	/**
 	 * Resolve descriptor inheritance into TargetDescriptor. Accepts any host -- globals read
 	 * through the seam; hosts without a mesh block (or null) fall back to the local descriptor.
+	 * Appends the output tags (PCGExCollections::Tags::AppendOutputTags) to what ComponentTags already holds.
 	 */
 	void InitPCGSoftISMDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGSoftISMComponentDescriptor& TargetDescriptor) const;
 

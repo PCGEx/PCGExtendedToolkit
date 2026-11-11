@@ -190,6 +190,8 @@ bool FPCGExPartitionGridElement::AdvanceWork(FPCGExContext* InContext, const UPC
 			}
 		}
 
+		Box = Box.ExpandBy(Settings->BoundsExpansion);
+
 		PCGExPointArrayDataHelpers::SetNumPointsAllocated(
 			PointData, 1,
 			EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::BoundsMin | EPCGPointNativeProperties::BoundsMax | EPCGPointNativeProperties::Seed | EPCGPointNativeProperties::Steepness);
@@ -209,7 +211,7 @@ bool FPCGExPartitionGridElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 		const PCGMetadataEntryKey Key = ParamData->Metadata->AddEntry();
 		Rows.Write(Key, Cell);
-		if (TextureAttr) { TextureAttr->SetValue(Key, PCGExPartitionGrid::GetTextureTransform(Cell)); }
+		if (TextureAttr) { TextureAttr->SetValue(Key, PCGExPartitionGrid::GetTextureTransform(Cell, FVector2D(Settings->BoundsExpansion))); }
 
 		Context->StageOutput(PointData, PCGExPartitionGrid::OutputPartitionsLabel, PCGExData::EStaging::Mutable);
 		Context->StageOutput(ParamData, PCGExPartitionGrid::OutputMetadataLabel, PCGExData::EStaging::Mutable);

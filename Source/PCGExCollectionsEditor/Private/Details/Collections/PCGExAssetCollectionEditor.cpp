@@ -1027,15 +1027,15 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 					}
 
 					FNotificationInfo Info(Removed > 0
-						                       ? FText::Format(INVTEXT("Removed {0} unused category override row(s)."), Removed)
-						                       : FText(INVTEXT("No unused category overrides to remove.")));
+						                       ? FText::Format(INVTEXT("Removed {0} unused category row(s)."), Removed)
+						                       : FText(INVTEXT("No unused category rows to remove.")));
 					Info.ExpireDuration = 4.0f;
 					Info.bFireAndForget = true;
 					FSlateNotificationManager::Get().AddNotification(Info);
 				})),
 			NAME_None,
 			FText::FromString(TEXT("Cleanup Categories")),
-			INVTEXT("Remove category override rows whose category no longer matches any entry. Rows with no enabled overrides are KEPT -- that is what in-progress authoring looks like."),
+			INVTEXT("Remove category rows (overrides and tags) whose category no longer matches any entry. Rows that author nothing are KEPT -- that is what in-progress authoring looks like."),
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Delete"));
 
 		// Icon-only in the bar, matching the combo buttons beside it. Per-block, not

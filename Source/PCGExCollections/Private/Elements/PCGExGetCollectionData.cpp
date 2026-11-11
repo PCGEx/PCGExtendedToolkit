@@ -32,24 +32,25 @@
 //
 // FieldName drives the FUniqueOutput member name via FieldName##Attr.
 // PerEntryValueExpr is evaluated inside the write loop where `E` (entry) / `Module` (subdivision
-// submodule) are in scope -- LEAF rows reference E, GRAMMAR rows reference Module.
+// submodule) are in scope -- ENTRY rows reference E, GRAMMAR rows reference Module.
 //
 // Attributes that don't fit the uniform shape are kept bespoke:
-//   - AssetPath/AssetClass: one toggle declares two attributes (FSoftObjectPath/FSoftClassPath)
+//   - AssetPath/AssetClass: one toggle, one attribute, in FSoftObjectPath or FSoftClassPath form
 //   - AssetId:              written for sub-collection rows too, like AssetPath
 //   - Weight:               int32 vs float depending on normalization mode
 //   - Category:             written always, not gated on bIsSubCollection
 //   - Entry:                always created, value derived from Packer
-#define PCGEX_GCD_LEAF_ATTRS(_) \
+// ENTRY attributes are written on leaf and grammar sub-collection rows alike; empty rows skip them.
+#define PCGEX_GCD_ENTRY_ATTRS(_) \
 	_(FVector, Extents,      ExtentsAttributeName,      bWriteExtents,      FVector::OneVector, E->Staging.Bounds.GetExtent()) \
 	_(FVector, BoundsMin,    BoundsMinAttributeName,    bWriteBoundsMin,    FVector::OneVector, E->Staging.Bounds.Min) \
 	_(FVector, BoundsMax,    BoundsMaxAttributeName,    bWriteBoundsMax,    FVector::OneVector, E->Staging.Bounds.Max) \
 	_(int32,   NestingDepth, NestingDepthAttributeName, bWriteNestingDepth, -1,                 EH.NestingDepth)
 
-// Per-row attributes (written for EVERY row, including sub-collection placeholders and empty rows).
+// Per-row attributes (written for EVERY row, empty rows included).
 //   _(Type, FieldName, AttrNameMember, ToggleMember, Default, PerEntryValueExpr)
 // PerEntryValueExpr references `EH` (the FFlattenedEntry), which always exists even when EH.Entry
-// is null -- that's why these live outside the leaf-only write block.
+// is null -- that's why they are written before the null-entry early-out.
 #define PCGEX_GCD_ROW_ATTRS(_) \
 	_(int32, RootCollectionIndex, RootCollectionIndexAttributeName, bWriteRootCollectionIndex, -1, EH.RootCollectionIndex) \
 	_(int32, CollectionIndex,     CollectionIndexAttributeName,     bWriteCollectionIndex,     -1, EH.CollectionIndex) \
@@ -186,7 +187,7 @@ bool FPCGExGetCollectionDataElement::Boot(FPCGExContext* InContext) const
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, bWriteCategory, CategoryAttributeName)
 #define PCGEX_GCD_VALIDATE(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
 	PCGEX_VALIDATE_TOGGLED(InContext, Settings, Toggle, AttrName)
-	PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_VALIDATE)
+	PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_ROW_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_GRAMMAR_PERAXIS_ATTRS(PCGEX_GCD_VALIDATE)
 	PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_VALIDATE)
@@ -253,8 +254,7 @@ namespace PCGExGetCollectionData
 	/** All the writable attribute pointers + property writer + entry list for a single unique output.
 	 *  Pre-built single-threaded before the parallel write loop; iteration only touches its own slot.
 	 *  In Merged fanout mode a single FUniqueOutput is shared across all unique collections (entries
-	 *  from each are appended into Entries); bWantAssetPath/bWantAssetClass are pre-OR'd across the
-	 *  set so the right attribute halves are declared. */
+	 *  from each are appended into Entries), and bRootsActorOnly covers every one of them. */
 	struct FUniqueOutput
 	{
 		UPCGExAssetCollection* Collection = nullptr; // primary collection (root for PropertyWriter / FixModuleInfos host context)
@@ -263,8 +263,8 @@ namespace PCGExGetCollectionData
 		// Pointer-identity set populated alongside Entries by ProcessEntry. Same scope as Entries so
 		// the dedup is correct in Merged fanout (multiple roots feeding one shared FUniqueOutput).
 		TSharedPtr<TSet<const FPCGExAssetCollectionEntry*>> SeenEntries;
-		bool bWantAssetPath = false;
-		bool bWantAssetClass = false;
+		// Asset path form for an output whose rows carry no entry (see ResolveAssetClassForm).
+		bool bRootsActorOnly = false;
 
 		// Per-output attribute pointers (set only when corresponding bWriteX is on).
 		FPCGMetadataAttribute<FSoftObjectPath>* AssetPathAttr = nullptr;
@@ -276,7 +276,7 @@ namespace PCGExGetCollectionData
 		FPCGMetadataAttribute<int64>* EntryAttr = nullptr;
 #define PCGEX_GCD_DECL_FIELD(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
 		FPCGMetadataAttribute<Type>* FieldName##Attr = nullptr;
-		PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_DECL_FIELD)
+		PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_DECL_FIELD)
 		PCGEX_GCD_ROW_ATTRS(PCGEX_GCD_DECL_FIELD)
 		PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_DECL_FIELD)
 #undef PCGEX_GCD_DECL_FIELD
@@ -339,15 +339,14 @@ namespace PCGExGetCollectionData
 		return (ResolvedPtr && *ResolvedPtr) ? *ResolvedPtr : nullptr;
 	}
 
-	/** Set AssetPath / AssetClass declaration flags from the collection's entry content --
-	 *  per-entry union, not collection class (heterogeneous hosts may hold both). */
-	FORCEINLINE static void SetAssetHalves(FUniqueOutput& U, const UPCGExAssetCollection* Collection)
+	/** True when a root classifies as actor-only from its own entries: a typed Actor collection, or
+	 *  actor leaves alone. Sub-collection entries are not looked into. */
+	bool IsRootActorOnly(const UPCGExAssetCollection* Collection)
 	{
 		bool bAnyActor = false;
 		bool bAnyNonActor = false;
 		PCGExCollectionHelpers::GetEntryAssetHalves(Collection, bAnyActor, bAnyNonActor);
-		U.bWantAssetPath = bAnyNonActor || !bAnyActor;
-		U.bWantAssetClass = bAnyActor;
+		return bAnyActor && !bAnyNonActor;
 	}
 
 	/** Append flattened entries from `Collection` into U.Entries. Never clobbers, so it's safe
@@ -366,6 +365,28 @@ namespace PCGExGetCollectionData
 	// =============================================================================================
 	// WriteFromEntries pre-passes
 	// =============================================================================================
+
+	/** Pre-pass: true when the asset path attribute takes the FSoftClassPath form, which needs every
+	 *  row carrying an entry to be an actor leaf (a sub-collection row names a collection asset).
+	 *  An output whose rows carry no entry keeps its roots' form. */
+	bool ResolveAssetClassForm(const FUniqueOutput& U)
+	{
+		bool bAnyActor = false;
+		for (const FFlattenedEntry& EH : *U.Entries)
+		{
+			const FPCGExAssetCollectionEntry* E = EH.Entry;
+			if (!E)
+			{
+				continue;
+			}
+			if (E->bIsSubCollection || !E->IsType(PCGExAssetCollection::TypeIds::Actor))
+			{
+				return false;
+			}
+			bAnyActor = true;
+		}
+		return bAnyActor || U.bRootsActorOnly;
+	}
 
 	/** Pre-pass: resolve each entry's effective grammar once and cache pointers for the write loop.
 	 *  Returns the union of per-entry Axes (intersected with the user-requested OutputAxes) -- this
@@ -425,7 +446,7 @@ namespace PCGExGetCollectionData
 		for (const FFlattenedEntry& EH : Entries)
 		{
 			const FPCGExAssetCollectionEntry* E = EH.Entry;
-			if (!E || E->bIsSubCollection)
+			if (!E || EH.bIsEmpty)
 			{
 				continue;
 			}
@@ -489,14 +510,11 @@ namespace PCGExGetCollectionData
 		TArray<FFlattenedEntry>& Entries = *U.Entries;
 		UPCGMetadata* Metadata = U.OutputSet->Metadata;
 
-		// Choose which asset half to declare. bWantAssetPath/bWantAssetClass are pre-computed
-		// per-mode (single-collection: based on actor-vs-mesh type; merged: OR'd across all
-		// contributing collections). Both halves share AssetPathAttributeName, so a heterogeneous
-		// mix collapses to the FSoftObjectPath half -- Staging.Path already holds the class path
-		// for actor entries, and a second CreateAttribute under the same identifier with a
-		// different type would fail and return nullptr.
-		const bool bOutputAssetPath = Settings->bWriteAssetPath && U.bWantAssetPath;
-		const bool bOutputAssetClass = Settings->bWriteAssetPath && U.bWantAssetClass && !bOutputAssetPath;
+		// Both forms share AssetPathAttributeName and a second CreateAttribute of another type under the
+		// same identifier fails, so exactly one is declared. Actor rows of a mixed output keep their
+		// class path as the FSoftObjectPath value.
+		const bool bOutputAssetClass = Settings->bWriteAssetPath && ResolveAssetClassForm(U);
+		const bool bOutputAssetPath = Settings->bWriteAssetPath && !bOutputAssetClass;
 
 		// Resolve grammars once, accumulate the union of axes used across all entries -- drives
 		// the per-axis attribute declarations below and the per-row Fix dispatch in the write loop.
@@ -540,7 +558,7 @@ namespace PCGExGetCollectionData
 			{ \
 				U.FieldName##Attr = Metadata->CreateAttribute<Type>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->AttrName, U.OutputSet), Default, false, true); \
 			}
-			PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_DECLARE)
+			PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_DECLARE)
 			PCGEX_GCD_ROW_ATTRS(PCGEX_GCD_DECLARE)
 			PCGEX_GCD_GRAMMAR_SHARED_ATTRS(PCGEX_GCD_DECLARE)
 #undef PCGEX_GCD_DECLARE
@@ -647,20 +665,23 @@ namespace PCGExGetCollectionData
 				continue;
 			}
 
-			// AssetPath is written for both leaf and sub-collection entries. UpdateStaging
-			// populates Staging.Path with the sub-collection's own asset path when bIsSubCollection,
-			// so downstream consumers can resolve either kind through the same attribute.
-			// AssetClass and the other leaf-only fields (weights, bounds, nesting depth) stay
-			// gated -- sub-collections aren't UClass references and don't have meaningful bounds.
+			// UpdateStaging stores a sub-collection entry's own path, so both kinds resolve through AssetPath.
 			SetIf(U.AssetPathAttr, Key, E->Staging.Path);
 			if (U.AssetIdAttr)
 			{
 				U.AssetIdAttr->SetValue(Key, PCGExCollections::ComputeAssetId(E->Staging.Path));
 			}
 
-			if (!E->bIsSubCollection)
+			// The class form is only declared when every row carrying an entry is an actor leaf.
+			if (U.AssetClassAttr)
 			{
-				SetIf(U.AssetClassAttr, Key, FSoftClassPath(E->Staging.Path.ToString()));
+				check(!E->bIsSubCollection);
+				U.AssetClassAttr->SetValue(Key, FSoftClassPath(E->Staging.Path.ToString()));
+			}
+
+			// Leaves and grammar sub-collection rows are both pickable entries; empty rows keep the defaults.
+			if (!EH.bIsEmpty)
+			{
 				if (U.WeightAttrInt)
 				{
 					U.WeightAttrInt->SetValue(Key, E->Weight);
@@ -683,10 +704,10 @@ namespace PCGExGetCollectionData
 					}
 					U.WeightAttrFloat->SetValue(Key, Denom > 0.0 ? static_cast<float>(static_cast<double>(E->Weight) / Denom) : 0.0f);
 				}
-#define PCGEX_GCD_WRITE_LEAF(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
+#define PCGEX_GCD_WRITE_ENTRY(Type, FieldName, AttrName, Toggle, Default, ValueExpr) \
 				SetIf(U.FieldName##Attr, Key, ValueExpr);
-				PCGEX_GCD_LEAF_ATTRS(PCGEX_GCD_WRITE_LEAF)
-#undef PCGEX_GCD_WRITE_LEAF
+				PCGEX_GCD_ENTRY_ATTRS(PCGEX_GCD_WRITE_ENTRY)
+#undef PCGEX_GCD_WRITE_ENTRY
 			}
 
 			SetIf(U.CategoryAttr, Key, EH.Category);
@@ -1058,7 +1079,7 @@ namespace PCGExGetCollectionData
 		}
 		U.Entries = MakeShared<TArray<FFlattenedEntry>>();
 		U.SeenEntries = MakeShared<TSet<const FPCGExAssetCollectionEntry*>>();
-		SetAssetHalves(U, MainCollection);
+		U.bRootsActorOnly = IsRootActorOnly(MainCollection);
 
 		if (MainCollection)
 		{
@@ -1102,9 +1123,7 @@ namespace PCGExGetCollectionData
 	}
 
 	/** FromInputs - Merged fanout. One shared FUniqueOutput receives entries from every unique
-	 *  collection (append in encounter order). One FPCGTaggedData emitted. AssetPath/AssetClass
-	 *  attributes are declared based on the union of contributing collection types so heterogeneous
-	 *  mixes get both halves. */
+	 *  collection (append in encounter order). One FPCGTaggedData emitted. */
 	static void Run_MergedFanout(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_AdvanceWork_Merged);
@@ -1114,11 +1133,10 @@ namespace PCGExGetCollectionData
 
 		// Walk slots to discover unique collections (dedupe flatten work), build the Collection ->
 		// RootIdx map (used both by the flatten loop below and by AnnotateSources for per-row
-		// identity lookup), and pre-OR the asset-half flags.
+		// identity lookup), and classify the roots.
 		TArray<UPCGExAssetCollection*> UniqueCollections;
 		TMap<UPCGExAssetCollection*, int32> CollectionToRootIdx;
-		bool bAnyActor = false;
-		bool bAnyNonActor = false;
+		bool bAllRootsActorOnly = true;
 		for (const FPCGExGetCollectionDataContext::FSlot& Slot : Context->Slots)
 		{
 			UPCGExAssetCollection* Collection = ResolveSlotCollection(Context, Slot);
@@ -1135,13 +1153,7 @@ namespace PCGExGetCollectionData
 			RootIdx = UniqueCollections.Num();
 			UniqueCollections.Add(Collection);
 			Collection->EDITOR_RegisterTrackingKeys(InContext);
-
-			// Per-entry union so heterogeneous hosts declare both halves.
-			bool bCollectionAnyActor = false;
-			bool bCollectionAnyNonActor = false;
-			PCGExCollectionHelpers::GetEntryAssetHalves(Collection, bCollectionAnyActor, bCollectionAnyNonActor);
-			bAnyActor |= bCollectionAnyActor;
-			bAnyNonActor |= bCollectionAnyNonActor || (!bCollectionAnyActor && !bCollectionAnyNonActor);
+			bAllRootsActorOnly = bAllRootsActorOnly && IsRootActorOnly(Collection);
 		}
 
 		// Allocate the single shared output. Packer registration covers every contributing host.
@@ -1150,8 +1162,7 @@ namespace PCGExGetCollectionData
 		Merged.OutputSet = InContext->ManagedObjects->New<UPCGParamData>();
 		Merged.Entries = MakeShared<TArray<FFlattenedEntry>>();
 		Merged.SeenEntries = MakeShared<TSet<const FPCGExAssetCollectionEntry*>>();
-		Merged.bWantAssetPath = bAnyNonActor;
-		Merged.bWantAssetClass = bAnyActor;
+		Merged.bRootsActorOnly = bAllRootsActorOnly && !UniqueCollections.IsEmpty();
 
 		for (int32 RootIdx = 0; RootIdx < UniqueCollections.Num(); ++RootIdx)
 		{
@@ -1233,7 +1244,7 @@ namespace PCGExGetCollectionData
 			U.OutputSet = InContext->ManagedObjects->New<UPCGParamData>();
 			U.Entries = MakeShared<TArray<FFlattenedEntry>>();
 			U.SeenEntries = MakeShared<TSet<const FPCGExAssetCollectionEntry*>>();
-			SetAssetHalves(U, Collection);
+			U.bRootsActorOnly = IsRootActorOnly(Collection);
 
 			Collection->EDITOR_RegisterTrackingKeys(InContext);
 		}
@@ -1443,7 +1454,7 @@ bool FPCGExGetCollectionDataElement::AdvanceWork(FPCGExContext* InContext, const
 	return InContext->TryComplete();
 }
 
-#undef PCGEX_GCD_LEAF_ATTRS
+#undef PCGEX_GCD_ENTRY_ATTRS
 #undef PCGEX_GCD_ROW_ATTRS
 #undef PCGEX_GCD_GRAMMAR_PERAXIS_ATTRS
 #undef PCGEX_GCD_GRAMMAR_SHARED_ATTRS

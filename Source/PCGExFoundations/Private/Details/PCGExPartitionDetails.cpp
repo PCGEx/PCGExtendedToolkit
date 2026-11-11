@@ -210,10 +210,10 @@ namespace PCGExPartitionGrid
 		return FBox(Center - Extent, Center + Extent);
 	}
 
-	FTransform GetTextureTransform(const FCell& InCell)
+	FTransform GetTextureTransform(const FCell& InCell, const FVector2D& InExpansion)
 	{
 		// The partition actor sits at the cell center, unrotated and unscaled; Get Texture Data scales by its local bounds extent.
-		return FTransform(FQuat::Identity, InCell.CellCenter(), GetFixedBounds(InCell).GetExtent());
+		return FTransform(FQuat::Identity, InCell.CellCenter(), GetFixedBounds(InCell).GetExtent() + FVector(InExpansion, 0.0));
 	}
 
 	bool IsCellGenerated(const FCell& InCell, const FBox& InBounds)

@@ -157,7 +157,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 							OnEditCategoryOverrides.ExecuteIfBound(CategoryName);
 							return FReply::Handled();
 						})
-						.ToolTipText(INVTEXT("Edit property overrides for this category"))
+						.ToolTipText(INVTEXT("Edit property overrides and tags for this category"))
 						[
 							SNew(SImage)
 							.Image(FAppStyle::GetBrush("Icons.Settings"))

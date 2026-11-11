@@ -212,6 +212,31 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 		return Prop ? Prop->TryWriteValue(PathType, OutPath) : false;
 	}
 
+	// Category's row, minted after the undo snapshot when absent. Rows only mint in the editor: elsewhere a missing
+	// row is reported (InWhat names what was not written) and null is returned.
+	FPCGExCategoryOverrides* FindOrMintCategoryRow(UPCGExAssetCollection* Collection, const FName Category, const TCHAR* InWhat)
+	{
+		if (Category.IsNone())
+		{
+			return nullptr;
+		}
+		if (FPCGExCategoryOverrides* Row = Collection->FindCategoryOverridesRow(Category))
+		{
+			return Row;
+		}
+#if WITH_EDITOR
+		Collection->Modify();
+		return Collection->EDITOR_FindOrAddCategoryOverrides(Category);
+#else
+		FFrame::KismetExecutionMessage(
+			*FString::Printf(
+				TEXT("Collection '%s' has no override row for category '%s' and rows can only be minted in the editor -- %s not written."),
+				*GetNameSafe(Collection), *Category.ToString(), InWhat),
+			ELogVerbosity::Warning);
+		return nullptr;
+#endif
+	}
+
 	// Writable slot for (category, property). bMintRow mints a missing row (editor only, after the undo
 	// snapshot); otherwise a missing row returns null and sets bOutNeedsRow so the caller can mint once it
 	// holds a known-good value. The schema check runs first so a bad name never mints a row.
@@ -253,17 +278,11 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 				}
 				return nullptr;
 			}
-#if WITH_EDITOR
-			Collection->Modify();
-			Row = Collection->EDITOR_FindOrAddCategoryOverrides(Category);
-#else
-			FFrame::KismetExecutionMessage(
-				*FString::Printf(
-					TEXT("Collection '%s' has no override row for category '%s' and rows can only be minted in the editor -- category override not written."),
-					*GetNameSafe(Collection), *Category.ToString()),
-				ELogVerbosity::Warning);
-			return nullptr;
-#endif
+			Row = FindOrMintCategoryRow(Collection, Category, TEXT("category override"));
+			if (!Row)
+			{
+				return nullptr;
+			}
 		}
 
 		FPCGExPropertyOverrideEntry* Slot = Row ? Row->PropertyOverrides.FindEntryMutableByName(PropertyName) : nullptr;
@@ -1291,6 +1310,58 @@ bool UPCGExCollectionEntryBlueprintLibrary::HasCategoryOverrides(const UPCGExAss
 {
 	const FPCGExPropertyOverrides* Layer = Collection ? Collection->FindCategoryOverrides(Category) : nullptr;
 	return Layer ? Layer->GetEnabledCount() > 0 : false;
+}
+
+TArray<FName> UPCGExCollectionEntryBlueprintLibrary::GetCategoryTags(const UPCGExAssetCollection* Collection, FName Category)
+{
+	const FPCGExCategoryOverrides* Row = Collection ? Collection->FindCategoryOverridesRow(Category) : nullptr;
+	return Row ? Row->Tags.Array() : TArray<FName>();
+}
+
+bool UPCGExCollectionEntryBlueprintLibrary::AddCategoryTag(UPCGExAssetCollection* Collection, FName Category, FName Tag)
+{
+	if (!Collection || Category.IsNone() || Tag.IsNone())
+	{
+		return false;
+	}
+
+	if (const FPCGExCategoryOverrides* Existing = Collection->FindCategoryOverridesRow(Category); Existing && Existing->Tags.Contains(Tag))
+	{
+		return false;
+	}
+
+	FPCGExCategoryOverrides* Row = PCGExCollectionEntryBlueprintLibrary_Private::FindOrMintCategoryRow(Collection, Category, TEXT("category tag"));
+	if (!Row)
+	{
+		return false;
+	}
+
+	Collection->Modify();
+	Row->Tags.Add(Tag);
+	(void)Collection->MarkPackageDirty();
+	Collection->InvalidateCache();
+	return true;
+}
+
+bool UPCGExCollectionEntryBlueprintLibrary::RemoveCategoryTag(UPCGExAssetCollection* Collection, FName Category, FName Tag)
+{
+	FPCGExCategoryOverrides* Row = Collection ? Collection->FindCategoryOverridesRow(Category) : nullptr;
+	if (!Row || !Row->Tags.Contains(Tag))
+	{
+		return false;
+	}
+
+	Collection->Modify();
+	Row->Tags.Remove(Tag);
+	(void)Collection->MarkPackageDirty();
+	Collection->InvalidateCache();
+	return true;
+}
+
+bool UPCGExCollectionEntryBlueprintLibrary::CategoryHasTag(const UPCGExAssetCollection* Collection, FName Category, FName Tag)
+{
+	const FPCGExCategoryOverrides* Row = Collection ? Collection->FindCategoryOverridesRow(Category) : nullptr;
+	return Row ? Row->Tags.Contains(Tag) : false;
 }
 
 TArray<FName> UPCGExCollectionEntryBlueprintLibrary::GetOverriddenCategories(const UPCGExAssetCollection* Collection)

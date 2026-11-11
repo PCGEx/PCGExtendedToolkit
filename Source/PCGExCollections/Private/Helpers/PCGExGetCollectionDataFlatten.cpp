@@ -49,7 +49,7 @@ namespace PCGExGetCollectionData
 			// at which the slot was attempted. Hash is keyed off this (Root, -1, Depth) tuple, so
 			// null rows from the same root+depth group together under one hash.
 			const int32 NoneHash = GetOrAssignCollectionHash(Ctx, RootCollectionIndex, -1, Depth);
-			OutEntries.Add({nullptr, nullptr, NAME_None, RootCollectionIndex, -1, Depth, NoneHash});
+			OutEntries.Add({nullptr, nullptr, NAME_None, RootCollectionIndex, -1, Depth, NoneHash, /*bIsEmpty=*/true});
 			if (bDedup)
 			{
 				Ctx.SeenEntries->Add(nullptr);
@@ -67,7 +67,7 @@ namespace PCGExGetCollectionData
 			return;
 		}
 
-		if (Ctx.TagFilter && (Depth == 0 || Ctx.bTagFilterRecursive) && !PCGExCollections::Tags::Matches(*InEntry, Ctx.TagSources, *Ctx.TagFilter))
+		if (Ctx.TagFilter && (Depth == 0 || Ctx.bTagFilterRecursive) && !PCGExCollections::Tags::Matches(*InEntry, Ctx.TagSources, *Ctx.TagFilter, InHost, false))
 		{
 			return;
 		}
@@ -96,7 +96,7 @@ namespace PCGExGetCollectionData
 			{
 				return;
 			}
-			OutEntries.Add({S, InHost, NAME_None, RootCollectionIndex, HostCollectionIndex, Depth, EntryHash});
+			OutEntries.Add({S, InHost, NAME_None, RootCollectionIndex, HostCollectionIndex, Depth, EntryHash, /*bIsEmpty=*/true});
 			if (bDedup)
 			{
 				Ctx.SeenEntries->Add(S);
@@ -122,7 +122,7 @@ namespace PCGExGetCollectionData
 		{
 			if (InEntry->SubGrammarMode != EPCGExGrammarSubCollectionMode::Flatten)
 			{
-				// Sub-collection emitted as a single placeholder row -- depth stays at the host's depth
+				// Sub-collection emitted as a single row -- depth stays at the host's depth
 				// (the entry physically lives in InHost; we didn't recurse into its contents).
 				OutEntries.Add({InEntry, InHost, ResolveCategory(InEntry->Category), RootCollectionIndex, HostCollectionIndex, Depth, EntryHash});
 				if (bDedup)

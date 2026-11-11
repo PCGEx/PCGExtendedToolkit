@@ -41,7 +41,8 @@ namespace PCGExCollections
 
 		bool IsEmpty() const { return Lists.IsEmpty(); }
 
-		/** InHost is the collection holding InEntry (null when unknown): the Collection tag source reads its tags. */
+		/** InHost is the collection holding InEntry (null when unknown): it resolves the entry's category tags, and the
+		 *  Collection tag source reads its own tags. */
 		bool Passes(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost) const;
 
 		/** Tag sources the tag walk reads (Asset, Collection); other bits change nothing. */

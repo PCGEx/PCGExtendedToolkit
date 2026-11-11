@@ -2,6 +2,7 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Core/PCGExStagingBoundsModifier.h"
 #include "PCGExCollectionsCustomVersion.h"
 
@@ -932,12 +933,12 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryAt(int32 Index, uint8 Tag
 	{
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
 		{
-			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
+			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
 		}
 	}
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 	{
-		OutTags.Append(Entry->Tags);
+		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 	}
 
 	Result.Entry = Entry;
@@ -961,12 +962,12 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRaw(int32 RawIndex, uint8
 	{
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
 		{
-			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
+			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
 		}
 	}
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 	{
-		OutTags.Append(Entry->Tags);
+		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 	}
 
 	Result.Entry = Entry;
@@ -991,18 +992,18 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed,
 	{
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Hierarchy))
 		{
-			OutTags.Append(Entry->Tags);
+			PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 		}
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
 		{
-			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
+			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
 		}
 		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 	}
 
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 	{
-		OutTags.Append(Entry->Tags);
+		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 	}
 
 	Result.Entry = Entry;
@@ -1028,18 +1029,18 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed, uint8 
 	{
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Hierarchy))
 		{
-			OutTags.Append(Entry->Tags);
+			PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 		}
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
 		{
-			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
+			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
 		}
 		return Entry->GetSubCollectionPtr()->GetEntryRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 	}
 
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 	{
-		OutTags.Append(Entry->Tags);
+		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 	}
 
 	Result.Entry = Entry;
@@ -1065,18 +1066,18 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 	{
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Hierarchy))
 		{
-			OutTags.Append(Entry->Tags);
+			PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 		}
 		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
 		{
-			OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
+			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
 		}
 		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
 	}
 
 	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
 	{
-		OutTags.Append(Entry->Tags);
+		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
 	}
 
 	Result.Entry = Entry;
@@ -1938,6 +1939,11 @@ bool UPCGExAssetCollection::SyncPropertySchemaAndRemapEntries()
 
 FPCGExCategoryOverrides* UPCGExAssetCollection::FindCategoryOverridesRow(const FName InCategory)
 {
+	return const_cast<FPCGExCategoryOverrides*>(static_cast<const UPCGExAssetCollection*>(this)->FindCategoryOverridesRow(InCategory));
+}
+
+const FPCGExCategoryOverrides* UPCGExAssetCollection::FindCategoryOverridesRow(const FName InCategory) const
+{
 	if (InCategory.IsNone())
 	{
 		return nullptr;
@@ -2073,8 +2079,14 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 				ChangeType == EPropertyChangeType::ArrayMove ||
 				ChangeType == EPropertyChangeType::Duplicate;
 
-			bIsValueOnlyLeafEdit = !bArrayShapeChange;
-			bIsStructuralSchemaChange = bArrayShapeChange;
+			// A row's Tags set never shapes the schema: adding or removing a tag stays a value edit.
+			const FProperty* LeafProperty = PropertyChangedEvent.Property;
+			const bool bRowTagsEdit = LeafProperty
+				&& LeafProperty->GetOwnerStruct() == FPCGExCategoryOverrides::StaticStruct()
+				&& LeafProperty->GetFName() == GET_MEMBER_NAME_CHECKED(FPCGExCategoryOverrides, Tags);
+
+			bIsValueOnlyLeafEdit = !bArrayShapeChange || bRowTagsEdit;
+			bIsStructuralSchemaChange = !bIsValueOnlyLeafEdit;
 		}
 		// Programmatic / reflection edits that bypass the outer CollectionProperties UPROPERTY.
 		else if (const UStruct* OwnerStruct = PropertyChangedEvent.MemberProperty->GetOwnerStruct();
@@ -2303,7 +2315,7 @@ bool UPCGExAssetCollection::EDITOR_RenameCategoryOverrides(const FName OldCatego
 
 	// A destination that exists but authors nothing is a vacancy, not a conflict: rekey into it so
 	// the source's values survive. Keyed on authored content, never on the row's mere presence.
-	if (DestIdx == INDEX_NONE || !CategoryOverrides[DestIdx].HasAnyEnabled())
+	if (DestIdx == INDEX_NONE || !CategoryOverrides[DestIdx].HasAnyAuthored())
 	{
 		if (DestIdx != INDEX_NONE)
 		{
@@ -2314,40 +2326,13 @@ bool UPCGExAssetCollection::EDITOR_RenameCategoryOverrides(const FName OldCatego
 		return true;
 	}
 
-	// Enabled source slots the destination will not reproduce. Empty = the destination already
-	// says the same thing, so absorbing the source is a silent no-op.
-	TArray<FName> Dropped;
-	const FPCGExPropertyOverrides& Dest = CategoryOverrides[DestIdx].PropertyOverrides;
-	for (const FPCGExPropertyOverrideEntry& Slot : CategoryOverrides[SourceIdx].PropertyOverrides.Overrides)
+	// Nothing lost = the destination already says it all, so absorbing the source is silent.
+	const FString Lost = CategoryOverrides[DestIdx].DescribeCollisionLoss(CategoryOverrides[SourceIdx]);
+	if (!Lost.IsEmpty())
 	{
-		if (!Slot.bEnabled)
-		{
-			continue;
-		}
-		const FName SlotName = Slot.GetPropertyName();
-		if (SlotName.IsNone())
-		{
-			continue;
-		}
-		// Values only: two rows saying the same thing may still differ by a pick or a mirrored choice list.
-		const FInstancedStruct* DestSlot = Dest.GetOverride(SlotName);
-		if (!DestSlot || !PCGExProperties::ValuesIdentical(*DestSlot, Slot.Value))
-		{
-			Dropped.Add(SlotName);
-		}
-	}
-
-	if (!Dropped.IsEmpty())
-	{
-		TArray<FString> Names;
-		Names.Reserve(Dropped.Num());
-		for (const FName DroppedName : Dropped)
-		{
-			Names.Add(DroppedName.ToString());
-		}
 		UE_LOG(LogPCGEx, Warning,
-		       TEXT("Merged category \"%s\" into existing \"%s\" in \"%s\": the destination's values win, so these overrides were dropped: %s"),
-		       *OldCategory.ToString(), *NewCategory.ToString(), *GetNameSafe(this), *FString::Join(Names, TEXT(", ")));
+		       TEXT("Merged category \"%s\" into existing \"%s\" in \"%s\": the destination row wins, so these were dropped. %s"),
+		       *OldCategory.ToString(), *NewCategory.ToString(), *GetNameSafe(this), *Lost);
 	}
 
 	CategoryOverrides.RemoveAt(SourceIdx);

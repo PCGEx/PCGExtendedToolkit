@@ -10,6 +10,7 @@
 
 #include "PCGExCollectionsSettingsCache.h"
 #include "Components/MeshComponent.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Helpers/PCGExPropertyHelpers.h"
@@ -237,7 +238,7 @@ void FPCGExSkinnedMeshCollectionEntry::ResolveGlobalsToLocal(const UPCGExAssetCo
 }
 
 // Resolves descriptor inheritance: Global/Overrule → collection-level descriptor (via the
-// seam), Local → entry-level Descriptor. Always appends entry tags to component tags.
+// seam), Local → entry-level Descriptor. Appends the entry's output tags either way.
 void FPCGExSkinnedMeshCollectionEntry::InitPCGSoftSkinnedDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGSoftSkinnedMeshComponentDescriptor& TargetDescriptor) const
 {
 	FPCGExSkinnedMeshCollectionGlobals Globals;
@@ -246,7 +247,6 @@ void FPCGExSkinnedMeshCollectionEntry::InitPCGSoftSkinnedDescriptor(const UPCGEx
 	if (bHasGlobals && (DescriptorSource == EPCGExEntryVariationMode::Global || Globals.GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule))
 	{
 		PCGExPropertyHelpers::CopyStructProperties(&Globals.GlobalDescriptor, &TargetDescriptor, FPCGSoftSkinnedMeshComponentDescriptor::StaticStruct(), FPCGSoftSkinnedMeshComponentDescriptor::StaticStruct());
-		TargetDescriptor.ComponentTags.Append(ParentCollection->CollectionTags.Array());
 	}
 	else
 	{
@@ -256,7 +256,7 @@ void FPCGExSkinnedMeshCollectionEntry::InitPCGSoftSkinnedDescriptor(const UPCGEx
 	// The entry's asset is authoritative: globals don't carry one, and a local descriptor only
 	// mirrors it through SetAssetPath/EDITOR_Sanitize -- which programmatic authoring bypasses.
 	TargetDescriptor.SkinnedAsset = SkinnedAsset;
-	TargetDescriptor.ComponentTags.Append(Tags.Array());
+	PCGExCollections::Tags::AppendOutputTags(*this, ParentCollection, TargetDescriptor.ComponentTags);
 }
 
 #if WITH_EDITOR
