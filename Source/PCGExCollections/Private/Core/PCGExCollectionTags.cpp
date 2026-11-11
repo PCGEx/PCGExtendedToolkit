@@ -20,9 +20,42 @@ namespace PCGExCollections::Tags
 		}
 	}
 
+	void AppendTags(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const UPCGExAssetCollection* InHost, TSet<FName>& OutTags)
+	{
+		ForEachEntryTag(InEntry, InTagSources, InHost, false, [&OutTags](const FName Tag)
+		{
+			OutTags.Add(Tag);
+			return true;
+		});
+	}
+
+	void AppendEntryTags(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TSet<FName>& OutTags)
+	{
+		AppendTags(InEntry, static_cast<uint8>(EPCGExAssetTagInheritance::Asset), InHost, OutTags);
+	}
+
+	void AppendOutputTags(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost, TArray<FName>& OutTags)
+	{
+		ForEachEntryTag(InEntry, static_cast<uint8>(EPCGExAssetTagInheritance::Asset), InHost, false, [&OutTags](const FName Tag)
+		{
+			OutTags.AddUnique(Tag);
+			return true;
+		});
+
+		if (!InHost)
+		{
+			return;
+		}
+
+		for (const FName& Tag : InHost->CollectionTags)
+		{
+			if (!Tag.IsNone()) { OutTags.AddUnique(Tag); }
+		}
+	}
+
 #pragma region FTagIndex
 
-	void FTagIndex::Build(const PCGExAssetCollection::FCategory& InPool, const uint8 InTagSources)
+	void FTagIndex::Build(const PCGExAssetCollection::FCategory& InPool, const uint8 InTagSources, const UPCGExAssetCollection* InHost)
 	{
 		TagToId.Reset();
 		Words.Reset();
@@ -39,9 +72,9 @@ namespace PCGExCollections::Tags
 		// Two passes: ids first (deterministic, entry order), then masks once Stride is known.
 		for (int32 i = 0; i < Num; ++i)
 		{
-			ForEachEntryTag(*InPool.Entries[i], InTagSources, [&](const FName Tag)
+			ForEachEntryTag(*InPool.Entries[i], InTagSources, InHost, false, [&](const FName Tag)
 			{
-				if (!Tag.IsNone() && !TagToId.Contains(Tag))
+				if (!TagToId.Contains(Tag))
 				{
 					TagToId.Add(Tag, NumTags++);
 				}
@@ -61,7 +94,7 @@ namespace PCGExCollections::Tags
 		{
 			const int32 Raw = InPool.Indices[i];
 			TArrayView<int64> Mask(Words.GetData() + Raw * Stride, Stride);
-			ForEachEntryTag(*InPool.Entries[i], InTagSources, [&](const FName Tag)
+			ForEachEntryTag(*InPool.Entries[i], InTagSources, InHost, false, [&](const FName Tag)
 			{
 				if (const int32* Id = TagToId.Find(Tag))
 				{
@@ -177,16 +210,16 @@ namespace PCGExCollections::Tags
 		ParseOperand(InExclude, bCommaSeparated, Exclude);
 	}
 
-	bool Matches(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const FTagLists& InLists, const UPCGExAssetCollection* InHost)
+	bool Matches(const FPCGExAssetCollectionEntry& InEntry, const uint8 InTagSources, const FTagLists& InLists, const UPCGExAssetCollection* InHost, const bool bInHostTags)
 	{
 		auto Has = [&](const FName InTag)
 		{
 			bool bFound = false;
-			ForEachEntryTag(InEntry, InTagSources, [&](const FName Tag)
+			ForEachEntryTag(InEntry, InTagSources, InHost, bInHostTags, [&](const FName Tag)
 			{
 				bFound = (Tag == InTag);
 				return !bFound;
-			}, InHost);
+			});
 			return bFound;
 		};
 
@@ -331,7 +364,7 @@ namespace PCGExCollections::Tags
 
 #pragma region FTagPoolStore
 
-	TSharedPtr<const FTagIndex> FTagPoolStore::GetOrBuildIndex(const TSharedPtr<PCGExAssetCollection::FCategory>& InPool, const uint8 InTagSources)
+	TSharedPtr<const FTagIndex> FTagPoolStore::GetOrBuildIndex(const TSharedPtr<PCGExAssetCollection::FCategory>& InPool, const uint8 InTagSources, const UPCGExAssetCollection* InHost)
 	{
 		if (!InPool)
 		{
@@ -347,7 +380,7 @@ namespace PCGExCollections::Tags
 		}
 
 		TSharedPtr<FTagIndex> Index = MakeShared<FTagIndex>();
-		Index->Build(*InPool, InTagSources);
+		Index->Build(*InPool, InTagSources, InHost);
 		Indices.Add(Key, Index);
 		return Index;
 	}

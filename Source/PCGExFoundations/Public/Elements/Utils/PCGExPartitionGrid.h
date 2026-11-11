@@ -66,6 +66,11 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExPartitionCellBounds PointBounds = EPCGExPartitionCellBounds::FullCell;
 
+	/** World units added to each side of the point's bounds and, on X and Y, to the texture transform's half-size.
+	 *  Negative values inset. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FVector BoundsExpansion = FVector::ZeroVector;
+
 	/** Also output the cells the reference bounds only touch on a face or an edge. The editor creates a partition actor
 	 *  in those but never generates there, so they are skipped by default. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -110,8 +115,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bOutputTextureTransform = true;
 
-	/** When enabled, write to this attribute the transform Get Texture Data gives a texture in the cell's partition actor,
-	 *  so the texture fills the cell. Feed it to Get Texture Data's Transform with Use Absolute Transform on. */
+	/** When enabled, write to this attribute the transform that fits a texture to the cell, grown by Bounds Expansion on
+	 *  X and Y. Feed it to Get Texture Data's Transform with Use Absolute Transform on. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs", meta = (PCG_Overridable, EditCondition = "bOutputTextureTransform"))
 	FName TextureTransformAttributeName = "TextureTransform";
 };

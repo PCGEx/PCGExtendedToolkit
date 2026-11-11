@@ -201,8 +201,11 @@ namespace PCGExPartitionGrid
 	/** The cell's partition actor bounds (APCGPartitionActor::GetFixedBounds): the cell, unbounded along Z in 2D. */
 	PCGEXFOUNDATIONS_API FBox GetFixedBounds(const FCell& InCell);
 
-	/** The transform Get Texture Data gives a texture in the cell's partition actor, in relative mode with an identity node transform. */
-	PCGEXFOUNDATIONS_API FTransform GetTextureTransform(const FCell& InCell);
+	/**
+	 * The transform Get Texture Data gives a texture in the cell's partition actor, in relative mode with an identity node
+	 * transform. InExpansion (world units) is added to the texture's half-size along X and Y.
+	 */
+	PCGEXFOUNDATIONS_API FTransform GetTextureTransform(const FCell& InCell, const FVector2D& InExpansion = FVector2D::ZeroVector);
 
 	/**
 	 * The cells a partitioned component with these grid bounds gets, in the order UPCGSubsystem::ForAllOverlappingCells

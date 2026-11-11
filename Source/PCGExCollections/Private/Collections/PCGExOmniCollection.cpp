@@ -631,26 +631,36 @@ int32 UPCGExOmniCollection::EDITOR_AppendCollections(TConstArrayView<UPCGExAsset
 			SourceAppended++;
 		});
 
-		// Category rows travel ONLY with appended entries that carry their category -- copying a row
-		// no entry references would mint a stale row (Cleanup bait), and rows copied without entries
-		// would skip the AppendedCount-gated tail refresh that re-syncs them to the target schema.
-		// Conflict policy matches the globals blocks: a row this target already has is the user's and
-		// wins; the incoming one is dropped with a warning rather than merged, since two rows can
-		// enable the same property with different values and any per-slot union would match neither.
+		// Rows travel only with appended entries of their category: an unreferenced row is Cleanup bait, and a row
+		// copied without entries misses the AppendedCount-gated re-sync to this schema. On a collision the row here
+		// wins unless it authors nothing, as in EDITOR_RenameCategoryOverrides; rows never merge slot by slot.
 		for (const FPCGExCategoryOverrides& SourceRow : Source->CategoryOverrides)
 		{
 			if (SourceRow.Category.IsNone() || !AppendedCategories.Contains(SourceRow.Category))
 			{
 				continue;
 			}
-			if (const FPCGExPropertyOverrides* Existing = FindCategoryOverrides(SourceRow.Category))
+
+			FPCGExCategoryOverrides* Existing = FindCategoryOverridesRow(SourceRow.Category);
+			if (!Existing)
 			{
-				UE_LOG(LogPCGEx, Warning,
-				       TEXT("Merging \"%s\" into \"%s\": category \"%s\" already has overrides here, so the source's were dropped. Re-author them if needed."),
-				       *GetNameSafe(Source), *GetNameSafe(this), *SourceRow.Category.ToString());
+				CategoryOverrides.Add(SourceRow);
 				continue;
 			}
-			CategoryOverrides.Add(SourceRow);
+
+			if (!Existing->HasAnyAuthored())
+			{
+				*Existing = SourceRow;
+				continue;
+			}
+
+			const FString Lost = Existing->DescribeCollisionLoss(SourceRow);
+			if (!Lost.IsEmpty())
+			{
+				UE_LOG(LogPCGEx, Warning,
+				       TEXT("Merging \"%s\" into \"%s\": category \"%s\" already has a row here and it wins, so these were dropped from the source's row. %s"),
+				       *GetNameSafe(Source), *GetNameSafe(this), *SourceRow.Category.ToString(), *Lost);
+			}
 		}
 
 		// Ensure per-type STATES for what THIS source contributed, seeding newly created

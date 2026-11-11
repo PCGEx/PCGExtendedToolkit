@@ -37,8 +37,8 @@ struct PCGEXCOLLECTIONS_API FPCGExBaseTagFilterDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	bool bParseCommaSeparatedLists = false;
 
-	/** Which tags an entry is matched on: its own tags, and/or its sub-collection's tags when the entry is a sub-collection
-	 *  (material swaps also read the tags of the collection holding the entry). */
+	/** Which tags an entry is matched on. Material swaps also read the holding collection's own tags under
+	 *  Collection. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExCollections.EPCGExAssetTagInheritance"))
 	uint8 TagSources = static_cast<uint8>(EPCGExAssetTagInheritance::Asset);
 

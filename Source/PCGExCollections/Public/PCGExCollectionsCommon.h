@@ -96,9 +96,9 @@ UENUM()
 enum class EPCGExAssetTagInheritance : uint8
 {
 	None           = 0,
-	Asset          = 1 << 1 UMETA(DisplayName = "Asset"),
+	Asset          = 1 << 1 UMETA(DisplayName = "Asset", ToolTip="The entry's own tags, and its category's."),
 	Hierarchy      = 1 << 2 UMETA(Hidden, DisplayName = "Hierarchy"),
-	Collection     = 1 << 3 UMETA(DisplayName = "Collection"),
+	Collection     = 1 << 3 UMETA(DisplayName = "Collection", ToolTip="Collection tags: the sub-collection's, for an entry that points to one."),
 	RootCollection = 1 << 4 UMETA(Hidden, DisplayName = "Root Collection"),
 	RootAsset      = 1 << 5 UMETA(Hidden, DisplayName = "Root Asset"),
 };
