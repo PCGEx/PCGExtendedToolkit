@@ -121,6 +121,7 @@ struct PCGEXCOLLECTIONS_API FPCGExSkinnedMeshCollectionEntry : public FPCGExAsse
 	/**
 	 * Resolve descriptor inheritance into TargetDescriptor. Accepts any host -- globals read
 	 * through the seam; hosts without a block (or null) fall back to the local descriptor.
+	 * Appends the output tags (PCGExCollections::Tags::AppendOutputTags) after the resolved descriptor's own.
 	 */
 	void InitPCGSoftSkinnedDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGSoftSkinnedMeshComponentDescriptor& TargetDescriptor) const;
 

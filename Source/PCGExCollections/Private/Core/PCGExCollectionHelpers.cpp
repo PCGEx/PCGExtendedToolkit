@@ -9,6 +9,7 @@
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Collections/PCGExVariantCollection.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Details/PCGExStagingDetails.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
@@ -642,24 +643,12 @@ namespace PCGExCollectionHelpers
 	void AccumulateTags(
 		const FPCGExAssetCollectionEntry* Entry,
 		uint8 TagInheritance,
-		TSet<FName>& OutTags)
+		TSet<FName>& OutTags,
+		const UPCGExAssetCollection* InHost)
 	{
-		if (!Entry)
+		if (Entry)
 		{
-			return;
-		}
-
-		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
-		{
-			OutTags.Append(Entry->Tags);
-		}
-
-		if (Entry->HasValidSubCollection())
-		{
-			if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
-			{
-				OutTags.Append(Entry->GetSubCollectionPtr()->CollectionTags);
-			}
+			PCGExCollections::Tags::AppendTags(*Entry, TagInheritance, InHost, OutTags);
 		}
 	}
 

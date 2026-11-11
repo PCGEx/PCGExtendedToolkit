@@ -147,7 +147,7 @@ namespace PCGExCollections
 
 	bool FMaterialSwapGate::Passes(const FPCGExAssetCollectionEntry& InEntry, const UPCGExAssetCollection* InHost) const
 	{
-		return Lists.IsEmpty() || Tags::Matches(InEntry, TagSources, Lists, InHost);
+		return Lists.IsEmpty() || Tags::Matches(InEntry, TagSources, Lists, InHost, true);
 	}
 
 	uint8 FMaterialSwapGate::GetEffectiveTagSources() const

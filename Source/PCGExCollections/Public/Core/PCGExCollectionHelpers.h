@@ -131,12 +131,14 @@ namespace PCGExCollectionHelpers
 	 * @param Entry The entry to get tags from
 	 * @param TagInheritance Bitmask of EPCGExAssetTagInheritance flags
 	 * @param OutTags Set to append tags to
+	 * @param InHost The collection holding Entry; without it the Asset source reads no category tags
 	 */
 	PCGEXCOLLECTIONS_API
 	void AccumulateTags(
 		const FPCGExAssetCollectionEntry* Entry,
 		uint8 TagInheritance,
-		TSet<FName>& OutTags);
+		TSet<FName>& OutTags,
+		const UPCGExAssetCollection* InHost = nullptr);
 
 	/**
 	 * Classify a collection's LEAF entries for actor-vs-asset output declaration (actor =
