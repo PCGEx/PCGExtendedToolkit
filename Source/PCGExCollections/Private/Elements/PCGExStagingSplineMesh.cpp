@@ -764,6 +764,15 @@ namespace PCGExPathSplineMesh
 			Segment.MeshEntry = MeshEntry;
 			Segment.Host = Result.Host;
 
+			// Grab Tags picks the entry-side sources; the holding collection's own tags come with any of them.
+			if (bUseTags && bLocalFitting && Result.Host)
+			{
+				for (const FName& Tag : Result.Host->CollectionTags)
+				{
+					if (!Tag.IsNone()) { Segment.Tags.Add(Tag); }
+				}
+			}
+
 			const int32 NextIndex = Index + 1 > LastIndex ? 0 : Index + 1;
 			const FTransform& CurrentTransform = Transforms[Index];
 			const FVector CurrentLocation = CurrentTransform.GetLocation();
@@ -971,12 +980,9 @@ namespace PCGExPathSplineMesh
 
 		if (Settings->TaggingDetails.bForwardInputDataTags)
 		{
-			SplineMeshComponent->ComponentTags.Append(DataTags);
+			for (const FName& Tag : DataTags) { SplineMeshComponent->ComponentTags.AddUnique(Tag); }
 		}
-		if (!Segment.Tags.IsEmpty())
-		{
-			SplineMeshComponent->ComponentTags.Append(Segment.Tags.Array());
-		}
+		for (const FName& Tag : Segment.Tags) { SplineMeshComponent->ComponentTags.AddUnique(Tag); }
 
 		if (!Settings->PropertyOverrideDescriptions.IsEmpty())
 		{

@@ -1328,9 +1328,9 @@ public:
 	/**
 	 * Re-key OldCategory's row to NewCategory. Move, not copy: leaving the original behind lets a
 	 * later category of the same name resurrect stale overrides. Destination wins on a real
-	 * conflict -- a populated NewCategory row keeps its values and the source row is dropped with
-	 * a warning naming the discarded properties; a value-identical or absent destination absorbs
-	 * the source silently. Returns true if CategoryOverrides changed.
+	 * conflict -- a NewCategory row that authors anything (HasAnyAuthored) is kept, and the source
+	 * row is dropped with a warning naming whatever it loses (DescribeCollisionLoss); an absent or
+	 * empty destination takes the source row. Returns true if CategoryOverrides changed.
 	 */
 	bool EDITOR_RenameCategoryOverrides(FName OldCategory, FName NewCategory);
 
@@ -1341,7 +1341,7 @@ public:
 	 */
 	int32 EDITOR_CleanupUnusedCategoryOverrides();
 
-	/** Drop InCategory's row outright, enabled slots included. Returns true if a row was removed. */
+	/** Drop InCategory's row outright, enabled slots and tags included. Returns true if a row was removed. */
 	bool EDITOR_RemoveCategoryOverrides(FName InCategory);
 
 	/** Categories actually referenced by entries, excluding NAME_None. */
@@ -1428,7 +1428,8 @@ public:
 	TObjectPtr<UPCGExCollectionStagingPipeline> StagingPipeline_DEPRECATED;
 #endif
 
-	/** Tags carried by this collection: appended to spawned components' ComponentTags, and merged into entry tags wherever this collection is consumed as a subcollection or flattened. */
+	/** Tags carried by this collection: added to whatever its entries spawn (components, actors), and merged
+	 *  into entry tags wherever this collection is consumed as a subcollection or flattened. */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(DisplayPriority=-1))
 	TSet<FName> CollectionTags;
 
@@ -1560,7 +1561,8 @@ public:
 
 	/**
 	 * Middle resolution tier: an entry whose Category names a row here reads that row's enabled
-	 * slots before falling back to CollectionProperties. Cooked -- runtime resolution reads it.
+	 * slots before falling back to CollectionProperties, and carries the row's tags on top of its own.
+	 * Cooked -- runtime resolution reads it.
 	 * Rows only refine names CollectionProperties already declares; they never declare their own.
 	 * EditFixedSize is load-bearing: it suppresses the details panel's add/insert/delete AND
 	 * reset-to-default, the latter of which would otherwise wipe every row in one click (the CDO
@@ -1571,26 +1573,17 @@ public:
 
 	/**
 	 * Override layer for InCategory, or null when there is none. NAME_None never matches: an
-	 * uncategorized entry contributes no layer. Enforced here, NOT by cache shape.
+	 * uncategorized entry contributes no layer. Enforced by the row lookup, NOT by cache shape.
 	 */
 	const FPCGExPropertyOverrides* FindCategoryOverrides(const FName InCategory) const
 	{
-		if (InCategory.IsNone())
-		{
-			return nullptr;
-		}
-		for (const FPCGExCategoryOverrides& Row : CategoryOverrides)
-		{
-			if (Row.Category == InCategory)
-			{
-				return &Row.PropertyOverrides;
-			}
-		}
-		return nullptr;
+		const FPCGExCategoryOverrides* Row = FindCategoryOverridesRow(InCategory);
+		return Row ? &Row->PropertyOverrides : nullptr;
 	}
 
-	/** Mutable row for InCategory, or null. Never mints; NAME_None never matches. */
+	/** Row for InCategory, or null. Never mints; NAME_None never matches. */
 	FPCGExCategoryOverrides* FindCategoryOverridesRow(FName InCategory);
+	const FPCGExCategoryOverrides* FindCategoryOverridesRow(FName InCategory) const;
 
 	/** Collection-side tiers of property resolution: InCategory's enabled slot, then the collection default
 	 *  (ImportOverrides-aware). Entries chain here after their own tier. Only slots deriving from

@@ -10,6 +10,10 @@
 #include "MeshSelectors/PCGMeshSelectorBase.h"
 
 #include "Collections/PCGExMeshCollection.h"
+#include "PCGExCollectionsCustomVersion.h"
+#include "Clusters/PCGExClusterCommon.h"
+#include "Core/PCGExCollectionTags.h"
+#include "Data/PCGExDataTags.h"
 #include "Engine/StaticMesh.h"
 #include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExMetaHelpers.h"
@@ -63,6 +67,31 @@ namespace PCGExMeshSelectorStaged
 		for (int32 PointIndex = 0; PointIndex < MetadataEntries.Num(); PointIndex++)
 		{
 			OutTables[PointIndex] = static_cast<uint32>(Stamp->GetValueFromItemKey(MetadataEntries[PointIndex]));
+		}
+	}
+
+	void GetInputDataTags(const FPCGStaticMeshSpawnerContext& InContext, TArray<FName>& OutTags)
+	{
+		// Same input the spawner selects for: GetInputsByPin(DefaultInputLabel)[CurrentInputIndex], i.e. default pin
+		// with data, counted in place (GetInputsByPin copies every input). The index advances only after selection.
+		int32 InputIndex = 0;
+		for (const FPCGTaggedData& Input : InContext.InputData.TaggedData)
+		{
+			if (!Input.Data || Input.Pin != PCGPinConstants::DefaultInputLabel)
+			{
+				continue;
+			}
+
+			if (InputIndex++ != InContext.CurrentInputIndex)
+			{
+				continue;
+			}
+
+			// Cluster pairing tags carry a per-run id: forwarded, they would split and churn the ISM components.
+			PCGExData::FTags InputTags(Input.Tags);
+			InputTags.Remove(PCGExClusters::Labels::ProtectedClusterTags);
+			OutTags.Append(InputTags.FlattenToArrayOfNames());
+			return;
 		}
 	}
 
@@ -144,6 +173,19 @@ namespace PCGExMeshSelectorStaged
 		}
 
 		return Result;
+	}
+}
+
+void UPCGExMeshSelectorStaged::Serialize(FArchive& Ar)
+{
+	Ar.UsingCustomVersion(FPCGExCollectionsCustomVersion::GUID);
+	Super::Serialize(Ar);
+
+	// Selectors saved before the toggle existed keep their output. Duplication and undo read the registered versions.
+	if (Ar.IsLoading() && Ar.IsPersistent() && !Ar.IsTransacting()
+		&& Ar.CustomVer(FPCGExCollectionsCustomVersion::GUID) < FPCGExCollectionsCustomVersion::StagedSelectorForwardsInputDataTags)
+	{
+		bForwardInputDataTags = false;
 	}
 }
 
@@ -261,6 +303,13 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			PCGExMeshSelectorStaged::ReadSwapStamps(InPointData, StagingLayer, PointTables);
 		}
 
+		// Added to every list before the swap and mirror splits copy its descriptor.
+		TArray<FName> InputTags;
+		if (bForwardInputDataTags)
+		{
+			PCGExMeshSelectorStaged::GetInputDataTags(Context, InputTags);
+		}
+
 		// Points whose stamp names a table the Overrides pin doesn't carry.
 		int32 NumUnknownTables = 0;
 
@@ -291,13 +340,18 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 
 			if (bUseTemplateDescriptor)
 			{
-				OutDescriptor.ComponentTags.Append(Entry->Tags.Array());
 				OutDescriptor.StaticMesh = Entry->StaticMesh;
+				PCGExCollections::Tags::AppendOutputTags(*Entry, Result.Host, OutDescriptor.ComponentTags);
 			}
 			else
 			{
 				// Globals via the host's seam; hosts without a block fall back to the local descriptor.
 				Entry->InitPCGSoftISMDescriptor(Result.Host, OutDescriptor);
+			}
+
+			for (const FName& Tag : InputTags)
+			{
+				OutDescriptor.ComponentTags.AddUnique(Tag);
 			}
 
 			if (bForceDisableCollisions)

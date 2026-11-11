@@ -13,6 +13,7 @@ class UPCGExMeshSelectorStaged : public UPCGMeshSelectorBase
 
 public:
 	virtual bool SelectMeshInstances(FPCGStaticMeshSpawnerContext& Context, const UPCGStaticMeshSpawnerSettings* Settings, const UPCGBasePointData* InPointData, TArray<FPCGMeshInstanceList>& OutMeshInstances, UPCGBasePointData* OutPointData) const override;
+	virtual void Serialize(FArchive& Ar) override;
 
 	/** Staging layer this selector reads staged picks from (and strips from output points). None = default layer (PCGEx/CollectionEntry); otherwise the layer name is appended (PCGEx/CollectionEntry/<layer>). Other layers' attributes pass through untouched. */
 	UPROPERTY(EditAnywhere, Category = MeshSelector, AdvancedDisplay)
@@ -33,6 +34,11 @@ public:
 	 *  is mirrored (negative scale). */
 	UPROPERTY(EditAnywhere, Category = MeshSelector)
 	bool bForceEntryReverseCulling = false;
+
+	/** Add the input data's tags to every spawned component, after the entry, category and collection tags.
+	 *  Inputs with different tags never share an ISM component. Off on selectors saved before it existed. */
+	UPROPERTY(EditAnywhere, Category = MeshSelector)
+	bool bForwardInputDataTags = true;
 
 	UPROPERTY(EditAnywhere, Category = MeshSelector, meta=(InlineEditConditionToggle))
 	bool bUseTemplateDescriptor = true;
@@ -67,6 +73,10 @@ namespace PCGExMeshSelectorStaged
 {
 	/** Each point's material swap table on InLayer (0 = none); left empty when the points carry no stamp. */
 	PCGEXCOLLECTIONS_API void ReadSwapStamps(const UPCGBasePointData* InPointData, FName InLayer, TArray<uint32>& OutTables);
+
+	/** Data tags of the input InContext is selecting for, flattened like PCGExData::FTags (value tags included), minus
+	 *  PCGEx's cluster pairing tags. */
+	PCGEXCOLLECTIONS_API void GetInputDataTags(const FPCGStaticMeshSpawnerContext& InContext, TArray<FName>& OutTags);
 
 	/**
 	 * Moves the points of InOutList whose key differs from the kept one into copies of the list, one per key in first-seen

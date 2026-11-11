@@ -196,7 +196,7 @@ void SPCGExCollectionGridView::Construct(const FArguments& InArgs)
 					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 					.Text_Lambda([this]()
 					{
-						return FText::Format(INVTEXT("Category overrides: {0}"), FText::FromName(ActiveOverridesCategory));
+						return FText::Format(INVTEXT("Category overrides and tags: {0}"), FText::FromName(ActiveOverridesCategory));
 					})
 				]
 
@@ -1624,21 +1624,17 @@ void SPCGExCollectionGridView::SyncStructToCategoryOverrides()
 		return;
 	}
 
-	const FProperty* OverridesProp = FPCGExCategoryOverrides::StaticStruct()->FindPropertyByName(
-		GET_MEMBER_NAME_CHECKED(FPCGExCategoryOverrides, PropertyOverrides));
-	if (!OverridesProp)
-	{
-		return;
-	}
-
 	Coll->Modify();
 
-	// Member-scoped, not a whole-struct copy: Category is the row's key, and writing it back from a
-	// scope taken before a rename would restore the retired name.
-	const int32 Offset = OverridesProp->GetOffset_ForInternal();
-	OverridesProp->CopyCompleteValue(
-		reinterpret_cast<uint8*>(Row) + Offset,
-		CurrentStructScope->GetStructMemory() + Offset);
+	// Editable members only: the read-only Category is the row's key, and writing it back from a scope taken
+	// before a rename would restore the retired name.
+	for (TFieldIterator<FProperty> It(FPCGExCategoryOverrides::StaticStruct()); It; ++It)
+	{
+		if (It->HasAnyPropertyFlags(CPF_Edit) && !It->HasAnyPropertyFlags(CPF_EditConst | CPF_Transient))
+		{
+			It->CopyCompleteValue_InContainer(Row, CurrentStructScope->GetStructMemory());
+		}
+	}
 
 	// Classified event, not a bare PostEditChange(): a null MemberProperty reads as structural and
 	// pays the grammar-context and circular-dependency walks on every commit.

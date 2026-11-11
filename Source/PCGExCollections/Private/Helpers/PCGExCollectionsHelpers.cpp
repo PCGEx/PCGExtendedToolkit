@@ -278,7 +278,7 @@ namespace PCGExCollections
 				Store = LocalTagPools.Get();
 			}
 
-			const TSharedPtr<const Tags::FTagIndex> Index = Store->GetOrBuildIndex(Cache->Main, TagFilter.TagSources);
+			const TSharedPtr<const Tags::FTagIndex> Index = Store->GetOrBuildIndex(Cache->Main, TagFilter.TagSources, Collection);
 
 			// The store keys on the base pool object, so hand it the cache's own shared pointer.
 			auto BaseShared = [&](const int32 Slot) -> TSharedPtr<PCGExAssetCollection::FCategory>

@@ -75,6 +75,7 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetTaggingDetails : public FPCGExComponentTa
 
 	FPCGExAssetTaggingDetails() = default;
 
+	/** Which entry tags spawned components carry; any source ticked adds the holding collection's tags too. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, Bitmask, BitmaskEnum="/Script/PCGExCollections.EPCGExAssetTagInheritance"))
 	uint8 GrabTags = static_cast<uint8>(EPCGExAssetTagInheritance::Asset);
 

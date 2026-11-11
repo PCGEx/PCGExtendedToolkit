@@ -7,6 +7,7 @@
 #include "PCGElement.h"
 #include "PCGManagedResource.h"
 #include "PCGParamData.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataMacros.h"
@@ -272,6 +273,7 @@ namespace PCGExStagingSpawnActors
 
 			// Write directly to our index -- no lock, each thread writes unique indices
 			ResolvedEntries[Index].Entry = ActorEntry;
+			ResolvedEntries[Index].Host = Result.Host;
 
 			// Delta collateral paths are skipped when deltas are disabled -- prefetching
 			// them would be wasted IO since the apply path won't run.
@@ -645,10 +647,7 @@ namespace PCGExStagingSpawnActors
 		// Apply entry tags to the actor
 		if (Settings->bApplyEntryTags)
 		{
-			for (const FName& Tag : ActorEntry->Tags)
-			{
-				SpawnedActor->Tags.AddUnique(Tag);
-			}
+			PCGExCollections::Tags::AppendOutputTags(*ActorEntry, ResolvedEntries[PointIndex].Host, SpawnedActor->Tags);
 		}
 
 		// Apply per-instance tags from InstanceTags attribute

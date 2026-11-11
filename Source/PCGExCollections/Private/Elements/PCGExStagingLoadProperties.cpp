@@ -6,6 +6,7 @@
 #include "PCGExPropertyTypes.h"
 #include "PCGParamData.h"
 #include "Core/PCGExAssetCollection.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
@@ -460,16 +461,24 @@ namespace PCGExStagingLoadProperties
 		EntryTagsByHash.Reserve(UniqueEntryHashes.Num());
 
 		int16 MaterialPick = 0;
+		TArray<FName> OutputTags;
 		for (const uint64 Hash : UniqueEntryHashes)
 		{
 			FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, MaterialPick);
-			if (!Result.IsValid() || !Result.Entry || Result.Entry->Tags.IsEmpty())
+			if (!Result.IsValid() || !Result.Entry)
+			{
+				continue;
+			}
+
+			OutputTags.Reset();
+			PCGExCollections::Tags::AppendOutputTags(*Result.Entry, Result.Host, OutputTags);
+			if (OutputTags.IsEmpty())
 			{
 				continue;
 			}
 
 			FString Joined;
-			for (const FName& Tag : Result.Entry->Tags)
+			for (const FName& Tag : OutputTags)
 			{
 				if (!Joined.IsEmpty())
 				{

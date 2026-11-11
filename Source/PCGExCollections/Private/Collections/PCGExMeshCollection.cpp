@@ -11,6 +11,7 @@
 #include "PCGExCollectionsSettingsCache.h"
 #include "PCGExLog.h"
 #include "Components/StaticMeshComponent.h"
+#include "Core/PCGExCollectionTags.h"
 #include "Engine/StaticMeshSocket.h"
 #include "Helpers/PCGExPropertyHelpers.h"
 #include "Materials/MaterialInterface.h"
@@ -418,8 +419,8 @@ void FPCGExMeshCollectionEntry::ResolveGlobalsToLocal(const UPCGExAssetCollectio
 	}
 }
 
-// Resolves descriptor inheritance: Global/Overrule → collection-level descriptor (via the
-// seam), Local → entry-level ISMDescriptor. Always appends entry tags to component tags.
+// Resolves descriptor inheritance: Global/Overrule -> collection-level descriptor (via the
+// seam), Local -> entry-level ISMDescriptor. Appends the entry's output tags either way.
 void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGSoftISMComponentDescriptor& TargetDescriptor) const
 {
 	FPCGExMeshCollectionGlobals Globals;
@@ -428,7 +429,6 @@ void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExAssetCollec
 	if (bHasGlobals && (DescriptorSource == EPCGExEntryVariationMode::Global || Globals.GlobalDescriptorMode == EPCGExGlobalVariationRule::Overrule))
 	{
 		PCGExPropertyHelpers::CopyStructProperties(&Globals.GlobalISMDescriptor, &TargetDescriptor, FSoftISMComponentDescriptor::StaticStruct(), FPCGSoftISMComponentDescriptor::StaticStruct());
-		TargetDescriptor.ComponentTags.Append(ParentCollection->CollectionTags.Array());
 	}
 	else
 	{
@@ -438,7 +438,7 @@ void FPCGExMeshCollectionEntry::InitPCGSoftISMDescriptor(const UPCGExAssetCollec
 	// The entry's asset is authoritative: globals don't carry one, and a local descriptor only
 	// mirrors it through SetAssetPath/EDITOR_Sanitize -- which programmatic authoring bypasses.
 	TargetDescriptor.StaticMesh = StaticMesh;
-	TargetDescriptor.ComponentTags.Append(Tags.Array());
+	PCGExCollections::Tags::AppendOutputTags(*this, ParentCollection, TargetDescriptor.ComponentTags);
 }
 
 void FPCGExMeshCollectionEntry::ComposeStaticMeshDescriptor(const UPCGExAssetCollection* ParentCollection, FPCGExStaticMeshComponentDescriptor& OutDescriptor) const

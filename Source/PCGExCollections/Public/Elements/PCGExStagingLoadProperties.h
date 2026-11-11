@@ -79,7 +79,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Sampled Properties Mapping", TitleProperty="{PropertyName}"))
 	TArray<FPCGExPropertySampledOutputConfig> SampledPropertyOutputs;
 
-	/** If enabled, write each entry's collection Tags joined into a string attribute on the point. */
+	/** If enabled, write each entry's tags (its own, its category's and its collection's) joined into a
+	 *  string attribute on the point. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteEntryTags = false;
 

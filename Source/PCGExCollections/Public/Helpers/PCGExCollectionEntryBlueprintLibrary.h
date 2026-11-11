@@ -449,6 +449,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "PCGEx|Collection")
 	static bool HasCategoryOverrides(const UPCGExAssetCollection* Collection, FName Category);
 
+	/** The category's tags (empty when it has no row); its entries carry them on top of their own. */
+	UFUNCTION(BlueprintPure, Category = "PCGEx|Collection")
+	static TArray<FName> GetCategoryTags(const UPCGExAssetCollection* Collection, FName Category);
+
+	/** Add a tag to the category, minting its row when absent (editor only). True only when newly added. */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Collection")
+	static bool AddCategoryTag(UPCGExAssetCollection* Collection, FName Category, FName Tag);
+
+	/** Remove a tag from the category. Returns true only when the tag was present. */
+	UFUNCTION(BlueprintCallable, Category = "PCGEx|Collection")
+	static bool RemoveCategoryTag(UPCGExAssetCollection* Collection, FName Category, FName Tag);
+
+	/** True if the category carries the given tag. */
+	UFUNCTION(BlueprintPure, Category = "PCGEx|Collection")
+	static bool CategoryHasTag(const UPCGExAssetCollection* Collection, FName Category, FName Tag);
+
 	/** Categories that own an override row with at least one enabled slot. */
 	UFUNCTION(BlueprintPure, Category = "PCGEx|Collection")
 	static TArray<FName> GetOverriddenCategories(const UPCGExAssetCollection* Collection);
@@ -457,7 +473,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "PCGEx|Collection")
 	static TArray<FName> GetUsedCategories(const UPCGExAssetCollection* Collection);
 
-	/** Drop the category's override row outright, enabled slots included. Editor-only; returns true when a row was removed. */
+	/** Drop the category's row outright, enabled slots and tags included. Editor-only; returns true when a row
+	 *  was removed. */
 	UFUNCTION(BlueprintCallable, Category = "PCGEx|Collection")
 	static bool RemoveCategoryOverrides(UPCGExAssetCollection* Collection, FName Category);
 

@@ -10,9 +10,9 @@
 #include "PCGExCategoryOverrides.generated.h"
 
 /**
- * Authored per-category data on a collection, one row per category name that carries overrides.
- * Resolves between an entry's own authoring and the collection's defaults. NAME_None is never a
- * key: an uncategorized entry contributes no layer.
+ * Authored per-category data on a collection, one row per category name that carries overrides or tags.
+ * Property overrides resolve between an entry's own authoring and the collection's defaults; tags add to
+ * the entry's own. NAME_None is never a key: an uncategorized entry contributes no layer.
  *
  * A row may only refine names the collection schema already declares -- SyncToSchema enforces
  * that structurally, which is what keeps every prototype/layout scan correct without a tier.
@@ -32,6 +32,10 @@ struct PCGEXCOLLECTIONS_API FPCGExCategoryOverrides
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(NoResetToDefault))
 	FPCGExPropertyOverrides PropertyOverrides;
 
+	/** Tags every entry of this category carries on top of its own, for tag filters and what it spawns. */
+	UPROPERTY(EditAnywhere, Category = Settings)
+	TSet<FName> Tags;
+
 	FPCGExCategoryOverrides() = default;
 
 	explicit FPCGExCategoryOverrides(const FName InCategory)
@@ -44,4 +48,20 @@ struct PCGEXCOLLECTIONS_API FPCGExCategoryOverrides
 	{
 		return PropertyOverrides.GetEnabledCount() > 0;
 	}
+
+	/** True when the row says anything: a tag (None is never one) or an enabled slot. */
+	bool HasAnyAuthored() const
+	{
+		for (const FName& Tag : Tags)
+		{
+			if (!Tag.IsNone()) { return true; }
+		}
+		return HasAnyEnabled();
+	}
+
+	/**
+	 * What InDropped loses when this row wins a collision with it, as "Overrides: A, B. Tags: none.": its enabled
+	 * slots this row doesn't hold at the same value, and its tags this row lacks. Empty when nothing is lost.
+	 */
+	FString DescribeCollisionLoss(const FPCGExCategoryOverrides& InDropped) const;
 };

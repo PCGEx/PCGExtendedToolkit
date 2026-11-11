@@ -114,8 +114,8 @@ private:
 
 	int32 CurrentDetailIndex = INDEX_NONE;
 
-	/** Footer category-group filter on the struct panel. Category-overrides mode is exempt: its only
-	 *  content is the overrides block. */
+	/** Footer category-group filter on the struct panel. Category-overrides mode is exempt: it only shows
+	 *  the row (its read-only Category, overrides block and tags). */
 	bool IsStructPanelPropertyVisible(const FPropertyAndParent& PropertyAndParent) const;
 	bool IsStructPanelCustomRowVisible(FName RowName, FName ParentName) const;
 

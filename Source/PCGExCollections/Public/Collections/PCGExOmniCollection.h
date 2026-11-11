@@ -129,6 +129,8 @@ public:
 	 *   block, subobjects duplicated. On a value conflict, behavior wins over the block:
 	 *   a block THIS call installed is removed and both contributors bake via
 	 *   ResolveGlobalsToLocal; a pre-existing block stays (incoming bakes + warning).
+	 * - Category rows come with the appended entries of their category. A row already here wins unless it
+	 *   authors nothing (EDITOR_RenameCategoryOverrides' rule); a warning names whatever the incoming row loses.
 	 * - The collection-level property schema is re-derived afterwards.
 	 */
 	int32 EDITOR_AppendCollections(TConstArrayView<UPCGExAssetCollection*> InSources);
