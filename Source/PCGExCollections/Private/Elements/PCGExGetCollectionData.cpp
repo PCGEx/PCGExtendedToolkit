@@ -866,8 +866,8 @@ namespace PCGExGetCollectionData
 			}
 		}
 
-		// Sidecar sources for the schema annotations -- gathered here, single-threaded, before the parallel write.
-		if (Sidecars && bWantSchema)
+		// Schema annotation pre-pass over the unique resolved hosts -- single-threaded, before the parallel write.
+		if (bWantSchema)
 		{
 			TArray<const UPCGExAssetCollection*> Hosts;
 			Hosts.Reserve(SlotIdentity.Num());
@@ -878,8 +878,18 @@ namespace PCGExGetCollectionData
 					Hosts.AddUnique(Id.Collection);
 				}
 			}
-			FScopeLock ScopeLock(&Sidecars->Lock);
-			PCGExCollections::GatherSchemaSidecarSources(Settings->SchemaPropertyAnnotations, Hosts, Sidecars->Sources);
+
+			if (Sidecars)
+			{
+				FScopeLock ScopeLock(&Sidecars->Lock);
+				PCGExCollections::GatherSchemaSidecarSources(Settings->SchemaPropertyAnnotations, Hosts, Sidecars->Sources);
+			}
+
+			// The @Element writer reports its own misses.
+			if (bDataDomain)
+			{
+				PCGExCollections::WarnUndeclaredSchemaProperties(Context, Settings->SchemaPropertyAnnotations, Hosts);
+			}
 		}
 
 		// Bucket slots by input. Slots are stored input-major, row-minor today, but explicit
@@ -1106,9 +1116,11 @@ namespace PCGExGetCollectionData
 				TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_WriteSchemaToDataDomain);
 				PCGExCollections::WriteSchemaToDataDomain(
 					InContext, Settings->SchemaPropertyAnnotations, MainCollection, U.OutputSet);
+
+				const UPCGExAssetCollection* Hosts[] = {MainCollection};
+				PCGExCollections::WarnUndeclaredSchemaProperties(InContext, Settings->SchemaPropertyAnnotations, Hosts);
 				if (P.Sidecars)
 				{
-					const UPCGExAssetCollection* Hosts[] = {MainCollection};
 					PCGExCollections::GatherSchemaSidecarSources(Settings->SchemaPropertyAnnotations, Hosts, P.Sidecars->Sources);
 				}
 			}

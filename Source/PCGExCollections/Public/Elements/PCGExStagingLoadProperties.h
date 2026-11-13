@@ -9,7 +9,10 @@
 #include "Core/PCGExAssetGrammar.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExPointsProcessor.h"
+#include "Data/PCGExDataCommon.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
+
+#include <atomic>
 
 #include "PCGExStagingLoadProperties.generated.h"
 
@@ -58,6 +61,16 @@ public:
 	FName StagingLayer = NAME_None;
 
 	FName GetEntryIdxAttributeName() const { return PCGExCollections::Labels::EntryIdxName(StagingLayer); }
+
+	/** Domain the staged pick is read from. Any reads per-point picks when the input has them, its single @Data pick
+	 *  otherwise. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	EPCGExAttributeDomainScope EntryDomain = EPCGExAttributeDomainScope::Any;
+
+	/** Keep writing per-point attributes when the pick is read from @Data. Off writes one @Data value per input: point
+	 *  filters do not gate those, and a sampled property stays per-point only while its Time is read per point. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="EntryDomain != EPCGExAttributeDomainScope::Elements"))
+	bool bForceElementOutput = false;
 
 	/**
 	 * Properties to output as point attributes.
@@ -214,6 +227,9 @@ struct FPCGExStagingLoadPropertiesContext final : FPCGExPointsProcessorContext
 	FCriticalSection SidecarLock;
 	TArray<const FPCGExProperty*> SidecarSources;
 
+	/** Latches the "point filters do not gate @Data outputs" warning to once per execution. */
+	std::atomic<bool> bWarnedFiltersIgnored{false};
+
 	/** Output dependencies of every property hosted by the unpacked collections (e.g. Collection Entry picks). */
 	virtual void RegisterAssetDependencies() override;
 
@@ -255,11 +271,15 @@ namespace PCGExStagingLoadProperties
 	 * registered before the parallel point pass so scoped fetches cover it. Sources are resolved
 	 * per unique entry hash in OnPointsProcessingComplete, once hashes are known.
 	 * Entries in the array are fully valid by construction (Writer and TimeGetter non-null).
+	 * A cache written as one @Data value has no Writer: those live in FProcessor::SampledDataCaches.
 	 */
 	struct FSampledPropertyCache
 	{
 		/** Property name resolved against each entry (override first, collection default second) */
 		FName PropertyName = NAME_None;
+
+		/** Attribute the sampled value is written to */
+		FName OutputName = NAME_None;
 
 		/** Per-point time source */
 		TSharedPtr<PCGExDetails::TSettingValue<double>> TimeGetter;
@@ -275,11 +295,21 @@ namespace PCGExStagingLoadProperties
 	{
 		TSharedPtr<PCGExData::TBuffer<int64>> EntryHashGetter;
 
+		/** The pick is the input's single @Data value and outputs are written back as @Data values. */
+		bool bDataDomainOutput = false;
+
+		/** The resolved @Data pick. Entry is non-null once ResolveDataPick succeeded; only set when bDataDomainOutput. */
+		const FPCGExAssetCollectionEntry* DataPickEntry = nullptr;
+		const UPCGExAssetCollection* DataPickHost = nullptr;
+
 		/** Pre-resolved property caches keyed by property name */
 		TMap<FName, FPropertyCache> PropertyCaches;
 
 		/** Sampled-output caches, one per valid config (array: the same property may appear several times) */
 		TArray<FSampledPropertyCache> SampledPropertyCaches;
+
+		/** Sampled outputs whose Time is data-wide, written as one @Data value. Only filled when bDataDomainOutput. */
+		TArray<FSampledPropertyCache> SampledDataCaches;
 
 		/** Optional joined entry-tags writer + per-hash cache (only allocated when bWriteEntryTags). */
 		TSharedPtr<PCGExData::TBuffer<FString>> EntryTagsWriter;
@@ -350,6 +380,15 @@ MACRO(Scalable, bool, true, Module.bScalable)
 		virtual void OnPointsProcessingComplete() override;
 
 	private:
+		/** Bind EntryHashGetter in the domain Settings->EntryDomain selects. False when the input has no pick there. */
+		bool InitEntryHashGetter(bool& bOutFromData);
+
+		/** Resolve the input's single @Data pick into DataPickEntry / DataPickHost. False when it does not resolve. */
+		bool ResolveDataPick();
+
+		/** Write every data-wide output of the resolved @Data pick. Call after PrepareSampledPropertyCaches. */
+		void WriteDataDomainOutputs();
+
 		/** Pre-resolve properties for all unique hashes */
 		void BuildPropertyCaches();
 
