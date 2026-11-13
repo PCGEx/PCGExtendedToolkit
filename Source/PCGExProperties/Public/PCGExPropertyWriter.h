@@ -274,6 +274,9 @@ namespace PCGExProperties
 	/** Declares the optional "Map" sidecar output pin: Normal when bVisible, Advanced otherwise. */
 	PCGEXPROPERTIES_API void AddOutputMapPin(TArray<FPCGPinProperties>& PinProperties, bool bVisible);
 
+	/** True when a resolved entry of InCollection writes to the "Map" pin: what makes that pin worth showing. */
+	PCGEXPROPERTIES_API bool WritesOutputMap(const FPCGExPropertySchemaCollection& InCollection);
+
 	/** FPCGExProperty::GatherOutputDependencies over every valid property in InProperties. */
 	PCGEXPROPERTIES_API void GatherOutputDependencies(TConstArrayView<FInstancedStruct> InProperties, TSet<FSoftObjectPath>& OutPaths);
 

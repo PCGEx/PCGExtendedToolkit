@@ -111,7 +111,8 @@ TArray<FPCGPinProperties> UPCGExTupleSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
 	PCGEX_PIN_PARAM(FName("Tuple"), TEXT("Tuple."), Required)
-	PCGExProperties::AddOutputMapPin(PinProperties, bOutputMap);
+	// Regular only when a column feeds it; the Map is emitted whenever one does.
+	PCGExProperties::AddOutputMapPin(PinProperties, PCGExProperties::WritesOutputMap(Composition));
 	return PinProperties;
 }
 
@@ -228,7 +229,7 @@ bool FPCGExTupleElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSetti
 			if (const FPCGExProperty* Property = Cell ? Cell->GetPtr<FPCGExProperty>() : nullptr)
 			{
 				Property->WriteMetadataValue(Attribute, Keys[k]);
-				if (Settings->bOutputMap && !Property->GetOutputSidecarPin().IsNone())
+				if (!Property->GetOutputSidecarPin().IsNone())
 				{
 					SidecarSources.AddUnique(Property);
 				}

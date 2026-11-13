@@ -8,7 +8,11 @@
 #include "Details/PCGExPropertyInlineWidgets.h"
 #include "Details/PCGExRawPropertyEdit.h"
 #include "Details/Properties/SPCGExRangeSlider.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
+#include "Engine/Texture.h"
 #include "Properties/PCGExProperty_Range.h"
+#include "Slate/DeferredCleanupSlateBrush.h"
 #include "Styling/AppStyle.h"
 #include "Templates/Function.h"
 #include "Widgets/SNullWidget.h"
@@ -133,6 +137,76 @@ namespace PCGExRangePropertyWidget
 		FPCGExRawPropertyEdit Edit;
 		const FProperty* ValueProperty = nullptr;
 	};
+
+	/** Slider brush for a property's BackgroundTexture. Never blocks: an unloaded texture is requested and shows once resident. */
+	class FRangeBackground
+	{
+	public:
+		/** Null while Property has no texture, or none resident yet. Game thread. */
+		const FSlateBrush* Resolve(const FPCGExProperty_Range* Property)
+		{
+			// By reference: this runs on every paint, and a soft pointer copy is not free.
+			static const TSoftObjectPtr<UTexture> NoTexture;
+			const TSoftObjectPtr<UTexture>& Wanted = Property ? Property->BackgroundTexture : NoTexture;
+			if (Wanted != Source)
+			{
+				Source = Wanted;
+				Brush.Reset();
+				LoadHandle.Reset();
+				bLoadRequested = false;
+			}
+			if (Source.IsNull())
+			{
+				return nullptr;
+			}
+
+			// Compared every call: an asset reload swaps the object behind an unchanged path.
+			UTexture* Texture = Source.Get();
+			if (!Texture)
+			{
+				Brush.Reset();
+				if (!bLoadRequested)
+				{
+					bLoadRequested = true;
+					LoadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(Source.ToSoftObjectPath());
+				}
+				return nullptr;
+			}
+			if (!Brush.IsValid() || Brush->GetSlateBrush()->GetResourceObject() != Texture)
+			{
+				// The brush roots the texture from here on.
+				Brush = FDeferredCleanupSlateBrush::CreateBrush(Texture);
+				LoadHandle.Reset();
+			}
+			return Brush->GetSlateBrush();
+		}
+
+	private:
+		TSoftObjectPtr<UTexture> Source;
+		TSharedPtr<FDeferredCleanupSlateBrush> Brush;
+		TSharedPtr<FStreamableHandle> LoadHandle;
+		/** One request per source: a path that cannot load is not asked for again on every paint. */
+		bool bLoadRequested = false;
+	};
+
+	/** Clockwise quarter turns that lay a texture along the slider as InOrientation asks. */
+	int32 ToQuarterTurns(const EPCGExRangeBackgroundOrientation InOrientation)
+	{
+		switch (InOrientation)
+		{
+		case EPCGExRangeBackgroundOrientation::U:
+			return 0;
+		case EPCGExRangeBackgroundOrientation::UReversed:
+			return 2;
+		case EPCGExRangeBackgroundOrientation::V:
+			return -1;
+		case EPCGExRangeBackgroundOrientation::VReversed:
+			return 1;
+		default:
+			ensureMsgf(false, TEXT("Unhandled EPCGExRangeBackgroundOrientation"));
+			return 0;
+		}
+	}
 
 	FText FormatNumber(const double InValue)
 	{
@@ -356,6 +430,7 @@ namespace PCGExRangePropertyWidget
 		}
 
 		const TSharedRef<FRangeBinding> Binding = MakeShared<FRangeBinding>(ValueHandle);
+		const TSharedRef<FRangeBackground> Background = MakeShared<FRangeBackground>();
 
 		const TSharedRef<SMenuAnchor> Anchor = SNew(SMenuAnchor)
 			.Placement(MenuPlacement_BelowAnchor)
@@ -371,6 +446,13 @@ namespace PCGExRangePropertyWidget
 			{
 				const FPCGExProperty_Range* Property = Binding->Peek();
 				return Property ? TOptional<FVector2D>(Property->Value) : TOptional<FVector2D>();
+			})
+			// First(), not Peek(): the background is schema-owned, so it holds while the positions disagree.
+			.Background_Lambda([Binding, Background]() { return Background->Resolve(Binding->First()); })
+			.BackgroundQuarterTurns_Lambda([Binding]()
+			{
+				const FPCGExProperty_Range* Property = Binding->First();
+				return Property ? ToQuarterTurns(Property->BackgroundOrientation) : 0;
 			})
 			.OnBeginDrag_Lambda([Binding]() { Binding->BeginInteractive(); })
 			.OnValueChanged_Lambda([Binding](const FVector2D& NewPositions)
