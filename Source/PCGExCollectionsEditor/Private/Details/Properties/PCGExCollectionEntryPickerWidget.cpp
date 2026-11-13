@@ -137,15 +137,17 @@ namespace PCGExCollectionEntryPickerWidget
 		return Collection;
 	}
 
+	/** The entry's display name; "Entry N" for one that has none. */
+	FText FormatEntryLabel(const FPCGExAssetCollectionEntry& Entry, const int32 RawIndex)
+	{
+		const FString DisplayName = Entry.EDITOR_GetDisplayName();
+		return DisplayName.IsEmpty() ? FText::Format(LOCTEXT("EntryByIndex", "Entry {0}"), RawIndex) : FText::FromString(DisplayName);
+	}
+
 	static FText EntryLabel(const UPCGExAssetCollection* Collection, const int32 RawIndex)
 	{
 		const FPCGExAssetCollectionEntry* Entry = Collection ? Collection->GetEntryRaw(RawIndex).Entry : nullptr;
-		if (!Entry)
-		{
-			return LOCTEXT("MissingEntry", "<missing>");
-		}
-		const FString AssetName = Entry->EDITOR_GetThumbnailAssetPath().GetAssetName();
-		return AssetName.IsEmpty() ? FText::Format(LOCTEXT("EntryByIndex", "Entry {0}"), RawIndex) : FText::FromString(AssetName);
+		return Entry ? FormatEntryLabel(*Entry, RawIndex) : LOCTEXT("MissingEntry", "<missing>");
 	}
 
 	// ---------- Type compatibility ---------------------------------------------------------------
@@ -588,8 +590,7 @@ namespace PCGExCollectionEntryPickerWidget
 					Item->RawIndex = RawIndex;
 					Item->EntryId = Entry->EntryId;
 					Item->ThumbPath = Entry->EDITOR_GetThumbnailAssetPath();
-					const FString AssetName = Item->ThumbPath.GetAssetName();
-					Item->Label = AssetName.IsEmpty() ? FText::Format(LOCTEXT("EntryByIndex", "Entry {0}"), RawIndex) : FText::FromString(AssetName);
+					Item->Label = FormatEntryLabel(*Entry, RawIndex);
 					Item->Category = Entry->Category;
 					Item->CollectionPath = CollectionPath;
 					Item->SourceIndex = SourceIndex;

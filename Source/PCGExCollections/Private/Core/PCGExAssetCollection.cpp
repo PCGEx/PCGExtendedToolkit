@@ -769,6 +769,11 @@ FSoftObjectPath FPCGExAssetCollectionEntry::EDITOR_GetThumbnailAssetPath() const
 	}
 	return Staging.Path;
 }
+
+FString FPCGExAssetCollectionEntry::EDITOR_GetDisplayName() const
+{
+	return EDITOR_GetThumbnailAssetPath().GetAssetName();
+}
 #endif
 
 void FPCGExAssetCollectionEntry::BuildMicroCache()

@@ -163,6 +163,73 @@ namespace PCGExCollections
 		}
 	}
 
+	void WarnUndeclaredSchemaProperties(
+		FPCGExContext* InContext,
+		const FPCGExPropertyOutputSettings& OutputSettings,
+		const TConstArrayView<const UPCGExAssetCollection*> Hosts)
+	{
+		TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
+		OutputSettings.GetEffectiveConfigs(EffectiveConfigs);
+
+		int32 NumHosts = 0;
+		for (const UPCGExAssetCollection* Host : Hosts)
+		{
+			if (Host)
+			{
+				++NumHosts;
+			}
+		}
+
+		// Explicit configs may write one property under several output names; it is listed once.
+		TSet<FName> Checked;
+		TArray<FString> Undeclared;
+		for (const FPCGExPropertyOutputConfig& Config : EffectiveConfigs)
+		{
+			if (!Config.IsValid())
+			{
+				continue;
+			}
+
+			bool bAlreadyChecked = false;
+			Checked.Add(Config.PropertyName, &bAlreadyChecked);
+			if (bAlreadyChecked)
+			{
+				continue;
+			}
+
+			int32 NumMissing = 0;
+			const UPCGExAssetCollection* FirstMissing = nullptr;
+			for (const UPCGExAssetCollection* Host : Hosts)
+			{
+				if (!Host)
+				{
+					continue;
+				}
+
+				const FInstancedStruct* Source = Host->CollectionProperties.GetPropertyByName(Config.PropertyName);
+				if (Source && Source->IsValid())
+				{
+					continue;
+				}
+				if (NumMissing++ == 0)
+				{
+					FirstMissing = Host;
+				}
+			}
+
+			if (NumMissing > 0)
+			{
+				Undeclared.Add(FString::Printf(TEXT("'%s' (%d of %d, first: '%s')"), *Config.PropertyName.ToString(), NumMissing, NumHosts, *FirstMissing->GetPathName()));
+			}
+		}
+
+		if (!Undeclared.IsEmpty())
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext,
+			           FText::FromString(FString::Printf(TEXT("%d property(ies) not found in the schema of every source collection; nothing is written where one is missing: %s."), Undeclared.Num(), *FString::Join(Undeclared, TEXT(", ")))));
+		}
+	}
+
 	void WriteSchemaToElementDomain(
 		FPCGExContext* InContext,
 		const FPCGExPropertyOutputSettings& OutputSettings,

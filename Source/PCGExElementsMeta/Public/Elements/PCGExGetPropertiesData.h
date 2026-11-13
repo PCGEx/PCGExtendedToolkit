@@ -104,17 +104,6 @@ public:
 		meta=(PCG_Overridable, EditCondition="OutputMode == EPCGExPropertyOutputMode::Explicit", EditConditionHides, ShowOnlyInnerProperties))
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
 
-	/** Emit the "Map" attribute set describing external resources referenced by written properties. Always emitted in AllFound mode (the toggle is hidden there). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source", AdvancedDisplay,
-		meta=(DisplayName="Output Map", EditCondition="OutputMode == EPCGExPropertyOutputMode::Explicit", EditConditionHides))
-	bool bOutputMap = false;
-
-	/** Map sidecar is emitted in AllFound mode or when the node-level toggle is on. */
-	bool WantsOutputMap() const
-	{
-		return OutputMode == EPCGExPropertyOutputMode::AllFound || bOutputMap;
-	}
-
 	/** Forward each input's tags to the corresponding output. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Source")
 	bool bForwardInputTags = true;
