@@ -8,6 +8,18 @@
 
 #include "PCGExProperty_Range.generated.h"
 
+class UTexture;
+
+/** How FPCGExProperty_Range::BackgroundTexture is laid along the slider. */
+UENUM()
+enum class EPCGExRangeBackgroundOrientation : uint8
+{
+	U         = 0 UMETA(DisplayName = "U", ToolTip="The texture's left edge sits at the range start."),
+	UReversed = 1 UMETA(DisplayName = "U (Reversed)", ToolTip="The texture's right edge sits at the range start (rotated 180)."),
+	V         = 2 UMETA(DisplayName = "V", ToolTip="The texture's top edge sits at the range start (rotated -90)."),
+	VReversed = 3 UMETA(DisplayName = "V (Reversed)", ToolTip="The texture's bottom edge sits at the range start (rotated 90)."),
+};
+
 /**
  * Range property: a range picked inside schema-owned bounds, output as an FVector2D attribute
  * (X = start, Y = end).
@@ -17,6 +29,8 @@
  *
  * Min / Max are structural: the schema owns them and overrides mirror them (SyncStructuralFromSchema).
  * Positions are not clamped to 0..1 -- a programmatic write outside the bounds extrapolates.
+ *
+ * The background texture is editor-only decoration for the slider, mirrored the same way; no output reads it.
  */
 USTRUCT(BlueprintType, meta=(PCGExInlineValue), DisplayName="Range")
 struct PCGEXCOLLECTIONS_API FPCGExProperty_Range : public FPCGExProperty
@@ -34,6 +48,16 @@ struct PCGEXCOLLECTIONS_API FPCGExProperty_Range : public FPCGExProperty
 	/** Output value at the slider's right end. */
 	UPROPERTY(EditAnywhere, Category = "Property")
 	double Max = 1.0;
+
+#if WITH_EDITORONLY_DATA
+	/** Texture stretched behind the slider, e.g. the heatmap a debug material reads this range against. */
+	UPROPERTY(EditAnywhere, Category = "Property")
+	TSoftObjectPtr<UTexture> BackgroundTexture;
+
+	/** Which way Background Texture runs along the slider. */
+	UPROPERTY(EditAnywhere, Category = "Property")
+	EPCGExRangeBackgroundOrientation BackgroundOrientation = EPCGExRangeBackgroundOrientation::U;
+#endif
 
 	/** Output value at a position. Exact at both ends: 0 is Min, 1 is Max. */
 	double PositionToValue(const double Position) const

@@ -7,6 +7,8 @@
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SLeafWidget.h"
 
+struct FSlateBrush;
+
 DECLARE_DELEGATE_OneParam(FPCGExOnRangeChanged, const FVector2D& /*NewRange*/);
 
 namespace PCGExRangeSlider
@@ -39,6 +41,13 @@ public:
 
 		/** X = start, Y = end, as 0..1 positions. Unset draws the bare track and disables dragging. */
 		SLATE_ATTRIBUTE(TOptional<FVector2D>, Value)
+
+		/** Image stretched over the 0..1 track: full strength inside the range, dimmed outside it, and the handle
+		 *  drawn as an outline so it shows through. Null draws the plain track. The owner keeps the brush alive. */
+		SLATE_ATTRIBUTE(const FSlateBrush*, Background)
+
+		/** Clockwise quarter turns applied to Background about the track's centre. */
+		SLATE_ATTRIBUTE(int32, BackgroundQuarterTurns)
 
 		SLATE_EVENT(FSimpleDelegate, OnBeginDrag)
 		SLATE_EVENT(FPCGExOnRangeChanged, OnValueChanged)
@@ -97,6 +106,8 @@ private:
 	void SetHoveredPart(EPart InPart);
 
 	TAttribute<TOptional<FVector2D>> Value;
+	TAttribute<const FSlateBrush*> Background;
+	TAttribute<int32> BackgroundQuarterTurns;
 
 	FSimpleDelegate OnBeginDrag;
 	FPCGExOnRangeChanged OnValueChanged;

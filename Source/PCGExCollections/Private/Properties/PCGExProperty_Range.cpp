@@ -39,13 +39,22 @@ void FPCGExProperty_Range::CopyValueFrom(const FPCGExProperty* Source)
 bool FPCGExProperty_Range::SyncStructuralFromSchema(const FPCGExProperty& Schema)
 {
 	const FPCGExProperty_Range& Typed = static_cast<const FPCGExProperty_Range&>(Schema);
-	if (Min == Typed.Min && Max == Typed.Max)
+	bool bChanged = false;
+	if (Min != Typed.Min || Max != Typed.Max)
 	{
-		return false;
+		Min = Typed.Min;
+		Max = Typed.Max;
+		bChanged = true;
 	}
-	Min = Typed.Min;
-	Max = Typed.Max;
-	return true;
+#if WITH_EDITORONLY_DATA
+	if (BackgroundTexture != Typed.BackgroundTexture || BackgroundOrientation != Typed.BackgroundOrientation)
+	{
+		BackgroundTexture = Typed.BackgroundTexture;
+		BackgroundOrientation = Typed.BackgroundOrientation;
+		bChanged = true;
+	}
+#endif
+	return bChanged;
 }
 
 FPCGMetadataAttributeBase* FPCGExProperty_Range::CreateMetadataAttribute(UPCGMetadata* Metadata, const FName AttributeName) const
