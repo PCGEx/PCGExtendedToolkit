@@ -497,6 +497,10 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	{
 		return EDITOR_GetThumbnailAssetPath();
 	}
+
+	/** Editor-only: the name pickers and lists show for this entry; empty when it has none. Defaults to the thumbnail
+	 *  asset's name; override when that asset is generated storage. Game thread; must not load. */
+	virtual FString EDITOR_GetDisplayName() const;
 #endif
 
 

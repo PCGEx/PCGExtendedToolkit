@@ -712,7 +712,7 @@ void SPCGExVariantGridView::RebuildItems()
 			NewItem.SourceRawIndex = RawIndex;
 			NewItem.SourceEntryId = Entry->EntryId;
 			NewItem.SourceThumbPath = Entry->EDITOR_GetThumbnailAssetPath();
-			NewItem.Label = FText::FromString(NewItem.SourceThumbPath.GetAssetName());
+			NewItem.Label = FText::FromString(Entry->EDITOR_GetDisplayName());
 
 			if (const FPCGExAssetGrammarDetails* Grammar = Entry->GetEffectiveGrammar(Src))
 			{

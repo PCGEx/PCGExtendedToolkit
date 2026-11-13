@@ -57,7 +57,8 @@ TArray<FPCGPinProperties> UPCGExGetPropertiesDataSettings::OutputPinProperties()
 {
 	TArray<FPCGPinProperties> PinProperties;
 	PCGEX_PIN_ANY(PCGExGetPropertiesData::SourcesPin, TEXT("One forwarded copy of each input, augmented with resolved property attributes."), Required)
-	PCGExProperties::AddOutputMapPin(PinProperties, WantsOutputMap());
+	// Always a regular pin: the Map is emitted whenever a written property contributes to it.
+	PCGExProperties::AddOutputMapPin(PinProperties, true);
 	return PinProperties;
 }
 
@@ -510,7 +511,7 @@ namespace PCGExGetPropertiesData
 		const TArray<FPCGExPropertyOutputConfig>& EffectiveConfigs,
 		UPCGData* DupData,
 		const FSlot& Slot,
-		TArray<const FPCGExProperty*>* OutSidecarSources /* non-null when the Map sidecar is wanted */)
+		TArray<const FPCGExProperty*>& OutSidecarSources /* written properties that declare a sidecar pin */)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::WriteInputDataDomain);
 
@@ -547,9 +548,9 @@ namespace PCGExGetPropertiesData
 			}
 			NumWritten++;
 
-			if (OutSidecarSources && !Prop->GetOutputSidecarPin().IsNone())
+			if (!Prop->GetOutputSidecarPin().IsNone())
 			{
-				OutSidecarSources->AddUnique(Prop);
+				OutSidecarSources.AddUnique(Prop);
 			}
 		}
 
@@ -564,8 +565,8 @@ namespace PCGExGetPropertiesData
 		const UPCGData* InData,
 		const TArray<int32>& SlotIndicesForInput,
 		TSharedPtr<PCGExData::FPointIO>& OutPointIO, /* set iff input is point data; caller stages it */
-		TArray<FInstancedStruct>* OutSidecarClones, /* non-null when the Map sidecar is wanted */
-		TArray<const FPCGExProperty*>* OutSidecarSources, /* @Data mode counterpart of OutSidecarClones */
+		TArray<FInstancedStruct>& OutSidecarClones, /* writer clones that declare a sidecar pin */
+		TArray<const FPCGExProperty*>& OutSidecarSources, /* @Data mode counterpart of OutSidecarClones */
 		bool* bOutPartialFilterSkipped /* optional; set when a non-gatherable input kept rows the filter wanted gone */)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExGetPropertiesData::WriteInput);
@@ -726,10 +727,7 @@ namespace PCGExGetPropertiesData
 			}
 
 			// The writer is local to this (parallel) task; sidecars flush single-threaded in the post-pass.
-			if (OutSidecarClones)
-			{
-				Writer.CopySidecarClones(*OutSidecarClones);
-			}
+			Writer.CopySidecarClones(OutSidecarClones);
 		}
 
 		// Row-filter step. FailedSchema rows are always dropped when the user enabled the
@@ -923,7 +921,6 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		// Non-gatherable input forwarded intact despite filtered rows; reported once in the post-pass.
 		bool bPartialFilterSkipped = false;
 	};
-	const bool bWantsMap = Settings->WantsOutputMap();
 	TArray<FInputResult> ParallelResults;
 	ParallelResults.SetNum(Inputs.Num());
 
@@ -938,8 +935,7 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 		FInputResult& Result = ParallelResults[InputIdx];
 		UPCGData* Out = PCGExGetPropertiesData::WriteInput(
 			Context, Settings, EffectiveConfigs, InputTagged.Data, SlotsPerInput[InputIdx], Result.PointIO,
-			bWantsMap ? &Result.SidecarClones : nullptr,
-			bWantsMap ? &Result.SidecarSources : nullptr,
+			Result.SidecarClones, Result.SidecarSources,
 			&Result.bPartialFilterSkipped);
 		if (!Out)
 		{
@@ -990,31 +986,28 @@ bool FPCGExGetPropertiesDataElement::AdvanceWork(FPCGExContext* InContext, const
 			"Row filtering (omit unresolved / partial / schema-filtered) can't remove individual elements from inputs that are neither points nor attribute sets (e.g. splines). Such inputs were forwarded intact and their filtered rows keep default attribute values; inputs where every row was filtered out were dropped."));
 	}
 
-	// Sidecars: one attribute set per pin across all inputs, staged to that pin. @Data mode wrote
-	// straight from the resident component properties, so it stages sources instead of clones.
-	if (bWantsMap)
+	// Sidecars: one attribute set per pin across all inputs, staged to that pin; none when no written property
+	// declares one. @Data mode wrote straight from the resident component properties, so it stages sources, not clones.
+	if (Context->bDataDomainOutput)
 	{
-		if (Context->bDataDomainOutput)
+		TArray<const FPCGExProperty*> Sources;
+		for (const FInputResult& Result : ParallelResults)
 		{
-			TArray<const FPCGExProperty*> Sources;
-			for (const FInputResult& Result : ParallelResults)
+			for (const FPCGExProperty* Source : Result.SidecarSources)
 			{
-				for (const FPCGExProperty* Source : Result.SidecarSources)
-				{
-					Sources.AddUnique(Source);
-				}
+				Sources.AddUnique(Source);
 			}
-			PCGExProperties::StageSidecars(InContext, TConstArrayView<const FPCGExProperty*>(Sources));
 		}
-		else
+		PCGExProperties::StageSidecars(InContext, TConstArrayView<const FPCGExProperty*>(Sources));
+	}
+	else
+	{
+		TArray<FInstancedStruct> Clones;
+		for (FInputResult& Result : ParallelResults)
 		{
-			TArray<FInstancedStruct> Clones;
-			for (FInputResult& Result : ParallelResults)
-			{
-				Clones.Append(MoveTemp(Result.SidecarClones));
-			}
-			PCGExProperties::StageSidecars(InContext, Clones);
+			Clones.Append(MoveTemp(Result.SidecarClones));
 		}
+		PCGExProperties::StageSidecars(InContext, Clones);
 	}
 
 	InContext->Done();

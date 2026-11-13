@@ -169,6 +169,9 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 	virtual void EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
 	virtual FSoftObjectPath EDITOR_GetThumbnailAssetPath() const override;
 	virtual FSoftObjectPath EDITOR_GetActivationAssetPath() const override;
+
+	/** Named after the authored source, never the export: the data asset, the level, or "Level / Actor". */
+	virtual FString EDITOR_GetDisplayName() const override;
 #endif
 
 	/** Embedded per-entry slot collection by id, or null. Legacy accessor for the actor slot: FindEmbeddedSlot(Actors). */

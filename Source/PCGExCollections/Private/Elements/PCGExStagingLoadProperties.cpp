@@ -8,10 +8,12 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionTags.h"
 #include "Data/PCGExData.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Elements/Grammar/PCGSubdivisionBase.h"
 #include "Helpers/PCGExCollectionPropertySetWriter.h"
+#include "Helpers/PCGExMetaHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingLoadPropertiesElement"
 #define PCGEX_NAMESPACE StagingLoadProperties
@@ -27,7 +29,8 @@ void UPCGExStagingLoadPropertiesSettings::InputPinPropertiesBeforeFilters(TArray
 TArray<FPCGPinProperties> UPCGExStagingLoadPropertiesSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGExProperties::AddOutputMapPin(PinProperties, bOutputMap);
+	// Always a regular pin: which properties feed the Map is only known once the collections are unpacked.
+	PCGExProperties::AddOutputMapPin(PinProperties, true);
 	return PinProperties;
 }
 
@@ -77,7 +80,6 @@ bool FPCGExStagingLoadPropertiesElement::Boot(FPCGExContext* InContext) const
 	}
 
 	PCGEX_FWD(PropertyOutputSettings)
-	PCGEX_FWD(bOutputMap)
 	PCGEX_FWD(SampledPropertyOutputs)
 
 	// Roll up "any output configured?" across all output families so the warning only fires
@@ -132,7 +134,7 @@ bool FPCGExStagingLoadPropertiesElement::AdvanceWork(FPCGExContext* InContext, c
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExStagingLoadPropertiesElement::Execute);
 
-	PCGEX_CONTEXT_AND_SETTINGS(StagingLoadProperties)
+	PCGEX_CONTEXT(StagingLoadProperties)
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
@@ -153,7 +155,7 @@ bool FPCGExStagingLoadPropertiesElement::AdvanceWork(FPCGExContext* InContext, c
 
 	Context->MainPoints->StageOutputs();
 
-	if (Settings->bOutputMap && !Context->SidecarSources.IsEmpty())
+	if (!Context->SidecarSources.IsEmpty())
 	{
 		PCGExProperties::StageSidecars(Context, Context->SidecarSources);
 	}
@@ -177,8 +179,16 @@ namespace PCGExStagingLoadProperties
 
 		PCGEX_INIT_IO(PointDataFacade->Source, Settings->GetMainDataInitializationPolicy())
 
-		EntryHashGetter = PointDataFacade->GetReadable<int64>(Settings->GetEntryIdxAttributeName(), PCGExData::EIOSide::In, true);
-		if (!EntryHashGetter)
+		bool bPickFromData = false;
+		if (!InitEntryHashGetter(bPickFromData))
+		{
+			return false;
+		}
+
+		bDataDomainOutput = bPickFromData && !Settings->bForceElementOutput;
+
+		// Before any writer exists: an input whose @Data pick does not resolve is left untouched.
+		if (bDataDomainOutput && !ResolveDataPick())
 		{
 			return false;
 		}
@@ -188,15 +198,70 @@ namespace PCGExStagingLoadProperties
 		// are registered on the facade beforehand.
 		PrepareSampledPropertyCaches();
 
+		if (bDataDomainOutput)
+		{
+			WriteDataDomainOutputs();
+
+			if (SampledPropertyCaches.IsEmpty())
+			{
+				// Nothing is written per point: no pass to run.
+				return true;
+			}
+		}
+
 		// Step 1: Collect unique entry hashes (O(N) scan, but enables O(1) lookups later)
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
 		return true;
 	}
 
+	bool FProcessor::InitEntryHashGetter(bool& bOutFromData)
+	{
+		const FName EntryName = Settings->GetEntryIdxAttributeName();
+		const FPCGAttributeIdentifier DataIdentifier = PCGExMetaHelpers::MakeDataIdentifier(EntryName);
+
+		// Typed: neither read converts, so a same-named attribute of another type is no pick.
+		const bool bHasDataPick = PointDataFacade->Source->FindConstAttribute<int64>(DataIdentifier) != nullptr;
+
+		bOutFromData = false;
+		switch (Settings->EntryDomain)
+		{
+		case EPCGExAttributeDomainScope::Any:
+			// Per-point picks win when both domains carry one. Same identifier the per-point read resolves.
+			bOutFromData = bHasDataPick && PointDataFacade->Source->FindConstAttribute<int64>(PCGExMetaHelpers::GetAttributeIdentifier(EntryName, PointDataFacade->GetIn())) == nullptr;
+			break;
+		case EPCGExAttributeDomainScope::Data:
+			bOutFromData = true;
+			break;
+		case EPCGExAttributeDomainScope::Elements:
+			break;
+		default:
+			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Unsupported Entry Domain."));
+			return false;
+		}
+
+		if (bOutFromData)
+		{
+			if (!bHasDataPick)
+			{
+				return false;
+			}
+			EntryHashGetter = PointDataFacade->GetReadable<int64>(DataIdentifier, PCGExData::EIOSide::In, true);
+		}
+		else
+		{
+			EntryHashGetter = PointDataFacade->GetReadable<int64>(EntryName, PCGExData::EIOSide::In, true);
+		}
+
+		return EntryHashGetter.IsValid();
+	}
+
 	void FProcessor::PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops)
 	{
-		ScopedUniqueEntryHashes = MakeShared<PCGExMT::TScopedSet<uint64>>(Loops, 8);
+		if (!bDataDomainOutput)
+		{
+			ScopedUniqueEntryHashes = MakeShared<PCGExMT::TScopedSet<uint64>>(Loops, 8);
+		}
 	}
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
@@ -206,6 +271,12 @@ namespace PCGExStagingLoadProperties
 		// Scoped fetch & filtering
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
+
+		// One @Data pick for the whole input: nothing to collect per point.
+		if (bDataDomainOutput)
+		{
+			return;
+		}
 
 		// Collect unique hashes
 		TSet<uint64>& LocalSet = ScopedUniqueEntryHashes->Get_Ref(Scope);
@@ -316,7 +387,7 @@ namespace PCGExStagingLoadProperties
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping), so sidecar rows come from
 			// the unique sources resolved above.
-			if (Context->bOutputMap && !Cache.WriterPtr->GetOutputSidecarPin().IsNone())
+			if (!Cache.WriterPtr->GetOutputSidecarPin().IsNone())
 			{
 				FScopeLock ScopeLock(&Context->SidecarLock);
 				for (const TPair<uint64, const FPCGExProperty*>& Pair : Cache.SourceByHash)
@@ -393,14 +464,20 @@ namespace PCGExStagingLoadProperties
 				continue;
 			}
 
-			TSharedPtr<PCGExData::TBuffer<double>> Writer = PointDataFacade->GetWritable<double>(
-				OutputName, 0.0, true, PCGExData::EBufferInit::New);
-			if (!Writer)
+			// A data-wide Time (constant or @Data) samples once per input, so the result is a @Data value too.
+			const bool bDataWide = bDataDomainOutput && Config.Time.CanSupportDataOnly();
+
+			TSharedPtr<PCGExData::TBuffer<double>> Writer;
+			if (!bDataWide)
 			{
-				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
-					           FTEXT("Failed to initialize sampled output buffer for property '{0}', skipping."),
-					           FText::FromName(PropName)));
-				continue;
+				Writer = PointDataFacade->GetWritable<double>(OutputName, 0.0, true, PCGExData::EBufferInit::New);
+				if (!Writer)
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+						           FTEXT("Failed to initialize sampled output buffer for property '{0}', skipping."),
+						           FText::FromName(PropName)));
+					continue;
+				}
 			}
 
 			TSharedPtr<PCGExDetails::TSettingValue<double>> TimeGetter = Config.Time.GetValueSetting();
@@ -410,8 +487,9 @@ namespace PCGExStagingLoadProperties
 				continue;
 			}
 
-			FSampledPropertyCache& Cache = SampledPropertyCaches.AddDefaulted_GetRef();
+			FSampledPropertyCache& Cache = (bDataWide ? SampledDataCaches : SampledPropertyCaches).AddDefaulted_GetRef();
 			Cache.PropertyName = PropName;
+			Cache.OutputName = OutputName;
 			Cache.TimeGetter = TimeGetter;
 			Cache.Writer = Writer;
 		}
@@ -647,33 +725,221 @@ namespace PCGExStagingLoadProperties
 		return false;
 	}
 
-	void FProcessor::OnPointsProcessingComplete()
+	bool FProcessor::ResolveDataPick()
 	{
-		ScopedUniqueEntryHashes->Collapse(UniqueEntryHashes);
-
-		if (UniqueEntryHashes.IsEmpty())
+		const uint64 Hash = EntryHashGetter->Read(0);
+		if (Hash == 0)
 		{
-			// No valid entries found
-			bIsProcessorValid = false;
-			return;
+			return false;
 		}
 
-		// Step 2: Initialize writers and pre-resolve properties for all unique hashes
-		BuildPropertyCaches();
-		BuildSampledPropertySources();
+		int16 MaterialPick = 0;
+		const FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, MaterialPick);
+		if (!Result.IsValid())
+		{
+			return false;
+		}
+
+		UniqueEntryHashes.Add(Hash);
+		DataPickEntry = Result.Entry;
+		DataPickHost = Result.Host;
+		return true;
+	}
+
+	void FProcessor::WriteDataDomainOutputs()
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagingLoadProperties::WriteDataDomainOutputs);
+
+		check(DataPickEntry);
+
+		const FPCGExAssetCollectionEntry* Entry = DataPickEntry;
+		const UPCGExAssetCollection* Host = DataPickHost;
+		UPCGData* OutData = PointDataFacade->GetOut();
+
+		if (PrimaryFilters && !Context->bWarnedFiltersIgnored.exchange(true))
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Point filters do not gate the outputs written as @Data values."));
+		}
+
+		// Flatten collections from the unpacker into a search order, once.
+		TArray<const UPCGExAssetCollection*> SearchOrder;
+		SearchOrder.Reserve(Context->CollectionPickUnpacker->GetCollections().Num());
+		for (const auto& CollectionPair : Context->CollectionPickUnpacker->GetCollections())
+		{
+			if (CollectionPair.Value)
+			{
+				SearchOrder.Add(CollectionPair.Value);
+			}
+		}
+
+		TArray<FPCGExPropertyOutputConfig> EffectiveConfigs;
+		Context->PropertyOutputSettings.GetEffectiveConfigs(EffectiveConfigs);
+
+		for (const FPCGExPropertyOutputConfig& Config : EffectiveConfigs)
+		{
+			if (!Config.IsValid())
+			{
+				continue;
+			}
+
+			const FName PropName = Config.PropertyName;
+
+			// Same prototype as the per-point path: it names and types the output.
+			const FInstancedStruct* Prototype = PCGExCollections::FindPrototypeProperty(PropName, SearchOrder);
+			const FPCGExProperty* PrototypeProp = Prototype ? Prototype->GetPtr<FPCGExProperty>() : nullptr;
+			if (!PrototypeProp)
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+					           FTEXT("Property '{0}' not found in any staged collection, skipping."),
+					           FText::FromName(PropName)));
+				continue;
+			}
+
+			const FName OutputName = PrototypeProp->ResolveOutputAttributeName(Config.GetEffectiveOutputName());
+
+			const FPCGExProperty* Effective = nullptr;
+			if (const FInstancedStruct* Source = PCGExCollections::ResolveEntrySourceProperty(Entry, Host, PropName))
+			{
+				if (Source->GetScriptStruct() != Prototype->GetScriptStruct())
+				{
+					PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+						           FTEXT("Property '{0}' has conflicting types across staged collections -- mismatched entries keep the default value."),
+						           FText::FromName(PropName)));
+				}
+				else
+				{
+					Effective = Source->GetPtr<FPCGExProperty>();
+				}
+			}
+
+			if (!Effective)
+			{
+				// The entry carries no usable value: an existing one survives, as through the per-point Inherit buffer.
+				if (PCGExMetaHelpers::HasAttribute(OutData, PCGExMetaHelpers::MakeDataIdentifier(OutputName)))
+				{
+					continue;
+				}
+
+				Effective = PrototypeProp;
+			}
+
+			if (!PCGExProperties::WriteDataDomainValue(OutData, OutputName, *Effective))
+			{
+				PCGE_LOG_C(Warning, GraphAndLog, Context, FText::Format(
+					           FTEXT("Property '{0}' cannot be written as a @Data value, skipping."),
+					           FText::FromName(PropName)));
+				continue;
+			}
+
+			if (!Effective->GetOutputSidecarPin().IsNone())
+			{
+				FScopeLock ScopeLock(&Context->SidecarLock);
+				Context->SidecarSources.AddUnique(Effective);
+			}
+		}
+
+		for (const FSampledPropertyCache& Cache : SampledDataCaches)
+		{
+			double Sampled = 0.0;
+			if (const FInstancedStruct* Source = PCGExCollections::ResolveEntrySourceProperty(Entry, Host, Cache.PropertyName))
+			{
+				const FPCGExProperty* SourceProp = Source->GetPtr<FPCGExProperty>();
+				if (SourceProp && SourceProp->SupportsSampling())
+				{
+					Sampled = SourceProp->SampleAt(Cache.TimeGetter->Read(0));
+				}
+			}
+			PCGExData::Helpers::SetDataValue<double>(OutData, Cache.OutputName, Sampled);
+		}
 
 		if (Settings->bWriteEntryTags)
 		{
-			BuildEntryTagsCache();
+			TArray<FName> OutputTags;
+			PCGExCollections::Tags::AppendOutputTags(*Entry, Host, OutputTags);
+			PCGExData::Helpers::SetDataValue<FString>(
+				OutData, Settings->EntryTagsAttributeName,
+				FString::JoinBy(OutputTags, *Settings->EntryTagsSeparator, [](const FName& Tag) { return Tag.ToString(); }));
 		}
 
-		BuildEntryFieldsCache();
+#define PCGEX_LOAD_PROP_FIELD_DATA(_NAME, _TYPE, _DEFAULT, _GETTER) \
+		if (Settings->bWrite##_NAME) { PCGExData::Helpers::SetDataValue<_TYPE>(OutData, Settings->_NAME##AttributeName, _GETTER); }
+		PCGEX_FOREACH_ENTRY_DATA_FIELD(PCGEX_LOAD_PROP_FIELD_DATA)
+#undef PCGEX_LOAD_PROP_FIELD_DATA
 
-		if (PropertyCaches.IsEmpty() && SampledPropertyCaches.IsEmpty() && !EntryTagsWriter && !HasAnyEntryFieldWriter())
+		const bool bWantGrammar =
+			(Settings->OutputAxes != 0) &&
+			(Settings->bWriteSymbol || Settings->bWriteSize || Settings->bWriteScalable || Settings->bWriteDebugColor);
+
+		const FPCGExAssetGrammarDetails* Grammar = bWantGrammar ? Entry->GetEffectiveGrammar(Host) : nullptr;
+		const bool bHasGrammar = Grammar && Grammar->Axes != 0;
+
+		// Like the per-point writers, the shared attributes exist whenever their toggle is on.
+#define PCGEX_LOAD_PROP_FIELD_DATA_SHARED(_NAME, _TYPE, _DEFAULT, _GETTER) \
+		if (Settings->bWrite##_NAME) { PCGExData::Helpers::SetDataValue<_TYPE>(OutData, Settings->_NAME##AttributeName, bHasGrammar ? _TYPE(_GETTER) : _TYPE(_DEFAULT)); }
+		PCGEX_FOREACH_GRAMMAR_SHARED_FIELD(PCGEX_LOAD_PROP_FIELD_DATA_SHARED)
+#undef PCGEX_LOAD_PROP_FIELD_DATA_SHARED
+
+		if (bHasGrammar)
 		{
-			// No valid outputs of any kind
-			bIsProcessorValid = false;
-			return;
+			const uint8 EntryAxes = Grammar->Axes & Settings->OutputAxes;
+			const bool bSuppressSuffix = (PCGExGrammarAxes::CountAxes(EntryAxes) <= 1) && !Settings->bAlwaysSuffixAxes;
+			FPCGExGrammarSizeCache SizeCache;
+
+			for (int32 a = 0; a < 3; a++)
+			{
+				if (!(EntryAxes & static_cast<uint8>(PCGExGrammarAxes::Bits[a])))
+				{
+					continue;
+				}
+				FPCGSubdivisionSubmodule Module;
+				const bool bFixed = Entry->bIsSubCollection
+					? Grammar->FixSubCollection(Entry->SubCollection, PCGExGrammarAxes::Bits[a], Module, Settings->bWriteSize ? &SizeCache : nullptr)
+					: Grammar->FixLeaf(Entry->Staging.Bounds, PCGExGrammarAxes::Bits[a], Module);
+
+				// Like the per-point writers, an emitted axis declares its attributes even when the fix fails.
+#define PCGEX_LOAD_PROP_FIELD_DATA_PERAXIS(_NAME, _TYPE, _DEFAULT, _GETTER) \
+				if (Settings->bWrite##_NAME) { PCGExData::Helpers::SetDataValue<_TYPE>(OutData, PCGExGrammarAxes::MakeAxisAttributeName(Settings->_NAME##AttributeName, a, bSuppressSuffix), bFixed ? _TYPE(_GETTER) : _TYPE(_DEFAULT)); }
+				PCGEX_FOREACH_GRAMMAR_PERAXIS_FIELD(PCGEX_LOAD_PROP_FIELD_DATA_PERAXIS)
+#undef PCGEX_LOAD_PROP_FIELD_DATA_PERAXIS
+			}
+		}
+	}
+
+	void FProcessor::OnPointsProcessingComplete()
+	{
+		if (bDataDomainOutput)
+		{
+			// Only reached when a sampled output reads its Time per point; the @Data values are already written.
+			BuildSampledPropertySources();
+		}
+		else
+		{
+			ScopedUniqueEntryHashes->Collapse(UniqueEntryHashes);
+
+			if (UniqueEntryHashes.IsEmpty())
+			{
+				// No valid entries found
+				bIsProcessorValid = false;
+				return;
+			}
+
+			// Step 2: Initialize writers and pre-resolve properties for all unique hashes
+			BuildPropertyCaches();
+			BuildSampledPropertySources();
+
+			if (Settings->bWriteEntryTags)
+			{
+				BuildEntryTagsCache();
+			}
+
+			BuildEntryFieldsCache();
+
+			if (PropertyCaches.IsEmpty() && SampledPropertyCaches.IsEmpty() && !EntryTagsWriter && !HasAnyEntryFieldWriter())
+			{
+				// No valid outputs of any kind
+				bIsProcessorValid = false;
+				return;
+			}
 		}
 
 #define PCGEX_LOAD_PROP_FIELD_WRITE(_NAME, _TYPE, _DEFAULT, _GETTER) if (_NAME##Writer) { if (const _TYPE* Cached = _NAME##ByHash.Find(Hash)) { _NAME##Writer->SetValue(i, *Cached); } }

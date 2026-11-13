@@ -24,7 +24,8 @@
 TArray<FPCGPinProperties> UPCGExDistributeTupleSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
-	PCGExProperties::AddOutputMapPin(PinProperties, bOutputMap);
+	// Regular only when a column feeds it; the Map is emitted whenever one does.
+	PCGExProperties::AddOutputMapPin(PinProperties, PCGExProperties::WritesOutputMap(Composition));
 	return PinProperties;
 }
 
@@ -374,7 +375,7 @@ namespace PCGExDistributeTuple
 					continue;
 				}
 
-				if (Settings->bOutputMap && !Source->GetOutputSidecarPin().IsNone())
+				if (!Source->GetOutputSidecarPin().IsNone())
 				{
 					Context->SidecarSources.AddUnique(Source);
 				}
@@ -474,7 +475,7 @@ bool FPCGExDistributeTupleElement::AdvanceWork(FPCGExContext* InContext, const U
 
 	Context->MainPoints->StageOutputs();
 
-	if (Settings->bOutputMap && !Context->SidecarSources.IsEmpty())
+	if (!Context->SidecarSources.IsEmpty())
 	{
 		PCGExProperties::StageSidecars(Context, Context->SidecarSources);
 	}
@@ -521,7 +522,7 @@ namespace PCGExDistributeTuple
 
 			// Parallel writes go through WriteOutputFrom (no clone bookkeeping): sidecar rows come from
 			// the per-row sources, plus the column's own value wherever a point can be left holding it.
-			if (Settings->bOutputMap && !OutputProperty->GetOutputSidecarPin().IsNone())
+			if (!OutputProperty->GetOutputSidecarPin().IsNone())
 			{
 				// Index + Ignore leaves out-of-range points unpicked; they keep the buffer default.
 				bool bOwnValueReachable = Settings->Distribution == EPCGExDistribution::Index && Settings->IndexSafety == EPCGExIndexSafety::Ignore;

@@ -52,6 +52,8 @@ namespace PCGExRangeSlider
 void SPCGExRangeSlider::Construct(const FArguments& InArgs)
 {
 	Value = InArgs._Value;
+	Background = InArgs._Background;
+	BackgroundQuarterTurns = InArgs._BackgroundQuarterTurns;
 	OnBeginDrag = InArgs._OnBeginDrag;
 	OnValueChanged = InArgs._OnValueChanged;
 	OnEndDrag = InArgs._OnEndDrag;
@@ -165,28 +167,77 @@ int32 SPCGExRangeSlider::OnPaint(
 	DrawBox(LayerId, 0.0f, BarTop, TickWidth, BarHeight, WhiteBrush, TrackColor);
 	DrawBox(LayerId, Size.X - TickWidth, BarTop, TickWidth, BarHeight, WhiteBrush, TrackColor);
 
+	// One layer per pass: the background, its scrim, the handle and the caps stack in that order.
+	const int32 BackgroundLayer = LayerId + 1;
+	const int32 ScrimLayer = LayerId + 2;
+	const int32 HandleLayer = LayerId + 3;
+	const int32 CapLayer = LayerId + 4;
+
+	// Background: spans exactly the 0..1 travel, so a position sits on the texel it stands for.
+	const FSlateBrush* BackgroundBrush = Background.Get(nullptr);
+	const FLinearColor ScrimColor = FStyleColors::Recessed.GetSpecifiedColor().CopyWithNewOpacity(0.7f);
+	if (BackgroundBrush)
+	{
+		// An odd turn count draws the box on its side, sized so the rotation lands it on the track.
+		const int32 QuarterTurns = ((BackgroundQuarterTurns.Get(0) % 4) + 4) % 4;
+		const bool bOnItsSide = (QuarterTurns % 2) != 0;
+		const FVector2f BoxSize = bOnItsSide ? FVector2f(BarHeight, Layout.TrackWidth) : FVector2f(Layout.TrackWidth, BarHeight);
+		const FVector2f TrackCenter(CapWidth + Layout.TrackWidth * 0.5f, BarTop + BarHeight * 0.5f);
+
+		// Alpha is ignored: a ramp authored with an empty alpha channel still has to show.
+		FSlateDrawElement::MakeRotatedBox(
+			OutDrawElements, BackgroundLayer,
+			AllottedGeometry.ToPaintGeometry(BoxSize, FSlateLayoutTransform(TrackCenter - BoxSize * 0.5f)),
+			BackgroundBrush, DrawEffects | ESlateDrawEffect::IgnoreTextureAlpha,
+			static_cast<float>(QuarterTurns) * UE_HALF_PI,
+			TOptional<FVector2f>(), FSlateDrawElement::RelativeToElement, WidgetTint);
+	}
+
 	if (!Layout.bHasValue)
 	{
+		// No range to single out: the whole background reads as outside one.
+		if (BackgroundBrush)
+		{
+			DrawBox(ScrimLayer, CapWidth, BarTop, Layout.TrackWidth, BarHeight, WhiteBrush, ScrimColor);
+			return ScrimLayer;
+		}
 		return LayerId;
 	}
 
 	const EPart ActivePart = PressedPart != EPart::None ? PressedPart : HoveredPart;
 
+	const float RangeLeft = FMath::RoundToFloat(Layout.StartX);
+	const float RangeRight = FMath::RoundToFloat(Layout.EndX);
+	if (BackgroundBrush)
+	{
+		const float TrackRight = CapWidth + Layout.TrackWidth;
+		if (RangeLeft > CapWidth)
+		{
+			DrawBox(ScrimLayer, CapWidth, BarTop, RangeLeft - CapWidth, BarHeight, WhiteBrush, ScrimColor);
+		}
+		if (RangeRight < TrackRight)
+		{
+			DrawBox(ScrimLayer, RangeRight, BarTop, TrackRight - RangeRight, BarHeight, WhiteBrush, ScrimColor);
+		}
+	}
+
 	// Handle: one outlined bar from cap to cap; the range itself is the span between the caps.
-	const float HandleLeft = FMath::RoundToFloat(Layout.StartX - CapWidth);
-	const float HandleRight = FMath::RoundToFloat(Layout.EndX + CapWidth);
+	const float HandleLeft = RangeLeft - CapWidth;
+	const float HandleRight = RangeRight + CapWidth;
 	const bool bBodyActive = ActivePart == EPart::Body;
-	const FLinearColor BarColor = FMath::Lerp(
-		FStyleColors::Input.GetSpecifiedColor(), FStyleColors::Primary.GetSpecifiedColor(), bBodyActive ? 0.6f : 0.4f);
-	DrawBox(LayerId + 1, HandleLeft, BarTop, HandleRight - HandleLeft, BarHeight, PCGExRangeSlider::GetHandleBrush(bBodyActive), BarColor);
+	// Over a background the fill is fully transparent, in the outline's own hue so the antialiased edge has no fringe.
+	const FLinearColor BarColor = BackgroundBrush
+		                              ? (bBodyActive ? FStyleColors::PrimaryHover : FStyleColors::Primary).GetSpecifiedColor().CopyWithNewOpacity(0.0f)
+		                              : FMath::Lerp(FStyleColors::Input.GetSpecifiedColor(), FStyleColors::Primary.GetSpecifiedColor(), bBodyActive ? 0.6f : 0.4f);
+	DrawBox(HandleLayer, HandleLeft, BarTop, HandleRight - HandleLeft, BarHeight, PCGExRangeSlider::GetHandleBrush(bBodyActive), BarColor);
 
 	// Caps, inset by the handle's outline.
 	const FLinearColor CapColor = FStyleColors::Foreground.GetSpecifiedColor();
 	const FLinearColor CapActiveColor = FStyleColors::ForegroundHover.GetSpecifiedColor();
-	DrawBox(LayerId + 2, HandleLeft + 1.0f, BarTop + 1.0f, CapWidth - 1.0f, BarHeight - 2.0f, WhiteBrush, ActivePart == EPart::Start ? CapActiveColor : CapColor);
-	DrawBox(LayerId + 2, HandleRight - CapWidth, BarTop + 1.0f, CapWidth - 1.0f, BarHeight - 2.0f, WhiteBrush, ActivePart == EPart::End ? CapActiveColor : CapColor);
+	DrawBox(CapLayer, HandleLeft + 1.0f, BarTop + 1.0f, CapWidth - 1.0f, BarHeight - 2.0f, WhiteBrush, ActivePart == EPart::Start ? CapActiveColor : CapColor);
+	DrawBox(CapLayer, HandleRight - CapWidth, BarTop + 1.0f, CapWidth - 1.0f, BarHeight - 2.0f, WhiteBrush, ActivePart == EPart::End ? CapActiveColor : CapColor);
 
-	return LayerId + 2;
+	return CapLayer;
 }
 
 #pragma endregion

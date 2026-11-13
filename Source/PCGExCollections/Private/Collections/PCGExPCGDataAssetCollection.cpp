@@ -681,6 +681,49 @@ FSoftObjectPath FPCGExPCGDataAssetCollectionEntry::EDITOR_GetActivationAssetPath
 		return FSoftObjectPath();
 	}
 }
+
+FString FPCGExPCGDataAssetCollectionEntry::EDITOR_GetDisplayName() const
+{
+	if (bIsSubCollection)
+	{
+		return FPCGExAssetCollectionEntry::EDITOR_GetDisplayName();
+	}
+
+	switch (Source)
+	{
+	case EPCGExDataAssetEntrySource::DataAsset:
+		return DataAsset.GetAssetName();
+	case EPCGExDataAssetEntrySource::Level:
+		return Level.GetAssetName();
+	case EPCGExDataAssetEntrySource::Actor:
+		{
+			const FSoftObjectPath ActorPath = SourceActor.ToSoftObjectPath();
+			if (ActorPath.IsNull())
+			{
+				return FString();
+			}
+
+			// The label only exists on a resident actor; a closed level leaves the object name from the path.
+			FString ActorName;
+			if (const AActor* Actor = SourceActor.Get())
+			{
+				ActorName = Actor->GetActorLabel(/*bCreateIfNone=*/false);
+			}
+			if (ActorName.IsEmpty())
+			{
+				const FString SubPath(ActorPath.GetSubPathUtf8String());
+				int32 LastDot = INDEX_NONE;
+				ActorName = SubPath.FindLastChar(TEXT('.'), LastDot) ? SubPath.RightChop(LastDot + 1) : SubPath;
+			}
+
+			const FString LevelName = ActorPath.GetAssetName();
+			return ActorName.IsEmpty() ? LevelName : FString::Printf(TEXT("%s / %s"), *LevelName, *ActorName);
+		}
+	default:
+		ensureMsgf(false, TEXT("Unhandled EPCGExDataAssetEntrySource"));
+		return FString();
+	}
+}
 #endif
 
 #pragma endregion

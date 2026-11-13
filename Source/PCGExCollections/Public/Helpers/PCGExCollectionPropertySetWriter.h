@@ -46,6 +46,8 @@ namespace PCGExCollections
 	 *
 	 * Null Host -> per-property writes are skipped (no attribute is declared). Use the identity
 	 * attributes (RootCollectionIndex etc.) to detect null-resolved inputs downstream.
+	 * A property Host does not declare is skipped without a log: callers report those once through
+	 * WarnUndeclaredSchemaProperties, since this runs per data and in parallel.
 	 *
 	 * Standalone helper rather than a method on FPCGExCollectionPropertySetWriter so callers can
 	 * use it without first calling Initialize -- @Data writes don't share machinery with the
@@ -180,4 +182,13 @@ namespace PCGExCollections
 		const FPCGExPropertyOutputSettings& OutputSettings,
 		TConstArrayView<const UPCGExAssetCollection*> Hosts,
 		TArray<const FPCGExProperty*>& OutSources);
+
+	/**
+	 * One warning per call, listing every property OutputSettings writes that some of Hosts do not declare in
+	 * their CollectionProperties -- the diagnostic WriteSchemaToDataDomain leaves to its caller. Pass unique hosts.
+	 */
+	PCGEXCOLLECTIONS_API void WarnUndeclaredSchemaProperties(
+		FPCGExContext* InContext,
+		const FPCGExPropertyOutputSettings& OutputSettings,
+		TConstArrayView<const UPCGExAssetCollection*> Hosts);
 }
