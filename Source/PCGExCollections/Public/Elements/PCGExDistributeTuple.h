@@ -111,10 +111,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta=(PCG_Overridable, EditCondition="bOutputWeight"))
 	FName WeightAttributeName = "TupleWeight";
 
-	/** Emit the "Map" attribute set describing external resources referenced by written values (e.g. Collection Entry picks). */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", AdvancedDisplay, meta=(DisplayName="Output Map"))
-	bool bOutputMap = false;
-
 protected:
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 
@@ -166,7 +162,7 @@ struct FPCGExDistributeTupleContext final : FPCGExPointsProcessorContext
 	bool bPassThrough = false;
 
 	// Source properties declaring a sidecar pin, unioned across inputs (lock: per-point processors finish in
-	// parallel). Flushed once after StageOutputs when bOutputMap.
+	// parallel). Flushed once after StageOutputs.
 	FCriticalSection SidecarLock;
 	TArray<const FPCGExProperty*> SidecarSources;
 

@@ -441,6 +441,21 @@ namespace PCGExProperties
 		}
 	}
 
+	bool WritesOutputMap(const FPCGExPropertySchemaCollection& InCollection)
+	{
+		TArray<FPCGExPropertyResolved> Resolved;
+		InCollection.Resolve(Resolved);
+		for (const FPCGExPropertyResolved& Entry : Resolved)
+		{
+			const FPCGExProperty* Property = Entry.GetEffectiveProperty().GetPtr<FPCGExProperty>();
+			if (Property && Property->GetOutputSidecarPin() == Labels::OutputMapLabel)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void GatherOutputDependencies(const TConstArrayView<FInstancedStruct> InProperties, TSet<FSoftObjectPath>& OutPaths)
 	{
 		for (const FInstancedStruct& Instance : InProperties)

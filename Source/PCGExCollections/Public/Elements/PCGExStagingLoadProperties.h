@@ -66,10 +66,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
 
-	/** Emit the "Map" attribute set describing external resources referenced by written properties. The pin is declared either way (merely demoted to advanced when off), and only Collection Entry properties contribute rows today -- an enabled pin with no such property comes out empty. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay, meta=(DisplayName="Output Map"))
-	bool bOutputMap = false;
-
 	/**
 	 * Sampleable properties (e.g. Float Curve) evaluated at a per-point time and written as
 	 * double point attributes. Independent from Properties Mapping -- a property can be
@@ -211,11 +207,10 @@ struct FPCGExStagingLoadPropertiesContext final : FPCGExPointsProcessorContext
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 	FPCGExPropertyOutputSettings PropertyOutputSettings;
-	bool bOutputMap = false;
 	TArray<FPCGExPropertySampledOutputConfig> SampledPropertyOutputs;
 
 	// Source properties declaring a sidecar pin, unioned across processors (lock: processors finish in
-	// parallel). Flushed once into the Map output after StageOutputs when bOutputMap.
+	// parallel). Flushed once into the Map output after StageOutputs.
 	FCriticalSection SidecarLock;
 	TArray<const FPCGExProperty*> SidecarSources;
 
