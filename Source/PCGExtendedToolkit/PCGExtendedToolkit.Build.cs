@@ -23,6 +23,8 @@ public class PCGExtendedToolkit : ModuleRules
 
 	private readonly Dictionary<string, List<string>> _moduleDependencies = new();
 
+	private static Object HeaderGeneratorLocker = new Object();
+
 	public PCGExtendedToolkit(ReadOnlyTargetRules Target) : base(Target)
 	{
 		bool bNoPCH = System.Environment.GetEnvironmentVariable("PCGEX_NO_PCH") == "1" || File.Exists(Path.Combine(ModuleDirectory, "..", "..", "Config", ".noPCH")); 
@@ -59,8 +61,10 @@ public class PCGExtendedToolkit : ModuleRules
 		}
 
 		ValidateConfiguration(declaredModules);
-		GenerateSubModulesHeader();
-		
+		lock (HeaderGeneratorLocker) {
+			GenerateSubModulesHeader();
+		}
+
 		PublicIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "../../Intermediate/Generated") });
 	}
 

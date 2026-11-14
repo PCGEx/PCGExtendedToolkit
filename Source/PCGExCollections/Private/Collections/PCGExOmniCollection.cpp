@@ -406,7 +406,7 @@ void UPCGExOmniCollection::Serialize(FArchive& Ar)
 	}
 }
 
-void UPCGExOmniCollection::PreSave(FObjectPreSaveContext ObjectSaveContext)
+void UPCGExOmniCollection::RunTypeStatesPreSave(FObjectPreSaveContext ObjectSaveContext)
 {
 	for (const TObjectPtr<UPCGExCollectionTypeState>& State : TypeStates)
 	{
@@ -415,8 +415,6 @@ void UPCGExOmniCollection::PreSave(FObjectPreSaveContext ObjectSaveContext)
 			State->OnHostPreSave(this, ObjectSaveContext);
 		}
 	}
-
-	Super::PreSave(ObjectSaveContext);
 }
 
 void UPCGExOmniCollection::PostDuplicate(const bool bDuplicateForPIE)
