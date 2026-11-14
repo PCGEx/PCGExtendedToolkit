@@ -47,4 +47,7 @@ public:
 #else
 	virtual void GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const {}
 #endif
+
+	/** False opts this asset out of the force-cook: neither its package nor the paths it reports are added. */
+	virtual bool IsCookedForRuntime() const { return true; }
 };
