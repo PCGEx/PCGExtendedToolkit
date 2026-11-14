@@ -7,6 +7,10 @@
 #include "Algo/BinarySearch.h"
 #include "Helpers/PCGExMaterialSwapTable.h"
 
+#if WITH_EDITOR
+#include "UObject/ICookInfo.h"
+#endif
+
 PCGEX_REGISTER_COLLECTION_TYPE(Variant, UPCGExVariantCollection, FPCGExAssetCollectionEntry, "Variant Collection", Base)
 
 #pragma region FPCGExMaterialSwap
@@ -316,6 +320,8 @@ void UPCGExVariantCollection::PostLoad()
 		if (!Group.SourceCollection && !Group.Source_DEPRECATED.IsNull())
 		{
 #if WITH_EDITOR
+			// Still a soft ref on disk, so a cook loading this package needs the load declared.
+			FCookLoadScope CookLoadScope(GetCookLoadType());
 			Group.SourceCollection = Cast<UPCGExAssetCollection>(Group.Source_DEPRECATED.ToSoftObjectPath().TryLoad());
 #else
 			Group.SourceCollection = Group.Source_DEPRECATED.Get();

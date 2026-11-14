@@ -559,7 +559,7 @@ public:
 	virtual void PostLoad() override;
 	virtual void Serialize(FArchive& Ar) override;
 	virtual void PostDuplicate(bool bDuplicateForPIE) override;
-	virtual void PreSave(FObjectPreSaveContext ObjectSaveContext) override;
+	virtual void RunTypeStatesPreSave(FObjectPreSaveContext ObjectSaveContext) override;
 
 #if WITH_EDITOR
 	virtual void EDITOR_OnPostStagingRebuild() override;

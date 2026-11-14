@@ -135,6 +135,14 @@ enum class EPCGExSubcollectionBoundsMode : uint8
 	MaxExtents   = 3 UMETA(DisplayName = "Max Extents", ToolTip="Axis-wise max of child extents. Upper bound of any possible child pick."),
 };
 
+/** How a cook treats a collection and the assets it references. */
+UENUM()
+enum class EPCGExCollectionCookScope : uint8
+{
+	Runtime    = 0 UMETA(DisplayName = "Runtime", ToolTip="Cooked with everything it references, so packaged builds can use it."),
+	EditorOnly = 1 UMETA(DisplayName = "Editor Only", ToolTip="Never added to a cook on its own. Still cooked when a cooked asset hard-references it."),
+};
+
 namespace PCGExCollections::Labels
 {
 	const FName SourceAssetCollection = TEXT("AttributeSet");

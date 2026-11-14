@@ -34,6 +34,7 @@
 #include "Helpers/PCGExCollectionStagingPipeline.h"
 #include "Serialization/MemoryWriter.h"
 #include "Serialization/ObjectAndNameAsStringProxyArchive.h"
+#include "UObject/ICookInfo.h"
 #include "UObject/Script.h"
 #include "UObject/StructOnScope.h"
 #include "UObject/UnrealType.h"
@@ -1349,13 +1350,23 @@ void UPCGExAssetCollection::Serialize(FArchive& Ar)
 
 void UPCGExAssetCollection::PreSave(const FObjectPreSaveContext ObjectSaveContext)
 {
-	ForEachEntry([this, ObjectSaveContext](FPCGExAssetCollectionEntry* Entry, int32)
 	{
-		if (Entry)
+#if WITH_EDITOR
+		// The cooker reports any load made while it saves this package unless the load declares its type.
+		FCookLoadScope CookLoadScope(GetCookLoadType());
+#endif
+
+		RunTypeStatesPreSave(ObjectSaveContext);
+
+		ForEachEntry([this, ObjectSaveContext](FPCGExAssetCollectionEntry* Entry, int32)
 		{
-			Entry->OnHostPreSave(this, ObjectSaveContext);
-		}
-	});
+			if (Entry)
+			{
+				Entry->OnHostPreSave(this, ObjectSaveContext);
+			}
+		});
+	}
+
 	Super::PreSave(ObjectSaveContext);
 }
 
@@ -1806,6 +1817,25 @@ void UPCGExAssetCollection::GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& O
 {
 	GatherCookAssetPaths(OutPaths);
 	GatherPropertySoftObjectPaths(OutPaths);
+}
+
+bool UPCGExAssetCollection::IsCookedForRuntime() const
+{
+	return GetCookLoadType() == ECookLoadType::UsedInGame;
+}
+
+ECookLoadType UPCGExAssetCollection::GetCookLoadType() const
+{
+	switch (CookScope)
+	{
+	case EPCGExCollectionCookScope::Runtime:
+		return ECookLoadType::UsedInGame;
+	case EPCGExCollectionCookScope::EditorOnly:
+		return ECookLoadType::EditorOnly;
+	default:
+		UE_LOG(LogPCGEx, Error, TEXT("'%s' has an unknown cook scope (%d); cooking it as runtime content."), *GetPathName(), static_cast<int32>(CookScope));
+		return ECookLoadType::UsedInGame;
+	}
 }
 
 void UPCGExAssetCollection::GatherCookAssetPaths(TSet<FSoftObjectPath>& OutPaths) const

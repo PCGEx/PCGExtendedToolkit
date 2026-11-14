@@ -1398,12 +1398,16 @@ void UPCGExPCGDataAssetCollection::ExternalizeSlotCollectionsFor(FPCGExPCGDataAs
 	const FString& FolderPath = State.ExportFolderPath;
 	const FString& GuidPrefix = State.ExternalAssetPrefix;
 
+	// An externalized slot collection is cooked as its own asset, so it carries the host's cook scope.
+	const EPCGExCollectionCookScope HostCookScope = State.Host->CookScope;
+
 	for (FPCGExExportCollectionSlot& Slot : *State.SharedSlots)
 	{
 		if (!Slot.Collection)
 		{
 			continue;
 		}
+		Slot.Collection->CookScope = HostCookScope;
 		const FString AssetName = FString::Printf(TEXT("%s_%s"), *GuidPrefix, *Slot.SlotId.ToString());
 		Slot.External = TSoftObjectPtr<UPCGExAssetCollection>(PCGExSharedCompact::ExternalizeUObject(Slot.Collection, FolderPath / AssetName, AssetName));
 	}
@@ -1419,6 +1423,7 @@ void UPCGExPCGDataAssetCollection::ExternalizeSlotCollectionsFor(FPCGExPCGDataAs
 			{
 				continue;
 			}
+			Slot.Collection->CookScope = HostCookScope;
 			const FString AssetName = FString::Printf(TEXT("%s_E%03d_%s"), *GuidPrefix, EntryIdx, *Slot.SlotId.ToString());
 			Slot.External = TSoftObjectPtr<UPCGExAssetCollection>(PCGExSharedCompact::ExternalizeUObject(Slot.Collection, FolderPath / AssetName, AssetName));
 		}
@@ -1917,7 +1922,7 @@ void UPCGExPCGDataAssetCollection::PostDuplicate(bool bDuplicateForPIE)
 	}
 }
 
-void UPCGExPCGDataAssetCollection::PreSave(FObjectPreSaveContext ObjectSaveContext)
+void UPCGExPCGDataAssetCollection::RunTypeStatesPreSave(FObjectPreSaveContext ObjectSaveContext)
 {
 	// Cook-time safety net -- gated and explained in UPCGExPCGDataTypeState::OnHostPreSave
 	// (including why SaveExternalPackages is deliberately NOT called during cook).
@@ -1925,8 +1930,6 @@ void UPCGExPCGDataAssetCollection::PreSave(FObjectPreSaveContext ObjectSaveConte
 	{
 		MachineryState->OnHostPreSave(this, ObjectSaveContext);
 	}
-
-	Super::PreSave(ObjectSaveContext);
 }
 
 #if WITH_EDITOR
