@@ -32,6 +32,8 @@
 struct FAssetData;
 #endif
 
+enum class ECookLoadType : uint8;
+
 class UPCGExAssetCollection;
 class UPCGExCollectionStagingPipeline;
 class UPCGExCollectionTypeState;
@@ -1094,7 +1096,11 @@ public:
 #if WITH_EDITOR
 	//~ Begin IPCGExCookDependencyProvider
 	virtual void GetCookDependencyAssetPaths(TSet<FSoftObjectPath>& OutPaths) const override;
+	virtual bool IsCookedForRuntime() const override;
 	//~ End IPCGExCookDependencyProvider
+
+	/** CookScope as the load type to declare around any load made while a cook loads or saves this collection. */
+	ECookLoadType GetCookLoadType() const;
 
 	/** GetAssetPaths(Recursive) minus editor-only entries, which the cook writes without their asset. */
 	void GatherCookAssetPaths(TSet<FSoftObjectPath>& OutPaths) const;
@@ -1116,6 +1122,12 @@ public:
 	virtual void PostLoad() override;
 	virtual void PreSave(FObjectPreSaveContext ObjectSaveContext) override;
 	virtual void BeginDestroy() override;
+
+	/** Type-state half of PreSave, run inside its cook load scope and before the entry hooks. Hosts with type
+	 *  states override this rather than PreSave. */
+	virtual void RunTypeStatesPreSave(FObjectPreSaveContext ObjectSaveContext)
+	{
+	}
 
 	/** Rename / re-outer of THIS object (UObject::Rename, not a content-browser asset rename, which fixes
 	 *  soft paths itself). Dispatches EDITOR_OnHostRelocated unless the move is a retirement to transient. */
@@ -1567,6 +1579,10 @@ public:
 	 *  only: existing entries are never validated against it. */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(AllowAbstract="true"), AdvancedDisplay)
 	TSubclassOf<UObject> GenericAllowedClass;
+
+	/** Whether a cook treats this collection and what it references as runtime content. */
+	UPROPERTY(EditAnywhere, Category = Settings, AdvancedDisplay)
+	EPCGExCollectionCookScope CookScope = EPCGExCollectionCookScope::Runtime;
 #endif
 
 	/**

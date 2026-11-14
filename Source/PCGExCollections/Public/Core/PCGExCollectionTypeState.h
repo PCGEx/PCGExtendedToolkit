@@ -31,7 +31,8 @@ class UPackage;
  * - EDITOR_OnHostPostStagingRebuild: cross-entry post passes (fires after the host's native
  *   post-rebuild work, before staging pipelines' OnPostRebuild).
  * - EDITOR_OnHostPreStagingRebuild: cross-entry repairs before any entry re-stages (every editor restage path).
- * - OnHostPreSave: cook-time safety nets (called BEFORE Super::PreSave on the host).
+ * - OnHostPreSave: cook-time safety nets (called from the host's PreSave, inside its cook load
+ *   scope and before the entry hooks).
  * - OnHostPostDuplicate: identity re-stamping after asset duplication.
  * - OnHostSerializeSave_Begin/End: paired around the host's Super::Serialize on save, for
  *   scrubbing instanced refs that live in the HOST's data (entry payload subobjects).

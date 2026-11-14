@@ -96,7 +96,7 @@ public:
 	//~ Lifecycle dispatch into type states
 	virtual void Serialize(FArchive& Ar) override;
 	virtual void PostLoad() override;
-	virtual void PreSave(FObjectPreSaveContext ObjectSaveContext) override;
+	virtual void RunTypeStatesPreSave(FObjectPreSaveContext ObjectSaveContext) override;
 	virtual void PostDuplicate(bool bDuplicateForPIE) override;
 
 	//~ UPCGExAssetCollection storage interface -- rows wrap payloads, so the
