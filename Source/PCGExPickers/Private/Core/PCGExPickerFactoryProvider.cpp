@@ -61,6 +61,29 @@ namespace PCGExPickers
 		}
 		return true;
 	}
+
+	bool GetSortedPicks(const TArray<TObjectPtr<const UPCGExPickerFactoryData>>& Factories, const int32 InNum, TArray<int32>& OutPicks)
+	{
+		OutPicks.Reset();
+
+		if (InNum <= 0)
+		{
+			return false;
+		}
+
+		TSet<int32> UniquePicks;
+		for (const TObjectPtr<const UPCGExPickerFactoryData>& Op : Factories)
+		{
+			Op->AddPicks(InNum, UniquePicks);
+		}
+
+		// -1 is what an out-of-bounds pick sanitizes to.
+		UniquePicks.Remove(-1);
+
+		OutPicks = UniquePicks.Array();
+		OutPicks.Sort();
+		return !OutPicks.IsEmpty();
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

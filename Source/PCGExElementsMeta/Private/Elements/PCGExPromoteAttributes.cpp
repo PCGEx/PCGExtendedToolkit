@@ -176,7 +176,7 @@ namespace PCGExPromoteAttributes
 	}
 
 	// Resolve the row indices to promote per selection mode (indices into the source's own row count). Picker emits all
-	// picks ascending; PickerFirst/Last emit the single lowest/highest via min/max scan (no full sort). -1 = out-of-bounds sentinel, skipped.
+	// valid picks ascending; PickerFirst/Last emit the lowest/highest of them.
 	void ResolveIndices(
 		const EPCGExCollectionEntrySelection Selection,
 		const int32 SourceNum,
@@ -204,31 +204,11 @@ namespace PCGExPromoteAttributes
 		case EPCGExCollectionEntrySelection::PickerFirst:
 		case EPCGExCollectionEntrySelection::PickerLast:
 			{
-				TSet<int32> UniqueIndices;
-				for (const TObjectPtr<const UPCGExPickerFactoryData>& Picker : PickerFactories)
-				{
-					Picker->AddPicks(SourceNum, UniqueIndices);
-				}
+				TArray<int32> Picks;
+				if (!PCGExPickers::GetSortedPicks(PickerFactories, SourceNum, Picks)) { break; }
 
-				if (Selection == EPCGExCollectionEntrySelection::Picker)
-				{
-					TArray<int32> Sorted = UniqueIndices.Array();
-					Sorted.Sort();
-					for (const int32 Idx : Sorted) { if (Idx != -1) { OutIndices.Add(Idx); } }
-				}
-				else
-				{
-					// PickerFirst = lowest valid pick, PickerLast = highest -- single order-independent scan.
-					int32 Best = INDEX_NONE;
-					for (const int32 Idx : UniqueIndices)
-					{
-						if (Idx == -1) { continue; }
-						if (Best == INDEX_NONE) { Best = Idx; }
-						else if (Selection == EPCGExCollectionEntrySelection::PickerFirst) { Best = FMath::Min(Best, Idx); }
-						else { Best = FMath::Max(Best, Idx); }
-					}
-					if (Best != INDEX_NONE) { OutIndices.Add(Best); }
-				}
+				if (Selection == EPCGExCollectionEntrySelection::Picker) { OutIndices.Append(Picks); }
+				else { OutIndices.Add(Selection == EPCGExCollectionEntrySelection::PickerFirst ? Picks[0] : Picks.Last()); }
 			}
 			break;
 		}

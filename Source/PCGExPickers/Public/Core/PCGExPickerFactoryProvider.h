@@ -133,4 +133,8 @@ namespace PCGExPickers
 {
 	PCGEXPICKERS_API
 	bool GetPicks(const TArray<TObjectPtr<const UPCGExPickerFactoryData>>& Factories, const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<int32>& OutPicks);
+
+	/** Every factory's picks over InNum entries, replacing OutPicks: ascending, unique, out-of-bounds picks dropped. False when nothing is picked. */
+	PCGEXPICKERS_API
+	bool GetSortedPicks(const TArray<TObjectPtr<const UPCGExPickerFactoryData>>& Factories, int32 InNum, TArray<int32>& OutPicks);
 }

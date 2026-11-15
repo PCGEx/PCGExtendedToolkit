@@ -3,11 +3,19 @@
 
 #include "PCGExElementsMetaEditor.h"
 
+#include "PCGExAssetTypesMacros.h"
+#include "PropertyEditorDelegates.h"
+#include "PropertyEditorModule.h"
+#include "Details/PCGExAttributeToPinCustomization.h"
+
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsMetaEditorModule, PCGExElementsMetaEditor)
 
 void FPCGExElementsMetaEditorModule::StartupModule()
 {
 	IPCGExEditorModuleInterface::StartupModule();
+
+	PCGEX_REGISTER_CUSTO_START
+	PCGEX_REGISTER_CUSTO("PCGExAttributeToPinDetails", FPCGExAttributeToPinCustomization)
 }
 
 void FPCGExElementsMetaEditorModule::ShutdownModule()
