@@ -251,13 +251,8 @@ class FPCGExProjectionElement final : public FPCGExPointsProcessorElement
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(Projection)
 
-	/** Waits on the target's spatial-query preparation through DynamicDependencies, which must be set synchronously. */
-	virtual bool SupportsDetachedExecute() const override
-	{
-		return false;
-	}
-
 	virtual bool Boot(FPCGExContext* InContext) const override;
+	virtual void RequestDynamicDependencies(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };
 
