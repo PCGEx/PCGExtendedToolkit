@@ -252,6 +252,7 @@ void FPCGExTensorSurface::CheckPCGSurfaces(const FVector& Position, FPCGExSurfac
 
 		const UPCGSurfaceData* Surface = WeakSurface.Get();
 
+		// TODO: prime landscape surfaces (PrepareForSpatialQuery) before parallel sampling; the consuming node owns the bounds.
 		// Project point onto surface
 		FPCGPoint ProjectedPoint;
 		if (!Surface->ProjectPoint(FTransform(Position), FBox(FVector(-1), FVector(1)), ProjectionParams, ProjectedPoint, nullptr))

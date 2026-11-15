@@ -55,11 +55,15 @@ protected:
 	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override;
 	virtual bool SupportsBasePointDataInputs(FPCGContext* InContext) const override;
 
-	/** Elements that populate FPCGContext::DynamicDependencies (ScheduleGraph + bIsPaused) must return
-	 *  false: the executor registers paused-task successors from the dependencies visible when
+	/** Elements that populate FPCGContext::DynamicDependencies (ScheduleGraph + bIsPaused) from AdvanceWork
+	 *  must return false: the executor registers paused-task successors from the dependencies visible when
 	 *  ExecuteInternal returns, so dependencies added from a detached AdvanceWork are never watched
-	 *  and the node is never unpaused. */
+	 *  and the node is never unpaused. Dependencies known on entry go through RequestDynamicDependencies. */
 	virtual bool SupportsDetachedExecute() const { return true; }
+
+	/** Called once, inline in ExecuteInternal, before InitializeData and the detach gate. Whatever it adds to
+	 *  FPCGContext::DynamicDependencies is waited on before the first AdvanceWork, which may still run detached. */
+	virtual void RequestDynamicDependencies(FPCGExContext* InContext, const UPCGExSettings* InSettings) const;
 
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;
 	virtual void InitializeData(FPCGExContext* InContext, const UPCGExSettings* InSettings) const;
