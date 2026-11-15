@@ -267,6 +267,19 @@ bool IPCGExElement::ExecuteInternal(FPCGContext* Context) const
 
 	if (InContext->IsInitialExecution())
 	{
+		if (!InContext->bDynamicDependenciesRequested)
+		{
+			InContext->bDynamicDependenciesRequested = true;
+			RequestDynamicDependencies(InContext, InSettings);
+
+			// The executor clears the pause once every dependency is done, then re-enters here.
+			if (!InContext->DynamicDependencies.IsEmpty())
+			{
+				InContext->PauseContext();
+				return false;
+			}
+		}
+
 		InitializeData(InContext, InSettings);
 	}
 
@@ -295,6 +308,10 @@ bool IPCGExElement::ExecuteInternal(FPCGContext* Context) const
 	}
 
 	return InContext->DriveAdvanceWork(InSettings);
+}
+
+void IPCGExElement::RequestDynamicDependencies(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+{
 }
 
 void IPCGExElement::InitializeData(FPCGExContext* InContext, const UPCGExSettings* InSettings) const

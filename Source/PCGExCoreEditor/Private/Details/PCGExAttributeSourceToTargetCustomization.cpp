@@ -87,10 +87,7 @@ void FPCGExAttributeSourceToTargetCustomization::CustomizeHeader(
 		});
 	};
 
-	HeaderRow.ValueContent()
-	         .MinDesiredWidth(220)
-	[
-		SNew(SHorizontalBox)
+	const TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 4, 0)
 		[
 			SNew(STextBlock)
@@ -107,7 +104,14 @@ void FPCGExAttributeSourceToTargetCustomization::CustomizeHeader(
 			.SelectAllTextWhenFocused(true)
 			.ClearKeyboardFocusOnCommit(true)
 			.Font(IDetailLayoutBuilder::GetDetailFont())
-		]
+		];
+
+	AddInlineControls(PropertyHandle, Row);
+
+	HeaderRow.ValueContent()
+	         .MinDesiredWidth(220)
+	[
+		Row
 	];
 }
 
