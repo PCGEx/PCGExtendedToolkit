@@ -175,20 +175,7 @@ void FPCGExAttributeToTagDetails::Tag(const PCGExData::FElement& TagSource, UPCG
 			const TSharedPtr<PCGExData::IAttributeBroadcaster>& Getter = Getters[i];
 			const FName OutputName = !GetterNames[i].IsNone() ? GetterNames[i] : Getter->GetName();
 
-			PCGExMetaHelpers::ExecuteWithRightType(Getter->GetMetadataType(), [&](auto DummyValue)
-			{
-				using T = decltype(DummyValue);
-				TSharedPtr<PCGExData::TAttributeBroadcaster<T>> TypedGetter = StaticCastSharedPtr<PCGExData::TAttributeBroadcaster<T>>(Getter);
-
-				if (!TypedGetter)
-				{
-					return;
-				}
-
-				const FPCGAttributeIdentifier Identifier = FPCGAttributeIdentifier(OutputName, PCGMetadataDomainID::Data);
-				InMetadata->DeleteAttribute(Identifier);
-				InMetadata->FindOrCreateAttribute<T>(Identifier, TypedGetter->FetchSingle(TagSource, T{}));
-			});
+			PCGExData::WriteSingle(Getter, TagSource, InMetadata, FPCGAttributeIdentifier(OutputName, PCGMetadataDomainID::Data));
 		}
 	}
 }

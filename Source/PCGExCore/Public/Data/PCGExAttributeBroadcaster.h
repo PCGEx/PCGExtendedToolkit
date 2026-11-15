@@ -205,6 +205,19 @@ namespace PCGExData
 	// Raw-data variant: builds a broadcaster from a UPCGData (point data OR attribute set) without an FPointIO. Always single-fetch.
 	PCGEXCORE_API TSharedPtr<IAttributeBroadcaster> MakeBroadcaster(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData);
 
+	// Raw-data variant reading the source as InType instead of its own type (e.g. a sub-selection's result type). Always single-fetch.
+	PCGEXCORE_API TSharedPtr<IAttributeBroadcaster> MakeBroadcaster(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, EPCGMetadataTypes InType);
+
+	/**
+	 * Writes the broadcaster's value at Element as attribute Identifier on OutMetadata, converted to OutType (Unknown keeps
+	 * the broadcaster's type). PCGDefaultValueKey replaces the attribute, with the value as its default; any other key finds
+	 * or creates it and sets that entry. A failed read writes the type's default value. Null when nothing was written.
+	 */
+	PCGEXCORE_API FPCGMetadataAttributeBase* WriteSingle(
+		const TSharedPtr<IAttributeBroadcaster>& InBroadcaster, const FElement& Element,
+		UPCGMetadata* OutMetadata, const FPCGAttributeIdentifier& Identifier,
+		PCGMetadataEntryKey TargetKey = PCGDefaultValueKey, EPCGMetadataTypes OutType = EPCGMetadataTypes::Unknown);
+
 	template <typename T>
 	TSharedPtr<TAttributeBroadcaster<T>> MakeTypedBroadcaster(const FName& InName, const TSharedRef<FPointIO>& InPointIO, bool bSingleFetch = false);
 

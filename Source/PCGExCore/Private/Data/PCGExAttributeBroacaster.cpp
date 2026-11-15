@@ -12,10 +12,12 @@
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGAttributePropertySelector.h"
+#include "Metadata/PCGMetadata.h"
 #include "Metadata/Accessors/IPCGAttributeAccessor.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
 #include "Types/PCGExTypeOpsImpl.h"
+#include "Types/PCGExTypes.h"
 
 namespace PCGExAttributeBroadcaster
 {
@@ -616,8 +618,13 @@ namespace PCGExData
 			return nullptr;
 		}
 
+		return MakeBroadcaster(InSelector, InData, Type);
+	}
+
+	TSharedPtr<IAttributeBroadcaster> MakeBroadcaster(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const EPCGMetadataTypes InType)
+	{
 		TSharedPtr<IAttributeBroadcaster> Broadcaster = nullptr;
-		PCGExMetaHelpers::ExecuteWithRightType(Type, [&](auto DummyValue)
+		PCGExMetaHelpers::ExecuteWithRightType(InType, [&](auto DummyValue)
 		{
 			using T = decltype(DummyValue);
 			TSharedPtr<TAttributeBroadcaster<T>> TypedBroadcaster = MakeShared<TAttributeBroadcaster<T>>();
@@ -629,6 +636,55 @@ namespace PCGExData
 		});
 
 		return Broadcaster;
+	}
+
+	FPCGMetadataAttributeBase* WriteSingle(
+		const TSharedPtr<IAttributeBroadcaster>& InBroadcaster, const FElement& Element,
+		UPCGMetadata* OutMetadata, const FPCGAttributeIdentifier& Identifier,
+		const PCGMetadataEntryKey TargetKey, const EPCGMetadataTypes OutType)
+	{
+		if (!InBroadcaster || !OutMetadata)
+		{
+			return nullptr;
+		}
+
+		const EPCGMetadataTypes SourceType = InBroadcaster->GetMetadataType();
+		const EPCGMetadataTypes WriteType = OutType == EPCGMetadataTypes::Unknown ? SourceType : OutType;
+
+		if (!PCGExMetaHelpers::IsLegacyScalarType(SourceType) || !PCGExMetaHelpers::IsLegacyScalarType(WriteType))
+		{
+			return nullptr;
+		}
+
+		// The value crosses the two dispatches type-erased, so they don't multiply into one instantiation per type pair.
+		PCGExTypes::FScopedTypedValue Value(SourceType);
+		PCGExMetaHelpers::ExecuteWithRightType(SourceType, [&](auto DummyValue)
+		{
+			using T = decltype(DummyValue);
+			Value.As<T>() = StaticCastSharedPtr<TAttributeBroadcaster<T>>(InBroadcaster)->FetchSingle(Element, T{});
+		});
+
+		FPCGMetadataAttributeBase* OutAttribute = nullptr;
+		PCGExMetaHelpers::ExecuteWithRightType(WriteType, [&](auto DummyValue)
+		{
+			using T = decltype(DummyValue);
+
+			T OutValue = T{};
+			PCGExTypeOps::FConversionTable::Convert(SourceType, Value.GetRaw(), WriteType, &OutValue);
+
+			if (TargetKey == PCGDefaultValueKey)
+			{
+				OutMetadata->DeleteAttribute(Identifier);
+				OutAttribute = OutMetadata->FindOrCreateAttribute<T>(Identifier, OutValue);
+			}
+			else if (FPCGMetadataAttribute<T>* TypedAttribute = OutMetadata->FindOrCreateAttribute<T>(Identifier, T{}))
+			{
+				TypedAttribute->SetValue(TargetKey, OutValue);
+				OutAttribute = TypedAttribute;
+			}
+		});
+
+		return OutAttribute;
 	}
 
 	template <typename T>
