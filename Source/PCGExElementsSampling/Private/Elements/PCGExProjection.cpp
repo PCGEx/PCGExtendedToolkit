@@ -78,6 +78,27 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(Projection)
 
 namespace PCGExProjection
 {
+	PCGEX_CTX_STATE(State_PrimingTarget)
+
+	/** World bounds the target is queried within : the input points, padded by how far a constant footprint reaches past them. */
+	FBox GetQueryBounds(const FPCGExProjectionContext* Context, const UPCGExProjectionSettings* Settings)
+	{
+		FBox Bounds = Context->MainPoints->GetInBounds();
+		if (!Bounds.IsValid || !Context->bFootprint)
+		{
+			return Bounds;
+		}
+
+		// Add and Fixed corner probes leave the point bounds by at most |Adjust|. Multiply and per-point Adjust: not padded.
+		const FPCGExProjectionFootprintDetails& Footprint = Settings->Footprint;
+		if (Footprint.Adjust.Input == EPCGExInputValueType::Constant && Footprint.AdjustMode != EPCGExFootprintAdjust::Multiply)
+		{
+			Bounds = Bounds.ExpandBy(Footprint.Adjust.Constant.Size2D());
+		}
+
+		return Bounds;
+	}
+
 	/** Targets whose projection is a containment test : the projected position is always the input position. */
 	bool IsStaticTarget(const UPCGSpatialData* Target)
 	{
@@ -349,6 +370,24 @@ bool FPCGExProjectionElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 	PCGEX_CONTEXT_AND_SETTINGS(Projection)
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
+	{
+		Context->SetState(PCGExProjection::State_PrimingTarget);
+
+		// A landscape builds (editor) or reads from disk (cooked) cache entries on first touch: keep that out of the loop.
+		const FBox QueryBounds = PCGExProjection::GetQueryBounds(Context, Settings);
+		if (QueryBounds.IsValid)
+		{
+			const TArray<FPCGTaskId> PrimingTasks = Context->ProjectionTarget->PrepareForSpatialQuery(Context, QueryBounds);
+			if (!PrimingTasks.IsEmpty())
+			{
+				Context->DynamicDependencies.Append(PrimingTasks);
+				Context->bIsPaused = true;
+				return false;
+			}
+		}
+	}
+
+	PCGEX_ON_STATE(PCGExProjection::State_PrimingTarget)
 	{
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
