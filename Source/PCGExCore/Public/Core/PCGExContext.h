@@ -84,6 +84,7 @@ protected:
 
 	bool bPreparationDispatchedOffThread = false;
 	bool bExecutionDispatchedOffThread = false;
+	bool bDynamicDependenciesRequested = false;
 	bool bWantsResourcesCached = false;
 
 public:

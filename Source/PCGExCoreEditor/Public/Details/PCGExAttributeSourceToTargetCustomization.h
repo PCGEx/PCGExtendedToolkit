@@ -5,14 +5,16 @@
 
 #include "IPropertyTypeCustomization.h"
 
+class SHorizontalBox;
+
 /**
- * Customizes FPCGExAttributeSourceToTargetDetails into a compact inline row:
+ * Customizes FPCGExAttributeSourceToTargetDetails, and structs deriving from it, into a compact inline row:
  *   [Source] -> [Target]
  * The arrowed value box edits Target: committing text enables bOutputToDifferentName + sets Target,
  * clearing it disables the remap. While not remapping, the box shows a greyed "= {Source}" hint, since
  * GetOutputName() falls back to Source.
  */
-class FPCGExAttributeSourceToTargetCustomization : public IPropertyTypeCustomization
+class PCGEXCOREEDITOR_API FPCGExAttributeSourceToTargetCustomization : public IPropertyTypeCustomization
 {
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
@@ -26,4 +28,10 @@ public:
 		TSharedRef<IPropertyHandle> PropertyHandle,
 		class IDetailChildrenBuilder& ChildBuilder,
 		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+
+protected:
+	/** Extra controls for a derived struct's own members, placed after the Target box. */
+	virtual void AddInlineControls(const TSharedRef<IPropertyHandle>& PropertyHandle, const TSharedRef<SHorizontalBox>& Row)
+	{
+	}
 };

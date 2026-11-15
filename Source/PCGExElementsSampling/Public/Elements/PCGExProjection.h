@@ -252,6 +252,7 @@ protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(Projection)
 
 	virtual bool Boot(FPCGExContext* InContext) const override;
+	virtual void RequestDynamicDependencies(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };
 

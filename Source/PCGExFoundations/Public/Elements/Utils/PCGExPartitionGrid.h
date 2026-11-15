@@ -59,7 +59,7 @@ protected:
 
 public:
 	/** Grid the cells are laid on. From Component uses the executing component's grid when it runs as a partition. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (HideCellOffset))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, HideCellOffset))
 	FPCGExPartitionQuery Grid;
 
 	/** Bounds of each cell's point. The point itself always sits at the cell center, unrotated and unscaled. */

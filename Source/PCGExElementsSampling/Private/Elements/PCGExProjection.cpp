@@ -14,6 +14,7 @@
 #include "Data/PCGExDataMacros.h"
 #include "Data/PCGExPointElements.h"
 #include "Data/PCGExPointIO.h"
+#include "Data/PCGLandscapeData.h"
 #include "Data/PCGLandscapeSplineData.h"
 #include "Data/PCGPrimitiveData.h"
 #include "Data/PCGSpatialData.h"
@@ -24,10 +25,12 @@
 #include "Data/Utils/PCGExDataForward.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Elements/PCGProjectionElement.h"
+#include "HAL/PlatformProperties.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGPointHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/PCGMetadataDomain.h"
+#include "PCGExLog.h"
 #include "PCGPoint.h"
 #include "Sampling/PCGExSamplingCommon.h"
 
@@ -78,6 +81,72 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(Projection)
 
 namespace PCGExProjection
 {
+	/** World box the target is primed over : every input's bounds, padded for a constant footprint Adjust. */
+	FBox GetQueryBounds(const FPCGExProjectionContext* Context, const UPCGExProjectionSettings* Settings)
+	{
+		FBox Bounds = Context->MainPoints->GetInBounds();
+		if (!Bounds.IsValid || !Context->bFootprint)
+		{
+			return Bounds;
+		}
+
+		// 3D length: a tilted box turns Adjust.Z into a sideways reach. Not covered: Add under a Projected reference,
+		// unscaled Bounds on a scaled-down point, a pivot outside its own bounds, Multiply and per-point Adjust.
+		const FPCGExProjectionFootprintDetails& Footprint = Settings->Footprint;
+		if (Footprint.Adjust.Input == EPCGExInputValueType::Constant && Footprint.AdjustMode != EPCGExFootprintAdjust::Multiply)
+		{
+			Bounds = Bounds.ExpandBy(Footprint.Adjust.Constant.Size());
+		}
+
+		return Bounds;
+	}
+
+	/** Lower bound of the landscape vertices priming InBounds loads; 0 for any other target. */
+	int64 CountPrimedVertices(const UPCGSpatialData* Target, const FBox& InBounds)
+	{
+		const UPCGLandscapeData* Landscape = Cast<UPCGLandscapeData>(Target);
+		if (!Landscape)
+		{
+			return 0;
+		}
+
+		// One landscape quad is one unit of the landscape's local space.
+		const FVector Scale = Landscape->GetTransform().GetScale3D().GetAbs();
+		if (Scale.X <= UE_SMALL_NUMBER || Scale.Y <= UE_SMALL_NUMBER)
+		{
+			return 0;
+		}
+
+		const FVector Size = InBounds.GetSize();
+		return static_cast<int64>((Size.X / Scale.X) * (Size.Y / Scale.Y));
+	}
+
+	/** Schedules the target's spatial-query preparation over the input points and makes the context wait on it. */
+	void PrimeTarget(FPCGExProjectionContext* Context, const UPCGExProjectionSettings* Settings)
+	{
+		const FBox QueryBounds = GetQueryBounds(Context, Settings);
+		if (!QueryBounds.IsValid)
+		{
+			return;
+		}
+
+		const TArray<FPCGTaskId> PrimingTasks = Context->ProjectionTarget->PrepareForSpatialQuery(Context, QueryBounds);
+		if (PrimingTasks.IsEmpty())
+		{
+			return;
+		}
+
+		Context->DynamicDependencies.Append(PrimingTasks);
+
+		// The whole box is loaded, entries no point lands on included: sparse or far-apart inputs pay for the gap.
+		const int64 NumVertices = CountPrimedVertices(Context->ProjectionTarget, QueryBounds);
+		const int32 NumPoints = Context->MainPoints->GetInNumPoints();
+		if (NumVertices > NumPoints)
+		{
+			UE_LOG(LogPCGEx, Verbose, TEXT("Projection : priming at least %lld landscape vertices for %d points."), NumVertices, NumPoints);
+		}
+	}
+
 	/** Targets whose projection is a containment test : the projected position is always the input position. */
 	bool IsStaticTarget(const UPCGSpatialData* Target)
 	{
@@ -340,6 +409,17 @@ bool FPCGExProjectionElement::Boot(FPCGExContext* InContext) const
 	}
 
 	return true;
+}
+
+void FPCGExProjectionElement::RequestDynamicDependencies(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
+{
+	// Cooked data only: that is where a landscape reads its cache entries from disk on first touch, a blocking
+	// read the parallel loop must not make. With editor data the entries are built in memory.
+	if (FPlatformProperties::RequiresCookedData())
+	{
+		PCGEX_CONTEXT_AND_SETTINGS(Projection)
+		PCGExProjection::PrimeTarget(Context, Settings);
+	}
 }
 
 bool FPCGExProjectionElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const

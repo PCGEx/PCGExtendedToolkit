@@ -1813,7 +1813,7 @@ namespace PCGExDensitySampling
 		TPCGValueRange<FTransform> Transforms = OutData->GetTransformValueRange(false);
 		TPCGValueRange<float> Densities = OutData->GetDensityValueRange(false);
 		TPCGValueRange<int32> Seeds = OutData->GetSeedValueRange(false);
-		TPCGValueRange<int64> MetadataEntries = OutData->GetMetadataEntryValueRange(false);
+		TPCGValueRange<int64> MetadataEntries = OutData->GetMetadataEntryValueRange();
 		TPCGValueRange<FVector4> Colors = OutData->GetColorValueRange(false);
 
 		PCGExMT::ParallelOrSequential(InScopes.Num(), [&](const int32 ScopeIndex)
