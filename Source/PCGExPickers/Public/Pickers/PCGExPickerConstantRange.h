@@ -22,7 +22,7 @@ struct PCGEXPICKERS_API FPCGExPickerConstantRangeConfig : public FPCGExPickerCon
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="!bTreatAsNormalized", EditConditionHides, DisplayAfter="bTreatAsNormalized"))
 	int32 DiscreteStartIndex = 0;
 
-	/**  Use negative values to select from the end. */
+	/** Negative values count back from the last entry: -1 is the first one. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bTreatAsNormalized", EditConditionHides, DisplayAfter="bTreatAsNormalized"))
 	double RelativeStartIndex = 0;
 
@@ -30,7 +30,7 @@ struct PCGEXPICKERS_API FPCGExPickerConstantRangeConfig : public FPCGExPickerCon
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="!bTreatAsNormalized", EditConditionHides, DisplayAfter="bTreatAsNormalized"))
 	int32 DiscreteEndIndex = 0;
 
-	/**  Use negative values to select from the end. */
+	/** Negative values count back from the last entry: -1 is the first one. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bTreatAsNormalized", EditConditionHides, DisplayAfter="bTreatAsNormalized"))
 	double RelativeEndIndex = 0;
 

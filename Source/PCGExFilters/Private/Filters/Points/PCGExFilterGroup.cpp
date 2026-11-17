@@ -54,6 +54,7 @@ namespace PCGExFilterGroup
 			NewFilter->bCacheResults = false;
 			NewFilter->SetSupportedTypes(SupportedFactoriesTypes);
 			NewFilter->bWillBeUsedWithCollections = bWillBeUsedWithCollections;
+			NewFilter->HostCollection = HostCollection;
 
 			if (!InitManagedFilter(InContext, NewFilter, ManagedFactory->InitializationFailurePolicy != EPCGExFilterNoDataFallback::Error))
 			{

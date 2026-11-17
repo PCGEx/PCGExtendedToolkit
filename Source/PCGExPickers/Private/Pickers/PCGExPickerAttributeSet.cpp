@@ -33,7 +33,11 @@ FString UPCGExPickerAttributeSetSettings::GetDisplayName() const
 
 void UPCGExPickerAttributeSetFactory::AddPicks(const int32 InNum, TSet<int32>& OutPicks) const
 {
-	int32 TargetIndex = 0;
+	if (InNum <= 0)
+	{
+		return;
+	}
+
 	const int32 MaxIndex = InNum - 1;
 
 	if (Config.bTreatAsNormalized)
@@ -41,13 +45,7 @@ void UPCGExPickerAttributeSetFactory::AddPicks(const int32 InNum, TSet<int32>& O
 		OutPicks.Reserve(OutPicks.Num() + RelativePicks.Num());
 		for (const double Pick : RelativePicks)
 		{
-			TargetIndex = PCGExMath::TruncateDbl(static_cast<double>(MaxIndex) * Pick, Config.TruncateMode);
-
-			if (TargetIndex < 0)
-			{
-				TargetIndex = InNum + TargetIndex;
-			}
-			TargetIndex = PCGExMath::SanitizeIndex(TargetIndex, MaxIndex, Config.Safety);
+			const int32 TargetIndex = PCGExMath::SanitizeIndex(PCGExPickers::ResolveRelative(Pick, InNum, Config.TruncateMode), MaxIndex, Config.Safety);
 
 			if (FMath::IsWithin(TargetIndex, 0, InNum))
 			{
@@ -60,13 +58,7 @@ void UPCGExPickerAttributeSetFactory::AddPicks(const int32 InNum, TSet<int32>& O
 		OutPicks.Reserve(OutPicks.Num() + DiscretePicks.Num());
 		for (const int32 Pick : DiscretePicks)
 		{
-			TargetIndex = Pick;
-
-			if (TargetIndex < 0)
-			{
-				TargetIndex = InNum + TargetIndex;
-			}
-			TargetIndex = PCGExMath::SanitizeIndex(TargetIndex, MaxIndex, Config.Safety);
+			const int32 TargetIndex = PCGExMath::SanitizeIndex(PCGExPickers::ResolveDiscrete(Pick, InNum), MaxIndex, Config.Safety);
 
 			if (FMath::IsWithin(TargetIndex, 0, InNum))
 			{
