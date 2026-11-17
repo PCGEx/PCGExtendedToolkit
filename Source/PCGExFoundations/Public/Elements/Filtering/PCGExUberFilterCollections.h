@@ -148,5 +148,8 @@ namespace PCGExUberFilterCollections
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
 
 		virtual void Output() override;
+
+	protected:
+		virtual bool InitPrimaryFilters(const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* InFilterFactories) override;
 	};
 }

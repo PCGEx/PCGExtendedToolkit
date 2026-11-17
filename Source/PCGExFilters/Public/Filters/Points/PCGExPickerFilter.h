@@ -49,6 +49,14 @@ public:
 
 	virtual bool Init(FPCGExContext* InContext) override;
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
+
+	/** Whether InIndex is picked over InNum entries. Picks are resolved once per InNum and shared by every filter instance. */
+	bool IsPicked(int32 InIndex, int32 InNum) const;
+
+private:
+	mutable FRWLock SharedPicksLock;
+	mutable int32 SharedPicksNum = INDEX_NONE;
+	mutable TSet<int32> SharedPicks;
 };
 
 namespace PCGExPointFilter
@@ -74,6 +82,10 @@ namespace PCGExPointFilter
 
 	protected:
 		TSet<int32> Picks;
+
+		// Under a host collection, every point answers for its data's index in that collection.
+		bool bTestsDataIndex = false;
+		bool bDataIndexResult = false;
 	};
 }
 

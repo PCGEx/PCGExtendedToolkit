@@ -7,6 +7,7 @@
 #include "Core/PCGExPickerFactoryProvider.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Misc/ScopeRWLock.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPickerFilterDefinition"
 #define PCGEX_NAMESPACE PCGExPickerFilterDefinition
@@ -26,11 +27,47 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExPickerFilterFactory::CreateFilter() 
 	return MakeShared<PCGExPointFilter::FPickerFilter>(this);
 }
 
+bool UPCGExPickerFilterFactory::IsPicked(const int32 InIndex, const int32 InNum) const
+{
+	{
+		FReadScopeLock ReadScope(SharedPicksLock);
+		if (SharedPicksNum == InNum)
+		{
+			return SharedPicks.Contains(InIndex);
+		}
+	}
+
+	FWriteScopeLock WriteScope(SharedPicksLock);
+	if (SharedPicksNum != InNum)
+	{
+		SharedPicks.Reset();
+		for (const TObjectPtr<const UPCGExPickerFactoryData>& FactoryData : PickerFactories)
+		{
+			FactoryData->AddPicks(InNum, SharedPicks);
+		}
+		SharedPicksNum = InNum;
+	}
+
+	return SharedPicks.Contains(InIndex);
+}
+
 bool PCGExPointFilter::FPickerFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 {
 	if (!IFilter::Init(InContext, InPointDataFacade))
 	{
 		return false;
+	}
+
+	if (bWillBeUsedWithCollections)
+	{
+		return true;
+	}
+
+	if (HostCollection)
+	{
+		bTestsDataIndex = true;
+		bDataIndexResult = Test(InPointDataFacade->Source, HostCollection);
+		return true;
 	}
 
 	PCGExPickers::GetPicks(TypedFilterFactory->PickerFactories, InPointDataFacade, Picks);
@@ -39,7 +76,7 @@ bool PCGExPointFilter::FPickerFilter::Init(FPCGExContext* InContext, const TShar
 
 bool PCGExPointFilter::FPickerFilter::Test(const int32 PointIndex) const
 {
-	return TypedFilterFactory->Config.bInvert ? !Picks.Contains(PointIndex) : Picks.Contains(PointIndex);
+	return bTestsDataIndex ? bDataIndexResult : Picks.Contains(PointIndex) != TypedFilterFactory->Config.bInvert;
 }
 
 bool PCGExPointFilter::FPickerFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
@@ -49,18 +86,7 @@ bool PCGExPointFilter::FPickerFilter::Test(const TSharedPtr<PCGExData::FPointIO>
 		return false;
 	}
 
-	const int32 NumEntries = ParentCollection->Num();
-	for (const TObjectPtr<const UPCGExPickerFactoryData>& FactoryData : TypedFilterFactory->PickerFactories)
-	{
-		TSet<int32> TempPicks;
-		FactoryData->AddPicks(NumEntries, TempPicks);
-		if (TempPicks.Contains(IO->IOIndex))
-		{
-			return !TypedFilterFactory->Config.bInvert;
-		}
-	}
-
-	return TypedFilterFactory->Config.bInvert;
+	return TypedFilterFactory->IsPicked(IO->IOIndex, ParentCollection->Num()) != TypedFilterFactory->Config.bInvert;
 }
 
 TArray<FPCGPinProperties> UPCGExPickerFilterProviderSettings::InputPinProperties() const

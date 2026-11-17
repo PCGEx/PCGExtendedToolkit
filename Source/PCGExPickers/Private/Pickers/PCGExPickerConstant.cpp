@@ -31,23 +31,13 @@ FString UPCGExPickerConstantSettings::GetDisplayName() const
 
 void UPCGExPickerConstantFactory::AddPicks(const int32 InNum, TSet<int32>& OutPicks) const
 {
-	int32 TargetIndex = 0;
-	const int32 MaxIndex = InNum - 1;
-
-	if (!Config.bTreatAsNormalized)
+	if (InNum <= 0)
 	{
-		TargetIndex = Config.DiscreteIndex;
-	}
-	else
-	{
-		TargetIndex = PCGExMath::TruncateDbl(static_cast<double>(MaxIndex) * Config.RelativeIndex, Config.TruncateMode);
+		return;
 	}
 
-	if (TargetIndex < 0)
-	{
-		TargetIndex = InNum + TargetIndex;
-	}
-	TargetIndex = PCGExMath::SanitizeIndex(TargetIndex, MaxIndex, Config.Safety);
+	int32 TargetIndex = Config.bTreatAsNormalized ? PCGExPickers::ResolveRelative(Config.RelativeIndex, InNum, Config.TruncateMode) : PCGExPickers::ResolveDiscrete(Config.DiscreteIndex, InNum);
+	TargetIndex = PCGExMath::SanitizeIndex(TargetIndex, InNum - 1, Config.Safety);
 
 	if (!FMath::IsWithin(TargetIndex, 0, InNum))
 	{
