@@ -91,6 +91,11 @@ bool FPCGExUberFilterCollectionsElement::Boot(FPCGExContext* InContext) const
 		}
 	}
 
+	if (Context->bHasOnlyCollectionFilters && !Context->PickerFactories.IsEmpty())
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Pickers are ignored: they select which points get tested, and every connected filter tests whole data."));
+	}
+
 	return true;
 }
 
@@ -184,6 +189,12 @@ namespace PCGExUberFilterCollections
 		bUsePicks = PCGExPickers::GetPicks(Context->PickerFactories, PointDataFacade, Picks);
 		NumPoints = bUsePicks ? Picks.Num() : PointDataFacade->GetNum();
 
+		if (NumPoints == 0)
+		{
+			// Nothing picked for testing; Output() routes to Outside.
+			return true;
+		}
+
 		// Early out only in Partial mode -- Measure is hidden (and meaningless) under All/Any, so a stale
 		// Discrete value must not gate them. Staging is left to Output(), which runs for every valid
 		// processor; adding here as well would stage the same dataset twice.
@@ -242,12 +253,33 @@ namespace PCGExUberFilterCollections
 		}
 	}
 
+	bool FProcessor::InitPrimaryFilters(const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* InFilterFactories)
+	{
+		PointFilterCache.Init(DefaultPointFilterValue, PointDataFacade->GetNum());
+
+		if (InFilterFactories->IsEmpty())
+		{
+			return true;
+		}
+
+		PrimaryFilters = MakeShared<PCGExPointFilter::FManager>(PointDataFacade);
+		PrimaryFilters->HostCollection = Context->MainPoints;
+		return PrimaryFilters->Init(ExecutionContext, *InFilterFactories);
+	}
+
 	void FProcessor::Output()
 	{
 		IProcessor::Output();
 
+		if (NumPoints == 0)
+		{
+			// No pick resolved to a point, so there was nothing to pass.
+			Context->Outside->Add(PointDataFacade->Source);
+			return;
+		}
+
 		TSharedPtr<PCGExData::FPointIO> OutIO;
-		
+
 		switch (Settings->Mode)
 		{
 		default: case EPCGExUberFilterCollectionsMode::All:

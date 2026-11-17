@@ -59,40 +59,51 @@ bool FPCGExPickerConstantRangeConfig::IsWithinInclusive(const double Value) cons
 
 void UPCGExPickerConstantRangeFactory::AddPicksFromConfig(const FPCGExPickerConstantRangeConfig& InConfig, int32 InNum, TSet<int32>& OutPicks)
 {
+	if (InNum <= 0)
+	{
+		return;
+	}
+
 	int32 TargetStartIndex = 0;
 	int32 TargetEndIndex = 0;
 	const int32 MaxIndex = InNum - 1;
 
 	if (!InConfig.bTreatAsNormalized)
 	{
-		TargetStartIndex = InConfig.DiscreteStartIndex;
-		TargetEndIndex = InConfig.DiscreteEndIndex;
+		TargetStartIndex = PCGExPickers::ResolveDiscrete(InConfig.DiscreteStartIndex, InNum);
+		TargetEndIndex = PCGExPickers::ResolveDiscrete(InConfig.DiscreteEndIndex, InNum);
 	}
 	else
 	{
-		TargetStartIndex = PCGExMath::TruncateDbl(static_cast<double>(MaxIndex) * InConfig.RelativeStartIndex, InConfig.TruncateMode);
-		TargetEndIndex = PCGExMath::TruncateDbl(static_cast<double>(MaxIndex) * InConfig.RelativeEndIndex, InConfig.TruncateMode);
+		TargetStartIndex = PCGExPickers::ResolveRelative(InConfig.RelativeStartIndex, InNum, InConfig.TruncateMode);
+		TargetEndIndex = PCGExPickers::ResolveRelative(InConfig.RelativeEndIndex, InNum, InConfig.TruncateMode);
 	}
 
-	if (TargetStartIndex < 0)
+	// Ordered once from-the-end indices are resolved: the config can only order the raw values.
+	if (TargetStartIndex > TargetEndIndex)
 	{
-		TargetStartIndex = InNum + TargetStartIndex;
+		Swap(TargetStartIndex, TargetEndIndex);
 	}
-	TargetStartIndex = PCGExMath::SanitizeIndex(TargetStartIndex, MaxIndex, InConfig.Safety);
 
-	if (TargetEndIndex < 0)
+	if (InConfig.Safety == EPCGExIndexSafety::Ignore)
 	{
-		TargetEndIndex = InNum + TargetEndIndex;
+		// Ignore drops out-of-bounds indices one by one, not the range they belong to.
+		TargetStartIndex = FMath::Max(TargetStartIndex, 0);
+		TargetEndIndex = FMath::Min(TargetEndIndex, MaxIndex);
 	}
-	TargetEndIndex = PCGExMath::SanitizeIndex(TargetEndIndex, MaxIndex, InConfig.Safety);
+	else
+	{
+		TargetStartIndex = PCGExMath::SanitizeIndex(TargetStartIndex, MaxIndex, InConfig.Safety);
+		TargetEndIndex = PCGExMath::SanitizeIndex(TargetEndIndex, MaxIndex, InConfig.Safety);
+	}
 
-	if (!FMath::IsWithin(TargetStartIndex, 0, InNum) || !FMath::IsWithin(TargetEndIndex, 0, InNum))
+	if (TargetStartIndex > TargetEndIndex)
 	{
 		return;
 	}
 
 	OutPicks.Reserve(OutPicks.Num() + TargetEndIndex - TargetStartIndex + 1);
-	for (int i = TargetStartIndex; i <= TargetEndIndex; i++)
+	for (int32 i = TargetStartIndex; i <= TargetEndIndex; i++)
 	{
 		OutPicks.Add(i);
 	}

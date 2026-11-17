@@ -47,6 +47,18 @@ UPCGExFactoryData* UPCGExPickerFactoryProviderSettings::CreateFactory(FPCGExCont
 
 namespace PCGExPickers
 {
+	int32 ResolveDiscrete(const int32 InPick, const int32 InNum)
+	{
+		return InPick < 0 ? InNum + InPick : InPick;
+	}
+
+	int32 ResolveRelative(const double InPick, const int32 InNum, const EPCGExTruncateMode InTruncateMode)
+	{
+		const int32 MaxIndex = InNum - 1;
+		const int32 Offset = static_cast<int32>(PCGExMath::TruncateDbl(static_cast<double>(MaxIndex) * FMath::Abs(InPick), InTruncateMode));
+		return InPick < 0 ? MaxIndex - Offset : Offset;
+	}
+
 	bool GetPicks(const TArray<TObjectPtr<const UPCGExPickerFactoryData>>& Factories, const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<int32>& OutPicks)
 	{
 		if (Factories.IsEmpty())
