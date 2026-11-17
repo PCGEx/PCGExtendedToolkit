@@ -169,6 +169,7 @@ namespace PCGExPointFilter
 			NewFilter->bUseEdgeAsPrimary = bUseEdgeAsPrimary;
 			NewFilter->SetSupportedTypes(SupportedFactoriesTypes);
 			NewFilter->bWillBeUsedWithCollections = bWillBeUsedWithCollections;
+			NewFilter->HostCollection = HostCollection;
 
 			if (!InitFilter(InContext, NewFilter))
 			{
