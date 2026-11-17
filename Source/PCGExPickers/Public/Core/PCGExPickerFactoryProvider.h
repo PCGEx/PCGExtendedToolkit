@@ -131,6 +131,14 @@ public:
 
 namespace PCGExPickers
 {
+	/** Index a discrete pick stands for over InNum entries, before safety. A negative pick counts from the end: -1 is the last entry. */
+	PCGEXPICKERS_API
+	int32 ResolveDiscrete(int32 InPick, int32 InNum);
+
+	/** Index a relative pick stands for over InNum entries, before safety. A negative pick counts from the end: -1 is the first entry. */
+	PCGEXPICKERS_API
+	int32 ResolveRelative(double InPick, int32 InNum, EPCGExTruncateMode InTruncateMode);
+
 	PCGEXPICKERS_API
 	bool GetPicks(const TArray<TObjectPtr<const UPCGExPickerFactoryData>>& Factories, const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<int32>& OutPicks);
 

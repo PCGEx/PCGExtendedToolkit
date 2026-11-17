@@ -149,6 +149,9 @@ namespace PCGExPointFilter
 		bool bCollectionTestResult = true;
 		bool bUseEdgeAsPrimary = false; // This shouldn't be there but...
 
+		// Set by hosts that filter whole data through per-point evaluation: an index filter then tests its data's index in this collection.
+		TSharedPtr<PCGExData::FPointIOCollection> HostCollection;
+
 		bool DefaultResult = true;
 		TSharedPtr<PCGExData::FFacade> PointDataFacade;
 
@@ -273,6 +276,9 @@ namespace PCGExPointFilter
 
 		bool bUseEdgeAsPrimary = false; // This shouldn't be there...
 		bool bWillBeUsedWithCollections = false;
+
+		// Handed to every filter; see IFilter::HostCollection.
+		TSharedPtr<PCGExData::FPointIOCollection> HostCollection;
 
 		bool bCacheResultsPerFilter = false;
 		bool bCacheResults = false;
