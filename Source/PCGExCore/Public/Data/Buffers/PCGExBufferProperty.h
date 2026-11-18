@@ -177,7 +177,12 @@ namespace PCGExData
 		virtual void Write(const bool bEnsureValidKeys = true) override;
 
 		bool InitForRead(const EIOSide InSide = EIOSide::In);
+		// SourceAttribute only describes the attribute and may belong to another data: Inherit seeds from the output's own values.
 		bool InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init = EBufferInit::Inherit);
+
+		// Address of the Index-th input value, valid while this buffer lives; pairs with SetFromVoidProperty
+		// for a single deep copy between two buffers of the same attribute type. Requires InitForRead.
+		const void* GetReadAddress(int32 Index) const;
 
 		// Property-aware write at a specific index. SrcPtr must point to bytes matching
 		// CachedInnerProperty's layout (typically obtained from an attribute with the same desc).
@@ -235,6 +240,7 @@ namespace PCGExData
 		virtual void Flush() override;
 
 		bool InitForRead(const EIOSide InSide = EIOSide::In);
+		// SourceAttribute only describes the attribute and may belong to another data: Inherit keeps the output's own value when it has one.
 		bool InitForWrite(const FPCGMetadataAttributeBase* SourceAttribute, EBufferInit Init = EBufferInit::Inherit);
 
 	private:

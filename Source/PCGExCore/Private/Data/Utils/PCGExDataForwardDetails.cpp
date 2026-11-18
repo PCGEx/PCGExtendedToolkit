@@ -28,9 +28,9 @@ TSharedPtr<PCGExData::FDataForwardHandler> FPCGExForwardDetails::GetHandler(cons
 	return MakeShared<PCGExData::FDataForwardHandler>(*this, InSourceDataFacade, InDomain);
 }
 
-TSharedPtr<PCGExData::FDataForwardHandler> FPCGExForwardDetails::GetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const TSharedPtr<PCGExData::FFacade>& InTargetDataFacade, const PCGExData::EForwardDomain InDomain, const TSet<FName>* InIgnoredAttributes) const
+TSharedPtr<PCGExData::FDataForwardHandler> FPCGExForwardDetails::GetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const TSharedPtr<PCGExData::FFacade>& InTargetDataFacade, const PCGExData::EForwardDomain InDomain, const TSet<FName>* InIgnoredAttributes, const bool bInheritTargetValues) const
 {
-	return MakeShared<PCGExData::FDataForwardHandler>(*this, InSourceDataFacade, InTargetDataFacade, InDomain, InIgnoredAttributes);
+	return MakeShared<PCGExData::FDataForwardHandler>(*this, InSourceDataFacade, InTargetDataFacade, InDomain, InIgnoredAttributes, bInheritTargetValues);
 }
 
 TSharedPtr<PCGExData::FDataForwardHandler> FPCGExForwardDetails::TryGetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const PCGExData::EForwardDomain InDomain) const
