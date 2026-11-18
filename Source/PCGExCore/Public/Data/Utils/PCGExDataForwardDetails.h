@@ -56,7 +56,8 @@ struct PCGEXCORE_API FPCGExForwardDetails : public FPCGExNameFiltersDetails
 	void Filter(TArray<PCGExData::FAttributeIdentity>& Identities) const;
 
 	TSharedPtr<PCGExData::FDataForwardHandler> GetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, PCGExData::EForwardDomain InDomain = PCGExData::EForwardDomain::ToData) const;
-	TSharedPtr<PCGExData::FDataForwardHandler> GetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const TSharedPtr<PCGExData::FFacade>& InTargetDataFacade, PCGExData::EForwardDomain InDomain = PCGExData::EForwardDomain::Inherit, const TSet<FName>* InIgnoredAttributes = nullptr) const;
+	// bInheritTargetValues: see FDataForwardHandler.
+	TSharedPtr<PCGExData::FDataForwardHandler> GetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const TSharedPtr<PCGExData::FFacade>& InTargetDataFacade, PCGExData::EForwardDomain InDomain = PCGExData::EForwardDomain::Inherit, const TSet<FName>* InIgnoredAttributes = nullptr, bool bInheritTargetValues = true) const;
 	TSharedPtr<PCGExData::FDataForwardHandler> TryGetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, PCGExData::EForwardDomain InDomain = PCGExData::EForwardDomain::ToData) const;
 	TSharedPtr<PCGExData::FDataForwardHandler> TryGetHandler(const TSharedPtr<PCGExData::FFacade>& InSourceDataFacade, const TSharedPtr<PCGExData::FFacade>& InTargetDataFacade, PCGExData::EForwardDomain InDomain = PCGExData::EForwardDomain::Inherit, const TSet<FName>* InIgnoredAttributes = nullptr) const;
 	// Metadata-sourced handler (see FDataForwardHandler); null when forwarding is disabled.
