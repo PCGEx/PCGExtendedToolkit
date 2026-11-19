@@ -707,10 +707,12 @@ namespace PCGExData
 		}
 
 		// Resolve the output generic attribute
+		bool bOutputHasValues = false;
 		if (SourceAttribute)
 		{
 			// Prefer an existing matching attribute on output (typically present from data duplication).
 			FPCGMetadataAttributeBase* MutableAttr = Source->FindMutableAttribute(Identifier, EIOSide::Out);
+			bOutputHasValues = MutableAttr != nullptr;
 
 			// Otherwise create it on-the-fly using the source attribute's desc -- mirrors what TBuffer<T>
 			// does via FindOrCreateAttribute<T>. Required for the data forward path where target starts
@@ -755,22 +757,44 @@ namespace PCGExData
 			CachedInnerProperty->InitializeValue(OutBytesData + i * ElementSize);
 		}
 
-		// If inheriting, deep-copy input values into our owned output storage.
 		if (Init == EBufferInit::Inherit && SourceAttribute)
 		{
-			auto EntryKeys = OutData->GetConstMetadataEntryValueRange();
+			// A just-created attribute holds values only through a parent; a mismatched one cannot be read with our property.
+			bOutputHasValues = GenericOutAttribute && (bOutputHasValues || GenericOutAttribute->GetParent()) && GenericOutAttribute->GetAttributeDesc().IsSameType(Desc);
 
-			for (int32 i = 0; i < NumPoints; i++)
+			if (bOutputHasValues)
 			{
-				if (const void* ReadAddr = SourceAttribute->GetReadAddressFromEntryKey_Unsafe(EntryKeys[i]))
+				// The output's own attribute, never SourceAttribute: Out's entry keys mean nothing to another data's attribute.
+				auto EntryKeys = OutData->GetConstMetadataEntryValueRange();
+
+				for (int32 i = 0; i < NumPoints; i++)
 				{
-					CachedInnerProperty->CopyCompleteValue(OutBytesData + i * ElementSize, ReadAddr);
+					if (const void* ReadAddr = GenericOutAttribute->GetReadAddressFromEntryKey_Unsafe(EntryKeys[i]))
+					{
+						CachedInnerProperty->CopyCompleteValue(OutBytesData + i * ElementSize, ReadAddr);
+					}
+				}
+			}
+			else if (const void* DefaultAddr = SourceAttribute->GetReadAddressFromEntryKey_Unsafe(PCGDefaultValueKey))
+			{
+				// Nothing to inherit: every slot starts at the describing attribute's default, as typed buffers do.
+				for (int32 i = 0; i < NumPoints; i++)
+				{
+					CachedInnerProperty->CopyCompleteValue(OutBytesData + i * ElementSize, DefaultAddr);
 				}
 			}
 		}
 
 		bIsNewOutput = (Init == EBufferInit::New);
 		return true;
+	}
+
+	const void* FPropertyArrayBuffer::GetReadAddress(const int32 Index) const
+	{
+		check(InBytes && ElementSize > 0);
+		const int32 Offset = Index * ElementSize;
+		check(Offset + ElementSize <= InBytes->Num());
+		return InBytes->GetData() + Offset;
 	}
 
 	void FPropertyArrayBuffer::Write(const bool bEnsureValidKeys)
@@ -942,6 +966,8 @@ namespace PCGExData
 		check(OutValue.Num() >= ElementSize && ElementSize > 0);
 		check(Value.GetValueSize() == ElementSize);
 
+		// One slot shared by every writer: locked, matching TSingleValueBuffer<T>::SetValue.
+		FWriteScopeLock WriteScopeLock(BufferLock);
 		Value.ExportTo(OutValue.GetData());
 	}
 
@@ -978,6 +1004,8 @@ namespace PCGExData
 	void FPropertySingleValueBuffer::SetRawValue(const int32 Index, const void* Src)
 	{
 		check(CachedInnerProperty && OutValue.Num() >= ElementSize && ElementSize > 0);
+
+		FWriteScopeLock WriteScopeLock(BufferLock);
 		CachedInnerProperty->CopyCompleteValue(OutValue.GetData(), Src);
 	}
 
@@ -1060,9 +1088,11 @@ namespace PCGExData
 			return false;
 		}
 
+		bool bOutputHasValue = false;
 		if (SourceAttribute)
 		{
 			FPCGMetadataAttributeBase* MutableAttr = Source->FindMutableAttribute(Identifier, EIOSide::Out);
+			bOutputHasValue = MutableAttr != nullptr;
 
 			// Create-on-the-fly when not already present (data forward path).
 			if (!MutableAttr)
@@ -1100,7 +1130,11 @@ namespace PCGExData
 
 		if (Init == EBufferInit::Inherit && SourceAttribute)
 		{
-			if (const void* ReadAddr = SourceAttribute->GetReadAddressFromEntryKey_Unsafe(PCGDefaultValueKey))
+			// The output's own value when it has one of this type, as TSingleValueBuffer<T> does; the describing attribute's otherwise.
+			bOutputHasValue = bOutputHasValue && GenericOutAttribute && GenericOutAttribute->GetAttributeDesc().IsSameType(Desc);
+			const FPCGMetadataAttributeBase* ValueOwner = bOutputHasValue ? GenericOutAttribute : SourceAttribute;
+
+			if (const void* ReadAddr = ValueOwner->GetReadAddressFromEntryKey_Unsafe(PCGDefaultValueKey))
 			{
 				CachedInnerProperty->CopyCompleteValue(OutValue.GetData(), ReadAddr);
 			}

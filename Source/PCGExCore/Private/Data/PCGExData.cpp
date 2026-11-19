@@ -483,51 +483,49 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 
 	TSharedPtr<IBuffer> FFacade::GetWritable(const EPCGMetadataTypes Type, const FPCGMetadataAttributeBase* InAttribute, EBufferInit Init)
 	{
+		// Type is often a desc's value type, which for a container names the element type: only a single value gets a typed buffer.
+		if (!InAttribute || PCGExMetaHelpers::IsBasicSingleValue(InAttribute->GetAttributeDesc()))
+		{
 #define PCGEX_TYPED_WRITABLE(_TYPE, _ID, ...) case EPCGMetadataTypes::_ID: return GetWritable<_TYPE>(InAttribute, Init);
-		switch (Type)
+			switch (Type)
+			{
+			PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TYPED_WRITABLE)
+			default:
+				break;
+			}
+#undef PCGEX_TYPED_WRITABLE
+		}
+
+		// Tier 3 fallback: FPropertyBuffer for containers and types not in PCGEX_FOREACH_SUPPORTEDTYPES.
+		if (!InAttribute)
 		{
-		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TYPED_WRITABLE)
-		default:
+			return nullptr;
+		}
+
+		const FPCGMetadataDomainID DomainID = InAttribute->GetMetadataDomain()->GetDomainID();
+		FPCGAttributeIdentifier AttrIdentifier(InAttribute->Name, DomainID);
+
+		// Dedup -- mirror the typed GetBuffer<T> path. Property buffers all share
+		// Type=Unknown, so the UID is keyed on (name, domain) which is what we want:
+		// repeat calls for the same attribute return the existing buffer instead of
+		// stacking duplicates (which the engine rejects as "written to by different
+		// buffers"). Re-check under the write lock to close the construction race.
+		const uint64 ExpectedUID = BufferUID(AttrIdentifier, EPCGMetadataTypes::Unknown);
+		if (const TSharedPtr<IBuffer> Existing = FindBuffer(ExpectedUID))
 		{
-			// Tier 3 fallback: FPropertyBuffer for types not in PCGEX_FOREACH_SUPPORTEDTYPES.
-			if (!InAttribute)
-			{
-				return nullptr;
-			}
+			return Existing;
+		}
 
-			const FPCGMetadataDomainID DomainID = InAttribute->GetMetadataDomain()->GetDomainID();
-			FPCGAttributeIdentifier AttrIdentifier(InAttribute->Name, DomainID);
+		FWriteScopeLock WriteScopeLock(BufferLock);
 
-			// Dedup -- mirror the typed GetBuffer<T> path. Property buffers all share
-			// Type=Unknown, so the UID is keyed on (name, domain) which is what we want:
-			// repeat calls for the same attribute return the existing buffer instead of
-			// stacking duplicates (which the engine rejects as "written to by different
-			// buffers"). Re-check under the write lock to close the construction race.
-			const uint64 ExpectedUID = BufferUID(AttrIdentifier, EPCGMetadataTypes::Unknown);
-			if (const TSharedPtr<IBuffer> Existing = FindBuffer(ExpectedUID))
-			{
-				return Existing;
-			}
+		if (const TSharedPtr<IBuffer> Existing = FindBuffer_Unsafe(ExpectedUID))
+		{
+			return Existing;
+		}
 
-			FWriteScopeLock WriteScopeLock(BufferLock);
-
-			if (const TSharedPtr<IBuffer> Existing = FindBuffer_Unsafe(ExpectedUID))
-			{
-				return Existing;
-			}
-
-			if (DomainID.Flag == EPCGMetadataDomainFlag::Data)
-			{
-				auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, AttrIdentifier);
-				if (!PropBuf->InitProperty(InAttribute) || !PropBuf->InitForWrite(InAttribute, Init))
-				{
-					return nullptr;
-				}
-				PropBuf->BufferIndex = Buffers.Add(PropBuf);
-				BufferMap.Add(PropBuf->GetUID(), PropBuf);
-				return PropBuf;
-			}
-			auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, AttrIdentifier);
+		if (DomainID.Flag == EPCGMetadataDomainFlag::Data)
+		{
+			auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, AttrIdentifier);
 			if (!PropBuf->InitProperty(InAttribute) || !PropBuf->InitForWrite(InAttribute, Init))
 			{
 				return nullptr;
@@ -536,8 +534,14 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 			BufferMap.Add(PropBuf->GetUID(), PropBuf);
 			return PropBuf;
 		}
+		auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, AttrIdentifier);
+		if (!PropBuf->InitProperty(InAttribute) || !PropBuf->InitForWrite(InAttribute, Init))
+		{
+			return nullptr;
 		}
-#undef PCGEX_TYPED_WRITABLE
+		PropBuf->BufferIndex = Buffers.Add(PropBuf);
+		BufferMap.Add(PropBuf->GetUID(), PropBuf);
+		return PropBuf;
 	}
 
 	TSharedPtr<IBuffer> FFacade::GetWritable(const EPCGMetadataTypes Type, const FName InName, EBufferInit Init)
@@ -604,14 +608,18 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 		TSharedPtr<IBuffer> Buffer = nullptr;
 		const FPCGAttributeIdentifier Identifier = Identity.GetIdentifier();
 
+		// A container identity carries its element type as value type: only a single value has a typed buffer.
+		if (PCGExMetaHelpers::IsBasicSingleValue(Identity))
+		{
 #define PCGEX_TYPED_EXEC(_TYPE, _NAME) Buffer = GetReadable<_TYPE>(Identifier, InSide, bSupportScoped);
-		PCGEX_EXECUTEWITHRIGHTTYPE(Identity.GetType(), PCGEX_TYPED_EXEC)
+			PCGEX_EXECUTEWITHRIGHTTYPE(Identity.GetType(), PCGEX_TYPED_EXEC)
 #undef PCGEX_TYPED_EXEC
+		}
 
-		// Tier 3 fallback: FPropertyBuffer for types not in PCGEX_FOREACH_SUPPORTEDTYPES
+		// Tier 3 fallback: FPropertyBuffer for containers and types not in PCGEX_FOREACH_SUPPORTEDTYPES
 		if (!Buffer)
 		{
-			// Dedup -- see FFacade::GetWritable default branch for rationale.
+			// Dedup -- see FFacade::GetWritable fallback for rationale.
 			const uint64 ExpectedUID = BufferUID(Identifier, EPCGMetadataTypes::Unknown);
 			if (const TSharedPtr<IBuffer> Existing = FindBuffer(ExpectedUID))
 			{
@@ -670,7 +678,7 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 		// Tier 3 fallback: FPropertyBuffer for types not in PCGEX_FOREACH_SUPPORTEDTYPES
 		if (!Buffer && RawAttribute)
 		{
-			// Dedup -- see FFacade::GetWritable default branch for rationale.
+			// Dedup -- see FFacade::GetWritable fallback for rationale.
 			const uint64 ExpectedUID = BufferUID(InIdentifier, EPCGMetadataTypes::Unknown);
 			if (const TSharedPtr<IBuffer> Existing = FindBuffer(ExpectedUID))
 			{
