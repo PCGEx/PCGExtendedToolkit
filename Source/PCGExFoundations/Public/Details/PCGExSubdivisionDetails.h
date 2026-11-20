@@ -87,14 +87,6 @@ struct PCGEXFOUNDATIONS_API FPCGExManhattanDetails
 {
 	GENERATED_BODY()
 
-	explicit FPCGExManhattanDetails(const bool InSupportAttribute = false)
-		: bSupportAttribute(InSupportAttribute)
-	{
-	}
-
-	UPROPERTY()
-	bool bSupportAttribute = false;
-
 	/** How Manhattan subdivision is calculated. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExManhattanMethod Method = EPCGExManhattanMethod::Simple;

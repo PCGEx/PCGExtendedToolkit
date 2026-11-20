@@ -346,7 +346,8 @@ namespace PCGExSampleNearestPoint
 		else if (Settings->BlendingInterface == EPCGExBlendingInterface::Monolithic)
 		{
 			TSet<FName> MissingAttributes;
-			PCGExBlending::AssembleBlendingDetails(Settings->PointPropertiesBlendingSettings, Settings->TargetAttributes, Context->TargetsHandler->GetFacades(), BlendingDetails, MissingAttributes);
+			const FPCGExPropertiesBlendingDetails PropertiesBlending = Settings->bBlendPointProperties ? Settings->PointPropertiesBlendingSettings : FPCGExPropertiesBlendingDetails(EPCGExBlendingType::None);
+			PCGExBlending::AssembleBlendingDetails(PropertiesBlending, Settings->TargetAttributes, Context->TargetsHandler->GetFacades(), BlendingDetails, MissingAttributes);
 
 			UnionBlender = MakeShared<PCGExBlending::FUnionBlender>(&BlendingDetails, nullptr, Context->TargetsHandler->GetDistances());
 			UnionBlender->AddSources(Context->TargetsHandler->GetFacades());
