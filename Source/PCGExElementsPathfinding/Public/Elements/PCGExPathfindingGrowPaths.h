@@ -230,10 +230,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding")
 	FPCGExForwardDetails SeedForwarding;
 
-	/** Output various statistics. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Advanced")
-	FPCGExPathStatistics Statistics;
-
 	/** Whether or not to search for closest node using an octree. Depending on your dataset, enabling this may be either much faster, or slightly slower. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Advanced")
 	bool bUseOctreeSearch = false;

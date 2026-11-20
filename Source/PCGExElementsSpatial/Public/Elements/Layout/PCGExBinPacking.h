@@ -24,22 +24,6 @@ namespace PCGExData
 	struct FMutablePoint;
 }
 
-UENUM()
-enum class EPCGExBinFreeSpacePartitionMode : uint8
-{
-	UVWConstant       = 0 UMETA(DisplayName = "UVW (Constant)", ToolTip="A constant bound-relative position"),
-	UVWAttribute      = 1 UMETA(DisplayName = "UVW", ToolTip="A per-bin bound-relative position"),
-	PositionConstant  = 2 UMETA(DisplayName = "Position (Constant)", ToolTip="A constant world position"),
-	PositionAttribute = 3 UMETA(DisplayName = "Position (Attribute)", ToolTip="A per-bin world position"),
-};
-
-UENUM()
-enum class EPCGExPlacementFavor : uint8
-{
-	SeedProximity = 0 UMETA(DisplayName = "Seed Proximity", ToolTip="Favor seed proximity over space conservation"),
-	Space         = 1 UMETA(DisplayName = "Space Conservation", ToolTip="Favor space conservation over seed proximity"),
-};
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/modify/bin-packing"))
 class UPCGExBinPackingSettings : public UPCGExPointsProcessorSettings
 {
@@ -92,10 +76,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="SeedMode == EPCGExBinSeedMode::PositionAttribute", EditConditionHides))
 	FPCGAttributePropertyInputSelector SeedPositionAttribute;
 
-	/** Will attempt to infer the split axis from relative seed positioning, and fall back to selected axis if it can't find one. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fitting", meta = (PCG_Overridable))
-	bool bInferSplitAxisFromSeed = false;
-
 	/** The main stacking axis is the axis that will generate the smallest free space for further insertion. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fitting", meta = (PCG_Overridable))
 	EPCGExAxis SplitAxis = EPCGExAxis::Up;
@@ -107,10 +87,6 @@ public:
 	/** If enabled, fitting will try to avoid wasted space by not creating free spaces that are below a certain threshold. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fitting", meta = (PCG_Overridable))
 	bool bAvoidWastedSpace = true;
-
-	/** If enabled, fitting will try to avoid wasted space by not creating free spaces that are below a certain threshold. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Fitting", meta = (PCG_Overridable))
-	EPCGExPlacementFavor PlacementFavor = EPCGExPlacementFavor::SeedProximity;
 
 	// TODO : Testable Rotation
 
