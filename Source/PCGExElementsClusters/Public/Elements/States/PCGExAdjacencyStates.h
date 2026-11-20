@@ -125,7 +125,7 @@ protected:
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ClusterNodeFlag, "State : Bitmask Adjacency", "A bulk-check for directional adjacency, using bitmask collections", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(AdjacencyState, "State : Bitmask Adjacency", "A bulk-check for directional adjacency, using bitmask collections", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings
 

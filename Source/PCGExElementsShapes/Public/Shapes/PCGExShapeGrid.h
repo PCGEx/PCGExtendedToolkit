@@ -54,7 +54,6 @@ namespace PCGExShapes
 	{
 	public:
 		FIntVector3 Count = FIntVector3(5);
-		FVector Extents = FVector(10.0);
 		FVector Offset = FVector(0);
 
 		explicit FGrid(const PCGExData::FConstPoint& InPointRef)

@@ -61,6 +61,7 @@ public:
 	virtual TSharedPtr<FPCGExTangentsOperation> CreateOperation() const override
 	{
 		PCGEX_FACTORY_NEW_OPERATION(TangentsFromTransform)
+		NewOperation->Axis = Axis;
 		return NewOperation;
 	}
 };

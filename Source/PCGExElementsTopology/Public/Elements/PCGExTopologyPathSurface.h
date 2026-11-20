@@ -20,7 +20,7 @@ class PCGEXELEMENTSTOPOLOGY_API UPCGExTopologyPathSurfaceSettings : public UPCGE
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(TopologyClusterSurface, "Topology : Path Surface", "Create a path surface topology");
+	PCGEX_NODE_INFOS(TopologyPathSurface, "Topology : Path Surface", "Create a path surface topology");
 
 	virtual EPCGSettingsType GetType() const override
 	{

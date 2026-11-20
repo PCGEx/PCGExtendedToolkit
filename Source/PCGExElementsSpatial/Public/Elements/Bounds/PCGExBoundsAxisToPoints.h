@@ -35,7 +35,7 @@ enum class EPCGExAxisSizeConstraint : uint8
 {
 	None    = 0 UMETA(DisplayName = "None", ToolTip="Apply no size shift to the picked axis."),
 	Greater = 1 UMETA(DisplayName = "Greater", ToolTip="Step one rank toward the longer axes for every remaining axis whose extent is under Threshold."),
-	Smaller = 1 UMETA(DisplayName = "Smaller", ToolTip="Shares its value with Greater, so picking it selects Greater and reads back as Greater. The step-toward-shorter branch is unreachable."),
+	Smaller = 2 UMETA(DisplayName = "Smaller", ToolTip="Step one rank toward the shorter axes for every preceding axis whose extent is over Threshold."),
 };
 
 UENUM()

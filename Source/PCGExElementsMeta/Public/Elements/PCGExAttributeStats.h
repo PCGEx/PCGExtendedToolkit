@@ -499,7 +499,7 @@ namespace PCGExAttributeStats
 				PCGEX_OUTPUT_STAT(DefaultValuesNum, int32, DefaultValuesNum)
 				PCGEX_OUTPUT_STAT(HasOnlyDefaultValues, bool, NumValues == DefaultValuesNum)
 				PCGEX_OUTPUT_STAT(HasOnlySetValues, bool, DefaultValuesNum == 0)
-				PCGEX_OUTPUT_STAT(HasOnlyUniqueValues, bool, NumValues == UniqueSetValuesNum)
+				PCGEX_OUTPUT_STAT(HasOnlyUniqueValues, bool, NumValues == DifferentValuesNum)
 				PCGEX_OUTPUT_STAT(Samples, int32, NumValues)
 				PCGEX_OUTPUT_STAT(IsValid, bool, true)
 

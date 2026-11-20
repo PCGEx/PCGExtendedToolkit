@@ -79,6 +79,13 @@ else{_TARGET##Axis.RadiusInput = EPCGExInputValueToggle::Disabled;}
 		SolidificationLerp.Update(SolidificationLerpInput_DEPRECATED, SolidificationLerpAttribute_DEPRECATED, SolidificationLerpConstant_DEPRECATED);
 	}
 
+	// Not version-gated: a legacy attribute-driven normal reads through Custom. Cleared so it applies once.
+	if (NormalType_DEPRECATED == EPCGExInputValueType::Attribute)
+	{
+		Normal = EPCGExPathNormalDirection::Custom;
+		NormalType_DEPRECATED = EPCGExInputValueType::Constant;
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 

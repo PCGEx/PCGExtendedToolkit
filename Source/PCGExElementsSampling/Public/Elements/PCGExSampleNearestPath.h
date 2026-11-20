@@ -28,7 +28,7 @@
 MACRO(Time, double, 0)\
 MACRO(SegmentTime, double, 0)\
 MACRO(NumInside, int32, 0)\
-MACRO(ClosedLoop, int32, false)
+MACRO(ClosedLoop, bool, false)
 
 #define PCGEX_FOREACH_FIELD_NEARESTPATH(MACRO)\
 PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
