@@ -1035,7 +1035,7 @@ void FPCGExAssetCollectionEditor::RegisterTabSpawners(const TSharedRef<FTabManag
 		}
 	}
 
-	InTabManager->SetMainTab(FName("Grid"));
+	InTabManager->SetMainTab(GetDefaultForegroundTabId());
 
 	FAssetEditorToolkit::RegisterTabSpawners(InTabManager);
 }

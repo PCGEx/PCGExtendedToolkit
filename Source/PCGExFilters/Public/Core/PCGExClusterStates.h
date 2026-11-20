@@ -94,7 +94,7 @@ namespace PCGExClusterStates
 	};
 };
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="clusters/metadata/flag-nodes/node-flag"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="clusters/analyze/cluster-write-states"))
 class PCGEXFILTERS_API UPCGExClusterStateFactoryProviderSettings : public UPCGExStateFactoryProviderSettings
 {
 	GENERATED_BODY()

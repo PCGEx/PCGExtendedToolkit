@@ -15,6 +15,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Styling/SlateStyle.h"
 #include "Styling/SlateStyleRegistry.h"
+#include "UObject/UObjectBase.h"
 
 #pragma region CommandListEditorOnlyGraphs
 namespace PCGExEditor
@@ -114,11 +115,19 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 	{
 		FPCGDataVisualizationRegistry& DataVisRegistry = FPCGModule::GetMutablePCGDataVisualizationRegistry();
 		DataVisRegistry.RegisterPCGDataVisualization(UPCGSpatialData::StaticClass(), MakeUnique<const IPCGExSpatialDataVisualization>());
+		bDataVisualizationRegistered = true;
 	}
 }
 
 void FPCGExtendedToolkitEditorModule::ShutdownModule()
 {
+	// At engine exit UObjects are purged before modules unload and the registry dies with PCG: only a live unload has an entry to remove.
+	if (bDataVisualizationRegistered && UObjectInitialized() && FPCGModule::IsPCGModuleLoaded())
+	{
+		FPCGModule::GetMutablePCGDataVisualizationRegistry().UnregisterPCGDataVisualization(UPCGSpatialData::StaticClass());
+	}
+	bDataVisualizationRegistered = false;
+
 	FSlateStyleRegistry::UnRegisterSlateStyle(Style->GetStyleSetName());
 	Style.Reset();
 }

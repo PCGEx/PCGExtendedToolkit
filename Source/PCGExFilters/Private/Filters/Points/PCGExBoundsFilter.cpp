@@ -184,6 +184,7 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 
 				if (Collections->IsEmpty())
 				{
+					bCheckAgainstDataBounds = true;
 					bCollectionTestResult = TypedFilterFactory->Config.bInvert;
 					return true;
 				}

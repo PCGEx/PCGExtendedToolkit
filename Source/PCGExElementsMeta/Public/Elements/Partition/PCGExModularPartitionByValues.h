@@ -31,7 +31,7 @@ public:
 	FPCGExPartitonRuleConfig Config;
 };
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-by-values"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-rule"))
 class UPCGExPartitionRuleProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()
@@ -72,7 +72,7 @@ public:
 /**
  * 
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="misc/partition-by-values/partition-rule"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-by-values"))
 class UPCGExModularPartitionByValuesSettings : public UPCGExPartitionByValuesBaseSettings
 {
 	GENERATED_BODY()

@@ -190,7 +190,7 @@ protected:
 		return FName("PCGExAssetCollectionEditor");
 	}
 
-	/** Tab forcibly foregrounded on open (see InitEditor). Must be one of the Tabs ids. */
+	/** Tab foregrounded on open (see InitEditor) and kept as the non-closeable main tab. Must be one of the Tabs ids. */
 	virtual FName GetDefaultForegroundTabId() const
 	{
 		return FName("Grid");

@@ -151,7 +151,7 @@ namespace PCGExEnumCustomization
 
 	TSharedRef<SWidget> CreateRadioGroup(const TSharedPtr<IPropertyHandle>& PropertyHandle, const FString& Enum)
 	{
-		return CreateRadioGroup(PropertyHandle, FindFirstObjectSafe<UEnum>(*Enum), /*SkipIndices=*/{});
+		return CreateRadioGroup(PropertyHandle, FindFirstObjectSafe<UEnum>(*Enum));
 	}
 
 	TSharedRef<SWidget> CreateRadioGroup(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum, const TSet<int32>& SkipIndices)

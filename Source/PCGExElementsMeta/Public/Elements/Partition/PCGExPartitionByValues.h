@@ -32,7 +32,7 @@ namespace PCGExPartition
 /**
  * 
  */
-UCLASS(Abstract, MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="misc/partition-by-values"))
+UCLASS(Abstract, MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-by-values"))
 class UPCGExPartitionByValuesBaseSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()
