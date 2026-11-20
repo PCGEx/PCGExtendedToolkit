@@ -56,7 +56,9 @@ class UPCGExSplitJoinIntegerSettings : public UPCGExSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(SplitJoinInteger, "Split / Join Integer", "Split an integer attribute into smaller integer attributes following a bit layout, or join them back.");
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(SplitJoinInteger, "Split / Join Integer", "Split an integer attribute into smaller integer attributes following a bit layout, or join them back.", FName(GetDisplayName()));
+
+	virtual TArray<FText> GetNodeTitleAliases() const override;
 
 	virtual EPCGSettingsType GetType() const override
 	{
@@ -96,6 +98,11 @@ public:
 	/** Fields of the packed integer. The first entry takes the most significant bits, the last one ends on bit 0. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	TArray<FPCGExIntegerLayoutField> Layout = {FPCGExIntegerLayoutField(FName("CollectionEntryHi"), 32), FPCGExIntegerLayoutField(FName("CollectionEntryLo"), 32)};
+
+#if WITH_EDITOR
+	/** Node title for the current Mode. */
+	FString GetDisplayName() const;
+#endif
 };
 
 namespace PCGExSplitJoinInteger

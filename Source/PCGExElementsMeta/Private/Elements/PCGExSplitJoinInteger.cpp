@@ -22,6 +22,26 @@
 
 #pragma region UPCGSettings interface
 
+#if WITH_EDITOR
+TArray<FText> UPCGExSplitJoinIntegerSettings::GetNodeTitleAliases() const
+{
+	return {FTEXT("PCGEx | Split Integer"), FTEXT("PCGEx | Join Integer")};
+}
+
+FString UPCGExSplitJoinIntegerSettings::GetDisplayName() const
+{
+	switch (Mode)
+	{
+	case EPCGExSplitJoinIntegerMode::Split:
+		return TEXT("PCGEx | Split Integer");
+	case EPCGExSplitJoinIntegerMode::Join:
+		return TEXT("PCGEx | Join Integer");
+	default:
+		return TEXT("PCGEx | Split / Join Integer");
+	}
+}
+#endif
+
 TArray<FPCGPinProperties> UPCGExSplitJoinIntegerSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
