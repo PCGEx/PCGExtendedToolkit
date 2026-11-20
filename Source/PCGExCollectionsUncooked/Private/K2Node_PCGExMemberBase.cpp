@@ -3,6 +3,8 @@
 
 #include "K2Node_PCGExMemberBase.h"
 
+#include "BlueprintActionDatabaseRegistrar.h"
+#include "BlueprintNodeSpawner.h"
 #include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
 #include "KismetCompiler.h"
@@ -110,6 +112,17 @@ FLinearColor UK2Node_PCGExMemberBase::GetNodeTitleColor() const
 FText UK2Node_PCGExMemberBase::GetMenuCategory() const
 {
 	return LOCTEXT("MenuCategory", "PCGEx|Collection");
+}
+
+void UK2Node_PCGExMemberBase::GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const
+{
+	UClass* ActionKey = GetClass();
+	if (ActionRegistrar.IsOpenForRegistration(ActionKey))
+	{
+		UBlueprintNodeSpawner* NodeSpawner = UBlueprintNodeSpawner::Create(GetClass());
+		check(NodeSpawner != nullptr);
+		ActionRegistrar.AddBlueprintAction(ActionKey, NodeSpawner);
+	}
 }
 
 void UK2Node_PCGExMemberBase::GetNodeContextMenuActions(UToolMenu* Menu, UGraphNodeContextMenuContext* Context) const

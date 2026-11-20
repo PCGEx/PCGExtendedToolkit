@@ -8,16 +8,11 @@
 
 #include "K2Node_GetPCGExEntryMember.generated.h"
 
-class FBlueprintActionDatabaseRegistrar;
-
 /** Reads a reflected member from a collection entry by raw index (pure). See UK2Node_PCGExMemberBase. */
 UCLASS(meta=(DisplayName="Get Entry Member", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExEntryMember : public UK2Node_PCGExMemberBase
 {
 	GENERATED_BODY()
-
-public:
-	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
 
 protected:
 	virtual bool IsSetNode() const override
