@@ -263,6 +263,10 @@ public:
 	UPROPERTY()
 	bool bExposePathOutputProperties = true;
 
+	/** Per-class constant: true on Offset, the only node that reads Preserve Collinear and Arc Tolerance. */
+	UPROPERTY()
+	bool bExposeOffsetProperties = false;
+
 	/** Per-class constant: whether the grouping-policy + main-matching controls are user-editable. When false the
 	 *  controls hide and inputs fall back to Split (see GetEffectiveGroupingPolicy). */
 	UPROPERTY()
@@ -316,11 +320,11 @@ public:
 	bool bSimplifyPaths = false;
 
 	/** Keep collinear points in the output instead of simplifying them. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties && bExposeOffsetProperties", EditConditionHides, HideEditConditionToggle))
 	bool bPreserveCollinear = true;
 
 	/** Tolerance for arc approximation when generating curved offsets. Higher values = fewer points. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties && bExposeOffsetProperties", EditConditionHides, HideEditConditionToggle))
 	double ArcTolerance = 5.0;
 
 	FORCEINLINE double GetArcTolerance() const

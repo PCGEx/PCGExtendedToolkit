@@ -150,6 +150,11 @@ void FPCGExPathfindingPlotEdgesContext::BuildPath(const TSharedPtr<PCGExPathfind
 		return;
 	} // No path could be resolved
 
+	if (Settings->bOmitCompletePathOnFailedPlot && ValidPlotIndex != Query->SubQueries.Num())
+	{
+		return;
+	}
+
 	TArray<int32> IndicesBuffer;
 	IndicesBuffer.Reserve(MaxQueryNumPoints);
 

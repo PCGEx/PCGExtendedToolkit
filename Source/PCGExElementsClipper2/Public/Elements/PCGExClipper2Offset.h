@@ -29,6 +29,8 @@ class UPCGExClipper2OffsetSettings : public UPCGExClipper2ProcessorSettings
 	GENERATED_BODY()
 
 public:
+	UPCGExClipper2OffsetSettings(const FObjectInitializer& ObjectInitializer);
+
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(Clipper2Offset, "Clipper2 : Offset", "Does a Clipper2 offset operation.");

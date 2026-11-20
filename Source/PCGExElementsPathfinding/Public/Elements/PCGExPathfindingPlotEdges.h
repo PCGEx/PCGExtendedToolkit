@@ -131,6 +131,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Performance, meta=(PCG_NotOverridable, AdvancedDisplay))
 	bool bUseOctreeSearch = false;
 
+	/** If any leg of the plot fails, output no path instead of the legs that succeeded. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(EditCondition="OutputMode==EPCGExPathfindingOutputMode::Paths", EditConditionHides))
 	bool bOmitCompletePathOnFailedPlot = false;
 
