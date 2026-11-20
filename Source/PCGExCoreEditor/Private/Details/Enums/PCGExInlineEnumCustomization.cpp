@@ -7,6 +7,7 @@
 #include "PropertyHandle.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SNullWidget.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
@@ -266,6 +267,11 @@ namespace PCGExEnumCustomization
 
 	TSharedRef<SWidget> CreateDropdown(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum, const TSet<int32>& SkipIndices)
 	{
+		if (!Enum)
+		{
+			return SNullWidget::NullWidget;
+		}
+
 		return SNew(SComboButton)
 			// Default ContentPadding -- match the standard property-value enum combobox height.
 			// The label below uses the smaller detail font so the visual weight stays consistent
@@ -447,6 +453,11 @@ namespace PCGExEnumCustomization
 
 	TSharedRef<SWidget> CreateCycleButton(TSharedPtr<IPropertyHandle> PropertyHandle, UEnum* Enum)
 	{
+		if (!Enum)
+		{
+			return SNullWidget::NullWidget;
+		}
+
 		auto ToolTip = [PropertyHandle, Enum]()
 		{
 			FString CurrentValue;

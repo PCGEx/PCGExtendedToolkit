@@ -9,6 +9,7 @@
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExAssetGrammar.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Colors/SColorBlock.h"
@@ -134,9 +135,6 @@ void FPCGExAssetGrammarCustomization::CustomizeHeader(
 		GrammarSourceHandle = ParentHandle->GetChildHandle(FName("GrammarSource"));
 	}
 
-	TArray<UObject*> OuterObjects;
-	PropertyHandle->GetOuterObjects(OuterObjects);
-
 	// "Global" detection drives the disabled-state hint on the entry-level grammar (the entry struct
 	// loses authoring power when the collection overrules globally) and on the GlobalAssetGrammar
 	// itself (always editable -- it IS the global source).
@@ -144,7 +142,7 @@ void FPCGExAssetGrammarCustomization::CustomizeHeader(
 		? PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"))
 		: false;
 
-	UPCGExAssetCollection* Collection = !OuterObjects.IsEmpty() ? Cast<UPCGExAssetCollection>(OuterObjects[0]) : nullptr;
+	const UPCGExAssetCollection* Collection = PCGExCollectionEditorUtils::FindHostCollection(PropertyHandle);
 
 	auto IsLocalData = [GrammarSourceHandle, bIsGlobal]()
 	{

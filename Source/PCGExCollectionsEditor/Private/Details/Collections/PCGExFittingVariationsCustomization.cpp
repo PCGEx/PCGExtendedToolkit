@@ -8,6 +8,7 @@
 #include "IDetailChildrenBuilder.h"
 #include "Details/PCGExCategoryGroups.h"
 #include "Details/Collections/PCGExCollectionCategoryGroups.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/PCGExInlineNumericWidgets.h"
@@ -84,12 +85,8 @@ void FPCGExFittingVariationsCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Grab parent collection
-	TArray<UObject*> OuterObjects;
-	PropertyHandle->GetOuterObjects(OuterObjects);
-
 	const bool bIsGlobal = PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"));
-	if (UPCGExAssetCollection* Collection = !OuterObjects.IsEmpty() ? Cast<UPCGExAssetCollection>(OuterObjects[0]) : nullptr;
+	if (const UPCGExAssetCollection* Collection = PCGExCollectionEditorUtils::FindHostCollection(PropertyHandle);
 		Collection && !bIsGlobal)
 	{
 		HeaderRow.NameContent()[

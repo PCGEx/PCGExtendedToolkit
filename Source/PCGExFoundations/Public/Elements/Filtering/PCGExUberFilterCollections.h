@@ -20,13 +20,7 @@ class UPCGExUberFilterCollectionsSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()
 
-	//~Begin UObject interface
-#if WITH_EDITOR
-
 public:
-#endif
-	//~End UObject interface
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(UberFilterCollections, "Uber Filter (Data)", "Filter entire collections based on multiple rules & conditions.");

@@ -15,6 +15,7 @@ void IPCGExEditorModuleInterface::StartupModule()
 
 void IPCGExEditorModuleInterface::ShutdownModule()
 {
+	UToolMenus::UnRegisterStartupCallback(this);
 	UnregisterMenuExtensions();
 }
 

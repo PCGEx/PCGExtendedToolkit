@@ -57,13 +57,15 @@ void FPCGExWeightedPropertyOverridesCustomization::CustomizeHeader(
 
 FText FPCGExWeightedPropertyOverridesCustomization::GetHeaderText() const
 {
-	if (!PropertyHandlePtr.IsValid())
+	// IsValidHandle: AccessRawData dereferences the handle's property node unchecked.
+	const TSharedPtr<IPropertyHandle> Handle = PropertyHandlePtr.Pin();
+	if (!Handle.IsValid() || !Handle->IsValidHandle())
 	{
 		return FText::FromString(TEXT("0 / 0 active"));
 	}
 
 	TArray<void*> RawData;
-	PropertyHandlePtr.Pin()->AccessRawData(RawData);
+	Handle->AccessRawData(RawData);
 	int32 EnabledCount = 0;
 	int32 TotalCount = 0;
 	if (!RawData.IsEmpty() && RawData[0])
@@ -87,16 +89,14 @@ void FPCGExWeightedPropertyOverridesCustomization::CustomizeChildren(
 		return;
 	}
 
-	// Structural changes (add/remove/reorder) need a refresh, deferred -- see FPCGExPropertyOverridesCustomization for why.
-	auto RefreshDelegate = FSimpleDelegate::CreateLambda([this]()
+	// Structural changes (add / remove / reorder) rebuild the rows, deferred -- see FPCGExPropertyOverridesCustomization for why.
+	OverridesArrayHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateLambda([WeakUtilities = WeakPropertyUtilities]()
 	{
-		if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
+		if (const TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakUtilities.Pin())
 		{
-			PropertyUtilities->RequestRefresh();
+			PropertyUtilities->RequestForceRefresh();
 		}
-	});
-
-	OverridesArrayHandle->SetOnPropertyValueChanged(RefreshDelegate);
+	}));
 	// No SetOnChildPropertyValueChanged -- see FPCGExPropertyOverridesCustomization for rationale.
 
 	// Iterate override entries - hide array controls

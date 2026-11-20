@@ -186,13 +186,29 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 			                             {
 				                             return GetSelectedTime();
 			                             })
+			                             .OnBeginSliderMovement_Lambda([this]()
+			                             {
+				                             bInspectorSpinning = true;
+			                             })
 			                             .OnValueChanged_Lambda([this](float V)
 			                             {
-				                             SetSelectedTime(V, /*bInteractive=*/true);
+				                             if (bInspectorSpinning)
+				                             {
+				                             	SetSelectedTime(V, /*bInteractive=*/true);
+				                             }
 			                             })
 			                             .OnValueCommitted_Lambda([this](float V, ETextCommit::Type)
 			                             {
+				                             bInspectorSpinning = false;
 				                             SetSelectedTime(V, /*bInteractive=*/false);
+			                             })
+			                             .OnEndSliderMovement_Lambda([this](float V)
+			                             {
+				                             if (bInspectorSpinning)
+				                             {
+				                             	bInspectorSpinning = false;
+				                             	SetSelectedTime(V, /*bInteractive=*/false);
+				                             }
 			                             })
 		]
 		+ SHorizontalBox::Slot()
@@ -217,13 +233,29 @@ TSharedRef<SWidget> SPCGExPropertyCurveEditor::BuildInspector()
 			{
 				return GetSelectedValue();
 			})
+			.OnBeginSliderMovement_Lambda([this]()
+			{
+				bInspectorSpinning = true;
+			})
 			.OnValueChanged_Lambda([this](float V)
 			{
-				SetSelectedValue(V, /*bInteractive=*/true);
+				if (bInspectorSpinning)
+				{
+					SetSelectedValue(V, /*bInteractive=*/true);
+				}
 			})
 			.OnValueCommitted_Lambda([this](float V, ETextCommit::Type)
 			{
+				bInspectorSpinning = false;
 				SetSelectedValue(V, /*bInteractive=*/false);
+			})
+			.OnEndSliderMovement_Lambda([this](float V)
+			{
+				if (bInspectorSpinning)
+				{
+					bInspectorSpinning = false;
+					SetSelectedValue(V, /*bInteractive=*/false);
+				}
 			})
 		]
 		+ SHorizontalBox::Slot()
