@@ -28,10 +28,6 @@ struct FPCGExDistanceFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDistanceFilterConfig()
-	{
-	}
-
 	/** Distance method to be used for source & target points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExDistanceDetails DistanceDetails;

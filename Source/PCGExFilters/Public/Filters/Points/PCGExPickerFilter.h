@@ -18,10 +18,6 @@ struct PCGEXFILTERS_API FPCGExPickerFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExPickerFilterConfig()
-	{
-	}
-
 	/** Invert the filter */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvert = false;

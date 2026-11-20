@@ -143,33 +143,9 @@ void FPCGExPropertySchemaCustomization::CustomizeChildren(
 		// Read-only mode: Only show the inner Value field from the FInstancedStruct
 		// Schema name and type are shown in header, struct type cannot be changed
 
-		if (!PropertyInnerHandle.IsValid())
-		{
-			return;
-		}
-
-		// Access raw data to get the FInstancedStruct
-		TArray<void*> RawData;
-		PropertyInnerHandle->AccessRawData(RawData);
-		if (RawData.IsEmpty() || !RawData[0])
-		{
-			return;
-		}
-
-		FInstancedStruct* Instance = static_cast<FInstancedStruct*>(RawData[0]);
-		if (!Instance || !Instance->IsValid())
-		{
-			return;
-		}
-
-		UScriptStruct* InnerStruct = const_cast<UScriptStruct*>(Instance->GetScriptStruct());
-		if (!InnerStruct)
-		{
-			return;
-		}
-
-		uint8* StructMemory = Instance->GetMutableMemory();
-		if (!StructMemory)
+		UScriptStruct* InnerStruct = nullptr;
+		uint8* StructMemory = nullptr;
+		if (!PCGExPropertyChoiceHost::AccessInstancedStruct(PropertyInnerHandle, InnerStruct, StructMemory))
 		{
 			return;
 		}

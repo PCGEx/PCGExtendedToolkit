@@ -25,10 +25,6 @@ struct FPCGExStringCompareFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExStringCompareFilterConfig()
-	{
-	}
-
 	/** Operand A for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;

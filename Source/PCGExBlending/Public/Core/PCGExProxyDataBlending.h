@@ -25,11 +25,6 @@ namespace PCGEx
 	class FIndexLookup;
 }
 
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 namespace PCGExData
 {
 	enum class EIOSide : uint8;

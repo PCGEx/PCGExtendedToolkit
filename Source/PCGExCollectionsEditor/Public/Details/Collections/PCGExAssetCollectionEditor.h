@@ -15,6 +15,7 @@ class SWidget;
 #include "Details/Collections/SPCGExCollectionGridTile.h"
 
 class FArrayProperty;
+class IDetailsView;
 class UPCGExAssetCollection;
 class UScriptStruct;
 class SVerticalBox;
@@ -154,6 +155,13 @@ protected:
 	virtual void CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	void CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
 	void CreateGridTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs);
+
+	/** A details view configured for hosting in one of this editor's tabs. */
+	static TSharedRef<IDetailsView> MakeTabDetailsView();
+
+	/** Set the tab's header and footer to the asset header / footer toolbars. */
+	void MakeTabToolbars(PCGExAssetCollectionEditor::TabInfos& Infos);
+
 	virtual void BuildEditorToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder);
 	virtual void BuildAddMenuContent(const TSharedRef<SVerticalBox>& MenuBox);

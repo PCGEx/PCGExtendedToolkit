@@ -193,12 +193,8 @@ public:
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(VtxAmplitude, "Vtx : Amplitude", "Amplitude of a vtx, based on neighboring connections.", FName(GetDisplayName()))
 #endif
-
-protected:
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	//~End UPCGSettings
 
-public:
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
 
 	/** Direction Settings. */

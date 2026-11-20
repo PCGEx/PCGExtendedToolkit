@@ -23,10 +23,6 @@ struct FPCGExRandomRatioFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExRandomRatioFilterConfig()
-	{
-	}
-
 	/** Random selection settings (seed, ratio, mode). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExRandomRatioDetails Random;

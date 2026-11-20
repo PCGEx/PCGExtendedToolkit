@@ -20,10 +20,6 @@ struct FPCGExEntryCountFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExEntryCountFilterConfig()
-	{
-	}
-
 	/** Comparison */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::EqualOrGreater;

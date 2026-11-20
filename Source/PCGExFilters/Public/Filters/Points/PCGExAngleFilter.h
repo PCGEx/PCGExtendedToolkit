@@ -24,10 +24,6 @@ struct FPCGExAngleFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExAngleFilterConfig()
-	{
-	}
-
 	/** Filter mode */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExAngleFilterMode Mode = EPCGExAngleFilterMode::Curvature;

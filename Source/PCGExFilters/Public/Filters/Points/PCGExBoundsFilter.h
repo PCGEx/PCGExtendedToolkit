@@ -46,10 +46,6 @@ struct FPCGExBoundsFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExBoundsFilterConfig()
-	{
-	}
-
 	/** How to compare bounds. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExBoundsFilterCompareMode Mode = EPCGExBoundsFilterCompareMode::PerPointBounds;

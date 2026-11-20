@@ -345,6 +345,26 @@ TSharedRef<SWidget> FPCGExPropertyOverrideEntryCustomization::BuildOverrideToggl
 		.OnCheckStateChanged(this, &FPCGExPropertyOverrideEntryCustomization::OnToggleStateChanged);
 }
 
+TSharedRef<SWidget> FPCGExPropertyOverrideEntryCustomization::BuildNameContentWidget()
+{
+	return SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(0, 0, 4, 0)
+		[
+			BuildOverrideToggleWidget()
+		]
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		[
+			PCGExPropertyLabelRow::Build(
+				TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryNameText)),
+				TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryTypeText)))
+		];
+}
+
 void FPCGExPropertyOverrideEntryCustomization::CustomizeHeader(
 	TSharedRef<IPropertyHandle> PropertyHandle,
 	FDetailWidgetRow& HeaderRow,
@@ -388,22 +408,11 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeHeader(
 
 	// Check if this is an inline type (schema-driven, stable for the detail session)
 	bool bShouldInline = false;
-	if (ValueHandlePtr.IsValid())
+	UScriptStruct* InnerStruct = nullptr;
+	uint8* StructMemory = nullptr;
+	if (PCGExPropertyChoiceHost::AccessInstancedStruct(ValueHandlePtr, InnerStruct, StructMemory))
 	{
-		TArray<void*> RawData;
-		ValueHandlePtr->AccessRawData(RawData);
-		if (!RawData.IsEmpty() && RawData[0])
-		{
-			FInstancedStruct* Instance = static_cast<FInstancedStruct*>(RawData[0]);
-			if (Instance && Instance->IsValid())
-			{
-				UScriptStruct* InnerStruct = const_cast<UScriptStruct*>(Instance->GetScriptStruct());
-				if (InnerStruct)
-				{
-					bShouldInline = FPCGExInlineWidgetRegistry::IsInlineValue(InnerStruct, EPCGExInlineWidgetMode::Compact);
-				}
-			}
-		}
+		bShouldInline = FPCGExInlineWidgetRegistry::IsInlineValue(InnerStruct, EPCGExInlineWidgetMode::Compact);
 	}
 
 	// For complex (non-inline) types, show checkbox + label in header
@@ -413,22 +422,7 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeHeader(
 		HeaderRow
 			.NameContent()
 			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				.Padding(0, 0, 4, 0)
-				[
-					BuildOverrideToggleWidget()
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				[
-					PCGExPropertyLabelRow::Build(
-						TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryNameText)),
-						TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryTypeText)))
-				]
+				BuildNameContentWidget()
 			];
 
 		// Complex types put their content on HeaderRow; the reset arrow lives on this row. Inline types leave HeaderRow
@@ -474,27 +468,9 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 		ValueHandlePtr = PropertyHandle->GetChildHandle(TEXT("Value"));
 	}
 
-	if (!ValueHandlePtr.IsValid())
-	{
-		return;
-	}
-
-	// Access raw data to get the FInstancedStruct
-	TArray<void*> RawData;
-	ValueHandlePtr->AccessRawData(RawData);
-	if (RawData.IsEmpty() || !RawData[0])
-	{
-		return;
-	}
-
-	FInstancedStruct* Instance = static_cast<FInstancedStruct*>(RawData[0]);
-	if (!Instance || !Instance->IsValid())
-	{
-		return;
-	}
-
-	UScriptStruct* InnerStruct = const_cast<UScriptStruct*>(Instance->GetScriptStruct());
-	if (!InnerStruct)
+	UScriptStruct* InnerStruct = nullptr;
+	uint8* StructMemory = nullptr;
+	if (!PCGExPropertyChoiceHost::AccessInstancedStruct(ValueHandlePtr, InnerStruct, StructMemory))
 	{
 		return;
 	}
@@ -503,7 +479,6 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 
 	// A disabled slot shows what its consumers resolve to, off a copy this customization owns: its stored value is
 	// never shown. The slot itself is shown while enabled, or when nothing below declares the property in its type.
-	uint8* StructMemory = Instance->GetMutableMemory();
 	InheritedValue.Reset();
 	if (!IsOverrideEnabled() && ResolveInheritedValue(Site, InheritedValue) && InheritedValue.GetScriptStruct() == InnerStruct)
 	{
@@ -548,22 +523,7 @@ void FPCGExPropertyOverrideEntryCustomization::CustomizeChildren(
 
 	if (bShouldInline)
 	{
-		const TSharedRef<SWidget> NameContent = SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			.Padding(0, 0, 4, 0)
-			[
-				BuildOverrideToggleWidget()
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			[
-				PCGExPropertyLabelRow::Build(
-					TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryNameText)),
-					TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &FPCGExPropertyOverrideEntryCustomization::GetEntryTypeText)))
-			];
+		const TSharedRef<SWidget> NameContent = BuildNameContentWidget();
 
 		IDetailPropertyRow* InnerRow = FPCGExInlineWidgetRegistry::AddCompactValueRow(
 			ChildBuilder, InnerScope.ToSharedRef(), InnerStruct, NameContent, IsEnabledAttr, Choices);

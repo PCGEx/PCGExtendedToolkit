@@ -48,10 +48,6 @@ struct FPCGExDataBoundsFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDataBoundsFilterConfig()
-	{
-	}
-
 	/** Operand A */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExDataBoundsAspect OperandA = EPCGExDataBoundsAspect::Volume;

@@ -19,10 +19,6 @@ struct FPCGExBooleanCompareFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExBooleanCompareFilterConfig()
-	{
-	}
-
 	/** Operand A for testing -- Will be translated to `bool` under the hood (numeric values read true when > 0). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;

@@ -3,8 +3,4 @@
 
 #include "PCGExElementsTopology.h"
 
-#define LOCTEXT_NAMESPACE "FPCGExElementsTopologyModule"
-
-#undef LOCTEXT_NAMESPACE
-
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsTopologyModule, PCGExElementsTopology)

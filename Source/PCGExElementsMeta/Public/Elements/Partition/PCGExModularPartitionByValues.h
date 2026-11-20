@@ -81,16 +81,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(ModularPartitionByValues, "Partition by Values", "Outputs separate buckets of points based on an attribute' value. Each bucket is named after a unique attribute value. Note that it is recommended to use a Merge before.");
-
-	virtual EPCGSettingsType GetType() const override
-	{
-		return EPCGSettingsType::Spatial;
-	}
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscAdd);
-	}
 #endif
 
 protected:

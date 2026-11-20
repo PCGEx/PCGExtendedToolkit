@@ -32,11 +32,6 @@ namespace PCGExClusters
 	class FCluster;
 }
 
-namespace PCGExTopology
-{
-	const FName MeshOutputLabel = TEXT("Mesh");
-}
-
 USTRUCT(BlueprintType)
 struct PCGEXELEMENTSTOPOLOGY_API FPCGExUVInputDetails
 {

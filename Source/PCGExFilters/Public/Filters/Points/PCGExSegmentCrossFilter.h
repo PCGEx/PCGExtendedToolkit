@@ -27,10 +27,6 @@ struct FPCGExSegmentCrossFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExSegmentCrossFilterConfig()
-	{
-	}
-
 	/** Sample inputs.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExSplineSamplingIncludeMode SampleInputs = EPCGExSplineSamplingIncludeMode::All;

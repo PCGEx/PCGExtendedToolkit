@@ -127,12 +127,6 @@ TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyEdgeMatchFactory::Create
 	return NewOperation;
 }
 
-TArray<FPCGPinProperties> UPCGExVtxPropertyEdgeMatchSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	return PinProperties;
-}
-
 UPCGExFactoryData* UPCGExVtxPropertyEdgeMatchSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const
 {
 	UPCGExVtxPropertyEdgeMatchFactory* NewFactory = InContext->ManagedObjects->New<UPCGExVtxPropertyEdgeMatchFactory>();

@@ -200,16 +200,6 @@ UPCGExAssetCollection* FPCGExAssetCollectionEditor::GetEditedCollection() const
 
 void FPCGExAssetCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollectionEditor::FPushOption>& OutOptions)
 {
-#define PCGEX_DECL_PUSH_OPTION(_ID, _LABEL, _TOOLTIP, _GATE, ...) \
-{\
-	PCGExAssetCollectionEditor::FPushOption& Option = OutOptions.Emplace_GetRef();\
-	Option.Id = FName(_ID);\
-	Option.Label = FTEXT(_LABEL);\
-	Option.Tooltip = FTEXT(_TOOLTIP);\
-	Option.bRespectEnabledGate = _GATE;\
-	Option.EntryPropertyNames = { __VA_ARGS__ };\
-}
-
 	PCGEX_DECL_PUSH_OPTION(
 		"AssetEditor.Push.Variations",
 		"Variations",
@@ -244,8 +234,6 @@ void FPCGExAssetCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollectio
 		"Push property overrides from the active entry to other selected entries.\nOverwrites everything, including overrides that are already enabled on targets.",
 		false,
 		FName("PropertyOverrides"))
-
-#undef PCGEX_DECL_PUSH_OPTION
 }
 
 void FPCGExAssetCollectionEditor::GetFilterableEntryStructs(TArray<const UScriptStruct*>& OutStructs) const
@@ -282,7 +270,7 @@ void FPCGExAssetCollectionEditor::RefreshFilteredPanels()
 	}
 }
 
-void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
+TSharedRef<IDetailsView> FPCGExAssetCollectionEditor::MakeTabDetailsView()
 {
 	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 
@@ -294,7 +282,25 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 	DetailsArgs.NotifyHook = nullptr;
 	DetailsArgs.bAllowMultipleTopLevelObjects = false;
 
-	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
+	return PropertyModule.CreateDetailView(DetailsArgs);
+}
+
+void FPCGExAssetCollectionEditor::MakeTabToolbars(PCGExAssetCollectionEditor::TabInfos& Infos)
+{
+	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
+	Infos.Header = HeaderToolbarBuilder.MakeWidget();
+
+	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
+	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
+	BuildAssetFooterToolbar(FooterToolbarBuilder);
+	Infos.Footer = FooterToolbarBuilder.MakeWidget();
+}
+
+void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
+{
+	TSharedPtr<IDetailsView> DetailsView = MakeTabDetailsView();
 	const FArrayProperty* EntriesProperty = UPCGExAssetCollection::FindEntriesProperty(EditedCollection->GetClass());
 	DetailsView->SetIsPropertyVisibleDelegate(
 		FIsPropertyVisible::CreateLambda(
@@ -317,17 +323,7 @@ void FPCGExAssetCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::
 
 void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
 {
-	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
-
-	FDetailsViewArgs DetailsArgs;
-	DetailsArgs.bUpdatesFromSelection = false;
-	DetailsArgs.bLockable = false;
-	DetailsArgs.bAllowSearch = true;
-	DetailsArgs.bHideSelectionTip = true;
-	DetailsArgs.NotifyHook = nullptr;
-	DetailsArgs.bAllowMultipleTopLevelObjects = false;
-
-	TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
+	TSharedPtr<IDetailsView> DetailsView = MakeTabDetailsView();
 
 	// Tab scope first (which rows belong here at all), then the footer's category-group filter.
 	const FArrayProperty* EntriesProperty = UPCGExAssetCollection::FindEntriesProperty(EditedCollection->GetClass());
@@ -343,15 +339,7 @@ void FPCGExAssetCollectionEditor::CreateEntriesTab(TArray<PCGExAssetCollectionEd
 	PCGExAssetCollectionEditor::TabInfos& Infos = OutTabs.Emplace_GetRef(FName("Assets"), DetailsView);
 	Infos.Icon = TEXT("Entries");
 
-	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
-	Infos.Header = HeaderToolbarBuilder.MakeWidget();
-
-	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetFooterToolbar(FooterToolbarBuilder);
-	Infos.Footer = FooterToolbarBuilder.MakeWidget();
+	MakeTabToolbars(Infos);
 }
 
 void FPCGExAssetCollectionEditor::CreateGridTab(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
@@ -375,17 +363,7 @@ void FPCGExAssetCollectionEditor::CreateGridTab(TArray<PCGExAssetCollectionEdito
 	Infos.Icon = TEXT("Entries");
 	Infos.bIsDetailsView = false;
 
-	// Reuse the same header toolbar as the Assets tab
-	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
-	Infos.Header = HeaderToolbarBuilder.MakeWidget();
-
-	// Reuse the same footer toolbar (filter buttons)
-	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetFooterToolbar(FooterToolbarBuilder);
-	Infos.Footer = FooterToolbarBuilder.MakeWidget();
+	MakeTabToolbars(Infos);
 }
 
 TSharedRef<SWidget> FPCGExAssetCollectionEditor::BuildSubCollectionPickerSlot(

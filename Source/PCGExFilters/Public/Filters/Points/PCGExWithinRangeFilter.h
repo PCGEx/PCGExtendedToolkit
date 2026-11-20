@@ -28,10 +28,6 @@ struct FPCGExWithinRangeFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExWithinRangeFilterConfig()
-	{
-	}
-
 	/** Operand A for testing -- Will be translated to `double` under the hood. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;

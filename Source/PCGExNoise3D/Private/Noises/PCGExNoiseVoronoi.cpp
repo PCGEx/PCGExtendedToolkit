@@ -108,7 +108,6 @@ TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryVoronoi::CreateOperationI
 	NewOperation->OutputMode = Config.OutputType;
 	NewOperation->Jitter = Config.Jitter;
 	NewOperation->Smoothness = Config.Smoothness;
-	NewOperation->Octaves = 1;
 
 	return NewOperation;
 }

@@ -15,10 +15,6 @@ struct FPCGExTagValueFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExTagValueFilterConfig()
-	{
-	}
-
 	/** Constant tag name value. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tag Name", EditConditionHides, HideEditConditionToggle))
 	FString Tag = TEXT("Tag");

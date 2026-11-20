@@ -18,10 +18,6 @@ struct FPCGExMeanFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExMeanFilterConfig()
-	{
-	}
-
 	/** Target value to compile -- Will be translated to `double` under the hood. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
 	FPCGAttributePropertyInputSelector Target;

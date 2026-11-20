@@ -187,7 +187,7 @@ namespace PCGExTopologyEdges
 			EdgeDataFacade->Source->Tags->DumpTo(MeshTags);
 			VtxDataFacade->Source->Tags->DumpTo(MeshTags);
 
-			Context->StageOutput(InternalMeshData, PCGExTopology::MeshOutputLabel, PCGExData::EStaging::Managed, MeshTags);
+			Context->StageOutput(InternalMeshData, PCGExTopology::Labels::OutputMeshLabel, PCGExData::EStaging::Managed, MeshTags);
 		}
 	}
 

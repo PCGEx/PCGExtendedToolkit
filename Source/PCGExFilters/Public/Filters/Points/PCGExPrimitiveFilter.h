@@ -32,10 +32,6 @@ struct FPCGExPrimitiveFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExPrimitiveFilterConfig()
-	{
-	}
-
 	/** Bounds to use on input points for the overlap collision shape. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExPointBoundsSource BoundsSource = EPCGExPointBoundsSource::ScaledBounds;

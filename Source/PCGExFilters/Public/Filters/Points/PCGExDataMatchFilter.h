@@ -27,10 +27,6 @@ struct FPCGExDataMatchFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDataMatchFilterConfig()
-	{
-	}
-
 	/** How match rules are combined. All = every rule must pass. Any = at least one rule must pass. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExMapMatchMode Mode = EPCGExMapMatchMode::All;

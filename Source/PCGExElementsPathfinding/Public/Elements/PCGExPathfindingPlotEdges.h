@@ -35,11 +35,6 @@ namespace PCGExMatching
 	class FDataMatcher;
 }
 
-namespace PCGExSampling
-{
-	class FTargetsHandler;
-}
-
 class FPCGExHeuristicOperation;
 class UPCGExSearchInstancedFactory;
 /**

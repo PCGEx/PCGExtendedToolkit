@@ -86,10 +86,6 @@ struct FPCGExVolumeFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExVolumeFilterConfig()
-	{
-	}
-
 	/** Type of volume check to perform. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExVolumeCheckType CheckType = EPCGExVolumeCheckType::IsInside;

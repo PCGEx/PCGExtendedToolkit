@@ -29,10 +29,6 @@ struct FPCGExGameplayTagsFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExGameplayTagsFilterConfig()
-	{
-	}
-
 	/** Name of the attribute that contains a path to an actor in the level, usually from a GetActorData PCG Node in point mode.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName ActorReference = FName("ActorReference");

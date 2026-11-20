@@ -23,10 +23,6 @@ struct PCGEXFILTERS_API FPCGExBitmaskFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExBitmaskFilterConfig()
-	{
-	}
-
 	/** Source value. (Operand A) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName FlagsAttribute = FName("Flags");

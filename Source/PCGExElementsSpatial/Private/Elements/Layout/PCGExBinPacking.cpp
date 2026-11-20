@@ -32,12 +32,6 @@ void UPCGExBinPackingSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* I
 }
 #endif
 
-bool UPCGExBinPackingSettings::GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const
-{
-	OutRules.Append(PCGExSorting::GetSortingRules(InContext, PCGExSorting::Labels::SourceSortingRules));
-	return !OutRules.IsEmpty();
-}
-
 TArray<FPCGPinProperties> UPCGExBinPackingSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
@@ -143,7 +137,7 @@ bool FPCGExBinPackingElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
 				TArray<FPCGExSortRuleConfig> OutRules;
-				Settings->GetSortingRules(Context, OutRules);
+				OutRules.Append(PCGExSorting::GetSortingRules(Context, PCGExSorting::Labels::SourceSortingRules));
 				NewBatch->bPrefetchData = !OutRules.IsEmpty();
 			}))
 		{
@@ -287,7 +281,8 @@ namespace PCGExBinPacking
 		TProcessor::RegisterBuffersDependencies(FacadePreloader);
 
 		TArray<FPCGExSortRuleConfig> RuleConfigs;
-		if (Settings->GetSortingRules(ExecutionContext, RuleConfigs) && !RuleConfigs.IsEmpty())
+		RuleConfigs.Append(PCGExSorting::GetSortingRules(ExecutionContext, PCGExSorting::Labels::SourceSortingRules));
+		if (!RuleConfigs.IsEmpty())
 		{
 			Sorter = MakeShared<PCGExSorting::FSorter>(Context, PointDataFacade, RuleConfigs);
 			Sorter->SortDirection = Settings->SortDirection;

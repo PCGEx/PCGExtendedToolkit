@@ -36,10 +36,6 @@ struct FPCGExValueHashFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExValueHashFilterConfig()
-	{
-	}
-
 	/** How to process input sets */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExValueHashMode Mode = EPCGExValueHashMode::Merged;

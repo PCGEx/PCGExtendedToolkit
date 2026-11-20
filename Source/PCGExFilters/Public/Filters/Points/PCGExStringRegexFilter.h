@@ -25,10 +25,6 @@ struct FPCGExStringRegexFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExStringRegexFilterConfig()
-	{
-	}
-
 	/** Attribute whose value will be tested against the regex pattern. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;

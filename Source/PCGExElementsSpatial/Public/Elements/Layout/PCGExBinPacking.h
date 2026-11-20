@@ -129,8 +129,6 @@ public:
 	/** If enabled, won't throw a warning if there are fewer bins than there are inputs. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietTooFewBinsWarning = false;
-
-	virtual bool GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const;
 };
 
 struct FPCGExBinPackingContext final : FPCGExPointsProcessorContext

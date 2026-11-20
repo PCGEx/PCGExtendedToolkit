@@ -29,17 +29,7 @@ void FPCGExVariantCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor
 {
 	// No entries tab (there is no homogeneous Entries array) — a Collection Settings tab
 	// (full asset details, incl. raw Sources as escape hatch) plus the variant grid.
-	FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
-
-	FDetailsViewArgs DetailsArgs;
-	DetailsArgs.bUpdatesFromSelection = false;
-	DetailsArgs.bLockable = false;
-	DetailsArgs.bAllowSearch = true;
-	DetailsArgs.bHideSelectionTip = true;
-	DetailsArgs.NotifyHook = nullptr;
-	DetailsArgs.bAllowMultipleTopLevelObjects = false;
-
-	const TSharedPtr<IDetailsView> DetailsView = PropertyModule.CreateDetailView(DetailsArgs);
+	const TSharedPtr<IDetailsView> DetailsView = MakeTabDetailsView();
 	DetailsView->SetObject(EditedCollection.Get());
 
 	PCGExAssetCollectionEditor::TabInfos& SettingsInfos = OutTabs.Emplace_GetRef(FName("Collection"), DetailsView, FName("Collection Settings"));
@@ -61,15 +51,7 @@ void FPCGExVariantCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor
 	GridInfos.Icon = TEXT("Entries");
 	GridInfos.bIsDetailsView = false;
 
-	FToolBarBuilder HeaderToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	HeaderToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetHeaderToolbar(HeaderToolbarBuilder);
-	GridInfos.Header = HeaderToolbarBuilder.MakeWidget();
-
-	FToolBarBuilder FooterToolbarBuilder(GetToolkitCommands(), FMultiBoxCustomization::None);
-	FooterToolbarBuilder.SetStyle(&FAppStyle::Get(), FName("Toolbar"));
-	BuildAssetFooterToolbar(FooterToolbarBuilder);
-	GridInfos.Footer = FooterToolbarBuilder.MakeWidget();
+	MakeTabToolbars(GridInfos);
 }
 
 void FPCGExVariantCollectionEditor::GetFilterableEntryStructs(TArray<const UScriptStruct*>& OutStructs) const

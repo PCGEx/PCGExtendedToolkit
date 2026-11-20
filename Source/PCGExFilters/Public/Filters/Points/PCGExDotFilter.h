@@ -19,10 +19,6 @@ struct FPCGExDotFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDotFilterConfig()
-	{
-	}
-
 	/** Vector operand A */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
 	FPCGAttributePropertyInputSelector OperandA;

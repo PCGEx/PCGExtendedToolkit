@@ -178,7 +178,7 @@ namespace PCGExTopologyPathSurface
 		if (InternalMeshData)
 		{
 			Context->StageOutput(
-				InternalMeshData, PCGExTopology::MeshOutputLabel, PCGExData::EStaging::Managed,
+				InternalMeshData, PCGExTopology::Labels::OutputMeshLabel, PCGExData::EStaging::Managed,
 				PointDataFacade->Source->Tags->Flatten());
 		}
 	}

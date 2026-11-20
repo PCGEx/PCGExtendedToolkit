@@ -19,10 +19,6 @@ struct FPCGExInclusionFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExInclusionFilterConfig()
-	{
-	}
-
 	/** Projection settings (used for inclusion checks). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExGeo2DProjectionDetails ProjectionDetails;

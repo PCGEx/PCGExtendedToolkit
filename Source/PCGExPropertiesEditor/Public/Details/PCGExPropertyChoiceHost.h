@@ -113,3 +113,9 @@ struct FPCGExChoiceRowArgs
 	/** For a type whose value editor also edits its structure, on the row that declares it: locked keeps the editor. */
 	bool bKeepEditorWhenLocked = false;
 };
+
+namespace PCGExPropertyChoiceHost
+{
+	/** The inner struct and memory of the FInstancedStruct that is Handle's first instance; false when there is none. */
+	bool AccessInstancedStruct(const TSharedPtr<IPropertyHandle>& Handle, UScriptStruct*& OutStruct, uint8*& OutMemory);
+}

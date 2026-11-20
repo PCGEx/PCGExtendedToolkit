@@ -20,16 +20,6 @@ void FPCGExMeshCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollection
 {
 	FPCGExAssetCollectionEditor::RegisterPushOptions(OutOptions);
 
-#define PCGEX_DECL_PUSH_OPTION(_ID, _LABEL, _TOOLTIP, _GATE, ...) \
-{\
-	PCGExAssetCollectionEditor::FPushOption& Option = OutOptions.Emplace_GetRef();\
-	Option.Id = FName(_ID);\
-	Option.Label = FTEXT(_LABEL);\
-	Option.Tooltip = FTEXT(_TOOLTIP);\
-	Option.bRespectEnabledGate = _GATE;\
-	Option.EntryPropertyNames = { __VA_ARGS__ };\
-}
-
 	PCGEX_DECL_PUSH_OPTION(
 		"AssetEditor.Push.MaterialVariants",
 		"Material Variants",
@@ -44,8 +34,6 @@ void FPCGExMeshCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollection
 		"Push descriptor source and ISM/SM descriptors from the active entry to other selected entries.",
 		false,
 		FName("DescriptorSource"), FName("ISMDescriptor"), FName("SMExtras"))
-
-#undef PCGEX_DECL_PUSH_OPTION
 }
 
 void FPCGExMeshCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)

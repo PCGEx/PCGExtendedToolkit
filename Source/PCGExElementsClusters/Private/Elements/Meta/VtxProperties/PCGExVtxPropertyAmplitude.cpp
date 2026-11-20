@@ -240,12 +240,6 @@ void UPCGExVtxPropertyAmplitudeFactory::RegisterBuffersDependencies(FPCGExContex
 	}
 }
 
-TArray<FPCGPinProperties> UPCGExVtxPropertyAmplitudeSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	return PinProperties;
-}
-
 UPCGExFactoryData* UPCGExVtxPropertyAmplitudeSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const
 {
 	UPCGExVtxPropertyAmplitudeFactory* NewFactory = InContext->ManagedObjects->New<UPCGExVtxPropertyAmplitudeFactory>();

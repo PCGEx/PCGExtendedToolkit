@@ -123,12 +123,6 @@ TArray<FPCGPinProperties> UPCGExExtrudeTensorsSettings::InputPinProperties() con
 	return PinProperties;
 }
 
-bool UPCGExExtrudeTensorsSettings::GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const
-{
-	OutRules.Append(PCGExSorting::GetSortingRules(InContext, PCGExSorting::Labels::SourceSortingRules));
-	return !OutRules.IsEmpty();
-}
-
 PCGEX_INITIALIZE_ELEMENT(ExtrudeTensors)
 PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(ExtrudeTensors)
 
@@ -214,7 +208,8 @@ namespace PCGExExtrudeTensors
 		TProcessor<FPCGExExtrudeTensorsContext, UPCGExExtrudeTensorsSettings>::RegisterBuffersDependencies(FacadePreloader);
 
 		TArray<FPCGExSortRuleConfig> RuleConfigs;
-		if (Settings->GetSortingRules(ExecutionContext, RuleConfigs) && !RuleConfigs.IsEmpty())
+		RuleConfigs.Append(PCGExSorting::GetSortingRules(ExecutionContext, PCGExSorting::Labels::SourceSortingRules));
+		if (!RuleConfigs.IsEmpty())
 		{
 			Sorter = MakeShared<PCGExSorting::FSorter>(Context, PointDataFacade, RuleConfigs);
 			Sorter->SortDirection = Settings->SortDirection;

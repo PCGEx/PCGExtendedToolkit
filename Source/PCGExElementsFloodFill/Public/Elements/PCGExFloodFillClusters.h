@@ -258,8 +258,6 @@ namespace PCGExClusterDiffusion
 
 		PCGEX_FOREACH_FIELD_CLUSTER_DIFF(PCGEX_OUTPUT_DECL)
 
-		virtual ~FProcessor() override;
-
 		virtual void CompleteWork() override;
 		void Diffuse(const TSharedPtr<PCGExFloodFill::FDiffusion>& Diffusion);
 

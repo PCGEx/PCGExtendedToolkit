@@ -15,10 +15,6 @@ struct FPCGExConstantFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExConstantFilterConfig()
-	{
-	}
-
 	/** The constant value returned by this filter. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool Value = true;

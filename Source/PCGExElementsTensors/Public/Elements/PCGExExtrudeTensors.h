@@ -316,8 +316,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta=(DisplayName="Paths Output Settings"))
 	FPCGExPathOutputDetails PathOutputDetails;
 
-	virtual bool GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const;
-
 private:
 	friend class FPCGExExtrudeTensorsElement;
 };

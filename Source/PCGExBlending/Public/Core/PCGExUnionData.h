@@ -23,11 +23,6 @@ namespace PCGEx
 
 class UPCGBasePointData;
 
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 namespace PCGExData
 {
 	struct FConstPoint;

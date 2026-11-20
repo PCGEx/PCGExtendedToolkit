@@ -23,6 +23,19 @@ class UPCGExSortPointsBaseSettings : public UPCGExPointsProcessorSettings
 	GENERATED_BODY()
 
 	//~Begin UPCGSettings
+public:
+#if WITH_EDITOR
+	virtual EPCGSettingsType GetType() const override
+	{
+		return EPCGSettingsType::Generic;
+	}
+
+	virtual FLinearColor GetNodeTitleColor() const override
+	{
+		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscWrite);
+	}
+#endif
+
 protected:
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
@@ -49,16 +62,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(SortPointsStatic, "Sort Points (Static)", "Sort the source points according to specific rules.");
-
-	virtual EPCGSettingsType GetType() const override
-	{
-		return EPCGSettingsType::Generic;
-	}
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscWrite);
-	}
 #endif
 
 	//~Begin UObject interface
