@@ -265,19 +265,13 @@ namespace PCGExDiscardByOverlap
 
 	void FProcessor::RegisterPointBounds(const int32 Index, const TSharedPtr<FPointBounds>& InPointBounds)
 	{
-		const int8 bValidPoint = PointFilterCache[Index];
-		if (!bValidPoint && !Settings->bIncludeFilteredInMetrics)
-		{
-			return;
-		}
-
-		const FBox& B = InPointBounds->Bounds.GetBox();
-		Bounds += B;
-		TotalVolume += B.GetVolume();
-
-		if (bValidPoint)
+		if (PointFilterCache[Index])
 		{
 			LocalPointBounds[Index] = InPointBounds;
+		}
+		else if (Settings->bIncludeFilteredInMetrics)
+		{
+			FilteredPointBounds[Index] = InPointBounds;
 		}
 	}
 
@@ -296,6 +290,10 @@ namespace PCGExDiscardByOverlap
 		NumPoints = InPoints->GetNumPoints();
 
 		PCGExArrayHelpers::InitArray(LocalPointBounds, NumPoints);
+		if (Settings->bIncludeFilteredInMetrics)
+		{
+			PCGExArrayHelpers::InitArray(FilteredPointBounds, NumPoints);
+		}
 
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
@@ -329,6 +327,25 @@ namespace PCGExDiscardByOverlap
 	void FProcessor::OnPointsProcessingComplete()
 	{
 		const TConstPCGValueRange<float> Densities = InPoints->GetConstDensityValueRange();
+
+		const bool bHasFilteredBounds = !FilteredPointBounds.IsEmpty();
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			const FPointBounds* PtBounds = LocalPointBounds[i].Get();
+			if (!PtBounds && bHasFilteredBounds)
+			{
+				PtBounds = FilteredPointBounds[i].Get();
+			}
+			if (!PtBounds)
+			{
+				continue;
+			}
+
+			const FBox B = PtBounds->Bounds.GetBox();
+			Bounds += B;
+			TotalVolume += B.GetVolume();
+		}
+		FilteredPointBounds.Empty();
 
 		Octree = MakeUnique<FPointBoundsOctree>(Bounds.GetCenter(), Bounds.GetExtent().Length());
 		for (const TSharedPtr<FPointBounds>& PtBounds : LocalPointBounds)

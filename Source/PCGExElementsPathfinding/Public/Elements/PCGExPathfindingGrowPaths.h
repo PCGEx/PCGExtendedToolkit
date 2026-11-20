@@ -49,7 +49,8 @@ namespace PCGExPathfindingGrowPaths
 	class FGrowth
 	{
 	public:
-		const TSharedPtr<FProcessor> Processor;
+		// Non-owning: a growth is only ever held by its processor, and only runs from that processor's own calls.
+		FProcessor* const Processor;
 		const PCGExClusters::FNode* SeedNode = nullptr;
 		TSharedPtr<PCGEx::FHashLookup> TravelStack;
 
@@ -69,7 +70,7 @@ namespace PCGExPathfindingGrowPaths
 
 		TArray<int32> Path;
 
-		FGrowth(const TSharedPtr<FProcessor>& InProcessor, const int32 InMaxIterations, const int32 InLastGrowthIndex, const FVector& InGrowthDirection);
+		FGrowth(FProcessor* InProcessor, const int32 InMaxIterations, const int32 InLastGrowthIndex, const FVector& InGrowthDirection);
 
 		int32 FindNextGrowthNodeIndex();
 		bool Grow(); // return false if too far or couldn't connect for [reasons]

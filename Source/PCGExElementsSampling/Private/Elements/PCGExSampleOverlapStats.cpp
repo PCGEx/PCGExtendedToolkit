@@ -225,6 +225,14 @@ namespace PCGExSampleOverlapStats
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
+		for (const TSharedPtr<PCGExDiscardByOverlap::FPointBounds>& PtBounds : LocalPointBounds)
+		{
+			if (PtBounds)
+			{
+				Bounds += PtBounds->Bounds.GetBox();
+			}
+		}
+
 		Octree = MakeShared<PCGExDiscardByOverlap::FPointBoundsOctree>(Bounds.GetCenter(), Bounds.GetExtent().Length());
 		for (const TSharedPtr<PCGExDiscardByOverlap::FPointBounds>& PtBounds : LocalPointBounds)
 		{

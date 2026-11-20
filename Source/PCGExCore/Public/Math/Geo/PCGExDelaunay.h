@@ -86,7 +86,7 @@ namespace PCGExMath::Geo
 
 	struct PCGEXCORE_API FDelaunaySite3
 	{
-		uint32 Faces[4];
+		uint64 Faces[4];
 		int32 Vtx[4];
 		int32 Id = -1;
 		int8 bOnHull = 0;
@@ -103,7 +103,7 @@ namespace PCGExMath::Geo
 
 		TSet<uint64> DelaunayEdges;
 		TSet<int32> DelaunayHull;
-		TMap<uint32, uint64> Adjacency;
+		TMap<uint64, uint64> Adjacency;
 
 		bool IsValid = false;
 
@@ -143,7 +143,7 @@ namespace PCGExMath::Geo
 
 			DelaunayEdges.Reserve(NumReserve);
 
-			TSet<uint32> FacesUsage;
+			TSet<uint64> FacesUsage;
 			if constexpr (bComputeAdjacency)
 			{
 				Adjacency.Reserve(NumSites * 4);
@@ -177,7 +177,7 @@ namespace PCGExMath::Geo
 				{
 					for (int f = 0; f < 4; f++)
 					{
-						const uint32 FH = Site.Faces[f];
+						const uint64 FH = Site.Faces[f];
 
 						bool bAlreadySet = false;
 						FacesUsage.Add(FH, &bAlreadySet);
@@ -200,7 +200,7 @@ namespace PCGExMath::Geo
 				{
 					for (int f = 0; f < 4; f++)
 					{
-						const uint32 FH = Site.Faces[f];
+						const uint64 FH = Site.Faces[f];
 						bool bAlreadySet = false;
 						FacesUsage.Add(FH, &bAlreadySet);
 						if (bAlreadySet)
@@ -213,7 +213,7 @@ namespace PCGExMath::Geo
 				{
 					for (int f = 0; f < 4; f++)
 					{
-						const uint32 FH = Site.Faces[f];
+						const uint64 FH = Site.Faces[f];
 						if (const uint64* AH = Adjacency.Find(FH))
 						{
 							Adjacency.Add(FH, PCGEx::NH64(i, PCGEx::NH64B(*AH)));

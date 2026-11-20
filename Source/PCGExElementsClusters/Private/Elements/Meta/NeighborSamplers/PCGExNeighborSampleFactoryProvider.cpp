@@ -37,7 +37,11 @@ void FPCGExNeighborSampleOperation::PrepareForCluster(FPCGExContext* InContext, 
 	{
 		ValueFilters = MakeShared<PCGExClusterFilter::FManager>(InCluster, InVtxDataFacade, InEdgeDataFacade);
 		ValueFilters->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
-		ValueFilters->Init(InContext, ValueFilterFactories);
+		ValueFilters->bCacheResults = true;
+		if (!ValueFilters->Init(InContext, ValueFilterFactories))
+		{
+			ValueFilters.Reset();
+		}
 	}
 }
 
@@ -87,7 +91,7 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 	PrepareNode(Node, Scope);
 	const FVector Origin = Cluster->GetPos(Node);
 
-	const int32 SafeMaxDepth = FMath::Min(1, SamplingConfig.MaxDepth);
+	const int32 SafeMaxDepth = FMath::Max(1, SamplingConfig.MaxDepth);
 
 	while (CurrentDepth <= SafeMaxDepth)
 	{
@@ -113,7 +117,7 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 			}
 			else
 			{
-				LocalWeight = SamplingConfig.BlendOver == EPCGExBlendOver::Index ? 1 - (CurrentDepth / SafeMaxDepth) : SamplingConfig.FixedBlend;
+				LocalWeight = SamplingConfig.BlendOver == EPCGExBlendOver::Index ? 1.0 - (static_cast<double>(CurrentDepth) / SafeMaxDepth) : SamplingConfig.FixedBlend;
 			}
 
 			LocalWeight = WeightLUT->Eval(LocalWeight);
@@ -151,7 +155,7 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 					{
 						continue;
 					}
-					if (!ValueFilters->Results[Cluster->GetNodePointIndex(Next)])
+					if (!ValueFilters->Results[NextIndex])
 					{
 						VisitedNodes.Add(NextIndex);
 						continue;

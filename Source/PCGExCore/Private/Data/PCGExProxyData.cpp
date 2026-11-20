@@ -25,7 +25,8 @@ namespace PCGExData
 		{
 			return false;
 		}
-		UpdateSubSelection();
+		// Not re-parsed from Selector: that would discard the field step just set.
+		WorkingType = EPCGMetadataTypes::Double;
 		return true;
 	}
 

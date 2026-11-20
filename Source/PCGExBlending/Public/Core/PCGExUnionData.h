@@ -82,10 +82,14 @@ namespace PCGExData
 			return 0;
 		}
 
+		// A zero max distance has nothing to normalize by: the total stays 0 and the equal split below applies.
 		double TotalWeight = 0;
-		for (FWeightedPoint& P : OutWeightedPoints)
+		if (MaxWeight != 0)
 		{
-			TotalWeight += (P.Weight = 1 - (P.Weight / MaxWeight));
+			for (FWeightedPoint& P : OutWeightedPoints)
+			{
+				TotalWeight += (P.Weight = 1 - (P.Weight / MaxWeight));
+			}
 		}
 
 		if (Index == 1)

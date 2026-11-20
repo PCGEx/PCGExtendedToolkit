@@ -65,11 +65,6 @@ namespace PCGExGraphs
 		TSharedPtr<PCGExData::FPointIOCollection> EdgesIO;
 		const TArray<TSharedRef<PCGExData::FFacade>>* SourceEdgeFacades = nullptr;
 
-		// Used exclusively by the custom graph builder.
-		// Otherwise a transient array is allocated for the duration of the graph compilation
-		TSharedPtr<TArray<int32>> OutputNodeIndices;
-		TSharedPtr<TArray<int32>> OutputPointIndices;
-
 		// A value range we will fetch positions from during compilation
 		// It must have a valid range for Node.PointIndex
 		TConstPCGValueRange<FTransform> NodePointsTransforms;

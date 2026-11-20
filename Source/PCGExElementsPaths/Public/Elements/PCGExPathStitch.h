@@ -180,8 +180,9 @@ namespace PCGExPathStitch
 		PCGExMath::FSegment EndSegment; // ...---A---B
 		FBox EndBounds = FBox(ForceInit);
 
-		TSharedPtr<FProcessor> StartStitch = nullptr; // Which other processor is stitched to the start
-		TSharedPtr<FProcessor> EndStitch = nullptr;   // Which other processor is stitched to the end
+		// Weak: stitched processors reference each other, and the batch owns them all.
+		TWeakPtr<FProcessor> StartStitch = nullptr; // Which other processor is stitched to the start
+		TWeakPtr<FProcessor> EndStitch = nullptr;   // Which other processor is stitched to the end
 
 		TSharedPtr<FPCGExPointIOMerger> Merger;
 
@@ -197,7 +198,7 @@ namespace PCGExPathStitch
 
 		bool IsAvailableForStitching() const
 		{
-			return !StartStitch || !EndStitch;
+			return !StartStitch.IsValid() || !EndStitch.IsValid();
 		}
 
 		bool IsStitchedTo(const TSharedPtr<FProcessor>& InOtherProcessor);

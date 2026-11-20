@@ -151,13 +151,17 @@ namespace PCGExData
 		Step.StepGetFn = nullptr;
 		Step.StepSetFn = nullptr;
 
-		ParsedChain.Reset();
+		// Replaces a trailing field step only: component / axis steps ahead of it stay selected.
+		if (!ParsedChain.Steps.IsEmpty() && ParsedChain.Steps.Last().Accessor == Accessor)
+		{
+			ParsedChain.Steps.RemoveAt(ParsedChain.Steps.Num() - 1);
+		}
 		ParsedChain.Steps.Add(MoveTemp(Step));
 		ParsedChain.bIsValid = true;
 		ParsedChain.FinalType = EPCGMetadataTypes::Double;
 
 		Field = NewField;
-		ClassifierMask = Bit_HasSelection | Bit_Field;
+		ClassifierMask |= Bit_HasSelection | Bit_Field;
 		CachedCompiledSourceType = EPCGMetadataTypes::Unknown; // invalidate compile cache
 		return true;
 	}

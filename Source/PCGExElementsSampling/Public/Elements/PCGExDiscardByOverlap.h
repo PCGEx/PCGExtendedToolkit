@@ -293,6 +293,8 @@ namespace PCGExDiscardByOverlap
 		TUniquePtr<FPointBoundsOctree> Octree;
 
 		TArray<TSharedPtr<FPointBounds>> LocalPointBounds;
+		// Filtered-out points that still count toward Bounds / TotalVolume; sized only when bIncludeFilteredInMetrics.
+		TArray<TSharedPtr<FPointBounds>> FilteredPointBounds;
 
 		mutable FRWLock RegistrationLock;
 		TArray<TSharedPtr<FOverlap>> Overlaps;

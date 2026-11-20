@@ -355,6 +355,8 @@ namespace PCGExSampleStampPoints
 		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
 		SamplingMask.Init(1, PointDataFacade->GetNum());
 
+		SafeUpVector = Settings->LookAtUpConstant;
+
 		{
 			PCGExSampling::FCommonOutputConfig Config;
 			PCGEX_OUTPUT_CONFIG_FWD_COMMON

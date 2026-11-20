@@ -118,12 +118,15 @@ namespace PCGExFlatProjection
 		{
 			TransformReader = PointDataFacade->GetReadable<FTransform>(Context->CachedTransformAttributeName, PCGExData::EIOSide::In, true);
 		}
-		else if (bWriteAttribute)
+		else
 		{
 			ProjectionDetails = Settings->ProjectionDetails;
 			ProjectionDetails.Init(PointDataFacade);
 
-			TransformWriter = PointDataFacade->GetWritable<FTransform>(Context->CachedTransformAttributeName, PCGExData::EBufferInit::New);
+			if (bWriteAttribute)
+			{
+				TransformWriter = PointDataFacade->GetWritable<FTransform>(Context->CachedTransformAttributeName, PCGExData::EBufferInit::New);
+			}
 		}
 
 		StartParallelLoopForPoints();
@@ -171,7 +174,7 @@ namespace PCGExFlatProjection
 				OutTransforms[Index] = FTransform(FQuat::MakeFromEuler(OutRotation), OutPosition, OutScale);
 			}
 		}
-		else if (bWriteAttribute)
+		else
 		{
 			if (bWriteAttribute)
 			{

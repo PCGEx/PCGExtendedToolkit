@@ -487,9 +487,12 @@ namespace PCGExHeuristics
 		{
 			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
 			const double EffectiveWeight = Op->WeightFactor * Multiplier;
-			const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier);
-			WeightedLogSum += EffectiveWeight * FMath::Loge(Score / EffectiveWeight);
-			TotalWeight += EffectiveWeight;
+			if (EffectiveWeight > 0)
+			{
+				const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier);
+				WeightedLogSum += EffectiveWeight * FMath::Loge(Score / EffectiveWeight);
+				TotalWeight += EffectiveWeight;
+			}
 		}
 
 		if (LocalFeedback)

@@ -128,12 +128,12 @@ namespace PCGExPathStitch
 	bool FProcessor::IsStitchedTo(const TSharedPtr<FProcessor>& InOtherProcessor)
 	{
 		const TSharedPtr<FProcessor> Self = SharedThis(this);
-		return StartStitch == InOtherProcessor || EndStitch == InOtherProcessor || InOtherProcessor->StartStitch == Self || InOtherProcessor->EndStitch == Self;
+		return StartStitch.Pin() == InOtherProcessor || EndStitch.Pin() == InOtherProcessor || InOtherProcessor->StartStitch.Pin() == Self || InOtherProcessor->EndStitch.Pin() == Self;
 	}
 
 	bool FProcessor::SetStartStitch(const TSharedPtr<FProcessor>& InStitch)
 	{
-		if (StartStitch)
+		if (StartStitch.IsValid())
 		{
 			return false;
 		}
@@ -143,7 +143,7 @@ namespace PCGExPathStitch
 
 	bool FProcessor::SetEndStitch(const TSharedPtr<FProcessor>& InStitch)
 	{
-		if (EndStitch)
+		if (EndStitch.IsValid())
 		{
 			return false;
 		}
@@ -176,7 +176,7 @@ namespace PCGExPathStitch
 
 	void FProcessor::CompleteWork()
 	{
-		if (!EndStitch && !StartStitch)
+		if (!EndStitch.IsValid() && !StartStitch.IsValid())
 		{
 			PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::Forward);
 			return;
@@ -200,9 +200,9 @@ namespace PCGExPathStitch
 		Chain.Reserve(8);
 
 		// Prefer EndStitch when both are set; otherwise we are an endpoint.
-		const bool bStartGoesViaEnd = EndStitch != nullptr;
+		const bool bStartGoesViaEnd = EndStitch.IsValid();
 		TSharedPtr<FProcessor> PreviousProcessor = Start;
-		TSharedPtr<FProcessor> NextProcessor = bStartGoesViaEnd ? EndStitch : StartStitch;
+		TSharedPtr<FProcessor> NextProcessor = bStartGoesViaEnd ? EndStitch.Pin() : StartStitch.Pin();
 
 		Chain.Add({Start, !bStartGoesViaEnd});
 
@@ -212,13 +212,13 @@ namespace PCGExPathStitch
 		{
 			// Whichever stitch points back to Previous is the endpoint we entered
 			// through; we'll exit via the other and the chosen entry dictates bReverse.
-			const bool bEnteredViaStart = (NextProcessor->StartStitch == PreviousProcessor);
+			const bool bEnteredViaStart = (NextProcessor->StartStitch.Pin() == PreviousProcessor);
 
 			Chain.Add({NextProcessor, !bEnteredViaStart});
 			SmallestWorkIndex = FMath::Min(SmallestWorkIndex, NextProcessor->WorkIndex);
 
 			PreviousProcessor = NextProcessor;
-			NextProcessor = bEnteredViaStart ? NextProcessor->EndStitch : NextProcessor->StartStitch;
+			NextProcessor = bEnteredViaStart ? NextProcessor->EndStitch.Pin() : NextProcessor->StartStitch.Pin();
 
 			if (NextProcessor == Start)
 			{
@@ -227,7 +227,7 @@ namespace PCGExPathStitch
 			}
 		}
 
-		if (EndStitch && StartStitch)
+		if (EndStitch.IsValid() && StartStitch.IsValid())
 		{
 			// Closed-loop members all land here -- only the SmallestWorkIndex one
 			// proceeds; mid-chain processors of open chains also bail out.
@@ -510,8 +510,8 @@ namespace PCGExPathStitch
 
 		for (const FStitchCandidate& C : Candidates)
 		{
-			if ((C.bEndA ? C.A->EndStitch : C.A->StartStitch) ||
-				(C.bEndB ? C.B->EndStitch : C.B->StartStitch))
+			if ((C.bEndA ? C.A->EndStitch : C.A->StartStitch).IsValid() ||
+				(C.bEndB ? C.B->EndStitch : C.B->StartStitch).IsValid())
 			{
 				continue;
 			}
