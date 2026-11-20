@@ -13,6 +13,8 @@
 
 #include "PCGExSplitJoinInteger.generated.h"
 
+class UPCGData;
+
 UENUM(BlueprintType)
 enum class EPCGExSplitJoinIntegerMode : uint8
 {
@@ -136,6 +138,14 @@ namespace PCGExSplitJoinInteger
 	{
 		return (InValue & InField.Mask) << InField.Shift;
 	}
+
+	/** A duplicate of InData with every field of its int32 or int64 InPackedName written as an int32 attribute.
+	 *  Null when InData is to be forwarded as is: the packed attribute is missing, not an integer, or could not be read. */
+	PCGEXELEMENTSMETA_API UPCGData* Split(FPCGExContext* InContext, FName InPackedName, TConstArrayView<FField> InFields, const UPCGData* InData, int32 InInputIndex);
+
+	/** A duplicate of InData with InPackedName written as an int64, or as an int32 that keeps bits 31..0 only.
+	 *  Null when InData is to be forwarded as is: a field attribute is missing, not an integer, or could not be read. */
+	PCGEXELEMENTSMETA_API UPCGData* Join(FPCGExContext* InContext, FName InPackedName, TConstArrayView<FField> InFields, bool bInToInt64, const UPCGData* InData, int32 InInputIndex);
 }
 
 struct FPCGExSplitJoinIntegerContext final : FPCGExContext
@@ -145,7 +155,6 @@ struct FPCGExSplitJoinIntegerContext final : FPCGExContext
 	/** Named fields of the layout. Resolved in Boot. */
 	TArray<PCGExSplitJoinInteger::FField> Fields;
 
-	int32 TotalBits = 0;
 	bool bJoin = false;
 	bool bJoinToInt64 = true;
 };

@@ -13,6 +13,7 @@
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/PCGMetadataAttribute.h"
+#include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
 
 #define LOCTEXT_NAMESPACE "PCGExSplitJoinIntegerElement"
@@ -30,9 +31,9 @@ TArray<FText> UPCGExSplitJoinIntegerSettings::GetNodeTitleAliases() const
 
 FString UPCGExSplitJoinIntegerSettings::GetDisplayName() const
 {
+	// No "PCGEx | " prefix: the default title already shows it on the line below.
 	switch (Mode)
 	{
-	// No "PCGEx | " prefix: the default title already shows it on the line below.
 	case EPCGExSplitJoinIntegerMode::Split:
 		return TEXT("Split Integer");
 	case EPCGExSplitJoinIntegerMode::Join:
@@ -133,10 +134,19 @@ namespace PCGExSplitJoinInteger
 		return true;
 	}
 
-	// Element-domain attributes only: a name that carries a domain or an accessor is refused.
+	// Names the engine resolves per data to whichever attribute was last read or created: writing through one overwrites that attribute.
+	bool IsReservedAttributeName(const FName InName)
+	{
+		return InName == PCGMetadataAttributeConstants::LastAttributeName
+			|| InName == PCGMetadataAttributeConstants::LastCreatedAttributeName
+			|| InName == PCGMetadataAttributeConstants::SourceAttributeName
+			|| InName == PCGMetadataAttributeConstants::SourceNameAttributeName;
+	}
+
+	// Element-domain attributes only: a name that carries a domain or an accessor, or that the engine reserves, is refused.
 	bool IsPlainAttributeName(const FName InName)
 	{
-		if (InName.IsNone())
+		if (InName.IsNone() || IsReservedAttributeName(InName))
 		{
 			return false;
 		}
@@ -151,6 +161,17 @@ namespace PCGExSplitJoinInteger
 			&& Selector.IsValid()
 			&& Selector.GetDomainName().IsNone()
 			&& Selector.GetExtraNames().IsEmpty();
+	}
+
+	// One past the highest bit a field reads or writes.
+	int32 GetUsedBits(const TConstArrayView<FField> InFields)
+	{
+		int32 UsedBits = 0;
+		for (const FField& Field : InFields)
+		{
+			UsedBits = FMath::Max(UsedBits, Field.Shift + static_cast<int32>(FMath::CountBits64(Field.Mask)));
+		}
+		return UsedBits;
 	}
 
 	// False unless InName is a single-value int32 or int64 attribute on InData.
@@ -188,7 +209,13 @@ namespace PCGExSplitJoinInteger
 	bool WriteRows(UPCGData* InData, const FName InName, const TArray<T>& InValues, IPCGAttributeAccessorKeys* InKeys)
 	{
 		UPCGMetadata* Metadata = InData->MutableMetadata();
-		if (!Metadata || !Metadata->FindOrCreateAttribute<T>(PCGExMetaHelpers::GetAttributeIdentifier(InName, InData), T{}, false, true, true))
+		if (!Metadata)
+		{
+			return false;
+		}
+
+		FPCGMetadataAttribute<T>* Attribute = Metadata->FindOrCreateAttribute<T>(PCGExMetaHelpers::GetAttributeIdentifier(InName, InData), T{}, false, true, true);
+		if (!Attribute)
 		{
 			return false;
 		}
@@ -198,21 +225,28 @@ namespace PCGExSplitJoinInteger
 			return true;
 		}
 
-		return InKeys && PCGExData::Helpers::BulkWriteRows<T>(InData, InName, InValues, *InKeys);
+		if (!InKeys)
+		{
+			return false;
+		}
+
+		const TUniquePtr<IPCGAttributeAccessor> Accessor = PCGAttributeAccessorHelpers::CreateAccessor(Attribute, Metadata);
+		return Accessor && PCGExData::Helpers::BulkWriteRows<T>(*Accessor, InValues, *InKeys);
 	}
 
 	template <typename T>
-	UPCGData* SplitTyped(FPCGExContext* InContext, const FPCGExSplitJoinIntegerContext* Context, const FName PackedName, const UPCGData* InData)
+	UPCGData* SplitTyped(FPCGExContext* InContext, const FName InPackedName, const TConstArrayView<FField> InFields, const UPCGData* InData)
 	{
 		using TUnsigned = std::make_unsigned_t<T>;
 
 		const int32 NumRows = PCGExMetaHelpers::GetElementsCount(InData);
 
+		// Read from the input, before duplicating: a duplicate answers every row through its parent.
 		TArray<T> Packed;
 		if (NumRows > 0)
 		{
 			const TSharedPtr<IPCGAttributeAccessorKeys> ReadKeys = PCGExMetaHelpers::MakeConstKeys(InData);
-			if (!ReadKeys || !ReadRows<T>(InData, PackedName, ReadKeys, NumRows, Packed))
+			if (!ReadKeys || !ReadRows<T>(InData, InPackedName, ReadKeys, NumRows, Packed))
 			{
 				return nullptr;
 			}
@@ -229,7 +263,7 @@ namespace PCGExSplitJoinInteger
 		TArray<int32> Values;
 		Values.SetNumUninitialized(NumRows);
 
-		for (const FField& Field : Context->Fields)
+		for (const FField& Field : InFields)
 		{
 			for (int32 i = 0; i < NumRows; i++)
 			{
@@ -245,130 +279,131 @@ namespace PCGExSplitJoinInteger
 		return OutData;
 	}
 
-	// The duplicated input with every named field written, or null when the input is to be forwarded untouched.
-	UPCGData* Split(FPCGExContext* InContext, const FPCGExSplitJoinIntegerContext* Context, const FName PackedName, const UPCGData* InData, const int32 InputIndex)
+	UPCGData* Split(FPCGExContext* InContext, const FName InPackedName, const TConstArrayView<FField> InFields, const UPCGData* InData, const int32 InInputIndex)
 	{
 		bool bIs64 = false;
-		if (!TryGetIntegerWidth(InData, PackedName, bIs64))
+		if (!TryGetIntegerWidth(InData, InPackedName, bIs64))
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
-				           FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "input #{0} has no int32 or int64 attribute \"{1}\" -- forwarded untouched."),
-				           FText::AsNumber(InputIndex), FText::FromName(PackedName)));
+			PCGEX_LOG_INVALID_INPUT(InContext, FText::Format(
+				                        FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "input #{0} has no int32 or int64 attribute \"{1}\" -- forwarded untouched."),
+				                        FText::AsNumber(InInputIndex), FText::FromName(InPackedName)))
 			return nullptr;
 		}
 
-		if (!bIs64 && Context->TotalBits > 32)
+		if (!bIs64 && GetUsedBits(InFields) > 32)
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
-				           FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "the layout takes {0} bits but \"{1}\" is an int32 on input #{2} -- fields above bit 31 read zero."),
-				           FText::AsNumber(Context->TotalBits), FText::FromName(PackedName), FText::AsNumber(InputIndex)));
+			PCGEX_LOG_INVALID_INPUT(InContext, FText::Format(
+				                        FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "\"{0}\" is an int32 on input #{1} -- fields above bit 31 read zero."),
+				                        FText::FromName(InPackedName), FText::AsNumber(InInputIndex)))
 		}
 
 		UPCGData* OutData = bIs64
-			                    ? SplitTyped<int64>(InContext, Context, PackedName, InData)
-			                    : SplitTyped<int32>(InContext, Context, PackedName, InData);
+			                    ? SplitTyped<int64>(InContext, InPackedName, InFields, InData)
+			                    : SplitTyped<int32>(InContext, InPackedName, InFields, InData);
 
 		if (!OutData)
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
 				           FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "could not split \"{0}\" on input #{1} -- forwarded untouched."),
-				           FText::FromName(PackedName), FText::AsNumber(InputIndex)));
+				           FText::FromName(InPackedName), FText::AsNumber(InInputIndex)));
 		}
 
 		return OutData;
 	}
 
-	template <typename T>
-	bool JoinField(const UPCGData* InData, const FField& InField, const TSharedPtr<const IPCGAttributeAccessorKeys>& InKeys, TArray<int64>& InOutPacked)
+	// ORs one field into every packed row. InScratch is reused across the fields of its type.
+	template <typename TField, typename TPacked>
+	bool JoinField(const UPCGData* InData, const FField& InField, const TSharedPtr<const IPCGAttributeAccessorKeys>& InKeys, TArray<TField>& InScratch, TArray<TPacked>& InOutPacked)
 	{
-		using TUnsigned = std::make_unsigned_t<T>;
+		using TUnsignedField = std::make_unsigned_t<TField>;
+		using TUnsignedPacked = std::make_unsigned_t<TPacked>;
 
 		const int32 NumRows = InOutPacked.Num();
 
-		TArray<T> Values;
-		if (!ReadRows<T>(InData, InField.Name, InKeys, NumRows, Values))
+		if (!ReadRows<TField>(InData, InField.Name, InKeys, NumRows, InScratch))
 		{
 			return false;
 		}
 
 		for (int32 i = 0; i < NumRows; i++)
 		{
-			InOutPacked[i] = static_cast<int64>(static_cast<uint64>(InOutPacked[i]) | Insert(static_cast<TUnsigned>(Values[i]), InField));
+			const TUnsignedPacked Bits = static_cast<TUnsignedPacked>(Insert(static_cast<TUnsignedField>(InScratch[i]), InField));
+			InOutPacked[i] = static_cast<TPacked>(static_cast<TUnsignedPacked>(InOutPacked[i]) | Bits);
 		}
 
 		return true;
 	}
 
-	// The duplicated input with the packed attribute written, or null when the input is to be forwarded untouched.
-	UPCGData* Join(FPCGExContext* InContext, const FPCGExSplitJoinIntegerContext* Context, const FName PackedName, const UPCGData* InData, const int32 InputIndex)
+	template <typename TPacked>
+	UPCGData* JoinTyped(FPCGExContext* InContext, const FName InPackedName, const TConstArrayView<FField> InFields, const TConstArrayView<bool> InIs64, const UPCGData* InData)
 	{
-		const int32 NumFields = Context->Fields.Num();
+		const int32 NumRows = PCGExMetaHelpers::GetElementsCount(InData);
 
+		TArray<TPacked> Packed;
+		Packed.SetNumZeroed(NumRows);
+
+		// Read from the input, before duplicating: a duplicate answers every row through its parent.
+		if (NumRows > 0)
+		{
+			const TSharedPtr<IPCGAttributeAccessorKeys> ReadKeys = PCGExMetaHelpers::MakeConstKeys(InData);
+			if (!ReadKeys)
+			{
+				return nullptr;
+			}
+
+			TArray<int32> Scratch32;
+			TArray<int64> Scratch64;
+
+			for (int32 f = 0; f < InFields.Num(); f++)
+			{
+				const bool bRead = InIs64[f]
+					                   ? JoinField<int64, TPacked>(InData, InFields[f], ReadKeys, Scratch64, Packed)
+					                   : JoinField<int32, TPacked>(InData, InFields[f], ReadKeys, Scratch32, Packed);
+
+				if (!bRead)
+				{
+					return nullptr;
+				}
+			}
+		}
+
+		UPCGData* OutData = InContext->ManagedObjects->DuplicateData<UPCGData>(InData);
+		if (!OutData)
+		{
+			return nullptr;
+		}
+
+		const TSharedPtr<IPCGAttributeAccessorKeys> WriteKeys = NumRows > 0 ? PCGExMetaHelpers::MakeMutableKeys(OutData) : nullptr;
+		return WriteRows<TPacked>(OutData, InPackedName, Packed, WriteKeys.Get()) ? OutData : nullptr;
+	}
+
+	UPCGData* Join(FPCGExContext* InContext, const FName InPackedName, const TConstArrayView<FField> InFields, const bool bInToInt64, const UPCGData* InData, const int32 InInputIndex)
+	{
 		TArray<bool, TInlineAllocator<8>> Is64;
-		Is64.SetNumZeroed(NumFields);
+		Is64.SetNumZeroed(InFields.Num());
 
-		for (int32 f = 0; f < NumFields; f++)
+		for (int32 f = 0; f < InFields.Num(); f++)
 		{
 			bool bIs64 = false;
-			if (!TryGetIntegerWidth(InData, Context->Fields[f].Name, bIs64))
+			if (!TryGetIntegerWidth(InData, InFields[f].Name, bIs64))
 			{
-				PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
-					           FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "input #{0} has no int32 or int64 attribute \"{1}\" -- forwarded untouched."),
-					           FText::AsNumber(InputIndex), FText::FromName(Context->Fields[f].Name)));
+				PCGEX_LOG_INVALID_INPUT(InContext, FText::Format(
+					                        FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "input #{0} has no int32 or int64 attribute \"{1}\" -- forwarded untouched."),
+					                        FText::AsNumber(InInputIndex), FText::FromName(InFields[f].Name)))
 				return nullptr;
 			}
 			Is64[f] = bIs64;
 		}
 
-		const int32 NumRows = PCGExMetaHelpers::GetElementsCount(InData);
+		UPCGData* OutData = bInToInt64
+			                    ? JoinTyped<int64>(InContext, InPackedName, InFields, Is64, InData)
+			                    : JoinTyped<int32>(InContext, InPackedName, InFields, Is64, InData);
 
-		TArray<int64> Packed;
-		Packed.SetNumZeroed(NumRows);
-
-		bool bSuccess = true;
-
-		if (NumRows > 0)
-		{
-			const TSharedPtr<IPCGAttributeAccessorKeys> ReadKeys = PCGExMetaHelpers::MakeConstKeys(InData);
-			bSuccess = ReadKeys.IsValid();
-
-			for (int32 f = 0; bSuccess && f < NumFields; f++)
-			{
-				bSuccess = Is64[f]
-					           ? JoinField<int64>(InData, Context->Fields[f], ReadKeys, Packed)
-					           : JoinField<int32>(InData, Context->Fields[f], ReadKeys, Packed);
-			}
-		}
-
-		UPCGData* OutData = bSuccess ? InContext->ManagedObjects->DuplicateData<UPCGData>(InData) : nullptr;
-		bSuccess = OutData != nullptr;
-
-		if (bSuccess)
-		{
-			const TSharedPtr<IPCGAttributeAccessorKeys> WriteKeys = NumRows > 0 ? PCGExMetaHelpers::MakeMutableKeys(OutData) : nullptr;
-
-			if (Context->bJoinToInt64)
-			{
-				bSuccess = WriteRows<int64>(OutData, PackedName, Packed, WriteKeys.Get());
-			}
-			else
-			{
-				TArray<int32> Narrow;
-				Narrow.SetNumUninitialized(NumRows);
-				for (int32 i = 0; i < NumRows; i++)
-				{
-					Narrow[i] = static_cast<int32>(static_cast<uint32>(static_cast<uint64>(Packed[i])));
-				}
-				bSuccess = WriteRows<int32>(OutData, PackedName, Narrow, WriteKeys.Get());
-			}
-		}
-
-		if (!bSuccess)
+		if (!OutData)
 		{
 			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(
 				           FTEXT(PCGEX_SPLITJOIN_LOG_PREFIX "could not join \"{0}\" on input #{1} -- forwarded untouched."),
-				           FText::FromName(PackedName), FText::AsNumber(InputIndex)));
-			return nullptr;
+				           FText::FromName(InPackedName), FText::AsNumber(InInputIndex)));
 		}
 
 		return OutData;
@@ -436,8 +471,6 @@ bool FPCGExSplitJoinIntegerElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
-	Context->TotalBits = PCGExSplitJoinInteger::GetTotalBits(Settings->Layout);
-
 	for (const PCGExSplitJoinInteger::FField& Field : Context->Fields)
 	{
 		if (!PCGExSplitJoinInteger::IsPlainAttributeName(Field.Name))
@@ -496,8 +529,8 @@ bool FPCGExSplitJoinIntegerElement::AdvanceWork(FPCGExContext* InContext, const 
 		}
 
 		Processed[InputIndex] = Context->bJoin
-			                        ? PCGExSplitJoinInteger::Join(InContext, Context, PackedName, InData, InputIndex)
-			                        : PCGExSplitJoinInteger::Split(InContext, Context, PackedName, InData, InputIndex);
+			                        ? PCGExSplitJoinInteger::Join(InContext, PackedName, Context->Fields, Context->bJoinToInt64, InData, InputIndex)
+			                        : PCGExSplitJoinInteger::Split(InContext, PackedName, Context->Fields, InData, InputIndex);
 	}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
 
 	InContext->IncreaseStagedOutputReserve(Inputs.Num());
