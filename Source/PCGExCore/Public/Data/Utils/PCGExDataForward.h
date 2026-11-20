@@ -47,7 +47,8 @@ namespace PCGExData
 		~FDataForwardHandler() = default;
 		FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const EForwardDomain InDomain = EForwardDomain::Inherit);
 		// InIgnoredAttributes: source attribute names never forwarded, applied before the details name filter.
-		FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const EForwardDomain InDomain = EForwardDomain::Inherit, const TSet<FName>* InIgnoredAttributes = nullptr);
+		// bInheritTargetValues: false when every target row is forwarded, so writers skip reading the target's current values.
+		FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const EForwardDomain InDomain = EForwardDomain::Inherit, const TSet<FName>* InIgnoredAttributes = nullptr, const bool bInheritTargetValues = true);
 
 		// Metadata-sourced handler: identities come from InSourceMetadata (e.g. the scratch metadata an engine
 		// ProjectPoint/SamplePoint writes into), Elements domain only, writers pre-created on the target facade.

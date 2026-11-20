@@ -40,7 +40,7 @@ namespace PCGExData
 		Details.Filter(Identities);
 	}
 
-	FDataForwardHandler::FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const EForwardDomain InDomain, const TSet<FName>* InIgnoredAttributes)
+	FDataForwardHandler::FDataForwardHandler(const FPCGExForwardDetails& InDetails, const TSharedPtr<FFacade>& InSourceDataFacade, const TSharedPtr<FFacade>& InTargetDataFacade, const EForwardDomain InDomain, const TSet<FName>* InIgnoredAttributes, const bool bInheritTargetValues)
 		: Details(InDetails)
 		  , SourceDataFacade(InSourceDataFacade)
 		  , TargetDataFacade(InTargetDataFacade)
@@ -56,6 +56,8 @@ namespace PCGExData
 		// paths cast by Identities[i]'s type, so a compacted array would cast to the wrong type.
 		Readers.Init(nullptr, NumAttributes);
 		Writers.Init(nullptr, NumAttributes);
+
+		const EBufferInit WriterInit = bInheritTargetValues ? EBufferInit::Inherit : EBufferInit::New;
 
 		// Init forwarded attributes on target
 		for (int i = 0; i < NumAttributes; i++)
@@ -83,11 +85,11 @@ namespace PCGExData
 					if (RedirectsDomain(Identity))
 					{
 						const T DefaultValue = Identity.InDataDomain() ? Helpers::ReadDataValue<T>(SourceAtt) : SourceAtt->GetValueFromItemKey<T>(PCGDefaultValueKey);
-						Writer = TargetDataFacade->GetWritable<T>(GetTargetIdentifier(Identity), DefaultValue, SourceAtt->AllowsInterpolation(), EBufferInit::Inherit);
+						Writer = TargetDataFacade->GetWritable<T>(GetTargetIdentifier(Identity), DefaultValue, SourceAtt->AllowsInterpolation(), WriterInit);
 					}
 					else
 					{
-						Writer = TargetDataFacade->GetWritable<T>(SourceAtt, EBufferInit::Inherit);
+						Writer = TargetDataFacade->GetWritable<T>(SourceAtt, WriterInit);
 					}
 					if (!Writer)
 					{
@@ -114,7 +116,7 @@ namespace PCGExData
 					{
 						return;
 					}
-					TSharedPtr<IBuffer> Writer = TargetDataFacade->GetWritable(Identity.GetType(), Identity.Attribute, EBufferInit::Inherit);
+					TSharedPtr<IBuffer> Writer = TargetDataFacade->GetWritable(Identity.GetType(), Identity.Attribute, WriterInit);
 					if (!Writer)
 					{
 						return;
@@ -466,7 +468,45 @@ namespace PCGExData
 				},
 				[&]()
 				{
-					PCGExTypes::FScopedTypedValue Scratch = Readers[i]->MakeScopedValue();
+					IBuffer* Reader = Readers[i].Get();
+					IBuffer* Writer = Writers[i].Get();
+
+					if (Writer->GetUnderlyingDomain() != EDomainType::Elements)
+					{
+						// Single slot: the scope's last forwarded row wins, as on the typed path.
+						for (int32 t = Scope.End - 1; t >= Scope.Start; t--)
+						{
+							const int32 Row = SourceIndexPerTarget[t];
+							if (Row >= 0)
+							{
+								PCGExTypes::FScopedTypedValue Scratch = Reader->MakeScopedValue();
+								Reader->ReadVoid(Row, Scratch);
+								Writer->SetVoid(0, Scratch);
+								break;
+							}
+						}
+						return;
+					}
+
+					if (Reader->GetUnderlyingDomain() == EDomainType::Elements && Reader->IsPropertyBacked() && Writer->IsPropertyBacked())
+					{
+						// Both ends are property array buffers of one attribute type: one deep copy per row, slot to slot.
+						const FPropertyArrayBuffer* ArrayReader = static_cast<const FPropertyArrayBuffer*>(Reader);
+						FPropertyArrayBuffer* ArrayWriter = static_cast<FPropertyArrayBuffer*>(Writer);
+						check(ArrayReader->GetElementSize() == ArrayWriter->GetElementSize())
+
+						for (int32 t = Scope.Start; t < Scope.End; t++)
+						{
+							const int32 Row = SourceIndexPerTarget[t];
+							if (Row >= 0)
+							{
+								ArrayWriter->SetFromVoidProperty(t, ArrayReader->GetReadAddress(Row));
+							}
+						}
+						return;
+					}
+
+					PCGExTypes::FScopedTypedValue Scratch = Reader->MakeScopedValue();
 					for (int32 t = Scope.Start; t < Scope.End; t++)
 					{
 						const int32 Row = SourceIndexPerTarget[t];
@@ -474,8 +514,8 @@ namespace PCGExData
 						{
 							continue;
 						}
-						Readers[i]->ReadVoid(Row, Scratch);
-						Writers[i]->SetVoid(t, Scratch);
+						Reader->ReadVoid(Row, Scratch);
+						Writer->SetVoid(t, Scratch);
 					}
 				});
 		}
