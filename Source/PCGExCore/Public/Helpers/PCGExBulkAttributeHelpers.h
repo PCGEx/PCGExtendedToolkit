@@ -108,12 +108,26 @@ namespace PCGExData::Helpers
 		}
 	}
 
+	/** Writes one value per key through InAccessor, which must be a fresh one: an accessor prepares once. False when the write is refused. */
+	template <typename T>
+	bool BulkWriteRows(IPCGAttributeAccessor& InAccessor, const TArray<T>& InValues, IPCGAttributeAccessorKeys& InKeys)
+	{
+		// Prepared, an attribute reserves its entry map and value slots once; unprepared, SetRange inserts row by row into a map it never reserved.
+		// Same-type writes only: the slots are reserved before the copy, and a write that then failed to convert would leave them unwritten.
+		if (!InValues.IsEmpty() && InValues.Num() <= InKeys.GetNum() && InAccessor.GetUnderlyingType() == static_cast<int16>(PCG::Private::MetadataTypes<T>::Id))
+		{
+			InAccessor.Prepare(InKeys, InValues.Num(), /*bCanReuseEntryKeys=*/false);
+		}
+
+		return InAccessor.SetRange<T>(InValues, 0, InKeys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
+	}
+
 	/** Writes one value per key to an existing attribute. False when the name resolves to nothing or the write is refused. */
 	template <typename T>
 	bool BulkWriteRows(UPCGData* InData, const FName AttributeName, const TArray<T>& InValues, IPCGAttributeAccessorKeys& InKeys)
 	{
 		const TUniquePtr<IPCGAttributeAccessor> Accessor = MakeAccessor(InData, AttributeName);
-		return Accessor && Accessor->SetRange<T>(InValues, 0, InKeys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
+		return Accessor && BulkWriteRows<T>(*Accessor, InValues, InKeys);
 	}
 
 	inline void BulkReadSoftPaths(const UPCGData* InData, const FName AttributeName, TArray<FSoftObjectPath>& OutPaths,
