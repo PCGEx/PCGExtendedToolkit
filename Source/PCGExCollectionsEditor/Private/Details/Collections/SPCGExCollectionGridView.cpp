@@ -384,14 +384,8 @@ void SPCGExCollectionGridView::RebuildCategoryCache()
 	CategoryComboOptions->Add(MakeShared<FName>(NewCategorySentinel));
 }
 
-void SPCGExCollectionGridView::RebuildGroupedLayout()
+void SPCGExCollectionGridView::CaptureCollapseStates()
 {
-	if (!GroupScrollBox.IsValid())
-	{
-		return;
-	}
-
-	// Capture current collapse states before destroying old widgets
 	for (const auto& Pair : CategoryGroupWidgets)
 	{
 		if (const TSharedPtr<SPCGExCollectionCategoryGroup>& Group = Pair.Value)
@@ -406,6 +400,62 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 			}
 		}
 	}
+}
+
+TSharedRef<SPCGExCollectionCategoryGroup> SPCGExCollectionGridView::AddCategoryGroup(const FName Category, const int32 EntryCount, const bool bIsCollapsed)
+{
+	TSharedPtr<SPCGExCollectionCategoryGroup> Group;
+
+	GroupScrollBox->AddSlot()
+	              .Padding(0, 2)
+	[
+		SAssignNew(Group, SPCGExCollectionCategoryGroup)
+		.CategoryName(Category)
+		.EntryCount(EntryCount)
+		.bIsCollapsed(bIsCollapsed)
+		.OnCategoryRenamed(FOnCategoryRenamed::CreateSP(this, &SPCGExCollectionGridView::OnCategoryRenamed))
+		.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
+		.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
+		.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
+		.OnEditCategoryOverrides(FOnEditCategoryOverrides::CreateSP(this, &SPCGExCollectionGridView::OnEditCategoryOverrides))
+		.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
+		.OnTileReorderInCategory(FOnTileReorderInCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileReorderInCategory))
+	];
+
+	CategoryGroupWidgets.Add(Category, Group);
+	return Group.ToSharedRef();
+}
+
+TSharedRef<SPCGExCollectionGridTile> SPCGExCollectionGridView::AddTile(const TSharedRef<SPCGExCollectionCategoryGroup>& Group, const int32 EntryIndex, const int32 CategoryIndex)
+{
+	const TSharedRef<SPCGExCollectionGridTile> Tile =
+		SNew(SPCGExCollectionGridTile)
+		.ThumbnailPool(ThumbnailPool)
+		.OnGetPickerWidget(OnGetPickerWidget)
+		.TileSize(TileSize)
+		.Collection(Collection)
+		.EntryIndex(EntryIndex)
+		.CategoryIndex(CategoryIndex)
+		.CategoryOptions(CategoryComboOptions)
+		.ThumbnailCachePtr(&ThumbnailCache)
+		.BatchFlagPtr(&bIsBatchOperation)
+		.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
+		.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
+		.OnTileEntryChanged(FOnTileEntryChanged::CreateSP(this, &SPCGExCollectionGridView::OnTileEntryChanged));
+
+	Group->AddTile(Tile);
+	ActiveTiles.Add(EntryIndex, Tile);
+	return Tile;
+}
+
+void SPCGExCollectionGridView::RebuildGroupedLayout()
+{
+	if (!GroupScrollBox.IsValid())
+	{
+		return;
+	}
+
+	CaptureCollapseStates();
 
 	GroupScrollBox->ClearChildren();
 	CategoryGroupWidgets.Reset();
@@ -418,25 +468,7 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 
 		const bool bIsCollapsed = CollapsedCategories.Contains(CatName);
 
-		TSharedPtr<SPCGExCollectionCategoryGroup> Group;
-
-		GroupScrollBox->AddSlot()
-		              .Padding(0, 2)
-		[
-			SAssignNew(Group, SPCGExCollectionCategoryGroup)
-			.CategoryName(CatName)
-			.EntryCount(EntryCount)
-			.bIsCollapsed(bIsCollapsed)
-			.OnCategoryRenamed(FOnCategoryRenamed::CreateSP(this, &SPCGExCollectionGridView::OnCategoryRenamed))
-			.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
-			.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
-			.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
-			.OnEditCategoryOverrides(FOnEditCategoryOverrides::CreateSP(this, &SPCGExCollectionGridView::OnEditCategoryOverrides))
-			.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
-			.OnTileReorderInCategory(FOnTileReorderInCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileReorderInCategory))
-		];
-
-		CategoryGroupWidgets.Add(CatName, Group);
+		const TSharedRef<SPCGExCollectionCategoryGroup> Group = AddCategoryGroup(CatName, EntryCount, bIsCollapsed);
 
 		// Skip tile creation for collapsed categories (lazy -- created on expand)
 		if (bIsCollapsed || !Indices)
@@ -449,25 +481,7 @@ void SPCGExCollectionGridView::RebuildGroupedLayout()
 		{
 			const int32 EntryIdx = (*Indices)[CatIdx];
 
-			TSharedPtr<SPCGExCollectionGridTile> Tile;
-
-			TSharedRef<SWidget> TileWidget =
-				SAssignNew(Tile, SPCGExCollectionGridTile)
-				.ThumbnailPool(ThumbnailPool)
-				.OnGetPickerWidget(OnGetPickerWidget)
-				.TileSize(TileSize)
-				.Collection(Collection)
-				.EntryIndex(EntryIdx)
-				.CategoryIndex(CatIdx)
-				.CategoryOptions(CategoryComboOptions)
-				.ThumbnailCachePtr(&ThumbnailCache)
-				.BatchFlagPtr(&bIsBatchOperation)
-				.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
-				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
-				.OnTileEntryChanged(FOnTileEntryChanged::CreateSP(this, &SPCGExCollectionGridView::OnTileEntryChanged));
-
-			Group->AddTile(TileWidget);
-			ActiveTiles.Add(EntryIdx, Tile);
+			const TSharedRef<SPCGExCollectionGridTile> Tile = AddTile(Group, EntryIdx, CatIdx);
 
 			// Apply selection visual
 			if (SelectedIndices.Contains(EntryIdx))
@@ -512,21 +526,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 		return;
 	}
 
-	// Capture collapse states
-	for (const auto& Pair : CategoryGroupWidgets)
-	{
-		if (const TSharedPtr<SPCGExCollectionCategoryGroup>& Group = Pair.Value)
-		{
-			if (Group->IsCollapsed())
-			{
-				CollapsedCategories.Add(Pair.Key);
-			}
-			else
-			{
-				CollapsedCategories.Remove(Pair.Key);
-			}
-		}
-	}
+	CaptureCollapseStates();
 
 	// Snapshot tiles (keeps them alive during reparenting)
 	TMap<int32, TSharedPtr<SPCGExCollectionGridTile>> PreviousTiles = MoveTemp(ActiveTiles);
@@ -547,25 +547,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 
 		const bool bIsCollapsed = CollapsedCategories.Contains(CatName);
 
-		TSharedPtr<SPCGExCollectionCategoryGroup> Group;
-
-		GroupScrollBox->AddSlot()
-		              .Padding(0, 2)
-		[
-			SAssignNew(Group, SPCGExCollectionCategoryGroup)
-			.CategoryName(CatName)
-			.EntryCount(EntryCount)
-			.bIsCollapsed(bIsCollapsed)
-			.OnCategoryRenamed(FOnCategoryRenamed::CreateSP(this, &SPCGExCollectionGridView::OnCategoryRenamed))
-			.OnTileDropOnCategory(FOnTileDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileDropOnCategory))
-			.OnAssetDropOnCategory(FOnAssetDropOnCategory::CreateSP(this, &SPCGExCollectionGridView::OnAssetDropOnCategory))
-			.OnAddToCategory(FOnAddToCategory::CreateSP(this, &SPCGExCollectionGridView::OnAddToCategory))
-			.OnEditCategoryOverrides(FOnEditCategoryOverrides::CreateSP(this, &SPCGExCollectionGridView::OnEditCategoryOverrides))
-			.OnExpansionChanged(FOnCategoryExpansionChanged::CreateSP(this, &SPCGExCollectionGridView::OnCategoryExpansionChanged))
-			.OnTileReorderInCategory(FOnTileReorderInCategory::CreateSP(this, &SPCGExCollectionGridView::OnTileReorderInCategory))
-		];
-
-		CategoryGroupWidgets.Add(CatName, Group);
+		const TSharedRef<SPCGExCollectionCategoryGroup> Group = AddCategoryGroup(CatName, EntryCount, bIsCollapsed);
 
 		// Skip tile creation for collapsed categories (lazy -- created on expand)
 		if (bIsCollapsed || !Indices)
@@ -587,25 +569,7 @@ void SPCGExCollectionGridView::IncrementalCategoryRefresh()
 			}
 
 			// Fallback: create new tile
-			TSharedPtr<SPCGExCollectionGridTile> Tile;
-
-			TSharedRef<SWidget> TileWidget =
-				SAssignNew(Tile, SPCGExCollectionGridTile)
-				.ThumbnailPool(ThumbnailPool)
-				.OnGetPickerWidget(OnGetPickerWidget)
-				.TileSize(TileSize)
-				.Collection(Collection)
-				.EntryIndex(EntryIdx)
-				.CategoryIndex(CatIdx)
-				.CategoryOptions(CategoryComboOptions)
-				.ThumbnailCachePtr(&ThumbnailCache)
-				.BatchFlagPtr(&bIsBatchOperation)
-				.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
-				.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
-				.OnTileEntryChanged(FOnTileEntryChanged::CreateSP(this, &SPCGExCollectionGridView::OnTileEntryChanged));
-
-			Group->AddTile(TileWidget);
-			ActiveTiles.Add(EntryIdx, Tile);
+			AddTile(Group, EntryIdx, CatIdx);
 		}
 	}
 
@@ -1391,31 +1355,13 @@ void SPCGExCollectionGridView::PopulateCategoryTiles(FName Category)
 		return;
 	}
 
-	TSharedPtr<SPCGExCollectionCategoryGroup>& Group = *GroupPtr;
+	const TSharedRef<SPCGExCollectionCategoryGroup> Group = GroupPtr->ToSharedRef();
 
 	for (int32 CatIdx = 0; CatIdx < Indices->Num(); ++CatIdx)
 	{
 		const int32 EntryIdx = (*Indices)[CatIdx];
 
-		TSharedPtr<SPCGExCollectionGridTile> Tile;
-
-		TSharedRef<SWidget> TileWidget =
-			SAssignNew(Tile, SPCGExCollectionGridTile)
-			.ThumbnailPool(ThumbnailPool)
-			.OnGetPickerWidget(OnGetPickerWidget)
-			.TileSize(TileSize)
-			.Collection(Collection)
-			.EntryIndex(EntryIdx)
-			.CategoryIndex(CatIdx)
-			.CategoryOptions(CategoryComboOptions)
-			.ThumbnailCachePtr(&ThumbnailCache)
-			.BatchFlagPtr(&bIsBatchOperation)
-			.OnTileClicked(FOnTileClicked::CreateSP(this, &SPCGExCollectionGridView::OnTileClicked))
-			.OnTileDragDetected(FOnTileDragDetected::CreateSP(this, &SPCGExCollectionGridView::OnTileDragDetected))
-			.OnTileEntryChanged(FOnTileEntryChanged::CreateSP(this, &SPCGExCollectionGridView::OnTileEntryChanged));
-
-		Group->AddTile(TileWidget);
-		ActiveTiles.Add(EntryIdx, Tile);
+		const TSharedRef<SPCGExCollectionGridTile> Tile = AddTile(Group, EntryIdx, CatIdx);
 
 		if (SelectedIndices.Contains(EntryIdx))
 		{

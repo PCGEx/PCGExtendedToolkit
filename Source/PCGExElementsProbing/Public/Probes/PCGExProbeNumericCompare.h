@@ -108,8 +108,7 @@ class UPCGExProbeNumericCompareProviderSettings : public UPCGExProbeFactoryProvi
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeNumericCompare, "Probe : Numeric Compare", "Connect points that pass the value comparison between the probing point and the candidate point.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
@@ -119,9 +118,4 @@ public:
 	/** Filter Config.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExProbeConfigNumericCompare Config;
-
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 };

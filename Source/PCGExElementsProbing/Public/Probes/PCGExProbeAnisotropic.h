@@ -86,8 +86,7 @@ class UPCGExProbeAnisotropicProviderSettings : public UPCGExProbeFactoryProvider
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeAnisotropic, "Probe : Anisotropic", "Probe in 16 directions over the X/Y axis. It's recommended to use internal projection to get the best results", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
@@ -97,9 +96,4 @@ public:
 	/** Filter Config.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExProbeConfigAnisotropic Config;
-
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 };

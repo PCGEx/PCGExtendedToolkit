@@ -87,6 +87,6 @@ public:
 
 
 #if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
+	virtual const FPCGExHeuristicConfigBase* GetBaseConfig() const override { return &Config; }
 #endif
 };

@@ -82,8 +82,7 @@ class UPCGExProbeGradientFlowProviderSettings : public UPCGExProbeFactoryProvide
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS(ProbeGradientFlow, "G-Probe : Gradient Flow", "Connects points along the gradient of an attribute (e.g. downhill/uphill flow)")
 #endif
 	//~End UPCGSettings

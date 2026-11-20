@@ -20,6 +20,7 @@ TSharedPtr<FPCGExProbeOperation> UPCGExProbeFactory##_NAME::CreateOperation(FPCG
 	NewOperation->Config = Config; NewOperation->BaseConfig = &NewOperation->Config; _EXTRA_OPERATION return NewOperation;}
 
 class FPCGExProbeOperation;
+struct FPCGExProbeConfigBase;
 
 USTRUCT(meta=(PCG_DataTypeDisplayName="PCGEx | Probe"))
 struct FPCGExDataTypeInfoProbe : public FPCGExFactoryDataTypeInfo
@@ -56,6 +57,12 @@ public:
 	{
 		return PCGEX_NODE_COLOR_NAME(Probe);
 	}
+
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
+	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+
+	/** The provider's own Config, migrated by the two deprecation passes; null opts out. */
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() { return nullptr; }
 #endif
 	//~End UPCGSettings
 

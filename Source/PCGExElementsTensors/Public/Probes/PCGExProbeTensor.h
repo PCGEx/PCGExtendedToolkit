@@ -115,8 +115,7 @@ class UPCGExProbeTensorProviderSettings : public UPCGExProbeFactoryProviderSetti
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeTensor, "Probe : Tensor", "Sample a tensor at point location and probe in that direction.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
@@ -130,9 +129,4 @@ public:
 	/** Filter Config.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExProbeConfigTensor Config;
-
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 };

@@ -3,6 +3,7 @@
 
 #include "Core/PCGExHeuristicsFactoryProvider.h"
 
+#include "PCGExCommon.h"
 #include "Helpers/PCGExMetaHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCreateHeuristics"
@@ -39,6 +40,21 @@ UPCGExFactoryData* UPCGExHeuristicsFactoryProviderSettings::CreateFactory(FPCGEx
 {
 	return Super::CreateFactory(InContext, InFactory);
 }
+
+#if WITH_EDITOR
+FString UPCGExHeuristicsFactoryProviderSettings::GetDisplayName() const
+{
+	const FPCGExHeuristicConfigBase* BaseConfig = GetBaseConfig();
+	if (!BaseConfig)
+	{
+		return Super::GetDisplayName();
+	}
+
+	return PCGExCommon::FlagInvertLabel(
+		GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Heuristics"), TEXT("HX")) + TEXT(" @ ") + FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * BaseConfig->WeightFactor) / 1000.0)),
+		BaseConfig->bInvert);
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE
 #undef PCGEX_NAMESPACE

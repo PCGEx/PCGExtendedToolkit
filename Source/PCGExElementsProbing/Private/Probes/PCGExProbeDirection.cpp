@@ -4,7 +4,6 @@
 #include "Probes/PCGExProbeDirection.h"
 
 #include "PCGExH.h"
-#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExProbingCandidates.h"
 #include "Details/PCGExSettingsDetails.h"
@@ -233,30 +232,3 @@ void FPCGExProbeDirection::ProcessBestCandidate(const int32 Index, PCGExProbing:
 
 	OutEdges->Add(PCGEx::H64U(Index, C.PointIndex));
 }
-
-#if WITH_EDITOR
-void UPCGExProbeDirectionProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeDirectionProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-
-FString UPCGExProbeDirectionProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif

@@ -5,7 +5,6 @@
 
 
 #include "PCGExH.h"
-#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 
 #include "Core/PCGExProbingCandidates.h"
@@ -93,30 +92,3 @@ void FPCGExProbeClosest::ProcessCandidates(const int32 Index, TArray<PCGExProbin
 		}
 	}
 }
-
-#if WITH_EDITOR
-void UPCGExProbeClosestProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeClosestProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-
-FString UPCGExProbeClosestProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif

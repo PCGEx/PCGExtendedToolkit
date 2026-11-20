@@ -4,7 +4,6 @@
 #include "Probes/PCGExProbeTensor.h"
 
 #include "PCGExH.h"
-#include "PCGExVersion.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExProbingCandidates.h"
 #include "Core/PCGExTensorFactoryProvider.h"
@@ -259,30 +258,3 @@ void FPCGExProbeTensor::ProcessBestCandidate(const int32 Index, PCGExProbing::FB
 
 	OutEdges->Add(PCGEx::H64U(Index, C.PointIndex));
 }
-
-#if WITH_EDITOR
-void UPCGExProbeTensorProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeTensorProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-
-FString UPCGExProbeTensorProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif

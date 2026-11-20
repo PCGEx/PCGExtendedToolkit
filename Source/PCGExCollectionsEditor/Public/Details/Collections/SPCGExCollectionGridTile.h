@@ -15,6 +15,7 @@ class FAssetThumbnailPool;
 class SBox;
 class SBorder;
 class UPCGExAssetCollection;
+struct FPCGExAssetCollectionEntry;
 class SWidgetSwitcher;
 template <typename OptionType>
 class SComboBox;
@@ -128,4 +129,7 @@ private:
 	TSharedPtr<FAssetThumbnail> GetOrCreateThumbnail(const FSoftObjectPath& AssetPath, bool& bOutCreated);
 
 	void HandlePickerPropertyEdited(FName PropertyName);
+
+	/** Applies Mutate to the entry at Index inside one transaction, then notifies the view. False when the entry is gone. */
+	bool CommitEntryEdit(const TWeakObjectPtr<UPCGExAssetCollection>& InCollection, int32 Index, const FText& TransactionText, FName PropertyName, TFunctionRef<void(FPCGExAssetCollectionEntry&)> Mutate);
 };

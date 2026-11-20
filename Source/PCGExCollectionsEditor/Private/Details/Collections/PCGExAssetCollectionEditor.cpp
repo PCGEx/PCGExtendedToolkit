@@ -788,6 +788,23 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 
 void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)
 {
+	// A menu button running Tool on the edited collection, when there is one.
+	const auto MakeToolButton = [this](const FText& Label, const FText& ToolTip, void (*Tool)(UPCGExAssetCollection*)) -> TSharedRef<SWidget>
+	{
+		return SNew(SButton)
+			.Text(Label)
+			.OnClicked_Lambda(
+				[this, Tool]()
+				{
+					PCGEX_CURRENT_COLLECTION
+					{
+						Tool(Collection);
+					}
+					return FReply::Handled();
+				})
+			.ToolTipText(ToolTip);
+	};
+
 #pragma region Append
 
 	ToolbarBuilder.BeginSection("ToolsSection");
@@ -823,7 +840,7 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 				PCGEX_COMBOBOX_BUTTON_CONTENT("PCGEx.ActionIcon.NormalizeWeight")
 			]
 			.OnGetMenuContent_Lambda(
-				[this]() -> TSharedRef<SWidget>
+				[this, MakeToolButton]() -> TSharedRef<SWidget>
 				{
 					return
 							SNew(SVerticalBox)
@@ -831,18 +848,7 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 							.AutoHeight()
 							.Padding(4)
 							[
-								SNew(SButton)
-								.Text(INVTEXT("Normalize to 100"))
-								.OnClicked_Lambda(
-									[this]()
-									{
-										PCGEX_CURRENT_COLLECTION
-										{
-											PCGExCollectionEditorUtils::NormalizedWeightToSum(Collection);
-										}
-										return FReply::Handled();
-									})
-								.ToolTipText(INVTEXT("Normalize weight sum to 100"))
+								MakeToolButton(INVTEXT("Normalize to 100"), INVTEXT("Normalize weight sum to 100"), &PCGExCollectionEditorUtils::NormalizedWeightToSum)
 							]
 							+ SVerticalBox::Slot()
 							.AutoHeight()
@@ -852,93 +858,27 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 								.SlotPadding(FMargin(2, 2))
 								+ SUniformGridPanel::Slot(0, 0)
 								[
-									SNew(SButton)
-									.Text(FText::FromString(TEXT("= i")))
-									.OnClicked_Lambda(
-										[this]()
-										{
-											PCGEX_CURRENT_COLLECTION
-											{
-												PCGExCollectionEditorUtils::SetWeightIndex(Collection);
-											}
-											return FReply::Handled();
-										})
-									.ToolTipText(FText::FromString("Set the weight index to the entry index."))
+									MakeToolButton(FText::FromString(TEXT("= i")), FText::FromString("Set the weight index to the entry index."), &PCGExCollectionEditorUtils::SetWeightIndex)
 								]
 								+ SUniformGridPanel::Slot(1, 0)
 								[
-									SNew(SButton)
-									.Text(FText::FromString(TEXT("100")))
-									.OnClicked_Lambda(
-										[this]()
-										{
-											PCGEX_CURRENT_COLLECTION
-											{
-												PCGExCollectionEditorUtils::WeightOne(Collection);
-											}
-											return FReply::Handled();
-										})
-									.ToolTipText(FText::FromString("Reset all weights to 100"))
+									MakeToolButton(FText::FromString(TEXT("100")), FText::FromString("Reset all weights to 100"), &PCGExCollectionEditorUtils::WeightOne)
 								]
 								+ SUniformGridPanel::Slot(2, 0)
 								[
-									SNew(SButton)
-									.Text(FText::FromString(TEXT("+=1")))
-									.OnClicked_Lambda(
-										[this]()
-										{
-											PCGEX_CURRENT_COLLECTION
-											{
-												PCGExCollectionEditorUtils::PadWeight(Collection);
-											}
-											return FReply::Handled();
-										})
-									.ToolTipText(FText::FromString("Add 1 to all weights"))
+									MakeToolButton(FText::FromString(TEXT("+=1")), FText::FromString("Add 1 to all weights"), &PCGExCollectionEditorUtils::PadWeight)
 								]
 								+ SUniformGridPanel::Slot(0, 1)
 								[
-									SNew(SButton)
-									.Text(FText::FromString(TEXT("\xD7""2")))
-									.OnClicked_Lambda(
-										[this]()
-										{
-											PCGEX_CURRENT_COLLECTION
-											{
-												PCGExCollectionEditorUtils::MultWeight(Collection, 2);
-											}
-											return FReply::Handled();
-										})
-									.ToolTipText(FText::FromString("Multiply weights by 2"))
+									MakeToolButton(FText::FromString(TEXT("\xD7""2")), FText::FromString("Multiply weights by 2"), [](UPCGExAssetCollection* Collection) { PCGExCollectionEditorUtils::MultWeight(Collection, 2); })
 								]
 								+ SUniformGridPanel::Slot(1, 1)
 								[
-									SNew(SButton)
-									.Text(FText::FromString(TEXT("\xD7""10")))
-									.OnClicked_Lambda(
-										[this]()
-										{
-											PCGEX_CURRENT_COLLECTION
-											{
-												PCGExCollectionEditorUtils::MultWeight(Collection, 10);
-											}
-											return FReply::Handled();
-										})
-									.ToolTipText(FText::FromString("Multiply weights by 10"))
+									MakeToolButton(FText::FromString(TEXT("\xD7""10")), FText::FromString("Multiply weights by 10"), [](UPCGExAssetCollection* Collection) { PCGExCollectionEditorUtils::MultWeight(Collection, 10); })
 								]
 								+ SUniformGridPanel::Slot(2, 1)
 								[
-									SNew(SButton)
-									.Text(FText::FromString(TEXT("???")))
-									.OnClicked_Lambda(
-										[this]()
-										{
-											PCGEX_CURRENT_COLLECTION
-											{
-												PCGExCollectionEditorUtils::WeightRandom(Collection);
-											}
-											return FReply::Handled();
-										})
-									.ToolTipText(FText::FromString("Assign random weights"))
+									MakeToolButton(FText::FromString(TEXT("???")), FText::FromString("Assign random weights"), &PCGExCollectionEditorUtils::WeightRandom)
 								]
 							];
 				})
@@ -955,40 +895,18 @@ void FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& Toolb
 				PCGEX_COMBOBOX_BUTTON_CONTENT_TEXT(TEXT("\u2195"), 10)
 			]
 			.OnGetMenuContent_Lambda(
-				[this]() -> TSharedRef<SWidget>
+				[this, MakeToolButton]() -> TSharedRef<SWidget>
 				{
 					return
 							SNew(SUniformGridPanel)
 							.SlotPadding(FMargin(2, 2))
 							+ SUniformGridPanel::Slot(0, 0)
 							[
-								SNew(SButton)
-								.Text(FText::FromString(TEXT("\u25B2 Ascending")))
-								.OnClicked_Lambda(
-									[this]()
-									{
-										PCGEX_CURRENT_COLLECTION
-										{
-											PCGExCollectionEditorUtils::SortByWeightAscending(Collection);
-										}
-										return FReply::Handled();
-									})
-								.ToolTipText(FText::FromString("Sort collection by ascending weight"))
+								MakeToolButton(FText::FromString(TEXT("\u25B2 Ascending")), FText::FromString("Sort collection by ascending weight"), &PCGExCollectionEditorUtils::SortByWeightAscending)
 							]
 							+ SUniformGridPanel::Slot(0, 1)
 							[
-								SNew(SButton)
-								.Text(FText::FromString(TEXT("\u25BC Descending")))
-								.OnClicked_Lambda(
-									[this]()
-									{
-										PCGEX_CURRENT_COLLECTION
-										{
-											PCGExCollectionEditorUtils::SortByWeightDescending(Collection);
-										}
-										return FReply::Handled();
-									})
-								.ToolTipText(FText::FromString("Sort collection by descending weight"))
+								MakeToolButton(FText::FromString(TEXT("\u25BC Descending")), FText::FromString("Sort collection by descending weight"), &PCGExCollectionEditorUtils::SortByWeightDescending)
 							];
 				})
 			);
