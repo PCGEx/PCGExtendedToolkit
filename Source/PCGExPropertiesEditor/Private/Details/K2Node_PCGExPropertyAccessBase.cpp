@@ -8,6 +8,7 @@
 #include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
 #include "KismetCompiler.h"
+#include "ScopedTransaction.h"
 #include "ToolMenu.h"
 #include "ToolMenus.h"
 #include "Details/PCGExK2NodeTypeHelpers.h"
@@ -443,10 +444,15 @@ void UK2Node_PCGExPropertyAccessBase::AdoptTypeFromOther(const UEdGraphPin* Othe
 
 void UK2Node_PCGExPropertyAccessBase::SetWildcardPinsType(const FEdGraphPinType& InType)
 {
+	const FScopedTransaction Transaction(LOCTEXT("ChangePinType", "Change Pin Type"));
+	Modify();
+
 	TArray<UEdGraphPin*> Wildcards;
 	GetWildcardPins(Wildcards);
 	for (UEdGraphPin* Pin : Wildcards)
 	{
+		Pin->Modify();
+
 		// Break links that no longer match the new type.
 		for (int32 i = Pin->LinkedTo.Num() - 1; i >= 0; --i)
 		{

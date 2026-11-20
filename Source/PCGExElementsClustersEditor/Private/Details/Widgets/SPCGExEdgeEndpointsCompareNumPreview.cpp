@@ -7,6 +7,7 @@
 void SPCGExEdgeEndpointsCompareNumPreview::Construct(const FArguments& InArgs)
 {
 	Comparison = InArgs._Comparison;
+	Tolerance = InArgs._Tolerance;
 	bInvert = InArgs._bInvert;
 }
 
@@ -28,6 +29,7 @@ int32 SPCGExEdgeEndpointsCompareNumPreview::OnPaint(
 
 	const FVector2D LocalSize = AllottedGeometry.GetLocalSize();
 	const EPCGExComparison CurrentComparison = Comparison.Get();
+	const double CurrentTolerance = Tolerance.Get(DBL_COMPARE_TOLERANCE);
 	const bool bCurrentInvert = bInvert.Get();
 
 	// 3 Panels: Start>End, Start==End, Start<End
@@ -50,7 +52,7 @@ int32 SPCGExEdgeEndpointsCompareNumPreview::OnPaint(
 		const double EVal = EndVals[Panel];
 
 		// Evaluate
-		bool bPass = PCGExCompare::Compare(CurrentComparison, SVal, EVal, DBL_COMPARE_TOLERANCE);
+		bool bPass = PCGExCompare::Compare(CurrentComparison, SVal, EVal, CurrentTolerance);
 		if (bCurrentInvert)
 		{
 			bPass = !bPass;

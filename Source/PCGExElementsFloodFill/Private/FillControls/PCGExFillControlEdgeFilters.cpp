@@ -62,6 +62,38 @@ TSharedPtr<FPCGExFillControlOperation> UPCGExFillControlsFactoryEdgeFilters::Cre
 	return NewOperation;
 }
 
+bool UPCGExFillControlsFactoryEdgeFilters::RegisterConsumableAttributes(FPCGExContext* InContext) const
+{
+	if (!Super::RegisterConsumableAttributes(InContext))
+	{
+		return false;
+	}
+
+	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
+	{
+		// The return is that filter's own cleanup opt-out, not a failure: every nested filter registers.
+		Factory->RegisterConsumableAttributes(InContext);
+	}
+
+	return true;
+}
+
+bool UPCGExFillControlsFactoryEdgeFilters::RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const
+{
+	if (!Super::RegisterConsumableAttributesWithData(InContext, InData))
+	{
+		return false;
+	}
+
+	for (const TObjectPtr<const UPCGExPointFilterFactoryData>& Factory : FilterFactories)
+	{
+		// The return is that filter's own cleanup opt-out, not a failure: every nested filter registers.
+		Factory->RegisterConsumableAttributesWithData(InContext, InData);
+	}
+
+	return true;
+}
+
 TArray<FPCGPinProperties> UPCGExFillControlsEdgeFiltersProviderSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;

@@ -8,6 +8,7 @@
 #include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
 #include "KismetCompiler.h"
+#include "ScopedTransaction.h"
 #include "ToolMenu.h"
 #include "ToolMenus.h"
 #include "Core/PCGExAssetCollection.h"
@@ -485,6 +486,10 @@ void UK2Node_PCGExMemberBase::SetValuePinType(const FEdGraphPinType& InType)
 	{
 		return;
 	}
+
+	const FScopedTransaction Transaction(LOCTEXT("ChangePinType", "Change Pin Type"));
+	Modify();
+	ValuePin->Modify();
 
 	// Break existing links that no longer match the picked member's type.
 	for (int32 i = ValuePin->LinkedTo.Num() - 1; i >= 0; --i)

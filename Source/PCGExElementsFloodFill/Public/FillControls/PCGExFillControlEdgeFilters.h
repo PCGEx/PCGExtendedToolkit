@@ -53,6 +53,9 @@ public:
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> FilterFactories;
 
 	virtual TSharedPtr<FPCGExFillControlOperation> CreateOperation(FPCGExContext* InContext) const override;
+
+	virtual bool RegisterConsumableAttributes(FPCGExContext* InContext) const override;
+	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="pathfinding/cluster-flood-fill/fc-edge-filters"))

@@ -21,6 +21,7 @@ public:
 		}
 
 		SLATE_ATTRIBUTE(EPCGExComparison, Comparison)
+		SLATE_ATTRIBUTE(double, Tolerance)
 		SLATE_ATTRIBUTE(bool, bInvert)
 	SLATE_END_ARGS()
 
@@ -39,5 +40,6 @@ public:
 
 private:
 	TAttribute<EPCGExComparison> Comparison;
+	TAttribute<double> Tolerance;
 	TAttribute<bool> bInvert;
 };
