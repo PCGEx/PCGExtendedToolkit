@@ -240,6 +240,12 @@ namespace PCGExTensor
 	const FName SourceEffectorsLabel = TEXT("Effectors");
 	const FName SourceTensorConfigSourceLabel = TEXT("Parent Tensor");
 
+	// True only when FRichCurve::Eval provably returns the same bits at every time, NaN included.
+	PCGEXELEMENTSTENSORS_API bool IsTimeInvariant(const FRichCurve& InCurve);
+
+	// False unless InCurve returns OutValue at every time; a curve that fails must keep the full evaluation.
+	PCGEXELEMENTSTENSORS_API bool TryGetConstantValue(const FRuntimeVectorCurve& InCurve, FVector& OutValue);
+
 	struct FPackedEffector
 	{
 		FVector Location = FVector::ZeroVector;

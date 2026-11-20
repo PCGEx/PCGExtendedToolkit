@@ -8,6 +8,8 @@
 
 namespace PCGExProbing
 {
+	// Direction and GH are only filled when Distance (squared) is within some probe's GetSearchRadius:
+	// a probe must test Distance against its own radius before reading either.
 	struct PCGEXELEMENTSPROBING_API FCandidate
 	{
 		int32 PointIndex;

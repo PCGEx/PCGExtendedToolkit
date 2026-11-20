@@ -65,7 +65,7 @@ namespace PCGExDetails
 	}
 
 	template <typename T>
-	T TSettingValueBuffer<T>::Read(const int32 Index)
+	T TSettingValueBuffer<T>::ReadInternal(const int32 Index)
 	{
 		return Buffer->Read(Index);
 	}
@@ -126,14 +126,14 @@ namespace PCGExDetails
 		const int32 Count = OutResults.Num();
 		for (int i = 0; i < Count; i++)
 		{
-			OutResults[i] = Constant;
+			OutResults[i] = this->Constant;
 		}
 	}
 
 	template <typename T>
 	uint32 TSettingValueConstant<T>::ReadValueHash(const int32 Index)
 	{
-		return PCGExTypes::ComputeHash(Constant);
+		return PCGExTypes::ComputeHash(this->Constant);
 	}
 
 	template <typename T>
@@ -171,19 +171,31 @@ namespace PCGExDetails
 	}
 
 	template <typename T>
-	bool TSettingValueNegated<T>::IsConstant()
+	TSettingValueNegated<T>::TSettingValueNegated(const TSharedPtr<TSettingValue<T>>& InInner)
+		: Inner(InInner)
 	{
-		return Inner->IsConstant();
+		SyncConstant();
+	}
+
+	template <typename T>
+	void TSettingValueNegated<T>::SyncConstant()
+	{
+		this->bConstant = Inner->IsConstant();
+		if (this->bConstant)
+		{
+			this->Constant = -Inner->Read(0);
+		}
 	}
 
 	template <typename T>
 	void TSettingValueNegated<T>::SetConstant(T InConstant)
 	{
 		Inner->SetConstant(-InConstant);
+		SyncConstant();
 	}
 
 	template <typename T>
-	T TSettingValueNegated<T>::Read(const int32 Index)
+	T TSettingValueNegated<T>::ReadInternal(const int32 Index)
 	{
 		return -Inner->Read(Index);
 	}
@@ -210,7 +222,7 @@ namespace PCGExDetails
 	template <typename T>
 	uint32 TSettingValueNegated<T>::ReadValueHash(const int32 Index)
 	{
-		return PCGExTypes::ComputeHash(Read(Index));
+		return PCGExTypes::ComputeHash(this->Read(Index));
 	}
 
 	template <typename T>
@@ -218,7 +230,10 @@ namespace PCGExDetails
 	{
 		Inner->bQuiet = this->bQuiet;
 		Inner->bRegisterConsumable = this->bRegisterConsumable;
-		return Inner->Init(InDataFacade, bSupportScoped, bCaptureMinMax);
+		const bool bInnerReady = Inner->Init(InDataFacade, bSupportScoped, bCaptureMinMax);
+		// A @Data-domain operand resolves its constant during Init.
+		SyncConstant();
+		return bInnerReady;
 	}
 
 	template <typename T>

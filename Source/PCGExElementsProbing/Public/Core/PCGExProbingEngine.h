@@ -112,6 +112,8 @@ namespace PCGExProbing
 
 		bool bUseVariableRadius = false;
 		double SharedSearchRadius = 0;
+		// Squared distance past which no radius source accepts a candidate. Unused with a variable radius.
+		double SharedCullDistance = 0;
 
 		TUniquePtr<PCGExOctree::FItemOctree> Octree;
 
@@ -146,6 +148,9 @@ namespace PCGExProbing
 
 		/** Decrement the phase countdown; the worker that reaches zero collapses + fires OnComplete. */
 		void AdvanceRun();
+
+		/** Max of two squared radii; a NaN radius yields +inf, since probes reject nothing against it. */
+		static double WidenCullDistance(const double InCullDistance, const double InRadiusSquared);
 
 		bool RequiresEdgePostFilter() const { return EdgeRelation != EEdgeRelation::Any && PointGroupIds; }
 		void AppendEdgesFiltered_Unsafe(const TSet<uint64>& InEdges);

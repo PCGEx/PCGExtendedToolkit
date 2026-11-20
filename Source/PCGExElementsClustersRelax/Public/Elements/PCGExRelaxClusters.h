@@ -150,7 +150,8 @@ namespace PCGExRelaxClusters
 
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
-		void StartNextStep();
+		// Runs every remaining step in order, then the output node loop. Returns once all of it is done.
+		void RunRelaxation();
 		void RelaxScope(const PCGExMT::FScope& Scope) const;
 		virtual void PrepareLoopScopesForNodes(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessNodes(const PCGExMT::FScope& Scope) override;

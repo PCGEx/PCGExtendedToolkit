@@ -35,6 +35,9 @@ namespace PCGExClusters
 
 		/** Context hash for validation (e.g., projection settings hash). 0 = always valid. */
 		uint32 ContextHash = 0;
+
+		/** Derived from the node and edge arrays alone, never from vtx positions: a mirror sharing both arrays inherits it. */
+		bool bTopologyOnly = false;
 	};
 
 	/**

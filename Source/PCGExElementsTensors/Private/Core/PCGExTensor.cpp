@@ -98,6 +98,81 @@ void FPCGExTensorConfigBase::Init(FPCGExContext* InContext)
 
 namespace PCGExTensor
 {
+	bool IsTimeInvariant(const FRichCurve& InCurve)
+	{
+		const TArray<FRichCurveKey>& Keys = InCurve.GetConstRefOfKeys();
+		const int32 NumKeys = Keys.Num();
+
+		// FRichCurve::Eval never reads the time below two keys.
+		if (NumKeys < 2)
+		{
+			return true;
+		}
+
+		// Any other extrapolation remaps the time or adds a cycle offset.
+		if (InCurve.PreInfinityExtrap != RCCE_Constant || InCurve.PostInfinityExtrap != RCCE_Constant)
+		{
+			return false;
+		}
+
+		// -0 is refused so the result never depends on how the engine build folds `x + 0`.
+		const float Value = Keys[0].Value;
+		if (!FMath::IsFinite(Value) || (Value == 0.0f && FMath::IsNegativeOrNegativeZero(Value)))
+		{
+			return false;
+		}
+
+		const uint32 ValueBits = FMath::AsUInt(Value);
+
+		for (int32 i = 0; i < NumKeys; i++)
+		{
+			const FRichCurveKey& Key = Keys[i];
+
+			if (FMath::AsUInt(Key.Value) != ValueBits || !FMath::IsFinite(Key.Time))
+			{
+				return false;
+			}
+
+			// Cubic segments are refused: their tangents can leave the key value.
+			if (Key.InterpMode != RCIM_Linear && Key.InterpMode != RCIM_Constant)
+			{
+				return false;
+			}
+
+			if (i > 0)
+			{
+				// An unsorted or overflowing span can make the interpolation alpha non-finite.
+				const float Span = Key.Time - Keys[i - 1].Time;
+				if (!(Span >= 0.0f) || !FMath::IsFinite(Span))
+				{
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	bool TryGetConstantValue(const FRuntimeVectorCurve& InCurve, FVector& OutValue)
+	{
+		// FRuntimeVectorCurve::GetValue reads the external asset instead when one is set.
+		if (InCurve.ExternalCurve)
+		{
+			return false;
+		}
+
+		for (int32 i = 0; i < 3; i++)
+		{
+			if (!IsTimeInvariant(InCurve.VectorCurves[i]))
+			{
+				return false;
+			}
+		}
+
+		OutValue = InCurve.GetValue(0.0f);
+		return true;
+	}
+
 	bool FEffectorsArray::Init(FPCGExContext* InContext, const UPCGExTensorPointFactoryData* InFactory)
 	{
 		TSharedPtr<PCGExDetails::TSettingValue<double>> PotencyValue = InFactory->BaseConfig.PotencyValue.GetValueSetting();

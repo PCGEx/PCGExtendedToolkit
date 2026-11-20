@@ -35,6 +35,11 @@ namespace PCGExDetails
 	template <typename T>
 	class PCGEXCORE_API TSettingValue : public TSharedFromThis<TSettingValue<T>>
 	{
+	protected:
+		// While bConstant is set, Read() returns Constant without a virtual call. Subclasses own both.
+		bool bConstant = false;
+		T Constant = T{};
+
 	public:
 		virtual ~TSettingValue() = default;
 
@@ -61,12 +66,16 @@ namespace PCGExDetails
 		 */
 		bool bRegisterConsumable = true;
 
-		FORCEINLINE virtual bool IsConstant()
+		FORCEINLINE bool IsConstant() const
 		{
-			return false;
+			return bConstant;
 		}
 
-		FORCEINLINE virtual T Read(const int32 Index) = 0;
+		FORCEINLINE T Read(const int32 Index)
+		{
+			return bConstant ? Constant : ReadInternal(Index);
+		}
+
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) = 0;
 
 		FORCEINLINE virtual T Min() = 0;
@@ -75,6 +84,12 @@ namespace PCGExDetails
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) = 0;
+
+		/** Per-index read behind Read(). Not reached while bConstant is set. */
+		virtual T ReadInternal(const int32 Index)
+		{
+			return Constant;
+		}
 
 		/** Name of the attribute this value consumes (domain-qualified when selector-driven), or NAME_None. */
 		virtual FName GetConsumableName(const UPCGData* InData) const
@@ -96,7 +111,6 @@ namespace PCGExDetails
 		{
 		}
 
-		virtual T Read(const int32 Index) override;
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual T Min() override;
@@ -105,6 +119,7 @@ namespace PCGExDetails
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+		virtual T ReadInternal(const int32 Index) override;
 
 		virtual FName GetConsumableName(const UPCGData* InData) const override
 		{
@@ -135,40 +150,28 @@ namespace PCGExDetails
 	template <typename T>
 	class PCGEXCORE_API TSettingValueConstant : public TSettingValue<T>
 	{
-	protected:
-		T Constant = T{};
-
 	public:
 		explicit TSettingValueConstant(const T InConstant)
-			: Constant(InConstant)
 		{
-		}
-
-		FORCEINLINE virtual bool IsConstant() override
-		{
-			return true;
+			this->bConstant = true;
+			this->Constant = InConstant;
 		}
 
 		FORCEINLINE virtual void SetConstant(T InConstant) override
 		{
-			Constant = InConstant;
+			this->Constant = InConstant;
 		};
-
-		FORCEINLINE virtual T Read(const int32 Index) override
-		{
-			return Constant;
-		}
 
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		FORCEINLINE virtual T Min() override
 		{
-			return Constant;
+			return this->Constant;
 		}
 
 		FORCEINLINE virtual T Max() override
 		{
-			return Constant;
+			return this->Constant;
 		}
 
 		virtual uint32 ReadValueHash(const int32 Index) override;
@@ -220,6 +223,7 @@ namespace PCGExDetails
 	/**
 	 * Negates every value read from a wrapped setting value (direction shorthands' bFlip).
 	 * Init hands the caller's bQuiet / bRegisterConsumable to the wrapped value, which owns the consumable registration.
+	 * The wrapped value must only be set or initialised through this wrapper: its constant is mirrored here.
 	 * Only instantiated for FVector.
 	 */
 	template <typename T>
@@ -229,15 +233,10 @@ namespace PCGExDetails
 		TSharedPtr<TSettingValue<T>> Inner;
 
 	public:
-		explicit TSettingValueNegated(const TSharedPtr<TSettingValue<T>>& InInner)
-			: Inner(InInner)
-		{
-		}
+		explicit TSettingValueNegated(const TSharedPtr<TSettingValue<T>>& InInner);
 
-		virtual bool IsConstant() override;
 		virtual void SetConstant(T InConstant) override;
 
-		virtual T Read(const int32 Index) override;
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual T Min() override;
@@ -246,6 +245,10 @@ namespace PCGExDetails
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+		virtual T ReadInternal(const int32 Index) override;
+
+		// Mirrors the wrapped value's constant state, negated, into this value's own fast path.
+		void SyncConstant();
 	};
 
 	/**

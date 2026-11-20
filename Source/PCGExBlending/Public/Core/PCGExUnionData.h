@@ -111,6 +111,36 @@ namespace PCGExData
 		return Index;
 	}
 
+	// The elements ComputeUnionWeights keeps, in the same order, with no distance read: every weight is left at 1.
+	// Only for a consumer that reads no weight.
+	template <typename TElementIterable>
+	int32 CollectUnionElements(
+		const TElementIterable& InElements,
+		const TSharedPtr<PCGEx::FIndexLookup>& IdxLookup,
+		TArray<FWeightedPoint>& OutWeightedPoints)
+	{
+		OutWeightedPoints.Reset(InElements.Num());
+
+		for (const FElement& Element : InElements)
+		{
+			// Abstract elements (IO < 0) have no source; skip before the unchecked Get(-1) reads OOB.
+			if (Element.IO < 0)
+			{
+				continue;
+			}
+
+			const int32 IOIdx = IdxLookup->Get(Element.IO);
+			if (IOIdx == -1)
+			{
+				continue;
+			}
+
+			OutWeightedPoints.Emplace(Element.Index, 1.0, IOIdx);
+		}
+
+		return OutWeightedPoints.Num();
+	}
+
 	// Read interface for any container of fused source-element groups, regardless of underlying storage.
 	// Implemented by the legacy sparse FUnionMetadata (TSet-of-IUnionData per entry) and the dense
 	// FUnionTable (CSR layout). FGraph stores TSharedPtr<IUnionMetadata>; consumers that need the

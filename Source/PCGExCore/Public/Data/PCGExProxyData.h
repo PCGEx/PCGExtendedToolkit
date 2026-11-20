@@ -38,13 +38,6 @@ namespace PCGExData
 	};
 
 
-	// What the consumer does with the proxy it asks for.
-	enum class EProxyAccess : uint8
-	{
-		Typed,      // Get<T> / Set<T>: every value is WorkingType
-		TypeErased, // void, scoped-value and hash accessors only: container and extended-type attributes are served too
-	};
-
 	enum class EProxyFlags : uint8
 	{
 		None     = 0,
@@ -262,7 +255,7 @@ namespace PCGExData
 
 		//
 		// Convenience typed accessors - SAFE versions with proper lifecycle
-		// Not valid on a type-erased proxy: GetProxyBuffer only hands one out for EProxyAccess::TypeErased.
+		// Not valid on a type-erased proxy: GetProxyBuffer only hands one out to a type-erased request.
 		//
 
 		template <typename T>
@@ -357,9 +350,6 @@ namespace PCGExData
 			PCGExTypeOps::FConversionTable::Convert(WorkingType, WorkingValue.GetRaw(), RequestedType, &Result);
 			return Result;
 		}
-
-		// Out of line twin of Get<double>(), for callers that should not instantiate the template.
-		double ReadAsDouble(const int32 Index) const;
 
 		// Scoped storage for the void accessors: property-aware for property-backed proxies (which
 		// perform no Real->Working conversion), plain WorkingType otherwise. Always use this -- not

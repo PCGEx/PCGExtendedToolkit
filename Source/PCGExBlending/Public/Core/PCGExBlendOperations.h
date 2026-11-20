@@ -44,6 +44,9 @@ namespace PCGExBlending
 		FBlendFn AccumulateFunc = nullptr;
 		FFinalizeFn FinalizeFunc = nullptr;
 
+		// Subclasses clear it only when EndMulti leaves the accumulator untouched for every input.
+		bool bHasFinalize = true;
+
 	public:
 		IBlendOperation(EPCGExABBlendingType InMode, bool bInResetForMulti);
 		virtual ~IBlendOperation() = default;
@@ -109,6 +112,11 @@ namespace PCGExBlending
 		FORCEINLINE bool RequiresReset() const
 		{
 			return bResetForMulti;
+		}
+
+		FORCEINLINE bool HasFinalize() const
+		{
+			return bHasFinalize;
 		}
 
 		// Stack buffer helpers
@@ -445,6 +453,8 @@ namespace PCGExBlending
 			BlendFunc = BlendFunctions::GetBlendFunction<T>(InMode);
 			AccumulateFunc = BlendFunctions::GetAccumulateFunction<T>(InMode);
 			FinalizeFunc = BlendFunctions::GetFinalizeFunction<T>(InMode);
+			const FFinalizeFn NoFinalize = &BlendFunctions::FinalizeNoop<T>;
+			bHasFinalize = FinalizeFunc != NoFinalize;
 		}
 
 		//~ Begin IBlendOperation interface
@@ -524,6 +534,7 @@ namespace PCGExBlending
 			BlendFunc = nullptr;
 			AccumulateFunc = nullptr;
 			FinalizeFunc = nullptr;
+			bHasFinalize = false;
 		}
 
 		virtual void Blend(const void* A, const void* B, double /*Weight*/, void* Out) const override
@@ -624,6 +635,7 @@ namespace PCGExBlending
 			BlendFunc = nullptr;
 			AccumulateFunc = nullptr;
 			FinalizeFunc = nullptr;
+			bHasFinalize = false;
 		}
 
 		virtual void Blend(const void* A, const void* B, double /*Weight*/, void* Out) const override

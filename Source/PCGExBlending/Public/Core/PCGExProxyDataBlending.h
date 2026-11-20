@@ -223,6 +223,8 @@ namespace PCGExBlending
 	public:
 		virtual ~FProxyDataBlender() = default;
 
+		// UnderlyingType, A, C and Operation feed state cached by ResolveCachedState(): only the factories and
+		// InitFromParam assign them.
 		EPCGMetadataTypes UnderlyingType = EPCGMetadataTypes::Unknown;
 
 		// Buffer proxies
@@ -278,26 +280,30 @@ namespace PCGExBlending
 		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(FPCGExContext*, EPCGExABBlendingType, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, bool);
 		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(FPCGExContext*, EPCGExABBlendingType, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, bool);
 
-		// Cached type info
-		bool bNeedsLifecycleManagement = false;
-
 		// Cached value size/alignment for working buffers (from Operation)
 		int32 ValueSize = 0;
 		int32 ValueAlignment = 1;
 
+		// Scratch recipe read by MakeScopedValue().
+		const FProperty* ScratchProperty = nullptr; // A's backing property; lives as long as A's buffer
+		bool bSizedScratch = false;                 // UnderlyingType has no fixed size: ValueSize / ValueAlignment apply
+
+		// The op finalizes nothing and C is a plain buffer slot: EndMultiBlend would rewrite C with its own value.
+		bool bEndMultiIsNoop = false;
+
+		// Must run after any change to A, C, Operation, UnderlyingType, ValueSize or ValueAlignment.
+		void ResolveCachedState();
+
 		// Scratch value in the WORKING type (UnderlyingType), which is what proxy Get/Set and Operation use.
-		// Delegate to the source buffer only when it is property-backed (property-sized, container-aware);
+		// Property-initialized only when A's buffer is property-backed (property-sized, container-aware);
 		// a typed TBuffer<T> would yield the REAL type and its destructor would run over working-type bytes.
 		FORCEINLINE PCGExTypes::FScopedTypedValue MakeScopedValue() const
 		{
-			if (A)
+			if (ScratchProperty)
 			{
-				if (TSharedPtr<PCGExData::IBuffer> Buf = A->GetBuffer(); Buf && Buf->GetSourceProperty())
-				{
-					return Buf->MakeScopedValue();
-				}
+				return PCGExTypes::FScopedTypedValue(ScratchProperty);
 			}
-			if (ValueSize > 0 && PCGExTypes::FScopedTypedValue::GetTypeSize(UnderlyingType) == 0)
+			if (bSizedScratch)
 			{
 				return PCGExTypes::FScopedTypedValue(UnderlyingType, ValueSize, ValueAlignment);
 			}

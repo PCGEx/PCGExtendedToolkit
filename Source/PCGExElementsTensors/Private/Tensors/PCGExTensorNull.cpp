@@ -29,7 +29,7 @@ PCGExTensor::FTensorSample FPCGExTensorNull::Sample(const int32 InSeedIndex, con
 	auto ProcessNeighbor = [&](const PCGExOctree::FItem& InEffector)
 	{
 		PCGExTensor::FEffectorMetrics Metrics;
-		if (!ComputeFactor(InPosition, InEffector.Index, Metrics))
+		if (!ComputeFactor<true>(InPosition, InEffector.Index, Metrics))
 		{
 			return;
 		}

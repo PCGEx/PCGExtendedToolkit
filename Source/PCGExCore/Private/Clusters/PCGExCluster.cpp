@@ -102,6 +102,19 @@ namespace PCGExClusters
 
 		// Spatial state is never inherited: InVtxIO's points may have moved since the original was built.
 		ComputeBounds();
+
+		if (!bCopyNodes && !bCopyEdges)
+		{
+			// Both arrays are the original's own: whatever it derived from them alone holds here too.
+			FReadScopeLock ReadLock(OtherCluster->ClusterLock);
+			for (const TPair<FName, TSharedPtr<ICachedClusterData>>& Entry : OtherCluster->CachedData)
+			{
+				if (Entry.Value && Entry.Value->bTopologyOnly)
+				{
+					CachedData.Add(Entry.Key, Entry.Value);
+				}
+			}
+		}
 	}
 
 	void FCluster::TConstVtxLookup::Dump(TArray<int32>& OutIndices) const

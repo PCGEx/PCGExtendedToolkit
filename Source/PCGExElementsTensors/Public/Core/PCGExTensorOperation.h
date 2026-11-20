@@ -29,6 +29,10 @@ protected:
 	PCGExFloatLUT PotencyFalloffLUT = nullptr;
 	PCGExFloatLUT WeightFalloffLUT = nullptr;
 
+	// Set by Init when the guide curve returns GuideConstant at every time; the curve is evaluated otherwise.
+	bool bConstantGuide = false;
+	FVector GuideConstant = FVector::ForwardVector;
+
 public:
 	TSharedPtr<PCGExTensor::FEffectorsArray> Effectors;
 	TObjectPtr<const UPCGExTensorFactoryData> Factory = nullptr;
@@ -65,7 +69,14 @@ public:
 		}
 		else
 		{
-			OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			if (bConstantGuide)
+			{
+				OutMetrics.Guide = GuideConstant;
+			}
+			else
+			{
+				OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			}
 		}
 
 		OutMetrics.Potency = E->Potency * PotencyFalloffLUT->Eval(OutFactor);
@@ -102,7 +113,14 @@ public:
 		}
 		else
 		{
-			OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			if (bConstantGuide)
+			{
+				OutMetrics.Guide = GuideConstant;
+			}
+			else
+			{
+				OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			}
 		}
 
 		OutMetrics.Potency = BaseConfig.PotencyValue.Constant * PotencyFalloffLUT->Eval(OutFactor);

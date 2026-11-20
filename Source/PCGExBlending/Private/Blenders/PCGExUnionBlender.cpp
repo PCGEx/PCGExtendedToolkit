@@ -8,6 +8,7 @@
 #include "Blenders/PCGExUnionBlender.h"
 
 #include "Containers/PCGExIndexLookup.h"
+#include "Core/PCGExBlendOperations.h"
 #include "Core/PCGExMTCommon.h"
 #include "Core/PCGExOpStats.h"
 #include "Core/PCGExUnionData.h"
@@ -220,6 +221,24 @@ namespace PCGExBlending
 		return true;
 	}
 
+	bool FUnionBlender::FMultiSourceBlender::ReadsWeight() const
+	{
+		if (MainBlender && MainBlender->Operation && RequiresWeight(MainBlender->Operation->GetBlendMode()))
+		{
+			return true;
+		}
+
+		for (const TSharedPtr<FProxyDataBlender>& SubBlender : SubBlenders)
+		{
+			if (SubBlender && SubBlender->Operation && RequiresWeight(SubBlender->Operation->GetBlendMode()))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 #pragma endregion
 
 	FUnionBlender::FUnionBlender(const FPCGExBlendingDetails* InBlendingDetails, const FPCGExCarryOverDetails* InCarryOverDetails, const PCGExMath::IDistances* InDistanceDetails)
@@ -379,6 +398,17 @@ namespace PCGExBlending
 			}
 		}
 
+		bReadsWeights = false;
+		for (const TSharedPtr<FMultiSourceBlender>& MultiAttribute : Blenders)
+		{
+			// @Data blenders never run through the per-entry Blend.
+			if (!MultiAttribute->bDataDomain && MultiAttribute->ReadsWeight())
+			{
+				bReadsWeights = true;
+				break;
+			}
+		}
+
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(BlendDataDomain)
 
@@ -472,6 +502,18 @@ namespace PCGExBlending
 	{
 		check(InUnionData)
 		if (!ComputeWeights(WriteIndex, InUnionData, OutWeightedPoints))
+		{
+			return;
+		}
+		Blend(WriteIndex, OutWeightedPoints, Trackers);
+	}
+
+	void FUnionBlender::MergeSingle(const int32 WriteIndex, TConstArrayView<PCGExData::FElement> InElements, TArray<PCGExData::FWeightedPoint>& OutWeightedPoints, TArray<PCGEx::FOpStats>& Trackers) const
+	{
+		const int32 NumPoints = bReadsWeights
+			                        ? ComputeWeights(WriteIndex, InElements, OutWeightedPoints)
+			                        : PCGExData::CollectUnionElements(InElements, IOLookup, OutWeightedPoints);
+		if (!NumPoints)
 		{
 			return;
 		}

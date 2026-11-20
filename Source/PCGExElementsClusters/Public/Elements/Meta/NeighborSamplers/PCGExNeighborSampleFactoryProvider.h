@@ -33,6 +33,12 @@ namespace PCGExGraphs
 	struct FLink;
 }
 
+namespace PCGExMT
+{
+	template <typename T>
+	class TScopedPtr;
+}
+
 USTRUCT(meta=(PCG_DataTypeDisplayName="PCGEx | Neighbor Sampler"))
 struct FPCGExDataTypeInfoNeighborSampler : public FPCGExFactoryDataTypeInfo
 {
@@ -44,6 +50,8 @@ namespace PCGExNeighborSample
 {
 	const FName SourceSamplersLabel = TEXT("Samplers");
 	const FName OutputSamplerLabel = TEXT("Sampler");
+
+	struct FTraversalScratch;
 }
 
 USTRUCT(BlueprintType)
@@ -146,6 +154,12 @@ public:
 protected:
 	bool bIsValidOperation = true;
 	TSharedPtr<PCGExClusters::FCluster> Cluster;
+
+	// One per loop scope, allocated by PrepareForLoops; only when sampling goes past direct neighbors.
+	TSharedPtr<PCGExMT::TScopedPtr<PCGExNeighborSample::FTraversalScratch>> TraversalScratch;
+
+	// Samples one depth level in link order. Count and TotalWeight accumulate across levels.
+	void SampleLinks(const PCGExClusters::FNode& TargetNode, const FVector& Origin, const TConstArrayView<PCGExGraphs::FLink> Links, const int32 Depth, const int32 SafeMaxDepth, const PCGExMT::FScope& Scope, int32& Count, double& TotalWeight);
 };
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")

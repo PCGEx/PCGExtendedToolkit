@@ -43,7 +43,7 @@ PCGExTensor::FTensorSample FPCGExTensorNoiseBounded::Sample(const int32 InSeedIn
 			if (const double Mask = NoiseMaskGenerator->GetDouble(InPosition);
 				!FMath::IsNearlyZero(Mask))
 			{
-				if (const auto* E = ComputeFactor(InPosition, InEffector.Index, Metrics))
+				if (const auto* E = ComputeFactor<true>(InPosition, InEffector.Index, Metrics))
 				{
 					Samples.Emplace_GetRef(Noise, Metrics.Potency * Mask, Metrics.Weight * Mask);
 				}
@@ -56,7 +56,7 @@ PCGExTensor::FTensorSample FPCGExTensorNoiseBounded::Sample(const int32 InSeedIn
 	{
 		auto ProcessNeighbor = [&](const PCGExOctree::FItem& InEffector)
 		{
-			if (const auto* E = ComputeFactor(InPosition, InEffector.Index, Metrics))
+			if (const auto* E = ComputeFactor<true>(InPosition, InEffector.Index, Metrics))
 			{
 				Samples.Emplace_GetRef(Noise, Metrics.Potency, Metrics.Weight);
 			}

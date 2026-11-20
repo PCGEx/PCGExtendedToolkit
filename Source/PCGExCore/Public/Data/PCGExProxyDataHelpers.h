@@ -59,6 +59,13 @@ namespace PCGExData
 
 #pragma endregion
 
+	// What the consumer does with the proxy it asks GetProxyBuffer for.
+	enum class EProxyAccess : uint8
+	{
+		Typed,      // Get<T> / Set<T>: every value is WorkingType
+		TypeErased, // void, scoped-value and hash accessors only: container and extended-type attributes are served too
+	};
+
 	//
 	// Main proxy creation function - fully type-erased
 	// Null, with an error, when InAccess is Typed and the attribute is a container or an extended type.

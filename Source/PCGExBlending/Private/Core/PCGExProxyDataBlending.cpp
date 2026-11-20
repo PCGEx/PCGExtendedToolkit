@@ -208,7 +208,7 @@ namespace PCGExBlending
 		check(Operation)
 		check(C)
 
-		if (!Tracker.Count)
+		if (!Tracker.Count || bEndMultiIsNoop)
 		{
 			return;
 		}
@@ -303,12 +303,14 @@ namespace PCGExBlending
 
 		// Set type info
 		UnderlyingType = Desc_A.WorkingType;
-		bNeedsLifecycleManagement = PCGExTypes::FScopedTypedValue::NeedsLifecycleManagement(UnderlyingType);
 
 		// Create output first so we may read from it
 		C = PCGExData::GetProxyBuffer(InContext, Desc_C, PCGExData::EProxyAccess::TypeErased);
 		A = PCGExData::GetProxyBuffer(InContext, Desc_A, PCGExData::EProxyAccess::TypeErased);
 		B = PCGExData::GetProxyBuffer(InContext, Desc_B, PCGExData::EProxyAccess::TypeErased);
+
+		// Before the early-outs below: the cached state must match the proxies even on a failed init.
+		ResolveCachedState();
 
 		// Ensure C is readable for MultiBlend, as those will use GetCurrent
 		if (C && !C->EnsureReadable())
@@ -346,6 +348,7 @@ namespace PCGExBlending
 
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 
 		return Blender;
 	}
@@ -368,6 +371,7 @@ namespace PCGExBlending
 		}
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 		return Blender;
 	}
 
@@ -427,6 +431,16 @@ namespace PCGExBlending
 		}
 	}
 
+	void FProxyDataBlender::ResolveCachedState()
+	{
+		ScratchProperty = ResolveBackingProperty(A);
+		bSizedScratch = ValueSize > 0 && PCGExTypes::FScopedTypedValue::GetTypeSize(UnderlyingType) == 0;
+
+		// Reading a slot back and storing it unchanged is exact only without sub-selection or Real<->Working conversion.
+		bEndMultiIsNoop = Operation && C && !Operation->HasFinalize()
+			&& !C->HasSubSelection() && C->RealType == C->WorkingType && C->GetBuffer().IsValid();
+	}
+
 	TSharedPtr<FProxyDataBlender> CreateProxyBlender(
 		FPCGExContext* InContext,
 		const EPCGExABBlendingType BlendMode,
@@ -479,6 +493,7 @@ namespace PCGExBlending
 
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 
 		// Ensure C is readable for MultiBlend, as those will use GetCurrent
 		if (!Blender->C->EnsureReadable())
@@ -534,6 +549,7 @@ namespace PCGExBlending
 
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 
 		// Ensure C is readable for MultiBlend, as those will use GetCurrent
 		if (!Blender->C->EnsureReadable())

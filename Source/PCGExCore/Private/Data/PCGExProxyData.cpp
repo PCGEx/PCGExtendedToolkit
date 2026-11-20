@@ -262,21 +262,6 @@ namespace PCGExData
 		return PCGExTypes::FScopedTypedValue(WorkingType);
 	}
 
-	double IBufferProxy::ReadAsDouble(const int32 Index) const
-	{
-		checkSlow(!bTypeErased);
-		PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
-		GetVoid(Index, WorkingValue.GetRaw());
-		constexpr EPCGMetadataTypes TargetType = PCGExTypes::TTraits<double>::Type;
-		if (TargetType == WorkingType)
-		{
-			return *reinterpret_cast<const double*>(WorkingValue.GetRaw());
-		}
-		double Result{};
-		PCGExTypeOps::FConversionTable::Convert(WorkingType, WorkingValue.GetRaw(), TargetType, &Result);
-		return Result;
-	}
-
 	int32 IBufferProxy::GetValueSize() const
 	{
 		if (WorkingOps)
