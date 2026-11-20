@@ -4,18 +4,6 @@
 #include "Samplers/PCGExTensorSamplerAdaptive.h"
 #include "Core/PCGExTensorOperation.h"
 
-void UPCGExTensorSamplerAdaptive::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExTensorSamplerAdaptive* TypedOther = Cast<UPCGExTensorSamplerAdaptive>(Other))
-	{
-		MinStepFraction = TypedOther->MinStepFraction;
-		MaxStepFraction = TypedOther->MaxStepFraction;
-		ErrorTolerance = TypedOther->ErrorTolerance;
-		MaxSubSteps = TypedOther->MaxSubSteps;
-	}
-}
-
 bool UPCGExTensorSamplerAdaptive::PrepareForData(FPCGExContext* InContext)
 {
 	return Super::PrepareForData(InContext);

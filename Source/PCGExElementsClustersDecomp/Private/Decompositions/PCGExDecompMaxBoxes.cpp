@@ -504,19 +504,4 @@ void FPCGExDecompMaxBoxes::SubdivideAndClaim(
 
 #pragma region UPCGExDecompMaxBoxes
 
-void UPCGExDecompMaxBoxes::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompMaxBoxes* TypedOther = Cast<UPCGExDecompMaxBoxes>(Other))
-	{
-		TransformSpace = TypedOther->TransformSpace;
-		CustomTransform = TypedOther->CustomTransform;
-		VoxelSizeMode = TypedOther->VoxelSizeMode;
-		VoxelSize = TypedOther->VoxelSize;
-		MaxCellSize = TypedOther->MaxCellSize;
-		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
-		Balance = TypedOther->Balance;
-	}
-}
-
 #pragma endregion

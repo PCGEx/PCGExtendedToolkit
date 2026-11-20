@@ -72,8 +72,6 @@ class PCGEXELEMENTSPATHFINDING_API UPCGExSearchInstancedFactory : public UPCGExI
 	GENERATED_BODY()
 
 public:
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	virtual TSharedPtr<FPCGExSearchOperation> CreateOperation() const PCGEX_NOT_IMPLEMENTED_RET(CreateOperation(), nullptr);
 
 	/** Exit the search early once a valid path is found. Disabling explores all possible paths. */

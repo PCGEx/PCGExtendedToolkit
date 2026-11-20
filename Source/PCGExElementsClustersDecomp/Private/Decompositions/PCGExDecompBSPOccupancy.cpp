@@ -340,19 +340,4 @@ void FPCGExDecompBSPOccupancy::SplitNonContiguousCells(
 
 #pragma region UPCGExDecompBSPOccupancy
 
-void UPCGExDecompBSPOccupancy::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompBSPOccupancy* TypedOther = Cast<UPCGExDecompBSPOccupancy>(Other))
-	{
-		TransformSpace = TypedOther->TransformSpace;
-		CustomTransform = TypedOther->CustomTransform;
-		VoxelSizeMode = TypedOther->VoxelSizeMode;
-		VoxelSize = TypedOther->VoxelSize;
-		MaxDepth = TypedOther->MaxDepth;
-		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
-		GapWeight = TypedOther->GapWeight;
-	}
-}
-
 #pragma endregion

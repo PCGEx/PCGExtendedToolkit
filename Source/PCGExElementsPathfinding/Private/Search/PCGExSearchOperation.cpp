@@ -60,9 +60,3 @@ void FPCGExSearchOperation::ReleaseAllocations(const TSharedPtr<PCGExPathfinding
 	FScopeLock Lock(&AllocationsPoolLock);
 	AllocationsPool.Add(InAllocations);
 }
-
-
-void UPCGExSearchInstancedFactory::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-}

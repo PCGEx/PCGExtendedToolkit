@@ -38,7 +38,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin=1, ClampMax=16))
 	int32 MaxSubSteps = 4;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 	virtual bool PrepareForData(FPCGExContext* InContext);
 	virtual PCGExTensor::FTensorSample RawSample(const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors, int32 InSeedIndex, const FTransform& InProbe) const;
 	virtual PCGExTensor::FTensorSample Sample(const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors, int32 InSeedIndex, const FTransform& InProbe, bool& OutSuccess) const;

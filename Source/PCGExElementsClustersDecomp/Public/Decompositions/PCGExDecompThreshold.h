@@ -53,7 +53,6 @@ public:
 	EPCGExDecompBinningMode BinningMode = EPCGExDecompBinningMode::Uniform;
 
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) override;
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompThreshold, {
 	                                     Operation->AttributeSelector = AttributeSelector;

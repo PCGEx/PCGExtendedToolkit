@@ -450,16 +450,4 @@ bool FPCGExDecompConvexBSP::Decompose(FPCGExDecompositionResult& OutResult)
 
 #pragma region UPCGExDecompConvexBSP
 
-void UPCGExDecompConvexBSP::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompConvexBSP* TypedOther = Cast<UPCGExDecompConvexBSP>(Other))
-	{
-		MaxConcavityRatio = TypedOther->MaxConcavityRatio;
-		MinNodesPerCell = TypedOther->MinNodesPerCell;
-		MaxCells = TypedOther->MaxCells;
-		MaxDepth = TypedOther->MaxDepth;
-	}
-}
-
 #pragma endregion

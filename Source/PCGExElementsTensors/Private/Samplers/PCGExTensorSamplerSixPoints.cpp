@@ -4,11 +4,6 @@
 
 #include "Samplers/PCGExTensorSamplerSixPoints.h"
 
-void UPCGExTensorSamplerSixPoints::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-}
-
 bool UPCGExTensorSamplerSixPoints::PrepareForData(FPCGExContext* InContext)
 {
 	return true;

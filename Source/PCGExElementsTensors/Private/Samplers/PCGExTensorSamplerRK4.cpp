@@ -5,11 +5,6 @@
 #include "Samplers/PCGExTensorSamplerRK4.h"
 
 
-void UPCGExTensorSamplerRK4::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-}
-
 bool UPCGExTensorSamplerRK4::PrepareForData(FPCGExContext* InContext)
 {
 	return true;

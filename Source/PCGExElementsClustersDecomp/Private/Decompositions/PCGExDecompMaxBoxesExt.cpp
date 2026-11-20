@@ -929,29 +929,4 @@ void UPCGExDecompMaxBoxesExt::RegisterBuffersDependencies(FPCGExContext* InConte
 	Weight.RegisterBufferDependencies(InContext, FacadePreloader);
 }
 
-void UPCGExDecompMaxBoxesExt::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompMaxBoxesExt* TypedOther = Cast<UPCGExDecompMaxBoxesExt>(Other))
-	{
-		TransformSpace = TypedOther->TransformSpace;
-		CustomTransform = TypedOther->CustomTransform;
-		VoxelSizeMode = TypedOther->VoxelSizeMode;
-		VoxelSize = TypedOther->VoxelSize;
-		MaxCellSize = TypedOther->MaxCellSize;
-		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
-		Balance = TypedOther->Balance;
-		AxisBias = TypedOther->AxisBias;
-		Weight = TypedOther->Weight;
-		WeightInfluence = TypedOther->WeightInfluence;
-		WeightMode = TypedOther->WeightMode;
-		PriorityThreshold = TypedOther->PriorityThreshold;
-		PreferredMinVolume = TypedOther->PreferredMinVolume;
-		PreferredMaxVolume = TypedOther->PreferredMaxVolume;
-		VolumePreferenceWeight = TypedOther->VolumePreferenceWeight;
-		bUseHeuristicMergeGating = TypedOther->bUseHeuristicMergeGating;
-		MergeScoreThreshold = TypedOther->MergeScoreThreshold;
-	}
-}
-
 #pragma endregion

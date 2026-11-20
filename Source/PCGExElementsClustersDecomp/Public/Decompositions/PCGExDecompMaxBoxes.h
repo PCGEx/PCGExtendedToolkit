@@ -99,8 +99,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
 	double Balance = 1.0;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompMaxBoxes, {
 	                                     Operation->TransformSpace = TransformSpace;
 	                                     Operation->CustomTransform = CustomTransform;
