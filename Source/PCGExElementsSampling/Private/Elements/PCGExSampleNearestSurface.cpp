@@ -291,6 +291,7 @@ namespace PCGExSampleNearestSurface
 			PCGEX_OUTPUT_VALUE(Success, Index, false)
 		};
 
+		bool bLocalAnySuccess = false;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -429,7 +430,7 @@ namespace PCGExSampleNearestSurface
 
 					MaxDistanceValue->Set(Scope, FMath::Max(MaxDistanceValue->Get(Scope), MinDist));
 
-					FPlatformAtomics::InterlockedExchange(&bAnySuccess, 1);
+					bLocalAnySuccess = true;
 				}
 				else
 				{
@@ -502,6 +503,11 @@ namespace PCGExSampleNearestSurface
 					break;
 				}
 			}
+		}
+
+		if (bLocalAnySuccess)
+		{
+			FPlatformAtomics::InterlockedExchange(&bAnySuccess, 1);
 		}
 
 		if (SurfacesForward)

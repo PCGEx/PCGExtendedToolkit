@@ -9,6 +9,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Core/PCGExMTCommon.h"
+#include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGAttributeAccessorKeys.h"
 
@@ -650,6 +651,7 @@ namespace PCGExData
 							return;
 						}
 						FPCGAttributeAccessorKeysEntries WriterKeys(MakeArrayView(WriterEntries));
+						PCGExData::Helpers::PrepareBulkWrite<T>(*Accessor, WriterKeys, WriterValues.Num());
 						Accessor->SetRange<T>(TArrayView<const T>(WriterValues), 0, WriterKeys);
 					},
 					[&]()

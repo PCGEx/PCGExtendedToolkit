@@ -376,8 +376,8 @@ namespace PCGExPathSplineMeshSimple
 
 		bool bAnyValidSegment = false;
 
-		const TArray<PCGExValueHash>& MeshKeysRef = MeshKeys ? *MeshKeys.Get() : TArray<PCGExValueHash>{};
-		const TArray<PCGExValueHash>& MaterialKeysRef = MaterialKeys ? *MaterialKeys.Get() : TArray<PCGExValueHash>{};
+		const TConstArrayView<PCGExValueHash> MeshKeysView = MeshKeys ? TConstArrayView<PCGExValueHash>(*MeshKeys) : TConstArrayView<PCGExValueHash>();
+		const TConstArrayView<PCGExValueHash> MaterialKeysView = MaterialKeys ? TConstArrayView<PCGExValueHash>(*MaterialKeys) : TConstArrayView<PCGExValueHash>();
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -394,7 +394,7 @@ namespace PCGExPathSplineMeshSimple
 				continue;
 			}
 
-			const TObjectPtr<UStaticMesh>* SM = MeshKeys ? Context->StaticMeshLoader->GetAsset(MeshKeysRef[Index]) : &Context->StaticMesh;
+			const TObjectPtr<UStaticMesh>* SM = MeshKeys ? Context->StaticMeshLoader->GetAsset(MeshKeysView[Index]) : &Context->StaticMesh;
 
 			if (!SM)
 			{
@@ -403,7 +403,7 @@ namespace PCGExPathSplineMeshSimple
 			}
 
 			Meshes[Index] = *SM;
-			if (const TObjectPtr<UMaterialInterface>* MI = MaterialKeys ? Context->MaterialLoader->GetAsset(MaterialKeysRef[Index]) : nullptr)
+			if (const TObjectPtr<UMaterialInterface>* MI = MaterialKeys ? Context->MaterialLoader->GetAsset(MaterialKeysView[Index]) : nullptr)
 			{
 				Materials[Index] = *MI;
 			}

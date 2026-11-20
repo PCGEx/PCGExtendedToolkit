@@ -262,11 +262,12 @@ namespace PCGExPaths
 			ResultIndices.Add(NumPoints - 1);
 		}
 
-		for (int32 i = 1; i < NumPoints; ++i)
+		// Stops below the terminal: an open path's last index is already pinned above.
+		for (int32 i = 1; i < TerminalIndex; ++i)
 		{
 			if (!RemovableFlags[i])
 			{
-				ResultIndices.AddUnique(i);
+				ResultIndices.Add(i);
 			}
 		}
 
@@ -323,7 +324,8 @@ namespace PCGExPaths
 
 		if (MaxDistance > MaxError && MaxIndex != -1)
 		{
-			SelectedIndices.AddUnique(MaxIndex);
+			// Never already selected: removable, strictly inside this span, and sibling spans are disjoint.
+			SelectedIndices.Add(MaxIndex);
 			SimplifyRecursive(Points, RemovableFlags, SelectedIndices, StartIndex, MaxIndex, MaxError);
 			SimplifyRecursive(Points, RemovableFlags, SelectedIndices, MaxIndex, EndIndex, MaxError);
 		}

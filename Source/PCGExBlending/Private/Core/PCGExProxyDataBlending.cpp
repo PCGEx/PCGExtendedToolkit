@@ -306,9 +306,9 @@ namespace PCGExBlending
 		bNeedsLifecycleManagement = PCGExTypes::FScopedTypedValue::NeedsLifecycleManagement(UnderlyingType);
 
 		// Create output first so we may read from it
-		C = PCGExData::GetProxyBuffer(InContext, Desc_C);
-		A = PCGExData::GetProxyBuffer(InContext, Desc_A);
-		B = PCGExData::GetProxyBuffer(InContext, Desc_B);
+		C = PCGExData::GetProxyBuffer(InContext, Desc_C, PCGExData::EProxyAccess::TypeErased);
+		A = PCGExData::GetProxyBuffer(InContext, Desc_A, PCGExData::EProxyAccess::TypeErased);
+		B = PCGExData::GetProxyBuffer(InContext, Desc_B, PCGExData::EProxyAccess::TypeErased);
 
 		// Ensure C is readable for MultiBlend, as those will use GetCurrent
 		if (C && !C->EnsureReadable())
@@ -448,9 +448,9 @@ namespace PCGExBlending
 
 		// Create proxies first -- the operation now depends on whether any proxy is
 		// property-backed, which we can only know after they're built.
-		Blender->C = PCGExData::GetProxyBuffer(InContext, C);
-		Blender->A = PCGExData::GetProxyBuffer(InContext, A);
-		Blender->B = PCGExData::GetProxyBuffer(InContext, B);
+		Blender->C = PCGExData::GetProxyBuffer(InContext, C, PCGExData::EProxyAccess::TypeErased);
+		Blender->A = PCGExData::GetProxyBuffer(InContext, A, PCGExData::EProxyAccess::TypeErased);
+		Blender->B = PCGExData::GetProxyBuffer(InContext, B, PCGExData::EProxyAccess::TypeErased);
 
 		if (!Blender->A)
 		{
@@ -509,8 +509,8 @@ namespace PCGExBlending
 		Blender->UnderlyingType = A.WorkingType;
 
 		// Create proxies first (see 3-source overload for rationale).
-		Blender->C = PCGExData::GetProxyBuffer(InContext, C);
-		Blender->A = PCGExData::GetProxyBuffer(InContext, A);
+		Blender->C = PCGExData::GetProxyBuffer(InContext, C, PCGExData::EProxyAccess::TypeErased);
+		Blender->A = PCGExData::GetProxyBuffer(InContext, A, PCGExData::EProxyAccess::TypeErased);
 		Blender->B = Blender->A; // Use B as fallback -- important for intrinsic properties such as $Index
 
 		if (!Blender->A)

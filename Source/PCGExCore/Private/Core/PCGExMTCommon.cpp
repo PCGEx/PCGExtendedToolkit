@@ -30,7 +30,7 @@ namespace PCGExMT
 
 #pragma region Parallel Helpers
 
-	void ParallelOrSequential(const int32 Num, const FLoopBody& Body, const int32 Threshold, const EParallelForFlags Flags)
+	void ParallelOrSequential(const int32 Num, FLoopBody Body, const int32 Threshold, const EParallelForFlags Flags)
 	{
 		if (Num >= Threshold)
 		{
@@ -45,7 +45,7 @@ namespace PCGExMT
 		}
 	}
 
-	void ParallelOrSequentialScoped(const int32 Num, const FScopedLoopBody& Body, const int32 Threshold)
+	void ParallelOrSequentialScoped(const int32 Num, FScopedLoopBody Body, const int32 Threshold)
 	{
 		if (Num <= 0)
 		{
@@ -77,7 +77,7 @@ namespace PCGExMT
 		}
 	}
 
-	void Sequential(const int32 Num, const FLoopBody& Body)
+	void Sequential(const int32 Num, FLoopBody Body)
 	{
 		for (int32 i = 0; i < Num; ++i)
 		{

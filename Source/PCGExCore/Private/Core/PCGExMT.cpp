@@ -51,7 +51,7 @@ namespace PCGExMT
 		return OutSubRanges.Num();
 	}
 
-	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, const FScopedLoopBody& Body)
+	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, FScopedLoopBody Body)
 	{
 		if (Scopes.Num() == 1 || bForceSingleThreaded)
 		{
@@ -108,7 +108,7 @@ namespace PCGExMT
 		}
 
 		Group = InGroup;
-		PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::SetParent to [#%d|%s]"), HandleIdx, *DEBUG_HandleId(), InGroup->HandleIdx, *InGroup->DEBUG_HandleId());
+		PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::SetParent to [#%d|%s]"), HandleIdx, DEBUG_HandleId(), InGroup->HandleIdx, InGroup->DEBUG_HandleId());
 
 		// Only register with the parent group if not already counted as "expected".
 		// FRegistrationGuard suppresses completion checks during registration to prevent
@@ -128,13 +128,13 @@ namespace PCGExMT
 	{
 		if (!TryTransitionState(EAsyncHandleState::Idle, EAsyncHandleState::Running))
 		{
-			PCGEX_TASK_LOG(LogTemp, Error, TEXT("IAsyncHandle[#%d|%s]::Start (aborted)"), HandleIdx, *DEBUG_HandleId());
+			PCGEX_TASK_LOG(LogTemp, Error, TEXT("IAsyncHandle[#%d|%s]::Start (aborted)"), HandleIdx, DEBUG_HandleId());
 			Cancel();
 			Complete();
 			return false;
 		}
 
-		PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Start"), HandleIdx, *DEBUG_HandleId());
+		PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Start"), HandleIdx, DEBUG_HandleId());
 		if (const TSharedPtr<IAsyncHandleGroup> Parent = Group.Pin())
 		{
 			Parent->NotifyStarted();
@@ -153,7 +153,7 @@ namespace PCGExMT
 		// Try to end immediately if idle
 		if (TryTransitionState(EAsyncHandleState::Idle, EAsyncHandleState::Ended))
 		{
-			PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Cancel"), HandleIdx, *DEBUG_HandleId());
+			PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Cancel"), HandleIdx, DEBUG_HandleId());
 			OnEnd(true);
 		}
 	}
@@ -162,7 +162,7 @@ namespace PCGExMT
 	{
 		if (TryTransitionState(EAsyncHandleState::Running, EAsyncHandleState::Ended))
 		{
-			PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Complete"), HandleIdx, *DEBUG_HandleId());
+			PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Complete"), HandleIdx, DEBUG_HandleId());
 			OnEnd(IsCancelled());
 		}
 	}
@@ -174,7 +174,7 @@ namespace PCGExMT
 
 	void IAsyncHandle::OnEnd(const bool bWasCancelled)
 	{
-		PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::OnEnd"), HandleIdx, *DEBUG_HandleId());
+		PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::OnEnd"), HandleIdx, DEBUG_HandleId());
 		if (const TSharedPtr<IAsyncHandleGroup> Parent = Group.Pin())
 		{
 			Parent->NotifyCompleted();
@@ -212,21 +212,21 @@ namespace PCGExMT
 			return false;
 		}
 		ExpectedCount.fetch_add(Count, std::memory_order_acq_rel);
-		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::RegisterExpected +%d (%d)"), HandleIdx, *DEBUG_HandleId(), Count, ExpectedCount.load());
+		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::RegisterExpected +%d (%d)"), HandleIdx, *GroupName.ToString(), Count, ExpectedCount.load());
 		return true;
 	}
 
 	void IAsyncHandleGroup::NotifyStarted()
 	{
 		StartedCount.fetch_add(1, std::memory_order_acq_rel);
-		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::NotifyStarted++ (%d)"), HandleIdx, *DEBUG_HandleId(), StartedCount.load());
+		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::NotifyStarted++ (%d)"), HandleIdx, *GroupName.ToString(), StartedCount.load());
 	}
 
 	void IAsyncHandleGroup::NotifyCompleted()
 	{
 
 		CompletedCount.fetch_add(1, std::memory_order_acq_rel);
-		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::NotifyCompleted++ (%d)"), HandleIdx, *DEBUG_HandleId(), CompletedCount.load());
+		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::NotifyCompleted++ (%d)"), HandleIdx, *GroupName.ToString(), CompletedCount.load());
 
 		CheckCompletion();
 	}
@@ -399,7 +399,7 @@ namespace PCGExMT
 	void IAsyncHandleGroup::AssertEmptyThread() const
 	{
 		FTaskManager* Manager = GetManager();
-		UE_LOG(LogPCGEx, Error, TEXT( "[%s @ %s] Empty thread - Graph will hang until cancelled. Enable bAssertOnEmptyThread for stack trace; Please head out to PCGEx Discord or log an issue on git." ), Manager ? *GetNameSafe(Manager->GetContext()->GetInputSettings<UPCGExSettings>()) : TEXT( "UNKNOWN NODE"), *DEBUG_HandleId());
+		UE_LOG(LogPCGEx, Error, TEXT( "[%s @ %s] Empty thread - Graph will hang until cancelled. Enable bAssertOnEmptyThread for stack trace; Please head out to PCGEx Discord or log an issue on git." ), Manager ? *GetNameSafe(Manager->GetContext()->GetInputSettings<UPCGExSettings>()) : TEXT( "UNKNOWN NODE"), *GroupName.ToString());
 		if (PCGEX_CORE_SETTINGS.bAssertOnEmptyThread)
 		{
 			ensure(false);
@@ -432,7 +432,7 @@ namespace PCGExMT
 		// Try to end immediately if idle
 		if (TryTransitionState(EAsyncHandleState::Idle, EAsyncHandleState::Ended))
 		{
-			PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Cancel"), HandleIdx, *DEBUG_HandleId());
+			PCGEX_TASK_LOG(LogTemp, Warning, TEXT("IAsyncHandle[#%d|%s]::Cancel"), HandleIdx, *GroupName.ToString());
 			OnEnd(true);
 		}
 	}
@@ -449,7 +449,7 @@ namespace PCGExMT
 			return;
 		}
 
-		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::LaunchTask"), HandleIdx, *DEBUG_HandleId()) if (FTaskManager* Manager = GetManager())
+		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[#%d|%s]::LaunchTask"), HandleIdx, *GroupName.ToString()) if (FTaskManager* Manager = GetManager())
 		{
 			// Register in this handle's registry
 			const int32 Idx = RegisterTask(InTask);
@@ -463,7 +463,7 @@ namespace PCGExMT
 	void IAsyncHandleGroup::OnEnd(const bool bWasCancelled)
 	{
 		const FTaskManager* Manager = GetManager();
-		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[[%s]#%d|%s]::OnEnd(%d)"), Manager ? *GetNameSafe(Manager->GetContext()->GetInputSettings<UPCGExSettings>()) : TEXT(""), HandleIdx, *DEBUG_HandleId(), bWasCancelled)
+		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("IAsyncMultiHandle[[%s]#%d|%s]::OnEnd(%d)"), Manager ? *GetNameSafe(Manager->GetContext()->GetInputSettings<UPCGExSettings>()) : TEXT(""), HandleIdx, *GroupName.ToString(), bWasCancelled)
 
 		// Clear registry to free memory
 		ClearRegistry();
@@ -489,7 +489,7 @@ namespace PCGExMT
 	{
 		if (const TSharedPtr<IAsyncHandleGroup> Pinned = Group.Pin())
 		{
-			PCGEX_TASK_LOG(LogTemp, Error, TEXT("FAsyncToken::FAsyncToken @#%d|%s"), Pinned->HandleIdx, *Pinned->DEBUG_HandleId());
+			PCGEX_TASK_LOG(LogTemp, Error, TEXT("FAsyncToken::FAsyncToken @#%d|%s"), Pinned->HandleIdx, Pinned->DEBUG_HandleId());
 			Pinned->RegisterExpected();
 			Pinned->NotifyStarted();
 		}
@@ -696,7 +696,7 @@ namespace PCGExMT
 			return;
 		}
 
-		PCGEX_MANAGER_LOG(LogTemp, Warning, TEXT("FTaskManager::LaunchTask : [%d|%s]"), InTask->HandleIdx, *InTask->DEBUG_HandleId());
+		PCGEX_MANAGER_LOG(LogTemp, Warning, TEXT("FTaskManager::LaunchTask : [%d|%s]"), InTask->HandleIdx, InTask->DEBUG_HandleId());
 		PCGEX_SHARED_THIS_DECL
 
 		// Orphan tasks (no explicit group) are parented directly to the manager.
@@ -706,7 +706,7 @@ namespace PCGExMT
 			InTask->SetGroup(ThisPtr);
 		}
 
-		UE::Tasks::Launch(*InTask->DEBUG_HandleId(), [WeakManager = TWeakPtr<FTaskManager>(SharedThis(this)), Task = InTask, PinTracker = Context->GetAsyncPinTracker()]()
+		UE::Tasks::Launch(InTask->DEBUG_HandleId(), [WeakManager = TWeakPtr<FTaskManager>(SharedThis(this)), Task = InTask, PinTracker = Context->GetAsyncPinTracker()]()
 		{
 #define PCGEX_CANCEL_TASK_INTERNAL Task->Cancel(); Task->Complete(); return;
 
@@ -745,7 +745,7 @@ namespace PCGExMT
 	void FTaskManager::OnEnd(const bool bWasCancelled)
 	{
 		const FTaskManager* Manager = this;
-		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("FTaskManager[[%s]#%d|%s]::OnEnd(%d)"), Manager ? *GetNameSafe(Manager->GetContext()->GetInputSettings<UPCGExSettings>()) : TEXT(""), HandleIdx, *DEBUG_HandleId(), bWasCancelled)
+		PCGEX_MULTI_LOG(LogTemp, Warning, TEXT("FTaskManager[[%s]#%d|%s]::OnEnd(%d)"), Manager ? *GetNameSafe(Manager->GetContext()->GetInputSettings<UPCGExSettings>()) : TEXT(""), HandleIdx, *GroupName.ToString(), bWasCancelled)
 
 		// Clear registries
 		ClearRegistry();

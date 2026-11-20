@@ -419,8 +419,9 @@ namespace PCGExClusters
 		FVector GetEdgeDir(const int32 InEdgeIndex, const int32 InStartPtIndex) const;
 		FVector GetEdgeDir(const FLink Lk, const int32 InStartPtIndex) const;
 
-		TSharedPtr<PCGExOctree::FItemOctree> GetNodeOctree();
-		TSharedPtr<PCGExOctree::FItemOctree> GetEdgeOctree();
+		// The returned reference is to the member: do not hold it across WillModifyVtxPositions or a rebuild.
+		const TSharedPtr<PCGExOctree::FItemOctree>& GetNodeOctree();
+		const TSharedPtr<PCGExOctree::FItemOctree>& GetEdgeOctree();
 
 		void RebuildNodeOctree();
 		void RebuildEdgeOctree();

@@ -307,7 +307,7 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 	// When the Shared flag is set, creation routes through the pool's atomic GetOrCreate
 	// so the side-effectful InitForRole (e.g. PointData->AllocateProperties) runs at most
 	// once per descriptor -- preventing concurrent UObject mutation from parallel callers.
-	TSharedPtr<IBufferProxy> GetProxyBuffer(FPCGExContext* InContext, const FProxyDescriptor& InDescriptor)
+	TSharedPtr<IBufferProxy> GetProxyBuffer(FPCGExContext* InContext, const FProxyDescriptor& InDescriptor, const EProxyAccess InAccess)
 	{
 		const TSharedPtr<FFacade> InDataFacade = InDescriptor.DataFacade.Pin();
 		UPCGBasePointData* PointData = nullptr;
@@ -434,7 +434,8 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 				// Tier 3 fallback: wrap FPropertyBuffer via void* R/W for types not in
 				// PCGEX_FOREACH_SUPPORTEDTYPES. FFacade::GetWritable/GetDefaultReadable gate on
 				// InitProperty internally -- a failed size derivation returns nullptr.
-				if (!OutProxy)
+				// Type-erased consumers only: a typed request must not create the attribute or its buffer.
+				if (!OutProxy && InAccess == EProxyAccess::TypeErased)
 				{
 					const FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(
 						InDescriptor.Selector,
@@ -512,16 +513,42 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 			return OutProxy;
 		};
 
+		TSharedPtr<IBufferProxy> Proxy;
+
 		if (InDescriptor.HasFlag(EProxyFlags::Shared))
 		{
 			// Route to the descriptor's facade-local pool: a per-cluster target facade's pool is uncontended,
 			// and shared source facades distribute contention while retaining their read proxies.
 			// Descriptors with no pinnable facade fall back to the context pool.
-			
+
 			IBufferProxyPool& Pool = InDataFacade ? InDataFacade->GetProxyPool() : *InContext->BufferProxyPool;
-			return Pool.GetOrCreate(InDescriptor, Factory);
+			Proxy = Pool.GetOrCreate(InDescriptor, Factory);
 		}
-		return Factory();
+		else
+		{
+			Proxy = Factory();
+		}
+
+		if (InAccess == EProxyAccess::Typed)
+		{
+			// A shared pool can already hold the type-erased proxy another consumer built for this descriptor.
+			if (Proxy && Proxy->IsTypeErased())
+			{
+				Proxy = nullptr;
+			}
+
+			if (!Proxy && InDescriptor.Selector.GetSelection() == EPCGAttributePropertySelection::Attribute)
+			{
+				const bool bIsContainer = InDescriptor.SourceDesc.IsValid() && !InDescriptor.SourceDesc.IsSingleValue();
+				const bool bIsExtended = InDescriptor.RealType != EPCGMetadataTypes::Unknown && !PCGExMetaHelpers::IsLegacyScalarType(InDescriptor.RealType);
+				if (bIsContainer || bIsExtended)
+				{
+					PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("\"{0}\" is a container or extended-type attribute: it has no single value to read or write here."), FText::FromString(PCGExMetaHelpers::GetSelectorDisplayName(InDescriptor.Selector))));
+				}
+			}
+		}
+
+		return Proxy;
 	}
 
 #pragma endregion

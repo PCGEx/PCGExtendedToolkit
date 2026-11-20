@@ -40,7 +40,8 @@ namespace PCGEx
 			return false;
 		}
 
-		ValuesBuffer = PCGExData::GetProxyBuffer(InContext, Descriptor);
+		// Hash-only reads: container and extended-type attributes hash too.
+		ValuesBuffer = PCGExData::GetProxyBuffer(InContext, Descriptor, PCGExData::EProxyAccess::TypeErased);
 
 		if (!ValuesBuffer)
 		{

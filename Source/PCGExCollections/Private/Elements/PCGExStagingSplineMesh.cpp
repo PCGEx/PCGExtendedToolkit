@@ -710,6 +710,8 @@ namespace PCGExPathSplineMesh
 		// their scratch freely. Null when no active selector op uses scratch.
 		const TSharedPtr<PCGExCollections::FSourceScratches> PickScratches = bLocalFitting ? Source->CreateScratches(Scope.Count) : nullptr;
 
+		TSet<FSoftObjectPath>& ScopeMaterials = ScopedMaterials->Get_Ref(Scope);
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			PCGExCollections::FMicroSelectorHelper* MicroHelper = nullptr;
@@ -806,7 +808,7 @@ namespace PCGExPathSplineMesh
 
 				if (Segment.MaterialPick != -1)
 				{
-					MeshEntry->GetMaterialPaths(Segment.MaterialPick, *ScopedMaterials->Get(Scope));
+					MeshEntry->GetMaterialPaths(Segment.MaterialPick, ScopeMaterials);
 				}
 			}
 

@@ -44,14 +44,15 @@ namespace PCGExGraphs
 		}
 
 		const uint64 Hash = PCGEx::H64U(A, B);
-		if (const int32* EdgeIndex = UniqueEdges.Find(Hash))
+		const uint32 KeyHash = GetTypeHash(Hash);
+		if (const int32* EdgeIndex = UniqueEdges.FindByHash(KeyHash, Hash))
 		{
 			OutEdge.Index = *EdgeIndex;
 			return false;
 		}
 
 		OutEdge = Edges.Emplace_GetRef(Edges.Num(), A, B, -1, IOIndex);
-		UniqueEdges.Add(Hash, (OutEdge.Index = Edges.Num() - 1));
+		UniqueEdges.AddByHash(KeyHash, Hash, (OutEdge.Index = Edges.Num() - 1));
 
 		Nodes[A].LinkEdge(OutEdge.Index);
 		Nodes[B].LinkEdge(OutEdge.Index);
@@ -74,13 +75,14 @@ namespace PCGExGraphs
 		}
 
 		uint64 H = Edge.H64U();
-		if (UniqueEdges.Contains(H))
+		const uint32 KeyHash = GetTypeHash(H);
+		if (UniqueEdges.ContainsByHash(KeyHash, H))
 		{
 			return false;
 		}
 
 		FEdge& NewEdge = Edges.Emplace_GetRef(Edge);
-		UniqueEdges.Add(H, (NewEdge.Index = Edges.Num() - 1));
+		UniqueEdges.AddByHash(KeyHash, H, (NewEdge.Index = Edges.Num() - 1));
 
 		Nodes[Edge.Start].LinkEdge(NewEdge.Index);
 		Nodes[Edge.End].LinkEdge(NewEdge.Index);
@@ -117,7 +119,8 @@ namespace PCGExGraphs
 
 		for (const uint64 E : InEdges)
 		{
-			if (UniqueEdges.Contains(E))
+			const uint32 KeyHash = GetTypeHash(E);
+			if (UniqueEdges.ContainsByHash(KeyHash, E))
 			{
 				continue;
 			}
@@ -132,12 +135,10 @@ namespace PCGExGraphs
 
 			const int32 EdgeIndex = Edges.Emplace(Edges.Num(), A, B, -1, InIOIndex);
 
-			UniqueEdges.Add(E, EdgeIndex);
+			UniqueEdges.AddByHash(KeyHash, E, EdgeIndex);
 			Nodes[A].LinkEdge(EdgeIndex);
 			Nodes[B].LinkEdge(EdgeIndex);
 		}
-
-		UniqueEdges.Shrink();
 	}
 
 	int32 FGraph::InsertEdges(const TArray<FEdge>& InEdges)
@@ -254,7 +255,8 @@ namespace PCGExGraphs
 
 		for (const uint64& E : InEdges)
 		{
-			if (UniqueEdges.Contains(E))
+			const uint32 KeyHash = GetTypeHash(E);
+			if (UniqueEdges.ContainsByHash(KeyHash, E))
 			{
 				continue;
 			}
@@ -268,7 +270,7 @@ namespace PCGExGraphs
 			}
 
 			const int32 EdgeIndex = Edges.Emplace(Edges.Num(), A, B);
-			UniqueEdges.Add(E, EdgeIndex);
+			UniqueEdges.AddByHash(KeyHash, E, EdgeIndex);
 			Nodes[A].LinkEdge(EdgeIndex);
 			Nodes[B].LinkEdge(EdgeIndex);
 			Edges[EdgeIndex].IOIndex = InIOIndex;

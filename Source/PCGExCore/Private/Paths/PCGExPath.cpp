@@ -345,6 +345,8 @@ namespace PCGExPaths
 		const int32 Threshold = FMath::Max(1, FMath::RoundToInt(static_cast<double>(OtherNumPoints) * (1 - FMath::Clamp(Tolerance, 0, 1))));
 
 		int32 InsideCount = 0;
+		// Outside points left before the threshold is out of reach.
+		int32 OutsideBudget = OtherNumPoints - Threshold;
 
 		for (int i = 0; i < OtherNumPoints; i++)
 		{
@@ -355,6 +357,10 @@ namespace PCGExPaths
 				{
 					return true;
 				}
+			}
+			else if (--OutsideBudget < 0)
+			{
+				return false;
 			}
 		}
 

@@ -126,7 +126,7 @@ namespace PCGEx
 		return true;
 	}
 
-	void FManagedObjects::Remove(const TArray<FPCGTaggedData>& InTaggedData)
+	void FManagedObjects::Remove(TConstArrayView<FPCGTaggedData> InTaggedData)
 	{
 		if (IsFlushing())
 		{

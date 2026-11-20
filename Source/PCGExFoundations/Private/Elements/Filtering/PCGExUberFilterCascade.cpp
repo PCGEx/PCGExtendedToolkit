@@ -367,6 +367,9 @@ namespace PCGExUberFilterCascade
 
 		const int32 DefaultIdx = NumBranches; // Last bucket
 
+		TArray<int32, TInlineAllocator<8>> ScopeCounts;
+		ScopeCounts.Init(0, NumBranches + 1);
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			int32 MatchedBranch = -1;
@@ -382,12 +385,20 @@ namespace PCGExUberFilterCascade
 			if (MatchedBranch >= 0)
 			{
 				BranchIndices[MatchedBranch]->Get_Ref(Scope).Add(Index);
-				FPlatformAtomics::InterlockedAdd(&BranchCounts[MatchedBranch], 1);
+				ScopeCounts[MatchedBranch]++;
 			}
 			else
 			{
 				BranchIndices[DefaultIdx]->Get_Ref(Scope).Add(Index);
-				FPlatformAtomics::InterlockedAdd(&BranchCounts[DefaultIdx], 1);
+				ScopeCounts[DefaultIdx]++;
+			}
+		}
+
+		for (int32 i = 0; i <= NumBranches; i++)
+		{
+			if (ScopeCounts[i])
+			{
+				FPlatformAtomics::InterlockedAdd(&BranchCounts[i], ScopeCounts[i]);
 			}
 		}
 	}

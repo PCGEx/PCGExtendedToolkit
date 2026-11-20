@@ -144,6 +144,7 @@ public:
 
 	void IncreaseStagedOutputReserve(const int32 InIncreaseNum);
 	void StageOutput(UPCGData* InData, const FName& InPin, const PCGExData::EStaging Staging = PCGExData::EStaging::None, const TSet<FString>& InTags = {});
+	void StageOutput(UPCGData* InData, const FName& InPin, const PCGExData::EStaging Staging, TSet<FString>&& InTags);
 
 #pragma endregion
 

@@ -572,13 +572,15 @@ namespace PCGExExtrudeTensors
 
 	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
 	{
+		TArray<TSharedPtr<FExtrusion>>& ScopeCompleted = CompletedExtrusions->Get_Ref(Scope);
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			if (TSharedPtr<FExtrusion> Extrusion = ExtrusionQueue[Index];
 				Extrusion && !Extrusion->Advance())
 			{
 				Extrusion->Complete();
-				CompletedExtrusions->Get(Scope)->Add(Extrusion);
+				ScopeCompleted.Add(Extrusion);
 			}
 		}
 	}

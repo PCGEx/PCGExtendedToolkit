@@ -430,12 +430,19 @@ namespace PCGExStagedTypeFilter
 				if (Bucket >= 0)
 				{
 					BucketIndices[Bucket]->Get_Ref(Scope).Add(Index);
-					FPlatformAtomics::InterlockedAdd(&BucketCounts[Bucket], 1);
 				}
 				else
 				{
 					BucketIndices[UnmatchedIdx]->Get_Ref(Scope).Add(Index);
-					FPlatformAtomics::InterlockedAdd(&BucketCounts[UnmatchedIdx], 1);
+				}
+			}
+
+			// Each scope owns its bucket arrays, so their sizes are this scope's counts.
+			for (int32 i = 0; i <= UnmatchedIdx; i++)
+			{
+				if (const int32 LocalCount = BucketIndices[i]->Get_Ref(Scope).Num())
+				{
+					FPlatformAtomics::InterlockedAdd(&BucketCounts[i], LocalCount);
 				}
 			}
 		}

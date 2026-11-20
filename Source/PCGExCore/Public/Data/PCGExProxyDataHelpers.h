@@ -61,10 +61,12 @@ namespace PCGExData
 
 	//
 	// Main proxy creation function - fully type-erased
+	// Null, with an error, when InAccess is Typed and the attribute is a container or an extended type.
 	//
 	PCGEXCORE_API TSharedPtr<IBufferProxy> GetProxyBuffer(
 		FPCGExContext* InContext,
-		const FProxyDescriptor& InDescriptor);
+		const FProxyDescriptor& InDescriptor,
+		const EProxyAccess InAccess = EProxyAccess::Typed);
 
 	//
 	// Constant proxy creation

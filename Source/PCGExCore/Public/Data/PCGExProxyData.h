@@ -38,6 +38,13 @@ namespace PCGExData
 	};
 
 
+	// What the consumer does with the proxy it asks for.
+	enum class EProxyAccess : uint8
+	{
+		Typed,      // Get<T> / Set<T>: every value is WorkingType
+		TypeErased, // void, scoped-value and hash accessors only: container and extended-type attributes are served too
+	};
+
 	enum class EProxyFlags : uint8
 	{
 		None     = 0,
@@ -163,6 +170,9 @@ namespace PCGExData
 		// Cached flag for whether working type needs lifecycle management
 		bool bWorkingTypeNeedsLifecycle = false;
 
+		// The void accessors carry the buffer's own value layout, not WorkingType: no typed accessor is valid.
+		bool bTypeErased = false;
+
 	public:
 		// Point data reference for property proxies
 		UPCGBasePointData* Data = nullptr;
@@ -240,6 +250,11 @@ namespace PCGExData
 			return bWorkingTypeNeedsLifecycle;
 		}
 
+		FORCEINLINE bool IsTypeErased() const
+		{
+			return bTypeErased;
+		}
+
 		// Value size/alignment for blend operation sizing.
 		// Returns the size from WorkingOps if available, otherwise falls back to descriptor or FScopedTypedValue::GetTypeSize.
 		virtual int32 GetValueSize() const;
@@ -247,11 +262,13 @@ namespace PCGExData
 
 		//
 		// Convenience typed accessors - SAFE versions with proper lifecycle
+		// Not valid on a type-erased proxy: GetProxyBuffer only hands one out for EProxyAccess::TypeErased.
 		//
 
 		template <typename T>
 		T Get(const int32 Index) const
 		{
+			checkSlow(!bTypeErased);
 			constexpr EPCGMetadataTypes RequestedType = PCGExTypes::TTraits<T>::Type;
 
 			if constexpr (TypeTraits::TIsComplexType<T>)
@@ -298,6 +315,7 @@ namespace PCGExData
 		template <typename T>
 		void Set(const int32 Index, const T& Value) const
 		{
+			checkSlow(!bTypeErased);
 			constexpr EPCGMetadataTypes ValueType = PCGExTypes::TTraits<T>::Type;
 
 			if (ValueType == WorkingType)
@@ -316,6 +334,7 @@ namespace PCGExData
 		template <typename T>
 		T GetCurrent(const int32 Index) const
 		{
+			checkSlow(!bTypeErased);
 			constexpr EPCGMetadataTypes RequestedType = PCGExTypes::TTraits<T>::Type;
 
 			// Always use scoped value for safety
@@ -339,10 +358,8 @@ namespace PCGExData
 			return Result;
 		}
 
-		// Converting read methods - SAFE versions
-#define PCGEX_CONVERTING_READ(_TYPE, _NAME, ...) virtual _TYPE ReadAs##_NAME(const int32 Index) const;
-		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_CONVERTING_READ)
-#undef PCGEX_CONVERTING_READ
+		// Out of line twin of Get<double>(), for callers that should not instantiate the template.
+		double ReadAsDouble(const int32 Index) const;
 
 		// Scoped storage for the void accessors: property-aware for property-backed proxies (which
 		// perform no Real->Working conversion), plain WorkingType otherwise. Always use this -- not

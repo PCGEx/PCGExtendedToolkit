@@ -151,7 +151,7 @@ namespace PCGExRelaxClusters
 		TArray<FTransform>& PBufferRef = (*PrimaryBuffer);
 		TArray<FTransform>& SBufferRef = (*SecondaryBuffer);
 
-		TArray<PCGExClusters::FNode> NodesRef = *Cluster->Nodes.Get();
+		const TArray<PCGExClusters::FNode>& NodesRef = *Cluster->Nodes.Get();
 		TConstPCGValueRange<FTransform> InTransforms = VtxDataFacade->GetIn()->GetConstTransformValueRange();
 
 		for (int i = 0; i < NumNodes; i++)

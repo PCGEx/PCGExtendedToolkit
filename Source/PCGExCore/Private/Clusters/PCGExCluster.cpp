@@ -275,9 +275,12 @@ namespace PCGExClusters
 		const TArray<FEdge>& EdgesRef = *Edges;
 		const int32 NumEdges = EdgesRef.Num();
 
+		// At most two nodes per edge: the caller's hint can be the point count of a vtx data shared by many clusters.
+		const int32 NumNodesHint = static_cast<int32>(FMath::Min<int64>(InNumNodesHint, static_cast<int64>(NumEdges) * 2));
+
 		if (NumEdges < ParallelClusterBuildThreshold)
 		{
-			Nodes->Reserve(InNumNodesHint);
+			Nodes->Reserve(NumNodesHint);
 
 			for (const FEdge& E : EdgesRef)
 			{
@@ -297,7 +300,7 @@ namespace PCGExClusters
 		// Uninitialized on purpose: the assignment loop below placement-news each node
 		// exactly once at first appearance, and the never-constructed tail is trimmed
 		// with SetNumUnsafeInternal (no destructor runs on it).
-		NodesRef.SetNumUninitialized(InNumNodesHint);
+		NodesRef.SetNumUninitialized(NumNodesHint);
 		FNode* NodesData = NodesRef.GetData();
 
 		const FEdge* EdgesData = EdgesRef.GetData();
@@ -305,7 +308,7 @@ namespace PCGExClusters
 
 		// Per-node degree counts, gathered during assignment; reused as scatter cursors.
 		TArray<int32> LinkCursors;
-		LinkCursors.SetNumZeroed(InNumNodesHint);
+		LinkCursors.SetNumZeroed(NumNodesHint);
 		int32* Cursors = LinkCursors.GetData();
 
 		// Sequential index assignment in first-appearance order -- matches the
@@ -318,7 +321,7 @@ namespace PCGExClusters
 			int32& NodeIndex = Lookup->GetMutable(PointIndex);
 			if (NodeIndex == -1)
 			{
-				check(NumCreated < InNumNodesHint)
+				check(NumCreated < NumNodesHint)
 				new(NodesData + NumCreated) FNode(NumCreated, PointIndex);
 				NodeIndex = NumCreated++;
 			}
@@ -537,7 +540,7 @@ namespace PCGExClusters
 		return (VtxTransforms[InStartPtIndex].GetLocation() - VtxTransforms[Edge->Other(InStartPtIndex)].GetLocation()).GetSafeNormal();
 	}
 
-	TSharedPtr<PCGExOctree::FItemOctree> FCluster::GetNodeOctree()
+	const TSharedPtr<PCGExOctree::FItemOctree>& FCluster::GetNodeOctree()
 	{
 		if (!NodeOctree)
 		{
@@ -546,7 +549,7 @@ namespace PCGExClusters
 		return NodeOctree;
 	}
 
-	TSharedPtr<PCGExOctree::FItemOctree> FCluster::GetEdgeOctree()
+	const TSharedPtr<PCGExOctree::FItemOctree>& FCluster::GetEdgeOctree()
 	{
 		if (!EdgeOctree)
 		{

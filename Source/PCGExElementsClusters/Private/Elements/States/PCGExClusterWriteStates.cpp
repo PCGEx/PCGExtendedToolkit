@@ -93,8 +93,6 @@ namespace PCGExFlagNodes
 			return false;
 		}
 
-		Cluster->ComputeEdgeLengths();
-
 		StateManager = MakeShared<PCGExClusterStates::FStateManager>(StateFlags, Cluster.ToSharedRef(), VtxDataFacade, EdgeDataFacade);
 		StateManager->Init(ExecutionContext, Context->StateFactories);
 

@@ -37,7 +37,7 @@ namespace PCGExMT
 	// Calls Body once per scope and returns when all have run: in order on the calling thread for a single scope
 	// or when bForceSingleThreaded, fanned out otherwise. Scopes are skipped once WorkHandle is dead.
 	PCGEXCORE_API
-	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, const FScopedLoopBody& Body);
+	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, FScopedLoopBody Body);
 
 	enum class EAsyncHandleState : uint8
 	{
@@ -110,7 +110,8 @@ namespace PCGExMT
 	public:
 		int32 HandleIdx = -1;
 
-		virtual FString DEBUG_HandleId() const
+		// Overrides return a string literal: UE::Tasks::Launch stores the pointer, it never copies the string.
+		virtual const TCHAR* DEBUG_HandleId() const
 		{
 			return TEXT("NOT IMPLEMENTED");
 		}
@@ -194,11 +195,6 @@ namespace PCGExMT
 				}
 			}
 		};
-
-		virtual FString DEBUG_HandleId() const override
-		{
-			return GroupName.ToString();
-		}
 
 		FCompletionCallback OnCompleteCallback;
 

@@ -58,7 +58,7 @@ namespace PCGEx
 
 		bool Add(UObject* InObject);
 		bool Remove(UObject* InObject);
-		void Remove(const TArray<FPCGTaggedData>& InTaggedData);
+		void Remove(TConstArrayView<FPCGTaggedData> InTaggedData);
 
 		void AddExtraStructReferencedObjects(FReferenceCollector& Collector);
 

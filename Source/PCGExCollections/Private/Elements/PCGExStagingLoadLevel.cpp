@@ -322,6 +322,12 @@ namespace PCGExStagingLoadLevel
 			return false;
 		}
 
+		// Reused managed resources need no spawn requests, which is all the point loop builds.
+		if (Context->bReusedManagedResources)
+		{
+			return true;
+		}
+
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
 		return true;

@@ -520,8 +520,6 @@ namespace PCGExRefineEdges
 	{
 		PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, SanitizeTaskGroup)
 
-		Cluster->GetBoundedEdges(true); //Oof
-
 		SanitizeTaskGroup->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
 		{
 			PCGEX_ASYNC_THIS

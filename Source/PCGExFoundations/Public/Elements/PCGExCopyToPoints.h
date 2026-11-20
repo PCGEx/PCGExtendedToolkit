@@ -109,6 +109,8 @@ namespace PCGExCopyToPoints
 	{
 	protected:
 		TArray<TSharedPtr<PCGExData::FPointIO>> Dupes;
+		// Per-target copies all fit the same untransformed source.
+		FBox SourceFitBounds = FBox(ForceInit);
 		int32 NumCopies = 0;
 		PCGExMatching::FScope MatchScope;
 

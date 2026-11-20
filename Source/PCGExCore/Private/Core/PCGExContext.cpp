@@ -58,6 +58,14 @@ void FPCGExContext::IncreaseStagedOutputReserve(const int32 InIncreaseNum)
 
 void FPCGExContext::StageOutput(UPCGData* InData, const FName& InPin, const PCGExData::EStaging Staging, const TSet<FString>& InTags)
 {
+	// Append, not a copy-construct: the staged set is rebuilt compact whatever free slots InTags carries.
+	TSet<FString> Tags;
+	Tags.Append(InTags);
+	StageOutput(InData, InPin, Staging, MoveTemp(Tags));
+}
+
+void FPCGExContext::StageOutput(UPCGData* InData, const FName& InPin, const PCGExData::EStaging Staging, TSet<FString>&& InTags)
+{
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExContext::StageOutput);
 
 	// Staging accumulates outputs during async processing. They're moved to
@@ -74,7 +82,7 @@ void FPCGExContext::StageOutput(UPCGData* InData, const FName& InPin, const PCGE
 		FPCGTaggedData& Output = StagedData.Emplace_GetRef();
 		Output.Data = InData;
 		Output.Pin = InPin;
-		Output.Tags.Append(InTags);
+		Output.Tags = MoveTemp(InTags);
 		Output.bPinlessData = EnumHasAnyFlags(Staging, PCGExData::EStaging::Pinless);
 	}
 
@@ -534,8 +542,9 @@ void FPCGExContext::OnComplete()
 		// Flush staged outputs into the PCG output data. Also remove them from
 		// ManagedObjects since PCG now owns the data lifecycle.
 		FWriteScopeLock WriteScopeLock(StagingLock);
-		OutputData.TaggedData.Append(StagedData);
-		ManagedObjects->Remove(StagedData);
+		const int32 FirstStaged = OutputData.TaggedData.Num();
+		OutputData.TaggedData.Append(MoveTemp(StagedData));
+		ManagedObjects->Remove(TConstArrayView<FPCGTaggedData>(OutputData.TaggedData).RightChop(FirstStaged));
 		StagedData.Empty();
 	}
 
