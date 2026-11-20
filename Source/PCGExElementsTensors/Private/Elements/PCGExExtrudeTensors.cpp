@@ -209,10 +209,6 @@ bool FPCGExExtrudeTensorsElement::AdvanceWork(FPCGExContext* InContext, const UP
 
 namespace PCGExExtrudeTensors
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader)
 	{
 		TProcessor<FPCGExExtrudeTensorsContext, UPCGExExtrudeTensorsSettings>::RegisterBuffersDependencies(FacadePreloader);

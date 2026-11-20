@@ -20,8 +20,6 @@ namespace PCGExMath
 	{
 		class TDelaunay3;
 	}
-
-	class TDelaunay3;
 }
 
 /**

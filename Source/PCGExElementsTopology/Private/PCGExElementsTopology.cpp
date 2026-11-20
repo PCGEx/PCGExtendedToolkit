@@ -5,16 +5,6 @@
 
 #define LOCTEXT_NAMESPACE "FPCGExElementsTopologyModule"
 
-void FPCGExElementsTopologyModule::StartupModule()
-{
-	IPCGExLegacyModuleInterface::StartupModule();
-}
-
-void FPCGExElementsTopologyModule::ShutdownModule()
-{
-	IPCGExLegacyModuleInterface::ShutdownModule();
-}
-
 #undef LOCTEXT_NAMESPACE
 
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsTopologyModule, PCGExElementsTopology)

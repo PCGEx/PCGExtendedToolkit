@@ -154,10 +154,6 @@ public:
 	{
 	}
 
-	virtual void PrepareVtxFacade(const TSharedPtr<PCGExData::FFacade>& InVtxFacade) const
-	{
-	}
-
 	virtual bool WantsHeuristics() const
 	{
 		return false;

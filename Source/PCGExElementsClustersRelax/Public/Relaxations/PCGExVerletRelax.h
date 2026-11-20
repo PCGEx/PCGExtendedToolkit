@@ -114,7 +114,4 @@ protected:
 	TSharedPtr<PCGExDetails::TSettingValue<double>> StiffnessBuffer;
 	TSharedPtr<PCGExDetails::TSettingValue<double>> ScalingBuffer;
 	TSharedPtr<PCGExDetails::TSettingValue<double>> FrictionBuffer;
-
-	TArray<int8> Hits;
-	TArray<FVector> HitLocations;
 };

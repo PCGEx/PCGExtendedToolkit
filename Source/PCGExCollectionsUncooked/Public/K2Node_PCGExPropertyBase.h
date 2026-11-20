@@ -12,7 +12,6 @@
 class FBlueprintActionDatabaseRegistrar;
 class FKismetCompilerContext;
 class UEdGraph;
-class UEdGraphPin;
 class UGraphNodeContextMenuContext;
 class UK2Node_CallFunction;
 class UToolMenu;

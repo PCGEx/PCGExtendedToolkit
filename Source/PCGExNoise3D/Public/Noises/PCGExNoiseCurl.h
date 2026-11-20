@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigCurl : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigCurl()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "8"))
 	int32 Octaves = 1;
 
@@ -47,8 +42,6 @@ class PCGEXNOISE3D_API FPCGExNoiseCurl : public FPCGExNoise3DOperation
 public:
 	double Epsilon = 0.001;
 	double CurlScale = 1.0;
-
-	virtual ~FPCGExNoiseCurl() override = default;
 
 	// Override vector outputs for curl field
 	virtual double GetDouble(const FVector& Position) const override;

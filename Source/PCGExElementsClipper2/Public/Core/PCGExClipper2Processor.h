@@ -14,8 +14,6 @@
 #include "PCGExClipper2Processor.generated.h"
 
 class UPCGExClipper2ProcessorSettings;
-struct FPCGExBlendingDetails;
-struct FPCGExCarryOverDetails;
 
 
 UENUM(BlueprintType)

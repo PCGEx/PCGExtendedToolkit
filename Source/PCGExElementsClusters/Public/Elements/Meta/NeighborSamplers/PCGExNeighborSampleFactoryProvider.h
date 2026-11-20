@@ -219,10 +219,6 @@ public:
 	}
 
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 	//~End UPCGExFactoryProviderSettings
 
 	/** Priority for sampling order. Higher values are processed last. */

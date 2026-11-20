@@ -18,9 +18,6 @@ namespace PCGExData
 	class IBufferProxy;
 }
 
-class FPCGExComputeIOBounds;
-
-
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/analyze/normalize"))
 class UPCGExNormalizeSettings : public UPCGExPointsProcessorSettings
 {
@@ -132,8 +129,6 @@ namespace PCGExNormalize
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 	};

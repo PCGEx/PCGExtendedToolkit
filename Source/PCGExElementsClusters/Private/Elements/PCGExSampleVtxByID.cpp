@@ -198,10 +198,6 @@ bool FPCGExSampleVtxByIDElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExSampleVtxByID
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::SamplingFailed(const int32 Index)
 	{
 		SamplingMask[Index] = false;

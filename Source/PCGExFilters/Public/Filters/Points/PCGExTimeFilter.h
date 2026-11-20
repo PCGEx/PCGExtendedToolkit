@@ -149,10 +149,6 @@ namespace PCGExPointFilter
 
 		// Proxy test with the data the point stands for, so Ignore Self can skip it; null when there is none.
 		bool TestProxy(const PCGExData::FProxyPoint& Point, const UPCGData* InParentData) const;
-
-		virtual ~FTimeFilter() override
-		{
-		}
 	};
 }
 

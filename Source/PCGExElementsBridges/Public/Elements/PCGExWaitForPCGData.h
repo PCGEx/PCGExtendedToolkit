@@ -272,7 +272,6 @@ struct FPCGExWaitForPCGDataContext final : FPCGExPointsProcessorContext
 
 	virtual void RegisterAssetDependencies() override;
 
-	TArray<FPCGPinProperties> RequiredPinProperties;
 	TSet<FName> AllLabels;
 	TSet<FName> RequiredLabels;
 

@@ -61,8 +61,6 @@ private:
 	UPROPERTY()
 	FEdGraphPinType ResolvedPinType;
 
-	UEdGraphPin* GetExecPin() const;
-	UEdGraphPin* GetThenPin() const;
 	UEdGraphPin* GetComponentPin() const;
 	UEdGraphPin* GetPropertyNamePin() const;
 	UEdGraphPin* GetNewValuePin() const;

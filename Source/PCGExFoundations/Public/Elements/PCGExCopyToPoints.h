@@ -14,11 +14,6 @@
 
 #include "PCGExCopyToPoints.generated.h"
 
-namespace PCGExMatching
-{
-	class FDataMatcher;
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/generate/copy-to-points"))
 class UPCGExCopyToPointsSettings : public UPCGExPointsProcessorSettings
 {
@@ -122,10 +117,6 @@ namespace PCGExCopyToPoints
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
-		{
-		}
-
-		virtual ~FProcessor() override
 		{
 		}
 

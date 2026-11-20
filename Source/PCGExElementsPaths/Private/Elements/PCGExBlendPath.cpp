@@ -108,10 +108,6 @@ bool FPCGExBlendPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExBlendPath
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExBlendPath::Process);

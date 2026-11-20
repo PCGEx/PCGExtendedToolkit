@@ -10,15 +10,6 @@
 #define LOCTEXT_NAMESPACE "PCGExCreateTensorPathFlow"
 #define PCGEX_NAMESPACE CreateTensorPathFlow
 
-bool FPCGExTensorPathFlow::Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory)
-{
-	if (!PCGExTensorOperation::Init(InContext, InFactory))
-	{
-		return false;
-	}
-	return true;
-}
-
 PCGExTensor::FTensorSample FPCGExTensorPathFlow::Sample(const int32 InSeedIndex, const FTransform& InProbe) const
 {
 	const FVector& InPosition = InProbe.GetLocation();

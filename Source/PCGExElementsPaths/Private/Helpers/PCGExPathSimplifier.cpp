@@ -4,9 +4,8 @@
 
 namespace PCGExPaths
 {
-	FSimplifiedPoint::FSimplifiedPoint(const FTransform& InTransform, int8 bCanRemove)
+	FSimplifiedPoint::FSimplifiedPoint(const FTransform& InTransform)
 		: Transform(InTransform)
-		  , bIsRemovable(bCanRemove)
 	{
 		TangentIn = FVector::ZeroVector;
 		TangentOut = FVector::ZeroVector;
@@ -169,7 +168,7 @@ namespace PCGExPaths
 
 		for (int32 Idx : CleanIndices)
 		{
-			Result.Add(FSimplifiedPoint(InPoints[Idx], false));
+			Result.Add(FSimplifiedPoint(InPoints[Idx]));
 			Result.Last().OriginalIndex = Idx;
 		}
 
@@ -886,13 +885,5 @@ namespace PCGExPaths
 				OutTValues.Add(static_cast<double>(i + 1) / static_cast<double>(IntermediatePoints.Num() + 1));
 			}
 		}
-	}
-
-	FVector FCurveSimplifier::EvaluateHermite(
-		const FVector& P0, const FVector& T0,
-		const FVector& P1, const FVector& T1,
-		double t)
-	{
-		return H00(t) * P0 + H10(t) * T0 + H01(t) * P1 + H11(t) * T1;
 	}
 }

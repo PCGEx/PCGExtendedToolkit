@@ -115,10 +115,6 @@ bool FPCGExFindPointOnBoundsElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExFindPointOnBounds
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFindPointOnBounds::Process);

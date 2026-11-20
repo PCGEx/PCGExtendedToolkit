@@ -102,7 +102,6 @@ public:
 
 protected:
 	double DirectionMultiplier = 1;
-	bool bUseConstantDir = false;
 	double MinDot = 0;
 	bool bUseBestDot = false;
 

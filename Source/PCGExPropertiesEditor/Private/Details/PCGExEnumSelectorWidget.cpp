@@ -227,11 +227,6 @@ namespace PCGExEnumSelectorWidget
 		// used as a stand-in -- for user-authored BP enums these usually match anyway.
 		FString DisplayName;
 
-		bool IsLazy() const
-		{
-			return !Loaded.IsValid() && LazyAsset.IsValid();
-		}
-
 		/** Resolves to a usable UEnum*, force-loading the asset if needed. */
 		UEnum* Resolve() const
 		{

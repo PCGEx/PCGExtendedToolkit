@@ -151,8 +151,6 @@ class FPCGExVtxPropertyAmplitude : public FPCGExVtxPropertyOperation
 public:
 	FPCGExAmplitudeConfig Config;
 
-	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* FilterFactories = nullptr;
-
 	virtual bool PrepareForCluster(FPCGExContext* InContext, TSharedPtr<PCGExClusters::FCluster> InCluster, const TSharedPtr<PCGExData::FFacade>& InVtxDataFacade, const TSharedPtr<PCGExData::FFacade>& InEdgeDataFacade) override;
 	virtual void ProcessNode(PCGExClusters::FNode& Node, const TArray<PCGExClusters::FAdjacencyData>& Adjacency, const PCGExMath::FBestFitPlane& BFP) override;
 
@@ -202,10 +200,6 @@ protected:
 
 public:
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 
 	/** Direction Settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))

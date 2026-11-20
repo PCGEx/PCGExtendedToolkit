@@ -313,10 +313,6 @@ bool FPCGExSampleStampPointsElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExSampleStampPoints
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::SamplingFailed(const int32 Index)
 	{
 		SamplingMask[Index] = false;

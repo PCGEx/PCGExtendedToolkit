@@ -85,13 +85,6 @@ void FPCGExVtxPropertySpecialEdges::ProcessNode(PCGExClusters::FNode& Node, cons
 	}
 }
 
-#if WITH_EDITOR
-FString UPCGExVtxPropertySpecialEdgesSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif
-
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertySpecialEdgesFactory::CreateOperation(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(VtxPropertySpecialEdges)

@@ -14,11 +14,6 @@ namespace PCGExBitmask
 	class FBitmaskData;
 }
 
-namespace PCGExAdjacency
-{
-	class FBitmaskData;
-}
-
 USTRUCT(BlueprintType)
 struct PCGEXELEMENTSCLUSTERS_API FPCGExAdjacencyStateConfigBase
 {
@@ -109,8 +104,6 @@ namespace PCGExAdjacencyStates
 		}
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade) override;
-
-		virtual ~FState() override;
 
 		virtual void ProcessFlags(const bool bSuccess, int64& InFlags, const int32 Index) const override;
 		virtual void ProcessFlags(const bool bSuccess, int64& InFlags, const PCGExClusters::FNode& Node) const override;

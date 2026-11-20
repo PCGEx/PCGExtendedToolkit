@@ -19,8 +19,6 @@ struct FAssetData;
 class FPCGExVariantCollectionEditor : public FPCGExAssetCollectionEditor
 {
 public:
-	FPCGExVariantCollectionEditor();
-
 	virtual FName GetToolkitFName() const override
 	{
 		return FName("PCGExVariantCollectionEditor");
@@ -29,16 +27,6 @@ public:
 	virtual FText GetBaseToolkitName() const override
 	{
 		return INVTEXT("PCGEx Variant Collection Editor");
-	}
-
-	virtual FString GetWorldCentricTabPrefix() const override
-	{
-		return TEXT("PCGEx");
-	}
-
-	virtual FLinearColor GetWorldCentricTabColorScale() const override
-	{
-		return FLinearColor::White;
 	}
 
 protected:

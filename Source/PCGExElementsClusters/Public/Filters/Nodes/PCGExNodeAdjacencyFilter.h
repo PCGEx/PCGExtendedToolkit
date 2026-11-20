@@ -96,7 +96,6 @@ public:
 
 	bool bCaptureFromNodes = false;
 
-	TArray<double> CachedThreshold;
 	FPCGExAdjacencySettings Adjacency;
 
 	TSharedPtr<PCGExDetails::TSettingValue<double>> OperandA;

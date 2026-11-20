@@ -67,10 +67,6 @@ namespace PCGExPointFilter
 		const TObjectPtr<const UPCGExTagCheckFilterFactory> TypedFilterFactory;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FTagCheckFilter() override
-		{
-		}
 	};
 }
 

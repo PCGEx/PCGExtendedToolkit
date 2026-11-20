@@ -12,16 +12,6 @@
 #define LOCTEXT_NAMESPACE "PCGExSplitPathElement"
 #define PCGEX_NAMESPACE SplitPath
 
-#if WITH_EDITOR
-void UPCGExSplitPathSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-	Super::PostEditChangeProperty(PropertyChangedEvent);
-	if (SplitAction == EPCGExPathSplitAction::Switch)
-	{
-	}
-}
-#endif
-
 PCGEX_INITIALIZE_ELEMENT(SplitPath)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(SplitPath)
 

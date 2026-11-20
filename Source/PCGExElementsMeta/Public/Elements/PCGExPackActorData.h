@@ -21,10 +21,6 @@ namespace PCGExMT
 	class FTimeSlicedMainThreadLoop;
 }
 
-namespace PCGExPackActorData
-{
-}
-
 /**
  * Executed once per point
  */
@@ -35,7 +31,6 @@ class UPCGExCustomActorDataPacker : public UPCGExInstancedFactory
 
 	struct FComponentInfos
 	{
-		AActor* Owner = nullptr;
 		UActorComponent* Component = nullptr;
 		FAttachmentTransformRules AttachmentTransformRules;
 
@@ -104,7 +99,6 @@ public:
 	TArray<TObjectPtr<AActor>> InputActors;
 
 	TSet<FSoftObjectPath> RequiredAssetsPaths;
-	TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
 
 	TSharedPtr<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>> WriteBuffers;
 	TSharedPtr<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Read>> ReadBuffers;

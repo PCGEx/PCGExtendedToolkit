@@ -163,10 +163,6 @@ namespace PCGExReversePointOrder
 		{
 		}
 
-		virtual ~FProcessor() override
-		{
-		}
-
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;

@@ -20,8 +20,6 @@ namespace PCGExNoise3D
 
 		constexpr double F3 = 0.33333333333333333; // 1.0 / 3.0
 		constexpr double G3 = 0.16666666666666666; // 1.0 / 6.0
-		constexpr double F2 = 0.36602540378443864; // 0.5 * (FMath::Sqrt(3.0) - 1.0)
-		constexpr double G2 = 0.21132486540518713; // (3.0 - FMath::Sqrt(3.0)) / 6.0
 
 		// Permutation table; every lookup masks its index with & 255
 		inline const uint8 Perm[256] = {
@@ -189,10 +187,6 @@ namespace PCGExNoise3D
 			}
 			return 1.0 / AmpSum;
 		}
-
-		//
-		// Remapping
-		//
 
 		//
 		// Noise Cores

@@ -335,8 +335,7 @@ namespace PCGExEnumCustomization
 				continue;
 			}
 
-			const FString KeyName = Enum->GetNameStringByIndex(i);
-			const uint8 Bit = Enum->GetValueByIndex(i); // or (1LL << i)
+			const uint8 Bit = Enum->GetValueByIndex(i);
 
 			auto IsActive = [PropertyHandle, Bit]() -> bool
 			{

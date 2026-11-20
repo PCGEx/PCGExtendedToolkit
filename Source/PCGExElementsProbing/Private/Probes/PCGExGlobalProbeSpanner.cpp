@@ -11,11 +11,6 @@ bool FPCGExProbeSpanner::IsGlobalProbe() const
 	return true;
 }
 
-bool FPCGExProbeSpanner::Prepare(FPCGExContext* InContext)
-{
-	return FPCGExProbeOperation::Prepare(InContext);
-}
-
 double FPCGExProbeSpanner::GetGraphDistance(int32 From, int32 To,
                                             const TArray<TSet<int32>>& Adjacency, const TArray<FVector>& Positions) const
 {

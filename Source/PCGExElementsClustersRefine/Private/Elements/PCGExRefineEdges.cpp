@@ -334,10 +334,6 @@ namespace PCGExRefineEdges
 		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, false, true, false);
 	}
 
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExRefineEdges::Process);
@@ -362,7 +358,6 @@ namespace PCGExRefineEdges
 
 		Refinement->PrepareForCluster(Cluster, HeuristicsHandler);
 
-		Refinement->VtxFilterCache = VtxFilterCache.Get();
 		Refinement->EdgeFilterCache = &EdgeFilterCache;
 		Refinement->bHasEdgeFilters = !Context->EdgeFilterFactories.IsEmpty();
 
@@ -665,18 +660,8 @@ namespace PCGExRefineEdges
 
 		TBatch<FProcessor>::RegisterBuffersDependencies(FacadePreloader);
 
-		Context->Refinement->RegisterBuffersDependencies(ExecutionContext, FacadePreloader);
-
 		PCGExPointFilter::RegisterBuffersDependencies(ExecutionContext, Context->EdgeFilterFactories, FacadePreloader);
 		PCGExPointFilter::RegisterBuffersDependencies(ExecutionContext, Context->SanitizationFilterFactories, FacadePreloader);
-	}
-
-	void FBatch::OnProcessingPreparationComplete()
-	{
-		PCGEX_TYPED_CONTEXT_AND_SETTINGS(RefineEdges)
-
-		Context->Refinement->PrepareVtxFacade(VtxDataFacade);
-		TBatch<FProcessor>::OnProcessingPreparationComplete();
 	}
 
 	void FBatch::Write()

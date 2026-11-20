@@ -162,14 +162,10 @@ namespace PCGExFindPointOnBoundsClusters
 		int32 BestIndex = -1;
 
 	public:
-		int32 Picker = -1;
-
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 

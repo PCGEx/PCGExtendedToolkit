@@ -643,10 +643,10 @@ namespace PCGExPathfindingPlotEdges
 
 		VtxDataForwardHandler = Context->VtxDataForwarding.TryGetHandler(VtxDataFacade, PCGExData::EForwardDomain::Inherit);
 
-		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-			Context->bMatchForVtx && !Context->MainDataMatcher->PopulateIgnoreList(VtxDataFacade->Source->GetTaggedData(), MatchingScope, IgnoreList))
+		if (Context->bMatchForVtx)
 		{
-			bUnmatched = true;
+			PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
+			Context->MainDataMatcher->PopulateIgnoreList(VtxDataFacade->Source->GetTaggedData(), MatchingScope, IgnoreList);
 		}
 
 		TBatch<FProcessor>::Process();

@@ -34,9 +34,9 @@ bool FPCGExFlatProjectionElement::Boot(FPCGExContext* InContext) const
 	if (Settings->bRestorePreviousProjection)
 	{
 #define PCGEX_REGISTER_FLAG(_COMPONENT, _ARRAY) \
-if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::X)) != 0){ Context->_ARRAY.Add(0); Context->AppliedComponents++; } \
-if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Y)) != 0){ Context->_ARRAY.Add(1); Context->AppliedComponents++; } \
-if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Z)) != 0){ Context->_ARRAY.Add(2); Context->AppliedComponents++; }
+if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::X)) != 0){ Context->_ARRAY.Add(0); } \
+if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Y)) != 0){ Context->_ARRAY.Add(1); } \
+if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Z)) != 0){ Context->_ARRAY.Add(2); }
 
 		PCGEX_REGISTER_FLAG(TransformPosition, TrPosComponents)
 		PCGEX_REGISTER_FLAG(TransformRotation, TrRotComponents)

@@ -226,8 +226,6 @@ namespace PCGExShrinkPath
 			DefaultPointFilterValue = false;
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
 	protected:

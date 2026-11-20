@@ -56,7 +56,6 @@ namespace PCGExShapes
 		FIntVector3 Count = FIntVector3(5);
 		FVector Extents = FVector(10.0);
 		FVector Offset = FVector(0);
-		bool bClosedLoop = false;
 
 		explicit FGrid(const PCGExData::FConstPoint& InPointRef)
 			: FShape(InPointRef)
@@ -76,10 +75,6 @@ public:
 	virtual bool PrepareForSeeds(FPCGExContext* InContext, const TSharedRef<PCGExData::FFacade>& InSeedDataFacade) override;
 	virtual void PrepareShape(const PCGExData::FConstPoint& Seed) override;
 	virtual void BuildShape(TSharedPtr<PCGExShapes::FShape> InShape, TSharedPtr<PCGExData::FFacade> InDataFacade, const PCGExData::FScope& Scope, bool bOwnsData = false) override;
-
-protected:
-	TSharedPtr<PCGExDetails::TSettingValue<double>> Resolution;
-	TSharedPtr<PCGExDetails::TSettingValue<FVector>> ResolutionVector;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
@@ -113,10 +108,4 @@ public:
 	FPCGExShapeGridConfig Config;
 
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-protected:
-	virtual bool IsCacheable() const override
-	{
-		return true;
-	}
 };

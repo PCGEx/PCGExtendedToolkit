@@ -17,8 +17,6 @@ namespace PCGExMath
 	{
 		class TDelaunay2;
 	}
-
-	class TDelaunay2;
 }
 
 namespace PCGExGraphs

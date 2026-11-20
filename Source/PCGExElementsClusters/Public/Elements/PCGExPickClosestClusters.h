@@ -27,11 +27,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(PickClosestClusters, "Cluster : Pick Closest", "Pick the clusters closest to input targets.");
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
 #endif
 
 protected:
@@ -128,8 +123,6 @@ namespace PCGExPickClosestClusters
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void Search();

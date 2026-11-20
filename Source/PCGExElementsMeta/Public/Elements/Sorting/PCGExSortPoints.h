@@ -80,8 +80,6 @@ private:
 
 struct FPCGExSortPointsContext final : FPCGExPointsProcessorContext
 {
-	friend class FPCGExSortPointsElement;
-
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
 };

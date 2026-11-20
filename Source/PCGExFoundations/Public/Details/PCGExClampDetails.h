@@ -10,18 +10,6 @@ struct PCGEXFOUNDATIONS_API FPCGExClampDetails
 {
 	GENERATED_BODY()
 
-	FPCGExClampDetails()
-	{
-	}
-
-	FPCGExClampDetails(const FPCGExClampDetails& Other)
-		: bApplyClampMin(Other.bApplyClampMin)
-		  , ClampMinValue(Other.ClampMinValue)
-		  , bApplyClampMax(Other.bApplyClampMax)
-		  , ClampMaxValue(Other.ClampMaxValue)
-	{
-	}
-
 	/** Enable minimum value clamping. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bApplyClampMin = false;

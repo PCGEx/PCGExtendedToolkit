@@ -80,10 +80,6 @@ bool FPCGExFlagNodesElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExFlagNodes
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFindNodeState::Process);

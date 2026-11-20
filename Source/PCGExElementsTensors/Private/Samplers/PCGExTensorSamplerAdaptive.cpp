@@ -4,11 +4,6 @@
 #include "Samplers/PCGExTensorSamplerAdaptive.h"
 #include "Core/PCGExTensorOperation.h"
 
-bool UPCGExTensorSamplerAdaptive::PrepareForData(FPCGExContext* InContext)
-{
-	return Super::PrepareForData(InContext);
-}
-
 double UPCGExTensorSamplerAdaptive::EstimateCurvature(
 	const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors,
 	int32 InSeedIndex, const FTransform& InProbe, double StepSize) const

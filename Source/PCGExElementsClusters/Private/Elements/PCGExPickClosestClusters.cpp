@@ -155,10 +155,6 @@ bool FPCGExPickClosestClustersElement::AdvanceWork(FPCGExContext* InContext, con
 
 namespace PCGExPickClosestClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		if (!IProcessor::Process(InTaskManager))

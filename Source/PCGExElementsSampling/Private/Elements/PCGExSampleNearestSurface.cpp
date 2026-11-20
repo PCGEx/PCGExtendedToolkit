@@ -216,10 +216,6 @@ bool FPCGExSampleNearestSurfaceElement::AdvanceWork(FPCGExContext* InContext, co
 
 namespace PCGExSampleNearestSurface
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSampleNearestSurface::Process);

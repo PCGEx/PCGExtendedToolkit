@@ -43,10 +43,6 @@ TArray<FPCGPinProperties> UPCGExConnectVtxSettings::InputPinProperties() const
 PCGEX_INITIALIZE_ELEMENT(ConnectVtx)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(ConnectVtx)
 
-FPCGExConnectVtxContext::~FPCGExConnectVtxContext()
-{
-}
-
 #pragma region UPCGExConnectVtxSettings / FPCGExConnectVtxElement
 
 bool FPCGExConnectVtxElement::Boot(FPCGExContext* InContext) const

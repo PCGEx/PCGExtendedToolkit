@@ -945,7 +945,6 @@ namespace PCGExBinPacking3D
 				for (int32 RotIdx = 0; RotIdx < RotationsToTest.Num(); RotIdx++)
 				{
 					FBP3DPlacementCandidate Candidate;
-					Candidate.RotationIndex = RotIdx;
 
 					if (Bin->EvaluatePlacement(OriginalSize, InItem.Padding, EPIdx, RotationsToTest[RotIdx], Candidate))
 					{

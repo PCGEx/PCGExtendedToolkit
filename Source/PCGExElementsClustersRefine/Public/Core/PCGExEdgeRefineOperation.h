@@ -29,7 +29,6 @@ protected:
 	bool bWantsHeuristics = false;
 
 public:
-	TArray<int8>* VtxFilterCache = nullptr;
 	TArray<int8>* EdgeFilterCache = nullptr;
 
 	// Set by the processor: whether edge filter factories are actually connected. Lets refinements with
@@ -125,14 +124,6 @@ class UPCGExEdgeRefineInstancedFactory : public UPCGExInstancedFactory
 	GENERATED_BODY()
 
 public:
-	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader)
-	{
-	}
-
-	virtual void PrepareVtxFacade(const TSharedPtr<PCGExData::FFacade>& InVtxFacade) const
-	{
-	}
-
 	virtual bool SupportFilters() const
 	{
 		return false;

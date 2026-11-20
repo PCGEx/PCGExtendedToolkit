@@ -12,8 +12,6 @@ class UPCGExAssetCollection;
 class FPCGExSkinnedMeshCollectionEditor : public FPCGExAssetCollectionEditor
 {
 public:
-	FPCGExSkinnedMeshCollectionEditor();
-
 	virtual FName GetToolkitFName() const override
 	{
 		return FName("PCGExSkinnedMeshCollectionEditor");
@@ -22,16 +20,6 @@ public:
 	virtual FText GetBaseToolkitName() const override
 	{
 		return INVTEXT("PCGEx Skinned Mesh Collection Editor");
-	}
-
-	virtual FString GetWorldCentricTabPrefix() const override
-	{
-		return TEXT("PCGEx");
-	}
-
-	virtual FLinearColor GetWorldCentricTabColorScale() const override
-	{
-		return FLinearColor::White;
 	}
 
 protected:

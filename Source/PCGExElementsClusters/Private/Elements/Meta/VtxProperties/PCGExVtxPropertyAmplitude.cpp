@@ -222,11 +222,6 @@ void UPCGExVtxPropertyAmplitudeSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 	Super::PCGExApplyDeprecation(InOutNode);
 }
-
-FString UPCGExVtxPropertyAmplitudeSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
 #endif
 
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyAmplitudeFactory::CreateOperation(FPCGExContext* InContext) const

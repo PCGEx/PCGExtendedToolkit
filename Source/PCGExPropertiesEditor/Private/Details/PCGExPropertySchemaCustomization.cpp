@@ -7,7 +7,6 @@
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "IDetailPropertyRow.h"
-#include "IPropertyUtilities.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExProperty.h"
 #include "PropertyHandle.h"
@@ -92,7 +91,6 @@ void FPCGExPropertySchemaCustomization::CustomizeHeader(
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
 	PropertyHandlePtr = PropertyHandle;
-	WeakPropertyUtilities = CustomizationUtils.GetPropertyUtilities();
 	bIsReadOnly = PCGExPropertyChoicesUI::IsUnderReadOnlySchema(PropertyHandle);
 
 	HeaderRow

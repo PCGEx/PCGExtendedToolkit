@@ -89,10 +89,6 @@ bool FPCGExSampleNeighborsElement::AdvanceWork(FPCGExContext* InContext, const U
 
 namespace PCGExSampleNeighbors
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSampleNeighbors::Process);

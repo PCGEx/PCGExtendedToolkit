@@ -126,10 +126,6 @@ namespace PCGExSampleOverlapStats
 	{
 	}
 
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::RegisterOverlap(FProcessor* InOtherProcessor, const FBox& Intersection)
 	{
 		FWriteScopeLock WriteScopeLock(RegistrationLock);

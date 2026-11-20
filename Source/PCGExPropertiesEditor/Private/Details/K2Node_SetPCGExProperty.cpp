@@ -369,16 +369,6 @@ void UK2Node_SetPCGExProperty::ExpandNode(FKismetCompilerContext& CompilerContex
 	BreakAllNodeLinks();
 }
 
-UEdGraphPin* UK2Node_SetPCGExProperty::GetExecPin() const
-{
-	return FindPin(UEdGraphSchema_K2::PN_Execute);
-}
-
-UEdGraphPin* UK2Node_SetPCGExProperty::GetThenPin() const
-{
-	return FindPin(UEdGraphSchema_K2::PN_Then);
-}
-
 UEdGraphPin* UK2Node_SetPCGExProperty::GetComponentPin() const
 {
 	return FindPin(ComponentPinName);

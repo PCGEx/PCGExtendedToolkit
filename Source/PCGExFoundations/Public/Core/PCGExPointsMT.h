@@ -285,9 +285,5 @@ namespace PCGExPointsMT
 			: IBatch(InContext, InPointsCollection)
 		{
 		}
-
-		virtual ~TBatch() override
-		{
-		}
 	};
 }

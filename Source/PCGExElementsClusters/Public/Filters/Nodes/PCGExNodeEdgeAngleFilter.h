@@ -71,8 +71,6 @@ public:
 
 	FPCGExDotComparisonDetails DotComparison;
 
-	TSharedPtr<PCGExData::TBuffer<FVector>> OperandDirection;
-
 	virtual bool Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade) override;
 	virtual bool Test(const PCGExClusters::FNode& Node) const override;
 

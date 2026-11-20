@@ -151,10 +151,6 @@ bool FPCGExClusterCentralityElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExClusterCentrality
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExClusterCentrality::Process);

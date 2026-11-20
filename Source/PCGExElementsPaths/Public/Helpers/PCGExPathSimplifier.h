@@ -22,11 +22,10 @@ namespace PCGExPaths
 		FTransform Transform = FTransform::Identity;
 		FVector TangentIn = FVector::ZeroVector;
 		FVector TangentOut = FVector::ZeroVector;
-		int8 bIsRemovable = false;
 		int32 OriginalIndex = -1;
 
 		FSimplifiedPoint() = default;
-		FSimplifiedPoint(const FTransform& InTransform, int8 bCanRemove = true);
+		FSimplifiedPoint(const FTransform& InTransform);
 	};
 
 	class FCurveSimplifier
@@ -200,8 +199,5 @@ namespace PCGExPaths
 		{
 			return t * t * t - t * t;
 		}
-
-		static FVector EvaluateHermite(const FVector& P0, const FVector& T0,
-		                               const FVector& P1, const FVector& T1, double t);
 	};
 }

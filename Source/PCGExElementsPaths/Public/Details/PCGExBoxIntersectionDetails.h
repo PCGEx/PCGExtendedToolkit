@@ -20,16 +20,6 @@ MACRO(BoundIndex, int32, -1)
 
 struct FPCGContext;
 
-namespace PCGExMath
-{
-	namespace OBB
-	{
-		struct FCut;
-	}
-
-	struct FCut;
-}
-
 namespace PCGExMatching
 {
 	class FTargetsHandler;

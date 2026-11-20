@@ -60,14 +60,8 @@ namespace PCGExExtrudeTensors
 	// Import core extrusion types from the reusable module
 	using EExtrusionState = PCGExExtrusion::EExtrusionState;
 	using EStopReason = PCGExExtrusion::EStopReason;
-	using EExtrusionFlags = PCGExExtrusion::EExtrusionFlags;
 	using FExtrusionConfig = PCGExExtrusion::FExtrusionConfig;
-	using FCollisionResult = PCGExExtrusion::FCollisionResult;
-	using FExtrusionCallbacks = PCGExExtrusion::FExtrusionCallbacks;
 	using FExtrusion = PCGExExtrusion::FExtrusion;
-
-	// Re-export HasFlag for convenience
-	using PCGExExtrusion::HasFlag;
 }
 
 // Forward declarations for config initialization
@@ -338,7 +332,6 @@ struct FPCGExExtrudeTensorsContext final : FPCGExPathProcessorContext
 	// Cached configuration (uses imported type)
 	PCGExExtrudeTensors::FExtrusionConfig ExtrusionConfig;
 
-	TArray<TSharedPtr<PCGExData::FFacade>> PathsFacades;
 	TArray<TSharedPtr<PCGExPaths::FPath>> ExternalPaths;
 
 protected:
@@ -373,8 +366,6 @@ namespace PCGExExtrudeTensors
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool IsTrivial() const override
 		{

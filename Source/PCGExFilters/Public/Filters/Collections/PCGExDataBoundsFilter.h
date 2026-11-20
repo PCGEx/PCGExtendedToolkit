@@ -102,10 +102,6 @@ namespace PCGExPointFilter
 		const TObjectPtr<const UPCGExDataBoundsFilterFactory> TypedFilterFactory;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FDataBoundsFilter() override
-		{
-		}
 	};
 }
 

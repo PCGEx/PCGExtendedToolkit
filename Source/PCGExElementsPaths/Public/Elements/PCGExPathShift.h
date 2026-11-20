@@ -47,13 +47,6 @@ class UPCGExShiftPathSettings : public UPCGExPathProcessorSettings
 public:
 	UPCGExShiftPathSettings(const FObjectInitializer& ObjectInitializer);
 
-	//~Begin UObject interface
-#if WITH_EDITOR
-
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-	//~End UObject interface
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(PathShift, "Path : Shift", "Shift path points");
@@ -146,8 +139,6 @@ namespace PCGExShiftPath
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

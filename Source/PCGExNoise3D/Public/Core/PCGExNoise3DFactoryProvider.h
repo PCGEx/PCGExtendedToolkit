@@ -60,10 +60,6 @@ struct PCGEXNOISE3D_API FPCGExNoise3DConfigBase
 		LocalRemapCurve.EditorCurveData.AddKey(1, 1);
 	}
 
-	~FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** The weight factor for this Noise3D (used when combining multiple noise sources). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Weighting", meta=(PCG_Overridable))
 	double WeightFactor = 1;

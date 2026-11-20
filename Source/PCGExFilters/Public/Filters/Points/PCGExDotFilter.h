@@ -63,10 +63,6 @@ struct FPCGExDotFilterConfig
 
 #pragma endregion
 
-	void Sanitize()
-	{
-	}
-
 #if WITH_EDITOR
 	void ApplyDeprecation();
 	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
@@ -120,10 +116,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FDotFilter() override
-		{
-		}
 	};
 }
 

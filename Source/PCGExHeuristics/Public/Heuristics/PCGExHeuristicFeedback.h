@@ -81,7 +81,7 @@ public:
 	UPROPERTY()
 	FPCGExHeuristicConfigFeedback Config;
 
-	virtual bool IsGlobal() const
+	bool IsGlobal() const
 	{
 		return Config.bGlobalFeedback;
 	}

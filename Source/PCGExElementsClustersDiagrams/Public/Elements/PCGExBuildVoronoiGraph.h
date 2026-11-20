@@ -22,8 +22,6 @@ namespace PCGExMath
 	{
 		class TVoronoi3;
 	}
-
-	class TVoronoi3;
 }
 
 namespace PCGExData

@@ -25,11 +25,6 @@
 
 #define LOCTEXT_NAMESPACE "PCGExVariantCollectionEditor"
 
-FPCGExVariantCollectionEditor::FPCGExVariantCollectionEditor()
-	: FPCGExAssetCollectionEditor()
-{
-}
-
 void FPCGExVariantCollectionEditor::CreateTabs(TArray<PCGExAssetCollectionEditor::TabInfos>& OutTabs)
 {
 	// No entries tab (there is no homogeneous Entries array) — a Collection Settings tab

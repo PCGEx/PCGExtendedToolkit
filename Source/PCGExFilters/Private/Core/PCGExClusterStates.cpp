@@ -34,10 +34,6 @@ void UPCGExClusterStateFactoryProviderSettings::PCGExApplyDeprecation(UPCGNode* 
 
 namespace PCGExClusterStates
 {
-	FState::~FState()
-	{
-	}
-
 	bool FState::Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
 	{
 		Config.Init();

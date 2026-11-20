@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigSimplex : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigSimplex()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Number of fractal octaves */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "16"))
 	int32 Octaves = 1;
@@ -39,9 +34,6 @@ struct FPCGExNoiseConfigSimplex : public FPCGExNoise3DConfigBase
  */
 class PCGEXNOISE3D_API FPCGExNoiseSimplex : public FPCGExNoise3DOperation
 {
-public:
-	virtual ~FPCGExNoiseSimplex() override = default;
-
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 

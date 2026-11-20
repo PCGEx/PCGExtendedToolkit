@@ -33,10 +33,6 @@ void UPCGExStateFactoryProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(U
 
 namespace PCGExPointStates
 {
-	FState::~FState()
-	{
-	}
-
 	bool FState::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 	{
 		if (!IFilter::Init(InContext, InPointDataFacade))

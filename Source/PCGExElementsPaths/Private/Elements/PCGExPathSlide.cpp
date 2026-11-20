@@ -90,10 +90,6 @@ bool FPCGExPathSlideElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExPathSlide
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExPathSlide::Process);

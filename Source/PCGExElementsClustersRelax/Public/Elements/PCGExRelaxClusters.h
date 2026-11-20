@@ -136,8 +136,6 @@ namespace PCGExRelaxClusters
 
 		FPCGExInfluenceDetails InfluenceDetails;
 
-		TSharedPtr<PCGExMT::TScopedNumericValue<double>> MaxDistanceValue;
-
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
@@ -146,14 +144,11 @@ namespace PCGExRelaxClusters
 
 		PCGEX_FOREACH_FIELD_RELAX_CLUSTER(PCGEX_OUTPUT_DECL)
 
-		virtual ~FProcessor() override;
-
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		// Runs every remaining step in order, then the output node loop. Returns once all of it is done.
 		void RunRelaxation();
 		void RelaxScope(const PCGExMT::FScope& Scope) const;
-		virtual void PrepareLoopScopesForNodes(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessNodes(const PCGExMT::FScope& Scope) override;
 		virtual void OnNodesProcessingComplete() override;
 	};
@@ -164,7 +159,6 @@ namespace PCGExRelaxClusters
 
 	public:
 		FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges);
-		virtual ~FBatch() override;
 
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;
 		virtual bool PrepareSingle(const TSharedPtr<PCGExClusterMT::IProcessor>& InProcessor) override;

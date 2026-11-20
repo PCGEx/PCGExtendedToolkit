@@ -14,8 +14,6 @@
 
 #include "PCGExBoundsAxisToPoints.generated.h"
 
-class FPCGExComputeIOBounds;
-
 UENUM()
 enum class EPCGExBoundAxisPriority : uint8
 {
@@ -149,8 +147,6 @@ namespace PCGExBoundsAxisToPoints
 {
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExBoundsAxisToPointsContext, UPCGExBoundsAxisToPointsSettings>
 	{
-		FPCGExUVW BaseUVW;
-
 		int32 NumPoints = 0;
 		bool bGeneratePerPointData = false;
 

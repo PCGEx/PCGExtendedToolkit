@@ -130,7 +130,6 @@ namespace PCGExDetailsCustomization
 		PCGEX_ADD_ACTION_ICON(NoSnapping, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(SnapOffset, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(SnapResult, AIS_Small)
-		PCGEX_ADD_ACTION_ICON(Snap, AIS_Small)
 
 		PCGEX_ADD_ACTION_ICON(ClosedClosed, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(ClosedOpen, AIS_Small)
@@ -140,9 +139,6 @@ namespace PCGExDetailsCustomization
 		PCGEX_ADD_ACTION_ICON(Round, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(Floor, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(Ceil, AIS_Small)
-
-		PCGEX_ADD_ACTION_ICON(Fixed, AIS_Small)
-		PCGEX_ADD_ACTION_ICON(Flexible, AIS_Small)
 
 		PCGEX_ADD_ACTION_ICON(Bit_Direct, AIS_VerySmall)
 		PCGEX_ADD_ACTION_ICON(Bit_Mutations, AIS_VerySmall)

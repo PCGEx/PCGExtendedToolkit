@@ -66,7 +66,6 @@ namespace PCGExPathfindingGrowPaths
 		PCGExPaths::FPathMetrics Metrics;
 
 		double MaxDistance = 0;
-		double Distance = 0;
 
 		TArray<int32> Path;
 
@@ -274,7 +273,6 @@ namespace PCGExPathfindingGrowPaths
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExPathfindingGrowPathsContext, UPCGExPathfindingGrowPathsSettings>
 	{
 		friend class FGrowth;
-		friend class FProcessorBatch;
 
 		TSharedPtr<PCGExData::TBuffer<int32>> NumIterations;
 		TSharedPtr<PCGExData::TBuffer<int32>> NumBranches;

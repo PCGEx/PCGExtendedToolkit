@@ -22,7 +22,6 @@ namespace PCGExPathfinding
 {
 	class FSearchAllocations;
 	class FPathQuery;
-	struct FExtraWeights;
 }
 
 class FPCGExHeuristicOperation;

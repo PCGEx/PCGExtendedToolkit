@@ -140,7 +140,6 @@ struct FPCGExBinPackingContext final : FPCGExPointsProcessorContext
 	TSet<int32> ValidIOIndices;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Bins;
-	TArray<FPCGExUVW> BinsUVW;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Discarded;
 
@@ -228,10 +227,6 @@ namespace PCGExBinPacking
 			: TProcessor(InPointDataFacade)
 		{
 			bForceSingleThreadedProcessPoints = true;
-		}
-
-		virtual ~FProcessor() override
-		{
 		}
 
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;

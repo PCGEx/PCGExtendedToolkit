@@ -45,14 +45,7 @@ class UPCGExSplitPathSettings : public UPCGExPathProcessorSettings
 {
 	GENERATED_BODY()
 
-	//~Begin UObject interface
 public:
-#if WITH_EDITOR
-
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-	//~End UObject interface
-
 	// TODO : Display split mode in title
 	//~Begin UPCGSettings
 #if WITH_EDITOR

@@ -131,10 +131,6 @@ bool FPCGExAttributeRollingElement::AdvanceWork(FPCGExContext* InContext, const 
 
 namespace PCGExAttributeRolling
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader)
 	{
 		TProcessor<FPCGExAttributeRollingContext, UPCGExAttributeRollingSettings>::RegisterBuffersDependencies(FacadePreloader);

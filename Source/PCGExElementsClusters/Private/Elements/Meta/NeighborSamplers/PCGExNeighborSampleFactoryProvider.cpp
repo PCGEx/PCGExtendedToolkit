@@ -239,13 +239,6 @@ void FPCGExNeighborSampleOperation::CompleteOperation()
 	TraversalScratch.Reset();
 }
 
-#if WITH_EDITOR
-FString UPCGExNeighborSampleProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif
-
 TSharedPtr<FPCGExNeighborSampleOperation> UPCGExNeighborSamplerFactoryData::CreateOperation(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(NeighborSampleOperation)

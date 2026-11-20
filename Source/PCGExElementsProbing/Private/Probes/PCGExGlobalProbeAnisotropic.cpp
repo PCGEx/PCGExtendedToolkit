@@ -16,11 +16,6 @@ bool FPCGExProbeGlobalAnisotropic::WantsOctree() const
 	return true;
 }
 
-bool FPCGExProbeGlobalAnisotropic::Prepare(FPCGExContext* InContext)
-{
-	return FPCGExProbeOperation::Prepare(InContext);
-}
-
 FMatrix FPCGExProbeGlobalAnisotropic::BuildTransformMatrix(const FVector& Primary, const FVector& Secondary) const
 {
 	const FVector P = Primary.GetSafeNormal();

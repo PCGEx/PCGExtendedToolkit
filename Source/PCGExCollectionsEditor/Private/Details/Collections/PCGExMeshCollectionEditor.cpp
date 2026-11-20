@@ -16,11 +16,6 @@
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Layout/SBox.h"
 
-FPCGExMeshCollectionEditor::FPCGExMeshCollectionEditor()
-	: FPCGExAssetCollectionEditor()
-{
-}
-
 void FPCGExMeshCollectionEditor::RegisterPushOptions(TArray<PCGExAssetCollectionEditor::FPushOption>& OutOptions)
 {
 	FPCGExAssetCollectionEditor::RegisterPushOptions(OutOptions);

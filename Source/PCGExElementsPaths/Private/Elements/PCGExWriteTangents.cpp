@@ -160,10 +160,6 @@ bool FPCGExWriteTangentsElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExWriteTangents
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;

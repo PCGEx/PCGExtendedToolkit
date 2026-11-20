@@ -162,30 +162,11 @@ void FPCGExVtxPropertyOperation::ProcessNode(PCGExClusters::FNode& Node, const T
 {
 }
 
-#if WITH_EDITOR
-FString UPCGExVtxPropertyProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif
-
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyFactoryData::CreateOperation(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(VtxPropertyOperation)
 	return NewOperation;
 }
-
-TArray<FPCGPinProperties> UPCGExVtxPropertyProviderSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	return PinProperties;
-}
-
-UPCGExFactoryData* UPCGExVtxPropertyProviderSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const
-{
-	return Super::CreateFactory(InContext, InFactory);
-}
-
 
 #undef LOCTEXT_NAMESPACE
 #undef PCGEX_NAMESPACE

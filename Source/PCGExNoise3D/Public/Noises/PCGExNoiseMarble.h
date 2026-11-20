@@ -24,11 +24,6 @@ struct FPCGExNoiseConfigMarble : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigMarble()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Direction of marble veins */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExMarbleDirection Direction = EPCGExMarbleDirection::X;
@@ -62,8 +57,6 @@ public:
 	double TurbulenceStrength = 1.0;
 	int32 TurbulenceOctaves = 4;
 	double VeinSharpness = 1.0;
-
-	virtual ~FPCGExNoiseMarble() override = default;
 
 	virtual void PostInitDerived() override;
 

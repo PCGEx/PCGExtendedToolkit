@@ -84,7 +84,6 @@ namespace PCGExWriteStates
 {
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExWriteStatesContext, UPCGExWriteStatesSettings>
 	{
-		friend class FBatch;
 		TSharedPtr<PCGExPointStates::FStateManager> StateManager;
 
 	public:

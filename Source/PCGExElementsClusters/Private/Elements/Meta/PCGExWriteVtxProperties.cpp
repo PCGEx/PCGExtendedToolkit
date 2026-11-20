@@ -230,10 +230,6 @@ namespace PCGExWriteVtxProperties
 	{
 	}
 
-	FBatch::~FBatch()
-	{
-	}
-
 	void FBatch::OnProcessingPreparationComplete()
 	{
 		PCGEX_TYPED_CONTEXT_AND_SETTINGS(WriteVtxProperties)

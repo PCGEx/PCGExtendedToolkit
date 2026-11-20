@@ -89,7 +89,6 @@ public:
 protected:
 	FPCGExVectorHashComparisonDetails HashComparisonDetails;
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> WindowSize;
-	TSharedPtr<PCGExDetails::TSettingValue<double>> DistanceLimit;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")

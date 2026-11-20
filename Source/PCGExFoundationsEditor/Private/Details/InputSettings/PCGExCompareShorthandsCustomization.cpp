@@ -100,23 +100,3 @@ void FPCGExCompareShorthandCustomization::CustomizeHeader(
 			]
 		];
 }
-
-TSharedRef<IPropertyTypeCustomization> FPCGExCompareShorthandVectorCustomization::MakeInstance()
-{
-	return MakeShareable(new FPCGExCompareShorthandVectorCustomization());
-}
-
-TSharedRef<SWidget> FPCGExCompareShorthandVectorCustomization::CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle)
-{
-	return PCGEX_VECTORINPUTBOX(ValueHandle);
-}
-
-TSharedRef<IPropertyTypeCustomization> FPCGExCompareShorthandRotatorCustomization::MakeInstance()
-{
-	return MakeShareable(new FPCGExCompareShorthandRotatorCustomization());
-}
-
-TSharedRef<SWidget> FPCGExCompareShorthandRotatorCustomization::CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle)
-{
-	return PCGEX_ROTATORINPUTBOX(ValueHandle);
-}

@@ -16,8 +16,6 @@
 #include "Styling/SlateStyle.h"
 #include "Styling/SlateStyleRegistry.h"
 
-#define LOCTEXT_NAMESPACE "FPCGExtendedToolkitEditorModule"
-
 #pragma region CommandListEditorOnlyGraphs
 namespace PCGExEditor
 {
@@ -84,16 +82,9 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		PCGEX_ADD_CLASS_ICON(PCGExCustomGraphSettings)
 		PCGEX_ADD_CLASS_ICON(PCGExCustomGraphBuilder)
 		PCGEX_ADD_CLASS_ICON(PCGExCustomActorDataPacker)
-		PCGEX_ADD_CLASS_ICON(PCGExBeacon)
 		PCGEX_ADD_CLASS_ICON(PCGExBitmaskCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExPropertySchemaAsset)
 		PCGEX_ADD_CLASS_ICON(PCGExVariantCollection)
-
-		PCGEX_REGISTER_PIN_ICON(OUT_Special)
-		PCGEX_REGISTER_PIN_ICON(IN_Special)
-
-		PCGEX_REGISTER_PIN_ICON(OUT_RecursionTracker)
-		PCGEX_REGISTER_PIN_ICON(IN_RecursionTracker)
 
 		for (int32 Bit = 0; Bit < 64; Bit++)
 		{
@@ -103,7 +94,6 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 
 
 			AppStyle.Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
-			InStyle->Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
 		}
 	}
 
@@ -132,7 +122,5 @@ void FPCGExtendedToolkitEditorModule::ShutdownModule()
 	FSlateStyleRegistry::UnRegisterSlateStyle(Style->GetStyleSetName());
 	Style.Reset();
 }
-
-#undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FPCGExtendedToolkitEditorModule, PCGExtendedToolkitEditor)

@@ -300,7 +300,6 @@ bool FPCGExWaitForPCGDataElement::Boot(FPCGExContext* InContext) const
 
 		if (Pin.IsRequiredPin())
 		{
-			Context->RequiredPinProperties.Add(Pin);
 			Context->RequiredLabels.Add(Pin.Label);
 		}
 	}

@@ -150,10 +150,6 @@ bool FPCGExCopyClustersToPointsElement::AdvanceWork(FPCGExContext* InContext, co
 
 namespace PCGExCopyClustersToPoints
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		if (!IProcessor::Process(InTaskManager))
@@ -262,10 +258,6 @@ namespace PCGExCopyClustersToPoints
 			Context->TargetsAttributesToClusterTags.Tag(Context->TargetsDataFacade->GetInPoint(i), EdgeDupe);
 			Context->TargetsForwardHandler->Forward(i, EdgeDupe->GetOut()->Metadata);
 		}
-	}
-
-	FBatch::~FBatch()
-	{
 	}
 
 	void FBatch::Process()

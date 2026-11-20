@@ -246,7 +246,6 @@ namespace PCGExPathfindingPlotEdges
 		friend class FProcessor;
 
 	protected:
-		bool bUnmatched = false;
 		TSet<const UPCGData*> IgnoreList;
 		TSharedPtr<PCGExData::FDataForwardHandler> VtxDataForwardHandler;
 

@@ -80,8 +80,7 @@ void SPCGExAdjacencyPreview::DrawStarPanel(
 	const FVector2D& Center,
 	const double Radius,
 	const int32 TotalBranches,
-	const int32 GreenCount,
-	const bool bOverallPass) const
+	const int32 GreenCount) const
 {
 	if (TotalBranches <= 0)
 	{
@@ -130,8 +129,7 @@ void SPCGExAdjacencyPreview::DrawAggregatedPanel(
 	const FVector2D& Center,
 	const double MaxRadius,
 	const TArray<double>& Values,
-	const int32 HighlightIndex,
-	const EPCGExAdjacencyGatherMode GatherMode) const
+	const int32 HighlightIndex) const
 {
 	const int32 N = Values.Num();
 	if (N <= 0)
@@ -230,7 +228,7 @@ int32 SPCGExAdjacencyPreview::PaintSomeMode(
 		                                       FVector2D(PanelX, 0), FVector2D(PanelWidth, LocalSize.Y), BgColor);
 
 		DrawStarPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
-		              TotalNeighbors, GreenCount, bPass);
+		              TotalNeighbors, GreenCount);
 
 		// Count label below star
 		const FString CountStr = FString::Printf(TEXT("%d/%d"), GreenCount, TotalNeighbors);
@@ -298,7 +296,7 @@ int32 SPCGExAdjacencyPreview::PaintAllIndividualMode(
 
 		// Star
 		DrawStarPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
-		              TotalBranches, GreenCount, bPass);
+		              TotalBranches, GreenCount);
 
 		// Count label
 		const FString CountStr = FString::Printf(TEXT("%d/%d"), GreenCount, TotalBranches);
@@ -323,12 +321,11 @@ int32 SPCGExAdjacencyPreview::PaintAllIndividualMode(
 
 	// Mode label
 	{
-		const FSlateFontInfo SmallFont = FCoreStyle::GetDefaultFontStyle("Regular", 7);
 		const FVector2D LabelPos(LocalSize.X * 0.5 - 30.0, 2.0);
 		FSlateDrawElement::MakeText(
 			OutDrawElements, LayerId + 5,
 			AllottedGeometry.ToPaintGeometry(FVector2D(80, 12), FSlateLayoutTransform(LabelPos)),
-			TEXT("All : Individual"), SmallFont, ESlateDrawEffect::None,
+			TEXT("All : Individual"), Font, ESlateDrawEffect::None,
 			PCGExAdjacencyPreviewConstants::LabelColor);
 	}
 
@@ -430,7 +427,7 @@ int32 SPCGExAdjacencyPreview::PaintAllAggregatedMode(
 		}
 
 		DrawAggregatedPanel(OutDrawElements, AllottedGeometry, LayerId, PanelCenter, StarRadius,
-		                    Values, HighlightIndex, GatherMode);
+		                    Values, HighlightIndex);
 
 		// Aggregate label below star
 		const FVector2D LabelPos(PanelCenter.X - 20.0, StarCenterY + StarRadius + 6.0);

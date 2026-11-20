@@ -73,7 +73,7 @@ void FPCGExPointsToBoundsDataDetails::Output(const UPCGBasePointData* InBoundsDa
 	}
 }
 
-void FPCGExPointsToBoundsDataDetails::OutputInverse(const UPCGBasePointData* InPoints, UPCGBasePointData* OutData, const TArray<FPCGAttributeIdentifier>& AttributeIdentifiers, PCGExMath::FBestFitPlane& Plane) const
+void FPCGExPointsToBoundsDataDetails::OutputInverse(UPCGBasePointData* OutData, const TArray<FPCGAttributeIdentifier>& AttributeIdentifiers, PCGExMath::FBestFitPlane& Plane) const
 {
 	// Collapse mode: the collapsed output is its own bounds source.
 	Output(OutData, OutData, AttributeIdentifiers, Plane);
@@ -139,10 +139,6 @@ bool FPCGExPointsToBoundsElement::AdvanceWork(FPCGExContext* InContext, const UP
 
 namespace PCGExPointsToBounds
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExPointsToBounds::Process);
@@ -318,7 +314,7 @@ namespace PCGExPointsToBounds
 		}
 		else
 		{
-			Settings->DataDetails.OutputInverse(PointDataFacade->GetIn(), OutputFacade->GetOut(), BlendedAttributes, BestFitPlane);
+			Settings->DataDetails.OutputInverse(OutputFacade->GetOut(), BlendedAttributes, BestFitPlane);
 			PCGExClusters::Helpers::CleanupClusterData(OutputFacade->Source);
 		}
 	}

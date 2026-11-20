@@ -84,10 +84,6 @@ bool FPCGExRepairClustersElement::AdvanceWork(FPCGExContext* InContext, const UP
 
 namespace PCGExRepairClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSanitizeClusters::Process);

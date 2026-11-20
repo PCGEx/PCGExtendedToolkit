@@ -141,7 +141,6 @@ private:
 struct FPCGExFindContoursContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExFindContoursElement;
-	friend class FPCGExCreateBridgeTask;
 
 	FPCGExCellArtifactsDetails Artifacts;
 	FPCGExCellGrowthDetails SeedGrowth;

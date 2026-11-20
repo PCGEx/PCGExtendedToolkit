@@ -5,11 +5,6 @@
 #include "Samplers/PCGExTensorSamplerRK4.h"
 
 
-bool UPCGExTensorSamplerRK4::PrepareForData(FPCGExContext* InContext)
-{
-	return true;
-}
-
 PCGExTensor::FTensorSample UPCGExTensorSamplerRK4::Sample(const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors, const int32 InSeedIndex, const FTransform& InProbe, bool& OutSuccess) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(UPCGExTensorSamplerRK4::Sample);

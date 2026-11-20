@@ -124,7 +124,6 @@ namespace PCGExOffsetPath
 		InTransforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
 
 		Up = Settings->UpVectorConstant.GetSafeNormal();
-		OffsetConstant = Settings->OffsetConstant_DEPRECATED;
 
 		Path = MakeShared<PCGExPaths::FPath>(InTransforms, PCGExPaths::Helpers::GetClosedLoop(PointDataFacade->GetIn()), 0);
 

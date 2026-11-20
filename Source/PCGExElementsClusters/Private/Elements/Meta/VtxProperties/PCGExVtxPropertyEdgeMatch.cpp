@@ -118,11 +118,6 @@ void UPCGExVtxPropertyEdgeMatchSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 	Super::PCGExApplyDeprecation(InOutNode);
 }
-
-FString UPCGExVtxPropertyEdgeMatchSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
 #endif
 
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyEdgeMatchFactory::CreateOperation(FPCGExContext* InContext) const

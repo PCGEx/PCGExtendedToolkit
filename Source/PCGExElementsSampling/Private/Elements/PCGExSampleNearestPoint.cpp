@@ -287,10 +287,6 @@ bool FPCGExSampleNearestPointElement::AdvanceWork(FPCGExContext* InContext, cons
 
 namespace PCGExSampleNearestPoint
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::SamplingFailed(const int32 Index)
 	{
 		SamplingMask[Index] = false;

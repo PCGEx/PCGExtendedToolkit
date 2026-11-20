@@ -13,15 +13,6 @@
 #define LOCTEXT_NAMESPACE "PCGExCreateTensorNoiseBounded"
 #define PCGEX_NAMESPACE CreateTensorNoiseBounded
 
-bool FPCGExTensorNoiseBounded::Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory)
-{
-	if (!PCGExTensorPointOperation::Init(InContext, InFactory))
-	{
-		return false;
-	}
-	return true;
-}
-
 PCGExTensor::FTensorSample FPCGExTensorNoiseBounded::Sample(const int32 InSeedIndex, const FTransform& InProbe) const
 {
 	const FVector& InPosition = InProbe.GetLocation();

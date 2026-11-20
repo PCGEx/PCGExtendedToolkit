@@ -331,8 +331,6 @@ namespace PCGExPathSolidify
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
 		EPCGExAxisOrder GetOrder(const int32 Index) const;

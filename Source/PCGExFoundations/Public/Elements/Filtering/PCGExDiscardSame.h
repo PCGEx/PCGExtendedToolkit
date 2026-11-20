@@ -10,11 +10,6 @@
 
 #include "PCGExDiscardSame.generated.h"
 
-namespace PCGEx
-{
-	class FAttributeHasher;
-}
-
 UENUM()
 enum class EPCGExDiscardSameMode : uint8
 {
@@ -30,11 +25,6 @@ enum class EPCGExDiscardAttributeHashMode : uint8
 	Single = 1 UMETA(DisplayName = "Single", ToolTip="Use a single, overridable attribute."),
 	List   = 2 UMETA(DisplayName = "List", ToolTip="Use a list of attributes. Arrays are not overridable"),
 };
-
-namespace PCGExDiscardSame
-{
-	class FProcessor;
-}
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/discarding/discard-same"))
 class UPCGExDiscardSameSettings : public UPCGExPointsProcessorSettings

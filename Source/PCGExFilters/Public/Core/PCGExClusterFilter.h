@@ -229,10 +229,6 @@ namespace PCGExClusterFilter
 		TSharedRef<PCGExClusters::FCluster> Cluster;
 		TSharedRef<PCGExData::FFacade> EdgeDataFacade;
 
-		virtual ~FManager() override
-		{
-		}
-
 	protected:
 		virtual bool InitFilter(FPCGExContext* InContext, const TSharedPtr<PCGExPointFilter::IFilter>& Filter) override;
 		virtual void InitCache() override;

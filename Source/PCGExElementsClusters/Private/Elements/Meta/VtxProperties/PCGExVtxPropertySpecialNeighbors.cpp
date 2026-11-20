@@ -74,13 +74,6 @@ void FPCGExVtxPropertySpecialNeighbors::ProcessNode(PCGExClusters::FNode& Node, 
 	}
 }
 
-#if WITH_EDITOR
-FString UPCGExVtxPropertySpecialNeighborsSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif
-
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertySpecialNeighborsFactory::CreateOperation(FPCGExContext* InContext) const
 {
 	PCGEX_FACTORY_NEW_OPERATION(VtxPropertySpecialNeighbors)

@@ -229,8 +229,6 @@ namespace PCGExSampleOverlapStats
 
 		//virtual bool IsTrivial() const override { return false; } // Force non-trivial because this shit is expensive
 
-		virtual ~FProcessor() override;
-
 		FORCEINLINE void RegisterPointBounds(const int32 Index, const TSharedPtr<PCGExDiscardByOverlap::FPointBounds>& InPointBounds)
 		{
 			LocalPointBounds[Index] = InPointBounds;

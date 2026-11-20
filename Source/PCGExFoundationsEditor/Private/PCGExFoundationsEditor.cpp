@@ -31,7 +31,7 @@ void FPCGExFoundationsEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExPartitionGrid", FPCGExPartitionGridCustomization)
 
 	PCGEX_REGISTER_CUSTO("PCGExBitmask", FPCGExBitmaskCustomization)
-	PCGEX_REGISTER_CUSTO("PCGExBitmaskWithOperation", FPCGExBitmaskWithOperationCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExBitmaskWithOperation", FPCGExBitmaskCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExClampedBit", FPCGExClampedBitCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExClampedBitOp", FPCGExClampedBitOpCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExBitmaskFilterConfig", FPCGExBitmaskFilterConfigCustomization)

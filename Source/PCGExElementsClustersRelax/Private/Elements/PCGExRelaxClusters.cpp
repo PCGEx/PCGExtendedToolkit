@@ -109,10 +109,6 @@ bool FPCGExRelaxClustersElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExRelaxClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	TSharedPtr<PCGExClusters::FCluster> FProcessor::HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef)
 	{
 		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, true, false, false);
@@ -275,12 +271,6 @@ namespace PCGExRelaxClusters
 #undef PCGEX_RELAX_STEP_EDGE
 	}
 
-	void FProcessor::PrepareLoopScopesForNodes(const TArray<PCGExMT::FScope>& Loops)
-	{
-		TProcessor<FPCGExRelaxClustersContext, UPCGExRelaxClustersSettings>::PrepareLoopScopesForNodes(Loops);
-		MaxDistanceValue = MakeShared<PCGExMT::TScopedNumericValue<double>>(Loops, 0);
-	}
-
 	void FProcessor::ProcessNodes(const PCGExMT::FScope& Scope)
 	{
 		TArray<PCGExClusters::FNode>& Nodes = *Cluster->Nodes;
@@ -319,10 +309,6 @@ namespace PCGExRelaxClusters
 
 	FBatch::FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges)
 		: TBatch(InContext, InVtx, InEdges)
-	{
-	}
-
-	FBatch::~FBatch()
 	{
 	}
 

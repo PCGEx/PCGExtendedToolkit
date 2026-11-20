@@ -54,7 +54,6 @@ class FPCGExProbeGlobalAnisotropic : public FPCGExProbeOperation
 public:
 	virtual bool IsGlobalProbe() const override;
 	virtual bool WantsOctree() const override;
-	virtual bool Prepare(FPCGExContext* InContext) override;
 	virtual void ProcessAll(TSet<uint64>& OutEdges) const override;
 
 	FPCGExProbeConfigGlobalAnisotropic Config;

@@ -13,7 +13,6 @@ class FBlueprintActionDatabaseRegistrar;
 class FKismetCompilerContext;
 class FProperty;
 class UEdGraph;
-class UEdGraphPin;
 class UGraphNodeContextMenuContext;
 class UToolMenu;
 struct FToolMenuSection;

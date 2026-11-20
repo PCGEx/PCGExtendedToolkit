@@ -257,7 +257,6 @@ struct FPCGExBinPacking3DContext final : FPCGExPointsProcessorContext
 	TSet<int32> ValidIOIndices;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Bins;
-	TArray<FPCGExUVW> BinsUVW;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Discarded;
 
@@ -306,7 +305,6 @@ namespace PCGExBinPacking3D
 	{
 		int32 BinIndex = -1;
 		int32 EPIndex = -1;
-		int32 RotationIndex = 0;
 		FRotator Rotation = FRotator::ZeroRotator;
 		FVector RotatedSize = FVector::ZeroVector;
 		FVector PlacementMin = FVector::ZeroVector;
@@ -438,10 +436,6 @@ namespace PCGExBinPacking3D
 			: TProcessor(InPointDataFacade)
 		{
 			bForceSingleThreadedProcessPoints = true;
-		}
-
-		virtual ~FProcessor() override
-		{
 		}
 
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;

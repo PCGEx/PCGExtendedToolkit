@@ -5,8 +5,6 @@
 
 #include "CoreMinimal.h"
 
-class FPCGExInlineWidgetRegistry;
-
 /**
  * Built-in compact inline widget factories for FPCGExProperty_Vector / _Vector2 / _Rotator.
  *

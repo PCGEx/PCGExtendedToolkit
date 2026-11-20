@@ -10,10 +10,6 @@
 #include "Details/PCGExDotComparisonCustomization.h"
 #include "Details/PCGExNameFiltersCustomization.h"
 
-#define LOCTEXT_NAMESPACE "FPCGExCoreEditorModule"
-
-#undef LOCTEXT_NAMESPACE
-
 PCGEX_IMPLEMENT_MODULE(FPCGExCoreEditorModule, PCGExCoreEditor)
 
 void FPCGExCoreEditorModule::StartupModule()
@@ -27,9 +23,4 @@ void FPCGExCoreEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExAttributeGatherDetails", FPCGExNameFiltersDetailsCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExForwardDetails", FPCGExForwardDetailsCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExAttributeSourceToTargetDetails", FPCGExAttributeSourceToTargetCustomization)
-}
-
-void FPCGExCoreEditorModule::ShutdownModule()
-{
-	IPCGExEditorModuleInterface::ShutdownModule();
 }

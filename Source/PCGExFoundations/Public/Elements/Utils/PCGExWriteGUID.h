@@ -30,7 +30,6 @@ enum class EPCGExGUIDUniquenessFlags : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExGUIDUniquenessFlags)
-using EPCGExGUIDUniquenessFlagsBitmask = TEnumAsByte<EPCGExGUIDUniquenessFlags>;
 
 UENUM()
 enum class EPCGExGUIDOutputType : uint8
@@ -194,10 +193,6 @@ namespace PCGExWriteGUID
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
-		{
-		}
-
-		virtual ~FProcessor() override
 		{
 		}
 

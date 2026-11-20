@@ -10,15 +10,6 @@
 #define LOCTEXT_NAMESPACE "PCGExCreateTensorNull"
 #define PCGEX_NAMESPACE CreateTensorNull
 
-bool FPCGExTensorNull::Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory)
-{
-	if (!PCGExTensorPointOperation::Init(InContext, InFactory))
-	{
-		return false;
-	}
-	return true;
-}
-
 PCGExTensor::FTensorSample FPCGExTensorNull::Sample(const int32 InSeedIndex, const FTransform& InProbe) const
 {
 	const FVector& InPosition = InProbe.GetLocation();

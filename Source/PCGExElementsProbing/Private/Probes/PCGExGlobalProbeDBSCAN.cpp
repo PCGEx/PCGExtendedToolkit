@@ -16,11 +16,6 @@ bool FPCGExProbeDBSCAN::WantsOctree() const
 	return true;
 }
 
-bool FPCGExProbeDBSCAN::Prepare(FPCGExContext* InContext)
-{
-	return FPCGExProbeOperation::Prepare(InContext);
-}
-
 void FPCGExProbeDBSCAN::ProcessAll(TSet<uint64>& OutEdges) const
 {
 	const TArray<FVector>& Positions = *WorkingPositions;

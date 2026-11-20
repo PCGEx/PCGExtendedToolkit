@@ -126,9 +126,6 @@ namespace PCGExUberNoise
 {
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExUberNoiseContext, UPCGExUberNoiseSettings>
 	{
-		EPCGMetadataTypes UnderlyingType = EPCGMetadataTypes::Unknown;
-		int32 NumFields = 0;
-
 		TSharedPtr<PCGExBlending::FProxyDataBlender> Blender;
 		TSharedPtr<PCGExData::IBufferProxy> NoiseBuffer;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> WeightBuffer;

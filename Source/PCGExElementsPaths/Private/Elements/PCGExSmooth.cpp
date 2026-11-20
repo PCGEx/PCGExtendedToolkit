@@ -132,10 +132,6 @@ bool FPCGExSmoothElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSett
 
 namespace PCGExSmooth
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSmooth::Process);

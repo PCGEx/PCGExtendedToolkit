@@ -76,11 +76,9 @@ public:
 	TSharedPtr<PCGExTensor::FTensorsHandler> TensorsHandler;
 
 protected:
-	bool bUseConstantDir = false;
 	double Mirror = 1;
 	double MinDot = 0;
 	bool bUseBestDot = false;
-	FVector Direction = FVector::ForwardVector;
 };
 
 ////

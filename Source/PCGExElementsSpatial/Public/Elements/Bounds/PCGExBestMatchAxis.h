@@ -20,8 +20,6 @@ namespace PCGExMatching
 	class FTargetsHandler;
 }
 
-class FPCGExComputeIOBounds;
-
 UENUM()
 enum class EPCGExBestMatchAxisTargetMode : uint8
 {
@@ -127,8 +125,6 @@ namespace PCGExBestMatchAxis
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
