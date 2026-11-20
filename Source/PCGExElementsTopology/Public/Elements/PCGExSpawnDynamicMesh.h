@@ -56,7 +56,6 @@ protected:
 struct FPCGExSpawnDynamicMeshContext final : FPCGExContext
 {
 	friend class FPCGExSpawnDynamicMeshElement;
-	bool bWait = true;
 };
 
 class FPCGExSpawnDynamicMeshElement final : public IPCGExElement

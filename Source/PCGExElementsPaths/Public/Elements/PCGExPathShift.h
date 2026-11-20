@@ -114,7 +114,6 @@ public:
 struct FPCGExShiftPathContext final : FPCGExPathProcessorContext
 {
 	friend class FPCGExShiftPathElement;
-	FPCGExBlendingDetails BlendingSettings;
 	EPCGPointNativeProperties ShiftedProperties;
 	TArray<FPCGAttributeIdentifier> ShiftedAttributes;
 

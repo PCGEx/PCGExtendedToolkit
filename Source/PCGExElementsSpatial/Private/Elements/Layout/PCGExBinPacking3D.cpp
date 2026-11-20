@@ -1190,7 +1190,6 @@ namespace PCGExBinPacking3D
 		}
 
 		// Create bins
-		BinMaxWeights.SetNum(TargetBins->GetNum());
 		for (int i = 0; i < TargetBins->GetNum(); i++)
 		{
 			const PCGExData::FConstPoint BinPoint = TargetBins->GetInPoint(i);
@@ -1219,7 +1218,6 @@ namespace PCGExBinPacking3D
 				NewBin->MaxWeight = TNumericLimits<double>::Max();
 			}
 
-			BinMaxWeights[i] = NewBin->MaxWeight;
 			Bins.Add(NewBin);
 		}
 

@@ -628,14 +628,6 @@ namespace PCGExProperties
 	}
 
 	/**
-	 * Check if properties array contains a property with given name.
-	 */
-	inline bool HasProperty(TConstArrayView<FInstancedStruct> Properties, FName PropertyName)
-	{
-		return GetPropertyByName(Properties, PropertyName) != nullptr;
-	}
-
-	/**
 	 * Check if properties array contains any property of given type.
 	 */
 	template <typename T>

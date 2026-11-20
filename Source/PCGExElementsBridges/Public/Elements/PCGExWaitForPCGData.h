@@ -330,11 +330,6 @@ namespace PCGExWaitForPCGData
 			OnComponentFound = MoveTemp(InCallback);
 		}
 
-		void SetOnDiscoveryComplete(TFunction<void()>&& InCallback)
-		{
-			OnDiscoveryComplete = MoveTemp(InCallback);
-		}
-
 		bool Start(const TSet<FSoftObjectPath>& InActorReferences);
 		void Stop();
 
@@ -366,7 +361,6 @@ namespace PCGExWaitForPCGData
 		TArray<TArray<UPCGComponent*>> PerActorGatheredComponents;
 
 		FOnDiscoveryComplete OnComponentFound;
-		TFunction<void()> OnDiscoveryComplete;
 	};
 
 	//

@@ -368,7 +368,7 @@ namespace PCGExPathInclusion
 		}
 	}
 
-	EFlags FHandler::GetInclusionFlags(const FTransform& InTransform, const FVector& InBoundsMin, const FVector& InBoundsMax, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData, const TSet<const UPCGData*>* InAdditionalExclude) const
+	EFlags FHandler::GetInclusionFlags(const FTransform& InTransform, const FVector& InBoundsMin, const FVector& InBoundsMax, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData) const
 	{
 		const FVector WorldPosition = InTransform.GetLocation();
 		const bool bUsePrecision = Precision != EPCGExDistance::Center;
@@ -392,7 +392,6 @@ namespace PCGExPathInclusion
 		{
 			if (bIgnoreSelf && DataArray[Item.Index].Data == InParentData) { return true; }
 			if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data)) { return true; }
-			if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data)) { return true; }
 			return false;
 		};
 
@@ -490,7 +489,7 @@ namespace PCGExPathInclusion
 		return static_cast<EFlags>(OutFlags);
 	}
 
-	PCGExMath::FClosestPosition FHandler::FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData, const TSet<const UPCGData*>* InAdditionalExclude) const
+	PCGExMath::FClosestPosition FHandler::FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData) const
 	{
 		PCGExMath::FClosestPosition ClosestIntersection;
 
@@ -507,10 +506,6 @@ namespace PCGExPathInclusion
 				}
 			}
 			if (!MatchIgnoreList.IsEmpty() && MatchIgnoreList.Contains(DataArray[Item.Index].Data))
-			{
-				return true;
-			}
-			if (InAdditionalExclude && InAdditionalExclude->Contains(DataArray[Item.Index].Data))
 			{
 				return true;
 			}

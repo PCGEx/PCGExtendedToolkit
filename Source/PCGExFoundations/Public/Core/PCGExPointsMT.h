@@ -78,8 +78,6 @@ namespace PCGExPointsMT
 		bool bForceSingleThreadedProcessPoints = false;
 		bool bForceSingleThreadedProcessRange = false;
 
-		int32 LocalPointProcessingChunkSize = -1;
-
 	public:
 		TWeakPtr<IBatch> ParentBatch;
 
@@ -211,8 +209,6 @@ namespace PCGExPointsMT
 		PCGExData::EIOInit DataInitializationPolicy = PCGExData::EIOInit::NoInit;
 		TArray<TSharedRef<PCGExData::FFacade>> ProcessorFacades;
 		TMap<PCGExData::FPointIO*, TSharedRef<IProcessor>>* SubProcessorMap = nullptr;
-
-		mutable FRWLock BatchLock;
 
 		FPCGExContext* ExecutionContext = nullptr;
 

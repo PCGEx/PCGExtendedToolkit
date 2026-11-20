@@ -7,18 +7,14 @@
 #include "ToolMenus.h"
 #include "Styling/SlateStyle.h"
 
-TArray<IPCGExEditorModuleInterface*> IPCGExEditorModuleInterface::RegisteredModules;
-
 void IPCGExEditorModuleInterface::StartupModule()
 {
-	RegisteredModules.Add(this);
 	UE_LOG(LogPCGEx, Log, TEXT("IPCGExEditorModuleInterface::StartupModule >> %s"), *GetModuleName());
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &IPCGExEditorModuleInterface::RegisterMenuExtensions));
 }
 
 void IPCGExEditorModuleInterface::ShutdownModule()
 {
-	RegisteredModules.Remove(this);
 	UnregisterMenuExtensions();
 }
 

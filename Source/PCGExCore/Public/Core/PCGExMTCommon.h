@@ -42,13 +42,6 @@ namespace PCGExMT
 	 */
 	PCGEXCORE_API void ParallelOrSequentialScoped(int32 Num, FScopedLoopBody Body, int32 Threshold = DefaultParallelThreshold);
 
-	/**
-	 * Force sequential execution regardless of iteration count.
-	 * @param Num Number of iterations
-	 * @param Body Function taking (int32 i) to execute per iteration
-	 */
-	PCGEXCORE_API void Sequential(int32 Num, FLoopBody Body);
-
 	/** Lowers Target to Value when Value is smaller. Lock-free: the outcome is the smallest value any caller passed, whatever their order. */
 	FORCEINLINE void AtomicMin(int32& Target, const int32 Value)
 	{
@@ -86,11 +79,6 @@ namespace PCGExMT
 		bool IsValid() const
 		{
 			return Start != -1 && Count > 0;
-		}
-
-		int32 GetNextScopeIndex() const
-		{
-			return LoopIndex + 1;
 		}
 
 		void GetIndices(TArray<int32>& OutIndices) const;

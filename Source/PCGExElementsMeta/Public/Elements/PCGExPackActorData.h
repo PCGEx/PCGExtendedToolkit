@@ -708,7 +708,6 @@ namespace PCGExPackActorData
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExPackActorDataContext, UPCGExPackActorDataSettings>
 	{
-		TArray<FPCGMetadataAttributeBase*> Attributes;
 		UPCGExCustomActorDataPacker* Packer = nullptr;
 
 		TSet<AActor*> UniqueActors;

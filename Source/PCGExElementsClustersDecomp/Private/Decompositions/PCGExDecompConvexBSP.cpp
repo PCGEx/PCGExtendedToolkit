@@ -10,7 +10,7 @@ namespace PCGExDecompConvexBSPInternal
 		TArray<int32> NodeIndices;
 	};
 
-	static void ComputeConvexHull(
+	void ComputeConvexHull(
 		const TArray<FVector>& Points,
 		TArray<int32>& OutHullIndices)
 	{
@@ -146,7 +146,6 @@ namespace PCGExDecompConvexBSPInternal
 			{
 				F.Normal = -F.Normal;
 				F.D = -F.D;
-				Swap(F.B, F.C);
 			}
 
 			Faces.Add(F);
@@ -186,7 +185,7 @@ namespace PCGExDecompConvexBSPInternal
 	// Returns CONCAVITY: the fraction of points interior to the hull (0 = fully convex, ->1 = mostly
 	// interior). Terminate when it drops to/below MaxConcavityRatio -- the name matches the value, so
 	// don't flip the comparison.
-	static double ComputeConcavityRatio(const TArray<FVector>& Positions)
+	double ComputeConcavityRatio(const TArray<FVector>& Positions)
 	{
 		if (Positions.Num() <= 4)
 		{
@@ -205,7 +204,7 @@ namespace PCGExDecompConvexBSPInternal
 		return static_cast<double>(InteriorCount) / Positions.Num();
 	}
 
-	static bool FindSplitPlane(
+	bool FindSplitPlane(
 		const TArray<FVector>& Positions,
 		FVector& OutPlaneOrigin,
 		FVector& OutPlaneNormal)
@@ -263,7 +262,7 @@ namespace PCGExDecompConvexBSPInternal
 		return true;
 	}
 
-	static void DecomposeRecursive(
+	void DecomposeRecursive(
 		const PCGExClusters::FCluster* InCluster,
 		const TArray<int32>& NodeIndices,
 		const int32 MinNodesPerCell,

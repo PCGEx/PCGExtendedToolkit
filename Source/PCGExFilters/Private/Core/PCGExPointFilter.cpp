@@ -432,11 +432,6 @@ namespace PCGExPointFilter
 		SupportedFactoriesTypes = InTypes;
 	}
 
-	const TSet<FPCGDataTypeBaseId>* FManager::GetSupportedTypes() const
-	{
-		return SupportedFactoriesTypes;
-	}
-
 	bool FManager::InitFilter(FPCGExContext* InContext, const TSharedPtr<IFilter>& Filter)
 	{
 		return Filter->Init(InContext, PointDataFacade);
@@ -447,9 +442,7 @@ namespace PCGExPointFilter
 	// is called here to let filters allocate their Results cache after sorting.
 	bool FManager::PostInit(FPCGExContext* InContext)
 	{
-		bValid = !ManagedFilters.IsEmpty();
-
-		if (!bValid)
+		if (ManagedFilters.IsEmpty())
 		{
 			return false;
 		}

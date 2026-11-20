@@ -12,10 +12,6 @@
 
 PCG_DEFINE_TYPE_INFO(FPCGExFactoryDataTypeInfo, UPCGExFactoryData)
 
-void UPCGExParamDataBase::OutputConfigToMetadata()
-{
-}
-
 bool UPCGExFactoryData::RegisterConsumableAttributes(FPCGExContext* InContext) const
 {
 	return bCleanupConsumableAttributes;

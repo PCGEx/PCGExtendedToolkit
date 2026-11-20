@@ -117,15 +117,6 @@ bool FPCGExAttributeSourceToTargetList::ValidateNames(FPCGExContext* InContext) 
 	return true;
 }
 
-void FPCGExAttributeSourceToTargetList::GetSources(TArray<FName>& OutNames) const
-{
-	OutNames.Reserve(OutNames.Num() + Attributes.Num());
-	for (const FPCGExAttributeSourceToTargetDetails& Entry : Attributes)
-	{
-		OutNames.Add(Entry.Source);
-	}
-}
-
 #if WITH_EDITOR
 void PCGExAttributeMigration::AppendMappingsFromSelectors(
 	const TConstArrayView<FPCGAttributePropertyInputSelector> InSelectors,

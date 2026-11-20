@@ -88,17 +88,11 @@ namespace PCGExTypeOps
 
 		// Type information
 		virtual EPCGMetadataTypes GetTypeId() const = 0;
-		virtual FString GetTypeName() const = 0;
 		virtual int32 GetTypeSize() const = 0;
 		virtual int32 GetTypeAlignment() const = 0;
 		virtual bool SupportsLerp() const = 0;
 		virtual bool SupportsMinMax() const = 0;
 		virtual bool SupportsArithmetic() const = 0;
-
-		virtual bool SameType(const ITypeOpsBase* Other) const
-		{
-			return GetTypeId() == Other->GetTypeId();
-		}
 
 		// Default value operations
 		virtual void SetDefault(void* OutValue) const = 0;
@@ -152,24 +146,11 @@ namespace PCGExTypeOps
 	class PCGEXCORE_API FTypeOpsRegistry
 	{
 	public:
-		static constexpr int32 NumSupportedTypes = 14;
-
 		static const ITypeOpsBase* Get(EPCGMetadataTypes Type);
 
 		// Get ops with template type
 		template <typename T>
 		static const ITypeOpsBase* Get();
-
-		// Type ID conversion
-		template <typename T>
-		static EPCGMetadataTypes GetTypeId();
-
-		// Initialize the registry (called automatically)
-		static void Initialize();
-
-	private:
-		static TArray<TUniquePtr<ITypeOpsBase>> TypeOps;
-		static bool bInitialized;
 	};
 
 	// Conversion Function Pointer Types

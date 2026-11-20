@@ -359,8 +359,8 @@ namespace PCGExMath
 
 	double GetRadiansBetweenVectors(const FVector& A, const FVector& B, const FVector& UpVector)
 	{
-		// Clamp the dot: FP rounding on (near-)unit inputs can push it just outside [-1, 1], which makes Acos return NaN 
-		const double Radians = FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1.0, 1.0));
+		// FMath::Acos clamps its input to [-1, 1]: a dot pushed just outside by FP rounding on (near-)unit inputs is safe.
+		const double Radians = FMath::Acos(FVector::DotProduct(A, B));
 		return FVector::DotProduct(FVector::CrossProduct(A, B), UpVector) < 0 ? TWO_PI - Radians : Radians;
 	}
 
@@ -376,7 +376,7 @@ namespace PCGExMath
 
 	double GetDegreesBetweenVectors(const FVector& A, const FVector& B, const FVector& UpVector)
 	{
-		const double D = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(A, B), -1.0, 1.0)));
+		const double D = FMath::RadiansToDegrees(FMath::Acos(FVector::DotProduct(A, B)));
 		return FVector::DotProduct(FVector::CrossProduct(A, B), UpVector) < 0 ? 360 - D : D;
 	}
 }

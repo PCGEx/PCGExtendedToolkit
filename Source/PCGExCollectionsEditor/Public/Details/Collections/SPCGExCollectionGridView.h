@@ -145,8 +145,6 @@ private:
 
 	// Selection
 	void SelectIndex(int32 Index, bool bCtrl, bool bShift);
-	void ClearSelection();
-	bool IsSelected(int32 Index) const;
 	void NotifySelectionChanged();
 	void ApplySelectionVisuals();
 
@@ -290,7 +288,6 @@ private:
 	void OnScrolled(float ScrollOffset);
 
 	// Entry operations
-	FReply OnAddEntry();
 	FReply OnDuplicateSelected();
 	FReply OnDeleteSelected();
 

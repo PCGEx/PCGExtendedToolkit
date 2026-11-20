@@ -85,7 +85,7 @@ namespace PCGExMath::OBB
 		}
 
 		void Sort();
-		void SortAndDedupe(float Tolerance = KINDA_SMALL_NUMBER);
+		void SortAndDedupe();
 
 		FBoxCenterAndExtent GetBounds() const
 		{

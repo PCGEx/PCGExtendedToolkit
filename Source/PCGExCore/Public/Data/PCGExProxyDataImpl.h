@@ -45,14 +45,6 @@ namespace PCGExData
 		virtual PCGExValueHash ReadValueHash(const int32 Index) const override;
 	};
 
-#pragma region externalization TAttributeBufferProxy
-
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TRawBufferProxy<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL) // omitted: extern-template of dllexport class = C4910 (MSVC)
-#undef PCGEX_TPL
-
-#pragma endregion
-
 	//
 	// TAttributeBufferProxy - Proxy for attribute buffers
 	// Single template parameter (T_REAL) - working type handled via runtime conversion
@@ -74,14 +66,6 @@ namespace PCGExData
 
 		virtual PCGExValueHash ReadValueHash(const int32 Index) const override;
 	};
-
-#pragma region externalization TAttributeBufferProxy
-
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TAttributeBufferProxy<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL) // omitted: extern-template of dllexport class = C4910 (MSVC)
-#undef PCGEX_TPL
-
-#pragma endregion
 
 	//
 	// FPointPropertyProxy - Runtime property dispatch proxy
@@ -154,10 +138,6 @@ namespace PCGExData
 
 #pragma region externalization TConstantProxy
 
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TConstantProxy<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL) // omitted: extern-template of dllexport class = C4910 (MSVC)
-#undef PCGEX_TPL
-
 #define PCGEX_TPL(_TYPE_A, _NAME_A, _TYPE_B, _NAME_B, ...) \
 	extern template void TConstantProxy<_TYPE_A>::SetConstant<_TYPE_B>(const _TYPE_B&);
 	PCGEX_FOREACH_SUPPORTEDTYPES_PAIRS(PCGEX_TPL)
@@ -182,14 +162,6 @@ namespace PCGExData
 		virtual void SetVoid(const int32 Index, const void* Value) const override;
 		virtual PCGExValueHash ReadValueHash(const int32 Index) const override;
 	};
-
-#pragma region externalization TDirectAttributeProxy
-
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TDirectAttributeProxy<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL) // omitted: extern-template of dllexport class = C4910 (MSVC)
-#undef PCGEX_TPL
-
-#pragma endregion
 
 	//
 	// FPropertyBufferProxy - Non-template proxy for generic/unknown attribute types (Tier 3).
@@ -245,12 +217,4 @@ namespace PCGExData
 	protected:
 		T_REAL CachedInValue{};
 	};
-
-#pragma region externalization TDirectDataAttributeProxy
-
-#define PCGEX_TPL(_TYPE, _NAME, ...) extern template class TDirectDataAttributeProxy<_TYPE>;
-	//PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL) // omitted: extern-template of dllexport class = C4910 (MSVC)
-#undef PCGEX_TPL
-
-#pragma endregion
 }

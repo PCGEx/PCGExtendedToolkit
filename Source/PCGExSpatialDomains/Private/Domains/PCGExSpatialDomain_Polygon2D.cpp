@@ -22,23 +22,6 @@ FPCGExSpatialDomain_Polygon2D FPCGExSpatialDomain_Polygon2D::MakeFromOutline(
 	return Out;
 }
 
-FPCGExSpatialDomain_Polygon2D FPCGExSpatialDomain_Polygon2D::MakeFromFPolyPath(
-	const PCGExPaths::FPolyPath& Path,
-	float InZMin,
-	float InZMax)
-{
-	// Lift the projection frame from the path itself: FPolyPath may have
-	// fallen back to FBestFitPlane during construction, so the final quat
-	// can differ from whatever the caller passed at construction time.
-	// Reading it from FPath::GetProjection() guarantees we use the actual
-	// frame the projected points are expressed in.
-	return MakeFromOutline(
-		Path.GetProjectedPoints(),
-		InZMin,
-		InZMax,
-		Path.GetProjection().ProjectionQuat);
-}
-
 float FPCGExSpatialDomain_Polygon2D::QueryPoint(const FVector& Point) const
 {
 	// No WorldOrigin: outline is already in projection-frame XY, so only the
@@ -57,12 +40,6 @@ int32 FPCGExSpatialDomain_Polygon2D::Append(const FPCGExFootprintShape& Shape, i
 
 void FPCGExSpatialDomain_Polygon2D::RecomputeBounds()
 {
-	Bounds2D = FBox2D(ForceInit);
-	for (const FVector2D& V : Outline)
-	{
-		Bounds2D += V;
-	}
-
 	WorldBounds = PCGExMath::Geo::ProjectPrismToWorldAABB(
 		Outline, ZMin, ZMax, FVector::ZeroVector, ProjectionQuat);
 }

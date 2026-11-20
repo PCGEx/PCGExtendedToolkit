@@ -43,66 +43,39 @@ namespace PCGExPaths
 			MaxError, bIsClosed, SmoothingMode);
 	}
 
-	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToSelection(
+	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToMask(
 		const TConstPCGValueRange<FTransform>& InPoints,
-		const TArray<int32>& InSelectedIndices,
+		const TArray<int8>& InKeepFlags,
 		bool bIsClosed,
 		double Smoothing,
 		EPCGExTangentSmoothing SmoothingMode)
 	{
-		return FitTangentsToSelectionInternal(
-			InPoints, InSelectedIndices,
+		return FitTangentsToMaskInternal(
+			InPoints, InKeepFlags,
 			TArray<double>(),
 			Smoothing,
 			bIsClosed, SmoothingMode);
 	}
 
-	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToSelection(
+	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToMask(
 		const TConstPCGValueRange<FTransform>& InPoints,
-		const TArray<int32>& InSelectedIndices,
+		const TArray<int8>& InKeepFlags,
 		const TArray<double>& InSmoothingValues,
 		bool bIsClosed,
 		EPCGExTangentSmoothing SmoothingMode)
 	{
-		return FitTangentsToSelectionInternal(
-			InPoints, InSelectedIndices,
+		return FitTangentsToMaskInternal(
+			InPoints, InKeepFlags,
 			InSmoothingValues,
 			0.0,
 			bIsClosed, SmoothingMode);
 	}
 
-	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToMask(
-		const TConstPCGValueRange<FTransform>& InPoints,
-		const TArray<int8>& InKeepFlags,
-		bool bIsClosed,
-		double Smoothing,
-		EPCGExTangentSmoothing SmoothingMode)
-	{
-		if (InPoints.Num() != InKeepFlags.Num() || InPoints.Num() < 2)
-		{
-			return {};
-		}
-
-		TArray<int32> SelectedIndices;
-		for (int32 i = 0; i < InKeepFlags.Num(); ++i)
-		{
-			if (InKeepFlags[i])
-			{
-				SelectedIndices.Add(i);
-			}
-		}
-
-		return FitTangentsToSelectionInternal(
-			InPoints, SelectedIndices,
-			TArray<double>(),
-			Smoothing,
-			bIsClosed, SmoothingMode);
-	}
-
-	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToMask(
+	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToMaskInternal(
 		const TConstPCGValueRange<FTransform>& InPoints,
 		const TArray<int8>& InKeepFlags,
 		const TArray<double>& InSmoothingValues,
+		double UniformSmoothing,
 		bool bIsClosed,
 		EPCGExTangentSmoothing SmoothingMode)
 	{
@@ -122,28 +95,7 @@ namespace PCGExPaths
 
 		return FitTangentsToSelectionInternal(
 			InPoints, SelectedIndices,
-			InSmoothingValues,
-			0.0,
-			bIsClosed, SmoothingMode);
-	}
-
-	TArray<FSimplifiedPoint> FCurveSimplifier::FitTangentsToAll(
-		const TConstPCGValueRange<FTransform>& InPoints,
-		bool bIsClosed,
-		double Smoothing,
-		EPCGExTangentSmoothing SmoothingMode)
-	{
-		TArray<int32> AllIndices;
-		AllIndices.Reserve(InPoints.Num());
-		for (int32 i = 0; i < InPoints.Num(); ++i)
-		{
-			AllIndices.Add(i);
-		}
-
-		return FitTangentsToSelectionInternal(
-			InPoints, AllIndices,
-			TArray<double>(),
-			Smoothing,
+			InSmoothingValues, UniformSmoothing,
 			bIsClosed, SmoothingMode);
 	}
 

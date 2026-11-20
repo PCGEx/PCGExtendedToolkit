@@ -9,16 +9,6 @@
 #include "Factories/PCGExOperation.h"
 #include "UObject/Object.h"
 
-namespace PCGExMath
-{
-	class IDistances;
-}
-
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 class UPCGExTensorFactoryData;
 /**
  * 
@@ -137,5 +127,4 @@ class PCGEXELEMENTSTENSORS_API PCGExTensorPointOperation : public PCGExTensorOpe
 {
 public:
 	virtual bool Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory) override;
-	TSharedPtr<PCGExMath::IDistances> DistanceDetails;
 };

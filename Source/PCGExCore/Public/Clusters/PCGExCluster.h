@@ -52,8 +52,6 @@ namespace PCGExClusters
 	class PCGEXCORE_API FCluster : public TSharedFromThis<FCluster>
 	{
 	protected:
-		bool bIsMirror = false;
-
 		TSharedPtr<FCluster> OriginalCluster = nullptr;
 
 		mutable FRWLock ClusterLock;
@@ -62,9 +60,7 @@ namespace PCGExClusters
 
 		// Internal helpers for O(1) visited tracking (uses TBitArray instead of TArray::Contains)
 		void GetConnectedNodesInternal(const int32 FromIndex, TArray<int32>& OutIndices, TBitArray<>& Visited, const int32 SearchDepth) const;
-		void GetConnectedNodesInternal(const int32 FromIndex, TArray<int32>& OutIndices, TBitArray<>& Visited, const int32 SearchDepth, const TSet<int32>& Skip) const;
 		void GetConnectedEdgesInternal(const int32 FromNodeIndex, TArray<int32>& OutNodeIndices, TArray<int32>& OutEdgeIndices, TBitArray<>& VisitedNodes, TBitArray<>& VisitedEdges, const int32 SearchDepth) const;
-		void GetConnectedEdgesInternal(const int32 FromNodeIndex, TArray<int32>& OutNodeIndices, TArray<int32>& OutEdgeIndices, TBitArray<>& VisitedNodes, TBitArray<>& VisitedEdges, const int32 SearchDepth, const TSet<int32>& SkipNodes, const TSet<int32>& SkipEdges) const;
 
 	public:
 		int32 NumRawVtx = 0;
@@ -73,10 +69,6 @@ namespace PCGExClusters
 		FNode* NodesDataPtr = nullptr;
 		FEdge* EdgesDataPtr = nullptr;
 
-		bool bValid = false;
-		bool bIsOneToOne = false; // Whether the input data has a single set of edges for a single set of vtx
-
-		int32 ClusterID = -1;
 		TSharedPtr<PCGEx::FIndexLookup> NodeIndexLookup; // Point Index -> Node index
 		TSharedPtr<TArray<FNode>> Nodes;
 		TSharedPtr<TArray<FBoundedEdge>> BoundedEdges;
@@ -152,36 +144,6 @@ namespace PCGExClusters
 			const TArray<FNode>& NodesArray;
 		};
 
-		class TVtxLookup
-		{
-		public:
-			TVtxLookup(const TSharedPtr<FCluster>& InCluster)
-				: NodesArray(*InCluster->Nodes.Get())
-			{
-			}
-
-			int32 Num() const
-			{
-				return NodesArray.Num();
-			}
-
-			int32& operator[](const int32 Index)
-			{
-				return NodesArray[Index].PointIndex;
-			}
-
-			const int32& operator[](const int32 Index) const
-			{
-				return NodesArray[Index].PointIndex;
-			}
-
-			void Dump(TArray<int32>& OutIndices) const;
-
-		private:
-			TArray<FNode>& NodesArray;
-		};
-
-		void ClearInheritedForChanges(const bool bClearOwned = false);
 		void WillModifyVtxIO(const bool bClearOwned = false);
 		void WillModifyVtxPositions(const bool bClearOwned = false);
 
@@ -202,7 +164,6 @@ namespace PCGExClusters
 		void BuildFromSubgraphData(const TSharedPtr<PCGExData::FFacade>& InVtxFacade, const TSharedPtr<PCGExData::FFacade>& InEdgeFacade, const TArray<FEdge>& InEdges, const int32 InNumNodes);
 
 		bool IsValidWith(const TSharedRef<PCGExData::FPointIO>& InVtxIO, const TSharedRef<PCGExData::FPointIO>& InEdgesIO) const;
-		bool HasTag(const FString& InTag);
 
 		FORCEINLINE FNode* GetNode(const int32 Index) const
 		{
@@ -398,17 +359,12 @@ namespace PCGExClusters
 			return FVector::DistSquared(VtxTransforms[A.PointIndex].GetLocation(), VtxTransforms[B.PointIndex].GetLocation());
 		}
 
-		FNode* GetGuidedHalfEdge(const int32 Edge, const FVector& Guide, const FVector& Up = FVector::UpVector) const;
-
 		FNode* GetRoamingNode(const FVector& UVW) const
 		{
 			return GetNode(FindClosestNode(Bounds.GetCenter() + Bounds.GetExtent() * UVW, EPCGExClusterClosestSearchMode::Edge));
 		}
 
-		double EdgeDistToEdge(const FEdge* A, const FEdge* B, FVector& OutP1, FVector& OutP2) const;
-		double EdgeDistToEdge(const int32 EdgeA, const int32 EdgeB, FVector& OutP1, FVector& OutP2) const;
 		double EdgeDistToEdgeSquared(const FEdge* A, const FEdge* B, FVector& OutP1, FVector& OutP2) const;
-		double EdgeDistToEdgeSquared(const int32 EdgeA, const int32 EdgeB, FVector& OutP1, FVector& OutP2) const;
 		FVector GetDir(const int32 FromNode, const int32 ToNode) const;
 		FVector GetDir(const FNode& From, const FNode& To) const;
 		double GetEdgeLength(const FEdge& InEdge) const;
@@ -437,16 +393,12 @@ namespace PCGExClusters
 		bool HasEdgeWithin(const FVector& Position, const double Radius);
 
 		int32 FindClosestEdge(const int32 InNodeIndex, const FVector& InPosition, const int32 MinNeighbors = 0) const;
-		int32 FindClosestNeighbor(const int32 NodeIndex, const FVector& Position, const int32 MinNeighborCount = 1) const;
-		int32 FindClosestNeighbor(const int32 NodeIndex, const FVector& Position, const TSet<int32>& Exclusion, const int32 MinNeighborCount = 1) const;
 
 		void ComputeEdgeLengths();
 
 		void GetConnectedNodes(const int32 FromIndex, TArray<int32>& OutIndices, const int32 SearchDepth) const;
-		void GetConnectedNodes(const int32 FromIndex, TArray<int32>& OutIndices, const int32 SearchDepth, const TSet<int32>& Skip) const;
 
 		void GetConnectedEdges(const int32 FromNodeIndex, TArray<int32>& OutNodeIndices, TArray<int32>& OutEdgeIndices, const int32 SearchDepth) const;
-		void GetConnectedEdges(const int32 FromNodeIndex, TArray<int32>& OutNodeIndices, TArray<int32>& OutEdgeIndices, const int32 SearchDepth, const TSet<int32>& SkipNodes, const TSet<int32>& SkipEdges) const;
 
 		FVector GetClosestPointOnEdge(const int32 FromIndex, const int32 ToIndex, const FVector& Position) const;
 		FVector GetClosestPointOnEdge(const FEdge& InEdge, const FVector& Position) const;
@@ -458,33 +410,7 @@ namespace PCGExClusters
 
 		void GetValidEdges(TArray<FEdge>& OutValidEdges) const;
 
-		int32 FindClosestNeighborInDirection(const int32 NodeIndex, const FVector& Direction, int32 MinNeighborCount = 1) const;
-
 		TSharedPtr<TArray<FBoundedEdge>> GetBoundedEdges(const bool bBuild);
-		void ExpandEdges(PCGExMT::FTaskManager* TaskManager);
-
-		template <typename T, class MakeFunc>
-		void GrabNeighbors(const int32 NodeIndex, TArray<T>& OutNeighbors, const MakeFunc&& Make) const
-		{
-			FNode* Node = (NodesDataPtr + NodeIndex);
-			PCGExArrayHelpers::InitArray(OutNeighbors, Node->Num());
-			for (int i = 0; i < Node->Num(); i++)
-			{
-				const FLink Lk = Node->Links[i];
-				OutNeighbors[i] = Make(Node, (NodesDataPtr + Lk.Node), (EdgesDataPtr + Lk.Edge));
-			}
-		}
-
-		template <typename T, class MakeFunc>
-		void GrabNeighbors(const FNode& Node, TArray<T>& OutNeighbors, const MakeFunc&& Make) const
-		{
-			PCGExArrayHelpers::InitArray(OutNeighbors, Node.Num());
-			for (int i = 0; i < Node.Num(); i++)
-			{
-				const FLink Lk = Node.Links[i];
-				OutNeighbors[i] = Make((NodesDataPtr + Lk.Node), (EdgesDataPtr + Lk.Edge));
-			}
-		}
 
 	protected:
 		/** Builds Nodes, their links and the node bounds from the already-populated Edges

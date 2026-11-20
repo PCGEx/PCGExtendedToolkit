@@ -129,7 +129,6 @@ namespace PCGExResamplePath
 		int32 Start = 0;
 		int32 End = 1;
 		FVector Location = FVector::ZeroVector;
-		double Distance = 0;
 	};
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExResamplePathContext, UPCGExResamplePathSettings>

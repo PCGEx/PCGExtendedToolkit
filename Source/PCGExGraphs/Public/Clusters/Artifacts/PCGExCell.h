@@ -209,7 +209,6 @@ namespace PCGExClusters
 	{
 	protected:
 		PCGExMT::TH64SetShards<> UniquePathsHashSet;
-		PCGExMT::TH64SetShards<> UniqueStartHalfEdgesHash;
 
 	public:
 		EPCGExWinding Winding = EPCGExWinding::CounterClockwise;
@@ -255,8 +254,6 @@ namespace PCGExClusters
 		explicit FCellConstraints(const FPCGExCellConstraintsDetails& InDetails);
 
 		void Reserve(const int32 InCellHashReserve);
-		bool ContainsSignedEdgeHash(const uint64 Hash);
-		bool IsUniqueStartHalfEdge(const uint64 Hash);
 		bool IsUniqueCellHash(const TSharedPtr<FCell>& InCell);
 
 		/**
@@ -279,8 +276,6 @@ namespace PCGExClusters
 
 	struct PCGEXGRAPHS_API FCellData
 	{
-		int8 bIsValid = 0;
-		uint32 CellHash = 0;
 		FBox Bounds = FBox(ForceInit);
 		FVector Centroid = FVector::ZeroVector;
 		double Area = 0;
@@ -296,7 +291,6 @@ namespace PCGExClusters
 	class PCGEXGRAPHS_API FCell : public TSharedFromThis<FCell>
 	{
 	protected:
-		int32 Sign = 0;
 		uint64 CellHash = 0;
 
 	public:
@@ -332,13 +326,11 @@ namespace PCGExClusters
 		explicit FCell(const TSharedRef<FCellConstraints>& InConstraints)
 			: Constraints(InConstraints)
 		{
-			Data.bIsValid = true;
 		}
 
 		~FCell() = default;
 
 		uint64 GetCellHash();
-		void PostProcessPoints(UPCGBasePointData* InMutablePoints);
 
 		/**
 		 * Point-in-cell test in the cell's OWN 2D space: the shared global projection normally, the

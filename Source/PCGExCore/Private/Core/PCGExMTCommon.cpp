@@ -77,13 +77,5 @@ namespace PCGExMT
 		}
 	}
 
-	void Sequential(const int32 Num, FLoopBody Body)
-	{
-		for (int32 i = 0; i < Num; ++i)
-		{
-			Body(i);
-		}
-	}
-
 #pragma endregion
 }

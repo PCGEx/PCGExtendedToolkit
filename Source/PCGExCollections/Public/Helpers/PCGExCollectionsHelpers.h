@@ -336,12 +336,6 @@ namespace PCGExCollections
 		 */
 		bool Init(const TSharedRef<PCGExData::FFacade>& InDataFacade, const UPCGExSelectorFactoryData* ExternalFactory = nullptr);
 
-		/** Active factory (either the External one passed to Init, or the transient built-in built from Details in Legacy mode). */
-		const UPCGExSelectorFactoryData* GetActiveFactory() const
-		{
-			return ActiveFactory;
-		}
-
 		/** Pick seed for a point: equals GetSeed(BaseSeed, Details.SeedComponents, Details.LocalSeed, Settings, Component) of the facade's context. */
 		FORCEINLINE int32 ResolveSeed(const int32 BaseSeed) const
 		{
@@ -403,12 +397,6 @@ namespace PCGExCollections
 		UPCGExAssetCollection* GetCollection() const
 		{
 			return Collection;
-		}
-
-		/** Get the collection's type ID */
-		PCGExAssetCollection::FTypeId GetCollectionTypeId() const
-		{
-			return Collection ? Collection->GetTypeId() : PCGExAssetCollection::TypeIds::None;
 		}
 	};
 
@@ -606,7 +594,6 @@ namespace PCGExCollections
 		int32 NumUniqueEntries = 0;
 
 	public:
-		TMap<int64, TSharedPtr<TArray<int32>>> HashedPartitions;
 		TMap<int64, int32> IndexedPartitions;
 
 		/** Resolved staged-hash attribute name BuildPartitions reads. Set before use when consuming a non-default staging layer. */
@@ -783,18 +770,6 @@ namespace PCGExCollections
 		 * @return true if valid helpers found
 		 */
 		bool TryGetHelpers(int32 Index, FSelectorHelper*& OutHelper, FMicroSelectorHelper*& OutMicroHelper);
-
-		/** Check if this is a single source */
-		bool IsSingleSource() const
-		{
-			return SingleSource != nullptr;
-		}
-
-		/** Get the single source collection (if applicable) */
-		UPCGExAssetCollection* GetSingleSource() const
-		{
-			return SingleSource;
-		}
 
 		/**
 		 * Pre-register every collection this source can surface as a Host with the given

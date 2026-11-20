@@ -63,7 +63,6 @@ namespace PCGExExtrudeTensors
 	using EExtrusionFlags = PCGExExtrusion::EExtrusionFlags;
 	using FExtrusionConfig = PCGExExtrusion::FExtrusionConfig;
 	using FCollisionResult = PCGExExtrusion::FCollisionResult;
-	using FBranchPoint = PCGExExtrusion::FBranchPoint;
 	using FExtrusionCallbacks = PCGExExtrusion::FExtrusionCallbacks;
 	using FExtrusion = PCGExExtrusion::FExtrusion;
 

@@ -207,21 +207,10 @@ namespace PCGExAttributeStats
 		const int64 Key = Context->Rows[PointDataFacade->Source->IOIndex];
 		const int32 NumAttributes = Context->AttributesInfos->Identities.Num();
 
-		if (Settings->bOutputPerUniqueValuesStats)
-		{
-			PerAttributeStatMap.Reserve(NumAttributes);
-			PerAttributeStats.Init(nullptr, NumAttributes);
-		}
-
 		Stats.Reserve(NumAttributes);
 		for (int i = 0; i < NumAttributes; i++)
 		{
 			const PCGExData::FAttributeIdentity& Identity = Context->AttributesInfos->Identities[i];
-
-			if (Settings->bOutputPerUniqueValuesStats)
-			{
-				PerAttributeStatMap.Add(Identity.Name, i);
-			}
 
 			PCGExMetaHelpers::ExecuteWithRightType(
 				Identity,

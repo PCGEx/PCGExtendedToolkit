@@ -115,7 +115,6 @@ struct PCGEXFILTERS_API FPCGExFilterResultDetails
 
 	void Write(const int32 Index, bool bPass) const;
 	void Write(const PCGExMT::FScope& Scope, const TArray<int8>& Results) const;
-	void Write(const PCGExMT::FScope& Scope, const TBitArray<>& Results) const;
 
 	/** Metadata counterpart of Init for non-point data (attribute sets): creates or loads the result attribute on InData. */
 	bool InitForData(UPCGData* InData);
@@ -133,10 +132,6 @@ struct PCGEXFILTERS_API FPCGExFilterResultDetails
 #endif
 
 protected:
-	// Shared body of the two scope Write overloads; defined in the .cpp, where both instantiations live.
-	template <typename ResultsT>
-	void WriteScope(const PCGExMT::FScope& Scope, const ResultsT& Results) const;
-
 	TSharedPtr<PCGExData::TBuffer<bool>> BoolBuffer;
 	TSharedPtr<PCGExData::TBuffer<double>> IncrementBuffer;
 	TSharedPtr<PCGExData::TBuffer<int64>> BitmaskBuffer;

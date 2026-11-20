@@ -271,7 +271,6 @@ namespace PCGExData
 
 		void SetNum(const int32 InNum);
 
-		TSharedPtr<IUnionData> NewEntry_Unsafe(const FConstPoint& Point);
 		TSharedPtr<IUnionData> NewEntryAt_Unsafe(const int32 ItemIndex);
 
 		FORCEINLINE void Append_Unsafe(const int32 Index, const FPoint& Point)

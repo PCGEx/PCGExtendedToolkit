@@ -733,20 +733,6 @@ void SPCGExCollectionGridView::SelectIndex(int32 Index, bool bCtrl, bool bShift)
 	NotifySelectionChanged();
 }
 
-void SPCGExCollectionGridView::ClearSelection()
-{
-	ActiveOverridesCategory = NAME_None;
-	SelectedIndices.Reset();
-	LastClickedIndex = INDEX_NONE;
-	ApplySelectionVisuals();
-	NotifySelectionChanged();
-}
-
-bool SPCGExCollectionGridView::IsSelected(int32 Index) const
-{
-	return SelectedIndices.Contains(Index);
-}
-
 void SPCGExCollectionGridView::NotifySelectionChanged()
 {
 	UpdateDetailForSelection();
@@ -922,7 +908,7 @@ void SPCGExCollectionGridView::OnTileDropOnCategory(FName TargetCategory, TShare
 		// Step 1: Change categories
 		for (int32 Index : Indices)
 		{
-			FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Index);
+			FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Index);
 			if (Entry)
 			{
 				Entry->Category = TargetCategory;
@@ -1185,7 +1171,7 @@ void SPCGExCollectionGridView::OnAssetDropOnCategory(FName TargetCategory, const
 		{
 			for (int32 i = OldCount; i < NewCount; ++i)
 			{
-				FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(i);
+				FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(i);
 				if (Entry)
 				{
 					Entry->Category = TargetCategory;
@@ -1218,7 +1204,7 @@ void SPCGExCollectionGridView::OnCategoryRenamed(FName OldName, FName NewName)
 
 		for (int32 i = 0; i < Num; ++i)
 		{
-			FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(i);
+			FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(i);
 			if (Entry && Entry->Category == OldName)
 			{
 				Entry->Category = NewName;
@@ -2253,12 +2239,6 @@ SPCGExCollectionGridView::FEntriesArrayAccess SPCGExCollectionGridView::GetEntri
 }
 
 // ── Entry operations ────────────────────────────────────────────────────────
-
-FReply SPCGExCollectionGridView::OnAddEntry()
-{
-	RequestAddEntry(NAME_None);
-	return FReply::Handled();
-}
 
 void SPCGExCollectionGridView::RequestAddEntry(FName Category)
 {

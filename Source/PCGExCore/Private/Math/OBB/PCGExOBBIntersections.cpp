@@ -28,7 +28,7 @@ namespace PCGExMath::OBB
 		});
 	}
 
-	void FIntersections::SortAndDedupe(float Tolerance)
+	void FIntersections::SortAndDedupe()
 	{
 		Sort();
 		Cuts.SetNum(Algo::Unique(Cuts, [](const FCut& A, const FCut& B)

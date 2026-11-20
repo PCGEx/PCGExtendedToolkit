@@ -11,7 +11,7 @@
 _OP->PrimaryDataFacade = VtxDataFacade;\
 _OP->SecondaryDataFacade = EdgeDataFacade;\
 _OP->WeightFactor = _FACTORY->WeightFactor;\
-_OP->ReferenceWeight = ReferenceWeight * _FACTORY->WeightFactor;
+_OP->ReferenceWeight = _FACTORY->WeightFactor;
 
 namespace PCGExHeuristics
 {

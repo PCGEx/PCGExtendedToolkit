@@ -115,8 +115,6 @@ namespace PCGExMetaHelpers
 
 	PCGEXCORE_API void AppendUniqueSelectorsFromCommaSeparatedList(const FString& InCommaSeparatedString, TArray<FPCGAttributePropertyInputSelector>& OutSelectors);
 
-	PCGEXCORE_API FName GetLongNameFromSelector(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const bool bInitialized = true);
-
 	PCGEXCORE_API FPCGAttributeIdentifier GetAttributeIdentifier(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const bool bInitialized = true);
 	PCGEXCORE_API FPCGAttributeIdentifier GetAttributeIdentifier(const FName InName, const UPCGData* InData);
 	PCGEXCORE_API FPCGAttributeIdentifier GetAttributeIdentifier(const FName InName);

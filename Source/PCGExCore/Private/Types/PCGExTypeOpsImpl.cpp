@@ -9,9 +9,6 @@
 namespace PCGExTypeOps
 {
 	// FTypeOpsRegistry Implementation
-	TArray<TUniquePtr<ITypeOpsBase>> FTypeOpsRegistry::TypeOps;
-	bool FTypeOpsRegistry::bInitialized = false;
-
 	const ITypeOpsBase* FTypeOpsRegistry::Get(const EPCGMetadataTypes Type)
 	{
 #define PCGEX_TPL(_TYPE, _NAME, ...) case EPCGMetadataTypes::_NAME: return &TTypeOpsImpl<_TYPE>::GetInstance();
@@ -24,17 +21,11 @@ namespace PCGExTypeOps
 #undef PCGEX_TPL
 	}
 
-	void FTypeOpsRegistry::Initialize()
-	{
-		// Using static instances via GetInstance(), no additional initialization needed
-		bInitialized = true;
-	}
-
 	// FConversionTable Implementation
 	FConvertFn FConversionTable::Table[PCGExTypes::TypesAllocations][PCGExTypes::TypesAllocations] = {};
 	bool FConversionTable::bInitialized = false;
 
-	namespace
+	namespace PCGExTypeOpsImpl
 	{
 		void NoOpConvert(const void* /*Src*/, void* /*Dst*/)
 		{
@@ -66,12 +57,12 @@ namespace PCGExTypeOps
 		{
 			for (int32 j = 0; j < PCGExTypes::TypesAllocations; ++j)
 			{
-				Table[i][j] = &NoOpConvert;
+				Table[i][j] = &PCGExTypeOpsImpl::NoOpConvert;
 			}
 		}
 
 		// Populate known type conversions at correct enum indices
-#define PCGEX_TPL(_TYPE, _NAME, ...) PopulateConversionRow<_TYPE>(Table[static_cast<int32>(EPCGMetadataTypes::_NAME)]);
+#define PCGEX_TPL(_TYPE, _NAME, ...) PCGExTypeOpsImpl::PopulateConversionRow<_TYPE>(Table[static_cast<int32>(EPCGMetadataTypes::_NAME)]);
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
@@ -84,7 +75,6 @@ namespace PCGExTypeOps
 		FTypeOpsModuleInit()
 		{
 			FConversionTable::Initialize();
-			FTypeOpsRegistry::Initialize();
 		}
 	};
 

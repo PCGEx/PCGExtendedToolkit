@@ -70,41 +70,34 @@ namespace PCGExBucketDispatchHelpers
 			return;
 		}
 
-		// Mixed distribution: create a new output per non-empty named bucket.
-		for (int32 i = 0; i < NumBuckets; i++)
+		auto EmitBucket = [&](const TSharedRef<PCGExData::FPointIOCollection>& InCollection, const int32 BucketIdx)
 		{
-			if (Counts[i] <= 0)
-			{
-				continue;
-			}
-
 			TArray<int32> ReadIndices;
-			ScopedIndices[i]->Collapse(ReadIndices);
+			ScopedIndices[BucketIdx]->Collapse(ReadIndices);
 
-			TSharedPtr<PCGExData::FPointIO> BucketIO = CreateIO(Buckets[i].ToSharedRef(), PCGExData::EIOInit::New);
+			const TSharedPtr<PCGExData::FPointIO> BucketIO = CreateIO(InCollection, PCGExData::EIOInit::New);
 			if (!BucketIO)
 			{
-				continue;
+				return;
 			}
 
 			PCGExPointArrayDataHelpers::SetNumPointsAllocated(BucketIO->GetOut(), ReadIndices.Num(), BucketIO->GetAllocations());
 			BucketIO->InheritProperties(ReadIndices, BucketIO->GetAllocations());
+		};
+
+		// Mixed distribution: create a new output per non-empty named bucket.
+		for (int32 i = 0; i < NumBuckets; i++)
+		{
+			if (Counts[i] > 0)
+			{
+				EmitBucket(Buckets[i].ToSharedRef(), i);
+			}
 		}
 
 		// Unmatched bucket (only when the caller opted in by passing a non-null collection).
 		if (UnmatchedBucket && Counts[UnmatchedIdx] > 0)
 		{
-			TArray<int32> ReadIndices;
-			ScopedIndices[UnmatchedIdx]->Collapse(ReadIndices);
-
-			TSharedPtr<PCGExData::FPointIO> UnmatchedIO = CreateIO(UnmatchedBucket.ToSharedRef(), PCGExData::EIOInit::New);
-			if (!UnmatchedIO)
-			{
-				return;
-			}
-
-			PCGExPointArrayDataHelpers::SetNumPointsAllocated(UnmatchedIO->GetOut(), ReadIndices.Num(), UnmatchedIO->GetAllocations());
-			UnmatchedIO->InheritProperties(ReadIndices, UnmatchedIO->GetAllocations());
+			EmitBucket(UnmatchedBucket.ToSharedRef(), UnmatchedIdx);
 		}
 	}
 

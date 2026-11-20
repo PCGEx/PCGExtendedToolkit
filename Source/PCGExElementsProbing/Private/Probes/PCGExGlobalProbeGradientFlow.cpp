@@ -72,9 +72,6 @@ void FPCGExProbeGradientFlow::ProcessAll(TSet<uint64>& OutEdges) const
 	// TODO : Use octree for faster queries, this is crude
 
 	// For each point, find K nearest neighbors
-	TArray<TPair<double, int32>> Distances;
-	Distances.SetNum(NumPoints);
-
 	for (int32 i = 0; i < NumPoints; ++i)
 	{
 		if (!CanGenerateRef[i])

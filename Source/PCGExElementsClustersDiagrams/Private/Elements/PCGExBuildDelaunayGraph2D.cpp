@@ -16,11 +16,6 @@
 #define LOCTEXT_NAMESPACE "PCGExGraphs"
 #define PCGEX_NAMESPACE BuildDelaunayGraph2D
 
-namespace PCGExGeoTask
-{
-	class FLloydRelax2;
-}
-
 #if WITH_EDITOR
 TArray<FText> UPCGExBuildDelaunayGraph2DSettings::GetNodeTitleAliases() const
 {
@@ -392,12 +387,6 @@ namespace PCGExBuildDelaunayGraph2D
 
 		GraphBuilder = MakeShared<PCGExGraphs::FGraphBuilder>(PointDataFacade, &Settings->GraphBuilderDetails);
 
-		if (Settings->bMarkHull)
-		{
-			OutputIndices = MakeShared<TArray<int32>>();
-			PCGExArrayHelpers::ArrayOfIndices(*OutputIndices, PointDataFacade->GetNum());
-		}
-
 		GraphBuilder->Graph->InsertEdges(Delaunay->DelaunayEdges, -1);
 		GraphBuilder->CompileAsync(TaskManager, false);
 
@@ -412,7 +401,6 @@ namespace PCGExBuildDelaunayGraph2D
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::BuildDelaunayGraph3D::ProcessPoints);
-		const TArray<int32>& OutputIndicesRef = *OutputIndices.Get();
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			HullMarkPointWriter->SetValue(Index, Delaunay->DelaunayHull.Contains(Index));

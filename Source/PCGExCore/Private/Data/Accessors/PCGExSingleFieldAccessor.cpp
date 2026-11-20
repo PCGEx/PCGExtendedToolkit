@@ -8,7 +8,7 @@
 
 namespace PCGExData
 {
-	namespace
+	namespace PCGExSingleFieldAccessor
 	{
 		// Mirrors STRMAP_SINGLE_FIELD from PCGExSubSelection.h. The third tuple
 		// element ("FieldIndex" 0..3) is what SetFieldIndex would normalize to;
@@ -374,7 +374,7 @@ namespace PCGExData
 
 	bool FSingleFieldAccessor::MatchesToken(const FString& UpperToken, FAccessorParseResult& OutParsed) const
 	{
-		if (const FFieldEntry* Entry = GetFieldTable().Find(UpperToken))
+		if (const PCGExSingleFieldAccessor::FFieldEntry* Entry = PCGExSingleFieldAccessor::GetFieldTable().Find(UpperToken))
 		{
 			OutParsed.Field = Entry->Field;
 			OutParsed.FieldIndex = Entry->FieldIndex;
@@ -404,7 +404,7 @@ namespace PCGExData
 		check(Source != nullptr);
 		check(OutValue != nullptr);
 
-#define PCGEX_FIELD_EXTRACT(_TYPE, _NAME) { *static_cast<double*>(OutValue) = ExtractFieldFromValue<_TYPE>(*static_cast<const _TYPE*>(Source), Parsed.Field); }
+#define PCGEX_FIELD_EXTRACT(_TYPE, _NAME) { *static_cast<double*>(OutValue) = PCGExSingleFieldAccessor::ExtractFieldFromValue<_TYPE>(*static_cast<const _TYPE*>(Source), Parsed.Field); }
 		PCGEX_EXECUTEWITHRIGHTTYPE(InType, PCGEX_FIELD_EXTRACT)
 #undef PCGEX_FIELD_EXTRACT
 	}
@@ -429,7 +429,7 @@ namespace PCGExData
 			PCGExTypeOps::FConversionTable::Convert(SourceType, Source, EPCGMetadataTypes::Double, &Scalar);
 		}
 
-#define PCGEX_FIELD_INJECT(_TYPE, _NAME) { InjectFieldIntoValue<_TYPE>(*static_cast<_TYPE*>(TargetInOut), Scalar, Parsed.Field); }
+#define PCGEX_FIELD_INJECT(_TYPE, _NAME) { PCGExSingleFieldAccessor::InjectFieldIntoValue<_TYPE>(*static_cast<_TYPE*>(TargetInOut), Scalar, Parsed.Field); }
 		PCGEX_EXECUTEWITHRIGHTTYPE(InType, PCGEX_FIELD_INJECT)
 #undef PCGEX_FIELD_INJECT
 	}
@@ -443,7 +443,7 @@ namespace PCGExData
 	{
 		switch (InType)
 		{
-#define PCGEX_CASE(_TYPE, _NAME, ...) case EPCGMetadataTypes::_NAME: return &FieldGetStep<_TYPE>;
+#define PCGEX_CASE(_TYPE, _NAME, ...) case EPCGMetadataTypes::_NAME: return &PCGExSingleFieldAccessor::FieldGetStep<_TYPE>;
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_CASE)
 #undef PCGEX_CASE
 		default:
@@ -455,7 +455,7 @@ namespace PCGExData
 	{
 		switch (InType)
 		{
-#define PCGEX_CASE(_TYPE, _NAME, ...) case EPCGMetadataTypes::_NAME: return &FieldSetStep<_TYPE>;
+#define PCGEX_CASE(_TYPE, _NAME, ...) case EPCGMetadataTypes::_NAME: return &PCGExSingleFieldAccessor::FieldSetStep<_TYPE>;
 		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_CASE)
 #undef PCGEX_CASE
 		default:

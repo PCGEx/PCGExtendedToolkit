@@ -190,37 +190,6 @@ namespace PCGExGraphs
 		EdgeMetadata.SetNum(NumEdges);
 	}
 
-	FEdge* FGraph::FindEdge_Unsafe(const uint64 Hash)
-	{
-		const int32* Index = UniqueEdges.Find(Hash);
-		if (!Index)
-		{
-			return nullptr;
-		}
-		return (Edges.GetData() + *Index);
-	}
-
-	FEdge* FGraph::FindEdge_Unsafe(const int32 A, const int32 B)
-	{
-		return FindEdge(PCGEx::H64U(A, B));
-	}
-
-	FEdge* FGraph::FindEdge(const uint64 Hash)
-	{
-		FReadScopeLock ReadScopeLock(GraphLock);
-		const int32* Index = UniqueEdges.Find(Hash);
-		if (!Index)
-		{
-			return nullptr;
-		}
-		return (Edges.GetData() + *Index);
-	}
-
-	FEdge* FGraph::FindEdge(const int32 A, const int32 B)
-	{
-		return FindEdge(PCGEx::H64U(A, B));
-	}
-
 	FGraphEdgeMetadata& FGraph::GetOrCreateEdgeMetadata(const int32 EdgeIndex, const int32 RootIndex)
 	{
 		{
@@ -662,33 +631,6 @@ namespace PCGExGraphs
 					FPlatformAtomics::InterlockedIncrement(&NodesData[Start].NumExportedEdges);
 					FPlatformAtomics::InterlockedIncrement(&NodesData[End].NumExportedEdges);
 				});
-		}
-	}
-
-	void FGraph::GetConnectedNodes(const int32 FromIndex, TArray<int32>& OutIndices, const int32 SearchDepth) const
-	{
-		const int32 NextDepth = SearchDepth - 1;
-		const FNode& RootNode = Nodes[FromIndex];
-
-		for (const FLink Lk : RootNode.Links)
-		{
-			const FEdge& Edge = Edges[Lk.Edge];
-			if (!Edge.bValid)
-			{
-				continue;
-			}
-
-			int32 OtherIndex = Edge.Other(FromIndex);
-			if (OutIndices.Contains(OtherIndex))
-			{
-				continue;
-			}
-
-			OutIndices.Add(OtherIndex);
-			if (NextDepth > 0)
-			{
-				GetConnectedNodes(OtherIndex, OutIndices, NextDepth);
-			}
 		}
 	}
 }

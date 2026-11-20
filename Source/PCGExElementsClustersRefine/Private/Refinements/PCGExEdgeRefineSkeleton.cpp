@@ -74,17 +74,3 @@ void FPCGExEdgeRefineSkeleton::ProcessEdge(PCGExGraphs::FEdge& Edge)
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRefineSkeleton
-
-void UPCGExEdgeRefineSkeleton::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRefineSkeleton* TypedOther = Cast<UPCGExEdgeRefineSkeleton>(Other))
-	{
-		Beta = TypedOther->Beta;
-		bInvert = TypedOther->bInvert;
-	}
-}
-
-#pragma endregion

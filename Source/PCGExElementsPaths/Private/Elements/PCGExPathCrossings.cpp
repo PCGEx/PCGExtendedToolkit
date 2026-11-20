@@ -152,11 +152,6 @@ namespace PCGExPathCrossings
 
 #pragma region FProcessor
 
-	const PCGExPaths::FPathEdgeOctree* FProcessor::GetEdgeOctree() const
-	{
-		return Path->GetEdgeOctree();
-	}
-
 	bool FProcessor::IsCutter() const
 	{
 		return bCanCut && Path && Path->GetEdgeOctree();
@@ -204,8 +199,6 @@ namespace PCGExPathCrossings
 		Path = MakeShared<PCGExPaths::FPath>(PointIO->GetIn(), Details.Tolerance * 2);
 		Path->IOIndex = PointDataFacade->Source->IOIndex;
 		PathLength = Path->AddExtra<PCGExPaths::FPathEdgeLength>();
-
-		Path->IOIndex = PointIO->IOIndex;
 
 		CanCut.Init(bCanCut, Path->NumEdges);
 		CanBeCut.Init(bCanBeCut, Path->NumEdges);

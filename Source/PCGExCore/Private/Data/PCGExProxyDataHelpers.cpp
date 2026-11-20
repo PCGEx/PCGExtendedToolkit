@@ -560,66 +560,36 @@ template PCGEXCORE_API TSharedPtr<IBufferProxy> GetConstantProxyBuffer<_TYPE>(co
 		TArray<TSharedPtr<IBufferProxy>>& OutProxies)
 	{
 		OutProxies.Reset(NumDesiredFields);
-		const int32 Dimensions = FMath::Min(4, GetNumFieldsForType(InBaseDescriptor.RealType));
+		const int32 MaxIndex = FMath::Min(4, GetNumFieldsForType(InBaseDescriptor.RealType)) - 1;
 
-		if (Dimensions == -1 &&
-			(!InBaseDescriptor.SubSelection.HasSelection() || !InBaseDescriptor.SubSelection.IsComponentSelection()))
+		if (InBaseDescriptor.SubSelection.HasSelection() && InBaseDescriptor.SubSelection.IsFieldSelection())
 		{
-			PCGE_LOG_C(Error, GraphAndLog, InContext,
-			           FTEXT("Can't automatically break complex type into sub-components. "
-				           "Use a narrower selector or a supported type."));
-			return false;
-		}
-
-		const int32 MaxIndex = Dimensions == -1 ? 2 : Dimensions - 1;
-
-		if (InBaseDescriptor.SubSelection.HasSelection())
-		{
-			if (InBaseDescriptor.SubSelection.IsFieldSelection())
+			// Single specific field - use same proxy for all
+			const TSharedPtr<IBufferProxy> Proxy = GetProxyBuffer(InContext, InBaseDescriptor);
+			if (!Proxy)
 			{
-				// Single specific field - use same proxy for all
-				const TSharedPtr<IBufferProxy> Proxy = GetProxyBuffer(InContext, InBaseDescriptor);
-				if (!Proxy)
-				{
-					return false;
-				}
-
-				for (int i = 0; i < NumDesiredFields; i++)
-				{
-					OutProxies.Add(Proxy);
-				}
-				return true;
+				return false;
 			}
 
-			// Create individual field proxies
 			for (int i = 0; i < NumDesiredFields; i++)
 			{
-				FProxyDescriptor SingleFieldCopy = InBaseDescriptor;
-				SingleFieldCopy.SetFieldIndex(FMath::Clamp(i, 0, MaxIndex));
-
-				const TSharedPtr<IBufferProxy> Proxy = GetProxyBuffer(InContext, SingleFieldCopy);
-				if (!Proxy)
-				{
-					return false;
-				}
 				OutProxies.Add(Proxy);
 			}
+			return true;
 		}
-		else
-		{
-			// No subselection - create field proxies
-			for (int i = 0; i < NumDesiredFields; i++)
-			{
-				FProxyDescriptor SingleFieldCopy = InBaseDescriptor;
-				SingleFieldCopy.SetFieldIndex(FMath::Clamp(i, 0, MaxIndex));
 
-				const TSharedPtr<IBufferProxy> Proxy = GetProxyBuffer(InContext, SingleFieldCopy);
-				if (!Proxy)
-				{
-					return false;
-				}
-				OutProxies.Add(Proxy);
+		// Create individual field proxies
+		for (int i = 0; i < NumDesiredFields; i++)
+		{
+			FProxyDescriptor SingleFieldCopy = InBaseDescriptor;
+			SingleFieldCopy.SetFieldIndex(FMath::Clamp(i, 0, MaxIndex));
+
+			const TSharedPtr<IBufferProxy> Proxy = GetProxyBuffer(InContext, SingleFieldCopy);
+			if (!Proxy)
+			{
+				return false;
 			}
+			OutProxies.Add(Proxy);
 		}
 
 		return true;

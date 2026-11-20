@@ -152,7 +152,6 @@ namespace PCGExPointFilter
 		// Set by hosts that filter whole data through per-point evaluation: an index filter then tests its data's index in this collection.
 		TSharedPtr<PCGExData::FPointIOCollection> HostCollection;
 
-		bool DefaultResult = true;
 		TSharedPtr<PCGExData::FFacade> PointDataFacade;
 
 		bool bCacheResults = true;
@@ -284,8 +283,6 @@ namespace PCGExPointFilter
 		bool bCacheResults = false;
 		TArray<int8> Results;
 
-		bool bValid = false;
-
 		TSharedRef<PCGExData::FFacade> PointDataFacade;
 
 		bool Init(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>& InFactories);
@@ -313,7 +310,6 @@ namespace PCGExPointFilter
 		}
 
 		void SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes);
-		const TSet<FPCGDataTypeBaseId>* GetSupportedTypes() const;
 
 	protected:
 		const TSet<FPCGDataTypeBaseId>* SupportedFactoriesTypes = nullptr;

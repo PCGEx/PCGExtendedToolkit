@@ -181,7 +181,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 						return;
 					}
 
-					FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+					FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
 					if (!Entry)
 					{
 						return;
@@ -256,7 +256,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 						UPCGExAssetCollection* Coll = WeakColl.Get();
 						if (Coll)
 						{
-							FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+							FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
 							if (Entry)
 							{
 								const FName NewCat = PCGExTypeOps::MakeNameChecked(Text.ToString());
@@ -374,7 +374,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									{
 										return;
 									}
-									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
 									if (!Entry)
 									{
 										return;
@@ -453,7 +453,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									{
 										return;
 									}
-									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
 									if (Entry)
 									{
 										Entry->Weight = NewVal;
@@ -482,7 +482,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									{
 										return;
 									}
-									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
 									if (!Entry)
 									{
 										return;

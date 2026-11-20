@@ -14,15 +14,11 @@
 #include "Core/PCGExUnionData.h"
 #include "Core/PCGExUnionTable.h"
 #include "Data/PCGExData.h"
-#include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
-#include "Data/PCGExDataTags.h"
-#include "Data/PCGExPointIO.h"
 #include "Data/PCGExPointIO.h"
 #include "PCGData.h"
 #include "Data/Buffers/PCGExBufferProperty.h"
 #include "Data/PCGExProxyData.h"
-#include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Details/PCGExBlendingDetails.h"
 
@@ -299,8 +295,6 @@ namespace PCGExBlending
 			}
 
 			EnumAddFlags(AllocatedProperties, Facade->GetAllocations());
-
-			UniqueTags.Append(Facade->Source->Tags->RawTags);
 
 			TArray<PCGExData::FAttributeIdentity> SourceAttributes;
 			GetFilteredIdentities(Facade->GetIn()->Metadata, SourceAttributes, BlendingDetails, CarryOverDetails, IgnoreAttributeSet);

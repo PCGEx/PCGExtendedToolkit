@@ -184,20 +184,6 @@ void FPCGExCarryOverDetails::Prune(TSet<FString>& InValues) const
 	}
 }
 
-void FPCGExCarryOverDetails::Prune(TArray<FString>& InValues) const
-{
-	if (Tags.FilterMode == EPCGExAttributeFilter::All)
-	{
-		return;
-	}
-	InValues.SetNum(Algo::StableRemoveIf(
-		InValues,
-		[&](const FString& Value)
-		{
-			return !Tags.Test(Value);
-		}));
-}
-
 void FPCGExCarryOverDetails::Prune(const PCGExData::FPointIO* PointIO) const
 {
 	Prune(PointIO->GetOut()->MutableMetadata());

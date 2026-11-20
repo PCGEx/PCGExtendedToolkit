@@ -140,7 +140,7 @@ namespace PCGExGraphs
 	{
 		// Find the perpendicular projection of the candidate node onto the segment, returning a
 		// non-degenerate hit when the projected point is strictly interior and within tolerance.
-		static bool TryFindSplit(
+		bool TryFindSplit(
 			const FIntersectionAllocations& Allocations,
 			const int32 EdgeIdx,
 			const int32 CandidateNodeIdx,
@@ -402,7 +402,7 @@ namespace PCGExGraphs
 	namespace EdgeEdgePass
 	{
 		// Compute crossing geometry between two valid edges. Returns false on miss/endpoint touch.
-		static bool TryFindSplit(
+		bool TryFindSplit(
 			const FIntersectionAllocations& Allocations,
 			const int32 EdgeAIdx,
 			const int32 EdgeBIdx,

@@ -219,37 +219,6 @@ namespace PCGExMath::OBB
 		}
 	}
 
-	// Template policy interface (for advanced compile-time dispatch)
-	// TODO : Refactor related classes, filters, samplers
-	template <EPCGExBoxCheckMode Mode>
-	struct PCGEXCORE_API TPolicy
-	{
-		float Expansion = 0.0f;
-
-		TPolicy() = default;
-
-		explicit TPolicy(float InExpansion)
-			: Expansion(InExpansion)
-		{
-		}
-
-		FORCEINLINE bool TestPoint(const FOBB& Box, const FVector& Point) const
-		{
-			return OBB::TestPoint(Box, Point, Mode, Expansion);
-		}
-
-		FORCEINLINE bool TestOverlap(const FOBB& A, const FOBB& B) const
-		{
-			return OBB::TestOverlap(A, B, Mode, Expansion);
-		}
-	};
-
-	// Common policy aliases
-	using FPolicyBox = TPolicy<EPCGExBoxCheckMode::Box>;
-	using FPolicySphere = TPolicy<EPCGExBoxCheckMode::Sphere>;
-	using FPolicyExpandedBox = TPolicy<EPCGExBoxCheckMode::ExpandedBox>;
-	using FPolicyExpandedSphere = TPolicy<EPCGExBoxCheckMode::ExpandedSphere>;
-
 	// Runtime policy wrapper (when mode isn't known at compile time)
 	struct PCGEXCORE_API FPolicy
 	{

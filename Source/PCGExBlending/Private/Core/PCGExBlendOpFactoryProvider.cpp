@@ -38,28 +38,12 @@ void UPCGExBlendOpFactoryProviderSettings::PostEditChangeProperty(FPropertyChang
 {
 	Config.bRequiresWeight = PCGExBlending::RequiresWeight(Config.BlendMode);
 
-	FName Prop = PropertyChangedEvent.GetMemberPropertyName();
-	if (Prop == GET_MEMBER_NAME_CHECKED(FPCGExAttributeBlendConfig, OperandASource) && Config.OperandASource == EPCGExOperandSource::Constant)
-	{
-	}
-	else if (Prop == GET_MEMBER_NAME_CHECKED(FPCGExAttributeBlendConfig, OperandBSource) && Config.OperandBSource == EPCGExOperandSource::Constant)
-	{
-	}
-
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
 #endif
 
 bool UPCGExBlendOpFactoryProviderSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
 {
-	if (InPin->Properties.Label == PCGExBlending::Labels::SourceConstantA && Config.OperandASource == EPCGExOperandSource::Constant)
-	{
-		return true;
-	}
-	if (InPin->Properties.Label == PCGExBlending::Labels::SourceConstantB && Config.OperandBSource == EPCGExOperandSource::Constant)
-	{
-		return true;
-	}
 	return Super::IsPinUsedByNodeExecution(InPin);
 }
 

@@ -196,12 +196,6 @@ namespace PCGExPathStitch
 			return true;
 		}
 
-		bool IsAvailableForStitching() const
-		{
-			return !StartStitch.IsValid() || !EndStitch.IsValid();
-		}
-
-		bool IsStitchedTo(const TSharedPtr<FProcessor>& InOtherProcessor);
 		bool SetStartStitch(const TSharedPtr<FProcessor>& InStitch);
 		bool SetEndStitch(const TSharedPtr<FProcessor>& InStitch);
 

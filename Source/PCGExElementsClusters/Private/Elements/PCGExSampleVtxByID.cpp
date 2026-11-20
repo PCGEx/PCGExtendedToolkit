@@ -205,7 +205,6 @@ namespace PCGExSampleVtxByID
 	void FProcessor::SamplingFailed(const int32 Index)
 	{
 		SamplingMask[Index] = false;
-		const TConstPCGValueRange<FTransform> Transforms = PointDataFacade->GetIn()->GetConstTransformValueRange();
 	}
 
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
@@ -310,7 +309,6 @@ namespace PCGExSampleVtxByID
 			const FVector LookAtUp = LookAtUpGetter->Read(Index).GetSafeNormal();
 
 			FTransform VtxTransform = Context->TargetFacades[Element.IO]->GetIn()->GetTransform(Element.Index);
-			double Distance = FVector::Dist(Origin, VtxTransform.GetLocation());
 
 			// Blend using updated weighted points
 			DataBlender->Blend(Index, OutWeightedPoints, Trackers);

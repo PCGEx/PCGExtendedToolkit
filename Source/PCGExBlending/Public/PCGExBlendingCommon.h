@@ -93,13 +93,6 @@ enum class EPCGExBlendingInterface : uint8
 };
 
 UENUM()
-enum class EPCGExOperandSource : uint8
-{
-	Constant  = 0 UMETA(DisplayName = "Constant", Tooltip="Use a constant, user-defined value.", ActionIcon="Constant"),
-	Attribute = 1 UMETA(DisplayName = "Attribute", Tooltip="Read the value from the input data.", ActionIcon="Attribute"),
-};
-
-UENUM()
 enum class EPCGExOperandAuthority : uint8
 {
 	A      = 0 UMETA(DisplayName = "Operand A", ToolTip="Type of operand A will drive the output type, thus converting operand B to the same type for the operation."),

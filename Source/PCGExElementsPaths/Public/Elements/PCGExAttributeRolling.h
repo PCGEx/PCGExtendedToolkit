@@ -197,8 +197,6 @@ namespace PCGExAttributeRolling
 		TSharedPtr<PCGExPointFilter::FManager> StartFilterManager;
 		TSharedPtr<PCGExPointFilter::FManager> StopFilterManager;
 
-		PCGExPaths::FPathMetrics CurrentMetric;
-
 		TSharedPtr<PCGExBlending::FBlendOpsManager> BlendOpsManager;
 
 		PCGEX_FOREACH_FIELD_ATTRIBUTE_ROLL(PCGEX_OUTPUT_DECL)

@@ -93,8 +93,6 @@ namespace PCGExMatching
 			return *MatchableSources;
 		}
 
-		bool FindIndex(const UPCGData* InData, int32& OutIndex) const;
-
 		void SetDetails(const FPCGExMatchingDetails* InDetails);
 
 		bool Init(FPCGExContext* InContext, const TArray<const UPCGData*>& InMatchableSources, const TArray<TSharedPtr<PCGExData::FTags>>& InTags, const bool bThrowError, const FName InFactoriesLabel = NAME_None);
@@ -162,6 +160,11 @@ namespace PCGExMatching
 		}
 
 	protected:
+		// Runs the rules against an already-resolved matchable element and registers the match in the scope.
+		bool TestRules(const PCGExData::FConstPoint& InMatchableElement, const FPCGExTaggedData& InDataCandidate, FScope& InMatchingScope) const;
+		// Appends direct matches, then transitive ones; InExcludedSources may be null.
+		void CollectMatchingSources(const FPCGExTaggedData& InDataCandidate, FScope& InMatchingScope, TArray<int32>& OutMatches, const TSet<int32>* InExcludedSources) const;
+
 		int32 GetMatchLimitFor(const FPCGExTaggedData& InDataCandidate) const;
 		void RegisterTaggedData(FPCGExContext* InContext, const FPCGExTaggedData& InTaggedData);
 		bool InitInternal(FPCGExContext* InContext, const FName InFactoriesLabel);

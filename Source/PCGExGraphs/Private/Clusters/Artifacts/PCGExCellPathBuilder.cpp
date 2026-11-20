@@ -93,9 +93,6 @@ namespace PCGExClusters
 		// Copy points from cluster
 		InPathIO->InheritPoints(ReadIndices, 0);
 
-		// Post-process (handles winding, leaf duplication, etc.)
-		InCell->PostProcessPoints(InPathIO->GetOut());
-
 		// Seed-specific processing
 		if (InSeedIndex != INDEX_NONE && SeedsDataFacade)
 		{

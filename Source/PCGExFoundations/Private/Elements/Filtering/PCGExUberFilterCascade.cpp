@@ -330,15 +330,7 @@ namespace PCGExUberFilterCascade
 				PCGEX_SCOPE_LOOP(Index)
 				{
 					// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
-					int32 Depth = 0;
-					for (int32 i = 0; i < NumBranches; i++)
-					{
-						if (BranchManagers[i] && BranchManagers[i]->Test(Index))
-						{
-							Depth = i + 1;
-							break;
-						}
-					}
+					const int32 Depth = FindFirstMatchingBranch(Index) + 1;
 
 					ParamPartitionValues[Index] = Base + Depth;
 				}
@@ -348,15 +340,7 @@ namespace PCGExUberFilterCascade
 				PCGEX_SCOPE_LOOP(Index)
 				{
 					// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
-					int32 Depth = 0;
-					for (int32 i = 0; i < NumBranches; i++)
-					{
-						if (BranchManagers[i] && BranchManagers[i]->Test(Index))
-						{
-							Depth = i + 1;
-							break;
-						}
-					}
+					const int32 Depth = FindFirstMatchingBranch(Index) + 1;
 
 					PartitionBuffer->SetValue(Index, Base + Depth);
 				}
@@ -372,15 +356,7 @@ namespace PCGExUberFilterCascade
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			int32 MatchedBranch = -1;
-			for (int32 i = 0; i < NumBranches; i++)
-			{
-				if (BranchManagers[i] && BranchManagers[i]->Test(Index))
-				{
-					MatchedBranch = i;
-					break;
-				}
-			}
+			const int32 MatchedBranch = FindFirstMatchingBranch(Index);
 
 			if (MatchedBranch >= 0)
 			{

@@ -33,7 +33,6 @@ void UPCGExNoise3DFactory##_TYPE::RegisterAssetDependencies(TSet<FSoftObjectPath
 	NewOperation->Seed = Config.Seed; \
 	NewOperation->bInvert = Config.bInvert; \
 	NewOperation->BlendMode = Config.BlendMode; \
-	NewOperation->WeightFactor = Config.WeightFactor; \
 	NewOperation->RemapLUT = Config.RemapLUT; \
 	NewOperation->bApplyTransform = Config.bApplyTransform; \
 	NewOperation->Transform = Config.Transform; \

@@ -111,7 +111,6 @@ namespace PCGExBuildVoronoiGraph
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExBuildVoronoiGraphContext, UPCGExBuildVoronoiGraphSettings>
 	{
 	protected:
-		TSharedPtr<TArray<int32>> OutputIndices;
 		TSharedPtr<PCGExMath::Geo::TVoronoi3> Voronoi;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 
@@ -121,10 +120,7 @@ namespace PCGExBuildVoronoiGraph
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
-		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
 
 		virtual void CompleteWork() override;
 		virtual void Write() override;

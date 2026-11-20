@@ -7,15 +7,12 @@
 #include "PCGExDataCommon.h"
 #include "Containers/PCGExScopedContainers.h"
 #include "Data/PCGExCachedSubSelection.h"
-#include "Data/PCGExCachedSubSelection.h"
 #include "Data/PCGExSubSelection.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/PCGMetadataCommon.h"
 #include "Misc/ScopeRWLock.h"
 #include "Types/PCGExTypeOps.h"
-#include "Types/PCGExTypeOps.h"
 #include "Types/PCGExTypes.h"
-#include "UObject/Object.h"
 #include "UObject/Object.h"
 
 struct FPCGExContext;
@@ -223,24 +220,9 @@ namespace PCGExData
 		//
 		// Type information accessors
 		//
-		FORCEINLINE const PCGExTypeOps::ITypeOpsBase* GetRealOps() const
-		{
-			return RealOps;
-		}
-
-		FORCEINLINE const PCGExTypeOps::ITypeOpsBase* GetWorkingOps() const
-		{
-			return WorkingOps;
-		}
-
 		FORCEINLINE bool HasSubSelection() const
 		{
 			return bWantsSubSelection;
-		}
-
-		FORCEINLINE bool WorkingTypeNeedsLifecycle() const
-		{
-			return bWorkingTypeNeedsLifecycle;
 		}
 
 		FORCEINLINE bool IsTypeErased() const
@@ -322,33 +304,6 @@ namespace PCGExData
 			PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
 			PCGExTypeOps::FConversionTable::Convert(ValueType, &Value, WorkingType, WorkingValue.GetRaw());
 			SetVoid(Index, WorkingValue.GetRaw());
-		}
-
-		template <typename T>
-		T GetCurrent(const int32 Index) const
-		{
-			checkSlow(!bTypeErased);
-			constexpr EPCGMetadataTypes RequestedType = PCGExTypes::TTraits<T>::Type;
-
-			// Always use scoped value for safety
-			PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
-			GetCurrentVoid(Index, WorkingValue.GetRaw());
-
-			if (RequestedType == WorkingType)
-			{
-				if constexpr (TypeTraits::TIsComplexType<T>)
-				{
-					return WorkingValue.As<T>();
-				}
-				else
-				{
-					return *reinterpret_cast<const T*>(WorkingValue.GetRaw());
-				}
-			}
-
-			T Result{};
-			PCGExTypeOps::FConversionTable::Convert(WorkingType, WorkingValue.GetRaw(), RequestedType, &Result);
-			return Result;
 		}
 
 		// Scoped storage for the void accessors: property-aware for property-backed proxies (which

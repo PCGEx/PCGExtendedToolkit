@@ -215,6 +215,10 @@ namespace PCGExClusterCentrality
 
 		void ComputeEigenvector();
 		void ComputeKatz();
+
+	protected:
+		void FindDistancesFrom(const int32 Index, TArray<double>& Score, TArray<int32>& Stack, const TSharedPtr<PCGEx::FScoredQueue>& Queue) const;
+		void ApplyDownsampleRatio(TArray<double>& LocalScores) const;
 	};
 
 	class FBatch final : public PCGExClusterMT::TBatch<FProcessor>

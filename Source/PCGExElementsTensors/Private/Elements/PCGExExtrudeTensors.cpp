@@ -418,7 +418,6 @@ namespace PCGExExtrudeTensors
 		}
 
 		NewExtrusion->SetHead(InExtrusion->Head);
-		NewExtrusion->ParentExtrusion = InExtrusion;
 
 		{
 			FWriteScopeLock WriteScopeLock(NewExtrusionLock);

@@ -95,16 +95,6 @@ namespace PCGExData
 	}
 
 	template <typename T>
-	const void TArrayBuffer<T>::GetValues(const int32 Start, TArrayView<T> OutResults)
-	{
-		const int32 Count = OutResults.Num();
-		for (int i = 0; i < Count; i++)
-		{
-			OutResults[i] = *(OutValues->GetData() + (Start + i));
-		}
-	}
-
-	template <typename T>
 	void TArrayBuffer<T>::SetValue(const int32 Index, const T& Value)
 	{
 		*(OutValues->GetData() + Index) = Value;
@@ -647,17 +637,6 @@ namespace PCGExData
 	{
 		FReadScopeLock ReadScopeLock(BufferLock);
 		return OutValue;
-	}
-
-	template <typename T>
-	const void TSingleValueBuffer<T>::GetValues(const int32 Start, TArrayView<T> OutResults)
-	{
-		FReadScopeLock ReadScopeLock(BufferLock);
-		const int32 Count = OutResults.Num();
-		for (int i = 0; i < Count; i++)
-		{
-			OutResults[i] = OutValue;
-		}
 	}
 
 	template <typename T>

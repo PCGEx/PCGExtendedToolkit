@@ -194,7 +194,6 @@ namespace PCGExBinPacking
 		void AddSpace(const FBox& InBox);
 
 	public:
-		int32 MaxItems = 0;
 		FBox Bounds;
 		FTransform Transform;
 
@@ -205,12 +204,7 @@ namespace PCGExBinPacking
 		FBin(const PCGExData::FConstPoint& InBinPoint, const FVector& InSeed, const TSharedPtr<FBinSplit>& InSplitter);
 		~FBin() = default;
 
-		bool IsFull() const
-		{
-			return Items.Num() <= MaxItems;
-		}
-
-		int32 GetBestSpaceScore(const FItem& InItem, double& OutScore, FRotator& OutRotator) const;
+		int32 GetBestSpaceScore(const FItem& InItem, double& OutScore) const;
 		void AddItem(int32 SpaceIndex, FItem& InItem);
 		bool Insert(FItem& InItem);
 		void UpdatePoint(PCGExData::FMutablePoint& InPoint, const FItem& InItem) const;

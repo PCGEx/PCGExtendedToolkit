@@ -68,7 +68,6 @@ namespace PCGExHeuristics
 
 		TSharedPtr<PCGExClusters::FCluster> Cluster;
 
-		double ReferenceWeight = 1;
 		double TotalStaticWeight = 0;
 		bool bUseDynamicWeight = false;
 

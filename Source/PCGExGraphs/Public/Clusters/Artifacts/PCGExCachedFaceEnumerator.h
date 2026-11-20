@@ -17,6 +17,8 @@ namespace PCGExClusters
 	class PCGEXGRAPHS_API FCachedTangentFrames : public ICachedClusterData
 	{
 	public:
+		static inline const FName CacheKey = FName("TangentFrames");
+
 		TSharedPtr<TArray<FQuat>> NodeTangentFrames; // node-indexed
 	};
 

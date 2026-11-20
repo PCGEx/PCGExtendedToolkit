@@ -87,18 +87,6 @@ bool FPCGExProbeBitmasks::RequiresChainProcessing() const
 	return false;
 }
 
-bool FPCGExProbeBitmasks::Prepare(FPCGExContext* InContext)
-{
-	if (!FPCGExProbeOperation::Prepare(InContext))
-	{
-		return false;
-	}
-
-	return true;
-}
-
-#define PCGEX_GET_DIRECTION (Direction->Read(Index) * DirectionMultiplier).GetSafeNormal()
-
 void FPCGExProbeBitmasks::ProcessCandidates(const int32 Index, TArray<PCGExProbing::FCandidate>& Candidates, TSet<uint64>* Coincidence, const FVector& ST, TSet<uint64>* OutEdges, PCGExMT::FScopedContainer* Container)
 {
 	const int32 DirCount = BitmaskData->Directions.Num();
@@ -201,8 +189,6 @@ void FPCGExProbeBitmasks::ProcessCandidates(const int32 Index, TArray<PCGExProbi
 		OutEdges->Add(PCGEx::H64U(Index, C.PointIndex));
 	}
 }
-
-#undef PCGEX_GET_DIRECTION
 
 #if WITH_EDITOR
 FString UPCGExProbeBitmasksProviderSettings::GetDisplayName() const

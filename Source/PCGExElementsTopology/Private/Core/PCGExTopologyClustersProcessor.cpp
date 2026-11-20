@@ -130,8 +130,6 @@ namespace PCGExTopologyEdges
 		UVDetails = Settings->Topology.UVChannels;
 		UVDetails.Prepare(VtxDataFacade);
 
-		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
-
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
 

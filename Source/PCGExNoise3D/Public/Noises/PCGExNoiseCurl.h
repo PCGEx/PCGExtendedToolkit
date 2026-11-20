@@ -62,7 +62,6 @@ private:
 	/** Precomputed in PostInitDerived */
 	double InvE2 = 500.0;
 
-	FVector GetPotentialField(const FVector& Position) const;
 	FVector ComputeCurl(const FVector& Position) const;
 
 	/** Single-component curl paths; must produce the exact same values as the matching ComputeCurl component */

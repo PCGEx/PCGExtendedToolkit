@@ -38,11 +38,6 @@ struct PCGEXCORE_API FPCGExInputConfig
 	FPCGMetadataAttributeBase* Attribute = nullptr;
 	int16 UnderlyingType = 255; //static_cast<int16>(EPCGMetadataTypes::Unknown);
 
-	FPCGAttributePropertyInputSelector& GetMutableSelector()
-	{
-		return Selector;
-	}
-
 	EPCGAttributePropertySelection GetSelection() const
 	{
 		return Selector.GetSelection();
@@ -131,7 +126,6 @@ struct PCGEXCORE_API FPCGExAttributeSourceToTargetList
 	}
 
 	bool ValidateNames(FPCGExContext* InContext) const;
-	void GetSources(TArray<FName>& OutNames) const;
 };
 
 #if WITH_EDITOR

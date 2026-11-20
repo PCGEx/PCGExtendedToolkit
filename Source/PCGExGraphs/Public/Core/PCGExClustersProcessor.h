@@ -101,8 +101,6 @@ struct PCGEXGRAPHS_API FPCGExClustersProcessorContext : FPCGExPointsProcessorCon
 
 	virtual bool AdvancePointsIO(const bool bCleanupKeys = true) override;
 
-	TSharedPtr<PCGExClusters::FCluster> CurrentCluster;
-
 	void OutputPointsAndEdges() const;
 
 	FPCGExGraphBuilderDetails GraphBuilderDetails;

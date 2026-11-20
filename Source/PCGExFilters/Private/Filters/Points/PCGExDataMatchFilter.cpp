@@ -49,11 +49,6 @@ PCGExFactories::EPreparationResult UPCGExDataMatchFilterFactory::Prepare(FPCGExC
 	return Super::Prepare(InContext, TaskManager);
 }
 
-void UPCGExDataMatchFilterFactory::BeginDestroy()
-{
-	Super::BeginDestroy();
-}
-
 #pragma endregion
 
 #pragma region FDataMatchFilter

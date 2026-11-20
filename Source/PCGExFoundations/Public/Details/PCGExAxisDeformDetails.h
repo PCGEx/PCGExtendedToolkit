@@ -89,14 +89,3 @@ protected:
 	TArray<TSharedPtr<PCGExDetails::TSettingValue<double>>> TargetsFirstValueGetter;
 	TArray<TSharedPtr<PCGExDetails::TSettingValue<double>>> TargetsSecondValueGetter;
 };
-
-
-USTRUCT(BlueprintType)
-struct PCGEXFOUNDATIONS_API FPCGExAxisTwistDetails
-{
-	GENERATED_BODY()
-
-	// Start/End
-	// or
-	// Per-point angle
-};

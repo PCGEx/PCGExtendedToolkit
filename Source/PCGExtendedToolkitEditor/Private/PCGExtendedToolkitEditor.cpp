@@ -98,13 +98,9 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		for (int32 Bit = 0; Bit < 64; Bit++)
 		{
 			const FString IconName = FString::Printf(TEXT("bits_bit_%d"), Bit);
-			const FString StyleKey = FString::Printf(TEXT("PCGEx.Bit.%d"), Bit);
 			const FString StyleKey16 = FString::Printf(TEXT("PCGEx.Bit.%d_16"), Bit);
 			const FString FullPath = InStyle->RootToContentDir(*FString::Printf(TEXT("Bits/%s"), *IconName), TEXT(".svg"));
 
-
-			AppStyle.Set(*StyleKey, new FSlateVectorImageBrush(FullPath, FVector2D(8.0f)));
-			InStyle->Set(*StyleKey, new FSlateVectorImageBrush(FullPath, FVector2D(8.0f)));
 
 			AppStyle.Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
 			InStyle->Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
@@ -131,15 +127,12 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 	}
 }
 
-#undef PCGEX_ADD_ICON
-
 void FPCGExtendedToolkitEditorModule::ShutdownModule()
 {
 	FSlateStyleRegistry::UnRegisterSlateStyle(Style->GetStyleSetName());
 	Style.Reset();
 }
 
-#undef PCGEX_FOREACH_CUSTOM_DATA_TYPE
 #undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FPCGExtendedToolkitEditorModule, PCGExtendedToolkitEditor)

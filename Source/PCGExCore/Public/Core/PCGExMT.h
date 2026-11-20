@@ -23,7 +23,6 @@ namespace PCGEx
 }
 
 struct FPCGContextHandle;
-enum class EPCGExAsyncPriority : uint8;
 struct FPCGExContext;
 
 namespace PCGExMT
@@ -259,7 +258,6 @@ namespace PCGExMT
 
 	public:
 		FEndCallback OnEndCallback;
-		UE::Tasks::ETaskPriority WorkPriority = UE::Tasks::ETaskPriority::Default;
 
 		explicit FTaskManager(FPCGExContext* InContext);
 		virtual ~FTaskManager() override;
@@ -303,7 +301,6 @@ namespace PCGExMT
 		friend class FTaskManager;
 		friend class FSimpleCallbackTask;
 		friend class FScopeIterationTask;
-		friend class FForceSingleThreadedScopeIterationTask;
 
 	public:
 		using FIterationCallback = std::function<void(const int32, const FScope&)>;
@@ -355,12 +352,9 @@ namespace PCGExMT
 		void AddSimpleCallbacks(TArray<FSimpleCallback>&& InCallbacks);
 		void StartSimpleCallbacks();
 
-		template <typename T>
-		void StartTasksBatch(const TArray<TSharedPtr<T>>& InTasks)
+		void StartTasksBatch(const TArray<TSharedPtr<FTask>>& InTasks)
 		{
-			static_assert(TIsDerivedFrom<T, FTask>::Value, "T must derive from IAsyncHandle");
-			const TArray<TSharedPtr<FTask>>& BaseTasks = reinterpret_cast<const TArray<TSharedPtr<FTask>>&>(InTasks);
-			StartHandlesBatchImpl(BaseTasks);
+			StartHandlesBatchImpl(InTasks);
 		}
 
 	protected:

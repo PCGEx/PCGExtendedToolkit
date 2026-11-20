@@ -21,18 +21,6 @@ PCGExData::EIOInit UPCGExTransformPointsSettings::GetMainDataInitializationPolic
 
 PCGEX_ELEMENT_BATCH_POINT_IMPL(TransformPoints)
 
-bool FPCGExTransformPointsElement::Boot(FPCGExContext* InContext) const
-{
-	if (!FPCGExPointsProcessorElement::Boot(InContext))
-	{
-		return false;
-	}
-
-	PCGEX_CONTEXT_AND_SETTINGS(TransformPoints)
-
-	return true;
-}
-
 bool FPCGExTransformPointsElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExTransformPointsElement::Execute);

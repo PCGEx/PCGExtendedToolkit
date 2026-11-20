@@ -112,11 +112,10 @@ struct FPCGExPartitonRuleConfig : public FPCGExInputConfig
 
 namespace PCGExPartition
 {
-	struct FRule final : PCGExData::TAttributeBroadcaster<double>
+	struct FRule final
 	{
 		explicit FRule(FPCGExPartitonRuleConfig& InRule)
-			: TAttributeBroadcaster<double>()
-			  , RuleConfig(&InRule)
+			: RuleConfig(&InRule)
 			  , FilterSize(InRule.FilterSize)
 			  , Upscale(InRule.Upscale)
 			  , Offset(InRule.Offset)
@@ -130,7 +129,7 @@ namespace PCGExPartition
 		{
 		}
 
-		virtual ~FRule() override
+		~FRule()
 		{
 			RuleConfig = nullptr;
 		}

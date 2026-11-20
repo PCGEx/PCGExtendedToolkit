@@ -20,16 +20,3 @@ void FPCGExEdgeRefineByFilter::ProcessEdge(PCGExGraphs::FEdge& Edge)
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRefineByFilter
-
-void UPCGExEdgeRefineByFilter::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRefineByFilter* TypedOther = Cast<UPCGExEdgeRefineByFilter>(Other))
-	{
-		bInvert = TypedOther->bInvert;
-	}
-}
-
-#pragma endregion

@@ -268,8 +268,6 @@ namespace PCGExPointsMT
 		TaskManager = InTaskManager;
 		PCGEX_ASYNC_CHKD_VOID(TaskManager)
 
-		TSharedPtr<IBatch> SelfPtr = SharedThis(this);
-
 		const bool bDoInitData = DataInitializationPolicy == PCGExData::EIOInit::Duplicate || DataInitializationPolicy == PCGExData::EIOInit::New;
 
 		TArray<TSharedPtr<IProcessor>> Candidates;

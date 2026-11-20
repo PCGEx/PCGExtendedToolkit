@@ -23,7 +23,6 @@ namespace PCGExMath::Geo
 		int32 Id = -1;
 		bool bOnHull = true;
 
-		FDelaunaySite2(const UE::Geometry::FIndex3i& InVtx, const UE::Geometry::FIndex3i& InAdjacency, const int32 InId = -1);
 		FDelaunaySite2(const int32 A, const int32 B, const int32 C, const int32 InId = -1);
 
 		bool ContainsEdge(const uint64 Edge) const;
@@ -54,8 +53,6 @@ namespace PCGExMath::Geo
 		TSet<uint64> DelaunayEdges;
 		TSet<int32> DelaunayHull;
 		bool IsValid = false;
-
-		mutable FRWLock ProcessLock;
 
 		TDelaunay2() = default;
 		~TDelaunay2();
@@ -106,8 +103,6 @@ namespace PCGExMath::Geo
 		TMap<uint64, uint64> Adjacency;
 
 		bool IsValid = false;
-
-		mutable FRWLock ProcessLock;
 
 		TDelaunay3() = default;
 
@@ -251,6 +246,5 @@ namespace PCGExMath::Geo
 		}
 
 		void RemoveLongestEdges(const TArrayView<FVector>& Positions);
-		void RemoveLongestEdges(const TArrayView<FVector>& Positions, TSet<uint64>& LongestEdges);
 	};
 }

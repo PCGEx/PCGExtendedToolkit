@@ -122,7 +122,6 @@ namespace PCGExBlending
 		TSet<FString> TypeMismatches;
 		bool Validate(FPCGExContext* InContext, const bool bQuiet) const;
 
-		bool bPreserveAttributesDefaultValue = false;
 		const FPCGExBlendingDetails* BlendingDetails = nullptr;
 		const PCGExMath::IDistances* DistanceDetails = nullptr;
 
@@ -132,9 +131,6 @@ namespace PCGExBlending
 		// Resolved by Init: false when no per-entry blender reads a weight, so the distance pass can be skipped.
 		bool bReadsWeights = true;
 
-		TSet<FString> UniqueTags;
-		TArray<FString> UniqueTagsList;
-		TArray<FPCGMetadataAttribute<bool>*> TagAttributes;
 		TSharedPtr<PCGEx::FIndexLookup> IOLookup;
 
 		TArray<TSharedPtr<PCGExData::FFacade>> Sources;

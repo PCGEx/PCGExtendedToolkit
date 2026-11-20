@@ -73,12 +73,6 @@ namespace PCGExPathfinding
 		return PickResolution;
 	}
 
-	void FPathQuery::Reserve(const int32 NumReserve)
-	{
-		PathNodes.Reserve(NumReserve);
-		PathEdges.Reserve(NumReserve - 1);
-	}
-
 	void FPathQuery::AddPathNode(const int32 InNodeIndex, const int32 InEdgeIndex)
 	{
 		PathNodes.Add(InNodeIndex);

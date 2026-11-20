@@ -125,12 +125,6 @@ bool FPCGExPathStitchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 namespace PCGExPathStitch
 {
-	bool FProcessor::IsStitchedTo(const TSharedPtr<FProcessor>& InOtherProcessor)
-	{
-		const TSharedPtr<FProcessor> Self = SharedThis(this);
-		return StartStitch.Pin() == InOtherProcessor || EndStitch.Pin() == InOtherProcessor || InOtherProcessor->StartStitch.Pin() == Self || InOtherProcessor->EndStitch.Pin() == Self;
-	}
-
 	bool FProcessor::SetStartStitch(const TSharedPtr<FProcessor>& InStitch)
 	{
 		if (StartStitch.IsValid())

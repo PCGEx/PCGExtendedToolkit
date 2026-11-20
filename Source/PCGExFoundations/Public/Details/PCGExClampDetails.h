@@ -38,21 +38,6 @@ struct PCGEXFOUNDATIONS_API FPCGExClampDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="bApplyClampMax"))
 	double ClampMaxValue = 0;
 
-	FORCEINLINE double GetClampMin(const double InValue) const
-	{
-		return InValue < ClampMinValue ? ClampMinValue : InValue;
-	}
-
-	FORCEINLINE double GetClampMax(const double InValue) const
-	{
-		return InValue > ClampMaxValue ? ClampMaxValue : InValue;
-	}
-
-	FORCEINLINE double GetClampMinMax(const double InValue) const
-	{
-		return InValue > ClampMaxValue ? ClampMaxValue : InValue < ClampMinValue ? ClampMinValue : InValue;
-	}
-
 	FORCEINLINE double GetClampedValue(const double InValue) const
 	{
 		if (bApplyClampMin && InValue < ClampMinValue)

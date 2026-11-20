@@ -23,7 +23,7 @@ namespace PCGExEnumCustomization
 	 * metadata, so per-property gating works through the inline customizations the same way it
 	 * does through the default enum combobox.
 	 */
-	static TSet<int32> GetMetaSkipIndices(const TSharedPtr<IPropertyHandle>& PropertyHandle, const UEnum* Enum)
+	TSet<int32> GetMetaSkipIndices(const TSharedPtr<IPropertyHandle>& PropertyHandle, const UEnum* Enum)
 	{
 		TSet<int32> SkipIndices;
 		if (!PropertyHandle || !Enum)
@@ -396,7 +396,7 @@ namespace PCGExEnumCustomization
 		return CreateCheckboxGroup(PropertyHandle, FindFirstObjectSafe<UEnum>(*Enum), SkipIndices);
 	}
 
-	static int32 FindNextVisibleEnumIndex(const UEnum* Enum, int32 FromIndex)
+	int32 FindNextVisibleEnumIndex(const UEnum* Enum, int32 FromIndex)
 	{
 		const TArray<int32> Order = GetEnumDisplayOrder(Enum);
 		if (Order.IsEmpty())
@@ -419,7 +419,7 @@ namespace PCGExEnumCustomization
 		return INDEX_NONE;
 	}
 
-	static bool EnumHasAnyActionIcon(const UEnum* Enum)
+	bool EnumHasAnyActionIcon(const UEnum* Enum)
 	{
 		for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
 		{
@@ -438,7 +438,7 @@ namespace PCGExEnumCustomization
 	// Small "advance" glyph rendered inside cycle buttons so users can tell the button cycles.
 	// Plain ASCII '>' is used so the default Slate font (Roboto) can render it without
 	// falling back to DroidSansFallback (which spams "Could not find Glyph Index" warnings).
-	static TSharedRef<SWidget> MakeCycleIndicator(int32 FontSize)
+	TSharedRef<SWidget> MakeCycleIndicator(int32 FontSize)
 	{
 		return SNew(STextBlock)
 			.Text(FText::FromString(TEXT(">")))

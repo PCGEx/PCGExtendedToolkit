@@ -115,8 +115,6 @@ public:
 	}
 
 	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
-
-	virtual void BeginDestroy() override;
 };
 
 namespace PCGExPointFilter

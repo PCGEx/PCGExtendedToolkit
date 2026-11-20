@@ -71,5 +71,4 @@ class PCGEXFOUNDATIONS_API FPCGExPathProcessorElement : public FPCGExPointsProce
 {
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(PathProcessor)
-	virtual bool Boot(FPCGExContext* InContext) const override;
 };

@@ -21,7 +21,6 @@ MACRO(RelativeOverlapSubCount, double, 0)
 
 namespace PCGExSampleOverlapStats
 {
-	struct FOverlapStats;
 	struct FOverlap;
 	class FProcessor;
 }
@@ -167,52 +166,12 @@ namespace PCGExSampleOverlapStats
 {
 	class FProcessor;
 
-	struct PCGEXELEMENTSSAMPLING_API FOverlapStats
-	{
-		int32 OverlapCount = 0;
-		double OverlapVolume = 0;
-		double OverlapVolumeAvg = 0;
-
-		FORCEINLINE void Add(const FOverlapStats& Other)
-		{
-			OverlapCount += Other.OverlapCount;
-			OverlapVolume += Other.OverlapVolume;
-		}
-
-		FORCEINLINE void Remove(const FOverlapStats& Other)
-		{
-			OverlapCount -= Other.OverlapCount;
-			OverlapVolume -= Other.OverlapVolume;
-		}
-
-		FORCEINLINE void Add(const FOverlapStats& Other, const int32 MaxCount, const double MaxVolume)
-		{
-			Add(Other);
-			UpdateRelative(MaxCount, MaxVolume);
-		}
-
-		FORCEINLINE void Remove(const FOverlapStats& Other, const int32 MaxCount, const double MaxVolume)
-		{
-			Remove(Other);
-			UpdateRelative(MaxCount, MaxVolume);
-		}
-
-		FORCEINLINE void UpdateRelative(const int32 MaxCount, const double MaxVolume)
-		{
-			OverlapVolumeAvg = OverlapVolume / OverlapCount;
-		}
-	};
-
 	struct PCGEXELEMENTSSAMPLING_API FOverlap
 	{
-		uint64 HashID = 0;
 		FBox Intersection = FBox(NoInit);
-		bool IsValid = true;
 
 		FProcessor* Primary = nullptr;
 		FProcessor* Secondary = nullptr;
-
-		FOverlapStats Stats;
 
 		FOverlap(FProcessor* InPrimary, FProcessor* InSecondary, const FBox& InIntersection);
 		FORCEINLINE FProcessor* GetOther(const FProcessor* InCandidate) const
@@ -234,7 +193,6 @@ namespace PCGExSampleOverlapStats
 
 		mutable FRWLock RegistrationLock;
 		TArray<TSharedRef<FOverlap>> Overlaps;
-		TArray<TSharedRef<FOverlap>> ManagedOverlaps;
 
 		int32 NumPoints = 0;
 
@@ -246,8 +204,6 @@ namespace PCGExSampleOverlapStats
 		PCGEX_FOREACH_FIELD_SAMPLEOVERLAPSTATS(PCGEX_OUTPUT_DECL)
 
 	public:
-		FOverlapStats Stats;
-
 		double LocalOverlapSubCountMax = 0;
 		double LocalOverlapCountMax = 0;
 

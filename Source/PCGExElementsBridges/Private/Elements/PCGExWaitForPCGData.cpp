@@ -541,10 +541,6 @@ namespace PCGExWaitForPCGData
 			}
 
 			PCGEX_ASYNC_RELEASE_TOKEN(SearchActorsToken)
-			if (OnDiscoveryComplete)
-			{
-				OnDiscoveryComplete();
-			}
 			return;
 		}
 
@@ -554,10 +550,6 @@ namespace PCGExWaitForPCGData
 		SearchComponentsToken = TaskManager->TryCreateToken(FName("SearchComponents"));
 		if (!SearchComponentsToken.IsValid())
 		{
-			if (OnDiscoveryComplete)
-			{
-				OnDiscoveryComplete();
-			}
 			return;
 		}
 
@@ -584,10 +576,6 @@ namespace PCGExWaitForPCGData
 		if (!TaskManager || !TaskManager->IsAvailable())
 		{
 			Stop();
-			if (OnDiscoveryComplete)
-			{
-				OnDiscoveryComplete();
-			}
 			return;
 		}
 
@@ -613,10 +601,6 @@ namespace PCGExWaitForPCGData
 		if (!TaskManager || !TaskManager->IsAvailable())
 		{
 			Stop();
-			if (OnDiscoveryComplete)
-			{
-				OnDiscoveryComplete();
-			}
 			return;
 		}
 
@@ -740,11 +724,6 @@ namespace PCGExWaitForPCGData
 		}
 
 		Stop();
-
-		if (OnDiscoveryComplete)
-		{
-			OnDiscoveryComplete();
-		}
 	}
 
 	bool FComponentDiscovery::IsValidCandidate(const UPCGComponent* Candidate, PCGExActorSelection::FTagMatcher& InComponentTags) const

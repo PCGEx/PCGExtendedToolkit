@@ -57,39 +57,6 @@ namespace PCGExPaths
 		//~~ Tangent Fitting Only (no simplification) ~~//
 
 		/**
-		 * Fit tangents to a pre-selected subset of points.
-		 * No simplification is performed - the provided indices define exactly which points to keep.
-		 * 
-		 * @param InPoints          The original point transforms
-		 * @param InSelectedIndices Sorted indices of points to keep (must be sorted ascending)
-		 * @param bIsClosed         Whether this is a closed loop
-		 * @param Smoothing         How much to blend tangents at junctions (0 = precise, 1 = smooth)
-		 * @param SmoothingMode     Type of smoothing to apply
-		 */
-		static TArray<FSimplifiedPoint> FitTangentsToSelection(
-			const TConstPCGValueRange<FTransform>& InPoints,
-			const TArray<int32>& InSelectedIndices,
-			bool bIsClosed = false,
-			double Smoothing = 0.0,
-			EPCGExTangentSmoothing SmoothingMode = EPCGExTangentSmoothing::Full);
-
-		/**
-		 * Fit tangents to a pre-selected subset with per-point smoothing.
-		 * 
-		 * @param InPoints              The original point transforms
-		 * @param InSelectedIndices     Sorted indices of points to keep
-		 * @param InSmoothingValues     Per-point smoothing (indexed by original point index, same size as InPoints)
-		 * @param bIsClosed             Whether this is a closed loop
-		 * @param SmoothingMode         Type of smoothing to apply
-		 */
-		static TArray<FSimplifiedPoint> FitTangentsToSelection(
-			const TConstPCGValueRange<FTransform>& InPoints,
-			const TArray<int32>& InSelectedIndices,
-			const TArray<double>& InSmoothingValues,
-			bool bIsClosed = false,
-			EPCGExTangentSmoothing SmoothingMode = EPCGExTangentSmoothing::Full);
-
-		/**
 		 * Fit tangents using a keep/remove mask.
 		 * Points where InKeepFlags[i] == true will be kept.
 		 * 
@@ -116,16 +83,6 @@ namespace PCGExPaths
 			bool bIsClosed = false,
 			EPCGExTangentSmoothing SmoothingMode = EPCGExTangentSmoothing::Full);
 
-		/**
-		 * Fit tangents to ALL points (no reduction at all).
-		 * Useful when you just want tangent computation for an existing polyline.
-		 */
-		static TArray<FSimplifiedPoint> FitTangentsToAll(
-			const TConstPCGValueRange<FTransform>& InPoints,
-			bool bIsClosed = false,
-			double Smoothing = 0.0,
-			EPCGExTangentSmoothing SmoothingMode = EPCGExTangentSmoothing::Full);
-
 	private:
 		// Core implementation for simplification path
 		static TArray<FSimplifiedPoint> SimplifyPolylineInternal(
@@ -134,6 +91,15 @@ namespace PCGExPaths
 			const TArray<double>& InSmoothingValues,
 			double UniformSmoothing,
 			double MaxError,
+			bool bIsClosed,
+			EPCGExTangentSmoothing SmoothingMode);
+
+		// Core implementation for mask-based fitting
+		static TArray<FSimplifiedPoint> FitTangentsToMaskInternal(
+			const TConstPCGValueRange<FTransform>& InPoints,
+			const TArray<int8>& InKeepFlags,
+			const TArray<double>& InSmoothingValues,
+			double UniformSmoothing,
 			bool bIsClosed,
 			EPCGExTangentSmoothing SmoothingMode);
 

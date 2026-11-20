@@ -294,7 +294,7 @@ bool UK2Node_PCGExMemberBase::IsMemberEligible(const FProperty* Property, bool b
 	}
 
 	// Only authorable surface: EditAnywhere/VisibleAnywhere set CPF_Edit; plain UPROPERTY()
-	// internals (PropertyRegistry, schema versions...) drop out here.
+	// internals (schema versions...) drop out here.
 	if (!Property->HasAnyPropertyFlags(CPF_Edit))
 	{
 		return false;

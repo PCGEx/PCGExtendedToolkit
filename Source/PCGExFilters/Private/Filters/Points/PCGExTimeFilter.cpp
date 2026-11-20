@@ -48,7 +48,6 @@ void UPCGExTimeFilterFactory::InitConfig_Internal()
 	LocalSampleInputs = Config.SampleInputs;
 	WindingMutation = Config.WindingMutation;
 	bScaleTolerance = false;
-	bUsedForInclusion = false;
 	bIgnoreSelf = Config.bIgnoreSelf;
 	DataMatching = Config.DataMatching;
 }

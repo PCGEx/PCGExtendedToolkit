@@ -144,7 +144,6 @@ namespace PCGExSplitPath
 		TArray<TSharedPtr<PCGExData::FPointIO>> SubPathsIOs;
 
 		bool bWrapLastPath = false;
-		bool bAddOpenTag = false;
 		int8 bLastResult = false;
 		bool bEven = true;
 

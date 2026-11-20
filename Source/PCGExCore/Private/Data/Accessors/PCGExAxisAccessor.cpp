@@ -7,7 +7,7 @@
 
 namespace PCGExData
 {
-	namespace
+	namespace PCGExAxisAccessor
 	{
 		// Mirrors STRMAP_AXIS from PCGExSubSelection.h.
 		const TMap<FString, EPCGExAxis>& GetAxisTable()
@@ -59,7 +59,7 @@ namespace PCGExData
 
 	bool FAxisAccessor::MatchesToken(const FString& UpperToken, FAccessorParseResult& OutParsed) const
 	{
-		if (const EPCGExAxis* Axis = GetAxisTable().Find(UpperToken))
+		if (const EPCGExAxis* Axis = PCGExAxisAccessor::GetAxisTable().Find(UpperToken))
 		{
 			OutParsed.Axis = *Axis;
 			OutParsed.SourceTypeHint = EPCGMetadataTypes::Quaternion;
@@ -93,14 +93,14 @@ namespace PCGExData
 		switch (InType)
 		{
 		case EPCGMetadataTypes::Quaternion:
-			Out = ExtractAxisFromQuat(*static_cast<const FQuat*>(Source), Parsed.Axis);
+			Out = PCGExAxisAccessor::ExtractAxisFromQuat(*static_cast<const FQuat*>(Source), Parsed.Axis);
 			break;
 		case EPCGMetadataTypes::Rotator:
-			Out = ExtractAxisFromRotator(*static_cast<const FRotator*>(Source), Parsed.Axis);
+			Out = PCGExAxisAccessor::ExtractAxisFromRotator(*static_cast<const FRotator*>(Source), Parsed.Axis);
 			break;
 		case EPCGMetadataTypes::Transform:
 			// FTransform: extract rotation quaternion, then apply axis.
-			Out = ExtractAxisFromQuat(static_cast<const FTransform*>(Source)->GetRotation(), Parsed.Axis);
+			Out = PCGExAxisAccessor::ExtractAxisFromQuat(static_cast<const FTransform*>(Source)->GetRotation(), Parsed.Axis);
 			break;
 		default:
 			Out = FVector::ForwardVector;
@@ -118,9 +118,9 @@ namespace PCGExData
 		switch (InType)
 		{
 		case EPCGMetadataTypes::Quaternion:
-			return &AxisGetStep_Quat;
+			return &PCGExAxisAccessor::AxisGetStep_Quat;
 		case EPCGMetadataTypes::Rotator:
-			return &AxisGetStep_Rotator;
+			return &PCGExAxisAccessor::AxisGetStep_Rotator;
 		default:
 			return nullptr;
 		}

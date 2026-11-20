@@ -228,8 +228,6 @@ namespace PCGExCreateSpline
 
 		PointDataFacade->Fetch(Scope);
 
-		bool bHasAValidEntry = false;
-
 		const UPCGBasePointData* InPointData = PointDataFacade->GetIn();
 		TConstPCGValueRange<FTransform> InTransforms = InPointData->GetConstTransformValueRange();
 		TConstPCGValueRange<int64> InMetadataEntries = InPointData->GetConstMetadataEntryValueRange();
@@ -281,12 +279,6 @@ namespace PCGExCreateSpline
 
 			const int64 PointMetadataEntry = InMetadataEntries[Index];
 			SplineEntryKeys[Index] = PointMetadataEntry;
-			bHasAValidEntry |= (PointMetadataEntry != PCGInvalidEntryKey);
-		}
-
-		if (bHasAValidEntry)
-		{
-			FPlatformAtomics::InterlockedExchange(&HasAValidEntry, true);
 		}
 	}
 

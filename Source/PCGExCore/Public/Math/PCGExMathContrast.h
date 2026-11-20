@@ -27,48 +27,6 @@ namespace PCGExMath::Contrast
 	//
 
 	/**
-		 * Power-based contrast (simple, predictable)
-		 * Remaps around 0.5 midpoint internally
-		 * @param Value Input value in [0, 1]
-		 * @param Contrast Contrast amount (1.0 = no change, >1 = more contrast)
-		 */
-	FORCEINLINE double ContrastPower(const double Value, const double Contrast)
-	{
-		if (Contrast <= SMALL_NUMBER)
-		{
-			return Value;
-		}
-		const double T = Value * 2.0 - 1.0;
-		if (FMath::Abs(T) < SMALL_NUMBER)
-		{
-			return Value;
-		}
-		const double Exp = 1.0 / Contrast;
-		return (FMath::Sign(T) * FMath::Pow(FMath::Abs(T), Exp)) * 0.5 + 0.5;
-	}
-
-	/**
-		 * S-curve contrast using tanh (smooth, never clips)
-		 * Remaps around 0.5 midpoint internally
-		 * @param Value Input value in [0, 1]
-		 * @param Contrast Contrast amount (1.0 = no change, >1 = more contrast)
-		 */
-	FORCEINLINE double ContrastSCurve(const double Value, const double Contrast)
-	{
-		if (Contrast <= SMALL_NUMBER)
-		{
-			return Value;
-		}
-		const double TanhC = FMath::Tanh(Contrast);
-		if (FMath::Abs(TanhC) < SMALL_NUMBER)
-		{
-			return Value;
-		}
-		const double T = Value * 2.0 - 1.0;
-		return (FMath::Tanh(T * Contrast) / TanhC) * 0.5 + 0.5;
-	}
-
-	/**
 		 * Gain contrast using power-based S-curve (symmetrical)
 		 * Good for subtle adjustments, softer than sigmoid
 		 * @param Value Input value in [0, 1]
@@ -89,34 +47,8 @@ namespace PCGExMath::Contrast
 	}
 
 	/**
-		 * Apply contrast with selectable curve type -- input in [0, 1]
-		 * @param Value Input value in [0, 1]
-		 * @param Contrast Contrast amount (1.0 = no change)
-		 * @param CurveType 0 = Power, 1 = SCurve, 2 = Gain
-		 */
-	FORCEINLINE double ApplyContrast(const double Value, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return Value;
-		}
-
-		switch (CurveType)
-		{
-		case 0:
-			return ContrastPower(Value, Contrast);
-		case 1:
-			return ContrastSCurve(Value, Contrast);
-		case 2:
-			return ContrastGain(Value, Contrast);
-		default:
-			return ContrastPower(Value, Contrast);
-		}
-	}
-
-	/**
-	 * Curve constants hoisted out of the per-value call. Apply matches ApplyContrast(Value, Contrast, CurveType);
-	 * the S-curve multiplies by a cached reciprocal instead of dividing, as the batch variants do.
+	 * Curve constants hoisted out of the per-value call. CurveType: 1 = SCurve, 2 = Gain, anything else = Power.
+	 * The S-curve multiplies by a cached reciprocal instead of dividing, as ApplyContrastBatchInRange does.
 	 */
 	struct FPreparedContrast
 	{
@@ -175,152 +107,7 @@ namespace PCGExMath::Contrast
 	};
 
 	//
-	// Vector overloads -- [0,1] per component
-	//
-
-	FORCEINLINE FVector2D ApplyContrast(const FVector2D& Value, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return Value;
-		}
-		return FVector2D(
-			ApplyContrast(Value.X, Contrast, CurveType),
-			ApplyContrast(Value.Y, Contrast, CurveType)
-			);
-	}
-
-	FORCEINLINE FVector ApplyContrast(const FVector& Value, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return Value;
-		}
-		return FVector(
-			ApplyContrast(Value.X, Contrast, CurveType),
-			ApplyContrast(Value.Y, Contrast, CurveType),
-			ApplyContrast(Value.Z, Contrast, CurveType)
-			);
-	}
-
-	FORCEINLINE FVector4 ApplyContrast(const FVector4& Value, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return Value;
-		}
-		return FVector4(
-			ApplyContrast(Value.X, Contrast, CurveType),
-			ApplyContrast(Value.Y, Contrast, CurveType),
-			ApplyContrast(Value.Z, Contrast, CurveType),
-			ApplyContrast(Value.W, Contrast, CurveType)
-			);
-	}
-
-	//
-	// [0,1] batch operations (switch outside loop for branch prediction)
-	//
-
-	inline void ApplyContrastBatch(double* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return;
-		}
-
-		switch (CurveType)
-		{
-		case 0: // Power
-		{
-			// Same degenerate guard as ContrastPower.
-			if (Contrast <= SMALL_NUMBER)
-			{
-				break;
-			}
-			const double Exp = 1.0 / Contrast;
-			for (int32 i = 0; i < Count; ++i)
-			{
-				const double T = Values[i] * 2.0 - 1.0;
-				if (FMath::Abs(T) > SMALL_NUMBER)
-				{
-					Values[i] = (FMath::Sign(T) * FMath::Pow(FMath::Abs(T), Exp)) * 0.5 + 0.5;
-				}
-			}
-		}
-		break;
-
-		case 1: // SCurve
-		{
-			// Same degenerate guards as ContrastSCurve.
-			const double TanhC = FMath::Tanh(Contrast);
-			if (Contrast <= SMALL_NUMBER || FMath::Abs(TanhC) < SMALL_NUMBER)
-			{
-				break;
-			}
-			const double InvTanhC = 1.0 / TanhC;
-			for (int32 i = 0; i < Count; ++i)
-			{
-				const double T = Values[i] * 2.0 - 1.0;
-				Values[i] = (FMath::Tanh(T * Contrast) * InvTanhC) * 0.5 + 0.5;
-			}
-		}
-		break;
-
-		case 2: // Gain
-			for (int32 i = 0; i < Count; ++i)
-			{
-				Values[i] = ContrastGain(Values[i], Contrast);
-			}
-			break;
-
-		default:
-			ApplyContrastBatch(Values, Count, Contrast, 0);
-			break;
-		}
-	}
-
-	inline void ApplyContrastBatch(FVector2D* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return;
-		}
-
-		for (int32 i = 0; i < Count; ++i)
-		{
-			Values[i] = ApplyContrast(Values[i], Contrast, CurveType);
-		}
-	}
-
-	inline void ApplyContrastBatch(FVector* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return;
-		}
-
-		for (int32 i = 0; i < Count; ++i)
-		{
-			Values[i] = ApplyContrast(Values[i], Contrast, CurveType);
-		}
-	}
-
-	inline void ApplyContrastBatch(FVector4* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER))
-		{
-			return;
-		}
-
-		for (int32 i = 0; i < Count; ++i)
-		{
-			Values[i] = ApplyContrast(Values[i], Contrast, CurveType);
-		}
-	}
-
-	//
-	// [Min,Max] batch -- fused remap, switch outside loop
-	// Pass 1: find min/max if not provided. Pass 2: remap + contrast + unmap.
+	// [Min,Max] batch -- fused remap + contrast + unmap, switch outside loop
 	//
 
 	inline void ApplyContrastBatchInRange(double* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType, const double Min, const double Max)
@@ -342,7 +129,7 @@ namespace PCGExMath::Contrast
 		{
 		case 0: // Power
 		{
-			// Same degenerate guard as ContrastPower.
+			// Same degenerate guard as FPreparedContrast::Apply.
 			if (Contrast <= SMALL_NUMBER)
 			{
 				break;
@@ -362,7 +149,7 @@ namespace PCGExMath::Contrast
 
 		case 1: // SCurve
 		{
-			// Same degenerate guards as ContrastSCurve.
+			// Same degenerate guards as FPreparedContrast::Apply.
 			const double TanhC = FMath::Tanh(Contrast);
 			if (Contrast <= SMALL_NUMBER || FMath::Abs(TanhC) < SMALL_NUMBER)
 			{
@@ -392,58 +179,12 @@ namespace PCGExMath::Contrast
 		}
 	}
 
-	/**
-		 * Auto-range batch: scans for min/max, then applies contrast preserving the original range.
-		 */
-	inline void ApplyContrastBatchAutoRange(double* RESTRICT Values, const int32 Count, const double Contrast, const int32 CurveType = 0)
-	{
-		if (FMath::IsNearlyEqual(Contrast, 1.0, SMALL_NUMBER) || Count <= 0)
-		{
-			return;
-		}
-
-		double Min = Values[0];
-		double Max = Values[0];
-		for (int32 i = 1; i < Count; ++i)
-		{
-			Min = FMath::Min(Min, Values[i]);
-			Max = FMath::Max(Max, Values[i]);
-		}
-
-		ApplyContrastBatchInRange(Values, Count, Contrast, CurveType, Min, Max);
-	}
-
 	//
-	// TArrayView convenience overloads
+	// TArrayView convenience overload
 	//
-
-	inline void ApplyContrastBatch(TArrayView<double> Values, const double Contrast, const int32 CurveType = 0)
-	{
-		ApplyContrastBatch(Values.GetData(), Values.Num(), Contrast, CurveType);
-	}
-
-	inline void ApplyContrastBatch(TArrayView<FVector2D> Values, const double Contrast, const int32 CurveType = 0)
-	{
-		ApplyContrastBatch(Values.GetData(), Values.Num(), Contrast, CurveType);
-	}
-
-	inline void ApplyContrastBatch(TArrayView<FVector> Values, const double Contrast, const int32 CurveType = 0)
-	{
-		ApplyContrastBatch(Values.GetData(), Values.Num(), Contrast, CurveType);
-	}
-
-	inline void ApplyContrastBatch(TArrayView<FVector4> Values, const double Contrast, const int32 CurveType = 0)
-	{
-		ApplyContrastBatch(Values.GetData(), Values.Num(), Contrast, CurveType);
-	}
 
 	inline void ApplyContrastBatchInRange(TArrayView<double> Values, const double Contrast, const int32 CurveType, const double Min, const double Max)
 	{
 		ApplyContrastBatchInRange(Values.GetData(), Values.Num(), Contrast, CurveType, Min, Max);
-	}
-
-	inline void ApplyContrastBatchAutoRange(TArrayView<double> Values, const double Contrast, const int32 CurveType = 0)
-	{
-		ApplyContrastBatchAutoRange(Values.GetData(), Values.Num(), Contrast, CurveType);
 	}
 }

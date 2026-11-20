@@ -19,16 +19,6 @@ void FPCGExNoiseCurl::PostInitDerived()
 	InvE2 = 1.0 / (2.0 * Epsilon);
 }
 
-FVector FPCGExNoiseCurl::GetPotentialField(const FVector& Position) const
-{
-	// Three independent noise channels for potential field
-	const FVector ScaledPos = Position * Frequency;
-	const double Fx = Perlin3D(ScaledPos, Seed);
-	const double Fy = Perlin3D(ScaledPos + PCGExNoiseCurl::OffsetFy, Seed);
-	const double Fz = Perlin3D(ScaledPos + PCGExNoiseCurl::OffsetFz, Seed);
-	return FVector(Fx, Fy, Fz);
-}
-
 FVector FPCGExNoiseCurl::ComputeCurl(const FVector& Position) const
 {
 	const double E = Epsilon;

@@ -53,9 +53,6 @@ public:
 	// Override GetDouble for custom fractal behavior
 	virtual double GetDouble(const FVector& Position) const override;
 
-protected:
-	virtual double GenerateRaw(const FVector& Position) const override;
-
 private:
 	/** Perlin noise with analytical derivatives */
 	void NoiseWithDerivatives(const FVector& Position, double& OutValue, FVector& OutDerivatives) const;

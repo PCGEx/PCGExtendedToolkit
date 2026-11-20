@@ -23,11 +23,6 @@ void UPCGExPointStateFactoryData::RegisterBuffersDependencies(FPCGExContext* InC
 	PCGExPointFilter::RegisterBuffersDependencies(InContext, FilterFactories, FacadePreloader);
 }
 
-void UPCGExPointStateFactoryData::BeginDestroy()
-{
-	Super::BeginDestroy();
-}
-
 #if WITH_EDITOR
 void UPCGExStateFactoryProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
@@ -183,11 +178,6 @@ FString UPCGExStateFactoryProviderSettings::GetDisplayName() const
 	return Name.ToString();
 }
 #endif
-
-TSet<FPCGDataTypeBaseId> UPCGExStateFactoryProviderSettings::GetInternalFilterTypes() const
-{
-	return PCGExFactories::PointFilters();
-}
 
 void UPCGExStateFactoryProviderSettings::OutputBitmasks(FPCGExContext* InContext, const FPCGExStateConfigBase& InConfig) const
 {

@@ -120,8 +120,6 @@ struct PCGEXFOUNDATIONS_API FPCGExGUIDDetails
 	bool bUseSeed = false;
 	bool bUsePosition = false;
 
-	FGuid DefaultGUID = FGuid(0, 0, 0, 0);
-
 	bool Init(FPCGExContext* InContext, TSharedRef<PCGExData::FFacade>& InFacade);
 	void GetGUID(const int32 Index, const PCGExData::FConstPoint& InPoint, FGuid& OutGUID) const;
 };

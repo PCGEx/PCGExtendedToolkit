@@ -76,12 +76,6 @@ public:
 		bIsSelected = bInSelected;
 	}
 
-	/** Query selection state */
-	bool IsSelected() const
-	{
-		return bIsSelected;
-	}
-
 	// Mouse handling for selection and drag
 	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;

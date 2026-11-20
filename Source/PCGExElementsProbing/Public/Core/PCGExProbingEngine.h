@@ -87,8 +87,6 @@ namespace PCGExProbing
 		void RunAsync(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager, TFunction<void()>&& InOnComplete);
 
 		TSet<uint64>& GetUniqueEdges() { return UniqueEdges; }
-		const TArray<FVector>& GetWorkingPositions() const { return WorkingPositions; }
-		const TArray<FTransform>& GetWorkingTransforms() const { return WorkingTransforms; }
 
 	protected:
 		TSharedRef<PCGExData::FFacade> DataFacade;

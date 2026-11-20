@@ -6,11 +6,6 @@
 #include "CoreMinimal.h"
 #include "Domains/PCGExSpatialDomain.h"
 
-namespace PCGExPaths
-{
-	class FPolyPath;
-}
-
 /**
  * Static spatial domain backed by a 2D polygon outline + height band,
  * authored on an arbitrary projection plane.
@@ -28,10 +23,8 @@ namespace PCGExPaths
  *
  * Storage is owned (TArray<FVector2D> outline + FQuat projection +
  * ZMin/ZMax) -- decoupled from any backing PCG point data, so the domain
- * outlives the spline/PointIO it was baked from. MakeFromFPolyPath bakes
- * the projection from FPath::GetProjection() at construction time;
- * MakeFromOutline accepts authored 2D verts directly with an optional
- * explicit projection.
+ * outlives the spline/PointIO it was baked from. MakeFromOutline accepts
+ * authored 2D verts directly with an optional explicit projection.
  *
  * Topology: arbitrary (concave allowed). Inside test delegates to
  * winding-number math. Closest-edge distance is naive O(N) -- fine for
@@ -63,18 +56,6 @@ public:
 		float ZMin,
 		float ZMax,
 		const FQuat& ProjectionQuat = FQuat::Identity);
-
-	/**
-	 * Bake from an FPolyPath, lifting the projection frame from the path
-	 * itself (FPath::GetProjection().ProjectionQuat). Z band must be
-	 * supplied explicitly: an FPolyPath is generally planar in its
-	 * projection frame, so height extents are a separate authoring
-	 * choice.
-	 */
-	static FPCGExSpatialDomain_Polygon2D MakeFromFPolyPath(
-		const PCGExPaths::FPolyPath& Path,
-		float ZMin,
-		float ZMax);
 
 	// ========== FPCGExSpatialDomain ==========
 
@@ -126,20 +107,17 @@ private:
 	 */
 	FQuat ProjectionQuat = FQuat::Identity;
 
-	/** Cached 2D AABB of Outline (in projection-frame XY). */
-	FBox2D Bounds2D = FBox2D(ForceInit);
-
 	/** Height band along the projection frame's local Z. Inclusive on both ends. */
 	float ZMin = 0.0f;
 	float ZMax = 0.0f;
 
 	/**
 	 * Cached world-space 3D AABB. Computed by un-projecting the 8 corners of
-	 * the local AABB (Bounds2D + ZMin/ZMax) through ProjectionQuat and taking
+	 * the local AABB (Outline extents + ZMin/ZMax) through ProjectionQuat and taking
 	 * min/max -- conservative when ProjectionQuat is non-identity.
 	 */
 	FBox WorldBounds = FBox(ForceInit);
 
-	/** Recompute Bounds2D + WorldBounds from Outline + (ZMin, ZMax) + ProjectionQuat. */
+	/** Recompute WorldBounds from Outline + (ZMin, ZMax) + ProjectionQuat. */
 	void RecomputeBounds();
 };

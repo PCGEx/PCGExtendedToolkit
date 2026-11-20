@@ -297,9 +297,6 @@ namespace PCGExAttributeStats
 		T SetMinValue = T{};
 		T SetMaxValue = T{};
 		T AverageValue = T{};
-		T AverageSetValue = T{};
-		T MaxUniqueValue = T{};
-		T MinUniqueValue = T{};
 		int32 UniqueValuesNum = 0;
 		int32 UniqueSetValuesNum = 0;
 		int32 DifferentValuesNum = 0;
@@ -515,8 +512,6 @@ namespace PCGExAttributeStats
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExAttributeStatsContext, UPCGExAttributeStatsSettings>
 	{
 		TArray<TSharedPtr<IAttributeStats>> Stats;
-		TMap<FName, int32> PerAttributeStatMap;
-		TArray<UPCGParamData*> PerAttributeStats;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

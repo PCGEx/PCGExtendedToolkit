@@ -174,7 +174,6 @@ class FPCGExTransformPointsElement final : public FPCGExPointsProcessorElement
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(TransformPoints)
 
-	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };
 

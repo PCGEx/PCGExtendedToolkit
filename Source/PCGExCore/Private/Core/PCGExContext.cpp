@@ -370,7 +370,6 @@ void FPCGExContext::ExecuteOnNotifyActors(const TArray<FName>& FunctionNames)
 void FPCGExContext::AddExtraStructReferencedObjects(FReferenceCollector& Collector)
 {
 	FPCGContext::AddExtraStructReferencedObjects(Collector);
-	ManagedObjects->AddExtraStructReferencedObjects(Collector);
 }
 
 void FPCGExContext::AddNotifyActor(AActor* InActor)

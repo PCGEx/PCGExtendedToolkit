@@ -150,6 +150,20 @@ namespace PCGExUberFilterCascade
 		// Write-mode results for param sources; each index is written by exactly one thread.
 		TArray<int32> ParamPartitionValues;
 
+		// Index of the first branch whose filters pass, -1 when none does.
+		FORCEINLINE int32 FindFirstMatchingBranch(const int32 Index)
+		{
+			const int32 NumBranches = BranchManagers.Num();
+			for (int32 i = 0; i < NumBranches; i++)
+			{
+				if (BranchManagers[i] && BranchManagers[i]->Test(Index))
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)

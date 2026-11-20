@@ -36,27 +36,12 @@ namespace PCGExTensor
 }
 
 UENUM()
-enum class EPCGExTensorSamplingMode : uint8
-{
-	Weighted       = 0 UMETA(DisplayName = "Weighted", ToolTip="Compute a weighted average of the sampled tensors"),
-	OrderedInPlace = 1 UMETA(DisplayName = "Ordered (in place)", ToolTip="Applies tensor one after another in order, using the same original position"),
-	OrderedMutated = 2 UMETA(DisplayName = "Ordered (mutated)", ToolTip="Applies tensor & update sampling position one after another in order"),
-};
-
-UENUM()
 enum class EPCGExEffectorFlattenMode : uint8
 {
 	Weighted         = 0 UMETA(DisplayName = "Weighted", ToolTip="Compute a weighted average of the sampled effectors"),
 	Closest          = 1 UMETA(DisplayName = "Closest", ToolTip="Uses the closest effector only"),
 	StrongestWeight  = 2 UMETA(DisplayName = "Strongest (Weight)", ToolTip="Uses the effector with the highest weight only"),
 	StrongestPotency = 3 UMETA(DisplayName = "Strongest (Potency)", ToolTip="Uses the effector with the highest potency only"),
-};
-
-UENUM()
-enum class EPCGExEffectorInfluenceShape : uint8
-{
-	Box    = 0 UMETA(DisplayName = "Box", Tooltip="Point' bounds"),
-	Sphere = 1 UMETA(DisplayName = "Sphere", Tooltip="Sphere which radius is defined by the bounds' extents size"),
 };
 
 UENUM()
@@ -119,10 +104,6 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 	/** Base weight multiplier for this tensor. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayPriority=-1))
 	double TensorWeight = 1;
-
-	/** How individual effectors on that tensor are composited */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, DisplayPriority=-1))
-	EPCGExEffectorFlattenMode Blending = EPCGExEffectorFlattenMode::Weighted;
 
 	// Guide falloff
 
@@ -277,11 +258,6 @@ namespace PCGExTensor
 			return Octree.Get();
 		}
 
-		FORCEINLINE const FPackedEffector& GetPackedEffector(const int32 Index) const
-		{
-			return PackedEffectors[Index];
-		}
-
 		FORCEINLINE const FPackedEffector* GetPackedEffectorPtr(const int32 Index) const
 		{
 			return (PackedEffectors.GetData() + Index);
@@ -318,7 +294,6 @@ namespace PCGExTensor
 
 	struct FEffectorMetrics
 	{
-		double Distance = 0;
 		double Factor = 0;
 		double Potency = 0;
 		double Weight = 0;
@@ -353,40 +328,21 @@ namespace PCGExTensor
 
 		FEffectorSample& Emplace_GetRef(const FVector& InDirection, const double InPotency, const double InWeight);
 
-		template <EPCGExEffectorFlattenMode Mode = EPCGExEffectorFlattenMode::Weighted>
 		FTensorSample Flatten(double InWeight)
 		{
 			TensorSample.Effectors = Samples.Num();
 
-			if constexpr (Mode == EPCGExEffectorFlattenMode::Closest)
+			FVector DirectionAndSize = FVector::ZeroVector;
+
+			for (const FEffectorSample& EffectorSample : Samples)
 			{
-				FVector DirectionAndSize = FVector::ZeroVector;
-
-				for (const FEffectorSample& EffectorSample : Samples)
-				{
-					const double S = (EffectorSample.Potency * (EffectorSample.Weight / TensorSample.Weight));
-					DirectionAndSize += EffectorSample.Direction * S;
-				}
-
-				TensorSample.DirectionAndSize = DirectionAndSize;
-				TensorSample.Rotation = FRotationMatrix::MakeFromX(DirectionAndSize.GetSafeNormal()).ToQuat();
-				TensorSample.Weight = InWeight;
+				const double S = (EffectorSample.Potency * (EffectorSample.Weight / TensorSample.Weight));
+				DirectionAndSize += EffectorSample.Direction * S;
 			}
-			else
-			{
-				// defaults to weighted 
-				FVector DirectionAndSize = FVector::ZeroVector;
 
-				for (const FEffectorSample& EffectorSample : Samples)
-				{
-					const double S = (EffectorSample.Potency * (EffectorSample.Weight / TensorSample.Weight));
-					DirectionAndSize += EffectorSample.Direction * S;
-				}
-
-				TensorSample.DirectionAndSize = DirectionAndSize;
-				TensorSample.Rotation = FRotationMatrix::MakeFromX(DirectionAndSize.GetSafeNormal()).ToQuat();
-				TensorSample.Weight = InWeight;
-			}
+			TensorSample.DirectionAndSize = DirectionAndSize;
+			TensorSample.Rotation = FRotationMatrix::MakeFromX(DirectionAndSize.GetSafeNormal()).ToQuat();
+			TensorSample.Weight = InWeight;
 
 			return TensorSample;
 		}

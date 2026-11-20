@@ -469,14 +469,12 @@ TSharedPtr<PCGExCollections::FSelectorSharedData> UPCGExSelectorQuotaFactoryData
 	}
 
 	TSharedPtr<FPCGExQuotaSharedData> NewShared = MakeShared<FPCGExQuotaSharedData>();
-	NewShared->EntryWeights.SetNumUninitialized(N);
 	NewShared->MaxValues.SetNumUninitialized(N);
 	NewShared->MinValues.SetNumUninitialized(N);
 
 	for (int32 i = 0; i < N; ++i)
 	{
 		const FPCGExAssetCollectionEntry* Entry = Target->Entries[i];
-		NewShared->EntryWeights[i] = PCGExCollections::Selectors::EntryEffectiveWeight(Entry);
 
 		double MaxValue = -1.0; // unresolved = uncapped
 		if (!Config.MaxPropertyName.IsNone())

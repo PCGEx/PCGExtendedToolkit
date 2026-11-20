@@ -78,8 +78,6 @@ bool FPCGExFactoryProviderElement::AdvanceWork(FPCGExContext* InContext, const U
 			return true;
 		}
 
-		Context->OutFactory->OutputConfigToMetadata();
-
 		{
 			PCGEX_MAKE_SHARED(AssetDeps, TSet<FSoftObjectPath>)
 			Context->OutFactory->RegisterAssetDependencies(*AssetDeps.Get());

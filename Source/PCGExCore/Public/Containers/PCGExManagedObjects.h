@@ -52,15 +52,11 @@ namespace PCGEx
 
 		~FManagedObjects();
 
-		bool IsAvailable() const;
-
 		void Flush();
 
 		bool Add(UObject* InObject);
 		bool Remove(UObject* InObject);
 		void Remove(TConstArrayView<FPCGTaggedData> InTaggedData);
-
-		void AddExtraStructReferencedObjects(FReferenceCollector& Collector);
 
 		template <class T, typename... Args>
 		T* New(Args&&... InArgs)

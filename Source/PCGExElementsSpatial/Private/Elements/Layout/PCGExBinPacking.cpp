@@ -192,7 +192,7 @@ namespace PCGExBinPacking
 		AddSpace(Bounds);
 	}
 
-	int32 FBin::GetBestSpaceScore(const FItem& InItem, double& OutScore, FRotator& OutRotator) const
+	int32 FBin::GetBestSpaceScore(const FItem& InItem, double& OutScore) const
 	{
 		int32 BestIndex = -1;
 		const double BoxVolume = InItem.Box.GetVolume();
@@ -242,7 +242,7 @@ namespace PCGExBinPacking
 
 		if (Settings->bAvoidWastedSpace)
 		{
-			const FVector Amplitude = Space.Inflate(ItemBox, WastedSpaceThresholds);
+			Space.Inflate(ItemBox, WastedSpaceThresholds);
 		}
 
 
@@ -260,10 +260,9 @@ namespace PCGExBinPacking
 
 	bool FBin::Insert(FItem& InItem)
 	{
-		FRotator OutRotation = FRotator::ZeroRotator;
 		double OutScore = TNumericLimits<double>::Max();
 
-		const int32 BestIndex = GetBestSpaceScore(InItem, OutScore, OutRotation);
+		const int32 BestIndex = GetBestSpaceScore(InItem, OutScore);
 
 		if (BestIndex == -1)
 		{
@@ -322,19 +321,20 @@ namespace PCGExBinPacking
 		switch (Settings->SplitMode){\
 		case EPCGExSpaceSplitMode::Minimal: Splitter = MakeShared<TBinSplit<_DIRECTION, EPCGExSpaceSplitMode::Minimal>>(); break;\
 		case EPCGExSpaceSplitMode::MinimalCross: Splitter = MakeShared<TBinSplit<_DIRECTION, EPCGExSpaceSplitMode::MinimalCross>>(); break;\
-		case EPCGExSpaceSplitMode::EqualSplit: Splitter = MakeShared<TBinSplit<_DIRECTION, EPCGExSpaceSplitMode::EqualSplit>>(); break;\
-		case EPCGExSpaceSplitMode::Cone: Splitter = MakeShared<TBinSplit<_DIRECTION, EPCGExSpaceSplitMode::Cone>>(); break;\
-		case EPCGExSpaceSplitMode::ConeCross: Splitter = MakeShared<TBinSplit<_DIRECTION, EPCGExSpaceSplitMode::ConeCross>>(); break;\
+		case EPCGExSpaceSplitMode::EqualSplit: Splitter = MakeShared<TBinSplit<EPCGExAxis::Up, EPCGExSpaceSplitMode::EqualSplit>>(); break;\
+		case EPCGExSpaceSplitMode::Cone:\
+		case EPCGExSpaceSplitMode::ConeCross: Splitter = MakeShared<TBinSplit<EPCGExAxis::Up, EPCGExSpaceSplitMode::Cone>>(); break;\
 		}
 
+		// SplitSpace only tells the three axis pairs apart, and only for the two Minimal modes.
 #define PCGEX_SWITCH_ON_SPLIT_DIRECTION(_MACRO) \
 		switch (Settings->SplitAxis){ \
-		case EPCGExAxis::Forward: _MACRO(EPCGExAxis::Forward) break; \
-		case EPCGExAxis::Backward: _MACRO(EPCGExAxis::Backward) break; \
-		case EPCGExAxis::Right: _MACRO(EPCGExAxis::Right) break; \
-		case EPCGExAxis::Left: _MACRO(EPCGExAxis::Left) break; \
-		case EPCGExAxis::Up: _MACRO(EPCGExAxis::Up) break; \
-		case EPCGExAxis::Down: _MACRO(EPCGExAxis::Down) break; \
+		case EPCGExAxis::Forward: \
+		case EPCGExAxis::Backward: _MACRO(EPCGExAxis::Forward) break; \
+		case EPCGExAxis::Right: \
+		case EPCGExAxis::Left: _MACRO(EPCGExAxis::Right) break; \
+		case EPCGExAxis::Up: \
+		case EPCGExAxis::Down: _MACRO(EPCGExAxis::Up) break; \
 		}
 
 		PCGEX_SWITCH_ON_SPLIT_DIRECTION(PCGEX_SWITCH_ON_SPLIT_MODE)

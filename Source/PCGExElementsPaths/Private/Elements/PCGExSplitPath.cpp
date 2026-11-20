@@ -430,11 +430,6 @@ namespace PCGExSplitPath
 					bWrapLastPath = SubPaths[0].Start == 0 && SubPaths.Last().End == -1 && !PointFilterCache[0];
 				}
 			}
-
-			if (SubPaths.Num() > 1 || SubPaths[0].End != -1 || SubPaths[0].Start != 0)
-			{
-				bAddOpenTag = true;
-			}
 		}
 
 		SubPathsIOs.Init(nullptr, SubPaths.Num());

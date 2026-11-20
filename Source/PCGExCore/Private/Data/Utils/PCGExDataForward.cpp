@@ -138,7 +138,7 @@ namespace PCGExData
 		FAttributeIdentity::Get(InSourceMetadata, Identities, InIgnoredAttributes);
 		Details.Filter(Identities);
 
-		// ForwardEntry reads the source attribute by entry key, which only the Elements domain has.
+		// ForwardEntriesScoped reads the source attribute by entry key, which only the Elements domain has.
 		for (int i = Identities.Num() - 1; i >= 0; i--)
 		{
 			if (Identities[i].InDataDomain() || !Identities[i].Attribute)
@@ -203,74 +203,6 @@ namespace PCGExData
 			Readers.SetNum(WriteIndex);
 			Writers.SetNum(WriteIndex);
 		}
-	}
-
-	void FDataForwardHandler::Forward(const int32 SourceIndex, const int32 TargetIndex)
-	{
-		const int32 NumAttributes = Identities.Num();
-
-		for (int i = 0; i < NumAttributes; i++)
-		{
-			const FAttributeIdentity& Identity = Identities[i];
-			if (!Readers.IsValidIndex(i) || !Readers[i] || !Writers[i])
-			{
-				continue;
-			}
-
-			PCGExMetaHelpers::ExecuteWithRightType(
-				Identity,
-				[&](auto DummyValue)
-				{
-					using T = decltype(DummyValue);
-					TSharedPtr<TBuffer<T>> Reader = StaticCastSharedPtr<TBuffer<T>>(Readers[i]);
-					TSharedPtr<TBuffer<T>> Writer = StaticCastSharedPtr<TBuffer<T>>(Writers[i]);
-					// A @Data writer (ToData policy, or an inherited @Data source) has a single slot
-					Writer->SetValue(Writer->GetUnderlyingDomain() == EDomainType::Elements ? TargetIndex : 0, Reader->Read(SourceIndex));
-				},
-				[&]()
-				{
-					// Property-backed: read source slot to scratch via property reflection, then write to target.
-					// Both buffers cache the same FProperty; void* + property handle deep-copy.
-					PCGExTypes::FScopedTypedValue Scratch = Readers[i]->MakeScopedValue();
-					Readers[i]->ReadVoid(SourceIndex, Scratch);
-					Writers[i]->SetVoid(TargetIndex, Scratch);
-				});
-		}
-	}
-
-	void FDataForwardHandler::ForwardEntry(const PCGMetadataEntryKey SourceKey, const int32 TargetIndex)
-	{
-		if (SourceKey == PCGInvalidEntryKey)
-		{
-			return;
-		}
-
-		const int32 NumAttributes = Identities.Num();
-
-		for (int i = 0; i < NumAttributes; i++)
-		{
-			if (!Writers.IsValidIndex(i) || !Writers[i])
-			{
-				continue;
-			}
-
-			const FAttributeIdentity& Identity = Identities[i];
-
-			PCGExMetaHelpers::ExecuteWithRightType(
-				Identity,
-				[&](auto DummyValue)
-				{
-					using T = decltype(DummyValue);
-					// Reads through the child attribute: an inherited entry resolves to the parent's value.
-					StaticCastSharedPtr<TBuffer<T>>(Writers[i])->SetValue(TargetIndex, Identity.Attribute->GetValueFromItemKey<T>(SourceKey));
-				});
-		}
-	}
-
-	void FDataForwardHandler::ForwardEntries(TConstArrayView<PCGMetadataEntryKey> SourceKeys)
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(FDataForwardHandler::ForwardEntries);
-		ForwardEntriesScoped(PCGExMT::FScope(0, SourceKeys.Num()), SourceKeys);
 	}
 
 	void FDataForwardHandler::ForwardEntriesScoped(const PCGExMT::FScope& Scope, const TConstArrayView<PCGMetadataEntryKey> SourceKeyPerTarget) const
@@ -834,75 +766,6 @@ namespace PCGExData
 		}
 	}
 
-	void FDataForwardHandler::Forward(const int32 SourceIndex, const TSharedPtr<FFacade>& InTargetDataFacade, const TArray<int32>& Indices)
-	{
-		if (Identities.IsEmpty())
-		{
-			return;
-		}
-
-		const UPCGBasePointData* InSourceData = SourceDataFacade->GetIn();
-
-		for (const FAttributeIdentity& Identity : Identities)
-		{
-			PCGExMetaHelpers::ExecuteWithRightType(
-				Identity,
-				[&](auto DummyValue)
-				{
-					using T = decltype(DummyValue);
-
-					const FPCGMetadataAttributeBase* SourceAtt = PCGExMetaHelpers::TryGetConstAttribute<T>(InSourceData, Identity.GetIdentifier());
-					if (!SourceAtt)
-					{
-						return;
-					}
-
-					const T ForwardValue = Identity.InDataDomain() ? Helpers::ReadDataValue<T>(SourceAtt) : SourceAtt->GetValueFromItemKey<T>(InSourceData->GetMetadataEntry(SourceIndex));
-
-					TSharedPtr<TBuffer<T>> Writer = InTargetDataFacade->GetWritable<T>(SourceAtt, EBufferInit::Inherit);
-					if (Writer->GetUnderlyingDomain() == EDomainType::Elements)
-					{
-						TSharedPtr<TArrayBuffer<T>> ElementsWriter = StaticCastSharedPtr<TArrayBuffer<T>>(Writer);
-						TArray<T>& Values = *ElementsWriter->GetOutValues();
-						for (int32 Index : Indices)
-						{
-							Values[Index] = ForwardValue;
-						}
-					}
-					else
-					{
-						Writer->SetValue(0, ForwardValue);
-					}
-				},
-				[&]()
-				{
-					// Property-backed: scatter source value to specified target indices via property reflection.
-					const FPCGMetadataAttributeBase* SourceAtt = Identity.Attribute;
-					if (!SourceAtt)
-					{
-						return;
-					}
-
-					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
-					const void* SrcAddr = SourceAtt->GetReadAddressFromEntryKey_Unsafe(SourceKey);
-					if (!SrcAddr)
-					{
-						return;
-					}
-
-					TSharedPtr<IBuffer> Writer = InTargetDataFacade->GetWritable(Identity.GetType(), SourceAtt, EBufferInit::Inherit);
-					if (Writer && Writer->GetUnderlyingDomain() == EDomainType::Elements)
-					{
-						Helpers::PropertyScatterAttribute(SourceAtt, SourceKey, Writer, Indices);
-					}
-					else
-					{
-						Helpers::PropertyBroadcastAttribute(SourceAtt, SourceKey, Writer);
-					}
-				});
-		}
-	}
-
 	void FDataForwardHandler::Forward(const int32 SourceIndex, UPCGMetadata* InTargetMetadata)
 	{
 		if (Identities.IsEmpty())
@@ -958,66 +821,6 @@ namespace PCGExData
 
 					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
 					Helpers::PropertyCopyAttribute(SourceAtt, SourceKey, TargetAtt, PCGDefaultValueKey);
-				});
-		}
-	}
-
-	void FDataForwardHandler::Forward(const int32 SourceIndex, UPCGMetadata* InTargetMetadata, const int64 TargetKey)
-	{
-		if (Identities.IsEmpty())
-		{
-			return;
-		}
-
-		const UPCGBasePointData* InSourceData = SourceDataFacade->GetIn();
-
-		for (const FAttributeIdentity& Identity : Identities)
-		{
-			PCGExMetaHelpers::ExecuteWithRightType(
-				Identity,
-				[&](auto DummyValue)
-				{
-					using T = decltype(DummyValue);
-
-					const FPCGMetadataAttributeBase* SourceAtt = PCGExMetaHelpers::TryGetConstAttribute<T>(InSourceData, Identity.GetIdentifier());
-					if (!SourceAtt)
-					{
-						return;
-					}
-
-					const T ForwardValue = Identity.InDataDomain() ? Helpers::ReadDataValue<T>(SourceAtt) : SourceAtt->GetValueFromItemKey<T>(InSourceData->GetMetadataEntry(SourceIndex));
-
-					// Single target entry on the element (per-row) domain. Find-or-create (not delete+create):
-					// successive calls forward distinct rows into the same target metadata.
-					const FPCGAttributeIdentifier TargetIdentifier(Identity.Name);
-					FPCGMetadataAttribute<T>* TargetAtt = InTargetMetadata->FindOrCreateAttribute<T>(TargetIdentifier, T{}, SourceAtt->AllowsInterpolation());
-					if (TargetAtt)
-					{
-						TargetAtt->SetValue(TargetKey, ForwardValue);
-					}
-				},
-				[&]()
-				{
-					// Property-backed (Struct/Enum/Object/container) source -> deep-copy the single source value onto TargetKey.
-					const FPCGMetadataAttributeBase* SourceAtt = Identity.Attribute;
-					if (!SourceAtt || !InTargetMetadata)
-					{
-						return;
-					}
-
-					const FPCGAttributeIdentifier TargetIdentifier(Identity.Name);
-					FPCGMetadataAttributeBase* TargetAtt = InTargetMetadata->GetMutableAttribute(TargetIdentifier);
-					if (!TargetAtt)
-					{
-						TargetAtt = InTargetMetadata->CreateAttribute(TargetIdentifier, SourceAtt->GetAttributeDesc(), SourceAtt->AllowsInterpolation(), /*bOverrideParent=*/true);
-					}
-					if (!TargetAtt)
-					{
-						return;
-					}
-
-					const PCGMetadataEntryKey SourceKey = Identity.InDataDomain() ? Helpers::GetDataValueKey(SourceAtt) : InSourceData->GetMetadataEntry(SourceIndex);
-					Helpers::PropertyCopyAttribute(SourceAtt, SourceKey, TargetAtt, TargetKey);
 				});
 		}
 	}

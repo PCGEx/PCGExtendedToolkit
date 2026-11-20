@@ -11,15 +11,6 @@
 /**
  *
  */
-class FPCGExEdgeRemoveLongest : public FPCGExEdgeRefineOperation
-{
-public:
-	virtual void ProcessNode(PCGExClusters::FNode& Node) override;
-};
-
-/**
- *
- */
 UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Remove Longest", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/length-based-refinements"))
 class UPCGExEdgeRemoveLongest : public UPCGExEdgeRefineInstancedFactory
 {
@@ -31,5 +22,5 @@ public:
 		return true;
 	}
 
-	PCGEX_CREATE_REFINE_OPERATION(EdgeRemoveLongest, {})
+	PCGEX_CREATE_REFINE_OPERATION(EdgeRefineBestLink, { Operation->bUseScore = false; Operation->bPickHighest = true; Operation->InitialBest = 0; Operation->Validity = 0; })
 };

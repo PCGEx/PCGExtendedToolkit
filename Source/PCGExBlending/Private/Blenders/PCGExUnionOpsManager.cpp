@@ -131,8 +131,6 @@ namespace PCGExBlending
 	{
 		check(!Blenders.IsEmpty())
 
-		const PCGExData::FConstPoint Target = CurrentTargetData->Source->GetOutPoint(WriteIndex);
-
 		if (InWeightedPoints.IsEmpty())
 		{
 			return;

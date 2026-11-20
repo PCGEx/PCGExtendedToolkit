@@ -119,12 +119,6 @@ namespace PCGExGraphs
 		}
 	}
 
-	void FSubGraph::Shrink()
-	{
-		Nodes.Shrink();
-		Edges.Shrink();
-	}
-
 	void FSubGraph::ComputeMinPointIndex(const TArray<FNode>& ParentNodes)
 	{
 		MinPointIndex = MAX_int32;
@@ -168,20 +162,9 @@ namespace PCGExGraphs
 
 		const int32 NumEdges = Edges.Num();
 
-		// When edges come from union graphs, node indices are non-deterministic due to parallel insertion.
-		// Recompute sort keys using the now-remapped PointIndex values for deterministic ordering.
-		if (InBuilder->bRequiresEdgeResort)
-		{
-			PCGEX_PARALLEL_FOR(
-				Edges.Num(),
-				const FEdge& E = ParentGraphEdges[Edges[i].Index];
-				Edges[i].Key = PCGEx::H64U(ParentGraphNodes[E.Start].PointIndex, ParentGraphNodes[E.End].PointIndex);
-				)
-		}
-
 		// Sorting establishes a deterministic output edge order; builders whose edge
 		// insertion order is already deterministic can opt out of the cost entirely.
-		if (InBuilder->bSortEdgeKeys || InBuilder->bRequiresEdgeResort)
+		if (InBuilder->bSortEdgeKeys)
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(FSubGraph::Compile::SortEdges);
 			PCGExSortingHelpers::RadixSort(Edges);

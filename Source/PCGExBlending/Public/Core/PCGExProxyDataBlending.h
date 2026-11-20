@@ -245,17 +245,12 @@ namespace PCGExBlending
 		void Blend(const int32 SourceIndexA, const int32 SourceIndexB, const int32 TargetIndex, const double Weight) const;
 
 		// 1:1 Range blending
-		void BlendScope(const PCGExMT::FScope& Scope, const double Weight) const;
 		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const double> Weights) const;
-		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, const double Weight) const;
 		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, TArrayView<const double> Weights) const;
 
 		PCGEx::FOpStats BeginMultiBlend(const int32 TargetIndex);
 		void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double Weight, PCGEx::FOpStats& Tracker);
 		void EndMultiBlend(const int32 TargetIndex, PCGEx::FOpStats& Tracker);
-
-		// Division helper
-		void Div(const int32 TargetIndex, const double Divider);
 
 		TSharedPtr<PCGExData::IBuffer> GetOutputBuffer() const;
 

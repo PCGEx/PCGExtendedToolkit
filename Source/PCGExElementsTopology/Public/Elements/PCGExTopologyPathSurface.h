@@ -11,11 +11,6 @@
 
 #include "PCGExTopologyPathSurface.generated.h"
 
-namespace PCGExClusters
-{
-	class FProjectedPointSet;
-}
-
 
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="topology/topology-path-surface"))
 class PCGEXELEMENTSTOPOLOGY_API UPCGExTopologyPathSurfaceSettings : public UPCGExPathProcessorSettings
@@ -81,15 +76,9 @@ namespace PCGExTopologyPathSurface
 	class PCGEXELEMENTSTOPOLOGY_API FProcessor : public PCGExPointsMT::TProcessor<FPCGExTopologyPathSurfaceContext, UPCGExTopologyPathSurfaceSettings>
 	{
 	protected:
-		TSharedPtr<PCGExClusters::FProjectedPointSet> Holes;
-
-		bool bIsPreviewMode = false;
-
 		TObjectPtr<UDynamicMesh> InternalMesh;
 		UPCGDynamicMeshData* InternalMeshData = nullptr;
 		FPCGExTopologyUVDetails UVDetails;
-
-		int32 ConstrainedEdgesNum = 0;
 
 	public:
 		TObjectPtr<UDynamicMesh> GetInternalMesh()

@@ -97,9 +97,6 @@ namespace PCGExClusters
 		void Unregister(FName Key);
 
 		IClusterCacheFactory* GetFactory(FName Key) const;
-		void GetPreBuildKeys(TArray<FName>& OutKeys) const;
-		void GetOpportunisticKeys(TArray<FName>& OutKeys) const;
-		void GetAllFactories(TArray<TSharedRef<IClusterCacheFactory>>& OutFactories) const;
 
 	private:
 		FClusterCacheRegistry() = default;

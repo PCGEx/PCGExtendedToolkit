@@ -331,8 +331,6 @@ namespace PCGExFloodFill
 		TArray<TSharedPtr<FPCGExFillControlOperation>> SubOpsProbeFanout;
 
 	public:
-		mutable FRWLock HandlerLock;
-
 		// Set in BuildFrom -- whether any control opts into capture-notify / probe fan-out
 		// limiting, so hot paths can skip the dispatch.
 		bool bHasCaptureNotify = false;
@@ -347,7 +345,6 @@ namespace PCGExFloodFill
 		TSharedPtr<PCGExData::FFacade> VtxDataFacade;
 		TSharedPtr<PCGExData::FFacade> EdgeDataFacade;
 		TSharedPtr<PCGExData::FFacade> SeedsDataFacade;
-		TWeakPtr<PCGExHeuristics::FHandler> HeuristicsHandler;
 
 		TArray<TSharedPtr<FPCGExFillControlOperation>> Operations;
 

@@ -71,11 +71,6 @@ PCGExFactories::EPreparationResult UPCGExDistanceFilterFactory::Prepare(FPCGExCo
 	return Super::Prepare(InContext, TaskManager);
 }
 
-void UPCGExDistanceFilterFactory::BeginDestroy()
-{
-	Super::BeginDestroy();
-}
-
 bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade)
 {
 	if (!IFilter::Init(InContext, InPointDataFacade))

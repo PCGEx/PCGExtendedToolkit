@@ -770,8 +770,6 @@ namespace PCGExMT
 
 	void FTaskManager::ClearRegistry(const bool bCancel)
 	{
-		bool Expected = false;
-
 		if (bCancel)
 		{
 			TArray<TSharedPtr<IAsyncHandle>> HandlesToCancel;

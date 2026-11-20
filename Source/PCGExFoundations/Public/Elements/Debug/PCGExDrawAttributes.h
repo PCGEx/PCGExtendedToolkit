@@ -126,7 +126,6 @@ struct FPCGExAttributeDebugDraw
 	TSharedPtr<PCGExData::TAttributeBroadcaster<double>> SingleGetter;
 	TSharedPtr<PCGExData::TAttributeBroadcaster<double>> SizeGetter;
 	TSharedPtr<PCGExData::TAttributeBroadcaster<FVector>> ColorGetter;
-	TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> TextGetter;
 
 	bool bValid = false;
 

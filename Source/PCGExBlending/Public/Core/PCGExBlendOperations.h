@@ -109,11 +109,6 @@ namespace PCGExBlending
 			return Mode;
 		}
 
-		FORCEINLINE bool RequiresReset() const
-		{
-			return bResetForMulti;
-		}
-
 		FORCEINLINE bool HasFinalize() const
 		{
 			return bHasFinalize;
@@ -193,12 +188,6 @@ namespace PCGExBlending
 		}
 
 		template <typename T>
-		void Weight(const void* A, const void* B, double Weight, void* Out)
-		{
-			*static_cast<T*>(Out) = PCGExTypeOps::FTypeOps<T>::WeightedAdd(*static_cast<const T*>(A), *static_cast<const T*>(B), Weight);
-		}
-
-		template <typename T>
 		void WeightedAdd(const void* A, const void* B, double Weight, void* Out)
 		{
 			*static_cast<T*>(Out) = PCGExTypeOps::FTypeOps<T>::WeightedAdd(*static_cast<const T*>(A), *static_cast<const T*>(B), Weight);
@@ -271,12 +260,6 @@ namespace PCGExBlending
 			*static_cast<T*>(Out) = PCGExTypeOps::FTypeOps<T>::ModComplex(*static_cast<const T*>(A), *static_cast<const T*>(B));
 		}
 
-		template <typename T>
-		void None(const void* A, const void* /*B*/, double /*Weight*/, void* Out)
-		{
-			*static_cast<T*>(Out) = *static_cast<const T*>(A);
-		}
-
 		// Get blend function pointer by mode
 		template <typename T>
 		FBlendFn GetBlendFunction(const EPCGExABBlendingType Mode)
@@ -300,7 +283,7 @@ namespace PCGExBlending
 			case EPCGExABBlendingType::Average:
 				return &Average<T>;
 			case EPCGExABBlendingType::Weight:
-				return &Weight<T>;
+				return &WeightedAdd<T>;
 			case EPCGExABBlendingType::WeightedAdd:
 				return &WeightedAdd<T>;
 			case EPCGExABBlendingType::WeightedSubtract:
@@ -326,18 +309,18 @@ namespace PCGExBlending
 			case EPCGExABBlendingType::ModCW:
 				return &ModComplex<T>;
 			case EPCGExABBlendingType::WeightNormalize:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::GeometricMean:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::HarmonicMean:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::RMS:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::Step:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::None:
 			default:
-				return &None<T>;
+				return &CopyA<T>;
 			}
 		}
 

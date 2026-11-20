@@ -600,16 +600,6 @@ namespace PCGExPackActorData
 			PointsForProcessing.Empty();
 		}
 
-		Attributes.Reserve(PointDataFacade->Buffers.Num());
-		for (const TSharedPtr<PCGExData::IBuffer>& Buffer : PointDataFacade->Buffers)
-		{
-			if (!Buffer->IsWritable())
-			{
-				continue;
-			}
-			Attributes.Add(Buffer->OutAttribute);
-		}
-
 		PointDataFacade->WriteFastest(TaskManager);
 	}
 

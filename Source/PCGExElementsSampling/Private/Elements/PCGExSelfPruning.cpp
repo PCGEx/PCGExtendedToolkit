@@ -138,6 +138,22 @@ bool FPCGExSelfPruningElement::AdvanceWork(FPCGExContext* InContext, const UPCGE
 
 namespace PCGExSelfPruning
 {
+	FBox GetPrimaryWorldBox(
+		const UPCGBasePointData* InData, const int32 Index, const FTransform& Transform,
+		const EPCGExSelfPruningExpandOrder Mode, const TSharedPtr<PCGExDetails::TSettingValue<double>>& Expansion)
+	{
+		const FBox LocalBox = InData->GetLocalBounds(Index);
+		if (Mode == EPCGExSelfPruningExpandOrder::Before)
+		{
+			return LocalBox.ExpandBy(Expansion->Read(Index)).TransformBy(Transform);
+		}
+		if (Mode == EPCGExSelfPruningExpandOrder::After)
+		{
+			return LocalBox.TransformBy(Transform).ExpandBy(Expansion->Read(Index));
+		}
+		return LocalBox.TransformBy(Transform);
+	}
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSelfPruning::Process);
@@ -384,22 +400,7 @@ namespace PCGExSelfPruning
 				const int32 Index = Candidate.Index;
 				const FTransform& Transform = Transforms[Index];
 
-				FBox BoxA = InData->GetLocalBounds(Index);
-				FBox Box = FBox(NoInit);
-				if (Settings->PrimaryMode == EPCGExSelfPruningExpandOrder::Before)
-				{
-					BoxA = BoxA.ExpandBy(PrimaryExpansion->Read(Index));
-					Box = BoxA.TransformBy(Transform);
-				}
-				else if (Settings->PrimaryMode == EPCGExSelfPruningExpandOrder::After)
-				{
-					Box = BoxA.TransformBy(Transform).ExpandBy(PrimaryExpansion->Read(Index));
-					BoxA = BoxA.ExpandBy(PrimaryExpansion->Read(Index));
-				}
-				else
-				{
-					Box = BoxA.TransformBy(Transform);
-				}
+				const FBox Box = PCGExSelfPruning::GetPrimaryWorldBox(InData, Index, Transform, Settings->PrimaryMode, PrimaryExpansion);
 
 				Octree.FindElementsWithBoundsTest(Box, [&](const PCGPointOctree::FPointRef& Other)
 				{
@@ -443,23 +444,7 @@ namespace PCGExSelfPruning
 				const int32 CurrentPriority = Priority[Index];
 				const FTransform& Transform = Transforms[Index];
 
-
-				FBox BoxA = InData->GetLocalBounds(Index);
-				FBox Box = FBox(NoInit);
-				if (Settings->PrimaryMode == EPCGExSelfPruningExpandOrder::Before)
-				{
-					BoxA = BoxA.ExpandBy(PrimaryExpansion->Read(Index));
-					Box = BoxA.TransformBy(Transform);
-				}
-				else if (Settings->PrimaryMode == EPCGExSelfPruningExpandOrder::After)
-				{
-					Box = BoxA.TransformBy(Transform).ExpandBy(PrimaryExpansion->Read(Index));
-					BoxA = BoxA.ExpandBy(PrimaryExpansion->Read(Index));
-				}
-				else
-				{
-					Box = BoxA.TransformBy(Transform);
-				}
+				const FBox Box = PCGExSelfPruning::GetPrimaryWorldBox(InData, Index, Transform, Settings->PrimaryMode, PrimaryExpansion);
 
 				Octree.FindFirstElementWithBoundsTest(Box, [&](const PCGPointOctree::FPointRef& Other)
 				{

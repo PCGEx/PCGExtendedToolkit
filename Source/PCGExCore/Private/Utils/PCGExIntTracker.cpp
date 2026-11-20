@@ -28,20 +28,6 @@ void FPCGExIntTracker::IncrementCompleted(const int32 Count)
 	}
 }
 
-void FPCGExIntTracker::Trigger()
-{
-	TriggerInternal();
-}
-
-void FPCGExIntTracker::SafetyTrigger()
-{
-	// Force completion only while work is still in flight (a finished tracker is latched at 0).
-	if (Outstanding.load(std::memory_order_acquire) > 0)
-	{
-		TriggerInternal();
-	}
-}
-
 void FPCGExIntTracker::Reset()
 {
 	// Phase boundary -- must not race with in-flight increments.

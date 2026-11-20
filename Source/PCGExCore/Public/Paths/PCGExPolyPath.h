@@ -79,9 +79,6 @@ namespace PCGExPaths
 		virtual FTransform GetClosestTransform(const FVector& WorldPosition, bool& bIsInside, const bool bUseScale = false) const override;
 		virtual FTransform GetClosestTransform(const FVector& WorldPosition, const bool bUseScale = false) const override;
 
-		virtual bool GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition) const override;
-		virtual bool GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition, bool& bIsInside) const override;
-
 		virtual int32 GetClosestEdge(const FVector& WorldPosition, float& OutLerp) const override;
 		virtual int32 GetClosestEdge(const double InTime, float& OutLerp) const override;
 

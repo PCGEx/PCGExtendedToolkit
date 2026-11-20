@@ -809,32 +809,7 @@ namespace PCGExPathInsert
 				OutTransforms[i].SetLocation(Position);
 				OutSeeds[i] = PCGExRandomHelpers::ComputeSpatialSeed(Position);
 
-				// Write output attributes for pre-path extension
-				if (FlagWriter)
-				{
-					FlagWriter->SetValue(i, true);
-				}
-				if (AlphaWriter)
-				{
-					AlphaWriter->SetValue(i, Insert.Alpha);
-				} // Negative = before start
-				if (DistanceWriter)
-				{
-					DistanceWriter->SetValue(i, Insert.Distance);
-				}
-				if (TargetIndexWriter)
-				{
-					TargetIndexWriter->SetValue(i, Insert.TargetIOIndex);
-				}
-				if (DirectionWriter)
-				{
-					FVector Direction = (Insert.PathLocation - Insert.OriginalLocation).GetSafeNormal();
-					if (Settings->bInvertDirection)
-					{
-						Direction = -Direction;
-					}
-					DirectionWriter->SetValue(i, Direction);
-				}
+				WriteInsertOutputs(i, Insert, Insert.Alpha); // Negative = before start
 
 				if (i > 0)
 				{
@@ -874,32 +849,7 @@ namespace PCGExPathInsert
 				OutTransforms[InsertIndex].SetLocation(Position);
 				OutSeeds[InsertIndex] = PCGExRandomHelpers::ComputeSpatialSeed(Position);
 
-				// Write output attributes for post-path extension
-				if (FlagWriter)
-				{
-					FlagWriter->SetValue(InsertIndex, true);
-				}
-				if (AlphaWriter)
-				{
-					AlphaWriter->SetValue(InsertIndex, 1.0 + Insert.Alpha);
-				} // > 1 = after end
-				if (DistanceWriter)
-				{
-					DistanceWriter->SetValue(InsertIndex, Insert.Distance);
-				}
-				if (TargetIndexWriter)
-				{
-					TargetIndexWriter->SetValue(InsertIndex, Insert.TargetIOIndex);
-				}
-				if (DirectionWriter)
-				{
-					FVector Direction = (Insert.PathLocation - Insert.OriginalLocation).GetSafeNormal();
-					if (Settings->bInvertDirection)
-					{
-						Direction = -Direction;
-					}
-					DirectionWriter->SetValue(InsertIndex, Direction);
-				}
+				WriteInsertOutputs(InsertIndex, Insert, 1.0 + Insert.Alpha); // > 1 = after end
 
 				PostMetrics.Add(Position);
 			}
@@ -971,32 +921,7 @@ namespace PCGExPathInsert
 				OutTransforms[InsertIndex].SetLocation(Position);
 				OutSeeds[InsertIndex] = PCGExRandomHelpers::ComputeSpatialSeed(Position);
 
-				// Write output attributes
-				if (FlagWriter)
-				{
-					FlagWriter->SetValue(InsertIndex, true);
-				}
-				if (AlphaWriter)
-				{
-					AlphaWriter->SetValue(InsertIndex, Insert.Alpha);
-				}
-				if (DistanceWriter)
-				{
-					DistanceWriter->SetValue(InsertIndex, Insert.Distance);
-				}
-				if (TargetIndexWriter)
-				{
-					TargetIndexWriter->SetValue(InsertIndex, Insert.TargetIOIndex);
-				}
-				if (DirectionWriter)
-				{
-					FVector Direction = (Insert.PathLocation - Insert.OriginalLocation).GetSafeNormal();
-					if (Settings->bInvertDirection)
-					{
-						Direction = -Direction;
-					}
-					DirectionWriter->SetValue(InsertIndex, Direction);
-				}
+				WriteInsertOutputs(InsertIndex, Insert, Insert.Alpha);
 
 				Metrics.Add(Position);
 			}
@@ -1013,6 +938,35 @@ namespace PCGExPathInsert
 				PointDataFacade->GetOutPoint(EndPointIndex),
 				SubScope,
 				Metrics);
+		}
+	}
+
+	void FProcessor::WriteInsertOutputs(const int32 WriteIndex, const FInsertCandidate& Insert, const double Alpha) const
+	{
+		if (FlagWriter)
+		{
+			FlagWriter->SetValue(WriteIndex, true);
+		}
+		if (AlphaWriter)
+		{
+			AlphaWriter->SetValue(WriteIndex, Alpha);
+		}
+		if (DistanceWriter)
+		{
+			DistanceWriter->SetValue(WriteIndex, Insert.Distance);
+		}
+		if (TargetIndexWriter)
+		{
+			TargetIndexWriter->SetValue(WriteIndex, Insert.TargetIOIndex);
+		}
+		if (DirectionWriter)
+		{
+			FVector Direction = (Insert.PathLocation - Insert.OriginalLocation).GetSafeNormal();
+			if (Settings->bInvertDirection)
+			{
+				Direction = -Direction;
+			}
+			DirectionWriter->SetValue(WriteIndex, Direction);
 		}
 	}
 

@@ -72,7 +72,6 @@ namespace PCGExGraphs
 		~FSubGraph() = default;
 
 		void Add(const FEdge& Edge);
-		void Shrink();
 		void ComputeMinPointIndex(const TArray<FNode>& ParentNodes);
 
 		void BuildCluster(const TSharedRef<PCGExClusters::FCluster>& InCluster);

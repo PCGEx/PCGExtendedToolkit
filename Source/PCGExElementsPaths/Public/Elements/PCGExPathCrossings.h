@@ -253,8 +253,6 @@ namespace PCGExPathCrossings
 			return false;
 		} // Force non-trivial because this shit is expensive
 
-		const PCGExPaths::FPathEdgeOctree* GetEdgeOctree() const;
-
 		// Whether this path has edges that other paths (or itself) can be tested against.
 		bool IsCutter() const;
 

@@ -18,11 +18,6 @@
 #define LOCTEXT_NAMESPACE "PCGExGraphs"
 #define PCGEX_NAMESPACE TopologyPointSurface
 
-namespace PCGExGeoTask
-{
-	class FLloydRelax2;
-}
-
 TArray<FPCGPinProperties> UPCGExTopologyPointSurfaceSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
@@ -108,8 +103,6 @@ namespace PCGExTopologyPointSurface
 
 		// Prep data
 
-		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
-
 		InternalMeshData = Context->ManagedObjects->New<UPCGDynamicMeshData>();
 		if (!InternalMeshData)
 		{
@@ -119,15 +112,12 @@ namespace PCGExTopologyPointSurface
 		InternalMesh = Context->ManagedObjects->New<UDynamicMesh>();
 		InternalMesh->InitializeMesh();
 
-		if (InternalMeshData)
+		InternalMeshData->Initialize(InternalMesh, true);
+		InternalMesh = InternalMeshData->GetMutableDynamicMesh();
+		// Processors run on workers: the context hands over the material its load recorded, no lookup.
+		if (UMaterialInterface* Material = Context->ResolveObject_AnyThreadTpl(Settings->Topology.Material))
 		{
-			InternalMeshData->Initialize(InternalMesh, true);
-			InternalMesh = InternalMeshData->GetMutableDynamicMesh();
-			// Processors run on workers: the context hands over the material its load recorded, no lookup.
-			if (UMaterialInterface* Material = Context->ResolveObject_AnyThreadTpl(Settings->Topology.Material))
-			{
-				InternalMeshData->SetMaterials({Material});
-			}
+			InternalMeshData->SetMaterials({Material});
 		}
 
 		// Project points
@@ -168,8 +158,6 @@ namespace PCGExTopologyPointSurface
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(PCGExTopologyPointSurface::EditMesh)
 
-			int8 bHasInvalidVertices = false;
-
 			InternalMesh->EditMesh([&](FDynamicMesh3& InMesh)
 			{
 				FVector4f DefaultVertexColor = FVector4f(Settings->Topology.DefaultVertexColor);
@@ -198,7 +186,6 @@ namespace PCGExTopologyPointSurface
 
 					if (VtxID == -1)
 					{
-						FPlatformAtomics::InterlockedExchange(&bHasInvalidVertices, 1);
 						return;
 					}
 

@@ -169,7 +169,6 @@ namespace PCGExRefineEdges
 		FPCGExFilterResultDetails ResultOutputEdges = FPCGExFilterResultDetails(false, false);
 
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
-		mutable FRWLock NodeLock;
 
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)

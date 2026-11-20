@@ -45,8 +45,6 @@ public:
 	FPCGExClusterStateConfigBase Config;
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
-
-	virtual void BeginDestroy() override;
 };
 
 namespace PCGExClusterStates
@@ -55,7 +53,6 @@ namespace PCGExClusterStates
 	{
 	public:
 		FPCGExClusterStateConfigBase Config;
-		FPCGExStateConfigBase BaseConfig;
 
 		const UPCGExClusterStateFactoryData* StateFactory = nullptr;
 
@@ -125,7 +122,4 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties, DisplayAfter="Name"))
 	FPCGExClusterStateConfigBase Config;
-
-protected:
-	virtual TSet<FPCGDataTypeBaseId> GetInternalFilterTypes() const override;
 };

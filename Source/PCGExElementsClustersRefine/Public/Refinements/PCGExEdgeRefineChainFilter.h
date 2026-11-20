@@ -49,8 +49,6 @@ public:
 		return true;
 	}
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	/** Chain selection criteria. Leave all criteria disabled to make the node inert. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExChainGatingDetails Gating;

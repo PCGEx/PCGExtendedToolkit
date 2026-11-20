@@ -164,11 +164,6 @@ namespace PCGExOrient
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			if (Path->IsValidEdgeIndex(Index))
-			{
-				Path->ComputeEdgeExtra(Index);
-			}
-
 			const FTransform OutT = Orient->ComputeOrientation(PointDataFacade->GetOutPoint(Index), PointFilterCache[Index] ? -1 : 1);
 			if (Settings->bOutputDot)
 			{

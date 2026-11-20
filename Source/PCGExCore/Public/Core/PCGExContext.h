@@ -197,16 +197,6 @@ public:
 		return bWorkCancelled.load(std::memory_order_acquire) || (TaskManager && TaskManager->IsCancelled()) || !WorkHandle.IsValid();
 	}
 
-	bool IsAdvanceWorkInProgress() const
-	{
-		return bAdvanceWorkInProgress.load(std::memory_order_acquire);
-	}
-
-	void SetPendingAsyncEnd()
-	{
-		bPendingAsyncWorkEnd.store(true, std::memory_order_release);
-	}
-
 	void Done();
 
 	bool TryComplete(const bool bForce = false);
@@ -360,7 +350,6 @@ protected:
 	void ExecuteOnNotifyActors(const TArray<FName>& FunctionNames);
 	virtual void AddExtraStructReferencedObjects(FReferenceCollector& Collector) override;
 
-	TArray<UPCGExInstancedFactory*> ProcessorOperations;
 	TSet<UPCGExInstancedFactory*> InternalOperations;
 
 public:

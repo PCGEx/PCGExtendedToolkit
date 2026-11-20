@@ -99,9 +99,6 @@ namespace PCGExFuseCollinear
 		ReadIndices.Reserve(Path->NumPoints);
 		LastPosition = Path->GetPos(0);
 
-		bForceSingleThreadedProcessPoints = true;
-		StartParallelLoopForPoints(PCGExData::EIOSide::In);
-
 		FilterAll();
 
 		// Preserve start & end
@@ -282,6 +279,29 @@ namespace PCGExFuseCollinear
 
 		const int32 IOIndex = PointDataFacade->Source->IOIndex;
 
+		auto BlendUnion = [&](const int32 WriteIndex, const int32 From, const int32 Count, const bool bWrap)
+		{
+			if (IsUnionWriter)
+			{
+				IsUnionWriter->SetValue(WriteIndex, true);
+			}
+			if (UnionSizeWriter)
+			{
+				UnionSizeWriter->SetValue(WriteIndex, Count);
+			}
+
+			Union->Reset();
+			Union->Reserve(1, Count);
+
+			for (int j = 0; j < Count; j++)
+			{
+				Union->AddWeighted_Unsafe(PCGExData::FElement(bWrap ? (From + j) % NumInPoints : From + j, IOIndex), 1);
+			}
+
+			DataBlender->ComputeWeights(WriteIndex, Union, OutWeightedPoints);
+			DataBlender->Blend(WriteIndex, OutWeightedPoints, Trackers);
+		};
+
 		for (int i = 0; i < LastRead; i++)
 		{
 			const int32 From = ReadIndices[i];
@@ -293,25 +313,7 @@ namespace PCGExFuseCollinear
 				continue;
 			}
 
-			if (IsUnionWriter)
-			{
-				IsUnionWriter->SetValue(i, true);
-			}
-			if (UnionSizeWriter)
-			{
-				UnionSizeWriter->SetValue(i, Count);
-			}
-
-			Union->Reset();
-			Union->Reserve(1, Count);
-
-			for (int j = 0; j < Count; j++)
-			{
-				Union->AddWeighted_Unsafe(PCGExData::FElement(From + j, IOIndex), 1);
-			}
-
-			DataBlender->ComputeWeights(i, Union, OutWeightedPoints);
-			DataBlender->Blend(i, OutWeightedPoints, Trackers);
+			BlendUnion(i, From, Count, false);
 		}
 
 		{
@@ -320,25 +322,7 @@ namespace PCGExFuseCollinear
 
 			if (Count > 1)
 			{
-				if (IsUnionWriter)
-				{
-					IsUnionWriter->SetValue(LastRead, true);
-				}
-				if (UnionSizeWriter)
-				{
-					UnionSizeWriter->SetValue(LastRead, Count);
-				}
-
-				Union->Reset();
-				Union->Reserve(1, Count);
-
-				for (int j = 0; j < Count; j++)
-				{
-					Union->AddWeighted_Unsafe(PCGExData::FElement((From + j) % NumInPoints, IOIndex), 1);
-				}
-
-				DataBlender->ComputeWeights(LastRead, Union, OutWeightedPoints);
-				DataBlender->Blend(LastRead, OutWeightedPoints, Trackers);
+				BlendUnion(LastRead, From, Count, true);
 			}
 		}
 

@@ -89,12 +89,6 @@ namespace PCGExDetails
 	}
 
 	template <typename T>
-	uint32 TSettingValueBuffer<T>::ReadValueHash(const int32 Index)
-	{
-		return Buffer->ReadValueHash(Index);
-	}
-
-	template <typename T>
 	bool TSettingValueSelector<T>::InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax)
 	{
 		FPCGExContext* Context = InDataFacade->GetContext();
@@ -128,12 +122,6 @@ namespace PCGExDetails
 		{
 			OutResults[i] = this->Constant;
 		}
-	}
-
-	template <typename T>
-	uint32 TSettingValueConstant<T>::ReadValueHash(const int32 Index)
-	{
-		return PCGExTypes::ComputeHash(this->Constant);
 	}
 
 	template <typename T>
@@ -188,13 +176,6 @@ namespace PCGExDetails
 	}
 
 	template <typename T>
-	void TSettingValueNegated<T>::SetConstant(T InConstant)
-	{
-		Inner->SetConstant(-InConstant);
-		SyncConstant();
-	}
-
-	template <typename T>
 	T TSettingValueNegated<T>::ReadInternal(const int32 Index)
 	{
 		return -Inner->Read(Index);
@@ -217,12 +198,6 @@ namespace PCGExDetails
 	T TSettingValueNegated<T>::Max()
 	{
 		return -Inner->Min();
-	}
-
-	template <typename T>
-	uint32 TSettingValueNegated<T>::ReadValueHash(const int32 Index)
-	{
-		return PCGExTypes::ComputeHash(this->Read(Index));
 	}
 
 	template <typename T>
@@ -293,18 +268,6 @@ namespace PCGExDetails
 		return MakeSettingValue<T>(Constant);
 	}
 
-	template <typename T>
-	TSharedPtr<TSettingValue<T>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FName InName, const T InConstant)
-	{
-		return MakeSettingValue<T>(InData->GetContext(), InData->GetIn(), InInput, InName, InConstant);
-	}
-
-	template <typename T>
-	TSharedPtr<TSettingValue<T>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const T InConstant)
-	{
-		return MakeSettingValue<T>(InData->GetContext(), InData->GetIn(), InInput, InSelector, InConstant);
-	}
-
 #pragma region externalization
 
 #define PCGEX_TPL(_TYPE, _NAME, ...)\
@@ -318,9 +281,7 @@ template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const _
 template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant); \
 template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
 template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
-template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant); \
-template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
-template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant);
+template PCGEXCORE_API TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant);
 
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 

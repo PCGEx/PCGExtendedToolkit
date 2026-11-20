@@ -117,18 +117,6 @@ namespace PCGExSorting
 		/** Build cache from a sorter. Populates values in parallel. */
 		static TSharedPtr<FSortCache> Build(const FSorter& Sorter, int32 InNumElements);
 
-		/** Get number of cached elements */
-		FORCEINLINE int32 Num() const
-		{
-			return NumElements;
-		}
-
-		/** Get number of rules */
-		FORCEINLINE int32 NumRules() const
-		{
-			return CachedNumRules;
-		}
-
 		/** Fast comparison using cached values. No virtual calls. */
 		FORCEINLINE bool Compare(const int32 A, const int32 B) const
 		{

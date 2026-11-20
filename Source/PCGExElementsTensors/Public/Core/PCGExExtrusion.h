@@ -137,34 +137,18 @@ namespace PCGExExtrusion
 		bool bHasCollision = false;
 		FVector Position = FVector::ZeroVector;
 		EStopReason Reason = EStopReason::None;
-		int32 OtherIndex = -1; // Index of other path/extrusion if applicable
 
 		explicit operator bool() const
 		{
 			return bHasCollision;
 		}
 
-		void Set(const FVector& InPosition, EStopReason InReason, int32 InOtherIndex = -1)
+		void Set(const FVector& InPosition, EStopReason InReason)
 		{
 			bHasCollision = true;
 			Position = InPosition;
 			Reason = InReason;
-			OtherIndex = InOtherIndex;
 		}
-	};
-
-	//
-	// Branching Support
-	//
-
-	/** Branch point for future branching extrusions */
-	struct PCGEXELEMENTSTENSORS_API FBranchPoint
-	{
-		int32 SourceExtrusionIndex = -1;
-		int32 PointIndex = -1;
-		FTransform BranchTransform = FTransform::Identity;
-		FVector BranchDirection = FVector::ZeroVector;
-		double BranchAngle = 0.0; // Angle from main direction
 	};
 
 	//
@@ -236,7 +220,6 @@ namespace PCGExExtrusion
 		FExtrusionCallbacks Callbacks;
 
 		//~ Hierarchy (for child/branching extrusions)
-		TWeakPtr<FExtrusion> ParentExtrusion;
 		bool bIsChildExtrusion = false;
 		bool bIsFollowUp = false;
 
@@ -262,23 +245,18 @@ namespace PCGExExtrusion
 		TSharedRef<PCGExData::FFacade> PointDataFacade;
 		FBox Bounds = FBox(ForceInit);
 
-		//~ Future branching support
-		TArray<FBranchPoint> PendingBranches;
-
 		//~ Main interface
 		bool Advance();
 		void Complete();
 
 		//~ Collision interface
 		PCGExMath::FSegment GetHeadSegment() const;        // Segment between last two inserted points
-		PCGExMath::FSegment GetCurrentHeadSegment() const; // Segment from last inserted point to current head position
 		PCGExMath::FClosestPosition FindCrossing(const PCGExMath::FSegment& InSegment, bool& OutIsLastSegment, PCGExMath::FClosestPosition& OutClosestPosition, int32 TruncateSearch = 0) const;
 		bool TryMerge(const PCGExMath::FSegment& InSegment, const PCGExMath::FClosestPosition& InMerge);
 
 		//~ Modification
 		void SetHead(const FTransform& InHead);
 		void CutOff(const FVector& InCutOff);
-		void Shorten(const FVector& InCutOff);
 		void Cleanup();
 
 		//~ State queries
@@ -287,19 +265,9 @@ namespace PCGExExtrusion
 			return State == EExtrusionState::Probing || State == EExtrusionState::Extruding;
 		}
 
-		FORCEINLINE bool IsComplete() const
-		{
-			return State == EExtrusionState::Completed || State == EExtrusionState::Stopped;
-		}
-
 		FORCEINLINE bool IsValidPath() const
 		{
 			return (State == EExtrusionState::Completed || State == EExtrusionState::Stopped) && ExtrudedPoints.Num() >= 2;
-		}
-
-		FORCEINLINE int32 GetPointCount() const
-		{
-			return ExtrudedPoints.Num();
 		}
 
 		FORCEINLINE bool HasStopReason(EStopReason InReason) const

@@ -19,18 +19,6 @@ namespace PCGExBlending
 }
 
 USTRUCT(BlueprintType)
-struct PCGEXBLENDING_API FPCGExAttributeBlendToTargetDetails : public FPCGExAttributeSourceToTargetDetails
-{
-	GENERATED_BODY()
-
-	FPCGExAttributeBlendToTargetDetails() = default;
-
-	/** BlendMode */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayAfter="Source"))
-	EPCGExBlendingType Blending = EPCGExBlendingType::None;
-};
-
-USTRUCT(BlueprintType)
 struct PCGEXBLENDING_API FPCGExPointPropertyBlendingOverrides
 {
 	GENERATED_BODY()

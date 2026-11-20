@@ -375,7 +375,6 @@ namespace PCGExStagedTypeFilter
 		const int32 MaxRange = PCGExMT::FScope::GetMaxRange(Loops);
 
 		BucketIndices.SetNum(TotalBuckets);
-		BucketCounts.Init(0, TotalBuckets);
 
 		for (int32 i = 0; i < TotalBuckets; i++)
 		{
@@ -436,15 +435,6 @@ namespace PCGExStagedTypeFilter
 					BucketIndices[UnmatchedIdx]->Get_Ref(Scope).Add(Index);
 				}
 			}
-
-			// Each scope owns its bucket arrays, so their sizes are this scope's counts.
-			for (int32 i = 0; i <= UnmatchedIdx; i++)
-			{
-				if (const int32 LocalCount = BucketIndices[i]->Get_Ref(Scope).Num())
-				{
-					FPlatformAtomics::InterlockedAdd(&BucketCounts[i], LocalCount);
-				}
-			}
 		}
 		else
 		{
@@ -501,6 +491,14 @@ namespace PCGExStagedTypeFilter
 		}
 
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagedTypeFilter::OnPointsProcessingComplete);
+
+		// Counted before the dispatch: it collapses, and so empties, the scoped arrays.
+		TArray<int32> BucketCounts;
+		BucketCounts.Reserve(BucketIndices.Num());
+		for (const TSharedPtr<PCGExMT::TScopedArray<int32>>& ScopedIndices : BucketIndices)
+		{
+			BucketCounts.Add(ScopedIndices->GetTotalNum());
+		}
 
 		PCGExBucketDispatchHelpers::DispatchBuckets(
 			Context->TypeOutputs,

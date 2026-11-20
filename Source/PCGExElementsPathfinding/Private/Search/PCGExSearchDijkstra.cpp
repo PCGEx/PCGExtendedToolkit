@@ -41,7 +41,6 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 
 	const PCGExHeuristics::FLocalFeedbackHandler* Feedback = LocalFeedback.Get();
 
-	int32 VisitedNum = 0;
 	int32 CurrentNodeIndex;
 	double CurrentScore;
 	while (ScoredQueue->Dequeue(CurrentNodeIndex, CurrentScore))
@@ -56,7 +55,6 @@ bool FPCGExSearchOperationDijkstra::ResolveQuery(
 			continue;
 		}
 		Visited[CurrentNodeIndex] = true;
-		VisitedNum++;
 
 		// Read the node only after the visited check -- stale queue entries skip the load.
 		const PCGExClusters::FNode& Current = NodesRef[CurrentNodeIndex];

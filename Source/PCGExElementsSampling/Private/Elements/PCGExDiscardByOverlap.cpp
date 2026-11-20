@@ -326,8 +326,6 @@ namespace PCGExDiscardByOverlap
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
-		const TConstPCGValueRange<float> Densities = InPoints->GetConstDensityValueRange();
-
 		const bool bHasFilteredBounds = !FilteredPointBounds.IsEmpty();
 		for (int32 i = 0; i < NumPoints; i++)
 		{
@@ -355,7 +353,6 @@ namespace PCGExDiscardByOverlap
 				continue;
 			}
 			Octree->AddElement(PtBounds.Get());
-			TotalDensity += Densities[PtBounds->Index];
 		}
 
 		VolumeDensity = NumPoints / TotalVolume;
@@ -562,13 +559,6 @@ namespace PCGExDiscardByOverlap
 
 		Weight = StaticWeight * W.StaticBalance + DynamicWeight * W.DynamicBalance;
 	}
-
-#if WITH_EDITOR
-	void FProcessor::PrintWeights() const
-	{
-		UE_LOG(LogPCGEx, Warning, TEXT("Set #%d | W = %f | SW = %f | DW = %f | NumPoints = %f, Volume = %f, VolumeDensity = %f, OverlapCount = %f, OverlapSubCount = %f, OverlapVolume = %f, OverlapVolumeDensity = %f"), BatchIndex, Weight, StaticWeight, DynamicWeight, RawScores.NumPoints, RawScores.Volume, RawScores.VolumeDensity, RawScores.OverlapCount, RawScores.OverlapSubCount, RawScores.OverlapVolume, RawScores.OverlapVolumeDensity)
-	}
-#endif
 }
 #undef LOCTEXT_NAMESPACE
 #undef PCGEX_NAMESPACE

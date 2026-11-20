@@ -45,18 +45,6 @@ TArray<FPCGPinProperties> UPCGExSpatialTriageSettings::OutputPinProperties() con
 
 PCGEX_INITIALIZE_ELEMENT(SpatialTriage)
 
-bool FPCGExSpatialTriageElement::Boot(FPCGExContext* InContext) const
-{
-	if (!FPCGExPointsProcessorElement::Boot(InContext))
-	{
-		return false;
-	}
-
-	PCGEX_CONTEXT_AND_SETTINGS(SpatialTriage)
-
-	return true;
-}
-
 bool FPCGExSpatialTriageElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExSpatialTriageElement::Execute);

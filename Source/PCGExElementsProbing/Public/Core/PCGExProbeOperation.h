@@ -121,5 +121,4 @@ public:
 
 protected:
 	TSharedPtr<PCGExData::FPointIO> PointIO;
-	TArray<double> LocalWeightMultiplier;
 };
