@@ -32,12 +32,13 @@ FString UPCGExSplitJoinIntegerSettings::GetDisplayName() const
 {
 	switch (Mode)
 	{
+	// No "PCGEx | " prefix: the default title already shows it on the line below.
 	case EPCGExSplitJoinIntegerMode::Split:
-		return TEXT("PCGEx | Split Integer");
+		return TEXT("Split Integer");
 	case EPCGExSplitJoinIntegerMode::Join:
-		return TEXT("PCGEx | Join Integer");
+		return TEXT("Join Integer");
 	default:
-		return TEXT("PCGEx | Split / Join Integer");
+		return TEXT("Split / Join Integer");
 	}
 }
 #endif
