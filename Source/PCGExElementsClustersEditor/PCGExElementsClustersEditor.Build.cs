@@ -48,6 +48,7 @@ public class PCGExElementsClustersEditor : ModuleRules
 				"SlateCore",
 				"UnrealEd",
 				"PropertyEditor",
+				"InputCore",
 			}
 		);
 

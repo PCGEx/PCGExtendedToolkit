@@ -45,8 +45,16 @@ public class PCGExtendedToolkitEditor : ModuleRules
 			{
 				"Slate",
 				"SlateCore",
+				"ApplicationCore",
+				"AssetDefinition",
+				"AssetTools",
 				"AssetRegistry",
+				"DeveloperSettings",
+				"EditorFramework",
+				"EditorSubsystem",
+				"InputCore",
 				"PropertyEditor",
+				"TypedElementFramework",
 				"UnrealEd",
 			}
 		);

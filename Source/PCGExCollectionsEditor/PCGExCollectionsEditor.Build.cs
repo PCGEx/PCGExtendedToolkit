@@ -67,6 +67,7 @@ public class PCGExCollectionsEditor : ModuleRules
 				// Assembly root editor host: level viewport overlay, eyedropper, typed selection set hooks
 				"LevelEditor",
 				"ActorPickerMode",
+				"TypedElementFramework",
 				"TypedElementRuntime"
 			}
 		);
