@@ -78,32 +78,20 @@ bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSh
 		return false;
 	}
 
-	if (TypedFilterFactory->Config.bIgnoreSelf)
-	{
-		IgnoreList.Add(InPointDataFacade->GetIn());
-	}
-
-	const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
-		&& !TypedFilterFactory->MatchRuleFactories.IsEmpty();
-
 	// Distance only supports collection-level (data/tag) matching: the ignore list is identical for every point,
-	// so it is built once here (PopulateIgnoreListInverse, data-vs-data) instead of per-point in Test(). A rule that
-	// reads a per-point attribute is rejected under per-point evaluation; under collection/proxy mode it degrades.
-	if (bMatchingEnabled)
+	// so it is built once here (data-vs-data) instead of per-point in Test(). A rule that reads a per-point
+	// attribute is rejected under per-point evaluation; under collection/proxy mode it degrades.
+	bool bWantsPoints = false;
+	const bool bMatched = ResolveIgnoreList(InPointDataFacade, IgnoreList, bWantsPoints);
+	if (PCGExPointFilter::RejectPerPointMatchRule(InContext, TEXT("Distance"), bWantsPoints, TypedFilterFactory->Config.bCheckAgainstDataBounds))
 	{
-		bool bWantsPoints = false;
-		PCGExMatching::FScope MatchingScope(TargetsHandler->Num(), true);
-		const bool bMatched = TargetsHandler->PopulateIgnoreListInverse(TypedFilterFactory->MatchRuleFactories, InPointDataFacade, &TypedFilterFactory->Config.DataMatching, MatchingScope, IgnoreList, bWantsPoints);
-		if (PCGExPointFilter::RejectPerPointMatchRule(InContext, TEXT("Distance"), bWantsPoints, TypedFilterFactory->Config.bCheckAgainstDataBounds))
-		{
-			return false;
-		}
-		if (!bMatched)
-		{
-			bCheckAgainstDataBounds = true;
-			bCollectionTestResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
-			return true;
-		}
+		return false;
+	}
+	if (!bMatched)
+	{
+		bCheckAgainstDataBounds = true;
+		bCollectionTestResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
+		return true;
 	}
 
 	bCheckAgainstDataBounds = TypedFilterFactory->Config.bCheckAgainstDataBounds;
@@ -128,7 +116,23 @@ bool PCGExPointFilter::FDistanceFilter::Init(FPCGExContext* InContext, const TSh
 	return true;
 }
 
+bool PCGExPointFilter::FDistanceFilter::ResolveIgnoreList(const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<const UPCGData*>& OutIgnoreList, bool& bOutWantsPoints) const
+{
+	if (TypedFilterFactory->Config.bIgnoreSelf)
+	{
+		OutIgnoreList.Add(InFacade->GetIn());
+	}
+
+	PCGExMatching::FScope MatchingScope(TargetsHandler->Num(), true);
+	return TargetsHandler->PopulateIgnoreListInverse(TypedFilterFactory->MatchRuleFactories, InFacade, &TypedFilterFactory->Config.DataMatching, MatchingScope, OutIgnoreList, bOutWantsPoints);
+}
+
 bool PCGExPointFilter::FDistanceFilter::Test(const PCGExData::FProxyPoint& Point) const
+{
+	return TestProxy(Point, IgnoreList);
+}
+
+bool PCGExPointFilter::FDistanceFilter::TestProxy(const PCGExData::FProxyPoint& Point, const TSet<const UPCGData*>& InIgnoreList) const
 {
 	const FVector ProbeLocation = Point.GetLocation();
 	const double B = TypedFilterFactory->Config.DistanceThresholdValue.Constant;
@@ -145,7 +149,7 @@ bool PCGExPointFilter::FDistanceFilter::Test(const PCGExData::FProxyPoint& Point
 		{
 			BestDist = D;
 		}
-	}, &IgnoreList);
+	}, &InIgnoreList);
 
 	return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, FMath::Sqrt(BestDist), B, TypedFilterFactory->Config.Tolerance);
 }
@@ -181,9 +185,17 @@ bool PCGExPointFilter::FDistanceFilter::Test(const int32 PointIndex) const
 
 bool PCGExPointFilter::FDistanceFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
 {
+	// Collection mode sets a filter up on one data and tests them all (see FManager::Init): each data resolves its own ignore list here.
+	TSet<const UPCGData*> DataIgnoreList;
+	bool bWantsPoints = false;
+	if (!ResolveIgnoreList(MakeShared<PCGExData::FFacade>(IO.ToSharedRef()), DataIgnoreList, bWantsPoints))
+	{
+		return TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass;
+	}
+
 	PCGExData::FProxyPoint ProxyPoint;
 	IO->GetDataAsProxyPoint(ProxyPoint);
-	return Test(ProxyPoint);
+	return TestProxy(ProxyPoint, DataIgnoreList);
 }
 
 TArray<FPCGPinProperties> UPCGExDistanceFilterProviderSettings::InputPinProperties() const

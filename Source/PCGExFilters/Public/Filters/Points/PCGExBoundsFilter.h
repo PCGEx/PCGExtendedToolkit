@@ -167,6 +167,11 @@ namespace PCGExPointFilter
 		TArray<FPCGExTaggedData> BoundsCandidates;
 		bool bNoMatchResult = false;
 
+		// Indices of the bounds data a tested data may be checked against: its own are dropped under Ignore Self.
+		void GetEligibleIndices(const UPCGData* InTestedData, TArray<int32>& OutIndices) const;
+		// Bounds one tested data is checked against once static data matching applied. False when matching rejects them all.
+		bool ResolveStaticCollections(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<TSharedPtr<PCGExMath::OBB::FCollection>>& OutCollections) const;
+
 		// Core test implementation
 		bool TestPoint(const FTransform& Transform, const FBox& LocalBox) const;
 		bool TestPoint(const FTransform& Transform, const FBox& LocalBox, TArrayView<const TSharedPtr<PCGExMath::OBB::FCollection>> InCollections) const;
