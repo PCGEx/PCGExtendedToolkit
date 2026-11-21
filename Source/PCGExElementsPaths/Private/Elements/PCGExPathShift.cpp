@@ -11,12 +11,6 @@
 #define LOCTEXT_NAMESPACE "PCGExShiftPathElement"
 #define PCGEX_NAMESPACE ShiftPath
 
-UPCGExShiftPathSettings::UPCGExShiftPathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 PCGEX_INITIALIZE_ELEMENT(ShiftPath)
 
 PCGExData::EIOInit UPCGExShiftPathSettings::GetMainDataInitializationPolicy() const

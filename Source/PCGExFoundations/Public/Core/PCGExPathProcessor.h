@@ -46,9 +46,6 @@ public:
 
 	//~End UPCGExPointsProcessorSettings
 
-	UPROPERTY()
-	bool bSupportClosedLoops = true;
-
 	/** If enabled, collections that have less than 2 points won't be processed and be omitted from the output. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable), AdvancedDisplay)
 	bool bOmitInvalidPathsOutputs = true;

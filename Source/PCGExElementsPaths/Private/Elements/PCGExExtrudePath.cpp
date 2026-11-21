@@ -15,12 +15,6 @@
 #define LOCTEXT_NAMESPACE "PCGExExtrudePathElement"
 #define PCGEX_NAMESPACE ExtrudePath
 
-UPCGExExtrudePathSettings::UPCGExExtrudePathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 TArray<FPCGPinProperties> UPCGExExtrudePathSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();

@@ -39,7 +39,7 @@ enum class EPCGExVtxAmplitudeSignOutput : uint8
 {
 	Raw            = 0 UMETA(DisplayName = "Raw", ToolTip="Raw dot product"),
 	Size           = 1 UMETA(DisplayName = "Size", ToolTip="Dot product * edge size"),
-	NormalizedSize = 2 UMETA(DisplayName = "Size (Normalized)", ToolTip="Dot product * edge size normalized"),
+	NormalizedSize = 2 UMETA(Hidden, DisplayName = "Size (Normalized)", ToolTip="Same value as Raw. Kept so saved graphs load."),
 	Sign           = 3 UMETA(DisplayName = "Sign", ToolTip="Sign (0,1,-1)"),
 };
 

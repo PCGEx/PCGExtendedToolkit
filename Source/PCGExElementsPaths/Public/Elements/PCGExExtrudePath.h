@@ -53,8 +53,6 @@ class UPCGExExtrudePathSettings : public UPCGExPathProcessorSettings
 	GENERATED_BODY()
 
 public:
-	explicit UPCGExExtrudePathSettings(const FObjectInitializer& ObjectInitializer);
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;

@@ -35,12 +35,6 @@ void UPCGExBlendPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 }
 #endif
 
-UPCGExBlendPathSettings::UPCGExBlendPathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 TArray<FPCGPinProperties> UPCGExBlendPathSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();

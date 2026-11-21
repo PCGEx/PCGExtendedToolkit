@@ -74,12 +74,6 @@ void FPCGExShrinkPathEndpointCountDetails::RenamePins(const UPCGSettings* InSett
 
 #pragma region UPCGExShrinkPathSettings
 
-UPCGExShrinkPathSettings::UPCGExShrinkPathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 #if WITH_EDITOR
 void UPCGExShrinkPathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {

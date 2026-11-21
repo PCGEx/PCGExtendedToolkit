@@ -45,8 +45,6 @@ class UPCGExShiftPathSettings : public UPCGExPathProcessorSettings
 	GENERATED_BODY()
 
 public:
-	UPCGExShiftPathSettings(const FObjectInitializer& ObjectInitializer);
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(PathShift, "Path : Shift", "Shift path points");

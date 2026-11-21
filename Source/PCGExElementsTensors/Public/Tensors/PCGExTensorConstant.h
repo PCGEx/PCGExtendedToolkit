@@ -46,9 +46,6 @@ public:
 	UPROPERTY()
 	FPCGExTensorConstantConfig Config;
 
-	UPROPERTY()
-	FVector Constant = FVector::OneVector;
-
 	virtual TSharedPtr<PCGExTensorOperation> CreateOperation(FPCGExContext* InContext) const override;
 
 protected:
