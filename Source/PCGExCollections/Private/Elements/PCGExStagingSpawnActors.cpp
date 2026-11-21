@@ -5,9 +5,9 @@
 
 #include "PCGComponent.h"
 #include "PCGElement.h"
-#include "PCGManagedResource.h"
 #include "PCGParamData.h"
 #include "Core/PCGExCollectionTags.h"
+#include "Core/PCGExManagedActors.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataMacros.h"
@@ -20,9 +20,9 @@
 #include "Helpers/PCGExActorPropertyOverrides.h"
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExFunctionPrototypes.h"
-#include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Helpers/PCGHelpers.h"
+#include "Misc/Crc.h"
 #include "Types/PCGExTypeOpsString.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingSpawnActorsElement"
@@ -106,9 +106,6 @@ bool FPCGExStagingSpawnActorsElement::AdvanceWork(FPCGExContext* InContext, cons
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		// Compute CRC for managed resource reuse detection; each processor derives its own from it.
-		GetDependenciesCrc(FPCGGetDependenciesCrcParams(&Context->InputData, Settings, nullptr), Context->DependenciesCrc);
-
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
@@ -122,8 +119,8 @@ bool FPCGExStagingSpawnActorsElement::AdvanceWork(FPCGExContext* InContext, cons
 		}
 	}
 
-	// Output drives a main-thread loop that spawns actors (World->SpawnActor / NewObject<UPCGManagedActors> /
-	// FinalizeSpawnedActor) -- illegal during a package save or GC. Defer the whole output phase (re-tick).
+	// Output drives a main-thread loop that spawns actors (World->SpawnActor / FinalizeSpawnedActor) and registers
+	// their managed resource -- illegal during a package save or GC. Defer the whole output phase (re-tick).
 	PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED
 
 	PCGEX_POINTS_BATCH_PROCESSING(PCGExCommon::States::State_Done)
@@ -198,12 +195,6 @@ namespace PCGExStagingSpawnActors
 		if (Context->OverrideTargets)
 		{
 			ActorOverrides = MakeShared<PCGExActorOverrides::FActorPropertyOverrides>(Context->OverrideTargets.ToSharedRef(), PointDataFacade->Source->GetIn());
-		}
-
-		InputCrc = Context->DependenciesCrc;
-		if (InputCrc.IsValid())
-		{
-			InputCrc.Combine(static_cast<uint32>(BatchIndex));
 		}
 
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
@@ -304,6 +295,71 @@ namespace PCGExStagingSpawnActors
 			return;
 		}
 
+		SpawnAssetPaths = UniquePaths.Array();
+		HashContent();
+
+		// On the game thread: claiming the previous run's actors clears a tag on each of them.
+		ReuseStep = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(1);
+		ReuseStep->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)
+		{
+			PCGEX_ASYNC_THIS
+			This->ReuseOrLoad();
+		};
+
+		PCGEX_ASYNC_HANDLE_CHKD_VOID(TaskManager, ReuseStep)
+	}
+
+	void FProcessor::HashContent()
+	{
+		// Not the CRC the executor hands down for these points: that one is the data object's id, new every session.
+		ContentCrc = Context->GetInputContentCrc(Settings->GetMainInputPin(), PointDataFacade->GetIn());
+		const bool bHash = ContentCrc.IsValid();
+
+		// What the points turn into: which ones spawn (the filters' say), and what the node reads off each picked entry.
+		TSet<TPair<const FPCGExActorCollectionEntry*, const UPCGExAssetCollection*>> HashedEntries;
+		TArray<FName> EntryTags;
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			const FResolvedEntry& Resolved = ResolvedEntries[i];
+			if (!Resolved.Entry)
+			{
+				continue;
+			}
+
+			NumResolved++;
+
+			if (!bHash)
+			{
+				continue;
+			}
+
+			ContentCrc.Combine(static_cast<uint32>(i));
+
+			bool bAlreadyHashed = false;
+			HashedEntries.Add(TPair<const FPCGExActorCollectionEntry*, const UPCGExAssetCollection*>(Resolved.Entry, Resolved.Host), &bAlreadyHashed);
+			if (bAlreadyHashed)
+			{
+				continue;
+			}
+
+			ContentCrc.Combine(FCrc::StrCrc32(*Resolved.Entry->Actor.ToString()));
+			ContentCrc.Combine(PCGExActorDelta::HashDelta(Resolved.Entry->SerializedPropertyDelta));
+			ContentCrc.Combine(static_cast<uint32>(Resolved.Entry->bPointIsActorTransform));
+
+			if (Settings->bApplyEntryTags)
+			{
+				EntryTags.Reset();
+				PCGExCollections::Tags::AppendOutputTags(*Resolved.Entry, Resolved.Host, EntryTags);
+				for (const FName& EntryTag : EntryTags)
+				{
+					ContentCrc.Combine(FCrc::StrCrc32(*EntryTag.ToString()));
+				}
+			}
+		}
+	}
+
+	void FProcessor::ReuseOrLoad()
+	{
 		if (TryReuseSpawnedActors())
 		{
 			return;
@@ -312,15 +368,13 @@ namespace PCGExStagingSpawnActors
 		// Cache transforms for the spawn loop
 		Transforms = PointDataFacade->Source->GetIn()->GetConstTransformValueRange();
 
-		TArray<FSoftObjectPath> PathsToLoad = UniquePaths.Array();
-
 		// Warm cache: completes synchronously on this thread (see LoadTracked). Keep-alive is context-owned.
 		PCGExHelpers::LoadTracked(
 			TaskManager,
-			[PCGEX_ASYNC_THIS_CAPTURE, PathsToLoad = MoveTemp(PathsToLoad)]() -> TArray<FSoftObjectPath>
+			[PCGEX_ASYNC_THIS_CAPTURE, Paths = MoveTemp(SpawnAssetPaths)]() -> TArray<FSoftObjectPath>
 			{
 				PCGEX_ASYNC_THIS_RET({})
-				return PathsToLoad;
+				return Paths;
 			},
 			[PCGEX_ASYNC_THIS_CAPTURE](const bool bSuccess)
 			{
@@ -333,43 +387,15 @@ namespace PCGExStagingSpawnActors
 
 	bool FProcessor::TryReuseSpawnedActors()
 	{
-		if (!InputCrc.IsValid())
+		// A resource short of one actor per point (a spawn failed) can't be mapped back onto the points.
+		bool bCurrent = false;
+		ManagedActors = Context->ReclaimOrAddManagedActors(Context->GetSlotCrc(BatchIndex, /*bWithSettings=*/false), ContentCrc, NumResolved, bCurrent);
+		if (!bCurrent)
 		{
 			return false;
 		}
 
-		int32 NumResolved = 0;
-		for (const FResolvedEntry& Resolved : ResolvedEntries)
-		{
-			NumResolved += Resolved.Entry ? 1 : 0;
-		}
-
-#if WITH_EDITOR
-		const UPCGComponent* SourceComponent = ExecutionContext->GetComponent();
-		const bool bIsPreview = SourceComponent && SourceComponent->IsInPreviewMode();
-#endif
-
-		// Same guards as the engine's spawner. A resource short of one actor per point (a spawn failed) can't be
-		// mapped back onto the points; one left by an interrupted run never got its CRC.
-		const UPCGManagedActors* Reused = PCGExManagedHelpers::TryReuseManagedResource<UPCGManagedActors>(
-			ExecutionContext->GetMutableComponent(), InputCrc,
-			[&](const UPCGManagedActors* Resource)
-			{
-#if WITH_EDITOR
-				if (Resource->IsPreview() != bIsPreview)
-				{
-					return false;
-				}
-#endif
-				return Resource->GetConstGeneratedActors().Num() == NumResolved;
-			});
-
-		if (!Reused)
-		{
-			return false;
-		}
-
-		const TArray<TSoftObjectPtr<AActor>>& Actors = Reused->GetConstGeneratedActors();
+		const TArray<TSoftObjectPtr<AActor>>& Actors = ManagedActors->GetConstGeneratedActors();
 		int32 ActorIndex = 0;
 		for (int32 i = 0; i < NumPoints; i++)
 		{
@@ -509,11 +535,8 @@ namespace PCGExStagingSpawnActors
 
 	void FProcessor::OnAllPointsVisited()
 	{
-		// Only now: a resource whose run got interrupted keeps no CRC, so it can never be taken for a complete one.
-		if (ManagedActors && InputCrc.IsValid())
-		{
-			ManagedActors->SetCrc(InputCrc);
-		}
+		// Only now: a run that got interrupted keeps no content hash, so it can never be taken for a complete one.
+		ManagedActors->EndRespawn(ContentCrc);
 	}
 
 	void FProcessor::CompleteWork()
@@ -597,11 +620,17 @@ namespace PCGExStagingSpawnActors
 			{
 				SpawnParams.ObjectFlags |= RF_Transient | RF_NonPIEDuplicateTransient;
 			}
+
+			// The previous run's actor in this slot, when of the same class in the same level, passes on its name, package and GUID.
+			ManagedActors->PrepareSpawn(ActorClass, SpawnParams);
+
 			SpawnedActor = World->SpawnActor<AActor>(ActorClass, SpawnTransform, SpawnParams);
 		}
 
 		if (!SpawnedActor)
 		{
+			ManagedActors->CommitSpawn(nullptr);
+
 			if (!Settings->bQuietInvalidEntryWarnings)
 			{
 				PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
@@ -671,26 +700,10 @@ namespace PCGExStagingSpawnActors
 			}
 		}
 
-		// Create and register managed resource on first successful spawn.
-		// Registering immediately ensures that if the time-sliced loop is
-		// interrupted by a graph regeneration, already-spawned actors are
-		// tracked and will be cleaned up.
-		if (!ManagedActors)
-		{
-			UPCGComponent* MutableSourceComponent = ExecutionContext->GetMutableComponent();
-			ManagedActors = NewObject<UPCGManagedActors>(MutableSourceComponent);
+		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, bTransientSpawn);
 
-#if WITH_EDITOR
-			// Explicitly reflect the component's editing mode on the resource. Without this,
-			// bIsPreview may not match the component state and tracked actors can be treated
-			// as transient. UE's PCG spawn element does this at PCGSpawnActor.cpp:972.
-			ManagedActors->SetIsPreview(bIsPreviewActor);
-#endif
-
-			MutableSourceComponent->AddToManagedResources(ManagedActors);
-		}
-
-		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, ManagedActors, bTransientSpawn);
+		// Tracked as soon as it exists: an interrupted loop leaves nothing behind that PCG can't clean up.
+		ManagedActors->CommitSpawn(SpawnedActor);
 
 		// Last, once the actor is tracked: these run user code against its final state.
 		if (!Settings->PostProcessFunctionNames.IsEmpty())

@@ -102,7 +102,6 @@ namespace PCGExFloodFill
 
 			FillControlsHandler = MakeShared<FFillControlsHandler>(this->Context, this->Cluster, this->VtxDataFacade, this->EdgeDataFacade, this->Context->SeedsDataFacade, this->Context->FillControlFactories);
 
-			FillControlsHandler->HeuristicsHandler = this->HeuristicsHandler;
 			FillControlsHandler->InfluencesCount = GetInfluencesCount();
 			FillControlsHandler->bNeedsTravelStack |= NeedsTravelStack();
 

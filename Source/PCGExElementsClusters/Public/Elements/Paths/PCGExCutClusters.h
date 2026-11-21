@@ -13,11 +13,6 @@
 
 #include "PCGExCutClusters.generated.h"
 
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 UENUM()
 enum class EPCGExCutEdgesMode : uint8
 {
@@ -139,8 +134,6 @@ namespace PCGExCutEdges
 			DefaultEdgeFilterValue = false;
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
 		virtual void ProcessEdges(const PCGExMT::FScope& Scope) override;
@@ -160,7 +153,6 @@ namespace PCGExCutEdges
 		FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, const TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges)
 			: TBatch(InContext, InVtx, InEdges)
 		{
-			PCGEX_TYPED_CONTEXT_AND_SETTINGS(CutEdges)
 			bRequiresGraphBuilder = true;
 			bAllowVtxDataFacadeScopedGet = true;
 			DefaultVtxFilterValue = false;

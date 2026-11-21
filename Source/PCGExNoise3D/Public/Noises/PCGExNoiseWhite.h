@@ -14,11 +14,6 @@ USTRUCT(BlueprintType)
 struct FPCGExNoiseConfigWhite : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
-
-	FPCGExNoiseConfigWhite()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
 };
 
 /**
@@ -27,9 +22,6 @@ struct FPCGExNoiseConfigWhite : public FPCGExNoise3DConfigBase
  */
 class PCGEXNOISE3D_API FPCGExNoiseWhite : public FPCGExNoise3DOperation
 {
-public:
-	virtual ~FPCGExNoiseWhite() override = default;
-
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 };

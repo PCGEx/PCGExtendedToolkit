@@ -25,11 +25,6 @@ struct FPCGExNoiseConfigSpots : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigSpots()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Shape of the spots */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExSpotsShape Shape = EPCGExSpotsShape::SoftCircle;
@@ -68,8 +63,6 @@ public:
 	double Jitter = 0.3;
 	bool bInvertSpots = false;
 	double ValueVariation = 0.0;
-
-	virtual ~FPCGExNoiseSpots() override = default;
 
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;

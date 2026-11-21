@@ -49,13 +49,6 @@ enum class EPCGExFloodFillPrioritization : uint8
 };
 
 UENUM()
-enum class EPCGExFloodFillOrder : uint8
-{
-	Index   = 0 UMETA(DisplayName = "Index", ToolTip="Uses point index to drive diffusion order."),
-	Sorting = 1 UMETA(DisplayName = "Sorting", ToolTip="Use sorting rules to drive diffusion order."),
-};
-
-UENUM()
 enum class EPCGExFloodFillProcessing : uint8
 {
 	Parallel = 0 UMETA(DisplayName = "Parallel", ToolTip="Diffuse each vtx once before moving to the next iteration."),
@@ -74,14 +67,6 @@ struct PCGEXELEMENTSFLOODFILL_API FPCGExFloodFillSeedPickingDetails
 	/** Drive how a seed point selects a node. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExNodeSelectionDetails SeedPicking = FPCGExNodeSelectionDetails(200);
-
-	/** Defines the sorting used for the vtx */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExFloodFillOrder Ordering = EPCGExFloodFillOrder::Index;
-
-	/** Sort direction */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
-	EPCGExSortDirection SortDirection = EPCGExSortDirection::Ascending;
 };
 
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true", DisplayName="[PCGEx] Flood Fill Control Step Flags"))
@@ -329,8 +314,6 @@ namespace PCGExFloodFill
 		TArray<TSharedPtr<FPCGExFillControlOperation>> SubOpsProbeFanout;
 
 	public:
-		mutable FRWLock HandlerLock;
-
 		// Set in BuildFrom -- whether any control opts into capture-notify / probe fan-out
 		// limiting, so hot paths can skip the dispatch.
 		bool bHasCaptureNotify = false;
@@ -345,7 +328,6 @@ namespace PCGExFloodFill
 		TSharedPtr<PCGExData::FFacade> VtxDataFacade;
 		TSharedPtr<PCGExData::FFacade> EdgeDataFacade;
 		TSharedPtr<PCGExData::FFacade> SeedsDataFacade;
-		TWeakPtr<PCGExHeuristics::FHandler> HeuristicsHandler;
 
 		TArray<TSharedPtr<FPCGExFillControlOperation>> Operations;
 

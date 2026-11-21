@@ -102,16 +102,3 @@ void FPCGExEdgeRemoveLeavesRecursive::Process()
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRemoveLeavesRecursive
-
-void UPCGExEdgeRemoveLeavesRecursive::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRemoveLeavesRecursive* TypedOther = Cast<UPCGExEdgeRemoveLeavesRecursive>(Other))
-	{
-		MaxIterations = TypedOther->MaxIterations;
-	}
-}
-
-#pragma endregion

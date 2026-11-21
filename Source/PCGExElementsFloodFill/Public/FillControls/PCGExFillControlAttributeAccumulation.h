@@ -30,7 +30,11 @@ struct FPCGExFillControlConfigAttributeAccumulation : public FPCGExFillControlCo
 {
 	GENERATED_BODY()
 
-	FPCGExFillControlConfigAttributeAccumulation() = default;
+	FPCGExFillControlConfigAttributeAccumulation()
+		: FPCGExFillControlConfigBase()
+	{
+		bSupportSteps = false; // Always scores and validates candidates.
+	}
 
 	/** Attribute to accumulate. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))

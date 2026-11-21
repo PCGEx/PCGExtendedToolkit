@@ -16,6 +16,11 @@
 
 PCGEX_INITIALIZE_ELEMENT(Clipper2Offset)
 
+UPCGExClipper2OffsetSettings::UPCGExClipper2OffsetSettings(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	bExposeOffsetProperties = true;
+}
 
 FPCGExGeo2DProjectionDetails UPCGExClipper2OffsetSettings::GetProjectionDetails() const
 {

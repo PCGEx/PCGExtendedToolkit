@@ -37,12 +37,12 @@ public:
 
 	virtual FString GetPointFilterTooltip() const override
 	{
-		return TEXT("Path points processing filters");
+		return TEXT("Seed points processing filters");
 	}
 
 	//~End UPCGExPointsProcessorSettings
 
-	/** How to pick which path endpoint to start with */
+	/** How the generated shapes are split across outputs. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExShapeOutputMode OutputMode = EPCGExShapeOutputMode::PerSeed;
 };

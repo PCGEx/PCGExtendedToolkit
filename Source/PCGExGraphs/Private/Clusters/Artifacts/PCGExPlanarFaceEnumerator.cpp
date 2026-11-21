@@ -849,132 +849,7 @@ namespace PCGExClusters
 			return;
 		}
 
-		const TArray<FRawFace>& RawFaces = EnumerateRawFaces();
-		const int32 NumRawFaces = RawFaces.Num();
-
-		if (NumRawFaces == 0)
-		{
-			return;
-		}
-
-		// For small face counts, serial is faster due to parallel overhead
-		constexpr int32 ParallelThreshold = 32;
-
-		// Wrapper detection:
-		// Normal/BestFit: CCW face (inverted winding) with largest area = unbounded exterior
-		// LocalTangent: no topological exterior -- wrapper = largest-area cell (heuristic)
-		auto IsWrapperCandidate = [this](const FCell& Cell) -> bool
-		{
-			return bIsLocalTangent ? true : !Cell.Data.bIsClockwise;
-		};
-
-		if (NumRawFaces < ParallelThreshold)
-		{
-			// Serial path for small counts
-			OutCells.Reserve(OutCells.Num() + NumRawFaces);
-			double WrapperArea = TNumericLimits<double>::Lowest();
-
-			for (const FRawFace& RawFace : RawFaces)
-			{
-				TSharedPtr<FCell> Cell = MakeShared<FCell>(Constraints);
-				const ECellResult Result = BuildCellFromRawFace(RawFace, Cell, Constraints);
-
-				// Always set FaceIndex for adjacency lookups
-				Cell->FaceIndex = RawFace.FaceIndex;
-
-				if (Result == ECellResult::Success)
-				{
-					if (bDetectWrapper && IsWrapperCandidate(*Cell) && Cell->Data.Area > WrapperArea)
-					{
-						// Move previous wrapper candidate back to output if any
-						if (Constraints->WrapperCell)
-						{
-							OutCells.Add(Constraints->WrapperCell);
-						}
-						Constraints->WrapperCell = Cell;
-						WrapperArea = Cell->Data.Area;
-					}
-					else
-					{
-						OutCells.Add(Cell);
-					}
-				}
-				else if (OutFailedCells && !Cell->Polygon.IsEmpty())
-				{
-					OutFailedCells->Add(Cell);
-				}
-			}
-			return;
-		}
-
-		// Parallel path for larger counts
-		// Pre-allocate result arrays - each slot corresponds to a raw face index
-		TArray<TSharedPtr<FCell>> SuccessCells;
-		SuccessCells.SetNum(NumRawFaces);
-
-		TArray<TSharedPtr<FCell>> FailedCells;
-		if (OutFailedCells)
-		{
-			FailedCells.SetNum(NumRawFaces);
-		}
-
-		// Process cells in parallel - each thread writes to its own index (no contention)
-		ParallelFor(NumRawFaces, [&](const int32 RawFaceIdx)
-		{
-			const FRawFace& RawFace = RawFaces[RawFaceIdx];
-			TSharedPtr<FCell> Cell = MakeShared<FCell>(Constraints);
-			const ECellResult Result = BuildCellFromRawFace(RawFace, Cell, Constraints);
-
-			// Always set FaceIndex for adjacency lookups
-			Cell->FaceIndex = RawFace.FaceIndex;
-
-			if (Result == ECellResult::Success)
-			{
-				SuccessCells[RawFaceIdx] = Cell;
-			}
-			else if (OutFailedCells && !Cell->Polygon.IsEmpty())
-			{
-				FailedCells[RawFaceIdx] = Cell;
-			}
-		});
-
-		// Compact results - remove null entries, detect wrapper during compaction
-		OutCells.Reserve(OutCells.Num() + NumRawFaces);
-		double WrapperArea = TNumericLimits<double>::Lowest();
-
-		for (TSharedPtr<FCell>& Cell : SuccessCells)
-		{
-			if (!Cell)
-			{
-				continue;
-			}
-
-			if (bDetectWrapper && IsWrapperCandidate(*Cell) && Cell->Data.Area > WrapperArea)
-			{
-				if (Constraints->WrapperCell)
-				{
-					OutCells.Add(MoveTemp(Constraints->WrapperCell));
-				}
-				Constraints->WrapperCell = MoveTemp(Cell);
-				WrapperArea = Constraints->WrapperCell->Data.Area;
-			}
-			else
-			{
-				OutCells.Add(MoveTemp(Cell));
-			}
-		}
-
-		if (OutFailedCells)
-		{
-			OutFailedCells->Reserve(OutFailedCells->Num() + NumRawFaces);
-			for (TSharedPtr<FCell>& Cell : FailedCells)
-			{
-				if (Cell)
-				{
-					OutFailedCells->Add(MoveTemp(Cell));
-				}
-			}
-		}
+		EnumerateFacesInternal(OutCells, Constraints, nullptr, OutFailedCells, bDetectWrapper);
 	}
 
 	void FPlanarFaceEnumerator::EnumerateFacesWithinBounds(
@@ -992,6 +867,23 @@ namespace PCGExClusters
 			return;
 		}
 
+		// Early exit if no culling possible (include outside or invalid bounds)
+		if (bIncludeOutside || !BoundsFilter.IsValid)
+		{
+			EnumerateAllFaces(OutCells, Constraints, OutFailedCells, bDetectWrapper);
+			return;
+		}
+
+		EnumerateFacesInternal(OutCells, Constraints, &BoundsFilter, OutFailedCells, bDetectWrapper);
+	}
+
+	void FPlanarFaceEnumerator::EnumerateFacesInternal(
+		TArray<TSharedPtr<FCell>>& OutCells,
+		const TSharedRef<FCellConstraints>& Constraints,
+		const FBox* BoundsFilter,
+		TArray<TSharedPtr<FCell>>* OutFailedCells,
+		bool bDetectWrapper)
+	{
 		const TArray<FRawFace>& RawFaces = EnumerateRawFaces();
 		const int32 NumRawFaces = RawFaces.Num();
 
@@ -1000,42 +892,41 @@ namespace PCGExClusters
 			return;
 		}
 
-		// Early exit if no culling possible (include outside or invalid bounds)
-		if (bIncludeOutside || !BoundsFilter.IsValid)
+		// Faces that can yield a cell: all of them, or those whose bounds intersect the filter
+		int32 NumCandidates = NumRawFaces;
+		if (BoundsFilter)
 		{
-			EnumerateAllFaces(OutCells, Constraints, OutFailedCells, bDetectWrapper);
-			return;
-		}
-
-		// Count faces that pass bounds filter (for reserve sizing)
-		int32 PotentialCount = 0;
-		for (const FRawFace& RawFace : RawFaces)
-		{
-			if (BoundsFilter.Intersect(RawFace.Bounds3D))
+			NumCandidates = 0;
+			for (const FRawFace& RawFace : RawFaces)
 			{
-				PotentialCount++;
+				if (BoundsFilter->Intersect(RawFace.Bounds3D))
+				{
+					NumCandidates++;
+				}
 			}
 		}
 
-		// Wrapper detection lambda (same logic as EnumerateAllFaces)
+		// For small face counts, serial is faster due to parallel overhead
+		constexpr int32 ParallelThreshold = 32;
+
+		// Wrapper detection:
+		// Normal/BestFit: CCW face (inverted winding) with largest area = unbounded exterior
+		// LocalTangent: no topological exterior -- wrapper = largest-area cell (heuristic)
 		auto IsWrapperCandidate = [this](const FCell& Cell) -> bool
 		{
 			return bIsLocalTangent ? true : !Cell.Data.bIsClockwise;
 		};
 
-		// For small face counts, serial is faster due to parallel overhead
-		constexpr int32 ParallelThreshold = 32;
-
-		if (PotentialCount < ParallelThreshold)
+		if (NumCandidates < ParallelThreshold)
 		{
-			// Serial path
-			OutCells.Reserve(OutCells.Num() + PotentialCount);
+			// Serial path for small counts
+			OutCells.Reserve(OutCells.Num() + NumCandidates);
 			double WrapperArea = TNumericLimits<double>::Lowest();
 
 			for (const FRawFace& RawFace : RawFaces)
 			{
 				// EARLY CULLING: Skip faces whose bounds don't intersect filter
-				if (!BoundsFilter.Intersect(RawFace.Bounds3D))
+				if (BoundsFilter && !BoundsFilter->Intersect(RawFace.Bounds3D))
 				{
 					continue;
 				}
@@ -1089,7 +980,7 @@ namespace PCGExClusters
 			const FRawFace& RawFace = RawFaces[RawFaceIdx];
 
 			// EARLY CULLING: Skip faces whose bounds don't intersect filter
-			if (!BoundsFilter.Intersect(RawFace.Bounds3D))
+			if (BoundsFilter && !BoundsFilter->Intersect(RawFace.Bounds3D))
 			{
 				return;
 			}
@@ -1111,7 +1002,7 @@ namespace PCGExClusters
 		});
 
 		// Compact results - remove null entries, detect wrapper during compaction
-		OutCells.Reserve(OutCells.Num() + PotentialCount);
+		OutCells.Reserve(OutCells.Num() + NumCandidates);
 		double WrapperArea = TNumericLimits<double>::Lowest();
 
 		for (TSharedPtr<FCell>& Cell : SuccessCells)
@@ -1138,7 +1029,7 @@ namespace PCGExClusters
 
 		if (OutFailedCells)
 		{
-			OutFailedCells->Reserve(OutFailedCells->Num() + PotentialCount);
+			OutFailedCells->Reserve(OutFailedCells->Num() + NumCandidates);
 			for (TSharedPtr<FCell>& Cell : FailedCells)
 			{
 				if (Cell)
@@ -1404,25 +1295,6 @@ namespace PCGExClusters
 		return -1;
 	}
 
-	void FPlanarFaceEnumerator::GetFacePolygon(const int32 FaceIndex, TArray<FVector2D>& OutPolygon) const
-	{
-		OutPolygon.Reset();
-
-		if (bIsLocalTangent || FaceIndex < 0)
-		{
-			return;
-		}
-
-		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
-		{
-			if (HalfEdges[HEIdx].FaceIndex == FaceIndex)
-			{
-				BuildFacePolygonFrom(HEIdx, OutPolygon);
-				return;
-			}
-		}
-	}
-
 	void FPlanarFaceEnumerator::BuildFacePolygonFrom(const int32 StartHalfEdge, TArray<FVector2D>& OutPolygon) const
 	{
 		// ProjectedPositions is node-indexed
@@ -1510,60 +1382,6 @@ namespace PCGExClusters
 		}
 
 		return CachedAdjacencyMap;
-	}
-
-	void FPlanarFaceEnumerator::GetAdjacentFaces(int32 FaceIndex, TArray<int32>& OutAdjacentFaces, int32 WrapperFaceIndex) const
-	{
-		OutAdjacentFaces.Reset();
-
-		if (!bRawFacesEnumerated || FaceIndex < 0 || HalfEdges.IsEmpty())
-		{
-			return;
-		}
-
-		TSet<int32> UniqueAdjacent;
-
-		// Find all half-edges belonging to this face and check their twins
-		for (const FHalfEdge& HE : HalfEdges)
-		{
-			if (HE.FaceIndex != FaceIndex)
-			{
-				continue;
-			}
-
-			if (HE.TwinIndex < 0 || HE.TwinIndex >= HalfEdges.Num())
-			{
-				continue;
-			}
-			const int32 AdjacentFace = HalfEdges[HE.TwinIndex].FaceIndex;
-
-			if (AdjacentFace < 0 || AdjacentFace == WrapperFaceIndex)
-			{
-				continue;
-			}
-
-			UniqueAdjacent.Add(AdjacentFace);
-		}
-
-		OutAdjacentFaces = UniqueAdjacent.Array();
-	}
-
-	void FPlanarFaceEnumerator::GetFaceHalfEdges(int32 FaceIndex, TArray<int32>& OutHalfEdgeIndices) const
-	{
-		OutHalfEdgeIndices.Reset();
-
-		if (!bRawFacesEnumerated || FaceIndex < 0 || HalfEdges.IsEmpty())
-		{
-			return;
-		}
-
-		for (int32 HEIdx = 0; HEIdx < HalfEdges.Num(); ++HEIdx)
-		{
-			if (HalfEdges[HEIdx].FaceIndex == FaceIndex)
-			{
-				OutHalfEdgeIndices.Add(HEIdx);
-			}
-		}
 	}
 
 	void FPlanarFaceEnumerator::GetSharedSegments(TArray<FSharedSegment>& OutSegments, int32 WrapperFaceIndex) const

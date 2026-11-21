@@ -21,8 +21,6 @@ namespace PCGExMath
 	{
 		class TDelaunay3;
 	}
-
-	class TDelaunay3;
 }
 
 namespace PCGExData
@@ -122,7 +120,6 @@ namespace PCGExBuildDelaunayGraph
 		friend class FOutputDelaunaySites;
 
 	protected:
-		TSharedPtr<TArray<int32>> OutputIndices;
 		TSharedPtr<PCGExMath::Geo::TDelaunay3> Delaunay;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 

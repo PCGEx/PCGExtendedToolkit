@@ -83,10 +83,6 @@ bool FPCGExBuildDualGraphElement::AdvanceWork(FPCGExContext* InContext, const UP
 
 namespace PCGExBuildDualGraph
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExBuildDualGraph::Process);
@@ -345,14 +341,6 @@ namespace PCGExBuildDualGraph
 		GraphBuilder->CompileAsync(TaskManager, false, nullptr);
 
 		return true;
-	}
-
-	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
-	{
-	}
-
-	void FProcessor::OnRangeProcessingComplete()
-	{
 	}
 }
 

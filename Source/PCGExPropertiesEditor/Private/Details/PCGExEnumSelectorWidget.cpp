@@ -33,7 +33,7 @@ namespace PCGExEnumSelectorWidget
 	 * for a long-scrolling list; this is the same Regular face at a slightly larger size,
 	 * which matches the readability of native UE class/asset pickers.
 	 */
-	static FSlateFontInfo MenuItemFont()
+	FSlateFontInfo MenuItemFont()
 	{
 		return FCoreStyle::GetDefaultFontStyle("Regular", 10);
 	}
@@ -41,7 +41,7 @@ namespace PCGExEnumSelectorWidget
 	// ---------- Raw data access on the FPCGExEnumSelector property handle -------------------
 
 	/** Returns the FPCGExEnumSelector* for each edited object. Empty array if handle invalid. */
-	static TArray<FPCGExEnumSelector*> AccessSelectors(const TSharedRef<IPropertyHandle>& ValueHandle)
+	TArray<FPCGExEnumSelector*> AccessSelectors(const TSharedRef<IPropertyHandle>& ValueHandle)
 	{
 		TArray<FPCGExEnumSelector*> Out;
 		if (!ValueHandle->IsValidHandle())
@@ -63,7 +63,7 @@ namespace PCGExEnumSelectorWidget
 	}
 
 	/** Returns the unanimous Class across all edited selectors, or nullptr on multi-edit conflict / no data. */
-	static UEnum* ReadUnanimousClass(const TSharedRef<IPropertyHandle>& ValueHandle, bool& bOutMultipleValues)
+	UEnum* ReadUnanimousClass(const TSharedRef<IPropertyHandle>& ValueHandle, bool& bOutMultipleValues)
 	{
 		bOutMultipleValues = false;
 		const TArray<FPCGExEnumSelector*> Selectors = AccessSelectors(ValueHandle);
@@ -85,7 +85,7 @@ namespace PCGExEnumSelectorWidget
 	}
 
 	/** Returns the unanimous Value across all edited selectors. Sets bOutMultipleValues if any disagree. */
-	static int64 ReadUnanimousValue(const TSharedRef<IPropertyHandle>& ValueHandle, bool& bOutMultipleValues)
+	int64 ReadUnanimousValue(const TSharedRef<IPropertyHandle>& ValueHandle, bool& bOutMultipleValues)
 	{
 		bOutMultipleValues = false;
 		const TArray<FPCGExEnumSelector*> Selectors = AccessSelectors(ValueHandle);
@@ -110,7 +110,7 @@ namespace PCGExEnumSelectorWidget
 	 * Apply a write across all edited selectors with proper PreChange/PostChange notifications.
 	 * Mutator is invoked once per edited selector with its raw pointer.
 	 */
-	static void ApplyWrite(
+	void ApplyWrite(
 		const TSharedRef<IPropertyHandle>& ValueHandle,
 		const FText& TransactionDescription,
 		TFunctionRef<void(FPCGExEnumSelector&)> Mutator)
@@ -145,7 +145,7 @@ namespace PCGExEnumSelectorWidget
 	 * scaffolding under /Script/CoreUObject) plus any enum explicitly tagged Hidden or
 	 * BlueprintInternalUseOnly. UUserDefinedEnum (blueprint enums) are deliberately *included*.
 	 */
-	static bool ShouldHideEnumClass(const UEnum* Enum)
+	bool ShouldHideEnumClass(const UEnum* Enum)
 	{
 		if (!Enum)
 		{
@@ -164,7 +164,7 @@ namespace PCGExEnumSelectorWidget
 
 	// ---------- Display labels -----------------------------------------------------------------
 
-	static FText FormatClassButtonLabel(const TSharedRef<IPropertyHandle>& ValueHandle)
+	FText FormatClassButtonLabel(const TSharedRef<IPropertyHandle>& ValueHandle)
 	{
 		bool bMulti = false;
 		UEnum* Enum = ReadUnanimousClass(ValueHandle, bMulti);
@@ -179,7 +179,7 @@ namespace PCGExEnumSelectorWidget
 		return FText::FromString(Enum->GetName());
 	}
 
-	static FText FormatValueButtonLabel(const TSharedRef<IPropertyHandle>& ValueHandle, const bool bFlagMasks)
+	FText FormatValueButtonLabel(const TSharedRef<IPropertyHandle>& ValueHandle, const bool bFlagMasks)
 	{
 		bool bMultiClass = false;
 		UEnum* Enum = ReadUnanimousClass(ValueHandle, bMultiClass);
@@ -226,11 +226,6 @@ namespace PCGExEnumSelectorWidget
 		// we don't have the localized display name without loading, so the asset name is
 		// used as a stand-in -- for user-authored BP enums these usually match anyway.
 		FString DisplayName;
-
-		bool IsLazy() const
-		{
-			return !Loaded.IsValid() && LazyAsset.IsValid();
-		}
 
 		/** Resolves to a usable UEnum*, force-loading the asset if needed. */
 		UEnum* Resolve() const

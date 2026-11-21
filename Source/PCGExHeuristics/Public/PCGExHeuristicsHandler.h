@@ -68,7 +68,6 @@ namespace PCGExHeuristics
 
 		TSharedPtr<PCGExClusters::FCluster> Cluster;
 
-		double ReferenceWeight = 1;
 		double TotalStaticWeight = 0;
 		bool bUseDynamicWeight = false;
 
@@ -152,9 +151,6 @@ namespace PCGExHeuristics
 		TArray<TSharedPtr<FLocalFeedbackHandler>> LocalFeedbackHandlerPool;
 		FCriticalSection PoolLock;
 
-		/** Clamp floor shared by aggregation modes that divide by, or take the log of, scores */
-		static constexpr double MinClampedScore = 1e-10;
-
 		/** Operations split by HasStaticEdgeScore, built by CompleteClusterPreparation.
 		 * Raw pointers -- lifetime owned by Operations. */
 		TArray<FPCGExHeuristicOperation*> StaticEdgeOps;
@@ -180,99 +176,5 @@ namespace PCGExHeuristics
 		virtual double BakeReduce(const double A, const double B) const = 0;
 		/** Neutral element of BakeReduce */
 		virtual double BakeIdentity() const = 0;
-	};
-
-	//
-	// Concrete handler implementations
-	//
-
-	/** Weighted average: sum(score x weight) / sum(weight) */
-	class PCGEXHEURISTICS_API FHandlerWeightedAverage final : public FHandler
-	{
-	public:
-		using FHandler::FHandler;
-
-		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr) const override;
-		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr, PCGEx::FHashLookup* TravelStack = nullptr) const override;
-
-	protected:
-		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return WeightedScore; }
-		virtual double BakeReduce(const double A, const double B) const override { return A + B; }
-		virtual double BakeIdentity() const override { return 0; }
-	};
-
-	/** Geometric mean: product(score^weight)^(1/sum(weight)) */
-	class PCGEXHEURISTICS_API FHandlerGeometricMean final : public FHandler
-	{
-	public:
-		using FHandler::FHandler;
-
-		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr) const override;
-		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr, PCGEx::FHashLookup* TravelStack = nullptr) const override;
-
-	protected:
-		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return Weight * FMath::Loge(FMath::Max(MinClampedScore, WeightedScore) / Weight); }
-		virtual double BakeReduce(const double A, const double B) const override { return A + B; }
-		virtual double BakeIdentity() const override { return 0; }
-	};
-
-	/** Weighted sum: sum(score x weight) - no normalization */
-	class PCGEXHEURISTICS_API FHandlerWeightedSum final : public FHandler
-	{
-	public:
-		using FHandler::FHandler;
-
-		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr) const override;
-		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr, PCGEx::FHashLookup* TravelStack = nullptr) const override;
-
-	protected:
-		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return WeightedScore; }
-		virtual double BakeReduce(const double A, const double B) const override { return A + B; }
-		virtual double BakeIdentity() const override { return 0; }
-	};
-
-	/** Harmonic mean: sum(weight) / sum(weight/score) - heavily emphasizes low scores */
-	class PCGEXHEURISTICS_API FHandlerHarmonicMean final : public FHandler
-	{
-	public:
-		using FHandler::FHandler;
-
-		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr) const override;
-		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr, PCGEx::FHashLookup* TravelStack = nullptr) const override;
-
-	protected:
-		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return Weight / (FMath::Max(MinClampedScore, WeightedScore) / Weight); }
-		virtual double BakeReduce(const double A, const double B) const override { return A + B; }
-		virtual double BakeIdentity() const override { return 0; }
-	};
-
-	/** Minimum: returns the lowest weighted score - most permissive */
-	class PCGEXHEURISTICS_API FHandlerMin final : public FHandler
-	{
-	public:
-		using FHandler::FHandler;
-
-		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr) const override;
-		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr, PCGEx::FHashLookup* TravelStack = nullptr) const override;
-
-	protected:
-		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return WeightedScore / Weight; }
-		virtual double BakeReduce(const double A, const double B) const override { return FMath::Min(A, B); }
-		virtual double BakeIdentity() const override { return TNumericLimits<double>::Max(); }
-	};
-
-	/** Maximum: returns the highest weighted score - most restrictive */
-	class PCGEXHEURISTICS_API FHandlerMax final : public FHandler
-	{
-	public:
-		using FHandler::FHandler;
-
-		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr) const override;
-		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback = nullptr, PCGEx::FHashLookup* TravelStack = nullptr) const override;
-
-	protected:
-		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return WeightedScore / Weight; }
-		virtual double BakeReduce(const double A, const double B) const override { return FMath::Max(A, B); }
-		virtual double BakeIdentity() const override { return TNumericLimits<double>::Lowest(); }
 	};
 }

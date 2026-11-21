@@ -33,7 +33,7 @@ namespace PCGExData
 	TArray<const ISubAccessor*> FSubAccessorRegistry::OrderedView;
 	bool FSubAccessorRegistry::bInitialized = false;
 
-	namespace
+	namespace PCGExSubAccessor
 	{
 		// Cached pointers for typed getters. Set by Initialize().
 		const ISubAccessor* GAxisAccessor = nullptr;
@@ -55,16 +55,16 @@ namespace PCGExData
 		// Axis -> TransformPart -> SingleField -> Swizzle ->
 		// ContainerCount -> ContainerIndex.
 		OwnedAccessors.Add(MakeUnique<FAxisAccessor>());
-		GAxisAccessor = OwnedAccessors.Last().Get();
-		OrderedView.Add(GAxisAccessor);
+		PCGExSubAccessor::GAxisAccessor = OwnedAccessors.Last().Get();
+		OrderedView.Add(PCGExSubAccessor::GAxisAccessor);
 
 		OwnedAccessors.Add(MakeUnique<FTransformPartAccessor>());
-		GTransformPartAccessor = OwnedAccessors.Last().Get();
-		OrderedView.Add(GTransformPartAccessor);
+		PCGExSubAccessor::GTransformPartAccessor = OwnedAccessors.Last().Get();
+		OrderedView.Add(PCGExSubAccessor::GTransformPartAccessor);
 
 		OwnedAccessors.Add(MakeUnique<FSingleFieldAccessor>());
-		GSingleFieldAccessor = OwnedAccessors.Last().Get();
-		OrderedView.Add(GSingleFieldAccessor);
+		PCGExSubAccessor::GSingleFieldAccessor = OwnedAccessors.Last().Get();
+		OrderedView.Add(PCGExSubAccessor::GSingleFieldAccessor);
 
 		// Swizzle accessor. Its MatchesToken only accepts 2-4 char combos of
 		// {x,y,z,w}, so it never competes with SingleField's single-letter
@@ -80,12 +80,12 @@ namespace PCGExData
 		// bracket-wrapped numeric tokens so there's no overlap in practice,
 		// but Count-first is cheaper (no numeric parse attempt).
 		OwnedAccessors.Add(MakeUnique<FContainerCountAccessor>());
-		GContainerCountAccessor = OwnedAccessors.Last().Get();
-		OrderedView.Add(GContainerCountAccessor);
+		PCGExSubAccessor::GContainerCountAccessor = OwnedAccessors.Last().Get();
+		OrderedView.Add(PCGExSubAccessor::GContainerCountAccessor);
 
 		OwnedAccessors.Add(MakeUnique<FContainerIndexAccessor>());
-		GContainerIndexAccessor = OwnedAccessors.Last().Get();
-		OrderedView.Add(GContainerIndexAccessor);
+		PCGExSubAccessor::GContainerIndexAccessor = OwnedAccessors.Last().Get();
+		OrderedView.Add(PCGExSubAccessor::GContainerIndexAccessor);
 
 		bInitialized = true;
 	}
@@ -105,7 +105,7 @@ namespace PCGExData
 		{
 			Initialize();
 		}
-		return GAxisAccessor;
+		return PCGExSubAccessor::GAxisAccessor;
 	}
 
 	const ISubAccessor* FSubAccessorRegistry::GetTransformPartAccessor()
@@ -114,7 +114,7 @@ namespace PCGExData
 		{
 			Initialize();
 		}
-		return GTransformPartAccessor;
+		return PCGExSubAccessor::GTransformPartAccessor;
 	}
 
 	const ISubAccessor* FSubAccessorRegistry::GetSingleFieldAccessor()
@@ -123,7 +123,7 @@ namespace PCGExData
 		{
 			Initialize();
 		}
-		return GSingleFieldAccessor;
+		return PCGExSubAccessor::GSingleFieldAccessor;
 	}
 
 	const ISubAccessor* FSubAccessorRegistry::GetContainerIndexAccessor()
@@ -132,7 +132,7 @@ namespace PCGExData
 		{
 			Initialize();
 		}
-		return GContainerIndexAccessor;
+		return PCGExSubAccessor::GContainerIndexAccessor;
 	}
 
 	const ISubAccessor* FSubAccessorRegistry::GetContainerCountAccessor()
@@ -141,7 +141,7 @@ namespace PCGExData
 		{
 			Initialize();
 		}
-		return GContainerCountAccessor;
+		return PCGExSubAccessor::GContainerCountAccessor;
 	}
 
 	int32 GetNumFieldsForType(EPCGMetadataTypes Type)
@@ -222,7 +222,7 @@ namespace PCGExData
 	// Chain compilation
 	//
 
-	namespace
+	namespace PCGExSubAccessor
 	{
 		// Build a synthesized TransformPart step for auto-promotion. The returned
 		// step is compiled (InType/OutType/StepGetFn/StepSetFn populated) and
@@ -307,7 +307,7 @@ namespace PCGExData
 
 				if (Action == ISubAccessor::ECompileAction::Keep)
 				{
-					FinalizeCompiledStep(Step, CurrentType);
+					PCGExSubAccessor::FinalizeCompiledStep(Step, CurrentType);
 					// Compile-time stash (container accessors use this to
 					// carry ElementSize into the hot path). No-op for
 					// scalar accessors.
@@ -348,7 +348,7 @@ namespace PCGExData
 					? PCGExTypeOps::ETransformPart::Rotation
 					: PCGExTypeOps::ETransformPart::Position;
 
-				FSubSelectionStep Inserted = MakeTransformPartStep(Part);
+				FSubSelectionStep Inserted = PCGExSubAccessor::MakeTransformPartStep(Part);
 				CurrentType = Inserted.OutType;
 				// TransformPart promotion doesn't consume a container layer.
 				// Clear Desc -- the promoted value is a scalar sub-component

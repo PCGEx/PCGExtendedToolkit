@@ -11,11 +11,6 @@ void FPCGExElementsClustersDecompModule::StartupModule()
 	IPCGExLegacyModuleInterface::StartupModule();
 }
 
-void FPCGExElementsClustersDecompModule::ShutdownModule()
-{
-	IPCGExLegacyModuleInterface::ShutdownModule();
-}
-
 #undef LOCTEXT_NAMESPACE
 
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsClustersDecompModule, PCGExElementsClustersDecomp)

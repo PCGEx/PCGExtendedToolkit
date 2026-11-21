@@ -6,11 +6,6 @@
 
 #include "Data/PCGExData.h"
 
-void UPCGExGoalPickerAll::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-}
-
 bool UPCGExGoalPickerAll::PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsDataFacade, const TSharedPtr<PCGExData::FFacade>& InGoalsDataFacade)
 {
 	if (!Super::PrepareForData(InContext, InSeedsDataFacade, InGoalsDataFacade))

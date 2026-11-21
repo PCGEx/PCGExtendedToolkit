@@ -33,12 +33,6 @@ protected:
 	virtual void BuildGrid(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder) const;
 };
 
-class FPCGExBitmaskWithOperationCustomization : public FPCGExBitmaskCustomization
-{
-public:
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
-};
-
 class FPCGExBitmaskFilterConfigCustomization : public FPCGExBitmaskCustomization
 {
 public:

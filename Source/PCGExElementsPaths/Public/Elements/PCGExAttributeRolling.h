@@ -57,8 +57,6 @@ class UPCGExAttributeRollingSettings : public UPCGExPathProcessorSettings
 	GENERATED_BODY()
 
 public:
-	UPCGExAttributeRollingSettings(const FObjectInitializer& ObjectInitializer);
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(AttributeRolling, "Path : Attribute Rolling", "Does a rolling blending of properties & attributes.");
@@ -197,8 +195,6 @@ namespace PCGExAttributeRolling
 		TSharedPtr<PCGExPointFilter::FManager> StartFilterManager;
 		TSharedPtr<PCGExPointFilter::FManager> StopFilterManager;
 
-		PCGExPaths::FPathMetrics CurrentMetric;
-
 		TSharedPtr<PCGExBlending::FBlendOpsManager> BlendOpsManager;
 
 		PCGEX_FOREACH_FIELD_ATTRIBUTE_ROLL(PCGEX_OUTPUT_DECL)
@@ -209,7 +205,6 @@ namespace PCGExAttributeRolling
 		{
 		}
 
-		virtual ~FProcessor() override;
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;

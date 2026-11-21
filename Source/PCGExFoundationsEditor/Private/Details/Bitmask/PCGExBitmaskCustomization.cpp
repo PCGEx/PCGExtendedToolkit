@@ -171,11 +171,6 @@ void FPCGExBitmaskCustomization::BuildGrid(TSharedRef<IPropertyHandle> PropertyH
 		];
 }
 
-TSharedRef<IPropertyTypeCustomization> FPCGExBitmaskWithOperationCustomization::MakeInstance()
-{
-	return MakeShareable(new FPCGExBitmaskWithOperationCustomization());
-}
-
 TSharedRef<IPropertyTypeCustomization> FPCGExBitmaskFilterConfigCustomization::MakeInstance()
 {
 	return MakeShareable(new FPCGExBitmaskFilterConfigCustomization());

@@ -82,7 +82,6 @@ TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryCaustic::CreateOperationI
 	NewOperation->AnimationSpeed = Config.AnimationSpeed;
 	NewOperation->Intensity = Config.Intensity;
 	NewOperation->Focus = Config.Focus;
-	NewOperation->Octaves = 1;
 
 	return NewOperation;
 }

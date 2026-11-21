@@ -589,8 +589,6 @@ void FPCGExPropertySchemaCollectionCustomization::CustomizeChildren(
 		return;
 	}
 
-	SchemasArrayHandlePtr = SchemasArrayHandle;
-
 	if (bValuesOnly)
 	{
 		// Schema structure is locked -- only values are editable. ReadOnlySchema on the array

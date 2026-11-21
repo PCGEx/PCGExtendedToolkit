@@ -12,15 +12,6 @@
 #define LOCTEXT_NAMESPACE "PCGExCreateTensorNoise"
 #define PCGEX_NAMESPACE CreateTensorNoise
 
-bool FPCGExTensorNoise::Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory)
-{
-	if (!PCGExTensorOperation::Init(InContext, InFactory))
-	{
-		return false;
-	}
-	return true;
-}
-
 PCGExTensor::FTensorSample FPCGExTensorNoise::Sample(const int32 InSeedIndex, const FTransform& InProbe) const
 {
 	PCGExTensor::FEffectorSamples Samples = PCGExTensor::FEffectorSamples();

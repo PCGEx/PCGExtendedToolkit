@@ -60,7 +60,7 @@ protected:
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(PickerConstantSet, "Picker : Ranges from Set", "A Picker that accept lists of ranges in the form of FVector2, read from one of more attribute. Note that if no attribute is set in the details, it will use the first available one.")
+	PCGEX_NODE_INFOS(PickerAttributeSetRanges, "Picker : Ranges from Set", "A Picker that accept lists of ranges in the form of FVector2, read from one of more attribute. Note that if no attribute is set in the details, it will use the first available one.")
 
 #endif
 	//~End UPCGSettings

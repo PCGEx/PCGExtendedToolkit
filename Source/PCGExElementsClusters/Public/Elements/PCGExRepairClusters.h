@@ -18,11 +18,6 @@ public:
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(SanitizeClusters, "Cluster : Repair", "Ensure the input set of vertex and edges outputs clean, interconnected clusters. May create new clusters, and deletes unresolvable edges, duplicates and stranded vtx.");
 
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
-	
 	virtual TArray<FText> GetNodeTitleAliases() const override;
 #endif
 
@@ -69,8 +64,6 @@ namespace PCGExRepairClusters
 		{
 			bBuildCluster = false;
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 	};

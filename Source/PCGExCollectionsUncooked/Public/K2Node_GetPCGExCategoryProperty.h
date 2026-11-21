@@ -8,16 +8,11 @@
 
 #include "K2Node_GetPCGExCategoryProperty.generated.h"
 
-class FBlueprintActionDatabaseRegistrar;
-
 /** Reads a category's resolved custom property (category override row, then collection default) (pure). See UK2Node_PCGExPropertyBase. */
 UCLASS(meta=(DisplayName="Get Category Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExCategoryProperty : public UK2Node_PCGExPropertyBase
 {
 	GENERATED_BODY()
-
-public:
-	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
 
 protected:
 	virtual bool IsSetNode() const override

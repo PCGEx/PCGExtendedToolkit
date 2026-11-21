@@ -185,15 +185,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Asset", meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bWriteAssetPath = true;
 
-	UPROPERTY(meta=(PCG_NotOverridable))
-	bool bWriteAssetClass = true;
-
 	/** Name of the attribute the asset path is written to. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Asset", meta=(PCG_Overridable, DisplayName="Asset Path", EditCondition="bWriteAssetPath"))
 	FName AssetPathAttributeName = FName("AssetPath");
-
-	UPROPERTY()
-	FName AssetClassAttributeName = NAME_None;
 
 	/** Write a stable int32 ID of the asset path (hash of the canonical path; 0 for a null path). Same ID as the Kweave Mesh List's mesh ID. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Outputs|Asset", meta=(PCG_NotOverridable, InlineEditConditionToggle))

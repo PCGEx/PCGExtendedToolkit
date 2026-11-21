@@ -33,7 +33,6 @@ void UPCGExNoise3DFactory##_TYPE::RegisterAssetDependencies(TSet<FSoftObjectPath
 	NewOperation->Seed = Config.Seed; \
 	NewOperation->bInvert = Config.bInvert; \
 	NewOperation->BlendMode = Config.BlendMode; \
-	NewOperation->WeightFactor = Config.WeightFactor; \
 	NewOperation->RemapLUT = Config.RemapLUT; \
 	NewOperation->bApplyTransform = Config.bApplyTransform; \
 	NewOperation->Transform = Config.Transform; \
@@ -59,10 +58,6 @@ struct PCGEXNOISE3D_API FPCGExNoise3DConfigBase
 	{
 		LocalRemapCurve.EditorCurveData.AddKey(0, 0);
 		LocalRemapCurve.EditorCurveData.AddKey(1, 1);
-	}
-
-	~FPCGExNoise3DConfigBase()
-	{
 	}
 
 	/** The weight factor for this Noise3D (used when combining multiple noise sources). */

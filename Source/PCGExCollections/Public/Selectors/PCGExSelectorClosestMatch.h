@@ -157,7 +157,6 @@ class PCGEXCOLLECTIONS_API FPCGExClosestMatchSharedData : public PCGExCollection
 {
 public:
 	int32 AxisCount = 0;
-	int32 EntryCount = 0;
 	TArray<TSharedPtr<FPCGExClosestMatchAxisData>> AxisData;
 	TArray<int32> ValidEntryIndices;
 };

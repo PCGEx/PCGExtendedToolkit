@@ -123,10 +123,6 @@ bool FPCGExBestMatchAxisElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExBestMatchAxis
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExBestMatchAxis::Process);

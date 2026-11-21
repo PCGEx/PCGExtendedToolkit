@@ -216,16 +216,12 @@ protected:
 namespace PCGExClusterDiffusion
 {
 	class FBatch;
-	class FProcessor;
 
 	class FProcessor final : public PCGExFloodFill::TDiffusionGrowthProcessor<FPCGExClusterDiffusionContext, UPCGExClusterDiffusionSettings>
 	{
 		friend FBatch;
 
 	protected:
-		const PCGExClusters::FNode* RoamingSeedNode = nullptr;
-		const PCGExClusters::FNode* RoamingGoalNode = nullptr;
-
 		// Shared per-vtx claim array, provided to the growth base via GetInfluencesCount().
 		TSharedPtr<TArray<int8>> InfluencesCount;
 		TSharedPtr<PCGExBlending::FBlendOpsManager> BlendOpsManager;
@@ -261,8 +257,6 @@ namespace PCGExClusterDiffusion
 		}
 
 		PCGEX_FOREACH_FIELD_CLUSTER_DIFF(PCGEX_OUTPUT_DECL)
-
-		virtual ~FProcessor() override;
 
 		virtual void CompleteWork() override;
 		void Diffuse(const TSharedPtr<PCGExFloodFill::FDiffusion>& Diffusion);

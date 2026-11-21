@@ -42,7 +42,7 @@ namespace PCGExInlineWidgetRegistry_Private
 		}
 	};
 
-	static TMap<FKey, FPCGExMakeInlineWidgetFn>& GetMap()
+	TMap<FKey, FPCGExMakeInlineWidgetFn>& GetMap()
 	{
 		static TMap<FKey, FPCGExMakeInlineWidgetFn> Map;
 		return Map;

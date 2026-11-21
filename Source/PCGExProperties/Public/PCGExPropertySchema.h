@@ -414,21 +414,6 @@ struct PCGEXPROPERTIES_API FPCGExPropertyOverrides
 	 */
 	void ApplyHeaderIdRemap(TConstArrayView<FPCGExHeaderIdRemap> Remaps);
 
-	/** Check if override at index is enabled */
-	bool IsOverrideEnabled(int32 Index) const
-	{
-		return Overrides.IsValidIndex(Index) && Overrides[Index].bEnabled;
-	}
-
-	/** Set override enabled state at index */
-	void SetOverrideEnabled(int32 Index, bool bEnabled)
-	{
-		if (Overrides.IsValidIndex(Index))
-		{
-			Overrides[Index].bEnabled = bEnabled;
-		}
-	}
-
 	/** Check if an enabled override exists for the given property name */
 	bool HasOverride(FName PropertyName) const
 	{

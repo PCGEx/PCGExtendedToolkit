@@ -9,7 +9,6 @@
 #include "PCGSettings.h"
 #include "UObject/Object.h"
 
-#include "PCGExCoreSettingsCache.h" // Boilerplate
 #include "PCGExVersion.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"

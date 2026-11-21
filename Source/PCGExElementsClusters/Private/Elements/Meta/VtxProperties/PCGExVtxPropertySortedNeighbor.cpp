@@ -126,13 +126,6 @@ TSharedPtr<PCGExSorting::FSorter> UPCGExVtxPropertySortedNeighborFactory::GetOrB
 
 #pragma region UPCGExVtxPropertySortedNeighborSettings
 
-#if WITH_EDITOR
-FString UPCGExVtxPropertySortedNeighborSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif
-
 TArray<FPCGPinProperties> UPCGExVtxPropertySortedNeighborSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();

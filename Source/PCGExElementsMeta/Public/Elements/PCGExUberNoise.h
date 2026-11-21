@@ -126,9 +126,6 @@ namespace PCGExUberNoise
 {
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExUberNoiseContext, UPCGExUberNoiseSettings>
 	{
-		EPCGMetadataTypes UnderlyingType = EPCGMetadataTypes::Unknown;
-		int32 NumFields = 0;
-
 		TSharedPtr<PCGExBlending::FProxyDataBlender> Blender;
 		TSharedPtr<PCGExData::IBufferProxy> NoiseBuffer;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> WeightBuffer;
@@ -138,8 +135,6 @@ namespace PCGExUberNoise
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

@@ -44,35 +44,33 @@ namespace PCGExPathfinding
 
 	EQueryPickResolution FPathQuery::ResolvePicks(const FPCGExNodeSelectionDetails& SeedSelectionDetails, const FPCGExNodeSelectionDetails& GoalSelectionDetails)
 	{
-		PickResolution = EQueryPickResolution::None;
+		// Both are always attempted; a pick is resolved exactly when it holds a node.
+		Seed.ResolveNode(Cluster, SeedSelectionDetails);
+		Goal.ResolveNode(Cluster, GoalSelectionDetails);
 
-		if (!Seed.ResolveNode(Cluster, SeedSelectionDetails))
+		return UpdatePickResolution();
+	}
+
+	EQueryPickResolution FPathQuery::UpdatePickResolution()
+	{
+		if (!Seed.IsValid())
 		{
-			PickResolution = EQueryPickResolution::UnresolvedSeed;
+			PickResolution = Goal.IsValid() ? EQueryPickResolution::UnresolvedSeed : EQueryPickResolution::UnresolvedPicks;
 		}
-
-		if (!Goal.ResolveNode(Cluster, GoalSelectionDetails))
+		else if (!Goal.IsValid())
 		{
-			PickResolution = PickResolution == EQueryPickResolution::UnresolvedSeed ? EQueryPickResolution::UnresolvedPicks : EQueryPickResolution::UnresolvedGoal;
+			PickResolution = EQueryPickResolution::UnresolvedGoal;
 		}
-
-		if (Seed.Node == Goal.Node && PickResolution == EQueryPickResolution::None)
+		else if (Seed.Node == Goal.Node)
 		{
 			PickResolution = EQueryPickResolution::SameSeedAndGoal;
 		}
-
-		if (PickResolution == EQueryPickResolution::None)
+		else
 		{
 			PickResolution = EQueryPickResolution::Success;
 		}
 
 		return PickResolution;
-	}
-
-	void FPathQuery::Reserve(const int32 NumReserve)
-	{
-		PathNodes.Reserve(NumReserve);
-		PathEdges.Reserve(NumReserve - 1);
 	}
 
 	void FPathQuery::AddPathNode(const int32 InNodeIndex, const int32 InEdgeIndex)

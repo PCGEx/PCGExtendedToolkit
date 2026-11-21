@@ -311,7 +311,7 @@ namespace PCGExMath::Geo
 		// (0, 2PI). This spans the semicircle case (extrusion perpendicular to the path -> radius = half the
 		// segment) and the reflex case (extrusion leaning back), which the shorter-arc slerp form could not
 		// represent. Only the b<=eps early-out above (extrusion collinear with the path) is a real degeneracy.
-		const double CosChordAngle = FMath::Clamp(FVector::DotProduct(D.GetSafeNormal(), Tangent), -1.0, 1.0);
+		const double CosChordAngle = FVector::DotProduct(D.GetSafeNormal(), Tangent);
 		Arc.Theta = 2.0 * FMath::Acos(CosChordAngle);
 
 		return Arc;

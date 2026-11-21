@@ -51,6 +51,15 @@ void FPCGExEdgeEndpointsCompareNumFilterConfigCustomization::CustomizeChildren(
 				}
 				return static_cast<EPCGExComparison>(Value);
 			})
+			.Tolerance_Lambda([this]() -> double
+			{
+				double Value = DBL_COMPARE_TOLERANCE;
+				if (ToleranceHandle.IsValid())
+				{
+					ToleranceHandle->GetValue(Value);
+				}
+				return Value;
+			})
 			.bInvert_Lambda([this]() -> bool
 			{
 				bool Value = false;

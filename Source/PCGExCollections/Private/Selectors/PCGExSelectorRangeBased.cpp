@@ -439,7 +439,6 @@ TSharedPtr<PCGExCollections::FSelectorSharedData> UPCGExSelectorRangeBasedFactor
 
 	TSharedPtr<FPCGExRangeBasedSharedData> NewShared = MakeShared<FPCGExRangeBasedSharedData>();
 	NewShared->AxisCount = AxisCount;
-	NewShared->EntryCount = N;
 	NewShared->EntryMins.SetNumUninitialized(N * AxisCount);
 	NewShared->EntryMaxs.SetNumUninitialized(N * AxisCount);
 	NewShared->EntryWeights.SetNumZeroed(N);

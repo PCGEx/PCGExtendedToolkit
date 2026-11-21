@@ -27,10 +27,6 @@ struct FPCGExDataMatchFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDataMatchFilterConfig()
-	{
-	}
-
 	/** How match rules are combined. All = every rule must pass. Any = at least one rule must pass. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExMapMatchMode Mode = EPCGExMapMatchMode::All;
@@ -72,8 +68,6 @@ public:
 	}
 
 	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
-
-	virtual void BeginDestroy() override;
 };
 
 namespace PCGExPointFilter
@@ -92,10 +86,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FDataMatchFilter() override
-		{
-		}
 	};
 }
 

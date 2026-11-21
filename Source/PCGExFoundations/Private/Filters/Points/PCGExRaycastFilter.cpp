@@ -25,7 +25,6 @@ bool UPCGExRaycastFilterFactory::Init(FPCGExContext* InContext)
 	{
 		return false;
 	}
-	Config.Sanitize();
 	Config.CollisionSettings.Init(InContext);
 
 	bUseInclude = Config.SurfaceSource != EPCGExSurfaceSource::All;

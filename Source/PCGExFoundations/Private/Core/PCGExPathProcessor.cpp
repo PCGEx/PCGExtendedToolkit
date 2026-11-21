@@ -23,17 +23,4 @@ FName UPCGExPathProcessorSettings::GetMainOutputPin() const
 	return PCGExPaths::Labels::OutputPathsLabel;
 }
 
-bool FPCGExPathProcessorElement::Boot(FPCGExContext* InContext) const
-{
-	if (!FPCGExPointsProcessorElement::Boot(InContext))
-	{
-		return false;
-	}
-
-	PCGEX_CONTEXT_AND_SETTINGS(PathProcessor)
-
-	return true;
-}
-
-
 #undef LOCTEXT_NAMESPACE

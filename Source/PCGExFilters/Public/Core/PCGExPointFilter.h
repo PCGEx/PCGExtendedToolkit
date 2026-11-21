@@ -152,7 +152,6 @@ namespace PCGExPointFilter
 		// Set by hosts that filter whole data through per-point evaluation: an index filter then tests its data's index in this collection.
 		TSharedPtr<PCGExData::FPointIOCollection> HostCollection;
 
-		bool DefaultResult = true;
 		TSharedPtr<PCGExData::FFacade> PointDataFacade;
 
 		bool bCacheResults = true;
@@ -261,8 +260,8 @@ namespace PCGExPointFilter
 	 * 2. PostInit() sorts filters by priority, builds the raw-pointer Stack for fast iteration
 	 * 3. Test() evaluates the stack -- all filters must pass (short-circuit on first failure)
 	 *
-	 * Batch Test() overloads accept a scope/range and optionally run in parallel via ParallelFor.
-	 * They return the number of passing items. Parallel paths use InterlockedIncrement for the count.
+	 * Batch Test() overloads accept a scope/range and optionally run in parallel.
+	 * They return the number of passing items. Parallel paths count per chunk and add once per chunk.
 	 *
 	 * Extension points:
 	 * - Override InitFilter() to customize how filters are initialized (see PCGExClusterFilter::FManager)
@@ -284,8 +283,6 @@ namespace PCGExPointFilter
 		bool bCacheResults = false;
 		TArray<int8> Results;
 
-		bool bValid = false;
-
 		TSharedRef<PCGExData::FFacade> PointDataFacade;
 
 		bool Init(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>& InFactories);
@@ -298,7 +295,8 @@ namespace PCGExPointFilter
 
 		// Writes at absolute point Index -- OutResults must span the full point count, not just the scope.
 		virtual int32 Test(const PCGExMT::FScope Scope, TArray<int8>& OutResults, const bool bParallel = false);
-		virtual int32 Test(const PCGExMT::FScope Scope, TBitArray<>& OutResults, const bool bParallel = false);
+		// Sequential only: neighbouring bits share a word.
+		virtual int32 Test(const PCGExMT::FScope Scope, TBitArray<>& OutResults);
 
 		// Node overloads write at Node.PointIndex (vtx-point space) -- OutResults must cover the tested
 		// nodes' point-index space (callers pass vtx-point-sized buffers, shareable across clusters).
@@ -312,7 +310,6 @@ namespace PCGExPointFilter
 		}
 
 		void SetSupportedTypes(const TSet<FPCGDataTypeBaseId>* InTypes);
-		const TSet<FPCGDataTypeBaseId>* GetSupportedTypes() const;
 
 	protected:
 		const TSet<FPCGDataTypeBaseId>* SupportedFactoriesTypes = nullptr;

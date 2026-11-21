@@ -180,8 +180,6 @@ namespace PCGExTensorsTransform
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool IsTrivial() const override
 		{
 			return false;

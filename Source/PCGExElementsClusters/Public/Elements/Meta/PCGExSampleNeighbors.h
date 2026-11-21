@@ -11,11 +11,6 @@
 
 #include "PCGExSampleNeighbors.generated.h"
 
-namespace PCGExNeighborSample
-{
-	struct FNeighbor;
-}
-
 class UPCGExNeighborSamplerFactoryData;
 class FPCGExNeighborSampleOperation;
 
@@ -85,8 +80,6 @@ namespace PCGExSampleNeighbors
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
@@ -105,7 +98,6 @@ namespace PCGExSampleNeighbors
 		FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, const TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges)
 			: TBatch(InContext, InVtx, InEdges)
 		{
-			PCGEX_TYPED_CONTEXT_AND_SETTINGS(SampleNeighbors)
 			bRequiresWriteStep = true;
 			bWriteVtxDataFacade = true;
 			bAllowVtxDataFacadeScopedGet = true; // TODO : More work required to support this

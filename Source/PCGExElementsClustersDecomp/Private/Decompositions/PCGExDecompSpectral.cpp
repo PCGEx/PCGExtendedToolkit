@@ -365,16 +365,4 @@ void FPCGExDecompSpectral::BisectRecursive(
 
 #pragma region UPCGExDecompSpectral
 
-void UPCGExDecompSpectral::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompSpectral* TypedOther = Cast<UPCGExDecompSpectral>(Other))
-	{
-		NumPartitions = TypedOther->NumPartitions;
-		MaxIterations = TypedOther->MaxIterations;
-		ConvergenceTolerance = TypedOther->ConvergenceTolerance;
-		PartitionMode = TypedOther->PartitionMode;
-	}
-}
-
 #pragma endregion

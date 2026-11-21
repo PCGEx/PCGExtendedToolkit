@@ -39,7 +39,7 @@ enum class EPCGExVtxAmplitudeSignOutput : uint8
 {
 	Raw            = 0 UMETA(DisplayName = "Raw", ToolTip="Raw dot product"),
 	Size           = 1 UMETA(DisplayName = "Size", ToolTip="Dot product * edge size"),
-	NormalizedSize = 2 UMETA(DisplayName = "Size (Normalized)", ToolTip="Dot product * edge size normalized"),
+	NormalizedSize = 2 UMETA(Hidden, DisplayName = "Size (Normalized)", ToolTip="Same value as Raw. Kept so saved graphs load."),
 	Sign           = 3 UMETA(DisplayName = "Sign", ToolTip="Sign (0,1,-1)"),
 };
 
@@ -151,8 +151,6 @@ class FPCGExVtxPropertyAmplitude : public FPCGExVtxPropertyOperation
 public:
 	FPCGExAmplitudeConfig Config;
 
-	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* FilterFactories = nullptr;
-
 	virtual bool PrepareForCluster(FPCGExContext* InContext, TSharedPtr<PCGExClusters::FCluster> InCluster, const TSharedPtr<PCGExData::FFacade>& InVtxDataFacade, const TSharedPtr<PCGExData::FFacade>& InEdgeDataFacade) override;
 	virtual void ProcessNode(PCGExClusters::FNode& Node, const TArray<PCGExClusters::FAdjacencyData>& Adjacency, const PCGExMath::FBestFitPlane& BFP) override;
 
@@ -195,17 +193,9 @@ public:
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(VtxAmplitude, "Vtx : Amplitude", "Amplitude of a vtx, based on neighboring connections.", FName(GetDisplayName()))
 #endif
-
-protected:
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	//~End UPCGSettings
 
-public:
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 
 	/** Direction Settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))

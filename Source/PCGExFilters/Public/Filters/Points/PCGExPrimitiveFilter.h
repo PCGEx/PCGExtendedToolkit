@@ -32,10 +32,6 @@ struct FPCGExPrimitiveFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExPrimitiveFilterConfig()
-	{
-	}
-
 	/** Bounds to use on input points for the overlap collision shape. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExPointBoundsSource BoundsSource = EPCGExPointBoundsSource::ScaledBounds;
@@ -92,8 +88,6 @@ namespace PCGExPointFilter
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FPrimitiveFilter() override = default;
 
 	private:
 		const TArray<FCachedPrimitive>* CachedPrimitives = nullptr;

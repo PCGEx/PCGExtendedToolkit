@@ -14,11 +14,6 @@
 
 #include "PCGExCopyClustersToPoints.generated.h"
 
-namespace PCGExMatching
-{
-	class FDataMatcher;
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/transform/cluster-copy-to-points"))
 class UPCGExCopyClustersToPointsSettings : public UPCGExClustersProcessorSettings
 {
@@ -30,11 +25,6 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS(CopyClustersToPoints, "Cluster : Copy to Points", "Create copies of the input clusters onto the target points. NOTE: Does not repair input.");
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
 #endif
 
 protected:
@@ -117,7 +107,6 @@ namespace PCGExCopyClustersToPoints
 			bBuildCluster = false;
 		}
 
-		virtual ~FProcessor() override;
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 		virtual void OnRangeProcessingComplete() override;
@@ -143,7 +132,6 @@ namespace PCGExCopyClustersToPoints
 		{
 		}
 
-		virtual ~FBatch() override;
 		virtual void Process() override;
 		virtual bool PrepareSingle(const TSharedPtr<PCGExClusterMT::IProcessor>& InProcessor) override;
 		virtual void CompleteWork() override;

@@ -10,6 +10,9 @@ bool PCGExTensorOperation::Init(FPCGExContext* InContext, const UPCGExTensorFact
 	Factory = InFactory;
 	PotencyFalloffLUT = InFactory->BaseConfig.PotencyFalloffLUT;
 	WeightFalloffLUT = InFactory->BaseConfig.WeightFalloffLUT;
+
+	// Reads this operation's own BaseConfig, the one ComputeFactor samples.
+	bConstantGuide = PCGExTensor::TryGetConstantValue(BaseConfig.LocalGuideCurve, GuideConstant);
 	return true;
 }
 

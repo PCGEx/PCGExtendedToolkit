@@ -16,6 +16,8 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Helpers/PCGExArrayHelpers.h"
 
+#include <limits>
+
 namespace PCGExProbing
 {
 	FProbingEngine::FProbingEngine(const TSharedRef<PCGExData::FFacade>& InDataFacade)
@@ -95,6 +97,11 @@ namespace PCGExProbing
 			if (!NewOperation->SearchRadius->IsConstant())
 			{
 				bUseVariableRadius = true;
+			}
+			else
+			{
+				// A constant radius ignores the index.
+				SharedCullDistance = WidenCullDistance(SharedCullDistance, NewOperation->GetSearchRadius(0));
 			}
 			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadius.Constant);
 
@@ -307,6 +314,7 @@ namespace PCGExProbing
 		const bool bWantsSameGroup = EdgeRelation == EEdgeRelation::SameGroup;
 
 		FVector Origin = FVector::ZeroVector;
+		double CullDistance = 0;
 		int32 CurrentIndex = 0;
 		int32 CurrentGroupId = -1;
 
@@ -323,10 +331,22 @@ namespace PCGExProbing
 			}
 
 			const FVector Position = WorkingPositions[OtherPointIndex];
-			// Bearing runs probing point -> candidate, so a configured direction names the side
-			// candidates are taken from.
-			const FVector Dir = (Position - Origin).GetSafeNormal();
-			const int32 EmplaceIndex = Candidates.Emplace(OtherPointIndex, Dir, FVector::DistSquared(Position, Origin), bPreventCoincidence ? PCGEx::SH3(Dir, CWCoincidenceTolerance) : 0);
+			const double DistSquared = FVector::DistSquared(Position, Origin);
+
+			int32 EmplaceIndex;
+			if (DistSquared > CullDistance)
+			{
+				// Out of every probe's reach, so no bearing or hash. Still emplaced: the unstable sort
+				// below orders equidistant candidates by the whole array, so dropping one reorders ties.
+				EmplaceIndex = Candidates.Emplace(OtherPointIndex, FVector::ZeroVector, DistSquared, static_cast<uint64>(0));
+			}
+			else
+			{
+				// Bearing runs probing point -> candidate, so a configured direction names the side
+				// candidates are taken from.
+				const FVector Dir = (Position - Origin).GetSafeNormal();
+				EmplaceIndex = Candidates.Emplace(OtherPointIndex, Dir, DistSquared, bPreventCoincidence ? PCGEx::SH3(Dir, CWCoincidenceTolerance) : 0);
+			}
 
 			if (NumChainedOps > 0)
 			{
@@ -381,12 +401,17 @@ namespace PCGExProbing
 				if (!bUseVariableRadius)
 				{
 					MaxRadius = SharedSearchRadius;
+					CullDistance = SharedCullDistance;
 				}
 				else
 				{
+					CullDistance = 0;
 					for (int i = 0; i < NumRadiusSources; i++)
 					{
-						MaxRadius = FMath::Max(MaxRadius, RadiusSources[i]->GetSearchRadiusRaw(Index));
+						const double Radius = RadiusSources[i]->GetSearchRadiusRaw(Index);
+						MaxRadius = FMath::Max(MaxRadius, Radius);
+						// Same value as GetSearchRadius(Index), the one each probe compares against.
+						CullDistance = WidenCullDistance(CullDistance, FMath::Square(Radius));
 					}
 				}
 
@@ -401,15 +426,18 @@ namespace PCGExProbing
 					ChainedOperations[i]->ProcessBestCandidate(Index, BestCandidates[i], Candidates, LocalCoincidence.Get(), CWCoincidenceTolerance, LocalUniqueEdges, ChainedOpsContainers[i].Get());
 				}
 
-				// Shared probes expect nearest-first ordering.
-				Candidates.Sort([&](const FCandidate& A, const FCandidate& B)
+				// Shared probes expect nearest-first ordering, and are the only readers past this point.
+				if (NumSharedOps > 0)
 				{
-					return A.Distance < B.Distance;
-				});
+					Candidates.Sort([&](const FCandidate& A, const FCandidate& B)
+					{
+						return A.Distance < B.Distance;
+					});
 
-				for (int i = 0; i < NumSharedOps; i++)
-				{
-					SharedOperations[i]->ProcessCandidates(Index, Candidates, LocalCoincidence.Get(), CWCoincidenceTolerance, LocalUniqueEdges, SharedOpsContainers[i].Get());
+					for (int i = 0; i < NumSharedOps; i++)
+					{
+						SharedOperations[i]->ProcessCandidates(Index, Candidates, LocalCoincidence.Get(), CWCoincidenceTolerance, LocalUniqueEdges, SharedOpsContainers[i].Get());
+					}
 				}
 			}
 
@@ -441,6 +469,16 @@ namespace PCGExProbing
 		}
 
 		ScopedEdges.Reset();
+	}
+
+	double FProbingEngine::WidenCullDistance(const double InCullDistance, const double InRadiusSquared)
+	{
+		if (InRadiusSquared <= InCullDistance)
+		{
+			return InCullDistance;
+		}
+
+		return InRadiusSquared > InCullDistance ? InRadiusSquared : std::numeric_limits<double>::infinity();
 	}
 
 	void FProbingEngine::AppendEdges(const TSet<uint64>& InUniqueEdges)

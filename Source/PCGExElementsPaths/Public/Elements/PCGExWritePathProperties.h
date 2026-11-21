@@ -417,7 +417,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Outer is not Odd", EditCondition="bTagOddInclusionDepth || bUseInclusionPins", HideEditConditionToggle))
 	bool bOuterIsNotOdd = true;
 
-	bool CanForwardData() const;
 	bool WantsInclusionHelper() const;
 	bool WriteAnyPathData() const;
 };
@@ -431,10 +430,6 @@ struct FPCGExWritePathPropertiesContext final : FPCGExPathProcessorContext
 
 	TObjectPtr<UPCGParamData> PathAttributeSet;
 	TArray<int64> MergedAttributeSetKeys;
-
-	int32 NumOuter = 0;
-	int32 NumInner = 0;
-	int32 NumOdd = 0;
 
 	TSharedPtr<PCGExPaths::FPathInclusionHelper> InclusionHelper;
 

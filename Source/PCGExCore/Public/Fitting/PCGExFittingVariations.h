@@ -14,31 +14,6 @@ struct PCGEXCORE_API FPCGExFittingVariations
 
 	FPCGExFittingVariations() = default;
 
-	FPCGExFittingVariations(
-		const FVector& InOffsetMin, const FVector& InOffsetMax,
-		const EPCGExVariationSnapping InSnapPosition, const FVector& InOffsetSnap, const bool bInAbsoluteOffset,
-		const FRotator& InRotationMin, const FRotator& InRotationMax,
-		const EPCGExVariationSnapping InSnapRotation, const FRotator& InRotationSnap, const uint8 InAbsoluteRotation,
-		const FVector& InScaleMin, const FVector& InScaleMax,
-		const EPCGExVariationSnapping InSnapScale, const FVector& InScaleSnap, const bool bInUniformScale)
-		: OffsetMin(InOffsetMin)
-		  , OffsetMax(InOffsetMax)
-		  , SnapPosition(InSnapPosition)
-		  , OffsetSnap(InOffsetSnap)
-		  , bAbsoluteOffset(bInAbsoluteOffset)
-		  , RotationMin(InRotationMin)
-		  , RotationMax(InRotationMax)
-		  , SnapRotation(InSnapRotation)
-		  , RotationSnap(InRotationSnap)
-		  , AbsoluteRotation(InAbsoluteRotation)
-		  , ScaleMin(InScaleMin)
-		  , ScaleMax(InScaleMax)
-		  , SnapScale(InSnapScale)
-		  , ScaleSnap(InScaleSnap)
-		  , bUniformScale(bInUniformScale)
-	{
-	}
-
 	/** Minimum random offset per axis. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FVector OffsetMin = FVector::ZeroVector;

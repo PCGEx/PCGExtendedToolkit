@@ -23,8 +23,6 @@ namespace PCGExFitting::Tasks
 	class PCGEXCORE_API FTransformPointIO final : public PCGExMT::FPCGExIndexedTask
 	{
 	public:
-		FTransformPointIO(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExData::FPointIO>& InToBeTransformedIO, FPCGExTransformDetails* InTransformDetails, bool bAllocate = false);
-
 		// Fits against InFitBounds, not the output's own bounds: a cluster's Vtx and Edges must share one fit.
 		FTransformPointIO(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExData::FPointIO>& InToBeTransformedIO, FPCGExTransformDetails* InTransformDetails, const FBox& InFitBounds);
 
@@ -33,7 +31,6 @@ namespace PCGExFitting::Tasks
 		FPCGExTransformDetails* TransformDetails = nullptr;
 
 		FBox FitBounds = FBox(ForceInit);
-		bool bHasFitBounds = false;
 
 		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 	};

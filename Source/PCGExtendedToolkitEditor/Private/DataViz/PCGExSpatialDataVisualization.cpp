@@ -28,10 +28,6 @@
 
 namespace PCGPointDataVisualizationConstants
 {
-	/** Special names of the columns in the attribute list. */
-	const FName NAME_MetadataEntry = FName(TEXT("MetadataEntry"));
-	const FName NAME_MetadataEntryParent = FName(TEXT("PointMetadataEntryParent"));
-
 	/** Special labels of the columns. */
 	const FText TEXT_MetadataEntry = LOCTEXT("MetadataEntry", "Entry Key");
 	const FText TEXT_MetadataEntryParent = LOCTEXT("MetadataEntryParent", "Parent Key");

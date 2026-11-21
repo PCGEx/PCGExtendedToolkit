@@ -118,8 +118,6 @@ class UPCGExShrinkPathSettings : public UPCGExPathProcessorSettings
 	GENERATED_BODY()
 
 public:
-	explicit UPCGExShrinkPathSettings(const FObjectInitializer& ObjectInitializer);
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
@@ -225,8 +223,6 @@ namespace PCGExShrinkPath
 		{
 			DefaultPointFilterValue = false;
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 

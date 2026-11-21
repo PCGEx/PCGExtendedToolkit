@@ -15,41 +15,28 @@ bool FPCGExManhattanDetails::IsValid() const
 
 bool FPCGExManhattanDetails::Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InDataFacade)
 {
-	if (bSupportAttribute)
+	// Simple never reads the grid size: an attribute set on that hidden row must not fail the node.
+	if (Method != EPCGExManhattanMethod::Simple)
 	{
 		GridSizeBuffer = GridSizeValue.GetValueSetting();
 		if (!GridSizeBuffer->Init(InDataFacade))
 		{
 			return false;
 		}
-
-		if (SpaceAlign == EPCGExManhattanAlign::Custom)
-		{
-			OrientBuffer = OrientValue.GetValueSetting();
-		}
-		else if (SpaceAlign == EPCGExManhattanAlign::World)
-		{
-			OrientBuffer = PCGExDetails::MakeSettingValue(FRotator::ZeroRotator);
-		}
-
-		if (OrientBuffer && !OrientBuffer->Init(InDataFacade))
-		{
-			return false;
-		}
 	}
-	else
+
+	if (SpaceAlign == EPCGExManhattanAlign::Custom)
 	{
-		// Attribute support disabled for this embedder: force the constant path regardless of the shorthand's Input toggle.
-		GridSizeValue.Constant = PCGExTypes::Abs(GridSizeValue.Constant);
-		GridSizeBuffer = PCGExDetails::MakeSettingValue(GridSizeValue.Constant);
-		if (SpaceAlign == EPCGExManhattanAlign::Custom)
-		{
-			OrientBuffer = PCGExDetails::MakeSettingValue(OrientValue.Constant);
-		}
-		else if (SpaceAlign == EPCGExManhattanAlign::World)
-		{
-			OrientBuffer = PCGExDetails::MakeSettingValue(FRotator::ZeroRotator);
-		}
+		OrientBuffer = OrientValue.GetValueSetting();
+	}
+	else if (SpaceAlign == EPCGExManhattanAlign::World)
+	{
+		OrientBuffer = PCGExDetails::MakeSettingValue(FRotator::ZeroRotator);
+	}
+
+	if (OrientBuffer && !OrientBuffer->Init(InDataFacade))
+	{
+		return false;
 	}
 
 	PCGExMath::GetAxesOrder(Order, Comps);

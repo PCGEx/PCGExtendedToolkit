@@ -15,6 +15,7 @@ class FAssetThumbnailPool;
 class SBox;
 class SBorder;
 class UPCGExAssetCollection;
+struct FPCGExAssetCollectionEntry;
 class SWidgetSwitcher;
 template <typename OptionType>
 class SComboBox;
@@ -76,12 +77,6 @@ public:
 		bIsSelected = bInSelected;
 	}
 
-	/** Query selection state */
-	bool IsSelected() const
-	{
-		return bIsSelected;
-	}
-
 	// Mouse handling for selection and drag
 	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
@@ -134,4 +129,7 @@ private:
 	TSharedPtr<FAssetThumbnail> GetOrCreateThumbnail(const FSoftObjectPath& AssetPath, bool& bOutCreated);
 
 	void HandlePickerPropertyEdited(FName PropertyName);
+
+	/** Applies Mutate to the entry at Index inside one transaction, then notifies the view. False when the entry is gone. */
+	bool CommitEntryEdit(const TWeakObjectPtr<UPCGExAssetCollection>& InCollection, int32 Index, const FText& TransactionText, FName PropertyName, TFunctionRef<void(FPCGExAssetCollectionEntry&)> Mutate);
 };

@@ -32,7 +32,7 @@ namespace PCGExPartition
 /**
  * 
  */
-UCLASS(Abstract, MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="misc/partition-by-values"))
+UCLASS(Abstract, MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-by-values"))
 class UPCGExPartitionByValuesBaseSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()
@@ -86,11 +86,6 @@ class UPCGExPartitionByValuesSettings : public UPCGExPartitionByValuesBaseSettin
 	GENERATED_BODY()
 
 public:
-	//~Begin UPCGSettings
-#if WITH_EDITOR
-	PCGEX_NODE_INFOS(PartitionByValuesStatic, "Partition by Values (Static)", "Outputs separate buckets of points based on an attribute' value. Each bucket is named after a unique attribute value. Note that it is recommended to use a Merge before.");
-#endif
-
 	//~Begin UObject interface
 #if WITH_EDITOR
 

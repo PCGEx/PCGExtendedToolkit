@@ -24,10 +24,6 @@ struct FPCGExAttributeCheckFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExAttributeCheckFilterConfig()
-	{
-	}
-
 	/** Name (or match pattern) of the attribute to look for. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Attribute Name"))
 	FString AttributeName = TEXT("Name");

@@ -37,7 +37,6 @@ bool FPCGExAttributeDebugDraw::Bind(const TSharedRef<PCGExData::FPointIO>& Point
 	SingleGetter.Reset();
 	SizeGetter.Reset();
 	ColorGetter.Reset();
-	TextGetter.Reset();
 
 	switch (Config->ExpressedAs)
 	{

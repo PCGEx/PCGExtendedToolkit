@@ -9,6 +9,9 @@
 #include "PCGElement.h"
 #include "PCGExSocketProvider.h"
 #include "PCGParamData.h"
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/IAssetRegistry.h"
+#include "Core/PCGExManagedActors.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataMacros.h"
@@ -21,6 +24,11 @@
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGHelpers.h"
+#include "IO/IoHash.h"
+#include "Misc/AssetRegistryInterface.h"
+#include "Misc/Crc.h"
+#include "UObject/GarbageCollection.h"
+#include "UObject/Package.h"
 
 #define LOCTEXT_NAMESPACE "PCGExStagingLoadLevelElement"
 #define PCGEX_NAMESPACE StagingLoadLevel
@@ -210,56 +218,31 @@ bool FPCGExStagingLoadLevelElement::AdvanceWork(FPCGExContext* InContext, const 
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		// Compute CRC for managed resource reuse detection
-		GetDependenciesCrc(FPCGGetDependenciesCrcParams(&Context->InputData, Settings, nullptr), Context->DependenciesCrc);
-
 		UPCGComponent* SourceComponent = Context->GetMutableComponent();
 
-		if (Context->DependenciesCrc.IsValid())
-		{
-			// Try streaming levels first, then LevelInstance actors
-			if (PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedStreamingLevels>(SourceComponent, Context->DependenciesCrc))
-			{
-				Context->bReusedManagedResources = true;
-			}
 #if WITH_EDITOR
-			else if (PCGExManagedHelpers::TryReuseManagedResource<UPCGManagedActors>(SourceComponent, Context->DependenciesCrc))
-			{
-				Context->bReusedManagedResources = true;
-			}
+		const bool bIsRuntime = SourceComponent->GenerationTrigger == EPCGComponentGenerationTrigger::GenerateAtRuntime;
+		Context->bUseLevelInstance = Settings->bSpawnAsLevelInstance && !bIsRuntime;
+		Context->bUseLooseActors = !Context->bUseLevelInstance && !bIsRuntime;
+
+		// The actor modes set nothing up here: each processor finds its own actors by slot, on the game thread.
+		if (!Context->bUseLevelInstance && !Context->bUseLooseActors)
 #endif
-		}
-
-		// Decide spawn mode and create the managed resource here, on the game thread, before any
-		// parallel/async work dispatches. Doing this from a worker callback (e.g. OnPointsProcessingComplete)
-		// causes NewObject to tag the resulting UObject with the async-loading root, which pins its
-		// outer chain (component → volume → level → world → package) and leaks the host package on
-		// world unload. One resource per execute (per context), shared across all processors.
-		if (!Context->bReusedManagedResources)
 		{
-			check(IsInGameThread());
+			// Streaming levels only live for the session, so the per-session CRC the executor hands down is enough to reuse them.
+			GetDependenciesCrc(FPCGGetDependenciesCrcParams(&Context->InputData, Settings, nullptr), Context->DependenciesCrc);
 
-#if WITH_EDITOR
-			const bool bIsRuntime = SourceComponent->GenerationTrigger == EPCGComponentGenerationTrigger::GenerateAtRuntime;
-			Context->bUseLevelInstance = Settings->bSpawnAsLevelInstance && !bIsRuntime;
-			Context->bUseLooseActors = !Context->bUseLevelInstance && !bIsRuntime;
-
-			if (Context->bUseLevelInstance)
+			if (Context->DependenciesCrc.IsValid() && PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedStreamingLevels>(SourceComponent, Context->DependenciesCrc))
 			{
-				Context->ManagedLevelInstances = NewObject<UPCGManagedActors>(SourceComponent);
-				Context->ManagedLevelInstances->SetCrc(Context->DependenciesCrc);
-				SourceComponent->AddToManagedResources(Context->ManagedLevelInstances);
-			}
-			else if (Context->bUseLooseActors)
-			{
-				Context->ManagedLooseActors = NewObject<UPCGManagedActors>(SourceComponent);
-				Context->ManagedLooseActors->SetCrc(Context->DependenciesCrc);
-				Context->ManagedLooseActors->SetIsPreview(SourceComponent->IsInPreviewMode());
-				SourceComponent->AddToManagedResources(Context->ManagedLooseActors);
+				Context->bReusedManagedResources = true;
 			}
 			else
-#endif
 			{
+				// Created here, on the game thread, before any parallel/async work dispatches. From a worker callback
+				// NewObject tags the UObject with the async-loading root, which pins its outer chain (component, level,
+				// world, package) and leaks the host package on world unload. One resource per execute, shared by all processors.
+				check(IsInGameThread());
+
 				Context->ManagedStreamingLevels = NewObject<UPCGExManagedStreamingLevels>(SourceComponent);
 				Context->ManagedStreamingLevels->SetCrc(Context->DependenciesCrc);
 				SourceComponent->AddToManagedResources(Context->ManagedStreamingLevels);
@@ -322,9 +305,20 @@ namespace PCGExStagingLoadLevel
 			return false;
 		}
 
+		// Reused managed resources need no spawn requests, which is all the point loop builds.
+		if (Context->bReusedManagedResources)
+		{
+			return true;
+		}
+
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
 		return true;
+	}
+
+	void FProcessor::PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops)
+	{
+		ScopedRequests = MakeShared<PCGExMT::TScopedArray<FLevelSpawnRequest>>(Loops);
 	}
 
 	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
@@ -346,6 +340,8 @@ namespace PCGExStagingLoadLevel
 		// from settings on the main thread.
 		const bool bRootIsConstant = RootActorSV->IsConstant();
 		PCGEX_SV_VIEW_COND(RootActorSV, !bRootIsConstant)
+
+		TArray<FLevelSpawnRequest>& LocalRequests = ScopedRequests->Get_Ref(Scope);
 
 		int16 MaterialPick = 0;
 
@@ -383,26 +379,24 @@ namespace PCGExStagingLoadLevel
 				? FSoftObjectPath()
 				: PCGEX_SV_READ(RootActorSV, Index - Scope.Start);
 
-			{
-				// TODO : Move to TScopedArray instead
-				FWriteScopeLock WriteLock(RequestLock);
-				SpawnRequests.Emplace(World, LevelPath.GetLongPackageName(), LevelPath, PerPointRoot, Transforms[Index], Index);
-			}
+			LocalRequests.Emplace(World, LevelPath.GetLongPackageName(), LevelPath, PerPointRoot, Transforms[Index], Index);
 		}
 	}
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
-		// All parallel work is done. Set up a main-thread loop to spawn level instances.
-		// FTimeSlicedMainThreadLoop ensures spawning happens on the game thread.
-
-		// TODO : Collapse SpawnRequests TScopedArray here
-
 		// CRC reuse: managed resources from a previous execution match, skip spawning entirely
 		if (Context->bReusedManagedResources)
 		{
 			return;
 		}
+
+		// Scope order is point order, which makes an actor's slot its request's rank.
+		ScopedRequests->ForEach([&](TArray<FLevelSpawnRequest>& Requests)
+		{
+			SpawnRequests.Append(MoveTemp(Requests));
+		});
+		ScopedRequests.Reset();
 
 		if (SpawnRequests.IsEmpty())
 		{
@@ -410,52 +404,170 @@ namespace PCGExStagingLoadLevel
 			return;
 		}
 
+#if WITH_EDITOR
+		if (Context->bUseLevelInstance || Context->bUseLooseActors)
+		{
+			HashContent();
+
+			// On the game thread: claiming the previous run's actors clears a tag on each of them.
+			ReuseStep = MakeShared<PCGExMT::FTimeSlicedMainThreadLoop>(1);
+			ReuseStep->OnIterationCallback = [PCGEX_ASYNC_THIS_CAPTURE](const int32 Index, const PCGExMT::FScope& Scope)
+			{
+				PCGEX_ASYNC_THIS
+				This->ReuseOrSpawn();
+			};
+
+			PCGEX_ASYNC_HANDLE_CHKD_VOID(TaskManager, ReuseStep)
+			return;
+		}
+#endif
+
 		// Monotonic generation counter for unique streaming level package names.
 		// Prevents name collisions with levels pending async unload from previous cycles.
 		static std::atomic<uint32> GenerationCounter{0};
 		Generation = GenerationCounter.fetch_add(1);
 
-		// Managed resources were created up-front in AdvanceWork on the game thread.
-		// Creating them here (worker thread) would tag the resulting UObject with the
-		// async-loading root and leak the host world's package on unload.
-
-#if WITH_EDITOR
-		if (Context->bUseLooseActors)
-		{
-			// The loose-actors path needs source UWorld objects in memory to iterate their
-			// PersistentLevel->Actors. Batch-load all unique level assets asynchronously,
-			// then start the time-sliced spawn loop once they are resident.
-			TSet<FSoftObjectPath> UniquePaths;
-			for (const FLevelSpawnRequest& Req : SpawnRequests)
-			{
-				UniquePaths.Add(Req.LevelPath);
-			}
-
-			TArray<FSoftObjectPath> PathsToLoad = UniquePaths.Array();
-
-			PCGExHelpers::Load(
-				TaskManager,
-				[PCGEX_ASYNC_THIS_CAPTURE, PathsToLoad = MoveTemp(PathsToLoad)]() -> TArray<FSoftObjectPath>
-				{
-					PCGEX_ASYNC_THIS_RET({})
-					return PathsToLoad;
-				},
-				[PCGEX_ASYNC_THIS_CAPTURE, CtxHandle = Context->GetWeakSelfHandle()](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
-				{
-					PCGEX_ASYNC_THIS
-					PCGEX_SHARED_CONTEXT_VOID(CtxHandle)
-
-					// Keeps the source worlds resident for the spawn loop; released at context teardown.
-					SharedContext.Get()->TrackAssetsHandle(StreamableHandle);
-					This->StartSpawnLoop();
-				});
-
-			return;
-		}
-#endif
-
+		// All parallel work is done: the main-thread loop spawns the level instances on the game thread.
 		StartSpawnLoop();
 	}
+
+#if WITH_EDITOR
+	void FProcessor::HashContent()
+	{
+		// Each level once, in the order its first request comes.
+		TMap<FSoftObjectPath, uint32> LevelCrcs;
+		for (const FLevelSpawnRequest& Request : SpawnRequests)
+		{
+			if (!LevelCrcs.Contains(Request.LevelPath))
+			{
+				LevelCrcs.Add(Request.LevelPath, FCrc::StrCrc32(*Request.LevelPath.ToString()));
+				SourceLevels.Add(Request.LevelPath);
+			}
+		}
+
+		// Not the CRC the executor hands down for these points: that one is the data object's id, new every session.
+		ContentCrc = Context->GetInputContentCrc(Settings->GetMainInputPin(), PointDataFacade->GetIn());
+		if (!ContentCrc.IsValid())
+		{
+			// No hash can serve, so there is nothing to wait for either.
+			bLevelHashesKnown = true;
+			return;
+		}
+
+		// Which points load a level (the filters' say), and which level their entry names.
+		for (const FLevelSpawnRequest& Request : SpawnRequests)
+		{
+			ContentCrc.Combine(static_cast<uint32>(Request.PointIndex));
+			ContentCrc.Combine(LevelCrcs.FindChecked(Request.LevelPath));
+		}
+
+		if (Context->bUseLooseActors)
+		{
+			CombineLevelHashes();
+		}
+		else
+		{
+			bLevelHashesKnown = true;
+		}
+	}
+
+	void FProcessor::CombineLevelHashes()
+	{
+		if (bLevelHashesKnown)
+		{
+			return;
+		}
+
+		// Copies are only as current as the level they were copied from: its saved hash moves when it is saved again.
+		const IAssetRegistry& AssetRegistry = IAssetRegistry::GetChecked();
+
+		FPCGCrc Crc = ContentCrc;
+		for (const FSoftObjectPath& LevelPath : SourceLevels)
+		{
+			FIoHash SavedHash;
+			bool bKnown = false;
+
+			{
+				// A level in memory tells its own hash; the registry only catches up with a save once it rescans the file.
+				FGCScopeGuard GCGuard;
+				if (const UPackage* Package = FindPackage(nullptr, *LevelPath.GetLongPackageName()))
+				{
+					SavedHash = Package->GetSavedHash();
+					bKnown = true;
+				}
+			}
+
+			if (!bKnown)
+			{
+				FAssetPackageData PackageData;
+				if (AssetRegistry.TryGetAssetPackageData(LevelPath.GetLongPackageFName(), PackageData) == UE::AssetRegistry::EExists::Exists)
+				{
+					SavedHash = PackageData.GetPackageSavedHash();
+					bKnown = true;
+				}
+			}
+
+			// Neither loaded nor scanned yet: told once the levels are loaded.
+			if (!bKnown)
+			{
+				return;
+			}
+
+			Crc.Combine(FCrc::MemCrc32(SavedHash.GetBytes(), sizeof(FIoHash::ByteArray)));
+		}
+
+		ContentCrc = Crc;
+		bLevelHashesKnown = true;
+	}
+
+	void FProcessor::ReuseOrSpawn()
+	{
+		// Copies whose source levels' hashes are not all known are told current, or not, once those levels are loaded.
+		if (!bLevelHashesKnown)
+		{
+			LoadSourceLevels();
+			return;
+		}
+
+		BeginActorSpawn();
+		if (bKeepActors)
+		{
+			return;
+		}
+
+		if (Context->bUseLooseActors)
+		{
+			LoadSourceLevels();
+		}
+		else
+		{
+			StartSpawnLoop();
+		}
+	}
+
+	void FProcessor::LoadSourceLevels()
+	{
+		// The loose-actors path needs source UWorld objects in memory to iterate their
+		// PersistentLevel->Actors. Batch-load all unique level assets asynchronously,
+		// then start the time-sliced spawn loop once they are resident.
+		PCGExHelpers::Load(
+			TaskManager,
+			[PCGEX_ASYNC_THIS_CAPTURE]() -> TArray<FSoftObjectPath>
+			{
+				PCGEX_ASYNC_THIS_RET({})
+				return This->SourceLevels;
+			},
+			[PCGEX_ASYNC_THIS_CAPTURE, CtxHandle = Context->GetWeakSelfHandle()](const bool bSuccess, TSharedPtr<FStreamableHandle> StreamableHandle)
+			{
+				PCGEX_ASYNC_THIS
+				PCGEX_SHARED_CONTEXT_VOID(CtxHandle)
+
+				// Keeps the source worlds resident for the spawn loop; released at context teardown.
+				SharedContext.Get()->TrackAssetsHandle(StreamableHandle);
+				This->StartSpawnLoop();
+			});
+	}
+#endif
 
 	void FProcessor::StartSpawnLoop()
 	{
@@ -494,6 +606,23 @@ namespace PCGExStagingLoadLevel
 	}
 
 #if WITH_EDITOR
+	void FProcessor::BeginActorSpawn()
+	{
+		// After a load every level is in memory and tells its own hash.
+		CombineLevelHashes();
+
+		// Level instances are one actor per request; how many actors a level copies into is not known ahead of the copy.
+		ManagedActors = Context->ReclaimOrAddManagedActors(
+			Context->GetSlotCrc(BatchIndex, /*bWithSettings=*/false), ContentCrc,
+			Context->bUseLevelInstance ? SpawnRequests.Num() : INDEX_NONE, bKeepActors);
+
+		// Copies hand no identity over, so the previous ones go in one batch rather than one by one.
+		if (!bKeepActors && Context->bUseLooseActors)
+		{
+			ManagedActors->DestroyDonors();
+		}
+	}
+
 	void FProcessor::SpawnAsLevelInstance(FLevelSpawnRequest& Request)
 	{
 		UWorld* World = Request.Params.World;
@@ -528,6 +657,11 @@ namespace PCGExStagingLoadLevel
 		// same .umap as its parent (mirrors UPCGActorHelpers::SpawnDefaultActor).
 		SpawnParams.OverrideLevel = TargetActor->GetLevel();
 
+		// The previous run's actor in this slot, when of the same class in the same level, passes on its name, package and
+		// GUID. A level instance's id derives from both, so the successor takes over the loaded level and the forced
+		// update below reloads it from its own world asset.
+		ManagedActors->PrepareSpawn(ActorClass, SpawnParams);
+
 		ALevelInstance* LevelInstanceActor = World->SpawnActor<ALevelInstance>(
 			ActorClass,
 			Request.Params.LevelTransform,
@@ -535,6 +669,8 @@ namespace PCGExStagingLoadLevel
 
 		if (!LevelInstanceActor)
 		{
+			ManagedActors->CommitSpawn(nullptr);
+
 			PCGE_LOG_C(Warning, GraphAndLog, ExecutionContext,
 			           FText::Format(LOCTEXT("FailedToSpawnLevelInstance", "Failed to spawn ALevelInstance for '{0}' at point {1}"),
 				           FText::FromString(Request.Params.LongPackageName), FText::AsNumber(Request.PointIndex)));
@@ -565,19 +701,13 @@ namespace PCGExStagingLoadLevel
 		PCGHelpers::AttachToParent(LevelInstanceActor, TargetActor, Settings->AttachOptions, ExecutionContext);
 
 		// Track via PCG managed resources -- engine handles cleanup on re-execution.
-		// Resource is context-owned; SpawnLevelInstance runs main-thread via FTimeSlicedMainThreadLoop,
-		// so cross-processor adds to the shared array serialize naturally.
-		if (Context->ManagedLevelInstances)
-		{
-			Context->ManagedLevelInstances->GetMutableGeneratedActors().Add(LevelInstanceActor);
-		}
+		ManagedActors->CommitSpawn(LevelInstanceActor);
 	}
 #endif
 
 	void FProcessor::SpawnLevelInstance(const int32 RequestIndex)
 	{
 		// This runs on the game thread via FTimeSlicedMainThreadLoop.
-		// Managed resources are created in AdvanceWork before any async/parallel work dispatches.
 
 		// FTimeSlicedMainThreadLoop tests cancellation once per time slice, not per iteration.
 		PCGEX_CHECK_WORK_HANDLE_VOID
@@ -585,14 +715,34 @@ namespace PCGExStagingLoadLevel
 		FLevelSpawnRequest& Request = SpawnRequests[RequestIndex];
 
 #if WITH_EDITOR
-		if (Context->bUseLevelInstance)
+		if (Context->bUseLevelInstance || Context->bUseLooseActors)
 		{
-			SpawnAsLevelInstance(Request);
-			return;
-		}
-		if (Context->bUseLooseActors)
-		{
-			SpawnAsLooseActors(Request);
+			// Only copies that had to load their levels first get here without their actors being told kept or not.
+			if (!ManagedActors)
+			{
+				BeginActorSpawn();
+			}
+
+			if (bKeepActors)
+			{
+				return;
+			}
+
+			if (Context->bUseLevelInstance)
+			{
+				SpawnAsLevelInstance(Request);
+			}
+			else
+			{
+				SpawnAsLooseActors(Request);
+			}
+
+			// Only now: a run cut short keeps no content hash, so it can never be taken for a complete one.
+			if (RequestIndex == SpawnRequests.Num() - 1)
+			{
+				ManagedActors->EndRespawn(ContentCrc);
+			}
+
 			return;
 		}
 #endif
@@ -817,7 +967,8 @@ namespace PCGExStagingLoadLevel
 				Spawned->SetFolderPath(FolderPath);
 			}
 
-			PCGExCollections::FinalizeSpawnedActor(Spawned, Context->ManagedLooseActors, bIsPreview);
+			PCGExCollections::FinalizeSpawnedActor(Spawned, bIsPreview);
+			ManagedActors->CommitSpawn(Spawned);
 		}
 	}
 #endif

@@ -126,8 +126,6 @@ const TArray<FPCGExSortRuleConfig>* FPCGExClustersProcessorContext::GetEdgeSorti
 
 bool FPCGExClustersProcessorContext::AdvancePointsIO(const bool bCleanupKeys)
 {
-	CurrentCluster.Reset();
-
 	CurrentEdgesIndex = -1;
 
 	// A Vtx dataset invalidated as a duplicate stays in MainPoints->Pairs. Visiting it would re-stamp

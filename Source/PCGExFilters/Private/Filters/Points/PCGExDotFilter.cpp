@@ -36,7 +36,6 @@ bool UPCGExDotFilterFactory::Init(FPCGExContext* InContext)
 	{
 		return false;
 	}
-	Config.Sanitize();
 	return true;
 }
 

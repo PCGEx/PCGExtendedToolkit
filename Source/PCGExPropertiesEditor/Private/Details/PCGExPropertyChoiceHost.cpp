@@ -16,6 +16,38 @@ namespace PCGExPropertyChoiceHost
 	{
 		return Instance.GetPtr<FPCGExProperty>() ? FStructView(Instance) : FStructView();
 	}
+
+	bool AccessInstancedStruct(const TSharedPtr<IPropertyHandle>& Handle, UScriptStruct*& OutStruct, uint8*& OutMemory)
+	{
+		if (!Handle.IsValid())
+		{
+			return false;
+		}
+
+		TArray<void*> RawData;
+		Handle->AccessRawData(RawData);
+		if (RawData.IsEmpty() || !RawData[0])
+		{
+			return false;
+		}
+
+		FInstancedStruct* Instance = static_cast<FInstancedStruct*>(RawData[0]);
+		if (!Instance || !Instance->IsValid())
+		{
+			return false;
+		}
+
+		UScriptStruct* InnerStruct = const_cast<UScriptStruct*>(Instance->GetScriptStruct());
+		uint8* StructMemory = Instance->GetMutableMemory();
+		if (!InnerStruct || !StructMemory)
+		{
+			return false;
+		}
+
+		OutStruct = InnerStruct;
+		OutMemory = StructMemory;
+		return true;
+	}
 }
 
 #pragma region FPCGExPropertyHostRef

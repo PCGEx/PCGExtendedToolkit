@@ -165,10 +165,6 @@ bool FPCGExClusterDiffusionElement::AdvanceWork(FPCGExContext* InContext, const 
 
 namespace PCGExClusterDiffusion
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::OnGrowthSetup()
 	{
 		EdgeDirectionDetails = Context->EdgeDirectionOutput;

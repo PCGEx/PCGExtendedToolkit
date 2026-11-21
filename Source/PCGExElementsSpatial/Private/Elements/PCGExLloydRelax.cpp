@@ -142,6 +142,10 @@ namespace PCGExLloydRelax
 			{
 				PCGEX_PARALLEL_FOR(NumPoints, Positions[i] = FMath::Lerp(Positions[i], Sum[i] / Counts[i], InfluenceSettings->GetInfluence(i));)
 			}
+			else
+			{
+				PCGEX_PARALLEL_FOR(NumPoints, Positions[i] = Sum[i] / Counts[i];)
+			}
 
 			Delaunay.Reset();
 

@@ -973,12 +973,6 @@ public:
 	}
 
 #if WITH_EDITOR
-	/** Editor-only mutable access to entry at raw array index. For editor UI direct writes. */
-	FPCGExAssetCollectionEntry* EDITOR_GetMutableEntry(int32 Index)
-	{
-		return GetMutableEntryAtRawIndex(Index);
-	}
-
 	/**
 	 * Concrete script struct of the entry payload at the given raw index (base: the Entries
 	 * inner struct; heterogeneous collections: per row). Null when the row has no payload.
@@ -1007,10 +1001,7 @@ public:
 	/** Get random entry (weighted by entry Weight property) */
 	FPCGExEntryAccessResult GetEntryWeightedRandom(int32 Seed) const;
 
-	FPCGExEntryAccessResult GetEntryAt(int32 Index, uint8 TagInheritance, TSet<FName>& OutTags) const;
 	FPCGExEntryAccessResult GetEntryRaw(int32 RawIndex, uint8 TagInheritance, TSet<FName>& OutTags) const;
-	FPCGExEntryAccessResult GetEntry(int32 Index, int32 Seed, EPCGExIndexPickMode PickMode, uint8 TagInheritance, TSet<FName>& OutTags) const;
-	FPCGExEntryAccessResult GetEntryRandom(int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags) const;
 	FPCGExEntryAccessResult GetEntryWeightedRandom(int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags) const;
 
 #pragma endregion
@@ -1162,9 +1153,6 @@ public:
 	 */
 	void RebuildStagingData(bool bRecursive);
 	void EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const;
-
-	/** Rebuild property registry from CollectionProperties. Called automatically during cache build. */
-	void RebuildPropertyRegistry();
 
 	/**
 	 * Sync CollectionProperties' schemas and propagate any HeaderId remaps to every entry's
@@ -1629,13 +1617,6 @@ public:
 	/** Every row container besides the schema's own import layer: each entry's, then each category's. */
 	void ForEachPropertyRows(TFunctionRef<void(const FPCGExPropertyOverrides& Rows)> Visitor) const;
 	void ForEachPropertyRows(TFunctionRef<void(FPCGExPropertyOverrides& Rows)> Visitor);
-
-	/**
-	 * Read-only registry of available properties (built from CollectionProperties).
-	 * Used for UI display and validation.
-	 */
-	UPROPERTY()
-	TArray<FPCGExPropertyRegistryEntry> PropertyRegistry;
 
 protected:
 	// Internal - Override in derived classes

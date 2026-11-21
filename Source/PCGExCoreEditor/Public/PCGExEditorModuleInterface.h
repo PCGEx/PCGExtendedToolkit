@@ -17,9 +17,6 @@ public:
 		return TEXT("");
 	}
 
-	// Static registry
-	static TArray<IPCGExEditorModuleInterface*> RegisteredModules;
-
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 

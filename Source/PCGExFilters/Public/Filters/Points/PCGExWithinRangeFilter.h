@@ -28,10 +28,6 @@ struct FPCGExWithinRangeFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExWithinRangeFilterConfig()
-	{
-	}
-
 	/** Operand A for testing -- Will be translated to `double` under the hood. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -109,11 +105,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FWithinRangeFilter() override
-		{
-			TypedFilterFactory = nullptr;
-		}
 	};
 }
 

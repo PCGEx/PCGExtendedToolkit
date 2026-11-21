@@ -8,16 +8,11 @@
 
 #include "K2Node_SetPCGExCollectionMember.generated.h"
 
-class FBlueprintActionDatabaseRegistrar;
-
 /** Writes a reflected member on the collection object itself (impure). See UK2Node_PCGExMemberBase. */
 UCLASS(meta=(DisplayName="Set Collection Member", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_SetPCGExCollectionMember : public UK2Node_PCGExMemberBase
 {
 	GENERATED_BODY()
-
-public:
-	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
 
 protected:
 	virtual bool IsSetNode() const override

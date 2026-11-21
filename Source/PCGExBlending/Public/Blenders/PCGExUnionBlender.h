@@ -80,6 +80,9 @@ namespace PCGExBlending
 			{
 				SubBlenders.SetNum(InNum);
 			}
+
+			// True when any of this attribute's blend operations reads the weight it is given.
+			bool ReadsWeight() const;
 		};
 
 		void AddSources(const TArray<TSharedRef<PCGExData::FFacade>>& InSources, const TSet<FName>* IgnoreAttributeSet = nullptr, FGetSourceIdx GetSourceIdxFn = nullptr, const TSet<int32>* RelevantIOIndices = nullptr);
@@ -106,10 +109,12 @@ namespace PCGExBlending
 		virtual void Blend(const int32 WriteIndex, const TArray<PCGExData::FWeightedPoint>& InWeightedPoints, TArray<PCGEx::FOpStats>& Trackers) const override;
 		virtual void MergeSingle(const int32 WriteIndex, const TSharedPtr<PCGExData::IUnionData>& InUnionData, TArray<PCGExData::FWeightedPoint>& OutWeightedPoints, TArray<PCGEx::FOpStats>& Trackers) const override;
 		virtual void MergeSingle(const int32 UnionIndex, TArray<PCGExData::FWeightedPoint>& OutWeightedPoints, TArray<PCGEx::FOpStats>& Trackers) const override;
+		// Weights in OutWeightedPoints are left at 1 when no blender reads one; elements and order are unaffected.
+		virtual void MergeSingle(const int32 WriteIndex, TConstArrayView<PCGExData::FElement> InElements, TArray<PCGExData::FWeightedPoint>& OutWeightedPoints, TArray<PCGEx::FOpStats>& Trackers) const override;
 
-		// Unhide the base-class overloads we inherit verbatim (span-based MergeSingle and the
-		// IUnionMetadata-based MergeSingle default impl). C++ name lookup hides all base overloads
-		// when any same-named member is declared in the derived class, so we re-expose explicitly.
+		// Unhide the base-class overload we inherit verbatim (the IUnionMetadata-based MergeSingle
+		// default impl). C++ name lookup hides all base overloads when any same-named member is
+		// declared in the derived class, so we re-expose explicitly.
 		using IUnionBlender::MergeSingle;
 		using IUnionBlender::ComputeWeights;
 
@@ -117,16 +122,15 @@ namespace PCGExBlending
 		TSet<FString> TypeMismatches;
 		bool Validate(FPCGExContext* InContext, const bool bQuiet) const;
 
-		bool bPreserveAttributesDefaultValue = false;
 		const FPCGExBlendingDetails* BlendingDetails = nullptr;
 		const PCGExMath::IDistances* DistanceDetails = nullptr;
 
 		TArray<FBlendingParam> PropertyParams;
 		TArray<TSharedPtr<FMultiSourceBlender>> Blenders;
 
-		TSet<FString> UniqueTags;
-		TArray<FString> UniqueTagsList;
-		TArray<FPCGMetadataAttribute<bool>*> TagAttributes;
+		// Resolved by Init: false when no per-entry blender reads a weight, so the distance pass can be skipped.
+		bool bReadsWeights = true;
+
 		TSharedPtr<PCGEx::FIndexLookup> IOLookup;
 
 		TArray<TSharedPtr<PCGExData::FFacade>> Sources;

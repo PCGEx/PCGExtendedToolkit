@@ -67,10 +67,6 @@ struct PCGEXBLENDING_API FPCGExFuseDetailsBase
 
 	bool HasPerPointTolerance() const { return bSupportLocalTolerance && ToleranceInput != EPCGExInputValueType::Constant; }
 
-	bool IsWithinTolerance(const double DistSquared, const int32 PointIndex) const;
-	bool IsWithinTolerance(const FVector& Source, const FVector& Target, const int32 PointIndex) const;
-	bool IsWithinToleranceComponentWise(const FVector& Source, const FVector& Target, const int32 PointIndex) const;
-
 	// Per-axis reach: the component-wise tolerances, or the radial one on every axis.
 	FVector GetToleranceExtent(const int32 PointIndex) const;
 

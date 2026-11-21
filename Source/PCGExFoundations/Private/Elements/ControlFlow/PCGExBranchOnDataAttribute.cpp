@@ -32,7 +32,7 @@ void UPCGExBranchOnDataAttributeSettings::PostEditChangeProperty(FPropertyChange
 
 				if (!bHidden)
 				{
-					FPCGExBranchOnDataPin& Pin = InternalBranches.Emplace_GetRef(SelectionMode == EPCGExControlFlowSelectionMode::EnumInteger);
+					FPCGExBranchOnDataPin& Pin = InternalBranches.Emplace_GetRef();
 					Pin.StringValue = Enum->GetDisplayNameTextByIndex(Index).BuildSourceString();
 					Pin.Label = FName(Pin.StringValue);
 					Pin.Check = SelectionMode == EPCGExControlFlowSelectionMode::EnumInteger ? EPCGExComparisonDataType::Numeric : EPCGExComparisonDataType::String;

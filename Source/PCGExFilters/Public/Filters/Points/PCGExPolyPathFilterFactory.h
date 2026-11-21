@@ -128,7 +128,6 @@ protected:
 	TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>> MatchRuleFactories;
 
 	bool bScaleTolerance = false;
-	bool bUsedForInclusion = true;
 	bool bIgnoreSelf = true;
 	bool bBuildEdgeOctree = false;
 
@@ -236,7 +235,7 @@ namespace PCGExPathInclusion
 
 		// Tested bounds are passed as the point's transform + local bounds (read from value ranges by the caller),
 		// avoiding any FPoint virtual dispatch on the per-point hot path. Center mode only reads the location.
-		EFlags GetInclusionFlags(const FTransform& InTransform, const FVector& InBoundsMin, const FVector& InBoundsMax, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData = nullptr, const TSet<const UPCGData*>* InAdditionalExclude = nullptr) const;
-		PCGExMath::FClosestPosition FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData = nullptr, const TSet<const UPCGData*>* InAdditionalExclude = nullptr) const;
+		EFlags GetInclusionFlags(const FTransform& InTransform, const FVector& InBoundsMin, const FVector& InBoundsMax, int32& InclusionCount, const bool bClosestOnly, const UPCGData* InParentData = nullptr) const;
+		PCGExMath::FClosestPosition FindClosestIntersection(const PCGExMath::FSegment& Segment, const FPCGExPathIntersectionDetails& InDetails, const UPCGData* InParentData = nullptr) const;
 	};
 }

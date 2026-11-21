@@ -14,10 +14,6 @@ void UPCGExGoalPickerAttribute::CopySettingsFrom(const UPCGExInstancedFactory* O
 	Super::CopySettingsFrom(Other);
 	if (const UPCGExGoalPickerAttribute* TypedOther = Cast<UPCGExGoalPickerAttribute>(Other))
 	{
-		GoalCount = TypedOther->GoalCount;
-		SingleSelector = TypedOther->SingleSelector;
-		AttributeSelectors = TypedOther->AttributeSelectors;
-
 		PCGExMetaHelpers::AppendUniqueSelectorsFromCommaSeparatedList(TypedOther->CommaSeparatedNames, AttributeSelectors);
 	}
 }

@@ -28,6 +28,12 @@
 #include "Math/PCGExMathDistances.h"
 #include "Sorting/PCGExSortingHelpers.h"
 
+namespace PCGExSubGraph
+{
+	// Below this edge count, a subgraph compiles and builds its cached cluster on the calling thread.
+	constexpr int32 InlineCompileThreshold = 1024;
+}
+
 namespace PCGExGraphTask
 {
 	class FWriteSubGraphCluster final : public PCGExMT::FTask
@@ -45,19 +51,24 @@ namespace PCGExGraphTask
 
 		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override
 		{
-			UPCGExClusterEdgesData* ClusterEdgesData = Cast<UPCGExClusterEdgesData>(SubGraph->EdgesDataFacade->GetOut());
-			const TSharedPtr<PCGExGraphs::FGraph> ParentGraph = SubGraph->WeakParentGraph.Pin();
+			BuildCachedCluster(SubGraph);
+		}
+
+		static void BuildCachedCluster(const TSharedPtr<PCGExGraphs::FSubGraph>& InSubGraph)
+		{
+			UPCGExClusterEdgesData* ClusterEdgesData = Cast<UPCGExClusterEdgesData>(InSubGraph->EdgesDataFacade->GetOut());
+			const TSharedPtr<PCGExGraphs::FGraph> ParentGraph = InSubGraph->WeakParentGraph.Pin();
 			if (!ParentGraph)
 			{
 				return;
 			}
-			PCGEX_MAKE_SHARED(NewCluster, PCGExClusters::FCluster, SubGraph->VtxDataFacade->Source, SubGraph->EdgesDataFacade->Source, ParentGraph->NodeIndexLookup)
+			PCGEX_MAKE_SHARED(NewCluster, PCGExClusters::FCluster, InSubGraph->VtxDataFacade->Source, InSubGraph->EdgesDataFacade->Source, ParentGraph->NodeIndexLookup)
 			ClusterEdgesData->SetBoundCluster(NewCluster);
 
-			SubGraph->BuildCluster(NewCluster.ToSharedRef());
+			InSubGraph->BuildCluster(NewCluster.ToSharedRef());
 
 			// Build pre-configured caches
-			if (const TSharedPtr<PCGExGraphs::FGraphBuilder> Builder = SubGraph->GetBuilder())
+			if (const TSharedPtr<PCGExGraphs::FGraphBuilder> Builder = InSubGraph->GetBuilder())
 			{
 				if (Builder->OutputDetails)
 				{
@@ -108,12 +119,6 @@ namespace PCGExGraphs
 		}
 	}
 
-	void FSubGraph::Shrink()
-	{
-		Nodes.Shrink();
-		Edges.Shrink();
-	}
-
 	void FSubGraph::ComputeMinPointIndex(const TArray<FNode>& ParentNodes)
 	{
 		MinPointIndex = MAX_int32;
@@ -157,20 +162,9 @@ namespace PCGExGraphs
 
 		const int32 NumEdges = Edges.Num();
 
-		// When edges come from union graphs, node indices are non-deterministic due to parallel insertion.
-		// Recompute sort keys using the now-remapped PointIndex values for deterministic ordering.
-		if (InBuilder->bRequiresEdgeResort)
-		{
-			PCGEX_PARALLEL_FOR(
-				Edges.Num(),
-				const FEdge& E = ParentGraphEdges[Edges[i].Index];
-				Edges[i].Key = PCGEx::H64U(ParentGraphNodes[E.Start].PointIndex, ParentGraphNodes[E.End].PointIndex);
-				)
-		}
-
 		// Sorting establishes a deterministic output edge order; builders whose edge
 		// insertion order is already deterministic can opt out of the cost entirely.
-		if (InBuilder->bSortEdgeKeys || InBuilder->bRequiresEdgeResort)
+		if (InBuilder->bSortEdgeKeys)
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(FSubGraph::Compile::SortEdges);
 			PCGExSortingHelpers::RadixSort(Edges);
@@ -382,7 +376,7 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 			OnPreCompile(*UserContext, PreCompileData);
 		}
 
-		if (NumEdges < 1024)
+		if (NumEdges < PCGExSubGraph::InlineCompileThreshold)
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(CompileAll);
 			// Avoid contention when dealing with lots of small graphs
@@ -513,7 +507,14 @@ MACRO(EdgeUnionSize, int32, 0, UnionSize)
 		{
 			if (Cast<UPCGExClusterEdgesData>(EdgesDataFacade->Source->GetOut()))
 			{
-				PCGEX_LAUNCH(PCGExGraphTask::FWriteSubGraphCluster, ThisPtr)
+				if (FlattenedEdges.Num() < PCGExSubGraph::InlineCompileThreshold)
+				{
+					PCGExGraphTask::FWriteSubGraphCluster::BuildCachedCluster(ThisPtr);
+				}
+				else
+				{
+					PCGEX_LAUNCH(PCGExGraphTask::FWriteSubGraphCluster, ThisPtr)
+				}
 			}
 		}
 

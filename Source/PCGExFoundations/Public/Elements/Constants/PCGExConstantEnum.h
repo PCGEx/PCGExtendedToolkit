@@ -42,10 +42,6 @@ namespace PCGExConstantEnumConstants
 
 	static const FName SingleOutputPinName = "Out";
 	static const FName BitflagOutputPinName = "Flags";
-
-	static const FName KeyOutputAttribute = "Key";
-	static const FName ValueOutputAttribute = "Value";
-	static const FName DescriptionAttribute = "Description";
 }
 
 UCLASS(BlueprintType, ClassGroup=(Procedural), meta=(AutoExpandCategories="Settings|Output Attributes", PCGExNodeLibraryDoc="metadata/keys/enum-constant"))

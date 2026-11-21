@@ -31,11 +31,6 @@ namespace PCGExSampling
 			Weights.Add(Element, InWeight);
 		}
 
-		void AddWeighted(const PCGExData::FElement& Element, const double InWeight);
-
-		double GetWeightAverage() const;
-		double GetSqrtWeightAverage() const;
-
 		virtual void Reserve(const int32 InSetReserve, const int32 InElementReserve = 8) override;
 		virtual void Reset() override;
 	};

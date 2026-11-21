@@ -22,11 +22,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Floating Point Precision"), AdvancedDisplay)
 	double Precision = 100;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override
-	{
-		Super::CopySettingsFrom(Other);
-	}
-
 	virtual bool PrepareForCluster(FPCGExContext* InContext, const TSharedPtr<PCGExClusters::FCluster>& InCluster)
 	{
 		Cluster = InCluster;

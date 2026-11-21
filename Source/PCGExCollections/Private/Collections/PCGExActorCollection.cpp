@@ -548,8 +548,6 @@ void UPCGExActorCollection::RebuildActorPropertiesFromComponents(
 	// must be re-synced here too or they silently drift out of the schema on Actor/Omni rebuilds.
 	Host->SyncCategoryOverridesToSchema(CanonicalSchema);
 
-	Host->RebuildPropertyRegistry();
-
 	for (TSharedPtr<FStreamableHandle>& H : LevelHandles)
 	{
 		PCGExHelpers::SafeReleaseHandle(H);

@@ -175,8 +175,6 @@ namespace PCGExPathToClusters
 		{
 		}
 
-		virtual ~FNonFusingProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;
 	};
@@ -204,8 +202,6 @@ namespace PCGExPathToClusters
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FFusingProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void EmitEdges(const PCGExMT::FScope& Scope);

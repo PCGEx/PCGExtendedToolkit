@@ -9,6 +9,7 @@
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExAssetGrammar.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Colors/SColorBlock.h"
@@ -28,7 +29,7 @@ namespace PCGExAssetGrammarCustomization
 	// nothing and leaves the package clean. Driving the picker manually and calling
 	// NotifyFinishedChangingProperties() forces PostEditChangeProperty + MarkPackageDirty
 	// the same way FColorStructCustomization does it for top-level FLinearColor properties.
-	static TSharedRef<SWidget> MakeColorWidget(TSharedPtr<IPropertyHandle> Handle)
+	TSharedRef<SWidget> MakeColorWidget(TSharedPtr<IPropertyHandle> Handle)
 	{
 		return SNew(SColorBlock)
 			.Color_Lambda([Handle]() -> FLinearColor
@@ -88,7 +89,7 @@ namespace PCGExAssetGrammarCustomization
 	 * Snapshotted at customization construction; toggling bIsSubCollection mid-edit may require
 	 * collapsing/expanding the row to refresh the available size modes.
 	 */
-	static bool DetermineSubCollectionContext(TSharedRef<IPropertyHandle> PropertyHandle)
+	bool DetermineSubCollectionContext(TSharedRef<IPropertyHandle> PropertyHandle)
 	{
 		if (FProperty* Prop = PropertyHandle->GetProperty())
 		{
@@ -134,9 +135,6 @@ void FPCGExAssetGrammarCustomization::CustomizeHeader(
 		GrammarSourceHandle = ParentHandle->GetChildHandle(FName("GrammarSource"));
 	}
 
-	TArray<UObject*> OuterObjects;
-	PropertyHandle->GetOuterObjects(OuterObjects);
-
 	// "Global" detection drives the disabled-state hint on the entry-level grammar (the entry struct
 	// loses authoring power when the collection overrules globally) and on the GlobalAssetGrammar
 	// itself (always editable -- it IS the global source).
@@ -144,7 +142,7 @@ void FPCGExAssetGrammarCustomization::CustomizeHeader(
 		? PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"))
 		: false;
 
-	UPCGExAssetCollection* Collection = !OuterObjects.IsEmpty() ? Cast<UPCGExAssetCollection>(OuterObjects[0]) : nullptr;
+	const UPCGExAssetCollection* Collection = PCGExCollectionEditorUtils::FindHostCollection(PropertyHandle);
 
 	auto IsLocalData = [GrammarSourceHandle, bIsGlobal]()
 	{
@@ -223,7 +221,7 @@ namespace PCGExAssetGrammarCustomization
 {
 	/** Matrix-shaped popup picker for EPCGExGrammarAxisSize (Fixed row + 3 aggregators x 3 axes).
 	 *  Combo button shows the current selection's display name; clicking a cell commits and closes. */
-	static TSharedRef<SWidget> CreateSizeMatrixDropdown(TSharedPtr<IPropertyHandle> SizeHandle)
+	TSharedRef<SWidget> CreateSizeMatrixDropdown(TSharedPtr<IPropertyHandle> SizeHandle)
 	{
 		UEnum* Enum = FindFirstObjectSafe<UEnum>(TEXT("EPCGExGrammarAxisSize"));
 		if (!Enum || !SizeHandle.IsValid())
@@ -358,7 +356,7 @@ namespace PCGExAssetGrammarCustomization
 	// implicitly construct fresh temporaries (rvalues), but an lvalue TFunction parameter
 	// would not bind. Template => each .IsEnabled_Lambda(IsLocalData) is a fresh conversion.
 	template <typename TIsLocalData>
-	static void AddAxisRow(
+	void AddAxisRow(
 		IDetailChildrenBuilder& ChildBuilder,
 		TSharedPtr<IPropertyHandle> AxesHandle,
 		TSharedPtr<IPropertyHandle> SizingHandle,

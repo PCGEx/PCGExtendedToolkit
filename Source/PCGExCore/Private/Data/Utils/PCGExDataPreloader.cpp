@@ -45,11 +45,6 @@ namespace PCGExData
 		Identity.ValueType = InUnderlyingType;
 	}
 
-	bool FReadableBufferConfig::Validate(FPCGExContext* InContext, const TSharedPtr<FFacade>& InFacade) const
-	{
-		return true;
-	}
-
 	void FReadableBufferConfig::Fetch(const TSharedRef<FFacade>& InFacade, const PCGExMT::FScope& Scope)
 	{
 		// Lazy-initialized buffer reader with three-state Status:
@@ -157,23 +152,6 @@ namespace PCGExData
 		return InternalDataFacadePtr.Pin();
 	}
 
-	bool FFacadePreloader::Validate(FPCGExContext* InContext) const
-	{
-		if (BufferConfigs.IsEmpty())
-		{
-			return true;
-		}
-		const TSharedPtr<FFacade> InDataFacade = InternalDataFacadePtr.Pin();
-		for (const FReadableBufferConfig& Config : BufferConfigs)
-		{
-			if (!Config.Validate(InContext, InDataFacade))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
 	void FFacadePreloader::Register(FPCGExContext* InContext, const FAttributeIdentity& InIdentity)
 	{
 		for (const FReadableBufferConfig& ExistingConfig : BufferConfigs)
@@ -272,13 +250,6 @@ template PCGEXCORE_API void FFacadePreloader::Register<_TYPE>(FPCGExContext* InC
 			return false;
 		}
 
-		if (!Validate(TaskManager->GetContext()))
-		{
-			InternalDataFacadePtr.Reset();
-			OnLoadingEnd();
-			return false;
-		}
-
 		// Pre-warm InKeys while still single-threaded: GetInKeys lazily inits under a write lock,
 		// so the per-config tasks below would otherwise all pile up on the first init
 		// (same rationale as IAssetLoader::Discover).
@@ -373,18 +344,6 @@ template PCGEXCORE_API void FFacadePreloader::Register<_TYPE>(FPCGExContext* InC
 		{
 			It(*Preloader.Get());
 		}
-	}
-
-	bool FMultiFacadePreloader::Validate(FPCGExContext* InContext)
-	{
-		for (const TSharedPtr<FFacadePreloader>& Preloader : Preloaders)
-		{
-			if (!Preloader->Validate(InContext))
-			{
-				return false;
-			}
-		}
-		return true;
 	}
 
 	void FMultiFacadePreloader::StartLoading(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, const TSharedPtr<PCGExMT::IAsyncHandleGroup>& InParentHandle)

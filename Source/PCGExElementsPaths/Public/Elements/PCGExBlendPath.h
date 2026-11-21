@@ -29,8 +29,6 @@ class UPCGExBlendPathSettings : public UPCGExPathProcessorSettings
 	GENERATED_BODY()
 
 public:
-	UPCGExBlendPathSettings(const FObjectInitializer& ObjectInitializer);
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
@@ -115,8 +113,6 @@ namespace PCGExBlendPath
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

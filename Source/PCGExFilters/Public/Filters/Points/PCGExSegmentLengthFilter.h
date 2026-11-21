@@ -90,10 +90,6 @@ struct FPCGExSegmentLengthFilterConfig
 
 #pragma endregion
 
-	void Sanitize()
-	{
-	}
-
 #if WITH_EDITOR
 	void ApplyDeprecation();
 	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
@@ -157,10 +153,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FSegmentLengthFilter() override
-		{
-		}
 	};
 }
 

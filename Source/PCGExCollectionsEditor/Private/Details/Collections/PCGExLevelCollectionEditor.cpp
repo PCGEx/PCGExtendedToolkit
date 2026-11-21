@@ -5,11 +5,6 @@
 
 #include "Engine/World.h"
 
-FPCGExLevelCollectionEditor::FPCGExLevelCollectionEditor()
-	: FPCGExAssetCollectionEditor()
-{
-}
-
 const UClass* FPCGExLevelCollectionEditor::GetTilePickerAllowedClass() const
 {
 	return UWorld::StaticClass();

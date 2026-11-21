@@ -78,19 +78,3 @@ void FPCGExEdgeRefineChainFilter::Process()
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRefineChainFilter
-
-void UPCGExEdgeRefineChainFilter::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRefineChainFilter* TypedOther = Cast<UPCGExEdgeRefineChainFilter>(Other))
-	{
-		Gating = TypedOther->Gating;
-		bInvert = TypedOther->bInvert;
-		FilterOverride = TypedOther->FilterOverride;
-		bRequireAllEdgesPass = TypedOther->bRequireAllEdgesPass;
-	}
-}
-
-#pragma endregion

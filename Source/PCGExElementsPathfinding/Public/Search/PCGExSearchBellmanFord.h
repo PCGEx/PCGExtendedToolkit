@@ -62,8 +62,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bDetectNegativeCycles = true;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	virtual TSharedPtr<FPCGExSearchOperation> CreateOperation() const override
 	{
 		PCGEX_FACTORY_NEW_OPERATION(SearchOperationBellmanFord)

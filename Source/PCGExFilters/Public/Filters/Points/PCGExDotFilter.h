@@ -19,10 +19,6 @@ struct FPCGExDotFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDotFilterConfig()
-	{
-	}
-
 	/** Vector operand A */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -62,10 +58,6 @@ struct FPCGExDotFilterConfig
 	FVector OperandBConstant_DEPRECATED = FVector::UpVector;
 
 #pragma endregion
-
-	void Sanitize()
-	{
-	}
 
 #if WITH_EDITOR
 	void ApplyDeprecation();
@@ -120,10 +112,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FDotFilter() override
-		{
-		}
 	};
 }
 

@@ -16,11 +16,6 @@
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Layout/SBox.h"
 
-FPCGExSkinnedMeshCollectionEditor::FPCGExSkinnedMeshCollectionEditor()
-	: FPCGExAssetCollectionEditor()
-{
-}
-
 void FPCGExSkinnedMeshCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)
 {
 	FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(ToolbarBuilder);

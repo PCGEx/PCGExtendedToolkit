@@ -10,7 +10,7 @@ namespace PCGExBitmask
 {
 	void FBitmaskData::Append(const UPCGExBitmaskCollection* InCollection, const double InAngle, EPCGExBitOp Op)
 	{
-		const int32 Reserve = Directions.Num() + InCollection->NumEntries();
+		const int32 Reserve = Directions.Num();
 
 		Bitmasks.Reserve(Reserve);
 		Directions.Reserve(Reserve);

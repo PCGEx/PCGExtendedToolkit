@@ -118,11 +118,6 @@ void UPCGExVtxPropertyEdgeMatchSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 	Super::PCGExApplyDeprecation(InOutNode);
 }
-
-FString UPCGExVtxPropertyEdgeMatchSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
 #endif
 
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyEdgeMatchFactory::CreateOperation(FPCGExContext* InContext) const
@@ -130,12 +125,6 @@ TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyEdgeMatchFactory::Create
 	PCGEX_FACTORY_NEW_OPERATION(VtxPropertyEdgeMatch)
 	PCGEX_VTX_EXTRA_CREATE
 	return NewOperation;
-}
-
-TArray<FPCGPinProperties> UPCGExVtxPropertyEdgeMatchSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	return PinProperties;
 }
 
 UPCGExFactoryData* UPCGExVtxPropertyEdgeMatchSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const

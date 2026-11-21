@@ -36,14 +36,6 @@ enum class EPCGExInputValueToggle : uint8
 	Disabled  = 2 UMETA(DisplayName = "Disabled", Tooltip="Disabled", ActionIcon="STF_None"),
 };
 
-UENUM()
-enum class EPCGExSolidificationSpace : uint8
-{
-	Local   = 0 UMETA(DisplayName = "Local", ToolTip="Solidifies in local space. Units ignore scale."),
-	Scaled  = 1 UMETA(DisplayName = "Scaled", ToolTip="Solidifies accounting for scale. Units will account for scale."),
-	Unscale = 2 UMETA(DisplayName = "Unscaled", ToolTip="Solidifies in local space, resets scale to 1"),
-};
-
 USTRUCT(BlueprintType)
 struct FPCGExPathSolidificationAxisDetails
 {
@@ -186,7 +178,7 @@ public:
 
 
 	/** Type of arithmetic path point cross direction.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Normal", EditCondition="NormalType_DEPRECATED == EPCGExInputValueType::Constant", EditConditionHides))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Normal"))
 	EPCGExPathNormalDirection Normal = EPCGExPathNormalDirection::Normal;
 
 	/** Custom offset direction **/
@@ -330,8 +322,6 @@ namespace PCGExPathSolidify
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 

@@ -31,7 +31,7 @@ bool FPCGExSpatialDomain::Overlaps(
 {
 	// Generic fallback: signed-distance overlap against the candidate's
 	// bounding OBB derived from its WorldAABB. Useful for static domains
-	// (Polygon2D, SDF) which back this with their QueryPoint impls; the
+	// (Polygon2D) which back this with their QueryPoint impls; the
 	// mutable Broadphase overrides with the registry-driven precise path.
 	//
 	// Skip args ignored at this level: static domains have no per-element

@@ -115,10 +115,6 @@ bool FPCGExFindPointOnBoundsElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExFindPointOnBounds
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFindPointOnBounds::Process);
@@ -186,6 +182,12 @@ namespace PCGExFindPointOnBounds
 
 	void FProcessor::CompleteWork()
 	{
+		// No candidate means every distance was infinite; skip rather than read point -1.
+		if (BestIndex == -1)
+		{
+			return;
+		}
+
 		const FVector Offset = (BestPosition - PointDataFacade->Source->GetIn()->GetBounds().GetCenter()).GetSafeNormal() * Settings->Offset;
 
 		if (Settings->OutputMode == EPCGExPointOnBoundsOutputMode::Merged)
@@ -208,6 +210,8 @@ namespace PCGExFindPointOnBounds
 		{
 			PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::New)
 			PCGExPointArrayDataHelpers::SetNumPointsAllocated(PointDataFacade->GetOut(), 1);
+
+			PointDataFacade->Source->InheritPoints(BestIndex, 0, 1);
 
 			TPCGValueRange<FTransform> OutTransforms = PointDataFacade->GetOut()->GetTransformValueRange(false);
 			TPCGValueRange<int64> OutMetadataEntry = PointDataFacade->GetOut()->GetMetadataEntryValueRange();

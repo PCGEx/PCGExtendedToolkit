@@ -216,13 +216,6 @@ namespace PCGExClusters
 		int32 FindFaceContaining(const FVector2D& Point) const;
 
 		/**
-		 * Ordered projected polygon of a face. Requires raw faces enumerated (FaceIndex populated).
-		 * @param FaceIndex The face to query
-		 * @param OutPolygon Output polygon; empty for LocalTangent builds or an unknown face
-		 */
-		void GetFacePolygon(int32 FaceIndex, TArray<FVector2D>& OutPolygon) const;
-
-		/**
 		 * Get the outer (wrapper) face index.
 		 * This is the unbounded face surrounding the entire graph.
 		 * @return Index of the wrapper face, or -1 if not found
@@ -273,16 +266,6 @@ namespace PCGExClusters
 		}
 
 		/**
-		 * Get half-edge index for a directed edge.
-		 * @return Half-edge index, or -1 if not found
-		 */
-		FORCEINLINE int32 GetHalfEdgeIndex(int32 FromNode, int32 ToNode) const
-		{
-			const int32* Found = HalfEdgeMap.Find(PCGEx::H64(FromNode, ToNode));
-			return Found ? *Found : -1;
-		}
-
-		/**
 		 * Build adjacency map for all faces.
 		 * Uses twin half-edges: if HalfEdge[i].FaceIndex = A and HalfEdge[HalfEdge[i].TwinIndex].FaceIndex = B,
 		 * then faces A and B are adjacent.
@@ -298,22 +281,6 @@ namespace PCGExClusters
 		 * @return Reference to cached map of FaceIndex -> Set of adjacent FaceIndices
 		 */
 		const TMap<int32, TSet<int32>>& GetOrBuildAdjacencyMap(int32 WrapperFaceIndex = -1) const;
-
-		/**
-		 * Get adjacent face indices for a specific face.
-		 * Requires EnumerateRawFaces() to have been called first.
-		 * @param FaceIndex The face to query
-		 * @param OutAdjacentFaces Output array of adjacent face indices
-		 * @param WrapperFaceIndex Optional face index to exclude from results
-		 */
-		void GetAdjacentFaces(int32 FaceIndex, TArray<int32>& OutAdjacentFaces, int32 WrapperFaceIndex = -1) const;
-
-		/**
-		 * Get the half-edges that belong to a specific face.
-		 * @param FaceIndex The face to query
-		 * @param OutHalfEdgeIndices Output array of half-edge indices belonging to this face
-		 */
-		void GetFaceHalfEdges(int32 FaceIndex, TArray<int32>& OutHalfEdgeIndices) const;
 
 		/**
 		 * Enumerate every interior shared segment (each undirected boundary half-edge bounded by two distinct faces),
@@ -338,6 +305,14 @@ namespace PCGExClusters
 			const TArray<int32>& FaceNodes,
 			TSharedPtr<FCell>& OutCell,
 			const TSharedRef<FCellConstraints>& Constraints) const;
+
+		/** Shared body of EnumerateAllFaces / EnumerateFacesWithinBounds; a null BoundsFilter keeps every face. */
+		void EnumerateFacesInternal(
+			TArray<TSharedPtr<FCell>>& OutCells,
+			const TSharedRef<FCellConstraints>& Constraints,
+			const FBox* BoundsFilter,
+			TArray<TSharedPtr<FCell>>* OutFailedCells,
+			bool bDetectWrapper);
 
 		/** Node 3D position regardless of build path: cluster, standalone array, or 2D lifted at Z=0. */
 		FVector GetNodePos3D(int32 NodeIdx) const;

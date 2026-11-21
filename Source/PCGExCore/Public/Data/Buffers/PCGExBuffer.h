@@ -58,7 +58,6 @@ namespace PCGExData
 		virtual const void Read(const int32 Start, TArrayView<T> OutResults) const override;
 
 		virtual const T& GetValue(const int32 Index) override;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual void SetValue(const int32 Index, const T& Value) override;
 		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
@@ -118,7 +117,6 @@ namespace PCGExData
 		virtual const void Read(const int32 Start, TArrayView<T> OutResults) const override;
 
 		virtual const T& GetValue(const int32 Index) override;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual void SetValue(const int32 Index, const T& Value) override;
 

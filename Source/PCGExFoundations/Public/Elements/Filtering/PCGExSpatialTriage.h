@@ -70,6 +70,5 @@ class FPCGExSpatialTriageElement final : public FPCGExPointsProcessorElement
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(SpatialTriage)
 
-	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };

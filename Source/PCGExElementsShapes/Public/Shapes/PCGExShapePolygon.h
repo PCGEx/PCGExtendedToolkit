@@ -12,14 +12,6 @@
 
 #include "PCGExShapePolygon.generated.h"
 
-// Not sure if this should be the same class or a different one...
-UENUM(BlueprintType)
-enum class EPCGExPolygonShapeType : uint8
-{
-	Convex = 0 UMETA(DisplayName = "Polygon"),
-	Star   = 1 UMETA(DisplayName = "Star")
-};
-
 UENUM(BlueprintType)
 enum class EPCGExPolygonSkeletonConnectionType : uint8
 {
@@ -46,10 +38,6 @@ struct FPCGExShapePolygonConfig : public FPCGExShapeConfigBase
 		: FPCGExShapeConfigBase()
 	{
 	}
-
-	// Type of polygon we're creating
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category=Settings, meta=(PCG_NotOverridable))
-	EPCGExPolygonShapeType PolygonType = EPCGExPolygonShapeType::Convex;
 
 	/** Number of vertices */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta = (PCG_Overridable))
@@ -189,7 +177,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ShapeBuilderCircle, "Shape : Polygon", "Create points as a regular polygon or star.", FName ("Polygon"))
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ShapeBuilderPolygon, "Shape : Polygon", "Create points as a regular polygon or star.", FName ("Polygon"))
 
 #endif
 	//~End UPCGSettings
@@ -199,10 +187,4 @@ public:
 	FPCGExShapePolygonConfig Config;
 
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-protected:
-	virtual bool IsCacheable() const override
-	{
-		return true;
-	}
 };

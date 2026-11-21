@@ -236,35 +236,11 @@ namespace PCGExData
 		 */
 		void ApplySet(EPCGMetadataTypes TargetType, void* Target, EPCGMetadataTypes SourceType, const void* Source) const;
 
-		/**
-		 * Extract a field value to double
-		 * 
-		 * Convenience method for common case of extracting a scalar field.
-		 * Returns 0.0 if the type doesn't support field extraction.
-		 * 
-		 * @param SourceType Type of the source value
-		 * @param Source Pointer to source value
-		 * @return Extracted field value as double
-		 */
-		double ExtractFieldToDouble(EPCGMetadataTypes SourceType, const void* Source) const;
-
-		/**
-		 * Inject a double value into a field
-		 * 
-		 * Convenience method for setting a single scalar field.
-		 * No-op if the type doesn't support field injection.
-		 * 
-		 * @param TargetType Type of the target value
-		 * @param Target Pointer to target value (modified in place)
-		 * @param Value Double value to inject
-		 */
-		void InjectFieldFromDouble(EPCGMetadataTypes TargetType, void* Target, double Value) const;
-
 		//
 		// Legacy Type-Erased Interface (for compatibility)
 		//
-		// These match the existing GetVoid/SetVoid signatures but internally
-		// use the new system.
+		// Matches the existing GetVoid signature but internally
+		// uses the new system.
 		//
 
 		/**
@@ -273,25 +249,16 @@ namespace PCGExData
 		 */
 		void GetVoid(EPCGMetadataTypes SourceType, const void* Source, EPCGMetadataTypes WorkingType, void* Target) const;
 
-		/**
-		 * Type-erased Set with explicit types
-		 * (Legacy compatibility wrapper)
-		 */
-		void SetVoid(EPCGMetadataTypes TargetType, void* Target, EPCGMetadataTypes SourceType, const void* Source) const;
-
 		//
 		// Templated Interface (for convenience, uses type-erased internally)
 		//
-		// These templates are thin wrappers that call the type-erased methods.
-		// They do NOT create 14×14 instantiations - they just provide type safety
-		// and call the void* versions.
+		// This template is a thin wrapper that calls the type-erased method.
+		// It does NOT create 14×14 instantiations - it just provides type safety
+		// and calls the void* version.
 		//
 
 		template <typename TSource, typename TResult>
 		TResult Get(const TSource& Value) const;
-
-		template <typename TTarget, typename TSource>
-		void Set(TTarget& Target, const TSource& Value) const;
 	};
 
 	//
@@ -309,15 +276,6 @@ namespace PCGExData
 		GetVoid(SourceType, &Value, ResultType, &Result);
 
 		return Result;
-	}
-
-	template <typename TTarget, typename TSource>
-	void FSubSelection::Set(TTarget& Target, const TSource& Value) const
-	{
-		constexpr EPCGMetadataTypes TargetType = PCGExTypes::TTraits<TTarget>::Type;
-		constexpr EPCGMetadataTypes SourceType = PCGExTypes::TTraits<TSource>::Type;
-
-		SetVoid(TargetType, &Target, SourceType, &Value);
 	}
 
 	PCGEXCORE_API bool TryGetType(const FPCGAttributePropertyInputSelector& InputSelector, const UPCGData* InData, EPCGMetadataTypes& OutType);

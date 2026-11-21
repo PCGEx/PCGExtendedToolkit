@@ -97,11 +97,6 @@ namespace PCGExPointFilter
 
 	protected:
 		virtual bool InitNearest(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
-
-	public:
-		virtual ~FNearestPointCheckFilter() override
-		{
-		}
 	};
 }
 

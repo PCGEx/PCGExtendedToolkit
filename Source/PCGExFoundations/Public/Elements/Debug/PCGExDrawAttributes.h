@@ -102,11 +102,6 @@ struct FPCGExAttributeDebugDrawConfig : public FPCGExInputConfig
 	/** Depth priority. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	int32 DepthPriority = 0;
-
-	FString GetNestedStructDisplayText() const
-	{
-		return PCGExMetaHelpers::GetSelectorDisplayName(Selector);
-	}
 };
 
 USTRUCT(BlueprintType)
@@ -126,7 +121,6 @@ struct FPCGExAttributeDebugDraw
 	TSharedPtr<PCGExData::TAttributeBroadcaster<double>> SingleGetter;
 	TSharedPtr<PCGExData::TAttributeBroadcaster<double>> SizeGetter;
 	TSharedPtr<PCGExData::TAttributeBroadcaster<FVector>> ColorGetter;
-	TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> TextGetter;
 
 	bool bValid = false;
 
@@ -203,7 +197,6 @@ private:
 
 struct FPCGExDrawAttributesContext final : FPCGExPointsProcessorContext
 {
-	friend class FPCGExWriteIndexElement;
 	TArray<FPCGExAttributeDebugDraw> DebugList;
 };
 

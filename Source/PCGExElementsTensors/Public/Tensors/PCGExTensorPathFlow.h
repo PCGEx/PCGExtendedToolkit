@@ -53,8 +53,6 @@ public:
 	FPCGExTensorPathFlowConfig Config;
 	const TArray<TSharedPtr<const FPCGSplineStruct>>* Splines = nullptr;
 
-	virtual bool Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory) override;
-
 	virtual PCGExTensor::FTensorSample Sample(int32 InSeedIndex, const FTransform& InProbe) const override;
 };
 

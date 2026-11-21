@@ -11,6 +11,7 @@ class AActor;
 class IPCGGraphExecutionSource;
 class UWorld;
 
+struct FActorSpawnParameters;
 struct FPCGContext;
 
 namespace PCGExData
@@ -61,6 +62,15 @@ namespace PCGExHelpers
 	 * in its own idiom.
 	 */
 	PCGEXCORE_API bool WithTempActor(UWorld* InWorld, UClass* InClass, TFunctionRef<void(AActor*)> Body);
+
+	/** Makes the next spawn take InDonor's name and GUID, hence its package, once the donor is destroyed. Persistent editor actors only; a no-op otherwise. */
+	PCGEXCORE_API void InheritActorIdentity(const AActor* InDonor, FActorSpawnParameters& InOutSpawnParams);
+
+	/** Destroys actors a managed resource tracked, the way a hard release does: their own PCG generation first, then one engine call for all. Game thread. */
+	PCGEXCORE_API void DestroyManagedActors(TConstArrayView<TSoftObjectPtr<AActor>> InActors);
+
+	/** Same for one actor, whose name is then freed for the successor about to spawn under it. Game thread. */
+	PCGEXCORE_API void DestroyManagedActor(AActor* InActor);
 
 	/**
 	 * Make every scene component's ComponentToWorld and Bounds trustworthy on a world that may

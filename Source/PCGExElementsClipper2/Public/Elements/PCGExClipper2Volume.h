@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "PCGCommon.h"
-#include "PCGCrc.h"
 #include "Core/PCGExClipper2Processor.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "PhysicsEngine/BodyInstance.h"
@@ -14,7 +13,6 @@
 
 class AActor;
 class AVolume;
-class UPCGManagedActors;
 
 namespace PCGExDetails
 {
@@ -171,12 +169,6 @@ struct FPCGExClipper2VolumeContext final : FPCGExClipper2ProcessorContext
 	// Volume build specs produced off-thread in Process(Group), consumed on the game thread in OutputWork.
 	TArray<TSharedPtr<FPCGExVolumeSpec>> StagedVolumes;
 	mutable FCriticalSection StagedVolumesLock;
-
-	// Managed resource owning all spawned volumes for this generation (auto-cleanup on regen).
-	UPCGManagedActors* ManagedActors = nullptr;
-
-	// CRC of inputs + settings, stamped on the managed resource.
-	FPCGCrc DependenciesCrc;
 
 	void AddStagedVolume(const TSharedPtr<FPCGExVolumeSpec>& Spec);
 

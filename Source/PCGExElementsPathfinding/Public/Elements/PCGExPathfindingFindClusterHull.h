@@ -76,14 +76,11 @@ private:
 struct FPCGExFindClusterHullContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExFindClusterHullElement;
-	friend class FPCGExCreateBridgeTask;
 
 	FPCGExCellArtifactsDetails Artifacts;
 
 	TSharedPtr<PCGExData::FPointIOCollection> OutputPaths;
 	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBounds;
-
-	mutable FRWLock SeedOutputLock;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL

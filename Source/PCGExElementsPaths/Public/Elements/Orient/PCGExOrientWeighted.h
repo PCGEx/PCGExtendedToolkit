@@ -57,15 +57,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInverseWeight = false;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override
-	{
-		Super::CopySettingsFrom(Other);
-		if (const UPCGExOrientWeighted* TypedOther = Cast<UPCGExOrientWeighted>(Other))
-		{
-			bInverseWeight = TypedOther->bInverseWeight;
-		}
-	}
-
 	virtual TSharedPtr<FPCGExOrientOperation> CreateOperation() const override
 	{
 		PCGEX_FACTORY_NEW_OPERATION(OrientWeighted)

@@ -99,6 +99,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	FNavAgentProperties NavAgentProperties;
 
+	/** If any leg of the plot fails, output no path instead of the legs that succeeded. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bOmitCompletePathOnFailedPlot = false;
 };

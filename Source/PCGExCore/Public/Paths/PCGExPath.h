@@ -57,9 +57,6 @@ namespace PCGExPaths
 
 		void Update(const TConstPCGValueRange<FTransform>& Positions, const double Expansion = 0);
 
-		bool ShareIndices(const FPathEdge& Other) const;
-		bool Connects(const FPathEdge& Other) const;
-		bool ShareIndices(const FPathEdge* Other) const;
 		FORCEINLINE double GetLength() const
 		{
 			return Length;
@@ -194,7 +191,6 @@ namespace PCGExPaths
 			return Positions;
 		}
 
-		int32 LoopPointIndex(const int32 Index) const;
 		int32 SafePointIndex(const int32 Index) const;
 
 		FORCEINLINE virtual FVector GetPos(const int32 Index) const
@@ -218,8 +214,6 @@ namespace PCGExPaths
 		{
 			return DirToNextPoint(SafePointIndex(Index - 1)) * -1;
 		}
-
-		FVector DirToNeighbor(const int32 Index, const int32 Offset) const;
 
 		virtual int32 NextPointIndex(const int32 Index) const
 		{
@@ -319,10 +313,6 @@ namespace PCGExPaths
 
 		virtual FTransform GetClosestTransform(const FVector& WorldPosition, const bool bUseScale) const PCGEX_NOT_IMPLEMENTED_RET(GetClosestTransform(const FVector& WorldPosition), FTransform::Identity);
 
-		virtual bool GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition) const PCGEX_NOT_IMPLEMENTED_RET(GetClosestTransform(const FVector& WorldPosition), false);
-
-		virtual bool GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition, bool& bIsInside) const PCGEX_NOT_IMPLEMENTED_RET(GetClosestTransform(const FVector& WorldPosition), false);
-
 		virtual int32 GetClosestEdge(const FVector& WorldPosition, float& OutLerp) const PCGEX_NOT_IMPLEMENTED_RET(GetClosestEdge(const FVector& WorldPosition, float& OutLerp), - 1);
 
 		virtual int32 GetClosestEdge(const double InTime, float& OutLerp) const PCGEX_NOT_IMPLEMENTED_RET(GetClosestEdge(const double InTime, float& OutLerp), - 1);
@@ -363,17 +353,6 @@ namespace PCGExPaths
 
 		virtual void ProcessEdge(const FPath* Path, const FPathEdge& Edge) override;
 		virtual void ProcessingDone(const FPath* Path) override;
-	};
-
-	class PCGEXCORE_API FPathEdgeLengthSquared : public TPathEdgeExtra<double>
-	{
-	public:
-		explicit FPathEdgeLengthSquared(const int32 InNumSegments, const bool InClosedLoop)
-			: TPathEdgeExtra(InNumSegments, InClosedLoop)
-		{
-		}
-
-		virtual void ProcessEdge(const FPath* Path, const FPathEdge& Edge) override;
 	};
 
 	class PCGEXCORE_API FPathEdgeNormal : public TPathEdgeExtra<FVector>
@@ -457,21 +436,6 @@ namespace PCGExPaths
 
 	public:
 		explicit FPathEdgeHalfAngle(const int32 InNumSegments, const bool InClosedLoop, const FVector& InUp = FVector::UpVector)
-			: TPathEdgeExtra(InNumSegments, InClosedLoop)
-			  , Up(InUp)
-		{
-		}
-
-		virtual void ProcessFirstEdge(const FPath* Path, const FPathEdge& Edge) override;
-		virtual void ProcessEdge(const FPath* Path, const FPathEdge& Edge) override;
-	};
-
-	class PCGEXCORE_API FPathEdgeFullAngle : public TPathEdgeExtra<double>
-	{
-		FVector Up = FVector::UpVector;
-
-	public:
-		explicit FPathEdgeFullAngle(const int32 InNumSegments, const bool InClosedLoop, const FVector& InUp = FVector::UpVector)
 			: TPathEdgeExtra(InNumSegments, InClosedLoop)
 			  , Up(InUp)
 		{

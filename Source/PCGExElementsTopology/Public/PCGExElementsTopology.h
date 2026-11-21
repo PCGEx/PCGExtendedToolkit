@@ -9,9 +9,4 @@
 class FPCGExElementsTopologyModule final : public IPCGExLegacyModuleInterface
 {
 	PCGEX_MODULE_BODY
-
-public:
-	/** IModuleInterface implementation */
-	virtual void StartupModule() override;
-	virtual void ShutdownModule() override;
 };

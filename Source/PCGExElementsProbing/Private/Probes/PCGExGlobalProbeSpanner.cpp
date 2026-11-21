@@ -2,41 +2,13 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExGlobalProbeSpanner.h"
-#include "PCGExVersion.h"
 #include "Data/PCGExPointIO.h"
 
 PCGEX_CREATE_PROBE_FACTORY(Spanner, {}, {})
 
-#if WITH_EDITOR
-void UPCGExProbeSpannerProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeSpannerProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-#endif
-
 bool FPCGExProbeSpanner::IsGlobalProbe() const
 {
 	return true;
-}
-
-bool FPCGExProbeSpanner::Prepare(FPCGExContext* InContext)
-{
-	return FPCGExProbeOperation::Prepare(InContext);
 }
 
 double FPCGExProbeSpanner::GetGraphDistance(int32 From, int32 To,

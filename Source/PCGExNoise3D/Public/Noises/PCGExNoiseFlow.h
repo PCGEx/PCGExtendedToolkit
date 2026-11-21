@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigFlow : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigFlow()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "16"))
 	int32 Octaves = 1;
 
@@ -48,8 +43,6 @@ class PCGEXNOISE3D_API FPCGExNoiseFlow : public FPCGExNoise3DOperation
 public:
 	double Time = 0.0;
 	double RotationSpeed = 1.0;
-
-	virtual ~FPCGExNoiseFlow() override = default;
 
 	virtual void PostInitDerived() override;
 

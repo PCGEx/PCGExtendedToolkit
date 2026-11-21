@@ -2,32 +2,9 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExGlobalProbeDBSCAN.h"
-#include "PCGExVersion.h"
 #include "Data/PCGExPointIO.h"
 
 PCGEX_CREATE_PROBE_FACTORY(DBSCAN, {}, {})
-
-#if WITH_EDITOR
-void UPCGExProbeDBSCANProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeDBSCANProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-#endif
 
 bool FPCGExProbeDBSCAN::IsGlobalProbe() const
 {
@@ -37,11 +14,6 @@ bool FPCGExProbeDBSCAN::IsGlobalProbe() const
 bool FPCGExProbeDBSCAN::WantsOctree() const
 {
 	return true;
-}
-
-bool FPCGExProbeDBSCAN::Prepare(FPCGExContext* InContext)
-{
-	return FPCGExProbeOperation::Prepare(InContext);
 }
 
 void FPCGExProbeDBSCAN::ProcessAll(TSet<uint64>& OutEdges) const

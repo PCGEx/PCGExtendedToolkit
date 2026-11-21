@@ -222,11 +222,6 @@ void UPCGExVtxPropertyAmplitudeSettings::PCGExApplyDeprecation(UPCGNode* InOutNo
 
 	Super::PCGExApplyDeprecation(InOutNode);
 }
-
-FString UPCGExVtxPropertyAmplitudeSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
 #endif
 
 TSharedPtr<FPCGExVtxPropertyOperation> UPCGExVtxPropertyAmplitudeFactory::CreateOperation(FPCGExContext* InContext) const
@@ -243,12 +238,6 @@ void UPCGExVtxPropertyAmplitudeFactory::RegisterBuffersDependencies(FPCGExContex
 	{
 		Config.UpVector.RegisterBufferDependencies(InContext, FacadePreloader);
 	}
-}
-
-TArray<FPCGPinProperties> UPCGExVtxPropertyAmplitudeSettings::InputPinProperties() const
-{
-	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	return PinProperties;
 }
 
 UPCGExFactoryData* UPCGExVtxPropertyAmplitudeSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const

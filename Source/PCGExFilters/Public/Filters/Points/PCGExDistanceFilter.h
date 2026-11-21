@@ -28,10 +28,6 @@ struct FPCGExDistanceFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDistanceFilterConfig()
-	{
-	}
-
 	/** Distance method to be used for source & target points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGExDistanceDetails DistanceDetails;
@@ -115,8 +111,6 @@ public:
 	}
 
 	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
-
-	virtual void BeginDestroy() override;
 };
 
 namespace PCGExPointFilter
@@ -134,8 +128,8 @@ namespace PCGExPointFilter
 		const TObjectPtr<const UPCGExDistanceFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExMatching::FTargetsHandler> TargetsHandler;
 
-		// Collection-level matching: IgnoreList is built once in Init() using PopulateIgnoreListInverse (data-vs-data,
-		// first point only), plus the self-ignore. Consulted as-is by every Test(); no per-point matching.
+		// Collection-level matching: built once in Init() for the data this filter was set up on (self-ignore, then
+		// data-vs-data matching, first point only). No per-point matching; Test(IO) resolves its own list per data.
 		TSet<const UPCGData*> IgnoreList;
 
 		bool bCheckAgainstDataBounds = false;
@@ -151,9 +145,10 @@ namespace PCGExPointFilter
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 
-		virtual ~FDistanceFilter() override
-		{
-		}
+	private:
+		// Targets one tested data ignores: itself under Ignore Self, then the ones data matching rejects. False when matching rejects them all.
+		bool ResolveIgnoreList(const TSharedPtr<PCGExData::FFacade>& InFacade, TSet<const UPCGData*>& OutIgnoreList, bool& bOutWantsPoints) const;
+		bool TestProxy(const PCGExData::FProxyPoint& Point, const TSet<const UPCGData*>& InIgnoreList) const;
 	};
 }
 

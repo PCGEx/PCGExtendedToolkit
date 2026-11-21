@@ -108,17 +108,23 @@ namespace PCGExData::Helpers
 		}
 	}
 
+	/** Call before a SetRange<T> of NumValues from index 0 through InAccessor, which must be a fresh one: an accessor prepares once. */
+	template <typename T>
+	void PrepareBulkWrite(IPCGAttributeAccessor& InAccessor, IPCGAttributeAccessorKeys& InKeys, const int32 NumValues)
+	{
+		// Prepared, an attribute reserves its entry map and value slots once; unprepared, SetRange inserts row by row into a map it never reserved.
+		// Same-type writes only: the slots are reserved before the copy, and a write that then failed to convert would leave them unwritten.
+		if (NumValues > 0 && NumValues <= InKeys.GetNum() && InAccessor.GetUnderlyingType() == static_cast<int16>(PCG::Private::MetadataTypes<T>::Id))
+		{
+			InAccessor.Prepare(InKeys, NumValues, /*bCanReuseEntryKeys=*/false);
+		}
+	}
+
 	/** Writes one value per key through InAccessor, which must be a fresh one: an accessor prepares once. False when the write is refused. */
 	template <typename T>
 	bool BulkWriteRows(IPCGAttributeAccessor& InAccessor, const TArray<T>& InValues, IPCGAttributeAccessorKeys& InKeys)
 	{
-		// Prepared, an attribute reserves its entry map and value slots once; unprepared, SetRange inserts row by row into a map it never reserved.
-		// Same-type writes only: the slots are reserved before the copy, and a write that then failed to convert would leave them unwritten.
-		if (!InValues.IsEmpty() && InValues.Num() <= InKeys.GetNum() && InAccessor.GetUnderlyingType() == static_cast<int16>(PCG::Private::MetadataTypes<T>::Id))
-		{
-			InAccessor.Prepare(InKeys, InValues.Num(), /*bCanReuseEntryKeys=*/false);
-		}
-
+		PrepareBulkWrite<T>(InAccessor, InKeys, InValues.Num());
 		return InAccessor.SetRange<T>(InValues, 0, InKeys, EPCGAttributeAccessorFlags::AllowBroadcastAndConstructible);
 	}
 

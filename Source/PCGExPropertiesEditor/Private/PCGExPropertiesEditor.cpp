@@ -32,8 +32,6 @@
 #include "Metadata/PCGObjectPropertyOverride.h"
 #include "Utils/PCGExWeightCurve.h"
 
-#define LOCTEXT_NAMESPACE "FPCGExPropertiesEditorModule"
-
 void FPCGExPropertiesEditorModule::StartupModule()
 {
 	IPCGExEditorModuleInterface::StartupModule();
@@ -211,7 +209,5 @@ void FPCGExPropertiesEditorModule::ShutdownModule()
 
 	IPCGExEditorModuleInterface::ShutdownModule();
 }
-
-#undef LOCTEXT_NAMESPACE
 
 PCGEX_IMPLEMENT_MODULE(FPCGExPropertiesEditorModule, PCGExPropertiesEditor)

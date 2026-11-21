@@ -106,10 +106,6 @@ bool FPCGExUberNoiseElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExUberNoise
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		PointDataFacade->bSupportsScopedGet = Context->bScopedAttributeGet;

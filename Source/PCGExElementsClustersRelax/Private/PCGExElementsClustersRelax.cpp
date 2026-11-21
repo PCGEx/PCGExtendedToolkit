@@ -11,11 +11,6 @@ void FPCGExElementsClustersRelaxModule::StartupModule()
 	IPCGExLegacyModuleInterface::StartupModule();
 }
 
-void FPCGExElementsClustersRelaxModule::ShutdownModule()
-{
-	IPCGExLegacyModuleInterface::ShutdownModule();
-}
-
 #undef LOCTEXT_NAMESPACE
 
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsClustersRelaxModule, PCGExElementsClustersRelax)

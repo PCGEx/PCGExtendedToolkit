@@ -45,15 +45,6 @@ class UPCGExShiftPathSettings : public UPCGExPathProcessorSettings
 	GENERATED_BODY()
 
 public:
-	UPCGExShiftPathSettings(const FObjectInitializer& ObjectInitializer);
-
-	//~Begin UObject interface
-#if WITH_EDITOR
-
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-	//~End UObject interface
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(PathShift, "Path : Shift", "Shift path points");
@@ -114,7 +105,6 @@ public:
 struct FPCGExShiftPathContext final : FPCGExPathProcessorContext
 {
 	friend class FPCGExShiftPathElement;
-	FPCGExBlendingDetails BlendingSettings;
 	EPCGPointNativeProperties ShiftedProperties;
 	TArray<FPCGAttributeIdentifier> ShiftedAttributes;
 
@@ -147,8 +137,6 @@ namespace PCGExShiftPath
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

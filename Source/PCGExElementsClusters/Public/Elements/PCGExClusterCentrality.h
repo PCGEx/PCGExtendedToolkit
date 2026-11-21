@@ -191,8 +191,6 @@ namespace PCGExClusterCentrality
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 
 		virtual void ProcessEdges(const PCGExMT::FScope& Scope) override;
@@ -215,6 +213,10 @@ namespace PCGExClusterCentrality
 
 		void ComputeEigenvector();
 		void ComputeKatz();
+
+	protected:
+		void FindDistancesFrom(const int32 Index, TArray<double>& Score, TArray<int32>& Stack, const TSharedPtr<PCGEx::FScoredQueue>& Queue) const;
+		void ApplyDownsampleRatio(TArray<double>& LocalScores) const;
 	};
 
 	class FBatch final : public PCGExClusterMT::TBatch<FProcessor>

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGCrc.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 
@@ -21,10 +22,6 @@ namespace PCGExMT
 	class FTimeSlicedMainThreadLoop;
 }
 
-namespace PCGExPackActorData
-{
-}
-
 /**
  * Executed once per point
  */
@@ -35,7 +32,6 @@ class UPCGExCustomActorDataPacker : public UPCGExInstancedFactory
 
 	struct FComponentInfos
 	{
-		AActor* Owner = nullptr;
 		UActorComponent* Component = nullptr;
 		FAttachmentTransformRules AttachmentTransformRules;
 
@@ -57,8 +53,9 @@ public:
 		return true;
 	}
 
-	TSharedPtr<FPCGExUniqueNameGenerator> UniqueNameGenerator;
-	bool bIsPreviewMode = false;
+	/** This input's slot; each AddComponent call finds its component of the previous generation under it, by call order */
+	FPCGCrc SlotCrc;
+	int32 NumAddedComponents = 0;
 	bool bIsProcessing = false;
 
 	/**
@@ -81,7 +78,9 @@ public:
 	void ProcessEntry(AActor* InActor, const FPCGPoint& InPoint, const int32 InPointIndex, FPCGPoint& OutPoint);
 
 	/**
-	 * Create a component that will be attached to the actor at the end of the execution.
+	 * Create a component and attach it to the actor. On a regeneration this hands back the component the same call
+	 * created last time: its tags, transform and material overrides are cleared, everything else is as it was set
+	 * then, so set every property you rely on.
 	 * @param InActor Actor to which the component will be attached
 	 * @param ComponentClass Component class
 	 * @param InLocationRule The rule to apply to location when attaching
@@ -104,7 +103,6 @@ public:
 	TArray<TObjectPtr<AActor>> InputActors;
 
 	TSet<FSoftObjectPath> RequiredAssetsPaths;
-	TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
 
 	TSharedPtr<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>> WriteBuffers;
 	TSharedPtr<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Read>> ReadBuffers;
@@ -708,7 +706,6 @@ namespace PCGExPackActorData
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExPackActorDataContext, UPCGExPackActorDataSettings>
 	{
-		TArray<FPCGMetadataAttributeBase*> Attributes;
 		UPCGExCustomActorDataPacker* Packer = nullptr;
 
 		TSet<AActor*> UniqueActors;
@@ -724,8 +721,6 @@ namespace PCGExPackActorData
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void StartProcessing();

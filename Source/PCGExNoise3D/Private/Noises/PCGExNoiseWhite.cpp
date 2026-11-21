@@ -23,8 +23,6 @@ TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryWhite::CreateOperationInt
 	PCGEX_FACTORY_NEW_OPERATION(NoiseWhite)
 	PCGEX_FORWARD_NOISE3D_CONFIG
 
-	NewOperation->Octaves = 1; // White noise doesn't use octaves
-
 	return NewOperation;
 }
 

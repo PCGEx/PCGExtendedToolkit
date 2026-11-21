@@ -122,7 +122,7 @@ public:
 	}
 
 #if WITH_EDITOR
-	virtual FString GetDisplayName() const;
+	FString GetDisplayName() const;
 #endif
 };
 

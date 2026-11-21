@@ -58,18 +58,10 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Tangents)
 	EPCGExAxis Axis = EPCGExAxis::Forward;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override
-	{
-		Super::CopySettingsFrom(Other);
-		if (const UPCGExFromTransformTangents* TypedOther = Cast<UPCGExFromTransformTangents>(Other))
-		{
-			Axis = TypedOther->Axis;
-		}
-	}
-
 	virtual TSharedPtr<FPCGExTangentsOperation> CreateOperation() const override
 	{
 		PCGEX_FACTORY_NEW_OPERATION(TangentsFromTransform)
+		NewOperation->Axis = Axis;
 		return NewOperation;
 	}
 };

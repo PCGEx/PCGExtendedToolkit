@@ -65,11 +65,6 @@ namespace PCGExGraphs
 		TSharedPtr<PCGExData::FPointIOCollection> EdgesIO;
 		const TArray<TSharedRef<PCGExData::FFacade>>* SourceEdgeFacades = nullptr;
 
-		// Used exclusively by the custom graph builder.
-		// Otherwise a transient array is allocated for the duration of the graph compilation
-		TSharedPtr<TArray<int32>> OutputNodeIndices;
-		TSharedPtr<TArray<int32>> OutputPointIndices;
-
 		// A value range we will fetch positions from during compilation
 		// It must have a valid range for Node.PointIndex
 		TConstPCGValueRange<FTransform> NodePointsTransforms;
@@ -81,14 +76,10 @@ namespace PCGExGraphs
 		// This will be set to true post-graph compilation, if compilation was a success
 		bool bCompiledSuccessfully = false;
 
-		// When true, edge sort keys will be recomputed using remapped node indices before sorting.
-		// Required for union graphs where node indices are non-deterministic due to parallel insertion.
-		bool bRequiresEdgeResort = false;
-
 		// Subgraph edge keys are sorted before compilation so the output edge order is
 		// deterministic. Nodes whose edge insertion order is itself deterministic (e.g.
 		// sequential, single-threaded inserts) can disable this and keep insertion order,
-		// skipping the sort entirely. Ignored when bRequiresEdgeResort is set.
+		// skipping the sort entirely.
 		bool bSortEdgeKeys = true;
 
 		// When true, nodes have been pre-sorted spatially at Collapse() time.

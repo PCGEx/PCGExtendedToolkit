@@ -95,10 +95,6 @@ namespace PCGExTransformBounds
 		InOutTransform.SetScale3D(Scale);
 	}
 
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExTransformBounds::Process);

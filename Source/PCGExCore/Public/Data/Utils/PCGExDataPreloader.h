@@ -59,7 +59,6 @@ namespace PCGExData
 		FReadableBufferConfig(const FName InName, const EPCGMetadataTypes InUnderlyingType, EBufferPreloadType InMode = EBufferPreloadType::RawAttribute);
 		FReadableBufferConfig(const FPCGAttributePropertyInputSelector& InSelector, const EPCGMetadataTypes InUnderlyingType);
 
-		bool Validate(FPCGExContext* InContext, const TSharedPtr<FFacade>& InFacade) const;
 		void Fetch(const TSharedRef<FFacade>& InFacade, const PCGExMT::FScope& Scope);
 		void Read(const TSharedRef<FFacade>& InFacade) const;
 	};
@@ -87,8 +86,6 @@ namespace PCGExData
 		{
 			return BufferConfigs.Num();
 		}
-
-		bool Validate(FPCGExContext* InContext) const;
 
 		void Register(FPCGExContext* InContext, const FAttributeIdentity& InIdentity);
 
@@ -150,7 +147,6 @@ extern template void FFacadePreloader::Register<_TYPE>(FPCGExContext* InContext,
 
 		PCGExMT::FCompletionCallback OnCompleteCallback;
 
-		bool Validate(FPCGExContext* InContext);
 		void StartLoading(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager, const TSharedPtr<PCGExMT::IAsyncHandleGroup>& InParentHandle = nullptr);
 
 	protected:

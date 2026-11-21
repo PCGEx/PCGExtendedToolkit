@@ -35,9 +35,6 @@ public:
 	void IncrementPending(const int32 Count = 1);
 	void IncrementCompleted(const int32 Count = 1);
 
-	void Trigger();
-	void SafetyTrigger();
-
 	void Reset();
 	void Reset(const int32 InMax);
 

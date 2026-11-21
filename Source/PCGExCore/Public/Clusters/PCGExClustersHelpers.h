@@ -26,6 +26,9 @@ namespace PCGExClusters::Helpers
 	PCGEXCORE_API void MarkClusterEdges(const TArrayView<TSharedRef<PCGExData::FPointIO>> Edges, const PCGExDataId& Id);
 	PCGEXCORE_API void CleanupClusterTags(const TSharedPtr<PCGExData::FPointIO>& IO, const bool bKeepPairTag = false);
 
+	/** Appends data tags to a spawned object's tags, unique, without the cluster id: a per-session object id that would change the saved object on every run. */
+	PCGEXCORE_API void AppendSavedTags(const TSet<FString>& InTags, TArray<FName>& OutTags);
+
 	PCGEXCORE_API bool IsPointDataVtxReady(const UPCGMetadata* Metadata);
 	PCGEXCORE_API bool IsPointDataEdgeReady(const UPCGMetadata* Metadata);
 	PCGEXCORE_API void CleanupVtxData(const TSharedPtr<PCGExData::FPointIO>& PointIO);

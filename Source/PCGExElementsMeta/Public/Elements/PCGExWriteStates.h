@@ -84,7 +84,6 @@ namespace PCGExWriteStates
 {
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExWriteStatesContext, UPCGExWriteStatesSettings>
 	{
-		friend class FBatch;
 		TSharedPtr<PCGExPointStates::FStateManager> StateManager;
 
 	public:
@@ -101,7 +100,7 @@ namespace PCGExWriteStates
 	};
 }
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Params", meta=(PCGExNodeLibraryDoc="clusters/metadata/flag-nodes/node-flag"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Params", meta=(PCGExNodeLibraryDoc="metadata/bitmasks/write-states/state-point"))
 class PCGEXELEMENTSMETA_API UPCGExPointStateFactoryProviderSettings : public UPCGExStateFactoryProviderSettings
 {
 	GENERATED_BODY()
@@ -112,7 +111,7 @@ protected:
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ClusterNodeFlag, "State : Point", "A single, filter-driven point state.", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(PointState, "State : Point", "A single, filter-driven point state.", PCGEX_FACTORY_NAME_PRIORITY)
 
 	virtual FLinearColor GetNodeTitleColor() const override
 	{

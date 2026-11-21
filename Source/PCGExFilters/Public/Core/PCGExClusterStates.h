@@ -45,8 +45,6 @@ public:
 	FPCGExClusterStateConfigBase Config;
 
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
-
-	virtual void BeginDestroy() override;
 };
 
 namespace PCGExClusterStates
@@ -55,7 +53,6 @@ namespace PCGExClusterStates
 	{
 	public:
 		FPCGExClusterStateConfigBase Config;
-		FPCGExStateConfigBase BaseConfig;
 
 		const UPCGExClusterStateFactoryData* StateFactory = nullptr;
 
@@ -64,8 +61,6 @@ namespace PCGExClusterStates
 			  , StateFactory(InFactory)
 		{
 		}
-
-		virtual ~FState() override;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade) override;
 		bool InitInternalManager(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>& InFactories);
@@ -99,7 +94,7 @@ namespace PCGExClusterStates
 	};
 };
 
-UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="clusters/metadata/flag-nodes/node-flag"))
+UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExNodeLibraryDoc="clusters/analyze/cluster-write-states"))
 class PCGEXFILTERS_API UPCGExClusterStateFactoryProviderSettings : public UPCGExStateFactoryProviderSettings
 {
 	GENERATED_BODY()
@@ -125,7 +120,4 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties, DisplayAfter="Name"))
 	FPCGExClusterStateConfigBase Config;
-
-protected:
-	virtual TSet<FPCGDataTypeBaseId> GetInternalFilterTypes() const override;
 };

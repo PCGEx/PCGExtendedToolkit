@@ -7,6 +7,7 @@
 #include "PCGComponent.h"
 
 #include "PCGExVersion.h"
+#include "Clusters/PCGExClustersHelpers.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
@@ -228,8 +229,6 @@ namespace PCGExCreateSpline
 
 		PointDataFacade->Fetch(Scope);
 
-		bool bHasAValidEntry = false;
-
 		const UPCGBasePointData* InPointData = PointDataFacade->GetIn();
 		TConstPCGValueRange<FTransform> InTransforms = InPointData->GetConstTransformValueRange();
 		TConstPCGValueRange<int64> InMetadataEntries = InPointData->GetConstMetadataEntryValueRange();
@@ -281,12 +280,6 @@ namespace PCGExCreateSpline
 
 			const int64 PointMetadataEntry = InMetadataEntries[Index];
 			SplineEntryKeys[Index] = PointMetadataEntry;
-			bHasAValidEntry |= (PointMetadataEntry != PCGInvalidEntryKey);
-		}
-
-		if (bHasAValidEntry)
-		{
-			FPlatformAtomics::InterlockedExchange(&HasAValidEntry, true);
 		}
 	}
 
@@ -300,24 +293,22 @@ namespace PCGExCreateSpline
 		TProcessor<FPCGExCreateSplineContext, UPCGExCreateSplineSettings>::Output();
 
 		// Output spline data
-		Context->StageOutput(
-			SplineData, Settings->GetMainOutputPin(), PCGExData::EStaging::Managed,
-			PointDataFacade->Source->Tags->Flatten());
+		const TSet<FString> DataTags = PointDataFacade->Source->Tags->Flatten();
+		Context->StageOutput(SplineData, Settings->GetMainOutputPin(), PCGExData::EStaging::Managed, DataTags);
 
 		// Output spline component
 		if (Settings->Mode != EPCGCreateSplineMode::CreateDataOnly)
 		{
-			const bool bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
+			// One slot per input: a regeneration rebuilds the spline it already has there, keeping its name.
+			FPCGExComponentSlot Slot;
+			USplineComponent* SplineComponent = Context->ReclaimOrCreateComponent<USplineComponent>(SplineActor, TEXT("PCGSplineComponent"), Context->GetSlotCrc(BatchIndex), Slot);
 
-			const FString ComponentName = TEXT("PCGSplineComponent");
-			const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-			USplineComponent* SplineComponent = NewObject<USplineComponent>(SplineActor, MakeUniqueObjectName(SplineActor, USplineComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
+			PCGExClusters::Helpers::AppendSavedTags(DataTags, SplineComponent->ComponentTags);
 
-			PointDataFacade->Source->Tags->DumpTo(SplineComponent->ComponentTags);
-
+			// Sets every point and the world transform, so a reclaimed spline keeps nothing of its previous shape.
 			SplineData->ApplyTo(SplineComponent);
 
-			Context->AttachManagedComponent(SplineActor, SplineComponent, Settings->AttachmentRules.GetRules());
+			Context->AttachManagedComponent(SplineActor, SplineComponent, Settings->AttachmentRules.GetRules(), Slot);
 			Context->AddNotifyActor(SplineActor);
 		}
 	}

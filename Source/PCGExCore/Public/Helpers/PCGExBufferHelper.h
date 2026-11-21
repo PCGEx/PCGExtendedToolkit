@@ -103,47 +103,7 @@ namespace PCGExData
 		template <typename T>
 		TSharedPtr<TArrayBuffer<T>> GetBuffer(const FName InName, const T& DefaultValue)
 		{
-			{
-				FReadScopeLock ReadScopeLock(BufferLock);
-				if (const TSharedPtr<IBuffer>* BufferPtr = BufferMap.Find(InName))
-				{
-					if (!(*BufferPtr)->IsA<T>())
-					{
-						UE_LOG(LogPCGEx, Error, TEXT("Attempted to create an attribute that already exist, with a different type (%s)"), *InName.ToString())
-						return nullptr;
-					}
-
-					return StaticCastSharedPtr<TArrayBuffer<T>>(*BufferPtr);
-				}
-			}
-			{
-				FWriteScopeLock WriteScopeLock(BufferLock);
-
-				if (PCGExMetaHelpers::IsPCGExAttribute(InName))
-				{
-					UE_LOG(LogPCGEx, Error, TEXT("Attempted to create an attribute with a protected prefix (%s)"), *InName.ToString())
-					return nullptr;
-				}
-
-				TSharedPtr<TArrayBuffer<T>> NewBuffer;
-
-				if constexpr (Mode == EBufferHelperMode::Write)
-				{
-					NewBuffer = StaticCastSharedPtr<TArrayBuffer<T>>(DataFacade->GetWritable<T>(InName, EBufferInit::Inherit));
-				}
-				else
-				{
-					NewBuffer = DataFacade->GetReadable<T>(InName);
-					if (!NewBuffer)
-					{
-						UE_LOG(LogPCGEx, Error, TEXT("Readable attribute (%s) does not exists."), *InName.ToString())
-						return nullptr;
-					}
-				}
-
-				BufferMap.Add(InName, StaticCastSharedPtr<IBuffer>(NewBuffer));
-				return NewBuffer;
-			}
+			return GetBuffer<T>(InName);
 		}
 
 		template <typename T>

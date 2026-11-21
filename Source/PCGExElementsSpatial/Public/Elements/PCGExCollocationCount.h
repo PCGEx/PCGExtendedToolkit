@@ -82,7 +82,6 @@ namespace PCGExCollocationCount
 {
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExCollocationCountContext, UPCGExCollocationCountSettings>
 	{
-		double NumPoints = 0;
 		double ToleranceConstant = DBL_COLLOCATION_TOLERANCE;
 		TSharedPtr<PCGExData::TBuffer<int32>> CollocationWriter;
 		TSharedPtr<PCGExData::TBuffer<int32>> LinearOccurencesWriter;
@@ -92,10 +91,6 @@ namespace PCGExCollocationCount
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
-		{
-		}
-
-		virtual ~FProcessor() override
 		{
 		}
 

@@ -96,8 +96,6 @@ protected:
 
 namespace PCGExTopologyEdges
 {
-	const FName SourceEdgeConstrainsFiltersLabel = FName("ConstrainedEdgeFilters");
-
 	class PCGEXELEMENTSTOPOLOGY_API IProcessor : public PCGExClusterMT::IProcessor
 	{
 		friend class IBatch;
@@ -107,13 +105,9 @@ namespace PCGExTopologyEdges
 		FPCGExTopologyUVDetails UVDetails;
 
 		const FVector2D CWTolerance = FVector2D(0.001);
-		bool bIsPreviewMode = false;
 
-		TSharedPtr<PCGExClusters::FCell> WrapperCell;
 		TObjectPtr<UDynamicMesh> InternalMesh;
 		UPCGDynamicMeshData* InternalMeshData = nullptr;
-
-		TSharedPtr<PCGEx::FIndexLookup> VerticesLookup;
 
 		TSharedPtr<PCGExClusters::FCellConstraints> CellsConstraints;
 

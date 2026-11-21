@@ -316,23 +316,6 @@ FPCGExCollectionTypeSet::FPCGExCollectionTypeSet(std::initializer_list<PCGExAsse
 	}
 }
 
-bool FPCGExCollectionTypeSet::ContainsOrDerives(PCGExAssetCollection::FTypeId Type) const
-{
-	if (Types.Contains(Type))
-	{
-		return true;
-	}
-
-	for (const auto& T : Types)
-	{
-		if (PCGExAssetCollection::FTypeRegistry::Get().IsA(T, Type))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 FPCGExCollectionTypeSet FPCGExCollectionTypeSet::operator|(const FPCGExCollectionTypeSet& Other) const
 {
 	FPCGExCollectionTypeSet Result = *this;

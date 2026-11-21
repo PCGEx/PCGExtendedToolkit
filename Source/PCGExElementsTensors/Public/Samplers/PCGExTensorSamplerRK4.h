@@ -19,7 +19,5 @@ class UPCGExTensorSamplerRK4 : public UPCGExTensorSampler
 	GENERATED_BODY()
 
 public:
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-	virtual bool PrepareForData(FPCGExContext* InContext) override;
 	virtual PCGExTensor::FTensorSample Sample(const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors, int32 InSeedIndex, const FTransform& InProbe, bool& OutSuccess) const override;
 };

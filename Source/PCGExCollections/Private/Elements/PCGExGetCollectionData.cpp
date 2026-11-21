@@ -90,8 +90,6 @@ UPCGExGetCollectionDataSettings::UPCGExGetCollectionDataSettings()
 void UPCGExGetCollectionDataSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	bWriteAssetClass = bWriteAssetPath;
-	AssetClassAttributeName = AssetPathAttributeName;
 	EntryAttributeName = GetEntryIdxAttributeName();
 }
 #endif
@@ -321,7 +319,7 @@ namespace PCGExGetCollectionData
 	/** Inline guarded setter -- write the value if the attribute pointer is non-null. Used by the
 	 *  X-macro-driven write block; FORCEINLINE so the call disappears entirely. */
 	template <typename T, typename V>
-	FORCEINLINE static void SetIf(FPCGMetadataAttribute<T>* Attr, int64 Key, const V& Value)
+	FORCEINLINE void SetIf(FPCGMetadataAttribute<T>* Attr, int64 Key, const V& Value)
 	{
 		if (Attr)
 		{
@@ -331,7 +329,7 @@ namespace PCGExGetCollectionData
 
 	/** Lookup `Slot.Path` in the per-context resolved map. Returns nullptr when the path is empty
 	 *  (leaf-failed slot) or when the resolve produced a null cast. */
-	FORCEINLINE static UPCGExAssetCollection* ResolveSlotCollection(
+	FORCEINLINE UPCGExAssetCollection* ResolveSlotCollection(
 		const FPCGExGetCollectionDataContext* Ctx,
 		const FPCGExGetCollectionDataContext::FSlot& Slot)
 	{
@@ -353,7 +351,7 @@ namespace PCGExGetCollectionData
 	 *  to call multiple times on the same U (Merged fanout walks every unique collection into
 	 *  one shared FUniqueOutput). Every appended entry is stamped with RootCollectionIndex, and
 	 *  its CollectionIndex is assigned from the shared map on FProcessEntryContext. */
-	static void FlattenInto(FUniqueOutput& U, UPCGExAssetCollection* Collection, const int32 RootCollectionIndex, const FOutputProcessParams& P)
+	void FlattenInto(FUniqueOutput& U, UPCGExAssetCollection* Collection, const int32 RootCollectionIndex, const FOutputProcessParams& P)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_Flatten);
 		// Per-call Ctx copy so the shared FlattenCtx isn't mutated -- SeenEntries is per-U, not global.
@@ -392,7 +390,7 @@ namespace PCGExGetCollectionData
 	 *  Returns the union of per-entry Axes (intersected with the user-requested OutputAxes) -- this
 	 *  drives which per-axis attribute slots get declared. No-op when no grammar field is requested
 	 *  or OutputAxes is empty (saves the GetEffectiveGrammar call entirely). */
-	static uint8 ResolveGrammars(
+	uint8 ResolveGrammars(
 		const TArray<FFlattenedEntry>& Entries,
 		const UPCGExGetCollectionDataSettings* Settings,
 		const bool bAnyGrammarField,
@@ -433,7 +431,7 @@ namespace PCGExGetCollectionData
 
 	/** Pre-pass: sum entry weights by the chosen normalization scope. Skips the walk when bWeightAsFloat
 	 *  is false -- raw int32 weights don't need a denominator. */
-	static void ComputeWeightNorms(
+	void ComputeWeightNorms(
 		const TArray<FFlattenedEntry>& Entries,
 		const EPCGExWeightNormalization Mode,
 		const bool bWeightAsFloat,
@@ -471,7 +469,7 @@ namespace PCGExGetCollectionData
 	 *  (every distinct host that isn't the primary U.Collection) so per-entry property lookups can
 	 *  resolve against the sub-collection that actually owns the entry. Skipped when no property
 	 *  output is configured -- saves a non-trivial allocation per output. */
-	static void InitPropertyWriter(
+	void InitPropertyWriter(
 		FUniqueOutput& U,
 		const FOutputProcessParams& P,
 		const UPCGExGetCollectionDataSettings* Settings,
@@ -502,7 +500,7 @@ namespace PCGExGetCollectionData
 
 	/** Declares attributes on U.OutputSet, initializes the property writer, computes weight sums,
 	 *  and writes every row in U.Entries. Call exactly once per output. */
-	static void WriteFromEntries(FUniqueOutput& U, const FOutputProcessParams& P)
+	void WriteFromEntries(FUniqueOutput& U, const FOutputProcessParams& P)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_WriteFromEntries);
 
@@ -789,7 +787,7 @@ namespace PCGExGetCollectionData
 	 *  its DupData and writes into its disjoint slot in ParallelResults; a single-threaded compact
 	 *  appends the successes to TaggedData. SlotIdentity carries Collection* so future schema-output
 	 *  paths can read collection-level data without re-resolving. */
-	static void AnnotateSources(
+	void AnnotateSources(
 		FPCGExGetCollectionDataContext* Context,
 		const UPCGExGetCollectionDataSettings* Settings,
 		const FProcessEntryContext& FlattenCtx,
@@ -1072,7 +1070,7 @@ namespace PCGExGetCollectionData
 	/** Collection-mode fast path. Skips Slots / UniqueOutputs / CollectionToIndex / ResolvedCollections
 	 *  / ParallelOrSequential dispatch entirely. Single FUniqueOutput, single flatten + write.
 	 *  Hard-ref TObjectPtr means the asset is already loaded -- no resolve, no map lookup. */
-	static void Run_CollectionFastPath(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
+	void Run_CollectionFastPath(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_AdvanceWork_CollectionFastPath);
 
@@ -1136,7 +1134,7 @@ namespace PCGExGetCollectionData
 
 	/** FromInputs - Merged fanout. One shared FUniqueOutput receives entries from every unique
 	 *  collection (append in encounter order). One FPCGTaggedData emitted. */
-	static void Run_MergedFanout(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
+	void Run_MergedFanout(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_AdvanceWork_Merged);
 
@@ -1222,7 +1220,7 @@ namespace PCGExGetCollectionData
 	/** FromInputs slot-based path (PerEntry / PerInputData). One FPCGTaggedData per slot. Multiple
 	 *  slots pointing at the same collection share a single UPCGParamData (tags live on the
 	 *  per-slot wrapper, not the data). Flatten serial, write parallel. */
-	static void Run_SlotBasedFanout(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
+	void Run_SlotBasedFanout(FPCGExGetCollectionDataContext* Context, const FOutputProcessParams& P)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(GetCollectionData_AdvanceWork_SlotBased);
 

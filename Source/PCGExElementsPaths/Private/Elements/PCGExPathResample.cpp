@@ -187,13 +187,11 @@ namespace PCGExResamplePath
 		int32 StartIndex = 0;
 		int32 EndIndex = 1;
 		FVector PrevPosition = InTransforms[0].GetLocation();
-		double TraversedDistance = 0;
 
 		FPointSample& FirstSample = Samples[0];
 		FirstSample.Start = StartIndex;
 		FirstSample.End = EndIndex;
 		FirstSample.Location = PrevPosition;
-		FirstSample.Distance = TraversedDistance;
 
 		for (int i = 1; i < NumSamples; i++)
 		{
@@ -208,7 +206,6 @@ namespace PCGExResamplePath
 			{
 				// Overshooting
 				PrevPosition = PrevPosition + (Path->DirToNextPoint(StartIndex) * SampleLength);
-				TraversedDistance += SampleLength;
 			}
 			else
 			{
@@ -246,7 +243,6 @@ namespace PCGExResamplePath
 
 			Sample.End = EndIndex;
 			Sample.Location = PrevPosition;
-			Sample.Distance = TraversedDistance;
 		}
 
 		if (bPreserveLastPoint && !Path->IsClosedLoop())
@@ -255,7 +251,6 @@ namespace PCGExResamplePath
 			LastSample.Start = InTransforms.Num() - 2;
 			LastSample.End = InTransforms.Num() - 1;
 			LastSample.Location = InTransforms[LastSample.End].GetLocation();
-			LastSample.Distance = TraversedDistance;
 		}
 
 		if (Settings->Mode == EPCGExResampleMode::Sweep)

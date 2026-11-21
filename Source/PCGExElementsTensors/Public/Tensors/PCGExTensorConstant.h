@@ -32,7 +32,6 @@ class FPCGExTensorConstant : public PCGExTensorOperation
 {
 public:
 	FPCGExTensorConstantConfig Config;
-	virtual bool Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory) override;
 
 	virtual PCGExTensor::FTensorSample Sample(int32 InSeedIndex, const FTransform& InProbe) const override;
 };
@@ -46,9 +45,6 @@ class UPCGExTensorConstantFactory : public UPCGExTensorFactoryData
 public:
 	UPROPERTY()
 	FPCGExTensorConstantConfig Config;
-
-	UPROPERTY()
-	FVector Constant = FVector::OneVector;
 
 	virtual TSharedPtr<PCGExTensorOperation> CreateOperation(FPCGExContext* InContext) const override;
 

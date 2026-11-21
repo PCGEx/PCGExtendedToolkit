@@ -273,10 +273,6 @@ void FPCGExDecompBSPOccupancy::SplitNonContiguousCells(
 	TArray<int32>& VoxelCellIDs,
 	int32& NextCellID) const
 {
-	static constexpr int32 Dx[] = {1, -1, 0, 0, 0, 0};
-	static constexpr int32 Dy[] = {0, 0, 1, -1, 0, 0};
-	static constexpr int32 Dz[] = {0, 0, 0, 0, 1, -1};
-
 	TBitArray<> Visited;
 	Visited.Init(false, Grid.TotalVoxels);
 
@@ -313,9 +309,9 @@ void FPCGExDecompBSPOccupancy::SplitNonContiguousCells(
 
 			for (int32 Dir = 0; Dir < 6; Dir++)
 			{
-				const int32 NX = Coord.X + Dx[Dir];
-				const int32 NY = Coord.Y + Dy[Dir];
-				const int32 NZ = Coord.Z + Dz[Dir];
+				const int32 NX = Coord.X + FPCGExDecompOccupancyGrid::NeighborDx[Dir];
+				const int32 NY = Coord.Y + FPCGExDecompOccupancyGrid::NeighborDy[Dir];
+				const int32 NZ = Coord.Z + FPCGExDecompOccupancyGrid::NeighborDz[Dir];
 
 				if (!Grid.IsInBounds(NX, NY, NZ))
 				{
@@ -339,20 +335,5 @@ void FPCGExDecompBSPOccupancy::SplitNonContiguousCells(
 #pragma endregion
 
 #pragma region UPCGExDecompBSPOccupancy
-
-void UPCGExDecompBSPOccupancy::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompBSPOccupancy* TypedOther = Cast<UPCGExDecompBSPOccupancy>(Other))
-	{
-		TransformSpace = TypedOther->TransformSpace;
-		CustomTransform = TypedOther->CustomTransform;
-		VoxelSizeMode = TypedOther->VoxelSizeMode;
-		VoxelSize = TypedOther->VoxelSize;
-		MaxDepth = TypedOther->MaxDepth;
-		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
-		GapWeight = TypedOther->GapWeight;
-	}
-}
 
 #pragma endregion

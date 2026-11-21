@@ -7,6 +7,7 @@
 #include "PCGCommon.h"
 #include "PCGCrc.h"
 #include "PCGManagedResource.h"
+#include "Containers/PCGExScopedContainers.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExInputShorthandsDetails.h"
@@ -16,6 +17,8 @@
 #include "LevelInstance/LevelInstanceLevelStreaming.h"
 
 #include "PCGExStagingLoadLevel.generated.h"
+
+class UPCGExManagedActors;
 
 /**
  * Custom streaming level that enforces bIsMainWorldOnly filtering
@@ -187,6 +190,7 @@ struct FPCGExStagingLoadLevelContext final : FPCGExPointsProcessorContext
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 
+	/** Streaming levels only: they live for the session, so the executor's per-session CRC is enough to reuse them */
 	FPCGCrc DependenciesCrc;
 	bool bReusedManagedResources = false;
 
@@ -201,11 +205,6 @@ struct FPCGExStagingLoadLevelContext final : FPCGExPointsProcessorContext
 	/** True when spawning level content as individual persistent actors (bSpawnAsLevelInstance=false, editor, non-runtime). */
 	bool bUseLooseActors = false;
 
-	/** Managed resource for ALevelInstance cleanup. One per execute. */
-	UPCGManagedActors* ManagedLevelInstances = nullptr;
-
-	/** Managed resource for loose-actor cleanup. One per execute. */
-	UPCGManagedActors* ManagedLooseActors = nullptr;
 #endif
 
 protected:
@@ -256,15 +255,37 @@ namespace PCGExStagingLoadLevel
 		/** Main-thread-only cache that dedups soft-path -> AActor resolution across the spawn loop */
 		TMap<FSoftObjectPath, TWeakObjectPtr<AActor>> RootActorResolveCache;
 
-		/** Collected spawn requests from parallel phase */
+		/** Spawn requests of the parallel phase, one array per scope */
+		TSharedPtr<PCGExMT::TScopedArray<FLevelSpawnRequest>> ScopedRequests;
+
+		/** The same, collapsed in point order */
 		TArray<FLevelSpawnRequest> SpawnRequests;
-		mutable FRWLock RequestLock;
 
 		/** Main thread loop for spawning -- runs on game thread via async handle */
 		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
 
 		/** Generation counter for unique level instance names */
 		uint32 Generation = 0;
+
+#if WITH_EDITOR
+		/** This input's actors, level instances or loose copies; the previous run's when it left some */
+		UPCGExManagedActors* ManagedActors = nullptr;
+
+		/** Hash of everything this input's actors are spawned from; equal to the resource's, they still hold */
+		FPCGCrc ContentCrc;
+
+		/** The previous run's actors still hold: nothing is spawned */
+		bool bKeepActors = false;
+
+		/** The levels the requests name, each once */
+		TArray<FSoftObjectPath> SourceLevels;
+
+		/** ContentCrc is complete. False while a copied level's saved hash is still unknown: neither loaded nor scanned. */
+		bool bLevelHashesKnown = false;
+
+		/** One-shot main thread step running ReuseOrSpawn */
+		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> ReuseStep;
+#endif
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
@@ -275,6 +296,7 @@ namespace PCGExStagingLoadLevel
 		virtual ~FProcessor() override = default;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
+		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
 		virtual void OnPointsProcessingComplete() override;
 
@@ -291,6 +313,21 @@ namespace PCGExStagingLoadLevel
 		FName ComputeInnerFolderPath(AActor* TargetActor) const;
 
 #if WITH_EDITOR
+		/** Hashes, off the game thread, everything this input's actors are spawned from */
+		void HashContent();
+
+		/** Adds the copied levels' saved hashes to ContentCrc, once each of them can be told */
+		void CombineLevelHashes();
+
+		/** Game thread: keeps the previous actors when nothing changed, else goes on to spawn */
+		void ReuseOrSpawn();
+
+		/** Loads the levels the loose copies are made from, then starts the spawn loop */
+		void LoadSourceLevels();
+
+		/** Game thread, ahead of the first spawn: finds the previous run's actors and tells whether they are kept as they are */
+		void BeginActorSpawn();
+
 		void SpawnAsLevelInstance(FLevelSpawnRequest& Request);
 		void SpawnAsLooseActors(FLevelSpawnRequest& Request);
 #endif

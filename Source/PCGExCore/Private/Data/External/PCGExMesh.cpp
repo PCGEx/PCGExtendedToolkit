@@ -18,25 +18,6 @@
 
 namespace PCGExMesh
 {
-	class PCGEXCORE_API FExtractStaticMeshTask final : public PCGExMT::FTask
-	{
-	public:
-		PCGEX_ASYNC_TASK_NAME(FExtractStaticMeshTask)
-
-		explicit FExtractStaticMeshTask(const TSharedPtr<FGeoStaticMesh>& InGSM)
-			: FTask()
-			  , GSM(InGSM)
-		{
-		}
-
-		TSharedPtr<FGeoStaticMesh> GSM;
-
-		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override
-		{
-			GSM->ExtractMeshSynchronous();
-		}
-	};
-
 	void DeclareGeoMeshImportInputs(const FPCGExGeoMeshImportDetails& InDetails, TArray<FPCGPinProperties>& PinProperties)
 	{
 		if (!InDetails.bImportUVs)
@@ -190,23 +171,14 @@ namespace PCGExMesh
 			TArray<FVector>* InVertices,
 			TArray<int32>* InRawIndices,
 			const FVector& InHashTolerance = FVector(DefaultVertexMergeHashTolerance),
-			const bool bPreciseVertexMerge = true,
-			const bool bMerge = true)
+			const bool bPreciseVertexMerge = true)
 		{
 			if (bPreciseVertexMerge)
 			{
-				if (bMerge)
-				{
-					return MakeUnique<TMeshLookup<true, true>>(Size, InVertices, InRawIndices, InHashTolerance);
-				}
-				return MakeUnique<TMeshLookup<false, true>>(Size, InVertices, InRawIndices, InHashTolerance);
+				return MakeUnique<TMeshLookup<true, true>>(Size, InVertices, InRawIndices, InHashTolerance);
 			}
 
-			if (bMerge)
-			{
-				return MakeUnique<TMeshLookup<true, false>>(Size, InVertices, InRawIndices, InHashTolerance);
-			}
-			return MakeUnique<TMeshLookup<false, false>>(Size, InVertices, InRawIndices, InHashTolerance);
+			return MakeUnique<TMeshLookup<true, false>>(Size, InVertices, InRawIndices, InHashTolerance);
 		}
 	}
 #pragma endregion
@@ -580,20 +552,6 @@ namespace PCGExMesh
 		}
 
 		bIsLoaded = true;
-	}
-
-	void FGeoStaticMesh::ExtractMeshAsync(PCGExMT::FTaskManager* TaskManager)
-	{
-		if (bIsLoaded)
-		{
-			return;
-		}
-		if (!bIsValid)
-		{
-			return;
-		}
-
-		PCGEX_LAUNCH(FExtractStaticMeshTask, SharedThis(this))
 	}
 
 	FGeoStaticMesh::~FGeoStaticMesh()

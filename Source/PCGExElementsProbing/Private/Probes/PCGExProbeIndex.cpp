@@ -3,7 +3,6 @@
 
 #include "Probes/PCGExProbeIndex.h"
 
-#include "PCGExVersion.h"
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 
@@ -83,30 +82,3 @@ bool FPCGExProbeIndex::Prepare(FPCGExContext* InContext)
 
 	return true;
 }
-
-#if WITH_EDITOR
-void UPCGExProbeIndexProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeIndexProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-
-FString UPCGExProbeIndexProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif

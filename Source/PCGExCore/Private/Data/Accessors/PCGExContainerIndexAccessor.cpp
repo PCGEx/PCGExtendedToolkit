@@ -10,7 +10,7 @@
 
 namespace PCGExData
 {
-	namespace
+	namespace PCGExContainerIndexAccessor
 	{
 		// Parse a non-negative integer from a token, with optional surrounding
 		// brackets. Returns true on success and writes the index to OutIndex.
@@ -122,7 +122,7 @@ namespace PCGExData
 	bool FContainerIndexAccessor::MatchesToken(const FString& UpperToken, FAccessorParseResult& OutParsed) const
 	{
 		int32 Index = -1;
-		if (!ParseContainerIndexToken(UpperToken, Index))
+		if (!PCGExContainerIndexAccessor::ParseContainerIndexToken(UpperToken, Index))
 		{
 			return false;
 		}
@@ -158,7 +158,7 @@ namespace PCGExData
 		(void)OutType;
 		check(Source != nullptr);
 		check(OutValue != nullptr);
-		ContainerIndexStep(Source, OutValue, Parsed);
+		PCGExContainerIndexAccessor::ContainerIndexStep(Source, OutValue, Parsed);
 	}
 
 	void FContainerIndexAccessor::ApplySet(EPCGMetadataTypes InType,
@@ -171,7 +171,7 @@ namespace PCGExData
 		(void)SourceType;
 		check(TargetInOut != nullptr);
 		check(Source != nullptr);
-		ContainerIndexSetStep(TargetInOut, Source, Parsed);
+		PCGExContainerIndexAccessor::ContainerIndexSetStep(TargetInOut, Source, Parsed);
 	}
 
 	FStepGetFn FContainerIndexAccessor::GetStepGetFn(EPCGMetadataTypes InType) const
@@ -179,13 +179,13 @@ namespace PCGExData
 		(void)InType;
 		// One fn pointer for all element types -- sizeof(element) is carried
 		// in Parsed.ContainerElementSize, populated by PostClassifyFinalize.
-		return &ContainerIndexStep;
+		return &PCGExContainerIndexAccessor::ContainerIndexStep;
 	}
 
 	FStepSetFn FContainerIndexAccessor::GetStepSetFn(EPCGMetadataTypes InType) const
 	{
 		(void)InType;
-		return &ContainerIndexSetStep;
+		return &PCGExContainerIndexAccessor::ContainerIndexSetStep;
 	}
 
 	ISubAccessor::ECompileAction FContainerIndexAccessor::ClassifyForInType(

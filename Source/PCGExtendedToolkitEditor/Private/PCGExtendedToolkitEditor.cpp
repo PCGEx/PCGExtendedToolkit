@@ -15,8 +15,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Styling/SlateStyle.h"
 #include "Styling/SlateStyleRegistry.h"
-
-#define LOCTEXT_NAMESPACE "FPCGExtendedToolkitEditorModule"
+#include "UObject/UObjectBase.h"
 
 #pragma region CommandListEditorOnlyGraphs
 namespace PCGExEditor
@@ -84,30 +83,18 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 		PCGEX_ADD_CLASS_ICON(PCGExCustomGraphSettings)
 		PCGEX_ADD_CLASS_ICON(PCGExCustomGraphBuilder)
 		PCGEX_ADD_CLASS_ICON(PCGExCustomActorDataPacker)
-		PCGEX_ADD_CLASS_ICON(PCGExBeacon)
 		PCGEX_ADD_CLASS_ICON(PCGExBitmaskCollection)
 		PCGEX_ADD_CLASS_ICON(PCGExPropertySchemaAsset)
 		PCGEX_ADD_CLASS_ICON(PCGExVariantCollection)
 
-		PCGEX_REGISTER_PIN_ICON(OUT_Special)
-		PCGEX_REGISTER_PIN_ICON(IN_Special)
-
-		PCGEX_REGISTER_PIN_ICON(OUT_RecursionTracker)
-		PCGEX_REGISTER_PIN_ICON(IN_RecursionTracker)
-
 		for (int32 Bit = 0; Bit < 64; Bit++)
 		{
 			const FString IconName = FString::Printf(TEXT("bits_bit_%d"), Bit);
-			const FString StyleKey = FString::Printf(TEXT("PCGEx.Bit.%d"), Bit);
 			const FString StyleKey16 = FString::Printf(TEXT("PCGEx.Bit.%d_16"), Bit);
 			const FString FullPath = InStyle->RootToContentDir(*FString::Printf(TEXT("Bits/%s"), *IconName), TEXT(".svg"));
 
 
-			AppStyle.Set(*StyleKey, new FSlateVectorImageBrush(FullPath, FVector2D(8.0f)));
-			InStyle->Set(*StyleKey, new FSlateVectorImageBrush(FullPath, FVector2D(8.0f)));
-
 			AppStyle.Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
-			InStyle->Set(*StyleKey16, new FSlateVectorImageBrush(FullPath, FVector2D(16.0f)));
 		}
 	}
 
@@ -128,18 +115,21 @@ void FPCGExtendedToolkitEditorModule::StartupModule()
 	{
 		FPCGDataVisualizationRegistry& DataVisRegistry = FPCGModule::GetMutablePCGDataVisualizationRegistry();
 		DataVisRegistry.RegisterPCGDataVisualization(UPCGSpatialData::StaticClass(), MakeUnique<const IPCGExSpatialDataVisualization>());
+		bDataVisualizationRegistered = true;
 	}
 }
 
-#undef PCGEX_ADD_ICON
-
 void FPCGExtendedToolkitEditorModule::ShutdownModule()
 {
+	// At engine exit UObjects are purged before modules unload and the registry dies with PCG: only a live unload has an entry to remove.
+	if (bDataVisualizationRegistered && UObjectInitialized() && FPCGModule::IsPCGModuleLoaded())
+	{
+		FPCGModule::GetMutablePCGDataVisualizationRegistry().UnregisterPCGDataVisualization(UPCGSpatialData::StaticClass());
+	}
+	bDataVisualizationRegistered = false;
+
 	FSlateStyleRegistry::UnRegisterSlateStyle(Style->GetStyleSetName());
 	Style.Reset();
 }
-
-#undef PCGEX_FOREACH_CUSTOM_DATA_TYPE
-#undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FPCGExtendedToolkitEditorModule, PCGExtendedToolkitEditor)

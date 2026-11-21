@@ -31,7 +31,7 @@ public:
 	FPCGExPartitonRuleConfig Config;
 };
 
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-by-values"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Filter", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-rule"))
 class UPCGExPartitionRuleProviderSettings : public UPCGExFactoryProviderSettings
 {
 	GENERATED_BODY()
@@ -72,7 +72,7 @@ public:
 /**
  * 
  */
-UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="misc/partition-by-values/partition-rule"))
+UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/partitioning/partition-by-values"))
 class UPCGExModularPartitionByValuesSettings : public UPCGExPartitionByValuesBaseSettings
 {
 	GENERATED_BODY()
@@ -81,16 +81,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(ModularPartitionByValues, "Partition by Values", "Outputs separate buckets of points based on an attribute' value. Each bucket is named after a unique attribute value. Note that it is recommended to use a Merge before.");
-
-	virtual EPCGSettingsType GetType() const override
-	{
-		return EPCGSettingsType::Spatial;
-	}
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(MiscAdd);
-	}
 #endif
 
 protected:

@@ -185,7 +185,6 @@ struct FPCGExDiscardByOverlapContext final : FPCGExPointsProcessorContext
 
 	FPCGExOverlapScoresWeighting Weights;
 	FPCGExOverlapScoresWeighting MaxScores;
-	TArray<PCGExDiscardByOverlap::FProcessor*> AllProcessors;
 	void UpdateScores(const TArray<PCGExDiscardByOverlap::FProcessor*>& InStack);
 
 	void Prune();
@@ -293,6 +292,8 @@ namespace PCGExDiscardByOverlap
 		TUniquePtr<FPointBoundsOctree> Octree;
 
 		TArray<TSharedPtr<FPointBounds>> LocalPointBounds;
+		// Filtered-out points that still count toward Bounds / TotalVolume; sized only when bIncludeFilteredInMetrics.
+		TArray<TSharedPtr<FPointBounds>> FilteredPointBounds;
 
 		mutable FRWLock RegistrationLock;
 		TArray<TSharedPtr<FOverlap>> Overlaps;
@@ -301,7 +302,6 @@ namespace PCGExDiscardByOverlap
 		int32 NumPoints = 0;
 		double TotalVolume = 0;
 		double VolumeDensity = 0;
-		double TotalDensity = 0;
 
 	public:
 		FPCGExOverlapScoresWeighting RawScores;
@@ -353,9 +353,5 @@ namespace PCGExDiscardByOverlap
 
 		void UpdateWeightValues();
 		void UpdateWeight(const FPCGExOverlapScoresWeighting& InMax);
-
-#if WITH_EDITOR
-		void PrintWeights() const;
-#endif
 	};
 }

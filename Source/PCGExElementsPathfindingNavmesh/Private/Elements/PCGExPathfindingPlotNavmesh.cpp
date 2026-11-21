@@ -144,6 +144,17 @@ void FPCGExPlotNavmeshTask::ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>&
 		return;
 	}
 
+	if (Settings->bOmitCompletePathOnFailedPlot)
+	{
+		for (const PCGExNavmesh::FNavmeshQuery& Query : PlotQueries)
+		{
+			if (!Query.IsValid())
+			{
+				return;
+			}
+		}
+	}
+
 	// Trim boundary duplicates from positions.
 	// Navmesh paths include start/end points that overlap with explicit seed/goal/plot points
 	// and with neighboring query endpoints.

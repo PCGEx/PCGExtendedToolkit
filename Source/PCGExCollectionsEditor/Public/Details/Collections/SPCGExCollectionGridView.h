@@ -143,10 +143,15 @@ private:
 
 	void RebuildGroupedLayout();
 
+	/** Records each live group's collapse state into CollapsedCategories. */
+	void CaptureCollapseStates();
+	/** Creates a category's group widget, appended to the scroll box and registered in CategoryGroupWidgets. */
+	TSharedRef<SPCGExCollectionCategoryGroup> AddCategoryGroup(FName Category, int32 EntryCount, bool bIsCollapsed);
+	/** Creates an entry's tile, appended to Group and registered in ActiveTiles. Selection visuals are the caller's. */
+	TSharedRef<SPCGExCollectionGridTile> AddTile(const TSharedRef<SPCGExCollectionCategoryGroup>& Group, int32 EntryIndex, int32 CategoryIndex);
+
 	// Selection
 	void SelectIndex(int32 Index, bool bCtrl, bool bShift);
-	void ClearSelection();
-	bool IsSelected(int32 Index) const;
 	void NotifySelectionChanged();
 	void ApplySelectionVisuals();
 
@@ -290,7 +295,6 @@ private:
 	void OnScrolled(float ScrollOffset);
 
 	// Entry operations
-	FReply OnAddEntry();
 	FReply OnDuplicateSelected();
 	FReply OnDeleteSelected();
 

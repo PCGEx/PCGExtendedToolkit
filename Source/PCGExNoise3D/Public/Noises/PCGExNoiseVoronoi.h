@@ -24,11 +24,6 @@ struct FPCGExNoiseConfigVoronoi : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigVoronoi()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Output type */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExVoronoiOutput OutputType = EPCGExVoronoiOutput::CellValue;
@@ -51,8 +46,6 @@ public:
 	EPCGExVoronoiOutput OutputMode = EPCGExVoronoiOutput::CellValue;
 	double Jitter = 1.0;
 	double Smoothness = 0.0;
-
-	virtual ~FPCGExNoiseVoronoi() override = default;
 
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;

@@ -157,8 +157,6 @@ struct FPCGExConnectVtxContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExConnectVtxElement;
 
-	virtual ~FPCGExConnectVtxContext() override;
-
 	TArray<TObjectPtr<const UPCGExProbeFactoryData>> ProbeFactories;
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> GeneratorsFiltersFactories;
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> ConnectablesFiltersFactories;

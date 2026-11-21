@@ -29,9 +29,6 @@ bool FPCGExMatchOverlap::PrepareForMatchableSources(FPCGExContext* InContext, co
 		MinOverlapRatios.Reserve(NumSources);
 	}
 
-	// Compute overall bounds for octree initialization
-	FBox OverallBounds(ForceInit);
-
 	for (int32 i = 0; i < NumSources; i++)
 	{
 		const FPCGExTaggedData& TaggedData = MatchableSourcesRef[i];
@@ -60,11 +57,6 @@ bool FPCGExMatchOverlap::PrepareForMatchableSources(FPCGExContext* InContext, co
 
 		SourceBounds.Add(DataBounds);
 
-		if (DataBounds.IsValid)
-		{
-			OverallBounds += DataBounds;
-		}
-
 		// Pre-compute min overlap ratio
 		if (Config.bUseMinOverlapRatio)
 		{
@@ -74,53 +66,7 @@ bool FPCGExMatchOverlap::PrepareForMatchableSources(FPCGExContext* InContext, co
 		}
 	}
 
-	// Build octree for spatial queries
-	if (OverallBounds.IsValid && NumSources > 1)
-	{
-		const FVector Center = OverallBounds.GetCenter();
-		const double Extent = OverallBounds.GetExtent().GetMax() * 1.1; // Slightly larger to ensure all items fit
-
-		Octree = MakeUnique<PCGExOctree::FItemOctree>(Center, Extent);
-
-		for (int32 i = 0; i < NumSources; i++)
-		{
-			if (SourceBounds[i].IsValid)
-			{
-				Octree->AddElement(PCGExOctree::FItem(i, FBoxSphereBounds(SourceBounds[i])));
-			}
-		}
-	}
-
 	return true;
-}
-
-void FPCGExMatchOverlap::GetOverlappingSourceIndices(const FBox& CandidateBounds, TArray<int32>& OutIndices) const
-{
-	OutIndices.Reset();
-
-	if (!CandidateBounds.IsValid)
-	{
-		return;
-	}
-
-	// If no octree, fall back to returning all indices
-	if (!Octree)
-	{
-		OutIndices.Reserve(SourceBounds.Num());
-		for (int32 i = 0; i < SourceBounds.Num(); i++)
-		{
-			OutIndices.Add(i);
-		}
-		return;
-	}
-
-	// Query octree for potential overlapping sources
-	Octree->FindElementsWithBoundsTest(
-		CandidateBounds,
-		[&OutIndices](const PCGExOctree::FItem& Item)
-		{
-			OutIndices.Add(Item.Index);
-		});
 }
 
 double FPCGExMatchOverlap::ComputeOverlapRatio(const FBox& BoxA, const FBox& BoxB)

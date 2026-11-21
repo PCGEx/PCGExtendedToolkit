@@ -15,10 +15,6 @@ struct FPCGExConstantFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExConstantFilterConfig()
-	{
-	}
-
 	/** The constant value returned by this filter. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool Value = true;
@@ -75,10 +71,6 @@ namespace PCGExPointFilter
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;
-
-		virtual ~FConstantFilter() override
-		{
-		}
 	};
 }
 
