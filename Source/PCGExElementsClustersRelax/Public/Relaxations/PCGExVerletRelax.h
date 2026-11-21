@@ -8,16 +8,7 @@
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/PCGExSettingsDetails.h"
-#include "Elements/Meta/NeighborSamplers/PCGExNeighborSampleAttribute.h"
 #include "PCGExVerletRelax.generated.h"
-
-UENUM()
-enum class EPCGExRelaxEdgeRestLength : uint8
-{
-	Fixed     = 0 UMETA(DisplayName = "Fixed", ToolTip="Aim for constant edge length while fitting"),
-	Existing  = 1 UMETA(DisplayName = "Existing", ToolTip="Attempts to preserve existing edge length"),
-	Attribute = 2 UMETA(DisplayName = "Attribute", ToolTip="Uses an attribute on the edges as target length"),
-};
 
 /**
  *

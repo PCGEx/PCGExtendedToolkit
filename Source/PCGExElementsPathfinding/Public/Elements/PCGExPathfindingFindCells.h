@@ -40,14 +40,6 @@ namespace PCGExFindContours
 	const FName OutputBadSeedsLabel = TEXT("SeedGenFailed");
 }
 
-UENUM()
-enum class EPCGExContourShapeTypeOutput : uint8
-{
-	Both        = 0 UMETA(DisplayName = "Convex & Concave", ToolTip="Output both convex and concave paths"),
-	ConvexOnly  = 1 UMETA(DisplayName = "Convex Only", ToolTip="Output only convex paths"),
-	ConcaveOnly = 2 UMETA(DisplayName = "Concave Only", ToolTip="Output only concave paths")
-};
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cells/find-cells"))
 class UPCGExFindContoursSettings : public UPCGExClustersProcessorSettings
 {
