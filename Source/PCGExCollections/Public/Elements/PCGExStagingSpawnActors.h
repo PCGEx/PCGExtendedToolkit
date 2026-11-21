@@ -270,12 +270,6 @@ namespace PCGExStagingSpawnActors
 		/** Hash of everything this input's actors are spawned from; equal to the resource's, they still hold */
 		FPCGCrc ContentCrc;
 
-		/** Actors the resource held when it was found; those not yet replaced sit at [NumSpawned, NumDonors) */
-		int32 NumDonors = 0;
-
-		/** Actors spawned so far, which is also the resource slot the next one goes to */
-		int32 NumSpawned = 0;
-
 		/** Optional PCG generation watcher */
 		TSharedPtr<PCGExPCGInterop::FGenerationWatcher> GenerationWatcher;
 

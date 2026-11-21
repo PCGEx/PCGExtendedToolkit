@@ -17,6 +17,8 @@
 
 #include "PCGExStagingLoadLevel.generated.h"
 
+class UPCGExManagedActors;
+
 /**
  * Custom streaming level that enforces bIsMainWorldOnly filtering
  * and organizes loaded actors into the PCG-generated folder.
@@ -187,6 +189,7 @@ struct FPCGExStagingLoadLevelContext final : FPCGExPointsProcessorContext
 
 	TSharedPtr<PCGExCollections::FPickUnpacker> CollectionPickUnpacker;
 
+	/** Streaming levels only: they live for the session, so the executor's per-session CRC is enough to reuse them */
 	FPCGCrc DependenciesCrc;
 	bool bReusedManagedResources = false;
 
@@ -201,11 +204,11 @@ struct FPCGExStagingLoadLevelContext final : FPCGExPointsProcessorContext
 	/** True when spawning level content as individual persistent actors (bSpawnAsLevelInstance=false, editor, non-runtime). */
 	bool bUseLooseActors = false;
 
-	/** Managed resource for ALevelInstance cleanup. One per execute. */
-	UPCGManagedActors* ManagedLevelInstances = nullptr;
+	/** Stack + node, without the settings: an edit to the node keeps its actors' identity */
+	FPCGCrc ExecutionCrc;
 
-	/** Managed resource for loose-actor cleanup. One per execute. */
-	UPCGManagedActors* ManagedLooseActors = nullptr;
+	/** Settings and every input but the points; each processor adds its own points to it */
+	FPCGCrc InputContentCrc;
 #endif
 
 protected:
@@ -266,6 +269,17 @@ namespace PCGExStagingLoadLevel
 		/** Generation counter for unique level instance names */
 		uint32 Generation = 0;
 
+#if WITH_EDITOR
+		/** This input's actors, level instances or loose copies; the previous run's when it left some */
+		UPCGExManagedActors* ManagedActors = nullptr;
+
+		/** Hash of everything this input's actors are spawned from; equal to the resource's, they still hold */
+		FPCGCrc ContentCrc;
+
+		/** The previous run's actors still hold: nothing is spawned */
+		bool bKeepActors = false;
+#endif
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
@@ -291,6 +305,9 @@ namespace PCGExStagingLoadLevel
 		FName ComputeInnerFolderPath(AActor* TargetActor) const;
 
 #if WITH_EDITOR
+		/** Game thread, ahead of the first spawn: finds the previous run's actors and decides whether they are kept as they are */
+		void BeginActorSpawn();
+
 		void SpawnAsLevelInstance(FLevelSpawnRequest& Request);
 		void SpawnAsLooseActors(FLevelSpawnRequest& Request);
 #endif

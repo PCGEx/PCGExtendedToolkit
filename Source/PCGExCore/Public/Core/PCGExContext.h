@@ -31,6 +31,7 @@ class UPCGExSettings;
 class UPCGComponent;
 class IPCGExElement;
 class UPCGManagedComponent;
+class UPCGExManagedActors;
 class UPCGExManagedComponent;
 struct FStreamableHandle;
 struct FAttachmentTransformRules;
@@ -296,6 +297,12 @@ public:
 	/** Hash of the node's settings and of what its inputs hold, leaving out InExcludedPin, factories and every tag (those carry per-session ids).
 	 *  Unlike the CRCs the executor hands down, it holds across sessions. */
 	FPCGCrc GetInputContentCrc(FName InExcludedPin = NAME_None) const;
+
+	/** The actors a previous generation tracked under SlotCrc, kept from the end-of-run cleanup whether or not they are still current; null if there are none. */
+	UPCGExManagedActors* ReclaimManagedActors(const FPCGCrc& SlotCrc) const;
+
+	/** A new, empty actor resource under SlotCrc. Game thread: a UObject created on a worker pins its outer chain. */
+	UPCGExManagedActors* AddManagedActors(const FPCGCrc& SlotCrc) const;
 
 	/** The component a previous generation attached under ReuseCrc, reset to how a new one starts out for a full rebuild; null if there is none. */
 	UPCGExManagedComponent* ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const;

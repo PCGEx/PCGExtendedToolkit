@@ -17,12 +17,10 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Helpers/PCGActorHelpers.h"
-#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
 #include "Helpers/PCGExActorPropertyOverrides.h"
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExFunctionPrototypes.h"
-#include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Misc/Crc.h"
@@ -375,41 +373,20 @@ namespace PCGExStagingSpawnActors
 			}
 		}
 
-#if WITH_EDITOR
-		const UPCGComponent* SourceComponent = ExecutionContext->GetComponent();
-		const bool bIsPreview = SourceComponent && SourceComponent->IsInPreviewMode();
-#endif
-
-		// The slot holds what this input spawned last, current or not; taking it keeps its actors from the end-of-run cleanup.
-		UPCGExManagedActors* Previous = PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedActors>(
-			ExecutionContext->GetMutableComponent(), SlotCrc,
-			[&](const UPCGExManagedActors* Resource)
-			{
-#if WITH_EDITOR
-				if (Resource->IsPreview() != bIsPreview)
-				{
-					return false;
-				}
-#endif
-				return Resource->IsMarkedUnused();
-			});
-
-		if (!Previous)
+		ManagedActors = Context->ReclaimManagedActors(SlotCrc);
+		if (!ManagedActors)
 		{
 			return false;
 		}
-
-		ManagedActors = Previous;
-		NumDonors = Previous->GetConstGeneratedActors().Num();
 
 		// A resource short of one actor per point (a spawn failed) can't be mapped back onto the points.
-		if (!(Previous->ContentCrc == ContentCrc) || NumDonors != NumResolved)
+		if (!ManagedActors->IsCurrent(ContentCrc, NumResolved))
 		{
-			Previous->ContentCrc = FPCGCrc();
+			ManagedActors->BeginRespawn();
 			return false;
 		}
 
-		const TArray<TSoftObjectPtr<AActor>>& Actors = Previous->GetConstGeneratedActors();
+		const TArray<TSoftObjectPtr<AActor>>& Actors = ManagedActors->GetConstGeneratedActors();
 		int32 ActorIndex = 0;
 		for (int32 i = 0; i < NumPoints; i++)
 		{
@@ -549,21 +526,11 @@ namespace PCGExStagingSpawnActors
 
 	void FProcessor::OnAllPointsVisited()
 	{
-		if (!ManagedActors)
-		{
-			return;
-		}
-
-		// Actors of the previous run that nothing replaced.
-		TArray<TSoftObjectPtr<AActor>>& TrackedActors = ManagedActors->GetMutableGeneratedActors();
-		for (int32 i = NumSpawned; i < TrackedActors.Num(); i++)
-		{
-			PCGExHelpers::DestroyManagedActor(TrackedActors[i].Get());
-		}
-		TrackedActors.SetNum(NumSpawned);
-
 		// Only now: a run that got interrupted keeps no content hash, so it can never be taken for a complete one.
-		ManagedActors->ContentCrc = ContentCrc;
+		if (ManagedActors)
+		{
+			ManagedActors->EndRespawn(ContentCrc);
+		}
 	}
 
 	void FProcessor::CompleteWork()
@@ -625,9 +592,6 @@ namespace PCGExStagingSpawnActors
 		const UPCGComponent* SourceComponent = ExecutionContext->GetComponent();
 		const bool bIsPreviewActor = (SourceComponent && SourceComponent->IsInPreviewMode());
 
-		// The previous run's actor in the slot this spawn goes to, if it left one there.
-		const bool bReplacesDonor = ManagedActors && NumSpawned < NumDonors;
-
 		AActor* SpawnedActor = nullptr;
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(PCGEx::StagingSpawnActors::WorldSpawnActor);
@@ -651,14 +615,10 @@ namespace PCGExStagingSpawnActors
 				SpawnParams.ObjectFlags |= RF_Transient | RF_NonPIEDuplicateTransient;
 			}
 
-			if (AActor* Donor = bReplacesDonor ? ManagedActors->GetConstGeneratedActors()[NumSpawned].Get() : nullptr)
+			// The previous run's actor in this slot, when of the same class in the same level, passes on its name, package and GUID.
+			if (ManagedActors)
 			{
-				// Same class in the same level: the new actor is the old one's successor, under its name, package and GUID.
-				if (Donor->GetClass() == ActorClass && Donor->GetLevel() == SpawnParams.OverrideLevel)
-				{
-					PCGExHelpers::InheritActorIdentity(Donor, SpawnParams);
-				}
-				PCGExHelpers::DestroyManagedActor(Donor);
+				ManagedActors->PrepareSpawn(ActorClass, SpawnParams.OverrideLevel, SpawnParams);
 			}
 
 			SpawnedActor = World->SpawnActor<AActor>(ActorClass, SpawnTransform, SpawnParams);
@@ -666,11 +626,9 @@ namespace PCGExStagingSpawnActors
 
 		if (!SpawnedActor)
 		{
-			// Its actor is gone either way; the slot goes to the next spawn's donor.
-			if (bReplacesDonor)
+			if (ManagedActors)
 			{
-				ManagedActors->GetMutableGeneratedActors().RemoveAt(NumSpawned);
-				NumDonors--;
+				ManagedActors->CommitSpawn(nullptr);
 			}
 
 			if (!Settings->bQuietInvalidEntryWarnings)
@@ -742,39 +700,16 @@ namespace PCGExStagingSpawnActors
 			}
 		}
 
-		// Create and register managed resource on first successful spawn.
-		// Registering immediately ensures that if the time-sliced loop is
-		// interrupted by a graph regeneration, already-spawned actors are
-		// tracked and will be cleaned up.
+		// Registered on the first successful spawn, and each actor tracked as soon as it exists: an interrupted
+		// loop leaves nothing behind that PCG can't clean up.
 		if (!ManagedActors)
 		{
-			UPCGComponent* MutableSourceComponent = ExecutionContext->GetMutableComponent();
-			ManagedActors = NewObject<UPCGExManagedActors>(MutableSourceComponent);
-			ManagedActors->SetCrc(SlotCrc);
-
-#if WITH_EDITOR
-			// Explicitly reflect the component's editing mode on the resource. Without this,
-			// bIsPreview may not match the component state and tracked actors can be treated
-			// as transient. UE's PCG spawn element does this at PCGSpawnActor.cpp:972.
-			ManagedActors->SetIsPreview(bIsPreviewActor);
-#endif
-
-			MutableSourceComponent->AddToManagedResources(ManagedActors);
+			ManagedActors = Context->AddManagedActors(SlotCrc);
+			ManagedActors->BeginRespawn();
 		}
 
 		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, nullptr, bTransientSpawn);
-
-		// Slot by slot rather than appended to a fresh list: an interrupted loop leaves every actor, old or new, tracked.
-		TArray<TSoftObjectPtr<AActor>>& TrackedActors = ManagedActors->GetMutableGeneratedActors();
-		if (NumSpawned < NumDonors)
-		{
-			TrackedActors[NumSpawned] = SpawnedActor;
-		}
-		else
-		{
-			TrackedActors.Add(SpawnedActor);
-		}
-		NumSpawned++;
+		ManagedActors->CommitSpawn(SpawnedActor);
 
 		// Last, once the actor is tracked: these run user code against its final state.
 		if (!Settings->PostProcessFunctionNames.IsEmpty())

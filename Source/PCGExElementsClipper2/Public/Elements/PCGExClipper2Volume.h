@@ -14,7 +14,7 @@
 
 class AActor;
 class AVolume;
-class UPCGManagedActors;
+class UPCGExManagedActors;
 
 namespace PCGExDetails
 {
@@ -172,11 +172,8 @@ struct FPCGExClipper2VolumeContext final : FPCGExClipper2ProcessorContext
 	TArray<TSharedPtr<FPCGExVolumeSpec>> StagedVolumes;
 	mutable FCriticalSection StagedVolumesLock;
 
-	// Managed resource owning all spawned volumes for this generation (auto-cleanup on regen).
-	UPCGManagedActors* ManagedActors = nullptr;
-
-	// CRC of inputs + settings, stamped on the managed resource.
-	FPCGCrc DependenciesCrc;
+	// Managed resource owning the node's volumes; the previous generation's when it left one.
+	UPCGExManagedActors* ManagedActors = nullptr;
 
 	void AddStagedVolume(const TSharedPtr<FPCGExVolumeSpec>& Spec);
 

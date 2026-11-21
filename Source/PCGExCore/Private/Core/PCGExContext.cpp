@@ -18,6 +18,7 @@
 #include "Containers/PCGExManagedObjects.h"
 #include "Containers/PCGExManagedObjectsInterfaces.h"
 #include "Core/PCGExElement.h"
+#include "Core/PCGExManagedActors.h"
 #include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Core/PCGExMTCommon.h"
@@ -747,6 +748,45 @@ FPCGCrc FPCGExContext::GetInputContentCrc(const FName InExcludedPin) const
 	}
 
 	return Crc;
+}
+
+UPCGExManagedActors* FPCGExContext::ReclaimManagedActors(const FPCGCrc& SlotCrc) const
+{
+	UPCGComponent* SrcComp = GetMutableComponent();
+
+#if WITH_EDITOR
+	const bool bIsPreviewMode = SrcComp->IsInPreviewMode();
+#endif
+
+	return PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedActors>(
+		SrcComp, SlotCrc,
+		[&](const UPCGExManagedActors* Resource)
+		{
+#if WITH_EDITOR
+			if (Resource->IsPreview() != bIsPreviewMode)
+			{
+				return false;
+			}
+#endif
+			// Still unused = soft-released by this regeneration and not claimed yet.
+			return Resource->IsMarkedUnused();
+		});
+}
+
+UPCGExManagedActors* FPCGExContext::AddManagedActors(const FPCGCrc& SlotCrc) const
+{
+	UPCGComponent* SrcComp = GetMutableComponent();
+
+	UPCGExManagedActors* ManagedActors = NewObject<UPCGExManagedActors>(SrcComp);
+	ManagedActors->SetCrc(SlotCrc);
+
+#if WITH_EDITOR
+	// Without this the resource may not match the component's editing mode, and its actors get treated as transient.
+	ManagedActors->SetIsPreview(SrcComp->IsInPreviewMode());
+#endif
+
+	SrcComp->AddToManagedResources(ManagedActors);
+	return ManagedActors;
 }
 
 UPCGExManagedComponent* FPCGExContext::ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const
