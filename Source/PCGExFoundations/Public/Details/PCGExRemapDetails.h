@@ -24,10 +24,6 @@ struct PCGEXFOUNDATIONS_API FPCGExRemapDetails
 		LocalScoreCurve.EditorCurveData.AddKey(1, 1);
 	}
 
-	~FPCGExRemapDetails()
-	{
-	}
-
 	/** Whether or not to use only positive values to compute range.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bUseAbsoluteRange = true;

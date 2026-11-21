@@ -19,35 +19,39 @@ void FPCGExNoiseCurl::PostInitDerived()
 	InvE2 = 1.0 / (2.0 * Epsilon);
 }
 
-FVector FPCGExNoiseCurl::GetPotentialField(const FVector& Position) const
-{
-	// Three independent noise channels for potential field
-	const FVector ScaledPos = Position * Frequency;
-	const double Fx = Perlin3D(ScaledPos, Seed);
-	const double Fy = Perlin3D(ScaledPos + PCGExNoiseCurl::OffsetFy, Seed);
-	const double Fz = Perlin3D(ScaledPos + PCGExNoiseCurl::OffsetFz, Seed);
-	return FVector(Fx, Fy, Fz);
-}
-
 FVector FPCGExNoiseCurl::ComputeCurl(const FVector& Position) const
 {
 	const double E = Epsilon;
 
 	// Central differences for partial derivatives
-	const FVector PxP = GetPotentialField(Position + FVector(E, 0, 0));
-	const FVector PxN = GetPotentialField(Position - FVector(E, 0, 0));
-	const FVector PyP = GetPotentialField(Position + FVector(0, E, 0));
-	const FVector PyN = GetPotentialField(Position - FVector(0, E, 0));
-	const FVector PzP = GetPotentialField(Position + FVector(0, 0, E));
-	const FVector PzN = GetPotentialField(Position - FVector(0, 0, E));
+	const FVector ScaledXP = (Position + FVector(E, 0, 0)) * Frequency;
+	const FVector ScaledXN = (Position - FVector(E, 0, 0)) * Frequency;
+	const FVector ScaledYP = (Position + FVector(0, E, 0)) * Frequency;
+	const FVector ScaledYN = (Position - FVector(0, E, 0)) * Frequency;
+	const FVector ScaledZP = (Position + FVector(0, 0, E)) * Frequency;
+	const FVector ScaledZN = (Position - FVector(0, 0, E)) * Frequency;
+
+	// Curl has no dFx/dx, dFy/dy or dFz/dz term: each offset samples only the other two channels
+	const double FyXP = Perlin3D(ScaledXP + PCGExNoiseCurl::OffsetFy, Seed);
+	const double FyXN = Perlin3D(ScaledXN + PCGExNoiseCurl::OffsetFy, Seed);
+	const double FzXP = Perlin3D(ScaledXP + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FzXN = Perlin3D(ScaledXN + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FxYP = Perlin3D(ScaledYP, Seed);
+	const double FxYN = Perlin3D(ScaledYN, Seed);
+	const double FzYP = Perlin3D(ScaledYP + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FzYN = Perlin3D(ScaledYN + PCGExNoiseCurl::OffsetFz, Seed);
+	const double FxZP = Perlin3D(ScaledZP, Seed);
+	const double FxZN = Perlin3D(ScaledZN, Seed);
+	const double FyZP = Perlin3D(ScaledZP + PCGExNoiseCurl::OffsetFy, Seed);
+	const double FyZN = Perlin3D(ScaledZN + PCGExNoiseCurl::OffsetFy, Seed);
 
 	// Partial derivatives
-	const double dFz_dy = (PyP.Z - PyN.Z) * InvE2;
-	const double dFy_dz = (PzP.Y - PzN.Y) * InvE2;
-	const double dFx_dz = (PzP.X - PzN.X) * InvE2;
-	const double dFz_dx = (PxP.Z - PxN.Z) * InvE2;
-	const double dFy_dx = (PxP.Y - PxN.Y) * InvE2;
-	const double dFx_dy = (PyP.X - PyN.X) * InvE2;
+	const double dFz_dy = (FzYP - FzYN) * InvE2;
+	const double dFy_dz = (FyZP - FyZN) * InvE2;
+	const double dFx_dz = (FxZP - FxZN) * InvE2;
+	const double dFz_dx = (FzXP - FzXN) * InvE2;
+	const double dFy_dx = (FyXP - FyXN) * InvE2;
+	const double dFx_dy = (FxYP - FxYN) * InvE2;
 
 	// Curl: (dFz/dy - dFy/dz, dFx/dz - dFz/dx, dFy/dx - dFx/dy)
 	return FVector(

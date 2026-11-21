@@ -148,10 +148,6 @@ bool FPCGExFindPointOnBoundsClustersElement::AdvanceWork(FPCGExContext* InContex
 
 namespace PCGExFindPointOnBoundsClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		if (!IProcessor::Process(InTaskManager))

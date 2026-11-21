@@ -53,11 +53,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(FuseClusters, "Cluster : Fuse", "Finds Point/Edge and Edge/Edge intersections between all input clusters.");
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
 #endif
 
 protected:
@@ -173,8 +168,6 @@ namespace PCGExFuseClusters
 
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExFuseClustersContext, UPCGExFuseClustersSettings>
 	{
-		int32 VtxIOIndex = 0;
-		int32 EdgesIOIndex = 0;
 		TArray<PCGExGraphs::FEdge> IndexedEdges;
 
 	public:
@@ -190,8 +183,6 @@ namespace PCGExFuseClusters
 		{
 			bBuildCluster = false;
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void EmitEdges(const PCGExMT::FScope& Scope);

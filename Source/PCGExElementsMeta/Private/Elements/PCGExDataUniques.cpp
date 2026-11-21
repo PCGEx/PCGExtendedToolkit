@@ -119,9 +119,8 @@ namespace PCGExDataUniques
 	}
 
 	// Copies every filtered @Data attribute of InData onto one row (TargetKey) of OutMetadata, elements domain.
-	// Any-UPCGData counterpart of FDataForwardHandler::Forward(SourceIndex, UPCGMetadata*, TargetKey), which is
-	// point-facade only. First-seen type wins: a later input carrying the same name with another type is
-	// skipped and counted in OutNumConflicts.
+	// Works on any UPCGData (FDataForwardHandler is point-facade only). First-seen type wins: a later input
+	// carrying the same name with another type is skipped and counted in OutNumConflicts.
 	void CopyDataDomainRow(const FPCGExDataUniquesContext* Context, const UPCGData* InData, UPCGMetadata* OutMetadata, const PCGMetadataEntryKey TargetKey, int32& OutNumConflicts)
 	{
 		const UPCGMetadata* InMetadata = InData->ConstMetadata();

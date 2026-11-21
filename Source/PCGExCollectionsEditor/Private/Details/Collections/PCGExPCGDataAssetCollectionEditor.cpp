@@ -46,7 +46,7 @@ TSharedRef<SWidget> FPCGExPCGDataAssetCollectionEditor::BuildTilePickerWidget(
 		{
 			return nullptr;
 		}
-		return static_cast<FPCGExPCGDataAssetCollectionEntry*>(Coll->EDITOR_GetMutableEntry(Idx));
+		return static_cast<FPCGExPCGDataAssetCollectionEntry*>(Coll->GetMutableEntryRaw(Idx));
 	};
 
 	TSharedRef<SVerticalBox> Box = SNew(SVerticalBox);

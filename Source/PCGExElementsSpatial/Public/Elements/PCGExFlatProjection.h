@@ -80,7 +80,6 @@ struct FPCGExFlatProjectionContext final : FPCGExPointsProcessorContext
 
 	FName CachedTransformAttributeName = NAME_None;
 
-	int32 AppliedComponents = 0;
 	TArray<int32> TrPosComponents;
 	TArray<int32> TrRotComponents;
 	TArray<int32> TrScaComponents;
@@ -114,10 +113,6 @@ namespace PCGExFlatProjection
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
-		{
-		}
-
-		virtual ~FProcessor() override
 		{
 		}
 

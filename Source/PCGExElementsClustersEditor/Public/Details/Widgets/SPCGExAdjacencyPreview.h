@@ -105,8 +105,7 @@ private:
 		const FVector2D& Center,
 		double Radius,
 		int32 TotalBranches,
-		int32 GreenCount,
-		bool bOverallPass) const;
+		int32 GreenCount) const;
 
 	/** Draw a single aggregated star panel with value-proportional branches. */
 	void DrawAggregatedPanel(
@@ -116,8 +115,7 @@ private:
 		const FVector2D& Center,
 		double MaxRadius,
 		const TArray<double>& Values,
-		int32 HighlightIndex,
-		EPCGExAdjacencyGatherMode GatherMode) const;
+		int32 HighlightIndex) const;
 
 	/** Compute the effective threshold from current settings. */
 	int32 ComputeThreshold(int32 TotalNeighbors) const;

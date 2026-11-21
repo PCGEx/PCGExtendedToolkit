@@ -14,8 +14,6 @@ class UPCGExAssetCollection;
 class FPCGExActorCollectionEditor : public FPCGExAssetCollectionEditor
 {
 public:
-	FPCGExActorCollectionEditor();
-
 	virtual FName GetToolkitFName() const override
 	{
 		return FName("PCGExActorCollectionEditor");
@@ -24,16 +22,6 @@ public:
 	virtual FText GetBaseToolkitName() const override
 	{
 		return INVTEXT("PCGEx Actor Collection Editor");
-	}
-
-	virtual FString GetWorldCentricTabPrefix() const override
-	{
-		return TEXT("PCGEx");
-	}
-
-	virtual FLinearColor GetWorldCentricTabColorScale() const override
-	{
-		return FLinearColor::White;
 	}
 
 protected:

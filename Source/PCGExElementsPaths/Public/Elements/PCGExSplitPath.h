@@ -45,14 +45,7 @@ class UPCGExSplitPathSettings : public UPCGExPathProcessorSettings
 {
 	GENERATED_BODY()
 
-	//~Begin UObject interface
 public:
-#if WITH_EDITOR
-
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-	//~End UObject interface
-
 	// TODO : Display split mode in title
 	//~Begin UPCGSettings
 #if WITH_EDITOR
@@ -144,7 +137,6 @@ namespace PCGExSplitPath
 		TArray<TSharedPtr<PCGExData::FPointIO>> SubPathsIOs;
 
 		bool bWrapLastPath = false;
-		bool bAddOpenTag = false;
 		int8 bLastResult = false;
 		bool bEven = true;
 

@@ -449,9 +449,6 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category = "PCGEx|Outputs")
 	TArray<TObjectPtr<UPCGExCustomGraphSettings>> GraphSettings;
-
-	UPROPERTY(BlueprintReadOnly, Category = "PCGEx|Inputs")
-	bool DoEdgeAttributeStep = false;
 };
 
 /**

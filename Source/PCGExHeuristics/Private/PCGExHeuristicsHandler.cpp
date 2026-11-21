@@ -11,7 +11,7 @@
 _OP->PrimaryDataFacade = VtxDataFacade;\
 _OP->SecondaryDataFacade = EdgeDataFacade;\
 _OP->WeightFactor = _FACTORY->WeightFactor;\
-_OP->ReferenceWeight = ReferenceWeight * _FACTORY->WeightFactor;
+_OP->ReferenceWeight = _FACTORY->WeightFactor;
 
 namespace PCGExHeuristics
 {
@@ -60,6 +60,175 @@ namespace PCGExHeuristics
 			Feedback->ResetFeedback();
 		}
 	}
+
+#pragma endregion
+
+#pragma region ScoreModes
+
+	// One struct per EPCGExHeuristicScoreMode, consumed by TScoreHandler.
+	// Contribution maps an op's weighted score and its weight into the mode's accumulation domain.
+	// The two bSkip flags are per-mode on purpose: they are each mode's own zero-weight guards.
+	namespace ScoreModes
+	{
+		/** Clamp floor for modes that divide by, or take the log of, scores */
+		constexpr double MinClampedScore = 1e-10;
+
+		/** sum(score x weight) / sum(weight) */
+		struct FWeightedAverage
+		{
+			static constexpr bool bSkipZeroDynamicWeight = false;
+			static constexpr bool bSkipZeroFeedbackWeight = false;
+
+			FORCEINLINE static double Identity() { return 0; }
+			FORCEINLINE static double Contribution(const double WeightedScore, const double Weight) { return WeightedScore; }
+			FORCEINLINE static double Reduce(const double A, const double B) { return A + B; }
+			FORCEINLINE static double Finish(const double Accumulated, const double TotalWeight) { return TotalWeight > 0 ? Accumulated / TotalWeight : 0; }
+		};
+
+		/** product(score^weight)^(1/sum(weight)), accumulated as a weighted log sum */
+		struct FGeometricMean
+		{
+			static constexpr bool bSkipZeroDynamicWeight = true;
+			static constexpr bool bSkipZeroFeedbackWeight = false;
+
+			FORCEINLINE static double Identity() { return 0; }
+			FORCEINLINE static double Contribution(const double WeightedScore, const double Weight) { return Weight * FMath::Loge(FMath::Max(MinClampedScore, WeightedScore) / Weight); }
+			FORCEINLINE static double Reduce(const double A, const double B) { return A + B; }
+			FORCEINLINE static double Finish(const double Accumulated, const double TotalWeight) { return TotalWeight > 0 ? FMath::Exp(Accumulated / TotalWeight) : 0; }
+		};
+
+		/** sum(score x weight), no normalization */
+		struct FWeightedSum
+		{
+			static constexpr bool bSkipZeroDynamicWeight = false;
+			static constexpr bool bSkipZeroFeedbackWeight = false;
+
+			FORCEINLINE static double Identity() { return 0; }
+			FORCEINLINE static double Contribution(const double WeightedScore, const double Weight) { return WeightedScore; }
+			FORCEINLINE static double Reduce(const double A, const double B) { return A + B; }
+			FORCEINLINE static double Finish(const double Accumulated, const double TotalWeight) { return Accumulated; }
+		};
+
+		/** sum(weight) / sum(weight/score), a single low score dominates */
+		struct FHarmonicMean
+		{
+			static constexpr bool bSkipZeroDynamicWeight = false;
+			static constexpr bool bSkipZeroFeedbackWeight = false;
+
+			FORCEINLINE static double Identity() { return 0; }
+			FORCEINLINE static double Contribution(const double WeightedScore, const double Weight) { return Weight / (FMath::Max(MinClampedScore, WeightedScore) / Weight); }
+			FORCEINLINE static double Reduce(const double A, const double B) { return A + B; }
+			FORCEINLINE static double Finish(const double Accumulated, const double TotalWeight) { return Accumulated > 0 ? TotalWeight / Accumulated : 0; }
+		};
+
+		/** Lowest weight-normalized score: any heuristic can allow passage */
+		struct FMin
+		{
+			static constexpr bool bSkipZeroDynamicWeight = true;
+			static constexpr bool bSkipZeroFeedbackWeight = true;
+
+			FORCEINLINE static double Identity() { return TNumericLimits<double>::Max(); }
+			FORCEINLINE static double Contribution(const double WeightedScore, const double Weight) { return WeightedScore / Weight; }
+			FORCEINLINE static double Reduce(const double A, const double B) { return FMath::Min(A, B); }
+			FORCEINLINE static double Finish(const double Accumulated, const double TotalWeight) { return Accumulated == TNumericLimits<double>::Max() ? 0 : Accumulated; }
+		};
+
+		/** Highest weight-normalized score: any heuristic can block passage */
+		struct FMax
+		{
+			static constexpr bool bSkipZeroDynamicWeight = true;
+			static constexpr bool bSkipZeroFeedbackWeight = true;
+
+			FORCEINLINE static double Identity() { return TNumericLimits<double>::Lowest(); }
+			FORCEINLINE static double Contribution(const double WeightedScore, const double Weight) { return WeightedScore / Weight; }
+			FORCEINLINE static double Reduce(const double A, const double B) { return FMath::Max(A, B); }
+			FORCEINLINE static double Finish(const double Accumulated, const double TotalWeight) { return Accumulated == TNumericLimits<double>::Lowest() ? 0 : Accumulated; }
+		};
+	}
+
+#pragma endregion
+
+#pragma region TScoreHandler
+
+	/** Handler for one aggregation mode; Mode is a ScoreModes struct. */
+	template <typename Mode>
+	class TScoreHandler final : public FHandler
+	{
+	public:
+		using FHandler::FHandler;
+
+		virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const override
+		{
+			double Score = Mode::Identity();
+			double TotalWeight = TotalStaticWeight;
+
+			for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
+			{
+				Score = Mode::Reduce(Score, Mode::Contribution(Op->GetGlobalScore(From, Seed, Goal), Op->WeightFactor));
+			}
+
+			if (LocalFeedback && (!Mode::bSkipZeroFeedbackWeight || LocalFeedback->TotalStaticWeight > 0))
+			{
+				Score = Mode::Reduce(Score, Mode::Contribution(LocalFeedback->GetGlobalScore(From, Seed, Goal), LocalFeedback->TotalStaticWeight));
+				TotalWeight += LocalFeedback->TotalStaticWeight;
+			}
+
+			return Mode::Finish(Score, TotalWeight);
+		}
+
+		virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const override
+		{
+			double Score = Mode::Identity();
+			double TotalWeight = TotalStaticWeight;
+
+			if (!bUseDynamicWeight)
+			{
+				if (bHasBakedEdgeScores)
+				{
+					Score = GetBakedEdgeScore(Edge, From);
+					for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
+					{
+						Score = Mode::Reduce(Score, Mode::Contribution(Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack), Op->WeightFactor));
+					}
+				}
+				else
+				{
+					for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
+					{
+						Score = Mode::Reduce(Score, Mode::Contribution(Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack), Op->WeightFactor));
+					}
+				}
+			}
+			else
+			{
+				// Per-edge custom weight multipliers scale both the score and the weight of each op
+				TotalWeight = 0;
+				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
+				{
+					const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
+					const double EffectiveWeight = Op->WeightFactor * Multiplier;
+					if (!Mode::bSkipZeroDynamicWeight || EffectiveWeight > 0)
+					{
+						Score = Mode::Reduce(Score, Mode::Contribution(Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier, EffectiveWeight));
+						TotalWeight += EffectiveWeight;
+					}
+				}
+			}
+
+			if (LocalFeedback && (!Mode::bSkipZeroFeedbackWeight || LocalFeedback->TotalStaticWeight > 0))
+			{
+				Score = Mode::Reduce(Score, Mode::Contribution(LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack), LocalFeedback->TotalStaticWeight));
+				TotalWeight += LocalFeedback->TotalStaticWeight;
+			}
+
+			return Mode::Finish(Score, TotalWeight);
+		}
+
+	protected:
+		virtual double BakeContribution(const double WeightedScore, const double Weight) const override { return Mode::Contribution(WeightedScore, Weight); }
+		virtual double BakeReduce(const double A, const double B) const override { return Mode::Reduce(A, B); }
+		virtual double BakeIdentity() const override { return Mode::Identity(); }
+	};
 
 #pragma endregion
 
@@ -326,492 +495,20 @@ namespace PCGExHeuristics
 		switch (ScoreMode)
 		{
 		case EPCGExHeuristicScoreMode::WeightedAverage:
-			return MakeShared<FHandlerWeightedAverage>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FWeightedAverage>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		case EPCGExHeuristicScoreMode::GeometricMean:
-			return MakeShared<FHandlerGeometricMean>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FGeometricMean>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		case EPCGExHeuristicScoreMode::WeightedSum:
-			return MakeShared<FHandlerWeightedSum>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FWeightedSum>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		case EPCGExHeuristicScoreMode::HarmonicMean:
-			return MakeShared<FHandlerHarmonicMean>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FHarmonicMean>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		case EPCGExHeuristicScoreMode::Min:
-			return MakeShared<FHandlerMin>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FMin>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		case EPCGExHeuristicScoreMode::Max:
-			return MakeShared<FHandlerMax>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FMax>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		default:
-			return MakeShared<FHandlerWeightedAverage>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
+			return MakeShared<TScoreHandler<ScoreModes::FWeightedAverage>>(InContext, InVtxDataCache, InEdgeDataCache, InFactories);
 		}
-	}
-
-#pragma endregion
-
-#pragma region FHandlerWeightedAverage
-
-	double FHandlerWeightedAverage::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const
-	{
-		double GScore = 0;
-		double TotalWeight = TotalStaticWeight;
-
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			GScore += Op->GetGlobalScore(From, Seed, Goal);
-		}
-		if (LocalFeedback)
-		{
-			GScore += LocalFeedback->GetGlobalScore(From, Seed, Goal);
-			TotalWeight += LocalFeedback->TotalStaticWeight;
-		}
-
-		return TotalWeight > 0 ? GScore / TotalWeight : 0;
-	}
-
-	double FHandlerWeightedAverage::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const
-	{
-		double EScore = 0;
-		double TotalWeight = TotalStaticWeight;
-
-		if (!bUseDynamicWeight)
-		{
-			if (bHasBakedEdgeScores)
-			{
-				EScore = GetBakedEdgeScore(Edge, From);
-				for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
-				{
-					EScore += Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-				}
-			}
-			else
-			{
-				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-				{
-					EScore += Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-				}
-			}
-
-			if (LocalFeedback)
-			{
-				EScore += LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-				TotalWeight += LocalFeedback->TotalStaticWeight;
-			}
-
-			return TotalWeight > 0 ? EScore / TotalWeight : 0;
-		}
-
-		// Dynamic weight path: apply per-edge custom weight multipliers
-		TotalWeight = 0;
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
-			EScore += Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier;
-			TotalWeight += Op->WeightFactor * Multiplier;
-		}
-
-		if (LocalFeedback)
-		{
-			EScore += LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-			TotalWeight += LocalFeedback->TotalStaticWeight;
-		}
-
-		return TotalWeight > 0 ? EScore / TotalWeight : 0;
-	}
-
-#pragma endregion
-
-#pragma region FHandlerGeometricMean
-
-	double FHandlerGeometricMean::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const
-	{
-		// Geometric mean: exp(sum(weight * log(score)) / sum(weight))
-		// To avoid log(0), we clamp scores to a small minimum
-		constexpr double MinScore = 1e-10;
-
-		double WeightedLogSum = 0;
-		double TotalWeight = TotalStaticWeight;
-
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Score = FMath::Max(MinScore, Op->GetGlobalScore(From, Seed, Goal));
-			// Score already includes WeightFactor via ReferenceWeight, so we use WeightFactor for the exponent
-			WeightedLogSum += Op->WeightFactor * FMath::Loge(Score / Op->WeightFactor); // Normalize out the weight from score first
-		}
-
-		if (LocalFeedback)
-		{
-			const double FeedbackScore = FMath::Max(MinScore, LocalFeedback->GetGlobalScore(From, Seed, Goal));
-			WeightedLogSum += LocalFeedback->TotalStaticWeight * FMath::Loge(FeedbackScore / LocalFeedback->TotalStaticWeight);
-			TotalWeight += LocalFeedback->TotalStaticWeight;
-		}
-
-		return TotalWeight > 0 ? FMath::Exp(WeightedLogSum / TotalWeight) : 0;
-	}
-
-	double FHandlerGeometricMean::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const
-	{
-		constexpr double MinScore = MinClampedScore;
-
-		double WeightedLogSum = 0;
-		double TotalWeight = TotalStaticWeight;
-
-		if (!bUseDynamicWeight)
-		{
-			if (bHasBakedEdgeScores)
-			{
-				WeightedLogSum = GetBakedEdgeScore(Edge, From);
-				for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
-				{
-					const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-					WeightedLogSum += Op->WeightFactor * FMath::Loge(Score / Op->WeightFactor);
-				}
-			}
-			else
-			{
-				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-				{
-					const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-					WeightedLogSum += Op->WeightFactor * FMath::Loge(Score / Op->WeightFactor);
-				}
-			}
-
-			if (LocalFeedback)
-			{
-				const double FeedbackScore = FMath::Max(MinScore, LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-				WeightedLogSum += LocalFeedback->TotalStaticWeight * FMath::Loge(FeedbackScore / LocalFeedback->TotalStaticWeight);
-				TotalWeight += LocalFeedback->TotalStaticWeight;
-			}
-
-			return TotalWeight > 0 ? FMath::Exp(WeightedLogSum / TotalWeight) : 0;
-		}
-
-		// Dynamic weight path
-		TotalWeight = 0;
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
-			const double EffectiveWeight = Op->WeightFactor * Multiplier;
-			const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier);
-			WeightedLogSum += EffectiveWeight * FMath::Loge(Score / EffectiveWeight);
-			TotalWeight += EffectiveWeight;
-		}
-
-		if (LocalFeedback)
-		{
-			const double FeedbackScore = FMath::Max(MinScore, LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-			WeightedLogSum += LocalFeedback->TotalStaticWeight * FMath::Loge(FeedbackScore / LocalFeedback->TotalStaticWeight);
-			TotalWeight += LocalFeedback->TotalStaticWeight;
-		}
-
-		return TotalWeight > 0 ? FMath::Exp(WeightedLogSum / TotalWeight) : 0;
-	}
-
-#pragma endregion
-
-#pragma region FHandlerWeightedSum
-
-	double FHandlerWeightedSum::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const
-	{
-		double GScore = 0;
-
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			GScore += Op->GetGlobalScore(From, Seed, Goal);
-		}
-		if (LocalFeedback)
-		{
-			GScore += LocalFeedback->GetGlobalScore(From, Seed, Goal);
-		}
-
-		// No normalization - weights directly scale contribution
-		return GScore;
-	}
-
-	double FHandlerWeightedSum::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const
-	{
-		double EScore = 0;
-
-		if (!bUseDynamicWeight)
-		{
-			if (bHasBakedEdgeScores)
-			{
-				EScore = GetBakedEdgeScore(Edge, From);
-				for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
-				{
-					EScore += Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-				}
-			}
-			else
-			{
-				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-				{
-					EScore += Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-				}
-			}
-
-			if (LocalFeedback)
-			{
-				EScore += LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-			}
-
-			return EScore;
-		}
-
-		// Dynamic weight path: apply per-edge custom weight multipliers
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
-			EScore += Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier;
-		}
-
-		if (LocalFeedback)
-		{
-			EScore += LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack);
-		}
-
-		return EScore;
-	}
-
-#pragma endregion
-
-#pragma region FHandlerHarmonicMean
-
-	double FHandlerHarmonicMean::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const
-	{
-		// Harmonic mean: sum(weight) / sum(weight/score)
-		// Heavily emphasizes low scores - a single low score dominates the result
-		constexpr double MinScore = 1e-10;
-
-		double WeightedInverseSum = 0;
-		double TotalWeight = TotalStaticWeight;
-
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Score = FMath::Max(MinScore, Op->GetGlobalScore(From, Seed, Goal));
-			// Normalize score by weight first, then compute inverse
-			WeightedInverseSum += Op->WeightFactor / (Score / Op->WeightFactor);
-		}
-
-		if (LocalFeedback)
-		{
-			const double FeedbackScore = FMath::Max(MinScore, LocalFeedback->GetGlobalScore(From, Seed, Goal));
-			WeightedInverseSum += LocalFeedback->TotalStaticWeight / (FeedbackScore / LocalFeedback->TotalStaticWeight);
-			TotalWeight += LocalFeedback->TotalStaticWeight;
-		}
-
-		return WeightedInverseSum > 0 ? TotalWeight / WeightedInverseSum : 0;
-	}
-
-	double FHandlerHarmonicMean::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const
-	{
-		constexpr double MinScore = MinClampedScore;
-
-		double WeightedInverseSum = 0;
-		double TotalWeight = TotalStaticWeight;
-
-		if (!bUseDynamicWeight)
-		{
-			if (bHasBakedEdgeScores)
-			{
-				WeightedInverseSum = GetBakedEdgeScore(Edge, From);
-				for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
-				{
-					const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-					WeightedInverseSum += Op->WeightFactor / (Score / Op->WeightFactor);
-				}
-			}
-			else
-			{
-				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-				{
-					const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-					WeightedInverseSum += Op->WeightFactor / (Score / Op->WeightFactor);
-				}
-			}
-
-			if (LocalFeedback)
-			{
-				const double FeedbackScore = FMath::Max(MinScore, LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-				WeightedInverseSum += LocalFeedback->TotalStaticWeight / (FeedbackScore / LocalFeedback->TotalStaticWeight);
-				TotalWeight += LocalFeedback->TotalStaticWeight;
-			}
-
-			return WeightedInverseSum > 0 ? TotalWeight / WeightedInverseSum : 0;
-		}
-
-		// Dynamic weight path
-		TotalWeight = 0;
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
-			const double EffectiveWeight = Op->WeightFactor * Multiplier;
-			const double Score = FMath::Max(MinScore, Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier);
-			WeightedInverseSum += EffectiveWeight / (Score / EffectiveWeight);
-			TotalWeight += EffectiveWeight;
-		}
-
-		if (LocalFeedback)
-		{
-			const double FeedbackScore = FMath::Max(MinScore, LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack));
-			WeightedInverseSum += LocalFeedback->TotalStaticWeight / (FeedbackScore / LocalFeedback->TotalStaticWeight);
-			TotalWeight += LocalFeedback->TotalStaticWeight;
-		}
-
-		return WeightedInverseSum > 0 ? TotalWeight / WeightedInverseSum : 0;
-	}
-
-#pragma endregion
-
-#pragma region FHandlerMin
-
-	double FHandlerMin::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const
-	{
-		// Min: returns the lowest score (normalized by weight)
-		// Most permissive - any heuristic can allow passage
-		double MinScore = TNumericLimits<double>::Max();
-
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Score = Op->GetGlobalScore(From, Seed, Goal) / Op->WeightFactor; // Normalize
-			MinScore = FMath::Min(MinScore, Score);
-		}
-
-		if (LocalFeedback && LocalFeedback->TotalStaticWeight > 0)
-		{
-			const double FeedbackScore = LocalFeedback->GetGlobalScore(From, Seed, Goal) / LocalFeedback->TotalStaticWeight;
-			MinScore = FMath::Min(MinScore, FeedbackScore);
-		}
-
-		return MinScore == TNumericLimits<double>::Max() ? 0 : MinScore;
-	}
-
-	double FHandlerMin::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const
-	{
-		double MinScore = TNumericLimits<double>::Max();
-
-		if (!bUseDynamicWeight)
-		{
-			if (bHasBakedEdgeScores)
-			{
-				MinScore = GetBakedEdgeScore(Edge, From);
-				for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
-				{
-					const double Score = Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / Op->WeightFactor;
-					MinScore = FMath::Min(MinScore, Score);
-				}
-			}
-			else
-			{
-				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-				{
-					const double Score = Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / Op->WeightFactor;
-					MinScore = FMath::Min(MinScore, Score);
-				}
-			}
-
-			if (LocalFeedback && LocalFeedback->TotalStaticWeight > 0)
-			{
-				const double FeedbackScore = LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / LocalFeedback->TotalStaticWeight;
-				MinScore = FMath::Min(MinScore, FeedbackScore);
-			}
-
-			return MinScore == TNumericLimits<double>::Max() ? 0 : MinScore;
-		}
-
-		// Dynamic weight path
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
-			const double EffectiveWeight = Op->WeightFactor * Multiplier;
-			if (EffectiveWeight > 0)
-			{
-				const double Score = (Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier) / EffectiveWeight;
-				MinScore = FMath::Min(MinScore, Score);
-			}
-		}
-
-		if (LocalFeedback && LocalFeedback->TotalStaticWeight > 0)
-		{
-			const double FeedbackScore = LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / LocalFeedback->TotalStaticWeight;
-			MinScore = FMath::Min(MinScore, FeedbackScore);
-		}
-
-		return MinScore == TNumericLimits<double>::Max() ? 0 : MinScore;
-	}
-
-#pragma endregion
-
-#pragma region FHandlerMax
-
-	double FHandlerMax::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback) const
-	{
-		// Max: returns the highest score (normalized by weight)
-		// Most restrictive - any heuristic can block passage
-		double MaxScore = TNumericLimits<double>::Lowest();
-
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Score = Op->GetGlobalScore(From, Seed, Goal) / Op->WeightFactor; // Normalize
-			MaxScore = FMath::Max(MaxScore, Score);
-		}
-
-		if (LocalFeedback && LocalFeedback->TotalStaticWeight > 0)
-		{
-			const double FeedbackScore = LocalFeedback->GetGlobalScore(From, Seed, Goal) / LocalFeedback->TotalStaticWeight;
-			MaxScore = FMath::Max(MaxScore, FeedbackScore);
-		}
-
-		return MaxScore == TNumericLimits<double>::Lowest() ? 0 : MaxScore;
-	}
-
-	double FHandlerMax::GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, const FLocalFeedbackHandler* LocalFeedback, PCGEx::FHashLookup* TravelStack) const
-	{
-		double MaxScore = TNumericLimits<double>::Lowest();
-
-		if (!bUseDynamicWeight)
-		{
-			if (bHasBakedEdgeScores)
-			{
-				MaxScore = GetBakedEdgeScore(Edge, From);
-				for (const FPCGExHeuristicOperation* Op : DynamicEdgeOps)
-				{
-					const double Score = Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / Op->WeightFactor;
-					MaxScore = FMath::Max(MaxScore, Score);
-				}
-			}
-			else
-			{
-				for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-				{
-					const double Score = Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / Op->WeightFactor;
-					MaxScore = FMath::Max(MaxScore, Score);
-				}
-			}
-
-			if (LocalFeedback && LocalFeedback->TotalStaticWeight > 0)
-			{
-				const double FeedbackScore = LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / LocalFeedback->TotalStaticWeight;
-				MaxScore = FMath::Max(MaxScore, FeedbackScore);
-			}
-
-			return MaxScore == TNumericLimits<double>::Lowest() ? 0 : MaxScore;
-		}
-
-		// Dynamic weight path
-		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
-		{
-			const double Multiplier = Op->GetCustomWeightMultiplier(To.Index, Edge.PointIndex);
-			const double EffectiveWeight = Op->WeightFactor * Multiplier;
-			if (EffectiveWeight > 0)
-			{
-				const double Score = (Op->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) * Multiplier) / EffectiveWeight;
-				MaxScore = FMath::Max(MaxScore, Score);
-			}
-		}
-
-		if (LocalFeedback && LocalFeedback->TotalStaticWeight > 0)
-		{
-			const double FeedbackScore = LocalFeedback->GetEdgeScore(From, To, Edge, Seed, Goal, TravelStack) / LocalFeedback->TotalStaticWeight;
-			MaxScore = FMath::Max(MaxScore, FeedbackScore);
-		}
-
-		return MaxScore == TNumericLimits<double>::Lowest() ? 0 : MaxScore;
 	}
 
 #pragma endregion

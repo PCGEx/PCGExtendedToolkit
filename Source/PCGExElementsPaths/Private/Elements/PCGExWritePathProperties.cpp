@@ -36,16 +36,6 @@ void UPCGExWritePathPropertiesSettings::PCGExApplyDeprecation(UPCGNode* InOutNod
 }
 #endif
 
-bool UPCGExWritePathPropertiesSettings::CanForwardData() const
-{
-#define PCGEX_PATH_MARK_FALSE(_NAME, _TYPE, _DEFAULT) if(bWrite##_NAME){return false;}
-	PCGEX_FOREACH_FIELD_PATH(PCGEX_PATH_MARK_FALSE)
-	PCGEX_FOREACH_FIELD_PATH_POINT(PCGEX_PATH_MARK_FALSE)
-#undef PCGEX_PATH_MARK_FALSE
-
-	return true;
-}
-
 bool UPCGExWritePathPropertiesSettings::WantsInclusionHelper() const
 {
 	return bTagInner || bTagOuter || bTagOddInclusionDepth || bWriteNumInside || bWriteInclusionDepth || bUseInclusionPins || bWriteIsHole || bTagPairing;
@@ -448,17 +438,14 @@ namespace PCGExWritePathProperties
 		{
 			if (!Infos.Depth)
 			{
-				Context->NumOuter++;
 				Context->StageOutput(PointDataFacade->GetOut(), OutputPathOuter, PCGExData::EStaging::None, FlattenedTags);
 			}
 			else
 			{
-				Context->NumInner++;
 				Context->StageOutput(PointDataFacade->GetOut(), OutputPathInner, PCGExData::EStaging::None, FlattenedTags);
 
 				if (Infos.bOdd && (!Settings->bOuterIsNotOdd || Infos.Depth > 0))
 				{
-					Context->NumOdd++;
 					Context->StageOutput(PointDataFacade->GetOut(), OutputPathMedian, PCGExData::EStaging::None, FlattenedTags);
 				}
 			}

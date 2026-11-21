@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigValue : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigValue()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "16"))
 	int32 Octaves = 1;
 
@@ -36,9 +31,6 @@ struct FPCGExNoiseConfigValue : public FPCGExNoise3DConfigBase
  */
 class PCGEXNOISE3D_API FPCGExNoiseValue : public FPCGExNoise3DOperation
 {
-public:
-	virtual ~FPCGExNoiseValue() override = default;
-
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 };

@@ -24,11 +24,6 @@ PCGExFactories::EPreparationResult UPCGExPickerFactoryData::Prepare(FPCGExContex
 	return InitInternalData(InContext);
 }
 
-bool UPCGExPickerFactoryData::RequiresInputs() const
-{
-	return false;
-}
-
 PCGExFactories::EPreparationResult UPCGExPickerFactoryData::InitInternalData(FPCGExContext* InContext)
 {
 	return PCGExFactories::EPreparationResult::Success;

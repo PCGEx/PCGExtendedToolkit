@@ -176,50 +176,6 @@ namespace PCGExPaths
 			return SplineStruct;
 		}
 
-		TSharedPtr<FPCGSplineStruct> MakeSplineCopy(const FPCGSplineStruct& Original)
-		{
-			const int32 NumPoints = Original.GetNumberOfPoints();
-			if (NumPoints < 1)
-			{
-				return nullptr;
-			}
-
-			const FInterpCurveVector& SplinePositions = Original.GetSplinePointsPosition();
-			TArray<FSplinePoint> SplinePoints;
-
-			auto GetPointType = [](const EInterpCurveMode Mode)-> ESplinePointType::Type
-			{
-				switch (Mode)
-				{
-				case CIM_Linear:
-					return ESplinePointType::Type::Linear;
-				case CIM_CurveAuto:
-					return ESplinePointType::Type::Curve;
-				case CIM_Constant:
-					return ESplinePointType::Type::Constant;
-				case CIM_CurveUser:
-					return ESplinePointType::Type::CurveCustomTangent;
-				case CIM_CurveAutoClamped:
-					return ESplinePointType::Type::CurveClamped;
-				default: case CIM_Unknown:
-				case CIM_CurveBreak:
-					return ESplinePointType::Type::Curve;
-				}
-			};
-
-			PCGExArrayHelpers::InitArray(SplinePoints, NumPoints);
-
-			for (int i = 0; i < NumPoints; i++)
-			{
-				const FTransform TR = Original.GetTransformAtSplineInputKey(i, ESplineCoordinateSpace::Local);
-				SplinePoints[i] = FSplinePoint(static_cast<float>(i), TR.GetLocation(), SplinePositions.Points[i].ArriveTangent, SplinePositions.Points[i].LeaveTangent, TR.GetRotation().Rotator(), TR.GetScale3D(), GetPointType(SplinePositions.Points[i].InterpMode));
-			}
-
-			PCGEX_MAKE_SHARED(SplineStruct, FPCGSplineStruct)
-			SplineStruct->Initialize(SplinePoints, Original.bClosedLoop, Original.GetTransform());
-			return SplineStruct;
-		}
-
 		PCGExMath::FClosestPosition FindClosestIntersection(const TArray<TSharedPtr<FPath>>& Paths, const FPCGExPathIntersectionDetails& InDetails, const PCGExMath::FSegment& InSegment, int32& OutPathIndex)
 		{
 			OutPathIndex = -1;
@@ -333,30 +289,6 @@ namespace PCGExPaths
 		return true;
 	}
 
-	bool FPathEdgeCrossings::RemoveCrossing(const int32 EdgeStartIndex, const int32 IOIndex)
-	{
-		const uint64 H = PCGEx::H64(EdgeStartIndex, IOIndex);
-		for (int i = 0; i < Crossings.Num(); i++)
-		{
-			if (Crossings[i].Hash == H)
-			{
-				Crossings.RemoveAt(i);
-				return true;
-			}
-		}
-		return false;
-	}
-
-	bool FPathEdgeCrossings::RemoveCrossing(const TSharedPtr<FPath>& Path, const int32 EdgeStartIndex)
-	{
-		return RemoveCrossing(EdgeStartIndex, Path->IOIndex);
-	}
-
-	bool FPathEdgeCrossings::RemoveCrossing(const TSharedPtr<FPath>& Path, const FPathEdge& Edge)
-	{
-		return RemoveCrossing(Edge.Start, Path->IOIndex);
-	}
-
 	void FPathEdgeCrossings::SortByAlpha()
 	{
 		if (Crossings.Num() <= 1)
@@ -366,18 +298,6 @@ namespace PCGExPaths
 		Crossings.Sort([&](const FCrossing& A, const FCrossing& B)
 		{
 			return A.Alpha < B.Alpha;
-		});
-	}
-
-	void FPathEdgeCrossings::SortByHash()
-	{
-		if (Crossings.Num() <= 1)
-		{
-			return;
-		}
-		Crossings.Sort([&](const FCrossing& A, const FCrossing& B)
-		{
-			return PCGEx::H64A(A.Hash) < PCGEx::H64A(B.Hash);
 		});
 	}
 

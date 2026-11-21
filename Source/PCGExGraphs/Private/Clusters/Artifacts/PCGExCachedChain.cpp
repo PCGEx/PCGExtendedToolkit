@@ -150,6 +150,7 @@ namespace PCGExClusters
 			// Step 4: Create and cache the result
 			TSharedPtr<FCachedChainData> Cached = MakeShared<FCachedChainData>();
 			Cached->ContextHash = 0; // No context needed - chains depend only on topology
+			Cached->bTopologyOnly = true;
 			Cached->Chains = MoveTemp(Chains);
 
 			// Opportunistically cache for downstream consumers

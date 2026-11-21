@@ -89,8 +89,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	double ConvergenceTolerance = 1e-6;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompSpectral, {
 	                                     Operation->NumPartitions = NumPartitions;
 	                                     Operation->MaxIterations = MaxIterations;

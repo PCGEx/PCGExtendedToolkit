@@ -4,7 +4,6 @@
 #include "Core/PCGExPointFilter.h"
 
 #include "PCGExFiltersSubSystem.h"
-#include "Async/ParallelFor.h"
 #include "Clusters/PCGExCluster.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -314,15 +313,17 @@ namespace PCGExPointFilter
 
 		if (bParallel)
 		{
-			ParallelFor(Scope.Count, [&](const int32 i)
+			PCGExMT::ParallelOrSequentialScoped(Scope.Count, [&](const PCGExMT::FScope& SubScope)
 			{
-				const int32 Index = Scope.Start + i;
-				PCGEX_TEST_STACK(Index, Index)
-				if (bResult)
+				int32 SubPass = 0;
+				PCGEX_SUBSCOPE_LOOP(i)
 				{
-					FPlatformAtomics::InterlockedIncrement(&NumPass);
+					const int32 Index = Scope.Start + i;
+					PCGEX_TEST_STACK(Index, Index)
+					SubPass += bResult;
 				}
-			});
+				FPlatformAtomics::InterlockedAdd(&NumPass, SubPass);
+			}, 1);
 		}
 		else
 		{
@@ -336,29 +337,14 @@ namespace PCGExPointFilter
 		return NumPass;
 	}
 
-	int32 FManager::Test(const PCGExMT::FScope Scope, TBitArray<>& OutResults, const bool bParallel)
+	int32 FManager::Test(const PCGExMT::FScope Scope, TBitArray<>& OutResults)
 	{
 		int32 NumPass = 0;
 
-		if (bParallel)
+		PCGEX_SCOPE_LOOP(Index)
 		{
-			ParallelFor(Scope.Count, [&](const int32 i)
-			{
-				const int32 Index = Scope.Start + i;
-				PCGEX_TEST_STACK(Index, Index)
-				if (bResult)
-				{
-					FPlatformAtomics::InterlockedIncrement(&NumPass);
-				}
-			});
-		}
-		else
-		{
-			PCGEX_SCOPE_LOOP(Index)
-			{
-				PCGEX_TEST_STACK(Index, Index)
-				NumPass += bResult;
-			}
+			PCGEX_TEST_STACK(Index, Index)
+			NumPass += bResult;
 		}
 
 		return NumPass;
@@ -379,15 +365,17 @@ namespace PCGExPointFilter
 
 		if (bParallel)
 		{
-			ParallelFor(NumItems, [&](const int32 i)
+			PCGExMT::ParallelOrSequentialScoped(NumItems, [&](const PCGExMT::FScope& SubScope)
 			{
-				const PCGExClusters::FNode& Node = Items[i];
-				PCGEX_TEST_STACK(Node, Node.PointIndex)
-				if (bResult)
+				int32 SubPass = 0;
+				PCGEX_SUBSCOPE_LOOP(i)
 				{
-					FPlatformAtomics::InterlockedIncrement(&NumPass);
+					const PCGExClusters::FNode& Node = Items[i];
+					PCGEX_TEST_STACK(Node, Node.PointIndex)
+					SubPass += bResult;
 				}
-			});
+				FPlatformAtomics::InterlockedAdd(&NumPass, SubPass);
+			}, 1);
 		}
 		else
 		{
@@ -414,15 +402,17 @@ namespace PCGExPointFilter
 		int32 NumPass = 0;
 		if (bParallel)
 		{
-			ParallelFor(NumItems, [&](const int32 i)
+			PCGExMT::ParallelOrSequentialScoped(NumItems, [&](const PCGExMT::FScope& SubScope)
 			{
-				const PCGExGraphs::FEdge& Edge = Items[i];
-				PCGEX_TEST_STACK(Edge, i)
-				if (bResult)
+				int32 SubPass = 0;
+				PCGEX_SUBSCOPE_LOOP(i)
 				{
-					FPlatformAtomics::InterlockedIncrement(&NumPass);
+					const PCGExGraphs::FEdge& Edge = Items[i];
+					PCGEX_TEST_STACK(Edge, i)
+					SubPass += bResult;
 				}
-			});
+				FPlatformAtomics::InterlockedAdd(&NumPass, SubPass);
+			}, 1);
 		}
 		else
 		{
@@ -442,11 +432,6 @@ namespace PCGExPointFilter
 		SupportedFactoriesTypes = InTypes;
 	}
 
-	const TSet<FPCGDataTypeBaseId>* FManager::GetSupportedTypes() const
-	{
-		return SupportedFactoriesTypes;
-	}
-
 	bool FManager::InitFilter(FPCGExContext* InContext, const TSharedPtr<IFilter>& Filter)
 	{
 		return Filter->Init(InContext, PointDataFacade);
@@ -457,9 +442,7 @@ namespace PCGExPointFilter
 	// is called here to let filters allocate their Results cache after sorting.
 	bool FManager::PostInit(FPCGExContext* InContext)
 	{
-		bValid = !ManagedFilters.IsEmpty();
-
-		if (!bValid)
+		if (ManagedFilters.IsEmpty())
 		{
 			return false;
 		}

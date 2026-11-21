@@ -193,21 +193,10 @@ public:
 		return PCGEX_NODE_COLOR_NAME(NeighborSampler);
 	}
 #endif
-
-protected:
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	//~End UPCGSettings
 
-public:
 	virtual FName GetMainOutputPin() const override
 	{
 		return PCGExVtxProperty::OutputPropertyLabel;
 	}
-
-	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
-
 };

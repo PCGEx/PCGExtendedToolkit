@@ -140,8 +140,6 @@ namespace PCGExCreateSpline
 		bool bApplyTangents = false;
 		float MaxIndex = 0.0;
 
-		int8 HasAValidEntry = false;
-
 		TSharedPtr<PCGExTangents::FTangentsHandler> TangentsHandler;
 		TSharedPtr<PCGExData::TBuffer<int32>> CustomPointType;
 
@@ -155,10 +153,6 @@ namespace PCGExCreateSpline
 
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
-		{
-		}
-
-		virtual ~FProcessor() override
 		{
 		}
 

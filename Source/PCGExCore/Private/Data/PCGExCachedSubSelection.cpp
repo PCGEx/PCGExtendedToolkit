@@ -46,8 +46,6 @@ namespace PCGExData
 			ConvertWorkingToReal = Other.ConvertWorkingToReal;
 			ConvertFinalToWorking = Other.ConvertFinalToWorking;
 			ConvertWorkingToFinal = Other.ConvertWorkingToFinal;
-			RealOps = Other.RealOps;
-			WorkingOps = Other.WorkingOps;
 			bIsSingleStep = Other.bIsSingleStep;
 			SingleStepGetFn = Other.SingleStepGetFn;
 			SingleStepSetFn = Other.SingleStepSetFn;
@@ -121,13 +119,9 @@ namespace PCGExData
 
 		FinalChainType = CompiledChain.Steps.IsEmpty() ? RealType : CompiledChain.Steps.Last().OutType;
 
-		// Type ops for copy/default (callers that rely on these).
-		RealOps = PCGExTypeOps::FTypeOpsRegistry::Get(RealType);
-		WorkingOps = PCGExTypeOps::FTypeOpsRegistry::Get(WorkingType);
-
 		// Conversions.
-		// ConvertReal*Working are used on the identity (no-chain) path and by
-		// ConvertGet/ConvertSet. ConvertFinal*Working are used on the
+		// ConvertReal*Working are used on the identity (no-chain) path.
+		// ConvertFinal*Working are used on the
 		// chain-active path to bridge the chain's final OutType and the
 		// blender's WorkingType.
 		ConvertRealToWorking = PCGExTypeOps::FConversionTable::GetConversionFn(RealType, WorkingType);

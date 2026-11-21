@@ -380,6 +380,16 @@ TSharedRef<SWidget> FPCGExInputShorthandVectorCustomization::CreateValueWidget(T
 	return PCGEX_VECTORINPUTBOX(ValueHandle);
 }
 
+TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandVector2Customization::MakeInstance()
+{
+	return MakeShareable(new FPCGExInputShorthandVector2Customization());
+}
+
+TSharedRef<SWidget> FPCGExInputShorthandVector2Customization::CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle)
+{
+	return PCGExInlineNumericWidgets::MakeVector2Widget(ValueHandle.ToSharedRef());
+}
+
 TSharedRef<IPropertyTypeCustomization> FPCGExInputShorthandDirectionCustomization::MakeInstance()
 {
 	return MakeShareable(new FPCGExInputShorthandDirectionCustomization());

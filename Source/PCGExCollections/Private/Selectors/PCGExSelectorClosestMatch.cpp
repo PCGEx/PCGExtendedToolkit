@@ -328,7 +328,6 @@ TSharedPtr<PCGExCollections::FSelectorSharedData> UPCGExSelectorClosestMatchFact
 
 	TSharedPtr<FPCGExClosestMatchSharedData> NewShared = MakeShared<FPCGExClosestMatchSharedData>();
 	NewShared->AxisCount = AxisCount;
-	NewShared->EntryCount = N;
 	NewShared->AxisData.SetNum(AxisCount);
 
 	int32 ResolvedAxisCount = 0;

@@ -18,11 +18,6 @@
 #define LOCTEXT_NAMESPACE "PCGExGraphs"
 #define PCGEX_NAMESPACE BuildVoronoiGraph
 
-namespace PCGExGeoTask
-{
-	class FLloydRelax3;
-}
-
 TArray<FPCGPinProperties> UPCGExBuildVoronoiGraphSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::OutputPinProperties();
@@ -88,10 +83,6 @@ bool FPCGExBuildVoronoiGraphElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExBuildVoronoiGraph
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExBuildVoronoiGraph::Process);
@@ -243,10 +234,6 @@ namespace PCGExBuildVoronoiGraph
 		GraphBuilder->CompileAsync(TaskManager, false);
 
 		return true;
-	}
-
-	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
-	{
 	}
 
 	void FProcessor::CompleteWork()

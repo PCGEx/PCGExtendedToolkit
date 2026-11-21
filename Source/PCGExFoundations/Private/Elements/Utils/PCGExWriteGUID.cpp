@@ -104,8 +104,6 @@ bool FPCGExGUIDDetails::Init(FPCGExContext* InContext, TSharedRef<PCGExData::FFa
 		GridHash = BaseUniqueKey;
 	}
 
-	DefaultGUID = FGuid(GridHash, 0, 0, 0);
-
 	return true;
 }
 

@@ -4,7 +4,6 @@
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "PCGExLog.h"
 
-#include "PCGManagedResource.h"
 #include "PCGParamData.h"
 #include "PCGSettings.h"
 #include "Collections/PCGExMeshCollection.h"
@@ -92,7 +91,7 @@ namespace PCGExCollections
 		}
 	}
 
-	void FinalizeSpawnedActor(AActor* InActor, UPCGManagedActors* InManagedActors, bool bIsPreview)
+	void FinalizeSpawnedActor(AActor* InActor, const bool bIsPreview)
 	{
 		if (!InActor)
 		{
@@ -110,11 +109,6 @@ namespace PCGExCollections
 				Level->Modify();
 				(void)Level->MarkPackageDirty();
 			}
-		}
-
-		if (InManagedActors)
-		{
-			InManagedActors->GetMutableGeneratedActors().Add(InActor);
 		}
 	}
 

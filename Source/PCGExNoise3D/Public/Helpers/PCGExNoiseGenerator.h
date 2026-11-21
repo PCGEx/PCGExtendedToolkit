@@ -20,19 +20,12 @@ namespace PCGExNoise3D
 	protected:
 		TArray<TSharedPtr<FPCGExNoise3DOperation>> Operations;
 		TArray<const FPCGExNoise3DOperation*> OperationsPtr;
-		TArray<double> Weights;
 		TArray<EPCGExNoiseBlendMode> BlendModes;
 
-		/** Precomputed blend factors: BlendFactors[i] = Weights[i] / sum(Weights[0..i]) */
+		/** Precomputed blend factors: BlendFactors[i] = Weight[i] / sum(Weight[0..i]) */
 		TArray<double> BlendFactors;
 
 		double TotalWeight = 0.0;
-
-		/** How GenerateInPlace combines initial value with noise */
-		EPCGExNoiseInPlaceMode InPlaceMode = EPCGExNoiseInPlaceMode::Composite;
-
-		/** Blend mode used for BlendResult in-place mode */
-		EPCGExNoiseBlendMode InPlaceBlendMode = EPCGExNoiseBlendMode::Blend;
 
 	public:
 		FNoiseGenerator() = default;
@@ -62,43 +55,12 @@ namespace PCGExNoise3D
 			return Operations.Num() > 0;
 		}
 
-		/**
-		 * Get total weight of all operations
-		 */
-		double GetTotalWeight() const
-		{
-			return TotalWeight;
-		}
-
-		/**
-		 * Set how GenerateInPlace combines initial value with noise
-		 * @param Mode The in-place combination mode
-		 * @param BlendMode Blend mode used when Mode is BlendResult (ignored otherwise)
-		 */
-		void SetInPlaceMode(EPCGExNoiseInPlaceMode Mode, EPCGExNoiseBlendMode BlendMode = EPCGExNoiseBlendMode::Blend)
-		{
-			InPlaceMode = Mode;
-			InPlaceBlendMode = BlendMode;
-		}
-
-		EPCGExNoiseInPlaceMode GetInPlaceMode() const
-		{
-			return InPlaceMode;
-		}
-
-		EPCGExNoiseBlendMode GetInPlaceBlendMode() const
-		{
-			return InPlaceBlendMode;
-		}
-
 		//
 		// Single-point generation
 		//
 
 		double GetDouble(const FVector& Position) const;
-		FVector2D GetVector2D(const FVector& Position) const;
 		FVector GetVector(const FVector& Position) const;
-		FVector4 GetVector4(const FVector& Position) const;
 
 		//
 		// Batch generation (optimized for parallel processing)
@@ -109,15 +71,6 @@ namespace PCGExNoise3D
 		void Generate(TArrayView<const FVector> Positions, TArrayView<FVector> OutResults) const;
 		void Generate(TArrayView<const FVector> Positions, TArrayView<FVector4> OutResults) const;
 
-		//
-		// Parallel batch generation (chunked; preserves the batch fast path)
-		//
-
-		void GenerateParallel(TArrayView<const FVector> Positions, TArrayView<double> OutResults, int32 MinBatchSize = 256) const;
-		void GenerateParallel(TArrayView<const FVector> Positions, TArrayView<FVector2D> OutResults, int32 MinBatchSize = 256) const;
-		void GenerateParallel(TArrayView<const FVector> Positions, TArrayView<FVector> OutResults, int32 MinBatchSize = 256) const;
-		void GenerateParallel(TArrayView<const FVector> Positions, TArrayView<FVector4> OutResults, int32 MinBatchSize = 256) const;
-
 	private:
 		/** Batch core. Scratch must be OutResults-sized when more than one operation is stacked (unused otherwise). */
 		template <typename ValueType>
@@ -126,8 +79,6 @@ namespace PCGExNoise3D
 		template <typename ValueType>
 		void GenerateTyped(TArrayView<const FVector> Positions, TArrayView<ValueType> OutResults) const;
 
-		template <typename ValueType>
-		void GenerateParallelImpl(TArrayView<const FVector> Positions, TArrayView<ValueType> OutResults, int32 MinBatchSize) const;
 		//
 		// Single-value blend (used for single-point generation)
 		//

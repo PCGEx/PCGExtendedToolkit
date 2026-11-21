@@ -239,10 +239,6 @@ bool FPCGExUberFilterCascadeElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExUberFilterCascade
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExUberFilterCascade::Process);
@@ -330,15 +326,7 @@ namespace PCGExUberFilterCascade
 				PCGEX_SCOPE_LOOP(Index)
 				{
 					// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
-					int32 Depth = 0;
-					for (int32 i = 0; i < NumBranches; i++)
-					{
-						if (BranchManagers[i] && BranchManagers[i]->Test(Index))
-						{
-							Depth = i + 1;
-							break;
-						}
-					}
+					const int32 Depth = FindFirstMatchingBranch(Index) + 1;
 
 					ParamPartitionValues[Index] = Base + Depth;
 				}
@@ -348,15 +336,7 @@ namespace PCGExUberFilterCascade
 				PCGEX_SCOPE_LOOP(Index)
 				{
 					// Depth 0 = unmatched (writes Base); a point matching branch i writes Base + i + 1.
-					int32 Depth = 0;
-					for (int32 i = 0; i < NumBranches; i++)
-					{
-						if (BranchManagers[i] && BranchManagers[i]->Test(Index))
-						{
-							Depth = i + 1;
-							break;
-						}
-					}
+					const int32 Depth = FindFirstMatchingBranch(Index) + 1;
 
 					PartitionBuffer->SetValue(Index, Base + Depth);
 				}
@@ -367,27 +347,30 @@ namespace PCGExUberFilterCascade
 
 		const int32 DefaultIdx = NumBranches; // Last bucket
 
+		TArray<int32, TInlineAllocator<8>> ScopeCounts;
+		ScopeCounts.Init(0, NumBranches + 1);
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			int32 MatchedBranch = -1;
-			for (int32 i = 0; i < NumBranches; i++)
-			{
-				if (BranchManagers[i] && BranchManagers[i]->Test(Index))
-				{
-					MatchedBranch = i;
-					break;
-				}
-			}
+			const int32 MatchedBranch = FindFirstMatchingBranch(Index);
 
 			if (MatchedBranch >= 0)
 			{
 				BranchIndices[MatchedBranch]->Get_Ref(Scope).Add(Index);
-				FPlatformAtomics::InterlockedAdd(&BranchCounts[MatchedBranch], 1);
+				ScopeCounts[MatchedBranch]++;
 			}
 			else
 			{
 				BranchIndices[DefaultIdx]->Get_Ref(Scope).Add(Index);
-				FPlatformAtomics::InterlockedAdd(&BranchCounts[DefaultIdx], 1);
+				ScopeCounts[DefaultIdx]++;
+			}
+		}
+
+		for (int32 i = 0; i <= NumBranches; i++)
+		{
+			if (ScopeCounts[i])
+			{
+				FPlatformAtomics::InterlockedAdd(&BranchCounts[i], ScopeCounts[i]);
 			}
 		}
 	}

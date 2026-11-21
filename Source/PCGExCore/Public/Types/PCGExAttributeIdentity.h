@@ -133,16 +133,13 @@ namespace PCGExData
 		TMap<FPCGAttributeIdentifier, int32> Map;
 		TArray<FAttributeIdentity> Identities; // Each identity carries its own Attribute pointer (was a parallel array pre-5.8 cleanup).
 
-		bool Contains(FName AttributeName, EPCGMetadataTypes Type);
 		bool Contains(FName AttributeName);
 		FAttributeIdentity* Find(FName AttributeName);
 
-		bool FindMissing(const TSet<FName>& Checklist, TSet<FName>& OutMissing);
 		bool FindMissing(const TArray<FName>& Checklist, TSet<FName>& OutMissing);
 
 		void Append(const TSharedPtr<FAttributesInfos>& Other, const FPCGExAttributeGatherDetails& InGatherDetails, TSet<FName>& OutTypeMismatch);
 		void Append(const TSharedPtr<FAttributesInfos>& Other, TSet<FName>& OutTypeMismatch, const TSet<FName>* InIgnoredAttributes = nullptr);
-		void Update(const FAttributesInfos* Other, const FPCGExAttributeGatherDetails& InGatherDetails, TSet<FName>& OutTypeMismatch);
 
 		using FilterCallback = std::function<bool(const FName&)>;
 

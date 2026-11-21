@@ -25,7 +25,8 @@ namespace PCGExData
 		{
 			return false;
 		}
-		UpdateSubSelection();
+		// Not re-parsed from Selector: that would discard the field step just set.
+		WorkingType = EPCGMetadataTypes::Double;
 		return true;
 	}
 
@@ -250,32 +251,16 @@ namespace PCGExData
 	{
 		// Property-backed buffers deep-copy the property's own representation into this storage --
 		// it must be property-initialized and -sized, or the copy leaks and mis-sizes.
-		if (const TSharedPtr<IBuffer> Buf = GetBuffer(); Buf && Buf->GetSourceProperty())
+		// Only a type-erased proxy holds one, so typed proxies skip the buffer lookup.
+		if (bTypeErased)
 		{
-			return Buf->MakeScopedValue();
+			if (const TSharedPtr<IBuffer> Buf = GetBuffer(); Buf && Buf->GetSourceProperty())
+			{
+				return Buf->MakeScopedValue();
+			}
 		}
 		return PCGExTypes::FScopedTypedValue(WorkingType);
 	}
-
-	// Converting read implementations - Now using FScopedTypedValue for safety
-#define PCGEX_CONVERTING_READ_IMPL(_TYPE, _NAME, ...) \
-	_TYPE IBufferProxy::ReadAs##_NAME(const int32 Index) const \
-	{ \
-		PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue(); \
-		GetVoid(Index, WorkingValue.GetRaw()); \
-		constexpr EPCGMetadataTypes TargetType = PCGExTypes::TTraits<_TYPE>::Type; \
-		if (TargetType == WorkingType) \
-		{ \
-			if constexpr (TypeTraits::TIsComplexType<_TYPE>) { return WorkingValue.As<_TYPE>(); }\
-			else { return *reinterpret_cast<const _TYPE*>(WorkingValue.GetRaw()); }\
-		} \
-		_TYPE Result{}; \
-		PCGExTypeOps::FConversionTable::Convert(WorkingType, WorkingValue.GetRaw(), TargetType, &Result);\
-		return Result; \
-	}
-	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_CONVERTING_READ_IMPL)
-
-#undef PCGEX_CONVERTING_READ_IMPL
 
 	int32 IBufferProxy::GetValueSize() const
 	{

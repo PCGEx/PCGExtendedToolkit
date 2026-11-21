@@ -55,19 +55,6 @@ namespace PCGExArrayHelpers
 	}
 
 	template <typename T>
-	static void InitArray(TSharedRef<TArray<T>> InArray, const int32 Num)
-	{
-		if constexpr (std::is_trivially_copyable_v<T>)
-		{
-			InArray.SetNumUninitialized(Num);
-		}
-		else
-		{
-			InArray.SetNum(Num);
-		}
-	}
-
-	template <typename T>
 	static void InitArray(TArray<T>* InArray, const int32 Num)
 	{
 		if constexpr (std::is_trivially_copyable_v<T>)
@@ -141,11 +128,10 @@ namespace PCGExArrayHelpers
 
 		if (MinIndex > 0)
 		{
-			TArray<T> TempArray;
-			TempArray.Append(InArray.GetData() + MinIndex, Num - MinIndex);
-			TempArray.Append(InArray.GetData(), MinIndex);
-
-			FMemory::Memcpy(InArray.GetData(), TempArray.GetData(), sizeof(T) * Num);
+			// Left rotation by MinIndex, as three in-place reversals.
+			PCGExArrayHelpers::Reverse(TArrayView<T>(InArray.GetData(), MinIndex));
+			PCGExArrayHelpers::Reverse(TArrayView<T>(InArray.GetData() + MinIndex, Num - MinIndex));
+			PCGExArrayHelpers::Reverse(TArrayView<T>(InArray));
 		}
 	}
 

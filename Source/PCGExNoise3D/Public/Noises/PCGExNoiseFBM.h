@@ -25,11 +25,6 @@ struct FPCGExNoiseConfigFBM : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigFBM()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "16"))
 	int32 Octaves = 4;
 
@@ -61,8 +56,6 @@ public:
 	EPCGExFBMVariant Variant = EPCGExFBMVariant::Standard;
 	double RidgeOffset = 1.0;
 	double WarpStrength = 0.5;
-
-	virtual ~FPCGExNoiseFBM() override = default;
 
 	// Override GetDouble to use custom fractal implementation
 	virtual double GetDouble(const FVector& Position) const override;

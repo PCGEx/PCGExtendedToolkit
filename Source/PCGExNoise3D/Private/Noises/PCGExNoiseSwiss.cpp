@@ -91,15 +91,6 @@ void FPCGExNoiseSwiss::NoiseWithDerivatives(const FVector& Position, double& Out
 		DW * (K3 + K5 * V + K6 * U + K7 * U * V);
 }
 
-double FPCGExNoiseSwiss::GenerateRaw(const FVector& Position) const
-{
-	// For non-fractal use
-	double Value;
-	FVector Deriv;
-	NoiseWithDerivatives(Position, Value, Deriv);
-	return Value;
-}
-
 double FPCGExNoiseSwiss::GetDouble(const FVector& Position) const
 {
 	const FVector P = TransformPosition(Position);

@@ -151,6 +151,7 @@ namespace PCGExCopyToPoints
 		else
 		{
 			PCGExArrayHelpers::InitArray(Dupes, NumTargets);
+			SourceFitBounds = PCGExFitting::Tasks::ComputeFitBounds(PointDataFacade->GetIn(), Context->TransformDetails.bIgnoreBounds);
 		}
 
 		StartParallelLoopForRange(NumTargets, 32);
@@ -203,7 +204,7 @@ namespace PCGExCopyToPoints
 
 			Dupes[i] = Dupe;
 
-			PCGEX_LAUNCH(PCGExFitting::Tasks::FTransformPointIO, i, Context->TargetsDataFacade->Source, Dupe, &Context->TransformDetails)
+			PCGEX_LAUNCH(PCGExFitting::Tasks::FTransformPointIO, i, Context->TargetsDataFacade->Source, Dupe, &Context->TransformDetails, SourceFitBounds)
 		}
 
 		if (Copies > 0)

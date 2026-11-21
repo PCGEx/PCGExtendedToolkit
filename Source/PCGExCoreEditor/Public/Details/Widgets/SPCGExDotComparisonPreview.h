@@ -98,7 +98,6 @@ private:
 	static FVector2D AngleToScreen(const FVector2D& Center, double VectorAngleRad, double Radius);
 
 	static constexpr int32 ArcSegments = 64;
-	static constexpr float Padding = 10.0f;
 	static constexpr float DesiredWidth = 240.0f;
 	static constexpr float LabelMargin = 18.0f;
 	static constexpr float DesiredHeight = 140.0f;

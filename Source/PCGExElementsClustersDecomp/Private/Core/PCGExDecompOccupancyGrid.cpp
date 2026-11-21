@@ -174,6 +174,29 @@ bool FPCGExDecompOccupancyGrid::Build(
 	return OccupiedCount > 0;
 }
 
+int32 FPCGExDecompOccupancyGrid::CompactCellIDsByFirstUse(TArray<int32>& VoxelCellIDs)
+{
+	TMap<int32, int32> Remap;
+	int32 NumCells = 0;
+	for (int32& CellID : VoxelCellIDs)
+	{
+		if (CellID < 0)
+		{
+			continue;
+		}
+		if (const int32* Compacted = Remap.Find(CellID))
+		{
+			CellID = *Compacted;
+		}
+		else
+		{
+			Remap.Add(CellID, NumCells);
+			CellID = NumCells++;
+		}
+	}
+	return NumCells;
+}
+
 void FPCGExDecompOccupancyGrid::ComputeCellSizes(
 	const TArray<int32>& VoxelCellIDs,
 	const int32 NumCells,

@@ -20,10 +20,6 @@ struct FPCGExEntryCountFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExEntryCountFilterConfig()
-	{
-	}
-
 	/** Comparison */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExComparison Comparison = EPCGExComparison::EqualOrGreater;
@@ -85,10 +81,6 @@ namespace PCGExPointFilter
 		const TObjectPtr<const UPCGExEntryCountFilterFactory> TypedFilterFactory;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FEntryCountFilter() override
-		{
-		}
 	};
 }
 

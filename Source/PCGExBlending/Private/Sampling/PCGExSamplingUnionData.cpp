@@ -97,43 +97,6 @@ namespace PCGExSampling
 		return Index;
 	}
 
-	void FSampingUnionData::AddWeighted(const PCGExData::FElement& Element, const double InWeight)
-	{
-		FWriteScopeLock WriteScopeLock(UnionLock);
-		Add_Unsafe(Element.Index, Element.IO);
-		Weights.Add(Element, InWeight);
-	}
-
-	double FSampingUnionData::GetWeightAverage() const
-	{
-		if (Weights.Num() == 0)
-		{
-			return 0;
-		}
-
-		double Average = 0;
-		for (const TPair<PCGExData::FElement, double>& Pair : Weights)
-		{
-			Average += Pair.Value;
-		}
-		return Average / Weights.Num();
-	}
-
-	double FSampingUnionData::GetSqrtWeightAverage() const
-	{
-		if (Weights.Num() == 0)
-		{
-			return 0;
-		}
-
-		double Average = 0;
-		for (const TPair<PCGExData::FElement, double>& Pair : Weights)
-		{
-			Average += FMath::Sqrt(Pair.Value);
-		}
-		return Average / Weights.Num();
-	}
-
 	void FSampingUnionData::Reserve(const int32 InSetReserve, const int32 InElementReserve)
 	{
 		IUnionData::Reserve(InSetReserve, InElementReserve);

@@ -124,21 +124,12 @@ namespace PCGExSampleOverlapStats
 		  , Primary(InPrimary)
 		  , Secondary(InSecondary)
 	{
-		HashID = PCGEx::H64U(InPrimary->BatchIndex, InSecondary->BatchIndex);
-	}
-
-	FProcessor::~FProcessor()
-	{
 	}
 
 	void FProcessor::RegisterOverlap(FProcessor* InOtherProcessor, const FBox& Intersection)
 	{
 		FWriteScopeLock WriteScopeLock(RegistrationLock);
 		const TSharedPtr<FOverlap> Overlap = Context->RegisterOverlap(this, InOtherProcessor, Intersection);
-		if (Overlap->Primary == this)
-		{
-			ManagedOverlaps.Add(Overlap.ToSharedRef());
-		}
 		Overlaps.Add(Overlap.ToSharedRef());
 	}
 
@@ -225,6 +216,14 @@ namespace PCGExSampleOverlapStats
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
+		for (const TSharedPtr<PCGExDiscardByOverlap::FPointBounds>& PtBounds : LocalPointBounds)
+		{
+			if (PtBounds)
+			{
+				Bounds += PtBounds->Bounds.GetBox();
+			}
+		}
+
 		Octree = MakeShared<PCGExDiscardByOverlap::FPointBoundsOctree>(Bounds.GetCenter(), Bounds.GetExtent().Length());
 		for (const TSharedPtr<PCGExDiscardByOverlap::FPointBounds>& PtBounds : LocalPointBounds)
 		{
@@ -241,7 +240,6 @@ namespace PCGExSampleOverlapStats
 		// For each managed overlap, find per-point intersections
 
 		const TSharedPtr<FOverlap> Overlap = Overlaps[Index];
-		const bool bUpdateOverlap = ManagedOverlaps.Contains(Overlap);
 		const TSharedRef<FProcessor> OtherProcessor = StaticCastSharedRef<FProcessor>(*ParentBatch.Pin()->SubProcessorMap->Find(&Overlap->GetOther(this)->PointDataFacade->Source.Get()));
 
 		TConstPCGValueRange<FTransform> InTransforms = InPoints->GetConstTransformValueRange();
@@ -278,12 +276,6 @@ namespace PCGExSampleOverlapStats
 					}
 
 					Count++;
-
-					if (bUpdateOverlap)
-					{
-						Overlap->Stats.OverlapCount++;
-						Overlap->Stats.OverlapVolume += Intersection.GetVolume();
-					}
 				});
 
 				if (Count > 0)
@@ -323,12 +315,6 @@ namespace PCGExSampleOverlapStats
 					}
 
 					Count++;
-
-					if (bUpdateOverlap)
-					{
-						Overlap->Stats.OverlapCount++;
-						Overlap->Stats.OverlapVolume += Amount;
-					}
 				});
 
 				if (Count > 0)

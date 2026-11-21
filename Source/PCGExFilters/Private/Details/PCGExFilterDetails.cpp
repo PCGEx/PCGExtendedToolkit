@@ -238,8 +238,7 @@ void FPCGExFilterResultDetails::Write(const int32 Index, bool bPass) const
 	}
 }
 
-template <typename ResultsT>
-void FPCGExFilterResultDetails::WriteScope(const PCGExMT::FScope& Scope, const ResultsT& Results) const
+void FPCGExFilterResultDetails::Write(const PCGExMT::FScope& Scope, const TArray<int8>& Results) const
 {
 	if (Action == EPCGExResultWriteAction::Bool)
 	{
@@ -300,14 +299,4 @@ void FPCGExFilterResultDetails::WriteScope(const PCGExMT::FScope& Scope, const R
 			}
 		}
 	}
-}
-
-void FPCGExFilterResultDetails::Write(const PCGExMT::FScope& Scope, const TArray<int8>& Results) const
-{
-	WriteScope(Scope, Results);
-}
-
-void FPCGExFilterResultDetails::Write(const PCGExMT::FScope& Scope, const TBitArray<>& Results) const
-{
-	WriteScope(Scope, Results);
 }

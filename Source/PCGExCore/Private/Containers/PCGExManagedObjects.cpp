@@ -38,12 +38,6 @@ namespace PCGEx
 		Flush();
 	}
 
-	bool FManagedObjects::IsAvailable() const
-	{
-		FReadScopeLock WriteScopeLock(ManagedObjectLock);
-		return WeakHandle.IsValid() && !IsFlushing();
-	}
-
 	// Atomic one-shot flush: compare_exchange ensures only one thread enters the flush path.
 	// Objects are removed from root (allowing GC) and have their Async internal flag cleared
 	// recursively, since PCGEx creates UObjects off the game thread and the Async flag must
@@ -126,7 +120,7 @@ namespace PCGEx
 		return true;
 	}
 
-	void FManagedObjects::Remove(const TArray<FPCGTaggedData>& InTaggedData)
+	void FManagedObjects::Remove(TConstArrayView<FPCGTaggedData> InTaggedData)
 	{
 		if (IsFlushing())
 		{
@@ -158,11 +152,6 @@ namespace PCGEx
 				}
 			}
 		}
-	}
-
-	void FManagedObjects::AddExtraStructReferencedObjects(FReferenceCollector& Collector)
-	{
-		//This is causing a deadlock
 	}
 
 	void FManagedObjects::Destroy(UObject* InObject)

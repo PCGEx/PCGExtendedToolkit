@@ -2,34 +2,11 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Probes/PCGExGlobalProbeGradientFlow.h"
-#include "PCGExVersion.h"
 
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
 
 PCGEX_CREATE_PROBE_FACTORY(GradientFlow, {}, {})
-
-#if WITH_EDITOR
-void UPCGExProbeGradientFlowProviderSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.RenamePins(this, InOutNode);
-	}
-
-	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
-}
-
-void UPCGExProbeGradientFlowProviderSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
-{
-	PCGEX_IF_VERSION_LOWER(1, 76, 10)
-	{
-		Config.ApplyDeprecation();
-	}
-
-	Super::PCGExApplyDeprecation(InOutNode);
-}
-#endif
 
 bool FPCGExProbeGradientFlow::IsGlobalProbe() const
 {
@@ -72,9 +49,6 @@ void FPCGExProbeGradientFlow::ProcessAll(TSet<uint64>& OutEdges) const
 	// TODO : Use octree for faster queries, this is crude
 
 	// For each point, find K nearest neighbors
-	TArray<TPair<double, int32>> Distances;
-	Distances.SetNum(NumPoints);
-
 	for (int32 i = 0; i < NumPoints; ++i)
 	{
 		if (!CanGenerateRef[i])

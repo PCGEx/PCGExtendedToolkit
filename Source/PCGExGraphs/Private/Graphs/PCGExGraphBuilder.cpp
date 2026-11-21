@@ -108,12 +108,7 @@ namespace PCGExGraphs
 		NodeIndexLookup = MakeShared<PCGEx::FIndexLookup>(NumNodes); // Likely larger than exported size; required for compilation.
 		Graph->NodeIndexLookup = NodeIndexLookup;
 
-		TArray<int32> InternalValidNodes;
-		TArray<int32>& ValidNodes = InternalValidNodes;
-		if (OutputNodeIndices)
-		{
-			ValidNodes = *OutputNodeIndices.Get();
-		}
+		TArray<int32> ValidNodes;
 
 		// Building subgraphs isolate connected edge clusters
 		// and invalidate roaming (isolated) nodes
@@ -243,17 +238,6 @@ namespace PCGExGraphs
 		//  Transforms & Metadata entry must be final and match the Nodes.PointIndex
 		//	Subgraph compilation rely on it.
 		///////////
-
-		if (OutputPointIndices && OutputPointIndices->Num() == NumValidNodes)
-		{
-			// Reorder output indices if provided
-			// Needed for delaunay etc that rely on original indices to identify sites etc
-			TArray<int32>& OutputPointIndicesRef = *OutputPointIndices.Get();
-			for (int32 i = 0; i < NumValidNodes; i++)
-			{
-				OutputPointIndicesRef[i] = ReadIndices[i];
-			}
-		}
 
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(FCompileGraph::VtxEndpoints);

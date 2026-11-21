@@ -87,6 +87,9 @@ private:
 	/** The toggle checkbox, one widget for every host. */
 	TSharedRef<SWidget> BuildOverrideToggleWidget();
 
+	/** The row's name cell: the toggle, then the name and type label. */
+	TSharedRef<SWidget> BuildNameContentWidget();
+
 	/** Reset = defer to the Blueprint chain, i.e. disable. Installed everywhere: UE's default reset would blank the entry. */
 	FResetToDefaultOverride MakeArchetypeResetOverride();
 	bool IsResetToInheritedVisible(TSharedPtr<IPropertyHandle> Handle) const;

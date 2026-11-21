@@ -19,11 +19,6 @@ enum class EPCGExVtxFilterOutput : uint8
 	Attribute = 3 UMETA(DisplayName = "Attribute", ToolTip="Writes the result of the filters to a boolean attribute."),
 };
 
-namespace PCGExFilterVtx
-{
-	const FName SourceSanitizeEdgeFilters = FName("SanitizeFilters");
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/refine/cluster-filter-vtx"))
 class UPCGExFilterVtxSettings : public UPCGExClustersProcessorSettings
 {
@@ -159,8 +154,6 @@ protected:
 
 namespace PCGExFilterVtx
 {
-	const FName SourceOverridesRefinement = TEXT("Overrides : Refinement");
-
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExFilterVtxContext, UPCGExFilterVtxSettings>
 	{
 		friend class FBatch;
@@ -178,8 +171,6 @@ namespace PCGExFilterVtx
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 

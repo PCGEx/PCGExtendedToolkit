@@ -20,7 +20,11 @@ struct FPCGExFillControlConfigCount : public FPCGExFillControlConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExFillControlConfigCount() = default;
+	FPCGExFillControlConfigCount()
+		: FPCGExFillControlConfigBase()
+	{
+		bSupportSteps = false; // Always validates at capture.
+	}
 
 	/** Max Count. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Max Count", ClampMin=1))

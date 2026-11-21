@@ -47,7 +47,6 @@ namespace PCGExPointFilter
 		FVector Position = FVector::ZeroVector;
 		PCGExMath::OBB::FOBB Box;
 		FBox WorldBounds = FBox(ForceInit);
-		bool bHasBox = false;
 
 		template <typename PointType>
 		void Build(const PointType& Point, const FTransform& WorldToMesh, const EPCGExPointBoundsSource BoundsSource, const double Expansion, const bool bWithBox)
@@ -55,7 +54,6 @@ namespace PCGExPointFilter
 			const FTransform& Transform = Point.GetTransform();
 			Position = WorldToMesh.TransformPosition(Transform.GetLocation());
 			WorldBounds = FBox(Position, Position);
-			bHasBox = bWithBox;
 
 			if (!bWithBox)
 			{

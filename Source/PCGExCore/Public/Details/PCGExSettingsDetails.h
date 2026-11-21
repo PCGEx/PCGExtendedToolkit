@@ -35,6 +35,11 @@ namespace PCGExDetails
 	template <typename T>
 	class PCGEXCORE_API TSettingValue : public TSharedFromThis<TSettingValue<T>>
 	{
+	protected:
+		// While bConstant is set, Read() returns Constant without a virtual call. Subclasses own both.
+		bool bConstant = false;
+		T Constant = T{};
+
 	public:
 		virtual ~TSettingValue() = default;
 
@@ -44,10 +49,6 @@ namespace PCGExDetails
 		 * hierarchy, subclasses only declare what they consume via GetConsumableName.
 		 */
 		[[nodiscard]] bool Init(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false);
-
-		FORCEINLINE virtual void SetConstant(T InConstant)
-		{
-		}
 
 		bool bQuiet = false;
 
@@ -61,20 +62,29 @@ namespace PCGExDetails
 		 */
 		bool bRegisterConsumable = true;
 
-		FORCEINLINE virtual bool IsConstant()
+		FORCEINLINE bool IsConstant() const
 		{
-			return false;
+			return bConstant;
 		}
 
-		FORCEINLINE virtual T Read(const int32 Index) = 0;
+		FORCEINLINE T Read(const int32 Index)
+		{
+			return bConstant ? Constant : ReadInternal(Index);
+		}
+
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) = 0;
 
 		FORCEINLINE virtual T Min() = 0;
 		FORCEINLINE virtual T Max() = 0;
-		FORCEINLINE virtual uint32 ReadValueHash(const int32 Index) = 0;
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) = 0;
+
+		/** Per-index read behind Read(). Not reached while bConstant is set. */
+		virtual T ReadInternal(const int32 Index)
+		{
+			return Constant;
+		}
 
 		/** Name of the attribute this value consumes (domain-qualified when selector-driven), or NAME_None. */
 		virtual FName GetConsumableName(const UPCGData* InData) const
@@ -96,15 +106,14 @@ namespace PCGExDetails
 		{
 		}
 
-		virtual T Read(const int32 Index) override;
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual T Min() override;
 		virtual T Max() override;
-		virtual uint32 ReadValueHash(const int32 Index) override;
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+		virtual T ReadInternal(const int32 Index) override;
 
 		virtual FName GetConsumableName(const UPCGData* InData) const override
 		{
@@ -135,43 +144,24 @@ namespace PCGExDetails
 	template <typename T>
 	class PCGEXCORE_API TSettingValueConstant : public TSettingValue<T>
 	{
-	protected:
-		T Constant = T{};
-
 	public:
 		explicit TSettingValueConstant(const T InConstant)
-			: Constant(InConstant)
 		{
-		}
-
-		FORCEINLINE virtual bool IsConstant() override
-		{
-			return true;
-		}
-
-		FORCEINLINE virtual void SetConstant(T InConstant) override
-		{
-			Constant = InConstant;
-		};
-
-		FORCEINLINE virtual T Read(const int32 Index) override
-		{
-			return Constant;
+			this->bConstant = true;
+			this->Constant = InConstant;
 		}
 
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		FORCEINLINE virtual T Min() override
 		{
-			return Constant;
+			return this->Constant;
 		}
 
 		FORCEINLINE virtual T Max() override
 		{
-			return Constant;
+			return this->Constant;
 		}
-
-		virtual uint32 ReadValueHash(const int32 Index) override;
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
@@ -220,6 +210,7 @@ namespace PCGExDetails
 	/**
 	 * Negates every value read from a wrapped setting value (direction shorthands' bFlip).
 	 * Init hands the caller's bQuiet / bRegisterConsumable to the wrapped value, which owns the consumable registration.
+	 * The wrapped value must only be initialised through this wrapper: its constant is mirrored here.
 	 * Only instantiated for FVector.
 	 */
 	template <typename T>
@@ -229,23 +220,19 @@ namespace PCGExDetails
 		TSharedPtr<TSettingValue<T>> Inner;
 
 	public:
-		explicit TSettingValueNegated(const TSharedPtr<TSettingValue<T>>& InInner)
-			: Inner(InInner)
-		{
-		}
+		explicit TSettingValueNegated(const TSharedPtr<TSettingValue<T>>& InInner);
 
-		virtual bool IsConstant() override;
-		virtual void SetConstant(T InConstant) override;
-
-		virtual T Read(const int32 Index) override;
 		virtual void ReadScope(const int32 Start, TArrayView<T> OutResults) override;
 
 		virtual T Min() override;
 		virtual T Max() override;
-		virtual uint32 ReadValueHash(const int32 Index) override;
 
 	protected:
 		virtual bool InitInternal(const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped, const bool bCaptureMinMax) override;
+		virtual T ReadInternal(const int32 Index) override;
+
+		// Mirrors the wrapped value's constant state, negated, into this value's own fast path.
+		void SyncConstant();
 	};
 
 	/**
@@ -270,12 +257,6 @@ namespace PCGExDetails
 	template <typename T>
 	TSharedPtr<TSettingValue<T>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const T InConstant);
 
-	template <typename T>
-	TSharedPtr<TSettingValue<T>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FName InName, const T InConstant);
-
-	template <typename T>
-	TSharedPtr<TSettingValue<T>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const T InConstant);
-
 	/** Assigns InValue to OutValue, ANDs bAllowConsumable into its bRegisterConsumable (factory stage of the veto chain), then inits it. OutValue is assigned even when Init fails. */
 	template <typename T>
 	[[nodiscard]] bool InitSettingValueGated(TSharedPtr<TSettingValue<T>>& OutValue, TSharedPtr<TSettingValue<T>> InValue, const bool bAllowConsumable, const TSharedPtr<PCGExData::FFacade>& InDataFacade, const bool bSupportScoped = true, const bool bCaptureMinMax = false)
@@ -297,9 +278,7 @@ extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const _TYPE In
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant); \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
 extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
-extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant); \
-extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FName InName, const _TYPE InConstant); \
-extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(const TSharedPtr<PCGExData::FPointIO> InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant);
+extern template TSharedPtr<TSettingValue<_TYPE>> MakeSettingValue(FPCGExContext* InContext, const UPCGData* InData, const EPCGExInputValueType InInput, const FPCGAttributePropertyInputSelector& InSelector, const _TYPE InConstant);
 
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 

@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigTiling : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigTiling()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "16"))
 	int32 Octaves = 1;
 
@@ -52,8 +47,6 @@ public:
 	int32 PeriodX = 4;
 	int32 PeriodY = 4;
 	int32 PeriodZ = 4;
-
-	virtual ~FPCGExNoiseTiling() override = default;
 
 	// Override for special fractal handling with tiling
 	virtual double GetDouble(const FVector& Position) const override;

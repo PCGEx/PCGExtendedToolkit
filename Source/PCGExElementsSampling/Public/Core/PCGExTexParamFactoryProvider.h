@@ -48,7 +48,6 @@ enum class EPCGExTexChannelsFlags : uint8
 };
 
 ENUM_CLASS_FLAGS(EPCGExTexChannelsFlags)
-using EPCGExTexChannelsFlagsBitmask = TEnumAsByte<EPCGExTexChannelsFlags>;
 
 namespace PCGExTexture
 {
@@ -57,8 +56,6 @@ namespace PCGExTexture
 
 	const FName SourceTextureDataLabel = TEXT("TextureData");
 	const FName OutputTextureDataLabel = TEXT("TextureData");
-
-	const FName OutputTexTagLabel = TEXT("TexTag");
 
 	const FString TexTag_Str = TEXT("TEX:");
 }

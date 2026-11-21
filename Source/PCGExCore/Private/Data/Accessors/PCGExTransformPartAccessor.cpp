@@ -7,7 +7,7 @@
 
 namespace PCGExData
 {
-	namespace
+	namespace PCGExTransformPartAccessor
 	{
 		// Mirrors STRMAP_TRANSFORM_FIELD from PCGExSubSelection.h.
 		struct FComponentEntry
@@ -46,7 +46,7 @@ namespace PCGExData
 
 	bool FTransformPartAccessor::MatchesToken(const FString& UpperToken, FAccessorParseResult& OutParsed) const
 	{
-		if (const FComponentEntry* Entry = GetComponentTable().Find(UpperToken))
+		if (const PCGExTransformPartAccessor::FComponentEntry* Entry = PCGExTransformPartAccessor::GetComponentTable().Find(UpperToken))
 		{
 			OutParsed.Component = Entry->Component;
 			OutParsed.SourceTypeHint = Entry->Hint;
@@ -62,7 +62,7 @@ namespace PCGExData
 		// This accessor only meaningfully applies to FTransform sources.
 		// The chain may include this step on a non-Transform source (the
 		// projection path tolerates it; the compiler will drop it).
-		OutType = ComponentToOutputType(Parsed.Component);
+		OutType = PCGExTransformPartAccessor::ComponentToOutputType(Parsed.Component);
 		return InType == EPCGMetadataTypes::Transform;
 	}
 
@@ -143,7 +143,7 @@ namespace PCGExData
 	// Typed fn pointers for compiled-chain hot path
 	//
 
-	namespace
+	namespace PCGExTransformPartAccessor
 	{
 		void TransformGetStep(const void* Parent, void* ChildOut, const FAccessorParseResult& Parsed)
 		{
@@ -182,12 +182,12 @@ namespace PCGExData
 
 	FStepGetFn FTransformPartAccessor::GetStepGetFn(EPCGMetadataTypes InType) const
 	{
-		return InType == EPCGMetadataTypes::Transform ? &TransformGetStep : nullptr;
+		return InType == EPCGMetadataTypes::Transform ? &PCGExTransformPartAccessor::TransformGetStep : nullptr;
 	}
 
 	FStepSetFn FTransformPartAccessor::GetStepSetFn(EPCGMetadataTypes InType) const
 	{
-		return InType == EPCGMetadataTypes::Transform ? &TransformSetStep : nullptr;
+		return InType == EPCGMetadataTypes::Transform ? &PCGExTransformPartAccessor::TransformSetStep : nullptr;
 	}
 
 	ISubAccessor::ECompileAction FTransformPartAccessor::ClassifyForInType(

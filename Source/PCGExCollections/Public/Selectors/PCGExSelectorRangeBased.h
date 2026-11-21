@@ -114,7 +114,6 @@ class FPCGExRangeBasedSharedData : public PCGExCollections::FSelectorSharedData
 {
 public:
 	int32 AxisCount = 0;
-	int32 EntryCount = 0;
 
 	// Entry-major flat: EntryMins[E * AxisCount + A], EntryMaxs[E * AxisCount + A].
 	TArray<double> EntryMins;

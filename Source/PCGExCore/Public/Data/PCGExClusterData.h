@@ -57,8 +57,6 @@ class PCGEXCORE_API UPCGExClusterNodesData : public UPCGExClusterData
 {
 	GENERATED_BODY()
 
-	mutable FRWLock BoundClustersLock;
-
 protected:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoVtx)
 

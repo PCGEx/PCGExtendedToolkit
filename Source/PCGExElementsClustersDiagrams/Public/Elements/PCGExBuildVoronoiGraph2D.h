@@ -185,7 +185,6 @@ namespace PCGExBuildVoronoiGraph2D
 		TArray<int8> WithinBounds;
 		TBitArray<> IsVtxValid;
 
-		TSharedPtr<TArray<int32>> OutputIndices;
 		TSharedPtr<PCGExMath::Geo::TVoronoi2> Voronoi;
 		TSharedPtr<PCGExGraphs::FGraphBuilder> GraphBuilder;
 
@@ -200,10 +199,7 @@ namespace PCGExBuildVoronoiGraph2D
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
-		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
 
 		virtual void CompleteWork() override;
 		virtual void Write() override;

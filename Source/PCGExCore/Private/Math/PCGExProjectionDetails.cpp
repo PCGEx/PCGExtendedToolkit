@@ -112,6 +112,8 @@ bool FPCGExGeo2DProjectionDetails::Init(const UPCGData* InData)
 	return true;
 }
 
+#undef PCGEX_SANITIZE_PROJECTION_METHOD
+
 void FPCGExGeo2DProjectionDetails::Init(const PCGExMath::FBestFitPlane& InFitPlane)
 {
 	InitInternal(InFitPlane.Normal());
@@ -147,8 +149,6 @@ void FPCGExGeo2DProjectionDetails::ProjectFlat(const TSharedPtr<PCGExData::FFaca
 }
 
 template PCGEXCORE_API void FPCGExGeo2DProjectionDetails::ProjectFlat<FVector2D>(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<FVector2D>& OutPositions) const;
-template PCGEXCORE_API void FPCGExGeo2DProjectionDetails::ProjectFlat<FVector>(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<FVector>& OutPositions) const;
-template PCGEXCORE_API void FPCGExGeo2DProjectionDetails::ProjectFlat<FVector4>(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<FVector4>& OutPositions) const;
 
 void FPCGExGeo2DProjectionDetails::Project(const TArray<FVector>& InPositions, TArray<FVector>& OutPositions) const
 {
@@ -197,17 +197,6 @@ void FPCGExGeo2DProjectionDetails::Project(const TArrayView<FVector>& InPosition
 	PCGEX_PARALLEL_FOR(
 		InPositions.Num(),
 		const FVector PP = ProjectionQuat.UnrotateVector(InPositions[i]);
-		const int32 ii = i * 2;
-		OutPositions[ii] = PP.X;
-		OutPositions[ii+1] = PP.Y;
-		)
-}
-
-void FPCGExGeo2DProjectionDetails::Project(const TConstPCGValueRange<FTransform>& InTransforms, std::vector<double>& OutPositions) const
-{
-	PCGEX_PARALLEL_FOR(
-		InTransforms.Num(),
-		const FVector PP = ProjectionQuat.UnrotateVector(InTransforms[i].GetLocation());
 		const int32 ii = i * 2;
 		OutPositions[ii] = PP.X;
 		OutPositions[ii+1] = PP.Y;

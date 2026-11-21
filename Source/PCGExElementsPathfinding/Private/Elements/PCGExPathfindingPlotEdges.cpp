@@ -150,6 +150,11 @@ void FPCGExPathfindingPlotEdgesContext::BuildPath(const TSharedPtr<PCGExPathfind
 		return;
 	} // No path could be resolved
 
+	if (Settings->bOmitCompletePathOnFailedPlot && ValidPlotIndex != Query->SubQueries.Num())
+	{
+		return;
+	}
+
 	TArray<int32> IndicesBuffer;
 	IndicesBuffer.Reserve(MaxQueryNumPoints);
 
@@ -643,10 +648,10 @@ namespace PCGExPathfindingPlotEdges
 
 		VtxDataForwardHandler = Context->VtxDataForwarding.TryGetHandler(VtxDataFacade, PCGExData::EForwardDomain::Inherit);
 
-		if (PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
-			Context->bMatchForVtx && !Context->MainDataMatcher->PopulateIgnoreList(VtxDataFacade->Source->GetTaggedData(), MatchingScope, IgnoreList))
+		if (Context->bMatchForVtx)
 		{
-			bUnmatched = true;
+			PCGExMatching::FScope MatchingScope(Context->InitialMainPointsNum, true);
+			Context->MainDataMatcher->PopulateIgnoreList(VtxDataFacade->Source->GetTaggedData(), MatchingScope, IgnoreList);
 		}
 
 		TBatch<FProcessor>::Process();

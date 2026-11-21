@@ -130,8 +130,6 @@ namespace PCGExTopologyEdges
 		UVDetails = Settings->Topology.UVChannels;
 		UVDetails.Prepare(VtxDataFacade);
 
-		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
-
 		CellsConstraints = MakeShared<PCGExClusters::FCellConstraints>(Settings->Constraints);
 		CellsConstraints->Reserve(Cluster->Edges->Num());
 
@@ -189,7 +187,7 @@ namespace PCGExTopologyEdges
 			EdgeDataFacade->Source->Tags->DumpTo(MeshTags);
 			VtxDataFacade->Source->Tags->DumpTo(MeshTags);
 
-			Context->StageOutput(InternalMeshData, PCGExTopology::MeshOutputLabel, PCGExData::EStaging::Managed, MeshTags);
+			Context->StageOutput(InternalMeshData, PCGExTopology::Labels::OutputMeshLabel, PCGExData::EStaging::Managed, MeshTags);
 		}
 	}
 

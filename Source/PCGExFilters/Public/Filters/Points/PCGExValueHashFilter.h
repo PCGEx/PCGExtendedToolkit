@@ -36,10 +36,6 @@ struct FPCGExValueHashFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExValueHashFilterConfig()
-	{
-	}
-
 	/** How to process input sets */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExValueHashMode Mode = EPCGExValueHashMode::Merged;
@@ -113,10 +109,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FValueHashFilter() override
-		{
-		}
 	};
 }
 

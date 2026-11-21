@@ -10,7 +10,7 @@
 
 namespace PCGExData
 {
-	namespace
+	namespace PCGExContainerCountAccessor
 	{
 		// Hot-path step: read the container element count, write as double.
 		// Type-agnostic -- works for TArray, TSet, and TMap because all three
@@ -57,7 +57,7 @@ namespace PCGExData
 		(void)OutType;
 		check(Source != nullptr);
 		check(OutValue != nullptr);
-		ContainerCountStep(Source, OutValue, Parsed);
+		PCGExContainerCountAccessor::ContainerCountStep(Source, OutValue, Parsed);
 	}
 
 	FStepGetFn FContainerCountAccessor::GetStepGetFn(EPCGMetadataTypes InType) const
@@ -66,7 +66,7 @@ namespace PCGExData
 		// One fn pointer for all container/element types -- the hot path
 		// reads Num() from the container header, which is layout-compatible
 		// across TArray, TSet, and TMap.
-		return &ContainerCountStep;
+		return &PCGExContainerCountAccessor::ContainerCountStep;
 	}
 
 	ISubAccessor::ECompileAction FContainerCountAccessor::ClassifyForInType(

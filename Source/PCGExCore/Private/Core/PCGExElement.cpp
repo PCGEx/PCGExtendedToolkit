@@ -4,7 +4,6 @@
 #include "Core/PCGExElement.h"
 
 #include "PCGExCoreSettingsCache.h"
-#include "RHITransientResourceAllocator.h"
 #include "Core/PCGExContext.h"
 #include "Core/PCGExSettings.h"
 #include "Factories/PCGExInstancedFactory.h"

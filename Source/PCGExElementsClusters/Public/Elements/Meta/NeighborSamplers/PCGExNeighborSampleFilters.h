@@ -99,7 +99,6 @@ public:
 	TSharedPtr<PCGExClusterFilter::FManager> FilterManager;
 
 	virtual void PrepareForCluster(FPCGExContext* InContext, TSharedRef<PCGExClusters::FCluster> InCluster, TSharedRef<PCGExData::FFacade> InVtxDataFacade, TSharedRef<PCGExData::FFacade> InEdgeDataFacade) override;
-	virtual void PrepareNode(const PCGExClusters::FNode& TargetNode, const PCGExMT::FScope& Scope) const override;
 
 	virtual void SampleNeighborNode(const PCGExClusters::FNode& TargetNode, const PCGExGraphs::FLink Lk, const double Weight, const PCGExMT::FScope& Scope) override;
 	virtual void SampleNeighborEdge(const PCGExClusters::FNode& TargetNode, const PCGExGraphs::FLink Lk, const double Weight, const PCGExMT::FScope& Scope) override;

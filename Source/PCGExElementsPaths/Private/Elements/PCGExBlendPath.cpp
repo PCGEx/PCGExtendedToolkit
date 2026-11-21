@@ -35,12 +35,6 @@ void UPCGExBlendPathSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 }
 #endif
 
-UPCGExBlendPathSettings::UPCGExBlendPathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 TArray<FPCGPinProperties> UPCGExBlendPathSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
@@ -108,10 +102,6 @@ bool FPCGExBlendPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExBlendPath
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExBlendPath::Process);

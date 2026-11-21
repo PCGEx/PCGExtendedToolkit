@@ -63,7 +63,6 @@ TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryGabor::CreateOperationInt
 	NewOperation->Bandwidth = Config.Bandwidth;
 	NewOperation->ImpulsesPerCell = Config.ImpulsesPerCell;
 	NewOperation->KernelRadius = Config.KernelRadius;
-	NewOperation->Octaves = 1;
 
 	return NewOperation;
 }

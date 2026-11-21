@@ -118,6 +118,35 @@ bool FPCGExUberBranchElement::Boot(FPCGExContext* InContext) const
 	return true;
 }
 
+namespace PCGExUberBranch
+{
+	// Routes one input to the first branch whose filters pass, else to the default pin. Callable from parallel scopes.
+	void DispatchFacade(FPCGExUberBranchContext* Context, const UPCGExUberBranchSettings* Settings, const TSharedPtr<PCGExData::FFacade>& Facade)
+	{
+		bool bDistributed = false;
+		for (int i = 0; i < Context->Managers.Num(); i++)
+		{
+			const TSharedPtr<PCGExPointFilter::FManager> Manager = Context->Managers[i];
+			if (!Manager)
+			{
+				continue;
+			}
+			if (Manager->Test(Facade->Source, Context->MainPoints))
+			{
+				Facade->Source->OutputPin = Settings->OutputLabels[i];
+				FPlatformAtomics::InterlockedIncrement(&Context->Dispatch[i]);
+				bDistributed = true;
+				break;
+			}
+		}
+
+		if (!bDistributed)
+		{
+			Facade->Source->OutputPin = Settings->GetMainOutputPin();
+		}
+	}
+}
+
 bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExUberBranchElement::Execute);
@@ -138,29 +167,7 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 				PCGEX_SHARED_TCONTEXT_VOID(UberBranch, Handle)
 				PCGEX_SCOPE_LOOP(Index)
 				{
-					const TSharedPtr<PCGExData::FFacade>& Facade = SharedContext.Get()->Facades[Index];
-
-					bool bDistributed = false;
-					for (int i = 0; i < SharedContext.Get()->Managers.Num(); i++)
-					{
-						const TSharedPtr<PCGExPointFilter::FManager> Manager = SharedContext.Get()->Managers[i];
-						if (!Manager)
-						{
-							continue;
-						}
-						if (Manager->Test(Facade->Source, SharedContext.Get()->MainPoints))
-						{
-							Facade->Source->OutputPin = Settings->OutputLabels[i];
-							FPlatformAtomics::InterlockedIncrement(&SharedContext.Get()->Dispatch[i]);
-							bDistributed = true;
-							break;
-						}
-					}
-
-					if (!bDistributed)
-					{
-						Facade->Source->OutputPin = Settings->GetMainOutputPin();
-					}
+					PCGExUberBranch::DispatchFacade(SharedContext.Get(), Settings, SharedContext.Get()->Facades[Index]);
 				}
 			};
 
@@ -185,27 +192,7 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 	{
 		for (const TSharedPtr<PCGExData::FFacade>& Facade : Context->Facades)
 		{
-			bool bDistributed = false;
-			for (int i = 0; i < Context->Managers.Num(); i++)
-			{
-				const TSharedPtr<PCGExPointFilter::FManager> Manager = Context->Managers[i];
-				if (!Manager)
-				{
-					continue;
-				}
-				if (Manager->Test(Facade->Source, Context->MainPoints))
-				{
-					Facade->Source->OutputPin = Settings->OutputLabels[i];
-					Context->Dispatch[i]++;
-					bDistributed = true;
-					break;
-				}
-			}
-
-			if (!bDistributed)
-			{
-				Facade->Source->OutputPin = Settings->GetMainOutputPin();
-			}
+			PCGExUberBranch::DispatchFacade(Context, Settings, Facade);
 		}
 
 		for (int i = 0; i < Context->Managers.Num(); i++)

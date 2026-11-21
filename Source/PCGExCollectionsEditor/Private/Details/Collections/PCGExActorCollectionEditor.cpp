@@ -44,11 +44,6 @@ namespace PCGExActorCollectionEditor
 	}
 }
 
-FPCGExActorCollectionEditor::FPCGExActorCollectionEditor()
-	: FPCGExAssetCollectionEditor()
-{
-}
-
 void FPCGExActorCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)
 {
 	FPCGExAssetCollectionEditor::BuildAssetHeaderToolbar(ToolbarBuilder);

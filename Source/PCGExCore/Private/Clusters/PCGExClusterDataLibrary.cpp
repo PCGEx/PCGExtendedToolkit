@@ -11,10 +11,25 @@
 
 namespace PCGExClusters
 {
+	namespace PCGExClusterDataLibrary
+	{
+		const TMap<EProblem, FProblem> EProblemLogs = {
+			{EProblem::DoubleMarking, FProblem{false, FTEXT("Uh oh, a data is marked as both Vtx and Edges -- it will be ignored for safety.")}},
+			{EProblem::VtxTagButNoMeta, FProblem{false, FTEXT("A Vtx-tagged input has no metadata and will be discarded.")}},
+			{EProblem::EdgeTagButNoMeta, FProblem{false, FTEXT("An Edges-tagged input has no edge metadata and will be discarded.")}},
+			{EProblem::NoTags, FProblem{false, FTEXT("An input data is neither tagged Vtx or Edges and will be ignored.")}},
+			{EProblem::VtxDupes, FProblem{true, FTEXT("At least two Vtx inputs share the same PCGEx/Cluster tag. Only one will be processed.")}},
+			{EProblem::RoamingEdges, FProblem{true, FTEXT("Some input edges have no associated vtx.")}},
+			{EProblem::RoamingVtx, FProblem{true, FTEXT("Some input vtx have no associated edges.")}},
+			{EProblem::VtxWrongPin, FProblem{true, FTEXT("There are vtx in the edge pin. They will be ignored.")}},
+			{EProblem::EdgeWrongPin, FProblem{true, FTEXT("There are edges in the vtx pin. They will be ignored.")}}
+		};
+	}
+
 	FDataLibrary::FDataLibrary(const bool InDisableInvalidData)
 	{
 		bDisableInvalidData = InDisableInvalidData;
-		ProblemsTracker.Init(0, EProblemLogs.Num() + 1);
+		ProblemsTracker.Init(0, PCGExClusterDataLibrary::EProblemLogs.Num() + 1);
 		InputDictionary = MakeShared<PCGExData::FPointIOTaggedDictionary>(Labels::TagStr_PCGExCluster);
 	}
 
@@ -52,12 +67,6 @@ namespace PCGExClusters
 
 			if (MainIO->Tags->IsTagged(Labels::TagStr_PCGExEdges))
 			{
-				if (MainIO->Tags->IsTagged(Labels::TagStr_PCGExVtx))
-				{
-					Invalidate(MainIO, EProblem::DoubleMarking);
-					continue;
-				}
-
 				if (!Helpers::IsPointDataEdgeReady(MainIO->GetIn()->Metadata))
 				{
 					Invalidate(MainIO, EProblem::EdgeTagButNoMeta);
@@ -106,12 +115,6 @@ namespace PCGExClusters
 
 			if (VtxIO->Tags->IsTagged(Labels::TagStr_PCGExEdges))
 			{
-				if (VtxIO->Tags->IsTagged(Labels::TagStr_PCGExVtx))
-				{
-					Invalidate(VtxIO, EProblem::DoubleMarking);
-					continue;
-				}
-
 				Invalidate(VtxIO, EProblem::EdgeWrongPin);
 				continue;
 			}
@@ -142,12 +145,6 @@ namespace PCGExClusters
 
 			if (MainIO->Tags->IsTagged(Labels::TagStr_PCGExVtx))
 			{
-				if (MainIO->Tags->IsTagged(Labels::TagStr_PCGExEdges))
-				{
-					Invalidate(MainIO, EProblem::DoubleMarking);
-					continue;
-				}
-
 				Invalidate(MainIO, EProblem::VtxWrongPin);
 				continue;
 			}
@@ -191,7 +188,7 @@ namespace PCGExClusters
 				continue;
 			}
 
-			const FProblem& Problem = EProblemLogs[static_cast<EProblem>(i)];
+			const FProblem& Problem = PCGExClusterDataLibrary::EProblemLogs[static_cast<EProblem>(i)];
 			if ((bSkipTrivial && !Problem.Get<0>()) || (bSkipImportant && Problem.Get<0>()))
 			{
 				continue;

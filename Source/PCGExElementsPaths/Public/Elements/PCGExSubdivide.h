@@ -152,8 +152,6 @@ namespace PCGExSubdivide
 		FPCGExManhattanDetails ManhattanDetails;
 		TArray<TSharedPtr<TArray<FVector>>> ManhattanPoints;
 
-		double ConstantAmount = 0;
-
 		bool bUseCount = false;
 
 	public:

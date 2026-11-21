@@ -143,20 +143,12 @@ void UPCGExBitmaskCollection::BuildCache()
 	const int32 NumEntries = Entries.Num();
 	Cache->Bitmasks.Reserve(NumEntries);
 	Cache->BitmaskMap.Reserve(NumEntries);
-	Cache->Identifiers.Reserve(NumEntries);
 
-	TSet<FName> UniqueIdentifiers;
 	for (FPCGExBitmaskCollectionEntry& Entry : Entries)
 	{
 		Entry.RebuildCache();
 		PCGExBitmask::FCachedRef EntryCache = Entry.CachedBitmask;
-		bool bAlreadyInSet = false;
-		UniqueIdentifiers.Add(Entry.Identifier, &bAlreadyInSet);
 		Cache->BitmaskMap.Add(Entry.Identifier, Cache->Bitmasks.Add(EntryCache));
-		if (!bAlreadyInSet)
-		{
-			Cache->Identifiers.Add(Entry.Identifier.ToString());
-		}
 	}
 }
 

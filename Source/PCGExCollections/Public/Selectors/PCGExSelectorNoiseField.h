@@ -32,17 +32,6 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorNoiseFieldConfig
 };
 
 /**
- * Collection-derived state for Noise Field: cumulative entry weights (same shape as
- * Interleaved's), built once per (Factory, Category).
- */
-class FPCGExNoiseFieldSharedData : public PCGExCollections::FSelectorSharedData
-{
-public:
-	TArray<double> Cumulative; // parallel to Target->Entries
-	double TotalWeight = 0.0;
-};
-
-/**
  * Spatially-coherent pick: samples the connected Noise3D stack at the point's world position
  * and maps the [0, 1] value through cumulative weight bands. Nearby points read similar noise
  * values and therefore pick the same entries -- organic patches without any attribute pre-pass.
@@ -50,7 +39,7 @@ public:
  * DETERMINISTIC BY POSITION: the per-point Seed is intentionally ignored (spatial coherence is
  * the point). Noise seeds/transforms on the connected Noise3D definitions drive variation.
  */
-class PCGEXCOLLECTIONS_API FPCGExEntryNoiseFieldPickerOp : public PCGExCollections::Selectors::TTypedSharedPickerOpBase<FPCGExNoiseFieldSharedData>
+class PCGEXCOLLECTIONS_API FPCGExEntryNoiseFieldPickerOp : public PCGExCollections::Selectors::TTypedSharedPickerOpBase<PCGExCollections::Selectors::FCumulativeWeightsSharedData>
 {
 public:
 	// Bound by the factory before PrepareForData. Thread-safe after init (see FNoiseGenerator).

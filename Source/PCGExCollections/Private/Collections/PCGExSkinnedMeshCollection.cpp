@@ -23,10 +23,8 @@ PCGEX_REGISTER_COLLECTION_TYPE(SkinnedMesh, UPCGExSkinnedMeshCollection, FPCGExS
 
 namespace PCGExSkinnedMeshCollection
 {
-	void FMicroCache::ProcessMaterialOverrides(const TArray<FPCGExMaterialOverrideSingleEntry>& Overrides, int32 InSlotIndex)
+	void FMicroCache::ProcessMaterialOverrides(const TArray<FPCGExMaterialOverrideSingleEntry>& Overrides)
 	{
-		HighestMaterialIndex = InSlotIndex;
-
 		TArray<int32> WeightArray;
 		WeightArray.SetNumUninitialized(Overrides.Num());
 		for (int32 i = 0; i < Overrides.Num(); i++)
@@ -39,14 +37,11 @@ namespace PCGExSkinnedMeshCollection
 
 	void FMicroCache::ProcessMaterialOverrides(const TArray<FPCGExMaterialOverrideCollection>& Overrides)
 	{
-		HighestMaterialIndex = -1;
-
 		TArray<int32> WeightArray;
 		WeightArray.SetNumUninitialized(Overrides.Num());
 		for (int32 i = 0; i < Overrides.Num(); i++)
 		{
 			WeightArray[i] = Overrides[i].Weight;
-			HighestMaterialIndex = FMath::Max(HighestMaterialIndex, Overrides[i].GetHighestIndex());
 		}
 
 		BuildFromWeights(WeightArray);
@@ -281,7 +276,7 @@ void FPCGExSkinnedMeshCollectionEntry::BuildMicroCache()
 	case EPCGExMaterialVariantsMode::None:
 		break;
 	case EPCGExMaterialVariantsMode::Single:
-		NewCache->ProcessMaterialOverrides(MaterialOverrideVariants, PCGExMeshCollection::ResolveSingleSlot(SlotIndex));
+		NewCache->ProcessMaterialOverrides(MaterialOverrideVariants);
 		break;
 	case EPCGExMaterialVariantsMode::Multi:
 		NewCache->ProcessMaterialOverrides(MaterialOverrideVariantsList);

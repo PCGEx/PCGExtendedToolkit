@@ -11,10 +11,6 @@ class FPCGExElementsClustersModule final : public IPCGExLegacyModuleInterface
 	PCGEX_MODULE_BODY
 
 public:
-	/** IModuleInterface implementation */
-	virtual void StartupModule() override;
-	virtual void ShutdownModule() override;
-
 #if WITH_EDITOR
 	virtual void RegisterToEditor(const TSharedPtr<FSlateStyleSet>& InStyle) override;
 #endif

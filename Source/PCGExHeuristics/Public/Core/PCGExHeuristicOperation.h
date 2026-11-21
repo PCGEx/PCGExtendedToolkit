@@ -72,12 +72,9 @@ public:
 		return UVWGoal;
 	}
 
-	const PCGExClusters::FNode* GetRoamingSeed() const;
-	const PCGExClusters::FNode* GetRoamingGoal() const;
-
 protected:
 	TSharedPtr<const PCGExClusters::FCluster> Cluster;
 	TArray<double> LocalWeightMultiplier;
 
-	virtual double GetScoreInternal(const double InTime) const;
+	double GetScoreInternal(const double InTime) const;
 };

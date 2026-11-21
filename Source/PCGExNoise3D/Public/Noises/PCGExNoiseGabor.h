@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigGabor : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigGabor()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Direction of the gabor kernel (will be normalized) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FVector Direction = FVector(1, 0, 0);
@@ -48,8 +43,6 @@ public:
 	double Bandwidth = 1.0;
 	int32 ImpulsesPerCell = 8;
 	double KernelRadius = 1.5;
-
-	virtual ~FPCGExNoiseGabor() override = default;
 
 	virtual void PostInitDerived() override;
 

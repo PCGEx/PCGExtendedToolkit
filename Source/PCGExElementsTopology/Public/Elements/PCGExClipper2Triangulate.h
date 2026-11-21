@@ -67,10 +67,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mesh")
 	FPCGExTopologyDetails Topology;
 
-	/** Suppress warnings about bad/duplicate vertices */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta = (PCG_Overridable))
-	bool bQuietBadVerticesWarning = false;
-
 	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 
 	virtual bool SupportOpenMainPaths() const override

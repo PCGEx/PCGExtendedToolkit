@@ -89,7 +89,6 @@ public:
 protected:
 	FPCGExVectorHashComparisonDetails HashComparisonDetails;
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> WindowSize;
-	TSharedPtr<PCGExDetails::TSettingValue<double>> DistanceLimit;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
@@ -116,7 +115,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsKeepDirection, "Fill Control : Keep Direction", "Stop fill after a certain number of vtx have been captured.", FName(GetDisplayName()))
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsKeepDirection, "Fill Control : Keep Direction", "Only let the fill advance in the direction it has been travelling, averaged over a window of previous steps.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
 

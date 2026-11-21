@@ -8,7 +8,7 @@
 
 namespace PCGExSpatial::NarrowPhase
 {
-	namespace
+	namespace PCGExNarrowPhase
 	{
 		/**
 		 * Single dispatch slot. For an entry at Matrix[StoredTag][CandidateTag]:
@@ -86,7 +86,7 @@ namespace PCGExSpatial::NarrowPhase
 			return InvalidKindTag;
 		}
 
-		FRegistryState& S = State();
+		PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 		if (const FShapeKindTag* Existing = S.StructToTag.Find(Struct))
 		{
 			return *Existing;
@@ -94,7 +94,7 @@ namespace PCGExSpatial::NarrowPhase
 
 		const FShapeKindTag Tag = S.TagToStruct.Add(Struct);
 		S.StructToTag.Add(Struct, Tag);
-		EnsureMatrixSize(S.TagToStruct.Num());
+		PCGExNarrowPhase::EnsureMatrixSize(S.TagToStruct.Num());
 		return Tag;
 	}
 
@@ -104,7 +104,7 @@ namespace PCGExSpatial::NarrowPhase
 		{
 			return InvalidKindTag;
 		}
-		const FShapeKindTag* Found = State().StructToTag.Find(Struct);
+		const FShapeKindTag* Found = PCGExNarrowPhase::State().StructToTag.Find(Struct);
 		return Found ? *Found : InvalidKindTag;
 	}
 
@@ -118,8 +118,8 @@ namespace PCGExSpatial::NarrowPhase
 		const FShapeKindTag TagA = RegisterShapeKind(StructA);
 		const FShapeKindTag TagB = RegisterShapeKind(StructB);
 
-		FRegistryState& S = State();
-		FPairSlot& Slot = S.Matrix[TagA][TagB];
+		PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
+		PCGExNarrowPhase::FPairSlot& Slot = S.Matrix[TagA][TagB];
 
 		if (Slot.Overlap != nullptr || Slot.Penetration != nullptr)
 		{
@@ -137,7 +137,7 @@ namespace PCGExSpatial::NarrowPhase
 			// Mirror: a query coming in as (B, A) resolves to the same fns
 			// with the swap flag set, so the impl is always called with the
 			// arg order the registration specified.
-			FPairSlot& Mirror = S.Matrix[TagB][TagA];
+			PCGExNarrowPhase::FPairSlot& Mirror = S.Matrix[TagB][TagA];
 			ensureMsgf(Mirror.Overlap == nullptr,
 			           TEXT("PCGExSpatial::NarrowPhase: pair (%s, %s) is already registered in the reverse direction. "
 				           "Register only one orientation; lookups in the other direction resolve via arg swap."),
@@ -150,7 +150,7 @@ namespace PCGExSpatial::NarrowPhase
 
 	void UnregisterAll()
 	{
-		FRegistryState& S = State();
+		PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 		S.Matrix.Reset();
 		S.StructToTag.Reset();
 		S.TagToStruct.Reset();
@@ -177,7 +177,7 @@ namespace PCGExSpatial::NarrowPhase
 		}
 
 		const FShapeKindTag Tag = RegisterShapeKind(Struct);
-		FRegistryState& S = State();
+		PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 
 		if (S.QueryPointFns[Tag] != nullptr)
 		{
@@ -196,13 +196,13 @@ namespace PCGExSpatial::NarrowPhase
 		{
 			return false;
 		}
-		const FRegistryState& S = State();
+		const PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 		return S.QueryPointFns.IsValidIndex(Tag) && S.QueryPointFns[Tag] != nullptr;
 	}
 
 	float QueryPoint(FShapeKindTag StoredKind, const FVector& Point, const FPCGExFootprintShape& Stored)
 	{
-		const FRegistryState& S = State();
+		const PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 		check(StoredKind >= 0 && StoredKind < S.QueryPointFns.Num());
 
 		const FQueryPointFn Fn = S.QueryPointFns[StoredKind];
@@ -227,11 +227,11 @@ namespace PCGExSpatial::NarrowPhase
 		FShapeKindTag AKind, const FPCGExFootprintShape& A,
 		FShapeKindTag BKind, const FPCGExFootprintShape& B)
 	{
-		const FRegistryState& S = State();
+		const PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 		check(AKind >= 0 && AKind < S.Matrix.Num());
 		check(BKind >= 0 && BKind < S.Matrix.Num());
 
-		const FPairSlot& Slot = S.Matrix[AKind][BKind];
+		const PCGExNarrowPhase::FPairSlot& Slot = S.Matrix[AKind][BKind];
 		if (!Slot.Overlap)
 		{
 			return false;
@@ -243,11 +243,11 @@ namespace PCGExSpatial::NarrowPhase
 		FShapeKindTag AKind, const FPCGExFootprintShape& A,
 		FShapeKindTag BKind, const FPCGExFootprintShape& B)
 	{
-		const FRegistryState& S = State();
+		const PCGExNarrowPhase::FRegistryState& S = PCGExNarrowPhase::State();
 		check(AKind >= 0 && AKind < S.Matrix.Num());
 		check(BKind >= 0 && BKind < S.Matrix.Num());
 
-		const FPairSlot& Slot = S.Matrix[AKind][BKind];
+		const PCGExNarrowPhase::FPairSlot& Slot = S.Matrix[AKind][BKind];
 
 		if (Slot.Penetration)
 		{

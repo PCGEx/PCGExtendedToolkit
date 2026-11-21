@@ -82,21 +82,3 @@ void FPCGExEdgeRemoveOverlap::ProcessEdge(PCGExGraphs::FEdge& Edge)
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRemoveOverlap
-
-void UPCGExEdgeRemoveOverlap::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRemoveOverlap* TypedOther = Cast<UPCGExEdgeRemoveOverlap>(Other))
-	{
-		Keep = TypedOther->Keep;
-		Tolerance = TypedOther->Tolerance;
-		bUseMinAngle = TypedOther->bUseMinAngle;
-		MinAngle = TypedOther->MinAngle;
-		bUseMaxAngle = TypedOther->bUseMaxAngle;
-		MaxAngle = TypedOther->MaxAngle;
-	}
-}
-
-#pragma endregion

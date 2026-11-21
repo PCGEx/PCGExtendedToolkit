@@ -97,10 +97,6 @@ bool FPCGExConnectPointsElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExConnectPoints
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExConnectPoints::Process);

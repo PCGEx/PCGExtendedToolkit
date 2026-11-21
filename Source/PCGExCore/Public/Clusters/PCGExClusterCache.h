@@ -35,6 +35,9 @@ namespace PCGExClusters
 
 		/** Context hash for validation (e.g., projection settings hash). 0 = always valid. */
 		uint32 ContextHash = 0;
+
+		/** Derived from the node and edge arrays alone, never from vtx positions: a mirror sharing both arrays inherits it. */
+		bool bTopologyOnly = false;
 	};
 
 	/**
@@ -94,9 +97,6 @@ namespace PCGExClusters
 		void Unregister(FName Key);
 
 		IClusterCacheFactory* GetFactory(FName Key) const;
-		void GetPreBuildKeys(TArray<FName>& OutKeys) const;
-		void GetOpportunisticKeys(TArray<FName>& OutKeys) const;
-		void GetAllFactories(TArray<TSharedRef<IClusterCacheFactory>>& OutFactories) const;
 
 	private:
 		FClusterCacheRegistry() = default;

@@ -7,7 +7,7 @@
 
 namespace PCGExData
 {
-	namespace
+	namespace PCGExSwizzleAccessor
 	{
 		// Try to interpret a single character as a component index (0..3).
 		// Returns true on success.
@@ -197,7 +197,7 @@ namespace PCGExData
 		for (int32 i = 0; i < Len; ++i)
 		{
 			uint8 Index = 0;
-			if (!ComponentIndexFromChar(UpperToken[i], Index))
+			if (!PCGExSwizzleAccessor::ComponentIndexFromChar(UpperToken[i], Index))
 			{
 				return false;
 			}
@@ -271,34 +271,34 @@ namespace PCGExData
 		switch (InType)
 		{
 		case EPCGMetadataTypes::Vector2:
-			SwizzleStep<FVector2D>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStep<FVector2D>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Vector:
-			SwizzleStep<FVector>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStep<FVector>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Vector4:
-			SwizzleStep<FVector4>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStep<FVector4>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Quaternion:
-			SwizzleStep<FQuat>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStep<FQuat>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Rotator:
-			SwizzleStep<FRotator>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStep<FRotator>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Float:
-			SwizzleStepScalar<float>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStepScalar<float>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Double:
-			SwizzleStepScalar<double>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStepScalar<double>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Integer32:
-			SwizzleStepScalar<int32>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStepScalar<int32>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Integer64:
-			SwizzleStepScalar<int64>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStepScalar<int64>(Source, OutValue, Parsed);
 			break;
 		case EPCGMetadataTypes::Boolean:
-			SwizzleStepScalar<bool>(Source, OutValue, Parsed);
+			PCGExSwizzleAccessor::SwizzleStepScalar<bool>(Source, OutValue, Parsed);
 			break;
 		default:
 			// Unsupported source type: leave OutValue uninitialized. Chain
@@ -313,25 +313,25 @@ namespace PCGExData
 		switch (InType)
 		{
 		case EPCGMetadataTypes::Vector2:
-			return &SwizzleStep<FVector2D>;
+			return &PCGExSwizzleAccessor::SwizzleStep<FVector2D>;
 		case EPCGMetadataTypes::Vector:
-			return &SwizzleStep<FVector>;
+			return &PCGExSwizzleAccessor::SwizzleStep<FVector>;
 		case EPCGMetadataTypes::Vector4:
-			return &SwizzleStep<FVector4>;
+			return &PCGExSwizzleAccessor::SwizzleStep<FVector4>;
 		case EPCGMetadataTypes::Quaternion:
-			return &SwizzleStep<FQuat>;
+			return &PCGExSwizzleAccessor::SwizzleStep<FQuat>;
 		case EPCGMetadataTypes::Rotator:
-			return &SwizzleStep<FRotator>;
+			return &PCGExSwizzleAccessor::SwizzleStep<FRotator>;
 		case EPCGMetadataTypes::Float:
-			return &SwizzleStepScalar<float>;
+			return &PCGExSwizzleAccessor::SwizzleStepScalar<float>;
 		case EPCGMetadataTypes::Double:
-			return &SwizzleStepScalar<double>;
+			return &PCGExSwizzleAccessor::SwizzleStepScalar<double>;
 		case EPCGMetadataTypes::Integer32:
-			return &SwizzleStepScalar<int32>;
+			return &PCGExSwizzleAccessor::SwizzleStepScalar<int32>;
 		case EPCGMetadataTypes::Integer64:
-			return &SwizzleStepScalar<int64>;
+			return &PCGExSwizzleAccessor::SwizzleStepScalar<int64>;
 		case EPCGMetadataTypes::Boolean:
-			return &SwizzleStepScalar<bool>;
+			return &PCGExSwizzleAccessor::SwizzleStepScalar<bool>;
 		default:
 			return nullptr;
 		}

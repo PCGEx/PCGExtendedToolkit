@@ -198,7 +198,7 @@ namespace PCGExSampleSockets
 		PointDataFacade->Fetch(Scope);
 		FilterScope(Scope);
 
-		const TArray<PCGExValueHash>& KeysRef = Keys ? *Keys.Get() : TArray<PCGExValueHash>{};
+		const TConstArrayView<PCGExValueHash> KeysView = Keys ? TConstArrayView<PCGExValueHash>(*Keys) : TConstArrayView<PCGExValueHash>();
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -207,7 +207,7 @@ namespace PCGExSampleSockets
 				continue;
 			}
 
-			const TObjectPtr<UStaticMesh>* SM = Keys ? Context->StaticMeshLoader->GetAsset(KeysRef[Index]) : &Context->StaticMesh;
+			const TObjectPtr<UStaticMesh>* SM = Keys ? Context->StaticMeshLoader->GetAsset(KeysView[Index]) : &Context->StaticMesh;
 			if (!SM)
 			{
 				continue;

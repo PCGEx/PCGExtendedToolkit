@@ -698,58 +698,14 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 	int32 FPointIO::Gather(const TArrayView<int8> InMask, const bool bInvert) const
 	{
 		TArray<int32> Indices;
-		Indices.Reserve(InMask.Num());
-
-		if (bInvert)
-		{
-			for (int i = 0; i < InMask.Num(); i++)
-			{
-				if (!InMask[i])
-				{
-					Indices.Add(i);
-				}
-			}
-		}
-		else
-		{
-			for (int i = 0; i < InMask.Num(); i++)
-			{
-				if (InMask[i])
-				{
-					Indices.Add(i);
-				}
-			}
-		}
-
+		PCGExArrayHelpers::ArrayOfIndices(Indices, InMask, 0, bInvert);
 		return Gather(Indices);
 	}
 
 	int32 FPointIO::Gather(const TBitArray<>& InMask, const bool bInvert) const
 	{
 		TArray<int32> Indices;
-		Indices.Reserve(InMask.Num());
-
-		if (bInvert)
-		{
-			for (int i = 0; i < InMask.Num(); i++)
-			{
-				if (!InMask[i])
-				{
-					Indices.Add(i);
-				}
-			}
-		}
-		else
-		{
-			for (int i = 0; i < InMask.Num(); i++)
-			{
-				if (InMask[i])
-				{
-					Indices.Add(i);
-				}
-			}
-		}
-
+		PCGExArrayHelpers::ArrayOfIndices(Indices, InMask, 0, bInvert);
 		return Gather(Indices);
 	}
 
@@ -1042,10 +998,8 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 		Pairs.Reserve(Pairs.Max() + InIncreaseNum);
 	}
 
-	int32 FPointIOCollection::StageOutputs()
+	int32 FPointIOCollection::StageSortedPairs(const TFunctionRef<bool(const FPointIO&, FPCGExContext*)> StageFn)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIOCollection::StageOutputs);
-
 		FWriteScopeLock WriteLock(PairsLock);
 
 		PCGEX_SHARED_CONTEXT_RET(ContextHandle, 0)
@@ -1058,57 +1012,41 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 		{
 			if (IO)
 			{
-				NumStaged += IO->StageOutput(Context);
+				NumStaged += StageFn(*IO, Context);
 			}
 		}
 
 		return NumStaged;
+	}
+
+	int32 FPointIOCollection::StageOutputs()
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIOCollection::StageOutputs);
+
+		return StageSortedPairs([](const FPointIO& IO, FPCGExContext* Context)
+		{
+			return IO.StageOutput(Context);
+		});
 	}
 
 	int32 FPointIOCollection::StageOutputs(const int32 MinPointCount, const int32 MaxPointCount)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIOCollection::StageOutputsMinMax);
 
-		FWriteScopeLock WriteLock(PairsLock);
-
-		PCGEX_SHARED_CONTEXT_RET(ContextHandle, 0)
-		FPCGExContext* Context = SharedContext.Get();
-
-		Sort();
-
-		int32 NumStaged = 0;
-		for (const TSharedPtr<FPointIO>& IO : Pairs)
+		return StageSortedPairs([MinPointCount, MaxPointCount](const FPointIO& IO, FPCGExContext* Context)
 		{
-			if (IO)
-			{
-				NumStaged += IO->StageOutput(Context, MinPointCount, MaxPointCount);
-			}
-		}
-
-		return NumStaged;
+			return IO.StageOutput(Context, MinPointCount, MaxPointCount);
+		});
 	}
 
 	int32 FPointIOCollection::StageAnyOutputs()
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FPointIOCollection::StageOutputsAny);
 
-		FWriteScopeLock WriteLock(PairsLock);
-
-		PCGEX_SHARED_CONTEXT_RET(ContextHandle, 0)
-		FPCGExContext* Context = SharedContext.Get();
-
-		Sort();
-
-		int32 NumStaged = 0;
-		for (const TSharedPtr<FPointIO>& IO : Pairs)
+		return StageSortedPairs([](const FPointIO& IO, FPCGExContext* Context)
 		{
-			if (IO)
-			{
-				NumStaged += IO->StageAnyOutput(Context);
-			}
-		}
-
-		return NumStaged;
+			return IO.StageAnyOutput(Context);
+		});
 	}
 
 	void FPointIOCollection::Sort()
@@ -1391,17 +1329,6 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 		}
 
 		return PointData;
-	}
-
-	UPCGBasePointData* PCGExPointIO::GetMutablePointData(const FPCGContext* Context, const FPCGTaggedData& Source)
-	{
-		const UPCGBasePointData* PointData = GetPointData(Context, Source);
-		if (!PointData)
-		{
-			return nullptr;
-		}
-
-		return const_cast<UPCGBasePointData*>(PointData);
 	}
 
 	const UPCGBasePointData* PCGExPointIO::ToPointData(FPCGExContext* Context, const FPCGTaggedData& Source)

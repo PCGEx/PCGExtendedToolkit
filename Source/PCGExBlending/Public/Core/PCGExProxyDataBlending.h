@@ -25,11 +25,6 @@ namespace PCGEx
 	class FIndexLookup;
 }
 
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 namespace PCGExData
 {
 	enum class EIOSide : uint8;
@@ -223,6 +218,8 @@ namespace PCGExBlending
 	public:
 		virtual ~FProxyDataBlender() = default;
 
+		// UnderlyingType, A, C and Operation feed state cached by ResolveCachedState(): only the factories and
+		// InitFromParam assign them.
 		EPCGMetadataTypes UnderlyingType = EPCGMetadataTypes::Unknown;
 
 		// Buffer proxies
@@ -243,17 +240,12 @@ namespace PCGExBlending
 		void Blend(const int32 SourceIndexA, const int32 SourceIndexB, const int32 TargetIndex, const double Weight) const;
 
 		// 1:1 Range blending
-		void BlendScope(const PCGExMT::FScope& Scope, const double Weight) const;
 		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const double> Weights) const;
-		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, const double Weight) const;
 		void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, TArrayView<const double> Weights) const;
 
 		PCGEx::FOpStats BeginMultiBlend(const int32 TargetIndex);
 		void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double Weight, PCGEx::FOpStats& Tracker);
 		void EndMultiBlend(const int32 TargetIndex, PCGEx::FOpStats& Tracker);
-
-		// Division helper
-		void Div(const int32 TargetIndex, const double Divider);
 
 		TSharedPtr<PCGExData::IBuffer> GetOutputBuffer() const;
 
@@ -278,26 +270,30 @@ namespace PCGExBlending
 		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(FPCGExContext*, EPCGExABBlendingType, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, bool);
 		friend PCGEXBLENDING_API TSharedPtr<FProxyDataBlender> CreateProxyBlender(FPCGExContext*, EPCGExABBlendingType, const PCGExData::FProxyDescriptor&, const PCGExData::FProxyDescriptor&, bool);
 
-		// Cached type info
-		bool bNeedsLifecycleManagement = false;
-
 		// Cached value size/alignment for working buffers (from Operation)
 		int32 ValueSize = 0;
 		int32 ValueAlignment = 1;
 
+		// Scratch recipe read by MakeScopedValue().
+		const FProperty* ScratchProperty = nullptr; // A's backing property; lives as long as A's buffer
+		bool bSizedScratch = false;                 // UnderlyingType has no fixed size: ValueSize / ValueAlignment apply
+
+		// The op finalizes nothing and C is a plain buffer slot: EndMultiBlend would rewrite C with its own value.
+		bool bEndMultiIsNoop = false;
+
+		// Must run after any change to A, C, Operation, UnderlyingType, ValueSize or ValueAlignment.
+		void ResolveCachedState();
+
 		// Scratch value in the WORKING type (UnderlyingType), which is what proxy Get/Set and Operation use.
-		// Delegate to the source buffer only when it is property-backed (property-sized, container-aware);
+		// Property-initialized only when A's buffer is property-backed (property-sized, container-aware);
 		// a typed TBuffer<T> would yield the REAL type and its destructor would run over working-type bytes.
 		FORCEINLINE PCGExTypes::FScopedTypedValue MakeScopedValue() const
 		{
-			if (A)
+			if (ScratchProperty)
 			{
-				if (TSharedPtr<PCGExData::IBuffer> Buf = A->GetBuffer(); Buf && Buf->GetSourceProperty())
-				{
-					return Buf->MakeScopedValue();
-				}
+				return PCGExTypes::FScopedTypedValue(ScratchProperty);
 			}
-			if (ValueSize > 0 && PCGExTypes::FScopedTypedValue::GetTypeSize(UnderlyingType) == 0)
+			if (bSizedScratch)
 			{
 				return PCGExTypes::FScopedTypedValue(UnderlyingType, ValueSize, ValueAlignment);
 			}

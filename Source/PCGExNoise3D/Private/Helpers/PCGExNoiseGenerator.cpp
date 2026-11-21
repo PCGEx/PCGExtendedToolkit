@@ -22,7 +22,6 @@ namespace PCGExNoise3D
 		const int32 Num = Factories.Num();
 		Operations.Reserve(Num);
 		OperationsPtr.Reserve(Num);
-		Weights.Reserve(Num);
 		BlendModes.Reserve(Num);
 		BlendFactors.Reserve(Num);
 		TotalWeight = 0.0;
@@ -40,7 +39,6 @@ namespace PCGExNoise3D
 
 			Operations.Add(Operation);
 			OperationsPtr.Add(Operation.Get());
-			Weights.Add(Weight);
 			BlendModes.Add(Operation->BlendMode);
 
 			// Precompute blend factor: this operation's weight relative to accumulated total
@@ -344,24 +342,6 @@ namespace PCGExNoise3D
 		return Result;
 	}
 
-	FVector2D FNoiseGenerator::GetVector2D(const FVector& Position) const
-	{
-		if (Operations.IsEmpty())
-		{
-			return FVector2D::ZeroVector;
-		}
-
-		FVector2D Result = OperationsPtr[0]->GetVector2D(Position);
-
-		for (int32 i = 1; i < Operations.Num(); ++i)
-		{
-			const FVector2D Value = OperationsPtr[i]->GetVector2D(Position);
-			Result = BlendSingle(BlendModes[i], Result, Value, BlendFactors[i]);
-		}
-
-		return Result;
-	}
-
 	FVector FNoiseGenerator::GetVector(const FVector& Position) const
 	{
 		if (Operations.IsEmpty())
@@ -374,24 +354,6 @@ namespace PCGExNoise3D
 		for (int32 i = 1; i < Operations.Num(); ++i)
 		{
 			const FVector Value = OperationsPtr[i]->GetVector(Position);
-			Result = BlendSingle(BlendModes[i], Result, Value, BlendFactors[i]);
-		}
-
-		return Result;
-	}
-
-	FVector4 FNoiseGenerator::GetVector4(const FVector& Position) const
-	{
-		if (Operations.IsEmpty())
-		{
-			return FVector4::Zero();
-		}
-
-		FVector4 Result = OperationsPtr[0]->GetVector4(Position);
-
-		for (int32 i = 1; i < Operations.Num(); ++i)
-		{
-			const FVector4 Value = OperationsPtr[i]->GetVector4(Position);
 			Result = BlendSingle(BlendModes[i], Result, Value, BlendFactors[i]);
 		}
 
@@ -437,36 +399,6 @@ namespace PCGExNoise3D
 		GenerateImpl<ValueType>(Positions, OutResults, Scratch);
 	}
 
-	template <typename ValueType>
-	void FNoiseGenerator::GenerateParallelImpl(const TArrayView<const FVector> Positions, TArrayView<ValueType> OutResults, const int32 MinBatchSize) const
-	{
-		check(Positions.Num() == OutResults.Num());
-
-		const int32 Count = Positions.Num();
-		if (Count < MinBatchSize * 2 || Operations.IsEmpty())
-		{
-			GenerateTyped(Positions, OutResults);
-			return;
-		}
-
-		// Single scratch allocation sliced per scope so every worker runs the batch path
-		TArray<ValueType> Scratch;
-		ValueType* ScratchData = nullptr;
-		if (Operations.Num() > 1)
-		{
-			Scratch.SetNumUninitialized(Count);
-			ScratchData = Scratch.GetData();
-		}
-
-		PCGExMT::ParallelOrSequentialScoped(Count, [&](const PCGExMT::FScope& Scope)
-		{
-			GenerateImpl(
-				Positions.Slice(Scope.Start, Scope.Count),
-				OutResults.Slice(Scope.Start, Scope.Count),
-				ScratchData ? TArrayView<ValueType>(ScratchData + Scope.Start, Scope.Count) : TArrayView<ValueType>());
-		}, MinBatchSize * 2);
-	}
-
 	void FNoiseGenerator::Generate(const TArrayView<const FVector> Positions, TArrayView<double> OutResults) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FNoiseGenerator::GenerateDouble);
@@ -489,30 +421,6 @@ namespace PCGExNoise3D
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(FNoiseGenerator::GenerateVector4);
 		GenerateTyped<FVector4>(Positions, OutResults);
-	}
-
-	//
-	// Parallel batch generation
-	//
-
-	void FNoiseGenerator::GenerateParallel(const TArrayView<const FVector> Positions, TArrayView<double> OutResults, const int32 MinBatchSize) const
-	{
-		GenerateParallelImpl<double>(Positions, OutResults, MinBatchSize);
-	}
-
-	void FNoiseGenerator::GenerateParallel(const TArrayView<const FVector> Positions, TArrayView<FVector2D> OutResults, const int32 MinBatchSize) const
-	{
-		GenerateParallelImpl<FVector2D>(Positions, OutResults, MinBatchSize);
-	}
-
-	void FNoiseGenerator::GenerateParallel(const TArrayView<const FVector> Positions, TArrayView<FVector> OutResults, const int32 MinBatchSize) const
-	{
-		GenerateParallelImpl<FVector>(Positions, OutResults, MinBatchSize);
-	}
-
-	void FNoiseGenerator::GenerateParallel(const TArrayView<const FVector> Positions, TArrayView<FVector4> OutResults, const int32 MinBatchSize) const
-	{
-		GenerateParallelImpl<FVector4>(Positions, OutResults, MinBatchSize);
 	}
 }
 

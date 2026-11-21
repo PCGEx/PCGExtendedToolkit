@@ -61,12 +61,3 @@ UPCGExFactoryData* UPCGExHeuristicsAzimuthProviderSettings::CreateFactory(FPCGEx
 	PCGEX_FORWARD_HEURISTIC_FACTORY
 	return Super::CreateFactory(InContext, NewFactory);
 }
-
-#if WITH_EDITOR
-FString UPCGExHeuristicsAzimuthProviderSettings::GetDisplayName() const
-{
-	return PCGExCommon::FlagInvertLabel(
-		GetDefaultNodeTitle().ToString().Replace(TEXT("PCGEx | Heuristics"), TEXT("HX")) + TEXT(" @ ") + FString::Printf(TEXT("%.3f"), (static_cast<int32>(1000 * Config.WeightFactor) / 1000.0)),
-		Config.bInvert);
-}
-#endif

@@ -6,7 +6,6 @@
 #include "IPropertyTypeCustomization.h"
 #include "Templates/Function.h"
 
-class IPropertyUtilities;
 struct FPCGExPropertySchema;
 
 /**
@@ -49,6 +48,5 @@ private:
 	/** The schema row's own handle, which the row keeps alive. Child handles are new objects per GetChildHandle call
 	 *  and die with the local that received them: nothing here may count on one. */
 	TWeakPtr<IPropertyHandle> PropertyHandlePtr;
-	TWeakPtr<IPropertyUtilities> WeakPropertyUtilities;
 	bool bIsReadOnly = false;
 };

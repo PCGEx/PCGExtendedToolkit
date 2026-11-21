@@ -52,21 +52,6 @@ namespace PCGExPaths
 		Dir = Length > SMALL_NUMBER ? Delta / Length : FVector::ZeroVector;
 	}
 
-	bool FPathEdge::ShareIndices(const FPathEdge& Other) const
-	{
-		return Start == Other.Start || Start == Other.End || End == Other.Start || End == Other.End;
-	}
-
-	bool FPathEdge::Connects(const FPathEdge& Other) const
-	{
-		return Start == Other.End || End == Other.Start;
-	}
-
-	bool FPathEdge::ShareIndices(const FPathEdge* Other) const
-	{
-		return Start == Other->Start || Start == Other->End || End == Other->Start || End == Other->End;
-	}
-
 	void IPathEdgeExtra::ProcessingDone(const FPath* Path)
 	{
 	}
@@ -96,12 +81,6 @@ namespace PCGExPaths
 		return PCGExMT::FScope(0, NumEdges, InLoopIndex);
 	}
 
-	int32 FPath::LoopPointIndex(const int32 Index) const
-	{
-		const int32 W = Index % NumPoints;
-		return W < 0 ? W + NumPoints : W;
-	}
-
 	int32 FPath::SafePointIndex(const int32 Index) const
 	{
 		if (bClosedLoop)
@@ -118,15 +97,6 @@ namespace PCGExPaths
 			return Edges[Index].Dir;
 		}
 		return Index == LastIndex ? Edges[Index - 1].Dir : Edges[Index].Dir;
-	}
-
-	FVector FPath::DirToNeighbor(const int32 Index, const int32 Offset) const
-	{
-		if (Offset < 0)
-		{
-			return DirToPrevPoint(Index);
-		}
-		return DirToNextPoint(Index);
 	}
 
 	PCGExMath::FClosestPosition FPath::FindClosestIntersection(const FPCGExPathIntersectionDetails& InDetails, const PCGExMath::FSegment& Segment) const
@@ -345,6 +315,8 @@ namespace PCGExPaths
 		const int32 Threshold = FMath::Max(1, FMath::RoundToInt(static_cast<double>(OtherNumPoints) * (1 - FMath::Clamp(Tolerance, 0, 1))));
 
 		int32 InsideCount = 0;
+		// Outside points left before the threshold is out of reach.
+		int32 OutsideBudget = OtherNumPoints - Threshold;
 
 		for (int i = 0; i < OtherNumPoints; i++)
 		{
@@ -355,6 +327,10 @@ namespace PCGExPaths
 				{
 					return true;
 				}
+			}
+			else if (--OutsideBudget < 0)
+			{
+				return false;
 			}
 		}
 
@@ -465,15 +441,6 @@ namespace PCGExPaths
 		{
 			CumulativeLength[i] = CumulativeLength[i - 1] + Data[i];
 		}
-	}
-
-#pragma endregion
-
-#pragma region FPathEdgeLength
-
-	void FPathEdgeLengthSquared::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
-	{
-		GetMutable(Edge.Start) = Edge.Length * Edge.Length;
 	}
 
 #pragma endregion
@@ -686,26 +653,6 @@ namespace PCGExPaths
 	void FPathEdgeHalfAngle::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
 	{
 		GetMutable(Edge.Start) = FMath::Acos(FVector::DotProduct(Path->DirToPrevPoint(Edge.Start), Edge.Dir));
-	}
-
-#pragma endregion
-
-#pragma region FPathEdgeAngle
-
-	void FPathEdgeFullAngle::ProcessFirstEdge(const FPath* Path, const FPathEdge& Edge)
-	{
-		if (Path->IsClosedLoop())
-		{
-			ProcessEdge(Path, Edge);
-			return;
-		}
-
-		GetMutable(Edge.Start) = 0;
-	}
-
-	void FPathEdgeFullAngle::ProcessEdge(const FPath* Path, const FPathEdge& Edge)
-	{
-		GetMutable(Edge.Start) = PCGExMath::GetAngle(Path->DirToPrevPoint(Edge.Start) * -1, Edge.Dir);
 	}
 
 #pragma endregion

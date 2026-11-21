@@ -18,7 +18,6 @@ namespace PCGExMT
 		const int32 Log2NumShards = FMath::FloorLog2(NumShards);
 		TStaticArray<TSet<uint64>, NumShards> Shards;
 		mutable TStaticArray<FRWLock, NumShards> Locks;
-		const uint32 ShardMask = NumShards - 1;
 
 	public:
 		TH64SetShards()
@@ -66,11 +65,6 @@ namespace PCGExMT
 
 		void Collapse(TSet<uint64>& OutMerged)
 		{
-			int32 Num = 0;
-			for (int32 i = 0; i < NumShards; i++)
-			{
-				Num += Shards[i].Num();
-			}
 			for (int32 i = 0; i < NumShards; i++)
 			{
 				OutMerged.Append(Shards[i]);
@@ -100,7 +94,6 @@ namespace PCGExMT
 		const int32 Log2NumShards = FMath::FloorLog2(NumShards);
 		TStaticArray<TMap<uint64, T>, NumShards> Shards;
 		mutable TStaticArray<FRWLock, NumShards> Locks;
-		const uint32 ShardMask = NumShards - 1;
 
 	public:
 		TH64MapShards()
@@ -202,11 +195,6 @@ namespace PCGExMT
 
 		void Collapse(TMap<uint64, T>& OutMerged)
 		{
-			int32 Num = 0;
-			for (int32 i = 0; i < NumShards; i++)
-			{
-				Num += Shards[i].Num();
-			}
 			for (int32 i = 0; i < NumShards; i++)
 			{
 				OutMerged.Append(Shards[i]);
@@ -455,8 +443,6 @@ namespace PCGExMT
 	{
 	public:
 		TArray<TSharedPtr<T>> Data;
-
-		using FFlattenFunc = std::function<T(const T&, const T&)>;
 
 		TScopedPtr(const TArray<FScope>& InScopes)
 		{

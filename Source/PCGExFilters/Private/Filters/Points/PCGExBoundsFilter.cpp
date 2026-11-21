@@ -86,112 +86,7 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 		return false;
 	}
 
-	Collections = &TypedFilterFactory->Collections;
-	if (!Collections || Collections->IsEmpty())
-	{
-		return false;
-	}
-
-	// Indices of bounds data eligible for this input; bIgnoreSelf drops bounds sourced from the tested data itself.
-	TArray<int32> EligibleIndices;
-	EligibleIndices.Reserve(TypedFilterFactory->BoundsDataFacades.Num());
-	const UPCGData* SelfData = TypedFilterFactory->Config.bIgnoreSelf ? InPointDataFacade->GetIn() : nullptr;
-	for (int32 i = 0; i < TypedFilterFactory->BoundsDataFacades.Num(); i++)
-	{
-		if (SelfData && TypedFilterFactory->BoundsDataFacades[i]->GetIn() == SelfData)
-		{
-			continue;
-		}
-		EligibleIndices.Add(i);
-	}
-
-	if (EligibleIndices.Num() != TypedFilterFactory->Collections.Num())
-	{
-		FilteredCollections.Reserve(EligibleIndices.Num());
-		for (const int32 i : EligibleIndices)
-		{
-			FilteredCollections.Add(TypedFilterFactory->Collections[i]);
-		}
-		Collections = &FilteredCollections;
-	}
-
-	const bool bMatchingEnabled = TypedFilterFactory->Config.DataMatching.IsEnabled()
-		&& !TypedFilterFactory->MatchRuleFactories.IsEmpty();
-
-	// See FDistanceFilter::Init for the full per-point vs static matching explanation.
-
-	if (bMatchingEnabled && !TypedFilterFactory->Config.bCheckAgainstDataBounds)
-	{
-		// Per-point: store matcher + candidates now, build per-point collections in Test()
-		InverseMatcher = MakeShared<PCGExMatching::FDataMatcher>();
-		InverseMatcher->SetDetails(&TypedFilterFactory->Config.DataMatching);
-
-		TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
-		SingleSource.Add(InPointDataFacade);
-		if (InverseMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
-		{
-			// Candidates stay positionally parallel to the (possibly self-filtered) Collections list.
-			BoundsCandidates.Reserve(EligibleIndices.Num());
-			for (const int32 i : EligibleIndices)
-			{
-				BoundsCandidates.Add(TypedFilterFactory->BoundsDataFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
-			}
-			bNoMatchResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
-		}
-		else
-		{
-			InverseMatcher.Reset();
-		}
-	}
-	else if (bMatchingEnabled)
-	{
-		// Static matching (collection-level with bCheckAgainstDataBounds)
-		auto StaticMatcher = MakeShared<PCGExMatching::FDataMatcher>();
-		StaticMatcher->SetDetails(&TypedFilterFactory->Config.DataMatching);
-
-		TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
-		SingleSource.Add(InPointDataFacade);
-		if (StaticMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
-		{
-			TArray<FPCGExTaggedData> StaticCandidates;
-			StaticCandidates.Reserve(EligibleIndices.Num());
-			for (const int32 i : EligibleIndices)
-			{
-				StaticCandidates.Add(TypedFilterFactory->BoundsDataFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
-			}
-
-			TSet<const UPCGData*> IgnoreList;
-			PCGExMatching::FScope MatchingScope(1, true);
-			if (!StaticMatcher->PopulateIgnoreListFromCandidates(StaticCandidates, MatchingScope, IgnoreList))
-			{
-				bCheckAgainstDataBounds = true;
-				bCollectionTestResult = (TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
-				return true;
-			}
-
-			if (!IgnoreList.IsEmpty())
-			{
-				FilteredCollections.Reset();
-				FilteredCollections.Reserve(EligibleIndices.Num());
-				for (const int32 i : EligibleIndices)
-				{
-					if (!IgnoreList.Contains(TypedFilterFactory->BoundsDataFacades[i]->GetIn()))
-					{
-						FilteredCollections.Add(TypedFilterFactory->Collections[i]);
-					}
-				}
-				Collections = &FilteredCollections;
-
-				if (Collections->IsEmpty())
-				{
-					bCollectionTestResult = TypedFilterFactory->Config.bInvert;
-					return true;
-				}
-			}
-		}
-	}
-
-	// Cache config for fast access during tests
+	// Cached before any exit: collection mode keeps a filter whose Init stopped early and still calls Test(IO).
 	const FPCGExBoundsFilterConfig& Config = TypedFilterFactory->Config;
 	BoundsSource = Config.BoundsSource;
 	CheckType = Config.CheckType;
@@ -202,12 +97,122 @@ bool PCGExPointFilter::FBoundsFilter::Init(FPCGExContext* InContext, const TShar
 	bCheckAgainstDataBounds = Config.bCheckAgainstDataBounds;
 	bUseCollectionBounds = Config.Mode == EPCGExBoundsFilterCompareMode::CollectionBounds;
 
+	Collections = &FilteredCollections;
+	if (TypedFilterFactory->Collections.IsEmpty())
+	{
+		return false;
+	}
+
+	const bool bMatchingEnabled = Config.DataMatching.IsEnabled() && !TypedFilterFactory->MatchRuleFactories.IsEmpty();
+
+	// See FDistanceFilter::Init for the full per-point vs static matching explanation.
+
+	if (bMatchingEnabled && !bCheckAgainstDataBounds)
+	{
+		TArray<int32> EligibleIndices;
+		GetEligibleIndices(InPointDataFacade->GetIn(), EligibleIndices);
+
+		FilteredCollections.Reserve(EligibleIndices.Num());
+		for (const int32 i : EligibleIndices)
+		{
+			FilteredCollections.Add(TypedFilterFactory->Collections[i]);
+		}
+
+		// Per-point: store matcher + candidates now, build per-point collections in Test()
+		InverseMatcher = MakeShared<PCGExMatching::FDataMatcher>();
+		InverseMatcher->SetDetails(&Config.DataMatching);
+
+		TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
+		SingleSource.Add(InPointDataFacade);
+		if (InverseMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
+		{
+			// Candidates stay positionally parallel to the self-filtered Collections list.
+			BoundsCandidates.Reserve(EligibleIndices.Num());
+			for (const int32 i : EligibleIndices)
+			{
+				BoundsCandidates.Add(TypedFilterFactory->BoundsDataFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
+			}
+			bNoMatchResult = (Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
+		}
+		else
+		{
+			InverseMatcher.Reset();
+		}
+	}
+	else if (!ResolveStaticCollections(InPointDataFacade, FilteredCollections))
+	{
+		bCheckAgainstDataBounds = true;
+		bCollectionTestResult = (Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass);
+		return true;
+	}
+
 	// Pre-compute collection test result if using data bounds mode
 	if (bCheckAgainstDataBounds)
 	{
 		PCGExData::FProxyPoint ProxyPoint;
 		InPointDataFacade->Source->GetDataAsProxyPoint(ProxyPoint);
 		bCollectionTestResult = Test(ProxyPoint);
+	}
+
+	return true;
+}
+
+void PCGExPointFilter::FBoundsFilter::GetEligibleIndices(const UPCGData* InTestedData, TArray<int32>& OutIndices) const
+{
+	const UPCGData* SelfData = TypedFilterFactory->Config.bIgnoreSelf ? InTestedData : nullptr;
+
+	OutIndices.Reserve(TypedFilterFactory->BoundsDataFacades.Num());
+	for (int32 i = 0; i < TypedFilterFactory->BoundsDataFacades.Num(); i++)
+	{
+		if (SelfData && TypedFilterFactory->BoundsDataFacades[i]->GetIn() == SelfData)
+		{
+			continue;
+		}
+		OutIndices.Add(i);
+	}
+}
+
+bool PCGExPointFilter::FBoundsFilter::ResolveStaticCollections(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<TSharedPtr<PCGExMath::OBB::FCollection>>& OutCollections) const
+{
+	const FPCGExBoundsFilterConfig& Config = TypedFilterFactory->Config;
+
+	TArray<int32> EligibleIndices;
+	GetEligibleIndices(InFacade->GetIn(), EligibleIndices);
+
+	TSet<const UPCGData*> IgnoreList;
+
+	// Static matching is collection-level only; per-point evaluation matches in Test(int32) instead.
+	if (Config.bCheckAgainstDataBounds && Config.DataMatching.IsEnabled() && !TypedFilterFactory->MatchRuleFactories.IsEmpty())
+	{
+		auto StaticMatcher = MakeShared<PCGExMatching::FDataMatcher>();
+		StaticMatcher->SetDetails(&Config.DataMatching);
+
+		TArray<TSharedPtr<PCGExData::FFacade>> SingleSource;
+		SingleSource.Add(InFacade);
+		if (StaticMatcher->Init(TypedFilterFactory->MatchRuleFactories, SingleSource, false))
+		{
+			TArray<FPCGExTaggedData> StaticCandidates;
+			StaticCandidates.Reserve(EligibleIndices.Num());
+			for (const int32 i : EligibleIndices)
+			{
+				StaticCandidates.Add(TypedFilterFactory->BoundsDataFacades[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
+			}
+
+			PCGExMatching::FScope MatchingScope(1, true);
+			if (!StaticMatcher->PopulateIgnoreListFromCandidates(StaticCandidates, MatchingScope, IgnoreList))
+			{
+				return false;
+			}
+		}
+	}
+
+	OutCollections.Reset(EligibleIndices.Num());
+	for (const int32 i : EligibleIndices)
+	{
+		if (!IgnoreList.Contains(TypedFilterFactory->BoundsDataFacades[i]->GetIn()))
+		{
+			OutCollections.Add(TypedFilterFactory->Collections[i]);
+		}
 	}
 
 	return true;
@@ -346,9 +351,16 @@ bool PCGExPointFilter::FBoundsFilter::Test(const int32 PointIndex) const
 
 bool PCGExPointFilter::FBoundsFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const
 {
+	// Collection mode sets a filter up on one data and tests them all (see FManager::Init): each data resolves its own bounds here.
+	TArray<TSharedPtr<PCGExMath::OBB::FCollection>> DataCollections;
+	if (!ResolveStaticCollections(MakeShared<PCGExData::FFacade>(IO.ToSharedRef()), DataCollections))
+	{
+		return TypedFilterFactory->Config.DataMatching.NoMatchFallback == EPCGExFilterFallback::Pass;
+	}
+
 	PCGExData::FProxyPoint ProxyPoint;
 	IO->GetDataAsProxyPoint(ProxyPoint);
-	return Test(ProxyPoint);
+	return TestPoint(ProxyPoint.GetTransform(), PCGExMath::GetLocalBounds(ProxyPoint, BoundsSource), DataCollections);
 }
 
 #if WITH_EDITOR

@@ -10,7 +10,7 @@
 namespace PCGExAssetGrammar
 {
 	/** Extract the bounds extent along the given single-axis bit. Returns 0 for an invalid mask. */
-	static double AxisExtent(const FBox& InBounds, const EPCGExGrammarAxes Axis)
+	double AxisExtent(const FBox& InBounds, const EPCGExGrammarAxes Axis)
 	{
 		const FVector S = InBounds.GetSize();
 		switch (Axis)

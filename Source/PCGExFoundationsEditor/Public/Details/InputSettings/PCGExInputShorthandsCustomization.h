@@ -47,6 +47,13 @@ public:
 	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
 };
 
+class FPCGExInputShorthandVector2Customization : public FPCGExInputShorthandCustomization
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
+};
+
 class FPCGExInputShorthandDirectionCustomization : public FPCGExInputShorthandVectorCustomization
 {
 public:

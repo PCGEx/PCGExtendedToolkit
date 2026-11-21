@@ -12,6 +12,7 @@
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
 #include "Paths/PCGExPathsCommon.h"
+#include "Types/PCGExTypeOpsString.h"
 
 namespace PCGExClusters::Helpers
 {
@@ -55,6 +56,26 @@ namespace PCGExClusters::Helpers
 		for (const TSharedRef<PCGExData::FPointIO>& IO : Edges)
 		{
 			MarkClusterEdges(IO, Id);
+		}
+	}
+
+	void AppendSavedTags(const TSet<FString>& InTags, TArray<FName>& OutTags)
+	{
+		static const FString ClusterIdPrefix = Labels::TagStr_PCGExCluster + PCGExData::TagSeparator;
+
+		OutTags.Reserve(OutTags.Num() + InTags.Num());
+		for (const FString& Tag : InTags)
+		{
+			if (Tag.StartsWith(ClusterIdPrefix))
+			{
+				continue;
+			}
+
+			const FName TagName = PCGExTypeOps::MakeNameChecked(Tag);
+			if (!TagName.IsNone())
+			{
+				OutTags.AddUnique(TagName);
+			}
 		}
 	}
 

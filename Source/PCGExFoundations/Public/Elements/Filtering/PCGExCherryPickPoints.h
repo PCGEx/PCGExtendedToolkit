@@ -10,13 +10,6 @@
 
 class UPCGExPickerFactoryData;
 
-UENUM()
-enum class EPCGExCherryPickSource : uint8
-{
-	Self    = 0 UMETA(DisplayName = "Self", ToolTip="Read indices from an attribute on the currently cherry-picked data set."),
-	Sources = 1 UMETA(DisplayName = "Sources", ToolTip="Read indices from a list of sources inputs."),
-};
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/pickers/cherry-pick-points"))
 class UPCGExCherryPickPointsSettings : public UPCGExPointsProcessorSettings
 {

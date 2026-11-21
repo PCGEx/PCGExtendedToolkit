@@ -10,15 +10,6 @@
 /**
  *
  */
-class FPCGExEdgeRemoveLowestScore : public FPCGExEdgeRefineOperation
-{
-public:
-	virtual void ProcessNode(PCGExClusters::FNode& Node) override;
-};
-
-/**
- *
- */
 UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Remove Lowest Score", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/score-based-refinements"))
 class UPCGExEdgeRemoveLowestScore : public UPCGExEdgeRefineInstancedFactory
 {
@@ -35,5 +26,5 @@ public:
 		return true;
 	}
 
-	PCGEX_CREATE_REFINE_OPERATION(EdgeRemoveLowestScore, {})
+	PCGEX_CREATE_REFINE_OPERATION(EdgeRefineBestLink, { Operation->bUseScore = true; Operation->bPickHighest = false; Operation->InitialBest = TNumericLimits<double>::Max(); Operation->Validity = 0; })
 };

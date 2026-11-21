@@ -118,26 +118,58 @@ bool FPCGExBitmaskRef::TryGetAdjacencyInfos(FVector& OutDirection, FPCGExSimpleB
 	return false;
 }
 
-int64 FPCGExBitmask::Get() const
+// Shared by FPCGExBitmask and FPCGExBitmaskWithOperation, which declare the same members.
+namespace PCGExBitmaskDetails
 {
-	int64 Mask = Bitmask;
-	if (Mode == EPCGExBitmaskMode::Individual)
+	template <typename T>
+	int64 ResolveMask(const T& In)
 	{
-		for (const FPCGExClampedBitOp& Bit : Mutations)
+		int64 Mask = In.Bitmask;
+		if (In.Mode == EPCGExBitmaskMode::Individual)
 		{
-			Bit.Mutate(Mask);
+			for (const FPCGExClampedBitOp& Bit : In.Mutations)
+			{
+				Bit.Mutate(Mask);
+			}
+		}
+		PCGExBitmask::Mutate(In.Compositions, Mask);
+		return Mask;
+	}
+
+	template <typename T>
+	void RegisterCompositionsTrackingKeys(const T& In, FPCGExContext* Context)
+	{
+		for (const FPCGExBitmaskRef& Comp : In.Compositions)
+		{
+			Comp.EDITOR_RegisterTrackingKeys(Context);
 		}
 	}
-	PCGExBitmask::Mutate(Compositions, Mask);
-	return Mask;
+
+#if WITH_EDITOR
+	template <typename T>
+	void FoldLegacyRanges(T& In)
+	{
+		In.Bitmask = 0;
+		In.Bitmask |= static_cast<int64>(In.Range_00_08_DEPRECATED) << 0;
+		In.Bitmask |= static_cast<int64>(In.Range_08_16_DEPRECATED) << 8;
+		In.Bitmask |= static_cast<int64>(In.Range_16_24_DEPRECATED) << 16;
+		In.Bitmask |= static_cast<int64>(In.Range_24_32_DEPRECATED) << 24;
+		In.Bitmask |= static_cast<int64>(In.Range_32_40_DEPRECATED) << 32;
+		In.Bitmask |= static_cast<int64>(In.Range_40_48_DEPRECATED) << 40;
+		In.Bitmask |= static_cast<int64>(In.Range_48_56_DEPRECATED) << 48;
+		In.Bitmask |= static_cast<int64>(In.Range_56_64_DEPRECATED) << 56;
+	}
+#endif
+}
+
+int64 FPCGExBitmask::Get() const
+{
+	return PCGExBitmaskDetails::ResolveMask(*this);
 }
 
 void FPCGExBitmask::EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const
 {
-	for (const FPCGExBitmaskRef& Comp : Compositions)
-	{
-		Comp.EDITOR_RegisterTrackingKeys(Context);
-	}
+	PCGExBitmaskDetails::RegisterCompositionsTrackingKeys(*this, Context);
 }
 
 #if WITH_EDITOR
@@ -145,15 +177,7 @@ void FPCGExBitmask::ApplyDeprecation()
 {
 	if (Mode == EPCGExBitmaskMode::Composite)
 	{
-		Bitmask = 0;
-		Bitmask |= static_cast<int64>(Range_00_08_DEPRECATED) << 0;
-		Bitmask |= static_cast<int64>(Range_08_16_DEPRECATED) << 8;
-		Bitmask |= static_cast<int64>(Range_16_24_DEPRECATED) << 16;
-		Bitmask |= static_cast<int64>(Range_24_32_DEPRECATED) << 24;
-		Bitmask |= static_cast<int64>(Range_32_40_DEPRECATED) << 32;
-		Bitmask |= static_cast<int64>(Range_40_48_DEPRECATED) << 40;
-		Bitmask |= static_cast<int64>(Range_48_56_DEPRECATED) << 48;
-		Bitmask |= static_cast<int64>(Range_56_64_DEPRECATED) << 56;
+		PCGExBitmaskDetails::FoldLegacyRanges(*this);
 	}
 	else if (Mode == EPCGExBitmaskMode::Individual)
 	{
@@ -179,17 +203,7 @@ void FPCGExBitmask::ApplyDeprecation()
 
 int64 FPCGExBitmaskWithOperation::Get() const
 {
-	int64 Mask = Bitmask;
-	if (Mode == EPCGExBitmaskMode::Individual)
-	{
-		for (const FPCGExClampedBitOp& Bit : Mutations)
-		{
-			Bit.Mutate(Mask);
-		}
-	}
-	PCGExBitmask::Mutate(Compositions, Mask);
-
-	return Mask;
+	return PCGExBitmaskDetails::ResolveMask(*this);
 }
 
 void FPCGExBitmaskWithOperation::Mutate(int64& Flags) const
@@ -210,10 +224,7 @@ void FPCGExBitmaskWithOperation::Mutate(int64& Flags) const
 
 void FPCGExBitmaskWithOperation::EDITOR_RegisterTrackingKeys(FPCGExContext* Context) const
 {
-	for (const FPCGExBitmaskRef& Comp : Compositions)
-	{
-		Comp.EDITOR_RegisterTrackingKeys(Context);
-	}
+	PCGExBitmaskDetails::RegisterCompositionsTrackingKeys(*this, Context);
 }
 
 #if WITH_EDITOR
@@ -221,15 +232,7 @@ void FPCGExBitmaskWithOperation::ApplyDeprecation()
 {
 	if (Mode == EPCGExBitmaskMode::Composite)
 	{
-		Bitmask = 0;
-		Bitmask |= static_cast<int64>(Range_00_08_DEPRECATED) << 0;
-		Bitmask |= static_cast<int64>(Range_08_16_DEPRECATED) << 8;
-		Bitmask |= static_cast<int64>(Range_16_24_DEPRECATED) << 16;
-		Bitmask |= static_cast<int64>(Range_24_32_DEPRECATED) << 24;
-		Bitmask |= static_cast<int64>(Range_32_40_DEPRECATED) << 32;
-		Bitmask |= static_cast<int64>(Range_40_48_DEPRECATED) << 40;
-		Bitmask |= static_cast<int64>(Range_48_56_DEPRECATED) << 48;
-		Bitmask |= static_cast<int64>(Range_56_64_DEPRECATED) << 56;
+		PCGExBitmaskDetails::FoldLegacyRanges(*this);
 		Mode = EPCGExBitmaskMode::Direct;
 	}
 }

@@ -239,22 +239,7 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 		}
 
 		// Re-compact CellIDs to be sequential
-		TMap<int32, int32> Remap;
-		int32 CompactID = 0;
-		for (int32 i = 0; i < Grid.TotalVoxels; i++)
-		{
-			if (VoxelCellIDs[i] < 0)
-			{
-				continue;
-			}
-			if (!Remap.Contains(VoxelCellIDs[i]))
-			{
-				Remap.Add(VoxelCellIDs[i], CompactID++);
-			}
-			VoxelCellIDs[i] = Remap[VoxelCellIDs[i]];
-		}
-
-		NextCellID = CompactID;
+		NextCellID = FPCGExDecompOccupancyGrid::CompactCellIDsByFirstUse(VoxelCellIDs);
 	}
 
 	// Map voxel CellIDs back to node CellIDs
@@ -468,10 +453,6 @@ void FPCGExDecompMaxBoxesExt::MergeAdjacentCells(
 	const FIntVector& MaxExtent,
 	const TArray<double>* EdgeScores) const
 {
-	static constexpr int32 Dx[] = {1, -1, 0, 0, 0, 0};
-	static constexpr int32 Dy[] = {0, 0, 1, -1, 0, 0};
-	static constexpr int32 Dz[] = {0, 0, 0, 0, 1, -1};
-
 	struct FCellInfo
 	{
 		FIntVector Min = FIntVector(MAX_int32, MAX_int32, MAX_int32);
@@ -525,9 +506,9 @@ void FPCGExDecompMaxBoxesExt::MergeAdjacentCells(
 			const FIntVector Coord = Grid.UnflatIndex(Flat);
 			for (int32 Dir = 0; Dir < 6; Dir++)
 			{
-				const int32 NX = Coord.X + Dx[Dir];
-				const int32 NY = Coord.Y + Dy[Dir];
-				const int32 NZ = Coord.Z + Dz[Dir];
+				const int32 NX = Coord.X + FPCGExDecompOccupancyGrid::NeighborDx[Dir];
+				const int32 NY = Coord.Y + FPCGExDecompOccupancyGrid::NeighborDy[Dir];
+				const int32 NZ = Coord.Z + FPCGExDecompOccupancyGrid::NeighborDz[Dir];
 				if (!Grid.IsInBounds(NX, NY, NZ))
 				{
 					continue;
@@ -664,21 +645,7 @@ void FPCGExDecompMaxBoxesExt::MergeAdjacentCells(
 	}
 
 	// Re-compact CellIDs to be sequential after merges
-	TMap<int32, int32> Remap;
-	int32 CompactID = 0;
-	for (int32 Flat = 0; Flat < Grid.TotalVoxels; Flat++)
-	{
-		if (VoxelCellIDs[Flat] < 0)
-		{
-			continue;
-		}
-		if (!Remap.Contains(VoxelCellIDs[Flat]))
-		{
-			Remap.Add(VoxelCellIDs[Flat], CompactID++);
-		}
-		VoxelCellIDs[Flat] = Remap[VoxelCellIDs[Flat]];
-	}
-	NextCellID = CompactID;
+	NextCellID = FPCGExDecompOccupancyGrid::CompactCellIDsByFirstUse(VoxelCellIDs);
 }
 
 void FPCGExDecompMaxBoxesExt::SubdivideAndClaim(
@@ -927,31 +894,6 @@ void UPCGExDecompMaxBoxesExt::RegisterBuffersDependencies(FPCGExContext* InConte
 {
 	AxisBias.RegisterBufferDependencies(InContext, FacadePreloader);
 	Weight.RegisterBufferDependencies(InContext, FacadePreloader);
-}
-
-void UPCGExDecompMaxBoxesExt::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompMaxBoxesExt* TypedOther = Cast<UPCGExDecompMaxBoxesExt>(Other))
-	{
-		TransformSpace = TypedOther->TransformSpace;
-		CustomTransform = TypedOther->CustomTransform;
-		VoxelSizeMode = TypedOther->VoxelSizeMode;
-		VoxelSize = TypedOther->VoxelSize;
-		MaxCellSize = TypedOther->MaxCellSize;
-		MinVoxelsPerCell = TypedOther->MinVoxelsPerCell;
-		Balance = TypedOther->Balance;
-		AxisBias = TypedOther->AxisBias;
-		Weight = TypedOther->Weight;
-		WeightInfluence = TypedOther->WeightInfluence;
-		WeightMode = TypedOther->WeightMode;
-		PriorityThreshold = TypedOther->PriorityThreshold;
-		PreferredMinVolume = TypedOther->PreferredMinVolume;
-		PreferredMaxVolume = TypedOther->PreferredMaxVolume;
-		VolumePreferenceWeight = TypedOther->VolumePreferenceWeight;
-		bUseHeuristicMergeGating = TypedOther->bUseHeuristicMergeGating;
-		MergeScoreThreshold = TypedOther->MergeScoreThreshold;
-	}
 }
 
 #pragma endregion

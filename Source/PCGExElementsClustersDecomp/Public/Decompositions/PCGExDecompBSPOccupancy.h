@@ -100,8 +100,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="0"))
 	double GapWeight = 2.0;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompBSPOccupancy, {
 	                                     Operation->TransformSpace = TransformSpace;
 	                                     Operation->CustomTransform = CustomTransform;

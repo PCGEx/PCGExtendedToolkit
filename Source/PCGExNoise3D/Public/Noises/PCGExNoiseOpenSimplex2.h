@@ -52,11 +52,6 @@ struct FPCGExNoiseConfigOpenSimplex2 : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigOpenSimplex2()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "16"))
 	int32 Octaves = 1;
 
@@ -73,9 +68,6 @@ struct FPCGExNoiseConfigOpenSimplex2 : public FPCGExNoise3DConfigBase
  */
 class PCGEXNOISE3D_API FPCGExNoiseOpenSimplex2 : public FPCGExNoise3DOperation
 {
-public:
-	virtual ~FPCGExNoiseOpenSimplex2() override = default;
-
 protected:
 	virtual double GenerateRaw(const FVector& Position) const override;
 

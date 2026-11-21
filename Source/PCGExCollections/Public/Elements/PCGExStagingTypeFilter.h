@@ -157,7 +157,6 @@ namespace PCGExStagedTypeFilter
 
 		// Bucket modes (PinPerType, EntryShape)
 		TArray<TSharedPtr<PCGExMT::TScopedArray<int32>>> BucketIndices;
-		TArray<int32> BucketCounts;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

@@ -19,8 +19,3 @@ void FPCGExElementsMetaEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExAttributeToPinDetails", FPCGExAttributeToPinCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExIntegerLayoutField", FPCGExIntegerLayoutFieldCustomization)
 }
-
-void FPCGExElementsMetaEditorModule::ShutdownModule()
-{
-	IPCGExEditorModuleInterface::ShutdownModule();
-}

@@ -20,11 +20,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(MergeVertices, "Cluster : Merge Vtx", "Merge Vtx so all edges share the same vtx collection.");
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
 #endif
 
 protected:
@@ -73,8 +68,6 @@ namespace PCGExMergeVertices
 {
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExMergeVerticesContext, UPCGExMergeVerticesSettings>
 	{
-		friend class FProcessorBatch;
-
 	protected:
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
 
@@ -85,8 +78,6 @@ namespace PCGExMergeVertices
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessNodes(const PCGExMT::FScope& Scope) override;

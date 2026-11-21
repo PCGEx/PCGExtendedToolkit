@@ -57,7 +57,7 @@ void SPCGExCollectionCategoryGroup::Construct(const FArguments& InArgs)
 
 	ChildSlot
 	[
-		SAssignNew(DropHighlightBorder, SBorder)
+		SNew(SBorder)
 		.BorderImage(FAppStyle::GetBrush("Brushes.White"))
 		.BorderBackgroundColor_Lambda([this]() -> FSlateColor
 		{

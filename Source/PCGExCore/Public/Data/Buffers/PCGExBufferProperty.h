@@ -53,25 +53,6 @@ namespace PCGExData
 
 		bool InitProperty(const FPCGMetadataAttributeBase* InGenericAttribute);
 
-		const FPCGMetadataAttributeBase* GetGenericInAttribute() const
-		{
-			return GenericInAttribute;
-		}
-
-		FPCGMetadataAttributeBase* GetGenericOutAttribute() const
-		{
-			return GenericOutAttribute;
-		}
-
-		// Non-owning accessor to the cached property that drives this buffer's reads/writes.
-		// Lifetime-tied to the buffer itself -- do not retain past the buffer's lifetime.
-		// Prefer IBuffer::GetSourceProperty() at call sites that only hold an IBuffer pointer;
-		// this stays for backwards compatibility with code that already has an FPropertyBuffer.
-		const FProperty* GetCachedProperty() const
-		{
-			return CachedInnerProperty;
-		}
-
 		virtual const FProperty* GetSourceProperty() const override
 		{
 			return CachedInnerProperty;
@@ -172,7 +153,6 @@ namespace PCGExData
 		virtual void SetRawValue(const int32 Index, const void* Src) override;
 
 		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-		virtual PCGExValueHash GetValueHash(const int32 Index) override;
 
 		virtual void Write(const bool bEnsureValidKeys = true) override;
 
@@ -233,7 +213,6 @@ namespace PCGExData
 		virtual void SetRawValue(const int32 Index, const void* Src) override;
 
 		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-		virtual PCGExValueHash GetValueHash(const int32 Index) override;
 
 		virtual void Write(const bool bEnsureValidKeys = true) override;
 

@@ -288,9 +288,6 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionTypeSet
 		return Types.Num();
 	}
 
-	// Check if this set contains a type or any of its parent types
-	bool ContainsOrDerives(PCGExAssetCollection::FTypeId Type) const;
-
 	FPCGExCollectionTypeSet operator|(const FPCGExCollectionTypeSet& Other) const;
 	FPCGExCollectionTypeSet operator&(const FPCGExCollectionTypeSet& Other) const;
 

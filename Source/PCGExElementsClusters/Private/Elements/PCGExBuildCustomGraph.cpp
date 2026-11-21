@@ -231,7 +231,6 @@ namespace PCGExBuildCustomGraph
 
 			PCGEX_MAKE_SHARED(NodeDataFacade, PCGExData::FFacade, PointIO.ToSharedRef())
 			PCGEX_MAKE_SHARED(GraphBuilder, PCGExGraphs::FGraphBuilder, NodeDataFacade.ToSharedRef(), &Settings->GraphBuilderDetails)
-			GraphBuilder->OutputNodeIndices = MakeShared<TArray<int32>>();
 
 			GraphSettings->VtxBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>>(NodeDataFacade.ToSharedRef());
 			GraphSettings->GraphBuilder = GraphBuilder;

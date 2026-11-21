@@ -17,13 +17,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExClusterStateFactoryData::CreateFilte
 {
 	PCGEX_MAKE_SHARED(NewState, PCGExClusterStates::FState, this)
 	NewState->Config = Config;
-	NewState->BaseConfig = NewState->Config;
 	return NewState;
-}
-
-void UPCGExClusterStateFactoryData::BeginDestroy()
-{
-	Super::BeginDestroy();
 }
 
 #if WITH_EDITOR
@@ -40,10 +34,6 @@ void UPCGExClusterStateFactoryProviderSettings::PCGExApplyDeprecation(UPCGNode* 
 
 namespace PCGExClusterStates
 {
-	FState::~FState()
-	{
-	}
-
 	bool FState::Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
 	{
 		Config.Init();
@@ -175,9 +165,4 @@ UPCGExFactoryData* UPCGExClusterStateFactoryProviderSettings::CreateFactory(FPCG
 	Super::CreateFactory(InContext, NewFactory);
 
 	return NewFactory;
-}
-
-TSet<FPCGDataTypeBaseId> UPCGExClusterStateFactoryProviderSettings::GetInternalFilterTypes() const
-{
-	return PCGExFactories::ClusterNodeFilters();
 }

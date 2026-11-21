@@ -22,17 +22,6 @@ void UPCGExGoalPickerRandom::PCGExApplyDeprecation(const int64 PCGExDataVersion)
 }
 #endif
 
-void UPCGExGoalPickerRandom::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExGoalPickerRandom* TypedOther = Cast<UPCGExGoalPickerRandom>(Other))
-	{
-		LocalSeed = TypedOther->LocalSeed;
-		GoalCount = TypedOther->GoalCount;
-		NumGoalsValue = TypedOther->NumGoalsValue;
-	}
-}
-
 bool UPCGExGoalPickerRandom::PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsDataFacade, const TSharedPtr<PCGExData::FFacade>& InGoalsDataFacade)
 {
 	if (!Super::PrepareForData(InContext, InSeedsDataFacade, InGoalsDataFacade))

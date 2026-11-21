@@ -12,12 +12,12 @@ namespace PCGExMT
 	/** Default threshold below which we use sequential execution */
 	inline constexpr int32 DefaultParallelThreshold = 512;
 
-	/** Function signature for parallel/sequential loop body */
-	using FLoopBody = std::function<void(int32)>;
+	/** Function signature for parallel/sequential loop body. Non-owning, as is FScopedLoopBody: never store one. */
+	using FLoopBody = TFunctionRef<void(int32)>;
 
 	struct FScope;
 	/** Scope-based loop body: runs once per worker task, iterates its own indices internally. */
-	using FScopedLoopBody = std::function<void(const FScope&)>;
+	using FScopedLoopBody = TFunctionRef<void(const FScope&)>;
 
 	/**
 	 * Execute a loop body either in parallel or sequentially based on iteration count.
@@ -27,7 +27,7 @@ namespace PCGExMT
 	 * @param Flags ParallelFor flags (default None). Pass EParallelForFlags::Unbalanced when
 	 *              per-iteration cost varies dramatically to enable dynamic work-stealing.
 	 */
-	PCGEXCORE_API void ParallelOrSequential(int32 Num, const FLoopBody& Body, int32 Threshold = DefaultParallelThreshold, EParallelForFlags Flags = EParallelForFlags::None);
+	PCGEXCORE_API void ParallelOrSequential(int32 Num, FLoopBody Body, int32 Threshold = DefaultParallelThreshold, EParallelForFlags Flags = EParallelForFlags::None);
 
 	/**
 	 * Scope-based variant: divides Num into chunks (roughly one per worker thread) and calls Body
@@ -40,14 +40,7 @@ namespace PCGExMT
 	 * @param Body Function taking (const FScope&) -- Body is responsible for iterating Scope.Start..Scope.End
 	 * @param Threshold Iteration count below which we use sequential execution (single scope, no dispatch)
 	 */
-	PCGEXCORE_API void ParallelOrSequentialScoped(int32 Num, const FScopedLoopBody& Body, int32 Threshold = DefaultParallelThreshold);
-
-	/**
-	 * Force sequential execution regardless of iteration count.
-	 * @param Num Number of iterations
-	 * @param Body Function taking (int32 i) to execute per iteration
-	 */
-	PCGEXCORE_API void Sequential(int32 Num, const FLoopBody& Body);
+	PCGEXCORE_API void ParallelOrSequentialScoped(int32 Num, FScopedLoopBody Body, int32 Threshold = DefaultParallelThreshold);
 
 	/** Lowers Target to Value when Value is smaller. Lock-free: the outcome is the smallest value any caller passed, whatever their order. */
 	FORCEINLINE void AtomicMin(int32& Target, const int32 Value)
@@ -88,11 +81,6 @@ namespace PCGExMT
 			return Start != -1 && Count > 0;
 		}
 
-		int32 GetNextScopeIndex() const
-		{
-			return LoopIndex + 1;
-		}
-
 		void GetIndices(TArray<int32>& OutIndices) const;
 
 		static int32 GetMaxRange(const TArray<FScope>& InScopes)
@@ -124,7 +112,7 @@ namespace PCGExMT
 #ifndef PCGEX_MT_MACROS
 #define PCGEX_MT_MACROS
 
-#define PCGEX_ASYNC_TASK_NAME(_NAME) virtual FString DEBUG_HandleId() const override { return TEXT(""#_NAME); }
+#define PCGEX_ASYNC_TASK_NAME(_NAME) virtual const TCHAR* DEBUG_HandleId() const override { return TEXT(""#_NAME); }
 
 #define PCGEX_ASYNC_GROUP_CHKD_VOID(_MANAGER, _NAME) TSharedPtr<PCGExMT::FTaskGroup> _NAME = _MANAGER ? _MANAGER->TryCreateTaskGroup(FName(#_NAME)) : nullptr; if(!_NAME){ return; }
 #define PCGEX_ASYNC_SUBGROUP_CHKD_RET(_MANAGER, _PARENT, _NAME, _RET) TSharedPtr<PCGExMT::FTaskGroup> _NAME = _MANAGER ? _MANAGER->TryCreateTaskGroup(FName(#_NAME), _PARENT) : nullptr; if(!_NAME){ return _RET; }

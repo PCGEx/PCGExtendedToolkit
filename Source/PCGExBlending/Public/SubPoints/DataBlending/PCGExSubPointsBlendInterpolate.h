@@ -34,8 +34,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="BlendOver == EPCGExBlendOver::Fixed", EditConditionHides))
 	double Lerp = 0.5;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	virtual TSharedPtr<FPCGExSubPointsBlendOperation> CreateOperation() const override;
 
 protected:

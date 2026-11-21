@@ -113,10 +113,6 @@ struct PCGEXBLENDING_API FPCGExAttributeBlendConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExABBlendingType BlendMode = EPCGExABBlendingType::Average;
 
-	/** Operand A Source. */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
-	EPCGExOperandSource OperandASource = EPCGExOperandSource::Attribute;
-
 	/** Operand A. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -128,10 +124,6 @@ struct PCGEXBLENDING_API FPCGExAttributeBlendConfig
 	/** Operand B. If not enabled, will re-use Operand A' input. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="bUseOperandB"))
 	FPCGAttributePropertyInputSelector OperandB;
-
-	/** Operand B Source. */
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, DisplayName=" └─ Inline", EditCondition="bUseOperandB", HideEditConditionToggle))
-	EPCGExOperandSource OperandBSource = EPCGExOperandSource::Attribute;
 
 	/** Choose where to output the result of the A/B blend */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
@@ -194,7 +186,6 @@ public:
 
 	virtual void BlendScope(const PCGExMT::FScope& Scope);
 	virtual void BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask);
-	virtual void BlendScope(const PCGExMT::FScope& Scope, const double InWeight);
 
 	virtual PCGEx::FOpStats BeginMultiBlend(const int32 TargetIndex);
 	virtual void MultiBlend(const int32 SourceIndex, const int32 TargetIndex, const double InWeight, PCGEx::FOpStats& Tracker);

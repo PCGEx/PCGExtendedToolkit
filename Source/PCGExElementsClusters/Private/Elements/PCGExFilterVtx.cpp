@@ -199,10 +199,6 @@ namespace PCGExFilterVtx
 		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, true, false, false);
 	}
 
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFilterVtx::Process);
@@ -279,28 +275,32 @@ namespace PCGExFilterVtx
 
 		if (Nodes.Num() > 1024)
 		{
-			ParallelFor(Nodes.Num(), [&](const int32 i)
+			PCGExMT::ParallelOrSequentialScoped(Nodes.Num(), [&](const PCGExMT::FScope& Scope)
 			{
-				PCGExClusters::FNode& Node = Nodes[i];
-				if (Node.bValid)
+				int32 LocalPassNum = 0;
+				PCGEX_SCOPE_LOOP(i)
 				{
-					int32 ValidCount = 0;
-					for (const PCGExGraphs::FLink& Lk : Node.Links)
+					PCGExClusters::FNode& Node = Nodes[i];
+					if (Node.bValid)
 					{
-						ValidCount += Edges[Lk.Edge].bValid;
+						int32 ValidCount = 0;
+						for (const PCGExGraphs::FLink& Lk : Node.Links)
+						{
+							ValidCount += Edges[Lk.Edge].bValid;
+						}
+						Node.bValid = static_cast<bool>(ValidCount);
 					}
-					Node.bValid = static_cast<bool>(ValidCount);
+
+					if (Node.bValid)
+					{
+						LocalPassNum++;
+					}
 				}
 
-				if (Node.bValid)
-				{
-					FPlatformAtomics::InterlockedIncrement(&PassNum);
-				}
-				else
-				{
-					FPlatformAtomics::InterlockedIncrement(&FailNum);
-				}
+				FPlatformAtomics::InterlockedAdd(&PassNum, LocalPassNum);
 			});
+
+			FailNum = Nodes.Num() - PassNum;
 		}
 		else
 		{

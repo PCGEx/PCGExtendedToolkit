@@ -79,6 +79,15 @@ struct FPCGExDecompOccupancyGrid
 		const FVector& VoxelSize,
 		TArray<FVector>& OutSizes) const;
 
+	/** Relabel a voxel -> CellID map in-place to 0..K-1 in order of first appearance and return K; entries < 0
+	 * are left untouched. Not PCGExDecomposition::CompactCellIDs, which numbers in ascending ID order. */
+	static int32 CompactCellIDsByFirstUse(TArray<int32>& VoxelCellIDs);
+
+	/** Offsets to the six face-adjacent voxels, in +X, -X, +Y, -Y, +Z, -Z order. */
+	static constexpr int32 NeighborDx[6] = {1, -1, 0, 0, 0, 0};
+	static constexpr int32 NeighborDy[6] = {0, 0, 1, -1, 0, 0};
+	static constexpr int32 NeighborDz[6] = {0, 0, 0, 0, 1, -1};
+
 	FORCEINLINE int32 FlatIndex(const int32 X, const int32 Y, const int32 Z) const
 	{
 		return X + Y * GridDimensions.X + Z * GridDimensions.X * GridDimensions.Y;

@@ -23,11 +23,6 @@ namespace PCGEx
 
 class UPCGBasePointData;
 
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 namespace PCGExData
 {
 	struct FConstPoint;
@@ -82,10 +77,14 @@ namespace PCGExData
 			return 0;
 		}
 
+		// A zero max distance has nothing to normalize by: the total stays 0 and the equal split below applies.
 		double TotalWeight = 0;
-		for (FWeightedPoint& P : OutWeightedPoints)
+		if (MaxWeight != 0)
 		{
-			TotalWeight += (P.Weight = 1 - (P.Weight / MaxWeight));
+			for (FWeightedPoint& P : OutWeightedPoints)
+			{
+				TotalWeight += (P.Weight = 1 - (P.Weight / MaxWeight));
+			}
 		}
 
 		if (Index == 1)
@@ -105,6 +104,36 @@ namespace PCGExData
 		}
 
 		return Index;
+	}
+
+	// The elements ComputeUnionWeights keeps, in the same order, with no distance read: every weight is left at 1.
+	// Only for a consumer that reads no weight.
+	template <typename TElementIterable>
+	int32 CollectUnionElements(
+		const TElementIterable& InElements,
+		const TSharedPtr<PCGEx::FIndexLookup>& IdxLookup,
+		TArray<FWeightedPoint>& OutWeightedPoints)
+	{
+		OutWeightedPoints.Reset(InElements.Num());
+
+		for (const FElement& Element : InElements)
+		{
+			// Abstract elements (IO < 0) have no source; skip before the unchecked Get(-1) reads OOB.
+			if (Element.IO < 0)
+			{
+				continue;
+			}
+
+			const int32 IOIdx = IdxLookup->Get(Element.IO);
+			if (IOIdx == -1)
+			{
+				continue;
+			}
+
+			OutWeightedPoints.Emplace(Element.Index, 1.0, IOIdx);
+		}
+
+		return OutWeightedPoints.Num();
 	}
 
 	// Read interface for any container of fused source-element groups, regardless of underlying storage.
@@ -237,7 +266,6 @@ namespace PCGExData
 
 		void SetNum(const int32 InNum);
 
-		TSharedPtr<IUnionData> NewEntry_Unsafe(const FConstPoint& Point);
 		TSharedPtr<IUnionData> NewEntryAt_Unsafe(const int32 ItemIndex);
 
 		FORCEINLINE void Append_Unsafe(const int32 Index, const FPoint& Point)

@@ -154,7 +154,6 @@ TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactorySpots::CreateOperationInt
 	NewOperation->Jitter = Config.Jitter;
 	NewOperation->bInvertSpots = Config.bInvertSpots;
 	NewOperation->ValueVariation = Config.ValueVariation;
-	NewOperation->Octaves = 1;
 
 	return NewOperation;
 }

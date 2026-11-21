@@ -35,35 +35,5 @@ namespace PCGExClusters
 		return nullptr;
 	}
 
-	void FClusterCacheRegistry::GetPreBuildKeys(TArray<FName>& OutKeys) const
-	{
-		FReadScopeLock ReadLock(Lock);
-		for (const auto& Pair : Factories)
-		{
-			if (Pair.Value->GetCacheType() == EClusterCacheType::PreBuild)
-			{
-				OutKeys.Add(Pair.Key);
-			}
-		}
-	}
-
-	void FClusterCacheRegistry::GetOpportunisticKeys(TArray<FName>& OutKeys) const
-	{
-		FReadScopeLock ReadLock(Lock);
-		for (const auto& Pair : Factories)
-		{
-			if (Pair.Value->GetCacheType() == EClusterCacheType::Opportunistic)
-			{
-				OutKeys.Add(Pair.Key);
-			}
-		}
-	}
-
-	void FClusterCacheRegistry::GetAllFactories(TArray<TSharedRef<IClusterCacheFactory>>& OutFactories) const
-	{
-		FReadScopeLock ReadLock(Lock);
-		Factories.GenerateValueArray(OutFactories);
-	}
-
 #pragma endregion
 }

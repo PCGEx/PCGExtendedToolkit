@@ -135,13 +135,6 @@ enum class EPCGExPointPropertyOutput : uint8
 };
 
 UENUM()
-enum class EPCGExCellOutputOrientation : uint8
-{
-	CCW = 0 UMETA(DisplayName = "Clockwise", Tooltip="Unused. No setting reads this enum; cell winding comes from Output Winding on the cell constraints."),
-	CW  = 1 UMETA(DisplayName = "Counter Clockwise", Tooltip="Unused. No setting reads this enum; cell winding comes from Output Winding on the cell constraints."),
-};
-
-UENUM()
 enum class EPCGExCellShapeTypeOutput : uint8
 {
 	Both        = 0 UMETA(DisplayName = "Convex & Concave", ToolTip="Output both convex and concave cells"),
@@ -157,14 +150,6 @@ enum class EPCGExCellSeedLocation : uint8
 	PathBoundsCenter = 2 UMETA(DisplayName = "Path bounds center", ToolTip="Place the seed at the center of the path' bounds"),
 	FirstNode        = 3 UMETA(DisplayName = "First Node", ToolTip="Place the seed on the position of the node that started the cell."),
 	LastNode         = 4 UMETA(DisplayName = "Last Node", ToolTip="Place the seed on the position of the node that ends the cell.")
-};
-
-UENUM()
-enum class EPCGExCellSeedBounds : uint8
-{
-	Original           = 0 UMETA(DisplayName = "Original", ToolTip="Seed bounds is unchanged"),
-	MatchCell          = 1 UMETA(DisplayName = "Match Cell", ToolTip="Seed bounds match cell bounds"),
-	MatchPathResetQuat = 2 UMETA(DisplayName = "Match Cell (with rotation reset)", ToolTip="Seed bounds match cell bounds, and rotation is reset"),
 };
 
 UENUM()

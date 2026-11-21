@@ -241,8 +241,6 @@ bool FPCGExWriteIndexElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			PCGExMetaHelpers::ExecuteWithRightType(PCGExData::Helpers::GetNumericType(Settings->NumEntriesOutputType), [&](auto DummyValue)
 			{
 				using T = decltype(DummyValue);
-				const PCGExTypeOps::ITypeOpsBase* TypeOps = PCGExTypeOps::FTypeOpsRegistry::Get<T>();
-
 				for (int i = 0; i < Context->WorkingData.Num(); i++)
 				{
 					double NumEntries = Settings->bNormalizeNumEntries ? Context->NumEntries[i] / Context->MaxNumEntries : Context->NumEntries[i];

@@ -15,9 +15,6 @@
 
 #include "PCGExTransformPoints.generated.h"
 
-class FPCGExComputeIOBounds;
-
-
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/transform/transform-points"))
 class UPCGExTransformPointsSettings : public UPCGExPointsProcessorSettings
 {
@@ -174,7 +171,6 @@ class FPCGExTransformPointsElement final : public FPCGExPointsProcessorElement
 protected:
 	PCGEX_ELEMENT_CREATE_CONTEXT(TransformPoints)
 
-	virtual bool Boot(FPCGExContext* InContext) const override;
 	virtual bool AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const override;
 };
 
@@ -210,8 +206,6 @@ namespace PCGExTransformPoints
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

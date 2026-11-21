@@ -27,18 +27,6 @@ enum class EPCGExNoiseBlendMode : uint8
 	First UMETA(DisplayName = "First Valid", ToolTip="Take the first non-zero value"),
 };
 
-/**
- * How initial values are handled in GenerateInPlace methods
- */
-UENUM(BlueprintType)
-enum class EPCGExNoiseInPlaceMode : uint8
-{
-	Composite UMETA(DisplayName = "Composite", ToolTip="Initial value is a base layer; operations blend on top"),
-	BlendResult UMETA(DisplayName = "Blend Result", ToolTip="Blend final noise result against initial value"),
-	Additive UMETA(DisplayName = "Additive", ToolTip="Add noise to initial value"),
-	Multiplicative UMETA(DisplayName = "Multiplicative", ToolTip="Multiply initial by noise (0-1 range)"),
-};
-
 namespace PCGExNoise3D
 {
 	namespace Labels

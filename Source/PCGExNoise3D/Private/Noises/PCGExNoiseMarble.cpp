@@ -79,7 +79,6 @@ TSharedPtr<FPCGExNoise3DOperation> UPCGExNoise3DFactoryMarble::CreateOperationIn
 	NewOperation->TurbulenceStrength = Config.TurbulenceStrength;
 	NewOperation->TurbulenceOctaves = Config.TurbulenceOctaves;
 	NewOperation->VeinSharpness = Config.VeinSharpness;
-	NewOperation->Octaves = 1; // Marble uses internal turbulence
 
 	return NewOperation;
 }

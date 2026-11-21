@@ -49,16 +49,6 @@ void FPCGExSubPointsBlendInterpolate::BlendSubPoints(const PCGExData::FConstPoin
 	}
 }
 
-void UPCGExSubPointsBlendInterpolate::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExSubPointsBlendInterpolate* TypedOther = Cast<UPCGExSubPointsBlendInterpolate>(Other))
-	{
-		BlendOver = TypedOther->BlendOver;
-		Lerp = TypedOther->Lerp;
-	}
-}
-
 TSharedPtr<FPCGExSubPointsBlendOperation> UPCGExSubPointsBlendInterpolate::CreateOperation() const
 {
 	PCGEX_CREATE_SUBPOINTBLEND_OPERATION(Interpolate)

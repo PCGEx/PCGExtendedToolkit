@@ -38,7 +38,7 @@ namespace PCGExCollectionEntryPickerWidget
 
 	using FProviderKey = TPair<FName, FName>;
 
-	static TMap<FProviderKey, FOptionsProvider>& GetProviders()
+	TMap<FProviderKey, FOptionsProvider>& GetProviders()
 	{
 		static TMap<FProviderKey, FOptionsProvider> Providers;
 		return Providers;
@@ -72,7 +72,7 @@ namespace PCGExCollectionEntryPickerWidget
 
 	// ---------- Raw data access on the FPCGExCollectionEntryRef property handle ------------------
 
-	static TArray<FPCGExCollectionEntryRef*> AccessRefs(const TSharedRef<IPropertyHandle>& ValueHandle)
+	TArray<FPCGExCollectionEntryRef*> AccessRefs(const TSharedRef<IPropertyHandle>& ValueHandle)
 	{
 		TArray<FPCGExCollectionEntryRef*> Out;
 		if (!ValueHandle->IsValidHandle())
@@ -94,7 +94,7 @@ namespace PCGExCollectionEntryPickerWidget
 	}
 
 	/** Unanimous value across edited objects; bOutMultiple set (and a default returned) on disagreement. */
-	static FPCGExCollectionEntryRef ReadUnanimous(const TSharedRef<IPropertyHandle>& ValueHandle, bool& bOutMultiple)
+	FPCGExCollectionEntryRef ReadUnanimous(const TSharedRef<IPropertyHandle>& ValueHandle, bool& bOutMultiple)
 	{
 		bOutMultiple = false;
 		const TArray<FPCGExCollectionEntryRef*> Refs = AccessRefs(ValueHandle);
@@ -113,7 +113,7 @@ namespace PCGExCollectionEntryPickerWidget
 		return *Refs[0];
 	}
 
-	static void ApplyWrite(
+	void ApplyWrite(
 		const TSharedRef<IPropertyHandle>& ValueHandle,
 		const FText& TransactionDescription,
 		TFunctionRef<void(FPCGExCollectionEntryRef&)> Mutator)
@@ -125,7 +125,7 @@ namespace PCGExCollectionEntryPickerWidget
 	}
 
 	/** Editor-side resolve: loads the collection if needed (game thread) and mints missing EntryIds. */
-	static UPCGExAssetCollection* LoadCollectionForEditing(const TSoftObjectPtr<UPCGExAssetCollection>& SoftCollection)
+	UPCGExAssetCollection* LoadCollectionForEditing(const TSoftObjectPtr<UPCGExAssetCollection>& SoftCollection)
 	{
 		if (SoftCollection.IsNull())
 		{
@@ -144,7 +144,7 @@ namespace PCGExCollectionEntryPickerWidget
 		return DisplayName.IsEmpty() ? FText::Format(LOCTEXT("EntryByIndex", "Entry {0}"), RawIndex) : FText::FromString(DisplayName);
 	}
 
-	static FText EntryLabel(const UPCGExAssetCollection* Collection, const int32 RawIndex)
+	FText EntryLabel(const UPCGExAssetCollection* Collection, const int32 RawIndex)
 	{
 		const FPCGExAssetCollectionEntry* Entry = Collection ? Collection->GetEntryRaw(RawIndex).Entry : nullptr;
 		return Entry ? FormatEntryLabel(*Entry, RawIndex) : LOCTEXT("MissingEntry", "<missing>");
@@ -152,7 +152,7 @@ namespace PCGExCollectionEntryPickerWidget
 
 	// ---------- Type compatibility ---------------------------------------------------------------
 
-	static bool IsEntryCompatible(const FPCGExAssetCollectionEntry* Entry, TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
+	bool IsEntryCompatible(const FPCGExAssetCollectionEntry* Entry, TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
 	{
 		if (!Entry)
 		{
@@ -173,7 +173,7 @@ namespace PCGExCollectionEntryPickerWidget
 	}
 
 	/** ShortName label of a registered type id ("Mesh"), the id itself when unregistered. */
-	static FText TypeLabel(const PCGExAssetCollection::FTypeId TypeId)
+	FText TypeLabel(const PCGExAssetCollection::FTypeId TypeId)
 	{
 		PCGExAssetCollection::FTypeInfo Info;
 		if (PCGExAssetCollection::FTypeRegistry::Get().GetInfo(TypeId, Info) && Info.EntryStruct)
@@ -183,7 +183,7 @@ namespace PCGExCollectionEntryPickerWidget
 		return FText::FromName(TypeId);
 	}
 
-	static FText FormatAllowedTypes(TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
+	FText FormatAllowedTypes(TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
 	{
 		TArray<FString> Labels;
 		for (const PCGExAssetCollection::FTypeId& TypeId : AllowedTypes)
@@ -194,7 +194,7 @@ namespace PCGExCollectionEntryPickerWidget
 	}
 
 	/** Why an entry cannot be picked under AllowedTypes. Only meaningful when IsEntryCompatible is false. */
-	static FText IncompatibleReason(const FPCGExAssetCollectionEntry* Entry, TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
+	FText IncompatibleReason(const FPCGExAssetCollectionEntry* Entry, TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
 	{
 		if (Entry && Entry->bIsSubCollection)
 		{
@@ -205,7 +205,7 @@ namespace PCGExCollectionEntryPickerWidget
 	}
 
 	/** Collection classes that can hold an entry of an allowed type: typed hosts of those lineages plus heterogeneous hosts. */
-	static TArray<const UClass*> ComputeHostClasses(TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
+	TArray<const UClass*> ComputeHostClasses(TConstArrayView<PCGExAssetCollection::FTypeId> AllowedTypes)
 	{
 		using namespace PCGExAssetCollection;
 
@@ -243,7 +243,7 @@ namespace PCGExCollectionEntryPickerWidget
 		return Out;
 	}
 
-	static bool IsDeclaredSource(const FOptions& Options, const TSoftObjectPtr<UPCGExAssetCollection>& Collection)
+	bool IsDeclaredSource(const FOptions& Options, const TSoftObjectPtr<UPCGExAssetCollection>& Collection)
 	{
 		if (Options.Sources.IsEmpty())
 		{
@@ -288,7 +288,7 @@ namespace PCGExCollectionEntryPickerWidget
 	};
 
 	/** Resident-only resolve (no load on paint). */
-	static FPickInfo EvaluatePick(const TSharedRef<IPropertyHandle>& ValueHandle, const FOptions& Options)
+	FPickInfo EvaluatePick(const TSharedRef<IPropertyHandle>& ValueHandle, const FOptions& Options)
 	{
 		FPickInfo Info;
 		bool bMultiple = false;
@@ -334,7 +334,7 @@ namespace PCGExCollectionEntryPickerWidget
 		return Info;
 	}
 
-	static FText FormatEntryButtonLabel(const FPickInfo& Info, const FOptions& Options)
+	FText FormatEntryButtonLabel(const FPickInfo& Info, const FOptions& Options)
 	{
 		switch (Info.State)
 		{
@@ -366,7 +366,7 @@ namespace PCGExCollectionEntryPickerWidget
 		}
 	}
 
-	static FText FormatPickTooltip(const FPickInfo& Info, const FOptions& Options)
+	FText FormatPickTooltip(const FPickInfo& Info, const FOptions& Options)
 	{
 		const FText CollectionName = FText::FromString(Info.Ref.Collection.GetAssetName());
 		switch (Info.State)
@@ -389,7 +389,7 @@ namespace PCGExCollectionEntryPickerWidget
 	}
 
 	/** Thumbnail asset path of the current pick; empty when unresolved. Cheap (resident-only resolve). */
-	static FSoftObjectPath ResolvePickThumbPath(const TSharedRef<IPropertyHandle>& ValueHandle)
+	FSoftObjectPath ResolvePickThumbPath(const TSharedRef<IPropertyHandle>& ValueHandle)
 	{
 		bool bMultiple = false;
 		const FPCGExCollectionEntryRef Ref = ReadUnanimous(ValueHandle, bMultiple);
@@ -887,7 +887,7 @@ namespace PCGExCollectionEntryPickerWidget
 
 	// ---------- Row ------------------------------------------------------------------------------
 
-	static TSharedRef<SWidget> MakeCollectionBox(const TSharedRef<IPropertyHandle>& ValueHandle, const TSharedRef<FOptions>& Options)
+	TSharedRef<SWidget> MakeCollectionBox(const TSharedRef<IPropertyHandle>& ValueHandle, const TSharedRef<FOptions>& Options)
 	{
 		// Snapshot: the Content Browser runs the filter per asset while scrolling. Empty = no type constraint.
 		const bool bFilterHosts = !Options->AllowedEntryTypes.IsEmpty();
@@ -940,7 +940,7 @@ namespace PCGExCollectionEntryPickerWidget
 			});
 	}
 
-	static bool ReadUnanimousLock(const TSharedRef<IPropertyHandle>& ValueHandle)
+	bool ReadUnanimousLock(const TSharedRef<IPropertyHandle>& ValueHandle)
 	{
 		// Mixed lock states read as locked -- the safe (non-retargeting) presentation.
 		bool bMultiple = false;
@@ -948,7 +948,7 @@ namespace PCGExCollectionEntryPickerWidget
 		return bMultiple || Ref.bLockCollection;
 	}
 
-	static TSharedRef<SWidget> MakeLockToggle(const TSharedRef<IPropertyHandle>& ValueHandle)
+	TSharedRef<SWidget> MakeLockToggle(const TSharedRef<IPropertyHandle>& ValueHandle)
 	{
 		return SNew(SCheckBox)
 			.Style(&FAppStyle::Get().GetWidgetStyle<FCheckBoxStyle>("ToggleButtonCheckbox"))

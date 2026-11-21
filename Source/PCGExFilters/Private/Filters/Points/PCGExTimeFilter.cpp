@@ -48,7 +48,6 @@ void UPCGExTimeFilterFactory::InitConfig_Internal()
 	LocalSampleInputs = Config.SampleInputs;
 	WindingMutation = Config.WindingMutation;
 	bScaleTolerance = false;
-	bUsedForInclusion = false;
 	bIgnoreSelf = Config.bIgnoreSelf;
 	DataMatching = Config.DataMatching;
 }
@@ -206,7 +205,8 @@ namespace PCGExPointFilter
 		}
 
 		// No point index in proxy/collection mode; the getter resolves constants and @Data attributes at any index.
-		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, OperandB->Read(0), TypedFilterFactory->Config.Tolerance);
+		const bool bPass = PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, OperandB->Read(0), TypedFilterFactory->Config.Tolerance);
+		return TypedFilterFactory->Config.bInvert ? !bPass : bPass;
 	}
 
 	// Compare the spline parametric time (alpha) at the closest projection of each point.
@@ -291,7 +291,8 @@ namespace PCGExPointFilter
 			}
 		}
 
-		return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, OperandB->Read(PointIndex), TypedFilterFactory->Config.Tolerance);
+		const bool bPass = PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, Alpha, OperandB->Read(PointIndex), TypedFilterFactory->Config.Tolerance);
+		return TypedFilterFactory->Config.bInvert ? !bPass : bPass;
 	}
 
 	bool FTimeFilter::Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const

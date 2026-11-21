@@ -164,12 +164,9 @@ namespace PCGExSampleVtxByID
 	{
 		TArray<int8> SamplingMask;
 
-		FVector SafeUpVector = FVector::UpVector;
 		TSharedPtr<PCGExDetails::TSettingValue<FVector>> LookAtUpGetter;
 		TSharedPtr<PCGExData::TBuffer<int32>> VtxID32Getter;
 		TSharedPtr<PCGExData::TBuffer<int64>> VtxID64Getter;
-
-		FPCGExBlendingDetails BlendingDetails;
 
 		TSharedPtr<PCGExBlending::FUnionOpsManager> UnionBlendOpsManager;
 		TSharedPtr<PCGExBlending::IUnionBlender> DataBlender;
@@ -182,8 +179,6 @@ namespace PCGExSampleVtxByID
 		{
 			DefaultPointFilterValue = true;
 		}
-
-		virtual ~FProcessor() override;
 
 		void SamplingFailed(const int32 Index);
 

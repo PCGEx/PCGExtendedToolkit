@@ -16,15 +16,14 @@
  * and the factory class to be named UPCGEx##_FILTERID##FilterFactory.
  * The provider must have a Config member that gets copied to the factory.
  *
- * Flow: create factory UObject → copy policies → copy Config → Super::CreateFactory
- * (which also copies MissingDataPolicy and Priority) → Init (validate settings against data)
+ * Flow: create factory UObject → copy InitializationFailurePolicy → copy Config → Super::CreateFactory
+ * (which copies MissingDataPolicy and Priority) → Init (validate settings against data)
  * → on failure, destroy and return nullptr.
  */
 #define PCGEX_CREATE_FILTER_FACTORY(_FILTERID)\
 UPCGExFactoryData* UPCGEx##_FILTERID##FilterProviderSettings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const{\
 	UPCGEx##_FILTERID##FilterFactory* NewFactory = InContext->ManagedObjects->New<UPCGEx##_FILTERID##FilterFactory>();\
 	NewFactory->InitializationFailurePolicy = InitializationFailurePolicy;\
-	NewFactory->MissingDataPolicy = MissingDataPolicy;\
 	NewFactory->Config = Config; Super::CreateFactory(InContext, NewFactory);\
 	if(!NewFactory->Init(InContext)){ InContext->ManagedObjects->Destroy(NewFactory); return nullptr; }\
 	return NewFactory; }

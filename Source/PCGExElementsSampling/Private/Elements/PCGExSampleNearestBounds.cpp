@@ -269,10 +269,6 @@ bool FPCGExSampleNearestBoundsElement::AdvanceWork(FPCGExContext* InContext, con
 
 namespace PCGExSampleNearestBounds
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::SamplingFailed(const int32 Index)
 	{
 		SamplingMask[Index] = false;
@@ -306,6 +302,8 @@ namespace PCGExSampleNearestBounds
 		// Filtered-out points that are not processed as fails keep the point: mask 1, never read as garbage.
 		SamplingMask.Init(1, PointDataFacade->GetNum());
 
+		SafeUpVector = Settings->LookAtUpConstant;
+
 		{
 			PCGExSampling::FCommonOutputConfig Config;
 			PCGEX_OUTPUT_CONFIG_FWD_COMMON
@@ -332,7 +330,8 @@ namespace PCGExSampleNearestBounds
 		else if (Settings->BlendingInterface == EPCGExBlendingInterface::Monolithic)
 		{
 			TSet<FName> MissingAttributes;
-			PCGExBlending::AssembleBlendingDetails(Settings->PointPropertiesBlendingSettings, Settings->TargetAttributes, Context->TargetsHandler->GetFacades(), BlendingDetails, MissingAttributes);
+			const FPCGExPropertiesBlendingDetails PropertiesBlending = Settings->bBlendPointProperties ? Settings->PointPropertiesBlendingSettings : FPCGExPropertiesBlendingDetails(EPCGExBlendingType::None);
+			PCGExBlending::AssembleBlendingDetails(PropertiesBlending, Settings->TargetAttributes, Context->TargetsHandler->GetFacades(), BlendingDetails, MissingAttributes);
 
 			UnionBlender = MakeShared<PCGExBlending::FUnionBlender>(&BlendingDetails, nullptr, Distances);
 			UnionBlender->AddSources(Context->TargetsHandler->GetFacades());

@@ -146,9 +146,7 @@ namespace PCGExFilterGroup
 
 	bool FFilterGroup::PostInitManaged(FPCGExContext* InContext)
 	{
-		bValid = !ManagedFilters.IsEmpty();
-
-		if (!bValid)
+		if (ManagedFilters.IsEmpty())
 		{
 			return false;
 		}

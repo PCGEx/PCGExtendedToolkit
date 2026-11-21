@@ -123,12 +123,6 @@ TArray<FPCGPinProperties> UPCGExExtrudeTensorsSettings::InputPinProperties() con
 	return PinProperties;
 }
 
-bool UPCGExExtrudeTensorsSettings::GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const
-{
-	OutRules.Append(PCGExSorting::GetSortingRules(InContext, PCGExSorting::Labels::SourceSortingRules));
-	return !OutRules.IsEmpty();
-}
-
 PCGEX_INITIALIZE_ELEMENT(ExtrudeTensors)
 PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(ExtrudeTensors)
 
@@ -209,16 +203,13 @@ bool FPCGExExtrudeTensorsElement::AdvanceWork(FPCGExContext* InContext, const UP
 
 namespace PCGExExtrudeTensors
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader)
 	{
 		TProcessor<FPCGExExtrudeTensorsContext, UPCGExExtrudeTensorsSettings>::RegisterBuffersDependencies(FacadePreloader);
 
 		TArray<FPCGExSortRuleConfig> RuleConfigs;
-		if (Settings->GetSortingRules(ExecutionContext, RuleConfigs) && !RuleConfigs.IsEmpty())
+		RuleConfigs.Append(PCGExSorting::GetSortingRules(ExecutionContext, PCGExSorting::Labels::SourceSortingRules));
+		if (!RuleConfigs.IsEmpty())
 		{
 			Sorter = MakeShared<PCGExSorting::FSorter>(Context, PointDataFacade, RuleConfigs);
 			Sorter->SortDirection = Settings->SortDirection;
@@ -418,7 +409,6 @@ namespace PCGExExtrudeTensors
 		}
 
 		NewExtrusion->SetHead(InExtrusion->Head);
-		NewExtrusion->ParentExtrusion = InExtrusion;
 
 		{
 			FWriteScopeLock WriteScopeLock(NewExtrusionLock);
@@ -572,13 +562,15 @@ namespace PCGExExtrudeTensors
 
 	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
 	{
+		TArray<TSharedPtr<FExtrusion>>& ScopeCompleted = CompletedExtrusions->Get_Ref(Scope);
+
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			if (TSharedPtr<FExtrusion> Extrusion = ExtrusionQueue[Index];
 				Extrusion && !Extrusion->Advance())
 			{
 				Extrusion->Complete();
-				CompletedExtrusions->Get(Scope)->Add(Extrusion);
+				ScopeCompleted.Add(Extrusion);
 			}
 		}
 	}

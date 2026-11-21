@@ -13,7 +13,6 @@ class FBlueprintActionDatabaseRegistrar;
 class FKismetCompilerContext;
 class FProperty;
 class UEdGraph;
-class UEdGraphPin;
 class UGraphNodeContextMenuContext;
 class UToolMenu;
 struct FToolMenuSection;
@@ -62,6 +61,7 @@ public:
 	}
 
 	virtual FText GetMenuCategory() const override;
+	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
 	virtual void ExpandNode(FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;
 
 protected:

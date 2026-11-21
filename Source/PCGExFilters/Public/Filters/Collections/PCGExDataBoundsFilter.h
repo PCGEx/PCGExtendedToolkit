@@ -48,10 +48,6 @@ struct FPCGExDataBoundsFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDataBoundsFilterConfig()
-	{
-	}
-
 	/** Operand A */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExDataBoundsAspect OperandA = EPCGExDataBoundsAspect::Volume;
@@ -102,10 +98,6 @@ namespace PCGExPointFilter
 		const TObjectPtr<const UPCGExDataBoundsFilterFactory> TypedFilterFactory;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FDataBoundsFilter() override
-		{
-		}
 	};
 }
 

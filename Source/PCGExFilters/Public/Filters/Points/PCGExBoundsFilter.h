@@ -46,10 +46,6 @@ struct FPCGExBoundsFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExBoundsFilterConfig()
-	{
-	}
-
 	/** How to compare bounds. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExBoundsFilterCompareMode Mode = EPCGExBoundsFilterCompareMode::PerPointBounds;
@@ -151,8 +147,6 @@ namespace PCGExPointFilter
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 
-		virtual ~FBoundsFilter() override = default;
-
 	private:
 		// Cached config
 		const TArray<TSharedPtr<PCGExMath::OBB::FCollection>>* Collections = nullptr;
@@ -172,6 +166,11 @@ namespace PCGExPointFilter
 		TSharedPtr<PCGExMatching::FDataMatcher> InverseMatcher;
 		TArray<FPCGExTaggedData> BoundsCandidates;
 		bool bNoMatchResult = false;
+
+		// Indices of the bounds data a tested data may be checked against: its own are dropped under Ignore Self.
+		void GetEligibleIndices(const UPCGData* InTestedData, TArray<int32>& OutIndices) const;
+		// Bounds one tested data is checked against once static data matching applied. False when matching rejects them all.
+		bool ResolveStaticCollections(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<TSharedPtr<PCGExMath::OBB::FCollection>>& OutCollections) const;
 
 		// Core test implementation
 		bool TestPoint(const FTransform& Transform, const FBox& LocalBox) const;

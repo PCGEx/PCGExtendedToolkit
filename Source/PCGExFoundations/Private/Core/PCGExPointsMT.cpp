@@ -230,7 +230,7 @@ namespace PCGExPointsMT
 
 	int32 IProcessor::FilterAll()
 	{
-		return FilterScope(PCGExMT::FScope(0, PointDataFacade->GetNum()), true);
+		return FilterScope(PCGExMT::FScope(0, PointDataFacade->GetNum()), !IsTrivial());
 	}
 
 	TSharedPtr<IProcessor> IBatch::NewProcessorInstance(const TSharedRef<PCGExData::FFacade>& InPointDataFacade) const
@@ -267,8 +267,6 @@ namespace PCGExPointsMT
 
 		TaskManager = InTaskManager;
 		PCGEX_ASYNC_CHKD_VOID(TaskManager)
-
-		TSharedPtr<IBatch> SelfPtr = SharedThis(this);
 
 		const bool bDoInitData = DataInitializationPolicy == PCGExData::EIOInit::Duplicate || DataInitializationPolicy == PCGExData::EIOInit::New;
 

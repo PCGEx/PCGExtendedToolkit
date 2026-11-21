@@ -116,7 +116,6 @@ struct FPCGExRefineEdgesContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExRefineEdgesElement;
 
-	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> VtxFilterFactories;
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> EdgeFilterFactories;
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> SanitizationFilterFactories;
 
@@ -159,7 +158,6 @@ namespace PCGExRefineEdges
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExRefineEdgesContext, UPCGExRefineEdgesSettings>
 	{
 		friend class FSanitizeRangeTask;
-		friend class FFilterRangeTask;
 
 	protected:
 		TSharedPtr<PCGExClusterFilter::FManager> SanitizationFilterManager;
@@ -169,15 +167,12 @@ namespace PCGExRefineEdges
 		FPCGExFilterResultDetails ResultOutputEdges = FPCGExFilterResultDetails(false, false);
 
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
-		mutable FRWLock NodeLock;
 
 	public:
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessNodes(const PCGExMT::FScope& Scope) override;
@@ -210,7 +205,6 @@ namespace PCGExRefineEdges
 		}
 
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;
-		virtual void OnProcessingPreparationComplete() override;
 		virtual void Write() override;
 	};
 }

@@ -26,8 +26,6 @@ namespace PCGExSkinnedMeshCollection
 	 *  override entry types from PCGExMeshCollection (descriptor-agnostic). */
 	class PCGEXCOLLECTIONS_API FMicroCache : public PCGExAssetCollection::FMicroCache
 	{
-		int32 HighestMaterialIndex = -1;
-
 	public:
 		FMicroCache() = default;
 
@@ -36,12 +34,7 @@ namespace PCGExSkinnedMeshCollection
 			return PCGExAssetCollection::TypeIds::SkinnedMesh;
 		}
 
-		int32 GetHighestIndex() const
-		{
-			return HighestMaterialIndex;
-		}
-
-		void ProcessMaterialOverrides(const TArray<FPCGExMaterialOverrideSingleEntry>& Overrides, int32 InSlotIndex = -1);
+		void ProcessMaterialOverrides(const TArray<FPCGExMaterialOverrideSingleEntry>& Overrides);
 		void ProcessMaterialOverrides(const TArray<FPCGExMaterialOverrideCollection>& Overrides);
 	};
 }

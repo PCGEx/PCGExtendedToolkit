@@ -28,7 +28,7 @@ namespace PCGExMath::OBB
 		});
 	}
 
-	void FIntersections::SortAndDedupe(float Tolerance)
+	void FIntersections::SortAndDedupe()
 	{
 		Sort();
 		Cuts.SetNum(Algo::Unique(Cuts, [](const FCut& A, const FCut& B)
@@ -52,8 +52,10 @@ namespace PCGExMath::OBB
 		const FMatrix Matrix = Box.GetMatrix();
 		const FBox LocalBox = Box.GetLocalBox();
 
-		const FVector LocalStart = Matrix.InverseTransformPosition(Start);
-		const FVector LocalEnd = Matrix.InverseTransformPosition(End);
+		// FMatrix::InverseTransformPosition is InverseFast().TransformPosition(): inverted once for both points.
+		const FMatrix InvMatrix = Matrix.InverseFast();
+		const FVector LocalStart = InvMatrix.TransformPosition(Start);
+		const FVector LocalEnd = InvMatrix.TransformPosition(End);
 
 		const bool bStartInside = LocalBox.IsInside(LocalStart);
 		const bool bEndInside = LocalBox.IsInside(LocalEnd);
@@ -171,8 +173,9 @@ namespace PCGExMath::OBB
 		const FMatrix Matrix = Box.GetMatrix();
 		const FBox LocalBox = Box.GetLocalBox();
 
-		const FVector LocalStart = Matrix.InverseTransformPosition(Start);
-		const FVector LocalEnd = Matrix.InverseTransformPosition(End);
+		const FMatrix InvMatrix = Matrix.InverseFast();
+		const FVector LocalStart = InvMatrix.TransformPosition(Start);
+		const FVector LocalEnd = InvMatrix.TransformPosition(End);
 
 		if (LocalBox.IsInside(LocalStart) || LocalBox.IsInside(LocalEnd))
 		{

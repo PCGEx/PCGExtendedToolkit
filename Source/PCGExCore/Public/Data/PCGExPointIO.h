@@ -746,6 +746,10 @@ namespace PCGExData
 		void PruneNullEntries(const bool bUpdateIndices);
 
 		void Flush();
+
+	protected:
+		// Sorts the pairs, then stages each one through StageFn under the pairs lock; returns the staged count.
+		int32 StageSortedPairs(TFunctionRef<bool(const FPointIO&, FPCGExContext*)> StageFn);
 	};
 
 	class PCGEXCORE_API FPointIOTaggedEntries : public TSharedFromThis<FPointIOTaggedEntries>
@@ -795,8 +799,6 @@ namespace PCGExData
 		PCGEXCORE_API int32 GetTotalPointsNum(const TArray<TSharedPtr<FPointIO>>& InIOs, const EIOSide InSide = EIOSide::In);
 
 		PCGEXCORE_API const UPCGBasePointData* GetPointData(const FPCGContext* Context, const FPCGTaggedData& Source);
-
-		PCGEXCORE_API UPCGBasePointData* GetMutablePointData(const FPCGContext* Context, const FPCGTaggedData& Source);
 
 		PCGEXCORE_API const UPCGBasePointData* ToPointData(FPCGExContext* Context, const FPCGTaggedData& Source);
 	}

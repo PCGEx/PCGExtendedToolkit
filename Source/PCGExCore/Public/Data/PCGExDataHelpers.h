@@ -44,9 +44,6 @@ namespace PCGExData::Helpers
 	template <typename T>
 	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute);
 
-	template <typename T>
-	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute, T Fallback);
-
 	/**
 	 * @Data identifier for a user-typed name: only the parsed attribute name is kept, any domain or sub-selection is
 	 * dropped. False, leaving OutIdentifier untouched, for a property selector.
@@ -79,7 +76,6 @@ namespace PCGExData::Helpers
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
 extern template _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute); \
-extern template _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute, _TYPE Fallback); \
 extern template bool SetDataValue<_TYPE>(FPCGMetadataAttributeBase* Attribute, const _TYPE Value); \
 extern template bool SetDataValue<_TYPE>(UPCGData* InData, FName Name, const _TYPE Value); \
 extern template bool SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifier Identifier, const _TYPE Value);
@@ -215,14 +211,6 @@ extern template bool SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifi
 	PCGEXCORE_API bool PropertyBroadcastAttribute(
 		const FPCGMetadataAttributeBase* SourceAttr, PCGMetadataEntryKey SourceKey,
 		const TSharedPtr<IBuffer>& TargetWriter);
-
-	/**
-	 * Like PropertyBroadcastAttribute but writes to a specific set of target indices instead of
-	 * all slots. Used by FDataForwardHandler::Forward(SourceIdx, FFacade, Indices).
-	 */
-	PCGEXCORE_API bool PropertyScatterAttribute(
-		const FPCGMetadataAttributeBase* SourceAttr, PCGMetadataEntryKey SourceKey,
-		const TSharedPtr<IBuffer>& TargetWriter, TArrayView<const int32> Indices);
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
 extern template bool TryReadDataValue<_TYPE>(FPCGExContext* InContext, const UPCGData* InData, const FPCGAttributePropertyInputSelector& InSelector, _TYPE& OutValue, const bool bQuiet); \

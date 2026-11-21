@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGCrc.h"
 #include "PCGExFilterCommon.h"
 #include "Factories/PCGExFactories.h"
 #include "Core/PCGExFilterTypeSets.h"
@@ -235,7 +236,6 @@ namespace PCGExPathSplineMeshSimple
 	protected:
 		bool bClosedLoop = false;
 		bool bUseTags = false;
-		bool bIsPreviewMode = false;
 		int8 bHasValidSegments = false;
 
 		FPCGExSplineMeshMutationDetails MutationDetails;
@@ -257,7 +257,8 @@ namespace PCGExPathSplineMeshSimple
 
 		TArray<FName> DataTags;
 		AActor* TargetActor = nullptr;
-		EObjectFlags ObjectFlags = RF_NoFlags;
+		/** This input's slot; each segment's component is found again under it, by segment index */
+		FPCGCrc SlotCrc;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

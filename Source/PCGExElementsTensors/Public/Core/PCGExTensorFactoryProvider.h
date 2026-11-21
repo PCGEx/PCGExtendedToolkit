@@ -119,7 +119,6 @@ protected:
 	virtual TSharedPtr<PCGExTensor::FEffectorsArray> GetEffectorsArray() const;
 
 	virtual bool InitInternalFacade(FPCGExContext* InContext);
-	virtual void PrepareSinglePoint(int32 Index) const;
 };
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Graph|Params", meta=(PCGExProxyInterface))

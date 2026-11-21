@@ -375,7 +375,6 @@ namespace PCGExStagedTypeFilter
 		const int32 MaxRange = PCGExMT::FScope::GetMaxRange(Loops);
 
 		BucketIndices.SetNum(TotalBuckets);
-		BucketCounts.Init(0, TotalBuckets);
 
 		for (int32 i = 0; i < TotalBuckets; i++)
 		{
@@ -430,12 +429,10 @@ namespace PCGExStagedTypeFilter
 				if (Bucket >= 0)
 				{
 					BucketIndices[Bucket]->Get_Ref(Scope).Add(Index);
-					FPlatformAtomics::InterlockedAdd(&BucketCounts[Bucket], 1);
 				}
 				else
 				{
 					BucketIndices[UnmatchedIdx]->Get_Ref(Scope).Add(Index);
-					FPlatformAtomics::InterlockedAdd(&BucketCounts[UnmatchedIdx], 1);
 				}
 			}
 		}
@@ -494,6 +491,14 @@ namespace PCGExStagedTypeFilter
 		}
 
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExStagedTypeFilter::OnPointsProcessingComplete);
+
+		// Counted before the dispatch: it collapses, and so empties, the scoped arrays.
+		TArray<int32> BucketCounts;
+		BucketCounts.Reserve(BucketIndices.Num());
+		for (const TSharedPtr<PCGExMT::TScopedArray<int32>>& ScopedIndices : BucketIndices)
+		{
+			BucketCounts.Add(ScopedIndices->GetTotalNum());
+		}
 
 		PCGExBucketDispatchHelpers::DispatchBuckets(
 			Context->TypeOutputs,

@@ -19,10 +19,6 @@ struct FPCGExInclusionFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExInclusionFilterConfig()
-	{
-	}
-
 	/** Projection settings (used for inclusion checks). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExGeo2DProjectionDetails ProjectionDetails;
@@ -154,10 +150,6 @@ namespace PCGExPointFilter
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FInclusionFilter() override
-		{
-		}
 	};
 }
 

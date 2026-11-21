@@ -114,9 +114,6 @@ namespace PCGExData
 		virtual PCGExValueHash ReadValueHash(const int32 Index) = 0;
 
 		// Unsafe read value hash from output
-		virtual PCGExValueHash GetValueHash(const int32 Index) = 0;
-
-		// Unsafe read value hash from output
 		virtual int32 GetNumValues(const EIOSide InSide = EIOSide::In) = 0;
 
 		const FPCGMetadataAttributeBase* InAttribute = nullptr;
@@ -207,12 +204,6 @@ namespace PCGExData
 		virtual int32 GetValueSize() const = 0;
 		virtual int32 GetValueAlignment() const = 0;
 
-		// Attribute descriptor for this buffer. Always non-null -- synthetic Desc on TBuffer<T>
-		// (Name + TTraits<T>::Type), real Desc on FPropertyBuffer (carries ContainerTypes,
-		// ValueTypeObject, KeyType). Use for shape introspection without downcasting.
-		// Read-only pointer to internal state -- do not mutate.
-		FORCEINLINE const FPCGMetadataAttributeDesc* GetDesc() const { return &Desc; }
-
 		// True iff this buffer is property-backed (FPropertyArrayBuffer / FPropertySingleValueBuffer
 		// fallback path for extended/container types). Derived from GetSourceProperty -- typed
 		// TBuffer<T> never carries an FProperty.
@@ -225,8 +216,8 @@ namespace PCGExData
 	protected:
 		void SetType(const EPCGMetadataTypes InType);
 
-		// Attribute descriptor cache -- populated by subclass constructors / Init paths.
-		// Exposed read-only via GetDesc(); see comment there.
+		// Attribute descriptor cache -- populated by subclass constructors / Init paths: synthetic on
+		// TBuffer<T> (Name + TTraits<T>::Type), the attribute's own on FPropertyBuffer.
 		FPCGMetadataAttributeDesc Desc;
 	};
 
@@ -268,13 +259,9 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 
 		// Unsafe read from output
 		virtual const T& GetValue(const int32 Index) = 0;
-		virtual const void GetValues(const int32 Start, TArrayView<T> OutResults) = 0;
 
 		// Unsafe read value hash from input
 		virtual PCGExValueHash ReadValueHash(const int32 Index) override;
-
-		// Unsafe read value hash from output
-		virtual PCGExValueHash GetValueHash(const int32 Index) override;
 
 		// Unsafe set value in output
 		virtual void SetValue(const int32 Index, const T& Value) = 0;
@@ -286,24 +273,6 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 
 		void DumpValues(TArray<T>& OutValues) const;
 		void DumpValues(const TSharedPtr<TArray<T>>& OutValues) const;
-
-		static const void* ReadRawImpl(const IBuffer* Self, int32 Index)
-		{
-			const TBuffer* Buffer = static_cast<const TBuffer*>(Self);
-			return &Buffer->Read(Index);
-		}
-
-		static const void* GetValueRawImpl(IBuffer* Self, int32 Index)
-		{
-			TBuffer* Buffer = static_cast<TBuffer*>(Self);
-			return &Buffer->GetValue(Index);
-		}
-
-		static void SetValueRawImpl(IBuffer* Self, int32 Index, const void* Value)
-		{
-			TBuffer* Buffer = static_cast<TBuffer*>(Self);
-			Buffer->SetValue(Index, *static_cast<const T*>(Value));
-		}
 	};
 
 #define PCGEX_USING_TBUFFER \
@@ -342,16 +311,12 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		TArray<TSharedPtr<IBuffer>> Buffers;
 		TMap<uint64, TSharedPtr<IBuffer>> BufferMap;
 
-		TMap<FName, FName> WritableRemap; // TODO : Manage remapping in the facade directly to remove the need for dummy attributes
-
 		bool bSupportsScopedGet = false;
 
 		int32 GetNum(const EIOSide InSide = EIOSide::In) const;
 
 		TSharedPtr<IBuffer> FindBuffer_Unsafe(const uint64 UID);
 		TSharedPtr<IBuffer> FindBuffer(const uint64 UID);
-		TSharedPtr<IBuffer> FindReadableAttributeBuffer(const FPCGAttributeIdentifier& InIdentifier);
-		TSharedPtr<IBuffer> FindWritableAttributeBuffer(const FPCGAttributeIdentifier& InIdentifier);
 
 		EPCGPointNativeProperties GetAllocations() const;
 
@@ -365,7 +330,6 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		~FFacade() = default;
 
 		bool IsDataValid(const EIOSide InSide) const;
-		bool ShareSource(const FFacade* OtherManager) const;
 
 		template <typename T>
 		TSharedPtr<TBuffer<T>> FindBuffer_Unsafe(const FPCGAttributeIdentifier& InIdentifier);
@@ -468,20 +432,6 @@ extern template bool IBuffer::IsA<_TYPE>() const;
 		FScope GetOutRange(const int32 Start, const int32 End, const bool bInclusive = true) const;
 
 	protected:
-		template <typename Func>
-		void ForEachWritable(Func&& Callback)
-		{
-			for (int i = 0; i < Buffers.Num(); i++)
-			{
-				const TSharedPtr<IBuffer> Buffer = Buffers[i];
-				if (!Buffer.IsValid() || !Buffer->IsWritable() || !Buffer->IsEnabled())
-				{
-					continue;
-				}
-				Callback(Buffer);
-			}
-		}
-
 		bool ValidateOutputsBeforeWriting() const;
 		void Flush(const TSharedPtr<IBuffer>& Buffer);
 	};
@@ -525,9 +475,6 @@ extern template bool TryReadMark<_TYPE>(const TSharedRef<FPointIO>& PointIO, con
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 
 #undef PCGEX_TPL
-
-	PCGEXCORE_API
-	UPCGBasePointData* GetMutablePointData(FPCGContext* Context, const FPCGTaggedData& Source);
 
 #pragma endregion
 

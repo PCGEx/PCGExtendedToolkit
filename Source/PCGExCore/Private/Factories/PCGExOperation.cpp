@@ -24,10 +24,6 @@ void FPCGExOperation::RegisterPrimaryBuffersDependencies(PCGExData::FFacadePrelo
 {
 }
 
-void FPCGExOperation::InitForScopes(const TArray<PCGExMT::FScope>& Loops)
-{
-}
-
 TSharedPtr<PCGExMT::FScopedContainer> FPCGExOperation::GetScopedContainer(const PCGExMT::FScope& InScope) const
 {
 	return nullptr;

@@ -109,7 +109,6 @@ namespace PCGExGraphs
 
 		GraphBuilder = MakeShared<FGraphBuilder>(UnionDataFacade, &BuilderDetails);
 		GraphBuilder->bInheritNodeData = false;
-		GraphBuilder->bRequiresEdgeResort = false; // All insertion is sequential → deterministic node ordering
 		// TODO(perf): expose an opt-in Morton remap step on FUnionTableBuilder so we can reinstate the
 		// fast-path. Lexicographic key sort is deterministic but not Morton-spatial.
 		GraphBuilder->bNodesPreSorted = false;
@@ -340,8 +339,6 @@ namespace PCGExGraphs
 		ScopedPERecords->Collapse(Records);
 		ScopedPERecords.Reset();
 
-		PENum = Records.Num();
-
 		if (Records.IsEmpty())
 		{
 			OnPointEdgeIntersectionsComplete();
@@ -458,8 +455,6 @@ namespace PCGExGraphs
 
 		ScopedEERecords->Collapse(EECrossings);
 		ScopedEERecords.Reset();
-
-		EENum = EECrossings.Num();
 
 		if (EECrossings.IsEmpty())
 		{

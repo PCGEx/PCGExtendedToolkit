@@ -117,8 +117,6 @@ namespace PCGExConnectPoints
 		{
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void OnPreparationComplete();
 

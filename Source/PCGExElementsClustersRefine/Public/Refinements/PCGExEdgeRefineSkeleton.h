@@ -43,8 +43,6 @@ public:
 		return true;
 	}
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	virtual bool WantsIndividualEdgeProcessing() const override
 	{
 		return true;

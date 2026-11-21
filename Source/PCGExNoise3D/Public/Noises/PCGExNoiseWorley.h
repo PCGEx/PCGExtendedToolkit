@@ -36,11 +36,6 @@ struct FPCGExNoiseConfigWorley : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigWorley()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Distance function to use */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExWorleyDistanceFunc DistanceFunction = EPCGExWorleyDistanceFunc::Euclidean;
@@ -64,8 +59,6 @@ public:
 	EPCGExWorleyDistanceFunc DistanceFunction = EPCGExWorleyDistanceFunc::Euclidean;
 	EPCGExWorleyReturnType ReturnType = EPCGExWorleyReturnType::F1;
 	double Jitter = 1.0;
-
-	virtual ~FPCGExNoiseWorley() override = default;
 
 	virtual void PostInitDerived() override;
 

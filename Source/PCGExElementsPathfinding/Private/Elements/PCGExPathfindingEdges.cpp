@@ -10,6 +10,7 @@
 #include "Clusters/PCGExCluster.h"
 #include "Clusters/PCGExClustersHelpers.h"
 #include "Core/PCGExHeuristicsFactoryProvider.h"
+#include "Core/PCGExMTCommon.h"
 #include "Core/PCGExPathQuery.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
@@ -267,6 +268,24 @@ bool FPCGExPathfindingEdgesElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	// Pairs share seeds and goals; slotting the distinct ones lets each cluster pick a node once per point.
+	TMap<int32, int32> SeedSlots;
+	TMap<int32, int32> GoalSlots;
+
+	auto SlotOf = [](TMap<int32, int32>& Slots, TArray<int32>& UniquePoints, const int32 PointIndex)
+	{
+		const int32* Slot = Slots.Find(PointIndex);
+		return Slot ? *Slot : Slots.Add(PointIndex, UniquePoints.Add(PointIndex));
+	};
+
+	Context->PickSlots.Reserve(Context->SeedGoalPairs.Num());
+	for (const uint64 Pair : Context->SeedGoalPairs)
+	{
+		const int32 SeedSlot = SlotOf(SeedSlots, Context->UniqueSeeds, static_cast<int32>(PCGEx::H64A(Pair)));
+		const int32 GoalSlot = SlotOf(GoalSlots, Context->UniqueGoals, static_cast<int32>(PCGEx::H64B(Pair)));
+		Context->PickSlots.Add(PCGEx::H64(SeedSlot, GoalSlot));
+	}
+
 	return true;
 }
 
@@ -402,9 +421,46 @@ namespace PCGExPathfindingEdges
 			}
 		}
 
+		const TSharedRef<PCGExClusters::FCluster> ClusterRef = Cluster.ToSharedRef();
+
+		const int32 NumSeedPicks = Context->UniqueSeeds.Num();
+		const int32 NumGoalPicks = Context->UniqueGoals.Num();
+
+		TArray<PCGExPathfinding::FNodePick> SeedPicks;
+		SeedPicks.Reserve(NumSeedPicks);
+		for (const int32 SeedIndex : Context->UniqueSeeds)
+		{
+			SeedPicks.Emplace(Context->SeedsDataFacade->Source->GetInPoint(SeedIndex));
+		}
+
+		TArray<PCGExPathfinding::FNodePick> GoalPicks;
+		GoalPicks.Reserve(NumGoalPicks);
+		for (const int32 GoalIndex : Context->UniqueGoals)
+		{
+			GoalPicks.Emplace(Context->GoalsDataFacade->Source->GetInPoint(GoalIndex));
+		}
+
+		// One pick per distinct point rather than per query: each is a whole-cluster scan without the octree.
+		// Iterations write their own pick only; the cluster is read-only from here on.
+		PCGExMT::ParallelOrSequential(
+			NumSeedPicks + NumGoalPicks,
+			[&](const int32 i)
+			{
+				if (i < NumSeedPicks)
+				{
+					SeedPicks[i].ResolveNode(ClusterRef, Settings->SeedPicking);
+				}
+				else
+				{
+					GoalPicks[i - NumSeedPicks].ResolveNode(ClusterRef, Settings->GoalPicking);
+				}
+			}, /*Threshold=*/IsTrivial() ? MAX_int32 : 2, EParallelForFlags::Unbalanced);
+
 		for (int i = 0; i < NumQueries; i++)
 		{
-			Queries[i] = MakeShared<PCGExPathfinding::FPathQuery>(Cluster.ToSharedRef(), Context->SeedsDataFacade->Source->GetInPoint(PCGEx::H64A(Context->SeedGoalPairs[i])), Context->GoalsDataFacade->Source->GetInPoint(PCGEx::H64B(Context->SeedGoalPairs[i])), i);
+			const uint64 Slots = Context->PickSlots[i];
+			Queries[i] = MakeShared<PCGExPathfinding::FPathQuery>(ClusterRef, SeedPicks[PCGEx::H64A(Slots)], GoalPicks[PCGEx::H64B(Slots)], i);
+			Queries[i]->UpdatePickResolution();
 			if (!bVisited)
 			{
 				QueriesIO[i]->Disable();
@@ -444,8 +500,6 @@ namespace PCGExPathfindingEdges
 			{
 				Query->Cleanup();
 			};
-
-			Query->ResolvePicks(Settings->SeedPicking, Settings->GoalPicking);
 
 			if (!Query->HasValidEndpoints())
 			{

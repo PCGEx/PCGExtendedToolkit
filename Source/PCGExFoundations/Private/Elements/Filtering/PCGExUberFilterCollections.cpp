@@ -109,8 +109,6 @@ bool FPCGExUberFilterCollectionsElement::AdvanceWork(FPCGExContext* InContext, c
 	{
 		if (!Context->bHasOnlyCollectionFilters)
 		{
-			Context->NumPairs = Context->MainPoints->Pairs.Num();
-
 			if (!Context->StartBatchProcessingPoints(
 				[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 				{
@@ -168,10 +166,6 @@ bool FPCGExUberFilterCollectionsElement::AdvanceWork(FPCGExContext* InContext, c
 
 namespace PCGExUberFilterCollections
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExUberFilterCollections::Process);
@@ -231,10 +225,6 @@ namespace PCGExUberFilterCollections
 				{
 					FPlatformAtomics::InterlockedAdd(&NumInside, 1);
 				}
-				else
-				{
-					FPlatformAtomics::InterlockedAdd(&NumOutside, 1);
-				}
 			}
 		}
 		else
@@ -244,10 +234,6 @@ namespace PCGExUberFilterCollections
 				if (PointFilterCache[Index])
 				{
 					FPlatformAtomics::InterlockedAdd(&NumInside, 1);
-				}
-				else
-				{
-					FPlatformAtomics::InterlockedAdd(&NumOutside, 1);
 				}
 			}
 		}
@@ -278,28 +264,26 @@ namespace PCGExUberFilterCollections
 			return;
 		}
 
-		TSharedPtr<PCGExData::FPointIO> OutIO;
-
 		switch (Settings->Mode)
 		{
 		default: case EPCGExUberFilterCollectionsMode::All:
 			if (NumInside == NumPoints)
 			{
-				OutIO = Context->Inside->Add(PointDataFacade->Source);
+				Context->Inside->Add(PointDataFacade->Source);
 			}
 			else
 			{
-				OutIO = Context->Outside->Add(PointDataFacade->Source);
+				Context->Outside->Add(PointDataFacade->Source);
 			}
 			break;
 		case EPCGExUberFilterCollectionsMode::Any:
 			if (NumInside != 0)
 			{
-				OutIO = Context->Inside->Add(PointDataFacade->Source);
+				Context->Inside->Add(PointDataFacade->Source);
 			}
 			else
 			{
-				OutIO = Context->Outside->Add(PointDataFacade->Source);
+				Context->Outside->Add(PointDataFacade->Source);
 			}
 			break;
 		case EPCGExUberFilterCollectionsMode::Partial:
@@ -307,11 +291,11 @@ namespace PCGExUberFilterCollections
 			{
 				if (PCGExCompare::Compare(Settings->Comparison, NumInside, Settings->IntThreshold, 0))
 				{
-					OutIO = Context->Inside->Add(PointDataFacade->Source);
+					Context->Inside->Add(PointDataFacade->Source);
 				}
 				else
 				{
-					OutIO = Context->Outside->Add(PointDataFacade->Source);
+					Context->Outside->Add(PointDataFacade->Source);
 				}
 			}
 			else
@@ -319,11 +303,11 @@ namespace PCGExUberFilterCollections
 				const double Ratio = static_cast<double>(NumInside) / static_cast<double>(NumPoints);
 				if (PCGExCompare::Compare(Settings->Comparison, Ratio, Settings->DblThreshold, Settings->Tolerance))
 				{
-					OutIO = Context->Inside->Add(PointDataFacade->Source);
+					Context->Inside->Add(PointDataFacade->Source);
 				}
 				else
 				{
-					OutIO = Context->Outside->Add(PointDataFacade->Source);
+					Context->Outside->Add(PointDataFacade->Source);
 				}
 			}
 			break;

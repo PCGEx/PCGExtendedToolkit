@@ -68,9 +68,4 @@ public:
 	/** Return true when the hidden set changed; a change saves the config and broadcasts. */
 	bool SetCategoryGroupHidden(FName Group, bool bHidden);
 	bool SetCategoryGroupsHidden(TConstArrayView<FName> Groups, bool bHidden);
-
-protected:
-	/** Internal version tracking. */
-	UPROPERTY(EditAnywhere, config, Category = Settings, AdvancedDisplay)
-	int64 PCGExDataVersion = -1;
 };

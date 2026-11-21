@@ -67,7 +67,6 @@ namespace PCGExData
 			{
 				FReadScopeLock ReadScopeLock(TagsLock);
 
-				TArray<T> ValuesForKey;
 				if (const TSharedPtr<IDataValue>* ValueTagPtr = ValueTags.Find(Key))
 				{
 					if ((*ValueTagPtr)->GetTypeId() == PCGExTypes::TTraits<T>::Type)

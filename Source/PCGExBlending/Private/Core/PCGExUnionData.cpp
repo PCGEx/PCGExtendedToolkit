@@ -123,13 +123,6 @@ namespace PCGExData
 		Entries.Init(nullptr, InNum);
 	}
 
-	TSharedPtr<IUnionData> FUnionMetadata::NewEntry_Unsafe(const FConstPoint& Point)
-	{
-		TSharedPtr<IUnionData> NewUnionData = Entries.Add_GetRef(MakeShared<IUnionData>());
-		NewUnionData->Add_Unsafe(Point);
-		return NewUnionData;
-	}
-
 	TSharedPtr<IUnionData> FUnionMetadata::NewEntryAt_Unsafe(const int32 ItemIndex)
 	{
 		Entries[ItemIndex] = MakeShared<IUnionData>();

@@ -76,7 +76,7 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorQuotaConfig
 };
 
 /**
- * Collection-derived state for Quota: per-entry raw quota values + weights, plus -- for the
+ * Collection-derived state for Quota: per-entry raw quota values, plus -- for the
  * AllInputs scope -- the shared atomic counter block itself. The counters are the sanctioned
  * exception to the shared-data read-only contract: lock-free atomics, mutated only through
  * FPCGExPickAvailability semantics, safe for concurrent facades by construction.
@@ -84,7 +84,6 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorQuotaConfig
 class FPCGExQuotaSharedData : public PCGExCollections::FSelectorSharedData
 {
 public:
-	TArray<double> EntryWeights; // (Weight + 1), parallel to Target->Entries
 	TArray<double> MaxValues;    // raw property values; < 0 (or unresolved) = uncapped
 	TArray<double> MinValues;    // raw property values; <= 0 (or unresolved) = no minimum
 

@@ -18,9 +18,6 @@
 class PCGEXNOISE3D_API FPCGExNoise3DOperation : public FPCGExOperation
 {
 public:
-	/** Weight factor for blending */
-	double WeightFactor = 1.0;
-
 	/** Optional remap curve LUT */
 	PCGExFloatLUT RemapLUT = nullptr;
 

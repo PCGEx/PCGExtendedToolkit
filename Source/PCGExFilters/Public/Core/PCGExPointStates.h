@@ -19,9 +19,6 @@ struct PCGEXFILTERS_API FPCGExStateConfigBase
 	{
 	}
 
-	FName StateName = NAME_None;
-	int32 StateId = 0;
-
 	/** Flags */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable, InlineEditConditionToggle))
 	bool bOnTestPass = true;
@@ -91,7 +88,6 @@ public:
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 
 	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const override;
-	virtual void BeginDestroy() override;
 };
 
 namespace PCGExPointStates
@@ -121,8 +117,6 @@ namespace PCGExPointStates
 			  , StateFactory(InFactory)
 		{
 		}
-
-		virtual ~FState() override;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		bool InitInternalManager(FPCGExContext* InContext, const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>& InFactories);
@@ -206,6 +200,5 @@ public:
 #endif
 
 protected:
-	virtual TSet<FPCGDataTypeBaseId> GetInternalFilterTypes() const;
 	virtual void OutputBitmasks(FPCGExContext* InContext, const FPCGExStateConfigBase& InConfig) const;
 };

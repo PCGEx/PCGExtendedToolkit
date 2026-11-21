@@ -105,11 +105,6 @@ struct PCGEXCORE_API FPCGExNodeSelectionDetails
 
 namespace PCGExClusters
 {
-	namespace States
-	{
-		PCGEX_CTX_STATE(State_ReadyForNextEdges)
-	}
-
 	/** Edge count above which cluster adjacency is built with the multi-pass parallel
 	 * path instead of a single sequential loop. Below this, the extra passes cost more
 	 * than they save, and sequential builds keep many-small-clusters batches free of

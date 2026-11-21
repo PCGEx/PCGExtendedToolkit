@@ -151,10 +151,6 @@ bool FPCGExClusterCentralityElement::AdvanceWork(FPCGExContext* InContext, const
 
 namespace PCGExClusterCentrality
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExClusterCentrality::Process);
@@ -325,11 +321,7 @@ namespace PCGExClusterCentrality
 					ProcessSingleNode_Betweenness(RandomSamples[Index], LocalScores, Score, Sigma, Delta, Pred, Stack, Queue);
 				}
 
-				const double Ratio = static_cast<double>(NumNodes) / static_cast<double>(RandomSamples.Num());
-				for (double& B : LocalScores)
-				{
-					B *= Ratio;
-				}
+				ApplyDownsampleRatio(LocalScores);
 			}
 			else
 			{
@@ -348,11 +340,7 @@ namespace PCGExClusterCentrality
 					ProcessSingleNode_Closeness(RandomSamples[Index], LocalScores, Score, Stack, Queue);
 				}
 
-				const double Ratio = static_cast<double>(NumNodes) / static_cast<double>(RandomSamples.Num());
-				for (double& B : LocalScores)
-				{
-					B *= Ratio;
-				}
+				ApplyDownsampleRatio(LocalScores);
 			}
 			else
 			{
@@ -371,11 +359,7 @@ namespace PCGExClusterCentrality
 					ProcessSingleNode_HarmonicCloseness(RandomSamples[Index], LocalScores, Score, Stack, Queue);
 				}
 
-				const double Ratio = static_cast<double>(NumNodes) / static_cast<double>(RandomSamples.Num());
-				for (double& B : LocalScores)
-				{
-					B *= Ratio;
-				}
+				ApplyDownsampleRatio(LocalScores);
 			}
 			else
 			{
@@ -384,6 +368,15 @@ namespace PCGExClusterCentrality
 					ProcessSingleNode_HarmonicCloseness(Index, LocalScores, Score, Stack, Queue);
 				}
 			}
+		}
+	}
+
+	void FProcessor::ApplyDownsampleRatio(TArray<double>& LocalScores) const
+	{
+		const double Ratio = static_cast<double>(NumNodes) / static_cast<double>(RandomSamples.Num());
+		for (double& B : LocalScores)
+		{
+			B *= Ratio;
 		}
 	}
 
@@ -458,9 +451,10 @@ namespace PCGExClusterCentrality
 
 #pragma endregion
 
-#pragma region ProcessSingleNode_Closeness
+#pragma region FindDistancesFrom
 
-	void FProcessor::ProcessSingleNode_Closeness(const int32 Index, TArray<double>& LocalScores, TArray<double>& Score, TArray<int32>& Stack, const TSharedPtr<PCGEx::FScoredQueue>& Queue)
+	// Leaves the visited nodes in Stack, in dequeue order, and their distance from Index in Score.
+	void FProcessor::FindDistancesFrom(const int32 Index, TArray<double>& Score, TArray<int32>& Stack, const TSharedPtr<PCGEx::FScoredQueue>& Queue) const
 	{
 		Stack.Reset();
 
@@ -493,6 +487,15 @@ namespace PCGExClusterCentrality
 				}
 			}
 		}
+	}
+
+#pragma endregion
+
+#pragma region ProcessSingleNode_Closeness
+
+	void FProcessor::ProcessSingleNode_Closeness(const int32 Index, TArray<double>& LocalScores, TArray<double>& Score, TArray<int32>& Stack, const TSharedPtr<PCGEx::FScoredQueue>& Queue)
+	{
+		FindDistancesFrom(Index, Score, Stack, Queue);
 
 		// Accumulate closeness: reachable / sum_dist
 		double SumDist = 0;
@@ -524,37 +527,7 @@ namespace PCGExClusterCentrality
 
 	void FProcessor::ProcessSingleNode_HarmonicCloseness(const int32 Index, TArray<double>& LocalScores, TArray<double>& Score, TArray<int32>& Stack, const TSharedPtr<PCGEx::FScoredQueue>& Queue)
 	{
-		Stack.Reset();
-
-		Score[Index] = 0.0;
-
-		Queue->Reset();
-		Queue->Enqueue(Index, 0.0);
-
-		int32 CurrentNode;
-		double CurrentScore;
-
-		while (Queue->Dequeue(CurrentNode, CurrentScore))
-		{
-			Stack.Add(CurrentNode);
-			const PCGExClusters::FNode& Current = *Cluster->GetNode(CurrentNode);
-
-			for (const PCGExGraphs::FLink Lk : Current.Links)
-			{
-				const int32 Neighbor = Lk.Node;
-				const int32 EdgeIndex = Lk.Edge;
-				const PCGExGraphs::FEdge& Edge = *Cluster->GetEdge(EdgeIndex);
-
-				const double EdgeCost = Edge.Start == Current.PointIndex ? DirectedEdgeScores[EdgeIndex] : DirectedEdgeScores[NumEdges + EdgeIndex];
-				const double NewDist = Score[CurrentNode] + EdgeCost;
-
-				if (NewDist < Score[Neighbor])
-				{
-					Score[Neighbor] = NewDist;
-					Queue->Enqueue(Neighbor, NewDist);
-				}
-			}
-		}
+		FindDistancesFrom(Index, Score, Stack, Queue);
 
 		// Accumulate harmonic closeness: sum(1/distance)
 		double HarmonicSum = 0;

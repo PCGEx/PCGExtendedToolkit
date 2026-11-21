@@ -131,10 +131,6 @@ bool FPCGExNormalizeElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExNormalize
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExNormalize::Process);

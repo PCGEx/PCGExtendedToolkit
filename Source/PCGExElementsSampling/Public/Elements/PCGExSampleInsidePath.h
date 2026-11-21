@@ -14,6 +14,7 @@
 #include "PCGExSampleInsidePath.generated.h"
 
 #define PCGEX_FOREACH_FIELD_INSIDEPATH(MACRO)\
+MACRO(Success, bool, false)\
 MACRO(Distance, double, 0)\
 MACRO(NumInside, int32, 0)\
 MACRO(NumSamples, int32, 0)
@@ -278,8 +279,6 @@ namespace PCGExSampleInsidePath
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void ProcessPath();

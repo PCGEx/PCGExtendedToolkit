@@ -119,7 +119,7 @@ namespace PCGExData
 		TSharedPtr<IPCGAttributeAccessorKeys> Keys;
 		TUniquePtr<const IPCGAttributeAccessor> InternalAccessor;
 
-		TSharedPtr<IDataValue> DataValue;
+		bool bHasDataValue = false;
 		T TypedDataValue = T{};
 
 		// False once a read through InternalAccessor has failed: every read then serves T{} without touching it.

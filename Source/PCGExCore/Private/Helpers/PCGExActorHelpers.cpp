@@ -17,6 +17,7 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Helpers/PCGActorHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "UObject/UObjectThreadContext.h"
 
@@ -120,6 +121,70 @@ namespace PCGExHelpers
 		TempActor->Destroy();
 
 		return true;
+	}
+
+	void InheritActorIdentity(const AActor* InDonor, FActorSpawnParameters& InOutSpawnParams)
+	{
+#if WITH_EDITOR
+		if (!InDonor || InDonor->HasAnyFlags(RF_Transient) || EnumHasAnyFlags(InOutSpawnParams.ObjectFlags, RF_Transient))
+		{
+			return;
+		}
+
+		InOutSpawnParams.Name = InDonor->GetFName();
+		// Not the default Required_Fatal: when the name cannot be used the engine falls back to a new one.
+		InOutSpawnParams.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
+		// The package is derived from the level and the name; the GUID keeps the actor descriptor the same one.
+		InOutSpawnParams.OverrideActorGuid = InDonor->GetActorGuid();
+#endif
+	}
+
+	void DestroyManagedActors(const TConstArrayView<TSoftObjectPtr<AActor>> InActors)
+	{
+		UWorld* World = nullptr;
+		TInlineComponentArray<UPCGComponent*, 1> Components;
+
+		for (const TSoftObjectPtr<AActor>& ActorPtr : InActors)
+		{
+			AActor* Actor = ActorPtr.Get();
+			if (!Actor)
+			{
+				continue;
+			}
+
+			if (!World)
+			{
+				World = Actor->GetWorld();
+			}
+
+			Components.Reset();
+			Actor->GetComponents(Components);
+			for (UPCGComponent* Component : Components)
+			{
+				Component->CleanupLocalImmediate(/*bRemoveComponents=*/true);
+			}
+		}
+
+		if (World)
+		{
+			UPCGActorHelpers::DeleteActors(World, TArray<TSoftObjectPtr<AActor>>(InActors));
+		}
+	}
+
+	void DestroyManagedActor(AActor* InActor)
+	{
+		if (!InActor)
+		{
+			return;
+		}
+
+		const TSoftObjectPtr<AActor> ActorPtr(InActor);
+		DestroyManagedActors(MakeArrayView(&ActorPtr, 1));
+
+#if WITH_EDITOR
+		// A destroyed actor holds its name until collected. UObject::Rename, not AActor's: the outer stays the level.
+		InActor->UObject::Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
+#endif
 	}
 
 	void EnsureWorldTransformsCurrent(UWorld* InWorld)

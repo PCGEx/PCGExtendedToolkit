@@ -52,11 +52,6 @@ namespace PCGExMesh
 	class FGeoStaticMesh;
 }
 
-namespace PCGExGeoTask
-{
-	class FLloydRelax3;
-}
-
 
 namespace PCGExMeshToCluster
 {

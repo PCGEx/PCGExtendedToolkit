@@ -188,10 +188,6 @@ bool FPCGExUberFilterElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 namespace PCGExUberFilter
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExUberFilter::Process);
@@ -269,6 +265,9 @@ namespace PCGExUberFilter
 			}
 		}
 
+		int32 ScopeInside = 0;
+		int32 ScopeOutside = 0;
+
 		if (Settings->Mode == EPCGExUberFilterMode::Partition)
 		{
 			TArray<int32>& IndicesInsideRef = IndicesInside->Get_Ref(Scope);
@@ -289,11 +288,11 @@ namespace PCGExUberFilter
 
 				if (bPass)
 				{
-					FPlatformAtomics::InterlockedAdd(&NumInside, 1);
+					ScopeInside++;
 				}
 				else
 				{
-					FPlatformAtomics::InterlockedAdd(&NumOutside, 1);
+					ScopeOutside++;
 				}
 			}
 		}
@@ -303,11 +302,11 @@ namespace PCGExUberFilter
 			{
 				if (PointFilterCache[Index])
 				{
-					FPlatformAtomics::InterlockedAdd(&NumInside, 1);
+					ScopeInside++;
 				}
 				else
 				{
-					FPlatformAtomics::InterlockedAdd(&NumOutside, 1);
+					ScopeOutside++;
 				}
 			}
 
@@ -317,6 +316,9 @@ namespace PCGExUberFilter
 				Results.Write(Scope, PointFilterCache);
 			}
 		}
+
+		FPlatformAtomics::InterlockedAdd(&NumInside, ScopeInside);
+		FPlatformAtomics::InterlockedAdd(&NumOutside, ScopeOutside);
 	}
 
 	TSharedPtr<PCGExData::FPointIO> FProcessor::CreateIO(const TSharedRef<PCGExData::FPointIOCollection>& InCollection, const PCGExData::EIOInit InitMode) const

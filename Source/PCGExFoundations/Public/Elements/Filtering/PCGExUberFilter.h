@@ -38,13 +38,7 @@ class UPCGExUberFilterSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()
 
-	//~Begin UObject interface
-#if WITH_EDITOR
-
 public:
-#endif
-	//~End UObject interface
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
@@ -191,8 +185,6 @@ namespace PCGExUberFilter
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;

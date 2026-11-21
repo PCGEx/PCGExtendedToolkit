@@ -9,16 +9,6 @@
 #include "Factories/PCGExOperation.h"
 #include "UObject/Object.h"
 
-namespace PCGExMath
-{
-	class IDistances;
-}
-
-namespace PCGExDetails
-{
-	class FDistances;
-}
-
 class UPCGExTensorFactoryData;
 /**
  * 
@@ -28,6 +18,10 @@ class PCGEXELEMENTSTENSORS_API PCGExTensorOperation : public FPCGExOperation
 protected:
 	PCGExFloatLUT PotencyFalloffLUT = nullptr;
 	PCGExFloatLUT WeightFalloffLUT = nullptr;
+
+	// Set by Init when the guide curve returns GuideConstant at every time; the curve is evaluated otherwise.
+	bool bConstantGuide = false;
+	FVector GuideConstant = FVector::ForwardVector;
 
 public:
 	TSharedPtr<PCGExTensor::FEffectorsArray> Effectors;
@@ -65,7 +59,14 @@ public:
 		}
 		else
 		{
-			OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			if (bConstantGuide)
+			{
+				OutMetrics.Guide = GuideConstant;
+			}
+			else
+			{
+				OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			}
 		}
 
 		OutMetrics.Potency = E->Potency * PotencyFalloffLUT->Eval(OutFactor);
@@ -102,7 +103,14 @@ public:
 		}
 		else
 		{
-			OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			if (bConstantGuide)
+			{
+				OutMetrics.Guide = GuideConstant;
+			}
+			else
+			{
+				OutMetrics.Guide = BaseConfig.LocalGuideCurve.GetValue(OutFactor);
+			}
 		}
 
 		OutMetrics.Potency = BaseConfig.PotencyValue.Constant * PotencyFalloffLUT->Eval(OutFactor);
@@ -119,5 +127,4 @@ class PCGEXELEMENTSTENSORS_API PCGExTensorPointOperation : public PCGExTensorOpe
 {
 public:
 	virtual bool Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory) override;
-	TSharedPtr<PCGExMath::IDistances> DistanceDetails;
 };

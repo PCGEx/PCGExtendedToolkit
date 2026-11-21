@@ -294,7 +294,7 @@ bool FPCGExCellSeedMergeDetails::Init(FPCGExContext* InContext, const TSharedPtr
 	TSharedPtr<PCGExData::IBufferProxy> Proxy;
 	if (Descriptor.CaptureStrict(InContext, SeedKey, PCGExData::EIOSide::In, false))
 	{
-		Proxy = PCGExData::GetProxyBuffer(InContext, Descriptor);
+		Proxy = PCGExData::GetProxyBuffer(InContext, Descriptor, PCGExData::EProxyAccess::TypeErased);
 	}
 
 	if (!Proxy)

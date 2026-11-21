@@ -83,12 +83,3 @@ void UPCGExSubPointsBlendInstancedFactory::PostInitProperties()
 		BlendingDetails.DefaultBlending = GetDefaultBlending();
 	}
 }
-
-void UPCGExSubPointsBlendInstancedFactory::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExSubPointsBlendInstancedFactory* TypedOther = Cast<UPCGExSubPointsBlendInstancedFactory>(Other))
-	{
-		BlendingDetails = TypedOther->BlendingDetails;
-	}
-}

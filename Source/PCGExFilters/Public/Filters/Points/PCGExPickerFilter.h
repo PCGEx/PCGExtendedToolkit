@@ -18,10 +18,6 @@ struct PCGEXFILTERS_API FPCGExPickerFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExPickerFilterConfig()
-	{
-	}
-
 	/** Invert the filter */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bInvert = false;
@@ -75,10 +71,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FPickerFilter() override
-		{
-		}
 
 	protected:
 		TSet<int32> Picks;

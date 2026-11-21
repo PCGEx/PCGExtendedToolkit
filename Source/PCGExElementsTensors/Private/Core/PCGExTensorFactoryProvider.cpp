@@ -37,14 +37,6 @@ void UPCGExTensorFactoryData::InheritFromOtherTensor(const UPCGExTensorFactoryDa
 {
 	const TSet<FString> Exclusions = {TEXT("Points"), TEXT("Splines"), TEXT("ManagedSplines")};
 	PCGExPropertyHelpers::CopyProperties(this, InOtherTensor, &Exclusions);
-	if (InOtherTensor->GetClass() == GetClass())
-	{
-		// Same type let's automate
-	}
-	else
-	{
-		// We can only attempt to inherit a few settings
-	}
 }
 
 TArray<FPCGPinProperties> UPCGExTensorFactoryProviderSettings::InputPinProperties() const
@@ -106,10 +98,6 @@ bool UPCGExTensorPointFactoryData::InitInternalFacade(FPCGExContext* InContext)
 		return false;
 	}
 	return true;
-}
-
-void UPCGExTensorPointFactoryData::PrepareSinglePoint(const int32 Index) const
-{
 }
 
 TArray<FPCGPinProperties> UPCGExTensorPointFactoryProviderSettings::InputPinProperties() const

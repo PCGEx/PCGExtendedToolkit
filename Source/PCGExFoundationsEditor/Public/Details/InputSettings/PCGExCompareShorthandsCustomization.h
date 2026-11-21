@@ -21,17 +21,3 @@ public:
 		class FDetailWidgetRow& HeaderRow,
 		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
 };
-
-class FPCGExCompareShorthandVectorCustomization : public FPCGExCompareShorthandCustomization
-{
-public:
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
-	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
-};
-
-class FPCGExCompareShorthandRotatorCustomization : public FPCGExCompareShorthandCustomization
-{
-public:
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
-	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
-};

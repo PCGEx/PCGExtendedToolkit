@@ -33,16 +33,3 @@ void FPCGExEdgeRefineGabriel::ProcessEdge(PCGExGraphs::FEdge& Edge)
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRefineGabriel
-
-void UPCGExEdgeRefineGabriel::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRefineGabriel* TypedOther = Cast<UPCGExEdgeRefineGabriel>(Other))
-	{
-		bInvert = TypedOther->bInvert;
-	}
-}
-
-#pragma endregion

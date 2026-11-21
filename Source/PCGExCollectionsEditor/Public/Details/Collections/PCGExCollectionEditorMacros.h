@@ -37,3 +37,14 @@ SNew(SHorizontalBox)\
 [\
 	PCGEX_COMBOBOX_INTERPUNCT\
 ]
+
+// Appends one push option to the TArray<FPushOption> named OutOptions in the calling scope.
+#define PCGEX_DECL_PUSH_OPTION(_ID, _LABEL, _TOOLTIP, _GATE, ...) \
+{\
+	PCGExAssetCollectionEditor::FPushOption& Option = OutOptions.Emplace_GetRef();\
+	Option.Id = FName(_ID);\
+	Option.Label = FTEXT(_LABEL);\
+	Option.Tooltip = FTEXT(_TOOLTIP);\
+	Option.bRespectEnabledGate = _GATE;\
+	Option.EntryPropertyNames = { __VA_ARGS__ };\
+}
