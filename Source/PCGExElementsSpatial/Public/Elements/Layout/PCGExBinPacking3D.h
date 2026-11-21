@@ -16,8 +16,6 @@
 
 #include "PCGExBinPacking3D.generated.h"
 
-struct FPCGExSortRuleConfig;
-
 namespace PCGExSorting
 {
 	class FSorter;

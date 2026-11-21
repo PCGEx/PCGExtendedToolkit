@@ -13,9 +13,6 @@
 
 #include "PCGExTexParamFactoryProvider.generated.h"
 
-class UPCGTexture2DSingleBaseData;
-class UMaterialInterface;
-
 namespace PCGExData
 {
 	template <typename T>

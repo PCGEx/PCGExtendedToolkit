@@ -22,12 +22,6 @@ namespace PCGExFindAllCellsBounded
 	class FProcessor;
 }
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedArray;
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cells/find-all-cells-bounded"))
 class UPCGExFindAllCellsBoundedSettings : public UPCGExClustersProcessorSettings
 {

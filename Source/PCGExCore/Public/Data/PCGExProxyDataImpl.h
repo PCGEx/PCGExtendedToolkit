@@ -15,10 +15,6 @@
 #include "UObject/Object.h"
 
 struct FPCGExContext;
-class UPCGBasePointData;
-
-template <typename T>
-class FPCGMetadataAttribute;
 
 namespace PCGExData
 {

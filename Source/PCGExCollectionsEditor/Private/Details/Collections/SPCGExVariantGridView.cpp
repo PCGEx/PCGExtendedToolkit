@@ -13,7 +13,6 @@
 #include "IDetailsView.h"
 #include "IStructureDetailsView.h"
 #include "Materials/MaterialInterface.h"
-#include "Misc/ITransaction.h"
 #include "Details/Collections/PCGExGenericAssetPickerCustomization.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"

@@ -13,29 +13,14 @@
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Utils/PCGValueRange.h"
 
-namespace PCGExGraphs
-{
-	class FSubGraph;
-}
-
 class UPCGBasePointData;
 struct FPCGExContext;
-
-namespace PCGExMT
-{
-	class FTaskManager;
-}
 
 namespace PCGExData
 {
 	class FPointIO;
 	class FFacade;
 	class FFacadePreloader;
-}
-
-namespace PCGExSorting
-{
-	class FSorter;
 }
 
 namespace PCGExClusters

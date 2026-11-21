@@ -13,7 +13,6 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Details/PCGExInlineNumericWidgets.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"

@@ -22,11 +22,6 @@ namespace PCGExData
 	class FFacade;
 }
 
-namespace PCGExMT
-{
-	class FTaskManager;
-}
-
 #define PCGEX_FACTORY_NEW_OPERATION(_TYPE) TSharedPtr<FPCGEx##_TYPE> NewOperation = MakeShared<FPCGEx##_TYPE>();
 
 class FPCGMetadataAttributeBase;

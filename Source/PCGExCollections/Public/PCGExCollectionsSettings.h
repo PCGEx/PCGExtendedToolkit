@@ -9,8 +9,6 @@
 
 #include "PCGExCollectionsSettings.generated.h"
 
-class UPCGPin;
-
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="PCGEx | Collections", Description="Configure PCG Extended Toolkit' Collections module settings"))
 class PCGEXCOLLECTIONS_API UPCGExCollectionsSettings : public UDeveloperSettings
 {

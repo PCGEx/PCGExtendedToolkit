@@ -18,8 +18,6 @@ namespace PCGExDetails
 	class TSettingValue;
 }
 
-class UPCGExPointFilterFactoryData;
-
 UENUM()
 enum class EPCGExVtxAmplitudeMode : uint8
 {

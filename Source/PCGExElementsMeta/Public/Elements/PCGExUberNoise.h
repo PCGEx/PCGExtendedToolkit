@@ -26,12 +26,6 @@ namespace PCGExNoise3D
 	class FNoiseGenerator;
 }
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedNumericValue;
-}
-
 namespace PCGExData
 {
 	class IBufferProxy;

@@ -24,12 +24,6 @@ class UPCGNode;
 class UPCGExTensorPointFactoryData;
 class UPCGExTensorFactoryData;
 
-namespace PCGExDetails
-{
-	template <typename T>
-	class TSettingValue;
-}
-
 namespace PCGExTensor
 {
 	struct FTensorSample;

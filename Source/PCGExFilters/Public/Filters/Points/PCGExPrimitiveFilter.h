@@ -16,7 +16,6 @@
 #include "PCGExPrimitiveFilter.generated.h"
 
 class UPrimitiveComponent;
-class UPCGPrimitiveData;
 
 namespace PCGExPointFilter
 {
@@ -73,16 +72,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FPrimitiveFilter final : public ISimpleFilter
+	class FPrimitiveFilter final : public TFactoryFilter<UPCGExPrimitiveFilterFactory>
 	{
 	public:
-		explicit FPrimitiveFilter(const TObjectPtr<const UPCGExPrimitiveFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExPrimitiveFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;

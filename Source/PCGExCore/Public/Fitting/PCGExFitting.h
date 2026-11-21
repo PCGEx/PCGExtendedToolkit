@@ -30,9 +30,6 @@ namespace PCGExData
 {
 	struct FPoint;
 	class FFacade;
-
-	template <typename T>
-	class TBuffer;
 }
 
 USTRUCT(BlueprintType)

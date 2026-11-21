@@ -56,16 +56,10 @@ public:
 
 namespace PCGExEdgeEndpointsCompareNum
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeEndpointsCompareNumFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeEndpointsCompareNumFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeEndpointsCompareNumFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<double>> NumericBuffer;
 

@@ -20,11 +20,6 @@ namespace PCGExData
 	class FPointIOCollection;
 }
 
-namespace PCGExMesh
-{
-	class FGeoDynMesh;
-}
-
 namespace PCGExGraphs
 {
 	class FGraphBuilder;

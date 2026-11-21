@@ -3,7 +3,6 @@
 
 #include "Data/PCGExData.h"
 
-#include "PCGExLog.h"
 #include "PCGExSettingsCacheBody.h"
 #include "Data/PCGExPointIO.h"
 #include "Metadata/PCGMetadataDomain.h"

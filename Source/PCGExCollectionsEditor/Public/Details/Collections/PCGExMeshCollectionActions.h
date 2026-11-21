@@ -13,8 +13,6 @@
 
 #include "PCGExMeshCollectionActions.generated.h"
 
-class UPackage;
-
 UCLASS()
 class UPCGExMeshCollectionFactory : public UPCGExDataAssetFactoryBase
 {

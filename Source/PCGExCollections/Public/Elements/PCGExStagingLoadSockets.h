@@ -11,12 +11,6 @@
 
 #include "PCGExStagingLoadSockets.generated.h"
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedNumericValue;
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(Keywords = "stage prepare spawn proxy", PCGExNodeLibraryDoc="staging/staging-load-sockets"))
 class UPCGExSocketStagingSettings : public UPCGExPointsProcessorSettings
 {

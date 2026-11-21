@@ -77,16 +77,10 @@ public:
 
 namespace PCGExEdgeLength
 {
-	class FLengthFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FLengthFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeLengthFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FLengthFilter(const UPCGExEdgeLengthFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeLengthFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Threshold;
 

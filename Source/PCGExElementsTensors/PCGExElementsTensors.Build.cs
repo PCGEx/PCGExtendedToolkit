@@ -55,8 +55,6 @@ public class PCGExElementsTensors : ModuleRules
 			{
 				"PhysicsCore",
 				"GeometryCore",
-				"GeometryFramework",
-				"GeometryAlgorithms",
 			}
 		);
 

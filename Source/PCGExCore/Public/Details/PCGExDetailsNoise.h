@@ -19,12 +19,6 @@ namespace PCGExData
 	class FFacade;
 }
 
-namespace PCGExDetails
-{
-	template <typename T>
-	class TSettingValue;
-}
-
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExRandomRatioDetails
 {

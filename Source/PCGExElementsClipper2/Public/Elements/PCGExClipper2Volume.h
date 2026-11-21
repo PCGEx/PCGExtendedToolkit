@@ -81,10 +81,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExClipper2VolumeOutputMode OutputMode = EPCGExClipper2VolumeOutputMode::Volume;
 
-	/** Projection settings used to flatten the path into a 2D footprint and to orient the extrusion. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	/** Fill rule used when triangulating the footprint. Even-Odd treats nested rings as holes (donut volumes). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExClipper2FillRule FillRule = EPCGExClipper2FillRule::EvenOdd;
@@ -146,7 +142,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay)
 	TArray<FName> PostProcessFunctionNames;
 	
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 
 	virtual bool SupportOpenMainPaths() const override
 	{

@@ -34,7 +34,6 @@ namespace PCGExMT
 	class FTaskManager;
 }
 
-class UPCGSettings;
 struct FPCGExContext;
 class UPCGExHeuristicsFactoryData;
 

@@ -87,17 +87,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FDotFilter final : public ISimpleFilter
+	class FDotFilter final : public TFactoryFilter<UPCGExDotFilterFactory>
 	{
 	public:
 		explicit FDotFilter(const TObjectPtr<const UPCGExDotFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
 		}
-
-		const TObjectPtr<const UPCGExDotFilterFactory> TypedFilterFactory;
 
 		FPCGExDotComparisonDetails DotComparison;
 

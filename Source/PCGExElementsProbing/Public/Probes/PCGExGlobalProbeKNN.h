@@ -14,11 +14,6 @@
 
 #include "PCGExGlobalProbeKNN.generated.h"
 
-namespace PCGExProbing
-{
-	struct FCandidate;
-}
-
 UENUM()
 enum class EPCGExProbeKNNMode : uint8
 {

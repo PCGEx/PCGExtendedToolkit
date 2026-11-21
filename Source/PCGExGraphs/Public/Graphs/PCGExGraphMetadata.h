@@ -14,7 +14,6 @@ struct FPCGExPointUnionMetadataDetails;
 struct FPCGExContext;
 struct FPCGExCarryOverDetails;
 struct FPCGExBlendingDetails;
-struct FPCGContext;
 
 UENUM()
 enum class EPCGExIntersectionType : uint8

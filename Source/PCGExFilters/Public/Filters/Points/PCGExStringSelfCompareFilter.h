@@ -91,16 +91,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FStringSelfCompareFilter final : public ISimpleFilter
+	class FStringSelfCompareFilter final : public TFactoryFilter<UPCGExStringSelfCompareFilterFactory>
 	{
 	public:
-		explicit FStringSelfCompareFilter(const TObjectPtr<const UPCGExStringSelfCompareFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExStringSelfCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> OperandA;
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> Index;

@@ -19,7 +19,6 @@ namespace PCGExMT
 namespace PCGExBlending
 {
 	class FBlendOpsSchema;
-	struct FBlendOpsSchemaEntry;
 
 	PCGEXBLENDING_API void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader, const TArray<TObjectPtr<const UPCGExBlendOpFactory>>& Factories);
 

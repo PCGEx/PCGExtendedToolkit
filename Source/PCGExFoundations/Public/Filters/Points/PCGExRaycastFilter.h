@@ -132,16 +132,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FRaycastFilter final : public ISimpleFilter
+	class FRaycastFilter final : public TFactoryFilter<UPCGExRaycastFilterFactory>
 	{
 	public:
-		explicit FRaycastFilter(const TObjectPtr<const UPCGExRaycastFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExRaycastFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		FPCGExCollisionDetails CollisionSettings;
 

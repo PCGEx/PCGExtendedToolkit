@@ -9,11 +9,7 @@
 #include "UObject/SoftObjectPath.h"
 
 struct FPCGExContext;
-class UPCGBasePointData;
 class FPCGMetadataAttributeBase;
-
-template <typename T>
-class FPCGMetadataAttribute;
 
 namespace PCGExData
 {

@@ -18,8 +18,6 @@ namespace PCGExBlending
 	class FBlendOpsManager;
 }
 
-class UPCGExSubPointsBlendInstancedFactory;
-
 /**
  * 
  */

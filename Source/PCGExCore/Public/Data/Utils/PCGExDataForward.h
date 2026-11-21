@@ -17,10 +17,8 @@ namespace PCGExMT
 
 namespace PCGExData
 {
-	struct FConstPoint;
 	class IBuffer;
 	class FDataForwardHandler;
-	class IAttributeBroadcaster;
 }
 
 namespace PCGExData

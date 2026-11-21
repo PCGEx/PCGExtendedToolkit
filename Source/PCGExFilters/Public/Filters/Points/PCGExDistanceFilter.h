@@ -115,17 +115,15 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FDistanceFilter final : public ISimpleFilter
+	class FDistanceFilter final : public TFactoryFilter<UPCGExDistanceFilterFactory>
 	{
 	public:
 		explicit FDistanceFilter(const TObjectPtr<const UPCGExDistanceFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 		{
 			TargetsHandler = TypedFilterFactory->TargetsHandler;
 		}
 
-		const TObjectPtr<const UPCGExDistanceFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExMatching::FTargetsHandler> TargetsHandler;
 
 		// Collection-level matching: built once in Init() for the data this filter was set up on (self-ignore, then

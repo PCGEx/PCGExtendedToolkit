@@ -53,7 +53,6 @@ public class PCGExElementsClustersRefine : ModuleRules
 			{
 				"PhysicsCore",
 				"GeometryCore",
-				"GeometryFramework",
 			}
 		);
 
@@ -70,7 +69,6 @@ public class PCGExElementsClustersRefine : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore"
 				});
 		}

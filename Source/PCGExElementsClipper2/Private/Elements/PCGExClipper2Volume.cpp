@@ -237,11 +237,6 @@ UPCGExClipper2VolumeSettings::UPCGExClipper2VolumeSettings(const FObjectInitiali
 	bExposePathOutputProperties = false;
 }
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2VolumeSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
-
 TArray<FPCGPinProperties> UPCGExClipper2VolumeSettings::OutputPinProperties() const
 {
 	// One spatial data per spawned actor. The actor reference and the source path's @Data attributes ride along in

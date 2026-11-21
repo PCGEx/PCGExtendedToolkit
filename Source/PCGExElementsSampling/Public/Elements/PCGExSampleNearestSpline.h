@@ -37,8 +37,6 @@ MACRO(TotalWeight, double, 0)
 PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
 PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(MACRO)
 
-class UPCGExPointFilterFactoryData;
-
 namespace PCGExMT
 {
 	template <typename T>

@@ -72,16 +72,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FDataMatchFilter final : public ISimpleFilter
+	class FDataMatchFilter final : public TFactoryFilter<UPCGExDataMatchFilterFactory>
 	{
 	public:
-		explicit FDataMatchFilter(const TObjectPtr<const UPCGExDataMatchFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExDataMatchFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;

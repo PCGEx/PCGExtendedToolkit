@@ -57,16 +57,10 @@ private:
 
 namespace PCGExPointFilter
 {
-	class FPickerFilter final : public ISimpleFilter
+	class FPickerFilter final : public TFactoryFilter<UPCGExPickerFilterFactory>
 	{
 	public:
-		explicit FPickerFilter(const TObjectPtr<const UPCGExPickerFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExPickerFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;

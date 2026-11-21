@@ -32,7 +32,6 @@ namespace PCGExClusters
 }
 
 class UPCGExProbeFactoryData;
-class FPCGExProbeOperation;
 
 UENUM()
 enum class EPCGExConnectVtxScope : uint8

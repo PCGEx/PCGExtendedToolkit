@@ -6,8 +6,6 @@
 #include "PCGExAssetCollectionEditor.h"
 #include "Toolkits/AssetEditorToolkit.h"
 
-class UPCGExAssetCollection;
-
 /** Mesh collection editor -- reference implementation of FPCGExAssetCollectionEditor. */
 class FPCGExMeshCollectionEditor : public FPCGExAssetCollectionEditor
 {

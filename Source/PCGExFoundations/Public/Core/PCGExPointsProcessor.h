@@ -43,8 +43,6 @@ namespace PCGExData
 	class TBuffer;
 }
 
-class UPCGExInstancedFactory;
-
 namespace PCGExFactories
 {
 	enum class EType : uint8;

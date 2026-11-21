@@ -11,7 +11,6 @@ class IPropertyHandle;
 class SWidget;
 class UPCGExAssetCollection;
 class UPCGExVariantCollection;
-class UPackage;
 
 class UClass;
 class UScriptStruct;

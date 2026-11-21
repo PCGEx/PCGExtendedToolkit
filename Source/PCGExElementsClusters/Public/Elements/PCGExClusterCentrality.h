@@ -15,8 +15,6 @@ namespace PCGEx
 	class FScoredQueue;
 }
 
-class UPCGExSearchInstancedFactory;
-
 namespace PCGExMT
 {
 	template <typename T>

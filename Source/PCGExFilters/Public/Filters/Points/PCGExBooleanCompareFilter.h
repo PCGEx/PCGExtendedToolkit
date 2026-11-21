@@ -72,16 +72,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FBooleanCompareFilter final : public ISimpleFilter
+	class FBooleanCompareFilter final : public TFactoryFilter<UPCGExBooleanCompareFilterFactory>
 	{
 	public:
-		explicit FBooleanCompareFilter(const TObjectPtr<const UPCGExBooleanCompareFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExBooleanCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<bool>> OperandA;
 		TSharedPtr<PCGExDetails::TSettingValue<bool>> OperandB;

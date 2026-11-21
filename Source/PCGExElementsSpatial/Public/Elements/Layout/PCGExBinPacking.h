@@ -12,8 +12,6 @@
 
 #include "PCGExBinPacking.generated.h"
 
-struct FPCGExSortRuleConfig;
-
 namespace PCGExSorting
 {
 	class FSorter;

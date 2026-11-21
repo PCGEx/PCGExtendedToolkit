@@ -131,16 +131,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FBoundsFilter final : public ISimpleFilter
+	class FBoundsFilter final : public TFactoryFilter<UPCGExBoundsFilterFactory>
 	{
 	public:
-		explicit FBoundsFilter(const TObjectPtr<const UPCGExBoundsFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExBoundsFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;

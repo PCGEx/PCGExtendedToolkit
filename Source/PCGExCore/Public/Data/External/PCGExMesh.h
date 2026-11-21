@@ -14,10 +14,6 @@ struct FPCGExGeoMeshImportDetails;
 struct FStreamableHandle;
 struct FPCGExContext;
 
-namespace PCGExMT
-{
-	class FTaskManager;
-}
 
 struct FPCGPinProperties;
 

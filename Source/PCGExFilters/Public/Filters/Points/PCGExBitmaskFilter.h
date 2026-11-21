@@ -84,17 +84,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FBitmaskFilter final : public ISimpleFilter
+	class FBitmaskFilter final : public TFactoryFilter<UPCGExBitmaskFilterFactory>
 	{
 	public:
 		explicit FBitmaskFilter(const TObjectPtr<const UPCGExBitmaskFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 			  , Bitmask(InDefinition->Config.BitmaskValue.Constant)
 		{
 		}
-
-		TObjectPtr<const UPCGExBitmaskFilterFactory> TypedFilterFactory;
 
 		TSharedPtr<PCGExData::TBuffer<int64>> FlagsReader;
 		TSharedPtr<PCGExDetails::TSettingValue<int64>> MaskReader;

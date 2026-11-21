@@ -122,19 +122,17 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FInclusionFilter final : public ISimpleFilter
+	class FInclusionFilter final : public TFactoryFilter<UPCGExInclusionFilterFactory>
 	{
 	public:
 		explicit FInclusionFilter(const TObjectPtr<const UPCGExInclusionFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			Handler = TypedFilterFactory->CreateHandler();
 			Handler->Init(TypedFilterFactory->Config.CheckType, TypedFilterFactory->Config.BoundsCheck);
 			Handler->ToleranceScaleFactor = FVector(0, 1, 1);
 		}
 
-		const TObjectPtr<const UPCGExInclusionFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExPathInclusion::FHandler> Handler;
 
 		bool bCheckAgainstDataBounds = false;

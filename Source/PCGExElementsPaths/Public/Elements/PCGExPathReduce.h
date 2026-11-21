@@ -13,10 +13,6 @@
 
 #include "PCGExPathReduce.generated.h"
 
-namespace PCGExPaths
-{
-	class FPath;
-}
 
 UENUM(BlueprintType)
 enum class EPCGExPathReduceFilterMode : uint8

@@ -9,9 +9,6 @@
 
 #include "PCGExAdjacency.generated.h"
 
-class UPCGExBitmaskCollection;
-struct FPCGContext;
-
 namespace PCGExClusters
 {
 	struct FNode;

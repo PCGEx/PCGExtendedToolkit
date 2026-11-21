@@ -6,8 +6,6 @@
 #include "PCGExAssetCollectionEditor.h"
 #include "Toolkits/AssetEditorToolkit.h"
 
-class UPCGExAssetCollection;
-
 /** Level collection editor -- minimal reference implementation. */
 class FPCGExLevelCollectionEditor : public FPCGExAssetCollectionEditor
 {

@@ -252,6 +252,20 @@ namespace PCGExPointFilter
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 	};
 
+	/** Filter base that keeps its concrete factory as TypedFilterFactory. TBase is the filter interface it extends. */
+	template <typename TFactory, typename TBase = ISimpleFilter>
+	class TFactoryFilter : public TBase
+	{
+	public:
+		explicit TFactoryFilter(const TFactory* InFactory)
+			: TBase(InFactory)
+			  , TypedFilterFactory(InFactory)
+		{
+		}
+
+		const TFactory* TypedFilterFactory = nullptr;
+	};
+
 	/**
 	 * Aggregates multiple IFilter instances into an AND-stack and provides batch evaluation.
 	 *

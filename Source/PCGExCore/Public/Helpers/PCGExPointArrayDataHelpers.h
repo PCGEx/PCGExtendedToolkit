@@ -12,9 +12,7 @@
 #include "PCGExPointArrayDataHelpers.generated.h"
 
 class UPCGBasePointData;
-class UPCGManagedComponent;
 class UPCGData;
-class UPCGComponent;
 
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true", DisplayName="[PCGEx] Native Point Properties"))
 enum class EPCGExPointNativeProperties : uint8

@@ -17,7 +17,6 @@ class FPCGMetadataAttributeBase;
 class UPCGMetadata;
 class UPCGSpatialData;
 class UPCGSurfaceData;
-struct FPCGContext;
 struct FPCGExContext;
 struct FPCGPoint;
 

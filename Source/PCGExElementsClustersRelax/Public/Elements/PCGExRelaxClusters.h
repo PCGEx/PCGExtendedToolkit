@@ -17,11 +17,6 @@ MACRO(Amplitude, double, 0)
 
 class UPCGExRelaxClusterOperation;
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedNumericValue;
-}
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="clusters/transform/cluster-relax"))
 class UPCGExRelaxClustersSettings : public UPCGExClustersProcessorSettings

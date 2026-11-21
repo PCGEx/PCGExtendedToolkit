@@ -79,16 +79,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FNumericCompareFilter final : public ISimpleFilter
+	class FNumericCompareFilter final : public TFactoryFilter<UPCGExNumericCompareFilterFactory>
 	{
 	public:
-		explicit FNumericCompareFilter(const TObjectPtr<const UPCGExNumericCompareFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExNumericCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<double>> OperandA;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> OperandB;

@@ -8,11 +8,6 @@
 #include "PCGExVersion.h"
 #include "Math/PCGExWinding.h"
 
-namespace PCGExMT
-{
-	struct FScope;
-}
-
 struct FPCGExContext;
 class UPCGPolygon2DData;
 struct FPCGSplineStruct;
@@ -22,10 +17,6 @@ namespace PCGExData
 {
 	class FPointIO;
 	struct FElement;
-	class FFacadePreloader;
-
-	template <typename T>
-	class TBuffer;
 }
 
 namespace PCGExPaths
