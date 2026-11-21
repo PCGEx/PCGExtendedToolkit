@@ -77,16 +77,11 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FGameplayTagsFilter final : public ISimpleFilter
+	class FGameplayTagsFilter final : public TFactoryFilter<UPCGExGameplayTagsFilterFactory>
 	{
 	public:
-		explicit FGameplayTagsFilter(const TObjectPtr<const UPCGExGameplayTagsFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
+		using TFactoryFilter::TFactoryFilter;
 
-		const TObjectPtr<const UPCGExGameplayTagsFilterFactory> TypedFilterFactory;
 		FCachedPropertyPath PropertyPath;
 		TArray<FString> PathSegments;
 

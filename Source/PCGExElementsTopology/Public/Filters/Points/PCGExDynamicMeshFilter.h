@@ -153,16 +153,10 @@ private:
 
 namespace PCGExPointFilter
 {
-	class FDynamicMeshFilter final : public ISimpleFilter
+	class FDynamicMeshFilter final : public TFactoryFilter<UPCGExDynamicMeshFilterFactory>
 	{
 	public:
-		explicit FDynamicMeshFilter(const TObjectPtr<const UPCGExDynamicMeshFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExDynamicMeshFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;

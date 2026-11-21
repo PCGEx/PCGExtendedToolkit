@@ -36,11 +36,6 @@ bool UPCGExClipper2BooleanSettings::WantsOperands() const
 	return Operation != EPCGExClipper2BooleanOp::Union || bUseOperandPin;
 }
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2BooleanSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
-
 bool UPCGExClipper2BooleanSettings::SupportOpenOperandPaths() const
 {
 	return false;

@@ -90,12 +90,10 @@ public:
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
-class FIsoEdgeDirectionFilter final : public PCGExClusterFilter::IEdgeFilter
+class FIsoEdgeDirectionFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExIsoEdgeDirectionFilterFactory, PCGExClusterFilter::IEdgeFilter>
 {
 public:
 	explicit FIsoEdgeDirectionFilter(const UPCGExIsoEdgeDirectionFilterFactory* InFactory);
-
-	const UPCGExIsoEdgeDirectionFilterFactory* TypedFilterFactory;
 
 	bool bUseDot = true;
 

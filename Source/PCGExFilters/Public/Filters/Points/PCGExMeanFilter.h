@@ -83,16 +83,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FMeanFilter final : public ISimpleFilter
+	class FMeanFilter final : public TFactoryFilter<UPCGExMeanFilterFactory>
 	{
 	public:
-		explicit FMeanFilter(const TObjectPtr<const UPCGExMeanFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExMeanFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TArray<double> Values;
 

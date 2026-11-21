@@ -128,16 +128,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FSegmentLengthFilter final : public ISimpleFilter
+	class FSegmentLengthFilter final : public TFactoryFilter<UPCGExSegmentLengthFilterFactory>
 	{
 	public:
-		explicit FSegmentLengthFilter(const TObjectPtr<const UPCGExSegmentLengthFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExSegmentLengthFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Threshold;
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> Index;

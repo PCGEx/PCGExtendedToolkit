@@ -83,17 +83,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FWithinRangeFilter final : public ISimpleFilter
+	class FWithinRangeFilter final : public TFactoryFilter<UPCGExWithinRangeFilterFactory>
 	{
 	public:
 		explicit FWithinRangeFilter(const UPCGExWithinRangeFilterFactory* InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 		{
 			Ranges = InDefinition->Ranges;
 		}
-
-		const UPCGExWithinRangeFilterFactory* TypedFilterFactory;
 
 		TSharedPtr<PCGExData::TBuffer<double>> OperandA;
 

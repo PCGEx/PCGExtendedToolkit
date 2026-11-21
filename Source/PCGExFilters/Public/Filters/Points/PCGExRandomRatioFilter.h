@@ -64,7 +64,7 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FRandomRatioFilter final : public ISimpleFilter
+	class FRandomRatioFilter final : public TFactoryFilter<UPCGExRandomRatioFilterFactory>
 	{
 	protected:
 		TBitArray<> PointPicks;
@@ -79,13 +79,7 @@ namespace PCGExPointFilter
 		void BuildCollectionPicks(const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const;
 
 	public:
-		explicit FRandomRatioFilter(const TObjectPtr<const UPCGExRandomRatioFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExRandomRatioFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;

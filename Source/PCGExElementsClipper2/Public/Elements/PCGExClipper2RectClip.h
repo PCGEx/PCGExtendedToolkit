@@ -41,10 +41,6 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Projection settings */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	/** Source for the clipping rectangle bounds */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Clip Bounds", meta = (PCG_Overridable))
 	EPCGExRectClipBoundsSource BoundsSource = EPCGExRectClipBoundsSource::Operand;
@@ -77,7 +73,6 @@ public:
 	bool bInvertClip = false;
 
 	virtual bool WantsOperands() const override;
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 	virtual bool SupportOpenMainPaths() const override;
 	virtual bool SupportOpenOperandPaths() const override;
 	virtual bool OperandsAsBounds() const override;

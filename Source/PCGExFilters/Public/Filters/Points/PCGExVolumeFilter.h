@@ -157,16 +157,10 @@ private:
 
 namespace PCGExPointFilter
 {
-	class FVolumeFilter final : public ISimpleFilter
+	class FVolumeFilter final : public TFactoryFilter<UPCGExVolumeFilterFactory>
 	{
 	public:
-		explicit FVolumeFilter(const TObjectPtr<const UPCGExVolumeFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExVolumeFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;

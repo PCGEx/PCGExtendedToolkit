@@ -87,17 +87,14 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FValueHashFilter final : public ISimpleFilter
+	class FValueHashFilter final : public TFactoryFilter<UPCGExValueHashFilterFactory>
 	{
 	public:
 		explicit FValueHashFilter(const TObjectPtr<const UPCGExValueHashFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 		{
 			Hashes = &TypedFilterFactory->Hashes;
 		}
-
-		const TObjectPtr<const UPCGExValueHashFilterFactory> TypedFilterFactory;
 
 		const TArray<TSet<PCGExValueHash>>* Hashes = nullptr;
 

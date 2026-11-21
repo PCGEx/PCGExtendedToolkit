@@ -44,10 +44,6 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Projection settings */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExClipper2FillRule FillRule = EPCGExClipper2FillRule::EvenOdd;
 
@@ -66,8 +62,6 @@ public:
 	/** Topology settings. Some settings will be ignored based on selected output mode. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mesh")
 	FPCGExTopologyDetails Topology;
-
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 
 	virtual bool SupportOpenMainPaths() const override
 	{

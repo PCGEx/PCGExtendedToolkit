@@ -64,8 +64,7 @@ TSharedPtr<PCGExPointFilter::IFilter> UPCGExIsoEdgeDirectionFilterFactory::Creat
 }
 
 FIsoEdgeDirectionFilter::FIsoEdgeDirectionFilter(const UPCGExIsoEdgeDirectionFilterFactory* InFactory)
-	: IEdgeFilter(InFactory)
-	  , TypedFilterFactory(InFactory)
+	: TFactoryFilter(InFactory)
 {
 	DotComparison = InFactory->Config.DotComparisonDetails;
 	HashComparison = InFactory->Config.HashComparisonDetails;

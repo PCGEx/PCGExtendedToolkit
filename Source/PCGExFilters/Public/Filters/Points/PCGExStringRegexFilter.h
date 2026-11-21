@@ -63,16 +63,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FStringRegexFilter final : public ISimpleFilter
+	class FStringRegexFilter final : public TFactoryFilter<UPCGExStringRegexFilterFactory>
 	{
 	public:
-		explicit FStringRegexFilter(const TObjectPtr<const UPCGExStringRegexFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExStringRegexFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> OperandA;
 		PCGExRegex::FPattern RegexMatcher;

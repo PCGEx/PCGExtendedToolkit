@@ -54,16 +54,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FConstantFilter final : public ISimpleFilter
+	class FConstantFilter final : public TFactoryFilter<UPCGExConstantFilterFactory>
 	{
 	public:
-		explicit FConstantFilter(const TObjectPtr<const UPCGExConstantFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExConstantFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		bool ConstantValue = true;
 
