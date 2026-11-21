@@ -4,7 +4,6 @@
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
-#include "Details/PCGExInputShorthandsDetails.h"
 
 
 class SWidget;

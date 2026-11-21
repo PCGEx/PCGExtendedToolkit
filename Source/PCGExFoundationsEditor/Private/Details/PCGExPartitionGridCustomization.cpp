@@ -6,7 +6,6 @@
 #include "DetailLayoutBuilder.h"
 #include "PropertyHandle.h"
 #include "Elements/Utils/PCGExPartitionIdentifier.h"
-#include "Fonts/SlateFontInfo.h"
 #include "Styling/SlateColor.h"
 #include "Types/PCGExTypeOpsString.h"
 #include "Widgets/SOverlay.h"

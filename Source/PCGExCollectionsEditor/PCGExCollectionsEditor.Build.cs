@@ -61,17 +61,12 @@ public class PCGExCollectionsEditor : ModuleRules
 				"AssetRegistry",
 				"Slate",
 				"SlateCore",
-				"PropertyPath",
 				"DeveloperSettings",
-				"Slate",
-				"SlateCore",
 				"PropertyEditor",
-				"EditorWidgets",
 				"ToolMenus", "AppFramework",
 				// Assembly root editor host: level viewport overlay, eyedropper, typed selection set hooks
 				"LevelEditor",
 				"ActorPickerMode",
-				"TypedElementFramework",
 				"TypedElementRuntime"
 			}
 		);

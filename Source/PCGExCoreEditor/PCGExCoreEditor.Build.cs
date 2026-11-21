@@ -51,11 +51,7 @@ public class PCGExCoreEditor : ModuleRules
 			{
 				"Slate",
 				"SlateCore",
-				"PropertyPath",
-				"Slate",
-				"SlateCore",
 				"PropertyEditor",
-				"EditorWidgets",
 				"InputCore",
 				"ToolMenus",
 				// FPCGExModeToolkitBase re-registers the mode's primary tab through FAssetEditorModeUILayer.

@@ -10,7 +10,6 @@
 #include "PCGExProperty.h"
 #include "PropertyHandle.h"
 #include "Delegates/Delegate.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExPropertyOverridesCustomization::MakeInstance()

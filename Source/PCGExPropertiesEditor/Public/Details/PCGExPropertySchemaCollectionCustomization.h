@@ -11,7 +11,6 @@
 
 class IDetailPropertyRow;
 class IPropertyUtilities;
-class FResetToDefaultOverride;
 class FTransactionObjectEvent;
 class UPCGExPropertySchemaAsset;
 struct FPCGExPropertyResolved;

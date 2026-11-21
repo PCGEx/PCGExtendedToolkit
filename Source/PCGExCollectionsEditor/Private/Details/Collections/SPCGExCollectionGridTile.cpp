@@ -16,7 +16,6 @@
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Types/PCGExTypeOpsString.h"
 #include "Widgets/SBoxPanel.h"
-#include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"

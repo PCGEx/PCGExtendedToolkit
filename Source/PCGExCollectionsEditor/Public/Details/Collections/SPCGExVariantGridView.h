@@ -13,7 +13,6 @@ class SWidget;
 #include "Details/Collections/SPCGExCollectionGridTile.h" // FThumbnailCacheMap
 
 struct FAssetData;
-class FAssetThumbnail;
 class FAssetThumbnailPool;
 class FStructOnScope;
 class FTransactionObjectEvent;
@@ -22,7 +21,6 @@ class SBorder;
 class SBox;
 class SScrollBox;
 class SPCGExCollectionCategoryGroup;
-class UPCGExAssetCollection;
 class UPCGExVariantCollection;
 
 /** Visual/behavioral state of a variant grid tile. */

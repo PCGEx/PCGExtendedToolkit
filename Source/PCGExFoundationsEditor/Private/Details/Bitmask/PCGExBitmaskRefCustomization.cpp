@@ -7,8 +7,6 @@
 #include "PropertyHandle.h"
 #include "Data/Bitmasks/PCGExBitmaskCollection.h"
 #include "Data/Bitmasks/PCGExBitmaskDetails.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExBitmaskRefCustomization::MakeInstance()

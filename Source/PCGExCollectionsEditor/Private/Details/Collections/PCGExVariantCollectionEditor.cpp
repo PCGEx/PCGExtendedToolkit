@@ -7,7 +7,6 @@
 #include "IContentBrowserSingleton.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
-#include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "ScopedTransaction.h"
 #include "Styling/AppStyle.h"
@@ -21,7 +20,6 @@
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/PCGExCollectionCategoryGroups.h"
 #include "Details/Collections/SPCGExVariantGridView.h"
-#include "Helpers/PCGExObjectNotifyHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExVariantCollectionEditor"
 
