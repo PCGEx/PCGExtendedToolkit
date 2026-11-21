@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 
 #include "PCGContext.h"
+#include "PCGCrc.h"
 #include "PCGExCommon.h"
 #include "PCGExMT.h"
 #include "Metadata/PCGMetadataCommon.h"
@@ -30,6 +31,7 @@ class UPCGExSettings;
 class UPCGComponent;
 class IPCGExElement;
 class UPCGManagedComponent;
+class UPCGExManagedComponent;
 struct FStreamableHandle;
 struct FAttachmentTransformRules;
 
@@ -288,7 +290,14 @@ protected:
 #pragma region Managed Components
 
 public:
-	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules) const;
+	/** Identity of this node execution (settings, stack, node) that holds across sessions; combine a per-component index into it to key a reusable component. */
+	FPCGCrc GetManagedComponentCrc() const;
+
+	/** The component a previous generation attached under ReuseCrc, unregistered and stripped of its tags for a full rebuild; null if there is none. */
+	UPCGExManagedComponent* ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const;
+
+	/** A valid ReuseCrc keeps the component across regenerations; InReclaimed is what ReclaimManagedComponent returned for it, if anything. */
+	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGCrc& ReuseCrc = FPCGCrc(), UPCGExManagedComponent* InReclaimed = nullptr) const;
 
 #pragma endregion
 

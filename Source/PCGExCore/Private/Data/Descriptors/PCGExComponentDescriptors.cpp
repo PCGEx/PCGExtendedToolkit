@@ -186,16 +186,14 @@ void FPCGExPrimitiveComponentDescriptor::InitComponent(UPrimitiveComponent* InCo
 	PrimitiveComponent->TranslucencySortDistanceOffset = TranslucencySortDistanceOffset;
 	//TargetComponent->RuntimeVirtualTextures = RuntimeVirtualTextures; // TODO : Load & Forward
 
-	if (!RuntimeVirtualTextures.IsEmpty())
+	// Replaced, not appended: a component rebuilt in place already holds the previous list.
+	PrimitiveComponent->RuntimeVirtualTextures.Reset(RuntimeVirtualTextures.Num());
+	for (const TSoftObjectPtr<URuntimeVirtualTexture>& SoftRVT : RuntimeVirtualTextures)
 	{
-		PrimitiveComponent->RuntimeVirtualTextures.Reserve(RuntimeVirtualTextures.Num());
-		for (const TSoftObjectPtr<URuntimeVirtualTexture>& SoftRVT : RuntimeVirtualTextures)
+		TObjectPtr<URuntimeVirtualTexture> RVT = SoftRVT.Get();
+		if (RVT)
 		{
-			TObjectPtr<URuntimeVirtualTexture> RVT = SoftRVT.Get();
-			if (RVT)
-			{
-				PrimitiveComponent->RuntimeVirtualTextures.Add(RVT);
-			}
+			PrimitiveComponent->RuntimeVirtualTextures.Add(RVT);
 		}
 	}
 

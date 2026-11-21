@@ -4,11 +4,15 @@
 #include "Elements/PCGExSpawnDynamicMesh.h"
 
 #include "PCGComponent.h"
+#include "PCGCrc.h"
 #include "PCGExTopology.h"
 #include "PCGPin.h"
+#include "Clusters/PCGExClusterCommon.h"
 #include "Components/DynamicMeshComponent.h"
+#include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGDynamicMeshData.h"
+#include "Data/PCGExDataTags.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Types/PCGExTypeOpsString.h"
 
@@ -62,6 +66,9 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 	// Output creates UObjects (NewObject) and attaches components -- illegal during a package save / GC. Defer (re-tick) until clear.
 	PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED
 
+	const FPCGCrc ExecutionCrc = Context->GetManagedComponentCrc();
+	const FString ClusterIdTagPrefix = PCGExClusters::Labels::TagStr_PCGExCluster + PCGExData::TagSeparator;
+
 	int32 Index = -1;
 	for (const FPCGTaggedData& Input : InContext->InputData.GetInputsByPin(PCGExTopology::Labels::SourceMeshLabel))
 	{
@@ -74,9 +81,24 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			continue;
 		}
 
-		const FString ComponentName = TEXT("PCGDynamicMeshComponent");
-		const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-		UDynamicMeshComponent* DynamicMeshComponent = NewObject<UDynamicMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, UDynamicMeshComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
+		// One slot per input: a regeneration rebuilds the component it already has there, keeping its name.
+		FPCGCrc SlotCrc = ExecutionCrc;
+		SlotCrc.Combine(static_cast<uint32>(Index));
+
+		UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(TargetActor, UDynamicMeshComponent::StaticClass(), SlotCrc);
+		UDynamicMeshComponent* DynamicMeshComponent = nullptr;
+
+		if (Reclaimed)
+		{
+			DynamicMeshComponent = CastChecked<UDynamicMeshComponent>(Reclaimed->GeneratedComponent.Get());
+			DynamicMeshComponent->EmptyOverrideMaterials();
+		}
+		else
+		{
+			const FString ComponentName = TEXT("PCGDynamicMeshComponent");
+			const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
+			DynamicMeshComponent = NewObject<UDynamicMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, UDynamicMeshComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
+		}
 
 		if (!DynamicMeshComponent)
 		{
@@ -108,6 +130,12 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 
 		for (const FString& Tag : Input.Tags)
 		{
+			// The cluster id is a per-session object id: on a saved component it would differ on every run.
+			if (Tag.StartsWith(ClusterIdTagPrefix))
+			{
+				continue;
+			}
+
 			const FName TagName = PCGExTypeOps::MakeNameChecked(Tag);
 			if (!TagName.IsNone())
 			{
@@ -115,7 +143,7 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			}
 		}
 
-		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules());
+		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules(), SlotCrc, Reclaimed);
 		Context->StageOutput(const_cast<UPCGData*>(Input.Data.Get()), PCGExTopology::Labels::SourceMeshLabel, PCGExData::EStaging::None, Input.Tags);
 		Context->AddNotifyActor(TargetActor);
 	}

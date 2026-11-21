@@ -11,9 +11,14 @@
 #include "PCGExSubSystem.h"
 #include "PCGGraphExecutionStateInterface.h"
 #include "PCGManagedResource.h"
+#include "PCGNode.h"
+#include "PCGSettings.h"
 #include "Async/Async.h"
+#include "Components/SceneComponent.h"
 #include "Containers/PCGExManagedObjects.h"
+#include "Containers/PCGExManagedObjectsInterfaces.h"
 #include "Core/PCGExElement.h"
+#include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Core/PCGExMTCommon.h"
 #include "Core/PCGExSettings.h"
@@ -24,12 +29,15 @@
 #include "Engine/EngineTypes.h"
 #include "Factories/PCGExInstancedFactory.h"
 #include "GameFramework/Actor.h"
+#include "Graph/PCGStackContext.h"
 #include "Helpers/PCGDynamicTrackingHelpers.h"
 #include "Helpers/PCGExFunctionPrototypes.h"
+#include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Metadata/PCGMetadata.h"
+#include "Misc/Crc.h"
 #include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExContext"
@@ -693,7 +701,71 @@ void FPCGExContext::ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Pa
 	PCGExHelpers::ResolveMissingObjects_AnyThread(Paths, OutObjects);
 }
 
-UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules) const
+FPCGCrc FPCGExContext::GetManagedComponentCrc() const
+{
+	const UPCGSettings* InSettings = GetInputSettings<UPCGSettings>();
+	FPCGCrc Crc = InSettings ? InSettings->GetSettingsCrc() : FPCGCrc();
+	if (!Crc.IsValid())
+	{
+		Crc = FPCGCrc(0);
+	}
+
+	if (const FPCGStack* CurrentStack = GetStack())
+	{
+		Crc.Combine(CurrentStack->GetCrc());
+	}
+
+	// The stack stops at the owning graph, so the node name tells same-settings nodes apart. Not GetTypeHash: an FName hash is per session.
+	if (Node)
+	{
+		Crc.Combine(FCrc::StrCrc32(*Node->GetName()));
+	}
+
+	return Crc;
+}
+
+UPCGExManagedComponent* FPCGExContext::ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const
+{
+	UPCGComponent* SrcComp = GetMutableComponent();
+
+	const bool bIsPreviewMode = SrcComp->IsInPreviewMode();
+
+	TArray<UPCGExManagedComponent*> Candidates;
+	PCGExManagedHelpers::FindManagedResources<UPCGExManagedComponent>(
+		SrcComp, ReuseCrc,
+		[&](const UPCGExManagedComponent* Resource)
+		{
+			// Still unused = soft-released by this regeneration and not claimed yet.
+			if (!Resource->IsMarkedUnused() || !Resource->CanBeUsed())
+			{
+				return false;
+			}
+
+			const UActorComponent* Component = Resource->GeneratedComponent.Get();
+			return Component && Component->IsA(InComponentClass) && Component->GetOwner() == InParent && Component->HasAnyFlags(RF_Transient) == bIsPreviewMode;
+		},
+		Candidates);
+
+	if (Candidates.IsEmpty())
+	{
+		return nullptr;
+	}
+
+	UPCGExManagedComponent* Reclaimed = Candidates[0];
+
+	// UPCGManagedComponentBase::MarkAsUsed drops the CRC and resets the tags to the default PCG tag alone.
+	Reclaimed->MarkAsUsed();
+	Reclaimed->SetCrc(ReuseCrc);
+
+	// Handed back the way a new component starts out, so one build path serves both.
+	UActorComponent* Component = Reclaimed->GeneratedComponent.Get();
+	Component->UnregisterComponent();
+	Component->ComponentTags.Reset();
+
+	return Reclaimed;
+}
+
+UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGCrc& ReuseCrc, UPCGExManagedComponent* InReclaimed) const
 {
 	// Transfers a component from PCGEx internal management to PCG's managed resource system.
 	// This ensures PCG can clean up the component on re-generate/destroy, while the component
@@ -702,33 +774,55 @@ UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UA
 
 	const bool bIsPreviewMode = SrcComp->IsInPreviewMode();
 
-	// Remove from internal management first. If it wasn't internally managed
-	// (e.g. created externally), clear root/async flags that would prevent GC.
-	if (!ManagedObjects->Remove(InComponent))
-	{
-		InComponent->RemoveFromRoot();
-		InComponent->ClearInternalFlags(EInternalObjectFlags::Async);
-	}
-
 	InComponent->ComponentTags.Reserve(InComponent->ComponentTags.Num() + 2);
 	InComponent->ComponentTags.Add(SrcComp->GetFName());
 	InComponent->ComponentTags.Add(PCGHelpers::DefaultPCGTag);
 
-	UPCGManagedComponent* ManagedComponent = NewObject<UPCGManagedComponent>(SrcComp);
-	ManagedComponent->GeneratedComponent = InComponent;
-	SrcComp->AddToManagedResources(ManagedComponent);
+	USceneComponent* SceneComponent = Cast<USceneComponent>(InComponent);
+	UPCGManagedComponent* ManagedComponent = InReclaimed;
 
-	if (IPCGExManagedComponentInterface* Managed = Cast<IPCGExManagedComponentInterface>(InComponent))
+	if (InReclaimed)
 	{
-		Managed->SetManagedComponent(ManagedComponent);
+		check(InReclaimed->GeneratedComponent.Get() == InComponent);
+
+		// Back to the identity transform a new component attaches from, so the rules resolve the same way.
+		if (SceneComponent)
+		{
+			SceneComponent->DetachFromComponent(FDetachmentTransformRules(EDetachmentRule::KeepRelative, false));
+			SceneComponent->SetRelativeTransform(FTransform::Identity);
+		}
+	}
+	else
+	{
+		// Remove from internal management first. If it wasn't internally managed
+		// (e.g. created externally), clear root/async flags that would prevent GC.
+		if (!ManagedObjects->Remove(InComponent))
+		{
+			InComponent->RemoveFromRoot();
+			InComponent->ClearInternalFlags(EInternalObjectFlags::Async);
+		}
+
+		UClass* ResourceClass = ReuseCrc.IsValid() ? UPCGExManagedComponent::StaticClass() : UPCGManagedComponent::StaticClass();
+		ManagedComponent = NewObject<UPCGManagedComponent>(SrcComp, ResourceClass);
+		ManagedComponent->GeneratedComponent = InComponent;
+		ManagedComponent->SetCrc(ReuseCrc);
+		SrcComp->AddToManagedResources(ManagedComponent);
+
+		if (IPCGExManagedComponentInterface* Managed = Cast<IPCGExManagedComponentInterface>(InComponent))
+		{
+			Managed->SetManagedComponent(ManagedComponent);
+		}
 	}
 
 	InParent->Modify(!bIsPreviewMode);
 
 	InComponent->RegisterComponent();
-	InParent->AddInstanceComponent(InComponent);
+	if (!InReclaimed)
+	{
+		InParent->AddInstanceComponent(InComponent);
+	}
 
-	if (USceneComponent* SceneComponent = Cast<USceneComponent>(InComponent))
+	if (SceneComponent)
 	{
 		USceneComponent* Root = InParent->GetRootComponent();
 		SceneComponent->SetMobility(Root->Mobility);
