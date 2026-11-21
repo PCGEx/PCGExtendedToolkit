@@ -6,7 +6,6 @@
 #include "PCGComponent.h"
 
 #include "PCGParamData.h"
-#include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExPointIO.h"
@@ -74,16 +73,8 @@ void UPCGExCustomActorDataPacker::AddComponent(AActor* InActor, TSubclassOf<UAct
 	FPCGCrc CallCrc = SlotCrc;
 	CallCrc.Combine(static_cast<uint32>(NumAddedComponents++));
 
-	UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(InActor, ComponentClass, CallCrc);
-	if (Reclaimed)
-	{
-		OutComponent = Reclaimed->GeneratedComponent.Get();
-	}
-	else
-	{
-		const EObjectFlags InObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-		OutComponent = Context->ManagedObjects->New<UActorComponent>(InActor, ComponentClass, MakeUniqueObjectName(InActor, ComponentClass, FName(TEXT("PCGComponent_") + ComponentClass->GetName())), InObjectFlags);
-	}
+	FPCGExComponentSlot Slot;
+	OutComponent = Context->ReclaimOrCreateComponent(InActor, ComponentClass, FName(TEXT("PCGComponent_") + ComponentClass->GetName()), CallCrc, Slot);
 
 	if (!OutComponent)
 	{
@@ -94,7 +85,7 @@ void UPCGExCustomActorDataPacker::AddComponent(AActor* InActor, TSubclassOf<UAct
 	{
 		FComponentInfos NewInfos = FComponentInfos(OutComponent, InLocationRule, InRotationRule, InScaleRule, InWeldSimulatedBodies);
 
-		Context->AttachManagedComponent(InActor, NewInfos.Component, NewInfos.AttachmentTransformRules, CallCrc, Reclaimed);
+		Context->AttachManagedComponent(InActor, NewInfos.Component, NewInfos.AttachmentTransformRules, Slot);
 	}
 }
 
@@ -400,7 +391,7 @@ bool FPCGExPackActorDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	}
 
 	// When bExecuteOnMainThread, the batch drives a main-thread loop whose ProcessEntry can create components/actors
-	// (AddComponent -> ManagedObjects->New / AttachManagedComponent) -- illegal during a package save or GC. Defer the
+	// (AddComponent -> NewObject / AttachManagedComponent) -- illegal during a package save or GC. Defer the
 	// whole output phase (re-tick) until it finishes.
 	PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED
 
@@ -431,13 +422,10 @@ namespace PCGExPackActorData
 		PointMask.Init(1, PointDataFacade->GetNum());
 
 		Packer = GetPrimaryInstancedFactory<UPCGExCustomActorDataPacker>();
-		Packer->SlotCrc = Context->GetExecutionCrc();
-		Packer->SlotCrc.Combine(static_cast<uint32>(BatchIndex));
+		Packer->SlotCrc = Context->GetSlotCrc(BatchIndex);
 		Packer->NumAddedComponents = 0;
 		Packer->WriteBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>>(PointDataFacade);
 		Packer->ReadBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Read>>(PointDataFacade);
-
-		Packer->bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		PointDataFacade->Source->bAllowEmptyOutput = !Settings->bOmitEmptyOutputs;
 

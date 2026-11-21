@@ -139,6 +139,38 @@ namespace PCGExHelpers
 #endif
 	}
 
+	void DestroyManagedActors(const TConstArrayView<TSoftObjectPtr<AActor>> InActors)
+	{
+		UWorld* World = nullptr;
+		TInlineComponentArray<UPCGComponent*, 1> Components;
+
+		for (const TSoftObjectPtr<AActor>& ActorPtr : InActors)
+		{
+			AActor* Actor = ActorPtr.Get();
+			if (!Actor)
+			{
+				continue;
+			}
+
+			if (!World)
+			{
+				World = Actor->GetWorld();
+			}
+
+			Components.Reset();
+			Actor->GetComponents(Components);
+			for (UPCGComponent* Component : Components)
+			{
+				Component->CleanupLocalImmediate(/*bRemoveComponents=*/true);
+			}
+		}
+
+		if (World)
+		{
+			UPCGActorHelpers::DeleteActors(World, TArray<TSoftObjectPtr<AActor>>(InActors));
+		}
+	}
+
 	void DestroyManagedActor(AActor* InActor)
 	{
 		if (!InActor)
@@ -146,17 +178,8 @@ namespace PCGExHelpers
 			return;
 		}
 
-		TInlineComponentArray<UPCGComponent*, 1> Components;
-		InActor->GetComponents(Components);
-		for (UPCGComponent* Component : Components)
-		{
-			Component->CleanupLocalImmediate(/*bRemoveComponents=*/true);
-		}
-
-		if (UWorld* World = InActor->GetWorld())
-		{
-			UPCGActorHelpers::DeleteActors(World, {TSoftObjectPtr<AActor>(InActor)});
-		}
+		const TSoftObjectPtr<AActor> ActorPtr(InActor);
+		DestroyManagedActors(MakeArrayView(&ActorPtr, 1));
 
 #if WITH_EDITOR
 		// A destroyed actor holds its name until collected. UObject::Rename, not AActor's: the outer stays the level.

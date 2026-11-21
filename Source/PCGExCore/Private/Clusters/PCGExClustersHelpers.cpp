@@ -61,7 +61,7 @@ namespace PCGExClusters::Helpers
 
 	void AppendSavedTags(const TSet<FString>& InTags, TArray<FName>& OutTags)
 	{
-		const FString ClusterIdPrefix = Labels::TagStr_PCGExCluster + PCGExData::TagSeparator;
+		static const FString ClusterIdPrefix = Labels::TagStr_PCGExCluster + PCGExData::TagSeparator;
 
 		OutTags.Reserve(OutTags.Num() + InTags.Num());
 		for (const FString& Tag : InTags)

@@ -16,7 +16,6 @@
 #include "Data/PCGExPointIO.h"
 #include "Factories/PCGExFactories.h"
 #include "Clusters/PCGExClustersHelpers.h"
-#include "Core/PCGExManagedComponent.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
@@ -463,29 +462,12 @@ bool FPCGExPathSplineMeshElement::AdvanceWork(FPCGExContext* InContext, const UP
 
 namespace PCGExPathSplineMesh
 {
-	void FSplineMeshSegment::ApplySettings(USplineMeshComponent* Component) const
-	{
-		PCGExPaths::FSplineMeshSegment::ApplySettings(Component);
-		if (bSetMeshWithSettings)
-		{
-			ApplyMesh(Component);
-		}
-	}
-
-	bool FSplineMeshSegment::ApplyMesh(USplineMeshComponent* Component) const
+	void FSplineMeshSegment::ApplyMesh(USplineMeshComponent* Component, UStaticMesh* InMesh) const
 	{
 		check(Component)
-		UStaticMesh* StaticMesh = MeshEntry->Staging.TryGet<UStaticMesh>(); //LoadSynchronous<UStaticMesh>();
 
-		if (!StaticMesh)
-		{
-			return false;
-		}
-
-		Component->SetStaticMesh(StaticMesh); // Will trigger a force rebuild, so put this last
+		Component->SetStaticMesh(InMesh); // Will trigger a force rebuild, so put this last
 		MeshEntry->ApplyMaterials(MaterialPick, Component);
-
-		return true;
 	}
 
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
@@ -505,8 +487,6 @@ namespace PCGExPathSplineMesh
 		{
 			return false;
 		}
-
-		bIsPreviewMode = Component->IsInPreviewMode();
 
 		Justification = Settings->Justification;
 		Justification.Init(ExecutionContext, PointDataFacade);
@@ -920,11 +900,9 @@ namespace PCGExPathSplineMesh
 		// Processors run on workers with 2+ inputs: resolve a path copy, GC-guarded, never the shared settings pointer.
 		AActor* SettingsTargetActor = PCGExHelpers::ResolveObject_AnyThreadTpl(Settings->TargetActor);
 		TargetActor = SettingsTargetActor ? SettingsTargetActor : ExecutionContext->GetTargetActor(nullptr);
-		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
 
 		// Each segment's slot derives from this input's.
-		SlotCrc = Context->GetExecutionCrc();
-		SlotCrc.Combine(static_cast<uint32>(BatchIndex));
+		SlotCrc = Context->GetSlotCrc(BatchIndex);
 
 		if (!TargetActor)
 		{
@@ -955,7 +933,8 @@ namespace PCGExPathSplineMesh
 		FSplineMeshSegment& Segment = Segments[Index];
 
 		// A segment without a mesh spawns nothing; told apart before a previous run's component is taken over for it.
-		if (!Segment.MeshEntry || !Segment.MeshEntry->Staging.TryGet<UStaticMesh>())
+		UStaticMesh* StaticMesh = Segment.MeshEntry ? Segment.MeshEntry->Staging.TryGet<UStaticMesh>() : nullptr;
+		if (!StaticMesh)
 		{
 			return;
 		}
@@ -964,18 +943,8 @@ namespace PCGExPathSplineMesh
 		FPCGCrc SegmentCrc = SlotCrc;
 		SegmentCrc.Combine(static_cast<uint32>(Index));
 
-		UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(TargetActor, USplineMeshComponent::StaticClass(), SegmentCrc);
-		USplineMeshComponent* SplineMeshComponent = nullptr;
-
-		if (Reclaimed)
-		{
-			SplineMeshComponent = CastChecked<USplineMeshComponent>(Reclaimed->GeneratedComponent.Get());
-			SplineMeshComponent->EmptyOverrideMaterials();
-		}
-		else
-		{
-			SplineMeshComponent = Context->ManagedObjects->New<USplineMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, USplineMeshComponent::StaticClass(), FName(TEXT("PCGSplineMeshComponent"))), ObjectFlags);
-		}
+		FPCGExComponentSlot Slot;
+		USplineMeshComponent* SplineMeshComponent = Context->ReclaimOrCreateComponent<USplineMeshComponent>(TargetActor, TEXT("PCGSplineMeshComponent"), SegmentCrc, Slot);
 
 		if (!SplineMeshComponent)
 		{
@@ -1024,12 +993,9 @@ namespace PCGExPathSplineMesh
 			}
 		}
 
-		if (!Segment.ApplyMesh(SplineMeshComponent))
-		{
-			return;
-		}
+		Segment.ApplyMesh(SplineMeshComponent, StaticMesh);
 
-		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false), SegmentCrc, Reclaimed);
+		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false), Slot);
 
 		Context->AddNotifyActor(TargetActor);
 	}

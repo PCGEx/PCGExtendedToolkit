@@ -29,12 +29,20 @@ namespace PCGExMT
 class UPCGExInstancedFactory;
 class UPCGExSettings;
 class UPCGComponent;
+class UPCGData;
 class IPCGExElement;
 class UPCGManagedComponent;
 class UPCGExManagedActors;
 class UPCGExManagedComponent;
 struct FStreamableHandle;
 struct FAttachmentTransformRules;
+
+/** A reusable component's slot: the key it is found under, and the previous generation's resource when it left one there. */
+struct FPCGExComponentSlot
+{
+	FPCGCrc Crc;
+	UPCGExManagedComponent* Reclaimed = nullptr;
+};
 
 namespace PCGExMT
 {
@@ -291,29 +299,54 @@ protected:
 #pragma region Managed Resources
 
 public:
-	/** Identity of this node execution (stack, node, and its settings unless left out) that holds across sessions; combine an index into it to key a reusable resource. */
+	/** The node's settings CRC, overrides applied; valid whatever the settings. */
+	FPCGCrc GetInputSettingsCrc() const;
+
+	/** Identity of this node execution (stack, node, and its settings unless left out) that holds across sessions. */
 	FPCGCrc GetExecutionCrc(bool bWithSettings = true) const;
 
-	/** Hash of the node's settings and of what its inputs hold, leaving out InExcludedPin, factories and every tag (those carry per-session ids).
-	 *  Unlike the CRCs the executor hands down, it holds across sessions. */
-	FPCGCrc GetInputContentCrc(FName InExcludedPin = NAME_None) const;
+	/** Key of what this execution reuses for InIndex (an input, a segment, a call) from one generation to the next. */
+	FPCGCrc GetSlotCrc(int32 InIndex, bool bWithSettings = true) const;
 
-	/** The actors a previous generation tracked under SlotCrc, kept from the end-of-run cleanup whether or not they are still current; null if there are none. */
-	UPCGExManagedActors* ReclaimManagedActors(const FPCGCrc& SlotCrc) const;
+	/** Hash of the node's settings and of what its inputs hold: InMainData, and every input off InMainPin. Factories are left out, and so is
+	 *  every tag (those carry per-session ids). Holds across sessions, unlike the CRCs the executor hands down. Invalid when no content hash
+	 *  can serve (see IsContentHashUsable): the actors then never pass for current. */
+	FPCGCrc GetInputContentCrc(FName InMainPin, const UPCGData* InMainData) const;
 
-	/** A new, empty actor resource under SlotCrc. Game thread: a UObject created on a worker pins its outer chain. */
-	UPCGExManagedActors* AddManagedActors(const FPCGCrc& SlotCrc) const;
+	/** The actor resource of SlotCrc: the previous generation's, kept from the end-of-run cleanup, or a new one. bOutCurrent says its actors are
+	 *  still what ContentCrc spawns (NumActors as in UPCGExManagedActors::IsCurrent); otherwise it comes back open for a respawn. Game thread. */
+	UPCGExManagedActors* ReclaimOrAddManagedActors(const FPCGCrc& SlotCrc, const FPCGCrc& ContentCrc, int32 NumActors, bool& bOutCurrent) const;
 
-	/** The component a previous generation attached under ReuseCrc, reset to how a new one starts out for a full rebuild; null if there is none. */
-	UPCGExManagedComponent* ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const;
+	/** The component SlotCrc held last generation, reset to how a new one starts out (unregistered, untagged, detached, no material override)
+	 *  for a full rebuild; else a new one named after InBaseName. OutSlot goes to AttachManagedComponent. Game thread. */
+	UActorComponent* ReclaimOrCreateComponent(AActor* InParent, UClass* InComponentClass, FName InBaseName, const FPCGCrc& SlotCrc, FPCGExComponentSlot& OutSlot) const;
 
-	/** A valid ReuseCrc keeps the component across regenerations; InReclaimed is what ReclaimManagedComponent returned for it, if anything. */
-	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGCrc& ReuseCrc = FPCGCrc(), UPCGExManagedComponent* InReclaimed = nullptr) const;
+	template <typename T>
+	T* ReclaimOrCreateComponent(AActor* InParent, const FName InBaseName, const FPCGCrc& SlotCrc, FPCGExComponentSlot& OutSlot) const
+	{
+		return CastChecked<T>(ReclaimOrCreateComponent(InParent, T::StaticClass(), InBaseName, SlotCrc, OutSlot), ECastCheckedType::NullAllowed);
+	}
+
+	/** With a slot from ReclaimOrCreateComponent the component is kept across regenerations; without one it is recreated every time. */
+	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGExComponentSlot& InSlot = FPCGExComponentSlot()) const;
 
 protected:
-	/** The components this regeneration soft-released, by CRC value; built on the first reclaim, emptied as they are reclaimed. Game thread. */
+	/** False when the engine's full point CRC is switched off, or on a runtime-generated component */
+	bool IsContentHashUsable() const;
+
+	/** Maps what this regeneration soft-released, once. Game thread. */
+	void IndexReclaimableResources() const;
+
+	/** Soft-released resources by CRC value, emptied as they are reclaimed. Game thread. */
 	mutable TMultiMap<uint32, UPCGExManagedComponent*> ReclaimableComponents;
-	mutable bool bReclaimableComponentsIndexed = false;
+	mutable TMultiMap<uint32, UPCGExManagedActors*> ReclaimableActors;
+	mutable bool bReclaimableResourcesIndexed = false;
+
+	/** Guards the memoized CRCs below, asked for by processors in parallel */
+	mutable FCriticalSection ManagedResourcesLock;
+	mutable FPCGCrc ExecutionCrcs[2];
+	mutable FPCGCrc SideInputsCrc;
+	mutable FName SideInputsPin;
 
 #pragma endregion
 

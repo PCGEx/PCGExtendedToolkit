@@ -24,7 +24,6 @@
 
 #include "PCGComponent.h"
 #include "PCGElement.h"
-#include "PCGManagedResource.h"
 #include "PCGPin.h"
 #include "Helpers/PCGHelpers.h"
 #include "Metadata/PCGMetadata.h"
@@ -401,11 +400,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 
 	// What the actors are built from: the settings and each spec. Hashed as built rather than from the inputs, so
 	// whatever led to the same footprints (matching rules included) keeps the same actors.
-	FPCGCrc ContentCrc = Settings->GetSettingsCrc();
-	if (!ContentCrc.IsValid())
-	{
-		ContentCrc = FPCGCrc(0);
-	}
+	FPCGCrc ContentCrc = GetInputSettingsCrc();
 
 	int32 NumVolumes = 0;
 	for (const TSharedPtr<FPCGExVolumeSpec>& Spec : StagedVolumes)
@@ -417,45 +412,49 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 		}
 	}
 
-	// One resource for the node, no settings in its key: an edit to the node keeps its actors' identity.
-	const FPCGCrc SlotCrc = GetExecutionCrc(/*bWithSettings=*/false);
-	ManagedActors = ReclaimManagedActors(SlotCrc);
-
-	if (ManagedActors)
+	// Nothing to spawn: what a previous generation left is not claimed, and goes with the end-of-run cleanup.
+	if (NumVolumes == 0)
 	{
-		// Nothing changed: the actors stay as they are, and only the outputs over them are made again.
-		if (ManagedActors->IsCurrent(ContentCrc, NumVolumes))
+		return;
+	}
+
+	// One resource for the node, no settings in its key: an edit to the node keeps its actors' identity.
+	bool bKeepActors = false;
+	UPCGExManagedActors* ManagedActors = ReclaimOrAddManagedActors(GetExecutionCrc(/*bWithSettings=*/false), ContentCrc, NumVolumes, bKeepActors);
+
+	// Nothing changed: the actors stay as they are, and only the outputs over them are made again.
+	if (bKeepActors)
+	{
+		const TArray<TSoftObjectPtr<AActor>>& KeptActors = ManagedActors->GetConstGeneratedActors();
+
+		TArray<UPCGSpatialData*> KeptData;
+		KeptData.Reserve(NumVolumes);
+		for (const TSoftObjectPtr<AActor>& KeptActor : KeptActors)
 		{
-			const TArray<TSoftObjectPtr<AActor>>& KeptActors = ManagedActors->GetConstGeneratedActors();
-
-			TArray<UPCGSpatialData*> KeptData;
-			KeptData.Reserve(NumVolumes);
-			for (const TSoftObjectPtr<AActor>& KeptActor : KeptActors)
+			AActor* Actor = KeptActor.Get();
+			UPCGSpatialData* Data = Actor ? WrapActor(Actor) : nullptr;
+			if (!Data)
 			{
-				AActor* Actor = KeptActor.Get();
-				UPCGSpatialData* Data = Actor ? WrapActor(Actor) : nullptr;
-				if (!Data)
-				{
-					break;
-				}
-				KeptData.Add(Data);
+				break;
 			}
-
-			if (KeptData.Num() == NumVolumes)
-			{
-				int32 Slot = 0;
-				for (const TSharedPtr<FPCGExVolumeSpec>& Spec : StagedVolumes)
-				{
-					if (Spec && !Spec->ConvexElems.IsEmpty())
-					{
-						StageVolume(*Spec, KeptActors[Slot].Get(), KeptData[Slot]);
-						Slot++;
-					}
-				}
-				return;
-			}
+			KeptData.Add(Data);
 		}
 
+		if (KeptData.Num() == NumVolumes)
+		{
+			int32 Slot = 0;
+			for (const TSharedPtr<FPCGExVolumeSpec>& Spec : StagedVolumes)
+			{
+				if (Spec && !Spec->ConvexElems.IsEmpty())
+				{
+					StageVolume(*Spec, KeptActors[Slot].Get(), KeptData[Slot]);
+					Slot++;
+				}
+			}
+			return;
+		}
+
+		// A kept actor is gone, or no longer one of this node's: respawn after all.
 		ManagedActors->BeginRespawn();
 	}
 
@@ -483,10 +482,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 		}
 
 		// The actor this spec had last time, when of the same class in the same level, passes on its name, package and GUID.
-		if (ManagedActors)
-		{
-			ManagedActors->PrepareSpawn(ActorClass, TargetLevel, SpawnParams);
-		}
+		ManagedActors->PrepareSpawn(ActorClass, SpawnParams);
 
 		// Host actor + the spatial data wrapping its collision; built per OutputMode below.
 		AActor* SpawnedActor = nullptr;
@@ -497,10 +493,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 			AActor* Actor = World->SpawnActor<AActor>(ActorClass, Spec->ActorTransform, SpawnParams);
 			if (!Actor)
 			{
-				if (ManagedActors)
-				{
-					ManagedActors->CommitSpawn(nullptr);
-				}
+				ManagedActors->CommitSpawn(nullptr);
 				continue;
 			}
 			
@@ -578,10 +571,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 			AVolume* Volume = World->SpawnActor<AVolume>(Settings->VolumeClass, Spec->ActorTransform, SpawnParams);
 			if (!Volume)
 			{
-				if (ManagedActors)
-				{
-					ManagedActors->CommitSpawn(nullptr);
-				}
+				ManagedActors->CommitSpawn(nullptr);
 				continue;
 			}
 
@@ -589,10 +579,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 			if (!BrushComp)
 			{
 				Volume->Destroy();
-				if (ManagedActors)
-				{
-					ManagedActors->CommitSpawn(nullptr);
-				}
+				ManagedActors->CommitSpawn(nullptr);
 				continue;
 			}
 
@@ -629,10 +616,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 			{
 				SpawnedActor->Destroy();
 			}
-			if (ManagedActors)
-			{
-				ManagedActors->CommitSpawn(nullptr);
-			}
+			ManagedActors->CommitSpawn(nullptr);
 			continue;
 		}
 
@@ -641,24 +625,16 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 		// Group the spawned actor under its Outliner folder (or attach it) instead of leaving it loose at the root.
 		PCGHelpers::AttachToParent(SpawnedActor, TargetActor, Settings->AttachOptions, this);
 
-		// Registered on the first spawn, and each actor tracked as soon as it exists, so partial work is still tracked.
-		if (!ManagedActors)
-		{
-			ManagedActors = AddManagedActors(SlotCrc);
-			ManagedActors->BeginRespawn();
-		}
+		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, bTransientSpawn);
 
-		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, nullptr, bTransientSpawn);
+		// Tracked as soon as it exists, so partial work is still tracked.
 		ManagedActors->CommitSpawn(SpawnedActor);
 
 		StageVolume(*Spec, SpawnedActor, OutData);
 	}
 
 	// Only now: a run cut short keeps no content hash, so it can never be taken for a complete one.
-	if (ManagedActors)
-	{
-		ManagedActors->EndRespawn(ContentCrc);
-	}
+	ManagedActors->EndRespawn(ContentCrc);
 
 	ExecuteOnNotifyActors(Settings->PostProcessFunctionNames);
 }

@@ -18,21 +18,42 @@ void UPCGExManagedActors::BeginRespawn()
 	ContentCrc = FPCGCrc();
 	NumDonors = GetConstGeneratedActors().Num();
 	NumSpawned = 0;
+	bDonorTaken = false;
 }
 
-void UPCGExManagedActors::PrepareSpawn(const UClass* InClass, const ULevel* InLevel, FActorSpawnParameters& InOutSpawnParams)
+void UPCGExManagedActors::DestroyDonors()
 {
-	AActor* Donor = NumSpawned < NumDonors ? GetConstGeneratedActors()[NumSpawned].Get() : nullptr;
+	TArray<TSoftObjectPtr<AActor>>& Actors = GetMutableGeneratedActors();
+	if (Actors.Num() > NumSpawned)
+	{
+		PCGExHelpers::DestroyManagedActors(MakeArrayView(Actors).RightChop(NumSpawned));
+		Actors.SetNum(NumSpawned);
+	}
+
+	NumDonors = NumSpawned;
+}
+
+void UPCGExManagedActors::PrepareSpawn(const UClass* InClass, FActorSpawnParameters& InOutSpawnParams)
+{
+	if (NumSpawned >= NumDonors)
+	{
+		return;
+	}
+
+	bDonorTaken = true;
+
+	AActor* Donor = GetConstGeneratedActors()[NumSpawned].Get();
 	if (!Donor)
 	{
 		return;
 	}
 
-	if (Donor->GetClass() == InClass && Donor->GetLevel() == InLevel)
+	if (Donor->GetClass() == InClass && Donor->GetLevel() == InOutSpawnParams.OverrideLevel)
 	{
 		PCGExHelpers::InheritActorIdentity(Donor, InOutSpawnParams);
 	}
 
+	// Ahead of the spawn, one at a time: the successor's package derives from the name the donor still holds.
 	PCGExHelpers::DestroyManagedActor(Donor);
 }
 
@@ -51,11 +72,12 @@ void UPCGExManagedActors::CommitSpawn(AActor* InActor)
 		return;
 	}
 
-	// A soft pointer re-resolves by path: once the replaced actor is gone, its slot can resolve to a successor of the same name.
-	if (AActor* Replaced = Actors[NumSpawned].Get(); Replaced != InActor)
+	// Not resolved once PrepareSpawn emptied it: by then the slot's path may name the successor that took over the name.
+	if (!bDonorTaken)
 	{
-		PCGExHelpers::DestroyManagedActor(Replaced);
+		PCGExHelpers::DestroyManagedActor(Actors[NumSpawned].Get());
 	}
+	bDonorTaken = false;
 
 	if (!InActor)
 	{
@@ -69,12 +91,6 @@ void UPCGExManagedActors::CommitSpawn(AActor* InActor)
 
 void UPCGExManagedActors::EndRespawn(const FPCGCrc& InContentCrc)
 {
-	TArray<TSoftObjectPtr<AActor>>& Actors = GetMutableGeneratedActors();
-	for (int32 i = NumSpawned; i < Actors.Num(); i++)
-	{
-		PCGExHelpers::DestroyManagedActor(Actors[i].Get());
-	}
-	Actors.SetNum(NumSpawned);
-
+	DestroyDonors();
 	ContentCrc = InContentCrc;
 }

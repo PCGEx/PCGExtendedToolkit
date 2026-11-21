@@ -56,7 +56,6 @@ public:
 	/** This input's slot; each AddComponent call finds its component of the previous generation under it, by call order */
 	FPCGCrc SlotCrc;
 	int32 NumAddedComponents = 0;
-	bool bIsPreviewMode = false;
 	bool bIsProcessing = false;
 
 	/**
@@ -80,7 +79,8 @@ public:
 
 	/**
 	 * Create a component and attach it to the actor. On a regeneration this hands back the component the same call
-	 * created last time, with whatever was set on it then: set every property you rely on.
+	 * created last time: its tags, transform and material overrides are cleared, everything else is as it was set
+	 * then, so set every property you rely on.
 	 * @param InActor Actor to which the component will be attached
 	 * @param ComponentClass Component class
 	 * @param InLocationRule The rule to apply to location when attaching

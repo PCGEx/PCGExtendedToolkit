@@ -14,6 +14,7 @@
 #include "PCGNode.h"
 #include "PCGSettings.h"
 #include "Async/Async.h"
+#include "Components/MeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Containers/PCGExManagedObjectsInterfaces.h"
@@ -31,10 +32,10 @@
 #include "Factories/PCGExFactoryData.h"
 #include "Factories/PCGExInstancedFactory.h"
 #include "GameFramework/Actor.h"
+#include "HAL/IConsoleManager.h"
 #include "Graph/PCGStackContext.h"
 #include "Helpers/PCGDynamicTrackingHelpers.h"
 #include "Helpers/PCGExFunctionPrototypes.h"
-#include "Helpers/PCGExManagedResourceHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Helpers/PCGHelpers.h"
@@ -703,14 +704,24 @@ void FPCGExContext::ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Pa
 	PCGExHelpers::ResolveMissingObjects_AnyThread(Paths, OutObjects);
 }
 
+FPCGCrc FPCGExContext::GetInputSettingsCrc() const
+{
+	const UPCGSettings* InSettings = GetInputSettings<UPCGSettings>();
+	const FPCGCrc Crc = InSettings ? InSettings->GetSettingsCrc() : FPCGCrc();
+	return Crc.IsValid() ? Crc : FPCGCrc(0);
+}
+
 FPCGCrc FPCGExContext::GetExecutionCrc(const bool bWithSettings) const
 {
-	const UPCGSettings* InSettings = bWithSettings ? GetInputSettings<UPCGSettings>() : nullptr;
-	FPCGCrc Crc = InSettings ? InSettings->GetSettingsCrc() : FPCGCrc();
-	if (!Crc.IsValid())
+	FScopeLock Lock(&ManagedResourcesLock);
+
+	FPCGCrc& Crc = ExecutionCrcs[bWithSettings ? 1 : 0];
+	if (Crc.IsValid())
 	{
-		Crc = FPCGCrc(0);
+		return Crc;
 	}
+
+	Crc = bWithSettings ? GetInputSettingsCrc() : FPCGCrc(0);
 
 	if (const FPCGStack* CurrentStack = GetStack())
 	{
@@ -726,58 +737,142 @@ FPCGCrc FPCGExContext::GetExecutionCrc(const bool bWithSettings) const
 	return Crc;
 }
 
-FPCGCrc FPCGExContext::GetInputContentCrc(const FName InExcludedPin) const
+FPCGCrc FPCGExContext::GetSlotCrc(const int32 InIndex, const bool bWithSettings) const
 {
-	const UPCGSettings* InSettings = GetInputSettings<UPCGSettings>();
-	FPCGCrc Crc = InSettings ? InSettings->GetSettingsCrc() : FPCGCrc();
-	if (!Crc.IsValid())
+	FPCGCrc Crc = GetExecutionCrc(bWithSettings);
+	Crc.Combine(static_cast<uint32>(InIndex));
+	return Crc;
+}
+
+bool FPCGExContext::IsContentHashUsable() const
+{
+	// With the full point CRC off, the engine hashes a point data's per-session id instead of its points.
+	static const IConsoleVariable* CVarFullPointDataCrc = IConsoleManager::Get().FindConsoleVariable(TEXT("pcg.Cache.FullPointDataCrc"));
+	if (CVarFullPointDataCrc && !CVarFullPointDataCrc->GetBool())
 	{
-		Crc = FPCGCrc(0);
+		return false;
 	}
 
-	for (const FPCGTaggedData& TaggedData : InputData.TaggedData)
+	// A runtime-generated component only ever regenerates from a full release: nothing is left to compare against.
+	const UPCGComponent* SrcComp = GetComponent();
+	return !SrcComp || SrcComp->GenerationTrigger != EPCGComponentGenerationTrigger::GenerateAtRuntime;
+}
+
+FPCGCrc FPCGExContext::GetInputContentCrc(const FName InMainPin, const UPCGData* InMainData) const
+{
+	if (!IsContentHashUsable())
 	{
-		// A factory's CRC is its object identity, so it is per session; what a factory decides is the caller's to hash.
-		if (!TaggedData.Data || TaggedData.Pin == InExcludedPin || TaggedData.Data->IsA<UPCGExParamDataBase>())
+		return FPCGCrc();
+	}
+
+	FPCGCrc Crc;
+	{
+		FScopeLock Lock(&ManagedResourcesLock);
+
+		if (!SideInputsCrc.IsValid() || SideInputsPin != InMainPin)
 		{
-			continue;
+			SideInputsPin = InMainPin;
+			SideInputsCrc = GetInputSettingsCrc();
+
+			for (const FPCGTaggedData& TaggedData : InputData.TaggedData)
+			{
+				// A factory's CRC is its object identity, so it is per session; what a factory decides is the caller's to hash.
+				if (!TaggedData.Data || TaggedData.Pin == InMainPin || TaggedData.Data->IsA<UPCGExParamDataBase>())
+				{
+					continue;
+				}
+
+				SideInputsCrc.Combine(FCrc::StrCrc32(*TaggedData.Pin.ToString()));
+				SideInputsCrc.Combine(TaggedData.Data->GetOrComputeCrc(/*bFullDataCrc=*/true));
+			}
 		}
 
-		Crc.Combine(FCrc::StrCrc32(*TaggedData.Pin.ToString()));
-		Crc.Combine(TaggedData.Data->GetOrComputeCrc(/*bFullDataCrc=*/true));
+		Crc = SideInputsCrc;
+	}
+
+	if (InMainData)
+	{
+		Crc.Combine(InMainData->GetOrComputeCrc(/*bFullDataCrc=*/true));
 	}
 
 	return Crc;
 }
 
-UPCGExManagedActors* FPCGExContext::ReclaimManagedActors(const FPCGCrc& SlotCrc) const
+void FPCGExContext::IndexReclaimableResources() const
 {
-	UPCGComponent* SrcComp = GetMutableComponent();
+	check(IsInGameThread());
 
-#if WITH_EDITOR
-	const bool bIsPreviewMode = SrcComp->IsInPreviewMode();
-#endif
+	if (bReclaimableResourcesIndexed)
+	{
+		return;
+	}
 
-	return PCGExManagedHelpers::TryReuseManagedResource<UPCGExManagedActors>(
-		SrcComp, SlotCrc,
-		[&](const UPCGExManagedActors* Resource)
+	bReclaimableResourcesIndexed = true;
+
+	// One walk of the managed resources per execution: a node with a component per segment reclaims thousands.
+	GetMutableComponent()->ForEachManagedResource(
+		[&](UPCGManagedResource* InResource)
 		{
-#if WITH_EDITOR
-			if (Resource->IsPreview() != bIsPreviewMode)
-			{
-				return false;
-			}
-#endif
 			// Still unused = soft-released by this regeneration and not claimed yet.
-			return Resource->IsMarkedUnused();
+			if (!InResource->GetCrc().IsValid() || !InResource->IsMarkedUnused() || !InResource->CanBeUsed())
+			{
+				return;
+			}
+
+			if (UPCGExManagedComponent* Component = Cast<UPCGExManagedComponent>(InResource))
+			{
+				ReclaimableComponents.Add(InResource->GetCrc().GetValue(), Component);
+			}
+			else if (UPCGExManagedActors* Actors = Cast<UPCGExManagedActors>(InResource))
+			{
+				ReclaimableActors.Add(InResource->GetCrc().GetValue(), Actors);
+			}
 		});
 }
 
-UPCGExManagedActors* FPCGExContext::AddManagedActors(const FPCGCrc& SlotCrc) const
+UPCGExManagedActors* FPCGExContext::ReclaimOrAddManagedActors(const FPCGCrc& SlotCrc, const FPCGCrc& ContentCrc, const int32 NumActors, bool& bOutCurrent) const
 {
-	UPCGComponent* SrcComp = GetMutableComponent();
+	IndexReclaimableResources();
 
-	UPCGExManagedActors* ManagedActors = NewObject<UPCGExManagedActors>(SrcComp);
+	UPCGComponent* SrcComp = GetMutableComponent();
+	UPCGExManagedActors* ManagedActors = nullptr;
+
+	for (auto It = ReclaimableActors.CreateKeyIterator(SlotCrc.GetValue()); It; ++It)
+	{
+		UPCGExManagedActors* Candidate = It.Value();
+
+#if WITH_EDITOR
+		if (Candidate->IsPreview() != SrcComp->IsInPreviewMode())
+		{
+			continue;
+		}
+#endif
+
+		if (Candidate->IsMarkedUnused())
+		{
+			ManagedActors = Candidate;
+			It.RemoveCurrent();
+			break;
+		}
+	}
+
+	if (ManagedActors)
+	{
+		// Keeps the actors from the end-of-run cleanup, whether or not they are still current.
+		ManagedActors->MarkAsReused();
+
+		bOutCurrent = ManagedActors->IsCurrent(ContentCrc, NumActors);
+		if (!bOutCurrent)
+		{
+			ManagedActors->BeginRespawn();
+		}
+
+		return ManagedActors;
+	}
+
+	bOutCurrent = false;
+
+	ManagedActors = NewObject<UPCGExManagedActors>(SrcComp);
 	ManagedActors->SetCrc(SlotCrc);
 
 #if WITH_EDITOR
@@ -789,54 +884,37 @@ UPCGExManagedActors* FPCGExContext::AddManagedActors(const FPCGCrc& SlotCrc) con
 	return ManagedActors;
 }
 
-UPCGExManagedComponent* FPCGExContext::ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const
+UActorComponent* FPCGExContext::ReclaimOrCreateComponent(AActor* InParent, UClass* InComponentClass, const FName InBaseName, const FPCGCrc& SlotCrc, FPCGExComponentSlot& OutSlot) const
 {
-	UPCGComponent* SrcComp = GetMutableComponent();
+	IndexReclaimableResources();
 
-	const bool bIsPreviewMode = SrcComp->IsInPreviewMode();
+	const bool bIsPreviewMode = GetComponent()->IsInPreviewMode();
 
-	check(IsInGameThread());
+	OutSlot.Crc = SlotCrc;
+	OutSlot.Reclaimed = nullptr;
 
-	// One walk of the managed resources per execution: a node with a component per segment reclaims thousands.
-	if (!bReclaimableComponentsIndexed)
+	for (auto It = ReclaimableComponents.CreateKeyIterator(SlotCrc.GetValue()); It; ++It)
 	{
-		bReclaimableComponentsIndexed = true;
-		SrcComp->ForEachManagedResource(
-			[&](UPCGManagedResource* InResource)
-			{
-				UPCGExManagedComponent* Resource = Cast<UPCGExManagedComponent>(InResource);
+		UPCGExManagedComponent* Candidate = It.Value();
+		const UActorComponent* Component = Candidate->GeneratedComponent.Get();
 
-				// Still unused = soft-released by this regeneration and not claimed yet.
-				if (Resource && Resource->GetCrc().IsValid() && Resource->IsMarkedUnused() && Resource->CanBeUsed())
-				{
-					ReclaimableComponents.Add(Resource->GetCrc().GetValue(), Resource);
-				}
-			});
-	}
-
-	UPCGExManagedComponent* Reclaimed = nullptr;
-	for (auto It = ReclaimableComponents.CreateKeyIterator(ReuseCrc.GetValue()); It; ++It)
-	{
-		const UActorComponent* Candidate = It.Value()->GeneratedComponent.Get();
-		if (Candidate && Candidate->IsA(InComponentClass) && Candidate->GetOwner() == InParent && Candidate->HasAnyFlags(RF_Transient) == bIsPreviewMode)
+		if (Component && Candidate->IsMarkedUnused() && Component->IsA(InComponentClass) && Component->GetOwner() == InParent && Component->HasAnyFlags(RF_Transient) == bIsPreviewMode)
 		{
-			Reclaimed = It.Value();
+			OutSlot.Reclaimed = Candidate;
 			It.RemoveCurrent();
 			break;
 		}
 	}
 
-	if (!Reclaimed)
+	if (!OutSlot.Reclaimed)
 	{
-		return nullptr;
+		return NewObject<UActorComponent>(InParent, InComponentClass, MakeUniqueObjectName(InParent, InComponentClass, InBaseName), bIsPreviewMode ? RF_Transient : RF_NoFlags);
 	}
 
-	// UPCGManagedComponentBase::MarkAsUsed drops the CRC and resets the tags to the default PCG tag alone.
-	Reclaimed->MarkAsUsed();
-	Reclaimed->SetCrc(ReuseCrc);
+	OutSlot.Reclaimed->MarkAsReused();
 
-	// Handed back the way a new component starts out (unregistered, untagged, detached at identity), so one build path serves both.
-	UActorComponent* Component = Reclaimed->GeneratedComponent.Get();
+	// Handed back the way a new component starts out (unregistered, untagged, detached at identity, no material override), so one build path serves both.
+	UActorComponent* Component = OutSlot.Reclaimed->GeneratedComponent.Get();
 	Component->UnregisterComponent();
 	Component->ComponentTags.Reset();
 
@@ -846,11 +924,19 @@ UPCGExManagedComponent* FPCGExContext::ReclaimManagedComponent(const AActor* InP
 		SceneComponent->SetRelativeTransform(FTransform::Identity);
 	}
 
-	return Reclaimed;
+	if (UMeshComponent* MeshComponent = Cast<UMeshComponent>(Component))
+	{
+		MeshComponent->EmptyOverrideMaterials();
+	}
+
+	return Component;
 }
 
-UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGCrc& ReuseCrc, UPCGExManagedComponent* InReclaimed) const
+UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGExComponentSlot& InSlot) const
 {
+	const FPCGCrc& ReuseCrc = InSlot.Crc;
+	UPCGExManagedComponent* const InReclaimed = InSlot.Reclaimed;
+
 	// Transfers a component from PCGEx internal management to PCG's managed resource system.
 	// This ensures PCG can clean up the component on re-generate/destroy, while the component
 	// remains tagged for PCG ownership (source component name + DefaultPCGTag).

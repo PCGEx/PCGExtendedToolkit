@@ -6,7 +6,6 @@
 #include "CoreMinimal.h"
 #include "PCGCommon.h"
 #include "PCGCrc.h"
-#include "PCGManagedResource.h"
 #include "Collections/PCGExActorCollection.h"
 #include "Containers/PCGExScopedContainers.h"
 #include "Core/PCGExPointFilter.h"
@@ -170,12 +169,6 @@ struct FPCGExStagingSpawnActorsContext final : FPCGExPointsProcessorContext
 	/** The node's property overrides resolved per actor class, shared by every input; null when it has none */
 	TSharedPtr<PCGExActorOverrides::FOverrideTargets> OverrideTargets;
 
-	/** Stack + node, without the settings: an edit to the node keeps its actors' identity */
-	FPCGCrc ExecutionCrc;
-
-	/** Settings and every input but the points; each processor adds its own points to it */
-	FPCGCrc InputContentCrc;
-
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
 };
@@ -261,14 +254,20 @@ namespace PCGExStagingSpawnActors
 		/** Main thread loop for spawning */
 		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
 
-		/** Managed resource for actor cleanup via PCG's native resource tracking; this input's previous one when it has one */
+		/** Managed resource for actor cleanup via PCG's native resource tracking; this input's previous one when it left one */
 		UPCGExManagedActors* ManagedActors = nullptr;
 
-		/** Finds this input's managed resource from one execution to the next, whatever its points hold */
-		FPCGCrc SlotCrc;
-
-		/** Hash of everything this input's actors are spawned from; equal to the resource's, they still hold */
+		/** Hash of everything this input's actors are spawned from; equal to the resource's, they still hold. Invalid when no hash can serve. */
 		FPCGCrc ContentCrc;
+
+		/** Points that spawn an actor */
+		int32 NumResolved = 0;
+
+		/** Entry classes and delta collaterals to load ahead of the spawn loop, unless the previous actors are kept */
+		TArray<FSoftObjectPath> SpawnAssetPaths;
+
+		/** One-shot main thread step running ReuseOrLoad */
+		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> ReuseStep;
 
 		/** Optional PCG generation watcher */
 		TSharedPtr<PCGExPCGInterop::FGenerationWatcher> GenerationWatcher;
@@ -301,8 +300,14 @@ namespace PCGExStagingSpawnActors
 		virtual void CompleteWork() override;
 
 	private:
-		/** Finds what a previous execution spawned for this input. True when nothing changed since and the actors are
-		 *  kept as they are; otherwise they stay tracked for the spawn loop to replace one by one. */
+		/** Hashes, off the game thread, everything this input's actors are spawned from */
+		void HashContent();
+
+		/** Game thread: keeps the previous actors when nothing changed, else loads what the spawn loop needs */
+		void ReuseOrLoad();
+
+		/** Game thread. Finds what a previous execution spawned for this input. True when nothing changed since and the
+		 *  actors are kept as they are; otherwise they stay tracked for the spawn loop to replace one by one. */
 		bool TryReuseSpawnedActors();
 
 		/** Entry classes and delta collaterals are loaded: prepares the override preload if any, else starts spawning */

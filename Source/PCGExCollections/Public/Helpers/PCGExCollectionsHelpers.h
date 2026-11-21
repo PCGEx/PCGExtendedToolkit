@@ -31,7 +31,6 @@ struct FPCGSkinnedMeshInstanceList;
 class AActor;
 class UPCGBasePointData;
 class UPCGExSelectorFactoryData;
-class UPCGManagedActors;
 class UPCGParamData;
 class FPCGExEntryPickerOperation;
 class FPCGExMicroEntryPickerOperation;
@@ -160,7 +159,7 @@ namespace PCGExCollections
 	 * single consistent persistence path.
 	 */
 	PCGEXCOLLECTIONS_API
-	void FinalizeSpawnedActor(AActor* InActor, UPCGManagedActors* InManagedActors, bool bIsPreview);
+	void FinalizeSpawnedActor(AActor* InActor, bool bIsPreview);
 
 	class FSocketHelper;
 	class FSelectorHelper;

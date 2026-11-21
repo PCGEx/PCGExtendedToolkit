@@ -236,7 +236,6 @@ namespace PCGExPathSplineMeshSimple
 	protected:
 		bool bClosedLoop = false;
 		bool bUseTags = false;
-		bool bIsPreviewMode = false;
 		int8 bHasValidSegments = false;
 
 		FPCGExSplineMeshMutationDetails MutationDetails;
@@ -258,8 +257,6 @@ namespace PCGExPathSplineMeshSimple
 
 		TArray<FName> DataTags;
 		AActor* TargetActor = nullptr;
-		EObjectFlags ObjectFlags = RF_NoFlags;
-
 		/** This input's slot; each segment's component is found again under it, by segment index */
 		FPCGCrc SlotCrc;
 
