@@ -24,14 +24,6 @@ struct FPCGExBranchOnDataPin
 {
 	GENERATED_BODY()
 
-	explicit FPCGExBranchOnDataPin(const bool InNumeric = true)
-	{
-	}
-
-	virtual ~FPCGExBranchOnDataPin()
-	{
-	}
-
 	/** Name of the output pin */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FName Label = FName("None");
@@ -59,11 +51,6 @@ struct FPCGExBranchOnDataPin
 	/** Value */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, DisplayName="Value", EditCondition="Check == EPCGExComparisonDataType::String", EditConditionHides))
 	FString StringValue = TEXT("");
-
-
-	virtual void Init()
-	{
-	}
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="utilities/control-flow/branch-on-data"))

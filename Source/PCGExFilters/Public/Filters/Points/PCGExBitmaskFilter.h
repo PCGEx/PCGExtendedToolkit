@@ -23,10 +23,6 @@ struct PCGEXFILTERS_API FPCGExBitmaskFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExBitmaskFilterConfig()
-	{
-	}
-
 	/** Source value. (Operand A) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FName FlagsAttribute = FName("Flags");
@@ -88,17 +84,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FBitmaskFilter final : public ISimpleFilter
+	class FBitmaskFilter final : public TFactoryFilter<UPCGExBitmaskFilterFactory>
 	{
 	public:
 		explicit FBitmaskFilter(const TObjectPtr<const UPCGExBitmaskFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 			  , Bitmask(InDefinition->Config.BitmaskValue.Constant)
 		{
 		}
-
-		TObjectPtr<const UPCGExBitmaskFilterFactory> TypedFilterFactory;
 
 		TSharedPtr<PCGExData::TBuffer<int64>> FlagsReader;
 		TSharedPtr<PCGExDetails::TSettingValue<int64>> MaskReader;
@@ -109,11 +102,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FBitmaskFilter() override
-		{
-			TypedFilterFactory = nullptr;
-		}
 	};
 }
 

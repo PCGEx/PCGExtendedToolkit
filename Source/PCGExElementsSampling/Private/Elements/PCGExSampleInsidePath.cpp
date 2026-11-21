@@ -256,10 +256,6 @@ bool FPCGExSampleInsidePathElement::AdvanceWork(FPCGExContext* InContext, const 
 
 namespace PCGExSampleInsidePath
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSampleInsidePath::Process);
@@ -499,6 +495,7 @@ namespace PCGExSampleInsidePath
 		PCGEX_OUTPUT_VALUE(Distance, Index, WeightedDistance)
 		PCGEX_OUTPUT_VALUE(NumInside, Index, NumInside)
 		PCGEX_OUTPUT_VALUE(NumSamples, Index, NumSampled)
+		PCGEX_OUTPUT_VALUE(Success, Index, true)
 
 		bAnySuccess = true;
 	}
@@ -515,6 +512,7 @@ namespace PCGExSampleInsidePath
 		PCGEX_OUTPUT_VALUE(Distance, Index, FailSafeDist)
 		PCGEX_OUTPUT_VALUE(NumInside, Index, -1)
 		PCGEX_OUTPUT_VALUE(NumSamples, Index, 0)
+		PCGEX_OUTPUT_VALUE(Success, Index, false)
 	}
 
 	void FProcessor::CompleteWork()

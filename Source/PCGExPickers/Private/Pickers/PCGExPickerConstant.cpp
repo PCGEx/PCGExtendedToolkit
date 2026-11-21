@@ -9,7 +9,7 @@
 #define LOCTEXT_NAMESPACE "PCGExCreatePickerConstant"
 #define PCGEX_NAMESPACE CreatePickerConstant
 
-PCGEX_PICKER_BOILERPLATE(Constant, {}, {})
+PCGEX_PICKER_BOILERPLATE(Constant, {})
 
 #if WITH_EDITOR
 FString UPCGExPickerConstantSettings::GetDisplayName() const

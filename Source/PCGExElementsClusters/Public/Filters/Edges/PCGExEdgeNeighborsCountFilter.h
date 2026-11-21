@@ -87,16 +87,10 @@ public:
 
 namespace PCGExEdgeNeighborsCount
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeNeighborsCountFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeNeighborsCountFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeNeighborsCountFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> ThresholdBuffer;
 
@@ -120,11 +114,6 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EdgeNeighborsCountFilterFactory, "Edge Filter : Num Vtx", "Check against the edge' endpoints neighbor count.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 	//~End UPCGSettings
 

@@ -164,14 +164,10 @@ void PCGExPCGInterop::FGenerationWatcher::Initialize()
 		},
 		[WeakThis = TWeakPtr<FGenerationWatcher>(SharedThis(this))]()
 		{
-			// On all complete - release token and notify
+			// On all complete - release token
 			if (TSharedPtr<FGenerationWatcher> This = WeakThis.Pin())
 			{
 				PCGEX_ASYNC_RELEASE_CAPTURED_TOKEN(This->WatchToken)
-				if (This->OnAllComplete)
-				{
-					This->OnAllComplete();
-				}
 			}
 		});
 }

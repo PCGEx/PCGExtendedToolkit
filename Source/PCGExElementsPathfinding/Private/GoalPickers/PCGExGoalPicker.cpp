@@ -9,15 +9,6 @@
 #include "Data/PCGExPointIO.h"
 
 
-void UPCGExGoalPicker::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExGoalPicker* TypedOther = Cast<UPCGExGoalPicker>(Other))
-	{
-		IndexSafety = TypedOther->IndexSafety;
-	}
-}
-
 bool UPCGExGoalPicker::PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsDataFacade, const TSharedPtr<PCGExData::FFacade>& InGoalsDataFacade)
 {
 	MaxGoalIndex = InGoalsDataFacade->Source->GetNum() - 1;

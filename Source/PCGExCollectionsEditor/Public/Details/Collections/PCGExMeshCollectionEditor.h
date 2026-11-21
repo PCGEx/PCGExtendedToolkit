@@ -6,14 +6,10 @@
 #include "PCGExAssetCollectionEditor.h"
 #include "Toolkits/AssetEditorToolkit.h"
 
-class UPCGExAssetCollection;
-
 /** Mesh collection editor -- reference implementation of FPCGExAssetCollectionEditor. */
 class FPCGExMeshCollectionEditor : public FPCGExAssetCollectionEditor
 {
 public:
-	FPCGExMeshCollectionEditor();
-
 	virtual FName GetToolkitFName() const override
 	{
 		return FName("PCGExMeshCollectionEditor");
@@ -22,16 +18,6 @@ public:
 	virtual FText GetBaseToolkitName() const override
 	{
 		return INVTEXT("PCGEx Mesh Collection Editor");
-	}
-
-	virtual FString GetWorldCentricTabPrefix() const override
-	{
-		return TEXT("PCGEx");
-	}
-
-	virtual FLinearColor GetWorldCentricTabColorScale() const override
-	{
-		return FLinearColor::White;
 	}
 
 protected:

@@ -28,16 +28,6 @@ public:
 		return INVTEXT("PCGEx PCGDataAsset Collection Editor");
 	}
 
-	virtual FString GetWorldCentricTabPrefix() const override
-	{
-		return TEXT("PCGEx");
-	}
-
-	virtual FLinearColor GetWorldCentricTabColorScale() const override
-	{
-		return FLinearColor::White;
-	}
-
 protected:
 	virtual FName GetTilePickerPropertyName() const override
 	{

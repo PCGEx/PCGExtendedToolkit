@@ -142,7 +142,7 @@ public class PCGExtendedToolkit : ModuleRules
 
 		if (Target.bBuildEditor)
 		{
-			PrivateDependencyModuleNames.AddRange(new[] { "UnrealEd", "Settings" });
+			PrivateDependencyModuleNames.Add("UnrealEd");
 			PrivateDependencyModuleNames.AddRange(BaseEditorDependencies);
 		}
 	}

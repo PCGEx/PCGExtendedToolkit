@@ -178,36 +178,6 @@ namespace PCGExData::Helpers
 		return NumSlots > 0;
 	}
 
-	bool PropertyScatterAttribute(
-		const FPCGMetadataAttributeBase* SourceAttr, const PCGMetadataEntryKey SourceKey,
-		const TSharedPtr<IBuffer>& TargetWriter, TArrayView<const int32> Indices)
-	{
-		if (!SourceAttr || !TargetWriter || Indices.IsEmpty())
-		{
-			return false;
-		}
-
-		const void* SrcAddr = SourceAttr->GetReadAddressFromEntryKey_Unsafe(SourceKey);
-		if (!SrcAddr)
-		{
-			return false;
-		}
-
-		PCGExTypes::FScopedTypedValue Scratch = TargetWriter->MakeScopedValue();
-		const FProperty* Prop = Scratch.GetProperty();
-		if (!Prop)
-		{
-			return false;
-		}
-
-		Prop->CopyCompleteValue(Scratch.GetRaw(), SrcAddr);
-		for (int32 Index : Indices)
-		{
-			TargetWriter->SetVoid(Index, Scratch);
-		}
-		return true;
-	}
-
 	bool PropertyCopyAttributeRange(
 		const TSharedPtr<FPointIO>& SourceIO, const FAttributeIdentity& SourceIdentity,
 		const TSharedRef<FPropertyArrayBuffer>& TargetBuffer,
@@ -274,19 +244,6 @@ namespace PCGExData::Helpers
 
 		// PCGDefaultValueKey == PCGInvalidEntryKey routes GetValueFromItemKey to the default slot.
 		return Attribute->GetValueFromItemKey<T>(GetDataValueKey(Attribute));
-	}
-
-	template <typename T>
-	T ReadDataValue(const FPCGMetadataAttributeBase* Attribute, T Fallback)
-	{
-		T Value = Fallback;
-		// Container/extended types fall through (no meaningful conversion to templated T) -- fallback wins.
-		PCGExMetaHelpers::ExecuteWithRightType(Attribute, [&](auto DummyValue)
-		{
-			using T_VALUE = decltype(DummyValue);
-			Value = PCGExTypeOps::Convert<T_VALUE, T>(ReadDataValue<T_VALUE>(static_cast<const FPCGMetadataAttribute<T_VALUE>*>(Attribute)));
-		});
-		return Value;
 	}
 
 	bool TryGetDataValueIdentifier(const FName Name, FPCGAttributeIdentifier& OutIdentifier)
@@ -378,7 +335,6 @@ namespace PCGExData::Helpers
 
 #define PCGEX_TPL(_TYPE, _NAME, ...) \
 template PCGEXCORE_API _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute); \
-template PCGEXCORE_API _TYPE ReadDataValue<_TYPE>(const FPCGMetadataAttributeBase* Attribute, _TYPE Fallback); \
 template PCGEXCORE_API bool SetDataValue<_TYPE>(FPCGMetadataAttributeBase* Attribute, const _TYPE Value); \
 template PCGEXCORE_API bool SetDataValue<_TYPE>(UPCGData* InData, FName Name, const _TYPE Value); \
 template PCGEXCORE_API bool SetDataValue<_TYPE>(UPCGData* InData, FPCGAttributeIdentifier Identifier, const _TYPE Value);

@@ -14,16 +14,6 @@
 
 #define LOCTEXT_NAMESPACE "FPCGExElementsClustersModule"
 
-void FPCGExElementsClustersModule::StartupModule()
-{
-	IPCGExLegacyModuleInterface::StartupModule();
-}
-
-void FPCGExElementsClustersModule::ShutdownModule()
-{
-	IPCGExLegacyModuleInterface::ShutdownModule();
-}
-
 #if WITH_EDITOR
 void FPCGExElementsClustersModule::RegisterToEditor(const TSharedPtr<FSlateStyleSet>& InStyle)
 {

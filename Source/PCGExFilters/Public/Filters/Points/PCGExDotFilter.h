@@ -19,10 +19,6 @@ struct FPCGExDotFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExDotFilterConfig()
-	{
-	}
-
 	/** Vector operand A */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -63,10 +59,6 @@ struct FPCGExDotFilterConfig
 
 #pragma endregion
 
-	void Sanitize()
-	{
-	}
-
 #if WITH_EDITOR
 	void ApplyDeprecation();
 	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
@@ -95,17 +87,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FDotFilter final : public ISimpleFilter
+	class FDotFilter final : public TFactoryFilter<UPCGExDotFilterFactory>
 	{
 	public:
 		explicit FDotFilter(const TObjectPtr<const UPCGExDotFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
 		}
-
-		const TObjectPtr<const UPCGExDotFilterFactory> TypedFilterFactory;
 
 		FPCGExDotComparisonDetails DotComparison;
 
@@ -120,10 +109,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FDotFilter() override
-		{
-		}
 	};
 }
 

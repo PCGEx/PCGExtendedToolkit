@@ -79,18 +79,6 @@ namespace PCGExProperties
 		TArray<FInstancedStruct> Merged;
 		TArray<TArray<int32>> SourceToMergedIdx;
 		TArray<FSchemaMergeConflict> Conflicts;
-
-		bool HasConflicts() const
-		{
-			return !Conflicts.IsEmpty();
-		}
-
-		void Reset()
-		{
-			Merged.Reset();
-			SourceToMergedIdx.Reset();
-			Conflicts.Reset();
-		}
 	};
 
 	/**

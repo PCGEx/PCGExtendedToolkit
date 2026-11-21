@@ -49,8 +49,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ClampMin="1"))
 	int32 MaxDepth = 100;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompConvexBSP, {
 	                                     Operation->MaxConcavityRatio = MaxConcavityRatio;
 	                                     Operation->MinNodesPerCell = MinNodesPerCell;

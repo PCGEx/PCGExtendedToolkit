@@ -92,11 +92,6 @@ int32 FPCGExChannelInteractionMatrix::GetChannelBit(FName ChannelKey) const
 	return Found ? *Found : INDEX_NONE;
 }
 
-FName FPCGExChannelInteractionMatrix::GetChannelKey(int32 BitIndex) const
-{
-	return ChannelKeys.IsValidIndex(BitIndex) ? ChannelKeys[BitIndex] : NAME_None;
-}
-
 bool FPCGExChannelInteractionMatrix::ShouldRunNarrowPhase(uint32 CandidateMask, uint32 StoredMask) const
 {
 	// Safe default: no channel info on either side means we run narrow phase

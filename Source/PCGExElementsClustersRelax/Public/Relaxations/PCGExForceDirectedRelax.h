@@ -16,7 +16,6 @@ class UPCGExForceDirectedRelax : public UPCGExRelaxClusterOperation
 	GENERATED_BODY()
 
 public:
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 	virtual void Step1(const PCGExClusters::FNode& Node) override;
 
 	/** Strength of the attraction pulling connected Vtx together. Grows with edge length, like a spring. */

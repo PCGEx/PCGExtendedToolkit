@@ -19,7 +19,6 @@ template <typename ValueType, typename ViewType>
 class TPCGValueRange;
 
 class UPCGMetadata;
-class UPCGManagedComponent;
 class UPCGData;
 class UPCGBasePointData;
 class UPCGComponent;
@@ -114,8 +113,6 @@ namespace PCGExMetaHelpers
 	PCGEXCORE_API bool IsDataDomainAttribute(const FPCGAttributePropertyInputSelector& InputSelector);
 
 	PCGEXCORE_API void AppendUniqueSelectorsFromCommaSeparatedList(const FString& InCommaSeparatedString, TArray<FPCGAttributePropertyInputSelector>& OutSelectors);
-
-	PCGEXCORE_API FName GetLongNameFromSelector(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const bool bInitialized = true);
 
 	PCGEXCORE_API FPCGAttributeIdentifier GetAttributeIdentifier(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const bool bInitialized = true);
 	PCGEXCORE_API FPCGAttributeIdentifier GetAttributeIdentifier(const FName InName, const UPCGData* InData);

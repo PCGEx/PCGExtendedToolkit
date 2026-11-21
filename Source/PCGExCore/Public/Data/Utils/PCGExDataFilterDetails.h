@@ -151,7 +151,6 @@ struct PCGEXCORE_API FPCGExCarryOverDetails
 	void Init();
 
 	void Prune(TSet<FString>& InValues) const;
-	void Prune(TArray<FString>& InValues) const;
 	void Prune(const PCGExData::FPointIO* PointIO) const;
 	void Prune(TArray<PCGExData::FAttributeIdentity>& Identities) const;
 	void Prune(PCGExData::FTags* InTags) const;

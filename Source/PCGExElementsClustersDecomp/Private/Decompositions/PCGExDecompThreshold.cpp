@@ -121,15 +121,4 @@ void UPCGExDecompThreshold::RegisterBuffersDependencies(FPCGExContext* InContext
 	FacadePreloader.Register<double>(InContext, AttributeSelector);
 }
 
-void UPCGExDecompThreshold::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompThreshold* TypedOther = Cast<UPCGExDecompThreshold>(Other))
-	{
-		AttributeSelector = TypedOther->AttributeSelector;
-		NumBins = TypedOther->NumBins;
-		BinningMode = TypedOther->BinningMode;
-	}
-}
-
 #pragma endregion

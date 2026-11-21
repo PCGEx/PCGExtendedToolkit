@@ -23,7 +23,6 @@ namespace PCGExMath::Geo
 		int32 Id = -1;
 		bool bOnHull = true;
 
-		FDelaunaySite2(const UE::Geometry::FIndex3i& InVtx, const UE::Geometry::FIndex3i& InAdjacency, const int32 InId = -1);
 		FDelaunaySite2(const int32 A, const int32 B, const int32 C, const int32 InId = -1);
 
 		bool ContainsEdge(const uint64 Edge) const;
@@ -55,8 +54,6 @@ namespace PCGExMath::Geo
 		TSet<int32> DelaunayHull;
 		bool IsValid = false;
 
-		mutable FRWLock ProcessLock;
-
 		TDelaunay2() = default;
 		~TDelaunay2();
 
@@ -86,7 +83,7 @@ namespace PCGExMath::Geo
 
 	struct PCGEXCORE_API FDelaunaySite3
 	{
-		uint32 Faces[4];
+		uint64 Faces[4];
 		int32 Vtx[4];
 		int32 Id = -1;
 		int8 bOnHull = 0;
@@ -103,11 +100,9 @@ namespace PCGExMath::Geo
 
 		TSet<uint64> DelaunayEdges;
 		TSet<int32> DelaunayHull;
-		TMap<uint32, uint64> Adjacency;
+		TMap<uint64, uint64> Adjacency;
 
 		bool IsValid = false;
-
-		mutable FRWLock ProcessLock;
 
 		TDelaunay3() = default;
 
@@ -143,7 +138,7 @@ namespace PCGExMath::Geo
 
 			DelaunayEdges.Reserve(NumReserve);
 
-			TSet<uint32> FacesUsage;
+			TSet<uint64> FacesUsage;
 			if constexpr (bComputeAdjacency)
 			{
 				Adjacency.Reserve(NumSites * 4);
@@ -177,7 +172,7 @@ namespace PCGExMath::Geo
 				{
 					for (int f = 0; f < 4; f++)
 					{
-						const uint32 FH = Site.Faces[f];
+						const uint64 FH = Site.Faces[f];
 
 						bool bAlreadySet = false;
 						FacesUsage.Add(FH, &bAlreadySet);
@@ -200,7 +195,7 @@ namespace PCGExMath::Geo
 				{
 					for (int f = 0; f < 4; f++)
 					{
-						const uint32 FH = Site.Faces[f];
+						const uint64 FH = Site.Faces[f];
 						bool bAlreadySet = false;
 						FacesUsage.Add(FH, &bAlreadySet);
 						if (bAlreadySet)
@@ -213,7 +208,7 @@ namespace PCGExMath::Geo
 				{
 					for (int f = 0; f < 4; f++)
 					{
-						const uint32 FH = Site.Faces[f];
+						const uint64 FH = Site.Faces[f];
 						if (const uint64* AH = Adjacency.Find(FH))
 						{
 							Adjacency.Add(FH, PCGEx::NH64(i, PCGEx::NH64B(*AH)));
@@ -251,6 +246,5 @@ namespace PCGExMath::Geo
 		}
 
 		void RemoveLongestEdges(const TArrayView<FVector>& Positions);
-		void RemoveLongestEdges(const TArrayView<FVector>& Positions, TSet<uint64>& LongestEdges);
 	};
 }

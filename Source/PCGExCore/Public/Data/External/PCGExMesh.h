@@ -14,10 +14,6 @@ struct FPCGExGeoMeshImportDetails;
 struct FStreamableHandle;
 struct FPCGExContext;
 
-namespace PCGExMT
-{
-	class FTaskManager;
-}
 
 struct FPCGPinProperties;
 
@@ -73,8 +69,6 @@ namespace PCGExMesh
 		}
 	};
 
-	class FExtractStaticMeshTask;
-
 	class PCGEXCORE_API FGeoMesh : public TSharedFromThis<FGeoMesh>
 	{
 	public:
@@ -123,8 +117,6 @@ namespace PCGExMesh
 
 		void ExtractMeshSynchronous();
 		void TriangulateMeshSynchronous();
-
-		void ExtractMeshAsync(PCGExMT::FTaskManager* TaskManager);
 
 		~FGeoStaticMesh();
 

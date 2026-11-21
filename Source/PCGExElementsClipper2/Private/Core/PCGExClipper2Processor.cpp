@@ -287,11 +287,6 @@ bool UPCGExClipper2ProcessorSettings::WantsOperands() const
 	return false;
 }
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2ProcessorSettings::GetProjectionDetails() const
-{
-	return FPCGExGeo2DProjectionDetails();
-}
-
 bool UPCGExClipper2ProcessorSettings::SupportOpenMainPaths() const
 {
 	return !bSkipOpenPaths;
@@ -974,7 +969,7 @@ bool FPCGExClipper2ProcessorElement::Boot(FPCGExContext* InContext) const
 	Context->AllOpData = MakeShared<PCGExClipper2::FOpData>(0);
 
 	// Initialize projection
-	Context->ProjectionDetails = Settings->GetProjectionDetails();
+	Context->ProjectionDetails = Settings->ProjectionDetails;
 
 	// Build main data
 	TArray<int32> MainIndices;

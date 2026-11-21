@@ -112,10 +112,6 @@ bool FPCGExTensorsTransformElement::AdvanceWork(FPCGExContext* InContext, const 
 
 namespace PCGExTensorsTransform
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExTensorsTransform::Process);

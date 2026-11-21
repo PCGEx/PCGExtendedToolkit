@@ -146,6 +146,11 @@ struct FPCGExPathfindingEdgesContext final : FPCGExClustersProcessorContext
 
 	TArray<uint64> SeedGoalPairs;
 
+	// Distinct seed / goal point indices among SeedGoalPairs, and per pair its H64(seed slot, goal slot) into them.
+	TArray<int32> UniqueSeeds;
+	TArray<int32> UniqueGoals;
+	TArray<uint64> PickSlots;
+
 	void BuildPath(const TSharedPtr<PCGExPathfinding::FPathQuery>& Query, const TSharedPtr<PCGExData::FPointIO>& PathIO);
 
 protected:

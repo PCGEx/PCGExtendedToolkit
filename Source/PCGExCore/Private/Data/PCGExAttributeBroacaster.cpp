@@ -111,7 +111,7 @@ namespace PCGExData
 	bool TAttributeBroadcaster<T>::ApplySelector(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData)
 	{
 		// Two distinct paths depending on attribute domain:
-		// @Data domain: Read a single value (DataValue) and cache its typed conversion (TypedDataValue).
+		// @Data domain: Read a single value and cache its typed conversion (TypedDataValue).
 		//   All subsequent Fetch/FetchSingle calls return this constant for every point.
 		// Element domain: Create a PCG accessor (InternalAccessor) for batch per-point reads via GetRange.
 		static_assert(Traits::Type != EPCGMetadataTypes::Unknown, "T must be of PCG-friendly type. Custom types are unsupported -- you'll have to static_cast the values.");
@@ -133,10 +133,11 @@ namespace PCGExData
 				[&](auto DummyValue)
 				{
 					using T_REAL = decltype(DummyValue);
-					DataValue = MakeShared<TDataValue<T_REAL>>(Helpers::ReadDataValue<T_REAL>(ProcessingInfos.Attribute));
+					const T_REAL RealValue = Helpers::ReadDataValue<T_REAL>(ProcessingInfos.Attribute);
+					bHasDataValue = true;
 
 					const FSubSelection& S = ProcessingInfos.SubSelection;
-					TypedDataValue = S.HasSelection() ? S.Get<T_REAL, T>(DataValue->GetValue<T_REAL>()) : PCGExTypeOps::Convert<T_REAL, T>(DataValue->GetValue<T_REAL>());
+					TypedDataValue = S.HasSelection() ? S.Get<T_REAL, T>(RealValue) : PCGExTypeOps::Convert<T_REAL, T>(RealValue);
 				},
 				[&]()
 				{
@@ -208,7 +209,7 @@ namespace PCGExData
 	template <typename T>
 	void TAttributeBroadcaster<T>::ProbeRead()
 	{
-		if (DataValue || !InternalAccessor || !Keys || Keys->GetNum() <= 0)
+		if (bHasDataValue || !InternalAccessor || !Keys || Keys->GetNum() <= 0)
 		{
 			return;
 		}
@@ -354,7 +355,7 @@ namespace PCGExData
 			return;
 		}
 
-		if (DataValue)
+		if (bHasDataValue)
 		{
 			PCGEX_SCOPE_LOOP(i)
 			{
@@ -385,7 +386,7 @@ namespace PCGExData
 			return;
 		}
 
-		if (DataValue)
+		if (bHasDataValue)
 		{
 			for (int32 i = 0; i < Scope.Count; ++i) { Dest[i] = TypedDataValue; }
 			return;
@@ -416,7 +417,7 @@ namespace PCGExData
 			return;
 		}
 
-		if (DataValue)
+		if (bHasDataValue)
 		{
 			for (int i = 0; i < NumPoints; i++)
 			{
@@ -470,7 +471,7 @@ namespace PCGExData
 		}
 		else
 		{
-			if (DataValue)
+			if (bHasDataValue)
 			{
 				OutUniqueValues.Add(TypedDataValue);
 			}
@@ -504,7 +505,7 @@ namespace PCGExData
 		{
 			return Fallback;
 		}
-		if (DataValue)
+		if (bHasDataValue)
 		{
 			return TypedDataValue;
 		}
@@ -530,7 +531,7 @@ namespace PCGExData
 		{
 			return false;
 		}
-		if (DataValue)
+		if (bHasDataValue)
 		{
 			OutValue = TypedDataValue;
 			return true;

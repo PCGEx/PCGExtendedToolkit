@@ -44,6 +44,9 @@ namespace PCGExBlending
 		FBlendFn AccumulateFunc = nullptr;
 		FFinalizeFn FinalizeFunc = nullptr;
 
+		// Subclasses clear it only when EndMulti leaves the accumulator untouched for every input.
+		bool bHasFinalize = true;
+
 	public:
 		IBlendOperation(EPCGExABBlendingType InMode, bool bInResetForMulti);
 		virtual ~IBlendOperation() = default;
@@ -106,9 +109,9 @@ namespace PCGExBlending
 			return Mode;
 		}
 
-		FORCEINLINE bool RequiresReset() const
+		FORCEINLINE bool HasFinalize() const
 		{
-			return bResetForMulti;
+			return bHasFinalize;
 		}
 
 		// Stack buffer helpers
@@ -185,12 +188,6 @@ namespace PCGExBlending
 		}
 
 		template <typename T>
-		void Weight(const void* A, const void* B, double Weight, void* Out)
-		{
-			*static_cast<T*>(Out) = PCGExTypeOps::FTypeOps<T>::WeightedAdd(*static_cast<const T*>(A), *static_cast<const T*>(B), Weight);
-		}
-
-		template <typename T>
 		void WeightedAdd(const void* A, const void* B, double Weight, void* Out)
 		{
 			*static_cast<T*>(Out) = PCGExTypeOps::FTypeOps<T>::WeightedAdd(*static_cast<const T*>(A), *static_cast<const T*>(B), Weight);
@@ -263,12 +260,6 @@ namespace PCGExBlending
 			*static_cast<T*>(Out) = PCGExTypeOps::FTypeOps<T>::ModComplex(*static_cast<const T*>(A), *static_cast<const T*>(B));
 		}
 
-		template <typename T>
-		void None(const void* A, const void* /*B*/, double /*Weight*/, void* Out)
-		{
-			*static_cast<T*>(Out) = *static_cast<const T*>(A);
-		}
-
 		// Get blend function pointer by mode
 		template <typename T>
 		FBlendFn GetBlendFunction(const EPCGExABBlendingType Mode)
@@ -292,7 +283,7 @@ namespace PCGExBlending
 			case EPCGExABBlendingType::Average:
 				return &Average<T>;
 			case EPCGExABBlendingType::Weight:
-				return &Weight<T>;
+				return &WeightedAdd<T>;
 			case EPCGExABBlendingType::WeightedAdd:
 				return &WeightedAdd<T>;
 			case EPCGExABBlendingType::WeightedSubtract:
@@ -318,18 +309,18 @@ namespace PCGExBlending
 			case EPCGExABBlendingType::ModCW:
 				return &ModComplex<T>;
 			case EPCGExABBlendingType::WeightNormalize:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::GeometricMean:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::HarmonicMean:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::RMS:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::Step:
-				return &Weight<T>; // TBD
+				return &WeightedAdd<T>; // TBD
 			case EPCGExABBlendingType::None:
 			default:
-				return &None<T>;
+				return &CopyA<T>;
 			}
 		}
 
@@ -445,6 +436,8 @@ namespace PCGExBlending
 			BlendFunc = BlendFunctions::GetBlendFunction<T>(InMode);
 			AccumulateFunc = BlendFunctions::GetAccumulateFunction<T>(InMode);
 			FinalizeFunc = BlendFunctions::GetFinalizeFunction<T>(InMode);
+			const FFinalizeFn NoFinalize = &BlendFunctions::FinalizeNoop<T>;
+			bHasFinalize = FinalizeFunc != NoFinalize;
 		}
 
 		//~ Begin IBlendOperation interface
@@ -524,6 +517,7 @@ namespace PCGExBlending
 			BlendFunc = nullptr;
 			AccumulateFunc = nullptr;
 			FinalizeFunc = nullptr;
+			bHasFinalize = false;
 		}
 
 		virtual void Blend(const void* A, const void* B, double /*Weight*/, void* Out) const override
@@ -624,6 +618,7 @@ namespace PCGExBlending
 			BlendFunc = nullptr;
 			AccumulateFunc = nullptr;
 			FinalizeFunc = nullptr;
+			bHasFinalize = false;
 		}
 
 		virtual void Blend(const void* A, const void* B, double /*Weight*/, void* Out) const override

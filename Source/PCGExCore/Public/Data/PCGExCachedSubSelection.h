@@ -63,8 +63,7 @@ namespace PCGExData
 		// Real<->Working conversion.
 		FSubSelectionChain CompiledChain;
 
-		// Identity conversions (used when CompiledChain is empty, and by
-		// ConvertGet/ConvertSet).
+		// Identity conversions (used when CompiledChain is empty).
 		PCGExTypeOps::FConvertFn ConvertRealToWorking = nullptr;
 		PCGExTypeOps::FConvertFn ConvertWorkingToReal = nullptr;
 
@@ -72,11 +71,6 @@ namespace PCGExData
 		// non-empty). FinalChainType <-> WorkingType.
 		PCGExTypeOps::FConvertFn ConvertFinalToWorking = nullptr;
 		PCGExTypeOps::FConvertFn ConvertWorkingToFinal = nullptr;
-
-		// Type ops kept for callers that already used these for default/copy
-		// semantics via FCachedSubSelection (e.g., IBufferProxy).
-		const PCGExTypeOps::ITypeOpsBase* RealOps = nullptr;
-		const PCGExTypeOps::ITypeOpsBase* WorkingOps = nullptr;
 
 		// 1-step fast-path cache. Populated by Initialize when the compiled
 		// chain has exactly 1 step (the common case: .X, .Position, etc.).
@@ -157,23 +151,5 @@ namespace PCGExData
 		 * extract-modify-inject order to mutate Target (RealType).
 		 */
 		void ApplySet(void* Target, const void* Source) const;
-
-		/** No sub-selection: just convert RealType -> WorkingType. */
-		FORCEINLINE void ConvertGet(const void* Source, void* OutValue) const
-		{
-			if (ConvertRealToWorking)
-			{
-				ConvertRealToWorking(Source, OutValue);
-			}
-		}
-
-		/** No sub-selection: just convert WorkingType -> RealType. */
-		FORCEINLINE void ConvertSet(void* Target, const void* Source) const
-		{
-			if (ConvertWorkingToReal)
-			{
-				ConvertWorkingToReal(Source, Target);
-			}
-		}
 	};
 }

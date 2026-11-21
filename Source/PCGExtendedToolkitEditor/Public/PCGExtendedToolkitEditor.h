@@ -15,4 +15,5 @@ public:
 
 protected:
 	TSharedPtr<FSlateStyleSet> Style;
+	bool bDataVisualizationRegistered = false;
 };

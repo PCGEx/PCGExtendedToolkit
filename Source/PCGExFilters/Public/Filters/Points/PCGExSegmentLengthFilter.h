@@ -90,10 +90,6 @@ struct FPCGExSegmentLengthFilterConfig
 
 #pragma endregion
 
-	void Sanitize()
-	{
-	}
-
 #if WITH_EDITOR
 	void ApplyDeprecation();
 	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
@@ -132,16 +128,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FSegmentLengthFilter final : public ISimpleFilter
+	class FSegmentLengthFilter final : public TFactoryFilter<UPCGExSegmentLengthFilterFactory>
 	{
 	public:
-		explicit FSegmentLengthFilter(const TObjectPtr<const UPCGExSegmentLengthFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExSegmentLengthFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Threshold;
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> Index;
@@ -157,10 +147,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FSegmentLengthFilter() override
-		{
-		}
 	};
 }
 

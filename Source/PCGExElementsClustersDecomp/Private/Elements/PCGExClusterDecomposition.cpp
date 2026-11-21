@@ -252,7 +252,6 @@ namespace PCGExClusterDecomposition
 			CellSizeBuffer = VtxDataFacade->GetWritable<FVector>(Settings->CellSizeAttributeName, FVector::ZeroVector, true, PCGExData::EBufferInit::New);
 		}
 
-		Context->Decomposition->PrepareVtxFacade(VtxDataFacade);
 		TBatch<FProcessor>::OnProcessingPreparationComplete();
 	}
 

@@ -17,12 +17,6 @@
 
 #include "PCGExSelfPruning.generated.h"
 
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
-}
-
 UENUM()
 enum class EPCGExSelfPruningMode : uint8
 {
@@ -200,10 +194,6 @@ namespace PCGExSelfPruning
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
-		{
-		}
-
-		virtual ~FProcessor() override
 		{
 		}
 

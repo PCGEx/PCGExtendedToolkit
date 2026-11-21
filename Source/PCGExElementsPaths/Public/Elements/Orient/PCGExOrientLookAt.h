@@ -105,16 +105,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="LookAt == EPCGExOrientLookAtMode::Direction || LookAt == EPCGExOrientLookAtMode::Position", EditConditionHides))
 	FPCGAttributePropertyInputSelector LookAtAttribute;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override
-	{
-		Super::CopySettingsFrom(Other);
-		if (const UPCGExOrientLookAt* TypedOther = Cast<UPCGExOrientLookAt>(Other))
-		{
-			LookAt = TypedOther->LookAt;
-			LookAtAttribute = TypedOther->LookAtAttribute;
-		}
-	}
-
 	virtual TSharedPtr<FPCGExOrientOperation> CreateOperation() const override
 	{
 		PCGEX_FACTORY_NEW_OPERATION(OrientLookAt)

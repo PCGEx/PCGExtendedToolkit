@@ -58,22 +58,6 @@ bool FPCGExFuseDetailsBase::Init(FPCGExContext* InContext, const TSharedPtr<PCGE
 	return true;
 }
 
-bool FPCGExFuseDetailsBase::IsWithinTolerance(const double DistSquared, const int32 PointIndex) const
-{
-	return FMath::IsWithin<double, double>(DistSquared, 0, FMath::Square(ToleranceGetter->Read(PointIndex).X));
-}
-
-bool FPCGExFuseDetailsBase::IsWithinTolerance(const FVector& Source, const FVector& Target, const int32 PointIndex) const
-{
-	return FMath::IsWithin<double, double>(FVector::DistSquared(Source, Target), 0, FMath::Square(ToleranceGetter->Read(PointIndex).X));
-}
-
-bool FPCGExFuseDetailsBase::IsWithinToleranceComponentWise(const FVector& Source, const FVector& Target, const int32 PointIndex) const
-{
-	const FVector CWTolerance = ToleranceGetter->Read(PointIndex);
-	return FMath::IsWithin<double, double>(abs(Source.X - Target.X), 0, CWTolerance.X) && FMath::IsWithin<double, double>(abs(Source.Y - Target.Y), 0, CWTolerance.Y) && FMath::IsWithin<double, double>(abs(Source.Z - Target.Z), 0, CWTolerance.Z);
-}
-
 FVector FPCGExFuseDetailsBase::GetToleranceExtent(const int32 PointIndex) const
 {
 	const FVector Tol = ToleranceGetter->Read(PointIndex);

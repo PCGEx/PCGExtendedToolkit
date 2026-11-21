@@ -37,8 +37,6 @@ MACRO(TotalWeight, double, 0)
 PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
 PCGEX_FOREACH_FIELD_NEARESTPOLYLINE_EXTRA(MACRO)
 
-class UPCGExPointFilterFactoryData;
-
 namespace PCGExMT
 {
 	template <typename T>
@@ -90,8 +88,6 @@ namespace PCGExPolyPath
 		{
 		}
 
-		int32 NumTargets = 0;
-		double TotalWeight = 0;
 		double SampledRangeMin = TNumericLimits<double>::Max();
 		double SampledRangeMax = 0;
 		double SampledRangeWidth = 0;
@@ -101,11 +97,6 @@ namespace PCGExPolyPath
 		FSample Farthest;
 
 		void Update(const FSample& Infos, bool& IsNewClosest, bool& IsNewFarthest);
-
-		FORCEINLINE bool IsValid() const
-		{
-			return UpdateCount > 0;
-		}
 	};
 }
 
@@ -543,8 +534,6 @@ namespace PCGExSampleNearestSpline
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;

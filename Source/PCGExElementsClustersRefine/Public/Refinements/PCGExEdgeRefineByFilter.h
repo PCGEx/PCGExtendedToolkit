@@ -7,11 +7,6 @@
 #include "Core/PCGExEdgeRefineOperation.h"
 #include "PCGExEdgeRefineByFilter.generated.h"
 
-namespace PCGExClusters
-{
-	struct FNode;
-}
-
 /**
  *
  */
@@ -48,8 +43,6 @@ public:
 	{
 		return bInvert;
 	}
-
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
 	/** If enabled, filtered out edges are kept, while edges that pass the filter are removed. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

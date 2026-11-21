@@ -13,19 +13,12 @@ namespace PCGExMath
     MACRO(EPCGExDistance::Center, EPCGExDistance::Center) \
     MACRO(EPCGExDistance::Center, EPCGExDistance::SphereBounds) \
     MACRO(EPCGExDistance::Center, EPCGExDistance::BoxBounds) \
-    MACRO(EPCGExDistance::Center, EPCGExDistance::None) \
     MACRO(EPCGExDistance::SphereBounds, EPCGExDistance::Center) \
     MACRO(EPCGExDistance::SphereBounds, EPCGExDistance::SphereBounds) \
     MACRO(EPCGExDistance::SphereBounds, EPCGExDistance::BoxBounds) \
-    MACRO(EPCGExDistance::SphereBounds, EPCGExDistance::None) \
     MACRO(EPCGExDistance::BoxBounds, EPCGExDistance::Center) \
     MACRO(EPCGExDistance::BoxBounds, EPCGExDistance::SphereBounds) \
-    MACRO(EPCGExDistance::BoxBounds, EPCGExDistance::BoxBounds) \
-    MACRO(EPCGExDistance::BoxBounds, EPCGExDistance::None) \
-    MACRO(EPCGExDistance::None, EPCGExDistance::Center) \
-    MACRO(EPCGExDistance::None, EPCGExDistance::SphereBounds) \
-    MACRO(EPCGExDistance::None, EPCGExDistance::BoxBounds) \
-    MACRO(EPCGExDistance::None, EPCGExDistance::None)
+    MACRO(EPCGExDistance::BoxBounds, EPCGExDistance::BoxBounds)
 
 	const IDistances* GetDistances(const EPCGExDistance Source, const EPCGExDistance Target, const bool bOverlapIsZero, const EPCGExDistanceType Type)
 	{

@@ -64,6 +64,14 @@ class UPCGExClusterFilterProviderSettings : public UPCGExFilterProviderSettings
 
 protected:
 	PCGEX_FACTORY_TYPE_ID(FPCGExDataTypeInfoFilterCluster)
+
+public:
+#if WITH_EDITOR
+	virtual FLinearColor GetNodeTitleColor() const override
+	{
+		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
+	}
+#endif
 };
 
 #pragma endregion
@@ -228,10 +236,6 @@ namespace PCGExClusterFilter
 
 		TSharedRef<PCGExClusters::FCluster> Cluster;
 		TSharedRef<PCGExData::FFacade> EdgeDataFacade;
-
-		virtual ~FManager() override
-		{
-		}
 
 	protected:
 		virtual bool InitFilter(FPCGExContext* InContext, const TSharedPtr<PCGExPointFilter::IFilter>& Filter) override;

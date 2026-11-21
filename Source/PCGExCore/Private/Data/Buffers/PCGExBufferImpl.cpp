@@ -12,6 +12,7 @@
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"
 #include "Helpers/PCGExArrayHelpers.h"
+#include "Helpers/PCGExBulkAttributeHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Helpers/PCGExMetaHelpersMacros.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
@@ -91,16 +92,6 @@ namespace PCGExData
 	const T& TArrayBuffer<T>::GetValue(const int32 Index)
 	{
 		return *(OutValues->GetData() + Index);
-	}
-
-	template <typename T>
-	const void TArrayBuffer<T>::GetValues(const int32 Start, TArrayView<T> OutResults)
-	{
-		const int32 Count = OutResults.Num();
-		for (int i = 0; i < Count; i++)
-		{
-			OutResults[i] = *(OutValues->GetData() + (Start + i));
-		}
 	}
 
 	template <typename T>
@@ -522,7 +513,10 @@ namespace PCGExData
 		SharedContext.Get()->AddProtectedAttributeName(OutAttribute->Name);
 
 		TArrayView<const T> View = MakeArrayView(OutValues->GetData(), OutValues->Num());
-		OutAccessor->SetRange<T>(View, 0, *Source->GetOutKeys(bEnsureValidKeys).Get());
+		const TSharedPtr<IPCGAttributeAccessorKeys> WriteKeys = Source->GetOutKeys(bEnsureValidKeys);
+
+		PCGExData::Helpers::PrepareBulkWrite<T>(*OutAccessor, *WriteKeys, View.Num());
+		OutAccessor->SetRange<T>(View, 0, *WriteKeys);
 	}
 
 	template <typename T>
@@ -643,17 +637,6 @@ namespace PCGExData
 	{
 		FReadScopeLock ReadScopeLock(BufferLock);
 		return OutValue;
-	}
-
-	template <typename T>
-	const void TSingleValueBuffer<T>::GetValues(const int32 Start, TArrayView<T> OutResults)
-	{
-		FReadScopeLock ReadScopeLock(BufferLock);
-		const int32 Count = OutResults.Num();
-		for (int i = 0; i < Count; i++)
-		{
-			OutResults[i] = OutValue;
-		}
 	}
 
 	template <typename T>

@@ -82,7 +82,6 @@ namespace PCGExPaths
 
 		const FName SourceCanCutFilters = TEXT("Can Cut Conditions");
 		const FName SourceCanBeCutFilters = TEXT("Can Be Cut Conditions");
-		const FName SourceTriggerFilters = TEXT("Trigger Conditions");
 		const FName SourceShiftFilters = TEXT("Shift Conditions");
 
 		const FPCGAttributeIdentifier ClosedLoopIdentifier = FPCGAttributeIdentifier(FName("IsClosed"), PCGMetadataDomainID::Data);

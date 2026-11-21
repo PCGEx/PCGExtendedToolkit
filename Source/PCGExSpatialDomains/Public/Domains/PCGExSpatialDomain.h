@@ -17,7 +17,6 @@
  *   - Broadphase: heterogeneous mutable tracker, AABB-octree backed; the
  *     placed-modules domain in growth runs.
  *   - Polygon2D: static, single extruded prism (floor plans, room outlines).
- *   - SDF: static, voxelized signed-distance field (Phase-3 stub).
  *
  * Overlap math is shape-pair-typed and lives in PCGExSpatial::NarrowPhase --
  * adding a new shape kind is a pure addition (new shape USTRUCT + register
@@ -68,7 +67,7 @@ public:
 	 *
 	 * Default impl: signed-distance fallback against the candidate's
 	 * bounding OBB derived from its WorldAABB -- safe and useful for static
-	 * domains (Polygon2D, SDF) which inherit it. The Broadphase concrete
+	 * domains (Polygon2D) which inherit it. The Broadphase concrete
 	 * overrides with the precise registry-driven dispatch.
 	 *
 	 * @param Candidate       Candidate shape (any kind).
@@ -120,7 +119,7 @@ public:
 
 	/**
 	 * True if this domain accepts Append() / snapshot mutations. Static
-	 * subclasses (Polygon2D, SDF, ...) return false; the placed-modules
+	 * subclasses (Polygon2D, ...) return false; the placed-modules
 	 * tracker (Broadphase) returns true.
 	 */
 	virtual bool IsMutable() const
@@ -131,7 +130,7 @@ public:
 	/**
 	 * Append a shape with its owner identity + channel mask. Pure virtual --
 	 * every concrete subclass implements (the mutable Broadphase actually
-	 * stores; static subclasses like Polygon2D / SDF check(false) loudly so
+	 * stores; static subclasses like Polygon2D check(false) loudly so
 	 * generic callers get a clear failure rather than a silent no-op).
 	 *
 	 * OwnerIndex must be >= 0, or ObstacleOwner for deliberately history-less
@@ -150,7 +149,7 @@ public:
 
 	/**
 	 * Hint the expected entry count so mutable subclasses can pre-size their
-	 * storage. Optional -- default no-op so static subclasses (Polygon2D, SDF)
+	 * storage. Optional -- default no-op so static subclasses (Polygon2D)
 	 * inherit the empty implementation without having to opt out.
 	 *
 	 * Call once before a batched Append sequence when the count is known
@@ -168,7 +167,7 @@ public:
 	 * CONTRACT: no query may run inside the scope -- the accelerator is stale
 	 * until EndBulkAppend. Calls do not nest; a second Begin is ignored, and an
 	 * End without a matching Begin is a no-op. Default no-op so static
-	 * subclasses (Polygon2D, SDF) inherit it without opting out.
+	 * subclasses (Polygon2D) inherit it without opting out.
 	 */
 	virtual void BeginBulkAppend()
 	{

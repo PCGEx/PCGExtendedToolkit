@@ -14,14 +14,6 @@ enum class EPCGExShapeOutputMode : uint8
 	PerShape   = 2 UMETA(DisplayName = "Per Shape", ToolTip="Create a new output per individual shape"),
 };
 
-
-UENUM()
-enum class EPCGExShapeResolutionMode : uint8
-{
-	Absolute = 0 UMETA(DisplayName = "Absolute", ToolTip="Resolution is absolute."),
-	Scaled   = 1 UMETA(DisplayName = "Scaled", ToolTip="Resolution is scaled by the seed' scale"),
-};
-
 UENUM()
 enum class EPCGExShapePointLookAt : uint8
 {

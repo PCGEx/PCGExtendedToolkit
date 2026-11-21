@@ -54,7 +54,6 @@ namespace PCGExBitmaskCollection
 	public:
 		TArray<PCGExBitmask::FCachedRef> Bitmasks;
 		TMap<FName, int32> BitmaskMap;
-		TArray<FString> Identifiers;
 
 		explicit FCache() = default;
 		~FCache() = default;
@@ -77,7 +76,6 @@ class PCGEXCORE_API UPCGExBitmaskCollection : public UDataAsset
 	GENERATED_BODY()
 
 	friend struct FPCGExBitmaskCollectionEntry;
-	friend class UPCGExMeshSelectorBase;
 
 public:
 	PCGExBitmaskCollection::FCache* LoadCache();
@@ -105,16 +103,6 @@ public:
 #endif
 
 	virtual void BuildCache();
-
-	virtual bool IsValidIndex(const int32 InIndex) const
-	{
-		return false;
-	}
-
-	virtual int32 NumEntries() const
-	{
-		return 0;
-	}
 
 	/** Named bitmask entries in this collection. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Settings, meta=(TitleProperty="{Identifier}   |   {Direction}"))

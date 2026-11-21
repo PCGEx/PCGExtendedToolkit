@@ -66,8 +66,6 @@ void UPCGExEdgeRefineLineTrace::CopySettingsFrom(const UPCGExInstancedFactory* O
 	Super::CopySettingsFrom(Other);
 	if (const UPCGExEdgeRefineLineTrace* TypedOther = Cast<UPCGExEdgeRefineLineTrace>(Other))
 	{
-		bTwoWayCheck = TypedOther->bTwoWayCheck;
-		bInvert = TypedOther->bInvert;
 		InitializedCollisionSettings = TypedOther->InitializedCollisionSettings;
 	}
 }

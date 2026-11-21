@@ -59,8 +59,6 @@ public:
 		return true;
 	}
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	/** Which edge to keep when doing comparison. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExEdgeOverlapPick Keep = EPCGExEdgeOverlapPick::Longest;

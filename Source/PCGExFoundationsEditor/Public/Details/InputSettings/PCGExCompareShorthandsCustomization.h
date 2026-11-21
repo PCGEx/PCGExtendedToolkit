@@ -4,11 +4,8 @@
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
-#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/InputSettings/PCGExInputShorthandsCustomization.h"
 
-
-class SWidget;
 
 /** Input-shorthand row with a leading comparison-operator dropdown and a trailing tolerance field. */
 class FPCGExCompareShorthandCustomization : public FPCGExInputShorthandCustomization
@@ -20,18 +17,4 @@ public:
 		TSharedRef<IPropertyHandle> PropertyHandle,
 		class FDetailWidgetRow& HeaderRow,
 		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
-};
-
-class FPCGExCompareShorthandVectorCustomization : public FPCGExCompareShorthandCustomization
-{
-public:
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
-	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
-};
-
-class FPCGExCompareShorthandRotatorCustomization : public FPCGExCompareShorthandCustomization
-{
-public:
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
-	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
 };

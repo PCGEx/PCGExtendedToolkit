@@ -1,22 +1,26 @@
-﻿// Copyright 2026 Timothé Lapetite and contributors
+// Copyright 2026 Timothé Lapetite and contributors
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
 
-class FPCGExCollectionGrammarCustomization : public IPropertyTypeCustomization
+class FDetailWidgetRow;
+class IDetailChildrenBuilder;
+
+/** FPCGExIntegerLayoutField on a single row: [Name] [NumBits] bits, then the bits the entry takes among its array siblings. */
+class FPCGExIntegerLayoutFieldCustomization : public IPropertyTypeCustomization
 {
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
 
 	virtual void CustomizeHeader(
 		TSharedRef<IPropertyHandle> PropertyHandle,
-		class FDetailWidgetRow& HeaderRow,
+		FDetailWidgetRow& HeaderRow,
 		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
 
 	virtual void CustomizeChildren(
 		TSharedRef<IPropertyHandle> PropertyHandle,
-		class IDetailChildrenBuilder& ChildBuilder,
+		IDetailChildrenBuilder& ChildBuilder,
 		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
 };

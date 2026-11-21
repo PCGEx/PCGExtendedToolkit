@@ -30,8 +30,6 @@ namespace PCGExData
 	class FFacadePreloader;
 }
 
-struct FPCGExFactoryProviderContext;
-
 USTRUCT(meta=(PCG_DataTypeDisplayName="PCGEx | Factory"))
 struct FPCGExFactoryDataTypeInfo : public FPCGDataTypeInfo
 {
@@ -57,8 +55,6 @@ public:
 	 *  before reading metadata : a full data Crc (which commandlets force on) collapses every instance of every
 	 *  factory onto one identical value. Object identity is the only sound Crc for this shape of data. */
 	virtual bool SupportsFullDataCrc() const override { return false; }
-
-	virtual void OutputConfigToMetadata();
 };
 
 /**

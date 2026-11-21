@@ -164,12 +164,3 @@ TSharedPtr<PCGExPathfinding::FSearchAllocations> FPCGExSearchOperationBellmanFor
 	Allocations->InitGScore(TNumericLimits<double>::Max()); // TNumericLimits<double>::Max() as infinity
 	return Allocations;
 }
-
-void UPCGExSearchBellmanFord::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExSearchBellmanFord* TypedOther = Cast<UPCGExSearchBellmanFord>(Other))
-	{
-		bDetectNegativeCycles = TypedOther->bDetectNegativeCycles;
-	}
-}

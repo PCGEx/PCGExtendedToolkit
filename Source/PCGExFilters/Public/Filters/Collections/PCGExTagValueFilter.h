@@ -15,10 +15,6 @@ struct FPCGExTagValueFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExTagValueFilterConfig()
-	{
-	}
-
 	/** Constant tag name value. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Tag Name", EditConditionHides, HideEditConditionToggle))
 	FString Tag = TEXT("Tag");
@@ -77,22 +73,12 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FTagValueFilter final : public ICollectionFilter
+	class FTagValueFilter final : public TFactoryFilter<UPCGExTagValueFilterFactory, ICollectionFilter>
 	{
 	public:
-		explicit FTagValueFilter(const TObjectPtr<const UPCGExTagValueFilterFactory>& InDefinition)
-			: ICollectionFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExTagValueFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FTagValueFilter() override
-		{
-		}
 	};
 }
 

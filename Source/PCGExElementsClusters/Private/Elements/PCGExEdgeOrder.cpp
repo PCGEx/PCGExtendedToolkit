@@ -96,10 +96,6 @@ bool FPCGExEdgeOrderElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExEdgeOrder
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	TSharedPtr<PCGExClusters::FCluster> FProcessor::HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef)
 	{
 		// Create a lite copy with only edges edited, we'll forward that to the output

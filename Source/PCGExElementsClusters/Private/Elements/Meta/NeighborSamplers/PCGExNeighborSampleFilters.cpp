@@ -107,11 +107,6 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 	bIsValidOperation = true;
 }
 
-void FPCGExNeighborSampleFilters::PrepareNode(const PCGExClusters::FNode& TargetNode, const PCGExMT::FScope& Scope) const
-{
-	FPCGExNeighborSampleOperation::PrepareNode(TargetNode, Scope);
-}
-
 void FPCGExNeighborSampleFilters::SampleNeighborNode(const PCGExClusters::FNode& TargetNode, const PCGExGraphs::FLink Lk, const double Weight, const PCGExMT::FScope& Scope)
 {
 	if (FilterManager->Test(*Cluster->GetNode(Lk)))

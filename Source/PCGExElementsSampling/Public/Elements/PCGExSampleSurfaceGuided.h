@@ -54,8 +54,6 @@ enum class EPCGExTraceSampleDistanceInput : uint8
 	Attribute       = 2 UMETA(DisplayName = "Attribute", ToolTip="Attribute"),
 };
 
-class UPCGExPointFilterFactoryData;
-
 namespace PCGExMT
 {
 	template <typename T>
@@ -390,8 +388,6 @@ namespace PCGExSampleSurfaceGuided
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;

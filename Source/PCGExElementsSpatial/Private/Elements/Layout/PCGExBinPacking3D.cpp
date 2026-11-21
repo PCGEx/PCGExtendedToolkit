@@ -22,12 +22,6 @@
 
 #pragma region UPCGExBinPacking3DSettings
 
-bool UPCGExBinPacking3DSettings::GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const
-{
-	OutRules.Append(PCGExSorting::GetSortingRules(InContext, PCGExSorting::Labels::SourceSortingRules));
-	return !OutRules.IsEmpty();
-}
-
 TArray<FPCGPinProperties> UPCGExBinPacking3DSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
@@ -137,7 +131,7 @@ bool FPCGExBinPacking3DElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 			}, [&](const TSharedPtr<PCGExPointsMT::IBatch>& NewBatch)
 			{
 				TArray<FPCGExSortRuleConfig> OutRules;
-				Settings->GetSortingRules(Context, OutRules);
+				OutRules.Append(PCGExSorting::GetSortingRules(Context, PCGExSorting::Labels::SourceSortingRules));
 				NewBatch->bPrefetchData = !OutRules.IsEmpty() || Settings->bSortByVolume;
 			}))
 		{
@@ -945,7 +939,6 @@ namespace PCGExBinPacking3D
 				for (int32 RotIdx = 0; RotIdx < RotationsToTest.Num(); RotIdx++)
 				{
 					FBP3DPlacementCandidate Candidate;
-					Candidate.RotationIndex = RotIdx;
 
 					if (Bin->EvaluatePlacement(OriginalSize, InItem.Padding, EPIdx, RotationsToTest[RotIdx], Candidate))
 					{
@@ -1040,7 +1033,8 @@ namespace PCGExBinPacking3D
 		TProcessor::RegisterBuffersDependencies(FacadePreloader);
 
 		TArray<FPCGExSortRuleConfig> RuleConfigs;
-		if (Settings->GetSortingRules(ExecutionContext, RuleConfigs) && !RuleConfigs.IsEmpty())
+		RuleConfigs.Append(PCGExSorting::GetSortingRules(ExecutionContext, PCGExSorting::Labels::SourceSortingRules));
+		if (!RuleConfigs.IsEmpty())
 		{
 			Sorter = MakeShared<PCGExSorting::FSorter>(Context, PointDataFacade, RuleConfigs);
 			Sorter->SortDirection = Settings->SortDirection;
@@ -1190,7 +1184,6 @@ namespace PCGExBinPacking3D
 		}
 
 		// Create bins
-		BinMaxWeights.SetNum(TargetBins->GetNum());
 		for (int i = 0; i < TargetBins->GetNum(); i++)
 		{
 			const PCGExData::FConstPoint BinPoint = TargetBins->GetInPoint(i);
@@ -1219,7 +1212,6 @@ namespace PCGExBinPacking3D
 				NewBin->MaxWeight = TNumericLimits<double>::Max();
 			}
 
-			BinMaxWeights[i] = NewBin->MaxWeight;
 			Bins.Add(NewBin);
 		}
 

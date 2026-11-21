@@ -253,10 +253,6 @@ bool FPCGExFuseClustersElement::AdvanceWork(FPCGExContext* InContext, const UPCG
 
 namespace PCGExFuseClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExFuseClusters::Process);
@@ -265,9 +261,6 @@ namespace PCGExFuseClusters
 		{
 			return false;
 		}
-
-		VtxIOIndex = VtxDataFacade->Source->IOIndex;
-		EdgesIOIndex = EdgeDataFacade->Source->IOIndex;
 
 		Cluster = PCGExClusters::Helpers::TryGetCachedCluster(VtxDataFacade->Source, EdgeDataFacade->Source);
 

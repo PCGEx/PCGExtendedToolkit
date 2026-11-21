@@ -19,10 +19,6 @@ struct FPCGExBooleanCompareFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExBooleanCompareFilterConfig()
-	{
-	}
-
 	/** Operand A for testing -- Will be translated to `bool` under the hood (numeric values read true when > 0). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -76,16 +72,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FBooleanCompareFilter final : public ISimpleFilter
+	class FBooleanCompareFilter final : public TFactoryFilter<UPCGExBooleanCompareFilterFactory>
 	{
 	public:
-		explicit FBooleanCompareFilter(const TObjectPtr<const UPCGExBooleanCompareFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExBooleanCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<bool>> OperandA;
 		TSharedPtr<PCGExDetails::TSettingValue<bool>> OperandB;
@@ -93,10 +83,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FBooleanCompareFilter() override
-		{
-		}
 	};
 }
 

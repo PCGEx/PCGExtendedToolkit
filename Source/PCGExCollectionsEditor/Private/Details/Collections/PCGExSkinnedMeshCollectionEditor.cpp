@@ -9,17 +9,11 @@
 #include "Widgets/Input/SButton.h"
 
 #include "Collections/PCGExSkinnedMeshCollection.h"
-#include "Core/PCGExAssetCollection.h"
 #include "Engine/SkinnedAsset.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Layout/SBox.h"
-
-FPCGExSkinnedMeshCollectionEditor::FPCGExSkinnedMeshCollectionEditor()
-	: FPCGExAssetCollectionEditor()
-{
-}
 
 void FPCGExSkinnedMeshCollectionEditor::BuildAssetHeaderToolbar(FToolBarBuilder& ToolbarBuilder)
 {

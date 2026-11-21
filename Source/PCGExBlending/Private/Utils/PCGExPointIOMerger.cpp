@@ -580,7 +580,6 @@ void FPCGExPointIOMerger::CopyProperties(const int32 Index)
 
 	const PCGExPointIOMerger::FMergeScope& Scope = Scopes[Index];
 	const TSharedPtr<PCGExData::FPointIO> Source = IOSources[Index];
-	UnionDataFacade->Source->Tags->Append(Source->Tags.ToSharedRef());
 
 	if (Scope.bReverse)
 	{

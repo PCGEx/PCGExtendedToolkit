@@ -10,7 +10,6 @@
 #include "AssetTypeActions_Base.h"
 #include "Data/Bitmasks/PCGExBitmaskCollection.h"
 #include "Data/Registry/PCGDataTypeRegistry.h"
-#include "PCGExCoreEditor/Public/PCGExAssetTypesMacros.h"
 #include "Sorting/PCGExSortingRuleProvider.h"
 #include "UObject/UObjectGlobals.h"
 #endif

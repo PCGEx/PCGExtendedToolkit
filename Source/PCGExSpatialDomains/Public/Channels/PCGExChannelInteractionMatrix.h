@@ -143,9 +143,6 @@ public:
 		return ChannelKeys.Num();
 	}
 
-	/** Inspection -- registered channel key at a given bit index, or NAME_None if out of range. */
-	FName GetChannelKey(int32 BitIndex) const;
-
 private:
 	/** Channel name at each bit index. Index = bit position. Bounded by MaxChannels. */
 	TArray<FName> ChannelKeys;

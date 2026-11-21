@@ -95,7 +95,7 @@ public:
 #if WITH_EDITOR
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsLength, "Fill Control : Length", "Stop fill after a certain number of vtx have been captured.", FName(GetDisplayName()))
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(FillControlsLength, "Fill Control : Length", "Stop fill once the path or edge length exceeds a maximum.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
 

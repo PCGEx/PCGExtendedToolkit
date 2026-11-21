@@ -276,8 +276,8 @@ namespace PCGExSorting
 				continue;
 			}
 
-			ValueA = Rule->Buffer->ReadAsDouble(A);
-			ValueB = Rule->Buffer->ReadAsDouble(B);
+			ValueA = Rule->Buffer->Get<double>(A);
+			ValueB = Rule->Buffer->Get<double>(B);
 
 			if (FMath::IsNearlyEqual(ValueA, ValueB, Rule->Tolerance))
 			{
@@ -316,8 +316,8 @@ namespace PCGExSorting
 			}
 			else
 			{
-				ValueA = Rule->Buffers[A.IO]->ReadAsDouble(A.Index);
-				ValueB = Rule->Buffers[B.IO]->ReadAsDouble(B.Index);
+				ValueA = Rule->Buffers[A.IO]->Get<double>(A.Index);
+				ValueB = Rule->Buffers[B.IO]->Get<double>(B.Index);
 			}
 
 			if (FMath::IsNearlyEqual(ValueA, ValueB, Rule->Tolerance))
@@ -497,7 +497,7 @@ namespace PCGExSorting
 					}
 					else if (PCGExData::IBufferProxy* Buffer = BuffersData[RuleIdx])
 					{
-						ValueArrays[RuleIdx][i] = Buffer->ReadAsDouble(i);
+						ValueArrays[RuleIdx][i] = Buffer->Get<double>(i);
 					}
 					else
 					{

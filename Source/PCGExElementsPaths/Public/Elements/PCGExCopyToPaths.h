@@ -189,10 +189,6 @@ namespace PCGExCopyToPaths
 		{
 		}
 
-		virtual ~FProcessor() override
-		{
-		}
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;
@@ -200,8 +196,6 @@ namespace PCGExCopyToPaths
 
 	class FBatch final : public PCGExPointsMT::TBatch<FProcessor>
 	{
-		AActor* TargetActor = nullptr;
-
 	public:
 		explicit FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection)
 			: TBatch(InContext, InPointsCollection)

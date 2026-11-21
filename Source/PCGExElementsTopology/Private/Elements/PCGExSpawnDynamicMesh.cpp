@@ -6,11 +6,11 @@
 #include "PCGComponent.h"
 #include "PCGExTopology.h"
 #include "PCGPin.h"
+#include "Clusters/PCGExClustersHelpers.h"
 #include "Components/DynamicMeshComponent.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGDynamicMeshData.h"
 #include "Helpers/PCGExStreamingHelpers.h"
-#include "Types/PCGExTypeOpsString.h"
 
 #define LOCTEXT_NAMESPACE "PCGExGraphSettings"
 #define PCGEX_NAMESPACE SpawnDynamicMesh
@@ -50,7 +50,6 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 	}
 
 	UPCGComponent* SourcePCGComponent = Context->GetMutableComponent();
-	const bool bIsPreviewMode = SourcePCGComponent->IsInPreviewMode();
 
 	PCGEX_MAKE_SHARED(TemplateResources, TSet<FSoftObjectPath>)
 	Settings->TemplateDescriptor.GetAssetPaths(*TemplateResources.Get());
@@ -74,9 +73,9 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			continue;
 		}
 
-		const FString ComponentName = TEXT("PCGDynamicMeshComponent");
-		const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-		UDynamicMeshComponent* DynamicMeshComponent = NewObject<UDynamicMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, UDynamicMeshComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
+		// One slot per input: a regeneration rebuilds the component it already has there, keeping its name.
+		FPCGExComponentSlot Slot;
+		UDynamicMeshComponent* DynamicMeshComponent = Context->ReclaimOrCreateComponent<UDynamicMeshComponent>(TargetActor, TEXT("PCGDynamicMeshComponent"), Context->GetSlotCrc(Index), Slot);
 
 		if (!DynamicMeshComponent)
 		{
@@ -106,16 +105,9 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			}
 		}
 
-		for (const FString& Tag : Input.Tags)
-		{
-			const FName TagName = PCGExTypeOps::MakeNameChecked(Tag);
-			if (!TagName.IsNone())
-			{
-				DynamicMeshComponent->ComponentTags.AddUnique(TagName);
-			}
-		}
+		PCGExClusters::Helpers::AppendSavedTags(Input.Tags, DynamicMeshComponent->ComponentTags);
 
-		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules());
+		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules(), Slot);
 		Context->StageOutput(const_cast<UPCGData*>(Input.Data.Get()), PCGExTopology::Labels::SourceMeshLabel, PCGExData::EStaging::None, Input.Tags);
 		Context->AddNotifyActor(TargetActor);
 	}

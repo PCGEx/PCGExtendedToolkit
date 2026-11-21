@@ -18,20 +18,11 @@
 
 class AActor;
 
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
-}
 
 USTRUCT(BlueprintType)
 struct FPCGExGameplayTagsFilterConfig
 {
 	GENERATED_BODY()
-
-	FPCGExGameplayTagsFilterConfig()
-	{
-	}
 
 	/** Name of the attribute that contains a path to an actor in the level, usually from a GetActorData PCG Node in point mode.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -81,16 +72,11 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FGameplayTagsFilter final : public ISimpleFilter
+	class FGameplayTagsFilter final : public TFactoryFilter<UPCGExGameplayTagsFilterFactory>
 	{
 	public:
-		explicit FGameplayTagsFilter(const TObjectPtr<const UPCGExGameplayTagsFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
+		using TFactoryFilter::TFactoryFilter;
 
-		const TObjectPtr<const UPCGExGameplayTagsFilterFactory> TypedFilterFactory;
 		FCachedPropertyPath PropertyPath;
 		TArray<FString> PathSegments;
 
@@ -100,10 +86,6 @@ namespace PCGExPointFilter
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FGameplayTagsFilter() override
-		{
-		}
 	};
 }
 

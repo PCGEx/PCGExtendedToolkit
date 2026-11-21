@@ -15,14 +15,6 @@
 #define PCGEX_SUBSYSTEM UPCGExSubSystem* PCGExSubsystem = UPCGExSubSystem::GetSubsystemForCurrentWorld(); check(PCGExSubsystem)
 
 class UPCGComponent;
-class UPCGExConstantFilterFactory;
-
-namespace PCGExPointFilter
-{
-	class IFilter;
-}
-
-class UPCGExGridIDTracker;
 
 // BlueprintType so a listener on OnGlobalEvent can actually switch on the value it receives.
 UENUM(BlueprintType)
@@ -75,8 +67,6 @@ class PCGEXCORE_API UPCGExSubSystem : public UTickableWorldSubsystem
 	GENERATED_BODY()
 
 	FRWLock SubsystemLock;
-	FRWLock IndexBufferLock;
-	FRWLock BeaconsLock;
 
 public:
 	UPCGExSubSystem();
@@ -115,17 +105,6 @@ public:
 
 	void PollEvent(UPCGComponent* InSource, EPCGExSubsystemEventType InEventType, uint32 InEventId);
 
-#pragma region Indices buffer
-
-protected:
-	void EnsureIndexBufferSize(const int32 Count);
-
-public:
-	TArrayView<const int32> GetIndexRange(const int32 Start, const int32 Count);
-
-
-#pragma endregion
-
 	FORCEINLINE double GetEndTime() const
 	{
 		return EndTime;
@@ -133,7 +112,6 @@ public:
 
 protected:
 	double EndTime = 0.0;
-	TArray<int32> IndexBuffer;
 	bool bWantsTick = false;
 
 	/** Functions will be executed at the beginning of the tick and then removed from this array. */

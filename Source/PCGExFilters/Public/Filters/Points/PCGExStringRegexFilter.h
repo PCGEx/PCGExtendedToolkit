@@ -25,10 +25,6 @@ struct FPCGExStringRegexFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExStringRegexFilterConfig()
-	{
-	}
-
 	/** Attribute whose value will be tested against the regex pattern. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -67,16 +63,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FStringRegexFilter final : public ISimpleFilter
+	class FStringRegexFilter final : public TFactoryFilter<UPCGExStringRegexFilterFactory>
 	{
 	public:
-		explicit FStringRegexFilter(const TObjectPtr<const UPCGExStringRegexFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExStringRegexFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TAttributeBroadcaster<FString>> OperandA;
 		PCGExRegex::FPattern RegexMatcher;
@@ -85,10 +75,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FStringRegexFilter() override
-		{
-		}
 	};
 }
 

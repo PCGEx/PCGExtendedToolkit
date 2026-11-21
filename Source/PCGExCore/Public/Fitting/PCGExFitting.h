@@ -30,9 +30,6 @@ namespace PCGExData
 {
 	struct FPoint;
 	class FFacade;
-
-	template <typename T>
-	class TBuffer;
 }
 
 USTRUCT(BlueprintType)
@@ -76,21 +73,6 @@ struct PCGEXCORE_API FPCGExScaleToFitDetails
 	EPCGExScaleToFit ScaleToFitZ = EPCGExScaleToFit::None;
 
 	void Process(const PCGExData::FPoint& InPoint, const FBox& InBounds, FVector& OutScale, FBox& OutBounds) const;
-
-	bool IsEnabled() const
-	{
-		if (ScaleToFitMode == EPCGExFitMode::None)
-		{
-			return false;
-		}
-		if (ScaleToFitMode == EPCGExFitMode::Uniform)
-		{
-			return ScaleToFit != EPCGExScaleToFit::None;
-		}
-		return !(ScaleToFitX == EPCGExScaleToFit::None
-			&& ScaleToFitY == EPCGExScaleToFit::None
-			&& ScaleToFitZ == EPCGExScaleToFit::None);
-	}
 };
 
 USTRUCT(BlueprintType)
@@ -275,9 +257,6 @@ struct PCGEXCORE_API FPCGExFittingDetailsHandler
 	/** Fits the asset with InLocalXForm (pre-fit variation, target-local frame) applied, so the fit sees the varied footprint.
 	 *  InOutBounds stays asset-local; rotation and resolved scale land on OutTransform. OutTranslation is justification only. */
 	void ComputeLocalTransform(const int32 TargetIndex, const FTransform& InLocalXForm, FTransform& OutTransform, FBox& InOutBounds, FVector& OutTranslation, const PCGExFitting::FOverridesView& InOverrides = {}) const;
-
-	bool WillChangeBounds() const;
-	bool WillChangeTransform() const;
 };
 
 USTRUCT(BlueprintType)

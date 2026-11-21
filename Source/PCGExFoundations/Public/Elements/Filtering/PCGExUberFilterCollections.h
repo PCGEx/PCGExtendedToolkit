@@ -20,13 +20,7 @@ class UPCGExUberFilterCollectionsSettings : public UPCGExPointsProcessorSettings
 {
 	GENERATED_BODY()
 
-	//~Begin UObject interface
-#if WITH_EDITOR
-
 public:
-#endif
-	//~End UObject interface
-
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(UberFilterCollections, "Uber Filter (Data)", "Filter entire collections based on multiple rules & conditions.");
@@ -107,8 +101,6 @@ struct FPCGExUberFilterCollectionsContext final : FPCGExPointsProcessorContext
 	TSharedPtr<PCGExData::FPointIOCollection> Inside;
 	TSharedPtr<PCGExData::FPointIOCollection> Outside;
 
-	int32 NumPairs = 0;
-
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
 };
@@ -128,21 +120,15 @@ namespace PCGExUberFilterCollections
 	{
 		int32 NumPoints = 0;
 		int32 NumInside = 0;
-		int32 NumOutside = 0;
 
 		bool bUsePicks = false;
 		TSet<int32> Picks;
 
 	public:
-		TSharedPtr<PCGExData::FPointIO> Inside;
-		TSharedPtr<PCGExData::FPointIO> Outside;
-
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

@@ -89,8 +89,6 @@ namespace PCGExTopologyPointSurface
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExTopologyPointSurfaceContext, UPCGExTopologyPointSurfaceSettings>
 	{
 	protected:
-		bool bIsPreviewMode = false;
-
 		TObjectPtr<UDynamicMesh> InternalMesh;
 		UPCGDynamicMeshData* InternalMeshData = nullptr;
 		FPCGExGeo2DProjectionDetails ProjectionDetails;

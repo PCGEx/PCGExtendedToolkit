@@ -11,15 +11,6 @@
 /**
  *
  */
-class FPCGExEdgeKeepHighestScore : public FPCGExEdgeRefineOperation
-{
-public:
-	virtual void ProcessNode(PCGExClusters::FNode& Node) override;
-};
-
-/**
- *
- */
 UCLASS(MinimalAPI, BlueprintType, meta=(DisplayName="Keep Highest Score", PCGExNodeLibraryDoc="clusters/refine/cluster-refine/score-based-refinements"))
 class UPCGExEdgeKeepHighestScore : public UPCGExEdgeRefineInstancedFactory
 {
@@ -41,5 +32,5 @@ public:
 		return true;
 	}
 
-	PCGEX_CREATE_REFINE_OPERATION(EdgeKeepHighestScore, {})
+	PCGEX_CREATE_REFINE_OPERATION(EdgeRefineBestLink, { Operation->bUseScore = true; Operation->bPickHighest = true; Operation->InitialBest = TNumericLimits<double>::Lowest(); Operation->Validity = 1; })
 };

@@ -16,10 +16,10 @@
 
 PCGEX_INITIALIZE_ELEMENT(Clipper2Offset)
 
-
-FPCGExGeo2DProjectionDetails UPCGExClipper2OffsetSettings::GetProjectionDetails() const
+UPCGExClipper2OffsetSettings::UPCGExClipper2OffsetSettings(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	return ProjectionDetails;
+	bExposeOffsetProperties = true;
 }
 
 bool UPCGExClipper2OffsetSettings::SupportOpenMainPaths() const

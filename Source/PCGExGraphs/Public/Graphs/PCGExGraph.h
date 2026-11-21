@@ -17,7 +17,6 @@ namespace PCGEx
 namespace PCGExData
 {
 	class IUnionMetadata;
-	class FUnionMetadata;
 }
 
 namespace PCGExGraphs
@@ -54,7 +53,7 @@ namespace PCGExGraphs
 		bool bRefreshEdgeSeed = false;
 
 		// False when edges were adopted without building per-node Links (compile-only
-		// graphs). Adjacency queries (GetConnectedNodes, Node.Links) are unavailable;
+		// graphs). Per-node adjacency (Node.Links) is unavailable;
 		// BuildSubGraphs derives connectivity from the edge list instead.
 		bool bHasNodeLinks = true;
 
@@ -83,11 +82,6 @@ namespace PCGExGraphs
 		 * receive further edge insertions, edge lookups or metadata writes.
 		 */
 		void AdoptEdges(TArray<FEdge>& InEdges, const bool bBuildAdjacency = true);
-
-		FEdge* FindEdge_Unsafe(const uint64 Hash);
-		FEdge* FindEdge_Unsafe(const int32 A, const int32 B);
-		FEdge* FindEdge(const uint64 Hash);
-		FEdge* FindEdge(const int32 A, const int32 B);
 
 #pragma region metadata
 
@@ -157,7 +151,5 @@ namespace PCGExGraphs
 		void BuildSubGraphs(const FPCGExGraphBuilderDetails& Limits, TArray<int32>& OutValidNodes);
 
 		~FGraph() = default;
-
-		void GetConnectedNodes(int32 FromIndex, TArray<int32>& OutIndices, int32 SearchDepth) const;
 	};
 }

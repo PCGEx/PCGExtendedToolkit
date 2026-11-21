@@ -4,7 +4,6 @@
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
-#include "Details/PCGExInputShorthandsDetails.h"
 
 
 class SWidget;
@@ -41,6 +40,13 @@ public:
 };
 
 class FPCGExInputShorthandVectorCustomization : public FPCGExInputShorthandCustomization
+{
+public:
+	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+	virtual TSharedRef<SWidget> CreateValueWidget(TSharedPtr<IPropertyHandle> ValueHandle) override;
+};
+
+class FPCGExInputShorthandVector2Customization : public FPCGExInputShorthandCustomization
 {
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();

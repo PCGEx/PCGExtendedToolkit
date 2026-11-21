@@ -99,10 +99,6 @@ namespace PCGExCreateShapes
 		}
 	};
 
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExCreateShapes::Process);

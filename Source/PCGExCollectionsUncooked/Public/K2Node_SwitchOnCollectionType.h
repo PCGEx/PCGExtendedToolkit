@@ -12,7 +12,6 @@
 class FBlueprintActionDatabaseRegistrar;
 class FKismetCompilerContext;
 class UEdGraph;
-class UEdGraphPin;
 
 /**
  * Exec switch over the registered PCGEx collection types (FTypeRegistry). One exec output

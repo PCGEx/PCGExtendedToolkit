@@ -101,7 +101,7 @@ struct FPCGExPointsToBoundsDataDetails
 	EPCGExAxisOrder AxisOrder = EPCGExAxisOrder::XYZ;
 
 	void Output(const UPCGBasePointData* InBoundsData, UPCGBasePointData* OutData, const TArray<FPCGAttributeIdentifier>& AttributeIdentifiers, PCGExMath::FBestFitPlane& Plane) const;
-	void OutputInverse(const UPCGBasePointData* InPoints, UPCGBasePointData* OutData, const TArray<FPCGAttributeIdentifier>& AttributeIdentifiers, PCGExMath::FBestFitPlane& Plane) const;
+	void OutputInverse(UPCGBasePointData* OutData, const TArray<FPCGAttributeIdentifier>& AttributeIdentifiers, PCGExMath::FBestFitPlane& Plane) const;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/modify/points-to-bounds"))
@@ -208,8 +208,6 @@ namespace PCGExPointsToBounds
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;

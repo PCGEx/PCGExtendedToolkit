@@ -39,17 +39,6 @@ struct PCGEXCOLLECTIONS_API FPCGExSelectorInterleavedConfig
 };
 
 /**
- * Collection-derived state for Interleaved: cumulative entry weights, built once per
- * (Factory, Category) and reused across facades via FSelectorSharedDataCache.
- */
-class FPCGExInterleavedSharedData : public PCGExCollections::FSelectorSharedData
-{
-public:
-	TArray<double> Cumulative; // parallel to Target->Entries
-	double TotalWeight = 0.0;
-};
-
-/**
  * Low-discrepancy weighted pick: t = Frac((Ordinal + 0.5) * φ⁻¹ + Phase) mapped through the
  * cumulative weight bands. Respects weight proportions like WeightedRandom but with maximally
  * even interleaving -- no clumps of identical picks.
@@ -58,7 +47,7 @@ public:
  * reintroduce the clumping this selector exists to remove). LocalSeed still de-correlates
  * multiple Interleaved selectors by rotating the phase (applied at factory time).
  */
-class FPCGExEntryInterleavedPickerOp : public PCGExCollections::Selectors::TTypedSharedPickerOpBase<FPCGExInterleavedSharedData>
+class FPCGExEntryInterleavedPickerOp : public PCGExCollections::Selectors::TTypedSharedPickerOpBase<PCGExCollections::Selectors::FCumulativeWeightsSharedData>
 {
 public:
 	// Copied from factory before PrepareForData. EffectivePhase = Config.Phase + LocalSeed rotation.

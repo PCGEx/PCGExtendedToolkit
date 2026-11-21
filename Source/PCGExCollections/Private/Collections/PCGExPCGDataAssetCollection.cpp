@@ -117,7 +117,7 @@ namespace PCGExPCGDataAssetCollectionInternal
 	}
 
 	/** Compute combined bounds from all spatial data in a PCGDataAsset. */
-	static FBox ComputeBoundsFromAsset(const UPCGDataAsset* Asset)
+	FBox ComputeBoundsFromAsset(const UPCGDataAsset* Asset)
 	{
 		FBox CombinedBounds(ForceInit);
 		if (Asset)

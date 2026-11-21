@@ -81,19 +81,13 @@ class FPCGExProbeBitmasks : public FPCGExProbeOperation
 public:
 	virtual TSharedPtr<PCGExMT::FScopedContainer> GetScopedContainer(const PCGExMT::FScope& InScope) const override;
 	virtual bool RequiresChainProcessing() const override;
-	virtual bool Prepare(FPCGExContext* InContext) override;
 	virtual void ProcessCandidates(const int32 Index, TArray<PCGExProbing::FCandidate>& Candidates, TSet<uint64>* Coincidence, const FVector& ST, TSet<uint64>* OutEdges, PCGExMT::FScopedContainer* Container) override;
 
 	FPCGExProbeConfigBitmasks Config;
 	TSharedPtr<PCGExBitmask::FBitmaskData> BitmaskData = nullptr;
 
 protected:
-	double DirectionMultiplier = 1;
-	bool bUseConstantDir = false;
-	double MinDot = 0;
 	bool bUseBestDot = false;
-
-	TSharedPtr<PCGExDetails::TSettingValue<FVector>> Direction;
 };
 
 ////
@@ -120,8 +114,7 @@ class UPCGExProbeBitmasksProviderSettings : public UPCGExProbeFactoryProviderSet
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ProbeBitmasks, "Probe : Bitmasks", "Probe using bitmasks references & collections.", FName(GetDisplayName()))
 #endif
 	//~End UPCGSettings
@@ -131,9 +124,4 @@ public:
 	/** Filter Config.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExProbeConfigBitmasks Config;
-
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 };

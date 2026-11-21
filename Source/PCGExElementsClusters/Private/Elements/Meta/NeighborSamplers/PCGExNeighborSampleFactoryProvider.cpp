@@ -5,6 +5,8 @@
 
 #include "PCGPin.h"
 #include "Clusters/PCGExCluster.h"
+#include "Clusters/PCGExLink.h"
+#include "Containers/PCGExScopedContainers.h"
 #include "Core/PCGExFilterTypeSets.h"
 #include "Data/PCGExData.h"
 
@@ -13,6 +15,16 @@
 #define PCGEX_NAMESPACE PCGExCreateNeighborSample
 
 PCG_DEFINE_TYPE_INFO(FPCGExDataTypeInfoNeighborSampler, UPCGExNeighborSamplerFactoryData)
+
+namespace PCGExNeighborSample
+{
+	struct FTraversalScratch
+	{
+		TArray<PCGExGraphs::FLink> Current;
+		TArray<PCGExGraphs::FLink> Next;
+		TSet<int32> Visited;
+	};
+}
 
 void FPCGExSamplingConfig::Init()
 {
@@ -37,7 +49,11 @@ void FPCGExNeighborSampleOperation::PrepareForCluster(FPCGExContext* InContext, 
 	{
 		ValueFilters = MakeShared<PCGExClusterFilter::FManager>(InCluster, InVtxDataFacade, InEdgeDataFacade);
 		ValueFilters->SetSupportedTypes(&PCGExFactories::ClusterNodeFilters());
-		ValueFilters->Init(InContext, ValueFilterFactories);
+		ValueFilters->bCacheResults = true;
+		if (!ValueFilters->Init(InContext, ValueFilterFactories))
+		{
+			ValueFilters.Reset();
+		}
 	}
 }
 
@@ -58,7 +74,10 @@ TSharedRef<PCGExData::FFacade> FPCGExNeighborSampleOperation::GetSourceDataFacad
 
 void FPCGExNeighborSampleOperation::PrepareForLoops(const TArray<PCGExMT::FScope>& Loops)
 {
-	// Do pre-allocation here
+	if (SamplingConfig.MaxDepth > 1)
+	{
+		TraversalScratch = MakeShared<PCGExMT::TScopedPtr<PCGExNeighborSample::FTraversalScratch>>(Loops);
+	}
 }
 
 void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCGExMT::FScope& Scope)
@@ -70,24 +89,36 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 		return;
 	}
 
-	int32 CurrentDepth = 0;
 	int32 Count = 0;
 	double TotalWeight = 0;
-
-	const TUniquePtr<TArray<PCGExGraphs::FLink>> A = MakeUnique<TArray<PCGExGraphs::FLink>>();
-	const TUniquePtr<TArray<PCGExGraphs::FLink>> B = MakeUnique<TArray<PCGExGraphs::FLink>>();
-
-	TArray<PCGExGraphs::FLink>* CurrentNeighbors = A.Get();
-	TArray<PCGExGraphs::FLink>* NextNeighbors = B.Get();
-	TSet<int32> VisitedNodes;
-
-	VisitedNodes.Add(NodeIndex);
-	CurrentNeighbors->Append(Node.Links);
 
 	PrepareNode(Node, Scope);
 	const FVector Origin = Cluster->GetPos(Node);
 
-	const int32 SafeMaxDepth = FMath::Min(1, SamplingConfig.MaxDepth);
+	const int32 SafeMaxDepth = FMath::Max(1, SamplingConfig.MaxDepth);
+
+	if (SamplingConfig.MaxDepth <= 1)
+	{
+		// Direct neighbors only: no frontier to gather, nothing to mark visited.
+		SampleLinks(Node, Origin, Node.Links, 1, SafeMaxDepth, Scope, Count, TotalWeight);
+		FinalizeNode(Node, Count, TotalWeight, Scope);
+		return;
+	}
+
+	check(TraversalScratch);
+	PCGExNeighborSample::FTraversalScratch& Scratch = TraversalScratch->Get_Ref(Scope);
+
+	TArray<PCGExGraphs::FLink>* CurrentNeighbors = &Scratch.Current;
+	TArray<PCGExGraphs::FLink>* NextNeighbors = &Scratch.Next;
+	TSet<int32>& VisitedNodes = Scratch.Visited;
+
+	CurrentNeighbors->Reset();
+	VisitedNodes.Reset();
+
+	VisitedNodes.Add(NodeIndex);
+	CurrentNeighbors->Append(Node.Links);
+
+	int32 CurrentDepth = 0;
 
 	while (CurrentDepth <= SafeMaxDepth)
 	{
@@ -100,36 +131,9 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 		for (const PCGExGraphs::FLink Lk : (*CurrentNeighbors))
 		{
 			VisitedNodes.Add(Lk.Node);
-			double LocalWeight;
-
-			if (SamplingConfig.BlendOver == EPCGExBlendOver::Distance)
-			{
-				const double Dist = FVector::Dist(Origin, Cluster->GetPos(Lk)); // Use Neighbor.FromNode to accumulate per-path distance 
-				if (Dist > SamplingConfig.MaxDistance)
-				{
-					continue;
-				}
-				LocalWeight = 1 - (Dist / SamplingConfig.MaxDistance);
-			}
-			else
-			{
-				LocalWeight = SamplingConfig.BlendOver == EPCGExBlendOver::Index ? 1 - (CurrentDepth / SafeMaxDepth) : SamplingConfig.FixedBlend;
-			}
-
-			LocalWeight = WeightLUT->Eval(LocalWeight);
-
-			if (SamplingConfig.NeighborSource == EPCGExClusterElement::Vtx)
-			{
-				SampleNeighborNode(Node, Lk, LocalWeight, Scope);
-			}
-			else
-			{
-				SampleNeighborEdge(Node, Lk, LocalWeight, Scope);
-			}
-
-			Count++;
-			TotalWeight += LocalWeight;
 		}
+
+		SampleLinks(Node, Origin, *CurrentNeighbors, CurrentDepth, SafeMaxDepth, Scope, Count, TotalWeight);
 
 		if (CurrentDepth >= SamplingConfig.MaxDepth)
 		{
@@ -151,7 +155,7 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 					{
 						continue;
 					}
-					if (!ValueFilters->Results[Cluster->GetNodePointIndex(Next)])
+					if (!ValueFilters->Results[NextIndex])
 					{
 						VisitedNodes.Add(NextIndex);
 						continue;
@@ -178,6 +182,42 @@ void FPCGExNeighborSampleOperation::ProcessNode(const int32 NodeIndex, const PCG
 	FinalizeNode(Node, Count, TotalWeight, Scope);
 }
 
+void FPCGExNeighborSampleOperation::SampleLinks(const PCGExClusters::FNode& TargetNode, const FVector& Origin, const TConstArrayView<PCGExGraphs::FLink> Links, const int32 Depth, const int32 SafeMaxDepth, const PCGExMT::FScope& Scope, int32& Count, double& TotalWeight)
+{
+	for (const PCGExGraphs::FLink Lk : Links)
+	{
+		double LocalWeight;
+
+		if (SamplingConfig.BlendOver == EPCGExBlendOver::Distance)
+		{
+			const double Dist = FVector::Dist(Origin, Cluster->GetPos(Lk)); // Use Neighbor.FromNode to accumulate per-path distance
+			if (Dist > SamplingConfig.MaxDistance)
+			{
+				continue;
+			}
+			LocalWeight = 1 - (Dist / SamplingConfig.MaxDistance);
+		}
+		else
+		{
+			LocalWeight = SamplingConfig.BlendOver == EPCGExBlendOver::Index ? 1.0 - (static_cast<double>(Depth) / SafeMaxDepth) : SamplingConfig.FixedBlend;
+		}
+
+		LocalWeight = WeightLUT->Eval(LocalWeight);
+
+		if (SamplingConfig.NeighborSource == EPCGExClusterElement::Vtx)
+		{
+			SampleNeighborNode(TargetNode, Lk, LocalWeight, Scope);
+		}
+		else
+		{
+			SampleNeighborEdge(TargetNode, Lk, LocalWeight, Scope);
+		}
+
+		Count++;
+		TotalWeight += LocalWeight;
+	}
+}
+
 void FPCGExNeighborSampleOperation::PrepareNode(const PCGExClusters::FNode& TargetNode, const PCGExMT::FScope& Scope) const
 {
 }
@@ -196,14 +236,8 @@ void FPCGExNeighborSampleOperation::FinalizeNode(const PCGExClusters::FNode& Tar
 
 void FPCGExNeighborSampleOperation::CompleteOperation()
 {
+	TraversalScratch.Reset();
 }
-
-#if WITH_EDITOR
-FString UPCGExNeighborSampleProviderSettings::GetDisplayName() const
-{
-	return TEXT("");
-}
-#endif
 
 TSharedPtr<FPCGExNeighborSampleOperation> UPCGExNeighborSamplerFactoryData::CreateOperation(FPCGExContext* InContext) const
 {

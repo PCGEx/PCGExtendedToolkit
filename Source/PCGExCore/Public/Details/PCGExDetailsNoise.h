@@ -12,47 +12,11 @@
 
 #include "PCGExDetailsNoise.generated.h"
 
-#pragma region PCG exposition
-// Exposed copy of the otherwise private PCG' spatial noise mode enum
-UENUM(BlueprintType)
-enum class PCGExSpatialNoiseMode : uint8
-{
-	/** Your classic perlin noise. */
-	Perlin,
-	/** Based on underwater fake caustic rendering, gives swirly look. */
-	Caustic,
-	/** Voronoi noise, result a the distance to edge and cell ID. */
-	Voronoi,
-	/** Based on fractional brownian motion. */
-	FractionalBrownian,
-	/** Used to create masks to blend out edges. */
-	EdgeMask,
-};
-
-UENUM(BlueprintType)
-enum class PCGExSpatialNoiseMask2DMode : uint8
-{
-	/** Your classic perlin noise. */
-	Perlin,
-	/** Based on underwater fake caustic rendering, gives swirly look. */
-	Caustic,
-	/** Based on fractional brownian motion. */
-	FractionalBrownian,
-};
-
-#pragma endregion
-
 struct FPCGExContext;
 
 namespace PCGExData
 {
 	class FFacade;
-}
-
-namespace PCGExDetails
-{
-	template <typename T>
-	class TSettingValue;
 }
 
 USTRUCT(BlueprintType)
@@ -61,11 +25,6 @@ struct PCGEXCORE_API FPCGExRandomRatioDetails
 	GENERATED_BODY()
 
 	FPCGExRandomRatioDetails() = default;
-
-	explicit FPCGExRandomRatioDetails(double DefaultAmount)
-	{
-		Amount_DEPRECATED = DefaultAmount;
-	}
 
 	/** Seed for random number generation. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))

@@ -23,8 +23,6 @@ namespace PCGExTexture
 	class FLookup;
 }
 
-class UPCGExPointFilterFactoryData;
-
 /**
  * Use PCGExSampling to manipulate the outgoing attributes instead of handling everything here.
  * This way we can multi-thread the various calculations instead of mixing everything along with async/game thread collision
@@ -194,11 +192,9 @@ namespace PCGExSampleTexture
 	{
 		TArray<int8> SamplingMask;
 
-		TSharedPtr<PCGExTexture::FLookup> TexParamLookup;
 		TSharedPtr<PCGExData::TBuffer<FVector2D>> UVGetter;
 
 		int8 bAnySuccess = 0;
-		UWorld* World = nullptr;
 
 		TArray<TSharedRef<FSampler>> Samplers;
 
@@ -207,8 +203,6 @@ namespace PCGExSampleTexture
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

@@ -13,12 +13,6 @@
 #define LOCTEXT_NAMESPACE "PCGExAttributeRollingElement"
 #define PCGEX_NAMESPACE AttributeRolling
 
-UPCGExAttributeRollingSettings::UPCGExAttributeRollingSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 TArray<FPCGPinProperties> UPCGExAttributeRollingSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
@@ -131,10 +125,6 @@ bool FPCGExAttributeRollingElement::AdvanceWork(FPCGExContext* InContext, const 
 
 namespace PCGExAttributeRolling
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader)
 	{
 		TProcessor<FPCGExAttributeRollingContext, UPCGExAttributeRollingSettings>::RegisterBuffersDependencies(FacadePreloader);

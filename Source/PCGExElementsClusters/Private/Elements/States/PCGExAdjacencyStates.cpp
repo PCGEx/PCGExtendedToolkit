@@ -33,10 +33,6 @@ namespace PCGExAdjacencyStates
 		return true;
 	}
 
-	FState::~FState()
-	{
-	}
-
 	void FState::ProcessFlags(const bool bSuccess, int64& InFlags, const int32 Index) const
 	{
 	}

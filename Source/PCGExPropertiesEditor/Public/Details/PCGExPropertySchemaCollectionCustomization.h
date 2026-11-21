@@ -11,7 +11,6 @@
 
 class IDetailPropertyRow;
 class IPropertyUtilities;
-class FResetToDefaultOverride;
 class FTransactionObjectEvent;
 class UPCGExPropertySchemaAsset;
 struct FPCGExPropertyResolved;
@@ -111,7 +110,6 @@ private:
 
 	TWeakPtr<IPropertyUtilities> WeakPropertyUtilities;
 	TWeakPtr<IPropertyHandle> PropertyHandlePtr;
-	TWeakPtr<IPropertyHandle> SchemasArrayHandlePtr;
 
 	/** Outer host of the collection; used to filter OnObjectTransacted to events we own. */
 	TWeakObjectPtr<UObject> WeakHostObject;

@@ -383,6 +383,8 @@ namespace PCGExPathInsert
 
 		void GatherCandidates();
 
+		void WriteInsertOutputs(int32 WriteIndex, const FInsertCandidate& Insert, double Alpha) const;
+
 		// Forwards Inserts[i]'s target row onto output point OutStart + i; the run must be contiguous and owned by the caller.
 		void ForwardInserts(TConstArrayView<FInsertCandidate> Inserts, int32 OutStart);
 

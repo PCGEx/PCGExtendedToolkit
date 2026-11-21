@@ -82,21 +82,17 @@ public:
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
-class FNodeAdjacencyFilter final : public PCGExClusterFilter::IVtxFilter
+class FNodeAdjacencyFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExNodeAdjacencyFilterFactory, PCGExClusterFilter::IVtxFilter>
 {
 public:
 	explicit FNodeAdjacencyFilter(const UPCGExNodeAdjacencyFilterFactory* InFactory)
-		: IVtxFilter(InFactory)
-		  , TypedFilterFactory(InFactory)
+		: TFactoryFilter(InFactory)
 	{
 		Adjacency = InFactory->Config.Adjacency;
 	}
 
-	const UPCGExNodeAdjacencyFilterFactory* TypedFilterFactory;
-
 	bool bCaptureFromNodes = false;
 
-	TArray<double> CachedThreshold;
 	FPCGExAdjacencySettings Adjacency;
 
 	TSharedPtr<PCGExDetails::TSettingValue<double>> OperandA;
@@ -125,11 +121,6 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NodeAdjacencyFilterFactory, "Vtx Filter : Adjacency", "Numeric comparison of adjacent values, testing either adjacent nodes or connected edges.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 
 	/** Test Config.*/

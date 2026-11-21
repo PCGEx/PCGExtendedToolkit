@@ -231,10 +231,6 @@ bool FPCGExSampleSurfaceGuidedElement::AdvanceWork(FPCGExContext* InContext, con
 
 namespace PCGExSampleSurfaceGuided
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSampleSurfaceGuided::Process);

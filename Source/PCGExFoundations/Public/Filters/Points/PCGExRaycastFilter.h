@@ -105,10 +105,6 @@ struct FPCGExRaycastFilterConfig
 	/** Whether the result of the filter should be inverted. Note: Inversion is applied AFTER the test, not to fallback values. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	bool bInvert = false;
-
-	void Sanitize()
-	{
-	}
 };
 
 /**
@@ -136,16 +132,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FRaycastFilter final : public ISimpleFilter
+	class FRaycastFilter final : public TFactoryFilter<UPCGExRaycastFilterFactory>
 	{
 	public:
-		explicit FRaycastFilter(const TObjectPtr<const UPCGExRaycastFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExRaycastFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		FPCGExCollisionDetails CollisionSettings;
 
@@ -161,10 +151,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FRaycastFilter() override
-		{
-		}
 
 	protected:
 		bool DoTrace(const FVector& Start, const FVector& End, const FQuat& Orientation, const int32 Index, FHitResult& OutHit) const;

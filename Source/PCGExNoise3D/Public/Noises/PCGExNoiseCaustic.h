@@ -15,11 +15,6 @@ struct FPCGExNoiseConfigCaustic : public FPCGExNoise3DConfigBase
 {
 	GENERATED_BODY()
 
-	FPCGExNoiseConfigCaustic()
-		: FPCGExNoise3DConfigBase()
-	{
-	}
-
 	/** Number of overlapping wave layers */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, ClampMin = "1", ClampMax = "8"))
 	int32 WaveLayers = 3;
@@ -58,8 +53,6 @@ public:
 	double AnimationSpeed = 1.0;
 	double Intensity = 2.0;
 	double Focus = 2.0;
-
-	virtual ~FPCGExNoiseCaustic() override = default;
 
 	virtual void PostInitDerived() override;
 

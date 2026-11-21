@@ -56,7 +56,6 @@ namespace PCGExMath::Geo
 	public:
 		TSharedPtr<TDelaunay3> Delaunay;
 		TSet<uint64> VoronoiEdges;
-		TSet<int32> VoronoiHull;
 		TArray<FSphere> Circumspheres;
 		TArray<FVector> Centroids;
 

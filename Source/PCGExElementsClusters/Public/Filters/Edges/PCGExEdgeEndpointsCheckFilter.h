@@ -84,16 +84,10 @@ public:
 
 namespace PCGExEdgeEndpointsCheck
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeEndpointsCheckFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeEndpointsCheckFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeEndpointsCheckFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		int8 Expected = 0;
 		int8 ExpectedB = 0;
@@ -122,11 +116,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EdgeEndpointsCheckFilterFactory, "Edge Filter : Endpoints Check", "Tests filters against the edge's endpoints to determine the edge's filter result.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 	//~End UPCGSettings
 

@@ -11,8 +11,6 @@
 #include "UObject/Object.h"
 #include "PCGExSearchBellmanFord.generated.h"
 
-class FPCGExHeuristicOperation;
-
 namespace PCGExPathfinding
 {
 	/**
@@ -61,8 +59,6 @@ public:
 	/** If enabled, the search will fail if a negative weight cycle is detected */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bDetectNegativeCycles = true;
-
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
 
 	virtual TSharedPtr<FPCGExSearchOperation> CreateOperation() const override
 	{

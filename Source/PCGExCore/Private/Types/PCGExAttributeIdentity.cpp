@@ -128,18 +128,6 @@ namespace PCGExData
 		return NumAttributes;
 	}
 
-	bool FAttributesInfos::Contains(const FName AttributeName, const EPCGMetadataTypes Type)
-	{
-		for (FAttributeIdentity& Identity : Identities)
-		{
-			if (Identity.Name == AttributeName && Identity.ValueType == Type)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
 	bool FAttributesInfos::Contains(const FName AttributeName)
 	{
 		for (FAttributeIdentity& Identity : Identities)
@@ -164,20 +152,6 @@ namespace PCGExData
 		return nullptr;
 	}
 
-	bool FAttributesInfos::FindMissing(const TSet<FName>& Checklist, TSet<FName>& OutMissing)
-	{
-		bool bAnyMissing = false;
-		for (const FName& Id : Checklist)
-		{
-			if (!Contains(Id) || !PCGExMetaHelpers::IsWritableAttributeName(Id))
-			{
-				OutMissing.Add(Id);
-				bAnyMissing = true;
-			}
-		}
-		return bAnyMissing;
-	}
-
 	bool FAttributesInfos::FindMissing(const TArray<FName>& Checklist, TSet<FName>& OutMissing)
 	{
 		bool bAnyMissing = false;
@@ -192,68 +166,54 @@ namespace PCGExData
 		return bAnyMissing;
 	}
 
-	void FAttributesInfos::Append(const TSharedPtr<FAttributesInfos>& Other, const FPCGExAttributeGatherDetails& InGatherDetails, TSet<FName>& OutTypeMismatch)
+	namespace PCGExAttributeIdentity
 	{
-		for (int i = 0; i < Other->Identities.Num(); i++)
+		template <typename SkipPredicate>
+		void AppendUnlessSkipped(FAttributesInfos& Infos, const FAttributesInfos& Other, TSet<FName>& OutTypeMismatch, SkipPredicate&& ShouldSkip)
 		{
-			const FAttributeIdentity& OtherId = Other->Identities[i];
-
-			if (!InGatherDetails.Test(OtherId.Name.ToString()))
+			for (int i = 0; i < Other.Identities.Num(); i++)
 			{
-				continue;
-			}
+				const FAttributeIdentity& OtherId = Other.Identities[i];
 
-			const FPCGAttributeIdentifier OtherIdentifier = OtherId.GetIdentifier();
-			if (const int32* Index = Map.Find(OtherIdentifier))
-			{
-				const FAttributeIdentity& Id = Identities[*Index];
-				// Desc-aware mismatch: catches Struct<A> vs Struct<B>, TArray<int> vs int, etc.
-				if (!Id.IsSameType(OtherId))
+				if (ShouldSkip(OtherId.Name))
 				{
-					OutTypeMismatch.Add(Id.Name);
-					// TODO : Update existing based on settings
+					continue;
 				}
 
-				continue;
-			}
+				const FPCGAttributeIdentifier OtherIdentifier = OtherId.GetIdentifier();
+				if (const int32* Index = Infos.Map.Find(OtherIdentifier))
+				{
+					const FAttributeIdentity& Id = Infos.Identities[*Index];
+					// Desc-aware mismatch: catches Struct<A> vs Struct<B>, TArray<int> vs int, etc.
+					if (!Id.IsSameType(OtherId))
+					{
+						OutTypeMismatch.Add(Id.Name);
+						// TODO : Update existing based on settings
+					}
 
-			int32 AppendIndex = Identities.Add(OtherId);
-			Map.Add(OtherIdentifier, AppendIndex);
+					continue;
+				}
+
+				int32 AppendIndex = Infos.Identities.Add(OtherId);
+				Infos.Map.Add(OtherIdentifier, AppendIndex);
+			}
 		}
+	}
+
+	void FAttributesInfos::Append(const TSharedPtr<FAttributesInfos>& Other, const FPCGExAttributeGatherDetails& InGatherDetails, TSet<FName>& OutTypeMismatch)
+	{
+		PCGExAttributeIdentity::AppendUnlessSkipped(*this, *Other, OutTypeMismatch, [&InGatherDetails](const FName& InName)
+		{
+			return !InGatherDetails.Test(InName.ToString());
+		});
 	}
 
 	void FAttributesInfos::Append(const TSharedPtr<FAttributesInfos>& Other, TSet<FName>& OutTypeMismatch, const TSet<FName>* InIgnoredAttributes)
 	{
-		for (int i = 0; i < Other->Identities.Num(); i++)
+		PCGExAttributeIdentity::AppendUnlessSkipped(*this, *Other, OutTypeMismatch, [InIgnoredAttributes](const FName& InName)
 		{
-			const FAttributeIdentity& OtherId = Other->Identities[i];
-
-			if (InIgnoredAttributes && InIgnoredAttributes->Contains(OtherId.Name))
-			{
-				continue;
-			}
-
-			const FPCGAttributeIdentifier OtherIdentifier = OtherId.GetIdentifier();
-			if (const int32* Index = Map.Find(OtherIdentifier))
-			{
-				const FAttributeIdentity& Id = Identities[*Index];
-				if (!Id.IsSameType(OtherId))
-				{
-					OutTypeMismatch.Add(Id.Name);
-					// TODO : Update existing based on settings
-				}
-
-				continue;
-			}
-
-			int32 AppendIndex = Identities.Add(OtherId);
-			Map.Add(OtherIdentifier, AppendIndex);
-		}
-	}
-
-	void FAttributesInfos::Update(const FAttributesInfos* Other, const FPCGExAttributeGatherDetails& InGatherDetails, TSet<FName>& OutTypeMismatch)
-	{
-		// TODO : Update types and attributes according to input settings?
+			return InIgnoredAttributes && InIgnoredAttributes->Contains(InName);
+		});
 	}
 
 	void FAttributesInfos::Filter(const FilterCallback& FilterFn)

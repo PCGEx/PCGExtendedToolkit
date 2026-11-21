@@ -13,11 +13,6 @@
 
 struct FPCGExTaggedData;
 
-namespace PCGExData
-{
-	template <typename T>
-	class TAttributeBroadcaster;
-}
 
 UENUM()
 enum class EPCGExMatchOverlapExpansionMode : uint8
@@ -96,12 +91,6 @@ protected:
 
 	// Pre-computed min overlap ratios per source (when using attribute input)
 	TArray<double> MinOverlapRatios;
-
-	// Octree for spatial queries - used to quickly find overlapping candidates
-	TUniquePtr<PCGExOctree::FItemOctree> Octree;
-
-	// Get source index from octree query for a given candidate bounds
-	void GetOverlappingSourceIndices(const FBox& CandidateBounds, TArray<int32>& OutIndices) const;
 
 	// Compute overlap ratio between two boxes (overlap volume / smallest volume)
 	static double ComputeOverlapRatio(const FBox& BoxA, const FBox& BoxB);

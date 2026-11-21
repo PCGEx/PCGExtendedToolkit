@@ -14,7 +14,6 @@
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Types/PCGExTypeOpsString.h"
-#include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPackActorDataElement"
 #define PCGEX_NAMESPACE PackActorData
@@ -70,8 +69,12 @@ void UPCGExCustomActorDataPacker::AddComponent(AActor* InActor, TSubclassOf<UAct
 		return;
 	}
 
-	const EObjectFlags InObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-	OutComponent = Context->ManagedObjects->New<UActorComponent>(InActor, ComponentClass, UniqueNameGenerator->Get(TEXT("PCGComponent_") + ComponentClass->GetName()), InObjectFlags);
+	// One slot per call, in call order: a regeneration hands back the component the same call got last time.
+	FPCGCrc CallCrc = SlotCrc;
+	CallCrc.Combine(static_cast<uint32>(NumAddedComponents++));
+
+	FPCGExComponentSlot Slot;
+	OutComponent = Context->ReclaimOrCreateComponent(InActor, ComponentClass, FName(TEXT("PCGComponent_") + ComponentClass->GetName()), CallCrc, Slot);
 
 	if (!OutComponent)
 	{
@@ -82,7 +85,7 @@ void UPCGExCustomActorDataPacker::AddComponent(AActor* InActor, TSubclassOf<UAct
 	{
 		FComponentInfos NewInfos = FComponentInfos(OutComponent, InLocationRule, InRotationRule, InScaleRule, InWeldSimulatedBodies);
 
-		Context->AttachManagedComponent(InActor, NewInfos.Component, NewInfos.AttachmentTransformRules);
+		Context->AttachManagedComponent(InActor, NewInfos.Component, NewInfos.AttachmentTransformRules, Slot);
 	}
 }
 
@@ -388,7 +391,7 @@ bool FPCGExPackActorDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	}
 
 	// When bExecuteOnMainThread, the batch drives a main-thread loop whose ProcessEntry can create components/actors
-	// (AddComponent -> ManagedObjects->New / AttachManagedComponent) -- illegal during a package save or GC. Defer the
+	// (AddComponent -> NewObject / AttachManagedComponent) -- illegal during a package save or GC. Defer the
 	// whole output phase (re-tick) until it finishes.
 	PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED
 
@@ -401,10 +404,6 @@ bool FPCGExPackActorDataElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExPackActorData
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExPackActorData::Process);
@@ -423,11 +422,10 @@ namespace PCGExPackActorData
 		PointMask.Init(1, PointDataFacade->GetNum());
 
 		Packer = GetPrimaryInstancedFactory<UPCGExCustomActorDataPacker>();
-		Packer->UniqueNameGenerator = Context->UniqueNameGenerator;
+		Packer->SlotCrc = Context->GetSlotCrc(BatchIndex);
+		Packer->NumAddedComponents = 0;
 		Packer->WriteBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>>(PointDataFacade);
 		Packer->ReadBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Read>>(PointDataFacade);
-
-		Packer->bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
 		PointDataFacade->Source->bAllowEmptyOutput = !Settings->bOmitEmptyOutputs;
 
@@ -598,16 +596,6 @@ namespace PCGExPackActorData
 		{
 			PointDataFacade->Source->SetPoints(0, PointsForProcessing, EPCGPointNativeProperties::All);
 			PointsForProcessing.Empty();
-		}
-
-		Attributes.Reserve(PointDataFacade->Buffers.Num());
-		for (const TSharedPtr<PCGExData::IBuffer>& Buffer : PointDataFacade->Buffers)
-		{
-			if (!Buffer->IsWritable())
-			{
-				continue;
-			}
-			Attributes.Add(Buffer->OutAttribute);
 		}
 
 		PointDataFacade->WriteFastest(TaskManager);

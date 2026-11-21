@@ -71,18 +71,15 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FTensorDotFilter final : public ISimpleFilter
+	class FTensorDotFilter final : public TFactoryFilter<UPCGExTensorDotFilterFactory>
 	{
 	public:
 		explicit FTensorDotFilter(const TObjectPtr<const UPCGExTensorDotFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
 			TensorsHandler = TypedFilterFactory->TensorsHandler;
 		}
-
-		const TObjectPtr<const UPCGExTensorDotFilterFactory> TypedFilterFactory;
 
 		FPCGExDotComparisonDetails DotComparison;
 		TSharedPtr<PCGExTensor::FTensorsHandler> TensorsHandler;
@@ -93,10 +90,6 @@ namespace PCGExPointFilter
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FTensorDotFilter() override
-		{
-		}
 	};
 }
 

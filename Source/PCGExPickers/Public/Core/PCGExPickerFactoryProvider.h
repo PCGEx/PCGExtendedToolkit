@@ -12,9 +12,7 @@
 
 #include "PCGExPickerFactoryProvider.generated.h"
 
-class UPCGExPickerOperation;
-
-#define PCGEX_PICKER_BOILERPLATE(_PICKER, _NEW_FACTORY, _NEW_OPERATION) \
+#define PCGEX_PICKER_BOILERPLATE(_PICKER, _NEW_FACTORY) \
 UPCGExFactoryData* UPCGExPicker##_PICKER##Settings::CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const{ \
 UPCGExPicker##_PICKER##Factory* NewFactory = InContext->ManagedObjects->New<UPCGExPicker##_PICKER##Factory>(); \
 NewFactory->Config = Config; \
@@ -55,10 +53,6 @@ struct PCGEXPICKERS_API FPCGExPickerConfigBase
 	virtual void Sanitize()
 	{
 	}
-
-	virtual void Init()
-	{
-	}
 };
 
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
@@ -83,12 +77,9 @@ public:
 
 	virtual void AddPicks(int32 InNum, TSet<int32>& OutPicks) const;
 
-	FPCGExPickerConfigBase BaseConfig;
 	virtual PCGExFactories::EPreparationResult Prepare(FPCGExContext* InContext, const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override;
 
 protected:
-	virtual bool RequiresInputs() const;
-
 	virtual bool WantsPreparation(FPCGExContext* InContext) override
 	{
 		return false;

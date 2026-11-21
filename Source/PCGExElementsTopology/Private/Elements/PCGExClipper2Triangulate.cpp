@@ -19,16 +19,11 @@
 TArray<FPCGPinProperties> UPCGExClipper2TriangulateSettings::OutputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties;
-	PCGEX_PIN_MESH(PCGExTopology::MeshOutputLabel, "PCG Dynamic Mesh", Normal)
+	PCGEX_PIN_MESH(PCGExTopology::Labels::OutputMeshLabel, "PCG Dynamic Mesh", Normal)
 	return PinProperties;
 }
 
 PCGEX_INITIALIZE_ELEMENT(Clipper2Triangulate)
-
-FPCGExGeo2DProjectionDetails UPCGExClipper2TriangulateSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
 
 uint64 FPCGExClipper2TriangulateContext::HashPoint(int64 X, int64 Y)
 {
@@ -459,7 +454,7 @@ void FPCGExClipper2TriangulateElement::OutputWork(FPCGExContext* InContext, cons
 		{
 			Context->StageOutput(
 				Output.MeshData,
-				PCGExTopology::MeshOutputLabel,
+				PCGExTopology::Labels::OutputMeshLabel,
 				PCGExData::EStaging::Managed,
 				Output.Tags);
 		}

@@ -10,8 +10,6 @@
 
 #include "PCGExConnectClusters.generated.h"
 
-class FPCGExPointIOMerger;
-
 namespace PCGExGraphs
 {
 	class FGraphPatcher;
@@ -36,11 +34,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(ConnectClusters, "Cluster : Connect", "Connects isolated edge clusters by their closest vertices, if they share the same vtx group.");
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
 #endif
 
 protected:
@@ -93,7 +86,6 @@ private:
 struct FPCGExConnectClustersContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExConnectClustersElement;
-	friend class FPCGExCreateBridgeTask;
 
 	FPCGExGeo2DProjectionDetails ProjectionDetails;
 	FPCGExCarryOverDetails CarryOverDetails;

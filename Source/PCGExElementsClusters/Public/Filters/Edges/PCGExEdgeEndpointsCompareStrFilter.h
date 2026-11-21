@@ -52,16 +52,10 @@ public:
 
 namespace PCGExEdgeEndpointsCompareStr
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeEndpointsCompareStrFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeEndpointsCompareStrFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeEndpointsCompareStrFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<FString>> StringBuffer;
 
@@ -83,11 +77,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(EdgeEndpointsCompareStrFilterFactory, "Edge Filter : Endpoints Compare (String)", "Compare the value of an attribute on each of the edge endpoint.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 	//~End UPCGSettings
 

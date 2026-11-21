@@ -54,24 +54,19 @@ public:
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
-class FNodeEdgeAngleFilter final : public PCGExClusterFilter::IVtxFilter
+class FNodeEdgeAngleFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExNodeEdgeAngleFilterFactory, PCGExClusterFilter::IVtxFilter>
 {
 public:
 	explicit FNodeEdgeAngleFilter(const UPCGExNodeEdgeAngleFilterFactory* InFactory)
-		: IVtxFilter(InFactory)
-		  , TypedFilterFactory(InFactory)
+		: TFactoryFilter(InFactory)
 	{
 		DotComparison = InFactory->Config.DotComparisonDetails;
 	}
-
-	const UPCGExNodeEdgeAngleFilterFactory* TypedFilterFactory;
 
 	bool bLeavesFallback = true;
 	bool bNonBinaryFallback = true;
 
 	FPCGExDotComparisonDetails DotComparison;
-
-	TSharedPtr<PCGExData::TBuffer<FVector>> OperandDirection;
 
 	virtual bool Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade) override;
 	virtual bool Test(const PCGExClusters::FNode& Node) const override;
@@ -89,11 +84,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NodeEdgeAngleFilterFactory, "Vtx Filter : Edge Angle", "Dot product comparison of connected edges against themselves. Mostly useful on binary nodes only.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 
 	/** Test Config.*/

@@ -35,18 +35,6 @@ TArray<FPCGPinProperties> UPCGExDiscardSameSettings::OutputPinProperties() const
 PCGEX_INITIALIZE_ELEMENT(DiscardSame)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(DiscardSame)
 
-bool FPCGExDiscardSameElement::Boot(FPCGExContext* InContext) const
-{
-	if (!FPCGExPointsProcessorElement::Boot(InContext))
-	{
-		return false;
-	}
-
-	PCGEX_CONTEXT_AND_SETTINGS(DiscardSame)
-
-	return true;
-}
-
 bool FPCGExDiscardSameElement::AdvanceWork(FPCGExContext* InContext, const UPCGExSettings* InSettings) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FPCGExDiscardSameElement::Execute);

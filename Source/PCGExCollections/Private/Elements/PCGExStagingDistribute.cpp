@@ -10,7 +10,6 @@
 #include "PCGExSubSystem.h"
 #endif
 
-#include "PCGExLog.h"
 #include "PCGGraph.h"
 #include "PCGParamData.h"
 #include "Collections/PCGExMeshCollection.h"

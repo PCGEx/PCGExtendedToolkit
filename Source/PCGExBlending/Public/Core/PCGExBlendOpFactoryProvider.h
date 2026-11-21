@@ -14,16 +14,6 @@
 
 #include "PCGExBlendOpFactoryProvider.generated.h"
 
-namespace PCGExDetails
-{
-	template <typename T>
-	class TSettingValue;
-}
-
-namespace PCGExBlending
-{
-	class FProxyDataBlender;
-}
 
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Blending", meta=(PCGExNodeLibraryDoc="metadata/blending/blendop"))
 class PCGEXBLENDING_API UPCGExBlendOpFactoryProviderSettings : public UPCGExFactoryProviderSettings

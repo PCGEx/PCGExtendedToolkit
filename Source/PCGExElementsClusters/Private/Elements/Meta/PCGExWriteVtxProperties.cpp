@@ -230,10 +230,6 @@ namespace PCGExWriteVtxProperties
 	{
 	}
 
-	FBatch::~FBatch()
-	{
-	}
-
 	void FBatch::OnProcessingPreparationComplete()
 	{
 		PCGEX_TYPED_CONTEXT_AND_SETTINGS(WriteVtxProperties)
@@ -262,7 +258,7 @@ namespace PCGExWriteVtxProperties
 
 #define PCGEX_FWD_VTX(_NAME, _TYPE, _DEFAULT_VALUE) TypedProcessor->_NAME##Writer = _NAME##Writer;
 		PCGEX_FOREACH_FIELD_VTXEXTRAS(PCGEX_FWD_VTX)
-#undef PCGEX_ASSIGN_AXIS_GETTER
+#undef PCGEX_FWD_VTX
 
 		return true;
 	}

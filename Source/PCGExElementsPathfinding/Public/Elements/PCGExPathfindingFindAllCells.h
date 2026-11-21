@@ -21,12 +21,6 @@ namespace PCGExFindAllCells
 	class FProcessor;
 }
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedArray;
-}
-
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Clusters", meta=(PCGExNodeLibraryDoc="pathfinding/cells/find-all-cells"))
 class UPCGExFindAllCellsSettings : public UPCGExClustersProcessorSettings
@@ -84,7 +78,6 @@ private:
 struct FPCGExFindAllCellsContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExFindAllCellsElement;
-	friend class FPCGExCreateBridgeTask;
 
 	FPCGExCellArtifactsDetails Artifacts;
 	FPCGExCellGrowthDetails HoleGrowth;
@@ -94,9 +87,6 @@ struct FPCGExFindAllCellsContext final : FPCGExClustersProcessorContext
 
 	TSharedPtr<PCGExData::FPointIOCollection> OutputPaths;
 	TSharedPtr<PCGExData::FPointIOCollection> OutputCellBounds;
-	TSharedPtr<PCGExData::FPointIO> Seeds;
-
-	mutable FRWLock SeedOutputLock;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL

@@ -34,21 +34,12 @@ namespace PCGExFitting::Tasks
 		return Bounds;
 	}
 
-	FTransformPointIO::FTransformPointIO(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExData::FPointIO>& InToBeTransformedIO, FPCGExTransformDetails* InTransformDetails, bool bAllocate)
-		: FPCGExIndexedTask(InTaskIndex)
-		  , PointIO(InPointIO)
-		  , ToBeTransformedIO(InToBeTransformedIO)
-		  , TransformDetails(InTransformDetails)
-	{
-	}
-
 	FTransformPointIO::FTransformPointIO(const int32 InTaskIndex, const TSharedPtr<PCGExData::FPointIO>& InPointIO, const TSharedPtr<PCGExData::FPointIO>& InToBeTransformedIO, FPCGExTransformDetails* InTransformDetails, const FBox& InFitBounds)
 		: FPCGExIndexedTask(InTaskIndex)
 		  , PointIO(InPointIO)
 		  , ToBeTransformedIO(InToBeTransformedIO)
 		  , TransformDetails(InTransformDetails)
 		  , FitBounds(InFitBounds)
-		  , bHasFitBounds(true)
 	{
 	}
 
@@ -58,7 +49,7 @@ namespace PCGExFitting::Tasks
 		TPCGValueRange<FTransform> OutTransforms = OutPointData->GetTransformValueRange();
 		FTransform TargetTransform = FTransform::Identity;
 
-		FBox PointBounds = bHasFitBounds ? FitBounds : ComputeFitBounds(OutPointData, TransformDetails->bIgnoreBounds);
+		FBox PointBounds = FitBounds;
 		FVector Translation = FVector::ZeroVector;
 
 		PointBounds = PointBounds.ExpandBy(0.1); // Avoid NaN

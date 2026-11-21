@@ -23,8 +23,6 @@
 
 namespace PCGExClusterMT
 {
-	const FName CachedTangentFramesKey = FName("TangentFrames");
-
 #pragma region Tasks
 
 	class FStartClusterBatchProcessing final : public PCGExMT::FTask
@@ -128,7 +126,6 @@ namespace PCGExClusterMT
 		if (!Cluster)
 		{
 			Cluster = MakeShared<PCGExClusters::FCluster>(VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup);
-			Cluster->bIsOneToOne = bIsOneToOne;
 
 			if (!Cluster->BuildFrom(*EndpointsLookup, ExpectedAdjacency))
 			{
@@ -305,7 +302,7 @@ namespace PCGExClusterMT
 
 					TSharedPtr<PCGExClusters::FCachedTangentFrames> CachedFrames = MakeShared<PCGExClusters::FCachedTangentFrames>();
 					CachedFrames->NodeTangentFrames = TangentFrames;
-					Cluster->SetCachedData(CachedTangentFramesKey, CachedFrames);
+					Cluster->SetCachedData(PCGExClusters::FCachedTangentFrames::CacheKey, CachedFrames);
 				}
 			}
 			else
@@ -376,7 +373,7 @@ namespace PCGExClusterMT
 
 		PrepareLoopScopesForNodes(Loops);
 
-		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessNodes, [this](const PCGExMT::FScope& Scope) { ProcessNodes(Scope); });
+		PCGExMT::ForEachScope(Loops, WorkHandle, false, [this](const PCGExMT::FScope& Scope) { ProcessNodes(Scope); });
 
 		OnNodesProcessingComplete();
 	}
@@ -419,7 +416,7 @@ namespace PCGExClusterMT
 
 		PrepareLoopScopesForEdges(Loops);
 
-		PCGExMT::ForEachScope(Loops, WorkHandle, bForceSingleThreadedProcessEdges, [this](const PCGExMT::FScope& Scope) { ProcessEdges(Scope); });
+		PCGExMT::ForEachScope(Loops, WorkHandle, false, [this](const PCGExMT::FScope& Scope) { ProcessEdges(Scope); });
 
 		OnEdgesProcessingComplete();
 	}

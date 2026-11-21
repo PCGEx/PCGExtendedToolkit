@@ -131,18 +131,6 @@ namespace PCGExMath::OBB
 		/** Test if point is inside any OBB, return which one */
 		bool IsPointInside(const FVector& Point, int32& OutIndex, EPCGExBoxCheckMode Mode = EPCGExBoxCheckMode::Box, float Expansion = 0.0f) const;
 
-		/** Template version for compile-time mode */
-		template <typename Policy>
-		bool IsPointInside(const FVector& Point, Policy TestPolicy = Policy{}) const
-		{
-			const float Exp = TestPolicy.Expansion;
-			const FBoxCenterAndExtent QueryBounds(Point, FVector4(Exp, Exp, Exp, Exp));
-			return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
-			{
-				return TestPolicy.TestPoint(GetOBB(Item.Index), Point);
-			});
-		}
-
 		/** Find all OBBs containing a point */
 		void FindContaining(const FVector& Point, TArray<int32>& OutIndices, EPCGExBoxCheckMode Mode = EPCGExBoxCheckMode::Box, float Expansion = 0.0f) const;
 
@@ -157,58 +145,13 @@ namespace PCGExMath::OBB
 		/** Test if query OBB is fully contained in OR overlaps any OBB in collection. Single octree traversal. */
 		bool ContainsOrOverlaps(const FOBB& Query, EPCGExBoxCheckMode Mode = EPCGExBoxCheckMode::Box, float Expansion = 0.0f) const;
 
-		/** Template version for compile-time mode */
-		template <typename Policy>
-		bool Overlaps(const FOBB& Query, Policy TestPolicy = Policy{}) const
-		{
-			const float R = Query.Bounds.Radius + TestPolicy.Expansion;
-			const FBoxCenterAndExtent QueryBounds(Query.Bounds.Origin, FVector4(R, R, R, R));
-			return FindFirstMatch(QueryBounds, [&](const PCGExOctree::FItem& Item)
-			{
-				return TestPolicy.TestOverlap(GetOBB(Item.Index), Query);
-			});
-		}
-
 		/** Find first overlapping OBB */
 		bool FindFirstOverlap(const FOBB& Query, int32& OutIndex, EPCGExBoxCheckMode Mode = EPCGExBoxCheckMode::Box, float Expansion = 0.0f) const;
 
 		/** Find all overlapping OBBs */
 		void FindAllOverlaps(const FOBB& Query, TArray<int32>& OutIndices, EPCGExBoxCheckMode Mode = EPCGExBoxCheckMode::Box, float Expansion = 0.0f) const;
 
-		/** Iterate with callback */
-		template <typename Callback>
-		void ForEachOverlap(const FOBB& Query, Callback&& Func, EPCGExBoxCheckMode Mode = EPCGExBoxCheckMode::Box, float Expansion = 0.0f) const
-		{
-			if (!Octree)
-			{
-				return;
-			}
-
-			const float R = Query.Bounds.Radius + Expansion;
-			const FBoxCenterAndExtent QueryBounds(Query.Bounds.Origin, FVector4(R, R, R, R));
-
-			Octree->FindElementsWithBoundsTest(QueryBounds, [&](const PCGExOctree::FItem& Item)
-			{
-				if (TestOverlap(GetOBB(Item.Index), Query, Mode, Expansion))
-				{
-					Func(GetOBB(Item.Index), Item.Index);
-				}
-			});
-		}
-
 		// Filtered OBB-OBB queries (virtual so FDynamicCollection can override with its two-tier approach)
-
-		/** Check overlap with SkipIndex. */
-		virtual bool OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex = INDEX_NONE) const;
-
-		/** Check overlap with SkipIndex and per-entry callback filter. Callback receives stored item index (OBB.Bounds.Index), returns true to SKIP. */
-		virtual bool OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkip) const;
-
-		/** Check if any entry overlaps with penetration depth exceeding threshold. */
-		virtual bool OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex = INDEX_NONE) const;
-
-		/** Check threshold-overlap with SkipIndex and per-entry callback filter. Callback receives stored item index (OBB.Bounds.Index), returns true to SKIP. */
-		virtual bool OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkip) const;
 
 		/** SAT-culls collection and calls ConfirmOverlap for each survivor. Returns true on first ConfirmOverlap that returns true. */
 		virtual bool ForEachOverlapping(const FOBB& Candidate, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkipOwner, TFunctionRef<bool(const FOBB&, int32 OwnerIndex)> ConfirmOverlap) const;
@@ -304,28 +247,12 @@ namespace PCGExMath::OBB
 		/** Mark entries from FromIndex onward as invalid (for grammar backtracking). */
 		void Invalidate(int32 FromIndex);
 
-		/** Two-tier overlap check (octree + pending) with ValidMask filtering. */
-		virtual bool OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex = INDEX_NONE) const override;
-
-		/** Two-tier overlap check with ValidMask + per-entry callback filter. Callback receives stored item index (OBB.Bounds.Index), returns true to SKIP. */
-		virtual bool OverlapsFiltered(const FOBB& Candidate, int32 SkipIndex, TFunctionRef<bool(int32)> ShouldSkip) const override;
-
-		/** Two-tier threshold-overlap check (octree + pending) with ValidMask filtering. */
-		virtual bool OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex = INDEX_NONE) const override;
-
-		/** Two-tier threshold-overlap check with ValidMask + per-entry callback filter. Callback receives stored item index (OBB.Bounds.Index), returns true to SKIP. */
-		virtual bool OverlapsBeyondThreshold(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex,
-		                                     TFunctionRef<bool(int32)> ShouldSkip) const override;
-
 		/** Two-tier SAT enumerator (octree + pending) with ValidMask filtering; calls ConfirmOverlap for each survivor. */
 		virtual bool ForEachOverlapping(
 			const FOBB& Candidate,
 			int32 SkipIndex,
 			TFunctionRef<bool(int32)> ShouldSkipOwner,
 			TFunctionRef<bool(const FOBB&, int32 OwnerIndex)> ConfirmOverlap) const override;
-
-		/** Count valid (non-invalidated) entries. */
-		int32 NumValid() const;
 
 		/** How many pending inserts before the octree is brought up to date. */
 		int32 RebuildInterval = 32;
@@ -364,14 +291,6 @@ namespace PCGExMath::OBB
 		 * only option.
 		 */
 		bool TryFlushPendingIncremental();
-
-		/** Templated overlap implementation for code reuse. */
-		template <typename FilterFn>
-		bool OverlapsImpl(const FOBB& Candidate, int32 SkipIndex, FilterFn&& Filter) const;
-
-		/** Templated penetration-threshold overlap implementation for code reuse. */
-		template <typename FilterFn>
-		bool OverlapsBeyondThresholdImpl(const FOBB& Candidate, float MaxPenetration, int32 SkipIndex, FilterFn&& Filter) const;
 
 		/** Two-tier traversal: Filter gates each entry, OnMatch(StoredOBB, EntryIndex) stops on true. Caches GetOBB per SAT-passing candidate. */
 		template <typename FilterFn, typename MatchFn>

@@ -38,11 +38,6 @@ UPCGExClipper2DecomposeSettings::UPCGExClipper2DecomposeSettings(const FObjectIn
 	bExposePathOutputProperties = false;
 }
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2DecomposeSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
-
 TArray<FPCGPinProperties> UPCGExClipper2DecomposeSettings::OutputPinProperties() const
 {
 	// Base declares the main Vtx pin via GetMainOutputPin(); add the paired Edges pin.

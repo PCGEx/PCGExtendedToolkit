@@ -3,7 +3,6 @@
 
 #include "Core/PCGExExtrusion.h"
 #include "Data/PCGExPointIO.h"
-#include "Helpers/PCGExArrayHelpers.h"
 
 namespace PCGExExtrusion
 {
@@ -75,11 +74,6 @@ namespace PCGExExtrusion
 	PCGExMath::FSegment FExtrusion::GetHeadSegment() const
 	{
 		return PCGExMath::FSegment(ExtrudedPoints.Last(1).GetLocation(), ExtrudedPoints.Last().GetLocation(), Config.ExternalPathIntersections.Tolerance);
-	}
-
-	PCGExMath::FSegment FExtrusion::GetCurrentHeadSegment() const
-	{
-		return PCGExMath::FSegment(ExtrudedPoints.Last().GetLocation(), Head.GetLocation(), Config.SelfPathIntersections.Tolerance);
 	}
 
 	bool FExtrusion::Advance()
@@ -358,7 +352,7 @@ namespace PCGExExtrusion
 
 		if (Intersection)
 		{
-			Result.Set(Intersection, EStopReason::ExternalPath, PathIndex);
+			Result.Set(Intersection, EStopReason::ExternalPath);
 		}
 
 		return Result;
@@ -384,7 +378,7 @@ namespace PCGExExtrusion
 
 		if (Intersection)
 		{
-			Result.Set(Intersection, EStopReason::SelfIntersection, PathIndex);
+			Result.Set(Intersection, EStopReason::SelfIntersection);
 		}
 
 		return Result;
@@ -594,15 +588,6 @@ namespace PCGExExtrusion
 		}
 
 		State = EExtrusionState::Stopped;
-	}
-
-	void FExtrusion::Shorten(const FVector& InCutOff)
-	{
-		const FVector A = ExtrudedPoints.Last(1).GetLocation();
-		if (FVector::DistSquared(A, InCutOff) < FVector::DistSquared(A, ExtrudedPoints.Last().GetLocation()))
-		{
-			ExtrudedPoints.Last().SetLocation(InCutOff);
-		}
 	}
 
 	void FExtrusion::Cleanup()

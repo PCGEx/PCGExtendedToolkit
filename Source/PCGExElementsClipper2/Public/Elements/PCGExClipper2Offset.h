@@ -29,6 +29,8 @@ class UPCGExClipper2OffsetSettings : public UPCGExClipper2ProcessorSettings
 	GENERATED_BODY()
 
 public:
+	UPCGExClipper2OffsetSettings(const FObjectInitializer& ObjectInitializer);
+
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(Clipper2Offset, "Clipper2 : Offset", "Does a Clipper2 offset operation.");
@@ -39,10 +41,6 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Projection settings. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	/** Number of iterations to apply */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Iterations", meta = (PCG_Overridable))
 	FPCGExInputShorthandNameInteger32Abs Iterations = FPCGExInputShorthandNameInteger32Abs(FName("@Data.Iterations"), 1, false);
@@ -95,7 +93,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output|Tagging", meta=(PCG_Overridable, EditCondition="bTagIteration"))
 	FString IterationTag = TEXT("OffsetNum");
 
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 	virtual bool SupportOpenMainPaths() const override;
 };
 

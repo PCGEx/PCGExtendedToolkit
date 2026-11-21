@@ -12,8 +12,6 @@
 
 #include "PCGExActorCollectionActions.generated.h"
 
-class UPackage;
-
 UCLASS()
 class UPCGExActorCollectionFactory : public UPCGExDataAssetFactoryBase
 {

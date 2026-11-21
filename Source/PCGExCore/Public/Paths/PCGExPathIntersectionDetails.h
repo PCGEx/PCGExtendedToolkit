@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "PCGExCommon.h"
-#include "Clusters/PCGExEdge.h"
 #include "Math/PCGExMath.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 
@@ -74,32 +73,6 @@ struct PCGEXCORE_API FPCGExPathEdgeIntersectionDetails
 	{
 		return InDot <= MaxDot && InDot >= MinDot;
 	}
-};
-
-USTRUCT(BlueprintType)
-struct PCGEXCORE_API FPCGExPathFilterSettings
-{
-	GENERATED_BODY()
-
-	/** Method to pick the edge direction amongst various possibilities.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExEdgeDirectionMethod DirectionMethod = EPCGExEdgeDirectionMethod::EndpointsOrder;
-
-	/** Which way the edge direction points relative to the method's endpoint ordering. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	EPCGExEdgeDirectionChoice DirectionChoice = EPCGExEdgeDirectionChoice::SmallestToGreatest;
-
-	/** Attribute picker for the selected Direction Method.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, EditCondition="DirectionMethod == EPCGExEdgeDirectionMethod::EdgeDotAttribute", EditConditionHides))
-	FPCGAttributePropertyInputSelector DirSourceAttribute;
-
-	bool bAscendingDesired = false;
-	TSharedPtr<PCGExData::TBuffer<double>> EndpointsReader;
-	TSharedPtr<PCGExData::TBuffer<FVector>> EdgeDirReader;
-
-	void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const;
-
-	bool Init(FPCGExContext* InContext);
 };
 
 USTRUCT(BlueprintType)

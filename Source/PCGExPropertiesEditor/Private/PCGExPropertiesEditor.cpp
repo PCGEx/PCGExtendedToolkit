@@ -7,7 +7,6 @@
 #include "PCGExEnumSelector.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExPropertiesEditorStyle.h"
-#include "PCGExProperty.h"
 #include "PCGExPropertyCollectionComponent.h"
 #include "PCGExPropertyFloatPacker.h"
 #include "PCGExPropertyType_Struct.h"
@@ -31,8 +30,6 @@
 #include "Details/PCGExWeightedPropertyOverridesCustomization.h"
 #include "Metadata/PCGObjectPropertyOverride.h"
 #include "Utils/PCGExWeightCurve.h"
-
-#define LOCTEXT_NAMESPACE "FPCGExPropertiesEditorModule"
 
 void FPCGExPropertiesEditorModule::StartupModule()
 {
@@ -211,7 +208,5 @@ void FPCGExPropertiesEditorModule::ShutdownModule()
 
 	IPCGExEditorModuleInterface::ShutdownModule();
 }
-
-#undef LOCTEXT_NAMESPACE
 
 PCGEX_IMPLEMENT_MODULE(FPCGExPropertiesEditorModule, PCGExPropertiesEditor)

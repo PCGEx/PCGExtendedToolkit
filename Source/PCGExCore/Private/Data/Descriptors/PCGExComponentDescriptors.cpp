@@ -186,16 +186,14 @@ void FPCGExPrimitiveComponentDescriptor::InitComponent(UPrimitiveComponent* InCo
 	PrimitiveComponent->TranslucencySortDistanceOffset = TranslucencySortDistanceOffset;
 	//TargetComponent->RuntimeVirtualTextures = RuntimeVirtualTextures; // TODO : Load & Forward
 
-	if (!RuntimeVirtualTextures.IsEmpty())
+	// Replaced, not appended: a component rebuilt in place already holds the previous list.
+	PrimitiveComponent->RuntimeVirtualTextures.Reset(RuntimeVirtualTextures.Num());
+	for (const TSoftObjectPtr<URuntimeVirtualTexture>& SoftRVT : RuntimeVirtualTextures)
 	{
-		PrimitiveComponent->RuntimeVirtualTextures.Reserve(RuntimeVirtualTextures.Num());
-		for (const TSoftObjectPtr<URuntimeVirtualTexture>& SoftRVT : RuntimeVirtualTextures)
+		TObjectPtr<URuntimeVirtualTexture> RVT = SoftRVT.Get();
+		if (RVT)
 		{
-			TObjectPtr<URuntimeVirtualTexture> RVT = SoftRVT.Get();
-			if (RVT)
-			{
-				PrimitiveComponent->RuntimeVirtualTextures.Add(RVT);
-			}
+			PrimitiveComponent->RuntimeVirtualTextures.Add(RVT);
 		}
 	}
 
@@ -249,16 +247,15 @@ void FPCGExMeshComponentDescriptor::InitComponent(UPrimitiveComponent* InCompone
 
 	for (int i = 0; i < OverrideMaterials.Num(); i++)
 	{
-		const TSoftObjectPtr<UMaterialInterface>& Mat = OverrideMaterials[i];
-		if (Mat.IsValid() && Mat.Get())
+		if (UMaterialInterface* Mat = OverrideMaterials[i].Get())
 		{
-			TargetComponent->SetMaterial(i, Mat.Get());
+			TargetComponent->SetMaterial(i, Mat);
 		}
 	}
 
-	if (OverlayMaterial.IsValid() && OverlayMaterial.Get())
+	if (UMaterialInterface* Overlay = OverlayMaterial.Get())
 	{
-		TargetComponent->OverlayMaterial = OverlayMaterial.Get();
+		TargetComponent->OverlayMaterial = Overlay;
 	}
 
 	TargetComponent->OverlayMaterialMaxDrawDistance = OverlayMaterialMaxDrawDistance;
@@ -267,11 +264,6 @@ void FPCGExMeshComponentDescriptor::InitComponent(UPrimitiveComponent* InCompone
 void FPCGExMeshComponentDescriptor::GetAssetPaths(TSet<FSoftObjectPath>& InAssetPaths) const
 {
 	FPCGExPrimitiveComponentDescriptor::GetAssetPaths(InAssetPaths);
-
-	for (int i = 0; i < RuntimeVirtualTextures.Num(); i++)
-	{
-		InAssetPaths.Add(RuntimeVirtualTextures[i].ToSoftObjectPath());
-	}
 	
 	for (int i = 0; i < OverrideMaterials.Num(); i++)
 	{
@@ -407,7 +399,7 @@ namespace PCGExComponentDescriptors
 
 	void FindSharedMismatches(const FPCGExStaticMeshComponentDescriptor& InStaticMesh, const FSoftISMComponentDescriptor& InShared, TArray<FName>& OutMismatches)
 	{
-		const TMap<FName, FName> Aliases = {
+		static const TMap<FName, FName> Aliases = {
 			{FName("CastShadow"), FName("bCastShadow")},
 			{FName("bAffectIndirectLightingWhileHidden"), FName("bAffectDynamicIndirectLightingWhileHidden")},
 		};

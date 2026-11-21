@@ -67,217 +67,106 @@ bool FNodeAdjacencyFilter::Init(FPCGExContext* InContext, const TSharedRef<PCGEx
 		return false;
 	}
 
-#define PCGEX_SUB_TEST_FUNC TestSubFunc = [&](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
-
-	if (Adjacency.bTestAllNeighbors)
+	// Binds TestSubFunc around one way of reading operand B off a link, so the read stays inlined in each loop.
+	const auto BindTest = [this](auto ReadB)
 	{
-		// Each adjacent sample must pass the comparison, exit early.
-		if (Adjacency.Consolidation == EPCGExAdjacencyGatherMode::Individual)
+		if (Adjacency.bTestAllNeighbors)
 		{
-			if (bCaptureFromNodes)
+			switch (Adjacency.Consolidation)
 			{
-				PCGEX_SUB_TEST_FUNC
+			case EPCGExAdjacencyGatherMode::Individual:
+				// Each adjacent sample must pass the comparison, exit early.
+				TestSubFunc = [this, ReadB](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
 				{
-					double B = 0;
 					for (const PCGExGraphs::FLink Lk : Node.Links)
 					{
-						B = OperandB->Read(NodesRef[Lk.Node].PointIndex);
-						if (!PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance))
+						if (!PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, ReadB(NodesRef, Lk), TypedFilterFactory->Config.Tolerance))
 						{
 							return false;
 						}
 					}
 					return true;
 				};
-			}
-			else
-			{
-				PCGEX_SUB_TEST_FUNC
+				return;
+			case EPCGExAdjacencyGatherMode::Average:
+				TestSubFunc = [this, ReadB](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
 				{
 					double B = 0;
 					for (const PCGExGraphs::FLink Lk : Node.Links)
 					{
-						B = OperandB->Read(Lk.Edge);
-						if (!PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance))
-						{
-							return false;
-						}
+						B += ReadB(NodesRef, Lk);
 					}
-					return true;
+					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B / FMath::Max(1, static_cast<double>(Node.Num())), TypedFilterFactory->Config.Tolerance);
 				};
+				return;
+			case EPCGExAdjacencyGatherMode::Min:
+				TestSubFunc = [this, ReadB](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
+				{
+					double B = TNumericLimits<double>::Max();
+					for (const PCGExGraphs::FLink Lk : Node.Links)
+					{
+						B = FMath::Min(B, ReadB(NodesRef, Lk));
+					}
+					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
+				};
+				return;
+			case EPCGExAdjacencyGatherMode::Max:
+				TestSubFunc = [this, ReadB](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
+				{
+					double B = TNumericLimits<double>::Lowest();
+					for (const PCGExGraphs::FLink Lk : Node.Links)
+					{
+						B = FMath::Max(B, ReadB(NodesRef, Lk));
+					}
+					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
+				};
+				return;
+			case EPCGExAdjacencyGatherMode::Sum:
+				TestSubFunc = [this, ReadB](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
+				{
+					double B = 0;
+					for (const PCGExGraphs::FLink Lk : Node.Links)
+					{
+						B += ReadB(NodesRef, Lk);
+					}
+					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
+				};
+				return;
+			default:
+				break;
 			}
 		}
 
-		// First, build the consolidated operand B
-		switch (Adjacency.Consolidation)
+		// Only some adjacent samples must pass the comparison
+		TestSubFunc = [this, ReadB](const PCGExClusters::FNode& Node, const TArray<PCGExClusters::FNode>& NodesRef, const double A)
 		{
-		case EPCGExAdjacencyGatherMode::Average:
-			if (bCaptureFromNodes)
+			const int32 Threshold = Adjacency.GetThreshold(Node);
+			if (Threshold == -1)
 			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = 0;
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B += OperandB->Read(NodesRef[Lk.Node].PointIndex);
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B / FMath::Max(1, static_cast<double>(Node.Num())), TypedFilterFactory->Config.Tolerance);
-				};
+				return false;
 			}
-			else
+			int32 LocalSuccessCount = 0;
+
+			for (const PCGExGraphs::FLink Lk : Node.Links)
 			{
-				PCGEX_SUB_TEST_FUNC
+				if (PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, ReadB(NodesRef, Lk), TypedFilterFactory->Config.Tolerance))
 				{
-					double B = 0;
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B += OperandB->Read(Lk.Edge);
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B / FMath::Max(1, static_cast<double>(Node.Num())), TypedFilterFactory->Config.Tolerance);
-				};
+					LocalSuccessCount++;
+				}
 			}
 
-			break;
-		case EPCGExAdjacencyGatherMode::Min:
-			if (bCaptureFromNodes)
-			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = TNumericLimits<double>::Max();
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B = FMath::Min(B, OperandB->Read(NodesRef[Lk.Node].PointIndex));
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
-				};
-			}
-			else
-			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = TNumericLimits<double>::Max();
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B = FMath::Min(B, OperandB->Read(Lk.Edge));
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
-				};
-			}
-			break;
-		case EPCGExAdjacencyGatherMode::Max:
-			if (bCaptureFromNodes)
-			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = TNumericLimits<double>::Lowest();
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B = FMath::Max(B, OperandB->Read(NodesRef[Lk.Node].PointIndex));
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
-				};
-			}
-			else
-			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = TNumericLimits<double>::Lowest();
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B = FMath::Max(B, OperandB->Read(Lk.Edge));
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
-				};
-			}
-			break;
-		case EPCGExAdjacencyGatherMode::Sum:
-			if (bCaptureFromNodes)
-			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = 0;
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B += OperandB->Read(NodesRef[Lk.Node].PointIndex);
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
-				};
-			}
-			else
-			{
-				PCGEX_SUB_TEST_FUNC
-				{
-					double B = 0;
-					for (const PCGExGraphs::FLink Lk : Node.Links)
-					{
-						B += OperandB->Read(Lk.Edge);
-					}
-					return PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance);
-				};
-			}
-			break;
-		default: case EPCGExAdjacencyGatherMode::Individual:
-			break;
-		}
-	}
-
-	if (TestSubFunc)
-	{
-		return true;
-	}
+			return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold, Adjacency.ThresholdTolerance);
+		};
+	};
 
 	if (bCaptureFromNodes)
 	{
-		PCGEX_SUB_TEST_FUNC
-		{
-			// Only some adjacent samples must pass the comparison
-			const int32 Threshold = Adjacency.GetThreshold(Node);
-			if (Threshold == -1)
-			{
-				return false;
-			}
-			int32 LocalSuccessCount = 0;
-			double B = 0;
-
-			for (const PCGExGraphs::FLink Lk : Node.Links)
-			{
-				B = OperandB->Read(NodesRef[Lk.Node].PointIndex);
-				if (PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance))
-				{
-					LocalSuccessCount++;
-				}
-			}
-
-			return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold, Adjacency.ThresholdTolerance);
-		};
+		BindTest([this](const TArray<PCGExClusters::FNode>& NodesRef, const PCGExGraphs::FLink Lk) { return OperandB->Read(NodesRef[Lk.Node].PointIndex); });
 	}
 	else
 	{
-		PCGEX_SUB_TEST_FUNC
-		{
-			// Only some adjacent samples must pass the comparison
-			const int32 Threshold = Adjacency.GetThreshold(Node);
-			if (Threshold == -1)
-			{
-				return false;
-			}
-			int32 LocalSuccessCount = 0;
-			double B = 0;
-
-			for (const PCGExGraphs::FLink Lk : Node.Links)
-			{
-				B = OperandB->Read(Lk.Edge);
-				if (PCGExCompare::Compare(TypedFilterFactory->Config.Comparison, A, B, TypedFilterFactory->Config.Tolerance))
-				{
-					LocalSuccessCount++;
-				}
-			}
-
-			return PCGExCompare::Compare(Adjacency.ThresholdComparison, LocalSuccessCount, Threshold, Adjacency.ThresholdTolerance);
-		};
+		BindTest([this](const TArray<PCGExClusters::FNode>& NodesRef, const PCGExGraphs::FLink Lk) { return OperandB->Read(Lk.Edge); });
 	}
-
-#undef PCGEX_SUB_TEST_FUNC
 
 	return true;
 }

@@ -90,12 +90,10 @@ public:
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
-class FIsoEdgeDirectionFilter final : public PCGExClusterFilter::IEdgeFilter
+class FIsoEdgeDirectionFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExIsoEdgeDirectionFilterFactory, PCGExClusterFilter::IEdgeFilter>
 {
 public:
 	explicit FIsoEdgeDirectionFilter(const UPCGExIsoEdgeDirectionFilterFactory* InFactory);
-
-	const UPCGExIsoEdgeDirectionFilterFactory* TypedFilterFactory;
 
 	bool bUseDot = true;
 
@@ -127,11 +125,6 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(IsoEdgeDirectionFilterFactory, "Edge Filter : Edge Direction", "Dot product comparison of the edge direction against a local attribute or constant.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;

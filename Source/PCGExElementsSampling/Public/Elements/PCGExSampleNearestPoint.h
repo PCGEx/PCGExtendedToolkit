@@ -418,10 +418,7 @@ namespace PCGExSampleNearestPoint
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
 		{
-			DefaultPointFilterValue = true;
 		}
-
-		virtual ~FProcessor() override;
 
 		void SamplingFailed(const int32 Index);
 

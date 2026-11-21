@@ -18,11 +18,6 @@ class UPCGExSubPointsBlendInstancedFactory;
 class FPCGExSubPointsBlendOperation;
 class UPCGExBlendOpFactory;
 
-namespace PCGExSampling
-{
-	class FTargetsHandler;
-}
-
 namespace PCGExMath::OBB
 {
 	class FCollection;
@@ -142,8 +137,6 @@ namespace PCGExBoundsPathIntersection
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 

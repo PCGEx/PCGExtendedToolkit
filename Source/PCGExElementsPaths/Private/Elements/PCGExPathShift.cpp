@@ -11,19 +11,6 @@
 #define LOCTEXT_NAMESPACE "PCGExShiftPathElement"
 #define PCGEX_NAMESPACE ShiftPath
 
-UPCGExShiftPathSettings::UPCGExShiftPathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
-#if WITH_EDITOR
-void UPCGExShiftPathSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-	Super::PostEditChangeProperty(PropertyChangedEvent);
-}
-#endif
-
 PCGEX_INITIALIZE_ELEMENT(ShiftPath)
 
 PCGExData::EIOInit UPCGExShiftPathSettings::GetMainDataInitializationPolicy() const
@@ -124,10 +111,6 @@ bool FPCGExShiftPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGExS
 
 namespace PCGExShiftPath
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExShiftPath::Process);

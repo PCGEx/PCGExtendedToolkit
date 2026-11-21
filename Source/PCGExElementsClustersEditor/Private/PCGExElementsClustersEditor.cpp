@@ -11,10 +11,6 @@
 #include "Details/PCGExEdgeEndpointsCompareNumFilterConfigCustomization.h"
 #include "Details/PCGExEdgeNeighborsCountFilterConfigCustomization.h"
 
-#define LOCTEXT_NAMESPACE "FPCGExElementsClustersEditorModule"
-
-#undef LOCTEXT_NAMESPACE
-
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsClustersEditorModule, PCGExElementsClustersEditor)
 
 void FPCGExElementsClustersEditorModule::StartupModule()
@@ -26,9 +22,4 @@ void FPCGExElementsClustersEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExEdgeEndpointsCheckFilterConfig", FPCGExEdgeEndpointsCheckFilterConfigCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExEdgeEndpointsCompareNumFilterConfig", FPCGExEdgeEndpointsCompareNumFilterConfigCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExEdgeNeighborsCountFilterConfig", FPCGExEdgeNeighborsCountFilterConfigCustomization)
-}
-
-void FPCGExElementsClustersEditorModule::ShutdownModule()
-{
-	IPCGExEditorModuleInterface::ShutdownModule();
 }

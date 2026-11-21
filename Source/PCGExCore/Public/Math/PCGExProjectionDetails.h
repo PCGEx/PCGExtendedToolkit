@@ -27,12 +27,6 @@ namespace PCGExData
 	class FPointIO;
 }
 
-namespace PCGExDetails
-{
-	template <typename T>
-	class TSettingValue;
-}
-
 UENUM()
 enum class EPCGExProjectionMethod : uint8
 {
@@ -128,7 +122,6 @@ public:
 	void Project(const TArrayView<FVector>& InPositions, TArray<FVector2D>& OutPositions) const;
 	void Project(const TConstPCGValueRange<FTransform>& InTransforms, TArray<FVector2D>& OutPositions) const;
 	void Project(const TArrayView<FVector>& InPositions, std::vector<double>& OutPositions) const;
-	void Project(const TConstPCGValueRange<FTransform>& InTransforms, std::vector<double>& OutPositions) const;
 
 	FORCEINLINE FTransform Unproject(const FTransform& InTransform) const
 	{
@@ -165,5 +158,3 @@ protected:
 };
 
 extern template void FPCGExGeo2DProjectionDetails::ProjectFlat<FVector2D>(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<FVector2D>& OutPositions) const;
-extern template void FPCGExGeo2DProjectionDetails::ProjectFlat<FVector>(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<FVector>& OutPositions) const;
-extern template void FPCGExGeo2DProjectionDetails::ProjectFlat<FVector4>(const TSharedPtr<PCGExData::FFacade>& InFacade, TArray<FVector4>& OutPositions) const;

@@ -13,6 +13,7 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/StaticMesh.h"
+#include "Clusters/PCGExClustersHelpers.h"
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExStreamingHelpers.h"
@@ -20,7 +21,6 @@
 #include "Metadata/PCGObjectPropertyOverride.h"
 #include "Paths/PCGExPathsHelpers.h"
 #include "Tangents/PCGExTangentsAuto.h"
-#include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPathSplineMeshSimpleElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
@@ -281,8 +281,6 @@ namespace PCGExPathSplineMeshSimple
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
-
 		MutationDetails = Settings->MutationDetails;
 		if (!MutationDetails.Init(PointDataFacade))
 		{
@@ -376,8 +374,8 @@ namespace PCGExPathSplineMeshSimple
 
 		bool bAnyValidSegment = false;
 
-		const TArray<PCGExValueHash>& MeshKeysRef = MeshKeys ? *MeshKeys.Get() : TArray<PCGExValueHash>{};
-		const TArray<PCGExValueHash>& MaterialKeysRef = MaterialKeys ? *MaterialKeys.Get() : TArray<PCGExValueHash>{};
+		const TConstArrayView<PCGExValueHash> MeshKeysView = MeshKeys ? TConstArrayView<PCGExValueHash>(*MeshKeys) : TConstArrayView<PCGExValueHash>();
+		const TConstArrayView<PCGExValueHash> MaterialKeysView = MaterialKeys ? TConstArrayView<PCGExValueHash>(*MaterialKeys) : TConstArrayView<PCGExValueHash>();
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -394,7 +392,7 @@ namespace PCGExPathSplineMeshSimple
 				continue;
 			}
 
-			const TObjectPtr<UStaticMesh>* SM = MeshKeys ? Context->StaticMeshLoader->GetAsset(MeshKeysRef[Index]) : &Context->StaticMesh;
+			const TObjectPtr<UStaticMesh>* SM = MeshKeys ? Context->StaticMeshLoader->GetAsset(MeshKeysView[Index]) : &Context->StaticMesh;
 
 			if (!SM)
 			{
@@ -403,7 +401,7 @@ namespace PCGExPathSplineMeshSimple
 			}
 
 			Meshes[Index] = *SM;
-			if (const TObjectPtr<UMaterialInterface>* MI = MaterialKeys ? Context->MaterialLoader->GetAsset(MaterialKeysRef[Index]) : nullptr)
+			if (const TObjectPtr<UMaterialInterface>* MI = MaterialKeys ? Context->MaterialLoader->GetAsset(MaterialKeysView[Index]) : nullptr)
 			{
 				Materials[Index] = *MI;
 			}
@@ -474,8 +472,10 @@ namespace PCGExPathSplineMeshSimple
 		// Processors run on workers with 2+ inputs: resolve a path copy, GC-guarded, never the shared settings pointer.
 		AActor* SettingsTargetActor = PCGExHelpers::ResolveObject_AnyThreadTpl(Settings->TargetActor);
 		TargetActor = SettingsTargetActor ? SettingsTargetActor : ExecutionContext->GetTargetActor(nullptr);
-		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-		DataTags = PointDataFacade->Source->Tags->FlattenToArrayOfNames();
+		PCGExClusters::Helpers::AppendSavedTags(PointDataFacade->Source->Tags->Flatten(), DataTags);
+
+		// Each segment's slot derives from this input's.
+		SlotCrc = Context->GetSlotCrc(BatchIndex);
 
 		if (!TargetActor)
 		{
@@ -509,7 +509,12 @@ namespace PCGExPathSplineMeshSimple
 			return;
 		}
 
-		USplineMeshComponent* SplineMeshComponent = Context->ManagedObjects->New<USplineMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, USplineMeshComponent::StaticClass(), Context->UniqueNameGenerator->Get(TEXT("PCGSplineMeshComponent_") + Meshes[Index].GetName())), ObjectFlags);
+		// One slot per segment: a regeneration rebuilds the component it already has there, keeping its name.
+		FPCGCrc SegmentCrc = SlotCrc;
+		SegmentCrc.Combine(static_cast<uint32>(Index));
+
+		FPCGExComponentSlot Slot;
+		USplineMeshComponent* SplineMeshComponent = Context->ReclaimOrCreateComponent<USplineMeshComponent>(TargetActor, TEXT("PCGSplineMeshComponent"), SegmentCrc, Slot);
 
 		Segment.ApplySettings(SplineMeshComponent); // Init Component
 
@@ -550,7 +555,7 @@ namespace PCGExPathSplineMeshSimple
 
 		SplineMeshComponent->SetStaticMesh(Meshes[Index]); // Will trigger a force rebuild, so put this last
 
-		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false));
+		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false), Slot);
 
 		Context->AddNotifyActor(TargetActor);
 	}

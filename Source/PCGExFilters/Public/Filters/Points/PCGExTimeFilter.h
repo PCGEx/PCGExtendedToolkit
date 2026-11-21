@@ -124,17 +124,15 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FTimeFilter final : public ISimpleFilter
+	class FTimeFilter final : public TFactoryFilter<UPCGExTimeFilterFactory>
 	{
 	public:
 		explicit FTimeFilter(const TObjectPtr<const UPCGExTimeFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			Handler = TypedFilterFactory->CreateHandler();
 		}
 
-		const TObjectPtr<const UPCGExTimeFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExPathInclusion::FHandler> Handler;
 
 		bool bCheckAgainstDataBounds = false;
@@ -149,10 +147,6 @@ namespace PCGExPointFilter
 
 		// Proxy test with the data the point stands for, so Ignore Self can skip it; null when there is none.
 		bool TestProxy(const PCGExData::FProxyPoint& Point, const UPCGData* InParentData) const;
-
-		virtual ~FTimeFilter() override
-		{
-		}
 	};
 }
 

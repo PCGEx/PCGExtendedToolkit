@@ -4,7 +4,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Core/PCGExMTCommon.h"
 #include "Math/InterpCurvePoint.h" // EInterpCurveMode
 #include "Math/PCGExMath.h"
 
@@ -74,8 +73,6 @@ namespace PCGExPaths
 
 		PCGEXCORE_API TSharedPtr<FPCGSplineStruct> MakeSplineFromPoints(const TConstPCGValueRange<FTransform>& InTransforms, const EPCGExSplinePointTypeRedux InPointType, const bool bClosedLoop, bool bSmoothLinear);
 
-		PCGEXCORE_API TSharedPtr<FPCGSplineStruct> MakeSplineCopy(const FPCGSplineStruct& Original);
-
 		PCGEXCORE_API PCGExMath::FClosestPosition FindClosestIntersection(const TArray<TSharedPtr<FPath>>& Paths, const FPCGExPathIntersectionDetails& InDetails, const PCGExMath::FSegment& InSegment, int32& OutPathIndex);
 
 		PCGEXCORE_API PCGExMath::FClosestPosition FindClosestIntersection(const TArray<TSharedPtr<FPath>>& Paths, const FPCGExPathIntersectionDetails& InDetails, const PCGExMath::FSegment& InSegment, int32& OutPathIndex, PCGExMath::FClosestPosition& OutClosestPosition);
@@ -115,12 +112,7 @@ namespace PCGExPaths
 			const TSharedPtr<FPath>& OtherPath, const FPathEdge& OtherEdge,
 			const FPCGExPathEdgeIntersectionDetails& InIntersectionDetails);
 
-		bool RemoveCrossing(const int32 EdgeStartIndex, const int32 IOIndex);
-		bool RemoveCrossing(const TSharedPtr<FPath>& Path, const int32 EdgeStartIndex);
-		bool RemoveCrossing(const TSharedPtr<FPath>& Path, const FPathEdge& Edge);
-
 		void SortByAlpha();
-		void SortByHash();
 	};
 
 	struct PCGEXCORE_API FInclusionInfos

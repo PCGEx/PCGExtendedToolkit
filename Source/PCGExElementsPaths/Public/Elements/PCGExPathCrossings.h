@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGExOctree.h"
 #include "Core/PCGExPathProcessor.h"
 #include "Core/PCGExPointsProcessor.h"
 #include "Details/PCGExBlendingDetails.h"
@@ -177,8 +178,31 @@ protected:
 
 namespace PCGExPathCrossings
 {
+	class FProcessor;
+	class FBatch;
+
+	struct FCutter
+	{
+		const FProcessor* Processor = nullptr;
+		// Padded path bounds, tested against each edge before the cutter's octree. Invalid = always queried.
+		FBox Reach = FBox(ForceInit);
+
+		explicit FCutter(const FProcessor* InProcessor)
+			: Processor(InProcessor)
+		{
+		}
+
+		FCutter(const FProcessor* InProcessor, const FBox& InReach)
+			: Processor(InProcessor)
+			  , Reach(InReach)
+		{
+		}
+	};
+
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExPathCrossingsContext, UPCGExPathCrossingsSettings>
 	{
+		friend class FBatch;
+
 		bool bClosedLoop = false;
 		bool bSelfIntersectionOnly = false;
 		bool bCanCut = true;
@@ -194,6 +218,14 @@ namespace PCGExPathCrossings
 
 		TBitArray<> CanCut;
 		TBitArray<> CanBeCut;
+
+		// Whether every edge bound of the path is finite. The batch only culls cutters when all paths are.
+		bool bFiniteBounds = false;
+
+		// Paths that can cut this one, in processor order. Filled by CompleteWork, read-only afterwards.
+		TArray<FCutter> Cutters;
+		// Padding the cutters' reach was built with; edge boxes get the same before being tested against it.
+		double CutterPad = 0;
 
 		TSet<FName> ProtectedAttributes;
 		TSharedPtr<FPCGExSubPointsBlendOperation> SubBlending;
@@ -221,16 +253,33 @@ namespace PCGExPathCrossings
 			return false;
 		} // Force non-trivial because this shit is expensive
 
-		const PCGExPaths::FPathEdgeOctree* GetEdgeOctree() const;
+		// Whether this path has edges that other paths (or itself) can be tested against.
+		bool IsCutter() const;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;
 		virtual void ProcessRange(const PCGExMT::FScope& Scope) override;
 		virtual void OnRangeProcessingComplete() override;
 
+		void GatherCutters();
 		void CollapseCrossings(const PCGExMT::FScope& Scope);
 		void CrossBlend(const PCGExMT::FScope& Scope);
 
 		virtual void Write() override;
+	};
+
+	class FBatch final : public PCGExPointsMT::TBatch<FProcessor>
+	{
+		friend class FProcessor;
+
+		// Padded bounds of every cutter, keyed by processor index. Null when cutters can't be culled.
+		TSharedPtr<PCGExOctree::FItemOctree> CutterOctree;
+		double CutterPad = 0;
+
+	public:
+		explicit FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection);
+
+	protected:
+		virtual void OnInitialPostProcess() override;
 	};
 }

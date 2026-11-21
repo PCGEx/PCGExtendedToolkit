@@ -7,7 +7,6 @@
 
 
 class SWidget;
-class UPCGExAssetCollection;
 
 /**
  * Base property type customization for collection entry structs (used in the list-view tab).

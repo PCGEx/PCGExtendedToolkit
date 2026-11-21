@@ -70,12 +70,11 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FStringCompareNearestFilter final : public FNearestFilter
+	class FStringCompareNearestFilter final : public TFactoryFilter<UPCGExStringCompareNearestFilterFactory, FNearestFilter>
 	{
 	public:
 		explicit FStringCompareNearestFilter(const TObjectPtr<const UPCGExStringCompareNearestFilterFactory>& InDefinition)
-			: FNearestFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 		{
 			bUseNameComparison = TypedFilterFactory->bUseNameComparison;
 			OperandAString = TypedFilterFactory->OperandAString;
@@ -83,8 +82,6 @@ namespace PCGExPointFilter
 			OperandAStringData = TypedFilterFactory->OperandAStringData;
 			OperandANameData = TypedFilterFactory->OperandANameData;
 		}
-
-		const TObjectPtr<const UPCGExStringCompareNearestFilterFactory> TypedFilterFactory;
 
 		bool bUseNameComparison = false;
 
@@ -102,11 +99,6 @@ namespace PCGExPointFilter
 
 	protected:
 		virtual bool InitNearest(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
-
-	public:
-		virtual ~FStringCompareNearestFilter() override
-		{
-		}
 	};
 }
 

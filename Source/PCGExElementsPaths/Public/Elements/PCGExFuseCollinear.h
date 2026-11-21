@@ -113,8 +113,6 @@ namespace PCGExFuseCollinear
 			DefaultPointFilterValue = false;
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void Finalize(TArray<int32>& ReadIndices);
 	};

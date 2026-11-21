@@ -99,7 +99,6 @@ void FPCGExShapeGridBuilder::PrepareShape(const PCGExData::FConstPoint& Seed)
 		Grid->Offset[i] = Grid->Extents[i] + (Size[i] - (Grid->Count[i] * (Grid->Extents[i] * 2))) * 0.5;
 	}
 
-	Grid->bClosedLoop = false;
 	Grid->NumPoints = Grid->Count.X * Grid->Count.Y * Grid->Count.Z;
 
 	ValidateShape(Grid);
@@ -170,11 +169,6 @@ void FPCGExShapeGridBuilder::BuildShape(const TSharedPtr<PCGExShapes::FShape> In
 					);
 			}
 		});
-
-	if (bOwnsData && Grid->bClosedLoop)
-	{
-		PCGExPaths::Helpers::SetClosedLoop(InDataFacade->GetOut(), true);
-	}
 }
 
 #if WITH_EDITOR

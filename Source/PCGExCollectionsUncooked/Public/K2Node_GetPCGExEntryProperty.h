@@ -8,16 +8,11 @@
 
 #include "K2Node_GetPCGExEntryProperty.generated.h"
 
-class FBlueprintActionDatabaseRegistrar;
-
 /** Reads an entry's resolved custom property by raw index (pure). See UK2Node_PCGExPropertyBase. */
 UCLASS(meta=(DisplayName="Get Entry Property", PCGExNodeLibraryDoc="staging/collections/helpers/collection-staging-pipeline/collection-accessor-nodes"))
 class PCGEXCOLLECTIONSUNCOOKED_API UK2Node_GetPCGExEntryProperty : public UK2Node_PCGExPropertyBase
 {
 	GENERATED_BODY()
-
-public:
-	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
 
 protected:
 	virtual bool IsSetNode() const override

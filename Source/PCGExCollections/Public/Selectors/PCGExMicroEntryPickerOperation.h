@@ -18,18 +18,14 @@ struct FPCGExContext;
  * Abstract hot-path operation for picking a sub-entry (variant) index within a MicroCache.
  *
  * Mirrors FPCGExEntryPickerOperation but targets FMicroCache* -- the per-entry data used for
- * material variant picking on mesh collections. One op is bound per MicroCache consumed in the
- * hot path; for typical use, a single op is created per factory and reused across entries by
- * re-binding the Target (cheap, since the op holds no per-target state beyond the pointer).
+ * material variant picking on mesh collections. For typical use, a single op is created per
+ * factory and reused across entries; the op holds no per-target state.
  *
  * Concrete subclasses implement Pick() with a tight, branch-minimal body.
  */
 class PCGEXCOLLECTIONS_API FPCGExMicroEntryPickerOperation : public FPCGExOperation
 {
 public:
-	/** Currently-bound micro cache. May be re-bound between points by the consumer. */
-	const PCGExAssetCollection::FMicroCache* Target = nullptr;
-
 	/**
 	 * Bind the operation to a data facade. MicroCache targets are re-bound per-pick by the
 	 * consumer (since each entry has its own MicroCache) so PrepareForData does NOT take a target.

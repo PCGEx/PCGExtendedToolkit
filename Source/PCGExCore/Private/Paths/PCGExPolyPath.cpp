@@ -20,21 +20,31 @@ PRAGMA_ENABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 
 namespace PCGExPaths
 {
+	namespace PCGExPolyPath
+	{
+		// Templated on the source so each caller keeps its own FPCGExGeo2DProjectionDetails::Init overload.
+		template <typename TSource>
+		void InitProjection(FPCGExGeo2DProjectionDetails& Projection, const TConstPCGValueRange<FTransform>& Positions, const TSource& InSource)
+		{
+			if (Projection.Method != EPCGExProjectionMethod::Normal)
+			{
+				Projection.Init(PCGExMath::FBestFitPlane(Positions));
+			}
+			else
+			{
+				if (!Projection.Init(InSource))
+				{
+					Projection.Init(PCGExMath::FBestFitPlane(Positions));
+				}
+			}
+		}
+	}
+
 	FPolyPath::FPolyPath(const TSharedPtr<PCGExData::FPointIO>& InPointIO, const FPCGExGeo2DProjectionDetails& InProjection, const double Expansion, const double ExpansionZ, const EPCGExWindingMutation WindingMutation)
 		: FPath(InPointIO->GetIn()->GetConstTransformValueRange(), Helpers::GetClosedLoop(InPointIO), Expansion)
 	{
 		Projection = InProjection;
-		if (Projection.Method != EPCGExProjectionMethod::Normal)
-		{
-			Projection.Init(PCGExMath::FBestFitPlane(Positions));
-		}
-		else
-		{
-			if (!Projection.Init(InPointIO))
-			{
-				Projection.Init(PCGExMath::FBestFitPlane(Positions));
-			}
-		}
+		PCGExPolyPath::InitProjection(Projection, Positions, InPointIO);
 
 		InitFromTransforms(WindingMutation);
 	}
@@ -43,17 +53,7 @@ namespace PCGExPaths
 		: FPath(InPathFacade->GetIn()->GetConstTransformValueRange(), Helpers::GetClosedLoop(InPathFacade->Source), Expansion)
 	{
 		Projection = InProjection;
-		if (Projection.Method != EPCGExProjectionMethod::Normal)
-		{
-			Projection.Init(PCGExMath::FBestFitPlane(Positions));
-		}
-		else
-		{
-			if (!Projection.Init(InPathFacade))
-			{
-				Projection.Init(PCGExMath::FBestFitPlane(Positions));
-			}
-		}
+		PCGExPolyPath::InitProjection(Projection, Positions, InPathFacade);
 
 		InitFromTransforms(WindingMutation);
 	}
@@ -61,7 +61,7 @@ namespace PCGExPaths
 	FPolyPath::FPolyPath(const UPCGSplineData* SplineData, const double Fidelity, const FPCGExGeo2DProjectionDetails& InProjection, const double Expansion, const double ExpansionZ, const EPCGExWindingMutation WindingMutation)
 		: FPath(SplineData->IsClosed())
 	{
-		Spline = &SplineData->SplineStruct; // MakeSplineCopy(SplineData->SplineStruct);
+		Spline = &SplineData->SplineStruct;
 		bIsSplineBacked = true;
 
 		TArray<FVector> TempPolyline;
@@ -76,17 +76,7 @@ namespace PCGExPaths
 		Positions = TConstPCGValueRange<FTransform>(MakeConstStridedView(LocalTransforms));
 
 		Projection = InProjection;
-		if (Projection.Method != EPCGExProjectionMethod::Normal)
-		{
-			Projection.Init(PCGExMath::FBestFitPlane(Positions));
-		}
-		else
-		{
-			if (!Projection.Init(SplineData))
-			{
-				Projection.Init(PCGExMath::FBestFitPlane(Positions));
-			}
-		}
+		PCGExPolyPath::InitProjection(Projection, Positions, SplineData);
 
 
 		InitFromTransforms(WindingMutation);
@@ -111,17 +101,7 @@ namespace PCGExPaths
 		Positions = TConstPCGValueRange<FTransform>(MakeConstStridedView(LocalTransforms));
 
 		Projection = InProjection;
-		if (Projection.Method != EPCGExProjectionMethod::Normal)
-		{
-			Projection.Init(PCGExMath::FBestFitPlane(Positions));
-		}
-		else
-		{
-			if (!Projection.Init(PolygonData))
-			{
-				Projection.Init(PCGExMath::FBestFitPlane(Positions));
-			}
-		}
+		PCGExPolyPath::InitProjection(Projection, Positions, PolygonData);
 
 		InitFromTransforms(WindingMutation);
 
@@ -251,19 +231,6 @@ namespace PCGExPaths
 			return LerpEdgeTransform(EdgeIndex, Lerp, bUseScale);
 		}
 		return Spline->GetTransformAtSplineInputKey(Spline->FindInputKeyClosestToWorldLocation(WorldPosition), ESplineCoordinateSpace::World, bUseScale);
-	}
-
-	bool FPolyPath::GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition) const
-	{
-		check(EdgeOctree)
-		return false;
-	}
-
-	bool FPolyPath::GetClosestPosition(const FVector& WorldPosition, FVector& OutPosition, bool& bIsInside) const
-	{
-		check(EdgeOctree)
-		bIsInside = IsInsideProjection(WorldPosition);
-		return false;
 	}
 
 	int32 FPolyPath::GetClosestEdge(const FVector& WorldPosition, float& OutLerp) const

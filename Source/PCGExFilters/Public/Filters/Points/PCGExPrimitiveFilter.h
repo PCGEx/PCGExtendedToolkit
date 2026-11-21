@@ -16,7 +16,6 @@
 #include "PCGExPrimitiveFilter.generated.h"
 
 class UPrimitiveComponent;
-class UPCGPrimitiveData;
 
 namespace PCGExPointFilter
 {
@@ -31,10 +30,6 @@ USTRUCT(BlueprintType)
 struct FPCGExPrimitiveFilterConfig
 {
 	GENERATED_BODY()
-
-	FPCGExPrimitiveFilterConfig()
-	{
-	}
 
 	/** Bounds to use on input points for the overlap collision shape. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
@@ -77,23 +72,15 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FPrimitiveFilter final : public ISimpleFilter
+	class FPrimitiveFilter final : public TFactoryFilter<UPCGExPrimitiveFilterFactory>
 	{
 	public:
-		explicit FPrimitiveFilter(const TObjectPtr<const UPCGExPrimitiveFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExPrimitiveFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FPrimitiveFilter() override = default;
 
 	private:
 		const TArray<FCachedPrimitive>* CachedPrimitives = nullptr;

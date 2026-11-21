@@ -343,8 +343,6 @@ namespace PCGExFloodFill
 
 	bool FFillControlsHandler::PrepareForDiffusions(const TArray<TSharedPtr<FDiffusion>>& Diffusions, const FPCGExFloodFillFlowDetails& Details)
 	{
-		// HeuristicsHandler is optional: node-level heuristics are deprecated in favor of the 'Heuristics Scoring' fill control.
-
 		NumDiffusions = Diffusions.Num();
 
 		SeedIndices = MakeShared<TArray<int32>>();

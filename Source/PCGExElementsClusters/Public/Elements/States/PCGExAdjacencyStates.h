@@ -14,11 +14,6 @@ namespace PCGExBitmask
 	class FBitmaskData;
 }
 
-namespace PCGExAdjacency
-{
-	class FBitmaskData;
-}
-
 USTRUCT(BlueprintType)
 struct PCGEXELEMENTSCLUSTERS_API FPCGExAdjacencyStateConfigBase
 {
@@ -110,8 +105,6 @@ namespace PCGExAdjacencyStates
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedRef<PCGExClusters::FCluster>& InCluster, const TSharedRef<PCGExData::FFacade>& InPointDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade) override;
 
-		virtual ~FState() override;
-
 		virtual void ProcessFlags(const bool bSuccess, int64& InFlags, const int32 Index) const override;
 		virtual void ProcessFlags(const bool bSuccess, int64& InFlags, const PCGExClusters::FNode& Node) const override;
 		virtual void ProcessFlags(const bool bSuccess, int64& InFlags, const PCGExGraphs::FEdge& Edge) const override;
@@ -132,7 +125,7 @@ protected:
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(ClusterNodeFlag, "State : Bitmask Adjacency", "A bulk-check for directional adjacency, using bitmask collections", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(AdjacencyState, "State : Bitmask Adjacency", "A bulk-check for directional adjacency, using bitmask collections", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings
 

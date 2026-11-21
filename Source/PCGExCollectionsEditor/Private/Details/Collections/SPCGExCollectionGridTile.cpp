@@ -16,7 +16,6 @@
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Types/PCGExTypeOpsString.h"
 #include "Widgets/SBoxPanel.h"
-#include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
@@ -175,33 +174,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 						return;
 					}
 
-					UPCGExAssetCollection* Coll = WeakColl.Get();
-					if (!Coll)
-					{
-						return;
-					}
-
-					FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
-					if (!Entry)
-					{
-						return;
-					}
-
-					if (BatchFlagPtr)
-					{
-						*BatchFlagPtr = true;
-					}
-					{
-						FScopedTransaction Transaction(INVTEXT("Change Category"));
-						Coll->Modify();
-						Entry->Category = *Selected;
-						Coll->PostEditChange();
-					}
-					OnTileEntryChanged.ExecuteIfBound(Idx, GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category));
-					if (BatchFlagPtr)
-					{
-						*BatchFlagPtr = false;
-					}
+					CommitEntryEdit(WeakColl, Idx, INVTEXT("Change Category"), GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category),
+					                [&Selected](FPCGExAssetCollectionEntry& Entry) { Entry.Category = *Selected; });
 				})
 				.OnGenerateWidget_Lambda([](TSharedPtr<FName> Item) -> TSharedRef<SWidget>
 				{
@@ -253,30 +227,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 				{
 					if (CommitType == ETextCommit::OnEnter && !Text.IsEmpty())
 					{
-						UPCGExAssetCollection* Coll = WeakColl.Get();
-						if (Coll)
-						{
-							FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
-							if (Entry)
-							{
-								const FName NewCat = PCGExTypeOps::MakeNameChecked(Text.ToString());
-								if (BatchFlagPtr)
-								{
-									*BatchFlagPtr = true;
-								}
-								{
-									FScopedTransaction Transaction(INVTEXT("New Category"));
-									Coll->Modify();
-									Entry->Category = NewCat;
-									Coll->PostEditChange();
-								}
-								OnTileEntryChanged.ExecuteIfBound(Idx, GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category));
-								if (BatchFlagPtr)
-								{
-									*BatchFlagPtr = false;
-								}
-							}
-						}
+						CommitEntryEdit(WeakColl, Idx, INVTEXT("New Category"), GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Category),
+						                [&Text](FPCGExAssetCollectionEntry& Entry) { Entry.Category = PCGExTypeOps::MakeNameChecked(Text.ToString()); });
 					}
 					// Switch back to combobox mode
 					if (CategoryWidgetSwitcher.IsValid())
@@ -369,32 +321,11 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 								})
 								.OnCheckStateChanged_Lambda([this, WeakColl, Idx](ECheckBoxState NewState)
 								{
-									UPCGExAssetCollection* Coll = WeakColl.Get();
-									if (!Coll)
+									if (CommitEntryEdit(WeakColl, Idx, INVTEXT("Toggle SubCollection"), GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, bIsSubCollection),
+									                    [NewState](FPCGExAssetCollectionEntry& Entry) { Entry.bIsSubCollection = (NewState == ECheckBoxState::Checked); }))
 									{
-										return;
+										RefreshThumbnail();
 									}
-									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
-									if (!Entry)
-									{
-										return;
-									}
-									if (BatchFlagPtr)
-									{
-										*BatchFlagPtr = true;
-									}
-									{
-										FScopedTransaction Transaction(INVTEXT("Toggle SubCollection"));
-										Coll->Modify();
-										Entry->bIsSubCollection = (NewState == ECheckBoxState::Checked);
-										Coll->PostEditChange();
-									}
-									OnTileEntryChanged.ExecuteIfBound(Idx, GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, bIsSubCollection));
-									if (BatchFlagPtr)
-									{
-										*BatchFlagPtr = false;
-									}
-									RefreshThumbnail();
 								})
 							]
 						]
@@ -453,7 +384,7 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 									{
 										return;
 									}
-									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
+									FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Idx);
 									if (Entry)
 									{
 										Entry->Weight = NewVal;
@@ -477,31 +408,8 @@ void SPCGExCollectionGridTile::Construct(const FArguments& InArgs)
 								})
 								.OnValueCommitted_Lambda([this, WeakColl, Idx](int32 NewVal, ETextCommit::Type CommitType)
 								{
-									UPCGExAssetCollection* Coll = WeakColl.Get();
-									if (!Coll)
-									{
-										return;
-									}
-									FPCGExAssetCollectionEntry* Entry = Coll->EDITOR_GetMutableEntry(Idx);
-									if (!Entry)
-									{
-										return;
-									}
-									if (BatchFlagPtr)
-									{
-										*BatchFlagPtr = true;
-									}
-									{
-										FScopedTransaction Transaction(INVTEXT("Set Weight"));
-										Coll->Modify();
-										Entry->Weight = NewVal;
-										Coll->PostEditChange();
-									}
-									OnTileEntryChanged.ExecuteIfBound(Idx, GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Weight));
-									if (BatchFlagPtr)
-									{
-										*BatchFlagPtr = false;
-									}
+									CommitEntryEdit(WeakColl, Idx, INVTEXT("Set Weight"), GET_MEMBER_NAME_CHECKED(FPCGExAssetCollectionEntry, Weight),
+									                [NewVal](FPCGExAssetCollectionEntry& Entry) { Entry.Weight = NewVal; });
 								})
 								.Font(FCoreStyle::GetDefaultFontStyle("Regular", 8))
 							]
@@ -915,6 +823,38 @@ FReply SPCGExCollectionGridTile::OnDragDetected(const FGeometry& MyGeometry, con
 		return OnTileDragDetected.Execute(EntryIndex, MouseEvent);
 	}
 	return FReply::Unhandled();
+}
+
+bool SPCGExCollectionGridTile::CommitEntryEdit(const TWeakObjectPtr<UPCGExAssetCollection>& InCollection, const int32 Index, const FText& TransactionText, const FName PropertyName, TFunctionRef<void(FPCGExAssetCollectionEntry&)> Mutate)
+{
+	UPCGExAssetCollection* Coll = InCollection.Get();
+	if (!Coll)
+	{
+		return false;
+	}
+
+	FPCGExAssetCollectionEntry* Entry = Coll->GetMutableEntryRaw(Index);
+	if (!Entry)
+	{
+		return false;
+	}
+
+	if (BatchFlagPtr)
+	{
+		*BatchFlagPtr = true;
+	}
+	{
+		FScopedTransaction Transaction(TransactionText);
+		Coll->Modify();
+		Mutate(*Entry);
+		Coll->PostEditChange();
+	}
+	OnTileEntryChanged.ExecuteIfBound(Index, PropertyName);
+	if (BatchFlagPtr)
+	{
+		*BatchFlagPtr = false;
+	}
+	return true;
 }
 
 void SPCGExCollectionGridTile::HandlePickerPropertyEdited(FName PropertyName)

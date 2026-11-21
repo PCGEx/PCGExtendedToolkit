@@ -78,7 +78,6 @@ namespace PCGExCollocationCount
 
 		PCGEX_INIT_IO(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
 
-		NumPoints = PointDataFacade->GetNum();
 		ToleranceConstant = Settings->Tolerance;
 
 		CollocationWriter = PointDataFacade->GetWritable(Settings->CollicationNumAttributeName, 0, true, PCGExData::EBufferInit::New);

@@ -13,15 +13,6 @@ PRAGMA_ENABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 #define LOCTEXT_NAMESPACE "PCGExCreateTensorSplineFlow"
 #define PCGEX_NAMESPACE CreateTensorSplineFlow
 
-bool FPCGExTensorSplineFlow::Init(FPCGExContext* InContext, const UPCGExTensorFactoryData* InFactory)
-{
-	if (!PCGExTensorOperation::Init(InContext, InFactory))
-	{
-		return false;
-	}
-	return true;
-}
-
 PCGExTensor::FTensorSample FPCGExTensorSplineFlow::Sample(const int32 InSeedIndex, const FTransform& InProbe) const
 {
 	const FVector& InPosition = InProbe.GetLocation();

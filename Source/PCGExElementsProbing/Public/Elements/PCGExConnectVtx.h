@@ -32,7 +32,6 @@ namespace PCGExClusters
 }
 
 class UPCGExProbeFactoryData;
-class FPCGExProbeOperation;
 
 UENUM()
 enum class EPCGExConnectVtxScope : uint8
@@ -156,8 +155,6 @@ namespace PCGExConnectVtx
 struct FPCGExConnectVtxContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExConnectVtxElement;
-
-	virtual ~FPCGExConnectVtxContext() override;
 
 	TArray<TObjectPtr<const UPCGExProbeFactoryData>> ProbeFactories;
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> GeneratorsFiltersFactories;

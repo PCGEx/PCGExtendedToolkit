@@ -431,32 +431,6 @@ namespace PCGExMetaHelpers
 		}
 	}
 
-	FName GetLongNameFromSelector(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const bool bInitialized)
-	{
-		// This return a domain-less unique identifier for the provided selector
-		// It's mostly used to create uniquely identified value buffers
-
-		if (!InData)
-		{
-			return InvalidName;
-		}
-
-		if (bInitialized)
-		{
-			if (InSelector.GetExtraNames().IsEmpty())
-			{
-				return FName(InSelector.GetName().ToString());
-			}
-			return PCGExTypeOps::MakeNameChecked(InSelector.GetName().ToString() + TEXT(".") + FString::Join(InSelector.GetExtraNames(), TEXT(".")));
-		}
-		if (InSelector.GetSelection() == EPCGAttributePropertySelection::Attribute && InSelector.GetName() == "@Last")
-		{
-			return GetLongNameFromSelector(InSelector.CopyAndFixLast(InData), InData, true);
-		}
-
-		return GetLongNameFromSelector(InSelector, InData, true);
-	}
-
 	FPCGAttributeIdentifier GetAttributeIdentifier(const FPCGAttributePropertyInputSelector& InSelector, const UPCGData* InData, const bool bInitialized)
 	{
 		// This return an identifier suitable to be used for data facade

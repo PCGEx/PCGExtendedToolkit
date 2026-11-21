@@ -49,11 +49,6 @@ PCGExFactories::EPreparationResult UPCGExDataMatchFilterFactory::Prepare(FPCGExC
 	return Super::Prepare(InContext, TaskManager);
 }
 
-void UPCGExDataMatchFilterFactory::BeginDestroy()
-{
-	Super::BeginDestroy();
-}
-
 #pragma endregion
 
 #pragma region FDataMatchFilter
@@ -128,11 +123,6 @@ FString UPCGExDataMatchFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Data Match : ");
 	DisplayName += Config.Mode == EPCGExMapMatchMode::All ? TEXT("All") : TEXT("Any");
-	
-	if (Config.bInvert)
-	{
-		DisplayName += TEXT(" (Inverted)");
-	}
 
 	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }

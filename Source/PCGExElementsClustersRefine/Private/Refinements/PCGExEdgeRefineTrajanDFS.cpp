@@ -65,16 +65,3 @@ void FPCGExEdgeRefineTrajanDFS::Process()
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRefineTrajanDFS
-
-void UPCGExEdgeRefineTrajanDFS::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRefineTrajanDFS* TypedOther = Cast<UPCGExEdgeRefineTrajanDFS>(Other))
-	{
-		bInvert = TypedOther->bInvert;
-	}
-}
-
-#pragma endregion

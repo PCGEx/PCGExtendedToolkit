@@ -5,16 +5,6 @@
 
 #pragma region UPCGExForceDirectedRelax
 
-void UPCGExForceDirectedRelax::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExForceDirectedRelax* TypedOther = Cast<UPCGExForceDirectedRelax>(Other))
-	{
-		SpringConstant = TypedOther->SpringConstant;
-		ElectrostaticConstant = TypedOther->ElectrostaticConstant;
-	}
-}
-
 void UPCGExForceDirectedRelax::Step1(const PCGExClusters::FNode& Node)
 {
 	const FVector Position = (ReadBuffer->GetData() + Node.Index)->GetLocation();

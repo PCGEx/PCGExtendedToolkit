@@ -91,10 +91,6 @@ bool FPCGExSimplifyClustersElement::AdvanceWork(FPCGExContext* InContext, const 
 
 namespace PCGExSimplifyClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExSimplifyClusters::Process);

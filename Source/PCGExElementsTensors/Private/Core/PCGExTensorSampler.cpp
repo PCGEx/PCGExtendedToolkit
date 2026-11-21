@@ -7,11 +7,6 @@
 #include "Core/PCGExTensorOperation.h"
 
 
-void UPCGExTensorSampler::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-}
-
 bool UPCGExTensorSampler::PrepareForData(FPCGExContext* InContext)
 {
 	return true;

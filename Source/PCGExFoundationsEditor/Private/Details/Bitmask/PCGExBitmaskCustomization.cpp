@@ -7,7 +7,6 @@
 #include "DetailWidgetRow.h"
 #include "IDetailChildrenBuilder.h"
 #include "PropertyHandle.h"
-#include "Misc/Attribute.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
 #include "Filters/Points/PCGExBitmaskFilter.h"
 #include "Widgets/SBoxPanel.h"
@@ -169,11 +168,6 @@ void FPCGExBitmaskCustomization::BuildGrid(TSharedRef<IPropertyHandle> PropertyH
 		[
 			PCGExBitmaskCustomization::BitsGrid(BitmaskHandle)
 		];
-}
-
-TSharedRef<IPropertyTypeCustomization> FPCGExBitmaskWithOperationCustomization::MakeInstance()
-{
-	return MakeShareable(new FPCGExBitmaskWithOperationCustomization());
 }
 
 TSharedRef<IPropertyTypeCustomization> FPCGExBitmaskFilterConfigCustomization::MakeInstance()

@@ -109,6 +109,6 @@ public:
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
 
 #if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
+	virtual const FPCGExHeuristicConfigBase* GetBaseConfig() const override { return &Config; }
 #endif
 };

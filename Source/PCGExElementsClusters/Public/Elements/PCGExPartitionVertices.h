@@ -18,11 +18,6 @@ public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
 	PCGEX_NODE_INFOS(PartitionVertices, "Cluster : Partition Vtx", "Split Vtx into per-cluster groups.");
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_NAME(ClusterOp);
-	}
 #endif
 
 protected:
@@ -42,7 +37,6 @@ struct FPCGExPartitionVerticesContext final : FPCGExClustersProcessorContext
 	friend class FPCGExPartitionVerticesElement;
 
 	TSharedPtr<PCGExData::FPointIOCollection> VtxPartitions;
-	TArray<PCGExGraphs::FEdge> IndexedEdges;
 
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL
@@ -61,8 +55,6 @@ namespace PCGExPartitionVertices
 {
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExPartitionVerticesContext, UPCGExPartitionVerticesSettings>
 	{
-		friend class FProcessorBatch;
-
 	protected:
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
 

@@ -11,8 +11,6 @@
 #include "UObject/Object.h"
 #include "PCGExSearchAStar.generated.h"
 
-class FPCGExHeuristicOperation;
-
 class FPCGExSearchOperationAStar : public FPCGExSearchOperation
 {
 public:

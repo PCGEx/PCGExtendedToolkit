@@ -121,17 +121,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FRandomFilter final : public ISimpleFilter
+	class FRandomFilter final : public TFactoryFilter<UPCGExRandomFilterFactory>
 	{
 	public:
 		explicit FRandomFilter(const TObjectPtr<const UPCGExRandomFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 			  , RandomSeed(InDefinition->Config.RandomSeed)
 		{
 		}
-
-		const TObjectPtr<const UPCGExRandomFilterFactory> TypedFilterFactory;
 
 		int32 RandomSeed;
 		FVector RandomSeedV = FVector::OneVector;
@@ -154,11 +151,6 @@ namespace PCGExPointFilter
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-
-		virtual ~FRandomFilter() override
-		{
-		}
 	};
 }
 

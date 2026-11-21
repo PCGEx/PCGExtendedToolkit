@@ -42,19 +42,6 @@ namespace PCGExMatching
 		MatchableSourceFirstElements = MakeShared<TArray<PCGExData::FConstPoint>>();
 	}
 
-	bool FDataMatcher::FindIndex(const UPCGData* InData, int32& OutIndex) const
-	{
-		const int32* DataIndexPtr = MatchableSourcesMap.Find(InData);
-		if (!DataIndexPtr)
-		{
-			OutIndex = -1;
-			return false;
-		}
-
-		OutIndex = *DataIndexPtr;
-		return true;
-	}
-
 	void FDataMatcher::SetDetails(const FPCGExMatchingDetails* InDetails)
 	{
 		Details = InDetails;
@@ -171,67 +158,7 @@ namespace PCGExMatching
 		const int32 DataIndex = *DataIndexPtr;
 		const PCGExData::FConstPoint& TargetElement = *(MatchableSourceFirstElements->GetData() + DataIndex);
 
-		bool bMatch = true;
-
-		if (MatchMode == EPCGExMapMatchMode::All)
-		{
-			for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : RequiredOperations)
-			{
-				if (!Op->Test(TargetElement, InDataCandidate, InMatchingScope))
-				{
-					bMatch = false;
-					break;
-				}
-			}
-
-			if (bMatch)
-			{
-				for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : OptionalOperations)
-				{
-					if (!Op->Test(TargetElement, InDataCandidate, InMatchingScope))
-					{
-						bMatch = false;
-						break;
-					}
-				}
-			}
-		}
-		else
-		{
-			bMatch = false;
-			for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : OptionalOperations)
-			{
-				if (Op->Test(TargetElement, InDataCandidate, InMatchingScope))
-				{
-					bMatch = true;
-					break;
-				}
-			}
-
-			if (bMatch)
-			{
-				for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : RequiredOperations)
-				{
-					if (!Op->Test(TargetElement, InDataCandidate, InMatchingScope))
-					{
-						bMatch = false;
-						break;
-					}
-				}
-			}
-		}
-
-		if (bMatch)
-		{
-			InMatchingScope.RegisterMatch();
-			// >= like the point-level overload: the Nth match is admitted, then the scope closes.
-			if (InMatchingScope.GetCounter() >= GetMatchLimitFor(InDataCandidate))
-			{
-				InMatchingScope.Invalidate();
-			}
-		}
-
-		return bMatch;
+		return TestRules(TargetElement, InDataCandidate, InMatchingScope);
 	}
 
 	bool FDataMatcher::Test(
@@ -265,13 +192,21 @@ namespace PCGExMatching
 			MatchableElement.IO = FMath::Clamp(MatchableElement.IO, 0, NumSources - 1);
 		}
 
+		return TestRules(MatchableElement, InDataCandidate, InMatchingScope);
+	}
+
+	bool FDataMatcher::TestRules(
+		const PCGExData::FConstPoint& InMatchableElement,
+		const FPCGExTaggedData& InDataCandidate,
+		FScope& InMatchingScope) const
+	{
 		bool bMatch = true;
 
 		if (MatchMode == EPCGExMapMatchMode::All)
 		{
 			for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : RequiredOperations)
 			{
-				if (!Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
+				if (!Op->Test(InMatchableElement, InDataCandidate, InMatchingScope))
 				{
 					bMatch = false;
 					break;
@@ -282,7 +217,7 @@ namespace PCGExMatching
 			{
 				for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : OptionalOperations)
 				{
-					if (!Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
+					if (!Op->Test(InMatchableElement, InDataCandidate, InMatchingScope))
 					{
 						bMatch = false;
 						break;
@@ -295,7 +230,7 @@ namespace PCGExMatching
 			bMatch = false;
 			for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : OptionalOperations)
 			{
-				if (Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
+				if (Op->Test(InMatchableElement, InDataCandidate, InMatchingScope))
 				{
 					bMatch = true;
 					break;
@@ -306,7 +241,7 @@ namespace PCGExMatching
 			{
 				for (const TSharedPtr<FPCGExMatchRuleOperation>& Op : RequiredOperations)
 				{
-					if (!Op->Test(MatchableElement, InDataCandidate, InMatchingScope))
+					if (!Op->Test(InMatchableElement, InDataCandidate, InMatchingScope))
 					{
 						bMatch = false;
 						break;
@@ -318,6 +253,7 @@ namespace PCGExMatching
 		if (bMatch)
 		{
 			InMatchingScope.RegisterMatch();
+			// >=: the Nth match is admitted, then the scope closes.
 			if (InMatchingScope.GetCounter() >= GetMatchLimitFor(InDataCandidate))
 			{
 				InMatchingScope.Invalidate();
@@ -403,7 +339,6 @@ namespace PCGExMatching
 
 	int32 FDataMatcher::GetMatchingSourcesIndices(const FPCGExTaggedData& InDataCandidate, FScope& InMatchingScope, TArray<int32>& OutMatches, const TSet<int32>* InExcludedSources) const
 	{
-		TArray<FPCGExTaggedData>& MatchableSourcesRef = *MatchableSources.Get();
 		OutMatches.Reset(NumSources);
 
 		if (InExcludedSources)
@@ -422,57 +357,7 @@ namespace PCGExMatching
 				return OutMatches.Num();
 			}
 
-			for (int32 i = 0; i < NumSources; i++)
-			{
-				if (InExcludedSources->Contains(i))
-				{
-					continue;
-				}
-				if (Test(MatchableSourcesRef[i].Data, InDataCandidate, InMatchingScope))
-				{
-					OutMatches.Add(i);
-				}
-			}
-
-			// Handle recursive/transitive matching
-			if (bWantsRecursion && !OutMatches.IsEmpty())
-			{
-				TBitArray<> Visited(false, NumSources);
-				for (const int32 Idx : OutMatches)
-				{
-					Visited[Idx] = true;
-				}
-
-				TArray<int32> CurrentLevel = OutMatches;
-				TArray<int32> NextLevel;
-				int32 CurrentDepth = 0;
-
-				while (!CurrentLevel.IsEmpty() && (MaxRecursionDepth < 0 || CurrentDepth < MaxRecursionDepth))
-				{
-					NextLevel.Reset();
-
-					for (const int32 CurrentIdx : CurrentLevel)
-					{
-						for (int32 i = 0; i < NumSources; i++)
-						{
-							if (Visited[i] || InExcludedSources->Contains(i))
-							{
-								continue;
-							}
-							if (Test(MatchableSourcesRef[i].Data, MatchableSourcesRef[CurrentIdx], InMatchingScope))
-							{
-								Visited[i] = true;
-								OutMatches.Add(i);
-								NextLevel.Add(i);
-							}
-						}
-					}
-
-					CurrentLevel = MoveTemp(NextLevel);
-					CurrentDepth++;
-				}
-			}
-
+			CollectMatchingSources(InDataCandidate, InMatchingScope, OutMatches, InExcludedSources);
 			return OutMatches.Num();
 		}
 
@@ -482,8 +367,20 @@ namespace PCGExMatching
 			return OutMatches.Num();
 		}
 
+		CollectMatchingSources(InDataCandidate, InMatchingScope, OutMatches, nullptr);
+		return OutMatches.Num();
+	}
+
+	void FDataMatcher::CollectMatchingSources(const FPCGExTaggedData& InDataCandidate, FScope& InMatchingScope, TArray<int32>& OutMatches, const TSet<int32>* InExcludedSources) const
+	{
+		TArray<FPCGExTaggedData>& MatchableSourcesRef = *MatchableSources.Get();
+
 		for (int32 i = 0; i < NumSources; i++)
 		{
+			if (InExcludedSources && InExcludedSources->Contains(i))
+			{
+				continue;
+			}
 			if (Test(MatchableSourcesRef[i].Data, InDataCandidate, InMatchingScope))
 			{
 				OutMatches.Add(i);
@@ -511,7 +408,7 @@ namespace PCGExMatching
 				{
 					for (int32 i = 0; i < NumSources; i++)
 					{
-						if (Visited[i])
+						if (Visited[i] || (InExcludedSources && InExcludedSources->Contains(i)))
 						{
 							continue;
 						}
@@ -528,8 +425,6 @@ namespace PCGExMatching
 				CurrentDepth++;
 			}
 		}
-
-		return OutMatches.Num();
 	}
 
 	bool FDataMatcher::HandleUnmatchedOutput(const TSharedPtr<PCGExData::FFacade>& InFacade, const bool bForward) const

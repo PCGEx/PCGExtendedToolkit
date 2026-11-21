@@ -24,10 +24,6 @@ struct FPCGExAngleFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExAngleFilterConfig()
-	{
-	}
-
 	/** Filter mode */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_NotOverridable))
 	EPCGExAngleFilterMode Mode = EPCGExAngleFilterMode::Curvature;
@@ -47,10 +43,6 @@ struct FPCGExAngleFilterConfig
 	/** Whether the result of the filter should be inverted or not. This also inverts fallback results. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	bool bInvert = false;
-
-	void Sanitize()
-	{
-	}
 };
 
 /**
@@ -81,17 +73,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FAngleFilter final : public ISimpleFilter
+	class FAngleFilter final : public TFactoryFilter<UPCGExAngleFilterFactory>
 	{
 	public:
 		explicit FAngleFilter(const TObjectPtr<const UPCGExAngleFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
 		}
-
-		const TObjectPtr<const UPCGExAngleFilterFactory> TypedFilterFactory;
 
 		bool bClosedLoop = false;
 		int32 LastIndex = -1;
@@ -102,10 +91,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FAngleFilter() override
-		{
-		}
 	};
 }
 

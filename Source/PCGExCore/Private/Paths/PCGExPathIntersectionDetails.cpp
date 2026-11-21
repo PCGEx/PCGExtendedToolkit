@@ -10,15 +10,6 @@ void FPCGExPathEdgeIntersectionDetails::Init()
 	ToleranceSquared = Tolerance * Tolerance;
 }
 
-void FPCGExPathFilterSettings::RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader) const
-{
-}
-
-bool FPCGExPathFilterSettings::Init(FPCGExContext* InContext)
-{
-	return true;
-}
-
 FPCGExPathIntersectionDetails::FPCGExPathIntersectionDetails(const double InTolerance, const double InMinAngle, const double InMaxAngle)
 {
 	Tolerance = InTolerance;

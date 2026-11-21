@@ -2,7 +2,6 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExFoundationsEditor.h"
-#include "Details/PCGExInputShorthandsDetails.h"
 
 
 #include "PCGExAssetTypesMacros.h"
@@ -31,7 +30,7 @@ void FPCGExFoundationsEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExPartitionGrid", FPCGExPartitionGridCustomization)
 
 	PCGEX_REGISTER_CUSTO("PCGExBitmask", FPCGExBitmaskCustomization)
-	PCGEX_REGISTER_CUSTO("PCGExBitmaskWithOperation", FPCGExBitmaskWithOperationCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExBitmaskWithOperation", FPCGExBitmaskCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExClampedBit", FPCGExClampedBitCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExClampedBitOp", FPCGExClampedBitOpCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExBitmaskFilterConfig", FPCGExBitmaskFilterConfigCustomization)
@@ -55,7 +54,7 @@ void FPCGExFoundationsEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameInteger3201", FPCGExInputShorthandCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameInteger64", FPCGExInputShorthandCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameVector", FPCGExInputShorthandVectorCustomization)
-	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameVector2", FPCGExInputShorthandVectorCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameVector2", FPCGExInputShorthandVector2Customization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameVector4", FPCGExInputShorthandVectorCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameDirection", FPCGExInputShorthandDirectionCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandNameRotator", FPCGExInputShorthandRotatorCustomization)
@@ -76,7 +75,7 @@ void FPCGExFoundationsEditorModule::StartupModule()
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorInteger3201", FPCGExInputShorthandCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorInteger64", FPCGExInputShorthandCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorVector", FPCGExInputShorthandVectorCustomization)
-	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorVector2", FPCGExInputShorthandVectorCustomization)
+	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorVector2", FPCGExInputShorthandVector2Customization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorVector4", FPCGExInputShorthandVectorCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorDirection", FPCGExInputShorthandDirectionCustomization)
 	PCGEX_REGISTER_CUSTO("PCGExInputShorthandSelectorRotator", FPCGExInputShorthandRotatorCustomization)

@@ -45,7 +45,7 @@ TArray<FPCGPinProperties> UPCGExPathCrossingsSettings::InputPinProperties() cons
 }
 
 PCGEX_INITIALIZE_ELEMENT(PathCrossings)
-PCGEX_ELEMENT_BATCH_POINT_IMPL(PathCrossings)
+PCGEX_ELEMENT_BATCH_POINT_IMPL_ADV(PathCrossings)
 
 bool FPCGExPathCrossingsElement::Boot(FPCGExContext* InContext) const
 {
@@ -146,9 +146,15 @@ bool FPCGExPathCrossingsElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExPathCrossings
 {
-	const PCGExPaths::FPathEdgeOctree* FProcessor::GetEdgeOctree() const
+	// Path bounds padding, relative to the largest coordinate in the batch. Far above the rounding of the
+	// octree's centre/extent test, so a box test on padded bounds never rejects a pair that test accepts.
+	constexpr double CutterPadRatio = 1e-9;
+
+#pragma region FProcessor
+
+	bool FProcessor::IsCutter() const
 	{
-		return Path->GetEdgeOctree();
+		return bCanCut && Path && Path->GetEdgeOctree();
 	}
 
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
@@ -194,8 +200,6 @@ namespace PCGExPathCrossings
 		Path->IOIndex = PointDataFacade->Source->IOIndex;
 		PathLength = Path->AddExtra<PCGExPaths::FPathEdgeLength>();
 
-		Path->IOIndex = PointIO->IOIndex;
-
 		CanCut.Init(bCanCut, Path->NumEdges);
 		CanBeCut.Init(bCanBeCut, Path->NumEdges);
 
@@ -238,6 +242,16 @@ namespace PCGExPathCrossings
 
 		CanCut.Empty();
 
+		if (!bSelfIntersectionOnly)
+		{
+			// Checked per edge: a box union can drop a NaN, so the path bounds alone prove nothing.
+			bFiniteBounds = !Path->Bounds.ContainsNaN();
+			for (int32 i = 0; bFiniteBounds && i < Path->NumEdges; i++)
+			{
+				bFiniteBounds = !Path->Edges[i].Bounds.ContainsNaN();
+			}
+		}
+
 		return true;
 	}
 
@@ -252,10 +266,11 @@ namespace PCGExPathCrossings
 			return;
 		}
 
+		GatherCutters();
 		StartParallelLoopForRange(Path->NumEdges);
 	}
 
-	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
+	void FProcessor::GatherCutters()
 	{
 		const TSharedPtr<PCGExPointsMT::IBatch> Parent = ParentBatch.Pin();
 		if (!Parent)
@@ -263,39 +278,63 @@ namespace PCGExPathCrossings
 			return;
 		}
 
-		const TSharedPtr<PCGExPointsMT::TBatch<FProcessor>> TypedParent = StaticCastSharedPtr<PCGExPointsMT::TBatch<FProcessor>>(Parent);
-
-		TArray<TSharedPtr<PCGExPaths::FPath>> Cutters;
-
 		if (bSelfIntersectionOnly)
 		{
-			if (bCanCut && Path->GetEdgeOctree())
+			if (IsCutter())
 			{
-				Cutters.Add(Path);
+				Cutters.Emplace(this);
 			}
+			return;
 		}
-		else
+
+		const FBatch* Batch = static_cast<const FBatch*>(Parent.Get());
+
+		if (Batch->CutterOctree)
 		{
-			Cutters.Reserve(Parent->ProcessorFacades.Num());
+			CutterPad = Batch->CutterPad;
 
-
-			for (int Pi = 0; Pi < TypedParent->GetNumProcessors(); Pi++)
+			TArray<int32> Indices;
+			Batch->CutterOctree->FindElementsWithBoundsTest(Path->Bounds.ExpandBy(CutterPad), [&Indices](const PCGExOctree::FItem& Item)
 			{
-				const TSharedPtr<FProcessor> P = TypedParent->GetProcessor<FProcessor>(Pi);
+				Indices.Add(Item.Index);
+			});
 
-				if (!Details.bEnableSelfIntersection && P.Get() == this)
+			// Cutters are visited in processor order; the octree returns them in its own.
+			Indices.Sort();
+
+			Cutters.Reserve(Indices.Num());
+			for (const int32 Pi : Indices)
+			{
+				const FProcessor* P = static_cast<const FProcessor*>(&Batch->Processors[Pi].Get());
+				if (!Details.bEnableSelfIntersection && P == this)
 				{
 					continue;
 				}
-				if (!P->bCanCut || !P->Path->GetEdgeOctree())
-				{
-					continue;
-				}
 
-				Cutters.Add(P->Path);
+				Cutters.Emplace(P, P->Path->Bounds.ExpandBy(CutterPad));
 			}
+
+			return;
 		}
 
+		Cutters.Reserve(Batch->Processors.Num());
+		for (const TSharedRef<PCGExPointsMT::IProcessor>& Processor : Batch->Processors)
+		{
+			const FProcessor* P = static_cast<const FProcessor*>(&Processor.Get());
+			if (!Details.bEnableSelfIntersection && P == this)
+			{
+				continue;
+			}
+
+			if (P->IsCutter())
+			{
+				Cutters.Emplace(P);
+			}
+		}
+	}
+
+	void FProcessor::ProcessRange(const PCGExMT::FScope& Scope)
+	{
 		if (Cutters.IsEmpty())
 		{
 			return;
@@ -318,9 +357,19 @@ namespace PCGExPathCrossings
 
 			const TSharedPtr<PCGExPaths::FPathEdgeCrossings> NewCrossing = MakeShared<PCGExPaths::FPathEdgeCrossings>(Index);
 
-			for (const TSharedPtr<PCGExPaths::FPath>& OtherPath : Cutters)
+			const FBox EdgeBox = Edge.Bounds.GetBox();
+			const FBoxCenterAndExtent QueryBounds(EdgeBox);
+			const FBox PaddedEdgeBox = EdgeBox.ExpandBy(CutterPad);
+
+			for (const FCutter& Cutter : Cutters)
 			{
-				OtherPath->GetEdgeOctree()->FindElementsWithBoundsTest(Edge.Bounds.GetBox(), [&](const PCGExPaths::FPathEdge* OtherEdge)
+				if (Cutter.Reach.IsValid && !Cutter.Reach.Intersect(PaddedEdgeBox))
+				{
+					continue;
+				}
+
+				const TSharedPtr<PCGExPaths::FPath>& OtherPath = Cutter.Processor->Path;
+				OtherPath->GetEdgeOctree()->FindElementsWithBoundsTest(QueryBounds, [&](const PCGExPaths::FPathEdge* OtherEdge)
 				{
 					NewCrossing->FindSplit(Path, Edge, PathLength, OtherPath, *OtherEdge, Details);
 				});
@@ -655,6 +704,67 @@ namespace PCGExPathCrossings
 
 		CrossBlendTask->StartSubLoops(Path->NumEdges, PCGEX_CORE_SETTINGS.GetPointsBatchChunkSize());
 	}
+
+#pragma endregion
+
+#pragma region FBatch
+
+	FBatch::FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection)
+		: TBatch(InContext, InPointsCollection)
+	{
+	}
+
+	void FBatch::OnInitialPostProcess()
+	{
+		PCGEX_TYPED_CONTEXT_AND_SETTINGS(PathCrossings)
+
+		TBatch<FProcessor>::OnInitialPostProcess();
+
+		if (Settings->bSelfIntersectionOnly)
+		{
+			return;
+		}
+
+		FBox World = FBox(ForceInit);
+		for (const TSharedRef<PCGExPointsMT::IProcessor>& Processor : Processors)
+		{
+			const FProcessor& P = static_cast<const FProcessor&>(Processor.Get());
+			if (!P.Path)
+			{
+				continue;
+			}
+
+			// No octree: every processor then falls back to testing all cutters.
+			if (!P.bFiniteBounds)
+			{
+				return;
+			}
+
+			World += P.Path->Bounds;
+		}
+
+		const double Pad = CutterPadRatio * FMath::Max(World.Min.GetAbsMax(), World.Max.GetAbsMax());
+		const FBox OctreeBounds = World.ExpandBy(Pad);
+
+		if (!World.IsValid || OctreeBounds.ContainsNaN())
+		{
+			return;
+		}
+
+		CutterPad = Pad;
+		CutterOctree = MakeShared<PCGExOctree::FItemOctree>(OctreeBounds.GetCenter(), OctreeBounds.GetExtent().Length());
+
+		for (int32 Pi = 0; Pi < Processors.Num(); Pi++)
+		{
+			const FProcessor& P = static_cast<const FProcessor&>(Processors[Pi].Get());
+			if (P.IsCutter())
+			{
+				CutterOctree->AddElement(PCGExOctree::FItem(Pi, P.Path->Bounds.ExpandBy(Pad)));
+			}
+		}
+	}
+
+#pragma endregion
 }
 
 #undef LOCTEXT_NAMESPACE

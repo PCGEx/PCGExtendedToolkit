@@ -16,8 +16,6 @@
 
 #include "PCGExBinPacking3D.generated.h"
 
-struct FPCGExSortRuleConfig;
-
 namespace PCGExSorting
 {
 	class FSorter;
@@ -242,8 +240,6 @@ public:
 	/** If enabled, won't throw a warning if there are fewer bins than there are inputs. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors")
 	bool bQuietTooFewBinsWarning = false;
-
-	virtual bool GetSortingRules(FPCGExContext* InContext, TArray<FPCGExSortRuleConfig>& OutRules) const;
 };
 
 ///
@@ -257,7 +253,6 @@ struct FPCGExBinPacking3DContext final : FPCGExPointsProcessorContext
 	TSet<int32> ValidIOIndices;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Bins;
-	TArray<FPCGExUVW> BinsUVW;
 
 	TSharedPtr<PCGExData::FPointIOCollection> Discarded;
 
@@ -306,7 +301,6 @@ namespace PCGExBinPacking3D
 	{
 		int32 BinIndex = -1;
 		int32 EPIndex = -1;
-		int32 RotationIndex = 0;
 		FRotator Rotation = FRotator::ZeroRotator;
 		FVector RotatedSize = FVector::ZeroVector;
 		FVector PlacementMin = FVector::ZeroVector;
@@ -421,8 +415,6 @@ namespace PCGExBinPacking3D
 		TSet<uint64> NegativeAffinityPairs;
 		TMap<int32, int32> PositiveAffinityGroup;
 
-		TArray<double> BinMaxWeights;
-
 		FBP3DPlacementCandidate FindBestPlacement(const FBP3DItem& InItem);
 		double ComputeFinalScore(const FBP3DPlacementCandidate& Candidate) const;
 
@@ -440,10 +432,6 @@ namespace PCGExBinPacking3D
 			: TProcessor(InPointDataFacade)
 		{
 			bForceSingleThreadedProcessPoints = true;
-		}
-
-		virtual ~FProcessor() override
-		{
 		}
 
 		virtual void RegisterBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) override;

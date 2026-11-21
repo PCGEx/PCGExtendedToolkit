@@ -13,9 +13,6 @@
 
 #include "PCGExFindPointOnBounds.generated.h"
 
-class FPCGExComputeIOBounds;
-
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/analyze/find-point-on-bounds"))
 class UPCGExFindPointOnBoundsSettings : public UPCGExPointsProcessorSettings
 {
@@ -128,8 +125,6 @@ namespace PCGExFindPointOnBounds
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

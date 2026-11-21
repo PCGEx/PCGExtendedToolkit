@@ -130,7 +130,6 @@ namespace PCGExDetailsCustomization
 		PCGEX_ADD_ACTION_ICON(NoSnapping, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(SnapOffset, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(SnapResult, AIS_Small)
-		PCGEX_ADD_ACTION_ICON(Snap, AIS_Small)
 
 		PCGEX_ADD_ACTION_ICON(ClosedClosed, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(ClosedOpen, AIS_Small)
@@ -140,9 +139,6 @@ namespace PCGExDetailsCustomization
 		PCGEX_ADD_ACTION_ICON(Round, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(Floor, AIS_Small)
 		PCGEX_ADD_ACTION_ICON(Ceil, AIS_Small)
-
-		PCGEX_ADD_ACTION_ICON(Fixed, AIS_Small)
-		PCGEX_ADD_ACTION_ICON(Flexible, AIS_Small)
 
 		PCGEX_ADD_ACTION_ICON(Bit_Direct, AIS_VerySmall)
 		PCGEX_ADD_ACTION_ICON(Bit_Mutations, AIS_VerySmall)
@@ -223,13 +219,8 @@ MACRO(EPCGExDataAssetEntrySource)
 MACRO(EPCGExAxisOrder, 3)\
 MACRO(EPCGExMakeRotAxis, 3)
 
-		// This is grotesque but it works （。＾▽＾）
-
 #define PCGEX_DECL_INLINE_ENUM(_ENUM)\
-class FPCGExInline##_ENUM final : public FPCGExInlineEnumCustomization{\
-public:	explicit FPCGExInline##_ENUM(const FString& InEnumName) : FPCGExInlineEnumCustomization(InEnumName){}\
-static TSharedRef<IPropertyTypeCustomization> MakeInstance(){ return MakeShareable(new FPCGExInline##_ENUM(#_ENUM));}};\
-PropertyModule.RegisterCustomPropertyTypeLayout(#_ENUM,FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExInline##_ENUM::MakeInstance));
+PropertyModule.RegisterCustomPropertyTypeLayout(#_ENUM,FOnGetPropertyTypeCustomizationInstance::CreateLambda([]() -> TSharedRef<IPropertyTypeCustomization>{ return MakeShareable(new FPCGExInlineEnumCustomization(TEXT(#_ENUM)));}));
 
 		PCGEX_FOREACH_INLINE_ENUM(PCGEX_DECL_INLINE_ENUM)
 
@@ -237,10 +228,7 @@ PropertyModule.RegisterCustomPropertyTypeLayout(#_ENUM,FOnGetPropertyTypeCustomi
 #undef PCGEX_FOREACH_INLINE_ENUM
 
 #define PCGEX_DECL_GRID_ENUM(_ENUM, _COL)\
-class FPCGExGrid##_ENUM final : public FPCGExGridEnumCustomization{\
-public:	explicit FPCGExGrid##_ENUM(const FString& InEnumName, const int32 InColumns = 3) : FPCGExGridEnumCustomization(InEnumName){}\
-static TSharedRef<IPropertyTypeCustomization> MakeInstance(){ return MakeShareable(new FPCGExGrid##_ENUM(#_ENUM, _COL));}};\
-PropertyModule.RegisterCustomPropertyTypeLayout(#_ENUM,FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FPCGExGrid##_ENUM::MakeInstance));
+PropertyModule.RegisterCustomPropertyTypeLayout(#_ENUM,FOnGetPropertyTypeCustomizationInstance::CreateLambda([]() -> TSharedRef<IPropertyTypeCustomization>{ return MakeShareable(new FPCGExGridEnumCustomization(TEXT(#_ENUM), _COL));}));
 
 		PCGEX_FOREACH_GRID_ENUM(PCGEX_DECL_GRID_ENUM)
 

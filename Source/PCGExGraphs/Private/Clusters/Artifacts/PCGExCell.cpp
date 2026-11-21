@@ -209,20 +209,7 @@ namespace PCGExClusters
 
 	void FCellConstraints::Reserve(const int32 InCellHashReserve)
 	{
-		UniqueStartHalfEdgesHash.Reserve(InCellHashReserve);
 		UniquePathsHashSet.Reserve(InCellHashReserve);
-	}
-
-	bool FCellConstraints::ContainsSignedEdgeHash(const uint64 Hash)
-	{
-		return UniqueStartHalfEdgesHash.Contains(Hash);
-	}
-
-	bool FCellConstraints::IsUniqueStartHalfEdge(const uint64 Hash)
-	{
-		bool bAlreadyExists = false;
-		UniqueStartHalfEdgesHash.Add(Hash, bAlreadyExists);
-		return !bAlreadyExists;
 	}
 
 	bool FCellConstraints::IsUniqueCellHash(const TSharedPtr<FCell>& InCell)
@@ -254,8 +241,7 @@ namespace PCGExClusters
 		// LocalTangent path: retrieve cached tangent frames and build with per-node frames
 		if (ProjectionDetails.Method == EPCGExProjectionMethod::LocalTangent)
 		{
-			static const FName TangentFramesKey = FName("TangentFrames");
-			if (TSharedPtr<FCachedTangentFrames> CachedFrames = InCluster->GetCachedData<FCachedTangentFrames>(TangentFramesKey))
+			if (TSharedPtr<FCachedTangentFrames> CachedFrames = InCluster->GetCachedData<FCachedTangentFrames>(FCachedTangentFrames::CacheKey))
 			{
 				Enumerator = MakeShared<FPlanarFaceEnumerator>();
 				Enumerator->Build(InCluster, CachedFrames->NodeTangentFrames);
@@ -600,7 +586,6 @@ namespace PCGExClusters
 			TSharedPtr<FCell> MergedCell = MakeShared<FCell>(InConstraints);
 			MergedCell->CustomIndex = InCustomIndex;
 			MergedCell->bBuiltSuccessfully = true;
-			MergedCell->Data.bIsValid = true;
 			MergedCell->Data.bIsClosedLoop = true;
 			MergedCell->Data.bIsConvex = false; // spans multiple faces
 
@@ -1001,10 +986,6 @@ namespace PCGExClusters
 		}
 		CellHash = CityHash64(reinterpret_cast<const char*>(Nodes.GetData()), Nodes.Num() * sizeof(int32));
 		return CellHash;
-	}
-
-	void FCell::PostProcessPoints(UPCGBasePointData* InMutablePoints)
-	{
 	}
 
 	bool FCell::ContainsPoint(const FVector2D& InGlobalProjected, const FVector& InPos3D, const double InMaxPlaneDistSq, double* OutPlaneDistSq) const

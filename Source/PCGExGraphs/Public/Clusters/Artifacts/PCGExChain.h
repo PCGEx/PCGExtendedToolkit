@@ -6,11 +6,6 @@
 #include "CoreMinimal.h"
 #include "Clusters/PCGExLink.h"
 
-namespace PCGExMT
-{
-	class FTaskManager;
-}
-
 namespace PCGExClusters
 {
 	class FCluster;
@@ -52,22 +47,5 @@ namespace PCGExClusters
 		FVector GetOutwardDirAt(const TSharedPtr<FCluster>& Cluster, int32 NodeIndex, bool bExitSide) const;
 
 		int32 GetNodes(const TSharedPtr<FCluster>& Cluster, TArray<int32>& OutNodes, bool bReverse);
-	};
-
-	class PCGEXGRAPHS_API FNodeChainBuilder : public TSharedFromThis<FNodeChainBuilder>
-	{
-	public:
-		TSharedRef<FCluster> Cluster;
-		TSharedPtr<TArray<int8>> Breakpoints;
-		TArray<TSharedPtr<FNodeChain>> Chains;
-
-		FNodeChainBuilder(const TSharedRef<FCluster>& InCluster);
-
-		bool Compile(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager);
-		bool CompileLeavesOnly(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager);
-
-	protected:
-		bool DispatchTasks(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager);
-		void Dedupe();
 	};
 }

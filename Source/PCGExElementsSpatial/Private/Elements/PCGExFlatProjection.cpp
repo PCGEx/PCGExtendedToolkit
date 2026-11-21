@@ -34,9 +34,9 @@ bool FPCGExFlatProjectionElement::Boot(FPCGExContext* InContext) const
 	if (Settings->bRestorePreviousProjection)
 	{
 #define PCGEX_REGISTER_FLAG(_COMPONENT, _ARRAY) \
-if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::X)) != 0){ Context->_ARRAY.Add(0); Context->AppliedComponents++; } \
-if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Y)) != 0){ Context->_ARRAY.Add(1); Context->AppliedComponents++; } \
-if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Z)) != 0){ Context->_ARRAY.Add(2); Context->AppliedComponents++; }
+if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::X)) != 0){ Context->_ARRAY.Add(0); } \
+if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Y)) != 0){ Context->_ARRAY.Add(1); } \
+if ((Settings->_COMPONENT & static_cast<uint8>(EPCGExApplySampledComponentFlags::Z)) != 0){ Context->_ARRAY.Add(2); }
 
 		PCGEX_REGISTER_FLAG(TransformPosition, TrPosComponents)
 		PCGEX_REGISTER_FLAG(TransformRotation, TrRotComponents)
@@ -118,12 +118,15 @@ namespace PCGExFlatProjection
 		{
 			TransformReader = PointDataFacade->GetReadable<FTransform>(Context->CachedTransformAttributeName, PCGExData::EIOSide::In, true);
 		}
-		else if (bWriteAttribute)
+		else
 		{
 			ProjectionDetails = Settings->ProjectionDetails;
 			ProjectionDetails.Init(PointDataFacade);
 
-			TransformWriter = PointDataFacade->GetWritable<FTransform>(Context->CachedTransformAttributeName, PCGExData::EBufferInit::New);
+			if (bWriteAttribute)
+			{
+				TransformWriter = PointDataFacade->GetWritable<FTransform>(Context->CachedTransformAttributeName, PCGExData::EBufferInit::New);
+			}
 		}
 
 		StartParallelLoopForPoints();
@@ -171,7 +174,7 @@ namespace PCGExFlatProjection
 				OutTransforms[Index] = FTransform(FQuat::MakeFromEuler(OutRotation), OutPosition, OutScale);
 			}
 		}
-		else if (bWriteAttribute)
+		else
 		{
 			if (bWriteAttribute)
 			{

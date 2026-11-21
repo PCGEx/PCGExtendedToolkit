@@ -14,6 +14,7 @@
 #include "PCGExSampleInsidePath.generated.h"
 
 #define PCGEX_FOREACH_FIELD_INSIDEPATH(MACRO)\
+MACRO(Success, bool, false)\
 MACRO(Distance, double, 0)\
 MACRO(NumInside, int32, 0)\
 MACRO(NumSamples, int32, 0)
@@ -35,8 +36,6 @@ enum class EPCGExSampleInsidePathOutput : uint8
 	SuccessOnly = 1 UMETA(DisplayName = "Success only", Tooltip="Output only paths that have sampled at least a single target point"),
 	Split       = 2 UMETA(DisplayName = "Split", Tooltip="Split between two pins")
 };
-
-class UPCGExPointFilterFactoryData;
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="sampling/nearest/sample-inside-path"))
 class UPCGExSampleInsidePathSettings : public UPCGExPointsProcessorSettings
@@ -278,8 +277,6 @@ namespace PCGExSampleInsidePath
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		void ProcessPath();

@@ -11,7 +11,6 @@
 #include "Data/PCGExProxyData.h"
 #include "Data/Utils/PCGExDataPreloader.h"
 #include "Details/PCGExSettingsDetails.h"
-#include "GeometryCollection/Facades/CollectionPositionTargetFacade.h"
 
 #define LOCTEXT_NAMESPACE "PCGExCreateAttributeBlend"
 #define PCGEX_NAMESPACE CreateAttributeBlend
@@ -382,11 +381,6 @@ void FPCGExBlendOperation::BlendScope(const PCGExMT::FScope& Scope, TArrayView<c
 	Config.Weighting.ScoreLUT->EvalInPlace(Weights);
 
 	Blender->BlendScope(Scope, Mask, Weights);
-}
-
-void FPCGExBlendOperation::BlendScope(const PCGExMT::FScope& Scope, const double InWeight)
-{
-	Blender->BlendScope(Scope, Config.Weighting.ScoreLUT->Eval(InWeight));
 }
 
 PCGEx::FOpStats FPCGExBlendOperation::BeginMultiBlend(const int32 TargetIndex)

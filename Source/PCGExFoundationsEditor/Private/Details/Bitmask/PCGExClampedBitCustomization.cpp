@@ -7,8 +7,6 @@
 #include "DetailWidgetRow.h"
 #include "PropertyHandle.h"
 #include "Data/Bitmasks/PCGExBitmaskDetails.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExClampedBitCustomization::MakeInstance()

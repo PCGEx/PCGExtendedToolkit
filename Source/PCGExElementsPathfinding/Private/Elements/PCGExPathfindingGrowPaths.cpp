@@ -33,7 +33,7 @@ void UPCGExPathfindingGrowPathsSettings::PostEditChangeProperty(FPropertyChanged
 
 namespace PCGExPathfindingGrowPaths
 {
-	FGrowth::FGrowth(const TSharedPtr<FProcessor>& InProcessor, const int32 InMaxIterations, const int32 InLastGrowthIndex, const FVector& InGrowthDirection)
+	FGrowth::FGrowth(FProcessor* InProcessor, const int32 InMaxIterations, const int32 InLastGrowthIndex, const FVector& InGrowthDirection)
 		: Processor(InProcessor)
 		  , MaxIterations(InMaxIterations)
 		  , LastGrowthIndex(InLastGrowthIndex)
@@ -457,7 +457,7 @@ namespace PCGExPathfindingGrowPaths
 
 			for (int j = 0; j < StartGrowthNumBranches; j++)
 			{
-				PCGEX_MAKE_SHARED(NewGrowth, FGrowth, ThisPtr, StartNumIterations, Node.Index, StartGrowthDirection)
+				PCGEX_MAKE_SHARED(NewGrowth, FGrowth, this, StartNumIterations, Node.Index, StartGrowthDirection)
 				NewGrowth->MaxDistance = StartGrowthMaxDistance;
 				NewGrowth->SeedPointIndex = i;
 				NewGrowth->BranchIndex = j;

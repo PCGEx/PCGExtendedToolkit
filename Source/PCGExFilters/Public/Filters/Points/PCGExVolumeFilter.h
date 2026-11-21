@@ -15,7 +15,6 @@
 #include "PCGExVolumeFilter.generated.h"
 
 class AVolume;
-class UPCGVolumeData;
 
 UENUM()
 enum class EPCGExVolumeCheckType : uint8
@@ -85,10 +84,6 @@ USTRUCT(BlueprintType)
 struct FPCGExVolumeFilterConfig
 {
 	GENERATED_BODY()
-
-	FPCGExVolumeFilterConfig()
-	{
-	}
 
 	/** Type of volume check to perform. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
@@ -161,23 +156,15 @@ private:
 
 namespace PCGExPointFilter
 {
-	class FVolumeFilter final : public ISimpleFilter
+	class FVolumeFilter final : public TFactoryFilter<UPCGExVolumeFilterFactory>
 	{
 	public:
-		explicit FVolumeFilter(const TObjectPtr<const UPCGExVolumeFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExVolumeFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const PCGExData::FProxyPoint& Point) const override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FVolumeFilter() override = default;
 
 	private:
 		const TArray<FCachedVolume>* CachedVolumes = nullptr;

@@ -90,16 +90,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, Bitmask, BitmaskEnum = "/Script/PCGExGraphs.EPCGExCellTriageFlags"))
 	uint8 TriageFlags = static_cast<uint8>(PCGExCellTriage::DefaultFlags);
 
-	FORCEINLINE bool OutputInside() const
-	{
-		return !!(TriageFlags & static_cast<uint8>(EPCGExCellTriageFlags::Inside));
-	}
-
-	FORCEINLINE bool OutputTouching() const
-	{
-		return !!(TriageFlags & static_cast<uint8>(EPCGExCellTriageFlags::Touching));
-	}
-
 	FORCEINLINE bool OutputOutside() const
 	{
 		return !!(TriageFlags & static_cast<uint8>(EPCGExCellTriageFlags::Outside));
@@ -163,7 +153,6 @@ private:
 struct FPCGExFindContoursBoundedContext final : FPCGExClustersProcessorContext
 {
 	friend class FPCGExFindContoursBoundedElement;
-	friend class FPCGExCreateBridgeTask;
 
 	FPCGExCellArtifactsDetails Artifacts;
 	FPCGExCellGrowthDetails SeedGrowth;

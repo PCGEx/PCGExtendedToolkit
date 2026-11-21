@@ -155,10 +155,6 @@ namespace PCGExClusterDiffuse
 {
 #pragma region FProcessor
 
-	FProcessor::~FProcessor()
-	{
-	}
-
 	void FProcessor::CompleteWork()
 	{
 		if (Diffusions.IsEmpty())

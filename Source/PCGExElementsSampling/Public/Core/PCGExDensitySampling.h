@@ -17,7 +17,6 @@ class FPCGMetadataAttributeBase;
 class UPCGMetadata;
 class UPCGSpatialData;
 class UPCGSurfaceData;
-struct FPCGContext;
 struct FPCGExContext;
 struct FPCGPoint;
 
@@ -313,8 +312,6 @@ namespace PCGExDensitySampling
 		bool Init(const FDensityModel& InModel, const FBox2D& InCoverage, int64 InMaxNodes);
 
 		int32 NumNodes() const { return NumU * NumV; }
-		int32 GetNumU() const { return NumU; }
-		int32 GetNumV() const { return NumV; }
 		FVector2D GetNodePosition(int32 InNodeIndex) const;
 		float* GetNodeValues(int32 InNodeIndex) { return Values.GetData() + static_cast<int64>(InNodeIndex) * NumChannels; }
 

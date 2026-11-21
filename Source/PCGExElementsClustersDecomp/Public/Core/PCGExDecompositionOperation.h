@@ -54,8 +54,6 @@ class FPCGExDecompositionOperation : public FPCGExOperation
 	friend class UPCGExDecompositionInstancedFactory;
 
 protected:
-	bool bWantsNodeOctree = false;
-	bool bWantsEdgeOctree = false;
 	bool bWantsHeuristics = false;
 
 public:
@@ -63,15 +61,6 @@ public:
 	{
 		Cluster = InCluster;
 		Heuristics = InHeuristics;
-
-		if (bWantsNodeOctree)
-		{
-			Cluster->RebuildOctree(EPCGExClusterClosestSearchMode::Vtx);
-		}
-		if (bWantsEdgeOctree)
-		{
-			Cluster->RebuildOctree(EPCGExClusterClosestSearchMode::Edge);
-		}
 
 		if (bWantsHeuristics && Heuristics)
 		{
@@ -165,20 +154,6 @@ public:
 	{
 	}
 
-	virtual void PrepareVtxFacade(const TSharedPtr<PCGExData::FFacade>& InVtxFacade) const
-	{
-	}
-
-	virtual bool WantsNodeOctree() const
-	{
-		return false;
-	}
-
-	virtual bool WantsEdgeOctree() const
-	{
-		return false;
-	}
-
 	virtual bool WantsHeuristics() const
 	{
 		return false;
@@ -189,8 +164,6 @@ public:
 protected:
 	void PushSettings(const TSharedPtr<FPCGExDecompositionOperation>& Operation) const
 	{
-		Operation->bWantsNodeOctree = WantsNodeOctree();
-		Operation->bWantsEdgeOctree = WantsEdgeOctree();
 		Operation->bWantsHeuristics = WantsHeuristics();
 	}
 };

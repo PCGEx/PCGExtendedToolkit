@@ -10,7 +10,6 @@
 
 namespace PCGExData
 {
-	class FPointIO;
 	enum class EIOInit : uint8;
 }
 
@@ -56,8 +55,6 @@ UCLASS()
 class PCGEXCORE_API UPCGExClusterNodesData : public UPCGExClusterData
 {
 	GENERATED_BODY()
-
-	mutable FRWLock BoundClustersLock;
 
 protected:
 	PCG_ASSIGN_TYPE_INFO(FPCGExDataTypeInfoVtx)

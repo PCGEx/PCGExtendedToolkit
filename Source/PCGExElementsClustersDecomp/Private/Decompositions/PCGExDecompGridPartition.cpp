@@ -298,15 +298,4 @@ bool FPCGExDecompGridPartition::Decompose(FPCGExDecompositionResult& OutResult)
 
 #pragma region UPCGExDecompGridPartition
 
-void UPCGExDecompGridPartition::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExDecompGridPartition* TypedOther = Cast<UPCGExDecompGridPartition>(Other))
-	{
-		CellSize = TypedOther->CellSize;
-		MinNodesPerCell = TypedOther->MinNodesPerCell;
-		MergeMode = TypedOther->MergeMode;
-	}
-}
-
 #pragma endregion

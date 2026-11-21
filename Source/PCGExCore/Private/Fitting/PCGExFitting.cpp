@@ -294,13 +294,3 @@ void FPCGExFittingDetailsHandler::ComputeLocalTransform(const int32 TargetIndex,
 	OutTransform.SetRotation(TargetRotation * LocalRotation);
 	OutTransform.SetScale3D(LocalFit.GetScale3D());
 }
-
-bool FPCGExFittingDetailsHandler::WillChangeBounds() const
-{
-	return ScaleToFit.ScaleToFitMode != EPCGExFitMode::None;
-}
-
-bool FPCGExFittingDetailsHandler::WillChangeTransform() const
-{
-	return ScaleToFit.ScaleToFitMode != EPCGExFitMode::None || Justification.bDoJustifyX || Justification.bDoJustifyY || Justification.bDoJustifyZ;
-}

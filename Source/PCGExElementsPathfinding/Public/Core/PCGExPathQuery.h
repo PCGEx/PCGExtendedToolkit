@@ -6,18 +6,8 @@
 #include "CoreMinimal.h"
 #include "PCGExPathfinding.h"
 
-namespace PCGExMT
-{
-	class FTaskManager;
-}
-
 class FPCGExSearchOperation;
 struct FPCGExNodeSelectionDetails;
-
-namespace PCGExData
-{
-	class FFacade;
-}
 
 namespace PCGExClusters
 {
@@ -73,7 +63,9 @@ namespace PCGExPathfinding
 
 		EQueryPickResolution ResolvePicks(const FPCGExNodeSelectionDetails& SeedSelectionDetails, const FPCGExNodeSelectionDetails& GoalSelectionDetails);
 
-		void Reserve(const int32 NumReserve);
+		/** Sets PickResolution from the picks as they stand, for picks resolved against this cluster beforehand. */
+		EQueryPickResolution UpdatePickResolution();
+
 		void AddPathNode(const int32 InNodeIndex, const int32 InEdgeIndex = -1);
 		void SetResolution(const EPathfindingResolution InResolution);
 

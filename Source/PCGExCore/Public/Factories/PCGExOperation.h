@@ -20,7 +20,6 @@ namespace PCGExMT
 {
 	class FScopedContainer;
 	struct FScope;
-	class FTaskManager;
 }
 
 class FPCGMetadataAttributeBase;
@@ -49,7 +48,6 @@ public:
 	virtual void RegisterConsumableAttributesWithFacade(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InFacade) const;
 	virtual void RegisterPrimaryBuffersDependencies(PCGExData::FFacadePreloader& FacadePreloader) const;
 
-	virtual void InitForScopes(const TArray<PCGExMT::FScope>& Loops);
 	virtual TSharedPtr<PCGExMT::FScopedContainer> GetScopedContainer(const PCGExMT::FScope& InScope) const;
 
 protected:

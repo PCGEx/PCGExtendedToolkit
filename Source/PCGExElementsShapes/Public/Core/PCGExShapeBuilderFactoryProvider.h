@@ -23,7 +23,6 @@ UPCGExFactoryData* UPCGExCreateShape##_SHAPE##Settings::CreateFactory(FPCGExCont
 	NewFactory->Config = Config; \
 	return Super::CreateFactory(InContext, NewFactory);}
 
-struct FPCGExShapeConfigBase;
 class FPCGExShapeBuilderOperation;
 
 USTRUCT(meta=(PCG_DataTypeDisplayName="PCGEx | Shape"))

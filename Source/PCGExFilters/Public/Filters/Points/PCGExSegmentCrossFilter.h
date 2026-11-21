@@ -27,10 +27,6 @@ struct FPCGExSegmentCrossFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExSegmentCrossFilterConfig()
-	{
-	}
-
 	/** Sample inputs.*/
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExSplineSamplingIncludeMode SampleInputs = EPCGExSplineSamplingIncludeMode::All;
@@ -86,12 +82,11 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FSegmentCrossFilter final : public ISimpleFilter
+	class FSegmentCrossFilter final : public TFactoryFilter<UPCGExSegmentCrossFilterFactory>
 	{
 	public:
 		explicit FSegmentCrossFilter(const TObjectPtr<const UPCGExSegmentCrossFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			Handler = TypedFilterFactory->CreateHandler();
 			Handler->Init(EPCGExSplineCheckType::IsOn, EPCGExDistance::Center);
@@ -102,7 +97,6 @@ namespace PCGExPointFilter
 		bool bMatchingFailed = false;
 		int32 LastIndex = 0;
 
-		const TObjectPtr<const UPCGExSegmentCrossFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExPathInclusion::FHandler> Handler;
 
 		TConstPCGValueRange<FTransform> InTransforms;
@@ -110,10 +104,6 @@ namespace PCGExPointFilter
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FSegmentCrossFilter() override
-		{
-		}
 	};
 }
 

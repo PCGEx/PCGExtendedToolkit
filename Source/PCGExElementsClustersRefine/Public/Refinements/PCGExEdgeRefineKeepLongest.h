@@ -8,18 +8,6 @@
 #include "Core/PCGExEdgeRefineOperation.h"
 #include "PCGExEdgeRefineKeepLongest.generated.h"
 
-class UPCGExHeuristicLocalDistance;
-class FPCGExHeuristicDistance;
-
-/**
- *
- */
-class FPCGExEdgeKeepLongest : public FPCGExEdgeRefineOperation
-{
-public:
-	virtual void ProcessNode(PCGExClusters::FNode& Node) override;
-};
-
 /**
  *
  */
@@ -39,5 +27,5 @@ public:
 		return true;
 	}
 
-	PCGEX_CREATE_REFINE_OPERATION(EdgeKeepLongest, {})
+	PCGEX_CREATE_REFINE_OPERATION(EdgeRefineBestLink, { Operation->bUseScore = false; Operation->bPickHighest = true; Operation->InitialBest = 0; Operation->Validity = 1; })
 };

@@ -410,6 +410,7 @@ namespace PCGExData
 		: IBufferProxy(InRealType, InWorkingType)
 		  , Buffer(InBuffer)
 	{
+		bTypeErased = true;
 	}
 
 	void FPropertyBufferProxy::GetVoid(const int32 Index, void* OutValue) const

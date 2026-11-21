@@ -16,16 +16,6 @@
 
 namespace PCGExMath::Geo
 {
-	FDelaunaySite2::FDelaunaySite2(const UE::Geometry::FIndex3i& InVtx, const UE::Geometry::FIndex3i& InAdjacency, const int32 InId)
-		: Id(InId)
-	{
-		for (int i = 0; i < 3; i++)
-		{
-			Vtx[i] = InVtx[i];
-			Neighbors[i] = InAdjacency[i];
-		}
-	}
-
 	FDelaunaySite2::FDelaunaySite2(const int32 A, const int32 B, const int32 C, const int32 InId)
 		: Id(InId)
 	{
@@ -443,17 +433,6 @@ namespace PCGExMath::Geo
 		{
 			GetLongestEdge(Positions, Site.Vtx, Edge);
 			DelaunayEdges.Remove(Edge);
-		}
-	}
-
-	void TDelaunay3::RemoveLongestEdges(const TArrayView<FVector>& Positions, TSet<uint64>& LongestEdges)
-	{
-		uint64 Edge;
-		for (const FDelaunaySite3& Site : Sites)
-		{
-			GetLongestEdge(Positions, Site.Vtx, Edge);
-			DelaunayEdges.Remove(Edge);
-			LongestEdges.Add(Edge);
 		}
 	}
 }

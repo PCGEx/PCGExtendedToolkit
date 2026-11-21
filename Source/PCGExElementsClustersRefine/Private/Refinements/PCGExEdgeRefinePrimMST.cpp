@@ -65,16 +65,3 @@ void FPCGExEdgeRefinePrimMST::Process()
 }
 
 #pragma endregion
-
-#pragma region UPCGExEdgeRefinePrimMST
-
-void UPCGExEdgeRefinePrimMST::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-	if (const UPCGExEdgeRefinePrimMST* TypedOther = Cast<UPCGExEdgeRefinePrimMST>(Other))
-	{
-		bInvert = TypedOther->bInvert;
-	}
-}
-
-#pragma endregion

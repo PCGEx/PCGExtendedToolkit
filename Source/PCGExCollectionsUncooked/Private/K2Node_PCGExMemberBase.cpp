@@ -3,9 +3,12 @@
 
 #include "K2Node_PCGExMemberBase.h"
 
+#include "BlueprintActionDatabaseRegistrar.h"
+#include "BlueprintNodeSpawner.h"
 #include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
 #include "KismetCompiler.h"
+#include "ScopedTransaction.h"
 #include "ToolMenu.h"
 #include "ToolMenus.h"
 #include "Core/PCGExAssetCollection.h"
@@ -110,6 +113,17 @@ FLinearColor UK2Node_PCGExMemberBase::GetNodeTitleColor() const
 FText UK2Node_PCGExMemberBase::GetMenuCategory() const
 {
 	return LOCTEXT("MenuCategory", "PCGEx|Collection");
+}
+
+void UK2Node_PCGExMemberBase::GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const
+{
+	UClass* ActionKey = GetClass();
+	if (ActionRegistrar.IsOpenForRegistration(ActionKey))
+	{
+		UBlueprintNodeSpawner* NodeSpawner = UBlueprintNodeSpawner::Create(GetClass());
+		check(NodeSpawner != nullptr);
+		ActionRegistrar.AddBlueprintAction(ActionKey, NodeSpawner);
+	}
 }
 
 void UK2Node_PCGExMemberBase::GetNodeContextMenuActions(UToolMenu* Menu, UGraphNodeContextMenuContext* Context) const
@@ -294,7 +308,7 @@ bool UK2Node_PCGExMemberBase::IsMemberEligible(const FProperty* Property, bool b
 	}
 
 	// Only authorable surface: EditAnywhere/VisibleAnywhere set CPF_Edit; plain UPROPERTY()
-	// internals (PropertyRegistry, schema versions...) drop out here.
+	// internals (schema versions...) drop out here.
 	if (!Property->HasAnyPropertyFlags(CPF_Edit))
 	{
 		return false;
@@ -472,6 +486,10 @@ void UK2Node_PCGExMemberBase::SetValuePinType(const FEdGraphPinType& InType)
 	{
 		return;
 	}
+
+	const FScopedTransaction Transaction(LOCTEXT("ChangePinType", "Change Pin Type"));
+	Modify();
+	ValuePin->Modify();
 
 	// Break existing links that no longer match the picked member's type.
 	for (int32 i = ValuePin->LinkedTo.Num() - 1; i >= 0; --i)

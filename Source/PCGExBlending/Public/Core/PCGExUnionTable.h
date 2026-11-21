@@ -21,7 +21,6 @@ class UPCGBasePointData;
 
 namespace PCGExData
 {
-	struct FConstPoint;
 	struct FPoint;
 	struct FWeightedPoint;
 	struct FElement;

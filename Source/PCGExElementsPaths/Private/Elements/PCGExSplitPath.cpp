@@ -12,16 +12,6 @@
 #define LOCTEXT_NAMESPACE "PCGExSplitPathElement"
 #define PCGEX_NAMESPACE SplitPath
 
-#if WITH_EDITOR
-void UPCGExSplitPathSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-	Super::PostEditChangeProperty(PropertyChangedEvent);
-	if (SplitAction == EPCGExPathSplitAction::Switch)
-	{
-	}
-}
-#endif
-
 PCGEX_INITIALIZE_ELEMENT(SplitPath)
 PCGEX_ELEMENT_BATCH_POINT_IMPL(SplitPath)
 
@@ -384,7 +374,13 @@ namespace PCGExSplitPath
 
 	void FProcessor::CompleteWork()
 	{
-		if (SubPaths.IsEmpty() || (SubPaths.Num() == 1 && SubPaths[0].Count == PointDataFacade->GetNum()))
+		if (SubPaths.IsEmpty())
+		{
+			// No point survived the action: output nothing, not the untouched source.
+			return;
+		}
+
+		if (SubPaths.Num() == 1 && SubPaths[0].Count == PointDataFacade->GetNum())
 		{
 			bool bHasFilteredOutPoints = false;
 			for (const int8 Filtered : PointFilterCache)
@@ -401,7 +397,7 @@ namespace PCGExSplitPath
 				// No splits, forward
 				PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::Forward)
 			}
-			else if ((SubPaths.Num() == 1 && SubPaths[0].Count == PointDataFacade->GetNum()) && bClosedLoop)
+			else if (bClosedLoop)
 			{
 				// Disconnecting closed loop last point will produce an open path
 				PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::Duplicate)
@@ -429,11 +425,6 @@ namespace PCGExSplitPath
 				{
 					bWrapLastPath = SubPaths[0].Start == 0 && SubPaths.Last().End == -1 && !PointFilterCache[0];
 				}
-			}
-
-			if (SubPaths.Num() > 1 || SubPaths[0].End != -1 || SubPaths[0].Start != 0)
-			{
-				bAddOpenTag = true;
 			}
 		}
 

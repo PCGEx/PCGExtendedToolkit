@@ -87,19 +87,16 @@ public:
 	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 };
 
-class FNodeEdgeDirectionFilter final : public PCGExClusterFilter::IVtxFilter
+class FNodeEdgeDirectionFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExNodeEdgeDirectionFilterFactory, PCGExClusterFilter::IVtxFilter>
 {
 public:
 	explicit FNodeEdgeDirectionFilter(const UPCGExNodeEdgeDirectionFilterFactory* InFactory)
-		: IVtxFilter(InFactory)
-		  , TypedFilterFactory(InFactory)
+		: TFactoryFilter(InFactory)
 	{
 		Adjacency = InFactory->Config.Adjacency;
 		DotComparison = InFactory->Config.DotComparisonDetails;
 		HashComparison = InFactory->Config.HashComparisonDetails;
 	}
-
-	const UPCGExNodeEdgeDirectionFilterFactory* TypedFilterFactory;
 
 	bool bFromNode = true;
 	bool bUseDot = true;
@@ -132,11 +129,6 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(NodeEdgeDirectionFilterFactory, "Vtx Filter : Edge Direction", "Dot product comparison of connected edges against a direction attribute stored on the vtx.", PCGEX_FACTORY_NAME_PRIORITY)
-
-	virtual FLinearColor GetNodeTitleColor() const override
-	{
-		return PCGEX_NODE_COLOR_OPTIN_NAME(FilterCluster);
-	}
 #endif
 
 	/** Test Config.*/

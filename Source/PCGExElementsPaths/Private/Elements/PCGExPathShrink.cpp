@@ -74,12 +74,6 @@ void FPCGExShrinkPathEndpointCountDetails::RenamePins(const UPCGSettings* InSett
 
 #pragma region UPCGExShrinkPathSettings
 
-UPCGExShrinkPathSettings::UPCGExShrinkPathSettings(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
-	bSupportClosedLoops = false;
-}
-
 #if WITH_EDITOR
 void UPCGExShrinkPathSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
 {
@@ -296,10 +290,6 @@ bool FPCGExShrinkPathElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 namespace PCGExShrinkPath
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExShrinkPath::Process);

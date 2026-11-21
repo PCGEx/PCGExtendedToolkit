@@ -10,7 +10,6 @@
 #include "PCGExProperty.h"
 #include "PropertyHandle.h"
 #include "Delegates/Delegate.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExPropertyOverridesCustomization::MakeInstance()
@@ -45,14 +44,15 @@ void FPCGExPropertyOverridesCustomization::CustomizeHeader(
 
 FText FPCGExPropertyOverridesCustomization::GetHeaderText() const
 {
-	if (!PropertyHandlePtr.IsValid())
+	// IsValidHandle: AccessRawData dereferences the handle's property node unchecked.
+	const TSharedPtr<IPropertyHandle> Handle = PropertyHandlePtr.Pin();
+	if (!Handle.IsValid() || !Handle->IsValidHandle())
 	{
 		return FText::FromString(TEXT("0 / 0 active"));
 	}
 
-	// Get raw access to count enabled
 	TArray<void*> RawData;
-	PropertyHandlePtr.Pin()->AccessRawData(RawData);
+	Handle->AccessRawData(RawData);
 	int32 EnabledCount = 0;
 	int32 TotalCount = 0;
 	if (!RawData.IsEmpty() && RawData[0])
@@ -76,22 +76,15 @@ void FPCGExPropertyOverridesCustomization::CustomizeChildren(
 		return;
 	}
 
-	// Structural changes (add/remove/reorder) need a refresh to recreate
-	// FStructOnScope instances with fresh pointers, but it MUST be deferred:
-	// the notification can fire synchronously from inside a Slate event handler
-	// (e.g. schema sync triggered during an undo/redo or toolbar action), and
-	// ForceRefresh() would tear down the widget tree while slot destructors are
-	// still unwinding on the stack. RequestRefresh() enqueues the rebuild for
-	// the next tick, matching the deferred pattern the grid view uses elsewhere.
-	auto RefreshDelegate = FSimpleDelegate::CreateLambda([this]()
+	// Structural changes (add / remove / reorder) rebuild the rows, deferred to the next tick: the notification
+	// can fire from inside a Slate event handler, where a synchronous ForceRefresh tears down live widgets.
+	OverridesArrayHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateLambda([WeakUtilities = WeakPropertyUtilities]()
 	{
-		if (TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakPropertyUtilities.Pin())
+		if (const TSharedPtr<IPropertyUtilities> PropertyUtilities = WeakUtilities.Pin())
 		{
-			PropertyUtilities->RequestRefresh();
+			PropertyUtilities->RequestForceRefresh();
 		}
-	});
-
-	OverridesArrayHandle->SetOnPropertyValueChanged(RefreshDelegate);
+	}));
 
 	// IMPORTANT: Do NOT SetOnChildPropertyValueChanged with ForceRefresh here.
 	// ForceRefresh() during the notification chain invalidates property nodes

@@ -256,7 +256,7 @@ void FPCGExActorEntryCustomization::FillCustomizedTopLevelPropertiesNames()
 
 namespace PCGExActorEntryCustomization
 {
-	static TSharedRef<SWidget> MakePickButton(
+	TSharedRef<SWidget> MakePickButton(
 		TSharedPtr<IPropertyHandle> ActorClassHandle,
 		TSharedPtr<IPropertyHandle> DeltaSourceActorHandle)
 	{
@@ -308,14 +308,14 @@ namespace PCGExActorEntryCustomization
 			FText::FromString(TEXT("Pick the currently selected actor from the viewport")));
 	}
 
-	static FSoftObjectPath GetDeltaSourcePath(const TSharedPtr<IPropertyHandle>& DeltaSourceActorHandle)
+	FSoftObjectPath GetDeltaSourcePath(const TSharedPtr<IPropertyHandle>& DeltaSourceActorHandle)
 	{
 		FString PathStr;
 		DeltaSourceActorHandle->GetValueAsFormattedString(PathStr);
 		return FSoftObjectPath(PathStr);
 	}
 
-	static TSharedRef<SWidget> MakeGoToButton(TSharedPtr<IPropertyHandle> DeltaSourceActorHandle)
+	TSharedRef<SWidget> MakeGoToButton(TSharedPtr<IPropertyHandle> DeltaSourceActorHandle)
 	{
 		return PropertyCustomizationHelpers::MakeBrowseButton(
 			FSimpleDelegate::CreateLambda([DeltaSourceActorHandle]()
@@ -348,7 +348,7 @@ namespace PCGExActorEntryCustomization
 			FText::FromString(TEXT("Go to the delta source actor in its level")));
 	}
 
-	static bool HasDeltaSource(const TSharedPtr<IPropertyHandle>& DeltaSourceActorHandle)
+	bool HasDeltaSource(const TSharedPtr<IPropertyHandle>& DeltaSourceActorHandle)
 	{
 		return GetDeltaSourcePath(DeltaSourceActorHandle).IsValid();
 	}
@@ -695,3 +695,4 @@ TSharedRef<SWidget> FPCGExGenericEntryCustomization::GetAssetPicker(TSharedRef<I
 
 #undef PCGEX_SUBCOLLECTION_VISIBLE
 #undef PCGEX_SUBCOLLECTION_COLLAPSED
+#undef PCGEX_ENTRY_INDEX

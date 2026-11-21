@@ -10,7 +10,6 @@
 
 #include "PCGExClipper2Triangulate.generated.h"
 
-class UDynamicMesh;
 class UPCGDynamicMeshData;
 
 /**
@@ -44,10 +43,6 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Projection settings */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExClipper2FillRule FillRule = EPCGExClipper2FillRule::EvenOdd;
 
@@ -66,12 +61,6 @@ public:
 	/** Topology settings. Some settings will be ignored based on selected output mode. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mesh")
 	FPCGExTopologyDetails Topology;
-
-	/** Suppress warnings about bad/duplicate vertices */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta = (PCG_Overridable))
-	bool bQuietBadVerticesWarning = false;
-
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 
 	virtual bool SupportOpenMainPaths() const override
 	{

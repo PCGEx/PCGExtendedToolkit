@@ -41,7 +41,6 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 
 	const PCGExHeuristics::FLocalFeedbackHandler* Feedback = LocalFeedback.Get();
 
-	int32 VisitedNum = 0;
 	int32 CurrentNodeIndex;
 	double CurrentFScore;
 	while (ScoredQueue->Dequeue(CurrentNodeIndex, CurrentFScore))
@@ -56,7 +55,6 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 			continue;
 		}
 		Visited[CurrentNodeIndex] = true;
-		VisitedNum++;
 
 		// Read per-node state only after the visited check -- stale queue entries skip these loads.
 		const double CurrentGScore = GScore[CurrentNodeIndex];
@@ -88,7 +86,7 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 			GScore[NeighborIndex] = TentativeGScore;
 
 			const double GS = Heuristics->GetGlobalScore(AdjacentNode, SeedNode, GoalNode, Feedback);
-			const double FScore = TentativeGScore + GS * Heuristics->ReferenceWeight;
+			const double FScore = TentativeGScore + GS;
 
 			ScoredQueue->Enqueue(NeighborIndex, FScore);
 		}

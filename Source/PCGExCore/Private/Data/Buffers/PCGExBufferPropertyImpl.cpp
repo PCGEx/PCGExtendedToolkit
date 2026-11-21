@@ -3,7 +3,6 @@
 
 #include "Data/PCGExData.h"
 
-#include "PCGExLog.h"
 #include "PCGExSettingsCacheBody.h"
 #include "Data/PCGExPointIO.h"
 #include "Metadata/PCGMetadataDomain.h"
@@ -239,11 +238,7 @@ namespace PCGExData
 			{
 				MetaClass = UObject::StaticClass();
 			}
-#if WITH_EDITORONLY_DATA
 			Prop->SetMetaClass(MetaClass);
-#else
-			Prop->SetMetaClass(MetaClass);
-#endif
 			Prop->PropertyClass = UClass::StaticClass();
 			Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
 			Prop->SetElementSize(sizeof(FObjectPtr));
@@ -257,11 +252,7 @@ namespace PCGExData
 			{
 				MetaClass = UObject::StaticClass();
 			}
-#if WITH_EDITORONLY_DATA
 			Prop->SetMetaClass(MetaClass);
-#else
-			Prop->SetMetaClass(MetaClass);
-#endif
 			Prop->PropertyClass = UClass::StaticClass();
 			Prop->SetPropertyFlags(CPF_HasGetValueTypeHash);
 			Prop->SetElementSize(sizeof(FSoftObjectPtr));
@@ -449,8 +440,8 @@ namespace PCGExData
 		}
 
 		// Cache the real attribute descriptor onto the IBuffer member -- replaces the empty
-		// default-constructed Desc from the IBuffer base, so GetDesc() now reflects the actual
-		// attribute shape (ContainerTypes, ValueTypeObject, KeyType).
+		// default-constructed Desc from the IBuffer base with the actual attribute shape
+		// (ContainerTypes, ValueTypeObject, KeyType).
 		Desc = InGenericAttribute->GetAttributeDesc();
 
 		// Build the FULL property -- including container wrapping, so reads/writes/copies
@@ -612,15 +603,6 @@ namespace PCGExData
 			return 0;
 		}
 		return HashValue(InBytes->GetData() + Index * ElementSize);
-	}
-
-	PCGExValueHash FPropertyArrayBuffer::GetValueHash(const int32 Index)
-	{
-		if (OutBytes && CachedInnerProperty && ElementSize > 0)
-		{
-			return HashValue(OutBytes->GetData() + Index * ElementSize);
-		}
-		return ReadValueHash(Index);
 	}
 
 	bool FPropertyArrayBuffer::InitForRead(const EIOSide InSide)
@@ -1018,15 +1000,6 @@ namespace PCGExData
 			return 0;
 		}
 		return HashValue(Src.GetData());
-	}
-
-	PCGExValueHash FPropertySingleValueBuffer::GetValueHash(const int32 Index)
-	{
-		if (OutValue.Num() >= ElementSize && CachedInnerProperty && ElementSize > 0)
-		{
-			return HashValue(OutValue.GetData());
-		}
-		return ReadValueHash(Index);
 	}
 
 	bool FPropertySingleValueBuffer::InitForRead(const EIOSide InSide)

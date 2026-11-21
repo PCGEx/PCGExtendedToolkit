@@ -19,8 +19,6 @@ namespace PCGExData
 
 	FTags::FTags()
 	{
-		RawTags.Empty();
-		ValueTags.Empty();
 	}
 
 	FTags::FTags(const TSet<FString>& InTags)

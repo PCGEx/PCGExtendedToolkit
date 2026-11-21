@@ -23,7 +23,6 @@ namespace PCGEx
 }
 
 struct FPCGContextHandle;
-enum class EPCGExAsyncPriority : uint8;
 struct FPCGExContext;
 
 namespace PCGExMT
@@ -37,7 +36,7 @@ namespace PCGExMT
 	// Calls Body once per scope and returns when all have run: in order on the calling thread for a single scope
 	// or when bForceSingleThreaded, fanned out otherwise. Scopes are skipped once WorkHandle is dead.
 	PCGEXCORE_API
-	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, const FScopedLoopBody& Body);
+	void ForEachScope(const TArray<FScope>& Scopes, const TWeakPtr<PCGEx::FWorkHandle>& WorkHandle, const bool bForceSingleThreaded, FScopedLoopBody Body);
 
 	enum class EAsyncHandleState : uint8
 	{
@@ -110,7 +109,8 @@ namespace PCGExMT
 	public:
 		int32 HandleIdx = -1;
 
-		virtual FString DEBUG_HandleId() const
+		// Overrides return a string literal: UE::Tasks::Launch stores the pointer, it never copies the string.
+		virtual const TCHAR* DEBUG_HandleId() const
 		{
 			return TEXT("NOT IMPLEMENTED");
 		}
@@ -195,11 +195,6 @@ namespace PCGExMT
 			}
 		};
 
-		virtual FString DEBUG_HandleId() const override
-		{
-			return GroupName.ToString();
-		}
-
 		FCompletionCallback OnCompleteCallback;
 
 		explicit IAsyncHandleGroup(const FName InName);
@@ -263,7 +258,6 @@ namespace PCGExMT
 
 	public:
 		FEndCallback OnEndCallback;
-		UE::Tasks::ETaskPriority WorkPriority = UE::Tasks::ETaskPriority::Default;
 
 		explicit FTaskManager(FPCGExContext* InContext);
 		virtual ~FTaskManager() override;
@@ -307,7 +301,6 @@ namespace PCGExMT
 		friend class FTaskManager;
 		friend class FSimpleCallbackTask;
 		friend class FScopeIterationTask;
-		friend class FForceSingleThreadedScopeIterationTask;
 
 	public:
 		using FIterationCallback = std::function<void(const int32, const FScope&)>;
@@ -359,12 +352,9 @@ namespace PCGExMT
 		void AddSimpleCallbacks(TArray<FSimpleCallback>&& InCallbacks);
 		void StartSimpleCallbacks();
 
-		template <typename T>
-		void StartTasksBatch(const TArray<TSharedPtr<T>>& InTasks)
+		void StartTasksBatch(const TArray<TSharedPtr<FTask>>& InTasks)
 		{
-			static_assert(TIsDerivedFrom<T, FTask>::Value, "T must derive from IAsyncHandle");
-			const TArray<TSharedPtr<FTask>>& BaseTasks = reinterpret_cast<const TArray<TSharedPtr<FTask>>&>(InTasks);
-			StartHandlesBatchImpl(BaseTasks);
+			StartHandlesBatchImpl(InTasks);
 		}
 
 	protected:

@@ -23,10 +23,6 @@ struct FPCGExRandomRatioFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExRandomRatioFilterConfig()
-	{
-	}
-
 	/** Random selection settings (seed, ratio, mode). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))
 	FPCGExRandomRatioDetails Random;
@@ -68,7 +64,7 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FRandomRatioFilter final : public ISimpleFilter
+	class FRandomRatioFilter final : public TFactoryFilter<UPCGExRandomRatioFilterFactory>
 	{
 	protected:
 		TBitArray<> PointPicks;
@@ -83,22 +79,11 @@ namespace PCGExPointFilter
 		void BuildCollectionPicks(const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const;
 
 	public:
-		explicit FRandomRatioFilter(const TObjectPtr<const UPCGExRandomRatioFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExRandomRatioFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Init(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InPointDataFacade) override;
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-
-		virtual ~FRandomRatioFilter() override
-		{
-		}
 	};
 }
 
@@ -115,7 +100,7 @@ public:
 	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
-	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(RandomCompareFilterFactory, "Filter : Random (Ratio)", "Passes an exact ratio or count of elements, selected at random.", PCGEX_FACTORY_NAME_PRIORITY)
+	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(RandomRatioFilterFactory, "Filter : Random (Ratio)", "Passes an exact ratio or count of elements, selected at random.", PCGEX_FACTORY_NAME_PRIORITY)
 #endif
 	//~End UPCGSettings
 

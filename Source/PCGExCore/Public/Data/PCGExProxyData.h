@@ -7,22 +7,16 @@
 #include "PCGExDataCommon.h"
 #include "Containers/PCGExScopedContainers.h"
 #include "Data/PCGExCachedSubSelection.h"
-#include "Data/PCGExCachedSubSelection.h"
 #include "Data/PCGExSubSelection.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 #include "Metadata/PCGMetadataCommon.h"
 #include "Misc/ScopeRWLock.h"
 #include "Types/PCGExTypeOps.h"
-#include "Types/PCGExTypeOps.h"
 #include "Types/PCGExTypes.h"
-#include "UObject/Object.h"
 #include "UObject/Object.h"
 
 struct FPCGExContext;
 class UPCGBasePointData;
-
-template <typename T>
-class FPCGMetadataAttribute;
 
 namespace PCGExData
 {
@@ -163,6 +157,9 @@ namespace PCGExData
 		// Cached flag for whether working type needs lifecycle management
 		bool bWorkingTypeNeedsLifecycle = false;
 
+		// The void accessors carry the buffer's own value layout, not WorkingType: no typed accessor is valid.
+		bool bTypeErased = false;
+
 	public:
 		// Point data reference for property proxies
 		UPCGBasePointData* Data = nullptr;
@@ -220,24 +217,14 @@ namespace PCGExData
 		//
 		// Type information accessors
 		//
-		FORCEINLINE const PCGExTypeOps::ITypeOpsBase* GetRealOps() const
-		{
-			return RealOps;
-		}
-
-		FORCEINLINE const PCGExTypeOps::ITypeOpsBase* GetWorkingOps() const
-		{
-			return WorkingOps;
-		}
-
 		FORCEINLINE bool HasSubSelection() const
 		{
 			return bWantsSubSelection;
 		}
 
-		FORCEINLINE bool WorkingTypeNeedsLifecycle() const
+		FORCEINLINE bool IsTypeErased() const
 		{
-			return bWorkingTypeNeedsLifecycle;
+			return bTypeErased;
 		}
 
 		// Value size/alignment for blend operation sizing.
@@ -247,11 +234,13 @@ namespace PCGExData
 
 		//
 		// Convenience typed accessors - SAFE versions with proper lifecycle
+		// Not valid on a type-erased proxy: GetProxyBuffer only hands one out to a type-erased request.
 		//
 
 		template <typename T>
 		T Get(const int32 Index) const
 		{
+			checkSlow(!bTypeErased);
 			constexpr EPCGMetadataTypes RequestedType = PCGExTypes::TTraits<T>::Type;
 
 			if constexpr (TypeTraits::TIsComplexType<T>)
@@ -298,6 +287,7 @@ namespace PCGExData
 		template <typename T>
 		void Set(const int32 Index, const T& Value) const
 		{
+			checkSlow(!bTypeErased);
 			constexpr EPCGMetadataTypes ValueType = PCGExTypes::TTraits<T>::Type;
 
 			if (ValueType == WorkingType)
@@ -312,37 +302,6 @@ namespace PCGExData
 			PCGExTypeOps::FConversionTable::Convert(ValueType, &Value, WorkingType, WorkingValue.GetRaw());
 			SetVoid(Index, WorkingValue.GetRaw());
 		}
-
-		template <typename T>
-		T GetCurrent(const int32 Index) const
-		{
-			constexpr EPCGMetadataTypes RequestedType = PCGExTypes::TTraits<T>::Type;
-
-			// Always use scoped value for safety
-			PCGExTypes::FScopedTypedValue WorkingValue = CreateScopedWorkingValue();
-			GetCurrentVoid(Index, WorkingValue.GetRaw());
-
-			if (RequestedType == WorkingType)
-			{
-				if constexpr (TypeTraits::TIsComplexType<T>)
-				{
-					return WorkingValue.As<T>();
-				}
-				else
-				{
-					return *reinterpret_cast<const T*>(WorkingValue.GetRaw());
-				}
-			}
-
-			T Result{};
-			PCGExTypeOps::FConversionTable::Convert(WorkingType, WorkingValue.GetRaw(), RequestedType, &Result);
-			return Result;
-		}
-
-		// Converting read methods - SAFE versions
-#define PCGEX_CONVERTING_READ(_TYPE, _NAME, ...) virtual _TYPE ReadAs##_NAME(const int32 Index) const;
-		PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_CONVERTING_READ)
-#undef PCGEX_CONVERTING_READ
 
 		// Scoped storage for the void accessors: property-aware for property-backed proxies (which
 		// perform no Real->Working conversion), plain WorkingType otherwise. Always use this -- not

@@ -28,7 +28,7 @@
 MACRO(Time, double, 0)\
 MACRO(SegmentTime, double, 0)\
 MACRO(NumInside, int32, 0)\
-MACRO(ClosedLoop, int32, false)
+MACRO(ClosedLoop, bool, false)
 
 #define PCGEX_FOREACH_FIELD_NEARESTPATH(MACRO)\
 PCGEX_FOREACH_FIELD_SAMPLING_COMMON(MACRO)\
@@ -63,8 +63,6 @@ namespace PCGExPaths
 {
 	class FPolyPath;
 }
-
-class UPCGExPointFilterFactoryData;
 
 UENUM()
 enum class EPCGExPathSamplingIncludeMode : uint8
@@ -517,8 +515,6 @@ namespace PCGExSampleNearestPath
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void PrepareLoopScopesForPoints(const TArray<PCGExMT::FScope>& Loops) override;

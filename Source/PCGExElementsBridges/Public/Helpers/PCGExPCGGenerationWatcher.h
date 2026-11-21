@@ -72,11 +72,6 @@ namespace PCGExPCGInterop
 			OnGenerationComplete = MoveTemp(InCallback);
 		}
 
-		void SetOnAllComplete(TFunction<void()>&& InCallback)
-		{
-			OnAllComplete = MoveTemp(InCallback);
-		}
-
 		/** Must be called after construction to initialize the tracker (cannot use SharedThis in constructor) */
 		void Initialize();
 
@@ -115,6 +110,5 @@ namespace PCGExPCGInterop
 		TSharedPtr<FPCGExIntTracker> WatcherTracker;
 
 		FOnGenerationComplete OnGenerationComplete;
-		TFunction<void()> OnAllComplete;
 	};
 }

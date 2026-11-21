@@ -14,8 +14,6 @@
 #include "PCGExClipper2Processor.generated.h"
 
 class UPCGExClipper2ProcessorSettings;
-struct FPCGExBlendingDetails;
-struct FPCGExCarryOverDetails;
 
 
 UENUM(BlueprintType)
@@ -258,12 +256,20 @@ protected:
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 
 public:
+	/** Projection settings. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FPCGExGeo2DProjectionDetails ProjectionDetails;
+
 	/** Per-class constant: false on geometry nodes (Volume, Decompose) to hide path-output-only properties
 	 *  (blending, carry-over, open-path output, simplify/arc-tolerance) that have no effect on geometry output.
 	 *  Intentionally an EditCondition gate, not an inheritance split, which would change the serialized class
 	 *  layout and drop these UPROPERTYs from existing graphs -- keep the gate until a data migration exists. */
 	UPROPERTY()
 	bool bExposePathOutputProperties = true;
+
+	/** Per-class constant: true on Offset, the only node that reads Preserve Collinear and Arc Tolerance. */
+	UPROPERTY()
+	bool bExposeOffsetProperties = false;
 
 	/** Per-class constant: whether the grouping-policy + main-matching controls are user-editable. When false the
 	 *  controls hide and inputs fall back to Split (see GetEffectiveGroupingPolicy). */
@@ -318,11 +324,11 @@ public:
 	bool bSimplifyPaths = false;
 
 	/** Keep collinear points in the output instead of simplifying them. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties && bExposeOffsetProperties", EditConditionHides, HideEditConditionToggle))
 	bool bPreserveCollinear = true;
 
 	/** Tolerance for arc approximation when generating curved offsets. Higher values = fewer points. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties", EditConditionHides, HideEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tweaks", meta = (PCG_Overridable, EditCondition="bExposePathOutputProperties && bExposeOffsetProperties", EditConditionHides, HideEditConditionToggle))
 	double ArcTolerance = 5.0;
 
 	FORCEINLINE double GetArcTolerance() const
@@ -380,7 +386,6 @@ public:
 	UFUNCTION()
 	virtual bool WantsOperands() const;
 
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const;
 	virtual bool SupportOpenMainPaths() const;
 	virtual bool SupportOpenOperandPaths() const;
 	virtual bool OperandsAsBounds() const;

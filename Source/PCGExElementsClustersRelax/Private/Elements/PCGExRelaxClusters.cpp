@@ -7,6 +7,7 @@
 #include "PCGParamData.h"
 #include "Containers/PCGExScopedContainers.h"
 #include "Core/PCGExFilterTypeSets.h"
+#include "Core/PCGExMT.h"
 #include "Core/PCGExPointFilter.h"
 #include "Core/PCGExRelaxClusterOperation.h"
 #include "Data/PCGExData.h"
@@ -108,10 +109,6 @@ bool FPCGExRelaxClustersElement::AdvanceWork(FPCGExContext* InContext, const UPC
 
 namespace PCGExRelaxClusters
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	TSharedPtr<PCGExClusters::FCluster> FProcessor::HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef)
 	{
 		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, true, false, false);
@@ -151,7 +148,7 @@ namespace PCGExRelaxClusters
 		TArray<FTransform>& PBufferRef = (*PrimaryBuffer);
 		TArray<FTransform>& SBufferRef = (*SecondaryBuffer);
 
-		TArray<PCGExClusters::FNode> NodesRef = *Cluster->Nodes.Get();
+		const TArray<PCGExClusters::FNode>& NodesRef = *Cluster->Nodes.Get();
 		TConstPCGValueRange<FTransform> InTransforms = VtxDataFacade->GetIn()->GetConstTransformValueRange();
 
 		for (int i = 0; i < NumNodes; i++)
@@ -179,7 +176,7 @@ namespace PCGExRelaxClusters
 			VtxTesting->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
 			{
 				PCGEX_ASYNC_THIS
-				This->StartNextStep();
+				This->RunRelaxation();
 			};
 
 			VtxTesting->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
@@ -192,57 +189,50 @@ namespace PCGExRelaxClusters
 		}
 		else
 		{
-			StartNextStep();
+			RunRelaxation();
 		}
 
 		return true;
 	}
 
-	void FProcessor::StartNextStep()
+	void FProcessor::RunRelaxation()
 	{
-		CurrentStep++;
+		// The scope split only depends on the element count, so it is the same for every step.
+		TArray<PCGExMT::FScope> VtxScopes;
+		TArray<PCGExMT::FScope> EdgeScopes;
+		PCGExMT::SubLoopScopes(VtxScopes, NumNodes, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumNodes, 32)));
+		PCGExMT::SubLoopScopes(EdgeScopes, NumEdges, FMath::Max(1, PCGExMT::GetSanitizedBatchSize(NumEdges, 32)));
 
-		// Valid step indices are 0..Steps-1; reaching Steps means one full cycle completed.
-		if (CurrentStep >= Steps)
+		while (true)
 		{
-			CurrentStep = 0;
-			Iterations--;
+			CurrentStep++;
+
+			// Valid step indices are 0..Steps-1; reaching Steps means one full cycle completed.
+			if (CurrentStep >= Steps)
+			{
+				CurrentStep = 0;
+				Iterations--;
+			}
+
+			// Checked AFTER the rollover so the pass that ends the last cycle doesn't run a fresh
+			// step (or swap buffers via PrepareNextStep(0)) -- WriteBuffer holds the final cycle's result.
+			if (Iterations <= 0)
+			{
+				break;
+			}
+
+			StepSource = RelaxOperation->PrepareNextStep(CurrentStep);
+
+			PCGEX_ASYNC_CHKD_VOID(TaskManager)
+
+			// Blocking: a step only starts once every scope of the previous one has returned.
+			PCGExMT::ForEachScope(
+				StepSource == EPCGExClusterElement::Vtx ? VtxScopes : EdgeScopes, WorkHandle, false,
+				[this](const PCGExMT::FScope& Scope) { RelaxScope(Scope); });
 		}
 
-		// Checked AFTER the rollover so the call that ends the last cycle doesn't dispatch a fresh
-		// step (or swap buffers via PrepareNextStep(0)) -- WriteBuffer holds the final cycle's result.
-		if (Iterations <= 0)
-		{
-			// Wrap up
-			StartParallelLoopForNodes();
-			return;
-		}
-
-		StepSource = RelaxOperation->PrepareNextStep(CurrentStep);
-
-		PCGEX_ASYNC_GROUP_CHKD_VOID(TaskManager, IterationGroup)
-
-		IterationGroup->OnCompleteCallback = [PCGEX_ASYNC_THIS_CAPTURE]()
-		{
-			PCGEX_ASYNC_THIS
-			This->StartNextStep();
-		};
-
-		IterationGroup->OnSubLoopStartCallback = [PCGEX_ASYNC_THIS_CAPTURE](const PCGExMT::FScope& Scope)
-		{
-			PCGEX_ASYNC_THIS
-			This->RelaxScope(Scope);
-		};
-
-		switch (StepSource)
-		{
-		case EPCGExClusterElement::Vtx:
-			IterationGroup->StartSubLoops(NumNodes, 32);
-			break;
-		case EPCGExClusterElement::Edge:
-			IterationGroup->StartSubLoops(NumEdges, 32);
-			break;
-		}
+		// Wrap up
+		StartParallelLoopForNodes();
 	}
 
 	void FProcessor::RelaxScope(const PCGExMT::FScope& Scope) const
@@ -279,12 +269,6 @@ namespace PCGExRelaxClusters
 #undef PCGEX_RELAX_PROGRESS
 #undef PCGEX_RELAX_STEP_NODE
 #undef PCGEX_RELAX_STEP_EDGE
-	}
-
-	void FProcessor::PrepareLoopScopesForNodes(const TArray<PCGExMT::FScope>& Loops)
-	{
-		TProcessor<FPCGExRelaxClustersContext, UPCGExRelaxClustersSettings>::PrepareLoopScopesForNodes(Loops);
-		MaxDistanceValue = MakeShared<PCGExMT::TScopedNumericValue<double>>(Loops, 0);
 	}
 
 	void FProcessor::ProcessNodes(const PCGExMT::FScope& Scope)
@@ -325,10 +309,6 @@ namespace PCGExRelaxClusters
 
 	FBatch::FBatch(FPCGExContext* InContext, const TSharedRef<PCGExData::FPointIO>& InVtx, TArrayView<TSharedRef<PCGExData::FPointIO>> InEdges)
 		: TBatch(InContext, InVtx, InEdges)
-	{
-	}
-
-	FBatch::~FBatch()
 	{
 	}
 

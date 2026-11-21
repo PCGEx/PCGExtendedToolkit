@@ -40,11 +40,6 @@ namespace PCGExTypeOps
 			return Traits::Type;
 		}
 
-		virtual FString GetTypeName() const override
-		{
-			return FString();
-		}
-
 		virtual int32 GetTypeSize() const override
 		{
 			return sizeof(T);
@@ -264,11 +259,6 @@ namespace PCGExTypeOps
 			return EPCGMetadataTypes::Unknown;
 		}
 
-		virtual FString GetTypeName() const override
-		{
-			return TEXT("Unknown");
-		}
-
 		virtual int32 GetTypeSize() const override
 		{
 			return 0;
@@ -460,12 +450,6 @@ namespace PCGExTypeOps
 	const ITypeOpsBase* FTypeOpsRegistry::Get()
 	{
 		return &TTypeOpsImpl<T>::GetInstance();
-	}
-
-	template <typename T>
-	EPCGMetadataTypes FTypeOpsRegistry::GetTypeId()
-	{
-		return &TTypeOpsImpl<T>::GetTypeId();
 	}
 
 	// Extern template declarations - prevents implicit instantiation in every translation unit

@@ -44,6 +44,9 @@ private:
 
 	TSharedPtr<FPCGExPropertyCurveEditController> Controller;
 
+	/** True during a spin box drag: value changes apply only then, and a commit or the drag's end closes it. */
+	bool bInspectorSpinning = false;
+
 	static constexpr float GraphHeight = 110.0f;
 	static constexpr float StripHeight = 18.0f;
 };

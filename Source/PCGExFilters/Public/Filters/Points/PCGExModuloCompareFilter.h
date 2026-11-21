@@ -105,16 +105,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FModuloComparisonFilter final : public ISimpleFilter
+	class FModuloComparisonFilter final : public TFactoryFilter<UPCGExModuloCompareFilterFactory>
 	{
 	public:
-		explicit FModuloComparisonFilter(const TObjectPtr<const UPCGExModuloCompareFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExModuloCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<double>> OperandA;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> OperandB;
@@ -124,10 +118,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FModuloComparisonFilter() override
-		{
-		}
 	};
 }
 

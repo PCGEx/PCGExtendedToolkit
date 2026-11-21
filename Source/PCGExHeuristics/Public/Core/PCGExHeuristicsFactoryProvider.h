@@ -147,6 +147,11 @@ public:
 	{
 		return PCGEX_NODE_COLOR_NAME(Heuristics);
 	}
+
+	virtual FString GetDisplayName() const override;
+
+	/** The provider's own Config, read for the shared "HX @ weight" node title; null leaves the title alone. */
+	virtual const FPCGExHeuristicConfigBase* GetBaseConfig() const { return nullptr; }
 #endif
 	//~End UPCGSettings
 

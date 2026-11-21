@@ -13,7 +13,6 @@ class SWidget;
 #include "Details/Collections/SPCGExCollectionGridTile.h" // FThumbnailCacheMap
 
 struct FAssetData;
-class FAssetThumbnail;
 class FAssetThumbnailPool;
 class FStructOnScope;
 class FTransactionObjectEvent;
@@ -22,7 +21,6 @@ class SBorder;
 class SBox;
 class SScrollBox;
 class SPCGExCollectionCategoryGroup;
-class UPCGExAssetCollection;
 class UPCGExVariantCollection;
 
 /** Visual/behavioral state of a variant grid tile. */
@@ -116,7 +114,6 @@ public:
 	void UpdateItem(int32 InItemIndex, const FPCGExVariantGridItem& InItem);
 
 	void SetSelected(const bool bInSelected) { bIsSelected = bInSelected; }
-	bool IsSelected() const { return bIsSelected; }
 
 	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 

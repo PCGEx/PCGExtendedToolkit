@@ -53,10 +53,6 @@ public:
 
 	//~End UPCGExPointsProcessorSettings
 
-	/** Projection settings used to flatten the path into a 2D footprint before decomposition. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	/** Fill rule used when triangulating the footprint. Even-Odd treats nested rings as holes (donut footprints). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExClipper2FillRule FillRule = EPCGExClipper2FillRule::EvenOdd;
@@ -76,8 +72,6 @@ public:
 	/** Suppress per-group warnings about degenerate footprints / failed triangulation. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Warnings and Errors", meta = (PCG_NotOverridable))
 	bool bQuietWarnings = false;
-
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 
 	virtual bool SupportOpenMainPaths() const override
 	{

@@ -14,7 +14,6 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExProxyData.h"
 #include "Data/PCGPointData.h"
-#include "Helpers/PCGExArrayHelpers.h"
 #include "Metadata/PCGMetadataDomain.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"
@@ -110,8 +109,7 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 		: IBuffer(InSource, InIdentifier)
 	{
 		SetType(PCGExTypes::TTraits<T>::Type);
-		// Synthetic descriptor: typed buffers don't have a source FProperty, but we expose a
-		// shape Desc so introspection (GetDesc()) is uniform across typed and property buffers.
+		// Synthetic descriptor: typed buffers have no source FProperty to take one from.
 		Desc.Name = InIdentifier.Name;
 		Desc.ValueType = PCGExTypes::TTraits<T>::Type;
 	}
@@ -140,12 +138,6 @@ template PCGEXCORE_API bool IBuffer::IsA<_TYPE>() const;
 	PCGExValueHash TBuffer<T>::ReadValueHash(const int32 Index)
 	{
 		return PCGExTypes::ComputeHash(Read(Index));
-	}
-
-	template <typename T>
-	PCGExValueHash TBuffer<T>::GetValueHash(const int32 Index)
-	{
-		return PCGExTypes::ComputeHash(GetValue(Index));
 	}
 
 	template <typename T>
@@ -199,40 +191,6 @@ template class PCGEXCORE_API TBuffer<_TYPE>;
 		return FindBuffer_Unsafe(UID);
 	}
 
-	TSharedPtr<IBuffer> FFacade::FindReadableAttributeBuffer(const FPCGAttributeIdentifier& InIdentifier)
-	{
-		FReadScopeLock ReadScopeLock(BufferLock);
-		for (const TSharedPtr<IBuffer>& Buffer : Buffers)
-		{
-			if (!Buffer->IsReadable())
-			{
-				continue;
-			}
-			if (Buffer->InAttribute && Buffer->InAttribute->Name == InIdentifier.Name)
-			{
-				return Buffer;
-			}
-		}
-		return nullptr;
-	}
-
-	TSharedPtr<IBuffer> FFacade::FindWritableAttributeBuffer(const FPCGAttributeIdentifier& InIdentifier)
-	{
-		FReadScopeLock ReadScopeLock(BufferLock);
-		for (const TSharedPtr<IBuffer>& Buffer : Buffers)
-		{
-			if (!Buffer->IsWritable())
-			{
-				continue;
-			}
-			if (Buffer->Identifier == InIdentifier)
-			{
-				return Buffer;
-			}
-		}
-		return nullptr;
-	}
-
 	EPCGPointNativeProperties FFacade::GetAllocations() const
 	{
 		return Source->GetAllocations();
@@ -266,11 +224,6 @@ template class PCGEXCORE_API TBuffer<_TYPE>;
 	bool FFacade::IsDataValid(const EIOSide InSide) const
 	{
 		return Source->IsDataValid(InSide);
-	}
-
-	bool FFacade::ShareSource(const FFacade* OtherManager) const
-	{
-		return this == OtherManager || OtherManager->Source == Source;
 	}
 
 	template <typename T>
@@ -481,6 +434,37 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 #undef PCGEX_TPL
 
+	// Caller holds the facade's buffer write lock.
+	template <typename TPropertyBuffer>
+	TSharedPtr<IBuffer> AddWritablePropertyBuffer_Unsafe(FFacade& Facade, const FPCGAttributeIdentifier& Identifier, const FPCGMetadataAttributeBase* Attribute, const EBufferInit Init)
+	{
+		auto PropBuf = MakeShared<TPropertyBuffer>(Facade.Source, Identifier);
+		if (!PropBuf->InitProperty(Attribute) || !PropBuf->InitForWrite(Attribute, Init))
+		{
+			return nullptr;
+		}
+		PropBuf->BufferIndex = Facade.Buffers.Add(PropBuf);
+		Facade.BufferMap.Add(PropBuf->GetUID(), PropBuf);
+		return PropBuf;
+	}
+
+	// Initializes outside BufferLock, then re-checks ExpectedUID under it: a buffer registered meanwhile wins.
+	template <typename TPropertyBuffer>
+	TSharedPtr<IBuffer> AddReadablePropertyBuffer(FFacade& Facade, FRWLock& BufferLock, const FPCGAttributeIdentifier& Identifier, const FPCGMetadataAttributeBase* Attribute, const EIOSide InSide, const uint64 ExpectedUID)
+	{
+		auto PropBuf = MakeShared<TPropertyBuffer>(Facade.Source, Identifier);
+		if (!PropBuf->InitProperty(Attribute) || !PropBuf->InitForRead(InSide))
+		{
+			return nullptr;
+		}
+
+		FWriteScopeLock WriteScopeLock(BufferLock);
+		if (const TSharedPtr<IBuffer> Existing = Facade.FindBuffer_Unsafe(ExpectedUID)) { return Existing; }
+		PropBuf->BufferIndex = Facade.Buffers.Add(PropBuf);
+		Facade.BufferMap.Add(PropBuf->GetUID(), PropBuf);
+		return PropBuf;
+	}
+
 	TSharedPtr<IBuffer> FFacade::GetWritable(const EPCGMetadataTypes Type, const FPCGMetadataAttributeBase* InAttribute, EBufferInit Init)
 	{
 		// Type is often a desc's value type, which for a container names the element type: only a single value gets a typed buffer.
@@ -525,23 +509,9 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 
 		if (DomainID.Flag == EPCGMetadataDomainFlag::Data)
 		{
-			auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, AttrIdentifier);
-			if (!PropBuf->InitProperty(InAttribute) || !PropBuf->InitForWrite(InAttribute, Init))
-			{
-				return nullptr;
-			}
-			PropBuf->BufferIndex = Buffers.Add(PropBuf);
-			BufferMap.Add(PropBuf->GetUID(), PropBuf);
-			return PropBuf;
+			return AddWritablePropertyBuffer_Unsafe<FPropertySingleValueBuffer>(*this, AttrIdentifier, InAttribute, Init);
 		}
-		auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, AttrIdentifier);
-		if (!PropBuf->InitProperty(InAttribute) || !PropBuf->InitForWrite(InAttribute, Init))
-		{
-			return nullptr;
-		}
-		PropBuf->BufferIndex = Buffers.Add(PropBuf);
-		BufferMap.Add(PropBuf->GetUID(), PropBuf);
-		return PropBuf;
+		return AddWritablePropertyBuffer_Unsafe<FPropertyArrayBuffer>(*this, AttrIdentifier, InAttribute, Init);
 	}
 
 	TSharedPtr<IBuffer> FFacade::GetWritable(const EPCGMetadataTypes Type, const FName InName, EBufferInit Init)
@@ -631,27 +601,11 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 			{
 				if (Identity.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
 				{
-					auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, Identifier);
-					if (PropBuf->InitProperty(RawAttribute) && PropBuf->InitForRead(InSide))
-					{
-						FWriteScopeLock WriteScopeLock(BufferLock);
-						if (const TSharedPtr<IBuffer> Existing = FindBuffer_Unsafe(ExpectedUID)) { return Existing; }
-						PropBuf->BufferIndex = Buffers.Add(PropBuf);
-						BufferMap.Add(PropBuf->GetUID(), PropBuf);
-						Buffer = PropBuf;
-					}
+					Buffer = AddReadablePropertyBuffer<FPropertySingleValueBuffer>(*this, BufferLock, Identifier, RawAttribute, InSide, ExpectedUID);
 				}
 				else
 				{
-					auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, Identifier);
-					if (PropBuf->InitProperty(RawAttribute) && PropBuf->InitForRead(InSide))
-					{
-						FWriteScopeLock WriteScopeLock(BufferLock);
-						if (const TSharedPtr<IBuffer> Existing = FindBuffer_Unsafe(ExpectedUID)) { return Existing; }
-						PropBuf->BufferIndex = Buffers.Add(PropBuf);
-						BufferMap.Add(PropBuf->GetUID(), PropBuf);
-						Buffer = PropBuf;
-					}
+					Buffer = AddReadablePropertyBuffer<FPropertyArrayBuffer>(*this, BufferLock, Identifier, RawAttribute, InSide, ExpectedUID);
 				}
 			}
 		}
@@ -671,7 +625,7 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 
 		const EPCGMetadataTypes AttrType = static_cast<EPCGMetadataTypes>(RawAttribute->GetTypeId());
 
-#define PCGEX_TYPED_EXEC(_TYPE, _NAME) Buffer = Buffer = GetReadable<_TYPE>(InIdentifier, InSide, bSupportScoped);
+#define PCGEX_TYPED_EXEC(_TYPE, _NAME) Buffer = GetReadable<_TYPE>(InIdentifier, InSide, bSupportScoped);
 		PCGEX_EXECUTEWITHRIGHTTYPE(AttrType, PCGEX_TYPED_EXEC)
 #undef PCGEX_TYPED_EXEC
 
@@ -687,27 +641,11 @@ template PCGEXCORE_API const FPCGMetadataAttributeBase* FFacade::FindConstAttrib
 
 			if (InIdentifier.MetadataDomain.Flag == EPCGMetadataDomainFlag::Data)
 			{
-				auto PropBuf = MakeShared<FPropertySingleValueBuffer>(Source, InIdentifier);
-				if (PropBuf->InitProperty(RawAttribute) && PropBuf->InitForRead(InSide))
-				{
-					FWriteScopeLock WriteScopeLock(BufferLock);
-					if (const TSharedPtr<IBuffer> Existing = FindBuffer_Unsafe(ExpectedUID)) { return Existing; }
-					PropBuf->BufferIndex = Buffers.Add(PropBuf);
-					BufferMap.Add(PropBuf->GetUID(), PropBuf);
-					Buffer = PropBuf;
-				}
+				Buffer = AddReadablePropertyBuffer<FPropertySingleValueBuffer>(*this, BufferLock, InIdentifier, RawAttribute, InSide, ExpectedUID);
 			}
 			else
 			{
-				auto PropBuf = MakeShared<FPropertyArrayBuffer>(Source, InIdentifier);
-				if (PropBuf->InitProperty(RawAttribute) && PropBuf->InitForRead(InSide))
-				{
-					FWriteScopeLock WriteScopeLock(BufferLock);
-					if (const TSharedPtr<IBuffer> Existing = FindBuffer_Unsafe(ExpectedUID)) { return Existing; }
-					PropBuf->BufferIndex = Buffers.Add(PropBuf);
-					BufferMap.Add(PropBuf->GetUID(), PropBuf);
-					Buffer = PropBuf;
-				}
+				Buffer = AddReadablePropertyBuffer<FPropertyArrayBuffer>(*this, BufferLock, InIdentifier, RawAttribute, InSide, ExpectedUID);
 			}
 		}
 
@@ -1117,23 +1055,6 @@ template PCGEXCORE_API bool TryReadMark<_TYPE>(const TSharedRef<FPointIO>& Point
 	PCGEX_FOREACH_SUPPORTEDTYPES(PCGEX_TPL)
 
 #undef PCGEX_TPL
-
-	UPCGBasePointData* GetMutablePointData(FPCGContext* Context, const FPCGTaggedData& Source)
-	{
-		const UPCGSpatialData* SpatialData = Cast<UPCGSpatialData>(Source.Data);
-		if (!SpatialData)
-		{
-			return nullptr;
-		}
-
-		const UPCGBasePointData* PointData = SpatialData->ToPointData(Context);
-		if (!PointData)
-		{
-			return nullptr;
-		}
-
-		return const_cast<UPCGBasePointData*>(PointData);
-	}
 
 	class FWriteBufferTask final : public PCGExMT::FTask
 	{

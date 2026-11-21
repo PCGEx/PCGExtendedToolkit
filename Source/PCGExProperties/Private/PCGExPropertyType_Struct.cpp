@@ -3,7 +3,6 @@
 
 #include "PCGExPropertyType_Struct.h"
 
-#include "PCGExLog.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExPointIO.h"

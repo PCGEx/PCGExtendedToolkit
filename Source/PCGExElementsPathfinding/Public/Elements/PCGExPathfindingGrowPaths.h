@@ -49,7 +49,8 @@ namespace PCGExPathfindingGrowPaths
 	class FGrowth
 	{
 	public:
-		const TSharedPtr<FProcessor> Processor;
+		// Non-owning: a growth is only ever held by its processor, and only runs from that processor's own calls.
+		FProcessor* const Processor;
 		const PCGExClusters::FNode* SeedNode = nullptr;
 		TSharedPtr<PCGEx::FHashLookup> TravelStack;
 
@@ -65,11 +66,10 @@ namespace PCGExPathfindingGrowPaths
 		PCGExPaths::FPathMetrics Metrics;
 
 		double MaxDistance = 0;
-		double Distance = 0;
 
 		TArray<int32> Path;
 
-		FGrowth(const TSharedPtr<FProcessor>& InProcessor, const int32 InMaxIterations, const int32 InLastGrowthIndex, const FVector& InGrowthDirection);
+		FGrowth(FProcessor* InProcessor, const int32 InMaxIterations, const int32 InLastGrowthIndex, const FVector& InGrowthDirection);
 
 		int32 FindNextGrowthNodeIndex();
 		bool Grow(); // return false if too far or couldn't connect for [reasons]
@@ -85,8 +85,6 @@ namespace PCGExPathfindingGrowPaths
 	};
 }
 
-class FPCGExHeuristicOperation;
-class UPCGExSearchInstancedFactory;
 /**
  * Use PCGExTransform to manipulate the outgoing attributes instead of handling everything here.
  * This way we can multi-thread the various calculations instead of mixing everything along with async/game thread collision
@@ -230,10 +228,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Tagging & Forwarding")
 	FPCGExForwardDetails SeedForwarding;
 
-	/** Output various statistics. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Advanced")
-	FPCGExPathStatistics Statistics;
-
 	/** Whether or not to search for closest node using an octree. Depending on your dataset, enabling this may be either much faster, or slightly slower. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Advanced")
 	bool bUseOctreeSearch = false;
@@ -273,7 +267,6 @@ namespace PCGExPathfindingGrowPaths
 	class FProcessor final : public PCGExClusterMT::TProcessor<FPCGExPathfindingGrowPathsContext, UPCGExPathfindingGrowPathsSettings>
 	{
 		friend class FGrowth;
-		friend class FProcessorBatch;
 
 		TSharedPtr<PCGExData::TBuffer<int32>> NumIterations;
 		TSharedPtr<PCGExData::TBuffer<int32>> NumBranches;

@@ -79,14 +79,11 @@ namespace PCGExFilterGroup
 	public:
 		explicit FFilterGroup(const UPCGExFilterGroupFactoryData* InFactory, const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* InFilterFactories)
 			: IFilter(InFactory)
-			  , GroupFactory(InFactory)
 			  , ManagedFactories(InFilterFactories)
 		{
 		}
 
-		bool bValid = false;
 		bool bInvert = false;
-		const UPCGExFilterGroupFactoryData* GroupFactory;
 		const TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* ManagedFactories;
 
 		virtual PCGExFilters::EType GetFilterType() const override

@@ -13,35 +13,19 @@
 #include "PCGExTopology.generated.h"
 
 struct FPCGExContext;
-struct FGeometryScriptSimplePolygon;
 
 namespace PCGExData
 {
 	class FFacadePreloader;
 	class FFacade;
-	struct FMutablePoint;
 
 	template <typename T>
 	class TBuffer;
 }
 
-struct FPCGExNodeSelectionDetails;
-
 namespace PCGExClusters
 {
 	class FCluster;
-}
-
-UENUM()
-enum class EPCGExTopologyOutputType : uint8
-{
-	PerItem = 1 UMETA(DisplayName = "Per-item Geometry", Tooltip="Output a geometry object per-item"),
-	Merged  = 0 UMETA(DisplayName = "Merged Geometry", Tooltip="Output a single geometry that merges all generated topologies"),
-};
-
-namespace PCGExTopology
-{
-	const FName MeshOutputLabel = TEXT("Mesh");
 }
 
 USTRUCT(BlueprintType)

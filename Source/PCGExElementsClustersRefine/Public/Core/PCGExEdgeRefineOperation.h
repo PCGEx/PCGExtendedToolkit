@@ -29,7 +29,6 @@ protected:
 	bool bWantsHeuristics = false;
 
 public:
-	TArray<int8>* VtxFilterCache = nullptr;
 	TArray<int8>* EdgeFilterCache = nullptr;
 
 	// Set by the processor: whether edge filter factories are actually connected. Lets refinements with
@@ -72,8 +71,48 @@ public:
 protected:
 	TSharedPtr<PCGExClusters::FCluster> Cluster;
 	TSharedPtr<PCGExHeuristics::FHandler> Heuristics;
-	mutable FRWLock EdgeLock;
-	mutable FRWLock NodeLock;
+};
+
+/**
+ * Per node, writes Validity on the one link whose metric strictly beats every earlier link and InitialBest.
+ */
+class FPCGExEdgeRefineBestLink : public FPCGExEdgeRefineOperation
+{
+public:
+	// Metric is the heuristic edge score, otherwise the squared edge length.
+	bool bUseScore = false;
+	bool bPickHighest = false;
+	double InitialBest = TNumericLimits<double>::Max();
+	int8 Validity = 1;
+
+	virtual void ProcessNode(PCGExClusters::FNode& Node) override
+	{
+		int32 BestIndex = -1;
+		double Best = InitialBest;
+
+		const PCGExClusters::FNode* RoamingSeedNode = bUseScore ? Heuristics->GetRoamingSeed() : nullptr;
+		const PCGExClusters::FNode* RoamingGoalNode = bUseScore ? Heuristics->GetRoamingGoal() : nullptr;
+
+		for (const PCGExGraphs::FLink Lk : Node.Links)
+		{
+			const double Value = bUseScore
+				? Heuristics->GetEdgeScore(Node, *Cluster->GetNode(Lk), *Cluster->GetEdge(Lk), *RoamingSeedNode, *RoamingGoalNode)
+				: Cluster->GetDistSquared(Node.Index, Lk.Node);
+
+			if (bPickHighest ? Value > Best : Value < Best)
+			{
+				Best = Value;
+				BestIndex = Lk.Edge;
+			}
+		}
+
+		if (BestIndex == -1)
+		{
+			return;
+		}
+
+		FPlatformAtomics::InterlockedExchange(&Cluster->GetEdge(BestIndex)->bValid, Validity);
+	}
 };
 
 /**
@@ -85,14 +124,6 @@ class UPCGExEdgeRefineInstancedFactory : public UPCGExInstancedFactory
 	GENERATED_BODY()
 
 public:
-	virtual void RegisterBuffersDependencies(FPCGExContext* InContext, PCGExData::FFacadePreloader& FacadePreloader)
-	{
-	}
-
-	virtual void PrepareVtxFacade(const TSharedPtr<PCGExData::FFacade>& InVtxFacade) const
-	{
-	}
-
 	virtual bool SupportFilters() const
 	{
 		return false;

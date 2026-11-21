@@ -11,7 +11,6 @@
 #include "Math/PCGExMath.h"
 #include "PCGExEdgeRefineLineTrace.generated.h"
 
-struct FPCGExCollisionDetails;
 /**
  *
  */

@@ -17,7 +17,6 @@
 
 class UPCGSettings;
 class UPCGNode;
-class UPCGExPointFilterFactoryData;
 
 USTRUCT(BlueprintType)
 struct FPCGExEdgeMatchConfig
@@ -79,8 +78,6 @@ class FPCGExVtxPropertyEdgeMatch : public FPCGExVtxPropertyOperation
 public:
 	FPCGExEdgeMatchConfig Config;
 
-	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>>* FilterFactories = nullptr;
-
 	virtual bool PrepareForCluster(FPCGExContext* InContext, TSharedPtr<PCGExClusters::FCluster> InCluster, const TSharedPtr<PCGExData::FFacade>& InVtxDataFacade, const TSharedPtr<PCGExData::FFacade>& InEdgeDataFacade) override;
 	virtual void ProcessNode(PCGExClusters::FNode& Node, const TArray<PCGExClusters::FAdjacencyData>& Adjacency, const PCGExMath::FBestFitPlane& BFP) override;
 
@@ -110,17 +107,9 @@ public:
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 	PCGEX_NODE_INFOS_CUSTOM_SUBTITLE(VtxEdgeMatch, "Vtx : Edge Match", "Find the edge that matches the closest provided direction.", FName(GetDisplayName()))
 #endif
-
-protected:
-	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	//~End UPCGSettings
 
-public:
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-#if WITH_EDITOR
-	virtual FString GetDisplayName() const override;
-#endif
 
 	/** Direction Settings. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, ShowOnlyInnerProperties))

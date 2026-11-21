@@ -34,7 +34,6 @@ namespace PCGExMT
 	class FTaskManager;
 }
 
-class UPCGSettings;
 struct FPCGExContext;
 class UPCGExHeuristicsFactoryData;
 
@@ -83,8 +82,6 @@ namespace PCGExClusterMT
 		bool bBuildCluster = true;
 		bool bWantsHeuristics = false;
 
-		bool bForceSingleThreadedProcessNodes = false;
-		bool bForceSingleThreadedProcessEdges = false;
 		bool bForceSingleThreadedProcessRange = false;
 
 		int32 NumNodes = 0;
@@ -121,7 +118,6 @@ namespace PCGExClusterMT
 		EPCGExHeuristicScoreMode HeuristicScoreMode = EPCGExHeuristicScoreMode::WeightedAverage;
 
 		bool bIsTrivial = false;
-		bool bIsOneToOne = false;
 
 		/** The whole node execution holds exactly ONE cluster: intra-cluster parallelism competes with
 		 *  nothing, so processors may nest ParallelFor where their workload warrants it. */
@@ -232,7 +228,6 @@ namespace PCGExClusterMT
 	class PCGEXGRAPHS_API IBatch : public TSharedFromThis<IBatch>
 	{
 	protected:
-		mutable FRWLock BatchLock;
 		TSharedPtr<PCGEx::FIndexLookup> NodeIndexLookup;
 
 		TSharedPtr<PCGExMT::FTaskManager> TaskManager;
@@ -302,11 +297,6 @@ namespace PCGExClusterMT
 		bool WantsHeuristics() const
 		{
 			return bWantsHeuristics;
-		}
-
-		EPCGExHeuristicScoreMode GetHeuristicsScoreMode() const
-		{
-			return HeuristicsScoreMode;
 		}
 
 		virtual void SetWantsHeuristics(const bool bRequired, const EPCGExHeuristicScoreMode ScoreMode)

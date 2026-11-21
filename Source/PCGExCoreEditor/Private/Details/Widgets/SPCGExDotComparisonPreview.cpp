@@ -320,16 +320,12 @@ int32 SPCGExDotComparisonPreview::OnPaint(
 		// Convert threshold from comparison space back to vector angle
 		// For unsigned: threshold = abs(dot), so dot = threshold, angle = acos(threshold)
 		// For signed: threshold = (1+dot)*0.5, so dot = 2*threshold - 1, angle = acos(2*threshold - 1)
-		double ThresholdDot;
-		if (bCurrentUnsigned)
+		auto ComparisonToDot = [bCurrentUnsigned](const double InComparison) -> double
 		{
-			ThresholdDot = FMath::Clamp(CurrentThreshold, 0.0, 1.0);
-		}
-		else
-		{
-			ThresholdDot = FMath::Clamp(CurrentThreshold * 2.0 - 1.0, -1.0, 1.0);
-		}
+			return bCurrentUnsigned ? FMath::Clamp(InComparison, 0.0, 1.0) : FMath::Clamp(InComparison * 2.0 - 1.0, -1.0, 1.0);
+		};
 
+		const double ThresholdDot = ComparisonToDot(CurrentThreshold);
 		const double ThresholdAngle = FMath::Acos(ThresholdDot);
 
 		// Right side threshold
@@ -343,17 +339,8 @@ int32 SPCGExDotComparisonPreview::OnPaint(
 			const double TolLowComp = FMath::Clamp(CurrentThreshold - CurrentTolerance, 0.0, 1.0);
 			const double TolHighComp = FMath::Clamp(CurrentThreshold + CurrentTolerance, 0.0, 1.0);
 
-			double TolLowDot, TolHighDot;
-			if (bCurrentUnsigned)
-			{
-				TolLowDot = FMath::Clamp(TolLowComp, 0.0, 1.0);
-				TolHighDot = FMath::Clamp(TolHighComp, 0.0, 1.0);
-			}
-			else
-			{
-				TolLowDot = FMath::Clamp(TolLowComp * 2.0 - 1.0, -1.0, 1.0);
-				TolHighDot = FMath::Clamp(TolHighComp * 2.0 - 1.0, -1.0, 1.0);
-			}
+			const double TolLowDot = ComparisonToDot(TolLowComp);
+			const double TolHighDot = ComparisonToDot(TolHighComp);
 
 			const double TolLowAngle = FMath::Acos(TolHighDot); // Higher dot = smaller angle
 			const double TolHighAngle = FMath::Acos(TolLowDot); // Lower dot = larger angle
@@ -386,46 +373,28 @@ int32 SPCGExDotComparisonPreview::OnPaint(
 	{
 		const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Regular", 7);
 
-		// 0° label (top - same direction)
+		struct FAngleLabel
 		{
-			const FVector2D Pos = AngleToScreen(ArcCenter, 0.0, ArcRadius + 4.0);
-			FSlateDrawElement::MakeText(
-				OutDrawElements, LayerId + 3,
-				AllottedGeometry.ToPaintGeometry(FVector2D(16, 12), FSlateLayoutTransform(Pos - FVector2D(8, 14))),
-				TEXT("0\u00B0"),
-				Font, ESlateDrawEffect::None,
-				PCGExDotPreviewConstants::LabelColor);
-		}
+			double Angle;
+			FVector2D Size;
+			FVector2D Offset;
+			const TCHAR* Text;
+		};
 
-		// 90° label (right - perpendicular)
-		{
-			const FVector2D Pos = AngleToScreen(ArcCenter, UE_HALF_PI, ArcRadius + 4.0);
-			FSlateDrawElement::MakeText(
-				OutDrawElements, LayerId + 3,
-				AllottedGeometry.ToPaintGeometry(FVector2D(24, 12), FSlateLayoutTransform(Pos + FVector2D(2, -6))),
-				TEXT("90\u00B0"),
-				Font, ESlateDrawEffect::None,
-				PCGExDotPreviewConstants::LabelColor);
-		}
+		const FAngleLabel AngleLabels[] = {
+			{0.0, FVector2D(16, 12), FVector2D(-8, -14), TEXT("0\u00B0")}, // top - same direction
+			{UE_HALF_PI, FVector2D(24, 12), FVector2D(2, -6), TEXT("90\u00B0")}, // right - perpendicular
+			{UE_PI, FVector2D(30, 12), FVector2D(-15, 2), TEXT("180\u00B0")}, // bottom - opposite
+			{-UE_HALF_PI, FVector2D(24, 12), FVector2D(-26, -6), TEXT("90\u00B0")}, // left - perpendicular, mirror
+		};
 
-		// 180° label (bottom - opposite)
+		for (const FAngleLabel& Label : AngleLabels)
 		{
-			const FVector2D Pos = AngleToScreen(ArcCenter, UE_PI, ArcRadius + 4.0);
+			const FVector2D Pos = AngleToScreen(ArcCenter, Label.Angle, ArcRadius + 4.0);
 			FSlateDrawElement::MakeText(
 				OutDrawElements, LayerId + 3,
-				AllottedGeometry.ToPaintGeometry(FVector2D(30, 12), FSlateLayoutTransform(Pos - FVector2D(15, -2))),
-				TEXT("180\u00B0"),
-				Font, ESlateDrawEffect::None,
-				PCGExDotPreviewConstants::LabelColor);
-		}
-
-		// 90° label (left - perpendicular, mirror)
-		{
-			const FVector2D Pos = AngleToScreen(ArcCenter, -UE_HALF_PI, ArcRadius + 4.0);
-			FSlateDrawElement::MakeText(
-				OutDrawElements, LayerId + 3,
-				AllottedGeometry.ToPaintGeometry(FVector2D(24, 12), FSlateLayoutTransform(Pos - FVector2D(26, 6))),
-				TEXT("90\u00B0"),
+				AllottedGeometry.ToPaintGeometry(Label.Size, FSlateLayoutTransform(Pos + Label.Offset)),
+				Label.Text,
 				Font, ESlateDrawEffect::None,
 				PCGExDotPreviewConstants::LabelColor);
 		}

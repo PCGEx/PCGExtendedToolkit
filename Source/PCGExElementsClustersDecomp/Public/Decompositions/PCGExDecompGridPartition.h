@@ -50,8 +50,6 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	EPCGExDecompGridMergeMode MergeMode = EPCGExDecompGridMergeMode::Nearest;
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	PCGEX_CREATE_DECOMPOSITION_OPERATION(DecompGridPartition, {
 	                                     Operation->CellSize = CellSize;
 	                                     Operation->MinNodesPerCell = MinNodesPerCell;

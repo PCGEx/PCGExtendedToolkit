@@ -34,18 +34,8 @@ namespace PCGExArrayHelpers
 			return;
 		}
 
-		TArray<FString> Result;
-		InCommaSeparatedString.ParseIntoArray(Result, TEXT(","));
-		// Trim leading and trailing spaces
-		for (int i = 0; i < Result.Num(); i++)
+		for (const FString& String : GetStringArrayFromCommaSeparatedList(InCommaSeparatedString))
 		{
-			FString& String = Result[i];
-			String.TrimStartAndEndInline();
-			if (String.IsEmpty())
-			{
-				continue;
-			}
-
 			OutStrings.Add(String);
 		}
 	}
@@ -57,18 +47,8 @@ namespace PCGExArrayHelpers
 			return;
 		}
 
-		TArray<FString> Result;
-		InCommaSeparatedString.ParseIntoArray(Result, TEXT(","));
-		// Trim leading and trailing spaces
-		for (int i = 0; i < Result.Num(); i++)
+		for (const FString& String : GetStringArrayFromCommaSeparatedList(InCommaSeparatedString))
 		{
-			FString& String = Result[i];
-			String.TrimStartAndEndInline();
-			if (String.IsEmpty())
-			{
-				continue;
-			}
-
 			OutStrings.AddUnique(String);
 		}
 	}

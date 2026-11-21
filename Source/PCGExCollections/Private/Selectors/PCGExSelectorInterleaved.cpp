@@ -77,14 +77,7 @@ TSharedPtr<PCGExCollections::FSelectorSharedData> UPCGExSelectorInterleavedFacto
 	const UPCGExAssetCollection* Collection,
 	const PCGExAssetCollection::FCategory* Target) const
 {
-	if (!Collection || !Target || Target->Entries.IsEmpty())
-	{
-		return nullptr;
-	}
-
-	TSharedPtr<FPCGExInterleavedSharedData> NewShared = MakeShared<FPCGExInterleavedSharedData>();
-	NewShared->TotalWeight = PCGExCollections::Selectors::BuildCumulativeWeights(Target, NewShared->Cumulative);
-	return NewShared;
+	return PCGExCollections::Selectors::BuildCumulativeWeightsSharedData(Collection, Target);
 }
 
 #pragma endregion

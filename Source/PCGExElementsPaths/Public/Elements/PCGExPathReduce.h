@@ -13,10 +13,6 @@
 
 #include "PCGExPathReduce.generated.h"
 
-namespace PCGExPaths
-{
-	class FPath;
-}
 
 UENUM(BlueprintType)
 enum class EPCGExPathReduceFilterMode : uint8
@@ -103,7 +99,6 @@ namespace PCGExPathReduce
 			DefaultPointFilterValue = false;
 		}
 
-		virtual ~FProcessor() override;
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;
 	};

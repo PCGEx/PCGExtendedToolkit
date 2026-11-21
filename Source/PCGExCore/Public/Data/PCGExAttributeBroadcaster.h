@@ -14,7 +14,6 @@
 #include "Types/PCGExTypeTraits.h"
 
 class UPCGMetadata;
-struct FPCGContext;
 struct FPCGContextHandle;
 class FPCGMetadataAttributeBase;
 struct FPCGExContext;
@@ -31,7 +30,6 @@ namespace PCGExData
 	struct FElement;
 	class FPointIO;
 	class IDataValue;
-	class FPointIOCollection;
 	class FFacade;
 }
 
@@ -119,7 +117,7 @@ namespace PCGExData
 		TSharedPtr<IPCGAttributeAccessorKeys> Keys;
 		TUniquePtr<const IPCGAttributeAccessor> InternalAccessor;
 
-		TSharedPtr<IDataValue> DataValue;
+		bool bHasDataValue = false;
 		T TypedDataValue = T{};
 
 		// False once a read through InternalAccessor has failed: every read then serves T{} without touching it.

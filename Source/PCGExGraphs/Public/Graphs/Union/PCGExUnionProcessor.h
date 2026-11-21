@@ -101,9 +101,6 @@ namespace PCGExGraphs
 	protected:
 		bool bRunning = false;
 
-		int32 PENum = 0;
-		int32 EENum = 0;
-
 		void OnNodesProcessingComplete();
 		void InternalStartExecution();
 

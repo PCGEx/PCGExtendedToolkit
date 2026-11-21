@@ -167,10 +167,4 @@ public:
 	FPCGExShapeFiblatConfig Config;
 
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;
-
-protected:
-	virtual bool IsCacheable() const override
-	{
-		return true;
-	}
 };

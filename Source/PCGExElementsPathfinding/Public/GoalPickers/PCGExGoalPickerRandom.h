@@ -57,8 +57,6 @@ public:
 	virtual void PCGExApplyDeprecation(const int64 PCGExDataVersion) override;
 #endif
 
-	virtual void CopySettingsFrom(const UPCGExInstancedFactory* Other) override;
-
 	virtual bool PrepareForData(FPCGExContext* InContext, const TSharedPtr<PCGExData::FFacade>& InSeedsDataFacade, const TSharedPtr<PCGExData::FFacade>& InGoalsDataFacade) override;
 
 	virtual int32 GetGoalIndex(const PCGExData::FConstPoint& Seed) const override;

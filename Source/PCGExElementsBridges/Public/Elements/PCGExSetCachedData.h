@@ -15,8 +15,6 @@
 
 #include "PCGExSetCachedData.generated.h"
 
-class AActor;
-
 /**
  * Set Cached Data.
  * Stores the input data on the target actor's PCGEx Data Cache component under a cache ID, so a later

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGCrc.h"
 #include "PCGExFilterCommon.h"
 #include "Collections/PCGExMeshCollection.h"
 #include "Core/PCGExPathProcessor.h"
@@ -23,8 +24,6 @@ namespace PCGExCollections
 {
 	class FCollectionSource;
 	class FPickUnpacker;
-	class FMicroSelectorHelper;
-	class FSelectorHelper;
 	class FSelectorSharedDataCache;
 }
 
@@ -275,8 +274,6 @@ namespace PCGExPathSplineMesh
 		{
 		}
 
-		bool bSetMeshWithSettings = false;
-
 		const FPCGExMeshCollectionEntry* MeshEntry = nullptr;
 		const UPCGExAssetCollection* Host = nullptr;
 		int16 MaterialPick = -1;
@@ -286,8 +283,7 @@ namespace PCGExPathSplineMesh
 		FVector EndScale3D = FVector::OneVector;
 		FVector Offset3D = FVector::ZeroVector;
 
-		virtual void ApplySettings(USplineMeshComponent* Component) const override;
-		bool ApplyMesh(USplineMeshComponent* Component) const;
+		void ApplyMesh(USplineMeshComponent* Component, UStaticMesh* InMesh) const;
 	};
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExPathSplineMeshContext, UPCGExPathSplineMeshSettings>
@@ -299,7 +295,6 @@ namespace PCGExPathSplineMesh
 		int8 bHasValidSegments = false;
 		bool bLocalFitting = true;
 
-		bool bIsPreviewMode = false;
 		bool bClosedLoop = false;
 		bool bApplyScaleToFit = false;
 		bool bUseTags = false;
@@ -333,7 +328,8 @@ namespace PCGExPathSplineMesh
 		TMap<const FPCGExMeshCollectionEntry*, FPCGExStaticMeshComponentDescriptor> ComposedDescriptors;
 
 		AActor* TargetActor = nullptr;
-		EObjectFlags ObjectFlags = RF_NoFlags;
+		/** This input's slot; each segment's component is found again under it, by segment index */
+		FPCGCrc SlotCrc;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

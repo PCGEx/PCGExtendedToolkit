@@ -7,8 +7,6 @@
 #include "PCGExModuleInterface.h" // Boilerplate
 #include "Modules/ModuleManager.h"
 
-class FPCGDataTypeRegistry;
-
 class PCGEXCOREEDITOR_API IPCGExEditorModuleInterface : public IModuleInterface
 {
 public:
@@ -16,9 +14,6 @@ public:
 	{
 		return TEXT("");
 	}
-
-	// Static registry
-	static TArray<IPCGExEditorModuleInterface*> RegisteredModules;
 
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;

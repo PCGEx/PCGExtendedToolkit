@@ -24,10 +24,6 @@ struct FPCGExAttributeCheckFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExAttributeCheckFilterConfig()
-	{
-	}
-
 	/** Name (or match pattern) of the attribute to look for. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Attribute Name"))
 	FString AttributeName = TEXT("Name");
@@ -69,16 +65,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FAttributeCheckFilter final : public ICollectionFilter
+	class FAttributeCheckFilter final : public TFactoryFilter<UPCGExAttributeCheckFilterFactory, ICollectionFilter>
 	{
 	public:
-		explicit FAttributeCheckFilter(const TObjectPtr<const UPCGExAttributeCheckFilterFactory>& InDefinition)
-			: ICollectionFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExAttributeCheckFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 	};

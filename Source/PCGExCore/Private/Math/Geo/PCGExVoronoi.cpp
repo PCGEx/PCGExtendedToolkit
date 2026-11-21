@@ -260,7 +260,7 @@ namespace PCGExMath::Geo
 				GetCentroid(Positions, Site.Vtx, Centroids[Site.Id]);
 			}
 
-			for (const TPair<uint32, uint64>& AdjacencyPair : Delaunay->Adjacency)
+			for (const TPair<uint64, uint64>& AdjacencyPair : Delaunay->Adjacency)
 			{
 				int32 A = -1;
 				int32 B = -1;

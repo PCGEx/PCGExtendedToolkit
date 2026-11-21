@@ -60,17 +60,6 @@ public:
 	FPCGExSpatialDomain_Broadphase();
 	virtual ~FPCGExSpatialDomain_Broadphase() override = default;
 
-	/**
-	 * Override the channel-interaction matrix used for query-time gating.
-	 * Default is `UPCGExSpatialDomainsSettings::GetCompiledMatrix()` at
-	 * construction; tests and isolated growth runs that want a different
-	 * matrix call this before placing anything.
-	 */
-	void SetChannelMatrix(const FPCGExChannelInteractionMatrix& InMatrix)
-	{
-		MatrixRef = &InMatrix;
-	}
-
 	// ========== Query ==========
 
 	virtual float QueryPoint(const FVector& Point) const override;
@@ -193,8 +182,7 @@ private:
 	/**
 	 * Borrowed-pointer to the channel-interaction matrix consulted before
 	 * each narrow-phase invocation. Initialized to the project-settings'
-	 * compiled matrix in the constructor; tests/specialized growth runs
-	 * may override via SetChannelMatrix. Pointer (not reference) so we
+	 * compiled matrix in the constructor. Pointer (not reference) so we
 	 * can keep the default ctor noexcept-friendly; guaranteed non-null
 	 * post-construction.
 	 */

@@ -7,6 +7,7 @@
 #include "PropertyEditorDelegates.h"
 #include "PropertyEditorModule.h"
 #include "Details/PCGExAttributeToPinCustomization.h"
+#include "Details/PCGExIntegerLayoutFieldCustomization.h"
 
 PCGEX_IMPLEMENT_MODULE(FPCGExElementsMetaEditorModule, PCGExElementsMetaEditor)
 
@@ -16,9 +17,5 @@ void FPCGExElementsMetaEditorModule::StartupModule()
 
 	PCGEX_REGISTER_CUSTO_START
 	PCGEX_REGISTER_CUSTO("PCGExAttributeToPinDetails", FPCGExAttributeToPinCustomization)
-}
-
-void FPCGExElementsMetaEditorModule::ShutdownModule()
-{
-	IPCGExEditorModuleInterface::ShutdownModule();
+	PCGEX_REGISTER_CUSTO("PCGExIntegerLayoutField", FPCGExIntegerLayoutFieldCustomization)
 }

@@ -10,12 +10,6 @@
 #include "Sampling/PCGExSamplingCommon.h"
 #include "PCGExEdgeOrder.generated.h"
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedArray;
-}
-
 UENUM()
 enum class EPCGExEdgeOrderMode : uint8
 {
@@ -124,8 +118,6 @@ namespace PCGExEdgeOrder
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual TSharedPtr<PCGExClusters::FCluster> HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef) override;
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;

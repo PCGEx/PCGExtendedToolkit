@@ -9,7 +9,6 @@
 #include "PCGExActorSelectionDetails.generated.h"
 
 class AActor;
-class IPCGGraphExecutionSource;
 class UWorld;
 struct FPCGActorSelectorSettings;
 struct FPCGComponentSelectorSettings;

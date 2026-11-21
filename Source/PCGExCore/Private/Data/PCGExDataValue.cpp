@@ -214,11 +214,7 @@ template class PCGEXCORE_API TDataValue<_TYPE>;
 
 				if (SubSelection.HasSelection())
 				{
-					PCGExMetaHelpers::ExecuteWithRightType(SourceAttribute, [&](auto WorkingValue)
-					{
-						using T_WORKING = decltype(DummyValue);
-						TypedDataValue = MakeShared<TDataValue<T_WORKING>>(SubSelection.Get<T, T_WORKING>(Value));
-					});
+					TypedDataValue = MakeShared<TDataValue<T>>(SubSelection.Get<T, T>(Value));
 				}
 				else
 				{

@@ -11,9 +11,6 @@
 
 #include "PCGExMovePivot.generated.h"
 
-class FPCGExComputeIOBounds;
-
-
 UCLASS(BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Misc", meta=(PCGExNodeLibraryDoc="transform/transform/move-pivot"))
 class UPCGExMovePivotSettings : public UPCGExPointsProcessorSettings
 {
@@ -76,8 +73,6 @@ namespace PCGExMovePivot
 			: TProcessor(InPointDataFacade)
 		{
 		}
-
-		virtual ~FProcessor() override;
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void ProcessPoints(const PCGExMT::FScope& Scope) override;

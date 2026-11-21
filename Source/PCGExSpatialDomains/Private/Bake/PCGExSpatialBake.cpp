@@ -48,7 +48,7 @@ namespace PCGExSpatial::Bake
 		// (Normal-from-data with FBestFitPlane fallback, or pure BestFit) ->
 		// project to 2D outline. Mirrors FPolyPath::FPolyPath(UPCGSplineData*)
 		// projection logic minus the unused spline/octree construction.
-		static bool BakeSplineToPolygonEntry(
+		bool BakeSplineToPolygonEntry(
 			const UPCGSplineData* SplineData,
 			double Fidelity,
 			FPCGExGeo2DProjectionDetails Projection,
@@ -119,7 +119,7 @@ namespace PCGExSpatial::Bake
 		// transform location + rotation * (local center * scale); extents =
 		// local extents * |scale|. Factory::FromTransform doesn't apply scale,
 		// so we do it explicitly.
-		static int32 BakePointsToOBBs(
+		int32 BakePointsToOBBs(
 			const UPCGBasePointData* PointData,
 			TArray<FBakedEntry>& OutEntries,
 			FName ChannelKey)

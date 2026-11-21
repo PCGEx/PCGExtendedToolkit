@@ -54,7 +54,6 @@ class FPCGExProbeGlobalAnisotropic : public FPCGExProbeOperation
 public:
 	virtual bool IsGlobalProbe() const override;
 	virtual bool WantsOctree() const override;
-	virtual bool Prepare(FPCGExContext* InContext) override;
 	virtual void ProcessAll(TSet<uint64>& OutEdges) const override;
 
 	FPCGExProbeConfigGlobalAnisotropic Config;
@@ -83,8 +82,7 @@ class UPCGExProbeGlobalAnisotropicProviderSettings : public UPCGExProbeFactoryPr
 
 public:
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS(ProbeGlobalAnisotropic, "G-Probe : Anisotropic", "Ellipsoidal distance metric for directional connectivity")
 #endif
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;

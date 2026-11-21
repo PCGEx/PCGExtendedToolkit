@@ -14,11 +14,6 @@
 
 #include "PCGExGlobalProbeKNN.generated.h"
 
-namespace PCGExProbing
-{
-	struct FCandidate;
-}
-
 UENUM()
 enum class EPCGExProbeKNNMode : uint8
 {
@@ -81,8 +76,7 @@ class UPCGExProbeKNNProviderSettings : public UPCGExProbeFactoryProviderSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS(ProbeKNN, "G-Probe : KNN", "K-Nearest Neighbors")
 #endif
 	//~End UPCGSettings

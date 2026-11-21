@@ -37,7 +37,6 @@ class FPCGExProbeDBSCAN : public FPCGExProbeOperation
 public:
 	virtual bool IsGlobalProbe() const override;
 	virtual bool WantsOctree() const override;
-	virtual bool Prepare(FPCGExContext* InContext) override;
 	virtual void ProcessAll(TSet<uint64>& OutEdges) const override;
 
 	FPCGExProbeConfigDBSCAN Config;
@@ -62,8 +61,7 @@ class UPCGExProbeDBSCANProviderSettings : public UPCGExProbeFactoryProviderSetti
 
 public:
 #if WITH_EDITOR
-	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
-	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
+	virtual FPCGExProbeConfigBase* GetMutableBaseConfig() override { return &Config; }
 	PCGEX_NODE_INFOS(ProbeDBSCAN, "G-Probe : DBSCAN", "Density-based connectivity/reachability (DBSCAN-style)")
 #endif
 	virtual UPCGExFactoryData* CreateFactory(FPCGExContext* InContext, UPCGExFactoryData* InFactory) const override;

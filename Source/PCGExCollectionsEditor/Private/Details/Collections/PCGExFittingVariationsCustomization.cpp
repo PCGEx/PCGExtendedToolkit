@@ -8,11 +8,11 @@
 #include "IDetailChildrenBuilder.h"
 #include "Details/PCGExCategoryGroups.h"
 #include "Details/Collections/PCGExCollectionCategoryGroups.h"
+#include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "PropertyHandle.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/PCGExInlineNumericWidgets.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
@@ -32,7 +32,7 @@ namespace PCGExFittingVariationsCustomization
 // remains the primary axis indicator.
 #define PCGEX_AXIS_LABEL(_TEXT, _TINT) \
 + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(1, 0) \
-[SNew(STextBlock).Text(FText::FromString(TEXT(_TEXT))).Font(FCoreStyle::GetDefaultFontStyle("Bold", 7)).ColorAndOpacity(FSlateColor(_TINT)).MinDesiredWidth(10)]
+[SNew(STextBlock).Text(FText::FromString(_TEXT)).Font(FCoreStyle::GetDefaultFontStyle("Bold", 7)).ColorAndOpacity(FSlateColor(_TINT)).MinDesiredWidth(10)]
 
 #define PCGEX_SMALL_LABEL(_TEXT) \
 + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(1, 0)\
@@ -57,7 +57,7 @@ return EVisibility::Collapsed;})
 #define PCGEX_AXIS_FIELD(_PARENT_HANDLE, _AXIS_NAME, _AXIS_COLOR, _TYPE_INTERFACE) \
 + SHorizontalBox::Slot().Padding(1).FillWidth(1) \
 [ \
-	PCGExInlineNumericWidgets::MakeAxisEntry(_PARENT_HANDLE->GetChildHandle(TEXT(_AXIS_NAME)), _AXIS_COLOR, _TYPE_INTERFACE) \
+	PCGExInlineNumericWidgets::MakeAxisEntry(_PARENT_HANDLE->GetChildHandle(_AXIS_NAME), _AXIS_COLOR, _TYPE_INTERFACE) \
 ]
 
 // Inline step spinner as third column on an axis row.
@@ -70,7 +70,7 @@ return EVisibility::Collapsed;})
 	PCGEX_STEP_VISIBILITY(_SNAP_HANDLE) \
 	.RenderOpacity(0.7f) \
 	[ \
-		PCGExInlineNumericWidgets::MakeAxisEntry(_STEPS_HANDLE->GetChildHandle(TEXT(_AXIS_NAME)), _AXIS_COLOR, _TYPE_INTERFACE) \
+		PCGExInlineNumericWidgets::MakeAxisEntry(_STEPS_HANDLE->GetChildHandle(_AXIS_NAME), _AXIS_COLOR, _TYPE_INTERFACE) \
 	] \
 ]
 
@@ -84,12 +84,8 @@ void FPCGExFittingVariationsCustomization::CustomizeHeader(
 	FDetailWidgetRow& HeaderRow,
 	IPropertyTypeCustomizationUtils& CustomizationUtils)
 {
-	// Grab parent collection
-	TArray<UObject*> OuterObjects;
-	PropertyHandle->GetOuterObjects(OuterObjects);
-
 	const bool bIsGlobal = PropertyHandle->GetProperty()->GetFName().ToString().Contains(TEXT("Global"));
-	if (UPCGExAssetCollection* Collection = !OuterObjects.IsEmpty() ? Cast<UPCGExAssetCollection>(OuterObjects[0]) : nullptr;
+	if (const UPCGExAssetCollection* Collection = PCGExCollectionEditorUtils::FindHostCollection(PropertyHandle);
 		Collection && !bIsGlobal)
 	{
 		HeaderRow.NameContent()[
@@ -136,6 +132,26 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 {
 	// Rows join footer sub-groups by tag; views without the filter (collection-level globals) ignore it.
 
+	// One axis row: tinted label, min : max entries, then the step entry (collapsed while snapping is off).
+	const auto MakeAxisRow = [](
+		const TCHAR* Label, const FLinearColor& Tint, const FName AxisName, const FLinearColor& AxisColor,
+		const TSharedPtr<IPropertyHandle>& MinHandle, const TSharedPtr<IPropertyHandle>& MaxHandle,
+		const TSharedPtr<IPropertyHandle>& StepsHandle, const TSharedPtr<IPropertyHandle>& SnapHandle,
+		const TSharedPtr<INumericTypeInterface<double>>& TypeInterface, const TAttribute<bool>& Enabled) -> TSharedRef<SWidget>
+	{
+		return SNew(SHorizontalBox)
+			.IsEnabled(Enabled)
+			PCGEX_AXIS_LABEL(Label, Tint)
+			+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
+			[
+				SNew(SHorizontalBox)
+				PCGEX_AXIS_FIELD(MinHandle, AxisName, AxisColor, TypeInterface)
+				PCGEX_SEP_LABEL(":")
+				PCGEX_AXIS_FIELD(MaxHandle, AxisName, AxisColor, TypeInterface)
+			]
+			PCGEX_STEP_SLOT(StepsHandle, AxisName, SnapHandle, AxisColor, TypeInterface);
+	};
+
 #pragma region Offset Min/Max
 
 	TSharedPtr<IPropertyHandle> OffsetMinHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, OffsetMin));
@@ -173,56 +189,29 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 		.MinDesiredWidth(200)
 		[
 			SNew(SVerticalBox)
-
-			// X -- [min]:[max] [step?]
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" X", PCGExFittingVariationsCustomization::AxisRowTintX)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(OffsetMinHandle, "X", PCGExInlineNumericWidgets::AxisColorX, nullptr)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(OffsetMaxHandle, "X", PCGExInlineNumericWidgets::AxisColorX, nullptr)
-				]
-				PCGEX_STEP_SLOT(OffsetStepsHandle, "X", OffsetSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorX, nullptr)
+				MakeAxisRow(
+					TEXT(" X"), PCGExFittingVariationsCustomization::AxisRowTintX, TEXT("X"), PCGExInlineNumericWidgets::AxisColorX,
+					OffsetMinHandle, OffsetMaxHandle, OffsetStepsHandle, OffsetSnappingModeHandle, nullptr, true)
 			]
-
-			// Row 4: Y
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" Y", PCGExFittingVariationsCustomization::AxisRowTintY)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(OffsetMinHandle, "Y", PCGExInlineNumericWidgets::AxisColorY, nullptr)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(OffsetMaxHandle, "Y", PCGExInlineNumericWidgets::AxisColorY, nullptr)
-				]
-				PCGEX_STEP_SLOT(OffsetStepsHandle, "Y", OffsetSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorY, nullptr)
+				MakeAxisRow(
+					TEXT(" Y"), PCGExFittingVariationsCustomization::AxisRowTintY, TEXT("Y"), PCGExInlineNumericWidgets::AxisColorY,
+					OffsetMinHandle, OffsetMaxHandle, OffsetStepsHandle, OffsetSnappingModeHandle, nullptr, true)
 			]
-
-			// Row 5: Z
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" Z", PCGExFittingVariationsCustomization::AxisRowTintZ)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(OffsetMinHandle, "Z", PCGExInlineNumericWidgets::AxisColorZ, nullptr)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(OffsetMaxHandle, "Z", PCGExInlineNumericWidgets::AxisColorZ, nullptr)
-				]
-				PCGEX_STEP_SLOT(OffsetStepsHandle, "Z", OffsetSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorZ, nullptr)
+				MakeAxisRow(
+					TEXT(" Z"), PCGExFittingVariationsCustomization::AxisRowTintZ, TEXT("Z"), PCGExInlineNumericWidgets::AxisColorZ,
+					OffsetMinHandle, OffsetMaxHandle, OffsetStepsHandle, OffsetSnappingModeHandle, nullptr, true)
 			]
 		];
 
@@ -268,56 +257,30 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 		.MinDesiredWidth(200)
 		[
 			SNew(SVerticalBox)
-
 			// R (Roll) -- tinted X because Roll is the X-axis rotation
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" R", PCGExFittingVariationsCustomization::AxisRowTintX)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(RotationMinHandle, "Roll", PCGExInlineNumericWidgets::AxisColorX, DegreeInterface)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(RotationMaxHandle, "Roll", PCGExInlineNumericWidgets::AxisColorX, DegreeInterface)
-				]
-				PCGEX_STEP_SLOT(RotationStepsHandle, "Roll", RotationSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorX, DegreeInterface)
+				MakeAxisRow(
+					TEXT(" R"), PCGExFittingVariationsCustomization::AxisRowTintX, TEXT("Roll"), PCGExInlineNumericWidgets::AxisColorX,
+					RotationMinHandle, RotationMaxHandle, RotationStepsHandle, RotationSnappingModeHandle, DegreeInterface, true)
 			]
-
-			// Row 4: P (Pitch) -- Y-axis rotation
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" P", PCGExFittingVariationsCustomization::AxisRowTintY)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(RotationMinHandle, "Pitch", PCGExInlineNumericWidgets::AxisColorY, DegreeInterface)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(RotationMaxHandle, "Pitch", PCGExInlineNumericWidgets::AxisColorY, DegreeInterface)
-				]
-				PCGEX_STEP_SLOT(RotationStepsHandle, "Pitch", RotationSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorY, DegreeInterface)
+				MakeAxisRow(
+					TEXT(" P"), PCGExFittingVariationsCustomization::AxisRowTintY, TEXT("Pitch"), PCGExInlineNumericWidgets::AxisColorY,
+					RotationMinHandle, RotationMaxHandle, RotationStepsHandle, RotationSnappingModeHandle, DegreeInterface, true)
 			]
-
-			// Row 5: Y (Yaw) -- Z-axis rotation
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" Y", PCGExFittingVariationsCustomization::AxisRowTintZ)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(RotationMinHandle, "Yaw", PCGExInlineNumericWidgets::AxisColorZ, DegreeInterface)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(RotationMaxHandle, "Yaw", PCGExInlineNumericWidgets::AxisColorZ, DegreeInterface)
-				]
-				PCGEX_STEP_SLOT(RotationStepsHandle, "Yaw", RotationSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorZ, DegreeInterface)
+				MakeAxisRow(
+					TEXT(" Y"), PCGExFittingVariationsCustomization::AxisRowTintZ, TEXT("Yaw"), PCGExInlineNumericWidgets::AxisColorZ,
+					RotationMinHandle, RotationMaxHandle, RotationStepsHandle, RotationSnappingModeHandle, DegreeInterface, true)
 			]
 		];
 
@@ -330,6 +293,13 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 	TSharedPtr<IPropertyHandle> UniformScaleHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, bUniformScale));
 	TSharedPtr<IPropertyHandle> ScaleSnappingModeHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, SnapScale));
 	TSharedPtr<IPropertyHandle> ScaleStepsHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPCGExFittingVariations, ScaleSnap));
+
+	const TAttribute<bool> EnabledWhenNonUniform = TAttribute<bool>::CreateLambda([UniformScaleHandle]()
+	{
+		bool bUniform = false;
+		UniformScaleHandle->GetValue(bUniform);
+		return !bUniform;
+	});
 
 	ChildBuilder
 		.AddCustomRow(FText::FromString("Scale"))
@@ -360,68 +330,29 @@ void FPCGExFittingVariationsCustomization::CustomizeChildren(
 		.MinDesiredWidth(200)
 		[
 			SNew(SVerticalBox)
-
-			// X
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				PCGEX_AXIS_LABEL(" X", PCGExFittingVariationsCustomization::AxisRowTintX)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(ScaleMinHandle, "X", PCGExInlineNumericWidgets::AxisColorX, nullptr)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(ScaleMaxHandle, "X", PCGExInlineNumericWidgets::AxisColorX, nullptr)
-				]
-				PCGEX_STEP_SLOT(ScaleStepsHandle, "X", ScaleSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorX, nullptr)
+				MakeAxisRow(
+					TEXT(" X"), PCGExFittingVariationsCustomization::AxisRowTintX, TEXT("X"), PCGExInlineNumericWidgets::AxisColorX,
+					ScaleMinHandle, ScaleMaxHandle, ScaleStepsHandle, ScaleSnappingModeHandle, nullptr, true)
 			]
-
-			// Row 4: Y (disabled when uniform)
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				.IsEnabled_Lambda([UniformScaleHandle]()
-				{
-					bool bUniform = false;
-					UniformScaleHandle->GetValue(bUniform);
-					return !bUniform;
-				})
-				PCGEX_AXIS_LABEL(" Y", PCGExFittingVariationsCustomization::AxisRowTintY)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(ScaleMinHandle, "Y", PCGExInlineNumericWidgets::AxisColorY, nullptr)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(ScaleMaxHandle, "Y", PCGExInlineNumericWidgets::AxisColorY, nullptr)
-				]
-				PCGEX_STEP_SLOT(ScaleStepsHandle, "Y", ScaleSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorY, nullptr)
+				MakeAxisRow(
+					TEXT(" Y"), PCGExFittingVariationsCustomization::AxisRowTintY, TEXT("Y"), PCGExInlineNumericWidgets::AxisColorY,
+					ScaleMinHandle, ScaleMaxHandle, ScaleStepsHandle, ScaleSnappingModeHandle, nullptr, EnabledWhenNonUniform)
 			]
-
-			// Row 5: Z (disabled when uniform)
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0, 1)
 			[
-				SNew(SHorizontalBox)
-				.IsEnabled_Lambda([UniformScaleHandle]()
-				{
-					bool bUniform = false;
-					UniformScaleHandle->GetValue(bUniform);
-					return !bUniform;
-				})
-				PCGEX_AXIS_LABEL(" Z", PCGExFittingVariationsCustomization::AxisRowTintZ)
-				+ SHorizontalBox::Slot().Padding(1).FillWidth(2)
-				[
-					SNew(SHorizontalBox)
-					PCGEX_AXIS_FIELD(ScaleMinHandle, "Z", PCGExInlineNumericWidgets::AxisColorZ, nullptr)
-					PCGEX_SEP_LABEL(":")
-					PCGEX_AXIS_FIELD(ScaleMaxHandle, "Z", PCGExInlineNumericWidgets::AxisColorZ, nullptr)
-				]
-				PCGEX_STEP_SLOT(ScaleStepsHandle, "Z", ScaleSnappingModeHandle, PCGExInlineNumericWidgets::AxisColorZ, nullptr)
+				MakeAxisRow(
+					TEXT(" Z"), PCGExFittingVariationsCustomization::AxisRowTintZ, TEXT("Z"), PCGExInlineNumericWidgets::AxisColorZ,
+					ScaleMinHandle, ScaleMaxHandle, ScaleStepsHandle, ScaleSnappingModeHandle, nullptr, EnabledWhenNonUniform)
 			]
 		];
 

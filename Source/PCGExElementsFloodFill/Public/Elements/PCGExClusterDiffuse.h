@@ -192,8 +192,6 @@ namespace PCGExClusterDiffuse
 			bAllowEdgesDataFacadeScopedGet = false;
 		}
 
-		virtual ~FProcessor() override;
-
 		virtual void CompleteWork() override;
 		virtual void Cleanup() override;
 	};

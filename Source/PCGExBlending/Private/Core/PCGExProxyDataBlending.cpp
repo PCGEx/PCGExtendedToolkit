@@ -63,27 +63,6 @@ namespace PCGExBlending
 		C->SetVoid(TargetIndex, ValC.GetRaw());
 	}
 
-	void FProxyDataBlender::BlendScope(const PCGExMT::FScope& Scope, const double Weight) const
-	{
-		if (!Operation || !A || !C)
-		{
-			return;
-		}
-
-		PCGExTypes::FScopedTypedValue ValA = MakeScopedValue();
-		PCGExTypes::FScopedTypedValue ValB = MakeScopedValue();
-		PCGExTypes::FScopedTypedValue ValC = MakeScopedValue();
-
-		PCGEX_SCOPE_LOOP(Index)
-		{
-			A->GetVoid(Index, ValA.GetRaw());
-			B->GetVoid(Index, ValB.GetRaw());
-
-			Operation->Blend(ValA.GetRaw(), ValB.GetRaw(), Weight, ValC.GetRaw());
-			C->SetVoid(Index, ValC.GetRaw());
-		}
-	}
-
 	void FProxyDataBlender::BlendScope(const PCGExMT::FScope& Scope, TArrayView<const double> Weights) const
 	{
 		if (!Operation || !A || !C)
@@ -101,32 +80,6 @@ namespace PCGExBlending
 			B->GetVoid(Index, ValB.GetRaw());
 
 			Operation->Blend(ValA.GetRaw(), ValB.GetRaw(), Weights[Index - Scope.Start], ValC.GetRaw());
-			C->SetVoid(Index, ValC.GetRaw());
-		}
-	}
-
-	void FProxyDataBlender::BlendScope(const PCGExMT::FScope& Scope, TArrayView<const int8> Mask, const double Weight) const
-	{
-		if (!Operation || !A || !C)
-		{
-			return;
-		}
-
-		PCGExTypes::FScopedTypedValue ValA = MakeScopedValue();
-		PCGExTypes::FScopedTypedValue ValB = MakeScopedValue();
-		PCGExTypes::FScopedTypedValue ValC = MakeScopedValue();
-
-		PCGEX_SCOPE_LOOP(Index)
-		{
-			if (!Mask[Index - Scope.Start])
-			{
-				continue;
-			}
-
-			A->GetVoid(Index, ValA.GetRaw());
-			B->GetVoid(Index, ValB.GetRaw());
-
-			Operation->Blend(ValA.GetRaw(), ValB.GetRaw(), Weight, ValC.GetRaw());
 			C->SetVoid(Index, ValC.GetRaw());
 		}
 	}
@@ -208,7 +161,7 @@ namespace PCGExBlending
 		check(Operation)
 		check(C)
 
-		if (!Tracker.Count)
+		if (!Tracker.Count || bEndMultiIsNoop)
 		{
 			return;
 		}
@@ -218,20 +171,6 @@ namespace PCGExBlending
 		C->GetCurrentVoid(TargetIndex, Current.GetRaw());                          // Read accumulated value
 		Operation->EndMulti(Current.GetRaw(), Tracker.TotalWeight, Tracker.Count); // Finalize (e.g., divide by count for average)
 		C->SetVoid(TargetIndex, Current.GetRaw());                                 // Write final result
-	}
-
-	void FProxyDataBlender::Div(const int32 TargetIndex, const double Divider)
-	{
-		if (!Operation || !C || Divider == 0.0)
-		{
-			return;
-		}
-
-		PCGExTypes::FScopedTypedValue Value = MakeScopedValue();
-
-		C->GetVoid(TargetIndex, Value.GetRaw()); // Read current value
-		Operation->Div(Value.GetRaw(), Divider); // Divide
-		C->SetVoid(TargetIndex, Value.GetRaw()); // Write back
 	}
 
 	TSharedPtr<PCGExData::IBuffer> FProxyDataBlender::GetOutputBuffer() const
@@ -303,14 +242,16 @@ namespace PCGExBlending
 
 		// Set type info
 		UnderlyingType = Desc_A.WorkingType;
-		bNeedsLifecycleManagement = PCGExTypes::FScopedTypedValue::NeedsLifecycleManagement(UnderlyingType);
 
 		// Create output first so we may read from it
-		C = PCGExData::GetProxyBuffer(InContext, Desc_C);
-		A = PCGExData::GetProxyBuffer(InContext, Desc_A);
-		B = PCGExData::GetProxyBuffer(InContext, Desc_B);
+		C = PCGExData::GetProxyBuffer(InContext, Desc_C, PCGExData::EProxyAccess::TypeErased);
+		A = PCGExData::GetProxyBuffer(InContext, Desc_A, PCGExData::EProxyAccess::TypeErased);
+		B = PCGExData::GetProxyBuffer(InContext, Desc_B, PCGExData::EProxyAccess::TypeErased);
 
-		// Ensure C is readable for MultiBlend, as those will use GetCurrent
+		// Before the early-outs below: the cached state must match the proxies even on a failed init.
+		ResolveCachedState();
+
+		// Ensure C is readable for MultiBlend, as those will use GetCurrentVoid
 		if (C && !C->EnsureReadable())
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("Failed to ensure target buffer is readable."));
@@ -346,6 +287,7 @@ namespace PCGExBlending
 
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 
 		return Blender;
 	}
@@ -368,10 +310,11 @@ namespace PCGExBlending
 		}
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 		return Blender;
 	}
 
-	namespace
+	namespace PCGExProxyDataBlending
 	{
 		// Resolve the FProperty backing a proxy. Returns nullptr for typed TBuffer<T> proxies,
 		// constants, and point-property proxies. Non-owning -- the FProperty's lifetime is tied
@@ -427,6 +370,16 @@ namespace PCGExBlending
 		}
 	}
 
+	void FProxyDataBlender::ResolveCachedState()
+	{
+		ScratchProperty = PCGExProxyDataBlending::ResolveBackingProperty(A);
+		bSizedScratch = ValueSize > 0 && PCGExTypes::FScopedTypedValue::GetTypeSize(UnderlyingType) == 0;
+
+		// Reading a slot back and storing it unchanged is exact only without sub-selection or Real<->Working conversion.
+		bEndMultiIsNoop = Operation && C && !Operation->HasFinalize()
+			&& !C->HasSubSelection() && C->RealType == C->WorkingType && C->GetBuffer().IsValid();
+	}
+
 	TSharedPtr<FProxyDataBlender> CreateProxyBlender(
 		FPCGExContext* InContext,
 		const EPCGExABBlendingType BlendMode,
@@ -448,9 +401,9 @@ namespace PCGExBlending
 
 		// Create proxies first -- the operation now depends on whether any proxy is
 		// property-backed, which we can only know after they're built.
-		Blender->C = PCGExData::GetProxyBuffer(InContext, C);
-		Blender->A = PCGExData::GetProxyBuffer(InContext, A);
-		Blender->B = PCGExData::GetProxyBuffer(InContext, B);
+		Blender->C = PCGExData::GetProxyBuffer(InContext, C, PCGExData::EProxyAccess::TypeErased);
+		Blender->A = PCGExData::GetProxyBuffer(InContext, A, PCGExData::EProxyAccess::TypeErased);
+		Blender->B = PCGExData::GetProxyBuffer(InContext, B, PCGExData::EProxyAccess::TypeErased);
 
 		if (!Blender->A)
 		{
@@ -470,7 +423,7 @@ namespace PCGExBlending
 			return nullptr;
 		}
 
-		Blender->Operation = CreateOperationForProxies(A, Blender->A, Blender->B, Blender->C, BlendMode, bResetValueForMultiBlend);
+		Blender->Operation = PCGExProxyDataBlending::CreateOperationForProxies(A, Blender->A, Blender->B, Blender->C, BlendMode, bResetValueForMultiBlend);
 		if (!Blender->Operation)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("ProxyBlender: Failed to create blend operation."));
@@ -479,8 +432,9 @@ namespace PCGExBlending
 
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 
-		// Ensure C is readable for MultiBlend, as those will use GetCurrent
+		// Ensure C is readable for MultiBlend, as those will use GetCurrentVoid
 		if (!Blender->C->EnsureReadable())
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("ProxyBlender: Failed to ensure target write buffer is also readable."));
@@ -509,8 +463,8 @@ namespace PCGExBlending
 		Blender->UnderlyingType = A.WorkingType;
 
 		// Create proxies first (see 3-source overload for rationale).
-		Blender->C = PCGExData::GetProxyBuffer(InContext, C);
-		Blender->A = PCGExData::GetProxyBuffer(InContext, A);
+		Blender->C = PCGExData::GetProxyBuffer(InContext, C, PCGExData::EProxyAccess::TypeErased);
+		Blender->A = PCGExData::GetProxyBuffer(InContext, A, PCGExData::EProxyAccess::TypeErased);
 		Blender->B = Blender->A; // Use B as fallback -- important for intrinsic properties such as $Index
 
 		if (!Blender->A)
@@ -525,7 +479,7 @@ namespace PCGExBlending
 			return nullptr;
 		}
 
-		Blender->Operation = CreateOperationForProxies(A, Blender->A, Blender->B, Blender->C, BlendMode, bResetValueForMultiBlend);
+		Blender->Operation = PCGExProxyDataBlending::CreateOperationForProxies(A, Blender->A, Blender->B, Blender->C, BlendMode, bResetValueForMultiBlend);
 		if (!Blender->Operation)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("ProxyBlender: Failed to create blend operation."));
@@ -534,8 +488,9 @@ namespace PCGExBlending
 
 		Blender->ValueSize = Blender->Operation->GetValueSize();
 		Blender->ValueAlignment = Blender->Operation->GetValueAlignment();
+		Blender->ResolveCachedState();
 
-		// Ensure C is readable for MultiBlend, as those will use GetCurrent
+		// Ensure C is readable for MultiBlend, as those will use GetCurrentVoid
 		if (!Blender->C->EnsureReadable())
 		{
 			PCGE_LOG_C(Error, GraphAndLog, InContext, FTEXT("ProxyBlender: Failed to ensure target write buffer is also readable."));

@@ -151,13 +151,17 @@ namespace PCGExData
 		Step.StepGetFn = nullptr;
 		Step.StepSetFn = nullptr;
 
-		ParsedChain.Reset();
+		// Replaces a trailing field step only: component / axis steps ahead of it stay selected.
+		if (!ParsedChain.Steps.IsEmpty() && ParsedChain.Steps.Last().Accessor == Accessor)
+		{
+			ParsedChain.Steps.RemoveAt(ParsedChain.Steps.Num() - 1);
+		}
 		ParsedChain.Steps.Add(MoveTemp(Step));
 		ParsedChain.bIsValid = true;
 		ParsedChain.FinalType = EPCGMetadataTypes::Double;
 
 		Field = NewField;
-		ClassifierMask = Bit_HasSelection | Bit_Field;
+		ClassifierMask |= Bit_HasSelection | Bit_Field;
 		CachedCompiledSourceType = EPCGMetadataTypes::Unknown; // invalidate compile cache
 		return true;
 	}
@@ -423,30 +427,10 @@ namespace PCGExData
 		}
 	}
 
-	double FSubSelection::ExtractFieldToDouble(EPCGMetadataTypes SourceType, const void* Source) const
-	{
-		const ISubAccessor* FieldAccessor = FSubAccessorRegistry::GetSingleFieldAccessor();
-		FAccessorParseResult Parsed;
-		Parsed.Field = Field;
-
-		double Out = 0.0;
-		FieldAccessor->ApplyGet(SourceType, Source, EPCGMetadataTypes::Double, &Out, Parsed);
-		return Out;
-	}
-
-	void FSubSelection::InjectFieldFromDouble(EPCGMetadataTypes TargetType, void* Target, double Value) const
-	{
-		const ISubAccessor* FieldAccessor = FSubAccessorRegistry::GetSingleFieldAccessor();
-		FAccessorParseResult Parsed;
-		Parsed.Field = Field;
-
-		FieldAccessor->ApplySet(TargetType, Target, EPCGMetadataTypes::Double, &Value, Parsed);
-	}
-
 	//
-	// Legacy Type-Erased Interface (GetVoid/SetVoid)
+	// Legacy Type-Erased Interface (GetVoid)
 	//
-	// Delegates to ApplyGet/ApplySet (the chain walker) with intermediate
+	// Delegates to ApplyGet (the chain walker) with intermediate
 	// type conversion. For performance, prefer FCachedSubSelection.
 	//
 
@@ -479,18 +463,6 @@ namespace PCGExData
 		{
 			PCGExTypeOps::FConversionTable::Convert(SourceType, Source, WorkingType, Target);
 		}
-	}
-
-	void FSubSelection::SetVoid(EPCGMetadataTypes TargetType, void* Target,
-	                            EPCGMetadataTypes SourceType, const void* Source) const
-	{
-		if (!HasSelection())
-		{
-			PCGExTypeOps::FConversionTable::Convert(SourceType, Source, TargetType, Target);
-			return;
-		}
-
-		ApplySet(TargetType, Target, SourceType, Source);
 	}
 
 	//

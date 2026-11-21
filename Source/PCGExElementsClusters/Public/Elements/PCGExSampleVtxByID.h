@@ -30,12 +30,6 @@ namespace PCGExBlending
 	class FBlendOpsSchema;
 }
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedNumericValue;
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="clusters/utilities/sample-vtx-by-id"))
 class UPCGExSampleVtxByIDSettings : public UPCGExPointsProcessorSettings
 {
@@ -164,12 +158,9 @@ namespace PCGExSampleVtxByID
 	{
 		TArray<int8> SamplingMask;
 
-		FVector SafeUpVector = FVector::UpVector;
 		TSharedPtr<PCGExDetails::TSettingValue<FVector>> LookAtUpGetter;
 		TSharedPtr<PCGExData::TBuffer<int32>> VtxID32Getter;
 		TSharedPtr<PCGExData::TBuffer<int64>> VtxID64Getter;
-
-		FPCGExBlendingDetails BlendingDetails;
 
 		TSharedPtr<PCGExBlending::FUnionOpsManager> UnionBlendOpsManager;
 		TSharedPtr<PCGExBlending::IUnionBlender> DataBlender;
@@ -182,8 +173,6 @@ namespace PCGExSampleVtxByID
 		{
 			DefaultPointFilterValue = true;
 		}
-
-		virtual ~FProcessor() override;
 
 		void SamplingFailed(const int32 Index);
 

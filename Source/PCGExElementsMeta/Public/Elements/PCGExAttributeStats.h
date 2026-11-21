@@ -297,9 +297,6 @@ namespace PCGExAttributeStats
 		T SetMinValue = T{};
 		T SetMaxValue = T{};
 		T AverageValue = T{};
-		T AverageSetValue = T{};
-		T MaxUniqueValue = T{};
-		T MinUniqueValue = T{};
 		int32 UniqueValuesNum = 0;
 		int32 UniqueSetValuesNum = 0;
 		int32 DifferentValuesNum = 0;
@@ -502,7 +499,7 @@ namespace PCGExAttributeStats
 				PCGEX_OUTPUT_STAT(DefaultValuesNum, int32, DefaultValuesNum)
 				PCGEX_OUTPUT_STAT(HasOnlyDefaultValues, bool, NumValues == DefaultValuesNum)
 				PCGEX_OUTPUT_STAT(HasOnlySetValues, bool, DefaultValuesNum == 0)
-				PCGEX_OUTPUT_STAT(HasOnlyUniqueValues, bool, NumValues == UniqueSetValuesNum)
+				PCGEX_OUTPUT_STAT(HasOnlyUniqueValues, bool, NumValues == DifferentValuesNum)
 				PCGEX_OUTPUT_STAT(Samples, int32, NumValues)
 				PCGEX_OUTPUT_STAT(IsValid, bool, true)
 
@@ -515,8 +512,6 @@ namespace PCGExAttributeStats
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExAttributeStatsContext, UPCGExAttributeStatsSettings>
 	{
 		TArray<TSharedPtr<IAttributeStats>> Stats;
-		TMap<FName, int32> PerAttributeStatMap;
-		TArray<UPCGParamData*> PerAttributeStats;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

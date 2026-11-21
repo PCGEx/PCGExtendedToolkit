@@ -191,10 +191,6 @@ bool FPCGExBuildVoronoiGraph2DElement::AdvanceWork(FPCGExContext* InContext, con
 
 namespace PCGExBuildVoronoiGraph2D
 {
-	FProcessor::~FProcessor()
-	{
-	}
-
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExBuildVoronoiGraph2D::Process);
@@ -238,10 +234,6 @@ namespace PCGExBuildVoronoiGraph2D
 		}
 
 		return BuildOutputs();
-	}
-
-	void FProcessor::ProcessPoints(const PCGExMT::FScope& Scope)
-	{
 	}
 
 	void FProcessor::CompleteWork()

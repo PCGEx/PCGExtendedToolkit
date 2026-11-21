@@ -25,10 +25,6 @@ struct FPCGExStringCompareFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExStringCompareFilterConfig()
-	{
-	}
-
 	/** Operand A for testing -- Read as text (string comparison). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	FPCGAttributePropertyInputSelector OperandA;
@@ -85,16 +81,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FStringCompareFilter final : public ISimpleFilter
+	class FStringCompareFilter final : public TFactoryFilter<UPCGExStringCompareFilterFactory>
 	{
 	public:
-		explicit FStringCompareFilter(const TObjectPtr<const UPCGExStringCompareFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExStringCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		// When the comparison is an equality check, operands are read as FName instead of
 		// FString (cheaper; matches FString equality for typical values -- see
@@ -112,10 +102,6 @@ namespace PCGExPointFilter
 
 		virtual bool Test(const int32 PointIndex) const override;
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
-
-		virtual ~FStringCompareFilter() override
-		{
-		}
 	};
 }
 

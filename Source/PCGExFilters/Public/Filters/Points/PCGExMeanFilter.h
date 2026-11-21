@@ -18,10 +18,6 @@ struct FPCGExMeanFilterConfig
 {
 	GENERATED_BODY()
 
-	FPCGExMeanFilterConfig()
-	{
-	}
-
 	/** Target value to compile -- Will be translated to `double` under the hood. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(ShowOnlyInnerProperties))
 	FPCGAttributePropertyInputSelector Target;
@@ -87,16 +83,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FMeanFilter final : public ISimpleFilter
+	class FMeanFilter final : public TFactoryFilter<UPCGExMeanFilterFactory>
 	{
 	public:
-		explicit FMeanFilter(const TObjectPtr<const UPCGExMeanFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExMeanFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TArray<double> Values;
 
@@ -113,10 +103,6 @@ namespace PCGExPointFilter
 		virtual void PostInit() override;
 
 		virtual bool Test(const int32 PointIndex) const override;
-
-		virtual ~FMeanFilter() override
-		{
-		}
 	};
 }
 

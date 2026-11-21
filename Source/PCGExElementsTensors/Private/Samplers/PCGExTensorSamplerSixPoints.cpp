@@ -4,16 +4,6 @@
 
 #include "Samplers/PCGExTensorSamplerSixPoints.h"
 
-void UPCGExTensorSamplerSixPoints::CopySettingsFrom(const UPCGExInstancedFactory* Other)
-{
-	Super::CopySettingsFrom(Other);
-}
-
-bool UPCGExTensorSamplerSixPoints::PrepareForData(FPCGExContext* InContext)
-{
-	return true;
-}
-
 PCGExTensor::FTensorSample UPCGExTensorSamplerSixPoints::Sample(const TArray<TSharedPtr<PCGExTensorOperation>>& InTensors, const int32 InSeedIndex, const FTransform& InProbe, bool& OutSuccess) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(UPCGExTensorSamplerSixPoints::Sample);

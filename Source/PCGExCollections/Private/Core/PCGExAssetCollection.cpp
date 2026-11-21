@@ -97,7 +97,7 @@ namespace PCGExAssetCollection
 {
 	// Shared helper: sorts Order by Weights ascending, converts Weights to cumulative sums.
 	// Used by both FMicroCache::BuildFromWeights() and FCategory::Compile().
-	static double CompileWeightedOrder(TArray<int32>& Weights, TArray<int32>& Order)
+	double CompileWeightedOrder(TArray<int32>& Weights, TArray<int32>& Order)
 	{
 		PCGExArrayHelpers::ArrayOfIndices(Order, Weights.Num());
 
@@ -922,37 +922,6 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryWeightedRandom(int32 Seed
 
 // With tag inheritance
 
-FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryAt(int32 Index, uint8 TagInheritance, TSet<FName>& OutTags) const
-{
-	FPCGExEntryAccessResult Result;
-
-	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
-	const int32 PickedIndex = ThisCache->Main->GetPick(Index, EPCGExIndexPickMode::Ascending);
-	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
-
-	if (!Entry)
-	{
-		return Result;
-	}
-
-	if (Entry->HasValidSubCollection())
-	{
-		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
-		{
-			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
-		}
-	}
-	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
-	{
-		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
-	}
-
-	Result.Entry = Entry;
-	Result.Host = this;
-	Result.Pool = ThisCache->Main.Get();
-	return Result;
-}
-
 FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRaw(int32 RawIndex, uint8 TagInheritance, TSet<FName>& OutTags) const
 {
 	FPCGExEntryAccessResult Result;
@@ -978,80 +947,6 @@ FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRaw(int32 RawIndex, uint8
 
 	Result.Entry = Entry;
 	Result.Host = this;
-	return Result;
-}
-
-FPCGExEntryAccessResult UPCGExAssetCollection::GetEntry(int32 Index, int32 Seed, EPCGExIndexPickMode PickMode, uint8 TagInheritance, TSet<FName>& OutTags) const
-{
-	FPCGExEntryAccessResult Result;
-
-	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
-	const int32 PickedIndex = ThisCache->Main->GetPick(Index, PickMode);
-	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
-
-	if (!Entry)
-	{
-		return Result;
-	}
-
-	if (Entry->HasValidSubCollection())
-	{
-		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Hierarchy))
-		{
-			PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
-		}
-		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
-		{
-			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
-		}
-		return Entry->GetSubCollectionPtr()->GetEntryWeightedRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
-	}
-
-	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
-	{
-		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
-	}
-
-	Result.Entry = Entry;
-	Result.Host = this;
-	Result.Pool = ThisCache->Main.Get();
-	return Result;
-}
-
-FPCGExEntryAccessResult UPCGExAssetCollection::GetEntryRandom(int32 Seed, uint8 TagInheritance, TSet<FName>& OutTags) const
-{
-	FPCGExEntryAccessResult Result;
-
-	const PCGExAssetCollection::FCache* ThisCache = const_cast<UPCGExAssetCollection*>(this)->LoadCache();
-	const int32 PickedIndex = ThisCache->Main->GetPickRandom(Seed);
-	const FPCGExAssetCollectionEntry* Entry = GetEntryAtRawIndex(PickedIndex);
-
-	if (!Entry)
-	{
-		return Result;
-	}
-
-	if (Entry->HasValidSubCollection())
-	{
-		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Hierarchy))
-		{
-			PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
-		}
-		if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Collection))
-		{
-			PCGExCollections::Tags::AppendTags(*Entry, static_cast<uint8>(EPCGExAssetTagInheritance::Collection), this, OutTags);
-		}
-		return Entry->GetSubCollectionPtr()->GetEntryRandom(PCGExAssetCollection::GetNestedPickSeed(Seed), TagInheritance, OutTags);
-	}
-
-	if (TagInheritance & static_cast<uint8>(EPCGExAssetTagInheritance::Asset))
-	{
-		PCGExCollections::Tags::AppendEntryTags(*Entry, this, OutTags);
-	}
-
-	Result.Entry = Entry;
-	Result.Host = this;
-	Result.Pool = ThisCache->Main.Get();
 	return Result;
 }
 
@@ -1272,7 +1167,7 @@ namespace PCGExAssetCollectionMigration
 	 *
 	 * Returns true if the entry was modified.
 	 */
-	static bool MigrateEntryVariationsV0ToV1(FPCGExAssetCollectionEntry* Entry)
+	bool MigrateEntryVariationsV0ToV1(FPCGExAssetCollectionEntry* Entry)
 	{
 		if (!Entry || Entry->VariationMode == EPCGExEntryVariationMode::Global)
 		{
@@ -1297,7 +1192,7 @@ namespace PCGExAssetCollectionMigration
 
 	/** Migrate one entry's grammar data from v0 to v1. Returns true if a downgrade warning
 	 *  should be emitted for this entry (legacy Min/Max/Average on a leaf). */
-	static bool MigrateEntryGrammarV0ToV1(FPCGExAssetCollectionEntry* Entry)
+	bool MigrateEntryGrammarV0ToV1(FPCGExAssetCollectionEntry* Entry)
 	{
 		if (!Entry)
 		{
@@ -1489,22 +1384,6 @@ void UPCGExAssetCollection::BeginDestroy()
 	Super::BeginDestroy();
 }
 
-void UPCGExAssetCollection::RebuildPropertyRegistry()
-{
-	// Straight off the resolved view: an entry is a name and a type, so no property is worth copying for it.
-	TArray<FPCGExPropertyResolved> Resolved;
-	CollectionProperties.Resolve(Resolved);
-
-	PropertyRegistry.Empty(Resolved.Num());
-	for (const FPCGExPropertyResolved& Entry : Resolved)
-	{
-		if (const FPCGExProperty* Property = Entry.GetEffectiveProperty().GetPtr<FPCGExProperty>())
-		{
-			PropertyRegistry.Add(Property->ToRegistryEntry());
-		}
-	}
-}
-
 void UPCGExAssetCollection::RebuildStagingData(bool bRecursive)
 {
 	SyncEntryIds();
@@ -1525,9 +1404,6 @@ bool UPCGExAssetCollection::BuildCacheFromEntryPtrs(TConstArrayView<FPCGExAssetC
 	{
 		return true;
 	}
-
-	// Rebuild property registry from collection properties
-	RebuildPropertyRegistry();
 
 	Cache = MakeShared<PCGExAssetCollection::FCache>();
 	bCacheNeedsRebuild = false;
@@ -1954,8 +1830,6 @@ void UPCGExAssetCollection::RefreshCollectionPropertiesFromEntries(
 	}
 #endif
 	SyncCategoryOverridesToSchema(CanonicalSchema);
-
-	RebuildPropertyRegistry();
 }
 
 bool UPCGExAssetCollection::SyncPropertySchemaAndRemapEntries()
@@ -2152,14 +2026,13 @@ void UPCGExAssetCollection::PostEditChangeProperty(FPropertyChangedEvent& Proper
 
 	if (bIsStructuralSchemaChange)
 	{
-		RebuildPropertyRegistry();
 		SyncPropertyOverridesToEntries();
 	}
 	else if (bIsSchemaValueLeafEdit)
 	{
 		// A schema leaf can be a structural field (AllowedClass, Range, bounds) that entry and category rows
 		// mirror, so they re-sync. SyncToSchema takes its fast path: no reallocation, and a value is only
-		// rewritten to follow the choice it stands on. Registry prototypes heal via the cache invalidation below.
+		// rewritten to follow the choice it stands on.
 		SyncPropertyOverridesToEntries();
 	}
 
@@ -2221,7 +2094,7 @@ void UPCGExAssetCollection::EDITOR_OnImportedSchemaChanged(UPCGExPropertySchemaA
 	// reshaping that layer under a live panel is the schema customization's job (parked buffers).
 	CollectionProperties.SyncImportOverridesInPlace();
 
-	// Then the standard structural path: registry, entry and category SyncToSchema, staging, view refresh.
+	// Then the standard structural path: entry and category SyncToSchema, staging, view refresh.
 	FPropertyChangedEvent Event(
 		FindFProperty<FProperty>(UPCGExAssetCollection::StaticClass(), GET_MEMBER_NAME_CHECKED(UPCGExAssetCollection, CollectionProperties)),
 		EPropertyChangeType::ValueSet);

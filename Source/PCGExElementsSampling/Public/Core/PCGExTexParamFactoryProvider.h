@@ -13,9 +13,6 @@
 
 #include "PCGExTexParamFactoryProvider.generated.h"
 
-class UPCGTexture2DSingleBaseData;
-class UMaterialInterface;
-
 namespace PCGExData
 {
 	template <typename T>
@@ -56,8 +53,6 @@ namespace PCGExTexture
 
 	const FName SourceTextureDataLabel = TEXT("TextureData");
 	const FName OutputTextureDataLabel = TEXT("TextureData");
-
-	const FName OutputTexTagLabel = TEXT("TexTag");
 
 	const FString TexTag_Str = TEXT("TEX:");
 }

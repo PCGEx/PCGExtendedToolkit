@@ -289,10 +289,6 @@ namespace PCGExPathToClusters
 {
 #pragma region NonFusing
 
-	FNonFusingProcessor::~FNonFusingProcessor()
-	{
-	}
-
 	bool FNonFusingProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		if (!IProcessor::Process(InTaskManager))
@@ -348,10 +344,6 @@ namespace PCGExPathToClusters
 #pragma endregion
 
 #pragma region Fusing
-
-	FFusingProcessor::~FFusingProcessor()
-	{
-	}
 
 	bool FFusingProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{

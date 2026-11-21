@@ -55,6 +55,27 @@ namespace PCGExCollections::Selectors
 		return Total;
 	}
 
+	/** Collection-derived state of selectors that pick through cumulative weight bands (PickFromNormalized). */
+	class FCumulativeWeightsSharedData : public FSelectorSharedData
+	{
+	public:
+		TArray<double> Cumulative; // parallel to Target->Entries
+		double TotalWeight = 0.0;
+	};
+
+	/** BuildSharedData body for a factory whose only shared state is FCumulativeWeightsSharedData. Null for an empty category. */
+	inline TSharedPtr<FSelectorSharedData> BuildCumulativeWeightsSharedData(const UPCGExAssetCollection* Collection, const PCGExAssetCollection::FCategory* Target)
+	{
+		if (!Collection || !Target || Target->Entries.IsEmpty())
+		{
+			return nullptr;
+		}
+
+		TSharedPtr<FCumulativeWeightsSharedData> NewShared = MakeShared<FCumulativeWeightsSharedData>();
+		NewShared->TotalWeight = BuildCumulativeWeights(Target, NewShared->Cumulative);
+		return NewShared;
+	}
+
 	/**
 	 * Map a normalized value t in [0, 1] to an entry index through a cumulative weight array
 	 * (proportional bands), or uniformly over N when bUseWeights is false. Deterministic --
