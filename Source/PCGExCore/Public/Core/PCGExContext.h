@@ -177,7 +177,9 @@ protected:
 #pragma region Managed Components
 
 public:
-	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules) const;
+	// InManagedComponentClass lets a caller substitute its own UPCGManagedComponent subclass, which is how the
+	// Spawn Dynamic Mesh node opts its components into surviving a regeneration. nullptr keeps the stock resource.
+	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, UClass* InManagedComponentClass = nullptr) const;
 
 #pragma endregion
 

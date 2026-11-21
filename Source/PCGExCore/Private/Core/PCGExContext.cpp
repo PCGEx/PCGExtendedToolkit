@@ -365,7 +365,7 @@ void FPCGExContext::TrackAssetsHandle(const TSharedPtr<FStreamableHandle>& InHan
 	}
 }
 
-UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules) const
+UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, UClass* InManagedComponentClass) const
 {
 	// Transfers a component from PCGEx internal management to PCG's managed resource system.
 	// This ensures PCG can clean up the component on re-generate/destroy, while the component
@@ -386,7 +386,7 @@ UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UA
 	InComponent->ComponentTags.Add(SrcComp->GetFName());
 	InComponent->ComponentTags.Add(PCGHelpers::DefaultPCGTag);
 
-	UPCGManagedComponent* ManagedComponent = NewObject<UPCGManagedComponent>(SrcComp);
+	UPCGManagedComponent* ManagedComponent = NewObject<UPCGManagedComponent>(SrcComp, InManagedComponentClass != nullptr ? InManagedComponentClass : UPCGManagedComponent::StaticClass());
 	ManagedComponent->GeneratedComponent = InComponent;
 	SrcComp->AddToManagedResources(ManagedComponent);
 

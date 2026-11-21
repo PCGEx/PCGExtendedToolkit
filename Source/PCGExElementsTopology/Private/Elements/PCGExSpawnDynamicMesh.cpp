@@ -8,6 +8,7 @@
 #include "PCGPin.h"
 #include "Components/PCGExDynamicMeshComponent.h"
 #include "Data/PCGDynamicMeshData.h"
+#include "Elements/PCGExSpawnDynamicMeshReuse.h"
 
 #define LOCTEXT_NAMESPACE "PCGExGraphSettings"
 #define PCGEX_NAMESPACE SpawnDynamicMesh
@@ -58,6 +59,17 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			continue;
 		}
 
+		// Pick up the component a previous generation built for this exact input instead of creating another one.
+		// Every new component is named with MakeUniqueObjectName, and the name of the one it replaces is still taken
+		// until the next garbage collection, so recreating them rewrites the target actor's package on every bake.
+		const FPCGCrc InputCrc = PCGExSpawnDynamicMesh::ComputeInputCrc(this, InContext, Settings, Input);
+		if (PCGExSpawnDynamicMesh::TryReuseComponent(SourcePCGComponent, TargetActor, InputCrc) != nullptr)
+		{
+			InContext->OutputData.TaggedData.Emplace(Input);
+			Context->AddNotifyActor(TargetActor);
+			continue;
+		}
+
 		const FString ComponentName = TEXT("PCGDynamicMeshComponent");
 		const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
 		UPCGExDynamicMeshComponent* DynamicMeshComponent = NewObject<UPCGExDynamicMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, UPCGExDynamicMeshComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
@@ -88,7 +100,11 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 
 		for (const FString& Tag : Input.Tags) { DynamicMeshComponent->ComponentTags.AddUnique(*Tag); }
 
-		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules());
+		UPCGManagedComponent* ManagedComponent = Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules(), PCGExSpawnDynamicMesh::GetManagedComponentClass());
+
+		// Stamp the resource with the Crc of the input it was built from, so the next generation recognizes it.
+		PCGExSpawnDynamicMesh::EnableReuse(ManagedComponent, InputCrc);
+
 		InContext->OutputData.TaggedData.Emplace(Input);
 		Context->AddNotifyActor(TargetActor);
 	}
