@@ -795,28 +795,41 @@ UPCGExManagedComponent* FPCGExContext::ReclaimManagedComponent(const AActor* InP
 
 	const bool bIsPreviewMode = SrcComp->IsInPreviewMode();
 
-	TArray<UPCGExManagedComponent*> Candidates;
-	PCGExManagedHelpers::FindManagedResources<UPCGExManagedComponent>(
-		SrcComp, ReuseCrc,
-		[&](const UPCGExManagedComponent* Resource)
-		{
-			// Still unused = soft-released by this regeneration and not claimed yet.
-			if (!Resource->IsMarkedUnused() || !Resource->CanBeUsed())
+	check(IsInGameThread());
+
+	// One walk of the managed resources per execution: a node with a component per segment reclaims thousands.
+	if (!bReclaimableComponentsIndexed)
+	{
+		bReclaimableComponentsIndexed = true;
+		SrcComp->ForEachManagedResource(
+			[&](UPCGManagedResource* InResource)
 			{
-				return false;
-			}
+				UPCGExManagedComponent* Resource = Cast<UPCGExManagedComponent>(InResource);
 
-			const UActorComponent* Component = Resource->GeneratedComponent.Get();
-			return Component && Component->IsA(InComponentClass) && Component->GetOwner() == InParent && Component->HasAnyFlags(RF_Transient) == bIsPreviewMode;
-		},
-		Candidates);
+				// Still unused = soft-released by this regeneration and not claimed yet.
+				if (Resource && Resource->GetCrc().IsValid() && Resource->IsMarkedUnused() && Resource->CanBeUsed())
+				{
+					ReclaimableComponents.Add(Resource->GetCrc().GetValue(), Resource);
+				}
+			});
+	}
 
-	if (Candidates.IsEmpty())
+	UPCGExManagedComponent* Reclaimed = nullptr;
+	for (auto It = ReclaimableComponents.CreateKeyIterator(ReuseCrc.GetValue()); It; ++It)
+	{
+		const UActorComponent* Candidate = It.Value()->GeneratedComponent.Get();
+		if (Candidate && Candidate->IsA(InComponentClass) && Candidate->GetOwner() == InParent && Candidate->HasAnyFlags(RF_Transient) == bIsPreviewMode)
+		{
+			Reclaimed = It.Value();
+			It.RemoveCurrent();
+			break;
+		}
+	}
+
+	if (!Reclaimed)
 	{
 		return nullptr;
 	}
-
-	UPCGExManagedComponent* Reclaimed = Candidates[0];
 
 	// UPCGManagedComponentBase::MarkAsUsed drops the CRC and resets the tags to the default PCG tag alone.
 	Reclaimed->MarkAsUsed();

@@ -13,6 +13,8 @@
 #include "Data/PCGExPointIO.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/StaticMesh.h"
+#include "Clusters/PCGExClustersHelpers.h"
+#include "Core/PCGExManagedComponent.h"
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExStreamingHelpers.h"
@@ -20,7 +22,6 @@
 #include "Metadata/PCGObjectPropertyOverride.h"
 #include "Paths/PCGExPathsHelpers.h"
 #include "Tangents/PCGExTangentsAuto.h"
-#include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPathSplineMeshSimpleElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
@@ -475,7 +476,11 @@ namespace PCGExPathSplineMeshSimple
 		AActor* SettingsTargetActor = PCGExHelpers::ResolveObject_AnyThreadTpl(Settings->TargetActor);
 		TargetActor = SettingsTargetActor ? SettingsTargetActor : ExecutionContext->GetTargetActor(nullptr);
 		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-		DataTags = PointDataFacade->Source->Tags->FlattenToArrayOfNames();
+		PCGExClusters::Helpers::AppendSavedTags(PointDataFacade->Source->Tags->Flatten(), DataTags);
+
+		// Each segment's slot derives from this input's.
+		SlotCrc = Context->GetExecutionCrc();
+		SlotCrc.Combine(static_cast<uint32>(BatchIndex));
 
 		if (!TargetActor)
 		{
@@ -509,7 +514,22 @@ namespace PCGExPathSplineMeshSimple
 			return;
 		}
 
-		USplineMeshComponent* SplineMeshComponent = Context->ManagedObjects->New<USplineMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, USplineMeshComponent::StaticClass(), Context->UniqueNameGenerator->Get(TEXT("PCGSplineMeshComponent_") + Meshes[Index].GetName())), ObjectFlags);
+		// One slot per segment: a regeneration rebuilds the component it already has there, keeping its name.
+		FPCGCrc SegmentCrc = SlotCrc;
+		SegmentCrc.Combine(static_cast<uint32>(Index));
+
+		UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(TargetActor, USplineMeshComponent::StaticClass(), SegmentCrc);
+		USplineMeshComponent* SplineMeshComponent = nullptr;
+
+		if (Reclaimed)
+		{
+			SplineMeshComponent = CastChecked<USplineMeshComponent>(Reclaimed->GeneratedComponent.Get());
+			SplineMeshComponent->EmptyOverrideMaterials();
+		}
+		else
+		{
+			SplineMeshComponent = Context->ManagedObjects->New<USplineMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, USplineMeshComponent::StaticClass(), FName(TEXT("PCGSplineMeshComponent"))), ObjectFlags);
+		}
 
 		Segment.ApplySettings(SplineMeshComponent); // Init Component
 
@@ -550,7 +570,7 @@ namespace PCGExPathSplineMeshSimple
 
 		SplineMeshComponent->SetStaticMesh(Meshes[Index]); // Will trigger a force rebuild, so put this last
 
-		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false));
+		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false), SegmentCrc, Reclaimed);
 
 		Context->AddNotifyActor(TargetActor);
 	}

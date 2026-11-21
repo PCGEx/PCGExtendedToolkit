@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGCrc.h"
 #include "PCGExFilterCommon.h"
 #include "Collections/PCGExMeshCollection.h"
 #include "Core/PCGExPathProcessor.h"
@@ -334,6 +335,9 @@ namespace PCGExPathSplineMesh
 
 		AActor* TargetActor = nullptr;
 		EObjectFlags ObjectFlags = RF_NoFlags;
+
+		/** This input's slot; each segment's component is found again under it, by segment index */
+		FPCGCrc SlotCrc;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)

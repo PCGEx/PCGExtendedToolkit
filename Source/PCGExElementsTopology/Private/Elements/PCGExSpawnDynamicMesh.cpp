@@ -7,12 +7,11 @@
 #include "PCGCrc.h"
 #include "PCGExTopology.h"
 #include "PCGPin.h"
-#include "Clusters/PCGExClusterCommon.h"
+#include "Clusters/PCGExClustersHelpers.h"
 #include "Components/DynamicMeshComponent.h"
 #include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGDynamicMeshData.h"
-#include "Data/PCGExDataTags.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Types/PCGExTypeOpsString.h"
 
@@ -67,7 +66,6 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 	PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED
 
 	const FPCGCrc ExecutionCrc = Context->GetExecutionCrc();
-	const FString ClusterIdTagPrefix = PCGExClusters::Labels::TagStr_PCGExCluster + PCGExData::TagSeparator;
 
 	int32 Index = -1;
 	for (const FPCGTaggedData& Input : InContext->InputData.GetInputsByPin(PCGExTopology::Labels::SourceMeshLabel))
@@ -128,20 +126,7 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 			}
 		}
 
-		for (const FString& Tag : Input.Tags)
-		{
-			// The cluster id is a per-session object id: on a saved component it would differ on every run.
-			if (Tag.StartsWith(ClusterIdTagPrefix))
-			{
-				continue;
-			}
-
-			const FName TagName = PCGExTypeOps::MakeNameChecked(Tag);
-			if (!TagName.IsNone())
-			{
-				DynamicMeshComponent->ComponentTags.AddUnique(TagName);
-			}
-		}
+		PCGExClusters::Helpers::AppendSavedTags(Input.Tags, DynamicMeshComponent->ComponentTags);
 
 		Context->AttachManagedComponent(TargetActor, DynamicMeshComponent, Settings->AttachmentRules.GetRules(), SlotCrc, Reclaimed);
 		Context->StageOutput(const_cast<UPCGData*>(Input.Data.Get()), PCGExTopology::Labels::SourceMeshLabel, PCGExData::EStaging::None, Input.Tags);

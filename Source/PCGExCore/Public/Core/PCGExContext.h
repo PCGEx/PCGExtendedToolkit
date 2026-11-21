@@ -310,6 +310,11 @@ public:
 	/** A valid ReuseCrc keeps the component across regenerations; InReclaimed is what ReclaimManagedComponent returned for it, if anything. */
 	UPCGManagedComponent* AttachManagedComponent(AActor* InParent, UActorComponent* InComponent, const FAttachmentTransformRules& AttachmentRules, const FPCGCrc& ReuseCrc = FPCGCrc(), UPCGExManagedComponent* InReclaimed = nullptr) const;
 
+protected:
+	/** The components this regeneration soft-released, by CRC value; built on the first reclaim, emptied as they are reclaimed. Game thread. */
+	mutable TMultiMap<uint32, UPCGExManagedComponent*> ReclaimableComponents;
+	mutable bool bReclaimableComponentsIndexed = false;
+
 #pragma endregion
 
 protected:

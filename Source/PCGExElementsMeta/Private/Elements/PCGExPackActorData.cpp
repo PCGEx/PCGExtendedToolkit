@@ -6,6 +6,7 @@
 #include "PCGComponent.h"
 
 #include "PCGParamData.h"
+#include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExAttributeBroadcaster.h"
 #include "Data/PCGExPointIO.h"
@@ -14,7 +15,6 @@
 #include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
 #include "Types/PCGExTypeOpsString.h"
-#include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPackActorDataElement"
 #define PCGEX_NAMESPACE PackActorData
@@ -70,8 +70,20 @@ void UPCGExCustomActorDataPacker::AddComponent(AActor* InActor, TSubclassOf<UAct
 		return;
 	}
 
-	const EObjectFlags InObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-	OutComponent = Context->ManagedObjects->New<UActorComponent>(InActor, ComponentClass, UniqueNameGenerator->Get(TEXT("PCGComponent_") + ComponentClass->GetName()), InObjectFlags);
+	// One slot per call, in call order: a regeneration hands back the component the same call got last time.
+	FPCGCrc CallCrc = SlotCrc;
+	CallCrc.Combine(static_cast<uint32>(NumAddedComponents++));
+
+	UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(InActor, ComponentClass, CallCrc);
+	if (Reclaimed)
+	{
+		OutComponent = Reclaimed->GeneratedComponent.Get();
+	}
+	else
+	{
+		const EObjectFlags InObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
+		OutComponent = Context->ManagedObjects->New<UActorComponent>(InActor, ComponentClass, MakeUniqueObjectName(InActor, ComponentClass, FName(TEXT("PCGComponent_") + ComponentClass->GetName())), InObjectFlags);
+	}
 
 	if (!OutComponent)
 	{
@@ -82,7 +94,7 @@ void UPCGExCustomActorDataPacker::AddComponent(AActor* InActor, TSubclassOf<UAct
 	{
 		FComponentInfos NewInfos = FComponentInfos(OutComponent, InLocationRule, InRotationRule, InScaleRule, InWeldSimulatedBodies);
 
-		Context->AttachManagedComponent(InActor, NewInfos.Component, NewInfos.AttachmentTransformRules);
+		Context->AttachManagedComponent(InActor, NewInfos.Component, NewInfos.AttachmentTransformRules, CallCrc, Reclaimed);
 	}
 }
 
@@ -419,7 +431,9 @@ namespace PCGExPackActorData
 		PointMask.Init(1, PointDataFacade->GetNum());
 
 		Packer = GetPrimaryInstancedFactory<UPCGExCustomActorDataPacker>();
-		Packer->UniqueNameGenerator = Context->UniqueNameGenerator;
+		Packer->SlotCrc = Context->GetExecutionCrc();
+		Packer->SlotCrc.Combine(static_cast<uint32>(BatchIndex));
+		Packer->NumAddedComponents = 0;
 		Packer->WriteBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Write>>(PointDataFacade);
 		Packer->ReadBuffers = MakeShared<PCGExData::TBufferHelper<PCGExData::EBufferHelperMode::Read>>(PointDataFacade);
 

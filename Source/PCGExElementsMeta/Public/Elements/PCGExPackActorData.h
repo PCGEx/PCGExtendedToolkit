@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGCrc.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 
@@ -52,7 +53,9 @@ public:
 		return true;
 	}
 
-	TSharedPtr<FPCGExUniqueNameGenerator> UniqueNameGenerator;
+	/** This input's slot; each AddComponent call finds its component of the previous generation under it, by call order */
+	FPCGCrc SlotCrc;
+	int32 NumAddedComponents = 0;
 	bool bIsPreviewMode = false;
 	bool bIsProcessing = false;
 
@@ -76,7 +79,8 @@ public:
 	void ProcessEntry(AActor* InActor, const FPCGPoint& InPoint, const int32 InPointIndex, FPCGPoint& OutPoint);
 
 	/**
-	 * Create a component that will be attached to the actor at the end of the execution.
+	 * Create a component and attach it to the actor. On a regeneration this hands back the component the same call
+	 * created last time, with whatever was set on it then: set every property you rely on.
 	 * @param InActor Actor to which the component will be attached
 	 * @param ComponentClass Component class
 	 * @param InLocationRule The rule to apply to location when attaching

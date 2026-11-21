@@ -5,8 +5,11 @@
 
 
 #include "PCGComponent.h"
+#include "PCGCrc.h"
 
 #include "PCGExVersion.h"
+#include "Clusters/PCGExClustersHelpers.h"
+#include "Core/PCGExManagedComponent.h"
 #include "Core/PCGExMT.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
@@ -301,15 +304,30 @@ namespace PCGExCreateSpline
 		{
 			const bool bIsPreviewMode = PCGExHelpers::IsSourceInPreviewMode(ExecutionContext);
 
-			const FString ComponentName = TEXT("PCGSplineComponent");
-			const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
-			USplineComponent* SplineComponent = NewObject<USplineComponent>(SplineActor, MakeUniqueObjectName(SplineActor, USplineComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
+			// One slot per input: a regeneration rebuilds the spline it already has there, keeping its name.
+			FPCGCrc SlotCrc = Context->GetExecutionCrc();
+			SlotCrc.Combine(static_cast<uint32>(BatchIndex));
 
-			PointDataFacade->Source->Tags->DumpTo(SplineComponent->ComponentTags);
+			UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(SplineActor, USplineComponent::StaticClass(), SlotCrc);
+			USplineComponent* SplineComponent = nullptr;
 
+			if (Reclaimed)
+			{
+				SplineComponent = CastChecked<USplineComponent>(Reclaimed->GeneratedComponent.Get());
+			}
+			else
+			{
+				const FString ComponentName = TEXT("PCGSplineComponent");
+				const EObjectFlags ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
+				SplineComponent = NewObject<USplineComponent>(SplineActor, MakeUniqueObjectName(SplineActor, USplineComponent::StaticClass(), FName(ComponentName)), ObjectFlags);
+			}
+
+			PCGExClusters::Helpers::AppendSavedTags(PointDataFacade->Source->Tags->Flatten(), SplineComponent->ComponentTags);
+
+			// Sets every point and the world transform, so a reclaimed spline keeps nothing of its previous shape.
 			SplineData->ApplyTo(SplineComponent);
 
-			Context->AttachManagedComponent(SplineActor, SplineComponent, Settings->AttachmentRules.GetRules());
+			Context->AttachManagedComponent(SplineActor, SplineComponent, Settings->AttachmentRules.GetRules(), SlotCrc, Reclaimed);
 			Context->AddNotifyActor(SplineActor);
 		}
 	}

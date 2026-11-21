@@ -15,6 +15,8 @@
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
 #include "Factories/PCGExFactories.h"
+#include "Clusters/PCGExClustersHelpers.h"
+#include "Core/PCGExManagedComponent.h"
 #include "Helpers/PCGExAssetLoader.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExRandomHelpers.h"
@@ -26,7 +28,6 @@
 #include "Selectors/PCGExSelectorFactoryProvider.h"
 #include "Selectors/PCGExSelectorSharedData.h"
 #include "Tangents/PCGExTangentsAuto.h"
-#include "Utils/PCGExUniqueNameGenerator.h"
 
 #define LOCTEXT_NAMESPACE "PCGExPathSplineMeshElement"
 #define PCGEX_NAMESPACE BuildCustomGraph
@@ -603,7 +604,7 @@ namespace PCGExPathSplineMesh
 			return false;
 		}
 
-		DataTags = PointDataFacade->Source->Tags->FlattenToArrayOfNames();
+		PCGExClusters::Helpers::AppendSavedTags(PointDataFacade->Source->Tags->Flatten(), DataTags);
 
 		// Capacity-claiming selectors (Quota max caps) resolve every pick deterministically
 		// before the main loop: parallel first-choice pass, then a sequential point-order
@@ -921,6 +922,10 @@ namespace PCGExPathSplineMesh
 		TargetActor = SettingsTargetActor ? SettingsTargetActor : ExecutionContext->GetTargetActor(nullptr);
 		ObjectFlags = (bIsPreviewMode ? RF_Transient : RF_NoFlags);
 
+		// Each segment's slot derives from this input's.
+		SlotCrc = Context->GetExecutionCrc();
+		SlotCrc.Combine(static_cast<uint32>(BatchIndex));
+
 		if (!TargetActor)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, ExecutionContext, FTEXT("Invalid target actor."));
@@ -948,14 +953,31 @@ namespace PCGExPathSplineMesh
 	void FProcessor::ProcessSegment(const int32 Index)
 	{
 		FSplineMeshSegment& Segment = Segments[Index];
-		if (!Segment.MeshEntry)
+
+		// A segment without a mesh spawns nothing; told apart before a previous run's component is taken over for it.
+		if (!Segment.MeshEntry || !Segment.MeshEntry->Staging.TryGet<UStaticMesh>())
 		{
 			return;
 		}
 
-		USplineMeshComponent* SplineMeshComponent = Context->ManagedObjects->New<USplineMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, USplineMeshComponent::StaticClass(), Context->UniqueNameGenerator->Get(TEXT("PCGSplineMeshComponent_") + Segment.MeshEntry->Staging.Path.GetAssetName())), ObjectFlags);
+		// One slot per segment: a regeneration rebuilds the component it already has there, keeping its name.
+		FPCGCrc SegmentCrc = SlotCrc;
+		SegmentCrc.Combine(static_cast<uint32>(Index));
 
-		if (!SplineMeshComponent || !Segment.MeshEntry)
+		UPCGExManagedComponent* Reclaimed = Context->ReclaimManagedComponent(TargetActor, USplineMeshComponent::StaticClass(), SegmentCrc);
+		USplineMeshComponent* SplineMeshComponent = nullptr;
+
+		if (Reclaimed)
+		{
+			SplineMeshComponent = CastChecked<USplineMeshComponent>(Reclaimed->GeneratedComponent.Get());
+			SplineMeshComponent->EmptyOverrideMaterials();
+		}
+		else
+		{
+			SplineMeshComponent = Context->ManagedObjects->New<USplineMeshComponent>(TargetActor, MakeUniqueObjectName(TargetActor, USplineMeshComponent::StaticClass(), FName(TEXT("PCGSplineMeshComponent"))), ObjectFlags);
+		}
+
+		if (!SplineMeshComponent)
 		{
 			return;
 		}
@@ -1007,7 +1029,7 @@ namespace PCGExPathSplineMesh
 			return;
 		}
 
-		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false));
+		Context->AttachManagedComponent(TargetActor, SplineMeshComponent, FAttachmentTransformRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false), SegmentCrc, Reclaimed);
 
 		Context->AddNotifyActor(TargetActor);
 	}
