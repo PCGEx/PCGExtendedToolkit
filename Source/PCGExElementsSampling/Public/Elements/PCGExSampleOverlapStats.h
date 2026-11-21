@@ -25,11 +25,6 @@ namespace PCGExSampleOverlapStats
 	class FProcessor;
 }
 
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
-}
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="sampling/sample-overlap-stats"))
 class UPCGExSampleOverlapStatsSettings : public UPCGExPointsProcessorSettings

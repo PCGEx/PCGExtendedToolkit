@@ -10,8 +10,6 @@
 
 #include "PCGExConnectClusters.generated.h"
 
-class FPCGExPointIOMerger;
-
 namespace PCGExGraphs
 {
 	class FGraphPatcher;

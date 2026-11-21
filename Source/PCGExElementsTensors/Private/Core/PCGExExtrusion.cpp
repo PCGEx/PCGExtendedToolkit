@@ -3,7 +3,6 @@
 
 #include "Core/PCGExExtrusion.h"
 #include "Data/PCGExPointIO.h"
-#include "Helpers/PCGExArrayHelpers.h"
 
 namespace PCGExExtrusion
 {

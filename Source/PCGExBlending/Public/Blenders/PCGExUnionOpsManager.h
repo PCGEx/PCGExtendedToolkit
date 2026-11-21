@@ -16,7 +16,6 @@ namespace PCGExBlending
 {
 	class FBlendOpsManager;
 	class FBlendOpsSchema;
-	struct FPropertiesBlender;
 }
 
 namespace PCGExBlending

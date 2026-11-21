@@ -15,7 +15,6 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
-#include "Helpers/PCGActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
 #include "Helpers/PCGExActorPropertyOverrides.h"
 #include "Helpers/PCGExArrayHelpers.h"

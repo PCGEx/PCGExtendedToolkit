@@ -54,8 +54,6 @@ enum class EPCGExTraceSampleDistanceInput : uint8
 	Attribute       = 2 UMETA(DisplayName = "Attribute", ToolTip="Attribute"),
 };
 
-class UPCGExPointFilterFactoryData;
-
 namespace PCGExMT
 {
 	template <typename T>

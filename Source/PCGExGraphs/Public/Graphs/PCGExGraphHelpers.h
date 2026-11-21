@@ -5,8 +5,6 @@
 
 #include "CoreMinimal.h"
 
-class UPCGMetadata;
-
 namespace PCGExData
 {
 	class FPointIO;
@@ -15,7 +13,6 @@ namespace PCGExData
 namespace PCGExGraphs
 {
 	struct FEdge;
-	class FGraph;
 
 	namespace Helpers
 	{

@@ -18,9 +18,6 @@
 struct FPCGExContext;
 class UPCGBasePointData;
 
-template <typename T>
-class FPCGMetadataAttribute;
-
 namespace PCGExData
 {
 	class IBuffer;

@@ -10,7 +10,6 @@
 
 #define PCGEX_FILTERS_SUBSYSTEM UPCGExFiltersSubSystem* PCGExFiltersSubsystem = UPCGExFiltersSubSystem::GetSubsystemForCurrentWorld(); check(PCGExFiltersSubsystem)
 
-class UPCGComponent;
 class UPCGExConstantFilterFactory;
 
 namespace PCGExPointFilter

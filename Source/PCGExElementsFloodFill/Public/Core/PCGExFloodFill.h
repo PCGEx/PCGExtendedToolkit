@@ -21,7 +21,6 @@ namespace PCGExBlending
 	class FBlendOpsManager;
 }
 
-class FPCGExBlendOperation;
 class UPCGExFillControlsFactoryData;
 class FPCGExFillControlOperation;
 

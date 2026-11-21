@@ -10,7 +10,6 @@
 
 #include "PCGExClipper2Triangulate.generated.h"
 
-class UDynamicMesh;
 class UPCGDynamicMeshData;
 
 /**

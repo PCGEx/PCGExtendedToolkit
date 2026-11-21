@@ -4,7 +4,6 @@
 #include "Elements/PCGExStagingSplineMesh.h"
 
 #include "PCGComponent.h"
-#include "PCGExLog.h"
 #include "PCGExVersion.h"
 #include "PCGGraph.h"
 #include "PCGParamData.h"

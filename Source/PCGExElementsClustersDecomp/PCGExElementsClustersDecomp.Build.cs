@@ -52,7 +52,6 @@ public class PCGExElementsClustersDecomp : ModuleRules
 			new string[]
 			{
 				"GeometryCore",
-				"GeometryFramework",
 			}
 		);
 
@@ -69,7 +68,6 @@ public class PCGExElementsClustersDecomp : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore"
 				});
 		}

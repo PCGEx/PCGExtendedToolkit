@@ -13,11 +13,6 @@
 
 struct FPCGExTaggedData;
 
-namespace PCGExData
-{
-	template <typename T>
-	class TAttributeBroadcaster;
-}
 
 UENUM()
 enum class EPCGExMatchOverlapExpansionMode : uint8

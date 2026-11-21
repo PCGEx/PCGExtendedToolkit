@@ -13,14 +13,7 @@
 
 #include "PCGExStagingLoadPCGData.generated.h"
 
-class UPCGLandscapeData;
-class UPCGVolumeData;
-class UPCGSurfaceData;
-class UPCGPrimitiveData;
-class UPCGPolyLineData;
-class UPCGSplineData;
 class UPCGDataAsset;
-class UPCGExPCGDataAssetCollection;
 struct FPCGExPCGDataAssetCollectionEntry;
 
 namespace PCGExPCGDataAssetLoader

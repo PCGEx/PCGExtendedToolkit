@@ -17,7 +17,6 @@
 
 class UPCGSettings;
 class UPCGNode;
-class UPCGExPointFilterFactoryData;
 
 USTRUCT(BlueprintType)
 struct FPCGExEdgeMatchConfig

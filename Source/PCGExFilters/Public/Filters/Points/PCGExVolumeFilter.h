@@ -15,7 +15,6 @@
 #include "PCGExVolumeFilter.generated.h"
 
 class AVolume;
-class UPCGVolumeData;
 
 UENUM()
 enum class EPCGExVolumeCheckType : uint8

@@ -20,7 +20,6 @@ namespace PCGExMT
 {
 	class FScopedContainer;
 	struct FScope;
-	class FTaskManager;
 }
 
 class FPCGMetadataAttributeBase;

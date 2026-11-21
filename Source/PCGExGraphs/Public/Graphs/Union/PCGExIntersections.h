@@ -21,13 +21,6 @@ namespace PCGExBlending
 	class FMetadataBlender;
 }
 
-namespace PCGExData
-{
-	class FUnionMetadata;
-	class IUnionMetadata;
-	class IUnionData;
-}
-
 namespace PCGExGraphs
 {
 	class FGraph;

@@ -6,7 +6,6 @@
 #include "PCGParamData.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
-#include "Helpers/PCGHelpers.h"
 #include "Misc/Guid.h"
 
 #define LOCTEXT_NAMESPACE "PCGExGetGUIDElement"

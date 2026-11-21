@@ -19,7 +19,6 @@ template <typename ValueType, typename ViewType>
 class TPCGValueRange;
 
 class UPCGMetadata;
-class UPCGManagedComponent;
 class UPCGData;
 class UPCGBasePointData;
 class UPCGComponent;

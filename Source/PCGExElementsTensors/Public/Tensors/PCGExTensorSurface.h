@@ -14,7 +14,6 @@
 
 class UPCGSurfaceData;
 class UPrimitiveComponent;
-class AActor;
 class UWorld;
 
 UENUM(BlueprintType)

@@ -16,7 +16,6 @@
 #include "PCGExPrimitiveFilter.generated.h"
 
 class UPrimitiveComponent;
-class UPCGPrimitiveData;
 
 namespace PCGExPointFilter
 {

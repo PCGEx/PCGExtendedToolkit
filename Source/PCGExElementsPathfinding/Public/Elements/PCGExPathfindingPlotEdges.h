@@ -35,7 +35,6 @@ namespace PCGExMatching
 	class FDataMatcher;
 }
 
-class FPCGExHeuristicOperation;
 class UPCGExSearchInstancedFactory;
 /**
  * Use PCGExTransform to manipulate the outgoing attributes instead of handling everything here.

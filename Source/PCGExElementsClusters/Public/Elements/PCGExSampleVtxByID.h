@@ -30,12 +30,6 @@ namespace PCGExBlending
 	class FBlendOpsSchema;
 }
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedNumericValue;
-}
-
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="clusters/utilities/sample-vtx-by-id"))
 class UPCGExSampleVtxByIDSettings : public UPCGExPointsProcessorSettings
 {

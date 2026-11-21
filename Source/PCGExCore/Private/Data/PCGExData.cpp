@@ -14,7 +14,6 @@
 #include "Data/PCGExPointIO.h"
 #include "Data/PCGExProxyData.h"
 #include "Data/PCGPointData.h"
-#include "Helpers/PCGExArrayHelpers.h"
 #include "Metadata/PCGMetadataDomain.h"
 #include "Metadata/Accessors/PCGAttributeAccessorHelpers.h"
 #include "Metadata/Accessors/PCGCustomAccessor.h"

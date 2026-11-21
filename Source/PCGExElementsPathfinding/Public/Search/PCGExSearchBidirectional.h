@@ -18,8 +18,6 @@ namespace PCGEx
 	class FHashLookupArray;
 }
 
-class FPCGExHeuristicOperation;
-
 namespace PCGExPathfinding
 {
 	/**

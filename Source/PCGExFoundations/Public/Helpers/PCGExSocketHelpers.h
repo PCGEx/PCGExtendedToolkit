@@ -28,7 +28,6 @@ namespace PCGExDetails
 	class TSettingValue;
 }
 
-struct FPCGContext;
 struct FPCGMeshInstanceList;
 class UPCGBasePointData;
 class UPCGParamData;

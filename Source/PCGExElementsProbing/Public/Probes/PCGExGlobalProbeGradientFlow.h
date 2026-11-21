@@ -10,11 +10,6 @@
 
 #include "PCGExGlobalProbeGradientFlow.generated.h"
 
-namespace PCGExProbing
-{
-	struct FCandidate;
-}
-
 namespace PCGExData
 {
 	template <typename T>

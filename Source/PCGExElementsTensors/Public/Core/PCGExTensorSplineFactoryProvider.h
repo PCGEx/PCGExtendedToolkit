@@ -12,8 +12,6 @@ PRAGMA_ENABLE_EXPERIMENTAL_WARNINGS // FPCGSplineStruct
 
 #include "PCGExTensorSplineFactoryProvider.generated.h"
 
-class PCGExTensorOperation;
-
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
 class PCGEXELEMENTSTENSORS_API UPCGExTensorSplineFactoryData : public UPCGExTensorFactoryData
 {

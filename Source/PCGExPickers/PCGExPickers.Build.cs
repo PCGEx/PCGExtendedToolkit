@@ -62,7 +62,6 @@ public class PCGExPickers : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore",
 				});
 		}

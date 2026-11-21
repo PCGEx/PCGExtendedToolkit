@@ -24,8 +24,6 @@
 
 #include "PCGExExtrudeTensors.generated.h"
 
-struct FPCGExSortRuleConfig;
-
 namespace PCGExSorting
 {
 	class FSorter;

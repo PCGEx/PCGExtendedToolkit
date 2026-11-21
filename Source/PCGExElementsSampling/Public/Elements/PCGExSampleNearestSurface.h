@@ -32,8 +32,6 @@ MACRO(ActorReference, FSoftObjectPath, FSoftObjectPath())\
 MACRO(PhysMat, FSoftObjectPath, FSoftObjectPath())
 
 class AActor;
-class UWorld;
-class UPCGExPointFilterFactoryData;
 
 namespace PCGExMT
 {

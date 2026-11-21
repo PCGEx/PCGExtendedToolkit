@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "PCGExCommon.h"
-#include "Clusters/PCGExEdge.h"
 #include "Math/PCGExMath.h"
 #include "Metadata/PCGAttributePropertySelector.h"
 

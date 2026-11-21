@@ -66,7 +66,6 @@ public class PCGExElementsFloodFill : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore"
 				});
 		}

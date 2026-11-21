@@ -26,8 +26,6 @@ namespace PCGExDetails
 
 struct FPCGContext;
 struct FStreamableHandle;
-struct FPCGMeshInstanceList;
-struct FPCGSkinnedMeshInstanceList;
 class AActor;
 class UPCGBasePointData;
 class UPCGExSelectorFactoryData;

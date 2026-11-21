@@ -12,7 +12,6 @@
 #include "Math/PCGExProjectionDetails.h"
 #include "Math/PCGExWinding.h"
 
-class UPCGBasePointData;
 struct FPCGExCellConstraintsDetails;
 
 namespace PCGExData
@@ -20,8 +19,6 @@ namespace PCGExData
 	class FFacade;
 	struct FMutablePoint;
 }
-
-struct FPCGExNodeSelectionDetails;
 
 namespace PCGExClusters
 {
@@ -147,7 +144,6 @@ namespace PCGExClusters
 
 	class FCell;
 	class FCellConstraints;
-	struct FNode;
 
 	/**
 	 * Unified point set for Seeds/Holes - projects points to 2D and provides AABB-optimized overlap checks.

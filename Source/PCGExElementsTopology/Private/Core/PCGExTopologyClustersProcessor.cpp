@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "PCGComponent.h"
-#include "PCGExLog.h"
 #include "UDynamicMesh.h"
 #include "Async/ParallelFor.h"
 #include "Clusters/PCGExCluster.h"

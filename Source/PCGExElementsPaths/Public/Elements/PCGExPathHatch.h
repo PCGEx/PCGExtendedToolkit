@@ -21,11 +21,6 @@ namespace PCGExBlending
 	class FUnionBlender;
 }
 
-namespace PCGExSampling
-{
-	class FSampingUnionData;
-}
-
 UENUM()
 enum class EPCGExHatchBoxFitMode : uint8
 {

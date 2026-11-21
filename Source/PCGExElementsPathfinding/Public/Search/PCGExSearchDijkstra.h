@@ -9,8 +9,6 @@
 #include "UObject/Object.h"
 #include "PCGExSearchDijkstra.generated.h"
 
-class FPCGExHeuristicOperation;
-
 class FPCGExSearchOperationDijkstra : public FPCGExSearchOperation
 {
 public:

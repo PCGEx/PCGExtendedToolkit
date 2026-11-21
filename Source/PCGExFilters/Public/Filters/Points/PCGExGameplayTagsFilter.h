@@ -18,11 +18,6 @@
 
 class AActor;
 
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
-}
 
 USTRUCT(BlueprintType)
 struct FPCGExGameplayTagsFilterConfig

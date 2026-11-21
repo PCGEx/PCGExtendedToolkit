@@ -13,19 +13,15 @@
 #include "PCGExTopology.generated.h"
 
 struct FPCGExContext;
-struct FGeometryScriptSimplePolygon;
 
 namespace PCGExData
 {
 	class FFacadePreloader;
 	class FFacade;
-	struct FMutablePoint;
 
 	template <typename T>
 	class TBuffer;
 }
-
-struct FPCGExNodeSelectionDetails;
 
 namespace PCGExClusters
 {

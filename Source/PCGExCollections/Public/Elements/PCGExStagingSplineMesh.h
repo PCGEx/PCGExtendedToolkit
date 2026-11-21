@@ -24,8 +24,6 @@ namespace PCGExCollections
 {
 	class FCollectionSource;
 	class FPickUnpacker;
-	class FMicroSelectorHelper;
-	class FSelectorHelper;
 	class FSelectorSharedDataCache;
 }
 

@@ -22,9 +22,6 @@ namespace PCGExData
 {
 	struct FProxyPoint;
 	struct FConstPoint;
-
-	template <typename T>
-	class TBuffer;
 }
 
 UENUM()

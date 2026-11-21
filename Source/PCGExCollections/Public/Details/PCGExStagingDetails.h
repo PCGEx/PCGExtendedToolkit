@@ -10,7 +10,6 @@
 #include "Math/PCGExMath.h"
 #include "PCGExStagingDetails.generated.h"
 
-class UPCGExBitmaskCollection;
 class UPCGExSelectorFactoryData;
 class UPCGParamData;
 

@@ -7,7 +7,6 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExSettings.h"
 #include "Factories/PCGExInstancedFactory.h"
-#include "Helpers/PCGAsync.h"
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGSettingsHelpers.h"
 #include "Types/PCGExTypeOpsString.h"

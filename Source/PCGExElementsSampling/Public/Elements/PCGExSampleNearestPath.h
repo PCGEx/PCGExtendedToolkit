@@ -64,8 +64,6 @@ namespace PCGExPaths
 	class FPolyPath;
 }
 
-class UPCGExPointFilterFactoryData;
-
 UENUM()
 enum class EPCGExPathSamplingIncludeMode : uint8
 {

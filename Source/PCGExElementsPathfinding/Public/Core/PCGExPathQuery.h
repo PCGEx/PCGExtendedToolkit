@@ -6,18 +6,8 @@
 #include "CoreMinimal.h"
 #include "PCGExPathfinding.h"
 
-namespace PCGExMT
-{
-	class FTaskManager;
-}
-
 class FPCGExSearchOperation;
 struct FPCGExNodeSelectionDetails;
-
-namespace PCGExData
-{
-	class FFacade;
-}
 
 namespace PCGExClusters
 {

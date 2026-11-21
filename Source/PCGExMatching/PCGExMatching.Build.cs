@@ -61,7 +61,6 @@ public class PCGExMatching : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore",
 				});
 		}

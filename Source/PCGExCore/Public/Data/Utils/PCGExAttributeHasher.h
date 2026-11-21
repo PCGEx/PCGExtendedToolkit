@@ -17,11 +17,6 @@ namespace PCGExMT
 	class FTaskManager;
 }
 
-namespace PCGExData
-{
-	class IBuffer;
-}
-
 UENUM()
 enum class EPCGExDataHashScope : uint8
 {

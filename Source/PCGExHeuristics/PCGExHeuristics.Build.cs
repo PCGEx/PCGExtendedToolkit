@@ -61,7 +61,6 @@ public class PCGExHeuristics : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore",
 				});
 		}

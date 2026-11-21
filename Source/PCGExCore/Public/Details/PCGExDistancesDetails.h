@@ -12,11 +12,6 @@ namespace PCGExMath
 	class IDistances;
 }
 
-namespace PCGExData
-{
-	struct FPoint;
-}
-
 USTRUCT(BlueprintType)
 struct PCGEXCORE_API FPCGExDistanceDetails
 {

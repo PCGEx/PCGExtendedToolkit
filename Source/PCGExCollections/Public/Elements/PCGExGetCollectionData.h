@@ -15,7 +15,6 @@
 #include "PCGExGetCollectionData.generated.h"
 
 class UPCGExAssetCollection;
-struct FPCGExAssetCollectionEntry;
 
 /** Row-skip conditions for GetCollectionData. Multiple flags may be combined. */
 UENUM(meta=(Bitflags, UseEnumValuesAsMaskValuesInEditor="true"))
