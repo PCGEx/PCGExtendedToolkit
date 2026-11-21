@@ -287,11 +287,15 @@ protected:
 
 #pragma endregion
 
-#pragma region Managed Components
+#pragma region Managed Resources
 
 public:
-	/** Identity of this node execution (settings, stack, node) that holds across sessions; combine a per-component index into it to key a reusable component. */
-	FPCGCrc GetManagedComponentCrc() const;
+	/** Identity of this node execution (stack, node, and its settings unless left out) that holds across sessions; combine an index into it to key a reusable resource. */
+	FPCGCrc GetExecutionCrc(bool bWithSettings = true) const;
+
+	/** Hash of the node's settings and of what its inputs hold, leaving out InExcludedPin, factories and every tag (those carry per-session ids).
+	 *  Unlike the CRCs the executor hands down, it holds across sessions. */
+	FPCGCrc GetInputContentCrc(FName InExcludedPin = NAME_None) const;
 
 	/** The component a previous generation attached under ReuseCrc, reset to how a new one starts out for a full rebuild; null if there is none. */
 	UPCGExManagedComponent* ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const;

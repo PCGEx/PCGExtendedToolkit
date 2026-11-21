@@ -66,7 +66,7 @@ bool FPCGExSpawnDynamicMeshElement::AdvanceWork(FPCGExContext* InContext, const 
 	// Output creates UObjects (NewObject) and attaches components -- illegal during a package save / GC. Defer (re-tick) until clear.
 	PCGEX_DEFER_IF_OBJECT_WORK_BLOCKED
 
-	const FPCGCrc ExecutionCrc = Context->GetManagedComponentCrc();
+	const FPCGCrc ExecutionCrc = Context->GetExecutionCrc();
 	const FString ClusterIdTagPrefix = PCGExClusters::Labels::TagStr_PCGExCluster + PCGExData::TagSeparator;
 
 	int32 Index = -1;

@@ -20,6 +20,8 @@
 
 #include "PCGExStagingSpawnActors.generated.h"
 
+class UPCGExManagedActors;
+
 namespace PCGExActorOverrides
 {
 	class FActorPropertyOverrides;
@@ -168,7 +170,11 @@ struct FPCGExStagingSpawnActorsContext final : FPCGExPointsProcessorContext
 	/** The node's property overrides resolved per actor class, shared by every input; null when it has none */
 	TSharedPtr<PCGExActorOverrides::FOverrideTargets> OverrideTargets;
 
-	FPCGCrc DependenciesCrc;
+	/** Stack + node, without the settings: an edit to the node keeps its actors' identity */
+	FPCGCrc ExecutionCrc;
+
+	/** Settings and every input but the points; each processor adds its own points to it */
+	FPCGCrc InputContentCrc;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
@@ -255,12 +261,20 @@ namespace PCGExStagingSpawnActors
 		/** Main thread loop for spawning */
 		TSharedPtr<PCGExMT::FTimeSlicedMainThreadLoop> MainThreadLoop;
 
-		/** Managed resource for actor cleanup via PCG's native resource tracking */
-		UPCGManagedActors* ManagedActors = nullptr;
+		/** Managed resource for actor cleanup via PCG's native resource tracking; this input's previous one when it has one */
+		UPCGExManagedActors* ManagedActors = nullptr;
 
-		/** Identifies this input's managed resource from one execution to the next. The node's CRC alone can't:
-		 *  every input owns a resource. */
-		FPCGCrc InputCrc;
+		/** Finds this input's managed resource from one execution to the next, whatever its points hold */
+		FPCGCrc SlotCrc;
+
+		/** Hash of everything this input's actors are spawned from; equal to the resource's, they still hold */
+		FPCGCrc ContentCrc;
+
+		/** Actors the resource held when it was found; those not yet replaced sit at [NumSpawned, NumDonors) */
+		int32 NumDonors = 0;
+
+		/** Actors spawned so far, which is also the resource slot the next one goes to */
+		int32 NumSpawned = 0;
 
 		/** Optional PCG generation watcher */
 		TSharedPtr<PCGExPCGInterop::FGenerationWatcher> GenerationWatcher;
@@ -293,7 +307,8 @@ namespace PCGExStagingSpawnActors
 		virtual void CompleteWork() override;
 
 	private:
-		/** Takes over the actors a previous execution spawned for this input, when nothing changed since. True if it did. */
+		/** Finds what a previous execution spawned for this input. True when nothing changed since and the actors are
+		 *  kept as they are; otherwise they stay tracked for the spawn loop to replace one by one. */
 		bool TryReuseSpawnedActors();
 
 		/** Entry classes and delta collaterals are loaded: prepares the override preload if any, else starts spawning */

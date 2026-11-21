@@ -27,6 +27,7 @@
 #include "Data/PCGExProxyData.h"
 #include "Engine/AssetManager.h"
 #include "Engine/EngineTypes.h"
+#include "Factories/PCGExFactoryData.h"
 #include "Factories/PCGExInstancedFactory.h"
 #include "GameFramework/Actor.h"
 #include "Graph/PCGStackContext.h"
@@ -701,9 +702,9 @@ void FPCGExContext::ResolveObjects_AnyThread(TConstArrayView<FSoftObjectPath> Pa
 	PCGExHelpers::ResolveMissingObjects_AnyThread(Paths, OutObjects);
 }
 
-FPCGCrc FPCGExContext::GetManagedComponentCrc() const
+FPCGCrc FPCGExContext::GetExecutionCrc(const bool bWithSettings) const
 {
-	const UPCGSettings* InSettings = GetInputSettings<UPCGSettings>();
+	const UPCGSettings* InSettings = bWithSettings ? GetInputSettings<UPCGSettings>() : nullptr;
 	FPCGCrc Crc = InSettings ? InSettings->GetSettingsCrc() : FPCGCrc();
 	if (!Crc.IsValid())
 	{
@@ -719,6 +720,30 @@ FPCGCrc FPCGExContext::GetManagedComponentCrc() const
 	if (Node)
 	{
 		Crc.Combine(FCrc::StrCrc32(*Node->GetName()));
+	}
+
+	return Crc;
+}
+
+FPCGCrc FPCGExContext::GetInputContentCrc(const FName InExcludedPin) const
+{
+	const UPCGSettings* InSettings = GetInputSettings<UPCGSettings>();
+	FPCGCrc Crc = InSettings ? InSettings->GetSettingsCrc() : FPCGCrc();
+	if (!Crc.IsValid())
+	{
+		Crc = FPCGCrc(0);
+	}
+
+	for (const FPCGTaggedData& TaggedData : InputData.TaggedData)
+	{
+		// A factory's CRC is its object identity, so it is per session; what a factory decides is the caller's to hash.
+		if (!TaggedData.Data || TaggedData.Pin == InExcludedPin || TaggedData.Data->IsA<UPCGExParamDataBase>())
+		{
+			continue;
+		}
+
+		Crc.Combine(FCrc::StrCrc32(*TaggedData.Pin.ToString()));
+		Crc.Combine(TaggedData.Data->GetOrComputeCrc(/*bFullDataCrc=*/true));
 	}
 
 	return Crc;
