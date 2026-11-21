@@ -293,7 +293,7 @@ public:
 	/** Identity of this node execution (settings, stack, node) that holds across sessions; combine a per-component index into it to key a reusable component. */
 	FPCGCrc GetManagedComponentCrc() const;
 
-	/** The component a previous generation attached under ReuseCrc, unregistered and stripped of its tags for a full rebuild; null if there is none. */
+	/** The component a previous generation attached under ReuseCrc, reset to how a new one starts out for a full rebuild; null if there is none. */
 	UPCGExManagedComponent* ReclaimManagedComponent(const AActor* InParent, const UClass* InComponentClass, const FPCGCrc& ReuseCrc) const;
 
 	/** A valid ReuseCrc keeps the component across regenerations; InReclaimed is what ReclaimManagedComponent returned for it, if anything. */

@@ -757,10 +757,16 @@ UPCGExManagedComponent* FPCGExContext::ReclaimManagedComponent(const AActor* InP
 	Reclaimed->MarkAsUsed();
 	Reclaimed->SetCrc(ReuseCrc);
 
-	// Handed back the way a new component starts out, so one build path serves both.
+	// Handed back the way a new component starts out (unregistered, untagged, detached at identity), so one build path serves both.
 	UActorComponent* Component = Reclaimed->GeneratedComponent.Get();
 	Component->UnregisterComponent();
 	Component->ComponentTags.Reset();
+
+	if (USceneComponent* SceneComponent = Cast<USceneComponent>(Component))
+	{
+		SceneComponent->DetachFromComponent(FDetachmentTransformRules(EDetachmentRule::KeepRelative, false));
+		SceneComponent->SetRelativeTransform(FTransform::Identity);
+	}
 
 	return Reclaimed;
 }
@@ -784,13 +790,6 @@ UPCGManagedComponent* FPCGExContext::AttachManagedComponent(AActor* InParent, UA
 	if (InReclaimed)
 	{
 		check(InReclaimed->GeneratedComponent.Get() == InComponent);
-
-		// Back to the identity transform a new component attaches from, so the rules resolve the same way.
-		if (SceneComponent)
-		{
-			SceneComponent->DetachFromComponent(FDetachmentTransformRules(EDetachmentRule::KeepRelative, false));
-			SceneComponent->SetRelativeTransform(FTransform::Identity);
-		}
 	}
 	else
 	{
