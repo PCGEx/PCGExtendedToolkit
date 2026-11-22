@@ -192,6 +192,10 @@ namespace PCGExPathStitch
 		TWeakPtr<FProcessor> StartStitch = nullptr; // Which other processor is stitched to the start
 		TWeakPtr<FProcessor> EndStitch = nullptr;   // Which other processor is stitched to the end
 
+		// Which endpoint of the stitched processor each stitch lands on: its end (true) or its start (false).
+		bool bStartStitchToEnd = false;
+		bool bEndStitchToEnd = false;
+
 		TSharedPtr<FPCGExPointIOMerger> Merger;
 
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
@@ -204,8 +208,8 @@ namespace PCGExPathStitch
 			return true;
 		}
 
-		bool SetStartStitch(const TSharedPtr<FProcessor>& InStitch);
-		bool SetEndStitch(const TSharedPtr<FProcessor>& InStitch);
+		bool SetStartStitch(const TSharedPtr<FProcessor>& InStitch, const bool bToEnd);
+		bool SetEndStitch(const TSharedPtr<FProcessor>& InStitch, const bool bToEnd);
 
 		// A path stitched onto itself has both stitches pointing at this processor.
 		bool DropsEndpointOnSelfClosure() const;
