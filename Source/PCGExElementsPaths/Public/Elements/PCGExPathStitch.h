@@ -96,6 +96,14 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
 	bool bOnlyMatchStartAndEnds = false;
 
+	/** Turn an open path into a closed loop when its own end stitches back onto its own start. No point is added. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
+	bool bCloseSelfConnectingPaths = true;
+
+	/** A self-closing path drops one endpoint when both are closer than this. Fuse follows its Method, Connect keeps the start. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName=" └─ Coincidence Tolerance", EditCondition="bCloseSelfConnectingPaths", EditConditionHides, ClampMin=0))
+	double SelfCoincidenceTolerance = 0.01;
+
 	/** Require paths to be aligned within an angular threshold before stitching. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bDoRequireAlignment = false;
@@ -198,6 +206,10 @@ namespace PCGExPathStitch
 
 		bool SetStartStitch(const TSharedPtr<FProcessor>& InStitch);
 		bool SetEndStitch(const TSharedPtr<FProcessor>& InStitch);
+
+		// A path stitched onto itself has both stitches pointing at this processor.
+		bool DropsEndpointOnSelfClosure() const;
+		void CloseSelf();
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;

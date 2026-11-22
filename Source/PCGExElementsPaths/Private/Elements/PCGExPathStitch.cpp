@@ -11,6 +11,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExDataMatcher.h"
 #include "Helpers/PCGExMatchingHelpers.h"
 #include "Paths/PCGExPathsHelpers.h"
@@ -50,6 +51,13 @@ void UPCGExPathStitchSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	{
 		MatchingDetails.ApplyDeprecation();
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 7)
+	{
+		// Graphs saved before self-closure existed keep their open outputs.
+		bCloseSelfConnectingPaths = false;
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
@@ -145,6 +153,28 @@ namespace PCGExPathStitch
 		return true;
 	}
 
+	bool FProcessor::DropsEndpointOnSelfClosure() const
+	{
+		return FVector::Dist(StartSegment.B, EndSegment.B) <= Settings->SelfCoincidenceTolerance;
+	}
+
+	void FProcessor::CloseSelf()
+	{
+		const TSharedRef<PCGExData::FPointIO>& PointIO = PointDataFacade->Source;
+		PCGEX_INIT_IO_VOID(PointIO, PCGExData::EIOInit::Duplicate);
+
+		if (DropsEndpointOnSelfClosure())
+		{
+			const bool bDropStart = Settings->Method == EPCGExStitchMethod::Fuse && Settings->FuseMethod == EPCGExStitchFuseMethod::KeepEnd;
+
+			TArray<int32> KeptIndices;
+			PCGExArrayHelpers::ArrayOfIndices(KeptIndices, PointIO->GetNum() - 1, bDropStart ? 1 : 0);
+			PointIO->Gather(KeptIndices);
+		}
+
+		PCGExPaths::Helpers::SetClosedLoop(PointIO->GetOut(), true);
+	}
+
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExPathStitch::Process);
@@ -173,6 +203,12 @@ namespace PCGExPathStitch
 		if (!EndStitch.IsValid() && !StartStitch.IsValid())
 		{
 			PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::Forward);
+			return;
+		}
+
+		if (EndStitch.HasSameObject(this))
+		{
+			CloseSelf();
 			return;
 		}
 
@@ -412,10 +448,20 @@ namespace PCGExPathStitch
 					const int32 OtherBatchIndex = FMath::Abs(Item.Index) - 1;
 					const TSharedPtr<FProcessor> Other = GetProcessor<FProcessor>(OtherBatchIndex);
 
-					if (Other->WorkIndex <= Current->WorkIndex)
+					const bool bSelf = Other == Current;
+
+					if (bSelf)
 					{
-						return;
-					} // Dedup + skip self
+						// The self pair is collected once, end to start.
+						if (!Settings->bCloseSelfConnectingPaths || !bCurrentEnd || bOtherEnd)
+						{
+							return;
+						}
+					}
+					else if (Other->WorkIndex < Current->WorkIndex)
+					{
+						return; // Dedup
+					}
 
 					if (!PartitionOf.IsEmpty() && PartitionOf[Current->WorkIndex] != PartitionOf[Other->WorkIndex])
 					{
@@ -431,6 +477,12 @@ namespace PCGExPathStitch
 
 					const double Dist = FVector::Dist(CurrentSeg.B, OtherSeg.B);
 					if (Dist > Settings->Tolerance)
+					{
+						return;
+					}
+
+					// A closed loop needs 3 points left once a coincident endpoint is dropped.
+					if (bSelf && Current->PointDataFacade->GetNum() - (Current->DropsEndpointOnSelfClosure() ? 1 : 0) < 3)
 					{
 						return;
 					}
