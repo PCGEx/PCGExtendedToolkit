@@ -967,7 +967,7 @@ namespace PCGExStagingLoadLevel
 				Spawned->SetFolderPath(FolderPath);
 			}
 
-			PCGExCollections::FinalizeSpawnedActor(Spawned, bIsPreview);
+			PCGExHelpers::FinalizeSpawnedActor(Spawned, bIsPreview);
 			ManagedActors->CommitSpawn(Spawned);
 		}
 	}

@@ -19,6 +19,7 @@
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGActorHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Helpers/PCGHelpers.h"
 #include "UObject/UObjectThreadContext.h"
 
 namespace PCGExHelpers
@@ -185,6 +186,27 @@ namespace PCGExHelpers
 		// A destroyed actor holds its name until collected. UObject::Rename, not AActor's: the outer stays the level.
 		InActor->UObject::Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
 #endif
+	}
+
+	void FinalizeSpawnedActor(AActor* InActor, const bool bIsPreview)
+	{
+		if (!InActor)
+		{
+			return;
+		}
+
+		InActor->Tags.AddUnique(PCGHelpers::DefaultPCGActorTag);
+
+		if (!bIsPreview)
+		{
+			InActor->Modify();
+			(void)InActor->MarkPackageDirty();
+			if (ULevel* Level = InActor->GetLevel())
+			{
+				Level->Modify();
+				(void)Level->MarkPackageDirty();
+			}
+		}
 	}
 
 	void EnsureWorldTransformsCurrent(UWorld* InWorld)
