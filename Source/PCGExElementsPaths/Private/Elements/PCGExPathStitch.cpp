@@ -133,23 +133,25 @@ bool FPCGExPathStitchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 namespace PCGExPathStitch
 {
-	bool FProcessor::SetStartStitch(const TSharedPtr<FProcessor>& InStitch)
+	bool FProcessor::SetStartStitch(const TSharedPtr<FProcessor>& InStitch, const bool bToEnd)
 	{
 		if (StartStitch.IsValid())
 		{
 			return false;
 		}
 		StartStitch = InStitch;
+		bStartStitchToEnd = bToEnd;
 		return true;
 	}
 
-	bool FProcessor::SetEndStitch(const TSharedPtr<FProcessor>& InStitch)
+	bool FProcessor::SetEndStitch(const TSharedPtr<FProcessor>& InStitch, const bool bToEnd)
 	{
 		if (EndStitch.IsValid())
 		{
 			return false;
 		}
 		EndStitch = InStitch;
+		bEndStitchToEnd = bToEnd;
 		return true;
 	}
 
@@ -216,10 +218,8 @@ namespace PCGExPathStitch
 
 		const TSharedPtr<FProcessor> Start = SharedThis(this);
 
-		// Snapshot (processor, bReverse) for each link at walk time -- never re-read
-		// from StartStitch/EndStitch afterwards. In a 2-path closed loop both of
-		// Chain.Last()'s stitches alias to Start, so any post-walk mutation of those
-		// pointers (or even reading them to derive direction) would corrupt ordering.
+		// Direction comes from the recorded peer endpoint, never from comparing stitch pointers:
+		// in a 2-path closed loop both stitches of a link alias the same processor.
 		struct FChainLink
 		{
 			TSharedPtr<FProcessor> Processor;
@@ -231,8 +231,8 @@ namespace PCGExPathStitch
 
 		// Prefer EndStitch when both are set; otherwise we are an endpoint.
 		const bool bStartGoesViaEnd = EndStitch.IsValid();
-		TSharedPtr<FProcessor> PreviousProcessor = Start;
 		TSharedPtr<FProcessor> NextProcessor = bStartGoesViaEnd ? EndStitch.Pin() : StartStitch.Pin();
+		bool bEnterViaEnd = bStartGoesViaEnd ? bEndStitchToEnd : bStartStitchToEnd;
 
 		Chain.Add({Start, !bStartGoesViaEnd});
 
@@ -240,15 +240,14 @@ namespace PCGExPathStitch
 
 		while (NextProcessor)
 		{
-			// Whichever stitch points back to Previous is the endpoint we entered
-			// through; we'll exit via the other and the chosen entry dictates bReverse.
-			const bool bEnteredViaStart = (NextProcessor->StartStitch.Pin() == PreviousProcessor);
+			// A link entered through its end is read backward and left through its start.
+			const TSharedPtr<FProcessor> Current = NextProcessor;
 
-			Chain.Add({NextProcessor, !bEnteredViaStart});
-			SmallestWorkIndex = FMath::Min(SmallestWorkIndex, NextProcessor->WorkIndex);
+			Chain.Add({Current, bEnterViaEnd});
+			SmallestWorkIndex = FMath::Min(SmallestWorkIndex, Current->WorkIndex);
 
-			PreviousProcessor = NextProcessor;
-			NextProcessor = bEnteredViaStart ? NextProcessor->EndStitch.Pin() : NextProcessor->StartStitch.Pin();
+			NextProcessor = bEnterViaEnd ? Current->StartStitch.Pin() : Current->EndStitch.Pin();
+			bEnterViaEnd = bEnterViaEnd ? Current->bStartStitchToEnd : Current->bEndStitchToEnd;
 
 			if (NextProcessor == Start)
 			{
@@ -279,31 +278,22 @@ namespace PCGExPathStitch
 		PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::New);
 		Merger = MakeShared<FPCGExPointIOMerger>(PointDataFacade);
 
+		const bool bFuse = Settings->Method == EPCGExStitchMethod::Fuse;
+		const bool bKeepEnd = Settings->FuseMethod == EPCGExStitchFuseMethod::KeepEnd;
+		const int32 LastLink = Chain.Num() - 1;
+
 		for (int i = 0; i < Chain.Num(); ++i)
 		{
 			const FChainLink& Link = Chain[i];
 			const TSharedPtr<FProcessor>& Current = Link.Processor;
 
-			int32 ReadStart = 0;
-			int32 ReadCount = Current->PointDataFacade->GetNum();
+			// Each junction drops one point, in chain order: Keep Start the previous link's last, Keep End the next link's first.
+			const bool bTrimHead = bFuse && bKeepEnd && (i > 0 || bClosedLoop);
+			const bool bTrimTail = bFuse && !bKeepEnd && (i < LastLink || bClosedLoop);
 
-			if (Settings->Method == EPCGExStitchMethod::Fuse)
-			{
-				const bool bIsLast = i == Chain.Num() - 1;
-
-				if (!bIsLast || bClosedLoop)
-				{
-					ReadCount--;
-				}
-
-				if (Settings->FuseMethod == EPCGExStitchFuseMethod::KeepEnd)
-				{
-					if (!bIsLast || bClosedLoop)
-					{
-						ReadStart++;
-					}
-				}
-			}
+			// The read scope is in native order: a reversed link's chain tail is its native first point.
+			const int32 ReadStart = (Link.bReverse ? bTrimTail : bTrimHead) ? 1 : 0;
+			const int32 ReadCount = Current->PointDataFacade->GetNum() - (bTrimHead || bTrimTail ? 1 : 0);
 
 			PCGExPointIOMerger::FMergeScope& MergeScope = Merger->Append(Current->PointDataFacade->Source, static_cast<PCGExMT::FScope>(Current->PointDataFacade->GetInScope(ReadStart, ReadCount)));
 
@@ -562,8 +552,8 @@ namespace PCGExPathStitch
 				continue;
 			}
 
-			const bool bA = C.bEndA ? C.A->SetEndStitch(C.B) : C.A->SetStartStitch(C.B);
-			const bool bB = C.bEndB ? C.B->SetEndStitch(C.A) : C.B->SetStartStitch(C.A);
+			const bool bA = C.bEndA ? C.A->SetEndStitch(C.B, C.bEndB) : C.A->SetStartStitch(C.B, C.bEndB);
+			const bool bB = C.bEndB ? C.B->SetEndStitch(C.A, C.bEndA) : C.B->SetStartStitch(C.A, C.bEndA);
 			check(bA && bB);
 		}
 	}
