@@ -7,8 +7,6 @@
 #include "PCGExModuleInterface.h" // Boilerplate
 #include "Modules/ModuleManager.h"
 
-class FPCGDataTypeRegistry;
-
 class PCGEXCOREEDITOR_API IPCGExEditorModuleInterface : public IModuleInterface
 {
 public:

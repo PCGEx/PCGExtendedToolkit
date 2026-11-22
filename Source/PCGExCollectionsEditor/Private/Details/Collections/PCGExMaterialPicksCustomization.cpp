@@ -9,8 +9,6 @@
 #include "IPropertyUtilities.h"
 #include "PropertyHandle.h"
 #include "Collections/PCGExMeshCollection.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/STextBlock.h"
 
 #pragma region FPCGExMaterialOverrideSingleEntryCustomization

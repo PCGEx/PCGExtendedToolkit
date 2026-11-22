@@ -78,18 +78,15 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FNumericCompareNearestFilter final : public FNearestFilter
+	class FNumericCompareNearestFilter final : public TFactoryFilter<UPCGExNumericCompareNearestFilterFactory, FNearestFilter>
 	{
 	public:
 		explicit FNumericCompareNearestFilter(const TObjectPtr<const UPCGExNumericCompareNearestFilterFactory>& InDefinition)
-			: FNearestFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 		{
 			OperandA = TypedFilterFactory->OperandA;
 			OperandAData = TypedFilterFactory->OperandAData;
 		}
-
-		const TObjectPtr<const UPCGExNumericCompareNearestFilterFactory> TypedFilterFactory;
 
 		TSharedPtr<TArray<TSharedPtr<PCGExData::TBuffer<double>>>> OperandA;
 		TSharedPtr<TArray<const double*>> OperandAData;

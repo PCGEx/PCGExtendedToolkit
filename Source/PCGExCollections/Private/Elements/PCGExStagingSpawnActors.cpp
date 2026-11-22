@@ -15,7 +15,7 @@
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
-#include "Helpers/PCGActorHelpers.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExActorPropertyDelta.h"
 #include "Helpers/PCGExActorPropertyOverrides.h"
 #include "Helpers/PCGExArrayHelpers.h"
@@ -700,7 +700,7 @@ namespace PCGExStagingSpawnActors
 			}
 		}
 
-		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, bTransientSpawn);
+		PCGExHelpers::FinalizeSpawnedActor(SpawnedActor, bTransientSpawn);
 
 		// Tracked as soon as it exists: an interrupted loop leaves nothing behind that PCG can't clean up.
 		ManagedActors->CommitSpawn(SpawnedActor);

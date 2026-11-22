@@ -52,8 +52,6 @@ public class PCGExElementsSpatial : ModuleRules
 			new string[]
 			{
 				"GeometryCore",
-				"GeometryFramework",
-				"GeometryAlgorithms",
 			}
 		);
 
@@ -70,7 +68,6 @@ public class PCGExElementsSpatial : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Settings"
 				});
 		}
 	}

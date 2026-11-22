@@ -22,11 +22,6 @@ UPCGExClipper2OffsetSettings::UPCGExClipper2OffsetSettings(const FObjectInitiali
 	bExposeOffsetProperties = true;
 }
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2OffsetSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
-
 bool UPCGExClipper2OffsetSettings::SupportOpenMainPaths() const
 {
 	return Super::SupportOpenMainPaths(); // && OffsetType == EPCGExClipper2OffsetType::Inflate;

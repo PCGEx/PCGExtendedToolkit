@@ -22,7 +22,6 @@ struct FStreamableHandle;
 
 namespace PCGExMT
 {
-	class IAsyncHandleGroup;
 	class FTaskManager;
 }
 

@@ -21,8 +21,6 @@ namespace PCGExData
 	class FFacade;
 }
 
-struct FPCGExStaticMeshComponentDescriptor;
-
 namespace PCGExPaths
 {
 	PCGEXFOUNDATIONS_API void GetAxisForEntry(const EPCGExSplineMeshAxis InAxis, ESplineMeshAxis::Type& OutAxis, int32& OutC1, int32& OutC2, const EPCGExSplineMeshAxis Default = EPCGExSplineMeshAxis::X);

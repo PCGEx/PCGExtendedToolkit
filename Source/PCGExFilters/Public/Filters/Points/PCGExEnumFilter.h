@@ -95,16 +95,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FEnumFilter final : public ISimpleFilter
+	class FEnumFilter final : public TFactoryFilter<UPCGExEnumFilterFactory>
 	{
 	public:
-		explicit FEnumFilter(const TObjectPtr<const UPCGExEnumFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExEnumFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<int64>> Reader;
 

@@ -69,16 +69,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FEntryCountFilter final : public ICollectionFilter
+	class FEntryCountFilter final : public TFactoryFilter<UPCGExEntryCountFilterFactory, ICollectionFilter>
 	{
 	public:
-		explicit FEntryCountFilter(const TObjectPtr<const UPCGExEntryCountFilterFactory>& InDefinition)
-			: ICollectionFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExEntryCountFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 	};

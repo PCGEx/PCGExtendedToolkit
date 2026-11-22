@@ -50,8 +50,6 @@ public class PCGExElementsProbing : ModuleRules
 			new string[]
 			{
 				"GeometryCore",
-				"GeometryFramework",
-				"GeometryAlgorithms",
 			}
 		);
 

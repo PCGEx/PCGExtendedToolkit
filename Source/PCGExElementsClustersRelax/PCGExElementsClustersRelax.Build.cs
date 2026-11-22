@@ -51,7 +51,6 @@ public class PCGExElementsClustersRelax : ModuleRules
 			new string[]
 			{
 				"GeometryCore",
-				"GeometryFramework",
 			}
 		);
 

@@ -124,17 +124,15 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FTimeFilter final : public ISimpleFilter
+	class FTimeFilter final : public TFactoryFilter<UPCGExTimeFilterFactory>
 	{
 	public:
 		explicit FTimeFilter(const TObjectPtr<const UPCGExTimeFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			Handler = TypedFilterFactory->CreateHandler();
 		}
 
-		const TObjectPtr<const UPCGExTimeFilterFactory> TypedFilterFactory;
 		TSharedPtr<PCGExPathInclusion::FHandler> Handler;
 
 		bool bCheckAgainstDataBounds = false;

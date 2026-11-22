@@ -6,7 +6,6 @@
 #include <functional>
 
 #include "CoreMinimal.h"
-#include "PCGExCoreMacros.h"
 
 namespace PCGExClusters
 {

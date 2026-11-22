@@ -62,16 +62,10 @@ public:
 
 namespace PCGExEdgeEndpointsRegex
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeEndpointsRegexFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeEndpointsRegexFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeEndpointsRegexFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TBuffer<FString>> StringBuffer;
 		PCGExRegex::FPattern RegexMatcher;

@@ -54,17 +54,14 @@ public:
 	virtual TSharedPtr<PCGExPointFilter::IFilter> CreateFilter() const override;
 };
 
-class FNodeEdgeAngleFilter final : public PCGExClusterFilter::IVtxFilter
+class FNodeEdgeAngleFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExNodeEdgeAngleFilterFactory, PCGExClusterFilter::IVtxFilter>
 {
 public:
 	explicit FNodeEdgeAngleFilter(const UPCGExNodeEdgeAngleFilterFactory* InFactory)
-		: IVtxFilter(InFactory)
-		  , TypedFilterFactory(InFactory)
+		: TFactoryFilter(InFactory)
 	{
 		DotComparison = InFactory->Config.DotComparisonDetails;
 	}
-
-	const UPCGExNodeEdgeAngleFilterFactory* TypedFilterFactory;
 
 	bool bLeavesFallback = true;
 	bool bNonBinaryFallback = true;

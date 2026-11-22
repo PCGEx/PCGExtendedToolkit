@@ -9,8 +9,6 @@
 #include "PropertyHandle.h"
 #include "Data/Bitmasks/PCGExBitmaskCollection.h"
 #include "Details/PCGExCustomizationMacros.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SVectorInputBox.h"
 #include "Widgets/Text/STextBlock.h"
 

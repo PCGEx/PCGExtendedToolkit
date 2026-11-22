@@ -11,8 +11,6 @@
 #include "UObject/Object.h"
 #include "PCGExSearchBellmanFord.generated.h"
 
-class FPCGExHeuristicOperation;
-
 namespace PCGExPathfinding
 {
 	/**

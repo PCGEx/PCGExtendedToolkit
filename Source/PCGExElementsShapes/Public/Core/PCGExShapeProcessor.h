@@ -10,7 +10,6 @@
 #include "Core/PCGExPointsProcessor.h"
 #include "PCGExShapeProcessor.generated.h"
 
-class UPCGExPointFilterFactoryData;
 /**
  * 
  */

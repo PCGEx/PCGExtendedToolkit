@@ -45,10 +45,6 @@ namespace PCGExPaths
 	class FPathInclusionHelper;
 }
 
-namespace PCGExPaths
-{
-	class FPolyPath;
-}
 
 namespace PCGExPaths
 {
@@ -56,12 +52,6 @@ namespace PCGExPaths
 	class FPathEdgeBinormal;
 	class FPathEdgeLength;
 	class FPath;
-}
-
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
 }
 
 

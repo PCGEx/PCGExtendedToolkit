@@ -17,11 +17,6 @@ bool UPCGExClipper2RectClipSettings::WantsOperands() const
 	return BoundsSource == EPCGExRectClipBoundsSource::Operand;
 }
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2RectClipSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
-
 bool UPCGExClipper2RectClipSettings::SupportOpenMainPaths() const
 {
 	return !bSkipOpenPaths;

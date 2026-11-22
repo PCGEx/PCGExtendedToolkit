@@ -49,14 +49,10 @@ public class PCGExFoundationsEditor : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"PropertyPath",
-				"DeveloperSettings",
 				"Slate",
 				"SlateCore",
 				"PropertyEditor",
-				"EditorWidgets",
 				"InputCore",
-				"ToolMenus" 
 			}
 		);
 

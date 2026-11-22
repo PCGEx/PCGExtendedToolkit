@@ -50,7 +50,6 @@ public class PCGExPropertiesEditor : ModuleRules
 				"SlateCore",
 				"UnrealEd",
 				"PropertyEditor",
-				"EditorStyle",
 				"InputCore",
 				"AssetRegistry",
 				"BlueprintGraph",

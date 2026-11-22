@@ -30,8 +30,6 @@ namespace PCGExData
 	class FFacadePreloader;
 }
 
-struct FPCGExFactoryProviderContext;
-
 USTRUCT(meta=(PCG_DataTypeDisplayName="PCGEx | Factory"))
 struct FPCGExFactoryDataTypeInfo : public FPCGDataTypeInfo
 {

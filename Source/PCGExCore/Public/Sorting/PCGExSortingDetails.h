@@ -11,8 +11,6 @@
 
 #include "PCGExSortingDetails.generated.h"
 
-struct FPCGContext;
-
 namespace PCGExData
 {
 	class FPointIOCollection;

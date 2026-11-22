@@ -7,11 +7,6 @@
 #include "Core/PCGExEdgeRefineOperation.h"
 #include "PCGExEdgeRefineByFilter.generated.h"
 
-namespace PCGExClusters
-{
-	struct FNode;
-}
-
 /**
  *
  */

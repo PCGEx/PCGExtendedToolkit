@@ -6,8 +6,6 @@
 #include "PCGExAssetCollectionEditor.h"
 #include "Toolkits/AssetEditorToolkit.h"
 
-class UPCGExAssetCollection;
-
 /** Skinned mesh collection editor -- mirrors FPCGExMeshCollectionEditor. */
 class FPCGExSkinnedMeshCollectionEditor : public FPCGExAssetCollectionEditor
 {

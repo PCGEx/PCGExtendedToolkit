@@ -70,16 +70,10 @@ public:
 
 namespace PCGExNodeNeighborsCount
 {
-	class FFilter final : public PCGExClusterFilter::IVtxFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExNodeNeighborsCountFilterFactory, PCGExClusterFilter::IVtxFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExNodeNeighborsCountFilterFactory* InFactory)
-			: IVtxFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExNodeNeighborsCountFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> LocalCount;
 

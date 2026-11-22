@@ -9,7 +9,6 @@
 #include "Widgets/Input/SButton.h"
 
 #include "Collections/PCGExMeshCollection.h"
-#include "Core/PCGExAssetCollection.h"
 #include "Engine/StaticMesh.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"

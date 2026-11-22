@@ -17,7 +17,6 @@ namespace PCGEx
 namespace PCGExData
 {
 	class IUnionMetadata;
-	class FUnionMetadata;
 }
 
 namespace PCGExGraphs

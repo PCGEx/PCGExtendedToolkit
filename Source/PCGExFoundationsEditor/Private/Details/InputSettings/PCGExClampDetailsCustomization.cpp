@@ -6,9 +6,6 @@
 #include "DetailWidgetRow.h"
 #include "PropertyHandle.h"
 #include "Details/PCGExClampDetails.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
-#include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExClampDetailsCustomization::MakeInstance()
 {

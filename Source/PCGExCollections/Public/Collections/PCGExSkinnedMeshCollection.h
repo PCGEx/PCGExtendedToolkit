@@ -16,7 +16,6 @@
 #include "PCGExSkinnedMeshCollection.generated.h"
 
 class UPCGExSkinnedMeshCollection;
-class UInstancedSkinnedMeshComponent;
 class UMeshComponent;
 
 namespace PCGExSkinnedMeshCollection

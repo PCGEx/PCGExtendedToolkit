@@ -2,7 +2,6 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "Details/InputSettings/PCGExInputShorthandsCustomization.h"
-#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "UObject/UnrealType.h"
 
@@ -18,7 +17,6 @@
 #include "UObject/TextProperty.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Layout/SBox.h"

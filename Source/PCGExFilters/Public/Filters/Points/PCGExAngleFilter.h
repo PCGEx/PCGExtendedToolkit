@@ -73,17 +73,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FAngleFilter final : public ISimpleFilter
+	class FAngleFilter final : public TFactoryFilter<UPCGExAngleFilterFactory>
 	{
 	public:
 		explicit FAngleFilter(const TObjectPtr<const UPCGExAngleFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
+			: TFactoryFilter(InFactory)
 		{
 			DotComparison = TypedFilterFactory->Config.DotComparisonDetails;
 		}
-
-		const TObjectPtr<const UPCGExAngleFilterFactory> TypedFilterFactory;
 
 		bool bClosedLoop = false;
 		int32 LastIndex = -1;

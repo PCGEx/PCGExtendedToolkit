@@ -17,12 +17,6 @@
 
 #include "PCGExSelfPruning.generated.h"
 
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
-}
-
 UENUM()
 enum class EPCGExSelfPruningMode : uint8
 {

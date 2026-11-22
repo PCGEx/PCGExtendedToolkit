@@ -64,7 +64,6 @@ public class PCGExElementsActions : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore",
 				});
 		}

@@ -56,17 +56,12 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FNoiseFilter final : public ISimpleFilter
+	class FNoiseFilter final : public TFactoryFilter<UPCGExNoiseFilterFactory>
 	{
 	public:
-		explicit FNoiseFilter(const TObjectPtr<const UPCGExNoiseFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
+		using TFactoryFilter::TFactoryFilter;
 
 		TConstPCGValueRange<FTransform> InTransforms;
-		const TObjectPtr<const UPCGExNoiseFilterFactory> TypedFilterFactory;
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> OperandB;
 		TSharedPtr<PCGExNoise3D::FNoiseGenerator> NoiseGenerator;

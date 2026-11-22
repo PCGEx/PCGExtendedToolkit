@@ -6,8 +6,6 @@
 #include "CoreMinimal.h"
 #include "Data/External/PCGExMesh.h"
 
-class UDynamicMesh;
-
 namespace UE::Geometry
 {
 	class FDynamicMesh3;

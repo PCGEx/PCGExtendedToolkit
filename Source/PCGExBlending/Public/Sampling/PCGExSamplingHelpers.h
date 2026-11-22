@@ -15,7 +15,6 @@ namespace PCGExData
 
 class AActor;
 
-struct FPCGContext;
 enum class EPCGExAngleRange : uint8;
 
 namespace PCGExSampling::Helpers

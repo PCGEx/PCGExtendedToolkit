@@ -81,16 +81,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FStringCompareFilter final : public ISimpleFilter
+	class FStringCompareFilter final : public TFactoryFilter<UPCGExStringCompareFilterFactory>
 	{
 	public:
-		explicit FStringCompareFilter(const TObjectPtr<const UPCGExStringCompareFilterFactory>& InFactory)
-			: ISimpleFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const TObjectPtr<const UPCGExStringCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		// When the comparison is an equality check, operands are read as FName instead of
 		// FString (cheaper; matches FString equality for typical values -- see

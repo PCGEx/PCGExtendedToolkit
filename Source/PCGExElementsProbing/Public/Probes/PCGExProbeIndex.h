@@ -14,10 +14,6 @@
 
 #include "PCGExProbeIndex.generated.h"
 
-namespace PCGExProbing
-{
-	struct FCandidate;
-}
 
 UENUM()
 enum class EPCGExProbeTargetMode : uint8

@@ -91,27 +91,6 @@ namespace PCGExCollections
 		}
 	}
 
-	void FinalizeSpawnedActor(AActor* InActor, const bool bIsPreview)
-	{
-		if (!InActor)
-		{
-			return;
-		}
-
-		InActor->Tags.AddUnique(PCGHelpers::DefaultPCGActorTag);
-
-		if (!bIsPreview)
-		{
-			InActor->Modify();
-			(void)InActor->MarkPackageDirty();
-			if (ULevel* Level = InActor->GetLevel())
-			{
-				Level->Modify();
-				(void)Level->MarkPackageDirty();
-			}
-		}
-	}
-
 	AActor* ResolveTargetActor(FPCGExContext* InContext, const FSoftObjectPath& InPath, TMap<FSoftObjectPath, TWeakObjectPtr<AActor>>& InOutCache)
 	{
 		if (!InPath.IsNull())

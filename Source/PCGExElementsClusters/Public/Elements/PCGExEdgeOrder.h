@@ -10,12 +10,6 @@
 #include "Sampling/PCGExSamplingCommon.h"
 #include "PCGExEdgeOrder.generated.h"
 
-namespace PCGExMT
-{
-	template <typename T>
-	class TScopedArray;
-}
-
 UENUM()
 enum class EPCGExEdgeOrderMode : uint8
 {

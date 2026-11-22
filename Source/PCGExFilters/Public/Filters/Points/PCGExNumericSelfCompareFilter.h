@@ -93,16 +93,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FNumericSelfCompareFilter final : public ISimpleFilter
+	class FNumericSelfCompareFilter final : public TFactoryFilter<UPCGExNumericSelfCompareFilterFactory>
 	{
 	public:
-		explicit FNumericSelfCompareFilter(const TObjectPtr<const UPCGExNumericSelfCompareFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExNumericSelfCompareFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExData::TAttributeBroadcaster<double>> OperandA;
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> Index;

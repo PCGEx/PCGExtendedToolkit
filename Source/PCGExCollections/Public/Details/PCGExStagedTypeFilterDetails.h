@@ -8,8 +8,6 @@
 
 #include "PCGExStagedTypeFilterDetails.generated.h"
 
-class UPCGExBitmaskCollection;
-class UPCGParamData;
 /**
  * Collection type filter configuration.
  * Automatically populated from the type registry.

@@ -51,16 +51,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FTagCheckFilter final : public ICollectionFilter
+	class FTagCheckFilter final : public TFactoryFilter<UPCGExTagCheckFilterFactory, ICollectionFilter>
 	{
 	public:
-		explicit FTagCheckFilter(const TObjectPtr<const UPCGExTagCheckFilterFactory>& InDefinition)
-			: ICollectionFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExTagCheckFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 	};

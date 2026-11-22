@@ -10,7 +10,6 @@
 
 namespace PCGExData
 {
-	class FPointIO;
 	enum class EIOInit : uint8;
 }
 

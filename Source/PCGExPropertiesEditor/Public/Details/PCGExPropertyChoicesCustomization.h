@@ -13,7 +13,6 @@ class IDetailsView;
 class UPCGExPropertySchemaAsset;
 struct FPCGExPropertyChoices;
 struct FPCGExPropertyChoicesPatch;
-struct FPCGExPropertyOverrideEntry;
 struct FPCGExPropertySchemaCollection;
 
 /**

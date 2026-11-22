@@ -71,18 +71,15 @@ protected:
 
 namespace PCGExPointFilter
 {
-	class FNearestPointCheckFilter final : public FNearestFilter
+	class FNearestPointCheckFilter final : public TFactoryFilter<UPCGExNearestPointCheckFilterFactory, FNearestFilter>
 	{
 	public:
 		explicit FNearestPointCheckFilter(const TObjectPtr<const UPCGExNearestPointCheckFilterFactory>& InDefinition)
-			: FNearestFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 		{
 			TargetFilterManagers = TypedFilterFactory->TargetFilterManagers;
 			TargetResultCache = TypedFilterFactory->TargetResultCache;
 		}
-
-		const TObjectPtr<const UPCGExNearestPointCheckFilterFactory> TypedFilterFactory;
 
 		// Shared from the factory; index-aligned with the nearest target's IO.
 		TSharedPtr<TArray<TSharedPtr<PCGExPointFilter::FManager>>> TargetFilterManagers;

@@ -87,19 +87,16 @@ public:
 	virtual bool RegisterConsumableAttributesWithData(FPCGExContext* InContext, const UPCGData* InData) const override;
 };
 
-class FNodeEdgeDirectionFilter final : public PCGExClusterFilter::IVtxFilter
+class FNodeEdgeDirectionFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExNodeEdgeDirectionFilterFactory, PCGExClusterFilter::IVtxFilter>
 {
 public:
 	explicit FNodeEdgeDirectionFilter(const UPCGExNodeEdgeDirectionFilterFactory* InFactory)
-		: IVtxFilter(InFactory)
-		  , TypedFilterFactory(InFactory)
+		: TFactoryFilter(InFactory)
 	{
 		Adjacency = InFactory->Config.Adjacency;
 		DotComparison = InFactory->Config.DotComparisonDetails;
 		HashComparison = InFactory->Config.HashComparisonDetails;
 	}
-
-	const UPCGExNodeEdgeDirectionFilterFactory* TypedFilterFactory;
 
 	bool bFromNode = true;
 	bool bUseDot = true;

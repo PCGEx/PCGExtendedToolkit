@@ -4,15 +4,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "PCGExCommon.h"
 #include "PCGExH.h"
 
 struct FPCGExGeo2DProjectionDetails;
-
-namespace PCGExMath
-{
-	struct FBestFitPlane;
-}
 
 namespace PCGExClusters
 {

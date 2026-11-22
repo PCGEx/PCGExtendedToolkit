@@ -27,12 +27,6 @@ namespace PCGExData
 	class FPointIO;
 }
 
-namespace PCGExDetails
-{
-	template <typename T>
-	class TSettingValue;
-}
-
 UENUM()
 enum class EPCGExProjectionMethod : uint8
 {

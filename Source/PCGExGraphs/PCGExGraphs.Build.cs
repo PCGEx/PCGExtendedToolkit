@@ -59,7 +59,6 @@ public class PCGExGraphs : ModuleRules
 			new string[]
 			{
 				"GeometryCore",
-				"GeometryFramework",
 			}
 		);
 

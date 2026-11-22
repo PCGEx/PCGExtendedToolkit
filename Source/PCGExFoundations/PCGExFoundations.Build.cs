@@ -62,8 +62,6 @@ public class PCGExFoundations : ModuleRules
 			{
 				"PhysicsCore",
 				"GeometryCore",
-				"GeometryFramework",
-				"PropertyPath"
 			}
 		);
 

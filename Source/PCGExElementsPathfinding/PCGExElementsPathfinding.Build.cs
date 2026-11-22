@@ -68,7 +68,6 @@ public class PCGExElementsPathfinding : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Slate",
 					"SlateCore",
 				});
 		}

@@ -84,16 +84,10 @@ public:
 
 namespace PCGExEdgeEndpointsCheck
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeEndpointsCheckFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeEndpointsCheckFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeEndpointsCheckFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		int8 Expected = 0;
 		int8 ExpectedB = 0;

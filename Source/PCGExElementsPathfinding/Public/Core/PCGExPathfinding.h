@@ -9,7 +9,6 @@
 
 namespace PCGEx
 {
-	class FScoredQueue;
 	class FHashLookup;
 }
 

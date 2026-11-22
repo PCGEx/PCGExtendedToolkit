@@ -256,6 +256,10 @@ protected:
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
 
 public:
+	/** Projection settings. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	FPCGExGeo2DProjectionDetails ProjectionDetails;
+
 	/** Per-class constant: false on geometry nodes (Volume, Decompose) to hide path-output-only properties
 	 *  (blending, carry-over, open-path output, simplify/arc-tolerance) that have no effect on geometry output.
 	 *  Intentionally an EditCondition gate, not an inheritance split, which would change the serialized class
@@ -382,7 +386,6 @@ public:
 	UFUNCTION()
 	virtual bool WantsOperands() const;
 
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const;
 	virtual bool SupportOpenMainPaths() const;
 	virtual bool SupportOpenOperandPaths() const;
 	virtual bool OperandsAsBounds() const;

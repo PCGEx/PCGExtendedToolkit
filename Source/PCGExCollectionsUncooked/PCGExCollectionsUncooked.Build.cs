@@ -54,7 +54,6 @@ public class PCGExCollectionsUncooked : ModuleRules
 				"UnrealEd",
 				"BlueprintGraph",
 				"KismetCompiler",
-				"Kismet",
 				"ToolMenus",
 			}
 		);

@@ -4,11 +4,8 @@
 #pragma once
 
 #include "IPropertyTypeCustomization.h"
-#include "Details/PCGExInputShorthandsDetails.h"
 #include "Details/InputSettings/PCGExInputShorthandsCustomization.h"
 
-
-class SWidget;
 
 /** Input-shorthand row with a leading comparison-operator dropdown and a trailing tolerance field. */
 class FPCGExCompareShorthandCustomization : public FPCGExInputShorthandCustomization

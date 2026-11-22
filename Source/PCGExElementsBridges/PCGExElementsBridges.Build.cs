@@ -65,7 +65,6 @@ public class PCGExElementsBridges : ModuleRules
 				new string[]
 				{
 					"UnrealEd",
-					"Settings"
 				});
 		}
 	}

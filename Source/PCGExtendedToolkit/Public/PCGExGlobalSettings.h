@@ -11,8 +11,6 @@
 
 #include "PCGExGlobalSettings.generated.h"
 
-class UPCGPin;
-
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="PCGEx", Description="Configure PCG Extended Toolkit settings", PCGExNodeLibraryDoc="common-settings/plugin-settings"))
 class PCGEXTENDEDTOOLKIT_API UPCGExGlobalSettings : public UDeveloperSettings
 {

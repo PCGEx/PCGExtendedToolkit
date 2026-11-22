@@ -25,11 +25,6 @@ TArray<FPCGPinProperties> UPCGExClipper2TriangulateSettings::OutputPinProperties
 
 PCGEX_INITIALIZE_ELEMENT(Clipper2Triangulate)
 
-FPCGExGeo2DProjectionDetails UPCGExClipper2TriangulateSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
-}
-
 uint64 FPCGExClipper2TriangulateContext::HashPoint(int64 X, int64 Y)
 {
 	return PCGEx::H64(

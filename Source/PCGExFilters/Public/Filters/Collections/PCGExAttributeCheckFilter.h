@@ -65,16 +65,10 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FAttributeCheckFilter final : public ICollectionFilter
+	class FAttributeCheckFilter final : public TFactoryFilter<UPCGExAttributeCheckFilterFactory, ICollectionFilter>
 	{
 	public:
-		explicit FAttributeCheckFilter(const TObjectPtr<const UPCGExAttributeCheckFilterFactory>& InDefinition)
-			: ICollectionFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
-		{
-		}
-
-		const TObjectPtr<const UPCGExAttributeCheckFilterFactory> TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		virtual bool Test(const TSharedPtr<PCGExData::FPointIO>& IO, const TSharedPtr<PCGExData::FPointIOCollection>& ParentCollection) const override;
 	};

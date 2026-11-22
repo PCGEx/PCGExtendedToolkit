@@ -87,16 +87,10 @@ public:
 
 namespace PCGExEdgeNeighborsCount
 {
-	class FFilter final : public PCGExClusterFilter::IEdgeFilter
+	class FFilter final : public PCGExPointFilter::TFactoryFilter<UPCGExEdgeNeighborsCountFilterFactory, PCGExClusterFilter::IEdgeFilter>
 	{
 	public:
-		explicit FFilter(const UPCGExEdgeNeighborsCountFilterFactory* InFactory)
-			: IEdgeFilter(InFactory)
-			  , TypedFilterFactory(InFactory)
-		{
-		}
-
-		const UPCGExEdgeNeighborsCountFilterFactory* TypedFilterFactory;
+		using TFactoryFilter::TFactoryFilter;
 
 		TSharedPtr<PCGExDetails::TSettingValue<int32>> ThresholdBuffer;
 

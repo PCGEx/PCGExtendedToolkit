@@ -19,7 +19,6 @@
 #include "Types/PCGExTypes.h"
 
 
-struct FPCGContext;
 class UPCGMetadata;
 struct FPCGAttributePropertyInputSelector;
 struct FPCGAttributeIdentifier;
@@ -31,9 +30,6 @@ namespace PCGExMT
 	class FTaskGroup;
 	class FTaskManager;
 }
-
-template <typename T>
-class FPCGMetadataAttribute;
 
 class FPCGMetadataAttributeBase;
 struct FPCGMetadataAttributeDesc;

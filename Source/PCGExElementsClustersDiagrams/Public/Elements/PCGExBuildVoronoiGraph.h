@@ -24,12 +24,6 @@ namespace PCGExMath
 	}
 }
 
-namespace PCGExData
-{
-	template <typename T>
-	class TBuffer;
-}
-
 /**
  * 
  */

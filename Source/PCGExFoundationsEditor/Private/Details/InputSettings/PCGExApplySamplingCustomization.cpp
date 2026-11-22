@@ -7,9 +7,6 @@
 #include "IDetailChildrenBuilder.h"
 #include "PropertyHandle.h"
 #include "Details/Enums/PCGExInlineEnumCustomization.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SEditableTextBox.h"
-#include "Widgets/Text/STextBlock.h"
 
 TSharedRef<IPropertyTypeCustomization> FPCGExApplySamplingCustomization::MakeInstance()
 {

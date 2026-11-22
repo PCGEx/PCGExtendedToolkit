@@ -9,7 +9,6 @@
 
 ///
 
-class UPCGExPointFilterFactoryData;
 class UPCGData;
 struct FPCGExContext;
 class UPCGExFactoryData;

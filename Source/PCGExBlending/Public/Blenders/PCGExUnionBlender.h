@@ -12,23 +12,14 @@
 struct FPCGExBlendingDetails;
 struct FPCGExCarryOverDetails;
 
-template <typename T>
-class FPCGMetadataAttribute;
-
 namespace PCGExData
 {
 	class IUnionMetadata;
-	class FUnionMetadata;
 }
 
 namespace PCGExMath
 {
 	class IDistances;
-}
-
-namespace PCGExBlending
-{
-	struct FPropertiesBlender;
 }
 
 namespace PCGExBlending

@@ -121,17 +121,14 @@ public:
 
 namespace PCGExPointFilter
 {
-	class FRandomFilter final : public ISimpleFilter
+	class FRandomFilter final : public TFactoryFilter<UPCGExRandomFilterFactory>
 	{
 	public:
 		explicit FRandomFilter(const TObjectPtr<const UPCGExRandomFilterFactory>& InDefinition)
-			: ISimpleFilter(InDefinition)
-			  , TypedFilterFactory(InDefinition)
+			: TFactoryFilter(InDefinition)
 			  , RandomSeed(InDefinition->Config.RandomSeed)
 		{
 		}
-
-		const TObjectPtr<const UPCGExRandomFilterFactory> TypedFilterFactory;
 
 		int32 RandomSeed;
 		FVector RandomSeedV = FVector::OneVector;

@@ -40,10 +40,6 @@ protected:
 	//~End UPCGSettings
 
 public:
-	/** Projection settings. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
-	FPCGExGeo2DProjectionDetails ProjectionDetails;
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	EPCGExClipper2BooleanOp Operation = EPCGExClipper2BooleanOp::Union;
 
@@ -55,7 +51,6 @@ public:
 	bool bUseOperandPin = false;
 
 	virtual bool WantsOperands() const override;
-	virtual FPCGExGeo2DProjectionDetails GetProjectionDetails() const override;
 
 	virtual bool SupportOpenOperandPaths() const override;
 

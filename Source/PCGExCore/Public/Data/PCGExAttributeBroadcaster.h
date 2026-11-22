@@ -14,7 +14,6 @@
 #include "Types/PCGExTypeTraits.h"
 
 class UPCGMetadata;
-struct FPCGContext;
 struct FPCGContextHandle;
 class FPCGMetadataAttributeBase;
 struct FPCGExContext;
@@ -31,7 +30,6 @@ namespace PCGExData
 	struct FElement;
 	class FPointIO;
 	class IDataValue;
-	class FPointIOCollection;
 	class FFacade;
 }
 

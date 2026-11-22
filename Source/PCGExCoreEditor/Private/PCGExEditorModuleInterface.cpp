@@ -2,10 +2,8 @@
 // Released under the MIT license https://opensource.org/license/MIT/
 
 #include "PCGExEditorModuleInterface.h"
-#include "Editor.h"
 #include "PCGExLog.h"
 #include "ToolMenus.h"
-#include "Styling/SlateStyle.h"
 
 void IPCGExEditorModuleInterface::StartupModule()
 {

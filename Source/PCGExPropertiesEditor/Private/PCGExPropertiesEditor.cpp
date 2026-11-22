@@ -7,7 +7,6 @@
 #include "PCGExEnumSelector.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "PCGExPropertiesEditorStyle.h"
-#include "PCGExProperty.h"
 #include "PCGExPropertyCollectionComponent.h"
 #include "PCGExPropertyFloatPacker.h"
 #include "PCGExPropertyType_Struct.h"

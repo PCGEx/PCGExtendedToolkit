@@ -40,7 +40,7 @@
 #include "Data/Utils/PCGExDataForward.h"
 #include "Details/PCGExSettingsDetails.h"
 #include "Engine/World.h"
-#include "Helpers/PCGExCollectionsHelpers.h"
+#include "Helpers/PCGExActorHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Math/PCGExProjectionDetails.h"
 #include "Misc/Crc.h"
@@ -235,11 +235,6 @@ UPCGExClipper2VolumeSettings::UPCGExClipper2VolumeSettings(const FObjectInitiali
 
 	// Hide inherited path-output-only parameters (blending, carry-over, open-path, simplify).
 	bExposePathOutputProperties = false;
-}
-
-FPCGExGeo2DProjectionDetails UPCGExClipper2VolumeSettings::GetProjectionDetails() const
-{
-	return ProjectionDetails;
 }
 
 TArray<FPCGPinProperties> UPCGExClipper2VolumeSettings::OutputPinProperties() const
@@ -625,7 +620,7 @@ void FPCGExClipper2VolumeContext::SpawnStagedVolumes()
 		// Group the spawned actor under its Outliner folder (or attach it) instead of leaving it loose at the root.
 		PCGHelpers::AttachToParent(SpawnedActor, TargetActor, Settings->AttachOptions, this);
 
-		PCGExCollections::FinalizeSpawnedActor(SpawnedActor, bTransientSpawn);
+		PCGExHelpers::FinalizeSpawnedActor(SpawnedActor, bTransientSpawn);
 
 		// Tracked as soon as it exists, so partial work is still tracked.
 		ManagedActors->CommitSpawn(SpawnedActor);
