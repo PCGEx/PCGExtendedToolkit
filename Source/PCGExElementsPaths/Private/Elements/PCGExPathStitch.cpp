@@ -11,6 +11,7 @@
 #include "Data/PCGExData.h"
 #include "Data/PCGExDataTags.h"
 #include "Data/PCGExPointIO.h"
+#include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExDataMatcher.h"
 #include "Helpers/PCGExMatchingHelpers.h"
 #include "Paths/PCGExPathsHelpers.h"
@@ -50,6 +51,13 @@ void UPCGExPathStitchSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 	{
 		MatchingDetails.ApplyDeprecation();
 	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 7)
+	{
+		// Graphs saved before self-closure existed keep their open outputs.
+		bCloseSelfConnectingPaths = false;
+	}
+
 	Super::PCGExApplyDeprecation(InOutNode);
 }
 #endif
@@ -125,24 +133,48 @@ bool FPCGExPathStitchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 namespace PCGExPathStitch
 {
-	bool FProcessor::SetStartStitch(const TSharedPtr<FProcessor>& InStitch)
+	bool FProcessor::SetStartStitch(const TSharedPtr<FProcessor>& InStitch, const bool bToEnd)
 	{
 		if (StartStitch.IsValid())
 		{
 			return false;
 		}
 		StartStitch = InStitch;
+		bStartStitchToEnd = bToEnd;
 		return true;
 	}
 
-	bool FProcessor::SetEndStitch(const TSharedPtr<FProcessor>& InStitch)
+	bool FProcessor::SetEndStitch(const TSharedPtr<FProcessor>& InStitch, const bool bToEnd)
 	{
 		if (EndStitch.IsValid())
 		{
 			return false;
 		}
 		EndStitch = InStitch;
+		bEndStitchToEnd = bToEnd;
 		return true;
+	}
+
+	bool FProcessor::DropsEndpointOnSelfClosure() const
+	{
+		return FVector::Dist(StartSegment.B, EndSegment.B) <= Settings->SelfCoincidenceTolerance;
+	}
+
+	void FProcessor::CloseSelf()
+	{
+		const TSharedRef<PCGExData::FPointIO>& PointIO = PointDataFacade->Source;
+		PCGEX_INIT_IO_VOID(PointIO, PCGExData::EIOInit::Duplicate);
+
+		if (DropsEndpointOnSelfClosure())
+		{
+			const bool bDropStart = Settings->Method == EPCGExStitchMethod::Fuse && Settings->FuseMethod == EPCGExStitchFuseMethod::KeepEnd;
+
+			TArray<int32> KeptIndices;
+			PCGExArrayHelpers::ArrayOfIndices(KeptIndices, PointIO->GetNum() - 1, bDropStart ? 1 : 0);
+			PointIO->Gather(KeptIndices);
+		}
+
+		PCGExPaths::Helpers::SetClosedLoop(PointIO->GetOut(), true);
 	}
 
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)
@@ -176,14 +208,18 @@ namespace PCGExPathStitch
 			return;
 		}
 
+		if (EndStitch.HasSameObject(this))
+		{
+			CloseSelf();
+			return;
+		}
+
 		bool bClosedLoop = false;
 
 		const TSharedPtr<FProcessor> Start = SharedThis(this);
 
-		// Snapshot (processor, bReverse) for each link at walk time -- never re-read
-		// from StartStitch/EndStitch afterwards. In a 2-path closed loop both of
-		// Chain.Last()'s stitches alias to Start, so any post-walk mutation of those
-		// pointers (or even reading them to derive direction) would corrupt ordering.
+		// Direction comes from the recorded peer endpoint, never from comparing stitch pointers:
+		// in a 2-path closed loop both stitches of a link alias the same processor.
 		struct FChainLink
 		{
 			TSharedPtr<FProcessor> Processor;
@@ -195,8 +231,8 @@ namespace PCGExPathStitch
 
 		// Prefer EndStitch when both are set; otherwise we are an endpoint.
 		const bool bStartGoesViaEnd = EndStitch.IsValid();
-		TSharedPtr<FProcessor> PreviousProcessor = Start;
 		TSharedPtr<FProcessor> NextProcessor = bStartGoesViaEnd ? EndStitch.Pin() : StartStitch.Pin();
+		bool bEnterViaEnd = bStartGoesViaEnd ? bEndStitchToEnd : bStartStitchToEnd;
 
 		Chain.Add({Start, !bStartGoesViaEnd});
 
@@ -204,15 +240,14 @@ namespace PCGExPathStitch
 
 		while (NextProcessor)
 		{
-			// Whichever stitch points back to Previous is the endpoint we entered
-			// through; we'll exit via the other and the chosen entry dictates bReverse.
-			const bool bEnteredViaStart = (NextProcessor->StartStitch.Pin() == PreviousProcessor);
+			// A link entered through its end is read backward and left through its start.
+			const TSharedPtr<FProcessor> Current = NextProcessor;
 
-			Chain.Add({NextProcessor, !bEnteredViaStart});
-			SmallestWorkIndex = FMath::Min(SmallestWorkIndex, NextProcessor->WorkIndex);
+			Chain.Add({Current, bEnterViaEnd});
+			SmallestWorkIndex = FMath::Min(SmallestWorkIndex, Current->WorkIndex);
 
-			PreviousProcessor = NextProcessor;
-			NextProcessor = bEnteredViaStart ? NextProcessor->EndStitch.Pin() : NextProcessor->StartStitch.Pin();
+			NextProcessor = bEnterViaEnd ? Current->StartStitch.Pin() : Current->EndStitch.Pin();
+			bEnterViaEnd = bEnterViaEnd ? Current->bStartStitchToEnd : Current->bEndStitchToEnd;
 
 			if (NextProcessor == Start)
 			{
@@ -243,31 +278,22 @@ namespace PCGExPathStitch
 		PCGEX_INIT_IO_VOID(PointDataFacade->Source, PCGExData::EIOInit::New);
 		Merger = MakeShared<FPCGExPointIOMerger>(PointDataFacade);
 
+		const bool bFuse = Settings->Method == EPCGExStitchMethod::Fuse;
+		const bool bKeepEnd = Settings->FuseMethod == EPCGExStitchFuseMethod::KeepEnd;
+		const int32 LastLink = Chain.Num() - 1;
+
 		for (int i = 0; i < Chain.Num(); ++i)
 		{
 			const FChainLink& Link = Chain[i];
 			const TSharedPtr<FProcessor>& Current = Link.Processor;
 
-			int32 ReadStart = 0;
-			int32 ReadCount = Current->PointDataFacade->GetNum();
+			// Each junction drops one point, in chain order: Keep Start the previous link's last, Keep End the next link's first.
+			const bool bTrimHead = bFuse && bKeepEnd && (i > 0 || bClosedLoop);
+			const bool bTrimTail = bFuse && !bKeepEnd && (i < LastLink || bClosedLoop);
 
-			if (Settings->Method == EPCGExStitchMethod::Fuse)
-			{
-				const bool bIsLast = i == Chain.Num() - 1;
-
-				if (!bIsLast || bClosedLoop)
-				{
-					ReadCount--;
-				}
-
-				if (Settings->FuseMethod == EPCGExStitchFuseMethod::KeepEnd)
-				{
-					if (!bIsLast || bClosedLoop)
-					{
-						ReadStart++;
-					}
-				}
-			}
+			// The read scope is in native order: a reversed link's chain tail is its native first point.
+			const int32 ReadStart = (Link.bReverse ? bTrimTail : bTrimHead) ? 1 : 0;
+			const int32 ReadCount = Current->PointDataFacade->GetNum() - (bTrimHead || bTrimTail ? 1 : 0);
 
 			PCGExPointIOMerger::FMergeScope& MergeScope = Merger->Append(Current->PointDataFacade->Source, static_cast<PCGExMT::FScope>(Current->PointDataFacade->GetInScope(ReadStart, ReadCount)));
 
@@ -412,10 +438,20 @@ namespace PCGExPathStitch
 					const int32 OtherBatchIndex = FMath::Abs(Item.Index) - 1;
 					const TSharedPtr<FProcessor> Other = GetProcessor<FProcessor>(OtherBatchIndex);
 
-					if (Other->WorkIndex <= Current->WorkIndex)
+					const bool bSelf = Other == Current;
+
+					if (bSelf)
 					{
-						return;
-					} // Dedup + skip self
+						// The self pair is collected once, end to start.
+						if (!Settings->bCloseSelfConnectingPaths || !bCurrentEnd || bOtherEnd)
+						{
+							return;
+						}
+					}
+					else if (Other->WorkIndex < Current->WorkIndex)
+					{
+						return; // Dedup
+					}
 
 					if (!PartitionOf.IsEmpty() && PartitionOf[Current->WorkIndex] != PartitionOf[Other->WorkIndex])
 					{
@@ -431,6 +467,12 @@ namespace PCGExPathStitch
 
 					const double Dist = FVector::Dist(CurrentSeg.B, OtherSeg.B);
 					if (Dist > Settings->Tolerance)
+					{
+						return;
+					}
+
+					// A closed loop needs 3 points left once a coincident endpoint is dropped.
+					if (bSelf && Current->PointDataFacade->GetNum() - (Current->DropsEndpointOnSelfClosure() ? 1 : 0) < 3)
 					{
 						return;
 					}
@@ -510,8 +552,8 @@ namespace PCGExPathStitch
 				continue;
 			}
 
-			const bool bA = C.bEndA ? C.A->SetEndStitch(C.B) : C.A->SetStartStitch(C.B);
-			const bool bB = C.bEndB ? C.B->SetEndStitch(C.A) : C.B->SetStartStitch(C.A);
+			const bool bA = C.bEndA ? C.A->SetEndStitch(C.B, C.bEndB) : C.A->SetStartStitch(C.B, C.bEndB);
+			const bool bB = C.bEndB ? C.B->SetEndStitch(C.A, C.bEndA) : C.B->SetStartStitch(C.A, C.bEndA);
 			check(bA && bB);
 		}
 	}

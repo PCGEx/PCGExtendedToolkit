@@ -72,6 +72,9 @@ namespace PCGExHelpers
 	/** Same for one actor, whose name is then freed for the successor about to spawn under it. Game thread. */
 	PCGEXCORE_API void DestroyManagedActor(AActor* InActor);
 
+	/** Tags a freshly spawned actor as PCG-made and, unless it is a preview spawn, marks it and its level modified and dirty. Game thread. */
+	PCGEXCORE_API void FinalizeSpawnedActor(AActor* InActor, bool bIsPreview);
+
 	/**
 	 * Make every scene component's ComponentToWorld and Bounds trustworthy on a world that may
 	 * have been loaded as an ASSET (never initialized, components never registered).
