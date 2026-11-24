@@ -312,6 +312,9 @@ namespace PCGExDensitySampling
 		bool Init(const FDensityModel& InModel, const FBox2D& InCoverage, int64 InMaxNodes);
 
 		int32 NumNodes() const { return NumU * NumV; }
+		/** Lattice dimensions. Nodes are row-major: node (I, J) has flat index J * GetNumU() + I. Public API, used outside this repo. */
+		int32 GetNumU() const { return NumU; }
+		int32 GetNumV() const { return NumV; }
 		FVector2D GetNodePosition(int32 InNodeIndex) const;
 		float* GetNodeValues(int32 InNodeIndex) { return Values.GetData() + static_cast<int64>(InNodeIndex) * NumChannels; }
 
