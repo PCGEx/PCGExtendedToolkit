@@ -63,27 +63,24 @@ bool FPCGExFillControlRunningAverage::IsValidCandidate(const PCGExFloodFill::FDi
 {
 	const int32 Window = WindowSize->Read(GetSettingsIndex(Diffusion));
 
-	int32 PathNodeIndex = PCGEx::NH64A(Diffusion->TravelStack->Get(From.Node->Index));
+	// The window starts at From (the vtx the candidate is probed from) and walks back toward the seed.
+	int32 PathNodeIndex = From.Node->Index;
 	int32 PathEdgeIndex = -1;
 
-	if (PathNodeIndex != -1)
+	double Avg = Operand->Read(From.Node->PointIndex);
+	int32 Sampled = 1;
+	while (PathNodeIndex != -1 && Sampled < Window)
 	{
-		double Avg = Operand->Read(Cluster->GetNodePointIndex(PathNodeIndex));
-		int32 Sampled = 1;
-		while (PathNodeIndex != -1 && Sampled < Window)
+		const int32 CurrentIndex = PathNodeIndex;
+		PCGEx::NH64(Diffusion->TravelStack->Get(CurrentIndex), PathNodeIndex, PathEdgeIndex);
+		if (PathNodeIndex != -1)
 		{
-			const int32 CurrentIndex = PathNodeIndex;
-			PCGEx::NH64(Diffusion->TravelStack->Get(CurrentIndex), PathNodeIndex, PathEdgeIndex);
-			if (PathNodeIndex != -1)
-			{
-				Avg += Operand->Read(Cluster->GetNodePointIndex(PathNodeIndex));
-				Sampled++;
-			}
+			Avg += Operand->Read(Cluster->GetNodePointIndex(PathNodeIndex));
+			Sampled++;
 		}
-
-		return FMath::IsNearlyEqual((Avg / static_cast<double>(Sampled)), Operand->Read(Candidate.Node->PointIndex), Tolerance->Read(GetSettingsIndex(Diffusion)));
 	}
-	return true;
+
+	return FMath::IsNearlyEqual((Avg / static_cast<double>(Sampled)), Operand->Read(Candidate.Node->PointIndex), Tolerance->Read(GetSettingsIndex(Diffusion)));
 }
 
 TSharedPtr<FPCGExFillControlOperation> UPCGExFillControlsFactoryRunningAverage::CreateOperation(FPCGExContext* InContext) const

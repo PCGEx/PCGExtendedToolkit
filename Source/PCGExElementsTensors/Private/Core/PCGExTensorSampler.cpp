@@ -70,9 +70,12 @@ PCGExTensor::FTensorSample UPCGExTensorSampler::RawSample(
 		WeightedDirection += Sample.DirectionAndSize * W;
 		TotalEffectors += Sample.Effectors;
 
-		// Incremental slerp
+		// Incremental slerp; a zero cumulative weight has no rotation to blend yet.
 		const double NewCumulative = CumulativeWeight + W;
-		WeightedRotation = FQuat::Slerp(WeightedRotation, Sample.Rotation, W / NewCumulative);
+		if (NewCumulative != 0.0)
+		{
+			WeightedRotation = FQuat::Slerp(WeightedRotation, Sample.Rotation, W / NewCumulative);
+		}
 		CumulativeWeight = NewCumulative;
 	}
 

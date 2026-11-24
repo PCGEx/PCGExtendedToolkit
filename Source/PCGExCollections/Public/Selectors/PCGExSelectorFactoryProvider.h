@@ -37,7 +37,7 @@ struct FPCGExDataTypeInfoSelector : public FPCGExFactoryDataTypeInfo
  *
  * Concrete subclasses override CreateEntryOperation to emit the hot-path picker matching
  * their distribution mode (Index, Random, WeightedRandom, or user-authored).
- * CreateMicroOperation dispatches on BaseConfig.EntryDistribution and is typically not
+ * CreateMicroOperation dispatches on BaseConfig.SubDistribution and is typically not
  * overridden by concrete main-mode factories.
  */
 UCLASS(Abstract, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
@@ -54,7 +54,7 @@ public:
 	/** Create a hot-path entry picker operation. Concrete subclasses override. */
 	virtual TSharedPtr<FPCGExEntryPickerOperation> CreateEntryOperation(FPCGExContext* InContext) const;
 
-	/** Create a hot-path micro picker operation based on BaseConfig.EntryDistribution. */
+	/** Create a hot-path micro picker operation based on BaseConfig.SubDistribution. */
 	virtual TSharedPtr<FPCGExMicroEntryPickerOperation> CreateMicroOperation(FPCGExContext* InContext) const;
 
 	/**

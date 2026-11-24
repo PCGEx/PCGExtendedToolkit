@@ -85,12 +85,12 @@ void FPCGExTensorConfigBase::Init(FPCGExContext* InContext)
 	WeightFalloffLUT = WeightFalloffCurveLookup.MakeLookup(bUseLocalWeightFalloffCurve, LocalWeightFalloffCurve, WeightFalloffCurve);
 	PotencyFalloffLUT = PotencyFalloffCurveLookup.MakeLookup(bUseLocalPotencyFalloffCurve, LocalPotencyFalloffCurve, PotencyFalloffCurve);
 
-	// Copy the external guide curve's keys so sampling never reads the asset.
-	if (!bUseLocalGuideCurve && GuideCurve)
+	// Copy the selected asset's keys so sampling never reads it; the local curve can carry an asset of its own.
+	if (const UCurveVector* SourceCurve = bUseLocalGuideCurve ? LocalGuideCurve.ExternalCurve.Get() : GuideCurve.Get())
 	{
 		for (int32 i = 0; i < 3; i++)
 		{
-			LocalGuideCurve.VectorCurves[i] = GuideCurve->FloatCurves[i];
+			LocalGuideCurve.VectorCurves[i] = SourceCurve->FloatCurves[i];
 		}
 	}
 	LocalGuideCurve.ExternalCurve = nullptr;

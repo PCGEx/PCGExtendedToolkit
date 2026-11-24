@@ -1203,6 +1203,10 @@ namespace PCGExMT
 		PCGEX_SCOPE_LOOP(Index)
 		{
 			OnIterationCallback(Index, Scope);
+			if (IsCancelled())
+			{
+				return true;
+			}
 			if (ShouldStop())
 			{
 				Scope.Start = Index + 1;

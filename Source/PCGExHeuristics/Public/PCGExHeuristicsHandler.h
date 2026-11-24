@@ -98,6 +98,9 @@ namespace PCGExHeuristics
 		void PrepareForCluster(const TSharedPtr<PCGExClusters::FCluster>& InCluster);
 		void CompleteClusterPreparation();
 
+		/** True when any operation reads travel history: edge scores are then only valid in a seed-to-goal search. */
+		bool UsesTravelHistory() const;
+
 		/** Pre-aggregates the static portion of edge scores once per directed edge, so GetEdgeScore only
 		 * evaluates goal/travel-dependent ops afterwards. Costs one full sweep of all directed edges x static
 		 * ops -- call it only when the expected number of edge-score evaluations justifies it (multiple

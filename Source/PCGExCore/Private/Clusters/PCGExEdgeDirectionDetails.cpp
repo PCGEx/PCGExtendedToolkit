@@ -53,6 +53,7 @@ bool FPCGExEdgeDirectionSettings::InitFromParent(FPCGExContext* InContext, const
 {
 	DirectionMethod = ParentSettings.DirectionMethod;
 	DirectionChoice = ParentSettings.DirectionChoice;
+	DirSourceAttribute = ParentSettings.DirSourceAttribute;
 
 	bAscendingDesired = ParentSettings.bAscendingDesired;
 	Sorter = ParentSettings.Sorter;

@@ -18,7 +18,7 @@ namespace PCGExDetails
  * Built-in entry and micro picker operations. Shared between:
  *   - The three concrete built-in factories (PCGExDistributionIndex/Random/WeightedRandom)
  *   - UPCGExSelectorFactoryData::CreateMicroOperation which dispatches on
- *     BaseConfig.EntryDistribution.Distribution
+ *     BaseConfig.SubDistribution.Distribution
  *
  * These operations are internal implementation; they intentionally have no reflection
  * (non-UObject, plain C++) so they stay out of the hot-path virtual-dispatch bill.

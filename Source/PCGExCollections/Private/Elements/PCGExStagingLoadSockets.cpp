@@ -141,7 +141,7 @@ namespace PCGExSocketStaging
 
 			const uint64 Hash = EntryHashGetter->Read(Index);
 			if (FPCGExEntryAccessResult Result = Context->CollectionPickUnpacker->ResolveEntry(Hash, MaterialPick);
-				Result.IsValid())
+				Result.IsValid() && !Result.Entry->bIsSubCollection)
 			{
 				SocketHelper->Add(Index, PCGExCollections::PickHash::GetEntryKey(Hash), Result.Entry);
 			}

@@ -208,6 +208,12 @@ public:
 		return bWorkCancelled.load(std::memory_order_acquire) || (TaskManager && TaskManager->IsCancelled()) || !WorkHandle.IsValid();
 	}
 
+	// True while DriveAdvanceWork is on the stack. Public API, used outside this repo.
+	bool IsAdvanceWorkInProgress() const
+	{
+		return bAdvanceWorkInProgress.load(std::memory_order_acquire);
+	}
+
 	void Done();
 
 	bool TryComplete(const bool bForce = false);

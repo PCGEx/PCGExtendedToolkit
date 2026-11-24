@@ -496,7 +496,7 @@ namespace PCGExPathfindingPlotEdges
 		}
 
 		SearchOperation = Context->SearchAlgorithm->CreateOperation(); // Create a local copy
-		SearchOperation->PrepareForCluster(Cluster.Get());
+		SearchOperation->PrepareForCluster(Cluster.Get(), HeuristicsHandler);
 		const int32 NumPlots = ValidPlots.Num();
 		PCGExArrayHelpers::InitArray(Queries, NumPlots);
 

@@ -328,11 +328,12 @@ namespace PCGExBreakClustersToPaths
 	void FProcessor::ProcessEdges(const PCGExMT::FScope& Scope)
 	{
 
-		TArray<PCGExGraphs::FEdge>& ClusterEdges = *Cluster->Edges;
+		const TArray<PCGExGraphs::FEdge>& ClusterEdges = *Cluster->Edges;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			PCGExGraphs::FEdge& Edge = ClusterEdges[Index];
+			// Sorted as a copy: the cluster's edges can be shared with other consumers of a cached cluster.
+			PCGExGraphs::FEdge Edge = ClusterEdges[Index];
 
 			const TSharedPtr<PCGExData::FPointIO> PathIO = ChainsIO[Index];
 			if (!PathIO)

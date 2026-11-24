@@ -345,7 +345,7 @@ namespace PCGExWriteEdgeProperties
 
 	void FProcessor::ProcessEdges(const PCGExMT::FScope& Scope)
 	{
-		TArray<PCGExGraphs::FEdge>& ClusterEdges = *Cluster->Edges;
+		const TArray<PCGExGraphs::FEdge>& ClusterEdges = *Cluster->Edges;
 		EdgeDataFacade->Fetch(Scope);
 
 		TPCGValueRange<FTransform> Transforms = (bSolidify || Settings->bWriteEdgePosition) ? EdgeDataFacade->GetOut()->GetTransformValueRange(false) : TPCGValueRange<FTransform>();
@@ -354,7 +354,8 @@ namespace PCGExWriteEdgeProperties
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			PCGExGraphs::FEdge& Edge = ClusterEdges[Index];
+			// Sorted as a copy: the cluster's edges can be shared with other consumers of a cached cluster.
+			PCGExGraphs::FEdge Edge = ClusterEdges[Index];
 			const int32 EdgeIndex = Edge.PointIndex;
 
 			DirectionSettings.SortEndpoints(Cluster.Get(), Edge);

@@ -102,8 +102,8 @@ namespace PCGExProbing
 			{
 				// A constant radius ignores the index.
 				SharedCullDistance = WidenCullDistance(SharedCullDistance, NewOperation->GetSearchRadius(0));
+				SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->GetSearchRadiusRaw(0));
 			}
-			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadius.Constant);
 
 			if (NewOperation->RequiresChainProcessing())
 			{

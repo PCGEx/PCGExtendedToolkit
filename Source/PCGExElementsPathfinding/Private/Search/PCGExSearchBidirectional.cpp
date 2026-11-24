@@ -6,9 +6,11 @@
 #include "PCGExHeuristicsHandler.h"
 #include "Clusters/PCGExCluster.h"
 #include "Containers/PCGExHashLookup.h"
+#include "Core/PCGExContext.h"
 #include "Core/PCGExPathQuery.h"
 #include "Core/PCGExPathfinding.h"
 #include "Core/PCGExSearchAllocations.h"
+#include "Search/PCGExSearchDijkstra.h"
 #include "Utils/PCGExScoredQueue.h"
 
 namespace PCGExPathfinding
@@ -31,12 +33,33 @@ namespace PCGExPathfinding
 	}
 }
 
+void FPCGExSearchOperationBidirectional::PrepareForCluster(PCGExClusters::FCluster* InCluster, const TSharedPtr<PCGExHeuristics::FHandler>& InHeuristics)
+{
+	FPCGExSearchOperation::PrepareForCluster(InCluster, InHeuristics);
+
+	if (!InHeuristics->UsesTravelHistory())
+	{
+		return;
+	}
+
+	ForwardSearch = MakeShared<FPCGExSearchOperationDijkstra>();
+	ForwardSearch->bEarlyExit = bEarlyExit;
+	ForwardSearch->PrepareForCluster(InCluster, InHeuristics);
+
+	PCGEX_LOG_INVALID_INPUT(Context, FTEXT("Bidirectional search runs as Dijkstra: at least one heuristic reads travel history (e.g. Inertia, Turn Penalty)."))
+}
+
 bool FPCGExSearchOperationBidirectional::ResolveQuery(
 	const TSharedPtr<PCGExPathfinding::FPathQuery>& InQuery,
 	const TSharedPtr<PCGExPathfinding::FSearchAllocations>& Allocations,
 	const TSharedPtr<PCGExHeuristics::FHandler>& Heuristics,
 	const TSharedPtr<PCGExHeuristics::FLocalFeedbackHandler>& LocalFeedback) const
 {
+	if (ForwardSearch)
+	{
+		return ForwardSearch->ResolveQuery(InQuery, Allocations, Heuristics, LocalFeedback);
+	}
+
 	check(InQuery->PickResolution == PCGExPathfinding::EQueryPickResolution::Success)
 
 	TSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations> LocalAllocations = StaticCastSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations>(PrepareAllocations(Allocations));
@@ -178,8 +201,8 @@ bool FPCGExSearchOperationBidirectional::ResolveQuery(
 					const PCGExClusters::FNode& AdjacentNode = NodesRef[NeighborIndex];
 					const PCGExGraphs::FEdge& Edge = EdgesRef[EdgeIndex];
 
-					// Note: For backward search, we reverse the direction conceptually
-					const double EScore = Heuristics->GetEdgeScore(Current, AdjacentNode, Edge, GoalNode, SeedNode, Feedback, TravelStackBackward);
+					// Scored as travelled, Adjacent to Current. No travel stack: this side stores successors, not predecessors.
+					const double EScore = Heuristics->GetEdgeScore(AdjacentNode, Current, Edge, SeedNode, GoalNode, Feedback, nullptr);
 					const double TentativeGScore = CurrentGScore + EScore;
 
 					const double PreviousGScore = GScoreBackward[NeighborIndex];
@@ -273,6 +296,11 @@ void FPCGExSearchOperationBidirectional::ReconstructPath(
 
 TSharedPtr<PCGExPathfinding::FSearchAllocations> FPCGExSearchOperationBidirectional::NewAllocations() const
 {
+	if (ForwardSearch)
+	{
+		return ForwardSearch->NewAllocations();
+	}
+
 	TSharedPtr<PCGExPathfinding::FBidirectionalSearchAllocations> Allocations = MakeShared<PCGExPathfinding::FBidirectionalSearchAllocations>();
 	Allocations->Init(Cluster);
 	return Allocations;

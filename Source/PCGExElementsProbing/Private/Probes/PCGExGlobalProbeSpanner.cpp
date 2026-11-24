@@ -94,7 +94,8 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 	const int32 MaxCandidates = FMath::Max(Config.MaxEdgeCandidates, 1);
 
 	TArray<FEdgeCandidate> Candidates;
-	Candidates.Reserve(FMath::Min(MaxCandidates, NumPoints * (NumPoints - 1) / 2));
+	// Pair count in 64 bits: it passes MAX_int32 from 65,537 points on.
+	Candidates.Reserve(static_cast<int32>(FMath::Min<int64>(MaxCandidates, static_cast<int64>(NumPoints) * (NumPoints - 1) / 2)));
 
 	for (int32 i = 0; i < NumPoints; ++i)
 	{
@@ -109,7 +110,7 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 			{
 				continue;
 			}
-			if (!CanGenerateRef[i] && !CanGenerateRef[j])
+			if (!CanConnect(i, j))
 			{
 				continue;
 			}

@@ -334,7 +334,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 			for (int32 j = i + 1; j < Hubs.Num(); ++j)
 			{
 				const double MaxDistSq = FMath::Max(GetSearchRadius(Hubs[i]), GetSearchRadius(Hubs[j]));
-				if (FVector::DistSquared(Positions[Hubs[i]], Positions[Hubs[j]]) <= MaxDistSq)
+				if (CanConnect(Hubs[i], Hubs[j]) && FVector::DistSquared(Positions[Hubs[i]], Positions[Hubs[j]]) <= MaxDistSq)
 				{
 					OutEdges.Add(PCGEx::H64U(Hubs[i], Hubs[j]));
 				}
@@ -372,7 +372,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 				}
 			}
 
-			if (BestHub != INDEX_NONE && (CanGenerateRef[i] || CanGenerateRef[BestHub]))
+			if (BestHub != INDEX_NONE && CanConnect(i, BestHub))
 			{
 				OutEdges.Add(PCGEx::H64U(i, BestHub));
 			}
@@ -384,7 +384,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 			{
 				if (FVector::DistSquared(Positions[i], Positions[Hub]) <= MaxDistSq)
 				{
-					if (CanGenerateRef[i] || CanGenerateRef[Hub])
+					if (CanConnect(i, Hub))
 					{
 						OutEdges.Add(PCGEx::H64U(i, Hub));
 					}

@@ -54,6 +54,11 @@ public:
 	double GlobalScore = 0;
 	double FallbackScore = 0;
 
+	virtual bool UsesTravelHistory() const override
+	{
+		return true;
+	}
+
 	virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal) const override;
 
 	virtual double GetEdgeScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& To, const PCGExGraphs::FEdge& Edge, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal, PCGEx::FHashLookup* TravelStack = nullptr) const override;

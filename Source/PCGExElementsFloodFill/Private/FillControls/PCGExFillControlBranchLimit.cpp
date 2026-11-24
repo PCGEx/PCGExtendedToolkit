@@ -36,17 +36,35 @@ bool FPCGExFillControlBranchLimit::PrepareForDiffusions(FPCGExContext* InContext
 
 	// Allocate state by enforcement strategy: Vtx+Reroute needs none (probe-time); Vtx+Prune
 	// tracks per-node child counts; Seed shares one fork budget per diffusion.
+	const int32 NumDiffusions = InHandler->GetNumDiffusions();
+	// Without claiming, several diffusions can capture the same node: child counts are then kept per diffusion.
+	const bool bPerDiffusionCounts = !InHandler->InfluencesCount && NumDiffusions > 1;
+
 	if (bSourceIsVtx)
 	{
 		if (Mode == EPCGExFloodFillBranchMode::Prune)
 		{
-			ChildCounts.Init(0, Cluster->Nodes->Num());
+			if (bPerDiffusionCounts)
+			{
+				DiffusionChildCounts.SetNum(NumDiffusions);
+			}
+			else
+			{
+				ChildCounts.Init(0, Cluster->Nodes->Num());
+			}
 		}
 	}
 	else
 	{
-		ParentHasChild.Init(0, Cluster->Nodes->Num());
-		DiffusionForks.Init(0, Handler->GetNumDiffusions());
+		if (bPerDiffusionCounts)
+		{
+			DiffusionChildCounts.SetNum(NumDiffusions);
+		}
+		else
+		{
+			ParentHasChild.Init(0, Cluster->Nodes->Num());
+		}
+		DiffusionForks.Init(0, NumDiffusions);
 	}
 
 	return true;
@@ -73,6 +91,17 @@ bool FPCGExFillControlBranchLimit::IsValidCapture(const PCGExFloodFill::FDiffusi
 	{
 		// Seed/root has no parent to budget against.
 		return true;
+	}
+
+	if (!DiffusionChildCounts.IsEmpty())
+	{
+		// Same rules as below, against this diffusion's own counts.
+		const int32 NumChildren = DiffusionChildCounts[Diffusion->Index].FindRef(ParentNode);
+		if (bSourceIsVtx)
+		{
+			return NumChildren <= ReadBudget(Cluster->GetNodePointIndex(ParentNode));
+		}
+		return NumChildren == 0 || DiffusionForks[Diffusion->Index] < ReadBudget(GetSettingsIndex(Diffusion));
 	}
 
 	if (bSourceIsVtx)
@@ -102,6 +131,15 @@ void FPCGExFillControlBranchLimit::OnCaptured(const PCGExFloodFill::FDiffusion* 
 		return;
 	}
 
+	if (!DiffusionChildCounts.IsEmpty())
+	{
+		if (++DiffusionChildCounts[Diffusion->Index].FindOrAdd(ParentNode) > 1 && !bSourceIsVtx)
+		{
+			DiffusionForks[Diffusion->Index]++;
+		}
+		return;
+	}
+
 	if (bSourceIsVtx)
 	{
 		FPlatformAtomics::InterlockedIncrement(&ChildCounts[ParentNode]);
@@ -109,7 +147,7 @@ void FPCGExFillControlBranchLimit::OnCaptured(const PCGExFloodFill::FDiffusion* 
 	}
 
 	// First child free; subsequent children spend a fork. Atomic test-and-set: whoever flips 0->1 is the
-	// first child (free); everyone that finds it already 1 spends a fork -- correct under overlapping diffusions.
+	// first child (free); everyone that finds it already 1 spends a fork.
 	if (FPlatformAtomics::InterlockedCompareExchange(&ParentHasChild[ParentNode], 1, 0) != 0) { DiffusionForks[Diffusion->Index]++; }
 }
 

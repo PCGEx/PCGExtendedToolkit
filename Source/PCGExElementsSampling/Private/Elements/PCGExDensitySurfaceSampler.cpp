@@ -226,20 +226,20 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(DensitySurfaceSampler)
 
-	if (Settings->MaxDensity <= 0)
+	// Every numeric check below also refuses NaN and infinity, which an override can bring in.
+	if (!(Settings->MaxDensity > 0 && FMath::IsFinite(Settings->MaxDensity)))
 	{
 		PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidMaxDensity", "Max Density must be greater than 0."));
 		return false;
 	}
 
-	// Also refuses NaN and infinity, which an override can bring in.
 	if (Settings->bUseMaxSpacing && Settings->DriverSource != EPCGExDensityDriverSource::Constant && !(Settings->MaxSpacing > 0 && FMath::IsFinite(Settings->MaxSpacing)))
 	{
 		PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidMaxSpacing", "Max Spacing must be greater than 0."));
 		return false;
 	}
 
-	if (Settings->PointExtents.X <= 0 || Settings->PointExtents.Y <= 0)
+	if (!(Settings->PointExtents.X > 0 && Settings->PointExtents.Y > 0 && FMath::IsFinite(Settings->PointExtents.X) && FMath::IsFinite(Settings->PointExtents.Y)))
 	{
 		PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidExtents", "Point Extents must be greater than 0 on X and Y."));
 		return false;
@@ -251,7 +251,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 	case EPCGExDensityDistribution::JitteredGrid:
 		break;
 	case EPCGExDensityDistribution::PoissonDisk:
-		if (Settings->PoissonRadiusFactor <= 0)
+		if (!(Settings->PoissonRadiusFactor > 0 && FMath::IsFinite(Settings->PoissonRadiusFactor)))
 		{
 			PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidRadiusFactor", "Radius Factor must be greater than 0."));
 			return false;
@@ -277,7 +277,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 	case EPCGExDensityEvaluation::Exact:
 		break;
 	case EPCGExDensityEvaluation::DensityMap:
-		if (Settings->DensityMapSpacing <= 0)
+		if (!(Settings->DensityMapSpacing > 0 && FMath::IsFinite(Settings->DensityMapSpacing)))
 		{
 			PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidMapSpacing", "Map Spacing must be greater than 0."));
 			return false;
@@ -289,7 +289,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 	}
 
 	const bool bStrictSpacing = Settings->bStrictSpacing && Settings->Distribution != EPCGExDensityDistribution::PoissonDisk;
-	if (bStrictSpacing && Settings->SpacingFactor <= 0)
+	if (bStrictSpacing && !(Settings->SpacingFactor > 0 && FMath::IsFinite(Settings->SpacingFactor)))
 	{
 		PCGE_LOG(Error, GraphAndLog, LOCTEXT("InvalidSpacingFactor", "Strict Spacing must be greater than 0."));
 		return false;

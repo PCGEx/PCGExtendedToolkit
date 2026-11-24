@@ -172,6 +172,9 @@ public:
 			return false;
 		}
 
+		// ISM bounds are world-space: measure with the actor at the origin, not at the last draw's offset.
+		Actor->SetActorLocation(FVector::ZeroVector, false);
+
 		FBoxSphereBounds::Builder BoundsBuilder;
 		for (const TPair<UStaticMesh*, TArray<FTransform>>& Pair : Instances)
 		{

@@ -112,6 +112,14 @@ public:
 	const TArray<int8>* CanGenerate = nullptr;
 	const TArray<int8>* AcceptConnections = nullptr;
 
+	/** True when an undirected A-B edge has a legal direction: one end generates and the other accepts. */
+	FORCEINLINE bool CanConnect(const int32 A, const int32 B) const
+	{
+		const TArray<int8>& Generates = *CanGenerate;
+		const TArray<int8>& Accepts = *AcceptConnections;
+		return (Generates[A] && Accepts[B]) || (Generates[B] && Accepts[A]);
+	}
+
 	double SearchRadiusOffset = 0;
 	/** Squared search radius, to be compared against FCandidate::Distance -- which is squared too. */
 	double GetSearchRadius(const int32 Index) const;

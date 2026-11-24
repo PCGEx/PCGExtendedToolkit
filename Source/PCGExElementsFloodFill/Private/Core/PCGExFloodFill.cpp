@@ -117,12 +117,12 @@ namespace PCGExFloodFill
 		};
 
 		// Fan-out budget for this parent. MAX_int32 (the default when no Vtx+Reroute control is
-		// active) means "unlimited" -- the claim-up-front path. bHasProbeFanout gates the handler call.
+		// active) means "unlimited" -- every valid neighbor is claimed. bHasProbeFanout gates the handler call.
 		const int32 FanoutLimit = FillControlsHandler->bHasProbeFanout ? FillControlsHandler->GetProbeFanoutLimit(this, From) : MAX_int32;
 
 		if (FanoutLimit == MAX_int32)
 		{
-			// Unlimited: claim every first-seen neighbor up front (rejected ones stay visited -- legacy behavior).
+			// Unlimited: claim every unvisited neighbor that validates. Rejected ones stay unvisited, reachable through another edge.
 			for (const PCGExGraphs::FLink& Lk : FromNode.Links)
 			{
 				PCGExClusters::FNode* OtherNode = Cluster->GetNode(Lk);
@@ -133,11 +133,11 @@ namespace PCGExFloodFill
 				{
 					continue;
 				}
-				Visited[OtherIndex] = true;
 
 				FCandidate Candidate = MakeCandidate(OtherNode, Lk);
 				if (FillControlsHandler->IsValidCandidate(this, From, Candidate))
 				{
+					Visited[OtherIndex] = true;
 					// O(log n) heap insertion instead of O(1) array add + O(n log n) sort later
 					Candidates.HeapPush(Candidate, HeapComparator);
 				}

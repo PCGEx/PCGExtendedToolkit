@@ -26,6 +26,7 @@
 #include "Metadata/PCGMetadataAttribute.h"
 #include "Metadata/PCGMetadataAttributeTpl.h"
 
+#include <cmath>
 #include <type_traits>
 
 #define LOCTEXT_NAMESPACE "PCGExDensitySampling"
@@ -774,7 +775,10 @@ namespace PCGExDensitySampling
 					Maxs[c] = Hi;
 				}
 
-				CellBounds[J * CellsU + I] = static_cast<float>(InModel.UpperBound(Mins.GetData(), Maxs.GetData()));
+				// Narrowing rounds to nearest: step up so the cached bound never sits below the model's.
+				const double Bound = InModel.UpperBound(Mins.GetData(), Maxs.GetData());
+				const float Narrowed = static_cast<float>(Bound);
+				CellBounds[J * CellsU + I] = Narrowed < Bound ? std::nextafter(Narrowed, MAX_flt) : Narrowed;
 			}
 		}, 16);
 	}

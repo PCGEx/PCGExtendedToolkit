@@ -207,7 +207,7 @@ void FPCGExProbeChain::ProcessAll(TSet<uint64>& OutEdges) const
 		const int32 A = ValidOrder[i];
 		const int32 B = ValidOrder[i + 1];
 
-		if (!CanGenerateRef[A] && !CanGenerateRef[B])
+		if (!CanConnect(A, B))
 		{
 			continue;
 		}
@@ -223,7 +223,7 @@ void FPCGExProbeChain::ProcessAll(TSet<uint64>& OutEdges) const
 		const int32 First = ValidOrder[0];
 		const int32 Last = ValidOrder.Last();
 
-		if ((CanGenerateRef[First] || CanGenerateRef[Last]) &&
+		if (CanConnect(First, Last) &&
 			FVector::DistSquared(Positions[First], Positions[Last]) <= FMath::Max(GetSearchRadius(First), GetSearchRadius(Last)))
 		{
 			OutEdges.Add(PCGEx::H64U(First, Last));
