@@ -41,7 +41,7 @@ enum class EPCGExPathNormalDirection : uint8
 	Binormal          = 1 UMETA(DisplayName = "Binormal", ToolTip="Bisector of the incoming and outgoing segment directions at each point, flipped to agree with the segment normal. Points into the corner, so an offset along it keeps walls meeting."),
 	AverageNormal     = 2 UMETA(DisplayName = "Average Normal", ToolTip="Mean of the incoming and outgoing segment normals. Smoother than Normal at corners, but the effective distance shrinks as the corner tightens."),
 	ParallelTransport = 3 UMETA(DisplayName = "Parallel Transport", ToolTip="Torsion-minimizing normal carried along the path from the first edge. Stable through vertical segments where Up-based normals degenerate; on closed loops the residual seam twist is distributed along the path."),
-	Custom            = 10 UMETA(DisplayName = "Custom", ToolTip="Read the direction per point from the Direction setting instead of deriving it from the path."),
+	Custom            = 10 UMETA(DisplayName = "Custom", ToolTip="Read a vector per point from the node's own setting instead of deriving it from the path."),
 };
 
 UENUM()

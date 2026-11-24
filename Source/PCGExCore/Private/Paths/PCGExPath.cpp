@@ -479,6 +479,14 @@ namespace PCGExPaths
 		// (equivalent to rotating the incoming direction by half the angle between them).
 		// If the result points away from the edge normal, flip it to maintain consistent orientation.
 		const FVector A = Path->DirToPrevPoint(Edge.Start);
+
+		if (A.IsZero() || Edge.Dir.IsZero())
+		{
+			// A zero-length edge on either side leaves no bisector: the other edge's normal stands in, zero if both are.
+			GetMutable(Edge.Start) = Edge.Dir.IsZero() ? PCGExMath::SafeCrossNormal(Up, A * -1) : N;
+			return;
+		}
+
 		FVector D = (A + Edge.Dir).GetSafeNormal();
 
 		if (D.IsZero())
