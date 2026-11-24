@@ -22,7 +22,12 @@ void FPCGExTopologyDetails::PostProcessMesh(const TObjectPtr<UDynamicMesh>& InDy
 	{
 		UGeometryScriptLibrary_MeshRepairFunctions::WeldMeshEdges(InDynamicMesh, WeldEdgesOptions);
 	}
-	if (bComputeNormals)
+	if (bSplitNormals)
+	{
+		// Recomputes the normals itself once the hard edges are split, so a plain recompute on top would be redundant.
+		UGeometryScriptLibrary_MeshNormalsFunctions::ComputeSplitNormals(InDynamicMesh, SplitNormalsOptions, NormalsOptions);
+	}
+	else if (bComputeNormals)
 	{
 		UGeometryScriptLibrary_MeshNormalsFunctions::RecomputeNormals(InDynamicMesh, NormalsOptions);
 	}

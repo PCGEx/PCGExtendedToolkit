@@ -41,6 +41,7 @@ public class PCGExElementsTopology : ModuleRules
 				"GeometryScriptingCore",
 				"PCGGeometryScriptInterop",
 				"PCGExCore",
+				"PCGExBlending",
 				"PCGExFilters",
 				"PCGExFoundations",
 				"PCGExGraphs",
