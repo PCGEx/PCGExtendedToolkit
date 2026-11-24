@@ -4,6 +4,8 @@
 #include "Elements/PCGExTopologyPathSweep.h"
 
 #include "PCGExCoreSettingsCache.h"
+#include "PCGNode.h"
+#include "PCGPin.h"
 #include "UDynamicMesh.h"
 #include "Algo/BinarySearch.h"
 #include "Core/PCGExBlendOperations.h"
@@ -48,6 +50,11 @@ namespace PCGExTopologyPathSweep
 		if (!ProfileIO)
 		{
 			return nullptr;
+		}
+
+		if (InContext->InputData.GetInputCountByPin(InPinLabel) > 1)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("'{0}' received more than one data: only the first one with points is used."), FText::FromName(InPinLabel)));
 		}
 
 		const UPCGBasePointData* ProfileData = ProfileIO->GetIn();
@@ -140,11 +147,22 @@ TArray<FPCGPinProperties> UPCGExTopologyPathSweepSettings::InputPinProperties() 
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
 	PCGEX_PIN_POINT(PCGExTopologyPathSweep::SourceProfile, "Single path used as the profile, read in its local XY plane with its longest side as one unit: X is scaled by Depth and Y by Width. A closed loop makes a tube.", Required)
-	if (Mode == EPCGExPathSweepMode::Dual)
+	// Always declared, so a mode change never drops its wire.
+	PCGEX_PIN_POINT(PCGExTopologyPathSweep::SourceSecondaryProfile, "Single path used as the secondary profile in Dual mode. The primary profile is used when unconnected.", Normal)
+	if (Mode != EPCGExPathSweepMode::Dual)
 	{
-		PCGEX_PIN_POINT(PCGExTopologyPathSweep::SourceSecondaryProfile, "Single path used as the secondary profile. The primary profile is used when unconnected.", Normal)
+		PinProperties.Last().PinStatus = EPCGPinStatus::Advanced;
 	}
 	return PinProperties;
+}
+
+bool UPCGExTopologyPathSweepSettings::IsPinUsedByNodeExecution(const UPCGPin* InPin) const
+{
+	if (InPin->Properties.Label == PCGExTopologyPathSweep::SourceSecondaryProfile)
+	{
+		return Mode == EPCGExPathSweepMode::Dual;
+	}
+	return Super::IsPinUsedByNodeExecution(InPin);
 }
 
 TArray<FPCGPinProperties> UPCGExTopologyPathSweepSettings::OutputPinProperties() const
@@ -169,7 +187,7 @@ void FPCGExTopologyPathSweepContext::RegisterAssetDependencies()
 		AddAssetDependency(Settings->Topology.Material.ToSoftObjectPath());
 	}
 
-	if (Settings->SecondaryMaterial.ToSoftObjectPath().IsValid())
+	if (Settings->Mode == EPCGExPathSweepMode::Dual && Settings->SecondaryMaterial.ToSoftObjectPath().IsValid())
 	{
 		AddAssetDependency(Settings->SecondaryMaterial.ToSoftObjectPath());
 	}
@@ -205,17 +223,24 @@ bool FPCGExTopologyPathSweepElement::Boot(FPCGExContext* InContext) const
 	case EPCGExPathSweepMode::Single:
 		break;
 	case EPCGExPathSweepMode::Dual:
-		if (Context->InputData.GetInputCountByPin(PCGExTopologyPathSweep::SourceSecondaryProfile) > 0)
 		{
-			Context->SecondaryProfile = PCGExTopologyPathSweep::BuildProfile(Context, PCGExTopologyPathSweep::SourceSecondaryProfile);
-			if (!Context->SecondaryProfile)
+			// Connectivity decides, not data: a connected pin that brings no profile is an error, never a fallback.
+			const bool bSecondaryConnected = Context->Node
+				                                 ? Context->Node->IsInputPinConnected(PCGExTopologyPathSweep::SourceSecondaryProfile)
+				                                 : Context->InputData.GetInputCountByPin(PCGExTopologyPathSweep::SourceSecondaryProfile) > 0;
+
+			if (bSecondaryConnected)
 			{
-				return false;
+				Context->SecondaryProfile = PCGExTopologyPathSweep::BuildProfile(Context, PCGExTopologyPathSweep::SourceSecondaryProfile);
+				if (!Context->SecondaryProfile)
+				{
+					return false;
+				}
 			}
-		}
-		else
-		{
-			Context->SecondaryProfile = Context->Profile;
+			else
+			{
+				Context->SecondaryProfile = Context->Profile;
+			}
 		}
 		break;
 	default:
@@ -376,10 +401,21 @@ namespace PCGExTopologyPathSweep
 		switch (Details.Anchor)
 		{
 		case EPCGExPathSweepAnchor::Reference:
-			Sheet.Reference = Details.Reference.GetValueSetting();
-			if (!Sheet.Reference->Init(PointDataFacade))
 			{
-				return false;
+				const TSharedPtr<PCGExDetails::TSettingValue<double>> ReferenceValue = Details.Reference.GetValueSetting();
+				if (!ReferenceValue->Init(PointDataFacade))
+				{
+					return false;
+				}
+
+				if (ReferenceValue->IsConstant())
+				{
+					Sheet.FixedAnchor = InProfile->GetPositionAt(ReferenceValue->Read(0));
+				}
+				else
+				{
+					Sheet.Reference = ReferenceValue;
+				}
 			}
 			break;
 		case EPCGExPathSweepAnchor::Center:
@@ -501,7 +537,31 @@ namespace PCGExTopologyPathSweep
 			Sheets[1].MaterialIndex = 1;
 			// The secondary profile runs against the unfolded strip, so its faces are flipped to match the primary's.
 			Sheets[1].bFlipWinding = true;
+		}
 
+		if (Context->bVDistance)
+		{
+			// Measured on the profiles as authored, never on their swept size: a row keeps its V along the whole path.
+			const double TileV = FMath::Max(Settings->TileSize.Y, UE_DOUBLE_KINDA_SMALL_NUMBER);
+			Sheets[0].VScale = Context->Profile->RawLength / TileV;
+
+			if (bDual)
+			{
+				Sheets[1].VScale = Context->SecondaryProfile->RawLength / TileV;
+
+				if (Context->bVContinuous)
+				{
+					// Both profiles leave V = 0, the primary toward negative V.
+					Sheets[0].VScale = -Sheets[0].VScale;
+				}
+				else
+				{
+					Sheets[1].VStart = Sheets[0].VScale;
+				}
+			}
+		}
+		else if (bDual)
+		{
 			const double Split = Context->VSplit;
 			Sheets[1].VStart = Split;
 			Sheets[1].VScale = 1.0 - Split;
@@ -510,23 +570,18 @@ namespace PCGExTopologyPathSweep
 			{
 				Sheets[0].VStart = Split;
 				Sheets[0].VScale = -Split;
-				Sheets[0].VDistanceSign = -1;
 			}
 			else
 			{
 				Sheets[0].VScale = Split;
-				Sheets[1].bVAfterPrimary = true;
 			}
 		}
 
 		int64 NumVertices = 0;
-		int64 NumDistances = 0;
 		for (FSheet& Sheet : Sheets)
 		{
 			Sheet.VertexOffset = static_cast<int32>(NumVertices);
-			Sheet.DistanceOffset = static_cast<int32>(NumDistances);
 			NumVertices += static_cast<int64>(NumPoints) * Sheet.Profile->Num;
-			NumDistances += static_cast<int64>(NumPoints) * Sheet.Profile->NumUVRows;
 		}
 
 		// Up to two triangles per vertex, and triangle ids are int32.
@@ -551,10 +606,7 @@ namespace PCGExTopologyPathSweep
 			return false;
 		}
 
-		InternalMesh = Context->ManagedObjects->New<UDynamicMesh>();
-		InternalMesh->InitializeMesh();
-
-		InternalMeshData->Initialize(InternalMesh, true);
+		// The data owns its mesh, created empty with attributes and material ids enabled.
 		InternalMesh = InternalMeshData->GetMutableDynamicMesh();
 
 		// Processors run on workers: the context hands over the materials its load recorded, no lookup.
@@ -572,17 +624,23 @@ namespace PCGExTopologyPathSweep
 			InternalMeshData->SetMaterials({Material});
 		}
 
+		UVChannel = FMath::Clamp(Settings->UVChannel, 0, 7);
+
 		UVDetails = Settings->Topology.UVChannels;
+		// The generated UVs own their channel: an attribute channel on the same index is not read at all.
+		for (FPCGExUVInputDetails& Channel : UVDetails.UVs)
+		{
+			if (Channel.Channel == UVChannel)
+			{
+				Channel.bEnabled = false;
+			}
+		}
 		UVDetails.Prepare(PointDataFacade);
 
 		MeshTransform = PCGExTopology::GetCoordinateSpaceTransform(Settings->Topology.CoordinateSpace, Context);
 
 		Positions.SetNumUninitialized(static_cast<int32>(NumVertices));
 		Colors.SetNumUninitialized(static_cast<int32>(NumVertices));
-		if (Context->bVDistance)
-		{
-			VDistances.SetNumUninitialized(static_cast<int32>(NumDistances));
-		}
 
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
 
@@ -599,7 +657,6 @@ namespace PCGExTopologyPathSweep
 
 		const PCGExBlending::IBlendOperation* ColorBlend = Context->ColorBlend.Get();
 		const bool bProfileColorOnly = Context->bProfileColorOnly;
-		const bool bVDistance = Context->bVDistance;
 
 		const int32 LastEdge = Path->LastEdge;
 
@@ -665,11 +722,6 @@ namespace PCGExTopologyPathSweep
 				const FVector2D Anchor = Sheet.Reference ? Profile.GetPositionAt(Sheet.Reference->Read(Index)) : Sheet.FixedAnchor;
 
 				const int32 Start = Sheet.VertexOffset + Index * Profile.Num;
-				const int32 DistanceStart = Sheet.DistanceOffset + Index * Profile.NumUVRows;
-
-				FVector2D FirstLocal = FVector2D::ZeroVector;
-				FVector2D PrevLocal = FVector2D::ZeroVector;
-				double ProfileDistance = 0;
 
 				for (int32 i = 0; i < Profile.Num; i++)
 				{
@@ -686,25 +738,6 @@ namespace PCGExTopologyPathSweep
 						Color = Profile.Colors[i];
 					}
 					Colors[Start + i] = FVector4f(Color);
-
-					if (bVDistance)
-					{
-						if (i > 0)
-						{
-							ProfileDistance += FVector2D::Distance(PrevLocal, Local);
-						}
-						else
-						{
-							FirstLocal = Local;
-						}
-						VDistances[DistanceStart + i] = static_cast<float>(ProfileDistance);
-						PrevLocal = Local;
-					}
-				}
-
-				if (bVDistance && Profile.bClosed)
-				{
-					VDistances[DistanceStart + Profile.Num] = static_cast<float>(ProfileDistance + FVector2D::Distance(PrevLocal, FirstLocal));
 				}
 			}
 		}
@@ -712,11 +745,13 @@ namespace PCGExTopologyPathSweep
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
+		// A cancelled loop leaves the vertex arrays partly unwritten.
+		PCGEX_CHECK_WORK_HANDLE_VOID
+
 		BuildMesh();
 
 		Positions.Empty();
 		Colors.Empty();
-		VDistances.Empty();
 	}
 
 	void FProcessor::BuildMesh()
@@ -730,10 +765,7 @@ namespace PCGExTopologyPathSweep
 		const int32 NumSpans = Path->NumEdges;
 		const int32 NumUVColumns = NumSpans + 1;
 
-		const FVector2D TileSize(FMath::Max(Settings->TileSize.X, UE_DOUBLE_KINDA_SMALL_NUMBER), FMath::Max(Settings->TileSize.Y, UE_DOUBLE_KINDA_SMALL_NUMBER));
-		const bool bVDistance = Context->bVDistance;
-
-		double UScale = 1.0 / TileSize.X;
+		double UScale = 1.0 / FMath::Max(Settings->TileSize.X, UE_DOUBLE_KINDA_SMALL_NUMBER);
 		if (!Context->bUDistance)
 		{
 			UScale = Path->TotalLength > UE_DOUBLE_SMALL_NUMBER ? 1.0 / Path->TotalLength : 0.0;
@@ -763,36 +795,34 @@ namespace PCGExTopologyPathSweep
 			NumTriangles += NumSpans * Profile.NumRows * 2;
 		}
 
-		// UV channels read from attributes get one value per path point, shared by its whole column.
+		// Read by attribute UV channels only: one value per path point, shared by its whole column.
+		TArray<int32> TriangleIDs;
 		TArray<int32> VertexPointIndices;
-		VertexPointIndices.SetNumUninitialized(NumVertices);
-		for (const FSheet& Sheet : Sheets)
+		if (UVDetails.NumChannels > 0)
 		{
-			const int32 NumProfilePoints = Sheet.Profile->Num;
-			for (int32 Column = 0; Column < NumPoints; Column++)
+			TriangleIDs.SetNumUninitialized(NumTriangles);
+			for (int32 i = 0; i < NumTriangles; i++)
 			{
-				const int32 Start = Sheet.VertexOffset + Column * NumProfilePoints;
-				for (int32 i = 0; i < NumProfilePoints; i++)
+				TriangleIDs[i] = i;
+			}
+
+			VertexPointIndices.SetNumUninitialized(NumVertices);
+			for (const FSheet& Sheet : Sheets)
+			{
+				const int32 NumProfilePoints = Sheet.Profile->Num;
+				for (int32 Column = 0; Column < NumPoints; Column++)
 				{
-					VertexPointIndices[Start + i] = Column;
+					const int32 Start = Sheet.VertexOffset + Column * NumProfilePoints;
+					for (int32 i = 0; i < NumProfilePoints; i++)
+					{
+						VertexPointIndices[Start + i] = Column;
+					}
 				}
 			}
 		}
 
-		TArray<int32> VertexIDs;
-		TArray<int32> ColorIDs;
-		TArray<int32> UVIDs;
-		TArray<int32> TriangleIDs;
-		TArray<UE::Geometry::FIndex3i> TriangleUVs;
-
-		VertexIDs.SetNumUninitialized(NumVertices);
-		ColorIDs.SetNumUninitialized(NumVertices);
-		UVIDs.SetNumUninitialized(NumUVElements);
-		TriangleIDs.Reserve(NumTriangles);
-		TriangleUVs.Reserve(NumTriangles);
-
-		const int32 UVChannel = FMath::Clamp(Settings->UVChannel, 0, 7);
-
+		// The mesh starts empty and hands out ids in append order: every vertex, element and triangle id below is its
+		// own index. Appends are verified against that, and a triangle cannot be refused on a grid with unique corners.
 		InternalMesh->EditMesh([&](UE::Geometry::FDynamicMesh3& InMesh)
 		{
 			InMesh.EnableAttributes();
@@ -804,10 +834,11 @@ namespace PCGExTopologyPathSweep
 
 			for (int32 i = 0; i < NumVertices; i++)
 			{
-				VertexIDs[i] = InMesh.AppendVertex(Positions[i]);
-				ColorIDs[i] = ColorOverlay->AppendElement(Colors[i]);
+				verify(InMesh.AppendVertex(Positions[i]) == i);
+				verify(ColorOverlay->AppendElement(Colors[i]) == i);
 			}
 
+			int32 TriangleID = 0;
 			for (int32 s = 0; s < NumSheets; s++)
 			{
 				const FSheet& Sheet = Sheets[s];
@@ -819,39 +850,28 @@ namespace PCGExTopologyPathSweep
 					const int32 Column = Sheet.VertexOffset + Span * Profile.Num;
 					const int32 NextColumn = Sheet.VertexOffset + ((Span + 1) % NumPoints) * Profile.Num;
 
-					const int32 UVColumn = UVOffsets[s] + Span * Profile.NumUVRows;
-					const int32 NextUVColumn = UVColumn + Profile.NumUVRows;
-
 					for (int32 Row = 0; Row < Profile.NumRows; Row++)
 					{
-						// A closed profile's last row wraps onto its first point; UV rows never wrap.
+						// A closed profile's last row wraps onto its first point.
 						const int32 NextRow = (Row + 1) % Profile.Num;
 						const int32 Corners[4] = {Column + Row, Column + NextRow, NextColumn + Row, NextColumn + NextRow};
-						const int32 UVCorners[4] = {UVColumn + Row, UVColumn + Row + 1, NextUVColumn + Row, NextUVColumn + Row + 1};
 
 						for (int32 t = 0; t < 2; t++)
 						{
-							const int32 A = Triangles[t][0];
-							const int32 B = Triangles[t][1];
-							const int32 C = Triangles[t][2];
+							const UE::Geometry::FIndex3i Triangle(Corners[Triangles[t][0]], Corners[Triangles[t][1]], Corners[Triangles[t][2]]);
 
-							const int32 TriangleID = InMesh.AppendTriangle(VertexIDs[Corners[A]], VertexIDs[Corners[B]], VertexIDs[Corners[C]]);
-							if (TriangleID < 0)
-							{
-								continue;
-							}
+							// One polygroup per sheet
+							verify(InMesh.AppendTriangle(Triangle, s) == TriangleID);
 
 							MaterialID->SetValue(TriangleID, Sheet.MaterialIndex);
-							ColorOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(ColorIDs[Corners[A]], ColorIDs[Corners[B]], ColorIDs[Corners[C]]));
-
-							TriangleIDs.Add(TriangleID);
-							TriangleUVs.Emplace(UVCorners[A], UVCorners[B], UVCorners[C]);
+							ColorOverlay->SetTriangle(TriangleID, Triangle);
+							TriangleID++;
 						}
 					}
 				}
 			}
 
-			// Attribute channels first: they size the UV layers, and the generated channel wins a shared index.
+			// Attribute channels first: writing them resizes the UV layers to their own count.
 			UVDetails.Write(TriangleIDs, VertexPointIndices, InMesh);
 
 			if (InMesh.Attributes()->NumUVLayers() <= UVChannel)
@@ -860,45 +880,55 @@ namespace PCGExTopologyPathSweep
 			}
 
 			UE::Geometry::FDynamicMeshUVOverlay* UVOverlay = InMesh.Attributes()->GetUVLayer(UVChannel);
-			UVOverlay->ClearElements();
 
-			const FSheet& PrimarySheet = Sheets[0];
-			const int32 PrimaryUVRows = PrimarySheet.Profile->NumUVRows;
-
+			TArray<float> RowV;
 			for (int32 s = 0; s < NumSheets; s++)
 			{
 				const FSheet& Sheet = Sheets[s];
 				const FProfile& Profile = *Sheet.Profile;
 
+				RowV.SetNumUninitialized(Profile.NumUVRows, EAllowShrinking::No);
+				for (int32 Row = 0; Row < Profile.NumUVRows; Row++)
+				{
+					RowV[Row] = static_cast<float>(Sheet.VStart + Sheet.VScale * Profile.Alphas[Row]);
+				}
+
+				// A loop's extra UV column repeats the first column's V at the far end of U.
 				for (int32 UVColumn = 0; UVColumn < NumUVColumns; UVColumn++)
 				{
-					// A loop's extra UV column sits on the first point's vertices.
-					const int32 Column = UVColumn % NumPoints;
-					const int32 DistanceStart = Sheet.DistanceOffset + Column * Profile.NumUVRows;
+					const float U = static_cast<float>(ColumnU[UVColumn]);
 					const int32 UVStart = UVOffsets[s] + UVColumn * Profile.NumUVRows;
-
-					double VOffset = 0;
-					if (bVDistance && Sheet.bVAfterPrimary)
-					{
-						// The primary profile's full length at this path point
-						VOffset = VDistances[PrimarySheet.DistanceOffset + (Column + 1) * PrimaryUVRows - 1];
-					}
 
 					for (int32 Row = 0; Row < Profile.NumUVRows; Row++)
 					{
-						const double V = bVDistance
-							                 ? (VOffset + Sheet.VDistanceSign * VDistances[DistanceStart + Row]) / TileSize.Y
-							                 : Sheet.VStart + Sheet.VScale * Profile.Alphas[Row];
-
-						UVIDs[UVStart + Row] = UVOverlay->AppendElement(FVector2f(static_cast<float>(ColumnU[UVColumn]), static_cast<float>(V)));
+						verify(UVOverlay->AppendElement(FVector2f(U, RowV[Row])) == UVStart + Row);
 					}
 				}
 			}
 
-			for (int32 i = 0; i < TriangleIDs.Num(); i++)
+			// Same walk as the triangle pass, so ids line up. UV rows and columns never wrap.
+			TriangleID = 0;
+			for (int32 s = 0; s < NumSheets; s++)
 			{
-				const UE::Geometry::FIndex3i& Elements = TriangleUVs[i];
-				UVOverlay->SetTriangle(TriangleIDs[i], UE::Geometry::FIndex3i(UVIDs[Elements.A], UVIDs[Elements.B], UVIDs[Elements.C]));
+				const FSheet& Sheet = Sheets[s];
+				const FProfile& Profile = *Sheet.Profile;
+				const int32 (&Triangles)[2][3] = QuadTriangles[Sheet.bFlipWinding ? 1 : 0];
+
+				for (int32 Span = 0; Span < NumSpans; Span++)
+				{
+					const int32 UVColumn = UVOffsets[s] + Span * Profile.NumUVRows;
+					const int32 NextUVColumn = UVColumn + Profile.NumUVRows;
+
+					for (int32 Row = 0; Row < Profile.NumRows; Row++)
+					{
+						const int32 UVCorners[4] = {UVColumn + Row, UVColumn + Row + 1, NextUVColumn + Row, NextUVColumn + Row + 1};
+
+						for (int32 t = 0; t < 2; t++)
+						{
+							UVOverlay->SetTriangle(TriangleID++, UE::Geometry::FIndex3i(UVCorners[Triangles[t][0]], UVCorners[Triangles[t][1]], UVCorners[Triangles[t][2]]));
+						}
+					}
+				}
 			}
 		}, EDynamicMeshChangeType::GeneralEdit, EDynamicMeshAttributeChangeFlags::Unknown, true);
 

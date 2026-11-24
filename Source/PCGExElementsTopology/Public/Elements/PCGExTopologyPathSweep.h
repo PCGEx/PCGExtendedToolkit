@@ -25,7 +25,7 @@ namespace PCGExTopologyPathSweep
 	const FName SourceProfile = TEXT("Profile");
 	const FName SourceSecondaryProfile = TEXT("Secondary Profile");
 
-	/** A profile flattened to its XY plane and normalized against its bounds: the longest side runs 0..1, the other keeps its proportion. */
+	/** A profile flattened to XY and normalized by the longest side of its bounds, which then runs 0..1. */
 	struct FProfile
 	{
 		TArray<FVector2D> Positions;
@@ -63,7 +63,7 @@ UENUM()
 enum class EPCGExPathSweepUVMode : uint8
 {
 	Normalized = 0 UMETA(DisplayName = "Normalized", ToolTip="0..1 over the whole length."),
-	Distance   = 1 UMETA(DisplayName = "Distance", ToolTip="World distance divided by the tile size."),
+	Distance   = 1 UMETA(DisplayName = "Distance", ToolTip="Distance divided by the tile size: world distance along the path for U, the profile's length as authored for V."),
 };
 
 UENUM()
@@ -95,12 +95,13 @@ struct FPCGExPathSweepProfileDetails
 
 	FPCGExPathSweepProfileDetails() = default;
 
-	/** Scale of the profile's X, along its cross axis. The profile's longest side is one unit, so equal Depth and Width keep its
-	 *  proportions. Negative values mirror it. */
+	/** Scale of the profile's X, along its cross axis. The profile's longest side is one unit, so equal Depth and
+	 *  Width keep its proportions. Negative values mirror it, which also turns its faces around. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExInputShorthandSelectorDouble Depth = FPCGExInputShorthandSelectorDouble(FName("Depth"), 100.0, false);
 
-	/** Scale of the profile's Y, along the other cross axis, in the same unit as Depth. Negative values mirror it. */
+	/** Scale of the profile's Y, along the other cross axis, in the same unit as Depth. Negative values mirror it,
+	 *  which also turns its faces around. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExInputShorthandSelectorDouble Width = FPCGExInputShorthandSelectorDouble(FName("Width"), 100.0, false);
 
@@ -137,6 +138,7 @@ public:
 protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override;
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override;
+	virtual bool IsPinUsedByNodeExecution(const UPCGPin* InPin) const override;
 	virtual FPCGElementPtr CreateElement() const override;
 	//~End UPCGSettings
 
@@ -181,7 +183,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|UVs", meta = (PCG_NotOverridable))
 	EPCGExPathSweepUVMode VMode = EPCGExPathSweepUVMode::Normalized;
 
-	/** World size of one UV tile, for the axes measured in distance. */
+	/** Size of one UV tile for the axes measured in distance: world units along the path (X), the profiles' own
+	 *  authored units along them (Y). */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|UVs", meta = (PCG_Overridable, EditCondition="UMode == EPCGExPathSweepUVMode::Distance || VMode == EPCGExPathSweepUVMode::Distance", EditConditionHides))
 	FVector2D TileSize = FVector2D(100, 100);
 
@@ -209,7 +212,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mesh", meta = (PCG_Overridable, EditCondition="Mode == EPCGExPathSweepMode::Dual", EditConditionHides))
 	TSoftObjectPtr<UMaterialInterface> SecondaryMaterial;
 
-	/** Topology settings. Triangulation settings are ignored: the mesh is a regular grid. */
+	/** Topology settings. Triangulation settings are ignored: the mesh is a regular grid. Faces follow the direction
+	 *  the profiles are drawn in; Flip Normals turns them around. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Mesh", meta = (PCG_Overridable))
 	FPCGExTopologyDetails Topology;
 
@@ -265,24 +269,19 @@ namespace PCGExTopologyPathSweep
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Depth;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Width;
 
-		// Null when the anchor is a fixed spot of the profile, held by FixedAnchor
+		// Null when the anchor is the same for every path point, held by FixedAnchor
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Reference;
 		FVector2D FixedAnchor = FVector2D::ZeroVector;
 
 		int32 VertexOffset = 0;
-		int32 DistanceOffset = 0; // Into VDistances, which holds one entry per UV row
 		int32 MaterialIndex = 0;
 
 		bool bDepthOnY = true;
 		bool bFlipWinding = false;
 
-		// Normalized V = VStart + VScale * Alpha
+		// V = VStart + VScale * Alpha in both V modes: a row keeps its V along the whole path
 		double VStart = 0;
 		double VScale = 1;
-
-		// Distance V = VDistanceSign * Distance, after the primary profile's own length when bVAfterPrimary
-		double VDistanceSign = 1;
-		bool bVAfterPrimary = false;
 	};
 
 	class FProcessor final : public PCGExPointsMT::TProcessor<FPCGExTopologyPathSweepContext, UPCGExTopologyPathSweepSettings>
@@ -292,6 +291,7 @@ namespace PCGExTopologyPathSweep
 		UPCGDynamicMeshData* InternalMeshData = nullptr;
 		FPCGExTopologyUVDetails UVDetails;
 		FTransform MeshTransform = FTransform::Identity;
+		int32 UVChannel = 0; // Channel of the generated UVs; UVDetails never holds an attribute channel on it
 
 		int32 NumPoints = 0;
 		bool bClosedLoop = false;
@@ -307,10 +307,9 @@ namespace PCGExTopologyPathSweep
 
 		TArray<FSheet> Sheets;
 
-		// Filled in parallel then consumed by the mesh assembly. Positions and Colors are per vertex.
+		// Per vertex: filled in parallel, then consumed by the mesh assembly
 		TArray<FVector> Positions;
 		TArray<FVector4f> Colors;
-		TArray<float> VDistances;
 
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
