@@ -41,6 +41,7 @@ public class PCGExElementsTopology : ModuleRules
 				"GeometryScriptingCore",
 				"PCGGeometryScriptInterop",
 				"PCGExCore",
+				"PCGExBlending",
 				"PCGExFilters",
 				"PCGExFoundations",
 				"PCGExGraphs",
@@ -57,6 +58,7 @@ public class PCGExElementsTopology : ModuleRules
 				"GeometryCore",
 				"GeometryFramework",
 				"GeometryAlgorithms",
+				"PCGExElementsPaths", // PCGExPaths::Profile (Path Sweep)
 			}
 		);
 
