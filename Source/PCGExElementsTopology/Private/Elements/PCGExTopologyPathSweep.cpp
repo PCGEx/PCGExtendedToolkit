@@ -15,7 +15,6 @@
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
 #include "Math/PCGExMathAxis.h"
-#include "Paths/PCGExPathProfile.h"
 #include "Paths/PCGExPathsHelpers.h"
 
 #define LOCTEXT_NAMESPACE "PCGExTopologyPathSweepElement"
@@ -28,71 +27,105 @@ PCGEX_ELEMENT_BATCH_POINT_IMPL(TopologyPathSweep)
 
 namespace PCGExTopologyPathSweep
 {
-	// Corner order per quad: (c, j), (c, j+1), (c+1, j), (c+1, j+1). Indexed by [flipped][triangle].
+	// Corner order per quad: (column, row), (column, row+1), (column+1, row), (column+1, row+1). Indexed by [flipped][triangle].
 	constexpr int32 QuadTriangles[2][2][3] = {{{0, 1, 2}, {2, 1, 3}}, {{0, 2, 1}, {2, 3, 1}}};
 
 	FVector2D FProfile::GetPositionAt(const double Alpha) const
 	{
 		const double SafeAlpha = FMath::IsFinite(Alpha) ? FMath::Clamp(Alpha, 0.0, 1.0) : 0.0;
-		const int32 Next = FMath::Clamp(static_cast<int32>(Algo::UpperBound(Alphas, SafeAlpha)), 1, Num - 1);
+		// The last alpha of a closed profile is its seam, back on the first point.
+		const int32 Next = FMath::Clamp(static_cast<int32>(Algo::UpperBound(Alphas, SafeAlpha)), 1, NumRows);
 		const int32 Prev = Next - 1;
 
 		const double Span = Alphas[Next] - Alphas[Prev];
 		const double Ratio = Span > UE_DOUBLE_SMALL_NUMBER ? (SafeAlpha - Alphas[Prev]) / Span : 0.0;
-		return FMath::Lerp(Positions[Prev], Positions[Next], Ratio);
+		return FMath::Lerp(Positions[Prev], Positions[Next % Num], Ratio);
 	}
 
-	TSharedPtr<FProfile> BuildProfile(FPCGExContext* InContext, const FName InPinLabel, TSharedPtr<PCGExData::FFacade>& OutFacade)
+	TSharedPtr<FProfile> BuildProfile(FPCGExContext* InContext, const FName InPinLabel)
 	{
-		TArray<FVector> Normalized;
-		if (!PCGExPaths::Profile::TryBuildCustomProfile(InContext, InPinLabel, OutFacade, Normalized))
+		const TSharedPtr<PCGExData::FPointIO> ProfileIO = PCGExData::TryGetSingleInput(InContext, InPinLabel, false, true);
+		if (!ProfileIO)
 		{
 			return nullptr;
 		}
 
-		const UPCGBasePointData* ProfileData = OutFacade->GetIn();
+		const UPCGBasePointData* ProfileData = ProfileIO->GetIn();
 		const TConstPCGValueRange<FTransform> Transforms = ProfileData->GetConstTransformValueRange();
 		const TConstPCGValueRange<FVector4> InColors = ProfileData->GetConstColorValueRange();
 
-		const int32 Num = Normalized.Num();
+		const int32 Num = Transforms.Num();
+		if (Num < 2)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("'{0}' must have at least two points."), FText::FromName(InPinLabel)));
+			return nullptr;
+		}
 
 		TSharedPtr<FProfile> Profile = MakeShared<FProfile>();
+		// A two-point loop folds back onto itself: it is read as an open profile.
+		Profile->bClosed = Num > 2 && PCGExPaths::Helpers::GetClosedLoop(ProfileData);
 		Profile->Num = Num;
-		Profile->Positions.SetNumUninitialized(Num);
-		Profile->Alphas.SetNumUninitialized(Num);
-		Profile->Colors.SetNumUninitialized(Num);
+		Profile->NumRows = Profile->bClosed ? Num : Num - 1;
+		Profile->NumUVRows = Profile->NumRows + 1;
 
-		double Length = 0;
-		double MaxSideways = 0;
-		double MaxDropped = 0;
+		Profile->Positions.SetNumUninitialized(Num);
+		Profile->Colors.SetNumUninitialized(Num);
+		Profile->Alphas.SetNumUninitialized(Profile->NumUVRows);
+
+		// Bounds of the positions alone: the point data's own bounds include each point's extents.
+		FBox2D Bounds(ForceInit);
+		double MinZ = MAX_dbl;
+		double MaxZ = -MAX_dbl;
 
 		for (int32 i = 0; i < Num; i++)
 		{
-			const FVector& Position = Normalized[i];
-			Profile->Positions[i] = FVector2D(Position.X, Position.Y);
+			const FVector Location = Transforms[i].GetLocation();
+			Profile->Positions[i] = FVector2D(Location.X, Location.Y);
 			Profile->Colors[i] = InColors[i];
 
-			if (i > 0)
-			{
-				Length += FVector2D::Distance(Profile->Positions[i - 1], Profile->Positions[i]);
-			}
-			Profile->Alphas[i] = Length;
-
-			MaxSideways = FMath::Max(MaxSideways, FMath::Abs(Position.Y));
-			MaxDropped = FMath::Max(MaxDropped, FMath::Abs(Position.Z));
+			Bounds += Profile->Positions[i];
+			MinZ = FMath::Min(MinZ, Location.Z);
+			MaxZ = FMath::Max(MaxZ, Location.Z);
 		}
 
-		// Length >= 1: the normalized chord alone spans 0..1 on X.
+		// Alphas and RawLength are measured as authored, so they do not depend on the normalization below.
+		double Length = 0;
+		Profile->Alphas[0] = 0;
+		for (int32 i = 1; i < Profile->NumUVRows; i++)
+		{
+			Length += FVector2D::Distance(Profile->Positions[i - 1], Profile->Positions[i % Num]);
+			Profile->Alphas[i] = Length;
+		}
+
+		if (Length <= UE_DOUBLE_KINDA_SMALL_NUMBER)
+		{
+			PCGE_LOG_C(Error, GraphAndLog, InContext, FText::Format(FTEXT("'{0}' has all its points collocated once flattened: profiles are read in their local XY plane."), FText::FromName(InPinLabel)));
+			return nullptr;
+		}
+
 		for (double& Alpha : Profile->Alphas)
 		{
 			Alpha /= Length;
 		}
 
-		Profile->RawLength = Length * FVector::Dist(Transforms[0].GetLocation(), Transforms[Num - 1].GetLocation());
+		Profile->RawLength = Length;
 
-		if (MaxDropped > UE_KINDA_SMALL_NUMBER && MaxSideways <= UE_KINDA_SMALL_NUMBER)
+		// One factor for both axes, from the longest side: equal Depth and Width then keep the drawn proportions.
+		const FVector2D Size = Bounds.GetSize();
+		const double LongestSide = FMath::Max(Size.X, Size.Y);
+		const double InvSize = LongestSide > UE_DOUBLE_SMALL_NUMBER ? 1.0 / LongestSide : 0.0;
+
+		for (FVector2D& Position : Profile->Positions)
 		{
-			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("'{0}' has no sideways extent once flattened: profiles are read in their local XY plane, and Z is dropped."), FText::FromName(InPinLabel)));
+			Position = (Position - Bounds.Min) * InvSize;
+		}
+
+		Profile->Center = (Bounds.GetCenter() - Bounds.Min) * InvSize;
+		Profile->Origin = (FVector2D::ZeroVector - Bounds.Min) * InvSize;
+
+		if (MaxZ - MinZ > UE_DOUBLE_KINDA_SMALL_NUMBER && FMath::Min(Size.X, Size.Y) <= UE_DOUBLE_KINDA_SMALL_NUMBER)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FText::Format(FTEXT("'{0}' is flat once its Z is dropped: profiles are read in their local XY plane."), FText::FromName(InPinLabel)));
 		}
 
 		return Profile;
@@ -106,7 +139,7 @@ namespace PCGExTopologyPathSweep
 TArray<FPCGPinProperties> UPCGExTopologyPathSweepSettings::InputPinProperties() const
 {
 	TArray<FPCGPinProperties> PinProperties = Super::InputPinProperties();
-	PCGEX_PIN_POINT(PCGExTopologyPathSweep::SourceProfile, "Single path used as the profile, drawn in its local XY plane. Its first-to-last span is the depth axis.", Required)
+	PCGEX_PIN_POINT(PCGExTopologyPathSweep::SourceProfile, "Single path used as the profile, read in its local XY plane with its longest side as one unit: X is scaled by Depth and Y by Width. A closed loop makes a tube.", Required)
 	if (Mode == EPCGExPathSweepMode::Dual)
 	{
 		PCGEX_PIN_POINT(PCGExTopologyPathSweep::SourceSecondaryProfile, "Single path used as the secondary profile. The primary profile is used when unconnected.", Normal)
@@ -161,7 +194,7 @@ bool FPCGExTopologyPathSweepElement::Boot(FPCGExContext* InContext) const
 		return false;
 	};
 
-	Context->Profile = PCGExTopologyPathSweep::BuildProfile(Context, PCGExTopologyPathSweep::SourceProfile, Context->ProfileFacade);
+	Context->Profile = PCGExTopologyPathSweep::BuildProfile(Context, PCGExTopologyPathSweep::SourceProfile);
 	if (!Context->Profile)
 	{
 		return false;
@@ -174,7 +207,7 @@ bool FPCGExTopologyPathSweepElement::Boot(FPCGExContext* InContext) const
 	case EPCGExPathSweepMode::Dual:
 		if (Context->InputData.GetInputCountByPin(PCGExTopologyPathSweep::SourceSecondaryProfile) > 0)
 		{
-			Context->SecondaryProfile = PCGExTopologyPathSweep::BuildProfile(Context, PCGExTopologyPathSweep::SourceSecondaryProfile, Context->SecondaryProfileFacade);
+			Context->SecondaryProfile = PCGExTopologyPathSweep::BuildProfile(Context, PCGExTopologyPathSweep::SourceSecondaryProfile);
 			if (!Context->SecondaryProfile)
 			{
 				return false;
@@ -340,9 +373,23 @@ namespace PCGExTopologyPathSweep
 			return false;
 		}
 
-		Sheet.Reference = Details.Reference.GetValueSetting();
-		if (!Sheet.Reference->Init(PointDataFacade))
+		switch (Details.Anchor)
 		{
+		case EPCGExPathSweepAnchor::Reference:
+			Sheet.Reference = Details.Reference.GetValueSetting();
+			if (!Sheet.Reference->Init(PointDataFacade))
+			{
+				return false;
+			}
+			break;
+		case EPCGExPathSweepAnchor::Center:
+			Sheet.FixedAnchor = InProfile->Center;
+			break;
+		case EPCGExPathSweepAnchor::Origin:
+			Sheet.FixedAnchor = InProfile->Origin;
+			break;
+		default:
+			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("Unsupported 'Anchor' value."));
 			return false;
 		}
 
@@ -441,7 +488,7 @@ namespace PCGExTopologyPathSweep
 		{
 			return false;
 		}
-		Sheets[0].bChordOnY = Context->bPrimaryOnY;
+		Sheets[0].bDepthOnY = Context->bPrimaryOnY;
 
 		if (bDual)
 		{
@@ -450,7 +497,7 @@ namespace PCGExTopologyPathSweep
 				return false;
 			}
 
-			Sheets[1].bChordOnY = !Context->bPrimaryOnY;
+			Sheets[1].bDepthOnY = !Context->bPrimaryOnY;
 			Sheets[1].MaterialIndex = 1;
 			// The secondary profile runs against the unfolded strip, so its faces are flipped to match the primary's.
 			Sheets[1].bFlipWinding = true;
@@ -473,13 +520,16 @@ namespace PCGExTopologyPathSweep
 		}
 
 		int64 NumVertices = 0;
+		int64 NumDistances = 0;
 		for (FSheet& Sheet : Sheets)
 		{
 			Sheet.VertexOffset = static_cast<int32>(NumVertices);
+			Sheet.DistanceOffset = static_cast<int32>(NumDistances);
 			NumVertices += static_cast<int64>(NumPoints) * Sheet.Profile->Num;
+			NumDistances += static_cast<int64>(NumPoints) * Sheet.Profile->NumUVRows;
 		}
 
-		// Two triangles per vertex, and triangle ids are int32.
+		// Up to two triangles per vertex, and triangle ids are int32.
 		if (NumVertices > MAX_int32 / 2)
 		{
 			PCGE_LOG_C(Error, GraphAndLog, Context, FTEXT("A path and its profiles make too many vertices for a single mesh and was skipped."));
@@ -531,7 +581,7 @@ namespace PCGExTopologyPathSweep
 		Colors.SetNumUninitialized(static_cast<int32>(NumVertices));
 		if (Context->bVDistance)
 		{
-			VDistances.SetNumUninitialized(static_cast<int32>(NumVertices));
+			VDistances.SetNumUninitialized(static_cast<int32>(NumDistances));
 		}
 
 		StartParallelLoopForPoints(PCGExData::EIOSide::In);
@@ -608,21 +658,23 @@ namespace PCGExTopologyPathSweep
 			{
 				const FProfile& Profile = *Sheet.Profile;
 
-				const FVector& ChordAxis = Sheet.bChordOnY ? AxisY : AxisZ;
-				const FVector& SidewaysAxis = Sheet.bChordOnY ? AxisZ : AxisY;
+				const FVector& DepthAxis = Sheet.bDepthOnY ? AxisY : AxisZ;
+				const FVector& WidthAxis = Sheet.bDepthOnY ? AxisZ : AxisY;
 
 				const FVector2D Scale(Sheet.Depth->Read(Index), Sheet.Width->Read(Index));
-				const FVector2D Anchor = Profile.GetPositionAt(Sheet.Reference->Read(Index));
+				const FVector2D Anchor = Sheet.Reference ? Profile.GetPositionAt(Sheet.Reference->Read(Index)) : Sheet.FixedAnchor;
 
 				const int32 Start = Sheet.VertexOffset + Index * Profile.Num;
+				const int32 DistanceStart = Sheet.DistanceOffset + Index * Profile.NumUVRows;
 
+				FVector2D FirstLocal = FVector2D::ZeroVector;
 				FVector2D PrevLocal = FVector2D::ZeroVector;
 				double ProfileDistance = 0;
 
 				for (int32 i = 0; i < Profile.Num; i++)
 				{
 					const FVector2D Local = (Profile.Positions[i] - Anchor) * Scale;
-					Positions[Start + i] = Origin + ChordAxis * Local.X + SidewaysAxis * Local.Y;
+					Positions[Start + i] = Origin + DepthAxis * Local.X + WidthAxis * Local.Y;
 
 					FVector4 Color = PathColor;
 					if (ColorBlend)
@@ -641,9 +693,18 @@ namespace PCGExTopologyPathSweep
 						{
 							ProfileDistance += FVector2D::Distance(PrevLocal, Local);
 						}
-						VDistances[Start + i] = static_cast<float>(ProfileDistance);
+						else
+						{
+							FirstLocal = Local;
+						}
+						VDistances[DistanceStart + i] = static_cast<float>(ProfileDistance);
 						PrevLocal = Local;
 					}
+				}
+
+				if (bVDistance && Profile.bClosed)
+				{
+					VDistances[DistanceStart + Profile.Num] = static_cast<float>(ProfileDistance + FVector2D::Distance(PrevLocal, FirstLocal));
 				}
 			}
 		}
@@ -696,10 +757,10 @@ namespace PCGExTopologyPathSweep
 		int32 NumTriangles = 0;
 		for (int32 s = 0; s < NumSheets; s++)
 		{
-			const int32 NumProfilePoints = Sheets[s].Profile->Num;
+			const FProfile& Profile = *Sheets[s].Profile;
 			UVOffsets[s] = NumUVElements;
-			NumUVElements += NumUVColumns * NumProfilePoints;
-			NumTriangles += NumSpans * (NumProfilePoints - 1) * 2;
+			NumUVElements += NumUVColumns * Profile.NumUVRows;
+			NumTriangles += NumSpans * Profile.NumRows * 2;
 		}
 
 		// UV channels read from attributes get one value per path point, shared by its whole column.
@@ -750,21 +811,23 @@ namespace PCGExTopologyPathSweep
 			for (int32 s = 0; s < NumSheets; s++)
 			{
 				const FSheet& Sheet = Sheets[s];
-				const int32 NumProfilePoints = Sheet.Profile->Num;
+				const FProfile& Profile = *Sheet.Profile;
 				const int32 (&Triangles)[2][3] = QuadTriangles[Sheet.bFlipWinding ? 1 : 0];
 
 				for (int32 Span = 0; Span < NumSpans; Span++)
 				{
-					const int32 Column = Sheet.VertexOffset + Span * NumProfilePoints;
-					const int32 NextColumn = Sheet.VertexOffset + ((Span + 1) % NumPoints) * NumProfilePoints;
+					const int32 Column = Sheet.VertexOffset + Span * Profile.Num;
+					const int32 NextColumn = Sheet.VertexOffset + ((Span + 1) % NumPoints) * Profile.Num;
 
-					const int32 UVColumn = UVOffsets[s] + Span * NumProfilePoints;
-					const int32 NextUVColumn = UVColumn + NumProfilePoints;
+					const int32 UVColumn = UVOffsets[s] + Span * Profile.NumUVRows;
+					const int32 NextUVColumn = UVColumn + Profile.NumUVRows;
 
-					for (int32 i = 0; i < NumProfilePoints - 1; i++)
+					for (int32 Row = 0; Row < Profile.NumRows; Row++)
 					{
-						const int32 Corners[4] = {Column + i, Column + i + 1, NextColumn + i, NextColumn + i + 1};
-						const int32 UVCorners[4] = {UVColumn + i, UVColumn + i + 1, NextUVColumn + i, NextUVColumn + i + 1};
+						// A closed profile's last row wraps onto its first point; UV rows never wrap.
+						const int32 NextRow = (Row + 1) % Profile.Num;
+						const int32 Corners[4] = {Column + Row, Column + NextRow, NextColumn + Row, NextColumn + NextRow};
+						const int32 UVCorners[4] = {UVColumn + Row, UVColumn + Row + 1, NextUVColumn + Row, NextUVColumn + Row + 1};
 
 						for (int32 t = 0; t < 2; t++)
 						{
@@ -800,7 +863,7 @@ namespace PCGExTopologyPathSweep
 			UVOverlay->ClearElements();
 
 			const FSheet& PrimarySheet = Sheets[0];
-			const int32 PrimaryLast = PrimarySheet.Profile->Num - 1;
+			const int32 PrimaryUVRows = PrimarySheet.Profile->NumUVRows;
 
 			for (int32 s = 0; s < NumSheets; s++)
 			{
@@ -811,22 +874,23 @@ namespace PCGExTopologyPathSweep
 				{
 					// A loop's extra UV column sits on the first point's vertices.
 					const int32 Column = UVColumn % NumPoints;
-					const int32 Start = Sheet.VertexOffset + Column * Profile.Num;
-					const int32 UVStart = UVOffsets[s] + UVColumn * Profile.Num;
+					const int32 DistanceStart = Sheet.DistanceOffset + Column * Profile.NumUVRows;
+					const int32 UVStart = UVOffsets[s] + UVColumn * Profile.NumUVRows;
 
 					double VOffset = 0;
 					if (bVDistance && Sheet.bVAfterPrimary)
 					{
-						VOffset = VDistances[PrimarySheet.VertexOffset + Column * PrimarySheet.Profile->Num + PrimaryLast];
+						// The primary profile's full length at this path point
+						VOffset = VDistances[PrimarySheet.DistanceOffset + (Column + 1) * PrimaryUVRows - 1];
 					}
 
-					for (int32 i = 0; i < Profile.Num; i++)
+					for (int32 Row = 0; Row < Profile.NumUVRows; Row++)
 					{
 						const double V = bVDistance
-							                 ? (VOffset + Sheet.VDistanceSign * VDistances[Start + i]) / TileSize.Y
-							                 : Sheet.VStart + Sheet.VScale * Profile.Alphas[i];
+							                 ? (VOffset + Sheet.VDistanceSign * VDistances[DistanceStart + Row]) / TileSize.Y
+							                 : Sheet.VStart + Sheet.VScale * Profile.Alphas[Row];
 
-						UVIDs[UVStart + i] = UVOverlay->AppendElement(FVector2f(static_cast<float>(ColumnU[UVColumn]), static_cast<float>(V)));
+						UVIDs[UVStart + Row] = UVOverlay->AppendElement(FVector2f(static_cast<float>(ColumnU[UVColumn]), static_cast<float>(V)));
 					}
 				}
 			}

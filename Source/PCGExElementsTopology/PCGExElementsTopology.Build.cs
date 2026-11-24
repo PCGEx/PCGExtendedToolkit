@@ -58,7 +58,6 @@ public class PCGExElementsTopology : ModuleRules
 				"GeometryCore",
 				"GeometryFramework",
 				"GeometryAlgorithms",
-				"PCGExElementsPaths", // PCGExPaths::Profile (Path Sweep)
 			}
 		);
 

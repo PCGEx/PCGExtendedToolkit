@@ -25,14 +25,21 @@ namespace PCGExTopologyPathSweep
 	const FName SourceProfile = TEXT("Profile");
 	const FName SourceSecondaryProfile = TEXT("Secondary Profile");
 
-	/** A profile flattened to its XY plane and normalized: chord on +X (0..1), sideways deviation on Y. */
+	/** A profile flattened to its XY plane and normalized against its bounds: the longest side runs 0..1, the other keeps its proportion. */
 	struct FProfile
 	{
 		TArray<FVector2D> Positions;
-		TArray<double> Alphas; // Normalized distance along the profile, per point
+		TArray<double> Alphas; // Normalized distance along the profile as authored; a closed profile has a last entry of 1 for its seam
 		TArray<FVector4> Colors;
+
+		FVector2D Center = FVector2D::ZeroVector; // Bounds center, normalized
+		FVector2D Origin = FVector2D::ZeroVector; // Origin of the profile data, normalized
+
 		double RawLength = 0; // Length as authored, before normalization
 		int32 Num = 0;
+		int32 NumRows = 0;   // Quad rows: one more than an open profile when closed
+		int32 NumUVRows = 0; // A closed profile's last row wraps onto the first point, which then needs its own UVs
+		bool bClosed = false;
 
 		FVector2D GetPositionAt(const double Alpha) const;
 	};
@@ -73,6 +80,14 @@ enum class EPCGExPathSweepVSplit : uint8
 	LengthRatio = 1 UMETA(DisplayName = "Length Ratio", ToolTip="The split follows the ratio between the two profiles' lengths, as authored."),
 };
 
+UENUM()
+enum class EPCGExPathSweepAnchor : uint8
+{
+	Reference = 0 UMETA(DisplayName = "Reference", ToolTip="A point along the profile sits on the path."),
+	Center    = 1 UMETA(DisplayName = "Center", ToolTip="The center of the profile's bounds sits on the path."),
+	Origin    = 2 UMETA(DisplayName = "Origin", ToolTip="The origin of the profile data sits on the path, for profiles drawn around it."),
+};
+
 USTRUCT(BlueprintType)
 struct FPCGExPathSweepProfileDetails
 {
@@ -80,16 +95,21 @@ struct FPCGExPathSweepProfileDetails
 
 	FPCGExPathSweepProfileDetails() = default;
 
-	/** Distance covered along the cross axis by the profile's first-to-last span. Negative values extend the other way. */
+	/** Scale of the profile's X, along its cross axis. The profile's longest side is one unit, so equal Depth and Width keep its
+	 *  proportions. Negative values mirror it. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExInputShorthandSelectorDouble Depth = FPCGExInputShorthandSelectorDouble(FName("Depth"), 100.0, false);
 
-	/** Scale of the profile's sideways deviation, applied on the other cross axis. Negative values mirror it. */
+	/** Scale of the profile's Y, along the other cross axis, in the same unit as Depth. Negative values mirror it. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	FPCGExInputShorthandSelectorDouble Width = FPCGExInputShorthandSelectorDouble(FName("Width"), 100.0, false);
 
+	/** Which part of the profile sits on the path. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
+	EPCGExPathSweepAnchor Anchor = EPCGExPathSweepAnchor::Reference;
+
 	/** Normalized position along the profile that sits on the path: 0 is its first point, 1 its last. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition="Anchor == EPCGExPathSweepAnchor::Reference", EditConditionHides))
 	FPCGExInputShorthandSelectorDouble01 Reference = FPCGExInputShorthandSelectorDouble01(FName("Reference"), 0.0, false);
 };
 
@@ -125,7 +145,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExPathSweepMode Mode = EPCGExPathSweepMode::Single;
 
-	/** Cross axis the primary profile extends along. In Dual mode the secondary profile takes the other one. */
+	/** Cross axis the primary profile's depth runs along. In Dual mode the secondary profile takes the other one. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable))
 	EPCGExPathSweepAxis PrimaryAxis = EPCGExPathSweepAxis::Y;
 
@@ -204,9 +224,6 @@ struct FPCGExTopologyPathSweepContext final : FPCGExPathProcessorContext
 {
 	friend class FPCGExTopologyPathSweepElement;
 
-	TSharedPtr<PCGExData::FFacade> ProfileFacade;
-	TSharedPtr<PCGExData::FFacade> SecondaryProfileFacade;
-
 	TSharedPtr<PCGExTopologyPathSweep::FProfile> Profile;
 	/** The primary profile when the secondary pin is unconnected; null in Single mode. */
 	TSharedPtr<PCGExTopologyPathSweep::FProfile> SecondaryProfile;
@@ -247,12 +264,16 @@ namespace PCGExTopologyPathSweep
 
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Depth;
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Width;
+
+		// Null when the anchor is a fixed spot of the profile, held by FixedAnchor
 		TSharedPtr<PCGExDetails::TSettingValue<double>> Reference;
+		FVector2D FixedAnchor = FVector2D::ZeroVector;
 
 		int32 VertexOffset = 0;
+		int32 DistanceOffset = 0; // Into VDistances, which holds one entry per UV row
 		int32 MaterialIndex = 0;
 
-		bool bChordOnY = true;
+		bool bDepthOnY = true;
 		bool bFlipWinding = false;
 
 		// Normalized V = VStart + VScale * Alpha
@@ -286,7 +307,7 @@ namespace PCGExTopologyPathSweep
 
 		TArray<FSheet> Sheets;
 
-		// Per vertex, filled in parallel then consumed by the mesh assembly
+		// Filled in parallel then consumed by the mesh assembly. Positions and Colors are per vertex.
 		TArray<FVector> Positions;
 		TArray<FVector4f> Colors;
 		TArray<float> VDistances;
