@@ -386,7 +386,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 			const FBox Domain = PCGExDensitySurfaceSampler::GetDomain(Surface, BoundingShapeBounds);
 			if (!Domain.IsValid && !Surface->IsBounded())
 			{
-				PCGE_LOG(Warning, GraphAndLog, LOCTEXT("UnboundedSurface", "A surface has no bounds of its own: connect a Bounding Shape to sample it."));
+				PCGE_LOG(Warning, GraphAndLog, LOCTEXT("UnboundedSurface", "A surface has no bounds of its own: turn Unbounded off so it is sampled inside the Bounding Shape or the component bounds."));
 			}
 			else
 			{

@@ -21,7 +21,7 @@ namespace PCGExDensitySurfaceSampler
 
 /**
  * Samples surfaces with a density read off the surface itself, such as a landscape layer: candidates are thinned
- * before they become points, so sparse areas cost little. Blue noise, jittered grid or Poisson disk layouts.
+ * before they become points, so sparse areas allocate little. Blue noise, jittered grid or Poisson disk layouts.
  */
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Sampling", meta=(PCGExNodeLibraryDoc="sampling/density-surface-sampler"))
 class UPCGExDensitySurfaceSamplerSettings : public UPCGExSettings
@@ -97,7 +97,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "0.01", PCG_Overridable, DisplayName = "Strict Spacing", EditCondition = "bStrictSpacing"))
 	double SpacingFactor = 0.75;
 
-	/** Without a Bounding Shape, sample the whole surface instead of the component bounds. Can create many points. */
+	/** Sample the whole surface, ignoring the Bounding Shape and the component bounds. Can create many points. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable))
 	bool bUnbounded = false;
 
@@ -159,7 +159,7 @@ public:
 	bool bWriteRank = false;
 
 	/** When enabled, writes each point's rank (0-1) to this attribute. Keeping ranks below a value downstream thins the
-	 *  points and keeps them evenly spread. */
+	 *  points, which stay evenly spread unless the grid thinning is Random. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Output", meta = (PCG_Overridable, DisplayName = "Rank", EditCondition = "bWriteRank"))
 	FName RankAttributeName = FName("Rank");
 };

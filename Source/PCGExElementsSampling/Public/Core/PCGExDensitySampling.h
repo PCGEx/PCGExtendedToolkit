@@ -92,7 +92,7 @@ struct PCGEXELEMENTSSAMPLING_API FPCGExDensityModifier
 /** Density-driven surface sampling: density model, candidate layouts, spacing passes and the per-surface job. */
 namespace PCGExDensitySampling
 {
-	/** Radii are derived from at least this density, so they stay within 16x the spacing at max density. */
+	/** Radii are derived from at least this density, so they stay within 16x their factor times the spacing at max density. */
 	inline constexpr double MinRadiusDensity = 1.0 / 256.0;
 
 #pragma region Density model
