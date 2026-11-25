@@ -71,7 +71,7 @@ void FPCGExProbeGradientFlow::ProcessAll(TSet<uint64>& OutEdges) const
 			[&](const PCGExOctree::FItem& Other)
 			{
 				const int32 OtherIndex = Other.Index;
-				if (i == OtherIndex || !AcceptConnectionsRef[OtherIndex])
+				if (i == OtherIndex || !AcceptConnectionsRef[OtherIndex] || !SharesGroup(i, OtherIndex))
 				{
 					return;
 				}

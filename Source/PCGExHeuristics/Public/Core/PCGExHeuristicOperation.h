@@ -52,6 +52,12 @@ public:
 		return false;
 	}
 
+	/** True when GetEdgeScore depends on the route that led to From, read from TravelStack as predecessors. */
+	virtual bool UsesTravelHistory() const
+	{
+		return false;
+	}
+
 	virtual void PrepareForCluster(const TSharedPtr<const PCGExClusters::FCluster>& InCluster);
 
 	virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal) const;

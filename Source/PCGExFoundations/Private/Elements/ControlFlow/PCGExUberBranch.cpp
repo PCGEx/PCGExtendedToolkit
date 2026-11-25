@@ -3,6 +3,7 @@
 
 #include "Elements/ControlFlow/PCGExUberBranch.h"
 
+#include "PCGCommon.h"
 #include "Core/PCGExFilterTypeSets.h"
 #include "Core/PCGExPointFilter.h"
 #include "Data/PCGExData.h"
@@ -177,7 +178,8 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 
 		PCGEX_ON_ASYNC_STATE_READY(PCGExCommon::States::State_WaitingOnAsyncWork)
 		{
-			for (int i = 0; i < Context->Managers.Num(); i++)
+			// The engine tracks MaxOutputPins pins at most; a branch past that is left active.
+			for (int i = 0; i < Context->Managers.Num() && i + 1 < PCGPinIdHelpers::MaxOutputPins; i++)
 			{
 				if (!Context->Dispatch[i])
 				{
@@ -195,7 +197,8 @@ bool FPCGExUberBranchElement::AdvanceWork(FPCGExContext* InContext, const UPCGEx
 			PCGExUberBranch::DispatchFacade(Context, Settings, Facade);
 		}
 
-		for (int i = 0; i < Context->Managers.Num(); i++)
+		// The engine tracks MaxOutputPins pins at most; a branch past that is left active.
+		for (int i = 0; i < Context->Managers.Num() && i + 1 < PCGPinIdHelpers::MaxOutputPins; i++)
 		{
 			if (!Context->Dispatch[i])
 			{

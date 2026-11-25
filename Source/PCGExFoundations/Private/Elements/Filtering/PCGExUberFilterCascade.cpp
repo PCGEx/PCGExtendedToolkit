@@ -3,6 +3,7 @@
 
 #include "Elements/Filtering/PCGExUberFilterCascade.h"
 
+#include "PCGCommon.h"
 #include "PCGParamData.h"
 #include "Containers/PCGExScopedContainers.h"
 #include "Metadata/PCGMetadata.h"
@@ -224,7 +225,8 @@ bool FPCGExUberFilterCascadeElement::AdvanceWork(FPCGExContext* InContext, const
 
 	for (int i = 0; i < Settings->NumBranches; i++)
 	{
-		if (!Context->BranchOutputs[i]->StageOutputs())
+		// The engine tracks MaxOutputPins pins at most; a branch past that is left active.
+		if (!Context->BranchOutputs[i]->StageOutputs() && i + 1 < PCGPinIdHelpers::MaxOutputPins)
 		{
 			Mask |= 1ULL << (i + 1);
 		}

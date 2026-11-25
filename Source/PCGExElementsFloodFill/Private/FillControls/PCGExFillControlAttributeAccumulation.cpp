@@ -35,7 +35,6 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 
 	AttributeSource = TypedFactory->Config.AttributeSource;
 	Mode = TypedFactory->Config.Mode;
-	bWriteToAccumulatedValue = TypedFactory->Config.bWriteToAccumulatedValue;
 
 	if (!InitSettingValue(MaxAccumulation, TypedFactory->Config.MaxAccumulationValue.GetValueSetting(), GetSourceFacade()))
 	{
@@ -46,10 +45,10 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 		? InHandler->VtxDataFacade
 		: InHandler->EdgeDataFacade;
 
-	AttributeBuffer = SourceFacade->GetReadable<double>(TypedFactory->Config.Attribute.GetName());
+	AttributeBuffer = SourceFacade->GetBroadcaster<double>(TypedFactory->Config.Attribute);
 	if (!AttributeBuffer)
 	{
-		PCGEX_LOG_INVALID_ATTR_C(InContext, Attribute Accumulation, TypedFactory->Config.Attribute.GetName())
+		PCGEX_LOG_INVALID_SELECTOR_C(InContext, Attribute Accumulation, TypedFactory->Config.Attribute)
 		return false;
 	}
 
@@ -70,13 +69,8 @@ void FPCGExFillControlAttributeAccumulation::ScoreCandidate(const PCGExFloodFill
 	const double NewValue = AttributeBuffer->Read(Index);
 	const double PreviousAccumulated = From.AccumulatedValue;
 
-	// Compute new accumulated value based on mode
-	const double Accumulated = ComputeAccumulation(PreviousAccumulated, NewValue, OutCandidate.Depth);
-
-	if (bWriteToAccumulatedValue)
-	{
-		OutCandidate.AccumulatedValue = Accumulated;
-	}
+	// IsValidCandidate and the next step along this path both read the stored total.
+	OutCandidate.AccumulatedValue = ComputeAccumulation(PreviousAccumulated, NewValue, OutCandidate.Depth);
 
 	// Also contribute to Score for sorting purposes
 	OutCandidate.Score += NewValue;
@@ -137,7 +131,7 @@ void UPCGExFillControlsFactoryAttributeAccumulation::RegisterBuffersDependencies
 	// Register the attribute we'll read
 	if (Config.AttributeSource == EPCGExClusterElement::Vtx)
 	{
-		FacadePreloader.Register<double>(InContext, Config.Attribute.GetName());
+		FacadePreloader.Register<double>(InContext, Config.Attribute);
 	}
 	// Edge attributes handled differently
 }

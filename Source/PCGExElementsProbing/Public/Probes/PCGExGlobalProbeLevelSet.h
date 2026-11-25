@@ -48,6 +48,9 @@ public:
 	FPCGExProbeConfigLevelSet Config;
 	TSharedPtr<PCGExData::TBuffer<double>> LevelBuffer;
 	double LevelMin = 0, LevelMax = 1;
+
+protected:
+	void ProcessDomain(TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const;
 };
 
 // Factory classes...

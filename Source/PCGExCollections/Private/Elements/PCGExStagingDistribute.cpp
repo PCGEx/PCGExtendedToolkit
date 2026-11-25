@@ -449,7 +449,7 @@ bool FPCGExAssetStagingElement::Boot(FPCGExContext* InContext) const
 	PCGEX_VALIDATE_NAME(Settings->AssetPathAttributeName)
 	PCGEX_VALIDATE_NAME(Settings->GetEntryIdxAttributeName())
 
-	if (!bMicroRedistribute && (Settings->WeightToAttribute == EPCGExWeightOutputMode::Raw || Settings->WeightToAttribute == EPCGExWeightOutputMode::Normalized))
+	if (!bMicroRedistribute && (Settings->WeightToAttribute == EPCGExWeightOutputMode::Raw || Settings->WeightToAttribute == EPCGExWeightOutputMode::Normalized || Settings->WeightToAttribute == EPCGExWeightOutputMode::NormalizedInverted))
 	{
 		PCGEX_VALIDATE_NAME_CONSUMABLE(Settings->WeightAttributeName)
 	}
@@ -845,7 +845,7 @@ namespace PCGExAssetStaging
 		{
 			WeightWriter = PointDataFacade->GetWritable<int32>(Settings->WeightAttributeName, UntouchedSafeInit);
 		}
-		else if (Settings->WeightToAttribute == EPCGExWeightOutputMode::Normalized)
+		else if (Settings->WeightToAttribute == EPCGExWeightOutputMode::Normalized || Settings->WeightToAttribute == EPCGExWeightOutputMode::NormalizedInverted)
 		{
 			NormalizedWeightWriter = PointDataFacade->GetWritable<double>(Settings->WeightAttributeName, UntouchedSafeInit);
 		}
@@ -1191,7 +1191,7 @@ namespace PCGExAssetStaging
 				}
 			}
 
-			if (SocketHelper)
+			if (SocketHelper && !Entry->bIsSubCollection)
 			{
 				// Hash scheme must match FSocketHelper::RegisterCollection (and LoadSockets' PickHash::GetEntryKey).
 				const uint64 EntryHash = PCGEx::H64(EntryHost->GetCollectionGUID(), Staging.InternalIndex);

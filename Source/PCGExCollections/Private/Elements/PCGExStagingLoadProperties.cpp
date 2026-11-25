@@ -457,6 +457,13 @@ namespace PCGExStagingLoadProperties
 				continue;
 			}
 
+			TSharedPtr<PCGExDetails::TSettingValue<double>> TimeGetter = Config.Time.GetValueSetting();
+			if (!TimeGetter->Init(PointDataFacade))
+			{
+				// Init logs the missing-attribute error itself.
+				continue;
+			}
+
 			// A data-wide Time (constant or @Data) samples once per input, so the result is a @Data value too.
 			const bool bDataWide = bDataDomainOutput && Config.Time.CanSupportDataOnly();
 
@@ -471,13 +478,6 @@ namespace PCGExStagingLoadProperties
 						           FText::FromName(PropName)));
 					continue;
 				}
-			}
-
-			TSharedPtr<PCGExDetails::TSettingValue<double>> TimeGetter = Config.Time.GetValueSetting();
-			if (!TimeGetter->Init(PointDataFacade))
-			{
-				// Init logs the missing-attribute error itself.
-				continue;
 			}
 
 			FSampledPropertyCache& Cache = (bDataWide ? SampledDataCaches : SampledPropertyCaches).AddDefaulted_GetRef();

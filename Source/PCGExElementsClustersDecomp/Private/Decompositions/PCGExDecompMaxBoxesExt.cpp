@@ -27,10 +27,7 @@ bool FPCGExDecompMaxBoxesExt::Decompose(FPCGExDecompositionResult& OutResult)
 	}
 
 	// Compute max extent in voxels from MaxCellSize (world units)
-	const FIntVector MaxExtent = FIntVector(
-		MaxCellSize.X > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.X / ResolvedVoxelSize.X), 1) : MAX_int32,
-		MaxCellSize.Y > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Y / ResolvedVoxelSize.Y), 1) : MAX_int32,
-		MaxCellSize.Z > KINDA_SMALL_NUMBER ? FMath::Max(FMath::FloorToInt(MaxCellSize.Z / ResolvedVoxelSize.Z), 1) : MAX_int32);
+	const FIntVector MaxExtent = FPCGExDecompOccupancyGrid::ResolveMaxExtent(MaxCellSize, ResolvedVoxelSize);
 
 	// --- Resolve axis bias ---
 	TSharedPtr<PCGExDetails::TSettingValue<FVector>> BiasSetting = AxisBias.GetValueSetting();

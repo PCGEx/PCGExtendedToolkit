@@ -381,6 +381,8 @@ int32 FPCGExSpatialDomain_Broadphase::RevalidateOwner(const int32 OwnerIndex)
 		return 0;
 	}
 
+	// TODO: also revives slots a RollbackToScope retired once their owner index is reused (grammar Prune inside a restored
+	// scope). Overlap queries stay correct (the collection's own mask is untouched); QueryPoint and NumValid do not.
 	int32 Flipped = 0;
 	for (const int32 StorageIdx : *Owned)
 	{

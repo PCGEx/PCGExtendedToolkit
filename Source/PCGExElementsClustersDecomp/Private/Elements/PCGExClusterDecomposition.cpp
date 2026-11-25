@@ -51,6 +51,22 @@ PCGExData::EIOInit UPCGExClusterDecompositionSettings::GetEdgeOutputInitMode() c
 PCGEX_INITIALIZE_ELEMENT(ClusterDecomposition)
 PCGEX_ELEMENT_BATCH_EDGE_IMPL_ADV(ClusterDecomposition)
 
+void FPCGExClusterDecompositionContext::ClusterProcessing_InitialProcessingDone()
+{
+	FPCGExClustersProcessorContext::ClusterProcessing_InitialProcessingDone();
+
+	TArray<TSharedPtr<PCGExClusterDecomposition::FProcessor>> Processors;
+	GatherClusterProcessors(Processors);
+
+	// One running count in batch then cluster order: ids never repeat across the execution, and stay deterministic.
+	int32 NextCellID = 0;
+	for (const TSharedPtr<PCGExClusterDecomposition::FProcessor>& Processor : Processors)
+	{
+		Processor->CellIDOffset = NextCellID;
+		NextCellID += Processor->GetNumCells();
+	}
+}
+
 bool FPCGExClusterDecompositionElement::Boot(FPCGExContext* InContext) const
 {
 	if (!FPCGExClustersProcessorElement::Boot(InContext))
@@ -147,62 +163,15 @@ namespace PCGExClusterDecomposition
 
 		Operation->PrepareForCluster(Cluster, HeuristicsHandler);
 
-		FPCGExDecompositionResult Result;
 		Result.Init(Cluster->Nodes->Num());
 		Result.bWantsCellSizes = CellSizeBuffer != nullptr;
 
-		if (Operation->DecomposeAndFinalize(Result))
-		{
-			const int32 Offset = EdgeDataFacade->Source->IOIndex * 1000000;
-			// DecomposeAndFinalize guarantees CellSizes is sized to NumCells when bWantsCellSizes.
-			const bool bWriteCellSize = Result.bWantsCellSizes;
-
-			for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
-			{
-				const int32 CellID = Result.NodeCellIDs[NodeIndex];
-				if (CellID < 0)
-				{
-					continue;
-				}
-
-				const int32 PointIndex = Cluster->GetNodePointIndex(NodeIndex);
-				CellIDBuffer->SetValue(PointIndex, Offset + CellID);
-
-				if (bWriteCellSize)
-				{
-					CellSizeBuffer->SetValue(PointIndex, Result.CellSizes[CellID]);
-				}
-			}
-
-			if (CellCountBuffer)
-			{
-				TMap<int32, int32> CellNodeCounts;
-				for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
-				{
-					const int32 CellID = Result.NodeCellIDs[NodeIndex];
-					if (CellID >= 0)
-					{
-						CellNodeCounts.FindOrAdd(CellID)++;
-					}
-				}
-
-				// Write per-node cell count
-				for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
-				{
-					const int32 CellID = Result.NodeCellIDs[NodeIndex];
-					if (CellID < 0)
-					{
-						continue;
-					}
-					CellCountBuffer->SetValue(Cluster->GetNodePointIndex(NodeIndex), CellNodeCounts[CellID]);
-				}
-			}
-		}
-		else
+		if (!Operation->DecomposeAndFinalize(Result))
 		{
 			// Buffers keep their defaults on failure, which is indistinguishable from a successful
 			// single-cell decomposition -- say so rather than ship a graph that looks like it worked.
 			PCGE_LOG_C(Warning, GraphAndLog, Context, FTEXT("Decomposition failed on a cluster; its Vtx keep the default cell values."));
+			Result.Init(0); // Reserves no ids and leaves CompleteWork nothing to write.
 		}
 
 		return true;
@@ -210,6 +179,49 @@ namespace PCGExClusterDecomposition
 
 	void FProcessor::CompleteWork()
 	{
+		// DecomposeAndFinalize guarantees CellSizes is sized to NumCells when bWantsCellSizes.
+		const bool bWriteCellSize = Result.bWantsCellSizes;
+
+		for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
+		{
+			const int32 CellID = Result.NodeCellIDs[NodeIndex];
+			if (CellID < 0)
+			{
+				continue;
+			}
+
+			const int32 PointIndex = Cluster->GetNodePointIndex(NodeIndex);
+			CellIDBuffer->SetValue(PointIndex, CellIDOffset + CellID);
+
+			if (bWriteCellSize)
+			{
+				CellSizeBuffer->SetValue(PointIndex, Result.CellSizes[CellID]);
+			}
+		}
+
+		if (CellCountBuffer)
+		{
+			TMap<int32, int32> CellNodeCounts;
+			for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
+			{
+				const int32 CellID = Result.NodeCellIDs[NodeIndex];
+				if (CellID >= 0)
+				{
+					CellNodeCounts.FindOrAdd(CellID)++;
+				}
+			}
+
+			// Write per-node cell count
+			for (int32 NodeIndex = 0; NodeIndex < Result.NodeCellIDs.Num(); NodeIndex++)
+			{
+				const int32 CellID = Result.NodeCellIDs[NodeIndex];
+				if (CellID < 0)
+				{
+					continue;
+				}
+				CellCountBuffer->SetValue(Cluster->GetNodePointIndex(NodeIndex), CellNodeCounts[CellID]);
+			}
+		}
 	}
 
 	void FProcessor::Cleanup()

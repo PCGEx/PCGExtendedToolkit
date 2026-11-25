@@ -145,8 +145,6 @@ bool FPCGExSampleSocketsElement::AdvanceWork(FPCGExContext* InContext, const UPC
 	PCGEX_EXECUTION_CHECK
 	PCGEX_ON_INITIAL_EXECUTION
 	{
-		PCGEX_ON_INVALILD_INPUTS(FTEXT("Some inputs have less than 2 points and won't be processed."))
-
 		if (!Context->StartBatchProcessingPoints(
 			[&](const TSharedPtr<PCGExData::FPointIO>& Entry)
 			{
@@ -156,7 +154,7 @@ bool FPCGExSampleSocketsElement::AdvanceWork(FPCGExContext* InContext, const UPC
 			{
 			}))
 		{
-			return Context->CancelExecution(TEXT("Could not find any paths to write tangents to."));
+			return Context->CancelExecution(TEXT("Could not find any points to process."));
 		}
 	}
 
@@ -182,6 +180,11 @@ namespace PCGExSampleSockets
 		if (Settings->Asset.Input == EPCGExInputValueType::Attribute)
 		{
 			Keys = Context->StaticMeshLoader->GetKeys(PointDataFacade->Source->IOIndex);
+			if (!Keys)
+			{
+				PCGEX_LOG_WARN_ATTR_C(Context, Asset, Settings->Asset.Attribute)
+				return false;
+			}
 		}
 
 		SocketHelper = MakeShared<PCGExStaging::FSocketHelper>(&Context->OutputSocketDetails, PointDataFacade->GetNum());

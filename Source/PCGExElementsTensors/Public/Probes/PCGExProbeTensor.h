@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/PCGExScopedContainers.h"
 #include "Core/PCGExProbeFactoryProvider.h"
 #include "UObject/Object.h"
 
@@ -12,6 +13,28 @@
 #include "Probes/PCGExProbeDirection.h"
 
 #include "PCGExProbeTensor.generated.h"
+
+namespace PCGExProbeTensor
+{
+	/** The current seed's tensor sample, taken once and shared by every chained candidate of that seed. */
+	class FScopedContainer : public PCGExMT::FScopedContainer
+	{
+	public:
+		explicit FScopedContainer(const PCGExMT::FScope& InScope)
+			: PCGExMT::FScopedContainer(InScope)
+		{
+		}
+
+		FVector Direction = FVector::ZeroVector;
+		bool bSampled = false;
+		bool bSuccess = false;
+
+		virtual void Reset() override
+		{
+			bSampled = false;
+		}
+	};
+}
 
 USTRUCT(BlueprintType)
 struct FPCGExProbeConfigTensor : public FPCGExProbeConfigBase
@@ -65,6 +88,8 @@ class FPCGExProbeTensor : public FPCGExProbeOperation
 public:
 	virtual bool RequiresChainProcessing() const override;
 	virtual bool Prepare(FPCGExContext* InContext) override;
+	/** Non-null only when chained: the chained callbacks rely on it. */
+	virtual TSharedPtr<PCGExMT::FScopedContainer> GetScopedContainer(const PCGExMT::FScope& InScope) const override;
 	virtual void ProcessCandidates(const int32 Index, TArray<PCGExProbing::FCandidate>& Candidates, TSet<uint64>* Coincidence, const FVector& ST, TSet<uint64>* OutEdges, PCGExMT::FScopedContainer* Container) override;
 
 	virtual void PrepareBestCandidate(const int32 Index, PCGExProbing::FBestCandidate& InBestCandidate, PCGExMT::FScopedContainer* Container) override;

@@ -86,5 +86,11 @@ int32 FPCGExFillControlOperation::GetSettingsIndex(const PCGExFloodFill::FDiffus
 
 TSharedPtr<PCGExData::FFacade> FPCGExFillControlOperation::GetSourceFacade() const
 {
-	return Factory->ConfigBase.Source == EPCGExFloodFillSettingSource::Seed ? Handler->SeedsDataFacade : Handler->VtxDataFacade;
+	const TSharedPtr<PCGExFloodFill::FFillControlsHandler> PinnedHandler = Handler.Pin();
+	if (!PinnedHandler)
+	{
+		return nullptr;
+	}
+
+	return Factory->ConfigBase.Source == EPCGExFloodFillSettingSource::Seed ? PinnedHandler->SeedsDataFacade : PinnedHandler->VtxDataFacade;
 }

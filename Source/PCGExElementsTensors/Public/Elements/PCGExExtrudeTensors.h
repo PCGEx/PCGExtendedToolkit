@@ -325,9 +325,6 @@ struct FPCGExExtrudeTensorsContext final : FPCGExPathProcessorContext
 	TArray<TObjectPtr<const UPCGExTensorFactoryData>> TensorFactories;
 	TArray<TObjectPtr<const UPCGExPointFilterFactoryData>> StopFilterFactories;
 
-	// Cached configuration (uses imported type)
-	PCGExExtrudeTensors::FExtrusionConfig ExtrusionConfig;
-
 	TArray<TSharedPtr<PCGExPaths::FPath>> ExternalPaths;
 
 protected:
@@ -401,6 +398,8 @@ namespace PCGExExtrudeTensors
 		TSharedPtr<PCGExTensor::FTensorsHandler> TensorsHandler;
 
 		FPCGExAttributeToTagDetails AttributesToPathTags;
+		// Per input, as stop filters are; extrusions hold a reference to it, so it is declared before them.
+		FExtrusionConfig ExtrusionConfig;
 		TArray<TSharedPtr<FExtrusion>> ExtrusionQueue;
 		TArray<TSharedPtr<FExtrusion>> NewExtrusions;
 

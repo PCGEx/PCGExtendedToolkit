@@ -182,6 +182,7 @@ namespace PCGExFloodFill
 		// A captured entry's own capture index is implicitly its position in FDiffusion::Captured.
 		int32 CaptureIndex = -1;
 		int32 Depth = 0;
+		// TODO: single slots -- two Accumulation controls share AccumulatedValue; Hx Budget / Threshold / Scoring overwrite PathScore.
 		double PathScore = 0;
 		double Score = 0;
 		double PathDistance = 0;
@@ -205,6 +206,7 @@ namespace PCGExFloodFill
 		{
 		}
 
+		// TODO: a NaN Score breaks the ordering; no stock control produces one.
 		FORCEINLINE bool operator()(const FCandidate& A, const FCandidate& B) const
 		{
 			// Min-heap: return true when A has LOWER priority than B (A should sink, B rises)

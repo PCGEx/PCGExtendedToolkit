@@ -77,7 +77,7 @@ struct PCGEXCOLLECTIONS_API FPCGExPCGDataAssetCollectionEntry : public FPCGExAss
 
 	// PCGDataAsset-Specific Properties
 
-	/** Source mode toggle (default = DataAsset for backward compatibility) */
+	/** Where this entry's data comes from (default = Level). */
 	UPROPERTY(EditAnywhere, Category = Settings, meta=(EditCondition="!bIsSubCollection", EditConditionHides))
 	EPCGExDataAssetEntrySource Source = EPCGExDataAssetEntrySource::Level;
 

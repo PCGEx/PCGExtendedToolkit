@@ -278,28 +278,16 @@ void FPCGExTensorSurface::CheckPCGSurfaces(const FVector& Position, FPCGExSurfac
 		bool bHasPY = Surface->ProjectPoint(FTransform(Position + FVector(0, SampleOffset, 0)), FBox(FVector(-1), FVector(1)), ProjectionParams, SamplePY, nullptr);
 		bool bHasNY = Surface->ProjectPoint(FTransform(Position - FVector(0, SampleOffset, 0)), FBox(FVector(-1), FVector(1)), ProjectionParams, SampleNY, nullptr);
 
-		// Compute normal from gradient
-		if (bHasPX && bHasNX && bHasPY && bHasNY)
+		// Compute normal from gradient; one hit per axis is enough.
+		if ((bHasPX || bHasNX) && (bHasPY || bHasNY))
 		{
-			const FVector DX = SamplePX.Transform.GetLocation() - SampleNX.Transform.GetLocation();
-			const FVector DY = SamplePY.Transform.GetLocation() - SampleNY.Transform.GetLocation();
+			// Centred stencil on four hits, forward when both forward samples hit, else whichever side hit.
+			const bool bUseNegativeSamples = !bHasPX || !bHasPY || (bHasNX && bHasNY);
+			const FVector DX = (bHasPX ? SamplePX.Transform.GetLocation() : ProjectedLocation) - (bHasNX && bUseNegativeSamples ? SampleNX.Transform.GetLocation() : ProjectedLocation);
+			const FVector DY = (bHasPY ? SamplePY.Transform.GetLocation() : ProjectedLocation) - (bHasNY && bUseNegativeSamples ? SampleNY.Transform.GetLocation() : ProjectedLocation);
 			FVector ComputedNormal = FVector::CrossProduct(DX, DY).GetSafeNormal();
 
 			// Ensure normal points upward (away from surface for landscapes)
-			if (ComputedNormal.Z < 0)
-			{
-				ComputedNormal *= -1;
-			}
-			if (!ComputedNormal.IsNearlyZero())
-			{
-				Normal = ComputedNormal;
-			}
-		}
-		else if (bHasPX && bHasPY)
-		{
-			const FVector DX = SamplePX.Transform.GetLocation() - ProjectedLocation;
-			const FVector DY = SamplePY.Transform.GetLocation() - ProjectedLocation;
-			FVector ComputedNormal = FVector::CrossProduct(DX, DY).GetSafeNormal();
 			if (ComputedNormal.Z < 0)
 			{
 				ComputedNormal *= -1;

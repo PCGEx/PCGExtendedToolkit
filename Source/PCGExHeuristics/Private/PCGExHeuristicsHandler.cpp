@@ -336,6 +336,18 @@ namespace PCGExHeuristics
 		}
 	}
 
+	bool FHandler::UsesTravelHistory() const
+	{
+		for (const TSharedPtr<FPCGExHeuristicOperation>& Op : Operations)
+		{
+			if (Op->UsesTravelHistory())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void FHandler::BakeStaticEdgeScores()
 	{
 		// Per-edge local weight multipliers make per-op contributions vary per edge in ways the

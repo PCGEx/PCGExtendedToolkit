@@ -55,6 +55,9 @@ struct FPCGExDecompOccupancyGrid
 		EPCGExDecompVoxelSizeMode Mode,
 		const FVector& ManualVoxelSize);
 
+	/** Per-axis voxel count that fits in MaxSize, at least 1; MAX_int32 on an axis where MaxSize is unset. */
+	static FIntVector ResolveMaxExtent(const FVector& MaxSize, const FVector& VoxelSize);
+
 	/**
 	 * Build the occupancy grid from a cluster.
 	 * @return false if the grid is degenerate (0 dimensions or 0 occupied voxels)

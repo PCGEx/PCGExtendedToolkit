@@ -29,11 +29,30 @@ namespace PCGExProbing
 	struct PCGEXELEMENTSPROBING_API FBestCandidate
 	{
 		int32 BestIndex = -1;
+		int32 BestPointIndex = -1; // FCandidate::PointIndex of the best candidate, the last tie-break
 		double BestPrimaryValue = 0;
 		double BestSecondaryValue = 0;
 
 		FBestCandidate()
 		{
+		}
+
+		/** Keeps the better of Candidate and the current best: favored metric, then the other one, then lowest point index. */
+		void ConsiderDirectional(const int32 CandidateIndex, const FCandidate& Candidate, const double Dot, const bool bFavorAlignment)
+		{
+			// Lower wins for both values, so alignment is stored negated.
+			const double Primary = bFavorAlignment ? -Dot : Candidate.Distance;
+			const double Secondary = bFavorAlignment ? Candidate.Distance : -Dot;
+
+			if (BestIndex == -1
+				|| Primary < BestPrimaryValue
+				|| (Primary == BestPrimaryValue && (Secondary < BestSecondaryValue || (Secondary == BestSecondaryValue && Candidate.PointIndex < BestPointIndex))))
+			{
+				BestIndex = CandidateIndex;
+				BestPointIndex = Candidate.PointIndex;
+				BestPrimaryValue = Primary;
+				BestSecondaryValue = Secondary;
+			}
 		}
 	};
 }

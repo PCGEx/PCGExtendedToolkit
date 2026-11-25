@@ -265,6 +265,12 @@ namespace PCGExExtrusion
 			return State == EExtrusionState::Probing || State == EExtrusionState::Extruding;
 		}
 
+		// Public API, used outside this repo.
+		FORCEINLINE bool IsComplete() const
+		{
+			return State == EExtrusionState::Completed || State == EExtrusionState::Stopped;
+		}
+
 		FORCEINLINE bool IsValidPath() const
 		{
 			return (State == EExtrusionState::Completed || State == EExtrusionState::Stopped) && ExtrudedPoints.Num() >= 2;

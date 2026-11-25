@@ -4,6 +4,7 @@
 #include "Elements/ControlFlow/PCGExBranchOnDataAttribute.h"
 
 
+#include "PCGCommon.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
@@ -167,7 +168,8 @@ bool FPCGExBranchOnDataAttributeElement::AdvanceWork(FPCGExContext* InContext, c
 		}
 	}
 
-	for (int i = 0; i < NumBranches; i++)
+	// The engine tracks MaxOutputPins pins at most; a branch past that is left active.
+	for (int i = 0; i < NumBranches && i + 1 < PCGPinIdHelpers::MaxOutputPins; i++)
 	{
 		if (!Context->Dispatch[i])
 		{

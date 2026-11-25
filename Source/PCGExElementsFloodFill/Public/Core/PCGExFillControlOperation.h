@@ -54,5 +54,6 @@ protected:
 	TSharedPtr<PCGExData::FFacade> GetSourceFacade() const;
 
 	TSharedPtr<PCGExClusters::FCluster> Cluster;
-	TSharedPtr<PCGExFloodFill::FFillControlsHandler> Handler;
+	// Weak: the handler owns its operations.
+	TWeakPtr<PCGExFloodFill::FFillControlsHandler> Handler;
 };
