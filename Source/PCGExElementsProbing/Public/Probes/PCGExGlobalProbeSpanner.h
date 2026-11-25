@@ -37,6 +37,8 @@ public:
 	FPCGExProbeConfigSpanner Config;
 
 protected:
+	void ProcessDomain(TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const;
+
 	// Dijkstra helper - returns shortest path distance between two nodes in current graph
 	double GetGraphDistance(int32 From, int32 To, const TArray<TSet<int32>>& Adjacency,
 	                        const TArray<FVector>& Positions) const;

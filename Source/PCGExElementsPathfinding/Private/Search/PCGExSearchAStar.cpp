@@ -30,7 +30,6 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 
 	TRACE_CPUPROFILER_EVENT_SCOPE(UPCGExSearchAStar::FindPath);
 
-	TBitArray<>& Visited = LocalAllocations->Visited;
 	TArray<double>& GScore = LocalAllocations->GScore;
 	PCGEx::FHashLookupArray* TravelStack = LocalAllocations->TravelStack.Get();
 	uint64* const TravelData = TravelStack->GetMutableData();
@@ -50,13 +49,6 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 			break;
 		} // Exit early
 
-		if (Visited[CurrentNodeIndex])
-		{
-			continue;
-		}
-		Visited[CurrentNodeIndex] = true;
-
-		// Read per-node state only after the visited check -- stale queue entries skip these loads.
 		const double CurrentGScore = GScore[CurrentNodeIndex];
 		const PCGExClusters::FNode& Current = NodesRef[CurrentNodeIndex];
 
@@ -65,7 +57,10 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 			const uint32 NeighborIndex = Lk.Node;
 			const uint32 EdgeIndex = Lk.Edge;
 
-			if (Visited[NeighborIndex])
+			// No closed set: a node is relaxed again whenever a strictly cheaper route reaches it, and the queue
+			// re-admits it. Both tests are a negated '<' so a NaN score can never replace a stored one.
+			const double PreviousGScore = GScore[NeighborIndex];
+			if (PreviousGScore != -1 && !(CurrentGScore < PreviousGScore))
 			{
 				continue;
 			}
@@ -76,8 +71,7 @@ bool FPCGExSearchOperationAStar::ResolveQuery(
 			const double EScore = Heuristics->GetEdgeScore(Current, AdjacentNode, Edge, SeedNode, GoalNode, Feedback, TravelStack);
 			const double TentativeGScore = CurrentGScore + EScore;
 
-			const double PreviousGScore = GScore[NeighborIndex];
-			if (PreviousGScore != -1 && TentativeGScore >= PreviousGScore)
+			if (PreviousGScore != -1 && !(TentativeGScore < PreviousGScore))
 			{
 				continue;
 			}

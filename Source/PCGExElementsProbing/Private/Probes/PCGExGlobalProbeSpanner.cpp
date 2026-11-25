@@ -69,8 +69,13 @@ double FPCGExProbeSpanner::GetGraphDistance(int32 From, int32 To,
 
 void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 {
+	ForEachPointDomain([&](const TConstArrayView<int32> Points) { ProcessDomain(Points, OutEdges); });
+}
+
+void FPCGExProbeSpanner::ProcessDomain(const TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const
+{
 	const TArray<FVector>& Positions = *WorkingPositions;
-	const int32 NumPoints = Positions.Num();
+	const int32 NumPoints = Points.Num();
 	if (NumPoints < 2)
 	{
 		return;
@@ -79,7 +84,7 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 	const TArray<int8>& CanGenerateRef = *CanGenerate;
 	const TArray<int8>& AcceptConnectionsRef = *AcceptConnections;
 
-	// Build sorted list of all candidate edges
+	// Build sorted list of all candidate edges; A and B are domain-local indices
 	struct FEdgeCandidate
 	{
 		int32 A, B;
@@ -94,22 +99,25 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 	const int32 MaxCandidates = FMath::Max(Config.MaxEdgeCandidates, 1);
 
 	TArray<FEdgeCandidate> Candidates;
-	Candidates.Reserve(FMath::Min(MaxCandidates, NumPoints * (NumPoints - 1) / 2));
+	// Pair count in 64 bits: it passes MAX_int32 from 65,537 points on.
+	Candidates.Reserve(static_cast<int32>(FMath::Min<int64>(MaxCandidates, static_cast<int64>(NumPoints) * (NumPoints - 1) / 2)));
 
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (int32 a = 0; a < NumPoints; ++a)
 	{
+		const int32 i = Points[a];
 		if (!CanGenerateRef[i] && !AcceptConnectionsRef[i])
 		{
 			continue;
 		}
 
-		for (int32 j = i + 1; j < NumPoints; ++j)
+		for (int32 b = a + 1; b < NumPoints; ++b)
 		{
+			const int32 j = Points[b];
 			if (!CanGenerateRef[j] && !AcceptConnectionsRef[j])
 			{
 				continue;
 			}
-			if (!CanGenerateRef[i] && !CanGenerateRef[j])
+			if (!CanConnect(i, j))
 			{
 				continue;
 			}
@@ -118,12 +126,12 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 
 			if (Candidates.Num() < MaxCandidates)
 			{
-				Candidates.HeapPush(FEdgeCandidate{i, j, Dist}, ByLongest);
+				Candidates.HeapPush(FEdgeCandidate{a, b, Dist}, ByLongest);
 			}
 			else if (Dist < Candidates.HeapTop().Dist)
 			{
 				Candidates.HeapPopDiscard(ByLongest, EAllowShrinking::No);
-				Candidates.HeapPush(FEdgeCandidate{i, j, Dist}, ByLongest);
+				Candidates.HeapPush(FEdgeCandidate{a, b, Dist}, ByLongest);
 			}
 		}
 	}
@@ -134,6 +142,14 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 		return A.Dist < B.Dist;
 	});
 
+	// Path queries run over the domain alone, so their cost follows the domain size, not the data's.
+	TArray<FVector> DomainPositions;
+	DomainPositions.SetNumUninitialized(NumPoints);
+	for (int32 a = 0; a < NumPoints; ++a)
+	{
+		DomainPositions[a] = Positions[Points[a]];
+	}
+
 	// Build adjacency list for path queries
 	TArray<TSet<int32>> Adjacency;
 	Adjacency.SetNum(NumPoints);
@@ -142,11 +158,11 @@ void FPCGExProbeSpanner::ProcessAll(TSet<uint64>& OutEdges) const
 	for (const FEdgeCandidate& Edge : Candidates)
 	{
 		// Check if current graph distance exceeds t * Euclidean distance
-		const double GraphDist = GetGraphDistance(Edge.A, Edge.B, Adjacency, Positions);
+		const double GraphDist = GetGraphDistance(Edge.A, Edge.B, Adjacency, DomainPositions);
 
 		if (GraphDist > Config.StretchFactor * Edge.Dist)
 		{
-			OutEdges.Add(PCGEx::H64U(Edge.A, Edge.B));
+			OutEdges.Add(PCGEx::H64U(Points[Edge.A], Points[Edge.B]));
 			Adjacency[Edge.A].Add(Edge.B);
 			Adjacency[Edge.B].Add(Edge.A);
 		}

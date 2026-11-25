@@ -89,7 +89,7 @@ void FPCGExProbeGlobalAnisotropic::ProcessAll(TSet<uint64>& OutEdges) const
 			[&](const PCGExOctree::FItem& Other)
 			{
 				const int32 j = Other.Index;
-				if (i == j || !AcceptConnectionsRef[j])
+				if (i == j || !AcceptConnectionsRef[j] || !SharesGroup(i, j))
 				{
 					return;
 				}

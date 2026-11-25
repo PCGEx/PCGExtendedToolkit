@@ -92,7 +92,7 @@ struct PCGEXELEMENTSSAMPLING_API FPCGExDensityModifier
 /** Density-driven surface sampling: density model, candidate layouts, spacing passes and the per-surface job. */
 namespace PCGExDensitySampling
 {
-	/** Radii are derived from at least this density, so they stay within 16x the spacing at max density. */
+	/** Radii are derived from at least this density, so they stay within 16x their factor times the spacing at max density. */
 	inline constexpr double MinRadiusDensity = 1.0 / 256.0;
 
 #pragma region Density model
@@ -228,15 +228,18 @@ namespace PCGExDensitySampling
 
 #pragma region Layouts
 
-	/** Lower wins: rank, then world-space keys, so every partition orders shared candidates the same way. */
+	/** Lower wins: ordinary candidates before Sparse Tail ones, then rank, then world-space keys, so every partition orders
+	 *  shared candidates the same way. */
 	struct FPriority
 	{
 		float Rank = 0;
 		int32 KeyA = 0;
 		int32 KeyB = 0;
+		bool bSparseTail = false;
 
 		bool operator<(const FPriority& Other) const
 		{
+			if (bSparseTail != Other.bSparseTail) { return !bSparseTail; }
 			if (Rank != Other.Rank) { return Rank < Other.Rank; }
 			if (KeyA != Other.KeyA) { return KeyA < Other.KeyA; }
 			return KeyB < Other.KeyB;
@@ -276,6 +279,9 @@ namespace PCGExDensitySampling
 		/** Picks the seed's offset. */
 		void Init(int32 InSeed);
 
+		/** Mask rank of a jittered-grid cell; rank 0 is the cell kept first. */
+		int32 GetRank(int32 InCellX, int32 InCellY) const;
+
 		/** Blue-noise threshold of a jittered-grid cell. */
 		double GetThreshold(int32 InCellX, int32 InCellY) const;
 
@@ -312,6 +318,9 @@ namespace PCGExDensitySampling
 		bool Init(const FDensityModel& InModel, const FBox2D& InCoverage, int64 InMaxNodes);
 
 		int32 NumNodes() const { return NumU * NumV; }
+		/** Lattice dimensions. Nodes are row-major: node (I, J) has flat index J * GetNumU() + I. Public API, used outside this repo. */
+		int32 GetNumU() const { return NumU; }
+		int32 GetNumV() const { return NumV; }
 		FVector2D GetNodePosition(int32 InNodeIndex) const;
 		float* GetNodeValues(int32 InNodeIndex) { return Values.GetData() + static_cast<int64>(InNodeIndex) * NumChannels; }
 
@@ -387,6 +396,9 @@ namespace PCGExDensitySampling
 		bool bStrictSpacing = false;
 		double SpacingFactor = 0.75;
 		double PoissonRadiusFactor = 0.83;
+
+		/** Blue noise and blue-noise grid thinning: the lowest rank also keeps densities below its own threshold, at their rate. */
+		bool bSparseTail = false;
 
 		bool bOutputSurfaceAttributes = true;
 		bool bWriteLocalDensity = false;

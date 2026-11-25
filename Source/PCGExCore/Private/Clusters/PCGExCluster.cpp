@@ -208,7 +208,10 @@ namespace PCGExClusters
 
 		// Nodes are a subset of all vtx points - only those referenced by at least one
 		// edge get a node, so NumRawVtx is only an upper bound on the node count.
-		BuildAdjacency_Unsafe(NumRawVtx);
+		if (!BuildAdjacency_Unsafe(NumRawVtx))
+		{
+			return OnFail();
+		}
 
 		// Validate against expected adjacency counts (from a previous cluster build).
 		// Only checks for missing connections, not extra ones, to detect broken edges.
@@ -252,7 +255,7 @@ namespace PCGExClusters
 
 		// Shared -1-initialized lookup doubles as point->node scratch: disjoint subgraph
 		// components let concurrent builds write it directly instead of using a TSparseArray.
-		BuildAdjacency_Unsafe(InNumNodes);
+		verify(BuildAdjacency_Unsafe(InNumNodes));
 
 		// Exact: every subgraph node is an endpoint of one of its edges.
 		check(Nodes->Num() == InNumNodes)
@@ -263,7 +266,7 @@ namespace PCGExClusters
 		EdgesDataPtr = Edges->GetData();
 	}
 
-	void FCluster::BuildAdjacency_Unsafe(const int32 InNumNodesHint)
+	bool FCluster::BuildAdjacency_Unsafe(const int32 InNumNodesHint)
 	{
 		check(NodeIndexLookup)
 
@@ -281,13 +284,17 @@ namespace PCGExClusters
 			{
 				const int32 StartNode = GetOrCreateNode_Unsafe(E.Start);
 				const int32 EndNode = GetOrCreateNode_Unsafe(E.End);
+				if (StartNode == INDEX_NONE || EndNode == INDEX_NONE)
+				{
+					return false;
+				}
 
 				(Nodes->GetData() + StartNode)->Link(EndNode, E.Index);
 				(Nodes->GetData() + EndNode)->Link(StartNode, E.Index);
 			}
 
 			Nodes->Shrink();
-			return;
+			return true;
 		}
 
 		TArray<FNode>& NodesRef = *Nodes;
@@ -311,6 +318,13 @@ namespace PCGExClusters
 		// increments per edge. Everything heavy below runs parallel.
 		int32 NumCreated = 0;
 
+		// A non -1 entry must be a node this build created. Anything else means another cluster of the
+		// batch shares the point, which the contract forbids; the build fails instead of writing through it.
+		auto IsOwnNode = [&](const int32 NodeIndex, const uint32 PointIndex)
+		{
+			return NodeIndex >= 0 && NodeIndex < NumCreated && NodesData[NodeIndex].PointIndex == static_cast<int32>(PointIndex);
+		};
+
 		auto AssignNode = [&](const uint32 PointIndex) -> int32
 		{
 			int32& NodeIndex = Lookup->GetMutable(PointIndex);
@@ -319,25 +333,33 @@ namespace PCGExClusters
 				check(NumCreated < NumNodesHint)
 				new(NodesData + NumCreated) FNode(NumCreated, PointIndex);
 				NodeIndex = NumCreated++;
+				return NodeIndex;
 			}
-			else
-			{
-				// A non -1 entry must be a node this build created; anything else is a
-				// stale/foreign lookup, which the contract forbids.
-				checkSlow(NodeIndex >= 0 && NodeIndex < NumCreated && NodesData[NodeIndex].PointIndex == static_cast<int32>(PointIndex))
-			}
-			return NodeIndex;
+			return IsOwnNode(NodeIndex, PointIndex) ? NodeIndex : INDEX_NONE;
 		};
 
+		bool bForeignNode = false;
 		for (int32 i = 0; i < NumEdges; i++)
 		{
 			const FEdge& E = EdgesData[i];
-			Cursors[AssignNode(E.Start)]++;
-			Cursors[AssignNode(E.End)]++;
+			const int32 StartNode = AssignNode(E.Start);
+			const int32 EndNode = AssignNode(E.End);
+			if (StartNode == INDEX_NONE || EndNode == INDEX_NONE)
+			{
+				bForeignNode = true;
+				break;
+			}
+			Cursors[StartNode]++;
+			Cursors[EndNode]++;
 		}
 
 		// Trim the unconstructed tail without running destructors on it.
 		NodesRef.SetNumUnsafeInternal(NumCreated);
+
+		if (bForeignNode)
+		{
+			return false;
+		}
 
 		// Size each node's links to its exact degree and gather bounds. Link slots are
 		// left uninitialized: the scatter below writes every one exactly once.
@@ -360,6 +382,8 @@ namespace PCGExClusters
 
 		// Scatter links; each atomic decrement claims a unique slot, so concurrent
 		// writes into a node's link array never alias.
+		// The lookup is read again here, so a cluster sharing points with this one may have rewritten an entry since.
+		int32 ForeignScatter = 0;
 		PCGExMT::ParallelOrSequential(
 			NumEdges,
 			[&](const int32 i)
@@ -367,10 +391,20 @@ namespace PCGExClusters
 				const FEdge& E = EdgesData[i];
 				const int32 StartNode = Lookup->Get(E.Start);
 				const int32 EndNode = Lookup->Get(E.End);
+				if (!IsOwnNode(StartNode, E.Start) || !IsOwnNode(EndNode, E.End))
+				{
+					FPlatformAtomics::InterlockedExchange(&ForeignScatter, 1);
+					return;
+				}
 
 				NodesData[StartNode].Links[FPlatformAtomics::InterlockedDecrement(Cursors + StartNode)] = FLink(EndNode, E.Index);
 				NodesData[EndNode].Links[FPlatformAtomics::InterlockedDecrement(Cursors + EndNode)] = FLink(StartNode, E.Index);
 			});
+
+		if (FPlatformAtomics::AtomicRead(&ForeignScatter))
+		{
+			return false;
+		}
 
 		// Slot claim order is scheduling-dependent; sorting by edge index restores
 		// the deterministic ascending order the sequential path produces.
@@ -382,6 +416,7 @@ namespace PCGExClusters
 			});
 
 		Nodes->Shrink();
+		return true;
 	}
 
 	void FCluster::ComputeBounds()
@@ -941,10 +976,8 @@ namespace PCGExClusters
 
 		if (NodeIndex != -1)
 		{
-			// A non -1 entry must be a node this build created; anything else is a
-			// stale/foreign lookup, which the build contract forbids.
-			checkSlow(Nodes->IsValidIndex(NodeIndex) && (*Nodes)[NodeIndex].PointIndex == PointIndex)
-			return NodeIndex;
+			// A non -1 entry must be a node this build created; anything else is another cluster's node.
+			return Nodes->IsValidIndex(NodeIndex) && (*Nodes)[NodeIndex].PointIndex == PointIndex ? NodeIndex : INDEX_NONE;
 		}
 
 		NodeIndex = Nodes->Add(FNode(Nodes->Num(), PointIndex));

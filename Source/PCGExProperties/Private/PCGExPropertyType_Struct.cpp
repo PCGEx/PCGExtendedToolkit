@@ -10,6 +10,7 @@
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
 #include "Metadata/PCGMetadataAttribute.h"
+#include "UObject/UnrealType.h"
 
 bool FPCGExProperty_Struct::InitializeOutput(const TSharedRef<PCGExData::FFacade>& OutputFacade, FName OutputName)
 {
@@ -26,13 +27,25 @@ bool FPCGExProperty_Struct::InitializeOutput(const TSharedRef<PCGExData::FFacade
 
 	const FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::MakeElementIdentifier(OutputName);
 
+	FPCGMetadataAttributeDesc Desc;
+	Desc.ValueType = EPCGMetadataTypes::Struct;
+	Desc.ValueTypeObject = const_cast<UScriptStruct*>(Value.GetScriptStruct());
+	Desc.Name = OutputName;
+
+	// The engine stores descs normalized (a Struct of FVector becomes Vector), so the comparison is too.
+	FPCGMetadataAttributeDesc StoredDesc = Desc;
+	StoredDesc.FixLegacyTypeId();
+
+	// Replaces a same-named attribute of another type, as the typed FindOrCreateAttribute<T> does.
 	FPCGMetadataAttributeBase* Attr = OutData->Metadata->GetMutableAttribute(Identifier);
+	if (Attr && !Attr->GetAttributeDesc().IsSameType(StoredDesc))
+	{
+		OutData->Metadata->DeleteAttribute(Identifier);
+		Attr = nullptr;
+	}
+
 	if (!Attr)
 	{
-		FPCGMetadataAttributeDesc Desc;
-		Desc.ValueType = EPCGMetadataTypes::Struct;
-		Desc.ValueTypeObject = const_cast<UScriptStruct*>(Value.GetScriptStruct());
-		Desc.Name = OutputName;
 		Attr = OutData->Metadata->CreateAttribute(Identifier, Desc, /*bAllowsInterp=*/true, /*bOverrideParent=*/true);
 	}
 
@@ -41,8 +54,10 @@ bool FPCGExProperty_Struct::InitializeOutput(const TSharedRef<PCGExData::FFacade
 		return false;
 	}
 
+	// The facade keys property buffers on name alone, so the one returned may predate this attribute.
 	const TSharedPtr<PCGExData::IBuffer> Buf = OutputFacade->GetWritableFromAttribute(Attr, PCGExData::EBufferInit::Inherit);
-	if (!Buf.IsValid() || !Buf->IsPropertyBacked())
+	const FStructProperty* BufferProperty = Buf.IsValid() ? CastField<FStructProperty>(Buf->GetSourceProperty()) : nullptr;
+	if (!BufferProperty || BufferProperty->Struct != Value.GetScriptStruct())
 	{
 		return false;
 	}
@@ -61,7 +76,11 @@ void FPCGExProperty_Struct::WriteOutputFrom(int32 PointIndex, const FPCGExProper
 {
 	check(OutputBuffer);
 	const FPCGExProperty_Struct* Typed = static_cast<const FPCGExProperty_Struct*>(Source);
-	// Layout-compatible by SyncStructuralFromSchema invariant.
+	// Callers gate on the property type alone; the buffer's layout is this property's inner struct.
+	if (Typed->Value.GetScriptStruct() != Value.GetScriptStruct())
+	{
+		return;
+	}
 	OutputBuffer->SetFromVoidProperty(PointIndex, Typed->Value.GetMemory());
 }
 

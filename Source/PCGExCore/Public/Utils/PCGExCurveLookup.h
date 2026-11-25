@@ -238,7 +238,7 @@ protected:
 		const int32 Hi = Lo + 1;
 		const float Frac = ClampedIdx - static_cast<float>(Lo);
 
-		// Hi is safe because LUT has Count+1 entries
+		// Hi is safe: the last real sample is followed by its duplicate
 		return LUT[Lo] + (LUT[Hi] - LUT[Lo]) * Frac;
 	}
 
@@ -250,7 +250,7 @@ protected:
 	float TimeMin = 0.0f;
 	float TimeMax = 1.0f;
 	float TimeToNormalized = 1.0f; // 1.0 / (TimeMax - TimeMin)
-	float LUTMaxIdx = 0.0f;        // LUT.Num() - 2 (because we have Count+1 entries)
+	float LUTMaxIdx = 0.0f;        // LUT.Num() - 2: the last real sample, ahead of its duplicate
 
 	// Fast-linear path (see EvalLinear); takes precedence over Mode when set.
 	bool bFastLinear = false;

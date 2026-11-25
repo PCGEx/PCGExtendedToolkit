@@ -411,9 +411,9 @@ namespace PCGExPathInclusion
 		else
 		{
 			// 'On' band: the nearest boundary lies within the bound's reach toward it plus the tolerance band.
-			// Center -> reach 0, measured as 3D squared distance. Precision -> reach is
-			// the sphere radius / oriented-box silhouette, and the distance is measured IN-PLANE (projected) so it
-			// matches the 2D inside test; out-of-plane extent is left to the octree / ExpandZAxis broad-phase.
+			// Center -> reach 0, 3D squared distance. Precision -> reach is the sphere radius / oriented-box silhouette,
+			// measured in-plane to the 3D-NEAREST boundary point, not to the in-plane nearest one: a target that varies
+			// out of plane can under-report 'On'. Out-of-plane extent is left to the octree / ExpandZAxis broad-phase.
 			auto ComputeIsOn = [&](const PCGExPaths::FPath& Path, const FTransform& Closest, const double DistSquared3D) -> bool
 			{
 				if (!bUsePrecision)

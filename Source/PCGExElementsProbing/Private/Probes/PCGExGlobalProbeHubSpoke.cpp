@@ -31,10 +31,10 @@ bool FPCGExProbeHubSpoke::Prepare(FPCGExContext* InContext)
 	return true;
 }
 
-void FPCGExProbeHubSpoke::SelectHubsByDensity(TArray<int32>& OutHubs) const
+void FPCGExProbeHubSpoke::SelectHubsByDensity(const TConstArrayView<int32> Points, TArray<int32>& OutHubs) const
 {
 	const TArray<FVector>& Positions = *WorkingPositions;
-	const int32 NumPoints = Positions.Num();
+	const int32 NumPoints = Points.Num();
 	const TArray<int8>& CanGenerateRef = *CanGenerate;
 
 	// Compute local density (inverse of average distance to K nearest neighbors)
@@ -45,16 +45,17 @@ void FPCGExProbeHubSpoke::SelectHubsByDensity(TArray<int32>& OutHubs) const
 	TArray<double> Distances;
 	Distances.SetNum(NumPoints);
 
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (const int32 i : Points)
 	{
 		if (!CanGenerateRef[i])
 		{
 			continue;
 		}
 
-		for (int32 j = 0; j < NumPoints; ++j)
+		for (int32 b = 0; b < NumPoints; ++b)
 		{
-			Distances[j] = (j != i) ? FVector::DistSquared(Positions[i], Positions[j]) : TNumericLimits<double>::Max();
+			const int32 j = Points[b];
+			Distances[b] = (j != i) ? FVector::DistSquared(Positions[i], Positions[j]) : TNumericLimits<double>::Max();
 		}
 
 		Algo::Sort(Distances);
@@ -84,15 +85,15 @@ void FPCGExProbeHubSpoke::SelectHubsByDensity(TArray<int32>& OutHubs) const
 	}
 }
 
-void FPCGExProbeHubSpoke::SelectHubsByAttribute(TArray<int32>& OutHubs) const
+void FPCGExProbeHubSpoke::SelectHubsByAttribute(const TConstArrayView<int32> Points, TArray<int32>& OutHubs) const
 {
-	const int32 NumPoints = WorkingPositions->Num();
+	const int32 NumPoints = Points.Num();
 	const TArray<int8>& CanGenerateRef = *CanGenerate;
 
 	TArray<TPair<double, int32>> Scores;
 	Scores.Reserve(NumPoints);
 
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (const int32 i : Points)
 	{
 		if (!CanGenerateRef[i])
 		{
@@ -113,17 +114,17 @@ void FPCGExProbeHubSpoke::SelectHubsByAttribute(TArray<int32>& OutHubs) const
 	}
 }
 
-void FPCGExProbeHubSpoke::SelectHubsByCentrality(TArray<int32>& OutHubs) const
+void FPCGExProbeHubSpoke::SelectHubsByCentrality(const TConstArrayView<int32> Points, TArray<int32>& OutHubs) const
 {
 	const TArray<FVector>& Positions = *WorkingPositions;
-	const int32 NumPoints = Positions.Num();
+	const int32 NumPoints = Points.Num();
 	const TArray<int8>& CanGenerateRef = *CanGenerate;
 
 	// Compute centrality: points closest to local centroid of neighborhood
 	TArray<TPair<double, int32>> CentralityScores;
 	CentralityScores.Reserve(NumPoints);
 
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (const int32 i : Points)
 	{
 		if (!CanGenerateRef[i])
 		{
@@ -135,7 +136,7 @@ void FPCGExProbeHubSpoke::SelectHubsByCentrality(TArray<int32>& OutHubs) const
 		FVector Centroid = FVector::ZeroVector;
 		int32 Count = 0;
 
-		for (int32 j = 0; j < NumPoints; ++j)
+		for (const int32 j : Points)
 		{
 			if (FVector::DistSquared(Positions[i], Positions[j]) <= Radius)
 			{
@@ -164,15 +165,14 @@ void FPCGExProbeHubSpoke::SelectHubsByCentrality(TArray<int32>& OutHubs) const
 	}
 }
 
-void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
+void FPCGExProbeHubSpoke::SelectHubsByKMeans(const TConstArrayView<int32> Points, TArray<int32>& OutHubs) const
 {
 	const TArray<FVector>& Positions = *WorkingPositions;
-	const int32 NumPoints = Positions.Num();
 	const TArray<int8>& CanGenerateRef = *CanGenerate;
 
 	// Collect valid points
 	TArray<int32> ValidIndices;
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (const int32 i : Points)
 	{
 		if (CanGenerateRef[i])
 		{
@@ -203,19 +203,16 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 		Centroids[c] = Positions[ShuffledIndices[c]];
 	}
 
-	// K-means iterations
+	// K-means iterations, one assignment per valid point
 	TArray<int32> Assignments;
-	Assignments.SetNum(NumPoints);
+	Assignments.SetNum(ValidIndices.Num());
 
 	for (int32 Iter = 0; Iter < Config.KMeansIterations; ++Iter)
 	{
 		// Assignment step
-		for (int32 i = 0; i < NumPoints; ++i)
+		for (int32 v = 0; v < ValidIndices.Num(); ++v)
 		{
-			if (!CanGenerateRef[i])
-			{
-				continue;
-			}
+			const int32 i = ValidIndices[v];
 
 			double BestDist = TNumericLimits<double>::Max();
 			int32 BestCluster = 0;
@@ -229,7 +226,7 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 					BestCluster = c;
 				}
 			}
-			Assignments[i] = BestCluster;
+			Assignments[v] = BestCluster;
 		}
 
 		// Update step
@@ -238,14 +235,10 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 		NewCentroids.Init(FVector::ZeroVector, K);
 		ClusterCounts.Init(0, K);
 
-		for (int32 i = 0; i < NumPoints; ++i)
+		for (int32 v = 0; v < ValidIndices.Num(); ++v)
 		{
-			if (!CanGenerateRef[i])
-			{
-				continue;
-			}
-			NewCentroids[Assignments[i]] += Positions[i];
-			ClusterCounts[Assignments[i]]++;
+			NewCentroids[Assignments[v]] += Positions[ValidIndices[v]];
+			ClusterCounts[Assignments[v]]++;
 		}
 
 		for (int32 c = 0; c < K; ++c)
@@ -267,9 +260,9 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 		double BestDist = TNumericLimits<double>::Max();
 		int32 BestPoint = INDEX_NONE;
 
-		for (int32 i = 0; i < NumPoints; ++i)
+		for (const int32 i : ValidIndices)
 		{
-			if (!CanGenerateRef[i] || Claimed.Contains(i))
+			if (Claimed.Contains(i))
 			{
 				continue;
 			}
@@ -292,9 +285,13 @@ void FPCGExProbeHubSpoke::SelectHubsByKMeans(TArray<int32>& OutHubs) const
 
 void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 {
+	ForEachPointDomain([&](const TConstArrayView<int32> Points) { ProcessDomain(Points, OutEdges); });
+}
+
+void FPCGExProbeHubSpoke::ProcessDomain(const TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const
+{
 	const TArray<FVector>& Positions = *WorkingPositions;
-	const int32 NumPoints = Positions.Num();
-	if (NumPoints < 2)
+	if (Points.Num() < 2)
 	{
 		return;
 	}
@@ -307,16 +304,16 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 	switch (Config.HubSelectionMode)
 	{
 	case EPCGExHubSelectionMode::ByDensity:
-		SelectHubsByDensity(Hubs);
+		SelectHubsByDensity(Points, Hubs);
 		break;
 	case EPCGExHubSelectionMode::ByAttribute:
-		SelectHubsByAttribute(Hubs);
+		SelectHubsByAttribute(Points, Hubs);
 		break;
 	case EPCGExHubSelectionMode::ByCentrality:
-		SelectHubsByCentrality(Hubs);
+		SelectHubsByCentrality(Points, Hubs);
 		break;
 	case EPCGExHubSelectionMode::KMeansCentroids:
-		SelectHubsByKMeans(Hubs);
+		SelectHubsByKMeans(Points, Hubs);
 		break;
 	}
 
@@ -334,7 +331,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 			for (int32 j = i + 1; j < Hubs.Num(); ++j)
 			{
 				const double MaxDistSq = FMath::Max(GetSearchRadius(Hubs[i]), GetSearchRadius(Hubs[j]));
-				if (FVector::DistSquared(Positions[Hubs[i]], Positions[Hubs[j]]) <= MaxDistSq)
+				if (CanConnect(Hubs[i], Hubs[j]) && FVector::DistSquared(Positions[Hubs[i]], Positions[Hubs[j]]) <= MaxDistSq)
 				{
 					OutEdges.Add(PCGEx::H64U(Hubs[i], Hubs[j]));
 				}
@@ -343,7 +340,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 	}
 
 	// Connect spokes to hubs
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (const int32 i : Points)
 	{
 		if (HubSet.Contains(i))
 		{
@@ -372,7 +369,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 				}
 			}
 
-			if (BestHub != INDEX_NONE && (CanGenerateRef[i] || CanGenerateRef[BestHub]))
+			if (BestHub != INDEX_NONE && CanConnect(i, BestHub))
 			{
 				OutEdges.Add(PCGEx::H64U(i, BestHub));
 			}
@@ -384,7 +381,7 @@ void FPCGExProbeHubSpoke::ProcessAll(TSet<uint64>& OutEdges) const
 			{
 				if (FVector::DistSquared(Positions[i], Positions[Hub]) <= MaxDistSq)
 				{
-					if (CanGenerateRef[i] || CanGenerateRef[Hub])
+					if (CanConnect(i, Hub))
 					{
 						OutEdges.Add(PCGEx::H64U(i, Hub));
 					}

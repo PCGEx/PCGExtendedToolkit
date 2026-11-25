@@ -245,7 +245,7 @@ namespace PCGExExtrudeTensors
 		}
 
 		// Initialize config using node-specific settings
-		InitExtrusionConfigFromSettings(Context->ExtrusionConfig, Context, Settings, StopFilters.IsValid());
+		InitExtrusionConfigFromSettings(ExtrusionConfig, Context, Settings, StopFilters.IsValid());
 
 		TensorsHandler = MakeShared<PCGExTensor::FTensorsHandler>(Settings->TensorHandlerDetails);
 		if (!TensorsHandler->Init(Context, Context->TensorFactories, PointDataFacade))
@@ -264,12 +264,9 @@ namespace PCGExExtrudeTensors
 		{
 			return false;
 		}
-		if (!PerPointIterations->IsConstant())
+		if (!PerPointIterations->IsConstant() && Settings->bUseMaxFromPoints)
 		{
-			if (Settings->bUseMaxFromPoints)
-			{
-				RemainingIterations = FMath::Max(RemainingIterations, PerPointIterations->Max());
-			}
+			RemainingIterations = FMath::Max(RemainingIterations, PerPointIterations->Max());
 		}
 		else
 		{
@@ -354,7 +351,8 @@ namespace PCGExExtrudeTensors
 
 	void FProcessor::InitExtrusionFromSeed(const int32 InSeedIndex)
 	{
-		const int32 Iterations = PerPointIterations->Read(InSeedIndex);
+		// RemainingIterations still holds the full round budget here; it caps each seed's own count.
+		const int32 Iterations = FMath::Min(RemainingIterations, PerPointIterations->Read(InSeedIndex));
 		if (Iterations < 1)
 		{
 			return;
@@ -432,7 +430,7 @@ namespace PCGExExtrudeTensors
 			return nullptr;
 		}
 
-		TSharedPtr<FExtrusion> NewExtrusion = MakeShared<FExtrusion>(InSeedIndex, Facade.ToSharedRef(), InMaxIterations, Context->ExtrusionConfig);
+		TSharedPtr<FExtrusion> NewExtrusion = MakeShared<FExtrusion>(InSeedIndex, Facade.ToSharedRef(), InMaxIterations, ExtrusionConfig);
 
 		if (Settings->bUseMaxLength)
 		{

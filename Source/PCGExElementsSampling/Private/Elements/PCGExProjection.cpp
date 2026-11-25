@@ -698,7 +698,8 @@ namespace PCGExProjection
 		}
 
 		const bool bFootprintProjected = FootprintProbe && FootprintProbe->WantsProjectedRotation();
-		const bool bPush = FootprintProbe && bApply && FootprintProbe->WantsPush();
+		// The push is a translation: it only applies when a position component does.
+		const bool bPush = FootprintProbe && bApply && FootprintProbe->WantsPush() && !ApplySampling.TrPosComponents.IsEmpty();
 		const int8* FootprintMaskPtr = FootprintMask.IsEmpty() ? nullptr : FootprintMask.GetData();
 		const FPCGProjectionParams& FootprintParams = Context->FootprintProjectionParams;
 

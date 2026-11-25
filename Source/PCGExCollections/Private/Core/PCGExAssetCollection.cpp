@@ -1563,7 +1563,9 @@ bool UPCGExAssetCollection::HasCircularDependency(const UPCGExAssetCollection* O
 		return true;
 	}
 
+	// Seeded with this: callers may ask before the reference to OtherCollection exists, so the walk has no path back here to find.
 	TSet<const UPCGExAssetCollection*> References;
+	References.Add(this);
 	return OtherCollection->HasCircularDependency(References);
 }
 
@@ -1615,7 +1617,8 @@ namespace PCGExAssetCollectionWalk
 			{
 				if (bRecursive && InEntry->SubCollection)
 				{
-					WalkAssetPaths(InEntry->SubCollection, OutPaths, Flags, bSkipEditorOnly);
+					// "Collections only" skips this level's own assets; everything nested loads in full.
+					WalkAssetPaths(InEntry->SubCollection, OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive, bSkipEditorOnly);
 				}
 				return;
 			}

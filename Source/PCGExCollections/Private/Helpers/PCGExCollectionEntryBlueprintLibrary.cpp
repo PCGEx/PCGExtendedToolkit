@@ -511,10 +511,9 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 	}
 
 	// Dirty path for plain field setters: weight/category/tags feed the pick cache
-	// (weights, categories) or tag queries, so invalidate alongside the undo snapshot.
+	// (weights, categories) or tag queries, so invalidate. Callers take the undo snapshot before mutating.
 	void CommitEntryFieldWrite(UPCGExAssetCollection* Collection)
 	{
-		Collection->Modify();
 		(void)Collection->MarkPackageDirty();
 		Collection->InvalidateCache();
 	}
@@ -607,10 +606,9 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 	}
 
 	// Generic member writes can touch anything the pick cache consumes (Weight, Category,
-	// material variants) -- blanket invalidate; the cache rebuilds lazily.
+	// material variants) -- blanket invalidate; the cache rebuilds lazily. Callers take the undo snapshot first.
 	void CommitMemberWrite(UPCGExAssetCollection* Collection)
 	{
-		Collection->Modify();
 		(void)Collection->MarkPackageDirty();
 		Collection->InvalidateCache();
 	}
@@ -686,6 +684,7 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 			return true;
 		}
 
+		Collection->Modify(false);
 		if (!CopyMemberValue(InProp, InMem, Member.Property, Member.Address, Collection, MemberPath))
 		{
 			return false;
@@ -763,6 +762,7 @@ namespace PCGExCollectionEntryBlueprintLibrary_Private
 			return true;
 		}
 
+		Collection->Modify(false);
 		SoftProp->SetPropertyValue(Member.Address, FSoftObjectPtr(InPath));
 		CommitMemberWrite(Collection);
 		return true;
@@ -1179,6 +1179,7 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetEntryWeight(UPCGExAssetCollection
 		return true;
 	}
 
+	Collection->Modify(false);
 	Entry->Weight = ClampedWeight;
 	PCGExCollectionEntryBlueprintLibrary_Private::CommitEntryFieldWrite(Collection);
 	return true;
@@ -1203,6 +1204,7 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetEntryCategory(UPCGExAssetCollecti
 		return true;
 	}
 
+	Collection->Modify(false);
 	Entry->Category = NewCategory;
 	PCGExCollectionEntryBlueprintLibrary_Private::CommitEntryFieldWrite(Collection);
 	return true;
@@ -1222,6 +1224,7 @@ bool UPCGExCollectionEntryBlueprintLibrary::AddEntryTag(UPCGExAssetCollection* C
 		return false;
 	}
 
+	Collection->Modify(false);
 	Entry->Tags.Add(Tag);
 	PCGExCollectionEntryBlueprintLibrary_Private::CommitEntryFieldWrite(Collection);
 	return true;
@@ -1230,11 +1233,13 @@ bool UPCGExCollectionEntryBlueprintLibrary::AddEntryTag(UPCGExAssetCollection* C
 bool UPCGExCollectionEntryBlueprintLibrary::RemoveEntryTag(UPCGExAssetCollection* Collection, int32 EntryIndex, FName Tag)
 {
 	FPCGExAssetCollectionEntry* Entry = PCGExCollectionEntryBlueprintLibrary_Private::GetMutableEntry(Collection, EntryIndex);
-	if (!Entry || Entry->Tags.Remove(Tag) == 0)
+	if (!Entry || !Entry->Tags.Contains(Tag))
 	{
 		return false;
 	}
 
+	Collection->Modify(false);
+	Entry->Tags.Remove(Tag);
 	PCGExCollectionEntryBlueprintLibrary_Private::CommitEntryFieldWrite(Collection);
 	return true;
 }
@@ -1264,8 +1269,8 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetEntryPropertyOverrideEnabled(UPCG
 		return true;
 	}
 
+	Collection->Modify(false);
 	Slot->bEnabled = bEnabled;
-	Collection->Modify();
 	(void)Collection->MarkPackageDirty();
 	return true;
 }
@@ -1717,9 +1722,9 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetEntryGrammar(UPCGExAssetCollectio
 		return false;
 	}
 
+	Collection->Modify(false);
 	Entry->AssetGrammar = NewGrammar;
 	// Grammar does not feed the pick cache -- undo snapshot + dirty only.
-	Collection->Modify();
 	(void)Collection->MarkPackageDirty();
 	return true;
 }
@@ -1758,6 +1763,7 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetEntryVariations(UPCGExAssetCollec
 		return false;
 	}
 
+	Collection->Modify(false);
 	Entry->Variations = NewVariations;
 	if (Entry->VariationMode == EPCGExEntryVariationMode::None)
 	{
@@ -1765,7 +1771,6 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetEntryVariations(UPCGExAssetCollec
 		// Global is left alone: writing while Global is already "parked values" behavior.
 		Entry->VariationMode = EPCGExEntryVariationMode::Local;
 	}
-	Collection->Modify();
 	(void)Collection->MarkPackageDirty();
 	return true;
 }
@@ -1783,8 +1788,8 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetCollectionGlobalGrammar(UPCGExAss
 		return false;
 	}
 
+	Collection->Modify(false);
 	Collection->GlobalAssetGrammar = NewGrammar;
-	Collection->Modify();
 	(void)Collection->MarkPackageDirty();
 	return true;
 }
@@ -1802,8 +1807,8 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetCollectionSubCollectionGrammar(UP
 		return false;
 	}
 
+	Collection->Modify(false);
 	Collection->SubCollectionGrammar = NewGrammar;
-	Collection->Modify();
 	(void)Collection->MarkPackageDirty();
 	return true;
 }
@@ -1821,8 +1826,8 @@ bool UPCGExCollectionEntryBlueprintLibrary::SetCollectionGlobalVariations(UPCGEx
 		return false;
 	}
 
+	Collection->Modify(false);
 	Collection->GlobalVariations = NewVariations;
-	Collection->Modify();
 	(void)Collection->MarkPackageDirty();
 	return true;
 }

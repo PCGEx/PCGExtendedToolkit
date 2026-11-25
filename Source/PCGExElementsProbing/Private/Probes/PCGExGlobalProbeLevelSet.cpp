@@ -49,9 +49,13 @@ bool FPCGExProbeLevelSet::Prepare(FPCGExContext* InContext)
 
 void FPCGExProbeLevelSet::ProcessAll(TSet<uint64>& OutEdges) const
 {
+	ForEachPointDomain([&](const TConstArrayView<int32> Points) { ProcessDomain(Points, OutEdges); });
+}
+
+void FPCGExProbeLevelSet::ProcessDomain(const TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const
+{
 	const TArray<FVector>& Positions = *WorkingPositions;
-	const int32 NumPoints = Positions.Num();
-	if (NumPoints < 2)
+	if (Points.Num() < 2)
 	{
 		return;
 	}
@@ -59,16 +63,31 @@ void FPCGExProbeLevelSet::ProcessAll(TSet<uint64>& OutEdges) const
 	const TArray<int8>& CanGenerateRef = *CanGenerate;
 	const TArray<int8>& AcceptConnectionsRef = *AcceptConnections;
 
-	const double LevelRange = Config.bNormalizeLevels ? (LevelMax - LevelMin) : 1.0;
+	// A confined group normalizes over its own range; otherwise the whole-data range from Prepare applies.
+	double DomainMin = LevelMin;
+	double DomainMax = LevelMax;
+	if (Config.bNormalizeLevels && ConfinedGroups)
+	{
+		DomainMin = TNumericLimits<double>::Max();
+		DomainMax = TNumericLimits<double>::Lowest();
+		for (const int32 Index : Points)
+		{
+			const double Val = LevelBuffer->Read(Index);
+			DomainMin = FMath::Min(DomainMin, Val);
+			DomainMax = FMath::Max(DomainMax, Val);
+		}
+	}
+
+	const double LevelRange = Config.bNormalizeLevels ? (DomainMax - DomainMin) : 1.0;
 	const double NormFactor = LevelRange > SMALL_NUMBER ? 1.0 / LevelRange : 1.0;
 
 	auto GetNormalizedLevel = [&](int32 Idx) -> double
 	{
 		const double Raw = LevelBuffer->Read(Idx);
-		return Config.bNormalizeLevels ? (Raw - LevelMin) * NormFactor : Raw;
+		return Config.bNormalizeLevels ? (Raw - DomainMin) * NormFactor : Raw;
 	};
 
-	for (int32 i = 0; i < NumPoints; ++i)
+	for (const int32 i : Points)
 	{
 		if (!CanGenerateRef[i])
 		{
@@ -88,7 +107,7 @@ void FPCGExProbeLevelSet::ProcessAll(TSet<uint64>& OutEdges) const
 			[&](const PCGExOctree::FItem& Other)
 			{
 				const int32 j = Other.Index;
-				if (i == j || !AcceptConnectionsRef[j])
+				if (i == j || !AcceptConnectionsRef[j] || !SharesGroup(i, j))
 				{
 					return;
 				}

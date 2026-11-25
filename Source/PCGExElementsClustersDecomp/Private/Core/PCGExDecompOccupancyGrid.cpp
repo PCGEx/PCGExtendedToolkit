@@ -54,6 +54,19 @@ FVector FPCGExDecompOccupancyGrid::ResolveVoxelSize(
 	return FVector(AvgEdgeLength);
 }
 
+FIntVector FPCGExDecompOccupancyGrid::ResolveMaxExtent(const FVector& MaxSize, const FVector& VoxelSize)
+{
+	// Clamped in double before narrowing: a huge "no limit" size must not wrap.
+	const auto AxisExtent = [](const double InMaxSize, const double InVoxelSize)
+	{
+		return InMaxSize > KINDA_SMALL_NUMBER
+			? static_cast<int32>(FMath::Clamp(FMath::FloorToDouble(InMaxSize / InVoxelSize), 1.0, static_cast<double>(MAX_int32)))
+			: MAX_int32;
+	};
+
+	return FIntVector(AxisExtent(MaxSize.X, VoxelSize.X), AxisExtent(MaxSize.Y, VoxelSize.Y), AxisExtent(MaxSize.Z, VoxelSize.Z));
+}
+
 bool FPCGExDecompOccupancyGrid::Build(
 	const TSharedPtr<PCGExClusters::FCluster>& InCluster,
 	const EPCGExDecompTransformSpace TransformSpace,
@@ -124,10 +137,18 @@ bool FPCGExDecompOccupancyGrid::Build(
 	// Use FloorToInt+1 (not CeilToInt) so boundary nodes at exact multiples of CellSize
 	// get their own voxel instead of being clamped into their neighbor's.
 	const FVector BoundsSize = LocalBounds.Max - LocalBounds.Min;
-	GridDimensions = FIntVector(
-		FMath::Max(FMath::FloorToInt(BoundsSize.X / SafeCellSize.X) + 1, 1),
-		FMath::Max(FMath::FloorToInt(BoundsSize.Y / SafeCellSize.Y) + 1, 1),
-		FMath::Max(FMath::FloorToInt(BoundsSize.Z / SafeCellSize.Z) + 1, 1));
+	const FVector Dimensions = FVector(
+		FMath::Max(FMath::FloorToDouble(BoundsSize.X / SafeCellSize.X) + 1, 1.0),
+		FMath::Max(FMath::FloorToDouble(BoundsSize.Y / SafeCellSize.Y) + 1, 1.0),
+		FMath::Max(FMath::FloorToDouble(BoundsSize.Z / SafeCellSize.Z) + 1, 1.0));
+
+	// Checked in double before narrowing: voxels are addressed by an int32 flat index.
+	if (!(Dimensions.X * Dimensions.Y * Dimensions.Z <= static_cast<double>(MAX_int32)))
+	{
+		return false;
+	}
+
+	GridDimensions = FIntVector(static_cast<int32>(Dimensions.X), static_cast<int32>(Dimensions.Y), static_cast<int32>(Dimensions.Z));
 
 	TotalVoxels = GridDimensions.X * GridDimensions.Y * GridDimensions.Z;
 	if (TotalVoxels <= 0)

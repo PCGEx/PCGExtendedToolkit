@@ -26,50 +26,46 @@ namespace PCGExStaging
 	{
 		const uint64 EntryHash = GetTypeHash(Mesh);
 
-		const int32* IdxPtr = nullptr;
-
+		// InfosKeys and SocketInfosList can both reallocate on a registration: nothing read from them outlives the lock.
 		{
 			FReadScopeLock ReadLock(SocketLock);
-			IdxPtr = InfosKeys.Find(EntryHash);
+			if (const int32* IdxPtr = InfosKeys.Find(EntryHash))
+			{
+				const int32 Idx = *IdxPtr;
+				FPlatformAtomics::InterlockedIncrement(&SocketInfosList[Idx].Count);
+				Mapping[Index] = Idx;
+				return;
+			}
 		}
+
+		FWriteScopeLock WriteLock(SocketLock);
 
 		int32 Idx = -1;
 
-		if (!IdxPtr)
+		if (const int32* IdxPtr = InfosKeys.Find(EntryHash))
 		{
-			FWriteScopeLock WriteLock(SocketLock);
-
-			IdxPtr = InfosKeys.Find(EntryHash);
-
-			if (IdxPtr)
-			{
-				Idx = *IdxPtr;
-			}
-			else
-			{
-				FSocketInfos& NewInfos = NewSocketInfos(EntryHash, Idx);
-
-				NewInfos.Path = Mesh.GetPath();
-				NewInfos.Category = NAME_None;
-				NewInfos.Sockets.Reserve(Mesh->Sockets.Num());
-
-				for (const TObjectPtr<UStaticMeshSocket>& MeshSocket : Mesh->Sockets)
-				{
-					FPCGExSocket& NewSocket = NewInfos.Sockets.Emplace_GetRef(
-						MeshSocket->SocketName,
-						MeshSocket->RelativeLocation,
-						MeshSocket->RelativeRotation,
-						MeshSocket->RelativeScale,
-						MeshSocket->Tag);
-					NewSocket.bManaged = true;
-				}
-
-				FilterSocketInfos(Idx);
-			}
+			Idx = *IdxPtr;
 		}
 		else
 		{
-			Idx = *IdxPtr;
+			FSocketInfos& NewInfos = NewSocketInfos(EntryHash, Idx);
+
+			NewInfos.Path = Mesh.GetPath();
+			NewInfos.Category = NAME_None;
+			NewInfos.Sockets.Reserve(Mesh->Sockets.Num());
+
+			for (const TObjectPtr<UStaticMeshSocket>& MeshSocket : Mesh->Sockets)
+			{
+				FPCGExSocket& NewSocket = NewInfos.Sockets.Emplace_GetRef(
+					MeshSocket->SocketName,
+					MeshSocket->RelativeLocation,
+					MeshSocket->RelativeRotation,
+					MeshSocket->RelativeScale,
+					MeshSocket->Tag);
+				NewSocket.bManaged = true;
+			}
+
+			FilterSocketInfos(Idx);
 		}
 
 		FPlatformAtomics::InterlockedIncrement(&SocketInfosList[Idx].Count);
@@ -101,15 +97,16 @@ namespace PCGExStaging
 		UPCGBasePointData* OutPoints = SocketIO->GetOut();
 		PCGExPointArrayDataHelpers::SetNumPointsAllocated(OutPoints, NumOutPoints, EPCGPointNativeProperties::MetadataEntry | EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::Seed);
 
+		// Pruned before the writers exist: Prune deletes attributes, and a writer keeps a pointer to the one it creates.
+		UPCGMetadata* Metadata = SocketFacade->GetOut()->MutableMetadata();
+		Details->CarryOverDetails.Prune(Metadata);
+
 #define PCGEX_OUTPUT_INIT_LOCAL(_NAME, _TYPE, _DEFAULT_VALUE) if(Details->bWrite##_NAME){ _NAME##Writer = SocketFacade->GetWritable<_TYPE>(Details->_NAME##AttributeName, _DEFAULT_VALUE, true, PCGExData::EBufferInit::Inherit); }
 		PCGEX_FOREACH_FIELD_SAMPLESOCKETS(PCGEX_OUTPUT_INIT_LOCAL)
 #undef PCGEX_OUTPUT_INIT_LOCAL
 
 		{
 			TRACE_CPUPROFILER_EVENT_SCOPE(FSocketHelper::Compile::LoopPreparation);
-
-			UPCGMetadata* Metadata = SocketFacade->GetOut()->MutableMetadata();
-			Details->CarryOverDetails.Prune(Metadata);
 
 			TConstPCGValueRange<int64> ReadMetadataEntry = InputDataFacade->GetIn()->GetConstMetadataEntryValueRange();
 			TPCGValueRange<int64> OutMetadataEntries = SocketFacade->GetOut()->GetMetadataEntryValueRange();

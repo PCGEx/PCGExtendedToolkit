@@ -45,6 +45,8 @@ namespace PCGExPathfinding
 class FPCGExSearchOperationBidirectional : public FPCGExSearchOperation
 {
 public:
+	virtual void PrepareForCluster(PCGExClusters::FCluster* InCluster, const TSharedPtr<PCGExHeuristics::FHandler>& InHeuristics) override;
+
 	virtual bool ResolveQuery(
 		const TSharedPtr<PCGExPathfinding::FPathQuery>& InQuery,
 		const TSharedPtr<PCGExPathfinding::FSearchAllocations>& Allocations,
@@ -54,6 +56,9 @@ public:
 	virtual TSharedPtr<PCGExPathfinding::FSearchAllocations> NewAllocations() const override;
 
 protected:
+	/** Set when a heuristic reads travel history, which a goal-side frontier lacks: then resolves every query. */
+	TSharedPtr<FPCGExSearchOperation> ForwardSearch;
+
 	/** Reconstruct path from meeting point using both travel stacks */
 	void ReconstructPath(
 		const TSharedPtr<PCGExPathfinding::FPathQuery>& InQuery,
@@ -70,7 +75,7 @@ protected:
  * Can be significantly faster than unidirectional search for large graphs.
  * Time complexity is roughly O(b^(d/2)) instead of O(b^d) where b=branching factor, d=depth.
  */
-UCLASS(MinimalAPI, meta=(DisplayName = "Bidirectional", ToolTip ="Bidirectional Search. Searches from both ends simultaneously. Very fast for large graphs.", PCGExNodeLibraryDoc="pathfinding/algorithms/search-bidirectional"))
+UCLASS(MinimalAPI, meta=(DisplayName = "Bidirectional", ToolTip ="Bidirectional Search. Searches from both ends simultaneously. Very fast for large graphs. Runs as Dijkstra when a heuristic reads travel history.", PCGExNodeLibraryDoc="pathfinding/algorithms/search-bidirectional"))
 class UPCGExSearchBidirectional : public UPCGExSearchInstancedFactory
 {
 	GENERATED_BODY()
@@ -79,6 +84,7 @@ public:
 	virtual TSharedPtr<FPCGExSearchOperation> CreateOperation() const override
 	{
 		PCGEX_FACTORY_NEW_OPERATION(SearchOperationBidirectional)
+		NewOperation->BindContext(Context);
 		NewOperation->bEarlyExit = bEarlyExit;
 		return NewOperation;
 	}

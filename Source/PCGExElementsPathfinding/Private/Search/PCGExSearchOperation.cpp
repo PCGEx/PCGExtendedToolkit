@@ -5,7 +5,7 @@
 #include "Search/PCGExSearchOperation.h"
 #include "Core/PCGExSearchAllocations.h"
 
-void FPCGExSearchOperation::PrepareForCluster(PCGExClusters::FCluster* InCluster)
+void FPCGExSearchOperation::PrepareForCluster(PCGExClusters::FCluster* InCluster, const TSharedPtr<PCGExHeuristics::FHandler>& InHeuristics)
 {
 	Cluster = InCluster;
 }
