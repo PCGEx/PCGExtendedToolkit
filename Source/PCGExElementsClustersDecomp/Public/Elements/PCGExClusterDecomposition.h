@@ -94,6 +94,8 @@ struct FPCGExClusterDecompositionContext final : FPCGExClustersProcessorContext
 
 	UPCGExDecompositionInstancedFactory* Decomposition = nullptr;
 
+	virtual void ClusterProcessing_InitialProcessingDone() override;
+
 protected:
 	PCGEX_ELEMENT_BATCH_EDGE_DECL
 };
@@ -119,11 +121,18 @@ namespace PCGExClusterDecomposition
 		TSharedPtr<PCGExData::TBuffer<int32>> CellCountBuffer;
 		TSharedPtr<PCGExData::TBuffer<FVector>> CellSizeBuffer;
 
+		FPCGExDecompositionResult Result;
+
 	public:
+		// First id of this cluster's cells, set by the context once every cluster is decomposed.
+		int32 CellIDOffset = 0;
+
 		FProcessor(const TSharedRef<PCGExData::FFacade>& InVtxDataFacade, const TSharedRef<PCGExData::FFacade>& InEdgeDataFacade)
 			: TProcessor(InVtxDataFacade, InEdgeDataFacade)
 		{
 		}
+
+		int32 GetNumCells() const { return Result.NumCells; }
 
 		virtual bool Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager) override;
 		virtual void CompleteWork() override;
