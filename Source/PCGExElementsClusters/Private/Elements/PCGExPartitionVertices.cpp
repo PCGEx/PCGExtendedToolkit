@@ -20,7 +20,8 @@ PCGExData::EIOInit UPCGExPartitionVerticesSettings::GetMainOutputInitMode() cons
 
 PCGExData::EIOInit UPCGExPartitionVerticesSettings::GetEdgeOutputInitMode() const
 {
-	return PCGExData::EIOInit::Forward;
+	// The remapped cluster gets bound to the edges output, so that must be this node's own data, never the shared input.
+	return PCGExData::EIOInit::Duplicate;
 }
 
 #pragma endregion

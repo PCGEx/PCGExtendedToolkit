@@ -67,7 +67,8 @@ public:
 	bool bUseMaxSpacing = false;
 
 	/** When enabled, the driver sets the spacing instead of the density: this spacing (cm) at 0, the spacing at Max
-	 *  Density (100 / sqrt(Max Density) cm) at 1, linear in between. A zero driver still gets points. */
+	 *  Density (100 / sqrt(Max Density) cm) at 1, linear in between. With Blue Noise thinning, spacings past about
+	 *  180x the Max Density one (90x on a Blue Noise grid) get points only with Sparse Tail on. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "1", PCG_Overridable, EditCondition = "bUseMaxSpacing"))
 	double MaxSpacing = 1000;
 
@@ -87,6 +88,11 @@ public:
 	 *  falls about 30% short of it where the density nears 1. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (ClampMin = "0.01", PCG_Overridable, DisplayName = " └─ Radius Factor", EditCondition = "Distribution == EPCGExDensityDistribution::PoissonDisk", EditConditionHides))
 	double PoissonRadiusFactor = 0.83;
+
+	/** Densities too low for even the first rank (under 1/32768 for Blue Noise, 1/8192 for a Blue Noise grid) still get
+	 *  points at their average rate, instead of none. No effect with Random thinning. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_Overridable, EditCondition = "Distribution != EPCGExDensityDistribution::PoissonDisk", EditConditionHides), AdvancedDisplay)
+	bool bSparseTail = false;
 
 	/** Toggles Strict Spacing. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta = (PCG_NotOverridable, InlineEditConditionToggle))

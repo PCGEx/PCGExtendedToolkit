@@ -228,15 +228,18 @@ namespace PCGExDensitySampling
 
 #pragma region Layouts
 
-	/** Lower wins: rank, then world-space keys, so every partition orders shared candidates the same way. */
+	/** Lower wins: ordinary candidates before Sparse Tail ones, then rank, then world-space keys, so every partition orders
+	 *  shared candidates the same way. */
 	struct FPriority
 	{
 		float Rank = 0;
 		int32 KeyA = 0;
 		int32 KeyB = 0;
+		bool bSparseTail = false;
 
 		bool operator<(const FPriority& Other) const
 		{
+			if (bSparseTail != Other.bSparseTail) { return !bSparseTail; }
 			if (Rank != Other.Rank) { return Rank < Other.Rank; }
 			if (KeyA != Other.KeyA) { return KeyA < Other.KeyA; }
 			return KeyB < Other.KeyB;
@@ -275,6 +278,9 @@ namespace PCGExDensitySampling
 
 		/** Picks the seed's offset. */
 		void Init(int32 InSeed);
+
+		/** Mask rank of a jittered-grid cell; rank 0 is the cell kept first. */
+		int32 GetRank(int32 InCellX, int32 InCellY) const;
 
 		/** Blue-noise threshold of a jittered-grid cell. */
 		double GetThreshold(int32 InCellX, int32 InCellY) const;
@@ -390,6 +396,9 @@ namespace PCGExDensitySampling
 		bool bStrictSpacing = false;
 		double SpacingFactor = 0.75;
 		double PoissonRadiusFactor = 0.83;
+
+		/** Blue noise and blue-noise grid thinning: the lowest rank also keeps densities below its own threshold, at their rate. */
+		bool bSparseTail = false;
 
 		bool bOutputSurfaceAttributes = true;
 		bool bWriteLocalDensity = false;

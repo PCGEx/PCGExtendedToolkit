@@ -105,6 +105,9 @@ public:
 
 	virtual void ProcessAll(TSet<uint64>& OutEdges) const;
 
+	/** Calls InProcessDomain once per confined group with its point indices, or once with every point when probing is not confined. */
+	void ForEachPointDomain(TFunctionRef<void(TConstArrayView<int32>)> InProcessDomain) const;
+
 	FPCGExProbeConfigBase* BaseConfig = nullptr;
 	const PCGExOctree::FItemOctree* Octree = nullptr;
 	const TArray<FTransform>* WorkingTransforms = nullptr;
@@ -112,12 +115,23 @@ public:
 	const TArray<int8>* CanGenerate = nullptr;
 	const TArray<int8>* AcceptConnections = nullptr;
 
+	/** Per-point group ids when a global probe must run once per group, null otherwise. */
+	const TArray<int32>* ConfinedGroupIds = nullptr;
+	/** Each confined group's point indices, ascending. Set together with ConfinedGroupIds. */
+	const TArray<TArray<int32>>* ConfinedGroups = nullptr;
+
 	/** True when an undirected A-B edge has a legal direction: one end generates and the other accepts. */
 	FORCEINLINE bool CanConnect(const int32 A, const int32 B) const
 	{
 		const TArray<int8>& Generates = *CanGenerate;
 		const TArray<int8>& Accepts = *AcceptConnections;
 		return (Generates[A] && Accepts[B]) || (Generates[B] && Accepts[A]);
+	}
+
+	/** False when probing is confined to groups and A and B are not in the same one. */
+	FORCEINLINE bool SharesGroup(const int32 A, const int32 B) const
+	{
+		return !ConfinedGroupIds || (*ConfinedGroupIds)[A] == (*ConfinedGroupIds)[B];
 	}
 
 	double SearchRadiusOffset = 0;

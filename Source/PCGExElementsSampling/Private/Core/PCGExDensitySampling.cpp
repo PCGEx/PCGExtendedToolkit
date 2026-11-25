@@ -39,6 +39,57 @@ namespace PCGExDensitySampling
 		constexpr int32 TilingSalt = 0x2F1B3C5D;
 		constexpr int32 MaskSalt = 0x5C4E1D2B;
 
+		/** Keeps Sparse Tail thresholds independent of a tile's or cell's other draws. */
+		constexpr int32 SparseSalt = 0x6B3D2F17;
+
+		/** Sparse Tail threshold of a tile or cell: uniform in [0, 1 / NumRanks), so a density D below the lowest rank's own
+		 *  threshold keeps that rank with probability D x NumRanks. */
+		double GetSparseThreshold(const int32 InSeed, const int32 InNumRanks)
+		{
+			FRandomStream Random(PCGHelpers::ComputeSeed(InSeed, SparseSalt));
+			return Random.GetFraction() / static_cast<double>(InNumRanks);
+		}
+
+		/** Ranks a tile generates under InBound. Sparse Tail keeps rank 0 for any positive bound. */
+		int32 GetRankLimit(const double InBound, const bool bInSparseTail)
+		{
+			const int32 Count = FBlueNoiseTiling::CountBelow(InBound);
+			return bInSparseTail && Count == 0 && InBound > 0 ? 1 : Count;
+		}
+
+		/** A candidate's thinning thresholds: the ordinary one, and the Sparse Tail one of a lowest rank (negative when unset). */
+		struct FThinning
+		{
+			double Ordinary = 0;
+			double Sparse = -1;
+
+			/** Whether a density up to InBound can keep the candidate; without a Sparse threshold, exactly !(Ordinary >= InBound). */
+			bool CanPass(const double InBound) const
+			{
+				return !(Ordinary >= InBound) || (Sparse >= 0 && Sparse < InBound);
+			}
+
+			/** The threshold that keeps InDensity, the ordinary one first. False when neither does. */
+			bool Select(const double InDensity, double& OutThreshold, bool& bOutSparse) const
+			{
+				OutThreshold = Ordinary;
+				bOutSparse = false;
+				if (!(Ordinary >= InDensity))
+				{
+					return true;
+				}
+
+				if (Sparse >= 0 && Sparse < InDensity)
+				{
+					OutThreshold = Sparse;
+					bOutSparse = true;
+					return true;
+				}
+
+				return false;
+			}
+		};
+
 		/** Density map node budget; past it the spacing is too fine for the area. */
 		constexpr int64 MaxDensityMapNodes = 1ll << 26;
 
@@ -642,12 +693,18 @@ namespace PCGExDensitySampling
 		Offset = FIntPoint(Random.RandRange(0, PCGExBlueNoise::DitherMaskSize - 1), Random.RandRange(0, PCGExBlueNoise::DitherMaskSize - 1));
 	}
 
-	double FDitherMask::GetThreshold(const int32 InCellX, const int32 InCellY) const
+	int32 FDitherMask::GetRank(const int32 InCellX, const int32 InCellY) const
 	{
 		constexpr int64 Size = PCGExBlueNoise::DitherMaskSize;
 		const int64 X = ((static_cast<int64>(InCellX) + Offset.X) % Size + Size) % Size;
 		const int64 Y = ((static_cast<int64>(InCellY) + Offset.Y) % Size + Size) % Size;
-		return (Ranks[static_cast<int32>(Y * Size + X)] + 0.5) / static_cast<double>(Size * Size);
+		return Ranks[static_cast<int32>(Y * Size + X)];
+	}
+
+	double FDitherMask::GetThreshold(const int32 InCellX, const int32 InCellY) const
+	{
+		constexpr int64 Size = PCGExBlueNoise::DitherMaskSize;
+		return (GetRank(InCellX, InCellY) + 0.5) / static_cast<double>(Size * Size);
 	}
 
 #pragma endregion
@@ -1277,9 +1334,20 @@ namespace PCGExDensitySampling
 			return;
 		}
 
-		MapOrigin = FVector2D(LandscapeTransform.GetLocation());
-		MapAxisU = FVector2D(LandscapeTransform.GetUnitAxis(EAxis::X)).GetSafeNormal();
-		MapAxisV = FVector2D(LandscapeTransform.GetUnitAxis(EAxis::Y)).GetSafeNormal();
+		FVector Origin = LandscapeTransform.GetLocation();
+		FVector AxisX = LandscapeTransform.GetUnitAxis(EAxis::X);
+		FVector AxisY = LandscapeTransform.GetUnitAxis(EAxis::Y);
+		if (PreProjection.bNeedsLocalTransformation)
+		{
+			// Nodes reach a tilted surface through the pre-projection, so the vertex frame is taken back through its inverse.
+			Origin = PreProjection.Transform.InverseTransformPosition(Origin);
+			AxisX = PreProjection.Transform.InverseTransformVector(AxisX);
+			AxisY = PreProjection.Transform.InverseTransformVector(AxisY);
+		}
+
+		MapOrigin = FVector2D(Origin);
+		MapAxisU = FVector2D(AxisX).GetSafeNormal();
+		MapAxisV = FVector2D(AxisY).GetSafeNormal();
 		MapStep = FVector2D(
 			Scale.X * FMath::Max(1.0, FMath::RoundToDouble(Config->DensityMapSpacing / Scale.X)),
 			Scale.Y * FMath::Max(1.0, FMath::RoundToDouble(Config->DensityMapSpacing / Scale.Y)));
@@ -1372,7 +1440,8 @@ namespace PCGExDensitySampling
 		OutScopes.SetNum(static_cast<int32>(NumTiles));
 
 		const bool bPool = Config->Distribution == EPCGExDensityDistribution::PoissonDisk;
-		const int32 GlobalLimit = bPool ? PCGExBlueNoise::TileNumPoints : FBlueNoiseTiling::CountBelow(Config->GlobalUpperBound);
+		const bool bSparseTail = Config->bSparseTail && !bPool;
+		const int32 GlobalLimit = bPool ? PCGExBlueNoise::TileNumPoints : Local::GetRankLimit(Config->GlobalUpperBound, bSparseTail);
 		if (GlobalLimit <= 0)
 		{
 			return true;
@@ -1396,7 +1465,7 @@ namespace PCGExDensitySampling
 			if (InMap)
 			{
 				const double TileBound = InMap->UpperBound(Tiling.GetTileBox(Tile));
-				Limit = bPool ? (TileBound > 0 ? Limit : 0) : FMath::Min(Limit, FBlueNoiseTiling::CountBelow(TileBound));
+				Limit = bPool ? (TileBound > 0 ? Limit : 0) : FMath::Min(Limit, Local::GetRankLimit(TileBound, bSparseTail));
 			}
 
 			if (Limit <= 0)
@@ -1426,7 +1495,8 @@ namespace PCGExDensitySampling
 					continue;
 				}
 
-				const double Threshold = FBlueNoiseTiling::GetThreshold(Rank);
+				// Sparse Tail: rank 0 also gets a per-tile threshold below its own.
+				const Local::FThinning Thinning{FBlueNoiseTiling::GetThreshold(Rank), bSparseTail && Rank == 0 ? Local::GetSparseThreshold(TileSeed, PCGExBlueNoise::TileNumPoints) : -1};
 				FPCGPoint Point;
 
 				if (bExact)
@@ -1441,7 +1511,7 @@ namespace PCGExDensitySampling
 				else
 				{
 					const double CellBound = InMap->GetCellBound(Position);
-					if (bPool ? CellBound <= 0 : Threshold >= CellBound)
+					if (bPool ? CellBound <= 0 : !Thinning.CanPass(CellBound))
 					{
 						continue;
 					}
@@ -1450,14 +1520,16 @@ namespace PCGExDensitySampling
 				}
 
 				const double Density = Config->Model.Evaluate(Values.GetData());
-				if (bPool ? Density <= 0 : Threshold >= Density)
+				double Threshold = Thinning.Ordinary;
+				bool bSparse = false;
+				if (bPool ? Density <= 0 : !Thinning.Select(Density, Threshold, bSparse))
 				{
 					continue;
 				}
 
 				FCandidate& Candidate = Scope.Candidates.Emplace_GetRef();
 				Candidate.Position = Position;
-				Candidate.Priority = FPriority{static_cast<float>(Threshold), Tile.Y, Tile.X};
+				Candidate.Priority = FPriority{static_cast<float>(Threshold), Tile.Y, Tile.X, bSparse};
 				Candidate.Density = static_cast<float>(Density);
 				Candidate.Seed = PCGHelpers::ComputeSeed(TileSeed, Rank);
 				Candidate.Rank = Rank;
@@ -1527,6 +1599,7 @@ namespace PCGExDensitySampling
 		const bool bExact = InMap == nullptr;
 		const bool bNeedsMetadata = bExact && Config->Model.ReadsMetadata();
 		const bool bKeepProjection = bExact && !Config->bOutputSurfaceAttributes;
+		const bool bSparseTail = Config->bSparseTail && bBlueNoiseThinning;
 		const FBox LocalBounds(-Config->PointExtents, Config->PointExtents);
 
 		PCGExMT::ParallelOrSequential(OutScopes.Num(), [&](const int32 BlockIndex)
@@ -1558,13 +1631,17 @@ namespace PCGExDensitySampling
 					const int32 Y = static_cast<int32>(CellY);
 
 					// Same draws, in the same order, as the engine Surface Sampler.
-					FRandomStream RandomSource(PCGHelpers::ComputeSeed(Config->Seed, X, Y));
+					const int32 CellSeed = PCGHelpers::ComputeSeed(Config->Seed, X, Y);
+					FRandomStream RandomSource(CellSeed);
 					const float Chance = RandomSource.FRand();
 					const float RandX = RandomSource.FRand();
 					const float RandY = RandomSource.FRand();
 
-					const double Threshold = bBlueNoiseThinning ? Config->Dither.GetThreshold(X, Y) : static_cast<double>(Chance);
-					if (Threshold >= Config->GlobalUpperBound)
+					// Sparse Tail: the mask's rank-0 cells also get a per-cell threshold below their own.
+					const Local::FThinning Thinning{
+						bBlueNoiseThinning ? Config->Dither.GetThreshold(X, Y) : static_cast<double>(Chance),
+						bSparseTail && Config->Dither.GetRank(X, Y) == 0 ? Local::GetSparseThreshold(CellSeed, PCGExBlueNoise::DitherMaskSize * PCGExBlueNoise::DitherMaskSize) : -1};
+					if (!Thinning.CanPass(Config->GlobalUpperBound))
 					{
 						continue;
 					}
@@ -1600,7 +1677,7 @@ namespace PCGExDensitySampling
 					}
 					else
 					{
-						if (Threshold >= InMap->GetCellBound(Position))
+						if (!Thinning.CanPass(InMap->GetCellBound(Position)))
 						{
 							continue;
 						}
@@ -1609,14 +1686,16 @@ namespace PCGExDensitySampling
 					}
 
 					const double Density = Config->Model.Evaluate(Values.GetData());
-					if (Threshold >= Density)
+					double Threshold = Thinning.Ordinary;
+					bool bSparse = false;
+					if (!Thinning.Select(Density, Threshold, bSparse))
 					{
 						continue;
 					}
 
 					FCandidate& Candidate = Scope.Candidates.Emplace_GetRef();
 					Candidate.Position = Position;
-					Candidate.Priority = FPriority{static_cast<float>(Threshold), Y, X};
+					Candidate.Priority = FPriority{static_cast<float>(Threshold), Y, X, bSparse};
 					Candidate.Density = static_cast<float>(Density);
 					Candidate.Seed = RandomSource.GetCurrentSeed();
 					Candidate.bOwned = IsOwned(Position);

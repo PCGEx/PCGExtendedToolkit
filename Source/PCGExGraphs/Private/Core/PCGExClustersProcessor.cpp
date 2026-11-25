@@ -257,7 +257,11 @@ bool FPCGExClustersProcessorContext::ProcessClusters(const PCGExCommon::ContextS
 					PCGEX_ASYNC_SCHEDULING_SCOPE(TaskManager, true)
 					for (const TSharedPtr<PCGExClusterMT::IBatch>& Batch : Batches)
 					{
-						Batch->Write();
+						// Write overrides flush or tear down what preparation built; an invalid batch may have built none of it.
+						if (Batch->bIsBatchValid)
+						{
+							Batch->Write();
+						}
 					}
 				}
 				if (IsWaitingForTasks())

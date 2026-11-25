@@ -1617,7 +1617,8 @@ namespace PCGExAssetCollectionWalk
 			{
 				if (bRecursive && InEntry->SubCollection)
 				{
-					WalkAssetPaths(InEntry->SubCollection, OutPaths, Flags, bSkipEditorOnly);
+					// "Collections only" skips this level's own assets; everything nested loads in full.
+					WalkAssetPaths(InEntry->SubCollection, OutPaths, PCGExAssetCollection::ELoadingFlags::Recursive, bSkipEditorOnly);
 				}
 				return;
 			}

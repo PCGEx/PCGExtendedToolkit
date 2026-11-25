@@ -64,10 +64,11 @@ public:
 	TSharedPtr<PCGExData::TBuffer<double>> HubAttributeBuffer;
 
 protected:
-	void SelectHubsByDensity(TArray<int32>& OutHubs) const;
-	void SelectHubsByAttribute(TArray<int32>& OutHubs) const;
-	void SelectHubsByCentrality(TArray<int32>& OutHubs) const;
-	void SelectHubsByKMeans(TArray<int32>& OutHubs) const;
+	void ProcessDomain(TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const;
+	void SelectHubsByDensity(TConstArrayView<int32> Points, TArray<int32>& OutHubs) const;
+	void SelectHubsByAttribute(TConstArrayView<int32> Points, TArray<int32>& OutHubs) const;
+	void SelectHubsByCentrality(TConstArrayView<int32> Points, TArray<int32>& OutHubs) const;
+	void SelectHubsByKMeans(TConstArrayView<int32> Points, TArray<int32>& OutHubs) const;
 };
 
 // Factory classes...

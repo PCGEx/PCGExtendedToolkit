@@ -314,6 +314,7 @@ bool FPCGExDensitySurfaceSamplerElement::Boot(FPCGExContext* InContext) const
 	Config->bStrictSpacing = bStrictSpacing;
 	Config->SpacingFactor = Settings->SpacingFactor;
 	Config->PoissonRadiusFactor = Settings->PoissonRadiusFactor;
+	Config->bSparseTail = Settings->bSparseTail;
 	Config->bOutputSurfaceAttributes = Settings->bOutputSurfaceAttributes;
 	Config->bWriteLocalDensity = Settings->bWriteLocalDensity;
 	Config->bWriteRank = Settings->bWriteRank;
