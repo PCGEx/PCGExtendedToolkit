@@ -370,6 +370,7 @@ bool UPCGExMeshSelectorStaged::SelectMeshInstances(FPCGStaticMeshSpawnerContext&
 			int16 MaterialPick = -1;
 
 			FPCGExEntryAccessResult Result = CollectionMap->ResolveEntry(Partition.Key, MaterialPick);
+			// TODO: a hash other than 0 / -1 that resolves to nothing is skipped silently; non-mesh entries are legitimate (mixed hosts).
 			if (!Result.IsValid() || !Result.Entry->IsType(PCGExAssetCollection::TypeIds::Mesh))
 			{
 				continue;

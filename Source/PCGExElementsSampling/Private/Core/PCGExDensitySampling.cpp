@@ -1839,6 +1839,7 @@ namespace PCGExDensitySampling
 		{
 			PCGEX_MAKE_SHARED(Facade, PCGExData::FFacade, Output.ToSharedRef())
 			const TSharedPtr<PCGExData::TBuffer<float>> RankWriter = Facade->GetWritable<float>(FPCGAttributeIdentifier(Config->RankAttributeName), 0.0f, true, PCGExData::EBufferInit::New);
+			// TODO: a name Boot accepts can still fail to make a writer (reserved names); the rank is then dropped without a warning.
 			if (RankWriter)
 			{
 				for (const FScopeResult& Scope : InScopes)

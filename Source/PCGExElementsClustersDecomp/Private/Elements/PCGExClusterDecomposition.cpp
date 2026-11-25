@@ -153,6 +153,7 @@ namespace PCGExClusterDecomposition
 
 		if (Operation->DecomposeAndFinalize(Result))
 		{
+			// TODO: int32 ids overflow from IOIndex 2148 on, and collide past 1e6 cells in one cluster.
 			const int32 Offset = EdgeDataFacade->Source->IOIndex * 1000000;
 			// DecomposeAndFinalize guarantees CellSizes is sized to NumCells when bWantsCellSizes.
 			const bool bWriteCellSize = Result.bWantsCellSizes;

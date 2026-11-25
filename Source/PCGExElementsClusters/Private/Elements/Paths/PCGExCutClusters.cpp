@@ -178,8 +178,8 @@ namespace PCGExCutEdges
 {
 	TSharedPtr<PCGExClusters::FCluster> FProcessor::HandleCachedCluster(const TSharedRef<PCGExClusters::FCluster>& InClusterRef)
 	{
-		// Create a light working copy with edges only, will be deleted.
-		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, Context->bWantsVtxProcessing, Context->bWantsEdgesProcessing, false);
+		// Owns nodes and edges: every mode can write validity on both, never on the cached cluster's arrays.
+		return MakeShared<PCGExClusters::FCluster>(InClusterRef, VtxDataFacade->Source, EdgeDataFacade->Source, NodeIndexLookup, true, true, false);
 	}
 
 	bool FProcessor::Process(const TSharedPtr<PCGExMT::FTaskManager>& InTaskManager)

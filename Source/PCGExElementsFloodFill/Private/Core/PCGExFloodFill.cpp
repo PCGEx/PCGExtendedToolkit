@@ -147,6 +147,7 @@ namespace PCGExFloodFill
 
 		// Fan-out-limited (Vtx+Reroute): score all valid unvisited neighbors, claim only the best
 		// 'FanoutLimit' by heap priority. Unclaimed ones stay unvisited for other nodes to adopt.
+		// TODO: parallel edges add one neighbour twice, spending fan-out on a duplicate; stock graphs carry none.
 		TArray<FCandidate, TInlineAllocator<8>> Pending;
 		for (const PCGExGraphs::FLink& Lk : FromNode.Links)
 		{
