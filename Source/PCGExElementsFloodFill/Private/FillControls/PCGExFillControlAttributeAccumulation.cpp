@@ -35,7 +35,6 @@ bool FPCGExFillControlAttributeAccumulation::PrepareForDiffusions(FPCGExContext*
 
 	AttributeSource = TypedFactory->Config.AttributeSource;
 	Mode = TypedFactory->Config.Mode;
-	bWriteToAccumulatedValue = TypedFactory->Config.bWriteToAccumulatedValue;
 
 	if (!InitSettingValue(MaxAccumulation, TypedFactory->Config.MaxAccumulationValue.GetValueSetting(), GetSourceFacade()))
 	{
@@ -70,13 +69,8 @@ void FPCGExFillControlAttributeAccumulation::ScoreCandidate(const PCGExFloodFill
 	const double NewValue = AttributeBuffer->Read(Index);
 	const double PreviousAccumulated = From.AccumulatedValue;
 
-	// Compute new accumulated value based on mode
-	const double Accumulated = ComputeAccumulation(PreviousAccumulated, NewValue, OutCandidate.Depth);
-
-	if (bWriteToAccumulatedValue)
-	{
-		OutCandidate.AccumulatedValue = Accumulated;
-	}
+	// IsValidCandidate and the next step along this path both read the stored total.
+	OutCandidate.AccumulatedValue = ComputeAccumulation(PreviousAccumulated, NewValue, OutCandidate.Depth);
 
 	// Also contribute to Score for sorting purposes
 	OutCandidate.Score += NewValue;
