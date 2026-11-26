@@ -192,7 +192,9 @@ void FPCGExNeighborSampleFilters::CompleteOperation()
 {
 	FPCGExNeighborSampleOperation::CompleteOperation();
 	Inside.Empty();
+	InsideWeight.Empty();
 	Outside.Empty();
+	OutsideWeight.Empty();
 	FilterManager.Reset();
 }
 

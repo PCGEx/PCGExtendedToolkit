@@ -43,7 +43,7 @@ namespace PCGExTopologyPathSweep
 	// A crossing found past the base window must join track points closer than this ratio of the track's offset.
 	constexpr double FoldExtendedGapRatio = 1.0;
 
-	// Clearance ignores paths off the sheet's height range by more than this ratio of the side's reach.
+	// Clearance ignores sheets whose height ranges stay apart by more than this ratio of the larger facing reach.
 	constexpr double ClearanceBandMargin = 0.5;
 
 	FVector2D FProfile::GetPositionAt(const double Alpha) const
@@ -384,9 +384,25 @@ bool FPCGExTopologyPathSweepElement::Boot(FPCGExContext* InContext) const
 			return UnsupportedValue(TEXT("Shrink"));
 		}
 
+		switch (Settings->ClearanceShrinks)
+		{
+		case EPCGExPathSweepClearanceShrinks::Both:
+			Context->ClearanceShrinksSign = 0;
+			break;
+		case EPCGExPathSweepClearanceShrinks::Lower:
+			Context->ClearanceShrinksSign = 1;
+			break;
+		case EPCGExPathSweepClearanceShrinks::Higher:
+			Context->ClearanceShrinksSign = -1;
+			break;
+		default:
+			return UnsupportedValue(TEXT("Shrinks"));
+		}
+
 		// Overrides bypass ClampMin/ClampMax.
 		Context->ClearanceShare = FMath::IsFinite(Settings->ClearanceShare) ? FMath::Clamp(Settings->ClearanceShare, 0.0, 1.0) : 0.5;
 		Context->ClearanceSmoothing = FMath::IsFinite(Settings->ClearanceSmoothing) ? FMath::Max(Settings->ClearanceSmoothing, 0.0) : 0.0;
+		Context->ClearanceBlendHeight = FMath::IsFinite(Settings->ClearanceBlendHeight) ? FMath::Max(Settings->ClearanceBlendHeight, 0.0) : 0.0;
 	}
 
 	if (Settings->bWriteClearanceUV)
@@ -857,6 +873,9 @@ namespace PCGExTopologyPathSweep
 			Reach[Index] = FVector2D(SideMax * SideLength, -SideMin * SideLength);
 			UpBand[Index] = FVector2D(FMath::Min(HeightA, HeightB), FMath::Max(HeightA, HeightB));
 			Allowed[Index] = Reach[Index];
+
+			MaxReach = FMath::Max3(MaxReach, Reach[Index].X, Reach[Index].Y);
+			MaxBand = FMath::Max3(MaxBand, -UpBand[Index].X, UpBand[Index].Y);
 		}
 	}
 
@@ -900,6 +919,11 @@ namespace PCGExTopologyPathSweep
 		const bool bReachRatio = Context->bClearanceReachRatio;
 		const double Share = Context->ClearanceShare;
 		const double Padding = Context->ClearancePadding;
+		const double ShrinksSign = Context->ClearanceShrinksSign;
+		const double BlendHeight = Context->ClearanceBlendHeight;
+
+		// Free space kept between two facing sheets: each keeps its padding.
+		const double PaddingGap = 2 * Padding;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -919,15 +943,15 @@ namespace PCGExTopologyPathSweep
 				const FVector RayDir = s == 0 ? SideDirs[Index] : -SideDirs[Index];
 				const FVector RayFwd = FVector::CrossProduct(UpDir, RayDir);
 
-				// The margin keeps uneven ground counting while a path well above or below is ignored.
-				const double Margin = SideReach * ClearanceBandMargin;
-				const double BandMin = Band.X - Margin;
-				const double BandMax = Band.Y + Margin;
+				// Farthest a counted crossing can sit: past both reaches and the padding along the ray, past both height
+				// ranges and the margin off it.
+				const double RayLength = SideReach + Batch->MaxReach + PaddingGap;
+				const double RayRise = FMath::Max(-Band.X, Band.Y) + Batch->MaxBand + ClearanceBandMargin * FMath::Max(SideReach, Batch->MaxReach);
 
 				FBox RayBox(ForceInit);
 				RayBox += Origin;
-				RayBox += Origin + RayDir * SideReach;
-				RayBox = RayBox.ExpandBy(FMath::Max(-BandMin, BandMax) + UE_KINDA_SMALL_NUMBER);
+				RayBox += Origin + RayDir * RayLength;
+				RayBox = RayBox.ExpandBy(RayRise + UE_KINDA_SMALL_NUMBER);
 
 				double Limit = SideReach;
 
@@ -954,26 +978,45 @@ namespace PCGExTopologyPathSweep
 
 						const double Alpha = YA / (YA - YB);
 						const double Hit = FMath::Lerp(FVector::DotProduct(A, RayDir), FVector::DotProduct(B, RayDir), Alpha);
-						if (Hit < MinHit || Hit > SideReach)
+						if (Hit < MinHit)
 						{
 							return;
 						}
 
-						const double Height = FMath::Lerp(FVector::DotProduct(A, UpDir), FVector::DotProduct(B, UpDir), Alpha);
-						if (Height < BandMin || Height > BandMax)
+						// The two sheets, padding included, must meet along the ray...
+						const double OtherReach = FMath::Lerp(Other->GetFacingReach(Edge->Start, RayDir), Other->GetFacingReach(Edge->End, RayDir), Alpha);
+						if (Hit > SideReach + OtherReach + PaddingGap)
 						{
 							return;
 						}
 
-						double HitLimit;
-						if (bReachRatio)
+						// ...and so must their height ranges, the other's carried onto this row's up axis.
+						const FVector Crossing = FMath::Lerp(A, B, Alpha);
+						const double Height = FVector::DotProduct(Crossing, UpDir);
+						const FVector2D OtherBand = FMath::Lerp(Other->UpBand[Edge->Start], Other->UpBand[Edge->End], Alpha);
+						const double Tilt = FVector::DotProduct(FMath::Lerp(Other->UpDirs[Edge->Start], Other->UpDirs[Edge->End], Alpha), UpDir);
+						const double OtherLow = Height + FMath::Min(OtherBand.X * Tilt, OtherBand.Y * Tilt);
+						const double OtherHigh = Height + FMath::Max(OtherBand.X * Tilt, OtherBand.Y * Tilt);
+
+						// The margin keeps uneven ground counting while a path well above or below is ignored.
+						const double Margin = ClearanceBandMargin * FMath::Max(SideReach, OtherReach);
+						if (OtherLow > Band.Y + Margin || OtherHigh < Band.X - Margin)
 						{
-							const double OtherReach = FMath::Lerp(Other->GetFacingReach(Edge->Start, RayDir), Other->GetFacingReach(Edge->End, RayDir), Alpha);
-							HitLimit = Hit * SideReach / (SideReach + OtherReach);
+							return;
 						}
-						else
+
+						const double ShareLimit = bReachRatio ? Hit * SideReach / (SideReach + OtherReach) : FMath::Max(Share * Hit - Padding, 0.0);
+
+						double HitLimit = ShareLimit;
+						if (ShrinksSign != 0)
 						{
-							HitLimit = FMath::Max(Share * Hit - Padding, 0.0);
+							// Positive when this sheet is the one that shrinks: heights are world heights, whatever the frame.
+							const double Lead = ShrinksSign * FVector::DotProduct(Crossing, WorldUp);
+							const double Weight = BlendHeight > 0 ? FMath::Min(FMath::Abs(Lead) / BlendHeight, 1.0) : (FMath::Abs(Lead) > UE_KINDA_SMALL_NUMBER ? 1.0 : 0.0);
+
+							// The shrinking sheet clears the other's full reach; the other keeps its own.
+							const double Target = Lead > 0 ? FMath::Max(Hit - OtherReach - PaddingGap, 0.0) : SideReach;
+							HitLimit = FMath::Lerp(ShareLimit, Target, Weight);
 						}
 
 						// A minimum over every hit: the visiting order cannot change the result.
@@ -1649,6 +1692,8 @@ namespace PCGExTopologyPathSweep
 			if (IsQueryable(P))
 			{
 				World += P.Path->Bounds;
+				MaxReach = FMath::Max(MaxReach, P.MaxReach);
+				MaxBand = FMath::Max(MaxBand, P.MaxBand);
 			}
 		}
 

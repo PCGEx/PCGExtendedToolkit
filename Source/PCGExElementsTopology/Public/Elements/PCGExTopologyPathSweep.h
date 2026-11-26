@@ -106,6 +106,14 @@ enum class EPCGExPathSweepClearanceShrink : uint8
 	Clamp  = 1 UMETA(DisplayName = "Clamp", ToolTip="Only the parts beyond the limit are pulled back to it, leaving a flat cut."),
 };
 
+UENUM()
+enum class EPCGExPathSweepClearanceShrinks : uint8
+{
+	Both   = 0 UMETA(DisplayName = "Both", ToolTip="Facing sheets share the gap as Clearance sets."),
+	Lower  = 1 UMETA(DisplayName = "Lower", ToolTip="The lower sheet clears the higher one's full reach; the higher keeps its own."),
+	Higher = 2 UMETA(DisplayName = "Higher", ToolTip="The higher sheet clears the lower one's full reach; the lower keeps its own."),
+};
+
 USTRUCT(BlueprintType)
 struct FPCGExPathSweepProfileDetails
 {
@@ -205,8 +213,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Overlaps", meta = (PCG_NotOverridable, InlineEditConditionToggle))
 	bool bClearance = false;
 
-	/** When enabled, sheets shrink sideways where they would reach into another path or a far part of their own;
-	 *  this picks how such a gap is shared. */
+	/** When enabled, sheets shrink sideways where they would overlap the sheets of another path or of a far part of
+	 *  their own; this picks how such a gap is shared. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Overlaps", meta = (PCG_NotOverridable, DisplayName="Clearance", EditCondition="bClearance"))
 	EPCGExPathSweepClearanceSplit ClearanceSplit = EPCGExPathSweepClearanceSplit::Share;
 
@@ -217,6 +225,14 @@ public:
 	/** Distance kept free in front of a sheet, taken off its share of the gap. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Overlaps", meta = (PCG_Overridable, DisplayName=" ├─ Padding", EditCondition="bClearance && ClearanceSplit == EPCGExPathSweepClearanceSplit::SharePadding", EditConditionHides, ClampMin=0))
 	double ClearancePadding = 0;
+
+	/** Which sheet shrinks where two sheets meet at different heights. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Overlaps", meta = (PCG_NotOverridable, DisplayName=" ├─ Shrinks", EditCondition="bClearance", EditConditionHides, HideEditConditionToggle))
+	EPCGExPathSweepClearanceShrinks ClearanceShrinks = EPCGExPathSweepClearanceShrinks::Both;
+
+	/** Height difference over which Shrinks fades in from sharing the gap. 0 switches at any difference. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Overlaps", meta = (PCG_Overridable, DisplayName=" ├─ Blend", EditCondition="bClearance && ClearanceShrinks != EPCGExPathSweepClearanceShrinks::Both", EditConditionHides, ClampMin=0))
+	double ClearanceBlendHeight = 0;
 
 	/** How a side shrinks when it may not reach as far as its profile does. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Overlaps", meta = (PCG_NotOverridable, DisplayName=" ├─ Shrink", EditCondition="bClearance", EditConditionHides, HideEditConditionToggle))
@@ -313,6 +329,8 @@ struct FPCGExTopologyPathSweepContext final : FPCGExPathProcessorContext
 	double ClearanceShare = 0.5;
 	double ClearancePadding = 0;
 	double ClearanceSmoothing = 0;
+	double ClearanceShrinksSign = 0; // +1 when the lower sheet shrinks, -1 the higher, 0 when both share
+	double ClearanceBlendHeight = 0;
 	int32 ClearanceUVChannel = INDEX_NONE; // INDEX_NONE when not written
 
 	virtual void RegisterAssetDependencies() override;
@@ -404,6 +422,8 @@ namespace PCGExTopologyPathSweep
 		TArray<FVector2D> Reach;   // World distance the sheets reach on each side
 		TArray<FVector2D> UpBand;  // Lowest and highest point of the sheets along UpDirs, always containing 0
 		TArray<FVector2D> Allowed; // Reach left once clearance is applied
+		double MaxReach = 0;       // Largest Reach component
+		double MaxBand = 0;        // Farthest UpBand gets from the path
 		const FBatch* ClearanceBatch = nullptr; // Only valid during CompleteWork
 
 	public:
@@ -442,6 +462,10 @@ namespace PCGExTopologyPathSweep
 
 		// Bounds of every path ready for clearance, keyed by processor index. Null when none is.
 		TSharedPtr<PCGExOctree::FItemOctree> PathOctree;
+
+		// Largest MaxReach / MaxBand of the paths in PathOctree: bounds how far a query must look.
+		double MaxReach = 0;
+		double MaxBand = 0;
 
 	public:
 		explicit FBatch(FPCGExContext* InContext, const TArray<TWeakPtr<PCGExData::FPointIO>>& InPointsCollection);
