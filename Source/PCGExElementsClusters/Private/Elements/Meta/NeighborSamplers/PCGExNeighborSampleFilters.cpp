@@ -42,7 +42,7 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 
 	if (Config.bWriteOutsideNum)
 	{
-		if (!Config.bNormalizeInsideNum)
+		if (!Config.bNormalizeOutsideNum)
 		{
 			NumOutsideBuffer = VtxDataFacade->GetWritable<int32>(Config.OutsideNumAttributeName, 0, true, PCGExData::EBufferInit::New);
 		}
@@ -83,7 +83,7 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 
 	if (Config.bWriteTotalWeight)
 	{
-		TotalWeightBuffer = VtxDataFacade->GetWritable<int32>(Config.TotalWeightAttributeName, 0, true, PCGExData::EBufferInit::New);
+		TotalWeightBuffer = VtxDataFacade->GetWritable<double>(Config.TotalWeightAttributeName, 0, true, PCGExData::EBufferInit::New);
 	}
 
 	if (SamplingConfig.NeighborSource == EPCGExClusterElement::Vtx)
@@ -174,7 +174,7 @@ void FPCGExNeighborSampleFilters::FinalizeNode(const PCGExClusters::FNode& Targe
 
 	if (WeightOutsideBuffer)
 	{
-		WeightOutsideBuffer->SetValue(WriteIndex, Outside[ReadIndex]);
+		WeightOutsideBuffer->SetValue(WriteIndex, OutsideWeight[ReadIndex]);
 	}
 	else if (NormalizedWeightOutsideBuffer)
 	{

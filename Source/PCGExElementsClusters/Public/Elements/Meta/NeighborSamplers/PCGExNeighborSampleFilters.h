@@ -123,7 +123,7 @@ protected:
 	TSharedPtr<PCGExData::TBuffer<double>> NormalizedWeightOutsideBuffer;
 
 	TSharedPtr<PCGExData::TBuffer<int32>> TotalNumBuffer;
-	TSharedPtr<PCGExData::TBuffer<int32>> TotalWeightBuffer;
+	TSharedPtr<PCGExData::TBuffer<double>> TotalWeightBuffer;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")
