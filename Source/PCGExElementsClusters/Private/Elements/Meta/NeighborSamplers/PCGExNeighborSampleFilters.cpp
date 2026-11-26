@@ -42,7 +42,7 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 
 	if (Config.bWriteOutsideNum)
 	{
-		if (!Config.bNormalizeInsideNum)
+		if (!Config.bNormalizeOutsideNum)
 		{
 			NumOutsideBuffer = VtxDataFacade->GetWritable<int32>(Config.OutsideNumAttributeName, 0, true, PCGExData::EBufferInit::New);
 		}
@@ -83,7 +83,7 @@ void FPCGExNeighborSampleFilters::PrepareForCluster(FPCGExContext* InContext, co
 
 	if (Config.bWriteTotalWeight)
 	{
-		TotalWeightBuffer = VtxDataFacade->GetWritable<int32>(Config.TotalWeightAttributeName, 0, true, PCGExData::EBufferInit::New);
+		TotalWeightBuffer = VtxDataFacade->GetWritable<double>(Config.TotalWeightAttributeName, 0, true, PCGExData::EBufferInit::New);
 	}
 
 	if (SamplingConfig.NeighborSource == EPCGExClusterElement::Vtx)
@@ -146,7 +146,7 @@ void FPCGExNeighborSampleFilters::FinalizeNode(const PCGExClusters::FNode& Targe
 	}
 	else if (NormalizedNumInsideBuffer)
 	{
-		NormalizedNumInsideBuffer->SetValue(WriteIndex, static_cast<double>(Inside[ReadIndex]) / static_cast<double>(Count));
+		NormalizedNumInsideBuffer->SetValue(WriteIndex, Count > 0 ? static_cast<double>(Inside[ReadIndex]) / static_cast<double>(Count) : 0);
 	}
 
 	if (NumOutsideBuffer)
@@ -155,7 +155,7 @@ void FPCGExNeighborSampleFilters::FinalizeNode(const PCGExClusters::FNode& Targe
 	}
 	else if (NormalizedNumOutsideBuffer)
 	{
-		NormalizedNumOutsideBuffer->SetValue(WriteIndex, static_cast<double>(Outside[ReadIndex]) / static_cast<double>(Count));
+		NormalizedNumOutsideBuffer->SetValue(WriteIndex, Count > 0 ? static_cast<double>(Outside[ReadIndex]) / static_cast<double>(Count) : 0);
 	}
 
 	if (TotalNumBuffer)
@@ -163,22 +163,23 @@ void FPCGExNeighborSampleFilters::FinalizeNode(const PCGExClusters::FNode& Targe
 		TotalNumBuffer->SetValue(WriteIndex, Count);
 	}
 
+	// TotalWeight != 0, not > 0: a custom weight curve can return negatives.
 	if (WeightInsideBuffer)
 	{
 		WeightInsideBuffer->SetValue(WriteIndex, InsideWeight[ReadIndex]);
 	}
 	else if (NormalizedWeightInsideBuffer)
 	{
-		NormalizedWeightInsideBuffer->SetValue(WriteIndex, InsideWeight[ReadIndex] / TotalWeight);
+		NormalizedWeightInsideBuffer->SetValue(WriteIndex, TotalWeight != 0 ? InsideWeight[ReadIndex] / TotalWeight : 0);
 	}
 
 	if (WeightOutsideBuffer)
 	{
-		WeightOutsideBuffer->SetValue(WriteIndex, Outside[ReadIndex]);
+		WeightOutsideBuffer->SetValue(WriteIndex, OutsideWeight[ReadIndex]);
 	}
 	else if (NormalizedWeightOutsideBuffer)
 	{
-		NormalizedWeightOutsideBuffer->SetValue(WriteIndex, OutsideWeight[ReadIndex] / TotalWeight);
+		NormalizedWeightOutsideBuffer->SetValue(WriteIndex, TotalWeight != 0 ? OutsideWeight[ReadIndex] / TotalWeight : 0);
 	}
 
 	if (TotalWeightBuffer)
@@ -191,7 +192,9 @@ void FPCGExNeighborSampleFilters::CompleteOperation()
 {
 	FPCGExNeighborSampleOperation::CompleteOperation();
 	Inside.Empty();
+	InsideWeight.Empty();
 	Outside.Empty();
+	OutsideWeight.Empty();
 	FilterManager.Reset();
 }
 

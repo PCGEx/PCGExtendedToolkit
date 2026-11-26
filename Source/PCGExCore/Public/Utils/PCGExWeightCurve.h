@@ -29,7 +29,7 @@ struct PCGEXCORE_API FPCGExWeightCurve
 	FPCGExWeightCurve(float InValueAtZero, float InValueAtOne);
 
 	/** Multiplier over the normalized [0,1] domain. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings", meta=(PCG_Overridable))
 	FRuntimeFloatCurve Curve;
 
 	/** Curve value at InTime. A key-less curve evaluates neutral (1.0) -- never the FRichCurve default 0.
