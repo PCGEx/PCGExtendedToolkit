@@ -389,13 +389,33 @@ bool FPCGExTopologyPathSweepElement::Boot(FPCGExContext* InContext) const
 		Context->ClearanceSmoothing = FMath::IsFinite(Settings->ClearanceSmoothing) ? FMath::Max(Settings->ClearanceSmoothing, 0.0) : 0.0;
 	}
 
-	for (const FPCGExUVInputDetails& Channel : Settings->Topology.UVChannels.UVs)
+	if (Settings->bWriteClearanceUV)
 	{
-		if (Channel.bEnabled && !Channel.AttributeName.IsNone() && Channel.Channel == Settings->UVChannel)
+		const int32 ClearanceChannel = FMath::Clamp(Settings->ClearanceUVChannel, 0, 7);
+		if (ClearanceChannel == FMath::Clamp(Settings->UVChannel, 0, 7))
 		{
-			PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("UV channel {0} is also fed by '{1}': the generated UVs replace it."), FText::AsNumber(Settings->UVChannel), FText::FromName(Channel.AttributeName)));
-			break;
+			PCGE_LOG(Error, GraphAndLog, FText::Format(FTEXT("'Clearance UV Channel' and 'UV Channel' are both {0}: they must differ."), FText::AsNumber(ClearanceChannel)));
+			return false;
 		}
+		Context->ClearanceUVChannel = ClearanceChannel;
+	}
+
+	const auto WarnAttributeChannel = [&](const int32 InChannel, const FText& InOutput)
+	{
+		for (const FPCGExUVInputDetails& Channel : Settings->Topology.UVChannels.UVs)
+		{
+			if (Channel.bEnabled && !Channel.AttributeName.IsNone() && Channel.Channel == InChannel)
+			{
+				PCGE_LOG(Warning, GraphAndLog, FText::Format(FTEXT("UV channel {0} is also fed by '{1}': the {2} replace it."), FText::AsNumber(InChannel), FText::FromName(Channel.AttributeName), InOutput));
+				break;
+			}
+		}
+	};
+
+	WarnAttributeChannel(Settings->UVChannel, FTEXT("generated UVs"));
+	if (Context->ClearanceUVChannel != INDEX_NONE)
+	{
+		WarnAttributeChannel(Context->ClearanceUVChannel, FTEXT("Clearance UVs"));
 	}
 
 	return true;
@@ -688,12 +708,13 @@ namespace PCGExTopologyPathSweep
 		}
 
 		UVChannel = FMath::Clamp(Settings->UVChannel, 0, 7);
+		ClearanceUVChannel = Context->ClearanceUVChannel;
 
 		UVDetails = Settings->Topology.UVChannels;
-		// The generated UVs own their channel: an attribute channel on the same index is not read at all.
+		// Generated UVs own their channels: an attribute channel on the same index is not read at all.
 		for (FPCGExUVInputDetails& Channel : UVDetails.UVs)
 		{
-			if (Channel.Channel == UVChannel)
+			if (Channel.Channel == UVChannel || (ClearanceUVChannel != INDEX_NONE && Channel.Channel == ClearanceUVChannel))
 			{
 				Channel.bEnabled = false;
 			}
@@ -704,6 +725,10 @@ namespace PCGExTopologyPathSweep
 
 		Positions.SetNumUninitialized(static_cast<int32>(NumVertices));
 		Colors.SetNumUninitialized(static_cast<int32>(NumVertices));
+		if (ClearanceUVChannel != INDEX_NONE)
+		{
+			ClearanceUVs.SetNumUninitialized(static_cast<int32>(NumVertices));
+		}
 
 		if (Settings->bClearance)
 		{
@@ -1007,6 +1032,7 @@ namespace PCGExTopologyPathSweep
 
 		const bool bClearance = bClearanceReady;
 		const bool bClearanceClamp = Context->bClearanceClamp;
+		const bool bClearanceUVs = ClearanceUVChannel != INDEX_NONE;
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
@@ -1018,6 +1044,8 @@ namespace PCGExTopologyPathSweep
 			// Per side, in profile units along AxisY: the squash factor and the clamp limit.
 			FVector2D SideFactor(1.0, 1.0);
 			FVector2D SideLimit(MAX_dbl, MAX_dbl);
+			// Clearance UVs per side: the fraction of the reach removed, then the same in world units.
+			FVector2f SideUV[2] = {FVector2f::ZeroVector, FVector2f::ZeroVector};
 			if (bClearance)
 			{
 				const double AxisYLength = AxisY.Size();
@@ -1030,9 +1058,13 @@ namespace PCGExTopologyPathSweep
 					{
 						SideFactor[s] = PointAllowed[s] / PointReach[s];
 						SideLimit[s] = AxisYLength > UE_DOUBLE_SMALL_NUMBER ? PointAllowed[s] / AxisYLength : 0.0;
+						SideUV[s] = FVector2f(static_cast<float>(1.0 - SideFactor[s]), static_cast<float>(PointReach[s] - PointAllowed[s]));
 					}
 				}
 			}
+
+			// A vertex on the path line belongs to both sides: it reports the more shrunk one.
+			const FVector2f& PathLineUV = SideUV[0].X >= SideUV[1].X ? SideUV[0] : SideUV[1];
 
 			// The mesh transform is translation-only, so the axes need none of it.
 			const FVector Origin = MeshTransform.InverseTransformPosition(InTransforms[Index].GetLocation());
@@ -1055,10 +1087,15 @@ namespace PCGExTopologyPathSweep
 				for (int32 i = 0; i < Profile.Num; i++)
 				{
 					FVector2D Local = (Profile.Positions[i] - Anchor) * Scale;
+					double& Side = Sheet.bDepthOnY ? Local.X : Local.Y;
+
+					if (bClearanceUVs)
+					{
+						ClearanceUVs[Start + i] = Side > 0 ? SideUV[0] : (Side < 0 ? SideUV[1] : PathLineUV);
+					}
 
 					if (bClearance)
 					{
-						double& Side = Sheet.bDepthOnY ? Local.X : Local.Y;
 						if (Side > 0)
 						{
 							Side = bClearanceClamp ? FMath::Min(Side, SideLimit.X) : Side * SideFactor.X;
@@ -1100,6 +1137,7 @@ namespace PCGExTopologyPathSweep
 
 		Positions.Empty();
 		Colors.Empty();
+		ClearanceUVs.Empty();
 	}
 
 	void FProcessor::CollapseFolds()
@@ -1529,6 +1567,26 @@ namespace PCGExTopologyPathSweep
 							UVOverlay->SetTriangle(TriangleID++, UE::Geometry::FIndex3i(UVCorners[Triangles[t][0]], UVCorners[Triangles[t][1]], UVCorners[Triangles[t][2]]));
 						}
 					}
+				}
+			}
+
+			if (ClearanceUVChannel != INDEX_NONE)
+			{
+				if (InMesh.Attributes()->NumUVLayers() <= ClearanceUVChannel)
+				{
+					InMesh.Attributes()->SetNumUVLayers(ClearanceUVChannel + 1);
+				}
+
+				// One element per vertex, as for the colors: the values never split along a seam.
+				UE::Geometry::FDynamicMeshUVOverlay* ClearanceOverlay = InMesh.Attributes()->GetUVLayer(ClearanceUVChannel);
+				for (int32 i = 0; i < NumVertices; i++)
+				{
+					verify(ClearanceOverlay->AppendElement(ClearanceUVs[i]) == i);
+				}
+
+				for (int32 i = 0; i < NumTriangles; i++)
+				{
+					ClearanceOverlay->SetTriangle(i, InMesh.GetTriangle(i));
 				}
 			}
 		}, EDynamicMeshChangeType::GeneralEdit, EDynamicMeshAttributeChangeFlags::Unknown, true);

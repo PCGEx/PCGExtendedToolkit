@@ -45,7 +45,7 @@ class UPCGExPathTaperSettings : public UPCGExPathProcessorSettings
 public:
 	//~Begin UPCGSettings
 #if WITH_EDITOR
-	PCGEX_NODE_INFOS(PathTaper, "Path : Taper", "Write a taper weight that ramps up from the path's start and end, then scaled and offset.");
+	PCGEX_NODE_INFOS(PathTaper, "Path : Taper", "Ramp a weight in from each end of a path, then scale, offset and blend it into an attribute or property.");
 #endif
 
 protected:

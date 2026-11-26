@@ -230,6 +230,15 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|UVs", meta = (PCG_NotOverridable, ClampMin=0, ClampMax=7, UIMin=0, UIMax=7))
 	int32 UVChannel = 0;
 
+	/** Gates Clearance UV Channel. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|UVs", meta = (PCG_NotOverridable, InlineEditConditionToggle))
+	bool bWriteClearanceUV = false;
+
+	/** When enabled, writes how much Clearance shrank each side to this UV channel: U is the fraction of the side's
+	 *  reach removed (0 untouched, 1 flat), V the same in world units. Zero while Clearance is off. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|UVs", meta = (PCG_NotOverridable, EditCondition="bWriteClearanceUV", ClampMin=0, ClampMax=7, UIMin=0, UIMax=7))
+	int32 ClearanceUVChannel = 1;
+
 	/** How U is measured along the path. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|UVs", meta = (PCG_NotOverridable))
 	EPCGExPathSweepUVMode UMode = EPCGExPathSweepUVMode::Normalized;
@@ -304,6 +313,7 @@ struct FPCGExTopologyPathSweepContext final : FPCGExPathProcessorContext
 	double ClearanceShare = 0.5;
 	double ClearancePadding = 0;
 	double ClearanceSmoothing = 0;
+	int32 ClearanceUVChannel = INDEX_NONE; // INDEX_NONE when not written
 
 	virtual void RegisterAssetDependencies() override;
 
@@ -363,6 +373,7 @@ namespace PCGExTopologyPathSweep
 		FPCGExTopologyUVDetails UVDetails;
 		FTransform MeshTransform = FTransform::Identity;
 		int32 UVChannel = 0; // Channel of the generated UVs; UVDetails never holds an attribute channel on it
+		int32 ClearanceUVChannel = INDEX_NONE; // Same rule as UVChannel; INDEX_NONE when not written
 
 		int32 NumPoints = 0;
 		bool bClosedLoop = false;
@@ -381,6 +392,7 @@ namespace PCGExTopologyPathSweep
 		// Per vertex: filled in parallel, then consumed by the mesh assembly
 		TArray<FVector> Positions;
 		TArray<FVector4f> Colors;
+		TArray<FVector2f> ClearanceUVs; // Empty unless the Clearance UVs are written
 
 		std::atomic<bool> bFoldsCollapsed{false};
 
