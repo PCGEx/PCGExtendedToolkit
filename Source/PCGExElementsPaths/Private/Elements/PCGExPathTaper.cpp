@@ -82,15 +82,34 @@ bool FPCGExPathTaperElement::Boot(FPCGExContext* InContext) const
 		return false;
 	}
 
+	EPCGExABBlendingType BlendingType = EPCGExABBlendingType::None;
 	switch (Settings->BlendMode)
 	{
 	case EPCGExPathTaperBlend::None:
+		break;
 	case EPCGExPathTaperBlend::Add:
+		BlendingType = EPCGExABBlendingType::Add;
+		break;
 	case EPCGExPathTaperBlend::Multiply:
+		BlendingType = EPCGExABBlendingType::Multiply;
+		break;
+	case EPCGExPathTaperBlend::Subtract:
+		BlendingType = EPCGExABBlendingType::Subtract;
+		break;
+	case EPCGExPathTaperBlend::Min:
+		BlendingType = EPCGExABBlendingType::Min;
+		break;
+	case EPCGExPathTaperBlend::Max:
+		BlendingType = EPCGExABBlendingType::Max;
 		break;
 	default:
 		PCGE_LOG(Error, GraphAndLog, FTEXT("Unsupported blend mode."));
 		return false;
+	}
+
+	if (BlendingType != EPCGExABBlendingType::None)
+	{
+		Context->BlendFn = PCGExBlending::BlendFunctions::GetBlendFunction<double>(BlendingType);
 	}
 
 	Context->StartCurve = Settings->Curve.MakeLookup(EPCGExCurveLUTMode::Lookup, 256);
@@ -191,8 +210,8 @@ namespace PCGExPathTaper
 		OutputDescriptor.WorkingType = EPCGMetadataTypes::Double;
 
 		// A target attribute that doesn't exist yet has no value to blend with.
-		BlendMode = bTargetExists ? Settings->BlendMode : EPCGExPathTaperBlend::None;
-		if (BlendMode != EPCGExPathTaperBlend::None)
+		BlendFn = bTargetExists ? Context->BlendFn : nullptr;
+		if (BlendFn)
 		{
 			// Reader before writer, as Attribute Remap does when its source and target are the same attribute.
 			PCGExData::FProxyDescriptor TargetDescriptor(PointDataFacade, PCGExData::EProxyRole::Read);
@@ -320,22 +339,16 @@ namespace PCGExPathTaper
 
 	void FProcessor::WriteValue(const int32 Index, const double Value) const
 	{
-		switch (BlendMode)
+		if (!BlendFn)
 		{
-		case EPCGExPathTaperBlend::None:
 			OutputProxy->Set(Index, Value);
-			break;
-		case EPCGExPathTaperBlend::Add:
-			OutputProxy->Set(Index, TargetReader->Get<double>(Index) + Value);
-			break;
-		case EPCGExPathTaperBlend::Multiply:
-			OutputProxy->Set(Index, TargetReader->Get<double>(Index) * Value);
-			break;
-		default:
-			// Boot rejects any other value.
-			checkNoEntry();
-			break;
+			return;
 		}
+
+		const double Current = TargetReader->Get<double>(Index);
+		double Blended = 0;
+		BlendFn(&Current, &Value, 0, &Blended);
+		OutputProxy->Set(Index, Blended);
 	}
 
 #pragma endregion
