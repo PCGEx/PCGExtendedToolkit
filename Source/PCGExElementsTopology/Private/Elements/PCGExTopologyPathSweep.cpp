@@ -46,6 +46,18 @@ namespace PCGExTopologyPathSweep
 	// Clearance ignores sheets whose height ranges stay apart by more than this ratio of the larger facing reach.
 	constexpr double ClearanceBandMargin = 0.5;
 
+	// Where two lines meet, the zone left to overlap never reaches past this ratio of the reaches it is built from.
+	constexpr double ClearanceMeetingRatio = 8.0;
+
+	// Clearance's height test: the other sheets' range, carried onto this row's up axis by Tilt and placed at Height,
+	// must come within Margin of this row's Band.
+	bool HeightRangesMeet(const FVector2D& Band, const FVector2D& OtherBand, const double Tilt, const double Height, const double Margin)
+	{
+		const double OtherLow = Height + FMath::Min(OtherBand.X * Tilt, OtherBand.Y * Tilt);
+		const double OtherHigh = Height + FMath::Max(OtherBand.X * Tilt, OtherBand.Y * Tilt);
+		return OtherLow <= Band.Y + Margin && OtherHigh >= Band.X - Margin;
+	}
+
 	FVector2D FProfile::GetPositionAt(const double Alpha) const
 	{
 		const double SafeAlpha = FMath::IsFinite(Alpha) ? FMath::Clamp(Alpha, 0.0, 1.0) : 0.0;
@@ -818,12 +830,27 @@ namespace PCGExTopologyPathSweep
 		UpBand.SetNumUninitialized(NumPoints);
 		Allowed.SetNumUninitialized(NumPoints);
 
+		FrameAxisY.SetNumUninitialized(NumPoints);
+		FrameAxisZ.SetNumUninitialized(NumPoints);
+		for (FSheet& Sheet : Sheets)
+		{
+			Sheet.Scales.SetNumUninitialized(NumPoints);
+			Sheet.Anchors.SetNumUninitialized(NumPoints);
+		}
+
 		for (int32 Index = 0; Index < NumPoints; Index++)
 		{
 			FVector Tangent;
-			FVector AxisY;
-			FVector AxisZ;
+			FVector& AxisY = FrameAxisY[Index];
+			FVector& AxisZ = FrameAxisZ[Index];
 			ComputeFrame(Index, Tangent, AxisY, AxisZ);
+
+			// Filled for every row: degenerate ones still place their vertices.
+			for (FSheet& Sheet : Sheets)
+			{
+				Sheet.Scales[Index] = Sheet.GetScale(Index);
+				Sheet.Anchors[Index] = Sheet.GetAnchor(Index);
+			}
 
 			// The miter only adds a component along the bend axis, which stays perpendicular to the tangent.
 			const FVector SideDir = AxisY.GetSafeNormal();
@@ -849,8 +876,8 @@ namespace PCGExTopologyPathSweep
 
 			for (const FSheet& Sheet : Sheets)
 			{
-				const FVector2D Scale = Sheet.GetScale(Index);
-				const FVector2D Anchor = Sheet.GetAnchor(Index);
+				const FVector2D& Scale = Sheet.Scales[Index];
+				const FVector2D& Anchor = Sheet.Anchors[Index];
 
 				// Positions run 0..Size on each axis, so the extremes are corners of the bounds.
 				const FVector2D CornerA = (FVector2D::ZeroVector - Anchor) * Scale;
@@ -885,6 +912,167 @@ namespace PCGExTopologyPathSweep
 		return FVector::DotProduct(SideDirs[Index], RayDir) < 0 ? Reach[Index].X : Reach[Index].Y;
 	}
 
+	void FProcessor::FindMeetings()
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(PCGExTopologyPathSweep::FindMeetings);
+
+		const FBatch* Batch = ClearanceBatch;
+		check(Batch && Batch->PathOctree);
+
+		Meetings.Reset();
+
+		const double PaddingGap = 2 * Context->ClearancePadding;
+
+		// Within this plan distance an end lands on a line, and two lines touch.
+		constexpr double Touch = UE_KINDA_SMALL_NUMBER;
+
+		const auto MaxReachAt = [](const FProcessor* P, const int32 Start, const int32 End, const double Alpha)
+		{
+			return FMath::Lerp(FMath::Max(P->Reach[Start].X, P->Reach[Start].Y), FMath::Max(P->Reach[End].X, P->Reach[End].Y), Alpha);
+		};
+
+		const auto IsOpenEnd = [](const FProcessor* P, const int32 Point)
+		{
+			return !P->bClosedLoop && (Point == 0 || Point == P->NumPoints - 1);
+		};
+
+		const auto PlanDistance = [](const FVector2D& Point, const FVector2D& SegStart, const FVector2D& SegDelta, double& OutAlpha)
+		{
+			OutAlpha = FMath::Clamp(FVector2D::DotProduct(Point - SegStart, SegDelta) / SegDelta.SizeSquared(), 0.0, 1.0);
+			return FVector2D::Distance(Point, SegStart + SegDelta * OutAlpha);
+		};
+
+		for (const PCGExPaths::FPathEdge& Edge : Path->Edges)
+		{
+			if (!Path->IsEdgeValid(Edge))
+			{
+				continue;
+			}
+
+			// Seen along this edge's up axis, the one its rays measure heights on: a meeting is where a ray's hit runs to 0.
+			const FVector Up = (UpDirs[Edge.Start] + UpDirs[Edge.End]).GetSafeNormal();
+			if (Up.IsZero())
+			{
+				continue;
+			}
+
+			FVector PlanX;
+			FVector PlanY;
+			Up.FindBestAxisVectors(PlanX, PlanY);
+			const auto ToPlan = [&](const FVector& P) { return FVector2D(FVector::DotProduct(P, PlanX), FVector::DotProduct(P, PlanY)); };
+
+			const FVector A = Path->GetPos_Unsafe(Edge.Start);
+			const FVector B = Path->GetPos_Unsafe(Edge.End);
+			const FVector2D A2 = ToPlan(A);
+			const FVector2D AB2 = ToPlan(B) - A2;
+			if (AB2.SizeSquared() <= UE_DOUBLE_SMALL_NUMBER)
+			{
+				continue;
+			}
+
+			// A meeting further off along the up axis than this fails the height test.
+			const double Lift = FMath::Max(FMath::Max(-UpBand[Edge.Start].X, UpBand[Edge.Start].Y), FMath::Max(-UpBand[Edge.End].X, UpBand[Edge.End].Y))
+				+ Batch->MaxBand + ClearanceBandMargin * FMath::Max(MaxReach, Batch->MaxReach);
+
+			// Across the up axis, a meeting's two points are no further apart than the two alphas' Touch clamps.
+			FBox EdgeBox(ForceInit);
+			EdgeBox += A;
+			EdgeBox += B;
+			EdgeBox = EdgeBox.ExpandBy(Up.GetAbs() * Lift + FVector(2 * Touch + UE_KINDA_SMALL_NUMBER));
+
+			Batch->PathOctree->FindElementsWithBoundsTest(EdgeBox, [&](const PCGExOctree::FItem& Item)
+			{
+				const FProcessor* Other = static_cast<const FProcessor*>(&Batch->Processors[Item.Index].Get());
+				const PCGExPaths::FPath* OtherPath = Other->Path.Get();
+
+				OtherPath->GetEdgeOctree()->FindElementsWithBoundsTest(EdgeBox, [&](const PCGExPaths::FPathEdge* OtherEdge)
+				{
+					// Neighbouring edges of one path share a point by construction.
+					if (Other == this && (OtherEdge->Start == Edge.Start || OtherEdge->Start == Edge.End || OtherEdge->End == Edge.Start || OtherEdge->End == Edge.End))
+					{
+						return;
+					}
+
+					const FVector C = OtherPath->GetPos_Unsafe(OtherEdge->Start);
+					const FVector D = OtherPath->GetPos_Unsafe(OtherEdge->End);
+					const FVector2D C2 = ToPlan(C);
+					const FVector2D CD2 = ToPlan(D) - C2;
+					if (CD2.SizeSquared() <= UE_DOUBLE_SMALL_NUMBER)
+					{
+						return;
+					}
+
+					// Where along each edge the lines meet, as (this edge, other edge) alphas.
+					TArray<FVector2D, TInlineAllocator<4>> Alphas;
+
+					const double Denom = FVector2D::CrossProduct(AB2, CD2);
+					if (FMath::Abs(Denom) > UE_DOUBLE_SMALL_NUMBER * AB2.Size() * CD2.Size())
+					{
+						const FVector2D AC2 = C2 - A2;
+						const double AlphaMine = FVector2D::CrossProduct(AC2, CD2) / Denom;
+						const double AlphaOther = FVector2D::CrossProduct(AC2, AB2) / Denom;
+						const double TolMine = Touch / AB2.Size();
+						const double TolOther = Touch / CD2.Size();
+						if (AlphaMine >= -TolMine && AlphaMine <= 1 + TolMine && AlphaOther >= -TolOther && AlphaOther <= 1 + TolOther)
+						{
+							Alphas.Emplace(FMath::Clamp(AlphaMine, 0.0, 1.0), FMath::Clamp(AlphaOther, 0.0, 1.0));
+						}
+					}
+
+					// Ends landing on a line: what finds two paths continuing one another, whose lines are parallel.
+					double EndAlpha = 0;
+					if (IsOpenEnd(Other, OtherEdge->Start) && PlanDistance(C2, A2, AB2, EndAlpha) <= Touch) { Alphas.Emplace(EndAlpha, 0.0); }
+					if (IsOpenEnd(Other, OtherEdge->End) && PlanDistance(C2 + CD2, A2, AB2, EndAlpha) <= Touch) { Alphas.Emplace(EndAlpha, 1.0); }
+					if (IsOpenEnd(this, Edge.Start) && PlanDistance(A2, C2, CD2, EndAlpha) <= Touch) { Alphas.Emplace(0.0, EndAlpha); }
+					if (IsOpenEnd(this, Edge.End) && PlanDistance(A2 + AB2, C2, CD2, EndAlpha) <= Touch) { Alphas.Emplace(1.0, EndAlpha); }
+
+					for (const FVector2D& Alpha : Alphas)
+					{
+						const FVector Mine = FMath::Lerp(A, B, Alpha.X);
+						const FVector Theirs = FMath::Lerp(C, D, Alpha.Y);
+						const double MyReach = MaxReachAt(this, Edge.Start, Edge.End, Alpha.X);
+						const double OtherReach = MaxReachAt(Other, OtherEdge->Start, OtherEdge->End, Alpha.Y);
+
+						const FVector2D Band = FMath::Lerp(UpBand[Edge.Start], UpBand[Edge.End], Alpha.X);
+						const FVector2D OtherBand = FMath::Lerp(Other->UpBand[OtherEdge->Start], Other->UpBand[OtherEdge->End], Alpha.Y);
+						const double Tilt = FVector::DotProduct(FMath::Lerp(Other->UpDirs[OtherEdge->Start], Other->UpDirs[OtherEdge->End], Alpha.Y), Up);
+						if (!HeightRangesMeet(Band, OtherBand, Tilt, FVector::DotProduct(Theirs - Mine, Up), ClearanceBandMargin * FMath::Max(MyReach, OtherReach)))
+						{
+							continue;
+						}
+
+						// The straight-line conflict cone: past this radius the two sheets have parted.
+						const double Sine = FMath::Abs(FVector2D::CrossProduct(AB2.GetSafeNormal(), CD2.GetSafeNormal()));
+						const double Radius = (MyReach + OtherReach + PaddingGap) / FMath::Max(Sine, 1.0 / ClearanceMeetingRatio);
+
+						// Both edges at a shared point find the same meeting.
+						if (FMeeting* Known = Meetings.FindByPredicate([&](const FMeeting& M) { return M.Other == Other && FVector::DistSquared(M.Point, Mine) <= FMath::Square(Touch); }))
+						{
+							Known->Radius = FMath::Max(Known->Radius, Radius);
+						}
+						else
+						{
+							Meetings.Add(FMeeting{Other, Mine, Radius});
+						}
+					}
+				});
+			});
+		}
+	}
+
+	bool FProcessor::IsMeetingHit(const FProcessor* Other, const FVector& Origin, const FVector& Crossing) const
+	{
+		for (const FMeeting& Meeting : Meetings)
+		{
+			const double RadiusSq = FMath::Square(Meeting.Radius);
+			if (Meeting.Other == Other && FVector::DistSquared(Origin, Meeting.Point) <= RadiusSq && FVector::DistSquared(Crossing, Meeting.Point) <= RadiusSq)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void FProcessor::CompleteWork()
 	{
 		if (!bClearanceReady)
@@ -898,6 +1086,7 @@ namespace PCGExTopologyPathSweep
 		// Blocking: the queries are done once this returns.
 		if (ClearanceBatch && ClearanceBatch->PathOctree)
 		{
+			FindMeetings();
 			StartParallelLoopForRange(NumPoints);
 		}
 
@@ -943,15 +1132,15 @@ namespace PCGExTopologyPathSweep
 				const FVector RayDir = s == 0 ? SideDirs[Index] : -SideDirs[Index];
 				const FVector RayFwd = FVector::CrossProduct(UpDir, RayDir);
 
-				// Farthest a counted crossing can sit: past both reaches and the padding along the ray, past both height
-				// ranges and the margin off it.
+				// A counted crossing lies in the ray's plane: along the ray within both reaches and the padding, along UpDir
+				// within both height ranges and the margin.
 				const double RayLength = SideReach + Batch->MaxReach + PaddingGap;
 				const double RayRise = FMath::Max(-Band.X, Band.Y) + Batch->MaxBand + ClearanceBandMargin * FMath::Max(SideReach, Batch->MaxReach);
 
 				FBox RayBox(ForceInit);
 				RayBox += Origin;
 				RayBox += Origin + RayDir * RayLength;
-				RayBox = RayBox.ExpandBy(RayRise + UE_KINDA_SMALL_NUMBER);
+				RayBox = RayBox.ExpandBy(UpDir.GetAbs() * RayRise + FVector(UE_KINDA_SMALL_NUMBER));
 
 				double Limit = SideReach;
 
@@ -992,15 +1181,18 @@ namespace PCGExTopologyPathSweep
 
 						// ...and so must their height ranges, the other's carried onto this row's up axis.
 						const FVector Crossing = FMath::Lerp(A, B, Alpha);
-						const double Height = FVector::DotProduct(Crossing, UpDir);
 						const FVector2D OtherBand = FMath::Lerp(Other->UpBand[Edge->Start], Other->UpBand[Edge->End], Alpha);
 						const double Tilt = FVector::DotProduct(FMath::Lerp(Other->UpDirs[Edge->Start], Other->UpDirs[Edge->End], Alpha), UpDir);
-						const double OtherLow = Height + FMath::Min(OtherBand.X * Tilt, OtherBand.Y * Tilt);
-						const double OtherHigh = Height + FMath::Max(OtherBand.X * Tilt, OtherBand.Y * Tilt);
 
 						// The margin keeps uneven ground counting while a path well above or below is ignored.
 						const double Margin = ClearanceBandMargin * FMath::Max(SideReach, OtherReach);
-						if (OtherLow > Band.Y + Margin || OtherHigh < Band.X - Margin)
+						if (!HeightRangesMeet(Band, OtherBand, Tilt, FVector::DotProduct(Crossing, UpDir), Margin))
+						{
+							return;
+						}
+
+						// Where the two lines meet, their sheets are left to overlap.
+						if (IsMeetingHit(Other, Origin, Origin + Crossing))
 						{
 							return;
 						}
@@ -1079,10 +1271,19 @@ namespace PCGExTopologyPathSweep
 
 		PCGEX_SCOPE_LOOP(Index)
 		{
-			FVector Tangent;
+			// Clearance computed every row's frame in Process already.
 			FVector AxisY;
 			FVector AxisZ;
-			ComputeFrame(Index, Tangent, AxisY, AxisZ);
+			if (bClearance)
+			{
+				AxisY = FrameAxisY[Index];
+				AxisZ = FrameAxisZ[Index];
+			}
+			else
+			{
+				FVector Tangent;
+				ComputeFrame(Index, Tangent, AxisY, AxisZ);
+			}
 
 			// Per side, in profile units along AxisY: the squash factor and the clamp limit.
 			FVector2D SideFactor(1.0, 1.0);
@@ -1122,8 +1323,8 @@ namespace PCGExTopologyPathSweep
 				const FVector& DepthAxis = Sheet.bDepthOnY ? AxisY : AxisZ;
 				const FVector& WidthAxis = Sheet.bDepthOnY ? AxisZ : AxisY;
 
-				const FVector2D Scale = Sheet.GetScale(Index);
-				const FVector2D Anchor = Sheet.GetAnchor(Index);
+				const FVector2D Scale = bClearance ? Sheet.Scales[Index] : Sheet.GetScale(Index);
+				const FVector2D Anchor = bClearance ? Sheet.Anchors[Index] : Sheet.GetAnchor(Index);
 
 				const int32 Start = Sheet.VertexOffset + Index * Profile.Num;
 
@@ -1168,6 +1369,15 @@ namespace PCGExTopologyPathSweep
 
 	void FProcessor::OnPointsProcessingComplete()
 	{
+		// The vertex placement was the frame cache's only reader.
+		FrameAxisY.Empty();
+		FrameAxisZ.Empty();
+		for (FSheet& Sheet : Sheets)
+		{
+			Sheet.Scales.Empty();
+			Sheet.Anchors.Empty();
+		}
+
 		// A cancelled loop leaves the vertex arrays partly unwritten.
 		PCGEX_CHECK_WORK_HANDLE_VOID
 

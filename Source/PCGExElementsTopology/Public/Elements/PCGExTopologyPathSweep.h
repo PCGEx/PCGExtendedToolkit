@@ -375,6 +375,10 @@ namespace PCGExTopologyPathSweep
 		double VStart = 0;
 		double VScale = 1;
 
+		// Clearance only: GetScale and GetAnchor per path point, kept from Process for the vertex placement
+		TArray<FVector2D> Scales;
+		TArray<FVector2D> Anchors;
+
 		FVector2D GetScale(const int32 Index) const;
 		FVector2D GetAnchor(const int32 Index) const;
 	};
@@ -426,6 +430,21 @@ namespace PCGExTopologyPathSweep
 		double MaxBand = 0;        // Farthest UpBand gets from the path
 		const FBatch* ClearanceBatch = nullptr; // Only valid during CompleteWork
 
+		// Where this path's line meets another's, or a far part of its own: Clearance leaves that pair alone within Radius.
+		struct FMeeting
+		{
+			const FProcessor* Other = nullptr;
+			FVector Point = FVector::ZeroVector;
+			double Radius = 0;
+		};
+
+		TArray<FMeeting> Meetings; // Filled at the start of CompleteWork, read by this processor's own rays only
+
+		// Clearance only: each row's cross axes from ComputeFrame, kept from Process for the vertex placement. Not read by
+		// other processors.
+		TArray<FVector> FrameAxisY;
+		TArray<FVector> FrameAxisZ;
+
 	public:
 		explicit FProcessor(const TSharedRef<PCGExData::FFacade>& InPointDataFacade)
 			: TProcessor(InPointDataFacade)
@@ -448,6 +467,8 @@ namespace PCGExTopologyPathSweep
 
 		void ComputeReach();
 		double GetFacingReach(const int32 Index, const FVector& RayDir) const;
+		void FindMeetings();
+		bool IsMeetingHit(const FProcessor* Other, const FVector& Origin, const FVector& Crossing) const;
 		void SmoothClearance();
 
 		void CollapseFolds();
