@@ -72,7 +72,8 @@ namespace PCGExCollections
 	/**
 	 * Call right before loading a level package for reading. In the editor, a level asset loaded outside a Level Instance
 	 * becomes a resident, rendered inactive world (UEditorEngine::OnAssetLoaded); a package this read brings in is unloaded
-	 * on a following game-thread tick unless it is in use by then (dirty, edited, PIE, or streamed into another world).
+	 * on a following game-thread tick, or by a batch's FlushLevelReadReleases, unless it is in use by then (dirty, edited,
+	 * PIE, or streamed into another world).
 	 * A world something else still references (a streamable handle, the undo buffer) is left alone and checked again
 	 * after each of the next few garbage collections, the only point where such holders let go in the editor. Editor
 	 * and game thread only: an off-thread read's world may still be in use after this frame, so it is not tracked.
@@ -81,10 +82,11 @@ namespace PCGExCollections
 
 	/**
 	 * Runs the pending level release now instead of on the next tick, for a batch that restages collections back to back
-	 * in one frame. Call it between two rebuilds, never inside a load, a property edit or a garbage collection: unloading
-	 * runs garbage collections. Game thread only; no-op when nothing is pending.
+	 * in one frame; packages in KeepPending (a later collection of the batch still reads them) stay pending. Call it
+	 * between two rebuilds, never inside a load, a property edit or a garbage collection: unloading runs garbage
+	 * collections. Held levels are left to the tick's retries. Game thread only; no-op when nothing is pending.
 	 */
-	PCGEXCOLLECTIONS_API void FlushLevelReadReleases();
+	PCGEXCOLLECTIONS_API void FlushLevelReadReleases(const TSet<FName>* KeepPending = nullptr);
 
 	/** Drops pending and retried level releases without unloading anything (module shutdown). */
 	PCGEXCOLLECTIONS_API void CancelPendingLevelReleases();

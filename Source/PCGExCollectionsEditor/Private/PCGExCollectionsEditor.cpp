@@ -34,6 +34,7 @@
 #include "Details/Properties/PCGExCollectionEntryPickerWidget.h"
 #include "Details/Properties/PCGExCollectionEntryRefCustomization.h"
 #include "Details/Properties/PCGExRangePropertyWidget.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExExternalPackageProducer.h"
 #include "PCGExInlineWidgetRegistry.h"
 #include "Details/PCGExPropertyCompiledCustomization.h"
@@ -402,6 +403,9 @@ void FPCGExCollectionsEditorModule::RestagePendingSources()
 			const uint64 Current = UPCGExAssetCollection::EDITOR_ComputeEntrySourceFingerprint(InEntry, &FingerprintCache);
 			return Current == 0 || Current != InEntry->StagingSourceFingerprint;
 		});
+
+		// One tick restages them all: release each collection's level reads before the next one's.
+		PCGExCollections::FlushLevelReadReleases();
 	}
 }
 
@@ -427,11 +431,15 @@ void FPCGExCollectionsEditorModule::OnAssetLoaded(UObject* InObject)
 	GEditor->GetTimerManager()->SetTimerForNextTick(
 		[this, WeakCollection]()
 		{
-			if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
+			if (WeakCollection.IsValid())
 			{
 				PendingStaleChecks.Add(WeakCollection);
 				FlushPendingStaleChecks();
+			}
 
+			// Resolved again: the stale checks release level reads, which runs garbage collections.
+			if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
+			{
 				// Not gated on the staleness preference: entry references (Collection Entry
 				// properties, variants) need ids to bind to, so never-rebuilt collections heal here.
 				PCGExCollectionEditorUtils::EnsureEntryIds(Loaded, /*bNotify=*/false);
@@ -476,6 +484,9 @@ void FPCGExCollectionsEditorModule::FlushPendingStaleChecks()
 		if (UPCGExAssetCollection* Loaded = WeakCollection.Get())
 		{
 			Loaded->EDITOR_RebuildStaleEntries();
+
+			// Every collection loaded in one frame checks on the same tick: release each one's level reads in turn.
+			PCGExCollections::FlushLevelReadReleases();
 		}
 	}
 }

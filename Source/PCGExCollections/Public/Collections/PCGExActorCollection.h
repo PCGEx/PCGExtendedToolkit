@@ -118,6 +118,9 @@ struct PCGEXCOLLECTIONS_API FPCGExActorCollectionEntry : public FPCGExAssetColle
 
 #if WITH_EDITOR
 	virtual void EDITOR_Sanitize() override;
+
+	/** Adds the map DeltaSourceActor lives in: UpdateStaging loads it to capture the delta. */
+	virtual void EDITOR_GetStagingLevelReads(TSet<FName>& OutLevelPackages) const override;
 #endif
 };
 

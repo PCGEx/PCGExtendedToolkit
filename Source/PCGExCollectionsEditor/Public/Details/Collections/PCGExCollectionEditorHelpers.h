@@ -44,11 +44,17 @@ namespace PCGExCollectionEditorHelpers
 	 */
 	PCGEXCOLLECTIONSEDITOR_API void MergeCollectionsIntoOmni(const TArray<FAssetData>& SelectedCollections);
 
+	/** False during PIE: a batch rebuild's progress dialog, and its Cancel, never opens there. */
+	PCGEXCOLLECTIONSEDITOR_API bool CanRebuildCollections();
+
 	/**
 	 * Load the selected collections and rebuild their staging through UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch,
-	 * then report the outcome in a notification. Rebuilt collections are left unsaved.
+	 * then report the outcome in a notification. Rebuilt collections are left unsaved. Refused during PIE.
 	 */
 	PCGEXCOLLECTIONSEDITOR_API void RebuildCollections(const TArray<FAssetData>& SelectedCollections, bool bIncludeSubCollections);
+
+	/** RebuildCollections for collections already loaded (the collection editor's toolbar). */
+	PCGEXCOLLECTIONSEDITOR_API void RebuildLoadedCollections(TConstArrayView<UPCGExAssetCollection*> Collections, bool bIncludeSubCollections);
 
 	/** Append the given source assets to each selected collection. */
 	PCGEXCOLLECTIONSEDITOR_API void UpdateCollectionsFromTyped(

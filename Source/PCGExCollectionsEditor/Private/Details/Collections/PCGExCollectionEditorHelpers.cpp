@@ -4,6 +4,7 @@
 #include "Details/Collections/PCGExCollectionEditorHelpers.h"
 
 #include "ContentBrowserModule.h"
+#include "Editor.h"
 #include "FileHelpers.h"
 #include "IContentBrowserSingleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -193,8 +194,75 @@ namespace PCGExCollectionEditorHelpers
 		}
 	}
 
+	void NotifyRebuildResult(const UPCGExAssetCollection::FBatchRebuildResult& Result, const int32 NumFailedToLoad)
+	{
+		FText Message;
+		if (Result.NumCollections == 0)
+		{
+			Message = NumFailedToLoad > 0
+				          ? NSLOCTEXT("PCGEx", "RebuildNothing", "No collection could be loaded (see log).")
+				          : NSLOCTEXT("PCGEx", "RebuildNoCollection", "No collection to rebuild.");
+		}
+		else if (Result.bCancelled)
+		{
+			Message = FText::Format(
+				NSLOCTEXT("PCGEx", "RebuildCancelled", "Rebuild cancelled after {0} of {1} collections; {2} changed."),
+				Result.NumRebuilt, Result.NumCollections, Result.NumChanged);
+		}
+		else
+		{
+			Message = FText::Format(
+				NSLOCTEXT("PCGEx", "RebuildDone", "Rebuilt staging for {0} {0}|plural(one=collection,other=collections); {1} changed."),
+				Result.NumRebuilt, Result.NumChanged);
+		}
+
+		if (Result.NumSkipped > 0)
+		{
+			Message = FText::Format(
+				NSLOCTEXT("PCGEx", "RebuildWithSkipped", "{0} {1} read-only {1}|plural(one=collection,other=collections) skipped (see log)."),
+				Message, Result.NumSkipped);
+		}
+
+		if (NumFailedToLoad > 0 && Result.NumCollections > 0)
+		{
+			Message = FText::Format(
+				NSLOCTEXT("PCGEx", "RebuildWithLoadFailures", "{0} {1} could not be loaded (see log)."),
+				Message, NumFailedToLoad);
+		}
+
+		SNotificationItem::ECompletionState State = SNotificationItem::CS_Success;
+		if (Result.NumCollections == 0 || NumFailedToLoad > 0)
+		{
+			State = SNotificationItem::CS_Fail;
+		}
+		else if (Result.bCancelled)
+		{
+			State = SNotificationItem::CS_None;
+		}
+
+		FNotificationInfo Info(Message);
+		Info.ExpireDuration = 5.0f;
+		Info.bUseSuccessFailIcons = true;
+		Info.bFireAndForget = true;
+		if (const TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
+		{
+			Item->SetCompletionState(State);
+		}
+	}
+
+	bool CanRebuildCollections()
+	{
+		return GEditor && !GEditor->GetPIEWorldContext();
+	}
+
 	void RebuildCollections(const TArray<FAssetData>& SelectedCollections, const bool bIncludeSubCollections)
 	{
+		if (!CanRebuildCollections())
+		{
+			UE_LOG(LogPCGEx, Warning, TEXT("Rebuild Staging is not available during Play In Editor."));
+			return;
+		}
+
 		TArray<UPCGExAssetCollection*> Collections;
 		Collections.Reserve(SelectedCollections.Num());
 		int32 NumFailed = 0;
@@ -216,52 +284,18 @@ namespace PCGExCollectionEditorHelpers
 			}
 		}
 
-		const UPCGExAssetCollection::FBatchRebuildResult Result = UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch(Collections, bIncludeSubCollections);
-		const bool bCancelled = Result.NumRebuilt < Result.NumCollections;
+		NotifyRebuildResult(UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch(Collections, bIncludeSubCollections), NumFailed);
+	}
 
-		FText Message;
-		if (Result.NumCollections == 0)
+	void RebuildLoadedCollections(const TConstArrayView<UPCGExAssetCollection*> Collections, const bool bIncludeSubCollections)
+	{
+		if (!CanRebuildCollections())
 		{
-			Message = NSLOCTEXT("PCGEx", "RebuildNothing", "No collection could be loaded (see log).");
-		}
-		else if (bCancelled)
-		{
-			Message = FText::Format(
-				NSLOCTEXT("PCGEx", "RebuildCancelled", "Rebuild cancelled after {0} of {1} collections; {2} changed."),
-				Result.NumRebuilt, Result.NumCollections, Result.NumChanged);
-		}
-		else
-		{
-			Message = FText::Format(
-				NSLOCTEXT("PCGEx", "RebuildDone", "Rebuilt staging for {0} {0}|plural(one=collection,other=collections); {1} changed."),
-				Result.NumRebuilt, Result.NumChanged);
+			UE_LOG(LogPCGEx, Warning, TEXT("Rebuild Staging is not available during Play In Editor."));
+			return;
 		}
 
-		if (NumFailed > 0 && Result.NumCollections > 0)
-		{
-			Message = FText::Format(
-				NSLOCTEXT("PCGEx", "RebuildWithLoadFailures", "{0} {1} could not be loaded (see log)."),
-				Message, NumFailed);
-		}
-
-		SNotificationItem::ECompletionState State = SNotificationItem::CS_Success;
-		if (Result.NumCollections == 0 || NumFailed > 0)
-		{
-			State = SNotificationItem::CS_Fail;
-		}
-		else if (bCancelled)
-		{
-			State = SNotificationItem::CS_None;
-		}
-
-		FNotificationInfo Info(Message);
-		Info.ExpireDuration = 5.0f;
-		Info.bUseSuccessFailIcons = true;
-		Info.bFireAndForget = true;
-		if (const TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
-		{
-			Item->SetCompletionState(State);
-		}
+		NotifyRebuildResult(UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch(Collections, bIncludeSubCollections), 0);
 	}
 
 	void UpdateCollectionsFromTyped(

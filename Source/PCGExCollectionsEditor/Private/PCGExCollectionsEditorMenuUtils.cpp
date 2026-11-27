@@ -199,22 +199,28 @@ namespace PCGExCollectionsEditorMenuUtils
 	void ExtendAssetActionsMenu(UToolMenu* Menu, const UContentBrowserAssetContextMenuContext& Context)
 	{
 		TArray<FAssetData> CollectionAssets;
+		TArray<FAssetData> ModifiableCollectionAssets;
 		for (const FAssetData& Asset : Context.SelectedAssets)
 		{
 			if (Asset.IsInstanceOf<UPCGExAssetCollection>())
 			{
 				CollectionAssets.Add(Asset);
+
+				// Rebuilding writes to them: the content browser's read-only test, per collection.
+				if (UPCGExAssetCollection::EDITOR_CanBeModified(Asset))
+				{
+					ModifiableCollectionAssets.Add(Asset);
+				}
 			}
+		}
+
+		if (!ModifiableCollectionAssets.IsEmpty())
+		{
+			AddRebuildEntries(Menu, ModifiableCollectionAssets);
 		}
 
 		if (!CollectionAssets.IsEmpty())
 		{
-			// Rebuilding writes to the collections; cooked or read-only selections can't take it.
-			if (Context.bCanBeModified)
-			{
-				AddRebuildEntries(Menu, CollectionAssets);
-			}
-
 			AddMergeIntoOmniEntry(Menu, CollectionAssets);
 		}
 

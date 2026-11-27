@@ -480,6 +480,18 @@ struct PCGEXCOLLECTIONS_API FPCGExAssetCollectionEntry
 	virtual void EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath>& OutPaths) const;
 
 	/**
+	 * Editor-only: level packages UpdateStaging loads to read from; a batch rebuild keeps such a level loaded until the
+	 * last collection reading it is done. Base: the whole source level plus the maps of actor source paths. Must not load.
+	 */
+	virtual void EDITOR_GetStagingLevelReads(TSet<FName>& OutLevelPackages) const;
+
+	/** Editor-only: loaded collections whose staging this entry copies, subcollection rows aside (a proxy's tiers). A batch
+	 *  rebuild orders them first; they never widen a recursive one. Must not load. */
+	virtual void EDITOR_GetStagingSourceCollections(TArray<const UPCGExAssetCollection*>& OutCollections) const
+	{
+	}
+
+	/**
 	 * Editor-only: the asset path the collection grid should use for this entry's
 	 * thumbnail and for double-click "open asset" actions. Defaults to Staging.Path
 	 * for leaves and to the live SubCollection reference for subcollection entries.
@@ -1234,35 +1246,50 @@ public:
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData();
 
-	/** This collection and every subcollection it reaches, each rebuilt once, through EDITOR_RebuildStagingData_Batch. */
+	/**
+	 * This collection and every subcollection it reaches, through EDITOR_RebuildStagingData_Batch (same call-site rules).
+	 * Batch rebuilds never route through it: customize a collection's rebuild in EDITOR_RebuildStagingData.
+	 */
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData_Recursive();
 
-	/** Every collection asset in the project, through EDITOR_RebuildStagingData_Batch. */
+	/** Every collection asset in the project, through EDITOR_RebuildStagingData_Batch (same call-site rules). */
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData_Project();
 
-	/** Outcome of EDITOR_RebuildStagingData_Batch. NumRebuilt < NumCollections when the user cancelled. */
+	/** Every collection asset the registry lists, loaded under a progress dialog. */
+	static TArray<UPCGExAssetCollection*> EDITOR_LoadProjectCollections();
+
+	/** False when the content browser would refuse to edit this collection (IAssetTools::IsAssetReadOnly: cooked, or
+	 *  outside the writable folders). A transient collection is always modifiable. */
+	bool EDITOR_CanBeModified() const;
+	static bool EDITOR_CanBeModified(const FAssetData& InAssetData);
+
+	/** Outcome of EDITOR_RebuildStagingData_Batch. */
 	struct FBatchRebuildResult
 	{
-		/** Collections in the rebuild order. */
+		/** Collections the batch went through, catch-up rebuilds included. */
 		int32 NumCollections = 0;
 		int32 NumRebuilt = 0;
 		/** Rebuilt collections whose rebuild changed something (LastRebuiltUtc moved). */
 		int32 NumChanged = 0;
+		/** Left alone: EDITOR_CanBeModified said no. */
+		int32 NumSkipped = 0;
+		bool bCancelled = false;
 	};
 
 	/**
-	 * InCollections in rebuild order: each once, after every subcollection it reaches (the walk crosses collections not in
-	 * InCollections too). bIncludeSubCollections also lists every reached subcollection. Nulls are skipped; a cycle is
-	 * broken where it closes.
+	 * InCollections in rebuild order: each once, after every collection its staging reads -- subcollection rows and
+	 * FPCGExAssetCollectionEntry::EDITOR_GetStagingSourceCollections -- the walk crossing collections not in InCollections.
+	 * bIncludeSubCollections also lists every reached subcollection. Nulls are skipped; a cycle is broken where it closes.
 	 */
 	static TArray<UPCGExAssetCollection*> EDITOR_GetRebuildOrder(TConstArrayView<UPCGExAssetCollection*> InCollections, bool bIncludeSubCollections);
 
 	/**
-	 * EDITOR_RebuildStagingData on every collection of EDITOR_GetRebuildOrder, under a cancellable progress dialog. The
-	 * levels a collection read for staging are released before the next one starts, so a batch never holds more of them
-	 * than a single rebuild does.
+	 * EDITOR_RebuildStagingData on every collection of EDITOR_GetRebuildOrder under a cancellable progress dialog, skipping
+	 * those that can't be modified. When a rebuild's pipeline hooks add dependencies, those are rebuilt, then the collection
+	 * once more. A level read for staging is released once no later collection reads it. Game thread, outside PIE, never
+	 * from inside a load, a property edit, a pipeline hook or a garbage collection: it runs garbage collections.
 	 */
 	static FBatchRebuildResult EDITOR_RebuildStagingData_Batch(TConstArrayView<UPCGExAssetCollection*> InCollections, bool bIncludeSubCollections);
 

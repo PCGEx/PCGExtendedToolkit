@@ -270,6 +270,17 @@ bool FPCGExActorCollectionEntry::OnHostPostLoad(UPCGExAssetCollection* Host)
 }
 
 #if WITH_EDITOR
+void FPCGExActorCollectionEntry::EDITOR_GetStagingLevelReads(TSet<FName>& OutLevelPackages) const
+{
+	FPCGExAssetCollectionEntry::EDITOR_GetStagingLevelReads(OutLevelPackages);
+
+	// Mirrors UpdateStaging: authored staging and subcollection rows capture no delta.
+	if (!bIsSubCollection && !Staging.bAuthored && DeltaSourceActor.ToSoftObjectPath().IsValid())
+	{
+		OutLevelPackages.Add(DeltaSourceActor.ToSoftObjectPath().GetLongPackageFName());
+	}
+}
+
 void FPCGExActorCollectionEntry::EDITOR_Sanitize()
 {
 	FPCGExAssetCollectionEntry::EDITOR_Sanitize();
