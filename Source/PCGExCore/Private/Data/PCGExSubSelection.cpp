@@ -492,7 +492,7 @@ namespace PCGExData
 			{
 				return false;
 			}
-			if (const FPCGMetadataAttributeBase* AttributeBase = InData->Metadata->GetConstAttribute(PCGExMetaHelpers::GetAttributeIdentifier(FixedSelector, InData)))
+			if (const FPCGMetadataAttributeBase* AttributeBase = PCGExMetaHelpers::TryGetConstAttribute(InData->Metadata, PCGExMetaHelpers::GetAttributeIdentifier(FixedSelector, InData)))
 			{
 				OutType = PCGExMetaHelpers::GetAttributeType(AttributeBase);
 			}
