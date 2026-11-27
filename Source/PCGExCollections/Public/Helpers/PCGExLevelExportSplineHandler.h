@@ -70,7 +70,7 @@ public:
 	virtual FPCGExExportSlotDesc GetSlotDesc() const override;
 	virtual int32 GetPriority() const override { return 40; }
 	virtual void Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const override;
-	virtual void FinalizeItemData(UPCGData* Data, int32 ItemIndex, FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
+	virtual void FinalizeItemData(UPCGData* Data, int32 ItemIndex, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;
 	virtual void GetWrittenAttributeNames(const UPCGExLevelDataExporter* Exporter, bool bRaw, TArray<FName>& OutNames) const override;
 #endif
 };

@@ -166,9 +166,6 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData_Implementation(UWorld* Worl
 
 namespace PCGExDefaultLevelDataExporter
 {
-	// Written on every pin, whatever its handler.
-	const FName ActorNameAttribute = TEXT("ActorName");
-
 	/** The classification an actor's system tags force. False when it carries none. */
 	bool ReadClassificationTags(const AActor* Actor, PCGExLevelExport::FSlotSet& OutSlots)
 	{
@@ -275,15 +272,15 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 
 	TSet<FName> ReportedUnknownSlots;
 
-	// Claim pass. A root is a candidate too (handlers may harvest its components) but never an entry; its
-	// classification tags, read whatever the content filter says, pick the slots that harvest it.
+	// Claim pass. A root is a candidate too (handlers may harvest its components) but never an entry, so the content
+	// filter, which picks entries, skips it; its classification tags pick its slots unless it is tagged StaticIgnore.
 	TArray<FPCGExExportCandidate> Candidates;
 	auto AddRoot = [&](AActor* RootActor)
 	{
 		FPCGExExportCandidate Root;
 		Root.Actor = RootActor;
 		Root.bIsRoot = true;
-		Root.bForcedByTag = ReadClassificationTags(RootActor, Root.ClaimedSlots);
+		Root.bForcedByTag = !RootActor->ActorHasTag(PCGExCollections::Labels::StaticIgnore) && ReadClassificationTags(RootActor, Root.ClaimedSlots);
 		if (ResolveClaims(Root, DescById, ReportedUnknownSlots))
 		{
 			Candidates.Add(MoveTemp(Root));
@@ -487,7 +484,7 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 		MetaEntries[i] = MetaEntryRange[i];
 	}
 
-	if (FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(PCGExDefaultLevelDataExporter::ActorNameAttribute, FString(), false, true))
+	if (FPCGMetadataAttribute<FString>* ActorNameAttr = Meta->CreateAttribute<FString>(ActorNameAttribute, FString(), false, true))
 	{
 		for (int32 i = 0; i < NumPoints; i++)
 		{
@@ -518,7 +515,7 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 
 		// What the export writes itself on this pin. PCG fails to create an attribute over one of another type,
 		// so a tag that took one of these names first would cost every point that attribute.
-		Registry.Reserved.Add(PCGExDefaultLevelDataExporter::ActorNameAttribute);
+		Registry.Reserved.Add(ActorNameAttribute);
 		if (bGenerateCollections)
 		{
 			Registry.Reserved.Add(PCGExCollections::Labels::Tag_EntryIdx);
@@ -593,7 +590,7 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 	return PointData;
 }
 
-void UPCGExDefaultLevelDataExporter::EmitRawSlotData(FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const
+void UPCGExDefaultLevelDataExporter::EmitRawSlotData(const FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const
 {
 	using namespace PCGExLevelExportShared;
 
@@ -623,7 +620,7 @@ void UPCGExDefaultLevelDataExporter::EmitRawSlotData(FPCGExExportSlotWriter& Wri
 
 		if (Item.SourceActor)
 		{
-			PCGExData::Helpers::SetDataValue<FString>(Data, PCGExDefaultLevelDataExporter::ActorNameAttribute, Item.SourceActor->GetActorNameOrLabel());
+			PCGExData::Helpers::SetDataValue<FString>(Data, ActorNameAttribute, Item.SourceActor->GetActorNameOrLabel());
 		}
 
 		Handler->FinalizeItemData(Data, i, Writer, this);
@@ -635,7 +632,7 @@ void UPCGExDefaultLevelDataExporter::EmitRawSlotData(FPCGExExportSlotWriter& Wri
 		{
 			Registry.TypeMap.Reset();
 			Registry.Reserved.Reset();
-			Registry.Reserved.Add(PCGExDefaultLevelDataExporter::ActorNameAttribute);
+			Registry.Reserved.Add(ActorNameAttribute);
 			Registry.Reserved.Append(HandlerAttributes);
 			Registry.Reserved.Append(GetDataDomainAttributeNames(Data));
 

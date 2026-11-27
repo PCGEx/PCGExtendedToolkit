@@ -22,7 +22,6 @@
 #include "Helpers/PCGExLevelDataExporter.h"
 #include "Helpers/PCGExLevelExportShared.h"
 #include "Helpers/PCGExMetaHelpers.h"
-#include "Metadata/PCGMetadata.h"
 #include "Paths/PCGExPathsHelpers.h"
 #include "StructUtils/InstancedStruct.h"
 #endif
@@ -174,16 +173,51 @@ namespace PCGExLevelExportSplineHandler
 {
 	const FName ComponentNameAttribute = TEXT("ComponentName");
 
+	/** A Property Collection value and the @Data name it is written under. */
+	using FKeptProperty = TPair<FName, FInstancedStruct>;
+
 	struct FScratch final : FPCGExExportScratch
 	{
-		/** Resolved Property Collection values per actor: ExtractSchemaFromActor fires PreparePropertyValues, once. */
-		TMap<const AActor*, TArray<FInstancedStruct>> PropertyValues;
-
-		/** Properties already reported as not written, so an actor's splines report each once. */
-		TSet<TPair<const AActor*, FName>> ReportedProperties;
+		/** Per actor, the Property Collection values its splines carry. */
+		TMap<const AActor*, TArray<FKeptProperty>> Properties;
 
 		PCGExLevelExportShared::FAuthoredTags AuthoredTags;
 	};
+
+	/**
+	 * The Property Collection values an actor's splines carry, decided once per actor: none that needs a sidecar, takes a
+	 * name the export writes or repeats another's name. Each one dropped is warned about.
+	 */
+	TArray<FKeptProperty> FilterProperties(const AActor* Actor, TArray<FInstancedStruct>&& Values)
+	{
+		TArray<FKeptProperty> Kept;
+		for (FInstancedStruct& Instanced : Values)
+		{
+			const FPCGExProperty* Property = Instanced.GetPtr<FPCGExProperty>();
+			if (!Property || !Property->SupportsOutput())
+			{
+				continue;
+			}
+
+			const FName OutName = Property->ResolveOutputAttributeName(PCGExMetaHelpers::SanitizeAttributeName(Property->PropertyName));
+			const FName SidecarPin = Property->GetOutputSidecarPin();
+			const bool bExportName = OutName == PCGExLevelExportShared::ActorNameAttribute || OutName == ComponentNameAttribute;
+			const FKeptProperty* Taken = Kept.FindByPredicate([&OutName](const FKeptProperty& Other) { return Other.Key == OutName; });
+			if (SidecarPin.IsNone() && !bExportName && !Taken)
+			{
+				Kept.Emplace(OutName, MoveTemp(Instanced));
+				continue;
+			}
+
+			const FString Reason =
+				!SidecarPin.IsNone() ? FString::Printf(TEXT("it needs its '%s' output, which a spline does not carry"), *SidecarPin.ToString()) :
+				bExportName ? FString::Printf(TEXT("the export writes its own '%s' attribute there"), *OutName.ToString()) :
+				FString::Printf(TEXT("property '%s' already writes '%s'"), *Taken->Value.GetPtr<FPCGExProperty>()->PropertyName.ToString(), *OutName.ToString());
+			UE_LOG(LogPCGEx, Warning, TEXT("Level export: property '%s' of '%s' is not written on its splines: %s."),
+			       *Property->PropertyName.ToString(), *Actor->GetActorNameOrLabel(), *Reason);
+		}
+		return Kept;
+	}
 }
 
 FPCGExExportSlotDesc UPCGExSplineExportHandler::GetSlotDesc() const
@@ -218,9 +252,9 @@ void UPCGExSplineExportHandler::Collect(const FPCGExExportCandidate& Candidate, 
 	}
 
 	FScratch& Scratch = Writer.GetOrCreateScratch<FScratch>();
-	if (UPCGExPropertyCollectionComponent::FindOnActor(Actor))
+	if (TArray<FKeptProperty> Kept = FilterProperties(Actor, UPCGExPropertyCollectionComponent::ExtractSchemaFromActor(Actor)); !Kept.IsEmpty())
 	{
-		Scratch.PropertyValues.Add(Actor, UPCGExPropertyCollectionComponent::ExtractSchemaFromActor(Actor));
+		Scratch.Properties.Add(Actor, MoveTemp(Kept));
 	}
 
 	// A component's own tags reach every spline it yields; ExtractSplines lists a component's splines together.
@@ -242,7 +276,7 @@ void UPCGExSplineExportHandler::Collect(const FPCGExExportCandidate& Candidate, 
 	}
 }
 
-void UPCGExSplineExportHandler::FinalizeItemData(UPCGData* Data, const int32 ItemIndex, FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
+void UPCGExSplineExportHandler::FinalizeItemData(UPCGData* Data, const int32 ItemIndex, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 {
 	using namespace PCGExLevelExportSplineHandler;
 
@@ -262,48 +296,14 @@ void UPCGExSplineExportHandler::FinalizeItemData(UPCGData* Data, const int32 Ite
 		PCGExData::Helpers::SetDataValue<FString>(SplineData, ComponentNameAttribute, Item.SourceComponent->GetName());
 	}
 
-	FScratch& Scratch = Writer.GetOrCreateScratch<FScratch>();
-	const TArray<FInstancedStruct>* Properties = Scratch.PropertyValues.Find(Item.SourceActor);
-	if (!Properties)
+	// Overwrites a same-named @Data attribute the source datum carried: the actor's authoring wins, as ActorName does.
+	const FScratch* Scratch = Writer.GetScratch<FScratch>();
+	check(Scratch);
+	if (const TArray<FKeptProperty>* Properties = Scratch->Properties.Find(Item.SourceActor))
 	{
-		return;
-	}
-
-	const UPCGMetadata* Metadata = SplineData->ConstMetadata();
-	for (const FInstancedStruct& Instanced : *Properties)
-	{
-		const FPCGExProperty* Property = Instanced.GetPtr<FPCGExProperty>();
-		if (!Property || !Property->SupportsOutput())
+		for (const FKeptProperty& Kept : *Properties)
 		{
-			continue;
-		}
-
-		const FName OutName = Property->ResolveOutputAttributeName(PCGExMetaHelpers::SanitizeAttributeName(Property->PropertyName));
-		const FName SidecarPin = Property->GetOutputSidecarPin();
-		const bool bNameTaken = Metadata && Metadata->HasAttribute(FPCGAttributeIdentifier(OutName, PCGMetadataDomainID::Data));
-		if (SidecarPin.IsNone() && !bNameTaken)
-		{
-			PCGExProperties::WriteDataDomainValue(SplineData, OutName, *Property);
-			continue;
-		}
-
-		bool bAlreadyReported = false;
-		Scratch.ReportedProperties.Add(TPair<const AActor*, FName>(Item.SourceActor, Property->PropertyName), &bAlreadyReported);
-		if (bAlreadyReported)
-		{
-			continue;
-		}
-
-		const FString ActorName = Item.SourceActor ? Item.SourceActor->GetActorNameOrLabel() : FString();
-		if (!SidecarPin.IsNone())
-		{
-			UE_LOG(LogPCGEx, Warning, TEXT("Level export: property '%s' of '%s' is not written on its splines: it needs its '%s' output, which a spline does not carry."),
-			       *Property->PropertyName.ToString(), *ActorName, *SidecarPin.ToString());
-		}
-		else
-		{
-			UE_LOG(LogPCGEx, Warning, TEXT("Level export: property '%s' of '%s' is not written on its splines: the export writes its own '%s' attribute there."),
-			       *Property->PropertyName.ToString(), *ActorName, *OutName.ToString());
+			PCGExProperties::WriteDataDomainValue(SplineData, Kept.Key, *Kept.Value.GetPtr<FPCGExProperty>());
 		}
 	}
 }

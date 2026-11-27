@@ -174,7 +174,7 @@ private:
 
 	/** A slot without a collection: each item's data, copied into the asset with ActorName and value tags on @Data and
 	 *  the authored tags as data tags, on the slot's pin. */
-	void EmitRawSlotData(FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const;
+	void EmitRawSlotData(const FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const;
 
 	/** PerEntry slot: (re)build the embedded collection from the writer and write its picks on the pin. */
 	void BuildEmbeddedSlot(const PCGExLevelExport::FHandlerRegistration& Registration, FPCGExExportSlotWriter& Writer, UPCGDataAsset* OutAsset, UPCGBasePointData* PointData, FPCGExLevelExportContext& OutContext) const;

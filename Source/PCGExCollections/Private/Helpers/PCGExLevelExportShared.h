@@ -30,6 +30,9 @@
  */
 namespace PCGExLevelExportShared
 {
+	/** Written on every pin, whatever its handler. */
+	const FName ActorNameAttribute = TEXT("ActorName");
+
 	/** Point data with transform + bounds allocated, ranges returned for filling. */
 	inline UPCGBasePointData* CreatePointData(
 		UObject* Outer, const int32 NumPoints,

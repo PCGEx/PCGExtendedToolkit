@@ -338,10 +338,10 @@ public:
 
 	/**
 	 * Slots without a collection: finishes Data, the exporter's own copy of Writer.Items[ItemIndex].Data, already
-	 * outered to the exported asset. Runs after the generic ActorName and before value tags, data tags and the
-	 * exporter's hooks; a value tag never overwrites a @Data attribute written here.
+	 * outered to the exported asset. Runs after the generic ActorName and before value tags and data tags; a value tag
+	 * never overwrites a @Data attribute written here.
 	 */
-	virtual void FinalizeItemData(UPCGData* Data, int32 ItemIndex, FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
+	virtual void FinalizeItemData(UPCGData* Data, int32 ItemIndex, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 	{
 	}
 
