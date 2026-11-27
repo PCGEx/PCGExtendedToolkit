@@ -10,6 +10,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExActorMeshClassificator.h"
+#include "Helpers/PCGExActorSplineClassificator.h"
+#include "Helpers/PCGExLevelExportSplineHandler.h"
 #include "LevelInstance/LevelInstanceActor.h"
 #include "PCGExAssemblyRoot.h"
 #include "PCGExCollectionsSettingsCache.h"
@@ -20,6 +22,9 @@
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
 #include "Core/PCGExExportSlots.h"
+#include "PCGExLog.h"
+#include "Data/PCGExDataHelpers.h"
+#include "Data/PCGSplineData.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExLevelExportBuiltinHandlers.h"
 #include "Helpers/PCGExLevelExportHandler.h"
@@ -43,6 +48,10 @@ UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter(const FObjectInit
 		? Settings.DefaultMeshClassificatorClass.Get()
 		: UPCGExDefaultActorMeshClassificator::StaticClass();
 
+	UClass* SplineClassificatorClass = Settings.DefaultSplineClassificatorClass
+		? Settings.DefaultSplineClassificatorClass.Get()
+		: UPCGExDefaultActorSplineClassificator::StaticClass();
+
 	ContentFilter = Cast<UPCGExActorContentFilter>(
 		ObjectInitializer.CreateDefaultSubobject(this, TEXT("ContentFilter"),
 		                                         UPCGExActorContentFilter::StaticClass(), FilterClass, false, false));
@@ -50,6 +59,10 @@ UPCGExDefaultLevelDataExporter::UPCGExDefaultLevelDataExporter(const FObjectInit
 	MeshClassificator = Cast<UPCGExActorMeshClassificator>(
 		ObjectInitializer.CreateDefaultSubobject(this, TEXT("MeshClassificator"),
 		                                         UPCGExActorMeshClassificator::StaticClass(), ClassificatorClass, false, false));
+
+	SplineClassificator = Cast<UPCGExActorSplineClassificator>(
+		ObjectInitializer.CreateDefaultSubobject(this, TEXT("SplineClassificator"),
+		                                         UPCGExActorSplineClassificator::StaticClass(), SplineClassificatorClass, false, false));
 
 	BoundsEvaluator = Cast<UPCGExBoundsEvaluator>(
 		ObjectInitializer.CreateDefaultSubobject(this, TEXT("BoundsEvaluator"),
@@ -80,32 +93,19 @@ void UPCGExDefaultLevelDataExporter::ApplyProjectDefaults()
 	const auto& Settings = PCGEX_COLLECTIONS_SETTINGS;
 	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, ContentFilter, Settings.DefaultContentFilterClass.Get());
 	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, MeshClassificator, Settings.DefaultMeshClassificatorClass.Get());
+	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, SplineClassificator, Settings.DefaultSplineClassificatorClass.Get());
 	PCGExDefaultLevelDataExporterInternal::ApplyProjectClass(this, BoundsEvaluator, Settings.DefaultBoundsEvaluatorClass.Get());
 }
 
-EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor) const
+namespace PCGExDefaultLevelDataExporterInternal
 {
-	// Level instances precede the mesh check: an ALevelInstance can incidentally have
-	// a UStaticMeshComponent (gizmo/visualizer) but the meaningful payload is the
-	// referenced UWorld asset.
-	if (const ALevelInstance* LI = Cast<ALevelInstance>(Actor))
+	// Any UStaticMeshComponent (or subclass -- ISMC, HISM, splines, future kinds) with a valid mesh AND geometry to
+	// contribute. ISMCs with zero instances contribute nothing and don't count.
+	bool HasMeshContent(const AActor* Actor)
 	{
-		if (!LI->GetWorldAsset().IsNull())
-		{
-			return EPCGExActorExportType::Level;
-		}
-		// Empty world ref -- nothing to embed; fall through to actor-style export so
-		// transform/tags survive the round-trip.
-	}
-
-	if (MeshClassificator && MeshClassificator->ShouldClassifyAsMesh(Actor))
-	{
-		// Any UStaticMeshComponent (or subclass -- ISMC, HISM, splines, future kinds)
-		// with a valid mesh AND geometry to contribute qualifies the actor as a Mesh
-		// container. ISMCs with zero instances contribute nothing and don't count.
 		TInlineComponentArray<UStaticMeshComponent*> SMCs;
 		Actor->GetComponents<UStaticMeshComponent>(SMCs);
-		for (UStaticMeshComponent* SMC : SMCs)
+		for (const UStaticMeshComponent* SMC : SMCs)
 		{
 			if (!SMC || !SMC->GetStaticMesh())
 			{
@@ -118,11 +118,37 @@ EPCGExActorExportType UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Acto
 					continue;
 				}
 			}
-			return EPCGExActorExportType::Mesh;
+			return true;
 		}
+		return false;
+	}
+}
+
+void UPCGExDefaultLevelDataExporter::ClassifyActor(AActor* Actor, PCGExLevelExport::FSlotSet& OutSlots) const
+{
+	// Level instances precede the content checks: an ALevelInstance can incidentally have a UStaticMeshComponent
+	// (gizmo/visualizer) but the meaningful payload is the referenced UWorld asset. An empty world ref has nothing to
+	// embed and falls through, so transform/tags survive the round-trip.
+	if (const ALevelInstance* LI = Cast<ALevelInstance>(Actor); LI && !LI->GetWorldAsset().IsNull())
+	{
+		OutSlots.Add(PCGExLevelExport::Slots::Levels);
+		return;
 	}
 
-	return EPCGExActorExportType::Actor;
+	if (MeshClassificator && MeshClassificator->ShouldClassifyAsMesh(Actor) && PCGExDefaultLevelDataExporterInternal::HasMeshContent(Actor))
+	{
+		OutSlots.Add(PCGExLevelExport::Slots::Meshes);
+	}
+
+	if (SplineClassificator && SplineClassificator->ShouldClassifyAsSpline(Actor) && PCGExLevelExport::HasSplineContent(Actor, SplineClassificator->bConvertSplineMeshes))
+	{
+		OutSlots.Add(PCGExLevelExport::Slots::Splines);
+	}
+
+	if (OutSlots.IsEmpty())
+	{
+		OutSlots.Add(PCGExLevelExport::Slots::Actors);
+	}
 }
 
 void UPCGExDefaultLevelDataExporter::OnExportComplete(UPCGDataAsset* OutAsset)
@@ -143,17 +169,125 @@ namespace PCGExDefaultLevelDataExporter
 	// Written on every pin, whatever its handler.
 	const FName ActorNameAttribute = TEXT("ActorName");
 
-	FName SlotForClassification(const EPCGExActorExportType Type)
+	/** The classification an actor's system tags force. False when it carries none. */
+	bool ReadClassificationTags(const AActor* Actor, PCGExLevelExport::FSlotSet& OutSlots)
 	{
-		switch (Type)
+		if (Actor->ActorHasTag(PCGExCollections::Labels::StaticClassifyMesh))
 		{
-		case EPCGExActorExportType::Mesh: return PCGExLevelExport::Slots::Meshes;
-		case EPCGExActorExportType::Actor: return PCGExLevelExport::Slots::Actors;
-		case EPCGExActorExportType::Level: return PCGExLevelExport::Slots::Levels;
-		case EPCGExActorExportType::Skip: return NAME_None;
-		default:
-			ensureMsgf(false, TEXT("Unhandled EPCGExActorExportType"));
-			return NAME_None;
+			OutSlots.AddUnique(PCGExLevelExport::Slots::Meshes);
+		}
+		if (Actor->ActorHasTag(PCGExCollections::Labels::StaticClassifySpline))
+		{
+			OutSlots.AddUnique(PCGExLevelExport::Slots::Splines);
+		}
+		return !OutSlots.IsEmpty();
+	}
+
+	FName ClassificationTagOf(const FName SlotId)
+	{
+		if (SlotId == PCGExLevelExport::Slots::Meshes)
+		{
+			return PCGExCollections::Labels::StaticClassifyMesh;
+		}
+		if (SlotId == PCGExLevelExport::Slots::Splines)
+		{
+			return PCGExCollections::Labels::StaticClassifySpline;
+		}
+		return NAME_None;
+	}
+
+	/**
+	 * Drops (once per export, loudly) the slots no handler registers, then sets bRecreated. False when a slot that
+	 * spawns the actor again would share it: the actor is skipped.
+	 */
+	bool ResolveClaims(FPCGExExportCandidate& Candidate, const TMap<FName, const FPCGExExportSlotDesc*>& DescById, TSet<FName>& ReportedUnknownSlots)
+	{
+		PCGExLevelExport::FSlotSet Resolved;
+		bool bRecreated = false;
+
+		for (const FName SlotId : Candidate.ClaimedSlots)
+		{
+			const FPCGExExportSlotDesc* const* Desc = DescById.Find(SlotId);
+			if (!Desc)
+			{
+				bool bAlreadyReported = false;
+				ReportedUnknownSlots.Add(SlotId, &bAlreadyReported);
+				if (!bAlreadyReported)
+				{
+					UE_LOG(LogPCGEx, Error, TEXT("Level export: '%s' is classified into slot '%s', which no handler registers; that slot is ignored."),
+					       *Candidate.Actor->GetActorNameOrLabel(), *SlotId.ToString());
+				}
+				continue;
+			}
+
+			if (!Resolved.Contains(SlotId))
+			{
+				Resolved.Add(SlotId);
+				bRecreated |= (*Desc)->bRecreatesSource;
+			}
+		}
+
+		if (bRecreated && Resolved.Num() > 1)
+		{
+			TArray<FString> SlotNames;
+			for (const FName SlotId : Resolved)
+			{
+				SlotNames.Add(SlotId.ToString());
+			}
+			UE_LOG(LogPCGEx, Error, TEXT("Level export: '%s' is classified into %s, but a slot that spawns the actor again (Actors, Levels) cannot share it. The actor is skipped."),
+			       *Candidate.Actor->GetActorNameOrLabel(), *FString::Join(SlotNames, TEXT(" + ")));
+			return false;
+		}
+
+		Candidate.ClaimedSlots = MoveTemp(Resolved);
+		Candidate.bRecreated = bRecreated;
+		return true;
+	}
+
+	/** A tag skips the content check: one warning per tagged actor whose tagged slots got nothing from it. */
+	void WarnEmptyTaggedCandidates(TConstArrayView<FPCGExExportCandidate> Candidates, TConstArrayView<PCGExLevelExport::FHandlerRegistration> Registrations, TConstArrayView<TUniquePtr<FPCGExExportSlotWriter>> Writers)
+	{
+		TMap<FName, TSet<const AActor*>> HarvestedBySlot;
+		bool bHarvestedBuilt = false;
+		for (const FPCGExExportCandidate& Candidate : Candidates)
+		{
+			if (!Candidate.bForcedByTag)
+			{
+				continue;
+			}
+
+			if (!bHarvestedBuilt)
+			{
+				bHarvestedBuilt = true;
+				for (int32 i = 0; i < Registrations.Num(); i++)
+				{
+					if (ClassificationTagOf(Registrations[i].Desc.SlotId).IsNone())
+					{
+						continue;
+					}
+					TSet<const AActor*>& Harvested = HarvestedBySlot.Add(Registrations[i].Desc.SlotId);
+					for (const FPCGExExportItem& Item : Writers[i]->Items)
+					{
+						Harvested.Add(Item.SourceActor);
+					}
+				}
+			}
+
+			TArray<FString> EmptyTags;
+			for (const FName SlotId : Candidate.ClaimedSlots)
+			{
+				const TSet<const AActor*>* Harvested = HarvestedBySlot.Find(SlotId);
+				if (!Harvested || !Harvested->Contains(Candidate.Actor))
+				{
+					EmptyTags.Add(ClassificationTagOf(SlotId).ToString());
+				}
+			}
+
+			if (!EmptyTags.IsEmpty())
+			{
+				UE_LOG(LogPCGEx, Warning, TEXT("Level export: '%s' is tagged %s but has nothing to export there."),
+				       *Candidate.Actor->GetActorNameOrLabel(), *FString::Join(EmptyTags, TEXT(" and ")));
+			}
 		}
 	}
 }
@@ -192,18 +326,34 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 
 	TArray<const UPCGExLevelExportHandler*> Handlers;
 	Handlers.Reserve(Registrations.Num());
+	TMap<FName, const FPCGExExportSlotDesc*> DescById;
+	DescById.Reserve(Registrations.Num());
 	for (const PCGExLevelExport::FHandlerRegistration& Registration : Registrations)
 	{
 		Handlers.Add(Registration.HandlerClass->GetDefaultObject<UPCGExLevelExportHandler>());
+		DescById.Add(Registration.Desc.SlotId, &Registration.Desc);
 	}
 
-	// Claim pass. The root is a candidate too (handlers may harvest its components) but never an entry.
+	TSet<FName> ReportedUnknownSlots;
+
+	// Claim pass. A root is a candidate too (handlers may harvest its components) but never an entry; its
+	// classification tags, read whatever the content filter says, pick the slots that harvest it.
 	TArray<FPCGExExportCandidate> Candidates;
+	auto AddRoot = [&](AActor* RootActor)
+	{
+		FPCGExExportCandidate Root;
+		Root.Actor = RootActor;
+		Root.bIsRoot = true;
+		Root.bForcedByTag = ReadClassificationTags(RootActor, Root.ClaimedSlots);
+		if (ResolveClaims(Root, DescById, ReportedUnknownSlots))
+		{
+			Candidates.Add(MoveTemp(Root));
+		}
+	};
+
 	if (Source.Root)
 	{
-		FPCGExExportCandidate& Root = Candidates.AddDefaulted_GetRef();
-		Root.Actor = Source.Root;
-		Root.bIsRoot = true;
+		AddRoot(Source.Root);
 	}
 
 	for (AActor* Actor : Source.Actors)
@@ -220,9 +370,7 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 		{
 			if (!UPCGExActorContentFilter::IsInfrastructureActor(Actor))
 			{
-				FPCGExExportCandidate& RootLike = Candidates.AddDefaulted_GetRef();
-				RootLike.Actor = Actor;
-				RootLike.bIsRoot = true;
+				AddRoot(Actor);
 			}
 			continue;
 		}
@@ -232,27 +380,33 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 			continue;
 		}
 
-		FName ClaimedSlot = NAME_None;
-		for (int32 i = 0; i < Handlers.Num(); i++)
+		FPCGExExportCandidate Candidate;
+		Candidate.Actor = Actor;
+
+		// Tags replace the classification: no handler claim, no classificator, no content check.
+		Candidate.bForcedByTag = ReadClassificationTags(Actor, Candidate.ClaimedSlots);
+		if (!Candidate.bForcedByTag)
 		{
-			if (Handlers[i]->Claim(Actor, Source, this))
+			for (int32 i = 0; i < Handlers.Num(); i++)
 			{
-				ClaimedSlot = Registrations[i].Desc.SlotId;
-				break;
+				if (Handlers[i]->Claim(Actor, Source, this))
+				{
+					Candidate.ClaimedSlots.Add(Registrations[i].Desc.SlotId);
+					break;
+				}
 			}
-		}
-		if (ClaimedSlot.IsNone())
-		{
-			ClaimedSlot = SlotForClassification(ClassifyActor(Actor));
-			if (ClaimedSlot.IsNone())
+			if (Candidate.ClaimedSlots.IsEmpty())
 			{
-				continue;
+				ClassifyActor(Actor, Candidate.ClaimedSlots);
 			}
 		}
 
-		FPCGExExportCandidate& Candidate = Candidates.AddDefaulted_GetRef();
-		Candidate.Actor = Actor;
-		Candidate.ClaimedSlot = ClaimedSlot;
+		if (!ResolveClaims(Candidate, DescById, ReportedUnknownSlots) || Candidate.ClaimedSlots.IsEmpty())
+		{
+			continue;
+		}
+
+		Candidates.Add(MoveTemp(Candidate));
 	}
 
 	if (Candidates.IsEmpty())
@@ -284,14 +438,25 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 		}
 	}
 
-	// Emit one point data per non-empty slot, in handler order.
+	WarnEmptyTaggedCandidates(Candidates, Registrations, Writers);
+
+	// Emit one point data per non-empty slot, in handler order; a slot without a collection emits each item's data.
 	TArray<UPCGBasePointData*> SlotPointData;
 	SlotPointData.Init(nullptr, Registrations.Num());
 	for (int32 i = 0; i < Registrations.Num(); i++)
 	{
-		if (!Writers[i]->IsEmpty())
+		if (Writers[i]->IsEmpty())
+		{
+			continue;
+		}
+
+		if (Registrations[i].Desc.HasCollection())
 		{
 			SlotPointData[i] = EmitSlotPoints(*Writers[i], Handlers[i], OutAsset);
+		}
+		else
+		{
+			EmitRawSlotData(*Writers[i], Handlers[i], OutAsset);
 		}
 	}
 
@@ -382,7 +547,7 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 		}
 	}
 
-	const bool bHasMeshPoints = Writer.Items.ContainsByPredicate([](const FPCGExExportItem& Item) { return Item.SourceComponent != nullptr; });
+	const bool bHasMeshPoints = Writer.Items.ContainsByPredicate([](const FPCGExExportItem& Item) { return Item.SourceComponent && Item.SourceComponent->IsA<UStaticMeshComponent>(); });
 	TArray<FName> DeclaredAttributes;
 	if (bHasMeshPoints)
 	{
@@ -463,9 +628,9 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 		for (int32 i = 0; i < NumPoints; i++)
 		{
 			const FPCGExExportItem& Item = Writer.Items[i];
-			if (Item.SourceComponent)
+			if (const UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Item.SourceComponent))
 			{
-				OnMeshPointExported(Item.SourceActor, Item.SourceComponent, Item.SourceInstanceIndex, Meta, MetaEntries[i]);
+				OnMeshPointExported(Item.SourceActor, MeshComponent, Item.SourceInstanceIndex, Meta, MetaEntries[i]);
 			}
 		}
 	}
@@ -475,6 +640,84 @@ UPCGBasePointData* UPCGExDefaultLevelDataExporter::EmitSlotPoints(const FPCGExEx
 	TaggedData.Pin = Writer.Desc.PinName;
 
 	return PointData;
+}
+
+void UPCGExDefaultLevelDataExporter::EmitRawSlotData(FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const
+{
+	using namespace PCGExLevelExportShared;
+
+	// What the export writes itself on every datum of this pin, whether or not a given datum carries it.
+	TArray<FName> HandlerAttributes;
+	Handler->GetWrittenAttributeNames(this, false, HandlerAttributes);
+
+	// One registry for the pin, so each skipped name warns once; types are per datum, one value per @Data name.
+	FValueTagRegistry Registry;
+
+	for (int32 i = 0; i < Writer.Items.Num(); i++)
+	{
+		const FPCGExExportItem& Item = Writer.Items[i];
+		if (!Item.Data)
+		{
+			continue;
+		}
+
+		// PCG's own recipe for keeping transient data in an asset (UPCGAssetExporter): copy, re-outer, flatten.
+		UPCGData* Data = Item.Data->DuplicateData(/*Context=*/nullptr);
+		if (!Data)
+		{
+			continue;
+		}
+		Data->Rename(nullptr, OutAsset, REN_DontCreateRedirectors | REN_NonTransactional);
+		Data->Flatten();
+
+		if (Item.SourceActor)
+		{
+			PCGExData::Helpers::SetDataValue<FString>(Data, PCGExDefaultLevelDataExporter::ActorNameAttribute, Item.SourceActor->GetActorNameOrLabel());
+		}
+
+		Handler->FinalizeItemData(Data, i, Writer, this);
+
+		const FPCGExExportSlotWriter::FTagSource* TagSource = Writer.TagSources.IsValidIndex(Item.TagSource) ? &Writer.TagSources[Item.TagSource] : nullptr;
+
+		if (ValueTagMode != EPCGExValueTagMode::NoParsing)
+		{
+			Registry.TypeMap.Reset();
+			Registry.Reserved.Reset();
+			Registry.Reserved.Add(PCGExDefaultLevelDataExporter::ActorNameAttribute);
+			Registry.Reserved.Append(HandlerAttributes);
+			Registry.Reserved.Append(GetDataDomainAttributeNames(Data));
+
+			// The source registers first and is written last: it wins a shared name, as on points.
+			const FParsedTags SourceParsed = TagSource ? ParseTags(TagSource->Tags, &Registry, TagSource->Name) : FParsedTags();
+			const FParsedTags ActorParsed = Item.SourceActor ? ParseActorTags(Item.SourceActor, &Registry) : FParsedTags();
+			SetValueTagDataValues(Data, ActorParsed);
+			SetValueTagDataValues(Data, SourceParsed);
+		}
+
+		if (UPCGSplineData* SplineData = Cast<UPCGSplineData>(Data))
+		{
+			OnSplineExported(Item.SourceActor, Item.SourceComponent, SplineData);
+		}
+
+		// Authored tags as data tags, as written: a Name:Value tag reads as a value tag downstream.
+		FPCGTaggedData& TaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
+		TaggedData.Data = Data;
+		TaggedData.Pin = Writer.Desc.PinName;
+		if (Item.SourceActor)
+		{
+			for (const FName& Tag : FAuthoredTags::OfActor(Item.SourceActor))
+			{
+				TaggedData.Tags.Add(Tag.ToString());
+			}
+		}
+		if (TagSource)
+		{
+			for (const FName& Tag : TagSource->Tags)
+			{
+				TaggedData.Tags.Add(Tag.ToString());
+			}
+		}
+	}
 }
 
 void UPCGExDefaultLevelDataExporter::BuildEmbeddedSlot(const PCGExLevelExport::FHandlerRegistration& Registration, FPCGExExportSlotWriter& Writer, UPCGDataAsset* OutAsset, UPCGBasePointData* PointData, FPCGExLevelExportContext& OutContext) const

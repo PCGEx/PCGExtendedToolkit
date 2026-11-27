@@ -8,8 +8,10 @@
 #if WITH_EDITOR
 
 #include "PCGComponent.h"
+#include "PCGExCollectionsCommon.h"
 #include "PCGExLog.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataValue.h"
 #include "Data/PCGPointArrayData.h"
 #include "GameFramework/Actor.h"
@@ -18,6 +20,7 @@
 #include "Helpers/PCGExPointArrayDataHelpers.h"
 #include "Helpers/PCGHelpers.h"
 #include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataDomain.h"
 #include "UObject/UObjectIterator.h"
 
 /**
@@ -176,7 +179,8 @@ namespace PCGExLevelExportShared
 
 	/**
 	 * Tags a user put on an export source. PCG stamps bookkeeping on what it generates -- its markers and
-	 * the generating component's name -- which is neither entry identity nor an attribute.
+	 * the generating component's name -- which is neither entry identity nor an attribute; nor are the
+	 * exporter's own system tags.
 	 */
 	struct FAuthoredTags
 	{
@@ -188,13 +192,20 @@ namespace PCGExLevelExportShared
 				|| Tag == PCGHelpers::MarkedForCleanupPCGTag;
 		}
 
+		static bool IsSystemTag(const FName& Tag)
+		{
+			return Tag == PCGExCollections::Labels::StaticIgnore
+				|| Tag == PCGExCollections::Labels::StaticClassifyMesh
+				|| Tag == PCGExCollections::Labels::StaticClassifySpline;
+		}
+
 		static TArray<FName> OfActor(const AActor* Actor)
 		{
 			TArray<FName> Tags;
 			Tags.Reserve(Actor->Tags.Num());
 			for (const FName& Tag : Actor->Tags)
 			{
-				if (!Tag.IsNone() && !IsPCGMarker(Tag))
+				if (!Tag.IsNone() && !IsPCGMarker(Tag) && !IsSystemTag(Tag))
 				{
 					Tags.Add(Tag);
 				}
@@ -217,7 +228,7 @@ namespace PCGExLevelExportShared
 			bool bSourceNamed = false;
 			for (const FName& Tag : RawTags)
 			{
-				if (Tag.IsNone() || IsPCGMarker(Tag))
+				if (Tag.IsNone() || IsPCGMarker(Tag) || IsSystemTag(Tag))
 				{
 					continue;
 				}
@@ -316,6 +327,39 @@ namespace PCGExLevelExportShared
 			PCGEX_EXECUTEWITHRIGHTTYPE(Val->GetTypeId(), PCGEX_SET_VALUE_TAG_ATTR)
 #undef PCGEX_SET_VALUE_TAG_ATTR
 		}
+	}
+
+	/** SetValueTagAttributes for a data's @Data domain, which holds one value per name. */
+	inline void SetValueTagDataValues(UPCGData* Data, const FParsedTags& Parsed)
+	{
+		for (const FName& Tag : Parsed.PlainTags)
+		{
+			PCGExData::Helpers::SetDataValue<bool>(Data, Tag, true);
+		}
+
+		for (const TPair<FName, TSharedPtr<PCGExData::IDataValue>>& VT : Parsed.ValueTags)
+		{
+			const TSharedPtr<PCGExData::IDataValue>& Val = VT.Value;
+
+#define PCGEX_SET_VALUE_TAG_DATA(_TYPE, _NAME) PCGExData::Helpers::SetDataValue<_TYPE>(Data, VT.Key, Val->GetValue<_TYPE>());
+			PCGEX_EXECUTEWITHRIGHTTYPE(Val->GetTypeId(), PCGEX_SET_VALUE_TAG_DATA)
+#undef PCGEX_SET_VALUE_TAG_DATA
+		}
+	}
+
+	/** Names already on Data's @Data domain. */
+	inline TArray<FName> GetDataDomainAttributeNames(const UPCGData* Data)
+	{
+		TArray<FName> Names;
+		TArray<EPCGMetadataTypes> Types;
+		if (const UPCGMetadata* Meta = Data ? Data->ConstMetadata() : nullptr)
+		{
+			if (const FPCGMetadataDomain* Domain = Meta->GetConstMetadataDomain(PCGMetadataDomainID::Data))
+			{
+				Domain->GetAttributes(Names, Types);
+			}
+		}
+		return Names;
 	}
 
 	/** Adds the effective form of tags (actor or component) under the parse mode: every tag, plain tags, or plain +

@@ -224,32 +224,7 @@ namespace PCGExPCGDataAssetLoader
 
 		virtual void ExecuteTask(const TSharedPtr<PCGExMT::FTaskManager>& TaskManager) override
 		{
-			// Copy keys
-			TArray<FInterpCurvePoint<FVector>>& Scales = const_cast<FInterpCurveVector&>(Data->SplineStruct.GetSplinePointsScale()).Points;
-			TArray<FInterpCurvePoint<FQuat>>& Rotations = const_cast<FInterpCurveQuat&>(Data->SplineStruct.GetSplinePointsRotation()).Points;
-			TArray<FInterpCurvePoint<FVector>>& Positions = const_cast<FInterpCurveVector&>(Data->SplineStruct.GetSplinePointsPosition()).Points;
-
-			FVector OutScale = Transform.GetScale3D();
-			for (FInterpCurvePoint<FVector>& Scale : Scales)
-			{
-				Scale.ArriveTangent = Transform.TransformVector(Scale.ArriveTangent);
-				Scale.LeaveTangent = Transform.TransformVector(Scale.LeaveTangent);
-				Scale.OutVal *= OutScale;
-			}
-
-			for (FInterpCurvePoint<FQuat>& Rotation : Rotations)
-			{
-				Rotation.ArriveTangent = Transform.TransformRotation(Rotation.ArriveTangent);
-				Rotation.LeaveTangent = Transform.TransformRotation(Rotation.LeaveTangent);
-				Rotation.OutVal = Transform.TransformRotation(Rotation.OutVal);
-			}
-
-			for (FInterpCurvePoint<FVector>& Position : Positions)
-			{
-				Position.ArriveTangent = Transform.TransformVector(Position.ArriveTangent);
-				Position.LeaveTangent = Transform.TransformVector(Position.LeaveTangent);
-				Position.OutVal = Transform.TransformPosition(Position.OutVal);
-			}
+			TransformSpline(Data, Transform);
 		}
 	};
 
@@ -289,6 +264,15 @@ namespace PCGExPCGDataAssetLoader
 			Data->Initialize(Data->GetStrictBounds().TransformBy(Transform));
 		}
 	};
+
+	void TransformSpline(UPCGSplineData* InData, const FTransform& InTransform)
+	{
+		// The target applies after the spline's own transform, as it does to points.
+		FPCGSplineStruct Struct = InData->SplineStruct;
+		Struct.Transform = Struct.Transform * InTransform;
+		Struct.Bounds = Struct.LocalBounds.TransformBy(Struct.Transform);
+		InData->Initialize(Struct);
+	}
 
 	/** Emptiness rule behind bOmitEmptyData. */
 	bool IsSpatialDataEmpty(const UPCGSpatialData* InData)

@@ -14,6 +14,7 @@
 #include "PCGExStagingLoadPCGData.generated.h"
 
 class UPCGDataAsset;
+class UPCGSplineData;
 struct FPCGExPCGDataAssetCollectionEntry;
 
 namespace PCGExPCGDataAssetLoader
@@ -43,7 +44,11 @@ namespace PCGExPCGDataAssetLoader
 		explicit FSpatialTransformResult(const TSharedPtr<PCGExMT::FTask>& InTask);
 	};
 
-	static FSpatialTransformResult PrepareTransformTask(UPCGSpatialData* InData, const FTransform& InTransform);
+	FSpatialTransformResult PrepareTransformTask(UPCGSpatialData* InData, const FTransform& InTransform);
+
+	/** Places InData at InTransform, applied after the spline's own transform; its control points stay local. Any thread,
+	 *  on data no other thread reads. */
+	PCGEXCOLLECTIONS_API void TransformSpline(UPCGSplineData* InData, const FTransform& InTransform);
 
 	/** Where an asset datum goes for one target */
 	enum class ERoute : uint8

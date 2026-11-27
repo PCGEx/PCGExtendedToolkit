@@ -9,10 +9,10 @@
 #include "PCGExLevelExportBuiltinHandlers.generated.h"
 
 /**
- * The three content kinds the default exporter has always produced, as handlers. None of them
- * claims: the Mesh / Actor / Level split stays UPCGExDefaultLevelDataExporter::ClassifyActor's
- * (overridable) decision; each handler harvests the candidates classified into its slot. Registered
- * by FPCGExCollectionsModule::StartupModule.
+ * The content kinds the default exporter has always produced, as handlers (splines live in
+ * PCGExLevelExportSplineHandler.h). None of them claims: the classification stays
+ * UPCGExDefaultLevelDataExporter::ClassifyActor's (overridable) decision; each handler harvests the
+ * candidates classified into its slot. Registered by FPCGExCollectionsModule::StartupModule.
  */
 
 /** Static-mesh components of Mesh-classified actors -> "Meshes" pin, shared mesh collection. */
@@ -72,11 +72,11 @@ public:
 #if WITH_EDITOR
 namespace PCGExLevelExport
 {
-	/** Registers the three built-in handlers. Called once from the Collections module startup. */
+	/** Registers the built-in handlers (meshes, actors, levels, splines). Called once from the Collections module startup. */
 	PCGEXCOLLECTIONS_API void RegisterBuiltinHandlers();
 	PCGEXCOLLECTIONS_API void UnregisterBuiltinHandlers();
 
-	/** True for the three built-in handler classes (what bUseRegisteredHandlers == false keeps). */
+	/** True for the built-in handler classes (what bUseRegisteredHandlers == false keeps). */
 	PCGEXCOLLECTIONS_API bool IsBuiltinHandlerClass(const UClass* HandlerClass);
 }
 #endif

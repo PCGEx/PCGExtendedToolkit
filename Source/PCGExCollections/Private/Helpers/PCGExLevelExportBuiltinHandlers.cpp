@@ -20,6 +20,7 @@
 #include "Helpers/PCGExCollectionSortKeys.h"
 #include "Helpers/PCGExDefaultLevelDataExporter.h"
 #include "Helpers/PCGExLevelExportShared.h"
+#include "Helpers/PCGExLevelExportSplineHandler.h"
 #include "ISMPartition/ISMComponentDescriptor.h"
 #include "LevelInstance/LevelInstanceActor.h"
 #include "Materials/MaterialInterface.h"
@@ -406,7 +407,7 @@ void UPCGExMeshExportHandler::Collect(const FPCGExExportCandidate& Candidate, co
 {
 	using namespace PCGExMeshExportHandler;
 
-	if (Candidate.ClaimedSlot != PCGExLevelExport::Slots::Meshes)
+	if (!Candidate.IsClaimedBy(PCGExLevelExport::Slots::Meshes))
 	{
 		return;
 	}
@@ -711,6 +712,7 @@ FPCGExExportSlotDesc UPCGExActorExportHandler::GetSlotDesc() const
 	Desc.CollectionClass = UPCGExActorCollection::StaticClass();
 	Desc.EntryStruct = FPCGExActorCollectionEntry::StaticStruct();
 	Desc.Scope = EPCGExExportSlotScope::PerEntry;
+	Desc.bRecreatesSource = true;
 	return Desc;
 }
 
@@ -723,7 +725,7 @@ void UPCGExActorExportHandler::Collect(const FPCGExExportCandidate& Candidate, c
 {
 	using namespace PCGExActorExportHandler;
 
-	if (Candidate.ClaimedSlot != PCGExLevelExport::Slots::Actors)
+	if (!Candidate.IsClaimedBy(PCGExLevelExport::Slots::Actors))
 	{
 		return;
 	}
@@ -900,6 +902,7 @@ FPCGExExportSlotDesc UPCGExLevelInstanceExportHandler::GetSlotDesc() const
 	Desc.CollectionClass = UPCGExLevelCollection::StaticClass();
 	Desc.EntryStruct = FPCGExLevelCollectionEntry::StaticStruct();
 	Desc.Scope = EPCGExExportSlotScope::Shared;
+	Desc.bRecreatesSource = true;
 	return Desc;
 }
 
@@ -910,7 +913,7 @@ TSharedPtr<const IPCGExExportSlotPolicy> UPCGExLevelInstanceExportHandler::MakeP
 
 void UPCGExLevelInstanceExportHandler::Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const
 {
-	if (Candidate.ClaimedSlot != PCGExLevelExport::Slots::Levels)
+	if (!Candidate.IsClaimedBy(PCGExLevelExport::Slots::Levels))
 	{
 		return;
 	}
@@ -977,6 +980,7 @@ namespace PCGExLevelExport
 		Registry.Register(UPCGExMeshExportHandler::StaticClass());
 		Registry.Register(UPCGExActorExportHandler::StaticClass());
 		Registry.Register(UPCGExLevelInstanceExportHandler::StaticClass());
+		Registry.Register(UPCGExSplineExportHandler::StaticClass());
 	}
 
 	void UnregisterBuiltinHandlers()
@@ -985,6 +989,7 @@ namespace PCGExLevelExport
 		Registry.Unregister(Slots::Meshes);
 		Registry.Unregister(Slots::Actors);
 		Registry.Unregister(Slots::Levels);
+		Registry.Unregister(Slots::Splines);
 	}
 
 	bool IsBuiltinHandlerClass(const UClass* HandlerClass)
@@ -992,7 +997,8 @@ namespace PCGExLevelExport
 		return HandlerClass
 			&& (HandlerClass->IsChildOf<UPCGExMeshExportHandler>()
 				|| HandlerClass->IsChildOf<UPCGExActorExportHandler>()
-				|| HandlerClass->IsChildOf<UPCGExLevelInstanceExportHandler>());
+				|| HandlerClass->IsChildOf<UPCGExLevelInstanceExportHandler>()
+				|| HandlerClass->IsChildOf<UPCGExSplineExportHandler>());
 	}
 }
 
