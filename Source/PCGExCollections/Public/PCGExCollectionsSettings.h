@@ -45,6 +45,11 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta=(MetaClass="/Script/PCGExCollections.PCGExActorMeshClassificator"))
 	FSoftClassPath DefaultMeshClassificatorClass;
 
+	/** Default actor spline classificator class used on new exporters.
+	 *  If None, falls back to UPCGExDefaultActorSplineClassificator. */
+	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta=(MetaClass="/Script/PCGExCollections.PCGExActorSplineClassificator"))
+	FSoftClassPath DefaultSplineClassificatorClass;
+
 	/** Additional actor class names to unconditionally exclude from all level exports,
 	 *  on top of the hardcoded list in UPCGExActorContentFilter::KnownSystemActorClasses.
 	 *  Use the C++ class name without the A prefix (e.g. "ChaosDebugDrawActor"). */

@@ -93,22 +93,25 @@ namespace PCGExLevelExport
 		Registration.HandlerClass = HandlerClass;
 		Registration.Priority = CDO->GetPriority();
 
-		if (!Registration.Desc.IsValid() || !Registration.Policy)
+		if (!Registration.Desc.IsValid() || Registration.Desc.HasCollection() != Registration.Policy.IsValid())
 		{
-			UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: incomplete slot descriptor or null policy."), *HandlerClass->GetName());
+			UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: incomplete slot descriptor or policy (a slot with a collection declares its class, entry struct and policy; Scope None declares none)."), *HandlerClass->GetName());
 			return false;
 		}
 
-		if (!Registration.Desc.EntryStruct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
+		if (Registration.Desc.HasCollection())
 		{
-			UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: entry struct '%s' is not an asset collection entry."), *HandlerClass->GetName(), *Registration.Desc.EntryStruct->GetName());
-			return false;
-		}
+			if (!Registration.Desc.EntryStruct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
+			{
+				UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: entry struct '%s' is not an asset collection entry."), *HandlerClass->GetName(), *Registration.Desc.EntryStruct->GetName());
+				return false;
+			}
 
-		if (!Registration.Desc.CollectionClass->IsChildOf<UPCGExAssetCollection>() || Registration.Desc.CollectionClass->HasAnyClassFlags(CLASS_Abstract))
-		{
-			UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: '%s' is not a concrete asset collection class."), *HandlerClass->GetName(), *Registration.Desc.CollectionClass->GetName());
-			return false;
+			if (!Registration.Desc.CollectionClass->IsChildOf<UPCGExAssetCollection>() || Registration.Desc.CollectionClass->HasAnyClassFlags(CLASS_Abstract))
+			{
+				UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: '%s' is not a concrete asset collection class."), *HandlerClass->GetName(), *Registration.Desc.CollectionClass->GetName());
+				return false;
+			}
 		}
 
 		FWriteScopeLock WriteLock(Lock);

@@ -33,6 +33,7 @@ namespace PCGExData
 }
 
 class UPCGData;
+class UPCGSplineData;
 
 namespace PCGExPaths
 {
@@ -66,6 +67,9 @@ namespace PCGExPaths
 		PCGEXCORE_API FTransform GetClosestTransform(const FPCGSplineStruct& InSpline, const FVector& InLocation, const bool bUseScale = true);
 
 		PCGEXCORE_API FTransform GetClosestTransform(const TSharedPtr<const FPCGSplineStruct>& InSpline, const FVector& InLocation, const bool bUseScale = true);
+
+		/** Moves InData to InTransform, bounds included; its control points stay local. Any thread, on data no other thread reads. */
+		PCGEXCORE_API void SetSplineTransform(UPCGSplineData* InData, const FTransform& InTransform);
 
 		/** Canonical encoding of a spline control point's interp mode to int32, shared by nodes that emit a
 		 *  "PointType" attribute (Spline to Path, Get Path Data) so the values stay consistent across them. */

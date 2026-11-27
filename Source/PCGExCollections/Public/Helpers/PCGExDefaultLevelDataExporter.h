@@ -8,8 +8,10 @@
 #include "PCGExSchemaMerging.h"
 #include "Helpers/PCGExActorContentFilter.h"
 #include "Helpers/PCGExActorMeshClassificator.h"
+#include "Helpers/PCGExActorSplineClassificator.h"
 #include "Helpers/PCGExBoundsEvaluator.h"
 #include "Helpers/PCGExLevelDataExporter.h"
+#include "Helpers/PCGExLevelExportHandler.h"
 
 #include "PCGExDefaultLevelDataExporter.generated.h"
 
@@ -35,29 +37,17 @@ enum class EPCGExValueTagMode : uint8
 	ParseAndKeep UMETA(DisplayName = "Parse and Keep", ToolTip="Same as Parse, but the name-part of each value tag is also written to the instance tag string."),
 };
 
-UENUM()
-enum class EPCGExActorExportType : uint8
-{
-	// Has UStaticMeshComponent with valid mesh
-	Mesh = 0,
-	// No static mesh → export as actor class reference
-	Actor = 1,
-	// ALevelInstance → export the referenced UWorld asset to an embedded level collection
-	Level = 2,
-	// Exclude entirely
-	Skip = 3,
-};
-
 /**
  * Default level data exporter that replicates the engine's UPCGLevelToAsset behavior.
  *
  * For each qualifying actor of the export source (a whole level, or one actor's subtree):
- * - Classifies actors as Mesh, Actor or Level (or Skip) -- unless a registered export handler claims
- *   the actor first (see UPCGExLevelExportHandler)
+ * - Classifies actors into Mesh and/or Spline, Actor or Level (or skips them) -- unless their
+ *   StaticClassifyMesh / StaticClassifySpline tags classify them outright, or a registered export
+ *   handler claims them first (see UPCGExLevelExportHandler)
  * - Hands every candidate (the subtree root included) to every export handler; the built-in Mesh /
- *   Actor / Level handlers harvest the actors classified into their slot
+ *   Actor / Level / Spline handlers harvest the actors classified into their slot
  * - Emits one point data per slot on that slot's pin, with the actor's transform, bounds, name and
- *   value tags as metadata
+ *   value tags as metadata; splines land on the Splines pin as one spline data each, those values on @Data
  *
  * When bGenerateCollections is enabled, raw metadata is replaced with collection entry hashes
  * (int64 PCGEx/CollectionEntry): per-entry slots (actors) are built into embedded collections here;
@@ -83,6 +73,11 @@ public:
 	 *  mesh components). Defaults to UPCGExDefaultActorMeshClassificator. */
 	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
 	TObjectPtr<UPCGExActorMeshClassificator> MeshClassificator;
+
+	/** Determines which actors are harvested for their splines, on top of or instead of their meshes.
+	 *  Defaults to UPCGExDefaultActorSplineClassificator, which accepts none. */
+	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
+	TObjectPtr<UPCGExActorSplineClassificator> SplineClassificator;
 
 	/** Bounds evaluator. Defaults to UPCGExDefaultBoundsEvaluator. */
 	UPROPERTY(EditAnywhere, Instanced, Category = Settings)
@@ -131,26 +126,25 @@ public:
 	virtual bool ExportLevelData_Implementation(UWorld* World, UPCGDataAsset* OutAsset) override;
 	virtual bool ExportLevelData(const FPCGExLevelExportSource& Source, UPCGDataAsset* OutAsset, FPCGExLevelExportContext& OutContext) override;
 
-	/** Classify an actor. Override for custom logic.
+	/** Classify an actor into the slots it is harvested for. Override for custom logic; leaving OutSlots empty skips it.
 	 *  Default behaviour:
-	 *   - ALevelInstance with a non-null world asset → Level.
-	 *   - Otherwise, if MeshClassificator approves AND the actor owns at least one
-	 *     UStaticMeshComponent (or subclass, e.g. ISMC) carrying a valid UStaticMesh
-	 *     and contributing geometry → Mesh.
-	 *   - Otherwise → Actor.
-	 *  An actor is either an Actor (full identity, property delta, etc.) or a Mesh
-	 *  container (every SMC-derived component is harvested). The two are mutually
-	 *  exclusive -- Actor-classified actors do NOT contribute mesh points, even when
-	 *  they own ISMCs. Registered handlers get to claim an actor BEFORE this runs. */
-	virtual EPCGExActorExportType ClassifyActor(AActor* Actor) const;
+	 *   - ALevelInstance with a non-null world asset → Levels.
+	 *   - Otherwise, Meshes if MeshClassificator approves AND the actor owns at least one
+	 *     UStaticMeshComponent (or subclass, e.g. ISMC) carrying a valid UStaticMesh and
+	 *     contributing geometry; and Splines if SplineClassificator approves AND the actor
+	 *     yields at least one spline (PCGExLevelExport::HasSplineContent). Both may apply.
+	 *   - Neither → Actors.
+	 *  An actor's classification tags and registered handlers' claims are decided BEFORE this runs. */
+	virtual void ClassifyActor(AActor* Actor, PCGExLevelExport::FSlotSet& OutSlots) const;
 
 	/** Called after all points are created, before collection generation. */
 	virtual void OnExportComplete(UPCGDataAsset* OutAsset);
 
 	/**
-	 * Swaps ContentFilter, MeshClassificator and BoundsEvaluator for the project defaults (PCGEx | Collections settings)
-	 * where they differ. A native instance resolves them in its constructor already; this covers an exporter whose
-	 * subobjects were instanced from a class default built before the cache was filled. Never call it on an authored one.
+	 * Swaps ContentFilter, MeshClassificator, SplineClassificator and BoundsEvaluator for the project defaults
+	 * (PCGEx | Collections settings) where they differ. A native instance resolves them in its constructor already; this
+	 * covers an exporter whose subobjects were instanced from a class default built before the cache was filled. Never
+	 * call it on an authored one.
 	 */
 	void ApplyProjectDefaults();
 
@@ -177,6 +171,10 @@ protected:
 private:
 	/** Point data for one slot's items on its pin: transform, bounds, ActorName, value tags, handler attributes. */
 	UPCGBasePointData* EmitSlotPoints(const FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const;
+
+	/** A slot without a collection: each item's data, copied into the asset with ActorName and value tags on @Data and
+	 *  the authored tags as data tags, on the slot's pin. */
+	void EmitRawSlotData(const FPCGExExportSlotWriter& Writer, const UPCGExLevelExportHandler* Handler, UPCGDataAsset* OutAsset) const;
 
 	/** PerEntry slot: (re)build the embedded collection from the writer and write its picks on the pin. */
 	void BuildEmbeddedSlot(const PCGExLevelExport::FHandlerRegistration& Registration, FPCGExExportSlotWriter& Writer, UPCGDataAsset* OutAsset, UPCGBasePointData* PointData, FPCGExLevelExportContext& OutContext) const;
