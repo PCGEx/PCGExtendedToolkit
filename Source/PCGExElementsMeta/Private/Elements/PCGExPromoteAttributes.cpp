@@ -9,8 +9,10 @@
 #include "PCGExPropertySchemaAsset.h"
 #include "PCGExVersion.h"
 #include "Details/PCGExAttributesDetails.h"
+#include "Details/PCGExInputShorthandsDetails.h"
 
 #include "PCGContext.h"
+#include "PCGData.h"
 #include "PCGParamData.h"
 #include "Containers/PCGExManagedObjects.h"
 #include "Core/PCGExMTCommon.h"
@@ -23,12 +25,34 @@
 #include "Helpers/PCGExArrayHelpers.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
+#include "Metadata/PCGMetadataAttribute.h"
+#include "Metadata/PCGMetadataDomain.h"
+#include "Types/PCGExAttributeIdentity.h"
 #include "Types/PCGExTypeOpsImpl.h"
 
 #define LOCTEXT_NAMESPACE "PCGExAttributesToTagsElement"
 #define PCGEX_NAMESPACE AttributesToTags
 
+UPCGExAttributesToTagsSettings::UPCGExAttributesToTagsSettings()
+{
+	// A fresh node promotes nothing until names are listed.
+	AttributeFilter.FilterMode = EPCGExAttributeFilter::Include;
+}
+
 #if WITH_EDITOR
+void UPCGExAttributesToTagsSettings::PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins)
+{
+	PCGEX_IF_VERSION_LOWER(1, 78, 8)
+	{
+		PCGExDeprecation::RenameShorthandOverridePin(
+			this, InOutNode, FName(TEXT("CommaSeparatedAttributeSelectors")),
+			GET_MEMBER_NAME_CHECKED(UPCGExAttributesToTagsSettings, AttributeFilter),
+			GET_MEMBER_NAME_CHECKED(FPCGExNameFiltersDetails, CommaSeparatedNames));
+	}
+
+	Super::PCGExApplyDeprecationBeforeUpdatePins(InOutNode, InputPins, OutputPins);
+}
+
 void UPCGExAttributesToTagsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 {
 	PCGEX_IF_VERSION_LOWER(1, 76, 1)
@@ -36,6 +60,12 @@ void UPCGExAttributesToTagsSettings::PCGExApplyDeprecation(UPCGNode* InOutNode)
 		// Behavior-preserving: each legacy selector becomes a non-remapped mapping (output keeps the source name).
 		PCGExAttributeMigration::AppendMappingsFromSelectors(Attributes_DEPRECATED, AttributeMappings);
 		Attributes_DEPRECATED.Empty();
+	}
+
+	PCGEX_IF_VERSION_LOWER(1, 78, 8)
+	{
+		PCGExPromoteAttributes::MigrateToNameFilter(CommaSeparatedAttributeSelectors_DEPRECATED, AttributeMappings, AttributeFilter);
+		CommaSeparatedAttributeSelectors_DEPRECATED.Empty();
 	}
 
 	Super::PCGExApplyDeprecation(InOutNode);
@@ -120,6 +150,13 @@ namespace PCGExPromoteAttributes
 		}
 	}
 
+	// The output name a mapping asks for, or None to keep the source's own. A remap with an empty target keeps it too,
+	// as FPCGExAttributeToTagDetails does on the element path.
+	FName GetRemappedName(const FPCGExAttributeSourceToTargetDetails& InMapping)
+	{
+		return InMapping.WantsRemappedOutput() ? InMapping.GetOutputName() : NAME_None;
+	}
+
 	// @Data-domain selectors carry a single value per data (not per-row), and the point-centric broadcaster
 	// doesn't read them off raw data -- so handle them here via TryReadDataValue. Applied once per source,
 	// mirroring FPCGExAttributeToTagDetails::Tag's formatting so @Data and element tags look identical.
@@ -132,8 +169,9 @@ namespace PCGExPromoteAttributes
 			EPCGMetadataTypes Type = EPCGMetadataTypes::Unknown;
 			if (!PCGExData::TryGetType(Selector, SourceData, Type)) { continue; }
 
-			// Remapped target wins; otherwise keep the source's resolved attribute name (pre-remapping behavior).
-			const FName OutputName = Mapping.WantsRemappedOutput() ? Mapping.GetOutputName() : PCGExMetaHelpers::GetAttributeIdentifier(Selector, SourceData).Name;
+			// A remap wins; otherwise the source's resolved attribute name.
+			const FName RemappedName = GetRemappedName(Mapping);
+			const FName OutputName = RemappedName.IsNone() ? PCGExMetaHelpers::GetAttributeIdentifier(Selector, SourceData).Name : RemappedName;
 
 			PCGExMetaHelpers::ExecuteWithRightType(Type, [&](auto DummyValue)
 			{
@@ -160,7 +198,7 @@ namespace PCGExPromoteAttributes
 
 			// Keep the source's resolved identifier (preserves the @Data domain); only swap the name when remapping.
 			FPCGAttributeIdentifier Identifier = PCGExMetaHelpers::GetAttributeIdentifier(Selector, SourceData);
-			if (Mapping.WantsRemappedOutput()) { Identifier.Name = Mapping.GetOutputName(); }
+			if (const FName RemappedName = GetRemappedName(Mapping); !RemappedName.IsNone()) { Identifier.Name = RemappedName; }
 
 			PCGExMetaHelpers::ExecuteWithRightType(Type, [&](auto DummyValue)
 			{
@@ -211,8 +249,102 @@ namespace PCGExPromoteAttributes
 				else { OutIndices.Add(Selection == EPCGExCollectionEntrySelection::PickerFirst ? Picks[0] : Picks.Last()); }
 			}
 			break;
+		default:
+			checkNoEntry();
+			break;
 		}
 	}
+
+	void ResolveMappings(const UPCGData* InData, const FPCGExAttributesToTagsMappings& InExplicit, const FPCGExNameFiltersDetails& InFilter, FPCGExAttributesToTagsMappings& OutMappings)
+	{
+		OutMappings = InExplicit;
+
+		const UPCGMetadata* Metadata = InData ? InData->ConstMetadata() : nullptr;
+		if (!Metadata) { return; }
+
+		// Default resolves to the domain it aliases on this data, so a plain row and the attribute it reads compare equal.
+		auto ResolveDomain = [Metadata](const FPCGMetadataDomainID& InDomainID)
+		{
+			const FPCGMetadataDomain* Domain = Metadata->GetConstMetadataDomain(InDomainID);
+			return Domain ? Domain->GetDomainID() : InDomainID;
+		};
+
+		// The attributes the explicit rows read: the filter never promotes them a second time.
+		TSet<FPCGAttributeIdentifier> Claimed;
+		auto Claim = [&](const FPCGExAttributeSourceToTargetDetails& InMapping)
+		{
+			const FPCGAttributePropertyInputSelector Selector = InMapping.GetSourceSelector().CopyAndFixLast(InData);
+			if (Selector.GetSelection() != EPCGAttributePropertySelection::Attribute) { return; }
+			Claimed.Add(FPCGAttributeIdentifier(Selector.GetAttributeName(), ResolveDomain(InData->GetMetadataDomainIDFromSelector(Selector))));
+		};
+
+		for (const FPCGExAttributeSourceToTargetDetails& Mapping : InExplicit.Element) { Claim(Mapping); }
+		for (const FPCGExAttributeSourceToTargetDetails& Mapping : InExplicit.Data) { Claim(Mapping); }
+
+		const FPCGMetadataDomainID DefaultDomainID = ResolveDomain(PCGMetadataDomainID::Default);
+
+		TArray<PCGExData::FAttributeIdentity> Identities;
+		PCGExData::FAttributeIdentity::Get(Metadata, Identities);
+
+		for (const PCGExData::FAttributeIdentity& Identity : Identities)
+		{
+			if (!InFilter.Test(Identity.Name.ToString()) || Claimed.Contains(Identity.GetIdentifier())) { continue; }
+
+			if (Identity.InDataDomain())
+			{
+				const FPCGAttributePropertyInputSelector Selector = FPCGAttributePropertySelector::CreateAttributeSelector<FPCGAttributePropertyInputSelector>(Identity.Name, PCGDataConstants::DataDomainName);
+				OutMappings.Data.Emplace(PCGExTypeOps::MakeNameChecked(Selector.ToString()));
+			}
+			else if (Identity.MetadataDomain == DefaultDomainID)
+			{
+				OutMappings.Element.Emplace(Identity.Name);
+			}
+		}
+	}
+
+#if WITH_EDITOR
+	void MigrateToNameFilter(const FString& InCommaSeparatedSelectors, TArray<FPCGExAttributeSourceToTargetDetails>& InOutMappings, FPCGExNameFiltersDetails& InOutFilter)
+	{
+		// Set explicitly: a migrated node must never inherit the default mode, whatever it is.
+		InOutFilter.FilterMode = EPCGExAttributeFilter::Include;
+
+		bool bNamesPCGExData = false;
+
+		InOutMappings.RemoveAll([&](const FPCGExAttributeSourceToTargetDetails& InMapping)
+		{
+			if (InMapping.Source.IsNone() || InMapping.WantsRemappedOutput()) { return false; }
+
+			// A valid attribute name holds no domain, $property, sub-field or reserved '@' name, so the filter matches it as-is.
+			const FString Name = InMapping.Source.ToString();
+			if (!FPCGMetadataAttributeBase::IsValidName(Name)) { return false; }
+
+			InOutFilter.Matches.Add(Name, EPCGExStringMatchMode::Equals);
+			bNamesPCGExData |= Name.StartsWith(PCGExCommon::PCGExPrefix);
+			return true;
+		});
+
+		TArray<FString> PlainTokens;
+		for (const FString& Token : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(InCommaSeparatedSelectors))
+		{
+			if (FPCGMetadataAttributeBase::IsValidName(Token))
+			{
+				PlainTokens.Add(Token);
+				bNamesPCGExData |= Token.StartsWith(PCGExCommon::PCGExPrefix);
+			}
+			else
+			{
+				// The row the comma-separated list used to resolve to: never remapped.
+				InOutMappings.Emplace(PCGExTypeOps::MakeNameChecked(Token));
+			}
+		}
+
+		// Kept in the overridable string, so an override still replaces them.
+		InOutFilter.CommaSeparatedNames = FString::Join(PlainTokens, TEXT(","));
+
+		// The old list promoted the PCGEx attributes it named; with Ex on, the filter would skip them.
+		if (bNamesPCGExData) { InOutFilter.bPreservePCGExData = false; }
+	}
+#endif
 }
 
 bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
@@ -224,24 +356,19 @@ bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
 
 	PCGEX_CONTEXT_AND_SETTINGS(AttributesToTags)
 
-	// @Data sources read a single value via TryReadDataValue, the rest go through the per-row broadcaster.
-	// IsDataDomainAttribute resolves the selector, so $/@ syntax in Source is honored.
-	auto RouteMapping = [&](const FPCGExAttributeSourceToTargetDetails& Mapping)
+	// Explicit sources, the same for every source data. @Data sources read a single value via TryReadDataValue, the
+	// rest go through the per-row broadcaster. IsDataDomainAttribute resolves the selector, so $/@ syntax in Source is honored.
+	FPCGExAttributesToTagsMappings Explicit;
+	auto AddExplicit = [&](const FPCGExAttributeSourceToTargetDetails& Mapping)
 	{
 		if (Mapping.Source.IsNone()) { return; }
-		if (PCGExMetaHelpers::IsDataDomainAttribute(Mapping.GetSourceSelector())) { Context->DataMappings.Add(Mapping); }
-		else { Context->ElementMappings.Add(Mapping); }
+		if (PCGExMetaHelpers::IsDataDomainAttribute(Mapping.GetSourceSelector())) { Explicit.Data.Add(Mapping); }
+		else { Explicit.Element.Add(Mapping); }
 	};
 
-	for (const FPCGExAttributeSourceToTargetDetails& Mapping : Settings->AttributeMappings) { RouteMapping(Mapping); }
+	for (const FPCGExAttributeSourceToTargetDetails& Mapping : Settings->AttributeMappings) { AddExplicit(Mapping); }
 
-	// Comma tokens and schema names are never remapped: the typed string is the source, output keeps that name.
-	for (const FString& Token : PCGExArrayHelpers::GetStringArrayFromCommaSeparatedList(Settings->CommaSeparatedAttributeSelectors))
-	{
-		RouteMapping(FPCGExAttributeSourceToTargetDetails(PCGExTypeOps::MakeNameChecked(Token)));
-	}
-
-	// Schema assets contribute their property names as sources.
+	// Schema assets contribute their property names as sources, never remapped.
 	TArray<FPCGExPropertyResolved> Resolved;
 	for (const TObjectPtr<UPCGExPropertySchemaAsset>& SchemaAsset : Settings->IncludedSchemas)
 	{
@@ -250,9 +377,13 @@ bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
 		for (const FPCGExPropertyResolved& Entry : Resolved)
 		{
 			if (!Entry.Source || Entry.Source->Name.IsNone()) { continue; }
-			RouteMapping(FPCGExAttributeSourceToTargetDetails(Entry.Source->Name));
+			AddExplicit(FPCGExAttributeSourceToTargetDetails(Entry.Source->Name));
 		}
 	}
+
+	// Init merges the comma-separated names into Matches, so it runs on a copy.
+	FPCGExNameFiltersDetails AttributeFilter = Settings->AttributeFilter;
+	AttributeFilter.Init();
 
 	// Pickers are valid for every resolution -- including Self -- so load them before the Self short-circuit below.
 	if (Settings->Selection == EPCGExCollectionEntrySelection::Picker || Settings->Selection == EPCGExCollectionEntrySelection::PickerFirst || Settings->Selection == EPCGExCollectionEntrySelection::PickerLast)
@@ -269,6 +400,8 @@ bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
 
 	if (Settings->Resolution == EPCGExAttributeToTagsResolution::Self)
 	{
+		// Self reads each input from itself, so each input resolves its own mappings.
+		for (FPCGExAttributesToTagsInput& Main : Context->ValidMains) { PCGExPromoteAttributes::ResolveMappings(Main.Tagged.Data, Explicit, AttributeFilter, Main.Mappings); }
 		return true;
 	}
 
@@ -310,11 +443,11 @@ bool FPCGExAttributesToTagsElement::Boot(FPCGExContext* InContext) const
 	Context->Details.Reserve(NumIterations);
 	for (int i = 0; i < NumIterations; i++)
 	{
-		const FPCGExAttributesToTagsInput& Source = ValidSources[i];
-		Context->Sources.Add(Source);
+		FPCGExAttributesToTagsInput& Source = Context->Sources.Add_GetRef(ValidSources[i]);
+		PCGExPromoteAttributes::ResolveMappings(Source.Tagged.Data, Explicit, AttributeFilter, Source.Mappings);
 
 		FPCGExAttributeToTagDetails& Details = Context->Details.Emplace_GetRef();
-		if (!PCGExPromoteAttributes::InitDetails(Context, Settings->bPrefixWithAttributeName, Context->ElementMappings, Source.Tagged.Data, Details))
+		if (!PCGExPromoteAttributes::InitDetails(Context, Settings->bPrefixWithAttributeName, Source.Mappings.Element, Source.Tagged.Data, Details))
 		{
 			return false;
 		}
@@ -355,37 +488,37 @@ bool FPCGExAttributesToTagsElement::AdvanceWork(FPCGExContext* InContext, const 
 			const FPCGTaggedData& MainTagged = ValidMains[i].Tagged;
 			const UPCGData* MainData = MainTagged.Data;
 
-			// Resolve the source data, its reader, and its (cached) row count for this input.
-			const UPCGData* SourceData = nullptr;
+			// Resolve the source (data, cached row count, mappings) and its reader for this input.
+			const FPCGExAttributesToTagsInput* Source = nullptr;
 			const FPCGExAttributeToTagDetails* Details = nullptr;
 			FPCGExAttributeToTagDetails SelfDetails;
-			int32 SourceNum = 0;
 
 			switch (Settings->Resolution)
 			{
 			case EPCGExAttributeToTagsResolution::Self:
 				// Self reads each input from itself, so the reader is per-input; source == main.
-				SourceData = MainData;
-				if (!PCGExPromoteAttributes::InitDetails(Context, Settings->bPrefixWithAttributeName, Context->ElementMappings, MainData, SelfDetails)) { return; }
+				Source = &ValidMains[i];
+				if (!PCGExPromoteAttributes::InitDetails(Context, Settings->bPrefixWithAttributeName, Source->Mappings.Element, MainData, SelfDetails)) { return; }
 				Details = &SelfDetails;
-				SourceNum = ValidMains[i].NumRows;
 				break;
 			case EPCGExAttributeToTagsResolution::CollectionToCollection:
-				SourceData = Context->Sources[i].Tagged.Data;
+				Source = &Context->Sources[i];
 				Details = &Context->Details[i];
-				SourceNum = Context->Sources[i].NumRows;
 				break;
 			case EPCGExAttributeToTagsResolution::EntryToCollection:
-				SourceData = Context->Sources[0].Tagged.Data;
+				Source = &Context->Sources[0];
 				Details = &Context->Details[0];
-				SourceNum = Context->Sources[0].NumRows;
 				break;
 			default:
+				checkNoEntry();
 				return;
 			}
 
+			const UPCGData* SourceData = Source->Tagged.Data;
+			const TArray<FPCGExAttributeSourceToTargetDetails>& DataMappings = Source->Mappings.Data;
+
 			TArray<int32> PickedIndices;
-			PCGExPromoteAttributes::ResolveIndices(Settings->Selection, SourceNum, i, Context->PickerFactories, PickedIndices);
+			PCGExPromoteAttributes::ResolveIndices(Settings->Selection, Source->NumRows, i, Context->PickerFactories, PickedIndices);
 
 			FPendingOutput& Out = Outputs[i];
 
@@ -399,7 +532,7 @@ bool FPCGExAttributesToTagsElement::AdvanceWork(FPCGExContext* InContext, const 
 
 					TSet<FString> Promoted;
 					PCGExPromoteAttributes::PromoteAll(*Details, PickedIndices, Promoted);
-					PCGExPromoteAttributes::PromoteDataDomainToTags(Context, SourceData, Context->DataMappings, Settings->bPrefixWithAttributeName, Promoted);
+					PCGExPromoteAttributes::PromoteDataDomainToTags(Context, SourceData, DataMappings, Settings->bPrefixWithAttributeName, Promoted);
 					OutTags.Append(Promoted);
 
 					Out.Data = const_cast<UPCGData*>(MainData);
@@ -416,7 +549,7 @@ bool FPCGExAttributesToTagsElement::AdvanceWork(FPCGExContext* InContext, const 
 					if (UPCGMetadata* Metadata = DupData->MutableMetadata())
 					{
 						PCGExPromoteAttributes::PromoteAll(*Details, PickedIndices, Metadata);
-						PCGExPromoteAttributes::PromoteDataDomainToMetadata(Context, SourceData, Context->DataMappings, Metadata);
+						PCGExPromoteAttributes::PromoteDataDomainToMetadata(Context, SourceData, DataMappings, Metadata);
 					}
 
 					PCGExData::FTags OutTags;
@@ -434,11 +567,14 @@ bool FPCGExAttributesToTagsElement::AdvanceWork(FPCGExContext* InContext, const 
 					OutputSet->Metadata->AddEntry();
 
 					PCGExPromoteAttributes::PromoteAll(*Details, PickedIndices, OutputSet->Metadata);
-					PCGExPromoteAttributes::PromoteDataDomainToMetadata(Context, SourceData, Context->DataMappings, OutputSet->Metadata);
+					PCGExPromoteAttributes::PromoteDataDomainToMetadata(Context, SourceData, DataMappings, OutputSet->Metadata);
 
 					Out.Data = OutputSet;
 					Out.Pin = FName("Tags");
 				}
+				break;
+			default:
+				checkNoEntry();
 				break;
 			}
 		}, /*Threshold=*/2, EParallelForFlags::Unbalanced);
