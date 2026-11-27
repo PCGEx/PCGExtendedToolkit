@@ -106,7 +106,7 @@ public:
 	EPCGExSchemaMergePolicy SchemaMergePolicy = EPCGExSchemaMergePolicy::StrictTypeMatch;
 
 	/** Run every export handler registered by other modules (e.g. cluster sketches). Off keeps only the
-	 *  built-in Mesh / Actor / Level handlers. */
+	 *  built-in Mesh / Actor / Level / Spline handlers. */
 	UPROPERTY(EditAnywhere, Category = Settings)
 	bool bUseRegisteredHandlers = true;
 
