@@ -10,6 +10,7 @@
 #include "Core/PCGExContext.h"
 #include "Core/PCGExElement.h"
 #include "Core/PCGExSettings.h"
+#include "Data/Utils/PCGExDataFilterDetails.h"
 #include "Data/Utils/PCGExDataForwardDetails.h"
 
 #include "PCGExPromoteAttributes.generated.h"
@@ -51,8 +52,11 @@ class UPCGExAttributesToTagsSettings : public UPCGExSettings
 	GENERATED_BODY()
 
 public:
+	UPCGExAttributesToTagsSettings();
+
 	//~Begin UPCGSettings
 #if WITH_EDITOR
+	virtual void PCGExApplyDeprecationBeforeUpdatePins(UPCGNode* InOutNode, TArray<TObjectPtr<UPCGPin>>& InputPins, TArray<TObjectPtr<UPCGPin>>& OutputPins) override;
 	virtual void PCGExApplyDeprecation(UPCGNode* InOutNode) override;
 
 	PCGEX_NODE_INFOS(PromoteAttributes, "Promote Attributes", "Promote element values to tags or data domain");
@@ -102,18 +106,22 @@ public:
 	// Pre-remapping selector list. Migrated to AttributeMappings in PCGExApplyDeprecation.
 	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
 	TArray<FPCGAttributePropertyInputSelector> Attributes_DEPRECATED;
+
+	// Pre-filter selector list. Migrated to AttributeFilter (plain names) and AttributeMappings (the rest) in PCGExApplyDeprecation.
+	UPROPERTY(meta=(DeprecatedProperty, ScriptNoExport))
+	FString CommaSeparatedAttributeSelectors_DEPRECATED;
 #pragma endregion
 
-	/** Attributes whose value is promoted, each with an optional source->target output-name remap.
-	 *  Leave the target empty to keep the source's resolved name (the pre-remapping behavior). */
+	/** Attributes promoted by name, matched against each source's own attributes. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName="Attributes"))
+	FPCGExNameFiltersDetails AttributeFilter = FPCGExNameFiltersDetails(true);
+
+	/** Explicit sources for what a name can't express: renames, $properties, sub-fields, domain-qualified names.
+	 *  An attribute read here is never promoted again by the filter. An empty target keeps the source's name. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(TitleProperty="{Source}"))
 	TArray<FPCGExAttributeSourceToTargetDetails> AttributeMappings;
 
-	/** A list of selectors separated by a comma, for easy overrides. Will be appended to the existing array.*/
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable))
-	FString CommaSeparatedAttributeSelectors;
-
-	/** Schema assets whose property names are appended to the selectors above. */
+	/** Schema assets whose property names are promoted as explicit sources, whatever the filter. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings)
 	TArray<TObjectPtr<UPCGExPropertySchemaAsset>> IncludedSchemas;
 
@@ -122,12 +130,36 @@ public:
 	bool bQuietTooManyCollectionsWarning = false;
 };
 
+/** What one source promotes: the explicit rows, then the filter's matches on that source, split by read path. */
+struct FPCGExAttributesToTagsMappings
+{
+	/** Read per row through the broadcaster. */
+	TArray<FPCGExAttributeSourceToTargetDetails> Element;
+
+	/** @Data sources, read once per source through PCGExData::Helpers::TryReadDataValue (the broadcaster is point-centric). */
+	TArray<FPCGExAttributeSourceToTargetDetails> Data;
+};
+
+namespace PCGExPromoteAttributes
+{
+	/** InExplicit as-is, then every attribute of InData that InFilter (already Init) passes and no explicit row reads.
+	 *  Only the data's default domain and @Data are matched; any other domain needs an explicit row. */
+	PCGEXELEMENTSMETA_API void ResolveMappings(const UPCGData* InData, const FPCGExAttributesToTagsMappings& InExplicit, const FPCGExNameFiltersDetails& InFilter, FPCGExAttributesToTagsMappings& OutMappings);
+
+#if WITH_EDITOR
+	/** Deprecation aid: sets InOutFilter to Include and moves every plain attribute name of InOutMappings and
+	 *  InCommaSeparatedSelectors into it. Remapped rows and selectors a name can't express stay explicit mappings. */
+	PCGEXELEMENTSMETA_API void MigrateToNameFilter(const FString& InCommaSeparatedSelectors, TArray<FPCGExAttributeSourceToTargetDetails>& InOutMappings, FPCGExNameFiltersDetails& InOutFilter);
+#endif
+}
+
 /** A non-empty input on a pin: the tagged data (copied by value -- self-contained, no lifetime ties to the
- * temporary GetInputsByPin array) plus its cached row count. */
+ * temporary GetInputsByPin array), its cached row count, and the mappings resolved on it when values are read from it. */
 struct FPCGExAttributesToTagsInput
 {
 	FPCGTaggedData Tagged;
 	int32 NumRows = 0;
+	FPCGExAttributesToTagsMappings Mappings;
 };
 
 struct FPCGExAttributesToTagsContext final : FPCGExContext
@@ -136,16 +168,10 @@ struct FPCGExAttributesToTagsContext final : FPCGExContext
 
 	TArray<TObjectPtr<const UPCGExPickerFactoryData>> PickerFactories;
 
-	/** Element-domain mappings (merged with the comma-separated overrides), read per-row via the broadcaster. Built in Boot. */
-	TArray<FPCGExAttributeSourceToTargetDetails> ElementMappings;
-
-	/** @Data-domain mappings, read as a single value via PCGExData::Helpers::TryReadDataValue (the broadcaster is point-centric and doesn't handle @Data off raw data). Built in Boot. */
-	TArray<FPCGExAttributeSourceToTargetDetails> DataMappings;
-
-	/** All non-empty main inputs (with cached row counts), gathered once in Boot and reused in AdvanceWork. */
+	/** All non-empty main inputs (with cached row counts), gathered once in Boot and reused in AdvanceWork. Self resolves their mappings. */
 	TArray<FPCGExAttributesToTagsInput> ValidMains;
 
-	/** Cross-collection (EntryToCollection / CollectionToCollection): resolved "Tags Source" data (with cached row counts) + matching readers, built in Boot. Empty for Self. */
+	/** Cross-collection (EntryToCollection / CollectionToCollection): resolved "Tags Source" data (with cached row counts and mappings) + matching readers, built in Boot. Empty for Self. */
 	TArray<FPCGExAttributesToTagsInput> Sources;
 	TArray<FPCGExAttributeToTagDetails> Details;
 };
