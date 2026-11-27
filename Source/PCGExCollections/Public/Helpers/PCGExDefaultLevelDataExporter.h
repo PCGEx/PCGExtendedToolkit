@@ -16,11 +16,9 @@
 #include "PCGExDefaultLevelDataExporter.generated.h"
 
 class AActor;
-class UActorComponent;
 class UPCGBasePointData;
 class UPCGExLevelExportHandler;
 class UPCGMetadata;
-class UPCGSplineData;
 class UStaticMeshComponent;
 
 #if WITH_EDITOR
@@ -136,10 +134,7 @@ public:
 	 *     contributing geometry; and Splines if SplineClassificator approves AND the actor
 	 *     yields at least one spline (PCGExLevelExport::HasSplineContent). Both may apply.
 	 *   - Neither → Actors.
-	 *  Actors and Levels re-create the actor (full identity, property delta, etc.) and share it
-	 *  with no other slot; Meshes and Splines take it apart and keep only what they harvest --
-	 *  Actor-classified actors do NOT contribute mesh points, even when they own ISMCs. An actor's
-	 *  classification tags and registered handlers' claims are decided BEFORE this runs. */
+	 *  An actor's classification tags and registered handlers' claims are decided BEFORE this runs. */
 	virtual void ClassifyActor(AActor* Actor, PCGExLevelExport::FSlotSet& OutSlots) const;
 
 	/** Called after all points are created, before collection generation. */
@@ -168,14 +163,6 @@ protected:
 	 * entry key in Metadata. InstanceIndex is the instance of an instanced Component, INDEX_NONE for a plain one.
 	 */
 	virtual void OnMeshPointExported(const AActor* SourceActor, const UStaticMeshComponent* Component, int32 InstanceIndex, UPCGMetadata* Metadata, int64 MetadataEntry) const
-	{
-	}
-
-	/**
-	 * Runs once per exported spline, after every built-in @Data attribute is written and before it lands on its pin.
-	 * Component is the one the spline was read from, null when the actor as a whole yielded it.
-	 */
-	virtual void OnSplineExported(const AActor* SourceActor, const UActorComponent* Component, UPCGSplineData* SplineData) const
 	{
 	}
 

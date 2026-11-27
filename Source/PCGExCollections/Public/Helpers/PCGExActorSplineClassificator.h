@@ -12,7 +12,6 @@ class AActor;
 
 /**
  * Abstract base for actor spline classification, sibling of the mesh classificator.
- * Instanced on exporters via EditInlineNew/DefaultToInstanced.
  * Determines whether an actor is harvested for its splines: whatever PCG's Get Spline Data reads from its
  * components or from the actor itself. An actor may be both a mesh and a spline container.
  */

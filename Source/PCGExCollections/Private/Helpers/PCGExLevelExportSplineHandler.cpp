@@ -23,50 +23,31 @@
 #include "Helpers/PCGExLevelExportShared.h"
 #include "Helpers/PCGExMetaHelpers.h"
 #include "Metadata/PCGMetadata.h"
+#include "Paths/PCGExPathsHelpers.h"
 #include "StructUtils/InstancedStruct.h"
-#include "UObject/StrongObjectPtr.h"
 #endif
 
 #pragma region Extraction
 
 namespace PCGExLevelExportSplineHandler
 {
-	/** Keeps the spline data of a registry output; what cannot be kept is warned about when asked. */
+	/** Keeps the spline data of a registry output; landscape splines, which cannot be kept, are warned about when asked. */
 	void KeepSplines(const FPCGDataCollection& Collection, const UActorComponent* Component, const AActor* Actor, const bool bWarnSkipped, TArray<PCGExLevelExport::FExtractedSpline>& OutSplines)
 	{
 		for (const FPCGTaggedData& Tagged : Collection.TaggedData)
 		{
 			const UPCGData* Data = Tagged.Data.Get();
-			if (!Data)
-			{
-				continue;
-			}
-
 			if (const UPCGSplineData* Spline = Cast<UPCGSplineData>(Data))
 			{
 				if (Spline->GetNumSegments() > 0)
 				{
 					OutSplines.Add(PCGExLevelExport::FExtractedSpline{Component, Spline});
 				}
-				continue;
 			}
-
-			if (!bWarnSkipped)
+			else if (bWarnSkipped && Cast<UPCGLandscapeSplineData>(Data))
 			{
-				continue;
-			}
-
-			const FString Source = Component
-				? FString::Printf(TEXT("'%s' of '%s'"), *Component->GetName(), *Actor->GetActorNameOrLabel())
-				: FString::Printf(TEXT("'%s'"), *Actor->GetActorNameOrLabel());
-
-			if (Data->IsA<UPCGLandscapeSplineData>())
-			{
-				UE_LOG(LogPCGEx, Warning, TEXT("Level export: landscape splines %s are skipped: their spline data reads the live landscape and cannot be stored."), *Source);
-			}
-			else
-			{
-				UE_LOG(LogPCGEx, Warning, TEXT("Level export: %s yields %s, not spline data; it is skipped."), *Source, *Data->GetClass()->GetName());
+				UE_LOG(LogPCGEx, Warning, TEXT("Level export: landscape splines '%s' of '%s' are skipped: their spline data reads the live landscape and cannot be stored."),
+				       *GetNameSafe(Component), *Actor->GetActorNameOrLabel());
 			}
 		}
 	}
@@ -110,10 +91,7 @@ namespace PCGExLevelExport
 			{
 				if (const USplineMeshComponent* SplineMesh = Cast<USplineMeshComponent>(Component))
 				{
-					if (const UPCGSplineData* Converted = ConvertSplineMesh(SplineMesh); Converted && Converted->GetNumSegments() > 0)
-					{
-						OutSplines.Add(FExtractedSpline{Component, Converted});
-					}
+					OutSplines.Add(FExtractedSpline{Component, ConvertSplineMesh(SplineMesh)});
 				}
 			}
 
@@ -177,8 +155,8 @@ namespace PCGExLevelExport
 		// Custom tangents over keys 0..1 evaluate the mesh's own Hermite segment.
 		TArray<FSplinePoint> Points;
 		Points.Reserve(2);
-		Points.Emplace(0.f, Component->GetStartPosition(), StartTangent, StartTangent, EndRotation(StartTangent, Component->GetStartRoll()), FVector(1, StartScale.X, StartScale.Y), ESplinePointType::CurveCustomTangent);
-		Points.Emplace(1.f, Component->GetEndPosition(), EndTangent, EndTangent, EndRotation(EndTangent, Component->GetEndRoll()), FVector(1, EndScale.X, EndScale.Y), ESplinePointType::CurveCustomTangent);
+		Points.Emplace(0.f, Component->GetStartPosition(), StartTangent, StartTangent, EndRotation(StartTangent, Component->GetStartRoll()), FVector(1, StartScale.X, StartScale.Y));
+		Points.Emplace(1.f, Component->GetEndPosition(), EndTangent, EndTangent, EndRotation(EndTangent, Component->GetEndRoll()), FVector(1, EndScale.X, EndScale.Y));
 
 		UPCGSplineData* SplineData = NewObject<UPCGSplineData>();
 		SplineData->Initialize(Points, /*bInClosedLoop=*/false, Component->GetComponentTransform());
@@ -198,9 +176,6 @@ namespace PCGExLevelExportSplineHandler
 
 	struct FScratch final : FPCGExExportScratch
 	{
-		/** Every item's source data, alive until the slot is emitted. */
-		TArray<TStrongObjectPtr<const UPCGData>> HeldData;
-
 		/** Resolved Property Collection values per actor: ExtractSchemaFromActor fires PreparePropertyValues, once. */
 		TMap<const AActor*, TArray<FInstancedStruct>> PropertyValues;
 
@@ -220,11 +195,6 @@ FPCGExExportSlotDesc UPCGExSplineExportHandler::GetSlotDesc() const
 	return Desc;
 }
 
-TSharedPtr<const IPCGExExportSlotPolicy> UPCGExSplineExportHandler::MakePolicy() const
-{
-	return nullptr;
-}
-
 void UPCGExSplineExportHandler::Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const
 {
 	using namespace PCGExLevelExportSplineHandler;
@@ -234,7 +204,6 @@ void UPCGExSplineExportHandler::Collect(const FPCGExExportCandidate& Candidate, 
 		return;
 	}
 
-	// A conversion policy, not a classification: it also applies to actors their tags classify.
 	const UPCGExDefaultLevelDataExporter* Default = Cast<UPCGExDefaultLevelDataExporter>(Exporter);
 	PCGExLevelExport::FSplineExtractionOptions Options;
 	Options.bConvertSplineMeshes = Default && Default->SplineClassificator && Default->SplineClassificator->bConvertSplineMeshes;
@@ -254,33 +223,22 @@ void UPCGExSplineExportHandler::Collect(const FPCGExExportCandidate& Candidate, 
 		Scratch.PropertyValues.Add(Actor, UPCGExPropertyCollectionComponent::ExtractSchemaFromActor(Actor));
 	}
 
-	// A component's own tags reach every spline it yields.
-	TMap<const UActorComponent*, int32> TagSourceByComponent;
+	// A component's own tags reach every spline it yields; ExtractSplines lists a component's splines together.
+	const UActorComponent* TaggedComponent = nullptr;
+	int32 TagSource = INDEX_NONE;
 	for (const PCGExLevelExport::FExtractedSpline& Spline : Splines)
 	{
-		int32 TagSource = INDEX_NONE;
-		if (Spline.Component)
+		if (Spline.Component != TaggedComponent)
 		{
-			if (const int32* Known = TagSourceByComponent.Find(Spline.Component))
-			{
-				TagSource = *Known;
-			}
-			else
-			{
-				const TArray<FName> ComponentTags = Scratch.AuthoredTags.OfComponent(Spline.Component);
-				if (!ComponentTags.IsEmpty())
-				{
-					TagSource = Writer.TagSources.Add(FPCGExExportSlotWriter::FTagSource{Spline.Component->GetReadableName(), ComponentTags});
-				}
-				TagSourceByComponent.Add(Spline.Component, TagSource);
-			}
+			TaggedComponent = Spline.Component;
+			TArray<FName> ComponentTags = TaggedComponent ? Scratch.AuthoredTags.OfComponent(TaggedComponent) : TArray<FName>();
+			TagSource = ComponentTags.IsEmpty() ? INDEX_NONE : Writer.TagSources.Add(FPCGExExportSlotWriter::FTagSource{TaggedComponent->GetReadableName(), MoveTemp(ComponentTags)});
 		}
 
 		FPCGExExportItem& Item = Writer.AddItem(Source.ToFrame(Spline.Data->SplineStruct.Transform), FVector::ZeroVector, FVector::ZeroVector, Actor, INDEX_NONE);
 		Item.TagSource = TagSource;
 		Item.SourceComponent = Spline.Component;
-		Item.Data = Spline.Data;
-		Scratch.HeldData.Emplace(Spline.Data);
+		Item.Data.Reset(Spline.Data);
 	}
 }
 
@@ -297,10 +255,7 @@ void UPCGExSplineExportHandler::FinalizeItemData(UPCGData* Data, const int32 Ite
 	const FPCGExExportItem& Item = Writer.Items[ItemIndex];
 
 	// Into the export frame: the control points stay local, the frame goes into the spline's own transform.
-	FPCGSplineStruct Struct = SplineData->SplineStruct;
-	Struct.Transform = Item.Transform;
-	Struct.Bounds = Struct.LocalBounds.TransformBy(Struct.Transform);
-	SplineData->Initialize(Struct);
+	PCGExPaths::Helpers::SetSplineTransform(SplineData, Item.Transform);
 
 	if (Item.SourceComponent)
 	{

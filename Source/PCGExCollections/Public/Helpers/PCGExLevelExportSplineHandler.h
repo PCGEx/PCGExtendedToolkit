@@ -20,7 +20,7 @@ namespace PCGExLevelExport
 		/** Convert spline mesh components (ConvertSplineMesh): PCG's registry has no path for them. */
 		bool bConvertSplineMeshes = false;
 
-		/** Warn about spline content that cannot be exported: landscape splines, data of another type. */
+		/** Warn about spline content that cannot be exported: landscape splines. */
 		bool bWarnSkipped = false;
 
 		/** Stop at the first spline: a content check. */
@@ -68,7 +68,6 @@ class PCGEXCOLLECTIONS_API UPCGExSplineExportHandler : public UPCGExLevelExportH
 public:
 #if WITH_EDITOR
 	virtual FPCGExExportSlotDesc GetSlotDesc() const override;
-	virtual TSharedPtr<const IPCGExExportSlotPolicy> MakePolicy() const override;
 	virtual int32 GetPriority() const override { return 40; }
 	virtual void Collect(const FPCGExExportCandidate& Candidate, const FPCGExLevelExportSource& Source, const UPCGExLevelDataExporter* Exporter, FPCGExExportSlotWriter& Writer) const override;
 	virtual void FinalizeItemData(UPCGData* Data, int32 ItemIndex, FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const override;

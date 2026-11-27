@@ -25,6 +25,7 @@
 #include "Helpers/PCGExMaterialSwapTable.h"
 #include "Helpers/PCGExRandomHelpers.h"
 #include "Helpers/PCGExStreamingHelpers.h"
+#include "Paths/PCGExPathsHelpers.h"
 #include "Data/PCGPointArrayData.h"
 #include "Data/Utils/PCGExPointReplicate.h"
 
@@ -267,11 +268,7 @@ namespace PCGExPCGDataAssetLoader
 
 	void TransformSpline(UPCGSplineData* InData, const FTransform& InTransform)
 	{
-		// The target applies after the spline's own transform, as it does to points.
-		FPCGSplineStruct Struct = InData->SplineStruct;
-		Struct.Transform = Struct.Transform * InTransform;
-		Struct.Bounds = Struct.LocalBounds.TransformBy(Struct.Transform);
-		InData->Initialize(Struct);
+		PCGExPaths::Helpers::SetSplineTransform(InData, InData->SplineStruct.Transform * InTransform);
 	}
 
 	/** Emptiness rule behind bOmitEmptyData. */

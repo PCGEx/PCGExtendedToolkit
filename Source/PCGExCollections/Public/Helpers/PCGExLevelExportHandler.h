@@ -4,16 +4,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGData.h"
 #include "PCGExCollectionsCommon.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Templates/SubclassOf.h"
 #include "UObject/Object.h"
+#include "UObject/StrongObjectPtr.h"
 
 #include "PCGExLevelExportHandler.generated.h"
 
 class AActor;
 class UActorComponent;
-class UPCGData;
 class UPCGExAssetCollection;
 class UPCGExLevelDataExporter;
 class UPCGMetadata;
@@ -77,7 +78,7 @@ struct PCGEXCOLLECTIONS_API FPCGExExportSlotDesc
 
 	bool IsValid() const
 	{
-		return !SlotId.IsNone() && !PinName.IsNone() && (!HasCollection() || (CollectionClass && EntryStruct));
+		return !SlotId.IsNone() && !PinName.IsNone() && (HasCollection() ? (CollectionClass && EntryStruct) : (!CollectionClass && !EntryStruct));
 	}
 };
 
@@ -139,10 +140,10 @@ struct PCGEXCOLLECTIONS_API FPCGExExportItem
 	int32 SourceInstanceIndex = INDEX_NONE;
 
 	/**
-	 * Slots without a collection: what the item emits. The exporter emits its own copy and never edits this one, which a
-	 * registry function may share; the handler keeps it alive (writer scratch) until the slot is emitted.
+	 * Slots without a collection: what the item emits, held alive by the item. The exporter emits its own copy and never
+	 * edits this one, which a registry function may share.
 	 */
-	const UPCGData* Data = nullptr;
+	TStrongObjectPtr<const UPCGData> Data;
 };
 
 /**
@@ -305,8 +306,11 @@ public:
 #if WITH_EDITOR
 	virtual FPCGExExportSlotDesc GetSlotDesc() const PURE_VIRTUAL(UPCGExLevelExportHandler::GetSlotDesc, return FPCGExExportSlotDesc(););
 
-	/** Null for a slot without a collection. */
-	virtual TSharedPtr<const IPCGExExportSlotPolicy> MakePolicy() const PURE_VIRTUAL(UPCGExLevelExportHandler::MakePolicy, return nullptr;);
+	/** Required by a slot with a collection: registration refuses one without a policy. */
+	virtual TSharedPtr<const IPCGExExportSlotPolicy> MakePolicy() const
+	{
+		return nullptr;
+	}
 
 	/** Lower runs first -- claim order and pin emission order. Built-ins use 10/20/30/40. */
 	virtual int32 GetPriority() const

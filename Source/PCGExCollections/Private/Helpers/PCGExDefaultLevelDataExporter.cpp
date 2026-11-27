@@ -10,7 +10,6 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Helpers/PCGExActorMeshClassificator.h"
-#include "Helpers/PCGExActorSplineClassificator.h"
 #include "Helpers/PCGExLevelExportSplineHandler.h"
 #include "LevelInstance/LevelInstanceActor.h"
 #include "PCGExAssemblyRoot.h"
@@ -19,12 +18,13 @@
 #include "UObject/UObjectHash.h"
 
 #if WITH_EDITOR
+#include "Algo/Find.h"
+#include "Algo/Transform.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExCollectionHelpers.h"
 #include "Core/PCGExExportSlots.h"
 #include "PCGExLog.h"
 #include "Data/PCGExDataHelpers.h"
-#include "Data/PCGSplineData.h"
 #include "Helpers/PCGExCollectionsHelpers.h"
 #include "Helpers/PCGExLevelExportBuiltinHandlers.h"
 #include "Helpers/PCGExLevelExportHandler.h"
@@ -172,28 +172,14 @@ namespace PCGExDefaultLevelDataExporter
 	/** The classification an actor's system tags force. False when it carries none. */
 	bool ReadClassificationTags(const AActor* Actor, PCGExLevelExport::FSlotSet& OutSlots)
 	{
-		if (Actor->ActorHasTag(PCGExCollections::Labels::StaticClassifyMesh))
+		for (const PCGExLevelExportShared::FClassificationTag& Classification : PCGExLevelExportShared::ClassificationTags)
 		{
-			OutSlots.AddUnique(PCGExLevelExport::Slots::Meshes);
-		}
-		if (Actor->ActorHasTag(PCGExCollections::Labels::StaticClassifySpline))
-		{
-			OutSlots.AddUnique(PCGExLevelExport::Slots::Splines);
+			if (Actor->ActorHasTag(Classification.Tag))
+			{
+				OutSlots.Add(Classification.SlotId);
+			}
 		}
 		return !OutSlots.IsEmpty();
-	}
-
-	FName ClassificationTagOf(const FName SlotId)
-	{
-		if (SlotId == PCGExLevelExport::Slots::Meshes)
-		{
-			return PCGExCollections::Labels::StaticClassifyMesh;
-		}
-		if (SlotId == PCGExLevelExport::Slots::Splines)
-		{
-			return PCGExCollections::Labels::StaticClassifySpline;
-		}
-		return NAME_None;
 	}
 
 	/**
@@ -242,53 +228,6 @@ namespace PCGExDefaultLevelDataExporter
 		Candidate.ClaimedSlots = MoveTemp(Resolved);
 		Candidate.bRecreated = bRecreated;
 		return true;
-	}
-
-	/** A tag skips the content check: one warning per tagged actor whose tagged slots got nothing from it. */
-	void WarnEmptyTaggedCandidates(TConstArrayView<FPCGExExportCandidate> Candidates, TConstArrayView<PCGExLevelExport::FHandlerRegistration> Registrations, TConstArrayView<TUniquePtr<FPCGExExportSlotWriter>> Writers)
-	{
-		TMap<FName, TSet<const AActor*>> HarvestedBySlot;
-		bool bHarvestedBuilt = false;
-		for (const FPCGExExportCandidate& Candidate : Candidates)
-		{
-			if (!Candidate.bForcedByTag)
-			{
-				continue;
-			}
-
-			if (!bHarvestedBuilt)
-			{
-				bHarvestedBuilt = true;
-				for (int32 i = 0; i < Registrations.Num(); i++)
-				{
-					if (ClassificationTagOf(Registrations[i].Desc.SlotId).IsNone())
-					{
-						continue;
-					}
-					TSet<const AActor*>& Harvested = HarvestedBySlot.Add(Registrations[i].Desc.SlotId);
-					for (const FPCGExExportItem& Item : Writers[i]->Items)
-					{
-						Harvested.Add(Item.SourceActor);
-					}
-				}
-			}
-
-			TArray<FString> EmptyTags;
-			for (const FName SlotId : Candidate.ClaimedSlots)
-			{
-				const TSet<const AActor*>* Harvested = HarvestedBySlot.Find(SlotId);
-				if (!Harvested || !Harvested->Contains(Candidate.Actor))
-				{
-					EmptyTags.Add(ClassificationTagOf(SlotId).ToString());
-				}
-			}
-
-			if (!EmptyTags.IsEmpty())
-			{
-				UE_LOG(LogPCGEx, Warning, TEXT("Level export: '%s' is tagged %s but has nothing to export there."),
-				       *Candidate.Actor->GetActorNameOrLabel(), *FString::Join(EmptyTags, TEXT(" and ")));
-			}
-		}
 	}
 }
 
@@ -414,17 +353,25 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 		return false;
 	}
 
-	// Harvest pass: every handler sees every candidate.
+	// Harvest pass: every handler sees every candidate. A tag skips the content check, so a tagged slot its candidate
+	// adds nothing to is warned about, once per actor.
+	TMap<const AActor*, TArray<FString>> EmptyTaggedSlots;
 	TArray<TUniquePtr<FPCGExExportSlotWriter>> Writers;
 	Writers.Reserve(Registrations.Num());
 	for (int32 i = 0; i < Registrations.Num(); i++)
 	{
 		const PCGExLevelExport::FHandlerRegistration& Registration = Registrations[i];
 		FPCGExExportSlotWriter& Writer = *Writers.Add_GetRef(MakeUnique<FPCGExExportSlotWriter>(Registration.Desc));
+		const PCGExLevelExportShared::FClassificationTag* Classification = Algo::FindBy(PCGExLevelExportShared::ClassificationTags, Registration.Desc.SlotId, &PCGExLevelExportShared::FClassificationTag::SlotId);
 
 		for (const FPCGExExportCandidate& Candidate : Candidates)
 		{
+			const int32 NumItems = Writer.Items.Num();
 			Handlers[i]->Collect(Candidate, Source, this, Writer);
+			if (Classification && Candidate.bForcedByTag && Writer.Items.Num() == NumItems && Candidate.IsClaimedBy(Registration.Desc.SlotId))
+			{
+				EmptyTaggedSlots.FindOrAdd(Candidate.Actor).Add(Classification->Tag.ToString());
+			}
 		}
 
 		// Shared captures live under the caller's outer (the host collection); per-entry collections under
@@ -438,7 +385,11 @@ bool UPCGExDefaultLevelDataExporter::ExportLevelData(const FPCGExLevelExportSour
 		}
 	}
 
-	WarnEmptyTaggedCandidates(Candidates, Registrations, Writers);
+	for (const TPair<const AActor*, TArray<FString>>& Empty : EmptyTaggedSlots)
+	{
+		UE_LOG(LogPCGEx, Warning, TEXT("Level export: '%s' is tagged %s but has nothing to export there."),
+		       *Empty.Key->GetActorNameOrLabel(), *FString::Join(Empty.Value, TEXT(" and ")));
+	}
 
 	// Emit one point data per non-empty slot, in handler order; a slot without a collection emits each item's data.
 	TArray<UPCGBasePointData*> SlotPointData;
@@ -678,6 +629,7 @@ void UPCGExDefaultLevelDataExporter::EmitRawSlotData(FPCGExExportSlotWriter& Wri
 		Handler->FinalizeItemData(Data, i, Writer, this);
 
 		const FPCGExExportSlotWriter::FTagSource* TagSource = Writer.TagSources.IsValidIndex(Item.TagSource) ? &Writer.TagSources[Item.TagSource] : nullptr;
+		const TArray<FName> ActorTags = Item.SourceActor ? FAuthoredTags::OfActor(Item.SourceActor) : TArray<FName>();
 
 		if (ValueTagMode != EPCGExValueTagMode::NoParsing)
 		{
@@ -689,33 +641,19 @@ void UPCGExDefaultLevelDataExporter::EmitRawSlotData(FPCGExExportSlotWriter& Wri
 
 			// The source registers first and is written last: it wins a shared name, as on points.
 			const FParsedTags SourceParsed = TagSource ? ParseTags(TagSource->Tags, &Registry, TagSource->Name) : FParsedTags();
-			const FParsedTags ActorParsed = Item.SourceActor ? ParseActorTags(Item.SourceActor, &Registry) : FParsedTags();
+			const FParsedTags ActorParsed = Item.SourceActor ? ParseTags(ActorTags, &Registry, Item.SourceActor->GetActorNameOrLabel()) : FParsedTags();
 			SetValueTagDataValues(Data, ActorParsed);
 			SetValueTagDataValues(Data, SourceParsed);
-		}
-
-		if (UPCGSplineData* SplineData = Cast<UPCGSplineData>(Data))
-		{
-			OnSplineExported(Item.SourceActor, Item.SourceComponent, SplineData);
 		}
 
 		// Authored tags as data tags, as written: a Name:Value tag reads as a value tag downstream.
 		FPCGTaggedData& TaggedData = OutAsset->Data.TaggedData.Emplace_GetRef();
 		TaggedData.Data = Data;
 		TaggedData.Pin = Writer.Desc.PinName;
-		if (Item.SourceActor)
-		{
-			for (const FName& Tag : FAuthoredTags::OfActor(Item.SourceActor))
-			{
-				TaggedData.Tags.Add(Tag.ToString());
-			}
-		}
+		Algo::Transform(ActorTags, TaggedData.Tags, [](const FName& Tag) { return Tag.ToString(); });
 		if (TagSource)
 		{
-			for (const FName& Tag : TagSource->Tags)
-			{
-				TaggedData.Tags.Add(Tag.ToString());
-			}
+			Algo::Transform(TagSource->Tags, TaggedData.Tags, [](const FName& Tag) { return Tag.ToString(); });
 		}
 	}
 }

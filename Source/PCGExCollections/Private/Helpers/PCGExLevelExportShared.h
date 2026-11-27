@@ -10,6 +10,7 @@
 #include "PCGComponent.h"
 #include "PCGExCollectionsCommon.h"
 #include "PCGExLog.h"
+#include "Algo/Find.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Data/PCGExDataHelpers.h"
 #include "Data/PCGExDataValue.h"
@@ -177,6 +178,17 @@ namespace PCGExLevelExportShared
 		return Result;
 	}
 
+	/** A tag that classifies an actor outright, and the slot it classifies it into. */
+	struct FClassificationTag
+	{
+		FName Tag;
+		FName SlotId;
+	};
+
+	const FClassificationTag ClassificationTags[] = {
+		{PCGExCollections::Labels::StaticClassifyMesh, PCGExLevelExport::Slots::Meshes},
+		{PCGExCollections::Labels::StaticClassifySpline, PCGExLevelExport::Slots::Splines}};
+
 	/**
 	 * Tags a user put on an export source. PCG stamps bookkeeping on what it generates -- its markers and
 	 * the generating component's name -- which is neither entry identity nor an attribute; nor are the
@@ -194,9 +206,7 @@ namespace PCGExLevelExportShared
 
 		static bool IsSystemTag(const FName& Tag)
 		{
-			return Tag == PCGExCollections::Labels::StaticIgnore
-				|| Tag == PCGExCollections::Labels::StaticClassifyMesh
-				|| Tag == PCGExCollections::Labels::StaticClassifySpline;
+			return Tag == PCGExCollections::Labels::StaticIgnore || Algo::FindBy(ClassificationTags, Tag, &FClassificationTag::Tag) != nullptr;
 		}
 
 		static TArray<FName> OfActor(const AActor* Actor)

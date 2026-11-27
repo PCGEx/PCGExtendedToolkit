@@ -93,28 +93,14 @@ namespace PCGExLevelExport
 		Registration.HandlerClass = HandlerClass;
 		Registration.Priority = CDO->GetPriority();
 
-		if (!Registration.Desc.IsValid())
+		if (!Registration.Desc.IsValid() || Registration.Desc.HasCollection() != Registration.Policy.IsValid())
 		{
-			UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: incomplete slot descriptor."), *HandlerClass->GetName());
+			UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: incomplete slot descriptor or policy (a slot with a collection declares its class, entry struct and policy; Scope None declares none)."), *HandlerClass->GetName());
 			return false;
 		}
 
-		if (!Registration.Desc.HasCollection())
+		if (Registration.Desc.HasCollection())
 		{
-			if (Registration.Desc.CollectionClass || Registration.Desc.EntryStruct || Registration.Policy)
-			{
-				UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: a slot without a collection declares no collection class, entry struct or policy."), *HandlerClass->GetName());
-				return false;
-			}
-		}
-		else
-		{
-			if (!Registration.Policy)
-			{
-				UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: null policy."), *HandlerClass->GetName());
-				return false;
-			}
-
 			if (!Registration.Desc.EntryStruct->IsChildOf(FPCGExAssetCollectionEntry::StaticStruct()))
 			{
 				UE_LOG(LogPCGEx, Error, TEXT("Level export handler '%s' refused: entry struct '%s' is not an asset collection entry."), *HandlerClass->GetName(), *Registration.Desc.EntryStruct->GetName());
